@@ -1,0 +1,162 @@
+using System.Runtime.InteropServices;
+using PixelEngine.Core;
+
+namespace PixelEngine.Simulation;
+
+/// <summary>
+/// 64x64 cell 的 SoA 数据块，保存权威 sim 状态与 dirty rectangle 元数据。
+/// </summary>
+public sealed class Chunk
+{
+    private const int IncomingSlotCount = 8;
+    private readonly DirtyRect[] _incoming;
+
+    /// <summary>
+    /// 创建 chunk 并分配固定长度 POH SoA 数组。
+    /// </summary>
+    public Chunk(ChunkCoord coord)
+    {
+        Material = GC.AllocateArray<ushort>(EngineConstants.ChunkArea, pinned: true);
+        Flags = GC.AllocateArray<byte>(EngineConstants.ChunkArea, pinned: true);
+        Lifetime = GC.AllocateArray<byte>(EngineConstants.ChunkArea, pinned: true);
+        _incoming = GC.AllocateArray<DirtyRect>(IncomingSlotCount, pinned: true);
+        Reset(coord);
+    }
+
+    /// <summary>
+    /// chunk 坐标。
+    /// </summary>
+    public ChunkCoord Coord { get; private set; }
+
+    /// <summary>
+    /// 每 cell 的运行时材质 id，0 表示 Empty。
+    /// </summary>
+    public ushort[] Material { get; }
+
+    /// <summary>
+    /// 每 cell 的运行时 flag。
+    /// </summary>
+    public byte[] Flags { get; }
+
+    /// <summary>
+    /// 每 cell 的 lifetime 计数器。
+    /// </summary>
+    public byte[] Lifetime { get; }
+
+    /// <summary>
+    /// 本帧迭代用 dirty rectangle。
+    /// </summary>
+    public DirtyRect CurrentDirty { get; private set; }
+
+    /// <summary>
+    /// 本帧累积给下一帧使用的 dirty rectangle。
+    /// </summary>
+    public DirtyRect WorkingDirty { get; private set; }
+
+    /// <summary>
+    /// 来自 8 个邻居的 KeepAlive 入站槽。
+    /// </summary>
+    public ReadOnlySpan<DirtyRect> IncomingDirty => _incoming;
+
+    /// <summary>
+    /// chunk 当前调度状态。
+    /// </summary>
+    public ChunkState State { get; private set; }
+
+    /// <summary>
+    /// 最近一次处理该 chunk 的帧 parity，仅用于调试与测试。
+    /// </summary>
+    public byte Parity { get; set; }
+
+    /// <summary>
+    /// 重置 chunk 元数据并清空 SoA 数组，供池化复用。
+    /// </summary>
+    public void Reset(ChunkCoord coord)
+    {
+        Coord = coord;
+        Array.Clear(Material);
+        Array.Clear(Flags);
+        Array.Clear(Lifetime);
+        ClearDirty();
+        Parity = 0;
+        State = ChunkState.Sleeping;
+    }
+
+    /// <summary>
+    /// 获取 Material 数组首元素引用，供热路径 ref 漫游使用。
+    /// </summary>
+    public ref ushort GetMaterialBase()
+    {
+        return ref MemoryMarshal.GetArrayDataReference(Material);
+    }
+
+    /// <summary>
+    /// 获取 Flags 数组首元素引用，供热路径 ref 漫游使用。
+    /// </summary>
+    public ref byte GetFlagsBase()
+    {
+        return ref MemoryMarshal.GetArrayDataReference(Flags);
+    }
+
+    /// <summary>
+    /// 获取 Lifetime 数组首元素引用，供热路径 ref 漫游使用。
+    /// </summary>
+    public ref byte GetLifetimeBase()
+    {
+        return ref MemoryMarshal.GetArrayDataReference(Lifetime);
+    }
+
+    /// <summary>
+    /// 将一个本地 cell 合并到 working dirty rect，并唤醒 chunk。
+    /// </summary>
+    public void MarkWorkingDirty(int lx, int ly, int padding)
+    {
+        WorkingDirty = WorkingDirty.Union(lx, ly, padding);
+        State = ChunkState.Awake;
+    }
+
+    /// <summary>
+    /// 直接设置当前 dirty rect，供测试、加载与后续帧边界 swap 使用。
+    /// </summary>
+    public void SetCurrentDirty(DirtyRect rect)
+    {
+        CurrentDirty = rect;
+        State = rect.IsEmpty && WorkingDirty.IsEmpty ? ChunkState.Sleeping : ChunkState.Awake;
+    }
+
+    /// <summary>
+    /// 直接设置 working dirty rect，供测试、编辑器与后续相位入口使用。
+    /// </summary>
+    public void SetWorkingDirty(DirtyRect rect)
+    {
+        WorkingDirty = rect;
+        State = rect.IsEmpty && CurrentDirty.IsEmpty ? ChunkState.Sleeping : ChunkState.Awake;
+    }
+
+    /// <summary>
+    /// 合并一个 KeepAlive 入站槽。
+    /// </summary>
+    public void MarkIncomingDirty(int slot, DirtyRect rect)
+    {
+        if ((uint)slot >= IncomingSlotCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(slot));
+        }
+
+        _incoming[slot] = _incoming[slot].Union(rect);
+        if (!rect.IsEmpty)
+        {
+            State = ChunkState.Awake;
+        }
+    }
+
+    /// <summary>
+    /// 清空所有 dirty rectangle 元数据。
+    /// </summary>
+    public void ClearDirty()
+    {
+        CurrentDirty = DirtyRect.Empty;
+        WorkingDirty = DirtyRect.Empty;
+        Array.Fill(_incoming, DirtyRect.Empty);
+    }
+}
