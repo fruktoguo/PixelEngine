@@ -162,11 +162,11 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 - [x] `ResidencyPlanner`（class）：`Plan(ChunkRect active, ChunkRect border, ResidencyTable table, ChunkMemoryBudget budget) → ResidencyPlan`；产出待装载 coord 集（进入 active∪border 但未驻留）、待卸载 chunk 集（border 之外 + 内存超限 LRU），含 border 提升项；受 `MaxStreamOpsPerFrame` 节流。（相位 2，§3.4/§3.5）
 - [x] `ChunkMemoryBudget`（class）：`long ResidentBytes`、`long CapBytes`、`Add/Remove(int bytes)`、`bool OverCap`、`SelectEvictions(ResidencyTable, ChunkRect border, long target) → IReadOnlyList<ChunkCoord>`（LRU + 距离评分，仅选 sleeping 且 border 外）。（相位 2，§3.5）
 - [x] `StreamingRequest`（struct：`enum Kind{Load,Unload}`、`ChunkCoord`、卸载时携游离 `Chunk` 句柄）；`StreamingRequestQueue`（SPSC，相位 2 生产 / I/O 线程消费）；`CompletedChunkQueue`（I/O 线程 / 池生产 / 相位 2 消费，携反序列化好的游离 `Chunk` 或卸载完成回执）。（§3.4）
-- [~] `WorldStreamer`（class）：拥有后台 I/O 线程、两条队列、`RegionFileStore`、`ChunkCodec`、`MaterialRemap`。
+- [x] `WorldStreamer`（class）：拥有后台 I/O 线程、两条队列、`RegionFileStore`、`ChunkCodec`、`MaterialRemap`。
   - [x] `ApplyPrepared(long frame)`：相位 2，应用 `CompletedChunkQueue`——插入已装载 chunk 到 `ChunkMap`+`ResidencyTable`（重置瞬时位、置 dirty-rect 待评估）、收尾已卸载 chunk（释放缓冲、移除记账）。（相位 2）
   - [x] `SubmitPlan(ResidencyPlan)`：相位 2，对待卸载 chunk **当场从 `ChunkMap` 摘下**置 `Detached` 并入 `StreamingRequestQueue`；待装载 coord 入队。**绝不在此做磁盘 I/O。**（相位 2，§3.4）
   - [x] `ProcessIo(CancellationToken)`：相位 11 后台循环，消费 `StreamingRequestQueue`：装载=`RegionFileStore.TryRead`→`ChunkCodec.Decode`→remap→游离 `Chunk`；卸载=`ChunkCodec.Encode`(游离 Chunk)→`RegionFileStore.Write`→释放；结果入 `CompletedChunkQueue`。**绝不触碰 live `ChunkMap`。**（相位 11，§3.4）
-  - [ ] RLE+LZ4 字节准备可派发 Core 线程池并行（多 chunk 并发），磁盘读写在 I/O 线程；缓冲走 `ArrayPool<byte>`。（AGENTS §3）
+  - [x] RLE+LZ4 字节准备可派发 Core 线程池并行（多 chunk 并发），磁盘读写在 I/O 线程；缓冲走 `ArrayPool<byte>`。（AGENTS §3）
 - [x] `WorldManager`（facade，class）：拥有 `WorldCamera`、`ActivationPolicy`、`ResidencyTable`、`ResidencyPlanner`、`ChunkMemoryBudget`、`WorldStreamer`；引用 plan/03 的 `ChunkMap`。
   - [x] `UpdateCamera(...)`（相位 0/1）。
   - [x] `ApplyResidency(long frame)`（相位 2）：`WorldStreamer.ApplyPrepared` → 重算 active/border → `ResidencyPlanner.Plan` → border 提升 → `WorldStreamer.SubmitPlan`。结构性增删只在此发生（§3.4）。

@@ -1,4 +1,5 @@
 using System.Buffers;
+using PixelEngine.Core.Threading;
 using PixelEngine.Serialization;
 using PixelEngine.Simulation;
 using Xunit;
@@ -107,6 +108,38 @@ public sealed class WorldStreamerTests
 
         Assert.Equal(9, manager.Streamer.PendingRequestCount);
         Assert.Equal(9, manager.Residency.Count);
+    }
+
+    /// <summary>
+    /// 验证 ProcessIoOnce(JobSystem) 可并行准备多个 chunk 的装载解码结果。
+    /// </summary>
+    [Fact]
+    public void ProcessIoOnceWithJobSystemPreparesMultipleLoads()
+    {
+        using JobSystem jobs = new(workerCount: 2)
+        {
+            SingleThreadThreshold = 0,
+        };
+        ResidentChunkMap chunks = new();
+        ResidencyTable residency = new();
+        ChunkMemoryBudget budget = Budget();
+        TemperatureField temperature = new();
+        MemoryChunkStore store = new();
+        ChunkCoord first = new(0, 0);
+        ChunkCoord second = new(1, 0);
+        WriteStoredChunk(store, first, savedMaterial: 1, temp: (Half)1f);
+        WriteStoredChunk(store, second, savedMaterial: 1, temp: (Half)2f);
+        WorldStreamer streamer = new(chunks, residency, budget, temperature, store, IdentityRemap());
+        streamer.SubmitPlan(new ResidencyPlan([first, second], [], []));
+
+        Assert.Equal(2, streamer.ProcessIoOnce(jobs));
+        Assert.Equal(2, streamer.ApplyPrepared(frame: 3));
+
+        Assert.True(chunks.TryGetChunk(first, out Chunk firstChunk));
+        Assert.True(chunks.TryGetChunk(second, out Chunk secondChunk));
+        Assert.Equal(1, firstChunk.Material[0]);
+        Assert.Equal(1, secondChunk.Material[0]);
+        Assert.Equal(2, chunks.Count);
     }
 
     private static void WriteStoredChunk(MemoryChunkStore store, ChunkCoord coord, ushort savedMaterial, Half temp)
