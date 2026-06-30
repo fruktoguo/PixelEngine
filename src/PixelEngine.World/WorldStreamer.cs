@@ -1,4 +1,4 @@
-using System.Buffers;
+using PixelEngine.Core.Threading;
 using PixelEngine.Serialization;
 using PixelEngine.Simulation;
 
@@ -119,18 +119,38 @@ public sealed class WorldStreamer
     /// </summary>
     public int ProcessIoOnce()
     {
-        int processed = 0;
-        while (_requests.TryDequeue(out StreamingRequest request))
-        {
-            if (request.Kind == StreamingRequestKind.Load)
-            {
-                ProcessLoad(request.Coord);
-            }
-            else
-            {
-                ProcessUnload(request);
-            }
+        return ProcessIoOnce(jobs: null);
+    }
 
+    /// <summary>
+    /// 相位 11：处理当前队列中的所有请求；提供 jobs 时并行准备多 chunk 编解码，磁盘写仍在调用线程顺序提交。
+    /// </summary>
+    public int ProcessIoOnce(JobSystem? jobs)
+    {
+        int processed = 0;
+        StreamingRequest[] requests = DrainRequests();
+        if (requests.Length == 0)
+        {
+            return 0;
+        }
+
+        PreparedStreamingOperation[] prepared = new PreparedStreamingOperation[requests.Length];
+        if (jobs is not null && requests.Length > 1)
+        {
+            PreparationBatch batch = new(this, requests, prepared);
+            jobs.ParallelRange(requests.Length, 1, PrepareRange, batch);
+        }
+        else
+        {
+            for (int i = 0; i < requests.Length; i++)
+            {
+                prepared[i] = Prepare(requests[i]);
+            }
+        }
+
+        for (int i = 0; i < prepared.Length; i++)
+        {
+            Publish(prepared[i]);
             processed++;
         }
 
@@ -220,11 +240,50 @@ public sealed class WorldStreamer
         }
     }
 
-    private void ProcessLoad(ChunkCoord coord)
+    private StreamingRequest[] DrainRequests()
+    {
+        List<StreamingRequest> drained = [];
+        while (_requests.TryDequeue(out StreamingRequest request))
+        {
+            drained.Add(request);
+        }
+
+        return [.. drained];
+    }
+
+    private static void PrepareRange(int start, int end, int workerIndex, object? context)
+    {
+        PreparationBatch batch = (PreparationBatch)context!;
+        for (int i = start; i < end; i++)
+        {
+            batch.Prepared[i] = batch.Streamer.Prepare(batch.Requests[i]);
+        }
+    }
+
+    private PreparedStreamingOperation Prepare(StreamingRequest request)
+    {
+        return request.Kind == StreamingRequestKind.Load
+            ? PrepareLoad(request.Coord)
+            : PrepareUnload(request);
+    }
+
+    private void Publish(PreparedStreamingOperation prepared)
+    {
+        if (prepared.Kind == CompletedStreamingKind.Loaded)
+        {
+            _completed.Enqueue(CompletedStreamingOperation.Loaded(prepared.Chunk!, prepared.Temperature!));
+            return;
+        }
+
+        _chunkStore.Write(prepared.Coord, prepared.Blob!);
+        _completed.Enqueue(CompletedStreamingOperation.Unloaded(prepared.Coord));
+    }
+
+    private PreparedStreamingOperation PrepareLoad(ChunkCoord coord)
     {
         Chunk chunk = new(coord);
         Half[] temperature = new Half[TemperatureField.BlockArea];
-        ArrayBufferWriter<byte> buffer = new();
+        using PooledByteBufferWriter buffer = new();
         if (_chunkStore.TryRead(coord, buffer))
         {
             _chunkCodec.Decode(
@@ -235,18 +294,66 @@ public sealed class WorldStreamer
         }
 
         chunk.SetCurrentDirty(DirtyRect.Full);
-        _completed.Enqueue(CompletedStreamingOperation.Loaded(chunk, temperature));
+        return PreparedStreamingOperation.Loaded(chunk, temperature);
     }
 
-    private void ProcessUnload(StreamingRequest request)
+    private PreparedStreamingOperation PrepareUnload(StreamingRequest request)
     {
         Chunk chunk = request.DetachedChunk ?? throw new InvalidOperationException("卸载请求缺少 chunk。");
         Half[] temperature = request.Temperature ?? throw new InvalidOperationException("卸载请求缺少温度子块。");
-        ArrayBufferWriter<byte> buffer = new();
+        using PooledByteBufferWriter buffer = new();
         _chunkCodec.Encode(
             new ChunkSnapshot(chunk.Coord, chunk.Material, chunk.Flags, chunk.Lifetime, temperature),
             buffer);
-        _chunkStore.Write(chunk.Coord, buffer.WrittenSpan);
-        _completed.Enqueue(CompletedStreamingOperation.Unloaded(chunk.Coord));
+        return PreparedStreamingOperation.Unloaded(chunk.Coord, buffer.WrittenSpan);
+    }
+
+    private sealed class PreparationBatch(
+        WorldStreamer streamer,
+        StreamingRequest[] requests,
+        PreparedStreamingOperation[] prepared)
+    {
+        public WorldStreamer Streamer { get; } = streamer;
+
+        public StreamingRequest[] Requests { get; } = requests;
+
+        public PreparedStreamingOperation[] Prepared { get; } = prepared;
+    }
+
+    private sealed class PreparedStreamingOperation
+    {
+        private PreparedStreamingOperation(
+            CompletedStreamingKind kind,
+            ChunkCoord coord,
+            Chunk? chunk,
+            Half[]? temperature,
+            byte[]? blob)
+        {
+            Kind = kind;
+            Coord = coord;
+            Chunk = chunk;
+            Temperature = temperature;
+            Blob = blob;
+        }
+
+        public CompletedStreamingKind Kind { get; }
+
+        public ChunkCoord Coord { get; }
+
+        public Chunk? Chunk { get; }
+
+        public Half[]? Temperature { get; }
+
+        public byte[]? Blob { get; }
+
+        public static PreparedStreamingOperation Loaded(Chunk chunk, ReadOnlySpan<Half> temperature)
+        {
+            return new PreparedStreamingOperation(CompletedStreamingKind.Loaded, chunk.Coord, chunk, temperature.ToArray(), null);
+        }
+
+        public static PreparedStreamingOperation Unloaded(ChunkCoord coord, ReadOnlySpan<byte> blob)
+        {
+            return new PreparedStreamingOperation(CompletedStreamingKind.Unloaded, coord, null, null, blob.ToArray());
+        }
     }
 }
