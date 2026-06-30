@@ -21,6 +21,7 @@ public sealed class Engine : IDisposable
         Phases = phases;
         _lifecycle = lifecycle;
         State = EngineRunState.Created;
+        Mode = EngineExecutionMode.Play;
     }
 
     /// <summary>
@@ -37,6 +38,51 @@ public sealed class Engine : IDisposable
     /// 当前生命周期状态。
     /// </summary>
     public EngineRunState State { get; private set; }
+
+    /// <summary>
+    /// 当前 Play/Edit/Step 执行模式。
+    /// </summary>
+    public EngineExecutionMode Mode { get; private set; }
+
+    /// <summary>
+    /// 切换到运行模式，后续 tick 会推进 sim/physics。
+    /// </summary>
+    public void EnterPlayMode()
+    {
+        ThrowIfShutdown();
+        Mode = EngineExecutionMode.Play;
+    }
+
+    /// <summary>
+    /// 切换到编辑模式，后续普通 tick 只推进渲染与后台流式相位。
+    /// </summary>
+    public void EnterEditMode()
+    {
+        ThrowIfShutdown();
+        Mode = EngineExecutionMode.Edit;
+    }
+
+    /// <summary>
+    /// 在编辑模式下执行恰好一个 sim tick，随后回到编辑模式。
+    /// </summary>
+    public FrameTiming StepOnce(double realDeltaSeconds = 0)
+    {
+        ThrowIfShutdown();
+        if (Mode != EngineExecutionMode.Edit)
+        {
+            throw new InvalidOperationException("StepOnce 只能从编辑模式触发。");
+        }
+
+        Mode = EngineExecutionMode.Step;
+        try
+        {
+            return RunOneTick(realDeltaSeconds);
+        }
+        finally
+        {
+            Mode = EngineExecutionMode.Edit;
+        }
+    }
 
     /// <summary>
     /// 持续运行直到收到取消请求或 Engine 被关闭。
@@ -69,7 +115,7 @@ public sealed class Engine : IDisposable
             using (profiler.Measure(FramePhase.InputAndTime))
             {
                 ApplyOverloadPolicy(realDeltaSeconds);
-                timing = Context.Clock.BeginFrame(realDeltaSeconds);
+                timing = BeginRuntimeFrame(realDeltaSeconds);
             }
 
             Phases.Execute(this, timing);
@@ -159,5 +205,16 @@ public sealed class Engine : IDisposable
         Context.Clock.SimHz = tier >= EngineQualityTier.Sim30Hz
             ? PixelEngine.Core.EngineConstants.SimHzDownscaled
             : Context.Options.SimHz;
+    }
+
+    private FrameTiming BeginRuntimeFrame(double realDeltaSeconds)
+    {
+        return Mode switch
+        {
+            EngineExecutionMode.Edit => Context.Clock.BeginRenderOnlyFrame(realDeltaSeconds),
+            EngineExecutionMode.Step => Context.Clock.BeginForcedSimFrame(realDeltaSeconds),
+            EngineExecutionMode.Play => Context.Clock.BeginFrame(realDeltaSeconds),
+            _ => throw new InvalidOperationException($"未知 Engine 执行模式：{Mode}。"),
+        };
     }
 }

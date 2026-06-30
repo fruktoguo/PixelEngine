@@ -107,6 +107,42 @@ public sealed class RuntimeInfrastructureTests
     }
 
     /// <summary>
+    /// 验证暂停态 render-only 帧只推进渲染帧，不推进 sim/physics tick。
+    /// </summary>
+    [Fact]
+    public void FrameClockRenderOnlyFrameDoesNotAdvanceSimTick()
+    {
+        FrameClock clock = new();
+
+        FrameTiming renderOnly = clock.BeginRenderOnlyFrame(1.0 / 60.0);
+
+        Assert.Equal(1, renderOnly.FrameIndex);
+        Assert.Equal(0, renderOnly.SimTickIndex);
+        Assert.False(renderOnly.RunSim);
+        Assert.False(renderOnly.RunPhysics);
+        Assert.False(clock.RunSimThisFrame);
+        Assert.Equal(0, clock.SimTickIndex);
+    }
+
+    /// <summary>
+    /// 验证强制单步帧不受 30Hz 隔帧规则影响，始终执行恰好一个 sim tick。
+    /// </summary>
+    [Fact]
+    public void FrameClockForcedSimFrameRunsOneSimTickEvenWhenDownscaled()
+    {
+        FrameClock clock = new(EngineConstants.SimHzDownscaled);
+        _ = clock.BeginRenderOnlyFrame(1.0 / 60.0);
+
+        FrameTiming forced = clock.BeginForcedSimFrame(1.0 / 60.0);
+
+        Assert.True(forced.RunSim);
+        Assert.True(forced.RunPhysics);
+        Assert.Equal(2, forced.FrameIndex);
+        Assert.Equal(1, forced.SimTickIndex);
+        Assert.Equal(1, clock.SimTickIndex);
+    }
+
+    /// <summary>
     /// 验证 BudgetMonitor 连续超预算后置位，回落后复位。
     /// </summary>
     [Fact]
