@@ -33,6 +33,8 @@ public sealed class SceneAndHeadlessTests
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.SceneService));
         Assert.NotNull(scenes.Current);
         Assert.Equal("start", scenes.Current.Name);
+        Assert.Equal("terrain-a", scenes.Current.ResolvedSource);
+        Assert.True(scenes.Current.WorldConstructionPending);
         Assert.True(scenes.TryGet("menu", out SceneDescriptor menu));
         Assert.Equal(SceneSourceKind.Empty, menu.SourceKind);
     }
@@ -55,10 +57,23 @@ public sealed class SceneAndHeadlessTests
         Assert.Same(loaded, scenes.Current);
         Assert.Equal(SceneSourceKind.SaveDirectory, loaded.Descriptor.SourceKind);
         Assert.Equal("saves/b", loaded.Descriptor.Source);
+        Assert.Equal(Path.GetFullPath(Path.Combine(engine.Context.Options.ContentRoot, "saves/b")), loaded.ResolvedSource);
+        Assert.True(loaded.WorldConstructionPending);
 
         scenes.UnloadCurrent();
         Assert.Null(scenes.Current);
         _ = Assert.Throws<InvalidOperationException>(() => scenes.SwitchTo("missing"));
+    }
+
+    /// <summary>
+    /// 验证场景来源配置会快速拒绝无效组合。
+    /// </summary>
+    [Fact]
+    public void SceneDescriptorRejectsInvalidSourceConfiguration()
+    {
+        _ = Assert.Throws<ArgumentException>(() => new SceneDescriptor("empty", SceneSourceKind.Empty, "unexpected"));
+        _ = Assert.Throws<ArgumentException>(() => new SceneDescriptor("save", SceneSourceKind.SaveDirectory));
+        _ = Assert.Throws<ArgumentException>(() => new SceneDescriptor("proc", SceneSourceKind.Procedural));
     }
 
     /// <summary>
