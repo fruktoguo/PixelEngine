@@ -1,4 +1,5 @@
 using PixelEngine.Core;
+using PixelEngine.Core.Diagnostics;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -82,6 +83,34 @@ public sealed class EnginePhasePipelineTests
 
         Assert.Same(engine.Phases, phases);
         Assert.Equal(1, phases.Count(EnginePhase.WorldStreaming));
+    }
+
+    /// <summary>
+    /// 验证 12 相位执行结果会写入 Core 帧诊断计时器。
+    /// </summary>
+    [Fact]
+    public void RunOneTickRecordsProfilerTimesForExecutedPhases()
+    {
+        EngineBuilder builder = new EngineBuilder()
+            .WithWorkerCount(1);
+        for (int i = 0; i < 12; i++)
+        {
+            EnginePhase phase = (EnginePhase)i;
+            _ = builder.OnPhase(phase, static _ => Thread.SpinWait(50_000));
+        }
+
+        using Engine engine = builder.Build();
+
+        _ = engine.RunOneTick();
+
+        ReadOnlySpan<double> lastFrame = engine.Context.Profiler.LastFrame;
+        Assert.Equal(12, lastFrame.Length);
+        for (int i = 0; i < lastFrame.Length; i++)
+        {
+            Assert.True(lastFrame[i] > 0, $"{(FramePhase)i} 应记录大于 0 的相位耗时。");
+        }
+
+        Assert.True(engine.Context.Profiler.Average(FramePhase.CaSimulation, 1) > 0);
     }
 
     private static void RegisterAllPhases(EngineBuilder builder, List<EnginePhase> phases)

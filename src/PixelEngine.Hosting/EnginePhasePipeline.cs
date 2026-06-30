@@ -1,3 +1,4 @@
+using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
 
 namespace PixelEngine.Hosting;
@@ -59,11 +60,14 @@ public sealed class EnginePhasePipeline
             }
 
             EngineTickContext context = new(engine, engine.Context, timing, phase);
-            _ = _commands.Flush(context);
-            List<EnginePhaseAction> actions = _actions[raw];
-            for (int i = 0; i < actions.Count; i++)
+            using (engine.Context.Profiler.Measure(ToFramePhase(phase)))
             {
-                actions[i](context);
+                _ = _commands.Flush(context);
+                List<EnginePhaseAction> actions = _actions[raw];
+                for (int i = 0; i < actions.Count; i++)
+                {
+                    actions[i](context);
+                }
             }
         }
     }
@@ -87,5 +91,11 @@ public sealed class EnginePhasePipeline
         {
             throw new ArgumentOutOfRangeException(nameof(phase), phase, "未知 Engine 相位。");
         }
+    }
+
+    private static FramePhase ToFramePhase(EnginePhase phase)
+    {
+        ValidatePhase(phase);
+        return (FramePhase)phase;
     }
 }
