@@ -101,4 +101,20 @@ public sealed class MaterialPropsTable
     {
         return Type[materialId];
     }
+
+    /// <summary>
+    /// 返回材质密度。
+    /// </summary>
+    public byte DensityOf(ushort materialId)
+    {
+        return Density[materialId];
+    }
+
+    /// <summary>
+    /// 返回材质扩散距离。
+    /// </summary>
+    public byte DispersionOf(ushort materialId)
+    {
+        return Dispersion[materialId];
+    }
 }
