@@ -103,6 +103,21 @@ public sealed class Scene
         }
     }
 
+    internal void DestroyComponent(Entity entity, Type componentType, IScriptContext context)
+    {
+        ValidateEntity(entity);
+        ArgumentNullException.ThrowIfNull(componentType);
+        ArgumentNullException.ThrowIfNull(context);
+        if (_buckets.TryGetValue(componentType, out IComponentBucket? bucket))
+        {
+            bucket.Destroy(entity.Id, context, _invoker);
+            if (bucket.Count == 0)
+            {
+                _ = _buckets.Remove(componentType);
+            }
+        }
+    }
+
     internal void AddComponent(Entity entity, IComponent component)
     {
         ValidateEntity(entity);
