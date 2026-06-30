@@ -1,3 +1,4 @@
+using PixelEngine.Core;
 using PixelEngine.Core.Threading;
 using PixelEngine.Simulation.Particles;
 using Xunit;
@@ -88,7 +89,28 @@ public sealed class ParticleHandshakeTests
         Assert.Equal(Sand, particles.ActiveReadOnly[0].Material);
         Assert.Equal(10.5f, particles.ActiveReadOnly[0].X);
         Assert.Equal(2, particles.ActiveReadOnly[0].Vx);
+        Assert.Equal(120, particles.ActiveReadOnly[0].Life);
         Assert.Equal(new DirtyRect(8, 8, 12, 12), center.CurrentDirty);
+    }
+
+    /// <summary>
+    /// 验证抛射粒子寿命来自材质默认 lifetime，并被粒子系统最大寿命钳制。
+    /// </summary>
+    [Fact]
+    public void RunEjectionPassUsesMaterialDefaultLifetimeClampedToParticleMax()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Set(center, 10, 10, Water);
+        MaterialPropsTable materials = CreateMaterials();
+        CellGrid grid = new(source, materials);
+        SimulationKernel kernel = new(source, materials);
+        ParticleSystem particles = new(capacity: 1);
+
+        Assert.True(particles.RequestEjection(new EjectionRequest(10, 10, 0, 0, 0, EjectMask.Liquid)));
+        particles.RunEjectionPass(kernel, grid);
+
+        Assert.Equal(1, particles.ActiveCount);
+        Assert.Equal(EngineConstants.ParticleMaxLifetimeTicks, particles.ActiveReadOnly[0].Life);
     }
 
     /// <summary>
@@ -193,7 +215,7 @@ public sealed class ParticleHandshakeTests
             [0, 0, 0, 0],
             [0, 0, 0, 0],
             [0, 0, 0, 0],
-            [0, 0, 0, 0]);
+            [0, 0, 120, 300]);
     }
 
     private static TestChunkSource CreateNeighborhood(ChunkCoord centerCoord, out Chunk center)
