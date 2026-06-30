@@ -174,10 +174,10 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 
 ### 4.3 Serialization — chunk 二进制（架构 §11.3，不变式 #8）
 
-- [ ] `ChunkSnapshot`（class/ref struct）：持 `Span<ushort> Material`、`Span<byte> Flags`、`Span<byte> Lifetime`、`Span<Half> Temperature` 视图；World 在 `Chunk`↔`ChunkSnapshot` 间适配（隔离 Serialization 不依赖 plan/03 `Chunk` 内部）。（§3.6）
-- [ ] `PersistentFlagMask`（const byte）= bit2(burning) | 预留持久位；XML 注释列明 bit0 parity / bit1 settled-sleep / bit3 freefalling 为瞬时位不入盘（架构 §7.1/§11.3）。（§3.6）
-- [ ] `RleCodec`（static）：`EncodeU16(ReadOnlySpan<ushort>, IBufferWriter<byte>)`/`DecodeU16`、`EncodeU8`/`DecodeU8`；行程编码大片均匀区。（§3.6）
-- [ ] `Lz4BlockCodec`（static，封装 K4os）：`Compress(ReadOnlySpan<byte>, IBufferWriter<byte>)`、`Decompress(ReadOnlySpan<byte>, Span<byte>)`，存未压缩长度便于预分配。（§3.6）
+- [x] `ChunkSnapshot`（ref struct）：持 `Span<ushort> Material`、`Span<byte> Flags`、`Span<byte> Lifetime`、`Span<Half> Temperature` 视图；World 在 `Chunk`↔`ChunkSnapshot` 间适配（隔离 Serialization 不依赖 plan/03 `Chunk` 内部）。（§3.6）
+- [x] `PersistentFlagMask`（const byte）= bit2(burning)；XML 注释列明 bit0 parity / bit1 settled-sleep / bit3 freefalling / bit4 rigid-owned 为瞬时位不入盘（架构 §7.1/§11.3）。（§3.6）
+- [x] `RleCodec`（static）：`EncodeU16(ReadOnlySpan<ushort>, IBufferWriter<byte>)`/`DecodeU16`、`EncodeU8`/`DecodeU8`；行程编码大片均匀区。（§3.6）
+- [x] `Lz4BlockCodec`（static，封装 K4os）：`Compress(ReadOnlySpan<byte>, IBufferWriter<byte>)`、`Decompress(ReadOnlySpan<byte>, Span<byte>)`，存未压缩长度便于预分配。（§3.6）
 - [ ] `ChunkBlobHeader`（struct）：magic、`FormatVersion`、`ChunkCoord`、各段未压缩长度、压缩标志。（§3.6/§3.9）
 - [ ] `ChunkCodec`（class）：`Encode(in ChunkSnapshot, IBufferWriter<byte>)`——Flags 先 `& PersistentFlagMask`，各段 RLE 后拼接再 LZ4；`Decode(ReadOnlySpan<byte>, ChunkSnapshot dst)`——LZ4 解→分段 RLE 解→瞬时位重置规则（parity 置异、settled/freefalling 清零）。（相位 11，§3.6）
 
