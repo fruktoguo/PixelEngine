@@ -60,4 +60,15 @@ public sealed class SimulationKernel(
                 _rigidDamageSink);
         }
     }
+
+    /// <summary>
+    /// 执行帧边界 dirty rectangle swap，并根据下一帧 current dirty 更新 chunk sleep 状态。
+    /// </summary>
+    public void SwapDirtyRects()
+    {
+        foreach (Chunk chunk in _chunks.ResidentChunks)
+        {
+            chunk.SwapDirtyRects();
+        }
+    }
 }
