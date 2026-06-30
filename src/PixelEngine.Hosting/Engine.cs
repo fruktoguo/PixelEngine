@@ -10,10 +10,12 @@ public sealed class Engine : IDisposable
 {
     private bool _disposed;
 
-    internal Engine(EngineContext context)
+    internal Engine(EngineContext context, EnginePhasePipeline phases)
     {
         ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(phases);
         Context = context;
+        Phases = phases;
         State = EngineRunState.Created;
     }
 
@@ -21,6 +23,11 @@ public sealed class Engine : IDisposable
     /// 当前运行上下文。
     /// </summary>
     public EngineContext Context { get; }
+
+    /// <summary>
+    /// 12 相位同步调度管线。
+    /// </summary>
+    public EnginePhasePipeline Phases { get; }
 
     /// <summary>
     /// 当前生命周期状态。
@@ -51,6 +58,7 @@ public sealed class Engine : IDisposable
         ThrowIfShutdown();
         State = EngineRunState.Running;
         FrameTiming timing = Context.Clock.BeginFrame(realDeltaSeconds);
+        Phases.Execute(this, timing);
         Context.Counters.SimHz = Context.Clock.SimHz;
         return timing;
     }
