@@ -177,13 +177,13 @@ plan/00 §7 明确要求把编译期常量**集中到 `PixelEngine.Core` 的 `En
 - [x] 在实现处写明「**绝无追帧 accumulator**，每帧至多一步，过载即时间膨胀」注释，引用架构 §4.1 与不变式 #6（驱动相位 0，架构 §3.3）。
 
 ### 4.8 诊断 / 计时（`Diagnostics/`，架构 §17.1/§4.3，plan/00 §93）
-- [ ] `FramePhase.cs` + `FrameSubPhase.cs`：按架构 §3.3 的 12 相位与 §17.1 细分定义枚举。
-- [ ] `FrameProfiler.cs`：`Measure(phase)→ProfilerScope`（`IDisposable` 零分配）、`Record/RecordSub/BeginFrame/EndFrame/LastFrame/Average`（基于 `Stopwatch.GetTimestamp`）。
-- [ ] `EngineCounters.cs`：`ActiveChunks/ActiveCells/FreeParticles/RigidBodies/ResidentChunks/ResidentMemoryBytes/SimHz`（架构 §17.1）+ worker 累加合并入口。
-- [ ] `BudgetMonitor.cs`：`BudgetMonitor(budgetMs,sustainWindow)`、`Submit/IsSustainedOverBudget/ConsecutiveOverBudgetFrames`（架构 §4.3 降级数据源，不含策略）。
+- [x] `FramePhase.cs` + `FrameSubPhase.cs`：按架构 §3.3 的 12 相位与 §17.1 细分定义枚举。
+- [x] `FrameProfiler.cs`：`Measure(phase)→ProfilerScope`（`IDisposable` 零分配）、`Record/RecordSub/BeginFrame/EndFrame/LastFrame/Average`（基于 `Stopwatch.GetTimestamp`）。
+- [x] `EngineCounters.cs`：`ActiveChunks/ActiveCells/FreeParticles/RigidBodies/ResidentChunks/ResidentMemoryBytes/SimHz`（架构 §17.1）+ worker 累加合并入口。
+- [x] `BudgetMonitor.cs`：`BudgetMonitor(budgetMs,sustainWindow)`、`Submit/IsSustainedOverBudget/ConsecutiveOverBudgetFrames`（架构 §4.3 降级数据源，不含策略）。
 
 ### 4.9 编译期常量（`EngineConstants.cs`，plan/00 §7）
-- [ ] `EngineConstants.cs`：`ChunkSize/ChunkSizeLog2/ChunkArea/MoveCap/HaloSize/PhysicsPixelsPerMeter/MetersPerPixel/TempFieldDownscale/DefaultSimHz/SimHzDownscaled/DirtyRectPadding/BorderRingWidth/CacheLineBytes`，逐项 XML 注释引用架构 §。
+- [x] `EngineConstants.cs`：`ChunkSize/ChunkSizeLog2/ChunkArea/MoveCap/HaloSize/PhysicsPixelsPerMeter/MetersPerPixel/TempFieldDownscale/DefaultSimHz/SimHzDownscaled/DirtyRectPadding/BorderRingWidth/CacheLineBytes`，逐项 XML 注释引用架构 §。
 
 ---
 
@@ -254,5 +254,5 @@ plan/00 §7 明确要求把编译期常量**集中到 `PixelEngine.Core` 的 `En
 - [x] 节点 3：`feat(core): 实现持久线程池 JobSystem 与 WorkerLocal`（§4.4，含 Box2D task 桥派发面 §14.2）。
 - [x] 节点 4：`feat(core): 实现确定性 RNG 与无锁事件总线`（§4.5 + §4.6）。
 - [x] 节点 5：`feat(core): 实现固定步长时间膨胀帧时钟(不追帧)`（§4.7，落地不变式 #6）。
-- [ ] 节点 6：`feat(core): 实现分项计时/计数器诊断与 EngineConstants`（§4.8 + §4.9）。
+- [x] 节点 6：`feat(core): 实现分项计时/计数器诊断与 EngineConstants`（§4.8 + §4.9）。
 - [ ] 节点 7：`test(core): 补齐 Core 基础设施性质/零分配/并发测试`（§5 验收标准对应单测与 BenchmarkDotNet 门禁全绿）。
