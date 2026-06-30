@@ -1,4 +1,5 @@
 using PixelEngine.Core;
+using PixelEngine.Core.Time;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -48,6 +49,44 @@ public sealed class EngineOverloadControllerTests
     }
 
     /// <summary>
+    /// 验证人工过载降到 30Hz 后，render/streaming 相位仍逐帧执行且 sim 不追帧。
+    /// </summary>
+    [Fact]
+    public void OverloadedSim30HzKeepsRenderFramesWithoutCatchUp()
+    {
+        List<EnginePhase> phases = [];
+        EngineBuilder builder = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithOverloadPolicy(frameBudgetMs: 10, sustainWindow: 1);
+        RegisterAllPhases(builder, phases);
+        using Engine engine = builder.Build();
+
+        _ = engine.RunOneTick(realDeltaSeconds: 0.011);
+        _ = engine.RunOneTick(realDeltaSeconds: 0.011);
+        _ = engine.RunOneTick(realDeltaSeconds: 0.011);
+        _ = engine.RunOneTick(realDeltaSeconds: 0.011);
+        Assert.Equal(EngineQualityTier.Sim30Hz, engine.Context.QualityTier);
+
+        phases.Clear();
+        FrameTiming simFrame = engine.RunOneTick(realDeltaSeconds: 0);
+        long simTicksAfterSimFrame = engine.Context.Clock.SimTickIndex;
+        phases.Clear();
+        FrameTiming renderOnlyFrame = engine.RunOneTick(realDeltaSeconds: 0);
+
+        Assert.True(simFrame.RunSim);
+        Assert.False(renderOnlyFrame.RunSim);
+        Assert.Equal(simTicksAfterSimFrame, engine.Context.Clock.SimTickIndex);
+        Assert.Equal(
+            [
+                EnginePhase.InputAndTime,
+                EnginePhase.BuildRenderBuffer,
+                EnginePhase.GpuUploadAndRender,
+                EnginePhase.WorldStreaming,
+            ],
+            phases);
+    }
+
+    /// <summary>
     /// 验证过载控制器通过 EngineContext 服务表暴露给脚本服务后端与 Editor。
     /// </summary>
     [Fact]
@@ -61,5 +100,14 @@ public sealed class EngineOverloadControllerTests
 
         Assert.Same(overload, engine.Context.GetService<EngineOverloadController>());
         Assert.Equal(EngineQualityTier.Full, overload.QualityTier);
+    }
+
+    private static void RegisterAllPhases(EngineBuilder builder, List<EnginePhase> phases)
+    {
+        for (int i = 0; i < 12; i++)
+        {
+            EnginePhase phase = (EnginePhase)i;
+            _ = builder.OnPhase(phase, context => phases.Add(context.Phase));
+        }
     }
 }
