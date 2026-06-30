@@ -29,6 +29,7 @@ public sealed class EngineBuilder
     private EngineOverloadOptions _overload = EngineOverloadOptions.CreateDefault();
     private readonly List<(EnginePhase Phase, EnginePhaseAction Action)> _phaseActions = [];
     private readonly List<SceneDescriptor> _scenes = [];
+    private readonly List<IEngineSubsystem> _subsystems = [];
 
     /// <summary>
     /// 配置窗口尺寸。
@@ -204,6 +205,16 @@ public sealed class EngineBuilder
     }
 
     /// <summary>
+    /// 注册一个由 Hosting 管理初始化与关闭顺序的子系统。
+    /// </summary>
+    public EngineBuilder AddSubsystem(IEngineSubsystem subsystem)
+    {
+        ArgumentNullException.ThrowIfNull(subsystem);
+        _subsystems.Add(subsystem);
+        return this;
+    }
+
+    /// <summary>
     /// 构建 Engine 并完成 Core 服务装配。
     /// </summary>
     public Engine Build()
@@ -235,6 +246,7 @@ public sealed class EngineBuilder
         FrameProfiler profiler = new();
         EngineOverloadController overload = new(options.Overload);
         EngineCommandQueue commands = new();
+        EngineLifecycle lifecycle = BuildLifecycle();
         SceneService scenes = BuildSceneService(options);
         EngineContext context = new(options, jobs, clock, events, counters, profiler);
         context.RegisterService(context);
@@ -246,6 +258,7 @@ public sealed class EngineBuilder
         context.RegisterService(profiler);
         context.RegisterService(overload);
         context.RegisterService(commands);
+        context.RegisterService(lifecycle);
         context.RegisterService<ISceneService>(EngineServiceRole.SceneService, scenes);
         context.RegisterService(scenes);
         EnginePhasePipeline phases = new(commands);
@@ -255,7 +268,27 @@ public sealed class EngineBuilder
         }
 
         context.RegisterService(phases);
-        return new Engine(context, phases);
+        try
+        {
+            lifecycle.Initialize(context);
+            return new Engine(context, phases, lifecycle);
+        }
+        catch
+        {
+            jobs.Dispose();
+            throw;
+        }
+    }
+
+    private EngineLifecycle BuildLifecycle()
+    {
+        EngineLifecycle lifecycle = new();
+        for (int i = 0; i < _subsystems.Count; i++)
+        {
+            lifecycle.Register(_subsystems[i]);
+        }
+
+        return lifecycle;
     }
 
     private SceneService BuildSceneService(EngineOptions options)

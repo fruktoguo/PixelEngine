@@ -74,7 +74,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [x] `EngineBuilder`:fluent 配置(窗口/内部 sim 分辨率/worker 数/GC 模式/Editor 开关/headless/确定性开关/GPU 门控/内容根/起始场景),`Build()→Engine`。[架构 §19.2 配置化]
 - [x] `Engine`:持有全部子系统 + `EngineContext`;`Run()`/`RunOneTick()`/`Shutdown()`。
 - [x] `EngineContext`:服务定位 + 诊断 + 事件总线 + 时间 + 当前质量档位。
-- [ ] 子系统装配与**初始化顺序**(§3.1);native(Box2D/OpenAL/GL)与 ALC 的正确释放顺序。
+- [~] 子系统装配与**初始化顺序**(§3.1);native(Box2D/OpenAL/GL)与 ALC 的正确释放顺序。
 - [x] `GameLoop.Tick()`:严格 12 相位编排(§3.2),相位间 barrier(plan/02 JobSystem),每帧至多一次 sim/physics step。[不变式 #6,架构 §3.3]
 - [x] sim 降频(30Hz)而 render 不降:render 复用上帧世界纹理(必要时整图相机偏移,不插值像素)。[架构 §4.2]
 - [ ] 各相位入口的调用绑定(Input/Time、Scripts、Residency、Particle 沉积/抛射、CA、Temperature、DirtySwap、Physics、BuildFrame、Present、Streaming)。
