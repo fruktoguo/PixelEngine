@@ -192,44 +192,44 @@ plan/00 §7 明确要求把编译期常量**集中到 `PixelEngine.Core` 的 `En
 > 全部勾选方算本文档完成（AGENTS.md §7）。性能敏感项按 AGENTS.md §3「校验而非臆断」用 BenchmarkDotNet + 反汇编证实。
 
 ### 5.1 编译与依赖
-- [ ] `dotnet build src/PixelEngine.Core -c Release` 零警告（`TreatWarningsAsErrors`）通过。
-- [ ] Core 的 `.csproj` 无任何 `ProjectReference`、无任何 `PackageReference`（仅 BCL）；依赖方向不被破坏（plan/00 §5/§8）。
-- [ ] 全部公开类型/方法带中文 XML 文档注释，`dotnet build` 无缺注释告警（AGENTS.md §4）。
+- [x] `dotnet build src/PixelEngine.Core -c Release` 零警告（`TreatWarningsAsErrors`）通过。
+- [x] Core 的 `.csproj` 无任何 `ProjectReference`、无任何 `PackageReference`（仅 BCL）；依赖方向不被破坏（plan/00 §5/§8）。
+- [x] 全部公开类型/方法带中文 XML 文档注释，`dotnet build` 无缺注释告警（AGENTS.md §4）。
 
 ### 5.2 数学正确性
-- [ ] `Mathx.FloorDiv/Mod` 在负坐标下与「floored 除法/模」数学定义一致（xUnit 覆盖 `x∈[-130,130]`、`b=64`），保证 cell→chunk 分解正确。
-- [ ] `Transform2D.InverseTransformPoint(TransformPoint(p)) ≈ p`（含任意旋转，误差 < 1e-5），为架构 §8.3 inverse-sampling 水密性背书。
-- [ ] `RectI.Encapsulate`/`ExpandClamped` 在 chunk 边界（`bounds=[0,64)`）下不越界、padding 正确（架构 §5.4）。
-- [ ] `Fixed` 四则与比较在相同输入下跨平台逐位一致（同一进程内确定性单测；为架构 §6.2/§6.4 确定性模式背书）。
-- [ ] 优先复用 `System.Numerics.Vector2`，未重复造浮点向量（代码审查确认）。
+- [x] `Mathx.FloorDiv/Mod` 在负坐标下与「floored 除法/模」数学定义一致（xUnit 覆盖 `x∈[-130,130]`、`b=64`），保证 cell→chunk 分解正确。
+- [x] `Transform2D.InverseTransformPoint(TransformPoint(p)) ≈ p`（含任意旋转，误差 < 1e-5），为架构 §8.3 inverse-sampling 水密性背书。
+- [x] `RectI.Encapsulate`/`ExpandClamped` 在 chunk 边界（`bounds=[0,64)`）下不越界、padding 正确（架构 §5.4）。
+- [x] `Fixed` 四则与比较在相同输入下跨平台逐位一致（同一进程内确定性单测；为架构 §6.2/§6.4 确定性模式背书）。
+- [x] 优先复用 `System.Numerics.Vector2`，未重复造浮点向量（代码审查确认）。
 
 ### 5.3 内存与零分配
-- [ ] `PinnedBuffer<T>.Pointer` 地址在 GC 压力下保持稳定（强制 `GC.Collect` 后地址不变）。
-- [ ] `NativeBuffer<T>` 分配/释放无泄漏（压力测试 + finalizer 兜底验证）。
-- [ ] `Pool<T>.Rent/Return`、`RentedArray<T>` 在稳态循环（≥10^6 次）**零 Gen0 分配**（BenchmarkDotNet `[MemoryDiagnoser]` 证实 `Allocated == 0`）。
-- [ ] `DoubleBuffer<T>.Swap` 仅交换引用、不拷贝、零分配。
-- [ ] `SoaBuffer.EnsureCapacity` 扩容后各列等长且原数据保留。
+- [x] `PinnedBuffer<T>.Pointer` 地址在 GC 压力下保持稳定（强制 `GC.Collect` 后地址不变）。
+- [x] `NativeBuffer<T>` 分配/释放无泄漏（压力测试 + finalizer 兜底验证）。
+- [x] `Pool<T>.Rent/Return`、`RentedArray<T>` 在稳态循环（≥10^6 次）**零 Gen0 分配**（BenchmarkDotNet `[MemoryDiagnoser]` 证实 `Allocated == 0`）。
+- [x] `DoubleBuffer<T>.Swap` 仅交换引用、不拷贝、零分配。
+- [x] `SoaBuffer.EnsureCapacity` 扩容后各列等长且原数据保留。
 
 ### 5.4 JobSystem
-- [ ] `ParallelRange`/`ParallelFor` 的 `workerIndex` 在整个生命周期对每个物理 worker 稳定且 `∈[0,WorkerCount)`（架构 §14.2、R14）。
-- [ ] 每次派发构成完整 barrier：返回后所有区间/任务确已完成（并发正确性测试，含数据竞争探测）。
-- [ ] 活跃任务数 < `SingleThreadThreshold` 时回退单线程、无派发开销（架构 R7，BenchmarkDotNet 对比确认）。
-- [ ] `ParallelRangeRaw` 经 `delegate* unmanaged` 回调 path 零托管分配、可被 native 函数指针消费（模拟 Box2D `b2TaskCallback` 签名验证，架构 §14.2）。
-- [ ] 稳态 `ParallelFor` 调用零分配（缓存委托/无闭包捕获，BenchmarkDotNet 证实）；确认**非** `Parallel.For`（代码审查）。
-- [ ] `WorkerLocal<T>` 槽位间隔 ≥ 64 字节（反射/布局校验 false-sharing 填充，架构 §12.7）。
+- [x] `ParallelRange`/`ParallelFor` 的 `workerIndex` 在整个生命周期对每个物理 worker 稳定且 `∈[0,WorkerCount)`（架构 §14.2、R14）。
+- [x] 每次派发构成完整 barrier：返回后所有区间/任务确已完成（并发正确性测试，含数据竞争探测）。
+- [x] 活跃任务数 < `SingleThreadThreshold` 时回退单线程、无派发开销（架构 R7，BenchmarkDotNet 对比确认）。
+- [x] `ParallelRangeRaw` 经 `delegate* unmanaged` 回调 path 零托管分配、可被 native 函数指针消费（模拟 Box2D `b2TaskCallback` 签名验证，架构 §14.2）。
+- [x] 稳态 `ParallelFor` 调用零分配（缓存委托/无闭包捕获，BenchmarkDotNet 证实）；确认**非** `Parallel.For`（代码审查）。
+- [x] `WorkerLocal<T>` 槽位间隔 ≥ 64 字节（反射/布局校验 false-sharing 填充，架构 §12.7）。
 
 ### 5.5 RNG / 事件 / 时钟
-- [ ] `CounterRng.Hash` 雪崩性达标（位独立性统计测试），同 `(seed,x,y,counter)` 恒定输出（纯函数式，架构 §6.2）。
-- [ ] `RngFactory.ForChunk` 不同 chunk 坐标产生统计独立流（架构 §5.6 左右交替偏置依赖）。
-- [ ] `RingBuffer`/`MpscRingBuffer` 在多生产者并发下不丢/不重/不撕裂（压力测试），`TryEnqueue` 满时返回 false（限频依据，架构 §10.2）；稳态零分配。
-- [ ] `FrameClock`：真实帧时长翻倍时 `Dt` 不变、每帧至多一次 `RunSim`（**无追帧**），`TimeScale<1`（时间膨胀，架构 §4.1、不变式 #6）。
-- [ ] `FrameClock` 30Hz 模式下每两渲染帧 `RunSimThisFrame` 为 true 一次（架构 §4.2）。
+- [x] `CounterRng.Hash` 雪崩性达标（位独立性统计测试），同 `(seed,x,y,counter)` 恒定输出（纯函数式，架构 §6.2）。
+- [x] `RngFactory.ForChunk` 不同 chunk 坐标产生统计独立流（架构 §5.6 左右交替偏置依赖）。
+- [x] `RingBuffer`/`MpscRingBuffer` 在多生产者并发下不丢/不重/不撕裂（压力测试），`TryEnqueue` 满时返回 false（限频依据，架构 §10.2）；稳态零分配。
+- [x] `FrameClock`：真实帧时长翻倍时 `Dt` 不变、每帧至多一次 `RunSim`（**无追帧**），`TimeScale<1`（时间膨胀，架构 §4.1、不变式 #6）。
+- [x] `FrameClock` 30Hz 模式下每两渲染帧 `RunSimThisFrame` 为 true 一次（架构 §4.2）。
 
 ### 5.6 诊断与常量
-- [ ] `FrameProfiler.Measure` using-scope 零分配（BenchmarkDotNet 证实），覆盖 §3.3 全部 12 相位 + §17.1 细分。
-- [ ] `EngineCounters` 暴露架构 §17.1 全部计数项（活跃 chunk/cell/粒子/刚体/常驻 chunk/内存/sim 频率）。
-- [ ] `BudgetMonitor.IsSustainedOverBudget` 在连续 N 帧超预算后置位、回落后复位（架构 §4.3 数据源）。
-- [ ] `EngineConstants` 含 `ChunkSize=64/MoveCap=32/PhysicsPixelsPerMeter=16/TempFieldDownscale=4` 等全部常量且值与架构/plan-00 一致（plan/00 §7、§8）。
+- [x] `FrameProfiler.Measure` using-scope 零分配（BenchmarkDotNet 证实），覆盖 §3.3 全部 12 相位 + §17.1 细分。
+- [x] `EngineCounters` 暴露架构 §17.1 全部计数项（活跃 chunk/cell/粒子/刚体/常驻 chunk/内存/sim 频率）。
+- [x] `BudgetMonitor.IsSustainedOverBudget` 在连续 N 帧超预算后置位、回落后复位（架构 §4.3 数据源）。
+- [x] `EngineConstants` 含 `ChunkSize=64/MoveCap=32/PhysicsPixelsPerMeter=16/TempFieldDownscale=4` 等全部常量且值与架构/plan-00 一致（plan/00 §7、§8）。
 
 ---
 
@@ -255,4 +255,4 @@ plan/00 §7 明确要求把编译期常量**集中到 `PixelEngine.Core` 的 `En
 - [x] 节点 4：`feat(core): 实现确定性 RNG 与无锁事件总线`（§4.5 + §4.6）。
 - [x] 节点 5：`feat(core): 实现固定步长时间膨胀帧时钟(不追帧)`（§4.7，落地不变式 #6）。
 - [x] 节点 6：`feat(core): 实现分项计时/计数器诊断与 EngineConstants`（§4.8 + §4.9）。
-- [ ] 节点 7：`test(core): 补齐 Core 基础设施性质/零分配/并发测试`（§5 验收标准对应单测与 BenchmarkDotNet 门禁全绿）。
+- [x] 节点 7：`test(core): 补齐 Core 基础设施性质/零分配/并发测试`（§5 验收标准对应单测与 BenchmarkDotNet 门禁全绿）。
