@@ -10,8 +10,21 @@ public sealed class Scene
     private readonly List<ISystem> _systems = [];
     private readonly List<Entity> _destroyQueue = [];
     private readonly Stack<int> _freeEntityIds = new();
-    private readonly ScriptInvoker _invoker = new();
+    private readonly ScriptInvoker _invoker;
     private int _nextEntityId;
+
+    /// <summary>
+    /// 创建一个脚本场景；脚本实体与组件只在相位 1 生命周期内被驱动。
+    /// </summary>
+    public Scene()
+        : this(null)
+    {
+    }
+
+    internal Scene(IScriptDiagnosticSink? diagnostics)
+    {
+        _invoker = new ScriptInvoker(diagnostics);
+    }
 
     /// <summary>
     /// 当前活跃实体数量；脚本可在相位 1 读取。
