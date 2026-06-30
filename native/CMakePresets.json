@@ -1,0 +1,112 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "win-x64",
+      "inherits": "base",
+      "cacheVariables": {
+        "PIXELENGINE_TARGET_RID": "win-x64",
+        "CMAKE_SYSTEM_PROCESSOR": "AMD64"
+      }
+    },
+    {
+      "name": "win-arm64",
+      "inherits": "base",
+      "cacheVariables": {
+        "PIXELENGINE_TARGET_RID": "win-arm64",
+        "CMAKE_SYSTEM_PROCESSOR": "ARM64"
+      }
+    },
+    {
+      "name": "linux-x64",
+      "inherits": "base",
+      "cacheVariables": {
+        "PIXELENGINE_TARGET_RID": "linux-x64",
+        "CMAKE_SYSTEM_PROCESSOR": "x86_64"
+      }
+    },
+    {
+      "name": "linux-arm64",
+      "inherits": "base",
+      "toolchainFile": "toolchains/linux-arm64.cmake",
+      "cacheVariables": {
+        "PIXELENGINE_TARGET_RID": "linux-arm64"
+      }
+    },
+    {
+      "name": "osx-x64",
+      "inherits": "base",
+      "cacheVariables": {
+        "PIXELENGINE_TARGET_RID": "osx-x64",
+        "CMAKE_OSX_ARCHITECTURES": "x86_64"
+      }
+    },
+    {
+      "name": "osx-arm64",
+      "inherits": "base",
+      "cacheVariables": {
+        "PIXELENGINE_TARGET_RID": "osx-arm64",
+        "CMAKE_OSX_ARCHITECTURES": "arm64"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "win-x64",
+      "configurePreset": "win-x64",
+      "targets": [
+        "box2d_shared",
+        "box2d_static"
+      ]
+    },
+    {
+      "name": "win-arm64",
+      "configurePreset": "win-arm64",
+      "targets": [
+        "box2d_shared",
+        "box2d_static"
+      ]
+    },
+    {
+      "name": "linux-x64",
+      "configurePreset": "linux-x64",
+      "targets": [
+        "box2d_shared",
+        "box2d_static"
+      ]
+    },
+    {
+      "name": "linux-arm64",
+      "configurePreset": "linux-arm64",
+      "targets": [
+        "box2d_shared",
+        "box2d_static"
+      ]
+    },
+    {
+      "name": "osx-x64",
+      "configurePreset": "osx-x64",
+      "targets": [
+        "box2d_shared",
+        "box2d_static"
+      ]
+    },
+    {
+      "name": "osx-arm64",
+      "configurePreset": "osx-arm64",
+      "targets": [
+        "box2d_shared",
+        "box2d_static"
+      ]
+    }
+  ]
+}

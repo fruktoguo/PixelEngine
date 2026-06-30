@@ -10,7 +10,7 @@
 
 本文档对应路线图里程碑 M0 的「骨架」半边（架构 §18），目标是产出一个能 `dotnet build` / `dotnet test` / `dotnet run` 通过的**空壳解决方案**与完整的本地 + CI 构建管线，为后续每个子系统计划提供可直接落地的工程地基。完成后，任何子系统计划都可以在既定的项目、依赖方向、编译属性、包版本、native 构建入口与 CI 矩阵之上直接写实现代码，而不必再触碰工程脚手架。
 
-范围之内：创建 `PixelEngine.sln` 与 plan/00 §5 列出的全部 18 个项目（`src/` 下 12 个、`demo/` 1 个、`tests/` 4 个、`bench/` 1 个）的 `.csproj` 骨架，并用 `ProjectReference` 强制 plan/00 §5 的依赖方向（无任何反向依赖）；建立 `Directory.Build.props`（统一目标框架、语言、Nullable、ImplicitUsings、Deterministic、分析器、热路径 `AllowUnsafeBlocks`）与 `Directory.Packages.props`（中央包版本管理 CPM，锁定 plan/00 §4 全部 NuGet 包版本）；在 `native/box2d/` 下 vendoring Box2D v3.1 C 源并搭起 CMake **dual-build（静态 + 动态）× 6 RID** 的脚本骨架与 MSBuild 集成入口（详细打包在 plan/15 落实，本文档只建脚手架）；补齐 `.vscode/`、`tools/` 与 GitHub Actions CI 工作流（6-RID 矩阵 build + test，同时验证 CoreCLR/R2R 动态路径与 NativeAOT 静态路径，针对架构 R5「debug 正常 publish 崩」）；最后做冒烟验证：全空项目能 build、空测试能 test、Demo 能 run 起一个空窗口或打印 banner。
+范围之内：创建 `PixelEngine.sln` 与 plan/00 §5 列出的全部 18 个项目（`src/` 下 12 个、`demo/` 1 个、`tests/` 4 个、`bench/` 1 个）的 `.csproj` 骨架，并用 `ProjectReference` 强制 plan/00 §5 的依赖方向（无任何反向依赖）；建立 `Directory.Build.props`（统一目标框架、语言、Nullable、ImplicitUsings、Deterministic、分析器、热路径 `AllowUnsafeBlocks`）与 `Directory.Packages.props`（中央包版本管理 CPM，锁定 plan/00 §4 全部 NuGet 包版本）；在 `native/box2d/` 下 vendoring Box2D v3.1.1 C 源并搭起 CMake **dual-build（静态 + 动态）× 6 RID** 的脚本骨架与 MSBuild 集成入口（详细打包在 plan/15 落实，本文档只建脚手架）；补齐 `.vscode/`、`tools/` 与 GitHub Actions CI 工作流（6-RID 矩阵 build + test，同时验证 CoreCLR/R2R 动态路径与 NativeAOT 静态路径，针对架构 R5「debug 正常 publish 崩」）；最后做冒烟验证：全空项目能 build、空测试能 test、Demo 能 run 起一个空窗口或打印 banner。
 
 范围之外（交由邻居文档）：任何 cell / chunk / 渲染 / 物理 / 脚本 / 编辑器 / 序列化 / 音频的**业务逻辑**与公开 API 设计，均在各自子系统计划落地；`EngineConstants` 的**具体常量值**在 plan/02 定义（本文档仅在 `PixelEngine.Core` 建一个无值的 `EngineConstants` 占位壳，见 §3）；Box2D 绑定的实际 `[LibraryImport]` 签名与 task 桥在 plan/06；native 的 codesign / notarization / 完整发行打包在 plan/15；GC 模式实测定档（架构 §12.4）、基准曲线在对应子系统计划。
 
@@ -37,7 +37,7 @@
 | 覆盖率（可选） | `coverlet.collector` | `6.0.4` | CI 覆盖率收集 |
 | 基准 | `BenchmarkDotNet` | `0.14.0` | 含 `[DisassemblyDiagnoser]`（架构 §17.3） |
 
-数学 / SIMD 走 `System.Numerics` + `System.Runtime.Intrinsics`（BCL，无包）。互操作走 `[LibraryImport]` source-gen（BCL，无包），禁新 `DllImport`（plan/00 §4、架构 §14.3）。物理为 vendored Box2D v3.1 C 源 + 自建 `[LibraryImport]` 薄绑定，**不**引第三方托管绑定包（避开架构 R10 的双 "Box2D.NET" 陷阱）。分析器以 .NET 内置 `Microsoft.CodeAnalysis.NetAnalyzers`（`EnableNETAnalyzers`）为基线；零分配 / SIMD 相关规则的「提升为 error」通过 `.editorconfig` 的 severity 配置实现（plan/00 §6），如需第三方堆分配分析器（如 `Meziantou.Analyzer`）由后续计划评审引入，本文档不强加。
+数学 / SIMD 走 `System.Numerics` + `System.Runtime.Intrinsics`（BCL，无包）。互操作走 `[LibraryImport]` source-gen（BCL，无包），禁新 `DllImport`（plan/00 §4、架构 §14.3）。物理为 vendored Box2D v3.1.1 C 源 + 自建 `[LibraryImport]` 薄绑定，**不**引第三方托管绑定包（避开架构 R10 的双 "Box2D.NET" 陷阱）。分析器以 .NET 内置 `Microsoft.CodeAnalysis.NetAnalyzers`（`EnableNETAnalyzers`）为基线；零分配 / SIMD 相关规则的「提升为 error」通过 `.editorconfig` 的 severity 配置实现（plan/00 §6），如需第三方堆分配分析器（如 `Meziantou.Analyzer`）由后续计划评审引入，本文档不强加。
 
 唯一 native 依赖：Box2D（不变式 10）。OpenAL（OpenAL Soft）、可选 ANGLE 等走 Silk.NET 自带 runtime 包 / 系统分发，不进入本文档的 dual-build fan-out。
 
@@ -52,7 +52,7 @@ PixelEngine/
 ├─ .git/                         已存在（main，无 commit）
 ├─ .gitignore                    已存在（需核对覆盖 bin/ obj/ native 产物 等，见 3.7）
 ├─ .editorconfig                 已存在（需补 §3.3 的分析器 severity，见 3.7）
-├─ .gitmodules                   (新增) Box2D v3.1 子模块声明
+├─ .gitmodules                   (新增) Box2D v3.1.1 子模块声明
 ├─ .gitattributes               (新增) 行尾与 native 二进制属性
 ├─ LICENSE                       已存在（MIT）
 ├─ AGENTS.md                     已存在
@@ -73,7 +73,7 @@ PixelEngine/
 │  ├─ build-native.sh            (新增) Linux/macOS 侧 CMake dual-build 驱动
 │  └─ verify-publish.ps1         (新增) 本地复现 CI 的 R2R/AOT publish 冒烟
 ├─ native/
-│  ├─ box2d/                     (新增) Box2D v3.1 C 源（git submodule）
+│  ├─ box2d/                     (新增) Box2D v3.1.1 C 源（git submodule）
 │  ├─ CMakeLists.txt             (新增) 顶层：dual-build（STATIC+SHARED）
 │  ├─ CMakePresets.json          (新增) 6 RID 预设 + 交叉编译 toolchain
 │  ├─ PixelEngine.Native.targets (新增) MSBuild 集成入口（动态拷贝 + AOT 静态链）
@@ -128,11 +128,11 @@ PixelEngine/
 
 启用 `<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>`（plan/00 §6），把 §2 表中全部包以 `<PackageVersion Include="..." Version="..." />` 集中锁定；各 `.csproj` 只写 `<PackageReference Include="..." />`（无版本）。包按项目分配：`Rendering` 引 Silk.NET.{Windowing,Input,OpenGL}；`Audio` 引 Silk.NET.OpenAL；`Editor` 引 Hexa.NET.ImGui(.Backends/.ImGuizmo/.ImPlot/.ImNodes)；`Scripting` 引 Microsoft.CodeAnalysis.CSharp；`Serialization` 引 K4os.Compression.LZ4；四个测试项目引 xunit + xunit.runner.visualstudio + Microsoft.NET.Test.Sdk(+coverlet.collector)；`Benchmarks` 引 BenchmarkDotNet。`System.Text.Json` 与 `System.Runtime.Loader` 随 net10 框架，不写 PackageReference。所有版本号注明「需核对」，落地时核对 NuGet 实际可用稳定版后回填。
 
-### 3.5 native/box2d — Box2D v3.1 vendoring 与 CMake dual-build 脚手架
+### 3.5 native/box2d — Box2D v3.1.1 vendoring 与 CMake dual-build 脚手架
 
-vendoring 方式：以 git submodule 引入 `erincatto/box2d`，固定到 v3.1 对应的 tag/commit（写入 `.gitmodules` 与 `native/box2d`）。这是唯一 native 依赖（不变式 10、架构 §14.4）。
+vendoring 方式：以 git submodule 引入 `erincatto/box2d`，固定到 v3.1.1 对应的 tag/commit `8c661469c9507d3ad6fbd2fea3f1aa71669c2fe3`（写入 `.gitmodules` 与 `native/box2d`）。这是唯一 native 依赖（不变式 10、架构 §14.4）。
 
-`native/CMakeLists.txt`（顶层）`add_subdirectory(box2d)` 后，定义两个目标：一个 `STATIC`（`.lib`/`.a`，供 NativeAOT 静态链）与一个 `SHARED`（`.dll`/`.so`/`.dylib`，供 CoreCLR 开发与 R2R 发行），即架构 §14.4 的「dual-build」。统一关闭 Box2D 的 sample/test 子目标，开启其 SIMD（x64 SSE2/AVX、arm64 NEON）。Linux 侧动态链 glibc、**不**静态链 libc（架构 §14.4、R5）。
+`native/CMakeLists.txt`（顶层）用 `ExternalProject_Add` 启动两套隔离的 Box2D 子构建，分别产出 `STATIC`（`.lib`/`.a`，供 NativeAOT 静态链）与 `SHARED`（`.dll`/`.so`/`.dylib`，供 CoreCLR 开发与 R2R 发行），即架构 §14.4 的「dual-build」。统一关闭 Box2D 的 sample/test 子目标，保留默认 SIMD（不为泛用 RID 固定 AVX2）。Linux 侧动态链 glibc、**不**静态链 libc（架构 §14.4、R5）。
 
 `native/CMakePresets.json` 提供 6 个 RID 预设：`win-x64`、`win-arm64`、`linux-x64`、`linux-arm64`、`osx-x64`、`osx-arm64`（plan/00 §3、架构 §15）。每个预设指定 generator、架构 / toolchain（arm64 交叉编译 toolchain 文件，macOS 用 `CMAKE_OSX_ARCHITECTURES`），并把产物输出到 `native/out/<rid>/{shared,static}/`。
 
@@ -205,11 +205,11 @@ demo / tests / bench：
 
 native（Box2D dual-build 脚手架）：
 
-- [ ] 以 git submodule 引入 `erincatto/box2d` 到 `native/box2d`，固定 v3.1 tag/commit，写 `.gitmodules`
-- [ ] 新增 `native/CMakeLists.txt`：`add_subdirectory(box2d)`，定义 STATIC + SHARED 双目标，关闭 sample/test，开启 SSE2/AVX/NEON，Linux 动态链 glibc
-- [ ] 新增 `native/CMakePresets.json`：6 RID 预设（win/linux/osx × x64/arm64）+ arm64 交叉 toolchain + `osx` 多架构，产物输出 `native/out/<rid>/{shared,static}/`
-- [ ] 新增 `tools/build-native.ps1` 与 `tools/build-native.sh`：参数化 RID 驱动 `cmake --preset` + `--build`，收集动态库到 `runtimes/<rid>/native/`、静态库到 `native/out/<rid>/static/`
-- [ ] 新增 `native/PixelEngine.Native.targets`：R2R/CoreCLR 动态路径拷 `.dll/.so/.dylib`；NativeAOT 静态路径 `<NativeLibrary Include>`（RID-gated）——仅入口骨架，真实库名 plan/06 接
+- [x] 以 git submodule 引入 `erincatto/box2d` 到 `native/box2d`，固定 v3.1.1 tag/commit，写 `.gitmodules`
+- [x] 新增 `native/CMakeLists.txt`：以隔离 ExternalProject 子构建定义 STATIC + SHARED 双目标，关闭 sample/test，保留默认 SIMD，Linux 动态链 glibc
+- [x] 新增 `native/CMakePresets.json`：6 RID 预设（win/linux/osx × x64/arm64）+ arm64 交叉 toolchain + `osx` 多架构，产物输出 `native/out/<rid>/{shared,static}/`
+- [x] 新增 `tools/build-native.ps1` 与 `tools/build-native.sh`：参数化 RID 驱动 `cmake --preset` + `--build`，收集动态库到 `runtimes/<rid>/native/`、静态库到 `native/out/<rid>/static/`
+- [x] 新增 `native/PixelEngine.Native.targets`：R2R/CoreCLR 动态路径拷 `.dll/.so/.dylib`；NativeAOT 静态路径 `<NativeLibrary Include>`（RID-gated）——仅入口骨架，真实库名 plan/06 接
 - [ ] 新增 `tools/verify-publish.ps1`：本地复现 R2R 与 NativeAOT publish 冒烟，便于 CI 前自检
 
 CI：
@@ -224,7 +224,7 @@ CI：
 - [x] `dotnet test` 四个测试项目全绿（装配冒烟 `[Fact]` 通过）
 - [x] `dotnet run --project demo/PixelEngine.Demo -c Release` 打印 banner 并退出 0
 - [x] `dotnet run --project bench/PixelEngine.Benchmarks -c Release` 正常启动 BenchmarkSwitcher（空集合）
-- [ ] 本机执行 `tools/build-native`（当前 RID），产出 Box2D 静态 + 动态库于约定目录
+- [x] 本机执行 `tools/build-native`（当前 RID），产出 Box2D 静态 + 动态库于约定目录
 
 ## 5. 验收标准
 
@@ -235,10 +235,10 @@ CI：
 - [x] 热路径项目 {Core, Interop, Simulation, Physics, Rendering, Benchmarks} 启用 `AllowUnsafeBlocks`；非热路径项目未启用
 - [x] `TreatWarningsAsErrors` 仅在 CI（`CI=true`）生效，本机开发态不因 warning 阻断
 - [x] `Directory.Packages.props` 启用 CPM，§2 表全部包集中锁定版本；各 `.csproj` 的 `PackageReference` 均不带内联版本；每个版本号附「需核对」标注
-- [ ] `native/box2d` 为固定到 v3.1 的 submodule；`native/CMakeLists.txt` 能产出**静态 + 动态**两类目标；`CMakePresets.json` 覆盖全部 6 RID
-- [ ] `tools/build-native.{ps1,sh}` 在当前平台可跑通，产物落在 `runtimes/<rid>/native/`（动态）与 `native/out/<rid>/static/`（静态）
-- [ ] `native/PixelEngine.Native.targets` 仅被 `Interop` 导入，R2R 动态拷贝与 AOT 静态链两条分支均有入口（真实库名待 plan/06，骨架完整）
-- [ ] 已存在文件全部纳入：`.gitignore` 覆盖产物与 `native/out/`、`runtimes/`；`.editorconfig` 含热路径分析器 `error` 升级；`LICENSE`(MIT)/`AGENTS.md` 未被改动
+- [x] `native/box2d` 为固定到 v3.1.1 的 submodule；`native/CMakeLists.txt` 能产出**静态 + 动态**两类目标；`CMakePresets.json` 覆盖全部 6 RID
+- [x] `tools/build-native.{ps1,sh}` 在当前平台可跑通，产物落在 `runtimes/<rid>/native/`（动态）与 `native/out/<rid>/static/`（静态）
+- [x] `native/PixelEngine.Native.targets` 仅被 `Interop` 导入，R2R 动态拷贝与 AOT 静态链两条分支均有入口（真实库名待 plan/06，骨架完整）
+- [x] 已存在文件全部纳入：`.gitignore` 覆盖产物与 `native/out/`、`runtimes/`；`.editorconfig` 含热路径分析器 `error` 升级；`LICENSE`(MIT)/`AGENTS.md` 未被改动
 - [x] `.vscode/extensions.json` 推荐 C# Dev Kit 与 CMake Tools；`tools/` 构建脚本目录存在
 - [ ] `.github/workflows/ci.yml` 存在并定义 6-RID 矩阵 build+test 与 R2R/AOT 双路径 publish 冒烟两段（覆盖架构 R5）
 - [x] `dotnet build PixelEngine.sln -c Release` 在本机零警告通过（全空项目）
@@ -262,7 +262,7 @@ CI：
 
 - [x] 节点 1：仓库工程化骨架。提交 `global.json`、`nuget.config`、`Directory.Build.props/.targets`、`Directory.Packages.props`、`.gitattributes`、`.vscode/`、补全的 `.gitignore`/`.editorconfig`。提交信息：`build(core): 建立全局 MSBuild 属性、CPM 与工程化配置`
 - [x] 节点 2：解决方案与全部空项目。提交 `PixelEngine.sln` 与 18 个 `.csproj` 骨架、`EngineConstants` 空壳、Demo/tests/bench 最小可运行壳；本机 `dotnet build`/`test`/`run` 冒烟通过。提交信息：`build(core): 建立解决方案与全部项目骨架及依赖方向`
-- [ ] 节点 3：native Box2D dual-build 脚手架。提交 Box2D v3.1 submodule、`native/CMakeLists.txt`、`CMakePresets.json`、`tools/build-native.*`、`PixelEngine.Native.targets`。提交信息：`build(physics): 搭建 Box2D v3.1 vendoring 与 CMake dual-build 脚手架`
+- [x] 节点 3：native Box2D dual-build 脚手架。提交 Box2D v3.1.1 submodule、`native/CMakeLists.txt`、`CMakePresets.json`、`tools/build-native.*`、`PixelEngine.Native.targets`。提交信息：`build(physics): 搭建 Box2D v3.1.1 vendoring 与 CMake dual-build 脚手架`
 - [ ] 节点 4：CI 管线。提交 `.github/workflows/ci.yml`（6-RID 矩阵 + R2R/AOT 双路径验证）与 `tools/verify-publish.ps1`。提交信息：`build(core): 接入 6-RID CI 与 R2R/NativeAOT 双路径发布验证`
 
 每个节点完成并自测后再勾选；遇阻塞标 `- [!] 阻塞：原因` 并上报，不前进（AGENTS.md §2/§5）。
