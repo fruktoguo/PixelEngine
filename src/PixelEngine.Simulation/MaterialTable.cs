@@ -3,10 +3,11 @@ namespace PixelEngine.Simulation;
 /// <summary>
 /// 材质注册表。运行期热路径按 id 访问，name 字典只用于加载、存档 remap 与热重载。
 /// </summary>
-public sealed class MaterialTable
+public sealed class MaterialTable : IMaterialCustomUpdateExecutor
 {
     private MaterialDef[] _defs;
     private bool[] _tombstones;
+    private MaterialCustomUpdate?[] _customUpdates;
     private readonly Dictionary<string, ushort> _nameToId;
 
     /// <summary>
@@ -17,6 +18,7 @@ public sealed class MaterialTable
         _nameToId = new Dictionary<string, ushort>(definitions.Length, StringComparer.Ordinal);
         _defs = CopyAndValidateInitialDefinitions(definitions, _nameToId);
         _tombstones = new bool[_defs.Length];
+        _customUpdates = new MaterialCustomUpdate[_defs.Length];
         Hot = MaterialHotTable.FromDefinitions(_defs);
     }
 
@@ -185,6 +187,7 @@ public sealed class MaterialTable
 
             _defs[i] = MaterialDef.Tombstone((ushort)i);
             _tombstones[i] = true;
+            _customUpdates[i] = null;
         }
 
         if (appended.Count != 0)
@@ -192,6 +195,7 @@ public sealed class MaterialTable
             int oldLength = _defs.Length;
             Array.Resize(ref _defs, oldLength + appended.Count);
             Array.Resize(ref _tombstones, _defs.Length);
+            Array.Resize(ref _customUpdates, _defs.Length);
             for (int i = 0; i < appended.Count; i++)
             {
                 ushort id = checked((ushort)(oldLength + i));
@@ -202,6 +206,54 @@ public sealed class MaterialTable
         RebuildNameIndex();
         Hot = MaterialHotTable.FromDefinitions(_defs);
         return new MaterialReloadResult([.. tombstones], appended.Count, preservedCount, fallbackReplacementCount);
+    }
+
+    /// <summary>
+    /// 为材质注册 custom-update 委托，并设置 HasCustomUpdate 热路径门控位。
+    /// </summary>
+    public void RegisterCustomUpdate(string name, MaterialCustomUpdate update)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(update);
+        if (!TryGetId(name, out ushort id))
+        {
+            throw new ArgumentException($"未知材质 name：{name}。", nameof(name));
+        }
+
+        _customUpdates[id] = update;
+        _defs[id] = _defs[id] with { PropertyFlags = _defs[id].PropertyFlags | MaterialProperty.HasCustomUpdate };
+        Hot = MaterialHotTable.FromDefinitions(_defs);
+    }
+
+    /// <inheritdoc />
+    public bool TryUpdate(
+        ref NeighborWindow window,
+        IChunkSource chunks,
+        int wx,
+        int wy,
+        ushort material,
+        byte parityBit)
+    {
+        if (material >= _customUpdates.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(material), material, "材质 id 超出 custom-update 表范围。");
+        }
+
+        MaterialCustomUpdate? update = _customUpdates[material];
+        if (update is null)
+        {
+            return false;
+        }
+
+        CellCursor cursor = new(
+            wx,
+            wy,
+            material,
+            window.GetFlags(wx, wy),
+            window.GetLifetime(wx, wy));
+        ChunkWorkContext context = new(chunks, wx, wy, parityBit);
+        update(ref cursor, ref window, ref context);
+        return true;
     }
 
     private static MaterialDef[] CopyAndValidateInitialDefinitions(

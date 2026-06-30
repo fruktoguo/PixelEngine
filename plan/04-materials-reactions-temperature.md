@@ -414,15 +414,15 @@ public sealed class TemperatureField
 
 ### 4.6 接触式火传播（架构 §7.5）
 
-- [ ] 火传播实现为普通概率反应（`[fire]+[burnable*]→[fire]+fire`），不开热场亦工作（架构 §7.5）。
-- [ ] 点燃置 burning Flags 位（持久位，架构 §7.1 bit2 / §11.3）；自燃 `temp≥AutoIgnitionTemp`（热场启用时，§3.9）。
-- [ ] burning cell 每 tick 注 `TemperatureOfFire`、按 `GeneratesSmoke` 产烟、按需喷火花粒子；burnout 走 `FireHp`/`Lifetime`（倒计时循环在 plan/05）转 ash/empty（§3.7）。
+- [x] 火传播实现为普通概率反应（`[fire]+[burnable*]→[fire]+fire`），不开热场亦工作（架构 §7.5）。
+- [x] 点燃置 burning Flags 位（持久位，架构 §7.1 bit2 / §11.3）；自燃 `temp≥AutoIgnitionTemp`（热场启用时，§3.9）。
+- [x] burning cell 每 tick 注 `TemperatureOfFire`、按 `GeneratesSmoke` 产烟、按需喷火花粒子；burnout 走 `FireHp`/`Lifetime`（倒计时循环在 plan/05）转 ash/empty（§3.7）。
 
 ### 4.7 custom-update 委托钩子（架构 §7.4）
 
-- [ ] `MaterialCustomUpdate` 委托类型（`ref CellCursor, ref ChunkWorkContext`）（§3.8）。
-- [ ] `MaterialTable.RegisterCustomUpdate(name, fn)` 写 `MaterialCustomUpdate?[] _customUpdates` 并置 `HasCustomUpdate` 位。
-- [ ] CA per-cell 仅当 `HasCustomUpdate` 位置位才调用委托（门控，免 null/虚调用开销）；委托内遵守 parity/halo/dirty/KeepAlive。
+- [x] `MaterialCustomUpdate` 委托类型（`ref CellCursor, ref ChunkWorkContext`）（§3.8）。实现接入现有 `NeighborWindow` seam，委托显式接收 window 与 context。
+- [x] `MaterialTable.RegisterCustomUpdate(name, fn)` 写 `MaterialCustomUpdate?[] _customUpdates` 并置 `HasCustomUpdate` 位。
+- [x] CA per-cell 仅当 `HasCustomUpdate` 位置位才调用委托（门控，免 null/虚调用开销）；委托内遵守 parity/halo/dirty/KeepAlive。
 
 ### 4.8 温度场（架构 §7.5 / §12.5 / §4.3）
 
@@ -452,9 +452,9 @@ public sealed class TemperatureField
 - [x] 反应质量守恒：双输出 / 定向反应在 chunk 边界**不翻倍、不丢失**（边界守恒性质测试通过，引用 `plan/14`，架构 §16.2 / 不变式 #4 / R2）。
 - [x] parity 防重：同对反应一帧至多一次，跨 pass barrier 后另一侧因 parity 跳过（单线程 oracle 比对统计性质，架构 §5.3 / §16.2）。
 - [x] 反应写入恒在 32px halo 内、跨界触发 KeepAlive 唤醒驻留邻居 chunk（雪崩跨界正确传播，架构 §5.5 / §5.8）。
-- [ ] 接触式火传播在**关闭温度场**时正常工作（接触点燃 / 燃烧 / burnout 链），不依赖热场（架构 §7.5）。
+- [x] 接触式火传播在**关闭温度场**时正常工作（接触点燃 / 燃烧 / burnout 链），不依赖热场（架构 §7.5）。
 - [ ] 温度场：ICE→WATR→STEAM 相变链正确（阈值 + 目标，不经反应表）；SIMD stencil 有 scalar fallback 且结果一致；每 N 帧降频与 §4.3 一级降级生效、退化为接触火传播后仍跑（架构 §7.5 / §4.3）。
-- [ ] custom-update：`HasCustomUpdate` 门控仅对声明材质调用委托，委托内写入遵守 parity/halo/dirty/KeepAlive（架构 §7.4）。
+- [x] custom-update：`HasCustomUpdate` 门控仅对声明材质调用委托，委托内写入遵守 parity/halo/dirty/KeepAlive（架构 §7.4）。
 - [ ] 稳态帧零托管堆分配（反应 / 温度 pass 无 LINQ / 闭包 / 装箱 / 字符串；BenchmarkDotNet 内存诊断确认，`AGENTS.md §3`）。
 - [ ] 与不变式 #3/#4/#8/#9 及技术栈 `00` 无冲突（自审通过）。
 

@@ -19,6 +19,7 @@ internal static class ChunkUpdater
         IRigidDamageSink rigidDamageSink,
         IReactionExecutor reactionExecutor,
         ILifetimeSink lifetimeSink,
+        IMaterialCustomUpdateExecutor customUpdateExecutor,
         SimulationDiagnostics diagnostics)
     {
         DirtyRect rect = chunk.CurrentDirty;
@@ -50,9 +51,15 @@ internal static class ChunkUpdater
                     continue;
                 }
 
-                ProcessLifetime(ref window, chunks, lifetimeSink, wx, wy, material);
+                ProcessLifetime(ref window, chunks, lifetimeSink, wx, wy, material, parityBit);
                 material = window.GetMaterial(wx, wy);
                 if (material == 0)
+                {
+                    continue;
+                }
+
+                flags = window.GetFlags(wx, wy);
+                if (CellFlags.MatchesFrame(flags, parityBit) || CellFlags.Has(flags, CellFlags.RigidOwned))
                 {
                     continue;
                 }
@@ -73,7 +80,8 @@ internal static class ChunkUpdater
 
                 ushort activeMaterial = window.GetMaterial(activeX, activeY);
                 bool reacted = TryReactVonNeumann(ref window, chunks, materials, reactionExecutor, diagnostics, activeX, activeY, activeMaterial, parityBit, ref rng);
-                if (!moved && !reacted && materials.TypeOf(material) != CellType.Solid)
+                bool customUpdated = !reacted && TryRunCustomUpdate(ref window, chunks, materials, customUpdateExecutor, activeX, activeY, activeMaterial, parityBit);
+                if (!moved && !reacted && !customUpdated && materials.TypeOf(material) != CellType.Solid)
                 {
                     window.SetFlags(wx, wy, CellFlags.SetParity(window.GetFlags(wx, wy), parityBit));
                 }
@@ -234,7 +242,8 @@ internal static class ChunkUpdater
         ILifetimeSink lifetimeSink,
         int wx,
         int wy,
-        ushort material)
+        ushort material,
+        byte parityBit)
     {
         byte lifetime = window.GetLifetime(wx, wy);
         if (lifetime == 0)
@@ -247,7 +256,7 @@ internal static class ChunkUpdater
         MarkDirty(chunks, wx, wy);
         if (lifetime == 0)
         {
-            lifetimeSink.OnExpired(ref window, wx, wy, material);
+            lifetimeSink.OnExpired(ref window, wx, wy, material, parityBit);
         }
     }
 
@@ -269,6 +278,21 @@ internal static class ChunkUpdater
             TryReactNeighbor(ref window, chunks, reactionExecutor, diagnostics, wx, wy, material, wx - 1, wy, parityBit, ref rng) ||
             TryReactNeighbor(ref window, chunks, reactionExecutor, diagnostics, wx, wy, material, wx + 1, wy, parityBit, ref rng) ||
             TryReactNeighbor(ref window, chunks, reactionExecutor, diagnostics, wx, wy, material, wx, wy + 1, parityBit, ref rng));
+    }
+
+    private static bool TryRunCustomUpdate(
+        ref NeighborWindow window,
+        IChunkSource chunks,
+        MaterialPropsTable materials,
+        IMaterialCustomUpdateExecutor customUpdateExecutor,
+        int wx,
+        int wy,
+        ushort material,
+        byte parityBit)
+    {
+        return material != 0 &&
+            (materials.Hot.PropertyFlags[material] & MaterialProperty.HasCustomUpdate) != 0 &&
+            customUpdateExecutor.TryUpdate(ref window, chunks, wx, wy, material, parityBit);
     }
 
     private static bool TryReactNeighbor(
