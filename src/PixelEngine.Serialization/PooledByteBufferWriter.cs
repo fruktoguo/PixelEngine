@@ -40,7 +40,9 @@ public sealed class PooledByteBufferWriter : IBufferWriter<byte>, IDisposable
         WrittenCount = 0;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 通知 writer 调用方已经写入指定字节数。
+    /// </summary>
     public void Advance(int count)
     {
         ThrowIfDisposed();
@@ -52,14 +54,18 @@ public sealed class PooledByteBufferWriter : IBufferWriter<byte>, IDisposable
         WrittenCount += count;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 获取至少包含 <paramref name="sizeHint" /> 字节可写空间的内存。
+    /// </summary>
     public Memory<byte> GetMemory(int sizeHint = 0)
     {
         Ensure(sizeHint);
         return _buffer.AsMemory(WrittenCount);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 获取至少包含 <paramref name="sizeHint" /> 字节可写空间的 Span。
+    /// </summary>
     public Span<byte> GetSpan(int sizeHint = 0)
     {
         Ensure(sizeHint);
@@ -75,7 +81,9 @@ public sealed class PooledByteBufferWriter : IBufferWriter<byte>, IDisposable
         return WrittenSpan.ToArray();
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 归还租用缓冲，释放 writer 的后续使用权。
+    /// </summary>
     public void Dispose()
     {
         if (_disposed)

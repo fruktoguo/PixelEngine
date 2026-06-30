@@ -313,11 +313,11 @@ public sealed class WorldStreamer
         StreamingRequest[] requests,
         PreparedStreamingOperation[] prepared)
     {
-        public WorldStreamer Streamer { get; } = streamer;
+        internal WorldStreamer Streamer { get; } = streamer;
 
-        public StreamingRequest[] Requests { get; } = requests;
+        internal StreamingRequest[] Requests { get; } = requests;
 
-        public PreparedStreamingOperation[] Prepared { get; } = prepared;
+        internal PreparedStreamingOperation[] Prepared { get; } = prepared;
     }
 
     private sealed class PreparedStreamingOperation
@@ -336,22 +336,22 @@ public sealed class WorldStreamer
             Blob = blob;
         }
 
-        public CompletedStreamingKind Kind { get; }
+        internal CompletedStreamingKind Kind { get; }
 
-        public ChunkCoord Coord { get; }
+        internal ChunkCoord Coord { get; }
 
-        public Chunk? Chunk { get; }
+        internal Chunk? Chunk { get; }
 
-        public Half[]? Temperature { get; }
+        internal Half[]? Temperature { get; }
 
-        public byte[]? Blob { get; }
+        internal byte[]? Blob { get; }
 
-        public static PreparedStreamingOperation Loaded(Chunk chunk, ReadOnlySpan<Half> temperature)
+        internal static PreparedStreamingOperation Loaded(Chunk chunk, ReadOnlySpan<Half> temperature)
         {
             return new PreparedStreamingOperation(CompletedStreamingKind.Loaded, chunk.Coord, chunk, temperature.ToArray(), null);
         }
 
-        public static PreparedStreamingOperation Unloaded(ChunkCoord coord, ReadOnlySpan<byte> blob)
+        internal static PreparedStreamingOperation Unloaded(ChunkCoord coord, ReadOnlySpan<byte> blob)
         {
             return new PreparedStreamingOperation(CompletedStreamingKind.Unloaded, coord, null, null, blob.ToArray());
         }

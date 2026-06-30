@@ -26,7 +26,9 @@ public sealed class RegionFileStore : IChunkStore
         _regionsDirectory = Path.Combine(rootPath, "regions");
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 从 region 文件读取指定 chunk 的 blob；缺失时返回 <see langword="false" />。
+    /// </summary>
     public bool TryRead(ChunkCoord coord, IBufferWriter<byte> destination)
     {
         ArgumentNullException.ThrowIfNull(destination);
@@ -53,13 +55,17 @@ public sealed class RegionFileStore : IChunkStore
         return true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 将指定 chunk blob 原子写入所属 region 文件。
+    /// </summary>
     public void Write(ChunkCoord coord, ReadOnlySpan<byte> blob)
     {
         MutateRegion(coord, blob, delete: false);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 判断指定 chunk blob 是否已存在且 region 索引有效。
+    /// </summary>
     public bool Exists(ChunkCoord coord)
     {
         string path = RegionPath(coord);
@@ -79,7 +85,9 @@ public sealed class RegionFileStore : IChunkStore
         return true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 删除指定 chunk blob；region 文件缺失时保持幂等。
+    /// </summary>
     public void Delete(ChunkCoord coord)
     {
         string path = RegionPath(coord);
@@ -228,6 +236,6 @@ public sealed class RegionFileStore : IChunkStore
 
     private readonly record struct RegionIndexEntry(long Offset, int Length)
     {
-        public bool Exists => Offset != 0 || Length != 0;
+        internal bool Exists => Offset != 0 || Length != 0;
     }
 }

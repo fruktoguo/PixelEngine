@@ -16,7 +16,7 @@ public readonly record struct ChunkBlobHeader(
     int UncompressedPayloadBytes)
 {
     /// <summary>
-    /// chunk blob magic，ASCII "PECH"。
+    /// chunk blob 魔数，ASCII "PECH"。
     /// </summary>
     public const uint Magic = 0x4843_4550u;
 

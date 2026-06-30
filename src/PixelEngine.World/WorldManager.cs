@@ -58,7 +58,7 @@ public sealed class WorldManager
     public WorldCamera Camera { get; }
 
     /// <summary>
-    /// live chunk map。
+    /// 当前 live chunk 驻留表。
     /// </summary>
     public ResidentChunkMap Chunks { get; }
 

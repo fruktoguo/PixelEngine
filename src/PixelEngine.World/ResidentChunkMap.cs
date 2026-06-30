@@ -15,7 +15,9 @@ public sealed class ResidentChunkMap : IChunkSource
     /// </summary>
     public int Count => _chunks.Count;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 当前驻留 chunk 的只读快照，供相位 4 worker 枚举。
+    /// </summary>
     public ReadOnlySpan<Chunk> ResidentChunks => _residentSnapshot;
 
     /// <summary>
@@ -46,7 +48,9 @@ public sealed class ResidentChunkMap : IChunkSource
         return true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 按 chunk 坐标查找当前驻留 chunk。
+    /// </summary>
     public bool TryGetChunk(ChunkCoord coord, out Chunk chunk)
     {
         return _chunks.TryGetValue(coord, out chunk!);
@@ -60,7 +64,9 @@ public sealed class ResidentChunkMap : IChunkSource
         return _chunks.ContainsKey(coord);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 解析中心 chunk 的 3x3 邻域；任一邻居缺失时返回 <see langword="false" />。
+    /// </summary>
     public bool ResolveNeighborhood(ChunkCoord center, out ChunkNeighborhood neighborhood)
     {
         if (!TryGetChunk(new ChunkCoord(center.X - 1, center.Y - 1), out Chunk slot0) ||
