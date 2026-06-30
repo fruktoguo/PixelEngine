@@ -26,6 +26,7 @@ public sealed class EngineBuilder
     private string? _startScene;
     private double _simHz = EngineConstants.DefaultSimHz;
     private int _eventCapacityPerChannel = EngineOptions.DefaultEventCapacityPerChannel;
+    private readonly List<(EnginePhase Phase, EnginePhaseAction Action)> _phaseActions = [];
 
     /// <summary>
     /// 配置窗口尺寸。
@@ -155,6 +156,16 @@ public sealed class EngineBuilder
     }
 
     /// <summary>
+    /// 注册指定运行时相位的同步 hook。
+    /// </summary>
+    public EngineBuilder OnPhase(EnginePhase phase, EnginePhaseAction action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        _phaseActions.Add((phase, action));
+        return this;
+    }
+
+    /// <summary>
     /// 构建 Engine 并完成 Core 服务装配。
     /// </summary>
     public Engine Build()
@@ -189,6 +200,13 @@ public sealed class EngineBuilder
         context.RegisterService(clock);
         context.RegisterService(events);
         context.RegisterService(counters);
-        return new Engine(context);
+        EnginePhasePipeline phases = new();
+        for (int i = 0; i < _phaseActions.Count; i++)
+        {
+            phases.Register(_phaseActions[i].Phase, _phaseActions[i].Action);
+        }
+
+        context.RegisterService(phases);
+        return new Engine(context, phases);
     }
 }
