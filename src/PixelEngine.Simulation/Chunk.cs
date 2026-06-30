@@ -151,6 +151,23 @@ public sealed class Chunk
     }
 
     /// <summary>
+    /// 在帧边界交换 dirty rectangle：current 接收 working 与 incoming 合并结果，working/incoming 清空。
+    /// </summary>
+    public void SwapDirtyRects()
+    {
+        DirtyRect next = WorkingDirty;
+        for (int i = 0; i < _incoming.Length; i++)
+        {
+            next = next.Union(_incoming[i]);
+        }
+
+        CurrentDirty = next;
+        WorkingDirty = DirtyRect.Empty;
+        Array.Fill(_incoming, DirtyRect.Empty);
+        State = CurrentDirty.IsEmpty ? ChunkState.Sleeping : ChunkState.Awake;
+    }
+
+    /// <summary>
     /// 清空所有 dirty rectangle 元数据。
     /// </summary>
     public void ClearDirty()
