@@ -160,16 +160,16 @@ plan/00 §7 明确要求把编译期常量**集中到 `PixelEngine.Core` 的 `En
 - [x] 在实现处写「为什么持久池而非 Parallel.For」「workerIndex 稳定性对 Box2D 桥的意义」注释，引用架构 §5.7/§14.2。
 
 ### 4.5 确定性 RNG（`Random/`，架构 §6.2/§6.3）
-- [ ] `DeterminismMode.cs`：`enum DeterminismMode { HighPerformance, Deterministic }`（置于 `PixelEngine.Core` 根命名空间）。
-- [ ] `IRandomSource.cs`：`NextUInt/NextInt/NextFloat`。
-- [ ] `Pcg32.cs`：`struct Pcg32 : IRandomSource`（有状态高吞吐，默认模式）。
-- [ ] `CounterRng.cs`：`static CounterRng`（`Hash(seed,x,y,counter)`、`ToFloat01`、`NextUInt(...,ref counter)`，纯函数式确定性）。
-- [ ] `RngFactory.cs`：`ForChunk(worldSeed,chunkX,chunkY,frame)`、`CreateDefault`、`CreateDeterministic`（每 chunk 可种子化 + 模式切换 seam，架构 §6.2）。
+- [x] `DeterminismMode.cs`：`enum DeterminismMode { HighPerformance, Deterministic }`（置于 `PixelEngine.Core` 根命名空间）。
+- [x] `IRandomSource.cs`：`NextUInt/NextInt/NextFloat`。
+- [x] `Pcg32.cs`：`struct Pcg32 : IRandomSource`（有状态高吞吐，默认模式）。
+- [x] `CounterRng.cs`：`static CounterRng`（`Hash(seed,x,y,counter)`、`ToFloat01`、`NextUInt(...,ref counter)`，纯函数式确定性）。
+- [x] `RngFactory.cs`：`ForChunk(worldSeed,chunkX,chunkY,frame)`、`CreateDefault`、`CreateDeterministic`（每 chunk 可种子化 + 模式切换 seam，架构 §6.2）。
 
 ### 4.6 事件总线（`Events/`，架构 §10.2）
-- [ ] `RingBuffer.cs`：`RingBuffer<T> where T:unmanaged`（SPSC 无锁，`TryEnqueue/TryDequeue/DrainTo/Count`）。
-- [ ] `MpscRingBuffer.cs`：`MpscRingBuffer<T>`（多生产者单消费者，CAS tail，`TryEnqueue/DrainTo/Count`）。
-- [ ] `EventBus.cs`：`EventBus`（`Channel<T>()` 按类型获取通道，`unmanaged` 约束零装箱）。在注释强调消费绝不进 sim 热循环（架构 §10.2），生产侧仅廉价 enqueue（计入「音频派发 ≤1ms」，架构 §1.4/§10.3）。
+- [x] `RingBuffer.cs`：`RingBuffer<T> where T:unmanaged`（SPSC 无锁，`TryEnqueue/TryDequeue/DrainTo/Count`）。
+- [x] `MpscRingBuffer.cs`：`MpscRingBuffer<T>`（多生产者单消费者，CAS tail，`TryEnqueue/DrainTo/Count`）。
+- [x] `EventBus.cs`：`EventBus`（`Channel<T>()` 按类型获取通道，`unmanaged` 约束零装箱）。在注释强调消费绝不进 sim 热循环（架构 §10.2），生产侧仅廉价 enqueue（计入「音频派发 ≤1ms」，架构 §1.4/§10.3）。
 
 ### 4.7 帧时钟（`Time/`，架构 §4，不变式 #6）
 - [ ] `FrameClock.cs`：`FrameClock`，含 `Dt`（固定、绝不放大）、`SimHz`（60/30 切换）、`FrameIndex/SimTickIndex`、`BeginFrame(realDeltaSeconds)`、`FrameTiming`、`RunSimThisFrame`、`TimeScale`。
@@ -252,7 +252,7 @@ plan/00 §7 明确要求把编译期常量**集中到 `PixelEngine.Core` 的 `En
 - [x] 节点 1：`feat(core): 建立 PixelEngine.Core 项目骨架与数学库`（§4.1 + §4.2，提交信息附「对应计划: plan/02 §实现清单 4.1–4.2」）。
 - [x] 节点 2：`feat(core): 实现内存封装(POH/NativeMemory/SoA/池/双缓冲)`（§4.3）。
 - [x] 节点 3：`feat(core): 实现持久线程池 JobSystem 与 WorkerLocal`（§4.4，含 Box2D task 桥派发面 §14.2）。
-- [ ] 节点 4：`feat(core): 实现确定性 RNG 与无锁事件总线`（§4.5 + §4.6）。
+- [x] 节点 4：`feat(core): 实现确定性 RNG 与无锁事件总线`（§4.5 + §4.6）。
 - [ ] 节点 5：`feat(core): 实现固定步长时间膨胀帧时钟(不追帧)`（§4.7，落地不变式 #6）。
 - [ ] 节点 6：`feat(core): 实现分项计时/计数器诊断与 EngineConstants`（§4.8 + §4.9）。
 - [ ] 节点 7：`test(core): 补齐 Core 基础设施性质/零分配/并发测试`（§5 验收标准对应单测与 BenchmarkDotNet 门禁全绿）。
