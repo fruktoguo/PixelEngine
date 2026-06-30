@@ -264,15 +264,15 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 - [x] `interface ICameraApi`/`IInputApi`/`IAudioApi`/`IGameTime`（plan/08/02/10，架构 §4/§10）
 - [x] 事件订阅：`IEventBus.Subscribe<TEvent>` + `IDisposable` 句柄；引擎相位 1 排空 ring buffer 分发（plan/02，架构 §3.1）
 - [x] 只读值类型：`MaterialId`/`CellView`/`MaterialInfo`/`RaycastHit`/`BodyHandle`/`BodyTransform`/`CharacterHandle`/`CharacterState`/`ParticleSpawnDesc`/`RectF`（blittable `readonly struct`，零分配）
-- [~] `internal ScriptCommandQueue`：blittable 命令 struct + per-thread 缓冲（`ArrayPool`/POH，零分配）；Hosting 在各相位安全窗口 flush（§3.3，架构 §3.3）
+- [!] `internal ScriptCommandQueue`：blittable 命令 struct + per-thread 缓冲（`ArrayPool`/POH，零分配）；Hosting 在各相位安全窗口 flush（§3.3，架构 §3.3）。阻塞：队列与测试已存在，但真实落地需要 Hosting 注入 cell/particle/physics 后端 sink；当前 Physics/粒子服务/脚本 cell 写入后端尚未形成统一公开 sink，不能写假 flush。
 
 ### 4.4 Roslyn 热重载（§3.4）
-- [ ] `internal sealed class ScriptCompiler`：`CSharpCompilation` + 引擎公开程序集 `MetadataReference` + BCL 参考程序集；`Emit` 到 `MemoryStream`；捕获并上报 `Diagnostics`（编译失败保留旧程序集，§3.4）
-- [ ] `internal sealed class ScriptLoadContext : AssemblyLoadContext`（`isCollectible:true`；引擎/BCL 类型回退默认上下文，仅用户脚本私有装载）
-- [ ] `internal sealed class HotReloadService`：`FileSystemWatcher` 去抖；`RequestReload()`；重载在**帧边界相位 1 开始**执行（§3.4，架构 §3.3 相位 2 同理）
-- [ ] 热重载五步：OnDestroy+退订 → `StateSnapshot` 反射快照 → `Unload()`+GC 确认可回收（弱引用探测+超时告警）→ 重建实例+回填状态 → OnStart+恢复订阅（§3.4）
-- [ ] 状态保持策略：默认保留 `[Persist]`/公开字段、其余重置；提供「完全重置」开关；句柄/订阅不保留由 OnStart 重建（§3.4）
-- [ ] 防泄漏：禁止跨 ALC 缓存用户 `Type`/委托/实例；句柄经稳定 id 而非对象引用（§3.4，.NET 可回收 ALC 最佳实践）
+- [x] `internal sealed class ScriptCompiler`：`CSharpCompilation` + 引擎公开程序集 `MetadataReference` + BCL 参考程序集；`Emit` 到 `MemoryStream`；捕获并上报 `Diagnostics`（编译失败保留旧程序集，§3.4）
+- [x] `internal sealed class ScriptLoadContext : AssemblyLoadContext`（`isCollectible:true`；引擎/BCL 类型回退默认上下文，仅用户脚本私有装载）
+- [~] `internal sealed class HotReloadService`：`FileSystemWatcher` 去抖；`RequestReload()`；重载在**帧边界相位 1 开始**执行（§3.4，架构 §3.3 相位 2 同理）。已实现显式 `RequestReload()` 与帧边界 `ApplyPendingReload()`；FileSystemWatcher 去抖仍未接入。
+- [~] 热重载五步：OnDestroy+退订 → `StateSnapshot` 反射快照 → `Unload()`+GC 确认可回收（弱引用探测+超时告警）→ 重建实例+回填状态 → OnStart+恢复订阅（§3.4）。已实现 OnDestroy、状态快照、卸载确认、重建与回填；订阅恢复仍待事件句柄生命周期整合。
+- [~] 状态保持策略：默认保留 `[Persist]`/公开字段、其余重置；提供「完全重置」开关；句柄/订阅不保留由 OnStart 重建（§3.4）。已实现默认保留策略；完全重置开关仍未接入。
+- [x] 防泄漏：禁止跨 ALC 缓存用户 `Type`/委托/实例；句柄经稳定 id 而非对象引用（§3.4，.NET 可回收 ALC 最佳实践）
 
 ### 4.5 异常隔离（§3.5，AGENTS §4）
 - [x] `internal sealed class ScriptInvoker`：每回调/事件处理器单独 `try/catch`（host 边界）
