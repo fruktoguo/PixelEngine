@@ -1,10 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\PixelEngine.Core\PixelEngine.Core.csproj" />
     <ProjectReference Include="..\PixelEngine.Simulation\PixelEngine.Simulation.csproj" />
     <ProjectReference Include="..\PixelEngine.Physics\PixelEngine.Physics.csproj" />
     <ProjectReference Include="..\PixelEngine.World\PixelEngine.World.csproj" />
     <ProjectReference Include="..\PixelEngine.Content\PixelEngine.Content.csproj" />
+    <ProjectReference Include="..\PixelEngine.Audio\PixelEngine.Audio.csproj" />
   </ItemGroup>
 
   <ItemGroup>
