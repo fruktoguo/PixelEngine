@@ -139,12 +139,67 @@ public sealed class SimulationDataStructureTests
         }
 
         TestChunkSource source = new(chunks);
-        Chunk?[] neighborhood = new Chunk?[9];
+        Assert.True(source.ResolveNeighborhood(new ChunkCoord(10, 20), out ChunkNeighborhood neighborhood));
+        Assert.Equal(new ChunkCoord(9, 19), neighborhood.Slot0.Coord);
+        Assert.Equal(new ChunkCoord(10, 20), neighborhood.Slot4.Coord);
+        Assert.Equal(new ChunkCoord(11, 21), neighborhood.Slot8.Coord);
+    }
 
-        Assert.True(source.ResolveNeighborhood(new ChunkCoord(10, 20), neighborhood));
-        Assert.Equal(new ChunkCoord(9, 19), neighborhood[0]!.Coord);
-        Assert.Equal(new ChunkCoord(10, 20), neighborhood[4]!.Coord);
-        Assert.Equal(new ChunkCoord(11, 21), neighborhood[8]!.Coord);
+    /// <summary>
+    /// 验证 NeighborWindow 可跨 3x3 邻域直接读写 Material/Flags/Lifetime，并按 slot 判断跨界 swap。
+    /// </summary>
+    [Fact]
+    public void NeighborWindowReadsWritesAndSwapsAcrossNeighborhood()
+    {
+        TestChunkSource source = CreateNeighborhoodSource(new ChunkCoord(4, 5), out Chunk center, out Chunk right);
+        NeighborWindow window = new(source, center.Coord);
+
+        int centerWx = (center.Coord.X * EngineConstants.ChunkSize) + 10;
+        int centerWy = (center.Coord.Y * EngineConstants.ChunkSize) + 12;
+        int rightWx = ((center.Coord.X + 1) * EngineConstants.ChunkSize) + 2;
+        int rightWy = centerWy;
+
+        window.SetMaterial(centerWx, centerWy, 17);
+        window.SetFlags(centerWx, centerWy, CellFlags.Burning);
+        window.SetLifetime(centerWx, centerWy, 3);
+        window.SetMaterial(rightWx, rightWy, 29);
+        window.SetFlags(rightWx, rightWy, CellFlags.FreeFalling);
+        window.SetLifetime(rightWx, rightWy, 8);
+
+        Assert.Equal(4, window.SlotOf(centerWx, centerWy));
+        Assert.Equal(5, window.SlotOf(rightWx, rightWy));
+        Assert.Equal(17, window.GetMaterial(centerWx, centerWy));
+        Assert.Equal(CellFlags.Burning, window.GetFlags(centerWx, centerWy));
+        Assert.Equal(3, window.GetLifetime(centerWx, centerWy));
+
+        bool crossedSlot = window.Swap(centerWx, centerWy, rightWx, rightWy);
+
+        Assert.True(crossedSlot);
+        Assert.Equal(29, window.GetMaterial(centerWx, centerWy));
+        Assert.Equal(CellFlags.FreeFalling, window.GetFlags(centerWx, centerWy));
+        Assert.Equal(8, window.GetLifetime(centerWx, centerWy));
+        Assert.Equal(17, window.GetMaterial(rightWx, rightWy));
+        Assert.Equal(CellFlags.Burning, window.GetFlags(rightWx, rightWy));
+        Assert.Equal(3, window.GetLifetime(rightWx, rightWy));
+        Assert.Same(right, source.GetRequired(new ChunkCoord(center.Coord.X + 1, center.Coord.Y)));
+    }
+
+    /// <summary>
+    /// 验证 NeighborWindow 构造阶段只解析一次邻域，不做托管堆分配。
+    /// </summary>
+    [Fact]
+    public void NeighborWindowConstructionAndAccessDoNotAllocate()
+    {
+        TestChunkSource source = CreateNeighborhoodSource(new ChunkCoord(0, 0), out Chunk center, out _);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+
+        NeighborWindow window = new(source, center.Coord);
+        window.SetMaterial(0, 0, 5);
+        ushort material = window.GetMaterial(0, 0);
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(5, material);
+        Assert.Equal(0, allocated);
     }
 
     private sealed class CountingRigidDamageSink : IRigidDamageSink
@@ -182,32 +237,55 @@ public sealed class SimulationDataStructureTests
             return _byCoord.TryGetValue(coord, out chunk!);
         }
 
-        public bool ResolveNeighborhood(ChunkCoord center, Span<Chunk?> neighborhood)
+        public Chunk GetRequired(ChunkCoord coord)
         {
-            ArgumentOutOfRangeException.ThrowIfLessThan(neighborhood.Length, 9);
+            return _byCoord[coord];
+        }
 
-            bool allResident = true;
-            int index = 0;
-            for (int dy = -1; dy <= 1; dy++)
+        public bool ResolveNeighborhood(ChunkCoord center, out ChunkNeighborhood neighborhood)
+        {
+            if (!TryGetChunk(new ChunkCoord(center.X - 1, center.Y - 1), out Chunk slot0) ||
+                !TryGetChunk(new ChunkCoord(center.X, center.Y - 1), out Chunk slot1) ||
+                !TryGetChunk(new ChunkCoord(center.X + 1, center.Y - 1), out Chunk slot2) ||
+                !TryGetChunk(new ChunkCoord(center.X - 1, center.Y), out Chunk slot3) ||
+                !TryGetChunk(center, out Chunk slot4) ||
+                !TryGetChunk(new ChunkCoord(center.X + 1, center.Y), out Chunk slot5) ||
+                !TryGetChunk(new ChunkCoord(center.X - 1, center.Y + 1), out Chunk slot6) ||
+                !TryGetChunk(new ChunkCoord(center.X, center.Y + 1), out Chunk slot7) ||
+                !TryGetChunk(new ChunkCoord(center.X + 1, center.Y + 1), out Chunk slot8))
             {
-                for (int dx = -1; dx <= 1; dx++)
-                {
-                    ChunkCoord coord = new(center.X + dx, center.Y + dy);
-                    if (_byCoord.TryGetValue(coord, out Chunk? chunk))
-                    {
-                        neighborhood[index] = chunk;
-                    }
-                    else
-                    {
-                        neighborhood[index] = null;
-                        allResident = false;
-                    }
-
-                    index++;
-                }
+                neighborhood = default;
+                return false;
             }
 
-            return allResident;
+            neighborhood = new ChunkNeighborhood(slot0, slot1, slot2, slot3, slot4, slot5, slot6, slot7, slot8);
+            return true;
         }
+    }
+
+    private static TestChunkSource CreateNeighborhoodSource(ChunkCoord centerCoord, out Chunk center, out Chunk right)
+    {
+        Chunk[] chunks = new Chunk[9];
+        int index = 0;
+        right = null!;
+        center = null!;
+        for (int dy = -1; dy <= 1; dy++)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                Chunk chunk = new(new ChunkCoord(centerCoord.X + dx, centerCoord.Y + dy));
+                chunks[index++] = chunk;
+                if (dx == 0 && dy == 0)
+                {
+                    center = chunk;
+                }
+                else if (dx == 1 && dy == 0)
+                {
+                    right = chunk;
+                }
+            }
+        }
+
+        return new TestChunkSource(chunks);
     }
 }

@@ -16,7 +16,7 @@ public interface IChunkSource
     bool TryGetChunk(ChunkCoord coord, out Chunk chunk);
 
     /// <summary>
-    /// 解析以 center 为中心的 3x3 邻域。输出 span 长度必须至少为 9，slot=(dy+1)*3+(dx+1)。
+    /// 解析以 center 为中心的 3x3 邻域，slot=(dy+1)*3+(dx+1)。
     /// </summary>
-    bool ResolveNeighborhood(ChunkCoord center, Span<Chunk?> neighborhood);
+    bool ResolveNeighborhood(ChunkCoord center, out ChunkNeighborhood neighborhood);
 }
