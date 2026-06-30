@@ -165,6 +165,50 @@ public sealed class WorldStreamerTests
     }
 
     /// <summary>
+    /// 验证持续平移和后台批处理 I/O 下，Detached chunk 不留在 live map，修改能跨装卸边界保留。
+    /// </summary>
+    [Fact]
+    public void StreamingPanningStressKeepsDetachedOutOfLiveMapAndPersistsEdit()
+    {
+        using JobSystem jobs = new(workerCount: 2)
+        {
+            SingleThreadThreshold = 0,
+        };
+        using TempWorldDirectory world = TempWorldDirectory.Create();
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("sand", CellType.Powder));
+        int chunkBytes = ChunkMemoryBudget.EstimatedResidentChunkBytes;
+        WorldManager manager = new(
+            new WorldCamera(32, 32, viewportCellsX: 64, viewportCellsY: 64),
+            new TemperatureField(),
+            materials,
+            world.Path,
+            fallbackMaterialId: 0,
+            new WorldStreamingConfig
+            {
+                ActivationMarginChunks = 0,
+                BorderRingWidth = 1,
+                ResidentMemoryCapBytes = chunkBytes * 2L,
+                EvictionTargetBytes = chunkBytes,
+                MaxStreamOpsPerFrame = 64,
+            });
+        long frame = 1;
+        Pump(manager, jobs, ref frame, iterations: 2);
+        Assert.True(manager.Chunks.TryGetChunk(new ChunkCoord(0, 0), out Chunk edited));
+        edited.Material[0] = 1;
+
+        long[] focusX = [320, 640, 32, 640, 32];
+        for (int i = 0; i < focusX.Length; i++)
+        {
+            manager.UpdateCamera(focusX[i], 32);
+            Pump(manager, jobs, ref frame, iterations: 3);
+            AssertNoDetachedResident(manager);
+        }
+
+        Assert.True(manager.Chunks.TryGetChunk(new ChunkCoord(0, 0), out Chunk reloaded));
+        Assert.Equal(1, reloaded.Material[0]);
+    }
+
+    /// <summary>
     /// 验证 ProcessIoOnce(JobSystem) 可并行准备多个 chunk 的装载解码结果。
     /// </summary>
     [Fact]
@@ -205,6 +249,24 @@ public sealed class WorldStreamerTests
         ArrayBufferWriter<byte> writer = new();
         new ChunkCodec().Encode(new ChunkSnapshot(coord, chunk.Material, chunk.Flags, chunk.Lifetime, temperature), writer);
         store.Write(coord, writer.WrittenSpan);
+    }
+
+    private static void Pump(WorldManager manager, JobSystem jobs, ref long frame, int iterations)
+    {
+        for (int i = 0; i < iterations; i++)
+        {
+            manager.ApplyResidency(frame++);
+            _ = manager.Streamer.ProcessIoOnce(jobs);
+        }
+    }
+
+    private static void AssertNoDetachedResident(WorldManager manager)
+    {
+        foreach (Chunk chunk in manager.Chunks.ResidentChunks)
+        {
+            Assert.True(manager.Residency.TryGetInfo(chunk.Coord, out ChunkResidencyInfo info));
+            Assert.NotEqual(ChunkResidencyState.Detached, info.State);
+        }
     }
 
     private static MaterialRemap IdentityRemap()
