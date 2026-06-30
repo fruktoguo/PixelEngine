@@ -22,8 +22,10 @@ public sealed class Entity
     public Scene Scene { get; }
 
     /// <summary>
-    /// 向实体添加指定组件类型；结构性变更由 Scene 统一管理。
+    /// 向实体添加指定组件类型；脚本可在相位 1 调用，结构性变更由 Scene 统一管理。
     /// </summary>
+    /// <typeparam name="T">要添加的组件类型。</typeparam>
+    /// <returns>新创建并挂载到该实体的组件实例。</returns>
     public T AddComponent<T>()
         where T : class, IComponent, new()
     {
@@ -31,8 +33,11 @@ public sealed class Entity
     }
 
     /// <summary>
-    /// 尝试读取指定组件类型。
+    /// 尝试读取指定组件类型；脚本可在相位 1 调用。
     /// </summary>
+    /// <typeparam name="T">要读取的组件类型。</typeparam>
+    /// <param name="component">找到时返回组件实例；未找到时为默认值。</param>
+    /// <returns>若实体上存在该组件则返回 true，否则返回 false。</returns>
     public bool TryGetComponent<T>(out T component)
         where T : class, IComponent
     {
@@ -40,8 +45,9 @@ public sealed class Entity
     }
 
     /// <summary>
-    /// 移除指定组件类型。
+    /// 移除指定组件类型；脚本可在相位 1 调用。
     /// </summary>
+    /// <typeparam name="T">要移除的组件类型。</typeparam>
     public void RemoveComponent<T>()
         where T : class, IComponent
     {
@@ -49,7 +55,7 @@ public sealed class Entity
     }
 
     /// <summary>
-    /// 请求销毁实体；实际移除由 Scene 在安全窗口统一执行。
+    /// 请求销毁实体；脚本可在相位 1 调用，实际移除由 Scene 在帧末安全窗口统一执行。
     /// </summary>
     public void Destroy()
     {
