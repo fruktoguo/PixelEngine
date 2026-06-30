@@ -137,6 +137,40 @@ public sealed class TemperatureFieldTests
         Assert.Equal(100, field.GetTemperature(10, 10));
     }
 
+    /// <summary>
+    /// 验证温度子块能按 chunk 导出为 Half 并导入到新温度场。
+    /// </summary>
+    [Fact]
+    public void ExportAndImportBlockRoundTripsChunkTemperature()
+    {
+        ChunkCoord coord = new(-2, 3);
+        TemperatureField source = new(storageKind: TemperatureStorageKind.Float32);
+        source.AddHeat((coord.X << 6) + 8, (coord.Y << 6) + 12, 42.5f);
+        Half[] block = new Half[TemperatureField.BlockArea];
+
+        source.ExportBlock(coord, block);
+
+        TemperatureField destination = new(storageKind: TemperatureStorageKind.Float16);
+        destination.ImportBlock(coord, block);
+        Assert.Equal(42.5f, destination.GetTemperature((coord.X << 6) + 8, (coord.Y << 6) + 12));
+    }
+
+    /// <summary>
+    /// 验证缺失温度块导出为全零，导入长度错误会失败。
+    /// </summary>
+    [Fact]
+    public void ExportBlockClearsMissingChunkAndImportValidatesLength()
+    {
+        TemperatureField field = new();
+        Half[] block = new Half[TemperatureField.BlockArea];
+        Array.Fill(block, (Half)3);
+
+        field.ExportBlock(new ChunkCoord(9, 9), block);
+
+        Assert.All(block, value => Assert.Equal((Half)0, value));
+        _ = Assert.Throws<ArgumentException>(() => field.ImportBlock(new ChunkCoord(0, 0), block.AsSpan(1)));
+    }
+
     private static MaterialTable CreateMaterials(float waterHeatCapacity = 1f, byte waterHeatConduct = 255)
     {
         MaterialDef[] definitions =

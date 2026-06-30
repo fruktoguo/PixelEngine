@@ -139,6 +139,47 @@ public sealed class TemperatureField
     }
 
     /// <summary>
+    /// 导出指定 chunk 的 16x16 温度子块，格式固定为 Half，供存档写入。
+    /// </summary>
+    public void ExportBlock(ChunkCoord coord, Span<Half> destination)
+    {
+        if (destination.Length != BlockArea)
+        {
+            throw new ArgumentException("温度子块导出缓冲长度必须等于 BlockArea。", nameof(destination));
+        }
+
+        if (!_blocks.TryGetValue(coord, out TemperatureBlock? block))
+        {
+            destination.Clear();
+            return;
+        }
+
+        for (int i = 0; i < destination.Length; i++)
+        {
+            destination[i] = (Half)block.ReadCurrent(i);
+        }
+    }
+
+    /// <summary>
+    /// 导入指定 chunk 的 16x16 温度子块，读档后作为当前温度场状态。
+    /// </summary>
+    public void ImportBlock(ChunkCoord coord, ReadOnlySpan<Half> source)
+    {
+        if (source.Length != BlockArea)
+        {
+            throw new ArgumentException("温度子块导入缓冲长度必须等于 BlockArea。", nameof(source));
+        }
+
+        TemperatureBlock block = GetOrCreateBlock(coord);
+        for (int i = 0; i < source.Length; i++)
+        {
+            block.WriteCurrent(i, (float)source[i]);
+        }
+
+        block.CopyCurrentToScratch();
+    }
+
+    /// <summary>
     /// 执行一次 5-point von Neumann 热传导。
     /// </summary>
     public void ConductStep(IChunkSource chunks, MaterialHotTable materials, uint frameIndex = 0, uint worldSeed = 0)
@@ -484,6 +525,17 @@ public sealed class TemperatureField
             _currentHalf![index] = (Half)((float)_currentHalf[index] + delta);
         }
 
+        public void WriteCurrent(int index, float value)
+        {
+            if (StorageKind == TemperatureStorageKind.Float32)
+            {
+                _currentFloat![index] = value;
+                return;
+            }
+
+            _currentHalf![index] = (Half)value;
+        }
+
         public void WriteScratch(int index, float value)
         {
             if (StorageKind == TemperatureStorageKind.Float32)
@@ -493,6 +545,17 @@ public sealed class TemperatureField
             }
 
             _scratchHalf![index] = (Half)value;
+        }
+
+        public void CopyCurrentToScratch()
+        {
+            if (StorageKind == TemperatureStorageKind.Float32)
+            {
+                _currentFloat!.CopyTo(_scratchFloat!, 0);
+                return;
+            }
+
+            _currentHalf!.CopyTo(_scratchHalf!, 0);
         }
 
         public void Swap()

@@ -19,7 +19,7 @@ public sealed class MigrationChain
         }
 
         TargetVersion = targetVersion;
-        _migrators = new Dictionary<int, ISaveMigrator>();
+        _migrators = [];
         foreach (ISaveMigrator migrator in migrators)
         {
             ArgumentNullException.ThrowIfNull(migrator);
