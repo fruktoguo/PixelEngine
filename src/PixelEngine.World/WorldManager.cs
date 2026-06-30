@@ -93,6 +93,7 @@ public sealed class WorldManager
         _ = Streamer.ApplyPrepared(frame);
         ChunkRect active = _activationPolicy.ComputeActive(Camera, Config);
         ChunkRect border = _activationPolicy.ComputeBorder(active, Config);
+        ClassifyResidents(active, border, frame);
         ResidencyPlan plan = _residencyPlanner.Plan(active, border, Residency, MemoryBudget);
         Streamer.SubmitPlan(plan);
     }
@@ -103,5 +104,30 @@ public sealed class WorldManager
     public void RunStreaming(CancellationToken cancellationToken)
     {
         Streamer.ProcessIo(cancellationToken);
+    }
+
+    private void ClassifyResidents(ChunkRect active, ChunkRect border, long frame)
+    {
+        foreach (Chunk chunk in Chunks.ResidentChunks)
+        {
+            ChunkResidencyState state = active.Contains(chunk.Coord)
+                ? ChunkResidencyState.Active
+                : border.Contains(chunk.Coord)
+                    ? ChunkResidencyState.Border
+                    : ChunkResidencyState.Cached;
+
+            if (state == ChunkResidencyState.Border)
+            {
+                chunk.ClearDirty();
+            }
+
+            Residency.Set(
+                chunk.Coord,
+                new ChunkResidencyInfo(
+                    state,
+                    frame,
+                    ChunkMemoryBudget.EstimatedResidentChunkBytes,
+                    DirtySinceLoad: false));
+        }
     }
 }

@@ -205,6 +205,7 @@ public sealed class Chunk
         CurrentDirty = DirtyRect.Empty;
         WorkingDirty = DirtyRect.Empty;
         ClearIncomingDirty();
+        State = ChunkState.Sleeping;
     }
 
     private void ClearIncomingDirty()
