@@ -215,20 +215,20 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 
 ### 5.3 chunk 格式与位区分
 
-- [ ] **存档往返逐 cell 等价测试通过**（引用 plan/14）：`ChunkCodec.Encode→Decode` 后 `Material`/`Lifetime`/持久 `Flags`/`Temperature` 逐 cell 等价（架构 §16.2）。
-- [ ] 持久位（burning 等）入盘并读回；瞬时位（parity、settled/sleep、freefalling）不入盘，读档时按规则重置（架构 §11.3/§7.1）。
-- [ ] chunk payload 经 RLE+LZ4（K4os），均匀 chunk 压缩率高（架构 §11.3）。
+- [x] **存档往返逐 cell 等价测试通过**（引用 plan/14）：`ChunkCodec.Encode→Decode` 后 `Material`/`Lifetime`/持久 `Flags`/`Temperature` 逐 cell 等价（架构 §16.2）。
+- [x] 持久位（burning 等）入盘并读回；瞬时位（parity、settled/sleep、freefalling）不入盘，读档时按规则重置（架构 §11.3/§7.1）。
+- [x] chunk payload 经 RLE+LZ4（K4os），均匀 chunk 压缩率高（架构 §11.3）。
 
 ### 5.4 material 稳定性与 manifest
 
-- [ ] 入盘只用 name；存档头 / region 头写 id↔name 表；运行时 id 绝不作为持久语义入盘（不变式 #8、架构 §11.2）。
-- [ ] **存档往返 + 重映射测试通过**（引用 plan/14）：改 materials.json 顺序、增删材质后旧档仍逐 cell 语义正确重映射；删除材质的 cell 走 fallback 并有诊断计数（架构 §16.2、R15）。
-- [ ] manifest 持久化 world seed / 版本 / 游戏时间 / 玩家态 / id↔name 表 / 在飞自由粒子 / 刚体（足以读档重建并续跑）；温度场随 chunk 子块落盘（架构 §11.3）。
+- [x] 入盘只用 name；存档头 / region 头写 id↔name 表；运行时 id 绝不作为持久语义入盘（不变式 #8、架构 §11.2）。
+- [x] **存档往返 + 重映射测试通过**（引用 plan/14）：改 materials.json 顺序、增删材质后旧档仍逐 cell 语义正确重映射；删除材质的 cell 走 fallback 并有诊断计数（架构 §16.2、R15）。
+- [x] manifest 持久化 world seed / 版本 / 游戏时间 / 玩家态 / id↔name 表 / 在飞自由粒子 / 刚体（足以读档重建并续跑）；温度场随 chunk 子块落盘（架构 §11.3）。
 - [ ] 整世界存档在帧边界对一致快照执行，不读半更新网格（架构 §11.5）。
 
 ### 5.5 版本迁移与两类持久化区分
 
-- [ ] **版本迁移链测试通过**（引用 plan/14）：旧 `FormatVersion` 存档经迁移链逐级升级后读取正确；新增 / 重排材质无需迁移（name 基机制，架构 §11.4）。
+- [x] **版本迁移链测试通过**（引用 plan/14）：旧 `FormatVersion` 存档经迁移链逐级升级后读取正确；新增 / 重排材质无需迁移（name 基机制，架构 §11.4）。
 - [ ] 流式（透明、隐式、持续）与存档（显式 / 周期、粗粒度快照）走分离入口（`WorldStreamer` vs `WorldSaveService`），共用 `ChunkCodec` 与 `MaterialRemap`（架构 §11.1）。
 - [ ] v1 不提供帧级 rewind / undo，仅粗粒度快照存档（架构 §6.3）。
 
