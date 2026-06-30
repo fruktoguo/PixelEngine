@@ -24,6 +24,10 @@ public sealed class WorldSaveService(ChunkCodec? chunkCodec = null, ManifestCode
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(stateSource);
         ArgumentException.ThrowIfNullOrWhiteSpace(savePath);
+        if (!world.IsFrameBoundary)
+        {
+            throw new InvalidOperationException("WorldSaveService.SaveAll 只能在相位 2 或专门暂停点读取一致快照。");
+        }
 
         _ = Directory.CreateDirectory(savePath);
         RegionFileStore chunkStore = new(savePath);
