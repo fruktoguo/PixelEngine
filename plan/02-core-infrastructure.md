@@ -145,12 +145,12 @@ plan/00 §7 明确要求把编译期常量**集中到 `PixelEngine.Core` 的 `En
 - [x] `Mathx.cs`：`FloorDiv`、`Mod`（floored，负坐标 chunk 分解正确）、`CeilDiv`、`Clamp(int)`、`Clamp01`、`Lerp`、`NextPowerOfTwo`、`IsPowerOfTwo`、`Log2Int`。
 
 ### 4.3 内存（`Memory/`，架构 §7.1/§12.6/§14.3，AGENTS.md §3）
-- [ ] `PinnedBuffer.cs`：`PinnedBuffer<T>`（`GC.AllocateArray(pinned:true)`），含 `Length/Span/Memory/Pointer/GetReference/this[]/Clear/Dispose`。
-- [ ] `NativeBuffer.cs`：`NativeBuffer<T>`（`NativeMemory.Alloc/AllocZeroed`），含 `Length/Pointer/Span/GetReference/this[]/Clear/Dispose` + finalizer。
-- [ ] `SoaColumn.cs` + `SoaBuffer.cs`：`MemoryKind` 枚举、`SoaColumn<T>`、`abstract SoaBuffer`（`Count/Capacity/DefineColumn<T>/EnsureCapacity/Clear/Dispose`），供 CellGrid/粒子池派生（架构 §7.1）。
-- [ ] `Pool.cs`：`Pool<T>`（`factory/onRent/onReturn/preallocate/maxRetained`、`Rent/Return/CountInactive`）。
-- [ ] `RentedArray.cs`：`readonly struct RentedArray<T>`（`ArrayPool<T>.Shared` 封装，`Rent/Dispose/Array/Length/Span`）。
-- [ ] `DoubleBuffer.cs`：`DoubleBuffer<TBuffer>`（`Front/Back/Swap`，相位边界翻转，架构 §3.2，相位 6/9/10 用）。
+- [x] `PinnedBuffer.cs`：`PinnedBuffer<T>`（`GC.AllocateArray(pinned:true)`），含 `Length/Span/Memory/Pointer/GetReference/this[]/Clear/Dispose`。
+- [x] `NativeBuffer.cs`：`NativeBuffer<T>`（`NativeMemory.Alloc/AllocZeroed`），含 `Length/Pointer/Span/GetReference/this[]/Clear/Dispose` + finalizer。
+- [x] `SoaColumn.cs` + `SoaBuffer.cs`：`MemoryKind` 枚举、`SoaColumn<T>`、`abstract SoaBuffer`（`Count/Capacity/DefineColumn<T>/EnsureCapacity/Clear/Dispose`），供 CellGrid/粒子池派生（架构 §7.1）。
+- [x] `Pool.cs`：`Pool<T>`（`factory/onRent/onReturn/preallocate/maxRetained`、`Rent/Return/CountInactive`）。
+- [x] `RentedArray.cs`：`readonly struct RentedArray<T>`（`ArrayPool<T>.Shared` 封装，`Rent/Dispose/Array/Length/Span`）。
+- [x] `DoubleBuffer.cs`：`DoubleBuffer<TBuffer>`（`Front/Back/Swap`，相位边界翻转，架构 §3.2，相位 6/9/10 用）。
 
 ### 4.4 持久线程池（`Threading/`，架构 §5.7/§12.7/§14.2，R7/R14）
 - [ ] `JobSystem.cs`：固定 worker + 帧 barrier 的 fork-join 调度器；`WorkerCount`、`ParallelRange(itemCount,minRange,RangeJob,context)`、`ParallelFor<TState>(ReadOnlySpan<TState>,ChunkJob)`、`Schedule/Wait/JobHandle`、`SingleThreadThreshold`（R7 回退）、稳定 `workerIndex`、`Dispose`。**非每帧 Parallel.For**。
@@ -250,7 +250,7 @@ plan/00 §7 明确要求把编译期常量**集中到 `PixelEngine.Core` 的 `En
 按 AGENTS.md §6 中文小步提交，每节点完成即提交（`scope=core`）：
 
 - [x] 节点 1：`feat(core): 建立 PixelEngine.Core 项目骨架与数学库`（§4.1 + §4.2，提交信息附「对应计划: plan/02 §实现清单 4.1–4.2」）。
-- [ ] 节点 2：`feat(core): 实现内存封装(POH/NativeMemory/SoA/池/双缓冲)`（§4.3）。
+- [x] 节点 2：`feat(core): 实现内存封装(POH/NativeMemory/SoA/池/双缓冲)`（§4.3）。
 - [ ] 节点 3：`feat(core): 实现持久线程池 JobSystem 与 WorkerLocal`（§4.4，含 Box2D task 桥派发面 §14.2）。
 - [ ] 节点 4：`feat(core): 实现确定性 RNG 与无锁事件总线`（§4.5 + §4.6）。
 - [ ] 节点 5：`feat(core): 实现固定步长时间膨胀帧时钟(不追帧)`（§4.7，落地不变式 #6）。
