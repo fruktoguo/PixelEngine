@@ -385,21 +385,21 @@ public sealed class TemperatureField
 
 ### 4.3 反应表数据模型与 cache-aware 查表（架构 §7.4 / R12）
 
-- [ ] `Reaction` `readonly record struct`（InputA/InputB/OutputA/OutputB/Probability/Flags，架构 §7.4）。
-- [ ] `ReactionFlags : byte` `[Flags]`（Fast/Directional/SpawnParticle/EmitHeat + bit4-7 预留方向码，架构 §7.4）。
-- [ ] `ReactionTable`：packed `Reaction[] _packed`（按 owner 分组连续）、`ReactionLookupMode[] _modeByMat`、DirectTable 材质私有 `ushort[]?[] _directTables`（§3.5）。
-- [ ] `ReactionLookupMode : byte`（None/Linear/Binary/DirectTable）；加载期按 `ReactionCount` 选模式（阈值按实测 cache-miss 定，架构 R12）。
-- [ ] `Find(mat, neighbor, in def)`：`ReactionCount==0` 一次比较早退；Linear 线性 / Binary 二分（切片按 InputB 升序）/ DirectTable 直查（§3.5）。
-- [ ] `At(packedIndex)` 返回 `ref readonly Reaction`。
-- [ ] **明确反对** `int[N*N]` 大表（架构 §7.4 修正，代码注释引用 §7.4 / R12）。
+- [x] `Reaction` `readonly record struct`（InputA/InputB/OutputA/OutputB/Probability/Flags，架构 §7.4）。
+- [x] `ReactionFlags : byte` `[Flags]`（Fast/Directional/SpawnParticle/EmitHeat + bit4-7 预留方向码，架构 §7.4）。
+- [x] `ReactionTable`：packed `Reaction[] _packed`（按 owner 分组连续）、`ReactionLookupMode[] _modeByMat`、DirectTable 材质私有 `ushort[]?[] _directTables`（§3.5）。
+- [x] `ReactionLookupMode : byte`（None/Linear/Binary/DirectTable）；加载期按 `ReactionCount` 选模式（阈值按实测 cache-miss 定，架构 R12）。
+- [x] `Find(mat, neighbor, in def)`：`ReactionCount==0` 一次比较早退；Linear 线性 / Binary 二分（切片按 InputB 升序）/ DirectTable 直查（§3.5）。
+- [x] `At(packedIndex)` 返回 `ref readonly Reaction`。
+- [x] **明确反对** `int[N*N]` 大表（架构 §7.4 修正，代码注释引用 §7.4 / R12）。
 
 ### 4.4 `[tag]` 展开规则契约（架构 §7.4，展开执行在 Content）
 
-- [ ] 定义 `MaterialTag`→`MaterialProperty` 位映射，供按位筛选 tag 成员材质（§3.4 规则 1）。
-- [ ] 定义笛卡尔积展开规则：输入 tag 集合 × 集合 → 具体材质对（§3.4 规则 2）。
-- [ ] 定义输出 tag 解析（tag `representative` 代表材质）（§3.4 规则 3）。
-- [ ] 定义有序对去重 `min(matA,matB)` 归一 + 双 owner 切片物化（普通反应）/ 单 owner（定向）（§3.4 规则 4 / §3.5）。
-- [ ] 定义概率映射 rate(0-100)→byte(0-255)（§3.4 规则 5）。
+- [x] 定义 `MaterialTag`→`MaterialProperty` 位映射，供按位筛选 tag 成员材质（§3.4 规则 1）。
+- [x] 定义笛卡尔积展开规则：输入 tag 集合 × 集合 → 具体材质对（§3.4 规则 2）。
+- [x] 定义输出 tag 解析（tag `representative` 代表材质）（§3.4 规则 3）。
+- [x] 定义有序对去重 `min(matA,matB)` 归一 + 双 owner 切片物化（普通反应）/ 单 owner（定向）（§3.4 规则 4 / §3.5）。
+- [x] 定义概率映射 rate(0-100)→byte(0-255)（§3.4 规则 5）。
 
 ### 4.5 反应执行（不变式 #3 / #4，架构 §5.3 / §5.5 / §5.8 / §7.4）
 
@@ -447,8 +447,8 @@ public sealed class TemperatureField
 - [x] `MaterialDef` 含架构 §7.3 全部字段，无遗漏；`MaterialHotTable` 热路径不触碰冷字段（字段审计 + `MaterialTableTests` 覆盖；反汇编随后续热路径基准确认）。
 - [ ] name↔id：改 `materials.json` 顺序 / 增删材质后，`BuildRemapLut` 使旧档逐 cell 正确重映射，缺失材质落 fallback（与 plan/07 存档往返测试联动通过，架构 §11.2 / §16.2，不变式 #8）。
 - [ ] 热重载 `ReloadStable` 后既有 id 不变、live 网格不损坏，删除材质活 cell 重映射 fallback 并输出诊断计数（架构 §17.4）。
-- [ ] `[tag]` 展开正确：tag 成员集合按位筛选无误、笛卡尔积齐全、有序对去重无对称重复、rate→byte 映射正确（反应表测试通过，架构 §16.2）。
-- [ ] cache-aware 查表：惰性材质（`ReactionCount==0`）一次比较早退、热路径不触反应数据；Linear/Binary/DirectTable 三模式结果一致；**无 `int[N*N]` 大表**（代码审查 + benchmark cache-miss 确认，架构 §7.4 / R12）。
+- [x] `[tag]` 展开正确：tag 成员集合按位筛选无误、笛卡尔积齐全、有序对去重无对称重复、rate→byte 映射正确（反应表测试通过，架构 §16.2）。
+- [ ] cache-aware 查表：惰性材质（`ReactionCount==0`）一次比较早退、热路径不触反应数据；Linear/Binary/DirectTable 三模式结果一致；**无 `int[N*N]` 大表**（代码审查 + benchmark cache-miss 确认，架构 §7.4 / R12）。实现与单元测试已覆盖，cache-miss benchmark 随反应执行热路径补齐。
 - [ ] 反应质量守恒：双输出 / 定向反应在 chunk 边界**不翻倍、不丢失**（边界守恒性质测试通过，引用 `plan/14`，架构 §16.2 / 不变式 #4 / R2）。
 - [ ] parity 防重：同对反应一帧至多一次，跨 pass barrier 后另一侧因 parity 跳过（单线程 oracle 比对统计性质，架构 §5.3 / §16.2）。
 - [ ] 反应写入恒在 32px halo 内、跨界触发 KeepAlive 唤醒驻留邻居 chunk（雪崩跨界正确传播，架构 §5.5 / §5.8）。
