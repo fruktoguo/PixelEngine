@@ -117,4 +117,28 @@ public sealed class MaterialPropsTable
     {
         return Dispersion[materialId];
     }
+
+    /// <summary>
+    /// 返回材质反应表起始索引。
+    /// </summary>
+    public int ReactionStartOf(ushort materialId)
+    {
+        return ReactionStart[materialId];
+    }
+
+    /// <summary>
+    /// 返回材质可触发反应数量。
+    /// </summary>
+    public byte ReactionCountOf(ushort materialId)
+    {
+        return ReactionCount[materialId];
+    }
+
+    /// <summary>
+    /// 返回材质默认 lifetime。
+    /// </summary>
+    public ushort DefaultLifetimeOf(ushort materialId)
+    {
+        return DefaultLifetime[materialId];
+    }
 }

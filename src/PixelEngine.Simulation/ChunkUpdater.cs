@@ -16,7 +16,9 @@ internal static class ChunkUpdater
         byte parityBit,
         uint frameIndex,
         ulong worldSeed,
-        IRigidDamageSink rigidDamageSink)
+        IRigidDamageSink rigidDamageSink,
+        IReactionExecutor reactionExecutor,
+        ILifetimeSink lifetimeSink)
     {
         DirtyRect rect = chunk.CurrentDirty;
         if (rect.IsEmpty)
@@ -47,19 +49,30 @@ internal static class ChunkUpdater
                     continue;
                 }
 
+                ProcessLifetime(ref window, chunks, lifetimeSink, wx, wy, material);
+                material = window.GetMaterial(wx, wy);
+                if (material == 0)
+                {
+                    continue;
+                }
+
                 bool preferNegative = ((parityBit ^ (byte)(ly & 1)) & CellFlags.Parity) == 0;
+                int activeX = wx;
+                int activeY = wy;
                 bool moved = materials.TypeOf(material) switch
                 {
                     CellType.Empty => false,
                     CellType.Solid => false,
-                    CellType.Powder => TryMovePowder(ref window, chunks, materials, rigidDamageSink, wx, wy, material, parityBit, preferNegative),
-                    CellType.Liquid => TryMoveLiquid(ref window, chunks, materials, rigidDamageSink, wx, wy, material, parityBit, preferNegative),
-                    CellType.Gas => TryMoveGas(ref window, chunks, materials, rigidDamageSink, wx, wy, material, parityBit, ref rng),
+                    CellType.Powder => TryMovePowder(ref window, chunks, materials, rigidDamageSink, wx, wy, material, parityBit, preferNegative, out activeX, out activeY),
+                    CellType.Liquid => TryMoveLiquid(ref window, chunks, materials, rigidDamageSink, wx, wy, material, parityBit, preferNegative, out activeX, out activeY),
+                    CellType.Gas => TryMoveGas(ref window, chunks, materials, rigidDamageSink, wx, wy, material, parityBit, ref rng, out activeX, out activeY),
                     CellType.Fire => false,
                     _ => throw new InvalidOperationException($"未知 CellType：{materials.TypeOf(material)}。"),
                 };
 
-                if (!moved && materials.TypeOf(material) != CellType.Solid)
+                ushort activeMaterial = window.GetMaterial(activeX, activeY);
+                bool reacted = TryReactVonNeumann(ref window, materials, reactionExecutor, activeX, activeY, activeMaterial, parityBit);
+                if (!moved && !reacted && materials.TypeOf(material) != CellType.Solid)
                 {
                     window.SetFlags(wx, wy, CellFlags.SetParity(window.GetFlags(wx, wy), parityBit));
                 }
@@ -76,12 +89,14 @@ internal static class ChunkUpdater
         int wy,
         ushort material,
         byte parityBit,
-        bool preferNegative)
+        bool preferNegative,
+        out int targetX,
+        out int targetY)
     {
         int firstDx = preferNegative ? -1 : 1;
-        return TryMoveTo(ref window, chunks, materials, rigidDamageSink, wx, wy, wx, wy + 1, material, parityBit) ||
-            TryMoveTo(ref window, chunks, materials, rigidDamageSink, wx, wy, wx + firstDx, wy + 1, material, parityBit) ||
-            TryMoveTo(ref window, chunks, materials, rigidDamageSink, wx, wy, wx - firstDx, wy + 1, material, parityBit);
+        return TryMoveTo(ref window, chunks, materials, rigidDamageSink, wx, wy, wx, wy + 1, material, parityBit, out targetX, out targetY) ||
+            TryMoveTo(ref window, chunks, materials, rigidDamageSink, wx, wy, wx + firstDx, wy + 1, material, parityBit, out targetX, out targetY) ||
+            TryMoveTo(ref window, chunks, materials, rigidDamageSink, wx, wy, wx - firstDx, wy + 1, material, parityBit, out targetX, out targetY);
     }
 
     private static bool TryMoveLiquid(
@@ -93,16 +108,18 @@ internal static class ChunkUpdater
         int wy,
         ushort material,
         byte parityBit,
-        bool preferNegative)
+        bool preferNegative,
+        out int targetX,
+        out int targetY)
     {
-        if (TryMovePowder(ref window, chunks, materials, rigidDamageSink, wx, wy, material, parityBit, preferNegative))
+        if (TryMovePowder(ref window, chunks, materials, rigidDamageSink, wx, wy, material, parityBit, preferNegative, out targetX, out targetY))
         {
             return true;
         }
 
         int firstDir = preferNegative ? -1 : 1;
-        return TryMoveHorizontal(ref window, chunks, materials, rigidDamageSink, wx, wy, material, parityBit, firstDir) ||
-            TryMoveHorizontal(ref window, chunks, materials, rigidDamageSink, wx, wy, material, parityBit, -firstDir);
+        return TryMoveHorizontal(ref window, chunks, materials, rigidDamageSink, wx, wy, material, parityBit, firstDir, out targetX, out targetY) ||
+            TryMoveHorizontal(ref window, chunks, materials, rigidDamageSink, wx, wy, material, parityBit, -firstDir, out targetX, out targetY);
     }
 
     private static bool TryMoveGas(
@@ -114,14 +131,16 @@ internal static class ChunkUpdater
         int wy,
         ushort material,
         byte parityBit,
-        ref Pcg32 rng)
+        ref Pcg32 rng,
+        out int targetX,
+        out int targetY)
     {
         int firstDx = rng.NextInt(2) == 0 ? -1 : 1;
-        return TryMoveTo(ref window, chunks, materials, rigidDamageSink, wx, wy, wx, wy - 1, material, parityBit) ||
-            TryMoveTo(ref window, chunks, materials, rigidDamageSink, wx, wy, wx + firstDx, wy - 1, material, parityBit) ||
-            TryMoveTo(ref window, chunks, materials, rigidDamageSink, wx, wy, wx - firstDx, wy - 1, material, parityBit) ||
-            TryMoveHorizontal(ref window, chunks, materials, rigidDamageSink, wx, wy, material, parityBit, firstDx) ||
-            TryMoveHorizontal(ref window, chunks, materials, rigidDamageSink, wx, wy, material, parityBit, -firstDx);
+        return TryMoveTo(ref window, chunks, materials, rigidDamageSink, wx, wy, wx, wy - 1, material, parityBit, out targetX, out targetY) ||
+            TryMoveTo(ref window, chunks, materials, rigidDamageSink, wx, wy, wx + firstDx, wy - 1, material, parityBit, out targetX, out targetY) ||
+            TryMoveTo(ref window, chunks, materials, rigidDamageSink, wx, wy, wx - firstDx, wy - 1, material, parityBit, out targetX, out targetY) ||
+            TryMoveHorizontal(ref window, chunks, materials, rigidDamageSink, wx, wy, material, parityBit, firstDx, out targetX, out targetY) ||
+            TryMoveHorizontal(ref window, chunks, materials, rigidDamageSink, wx, wy, material, parityBit, -firstDx, out targetX, out targetY);
     }
 
     private static bool TryMoveHorizontal(
@@ -133,8 +152,12 @@ internal static class ChunkUpdater
         int wy,
         ushort material,
         byte parityBit,
-        int direction)
+        int direction,
+        out int movedX,
+        out int movedY)
     {
+        movedX = wx;
+        movedY = wy;
         int maxDistance = Math.Min((int)materials.DispersionOf(material), EngineConstants.MoveCap);
         int targetX = wx;
         for (int step = 1; step <= maxDistance; step++)
@@ -149,7 +172,7 @@ internal static class ChunkUpdater
         }
 
         return targetX != wx &&
-            TryMoveTo(ref window, chunks, materials, rigidDamageSink, wx, wy, targetX, wy, material, parityBit);
+            TryMoveTo(ref window, chunks, materials, rigidDamageSink, wx, wy, targetX, wy, material, parityBit, out movedX, out movedY);
     }
 
     private static bool TryMoveTo(
@@ -162,8 +185,12 @@ internal static class ChunkUpdater
         int targetX,
         int targetY,
         ushort sourceMaterial,
-        byte parityBit)
+        byte parityBit,
+        out int movedX,
+        out int movedY)
     {
+        movedX = sourceX;
+        movedY = sourceY;
         ValidateMoveCap(sourceX, sourceY, targetX, targetY);
         if (!CanDisplace(ref window, materials, sourceMaterial, targetX, targetY, parityBit))
         {
@@ -190,7 +217,64 @@ internal static class ChunkUpdater
         {
             MarkKeepAliveIfCrossChunk(chunks, targetX, targetY, targetSlot);
         }
+        movedX = targetX;
+        movedY = targetY;
         return true;
+    }
+
+    private static void ProcessLifetime(
+        ref NeighborWindow window,
+        IChunkSource chunks,
+        ILifetimeSink lifetimeSink,
+        int wx,
+        int wy,
+        ushort material)
+    {
+        byte lifetime = window.GetLifetime(wx, wy);
+        if (lifetime == 0)
+        {
+            return;
+        }
+
+        lifetime--;
+        window.SetLifetime(wx, wy, lifetime);
+        MarkDirty(chunks, wx, wy);
+        if (lifetime == 0)
+        {
+            lifetimeSink.OnExpired(ref window, wx, wy, material);
+        }
+    }
+
+    private static bool TryReactVonNeumann(
+        ref NeighborWindow window,
+        MaterialPropsTable materials,
+        IReactionExecutor reactionExecutor,
+        int wx,
+        int wy,
+        ushort material,
+        byte parityBit)
+    {
+        return material != 0 &&
+            materials.ReactionCountOf(material) != 0 &&
+            (TryReactNeighbor(ref window, reactionExecutor, wx, wy, material, wx, wy - 1, parityBit) ||
+            TryReactNeighbor(ref window, reactionExecutor, wx, wy, material, wx - 1, wy, parityBit) ||
+            TryReactNeighbor(ref window, reactionExecutor, wx, wy, material, wx + 1, wy, parityBit) ||
+            TryReactNeighbor(ref window, reactionExecutor, wx, wy, material, wx, wy + 1, parityBit));
+    }
+
+    private static bool TryReactNeighbor(
+        ref NeighborWindow window,
+        IReactionExecutor reactionExecutor,
+        int wx,
+        int wy,
+        ushort material,
+        int neighborX,
+        int neighborY,
+        byte parityBit)
+    {
+        ushort neighborMaterial = window.GetMaterial(neighborX, neighborY);
+        return neighborMaterial != 0 &&
+            reactionExecutor.TryReact(ref window, wx, wy, material, neighborX, neighborY, neighborMaterial, parityBit);
     }
 
     private static bool CanDisplace(

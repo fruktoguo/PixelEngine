@@ -14,10 +14,14 @@ public sealed class SimulationKernel(
     MaterialPropsTable materialProps,
     ulong worldSeed = 0,
     IRigidDamageSink? rigidDamageSink = null,
+    IReactionExecutor? reactionExecutor = null,
+    ILifetimeSink? lifetimeSink = null,
     FrameProfiler? profiler = null)
 {
     private readonly IChunkSource _chunks = chunks ?? throw new ArgumentNullException(nameof(chunks));
     private readonly IRigidDamageSink _rigidDamageSink = rigidDamageSink ?? IRigidDamageSink.Null;
+    private readonly IReactionExecutor _reactionExecutor = reactionExecutor ?? IReactionExecutor.Null;
+    private readonly ILifetimeSink _lifetimeSink = lifetimeSink ?? ILifetimeSink.Null;
     private readonly CheckerboardScheduler _scheduler = new();
 
     /// <summary>
@@ -51,7 +55,7 @@ public sealed class SimulationKernel(
     public void StepCa()
     {
         AdvanceParity();
-        _scheduler.StepSingleThread(_chunks, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, Profiler);
+        _scheduler.StepSingleThread(_chunks, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, Profiler);
     }
 
     /// <summary>
@@ -61,7 +65,7 @@ public sealed class SimulationKernel(
     {
         ArgumentNullException.ThrowIfNull(jobs);
         AdvanceParity();
-        _scheduler.Step(_chunks, jobs, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, Profiler);
+        _scheduler.Step(_chunks, jobs, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, Profiler);
     }
 
     /// <summary>
