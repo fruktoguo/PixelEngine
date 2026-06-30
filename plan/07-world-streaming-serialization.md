@@ -162,15 +162,15 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 - [x] `ResidencyPlanner`（class）：`Plan(ChunkRect active, ChunkRect border, ResidencyTable table, ChunkMemoryBudget budget) → ResidencyPlan`；产出待装载 coord 集（进入 active∪border 但未驻留）、待卸载 chunk 集（border 之外 + 内存超限 LRU），含 border 提升项；受 `MaxStreamOpsPerFrame` 节流。（相位 2，§3.4/§3.5）
 - [x] `ChunkMemoryBudget`（class）：`long ResidentBytes`、`long CapBytes`、`Add/Remove(int bytes)`、`bool OverCap`、`SelectEvictions(ResidencyTable, ChunkRect border, long target) → IReadOnlyList<ChunkCoord>`（LRU + 距离评分，仅选 sleeping 且 border 外）。（相位 2，§3.5）
 - [x] `StreamingRequest`（struct：`enum Kind{Load,Unload}`、`ChunkCoord`、卸载时携游离 `Chunk` 句柄）；`StreamingRequestQueue`（SPSC，相位 2 生产 / I/O 线程消费）；`CompletedChunkQueue`（I/O 线程 / 池生产 / 相位 2 消费，携反序列化好的游离 `Chunk` 或卸载完成回执）。（§3.4）
-- [ ] `WorldStreamer`（class）：拥有后台 I/O 线程、两条队列、`RegionFileStore`、`ChunkCodec`、`MaterialRemap`。
-  - [ ] `ApplyPrepared(long frame)`：相位 2，应用 `CompletedChunkQueue`——插入已装载 chunk 到 `ChunkMap`+`ResidencyTable`（重置瞬时位、置 dirty-rect 待评估）、收尾已卸载 chunk（释放缓冲、移除记账）。（相位 2）
-  - [ ] `SubmitPlan(ResidencyPlan)`：相位 2，对待卸载 chunk **当场从 `ChunkMap` 摘下**置 `Detached` 并入 `StreamingRequestQueue`；待装载 coord 入队。**绝不在此做磁盘 I/O。**（相位 2，§3.4）
-  - [ ] `ProcessIo(CancellationToken)`：相位 11 后台循环，消费 `StreamingRequestQueue`：装载=`RegionFileStore.TryRead`→`ChunkCodec.Decode`→remap→游离 `Chunk`；卸载=`ChunkCodec.Encode`(游离 Chunk)→`RegionFileStore.Write`→释放；结果入 `CompletedChunkQueue`。**绝不触碰 live `ChunkMap`。**（相位 11，§3.4）
+- [~] `WorldStreamer`（class）：拥有后台 I/O 线程、两条队列、`RegionFileStore`、`ChunkCodec`、`MaterialRemap`。
+  - [x] `ApplyPrepared(long frame)`：相位 2，应用 `CompletedChunkQueue`——插入已装载 chunk 到 `ChunkMap`+`ResidencyTable`（重置瞬时位、置 dirty-rect 待评估）、收尾已卸载 chunk（释放缓冲、移除记账）。（相位 2）
+  - [x] `SubmitPlan(ResidencyPlan)`：相位 2，对待卸载 chunk **当场从 `ChunkMap` 摘下**置 `Detached` 并入 `StreamingRequestQueue`；待装载 coord 入队。**绝不在此做磁盘 I/O。**（相位 2，§3.4）
+  - [x] `ProcessIo(CancellationToken)`：相位 11 后台循环，消费 `StreamingRequestQueue`：装载=`RegionFileStore.TryRead`→`ChunkCodec.Decode`→remap→游离 `Chunk`；卸载=`ChunkCodec.Encode`(游离 Chunk)→`RegionFileStore.Write`→释放；结果入 `CompletedChunkQueue`。**绝不触碰 live `ChunkMap`。**（相位 11，§3.4）
   - [ ] RLE+LZ4 字节准备可派发 Core 线程池并行（多 chunk 并发），磁盘读写在 I/O 线程；缓冲走 `ArrayPool<byte>`。（AGENTS §3）
-- [ ] `WorldManager`（facade，class）：拥有 `WorldCamera`、`ActivationPolicy`、`ResidencyTable`、`ResidencyPlanner`、`ChunkMemoryBudget`、`WorldStreamer`；引用 plan/03 的 `ChunkMap`。
-  - [ ] `UpdateCamera(...)`（相位 0/1）。
-  - [ ] `ApplyResidency(long frame)`（相位 2）：`WorldStreamer.ApplyPrepared` → 重算 active/border → `ResidencyPlanner.Plan` → border 提升 → `WorldStreamer.SubmitPlan`。结构性增删只在此发生（§3.4）。
-  - [ ] `RunStreaming(CancellationToken)`（相位 11，驱动 `WorldStreamer.ProcessIo`）。
+- [x] `WorldManager`（facade，class）：拥有 `WorldCamera`、`ActivationPolicy`、`ResidencyTable`、`ResidencyPlanner`、`ChunkMemoryBudget`、`WorldStreamer`；引用 plan/03 的 `ChunkMap`。
+  - [x] `UpdateCamera(...)`（相位 0/1）。
+  - [x] `ApplyResidency(long frame)`（相位 2）：`WorldStreamer.ApplyPrepared` → 重算 active/border → `ResidencyPlanner.Plan` → border 提升 → `WorldStreamer.SubmitPlan`。结构性增删只在此发生（§3.4）。
+  - [x] `RunStreaming(CancellationToken)`（相位 11，驱动 `WorldStreamer.ProcessIo`）。
 
 ### 4.3 Serialization — chunk 二进制（架构 §11.3，不变式 #8）
 
@@ -203,8 +203,8 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 
 - [ ] 相机平移使 chunk 进出激活区时，激活区内 chunk 被模拟、超出者卸载、重入者从磁盘读回且玩家修改持久（架构 §5.1）。
 - [ ] border ring 始终为激活区外宽 1 chunk、驻留且默认 sleep；激活区边缘 cell 的 32px-halo 跨界写入与 KeepAlive 目标恒落在驻留 chunk 上，无「写入落到非驻留邻居」的洞（不变式 #4、架构 §3.4）。
-- [ ] 结构性增删（`ChunkMap`/`ResidencyTable`）**只在相位 2 单线程**发生；相位 11 后台线程仅操作游离字节缓冲与游离 `Chunk`，经断言 / 测试证实从不触碰 live map（架构 §3.4）。
-- [ ] 驱逐 / 卸载只发生在 border 之外，被摘下的 chunk 本帧不被任何相位 4 worker 触碰。
+- [x] 结构性增删（`ChunkMap`/`ResidencyTable`）**只在相位 2 单线程**发生；相位 11 后台线程仅操作游离字节缓冲与游离 `Chunk`，经断言 / 测试证实从不触碰 live map（架构 §3.4）。
+- [x] 驱逐 / 卸载只发生在 border 之外，被摘下的 chunk 本帧不被任何相位 4 worker 触碰。
 - [ ] **流式线程安全测试通过**（引用 plan/14）：相机持续平移 + 边界持续活动下，质量守恒跨装卸边界不变、无 `Detached` 期并发读（架构 §16.2、R16）。
 
 ### 5.2 内存上限与 LRU
@@ -229,7 +229,7 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 ### 5.5 版本迁移与两类持久化区分
 
 - [x] **版本迁移链测试通过**（引用 plan/14）：旧 `FormatVersion` 存档经迁移链逐级升级后读取正确；新增 / 重排材质无需迁移（name 基机制，架构 §11.4）。
-- [ ] 流式（透明、隐式、持续）与存档（显式 / 周期、粗粒度快照）走分离入口（`WorldStreamer` vs `WorldSaveService`），共用 `ChunkCodec` 与 `MaterialRemap`（架构 §11.1）。
+- [x] 流式（透明、隐式、持续）与存档（显式 / 周期、粗粒度快照）走分离入口（`WorldStreamer` vs `WorldSaveService`），共用 `ChunkCodec` 与 `MaterialRemap`（架构 §11.1）。
 - [ ] v1 不提供帧级 rewind / undo，仅粗粒度快照存档（架构 §6.3）。
 
 ### 5.6 工程纪律
