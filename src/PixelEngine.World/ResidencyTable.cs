@@ -108,4 +108,12 @@ public sealed class ResidencyTable
     {
         return _entries;
     }
+
+    /// <summary>
+    /// 以零装箱方式枚举当前所有驻留记录。
+    /// </summary>
+    public Dictionary<ChunkCoord, ChunkResidencyInfo>.Enumerator GetEnumerator()
+    {
+        return _entries.GetEnumerator();
+    }
 }

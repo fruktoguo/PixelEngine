@@ -234,7 +234,7 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 
 ### 5.6 工程纪律
 
-- [ ] 稳态帧循环内零托管堆分配：流式缓冲走 `ArrayPool<byte>` / 对象池，磁盘 I/O 与字节准备在相位 11 之外的帧关键路径无分配（AGENTS §3、架构 §12.4）。
+- [x] 稳态帧循环内零托管堆分配：流式缓冲走 `ArrayPool<byte>` / 对象池，磁盘 I/O 与字节准备在相位 11 之外的帧关键路径无分配（AGENTS §3、架构 §12.4）。
 - [x] `PixelEngine.World`/`PixelEngine.Serialization` 不开 `AllowUnsafeBlocks`，全安全代码（`MemoryMarshal.Cast`）（00 §1）。
 - [x] 公开 API 全部带中文 XML 文档注释；依赖方向 `World → {Core, Simulation, Serialization}`、`Serialization → {Core, Simulation}`，无反向（00 §5）。
 
@@ -272,6 +272,6 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 - [x] `feat(serialization): 实现 material name↔id 重映射与 fallback`（对应清单 §4.4 remap、§3.7）
 - [x] `feat(serialization): 实现 world manifest、全局态持久化与磁盘 region 布局`（对应清单 §4.4 manifest/store、§3.8/§3.10）
 - [x] `feat(serialization): 实现版本迁移链与显式存档/读档服务`（对应清单 §4.4 migration/save、§3.9）
-- [ ] `test(world,serialization): 接入流式线程安全/存档往返/重映射/迁移测试（plan/14）`（对应验收 §5，测试实现引用 plan/14）
+- [x] `test(world,serialization): 接入流式线程安全/存档往返/重映射/迁移测试（plan/14）`（对应验收 §5，测试实现引用 plan/14）
 
 > 每节点完成即勾选并提交；与架构文档 / 不变式冲突先改计划再改代码（AGENTS §5）。

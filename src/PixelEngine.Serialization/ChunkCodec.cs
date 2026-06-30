@@ -15,7 +15,26 @@ public sealed class ChunkCodec
     {
         ArgumentNullException.ThrowIfNull(writer);
 
-        ArrayBufferWriter<byte> payloadWriter = new();
+        PooledByteBufferWriter payloadWriter = new();
+        try
+        {
+            Encode(snapshot, writer, payloadWriter);
+        }
+        finally
+        {
+            payloadWriter.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// 使用调用方提供的 payload staging buffer 编码 chunk 快照。
+    /// </summary>
+    public void Encode(ChunkSnapshot snapshot, IBufferWriter<byte> writer, PooledByteBufferWriter payloadWriter)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(payloadWriter);
+
+        payloadWriter.Clear();
         RleCodec.EncodeU16(snapshot.Material, payloadWriter);
         int materialBytes = payloadWriter.WrittenCount;
 

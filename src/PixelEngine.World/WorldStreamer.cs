@@ -1,3 +1,4 @@
+using System.Buffers;
 using PixelEngine.Core.Threading;
 using PixelEngine.Serialization;
 using PixelEngine.Simulation;
@@ -16,8 +17,14 @@ public sealed class WorldStreamer
     private readonly IChunkStore _chunkStore;
     private readonly MaterialRemap _materialRemap;
     private readonly ChunkCodec _chunkCodec;
+    private readonly ChunkPool _chunkPool;
     private readonly StreamingRequestQueue _requests;
     private readonly CompletedChunkQueue _completed;
+    private readonly PreparationBatch _preparationBatch;
+    private StreamingRequest[] _requestBatch = [];
+    private PreparedStreamingOperation[] _preparedBatch = [];
+    private static readonly ThreadLocal<PooledByteBufferWriter> IoWriters = new(() => new PooledByteBufferWriter());
+    private static readonly ThreadLocal<PooledByteBufferWriter> PayloadWriters = new(() => new PooledByteBufferWriter());
 
     /// <summary>
     /// 创建世界流式装卸器。
@@ -30,6 +37,7 @@ public sealed class WorldStreamer
         IChunkStore chunkStore,
         MaterialRemap materialRemap,
         ChunkCodec? chunkCodec = null,
+        ChunkPool? chunkPool = null,
         StreamingRequestQueue? requests = null,
         CompletedChunkQueue? completed = null)
     {
@@ -47,8 +55,10 @@ public sealed class WorldStreamer
         _chunkStore = chunkStore;
         _materialRemap = materialRemap;
         _chunkCodec = chunkCodec ?? new ChunkCodec();
+        _chunkPool = chunkPool ?? new ChunkPool();
         _requests = requests ?? new StreamingRequestQueue();
         _completed = completed ?? new CompletedChunkQueue();
+        _preparationBatch = new PreparationBatch(this);
     }
 
     /// <summary>
@@ -128,29 +138,31 @@ public sealed class WorldStreamer
     public int ProcessIoOnce(JobSystem? jobs)
     {
         int processed = 0;
-        StreamingRequest[] requests = DrainRequests();
-        if (requests.Length == 0)
+        int requestCount = DrainRequests();
+        if (requestCount == 0)
         {
             return 0;
         }
 
-        PreparedStreamingOperation[] prepared = new PreparedStreamingOperation[requests.Length];
-        if (jobs is not null && requests.Length > 1)
+        EnsurePreparedCapacity(requestCount);
+        if (jobs is not null && requestCount > 1)
         {
-            PreparationBatch batch = new(this, requests, prepared);
-            jobs.ParallelRange(requests.Length, 1, PrepareRange, batch);
+            _preparationBatch.Requests = _requestBatch;
+            _preparationBatch.Prepared = _preparedBatch;
+            jobs.ParallelRange(requestCount, 1, PrepareRange, _preparationBatch);
         }
         else
         {
-            for (int i = 0; i < requests.Length; i++)
+            for (int i = 0; i < requestCount; i++)
             {
-                prepared[i] = Prepare(requests[i]);
+                _preparedBatch[i] = Prepare(_requestBatch[i]);
             }
         }
 
-        for (int i = 0; i < prepared.Length; i++)
+        for (int i = 0; i < requestCount; i++)
         {
-            Publish(prepared[i]);
+            Publish(_preparedBatch[i]);
+            _preparedBatch[i] = default;
             processed++;
         }
 
@@ -161,22 +173,30 @@ public sealed class WorldStreamer
     {
         Chunk chunk = operation.Chunk ?? throw new InvalidOperationException("装载完成事件缺少 chunk。");
         Half[] temperature = operation.Temperature ?? throw new InvalidOperationException("装载完成事件缺少温度子块。");
-        if (_chunks.Contains(chunk.Coord))
+        try
         {
-            return;
-        }
+            if (_chunks.Contains(chunk.Coord))
+            {
+                _chunkPool.Return(chunk);
+                return;
+            }
 
-        _temperature.ImportBlock(chunk.Coord, temperature);
-        chunk.SetCurrentDirty(DirtyRect.Full);
-        _chunks.Add(chunk);
-        _residency.Set(
-            chunk.Coord,
-            new ChunkResidencyInfo(
-                ChunkResidencyState.Cached,
-                frame,
-                ChunkMemoryBudget.EstimatedResidentChunkBytes,
-                DirtySinceLoad: false));
-        _budget.Add(ChunkMemoryBudget.EstimatedResidentChunkBytes);
+            _temperature.ImportBlock(chunk.Coord, temperature.AsSpan(0, TemperatureField.BlockArea));
+            chunk.SetCurrentDirty(DirtyRect.Full);
+            _chunks.Add(chunk);
+            _residency.Set(
+                chunk.Coord,
+                new ChunkResidencyInfo(
+                    ChunkResidencyState.Cached,
+                    frame,
+                    ChunkMemoryBudget.EstimatedResidentChunkBytes,
+                    DirtySinceLoad: false));
+            _budget.Add(ChunkMemoryBudget.EstimatedResidentChunkBytes);
+        }
+        finally
+        {
+            ArrayPool<Half>.Shared.Return(temperature);
+        }
     }
 
     private void ApplyUnloaded(ChunkCoord coord)
@@ -185,9 +205,9 @@ public sealed class WorldStreamer
         _budget.Remove(ChunkMemoryBudget.EstimatedResidentChunkBytes);
     }
 
-    private void ApplyStateChanges(IReadOnlyList<ResidencyStateChange> stateChanges)
+    private void ApplyStateChanges(ReadOnlySpan<ResidencyStateChange> stateChanges)
     {
-        for (int i = 0; i < stateChanges.Count; i++)
+        for (int i = 0; i < stateChanges.Length; i++)
         {
             ResidencyStateChange change = stateChanges[i];
             if (!_residency.TryGetInfo(change.Coord, out ChunkResidencyInfo info))
@@ -199,10 +219,9 @@ public sealed class WorldStreamer
         }
     }
 
-    private void SubmitUnloads(IReadOnlyList<ChunkCoord> unloadCoords)
+    private void SubmitUnloads(ReadOnlySpan<ChunkCoord> unloadCoords)
     {
-        Half[] temperature = new Half[TemperatureField.BlockArea];
-        for (int i = 0; i < unloadCoords.Count; i++)
+        for (int i = 0; i < unloadCoords.Length; i++)
         {
             ChunkCoord coord = unloadCoords[i];
             if (!_chunks.TryRemove(coord, out Chunk chunk))
@@ -210,8 +229,22 @@ public sealed class WorldStreamer
                 continue;
             }
 
-            _temperature.ExportBlock(coord, temperature);
-            _requests.Enqueue(StreamingRequest.Unload(chunk, temperature));
+            Half[] temperature = ArrayPool<Half>.Shared.Rent(TemperatureField.BlockArea);
+            bool queued = false;
+            try
+            {
+                _temperature.ExportBlock(coord, temperature.AsSpan(0, TemperatureField.BlockArea));
+                _requests.Enqueue(StreamingRequest.Unload(chunk, temperature));
+                queued = true;
+            }
+            finally
+            {
+                if (!queued)
+                {
+                    ArrayPool<Half>.Shared.Return(temperature);
+                }
+            }
+
             if (_residency.TryGetInfo(coord, out ChunkResidencyInfo info))
             {
                 _residency.Set(coord, info with { State = ChunkResidencyState.Detached });
@@ -219,9 +252,9 @@ public sealed class WorldStreamer
         }
     }
 
-    private void SubmitLoads(IReadOnlyList<ChunkCoord> loadCoords)
+    private void SubmitLoads(ReadOnlySpan<ChunkCoord> loadCoords)
     {
-        for (int i = 0; i < loadCoords.Count; i++)
+        for (int i = 0; i < loadCoords.Length; i++)
         {
             ChunkCoord coord = loadCoords[i];
             if (_chunks.Contains(coord))
@@ -240,15 +273,16 @@ public sealed class WorldStreamer
         }
     }
 
-    private StreamingRequest[] DrainRequests()
+    private int DrainRequests()
     {
-        List<StreamingRequest> drained = [];
+        int count = 0;
         while (_requests.TryDequeue(out StreamingRequest request))
         {
-            drained.Add(request);
+            EnsureRequestCapacity(count + 1);
+            _requestBatch[count++] = request;
         }
 
-        return [.. drained];
+        return count;
     }
 
     private static void PrepareRange(int start, int end, int workerIndex, object? context)
@@ -275,85 +309,121 @@ public sealed class WorldStreamer
             return;
         }
 
-        _chunkStore.Write(prepared.Coord, prepared.Blob!);
-        _completed.Enqueue(CompletedStreamingOperation.Unloaded(prepared.Coord));
+        byte[] blob = prepared.Blob ?? throw new InvalidOperationException("卸载准备结果缺少 blob。");
+        try
+        {
+            _chunkStore.Write(prepared.Coord, blob.AsSpan(0, prepared.BlobLength));
+            _completed.Enqueue(CompletedStreamingOperation.Unloaded(prepared.Coord));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(blob);
+        }
     }
 
     private PreparedStreamingOperation PrepareLoad(ChunkCoord coord)
     {
-        Chunk chunk = new(coord);
-        Half[] temperature = new Half[TemperatureField.BlockArea];
-        using PooledByteBufferWriter buffer = new();
-        if (_chunkStore.TryRead(coord, buffer))
+        Chunk chunk = _chunkPool.Rent(coord);
+        Half[] temperature = ArrayPool<Half>.Shared.Rent(TemperatureField.BlockArea);
+        PooledByteBufferWriter buffer = RentIoWriter();
+        buffer.Clear();
+        try
         {
-            _chunkCodec.Decode(
-                buffer.WrittenSpan,
-                new ChunkSnapshot(coord, chunk.Material, chunk.Flags, chunk.Lifetime, temperature),
-                CurrentParityBit);
-            _materialRemap.RemapInPlace(chunk.Material);
-        }
+            if (_chunkStore.TryRead(coord, buffer))
+            {
+                _chunkCodec.Decode(
+                    buffer.WrittenSpan,
+                    new ChunkSnapshot(coord, chunk.Material, chunk.Flags, chunk.Lifetime, temperature.AsSpan(0, TemperatureField.BlockArea)),
+                    CurrentParityBit);
+                _materialRemap.RemapInPlace(chunk.Material);
+            }
 
-        chunk.SetCurrentDirty(DirtyRect.Full);
-        return PreparedStreamingOperation.Loaded(chunk, temperature);
+            chunk.SetCurrentDirty(DirtyRect.Full);
+            return PreparedStreamingOperation.Loaded(chunk, temperature);
+        }
+        catch
+        {
+            _chunkPool.Return(chunk);
+            ArrayPool<Half>.Shared.Return(temperature);
+            throw;
+        }
     }
 
     private PreparedStreamingOperation PrepareUnload(StreamingRequest request)
     {
         Chunk chunk = request.DetachedChunk ?? throw new InvalidOperationException("卸载请求缺少 chunk。");
         Half[] temperature = request.Temperature ?? throw new InvalidOperationException("卸载请求缺少温度子块。");
-        using PooledByteBufferWriter buffer = new();
-        _chunkCodec.Encode(
-            new ChunkSnapshot(chunk.Coord, chunk.Material, chunk.Flags, chunk.Lifetime, temperature),
-            buffer);
-        return PreparedStreamingOperation.Unloaded(chunk.Coord, buffer.WrittenSpan);
+        try
+        {
+            PooledByteBufferWriter buffer = RentIoWriter();
+            PooledByteBufferWriter payload = RentPayloadWriter();
+            buffer.Clear();
+            _chunkCodec.Encode(
+                new ChunkSnapshot(chunk.Coord, chunk.Material, chunk.Flags, chunk.Lifetime, temperature.AsSpan(0, TemperatureField.BlockArea)),
+                buffer,
+                payload);
+            ChunkCoord coord = chunk.Coord;
+            byte[] blob = buffer.DetachWrittenBuffer(out int blobLength);
+            _chunkPool.Return(chunk);
+            return PreparedStreamingOperation.Unloaded(coord, blob, blobLength);
+        }
+        finally
+        {
+            ArrayPool<Half>.Shared.Return(temperature);
+        }
     }
 
-    private sealed class PreparationBatch(
-        WorldStreamer streamer,
-        StreamingRequest[] requests,
-        PreparedStreamingOperation[] prepared)
+    private void EnsureRequestCapacity(int required)
+    {
+        if (_requestBatch.Length < required)
+        {
+            Array.Resize(ref _requestBatch, required);
+        }
+    }
+
+    private void EnsurePreparedCapacity(int required)
+    {
+        if (_preparedBatch.Length < required)
+        {
+            Array.Resize(ref _preparedBatch, required);
+        }
+    }
+
+    private static PooledByteBufferWriter RentIoWriter()
+    {
+        return IoWriters.Value ?? throw new InvalidOperationException("线程本地 I/O writer 未初始化。");
+    }
+
+    private static PooledByteBufferWriter RentPayloadWriter()
+    {
+        return PayloadWriters.Value ?? throw new InvalidOperationException("线程本地 payload writer 未初始化。");
+    }
+
+    private sealed class PreparationBatch(WorldStreamer streamer)
     {
         internal WorldStreamer Streamer { get; } = streamer;
 
-        internal StreamingRequest[] Requests { get; } = requests;
+        internal StreamingRequest[] Requests { get; set; } = [];
 
-        internal PreparedStreamingOperation[] Prepared { get; } = prepared;
+        internal PreparedStreamingOperation[] Prepared { get; set; } = [];
     }
 
-    private sealed class PreparedStreamingOperation
+    private readonly record struct PreparedStreamingOperation(
+        CompletedStreamingKind Kind,
+        ChunkCoord Coord,
+        Chunk? Chunk,
+        Half[]? Temperature,
+        byte[]? Blob,
+        int BlobLength)
     {
-        private PreparedStreamingOperation(
-            CompletedStreamingKind kind,
-            ChunkCoord coord,
-            Chunk? chunk,
-            Half[]? temperature,
-            byte[]? blob)
+        internal static PreparedStreamingOperation Loaded(Chunk chunk, Half[] temperature)
         {
-            Kind = kind;
-            Coord = coord;
-            Chunk = chunk;
-            Temperature = temperature;
-            Blob = blob;
+            return new PreparedStreamingOperation(CompletedStreamingKind.Loaded, chunk.Coord, chunk, temperature, null, 0);
         }
 
-        internal CompletedStreamingKind Kind { get; }
-
-        internal ChunkCoord Coord { get; }
-
-        internal Chunk? Chunk { get; }
-
-        internal Half[]? Temperature { get; }
-
-        internal byte[]? Blob { get; }
-
-        internal static PreparedStreamingOperation Loaded(Chunk chunk, ReadOnlySpan<Half> temperature)
+        internal static PreparedStreamingOperation Unloaded(ChunkCoord coord, byte[] blob, int blobLength)
         {
-            return new PreparedStreamingOperation(CompletedStreamingKind.Loaded, chunk.Coord, chunk, temperature.ToArray(), null);
-        }
-
-        internal static PreparedStreamingOperation Unloaded(ChunkCoord coord, ReadOnlySpan<byte> blob)
-        {
-            return new PreparedStreamingOperation(CompletedStreamingKind.Unloaded, coord, null, null, blob.ToArray());
+            return new PreparedStreamingOperation(CompletedStreamingKind.Unloaded, coord, null, null, blob, blobLength);
         }
     }
 }

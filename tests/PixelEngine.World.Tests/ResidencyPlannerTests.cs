@@ -27,11 +27,13 @@ public sealed class ResidencyPlannerTests
             table,
             Budget());
 
-        Assert.Contains(new ResidencyStateChange(activeCoord, ChunkResidencyState.Active), plan.StateChanges);
-        Assert.Contains(new ResidencyStateChange(borderCoord, ChunkResidencyState.Border), plan.StateChanges);
-        Assert.Contains(new ChunkCoord(-1, -1), plan.LoadCoords);
-        Assert.DoesNotContain(activeCoord, plan.LoadCoords);
-        Assert.DoesNotContain(borderCoord, plan.LoadCoords);
+        ResidencyStateChange[] stateChanges = plan.StateChanges.ToArray();
+        ChunkCoord[] loadCoords = plan.LoadCoords.ToArray();
+        Assert.Contains(new ResidencyStateChange(activeCoord, ChunkResidencyState.Active), stateChanges);
+        Assert.Contains(new ResidencyStateChange(borderCoord, ChunkResidencyState.Border), stateChanges);
+        Assert.Contains(new ChunkCoord(-1, -1), loadCoords);
+        Assert.DoesNotContain(activeCoord, loadCoords);
+        Assert.DoesNotContain(borderCoord, loadCoords);
     }
 
     /// <summary>
@@ -48,8 +50,8 @@ public sealed class ResidencyPlannerTests
             new ResidencyTable(),
             Budget());
 
-        Assert.Equal(3, plan.LoadCoords.Count);
-        Assert.Empty(plan.UnloadCoords);
+        Assert.Equal(3, plan.LoadCoords.Length);
+        Assert.True(plan.UnloadCoords.IsEmpty);
     }
 
     /// <summary>
@@ -70,7 +72,9 @@ public sealed class ResidencyPlannerTests
             budget.Add(ChunkMemoryBudget.EstimatedResidentChunkBytes);
         }
 
-        IReadOnlyList<ChunkCoord> evictions = budget.SelectEvictions(table, new ChunkRect(-2, -2, 2, 2), budget.EvictionTargetBytes);
+        ChunkCoord[] evictions = budget
+            .SelectEvictions(table, new ChunkRect(-2, -2, 2, 2), budget.EvictionTargetBytes)
+            .ToArray();
 
         Assert.Equal([new ChunkCoord(8, 0), new ChunkCoord(-7, 0), new ChunkCoord(5, 0)], evictions);
         Assert.DoesNotContain(new ChunkCoord(0, 0), evictions);
@@ -98,9 +102,37 @@ public sealed class ResidencyPlannerTests
             table,
             budget);
 
-        Assert.Contains(new ResidencyStateChange(outside, ChunkResidencyState.Cached), plan.StateChanges);
-        Assert.Equal([cached], plan.UnloadCoords);
-        Assert.Contains(new ResidencyStateChange(cached, ChunkResidencyState.Detached), plan.StateChanges);
+        Assert.Contains(new ResidencyStateChange(outside, ChunkResidencyState.Cached), plan.StateChanges.ToArray());
+        Assert.Equal([cached], plan.UnloadCoords.ToArray());
+        Assert.Contains(new ResidencyStateChange(cached, ChunkResidencyState.Detached), plan.StateChanges.ToArray());
+    }
+
+    /// <summary>
+    /// 验证驻留规划器在缓冲预热后重复规划不产生托管堆分配。
+    /// </summary>
+    [Fact]
+    public void PlanReusesScratchBuffersAfterWarmup()
+    {
+        ResidencyTable table = new();
+        table.Set(new ChunkCoord(0, 0), Info(ChunkResidencyState.Active, frame: 10));
+        table.Set(new ChunkCoord(4, 0), Info(ChunkResidencyState.Active, frame: 8));
+        table.Set(new ChunkCoord(5, 0), Info(ChunkResidencyState.Cached, frame: 1));
+        ChunkMemoryBudget budget = Budget(cap: ChunkMemoryBudget.EstimatedResidentChunkBytes, target: 1);
+        budget.Add(ChunkMemoryBudget.EstimatedResidentChunkBytes * 3);
+        ResidencyPlanner planner = new(new WorldStreamingConfig { MaxStreamOpsPerFrame = 32 });
+        ChunkRect active = new(0, 0, 0, 0);
+        ChunkRect border = new(-1, -1, 1, 1);
+
+        _ = planner.Plan(active, border, table, budget);
+        _ = planner.Plan(active, border, table, budget);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 64; i++)
+        {
+            _ = planner.Plan(active, border, table, budget);
+        }
+
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
     }
 
     private static ChunkResidencyInfo Info(ChunkResidencyState state, long frame)

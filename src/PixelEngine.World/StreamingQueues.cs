@@ -38,13 +38,14 @@ public readonly record struct StreamingRequest(
     /// <summary>
     /// 创建卸载请求。
     /// </summary>
-    public static StreamingRequest Unload(Chunk chunk, ReadOnlySpan<Half> temperature)
+    public static StreamingRequest Unload(Chunk chunk, Half[] temperature)
     {
         ArgumentNullException.ThrowIfNull(chunk);
-        bool validTemperatureLength = temperature.Length == TemperatureField.BlockArea;
+        ArgumentNullException.ThrowIfNull(temperature);
+        bool validTemperatureLength = temperature.Length >= TemperatureField.BlockArea;
         return validTemperatureLength
-            ? new StreamingRequest(StreamingRequestKind.Unload, chunk.Coord, chunk, temperature.ToArray())
-            : throw new ArgumentException("卸载请求温度子块长度必须等于 BlockArea。", nameof(temperature));
+            ? new StreamingRequest(StreamingRequestKind.Unload, chunk.Coord, chunk, temperature)
+            : throw new ArgumentException("卸载请求温度子块长度必须至少等于 BlockArea。", nameof(temperature));
     }
 }
 
@@ -76,13 +77,14 @@ public readonly record struct CompletedStreamingOperation(
     /// <summary>
     /// 创建装载完成事件。
     /// </summary>
-    public static CompletedStreamingOperation Loaded(Chunk chunk, ReadOnlySpan<Half> temperature)
+    public static CompletedStreamingOperation Loaded(Chunk chunk, Half[] temperature)
     {
         ArgumentNullException.ThrowIfNull(chunk);
-        bool validTemperatureLength = temperature.Length == TemperatureField.BlockArea;
+        ArgumentNullException.ThrowIfNull(temperature);
+        bool validTemperatureLength = temperature.Length >= TemperatureField.BlockArea;
         return validTemperatureLength
-            ? new CompletedStreamingOperation(CompletedStreamingKind.Loaded, chunk.Coord, chunk, temperature.ToArray())
-            : throw new ArgumentException("装载完成事件温度子块长度必须等于 BlockArea。", nameof(temperature));
+            ? new CompletedStreamingOperation(CompletedStreamingKind.Loaded, chunk.Coord, chunk, temperature)
+            : throw new ArgumentException("装载完成事件温度子块长度必须至少等于 BlockArea。", nameof(temperature));
     }
 
     /// <summary>
@@ -148,9 +150,17 @@ public sealed class StreamingRequestQueue
 
     private static void ValidateRequest(StreamingRequest request)
     {
-        if (request.Kind == StreamingRequestKind.Unload && (request.DetachedChunk is null || request.Temperature is null))
+        if (request.Kind == StreamingRequestKind.Unload)
         {
-            throw new ArgumentException("卸载请求必须携带游离 chunk 与温度子块。", nameof(request));
+            if (request.DetachedChunk is null || request.Temperature is null)
+            {
+                throw new ArgumentException("卸载请求必须携带游离 chunk 与温度子块。", nameof(request));
+            }
+
+            if (request.Temperature.Length < TemperatureField.BlockArea)
+            {
+                throw new ArgumentException("卸载请求温度子块长度必须至少等于 BlockArea。", nameof(request));
+            }
         }
 
         if (request.Kind == StreamingRequestKind.Load && (request.DetachedChunk is not null || request.Temperature is not null))
@@ -214,9 +224,17 @@ public sealed class CompletedChunkQueue
 
     private static void ValidateOperation(CompletedStreamingOperation operation)
     {
-        if (operation.Kind == CompletedStreamingKind.Loaded && (operation.Chunk is null || operation.Temperature is null))
+        if (operation.Kind == CompletedStreamingKind.Loaded)
         {
-            throw new ArgumentException("装载完成事件必须携带游离 chunk 与温度子块。", nameof(operation));
+            if (operation.Chunk is null || operation.Temperature is null)
+            {
+                throw new ArgumentException("装载完成事件必须携带游离 chunk 与温度子块。", nameof(operation));
+            }
+
+            if (operation.Temperature.Length < TemperatureField.BlockArea)
+            {
+                throw new ArgumentException("装载完成事件温度子块长度必须至少等于 BlockArea。", nameof(operation));
+            }
         }
 
         if (operation.Kind == CompletedStreamingKind.Unloaded && (operation.Chunk is not null || operation.Temperature is not null))

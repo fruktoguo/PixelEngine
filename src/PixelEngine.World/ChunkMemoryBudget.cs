@@ -20,6 +20,9 @@ public sealed class ChunkMemoryBudget
     public const int EstimatedResidentChunkBytes = SimStateBytes + TemperatureBytes + MetadataSlackBytes;
 
     private long _residentBytes;
+    private EvictionCandidate[] _candidates = [];
+    private ChunkCoord[] _evictions = [];
+    private readonly EvictionCandidateComparer _candidateComparer = new();
 
     /// <summary>
     /// 创建常驻内存预算器。
@@ -86,7 +89,7 @@ public sealed class ChunkMemoryBudget
     /// <summary>
     /// 选择 border 外 cached chunk 进行 LRU 驱逐，直到预计字节数降到目标水位。
     /// </summary>
-    public IReadOnlyList<ChunkCoord> SelectEvictions(ResidencyTable table, ChunkRect border, long targetBytes)
+    public ReadOnlySpan<ChunkCoord> SelectEvictions(ResidencyTable table, ChunkRect border, long targetBytes)
     {
         ArgumentNullException.ThrowIfNull(table);
         if (targetBytes < 0)
@@ -100,46 +103,47 @@ public sealed class ChunkMemoryBudget
             return [];
         }
 
-        List<(ChunkCoord Coord, ChunkResidencyInfo Info)> candidates = [];
-        foreach (KeyValuePair<ChunkCoord, ChunkResidencyInfo> entry in table.Entries())
+        int candidateCount = 0;
+        EnsureCandidateCapacity(table.Count);
+        foreach (KeyValuePair<ChunkCoord, ChunkResidencyInfo> entry in table)
         {
             if (entry.Value.State != ChunkResidencyState.Cached || border.Contains(entry.Key))
             {
                 continue;
             }
 
-            candidates.Add((entry.Key, entry.Value));
+            _candidates[candidateCount++] = new EvictionCandidate(entry.Key, entry.Value);
         }
 
-        candidates.Sort((left, right) =>
-        {
-            int frameCompare = left.Info.LastTouchedFrame.CompareTo(right.Info.LastTouchedFrame);
-            if (frameCompare != 0)
-            {
-                return frameCompare;
-            }
+        _candidateComparer.Border = border;
+        Array.Sort(_candidates, 0, candidateCount, _candidateComparer);
 
-            int leftDistance = DistanceOutsideBorder(left.Coord, border);
-            int rightDistance = DistanceOutsideBorder(right.Coord, border);
-            int distanceCompare = rightDistance.CompareTo(leftDistance);
-            if (distanceCompare != 0)
-            {
-                return distanceCompare;
-            }
-
-            int bytesCompare = right.Info.ResidentBytes.CompareTo(left.Info.ResidentBytes);
-            return bytesCompare != 0 ? bytesCompare : left.Coord.GetHashCode().CompareTo(right.Coord.GetHashCode());
-        });
-
-        List<ChunkCoord> evictions = [];
+        EnsureEvictionCapacity(candidateCount);
+        int evictionCount = 0;
         long freed = 0;
-        for (int i = 0; i < candidates.Count && freed < bytesToFree; i++)
+        for (int i = 0; i < candidateCount && freed < bytesToFree; i++)
         {
-            evictions.Add(candidates[i].Coord);
-            freed += Math.Max(candidates[i].Info.ResidentBytes, 0);
+            _evictions[evictionCount++] = _candidates[i].Coord;
+            freed += Math.Max(_candidates[i].Info.ResidentBytes, 0);
         }
 
-        return evictions;
+        return _evictions.AsSpan(0, evictionCount);
+    }
+
+    private void EnsureCandidateCapacity(int required)
+    {
+        if (_candidates.Length < required)
+        {
+            Array.Resize(ref _candidates, required);
+        }
+    }
+
+    private void EnsureEvictionCapacity(int required)
+    {
+        if (_evictions.Length < required)
+        {
+            Array.Resize(ref _evictions, required);
+        }
     }
 
     private static int DistanceOutsideBorder(ChunkCoord coord, ChunkRect border)
@@ -155,5 +159,32 @@ public sealed class ChunkMemoryBudget
                 ? coord.Y - border.MaxCy
                 : 0;
         return Math.Max(dx, dy);
+    }
+
+    private readonly record struct EvictionCandidate(ChunkCoord Coord, ChunkResidencyInfo Info);
+
+    private sealed class EvictionCandidateComparer : IComparer<EvictionCandidate>
+    {
+        internal ChunkRect Border { get; set; }
+
+        int IComparer<EvictionCandidate>.Compare(EvictionCandidate left, EvictionCandidate right)
+        {
+            int frameCompare = left.Info.LastTouchedFrame.CompareTo(right.Info.LastTouchedFrame);
+            if (frameCompare != 0)
+            {
+                return frameCompare;
+            }
+
+            int leftDistance = DistanceOutsideBorder(left.Coord, Border);
+            int rightDistance = DistanceOutsideBorder(right.Coord, Border);
+            int distanceCompare = rightDistance.CompareTo(leftDistance);
+            if (distanceCompare != 0)
+            {
+                return distanceCompare;
+            }
+
+            int bytesCompare = right.Info.ResidentBytes.CompareTo(left.Info.ResidentBytes);
+            return bytesCompare != 0 ? bytesCompare : left.Coord.GetHashCode().CompareTo(right.Coord.GetHashCode());
+        }
     }
 }
