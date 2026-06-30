@@ -9,12 +9,15 @@ public sealed class EnginePhasePipeline
 {
     private const int PhaseCount = 12;
     private readonly List<EnginePhaseAction>[] _actions;
+    private readonly EngineCommandQueue _commands;
 
     /// <summary>
     /// 创建空相位管线。
     /// </summary>
-    public EnginePhasePipeline()
+    public EnginePhasePipeline(EngineCommandQueue commands)
     {
+        ArgumentNullException.ThrowIfNull(commands);
+        _commands = commands;
         _actions = new List<EnginePhaseAction>[PhaseCount];
         for (int i = 0; i < _actions.Length; i++)
         {
@@ -55,13 +58,9 @@ public sealed class EnginePhasePipeline
                 continue;
             }
 
-            List<EnginePhaseAction> actions = _actions[raw];
-            if (actions.Count == 0)
-            {
-                continue;
-            }
-
             EngineTickContext context = new(engine, engine.Context, timing, phase);
+            _ = _commands.Flush(context);
+            List<EnginePhaseAction> actions = _actions[raw];
             for (int i = 0; i < actions.Count; i++)
             {
                 actions[i](context);
