@@ -1,6 +1,9 @@
 using BenchmarkDotNet.Attributes;
+using PixelEngine.Core;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace PixelEngine.Benchmarks;
 
@@ -12,7 +15,10 @@ namespace PixelEngine.Benchmarks;
 public class ParticleHandshakeBenchmarks
 {
     private const ushort Sand = 2;
-    private readonly Chunk[] _chunks = new Chunk[9];
+    private const int SpawnChunksPerAxis = 8;
+    private const int ResidentChunksPerAxis = SpawnChunksPerAxis + 2;
+    private const int SpawnStride = (SpawnChunksPerAxis * EngineConstants.ChunkSize) - 2;
+    private readonly Chunk[] _chunks = new Chunk[ResidentChunksPerAxis * ResidentChunksPerAxis];
     private readonly TestChunkSource _source;
     private readonly MaterialPropsTable _materials;
     private readonly CellGrid _grid;
@@ -25,11 +31,11 @@ public class ParticleHandshakeBenchmarks
     public ParticleHandshakeBenchmarks()
     {
         int index = 0;
-        for (int dy = -1; dy <= 1; dy++)
+        for (int cy = 0; cy < ResidentChunksPerAxis; cy++)
         {
-            for (int dx = -1; dx <= 1; dx++)
+            for (int cx = 0; cx < ResidentChunksPerAxis; cx++)
             {
-                _chunks[index++] = new Chunk(new ChunkCoord(dx, dy));
+                _chunks[index++] = new Chunk(new ChunkCoord(cx - 1, cy - 1));
             }
         }
 
@@ -43,13 +49,13 @@ public class ParticleHandshakeBenchmarks
             [0, 0, 120]);
         _grid = new CellGrid(_source, _materials);
         _kernel = new SimulationKernel(_source, _materials);
-        _particles = new ParticleSystem(capacity: 4096);
+        _particles = new ParticleSystem();
     }
 
     /// <summary>
     /// 活跃粒子数量。
     /// </summary>
-    [Params(1024)]
+    [Params(50_000, 100_000, 200_000)]
     public int Count { get; set; }
 
     /// <summary>
@@ -61,12 +67,12 @@ public class ParticleHandshakeBenchmarks
         ResetWorldAndParticles();
         for (int i = 0; i < Count; i++)
         {
-            _ = _particles.TrySpawn(new ParticleSpawn(1 + (i & 31), 1 + ((i >> 5) & 31), 0.25f, 0.1f, Sand, (byte)i, 120));
+            _ = _particles.TrySpawn(new ParticleSpawn(SpawnX(i), SpawnY(i), 0.25f, 0.1f, Sand, (byte)i, 120));
         }
     }
 
     /// <summary>
-    /// 填充会立即沉积的静止粒子初态。
+    /// 填充混合初态：大多数粒子飞行，少数粒子本 tick 落定沉积。
     /// </summary>
     [IterationSetup(Target = nameof(IntegrateAndResolveDeposits))]
     public void SetupDeposits()
@@ -74,8 +80,20 @@ public class ParticleHandshakeBenchmarks
         ResetWorldAndParticles();
         for (int i = 0; i < Count; i++)
         {
-            _ = _particles.TrySpawn(new ParticleSpawn(1 + (i & 31), 1 + ((i >> 5) & 31), 0, 0, Sand, (byte)i, 120));
+            bool shouldDeposit = (i & 15) == 0;
+            float vx = shouldDeposit ? 0 : 0.25f;
+            float vy = shouldDeposit ? 0 : 0.1f;
+            _ = _particles.TrySpawn(new ParticleSpawn(SpawnX(i), SpawnY(i), vx, vy, Sand, (byte)i, 120));
         }
+    }
+
+    /// <summary>
+    /// 填充只读活跃前缀迭代初态。
+    /// </summary>
+    [IterationSetup(Target = nameof(ReadActivePrefix))]
+    public void SetupReadback()
+    {
+        SetupFlying();
     }
 
     /// <summary>
@@ -97,6 +115,23 @@ public class ParticleHandshakeBenchmarks
         _particles.ResolveDeposits(_kernel, _grid);
     }
 
+    /// <summary>
+    /// 只读遍历活跃前缀，验证 ReadOnlySpan 迭代形态。
+    /// </summary>
+    [Benchmark]
+    public float ReadActivePrefix()
+    {
+        float sum = 0;
+        ReadOnlySpan<Particle> particles = _particles.ActiveReadOnly;
+        ref readonly Particle first = ref MemoryMarshal.GetReference(particles);
+        for (int i = 0; i < particles.Length; i++)
+        {
+            sum += Unsafe.Add(ref Unsafe.AsRef(in first), i).X;
+        }
+
+        return sum;
+    }
+
     private void ResetWorldAndParticles()
     {
         for (int i = 0; i < _chunks.Length; i++)
@@ -106,6 +141,16 @@ public class ParticleHandshakeBenchmarks
         }
 
         _particles.Clear();
+    }
+
+    private static int SpawnX(int index)
+    {
+        return 1 + (index % SpawnStride);
+    }
+
+    private static int SpawnY(int index)
+    {
+        return 1 + (index / SpawnStride);
     }
 
     private sealed class TestChunkSource : IChunkSource

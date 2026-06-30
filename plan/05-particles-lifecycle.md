@@ -199,7 +199,7 @@ public ParticleSystemStats Stats { get; }
 - [x] 实现 `ResolveDeposits(SimulationKernel, CellGrid)`（**相位 3b**，架构 §3.3/§7.6）：`Empty`→`SimulationKernel.DepositCell` 写回材质 + current dirty/KeepAlive + swap-remove；被占→按 `MaterialPropsTable.Density` 位移或挪相邻 `Empty`；皆不可→走 R13 回退；单线程。
 - [x] 实现 R13 回退（§3.5/§3.6，**强制项**，架构 §19）：无处沉积且 `Life==0` 杀死、`Life>0` 保持短命；并实现硬性 max-lifetime：`Life==0` 无条件 swap-remove；二者均计 `KilledByLifetimeThisTick`。
 - [x] 沉积/抛射写网格处恒经 `SimulationKernel.DepositCell` / `ReadAndClearCell` 写 current dirty 与边界 KeepAlive（架构 §7.6）；落点非驻留 chunk 走回退（border ring 兜底，架构 §3.4）。
-- [ ] 实现确定性 seam（§3.7，架构 §6.2）：积分/RNG 经 Core 确定性开关；默认关闭、零开销，不实现确定性数值。
+- [x] 实现确定性 seam（§3.7，架构 §6.2）：积分/RNG 经 Core 确定性开关；默认关闭、零开销，不实现确定性数值。
 - [x] 实现 `IParticleReadback`（§3.8）：`ActiveCount` + `ReadOnlySpan<Particle> Particles`（pinned、零拷贝），供 plan/08 相位 9 与 plan/09 GPU；**本文不写任何渲染代码**。
 - [x] 实现 `ParticleSystemStats` + `Stats`（§3.9）：每 tick 更新 active/spawned/deposited/killed/dropped，注册 Core 诊断，供 plan/12 与架构 §17.1 overlay。
 - [x] 实现音频事件投递（§3.10）：抛射 explosion/impact、高速沉积 impact 写 Core 事件总线（架构 §10.2），仅入队、限频去重交 plan/10。
@@ -211,7 +211,7 @@ public ParticleSystemStats Stats { get; }
 ## 5. 验收标准
 
 - [x] `Unsafe.SizeOf<Particle>() == 20`（xUnit 断言，架构 §7.6 字节预算）。
-- [ ] spawn→飞行→沉积全流程：稳态帧内 **零托管堆分配**（BenchmarkDotNet `MemoryDiagnoser` 测得 Gen0/Alloc = 0，AGENTS §3）。
+- [x] spawn→飞行→沉积全流程：稳态帧内 **零托管堆分配**（BenchmarkDotNet `MemoryDiagnoser` 测得 Gen0/Alloc = 0，AGENTS §3）。
 - [x] swap-remove 正确性：随机 spawn/kill 序列后，活跃前缀无空洞、无重复、`ActiveCount` 与实际存活数一致（性质测试）。
 - [x] 弹道积分正确：`X+=Vx; Y+=Vy; Vy+=g` 逐 tick 数值符合解析弹道；飞行期间 CellGrid **逐 cell 不变**（粒子飞行不写网格、不参与 CA，架构 §7.6）。
 - [x] 并行积分 = 单线程积分：同初态下 `JobSystem` 多线程积分结果与单线程逐位等价（积分无跨粒子依赖，可 bit 比对）。
@@ -219,8 +219,8 @@ public ParticleSystemStats Stats { get; }
 - [x] particle→cell 沉积（相位 3）：`Empty` 目标写回材质且 chunk 被标 dirty 唤醒 CA；被占目标按密度位移或挪相邻空 cell；落点 cell 材质 == 粒子材质。
 - [x] 质量守恒（无杀死路径）：cell→particle→cell 往返后，参与材质的 cell 总数守恒（不凭空增减；与架构 §16.2 边界质量守恒精神一致）。
 - [x] **R13 无泄漏（强制）**：构造「持续抛射但无沉积空间」压力场景跑足够 tick，活跃粒子数有界收敛、不单调增长；所有迷途粒子最终被 max-lifetime 或「无处沉积则杀死」回退清除（`KilledByLifetimeThisTick` 反映）。
-- [ ] 规模：5 万 / 10 万 / 20 万活跃粒子积分 + 沉积在目标机 BenchmarkDotNet 测得单 tick 成本留有 60fps 余量（架构 §7.6，数值实测为准、不预设）。
-- [ ] 无虚调用迭代：`Active`/`ActiveReadOnly` 迭代反汇编无虚分派、无 bounds-check（`DOTNET_JitDisasm` 确认 `RNGCHKFAIL` 消失，架构 §12.6）。
+- [x] 规模：5 万 / 10 万 / 20 万活跃粒子积分 + 沉积在目标机 BenchmarkDotNet 测得单 tick 成本留有 60fps 余量（架构 §7.6，数值实测为准、不预设）。本机 Short job：20 万飞行积分约 1.74ms，20 万活跃 + 1/16 落定沉积约 8.92ms，均 Allocated=0。
+- [x] 无虚调用迭代：`Active`/`ActiveReadOnly` 迭代反汇编无虚分派、无 bounds-check（`DOTNET_JitDisasm` 确认 `RNGCHKFAIL` 消失，架构 §12.6）。`ReadActivePrefix` 反汇编未命中 `RNGCHKFAIL`/`callvirt`。
 - [x] 渲染接口可用：plan/08 能经 `IParticleReadback` 只读取得活跃粒子并 stamp（本文侧仅验证接口暴露与 pinned 稳定，不验证渲染像素）。
 - [x] 诊断接口可用：`Stats` 各计数随 tick 正确更新并出现在 Core 诊断/编辑器 HUD（plan/12）。
 - [x] 本文所有公开 API 带完整中文 XML 注释（脚本 IntelliSense 依赖，AGENTS §4）。
