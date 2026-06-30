@@ -230,7 +230,7 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 
 - [x] **版本迁移链测试通过**（引用 plan/14）：旧 `FormatVersion` 存档经迁移链逐级升级后读取正确；新增 / 重排材质无需迁移（name 基机制，架构 §11.4）。
 - [x] 流式（透明、隐式、持续）与存档（显式 / 周期、粗粒度快照）走分离入口（`WorldStreamer` vs `WorldSaveService`），共用 `ChunkCodec` 与 `MaterialRemap`（架构 §11.1）。
-- [ ] v1 不提供帧级 rewind / undo，仅粗粒度快照存档（架构 §6.3）。
+- [x] v1 不提供帧级 rewind / undo，仅粗粒度快照存档（架构 §6.3）。
 
 ### 5.6 工程纪律
 

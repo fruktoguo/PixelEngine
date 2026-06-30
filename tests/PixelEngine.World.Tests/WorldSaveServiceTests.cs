@@ -10,6 +10,17 @@ namespace PixelEngine.World.Tests;
 public sealed class WorldSaveServiceTests
 {
     /// <summary>
+    /// 验证 v1 存档能力只声明粗粒度快照，不声明帧级 rewind 或 undo。
+    /// </summary>
+    [Fact]
+    public void WorldSaveCapabilitiesExposeOnlyCoarseSnapshotSaves()
+    {
+        Assert.True(WorldSaveCapabilities.SupportsCoarseSnapshotSaves);
+        Assert.False(WorldSaveCapabilities.SupportsFrameRewind);
+        Assert.False(WorldSaveCapabilities.SupportsUndo);
+    }
+
+    /// <summary>
     /// 验证存档写入 manifest、chunk blob 与状态快照，读档时按 material name 重映射并恢复温度。
     /// </summary>
     [Fact]
