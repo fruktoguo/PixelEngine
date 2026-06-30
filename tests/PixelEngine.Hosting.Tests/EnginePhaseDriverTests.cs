@@ -353,12 +353,32 @@ public sealed class EnginePhaseDriverTests
 
         public IInputApi Input => throw new NotSupportedException();
 
-        public IEventBus Events => throw new NotSupportedException();
+        public IEventBus Events => NoopEventBus.Instance;
 
         public IAudioApi Audio => throw new NotSupportedException();
 
         public IGameTime Time => throw new NotSupportedException();
 
         public ScriptScene Scene { get; } = scene;
+    }
+
+    private sealed class NoopEventBus : IEventBus
+    {
+        public static NoopEventBus Instance { get; } = new();
+
+        public IDisposable Subscribe<TEvent>(Action<TEvent> handler)
+            where TEvent : unmanaged
+        {
+            return NoopSubscription.Instance;
+        }
+    }
+
+    private sealed class NoopSubscription : IDisposable
+    {
+        public static NoopSubscription Instance { get; } = new();
+
+        public void Dispose()
+        {
+        }
     }
 }

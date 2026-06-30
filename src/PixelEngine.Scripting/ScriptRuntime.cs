@@ -35,6 +35,11 @@ public sealed class ScriptRuntime : IScriptRuntime
     public void Update(float dt)
     {
         IScriptContext context = RequireContext();
+        if (context.Events is IScriptEventDispatcher dispatcher)
+        {
+            dispatcher.DrainEvents();
+        }
+
         context.Scene.DispatchUpdate(context, dt);
         context.Scene.DispatchFrameSystems(context, dt);
     }

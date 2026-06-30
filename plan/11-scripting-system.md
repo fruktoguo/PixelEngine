@@ -48,7 +48,7 @@ PixelEngine 的脚本系统让开发者像「在 Unity 引擎之上写 Unity 游
 
 「等同 Unity 游戏之于 Unity 引擎」：游戏项目只看见引擎的**公开 API 层**，看不见内核内部。边界规则：
 
-**`public`（API 层，稳定、带中文 XML 注释）**：`Behaviour`、`IComponent`、`ISystem` 及其生命周期；`Entity`/`Scene`；`IScriptContext` 及其聚合的世界能力接口（§3.3）；面向脚本的轻量值类型（`MaterialId`、`CellView`、`RaycastHit`、`BodyHandle`、`ParticleSpawnDesc` 等只读 `struct`）；特性 `[SerializeField]`/`[Persist]`/`[HideInInspector]`/`[ScriptComponent]`；面向 Hosting 装配的 `IScriptRuntime`/`ScriptRuntime`（§3.8）。
+**`public`（API 层，稳定、带中文 XML 注释）**：`Behaviour`、`IComponent`、`ISystem` 及其生命周期；`Entity`/`Scene`；`IScriptContext` 及其聚合的世界能力接口（§3.3）；面向脚本的轻量值类型（`MaterialId`、`CellView`、`RaycastHit`、`BodyHandle`、`ParticleSpawnDesc` 等只读 `struct`）；特性 `[SerializeField]`/`[Persist]`/`[HideInInspector]`/`[ScriptComponent]`；面向 Hosting 装配的 `IScriptRuntime`/`ScriptRuntime`/`ScriptEventBus`（§3.8）。
 
 **`internal`（内核，禁止游戏直接触碰）**：CellGrid 的 SoA 数组与指针漫游、Chunk/dirty-rect/checkerboard 调度（架构 §5）、Box2D `[LibraryImport]` 绑定与 task 桥（架构 §14.2）、ALC 装卸与 Roslyn 编译管线、命令队列内部缓冲。内核仅经 `InternalsVisibleTo` 暴露给对应测试与 `PixelEngine.Editor`。**铁律（架构 §3.1、AGENTS §0）**：若 Demo 需要某能力却只能靠 `internal` 实现，说明公开 API 有缺陷，必须修引擎公开 API，而非在 Demo 开后门或把内核类设 `public`。
 
@@ -262,7 +262,7 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 - [x] `interface IRigidBodyApi`：`CreateFromRegion/TryGetTransform/ApplyImpulse/Destroy`（建毁延迟相位 8a、力延迟 step 前，plan/06，架构 §8.2/§8.3）
 - [x] `interface ICharacterController`：`Create/Move/GetState`（kinematic AABB，延迟相位 8，plan/06，架构 §8.5）
 - [x] `interface ICameraApi`/`IInputApi`/`IAudioApi`/`IGameTime`（plan/08/02/10，架构 §4/§10）
-- [~] 事件订阅：`IEventBus.Subscribe<TEvent>` + `IDisposable` 句柄；引擎相位 1 排空 ring buffer 分发（plan/02，架构 §3.1）
+- [x] 事件订阅：`IEventBus.Subscribe<TEvent>` + `IDisposable` 句柄；引擎相位 1 排空 ring buffer 分发（plan/02，架构 §3.1）
 - [x] 只读值类型：`MaterialId`/`CellView`/`MaterialInfo`/`RaycastHit`/`BodyHandle`/`BodyTransform`/`CharacterHandle`/`CharacterState`/`ParticleSpawnDesc`/`RectF`（blittable `readonly struct`，零分配）
 - [~] `internal ScriptCommandQueue`：blittable 命令 struct + per-thread 缓冲（`ArrayPool`/POH，零分配）；Hosting 在各相位安全窗口 flush（§3.3，架构 §3.3）
 

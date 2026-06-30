@@ -328,7 +328,7 @@ public interface IEventBus
     /// <param name="handler">事件处理器；由运行时在相位 1 分发事件时调用。</param>
     /// <returns>用于取消订阅的释放句柄。</returns>
     IDisposable Subscribe<TEvent>(Action<TEvent> handler)
-        where TEvent : struct;
+        where TEvent : unmanaged;
 }
 
 /// <summary>
