@@ -107,6 +107,57 @@ public sealed class EngineBuilderTests
     }
 
     /// <summary>
+    /// 验证 Hosting 子系统按注册顺序初始化，并在 Shutdown 时逆序关闭。
+    /// </summary>
+    [Fact]
+    public void SubsystemsInitializeInOrderAndShutdownInReverseOrder()
+    {
+        List<string> events = [];
+        RecordingSubsystem first = new("first", events);
+        RecordingSubsystem second = new("second", events);
+        Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddSubsystem(first)
+            .AddSubsystem(second)
+            .Build();
+
+        EngineLifecycle lifecycle = engine.Context.GetService<EngineLifecycle>();
+
+        Assert.Equal(2, lifecycle.Count);
+        Assert.Equal(2, lifecycle.InitializedCount);
+        Assert.Equal(["init:first", "init:second"], events);
+
+        engine.Shutdown();
+
+        Assert.Equal(
+            ["init:first", "init:second", "shutdown:second", "shutdown:first"],
+            events);
+        Assert.Equal(0, lifecycle.InitializedCount);
+        engine.Dispose();
+    }
+
+    /// <summary>
+    /// 验证后续子系统初始化失败时，已初始化子系统会立即逆序关闭。
+    /// </summary>
+    [Fact]
+    public void BuildRollsBackInitializedSubsystemsWhenInitializationFails()
+    {
+        List<string> events = [];
+        RecordingSubsystem first = new("first", events);
+        RecordingSubsystem failing = new("failing", events, failInitialize: true);
+
+        _ = Assert.Throws<InvalidOperationException>(() => new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddSubsystem(first)
+            .AddSubsystem(failing)
+            .Build());
+
+        Assert.Equal(
+            ["init:first", "init:failing", "shutdown:first"],
+            events);
+    }
+
+    /// <summary>
     /// 验证 builder 对非法配置快速失败。
     /// </summary>
     [Fact]
@@ -159,5 +210,24 @@ public sealed class EngineBuilderTests
 
     private sealed class FakeWorldAccess
     {
+    }
+
+    private sealed class RecordingSubsystem(string name, List<string> events, bool failInitialize = false) : IEngineSubsystem
+    {
+        public string Name { get; } = name;
+
+        public void Initialize(EngineContext context)
+        {
+            events.Add($"init:{Name}");
+            if (failInitialize)
+            {
+                throw new InvalidOperationException($"{Name} init failed.");
+            }
+        }
+
+        public void Shutdown()
+        {
+            events.Add($"shutdown:{Name}");
+        }
     }
 }

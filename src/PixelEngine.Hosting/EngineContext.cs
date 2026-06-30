@@ -10,7 +10,7 @@ namespace PixelEngine.Hosting;
 /// </summary>
 public sealed class EngineContext
 {
-    private const int ServiceRoleCount = 11;
+    private const int ServiceRoleCount = (int)EngineServiceRole.Scripting + 1;
     private readonly Dictionary<Type, object> _services = [];
     private readonly Type?[] _serviceRoles = new Type?[ServiceRoleCount];
 

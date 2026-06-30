@@ -9,14 +9,17 @@ namespace PixelEngine.Hosting;
 /// </summary>
 public sealed class Engine : IDisposable
 {
+    private readonly EngineLifecycle _lifecycle;
     private bool _disposed;
 
-    internal Engine(EngineContext context, EnginePhasePipeline phases)
+    internal Engine(EngineContext context, EnginePhasePipeline phases, EngineLifecycle lifecycle)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(phases);
+        ArgumentNullException.ThrowIfNull(lifecycle);
         Context = context;
         Phases = phases;
+        _lifecycle = lifecycle;
         State = EngineRunState.Created;
     }
 
@@ -108,8 +111,25 @@ public sealed class Engine : IDisposable
             return;
         }
 
-        Context.Jobs.Dispose();
-        State = EngineRunState.Shutdown;
+        Exception? lifecycleFailure = null;
+        try
+        {
+            _lifecycle.Shutdown();
+        }
+        catch (Exception exception)
+        {
+            lifecycleFailure = exception;
+        }
+        finally
+        {
+            Context.Jobs.Dispose();
+            State = EngineRunState.Shutdown;
+        }
+
+        if (lifecycleFailure is not null)
+        {
+            throw lifecycleFailure;
+        }
     }
 
     /// <summary>
