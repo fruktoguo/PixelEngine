@@ -153,11 +153,11 @@ plan/00 §7 明确要求把编译期常量**集中到 `PixelEngine.Core` 的 `En
 - [x] `DoubleBuffer.cs`：`DoubleBuffer<TBuffer>`（`Front/Back/Swap`，相位边界翻转，架构 §3.2，相位 6/9/10 用）。
 
 ### 4.4 持久线程池（`Threading/`，架构 §5.7/§12.7/§14.2，R7/R14）
-- [ ] `JobSystem.cs`：固定 worker + 帧 barrier 的 fork-join 调度器；`WorkerCount`、`ParallelRange(itemCount,minRange,RangeJob,context)`、`ParallelFor<TState>(ReadOnlySpan<TState>,ChunkJob)`、`Schedule/Wait/JobHandle`、`SingleThreadThreshold`（R7 回退）、稳定 `workerIndex`、`Dispose`。**非每帧 Parallel.For**。
-- [ ] `JobSystem.Raw.cs`：`unsafe ParallelRangeRaw(itemCount,minRange, delegate*<int,int,int,void*,void>, void*)` 零分配重载，供 Interop Box2D task 桥经 `calli` 回调 native `b2TaskCallback`（架构 §14.2，相位 8c）；确保**不**标 `[SuppressGCTransition]`（R14）。
-- [ ] `RangeJob`/`ChunkJob<TState>` 委托与 `JobHandle` 结构定义。
-- [ ] `WorkerLocal.cs`：`WorkerLocal<T>`（64 字节 cache-line 填充防 false sharing，架构 §12.7），`this[workerIndex]/Slots`。
-- [ ] 在实现处写「为什么持久池而非 Parallel.For」「workerIndex 稳定性对 Box2D 桥的意义」注释，引用架构 §5.7/§14.2。
+- [x] `JobSystem.cs`：固定 worker + 帧 barrier 的 fork-join 调度器；`WorkerCount`、`ParallelRange(itemCount,minRange,RangeJob,context)`、`ParallelFor<TState>(ReadOnlySpan<TState>,ChunkJob)`、`Schedule/Wait/JobHandle`、`SingleThreadThreshold`（R7 回退）、稳定 `workerIndex`、`Dispose`。**非每帧 Parallel.For**。
+- [x] `JobSystem.Raw.cs`：`unsafe ParallelRangeRaw(itemCount,minRange, delegate*<int,int,int,void*,void>, void*)` 零分配重载，供 Interop Box2D task 桥经 `calli` 回调 native `b2TaskCallback`（架构 §14.2，相位 8c）；确保**不**标 `[SuppressGCTransition]`（R14）。
+- [x] `RangeJob`/`ChunkJob<TState>` 委托与 `JobHandle` 结构定义。
+- [x] `WorkerLocal.cs`：`WorkerLocal<T>`（64 字节 cache-line 填充防 false sharing，架构 §12.7），`this[workerIndex]/Slots`。
+- [x] 在实现处写「为什么持久池而非 Parallel.For」「workerIndex 稳定性对 Box2D 桥的意义」注释，引用架构 §5.7/§14.2。
 
 ### 4.5 确定性 RNG（`Random/`，架构 §6.2/§6.3）
 - [ ] `DeterminismMode.cs`：`enum DeterminismMode { HighPerformance, Deterministic }`（置于 `PixelEngine.Core` 根命名空间）。
@@ -251,7 +251,7 @@ plan/00 §7 明确要求把编译期常量**集中到 `PixelEngine.Core` 的 `En
 
 - [x] 节点 1：`feat(core): 建立 PixelEngine.Core 项目骨架与数学库`（§4.1 + §4.2，提交信息附「对应计划: plan/02 §实现清单 4.1–4.2」）。
 - [x] 节点 2：`feat(core): 实现内存封装(POH/NativeMemory/SoA/池/双缓冲)`（§4.3）。
-- [ ] 节点 3：`feat(core): 实现持久线程池 JobSystem 与 WorkerLocal`（§4.4，含 Box2D task 桥派发面 §14.2）。
+- [x] 节点 3：`feat(core): 实现持久线程池 JobSystem 与 WorkerLocal`（§4.4，含 Box2D task 桥派发面 §14.2）。
 - [ ] 节点 4：`feat(core): 实现确定性 RNG 与无锁事件总线`（§4.5 + §4.6）。
 - [ ] 节点 5：`feat(core): 实现固定步长时间膨胀帧时钟(不追帧)`（§4.7，落地不变式 #6）。
 - [ ] 节点 6：`feat(core): 实现分项计时/计数器诊断与 EngineConstants`（§4.8 + §4.9）。
