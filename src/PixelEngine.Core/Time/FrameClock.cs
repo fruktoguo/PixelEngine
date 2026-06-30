@@ -5,9 +5,6 @@ namespace PixelEngine.Core.Time;
 /// </summary>
 public sealed class FrameClock
 {
-    private const double DefaultSimHzValue = 60.0;
-    private const double DownscaledSimHzValue = 30.0;
-
     private double _simHz;
     private int _simStride;
 
@@ -15,7 +12,7 @@ public sealed class FrameClock
     /// 创建帧时钟。
     /// </summary>
     /// <param name="simHz">sim 频率，默认 60Hz。</param>
-    public FrameClock(double simHz = DefaultSimHzValue)
+    public FrameClock(double simHz = EngineConstants.DefaultSimHz)
     {
         SetSimHz(simHz);
         TimeScale = 1.0;
@@ -78,7 +75,7 @@ public sealed class FrameClock
         // 架构 §4.1 与不变式 #6：这里绝不维护 fixed-step accumulator，
         // 也绝不在单个渲染帧内 while 追多个 sim/physics step。过载时只降低 TimeScale，
         // CA/physics/particle 在同一个被执行 tick 中共享固定 Dt，避免 death spiral 与耦合错位。
-        double frameBudget = 1.0 / DefaultSimHzValue;
+        double frameBudget = 1.0 / EngineConstants.DefaultSimHz;
         TimeScale = realDeltaSeconds <= frameBudget || realDeltaSeconds == 0
             ? 1.0
             : frameBudget / realDeltaSeconds;
@@ -103,16 +100,16 @@ public sealed class FrameClock
             throw new ArgumentOutOfRangeException(nameof(simHz), simHz, "sim 频率必须是正有限数。");
         }
 
-        if (Math.Abs(simHz - DefaultSimHzValue) < double.Epsilon)
+        if (Math.Abs(simHz - EngineConstants.DefaultSimHz) < double.Epsilon)
         {
-            _simHz = DefaultSimHzValue;
+            _simHz = EngineConstants.DefaultSimHz;
             _simStride = 1;
             return;
         }
 
-        if (Math.Abs(simHz - DownscaledSimHzValue) < double.Epsilon)
+        if (Math.Abs(simHz - EngineConstants.SimHzDownscaled) < double.Epsilon)
         {
-            _simHz = DownscaledSimHzValue;
+            _simHz = EngineConstants.SimHzDownscaled;
             _simStride = 2;
             return;
         }
