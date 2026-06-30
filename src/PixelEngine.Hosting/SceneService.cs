@@ -8,6 +8,21 @@ public sealed class SceneService : ISceneService
     private readonly Dictionary<string, SceneDescriptor> _scenes = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// 创建默认场景服务。
+    /// </summary>
+    /// <param name="contentRoot">项目内容根目录。</param>
+    public SceneService(string contentRoot = "content")
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(contentRoot);
+        ContentRoot = contentRoot;
+    }
+
+    /// <summary>
+    /// 项目内容根目录，用于解析相对存档路径。
+    /// </summary>
+    public string ContentRoot { get; }
+
+    /// <summary>
     /// 当前已加载场景。
     /// </summary>
     public Scene? Current { get; private set; }
@@ -40,7 +55,7 @@ public sealed class SceneService : ISceneService
             throw new InvalidOperationException($"场景 {name} 未注册。");
         }
 
-        Current = new Scene(descriptor);
+        Current = CreateScene(descriptor);
         return Current;
     }
 
@@ -50,5 +65,30 @@ public sealed class SceneService : ISceneService
     public void UnloadCurrent()
     {
         Current = null;
+    }
+
+    private Scene CreateScene(SceneDescriptor descriptor)
+    {
+        return descriptor.SourceKind switch
+        {
+            SceneSourceKind.Empty => new Scene(descriptor),
+            SceneSourceKind.SaveDirectory => new Scene(
+                descriptor,
+                ResolveSaveDirectory(descriptor.Source!),
+                worldConstructionPending: true),
+            SceneSourceKind.Procedural => new Scene(
+                descriptor,
+                descriptor.Source,
+                worldConstructionPending: true),
+            _ => throw new ArgumentOutOfRangeException(nameof(descriptor), descriptor.SourceKind, "未知场景来源类型。"),
+        };
+    }
+
+    private string ResolveSaveDirectory(string source)
+    {
+        string path = Path.IsPathRooted(source)
+            ? source
+            : Path.Combine(ContentRoot, source);
+        return Path.GetFullPath(path);
     }
 }

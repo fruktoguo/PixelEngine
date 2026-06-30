@@ -309,7 +309,7 @@ public sealed class EngineBuilder
 
     private SceneService BuildSceneService(EngineOptions options)
     {
-        SceneService service = new();
+        SceneService service = new(options.ContentRoot);
         for (int i = 0; i < _scenes.Count; i++)
         {
             service.Register(_scenes[i]);

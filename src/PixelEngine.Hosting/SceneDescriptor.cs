@@ -11,6 +11,16 @@ public sealed class SceneDescriptor
     public SceneDescriptor(string name, SceneSourceKind sourceKind = SceneSourceKind.Empty, string? source = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        if (sourceKind == SceneSourceKind.Empty && !string.IsNullOrWhiteSpace(source))
+        {
+            throw new ArgumentException("空场景不能配置来源。", nameof(source));
+        }
+
+        if (sourceKind != SceneSourceKind.Empty && string.IsNullOrWhiteSpace(source))
+        {
+            throw new ArgumentException("非空场景必须配置存档路径或生成器键。", nameof(source));
+        }
+
         Name = name;
         SourceKind = sourceKind;
         Source = string.IsNullOrWhiteSpace(source) ? null : source;
