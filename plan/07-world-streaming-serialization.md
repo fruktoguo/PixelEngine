@@ -235,8 +235,8 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 ### 5.6 工程纪律
 
 - [ ] 稳态帧循环内零托管堆分配：流式缓冲走 `ArrayPool<byte>` / 对象池，磁盘 I/O 与字节准备在相位 11 之外的帧关键路径无分配（AGENTS §3、架构 §12.4）。
-- [ ] `PixelEngine.World`/`PixelEngine.Serialization` 不开 `AllowUnsafeBlocks`，全安全代码（`MemoryMarshal.Cast`）（00 §1）。
-- [ ] 公开 API 全部带中文 XML 文档注释；依赖方向 `World/Serialization → {Content, Core}`、`World → {Serialization, Simulation}`，无反向（00 §5）。
+- [x] `PixelEngine.World`/`PixelEngine.Serialization` 不开 `AllowUnsafeBlocks`，全安全代码（`MemoryMarshal.Cast`）（00 §1）。
+- [x] 公开 API 全部带中文 XML 文档注释；依赖方向 `World → {Core, Simulation, Serialization}`、`Serialization → {Core, Simulation}`，无反向（00 §5）。
 
 ---
 
