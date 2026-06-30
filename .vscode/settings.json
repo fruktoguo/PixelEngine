@@ -1,0 +1,7 @@
+{
+  "dotnet.server.useOmnisharp": false,
+  "editor.formatOnSave": true,
+  "files.eol": "\n",
+  "files.trimTrailingWhitespace": true,
+  "cmake.configureOnOpen": false
+}

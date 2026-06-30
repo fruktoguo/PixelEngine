@@ -7,6 +7,8 @@ obj/
 .vs/
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
 !.vscode/settings.shared.json
 .idea/
 *.DotSettings.user
@@ -14,6 +16,7 @@ obj/
 # ---- Build / publish ----
 artifacts/
 publish/
+runtimes/
 *.binlog
 [Dd]ebug/
 [Rr]elease/
@@ -31,6 +34,7 @@ BenchmarkDotNet.Artifacts/
 # ---- Native build outputs (Box2D dual-build per RID) ----
 native/build/
 native/out/
+runtimes/*/native/
 *.obj
 *.pdb
 *.ilk
@@ -40,6 +44,7 @@ native/out/
 # ---- Runtime / user data ----
 saves/
 worlds/*.world
+*.world.tmp
 logs/
 *.log
 

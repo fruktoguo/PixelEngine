@@ -1,0 +1,18 @@
+<Project>
+  <Import Project="$(MSBuildThisFileDirectory)native\PixelEngine.Native.targets"
+          Condition="'$(MSBuildProjectName)' == 'PixelEngine.Interop' and Exists('$(MSBuildThisFileDirectory)native\PixelEngine.Native.targets')" />
+
+  <PropertyGroup Condition="'$(IsHotPath)' == 'true'">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsHotPath)' == 'true' and '$(Configuration)' == 'Release'">
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+</Project>
