@@ -61,6 +61,11 @@ public static partial class EngineConstants
     public const int DirtyRectPadding = 2;
 
     /// <summary>
+    /// CA 活跃 chunk 少于该值时回退单线程，见架构 §5.7。
+    /// </summary>
+    public const int SingleThreadChunkThreshold = 4;
+
+    /// <summary>
     /// 流式边界常驻 ring 宽度，单位为 chunk，见架构 §3.4。
     /// </summary>
     public const int BorderRingWidth = 1;

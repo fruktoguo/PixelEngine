@@ -182,8 +182,14 @@ internal static class ChunkUpdater
         window.SetFlags(sourceX, sourceY, CellFlags.SetParity(window.GetFlags(sourceX, sourceY), parityBit));
         window.SetFlags(targetX, targetY, CellFlags.SetParity(window.GetFlags(targetX, targetY), parityBit));
         MarkDirty(chunks, sourceX, sourceY);
-        MarkDirty(chunks, targetX, targetY);
-        MarkKeepAliveIfCrossChunk(chunks, targetX, targetY, targetSlot);
+        if (targetSlot == 4)
+        {
+            MarkDirty(chunks, targetX, targetY);
+        }
+        else
+        {
+            MarkKeepAliveIfCrossChunk(chunks, targetX, targetY, targetSlot);
+        }
         return true;
     }
 

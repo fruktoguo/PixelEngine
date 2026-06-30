@@ -124,7 +124,7 @@ barrier 语义说明：本设计不暴露独立 `Barrier` 原语——每个 `Pa
 
 plan/00 §7 明确要求把编译期常量**集中到 `PixelEngine.Core` 的 `EngineConstants`**（便于 JIT 优化与统一调参）。这是 Core「无像素语义」边界的唯一受规约豁免点：常量在此集中声明，但 Core 代码本身不据其解释 cell 内容。
 
-`static class EngineConstants`：`ChunkSize=64`（架构 §5.1）、`ChunkSizeLog2=6`、`ChunkArea=ChunkSize*ChunkSize`、`MoveCap=32`（架构 §5.8，半个 chunk）、`HaloSize=32`（= MoveCap，架构 §5.7）、`PhysicsPixelsPerMeter=16`（架构 §8.1，1 物理单位=16px）、`MetersPerPixel=1f/16f`、`TempFieldDownscale=4`（架构 §7.5，CELL=4）、`DefaultSimHz=60.0`（架构 §4.1）、`SimHzDownscaled=30.0`（架构 §4.2）、`DirtyRectPadding=2`（架构 §5.4，可调）、`BorderRingWidth=1`（架构 §3.4，单位 chunk）、`CacheLineBytes=64`（架构 §12.7 false-sharing 填充）。全部 `const`，附 XML 注释引用对应架构 §。
+`static class EngineConstants`：`ChunkSize=64`（架构 §5.1）、`ChunkSizeLog2=6`、`ChunkArea=ChunkSize*ChunkSize`、`MoveCap=32`（架构 §5.8，半个 chunk）、`HaloSize=32`（= MoveCap，架构 §5.7）、`PhysicsPixelsPerMeter=16`（架构 §8.1，1 物理单位=16px）、`MetersPerPixel=1f/16f`、`TempFieldDownscale=4`（架构 §7.5，CELL=4）、`DefaultSimHz=60.0`（架构 §4.1）、`SimHzDownscaled=30.0`（架构 §4.2）、`DirtyRectPadding=2`（架构 §5.4，可调）、`SingleThreadChunkThreshold=4`（架构 §5.7，活跃 chunk 低阈值回退）、`BorderRingWidth=1`（架构 §3.4，单位 chunk）、`CacheLineBytes=64`（架构 §12.7 false-sharing 填充）。全部 `const`，附 XML 注释引用对应架构 §。
 
 ---
 
@@ -183,7 +183,7 @@ plan/00 §7 明确要求把编译期常量**集中到 `PixelEngine.Core` 的 `En
 - [x] `BudgetMonitor.cs`：`BudgetMonitor(budgetMs,sustainWindow)`、`Submit/IsSustainedOverBudget/ConsecutiveOverBudgetFrames`（架构 §4.3 降级数据源，不含策略）。
 
 ### 4.9 编译期常量（`EngineConstants.cs`，plan/00 §7）
-- [x] `EngineConstants.cs`：`ChunkSize/ChunkSizeLog2/ChunkArea/MoveCap/HaloSize/PhysicsPixelsPerMeter/MetersPerPixel/TempFieldDownscale/DefaultSimHz/SimHzDownscaled/DirtyRectPadding/BorderRingWidth/CacheLineBytes`，逐项 XML 注释引用架构 §。
+- [x] `EngineConstants.cs`：`ChunkSize/ChunkSizeLog2/ChunkArea/MoveCap/HaloSize/PhysicsPixelsPerMeter/MetersPerPixel/TempFieldDownscale/DefaultSimHz/SimHzDownscaled/DirtyRectPadding/SingleThreadChunkThreshold/BorderRingWidth/CacheLineBytes`，逐项 XML 注释引用架构 §。
 
 ---
 

@@ -1,3 +1,6 @@
+using PixelEngine.Core.Threading;
+using PixelEngine.Core.Diagnostics;
+
 namespace PixelEngine.Simulation;
 
 /// <summary>
@@ -10,10 +13,12 @@ public sealed class SimulationKernel(
     IChunkSource chunks,
     MaterialPropsTable materialProps,
     ulong worldSeed = 0,
-    IRigidDamageSink? rigidDamageSink = null)
+    IRigidDamageSink? rigidDamageSink = null,
+    FrameProfiler? profiler = null)
 {
     private readonly IChunkSource _chunks = chunks ?? throw new ArgumentNullException(nameof(chunks));
     private readonly IRigidDamageSink _rigidDamageSink = rigidDamageSink ?? IRigidDamageSink.Null;
+    private readonly CheckerboardScheduler _scheduler = new();
 
     /// <summary>
     /// 材质属性只读视图。
@@ -24,6 +29,11 @@ public sealed class SimulationKernel(
     /// 世界随机种子。
     /// </summary>
     public ulong WorldSeed { get; } = worldSeed;
+
+    /// <summary>
+    /// 可选帧诊断计时器。
+    /// </summary>
+    public FrameProfiler? Profiler { get; } = profiler;
 
     /// <summary>
     /// 当前 CA 帧 parity 位。
@@ -40,25 +50,18 @@ public sealed class SimulationKernel(
     /// </summary>
     public void StepCa()
     {
-        CurrentParity ^= CellFlags.Parity;
-        FrameIndex++;
+        AdvanceParity();
+        _scheduler.StepSingleThread(_chunks, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, Profiler);
+    }
 
-        foreach (Chunk chunk in _chunks.ResidentChunks)
-        {
-            if (chunk.State != ChunkState.Awake || chunk.CurrentDirty.IsEmpty)
-            {
-                continue;
-            }
-
-            ChunkUpdater.UpdateChunk(
-                chunk,
-                _chunks,
-                MaterialProps,
-                CurrentParity,
-                FrameIndex,
-                WorldSeed,
-                _rigidDamageSink);
-        }
+    /// <summary>
+    /// 使用 JobSystem 执行一次 4-pass checkerboard CA step，低活跃 chunk 数时回退单线程。
+    /// </summary>
+    public void StepCa(JobSystem jobs)
+    {
+        ArgumentNullException.ThrowIfNull(jobs);
+        AdvanceParity();
+        _scheduler.Step(_chunks, jobs, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, Profiler);
     }
 
     /// <summary>
@@ -70,5 +73,11 @@ public sealed class SimulationKernel(
         {
             chunk.SwapDirtyRects();
         }
+    }
+
+    private void AdvanceParity()
+    {
+        CurrentParity ^= CellFlags.Parity;
+        FrameIndex++;
     }
 }
