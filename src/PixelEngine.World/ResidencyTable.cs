@@ -18,6 +18,11 @@ public enum ChunkResidencyState
     Border,
 
     /// <summary>
+    /// 位于 border 外但仍保留在内存中的 sleeping chunk，可由 LRU 驱逐。
+    /// </summary>
+    Cached,
+
+    /// <summary>
     /// 已从 live map 摘下，后台 I/O 只能操作游离对象。
     /// </summary>
     Detached,

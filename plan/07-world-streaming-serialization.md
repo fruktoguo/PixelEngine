@@ -50,7 +50,7 @@
 
 `ChunkMap`（coord→`Chunk` 的驻留容器，以 chunk 坐标为键）的**类型定义属 plan/03**（它是不变式 #1 的承重墙、被 checkerboard 调度直接迭代）。本文档不重定义该容器，而是层叠其上的**驻留生命周期管理**：决定哪些 coord 应驻留、何时增删、增删的线程安全、以及驱逐。
 
-为不侵入 plan/03 的 `Chunk` 类型，World 维护一张并行的 `ResidencyTable`（`Dictionary<ChunkCoord, ChunkResidencyInfo>`，键为 plan/03 定义的 `ChunkCoord`）保存 World 侧元数据：`ChunkResidencyState State`（`Active` / `Border` / `Detached`）、`long LastTouchedFrame`（LRU 时间戳）、`int ResidentBytes`（内存核算）、`bool DirtySinceLoad`（是否需回写）。`ResidencyTable` 与 `ChunkMap` 同步增删，但前者是 World 私有、后者是 plan/03 容器。
+为不侵入 plan/03 的 `Chunk` 类型，World 维护一张并行的 `ResidencyTable`（`Dictionary<ChunkCoord, ChunkResidencyInfo>`，键为 plan/03 定义的 `ChunkCoord`）保存 World 侧元数据：`ChunkResidencyState State`（`Active` / `Border` / `Cached` / `Detached`）、`long LastTouchedFrame`（LRU 时间戳）、`int ResidentBytes`（内存核算）、`bool DirtySinceLoad`（是否需回写）。`Cached` 表示 border 外但仍驻留的 sleeping chunk，可被 LRU 选择卸载；`ResidencyTable` 与 `ChunkMap` 同步增删，但前者是 World 私有、后者是 plan/03 容器。
 
 读路径（相位 4，CA 多线程经 KeepAlive 查邻居 chunk）只读 `ChunkMap.TryGet`，不做结构性变更；写路径（增删）只在相位 2 单线程发生（见 §3.4）。borders 保证 KeepAlive 目标必驻留（§3.3），故相位 4 的并发查找永不命中正在被增删的 slot。
 
@@ -156,10 +156,10 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 
 ### 4.2 World — 驻留生命周期与装卸屏障（架构 §3.4，不变式 #4，R16）
 
-- [x] `enum ChunkResidencyState { Active, Border, Detached }`；`struct ChunkResidencyInfo { ChunkResidencyState State; long LastTouchedFrame; int ResidentBytes; bool DirtySinceLoad; }`。（§3.2）
+- [x] `enum ChunkResidencyState { Active, Border, Cached, Detached }`；`struct ChunkResidencyInfo { ChunkResidencyState State; long LastTouchedFrame; int ResidentBytes; bool DirtySinceLoad; }`。（§3.2）
 - [x] `ResidencyTable`（class）：`Dictionary<ChunkCoord,ChunkResidencyInfo>`，World 私有、与 plan/03 的 `ChunkMap` 同步增删；`TryGetInfo`、`Set`、`Remove`、`Touch(ChunkCoord,long frame)`、枚举。（§3.2/§3.5）
-- [ ] `ResidencyPlanner`（class）：`Plan(ChunkRect active, ChunkRect border, ResidencyTable table, ChunkMemoryBudget budget) → ResidencyPlan`；产出待装载 coord 集（进入 active∪border 但未驻留）、待卸载 chunk 集（border 之外 + 内存超限 LRU），含 border 提升项；受 `MaxStreamOpsPerFrame` 节流。（相位 2，§3.4/§3.5）
-- [ ] `ChunkMemoryBudget`（class）：`long ResidentBytes`、`long CapBytes`、`Add/Remove(int bytes)`、`bool OverCap`、`SelectEvictions(ResidencyTable, ChunkRect border, long target) → IReadOnlyList<ChunkCoord>`（LRU + 距离评分，仅选 sleeping 且 border 外）。（相位 2，§3.5）
+- [x] `ResidencyPlanner`（class）：`Plan(ChunkRect active, ChunkRect border, ResidencyTable table, ChunkMemoryBudget budget) → ResidencyPlan`；产出待装载 coord 集（进入 active∪border 但未驻留）、待卸载 chunk 集（border 之外 + 内存超限 LRU），含 border 提升项；受 `MaxStreamOpsPerFrame` 节流。（相位 2，§3.4/§3.5）
+- [x] `ChunkMemoryBudget`（class）：`long ResidentBytes`、`long CapBytes`、`Add/Remove(int bytes)`、`bool OverCap`、`SelectEvictions(ResidencyTable, ChunkRect border, long target) → IReadOnlyList<ChunkCoord>`（LRU + 距离评分，仅选 sleeping 且 border 外）。（相位 2，§3.5）
 - [ ] `StreamingRequest`（struct：`enum Kind{Load,Unload}`、`ChunkCoord`、卸载时携游离 `Chunk` 句柄）；`StreamingRequestQueue`（SPSC，相位 2 生产 / I/O 线程消费）；`CompletedChunkQueue`（I/O 线程 / 池生产 / 相位 2 消费，携反序列化好的游离 `Chunk` 或卸载完成回执）。（§3.4）
 - [ ] `WorldStreamer`（class）：拥有后台 I/O 线程、两条队列、`RegionFileStore`、`ChunkCodec`、`MaterialRemap`。
   - [ ] `ApplyPrepared(long frame)`：相位 2，应用 `CompletedChunkQueue`——插入已装载 chunk 到 `ChunkMap`+`ResidencyTable`（重置瞬时位、置 dirty-rect 待评估）、收尾已卸载 chunk（释放缓冲、移除记账）。（相位 2）
