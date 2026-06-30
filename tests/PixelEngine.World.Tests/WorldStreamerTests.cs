@@ -108,6 +108,14 @@ public sealed class WorldStreamerTests
 
         Assert.Equal(9, manager.Streamer.PendingRequestCount);
         Assert.Equal(9, manager.Residency.Count);
+
+        _ = manager.Streamer.ProcessIoOnce();
+        manager.ApplyResidency(frame: 2);
+
+        Assert.True(manager.Chunks.ResolveNeighborhood(new ChunkCoord(0, 0), out _));
+        Assert.True(manager.Chunks.TryGetChunk(new ChunkCoord(-1, 0), out Chunk borderChunk));
+        Assert.Equal(ChunkState.Sleeping, borderChunk.State);
+        Assert.True(borderChunk.CurrentDirty.IsEmpty);
     }
 
     /// <summary>

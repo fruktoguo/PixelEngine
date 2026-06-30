@@ -202,7 +202,7 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 ### 5.1 驻留、流式与线程安全
 
 - [x] 相机平移使 chunk 进出激活区时，激活区内 chunk 被模拟、超出者卸载、重入者从磁盘读回且玩家修改持久（架构 §5.1）。
-- [ ] border ring 始终为激活区外宽 1 chunk、驻留且默认 sleep；激活区边缘 cell 的 32px-halo 跨界写入与 KeepAlive 目标恒落在驻留 chunk 上，无「写入落到非驻留邻居」的洞（不变式 #4、架构 §3.4）。
+- [x] border ring 始终为激活区外宽 1 chunk、驻留且默认 sleep；激活区边缘 cell 的 32px-halo 跨界写入与 KeepAlive 目标恒落在驻留 chunk 上，无「写入落到非驻留邻居」的洞（不变式 #4、架构 §3.4）。
 - [x] 结构性增删（`ChunkMap`/`ResidencyTable`）**只在相位 2 单线程**发生；相位 11 后台线程仅操作游离字节缓冲与游离 `Chunk`，经断言 / 测试证实从不触碰 live map（架构 §3.4）。
 - [x] 驱逐 / 卸载只发生在 border 之外，被摘下的 chunk 本帧不被任何相位 4 worker 触碰。
 - [ ] **流式线程安全测试通过**（引用 plan/14）：相机持续平移 + 边界持续活动下，质量守恒跨装卸边界不变、无 `Detached` 期并发读（架构 §16.2、R16）。
