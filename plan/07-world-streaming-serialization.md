@@ -149,15 +149,15 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 
 ### 4.1 World — 坐标、相机、激活区（架构 §3.4、§5.1、§12.2）
 
-- [ ] `ChunkRect`（readonly struct，本文档定义）：`int MinCx,MinCy,MaxCx,MaxCy`；`bool Contains(ChunkCoord)`、`ChunkRect Expand(int)`、`int Count`、`Iterate()` 枚举。（§3.3）
-- [ ] `WorldCamera`（class）：`long FocusX,FocusY`（cell）、`int ViewportCellsX,ViewportCellsY`；由相位 0/1 更新；`ChunkCoord FocusChunk`。仅提供激活区驱动焦点，不含渲染投影（plan/08）。（相位 0/1，§3.3）
-- [ ] `WorldStreamingConfig`（record）：`ActivationMarginChunks`、`BorderRingWidth=1`、`ResidentMemoryCapBytes=512*1024*1024`、`EvictionTargetBytes`、`RegionSizeChunks=32`、`MaxStreamOpsPerFrame`；运行时可调。（§3.3/§3.5）
-- [ ] `ActivationPolicy`（class）：`ComputeVisible(WorldCamera)`、`ComputeActive(WorldCamera,WorldStreamingConfig) → ChunkRect`、`ComputeBorder(ChunkRect active,WorldStreamingConfig) → ChunkRect`（外扩 1 圈）。border chunk 驻留但默认 sleep，保证 32px-halo 跨界写入恒落驻留 chunk（不变式 #4）。（相位 2，§3.3）
+- [x] `ChunkRect`（readonly struct，本文档定义）：`int MinCx,MinCy,MaxCx,MaxCy`；`bool Contains(ChunkCoord)`、`ChunkRect Expand(int)`、`int Count`、`Iterate()` 枚举。（§3.3）
+- [x] `WorldCamera`（class）：`long FocusX,FocusY`（cell）、`int ViewportCellsX,ViewportCellsY`；由相位 0/1 更新；`ChunkCoord FocusChunk`。仅提供激活区驱动焦点，不含渲染投影（plan/08）。（相位 0/1，§3.3）
+- [x] `WorldStreamingConfig`（record）：`ActivationMarginChunks`、`BorderRingWidth=1`、`ResidentMemoryCapBytes=512*1024*1024`、`EvictionTargetBytes`、`RegionSizeChunks=32`、`MaxStreamOpsPerFrame`；运行时可调。（§3.3/§3.5）
+- [x] `ActivationPolicy`（class）：`ComputeVisible(WorldCamera)`、`ComputeActive(WorldCamera,WorldStreamingConfig) → ChunkRect`、`ComputeBorder(ChunkRect active,WorldStreamingConfig) → ChunkRect`（外扩 1 圈）。border chunk 驻留但默认 sleep，保证 32px-halo 跨界写入恒落驻留 chunk（不变式 #4）。（相位 2，§3.3）
 
 ### 4.2 World — 驻留生命周期与装卸屏障（架构 §3.4，不变式 #4，R16）
 
-- [ ] `enum ChunkResidencyState { Active, Border, Detached }`；`struct ChunkResidencyInfo { ChunkResidencyState State; long LastTouchedFrame; int ResidentBytes; bool DirtySinceLoad; }`。（§3.2）
-- [ ] `ResidencyTable`（class）：`Dictionary<ChunkCoord,ChunkResidencyInfo>`，World 私有、与 plan/03 的 `ChunkMap` 同步增删；`TryGetInfo`、`Set`、`Remove`、`Touch(ChunkCoord,long frame)`、枚举。（§3.2/§3.5）
+- [x] `enum ChunkResidencyState { Active, Border, Detached }`；`struct ChunkResidencyInfo { ChunkResidencyState State; long LastTouchedFrame; int ResidentBytes; bool DirtySinceLoad; }`。（§3.2）
+- [x] `ResidencyTable`（class）：`Dictionary<ChunkCoord,ChunkResidencyInfo>`，World 私有、与 plan/03 的 `ChunkMap` 同步增删；`TryGetInfo`、`Set`、`Remove`、`Touch(ChunkCoord,long frame)`、枚举。（§3.2/§3.5）
 - [ ] `ResidencyPlanner`（class）：`Plan(ChunkRect active, ChunkRect border, ResidencyTable table, ChunkMemoryBudget budget) → ResidencyPlan`；产出待装载 coord 集（进入 active∪border 但未驻留）、待卸载 chunk 集（border 之外 + 内存超限 LRU），含 border 提升项；受 `MaxStreamOpsPerFrame` 节流。（相位 2，§3.4/§3.5）
 - [ ] `ChunkMemoryBudget`（class）：`long ResidentBytes`、`long CapBytes`、`Add/Remove(int bytes)`、`bool OverCap`、`SelectEvictions(ResidencyTable, ChunkRect border, long target) → IReadOnlyList<ChunkCoord>`（LRU + 距离评分，仅选 sleeping 且 border 外）。（相位 2，§3.5）
 - [ ] `StreamingRequest`（struct：`enum Kind{Load,Unload}`、`ChunkCoord`、卸载时携游离 `Chunk` 句柄）；`StreamingRequestQueue`（SPSC，相位 2 生产 / I/O 线程消费）；`CompletedChunkQueue`（I/O 线程 / 池生产 / 相位 2 消费，携反序列化好的游离 `Chunk` 或卸载完成回执）。（§3.4）
