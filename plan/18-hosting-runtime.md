@@ -71,9 +71,9 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 
 ## 4. 实现清单
 
-- [ ] `EngineBuilder`:fluent 配置(窗口/内部 sim 分辨率/worker 数/GC 模式/Editor 开关/headless/确定性开关/GPU 门控/内容根/起始场景),`Build()→Engine`。[架构 §19.2 配置化]
-- [ ] `Engine`:持有全部子系统 + `EngineContext`;`Run()`/`RunOneTick()`/`Shutdown()`。
-- [ ] `EngineContext`:服务定位 + 诊断 + 事件总线 + 时间 + 当前质量档位。
+- [x] `EngineBuilder`:fluent 配置(窗口/内部 sim 分辨率/worker 数/GC 模式/Editor 开关/headless/确定性开关/GPU 门控/内容根/起始场景),`Build()→Engine`。[架构 §19.2 配置化]
+- [x] `Engine`:持有全部子系统 + `EngineContext`;`Run()`/`RunOneTick()`/`Shutdown()`。
+- [x] `EngineContext`:服务定位 + 诊断 + 事件总线 + 时间 + 当前质量档位。
 - [ ] 子系统装配与**初始化顺序**(§3.1);native(Box2D/OpenAL/GL)与 ALC 的正确释放顺序。
 - [ ] `GameLoop.Tick()`:严格 12 相位编排(§3.2),相位间 barrier(plan/02 JobSystem),每帧至多一次 sim/physics step。[不变式 #6,架构 §3.3]
 - [ ] sim 降频(30Hz)而 render 不降:render 复用上帧世界纹理(必要时整图相机偏移,不插值像素)。[架构 §4.2]
@@ -109,7 +109,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 
 ## 7. 提交节点
 
-- [ ] `feat(host): EngineBuilder/Engine/EngineContext 装配与生命周期`
+- [x] `feat(host): EngineBuilder/Engine/EngineContext 装配与生命周期`
 - [ ] `feat(host): 12 相位主循环编排 + 固定步长不追帧 + sim 降频`
 - [ ] `feat(host): 过载降级编排 + 脚本服务后端聚合`
 - [ ] `feat(host): 场景/项目模型 + Play/Edit/Step 模式 + headless`
