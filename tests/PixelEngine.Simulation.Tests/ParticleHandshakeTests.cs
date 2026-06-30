@@ -1,4 +1,5 @@
 using PixelEngine.Core;
+using PixelEngine.Core.Events;
 using PixelEngine.Core.Threading;
 using PixelEngine.Simulation.Particles;
 using Xunit;
@@ -114,6 +115,33 @@ public sealed class ParticleHandshakeTests
     }
 
     /// <summary>
+    /// 验证相位 7 抛射向 Core 事件总线投递 explosion 音频事件。
+    /// </summary>
+    [Fact]
+    public void RunEjectionPassEmitsExplosionAudioEvent()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Set(center, 10, 10, Sand);
+        MaterialPropsTable materials = CreateMaterials();
+        CellGrid grid = new(source, materials);
+        SimulationKernel kernel = new(source, materials);
+        EventBus events = new(capacityPerChannel: 8);
+        ParticleSystem particles = new(capacity: 4, events: events);
+
+        Assert.True(particles.RequestEjection(new EjectionRequest(10, 10, 0, 2, 0, EjectMask.Powder)));
+        particles.RunEjectionPass(kernel, grid);
+
+        Span<AudioEvent> drained = stackalloc AudioEvent[2];
+        int count = events.Channel<AudioEvent>().DrainTo(drained);
+        Assert.Equal(1, count);
+        Assert.Equal(AudioEventType.Explosion, drained[0].Type);
+        Assert.Equal(10, drained[0].CellX);
+        Assert.Equal(10, drained[0].CellY);
+        Assert.Equal(Sand, drained[0].MaterialId);
+        Assert.Equal(1, drained[0].Count);
+    }
+
+    /// <summary>
     /// 验证粒子池容量满时，抛射不会清空源 cell，避免质量丢失。
     /// </summary>
     [Fact]
@@ -159,6 +187,34 @@ public sealed class ParticleHandshakeTests
         Assert.Equal(Solid, Get(center, 10, 10));
         Assert.Equal(1, particles.Stats.DepositedThisTick);
         Assert.Equal(new DirtyRect(8, 7, 12, 11), center.CurrentDirty);
+    }
+
+    /// <summary>
+    /// 验证相位 3b 沉积向 Core 事件总线投递粒子 impact 音频事件。
+    /// </summary>
+    [Fact]
+    public void ResolveDepositsEmitsParticleImpactAudioEvent()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Set(center, 10, 10, Solid);
+        MaterialPropsTable materials = CreateMaterials();
+        CellGrid grid = new(source, materials);
+        SimulationKernel kernel = new(source, materials);
+        EventBus events = new(capacityPerChannel: 8);
+        ParticleSystem particles = new(capacity: 1, events: events);
+        _ = particles.TrySpawn(new ParticleSpawn(10.25f, 9.25f, 0, 1, Sand, 0, 10));
+
+        particles.IntegrateAndAdvance(grid);
+        particles.ResolveDeposits(kernel, grid);
+
+        Span<AudioEvent> drained = stackalloc AudioEvent[2];
+        int count = events.Channel<AudioEvent>().DrainTo(drained);
+        Assert.Equal(1, count);
+        Assert.Equal(AudioEventType.ParticleImpact, drained[0].Type);
+        Assert.Equal(10, drained[0].CellX);
+        Assert.Equal(9, drained[0].CellY);
+        Assert.Equal(Sand, drained[0].MaterialId);
+        Assert.True(drained[0].Magnitude > 0);
     }
 
     /// <summary>

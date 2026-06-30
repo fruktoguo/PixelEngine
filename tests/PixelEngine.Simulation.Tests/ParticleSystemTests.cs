@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using PixelEngine.Core;
+using PixelEngine.Core.Diagnostics;
 using PixelEngine.Simulation.Particles;
 using Xunit;
 
@@ -86,6 +87,60 @@ public sealed class ParticleSystemTests
         Assert.Equal(0, particles.ActiveCount);
         Assert.Equal(0, particles.Stats.SpawnedThisTick);
         Assert.Equal(0, particles.Stats.DroppedThisTick);
+    }
+
+    /// <summary>
+    /// 验证 IParticleReadback 暴露活跃前缀只读视图。
+    /// </summary>
+    [Fact]
+    public void ParticleReadbackExposesActivePrefix()
+    {
+        ParticleSystem particles = new(capacity: 2);
+        _ = particles.TrySpawn(new ParticleSpawn(1, 2, 3, 4, 5, 6, 7));
+        IParticleReadback readback = particles;
+
+        Assert.Equal(1, readback.ActiveCount);
+        Assert.Equal((ushort)5, readback.Particles[0].Material);
+    }
+
+    /// <summary>
+    /// 验证 RestoreFrom 从已重映射粒子快照重建活跃前缀并清空诊断。
+    /// </summary>
+    [Fact]
+    public void RestoreFromRebuildsActivePrefixAndClearsTickState()
+    {
+        ParticleSystem particles = new(capacity: 3);
+        _ = particles.TrySpawn(new ParticleSpawn(1, 0, 0, 0, 101, 1, 10));
+        _ = particles.TrySpawn(new ParticleSpawn(2, 0, 0, 0, 102, 2, 10));
+        Particle[] snapshot =
+        [
+            new Particle { X = 9, Y = 8, Material = 201, Life = 7 },
+        ];
+
+        particles.RestoreFrom(snapshot);
+
+        Assert.Equal(1, particles.ActiveCount);
+        Assert.Equal((ushort)201, particles.ActiveReadOnly[0].Material);
+        Assert.Equal(0, particles.Stats.SpawnedThisTick);
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => particles.RestoreFrom(new Particle[4]));
+    }
+
+    /// <summary>
+    /// 验证粒子诊断发布到 Core EngineCounters。
+    /// </summary>
+    [Fact]
+    public void PublishDiagnosticsWritesEngineCounters()
+    {
+        ParticleSystem particles = new(capacity: 1);
+        _ = particles.TrySpawn(new ParticleSpawn(1, 0, 0, 0, 101, 1, 10));
+        _ = particles.TrySpawn(new ParticleSpawn(2, 0, 0, 0, 102, 2, 10));
+        EngineCounters counters = new();
+
+        particles.PublishDiagnostics(counters);
+
+        Assert.Equal(1, counters.FreeParticles);
+        Assert.Equal(1, counters.FreeParticlesSpawnedThisTick);
+        Assert.Equal(1, counters.FreeParticlesDroppedThisTick);
     }
 
     private static (float X, float Y, float Vx, float Vy, ushort Material, byte ColorVariant, byte Life) Project(Particle particle)

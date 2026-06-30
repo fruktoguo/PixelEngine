@@ -12,4 +12,5 @@ public readonly record struct ParticleSystemStats(
     int SpawnedThisTick,
     int DepositedThisTick,
     int KilledByLifetimeThisTick,
-    int DroppedThisTick);
+    int DroppedThisTick,
+    int AudioEventsDroppedThisTick);

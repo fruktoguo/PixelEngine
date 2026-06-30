@@ -8,6 +8,10 @@ public sealed class EngineCounters
     private long _activeChunks;
     private long _activeCells;
     private long _freeParticles;
+    private long _freeParticlesDepositedThisTick;
+    private long _freeParticlesDroppedThisTick;
+    private long _freeParticlesKilledThisTick;
+    private long _freeParticlesSpawnedThisTick;
     private long _rigidBodies;
     private long _residentChunks;
     private long _residentMemoryBytes;
@@ -26,6 +30,26 @@ public sealed class EngineCounters
     /// 获取或设置自由粒子数量。
     /// </summary>
     public long FreeParticles { get => Volatile.Read(ref _freeParticles); set => Volatile.Write(ref _freeParticles, value); }
+
+    /// <summary>
+    /// 获取或设置本 tick 生成的自由粒子数量。
+    /// </summary>
+    public long FreeParticlesSpawnedThisTick { get => Volatile.Read(ref _freeParticlesSpawnedThisTick); set => Volatile.Write(ref _freeParticlesSpawnedThisTick, value); }
+
+    /// <summary>
+    /// 获取或设置本 tick 沉积的自由粒子数量。
+    /// </summary>
+    public long FreeParticlesDepositedThisTick { get => Volatile.Read(ref _freeParticlesDepositedThisTick); set => Volatile.Write(ref _freeParticlesDepositedThisTick, value); }
+
+    /// <summary>
+    /// 获取或设置本 tick 因寿命或回退删除的自由粒子数量。
+    /// </summary>
+    public long FreeParticlesKilledThisTick { get => Volatile.Read(ref _freeParticlesKilledThisTick); set => Volatile.Write(ref _freeParticlesKilledThisTick, value); }
+
+    /// <summary>
+    /// 获取或设置本 tick 丢弃的自由粒子或粒子事件数量。
+    /// </summary>
+    public long FreeParticlesDroppedThisTick { get => Volatile.Read(ref _freeParticlesDroppedThisTick); set => Volatile.Write(ref _freeParticlesDroppedThisTick, value); }
 
     /// <summary>
     /// 获取或设置刚体数量。
@@ -72,6 +96,42 @@ public sealed class EngineCounters
     public void AddFreeParticles(long delta)
     {
         _ = Interlocked.Add(ref _freeParticles, delta);
+    }
+
+    /// <summary>
+    /// 线程安全地累加本 tick 生成的自由粒子数。
+    /// </summary>
+    /// <param name="delta">增量。</param>
+    public void AddFreeParticlesSpawnedThisTick(long delta)
+    {
+        _ = Interlocked.Add(ref _freeParticlesSpawnedThisTick, delta);
+    }
+
+    /// <summary>
+    /// 线程安全地累加本 tick 沉积的自由粒子数。
+    /// </summary>
+    /// <param name="delta">增量。</param>
+    public void AddFreeParticlesDepositedThisTick(long delta)
+    {
+        _ = Interlocked.Add(ref _freeParticlesDepositedThisTick, delta);
+    }
+
+    /// <summary>
+    /// 线程安全地累加本 tick 因寿命或回退删除的自由粒子数。
+    /// </summary>
+    /// <param name="delta">增量。</param>
+    public void AddFreeParticlesKilledThisTick(long delta)
+    {
+        _ = Interlocked.Add(ref _freeParticlesKilledThisTick, delta);
+    }
+
+    /// <summary>
+    /// 线程安全地累加本 tick 丢弃的自由粒子或粒子事件数。
+    /// </summary>
+    /// <param name="delta">增量。</param>
+    public void AddFreeParticlesDroppedThisTick(long delta)
+    {
+        _ = Interlocked.Add(ref _freeParticlesDroppedThisTick, delta);
     }
 
     /// <summary>
