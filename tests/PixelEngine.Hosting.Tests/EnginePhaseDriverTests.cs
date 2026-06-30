@@ -1,7 +1,9 @@
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
+using PixelEngine.Scripting;
 using PixelEngine.World;
 using Xunit;
+using ScriptScene = PixelEngine.Scripting.Scene;
 
 namespace PixelEngine.Hosting.Tests;
 
@@ -155,6 +157,54 @@ public sealed class EnginePhaseDriverTests
         }
     }
 
+    /// <summary>
+    /// 验证脚本相位在 sim 降频时仍逐帧 Update，但 FixedSimTick 只随 sim tick 调用。
+    /// </summary>
+    [Fact]
+    public void ScriptingPhaseDriverUpdatesEveryFrameButFixedOnlyOnSimFrames()
+    {
+        RecordingScriptRuntime runtime = new();
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithSimHz(PixelEngine.Core.EngineConstants.SimHzDownscaled)
+            .AddPhaseDriver(new ScriptingPhaseDriver(runtime, new FakeScriptContext(new ScriptScene())))
+            .Build();
+
+        _ = engine.RunOneTick();
+        _ = engine.RunOneTick();
+
+        Assert.Equal(1, runtime.InitializeCount);
+        Assert.Equal(2, runtime.BeginCount);
+        Assert.Equal(2, runtime.UpdateCount);
+        Assert.Equal(1, runtime.FixedCount);
+        Assert.Equal(2, runtime.EndCount);
+    }
+
+    /// <summary>
+    /// 验证真实 ScriptRuntime 通过 Hosting 相位 1 派发 Behaviour 生命周期。
+    /// </summary>
+    [Fact]
+    public void ScriptingPhaseDriverDispatchesBehaviourLifecycleThroughRuntime()
+    {
+        ScriptScene scene = new();
+        Entity entity = scene.CreateEntity();
+        HostingLifecycleScript script = entity.AddComponent<HostingLifecycleScript>();
+        List<string> events = [];
+        script.Events = events;
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithSimHz(PixelEngine.Core.EngineConstants.SimHzDownscaled)
+            .AddPhaseDriver(new ScriptingPhaseDriver(new ScriptRuntime(), new FakeScriptContext(scene)))
+            .Build();
+
+        _ = engine.RunOneTick();
+        _ = engine.RunOneTick();
+        entity.Destroy();
+        _ = engine.RunOneTick();
+
+        Assert.Equal(["start", "update", "fixed", "update", "update", "fixed", "destroy"], events);
+    }
+
     private static MaterialTable Materials(params (string Name, CellType Type)[] definitions)
     {
         MaterialDef[] materials = new MaterialDef[definitions.Length];
@@ -216,5 +266,99 @@ public sealed class EnginePhaseDriverTests
             neighborhood = new ChunkNeighborhood(chunk, chunk, chunk, chunk, chunk, chunk, chunk, chunk, chunk);
             return true;
         }
+    }
+
+    private sealed class RecordingScriptRuntime : IScriptRuntime
+    {
+        public int InitializeCount { get; private set; }
+
+        public int BeginCount { get; private set; }
+
+        public int UpdateCount { get; private set; }
+
+        public int FixedCount { get; private set; }
+
+        public int EndCount { get; private set; }
+
+        public void Initialize(IScriptContext context)
+        {
+            InitializeCount++;
+        }
+
+        public void BeginFrame()
+        {
+            BeginCount++;
+        }
+
+        public void Update(float dt)
+        {
+            UpdateCount++;
+        }
+
+        public void FixedSimTick()
+        {
+            FixedCount++;
+        }
+
+        public void EndFrame()
+        {
+            EndCount++;
+        }
+
+        public void Shutdown()
+        {
+        }
+    }
+
+    private sealed class HostingLifecycleScript : Behaviour
+    {
+        public List<string> Events { get; set; } = [];
+
+        protected override void OnStart()
+        {
+            Events.Add("start");
+        }
+
+        protected override void OnUpdate(float dt)
+        {
+            Events.Add("update");
+        }
+
+        protected override void OnFixedSimTick()
+        {
+            Events.Add("fixed");
+        }
+
+        protected override void OnDestroy()
+        {
+            Events.Add("destroy");
+        }
+    }
+
+    private sealed class FakeScriptContext(ScriptScene scene) : IScriptContext
+    {
+        public IWorldCellAccess Cells => throw new NotSupportedException();
+
+        public IMaterialQuery Materials => throw new NotSupportedException();
+
+        public IParticleSpawner Particles => throw new NotSupportedException();
+
+        public ISolidSampler Solids => throw new NotSupportedException();
+
+        public IRigidBodyApi Bodies => throw new NotSupportedException();
+
+        public ICharacterController Character => throw new NotSupportedException();
+
+        public ICameraApi Camera => throw new NotSupportedException();
+
+        public IInputApi Input => throw new NotSupportedException();
+
+        public IEventBus Events => throw new NotSupportedException();
+
+        public IAudioApi Audio => throw new NotSupportedException();
+
+        public IGameTime Time => throw new NotSupportedException();
+
+        public ScriptScene Scene { get; } = scene;
     }
 }

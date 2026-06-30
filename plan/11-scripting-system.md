@@ -288,7 +288,7 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 ### 4.7 编辑器与 Hosting 协作
 - [ ] `public ScriptFieldDescriptor[] InspectField(Behaviour b)`：反射枚举 `[SerializeField]`/公开字段（排除 `[HideInInspector]`），供 plan/12 Inspector（§3.7）
 - [ ] `HotReloadService.RequestReload()` 暴露为编辑器热重载入口（§3.7）
-- [ ] `public interface IScriptRuntime`：`Initialize/BeginFrame/Update(dt)/FixedSimTick/EndFrame/Shutdown`，由 Hosting 主循环相位 1 驱动（§3.8，架构 §3.3）
+- [x] `public interface IScriptRuntime`：`Initialize/BeginFrame/Update(dt)/FixedSimTick/EndFrame/Shutdown`，由 Hosting 主循环相位 1 驱动（§3.8，架构 §3.3）
 - [ ] Hosting 装配期构造 `IScriptContext` 并注入各子系统公开 API（§3.8）
 
 ---
@@ -297,7 +297,7 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 - [ ] 游戏项目仅经 `ProjectReference`/`PackageReference` 引用引擎公开程序集即可编译并运行；不引用任何 `internal` 内核类型（§3.1，架构 §3.1）
 - [ ] 在 Rider / VS / VS Code 任一中打开游戏项目，`Behaviour`/`IScriptContext`/世界 API 均有中文 IntelliSense 补全、签名提示与跳转（靠 XML 注释，无额外语言服务，§3.1/§3.6）
 - [x] CS1591 在公开类型上为 error：缺任一公开成员 XML 注释则构建失败（§2.3，AGENTS §4）
-- [ ] 一个继承 `Behaviour` 的脚本，其 `OnStart`/`OnUpdate(dt)`/`OnFixedSimTick`/`OnDestroy` 按相位 1 节奏被正确调用；sim 降到 30Hz 时 `OnFixedSimTick` 跳过、`OnUpdate` 仍每帧（§3.2，架构 §4.2）
+- [x] 一个继承 `Behaviour` 的脚本，其 `OnStart`/`OnUpdate(dt)`/`OnFixedSimTick`/`OnDestroy` 按相位 1 节奏被正确调用；sim 降到 30Hz 时 `OnFixedSimTick` 跳过、`OnUpdate` 仍每帧（§3.2，架构 §4.2）
 - [x] 组件挂载到 Demo 稀疏实体且**不**出现在 `PixelEngine.Simulation` 内核数据结构中（§3.2，架构 §13.1）
 - [ ] 脚本经 facade 完成：读写 cell、查材质（按 name）、spawn 粒子、raycast/采样固体、建/查/控刚体、驱动角色控制器、控相机、读输入、订阅事件、播放音效——全部走公开 API（§3.3）
 - [ ] 脚本写入类调用经命令队列在正确相位落地：cell 写标 chunk dirty 并被下帧 CA 看见；particle 落相位 7；body 建于相位 8a——无跨相位竞争、不破坏 §3.2 相位安全（架构 §3.3）
