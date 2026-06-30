@@ -117,4 +117,47 @@ public sealed class EngineBuilderTests
         _ = Assert.Throws<ArgumentException>(() => new EngineBuilder().WithContentRoot(""));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new EngineBuilder().WithEventCapacityPerChannel(63).Build());
     }
+
+    /// <summary>
+    /// 验证 Hosting 只把已有真实后端的服务角色标为可用。
+    /// </summary>
+    [Fact]
+    public void ServiceRolesExposeOnlyRegisteredBackendsAsAvailable()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+
+        Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.EventBus));
+        Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.Diagnostics));
+        Assert.False(engine.Context.IsServiceAvailable(EngineServiceRole.WorldAccess));
+        Assert.False(engine.Context.IsServiceAvailable(EngineServiceRole.PhysicsService));
+        Assert.False(engine.Context.IsServiceAvailable(EngineServiceRole.Scripting));
+
+        EngineServiceAvailability audio = engine.Context.GetServiceAvailability(EngineServiceRole.AudioService);
+        Assert.False(audio.Available);
+        Assert.Null(audio.ServiceType);
+    }
+
+    /// <summary>
+    /// 验证角色服务注册会同时进入 typed service 表与能力表。
+    /// </summary>
+    [Fact]
+    public void RegisterServiceRolePublishesTypedBackend()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+        FakeWorldAccess world = new();
+
+        engine.Context.RegisterService(EngineServiceRole.WorldAccess, world);
+
+        Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.WorldAccess));
+        Assert.Same(world, engine.Context.GetService<FakeWorldAccess>());
+        Assert.Equal(typeof(FakeWorldAccess), engine.Context.GetServiceAvailability(EngineServiceRole.WorldAccess).ServiceType);
+    }
+
+    private sealed class FakeWorldAccess
+    {
+    }
 }

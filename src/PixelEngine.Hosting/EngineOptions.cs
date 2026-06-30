@@ -24,7 +24,8 @@ public sealed class EngineOptions
         string contentRoot,
         string? startScene,
         double simHz,
-        int eventCapacityPerChannel)
+        int eventCapacityPerChannel,
+        EngineOverloadOptions overload)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(windowWidth);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(windowHeight);
@@ -42,6 +43,7 @@ public sealed class EngineOptions
             throw new ArgumentOutOfRangeException(nameof(eventCapacityPerChannel), eventCapacityPerChannel, "事件通道容量必须是正的 2 的幂。");
         }
 
+        ArgumentNullException.ThrowIfNull(overload);
         WindowWidth = windowWidth;
         WindowHeight = windowHeight;
         InternalWidth = internalWidth;
@@ -56,6 +58,7 @@ public sealed class EngineOptions
         StartScene = startScene;
         SimHz = simHz;
         EventCapacityPerChannel = eventCapacityPerChannel;
+        Overload = overload;
     }
 
     /// <summary>
@@ -154,6 +157,11 @@ public sealed class EngineOptions
     public int EventCapacityPerChannel { get; }
 
     /// <summary>
+    /// 过载降级配置。
+    /// </summary>
+    public EngineOverloadOptions Overload { get; }
+
+    /// <summary>
     /// 创建默认配置。
     /// </summary>
     public static EngineOptions CreateDefault()
@@ -172,6 +180,7 @@ public sealed class EngineOptions
             contentRoot: "content",
             startScene: null,
             simHz: EngineConstants.DefaultSimHz,
-            eventCapacityPerChannel: DefaultEventCapacityPerChannel);
+            eventCapacityPerChannel: DefaultEventCapacityPerChannel,
+            overload: EngineOverloadOptions.CreateDefault());
     }
 }
