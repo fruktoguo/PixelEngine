@@ -43,6 +43,26 @@ public sealed class ReactionTableTests
     }
 
     /// <summary>
+    /// 验证 Linear 切片存在同 neighbor 普通/fast 两条时优先返回 Fast。
+    /// </summary>
+    [Fact]
+    public void LinearLookupPrefersFastReactionForSameNeighbor()
+    {
+        MaterialDef owner = Material(1, "fire") with { ReactionStart = 0, ReactionCount = 2 };
+        Reaction[] reactions =
+        [
+            Reaction(1, 2, 3, 4),
+            Reaction(1, 2, 5, 6) with { Flags = ReactionFlags.Fast },
+        ];
+        ReactionTable table = new(reactions, [Material(0, "empty"), owner, Material(2, "wood")]);
+
+        int index = table.Find(1, 2, in owner);
+
+        Assert.Equal(1, index);
+        Assert.True((table.At(index).Flags & ReactionFlags.Fast) != 0);
+    }
+
+    /// <summary>
     /// 验证中等切片使用按 InputB 升序的二分查找。
     /// </summary>
     [Fact]

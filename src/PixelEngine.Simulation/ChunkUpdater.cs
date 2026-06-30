@@ -72,7 +72,7 @@ internal static class ChunkUpdater
                 };
 
                 ushort activeMaterial = window.GetMaterial(activeX, activeY);
-                bool reacted = TryReactVonNeumann(ref window, materials, reactionExecutor, diagnostics, activeX, activeY, activeMaterial, parityBit);
+                bool reacted = TryReactVonNeumann(ref window, chunks, materials, reactionExecutor, diagnostics, activeX, activeY, activeMaterial, parityBit, ref rng);
                 if (!moved && !reacted && materials.TypeOf(material) != CellType.Solid)
                 {
                     window.SetFlags(wx, wy, CellFlags.SetParity(window.GetFlags(wx, wy), parityBit));
@@ -253,24 +253,27 @@ internal static class ChunkUpdater
 
     private static bool TryReactVonNeumann(
         ref NeighborWindow window,
+        IChunkSource chunks,
         MaterialPropsTable materials,
         IReactionExecutor reactionExecutor,
         SimulationDiagnostics diagnostics,
         int wx,
         int wy,
         ushort material,
-        byte parityBit)
+        byte parityBit,
+        ref Pcg32 rng)
     {
         return material != 0 &&
             materials.ReactionCountOf(material) != 0 &&
-            (TryReactNeighbor(ref window, reactionExecutor, diagnostics, wx, wy, material, wx, wy - 1, parityBit) ||
-            TryReactNeighbor(ref window, reactionExecutor, diagnostics, wx, wy, material, wx - 1, wy, parityBit) ||
-            TryReactNeighbor(ref window, reactionExecutor, diagnostics, wx, wy, material, wx + 1, wy, parityBit) ||
-            TryReactNeighbor(ref window, reactionExecutor, diagnostics, wx, wy, material, wx, wy + 1, parityBit));
+            (TryReactNeighbor(ref window, chunks, reactionExecutor, diagnostics, wx, wy, material, wx, wy - 1, parityBit, ref rng) ||
+            TryReactNeighbor(ref window, chunks, reactionExecutor, diagnostics, wx, wy, material, wx - 1, wy, parityBit, ref rng) ||
+            TryReactNeighbor(ref window, chunks, reactionExecutor, diagnostics, wx, wy, material, wx + 1, wy, parityBit, ref rng) ||
+            TryReactNeighbor(ref window, chunks, reactionExecutor, diagnostics, wx, wy, material, wx, wy + 1, parityBit, ref rng));
     }
 
     private static bool TryReactNeighbor(
         ref NeighborWindow window,
+        IChunkSource chunks,
         IReactionExecutor reactionExecutor,
         SimulationDiagnostics diagnostics,
         int wx,
@@ -278,7 +281,8 @@ internal static class ChunkUpdater
         ushort material,
         int neighborX,
         int neighborY,
-        byte parityBit)
+        byte parityBit,
+        ref Pcg32 rng)
     {
         ushort neighborMaterial = window.GetMaterial(neighborX, neighborY);
         if (neighborMaterial == 0)
@@ -287,13 +291,34 @@ internal static class ChunkUpdater
         }
 
         diagnostics.RecordReactionAttempt();
-        bool reacted = reactionExecutor.TryReact(ref window, wx, wy, material, neighborX, neighborY, neighborMaterial, parityBit);
+        byte randomByte = (byte)(rng.NextUInt() >> 24);
+        bool reacted = reactionExecutor.TryReact(ref window, wx, wy, material, neighborX, neighborY, neighborMaterial, parityBit, randomByte);
         if (reacted)
         {
+            MarkReactionTouchedCell(ref window, chunks, wx, wy, diagnostics);
+            MarkReactionTouchedCell(ref window, chunks, neighborX, neighborY, diagnostics);
             diagnostics.RecordReactionSuccess(wx, wy, material, neighborX, neighborY, neighborMaterial);
         }
 
         return reacted;
+    }
+
+    private static void MarkReactionTouchedCell(
+        ref NeighborWindow window,
+        IChunkSource chunks,
+        int wx,
+        int wy,
+        SimulationDiagnostics diagnostics)
+    {
+        int slot = window.SlotOf(wx, wy);
+        if (slot == 4)
+        {
+            MarkDirty(chunks, wx, wy);
+        }
+        else
+        {
+            MarkKeepAliveIfCrossChunk(chunks, wx, wy, slot, diagnostics);
+        }
     }
 
     private static bool CanDisplace(
