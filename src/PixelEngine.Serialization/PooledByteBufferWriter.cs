@@ -9,6 +9,7 @@ public sealed class PooledByteBufferWriter : IBufferWriter<byte>, IDisposable
 {
     private const int DefaultInitialCapacity = 16 * 1024;
 
+    private readonly int _initialCapacity;
     private byte[] _buffer;
     private bool _disposed;
 
@@ -18,6 +19,7 @@ public sealed class PooledByteBufferWriter : IBufferWriter<byte>, IDisposable
     public PooledByteBufferWriter(int initialCapacity = DefaultInitialCapacity)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(initialCapacity);
+        _initialCapacity = initialCapacity;
         _buffer = ArrayPool<byte>.Shared.Rent(initialCapacity);
     }
 
@@ -79,6 +81,19 @@ public sealed class PooledByteBufferWriter : IBufferWriter<byte>, IDisposable
     {
         ThrowIfDisposed();
         return WrittenSpan.ToArray();
+    }
+
+    /// <summary>
+    /// 转移当前租用缓冲的所有权，并为 writer 立即租用新的空缓冲。
+    /// </summary>
+    public byte[] DetachWrittenBuffer(out int writtenCount)
+    {
+        ThrowIfDisposed();
+        byte[] detached = _buffer;
+        writtenCount = WrittenCount;
+        _buffer = ArrayPool<byte>.Shared.Rent(_initialCapacity);
+        WrittenCount = 0;
+        return detached;
     }
 
     /// <summary>

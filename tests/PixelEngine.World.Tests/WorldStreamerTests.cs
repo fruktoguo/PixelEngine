@@ -240,6 +240,34 @@ public sealed class WorldStreamerTests
         Assert.Equal(2, chunks.Count);
     }
 
+    /// <summary>
+    /// 验证无请求的相位 11 tick 在预热后不产生托管堆分配。
+    /// </summary>
+    [Fact]
+    public void ProcessIoOnceWithoutRequestsDoesNotAllocateAfterWarmup()
+    {
+        WorldStreamer streamer = new(
+            new ResidentChunkMap(),
+            new ResidencyTable(),
+            Budget(),
+            new TemperatureField(),
+            new MemoryChunkStore(),
+            IdentityRemap());
+
+        _ = streamer.ProcessIoOnce();
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        int processed = 0;
+        for (int i = 0; i < 64; i++)
+        {
+            processed += streamer.ProcessIoOnce();
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(0, processed);
+        Assert.Equal(0, allocated);
+    }
+
     private static void WriteStoredChunk(MemoryChunkStore store, ChunkCoord coord, ushort savedMaterial, Half temp)
     {
         Chunk chunk = new(coord);

@@ -9,6 +9,7 @@ public sealed class ResidentChunkMap : IChunkSource
 {
     private readonly Dictionary<ChunkCoord, Chunk> _chunks = [];
     private Chunk[] _residentSnapshot = [];
+    private int _residentSnapshotCount;
 
     /// <summary>
     /// 当前驻留 chunk 数量。
@@ -18,7 +19,7 @@ public sealed class ResidentChunkMap : IChunkSource
     /// <summary>
     /// 当前驻留 chunk 的只读快照，供相位 4 worker 枚举。
     /// </summary>
-    public ReadOnlySpan<Chunk> ResidentChunks => _residentSnapshot;
+    public ReadOnlySpan<Chunk> ResidentChunks => _residentSnapshot.AsSpan(0, _residentSnapshotCount);
 
     /// <summary>
     /// 添加已准备好的 chunk；结构性变更只能在相位 2 单线程执行。
@@ -89,11 +90,26 @@ public sealed class ResidentChunkMap : IChunkSource
 
     private void RebuildSnapshot()
     {
-        _residentSnapshot = new Chunk[_chunks.Count];
+        EnsureSnapshotCapacity(_chunks.Count);
         int write = 0;
         foreach (Chunk chunk in _chunks.Values)
         {
             _residentSnapshot[write++] = chunk;
+        }
+
+        if (_residentSnapshotCount > write)
+        {
+            _residentSnapshot.AsSpan(write, _residentSnapshotCount - write).Clear();
+        }
+
+        _residentSnapshotCount = write;
+    }
+
+    private void EnsureSnapshotCapacity(int required)
+    {
+        if (_residentSnapshot.Length < required)
+        {
+            Array.Resize(ref _residentSnapshot, required);
         }
     }
 }
