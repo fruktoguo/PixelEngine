@@ -189,7 +189,7 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 - [x] `RigidBodySnapshot`（DTO：`int id`、不可变 body-local mask（`byte[]` + 尺寸）+ 每像素 `ushort material`、`float posX,posY,rotCos,rotSin`、`float linVelX,linVelY,angVel`，足以由 plan/06 重建 Box2D 刚体）。（§3.8）
 - [x] `IWorldStateSnapshotSource` / `IWorldStateSnapshotSink`（接口）：供 plan/05/06 导出 / 重建 particles 与 bodies；Serialization 只读写 DTO。（§3.8）
 - [x] `WorldManifest`（class）+ `ManifestCodec`：`FormatVersion`、`WorldSeed`、`GameTimeTicks`、`PlayerStateBlob`、`MaterialNameTable`、`FreeParticleSnapshot[]`、`RigidBodySnapshot[]`、chunk 索引；紧凑二进制读写（非 JSON）。（§3.8）
-- [ ] `SaveFormatVersions`（const）；`ISaveMigrator { int FromVersion; void Migrate(MigrationContext); }`；`MigrationChain.Upgrade(stream/bytes, int fromVersion)` 逐级应用。（§3.9）
+- [x] `SaveFormatVersions`（const）；`ISaveMigrator { int FromVersion; void Migrate(MigrationContext); }`；`MigrationChain.Upgrade(stream/bytes, int fromVersion)` 逐级应用。（§3.9）
 - [ ] `IChunkStore` 接口 + `RegionFileStore`（class）：`TryRead/Write/Exists/Delete(ChunkCoord)`；region 文件（32×32 chunk/文件）+ 文件内偏移索引；临时文件 + 原子 rename。（§3.10）
 - [ ] `WorldSaveService`（class）：`SaveAll(WorldManager, IWorldStateSnapshotSource, string savePath)`（相位 2/暂停点：flush dirty chunk→region→写 manifest 快照）；`LoadAll(string savePath, IWorldStateSnapshotSink)`（读 manifest→迁移链→remap→装载）。（相位 2，§3.8）
 
