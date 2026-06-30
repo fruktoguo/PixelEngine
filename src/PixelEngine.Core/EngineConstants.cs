@@ -74,4 +74,29 @@ public static partial class EngineConstants
     /// cache line 填充宽度，见架构 §12.7。
     /// </summary>
     public const int CacheLineBytes = 64;
+
+    /// <summary>
+    /// 默认自由粒子容量，覆盖 20 万活跃粒子目标并留余量，见架构 §7.6。
+    /// </summary>
+    public const int ParticleCapacityDefault = 262_144;
+
+    /// <summary>
+    /// 自由粒子每 tick 重力增量，单位 cell/tick^2，y 轴向下为正。
+    /// </summary>
+    public const float ParticleGravityPerTick = 0.20f;
+
+    /// <summary>
+    /// 自由粒子速度低于该阈值时可进入沉积判定，单位 cell/tick。
+    /// </summary>
+    public const float ParticleDepositSpeedEpsilon = 0.05f;
+
+    /// <summary>
+    /// 自由粒子最大寿命 tick，防止迷途粒子泄漏，见架构 §19 R13。
+    /// </summary>
+    public const byte ParticleMaxLifetimeTicks = 240;
+
+    /// <summary>
+    /// 单 tick cell→particle 抛射数量上限，防止爆炸尖峰。
+    /// </summary>
+    public const int ParticleEjectMaxPerTick = 4096;
 }
