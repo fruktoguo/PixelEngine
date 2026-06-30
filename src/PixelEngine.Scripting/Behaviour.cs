@@ -5,6 +5,8 @@ namespace PixelEngine.Scripting;
 /// </summary>
 public abstract class Behaviour : IComponent
 {
+    internal bool Started { get; private set; }
+
     /// <summary>
     /// 所属实体；由脚本运行时在组件挂载时注入。
     /// </summary>
@@ -53,5 +55,30 @@ public abstract class Behaviour : IComponent
     {
         Entity = entity;
         Context = context;
+    }
+
+    internal void InvokeStart(IScriptContext context)
+    {
+        Context = context;
+        OnStart();
+        Started = true;
+    }
+
+    internal void InvokeUpdate(IScriptContext context, float dt)
+    {
+        Context = context;
+        OnUpdate(dt);
+    }
+
+    internal void InvokeFixedSimTick(IScriptContext context)
+    {
+        Context = context;
+        OnFixedSimTick();
+    }
+
+    internal void InvokeDestroy(IScriptContext context)
+    {
+        Context = context;
+        OnDestroy();
     }
 }

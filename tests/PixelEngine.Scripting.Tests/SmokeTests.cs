@@ -45,8 +45,37 @@ public sealed class SmokeTests
         Assert.False(entity.TryGetComponent<TestComponent>(out _));
 
         entity.Destroy();
+        scene.FlushDestroyed(new FakeScriptContext(scene));
         Assert.Equal(0, scene.EntityCount);
         _ = Assert.Throws<InvalidOperationException>(entity.AddComponent<TestComponent>);
+        Assert.Equal(entity.Id, scene.CreateEntity().Id);
+    }
+
+    /// <summary>
+    /// 验证 Behaviour 生命周期由 Scene 按相位 1 语义派发。
+    /// </summary>
+    [Fact]
+    public void SceneDispatchesBehaviourLifecycle()
+    {
+        Scene scene = new();
+        FakeScriptContext context = new(scene);
+        Entity entity = scene.CreateEntity();
+        LifecycleComponent component = entity.AddComponent<LifecycleComponent>();
+        List<string> events = [];
+        component.Events = events;
+
+        scene.DispatchStart(context);
+        scene.DispatchStart(context);
+        scene.DispatchUpdate(context, 0.016f);
+        scene.DispatchFixedSimTick(context);
+        component.Enabled = false;
+        scene.DispatchUpdate(context, 0.016f);
+        scene.DispatchFixedSimTick(context);
+        entity.Destroy();
+        scene.FlushDestroyed(context);
+
+        Assert.Equal(["start", "update", "fixed", "destroy"], events);
+        Assert.Equal(0, scene.EntityCount);
     }
 
     /// <summary>
@@ -69,6 +98,31 @@ public sealed class SmokeTests
     private sealed class TestComponent : Behaviour
     {
         public int Value { get; set; }
+    }
+
+    private sealed class LifecycleComponent : Behaviour
+    {
+        public List<string> Events { get; set; } = [];
+
+        protected override void OnStart()
+        {
+            Events.Add("start");
+        }
+
+        protected override void OnUpdate(float dt)
+        {
+            Events.Add("update");
+        }
+
+        protected override void OnFixedSimTick()
+        {
+            Events.Add("fixed");
+        }
+
+        protected override void OnDestroy()
+        {
+            Events.Add("destroy");
+        }
     }
 
     private sealed class RecordingSystem(string name, List<string> events) : ISystem

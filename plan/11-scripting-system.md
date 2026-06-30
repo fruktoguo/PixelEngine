@@ -249,7 +249,7 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 - [x] `abstract class Behaviour`：`Entity`/`Context`/`Enabled` + 生命周期 `OnStart()`/`OnUpdate(float dt)`/`OnFixedSimTick()`/`OnDestroy()`（§3.2）
 - [x] `interface IComponent` 标记接口；`interface ISystem` 含 `OnSimTick`/`OnFrame`（数据导向批处理，§3.2、架构 §13.1）
 - [x] `sealed class Entity`：`AddComponent<T>`/`TryGetComponent<T>`/`RemoveComponent<T>`/`Destroy()`（延迟销毁，§3.2）
-- [~] `sealed class Scene`：按组件类型分桶的紧凑数组 + 自由列表 + swap-remove；`CreateEntity`/`RegisterSystem`；`DispatchStart`/`DispatchUpdate(dt)`/`DispatchFixedSimTick`/`FlushDestroyed`（§3.2，绝不进 sim 内核）
+- [x] `sealed class Scene`：按组件类型分桶的紧凑数组 + 自由列表 + swap-remove；`CreateEntity`/`RegisterSystem`；`DispatchStart`/`DispatchUpdate(dt)`/`DispatchFixedSimTick`/`FlushDestroyed`（§3.2，绝不进 sim 内核）
 - [x] 特性 `[SerializeField]`/`[Persist]`/`[HideInInspector]`/`[ScriptComponent]`（§3.1/§3.7）
 - [ ] 派发路径零分配验证：无 LINQ/闭包/装箱/`params`，缓存开放委托或虚调用（AGENTS §3）
 
