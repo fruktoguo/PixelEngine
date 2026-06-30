@@ -1,4 +1,6 @@
 using PixelEngine.Core;
+using PixelEngine.Core.Diagnostics;
+using PixelEngine.Core.Events;
 using PixelEngine.Core.Threading;
 using System.Runtime.CompilerServices;
 
@@ -7,7 +9,7 @@ namespace PixelEngine.Simulation.Particles;
 /// <summary>
 /// 自由粒子的连续缓冲池。活跃粒子始终位于数组前缀，释放使用 swap-remove，稳态不扩容。
 /// </summary>
-public sealed class ParticleSystem
+public sealed class ParticleSystem : IParticleReadback
 {
     private static readonly RangeJob IntegrateRangeJob = static (start, end, workerIndex, context) =>
     {
@@ -18,22 +20,25 @@ public sealed class ParticleSystem
     private readonly Particle[] _particles;
     private readonly ParticleOutcome[] _outcomes;
     private readonly EjectionRequest[] _ejectionRequests;
+    private readonly MpscRingBuffer<AudioEvent>? _audioEvents;
     private int _spawnedThisTick;
     private int _depositedThisTick;
     private int _killedByLifetimeThisTick;
     private int _droppedThisTick;
+    private int _droppedAudioEventsThisTick;
     private int _ejectionRequestCount;
     private CellGrid? _activeGrid;
 
     /// <summary>
     /// 创建指定容量的自由粒子系统。
     /// </summary>
-    public ParticleSystem(int capacity = EngineConstants.ParticleCapacityDefault)
+    public ParticleSystem(int capacity = EngineConstants.ParticleCapacityDefault, EventBus? events = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(capacity);
         _particles = GC.AllocateArray<Particle>(capacity, pinned: true);
         _outcomes = GC.AllocateArray<ParticleOutcome>(capacity, pinned: true);
         _ejectionRequests = GC.AllocateArray<EjectionRequest>(EngineConstants.ParticleEjectMaxPerTick, pinned: true);
+        _audioEvents = events?.Channel<AudioEvent>();
     }
 
     /// <summary>
@@ -56,6 +61,9 @@ public sealed class ParticleSystem
     /// </summary>
     public ReadOnlySpan<Particle> ActiveReadOnly => _particles.AsSpan(0, ActiveCount);
 
+    /// <inheritdoc />
+    public ReadOnlySpan<Particle> Particles => ActiveReadOnly;
+
     /// <summary>
     /// 当前 tick 的诊断计数。
     /// </summary>
@@ -65,7 +73,8 @@ public sealed class ParticleSystem
         _spawnedThisTick,
         _depositedThisTick,
         _killedByLifetimeThisTick,
-        _droppedThisTick);
+        _droppedThisTick,
+        _droppedAudioEventsThisTick);
 
     /// <summary>
     /// 清空本 tick 的增量诊断计数，不改变活跃粒子。
@@ -76,6 +85,21 @@ public sealed class ParticleSystem
         _depositedThisTick = 0;
         _killedByLifetimeThisTick = 0;
         _droppedThisTick = 0;
+        _droppedAudioEventsThisTick = 0;
+    }
+
+    /// <summary>
+    /// 将当前粒子诊断发布到 Core 计数器，供编辑器 HUD 和运行时监控读取。
+    /// </summary>
+    public void PublishDiagnostics(EngineCounters counters)
+    {
+        ArgumentNullException.ThrowIfNull(counters);
+        ParticleSystemStats stats = Stats;
+        counters.FreeParticles = stats.ActiveCount;
+        counters.FreeParticlesSpawnedThisTick = stats.SpawnedThisTick;
+        counters.FreeParticlesDepositedThisTick = stats.DepositedThisTick;
+        counters.FreeParticlesKilledThisTick = stats.KilledByLifetimeThisTick;
+        counters.FreeParticlesDroppedThisTick = stats.DroppedThisTick + stats.AudioEventsDroppedThisTick;
     }
 
     /// <summary>
@@ -202,7 +226,14 @@ public sealed class ParticleSystem
 
             if (TryDepositAt(kernel, grid, i, outcome.X, outcome.Y))
             {
+                Particle deposited = _particles[i];
                 _depositedThisTick++;
+                EmitAudio(new AudioEvent(
+                    AudioEventType.ParticleImpact,
+                    outcome.X,
+                    outcome.Y,
+                    deposited.Material,
+                    Magnitude(deposited.Vx, deposited.Vy)));
                 RemoveAtSwapBack(i);
                 continue;
             }
@@ -231,6 +262,8 @@ public sealed class ParticleSystem
         {
             EjectionRequest request = _ejectionRequests[requestIndex];
             int radiusSq = request.Radius * request.Radius;
+            int requestEjected = 0;
+            ushort firstMaterial = 0;
             for (int y = request.CenterY - request.Radius; y <= request.CenterY + request.Radius && ejected < EngineConstants.ParticleEjectMaxPerTick; y++)
             {
                 for (int x = request.CenterX - request.Radius; x <= request.CenterX + request.Radius && ejected < EngineConstants.ParticleEjectMaxPerTick; x++)
@@ -260,7 +293,23 @@ public sealed class ParticleSystem
                     }
 
                     ejected++;
+                    requestEjected++;
+                    if (firstMaterial == 0)
+                    {
+                        firstMaterial = material;
+                    }
                 }
+            }
+
+            if (requestEjected > 0)
+            {
+                EmitAudio(new AudioEvent(
+                    AudioEventType.Explosion,
+                    request.CenterX,
+                    request.CenterY,
+                    firstMaterial,
+                    MathF.Max(request.Radius, request.ImpulseSpeed),
+                    requestEjected > ushort.MaxValue ? ushort.MaxValue : (ushort)requestEjected));
             }
         }
 
@@ -276,6 +325,31 @@ public sealed class ParticleSystem
         _particles.AsSpan(0, ActiveCount).Clear();
         _outcomes.AsSpan(0, ActiveCount).Clear();
         ActiveCount = 0;
+        Array.Clear(_ejectionRequests, 0, _ejectionRequestCount);
+        _ejectionRequestCount = 0;
+        ResetTickStats();
+    }
+
+    /// <summary>
+    /// 从已完成 material id 重映射的粒子快照恢复活跃前缀。磁盘格式与 id 重映射由 plan/07 负责。
+    /// </summary>
+    public void RestoreFrom(ReadOnlySpan<Particle> saved)
+    {
+        if (saved.Length > Capacity)
+        {
+            throw new ArgumentOutOfRangeException(nameof(saved), saved.Length, "粒子快照数量超过当前粒子系统容量。");
+        }
+
+        int oldActiveCount = ActiveCount;
+        saved.CopyTo(_particles);
+        if (oldActiveCount > saved.Length)
+        {
+            _particles.AsSpan(saved.Length, oldActiveCount - saved.Length).Clear();
+        }
+
+        int outcomeClearCount = Math.Max(oldActiveCount, saved.Length);
+        _outcomes.AsSpan(0, outcomeClearCount).Clear();
+        ActiveCount = saved.Length;
         Array.Clear(_ejectionRequests, 0, _ejectionRequestCount);
         _ejectionRequestCount = 0;
         ResetTickStats();
@@ -438,6 +512,24 @@ public sealed class ParticleSystem
         hash ^= hash >> 13;
         hash *= 1274126177u;
         return (byte)(hash >> 24);
+    }
+
+    private void EmitAudio(in AudioEvent audioEvent)
+    {
+        if (_audioEvents is null)
+        {
+            return;
+        }
+
+        if (!_audioEvents.TryEnqueue(in audioEvent))
+        {
+            _droppedAudioEventsThisTick++;
+        }
+    }
+
+    private static float Magnitude(float x, float y)
+    {
+        return MathF.Sqrt((x * x) + (y * y));
     }
 
     private static int FloorToCell(float value)

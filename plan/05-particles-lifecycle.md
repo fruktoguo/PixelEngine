@@ -200,10 +200,10 @@ public ParticleSystemStats Stats { get; }
 - [x] 实现 R13 回退（§3.5/§3.6，**强制项**，架构 §19）：无处沉积且 `Life==0` 杀死、`Life>0` 保持短命；并实现硬性 max-lifetime：`Life==0` 无条件 swap-remove；二者均计 `KilledByLifetimeThisTick`。
 - [x] 沉积/抛射写网格处恒经 `SimulationKernel.DepositCell` / `ReadAndClearCell` 写 current dirty 与边界 KeepAlive（架构 §7.6）；落点非驻留 chunk 走回退（border ring 兜底，架构 §3.4）。
 - [ ] 实现确定性 seam（§3.7，架构 §6.2）：积分/RNG 经 Core 确定性开关；默认关闭、零开销，不实现确定性数值。
-- [ ] 实现 `IParticleReadback`（§3.8）：`ActiveCount` + `ReadOnlySpan<Particle> Particles`（pinned、零拷贝），供 plan/08 相位 9 与 plan/09 GPU；**本文不写任何渲染代码**。
-- [ ] 实现 `ParticleSystemStats` + `Stats`（§3.9）：每 tick 更新 active/spawned/deposited/killed/dropped，注册 Core 诊断，供 plan/12 与架构 §17.1 overlay。
-- [ ] 实现音频事件投递（§3.10）：抛射 explosion/impact、高速沉积 impact 写 Core 事件总线（架构 §10.2），仅入队、限频去重交 plan/10。
-- [ ] 实现序列化接口（§3.10）：`ActiveReadOnly` 导出在飞粒子 + `RestoreFrom(ReadOnlySpan<Particle>)` 重建（material id 由 plan/07 重映射后传入，架构 §11.3/§1.8）。
+- [x] 实现 `IParticleReadback`（§3.8）：`ActiveCount` + `ReadOnlySpan<Particle> Particles`（pinned、零拷贝），供 plan/08 相位 9 与 plan/09 GPU；**本文不写任何渲染代码**。
+- [x] 实现 `ParticleSystemStats` + `Stats`（§3.9）：每 tick 更新 active/spawned/deposited/killed/dropped，注册 Core 诊断，供 plan/12 与架构 §17.1 overlay。
+- [x] 实现音频事件投递（§3.10）：抛射 explosion/impact、高速沉积 impact 写 Core 事件总线（架构 §10.2），仅入队、限频去重交 plan/10。
+- [x] 实现序列化接口（§3.10）：`ActiveReadOnly` 导出在飞粒子 + `RestoreFrom(ReadOnlySpan<Particle>)` 重建（material id 由 plan/07 重映射后传入，架构 §11.3/§1.8）。
 - [x] 在 `PixelEngine.Simulation.Tests` 加测试（§5）。
 - [x] 在 `PixelEngine.Benchmarks` 加粒子池化基准（BenchmarkDotNet + `[MemoryDiagnoser]`，AGENTS §3/§7），覆盖节点 1 的 `TrySpawn` + swap-remove 零分配。
 - [x] 在 `PixelEngine.Benchmarks` 加粒子积分/沉积基准（BenchmarkDotNet + `[DisassemblyDiagnoser]`，AGENTS §3/§7）。
@@ -221,9 +221,9 @@ public ParticleSystemStats Stats { get; }
 - [x] **R13 无泄漏（强制）**：构造「持续抛射但无沉积空间」压力场景跑足够 tick，活跃粒子数有界收敛、不单调增长；所有迷途粒子最终被 max-lifetime 或「无处沉积则杀死」回退清除（`KilledByLifetimeThisTick` 反映）。
 - [ ] 规模：5 万 / 10 万 / 20 万活跃粒子积分 + 沉积在目标机 BenchmarkDotNet 测得单 tick 成本留有 60fps 余量（架构 §7.6，数值实测为准、不预设）。
 - [ ] 无虚调用迭代：`Active`/`ActiveReadOnly` 迭代反汇编无虚分派、无 bounds-check（`DOTNET_JitDisasm` 确认 `RNGCHKFAIL` 消失，架构 §12.6）。
-- [ ] 渲染接口可用：plan/08 能经 `IParticleReadback` 只读取得活跃粒子并 stamp（本文侧仅验证接口暴露与 pinned 稳定，不验证渲染像素）。
-- [ ] 诊断接口可用：`Stats` 各计数随 tick 正确更新并出现在 Core 诊断/编辑器 HUD（plan/12）。
-- [ ] 本文所有公开 API 带完整中文 XML 注释（脚本 IntelliSense 依赖，AGENTS §4）。
+- [x] 渲染接口可用：plan/08 能经 `IParticleReadback` 只读取得活跃粒子并 stamp（本文侧仅验证接口暴露与 pinned 稳定，不验证渲染像素）。
+- [x] 诊断接口可用：`Stats` 各计数随 tick 正确更新并出现在 Core 诊断/编辑器 HUD（plan/12）。
+- [x] 本文所有公开 API 带完整中文 XML 注释（脚本 IntelliSense 依赖，AGENTS §4）。
 
 ## 6. 依赖关系
 
@@ -238,5 +238,5 @@ public ParticleSystemStats Stats { get; }
 - [x] 节点 1：`feat(sim): 实现 Particle struct(20B) 与 ParticleSystem 连续缓冲池(swap-remove,零分配)` —— 完成 §3.1/§3.2 与对应实现清单、`sizeof==20`/零分配/swap-remove 验收项。
 - [x] 节点 2：`feat(sim): 实现并行弹道积分与 cell↔particle handshake(相位3/7)` —— 完成 §3.3/§3.4/§3.5 与抛射/沉积/并行积分等价性验收项。
 - [x] 节点 3：`feat(sim): 实现粒子生命周期与 R13 无泄漏回退(max-lifetime+无处沉积则杀死)` —— 完成 §3.6 与 R13 无泄漏验收项（强制项）。
-- 节点 4：`feat(sim): 暴露粒子渲染/编辑器/音频/序列化接口(IParticleReadback,Stats)` —— 完成 §3.8–§3.10 与接口可用、诊断验收项。
+- [x] 节点 4：`feat(sim): 暴露粒子渲染/编辑器/音频/序列化接口(IParticleReadback,Stats)` —— 完成 §3.8–§3.10 与接口可用、诊断验收项。
 - 每节点完成即按 `AGENTS.md §6` 用中文 git 提交，提交正文标注对应 plan 条目与架构 §。
