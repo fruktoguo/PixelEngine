@@ -5,13 +5,6 @@ namespace PixelEngine.Simulation;
 /// </summary>
 public sealed class MaterialPropsTable
 {
-    private readonly CellType[] _type;
-    private readonly byte[] _density;
-    private readonly byte[] _dispersion;
-    private readonly int[] _reactionStart;
-    private readonly byte[] _reactionCount;
-    private readonly ushort[] _defaultLifetime;
-
     /// <summary>
     /// 仅包含 Empty 材质的空属性表。
     /// </summary>
@@ -34,65 +27,56 @@ public sealed class MaterialPropsTable
         byte[] reactionCount,
         ushort[] defaultLifetime)
     {
-        ArgumentNullException.ThrowIfNull(type);
-        ArgumentNullException.ThrowIfNull(density);
-        ArgumentNullException.ThrowIfNull(dispersion);
-        ArgumentNullException.ThrowIfNull(reactionStart);
-        ArgumentNullException.ThrowIfNull(reactionCount);
-        ArgumentNullException.ThrowIfNull(defaultLifetime);
+        Hot = MaterialHotTable.FromColumns(type, density, dispersion, reactionStart, reactionCount, defaultLifetime);
+    }
 
-        int length = type.Length;
-        if (density.Length != length ||
-            dispersion.Length != length ||
-            reactionStart.Length != length ||
-            reactionCount.Length != length ||
-            defaultLifetime.Length != length)
-        {
-            throw new ArgumentException("所有材质属性列长度必须一致。");
-        }
-
-        _type = type;
-        _density = density;
-        _dispersion = dispersion;
-        _reactionStart = reactionStart;
-        _reactionCount = reactionCount;
-        _defaultLifetime = defaultLifetime;
+    /// <summary>
+    /// 从完整材质热表创建 movement 兼容视图。
+    /// </summary>
+    public MaterialPropsTable(MaterialHotTable hot)
+    {
+        Hot = hot ?? throw new ArgumentNullException(nameof(hot));
     }
 
     /// <summary>
     /// material id 的可用数量。
     /// </summary>
-    public int Count => _type.Length;
+    public int Count => Hot.Count;
+
+    /// <summary>
+    /// 完整材质热表。
+    /// </summary>
+    public MaterialHotTable Hot { get; }
 
     /// <summary>
     /// 材质类型列。
     /// </summary>
-    public ReadOnlySpan<CellType> Type => _type;
+    public ReadOnlySpan<CellType> Type => Hot.Type;
 
     /// <summary>
     /// 材质密度列。
     /// </summary>
-    public ReadOnlySpan<byte> Density => _density;
+    public ReadOnlySpan<byte> Density => Hot.Density;
 
     /// <summary>
     /// 液体/气体横向扩散列。
     /// </summary>
-    public ReadOnlySpan<byte> Dispersion => _dispersion;
+    public ReadOnlySpan<byte> Dispersion => Hot.Dispersion;
 
     /// <summary>
     /// 反应表起始索引列。
     /// </summary>
-    public ReadOnlySpan<int> ReactionStart => _reactionStart;
+    public ReadOnlySpan<int> ReactionStart => Hot.ReactionStart;
 
     /// <summary>
     /// 反应数量列。
     /// </summary>
-    public ReadOnlySpan<byte> ReactionCount => _reactionCount;
+    public ReadOnlySpan<byte> ReactionCount => Hot.ReactionCount;
 
     /// <summary>
     /// 默认 lifetime 列。
     /// </summary>
-    public ReadOnlySpan<ushort> DefaultLifetime => _defaultLifetime;
+    public ReadOnlySpan<ushort> DefaultLifetime => Hot.DefaultLifetime;
 
     /// <summary>
     /// 返回材质类型。

@@ -367,21 +367,21 @@ public sealed class TemperatureField
 
 ### 4.1 材质数据模型（架构 §7.3 / §7.1 / §7.2）
 
-- [ ] `MaterialDef` `readonly record struct`，含 §3.2 全部字段（Id/Name/Type/Density/Dispersion/LiquidStatic/LiquidSand/Flammability/AutoIgnitionTemp/FireHp/TemperatureOfFire/GeneratesSmoke/Melt+Freeze+Boil(Point+Target)/HeatConduct/HeatCapacity/DefaultLifetime/Durability/TextureId/BaseColorBGRA/ColorNoise/PropertyFlags/ReactionStart/ReactionCount/AudioCues）（架构 §7.3）。
-- [ ] `MaterialProperty : uint` `[Flags]`，含 8 个 tag 成员位 + `Emissive`/`HasCustomUpdate`/`Conductive` + 预留位（§3.2）。
-- [ ] `MaterialTag : byte` 枚举与 `MaterialProperty` 位的固定映射（§3.4）。
-- [ ] `AudioCueSet` `readonly record struct`（Impact/Fire/Splash/Explosion/Ambient cue，架构 §10.2）。
-- [ ] `MaterialDef.Type` 引用 plan/03 的 `CellType`（不重复定义，架构 §7.2）。
-- [ ] `MaterialHotTable` SoA 热表：从 `MaterialDef[]` 派生热路径字段并列数组（Density/Dispersion/Type/HeatConduct/HeatCapacity/相变阈值/ReactionStart/ReactionCount/PropertyFlags），冷字段不入热表（架构 §7.1 / §12.1）。
+- [x] `MaterialDef` `readonly record struct`，含 §3.2 全部字段（Id/Name/Type/Density/Dispersion/LiquidStatic/LiquidSand/Flammability/AutoIgnitionTemp/FireHp/TemperatureOfFire/GeneratesSmoke/Melt+Freeze+Boil(Point+Target)/HeatConduct/HeatCapacity/DefaultLifetime/Durability/TextureId/BaseColorBGRA/ColorNoise/PropertyFlags/ReactionStart/ReactionCount/AudioCues）（架构 §7.3）。
+- [x] `MaterialProperty : uint` `[Flags]`，含 8 个 tag 成员位 + `Emissive`/`HasCustomUpdate`/`Conductive` + 预留位（§3.2）。
+- [x] `MaterialTag : byte` 枚举与 `MaterialProperty` 位的固定映射（§3.4）。
+- [x] `AudioCueSet` `readonly record struct`（Impact/Fire/Splash/Explosion/Ambient cue，架构 §10.2）。
+- [x] `MaterialDef.Type` 引用 plan/03 的 `CellType`（不重复定义，架构 §7.2）。
+- [x] `MaterialHotTable` SoA 热表：从 `MaterialDef[]` 派生热路径字段并列数组（Density/Dispersion/Type/HeatConduct/HeatCapacity/相变阈值/ReactionStart/ReactionCount/PropertyFlags），冷字段不入热表（架构 §7.1 / §12.1）。
 
 ### 4.2 name↔id 映射与注册表（不变式 #8，架构 §11.2 / §17.4）
 
-- [ ] `MaterialTable`：`MaterialDef[] _defs` + `MaterialHotTable _hot` + `Dictionary<string,ushort> _nameToId`（后者非热路径）。
-- [ ] `ref readonly MaterialDef Get(ushort)` / `TryGetId` / `GetIdOrFallback` / `GetName` / `Count`。
-- [ ] `BuildIdNameTable()` 导出 id→name（供 plan/07 落盘，架构 §11.2）。
-- [ ] `BuildRemapLut(savedTable, fallbackId)` 构建 savedId→currentId LUT，缺失材质映射 fallback（架构 §11.2 / §11.4，供 plan/07）。
-- [ ] `ReloadStable(newDefs)` 增量稳定重载：保留既有 id、追加新 id、删除作 tombstone、绝不重排，返回 tombstone id 列表 + fallback 替换计数诊断（架构 §17.4，供 plan/12）。
-- [ ] `HeatCapacity != 0` 校验（构建期，必须非零，架构 §7.3）。
+- [x] `MaterialTable`：`MaterialDef[] _defs` + `MaterialHotTable _hot` + `Dictionary<string,ushort> _nameToId`（后者非热路径）。
+- [x] `ref readonly MaterialDef Get(ushort)` / `TryGetId` / `GetIdOrFallback` / `GetName` / `Count`。
+- [x] `BuildIdNameTable()` 导出 id→name（供 plan/07 落盘，架构 §11.2）。
+- [x] `BuildRemapLut(savedTable, fallbackId)` 构建 savedId→currentId LUT，缺失材质映射 fallback（架构 §11.2 / §11.4，供 plan/07）。
+- [x] `ReloadStable(newDefs)` 增量稳定重载：保留既有 id、追加新 id、删除作 tombstone、绝不重排，返回 tombstone id 列表 + fallback 替换计数诊断（架构 §17.4，供 plan/12）。
+- [x] `HeatCapacity != 0` 校验（构建期，必须非零，架构 §7.3）。
 
 ### 4.3 反应表数据模型与 cache-aware 查表（架构 §7.4 / R12）
 
@@ -444,7 +444,7 @@ public sealed class TemperatureField
 
 ## 5. 验收标准
 
-- [ ] `MaterialDef` 含架构 §7.3 全部字段，无遗漏；`MaterialHotTable` 热路径不触碰冷字段（反汇编 / 字段审计确认）。
+- [x] `MaterialDef` 含架构 §7.3 全部字段，无遗漏；`MaterialHotTable` 热路径不触碰冷字段（字段审计 + `MaterialTableTests` 覆盖；反汇编随后续热路径基准确认）。
 - [ ] name↔id：改 `materials.json` 顺序 / 增删材质后，`BuildRemapLut` 使旧档逐 cell 正确重映射，缺失材质落 fallback（与 plan/07 存档往返测试联动通过，架构 §11.2 / §16.2，不变式 #8）。
 - [ ] 热重载 `ReloadStable` 后既有 id 不变、live 网格不损坏，删除材质活 cell 重映射 fallback 并输出诊断计数（架构 §17.4）。
 - [ ] `[tag]` 展开正确：tag 成员集合按位筛选无误、笛卡尔积齐全、有序对去重无对称重复、rate→byte 映射正确（反应表测试通过，架构 §16.2）。
