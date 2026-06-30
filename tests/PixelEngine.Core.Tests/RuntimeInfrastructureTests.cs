@@ -140,14 +140,14 @@ public sealed class RuntimeInfrastructureTests
             profiler.Record(phase, 1.0 + (int)phase);
         }
 
-        using (profiler.Measure(FramePhase.FrameClock))
+        using (profiler.Measure(FramePhase.InputAndTime))
         {
         }
 
         profiler.EndFrame();
 
         Assert.Equal(FrameStats.PhaseCount, profiler.LastFrame.Length);
-        Assert.True(profiler.Average(FramePhase.Physics, 1) > 0);
+        Assert.True(profiler.Average(FramePhase.PhysicsSync, 1) > 0);
     }
 
     /// <summary>

@@ -8,35 +8,40 @@ public enum FrameSubPhase
     /// <summary>
     /// CA pass A。
     /// </summary>
-    CheckerboardA,
+    CaPassA,
 
     /// <summary>
     /// CA pass B。
     /// </summary>
-    CheckerboardB,
+    CaPassB,
 
     /// <summary>
     /// CA pass C。
     /// </summary>
-    CheckerboardC,
+    CaPassC,
 
     /// <summary>
     /// CA pass D。
     /// </summary>
-    CheckerboardD,
+    CaPassD,
 
     /// <summary>
-    /// Box2D task bridge。
+    /// 物理步进。
     /// </summary>
-    Box2DTasks,
+    PhysicsStep,
 
     /// <summary>
-    /// 光照计算。
+    /// 刚体形状重建。
     /// </summary>
-    Lighting,
+    ShapeRebuild,
 
     /// <summary>
-    /// 后处理。
+    /// GPU 上传。
     /// </summary>
-    PostProcess,
+    GpuUpload,
+
+    /// <summary>
+    /// 音频派发。
+    /// </summary>
+    AudioDispatch,
 }
