@@ -14,23 +14,24 @@ public sealed class Scene
     private int _nextEntityId;
 
     /// <summary>
-    /// 当前活跃实体数量。
+    /// 当前活跃实体数量；脚本可在相位 1 读取。
     /// </summary>
     public int EntityCount => _entities.Count;
 
     /// <summary>
-    /// 已注册系统数量。
+    /// 已注册系统数量；脚本可在相位 1 读取。
     /// </summary>
     public int SystemCount => _systems.Count;
 
     /// <summary>
-    /// 已捕获的脚本回调异常数量。
+    /// 已捕获的脚本回调异常数量；脚本可在相位 1 读取。
     /// </summary>
     public int ScriptExceptionCount => _invoker.Exceptions.Count;
 
     /// <summary>
-    /// 创建一个脚本实体。
+    /// 创建一个脚本实体；脚本可在相位 1 调用。
     /// </summary>
+    /// <returns>新创建的脚本实体。</returns>
     public Entity CreateEntity()
     {
         int id = _freeEntityIds.Count == 0 ? checked(++_nextEntityId) : _freeEntityIds.Pop();
@@ -40,8 +41,9 @@ public sealed class Scene
     }
 
     /// <summary>
-    /// 注册一个相位 1 脚本系统。
+    /// 注册一个相位 1 脚本系统；通常在场景初始化或热重载边界调用。
     /// </summary>
+    /// <param name="system">要按注册顺序派发的脚本系统。</param>
     public void RegisterSystem(ISystem system)
     {
         ArgumentNullException.ThrowIfNull(system);
@@ -51,7 +53,7 @@ public sealed class Scene
     /// <summary>
     /// 向指定实体添加组件。
     /// </summary>
-    public T AddComponent<T>(Entity entity)
+    internal T AddComponent<T>(Entity entity)
         where T : class, IComponent, new()
     {
         ValidateEntity(entity);
@@ -64,7 +66,7 @@ public sealed class Scene
     /// <summary>
     /// 尝试读取指定实体上的组件。
     /// </summary>
-    public bool TryGetComponent<T>(Entity entity, out T component)
+    internal bool TryGetComponent<T>(Entity entity, out T component)
         where T : class, IComponent
     {
         ValidateEntity(entity);
@@ -80,7 +82,7 @@ public sealed class Scene
     /// <summary>
     /// 移除指定实体上的组件。
     /// </summary>
-    public void RemoveComponent<T>(Entity entity)
+    internal void RemoveComponent<T>(Entity entity)
         where T : class, IComponent
     {
         ValidateEntity(entity);
@@ -93,7 +95,7 @@ public sealed class Scene
     /// <summary>
     /// 请求销毁指定实体；实际移除在 FlushDestroyed 中完成。
     /// </summary>
-    public void Destroy(Entity entity)
+    internal void Destroy(Entity entity)
     {
         ValidateEntity(entity);
         if (!_destroyQueue.Contains(entity))
@@ -105,7 +107,7 @@ public sealed class Scene
     /// <summary>
     /// 分发尚未启动 Behaviour 的 OnStart 回调。
     /// </summary>
-    public void DispatchStart(IScriptContext context)
+    internal void DispatchStart(IScriptContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
         foreach (IComponentBucket bucket in _buckets.Values)
@@ -117,7 +119,7 @@ public sealed class Scene
     /// <summary>
     /// 分发 Behaviour 的逐帧 OnUpdate 回调。
     /// </summary>
-    public void DispatchUpdate(IScriptContext context, float dt)
+    internal void DispatchUpdate(IScriptContext context, float dt)
     {
         ArgumentNullException.ThrowIfNull(context);
         foreach (IComponentBucket bucket in _buckets.Values)
@@ -129,7 +131,7 @@ public sealed class Scene
     /// <summary>
     /// 分发 Behaviour 的固定 sim tick 回调。
     /// </summary>
-    public void DispatchFixedSimTick(IScriptContext context)
+    internal void DispatchFixedSimTick(IScriptContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
         foreach (IComponentBucket bucket in _buckets.Values)
@@ -141,7 +143,7 @@ public sealed class Scene
     /// <summary>
     /// 刷新延迟销毁队列并分发 OnDestroy。
     /// </summary>
-    public void FlushDestroyed(IScriptContext context)
+    internal void FlushDestroyed(IScriptContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
         for (int i = 0; i < _destroyQueue.Count; i++)
@@ -167,7 +169,7 @@ public sealed class Scene
     /// <summary>
     /// 按注册顺序分发系统逐帧回调。
     /// </summary>
-    public void DispatchFrameSystems(IScriptContext context, float dt)
+    internal void DispatchFrameSystems(IScriptContext context, float dt)
     {
         ArgumentNullException.ThrowIfNull(context);
         for (int i = 0; i < _systems.Count; i++)
@@ -179,7 +181,7 @@ public sealed class Scene
     /// <summary>
     /// 按注册顺序分发系统固定 sim tick 回调。
     /// </summary>
-    public void DispatchSimSystems(IScriptContext context)
+    internal void DispatchSimSystems(IScriptContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
         for (int i = 0; i < _systems.Count; i++)

@@ -9,8 +9,9 @@ public sealed class ScriptRuntime : IScriptRuntime
     private bool _shutdown;
 
     /// <summary>
-    /// 使用脚本上下文初始化运行时。
+    /// 使用脚本上下文初始化运行时；由 Hosting 在主循环启动前调用。
     /// </summary>
+    /// <param name="context">脚本访问引擎能力的统一上下文。</param>
     public void Initialize(IScriptContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -28,7 +29,7 @@ public sealed class ScriptRuntime : IScriptRuntime
     }
 
     /// <summary>
-    /// 每个渲染帧派发 Behaviour OnUpdate 与系统 OnFrame。
+    /// 每个渲染帧在相位 1 派发 Behaviour OnUpdate 与系统 OnFrame。
     /// </summary>
     /// <param name="dt">本帧 delta time，单位秒。</param>
     public void Update(float dt)
@@ -39,7 +40,7 @@ public sealed class ScriptRuntime : IScriptRuntime
     }
 
     /// <summary>
-    /// sim tick 帧派发 Behaviour OnFixedSimTick 与系统 OnSimTick。
+    /// sim tick 帧在相位 1 派发 Behaviour OnFixedSimTick 与系统 OnSimTick。
     /// </summary>
     public void FixedSimTick()
     {
@@ -58,7 +59,7 @@ public sealed class ScriptRuntime : IScriptRuntime
     }
 
     /// <summary>
-    /// 关闭脚本运行时。
+    /// 关闭脚本运行时；由 Hosting 生命周期关闭流程调用。
     /// </summary>
     public void Shutdown()
     {

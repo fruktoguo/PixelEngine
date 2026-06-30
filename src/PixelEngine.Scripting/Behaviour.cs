@@ -62,7 +62,7 @@ public abstract class Behaviour : IComponent
     }
 
     /// <summary>
-    /// 清除异常隔离状态，并重新启用该脚本。
+    /// 清除异常隔离状态，并重新启用该脚本；由热重载或编辑器修复流程在相位 1 调用。
     /// </summary>
     public void ResetFault()
     {

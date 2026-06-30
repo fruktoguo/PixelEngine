@@ -72,28 +72,44 @@ public interface IScriptContext
 public interface IWorldCellAccess
 {
     /// <summary>
-    /// 即时读取指定世界坐标的材质。
+    /// 即时读取指定世界坐标的材质；脚本可在相位 1 调用，读取上帧末一致状态。
     /// </summary>
+    /// <param name="x">世界 X 坐标。</param>
+    /// <param name="y">世界 Y 坐标。</param>
+    /// <returns>该 cell 的运行时材质句柄。</returns>
     MaterialId GetMaterial(int x, int y);
 
     /// <summary>
-    /// 即时读取指定世界坐标的 cell 快照。
+    /// 即时读取指定世界坐标的 cell 快照；脚本可在相位 1 调用，读取上帧末一致状态。
     /// </summary>
+    /// <param name="x">世界 X 坐标。</param>
+    /// <param name="y">世界 Y 坐标。</param>
+    /// <returns>只读 cell 快照。</returns>
     CellView Sample(int x, int y);
 
     /// <summary>
-    /// 即时判断指定世界坐标是否为固体。
+    /// 即时判断指定世界坐标是否为固体；脚本可在相位 1 调用，读取上帧末一致状态。
     /// </summary>
+    /// <param name="x">世界 X 坐标。</param>
+    /// <param name="y">世界 Y 坐标。</param>
+    /// <returns>若该坐标按固体处理则返回 true，否则返回 false。</returns>
     bool IsSolid(int x, int y);
 
     /// <summary>
-    /// 延迟写入指定 cell，并在落地时标记 dirty。
+    /// 延迟写入指定 cell，并在相位安全窗口落地时标记 dirty；脚本可在相位 1 调用。
     /// </summary>
+    /// <param name="x">世界 X 坐标。</param>
+    /// <param name="y">世界 Y 坐标。</param>
+    /// <param name="material">要写入的材质句柄。</param>
     void SetCell(int x, int y, MaterialId material);
 
     /// <summary>
-    /// 延迟绘制圆形区域，并在落地时标记 dirty。
+    /// 延迟绘制圆形区域，并在相位安全窗口落地时标记 dirty；脚本可在相位 1 调用。
     /// </summary>
+    /// <param name="x">圆心世界 X 坐标。</param>
+    /// <param name="y">圆心世界 Y 坐标。</param>
+    /// <param name="radius">绘制半径，单位像素。</param>
+    /// <param name="material">要写入的材质句柄。</param>
     void Paint(int x, int y, int radius, MaterialId material);
 }
 
@@ -103,18 +119,25 @@ public interface IWorldCellAccess
 public interface IMaterialQuery
 {
     /// <summary>
-    /// 按稳定材质名解析材质句柄；失败时返回 <see cref="MaterialId.Invalid" />。
+    /// 按稳定材质名解析材质句柄；脚本可在相位 1 调用，失败时返回 <see cref="MaterialId.Invalid" />。
     /// </summary>
+    /// <param name="name">稳定材质名。</param>
+    /// <returns>解析得到的运行时材质句柄。</returns>
     MaterialId Resolve(string name);
 
     /// <summary>
-    /// 尝试按稳定材质名解析材质句柄。
+    /// 尝试按稳定材质名解析材质句柄；脚本可在相位 1 调用。
     /// </summary>
+    /// <param name="name">稳定材质名。</param>
+    /// <param name="id">解析成功时返回运行时材质句柄。</param>
+    /// <returns>若材质名存在则返回 true，否则返回 false。</returns>
     bool TryResolve(string name, out MaterialId id);
 
     /// <summary>
-    /// 读取材质属性摘要。
+    /// 读取材质属性摘要；脚本可在相位 1 调用。
     /// </summary>
+    /// <param name="id">运行时材质句柄。</param>
+    /// <returns>材质属性只读摘要。</returns>
     MaterialInfo GetInfo(MaterialId id);
 }
 
@@ -124,13 +147,19 @@ public interface IMaterialQuery
 public interface IParticleSpawner
 {
     /// <summary>
-    /// 延迟生成一个自由粒子。
+    /// 延迟生成一个自由粒子；脚本可在相位 1 调用，实际生成在粒子安全相位落地。
     /// </summary>
+    /// <param name="desc">粒子生成描述。</param>
     void Spawn(in ParticleSpawnDesc desc);
 
     /// <summary>
-    /// 延迟生成一组爆发式自由粒子。
+    /// 延迟生成一组爆发式自由粒子；脚本可在相位 1 调用，实际生成在粒子安全相位落地。
     /// </summary>
+    /// <param name="x">爆发中心 X 坐标。</param>
+    /// <param name="y">爆发中心 Y 坐标。</param>
+    /// <param name="material">粒子材质句柄。</param>
+    /// <param name="count">要生成的粒子数量。</param>
+    /// <param name="speed">初始速度标量。</param>
     void Burst(float x, float y, MaterialId material, int count, float speed);
 }
 
@@ -140,13 +169,25 @@ public interface IParticleSpawner
 public interface ISolidSampler
 {
     /// <summary>
-    /// 从指定位置沿方向执行 raycast。
+    /// 从指定位置沿方向执行 raycast；脚本可在相位 1 调用，读取上帧末一致状态。
     /// </summary>
+    /// <param name="x">起点 X 坐标。</param>
+    /// <param name="y">起点 Y 坐标。</param>
+    /// <param name="dx">方向 X 分量。</param>
+    /// <param name="dy">方向 Y 分量。</param>
+    /// <param name="maxDist">最大检测距离。</param>
+    /// <param name="hit">命中时返回命中信息。</param>
+    /// <returns>若检测到固体像素则返回 true，否则返回 false。</returns>
     bool Raycast(float x, float y, float dx, float dy, float maxDist, out RaycastHit hit);
 
     /// <summary>
-    /// 判断指定 AABB 内是否包含固体像素。
+    /// 判断指定 AABB 内是否包含固体像素；脚本可在相位 1 调用，读取上帧末一致状态。
     /// </summary>
+    /// <param name="x">AABB 左上角 X 坐标。</param>
+    /// <param name="y">AABB 左上角 Y 坐标。</param>
+    /// <param name="width">AABB 宽度。</param>
+    /// <param name="height">AABB 高度。</param>
+    /// <returns>若区域内存在固体像素则返回 true，否则返回 false。</returns>
     bool SampleSolidAabb(float x, float y, float width, float height);
 }
 
@@ -156,23 +197,35 @@ public interface ISolidSampler
 public interface IRigidBodyApi
 {
     /// <summary>
-    /// 延迟从像素区域创建刚体。
+    /// 延迟从像素区域创建刚体；脚本可在相位 1 调用，实际创建在 Physics 安全相位落地。
     /// </summary>
+    /// <param name="x">区域左上角 X 坐标。</param>
+    /// <param name="y">区域左上角 Y 坐标。</param>
+    /// <param name="width">区域宽度。</param>
+    /// <param name="height">区域高度。</param>
+    /// <returns>新刚体的运行时句柄；若后端采用延迟分配，可返回待解析句柄。</returns>
     BodyHandle CreateFromRegion(int x, int y, int width, int height);
 
     /// <summary>
-    /// 尝试读取刚体上一帧末的变换。
+    /// 尝试读取刚体上一帧末的变换；脚本可在相位 1 调用。
     /// </summary>
+    /// <param name="handle">刚体句柄。</param>
+    /// <param name="transform">读取成功时返回刚体变换。</param>
+    /// <returns>若句柄有效且存在变换则返回 true，否则返回 false。</returns>
     bool TryGetTransform(BodyHandle handle, out BodyTransform transform);
 
     /// <summary>
-    /// 延迟对刚体施加冲量。
+    /// 延迟对刚体施加冲量；脚本可在相位 1 调用，实际施加在 Physics step 前落地。
     /// </summary>
+    /// <param name="handle">刚体句柄。</param>
+    /// <param name="impulseX">X 方向冲量。</param>
+    /// <param name="impulseY">Y 方向冲量。</param>
     void ApplyImpulse(BodyHandle handle, float impulseX, float impulseY);
 
     /// <summary>
-    /// 延迟销毁刚体。
+    /// 延迟销毁刚体；脚本可在相位 1 调用，实际销毁在 Physics 安全相位落地。
     /// </summary>
+    /// <param name="handle">刚体句柄。</param>
     void Destroy(BodyHandle handle);
 }
 
@@ -182,18 +235,28 @@ public interface IRigidBodyApi
 public interface ICharacterController
 {
     /// <summary>
-    /// 创建一个角色控制器。
+    /// 创建一个角色控制器；脚本可在相位 1 调用，后端可在 Physics 安全相位落地。
     /// </summary>
+    /// <param name="x">初始 X 坐标。</param>
+    /// <param name="y">初始 Y 坐标。</param>
+    /// <param name="width">控制器宽度。</param>
+    /// <param name="height">控制器高度。</param>
+    /// <returns>角色控制器句柄。</returns>
     CharacterHandle Create(float x, float y, float width, float height);
 
     /// <summary>
-    /// 延迟移动角色控制器。
+    /// 延迟移动角色控制器；脚本可在相位 1 调用，实际移动在角色解算安全相位落地。
     /// </summary>
+    /// <param name="handle">角色控制器句柄。</param>
+    /// <param name="dx">X 方向位移。</param>
+    /// <param name="dy">Y 方向位移。</param>
     void Move(CharacterHandle handle, float dx, float dy);
 
     /// <summary>
-    /// 读取角色控制器状态。
+    /// 读取角色控制器状态；脚本可在相位 1 调用。
     /// </summary>
+    /// <param name="handle">角色控制器句柄。</param>
+    /// <returns>上一解算帧的角色状态。</returns>
     CharacterState GetState(CharacterHandle handle);
 }
 
@@ -203,17 +266,20 @@ public interface ICharacterController
 public interface ICameraApi
 {
     /// <summary>
-    /// 设置相机中心。
+    /// 设置相机中心；脚本可在相位 1 调用。
     /// </summary>
+    /// <param name="x">中心 X 坐标。</param>
+    /// <param name="y">中心 Y 坐标。</param>
     void SetCenter(float x, float y);
 
     /// <summary>
-    /// 让相机跟随指定实体。
+    /// 让相机跟随指定实体；脚本可在相位 1 调用。
     /// </summary>
+    /// <param name="target">要跟随的脚本实体。</param>
     void Follow(Entity target);
 
     /// <summary>
-    /// 当前相机视口。
+    /// 当前相机视口；脚本可在相位 1 读取。
     /// </summary>
     RectF Viewport { get; }
 }
@@ -224,22 +290,28 @@ public interface ICameraApi
 public interface IInputApi
 {
     /// <summary>
-    /// 判断按键当前是否按下。
+    /// 判断按键当前是否按下；脚本可在相位 1 调用，读取本帧输入快照。
     /// </summary>
+    /// <param name="key">要查询的按键。</param>
+    /// <returns>若当前按下则返回 true，否则返回 false。</returns>
     bool IsDown(Key key);
 
     /// <summary>
-    /// 判断按键是否在本帧按下。
+    /// 判断按键是否在本帧按下；脚本可在相位 1 调用，读取本帧输入快照。
     /// </summary>
+    /// <param name="key">要查询的按键。</param>
+    /// <returns>若该按键在本帧产生按下边沿则返回 true，否则返回 false。</returns>
     bool WasPressed(Key key);
 
     /// <summary>
-    /// 读取输入轴。
+    /// 读取输入轴；脚本可在相位 1 调用，读取本帧输入快照。
     /// </summary>
+    /// <param name="axis">要查询的输入轴。</param>
+    /// <returns>输入轴当前值。</returns>
     float Axis(Axis axis);
 
     /// <summary>
-    /// 鼠标所在像素坐标。
+    /// 鼠标所在像素坐标；脚本可在相位 1 读取本帧输入快照。
     /// </summary>
     (float X, float Y) MousePixel { get; }
 }
@@ -250,8 +322,11 @@ public interface IInputApi
 public interface IEventBus
 {
     /// <summary>
-    /// 订阅指定事件类型；返回的句柄释放后取消订阅。
+    /// 订阅指定事件类型；脚本可在相位 1 调用，返回的句柄释放后取消订阅。
     /// </summary>
+    /// <typeparam name="TEvent">要订阅的事件类型。</typeparam>
+    /// <param name="handler">事件处理器；由运行时在相位 1 分发事件时调用。</param>
+    /// <returns>用于取消订阅的释放句柄。</returns>
     IDisposable Subscribe<TEvent>(Action<TEvent> handler)
         where TEvent : struct;
 }
@@ -262,8 +337,12 @@ public interface IEventBus
 public interface IAudioApi
 {
     /// <summary>
-    /// 在指定世界坐标播放音效。
+    /// 在指定世界坐标播放音效；脚本可在相位 1 调用，请求由音频后端异步消费。
     /// </summary>
+    /// <param name="cue">音效 cue 名。</param>
+    /// <param name="x">播放位置 X 坐标。</param>
+    /// <param name="y">播放位置 Y 坐标。</param>
+    /// <param name="volume">播放音量。</param>
     void PlayAt(string cue, float x, float y, float volume = 1f);
 }
 
