@@ -42,7 +42,66 @@ public sealed class HotReloadServiceTests
         Assert.Equal(42, probe.Counter);
         Assert.Equal(99, probe.Persisted);
         Assert.Equal(123, probe.Hidden);
+        Assert.Equal(1, probe.StartedByReload);
         Assert.True(WaitForUnload(probe.OldContext));
+    }
+
+    /// <summary>
+    /// 验证完全重置策略不会恢复公开字段或 Persist 字段。
+    /// </summary>
+    [Fact]
+    public void SuccessfulReloadCanResetStateCompletely()
+    {
+        Scene scene = new();
+        FakeScriptContext context = new(scene);
+        Entity entity = scene.CreateEntity();
+        HotReloadService service = CreateServiceWithVersionOne(scene, context, entity);
+
+        service.RequestReload(
+            $"UserScripts.Reset.{Guid.NewGuid():N}",
+            [new ScriptSourceFile("ReloadableScript.cs", VersionTwoSource)],
+            HotReloadOptions.FullReset);
+        HotReloadResult result = service.ApplyPendingReload();
+        Behaviour replacement = scene.CaptureBehaviours()[0].Behaviour;
+
+        Assert.Equal(HotReloadStatus.Reloaded, result.Status);
+        Assert.Equal("v2", ReadVersion(replacement));
+        Assert.Equal(0, ReadField<int>(replacement, "Counter"));
+        Assert.Equal(0, ReadProperty<int>(replacement, "Persisted"));
+        Assert.Equal(123, ReadField<int>(replacement, "Hidden"));
+        Assert.Equal(1, ReadField<int>(replacement, "StartedByReload"));
+    }
+
+    /// <summary>
+    /// 验证源文件 watcher 会去抖并把目录内脚本合并为待处理热重载。
+    /// </summary>
+    [Fact]
+    public void SourceWatcherDebouncesChangesIntoPendingReload()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "PixelEngineScripts", Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(directory);
+        try
+        {
+            Scene scene = new();
+            using HotReloadService service = new(scene, new FakeScriptContext(scene), new ScriptCompiler());
+            service.StartWatching(new HotReloadWatchOptions($"UserScripts.Watched.{Guid.NewGuid():N}", directory)
+            {
+                DebounceInterval = TimeSpan.FromMilliseconds(30),
+            });
+
+            File.WriteAllText(Path.Combine(directory, "ReloadableScript.cs"), VersionTwoSource);
+
+            Assert.True(
+                SpinWait.SpinUntil(() => service.HasPendingReload || service.LastWatcherException is not null, TimeSpan.FromSeconds(5)),
+                service.LastWatcherException?.ToString() ?? "watcher 未在超时时间内触发 reload");
+            Assert.Null(service.LastWatcherException);
+            HotReloadResult result = service.ApplyPendingReload();
+            Assert.Equal(HotReloadStatus.Reloaded, result.Status);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -63,7 +122,8 @@ public sealed class HotReloadServiceTests
             ReadVersion(replacement),
             ReadField<int>(replacement, "Counter"),
             ReadProperty<int>(replacement, "Persisted"),
-            ReadField<int>(replacement, "Hidden"));
+            ReadField<int>(replacement, "Hidden"),
+            ReadField<int>(replacement, "StartedByReload"));
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -138,7 +198,8 @@ public sealed class HotReloadServiceTests
         string Version,
         int Counter,
         int Persisted,
-        int Hidden);
+        int Hidden,
+        int StartedByReload);
 
     private sealed class FakeScriptContext(Scene scene) : IScriptContext
     {
@@ -189,9 +250,15 @@ public sealed class HotReloadServiceTests
         public sealed class ReloadableScript : Behaviour
         {
             public int Counter;
+            public int StartedByReload;
             [Persist] private int Persisted { get; set; }
             [HideInInspector] public int Hidden = 123;
             public string Version => "v2";
+
+            protected override void OnStart()
+            {
+                StartedByReload = 1;
+            }
         }
         """;
 }

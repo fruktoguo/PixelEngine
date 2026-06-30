@@ -5,6 +5,8 @@ namespace PixelEngine.Scripting;
 /// </summary>
 public abstract class Behaviour : IComponent
 {
+    private List<IDisposable>? _subscriptions;
+
     internal bool Started { get; private set; }
 
     /// <summary>
@@ -100,6 +102,28 @@ public abstract class Behaviour : IComponent
     {
         Context = context;
         OnDestroy();
+    }
+
+    internal void TrackSubscription(IDisposable subscription)
+    {
+        ArgumentNullException.ThrowIfNull(subscription);
+        _subscriptions ??= [];
+        _subscriptions.Add(subscription);
+    }
+
+    internal void DisposeTrackedSubscriptions()
+    {
+        if (_subscriptions is null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _subscriptions.Count; i++)
+        {
+            _subscriptions[i].Dispose();
+        }
+
+        _subscriptions.Clear();
     }
 
     internal void MarkFaulted(Exception exception)

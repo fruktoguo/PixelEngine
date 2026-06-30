@@ -52,6 +52,57 @@ public sealed class ScriptEventBusTests
         Assert.Equal(["event:3", "update"], events);
     }
 
+    /// <summary>
+    /// 验证 Behaviour 生命周期内创建的事件订阅会在销毁时自动退订。
+    /// </summary>
+    [Fact]
+    public void BehaviourOwnedSubscriptionsAreDisposedOnDestroy()
+    {
+        EventBus coreEvents = new(capacityPerChannel: 8);
+        using ScriptEventBus scriptEvents = new(coreEvents);
+        Scene scene = new();
+        FakeScriptContext context = new(scene, scriptEvents);
+        Entity entity = scene.CreateEntity();
+        AutoSubscribedBehaviour behaviour = entity.AddComponent<AutoSubscribedBehaviour>();
+        ScriptRuntime runtime = new();
+        runtime.Initialize(context);
+
+        runtime.BeginFrame();
+        Assert.True(coreEvents.Channel<TestEvent>().TryEnqueue(new TestEvent(1)));
+        runtime.Update(0.016f);
+        scene.Destroy(entity);
+        runtime.EndFrame();
+        Assert.True(coreEvents.Channel<TestEvent>().TryEnqueue(new TestEvent(1)));
+        runtime.Update(0.016f);
+
+        Assert.Equal(1, behaviour.HandledCount);
+    }
+
+    /// <summary>
+    /// 验证事件处理器异常会标记 Behaviour 为 Faulted，而不会冒泡中断 drain。
+    /// </summary>
+    [Fact]
+    public void EventHandlerExceptionFaultsOwningBehaviour()
+    {
+        EventBus coreEvents = new(capacityPerChannel: 8);
+        using ScriptEventBus scriptEvents = new(coreEvents);
+        Scene scene = new();
+        FakeScriptContext context = new(scene, scriptEvents);
+        FailingEventBehaviour behaviour = scene.CreateEntity().AddComponent<FailingEventBehaviour>();
+        ScriptRuntime runtime = new();
+        runtime.Initialize(context);
+
+        runtime.BeginFrame();
+        Assert.True(coreEvents.Channel<TestEvent>().TryEnqueue(new TestEvent(5)));
+        runtime.Update(0.016f);
+        Assert.True(coreEvents.Channel<TestEvent>().TryEnqueue(new TestEvent(7)));
+        runtime.Update(0.016f);
+
+        Assert.True(behaviour.Faulted);
+        Assert.Equal(1, behaviour.Attempts);
+        Assert.Equal(1, scene.ScriptExceptionCount);
+    }
+
     private readonly struct TestEvent(int value)
     {
         public int Value { get; } = value;
@@ -64,6 +115,30 @@ public sealed class ScriptEventBusTests
         protected override void OnUpdate(float dt)
         {
             Events.Add("update");
+        }
+    }
+
+    private sealed class AutoSubscribedBehaviour : Behaviour
+    {
+        public int HandledCount { get; private set; }
+
+        protected override void OnStart()
+        {
+            _ = Context.Events.Subscribe<TestEvent>(_ => HandledCount++);
+        }
+    }
+
+    private sealed class FailingEventBehaviour : Behaviour
+    {
+        public int Attempts { get; private set; }
+
+        protected override void OnStart()
+        {
+            _ = Context.Events.Subscribe<TestEvent>(_ =>
+            {
+                Attempts++;
+                throw new InvalidOperationException("boom");
+            });
         }
     }
 

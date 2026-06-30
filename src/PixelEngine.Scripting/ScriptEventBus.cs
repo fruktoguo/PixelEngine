@@ -88,25 +88,30 @@ public sealed class ScriptEventBus(CoreEventBus coreEvents) : IEventBus, IScript
         where TEvent : unmanaged
     {
         private readonly MpscRingBuffer<TEvent> _ring = ring;
-        private readonly List<Action<TEvent>?> _handlers = [];
+        private readonly List<HandlerEntry?> _handlers = [];
         private readonly Stack<int> _freeSlots = new();
         private TEvent[] _buffer = ArrayPool<TEvent>.Shared.Rent(capacity);
 
         public IDisposable Subscribe(Action<TEvent> handler)
         {
+            HandlerEntry entry = ScriptInvoker.TryGetCurrentOwner(out Behaviour owner, out ScriptInvoker invoker)
+                ? new HandlerEntry(handler, owner, invoker)
+                : new HandlerEntry(handler, null, null);
             int index;
             if (_freeSlots.Count == 0)
             {
                 index = _handlers.Count;
-                _handlers.Add(handler);
+                _handlers.Add(entry);
             }
             else
             {
                 index = _freeSlots.Pop();
-                _handlers[index] = handler;
+                _handlers[index] = entry;
             }
 
-            return new Subscription(this, index);
+            Subscription subscription = new(this, index);
+            entry.Owner?.TrackSubscription(subscription);
+            return subscription;
         }
 
         public void Drain()
@@ -145,6 +150,22 @@ public sealed class ScriptEventBus(CoreEventBus coreEvents) : IEventBus, IScript
 
             _handlers[index] = null;
             _freeSlots.Push(index);
+        }
+
+        private sealed class HandlerEntry(Action<TEvent> handler, Behaviour? owner, ScriptInvoker? invoker)
+        {
+            public Behaviour? Owner { get; } = owner;
+
+            public void Invoke(TEvent item)
+            {
+                if (Owner is not null && invoker is not null)
+                {
+                    invoker.InvokeEvent(Owner, handler, item);
+                    return;
+                }
+
+                handler(item);
+            }
         }
 
         private sealed class Subscription(EventChannel<TEvent> owner, int index) : IDisposable
