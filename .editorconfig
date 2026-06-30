@@ -1,0 +1,30 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+[*.{cs,csx}]
+indent_size = 4
+# 性能纪律相关分析器（在 sim 热路径项目里提升为 error，见各 .csproj）
+dotnet_diagnostic.CA1814.severity = suggestion   # 多维数组
+dotnet_diagnostic.CA1819.severity = none         # 属性返回数组（SoA 设计需要）
+dotnet_style_namespace_match_folder = true:warning
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_prefer_braces = true:warning
+csharp_style_var_for_built_in_types = false:suggestion
+dotnet_style_readonly_field = true:warning
+# 命名：私有字段 _camelCase，常量 PascalCase，类型/方法 PascalCase
+dotnet_naming_rule.private_fields_underscore.severity = warning
+
+[*.{md,json,yml,yaml}]
+indent_size = 2
+
+[*.{csproj,props,targets}]
+indent_size = 2
+
+[*.{cmake,txt}]
+indent_size = 2

@@ -1,0 +1,53 @@
+# ---- .NET ----
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+.vs/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.shared.json
+.idea/
+*.DotSettings.user
+
+# ---- Build / publish ----
+artifacts/
+publish/
+*.binlog
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+
+# ---- Test / coverage / benchmark ----
+TestResults/
+coverage*.json
+coverage*.xml
+*.coverage
+BenchmarkDotNet.Artifacts/
+
+# ---- Native build outputs (Box2D dual-build per RID) ----
+native/build/
+native/out/
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib.tmp
+
+# ---- Runtime / user data ----
+saves/
+worlds/*.world
+logs/
+*.log
+
+# ---- OS ----
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# ---- Keep ----
+!native/CMakeLists.txt
+!native/**/*.cmake
