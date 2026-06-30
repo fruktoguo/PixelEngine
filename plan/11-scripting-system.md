@@ -286,10 +286,10 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 - [x] 「新建脚本」流程：写入源文件 → 刷新项目 → 触发热重载（§3.4/§3.6）
 
 ### 4.7 编辑器与 Hosting 协作
-- [ ] `public ScriptFieldDescriptor[] InspectField(Behaviour b)`：反射枚举 `[SerializeField]`/公开字段（排除 `[HideInInspector]`），供 plan/12 Inspector（§3.7）
-- [ ] `HotReloadService.RequestReload()` 暴露为编辑器热重载入口（§3.7）
+- [x] `public ScriptFieldDescriptor[] InspectField(Behaviour b)`：反射枚举 `[SerializeField]`/公开字段（排除 `[HideInInspector]`），供 plan/12 Inspector（§3.7）
+- [x] `HotReloadService.RequestReload()` 暴露为编辑器热重载入口（§3.7）
 - [x] `public interface IScriptRuntime`：`Initialize/BeginFrame/Update(dt)/FixedSimTick/EndFrame/Shutdown`，由 Hosting 主循环相位 1 驱动（§3.8，架构 §3.3）
-- [ ] Hosting 装配期构造 `IScriptContext` 并注入各子系统公开 API（§3.8）
+- [!] Hosting 装配期构造 `IScriptContext` 并注入各子系统公开 API（§3.8）。阻塞：当前只有 `ScriptingPhaseDriver` 可接收外部 `IScriptContext`，但 cell/material/particle/physics/audio/input/camera 等 facade 后端尚未形成 Hosting 可注入的统一公开实现；不能用抛 `NotSupportedException` 的假实现冒充装配。
 
 ---
 
@@ -307,7 +307,7 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 - [ ] 反复热重载 N 次（如 50 次）无 ALC/内存泄漏（无残留可回收上下文，无单调增长的句柄/委托缓存，§3.4）
 - [ ] 稳态帧脚本派发路径零托管堆分配（命令队列/事件分发/回调派发，BenchmarkDotNet 内存诊断为 0，§3.3/§3.5，AGENTS §3）
 - [x] `IdeLauncher` 在装有 Rider/VS/VS Code 的机器上能正确探测并打开 `.sln`；`ProjectGenerator` 生成的项目可被 IDE 直接加载（§3.6）
-- [ ] 编辑器经 `InspectField` 能展示并编辑脚本组件的 `[SerializeField]`/公开字段，修改下一相位 1 生效（§3.7）
+- [x] 编辑器经 `InspectField` 能展示并编辑脚本组件的 `[SerializeField]`/公开字段，修改下一相位 1 生效（§3.7）
 
 ---
 
