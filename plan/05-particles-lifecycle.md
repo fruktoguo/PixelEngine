@@ -186,12 +186,12 @@ public ParticleSystemStats Stats { get; }
 
 ## 4. 实现清单
 
-- [ ] 建 `PixelEngine.Simulation/Particles/` 目录与命名空间 `PixelEngine.Simulation.Particles`；项目已开 `AllowUnsafeBlocks`（plan/00 §1）。
-- [ ] 定义 `struct Particle`（§3.1）：字段 `float X,Y,Vx,Vy` + `ushort Material` + `byte ColorVariant` + `byte Life`；XML 中文注释；坐标系 y 向下、重力沿 +Y（plan/00 §7、架构 §7.6）。
-- [ ] 在 `EngineConstants`（plan/02/Core）新增：`ParticleCapacityDefault`（≥262144）、`ParticleGravityPerTick`、`ParticleDepositSpeedEpsilon`、`ParticleMaxLifetimeTicks`、`ParticleEjectMaxPerTick`（plan/00 §7 常量集中）。
-- [ ] 实现 `ParticleSystem`（§3.2）：用 plan/02 pinned 缓冲原语分配单条 `Particle[] _particles`（POH，零稳态分配）；`_activeCount`/`_capacity`；`Active`/`ActiveReadOnly` 返回活跃前缀 `Span`/`ReadOnlySpan`（架构 §7.6 无虚调用迭代）。
-- [ ] 实现 `bool TrySpawn(in ParticleSpawn)`：写 `_particles[_activeCount++]`；满则返回 `false` 且 `DroppedThisTick++`，**不扩容、不分配**。
-- [ ] 实现 swap-remove 释放语义（`_particles[i] = _particles[--_activeCount]`），供沉积/杀死复用，零分配。
+- [x] 建 `PixelEngine.Simulation/Particles/` 目录与命名空间 `PixelEngine.Simulation.Particles`；项目已开 `AllowUnsafeBlocks`（plan/00 §1）。
+- [x] 定义 `struct Particle`（§3.1）：字段 `float X,Y,Vx,Vy` + `ushort Material` + `byte ColorVariant` + `byte Life`；XML 中文注释；坐标系 y 向下、重力沿 +Y（plan/00 §7、架构 §7.6）。
+- [x] 在 `EngineConstants`（plan/02/Core）新增：`ParticleCapacityDefault`（≥262144）、`ParticleGravityPerTick`、`ParticleDepositSpeedEpsilon`、`ParticleMaxLifetimeTicks`、`ParticleEjectMaxPerTick`（plan/00 §7 常量集中）。
+- [x] 实现 `ParticleSystem`（§3.2）：用 plan/02 pinned 缓冲原语分配单条 `Particle[] _particles`（POH，零稳态分配）；`_activeCount`/`_capacity`；`Active`/`ActiveReadOnly` 返回活跃前缀 `Span`/`ReadOnlySpan`（架构 §7.6 无虚调用迭代）。
+- [x] 实现 `bool TrySpawn(in ParticleSpawn)`：写 `_particles[_activeCount++]`；满则返回 `false` 且 `DroppedThisTick++`，**不扩容、不分配**。
+- [x] 实现 swap-remove 释放语义（`_particles[i] = _particles[--_activeCount]`），供沉积/杀死复用，零分配。
 - [ ] 实现 `IntegrateAndAdvance(JobSystem, CellGrid)`（**相位 3a**，架构 §7.6/§12.7）：`X+=Vx; Y+=Vy; Vy+=g`；`Life--`；DDA 整数射线步进只读 `grid.GetCellType` 归类 `Flying`/`WantsDeposit`/`Dead`；结果写 per-particle outcome；**只写自身槽位、不写网格、不 swap-remove**。
 - [ ] 用 plan/02 `JobSystem` 做 `[0,_activeCount)` index-range 分区并行（**非 `Parallel.For`**，AGENTS §3）；子段内 `ref`/`Unsafe.Add` 漫游消除 bounds-check（架构 §12.6）。
 - [ ] 定义 `EjectionRequest` struct 与 `[Flags] EjectMask`（§3.4）；`RequestEjection`（相位 1，有界队列入队）。
@@ -204,14 +204,15 @@ public ParticleSystemStats Stats { get; }
 - [ ] 实现 `ParticleSystemStats` + `Stats`（§3.9）：每 tick 更新 active/spawned/deposited/killed/dropped，注册 Core 诊断，供 plan/12 与架构 §17.1 overlay。
 - [ ] 实现音频事件投递（§3.10）：抛射 explosion/impact、高速沉积 impact 写 Core 事件总线（架构 §10.2），仅入队、限频去重交 plan/10。
 - [ ] 实现序列化接口（§3.10）：`ActiveReadOnly` 导出在飞粒子 + `RestoreFrom(ReadOnlySpan<Particle>)` 重建（material id 由 plan/07 重映射后传入，架构 §11.3/§1.8）。
-- [ ] 在 `PixelEngine.Simulation.Tests` 加测试（§5）。
+- [x] 在 `PixelEngine.Simulation.Tests` 加测试（§5）。
+- [x] 在 `PixelEngine.Benchmarks` 加粒子池化基准（BenchmarkDotNet + `[MemoryDiagnoser]`，AGENTS §3/§7），覆盖节点 1 的 `TrySpawn` + swap-remove 零分配。
 - [ ] 在 `PixelEngine.Benchmarks` 加粒子积分/沉积基准（BenchmarkDotNet + `[DisassemblyDiagnoser]`，AGENTS §3/§7）。
 
 ## 5. 验收标准
 
-- [ ] `Unsafe.SizeOf<Particle>() == 20`（xUnit 断言，架构 §7.6 字节预算）。
+- [x] `Unsafe.SizeOf<Particle>() == 20`（xUnit 断言，架构 §7.6 字节预算）。
 - [ ] spawn→飞行→沉积全流程：稳态帧内 **零托管堆分配**（BenchmarkDotNet `MemoryDiagnoser` 测得 Gen0/Alloc = 0，AGENTS §3）。
-- [ ] swap-remove 正确性：随机 spawn/kill 序列后，活跃前缀无空洞、无重复、`ActiveCount` 与实际存活数一致（性质测试）。
+- [x] swap-remove 正确性：随机 spawn/kill 序列后，活跃前缀无空洞、无重复、`ActiveCount` 与实际存活数一致（性质测试）。
 - [ ] 弹道积分正确：`X+=Vx; Y+=Vy; Vy+=g` 逐 tick 数值符合解析弹道；飞行期间 CellGrid **逐 cell 不变**（粒子飞行不写网格、不参与 CA，架构 §7.6）。
 - [ ] 并行积分 = 单线程积分：同初态下 `JobSystem` 多线程积分结果与单线程逐位等价（积分无跨粒子依赖，可 bit 比对）。
 - [ ] cell→particle 抛射（相位 7）：源 cell 变 `Empty` 且标 dirty，粒子继承材质/色、速度方向为径向、数量受 `ParticleEjectMaxPerTick` 限制。
@@ -234,7 +235,7 @@ public ParticleSystemStats Stats { get; }
 
 ## 7. 提交节点
 
-- 节点 1：`feat(sim): 实现 Particle struct(20B) 与 ParticleSystem 连续缓冲池(swap-remove,零分配)` —— 完成 §3.1/§3.2 与对应实现清单、`sizeof==20`/零分配/swap-remove 验收项。
+- [x] 节点 1：`feat(sim): 实现 Particle struct(20B) 与 ParticleSystem 连续缓冲池(swap-remove,零分配)` —— 完成 §3.1/§3.2 与对应实现清单、`sizeof==20`/零分配/swap-remove 验收项。
 - 节点 2：`feat(sim): 实现并行弹道积分与 cell↔particle handshake(相位3/7)` —— 完成 §3.3/§3.4/§3.5 与抛射/沉积/并行积分等价性验收项。
 - 节点 3：`feat(sim): 实现粒子生命周期与 R13 无泄漏回退(max-lifetime+无处沉积则杀死)` —— 完成 §3.6 与 R13 无泄漏验收项（强制项）。
 - 节点 4：`feat(sim): 暴露粒子渲染/编辑器/音频/序列化接口(IParticleReadback,Stats)` —— 完成 §3.8–§3.10 与接口可用、诊断验收项。
