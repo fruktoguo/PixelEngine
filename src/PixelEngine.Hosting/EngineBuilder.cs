@@ -28,6 +28,7 @@ public sealed class EngineBuilder
     private int _eventCapacityPerChannel = EngineOptions.DefaultEventCapacityPerChannel;
     private EngineOverloadOptions _overload = EngineOverloadOptions.CreateDefault();
     private readonly List<(EnginePhase Phase, EnginePhaseAction Action)> _phaseActions = [];
+    private readonly List<IEnginePhaseDriver> _phaseDrivers = [];
     private readonly List<SceneDescriptor> _scenes = [];
     private readonly List<IEngineSubsystem> _subsystems = [];
 
@@ -215,6 +216,16 @@ public sealed class EngineBuilder
     }
 
     /// <summary>
+    /// 注册一个真实子系统相位驱动，由 Build 阶段绑定到 12 相位管线。
+    /// </summary>
+    public EngineBuilder AddPhaseDriver(IEnginePhaseDriver driver)
+    {
+        ArgumentNullException.ThrowIfNull(driver);
+        _phaseDrivers.Add(driver);
+        return this;
+    }
+
+    /// <summary>
     /// 构建 Engine 并完成 Core 服务装配。
     /// </summary>
     public Engine Build()
@@ -262,6 +273,11 @@ public sealed class EngineBuilder
         context.RegisterService<ISceneService>(EngineServiceRole.SceneService, scenes);
         context.RegisterService(scenes);
         EnginePhasePipeline phases = new(commands);
+        for (int i = 0; i < _phaseDrivers.Count; i++)
+        {
+            _phaseDrivers[i].RegisterPhases(phases);
+        }
+
         for (int i = 0; i < _phaseActions.Count; i++)
         {
             phases.Register(_phaseActions[i].Phase, _phaseActions[i].Action);
