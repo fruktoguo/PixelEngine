@@ -12,6 +12,7 @@ public sealed class EngineCounters
     private long _freeParticlesDroppedThisTick;
     private long _freeParticlesKilledThisTick;
     private long _freeParticlesSpawnedThisTick;
+    private long _materialRemapFallbackHits;
     private long _rigidBodies;
     private long _residentChunks;
     private long _residentMemoryBytes;
@@ -50,6 +51,11 @@ public sealed class EngineCounters
     /// 获取或设置本 tick 丢弃的自由粒子或粒子事件数量。
     /// </summary>
     public long FreeParticlesDroppedThisTick { get => Volatile.Read(ref _freeParticlesDroppedThisTick); set => Volatile.Write(ref _freeParticlesDroppedThisTick, value); }
+
+    /// <summary>
+    /// 获取或设置 material 重映射 fallback 命中次数。
+    /// </summary>
+    public long MaterialRemapFallbackHits { get => Volatile.Read(ref _materialRemapFallbackHits); set => Volatile.Write(ref _materialRemapFallbackHits, value); }
 
     /// <summary>
     /// 获取或设置刚体数量。
@@ -132,6 +138,15 @@ public sealed class EngineCounters
     public void AddFreeParticlesDroppedThisTick(long delta)
     {
         _ = Interlocked.Add(ref _freeParticlesDroppedThisTick, delta);
+    }
+
+    /// <summary>
+    /// 线程安全地累加 material 重映射 fallback 命中次数。
+    /// </summary>
+    /// <param name="delta">增量。</param>
+    public void AddMaterialRemapFallbackHits(long delta)
+    {
+        _ = Interlocked.Add(ref _materialRemapFallbackHits, delta);
     }
 
     /// <summary>

@@ -183,8 +183,8 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 
 ### 4.4 Serialization — material 重映射、manifest、迁移、磁盘（架构 §11.2/§11.3/§11.4）
 
-- [ ] `MaterialNameTable`（class）：`ushort id`↔`string name` 双向；`Write/Read`（紧凑二进制）。（§3.7）
-- [ ] `MaterialRemap`（class）：`Build(MaterialNameTable saved, MaterialRegistry current, ushort fallbackId)`；`ushort Map(ushort savedId)`；`RemapInPlace(Span<ushort> material)`；记 fallback 命中计数并经 Core 诊断输出。（§3.7，不变式 #8）
+- [x] `MaterialNameTable`（class）：`ushort id`↔`string name` 双向；`Write/Read`（紧凑二进制）。（§3.7）
+- [x] `MaterialRemap`（class）：`Build(MaterialNameTable saved, MaterialRegistry current, ushort fallbackId)`；`ushort Map(ushort savedId)`；`RemapInPlace(Span<ushort> material)`；记 fallback 命中计数并经 Core 诊断输出。（§3.7，不变式 #8）
 - [ ] `FreeParticleSnapshot`（struct DTO：`float x,y,vx,vy; ushort material; byte colorVariant; byte life`，对齐 plan/05 §7.6）。（§3.8）
 - [ ] `RigidBodySnapshot`（DTO：`int id`、不可变 body-local mask（`byte[]` + 尺寸）+ 每像素 `ushort material`、`float posX,posY,rotCos,rotSin`、`float linVelX,linVelY,angVel`，足以由 plan/06 重建 Box2D 刚体）。（§3.8）
 - [ ] `IWorldStateSnapshotSource` / `IWorldStateSnapshotSink`（接口）：供 plan/05/06 导出 / 重建 particles 与 bodies；Serialization 只读写 DTO。（§3.8）
