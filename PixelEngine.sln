@@ -73,6 +73,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{4B4D74E2
 		tools\verify-publish.ps1 = tools\verify-publish.ps1
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PixelEngine.Core.Tests", "tests\PixelEngine.Core.Tests\PixelEngine.Core.Tests.csproj", "{D44E6DE0-547D-43F6-A95E-34317A611FBB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -299,6 +301,18 @@ Global
 		{18DE4DBF-EEB7-4797-B605-133AC7B6EA12}.Release|x64.Build.0 = Release|Any CPU
 		{18DE4DBF-EEB7-4797-B605-133AC7B6EA12}.Release|x86.ActiveCfg = Release|Any CPU
 		{18DE4DBF-EEB7-4797-B605-133AC7B6EA12}.Release|x86.Build.0 = Release|Any CPU
+		{D44E6DE0-547D-43F6-A95E-34317A611FBB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D44E6DE0-547D-43F6-A95E-34317A611FBB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D44E6DE0-547D-43F6-A95E-34317A611FBB}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D44E6DE0-547D-43F6-A95E-34317A611FBB}.Debug|x64.Build.0 = Debug|Any CPU
+		{D44E6DE0-547D-43F6-A95E-34317A611FBB}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D44E6DE0-547D-43F6-A95E-34317A611FBB}.Debug|x86.Build.0 = Debug|Any CPU
+		{D44E6DE0-547D-43F6-A95E-34317A611FBB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D44E6DE0-547D-43F6-A95E-34317A611FBB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D44E6DE0-547D-43F6-A95E-34317A611FBB}.Release|x64.ActiveCfg = Release|Any CPU
+		{D44E6DE0-547D-43F6-A95E-34317A611FBB}.Release|x64.Build.0 = Release|Any CPU
+		{D44E6DE0-547D-43F6-A95E-34317A611FBB}.Release|x86.ActiveCfg = Release|Any CPU
+		{D44E6DE0-547D-43F6-A95E-34317A611FBB}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -322,5 +336,6 @@ Global
 		{F987E874-20C2-450F-85B3-00165F92FBC4} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{D4C56760-8EA1-4B04-A3CF-AFA27D9D8260} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{18DE4DBF-EEB7-4797-B605-133AC7B6EA12} = {760AB15A-8938-8D9B-BEDE-5CE1484B84C3}
+		{D44E6DE0-547D-43F6-A95E-34317A611FBB} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal
