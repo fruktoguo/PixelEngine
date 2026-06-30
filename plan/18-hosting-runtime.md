@@ -74,30 +74,30 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [x] `EngineBuilder`:fluent 配置(窗口/内部 sim 分辨率/worker 数/GC 模式/Editor 开关/headless/确定性开关/GPU 门控/内容根/起始场景),`Build()→Engine`。[架构 §19.2 配置化]
 - [x] `Engine`:持有全部子系统 + `EngineContext`;`Run()`/`RunOneTick()`/`Shutdown()`。
 - [x] `EngineContext`:服务定位 + 诊断 + 事件总线 + 时间 + 当前质量档位。
-- [~] 子系统装配与**初始化顺序**(§3.1);native(Box2D/OpenAL/GL)与 ALC 的正确释放顺序。
+- [!] 子系统装配与**初始化顺序**(§3.1);native(Box2D/OpenAL/GL)与 ALC 的正确释放顺序。阻塞:Physics/Rendering/Audio/Scripting/Editor 目前缺真实 public 资源类型,Box2D/OpenAL/GL/ALC 释放顺序需对应子系统落地后接入。
 - [x] `GameLoop.Tick()`:严格 12 相位编排(§3.2),相位间 barrier(plan/02 JobSystem),每帧至多一次 sim/physics step。[不变式 #6,架构 §3.3]
 - [x] sim 降频(30Hz)而 render 不降:render 复用上帧世界纹理(必要时整图相机偏移,不插值像素)。[架构 §4.2]
-- [~] 各相位入口的调用绑定(Input/Time、Scripts、Residency、Particle 沉积/抛射、CA、Temperature、DirtySwap、Physics、BuildFrame、Present、Streaming)。
+- [!] 各相位入口的调用绑定(Input/Time、Scripts、Residency、Particle 沉积/抛射、CA、Temperature、DirtySwap、Physics、BuildFrame、Present、Streaming)。阻塞:已绑定现有相位 2/3/4/5/6/7/11,相位 1/8/9/10 仍等待 Scripting/Physics/Rendering/Editor 真实入口。
 - [x] 过载降级编排:读诊断 → 五级降级决策 → 经 `EngineContext` 下发质量档位。[架构 §4.3,不变式 #6]
-- [ ] 脚本服务后端聚合:`IWorldAccess`/`IParticleService`/`IPhysicsService`/`IMaterialRegistry`/`ICamera`/`IInput`/`IEventBus`/`IAudioService`/`ISceneService`/`IDiagnostics` 的实现注入(plan/11 契约的后端)。
+- [!] 脚本服务后端聚合:`IWorldAccess`/`IParticleService`/`IPhysicsService`/`IMaterialRegistry`/`ICamera`/`IInput`/`IEventBus`/`IAudioService`/`ISceneService`/`IDiagnostics` 的实现注入(plan/11 契约的后端)。阻塞:plan/11 尚未定义脚本可见契约,Physics/Audio/Input/Camera 后端也未落地。
 - [x] 写操作延迟命令队列:脚本/玩法的世界写入入队,在正确相位 flush(配合 plan/11 相位安全模型)。
-- [~] `Scene` 模型 + `ISceneService`:加载/卸载/切换;从存档(plan/07)或程序化生成构建起始世界。
+- [!] `Scene` 模型 + `ISceneService`:加载/卸载/切换;从存档(plan/07)或程序化生成构建起始世界。阻塞:已完成来源校验与解析,但存档/程序化来源构建 live World 仍缺聚合后的 World/Simulation/脚本实体后端。
 - [x] 项目模型:内容根、materials/reactions、资产、起始场景引用;`EngineBuilder` 装载。
-- [~] Play/Edit/Step 三态机 + 进入 Play 前世界快照、退出回滚(plan/07 快照),脚本生命周期协调(plan/11、plan/12)。
-- [~] **headless 模式**:无窗口/渲染/音频,跑 Core+Sim+Physics+World,固定步数驱动(供 plan/14)。
+- [!] Play/Edit/Step 三态机 + 进入 Play 前世界快照、退出回滚(plan/07 快照),脚本生命周期协调(plan/11、plan/12)。阻塞:已完成模式驱动与 StepOnce,快照回滚需要完整 world snapshot 聚合,脚本生命周期需 plan/11 Behaviour 宿主。
+- [!] **headless 模式**:无窗口/渲染/音频,跑 Core+Sim+Physics+World,固定步数驱动(供 plan/14)。阻塞:已验证 Core+Simulation+World 固定步数,Physics 项目当前无真实入口。
 - [x] 帧节奏与 `FrameClock`(plan/02)对接:固定 dt、时间膨胀、sim/render 解耦的频率管理。
 - [x] 公开 API 全部中文 XML 文档注释(脚本 IntelliSense,plan/11/00 §7)。
 
 ## 5. 验收标准
 
-- [ ] `EngineBuilder().…​.Build().Run()` 能装配全部子系统并跑稳定 60fps 空场景。
+- [!] `EngineBuilder().…​.Build().Run()` 能装配全部子系统并跑稳定 60fps 空场景。阻塞:Rendering/Audio/Physics/Scripting/Editor 子系统尚未提供真实运行入口,当前仅能验证 headless 与已存在 phase driver。
 - [x] 12 相位顺序与架构 §3.3 完全一致;用诊断计时器可见各相位耗时。
 - [x] sim 降到 30Hz 时画面仍 60fps 出帧、世界慢放、无 death spiral(注入人工过载验证)。
-- [ ] 过载降级按五级顺序触发且可在编辑器观测/覆盖。
-- [ ] 脚本经 `EngineContext` 能读写世界/建刚体/播音效,写操作落在正确相位(配合 plan/11 测试)。
-- [ ] Play/Edit/Step 切换正确:进入 Play 快照、退出回滚到编辑态,脚本 OnStart/OnDestroy 正确触发。
+- [!] 过载降级按五级顺序触发且可在编辑器观测/覆盖。阻塞:五级顺序与 Sim30Hz 已测试,Editor 覆盖 UI 需 plan/12。
+- [!] 脚本经 `EngineContext` 能读写世界/建刚体/播音效,写操作落在正确相位(配合 plan/11 测试)。阻塞:plan/11 脚本 API、PhysicsService 与 AudioService 尚未实现。
+- [!] Play/Edit/Step 切换正确:进入 Play 快照、退出回滚到编辑态,脚本 OnStart/OnDestroy 正确触发。阻塞:快照聚合与脚本生命周期需 plan/11/12。
 - [x] headless 模式可被 plan/14 测试/基准以确定步数驱动,无窗口依赖。
-- [ ] 关闭时 native 资源与 ALC 正确释放,无泄漏(配合 plan/14 scripting 测试)。
+- [!] 关闭时 native 资源与 ALC 正确释放,无泄漏(配合 plan/14 scripting 测试)。阻塞:ALC 与 native 子系统尚未落地。
 - [x] Demo(plan/13)仅经 Hosting 公开 API 启动,无引擎内部后门。
 
 ## 6. 依赖关系
@@ -111,5 +111,5 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 
 - [x] `feat(host): EngineBuilder/Engine/EngineContext 装配与生命周期`
 - [x] `feat(host): 12 相位主循环编排 + 固定步长不追帧 + sim 降频`
-- [ ] `feat(host): 过载降级编排 + 脚本服务后端聚合`
-- [ ] `feat(host): 场景/项目模型 + Play/Edit/Step 模式 + headless`
+- [!] `feat(host): 过载降级编排 + 脚本服务后端聚合`。阻塞:过载已落地,脚本服务后端需 plan/11 契约与缺失子系统后端。
+- [!] `feat(host): 场景/项目模型 + Play/Edit/Step 模式 + headless`。阻塞:模型/模式/headless 基础已落地,完整快照/脚本生命周期/Physics headless 需后续计划。
