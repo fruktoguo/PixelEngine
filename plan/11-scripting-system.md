@@ -239,31 +239,31 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 ## 4. 实现清单
 
 ### 4.1 项目引用模型与公开 API 边界
-- [ ] 建 `PixelEngine.Scripting.csproj`，继承 `Directory.Build.props`，开 `GenerateDocumentationFile`、CS1591 公开类型 error（§2.3、plan/00 §6）
-- [ ] 审定并标注公开 API 表面：`Behaviour`/`IComponent`/`ISystem`/`Entity`/`Scene`/`IScriptContext` 及全部子接口/值类型为 `public`；内核（CellGrid SoA、checkerboard、Box2D 桥、ALC、编译管线、命令队列）为 `internal`（§3.1，架构 §3.1/§13.1）
-- [ ] 配置 `InternalsVisibleTo`：仅 `PixelEngine.Scripting.Tests` 与 `PixelEngine.Editor`（§3.1）
-- [ ] 为**所有** `public` 成员写中文 XML 文档注释，含 `<summary>`/参数/返回值/「相位安全」说明（§3.1，plan/00 §7、AGENTS §4）
+- [x] 建 `PixelEngine.Scripting.csproj`，继承 `Directory.Build.props`，开 `GenerateDocumentationFile`、CS1591 公开类型 error（§2.3、plan/00 §6）
+- [~] 审定并标注公开 API 表面：`Behaviour`/`IComponent`/`ISystem`/`Entity`/`Scene`/`IScriptContext` 及全部子接口/值类型为 `public`；内核（CellGrid SoA、checkerboard、Box2D 桥、ALC、编译管线、命令队列）为 `internal`（§3.1，架构 §3.1/§13.1）
+- [x] 配置 `InternalsVisibleTo`：仅 `PixelEngine.Scripting.Tests` 与 `PixelEngine.Editor`（§3.1）
+- [x] 为**所有** `public` 成员写中文 XML 文档注释，含 `<summary>`/参数/返回值/「相位安全」说明（§3.1，plan/00 §7、AGENTS §4）
 - [ ] 建游戏项目 `.csproj` 模板与引用集合（`ProjectReference` for Demo / `PackageReference` for 外部 NuGet），承接引擎 XML 注释（§3.6）
 
 ### 4.2 Behaviour / Component / System API（相位 1，架构 §3.3）
-- [ ] `abstract class Behaviour`：`Entity`/`Context`/`Enabled` + 生命周期 `OnStart()`/`OnUpdate(float dt)`/`OnFixedSimTick()`/`OnDestroy()`（§3.2）
-- [ ] `interface IComponent` 标记接口；`interface ISystem` 含 `OnSimTick`/`OnFrame`（数据导向批处理，§3.2、架构 §13.1）
-- [ ] `sealed class Entity`：`AddComponent<T>`/`TryGetComponent<T>`/`RemoveComponent<T>`/`Destroy()`（延迟销毁，§3.2）
-- [ ] `sealed class Scene`：按组件类型分桶的紧凑数组 + 自由列表 + swap-remove；`CreateEntity`/`RegisterSystem`；`DispatchStart`/`DispatchUpdate(dt)`/`DispatchFixedSimTick`/`FlushDestroyed`（§3.2，绝不进 sim 内核）
-- [ ] 特性 `[SerializeField]`/`[Persist]`/`[HideInInspector]`/`[ScriptComponent]`（§3.1/§3.7）
+- [x] `abstract class Behaviour`：`Entity`/`Context`/`Enabled` + 生命周期 `OnStart()`/`OnUpdate(float dt)`/`OnFixedSimTick()`/`OnDestroy()`（§3.2）
+- [x] `interface IComponent` 标记接口；`interface ISystem` 含 `OnSimTick`/`OnFrame`（数据导向批处理，§3.2、架构 §13.1）
+- [x] `sealed class Entity`：`AddComponent<T>`/`TryGetComponent<T>`/`RemoveComponent<T>`/`Destroy()`（延迟销毁，§3.2）
+- [~] `sealed class Scene`：按组件类型分桶的紧凑数组 + 自由列表 + swap-remove；`CreateEntity`/`RegisterSystem`；`DispatchStart`/`DispatchUpdate(dt)`/`DispatchFixedSimTick`/`FlushDestroyed`（§3.2，绝不进 sim 内核）
+- [x] 特性 `[SerializeField]`/`[Persist]`/`[HideInInspector]`/`[ScriptComponent]`（§3.1/§3.7）
 - [ ] 派发路径零分配验证：无 LINQ/闭包/装箱/`params`，缓存开放委托或虚调用（AGENTS §3）
 
 ### 4.3 世界脚本接口 facade（§3.3）
-- [ ] `interface IScriptContext` 聚合 `Cells/Materials/Particles/Solids/Bodies/Character/Camera/Input/Events/Audio/Time/Scene`（§3.3）
-- [ ] `interface IWorldCellAccess`：即时读 `GetMaterial/Sample/IsSolid`，延迟写 `SetCell/Paint`（入命令队列，相位 1 安全窗口落地 + 标 dirty，架构 §5.4）
-- [ ] `interface IMaterialQuery`：`Resolve/TryResolve/GetInfo`（name 稳定键，plan/04，架构 §7.3/§11.2）
-- [ ] `interface IParticleSpawner`：`Spawn/Burst`（延迟到相位 7，plan/05，架构 §7.6）
-- [ ] `interface ISolidSampler`：`Raycast/SampleSolidAabb`（即时只读网格，plan/06，架构 §8.5）
-- [ ] `interface IRigidBodyApi`：`CreateFromRegion/TryGetTransform/ApplyImpulse/Destroy`（建毁延迟相位 8a、力延迟 step 前，plan/06，架构 §8.2/§8.3）
-- [ ] `interface ICharacterController`：`Create/Move/GetState`（kinematic AABB，延迟相位 8，plan/06，架构 §8.5）
-- [ ] `interface ICameraApi`/`IInputApi`/`IAudioApi`/`IGameTime`（plan/08/02/10，架构 §4/§10）
-- [ ] 事件订阅：`IEventBus.Subscribe<TEvent>` + `IDisposable` 句柄；引擎相位 1 排空 ring buffer 分发（plan/02，架构 §3.1）
-- [ ] 只读值类型：`MaterialId`/`CellView`/`MaterialInfo`/`RaycastHit`/`BodyHandle`/`BodyTransform`/`CharacterHandle`/`CharacterState`/`ParticleSpawnDesc`/`RectF`（blittable `readonly struct`，零分配）
+- [x] `interface IScriptContext` 聚合 `Cells/Materials/Particles/Solids/Bodies/Character/Camera/Input/Events/Audio/Time/Scene`（§3.3）
+- [x] `interface IWorldCellAccess`：即时读 `GetMaterial/Sample/IsSolid`，延迟写 `SetCell/Paint`（入命令队列，相位 1 安全窗口落地 + 标 dirty，架构 §5.4）
+- [x] `interface IMaterialQuery`：`Resolve/TryResolve/GetInfo`（name 稳定键，plan/04，架构 §7.3/§11.2）
+- [x] `interface IParticleSpawner`：`Spawn/Burst`（延迟到相位 7，plan/05，架构 §7.6）
+- [x] `interface ISolidSampler`：`Raycast/SampleSolidAabb`（即时只读网格，plan/06，架构 §8.5）
+- [x] `interface IRigidBodyApi`：`CreateFromRegion/TryGetTransform/ApplyImpulse/Destroy`（建毁延迟相位 8a、力延迟 step 前，plan/06，架构 §8.2/§8.3）
+- [x] `interface ICharacterController`：`Create/Move/GetState`（kinematic AABB，延迟相位 8，plan/06，架构 §8.5）
+- [x] `interface ICameraApi`/`IInputApi`/`IAudioApi`/`IGameTime`（plan/08/02/10，架构 §4/§10）
+- [~] 事件订阅：`IEventBus.Subscribe<TEvent>` + `IDisposable` 句柄；引擎相位 1 排空 ring buffer 分发（plan/02，架构 §3.1）
+- [x] 只读值类型：`MaterialId`/`CellView`/`MaterialInfo`/`RaycastHit`/`BodyHandle`/`BodyTransform`/`CharacterHandle`/`CharacterState`/`ParticleSpawnDesc`/`RectF`（blittable `readonly struct`，零分配）
 - [ ] `internal ScriptCommandQueue`：blittable 命令 struct + per-thread 缓冲（`ArrayPool`/POH，零分配）；Hosting 在各相位安全窗口 flush（§3.3，架构 §3.3）
 
 ### 4.4 Roslyn 热重载（§3.4）
@@ -296,9 +296,9 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 ## 5. 验收标准
 - [ ] 游戏项目仅经 `ProjectReference`/`PackageReference` 引用引擎公开程序集即可编译并运行；不引用任何 `internal` 内核类型（§3.1，架构 §3.1）
 - [ ] 在 Rider / VS / VS Code 任一中打开游戏项目，`Behaviour`/`IScriptContext`/世界 API 均有中文 IntelliSense 补全、签名提示与跳转（靠 XML 注释，无额外语言服务，§3.1/§3.6）
-- [ ] CS1591 在公开类型上为 error：缺任一公开成员 XML 注释则构建失败（§2.3，AGENTS §4）
+- [x] CS1591 在公开类型上为 error：缺任一公开成员 XML 注释则构建失败（§2.3，AGENTS §4）
 - [ ] 一个继承 `Behaviour` 的脚本，其 `OnStart`/`OnUpdate(dt)`/`OnFixedSimTick`/`OnDestroy` 按相位 1 节奏被正确调用；sim 降到 30Hz 时 `OnFixedSimTick` 跳过、`OnUpdate` 仍每帧（§3.2，架构 §4.2）
-- [ ] 组件挂载到 Demo 稀疏实体且**不**出现在 `PixelEngine.Simulation` 内核数据结构中（§3.2，架构 §13.1）
+- [x] 组件挂载到 Demo 稀疏实体且**不**出现在 `PixelEngine.Simulation` 内核数据结构中（§3.2，架构 §13.1）
 - [ ] 脚本经 facade 完成：读写 cell、查材质（按 name）、spawn 粒子、raycast/采样固体、建/查/控刚体、驱动角色控制器、控相机、读输入、订阅事件、播放音效——全部走公开 API（§3.3）
 - [ ] 脚本写入类调用经命令队列在正确相位落地：cell 写标 chunk dirty 并被下帧 CA 看见；particle 落相位 7；body 建于相位 8a——无跨相位竞争、不破坏 §3.2 相位安全（架构 §3.3）
 - [ ] 修改脚本源文件后自动重编译并热重载：旧 ALC 成功 `Unload` 并被 GC 回收（弱引用确认）、组件实例重建、`[Persist]`/公开字段状态按策略恢复（§3.4）
