@@ -245,7 +245,7 @@ public sealed class ParticleSystem
                         continue;
                     }
 
-                    ParticleSpawn spawn = CreateEjectionSpawn(request, x, y, dx, dy, material);
+                    ParticleSpawn spawn = CreateEjectionSpawn(grid.MaterialProps, request, x, y, dx, dy, material);
                     if (!TrySpawn(in spawn))
                     {
                         continue;
@@ -334,7 +334,12 @@ public sealed class ParticleSystem
                 continue;
             }
 
-            if (!grid.TryGetMaterial(sx, sy, out ushort material) || material != 0)
+            if (!grid.TryGetMaterial(sx, sy, out ushort material))
+            {
+                return ParticleOutcome.WantsDeposit(sx, sy);
+            }
+
+            if (material != 0)
             {
                 return ParticleOutcome.WantsDeposit(lastOpenX, lastOpenY);
             }
@@ -392,13 +397,17 @@ public sealed class ParticleSystem
         return true;
     }
 
-    private static ParticleSpawn CreateEjectionSpawn(EjectionRequest request, int x, int y, int dx, int dy, ushort material)
+    private static ParticleSpawn CreateEjectionSpawn(MaterialPropsTable materials, EjectionRequest request, int x, int y, int dx, int dy, ushort material)
     {
         float length = MathF.Sqrt((dx * dx) + (dy * dy));
         float nx = length > 0 ? dx / length : 1;
         float ny = length > 0 ? dy / length : 0;
         float jitter = request.ImpulseJitter == 0 ? 0 : HashToUnitByte(x, y, material) / 255f * request.ImpulseJitter;
         float speed = request.ImpulseSpeed + jitter;
+        ushort defaultLifetime = materials.DefaultLifetimeOf(material);
+        byte life = defaultLifetime > EngineConstants.ParticleMaxLifetimeTicks
+            ? EngineConstants.ParticleMaxLifetimeTicks
+            : (byte)defaultLifetime;
         return new ParticleSpawn(
             x + 0.5f,
             y + 0.5f,
@@ -406,7 +415,7 @@ public sealed class ParticleSystem
             ny * speed,
             material,
             HashToUnitByte(x, y, material),
-            EngineConstants.ParticleMaxLifetimeTicks);
+            life);
     }
 
     private static EjectMask MaskFor(CellType type)

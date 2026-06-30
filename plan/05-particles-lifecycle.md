@@ -197,7 +197,7 @@ public ParticleSystemStats Stats { get; }
 - [x] 定义 `EjectionRequest` struct 与 `[Flags] EjectMask`（§3.4）；`RequestEjection`（相位 1，有界队列入队）。
 - [x] 实现 `RunEjectionPass(SimulationKernel, CellGrid)`（**相位 7**，架构 §3.3/§7.6）：对半径内匹配 `Mask` 的 cell：读材质→`TrySpawn` 预留粒子槽→`SimulationKernel.ReadAndClearCell` 写 Empty + current dirty/KeepAlive→拷 material/`ColorVariant`→按径向冲量 + RNG 抖动设 `Vx,Vy`；`ParticleEjectMaxPerTick` 封顶；单线程顺序；容量满不清源 cell。
 - [x] 实现 `ResolveDeposits(SimulationKernel, CellGrid)`（**相位 3b**，架构 §3.3/§7.6）：`Empty`→`SimulationKernel.DepositCell` 写回材质 + current dirty/KeepAlive + swap-remove；被占→按 `MaterialPropsTable.Density` 位移或挪相邻 `Empty`；皆不可→走 R13 回退；单线程。
-- [ ] 实现 R13 回退（§3.5/§3.6，**强制项**，架构 §19）：无处沉积且 `Life==0` 杀死、`Life>0` 保持短命；并实现硬性 max-lifetime：`Life==0` 无条件 swap-remove；二者均计 `KilledByLifetimeThisTick`。
+- [x] 实现 R13 回退（§3.5/§3.6，**强制项**，架构 §19）：无处沉积且 `Life==0` 杀死、`Life>0` 保持短命；并实现硬性 max-lifetime：`Life==0` 无条件 swap-remove；二者均计 `KilledByLifetimeThisTick`。
 - [x] 沉积/抛射写网格处恒经 `SimulationKernel.DepositCell` / `ReadAndClearCell` 写 current dirty 与边界 KeepAlive（架构 §7.6）；落点非驻留 chunk 走回退（border ring 兜底，架构 §3.4）。
 - [ ] 实现确定性 seam（§3.7，架构 §6.2）：积分/RNG 经 Core 确定性开关；默认关闭、零开销，不实现确定性数值。
 - [ ] 实现 `IParticleReadback`（§3.8）：`ActiveCount` + `ReadOnlySpan<Particle> Particles`（pinned、零拷贝），供 plan/08 相位 9 与 plan/09 GPU；**本文不写任何渲染代码**。
@@ -218,7 +218,7 @@ public ParticleSystemStats Stats { get; }
 - [x] cell→particle 抛射（相位 7）：源 cell 变 `Empty` 且标 dirty，粒子继承材质/色、速度方向为径向、数量受 `ParticleEjectMaxPerTick` 限制。
 - [x] particle→cell 沉积（相位 3）：`Empty` 目标写回材质且 chunk 被标 dirty 唤醒 CA；被占目标按密度位移或挪相邻空 cell；落点 cell 材质 == 粒子材质。
 - [x] 质量守恒（无杀死路径）：cell→particle→cell 往返后，参与材质的 cell 总数守恒（不凭空增减；与架构 §16.2 边界质量守恒精神一致）。
-- [ ] **R13 无泄漏（强制）**：构造「持续抛射但无沉积空间」压力场景跑足够 tick，活跃粒子数有界收敛、不单调增长；所有迷途粒子最终被 max-lifetime 或「无处沉积则杀死」回退清除（`KilledByLifetimeThisTick` 反映）。
+- [x] **R13 无泄漏（强制）**：构造「持续抛射但无沉积空间」压力场景跑足够 tick，活跃粒子数有界收敛、不单调增长；所有迷途粒子最终被 max-lifetime 或「无处沉积则杀死」回退清除（`KilledByLifetimeThisTick` 反映）。
 - [ ] 规模：5 万 / 10 万 / 20 万活跃粒子积分 + 沉积在目标机 BenchmarkDotNet 测得单 tick 成本留有 60fps 余量（架构 §7.6，数值实测为准、不预设）。
 - [ ] 无虚调用迭代：`Active`/`ActiveReadOnly` 迭代反汇编无虚分派、无 bounds-check（`DOTNET_JitDisasm` 确认 `RNGCHKFAIL` 消失，架构 §12.6）。
 - [ ] 渲染接口可用：plan/08 能经 `IParticleReadback` 只读取得活跃粒子并 stamp（本文侧仅验证接口暴露与 pinned 稳定，不验证渲染像素）。
@@ -237,6 +237,6 @@ public ParticleSystemStats Stats { get; }
 
 - [x] 节点 1：`feat(sim): 实现 Particle struct(20B) 与 ParticleSystem 连续缓冲池(swap-remove,零分配)` —— 完成 §3.1/§3.2 与对应实现清单、`sizeof==20`/零分配/swap-remove 验收项。
 - [x] 节点 2：`feat(sim): 实现并行弹道积分与 cell↔particle handshake(相位3/7)` —— 完成 §3.3/§3.4/§3.5 与抛射/沉积/并行积分等价性验收项。
-- 节点 3：`feat(sim): 实现粒子生命周期与 R13 无泄漏回退(max-lifetime+无处沉积则杀死)` —— 完成 §3.6 与 R13 无泄漏验收项（强制项）。
+- [x] 节点 3：`feat(sim): 实现粒子生命周期与 R13 无泄漏回退(max-lifetime+无处沉积则杀死)` —— 完成 §3.6 与 R13 无泄漏验收项（强制项）。
 - 节点 4：`feat(sim): 暴露粒子渲染/编辑器/音频/序列化接口(IParticleReadback,Stats)` —— 完成 §3.8–§3.10 与接口可用、诊断验收项。
 - 每节点完成即按 `AGENTS.md §6` 用中文 git 提交，提交正文标注对应 plan 条目与架构 §。

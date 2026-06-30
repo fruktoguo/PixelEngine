@@ -40,7 +40,7 @@ public class ParticleHandshakeBenchmarks
             [0, 0, 0],
             [0, 0, 0],
             [0, 0, 0],
-            [0, 0, 0]);
+            [0, 0, 120]);
         _grid = new CellGrid(_source, _materials);
         _kernel = new SimulationKernel(_source, _materials);
         _particles = new ParticleSystem(capacity: 4096);
