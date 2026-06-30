@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\PixelEngine.Core\PixelEngine.Core.csproj" />
+    <ProjectReference Include="..\PixelEngine.Simulation\PixelEngine.Simulation.csproj" />
+    <ProjectReference Include="..\PixelEngine.Physics\PixelEngine.Physics.csproj" />
+    <ProjectReference Include="..\PixelEngine.World\PixelEngine.World.csproj" />
+    <ProjectReference Include="..\PixelEngine.Serialization\PixelEngine.Serialization.csproj" />
+    <ProjectReference Include="..\PixelEngine.Content\PixelEngine.Content.csproj" />
+    <ProjectReference Include="..\PixelEngine.Rendering\PixelEngine.Rendering.csproj" />
+    <ProjectReference Include="..\PixelEngine.Audio\PixelEngine.Audio.csproj" />
+    <ProjectReference Include="..\PixelEngine.Scripting\PixelEngine.Scripting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Hexa.NET.ImGui" />
+    <PackageReference Include="Hexa.NET.ImGui.Backends" />
+    <PackageReference Include="Hexa.NET.ImGuizmo" />
+    <PackageReference Include="Hexa.NET.ImPlot" />
+    <PackageReference Include="Hexa.NET.ImNodes" />
+  </ItemGroup>
+</Project>

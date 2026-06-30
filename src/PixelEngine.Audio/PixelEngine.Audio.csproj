@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\PixelEngine.Core\PixelEngine.Core.csproj" />
+    <ProjectReference Include="..\PixelEngine.Content\PixelEngine.Content.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.OpenAL" />
+  </ItemGroup>
+</Project>
