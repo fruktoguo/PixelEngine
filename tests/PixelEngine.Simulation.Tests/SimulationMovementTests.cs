@@ -1,3 +1,4 @@
+using PixelEngine.Core;
 using Xunit;
 
 namespace PixelEngine.Simulation.Tests;
@@ -157,12 +158,53 @@ public sealed class SimulationMovementTests
         Assert.False(CellFlags.Has(GetFlags(center, 10, 11), CellFlags.RigidOwned));
     }
 
-    private static MaterialPropsTable CreateMaterials()
+    /// <summary>
+    /// 验证跨 chunk movement 会写目标 chunk working dirty 与朝向中心的 KeepAlive incoming 槽。
+    /// </summary>
+    [Fact]
+    public void StepCaMarksKeepAliveIncomingSlotWhenMovingAcrossChunkBoundary()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Chunk south = source.GetRequired(new ChunkCoord(0, 1));
+        SetCurrentDirty(center, DirtyRect.Full);
+        Set(center, 10, 63, Sand);
+        SimulationKernel kernel = new(source, CreateMaterials());
+
+        kernel.StepCa();
+
+        Assert.Equal(0, Get(center, 10, 63));
+        Assert.Equal(Sand, Get(south, 10, 0));
+        Assert.Equal(new DirtyRect(8, 0, 12, 2), south.WorkingDirty);
+        Assert.Equal(new DirtyRect(8, 0, 12, 2), south.GetIncomingDirty(1));
+    }
+
+    /// <summary>
+    /// 验证液体水平 dispersion 被 MoveCap 钳制。
+    /// </summary>
+    [Fact]
+    public void StepCaClampsLiquidDispersionToMoveCap()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        SetCurrentDirty(center, DirtyRect.Full);
+        Set(center, 10, 10, Water);
+        Set(center, 9, 11, Solid);
+        Set(center, 10, 11, Solid);
+        Set(center, 11, 11, Solid);
+        SimulationKernel kernel = new(source, CreateMaterials(waterDispersion: 40));
+
+        kernel.StepCa();
+
+        Assert.Equal(0, Get(center, 10, 10));
+        Assert.Equal(Water, Get(center, 10 + EngineConstants.MoveCap, 10));
+        Assert.Equal(0, Get(center, 10 + EngineConstants.MoveCap + 1, 10));
+    }
+
+    private static MaterialPropsTable CreateMaterials(byte waterDispersion = 3)
     {
         return new MaterialPropsTable(
             [CellType.Empty, CellType.Solid, CellType.Powder, CellType.Liquid, CellType.Gas, CellType.Fire],
             [0, 255, 120, 60, 1, 1],
-            [0, 0, 0, 3, 2, 0],
+            [0, 0, 0, waterDispersion, 2, 0],
             [0, 0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0, 0]);
@@ -234,6 +276,11 @@ public sealed class SimulationMovementTests
         public bool TryGetChunk(ChunkCoord coord, out Chunk chunk)
         {
             return _byCoord.TryGetValue(coord, out chunk!);
+        }
+
+        public Chunk GetRequired(ChunkCoord coord)
+        {
+            return _byCoord[coord];
         }
 
         public bool ResolveNeighborhood(ChunkCoord center, out ChunkNeighborhood neighborhood)

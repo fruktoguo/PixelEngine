@@ -23,9 +23,9 @@ public sealed class DirtyRectLifecycleTests
         Assert.Equal(new DirtyRect(1, 2, 52, 53), chunk.CurrentDirty);
         Assert.Equal(DirtyRect.Empty, chunk.WorkingDirty);
         Assert.Equal(ChunkState.Awake, chunk.State);
-        foreach (DirtyRect incoming in chunk.IncomingDirty)
+        for (int i = 0; i < chunk.IncomingDirtySlotCount; i++)
         {
-            Assert.Equal(DirtyRect.Empty, incoming);
+            Assert.Equal(DirtyRect.Empty, chunk.GetIncomingDirty(i));
         }
     }
 

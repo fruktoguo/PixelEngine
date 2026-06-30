@@ -9,7 +9,7 @@ namespace PixelEngine.Simulation;
 public sealed class Chunk
 {
     private const int IncomingSlotCount = 8;
-    private readonly DirtyRect[] _incoming;
+    private readonly PaddedDirtyRectSlot[] _incoming;
 
     /// <summary>
     /// 创建 chunk 并分配固定长度 POH SoA 数组。
@@ -19,7 +19,7 @@ public sealed class Chunk
         Material = GC.AllocateArray<ushort>(EngineConstants.ChunkArea, pinned: true);
         Flags = GC.AllocateArray<byte>(EngineConstants.ChunkArea, pinned: true);
         Lifetime = GC.AllocateArray<byte>(EngineConstants.ChunkArea, pinned: true);
-        _incoming = GC.AllocateArray<DirtyRect>(IncomingSlotCount, pinned: true);
+        _incoming = GC.AllocateArray<PaddedDirtyRectSlot>(IncomingSlotCount, pinned: true);
         Reset(coord);
     }
 
@@ -56,7 +56,7 @@ public sealed class Chunk
     /// <summary>
     /// 来自 8 个邻居的 KeepAlive 入站槽。
     /// </summary>
-    public ReadOnlySpan<DirtyRect> IncomingDirty => _incoming;
+    public int IncomingDirtySlotCount => IncomingSlotCount;
 
     /// <summary>
     /// chunk 当前调度状态。
@@ -143,7 +143,7 @@ public sealed class Chunk
             throw new ArgumentOutOfRangeException(nameof(slot));
         }
 
-        _incoming[slot] = _incoming[slot].Union(rect);
+        _incoming[slot].Rect = _incoming[slot].Rect.Union(rect);
         if (!rect.IsEmpty)
         {
             State = ChunkState.Awake;
@@ -158,13 +158,21 @@ public sealed class Chunk
         DirtyRect next = WorkingDirty;
         for (int i = 0; i < _incoming.Length; i++)
         {
-            next = next.Union(_incoming[i]);
+            next = next.Union(_incoming[i].Rect);
         }
 
         CurrentDirty = next;
         WorkingDirty = DirtyRect.Empty;
-        Array.Fill(_incoming, DirtyRect.Empty);
+        ClearIncomingDirty();
         State = CurrentDirty.IsEmpty ? ChunkState.Sleeping : ChunkState.Awake;
+    }
+
+    /// <summary>
+    /// 读取指定 KeepAlive 入站槽的 dirty rectangle。
+    /// </summary>
+    public DirtyRect GetIncomingDirty(int slot)
+    {
+        return (uint)slot >= IncomingSlotCount ? throw new ArgumentOutOfRangeException(nameof(slot)) : _incoming[slot].Rect;
     }
 
     /// <summary>
@@ -174,6 +182,14 @@ public sealed class Chunk
     {
         CurrentDirty = DirtyRect.Empty;
         WorkingDirty = DirtyRect.Empty;
-        Array.Fill(_incoming, DirtyRect.Empty);
+        ClearIncomingDirty();
+    }
+
+    private void ClearIncomingDirty()
+    {
+        for (int i = 0; i < _incoming.Length; i++)
+        {
+            _incoming[i].Rect = DirtyRect.Empty;
+        }
     }
 }
