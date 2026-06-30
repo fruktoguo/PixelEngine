@@ -264,7 +264,7 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 - [x] `interface ICameraApi`/`IInputApi`/`IAudioApi`/`IGameTime`（plan/08/02/10，架构 §4/§10）
 - [~] 事件订阅：`IEventBus.Subscribe<TEvent>` + `IDisposable` 句柄；引擎相位 1 排空 ring buffer 分发（plan/02，架构 §3.1）
 - [x] 只读值类型：`MaterialId`/`CellView`/`MaterialInfo`/`RaycastHit`/`BodyHandle`/`BodyTransform`/`CharacterHandle`/`CharacterState`/`ParticleSpawnDesc`/`RectF`（blittable `readonly struct`，零分配）
-- [ ] `internal ScriptCommandQueue`：blittable 命令 struct + per-thread 缓冲（`ArrayPool`/POH，零分配）；Hosting 在各相位安全窗口 flush（§3.3，架构 §3.3）
+- [~] `internal ScriptCommandQueue`：blittable 命令 struct + per-thread 缓冲（`ArrayPool`/POH，零分配）；Hosting 在各相位安全窗口 flush（§3.3，架构 §3.3）
 
 ### 4.4 Roslyn 热重载（§3.4）
 - [ ] `internal sealed class ScriptCompiler`：`CSharpCompilation` + 引擎公开程序集 `MetadataReference` + BCL 参考程序集；`Emit` 到 `MemoryStream`；捕获并上报 `Diagnostics`（编译失败保留旧程序集，§3.4）
