@@ -205,6 +205,7 @@ public sealed class EngineBuilder
             SimHz = options.SimHz,
         };
         EngineOverloadController overload = new(options.Overload);
+        EngineCommandQueue commands = new();
         EngineContext context = new(options, jobs, clock, events, counters);
         context.RegisterService(context);
         context.RegisterService(options);
@@ -213,7 +214,8 @@ public sealed class EngineBuilder
         context.RegisterService(EngineServiceRole.EventBus, events);
         context.RegisterService(EngineServiceRole.Diagnostics, counters);
         context.RegisterService(overload);
-        EnginePhasePipeline phases = new();
+        context.RegisterService(commands);
+        EnginePhasePipeline phases = new(commands);
         for (int i = 0; i < _phaseActions.Count; i++)
         {
             phases.Register(_phaseActions[i].Phase, _phaseActions[i].Action);
