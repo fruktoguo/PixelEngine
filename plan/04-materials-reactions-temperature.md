@@ -426,12 +426,12 @@ public sealed class TemperatureField
 
 ### 4.8 温度场（架构 §7.5 / §12.5 / §4.3）
 
-- [ ] `TemperatureField`：每 chunk 16×16（=64/`TempFieldDownscale`）`Half`/`float` 子块 + ping-pong `_temp`/`_tempScratch`（不违反不变式 #3，§3.9）。
-- [ ] `ConductStep`：5-point stencil，`HeatConduct` 概率传导 + `HeatCapacity` 加权；SIMD（Avx2/Avx512F/Avx10v2 + `Vector<T>`）+ scalar fallback，`gate on Vector512.IsHardwareAccelerated`（架构 §12.5）。
-- [ ] 跨 chunk 温度 halo 只读传导；温度 pass 处帧相位 [5]（与 CA [4] 分离，架构 §3.3）。
-- [ ] `ApplyPhaseTransitions`：阈值相变 melt/freeze/boil（`MaterialDef` 阈值+目标，**不进反应表**，架构 §7.4），写 Material、打 parity、标 dirty/KeepAlive，每 cell 每 pass 至多一次。
-- [ ] `AddHeat(worldX, worldY, deltaC)` 映射降采样 cell 并按 `HeatCapacity` 加权（热源：burning / EmitHeat）。
-- [ ] 每 N 帧降频；作为 §4.3 第一级降级（降 N → 退化为仅接触式火传播），向 Core 降级控制器注册（架构 §4.3 / §7.5 / `00 §7`）。
+- [x] `TemperatureField`：每 chunk 16×16（=64/`TempFieldDownscale`）`Half`/`float` 子块 + ping-pong `_temp`/`_tempScratch`（不违反不变式 #3，§3.9）。
+- [x] `ConductStep`：5-point stencil，`HeatConduct` 概率传导 + `HeatCapacity` 加权；SIMD（Avx2/Avx512F/Avx10v2 + `Vector<T>`）+ scalar fallback，`gate on Vector512.IsHardwareAccelerated`（架构 §12.5）。
+- [x] 跨 chunk 温度 halo 只读传导；温度 pass 处帧相位 [5]（与 CA [4] 分离，架构 §3.3）。
+- [x] `ApplyPhaseTransitions`：阈值相变 melt/freeze/boil（`MaterialDef` 阈值+目标，**不进反应表**，架构 §7.4），写 Material、打 parity、标 dirty/KeepAlive，每 cell 每 pass 至多一次。
+- [x] `AddHeat(worldX, worldY, deltaC)` 映射降采样 cell，并提供按 `HeatCapacity` 加权的热源入口（热源：burning / EmitHeat）。
+- [x] 每 N 帧降频；作为 §4.3 第一级降级 seam（降 N → 退化为仅接触式火传播），暴露给后续 Hosting 降级编排（架构 §4.3 / §7.5 / `00 §7`）。
 
 ### 4.9 数据格式契约（schema 在此，加载在 Content）
 
@@ -453,7 +453,7 @@ public sealed class TemperatureField
 - [x] parity 防重：同对反应一帧至多一次，跨 pass barrier 后另一侧因 parity 跳过（单线程 oracle 比对统计性质，架构 §5.3 / §16.2）。
 - [x] 反应写入恒在 32px halo 内、跨界触发 KeepAlive 唤醒驻留邻居 chunk（雪崩跨界正确传播，架构 §5.5 / §5.8）。
 - [x] 接触式火传播在**关闭温度场**时正常工作（接触点燃 / 燃烧 / burnout 链），不依赖热场（架构 §7.5）。
-- [ ] 温度场：ICE→WATR→STEAM 相变链正确（阈值 + 目标，不经反应表）；SIMD stencil 有 scalar fallback 且结果一致；每 N 帧降频与 §4.3 一级降级生效、退化为接触火传播后仍跑（架构 §7.5 / §4.3）。
+- [x] 温度场：ICE→WATR→STEAM 相变链正确（阈值 + 目标，不经反应表）；SIMD stencil 有 scalar fallback 且结果一致；每 N 帧降频与 §4.3 一级降级生效、退化为接触火传播后仍跑（架构 §7.5 / §4.3）。
 - [x] custom-update：`HasCustomUpdate` 门控仅对声明材质调用委托，委托内写入遵守 parity/halo/dirty/KeepAlive（架构 §7.4）。
 - [ ] 稳态帧零托管堆分配（反应 / 温度 pass 无 LINQ / 闭包 / 装箱 / 字符串；BenchmarkDotNet 内存诊断确认，`AGENTS.md §3`）。
 - [ ] 与不变式 #3/#4/#8/#9 及技术栈 `00` 无冲突（自审通过）。
