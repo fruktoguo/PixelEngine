@@ -41,7 +41,8 @@ public sealed class WorldSaveServiceTests
             savedMaterials,
             worldSeed: 1234,
             gameTimeTicks: 5678,
-            playerStateBlob: new byte[] { 7, 8, 9 });
+            playerStateBlob: new byte[] { 7, 8, 9 },
+            isFrameBoundary: true);
 
         service.SaveAll(saveContext, state, save.Path);
 
@@ -96,7 +97,7 @@ public sealed class WorldSaveServiceTests
         chunks.Add(chunk);
         FakeWorldStateBridge state = new([], []);
         service.SaveAll(
-            new WorldSaveContext(chunks, residency, temperature, materials, 1, 2, ReadOnlyMemory<byte>.Empty),
+            new WorldSaveContext(chunks, residency, temperature, materials, 1, 2, ReadOnlyMemory<byte>.Empty, isFrameBoundary: true),
             state,
             save.Path);
         File.Delete(Path.Combine(save.Path, "regions", "r.0.0.rgn"));
@@ -129,7 +130,7 @@ public sealed class WorldSaveServiceTests
             [new FreeParticleSnapshot(0, 0, 0, 0, 1, 0, 1)],
             [RigidBody(material: [1])]);
         service.SaveAll(
-            new WorldSaveContext(sourceChunks, sourceResidency, sourceTemperature, savedMaterials, 1, 2, ReadOnlyMemory<byte>.Empty),
+            new WorldSaveContext(sourceChunks, sourceResidency, sourceTemperature, savedMaterials, 1, 2, ReadOnlyMemory<byte>.Empty, isFrameBoundary: true),
             state,
             save.Path);
 
@@ -146,6 +147,31 @@ public sealed class WorldSaveServiceTests
         Assert.Equal(0, loadedChunk.Material[0]);
         Assert.Equal((ushort)0, restored.RestoredParticles[0].Material);
         Assert.Equal([0], restored.RestoredBodies[0].Material.ToArray());
+    }
+
+    /// <summary>
+    /// 验证 SaveAll 拒绝非帧边界上下文，避免读取半更新世界。
+    /// </summary>
+    [Fact]
+    public void SaveAllRejectsNonFrameBoundaryContext()
+    {
+        using TempWorldDirectory save = TempWorldDirectory.Create();
+        WorldSaveService service = new();
+        MaterialTable materials = Materials(("empty", CellType.Empty));
+        WorldSaveContext context = new(
+            new ResidentChunkMap(),
+            new ResidencyTable(),
+            new TemperatureField(),
+            materials,
+            worldSeed: 1,
+            gameTimeTicks: 2,
+            playerStateBlob: ReadOnlyMemory<byte>.Empty,
+            isFrameBoundary: false);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+            service.SaveAll(context, new FakeWorldStateBridge([], []), save.Path));
+
+        Assert.Contains("相位 2", exception.Message, StringComparison.Ordinal);
     }
 
     private static RigidBodySnapshot RigidBody(ushort[] material)

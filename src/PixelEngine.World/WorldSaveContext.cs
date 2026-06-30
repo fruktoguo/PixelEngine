@@ -17,7 +17,8 @@ public sealed class WorldSaveContext
         MaterialTable materials,
         ulong worldSeed,
         long gameTimeTicks,
-        ReadOnlyMemory<byte> playerStateBlob)
+        ReadOnlyMemory<byte> playerStateBlob,
+        bool isFrameBoundary)
     {
         ArgumentNullException.ThrowIfNull(chunks);
         ArgumentNullException.ThrowIfNull(residency);
@@ -35,6 +36,7 @@ public sealed class WorldSaveContext
         WorldSeed = worldSeed;
         GameTimeTicks = gameTimeTicks;
         PlayerStateBlob = playerStateBlob;
+        IsFrameBoundary = isFrameBoundary;
     }
 
     /// <summary>
@@ -71,4 +73,9 @@ public sealed class WorldSaveContext
     /// 宿主提供的不透明玩家状态。
     /// </summary>
     public ReadOnlyMemory<byte> PlayerStateBlob { get; }
+
+    /// <summary>
+    /// 调用方确认当前处于相位 2 或专门暂停点，可读取一致快照。
+    /// </summary>
+    public bool IsFrameBoundary { get; }
 }
