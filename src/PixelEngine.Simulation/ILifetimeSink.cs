@@ -13,11 +13,11 @@ public interface ILifetimeSink
     /// <summary>
     /// 通知一个 cell 的 lifetime 已递减到 0。实现方可写材质、flag、dirty 或粒子请求。
     /// </summary>
-    void OnExpired(ref NeighborWindow window, int wx, int wy, ushort material);
+    void OnExpired(ref NeighborWindow window, int wx, int wy, ushort material, byte parityBit);
 
     private sealed class NullLifetimeSink : ILifetimeSink
     {
-        public void OnExpired(ref NeighborWindow window, int wx, int wy, ushort material)
+        public void OnExpired(ref NeighborWindow window, int wx, int wy, ushort material, byte parityBit)
         {
         }
     }

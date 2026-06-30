@@ -75,6 +75,26 @@ public sealed class ReactionEngineTests
     }
 
     /// <summary>
+    /// 验证接触式火传播可作为普通反应工作，Fire 产物会被点燃为 burning cell。
+    /// </summary>
+    [Fact]
+    public void ContactFireReactionMarksFireOutputBurning()
+    {
+        ReactionSetup setup = CreateSetup(Reaction(Fire, Wood, Fire, Fire, 255));
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Set(center, 10, 10, Fire);
+        Set(center, 11, 10, Wood);
+        NeighborWindow window = new(source, center.Coord);
+
+        bool reacted = setup.Engine.TryReact(ref window, 10, 10, Fire, 11, 10, Wood, CellFlags.Parity, randomByte: 0);
+
+        Assert.True(reacted);
+        Assert.Equal(Fire, Get(center, 11, 10));
+        Assert.True(CellFlags.Has(GetFlags(center, 11, 10), CellFlags.Burning));
+        Assert.Equal(5, GetLifetime(center, 11, 10));
+    }
+
+    /// <summary>
     /// 验证 StepCa 成功反应后由 ChunkUpdater 标记 dirty 与跨界 KeepAlive。
     /// </summary>
     [Fact]

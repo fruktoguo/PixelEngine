@@ -57,7 +57,15 @@ public sealed class ReactionEngine(MaterialTable materials, ReactionTable reacti
     {
         window.SetMaterial(wx, wy, material);
         window.SetLifetime(wx, wy, DefaultLifetimeByte(material));
-        window.SetFlags(wx, wy, CellFlags.SetParity(window.GetFlags(wx, wy), parityBit));
+        byte flags = window.GetFlags(wx, wy);
+        flags = IsFireMaterial(material) ? CellFlags.Set(flags, CellFlags.Burning) : CellFlags.Clear(flags, CellFlags.Burning);
+        window.SetFlags(wx, wy, CellFlags.SetParity(flags, parityBit));
+    }
+
+    private bool IsFireMaterial(ushort material)
+    {
+        return _materials.Hot.Type[material] == CellType.Fire ||
+            (_materials.Hot.PropertyFlags[material] & MaterialProperty.Fire) != 0;
     }
 
     private void EmitSideEffects(in Reaction reaction, int wx1, int wy1, int wx2, int wy2)

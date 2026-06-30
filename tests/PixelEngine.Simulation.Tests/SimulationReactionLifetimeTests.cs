@@ -154,7 +154,7 @@ public sealed class SimulationReactionLifetimeTests
 
         public (int X, int Y, ushort Material) Last { get; private set; }
 
-        public void OnExpired(ref NeighborWindow window, int wx, int wy, ushort material)
+        public void OnExpired(ref NeighborWindow window, int wx, int wy, ushort material, byte parityBit)
         {
             Count++;
             Last = (wx, wy, material);
