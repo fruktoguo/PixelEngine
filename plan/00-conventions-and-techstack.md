@@ -99,7 +99,7 @@ PixelEngine.sln
 
 - [x] `Directory.Build.props`：统一 `TargetFramework=net10.0`、`LangVersion`、`Nullable`、`ImplicitUsings`、分析器、`Deterministic`、符号包。
 - [x] `Directory.Packages.props`：中央包版本管理（CPM，`ManagePackageVersionsCentrally=true`），所有版本集中锁定。
-- [ ] 热路径项目（Core/Simulation/Physics/Interop/Rendering）开 `AllowUnsafeBlocks`，并把零分配/SIMD 相关分析器提升为 error。
+- [x] 热路径项目（Core/Simulation/Physics/Interop/Rendering）开 `AllowUnsafeBlocks`，并把零分配/SIMD 相关分析器提升为 error。
 
 ## 7. 跨切面约定
 
@@ -112,8 +112,8 @@ PixelEngine.sln
 ## 8. 本文件验收清单
 
 - [ ] 所有其它 plan 文档的「技术栈」段不与本表冲突。
-- [ ] 解决方案结构与 §5 一致，依赖方向被 `.csproj` ProjectReference 强制（无反向依赖）。
-- [ ] `Directory.Build.props` / `Directory.Packages.props` 建立并被所有项目继承。
+- [x] 解决方案结构与 §5 一致，依赖方向被 `.csproj` ProjectReference 强制（无反向依赖）。
+- [x] `Directory.Build.props` / `Directory.Packages.props` 建立并被所有项目继承。
 - [ ] 六个 RID 的发行管线在 `plan/15` 落实；Box2D dual-build 在 `plan/01`/`plan/06` 落实。
 
 ## 9. 提交节点

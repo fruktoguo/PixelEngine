@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsHotPath>true</IsHotPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/PixelEngine.Core/PixelEngine.Core.csproj" />
+    <ProjectReference Include="../../src/PixelEngine.Simulation/PixelEngine.Simulation.csproj" />
+    <ProjectReference Include="../../src/PixelEngine.Physics/PixelEngine.Physics.csproj" />
+    <ProjectReference Include="../../src/PixelEngine.Serialization/PixelEngine.Serialization.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\PixelEngine.Core\PixelEngine.Core.csproj" />
+    <ProjectReference Include="..\PixelEngine.Simulation\PixelEngine.Simulation.csproj" />
+    <ProjectReference Include="..\PixelEngine.Serialization\PixelEngine.Serialization.csproj" />
+  </ItemGroup>
+</Project>

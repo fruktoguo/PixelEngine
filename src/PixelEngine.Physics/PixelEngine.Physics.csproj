@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsHotPath>true</IsHotPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PixelEngine.Core\PixelEngine.Core.csproj" />
+    <ProjectReference Include="..\PixelEngine.Interop\PixelEngine.Interop.csproj" />
+    <ProjectReference Include="..\PixelEngine.Simulation\PixelEngine.Simulation.csproj" />
+  </ItemGroup>
+</Project>

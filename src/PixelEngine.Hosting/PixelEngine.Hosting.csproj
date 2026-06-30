@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\PixelEngine.Core\PixelEngine.Core.csproj" />
+    <ProjectReference Include="..\PixelEngine.Interop\PixelEngine.Interop.csproj" />
+    <ProjectReference Include="..\PixelEngine.Simulation\PixelEngine.Simulation.csproj" />
+    <ProjectReference Include="..\PixelEngine.Content\PixelEngine.Content.csproj" />
+    <ProjectReference Include="..\PixelEngine.Serialization\PixelEngine.Serialization.csproj" />
+    <ProjectReference Include="..\PixelEngine.World\PixelEngine.World.csproj" />
+    <ProjectReference Include="..\PixelEngine.Physics\PixelEngine.Physics.csproj" />
+    <ProjectReference Include="..\PixelEngine.Rendering\PixelEngine.Rendering.csproj" />
+    <ProjectReference Include="..\PixelEngine.Audio\PixelEngine.Audio.csproj" />
+    <ProjectReference Include="..\PixelEngine.Scripting\PixelEngine.Scripting.csproj" />
+    <ProjectReference Include="..\PixelEngine.Editor\PixelEngine.Editor.csproj" />
+  </ItemGroup>
+</Project>
