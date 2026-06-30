@@ -57,6 +57,7 @@ public sealed class Engine : IDisposable
     {
         ThrowIfShutdown();
         State = EngineRunState.Running;
+        ApplyOverloadPolicy(realDeltaSeconds);
         FrameTiming timing = Context.Clock.BeginFrame(realDeltaSeconds);
         Phases.Execute(this, timing);
         Context.Counters.SimHz = Context.Clock.SimHz;
@@ -94,5 +95,15 @@ public sealed class Engine : IDisposable
     private void ThrowIfShutdown()
     {
         ObjectDisposedException.ThrowIf(State == EngineRunState.Shutdown, this);
+    }
+
+    private void ApplyOverloadPolicy(double realDeltaSeconds)
+    {
+        EngineOverloadController overload = Context.GetService<EngineOverloadController>();
+        EngineQualityTier tier = overload.SubmitFrame(realDeltaSeconds * 1000.0);
+        Context.SetQualityTier(tier);
+        Context.Clock.SimHz = tier >= EngineQualityTier.Sim30Hz
+            ? PixelEngine.Core.EngineConstants.SimHzDownscaled
+            : Context.Options.SimHz;
     }
 }

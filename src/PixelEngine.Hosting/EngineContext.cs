@@ -10,7 +10,9 @@ namespace PixelEngine.Hosting;
 /// </summary>
 public sealed class EngineContext
 {
+    private const int ServiceRoleCount = 11;
     private readonly Dictionary<Type, object> _services = [];
+    private readonly Type?[] _serviceRoles = new Type?[ServiceRoleCount];
 
     /// <summary>
     /// 创建引擎上下文。
@@ -84,6 +86,17 @@ public sealed class EngineContext
     }
 
     /// <summary>
+    /// 注册指定角色的真实后端服务，并标记该能力可用。
+    /// </summary>
+    public void RegisterService<TService>(EngineServiceRole role, TService service)
+        where TService : notnull
+    {
+        ValidateRole(role);
+        RegisterService(service);
+        _serviceRoles[(int)role] = typeof(TService);
+    }
+
+    /// <summary>
     /// 尝试获取指定服务。
     /// </summary>
     public bool TryGetService<TService>(out TService service)
@@ -108,5 +121,32 @@ public sealed class EngineContext
         return TryGetService(out TService service)
             ? service
             : throw new InvalidOperationException($"服务 {typeof(TService).FullName} 尚未注册。");
+    }
+
+    /// <summary>
+    /// 判断指定脚本/Demo 服务角色是否已有真实后端。
+    /// </summary>
+    public bool IsServiceAvailable(EngineServiceRole role)
+    {
+        ValidateRole(role);
+        return _serviceRoles[(int)role] is not null;
+    }
+
+    /// <summary>
+    /// 读取指定服务角色的可用性。
+    /// </summary>
+    public EngineServiceAvailability GetServiceAvailability(EngineServiceRole role)
+    {
+        ValidateRole(role);
+        Type? serviceType = _serviceRoles[(int)role];
+        return new EngineServiceAvailability(role, serviceType is not null, serviceType);
+    }
+
+    private static void ValidateRole(EngineServiceRole role)
+    {
+        if ((uint)role >= ServiceRoleCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(role), role, "未知服务角色。");
+        }
     }
 }

@@ -26,6 +26,7 @@ public sealed class EngineBuilder
     private string? _startScene;
     private double _simHz = EngineConstants.DefaultSimHz;
     private int _eventCapacityPerChannel = EngineOptions.DefaultEventCapacityPerChannel;
+    private EngineOverloadOptions _overload = EngineOverloadOptions.CreateDefault();
     private readonly List<(EnginePhase Phase, EnginePhaseAction Action)> _phaseActions = [];
 
     /// <summary>
@@ -156,6 +157,15 @@ public sealed class EngineBuilder
     }
 
     /// <summary>
+    /// 配置过载降级策略。
+    /// </summary>
+    public EngineBuilder WithOverloadPolicy(double frameBudgetMs, int sustainWindow)
+    {
+        _overload = new EngineOverloadOptions(frameBudgetMs, sustainWindow);
+        return this;
+    }
+
+    /// <summary>
     /// 注册指定运行时相位的同步 hook。
     /// </summary>
     public EngineBuilder OnPhase(EnginePhase phase, EnginePhaseAction action)
@@ -184,7 +194,8 @@ public sealed class EngineBuilder
             _contentRoot,
             _startScene,
             _simHz,
-            _eventCapacityPerChannel);
+            _eventCapacityPerChannel,
+            _overload);
         GCSettings.LatencyMode = options.GcMode.ToLatencyMode();
         JobSystem jobs = new(options.WorkerCount);
         FrameClock clock = new(options.SimHz);
@@ -193,13 +204,15 @@ public sealed class EngineBuilder
         {
             SimHz = options.SimHz,
         };
+        EngineOverloadController overload = new(options.Overload);
         EngineContext context = new(options, jobs, clock, events, counters);
         context.RegisterService(context);
         context.RegisterService(options);
         context.RegisterService(jobs);
         context.RegisterService(clock);
-        context.RegisterService(events);
-        context.RegisterService(counters);
+        context.RegisterService(EngineServiceRole.EventBus, events);
+        context.RegisterService(EngineServiceRole.Diagnostics, counters);
+        context.RegisterService(overload);
         EnginePhasePipeline phases = new();
         for (int i = 0; i < _phaseActions.Count; i++)
         {
