@@ -210,13 +210,13 @@ native（Box2D dual-build 脚手架）：
 - [x] 新增 `native/CMakePresets.json`：6 RID 预设（win/linux/osx × x64/arm64）+ arm64 交叉 toolchain + `osx` 多架构，产物输出 `native/out/<rid>/{shared,static}/`
 - [x] 新增 `tools/build-native.ps1` 与 `tools/build-native.sh`：参数化 RID 驱动 `cmake --preset` + `--build`，收集动态库到 `runtimes/<rid>/native/`、静态库到 `native/out/<rid>/static/`
 - [x] 新增 `native/PixelEngine.Native.targets`：R2R/CoreCLR 动态路径拷 `.dll/.so/.dylib`；NativeAOT 静态路径 `<NativeLibrary Include>`（RID-gated）——仅入口骨架，真实库名 plan/06 接
-- [ ] 新增 `tools/verify-publish.ps1`：本地复现 R2R 与 NativeAOT publish 冒烟，便于 CI 前自检
+- [x] 新增 `tools/verify-publish.ps1`：本地复现 R2R 与 NativeAOT publish 冒烟，便于 CI 前自检
 
 CI：
 
-- [ ] 新增 `.github/workflows/ci.yml` `build-test` job：6-RID 矩阵 + 对应 runner，先 `tools/build-native` 再 `dotnet build -c Release`，原生架构 runner 跑 `dotnet test`，交叉 arm 格 build-only（注明）
-- [ ] 在 `ci.yml` 加 `verify-publish` job：Demo 同时做 CoreCLR+R2R（动态）与 NativeAOT（静态）publish + headless 冒烟运行，覆盖架构 R5 两条路径
-- [ ] `ci.yml` 设 `env: CI=true`，使 `TreatWarningsAsErrors` 与确定性构建在 CI 生效
+- [x] 新增 `.github/workflows/ci.yml` `build-test` job：6-RID 矩阵 + 对应 runner，先 `tools/build-native` 再 `dotnet build -c Release`，原生架构 runner 跑 `dotnet test`，交叉 arm 格 build-only（注明）
+- [x] 在 `ci.yml` 加 `verify-publish` job：Demo 同时做 CoreCLR+R2R（动态）与 NativeAOT（静态）publish + headless 冒烟运行，覆盖架构 R5 两条路径
+- [x] `ci.yml` 设 `env: CI=true`，使 `TreatWarningsAsErrors` 与确定性构建在 CI 生效
 
 冒烟验证（本机）：
 
@@ -240,7 +240,7 @@ CI：
 - [x] `native/PixelEngine.Native.targets` 仅被 `Interop` 导入，R2R 动态拷贝与 AOT 静态链两条分支均有入口（真实库名待 plan/06，骨架完整）
 - [x] 已存在文件全部纳入：`.gitignore` 覆盖产物与 `native/out/`、`runtimes/`；`.editorconfig` 含热路径分析器 `error` 升级；`LICENSE`(MIT)/`AGENTS.md` 未被改动
 - [x] `.vscode/extensions.json` 推荐 C# Dev Kit 与 CMake Tools；`tools/` 构建脚本目录存在
-- [ ] `.github/workflows/ci.yml` 存在并定义 6-RID 矩阵 build+test 与 R2R/AOT 双路径 publish 冒烟两段（覆盖架构 R5）
+- [x] `.github/workflows/ci.yml` 存在并定义 6-RID 矩阵 build+test 与 R2R/AOT 双路径 publish 冒烟两段（覆盖架构 R5）
 - [x] `dotnet build PixelEngine.sln -c Release` 在本机零警告通过（全空项目）
 - [x] `dotnet test` 四个测试项目全部通过
 - [x] `dotnet run --project demo/PixelEngine.Demo -c Release` 起一个空窗口或打印 banner 并以 0 退出
@@ -263,6 +263,6 @@ CI：
 - [x] 节点 1：仓库工程化骨架。提交 `global.json`、`nuget.config`、`Directory.Build.props/.targets`、`Directory.Packages.props`、`.gitattributes`、`.vscode/`、补全的 `.gitignore`/`.editorconfig`。提交信息：`build(core): 建立全局 MSBuild 属性、CPM 与工程化配置`
 - [x] 节点 2：解决方案与全部空项目。提交 `PixelEngine.sln` 与 18 个 `.csproj` 骨架、`EngineConstants` 空壳、Demo/tests/bench 最小可运行壳；本机 `dotnet build`/`test`/`run` 冒烟通过。提交信息：`build(core): 建立解决方案与全部项目骨架及依赖方向`
 - [x] 节点 3：native Box2D dual-build 脚手架。提交 Box2D v3.1.1 submodule、`native/CMakeLists.txt`、`CMakePresets.json`、`tools/build-native.*`、`PixelEngine.Native.targets`。提交信息：`build(physics): 搭建 Box2D v3.1.1 vendoring 与 CMake dual-build 脚手架`
-- [ ] 节点 4：CI 管线。提交 `.github/workflows/ci.yml`（6-RID 矩阵 + R2R/AOT 双路径验证）与 `tools/verify-publish.ps1`。提交信息：`build(core): 接入 6-RID CI 与 R2R/NativeAOT 双路径发布验证`
+- [x] 节点 4：CI 管线。提交 `.github/workflows/ci.yml`（6-RID 矩阵 + R2R/AOT 双路径验证）与 `tools/verify-publish.ps1`。提交信息：`build(core): 接入 6-RID CI 与 R2R/NativeAOT 双路径发布验证`
 
 每个节点完成并自测后再勾选；遇阻塞标 `- [!] 阻塞：原因` 并上报，不前进（AGENTS.md §2/§5）。

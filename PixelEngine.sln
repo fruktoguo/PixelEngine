@@ -50,6 +50,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{4B4D74E2-72E9-4E0F-9B1A-8605B6485E5C}"
 	ProjectSection(SolutionItems) = preProject
 		.github\.gitkeep = .github\.gitkeep
+		.github\workflows\ci.yml = .github\workflows\ci.yml
 		.editorconfig = .editorconfig
 		.gitattributes = .gitattributes
 		.gitignore = .gitignore
@@ -69,6 +70,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{4B4D74E2
 		tools\build-native.ps1 = tools\build-native.ps1
 		tools\build-native.sh = tools\build-native.sh
 		tools\.gitkeep = tools\.gitkeep
+		tools\verify-publish.ps1 = tools\verify-publish.ps1
 	EndProjectSection
 EndProject
 Global

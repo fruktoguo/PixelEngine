@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  CI: true
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-test:
+    name: build-test (${{ matrix.rid }}${{ matrix.build_only == 'true' && ', build-only' || '' }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            runner: windows-latest
+            build_only: 'false'
+          - rid: win-arm64
+            runner: windows-latest
+            build_only: 'true'
+          - rid: linux-x64
+            runner: ubuntu-latest
+            build_only: 'false'
+          - rid: linux-arm64
+            runner: ubuntu-24.04-arm
+            build_only: 'false'
+          - rid: osx-x64
+            runner: macos-15-intel
+            build_only: 'false'
+          - rid: osx-arm64
+            runner: macos-14
+            build_only: 'false'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Linux arm64 cross toolchain
+        if: matrix.rid == 'linux-arm64'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Build native
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tools/build-native.ps1 -Rid ${{ matrix.rid }} -Configuration Release
+
+      - name: Build native
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash ./tools/build-native.sh --rid "${{ matrix.rid }}" --configuration Release
+
+      - name: Build solution
+        shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
+        run: dotnet build PixelEngine.sln -c Release
+
+      - name: Test solution
+        if: matrix.build_only != 'true'
+        shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
+        run: dotnet test PixelEngine.sln -c Release --no-build
+
+  verify-publish:
+    name: verify-publish (win-x64)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build native
+        shell: pwsh
+        run: ./tools/build-native.ps1 -Rid win-x64 -Configuration Release
+
+      - name: Verify publish
+        shell: pwsh
+        run: ./tools/verify-publish.ps1 -Rid win-x64
