@@ -82,10 +82,10 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [ ] 脚本服务后端聚合:`IWorldAccess`/`IParticleService`/`IPhysicsService`/`IMaterialRegistry`/`ICamera`/`IInput`/`IEventBus`/`IAudioService`/`ISceneService`/`IDiagnostics` 的实现注入(plan/11 契约的后端)。
 - [x] 写操作延迟命令队列:脚本/玩法的世界写入入队,在正确相位 flush(配合 plan/11 相位安全模型)。
 - [ ] `Scene` 模型 + `ISceneService`:加载/卸载/切换;从存档(plan/07)或程序化生成构建起始世界。
-- [ ] 项目模型:内容根、materials/reactions、资产、起始场景引用;`EngineBuilder` 装载。
+- [x] 项目模型:内容根、materials/reactions、资产、起始场景引用;`EngineBuilder` 装载。
 - [ ] Play/Edit/Step 三态机 + 进入 Play 前世界快照、退出回滚(plan/07 快照),脚本生命周期协调(plan/11、plan/12)。
 - [ ] **headless 模式**:无窗口/渲染/音频,跑 Core+Sim+Physics+World,固定步数驱动(供 plan/14)。
-- [ ] 帧节奏与 `FrameClock`(plan/02)对接:固定 dt、时间膨胀、sim/render 解耦的频率管理。
+- [x] 帧节奏与 `FrameClock`(plan/02)对接:固定 dt、时间膨胀、sim/render 解耦的频率管理。
 - [ ] 公开 API 全部中文 XML 文档注释(脚本 IntelliSense,plan/11/00 §7)。
 
 ## 5. 验收标准

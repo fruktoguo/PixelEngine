@@ -28,6 +28,7 @@ public sealed class EngineBuilder
     private int _eventCapacityPerChannel = EngineOptions.DefaultEventCapacityPerChannel;
     private EngineOverloadOptions _overload = EngineOverloadOptions.CreateDefault();
     private readonly List<(EnginePhase Phase, EnginePhaseAction Action)> _phaseActions = [];
+    private readonly List<SceneDescriptor> _scenes = [];
 
     /// <summary>
     /// 配置窗口尺寸。
@@ -139,6 +140,33 @@ public sealed class EngineBuilder
     }
 
     /// <summary>
+    /// 加载项目模型中的内容根、起始场景与场景列表。
+    /// </summary>
+    public EngineBuilder WithProject(EngineProject project)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        _contentRoot = project.ContentRoot;
+        _startScene = project.StartScene;
+        _scenes.Clear();
+        foreach (SceneDescriptor scene in project.Scenes)
+        {
+            _scenes.Add(scene);
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// 注册项目中的一个场景。
+    /// </summary>
+    public EngineBuilder AddScene(SceneDescriptor scene)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        _scenes.Add(scene);
+        return this;
+    }
+
+    /// <summary>
     /// 配置固定 sim 频率，目前支持 60Hz 与 30Hz。
     /// </summary>
     public EngineBuilder WithSimHz(double simHz)
@@ -206,6 +234,7 @@ public sealed class EngineBuilder
         };
         EngineOverloadController overload = new(options.Overload);
         EngineCommandQueue commands = new();
+        SceneService scenes = BuildSceneService(options);
         EngineContext context = new(options, jobs, clock, events, counters);
         context.RegisterService(context);
         context.RegisterService(options);
@@ -215,6 +244,8 @@ public sealed class EngineBuilder
         context.RegisterService(EngineServiceRole.Diagnostics, counters);
         context.RegisterService(overload);
         context.RegisterService(commands);
+        context.RegisterService<ISceneService>(EngineServiceRole.SceneService, scenes);
+        context.RegisterService(scenes);
         EnginePhasePipeline phases = new(commands);
         for (int i = 0; i < _phaseActions.Count; i++)
         {
@@ -223,5 +254,26 @@ public sealed class EngineBuilder
 
         context.RegisterService(phases);
         return new Engine(context, phases);
+    }
+
+    private SceneService BuildSceneService(EngineOptions options)
+    {
+        SceneService service = new();
+        for (int i = 0; i < _scenes.Count; i++)
+        {
+            service.Register(_scenes[i]);
+        }
+
+        if (options.StartScene is not null && !service.TryGet(options.StartScene, out _))
+        {
+            service.Register(new SceneDescriptor(options.StartScene));
+        }
+
+        if (options.StartScene is not null)
+        {
+            _ = service.SwitchTo(options.StartScene);
+        }
+
+        return service;
     }
 }

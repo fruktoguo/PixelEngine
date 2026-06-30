@@ -65,6 +65,24 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>
+    /// headless 模式下按固定次数驱动 tick，供测试与基准使用。
+    /// </summary>
+    public void RunHeadlessTicks(int tickCount, double realDeltaSeconds = 0)
+    {
+        ThrowIfShutdown();
+        ArgumentOutOfRangeException.ThrowIfNegative(tickCount);
+        if (!Context.Options.Headless)
+        {
+            throw new InvalidOperationException("RunHeadlessTicks 只能在 headless 模式下调用。");
+        }
+
+        for (int i = 0; i < tickCount; i++)
+        {
+            _ = RunOneTick(realDeltaSeconds);
+        }
+    }
+
+    /// <summary>
     /// 关闭引擎并按生命周期顺序释放已装配资源。
     /// </summary>
     public void Shutdown()
