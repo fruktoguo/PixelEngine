@@ -435,10 +435,10 @@ public sealed class TemperatureField
 
 ### 4.9 数据格式契约（schema 在此，加载在 Content）
 
-- [ ] `materials.json` schema：§3.10 全字段（target/tag 用 name，`baseColor` BGRA8 归一，`HeatCapacity!=0`）。
-- [ ] `reactions.json` schema：input/output 支持具体 name 与 `[tag]`，`probability` 0-100，`flags` 字符串数组（§3.10）。
-- [ ] tag 声明 + 代表材质 representative 字段契约（§3.4 规则 3）。
-- [ ] 标注 DTO（`MaterialJson`/`ReactionJson`/`JsonSerializerContext`）与反序列化 / 展开 / name→id 分配实现归属 Content；内容由 plan/13 填 `content/`。
+- [x] `materials.json` schema：§3.10 全字段（target/tag 用 name，`baseColor` BGRA8 归一，`HeatCapacity!=0`）。
+- [x] `reactions.json` schema：input/output 支持具体 name 与 `[tag]`，`probability` 0-100，`flags` 字符串数组（§3.10）。
+- [x] tag 声明 + 代表材质 representative 字段契约（§3.4 规则 3）。
+- [x] 标注 DTO（`MaterialJson`/`ReactionJson`/`JsonSerializerContext`）与反序列化 / 展开 / name→id 分配实现归属 Content；内容由 plan/13 填 `content/`。
 
 ---
 
