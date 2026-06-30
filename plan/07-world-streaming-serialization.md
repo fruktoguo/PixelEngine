@@ -178,8 +178,8 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 - [x] `PersistentFlagMask`（const byte）= bit2(burning)；XML 注释列明 bit0 parity / bit1 settled-sleep / bit3 freefalling / bit4 rigid-owned 为瞬时位不入盘（架构 §7.1/§11.3）。（§3.6）
 - [x] `RleCodec`（static）：`EncodeU16(ReadOnlySpan<ushort>, IBufferWriter<byte>)`/`DecodeU16`、`EncodeU8`/`DecodeU8`；行程编码大片均匀区。（§3.6）
 - [x] `Lz4BlockCodec`（static，封装 K4os）：`Compress(ReadOnlySpan<byte>, IBufferWriter<byte>)`、`Decompress(ReadOnlySpan<byte>, Span<byte>)`，存未压缩长度便于预分配。（§3.6）
-- [ ] `ChunkBlobHeader`（struct）：magic、`FormatVersion`、`ChunkCoord`、各段未压缩长度、压缩标志。（§3.6/§3.9）
-- [ ] `ChunkCodec`（class）：`Encode(in ChunkSnapshot, IBufferWriter<byte>)`——Flags 先 `& PersistentFlagMask`，各段 RLE 后拼接再 LZ4；`Decode(ReadOnlySpan<byte>, ChunkSnapshot dst)`——LZ4 解→分段 RLE 解→瞬时位重置规则（parity 置异、settled/freefalling 清零）。（相位 11，§3.6）
+- [x] `ChunkBlobHeader`（struct）：magic、`FormatVersion`、`ChunkCoord`、各段未压缩长度、压缩标志。（§3.6/§3.9）
+- [x] `ChunkCodec`（class）：`Encode(in ChunkSnapshot, IBufferWriter<byte>)`——Flags 先 `& PersistentFlagMask`，各段 RLE 后拼接再 LZ4；`Decode(ReadOnlySpan<byte>, ChunkSnapshot dst)`——LZ4 解→分段 RLE 解→瞬时位重置规则（parity 置异、settled/freefalling 清零）。（相位 11，§3.6）
 
 ### 4.4 Serialization — material 重映射、manifest、迁移、磁盘（架构 §11.2/§11.3/§11.4）
 
