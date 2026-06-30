@@ -403,14 +403,14 @@ public sealed class TemperatureField
 
 ### 4.5 反应执行（不变式 #3 / #4，架构 §5.3 / §5.5 / §5.8 / §7.4）
 
-- [ ] `ReactionEngine.TryReact(ref CellCursor, in NeighborSet, ref ChunkWorkContext)`，在 plan/03 CA 相位 [4] per-cell 更新中调用（§3.6）。
-- [ ] 早退（`ReactionCount==0`）→ parity 防重（c/n 任一已本帧 parity 则跳过，架构 §5.3）→ 查表 → 概率（per-chunk RNG byte）→ 应用。
-- [ ] 应用：写 OutputA→c / OutputB→n；c/n 输入与产物**全打本帧 parity**（架构 §5.3）；置产物 `DefaultLifetime`；标 dirty；n 跨界则 KeepAlive 其 chunk（架构 §5.5）。
-- [ ] 写入恒在 von Neumann 距离 1（32px halo 内，无锁安全，架构 §5.8，注释引用）。
-- [ ] 双输出 / 定向「谁先扫到谁执行、另一侧 parity 跳过」防翻倍 / 防丢失（不变式 #4，架构 §7.4）。
-- [ ] 定向反应单 owner 切片 + 取向语义（产物 OutputA→cell / OutputB→邻居）（§3.6）。
-- [ ] `Fast` 反应先于普通反应裁决；每 cell 每帧至多一次反应（架构 §7.4）。
-- [ ] 副作用：`EmitHeat`→`AddHeat`；`SpawnParticle`→粒子抛射请求（plan/05）；`GeneratesSmoke`→产烟输出（§3.6）。
+- [x] `ReactionEngine.TryReact(ref CellCursor, in NeighborSet, ref ChunkWorkContext)`，在 plan/03 CA 相位 [4] per-cell 更新中调用（§3.6）。实现接入现有 `IReactionExecutor` / `NeighborWindow` seam。
+- [x] 早退（`ReactionCount==0`）→ parity 防重（c/n 任一已本帧 parity 则跳过，架构 §5.3）→ 查表 → 概率（per-chunk RNG byte）→ 应用。
+- [x] 应用：写 OutputA→c / OutputB→n；c/n 输入与产物**全打本帧 parity**（架构 §5.3）；置产物 `DefaultLifetime`；标 dirty；n 跨界则 KeepAlive 其 chunk（架构 §5.5）。
+- [x] 写入恒在 von Neumann 距离 1（32px halo 内，无锁安全，架构 §5.8，注释引用）。
+- [x] 双输出 / 定向「谁先扫到谁执行、另一侧 parity 跳过」防翻倍 / 防丢失（不变式 #4，架构 §7.4）。
+- [x] 定向反应单 owner 切片 + 取向语义（产物 OutputA→cell / OutputB→邻居）（§3.6）。
+- [x] `Fast` 反应先于普通反应裁决；每 cell 每帧至多一次反应（架构 §7.4）。
+- [x] 副作用：`EmitHeat`→`AddHeat`；`SpawnParticle`→粒子抛射请求（plan/05）；`GeneratesSmoke`→产烟输出（§3.6）。
 
 ### 4.6 接触式火传播（架构 §7.5）
 
@@ -449,9 +449,9 @@ public sealed class TemperatureField
 - [ ] 热重载 `ReloadStable` 后既有 id 不变、live 网格不损坏，删除材质活 cell 重映射 fallback 并输出诊断计数（架构 §17.4）。
 - [x] `[tag]` 展开正确：tag 成员集合按位筛选无误、笛卡尔积齐全、有序对去重无对称重复、rate→byte 映射正确（反应表测试通过，架构 §16.2）。
 - [ ] cache-aware 查表：惰性材质（`ReactionCount==0`）一次比较早退、热路径不触反应数据；Linear/Binary/DirectTable 三模式结果一致；**无 `int[N*N]` 大表**（代码审查 + benchmark cache-miss 确认，架构 §7.4 / R12）。实现与单元测试已覆盖，cache-miss benchmark 随反应执行热路径补齐。
-- [ ] 反应质量守恒：双输出 / 定向反应在 chunk 边界**不翻倍、不丢失**（边界守恒性质测试通过，引用 `plan/14`，架构 §16.2 / 不变式 #4 / R2）。
-- [ ] parity 防重：同对反应一帧至多一次，跨 pass barrier 后另一侧因 parity 跳过（单线程 oracle 比对统计性质，架构 §5.3 / §16.2）。
-- [ ] 反应写入恒在 32px halo 内、跨界触发 KeepAlive 唤醒驻留邻居 chunk（雪崩跨界正确传播，架构 §5.5 / §5.8）。
+- [x] 反应质量守恒：双输出 / 定向反应在 chunk 边界**不翻倍、不丢失**（边界守恒性质测试通过，引用 `plan/14`，架构 §16.2 / 不变式 #4 / R2）。
+- [x] parity 防重：同对反应一帧至多一次，跨 pass barrier 后另一侧因 parity 跳过（单线程 oracle 比对统计性质，架构 §5.3 / §16.2）。
+- [x] 反应写入恒在 32px halo 内、跨界触发 KeepAlive 唤醒驻留邻居 chunk（雪崩跨界正确传播，架构 §5.5 / §5.8）。
 - [ ] 接触式火传播在**关闭温度场**时正常工作（接触点燃 / 燃烧 / burnout 链），不依赖热场（架构 §7.5）。
 - [ ] 温度场：ICE→WATR→STEAM 相变链正确（阈值 + 目标，不经反应表）；SIMD stencil 有 scalar fallback 且结果一致；每 N 帧降频与 §4.3 一级降级生效、退化为接触火传播后仍跑（架构 §7.5 / §4.3）。
 - [ ] custom-update：`HasCustomUpdate` 门控仅对声明材质调用委托，委托内写入遵守 parity/halo/dirty/KeepAlive（架构 §7.4）。

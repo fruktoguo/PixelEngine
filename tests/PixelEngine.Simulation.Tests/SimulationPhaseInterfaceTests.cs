@@ -268,7 +268,7 @@ public sealed class SimulationPhaseInterfaceTests
 
     private sealed class SuccessfulReactionExecutor : IReactionExecutor
     {
-        public bool TryReact(ref NeighborWindow window, int wx1, int wy1, ushort materialA, int wx2, int wy2, ushort materialB, byte parityBit)
+        public bool TryReact(ref NeighborWindow window, int wx1, int wy1, ushort materialA, int wx2, int wy2, ushort materialB, byte parityBit, byte randomByte)
         {
             window.SetFlags(wx1, wy1, CellFlags.SetParity(window.GetFlags(wx1, wy1), parityBit));
             window.SetFlags(wx2, wy2, CellFlags.SetParity(window.GetFlags(wx2, wy2), parityBit));

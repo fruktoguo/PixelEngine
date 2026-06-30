@@ -13,11 +13,11 @@ public interface IReactionExecutor
     /// <summary>
     /// 对两个 von Neumann 邻居 cell 尝试反应。实现方负责写产物、parity、dirty 与 KeepAlive。
     /// </summary>
-    bool TryReact(ref NeighborWindow window, int wx1, int wy1, ushort materialA, int wx2, int wy2, ushort materialB, byte parityBit);
+    bool TryReact(ref NeighborWindow window, int wx1, int wy1, ushort materialA, int wx2, int wy2, ushort materialB, byte parityBit, byte randomByte);
 
     private sealed class NullReactionExecutor : IReactionExecutor
     {
-        public bool TryReact(ref NeighborWindow window, int wx1, int wy1, ushort materialA, int wx2, int wy2, ushort materialB, byte parityBit)
+        public bool TryReact(ref NeighborWindow window, int wx1, int wy1, ushort materialA, int wx2, int wy2, ushort materialB, byte parityBit, byte randomByte)
         {
             return false;
         }

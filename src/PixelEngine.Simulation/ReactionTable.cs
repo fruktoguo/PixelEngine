@@ -190,15 +190,21 @@ public sealed class ReactionTable
     {
         int start = def.ReactionStart;
         int end = start + def.ReactionCount;
+        int normalMatch = -1;
         for (int i = start; i < end; i++)
         {
             if (_packed[i].InputB == neighbor)
             {
-                return i;
+                if ((_packed[i].Flags & ReactionFlags.Fast) != 0)
+                {
+                    return i;
+                }
+
+                normalMatch = normalMatch < 0 ? i : normalMatch;
             }
         }
 
-        return -1;
+        return normalMatch;
     }
 
     private int FindBinary(ushort neighbor, in MaterialDef def)

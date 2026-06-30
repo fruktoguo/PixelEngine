@@ -140,7 +140,7 @@ public sealed class SimulationReactionLifetimeTests
 
         public (int X1, int Y1, ushort MaterialA, int X2, int Y2, ushort MaterialB, byte Parity) Last { get; private set; }
 
-        public bool TryReact(ref NeighborWindow window, int wx1, int wy1, ushort materialA, int wx2, int wy2, ushort materialB, byte parityBit)
+        public bool TryReact(ref NeighborWindow window, int wx1, int wy1, ushort materialA, int wx2, int wy2, ushort materialB, byte parityBit, byte randomByte)
         {
             Count++;
             Last = (wx1, wy1, materialA, wx2, wy2, materialB, parityBit);

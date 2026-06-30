@@ -1,0 +1,145 @@
+using PixelEngine.Simulation.Particles;
+
+namespace PixelEngine.Simulation;
+
+/// <summary>
+/// 基于 packed 反应表的 CA 接触反应执行器。
+/// </summary>
+public sealed class ReactionEngine(MaterialTable materials, ReactionTable reactions, IReactionSideEffectSink? sideEffects = null) : IReactionExecutor
+{
+    private readonly MaterialTable _materials = materials ?? throw new ArgumentNullException(nameof(materials));
+    private readonly ReactionTable _reactions = reactions ?? throw new ArgumentNullException(nameof(reactions));
+    private readonly IReactionSideEffectSink? _sideEffects = sideEffects;
+
+    /// <inheritdoc />
+    public bool TryReact(
+        ref NeighborWindow window,
+        int wx1,
+        int wy1,
+        ushort materialA,
+        int wx2,
+        int wy2,
+        ushort materialB,
+        byte parityBit,
+        byte randomByte)
+    {
+        if (CellFlags.MatchesFrame(window.GetFlags(wx1, wy1), parityBit) ||
+            CellFlags.MatchesFrame(window.GetFlags(wx2, wy2), parityBit))
+        {
+            return false;
+        }
+
+        ref readonly MaterialDef def = ref _materials.Get(materialA);
+        int reactionIndex = _reactions.Find(materialA, materialB, in def);
+        if (reactionIndex < 0)
+        {
+            return false;
+        }
+
+        ref readonly Reaction reaction = ref _reactions.At(reactionIndex);
+        if (!PassesProbability(reaction.Probability, randomByte))
+        {
+            return false;
+        }
+
+        ApplyOutput(ref window, wx1, wy1, reaction.OutputA, parityBit);
+        ApplyOutput(ref window, wx2, wy2, reaction.OutputB, parityBit);
+        EmitSideEffects(reaction, wx1, wy1, wx2, wy2);
+        return true;
+    }
+
+    private static bool PassesProbability(byte probability, byte randomByte)
+    {
+        return probability == byte.MaxValue || (probability != 0 && randomByte < probability);
+    }
+
+    private void ApplyOutput(ref NeighborWindow window, int wx, int wy, ushort material, byte parityBit)
+    {
+        window.SetMaterial(wx, wy, material);
+        window.SetLifetime(wx, wy, DefaultLifetimeByte(material));
+        window.SetFlags(wx, wy, CellFlags.SetParity(window.GetFlags(wx, wy), parityBit));
+    }
+
+    private void EmitSideEffects(in Reaction reaction, int wx1, int wy1, int wx2, int wy2)
+    {
+        byte smokeA = _materials.Hot.GeneratesSmoke[reaction.OutputA];
+        byte smokeB = _materials.Hot.GeneratesSmoke[reaction.OutputB];
+        bool needsSink =
+            (reaction.Flags & (ReactionFlags.EmitHeat | ReactionFlags.SpawnParticle)) != 0 ||
+            smokeA != 0 ||
+            smokeB != 0;
+        if (!needsSink)
+        {
+            return;
+        }
+
+        IReactionSideEffectSink sink = _sideEffects ??
+            throw new InvalidOperationException("反应产生副作用，但 ReactionEngine 未配置 IReactionSideEffectSink。");
+        if ((reaction.Flags & ReactionFlags.EmitHeat) != 0)
+        {
+            byte heat = Math.Max(
+                _materials.Hot.TemperatureOfFire[reaction.OutputA],
+                _materials.Hot.TemperatureOfFire[reaction.OutputB]);
+            sink.AddHeat(wx1, wy1, reaction.OutputA, heat);
+            sink.AddHeat(wx2, wy2, reaction.OutputB, heat);
+        }
+
+        if ((reaction.Flags & ReactionFlags.SpawnParticle) != 0)
+        {
+            RequestParticleEjection(sink, wx1, wy1, reaction.OutputA);
+            RequestParticleEjection(sink, wx2, wy2, reaction.OutputB);
+        }
+
+        if (smokeA != 0)
+        {
+            sink.EmitSmoke(wx1, wy1, reaction.OutputA, smokeA);
+        }
+
+        if (smokeB != 0)
+        {
+            sink.EmitSmoke(wx2, wy2, reaction.OutputB, smokeB);
+        }
+    }
+
+    private void RequestParticleEjection(IReactionSideEffectSink sink, int wx, int wy, ushort material)
+    {
+        if (material == 0)
+        {
+            return;
+        }
+
+        EjectMask mask = MaskFor(_materials.Hot.Type[material]);
+        if (mask == EjectMask.None)
+        {
+            return;
+        }
+
+        EjectionRequest request = new(wx, wy, radius: 0, impulseSpeed: 0, impulseJitter: 0, mask);
+        if (!sink.RequestParticleEjection(in request))
+        {
+            throw new InvalidOperationException("反应副作用请求自由粒子抛射失败。");
+        }
+    }
+
+    private static EjectMask MaskFor(CellType type)
+    {
+        return type switch
+        {
+            CellType.Empty => EjectMask.None,
+            CellType.Solid => EjectMask.Solid,
+            CellType.Powder => EjectMask.Powder,
+            CellType.Liquid => EjectMask.Liquid,
+            CellType.Gas => EjectMask.Gas,
+            CellType.Fire => EjectMask.Fire,
+            _ => throw new ArgumentOutOfRangeException(nameof(type), type, "未知 cell 类型。"),
+        };
+    }
+
+    private byte DefaultLifetimeByte(ushort material)
+    {
+        ushort lifetime = _materials.Hot.DefaultLifetime[material];
+        return lifetime > byte.MaxValue
+            ? throw new InvalidOperationException($"材质 {material} 的默认 lifetime 超过 byte 存储上限。")
+            : (byte)lifetime;
+    }
+}
