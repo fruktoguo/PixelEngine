@@ -79,6 +79,35 @@ public sealed class SmokeTests
     }
 
     /// <summary>
+    /// 验证单个 Behaviour 抛异常会被隔离，不影响其它脚本。
+    /// </summary>
+    [Fact]
+    public void SceneIsolatesFaultedBehaviourCallbacks()
+    {
+        Scene scene = new();
+        FakeScriptContext context = new(scene);
+        Entity failingEntity = scene.CreateEntity();
+        Entity healthyEntity = scene.CreateEntity();
+        FailingComponent failing = failingEntity.AddComponent<FailingComponent>();
+        LifecycleComponent healthy = healthyEntity.AddComponent<LifecycleComponent>();
+        List<string> events = [];
+        healthy.Events = events;
+
+        scene.DispatchUpdate(context, 0.016f);
+        scene.DispatchUpdate(context, 0.016f);
+
+        Assert.True(failing.Faulted);
+        Assert.False(failing.Enabled);
+        Assert.NotNull(failing.LastException);
+        Assert.Equal(1, scene.ScriptExceptionCount);
+        Assert.Equal(["update", "update"], events);
+
+        failing.ResetFault();
+        Assert.False(failing.Faulted);
+        Assert.True(failing.Enabled);
+    }
+
+    /// <summary>
     /// 验证脚本系统按注册顺序派发。
     /// </summary>
     [Fact]
@@ -122,6 +151,14 @@ public sealed class SmokeTests
         protected override void OnDestroy()
         {
             Events.Add("destroy");
+        }
+    }
+
+    private sealed class FailingComponent : Behaviour
+    {
+        protected override void OnUpdate(float dt)
+        {
+            throw new InvalidOperationException("boom");
         }
     }
 
