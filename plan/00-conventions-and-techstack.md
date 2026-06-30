@@ -97,8 +97,8 @@ PixelEngine.sln
 
 ## 6. 项目级 .csproj 公共属性
 
-- [ ] `Directory.Build.props`：统一 `TargetFramework=net10.0`、`LangVersion`、`Nullable`、`ImplicitUsings`、分析器、`Deterministic`、符号包。
-- [ ] `Directory.Packages.props`：中央包版本管理（CPM，`ManagePackageVersionsCentrally=true`），所有版本集中锁定。
+- [x] `Directory.Build.props`：统一 `TargetFramework=net10.0`、`LangVersion`、`Nullable`、`ImplicitUsings`、分析器、`Deterministic`、符号包。
+- [x] `Directory.Packages.props`：中央包版本管理（CPM，`ManagePackageVersionsCentrally=true`），所有版本集中锁定。
 - [ ] 热路径项目（Core/Simulation/Physics/Interop/Rendering）开 `AllowUnsafeBlocks`，并把零分配/SIMD 相关分析器提升为 error。
 
 ## 7. 跨切面约定

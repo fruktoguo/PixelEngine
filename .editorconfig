@@ -12,6 +12,8 @@ indent_size = 4
 # 性能纪律相关分析器（在 sim 热路径项目里提升为 error，见各 .csproj）
 dotnet_diagnostic.CA1814.severity = suggestion   # 多维数组
 dotnet_diagnostic.CA1819.severity = none         # 属性返回数组（SoA 设计需要）
+dotnet_analyzer_diagnostic.category-Style.severity = warning
+dotnet_analyzer_diagnostic.category-CodeQuality.severity = warning
 dotnet_style_namespace_match_folder = true:warning
 csharp_style_namespace_declarations = file_scoped:warning
 csharp_prefer_braces = true:warning
@@ -19,6 +21,30 @@ csharp_style_var_for_built_in_types = false:suggestion
 dotnet_style_readonly_field = true:warning
 # 命名：私有字段 _camelCase，常量 PascalCase，类型/方法 PascalCase
 dotnet_naming_rule.private_fields_underscore.severity = warning
+
+[src/PixelEngine.Core/**/*.cs]
+dotnet_diagnostic.CA2014.severity = error
+dotnet_diagnostic.CA1849.severity = error
+
+[src/PixelEngine.Interop/**/*.cs]
+dotnet_diagnostic.CA2014.severity = error
+dotnet_diagnostic.CA1849.severity = error
+
+[src/PixelEngine.Simulation/**/*.cs]
+dotnet_diagnostic.CA2014.severity = error
+dotnet_diagnostic.CA1849.severity = error
+
+[src/PixelEngine.Physics/**/*.cs]
+dotnet_diagnostic.CA2014.severity = error
+dotnet_diagnostic.CA1849.severity = error
+
+[src/PixelEngine.Rendering/**/*.cs]
+dotnet_diagnostic.CA2014.severity = error
+dotnet_diagnostic.CA1849.severity = error
+
+[bench/PixelEngine.Benchmarks/**/*.cs]
+dotnet_diagnostic.CA2014.severity = error
+dotnet_diagnostic.CA1849.severity = error
 
 [*.{md,json,yml,yaml}]
 indent_size = 2
