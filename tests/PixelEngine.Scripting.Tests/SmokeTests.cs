@@ -84,8 +84,9 @@ public sealed class SmokeTests
     [Fact]
     public void SceneIsolatesFaultedBehaviourCallbacks()
     {
-        Scene scene = new();
-        FakeScriptContext context = new(scene);
+        RecordingDiagnostics diagnostics = new();
+        Scene scene = new(diagnostics);
+        FakeScriptContext context = new(scene, new FakeGameTime(123));
         Entity failingEntity = scene.CreateEntity();
         Entity healthyEntity = scene.CreateEntity();
         FailingComponent failing = failingEntity.AddComponent<FailingComponent>();
@@ -101,6 +102,12 @@ public sealed class SmokeTests
         Assert.NotNull(failing.LastException);
         Assert.Equal(1, scene.ScriptExceptionCount);
         Assert.Equal(["update", "update"], events);
+        ScriptExceptionRecord record = diagnostics.Records[0];
+        Assert.Equal(typeof(FailingComponent).FullName, record.ScriptType);
+        Assert.Equal("OnUpdate", record.Callback);
+        Assert.Equal(typeof(InvalidOperationException).FullName, record.ExceptionType);
+        Assert.Equal("boom", record.Message);
+        Assert.Equal(123, record.FrameIndex);
 
         failing.ResetFault();
         Assert.False(failing.Faulted);
@@ -175,7 +182,17 @@ public sealed class SmokeTests
         }
     }
 
-    private sealed class FakeScriptContext(Scene scene) : IScriptContext
+    private sealed class RecordingDiagnostics : IScriptDiagnosticSink
+    {
+        public List<ScriptExceptionRecord> Records { get; } = [];
+
+        public void ReportScriptException(in ScriptExceptionRecord record)
+        {
+            Records.Add(record);
+        }
+    }
+
+    private sealed class FakeScriptContext(Scene scene, IGameTime? time = null) : IScriptContext
     {
         public IWorldCellAccess Cells => throw new NotSupportedException();
 
@@ -197,8 +214,34 @@ public sealed class SmokeTests
 
         public IAudioApi Audio => throw new NotSupportedException();
 
-        public IGameTime Time => throw new NotSupportedException();
+        public IGameTime Time { get; } = time ?? new UnsupportedGameTime();
 
         public Scene Scene { get; } = scene;
+    }
+
+    private sealed class FakeGameTime(long frameCount) : IGameTime
+    {
+        public float DeltaTime => 0.016f;
+
+        public float FixedStep => 1f / 60f;
+
+        public long FrameCount { get; } = frameCount;
+
+        public float TimeScale => 1f;
+
+        public bool SimSteppedThisFrame => true;
+    }
+
+    private sealed class UnsupportedGameTime : IGameTime
+    {
+        public float DeltaTime => throw new NotSupportedException();
+
+        public float FixedStep => throw new NotSupportedException();
+
+        public long FrameCount => throw new NotSupportedException();
+
+        public float TimeScale => throw new NotSupportedException();
+
+        public bool SimSteppedThisFrame => throw new NotSupportedException();
     }
 }

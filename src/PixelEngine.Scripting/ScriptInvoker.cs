@@ -1,8 +1,6 @@
 namespace PixelEngine.Scripting;
 
-internal readonly record struct ScriptExceptionRecord(string ScriptType, string Callback, string Message);
-
-internal sealed class ScriptInvoker
+internal sealed class ScriptInvoker(IScriptDiagnosticSink? diagnostics = null)
 {
     [ThreadStatic]
     private static Behaviour? currentBehaviour;
@@ -10,6 +8,7 @@ internal sealed class ScriptInvoker
     [ThreadStatic]
     private static ScriptInvoker? currentInvoker;
 
+    private readonly IScriptDiagnosticSink? _diagnostics = diagnostics;
     private readonly List<ScriptExceptionRecord> _exceptions = [];
 
     public IReadOnlyList<ScriptExceptionRecord> Exceptions => _exceptions;
@@ -127,10 +126,14 @@ internal sealed class ScriptInvoker
     private void MarkFaulted(Behaviour behaviour, string callback, Exception exception)
     {
         behaviour.MarkFaulted(exception);
-        _exceptions.Add(new ScriptExceptionRecord(
+        ScriptExceptionRecord record = new(
             behaviour.GetType().FullName ?? behaviour.GetType().Name,
             callback,
-            exception.Message));
+            exception.GetType().FullName ?? exception.GetType().Name,
+            exception.Message,
+            behaviour.TryGetFrameCount());
+        _exceptions.Add(record);
+        _diagnostics?.ReportScriptException(record);
     }
 
     private readonly struct InvocationScope(Behaviour? previousBehaviour, ScriptInvoker? previousInvoker) : IDisposable

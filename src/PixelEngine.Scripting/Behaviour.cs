@@ -126,6 +126,22 @@ public abstract class Behaviour : IComponent
         _subscriptions.Clear();
     }
 
+    internal long TryGetFrameCount()
+    {
+        try
+        {
+            return Context?.Time.FrameCount ?? -1;
+        }
+        catch (NotSupportedException)
+        {
+            return -1;
+        }
+        catch (ObjectDisposedException)
+        {
+            return -1;
+        }
+    }
+
     internal void MarkFaulted(Exception exception)
     {
         LastException = exception;
