@@ -111,6 +111,52 @@ public sealed class WorldStreamerTests
     }
 
     /// <summary>
+    /// 验证相机平移触发卸载和重入装载，chunk 修改经 region store 持久化。
+    /// </summary>
+    [Fact]
+    public void WorldManagerPansEvictsAndReloadsPersistedChunk()
+    {
+        using TempWorldDirectory world = TempWorldDirectory.Create();
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("sand", CellType.Powder));
+        int chunkBytes = ChunkMemoryBudget.EstimatedResidentChunkBytes;
+        WorldManager manager = new(
+            new WorldCamera(32, 32, viewportCellsX: 64, viewportCellsY: 64),
+            new TemperatureField(),
+            materials,
+            world.Path,
+            fallbackMaterialId: 0,
+            new WorldStreamingConfig
+            {
+                ActivationMarginChunks = 0,
+                BorderRingWidth = 1,
+                ResidentMemoryCapBytes = chunkBytes * 2L,
+                EvictionTargetBytes = chunkBytes,
+                MaxStreamOpsPerFrame = 64,
+            });
+
+        manager.ApplyResidency(frame: 1);
+        _ = manager.Streamer.ProcessIoOnce();
+        manager.ApplyResidency(frame: 2);
+        Assert.True(manager.Chunks.TryGetChunk(new ChunkCoord(0, 0), out Chunk edited));
+        edited.Material[0] = 1;
+
+        manager.UpdateCamera(320, 32);
+        manager.ApplyResidency(frame: 3);
+        manager.ApplyResidency(frame: 4);
+        _ = manager.Streamer.ProcessIoOnce();
+        _ = manager.Streamer.ApplyPrepared(frame: 5);
+        Assert.False(manager.Chunks.Contains(new ChunkCoord(0, 0)));
+
+        manager.UpdateCamera(32, 32);
+        manager.ApplyResidency(frame: 6);
+        _ = manager.Streamer.ProcessIoOnce();
+        _ = manager.Streamer.ApplyPrepared(frame: 7);
+
+        Assert.True(manager.Chunks.TryGetChunk(new ChunkCoord(0, 0), out Chunk reloaded));
+        Assert.Equal(1, reloaded.Material[0]);
+    }
+
+    /// <summary>
     /// 验证 ProcessIoOnce(JobSystem) 可并行准备多个 chunk 的装载解码结果。
     /// </summary>
     [Fact]

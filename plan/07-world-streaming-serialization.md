@@ -201,7 +201,7 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 
 ### 5.1 驻留、流式与线程安全
 
-- [ ] 相机平移使 chunk 进出激活区时，激活区内 chunk 被模拟、超出者卸载、重入者从磁盘读回且玩家修改持久（架构 §5.1）。
+- [x] 相机平移使 chunk 进出激活区时，激活区内 chunk 被模拟、超出者卸载、重入者从磁盘读回且玩家修改持久（架构 §5.1）。
 - [ ] border ring 始终为激活区外宽 1 chunk、驻留且默认 sleep；激活区边缘 cell 的 32px-halo 跨界写入与 KeepAlive 目标恒落在驻留 chunk 上，无「写入落到非驻留邻居」的洞（不变式 #4、架构 §3.4）。
 - [x] 结构性增删（`ChunkMap`/`ResidencyTable`）**只在相位 2 单线程**发生；相位 11 后台线程仅操作游离字节缓冲与游离 `Chunk`，经断言 / 测试证实从不触碰 live map（架构 §3.4）。
 - [x] 驱逐 / 卸载只发生在 border 之外，被摘下的 chunk 本帧不被任何相位 4 worker 触碰。
@@ -209,9 +209,9 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 
 ### 5.2 内存上限与 LRU
 
-- [ ] `ChunkMemoryBudget` 以 ~18–20KB/chunk 核算常驻字节，不用单屏数字（架构 §12.2）。
-- [ ] 常驻字节超 `ResidentMemoryCapBytes`（默认 512MB，可配）时，即便仍在激活半径内，也按 LRU + 距离提前驱逐最远 sleeping（border 外）chunk 至 `EvictionTargetBytes`，且不抖动（架构 §1.4/§12.2）。
-- [ ] 激活区内活动 chunk 与 border chunk 永不被内存驱逐。
+- [x] `ChunkMemoryBudget` 以 ~18–20KB/chunk 核算常驻字节，不用单屏数字（架构 §12.2）。
+- [x] 常驻字节超 `ResidentMemoryCapBytes`（默认 512MB，可配）时，即便仍在激活半径内，也按 LRU + 距离提前驱逐最远 sleeping（border 外）chunk 至 `EvictionTargetBytes`，且不抖动（架构 §1.4/§12.2）。
+- [x] 激活区内活动 chunk 与 border chunk 永不被内存驱逐。
 
 ### 5.3 chunk 格式与位区分
 
@@ -265,13 +265,13 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 
 按 AGENTS §6，每完成一节点立即用中文 git 提交（type 前缀英文，scope=`world`/`world,serialization`）：
 
-- [ ] `feat(world): 实现 chunk 驻留 hash-map 生命周期、相机/视口与激活区+border ring`（对应清单 §4.1、§4.2 前半）
-- [ ] `feat(world): 实现装卸屏障(相位2/11分离)与流式后台 I/O`（对应清单 §4.2、§3.4）
-- [ ] `feat(world): 实现常驻内存上限与 LRU 驱逐`（对应清单 §4.2 budget/planner、§3.5）
-- [ ] `feat(serialization): 实现 chunk 二进制 RLE+LZ4 与持久/瞬时位区分`（对应清单 §4.3、§3.6）
-- [ ] `feat(serialization): 实现 material name↔id 重映射与 fallback`（对应清单 §4.4 remap、§3.7）
-- [ ] `feat(serialization): 实现 world manifest、全局态持久化与磁盘 region 布局`（对应清单 §4.4 manifest/store、§3.8/§3.10）
-- [ ] `feat(serialization): 实现版本迁移链与显式存档/读档服务`（对应清单 §4.4 migration/save、§3.9）
+- [x] `feat(world): 实现 chunk 驻留 hash-map 生命周期、相机/视口与激活区+border ring`（对应清单 §4.1、§4.2 前半）
+- [x] `feat(world): 实现装卸屏障(相位2/11分离)与流式后台 I/O`（对应清单 §4.2、§3.4）
+- [x] `feat(world): 实现常驻内存上限与 LRU 驱逐`（对应清单 §4.2 budget/planner、§3.5）
+- [x] `feat(serialization): 实现 chunk 二进制 RLE+LZ4 与持久/瞬时位区分`（对应清单 §4.3、§3.6）
+- [x] `feat(serialization): 实现 material name↔id 重映射与 fallback`（对应清单 §4.4 remap、§3.7）
+- [x] `feat(serialization): 实现 world manifest、全局态持久化与磁盘 region 布局`（对应清单 §4.4 manifest/store、§3.8/§3.10）
+- [x] `feat(serialization): 实现版本迁移链与显式存档/读档服务`（对应清单 §4.4 migration/save、§3.9）
 - [ ] `test(world,serialization): 接入流式线程安全/存档往返/重映射/迁移测试（plan/14）`（对应验收 §5，测试实现引用 plan/14）
 
 > 每节点完成即勾选并提交；与架构文档 / 不变式冲突先改计划再改代码（AGENTS §5）。

@@ -12,7 +12,7 @@ public sealed class ChunkMemoryBudget
     private const int TempBlockSize = EngineConstants.ChunkSize / EngineConstants.TempFieldDownscale;
     private const int SimStateBytes = EngineConstants.ChunkArea * (sizeof(ushort) + sizeof(byte) + sizeof(byte));
     private const int TemperatureBytes = TempBlockSize * TempBlockSize * HalfBytes;
-    private const int MetadataSlackBytes = 4 * 1024;
+    private const int MetadataSlackBytes = 3 * 1024;
 
     /// <summary>
     /// 估算的单 chunk 常驻字节数：Material/Flags/Lifetime + 温度子块 + 元数据余量。
