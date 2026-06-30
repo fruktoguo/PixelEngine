@@ -86,7 +86,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [ ] Play/Edit/Step 三态机 + 进入 Play 前世界快照、退出回滚(plan/07 快照),脚本生命周期协调(plan/11、plan/12)。
 - [ ] **headless 模式**:无窗口/渲染/音频,跑 Core+Sim+Physics+World,固定步数驱动(供 plan/14)。
 - [x] 帧节奏与 `FrameClock`(plan/02)对接:固定 dt、时间膨胀、sim/render 解耦的频率管理。
-- [ ] 公开 API 全部中文 XML 文档注释(脚本 IntelliSense,plan/11/00 §7)。
+- [x] 公开 API 全部中文 XML 文档注释(脚本 IntelliSense,plan/11/00 §7)。
 
 ## 5. 验收标准
 
