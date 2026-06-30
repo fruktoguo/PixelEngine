@@ -77,6 +77,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PixelEngine.Core.Tests", "t
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PixelEngine.Content.Tests", "tests\PixelEngine.Content.Tests\PixelEngine.Content.Tests.csproj", "{32CA00B7-8FD4-48B3-A419-472EA12B4D2D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PixelEngine.World.Tests", "tests\PixelEngine.World.Tests\PixelEngine.World.Tests.csproj", "{98E15647-0B27-471E-99FC-F59ECADC99A5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -327,6 +329,18 @@ Global
 		{32CA00B7-8FD4-48B3-A419-472EA12B4D2D}.Release|x64.Build.0 = Release|Any CPU
 		{32CA00B7-8FD4-48B3-A419-472EA12B4D2D}.Release|x86.ActiveCfg = Release|Any CPU
 		{32CA00B7-8FD4-48B3-A419-472EA12B4D2D}.Release|x86.Build.0 = Release|Any CPU
+		{98E15647-0B27-471E-99FC-F59ECADC99A5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{98E15647-0B27-471E-99FC-F59ECADC99A5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{98E15647-0B27-471E-99FC-F59ECADC99A5}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{98E15647-0B27-471E-99FC-F59ECADC99A5}.Debug|x64.Build.0 = Debug|Any CPU
+		{98E15647-0B27-471E-99FC-F59ECADC99A5}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{98E15647-0B27-471E-99FC-F59ECADC99A5}.Debug|x86.Build.0 = Debug|Any CPU
+		{98E15647-0B27-471E-99FC-F59ECADC99A5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{98E15647-0B27-471E-99FC-F59ECADC99A5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{98E15647-0B27-471E-99FC-F59ECADC99A5}.Release|x64.ActiveCfg = Release|Any CPU
+		{98E15647-0B27-471E-99FC-F59ECADC99A5}.Release|x64.Build.0 = Release|Any CPU
+		{98E15647-0B27-471E-99FC-F59ECADC99A5}.Release|x86.ActiveCfg = Release|Any CPU
+		{98E15647-0B27-471E-99FC-F59ECADC99A5}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -352,5 +366,6 @@ Global
 		{18DE4DBF-EEB7-4797-B605-133AC7B6EA12} = {760AB15A-8938-8D9B-BEDE-5CE1484B84C3}
 		{D44E6DE0-547D-43F6-A95E-34317A611FBB} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{32CA00B7-8FD4-48B3-A419-472EA12B4D2D} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{98E15647-0B27-471E-99FC-F59ECADC99A5} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal
