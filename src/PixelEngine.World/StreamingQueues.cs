@@ -21,23 +21,30 @@ public enum StreamingRequestKind
 /// <summary>
 /// 相位 2 提交给后台 I/O 的流式请求。
 /// </summary>
-public readonly record struct StreamingRequest(StreamingRequestKind Kind, ChunkCoord Coord, Chunk? DetachedChunk)
+public readonly record struct StreamingRequest(
+    StreamingRequestKind Kind,
+    ChunkCoord Coord,
+    Chunk? DetachedChunk,
+    Half[]? Temperature)
 {
     /// <summary>
     /// 创建装载请求。
     /// </summary>
     public static StreamingRequest Load(ChunkCoord coord)
     {
-        return new StreamingRequest(StreamingRequestKind.Load, coord, null);
+        return new StreamingRequest(StreamingRequestKind.Load, coord, null, null);
     }
 
     /// <summary>
     /// 创建卸载请求。
     /// </summary>
-    public static StreamingRequest Unload(Chunk chunk)
+    public static StreamingRequest Unload(Chunk chunk, ReadOnlySpan<Half> temperature)
     {
         ArgumentNullException.ThrowIfNull(chunk);
-        return new StreamingRequest(StreamingRequestKind.Unload, chunk.Coord, chunk);
+        bool validTemperatureLength = temperature.Length == TemperatureField.BlockArea;
+        return validTemperatureLength
+            ? new StreamingRequest(StreamingRequestKind.Unload, chunk.Coord, chunk, temperature.ToArray())
+            : throw new ArgumentException("卸载请求温度子块长度必须等于 BlockArea。", nameof(temperature));
     }
 }
 
@@ -60,15 +67,22 @@ public enum CompletedStreamingKind
 /// <summary>
 /// 后台 I/O 提交回相位 2 的完成事件。
 /// </summary>
-public readonly record struct CompletedStreamingOperation(CompletedStreamingKind Kind, ChunkCoord Coord, Chunk? Chunk)
+public readonly record struct CompletedStreamingOperation(
+    CompletedStreamingKind Kind,
+    ChunkCoord Coord,
+    Chunk? Chunk,
+    Half[]? Temperature)
 {
     /// <summary>
     /// 创建装载完成事件。
     /// </summary>
-    public static CompletedStreamingOperation Loaded(Chunk chunk)
+    public static CompletedStreamingOperation Loaded(Chunk chunk, ReadOnlySpan<Half> temperature)
     {
         ArgumentNullException.ThrowIfNull(chunk);
-        return new CompletedStreamingOperation(CompletedStreamingKind.Loaded, chunk.Coord, chunk);
+        bool validTemperatureLength = temperature.Length == TemperatureField.BlockArea;
+        return validTemperatureLength
+            ? new CompletedStreamingOperation(CompletedStreamingKind.Loaded, chunk.Coord, chunk, temperature.ToArray())
+            : throw new ArgumentException("装载完成事件温度子块长度必须等于 BlockArea。", nameof(temperature));
     }
 
     /// <summary>
@@ -76,7 +90,7 @@ public readonly record struct CompletedStreamingOperation(CompletedStreamingKind
     /// </summary>
     public static CompletedStreamingOperation Unloaded(ChunkCoord coord)
     {
-        return new CompletedStreamingOperation(CompletedStreamingKind.Unloaded, coord, null);
+        return new CompletedStreamingOperation(CompletedStreamingKind.Unloaded, coord, null, null);
     }
 }
 
@@ -134,14 +148,14 @@ public sealed class StreamingRequestQueue
 
     private static void ValidateRequest(StreamingRequest request)
     {
-        if (request.Kind == StreamingRequestKind.Unload && request.DetachedChunk is null)
+        if (request.Kind == StreamingRequestKind.Unload && (request.DetachedChunk is null || request.Temperature is null))
         {
-            throw new ArgumentException("卸载请求必须携带游离 chunk。", nameof(request));
+            throw new ArgumentException("卸载请求必须携带游离 chunk 与温度子块。", nameof(request));
         }
 
-        if (request.Kind == StreamingRequestKind.Load && request.DetachedChunk is not null)
+        if (request.Kind == StreamingRequestKind.Load && (request.DetachedChunk is not null || request.Temperature is not null))
         {
-            throw new ArgumentException("装载请求不能携带 chunk。", nameof(request));
+            throw new ArgumentException("装载请求不能携带 chunk 或温度子块。", nameof(request));
         }
     }
 }
@@ -200,14 +214,14 @@ public sealed class CompletedChunkQueue
 
     private static void ValidateOperation(CompletedStreamingOperation operation)
     {
-        if (operation.Kind == CompletedStreamingKind.Loaded && operation.Chunk is null)
+        if (operation.Kind == CompletedStreamingKind.Loaded && (operation.Chunk is null || operation.Temperature is null))
         {
-            throw new ArgumentException("装载完成事件必须携带游离 chunk。", nameof(operation));
+            throw new ArgumentException("装载完成事件必须携带游离 chunk 与温度子块。", nameof(operation));
         }
 
-        if (operation.Kind == CompletedStreamingKind.Unloaded && operation.Chunk is not null)
+        if (operation.Kind == CompletedStreamingKind.Unloaded && (operation.Chunk is not null || operation.Temperature is not null))
         {
-            throw new ArgumentException("卸载完成事件不能携带 chunk。", nameof(operation));
+            throw new ArgumentException("卸载完成事件不能携带 chunk 或温度子块。", nameof(operation));
         }
     }
 }

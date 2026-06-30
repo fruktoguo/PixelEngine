@@ -65,8 +65,9 @@ public sealed class ResidentChunkMapAndQueueTests
     {
         StreamingRequestQueue queue = new();
         Chunk chunk = new(new ChunkCoord(4, 5));
+        Half[] temperature = new Half[TemperatureField.BlockArea];
         queue.Enqueue(StreamingRequest.Load(new ChunkCoord(1, 2)));
-        queue.Enqueue(StreamingRequest.Unload(chunk));
+        queue.Enqueue(StreamingRequest.Unload(chunk, temperature));
 
         Assert.Equal(2, queue.Count);
         Assert.True(queue.TryDequeue(out StreamingRequest load));
@@ -75,10 +76,11 @@ public sealed class ResidentChunkMapAndQueueTests
         Assert.True(queue.TryDequeue(out StreamingRequest unload));
         Assert.Equal(StreamingRequestKind.Unload, unload.Kind);
         Assert.Same(chunk, unload.DetachedChunk);
+        Assert.Equal(TemperatureField.BlockArea, unload.Temperature!.Length);
         Assert.False(queue.TryDequeue(out _));
 
         _ = Assert.Throws<ArgumentException>(() =>
-            queue.Enqueue(new StreamingRequest(StreamingRequestKind.Unload, new ChunkCoord(0, 0), null)));
+            queue.Enqueue(new StreamingRequest(StreamingRequestKind.Unload, new ChunkCoord(0, 0), null, null)));
     }
 
     /// <summary>
@@ -89,19 +91,21 @@ public sealed class ResidentChunkMapAndQueueTests
     {
         CompletedChunkQueue queue = new();
         Chunk chunk = new(new ChunkCoord(-2, 7));
-        queue.Enqueue(CompletedStreamingOperation.Loaded(chunk));
+        Half[] temperature = new Half[TemperatureField.BlockArea];
+        queue.Enqueue(CompletedStreamingOperation.Loaded(chunk, temperature));
         queue.Enqueue(CompletedStreamingOperation.Unloaded(new ChunkCoord(9, 9)));
 
         Assert.Equal(2, queue.Count);
         Assert.True(queue.TryDequeue(out CompletedStreamingOperation loaded));
         Assert.Equal(CompletedStreamingKind.Loaded, loaded.Kind);
         Assert.Same(chunk, loaded.Chunk);
+        Assert.Equal(TemperatureField.BlockArea, loaded.Temperature!.Length);
         Assert.True(queue.TryDequeue(out CompletedStreamingOperation unloaded));
         Assert.Equal(CompletedStreamingKind.Unloaded, unloaded.Kind);
         Assert.Equal(new ChunkCoord(9, 9), unloaded.Coord);
         Assert.False(queue.TryDequeue(out _));
 
         _ = Assert.Throws<ArgumentException>(() =>
-            queue.Enqueue(new CompletedStreamingOperation(CompletedStreamingKind.Loaded, new ChunkCoord(0, 0), null)));
+            queue.Enqueue(new CompletedStreamingOperation(CompletedStreamingKind.Loaded, new ChunkCoord(0, 0), null, null)));
     }
 }
