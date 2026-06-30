@@ -98,7 +98,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [ ] Play/Edit/Step 切换正确:进入 Play 快照、退出回滚到编辑态,脚本 OnStart/OnDestroy 正确触发。
 - [ ] headless 模式可被 plan/14 测试/基准以确定步数驱动,无窗口依赖。
 - [ ] 关闭时 native 资源与 ALC 正确释放,无泄漏(配合 plan/14 scripting 测试)。
-- [ ] Demo(plan/13)仅经 Hosting 公开 API 启动,无引擎内部后门。
+- [x] Demo(plan/13)仅经 Hosting 公开 API 启动,无引擎内部后门。
 
 ## 6. 依赖关系
 
