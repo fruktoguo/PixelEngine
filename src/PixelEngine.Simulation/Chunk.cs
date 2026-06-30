@@ -115,6 +115,28 @@ public sealed class Chunk
         State = ChunkState.Awake;
     }
 
+    internal void MarkCurrentDirty(DirtyRect rect)
+    {
+        if (rect.IsEmpty)
+        {
+            return;
+        }
+
+        CurrentDirty = CurrentDirty.Union(rect);
+        State = ChunkState.Awake;
+    }
+
+    internal void MarkWorkingDirty(DirtyRect rect)
+    {
+        if (rect.IsEmpty)
+        {
+            return;
+        }
+
+        WorkingDirty = WorkingDirty.Union(rect);
+        State = ChunkState.Awake;
+    }
+
     /// <summary>
     /// 直接设置当前 dirty rect，供测试、加载与后续帧边界 swap 使用。
     /// </summary>

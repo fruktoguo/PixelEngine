@@ -46,7 +46,7 @@ public class CoreAllocationBenchmarks
     [Benchmark]
     public void FrameProfilerMeasure()
     {
-        using FrameProfiler.ProfilerScope scope = _profiler.Measure(FramePhase.FrameClock);
+        using FrameProfiler.ProfilerScope scope = _profiler.Measure(FramePhase.InputAndTime);
     }
 
     /// <summary>

@@ -50,12 +50,39 @@ public sealed class SimulationKernel(
     public uint FrameIndex { get; private set; }
 
     /// <summary>
+    /// 强制 `StepCa(JobSystem)` 使用单线程路径，供确定性 oracle 和调试使用。
+    /// </summary>
+    public bool ForceSingleThread { get; set; }
+
+    /// <summary>
+    /// 相位 3：把粒子落定结果写回权威网格，并标记 current dirty 使本帧 CA 立即可见。
+    /// </summary>
+    public void DepositCell(int wx, int wy, ushort material, byte persistentFlags)
+    {
+        Chunk chunk = RequireChunk(wx, wy);
+        int local = CellAddressing.LocalIndex(wx, wy);
+        NotifyRigidDamageIfNeeded(wx, wy, chunk.Flags[local]);
+        chunk.Material[local] = material;
+        chunk.Flags[local] = CellFlags.SetParity(persistentFlags, CurrentParity);
+        chunk.Lifetime[local] = DefaultLifetimeByte(material);
+        MarkDirty(wx, wy);
+    }
+
+    /// <summary>
+    /// 相位 3：标记世界坐标所在 cell 为 current dirty，使本帧 CA 会重检该区域。
+    /// </summary>
+    public void MarkDirty(int wx, int wy)
+    {
+        DirtyRegionMarker.MarkCell(_chunks, wx, wy, DirtyPhaseTarget.Current, includeBoundaryNeighbors: true, Diagnostics);
+    }
+
+    /// <summary>
     /// 执行一次单线程 CA step：翻转 parity，并顺序更新 awake chunk 的 current dirty。
     /// </summary>
     public void StepCa()
     {
         AdvanceParity();
-        _scheduler.StepSingleThread(_chunks, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, Profiler);
+        _scheduler.StepSingleThread(_chunks, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, Diagnostics, Profiler);
     }
 
     /// <summary>
@@ -65,7 +92,13 @@ public sealed class SimulationKernel(
     {
         ArgumentNullException.ThrowIfNull(jobs);
         AdvanceParity();
-        _scheduler.Step(_chunks, jobs, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, Profiler);
+        if (ForceSingleThread)
+        {
+            _scheduler.StepSingleThread(_chunks, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, Diagnostics, Profiler);
+            return;
+        }
+
+        _scheduler.Step(_chunks, jobs, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, Diagnostics, Profiler);
     }
 
     /// <summary>
@@ -79,9 +112,79 @@ public sealed class SimulationKernel(
         }
     }
 
+    /// <summary>
+    /// 相位 7：读取一个 cell 并清空为 Empty，标记 dirty 给下一帧使用。
+    /// </summary>
+    public ushort ReadAndClearCell(int wx, int wy, out byte flags, out byte lifetime)
+    {
+        Chunk chunk = RequireChunk(wx, wy);
+        int local = CellAddressing.LocalIndex(wx, wy);
+        ushort material = chunk.Material[local];
+        flags = chunk.Flags[local];
+        lifetime = chunk.Lifetime[local];
+        if (material != 0 || flags != 0 || lifetime != 0)
+        {
+            chunk.Material[local] = 0;
+            chunk.Flags[local] = 0;
+            chunk.Lifetime[local] = 0;
+            DirtyRegionMarker.MarkCell(_chunks, wx, wy, DirtyPhaseTarget.Current, includeBoundaryNeighbors: true, Diagnostics);
+        }
+
+        return material;
+    }
+
+    internal long CountNonEmptyCells()
+    {
+        long count = 0;
+        foreach (Chunk chunk in _chunks.ResidentChunks)
+        {
+            ushort[] material = chunk.Material;
+            for (int i = 0; i < material.Length; i++)
+            {
+                if (material[i] != 0)
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    internal SimulationDiagnostics Diagnostics { get; } = new();
+
+    internal ChunkSnapshot SnapshotChunk(ChunkCoord coord)
+    {
+        return _chunks.TryGetChunk(coord, out Chunk chunk)
+            ? ChunkSnapshot.Create(chunk)
+            : throw new InvalidOperationException($"目标 chunk 未驻留：{coord}。");
+    }
+
     private void AdvanceParity()
     {
         CurrentParity ^= CellFlags.Parity;
         FrameIndex++;
+    }
+
+    private Chunk RequireChunk(int wx, int wy)
+    {
+        ChunkCoord coord = CellAddressing.WorldToChunk(wx, wy);
+        return !_chunks.TryGetChunk(coord, out Chunk chunk) ? throw new InvalidOperationException($"目标 chunk 未驻留：{coord}。") : chunk;
+    }
+
+    private byte DefaultLifetimeByte(ushort material)
+    {
+        ushort lifetime = MaterialProps.DefaultLifetimeOf(material);
+        return lifetime > byte.MaxValue
+            ? throw new InvalidOperationException($"材质 {material} 的默认 lifetime 超过 byte 存储上限。")
+            : (byte)lifetime;
+    }
+
+    private void NotifyRigidDamageIfNeeded(int wx, int wy, byte flags)
+    {
+        if (CellFlags.Has(flags, CellFlags.RigidOwned))
+        {
+            _rigidDamageSink.OnOwnedCellDamaged(wx, wy);
+        }
     }
 }

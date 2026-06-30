@@ -6,62 +6,62 @@ namespace PixelEngine.Core.Diagnostics;
 public enum FramePhase
 {
     /// <summary>
-    /// 相位 0：帧时钟与预算监测。
+    /// 相位 0：输入、帧时钟与预算监测。
     /// </summary>
-    FrameClock,
+    InputAndTime,
 
     /// <summary>
-    /// 相位 1：玩法脚本输入与命令采集。
+    /// 相位 1：玩法脚本与命令执行。
     /// </summary>
-    Gameplay,
+    GameLogic,
 
     /// <summary>
-    /// 相位 2：世界流式装卸。
+    /// 相位 2：chunk 驻留变更应用。
     /// </summary>
-    Streaming,
+    ResidencyApply,
 
     /// <summary>
-    /// 相位 3：刚体像素擦除。
+    /// 相位 3：自由粒子落定写回 cell。
     /// </summary>
-    RigidBodyErase,
+    ParticleToCell,
 
     /// <summary>
     /// 相位 4：CA checkerboard 模拟。
     /// </summary>
-    CellularAutomata,
+    CaSimulation,
 
     /// <summary>
-    /// 相位 5：温度、火焰与反应。
+    /// 相位 5：温度、火焰与材质反应。
     /// </summary>
-    TemperatureReaction,
+    Temperature,
 
     /// <summary>
-    /// 相位 6：自由粒子积分。
+    /// 相位 6：dirty rectangle swap。
     /// </summary>
-    Particles,
+    DirtyRectSwap,
 
     /// <summary>
-    /// 相位 7：刚体形状重建。
+    /// 相位 7：cell 抛射为自由粒子。
     /// </summary>
-    RigidBodyRebuild,
+    CellToParticle,
 
     /// <summary>
-    /// 相位 8：物理步进。
+    /// 相位 8：物理同步、刚体 erase/step/stamp。
     /// </summary>
-    Physics,
+    PhysicsSync,
 
     /// <summary>
-    /// 相位 9：刚体像素回写。
+    /// 相位 9：构建渲染缓冲。
     /// </summary>
-    RigidBodyStamp,
+    BuildRenderBuffer,
 
     /// <summary>
-    /// 相位 10：渲染缓冲构建。
+    /// 相位 10：GPU 上传与渲染提交。
     /// </summary>
-    RenderBuild,
+    GpuUploadRender,
 
     /// <summary>
-    /// 相位 11：GPU 提交与音频消费。
+    /// 相位 11：世界流式后台与音频派发。
     /// </summary>
-    PresentAudio,
+    WorldStreaming,
 }

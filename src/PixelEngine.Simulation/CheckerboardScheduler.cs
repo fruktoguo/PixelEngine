@@ -31,6 +31,7 @@ public sealed class CheckerboardScheduler
     private IRigidDamageSink? _activeRigidDamageSink;
     private IReactionExecutor? _activeReactionExecutor;
     private ILifetimeSink? _activeLifetimeSink;
+    private SimulationDiagnostics? _activeDiagnostics;
     private ulong _activeWorldSeed;
     private uint _activeFrameIndex;
     private byte _activeParityBit;
@@ -38,7 +39,7 @@ public sealed class CheckerboardScheduler
     /// <summary>
     /// 按 checkerboard 4-pass 更新所有 awake chunk。
     /// </summary>
-    public void Step(
+    internal void Step(
         IChunkSource chunks,
         JobSystem jobs,
         MaterialPropsTable materials,
@@ -48,6 +49,7 @@ public sealed class CheckerboardScheduler
         IRigidDamageSink rigidDamageSink,
         IReactionExecutor reactionExecutor,
         ILifetimeSink lifetimeSink,
+        SimulationDiagnostics diagnostics,
         FrameProfiler? profiler)
     {
         ArgumentNullException.ThrowIfNull(chunks);
@@ -56,6 +58,7 @@ public sealed class CheckerboardScheduler
         ArgumentNullException.ThrowIfNull(rigidDamageSink);
         ArgumentNullException.ThrowIfNull(reactionExecutor);
         ArgumentNullException.ThrowIfNull(lifetimeSink);
+        ArgumentNullException.ThrowIfNull(diagnostics);
 
         int awakeCount = BuildBuckets(chunks.ResidentChunks);
         if (awakeCount == 0)
@@ -63,7 +66,7 @@ public sealed class CheckerboardScheduler
             return;
         }
 
-        CaptureContext(chunks, materials, rigidDamageSink, reactionExecutor, lifetimeSink, parityBit, frameIndex, worldSeed);
+        CaptureContext(chunks, materials, rigidDamageSink, reactionExecutor, lifetimeSink, diagnostics, parityBit, frameIndex, worldSeed);
         try
         {
             if (awakeCount < EngineConstants.SingleThreadChunkThreshold)
@@ -95,7 +98,7 @@ public sealed class CheckerboardScheduler
     /// <summary>
     /// 不经过 JobSystem，按同样 4-pass 顺序单线程更新所有 awake chunk。
     /// </summary>
-    public void StepSingleThread(
+    internal void StepSingleThread(
         IChunkSource chunks,
         MaterialPropsTable materials,
         byte parityBit,
@@ -104,6 +107,7 @@ public sealed class CheckerboardScheduler
         IRigidDamageSink rigidDamageSink,
         IReactionExecutor reactionExecutor,
         ILifetimeSink lifetimeSink,
+        SimulationDiagnostics diagnostics,
         FrameProfiler? profiler = null)
     {
         ArgumentNullException.ThrowIfNull(chunks);
@@ -111,13 +115,14 @@ public sealed class CheckerboardScheduler
         ArgumentNullException.ThrowIfNull(rigidDamageSink);
         ArgumentNullException.ThrowIfNull(reactionExecutor);
         ArgumentNullException.ThrowIfNull(lifetimeSink);
+        ArgumentNullException.ThrowIfNull(diagnostics);
 
         if (BuildBuckets(chunks.ResidentChunks) == 0)
         {
             return;
         }
 
-        CaptureContext(chunks, materials, rigidDamageSink, reactionExecutor, lifetimeSink, parityBit, frameIndex, worldSeed);
+        CaptureContext(chunks, materials, rigidDamageSink, reactionExecutor, lifetimeSink, diagnostics, parityBit, frameIndex, worldSeed);
         try
         {
             StepBucketsSingleThread(profiler);
@@ -175,6 +180,7 @@ public sealed class CheckerboardScheduler
         IRigidDamageSink rigidDamageSink,
         IReactionExecutor reactionExecutor,
         ILifetimeSink lifetimeSink,
+        SimulationDiagnostics diagnostics,
         byte parityBit,
         uint frameIndex,
         ulong worldSeed)
@@ -184,6 +190,7 @@ public sealed class CheckerboardScheduler
         _activeRigidDamageSink = rigidDamageSink;
         _activeReactionExecutor = reactionExecutor;
         _activeLifetimeSink = lifetimeSink;
+        _activeDiagnostics = diagnostics;
         _activeParityBit = parityBit;
         _activeFrameIndex = frameIndex;
         _activeWorldSeed = worldSeed;
@@ -197,6 +204,7 @@ public sealed class CheckerboardScheduler
         _activeRigidDamageSink = null;
         _activeReactionExecutor = null;
         _activeLifetimeSink = null;
+        _activeDiagnostics = null;
         _activeWorldSeed = 0;
         _activeFrameIndex = 0;
         _activeParityBit = 0;
@@ -222,7 +230,7 @@ public sealed class CheckerboardScheduler
 
         long elapsed = Stopwatch.GetTimestamp() - startTimestamp;
         double ms = elapsed * 1000.0 / Stopwatch.Frequency;
-        profiler.RecordSub((FrameSubPhase)((int)FrameSubPhase.CheckerboardA + pass), ms);
+        profiler.RecordSub((FrameSubPhase)((int)FrameSubPhase.CaPassA + pass), ms);
     }
 
     private void UpdateActiveBucketRange(int start, int end)
@@ -232,6 +240,7 @@ public sealed class CheckerboardScheduler
         IRigidDamageSink rigidDamageSink = _activeRigidDamageSink ?? throw new InvalidOperationException("checkerboard damage sink 上下文未设置。");
         IReactionExecutor reactionExecutor = _activeReactionExecutor ?? throw new InvalidOperationException("checkerboard reaction 上下文未设置。");
         ILifetimeSink lifetimeSink = _activeLifetimeSink ?? throw new InvalidOperationException("checkerboard lifetime 上下文未设置。");
+        SimulationDiagnostics diagnostics = _activeDiagnostics ?? throw new InvalidOperationException("checkerboard diagnostics 上下文未设置。");
 
         for (int i = start; i < end; i++)
         {
@@ -244,7 +253,8 @@ public sealed class CheckerboardScheduler
                 _activeWorldSeed,
                 rigidDamageSink,
                 reactionExecutor,
-                lifetimeSink);
+                lifetimeSink,
+                diagnostics);
         }
     }
 }
