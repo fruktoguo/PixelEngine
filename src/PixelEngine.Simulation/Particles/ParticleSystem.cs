@@ -3,6 +3,7 @@ using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Events;
 using PixelEngine.Core.Threading;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace PixelEngine.Simulation.Particles;
 
@@ -32,12 +33,16 @@ public sealed class ParticleSystem : IParticleReadback
     /// <summary>
     /// 创建指定容量的自由粒子系统。
     /// </summary>
-    public ParticleSystem(int capacity = EngineConstants.ParticleCapacityDefault, EventBus? events = null)
+    public ParticleSystem(
+        int capacity = EngineConstants.ParticleCapacityDefault,
+        EventBus? events = null,
+        DeterminismMode determinismMode = DeterminismMode.HighPerformance)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(capacity);
         _particles = GC.AllocateArray<Particle>(capacity, pinned: true);
         _outcomes = GC.AllocateArray<ParticleOutcome>(capacity, pinned: true);
         _ejectionRequests = GC.AllocateArray<EjectionRequest>(EngineConstants.ParticleEjectMaxPerTick, pinned: true);
+        DeterminismMode = determinismMode;
         _audioEvents = events?.Channel<AudioEvent>();
     }
 
@@ -52,14 +57,19 @@ public sealed class ParticleSystem : IParticleReadback
     public int Capacity => _particles.Length;
 
     /// <summary>
+    /// 粒子系统的确定性策略 seam。默认高性能；确定性数值实现留给后续确定性模式节点。
+    /// </summary>
+    public DeterminismMode DeterminismMode { get; }
+
+    /// <summary>
     /// 活跃粒子的可写连续前缀视图。
     /// </summary>
-    public Span<Particle> Active => _particles.AsSpan(0, ActiveCount);
+    public Span<Particle> Active => MemoryMarshal.CreateSpan(ref MemoryMarshal.GetArrayDataReference(_particles), ActiveCount);
 
     /// <summary>
     /// 活跃粒子的只读连续前缀视图。
     /// </summary>
-    public ReadOnlySpan<Particle> ActiveReadOnly => _particles.AsSpan(0, ActiveCount);
+    public ReadOnlySpan<Particle> ActiveReadOnly => MemoryMarshal.CreateReadOnlySpan(ref MemoryMarshal.GetArrayDataReference(_particles), ActiveCount);
 
     /// <inheritdoc />
     public ReadOnlySpan<Particle> Particles => ActiveReadOnly;
@@ -278,7 +288,7 @@ public sealed class ParticleSystem : IParticleReadback
                         continue;
                     }
 
-                    ParticleSpawn spawn = CreateEjectionSpawn(grid.MaterialProps, request, x, y, dx, dy, material);
+                    ParticleSpawn spawn = CreateEjectionSpawn(DeterminismMode, grid.MaterialProps, request, x, y, dx, dy, material);
                     if (!TrySpawn(in spawn))
                     {
                         continue;
@@ -471,12 +481,21 @@ public sealed class ParticleSystem : IParticleReadback
         return true;
     }
 
-    private static ParticleSpawn CreateEjectionSpawn(MaterialPropsTable materials, EjectionRequest request, int x, int y, int dx, int dy, ushort material)
+    private static ParticleSpawn CreateEjectionSpawn(
+        DeterminismMode determinismMode,
+        MaterialPropsTable materials,
+        EjectionRequest request,
+        int x,
+        int y,
+        int dx,
+        int dy,
+        ushort material)
     {
         float length = MathF.Sqrt((dx * dx) + (dy * dy));
         float nx = length > 0 ? dx / length : 1;
         float ny = length > 0 ? dy / length : 0;
-        float jitter = request.ImpulseJitter == 0 ? 0 : HashToUnitByte(x, y, material) / 255f * request.ImpulseJitter;
+        byte jitterByte = JitterByte(determinismMode, x, y, material);
+        float jitter = request.ImpulseJitter == 0 ? 0 : jitterByte / 255f * request.ImpulseJitter;
         float speed = request.ImpulseSpeed + jitter;
         ushort defaultLifetime = materials.DefaultLifetimeOf(material);
         byte life = defaultLifetime > EngineConstants.ParticleMaxLifetimeTicks
@@ -488,7 +507,7 @@ public sealed class ParticleSystem : IParticleReadback
             nx * speed,
             ny * speed,
             material,
-            HashToUnitByte(x, y, material),
+            jitterByte,
             life);
     }
 
@@ -512,6 +531,16 @@ public sealed class ParticleSystem : IParticleReadback
         hash ^= hash >> 13;
         hash *= 1274126177u;
         return (byte)(hash >> 24);
+    }
+
+    private static byte JitterByte(DeterminismMode determinismMode, int x, int y, ushort material)
+    {
+        return determinismMode switch
+        {
+            DeterminismMode.HighPerformance => HashToUnitByte(x, y, material),
+            DeterminismMode.Deterministic => HashToUnitByte(x, y, material),
+            _ => throw new ArgumentOutOfRangeException(nameof(determinismMode), determinismMode, "未知确定性模式。"),
+        };
     }
 
     private void EmitAudio(in AudioEvent audioEvent)

@@ -34,6 +34,18 @@ public sealed class ParticleSystemTests
     }
 
     /// <summary>
+    /// 验证粒子系统暴露确定性策略 seam，默认保持高性能模式。
+    /// </summary>
+    [Fact]
+    public void DeterminismModeDefaultsToHighPerformanceAndCanBeSelected()
+    {
+        Assert.Equal(DeterminismMode.HighPerformance, new ParticleSystem(capacity: 1).DeterminismMode);
+        Assert.Equal(
+            DeterminismMode.Deterministic,
+            new ParticleSystem(capacity: 1, determinismMode: DeterminismMode.Deterministic).DeterminismMode);
+    }
+
+    /// <summary>
     /// 验证 TrySpawn 写入活跃前缀并在容量满时只计 dropped、不扩容。
     /// </summary>
     [Fact]
