@@ -61,6 +61,7 @@ public sealed class EnginePhasePipelineTests
         Assert.Equal(
             [
                 EnginePhase.InputAndTime,
+                EnginePhase.GameLogicAndScripts,
                 EnginePhase.BuildRenderBuffer,
                 EnginePhase.GpuUploadAndRender,
                 EnginePhase.WorldStreaming,

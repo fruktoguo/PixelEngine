@@ -54,6 +54,11 @@ public sealed class EnginePhasePipeline
         for (int raw = 0; raw < PhaseCount; raw++)
         {
             EnginePhase phase = (EnginePhase)raw;
+            if (engine.Mode == EngineExecutionMode.Edit && phase == EnginePhase.GameLogicAndScripts)
+            {
+                continue;
+            }
+
             if (!ShouldRunPhase(phase, timing))
             {
                 continue;
@@ -80,6 +85,7 @@ public sealed class EnginePhasePipeline
         ValidatePhase(phase);
         return timing.RunSim || phase is
             EnginePhase.InputAndTime or
+            EnginePhase.GameLogicAndScripts or
             EnginePhase.BuildRenderBuffer or
             EnginePhase.GpuUploadAndRender or
             EnginePhase.WorldStreaming;

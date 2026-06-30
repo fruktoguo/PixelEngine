@@ -79,6 +79,7 @@ public sealed class EngineOverloadControllerTests
         Assert.Equal(
             [
                 EnginePhase.InputAndTime,
+                EnginePhase.GameLogicAndScripts,
                 EnginePhase.BuildRenderBuffer,
                 EnginePhase.GpuUploadAndRender,
                 EnginePhase.WorldStreaming,
