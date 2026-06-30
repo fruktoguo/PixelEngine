@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace PixelEngine.Simulation;
@@ -45,6 +46,7 @@ public ref struct NeighborWindow
         ArgumentNullException.ThrowIfNull(chunks);
         if (!chunks.ResolveNeighborhood(center, out ChunkNeighborhood neighborhood))
         {
+            Debug.Assert(false, $"中心 chunk {center} 的 3x3 邻域未完整驻留。");
             throw new InvalidOperationException($"中心 chunk {center} 的 3x3 邻域未完整驻留。");
         }
 

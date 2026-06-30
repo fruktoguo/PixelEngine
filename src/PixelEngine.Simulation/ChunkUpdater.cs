@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using PixelEngine.Core;
 using PixelEngine.Core.Random;
 
@@ -163,11 +164,13 @@ internal static class ChunkUpdater
         ushort sourceMaterial,
         byte parityBit)
     {
+        ValidateMoveCap(sourceX, sourceY, targetX, targetY);
         if (!CanDisplace(ref window, materials, sourceMaterial, targetX, targetY, parityBit))
         {
             return false;
         }
 
+        int targetSlot = window.SlotOf(targetX, targetY);
         byte targetFlags = window.GetFlags(targetX, targetY);
         if (CellFlags.Has(targetFlags, CellFlags.RigidOwned))
         {
@@ -180,6 +183,7 @@ internal static class ChunkUpdater
         window.SetFlags(targetX, targetY, CellFlags.SetParity(window.GetFlags(targetX, targetY), parityBit));
         MarkDirty(chunks, sourceX, sourceY);
         MarkDirty(chunks, targetX, targetY);
+        MarkKeepAliveIfCrossChunk(chunks, targetX, targetY, targetSlot);
         return true;
     }
 
@@ -212,5 +216,35 @@ internal static class ChunkUpdater
             CellAddressing.LocalCoord(wx),
             CellAddressing.LocalCoord(wy),
             EngineConstants.DirtyRectPadding);
+    }
+
+    private static void MarkKeepAliveIfCrossChunk(IChunkSource chunks, int wx, int wy, int targetSlot)
+    {
+        if (targetSlot == 4)
+        {
+            return;
+        }
+
+        ChunkCoord targetCoord = CellAddressing.WorldToChunk(wx, wy);
+        if (!chunks.TryGetChunk(targetCoord, out Chunk targetChunk))
+        {
+            Debug.Assert(false, $"KeepAlive 目标 chunk 未驻留：{targetCoord}。");
+            throw new InvalidOperationException($"KeepAlive 目标 chunk 未驻留：{targetCoord}。");
+        }
+
+        DirtyRect rect = DirtyRect.Empty.Union(
+            CellAddressing.LocalCoord(wx),
+            CellAddressing.LocalCoord(wy),
+            EngineConstants.DirtyRectPadding);
+        targetChunk.MarkIncomingDirty(KeepAliveDirections.IncomingSlotForTouchedNeighborSlot(targetSlot), rect);
+    }
+
+    private static void ValidateMoveCap(int sourceX, int sourceY, int targetX, int targetY)
+    {
+        if (Math.Abs(targetX - sourceX) > EngineConstants.MoveCap ||
+            Math.Abs(targetY - sourceY) > EngineConstants.MoveCap)
+        {
+            throw new InvalidOperationException("movement 目标超出 32px halo。");
+        }
     }
 }
