@@ -29,7 +29,7 @@
 |---|---|---|---|
 | 窗口/输入/GL/AL | **Silk.NET 2.x** | `Silk.NET.Windowing`、`Silk.NET.Input`、`Silk.NET.OpenGL`、`Silk.NET.OpenAL` | MIT、.NET Foundation；OpenGL 3.3 Core 基线 |
 | 数学/SIMD | **System.Numerics + System.Runtime.Intrinsics** | BCL | `Vector<T>` + `Avx2/Avx512/Avx10v2` + scalar fallback；`Silk.NET.Maths` 仅在与 GL 交互便利处可选 |
-| 物理 | **Box2D v3.1（vendored C 源，自建绑定）** | `native/box2d/`（git submodule 或 vendored）+ `PixelEngine.Interop` 内 `[LibraryImport]` 薄绑定 | 唯一 native 依赖；自建 task-callback 桥（架构 §14.2）；dual-build 静/动 × 6 RID |
+| 物理 | **Box2D v3.1.1（vendored C 源，自建绑定）** | `native/box2d/`（git submodule 或 vendored）+ `PixelEngine.Interop` 内 `[LibraryImport]` 薄绑定 | 唯一 native 依赖；自建 task-callback 桥（架构 §14.2）；dual-build 静/动 × 6 RID |
 | 编辑器 UI | **Dear ImGui via Hexa.NET.ImGui** | `Hexa.NET.ImGui`、`Hexa.NET.ImGui.Backends`（GL/GLFW 后端）；含 ImGuizmo/ImPlot/ImNodes | 即时模式、AOT 友好、活跃维护；停靠式面板 |
 | 脚本编译 | **Roslyn** | `Microsoft.CodeAnalysis.CSharp` | 热重载编译用户脚本 |
 | 脚本隔离 | **可回收 AssemblyLoadContext** | BCL `System.Runtime.Loader` | unload/reload 实现 Unity 式迭代 |
@@ -41,7 +41,7 @@
 | 互操作 | **`[LibraryImport]` source-gen** | BCL | 禁新 `DllImport` |
 | 跨界缓冲内存 | **POH / NativeMemory** | BCL `GC.AllocateArray(pinned:true)`、`NativeMemory` | 零拷贝双缓冲于 sim/physics/render |
 
-> 库命名陷阱（架构 R10）：存在两个 "Box2D.NET"。本项目**不**用第三方托管绑定，而是自建 `[LibraryImport]` 绑定到 vendored Box2D v3.1 C 源，以获得 task 桥完全控制与单 native 依赖。
+> 库命名陷阱（架构 R10）：存在两个 "Box2D.NET"。本项目**不**用第三方托管绑定，而是自建 `[LibraryImport]` 绑定到 vendored Box2D v3.1.1 C 源，以获得 task 桥完全控制与单 native 依赖。
 
 ### 4.1 可选/门控依赖（不在默认构建,采纳时须登记进 CPM 并由 plan/15 按 RID 打包）
 
@@ -79,7 +79,7 @@ PixelEngine.sln
 ├─ bench/
 │  └─ PixelEngine.Benchmarks/    BenchmarkDotNet
 ├─ content/                      materials.json / reactions.json / 材质纹理 / 音效 / 默认场景
-├─ native/                       box2d/ (vendored v3.1) + build 脚本(CMake, dual-build per-RID)
+├─ native/                       box2d/ (vendored v3.1.1) + build 脚本(CMake, dual-build per-RID)
 ├─ tools/                        构建/打包/codesign 脚本
 ├─ Directory.Build.props         全局 MSBuild 属性(LangVersion/Nullable/分析器)
 ├─ Directory.Packages.props      中央包版本管理(CPM)

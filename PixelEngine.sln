@@ -53,14 +53,21 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{4B4D74E2
 		.editorconfig = .editorconfig
 		.gitattributes = .gitattributes
 		.gitignore = .gitignore
+		.gitmodules = .gitmodules
 		AGENTS.md = AGENTS.md
 		Directory.Build.props = Directory.Build.props
 		Directory.Build.targets = Directory.Build.targets
 		Directory.Packages.props = Directory.Packages.props
 		global.json = global.json
 		LICENSE = LICENSE
+		native\CMakeLists.txt = native\CMakeLists.txt
+		native\CMakePresets.json = native\CMakePresets.json
 		native\.gitkeep = native\.gitkeep
+		native\PixelEngine.Native.targets = native\PixelEngine.Native.targets
+		native\toolchains\linux-arm64.cmake = native\toolchains\linux-arm64.cmake
 		nuget.config = nuget.config
+		tools\build-native.ps1 = tools\build-native.ps1
+		tools\build-native.sh = tools\build-native.sh
 		tools\.gitkeep = tools\.gitkeep
 	EndProjectSection
 EndProject

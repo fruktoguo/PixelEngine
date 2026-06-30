@@ -1,0 +1,21 @@
+<Project>
+  <PropertyGroup>
+    <PixelEngineNativeRid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</PixelEngineNativeRid>
+    <PixelEngineNativeRid Condition="'$(PixelEngineNativeRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</PixelEngineNativeRid>
+    <PixelEngineNativeRoot>$(MSBuildThisFileDirectory)..\</PixelEngineNativeRoot>
+    <PixelEngineNativeRuntimeDir>$(PixelEngineNativeRoot)runtimes\$(PixelEngineNativeRid)\native\</PixelEngineNativeRuntimeDir>
+    <PixelEngineNativeStaticDir>$(MSBuildThisFileDirectory)out\$(PixelEngineNativeRid)\static\</PixelEngineNativeStaticDir>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(PixelEngineNativeRid)' != '' and Exists('$(PixelEngineNativeRuntimeDir)') and '$(PublishAot)' != 'true'">
+    <None Include="$(PixelEngineNativeRuntimeDir)*"
+          Link="runtimes\$(PixelEngineNativeRid)\native\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(PixelEngineNativeRid)' != '' and Exists('$(PixelEngineNativeStaticDir)') and '$(PublishAot)' == 'true'">
+    <NativeLibrary Include="$(PixelEngineNativeStaticDir)*.lib" Condition="'$(OS)' == 'Windows_NT'" />
+    <NativeLibrary Include="$(PixelEngineNativeStaticDir)*.a" Condition="'$(OS)' != 'Windows_NT'" />
+  </ItemGroup>
+</Project>
