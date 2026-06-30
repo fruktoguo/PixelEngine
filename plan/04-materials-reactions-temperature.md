@@ -445,8 +445,8 @@ public sealed class TemperatureField
 ## 5. 验收标准
 
 - [x] `MaterialDef` 含架构 §7.3 全部字段，无遗漏；`MaterialHotTable` 热路径不触碰冷字段（字段审计 + `MaterialTableTests` 覆盖；反汇编随后续热路径基准确认）。
-- [ ] name↔id：改 `materials.json` 顺序 / 增删材质后，`BuildRemapLut` 使旧档逐 cell 正确重映射，缺失材质落 fallback（与 plan/07 存档往返测试联动通过，架构 §11.2 / §16.2，不变式 #8）。
-- [ ] 热重载 `ReloadStable` 后既有 id 不变、live 网格不损坏，删除材质活 cell 重映射 fallback 并输出诊断计数（架构 §17.4）。
+- [x] name↔id：改 `materials.json` 顺序 / 增删材质后，`BuildRemapLut` 使旧档逐 cell 正确重映射，缺失材质落 fallback（与 plan/07 存档往返测试联动通过，架构 §11.2 / §16.2，不变式 #8）。
+- [x] 热重载 `ReloadStable` 后既有 id 不变、live 网格不损坏，删除材质活 cell 重映射 fallback 并输出诊断计数（架构 §17.4）。
 - [x] `[tag]` 展开正确：tag 成员集合按位筛选无误、笛卡尔积齐全、有序对去重无对称重复、rate→byte 映射正确（反应表测试通过，架构 §16.2）。
 - [ ] cache-aware 查表：惰性材质（`ReactionCount==0`）一次比较早退、热路径不触反应数据；Linear/Binary/DirectTable 三模式结果一致；**无 `int[N*N]` 大表**（代码审查 + benchmark cache-miss 确认，架构 §7.4 / R12）。实现与单元测试已覆盖，cache-miss benchmark 随反应执行热路径补齐。
 - [x] 反应质量守恒：双输出 / 定向反应在 chunk 边界**不翻倍、不丢失**（边界守恒性质测试通过，引用 `plan/14`，架构 §16.2 / 不变式 #4 / R2）。
