@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
 
 namespace PixelEngine.Hosting;
@@ -57,10 +58,25 @@ public sealed class Engine : IDisposable
     {
         ThrowIfShutdown();
         State = EngineRunState.Running;
-        ApplyOverloadPolicy(realDeltaSeconds);
-        FrameTiming timing = Context.Clock.BeginFrame(realDeltaSeconds);
-        Phases.Execute(this, timing);
-        Context.Counters.SimHz = Context.Clock.SimHz;
+        FrameProfiler profiler = Context.Profiler;
+        profiler.BeginFrame();
+        FrameTiming timing;
+        try
+        {
+            using (profiler.Measure(FramePhase.InputAndTime))
+            {
+                ApplyOverloadPolicy(realDeltaSeconds);
+                timing = Context.Clock.BeginFrame(realDeltaSeconds);
+            }
+
+            Phases.Execute(this, timing);
+            Context.Counters.SimHz = Context.Clock.SimHz;
+        }
+        finally
+        {
+            profiler.EndFrame();
+        }
+
         return timing;
     }
 

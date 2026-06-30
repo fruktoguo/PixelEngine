@@ -22,19 +22,22 @@ public sealed class EngineContext
         JobSystem jobs,
         FrameClock clock,
         EventBus events,
-        EngineCounters counters)
+        EngineCounters counters,
+        FrameProfiler profiler)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(jobs);
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(events);
         ArgumentNullException.ThrowIfNull(counters);
+        ArgumentNullException.ThrowIfNull(profiler);
 
         Options = options;
         Jobs = jobs;
         Clock = clock;
         Events = events;
         Counters = counters;
+        Profiler = profiler;
         QualityTier = EngineQualityTier.Full;
     }
 
@@ -62,6 +65,11 @@ public sealed class EngineContext
     /// 引擎诊断计数器。
     /// </summary>
     public EngineCounters Counters { get; }
+
+    /// <summary>
+    /// 按架构 §3.3 的 12 个主相位记录耗时的帧诊断计时器。
+    /// </summary>
+    public FrameProfiler Profiler { get; }
 
     /// <summary>
     /// 当前质量档位，由 Hosting 过载降级逻辑下发。

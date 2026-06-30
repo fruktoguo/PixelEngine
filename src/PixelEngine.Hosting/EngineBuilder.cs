@@ -232,16 +232,18 @@ public sealed class EngineBuilder
         {
             SimHz = options.SimHz,
         };
+        FrameProfiler profiler = new();
         EngineOverloadController overload = new(options.Overload);
         EngineCommandQueue commands = new();
         SceneService scenes = BuildSceneService(options);
-        EngineContext context = new(options, jobs, clock, events, counters);
+        EngineContext context = new(options, jobs, clock, events, counters, profiler);
         context.RegisterService(context);
         context.RegisterService(options);
         context.RegisterService(jobs);
         context.RegisterService(clock);
         context.RegisterService(EngineServiceRole.EventBus, events);
         context.RegisterService(EngineServiceRole.Diagnostics, counters);
+        context.RegisterService(profiler);
         context.RegisterService(overload);
         context.RegisterService(commands);
         context.RegisterService<ISceneService>(EngineServiceRole.SceneService, scenes);
