@@ -84,7 +84,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [~] `Scene` 模型 + `ISceneService`:加载/卸载/切换;从存档(plan/07)或程序化生成构建起始世界。
 - [x] 项目模型:内容根、materials/reactions、资产、起始场景引用;`EngineBuilder` 装载。
 - [~] Play/Edit/Step 三态机 + 进入 Play 前世界快照、退出回滚(plan/07 快照),脚本生命周期协调(plan/11、plan/12)。
-- [ ] **headless 模式**:无窗口/渲染/音频,跑 Core+Sim+Physics+World,固定步数驱动(供 plan/14)。
+- [~] **headless 模式**:无窗口/渲染/音频,跑 Core+Sim+Physics+World,固定步数驱动(供 plan/14)。
 - [x] 帧节奏与 `FrameClock`(plan/02)对接:固定 dt、时间膨胀、sim/render 解耦的频率管理。
 - [x] 公开 API 全部中文 XML 文档注释(脚本 IntelliSense,plan/11/00 §7)。
 
@@ -96,7 +96,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [ ] 过载降级按五级顺序触发且可在编辑器观测/覆盖。
 - [ ] 脚本经 `EngineContext` 能读写世界/建刚体/播音效,写操作落在正确相位(配合 plan/11 测试)。
 - [ ] Play/Edit/Step 切换正确:进入 Play 快照、退出回滚到编辑态,脚本 OnStart/OnDestroy 正确触发。
-- [ ] headless 模式可被 plan/14 测试/基准以确定步数驱动,无窗口依赖。
+- [x] headless 模式可被 plan/14 测试/基准以确定步数驱动,无窗口依赖。
 - [ ] 关闭时 native 资源与 ALC 正确释放,无泄漏(配合 plan/14 scripting 测试)。
 - [x] Demo(plan/13)仅经 Hosting 公开 API 启动,无引擎内部后门。
 

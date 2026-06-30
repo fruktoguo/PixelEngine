@@ -103,6 +103,58 @@ public sealed class EnginePhaseDriverTests
         }
     }
 
+    /// <summary>
+    /// 验证 headless 固定步数驱动可以运行当前已有的 Simulation 与 World phase driver。
+    /// </summary>
+    [Fact]
+    public void HeadlessTicksDriveAvailableSimulationAndWorldPhaseDrivers()
+    {
+        string worldPath = Path.Combine(Path.GetTempPath(), $"pixelengine-headless-phase-{Guid.NewGuid():N}");
+        try
+        {
+            MaterialTable materials = Materials(("empty", CellType.Empty));
+            TestChunkSource chunks = new(new Chunk(new ChunkCoord(0, 0)));
+            CellGrid grid = new(chunks, new MaterialPropsTable(materials.Hot));
+            SimulationKernel kernel = new(chunks, new MaterialPropsTable(materials.Hot));
+            ParticleSystem particles = new(capacity: 16);
+            TemperatureField temperature = new();
+            WorldManager world = new(
+                new WorldCamera(0, 0, 64, 64),
+                temperature,
+                materials,
+                worldPath,
+                fallbackMaterialId: 0,
+                new WorldStreamingConfig
+                {
+                    ActivationMarginChunks = 0,
+                    BorderRingWidth = 1,
+                    MaxStreamOpsPerFrame = 4,
+                });
+
+            using Engine engine = new EngineBuilder()
+                .UseHeadless()
+                .UseDeterministicMode()
+                .AddPhaseDriver(new SimulationPhaseDriver(chunks, grid, kernel, particles, temperature, materials))
+                .AddPhaseDriver(new WorldPhaseDriver(world))
+                .Build();
+
+            engine.RunHeadlessTicks(3);
+
+            Assert.Equal(3, engine.Context.Clock.FrameIndex);
+            Assert.Equal(3, engine.Context.Clock.SimTickIndex);
+            Assert.Equal(3u, kernel.FrameIndex);
+            Assert.False(engine.Context.Options.EnableGpu);
+            Assert.Equal(0, world.Streamer.PendingRequestCount);
+        }
+        finally
+        {
+            if (Directory.Exists(worldPath))
+            {
+                Directory.Delete(worldPath, recursive: true);
+            }
+        }
+    }
+
     private static MaterialTable Materials(params (string Name, CellType Type)[] definitions)
     {
         MaterialDef[] materials = new MaterialDef[definitions.Length];
