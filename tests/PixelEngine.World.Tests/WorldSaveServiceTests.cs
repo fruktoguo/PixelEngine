@@ -110,6 +110,44 @@ public sealed class WorldSaveServiceTests
         Assert.Contains("缺失 chunk", exception.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证读档时被删除的材质在 chunk、粒子与刚体里统一走 fallback 并计数。
+    /// </summary>
+    [Fact]
+    public void LoadAllRemapsDeletedMaterialsToFallback()
+    {
+        using TempWorldDirectory save = TempWorldDirectory.Create();
+        WorldSaveService service = new();
+        MaterialTable savedMaterials = Materials(("empty", CellType.Empty), ("deleted", CellType.Solid));
+        ResidentChunkMap sourceChunks = new();
+        ResidencyTable sourceResidency = new();
+        TemperatureField sourceTemperature = new();
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        chunk.Material[0] = 1;
+        sourceChunks.Add(chunk);
+        FakeWorldStateBridge state = new(
+            [new FreeParticleSnapshot(0, 0, 0, 0, 1, 0, 1)],
+            [RigidBody(material: [1])]);
+        service.SaveAll(
+            new WorldSaveContext(sourceChunks, sourceResidency, sourceTemperature, savedMaterials, 1, 2, ReadOnlyMemory<byte>.Empty),
+            state,
+            save.Path);
+
+        MaterialTable currentMaterials = Materials(("empty", CellType.Empty));
+        ResidentChunkMap loadedChunks = new();
+        FakeWorldStateBridge restored = new([], []);
+        WorldLoadResult result = service.LoadAll(
+            save.Path,
+            new WorldLoadContext(loadedChunks, new ResidencyTable(), new TemperatureField(), currentMaterials, 0, CellFlags.Parity),
+            restored);
+
+        Assert.Equal(3, result.MaterialFallbackHitCount);
+        Assert.True(loadedChunks.TryGetChunk(new ChunkCoord(0, 0), out Chunk loadedChunk));
+        Assert.Equal(0, loadedChunk.Material[0]);
+        Assert.Equal((ushort)0, restored.RestoredParticles[0].Material);
+        Assert.Equal([0], restored.RestoredBodies[0].Material.ToArray());
+    }
+
     private static RigidBodySnapshot RigidBody(ushort[] material)
     {
         return new RigidBodySnapshot(
