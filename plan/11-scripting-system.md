@@ -275,10 +275,10 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 - [ ] 防泄漏：禁止跨 ALC 缓存用户 `Type`/委托/实例；句柄经稳定 id 而非对象引用（§3.4，.NET 可回收 ALC 最佳实践）
 
 ### 4.5 异常隔离（§3.5，AGENTS §4）
-- [ ] `internal sealed class ScriptInvoker`：每回调/事件处理器单独 `try/catch`（host 边界）
-- [ ] 捕获后：经 plan/02 诊断记录（异常+脚本类型+回调名+帧号）、标 `Faulted` + `Enabled=false`、通知编辑器；绝不冒泡主循环
-- [ ] `ResetFault()`：热重载修复后清除 Faulted（§3.5）
-- [ ] 验证：单脚本异常不影响同帧其它脚本、不崩引擎（对应 §5 验收）
+- [x] `internal sealed class ScriptInvoker`：每回调/事件处理器单独 `try/catch`（host 边界）
+- [~] 捕获后：经 plan/02 诊断记录（异常+脚本类型+回调名+帧号）、标 `Faulted` + `Enabled=false`、通知编辑器；绝不冒泡主循环
+- [x] `ResetFault()`：热重载修复后清除 Faulted（§3.5）
+- [x] 验证：单脚本异常不影响同帧其它脚本、不崩引擎（对应 §5 验收）
 
 ### 4.6 IDE 集成（轻量，§3.6）
 - [ ] `internal sealed class IdeLauncher`：探测 Rider/VS（vswhere）/VS Code（PATH/注册表），按优先级 `Process.Start` 打开 `.sln`
@@ -303,7 +303,7 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 - [ ] 脚本写入类调用经命令队列在正确相位落地：cell 写标 chunk dirty 并被下帧 CA 看见；particle 落相位 7；body 建于相位 8a——无跨相位竞争、不破坏 §3.2 相位安全（架构 §3.3）
 - [ ] 修改脚本源文件后自动重编译并热重载：旧 ALC 成功 `Unload` 并被 GC 回收（弱引用确认）、组件实例重建、`[Persist]`/公开字段状态按策略恢复（§3.4）
 - [ ] 编译错误不中断运行：保留旧程序集，诊断（行列+中文摘要）上报编辑器（§3.4）
-- [ ] 脚本任一回调抛异常被捕获、记录、该脚本被禁用，**引擎主循环继续、同帧其它脚本不受影响、进程不崩溃**（§3.5，AGENTS §4）
+- [x] 脚本任一回调抛异常被捕获、记录、该脚本被禁用，**引擎主循环继续、同帧其它脚本不受影响、进程不崩溃**（§3.5，AGENTS §4）
 - [ ] 反复热重载 N 次（如 50 次）无 ALC/内存泄漏（无残留可回收上下文，无单调增长的句柄/委托缓存，§3.4）
 - [ ] 稳态帧脚本派发路径零托管堆分配（命令队列/事件分发/回调派发，BenchmarkDotNet 内存诊断为 0，§3.3/§3.5，AGENTS §3）
 - [ ] `IdeLauncher` 在装有 Rider/VS/VS Code 的机器上能正确探测并打开 `.sln`；`ProjectGenerator` 生成的项目可被 IDE 直接加载（§3.6）

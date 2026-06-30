@@ -18,6 +18,16 @@ public abstract class Behaviour : IComponent
     public bool Enabled { get; set; } = true;
 
     /// <summary>
+    /// 获取该脚本是否因回调异常被运行时隔离。
+    /// </summary>
+    public bool Faulted { get; private set; }
+
+    /// <summary>
+    /// 最近一次导致脚本被隔离的异常。
+    /// </summary>
+    public Exception? LastException { get; private set; }
+
+    /// <summary>
     /// 访问引擎世界能力的统一上下文；由脚本运行时注入。
     /// </summary>
     protected IScriptContext Context { get; private set; } = null!;
@@ -51,6 +61,16 @@ public abstract class Behaviour : IComponent
     {
     }
 
+    /// <summary>
+    /// 清除异常隔离状态，并重新启用该脚本。
+    /// </summary>
+    public void ResetFault()
+    {
+        Faulted = false;
+        LastException = null;
+        Enabled = true;
+    }
+
     internal void Attach(Entity entity, IScriptContext context)
     {
         Entity = entity;
@@ -80,5 +100,12 @@ public abstract class Behaviour : IComponent
     {
         Context = context;
         OnDestroy();
+    }
+
+    internal void MarkFaulted(Exception exception)
+    {
+        LastException = exception;
+        Faulted = true;
+        Enabled = false;
     }
 }

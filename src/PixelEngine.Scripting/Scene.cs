@@ -10,6 +10,7 @@ public sealed class Scene
     private readonly List<ISystem> _systems = [];
     private readonly List<Entity> _destroyQueue = [];
     private readonly Stack<int> _freeEntityIds = new();
+    private readonly ScriptInvoker _invoker = new();
     private int _nextEntityId;
 
     /// <summary>
@@ -21,6 +22,11 @@ public sealed class Scene
     /// 已注册系统数量。
     /// </summary>
     public int SystemCount => _systems.Count;
+
+    /// <summary>
+    /// 已捕获的脚本回调异常数量。
+    /// </summary>
+    public int ScriptExceptionCount => _invoker.Exceptions.Count;
 
     /// <summary>
     /// 创建一个脚本实体。
@@ -104,7 +110,7 @@ public sealed class Scene
         ArgumentNullException.ThrowIfNull(context);
         foreach (IComponentBucket bucket in _buckets.Values)
         {
-            bucket.DispatchStart(context);
+            bucket.DispatchStart(context, _invoker);
         }
     }
 
@@ -116,7 +122,7 @@ public sealed class Scene
         ArgumentNullException.ThrowIfNull(context);
         foreach (IComponentBucket bucket in _buckets.Values)
         {
-            bucket.DispatchUpdate(context, dt);
+            bucket.DispatchUpdate(context, dt, _invoker);
         }
     }
 
@@ -128,7 +134,7 @@ public sealed class Scene
         ArgumentNullException.ThrowIfNull(context);
         foreach (IComponentBucket bucket in _buckets.Values)
         {
-            bucket.DispatchFixedSimTick(context);
+            bucket.DispatchFixedSimTick(context, _invoker);
         }
     }
 
@@ -148,7 +154,7 @@ public sealed class Scene
 
             foreach (IComponentBucket bucket in _buckets.Values)
             {
-                bucket.Destroy(entity.Id, context);
+                bucket.Destroy(entity.Id, context, _invoker);
             }
 
             _ = _entities.Remove(entity.Id);
@@ -209,13 +215,13 @@ public sealed class Scene
     {
         void Remove(int entityId);
 
-        void Destroy(int entityId, IScriptContext context);
+        void Destroy(int entityId, IScriptContext context, ScriptInvoker invoker);
 
-        void DispatchStart(IScriptContext context);
+        void DispatchStart(IScriptContext context, ScriptInvoker invoker);
 
-        void DispatchUpdate(IScriptContext context, float dt);
+        void DispatchUpdate(IScriptContext context, float dt, ScriptInvoker invoker);
 
-        void DispatchFixedSimTick(IScriptContext context);
+        void DispatchFixedSimTick(IScriptContext context, ScriptInvoker invoker);
     }
 
     private sealed class ComponentBucket<T> : IComponentBucket
@@ -277,45 +283,45 @@ public sealed class Scene
             _components[last] = null!;
         }
 
-        public void Destroy(int entityId, IScriptContext context)
+        public void Destroy(int entityId, IScriptContext context, ScriptInvoker invoker)
         {
             if (TryGet(entityId, out T component) && component is Behaviour behaviour)
             {
-                behaviour.InvokeDestroy(context);
+                invoker.InvokeDestroy(behaviour, context);
             }
 
             Remove(entityId);
         }
 
-        public void DispatchStart(IScriptContext context)
+        public void DispatchStart(IScriptContext context, ScriptInvoker invoker)
         {
             for (int i = 0; i < _count; i++)
             {
                 if (_components[i] is Behaviour { Started: false } behaviour)
                 {
-                    behaviour.InvokeStart(context);
+                    invoker.InvokeStart(behaviour, context);
                 }
             }
         }
 
-        public void DispatchUpdate(IScriptContext context, float dt)
+        public void DispatchUpdate(IScriptContext context, float dt, ScriptInvoker invoker)
         {
             for (int i = 0; i < _count; i++)
             {
-                if (_components[i] is Behaviour { Enabled: true } behaviour)
+                if (_components[i] is Behaviour behaviour)
                 {
-                    behaviour.InvokeUpdate(context, dt);
+                    invoker.InvokeUpdate(behaviour, context, dt);
                 }
             }
         }
 
-        public void DispatchFixedSimTick(IScriptContext context)
+        public void DispatchFixedSimTick(IScriptContext context, ScriptInvoker invoker)
         {
             for (int i = 0; i < _count; i++)
             {
-                if (_components[i] is Behaviour { Enabled: true } behaviour)
+                if (_components[i] is Behaviour behaviour)
                 {
-                    behaviour.InvokeFixedSimTick(context);
+                    invoker.InvokeFixedSimTick(behaviour, context);
                 }
             }
         }
