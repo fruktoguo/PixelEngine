@@ -133,16 +133,16 @@ plan/00 §7 明确要求把编译期常量**集中到 `PixelEngine.Core` 的 `En
 > 命名到文件/类型/方法级；标注架构 § 与帧相位（架构 §3.3）。所有公开 API 带中文 XML 注释（AGENTS.md §4）。稳态帧循环零分配（AGENTS.md §3）。
 
 ### 4.1 项目骨架
-- [ ] 建 `src/PixelEngine.Core/PixelEngine.Core.csproj`，继承 `Directory.Build.props`，开 `<AllowUnsafeBlocks>true`，**无任何 ProjectReference、无任何 PackageReference（仅 BCL）**（plan/00 §5/§6）。
-- [ ] 建命名空间骨架文件夹 `Mathematics/Memory/Threading/Random/Events/Time/Diagnostics/`。
+- [x] 建 `src/PixelEngine.Core/PixelEngine.Core.csproj`，继承 `Directory.Build.props`，开 `<AllowUnsafeBlocks>true`，**无任何 ProjectReference、无任何 PackageReference（仅 BCL）**（plan/00 §5/§6）。
+- [x] 建命名空间骨架文件夹 `Mathematics/Memory/Threading/Random/Events/Time/Diagnostics/`。
 
 ### 4.2 数学（`Mathematics/`，架构 §6.2/§8.2/§8.3，plan/00 §7）
-- [ ] `Vector2i.cs`：`readonly struct Vector2i`，含 `X/Y`、`Zero/One/UnitX/UnitY`、`+ - *(scalar) ==/!=`、`ManhattanLength`、`Min/Max`、`ToVector2`、`Floor/Round(Vector2)`、`GetHashCode`。
-- [ ] `Transform2D.cs`：`readonly struct Transform2D`（cos/sin 旋转，对齐 `b2Rot`），含两个构造、`Identity`、`TransformPoint`、`InverseTransformPoint`（架构 §8.3 inverse-sampling 基元）、`TransformDirection`、`Angle`。
-- [ ] `AABB.cs`：`readonly struct AABB`，含 `Center/Extents`、`Contains`、`Intersects`、`Union`、`Expand`、`ToRectI`。
-- [ ] `RectI.cs`：`struct RectI`，含 `IsEmpty/Width/Height/Area`、`Empty`、`Encapsulate(int,int)`/`Encapsulate(in RectI)`、`ExpandClamped`、`Contains`、`Intersects`、`Intersection`、`FromBounds`（供上层 dirty-rect grow/shrink，架构 §5.4/§5.5）。
-- [ ] `Fixed.cs`：`readonly struct Fixed`（Q32.32），含 `Raw/FractionalBits`、`Zero/One/Half`、`FromInt/FromRaw`、显式 float 互转、确定性 `+ - * /` 与比较、`Sqrt`、`ToInt/RoundToInt`（架构 §6.2 确定性 seam）。
-- [ ] `Mathx.cs`：`FloorDiv`、`Mod`（floored，负坐标 chunk 分解正确）、`CeilDiv`、`Clamp(int)`、`Clamp01`、`Lerp`、`NextPowerOfTwo`、`IsPowerOfTwo`、`Log2Int`。
+- [x] `Vector2i.cs`：`readonly struct Vector2i`，含 `X/Y`、`Zero/One/UnitX/UnitY`、`+ - *(scalar) ==/!=`、`ManhattanLength`、`Min/Max`、`ToVector2`、`Floor/Round(Vector2)`、`GetHashCode`。
+- [x] `Transform2D.cs`：`readonly struct Transform2D`（cos/sin 旋转，对齐 `b2Rot`），含两个构造、`Identity`、`TransformPoint`、`InverseTransformPoint`（架构 §8.3 inverse-sampling 基元）、`TransformDirection`、`Angle`。
+- [x] `AABB.cs`：`readonly struct AABB`，含 `Center/Extents`、`Contains`、`Intersects`、`Union`、`Expand`、`ToRectI`。
+- [x] `RectI.cs`：`struct RectI`，含 `IsEmpty/Width/Height/Area`、`Empty`、`Encapsulate(int,int)`/`Encapsulate(in RectI)`、`ExpandClamped`、`Contains`、`Intersects`、`Intersection`、`FromBounds`（供上层 dirty-rect grow/shrink，架构 §5.4/§5.5）。
+- [x] `Fixed.cs`：`readonly struct Fixed`（Q32.32），含 `Raw/FractionalBits`、`Zero/One/Half`、`FromInt/FromRaw`、显式 float 互转、确定性 `+ - * /` 与比较、`Sqrt`、`ToInt/RoundToInt`（架构 §6.2 确定性 seam）。
+- [x] `Mathx.cs`：`FloorDiv`、`Mod`（floored，负坐标 chunk 分解正确）、`CeilDiv`、`Clamp(int)`、`Clamp01`、`Lerp`、`NextPowerOfTwo`、`IsPowerOfTwo`、`Log2Int`。
 
 ### 4.3 内存（`Memory/`，架构 §7.1/§12.6/§14.3，AGENTS.md §3）
 - [ ] `PinnedBuffer.cs`：`PinnedBuffer<T>`（`GC.AllocateArray(pinned:true)`），含 `Length/Span/Memory/Pointer/GetReference/this[]/Clear/Dispose`。
@@ -249,7 +249,7 @@ plan/00 §7 明确要求把编译期常量**集中到 `PixelEngine.Core` 的 `En
 
 按 AGENTS.md §6 中文小步提交，每节点完成即提交（`scope=core`）：
 
-- [ ] 节点 1：`feat(core): 建立 PixelEngine.Core 项目骨架与数学库`（§4.1 + §4.2，提交信息附「对应计划: plan/02 §实现清单 4.1–4.2」）。
+- [x] 节点 1：`feat(core): 建立 PixelEngine.Core 项目骨架与数学库`（§4.1 + §4.2，提交信息附「对应计划: plan/02 §实现清单 4.1–4.2」）。
 - [ ] 节点 2：`feat(core): 实现内存封装(POH/NativeMemory/SoA/池/双缓冲)`（§4.3）。
 - [ ] 节点 3：`feat(core): 实现持久线程池 JobSystem 与 WorkerLocal`（§4.4，含 Box2D task 桥派发面 §14.2）。
 - [ ] 节点 4：`feat(core): 实现确定性 RNG 与无锁事件总线`（§4.5 + §4.6）。
