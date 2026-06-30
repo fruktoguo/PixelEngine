@@ -27,7 +27,7 @@
   - 常量：新增项进 `EngineConstants`（`plan/00 §7` 常量集中）：`ParticleCapacityDefault`、`ParticleGravityPerTick`、`ParticleDepositSpeedEpsilon`、`ParticleMaxLifetimeTicks`、`ParticleEjectMaxPerTick`。
   - RNG：每 chunk 可种子化 RNG（爆炸散布抖动、colorVariant），走 Core RNG 的确定性 seam（架构 §6.2）。
   - 诊断/事件总线：粒子计数等分项注册到 Core 诊断（`plan/00 §7`）；沉积/爆炸音频事件写入 Core 事件总线（架构 §10.2，供 plan/10 消费）。
-- **依赖 `PixelEngine.Simulation` 内 CellGrid（plan/03）**：只读材质/cell-type 采样、写回 cell、标记 chunk dirty / KeepAlive。本文按接口名引用（`CellGrid.GetMaterial`、`GetCellType`、`TryWriteCell`、`MarkDirtyAndKeepAlive`），最终签名以 plan/03 定稿为准；若 plan/03 未提供等价 API，标 `- [!] 阻塞` 并上报，不在本子系统私自绕过 CellGrid 直写 SoA 数组。
+- **依赖 `PixelEngine.Simulation` 内 CellGrid / SimulationKernel（plan/03）**：`CellGrid` 只负责只读材质/cell-type 采样与材质属性查询；相位 3/7 的写网格、current dirty 与边界 KeepAlive 一律经 `SimulationKernel.DepositCell` / `ReadAndClearCell` / `MarkDirty`。若 plan/03 未提供等价相位 API，标 `- [!] 阻塞` 并上报，不在本子系统私自绕过相位入口直写 SoA 数组。
 - **依赖 `MaterialDef`（plan/04，只读）**：按 material id 查 `Density`（密度位移）与 emissive 标志（供渲染判定，本文只透传 id，不在本文做发光判定）。
 - **被依赖（消费方，本文只暴露接口）**：plan/08（相位 9 CPU stamp + emissive）、plan/09（GPU point-sprite 直接映射 pinned 缓冲）、plan/12（编辑器粒子计数 + 轨迹叠层）、plan/10（音频事件）、plan/07（在飞粒子序列化/反序列化）。
 - 不引入任何新 NuGet 依赖；不与 `plan/00 §4` 选型表冲突。
@@ -109,18 +109,18 @@ public readonly struct EjectionRequest
 [Flags] public enum EjectMask : byte { Powder=1, Liquid=2, Gas=4, Fire=8, Solid=16 }
 
 public void RequestEjection(in EjectionRequest req);   // 相位 1 入队（有界队列）
-public void RunEjectionPass(CellGrid grid);            // 相位 7 抽干并执行
+public void RunEjectionPass(SimulationKernel kernel, CellGrid grid); // 相位 7 抽干并执行
 ```
 
-单粒子抛射动作（架构 §7.6）：读 cell 材质 → 网格写 `Empty`（并标 dirty/KeepAlive）→ 从池 `TrySpawn` 取粒子 → 拷材质 + `ColorVariant` → 按冲量设速度（径向方向 × `ImpulseSpeed` + RNG 抖动）。`RunEjectionPass` 单线程顺序执行（写网格 + 改 active-count，避免竞争；爆炸事件有界，`ParticleEjectMaxPerTick` 封顶防尖刺）。每次抛射可向事件总线投 explosion/impact 音频事件（架构 §10.2，plan/10 消费）。
+单粒子抛射动作（架构 §7.6）：读 cell 材质 → 先从池 `TrySpawn` 预留粒子槽 → 成功后经 `SimulationKernel.ReadAndClearCell` 把源 cell 写 `Empty`（并标 dirty/KeepAlive）→ 拷材质 + `ColorVariant` → 按冲量设速度（径向方向 × `ImpulseSpeed` + RNG 抖动）。容量满时不清源 cell，避免质量丢失。`RunEjectionPass` 单线程顺序执行（写网格 + 改 active-count，避免竞争；爆炸事件有界，`ParticleEjectMaxPerTick` 封顶防尖刺）。每次抛射可向事件总线投 explosion/impact 音频事件（架构 §10.2，plan/10 消费）。
 
 ### 3.5 particle→cell 沉积（相位 3b，架构 §3.3 / §7.6）
 
 承接 3a 标记为 `WantsDeposit` 的粒子，把它写回网格。放 CA 之前（相位 3），使新沉积像素本帧即被 CA 看见（架构 §3.3）。沉积**写网格 + swap-remove**，故单线程顺序执行（落定粒子通常远少于活跃粒子，开销低且天然无竞争）。
 
 - 触发条件（3a 判定）：DDA 命中 solid/blocked 目标，或速度量级 `≤ ParticleDepositSpeedEpsilon`（≈0）。
-- 方法：`void ResolveDeposits(CellGrid grid)`。每个候选粒子在落点 `(ix,iy)`：
-  - 目标 `Empty` → `grid.TryWriteCell(ix,iy, material)` 写回材质 → `grid.MarkDirtyAndKeepAlive(ix,iy)` 唤醒 CA → swap-remove 释放粒子。
+- 方法：`void ResolveDeposits(SimulationKernel kernel, CellGrid grid)`。每个候选粒子在落点 `(ix,iy)`：
+  - 目标 `Empty` → `kernel.DepositCell(ix,iy, material, persistentFlags)` 写回材质并唤醒 CA → swap-remove 释放粒子。
   - 目标被占（非 Empty）→ 按密度处置：若粒子材质 `Density >` 目标 cell 材质 `Density`，作密度位移（与目标 swap，遵 plan/03/§7.3 密度约定）；否则在 von Neumann 邻居中找一个 `Empty` cell 沉积；若邻居也无空位 → 见下回退。
   - **回退（R13，强制项，架构 §19）**：无处沉积时——若 `Life > 0` 则保持为短命粒子（继续飞，`Life` 已在 3a 递减）；若 `Life == 0` 则**直接杀死**（swap-remove，计入 `KilledByLifetimeThisTick`）。这条「无处沉积则杀死」+ §3.6 的硬性 max-lifetime 共同杜绝迷途粒子泄漏。
   - 落点所在 chunk 非驻留（理论上 border ring 保证驻留，架构 §3.4）→ 视为无处沉积，走回退。
@@ -179,7 +179,7 @@ public ParticleSystemStats Stats { get; }
 | [3a] 积分推进 | `IntegrateAndAdvance`：弹道积分 + `Life--` + DDA 采样归类 | **并行(JobSystem)** | 只读采样 |
 | [3b] 沉积 | `ResolveDeposits`：写回/位移/回退 + swap-remove | 单线程 | 写 + dirty |
 | [4] CA | （CA 看见本帧新沉积像素） | — | — |
-| [7] 抛射 | `RunEjectionPass`：读 cell→写 Empty→spawn→设速 | 单线程 | 写 + dirty |
+| [7] 抛射 | `RunEjectionPass`：读 cell→确认 spawn→写 Empty→设速 | 单线程 | 写 + dirty |
 | [9] 渲染合成 | plan/08 消费 `IParticleReadback`（本文不实现） | 并行 | 无 |
 
 ---
@@ -192,13 +192,13 @@ public ParticleSystemStats Stats { get; }
 - [x] 实现 `ParticleSystem`（§3.2）：用 plan/02 pinned 缓冲原语分配单条 `Particle[] _particles`（POH，零稳态分配）；`_activeCount`/`_capacity`；`Active`/`ActiveReadOnly` 返回活跃前缀 `Span`/`ReadOnlySpan`（架构 §7.6 无虚调用迭代）。
 - [x] 实现 `bool TrySpawn(in ParticleSpawn)`：写 `_particles[_activeCount++]`；满则返回 `false` 且 `DroppedThisTick++`，**不扩容、不分配**。
 - [x] 实现 swap-remove 释放语义（`_particles[i] = _particles[--_activeCount]`），供沉积/杀死复用，零分配。
-- [ ] 实现 `IntegrateAndAdvance(JobSystem, CellGrid)`（**相位 3a**，架构 §7.6/§12.7）：`X+=Vx; Y+=Vy; Vy+=g`；`Life--`；DDA 整数射线步进只读 `grid.GetCellType` 归类 `Flying`/`WantsDeposit`/`Dead`；结果写 per-particle outcome；**只写自身槽位、不写网格、不 swap-remove**。
-- [ ] 用 plan/02 `JobSystem` 做 `[0,_activeCount)` index-range 分区并行（**非 `Parallel.For`**，AGENTS §3）；子段内 `ref`/`Unsafe.Add` 漫游消除 bounds-check（架构 §12.6）。
-- [ ] 定义 `EjectionRequest` struct 与 `[Flags] EjectMask`（§3.4）；`RequestEjection`（相位 1，有界队列入队）。
-- [ ] 实现 `RunEjectionPass(CellGrid)`（**相位 7**，架构 §3.3/§7.6）：对半径内匹配 `Mask` 的 cell：读材质→`grid.TryWriteCell(Empty)`+`MarkDirtyAndKeepAlive`→`TrySpawn`→拷 material/`ColorVariant`→按径向冲量 + RNG 抖动设 `Vx,Vy`；`ParticleEjectMaxPerTick` 封顶；单线程顺序。
-- [ ] 实现 `ResolveDeposits(CellGrid)`（**相位 3b**，架构 §3.3/§7.6）：`Empty`→写回材质 + dirty + swap-remove；被占→按 `MaterialDef.Density` 位移或挪相邻 `Empty`；皆不可→走 R13 回退；单线程。
+- [x] 实现 `IntegrateAndAdvance(JobSystem, CellGrid)`（**相位 3a**，架构 §7.6/§12.7）：`X+=Vx; Y+=Vy; Vy+=g`；`Life--`；DDA 整数射线步进只读 `grid.GetCellType` 归类 `Flying`/`WantsDeposit`/`Dead`；结果写 per-particle outcome；**只写自身槽位、不写网格、不 swap-remove**。
+- [x] 用 plan/02 `JobSystem` 做 `[0,_activeCount)` index-range 分区并行（**非 `Parallel.For`**，AGENTS §3）；子段内 `ref`/`Unsafe.Add` 漫游消除 bounds-check（架构 §12.6）。
+- [x] 定义 `EjectionRequest` struct 与 `[Flags] EjectMask`（§3.4）；`RequestEjection`（相位 1，有界队列入队）。
+- [x] 实现 `RunEjectionPass(SimulationKernel, CellGrid)`（**相位 7**，架构 §3.3/§7.6）：对半径内匹配 `Mask` 的 cell：读材质→`TrySpawn` 预留粒子槽→`SimulationKernel.ReadAndClearCell` 写 Empty + current dirty/KeepAlive→拷 material/`ColorVariant`→按径向冲量 + RNG 抖动设 `Vx,Vy`；`ParticleEjectMaxPerTick` 封顶；单线程顺序；容量满不清源 cell。
+- [x] 实现 `ResolveDeposits(SimulationKernel, CellGrid)`（**相位 3b**，架构 §3.3/§7.6）：`Empty`→`SimulationKernel.DepositCell` 写回材质 + current dirty/KeepAlive + swap-remove；被占→按 `MaterialPropsTable.Density` 位移或挪相邻 `Empty`；皆不可→走 R13 回退；单线程。
 - [ ] 实现 R13 回退（§3.5/§3.6，**强制项**，架构 §19）：无处沉积且 `Life==0` 杀死、`Life>0` 保持短命；并实现硬性 max-lifetime：`Life==0` 无条件 swap-remove；二者均计 `KilledByLifetimeThisTick`。
-- [ ] 沉积/抛射写网格处恒调用 `MarkDirtyAndKeepAlive` 唤醒 CA（架构 §7.6）；落点非驻留 chunk 走回退（border ring 兜底，架构 §3.4）。
+- [x] 沉积/抛射写网格处恒经 `SimulationKernel.DepositCell` / `ReadAndClearCell` 写 current dirty 与边界 KeepAlive（架构 §7.6）；落点非驻留 chunk 走回退（border ring 兜底，架构 §3.4）。
 - [ ] 实现确定性 seam（§3.7，架构 §6.2）：积分/RNG 经 Core 确定性开关；默认关闭、零开销，不实现确定性数值。
 - [ ] 实现 `IParticleReadback`（§3.8）：`ActiveCount` + `ReadOnlySpan<Particle> Particles`（pinned、零拷贝），供 plan/08 相位 9 与 plan/09 GPU；**本文不写任何渲染代码**。
 - [ ] 实现 `ParticleSystemStats` + `Stats`（§3.9）：每 tick 更新 active/spawned/deposited/killed/dropped，注册 Core 诊断，供 plan/12 与架构 §17.1 overlay。
@@ -206,18 +206,18 @@ public ParticleSystemStats Stats { get; }
 - [ ] 实现序列化接口（§3.10）：`ActiveReadOnly` 导出在飞粒子 + `RestoreFrom(ReadOnlySpan<Particle>)` 重建（material id 由 plan/07 重映射后传入，架构 §11.3/§1.8）。
 - [x] 在 `PixelEngine.Simulation.Tests` 加测试（§5）。
 - [x] 在 `PixelEngine.Benchmarks` 加粒子池化基准（BenchmarkDotNet + `[MemoryDiagnoser]`，AGENTS §3/§7），覆盖节点 1 的 `TrySpawn` + swap-remove 零分配。
-- [ ] 在 `PixelEngine.Benchmarks` 加粒子积分/沉积基准（BenchmarkDotNet + `[DisassemblyDiagnoser]`，AGENTS §3/§7）。
+- [x] 在 `PixelEngine.Benchmarks` 加粒子积分/沉积基准（BenchmarkDotNet + `[DisassemblyDiagnoser]`，AGENTS §3/§7）。
 
 ## 5. 验收标准
 
 - [x] `Unsafe.SizeOf<Particle>() == 20`（xUnit 断言，架构 §7.6 字节预算）。
 - [ ] spawn→飞行→沉积全流程：稳态帧内 **零托管堆分配**（BenchmarkDotNet `MemoryDiagnoser` 测得 Gen0/Alloc = 0，AGENTS §3）。
 - [x] swap-remove 正确性：随机 spawn/kill 序列后，活跃前缀无空洞、无重复、`ActiveCount` 与实际存活数一致（性质测试）。
-- [ ] 弹道积分正确：`X+=Vx; Y+=Vy; Vy+=g` 逐 tick 数值符合解析弹道；飞行期间 CellGrid **逐 cell 不变**（粒子飞行不写网格、不参与 CA，架构 §7.6）。
-- [ ] 并行积分 = 单线程积分：同初态下 `JobSystem` 多线程积分结果与单线程逐位等价（积分无跨粒子依赖，可 bit 比对）。
-- [ ] cell→particle 抛射（相位 7）：源 cell 变 `Empty` 且标 dirty，粒子继承材质/色、速度方向为径向、数量受 `ParticleEjectMaxPerTick` 限制。
-- [ ] particle→cell 沉积（相位 3）：`Empty` 目标写回材质且 chunk 被标 dirty 唤醒 CA；被占目标按密度位移或挪相邻空 cell；落点 cell 材质 == 粒子材质。
-- [ ] 质量守恒（无杀死路径）：cell→particle→cell 往返后，参与材质的 cell 总数守恒（不凭空增减；与架构 §16.2 边界质量守恒精神一致）。
+- [x] 弹道积分正确：`X+=Vx; Y+=Vy; Vy+=g` 逐 tick 数值符合解析弹道；飞行期间 CellGrid **逐 cell 不变**（粒子飞行不写网格、不参与 CA，架构 §7.6）。
+- [x] 并行积分 = 单线程积分：同初态下 `JobSystem` 多线程积分结果与单线程逐位等价（积分无跨粒子依赖，可 bit 比对）。
+- [x] cell→particle 抛射（相位 7）：源 cell 变 `Empty` 且标 dirty，粒子继承材质/色、速度方向为径向、数量受 `ParticleEjectMaxPerTick` 限制。
+- [x] particle→cell 沉积（相位 3）：`Empty` 目标写回材质且 chunk 被标 dirty 唤醒 CA；被占目标按密度位移或挪相邻空 cell；落点 cell 材质 == 粒子材质。
+- [x] 质量守恒（无杀死路径）：cell→particle→cell 往返后，参与材质的 cell 总数守恒（不凭空增减；与架构 §16.2 边界质量守恒精神一致）。
 - [ ] **R13 无泄漏（强制）**：构造「持续抛射但无沉积空间」压力场景跑足够 tick，活跃粒子数有界收敛、不单调增长；所有迷途粒子最终被 max-lifetime 或「无处沉积则杀死」回退清除（`KilledByLifetimeThisTick` 反映）。
 - [ ] 规模：5 万 / 10 万 / 20 万活跃粒子积分 + 沉积在目标机 BenchmarkDotNet 测得单 tick 成本留有 60fps 余量（架构 §7.6，数值实测为准、不预设）。
 - [ ] 无虚调用迭代：`Active`/`ActiveReadOnly` 迭代反汇编无虚分派、无 bounds-check（`DOTNET_JitDisasm` 确认 `RNGCHKFAIL` 消失，架构 §12.6）。
@@ -227,16 +227,16 @@ public ParticleSystemStats Stats { get; }
 
 ## 6. 依赖关系
 
-- **前置（必须先完成）**：plan/02（Core：pinned 缓冲/`Pool`/`JobSystem`/`EngineConstants`/RNG/诊断/事件总线）；plan/03（CellGrid：材质/cell-type 采样、`TryWriteCell`、`MarkDirtyAndKeepAlive`、chunk 驻留与 border ring）。
+- **前置（必须先完成）**：plan/02（Core：pinned 缓冲/`Pool`/`JobSystem`/`EngineConstants`/RNG/诊断/事件总线）；plan/03（CellGrid：材质/cell-type 采样、SimulationKernel 相位 3/7 写网格入口、chunk 驻留与 border ring）。
 - **软依赖（接口对齐，可并行推进）**：plan/04（`MaterialDef.Density` 与 emissive 标志，按 id 只读）。
 - **被依赖（消费本文接口）**：plan/08（相位 9 CPU stamp + emissive）、plan/09（GPU point-sprite，零拷贝映射 pinned 缓冲）、plan/12（粒子计数 + 轨迹叠层）、plan/10（音频事件）、plan/07（在飞粒子序列化/重映射）。
 - 执行顺序（plan/README）：03 → **05** → 04 → 07，渲染 08 可并行起步但其粒子合成需本文接口先定。
-- 阻塞处置：若 plan/03 未提供等价 CellGrid 写/采样/dirty API，标 `- [!] 阻塞：原因` 上报，不私自绕过 CellGrid 直写 SoA（AGENTS §1、§5）。
+- 阻塞处置：若 plan/03 未提供等价相位写入 / 只读采样 API，标 `- [!] 阻塞：原因` 上报，不私自绕过 SimulationKernel 相位入口直写 SoA（AGENTS §1、§5）。
 
 ## 7. 提交节点
 
 - [x] 节点 1：`feat(sim): 实现 Particle struct(20B) 与 ParticleSystem 连续缓冲池(swap-remove,零分配)` —— 完成 §3.1/§3.2 与对应实现清单、`sizeof==20`/零分配/swap-remove 验收项。
-- 节点 2：`feat(sim): 实现并行弹道积分与 cell↔particle handshake(相位3/7)` —— 完成 §3.3/§3.4/§3.5 与抛射/沉积/并行积分等价性验收项。
+- [x] 节点 2：`feat(sim): 实现并行弹道积分与 cell↔particle handshake(相位3/7)` —— 完成 §3.3/§3.4/§3.5 与抛射/沉积/并行积分等价性验收项。
 - 节点 3：`feat(sim): 实现粒子生命周期与 R13 无泄漏回退(max-lifetime+无处沉积则杀死)` —— 完成 §3.6 与 R13 无泄漏验收项（强制项）。
 - 节点 4：`feat(sim): 暴露粒子渲染/编辑器/音频/序列化接口(IParticleReadback,Stats)` —— 完成 §3.8–§3.10 与接口可用、诊断验收项。
 - 每节点完成即按 `AGENTS.md §6` 用中文 git 提交，提交正文标注对应 plan 条目与架构 §。
