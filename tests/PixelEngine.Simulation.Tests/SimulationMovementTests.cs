@@ -174,7 +174,7 @@ public sealed class SimulationMovementTests
 
         Assert.Equal(0, Get(center, 10, 63));
         Assert.Equal(Sand, Get(south, 10, 0));
-        Assert.Equal(new DirtyRect(8, 0, 12, 2), south.WorkingDirty);
+        Assert.Equal(DirtyRect.Empty, south.WorkingDirty);
         Assert.Equal(new DirtyRect(8, 0, 12, 2), south.GetIncomingDirty(1));
     }
 
