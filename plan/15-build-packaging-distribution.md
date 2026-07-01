@@ -244,7 +244,7 @@ Trim 配置
 
 codesign / notarization
 
-- [ ] 写 `tools/codesign-macos.sh`：`codesign --options runtime --timestamp` 签 `osx-x64`/`osx-arm64` 可执行与动态库 → `notarytool submit --wait` → `stapler staple`（架构 §15）。
+- [x] 写 `tools/codesign-macos.sh`：`codesign --options runtime --timestamp` 签 `osx-x64`/`osx-arm64` 可执行与动态库 → `notarytool submit --wait` → `stapler staple`（架构 §15）。
 - [ ] CI secrets 接入：Developer ID Application 证书（base64 p12）、`notarytool` API key/issuer；缺失时该 step 标 `- [!] 阻塞：缺 macOS 签名凭据` 而非静默出未签名产物。
 
 版本与产物命名
@@ -309,5 +309,5 @@ codesign / notarization
 - [x] `build(build): Box2D dual-build × 6 RID 构建矩阵与 native 资产落位 targets` — 对应 §3.5、Box2D 项。
 - [x] `build(build): 引擎全程 trim/AOT-friendly 配置与脚本子系统豁免` — 对应 §3.6、Trim 项。
 - [x] `build(build): 版本号、产物命名与内容资产打包脚本` — 对应 §3.8、§3.9、版本/内容项。
-- [ ] `build(build): macOS codesign + notarization 脚本` — 对应 codesign 项、架构 §15。
+- [x] `build(build): macOS codesign + notarization 脚本` — 对应 codesign 项、架构 §15。
 - [ ] `build(build): 发布 CI release.yml（native→publish→verify→sign→release 五阶段，双路径冒烟）` — 对应 §3.10、CI 项，闭合架构 R5 防线。
