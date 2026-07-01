@@ -30,6 +30,20 @@ public sealed class GpuParticleRendererContractTests
     }
 
     [Fact]
+    public void GpuParticleUploadDoesNotReallocateVboOnSteadyFrames()
+    {
+        string source = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "GpuParticleRenderer.cs"));
+        int uploadStart = source.IndexOf("private void UploadVertices", StringComparison.Ordinal);
+        int uploadEnd = source.IndexOf("private void ConfigureVertexAttributes", StringComparison.Ordinal);
+        Assert.True(uploadStart > 0);
+        Assert.True(uploadEnd > uploadStart);
+
+        string uploadMethod = source[uploadStart..uploadEnd];
+        Assert.Contains("BufferSubData", uploadMethod, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Allocate(", uploadMethod, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void GpuParticleShaderSourcesExposeCameraAndPointSpriteContracts()
     {
         string vertex = GpuParticleShaderSources.Vertex(GlslProfile.DesktopGl330);
