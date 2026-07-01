@@ -4,6 +4,7 @@ using PixelEngine.Simulation.Particles;
 using PixelEngine.Scripting;
 using PixelEngine.World;
 using Xunit;
+using PhysicsSystem = PixelEngine.Physics.PhysicsSystem;
 
 namespace PixelEngine.Hosting.Tests;
 
@@ -258,10 +259,10 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
-    /// 验证 Physics 后端接入前，含刚体快照的 save directory 会明确失败而不是静默丢失刚体。
+    /// 验证含刚体快照的 save directory 会自动接入 Physics 并恢复刚体。
     /// </summary>
     [Fact]
-    public void AttachWorldFromSaveDirectoryRejectsRigidBodySnapshotsUntilPhysicsBackendExists()
+    public void AttachWorldFromSaveDirectoryRestoresRigidBodySnapshotsThroughPhysics()
     {
         string savePath = Path.Combine(Path.GetTempPath(), $"pixelengine-host-rigidbody-save-{Guid.NewGuid():N}");
         try
@@ -270,22 +271,28 @@ public sealed class SceneAndHeadlessTests
             ResidentChunkMap savedChunks = new();
             Chunk chunk = new(new ChunkCoord(0, 0));
             savedChunks.Add(chunk);
+            byte[] mask = new byte[256];
+            ushort[] bodyMaterials = new ushort[256];
+            Array.Fill(mask, (byte)1);
+            Array.Fill(bodyMaterials, (ushort)1);
             FakeWorldStateBridge savedState = new(
                 [],
                 [
                     new RigidBodySnapshot(
                         id: 1,
-                        width: 1,
-                        height: 1,
-                        bodyLocalMask: [1],
-                        material: [1],
-                        posX: 0,
-                        posY: 0,
+                        width: 16,
+                        height: 16,
+                        bodyLocalMask: mask,
+                        material: bodyMaterials,
+                        posX: 16,
+                        posY: 16,
                         rotCos: 1,
                         rotSin: 0,
                         linVelX: 0,
                         linVelY: 0,
-                        angVel: 0),
+                        angVel: 0,
+                        localOriginX: 8,
+                        localOriginY: 8),
                 ]);
             new WorldSaveService().SaveAll(
                 new WorldSaveContext(
@@ -305,10 +312,15 @@ public sealed class SceneAndHeadlessTests
                 .Build();
             engine.Context.RegisterService(materials);
 
-            NotSupportedException exception = Assert.Throws<NotSupportedException>(() =>
-                engine.AttachWorldFromSaveDirectory(savePath));
+            WorldLoadResult result = engine.AttachWorldFromSaveDirectory(savePath);
 
-            Assert.Contains("Physics", exception.Message, StringComparison.Ordinal);
+            Assert.Equal(1, result.LoadedChunkCount);
+            Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.PhysicsService));
+            PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+            Assert.Equal(1, physics.PhysicsWorld.ActiveBodyCount);
+            Assert.Equal(1, engine.Phases.Count(EnginePhase.PhysicsSync));
+            Assert.True(CellFlags.Has(engine.Context.GetService<CellGrid>().FlagsAt(16, 16), CellFlags.RigidOwned));
+            Assert.Equal(1, engine.Context.GetService<CellGrid>().GetMaterial(16, 16));
         }
         finally
         {

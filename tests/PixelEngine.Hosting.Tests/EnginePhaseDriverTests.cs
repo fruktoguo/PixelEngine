@@ -1,5 +1,6 @@
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
+using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
 using PixelEngine.World;
@@ -60,6 +61,29 @@ public sealed class EnginePhaseDriverTests
         Assert.Equal(1, engine.Phases.Count(EnginePhase.Temperature));
         Assert.Equal(1, engine.Phases.Count(EnginePhase.DirtyRectSwap));
         Assert.Equal(1, engine.Phases.Count(EnginePhase.CellToParticle));
+    }
+
+    /// <summary>
+    /// 验证 Engine.AttachPhysics 会注册真实 PhysicsService，并把 PhysicsSystem 接入相位 8。
+    /// </summary>
+    [Fact]
+    public void AttachPhysicsRegistersServiceAndRunsPhaseEight()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+        engine.Context.RegisterService(materials);
+        _ = engine.AttachResidentSimulationWorld(worldWidthCells: 64, worldHeightCells: 64, particleCapacity: 16);
+
+        PhysicsPhaseDriver driver = engine.AttachPhysics();
+        _ = engine.RunOneTick();
+
+        Assert.Same(driver, engine.Context.GetService<PhysicsPhaseDriver>());
+        Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.PhysicsService));
+        Assert.Same(engine.Context.GetService<PhysicsSystem>(), engine.Context.GetService<PhysicsSystem>());
+        Assert.Equal(1, engine.Phases.Count(EnginePhase.PhysicsSync));
+        Assert.Equal(0, engine.Context.GetService<PhysicsSystem>().PhysicsWorld.ActiveBodyCount);
     }
 
     /// <summary>
@@ -209,6 +233,30 @@ public sealed class EnginePhaseDriverTests
                 Directory.Delete(worldPath, recursive: true);
             }
         }
+    }
+
+    /// <summary>
+    /// 验证 headless 固定步数驱动会运行显式接入的真实 Physics 相位。
+    /// </summary>
+    [Fact]
+    public void HeadlessTicksDriveAttachedPhysicsPhase()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+        using Engine engine = new EngineBuilder()
+            .UseHeadless()
+            .UseDeterministicMode()
+            .WithWorkerCount(1)
+            .Build();
+        engine.Context.RegisterService(materials);
+        _ = engine.AttachResidentSimulationWorld(worldWidthCells: 64, worldHeightCells: 64, particleCapacity: 16);
+        _ = engine.AttachPhysics();
+
+        engine.RunHeadlessTicks(2);
+
+        Assert.Equal(2, engine.Context.Clock.FrameIndex);
+        Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.PhysicsService));
+        Assert.Equal(1, engine.Phases.Count(EnginePhase.PhysicsSync));
+        Assert.Equal(0, engine.Context.GetService<PhysicsSystem>().PhysicsWorld.ActiveBodyCount);
     }
 
     /// <summary>

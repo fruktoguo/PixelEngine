@@ -13,5 +13,5 @@ public static class SaveFormatVersions
     /// <summary>
     /// 当前 world manifest 格式版本。
     /// </summary>
-    public const int WorldManifest = 1;
+    public const int WorldManifest = 2;
 }

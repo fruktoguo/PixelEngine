@@ -12,7 +12,7 @@ public sealed class ManifestCodec
     private const uint Magic = 0x4D57_4550u;
     private const int HeaderSize = sizeof(uint) + sizeof(int) + sizeof(ulong) + sizeof(long) + (sizeof(int) * 4);
     private const int ParticleSize = (sizeof(float) * 4) + sizeof(ushort) + sizeof(byte) + sizeof(byte);
-    private const int RigidBodyHeaderSize = (sizeof(int) * 3) + (sizeof(float) * 7);
+    private const int RigidBodyHeaderSize = (sizeof(int) * 3) + (sizeof(float) * 9);
     private const int ChunkCoordSize = sizeof(int) * 2;
 
     /// <summary>
@@ -150,6 +150,8 @@ public sealed class ManifestCodec
             WriteSingle(header.Slice(28, 4), body.LinVelX);
             WriteSingle(header.Slice(32, 4), body.LinVelY);
             WriteSingle(header.Slice(36, 4), body.AngVel);
+            WriteSingle(header.Slice(40, 4), body.LocalOriginX);
+            WriteSingle(header.Slice(44, 4), body.LocalOriginY);
             writer.Advance(RigidBodyHeaderSize);
 
             WriteBytes(body.BodyLocalMask.Span, writer);
@@ -186,7 +188,9 @@ public sealed class ManifestCodec
                 ReadSingle(header.Slice(24, 4)),
                 ReadSingle(header.Slice(28, 4)),
                 ReadSingle(header.Slice(32, 4)),
-                ReadSingle(header.Slice(36, 4)));
+                ReadSingle(header.Slice(36, 4)),
+                ReadSingle(header.Slice(40, 4)),
+                ReadSingle(header.Slice(44, 4)));
         }
 
         return bodies;

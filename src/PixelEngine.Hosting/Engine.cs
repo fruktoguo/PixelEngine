@@ -369,6 +369,49 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>
+    /// 将真实 PhysicsSystem 接入相位 8，并注册脚本/Demo 可见的 PhysicsService。
+    /// </summary>
+    /// <returns>已注册的 Physics 相位驱动。</returns>
+    public PhysicsPhaseDriver AttachPhysics()
+    {
+        ThrowIfShutdown();
+        if (Context.TryGetService(out PhysicsPhaseDriver existing))
+        {
+            return existing;
+        }
+
+        CellGrid grid = Context.GetService<CellGrid>();
+        IChunkSource chunks = Context.GetService<IChunkSource>();
+        RigidDamageQueue damageQueue = Context.TryGetService(out RigidDamageQueue existingDamageQueue)
+            ? existingDamageQueue
+            : new RigidDamageQueue();
+        ParticleSystem? particles = Context.TryGetService(out ParticleSystem registeredParticles)
+            ? registeredParticles
+            : null;
+        RigidBodyDestruction destruction = new(fragmentPixelThreshold: 4, particles);
+        PhysicsSystem physics = PhysicsSystem.Initialize(
+            grid,
+            Context.Jobs,
+            damageQueue: damageQueue,
+            destruction: destruction,
+            profiler: Context.Profiler,
+            eventBus: Context.Events);
+        PhysicsPhaseDriver driver = new(physics, chunks);
+        Context.RegisterService(damageQueue);
+        Context.RegisterService(physics);
+        Context.RegisterService(EngineServiceRole.PhysicsService, physics);
+        Context.RegisterService(driver.GetType(), driver);
+        driver.RegisterPhases(Phases);
+        if (Context.TryGetService(out RuntimeWorldStateBridge stateBridge))
+        {
+            stateBridge.AttachPhysics(physics);
+        }
+
+        _ownedRuntimeResources.Add(physics);
+        return driver;
+    }
+
+    /// <summary>
     /// 从 plan/07 save directory 读取整世界存档，并接入 Simulation/World/Streaming 后端。
     /// </summary>
     /// <param name="savePath">包含 manifest.bin 与 regions/ 的世界存档目录。</param>
@@ -426,6 +469,11 @@ public sealed class Engine : IDisposable
         Context.RegisterService<IWorldStateSnapshotSource>(stateBridge);
         Context.RegisterService<IWorldStateSnapshotSink>(stateBridge);
         Context.RegisterService(stateBridge);
+        if (stateBridge.RigidBodyCount > 0)
+        {
+            _ = AttachPhysics();
+        }
+
         return result;
     }
 
