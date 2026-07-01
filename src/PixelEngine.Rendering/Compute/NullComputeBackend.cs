@@ -90,6 +90,11 @@ public sealed class NullComputeBackend : IComputeBackend
     }
 
     /// <inheritdoc />
+    public void DeleteTimerQuery(uint queryHandle)
+    {
+    }
+
+    /// <inheritdoc />
     public void Dispose()
     {
     }

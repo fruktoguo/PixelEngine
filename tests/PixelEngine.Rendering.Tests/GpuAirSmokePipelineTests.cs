@@ -176,6 +176,10 @@ public sealed class GpuAirSmokePipelineTests
             return false;
         }
 
+        public void DeleteTimerQuery(uint queryHandle)
+        {
+        }
+
         public void Dispose()
         {
         }

@@ -1,4 +1,5 @@
 using PixelEngine.Rendering.Compute;
+using PixelEngine.Core.Diagnostics;
 using Silk.NET.OpenGL;
 
 namespace PixelEngine.Rendering;
@@ -44,7 +45,7 @@ public sealed class AirSmokePass : IDisposable
     /// <summary>
     /// 执行一个非权威扩散步；设置关闭时不 dispatch。
     /// </summary>
-    public void Step(int width, int height, AirSmokeSettings settings)
+    public void Step(int width, int height, AirSmokeSettings settings, GpuComputeProfiler? gpuProfiler = null)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         settings = settings.Validate();
@@ -54,6 +55,7 @@ public sealed class AirSmokePass : IDisposable
             return;
         }
 
+        using GpuComputeProfiler.GpuTimerScope _ = gpuProfiler?.Measure("air_smoke", FrameSubPhase.GpuAirSmoke) ?? default;
         _pipeline.DispatchMargolusStep(_resources.SourceDensity, _resources.DestinationDensity, width, height, _parity, settings);
         _resources.Swap();
         _parity ^= 1;

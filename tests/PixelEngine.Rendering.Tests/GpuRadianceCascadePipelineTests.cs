@@ -146,6 +146,10 @@ public sealed class GpuRadianceCascadePipelineTests
             return false;
         }
 
+        public void DeleteTimerQuery(uint queryHandle)
+        {
+        }
+
         public void Dispose()
         {
         }

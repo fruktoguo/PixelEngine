@@ -190,6 +190,10 @@ public sealed class GpuComputeBloomPipelineTests
             return false;
         }
 
+        public void DeleteTimerQuery(uint queryHandle)
+        {
+        }
+
         public void Dispose()
         {
         }

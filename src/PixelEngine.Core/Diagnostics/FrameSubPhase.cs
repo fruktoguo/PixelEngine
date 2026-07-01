@@ -86,6 +86,26 @@ public enum FrameSubPhase
     Bloom,
 
     /// <summary>
+    /// GPU 粒子 point-sprite 绘制。
+    /// </summary>
+    GpuParticleDraw,
+
+    /// <summary>
+    /// GPU compute bloom。
+    /// </summary>
+    GpuComputeBloom,
+
+    /// <summary>
+    /// Radiance Cascades compute GI。
+    /// </summary>
+    GpuRadianceCascades,
+
+    /// <summary>
+    /// 非权威 air/smoke compute 扩散。
+    /// </summary>
+    GpuAirSmoke,
+
+    /// <summary>
     /// Dither、gamma 与 CRT 后处理。
     /// </summary>
     PostProcess,
