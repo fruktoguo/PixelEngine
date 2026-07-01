@@ -25,6 +25,7 @@ public sealed class RenderPipeline : IDisposable
     private readonly GpuComputeProfiler _gpuComputeProfiler;
     private readonly ComputeBloomPass? _computeBloom;
     private readonly ComputeLightCompositePass? _computeLightComposite;
+    private readonly RadianceCascadePass? _radianceCascades;
     private readonly DitherPass _dither;
     private readonly GammaPass _gamma;
     private readonly CrtPass _crt;
@@ -48,7 +49,8 @@ public sealed class RenderPipeline : IDisposable
     /// <param name="window">渲染窗口。</param>
     /// <param name="width">初始视口宽度。</param>
     /// <param name="height">初始视口高度。</param>
-    public RenderPipeline(RenderWindow window, int width, int height)
+    /// <param name="computeFeatures">可选 plan/09 G4 compute 功能开关；未传入时使用默认安全配置。</param>
+    public RenderPipeline(RenderWindow window, int width, int height, ComputeFeatureSwitches? computeFeatures = null)
     {
         ArgumentNullException.ThrowIfNull(window);
         ValidateSize(width, height);
@@ -62,7 +64,7 @@ public sealed class RenderPipeline : IDisposable
         _composite = new CompositePass(_gl, profile);
         _bloom = new BloomPass(_gl, profile);
         GpuCapabilities gpuCapabilities = GpuCapabilities.Query(_gl, window.Capabilities);
-        _computeGate = ComputeCapabilityGate.Evaluate(gpuCapabilities, ComputeFeatureSwitches.Default, preferComputeSharp: false);
+        _computeGate = ComputeCapabilityGate.Evaluate(gpuCapabilities, computeFeatures ?? ComputeFeatureSwitches.Default, preferComputeSharp: false);
         _computeBackend = ComputeBackendFactory.Create(_gl, _computeGate);
         _gpuComputeProfiler = new GpuComputeProfiler(_computeBackend);
         GpuComputeBloomPipeline? computeBloomPipeline = _computeGate.SelectedBackend == ComputeBackendKind.GlCompute
@@ -73,6 +75,9 @@ public sealed class RenderPipeline : IDisposable
             : null;
         _computeLightComposite = computeBloomPipeline is not null
             ? new ComputeLightCompositePass(computeBloomPipeline)
+            : null;
+        _radianceCascades = computeBloomPipeline is not null && _computeGate.FeatureSwitches.RadianceCascadesEnabled
+            ? new RadianceCascadePass(_gl, new GpuRadianceCascadePipeline(_computeBackend), width, height)
             : null;
         _dither = new DitherPass(_gl, profile);
         _gamma = new GammaPass(_gl, profile);
@@ -295,6 +300,13 @@ public sealed class RenderPipeline : IDisposable
         ColorRenderTarget current = _lit;
         if (Settings.QualityLevel == LightingQualityLevel.Full)
         {
+            if (ShouldUseRadianceCascades())
+            {
+                using GpuComputeProfiler.GpuTimerScope _ = _gpuComputeProfiler.Measure("radiance_cascades", FrameSubPhase.GpuRadianceCascades);
+                _radianceCascades!.Render(_occluder, _emissive, current, _postB, Settings.RadianceCascades);
+                current = _postB;
+            }
+
             started = Stopwatch.GetTimestamp();
             if (ShouldUseComputeBloom(Settings.Bloom))
             {
@@ -374,6 +386,7 @@ public sealed class RenderPipeline : IDisposable
         _crt.Dispose();
         _gamma.Dispose();
         _dither.Dispose();
+        _radianceCascades?.Dispose();
         _computeBloom?.Dispose();
         _gpuComputeProfiler.Dispose();
         _computeBackend.Dispose();
@@ -480,6 +493,13 @@ public sealed class RenderPipeline : IDisposable
     private bool ShouldUseComputeLightComposite()
     {
         return ShouldDelegateComputeLighting;
+    }
+
+    private bool ShouldUseRadianceCascades()
+    {
+        return _radianceCascades is not null &&
+            _computeGate.FeatureSwitches.RadianceCascadesEnabled &&
+            Settings.RadianceCascades.Validate().Enabled;
     }
 
     private static void ValidateInputs(RenderBuffer renderBuffer, RenderAuxBuffers aux, CameraState camera)

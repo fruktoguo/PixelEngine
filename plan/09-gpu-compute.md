@@ -127,7 +127,7 @@ cascade 层数 `RadianceCascadeCount`、每层角度/空间分辨率、射线步
 - [x] `rc_cascade_build.comp`（CP-R1）：逐 cascade 角度/空间分辨率射线区间采样，写 cascade 纹理。
 - [x] `rc_merge.comp`（CP-R2）：高→低 cascade 双线性射线合并。
 - [x] `rc_apply.comp`（CP-R3）：cascade 辐照应用到光照 buffer + 叠 emissive。
-- [~] `RadianceCascadeCount`/角度/空间分辨率/射线步数作 `EngineConstants` 常量与质量档；模式默认关已落地，G4/plan/08 主线接入与视觉质量档待补。
+- [x] `RadianceCascadeCount`/角度/空间分辨率/射线步数作 `EngineConstants` 常量与质量档；模式默认关，已通过 G4 `ComputeFeatureSwitches` 与 `RenderPipelineSettings.RadianceCascades.Enabled` 双门控接入 plan/08 主线，显式启用时在 bloom 前应用 RC。
 
 ### 4.5 GPU 粒子 point-sprite（§3.5，架构 §9.3）
 - [x] `GpuParticleRenderer`：读 `plan/05` 粒子活跃前缀，POH 暂存→orphan VBO 上传仅 `activeCount` 个，稳态零 per-frame 托管分配。

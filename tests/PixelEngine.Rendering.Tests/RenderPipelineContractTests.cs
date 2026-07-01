@@ -41,6 +41,10 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("ShouldUseComputeLightComposite", source, StringComparison.Ordinal);
         Assert.Contains("ComputeLightCompositePass", source, StringComparison.Ordinal);
         Assert.Contains("FrameSubPhase.GpuLightComposite", source, StringComparison.Ordinal);
+        Assert.Contains("ComputeFeatureSwitches? computeFeatures", source, StringComparison.Ordinal);
+        Assert.Contains("new RadianceCascadePass", source, StringComparison.Ordinal);
+        Assert.Contains("ShouldUseRadianceCascades", source, StringComparison.Ordinal);
+        Assert.Contains("FrameSubPhase.GpuRadianceCascades", source, StringComparison.Ordinal);
         Assert.Contains("DegradeGpuComputeOneStep", source, StringComparison.Ordinal);
         Assert.Contains("PublishComputeDiagnostics", source, StringComparison.Ordinal);
         Assert.Contains("_computeGate.PublishDiagnostics", source, StringComparison.Ordinal);
