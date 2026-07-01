@@ -147,7 +147,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 
 玩家与相机
 - [!] `PlayerController : Behaviour`：源码已落地，经 `ICharacterController.Create/SetPosition/Move/GetState` 创建、传送并移动 AABB，实现跑 / 跳 / 贴墙滑落 / 蹬墙、重力、coyote-time 与 jump-buffer；阻塞：缺少 Hosting/Silk.NET 输入采集、脚本运行时自动注入与场景 Behaviour 驱动，不能完成可玩控制验收。〔plan/06、plan/08 输入；§3.3〕
-- [ ] `PlayerHealth : Behaviour`：采样覆盖 cell 材质判定 lava/fire/acid 伤害，喷血粒子、死亡重生、受击 / 跳 / 落地音效。〔plan/11、plan/05、plan/10；§3.3〕
+- [!] `PlayerHealth : Behaviour`：源码已落地，按玩家 AABB 采样 `lava/fire/acid`，扣血、喷粒子、触发受击音效并死亡重生；阻塞：缺少 Hosting 自动加载 Demo 音频 clip、脚本运行时自动注入与场景 Behaviour 驱动，不能完成运行态验收。〔plan/11、plan/05、plan/10；§3.3〕
 - [!] `CameraFollow : Behaviour`：源码已落地，可跟随同实体 `PlayerController`，支持阻尼、lookahead、边界夹取与缩放；阻塞：缺少 Hosting 将相机快照同步到 Rendering/World residency、脚本运行时自动注入与统一 Transform 后的 `Follow(Entity)`，不能完成画面跟随验收。〔plan/08；§3.4〕
 
 世界交互
