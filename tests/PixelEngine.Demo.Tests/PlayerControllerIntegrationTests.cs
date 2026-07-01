@@ -13,6 +13,68 @@ namespace PixelEngine.Demo.Tests;
 public sealed class PlayerControllerIntegrationTests
 {
     /// <summary>
+    /// 验证 Demo HUD 与暂停菜单只经脚本 GUI 门面绘制玩家状态、笔刷、性能行、菜单按钮和调试叠层。
+    /// </summary>
+    [Fact]
+    public void DemoHudAndPauseMenuDrawExpectedGuiThroughScriptContext()
+    {
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out _, out _, out ScriptScene scene, DemoMaterials());
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<PlayerController>();
+        _ = entity.AddComponent<PlayerHealth>();
+        _ = entity.AddComponent<MaterialBrush>();
+        _ = entity.AddComponent<ExplosiveTool>();
+        _ = entity.AddComponent<GoalTrigger>();
+        _ = entity.AddComponent<DemoHud>();
+        _ = entity.AddComponent<PauseMenu>();
+
+        engine.RunHeadlessTicks(1);
+
+        IScriptRuntime runtime = engine.Context.GetService<IScriptRuntime>();
+        RecordingGuiContext hudGui = new();
+        runtime.DrawGui(hudGui);
+
+        Assert.Contains("begin:demo-hud:Demo HUD:NoTitleBar, NoResize, NoMove, NoSavedSettings", hudGui.Drawn);
+        Assert.Contains("swatch:selected-material:FF5FC8D8:14", hudGui.Drawn);
+        Assert.Contains(hudGui.Drawn, line => line.StartsWith("progress:", StringComparison.Ordinal));
+        Assert.Contains("text:材质 sand    半径 4", hudGui.Drawn);
+        Assert.Contains("text-colored:目标: 未抵达:FFE0E0E0", hudGui.Drawn);
+        Assert.Contains("text:爆破 0", hudGui.Drawn);
+        Assert.Contains(hudGui.Drawn, line => line.StartsWith("text:FPS ", StringComparison.Ordinal));
+        Assert.Contains(hudGui.Drawn, line => line.StartsWith("text:Chunks ", StringComparison.Ordinal));
+        Assert.DoesNotContain("text-colored:HUD 等待玩家脚本组件。:FF4080FF", hudGui.Drawn);
+
+        input.Update([Key.Escape], [], mouseX: 0, mouseY: 0, wheelY: 0);
+        engine.RunHeadlessTicks(1);
+
+        IRuntimeControlApi runtimeControl = engine.Context.GetService<IRuntimeControlApi>();
+        Assert.False(runtimeControl.Capture().IsPlaying);
+
+        RecordingGuiContext pauseGui = new();
+        runtime.DrawGui(pauseGui);
+
+        Assert.Contains("begin:demo-pause-menu:暂停:NoResize, NoSavedSettings", pauseGui.Drawn);
+        Assert.Contains("text:状态: 暂停", pauseGui.Drawn);
+        Assert.Contains("button:继续", pauseGui.Drawn);
+        Assert.Contains("button:打开 Editor", pauseGui.Drawn);
+        Assert.Contains("button:重开", pauseGui.Drawn);
+        Assert.Contains("button:退出", pauseGui.Drawn);
+        Assert.Contains("text:调试叠层", pauseGui.Drawn);
+        Assert.Contains("checkbox:dirty rect:False", pauseGui.Drawn);
+        Assert.Contains("checkbox:temperature:False", pauseGui.Drawn);
+        Assert.Contains("text-colored:重开关卡后端尚未接入。:FF4080FF", pauseGui.Drawn);
+
+        RecordingGuiContext continueGui = new(clickedButtons: ["继续"]);
+        runtime.DrawGui(continueGui);
+
+        Assert.True(runtimeControl.Capture().IsPlaying);
+
+        RecordingGuiContext closedGui = new();
+        runtime.DrawGui(closedGui);
+        Assert.DoesNotContain(closedGui.Drawn, line => line.StartsWith("begin:demo-pause-menu:", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// 验证 Demo 终点触发器会在玩家进入出口区域时标记通关，并产生粒子、光照、fog 与音效反馈。
     /// </summary>
     [Fact]
@@ -421,6 +483,83 @@ public sealed class PlayerControllerIntegrationTests
             LastCue = cue;
             LastX = x;
             LastY = y;
+        }
+    }
+
+    private sealed class RecordingGuiContext(IEnumerable<string>? clickedButtons = null) : IGuiContext
+    {
+        private readonly HashSet<string> _clickedButtons = clickedButtons is null
+            ? []
+            : new HashSet<string>(clickedButtons, StringComparer.Ordinal);
+
+        public int Width => 800;
+
+        public int Height => 450;
+
+        public float DeltaTime => 1f / 60f;
+
+        public bool WantsMouse => false;
+
+        public bool WantsKeyboard => false;
+
+        public List<string> Drawn { get; } = [];
+
+        public void SetNextWindow(float x, float y, float width, float height, GuiCondition condition = GuiCondition.Always)
+        {
+            Drawn.Add($"next:{x},{y},{width},{height},{condition}");
+        }
+
+        public bool BeginWindow(string id, string title, GuiWindowFlags flags = GuiWindowFlags.None)
+        {
+            Drawn.Add($"begin:{id}:{title}:{flags}");
+            return true;
+        }
+
+        public void EndWindow()
+        {
+            Drawn.Add("end");
+        }
+
+        public void Text(string text)
+        {
+            Drawn.Add($"text:{text}");
+        }
+
+        public void TextColored(string text, uint colorBgra)
+        {
+            Drawn.Add($"text-colored:{text}:{colorBgra:X8}");
+        }
+
+        public void SameLine()
+        {
+            Drawn.Add("same-line");
+        }
+
+        public void Separator()
+        {
+            Drawn.Add("separator");
+        }
+
+        public bool Button(string label)
+        {
+            Drawn.Add($"button:{label}");
+            return _clickedButtons.Contains(label);
+        }
+
+        public bool Checkbox(string label, ref bool value)
+        {
+            Drawn.Add($"checkbox:{label}:{value}");
+            return false;
+        }
+
+        public void ProgressBar(float value01, string? label = null)
+        {
+            Drawn.Add($"progress:{value01}:{label}");
+        }
+
+        public void ColorSwatch(string id, uint colorBgra, float size = 16)
+        {
+            Drawn.Add($"swatch:{id}:{colorBgra:X8}:{size}");
         }
     }
 
