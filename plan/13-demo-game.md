@@ -197,7 +197,7 @@ API 缺口登记
 - [ ] 关卡可从出生点用至少一种解法（引水成石桥 / 坍塌木桥成路）抵达出口触发通关，全程演示全部材质 / 反应 / 刚体 / 粒子 / 光照 / 音频。〔§3.11〕
 - [ ] HUD 正确显示当前材质 / 笔刷 / 玩家状态 / 操作提示 / 性能行；暂停菜单可继续 / 重开 / 切叠层 / 开编辑器 / 退出；HUD 经 `IGuiContext` 而非直接 ImGui。〔§3.12〕
 - [!] 开发态修改任一 `Behaviour` 源码触发 Roslyn + ALC 热重载，场景与世界状态保留：Hosting/Demo 已将源码 watcher 接入 `ScriptRuntime`，相位 1 应用热重载，并有 headless 集成测试验证同名 `Behaviour` 替换与公开字段状态恢复；阻塞：仍缺真实开发态窗口修改脚本后场景 / 世界状态保留验收。〔plan/11、§3.2〕
-- [ ] §3.13 全部「需引擎补 API」项已登记、被对应 plan 接纳或标 `- [!] 阻塞`，Demo 内无任何引擎内部类后门。〔§3.13、AGENTS.md §0〕
+- [x] §3.13 全部「需引擎补 API」项已登记、被对应 plan 接纳或标 `- [!] 阻塞`，Demo 内无任何引擎内部类后门；`HostingProjectDisciplineTests` 已覆盖 Demo 仅引用 Hosting/Scripting、源码不绕过 facade、内容包公开 API 不泄漏 Content/Simulation 实现类型。〔§3.13、AGENTS.md §0〕
 
 ---
 
