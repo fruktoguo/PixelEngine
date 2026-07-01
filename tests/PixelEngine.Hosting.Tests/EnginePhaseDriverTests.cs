@@ -310,6 +310,52 @@ public sealed class EnginePhaseDriverTests
     }
 
     /// <summary>
+    /// 验证 Hosting 相位 8 会自动 flush 脚本角色移动命令。
+    /// </summary>
+    [Fact]
+    public void PhysicsPhaseFlushesScriptCharacterMoveCommands()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+        using Engine engine = new EngineBuilder()
+            .UseHeadless()
+            .UseDeterministicMode()
+            .WithWorkerCount(1)
+            .Build();
+        engine.Context.RegisterService(materials);
+        _ = engine.AttachResidentSimulationWorld(worldWidthCells: 64, worldHeightCells: 64, particleCapacity: 16);
+        _ = engine.AttachPhysics();
+
+        CellGrid grid = engine.Context.GetService<CellGrid>();
+        for (int x = 0; x < 32; x++)
+        {
+            grid.MaterialAt(x, 10) = 1;
+            grid.FlagsAt(x, 10) = 0;
+            grid.LifetimeAt(x, 10) = 0;
+        }
+
+        ScriptSimulationContext scripts = new(
+            new ScriptScene(),
+            grid,
+            engine.Context.GetService<SimulationKernel>(),
+            engine.Context.GetService<ParticleSystem>(),
+            materials,
+            physics: engine.Context.GetService<PhysicsSystem>());
+        engine.Context.RegisterService(scripts);
+
+        CharacterHandle handle = scripts.Character.Create(4, 0, 4, 4);
+        CharacterState pending = scripts.Character.Move(handle, 0, 20);
+        Assert.Equal(0f, pending.Y);
+
+        engine.RunHeadlessTicks(1);
+
+        CharacterState state = scripts.Character.GetState(handle);
+        Assert.True(state.OnGround);
+        Assert.Equal(6f, state.Y);
+        Assert.Equal(20f, state.RequestedDeltaY);
+        Assert.Equal(6f, state.AppliedDeltaY);
+    }
+
+    /// <summary>
     /// 验证脚本相位在 sim 降频时仍逐帧 Update，但 FixedSimTick 只随 sim tick 调用。
     /// </summary>
     [Fact]

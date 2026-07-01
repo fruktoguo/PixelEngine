@@ -62,7 +62,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         _particles = new ParticleFacade(_commands);
         _solids = new SolidFacade(grid);
         _bodies = physics is null ? null : new BodyFacade(_commands, physics);
-        _character = new CharacterFacade(grid, physics, time);
+        _character = new CharacterFacade(_commands, grid, physics, time);
         Grid = grid;
         Kernel = kernel;
         ParticleSystem = particleSystem;
@@ -222,26 +222,27 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             return 0;
         }
 
-        BodyFacade bodies = _bodies ?? throw Unsupported(nameof(Bodies));
         for (int i = 0; i < commands.Length; i++)
         {
             ref readonly ScriptCommand command = ref commands[i];
             switch (command.Kind)
             {
                 case ScriptCommandKind.CreateBodyFromRegion:
-                    bodies.CreateNow(command.Body, command.X, command.Y, command.Width, command.Height);
+                    (_bodies ?? throw Unsupported(nameof(Bodies))).CreateNow(command.Body, command.X, command.Y, command.Width, command.Height);
                     break;
                 case ScriptCommandKind.ApplyImpulse:
-                    bodies.ApplyImpulseNow(command.Body, command.A, command.B);
+                    (_bodies ?? throw Unsupported(nameof(Bodies))).ApplyImpulseNow(command.Body, command.A, command.B);
                     break;
                 case ScriptCommandKind.DestroyBody:
-                    bodies.DestroyNow(command.Body);
+                    (_bodies ?? throw Unsupported(nameof(Bodies))).DestroyNow(command.Body);
+                    break;
+                case ScriptCommandKind.MoveCharacter:
+                    _character.MoveNow(command.Character, command.A, command.B);
                     break;
                 case ScriptCommandKind.SetCell:
                 case ScriptCommandKind.Paint:
                 case ScriptCommandKind.SpawnParticle:
                 case ScriptCommandKind.BurstParticles:
-                case ScriptCommandKind.MoveCharacter:
                     throw new InvalidOperationException($"脚本 physics 命令目标收到不匹配命令：{command.Kind}。");
                 default:
                     throw new InvalidOperationException($"未知脚本命令：{command.Kind}。");
@@ -599,7 +600,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         }
     }
 
-    private sealed class CharacterFacade(CellGrid grid, PhysicsSystem? physics, IGameTime? time) : ICharacterController
+    private sealed class CharacterFacade(ScriptCommandQueue commands, CellGrid grid, PhysicsSystem? physics, IGameTime? time) : ICharacterController
     {
         private readonly List<CharacterSlot> _characters = [];
 
@@ -634,6 +635,13 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             ValidateFinite(dx, nameof(dx));
             ValidateFinite(dy, nameof(dy));
 
+            commands.Enqueue(ScriptCommandTarget.Physics, ScriptCommand.MoveCharacter(handle, dx, dy));
+            return slot.State;
+        }
+
+        public void MoveNow(CharacterHandle handle, float dx, float dy)
+        {
+            CharacterSlot slot = GetSlot(handle);
             Vector2 desired = new(dx, dy);
             CharacterCollisionInfo info;
             if (physics is null)
@@ -647,7 +655,6 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 
             CharacterState state = Snapshot(slot.Controller, in info);
             slot.State = state;
-            return state;
         }
 
         public CharacterState GetState(CharacterHandle handle)

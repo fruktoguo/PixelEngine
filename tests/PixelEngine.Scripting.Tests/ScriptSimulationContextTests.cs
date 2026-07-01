@@ -95,17 +95,29 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
-    /// 验证脚本角色控制器 facade 使用真实像素碰撞后端，并在同一调用返回移动结果。
+    /// 验证脚本角色控制器 facade 延迟到 Physics flush 后使用真实像素碰撞后端更新状态。
     /// </summary>
     [Fact]
     public void CharacterFacadeMovesAgainstSolidPixelsAndReturnsCollisionState()
     {
-        Fixture fixture = Fixture.Create();
+        using Fixture fixture = Fixture.Create();
         FillRect(fixture.Chunk, minX: 0, minY: 10, maxX: 32, maxY: 11, material: 2);
         CharacterHandle handle = fixture.Context.Character.Create(4, 0, 4, 4);
 
-        CharacterState state = fixture.Context.Character.Move(handle, 0, 20);
+        CharacterState pending = fixture.Context.Character.Move(handle, 0, 20);
 
+        Assert.Equal(4f, pending.X);
+        Assert.Equal(0f, pending.Y);
+        Assert.False(pending.OnGround);
+        Assert.Equal(pending, fixture.Context.Character.GetState(handle));
+        Assert.Equal(0, fixture.Context.FlushCellCommands());
+        Assert.Equal(0, fixture.Context.FlushParticleCommands());
+        Assert.Equal(pending, fixture.Context.Character.GetState(handle));
+
+        int flushed = fixture.Context.FlushPhysicsCommands();
+
+        Assert.Equal(1, flushed);
+        CharacterState state = fixture.Context.Character.GetState(handle);
         Assert.True(state.OnGround);
         Assert.False(state.OnCeiling);
         Assert.False(state.OnWall);
@@ -117,6 +129,7 @@ public sealed class ScriptSimulationContextTests
         Assert.Equal(6f, state.AppliedDeltaY);
         Assert.Equal(0f, state.GroundNormalX, precision: 5);
         Assert.Equal(-1f, state.GroundNormalY, precision: 5);
+        Assert.Equal(0, fixture.Context.FlushPhysicsCommands());
         Assert.Equal(state, fixture.Context.Character.GetState(handle));
 
         CharacterState teleported = fixture.Context.Character.SetPosition(handle, 12, 1);
