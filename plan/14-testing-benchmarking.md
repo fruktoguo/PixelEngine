@@ -150,12 +150,12 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 ### 4.6 Benchmarks（§17.3）
 
-- [ ] `CellThroughputBenchmark`：满激活混沌液体 + 典型 dirty-rect 两档活跃 cell 吞吐，落实 §12.8 量级（CA 内核 §12.8）。
-- [ ] `CoreScalingBenchmark`：worker 1→物理核数加速曲线 + 单线程回退阈值实测点，回填 §12.7（CA 内核 §12.7、R7）。
-- [ ] `TextureUploadBenchmark`：全帧 PBO vs dirty-rect 子上传 vs persistent-mapped，BGRA8 直 memcpy（渲染 §9.2）。
-- [ ] `ReactionLookupBenchmark`：紧凑 per-material 反应列表查表 cache-miss 率、惰性早退 vs 命中（材质 / 反应 §7.4、R12）。
-- [ ] `GcPauseBenchmark`：稳态帧循环配 `[MemoryDiagnoser]` 断言零分配；Workstation vs Server GC 最坏停顿对比供 §12.4 定档（性能 §12.4）。
-- [ ] `ParticleIntegrationBenchmark`：5万–20万粒子弹道积分 + swap-remove 每帧耗时（粒子 §7.6）。
+- [x] `CellThroughputBenchmark`：满激活混沌液体 + 典型 dirty-rect 两档活跃 cell 吞吐，落实 §12.8 量级（CA 内核 §12.8）。
+- [x] `CoreScalingBenchmark`：worker 1→物理核数加速曲线 + 单线程回退阈值实测点，回填 §12.7（CA 内核 §12.7、R7）。
+- [x] `TextureUploadBenchmark`：全帧 PBO vs dirty-rect 子上传 vs persistent-mapped，BGRA8 直 memcpy（渲染 §9.2）。
+- [x] `ReactionLookupBenchmark`：紧凑 per-material 反应列表查表 cache-miss 率、惰性早退 vs 命中（材质 / 反应 §7.4、R12）。
+- [x] `GcPauseBenchmark`：稳态帧循环配 `[MemoryDiagnoser]` 断言零分配；Workstation vs Server GC 最坏停顿对比供 §12.4 定档（性能 §12.4）。
+- [x] `ParticleIntegrationBenchmark`：5万–20万粒子弹道积分 + swap-remove 每帧耗时（粒子 §7.6）。
 
 ### 4.7 反汇编守门与 CI 门禁
 
@@ -213,5 +213,5 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] `test(physics): 凸分解/inverse-sampling/刚体拆分守恒测试`（对应 §4.3）。
 - [x] `test(serialization): save-load 往返/材质重映射/版本迁移测试`（对应 §4.4）。
 - [x] `test(script): 热重载/异常隔离/ALC 可回收测试`（对应 §4.5）。
-- [ ] `test(bench): cells-frame/加速曲线/上传/反应/GC/粒子基准`（对应 §4.6）。
+- [x] `test(bench): cells-frame/加速曲线/上传/反应/GC/粒子基准`（对应 §4.6）。
 - [ ] `build(ci): 反汇编守门+性能回归门禁+6-RID build-test`（对应 §4.7）。

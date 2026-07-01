@@ -4,13 +4,15 @@ using PixelEngine.Rendering;
 namespace PixelEngine.Benchmarks;
 
 /// <summary>
-/// 渲染上传 CPU 侧 copy/dirty-rect 聚合成本基准。GL DMA 路径由显式 smoke 覆盖，本基准用于校验架构 §9.2 带宽量级。
+/// 纹理上传 CPU 侧 copy/dirty-rect/persistent-mapped 路径基准。
+/// GL DMA 路径由显式 smoke 覆盖，本基准用于校验 plan/14 §4.6 与架构 §9.2 带宽量级。
 /// </summary>
 [MemoryDiagnoser]
-public class RenderingUploadBenchmarks
+public class TextureUploadBenchmark
 {
     private uint[] _source = [];
     private uint[] _staging = [];
+    private uint[] _persistentMapped = [];
     private PixelUploadRect[] _dirtyRects = [];
     private int _width;
     private int _height;
@@ -31,6 +33,7 @@ public class RenderingUploadBenchmarks
         int length = checked(_width * _height);
         _source = GC.AllocateArray<uint>(length, pinned: true);
         _staging = GC.AllocateArray<uint>(length, pinned: true);
+        _persistentMapped = GC.AllocateArray<uint>(length, pinned: true);
         for (int i = 0; i < _source.Length; i++)
         {
             _source[i] = 0xFF000000u | (uint)i;
@@ -49,7 +52,7 @@ public class RenderingUploadBenchmarks
     /// 模拟默认全帧上传前的 CPU memcpy：整张 BGRA8 render buffer 复制到 PBO staging。
     /// </summary>
     [Benchmark(Baseline = true)]
-    public void FullFrameCopy()
+    public void FullFramePboCopy()
     {
         _source.AsSpan().CopyTo(_staging);
     }
@@ -58,7 +61,7 @@ public class RenderingUploadBenchmarks
     /// 模拟 dirty-rect 上传前的 CPU 子区 copy：逐脏矩形逐行复制。
     /// </summary>
     [Benchmark]
-    public void DirtyRectCopy()
+    public void DirtyRectSubUploadCopy()
     {
         for (int i = 0; i < _dirtyRects.Length; i++)
         {
@@ -72,9 +75,40 @@ public class RenderingUploadBenchmarks
     }
 
     /// <summary>
+    /// 模拟 GL 4.4 persistent-mapped 快车道：render 阶段直接写入持久映射目标，无额外 PBO staging copy。
+    /// </summary>
+    [Benchmark]
+    public void PersistentMappedDirectWrite()
+    {
+        Span<uint> destination = _persistentMapped;
+        for (int i = 0; i < destination.Length; i++)
+        {
+            destination[i] = 0xFF000000u | (uint)i;
+        }
+    }
+
+    /// <summary>
     /// 当前视口全帧字节数，用于从 benchmark 结果换算 MB/s。
     /// </summary>
     public int FullFrameBytes => checked(_width * _height * sizeof(uint));
+
+    /// <summary>
+    /// 当前 dirty-rect 子上传字节数，用于从 benchmark 结果换算 MB/s。
+    /// </summary>
+    public int DirtyRectBytes
+    {
+        get
+        {
+            int pixels = 0;
+            for (int i = 0; i < _dirtyRects.Length; i++)
+            {
+                PixelUploadRect rect = _dirtyRects[i];
+                pixels = checked(pixels + (rect.Width * rect.Height));
+            }
+
+            return checked(pixels * sizeof(uint));
+        }
+    }
 
     private static (int Width, int Height) ParseViewport(string viewport)
     {
@@ -88,4 +122,11 @@ public class RenderingUploadBenchmarks
         int height = int.Parse(viewport.AsSpan(separator + 1));
         return (width, height);
     }
+}
+
+/// <summary>
+/// 旧入口保留给已有 benchmark filter/脚本；实际实现见 <see cref="TextureUploadBenchmark"/>。
+/// </summary>
+public class RenderingUploadBenchmarks : TextureUploadBenchmark
+{
 }
