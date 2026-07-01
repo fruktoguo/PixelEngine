@@ -164,6 +164,8 @@ public sealed class ScriptEventBusTests
 
         public ILightingApi Lighting => throw new NotSupportedException();
 
+        public IDiagnosticsApi Diagnostics => throw new NotSupportedException();
+
         public IEventBus Events { get; } = events;
 
         public IAudioApi Audio => throw new NotSupportedException();

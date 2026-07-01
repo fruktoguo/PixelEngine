@@ -651,6 +651,8 @@ public sealed class EnginePhaseDriverTests
 
         public ILightingApi Lighting => throw new NotSupportedException();
 
+        public IDiagnosticsApi Diagnostics => throw new NotSupportedException();
+
         public IEventBus Events => NoopEventBus.Instance;
 
         public IAudioApi Audio => throw new NotSupportedException();

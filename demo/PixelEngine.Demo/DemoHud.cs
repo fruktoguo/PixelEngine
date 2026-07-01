@@ -121,10 +121,10 @@ public sealed class DemoHud : Behaviour
 
     private void DrawTiming(IGuiContext gui)
     {
-        float fps = Context.Time.DeltaTime > 0f ? 1f / Context.Time.DeltaTime : 0f;
-        float simHz = Context.Time.FixedStep > 0f ? 1f / Context.Time.FixedStep : 0f;
+        EngineDiagnosticsSnapshot diagnostics = Context.Diagnostics.Capture();
         gui.Separator();
-        gui.Text($"FPS {fps:0}   Sim {simHz:0}Hz   Frame {Context.Time.FrameCount}");
+        gui.Text($"FPS {diagnostics.FramesPerSecond:0}   Sim {diagnostics.SimHz:0}Hz   Frame {diagnostics.FrameCount}");
+        gui.Text($"Chunks {diagnostics.ActiveChunks}/{diagnostics.ResidentChunks}   Particles {diagnostics.FreeParticles}   Bodies {diagnostics.RigidBodies}");
     }
 
     private static uint ColorForMaterial(string name)

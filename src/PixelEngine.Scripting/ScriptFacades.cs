@@ -56,6 +56,11 @@ public interface IScriptContext
     ILightingApi Lighting { get; }
 
     /// <summary>
+    /// 引擎只读诊断能力。
+    /// </summary>
+    IDiagnosticsApi Diagnostics { get; }
+
+    /// <summary>
     /// 脚本事件订阅能力；事件在相位 1 分发。
     /// </summary>
     IEventBus Events { get; }
@@ -474,6 +479,37 @@ public interface ILightingApi
     /// </summary>
     void ClearPointLights();
 }
+
+/// <summary>
+/// 提供脚本可用的只读引擎诊断 API。
+/// </summary>
+public interface IDiagnosticsApi
+{
+    /// <summary>
+    /// 捕获当前诊断计数器快照。
+    /// </summary>
+    /// <returns>诊断快照。</returns>
+    EngineDiagnosticsSnapshot Capture();
+}
+
+/// <summary>
+/// 脚本 HUD 可消费的引擎诊断快照。
+/// </summary>
+/// <param name="FrameCount">当前渲染帧序号。</param>
+/// <param name="FramesPerSecond">最近一帧估算 FPS。</param>
+/// <param name="SimHz">当前 sim 频率。</param>
+/// <param name="ActiveChunks">活跃 chunk 数。</param>
+/// <param name="ResidentChunks">常驻 chunk 数。</param>
+/// <param name="FreeParticles">自由粒子数。</param>
+/// <param name="RigidBodies">活跃刚体数。</param>
+public readonly record struct EngineDiagnosticsSnapshot(
+    long FrameCount,
+    float FramesPerSecond,
+    float SimHz,
+    long ActiveChunks,
+    long ResidentChunks,
+    long FreeParticles,
+    long RigidBodies);
 
 /// <summary>
 /// 提供脚本可用的事件订阅 API。

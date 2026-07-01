@@ -298,6 +298,8 @@ public sealed class SmokeTests
 
         public ILightingApi Lighting => throw new NotSupportedException();
 
+        public IDiagnosticsApi Diagnostics => throw new NotSupportedException();
+
         public IEventBus Events => throw new NotSupportedException();
 
         public IAudioApi Audio => throw new NotSupportedException();
