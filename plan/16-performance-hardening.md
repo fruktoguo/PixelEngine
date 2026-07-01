@@ -168,7 +168,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [!] **延迟+分支校准**：瓶颈分析以 cache-miss/分支误预测为据；多核加速曲线与 cells/frame 在目标硬件实测落表、回填架构指标。[§12.7/§12.8/§17.3] 阻塞于 §4.11：当前非管理员会话无法采集 ETW 硬件计数器，且缺少 6 RID 代表硬件 cells/frame 实测。
 - [x] **工具链门禁运行**：BenchmarkDotNet perf 门禁在 CI 跑、回归视为 bug；反汇编流程可复现；debug overlay 在线；发行编译模式审计通过。[§17.1/§17.3/§12.3]
 - [!] **帧预算达标**：目标硬件实测 CA ≤8ms、渲染+光照+post ≤4ms、物理+重建 ≤3–4ms、逻辑+音频 ≤1ms（典型场景留余量）。[§1.4] 阻塞：当前已有 Short 报告显示 full-active CA 仍未达目标预算，且缺少目标硬件正式长跑。
-- [ ] **零冲突复核**：本表所有项与架构不变式（#2/#3/#6/#7/#9）及 plan/00 技术栈无冲突。[AGENTS §1]
+- [x] **零冲突复核**：本表所有项与架构不变式（#2/#3/#6/#7/#9）及 plan/00 技术栈无冲突。[AGENTS §1] 复核证据：§4.3 保持 checkerboard + 持久线程池、无 cell 级锁；§4.5/§4.8 保持单缓冲 + dirty-rect + parity；§4.9 明确绝不 accumulator 追帧；§4.1/§4.7 确认颜色不入 cell、CPU sim 权威且 GPU pass 非权威无 readback；技术栈仍沿用 plan/00 的 .NET 10/C# 14/Intrinsics/Silk.NET/Box2D/BenchmarkDotNet。
 
 ## 6. 依赖关系
 
