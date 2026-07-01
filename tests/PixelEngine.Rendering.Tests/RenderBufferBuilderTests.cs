@@ -33,6 +33,42 @@ public sealed class RenderBufferBuilderTests
     }
 
     [Fact]
+    public void BuildPaletteFastPathSpansChunkRowsAndWritesAux()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk left = new(new ChunkCoord(0, 0));
+        Chunk right = new(new ChunkCoord(1, 0));
+        SetMaterial(left, 62, 0, 1);
+        SetMaterial(left, 63, 0, 2);
+        SetMaterial(right, 0, 0, 3);
+        chunks.Add(left);
+        chunks.Add(right);
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "glow", CellType.Powder, 0xFF010203u) with { PropertyFlags = MaterialProperty.Emissive },
+            Material(2, "rock", CellType.Solid, 0xFF040506u),
+            Material(3, "static", CellType.Powder, 0xFF070809u) with { PropertyFlags = MaterialProperty.Static });
+        RenderBuffer target = new(3, 1);
+        RenderAuxBuffers aux = new(3, 1);
+        RenderFrameContext context = new(
+            chunks,
+            materials,
+            new TemperatureField(),
+            CameraState.OneToOne(62, 0, 3, 1),
+            simStepped: true);
+
+        new RenderBufferBuilder().Build(context, target, aux);
+
+        Assert.Equal([0xFF010203u, 0xFF040506u, 0xFF070809u], target.Pixels.ToArray());
+        Assert.Equal(0xFF010203u, aux.Emissive[0]);
+        Assert.Equal(0u, aux.Emissive[1]);
+        Assert.Equal(0u, aux.Emissive[2]);
+        Assert.Equal(0, aux.Occluder[0]);
+        Assert.Equal(byte.MaxValue, aux.Occluder[1]);
+        Assert.Equal(byte.MaxValue, aux.Occluder[2]);
+    }
+
+    [Fact]
     public void BuildAppliesTextureProviderTemperatureGlowAndAuxOutputs()
     {
         ResidentChunkMap chunks = new();

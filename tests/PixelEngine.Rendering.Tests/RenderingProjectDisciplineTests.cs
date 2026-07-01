@@ -47,6 +47,7 @@ public sealed class RenderingProjectDisciplineTests
             Environment.NewLine,
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderPipeline.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderBufferBuilder.cs")),
+            File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "PaletteBgraConverter.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "ParticleCompositor.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "OverlayRenderer.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "BloomPass.cs")));
@@ -57,6 +58,19 @@ public sealed class RenderingProjectDisciplineTests
         Assert.DoesNotContain("yield return", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Func<", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Action<", source.Replace("event Action<GL>?", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PaletteBgraConversionHasSimdFallbackAndBenchmark()
+    {
+        string converter = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "PaletteBgraConverter.cs"));
+        string benchmark = File.ReadAllText(ProjectPath("bench", "PixelEngine.Benchmarks", "PaletteBgraConversionBenchmarks.cs"));
+
+        Assert.Contains("Avx2.IsSupported", converter, StringComparison.Ordinal);
+        Assert.Contains("GatherVector256", converter, StringComparison.Ordinal);
+        Assert.Contains("ConvertScalar", converter, StringComparison.Ordinal);
+        Assert.Contains("MemoryDiagnoser", benchmark, StringComparison.Ordinal);
+        Assert.Contains("ConvertAvx2Experimental", benchmark, StringComparison.Ordinal);
     }
 
     private static string ProjectPath(params string[] parts)
