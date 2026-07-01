@@ -702,13 +702,21 @@ public sealed class Engine : IDisposable
     /// 从 Hosting 已注册的真实 Simulation/Physics/Audio/Input/Camera 服务创建脚本上下文并接入相位管线。
     /// </summary>
     /// <param name="runtime">可选脚本运行时；为 null 时创建默认 <see cref="ScriptRuntime" />。</param>
+    /// <param name="hotReload">可选热重载源目录；提供时由默认运行时在相位 1 应用变更。</param>
     /// <returns>已接入的真实 Simulation 脚本上下文。</returns>
-    public ScriptSimulationContext AttachScriptingFromServices(IScriptRuntime? runtime = null)
+    public ScriptSimulationContext AttachScriptingFromServices(
+        IScriptRuntime? runtime = null,
+        ScriptHotReloadRuntimeOptions? hotReload = null)
     {
         ThrowIfShutdown();
         if (_attachedScriptRuntime is not null)
         {
             throw new InvalidOperationException("脚本运行时已经接入当前 Engine。");
+        }
+
+        if (runtime is not null && hotReload is not null)
+        {
+            throw new ArgumentException("自定义脚本运行时不能同时由 Hosting 自动接入热重载。", nameof(hotReload));
         }
 
         PixelEngine.Scripting.Scene scriptScene = ResolveCurrentScriptScene();
@@ -749,6 +757,7 @@ public sealed class Engine : IDisposable
             runtimeControl);
         Context.RegisterService(scriptContext);
         simulationDriver?.AttachScriptContext(scriptContext);
+        runtime ??= CreateScriptRuntime(scriptScene, scriptContext, hotReload);
         AttachScripting(scriptContext, runtime);
         if (camera is ScriptCameraApi)
         {
@@ -761,6 +770,28 @@ public sealed class Engine : IDisposable
         }
 
         return scriptContext;
+    }
+
+    private IScriptRuntime CreateScriptRuntime(
+        PixelEngine.Scripting.Scene scriptScene,
+        IScriptContext scriptContext,
+        ScriptHotReloadRuntimeOptions? hotReload)
+    {
+        if (hotReload is null)
+        {
+            return new ScriptRuntime();
+        }
+
+        ScriptHotReloadController controller = new(scriptScene, scriptContext);
+        controller.StartWatching(
+            hotReload.AssemblyName,
+            hotReload.SourceDirectory,
+            hotReload.PreserveState,
+            hotReload.SearchPattern,
+            hotReload.IncludeSubdirectories,
+            hotReload.DebounceInterval);
+        Context.RegisterService(controller);
+        return new ScriptRuntime(controller);
     }
 
     private void MaterializeCurrentSceneScriptsIfPossible()

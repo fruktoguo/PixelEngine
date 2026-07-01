@@ -61,6 +61,57 @@ public sealed class DemoRuntimeScriptingTests
         Assert.Equal(["start", "update"], events);
     }
 
+    /// <summary>
+    /// 验证 Hosting 生产装配会把脚本源目录 watcher 接到 ScriptRuntime，并在帧边界应用热重载。
+    /// </summary>
+    [Fact]
+    public void AttachScriptingFromServicesAppliesWatchedHotReloadAtFrameBoundary()
+    {
+        string scriptDirectory = Path.Combine(Path.GetTempPath(), "PixelEngineHotReload", Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(scriptDirectory);
+        try
+        {
+            MaterialTable materials = Materials(("empty", CellType.Empty));
+            using Engine engine = new EngineBuilder()
+                .UseHeadless()
+                .UseDeterministicMode()
+                .AddScene(new SceneDescriptor("reload", SceneSourceKind.Procedural, typeof(HostingHotReloadProbeBehaviour).FullName!))
+                .WithStartScene("reload")
+                .Build();
+            engine.Context.RegisterService(materials);
+            _ = engine.AttachResidentSimulationWorld(worldWidthCells: 64, worldHeightCells: 64, particleCapacity: 16);
+            engine.RegisterScriptAssembly(typeof(HostingHotReloadProbeBehaviour).Assembly);
+            ScriptSimulationContext context = engine.AttachScriptingFromServices(
+                hotReload: new ScriptHotReloadRuntimeOptions(
+                    $"PixelEngine.Hosting.Tests.HotReload.{Guid.NewGuid():N}",
+                    scriptDirectory,
+                    DebounceInterval: TimeSpan.FromMilliseconds(30)));
+            ScriptHotReloadController controller = engine.Context.GetService<ScriptHotReloadController>();
+
+            engine.RunHeadlessTicks(1);
+            Behaviour initial = GetSingleBehaviour<HostingHotReloadProbeBehaviour>(context.Scene);
+            Assert.Equal("v1", ReadProperty<string>(initial, "Version"));
+            Assert.Equal(2, ReadField<int>(initial, "Counter"));
+
+            File.WriteAllText(Path.Combine(scriptDirectory, "HostingHotReloadProbeBehaviour.cs"), HotReloadProbeVersionTwoSource);
+
+            Assert.True(
+                SpinWait.SpinUntil(() => controller.HasPendingReload || controller.LastWatcherException is not null, TimeSpan.FromSeconds(5)),
+                controller.LastWatcherException?.ToString() ?? "watcher 未在超时时间内触发 reload");
+            Assert.Null(controller.LastWatcherException);
+
+            engine.RunHeadlessTicks(1);
+            Behaviour reloaded = engine.Context.GetService<ScriptScene>().CaptureInspectionSnapshot()[0].Components[0].Behaviour;
+
+            Assert.Equal("v2", ReadProperty<string>(reloaded, "Version"));
+            Assert.Equal(12, ReadField<int>(reloaded, "Counter"));
+        }
+        finally
+        {
+            Directory.Delete(scriptDirectory, recursive: true);
+        }
+    }
+
     private static MaterialTable Materials(params (string Name, CellType Type)[] definitions)
     {
         MaterialDef[] materials = new MaterialDef[definitions.Length];
@@ -93,6 +144,20 @@ public sealed class DemoRuntimeScriptingTests
         return Assert.IsType<TBehaviour>(snapshot[0].Components[0].Behaviour);
     }
 
+    private static T ReadField<T>(Behaviour behaviour, string name)
+    {
+        return (T)behaviour.GetType()
+            .GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(behaviour)!;
+    }
+
+    private static T ReadProperty<T>(Behaviour behaviour, string name)
+    {
+        return (T)behaviour.GetType()
+            .GetProperty(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(behaviour)!;
+    }
+
     private sealed class DemoRuntimeBehaviour : Behaviour
     {
         public List<string> Events { get; set; } = [];
@@ -106,5 +171,45 @@ public sealed class DemoRuntimeScriptingTests
         {
             Events.Add("update");
         }
+    }
+
+    private const string HotReloadProbeVersionTwoSource = """
+        using PixelEngine.Scripting;
+
+        namespace PixelEngine.Hosting.Tests;
+
+        public sealed class HostingHotReloadProbeBehaviour : Behaviour
+        {
+            public int Counter;
+
+            public string Version => "v2";
+
+            protected override void OnStart()
+            {
+                Counter += 10;
+            }
+        }
+        """;
+}
+
+/// <summary>
+/// Hosting 热重载测试使用的初始脚本类型；动态脚本程序集会用同名类型替换它。
+/// </summary>
+public sealed class HostingHotReloadProbeBehaviour : Behaviour
+{
+    /// <summary>
+    /// 用于验证热重载状态恢复的公开字段。
+    /// </summary>
+    public int Counter = 1;
+
+    /// <summary>
+    /// 当前脚本版本。
+    /// </summary>
+    public string Version => "v1";
+
+    /// <inheritdoc />
+    protected override void OnStart()
+    {
+        Counter++;
     }
 }

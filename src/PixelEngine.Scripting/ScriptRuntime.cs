@@ -6,6 +6,7 @@ namespace PixelEngine.Scripting;
 public sealed class ScriptRuntime : IScriptRuntime
 {
     private readonly HotReloadService? _hotReload;
+    private readonly ScriptHotReloadController? _hotReloadController;
     private IScriptContext? _context;
     private bool _shutdown;
 
@@ -14,6 +15,15 @@ public sealed class ScriptRuntime : IScriptRuntime
     /// </summary>
     public ScriptRuntime()
     {
+    }
+
+    /// <summary>
+    /// 创建带热重载控制器的脚本运行时；控制器会在运行时关闭时释放。
+    /// </summary>
+    /// <param name="hotReloadController">热重载控制器。</param>
+    public ScriptRuntime(ScriptHotReloadController hotReloadController)
+    {
+        _hotReloadController = hotReloadController ?? throw new ArgumentNullException(nameof(hotReloadController));
     }
 
     internal ScriptRuntime(HotReloadService hotReload)
@@ -39,6 +49,7 @@ public sealed class ScriptRuntime : IScriptRuntime
     {
         IScriptContext context = RequireContext();
         _ = _hotReload?.ApplyPendingReload();
+        _ = _hotReloadController?.ApplyPendingReload();
         context.Scene.DispatchStart(context);
     }
 
@@ -94,6 +105,7 @@ public sealed class ScriptRuntime : IScriptRuntime
     public void Shutdown()
     {
         _hotReload?.Dispose();
+        _hotReloadController?.Dispose();
         _shutdown = true;
         _context = null;
     }

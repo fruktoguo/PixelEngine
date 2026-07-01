@@ -144,7 +144,7 @@ API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosti
 
 工程与启动
 - [x] 建 `demo/PixelEngine.Demo/PixelEngine.Demo.csproj`（`Exe`，仅 `ProjectReference` 到 `PixelEngine.Hosting` 与 `PixelEngine.Scripting`，继承 `Directory.Build.props`，无新 NuGet）。〔plan/00 §5〕
-- [!] `Program.cs`：已用 `EngineBuilder`/`EngineProject` 构造 Engine，支持 `--editor/--headless/--scene/--content/--ticks/--no-hot-reload/--log-dir`；已通过 `Engine.LoadContentPackage()` 加载 Demo materials/reactions 内容包，已区分 save directory 与 `.scene` 来源，默认 `content/scenes/lava-mine.scene` 可加载并物化 `LevelDirector`；已支持 `.scene` 与 procedural 脚本实体/Behaviour 物化，已用 `Engine.AttachResidentSimulationWorld(...)` + `Engine.AttachScriptingFromServices()` 接入 headless resident Simulation/Scripting 后端并跑通 2 tick 冒烟；save directory 与 `.scene InitialSaveDirectory` 场景可经 `Engine.AttachCurrentSceneWorld(...)` 显式装配 live World/Simulation/粒子后端；非 headless 路径已调用 `Engine.AttachWindowRuntime()` 接入窗口、输入与 Rendering 相位；阻塞：未完成真实窗口可玩关卡验收。〔Hosting；§3.1〕
+- [!] `Program.cs`：已用 `EngineBuilder`/`EngineProject` 构造 Engine，支持 `--editor/--headless/--scene/--content/--ticks/--no-hot-reload/--log-dir`；已通过 `Engine.LoadContentPackage()` 加载 Demo materials/reactions 内容包，已区分 save directory 与 `.scene` 来源，默认 `content/scenes/lava-mine.scene` 可加载并物化 `LevelDirector`；已支持 `.scene` 与 procedural 脚本实体/Behaviour 物化，已用 `Engine.AttachResidentSimulationWorld(...)` + `Engine.AttachScriptingFromServices()` 接入 headless resident Simulation/Scripting 后端并跑通 2 tick 冒烟；`HotReloadEnabled` 为 true 且 Demo 源码目录可定位时会把源码 watcher 接入 `ScriptRuntime`，源码目录缺失时明确提示并继续运行；save directory 与 `.scene InitialSaveDirectory` 场景可经 `Engine.AttachCurrentSceneWorld(...)` 显式装配 live World/Simulation/粒子后端；非 headless 路径已调用 `Engine.AttachWindowRuntime()` 接入窗口、输入与 Rendering 相位；阻塞：未完成真实窗口可玩关卡验收。〔Hosting；§3.1〕
 - [x] CI 依赖方向断言：Demo 无对引擎内部 assembly 的越层 / 反向引用。〔plan/14；§2〕
 
 玩家与相机
@@ -196,7 +196,7 @@ API 缺口登记
 - [ ] 材质化音效随事件定位播放（沙 / 石 / 木 / 金属 impact、水 / 酸 splash、火 / 熔岩 ambient、熔岩遇水 sizzle、酸腐蚀、爆炸、刚体破碎），玩法音效（跳 / 落 / 受击 / 通关 / UI）正确触发，满屏事件下限频不过载。〔§3.10〕
 - [ ] 关卡可从出生点用至少一种解法（引水成石桥 / 坍塌木桥成路）抵达出口触发通关，全程演示全部材质 / 反应 / 刚体 / 粒子 / 光照 / 音频。〔§3.11〕
 - [ ] HUD 正确显示当前材质 / 笔刷 / 玩家状态 / 操作提示 / 性能行；暂停菜单可继续 / 重开 / 切叠层 / 开编辑器 / 退出；HUD 经 `IGuiContext` 而非直接 ImGui。〔§3.12〕
-- [ ] 开发态修改任一 `Behaviour` 源码触发 Roslyn + ALC 热重载，场景与世界状态保留。〔plan/11、§3.2〕
+- [!] 开发态修改任一 `Behaviour` 源码触发 Roslyn + ALC 热重载，场景与世界状态保留：Hosting/Demo 已将源码 watcher 接入 `ScriptRuntime`，相位 1 应用热重载，并有 headless 集成测试验证同名 `Behaviour` 替换与公开字段状态恢复；阻塞：仍缺真实开发态窗口修改脚本后场景 / 世界状态保留验收。〔plan/11、§3.2〕
 - [ ] §3.13 全部「需引擎补 API」项已登记、被对应 plan 接纳或标 `- [!] 阻塞`，Demo 内无任何引擎内部类后门。〔§3.13、AGENTS.md §0〕
 
 ---

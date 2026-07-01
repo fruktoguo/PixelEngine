@@ -232,7 +232,7 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 
 ### 3.8 与 Hosting 协作
 
-脚本生命周期由 `PixelEngine.Hosting` 主循环驱动（plan/00 §5）。`public interface IScriptRuntime`：`Initialize(IScriptContext)`、`BeginFrame()`（相位 1 开始：apply 待处理热重载 → 分发 OnStart）、`Update(float dt)`（相位 1：分发 OnUpdate + ISystem.OnFrame + 事件排空）、`FixedSimTick()`（相位 1 且 SimSteppedThisFrame：分发 OnFixedSimTick + ISystem.OnSimTick）、`EndFrame()`（flush 销毁队列）、`Shutdown()`。Hosting 在装配期构造 `IScriptContext` 并把各子系统公开 API 注入其字段。
+脚本生命周期由 `PixelEngine.Hosting` 主循环驱动（plan/00 §5）。`public interface IScriptRuntime`：`Initialize(IScriptContext)`、`BeginFrame()`（相位 1 开始：apply 待处理热重载 → 分发 OnStart）、`Update(float dt)`（相位 1：分发 OnUpdate + ISystem.OnFrame + 事件排空）、`FixedSimTick()`（相位 1 且 SimSteppedThisFrame：分发 OnFixedSimTick + ISystem.OnSimTick）、`EndFrame()`（flush 销毁队列）、`Shutdown()`。Hosting 在装配期构造 `IScriptContext` 并把各子系统公开 API 注入其字段。生产运行时可由 Hosting 传入 `ScriptHotReloadRuntimeOptions` 构造并注册 `ScriptHotReloadController`，由 `ScriptRuntime.BeginFrame()` 在相位 1 应用文件监听排队的热重载。
 
 ---
 
@@ -291,7 +291,7 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 - [x] `HotReloadService.RequestReload()` 暴露为编辑器热重载入口（§3.7）
 - [x] `public interface IScriptRuntime`：`Initialize/BeginFrame/Update(dt)/FixedSimTick/EndFrame/Shutdown`，由 Hosting 主循环相位 1 驱动（§3.8，架构 §3.3）
 - [x] Hosting/Simulation 可接入 `ScriptSimulationContext`：`SimulationPhaseDriver` 支持绑定脚本上下文，并在 Simulation 相位安全窗口 flush cell/particle 命令（§3.8）。
-- [x] Hosting 装配期构造完整 `IScriptContext` 并注入各子系统公开 API（§3.8）：cell/material/particle/solid/body/character/time/events/audio/input/camera/lighting 均有真实后端或已注册服务时的真实注入路径；Hosting 会注册 `ScriptSimulationContext` 供 Simulation/Physics 相位 flush。
+- [x] Hosting 装配期构造完整 `IScriptContext` 并注入各子系统公开 API（§3.8）：cell/material/particle/solid/body/character/time/events/audio/input/camera/lighting 均有真实后端或已注册服务时的真实注入路径；Hosting 会注册 `ScriptSimulationContext` 供 Simulation/Physics 相位 flush；可选 `ScriptHotReloadRuntimeOptions` 会创建并注册 `ScriptHotReloadController`，由 `ScriptRuntime` 在相位 1 应用源码 watcher 排队的热重载。
 
 ---
 

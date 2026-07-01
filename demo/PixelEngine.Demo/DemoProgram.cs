@@ -78,14 +78,20 @@ public static class DemoProgram
             : "脚本程序集已注册；热重载已由参数关闭。");
         if (contentLoaded)
         {
-            _ = engine.AttachScriptingFromServices();
+            PixelEngine.Scripting.ScriptHotReloadRuntimeOptions? hotReload = CreateHotReloadOptions(options);
+            _ = engine.AttachScriptingFromServices(hotReload: hotReload);
+            if (options.HotReloadEnabled && hotReload is null)
+            {
+                Console.WriteLine("脚本热重载未启用：未找到 Demo 源码目录。");
+            }
+
             Console.WriteLine("脚本运行时已接入 Hosting/Simulation 后端。");
         }
 
         if (options.Headless)
         {
             engine.RunHeadlessTicks(options.HeadlessTicks);
-            Scene? current = engine.Context.GetService<ISceneService>().Current;
+            PixelEngine.Hosting.Scene? current = engine.Context.GetService<ISceneService>().Current;
             Console.WriteLine($"Engine frame: {engine.Context.Clock.FrameIndex}, scene: {current?.Name}");
             return;
         }
@@ -93,6 +99,21 @@ public static class DemoProgram
         _ = engine.AttachWindowRuntime();
         Console.WriteLine("窗口运行时已接入 Rendering/Input 后端。");
         engine.Run();
+    }
+
+    private static PixelEngine.Scripting.ScriptHotReloadRuntimeOptions? CreateHotReloadOptions(DemoStartupOptions options)
+    {
+        string contentRoot = Path.GetFullPath(options.ContentRoot);
+        DirectoryInfo? contentDirectory = new(contentRoot);
+        string? sourceDirectory = contentDirectory.Parent?.FullName;
+        return !options.HotReloadEnabled || string.IsNullOrWhiteSpace(sourceDirectory) || !Directory.Exists(sourceDirectory)
+            ? null
+            : new PixelEngine.Scripting.ScriptHotReloadRuntimeOptions(
+                "PixelEngine.Demo.HotReload",
+                sourceDirectory,
+                PreserveState: true,
+                SearchPattern: "*.cs",
+                IncludeSubdirectories: false);
     }
 
     /// <summary>
