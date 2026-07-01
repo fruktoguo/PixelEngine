@@ -1,5 +1,6 @@
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
+using PixelEngine.Editor;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
@@ -108,6 +109,7 @@ public sealed class EnginePhaseDriverTests
         ScriptLightingSynchronizer lightingSync = new(lighting, cameraSync);
         lightingSync.Sync();
         RecordingRenderFrameSink sink = new();
+        DebugOverlayController overlays = new(new DebugOverlaySettings { Enabled = DebugOverlayFlags.ParticleTrails });
         RenderPhaseDriver driver = new(
             chunks,
             materials,
@@ -115,7 +117,8 @@ public sealed class EnginePhaseDriverTests
             particles,
             cameraSync,
             lightingSync,
-            sink);
+            sink,
+            debugOverlays: overlays);
 
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
@@ -133,6 +136,7 @@ public sealed class EnginePhaseDriverTests
         Assert.Equal(1, engine.Phases.Count(EnginePhase.GpuUploadAndRender));
         Assert.Equal(1, sink.ParticleCount);
         Assert.Equal(1, sink.PointLightCount);
+        Assert.True(sink.OverlayCount > 0);
         Assert.Equal(1, sink.DirtyRectCount);
         Assert.Equal(new PixelUploadRect(0, 0, 32, 16), sink.FirstDirtyRect);
         Assert.NotNull(sink.FogOfWar);
@@ -512,6 +516,8 @@ public sealed class EnginePhaseDriverTests
 
         public int PointLightCount { get; private set; }
 
+        public int OverlayCount { get; private set; }
+
         public int DirtyRectCount { get; private set; }
 
         public PixelUploadRect FirstDirtyRect { get; private set; }
@@ -536,7 +542,6 @@ public sealed class EnginePhaseDriverTests
         {
             _ = camera;
             _ = dirtyRects;
-            _ = overlays;
             _ = materials;
             _ = profiler;
             FrameCount++;
@@ -545,6 +550,7 @@ public sealed class EnginePhaseDriverTests
             AuxWidth = aux.Width;
             AuxHeight = aux.Height;
             PointLightCount = pointLights.Length;
+            OverlayCount = overlays.Length;
             ParticleCount = particles.Length;
             DirtyRectCount = dirtyRects.Length;
             FirstDirtyRect = dirtyRects.Length == 0 ? default : dirtyRects[0];
