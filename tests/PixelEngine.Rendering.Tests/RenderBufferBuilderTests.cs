@@ -135,6 +135,57 @@ public sealed class RenderBufferBuilderTests
     }
 
     [Fact]
+    public void BuildUsesDebugCellColorProviderWhenPresent()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        SetMaterial(chunk, 0, 0, 1);
+        chunks.Add(chunk);
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "sand", CellType.Powder, 0xFF010203u));
+        RenderBuffer target = new(1, 1);
+        RenderAuxBuffers aux = new(1, 1);
+        RenderFrameContext context = new(
+            chunks,
+            materials,
+            new TemperatureField(),
+            CameraState.OneToOne(0, 0, 1, 1),
+            simStepped: true,
+            new SolidDebugColorProvider(0xCC445566u));
+
+        new RenderBufferBuilder().Build(context, target, aux);
+
+        Assert.Equal(0xCC445566u, target.Pixels[0]);
+    }
+
+    [Fact]
+    public void BuildRebuildsWhenDebugCellColorProviderIsPresentEvenWithoutSimStep()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        SetMaterial(chunk, 0, 0, 1);
+        chunks.Add(chunk);
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "sand", CellType.Powder, 0xFF010203u));
+        RenderBuffer target = new(1, 1);
+        RenderAuxBuffers aux = new(1, 1);
+        target.Pixels[0] = 0xFFEEDDCCu;
+        RenderFrameContext context = new(
+            chunks,
+            materials,
+            new TemperatureField(),
+            CameraState.OneToOne(0, 0, 1, 1),
+            simStepped: false,
+            new SolidDebugColorProvider(0xCC445566u));
+
+        new RenderBufferBuilder().Build(context, target, aux);
+
+        Assert.Equal(0xCC445566u, target.Pixels[0]);
+    }
+
+    [Fact]
     public void BuildReusesPreviousBuffersWhenSimDidNotStep()
     {
         ResidentChunkMap chunks = new();
@@ -192,6 +243,15 @@ public sealed class RenderBufferBuilderTests
         {
             bgra = material.TextureId == 7 ? 0xFF445566u : 0;
             return material.TextureId == 7;
+        }
+    }
+
+    private sealed class SolidDebugColorProvider(uint color) : IDebugCellColorProvider
+    {
+        public bool TryGetDebugColor(int worldX, int worldY, ushort materialId, byte flags, float temperatureCelsius, out uint colorBgra)
+        {
+            colorBgra = color;
+            return true;
         }
     }
 }

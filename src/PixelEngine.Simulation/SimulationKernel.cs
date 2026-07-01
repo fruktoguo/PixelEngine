@@ -208,6 +208,22 @@ public sealed class SimulationKernel(
         return true;
     }
 
+    /// <summary>
+    /// 复制本帧记录到的 KeepAlive/边界唤醒诊断，供 Editor 调试叠层读取。
+    /// </summary>
+    public int CopyBoundaryWakeSnapshots(Span<BoundaryWakeSnapshot> destination)
+    {
+        ReadOnlySpan<BoundaryWakeRecord> records = Diagnostics.BoundaryWakeRecords;
+        int count = Math.Min(records.Length, destination.Length);
+        for (int i = 0; i < count; i++)
+        {
+            BoundaryWakeRecord record = records[i];
+            destination[i] = new BoundaryWakeSnapshot(record.TargetCoord, record.IncomingSlot, record.Rect);
+        }
+
+        return count;
+    }
+
     internal long CountNonEmptyCells()
     {
         long count = 0;

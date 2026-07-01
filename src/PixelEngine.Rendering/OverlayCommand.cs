@@ -11,6 +11,8 @@ namespace PixelEngine.Rendering;
 /// <param name="ColorBgra">矩形颜色或精灵 tint，BGRA8 非预乘 alpha。</param>
 /// <param name="OutlineThickness">轮廓矩形的内部描边厚度，单位为 viewport pixel；其它原语忽略该值。</param>
 /// <param name="Sprite">纹理精灵来源；仅当 <paramref name="PrimitiveType"/> 为 <see cref="OverlayPrimitiveType.Sprite"/> 时使用。</param>
+/// <param name="LineEndX">线段终点 X；仅当 <paramref name="PrimitiveType"/> 为 <see cref="OverlayPrimitiveType.Line"/> 时使用。</param>
+/// <param name="LineEndY">线段终点 Y；仅当 <paramref name="PrimitiveType"/> 为 <see cref="OverlayPrimitiveType.Line"/> 时使用。</param>
 public readonly record struct OverlayCommand(
     OverlayPrimitiveType PrimitiveType,
     float ViewportX,
@@ -19,7 +21,9 @@ public readonly record struct OverlayCommand(
     float Height,
     uint ColorBgra,
     float OutlineThickness,
-    OverlaySprite Sprite)
+    OverlaySprite Sprite,
+    float LineEndX,
+    float LineEndY)
 {
     /// <summary>
     /// 创建实色矩形命令。
@@ -32,7 +36,7 @@ public readonly record struct OverlayCommand(
     /// <returns>实色矩形命令。</returns>
     public static OverlayCommand SolidRectangle(float viewportX, float viewportY, float width, float height, uint colorBgra)
     {
-        return new OverlayCommand(OverlayPrimitiveType.SolidRectangle, viewportX, viewportY, width, height, colorBgra, 0f, default);
+        return new OverlayCommand(OverlayPrimitiveType.SolidRectangle, viewportX, viewportY, width, height, colorBgra, 0f, default, 0f, 0f);
     }
 
     /// <summary>
@@ -47,7 +51,7 @@ public readonly record struct OverlayCommand(
     /// <returns>轮廓矩形命令。</returns>
     public static OverlayCommand OutlineRectangle(float viewportX, float viewportY, float width, float height, float thickness, uint colorBgra)
     {
-        return new OverlayCommand(OverlayPrimitiveType.OutlineRectangle, viewportX, viewportY, width, height, colorBgra, thickness, default);
+        return new OverlayCommand(OverlayPrimitiveType.OutlineRectangle, viewportX, viewportY, width, height, colorBgra, thickness, default, 0f, 0f);
     }
 
     /// <summary>
@@ -62,7 +66,15 @@ public readonly record struct OverlayCommand(
     /// <returns>纹理精灵命令。</returns>
     public static OverlayCommand SpriteRectangle(float viewportX, float viewportY, float width, float height, OverlaySprite sprite, uint tintBgra = 0xFFFFFFFFu)
     {
-        return new OverlayCommand(OverlayPrimitiveType.Sprite, viewportX, viewportY, width, height, tintBgra, 0f, sprite);
+        return new OverlayCommand(OverlayPrimitiveType.Sprite, viewportX, viewportY, width, height, tintBgra, 0f, sprite, 0f, 0f);
+    }
+
+    /// <summary>
+    /// 创建线段命令。
+    /// </summary>
+    public static OverlayCommand Line(float startX, float startY, float endX, float endY, float thickness, uint colorBgra)
+    {
+        return new OverlayCommand(OverlayPrimitiveType.Line, startX, startY, 1f, 1f, colorBgra, thickness, default, endX, endY);
     }
 
     /// <summary>
@@ -94,6 +106,23 @@ public readonly record struct OverlayCommand(
                 return;
             case OverlayPrimitiveType.Sprite:
                 Sprite.Validate();
+                return;
+            case OverlayPrimitiveType.Line:
+                if (!float.IsFinite(LineEndX) || !float.IsFinite(LineEndY))
+                {
+                    throw new ArgumentOutOfRangeException(nameof(LineEndX), "Overlay 线段终点必须为有限数值。");
+                }
+
+                if (!float.IsFinite(OutlineThickness) || OutlineThickness <= 0f)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(OutlineThickness), "Overlay 线段厚度必须为正有限数值。");
+                }
+
+                if (ViewportX == LineEndX && ViewportY == LineEndY)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(LineEndX), "Overlay 线段长度必须大于 0。");
+                }
+
                 return;
             default:
                 throw new ArgumentOutOfRangeException(nameof(PrimitiveType), "未知 Overlay 原语类型。");

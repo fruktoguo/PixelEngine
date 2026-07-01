@@ -10,6 +10,7 @@ public sealed class OverlayRendererContractTests
         OverlayCommand solid = OverlayCommand.SolidRectangle(10f, 20f, 30f, 40f, 0x80403020u);
         OverlayCommand outline = OverlayCommand.OutlineRectangle(1f, 2f, 3f, 4f, 0.5f, 0xFF112233u);
         OverlayCommand sprite = OverlayCommand.SpriteRectangle(5f, 6f, 7f, 8f, new OverlaySprite(9, 16, 32), 0xFFFFFFFFu);
+        OverlayCommand line = OverlayCommand.Line(1f, 2f, 9f, 10f, 1.5f, 0xFF010203u);
 
         Assert.Equal(OverlayPrimitiveType.SolidRectangle, solid.PrimitiveType);
         Assert.Equal(10f, solid.ViewportX);
@@ -20,6 +21,9 @@ public sealed class OverlayRendererContractTests
         Assert.Equal(0.5f, outline.OutlineThickness);
         Assert.Equal(OverlayPrimitiveType.Sprite, sprite.PrimitiveType);
         Assert.Equal((uint)9, sprite.Sprite.TextureHandle);
+        Assert.Equal(OverlayPrimitiveType.Line, line.PrimitiveType);
+        Assert.Equal(9f, line.LineEndX);
+        Assert.Equal(10f, line.LineEndY);
     }
 
     [Fact]
@@ -29,6 +33,8 @@ public sealed class OverlayRendererContractTests
         AssertThrows<ArgumentOutOfRangeException>(() => OverlayCommand.SolidRectangle(0f, 0f, 0f, 1f, 0).Validate());
         AssertThrows<ArgumentOutOfRangeException>(() => OverlayCommand.OutlineRectangle(0f, 0f, 1f, 1f, 0f, 0).Validate());
         AssertThrows<ArgumentOutOfRangeException>(() => OverlayCommand.SpriteRectangle(0f, 0f, 1f, 1f, new OverlaySprite(0, 16, 16)).Validate());
+        AssertThrows<ArgumentOutOfRangeException>(() => OverlayCommand.Line(0f, 0f, 0f, 0f, 1f, 0).Validate());
+        AssertThrows<ArgumentOutOfRangeException>(() => OverlayCommand.Line(0f, 0f, 1f, 1f, 0f, 0).Validate());
         AssertThrows<ArgumentOutOfRangeException>(() => new OverlaySprite(1, 16, 16, 0.75f, 0f, 0.25f, 1f).Validate());
     }
 

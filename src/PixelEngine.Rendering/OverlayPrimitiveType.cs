@@ -19,4 +19,9 @@ public enum OverlayPrimitiveType
     /// 从 OpenGL 2D 纹理采样的精灵矩形。
     /// </summary>
     Sprite,
+
+    /// <summary>
+    /// 带厚度的屏幕空间线段。
+    /// </summary>
+    Line,
 }

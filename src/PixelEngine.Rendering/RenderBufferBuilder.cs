@@ -41,7 +41,7 @@ public sealed class RenderBufferBuilder(
         }
 
         aux.Resize(target.Width, target.Height);
-        if (!context.SimStepped)
+        if (!context.SimStepped && context.DebugCellColors is null)
         {
             RecordSub(profiler, started);
             return;
@@ -148,6 +148,7 @@ public sealed class RenderBufferBuilder(
         return camera.CellsPerPixel == 1f &&
             camera.OriginWorldX == MathF.Truncate(camera.OriginWorldX) &&
             camera.OriginWorldY == MathF.Truncate(camera.OriginWorldY) &&
+            context.DebugCellColors is null &&
             !context.Temperature.HasActiveBlocks &&
             !hot.HasColorNoise &&
             (_textures is null || !hot.HasTexturedMaterials);
@@ -200,6 +201,7 @@ public sealed class RenderBufferBuilder(
 
         int local = CellAddressing.LocalIndex(worldX, worldY);
         ushort materialId = chunk.Material[local];
+        byte cellFlags = chunk.Flags[local];
         ref readonly MaterialDef material = ref context.Materials.Get(materialId);
         uint color = material.BaseColorBGRA;
         if (material.TextureId >= 0 && _textures is not null &&
@@ -211,6 +213,11 @@ public sealed class RenderBufferBuilder(
         color = ApplyColorNoise(color, material.ColorNoise, worldX, worldY);
         float temperature = context.Temperature.GetTemperature(worldX, worldY);
         color = ApplyTemperatureGlow(color, temperature);
+        if (context.DebugCellColors?.TryGetDebugColor(worldX, worldY, materialId, cellFlags, temperature, out uint debugColor) == true)
+        {
+            color = debugColor;
+        }
+
         MaterialProperty flags = material.PropertyFlags;
         isEmissive = (flags & MaterialProperty.Emissive) != 0 ||
             temperature > _options.TemperatureGlowThreshold;
