@@ -164,7 +164,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] **GPU 下放且权威留 CPU**：光照/bloom/高密度粒子/可选非权威 sim pass 在 GPU；权威网格在 CPU、无 readback 卡流水线；compute capability-gate 与回退生效。[§9.4/§9.5/不变式 #9]
 - [ ] **dirty-rect 真生效**：满屏静止场景 sim 成本实测 ≈ 0，叠层确认 sleeping 区零迭代；KeepAlive 无永久唤醒。[§5.4/风险 R1]
 - [ ] **过载降级链可逐级触发**：五级降级 + 节流全部实现并可由诊断计时器触发；压力下绝不进入 death spiral（不变式 #6）。[§4.2/§4.3]
-- [ ] **内存上限守住**：常驻世界稳定 ≤ 配置上限，LRU 驱逐 + RLE+LZ4 生效，长漫游不无界增长。[§12.2]
+- [x] **内存上限守住**：常驻世界稳定 ≤ 配置上限，LRU 驱逐 + RLE+LZ4 生效，长漫游不无界增长。[§12.2]
 - [ ] **延迟+分支校准**：瓶颈分析以 cache-miss/分支误预测为据；多核加速曲线与 cells/frame 在目标硬件实测落表、回填架构指标。[§12.7/§12.8/§17.3]
 - [x] **工具链门禁运行**：BenchmarkDotNet perf 门禁在 CI 跑、回归视为 bug；反汇编流程可复现；debug overlay 在线；发行编译模式审计通过。[§17.1/§17.3/§12.3]
 - [ ] **帧预算达标**：目标硬件实测 CA ≤8ms、渲染+光照+post ≤4ms、物理+重建 ≤3–4ms、逻辑+音频 ≤1ms（典型场景留余量）。[§1.4]
