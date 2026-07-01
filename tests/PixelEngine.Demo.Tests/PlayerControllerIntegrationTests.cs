@@ -13,6 +13,43 @@ namespace PixelEngine.Demo.Tests;
 public sealed class PlayerControllerIntegrationTests
 {
     /// <summary>
+    /// 验证 Demo 终点触发器会在玩家进入出口区域时标记通关，并产生粒子、光照、fog 与音效反馈。
+    /// </summary>
+    [Fact]
+    public void GoalTriggerMarksReachedAndQueuesCelebrationFeedback()
+    {
+        RecordingAudioApi audio = new();
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(out _, out _, out _, out ScriptScene scene, materials, audio);
+        Entity entity = scene.CreateEntity();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 12f;
+        GoalTrigger goal = entity.AddComponent<GoalTrigger>();
+        goal.X = 10f;
+        goal.Y = 10f;
+        goal.Width = 8f;
+        goal.Height = 8f;
+        goal.CelebrationParticleCount = 8;
+        goal.CelebrationParticleSpeed = 30f;
+        goal.GoalAudioCue = "goal_reached.wav";
+
+        engine.RunHeadlessTicks(1);
+
+        Assert.True(goal.Reached, $"玩家应进入终点触发区，state={Describe(player.State)}");
+
+        ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
+        Assert.True(particles.ActiveCount > 0);
+
+        ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
+        Assert.True(lighting.PointLights.Length > 0);
+        Assert.True(lighting.FogOfWar.RevealAlpha(14, 14) > 0);
+        Assert.Equal("goal_reached.wav", audio.LastCue);
+        Assert.Equal(14f, audio.LastX, precision: 3);
+        Assert.Equal(14f, audio.LastY, precision: 3);
+    }
+
+    /// <summary>
     /// 验证 Demo 爆破工具会从鼠标世界坐标触发 cell 抛射、刚体冲量请求与光照反馈。
     /// </summary>
     [Fact]
@@ -201,9 +238,10 @@ public sealed class PlayerControllerIntegrationTests
         out CellGrid grid,
         out ScriptCameraApi camera,
         out ScriptScene scene,
-        MaterialTable? materials = null)
+        MaterialTable? materials = null,
+        IAudioApi? audio = null)
     {
-        Engine engine = CreateBaseEngine(out input, out grid, out camera, materials: materials);
+        Engine engine = CreateBaseEngine(out input, out grid, out camera, materials: materials, audio: audio);
         scene = new ScriptScene();
         engine.Context.RegisterService(scene);
         _ = engine.AttachScriptingFromServices();
@@ -226,7 +264,8 @@ public sealed class PlayerControllerIntegrationTests
         out CellGrid grid,
         out ScriptCameraApi camera,
         Type? entryType = null,
-        MaterialTable? materials = null)
+        MaterialTable? materials = null,
+        IAudioApi? audio = null)
     {
         materials ??= Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
         EngineBuilder builder = new EngineBuilder()
@@ -249,7 +288,7 @@ public sealed class PlayerControllerIntegrationTests
         engine.Context.RegisterService(input);
         engine.Context.RegisterService<ICameraApi>(EngineServiceRole.Camera, camera);
         engine.Context.RegisterService(camera);
-        engine.Context.RegisterService<IAudioApi>(EngineServiceRole.AudioService, NoOpAudioApi.Instance);
+        engine.Context.RegisterService<IAudioApi>(EngineServiceRole.AudioService, audio ?? NoOpAudioApi.Instance);
         grid = engine.Context.GetService<CellGrid>();
         return engine;
     }
@@ -361,6 +400,27 @@ public sealed class PlayerControllerIntegrationTests
 
         public void PlayAt(string cue, float x, float y, float volume = 1f)
         {
+        }
+    }
+
+    private sealed class RecordingAudioApi : IAudioApi
+    {
+        public string LastCue { get; private set; } = string.Empty;
+
+        public float LastX { get; private set; }
+
+        public float LastY { get; private set; }
+
+        public void PlayOneShot(string cue, float volume = 1f)
+        {
+            LastCue = cue;
+        }
+
+        public void PlayAt(string cue, float x, float y, float volume = 1f)
+        {
+            LastCue = cue;
+            LastX = x;
+            LastY = y;
         }
     }
 
