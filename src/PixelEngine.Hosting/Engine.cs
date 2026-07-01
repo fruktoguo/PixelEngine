@@ -18,7 +18,9 @@ namespace PixelEngine.Hosting;
 public sealed class Engine : IDisposable
 {
     private readonly EngineLifecycle _lifecycle;
+    private readonly List<IDisposable> _ownedRuntimeResources = [];
     private IScriptRuntime? _attachedScriptRuntime;
+    private bool _shutdownRequested;
     private bool _disposed;
 
     internal Engine(EngineContext context, EnginePhasePipeline phases, EngineLifecycle lifecycle)
@@ -206,6 +208,44 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>
+    /// 创建并接入窗口、输入与真实 Rendering 管线，用于非 headless Demo/runtime。
+    /// </summary>
+    /// <returns>已创建的渲染窗口。</returns>
+    public RenderWindow AttachWindowRuntime()
+    {
+        ThrowIfShutdown();
+        if (Context.Options.Headless)
+        {
+            throw new InvalidOperationException("headless Engine 不能接入窗口运行时。");
+        }
+
+        if (Context.TryGetService(out RenderWindow existing))
+        {
+            return existing;
+        }
+
+        RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine Demo",
+            Width = Context.Options.WindowWidth,
+            Height = Context.Options.WindowHeight,
+        });
+        _ownedRuntimeResources.Add(window);
+        Context.RegisterService(window);
+        _ = AttachWindowInput(window);
+        _ = AttachCameraSynchronization(window);
+        _ = AttachRendering(window);
+        Phases.Register(EnginePhase.InputAndTime, _ =>
+        {
+            if (window.IsClosing)
+            {
+                _shutdownRequested = true;
+            }
+        });
+        return window;
+    }
+
+    /// <summary>
     /// 接入脚本相机同步，使 Rendering/World 能消费脚本相机快照。
     /// </summary>
     /// <param name="window">可选渲染窗口；提供时每帧把窗口尺寸回写脚本相机视口。</param>
@@ -215,6 +255,12 @@ public sealed class Engine : IDisposable
         ThrowIfShutdown();
         if (Context.TryGetService(out ScriptCameraSynchronizer existing))
         {
+            if (window is not null && Context.TryGetService(out ScriptCameraSyncPhaseDriver existingDriver))
+            {
+                existingDriver.AttachWindow(window);
+                _ = existing.Sync(window.Width, window.Height);
+            }
+
             return existing;
         }
 
@@ -229,6 +275,44 @@ public sealed class Engine : IDisposable
         driver.RegisterPhases(Phases);
         _ = synchronizer.Sync(window?.Width ?? 0, window?.Height ?? 0);
         return synchronizer;
+    }
+
+    /// <summary>
+    /// 接入真实 Rendering 管线，将 Simulation render buffer、脚本相机与光照同步结果提交到窗口。
+    /// </summary>
+    /// <param name="window">渲染窗口。</param>
+    /// <returns>已接入的 Rendering 相位驱动。</returns>
+    public RenderPhaseDriver AttachRendering(RenderWindow window)
+    {
+        ThrowIfShutdown();
+        ArgumentNullException.ThrowIfNull(window);
+        if (Context.TryGetService(out RenderPhaseDriver existing))
+        {
+            return existing;
+        }
+
+        SimulationPhaseDriver simulation = Context.GetService<SimulationPhaseDriver>();
+        ScriptCameraSynchronizer camera = AttachCameraSynchronization(window);
+        ScriptLightingSynchronizer lighting = AttachLightingSynchronization();
+        RenderPipeline pipeline = new(window, Math.Max(1, window.Width), Math.Max(1, window.Height));
+        RenderPipelineFrameSink sink = new(pipeline);
+        RenderPhaseDriver driver = new(
+            Context.GetService<IChunkSource>(),
+            simulation.Materials,
+            simulation.Temperature,
+            simulation.Particles,
+            camera,
+            lighting,
+            sink,
+            Context.Jobs);
+        Context.RegisterService(pipeline);
+        Context.RegisterService<IGpuComputeQualityDegrader>(pipeline);
+        Context.RegisterService<IRenderFrameSink>(sink);
+        Context.RegisterService(sink);
+        Context.RegisterService(driver.GetType(), driver);
+        driver.RegisterPhases(Phases);
+        _ownedRuntimeResources.Add(pipeline);
+        return driver;
     }
 
     /// <summary>
@@ -798,6 +882,10 @@ public sealed class Engine : IDisposable
 
             Phases.Execute(this, timing);
             Context.Counters.SimHz = Context.Clock.SimHz;
+            if (_shutdownRequested)
+            {
+                Shutdown();
+            }
         }
         finally
         {
@@ -838,7 +926,9 @@ public sealed class Engine : IDisposable
         Exception? lifecycleFailure = null;
         try
         {
+            _shutdownRequested = false;
             _attachedScriptRuntime?.Shutdown();
+            DisposeOwnedRuntimeResources();
             _lifecycle.Shutdown();
         }
         catch (Exception exception)
@@ -855,6 +945,16 @@ public sealed class Engine : IDisposable
         {
             throw lifecycleFailure;
         }
+    }
+
+    private void DisposeOwnedRuntimeResources()
+    {
+        for (int i = _ownedRuntimeResources.Count - 1; i >= 0; i--)
+        {
+            _ownedRuntimeResources[i].Dispose();
+        }
+
+        _ownedRuntimeResources.Clear();
     }
 
     /// <summary>

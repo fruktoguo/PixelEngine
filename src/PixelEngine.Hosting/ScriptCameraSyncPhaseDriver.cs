@@ -10,7 +10,15 @@ public sealed class ScriptCameraSyncPhaseDriver(
     RenderWindow? window = null) : IEnginePhaseDriver
 {
     private readonly ScriptCameraSynchronizer _synchronizer = synchronizer ?? throw new ArgumentNullException(nameof(synchronizer));
-    private readonly RenderWindow? _window = window;
+    private RenderWindow? _window = window;
+
+    /// <summary>
+    /// 绑定或替换窗口尺寸来源。
+    /// </summary>
+    public void AttachWindow(RenderWindow window)
+    {
+        _window = window ?? throw new ArgumentNullException(nameof(window));
+    }
 
     /// <summary>
     /// 注册脚本相机同步相位。

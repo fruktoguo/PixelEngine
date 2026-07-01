@@ -1,5 +1,6 @@
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
+using PixelEngine.Rendering;
 using PixelEngine.Scripting;
 using PixelEngine.World;
 using Xunit;
@@ -59,6 +60,58 @@ public sealed class EnginePhaseDriverTests
         Assert.Equal(1, engine.Phases.Count(EnginePhase.Temperature));
         Assert.Equal(1, engine.Phases.Count(EnginePhase.DirtyRectSwap));
         Assert.Equal(1, engine.Phases.Count(EnginePhase.CellToParticle));
+    }
+
+    /// <summary>
+    /// 验证 RenderPhaseDriver 会在相位 9 构建 CPU render buffer，并把脚本相机、粒子与 fog-of-war 结果提交到渲染 sink。
+    /// </summary>
+    [Fact]
+    public void RenderPhaseDriverBuildsBufferAndSubmitsFrame()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        chunk.Material[0] = 1;
+        TestChunkSource chunks = new(chunk);
+        ParticleSystem particles = new(capacity: 16);
+        Assert.True(particles.TrySpawn(new ParticleSpawn(1, 0, 0, 0, Material: 1, ColorVariant: 0, Life: 10)));
+        TemperatureField temperature = new();
+        ScriptCameraApi camera = new(viewportWidth: 32, viewportHeight: 16, centerX: 16, centerY: 8, zoom: 1);
+        ScriptCameraSynchronizer cameraSync = new(camera);
+        _ = cameraSync.Sync();
+        ScriptLightingApi lighting = new();
+        lighting.RevealAround(16, 8, radius: 4, alpha: 192);
+        ScriptLightingSynchronizer lightingSync = new(lighting, cameraSync);
+        lightingSync.Sync();
+        RecordingRenderFrameSink sink = new();
+        RenderPhaseDriver driver = new(
+            chunks,
+            materials,
+            temperature,
+            particles,
+            cameraSync,
+            lightingSync,
+            sink);
+
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddPhaseDriver(driver)
+            .Build();
+
+        _ = engine.RunOneTick();
+
+        Assert.Equal(1, sink.FrameCount);
+        Assert.Equal(32, sink.Width);
+        Assert.Equal(16, sink.Height);
+        Assert.Equal(32, sink.AuxWidth);
+        Assert.Equal(16, sink.AuxHeight);
+        Assert.Equal(1, engine.Phases.Count(EnginePhase.BuildRenderBuffer));
+        Assert.Equal(1, sink.ParticleCount);
+        Assert.Equal(1, sink.DirtyRectCount);
+        Assert.Equal(new PixelUploadRect(0, 0, 32, 16), sink.FirstDirtyRect);
+        Assert.NotNull(sink.FogOfWar);
+        Assert.Equal(192, sink.FogOfWar.RevealAlpha(16, 8));
+        Assert.Equal(0xFF_80_80_80u, sink.FirstPixel);
+        Assert.Equal(0xFF_80_80_80u, sink.ParticlePixel);
     }
 
     /// <summary>
@@ -246,6 +299,7 @@ public sealed class EnginePhaseDriverTests
                 HeatCapacity = 1,
                 HeatConduct = 255,
                 TextureId = -1,
+                BaseColorBGRA = i == 0 ? 0 : 0xFF_80_80_80u,
                 MeltPoint = float.NaN,
                 FreezePoint = float.NaN,
                 BoilPoint = float.NaN,
@@ -292,6 +346,60 @@ public sealed class EnginePhaseDriverTests
 
             neighborhood = new ChunkNeighborhood(chunk, chunk, chunk, chunk, chunk, chunk, chunk, chunk, chunk);
             return true;
+        }
+    }
+
+    private sealed class RecordingRenderFrameSink : IRenderFrameSink
+    {
+        public int FrameCount { get; private set; }
+
+        public int Width { get; private set; }
+
+        public int Height { get; private set; }
+
+        public int AuxWidth { get; private set; }
+
+        public int AuxHeight { get; private set; }
+
+        public int ParticleCount { get; private set; }
+
+        public int DirtyRectCount { get; private set; }
+
+        public PixelUploadRect FirstDirtyRect { get; private set; }
+
+        public FogOfWarBuffer? FogOfWar { get; private set; }
+
+        public uint FirstPixel { get; private set; }
+
+        public uint ParticlePixel { get; private set; }
+
+        public void Render(
+            RenderBuffer renderBuffer,
+            RenderAuxBuffers aux,
+            CameraState camera,
+            ReadOnlySpan<PixelUploadRect> dirtyRects,
+            ReadOnlySpan<OverlayCommand> overlays,
+            ReadOnlySpan<Particle> particles,
+            MaterialTable materials,
+            FogOfWarBuffer? fogOfWar,
+            PixelEngine.Core.Diagnostics.FrameProfiler? profiler)
+        {
+            _ = camera;
+            _ = dirtyRects;
+            _ = overlays;
+            _ = materials;
+            _ = profiler;
+            FrameCount++;
+            Width = renderBuffer.Width;
+            Height = renderBuffer.Height;
+            AuxWidth = aux.Width;
+            AuxHeight = aux.Height;
+            ParticleCount = particles.Length;
+            DirtyRectCount = dirtyRects.Length;
+            FirstDirtyRect = dirtyRects.Length == 0 ? default : dirtyRects[0];
+            FogOfWar = fogOfWar;
+            FirstPixel = renderBuffer.Pixels[0];
+            ParticlePixel = renderBuffer.Pixels[1];
         }
     }
 

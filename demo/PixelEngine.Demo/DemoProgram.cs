@@ -80,6 +80,8 @@ public static class DemoProgram
             return;
         }
 
+        _ = engine.AttachWindowRuntime();
+        Console.WriteLine("窗口运行时已接入 Rendering/Input 后端。");
         engine.Run();
     }
 
