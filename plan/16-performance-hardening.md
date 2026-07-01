@@ -126,7 +126,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [ ] §17.2 dirty-rect 叠层目视确认 sleeping 区不再迭代。[plan/12 · §17.2]
 
 ### 4.9 过载降级链（绝不追帧）
-- [ ] 一级：降低/关闭全分辨率热场（每 N 帧或仅接触式火传播）。[plan/04 · §4.3]
+- [x] 一级：降低/关闭全分辨率热场（每 N 帧或仅接触式火传播）。[plan/04 · §4.3]
 - [x] 二级：降低光照质量（关 RC/bloom，回退 fog-of-war+emissive）。[plan/08/09 · §4.3]
 - [ ] 三级：远离相机的活跃 chunk 降频（隔帧更新外圈）。[plan/03 · §4.3]
 - [x] 四级：整体 sim 降 30Hz（相位 3–8 每两帧一次，render 每帧，dt=1/30）。[plan/03 · §4.2/§4.3]
