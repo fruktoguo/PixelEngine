@@ -141,9 +141,9 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] 长时间漫游压测常驻内存稳定在上限内、不无界增长。[plan/14 · §12.2]
 
 ### 4.11 瓶颈按延迟+分支分析 + 目标硬件校准
-- [ ] 性能分析围绕 cache-miss/分支误预测计数器，**不按带宽**结论。[plan/14 · §12.7/§2 挑战三]
-- [ ] 多核加速曲线在目标硬件实测（不预设 sub-linear）。[plan/14 · §12.7]
-- [ ] cells/frame 目标在 6 RID 代表硬件用 BenchmarkDotNet 确认、回填架构 §1.4/§12.8。[plan/14/15 · §12.8/§17.3]
+- [!] 阻塞：性能分析围绕 cache-miss/分支误预测计数器，**不按带宽**结论。[plan/14 · §12.7/§2 挑战三] 已接入 `HardwareCounter.CacheMisses` 与 `HardwareCounter.BranchMispredictions`；当前非管理员会话被 BenchmarkDotNet 拦截：需要 elevated ETW Kernel Session 才能采集硬件计数器。
+- [x] 多核加速曲线在目标硬件实测（不预设 sub-linear）。[plan/14 · §12.7]
+- [!] 阻塞：cells/frame 目标在 6 RID 代表硬件用 BenchmarkDotNet 确认、回填架构 §1.4/§12.8。[plan/14/15 · §12.8/§17.3] 当前只有本机 win-x64 / Ryzen 7 5800X 短基准，缺少 win-arm64、linux-x64、linux-arm64、osx-x64、osx-arm64 代表硬件或 CI runner 实测。
 
 ### 4.12 profiling 工具链
 - [x] BenchmarkDotNet 接入（`[MemoryDiagnoser]` + `[DisassemblyDiagnoser]`）作 CI perf 门禁。[plan/14 · §17.3]
