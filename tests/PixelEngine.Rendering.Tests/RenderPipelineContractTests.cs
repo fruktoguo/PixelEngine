@@ -1,3 +1,4 @@
+using PixelEngine.Rendering.Compute;
 using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
@@ -15,6 +16,9 @@ public sealed class RenderPipelineContractTests
         AssertThrows<ArgumentOutOfRangeException>(settings.Validate);
 
         settings = new RenderPipelineSettings { CrtScanlineStrength = float.NaN };
+        AssertThrows<ArgumentOutOfRangeException>(settings.Validate);
+
+        settings = new RenderPipelineSettings { RadianceCascades = RadianceCascadeSettings.Default with { BaseRayCount = 63 } };
         AssertThrows<ArgumentOutOfRangeException>(settings.Validate);
     }
 
@@ -34,6 +38,9 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("_crt.Render", source, StringComparison.Ordinal);
         Assert.Contains("BeforePresentUi?.Invoke", source, StringComparison.Ordinal);
         Assert.Contains("ShouldDelegateComputeLighting", source, StringComparison.Ordinal);
+        Assert.Contains("DegradeGpuComputeOneStep", source, StringComparison.Ordinal);
+        Assert.Contains("RadianceCascades.Enabled", source, StringComparison.Ordinal);
+        Assert.Contains("Settings.PreferComputeLighting = false", source, StringComparison.Ordinal);
         Assert.Contains("CreateComputeResourcesSnapshot", source, StringComparison.Ordinal);
         Assert.True(source.IndexOf("_worldBlit.Render", StringComparison.Ordinal) < source.IndexOf("_overlay.Render", StringComparison.Ordinal));
         Assert.True(source.IndexOf("_overlay.Render", StringComparison.Ordinal) < source.IndexOf("_composite.Render", StringComparison.Ordinal));

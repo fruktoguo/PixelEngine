@@ -1,4 +1,5 @@
 using PixelEngine.Rendering.Compute;
+using PixelEngine.Core.Diagnostics;
 using Silk.NET.OpenGL;
 
 namespace PixelEngine.Rendering;
@@ -33,7 +34,8 @@ public sealed class RadianceCascadePass : IDisposable
         ColorRenderTarget destination,
         RadianceCascadeSettings settings,
         float occluderThreshold = 0.5f,
-        float intensity = 1f)
+        float intensity = 1f,
+        GpuComputeProfiler? gpuProfiler = null)
     {
         ArgumentNullException.ThrowIfNull(occluder);
         ArgumentNullException.ThrowIfNull(emissive);
@@ -49,6 +51,7 @@ public sealed class RadianceCascadePass : IDisposable
         }
 
         _resources.Resize(scene.Width, scene.Height);
+        using GpuComputeProfiler.GpuTimerScope _ = gpuProfiler?.Measure("radiance_cascades", FrameSubPhase.GpuRadianceCascades) ?? default;
         uint sdf = BuildSdf(occluder, occluderThreshold);
         uint radiance = BuildRadiance(sdf, emissive, settings);
         _pipeline.DispatchApply(scene.Handle, radiance, destination.Handle, destination.Width, destination.Height, intensity);

@@ -12,6 +12,7 @@ public sealed class FrameProfiler
     private readonly double[] _current = new double[FrameStats.PhaseCount];
     private readonly double[] _last = new double[FrameStats.PhaseCount];
     private readonly double[] _subCurrent = new double[FrameStats.SubPhaseCount];
+    private readonly double[] _subLast = new double[FrameStats.SubPhaseCount];
     private readonly double[] _history = new double[FrameStats.PhaseCount * HistoryLength];
     private int _historyIndex;
     private int _historyCount;
@@ -20,6 +21,11 @@ public sealed class FrameProfiler
     /// 获取上一帧各主相位耗时，单位毫秒。
     /// </summary>
     public ReadOnlySpan<double> LastFrame => _last;
+
+    /// <summary>
+    /// 获取上一帧各细分相位耗时，单位毫秒。
+    /// </summary>
+    public ReadOnlySpan<double> LastSubFrame => _subLast;
 
     /// <summary>
     /// 开始记录新一帧。
@@ -36,6 +42,7 @@ public sealed class FrameProfiler
     public void EndFrame()
     {
         _current.CopyTo(_last, 0);
+        _subCurrent.CopyTo(_subLast, 0);
         int offset = _historyIndex * FrameStats.PhaseCount;
         _current.CopyTo(_history, offset);
         _historyIndex = (_historyIndex + 1) & (HistoryLength - 1);

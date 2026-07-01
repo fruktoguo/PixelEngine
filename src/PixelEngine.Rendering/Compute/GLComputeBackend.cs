@@ -190,6 +190,16 @@ public sealed class GLComputeBackend : IComputeBackend
     }
 
     /// <inheritdoc />
+    public void DeleteTimerQuery(uint queryHandle)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (queryHandle != 0)
+        {
+            _gl.DeleteQuery(queryHandle);
+        }
+    }
+
+    /// <inheritdoc />
     public void Dispose()
     {
         if (_disposed)

@@ -1,3 +1,5 @@
+using PixelEngine.Rendering.Compute;
+
 namespace PixelEngine.Rendering;
 
 /// <summary>
@@ -51,6 +53,11 @@ public sealed class RenderPipelineSettings
     public bool PreferComputeLighting { get; set; }
 
     /// <summary>
+    /// Radiance Cascades 可选 GI 设置；默认关闭，归入 §4.3 第二级降级。
+    /// </summary>
+    public RadianceCascadeSettings RadianceCascades { get; set; } = RadianceCascadeSettings.Default;
+
+    /// <summary>
     /// 自由粒子渲染模式。默认保持 plan/08 CPU stamp 路径；显式切到 GPU 时由管线在 world blit 后绘制 point-sprite。
     /// </summary>
     public ParticleRenderMode ParticleRenderMode { get; set; } = ParticleRenderMode.CpuStamp;
@@ -91,6 +98,7 @@ public sealed class RenderPipelineSettings
             throw new ArgumentOutOfRangeException(nameof(ParticleRenderMode), ParticleRenderMode, "未知自由粒子渲染模式。");
         }
 
+        _ = RadianceCascades.Validate();
         _ = AirSmoke.Validate();
     }
 }

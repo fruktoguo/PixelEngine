@@ -96,6 +96,12 @@ public sealed class ComputeSharpBackend : IComputeBackend
     }
 
     /// <inheritdoc />
+    public void DeleteTimerQuery(uint queryHandle)
+    {
+        throw CreateUnavailableException();
+    }
+
+    /// <inheritdoc />
     public void Dispose()
     {
     }

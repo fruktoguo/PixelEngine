@@ -200,7 +200,10 @@ public sealed class RuntimeInfrastructureTests
             profiler.RecordSub(phase, 0.1 + (int)phase);
         }
 
+        profiler.EndFrame();
+
         Assert.Equal(FrameStats.SubPhaseCount, Enum.GetValues<FrameSubPhase>().Length);
+        Assert.Equal(0.1 + (int)FrameSubPhase.GpuComputeBloom, profiler.LastSubFrame[(int)FrameSubPhase.GpuComputeBloom]);
     }
 
     /// <summary>

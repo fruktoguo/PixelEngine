@@ -115,4 +115,10 @@ public interface IComputeBackend : IDisposable
     /// <param name="elapsedNanoseconds">耗时，单位纳秒。</param>
     /// <returns>结果是否已经可用；实现不得为等待结果而阻塞 sim。</returns>
     bool TryGetTimerResult(uint queryHandle, out ulong elapsedNanoseconds);
+
+    /// <summary>
+    /// 删除尚未被读取的 GPU timer query。用于资源释放路径，不得阻塞等待结果。
+    /// </summary>
+    /// <param name="queryHandle">query 句柄；0 表示无操作。</param>
+    void DeleteTimerQuery(uint queryHandle);
 }

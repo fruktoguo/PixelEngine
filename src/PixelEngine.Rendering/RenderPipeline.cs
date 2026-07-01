@@ -22,6 +22,7 @@ public sealed class RenderPipeline : IDisposable
     private readonly BloomPass _bloom;
     private readonly IComputeBackend _computeBackend;
     private readonly ComputeCapabilityGate _computeGate;
+    private readonly GpuComputeProfiler _gpuComputeProfiler;
     private readonly ComputeBloomPass? _computeBloom;
     private readonly DitherPass _dither;
     private readonly GammaPass _gamma;
@@ -62,6 +63,7 @@ public sealed class RenderPipeline : IDisposable
         GpuCapabilities gpuCapabilities = GpuCapabilities.Query(_gl, window.Capabilities);
         _computeGate = ComputeCapabilityGate.Evaluate(gpuCapabilities, ComputeFeatureSwitches.Default, preferComputeSharp: false);
         _computeBackend = ComputeBackendFactory.Create(_gl, _computeGate);
+        _gpuComputeProfiler = new GpuComputeProfiler(_computeBackend);
         _computeBloom = _computeGate.SelectedBackend == ComputeBackendKind.GlCompute && _computeGate.FeatureSwitches.BloomComputeEnabled
             ? new ComputeBloomPass(_gl, new GpuComputeBloomPipeline(_computeBackend))
             : null;
@@ -177,6 +179,27 @@ public sealed class RenderPipeline : IDisposable
     }
 
     /// <summary>
+    /// 执行 plan/09 §4.7 的 GPU compute 第二级降级：Radiance Cascades → compute bloom → fragment bloom/fog 档。
+    /// </summary>
+    /// <returns>若发生降级返回 true；已在最低档时返回 false。</returns>
+    public bool DegradeGpuComputeOneStep()
+    {
+        if (Settings.RadianceCascades.Enabled)
+        {
+            Settings.RadianceCascades = Settings.RadianceCascades with { Enabled = false };
+            return true;
+        }
+
+        if (Settings.PreferComputeLighting)
+        {
+            Settings.PreferComputeLighting = false;
+            return true;
+        }
+
+        return DegradeQualityOneStep();
+    }
+
+    /// <summary>
     /// 渲染一帧并 present。默认路径要求粒子已在相位 9 stamp 到 render buffer。
     /// </summary>
     /// <param name="renderBuffer">相位 9 输出的世界 BGRA8 buffer。</param>
@@ -225,6 +248,7 @@ public sealed class RenderPipeline : IDisposable
         ArgumentNullException.ThrowIfNull(aux);
         ObjectDisposedException.ThrowIf(_disposed, this);
         Settings.Validate();
+        _gpuComputeProfiler.ResolveCompleted(profiler);
         ValidateInputs(renderBuffer, aux, camera);
         Resize(renderBuffer.Width, renderBuffer.Height);
 
@@ -250,6 +274,7 @@ public sealed class RenderPipeline : IDisposable
             started = Stopwatch.GetTimestamp();
             if (ShouldUseComputeBloom(Settings.Bloom))
             {
+                using GpuComputeProfiler.GpuTimerScope _ = _gpuComputeProfiler.Measure("compute_bloom", FrameSubPhase.GpuComputeBloom);
                 _computeBloom!.Render(current, _postA, Settings.Bloom);
             }
             else
@@ -326,6 +351,7 @@ public sealed class RenderPipeline : IDisposable
         _gamma.Dispose();
         _dither.Dispose();
         _computeBloom?.Dispose();
+        _gpuComputeProfiler.Dispose();
         _computeBackend.Dispose();
         _bloom.Dispose();
         _composite.Dispose();
@@ -415,6 +441,7 @@ public sealed class RenderPipeline : IDisposable
             throw new ArgumentNullException(nameof(materials), "GPU 粒子模式需要材质表。");
         }
 
+        using GpuComputeProfiler.GpuTimerScope _ = _gpuComputeProfiler.Measure("gpu_particles", FrameSubPhase.GpuParticleDraw);
         _gpuParticles.Render(particles, materials, camera, _scene, _emissive);
     }
 
