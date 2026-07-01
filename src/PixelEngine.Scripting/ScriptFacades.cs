@@ -259,12 +259,12 @@ public interface ICharacterController
     CharacterState SetPosition(CharacterHandle handle, float x, float y);
 
     /// <summary>
-    /// 移动角色控制器并立即返回本次碰撞解算状态；脚本可在相位 1 调用。
+    /// 延迟移动角色控制器；脚本可在相位 1 调用，实际碰撞解算在 Physics 安全相位落地。
     /// </summary>
     /// <param name="handle">角色控制器句柄。</param>
     /// <param name="dx">X 方向位移。</param>
     /// <param name="dy">Y 方向位移。</param>
-    /// <returns>本次移动后的角色状态。</returns>
+    /// <returns>当前已知角色状态；本次移动结果在 Physics 相位后可通过 <see cref="GetState" /> 读取。</returns>
     CharacterState Move(CharacterHandle handle, float dx, float dy);
 
     /// <summary>
