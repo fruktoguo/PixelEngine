@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Threading;
 using PixelEngine.Simulation;
 
@@ -24,8 +26,10 @@ public sealed class RenderBufferBuilder(
     /// <param name="context">渲染帧上下文。</param>
     /// <param name="target">目标 render buffer。</param>
     /// <param name="aux">副输出 buffer。</param>
-    public void Build(RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux)
+    /// <param name="profiler">可选 Core 诊断 profiler。</param>
+    public void Build(RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux, FrameProfiler? profiler = null)
     {
+        long started = Stopwatch.GetTimestamp();
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(aux);
@@ -37,6 +41,7 @@ public sealed class RenderBufferBuilder(
         aux.Resize(target.Width, target.Height);
         if (!context.SimStepped)
         {
+            RecordSub(profiler, started);
             return;
         }
 
@@ -44,10 +49,12 @@ public sealed class RenderBufferBuilder(
         if (_jobs is null)
         {
             BuildRows(0, target.Height, 0, (context, target, aux, this));
+            RecordSub(profiler, started);
             return;
         }
 
         _jobs.ParallelRange(target.Height, Math.Max(1, _options.MinRowsPerJob), BuildRows, (context, target, aux, this));
+        RecordSub(profiler, started);
     }
 
     private static void BuildRows(int start, int end, int workerIndex, object? state)
@@ -166,5 +173,16 @@ public sealed class RenderBufferBuilder(
     private static uint PackBgra(byte b, byte g, byte r, byte a)
     {
         return b | ((uint)g << 8) | ((uint)r << 16) | ((uint)a << 24);
+    }
+
+    private static void RecordSub(FrameProfiler? profiler, long started)
+    {
+        if (profiler is null)
+        {
+            return;
+        }
+
+        long elapsed = Stopwatch.GetTimestamp() - started;
+        profiler.RecordSub(FrameSubPhase.RenderBufferBuild, elapsed * 1000.0 / Stopwatch.Frequency);
     }
 }

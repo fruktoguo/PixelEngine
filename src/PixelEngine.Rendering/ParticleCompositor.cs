@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using PixelEngine.Core.Diagnostics;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 
@@ -18,13 +20,16 @@ public sealed class ParticleCompositor(IMaterialTextureProvider? textures = null
     /// <param name="camera">相机快照。</param>
     /// <param name="target">目标 render buffer。</param>
     /// <param name="aux">副输出 buffer。</param>
+    /// <param name="profiler">可选 Core 诊断 profiler。</param>
     public void Stamp(
         ReadOnlySpan<Particle> particles,
         MaterialTable materials,
         CameraState camera,
         RenderBuffer target,
-        RenderAuxBuffers aux)
+        RenderAuxBuffers aux,
+        FrameProfiler? profiler = null)
     {
+        long started = Stopwatch.GetTimestamp();
         ArgumentNullException.ThrowIfNull(materials);
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(aux);
@@ -54,6 +59,8 @@ public sealed class ParticleCompositor(IMaterialTextureProvider? textures = null
                 emissive[index] = color;
             }
         }
+
+        RecordSub(profiler, started);
     }
 
     private static int WorldToScreen(float world, float origin, float cellsPerPixel)
@@ -96,5 +103,16 @@ public sealed class ParticleCompositor(IMaterialTextureProvider? textures = null
     private static byte Adjust(byte value, int delta)
     {
         return (byte)Math.Clamp(value + delta, 0, 255);
+    }
+
+    private static void RecordSub(FrameProfiler? profiler, long started)
+    {
+        if (profiler is null)
+        {
+            return;
+        }
+
+        long elapsed = Stopwatch.GetTimestamp() - started;
+        profiler.RecordSub(FrameSubPhase.ParticleStamp, elapsed * 1000.0 / Stopwatch.Frequency);
     }
 }
