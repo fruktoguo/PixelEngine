@@ -19,7 +19,7 @@ public sealed class EngineSceneDocument
     public string? Name { get; init; }
 
     /// <summary>
-    /// 可选初始世界存档目录；当前 Hosting 仅记录，世界物化仍由后续 runtime bridge 完成。
+    /// 可选初始世界存档目录；相对路径按 .scene 文件所在目录解析。
     /// </summary>
     public string? InitialSaveDirectory { get; init; }
 

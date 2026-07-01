@@ -118,7 +118,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 | 子系统访问门面 | `EngineContext`（暴露 `World/Camera/Input/Particles/Lighting/Audio/Physics/Content/Diagnostics/Gui`） | Hosting（plan/00 §5） | 部分实现：`EngineContext` 可注册/查询 typed service 与 role availability，脚本后端已能自动装配 World/Camera/Input/Particles/Lighting/Audio/Content/Time/Event；窗口态已有 `AttachWindowRuntime()` 组合 RenderWindow/Input/Rendering；仍缺 GUI 与 save directory/world 组合门面 |
 | 注册 Demo 脚本程序集 / 实例化 Behaviour | `Engine.RegisterScriptAssembly(...)`、`Behaviour` 生命周期（`OnStart/OnUpdate/OnGui/OnDestroy`） | plan/11 / Hosting | 部分实现：`Engine.RegisterScriptAssembly(...)`、Hosting registry、procedural/scene file Behaviour 物化、`Engine.AttachScripting(...)` 与 `AttachScriptingFromServices()` 已落地；仍缺 `OnGui` |
 | 脚本服务句柄注入 | `Behaviour.World/Input/Camera/...` 属性 | plan/11 | 已规划（plan/11 世界脚本接口） |
-| 场景加载 / 保存 | `Engine.LoadScene(name)`、`SceneSourceKind.SceneFile`、`.scene` 格式 | plan/07（序列化）+ plan/12（编辑器编排） | 部分实现：Hosting 可切换已注册场景、区分 `.scene` 文件来源，并从 `.scene` 物化脚本实体/Behaviour 参数；`AttachWorldFromSaveDirectory` 已可显式从 save directory 装配 live World/Simulation/粒子后端；仍缺 `.scene InitialSaveDirectory` 自动物化、刚体快照恢复、world seed/game time 恢复与编辑器导出格式 |
+| 场景加载 / 保存 | `Engine.LoadScene(name)`、`SceneSourceKind.SceneFile`、`.scene` 格式 | plan/07（序列化）+ plan/12（编辑器编排） | 部分实现：Hosting 可切换已注册场景、区分 `.scene` 文件来源，并从 `.scene` 物化脚本实体/Behaviour 参数；`AttachCurrentSceneWorld` 已可显式从 save directory 或 `.scene InitialSaveDirectory` 装配 live World/Simulation/粒子后端；仍缺刚体快照恢复、world seed/game time 完整恢复与编辑器导出格式 |
 | 输入查询 | `IInput`（`IsDown/Pressed/Released(Key)`、`MousePosition`、`MouseButton`、`Wheel`） | plan/08（Silk.NET 输入）/ Hosting | 部分实现：Scripting 已有 `ScriptInputApi`、完整 Demo 所需键位/鼠标枚举、键鼠边沿、滚轮与轴快照；Hosting 已有 `SilkInputPhaseDriver` 采集窗口键鼠并支持通道门控，且已被 `AttachWindowRuntime()` 装配；仍缺真实窗口输入验收 |
 | 读写 cell（笔刷 / 关卡生成 / 危险采样） | `IWorld.GetCell/SetCell`、`FillRect/FillCircle/Stamp` | plan/11（世界脚本接口） | 已规划 |
 | 材质按名取 id | `EngineContentPackage.ResolveMaterial/TryResolveMaterial(...)`、`IMaterialQuery.Resolve/TryResolve(...)` | plan/04（Content）+ Hosting/plan/11 | 部分实现：Hosting 内容包门面与脚本材质查询接口已可用，public API 不泄漏 Content/Simulation 实现类型；Demo materials/reactions/textures/audio 已就位 |
@@ -136,7 +136,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 | 调试叠层开关 | `IDiagnostics.ToggleOverlay(OverlayKind)` | plan/12（调试叠层）+ 架构 §17.2 | 需引擎补 API（叠层开关的脚本可见 API） |
 | 确定性 RNG（关卡生成） | `IRandom`（可种子化） | plan/02（RNG） | 已规划 |
 
-API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosting 的 `.scene InitialSaveDirectory` 自动物化、Physics 刚体快照恢复与 world seed/game time 恢复；plan/06 的 kinematic 角色推动 dynamic 刚体公开交互；plan/05 + plan/06 + plan/10 的 `World.Explode(center,radius,force)` 复合入口；plan/11/12 的 `Behaviour.OnGui` 与 `IGuiContext` 游戏 HUD 服务；plan/12/架构 §17.2 的脚本可见调试叠层开关；plan/08 的 render pass 消费脚本点光源列表入口；plan/10 的材质事件 cue→clip buffer 映射验收。上述缺口均在本表中保持「需引擎补 API」或「部分实现但阻塞」状态，Demo 不允许绕过公开 API 直接引用内部实现。
+API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosting 的 Physics 刚体快照恢复与 world seed/game time 完整恢复；plan/06 的 kinematic 角色推动 dynamic 刚体公开交互；plan/05 + plan/06 + plan/10 的 `World.Explode(center,radius,force)` 复合入口；plan/11/12 的 `Behaviour.OnGui` 与 `IGuiContext` 游戏 HUD 服务；plan/12/架构 §17.2 的脚本可见调试叠层开关；plan/08 的 render pass 消费脚本点光源列表入口；plan/10 的材质事件 cue→clip buffer 映射验收。上述缺口均在本表中保持「需引擎补 API」或「部分实现但阻塞」状态，Demo 不允许绕过公开 API 直接引用内部实现。
 
 ---
 
@@ -144,7 +144,7 @@ API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosti
 
 工程与启动
 - [x] 建 `demo/PixelEngine.Demo/PixelEngine.Demo.csproj`（`Exe`，仅 `ProjectReference` 到 `PixelEngine.Hosting` 与 `PixelEngine.Scripting`，继承 `Directory.Build.props`，无新 NuGet）。〔plan/00 §5〕
-- [!] `Program.cs`：已用 `EngineBuilder`/`EngineProject` 构造 Engine，支持 `--editor/--headless/--scene/--content/--ticks/--no-hot-reload/--log-dir`；已通过 `Engine.LoadContentPackage()` 加载 Demo materials/reactions 内容包，已区分 save directory 与 `.scene` 来源，已支持 `.scene` 与 procedural 脚本实体/Behaviour 物化，已用 `Engine.AttachResidentSimulationWorld(...)` + `Engine.AttachScriptingFromServices()` 接入 headless resident Simulation/Scripting 后端并跑通 2 tick 冒烟；save directory 场景可经 `Engine.AttachWorldFromSaveDirectory(...)` 显式装配 live World/Simulation/粒子后端；非 headless 路径已调用 `Engine.AttachWindowRuntime()` 接入窗口、输入与 Rendering 相位；阻塞：缺少 `lava-mine.scene`，`.scene InitialSaveDirectory` 尚未自动物化，且未完成真实窗口可玩关卡验收。〔Hosting；§3.1〕
+- [!] `Program.cs`：已用 `EngineBuilder`/`EngineProject` 构造 Engine，支持 `--editor/--headless/--scene/--content/--ticks/--no-hot-reload/--log-dir`；已通过 `Engine.LoadContentPackage()` 加载 Demo materials/reactions 内容包，已区分 save directory 与 `.scene` 来源，已支持 `.scene` 与 procedural 脚本实体/Behaviour 物化，已用 `Engine.AttachResidentSimulationWorld(...)` + `Engine.AttachScriptingFromServices()` 接入 headless resident Simulation/Scripting 后端并跑通 2 tick 冒烟；save directory 与 `.scene InitialSaveDirectory` 场景可经 `Engine.AttachCurrentSceneWorld(...)` 显式装配 live World/Simulation/粒子后端；非 headless 路径已调用 `Engine.AttachWindowRuntime()` 接入窗口、输入与 Rendering 相位；阻塞：缺少 `lava-mine.scene`，且未完成真实窗口可玩关卡验收。〔Hosting；§3.1〕
 - [x] CI 依赖方向断言：Demo 无对引擎内部 assembly 的越层 / 反向引用。〔plan/14；§2〕
 
 玩家与相机
@@ -170,7 +170,7 @@ API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosti
 - [!] `materials.json` 的 `AudioCues` 已覆盖 impact/fire/splash/ambient/shatter，玩法脚本可经 `Audio.PlayOneShot`/`PlayAt` 请求音效；Hosting 已能从 `content/audio` 预加载 19 个 wav clip 并注入脚本上下文；阻塞：缺少爆炸复合 API 触发 explosion cue，以及材质事件 cue 句柄到 clip buffer 的 Demo 映射/消费验收。〔plan/04、plan/10;§3.10〕
 
 关卡与 UI
-- [!] `LevelDirector : Behaviour`：源码已落地，脚本生成「熔岩矿洞逃生」基础布局并装配玩家、相机、笔刷、喷口和目标触发器；Hosting procedural scene source 已可按入口 Behaviour 名自动物化 `LevelDirector` 到脚本场景，且 headless resident world 可经 `AttachScriptingFromServices()` 自动驱动；save directory 可显式装配 live World/Simulation/粒子后端，窗口态已可装配输入与 Rendering 相位；阻塞：`.scene InitialSaveDirectory` 自动物化与真实窗口可玩关卡验收仍未完成。〔plan/11、plan/02;§3.11〕
+- [!] `LevelDirector : Behaviour`：源码已落地，脚本生成「熔岩矿洞逃生」基础布局并装配玩家、相机、笔刷、喷口和目标触发器；Hosting procedural scene source 已可按入口 Behaviour 名自动物化 `LevelDirector` 到脚本场景，且 headless resident world 可经 `AttachScriptingFromServices()` 自动驱动；save directory 与 `.scene InitialSaveDirectory` 可显式装配 live World/Simulation/粒子后端，窗口态已可装配输入与 Rendering 相位；阻塞：真实窗口可玩关卡验收仍未完成。〔plan/11、plan/02;§3.11〕
 - [!] `MaterialEmitter : Behaviour`（材质 + 速率 + 喷口）：源码已落地，支持周期性 cell 注入、粒子、音频和点光源请求；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API，fog-of-war 请求已可进入 Rendering 管线；阻塞：缺少点光源 render pass 消费、真实窗口喷口画面与音频触发验收。〔plan/11;§3.11〕
 - [!] `GoalTrigger : Behaviour`：源码已落地，玩家进入触发区后触发通关状态、音效、粒子与光照反馈；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API，fog-of-war 请求已可进入 Rendering 管线；阻塞：缺少胜利菜单/GUI 服务、点光源 render pass 消费、窗口态通关画面与音效触发验收。〔plan/11、plan/10;§3.11〕
 - [ ] `content/scenes/lava-mine.scene`：编辑器编排并序列化，与 `LevelDirector` 等价。〔plan/12、plan/07;§3.2、§3.11〕

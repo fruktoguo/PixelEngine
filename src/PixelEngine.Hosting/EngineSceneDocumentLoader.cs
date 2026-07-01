@@ -16,6 +16,23 @@ public static class EngineSceneDocumentLoader
     public const int CurrentFormatVersion = 1;
 
     /// <summary>
+    /// 读取并验证 .scene JSON 文档，不物化脚本实体。
+    /// </summary>
+    /// <param name="path">.scene 文件路径。</param>
+    /// <returns>解析后的场景文档。</returns>
+    public static EngineSceneDocument LoadDocument(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        string json = File.ReadAllText(path);
+        EngineSceneDocument document = JsonSerializer.Deserialize(
+                json,
+                EngineSceneJsonContext.Default.EngineSceneDocument) ??
+            throw new JsonException(".scene 文件为空或格式无效。");
+        ValidateFormat(document);
+        return document;
+    }
+
+    /// <summary>
     /// 从 .scene 文件加载脚本实体场景。
     /// </summary>
     /// <param name="path">.scene 文件路径。</param>
@@ -23,14 +40,8 @@ public static class EngineSceneDocumentLoader
     /// <returns>物化后的脚本场景。</returns>
     public static PixelEngine.Scripting.Scene Load(string path, ScriptAssemblyRegistry scriptAssemblies)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(scriptAssemblies);
-        string json = File.ReadAllText(path);
-        EngineSceneDocument document = JsonSerializer.Deserialize(
-                json,
-                EngineSceneJsonContext.Default.EngineSceneDocument) ??
-            throw new JsonException(".scene 文件为空或格式无效。");
-        return Build(document, scriptAssemblies);
+        return Build(LoadDocument(path), scriptAssemblies);
     }
 
     /// <summary>
@@ -43,10 +54,7 @@ public static class EngineSceneDocumentLoader
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(scriptAssemblies);
-        if (document.FormatVersion != CurrentFormatVersion)
-        {
-            throw new NotSupportedException($"不支持的 .scene 格式版本：{document.FormatVersion}。");
-        }
+        ValidateFormat(document);
 
         PixelEngine.Scripting.Scene scene = new();
         EngineSceneEntityDocument[] entities = document.Entities ?? [];
@@ -63,6 +71,14 @@ public static class EngineSceneDocumentLoader
         }
 
         return scene;
+    }
+
+    private static void ValidateFormat(EngineSceneDocument document)
+    {
+        if (document.FormatVersion != CurrentFormatVersion)
+        {
+            throw new NotSupportedException($"不支持的 .scene 格式版本：{document.FormatVersion}。");
+        }
     }
 
     private static Type ResolveBehaviourType(

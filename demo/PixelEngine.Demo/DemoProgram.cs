@@ -52,11 +52,10 @@ public static class DemoProgram
         if (engine.HasContentPackage())
         {
             EngineContentPackage package = engine.LoadContentPackage();
-            Scene? currentScene = engine.Context.GetService<ISceneService>().Current;
-            if (currentScene?.Descriptor.SourceKind == SceneSourceKind.SaveDirectory)
+            object? worldLoad = engine.AttachCurrentSceneWorld();
+            if (worldLoad is not null)
             {
-                _ = engine.AttachWorldFromSaveDirectory(currentScene.ResolvedSource!);
-                Console.WriteLine($"世界存档已加载：{currentScene.ResolvedSource}");
+                Console.WriteLine("世界存档已加载。");
             }
             else
             {
