@@ -1,0 +1,243 @@
+using System.Numerics;
+
+namespace PixelEngine.Physics.Geometry;
+
+/// <summary>
+/// 从二值像素 mask 生成像素边界闭合折线。
+/// </summary>
+public static class MarchingSquares
+{
+    /// <summary>
+    /// 追踪固体区域的外边界，输出 CCW 闭合折线。
+    /// </summary>
+    /// <param name="solidMask">二值固体 mask，非 0 表示固体。</param>
+    /// <param name="width">mask 宽度。</param>
+    /// <param name="height">mask 高度。</param>
+    /// <param name="destination">输出点缓冲。</param>
+    /// <returns>写入点数；包含重复的闭合终点。</returns>
+    public static int TraceOuterContour(ReadOnlySpan<byte> solidMask, int width, int height, Span<Vector2> destination)
+    {
+        Span<ContourRange> ranges = stackalloc ContourRange[1];
+        int count = TraceContours(solidMask, width, height, destination, ranges);
+        return count == 0 ? 0 : ranges[0].Count;
+    }
+
+    /// <summary>
+    /// 追踪固体区域全部边界，输出一个 CCW 外轮廓和零个或多个 CW 内孔。
+    /// </summary>
+    /// <param name="solidMask">二值固体 mask，非 0 表示固体。</param>
+    /// <param name="width">mask 宽度。</param>
+    /// <param name="height">mask 高度。</param>
+    /// <param name="destination">输出点缓冲。</param>
+    /// <param name="ranges">输出 contour 范围缓冲。</param>
+    /// <returns>写入的 contour 数。</returns>
+    public static int TraceContours(
+        ReadOnlySpan<byte> solidMask,
+        int width,
+        int height,
+        Span<Vector2> destination,
+        Span<ContourRange> ranges)
+    {
+        ValidateArguments(solidMask, width, height, destination);
+        if (ranges.IsEmpty)
+        {
+            throw new ArgumentException("ranges 不能为空。", nameof(ranges));
+        }
+
+        Dictionary<EdgeKey, EdgeKey> nextByStart = BuildBoundaryEdges(solidMask, width, height);
+        if (nextByStart.Count == 0)
+        {
+            return 0;
+        }
+
+        int written = 0;
+        int rangeCount = 0;
+        int outerRangeIndex = -1;
+        float outerAreaMagnitude = 0f;
+
+        while (nextByStart.Count > 0)
+        {
+            if (rangeCount >= ranges.Length)
+            {
+                throw new ArgumentException("ranges 缓冲不足。", nameof(ranges));
+            }
+
+            EdgeKey start = FindStart(nextByStart);
+            EdgeKey current = start;
+            int startOffset = written;
+
+            while (true)
+            {
+                if (written >= destination.Length)
+                {
+                    throw new ArgumentException("destination 缓冲不足。", nameof(destination));
+                }
+
+                destination[written++] = current.ToVector2();
+                if (!nextByStart.Remove(current, out EdgeKey next))
+                {
+                    throw new InvalidOperationException("边界链断裂。");
+                }
+
+                current = next;
+                if (current.Equals(start))
+                {
+                    if (written >= destination.Length)
+                    {
+                        throw new ArgumentException("destination 缓冲不足。", nameof(destination));
+                    }
+
+                    destination[written++] = start.ToVector2();
+                    break;
+                }
+            }
+
+            Span<Vector2> contour = destination[startOffset..written];
+            float areaMagnitude = Math.Abs(SignedArea(contour));
+            ranges[rangeCount] = new ContourRange(startOffset, contour.Length, IsHole: true);
+            if (areaMagnitude > outerAreaMagnitude)
+            {
+                outerAreaMagnitude = areaMagnitude;
+                outerRangeIndex = rangeCount;
+            }
+
+            rangeCount++;
+        }
+
+        for (int i = 0; i < rangeCount; i++)
+        {
+            ContourRange range = ranges[i];
+            bool isOuter = i == outerRangeIndex;
+            NormalizeWinding(destination.Slice(range.Start, range.Count), wantCounterClockwise: isOuter);
+            ranges[i] = range with { IsHole = !isOuter };
+        }
+
+        if (outerRangeIndex > 0)
+        {
+            (ranges[0], ranges[outerRangeIndex]) = (ranges[outerRangeIndex], ranges[0]);
+        }
+
+        return rangeCount;
+    }
+
+    /// <summary>
+    /// 获取最坏情况下的外轮廓点数上界。
+    /// </summary>
+    /// <param name="width">mask 宽度。</param>
+    /// <param name="height">mask 高度。</param>
+    /// <returns>点数上界。</returns>
+    public static int GetMaximumContourPointCount(int width, int height)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        return checked((width * height * 4) + 1);
+    }
+
+    private static Dictionary<EdgeKey, EdgeKey> BuildBoundaryEdges(ReadOnlySpan<byte> solidMask, int width, int height)
+    {
+        Dictionary<EdgeKey, EdgeKey> edges = new(width * height);
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int index = (y * width) + x;
+                if (solidMask[index] == 0)
+                {
+                    continue;
+                }
+
+                if (y == 0 || solidMask[index - width] == 0)
+                {
+                    AddEdge(edges, x + 1, y, x, y);
+                }
+
+                if (x == 0 || solidMask[index - 1] == 0)
+                {
+                    AddEdge(edges, x, y, x, y + 1);
+                }
+
+                if (y == height - 1 || solidMask[index + width] == 0)
+                {
+                    AddEdge(edges, x, y + 1, x + 1, y + 1);
+                }
+
+                if (x == width - 1 || solidMask[index + 1] == 0)
+                {
+                    AddEdge(edges, x + 1, y + 1, x + 1, y);
+                }
+            }
+        }
+
+        return edges;
+    }
+
+    private static void AddEdge(Dictionary<EdgeKey, EdgeKey> edges, int startX, int startY, int endX, int endY)
+    {
+        edges.Add(new EdgeKey(startX, startY), new EdgeKey(endX, endY));
+    }
+
+    private static EdgeKey FindStart(Dictionary<EdgeKey, EdgeKey> edges)
+    {
+        EdgeKey best = default;
+        bool hasBest = false;
+
+        foreach (EdgeKey key in edges.Keys)
+        {
+            if (!hasBest || key.Y < best.Y || (key.Y == best.Y && key.X < best.X))
+            {
+                best = key;
+                hasBest = true;
+            }
+        }
+
+        return best;
+    }
+
+    private static void NormalizeWinding(Span<Vector2> contour, bool wantCounterClockwise)
+    {
+        float signedArea = SignedArea(contour);
+        bool isCounterClockwise = signedArea > 0f;
+        if (isCounterClockwise != wantCounterClockwise)
+        {
+            contour.Reverse();
+        }
+    }
+
+    private static float SignedArea(ReadOnlySpan<Vector2> contour)
+    {
+        float area = 0f;
+        for (int i = 0; i < contour.Length - 1; i++)
+        {
+            Vector2 a = contour[i];
+            Vector2 b = contour[i + 1];
+            area += (a.X * b.Y) - (b.X * a.Y);
+        }
+
+        return area * 0.5f;
+    }
+
+    private static void ValidateArguments(ReadOnlySpan<byte> solidMask, int width, int height, Span<Vector2> destination)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        int area = checked(width * height);
+        if (solidMask.Length < area)
+        {
+            throw new ArgumentException("solidMask 长度不足。", nameof(solidMask));
+        }
+
+        if (destination.IsEmpty)
+        {
+            throw new ArgumentException("destination 不能为空。", nameof(destination));
+        }
+    }
+
+    private readonly record struct EdgeKey(int X, int Y)
+    {
+        public Vector2 ToVector2()
+        {
+            return new Vector2(X, Y);
+        }
+
+    }
+}
