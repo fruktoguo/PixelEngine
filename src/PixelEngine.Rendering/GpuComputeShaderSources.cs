@@ -60,6 +60,16 @@ public static class GpuComputeShaderSources
     public const string RadianceCascadeApplyName = "rc_apply";
 
     /// <summary>
+    /// 非权威 air/smoke Margolus 扩散 compute pass 名称。
+    /// </summary>
+    public const string AirSmokeDiffuseMargolusName = "air_diffuse_margolus";
+
+    /// <summary>
+    /// 非权威 air/smoke Margolus 扩散 compute pass 名称兼容别名。
+    /// </summary>
+    public const string AirDiffuseMargolusName = AirSmokeDiffuseMargolusName;
+
+    /// <summary>
     /// GPU 粒子 point-sprite 顶点 shader 文件名。
     /// </summary>
     public const string ParticlePointSpriteVertexName = "particle_pointsprite.vert";
@@ -84,6 +94,7 @@ public static class GpuComputeShaderSources
         RadianceCascadeBuildName,
         RadianceCascadeMergeName,
         RadianceCascadeApplyName,
+        AirSmokeDiffuseMargolusName,
     ];
 
     /// <summary>
@@ -479,6 +490,56 @@ void main()
 """;
 
     /// <summary>
+    /// 非权威 air/smoke Margolus 2×2 扩散 compute shader，维护独立密度纹理。
+    /// </summary>
+    public const string AirSmokeDiffuseMargolus = """
+#version 430
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(r16f, binding = 0) readonly uniform image2D uAirSmokeDensityInput;
+layout(r16f, binding = 1) writeonly uniform image2D uAirSmokeDensityOutput;
+
+uniform ivec2 uOutputSize;
+uniform int uParity;
+uniform float uDiffusion;
+
+void main()
+{
+    // Non-authoritative air/smoke density texture only; this pass never reads or writes the CPU authority grid.
+    // Render-side effect only; there is intentionally zero GPU->CPU readback from this pass.
+    ivec2 blockOrigin = (ivec2(gl_GlobalInvocationID.xy) * 2) + ivec2(uParity & 1);
+    ivec2 maxPixel = blockOrigin + ivec2(1, 1);
+    if (any(greaterThanEqual(maxPixel, uOutputSize)))
+    {
+        return;
+    }
+
+    float d00 = imageLoad(uAirSmokeDensityInput, blockOrigin + ivec2(0, 0)).r;
+    float d10 = imageLoad(uAirSmokeDensityInput, blockOrigin + ivec2(1, 0)).r;
+    float d01 = imageLoad(uAirSmokeDensityInput, blockOrigin + ivec2(0, 1)).r;
+    float d11 = imageLoad(uAirSmokeDensityInput, blockOrigin + ivec2(1, 1)).r;
+
+    float total = d00 + d10 + d01 + d11;
+    float average = total * 0.25;
+    float diffusionRate = clamp(uDiffusion, 0.0, 1.0);
+
+    // Margolus 2x2 local redistribution: blend each cell toward the conserved block average.
+    float out00 = mix(d00, average, diffusionRate);
+    float out10 = mix(d10, average, diffusionRate);
+    float out01 = mix(d01, average, diffusionRate);
+    float out11 = mix(d11, average, diffusionRate);
+
+    // Correct the last cell so floating-point roundoff does not leak density from the 2x2 block.
+    out11 = total - out00 - out10 - out01;
+
+    imageStore(uAirSmokeDensityOutput, blockOrigin + ivec2(0, 0), vec4(max(out00, 0.0), 0.0, 0.0, 1.0));
+    imageStore(uAirSmokeDensityOutput, blockOrigin + ivec2(1, 0), vec4(max(out10, 0.0), 0.0, 0.0, 1.0));
+    imageStore(uAirSmokeDensityOutput, blockOrigin + ivec2(0, 1), vec4(max(out01, 0.0), 0.0, 0.0, 1.0));
+    imageStore(uAirSmokeDensityOutput, blockOrigin + ivec2(1, 1), vec4(max(out11, 0.0), 0.0, 0.0, 1.0));
+}
+""";
+
+    /// <summary>
     /// GPU 粒子 point-sprite 顶点 shader，定义 plan/09 §4.5 的粒子 buffer 到屏幕空间契约。
     /// </summary>
     public const string ParticlePointSpriteVertex = """
@@ -588,6 +649,7 @@ void main()
             RadianceCascadeBuildName => RadianceCascadeBuild,
             RadianceCascadeMergeName => RadianceCascadeMerge,
             RadianceCascadeApplyName => RadianceCascadeApply,
+            AirSmokeDiffuseMargolusName => AirSmokeDiffuseMargolus,
             _ => throw new ArgumentException($"未注册的 GPU compute shader pass：{passName}", nameof(passName)),
         };
     }

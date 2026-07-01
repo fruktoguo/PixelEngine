@@ -56,6 +56,11 @@ public sealed class RenderPipelineSettings
     public ParticleRenderMode ParticleRenderMode { get; set; } = ParticleRenderMode.CpuStamp;
 
     /// <summary>
+    /// 非权威 air/smoke 渲染增强设置；默认关闭，输出只允许进入渲染合成。
+    /// </summary>
+    public AirSmokeSettings AirSmoke { get; set; } = AirSmokeSettings.Default;
+
+    /// <summary>
     /// 校验当前设置。
     /// </summary>
     public void Validate()
@@ -85,5 +90,7 @@ public sealed class RenderPipelineSettings
         {
             throw new ArgumentOutOfRangeException(nameof(ParticleRenderMode), ParticleRenderMode, "未知自由粒子渲染模式。");
         }
+
+        _ = AirSmoke.Validate();
     }
 }
