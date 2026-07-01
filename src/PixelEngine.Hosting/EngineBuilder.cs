@@ -277,6 +277,7 @@ public sealed class EngineBuilder
         EnginePhasePipeline phases = new(commands);
         for (int i = 0; i < _phaseDrivers.Count; i++)
         {
+            context.RegisterService(_phaseDrivers[i].GetType(), _phaseDrivers[i]);
             _phaseDrivers[i].RegisterPhases(phases);
         }
 

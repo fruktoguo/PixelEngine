@@ -1,8 +1,13 @@
 using System.Diagnostics;
 using System.Reflection;
+using PixelEngine.Audio;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
+using PixelEngine.Physics;
 using PixelEngine.Scripting;
+using PixelEngine.Simulation;
+using PixelEngine.Simulation.Particles;
+using PixelEngine.World;
 
 namespace PixelEngine.Hosting;
 
@@ -143,6 +148,51 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>
+    /// 基于已加载材质表装配一个固定尺寸 resident world，并把真实 Simulation 相位接入主循环。
+    /// </summary>
+    /// <param name="worldWidthCells">可玩世界宽度，单位 cell。</param>
+    /// <param name="worldHeightCells">可玩世界高度，单位 cell。</param>
+    /// <param name="particleCapacity">自由粒子池容量。</param>
+    /// <returns>已注册的 Simulation 相位驱动。</returns>
+    public SimulationPhaseDriver AttachResidentSimulationWorld(
+        int worldWidthCells,
+        int worldHeightCells,
+        int particleCapacity = 32768)
+    {
+        ThrowIfShutdown();
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(worldWidthCells);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(worldHeightCells);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(particleCapacity);
+        if (Context.TryGetService(out SimulationPhaseDriver existing))
+        {
+            return existing;
+        }
+
+        MaterialTable materials = Context.GetService<MaterialTable>();
+        ResidentChunkMap chunks = new();
+        AddResidentChunks(chunks, worldWidthCells, worldHeightCells);
+        MaterialPropsTable props = new(materials.Hot);
+        CellGrid grid = new(chunks, props);
+        SimulationKernel kernel = new(chunks, props, profiler: Context.Profiler);
+        ParticleSystem particles = new(particleCapacity);
+        TemperatureField temperature = new();
+        SimulationPhaseDriver driver = new(chunks, grid, kernel, particles, temperature, materials);
+        driver.RegisterPhases(Phases);
+
+        Context.RegisterService(driver.GetType(), driver);
+        Context.RegisterService(chunks);
+        Context.RegisterService<IChunkSource>(chunks);
+        Context.RegisterService(grid);
+        Context.RegisterService(kernel);
+        Context.RegisterService(particles);
+        Context.RegisterService(temperature);
+        Context.RegisterService(EngineServiceRole.WorldAccess, grid);
+        Context.RegisterService(EngineServiceRole.ParticleService, particles);
+        Context.RegisterService(EngineServiceRole.MaterialRegistry, materials);
+        return driver;
+    }
+
+    /// <summary>
     /// 切换到已注册场景描述；实际世界构建由对应场景后端在后续装配中完成。
     /// </summary>
     /// <param name="name">场景稳定名称。</param>
@@ -175,6 +225,56 @@ public sealed class Engine : IDisposable
         _attachedScriptRuntime = runtime;
         Context.RegisterService(EngineServiceRole.Scripting, runtime);
         Context.RegisterService(scriptContext);
+    }
+
+    /// <summary>
+    /// 从 Hosting 已注册的真实 Simulation/Physics/Audio/Input/Camera 服务创建脚本上下文并接入相位管线。
+    /// </summary>
+    /// <param name="runtime">可选脚本运行时；为 null 时创建默认 <see cref="ScriptRuntime" />。</param>
+    /// <returns>已接入的真实 Simulation 脚本上下文。</returns>
+    public ScriptSimulationContext AttachScriptingFromServices(IScriptRuntime? runtime = null)
+    {
+        ThrowIfShutdown();
+        if (_attachedScriptRuntime is not null)
+        {
+            throw new InvalidOperationException("脚本运行时已经接入当前 Engine。");
+        }
+
+        PixelEngine.Scripting.Scene scriptScene = ResolveCurrentScriptScene();
+        SimulationPhaseDriver? simulationDriver = Context.TryGetService(out SimulationPhaseDriver driver)
+            ? driver
+            : null;
+        CellGrid grid = ResolveCellGrid(simulationDriver);
+        SimulationKernel kernel = ResolveSimulationKernel(simulationDriver);
+        ParticleSystem particles = ResolveParticleSystem(simulationDriver);
+        MaterialTable materials = ResolveMaterialTable(simulationDriver);
+        ScriptEventBus events = ResolveScriptEventBus();
+        ScriptFrameTime time = ResolveScriptFrameTime();
+        ICameraApi camera = ResolveCameraApi();
+        IInputApi input = ResolveInputApi();
+        ILightingApi lighting = ResolveLightingApi();
+        IAudioApi? audio = ResolveAudioApiOrNull();
+        PhysicsSystem? physics = Context.TryGetService(out PhysicsSystem registeredPhysics)
+            ? registeredPhysics
+            : null;
+
+        RegisterSimulationRolesIfMissing(grid, particles, materials, physics);
+        ScriptSimulationContext scriptContext = new(
+            scriptScene,
+            grid,
+            kernel,
+            particles,
+            materials,
+            events,
+            time,
+            audio,
+            physics,
+            camera,
+            input,
+            lighting);
+        simulationDriver?.AttachScriptContext(scriptContext);
+        AttachScripting(scriptContext, runtime);
+        return scriptContext;
     }
 
     private void MaterializeCurrentSceneScriptsIfPossible()
@@ -211,6 +311,214 @@ public sealed class Engine : IDisposable
                 Context.GetService<ScriptAssemblyRegistry>());
             scene.AttachScriptScene(scriptScene);
             Context.RegisterService(scriptScene);
+        }
+    }
+
+    private PixelEngine.Scripting.Scene ResolveCurrentScriptScene()
+    {
+        MaterializeCurrentSceneScriptsIfPossible();
+        if (Context.TryGetService(out PixelEngine.Scripting.Scene scriptScene))
+        {
+            return scriptScene;
+        }
+
+        ISceneService scenes = Context.GetService<ISceneService>();
+        Scene current = scenes.Current ??
+            throw new InvalidOperationException("无法自动接入脚本：当前没有已加载或已配置的场景。");
+        MaterializeSceneScripts(current);
+        return current.ScriptScene ??
+            throw new InvalidOperationException("无法自动接入脚本：当前场景没有可物化的脚本 Scene。");
+    }
+
+    private CellGrid ResolveCellGrid(SimulationPhaseDriver? simulationDriver)
+    {
+        if (Context.TryGetService(out CellGrid grid))
+        {
+            return grid;
+        }
+
+        if (simulationDriver is not null)
+        {
+            Context.RegisterService(simulationDriver.Grid);
+            return simulationDriver.Grid;
+        }
+
+        throw new InvalidOperationException("无法自动接入脚本：缺少 CellGrid 或 SimulationPhaseDriver。");
+    }
+
+    private SimulationKernel ResolveSimulationKernel(SimulationPhaseDriver? simulationDriver)
+    {
+        if (Context.TryGetService(out SimulationKernel kernel))
+        {
+            return kernel;
+        }
+
+        if (simulationDriver is not null)
+        {
+            Context.RegisterService(simulationDriver.Kernel);
+            return simulationDriver.Kernel;
+        }
+
+        throw new InvalidOperationException("无法自动接入脚本：缺少 SimulationKernel 或 SimulationPhaseDriver。");
+    }
+
+    private ParticleSystem ResolveParticleSystem(SimulationPhaseDriver? simulationDriver)
+    {
+        if (Context.TryGetService(out ParticleSystem particles))
+        {
+            return particles;
+        }
+
+        if (simulationDriver is not null)
+        {
+            Context.RegisterService(simulationDriver.Particles);
+            return simulationDriver.Particles;
+        }
+
+        throw new InvalidOperationException("无法自动接入脚本：缺少 ParticleSystem 或 SimulationPhaseDriver。");
+    }
+
+    private MaterialTable ResolveMaterialTable(SimulationPhaseDriver? simulationDriver)
+    {
+        if (Context.TryGetService(out MaterialTable materials))
+        {
+            return materials;
+        }
+
+        if (simulationDriver is not null)
+        {
+            Context.RegisterService(simulationDriver.Materials);
+            return simulationDriver.Materials;
+        }
+
+        throw new InvalidOperationException("无法自动接入脚本：缺少 MaterialTable 或 SimulationPhaseDriver。");
+    }
+
+    private ScriptEventBus ResolveScriptEventBus()
+    {
+        if (Context.TryGetService(out ScriptEventBus events))
+        {
+            return events;
+        }
+
+        ScriptEventBus created = new(Context.Events);
+        Context.RegisterService(created);
+        Context.RegisterService<IEventBus>(created);
+        return created;
+    }
+
+    private ScriptFrameTime ResolveScriptFrameTime()
+    {
+        if (Context.TryGetService(out ScriptFrameTime time))
+        {
+            return time;
+        }
+
+        ScriptFrameTime created = new(Context.Clock);
+        Context.RegisterService(created);
+        Context.RegisterService<IGameTime>(created);
+        return created;
+    }
+
+    private ICameraApi ResolveCameraApi()
+    {
+        if (Context.TryGetService(out ICameraApi camera))
+        {
+            return camera;
+        }
+
+        ScriptCameraApi created = new(
+            Context.Options.InternalWidth,
+            Context.Options.InternalHeight,
+            Context.Options.InternalWidth * 0.5f,
+            Context.Options.InternalHeight * 0.5f);
+        Context.RegisterService<ICameraApi>(EngineServiceRole.Camera, created);
+        Context.RegisterService(created);
+        return created;
+    }
+
+    private IInputApi ResolveInputApi()
+    {
+        if (Context.TryGetService(out IInputApi input))
+        {
+            return input;
+        }
+
+        ScriptInputApi created = new();
+        Context.RegisterService<IInputApi>(EngineServiceRole.Input, created);
+        Context.RegisterService(created);
+        return created;
+    }
+
+    private ILightingApi ResolveLightingApi()
+    {
+        if (Context.TryGetService(out ILightingApi lighting))
+        {
+            return lighting;
+        }
+
+        ScriptLightingApi created = new();
+        Context.RegisterService<ILightingApi>(created);
+        Context.RegisterService(created);
+        return created;
+    }
+
+    private IAudioApi? ResolveAudioApiOrNull()
+    {
+        if (Context.TryGetService(out IAudioApi audio))
+        {
+            return audio;
+        }
+
+        if (!Context.TryGetService(out AudioSystem audioSystem) ||
+            !Context.TryGetService(out AudioClipCache clips))
+        {
+            return null;
+        }
+
+        ScriptAudioApi created = new(audioSystem, clips);
+        Context.RegisterService<IAudioApi>(EngineServiceRole.AudioService, created);
+        Context.RegisterService(created);
+        return created;
+    }
+
+    private void RegisterSimulationRolesIfMissing(
+        CellGrid grid,
+        ParticleSystem particles,
+        MaterialTable materials,
+        PhysicsSystem? physics)
+    {
+        if (!Context.IsServiceAvailable(EngineServiceRole.WorldAccess))
+        {
+            Context.RegisterService(EngineServiceRole.WorldAccess, grid);
+        }
+
+        if (!Context.IsServiceAvailable(EngineServiceRole.ParticleService))
+        {
+            Context.RegisterService(EngineServiceRole.ParticleService, particles);
+        }
+
+        if (!Context.IsServiceAvailable(EngineServiceRole.MaterialRegistry))
+        {
+            Context.RegisterService(EngineServiceRole.MaterialRegistry, materials);
+        }
+
+        if (physics is not null && !Context.IsServiceAvailable(EngineServiceRole.PhysicsService))
+        {
+            Context.RegisterService(EngineServiceRole.PhysicsService, physics);
+        }
+    }
+
+    private static void AddResidentChunks(ResidentChunkMap chunks, int worldWidthCells, int worldHeightCells)
+    {
+        int lastPlayableChunkX = (worldWidthCells - 1) / PixelEngine.Core.EngineConstants.ChunkSize;
+        int lastPlayableChunkY = (worldHeightCells - 1) / PixelEngine.Core.EngineConstants.ChunkSize;
+        for (int cy = -1; cy <= lastPlayableChunkY + 1; cy++)
+        {
+            for (int cx = -1; cx <= lastPlayableChunkX + 1; cx++)
+            {
+                chunks.Add(new Chunk(new ChunkCoord(cx, cy)));
+            }
         }
     }
 
