@@ -1,4 +1,5 @@
 using PixelEngine.Core.Diagnostics;
+using PixelEngine.Scripting;
 
 namespace PixelEngine.Editor;
 
@@ -122,15 +123,69 @@ public sealed class EditorApp : IDisposable
         }
 
         _controller.NewFrame(deltaSeconds, width, height);
-        _controller.DrawDockSpace();
-        EditorContext context = new(counters, Selection, frameIndex, performance);
-        for (int i = 0; i < _panels.Count; i++)
+        if (Options.EnableDockSpace)
         {
-            IEditorPanel panel = _panels[i];
-            if (panel.Visible)
+            _controller.DrawDockSpace();
+        }
+
+        EditorContext context = new(counters, Selection, frameIndex, performance);
+        if (Options.EnableDockSpace)
+        {
+            for (int i = 0; i < _panels.Count; i++)
             {
-                panel.Draw(in context);
+                IEditorPanel panel = _panels[i];
+                if (panel.Visible)
+                {
+                    panel.Draw(in context);
+                }
             }
+        }
+
+        _controller.Render();
+    }
+
+    /// <summary>
+    /// 绘制一帧 Editor UI，并在同一 ImGui frame 内调度脚本 GUI。
+    /// </summary>
+    public void DrawFrame(
+        float deltaSeconds,
+        int width,
+        int height,
+        EngineCounters counters,
+        long frameIndex,
+        EditorPerformanceSnapshot performance,
+        Action<IGuiContext>? drawScriptGui)
+    {
+        ArgumentNullException.ThrowIfNull(counters);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!IsRunning)
+        {
+            return;
+        }
+
+        _controller.NewFrame(deltaSeconds, width, height);
+        if (Options.EnableDockSpace)
+        {
+            _controller.DrawDockSpace();
+        }
+
+        EditorContext context = new(counters, Selection, frameIndex, performance);
+        if (Options.EnableDockSpace)
+        {
+            for (int i = 0; i < _panels.Count; i++)
+            {
+                IEditorPanel panel = _panels[i];
+                if (panel.Visible)
+                {
+                    panel.Draw(in context);
+                }
+            }
+        }
+
+        if (drawScriptGui is not null)
+        {
+            ScriptGuiContext gui = new(width, height, deltaSeconds, Input.Capture);
+            drawScriptGui(gui);
         }
 
         _controller.Render();

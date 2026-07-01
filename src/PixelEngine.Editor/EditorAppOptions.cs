@@ -41,6 +41,11 @@ public sealed record EditorAppOptions
     public bool EnableMultiViewport { get; init; }
 
     /// <summary>
+    /// 是否绘制 Editor dockspace 与注册面板；游戏 HUD 模式可关闭以只保留 ImGui frame lifecycle。
+    /// </summary>
+    public bool EnableDockSpace { get; init; } = true;
+
+    /// <summary>
     /// 校验并返回规范化后的选项。
     /// </summary>
     /// <returns>规范化选项。</returns>

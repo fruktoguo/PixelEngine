@@ -28,6 +28,12 @@ public interface IScriptRuntime
     void FixedSimTick();
 
     /// <summary>
+    /// 每个 GUI 绘制相位在相位 1 调用一次，用于派发 Behaviour.OnGui。
+    /// </summary>
+    /// <param name="gui">本次 GUI 绘制相位的上下文。</param>
+    void DrawGui(IGuiContext gui);
+
+    /// <summary>
     /// 相位 1 结束时调用，用于刷新延迟销毁队列。
     /// </summary>
     void EndFrame();

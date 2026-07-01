@@ -51,6 +51,40 @@ public sealed class EditorAppTests
     }
 
     /// <summary>
+    /// 验证游戏 HUD 模式复用 EditorApp 的 ImGui frame，但不绘制 dockspace 与 Editor 面板。
+    /// </summary>
+    [Fact]
+    public void DrawFrameCanDispatchScriptGuiWithoutDockSpace()
+    {
+        RecordingBackend backend = new();
+        RecordingPanel panel = new();
+        using EditorApp app = new(backend, new EditorAppOptions { EnableDockSpace = false });
+        app.AddPanel(panel);
+        int guiWidth = 0;
+        int guiHeight = 0;
+
+        app.Initialize();
+        app.DrawFrame(
+            0.016f,
+            640,
+            360,
+            new EngineCounters(),
+            7,
+            EditorPerformanceSnapshot.FromCounters(new EngineCounters()),
+            gui =>
+            {
+                guiWidth = gui.Width;
+                guiHeight = gui.Height;
+                RecordingBackend.Current?.Events.Add("ScriptGui");
+            });
+
+        Assert.Equal(640, guiWidth);
+        Assert.Equal(360, guiHeight);
+        Assert.Equal(["Initialize", "NewFrame:640x360", "ScriptGui", "Render"], backend.Events);
+        Assert.Equal(0, panel.DrawCount);
+    }
+
+    /// <summary>
     /// 验证 ImGuiController 在禁用时不初始化后端，启用时能成对初始化与关闭。
     /// </summary>
     [Fact]

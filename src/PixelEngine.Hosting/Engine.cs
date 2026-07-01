@@ -3,6 +3,7 @@ using System.Reflection;
 using PixelEngine.Audio;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
+using PixelEngine.Editor;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
@@ -234,7 +235,7 @@ public sealed class Engine : IDisposable
         });
         _ownedRuntimeResources.Add(window);
         Context.RegisterService(window);
-        _ = AttachWindowInput(window);
+        _ = AttachWindowInput(window, _ => ResolveGuiInputRoute());
         _ = AttachCameraSynchronization(window);
         _ = AttachRendering(window);
         Phases.Register(EnginePhase.InputAndTime, _ =>
@@ -314,7 +315,73 @@ public sealed class Engine : IDisposable
         Context.RegisterService(driver.GetType(), driver);
         driver.RegisterPhases(Phases);
         _ownedRuntimeResources.Add(pipeline);
+        AttachGuiRuntime(window, pipeline);
         return driver;
+    }
+
+    private void AttachGuiRuntime(RenderWindow window, RenderPipeline pipeline)
+    {
+        if (Context.TryGetService(out EditorRenderBridge _))
+        {
+            return;
+        }
+
+        bool hasScriptGui = Context.TryGetService(out IScriptRuntime scriptRuntime);
+        bool wantsEditor = Context.Options.EnableEditor;
+        if (!hasScriptGui && !wantsEditor)
+        {
+            return;
+        }
+
+        EditorApp editor = ResolveEditorApp(wantsEditor);
+        EditorInputConnector input = new(window, editor.Input);
+        EditorRenderBridge? bridge = EditorRenderBridge.AttachIfEnabled(
+            pipeline,
+            editor,
+            Context.Counters,
+            Context.Profiler,
+            () => EditorRuntimeDiagnosticsProvider.Create(Context),
+            hasScriptGui ? scriptRuntime : null);
+        if (bridge is null)
+        {
+            input.Dispose();
+            return;
+        }
+
+        Context.RegisterService(bridge);
+        _ownedRuntimeResources.Add(input);
+        _ownedRuntimeResources.Add(bridge);
+    }
+
+    private EditorApp ResolveEditorApp(bool enableDockSpace)
+    {
+        if (Context.TryGetService(out EditorApp existing))
+        {
+            return existing;
+        }
+
+        EditorApp created = new(
+            new HexaImGuiBackend(),
+            new EditorAppOptions
+            {
+                Enabled = true,
+                EnableDockSpace = enableDockSpace,
+                LayoutPath = Path.Combine(Context.Options.ContentRoot, "imgui.ini"),
+            });
+        Context.RegisterService(created);
+        _ownedRuntimeResources.Add(created);
+        return created;
+    }
+
+    private ScriptInputRoute ResolveGuiInputRoute()
+    {
+        if (!Context.TryGetService(out EditorApp editor))
+        {
+            return ScriptInputRoute.Allowed;
+        }
+
+        EditorInputSnapshot capture = editor.Input.Capture;
+        return new ScriptInputRoute(capture.AllowWorldKeyboard, capture.AllowWorldMouse);
     }
 
     /// <summary>

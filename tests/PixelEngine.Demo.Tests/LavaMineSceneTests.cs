@@ -44,6 +44,7 @@ public sealed class LavaMineSceneTests
         LevelDirector director = FindBehaviour<LevelDirector>(engine.Context.GetService<ScriptScene>());
         Assert.True(director.RigidStructuresQueued);
         Assert.Equal(6, director.RigidStructureCount);
+        _ = FindBehaviour<DemoHud>(engine.Context.GetService<ScriptScene>());
         Assert.True(CountBehaviours<SparkEmitter>(engine.Context.GetService<ScriptScene>()) >= 2);
         ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
         Assert.True(particles.ActiveCount > 0);
