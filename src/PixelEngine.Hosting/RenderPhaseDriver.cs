@@ -68,6 +68,7 @@ public sealed class RenderPhaseDriver(
             _presentCamera,
             dirtyRects,
             [],
+            _lighting.PointLights,
             activeParticles,
             _materials,
             _lighting.FogOfWar,

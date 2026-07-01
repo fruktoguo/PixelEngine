@@ -166,7 +166,7 @@ API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosti
 刚体 / 粒子 / 光照 / 音频（Demo 侧消费）
 - [!] 木 / 金属可破坏结构布置：`LevelDirector` 已铺设木桥与金属梁，并经 `IRigidBodyApi.CreateFromRegion` 在 headless 真实 Hosting/Scripting/Physics 路径注册 6 个动态刚体；集成测试已切断其中一段木桥并验证 Physics 销毁父刚体、创建 2 个子刚体；阻塞：缺少窗口态可推 / 砸 / CA 挖断后再破坏端到端验收。〔plan/06;§3.7〕
 - [!] 火花 / 血 / 碎屑发射：`PlayerHealth` 已用 `Particles.Burst` 喷血，`MaterialEmitter` 已用 `Particles.Spawn` 做喷口粒子，`SparkEmitter` 已接入 lava 区域 fire 火花，刚体小碎片可由 Physics damage 重建写入自由粒子；阻塞：脚本公开 API 仍缺 `World.Explode(center,radius,force)`，不能完成爆炸抛射 cell 与推动刚体的复合验收。〔plan/05;§3.8〕
-- [!] emissive 材质标注正确（lava/molten_metal/fire/火花），Scripting 已有 `Lighting.RevealAround` + `AddPointLight` 请求 API，Hosting 已有 `ScriptLightingSynchronizer` 将脚本请求同步为 Rendering `LightSource` 与 `FogOfWarBuffer`，`RenderPhaseDriver` 已把 fog-of-war 传入 `RenderPipeline` 并 stamp 自由粒子到 emissive buffer；阻塞：`RenderPipeline.RenderFrame` 尚无脚本点光源列表参数，且缺少真实窗口光照验收。〔plan/08;§3.9〕
+- [!] emissive 材质标注正确（lava/molten_metal/fire/火花），Scripting 已有 `Lighting.RevealAround` + `AddPointLight` 请求 API，Hosting 已有 `ScriptLightingSynchronizer` 将脚本请求同步为 Rendering `LightSource` 与 `FogOfWarBuffer`，`RenderPhaseDriver` 已把 fog-of-war 与点光源传入 `RenderPipeline` 并 stamp 自由粒子到 emissive buffer；`RenderPipeline` 已把点光源合成进 visibility mask；阻塞：缺少真实窗口光照验收。〔plan/08;§3.9〕
 - [!] `materials.json` 的 `AudioCues` 已覆盖 impact/fire/splash/ambient/shatter，玩法脚本可经 `Audio.PlayOneShot`/`PlayAt` 请求音效；Hosting 已能从 `content/audio` 预加载 19 个 wav clip 并注入脚本上下文；阻塞：缺少爆炸复合 API 触发 explosion cue，以及材质事件 cue 句柄到 clip buffer 的 Demo 映射/消费验收。〔plan/04、plan/10;§3.10〕
 
 关卡与 UI

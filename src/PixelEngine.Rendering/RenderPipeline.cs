@@ -245,7 +245,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
         FogOfWarBuffer? fogOfWar = null,
         FrameProfiler? profiler = null)
     {
-        RenderFrame(renderBuffer, aux, camera, dirtyRects, overlays, [], null, fogOfWar, profiler);
+        RenderFrame(renderBuffer, aux, camera, dirtyRects, overlays, [], [], null, fogOfWar, profiler);
     }
 
     /// <summary>
@@ -271,6 +271,34 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
         FogOfWarBuffer? fogOfWar = null,
         FrameProfiler? profiler = null)
     {
+        RenderFrame(renderBuffer, aux, camera, dirtyRects, overlays, [], particles, materials, fogOfWar, profiler);
+    }
+
+    /// <summary>
+    /// 渲染一帧并 present，并在 <see cref="RenderPipelineSettings.ParticleRenderMode"/> 为 GPU 模式时批绘自由粒子，同时消费点光源。
+    /// </summary>
+    /// <param name="renderBuffer">相位 9 输出的世界 BGRA8 buffer；GPU 粒子模式下调用者不应再把同一批粒子 stamp 进此 buffer。</param>
+    /// <param name="aux">相位 9 副输出。</param>
+    /// <param name="camera">只读相机快照。</param>
+    /// <param name="dirtyRects">需要上传的 dirty rect；首次渲染会强制全帧上传。</param>
+    /// <param name="overlays">在 world blit 后、光照前绘制的屏幕空间 overlay 命令。</param>
+    /// <param name="pointLights">脚本或玩法提交的视口空间点光源。</param>
+    /// <param name="particles">plan/05 自由粒子活跃前缀；GPU 模式只读，不修改粒子状态。</param>
+    /// <param name="materials">粒子材质表；GPU 模式用于生成上传颜色与 emissive 标志。</param>
+    /// <param name="fogOfWar">可选 fog-of-war reveal map。</param>
+    /// <param name="profiler">可选 Core 诊断 profiler。</param>
+    public void RenderFrame(
+        RenderBuffer renderBuffer,
+        RenderAuxBuffers aux,
+        CameraState camera,
+        ReadOnlySpan<PixelUploadRect> dirtyRects,
+        ReadOnlySpan<OverlayCommand> overlays,
+        ReadOnlySpan<LightSource> pointLights,
+        ReadOnlySpan<Particle> particles,
+        MaterialTable? materials,
+        FogOfWarBuffer? fogOfWar = null,
+        FrameProfiler? profiler = null)
+    {
         ArgumentNullException.ThrowIfNull(renderBuffer);
         ArgumentNullException.ThrowIfNull(aux);
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -283,7 +311,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
         UploadWorld(renderBuffer, dirtyRects);
         _emissive.Upload(aux.Emissive);
         _occluder.Upload(aux.Occluder);
-        UploadVisibility(fogOfWar);
+        UploadVisibility(fogOfWar, pointLights);
         RecordSub(profiler, FrameSubPhase.GpuUpload, started);
 
         started = Stopwatch.GetTimestamp();
@@ -349,7 +377,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
     /// <param name="profiler">可选 Core 诊断 profiler。</param>
     public void RenderFrame(RenderBuffer renderBuffer, RenderAuxBuffers aux, CameraState camera, FrameProfiler? profiler = null)
     {
-        RenderFrame(renderBuffer, aux, camera, [], [], null, profiler);
+        RenderFrame(renderBuffer, aux, camera, [], [], default, profiler);
     }
 
     /// <summary>
@@ -423,11 +451,12 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
         _uploader.UploadDirtyRects(_worldTexture, renderBuffer, dirtyRects);
     }
 
-    private void UploadVisibility(FogOfWarBuffer? fogOfWar)
+    private void UploadVisibility(FogOfWarBuffer? fogOfWar, ReadOnlySpan<LightSource> pointLights)
     {
         if (fogOfWar is null)
         {
             _visibilityMask.AsSpan().Fill(byte.MaxValue);
+            ApplyPointLights(_visibilityMask, pointLights);
             _visibility.Upload(_visibilityMask);
             return;
         }
@@ -447,7 +476,43 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
             }
         }
 
+        ApplyPointLights(mask, pointLights);
         _visibility.Upload(mask);
+    }
+
+    private void ApplyPointLights(Span<byte> mask, ReadOnlySpan<LightSource> pointLights)
+    {
+        for (int i = 0; i < pointLights.Length; i++)
+        {
+            LightSource light = pointLights[i];
+            light.Validate();
+            int minX = Math.Max(0, (int)MathF.Floor(light.X - light.Radius));
+            int minY = Math.Max(0, (int)MathF.Floor(light.Y - light.Radius));
+            int maxX = Math.Min(Width, (int)MathF.Ceiling(light.X + light.Radius));
+            int maxY = Math.Min(Height, (int)MathF.Ceiling(light.Y + light.Radius));
+            float inverseRadius = 1f / light.Radius;
+            for (int y = minY; y < maxY; y++)
+            {
+                int row = y * Width;
+                float dy = y + 0.5f - light.Y;
+                for (int x = minX; x < maxX; x++)
+                {
+                    float dx = x + 0.5f - light.X;
+                    float distance = MathF.Sqrt((dx * dx) + (dy * dy));
+                    if (distance > light.Radius)
+                    {
+                        continue;
+                    }
+
+                    int contribution = (int)MathF.Round((1f - (distance * inverseRadius)) * light.Intensity * byte.MaxValue);
+                    int index = row + x;
+                    if (contribution > mask[index])
+                    {
+                        mask[index] = (byte)Math.Min(byte.MaxValue, contribution);
+                    }
+                }
+            }
+        }
     }
 
     private ColorRenderTarget RenderPost(ColorRenderTarget source)

@@ -18,6 +18,7 @@ public interface IRenderFrameSink
         CameraState camera,
         ReadOnlySpan<PixelUploadRect> dirtyRects,
         ReadOnlySpan<OverlayCommand> overlays,
+        ReadOnlySpan<LightSource> pointLights,
         ReadOnlySpan<Particle> particles,
         MaterialTable materials,
         FogOfWarBuffer? fogOfWar,
