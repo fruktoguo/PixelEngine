@@ -12,6 +12,7 @@ namespace PixelEngine.Hosting;
 public sealed class Engine : IDisposable
 {
     private readonly EngineLifecycle _lifecycle;
+    private IScriptRuntime? _attachedScriptRuntime;
     private bool _disposed;
 
     internal Engine(EngineContext context, EnginePhasePipeline phases, EngineLifecycle lifecycle)
@@ -152,6 +153,28 @@ public sealed class Engine : IDisposable
         Scene scene = Context.GetService<ISceneService>().SwitchTo(name);
         MaterializeSceneScripts(scene);
         return scene;
+    }
+
+    /// <summary>
+    /// 将脚本上下文接入 Hosting 相位 1，并注册脚本运行时服务。
+    /// </summary>
+    /// <param name="scriptContext">脚本访问引擎能力的统一上下文。</param>
+    /// <param name="runtime">可选脚本运行时；为 null 时创建默认 <see cref="ScriptRuntime" />。</param>
+    public void AttachScripting(IScriptContext scriptContext, IScriptRuntime? runtime = null)
+    {
+        ThrowIfShutdown();
+        ArgumentNullException.ThrowIfNull(scriptContext);
+        if (_attachedScriptRuntime is not null)
+        {
+            throw new InvalidOperationException("脚本运行时已经接入当前 Engine。");
+        }
+
+        runtime ??= new ScriptRuntime();
+        ScriptingPhaseDriver driver = new(runtime, scriptContext);
+        driver.RegisterPhases(Phases);
+        _attachedScriptRuntime = runtime;
+        Context.RegisterService(EngineServiceRole.Scripting, runtime);
+        Context.RegisterService(scriptContext);
     }
 
     private void MaterializeCurrentSceneScriptsIfPossible()
@@ -310,6 +333,7 @@ public sealed class Engine : IDisposable
         Exception? lifecycleFailure = null;
         try
         {
+            _attachedScriptRuntime?.Shutdown();
             _lifecycle.Shutdown();
         }
         catch (Exception exception)
