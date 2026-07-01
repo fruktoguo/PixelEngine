@@ -54,4 +54,25 @@ public sealed class ScriptLightingSynchronizerTests
         Assert.Equal(128, synchronizer.FogOfWar.RevealAlpha(32, 32));
         Assert.Equal(0, lighting.RevealCount);
     }
+
+    /// <summary>
+    /// 验证缩放相机下 fog buffer 使用屏幕像素尺寸，并把世界坐标 reveal 转成像素坐标。
+    /// </summary>
+    [Fact]
+    public void SynchronizerKeepsFogInViewportPixelSpaceWhenZoomed()
+    {
+        ScriptCameraApi camera = new(viewportWidth: 100, viewportHeight: 50, centerX: 200, centerY: 100, zoom: 2);
+        ScriptCameraSynchronizer cameraSync = new(camera);
+        _ = cameraSync.Sync();
+        ScriptLightingApi lighting = new();
+        lighting.RevealAround(200, 100, 8, alpha: 200);
+        ScriptLightingSynchronizer synchronizer = new(lighting, cameraSync);
+
+        synchronizer.Sync();
+
+        Assert.Equal(100, synchronizer.FogOfWar.ViewportCellWidth);
+        Assert.Equal(50, synchronizer.FogOfWar.ViewportCellHeight);
+        Assert.Equal(200, synchronizer.FogOfWar.RevealAlpha(50, 25));
+        Assert.Equal(0, lighting.RevealCount);
+    }
 }
