@@ -27,6 +27,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     /// <param name="materials">材质注册表。</param>
     /// <param name="events">脚本事件总线；未提供时访问 <see cref="Events" /> 会抛出明确异常。</param>
     /// <param name="time">时间 facade；未提供时访问 <see cref="Time" /> 会抛出明确异常。</param>
+    /// <param name="audio">音频 facade；未提供时访问 <see cref="Audio" /> 会抛出明确异常。</param>
     public ScriptSimulationContext(
         Scene scene,
         CellGrid grid,
@@ -34,7 +35,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         ParticleSystem particleSystem,
         MaterialTable materials,
         IEventBus? events = null,
-        IGameTime? time = null)
+        IGameTime? time = null,
+        IAudioApi? audio = null)
     {
         Scene = scene ?? throw new ArgumentNullException(nameof(scene));
         ArgumentNullException.ThrowIfNull(grid);
@@ -51,11 +53,14 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         ParticleSystem = particleSystem;
         EventBackend = events;
         TimeBackend = time;
+        AudioBackend = audio;
     }
 
     private IEventBus? EventBackend { get; }
 
     private IGameTime? TimeBackend { get; }
+
+    private IAudioApi? AudioBackend { get; }
 
     /// <summary>
     /// CA 内核，供 Hosting 相位驱动在 dirty swap 前落地脚本 cell 命令。
@@ -100,7 +105,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     public IEventBus Events => EventBackend ?? throw Unsupported(nameof(Events));
 
     /// <inheritdoc />
-    public IAudioApi Audio => throw Unsupported(nameof(Audio));
+    public IAudioApi Audio => AudioBackend ?? throw Unsupported(nameof(Audio));
 
     /// <inheritdoc />
     public IGameTime Time => TimeBackend ?? throw Unsupported(nameof(Time));

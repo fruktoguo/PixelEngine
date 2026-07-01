@@ -1,6 +1,8 @@
+using System.Buffers.Binary;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.Core.Time;
+using PixelEngine.Audio;
 using Xunit;
 using ScriptScene = PixelEngine.Scripting.Scene;
 
@@ -112,6 +114,29 @@ public sealed class ScriptSimulationContextTests
         Assert.True(time.TimeScale < 1f);
     }
 
+    /// <summary>
+    /// 验证脚本音频 facade 只播放已加载 cue，并把位置/音量交给真实 AudioSystem。
+    /// </summary>
+    [Fact]
+    public async Task ScriptAudioApiPlaysLoadedCueThroughAudioSystem()
+    {
+        byte[] wav = CreateWav(channels: 1, bitsPerSample: 8, sampleRate: 8_000, [128]);
+        using NullAudioBackend backend = new();
+        AudioClipCache cache = new(backend, new MemoryAssetStore(wav), new WavDecoder());
+        _ = await cache.LoadAsync("sfx/hit.wav");
+        using AudioSystem audio = new();
+        audio.Initialize(new AudioSettings { MaxVoices = 1, PixelsPerMeter = 16f, SfxVolume = 0.5f }, backend);
+        ScriptAudioApi api = new(audio, cache);
+
+        api.PlayAt("sfx/hit.wav", 32, 16, volume: 0.25f);
+
+        Assert.Equal(1, backend.PlayCalls);
+        Assert.Equal(new System.Numerics.Vector3(2f, 1f, 0f), backend.GetSourcePosition(1));
+        Assert.Equal(0.125f, backend.GetSourceGain(1), precision: 5);
+        _ = Assert.Throws<InvalidOperationException>(() => api.PlayAt("sfx/missing.wav", 0, 0));
+        audio.Shutdown();
+    }
+
     private sealed class Fixture
     {
         private Fixture(
@@ -176,6 +201,46 @@ public sealed class ScriptSimulationContextTests
         }
 
         return new MaterialTable(materials);
+    }
+
+    private static byte[] CreateWav(short channels, short bitsPerSample, int sampleRate, ReadOnlySpan<byte> pcm)
+    {
+        short blockAlign = (short)(channels * bitsPerSample / 8);
+        int byteRate = sampleRate * blockAlign;
+        byte[] wav = new byte[44 + pcm.Length];
+        WriteAscii(wav, 0, "RIFF");
+        BinaryPrimitives.WriteInt32LittleEndian(wav.AsSpan(4, 4), 36 + pcm.Length);
+        WriteAscii(wav, 8, "WAVE");
+        WriteAscii(wav, 12, "fmt ");
+        BinaryPrimitives.WriteInt32LittleEndian(wav.AsSpan(16, 4), 16);
+        BinaryPrimitives.WriteInt16LittleEndian(wav.AsSpan(20, 2), 1);
+        BinaryPrimitives.WriteInt16LittleEndian(wav.AsSpan(22, 2), channels);
+        BinaryPrimitives.WriteInt32LittleEndian(wav.AsSpan(24, 4), sampleRate);
+        BinaryPrimitives.WriteInt32LittleEndian(wav.AsSpan(28, 4), byteRate);
+        BinaryPrimitives.WriteInt16LittleEndian(wav.AsSpan(32, 2), blockAlign);
+        BinaryPrimitives.WriteInt16LittleEndian(wav.AsSpan(34, 2), bitsPerSample);
+        WriteAscii(wav, 36, "data");
+        BinaryPrimitives.WriteInt32LittleEndian(wav.AsSpan(40, 4), pcm.Length);
+        pcm.CopyTo(wav.AsSpan(44));
+        return wav;
+    }
+
+    private static void WriteAscii(byte[] destination, int offset, string text)
+    {
+        for (int i = 0; i < text.Length; i++)
+        {
+            destination[offset + i] = (byte)text[i];
+        }
+    }
+
+    private sealed class MemoryAssetStore(byte[] bytes) : IAudioAssetStore
+    {
+        public ValueTask<byte[]> LoadBytesAsync(string assetId, CancellationToken cancellationToken = default)
+        {
+            _ = assetId;
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(bytes);
+        }
     }
 
     private sealed class TestChunkSource(params Chunk[] chunks) : IChunkSource
