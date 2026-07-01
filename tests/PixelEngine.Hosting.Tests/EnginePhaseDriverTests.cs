@@ -146,6 +146,62 @@ public sealed class EnginePhaseDriverTests
     }
 
     /// <summary>
+    /// 验证 CA iteration 调试叠层只显示本帧实际迭代区域，resident sleeping chunk 不产生迭代矩形。
+    /// </summary>
+    [Fact]
+    public void RenderDebugOverlayShowsNoCaIterationRectForSleepingChunk()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("sand", CellType.Powder));
+        Chunk active = new(new ChunkCoord(0, 0));
+        active.Material[CellAddressing.LocalIndexFromLocal(1, 1)] = 1;
+        active.SetCurrentDirty(new DirtyRect(1, 1, 1, 1));
+        Chunk sleeping = new(new ChunkCoord(2, 0));
+        sleeping.Material[CellAddressing.LocalIndexFromLocal(1, 1)] = 1;
+        TestChunkSource chunks = new(active, sleeping);
+        MaterialPropsTable props = new(materials.Hot);
+        CellGrid grid = new(chunks, props);
+        SimulationKernel kernel = new(chunks, props);
+        ParticleSystem particles = new(capacity: 16);
+        TemperatureField temperature = new();
+        ScriptCameraApi camera = new(viewportWidth: 192, viewportHeight: 64, centerX: 96, centerY: 32, zoom: 1);
+        ScriptCameraSynchronizer cameraSync = new(camera);
+        _ = cameraSync.Sync();
+        ScriptLightingSynchronizer lightingSync = new(new ScriptLightingApi(), cameraSync);
+        lightingSync.Sync();
+        RecordingRenderFrameSink sink = new();
+        DebugOverlayController overlays = new(new DebugOverlaySettings { Enabled = DebugOverlayFlags.CaIterationRects });
+        RenderPhaseDriver render = new(
+            chunks,
+            materials,
+            temperature,
+            particles,
+            cameraSync,
+            lightingSync,
+            sink,
+            kernel: kernel,
+            debugOverlays: overlays);
+
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddPhaseDriver(new SimulationPhaseDriver(chunks, grid, kernel, particles, temperature, materials))
+            .AddPhaseDriver(render)
+            .Build();
+
+        _ = engine.RunOneTick();
+
+        Assert.Equal(ChunkState.Sleeping, sleeping.State);
+        Assert.Contains(sink.Overlays, static command =>
+            command.PrimitiveType == OverlayPrimitiveType.OutlineRectangle &&
+            command.ColorBgra == 0xD000FF40u &&
+            command.ViewportX == 1f &&
+            command.ViewportY == 1f);
+        Assert.DoesNotContain(sink.Overlays, static command =>
+            command.PrimitiveType == OverlayPrimitiveType.OutlineRectangle &&
+            command.ColorBgra == 0xD000FF40u &&
+            command.ViewportX >= 128f);
+    }
+
+    /// <summary>
     /// 验证 WorldPhaseDriver 会绑定驻留应用与流式 I/O 批处理入口。
     /// </summary>
     [Fact]
@@ -518,6 +574,8 @@ public sealed class EnginePhaseDriverTests
 
         public int OverlayCount { get; private set; }
 
+        public OverlayCommand[] Overlays { get; private set; } = [];
+
         public int DirtyRectCount { get; private set; }
 
         public PixelUploadRect FirstDirtyRect { get; private set; }
@@ -551,6 +609,7 @@ public sealed class EnginePhaseDriverTests
             AuxHeight = aux.Height;
             PointLightCount = pointLights.Length;
             OverlayCount = overlays.Length;
+            Overlays = overlays.ToArray();
             ParticleCount = particles.Length;
             DirtyRectCount = dirtyRects.Length;
             FirstDirtyRect = dirtyRects.Length == 0 ? default : dirtyRects[0];
