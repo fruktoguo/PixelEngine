@@ -166,6 +166,7 @@ public sealed class SimulationKernel(
         lifetime = chunk.Lifetime[local];
         if (material != 0 || flags != 0 || lifetime != 0)
         {
+            NotifyRigidDamageIfNeeded(wx, wy, flags);
             chunk.Material[local] = 0;
             chunk.Flags[local] = 0;
             chunk.Lifetime[local] = 0;

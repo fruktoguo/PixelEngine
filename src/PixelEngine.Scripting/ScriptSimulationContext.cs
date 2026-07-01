@@ -14,6 +14,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 {
     private readonly ScriptCommandQueue _commands = new();
     private readonly CellFacade _cells;
+    private readonly WorldEffectsFacade _world;
     private readonly MaterialFacade _materials;
     private readonly ParticleFacade _particles;
     private readonly SolidFacade _solids;
@@ -58,6 +59,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         ArgumentNullException.ThrowIfNull(materials);
 
         _cells = new CellFacade(_commands, grid);
+        _world = new WorldEffectsFacade(_commands, hasPhysics: physics is not null);
         _materials = new MaterialFacade(materials);
         _particles = new ParticleFacade(_commands);
         _solids = new SolidFacade(grid);
@@ -103,6 +105,9 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 
     /// <inheritdoc />
     public IWorldCellAccess Cells => _cells;
+
+    /// <inheritdoc />
+    public IWorldEffects World => _world;
 
     /// <inheritdoc />
     public IMaterialQuery Materials => _materials;
@@ -159,10 +164,12 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 case ScriptCommandKind.Paint:
                     Paint(command.X, command.Y, command.Width, command.Material.Value);
                     break;
+                case ScriptCommandKind.Explode:
                 case ScriptCommandKind.SpawnParticle:
                 case ScriptCommandKind.BurstParticles:
                 case ScriptCommandKind.CreateBodyFromRegion:
                 case ScriptCommandKind.ApplyImpulse:
+                case ScriptCommandKind.ApplyRadialImpulse:
                 case ScriptCommandKind.DestroyBody:
                 case ScriptCommandKind.MoveCharacter:
                     throw new InvalidOperationException($"脚本 cell 命令目标收到不匹配命令：{command.Kind}。");
@@ -194,10 +201,14 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 case ScriptCommandKind.BurstParticles:
                     SpawnBurst(command);
                     break;
+                case ScriptCommandKind.Explode:
+                    QueueExplosion(command);
+                    break;
                 case ScriptCommandKind.SetCell:
                 case ScriptCommandKind.Paint:
                 case ScriptCommandKind.CreateBodyFromRegion:
                 case ScriptCommandKind.ApplyImpulse:
+                case ScriptCommandKind.ApplyRadialImpulse:
                 case ScriptCommandKind.DestroyBody:
                 case ScriptCommandKind.MoveCharacter:
                     throw new InvalidOperationException($"脚本粒子命令目标收到不匹配命令：{command.Kind}。");
@@ -233,6 +244,9 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 case ScriptCommandKind.ApplyImpulse:
                     (_bodies ?? throw Unsupported(nameof(Bodies))).ApplyImpulseNow(command.Body, command.A, command.B);
                     break;
+                case ScriptCommandKind.ApplyRadialImpulse:
+                    (_bodies ?? throw Unsupported(nameof(Bodies))).ApplyRadialImpulseNow(command.X, command.Y, command.Width, command.A);
+                    break;
                 case ScriptCommandKind.DestroyBody:
                     (_bodies ?? throw Unsupported(nameof(Bodies))).DestroyNow(command.Body);
                     break;
@@ -241,6 +255,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                     break;
                 case ScriptCommandKind.SetCell:
                 case ScriptCommandKind.Paint:
+                case ScriptCommandKind.Explode:
                 case ScriptCommandKind.SpawnParticle:
                 case ScriptCommandKind.BurstParticles:
                     throw new InvalidOperationException($"脚本 physics 命令目标收到不匹配命令：{command.Kind}。");
@@ -331,6 +346,18 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         }
     }
 
+    private void QueueExplosion(ScriptCommand command)
+    {
+        EjectionRequest request = new(
+            command.X,
+            command.Y,
+            command.Width,
+            command.A,
+            command.B,
+            EjectMask.Powder | EjectMask.Liquid | EjectMask.Gas | EjectMask.Fire | EjectMask.Solid);
+        _ = ParticleSystem.RequestEjection(in request);
+    }
+
     private static ParticleSpawn ToParticleSpawn(ParticleSpawnDesc desc)
     {
         return new ParticleSpawn(
@@ -383,6 +410,34 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         public void Paint(int x, int y, int radius, MaterialId material)
         {
             commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.Paint(x, y, radius, material));
+        }
+    }
+
+    private sealed class WorldEffectsFacade(ScriptCommandQueue commands, bool hasPhysics) : IWorldEffects
+    {
+        public void Explode(float x, float y, int radius, float force)
+        {
+            ValidateFinite(x, nameof(x));
+            ValidateFinite(y, nameof(y));
+            ValidateFinite(force, nameof(force));
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(force);
+            int centerX = (int)MathF.Floor(x);
+            int centerY = (int)MathF.Floor(y);
+            float jitter = MathF.Max(1f, force * 0.25f);
+            commands.Enqueue(ScriptCommandTarget.Particle, ScriptCommand.Explode(centerX, centerY, radius, force, jitter));
+            if (hasPhysics)
+            {
+                commands.Enqueue(ScriptCommandTarget.Physics, ScriptCommand.ApplyRadialImpulse(centerX, centerY, radius, force));
+            }
+        }
+
+        private static void ValidateFinite(float value, string name)
+        {
+            if (!float.IsFinite(value))
+            {
+                throw new ArgumentOutOfRangeException(name, value, "参数必须是有限数值。");
+            }
         }
     }
 
@@ -556,6 +611,11 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             {
                 _ = physics.ApplyLinearImpulse(bodyKey, impulseX, impulseY);
             }
+        }
+
+        public void ApplyRadialImpulseNow(int x, int y, int radius, float force)
+        {
+            _ = physics.ApplyRadialImpulse(x, y, radius, force);
         }
 
         public void DestroyNow(BodyHandle handle)
