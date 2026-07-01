@@ -99,6 +99,20 @@ public static class PhysicsScale
     }
 
     /// <summary>
+    /// 将 Box2D 变换转换为像素世界坐标变换。
+    /// </summary>
+    /// <param name="transform">Box2D 物理变换。</param>
+    /// <returns>像素坐标系变换。</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Transform2D ToTransform2D(B2Transform transform)
+    {
+        return new Transform2D(
+            new Vector2(PhysicsToPixel(transform.P.X), PhysicsToPixel(transform.P.Y)),
+            transform.Q.C,
+            transform.Q.S);
+    }
+
+    /// <summary>
     /// 用 Box2D 凸包创建半径为 0 的锐利多边形。
     /// </summary>
     /// <param name="hull">Box2D 凸包。</param>

@@ -77,7 +77,7 @@ public sealed class CellGrid(
         int local = CellAddressing.LocalIndex(wx, wy);
         NotifyRigidDamageIfNeeded(wx, wy, chunk.Flags[local]);
         chunk.Material[local] = material;
-        MarkDirty(chunk, wx, wy);
+        MarkDirty(wx, wy);
         return true;
     }
 
@@ -117,6 +117,43 @@ public sealed class CellGrid(
         MarkDirty(chunk, wx, wy);
     }
 
+    /// <summary>
+    /// 相位 8：仅当目标仍是刚体占用 cell 时清空它，不触发刚体 damage 回调。
+    /// </summary>
+    public bool TryClearRigidOwnedCell(int wx, int wy)
+    {
+        Chunk chunk = RequireChunk(wx, wy);
+        int local = CellAddressing.LocalIndex(wx, wy);
+        if (!CellFlags.Has(chunk.Flags[local], CellFlags.RigidOwned))
+        {
+            return false;
+        }
+
+        chunk.Material[local] = 0;
+        chunk.Flags[local] = 0;
+        chunk.Lifetime[local] = 0;
+        MarkRigidDirty(wx, wy);
+        return true;
+    }
+
+    /// <summary>
+    /// 相位 8：写回刚体像素并设置 <see cref="CellFlags.RigidOwned"/>，不触发刚体 damage 回调。
+    /// </summary>
+    public void StampRigidOwnedCell(int wx, int wy, ushort material)
+    {
+        if (material == 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(material), material, "刚体 stamp 材质不能是 Empty。");
+        }
+
+        Chunk chunk = RequireChunk(wx, wy);
+        int local = CellAddressing.LocalIndex(wx, wy);
+        chunk.Material[local] = material;
+        chunk.Flags[local] = CellFlags.RigidOwned;
+        chunk.Lifetime[local] = 0;
+        MarkRigidDirty(wx, wy);
+    }
+
     private Chunk RequireChunk(int wx, int wy)
     {
         ChunkCoord coord = CellAddressing.WorldToChunk(wx, wy);
@@ -129,6 +166,11 @@ public sealed class CellGrid(
             CellAddressing.LocalCoord(wx),
             CellAddressing.LocalCoord(wy),
             EngineConstants.DirtyRectPadding);
+    }
+
+    private void MarkRigidDirty(int wx, int wy)
+    {
+        DirtyRegionMarker.MarkCell(_chunks, wx, wy, DirtyPhaseTarget.Working, includeBoundaryNeighbors: true);
     }
 
     private void NotifyRigidDamageIfNeeded(int wx, int wy, byte flags)

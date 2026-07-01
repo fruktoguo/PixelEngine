@@ -17,6 +17,7 @@ public sealed class PixelRigidBody
         BodyKey = bodyKey;
         BodyId = bodyId;
         Mask = mask ?? throw new ArgumentNullException(nameof(mask));
+        PreviousStamps = new List<RigidStampedCell>(mask.SolidPixelCount);
     }
 
     /// <summary>稠密 body key。</summary>
@@ -32,5 +33,5 @@ public sealed class PixelRigidBody
     public Transform2D PreviousTransform { get; set; } = Transform2D.Identity;
 
     /// <summary>上一帧 stamp 列表。</summary>
-    public List<RigidStamp> PreviousStamps { get; } = [];
+    public List<RigidStampedCell> PreviousStamps { get; }
 }

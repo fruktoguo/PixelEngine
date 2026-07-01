@@ -40,6 +40,16 @@ public sealed class BodyLocalMask
         _materials = GC.AllocateArray<ushort>(area, pinned: true);
         solidBits[..area].CopyTo(_solidBits);
         materials[..area].CopyTo(_materials);
+        int solidCount = 0;
+        for (int i = 0; i < area; i++)
+        {
+            if (_solidBits[i] != 0)
+            {
+                solidCount++;
+            }
+        }
+
+        SolidPixelCount = solidCount;
     }
 
     /// <summary>宽度。</summary>
@@ -50,6 +60,9 @@ public sealed class BodyLocalMask
 
     /// <summary>局部原点。</summary>
     public Vector2 LocalOrigin { get; }
+
+    /// <summary>固体像素数量。</summary>
+    public int SolidPixelCount { get; }
 
     /// <summary>固体 mask。</summary>
     public ReadOnlySpan<byte> SolidBits => _solidBits;
