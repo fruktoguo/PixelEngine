@@ -24,10 +24,79 @@ public sealed unsafe class OpenAlBackend : IAudioBackend
     }
 
     /// <inheritdoc />
+    public uint CreateBuffer()
+    {
+        ThrowIfDisposed();
+        return _al.GenBuffer();
+    }
+
+    /// <inheritdoc />
     public void DeleteSource(uint source)
     {
         ThrowIfDisposed();
         _al.DeleteSource(source);
+    }
+
+    /// <inheritdoc />
+    public void DeleteBuffer(uint buffer)
+    {
+        ThrowIfDisposed();
+        _al.DeleteBuffer(buffer);
+    }
+
+    /// <inheritdoc />
+    public void UploadBuffer(uint buffer, AudioSampleFormat format, ReadOnlySpan<byte> pcm, int sampleRate)
+    {
+        ThrowIfDisposed();
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sampleRate);
+        BufferFormat openAlFormat = format switch
+        {
+            AudioSampleFormat.Mono8 => BufferFormat.Mono8,
+            AudioSampleFormat.Mono16 => BufferFormat.Mono16,
+            AudioSampleFormat.Stereo8 => BufferFormat.Stereo8,
+            AudioSampleFormat.Stereo16 => BufferFormat.Stereo16,
+            _ => throw new ArgumentOutOfRangeException(nameof(format), format, "未知 PCM 格式。"),
+        };
+        fixed (byte* data = pcm)
+        {
+            _al.BufferData(buffer, openAlFormat, data, pcm.Length, sampleRate);
+        }
+    }
+
+    /// <inheritdoc />
+    public void QueueBuffers(uint source, ReadOnlySpan<uint> buffers)
+    {
+        ThrowIfDisposed();
+        fixed (uint* raw = buffers)
+        {
+            _al.SourceQueueBuffers(source, buffers.Length, raw);
+        }
+    }
+
+    /// <inheritdoc />
+    public int UnqueueProcessedBuffers(uint source, Span<uint> destination)
+    {
+        ThrowIfDisposed();
+        int processed = Math.Min(GetProcessedBufferCount(source), destination.Length);
+        if (processed == 0)
+        {
+            return 0;
+        }
+
+        fixed (uint* raw = destination)
+        {
+            _al.SourceUnqueueBuffers(source, processed, raw);
+        }
+
+        return processed;
+    }
+
+    /// <inheritdoc />
+    public int GetProcessedBufferCount(uint source)
+    {
+        ThrowIfDisposed();
+        _al.GetSourceProperty(source, GetSourceInteger.BuffersProcessed, out int processed);
+        return processed;
     }
 
     /// <inheritdoc />

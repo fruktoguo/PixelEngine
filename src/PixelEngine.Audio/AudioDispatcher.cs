@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Numerics;
 using PixelEngine.Core.Events;
 
@@ -59,6 +60,7 @@ public sealed class AudioDispatcher
     public AudioDispatchStats Dispatch(in AudioListenerState listener, long tick, IAudioEventPlayer player)
     {
         ArgumentNullException.ThrowIfNull(player);
+        long startTimestamp = Stopwatch.GetTimestamp();
         _coalescer.BeginFrame();
         int drained = _events.DrainTo(_eventScratch);
         for (int i = 0; i < drained; i++)
@@ -103,6 +105,8 @@ public sealed class AudioDispatcher
         }
 
         _voices.RefreshFinishedVoices();
+        long elapsedTimestamp = Stopwatch.GetTimestamp() - startTimestamp;
+        double elapsedMilliseconds = elapsedTimestamp * 1000.0 / Stopwatch.Frequency;
         LastStats = new AudioDispatchStats(
             drained,
             _coalescer.CoalescedCount,
@@ -110,7 +114,8 @@ public sealed class AudioDispatcher
             dispatched,
             played,
             _voices.ActiveVoiceCount,
-            _voices.StealCount);
+            _voices.StealCount,
+            elapsedMilliseconds);
         return LastStats;
     }
 }

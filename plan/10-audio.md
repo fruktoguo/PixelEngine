@@ -152,18 +152,18 @@ OpenAL 封装与生命周期：
 
 资产加载与播放接口：
 
-- [ ] `AudioBuffer`（AL buffer + PCM 元数据）/ `AudioClip`（引用计数资源句柄）。
-- [ ] `IAudioDecoder` + `WavDecoder`（纯托管 WAV/PCM，内建无新依赖）。
-- [ ] `AudioClipCache.Load(string assetId)` / `Unload`：经 Content 取字节、异步解码、上传 buffer；加载中静默占位不阻塞（架构 §10、AGENTS §2 不写假实现）。
-- [ ] `AudioStreamPlayer` + 流式 refill worker（队列 buffer，解码在后台线程，不进主线程 / sim 热循环，架构 §10.1）。
-- [ ] 公开播放 API：`PlayOneShot(AudioClip, in Vector2 worldPos, float volume, float pitch)` / `PlayUi` / 事件驱动 ambient（Demo 仅依赖公开 API，AGENTS §0）。
-- [ ] `OggVorbisDecoder`（NVorbis 纯托管，符合不变式 10）—— `- [!] 阻塞：NVorbis 未列入 plan/00 §4 技术栈表，需先修订 00 再实现，禁止静默引入`。
+- [x] `AudioBuffer`（AL buffer + PCM 元数据）/ `AudioClip`（引用计数资源句柄）。
+- [x] `IAudioDecoder` + `WavDecoder`（纯托管 WAV/PCM，内建无新依赖）。
+- [x] `AudioClipCache.Load(string assetId)` / `Unload`：经 Content 取字节、异步解码、上传 buffer；加载中静默占位不阻塞（架构 §10、AGENTS §2 不写假实现）。
+- [x] `AudioStreamPlayer` + 流式 refill worker（队列 buffer，解码在后台线程，不进主线程 / sim 热循环，架构 §10.1）。
+- [x] 公开播放 API：`PlayOneShot(AudioClip, in Vector2 worldPos, float volume, float pitch)` / `PlayUi` / 事件驱动 ambient（Demo 仅依赖公开 API，AGENTS §0）。
+- [!] `OggVorbisDecoder`（NVorbis 纯托管，符合不变式 10）—— 阻塞：NVorbis 未列入 plan/00 §4 技术栈表，需先修订 00 再实现，禁止静默引入。
 
 帧节奏与诊断：
 
 - [ ] 音频派发步骤接入帧尾（相位 8 后、相位 10 前），仅事件入队 / 排空 / 设源参数，计入 §1.4「音频派发 ≤1ms」（架构 §10.3、§17.1）。
 - [ ] render-only 帧（`simSteppedThisFrame==false`）仍推进 voice / ambient / listener，ring 空，声场连续（架构 §4.2）。
-- [ ] `AudioDiagnostics` 向 Core 诊断注册：派发耗时、drained/coalesced/dropped、活跃 voice / ambient 数、steal 次数、clip 计数（架构 §17.1）。
+- [x] `AudioDiagnostics` 向 Core 诊断注册：派发耗时、drained/coalesced/dropped、活跃 voice / ambient 数、steal 次数、clip 计数（架构 §17.1）。
 - [ ] `AudioSettings`：主 / 类别音量、`MaxVoices`/`MaxAmbientVoices`/`PixelsPerMeter`/ 距离模型 /`PerTypeCap`/`CoalesceBucketSize`，运行时可调。
 
 ---
@@ -182,7 +182,7 @@ OpenAL 封装与生命周期：
 - [ ] **voice stealing**：voice 池压满时按优先级 / 距离 / 年龄抢占，无爆音 / 无泄漏。
 - [ ] **ambient 交叉淡变**：材质区域进出时 ambient 平滑淡入淡出、滞回无反复启停。
 - [ ] **MPSC 线程安全**：多 worker 并发产生事件、主线程并发排空，无数据竞争 / 丢失 / 重复（与 Core ring 契约联测）。
-- [ ] **资产加载**：WAV/PCM 正确加载与播放；加载中不阻塞主线程；`Unload` 无泄漏。
+- [x] **资产加载**：WAV/PCM 正确加载与播放；加载中不阻塞主线程；`Unload` 无泄漏。
 - [ ] 不读取 sim 网格于热路径、不进 sim 热循环；混音 / 解码全在 OpenAL 音频线程 / 解码 worker（架构 §10.1）。
 - [ ] 未新增除 Silk.NET.OpenAL 外的 native 依赖（不变式 10）；无新 `DllImport`（AGENTS §3）。
 
@@ -211,7 +211,7 @@ OpenAL 封装与生命周期：
 - [x] 节点 1 `feat(audio): OpenAL 设备/上下文/listener + positional source 池`（§3.1/§3.3 对应实现清单第 1 组）。
 - [x] 节点 2 `feat(audio): 事件消费派发 + 限频去重(每帧上限/近坐标合并/冷却)`（§3.2/§3.4/§3.7 第 2 组）。
 - [x] 节点 3 `feat(audio): 材质化音效映射(AudioCues) + impact/fire/splash/explosion/shatter`（§3.5/§3.6 第 3 组）。
-- [ ] 节点 4 `feat(audio): 资产加载(WAV) + 流式播放 + 公开播放 API + 诊断接入`（§3.8/§3.9 第 4 组）。
+- [x] 节点 4 `feat(audio): 资产加载(WAV) + 流式播放 + 公开播放 API + 诊断接入`（§3.8/§3.9 第 4 组）。
 - [ ] 节点 5 `test(audio): 限频/去重/零分配/MPSC 线程安全/定位 验收测试`（§5 验收，随 plan/14）。
 
 > 节点 1–4 顺序推进，每节点完成即勾选并提交；§5 验收全部勾选方视为本文档完成（AGENTS §7）。Ogg 解码与 ambient 粗采样产生侧若被阻塞，标 `- [!]` 上报，不写假实现绕过。

@@ -73,6 +73,51 @@ public sealed class EngineCounters
     public long ResidentMemoryBytes { get => Volatile.Read(ref _residentMemoryBytes); set => Volatile.Write(ref _residentMemoryBytes, value); }
 
     /// <summary>
+    /// 获取或设置最近一帧音频派发排空事件数。
+    /// </summary>
+    public long AudioDrained { get; set; }
+
+    /// <summary>
+    /// 获取或设置最近一帧音频近坐标合并数。
+    /// </summary>
+    public long AudioCoalesced { get; set; }
+
+    /// <summary>
+    /// 获取或设置最近一帧音频丢弃数。
+    /// </summary>
+    public long AudioDropped { get; set; }
+
+    /// <summary>
+    /// 获取或设置最近一帧成功播放事件数。
+    /// </summary>
+    public long AudioPlayed { get; set; }
+
+    /// <summary>
+    /// 获取或设置活跃 positional voice 数。
+    /// </summary>
+    public long AudioActiveVoices { get; set; }
+
+    /// <summary>
+    /// 获取或设置累计 voice 抢占次数。
+    /// </summary>
+    public long AudioVoiceSteals { get; set; }
+
+    /// <summary>
+    /// 获取或设置已加载音频 clip 数。
+    /// </summary>
+    public long AudioLoadedClips { get; set; }
+
+    /// <summary>
+    /// 获取或设置加载中的音频 clip 数。
+    /// </summary>
+    public long AudioLoadingClips { get; set; }
+
+    /// <summary>
+    /// 获取或设置最近一帧音频派发耗时，单位毫秒。
+    /// </summary>
+    public double AudioDispatchMilliseconds { get; set; }
+
+    /// <summary>
     /// 获取或设置当前 GPU compute 后端枚举值。
     /// </summary>
     public long GpuComputeSelectedBackend { get; set; }
@@ -146,6 +191,31 @@ public sealed class EngineCounters
         GpuComputeRadianceCascadesEnabled = radianceCascadesEnabled;
         GpuComputeParticlesEnabled = particlesEnabled;
         GpuComputeAirSmokeEnabled = airSmokeEnabled;
+    }
+
+    /// <summary>
+    /// 批量发布音频派发与资源诊断，避免 HUD 读取到跨帧混合状态。
+    /// </summary>
+    public void SetAudioDiagnostics(
+        long drained,
+        long coalesced,
+        long dropped,
+        long played,
+        long activeVoices,
+        long voiceSteals,
+        long loadedClips,
+        long loadingClips,
+        double dispatchMilliseconds)
+    {
+        AudioDrained = drained;
+        AudioCoalesced = coalesced;
+        AudioDropped = dropped;
+        AudioPlayed = played;
+        AudioActiveVoices = activeVoices;
+        AudioVoiceSteals = voiceSteals;
+        AudioLoadedClips = loadedClips;
+        AudioLoadingClips = loadingClips;
+        AudioDispatchMilliseconds = dispatchMilliseconds;
     }
 
     /// <summary>
