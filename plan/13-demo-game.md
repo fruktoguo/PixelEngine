@@ -152,7 +152,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 
 世界交互
 - [!] `MaterialBrush : Behaviour`：源码已落地，支持左键放置、右键擦除、滚轮调半径、数字键 `1`–`0` 切材质，经 `Cells.Paint` 写入，`Materials.Resolve` 取 id，`Camera.ScreenToWorld` 映射鼠标；阻塞：缺少 Hosting/Silk.NET 输入采集、相机快照同步、脚本运行时自动注入与场景 Behaviour 驱动，不能完成运行态验收。〔plan/11、plan/04、plan/08；§3.5〕
-- [ ] `ExplosiveTool : Behaviour`：触发 `World.Explode`（清 cell + 抛粒子 + 推刚体）+ 相机震动 + explosion 音效。〔plan/05、plan/06、plan/10;§3.5〕
+- [!] `ExplosiveTool : Behaviour`：阻塞：当前脚本公开 API 缺少 `World.Explode(center,radius,force)` 复合能力；底层只有 cell→particle ejection 与刚体 impulse 原语雏形，尚未有“清 cell + 抛粒子 + 推刚体 + 音频事件”的脚本安全入口，不能写缩水版冒充完成。〔plan/05、plan/06、plan/10;§3.5〕
 
 内容
 - [x] `content/materials.json`：完整材质集（empty/sand/dirt/ash/water/oil/acid/lava/molten_metal/steam/smoke/acid_gas/fire/stone/wood/ice/metal/glass），含稳定 `Name`、CellType、密度 / 流散 / 可燃 / 相变阈值 / 温度参数 / PropertyFlags(emissive 等) / 纹理 / `AudioCues`，tag 归属。〔plan/04 格式；§3.6〕
