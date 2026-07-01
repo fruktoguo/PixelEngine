@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Rendering.Compute;
+using PixelEngine.Simulation;
+using PixelEngine.Simulation.Particles;
 using Silk.NET.OpenGL;
 
 namespace PixelEngine.Rendering;
@@ -15,6 +17,7 @@ public sealed class RenderPipeline : IDisposable
     private readonly FullscreenQuad _quad;
     private readonly WorldBlitPass _worldBlit;
     private readonly OverlayRenderer _overlay;
+    private readonly GpuParticleRenderer _gpuParticles;
     private readonly CompositePass _composite;
     private readonly BloomPass _bloom;
     private readonly IComputeBackend _computeBackend;
@@ -53,6 +56,7 @@ public sealed class RenderPipeline : IDisposable
         _quad = new FullscreenQuad(_gl);
         _worldBlit = new WorldBlitPass(_gl, profile);
         _overlay = new OverlayRenderer(_gl, profile);
+        _gpuParticles = new GpuParticleRenderer(_gl, profile);
         _composite = new CompositePass(_gl, profile);
         _bloom = new BloomPass(_gl, profile);
         GpuCapabilities gpuCapabilities = GpuCapabilities.Query(_gl, window.Capabilities);
@@ -173,7 +177,7 @@ public sealed class RenderPipeline : IDisposable
     }
 
     /// <summary>
-    /// 渲染一帧并 present。粒子应已在相位 9 stamp 到 render buffer。
+    /// 渲染一帧并 present。默认路径要求粒子已在相位 9 stamp 到 render buffer。
     /// </summary>
     /// <param name="renderBuffer">相位 9 输出的世界 BGRA8 buffer。</param>
     /// <param name="aux">相位 9 副输出。</param>
@@ -188,6 +192,32 @@ public sealed class RenderPipeline : IDisposable
         CameraState camera,
         ReadOnlySpan<PixelUploadRect> dirtyRects,
         ReadOnlySpan<OverlayCommand> overlays,
+        FogOfWarBuffer? fogOfWar = null,
+        FrameProfiler? profiler = null)
+    {
+        RenderFrame(renderBuffer, aux, camera, dirtyRects, overlays, [], null, fogOfWar, profiler);
+    }
+
+    /// <summary>
+    /// 渲染一帧并 present，并在 <see cref="RenderPipelineSettings.ParticleRenderMode"/> 为 GPU 模式时批绘自由粒子。
+    /// </summary>
+    /// <param name="renderBuffer">相位 9 输出的世界 BGRA8 buffer；GPU 粒子模式下调用者不应再把同一批粒子 stamp 进此 buffer。</param>
+    /// <param name="aux">相位 9 副输出。</param>
+    /// <param name="camera">只读相机快照。</param>
+    /// <param name="dirtyRects">需要上传的 dirty rect；首次渲染会强制全帧上传。</param>
+    /// <param name="overlays">在 world blit 后、光照前绘制的屏幕空间 overlay 命令。</param>
+    /// <param name="particles">plan/05 自由粒子活跃前缀；GPU 模式只读，不修改粒子状态。</param>
+    /// <param name="materials">粒子材质表；GPU 模式用于生成上传颜色与 emissive 标志。</param>
+    /// <param name="fogOfWar">可选 fog-of-war reveal map。</param>
+    /// <param name="profiler">可选 Core 诊断 profiler。</param>
+    public void RenderFrame(
+        RenderBuffer renderBuffer,
+        RenderAuxBuffers aux,
+        CameraState camera,
+        ReadOnlySpan<PixelUploadRect> dirtyRects,
+        ReadOnlySpan<OverlayCommand> overlays,
+        ReadOnlySpan<Particle> particles,
+        MaterialTable? materials,
         FogOfWarBuffer? fogOfWar = null,
         FrameProfiler? profiler = null)
     {
@@ -207,6 +237,7 @@ public sealed class RenderPipeline : IDisposable
 
         started = Stopwatch.GetTimestamp();
         _worldBlit.Render(_worldTexture, _scene, camera, _quad);
+        RenderGpuParticlesIfEnabled(particles, materials, camera);
         _overlay.Render(overlays, _scene);
         _lit.BindFramebuffer();
         _gl.Viewport(0, 0, (uint)Width, (uint)Height);
@@ -298,6 +329,7 @@ public sealed class RenderPipeline : IDisposable
         _computeBackend.Dispose();
         _bloom.Dispose();
         _composite.Dispose();
+        _gpuParticles.Dispose();
         _overlay.Dispose();
         _worldBlit.Dispose();
         _quad.Dispose();
@@ -369,6 +401,21 @@ public sealed class RenderPipeline : IDisposable
         }
 
         return current;
+    }
+
+    private void RenderGpuParticlesIfEnabled(ReadOnlySpan<Particle> particles, MaterialTable? materials, CameraState camera)
+    {
+        if (Settings.ParticleRenderMode != ParticleRenderMode.GpuPointSprite || particles.IsEmpty)
+        {
+            return;
+        }
+
+        if (materials is null)
+        {
+            throw new ArgumentNullException(nameof(materials), "GPU 粒子模式需要材质表。");
+        }
+
+        _gpuParticles.Render(particles, materials, camera, _scene, _emissive);
     }
 
     private bool ShouldUseComputeBloom(BloomSettings settings)

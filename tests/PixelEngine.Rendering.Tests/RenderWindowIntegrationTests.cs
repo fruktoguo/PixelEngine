@@ -1,4 +1,6 @@
 using PixelEngine.Rendering.Compute;
+using PixelEngine.Simulation;
+using PixelEngine.Simulation.Particles;
 using Silk.NET.OpenGL;
 using Xunit;
 
@@ -179,6 +181,45 @@ public sealed class RenderWindowIntegrationTests
 
         using RenderWindow window = CreateSmokeWindow("PixelEngine compute bloom smoke", RenderBackendPreference.Auto);
         RenderPipelineFrame(window, preferComputeLighting: true);
+    }
+
+    [Fact]
+    public void CanRenderFrameThroughGpuParticlesWhenExplicitlyEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = CreateSmokeWindow("PixelEngine GPU particle smoke", RenderBackendPreference.Auto);
+        using RenderPipeline pipeline = new(window, 16, 16);
+        RenderBuffer buffer = new(16, 16);
+        RenderAuxBuffers aux = new(16, 16);
+        MaterialTable materials = new(
+        [
+            new MaterialDef
+            {
+                Id = 0,
+                Name = "fire",
+                Type = CellType.Fire,
+                HeatCapacity = 1f,
+                TextureId = -1,
+                BaseColorBGRA = 0xFFFF8040u,
+                PropertyFlags = MaterialProperty.Emissive,
+            },
+        ]);
+        Particle[] particles =
+        [
+            new Particle { X = 4.5f, Y = 4.5f, Material = 0, ColorVariant = 128, Life = 16 },
+            new Particle { X = 11.5f, Y = 10.5f, Material = 0, ColorVariant = 220, Life = 16 },
+        ];
+
+        buffer.Pixels.Fill(0xFF101820u);
+        pipeline.Settings.ParticleRenderMode = ParticleRenderMode.GpuPointSprite;
+        pipeline.RenderFrame(buffer, aux, CameraState.OneToOne(0, 0, 16, 16), [], [], particles, materials);
+        window.SwapBuffers();
+
+        Assert.Equal(16, pipeline.Width);
     }
 
     [Fact]

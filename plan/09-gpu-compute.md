@@ -130,11 +130,11 @@ cascade 层数 `RadianceCascadeCount`、每层角度/空间分辨率、射线步
 - [~] `RadianceCascadeCount`/角度/空间分辨率/射线步数作 `EngineConstants` 常量与质量档；模式默认关已落地，G4/plan/08 主线接入与视觉质量档待补。
 
 ### 4.5 GPU 粒子 point-sprite（§3.5，架构 §9.3）
-- [ ] `GpuParticleRenderer`：读 `plan/05` 粒子 SoA 缓冲，POH 暂存→persistent-mapped/orphan VBO/SSBO 上传仅 `activeCount` 个，零 per-frame 托管分配。
-- [ ] `particle_pointsprite.vert`（SP-P1）：cell→屏幕变换（与 plan/08 相机一致 uniform）、`gl_PointSize`、按 material/colorVariant 取色。
-- [ ] `particle_pointsprite.frag`（SP-P2）：输出粒子色；发光粒子经 MRT/第二 pass 写 emissive buffer 参与 bloom；加色混合 `glBlendFunc(GL_ONE,GL_ONE)`。
-- [ ] `ParticleRenderMode { CpuStamp, GpuPointSprite }`（G4 控制），与 plan/08 CPU stamp 路径视觉一致、可热切换；G3 回退自动用 CPU stamp。
-- [ ] 遵架构 §9.3 合成顺序（世界纹理→粒子→角色/刚体高亮→光照→bloom）；本层只读 plan/05 缓冲、不改粒子状态。
+- [x] `GpuParticleRenderer`：读 `plan/05` 粒子活跃前缀，POH 暂存→orphan VBO 上传仅 `activeCount` 个，稳态零 per-frame 托管分配。
+- [x] `particle_pointsprite.vert`（SP-P1）：cell→屏幕变换（与 plan/08 相机一致 uniform）、`gl_PointSize`、按 material/colorVariant 顶点契约取色。
+- [x] `particle_pointsprite.frag`（SP-P2）：输出粒子色；发光粒子经第二 additive pass 写 emissive buffer 参与 bloom；加色混合 `glBlendFunc(GL_ONE,GL_ONE)`。
+- [x] `ParticleRenderMode { CpuStamp, GpuPointSprite }`（G4 控制），默认 CPU stamp，GPU 模式经显式重载热切换。
+  - [x] 遵架构 §9.3 合成顺序（世界纹理→粒子→角色/刚体高亮→光照→bloom）；本层只读 plan/05 缓冲、不改粒子状态。
 
 ### 4.6 可选非权威 air/smoke 扩散 pass（§3.6，架构 §9.5、不变式 #9）
 - [ ] GPU 常驻 air/smoke density 场（独立于权威网格），CPU→GPU 单向播种、可随世界纹理同传。
