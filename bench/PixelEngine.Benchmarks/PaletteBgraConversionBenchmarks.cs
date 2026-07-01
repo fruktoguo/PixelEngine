@@ -10,14 +10,22 @@ namespace PixelEngine.Benchmarks;
 public class PaletteBgraConversionBenchmarks
 {
     private readonly ushort[] _materials = new ushort[256 * 256];
-    private readonly uint[] _palette = new uint[256];
+    private uint[] _palette = [];
     private readonly uint[] _destination = new uint[256 * 256];
 
     /// <summary>
-    /// 创建 palette 转色 benchmark fixture。
+    /// palette 大小。16 触发 SSSE3 shuffle LUT 候选路径；256 覆盖通用 runtime material palette。
     /// </summary>
-    public PaletteBgraConversionBenchmarks()
+    [Params(16, 256)]
+    public int PaletteSize { get; set; }
+
+    /// <summary>
+    /// 初始化 palette 转色 benchmark fixture。
+    /// </summary>
+    [GlobalSetup]
+    public void Setup()
     {
+        _palette = new uint[PaletteSize];
         for (int i = 0; i < _palette.Length; i++)
         {
             _palette[i] = 0xFF000000u | (uint)(i * 0x00010203u);
@@ -25,7 +33,7 @@ public class PaletteBgraConversionBenchmarks
 
         for (int i = 0; i < _materials.Length; i++)
         {
-            _materials[i] = (ushort)(((i * 31) + (i >> 4)) & 255);
+            _materials[i] = (ushort)(((i * 31) + (i >> 4)) & (PaletteSize - 1));
         }
     }
 
@@ -36,6 +44,15 @@ public class PaletteBgraConversionBenchmarks
     public void ConvertScalar()
     {
         PaletteBgraConverter.ConvertScalar(_materials, _palette, _destination);
+    }
+
+    /// <summary>
+    /// 默认运行时 dispatcher；支持时可使用已验证的窄 SIMD 路径，否则回落标量。
+    /// </summary>
+    [Benchmark]
+    public void Convert()
+    {
+        PaletteBgraConverter.Convert(_materials, _palette, _destination);
     }
 
     /// <summary>

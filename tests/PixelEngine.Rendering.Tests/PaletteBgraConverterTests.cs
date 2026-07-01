@@ -4,11 +4,13 @@ namespace PixelEngine.Rendering.Tests;
 
 public sealed class PaletteBgraConverterTests
 {
-    [Fact]
-    public void ConvertMatchesScalarForFullVectorAndTail()
+    [Theory]
+    [InlineData(16)]
+    [InlineData(256)]
+    public void ConvertMatchesScalarForFullVectorAndTail(int paletteSize)
     {
-        ushort[] materials = new ushort[37];
-        uint[] palette = new uint[16];
+        ushort[] materials = new ushort[67];
+        uint[] palette = new uint[paletteSize];
         uint[] scalar = new uint[materials.Length];
         uint[] accelerated = new uint[materials.Length];
 
@@ -19,7 +21,26 @@ public sealed class PaletteBgraConverterTests
 
         for (int i = 0; i < materials.Length; i++)
         {
-            materials[i] = (ushort)((i * 7) & 15);
+            materials[i] = (ushort)(((i * 7) + (i >> 3)) & (paletteSize - 1));
+        }
+
+        PaletteBgraConverter.ConvertScalar(materials, palette, scalar);
+        PaletteBgraConverter.Convert(materials, palette, accelerated);
+
+        Assert.Equal(scalar, accelerated);
+    }
+
+    [Fact]
+    public void ConvertFallsBackToScalarForShortSixteenEntryPaletteRuns()
+    {
+        ushort[] materials = [0, 1, 15, 3, 9, 12, 7];
+        uint[] palette = new uint[16];
+        uint[] scalar = new uint[materials.Length];
+        uint[] accelerated = new uint[materials.Length];
+
+        for (int i = 0; i < palette.Length; i++)
+        {
+            palette[i] = 0xFF000000u | (uint)(i * 0x00050403u);
         }
 
         PaletteBgraConverter.ConvertScalar(materials, palette, scalar);
