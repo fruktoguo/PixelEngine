@@ -93,9 +93,22 @@ public sealed class TemperatureFieldTests
         simd.ConductStep(simdSource, materials.Hot);
         scalar.ConductStep(scalarSource, materials.Hot);
 
-        Assert.Equal(scalar.GetTemperature(32, 32), simd.GetTemperature(32, 32), 5);
-        Assert.Equal(scalar.GetTemperature(28, 32), simd.GetTemperature(28, 32), 5);
-        Assert.Equal(scalar.GetTemperature(36, 32), simd.GetTemperature(36, 32), 5);
+        for (int ty = 0; ty < TemperatureField.BlockSize; ty++)
+        {
+            for (int tx = 0; tx < TemperatureField.BlockSize; tx++)
+            {
+                int worldX = tx * simd.Downscale;
+                int worldY = ty * simd.Downscale;
+                Assert.Equal(scalar.GetTemperature(worldX, worldY), simd.GetTemperature(worldX, worldY), 5);
+            }
+        }
+
+        if (simd.SimdAvailable)
+        {
+            Assert.True(simd.LastConductStepVectorizedCellCount > 0);
+        }
+
+        Assert.Equal(0, scalar.LastConductStepVectorizedCellCount);
     }
 
     /// <summary>

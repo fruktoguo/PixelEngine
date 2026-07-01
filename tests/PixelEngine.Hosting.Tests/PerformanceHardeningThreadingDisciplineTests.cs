@@ -211,6 +211,28 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     }
 
     /// <summary>
+    /// 验证温度 5-point stencil 具备运行时 SIMD light-up 与 scalar fallback。
+    /// </summary>
+    [Fact]
+    public void TemperatureStencilUsesVectorizedFivePointPathWithScalarFallback()
+    {
+        string temperature = ReadProductionSource("src", "PixelEngine.Simulation", "TemperatureField.cs");
+
+        Assert.Contains("public bool SimdAvailable => EnableSimd", temperature, StringComparison.Ordinal);
+        Assert.Contains("StorageKind == TemperatureStorageKind.Float32", temperature, StringComparison.Ordinal);
+        Assert.Contains("Vector256.IsHardwareAccelerated", temperature, StringComparison.Ordinal);
+        Assert.Contains("Vector128.IsHardwareAccelerated", temperature, StringComparison.Ordinal);
+        Assert.Contains("private static int ConductInteriorRowIntrinsics", temperature, StringComparison.Ordinal);
+        Assert.Contains("Vector256<float> center", temperature, StringComparison.Ordinal);
+        Assert.Contains("Vector128<float> center", temperature, StringComparison.Ordinal);
+        Assert.Contains("LoadUnsafe", temperature, StringComparison.Ordinal);
+        Assert.Contains("StoreUnsafe", temperature, StringComparison.Ordinal);
+        Assert.Contains("MemoryMarshal.GetArrayDataReference", temperature, StringComparison.Ordinal);
+        Assert.Contains("ConductCellScalar(block, conductChanceRow, capacityRow", temperature, StringComparison.Ordinal);
+        Assert.Contains("enableSimd: false", ReadProductionSource("tests", "PixelEngine.Simulation.Tests", "TemperatureFieldTests.cs"), StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 sand/liquid movement 内层保持标量 gather/scatter，不引入 SIMD 路径。
     /// </summary>
     [Fact]
