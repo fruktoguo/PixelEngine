@@ -165,11 +165,11 @@ ImGui 集成与框架：
 - [x] CCL 连通块着色叠层（读 `plan/06` 连通块/轮廓）（§3.6）
 
 性能 HUD（架构 §17.1）：
-- [ ] `PerformanceHudPanel`：每相位耗时（particle/CA A–D/heat/physics/形状重建/render/upload/audio）（§3.7）
-- [ ] 活跃 chunk 数 / 活跃 cell 数 / 自由粒子数 / 刚体数 / 常驻 chunk 数 + 估算内存（§3.7、架构 §12.2）
-- [ ] 当前 sim 频率（60/30Hz）+ 时间膨胀/§4.3 降级级别显示（§3.7）
-- [ ] 用 ImPlot 绘制滚动耗时曲线与相位堆叠条（§3.7）
-- [ ] HUD 仅读 `plan/02` 诊断/计时器快照，零写入（§3.7）
+- [x] `PerformanceHudPanel`：每相位耗时（particle/CA A–D/heat/physics/形状重建/render/upload/audio）（§3.7）
+- [x] 活跃 chunk 数 / 活跃 cell 数 / 自由粒子数 / 刚体数 / 常驻 chunk 数 + 估算内存（§3.7、架构 §12.2）
+- [x] 当前 sim 频率（60/30Hz）+ 时间膨胀/§4.3 降级级别显示（§3.7）
+- [x] 用 ImPlot 绘制滚动耗时曲线与相位堆叠条（§3.7）
+- [x] HUD 仅读 `plan/02` 诊断/计时器快照，零写入（§3.7）
 
 材质 + 反应实时编辑器（架构 §17.4，#8）：
 - [ ] `MaterialReactionEditorPanel`：ImGui 表格编辑 `MaterialDef` 全字段（§3.8、架构 §7.3）
@@ -255,7 +255,7 @@ sim 控制 / 存读档 / 调参 / 模式：
 - [x] 节点 1：`feat(editor): 集成 Hexa.NET.ImGui(GL 后端+输入桥+docking+中文字体)`（§3.1–§3.3，实现清单「ImGui 集成与框架」全部）
 - [x] 节点 2：`feat(editor): 世界画刷调色板与世界检视器`（§3.4–§3.5）
 - [x] 节点 3：`feat(editor): 调试可视化叠层(架构 §17.2)`（§3.6）
-- [ ] 节点 4：`feat(editor): 性能 HUD(架构 §17.1)`（§3.7）
+- [x] 节点 4：`feat(editor): 性能 HUD(架构 §17.1)`（§3.7）
 - [ ] 节点 5：`feat(editor): 材质+反应实时编辑器与 id 稳定热重载(架构 §17.4)`（§3.8）
 - [ ] 节点 6：`feat(editor): 脚本 Inspector/资源浏览器/层级面板`（§3.9–§3.11）
 - [ ] 节点 7：`feat(editor): sim 控制条/存读档 UI/子系统调参面板`（§3.12–§3.14）
