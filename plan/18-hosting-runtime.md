@@ -79,7 +79,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [x] sim 降频(30Hz)而 render 不降:render 复用上帧世界纹理(必要时整图相机偏移,不插值像素)。[架构 §4.2]
 - [!] 各相位入口的调用绑定(Input/Time、Scripts、Residency、Particle 沉积/抛射、CA、Temperature、DirtySwap、Physics、BuildFrame、Present、Streaming)。阻塞:已绑定现有相位 0/1/2/3/4/5/6/7/8/9/10/11,相位 10 的 Editor.Render 叠加仍等待 Editor 后端。
 - [x] 过载降级编排:读诊断 → 五级降级决策 → 经 `EngineContext` 下发质量档位。[架构 §4.3,不变式 #6]
-- [!] 脚本服务后端聚合:`IWorldAccess`/`IParticleService`/`IPhysicsService`/`IMaterialRegistry`/`ICamera`/`IInput`/`IEventBus`/`IAudioService`/`ISceneService`/`IDiagnostics` 的实现注入(plan/11 契约的后端)。进展:cell/material/particle/solid/time/audio/input/camera/lighting/PhysicsSystem 后端已有真实注册,脚本可见刚体 façade 与角色移动已接入 phase 8 flush；阻塞:Diagnostics/GUI 仍未形成完整聚合。
+- [x] 脚本服务后端聚合:`IWorldAccess`/`IParticleService`/`IPhysicsService`/`IMaterialRegistry`/`ICamera`/`IInput`/`IEventBus`/`IAudioService`/`ISceneService`/`IDiagnostics` 的实现注入(plan/11 契约的后端)。cell/material/particle/solid/time/audio/input/camera/lighting/PhysicsSystem 后端已有真实注册，脚本可见刚体 façade 与角色移动已接入 phase 8 flush；Diagnostics 角色由 `EngineCounters` 注册，GUI/Editor 面板归 plan/12。
 - [x] 写操作延迟命令队列:脚本/玩法的世界写入入队,在正确相位 flush(配合 plan/11 相位安全模型)。
 - [!] `Scene` 模型 + `ISceneService`:加载/卸载/切换;从存档(plan/07)或程序化生成构建起始世界。阻塞:已完成来源校验与解析,`AttachCurrentSceneWorld` 可显式从 SaveDirectory 或 `.scene InitialSaveDirectory` 装配 live World/Simulation/粒子/Physics 后端并恢复 world seed/game time/刚体快照；程序化 world generator 仍未完成。
 - [x] 项目模型:内容根、materials/reactions、资产、起始场景引用;`EngineBuilder` 装载。
@@ -94,7 +94,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [x] 12 相位顺序与架构 §3.3 完全一致;用诊断计时器可见各相位耗时。
 - [x] sim 降到 30Hz 时画面仍 60fps 出帧、世界慢放、无 death spiral(注入人工过载验证)。
 - [!] 过载降级按五级顺序触发且可在编辑器观测/覆盖。阻塞:五级顺序与 Sim30Hz 已测试,Editor 覆盖 UI 需 plan/12。
-- [!] 脚本经 `EngineContext` 能读写世界/建刚体/播音效,写操作落在正确相位(配合 plan/11 测试)。进展:AudioService 与 PhysicsSystem 后端已注册,脚本可见 Physics 建/查/控/毁刚体命令与角色移动已在 phase 8 step 前 flush；阻塞:完整 Diagnostics/GUI 聚合仍未完成。
+- [x] 脚本经 `EngineContext` 能读写世界/建刚体/播音效,写操作落在正确相位(配合 plan/11 测试)。AudioService 与 PhysicsSystem 后端已注册，脚本可见 Physics 建/查/控/毁刚体命令与角色移动已在 phase 8 step 前 flush。
 - [!] Play/Edit/Step 切换正确:进入 Play 快照、退出回滚到编辑态,脚本 OnStart/OnDestroy 正确触发。阻塞:快照聚合与脚本生命周期需 plan/11/12。
 - [x] headless 模式可被 plan/14 测试/基准以确定步数驱动,无窗口依赖。
 - [!] 关闭时 native 资源与 ALC 正确释放,无泄漏(配合 plan/14 scripting 测试)。阻塞:ALC 与 native 子系统尚未落地。
@@ -111,5 +111,5 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 
 - [x] `feat(host): EngineBuilder/Engine/EngineContext 装配与生命周期`
 - [x] `feat(host): 12 相位主循环编排 + 固定步长不追帧 + sim 降频`
-- [!] `feat(host): 过载降级编排 + 脚本服务后端聚合`。阻塞:过载已落地,脚本刚体与角色移动后端及 phase 8 flush 已接通,但完整脚本服务后端仍需 Diagnostics/GUI 聚合。
+- [x] `feat(host): 过载降级编排 + 脚本服务后端聚合`。
 - [!] `feat(host): 场景/项目模型 + Play/Edit/Step 模式 + headless`。阻塞:模型/模式/headless/Physics phase 8 基础已落地,完整快照/脚本生命周期仍需后续计划。

@@ -34,6 +34,7 @@ public sealed class DemoRuntimeScriptingTests
         DemoRuntimeBehaviour behaviour = GetSingleBehaviour<DemoRuntimeBehaviour>(scriptScene);
         List<string> events = [];
         behaviour.Events = events;
+        _ = engine.AttachPhysics();
 
         ScriptSimulationContext scriptContext = engine.AttachScriptingFromServices();
         engine.RunHeadlessTicks(1);
@@ -43,12 +44,20 @@ public sealed class DemoRuntimeScriptingTests
         Assert.Same(scriptScene, current.ScriptScene);
         Assert.Same(scriptContext, engine.Context.GetService<IScriptContext>());
         Assert.Same(input, scriptContext.Input);
+        _ = scriptContext.Bodies;
+        _ = scriptContext.Character;
+        _ = scriptContext.Camera;
+        _ = scriptContext.Lighting;
+        _ = scriptContext.Events;
+        _ = scriptContext.Time;
+        Assert.Same(scriptScene, scriptContext.Scene);
         Assert.True(engine.Context.TryGetService(out ScriptCameraSynchronizer _));
         Assert.True(engine.Context.TryGetService(out ScriptLightingSynchronizer _));
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.Scripting));
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.WorldAccess));
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.ParticleService));
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.MaterialRegistry));
+        Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.PhysicsService));
         Assert.Equal(["start", "update"], events);
     }
 
