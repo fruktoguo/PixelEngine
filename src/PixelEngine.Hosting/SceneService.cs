@@ -74,7 +74,11 @@ public sealed class SceneService : ISceneService
             SceneSourceKind.Empty => new Scene(descriptor),
             SceneSourceKind.SaveDirectory => new Scene(
                 descriptor,
-                ResolveSaveDirectory(descriptor.Source!),
+                ResolveContentPath(descriptor.Source!),
+                worldConstructionPending: true),
+            SceneSourceKind.SceneFile => new Scene(
+                descriptor,
+                ResolveContentPath(descriptor.Source!),
                 worldConstructionPending: true),
             SceneSourceKind.Procedural => new Scene(
                 descriptor,
@@ -84,7 +88,7 @@ public sealed class SceneService : ISceneService
         };
     }
 
-    private string ResolveSaveDirectory(string source)
+    private string ResolveContentPath(string source)
     {
         string path = Path.IsPathRooted(source)
             ? source

@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Xunit;
@@ -25,6 +26,55 @@ public sealed class HostingProjectDisciplineTests
                     .Select(include => Path.GetFileNameWithoutExtension(include)!),
             ]);
         Assert.Empty(ReadIncludes(project, "PackageReference"));
+    }
+
+    /// <summary>
+    /// 验证 Demo 源码不绕过 Hosting/Scripting 公开入口访问内容或模拟实现。
+    /// </summary>
+    [Fact]
+    public void DemoSourcesDoNotBypassHostingFacade()
+    {
+        string root = FindRepositoryRoot();
+        string source = string.Join(
+            '\n',
+            Directory.EnumerateFiles(Path.Combine(root, "demo", "PixelEngine.Demo"), "*.cs").Select(File.ReadAllText));
+
+        Assert.DoesNotContain("using PixelEngine.Content", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("using PixelEngine.Simulation", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("EngineContentLoader", source, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Materials.Count", source, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Reactions.Count", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 Demo 可见内容包 API 不泄漏 Content / Simulation 实现类型。
+    /// </summary>
+    [Fact]
+    public void EngineContentPackagePublicApiDoesNotExposeImplementationAssemblies()
+    {
+        foreach (MemberInfo member in typeof(EngineContentPackage).GetMembers(
+            BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
+        {
+            if (member is MethodInfo method)
+            {
+                AssertAllowedPublicType(method.ReturnType, member.Name);
+                foreach (ParameterInfo parameter in method.GetParameters())
+                {
+                    AssertAllowedPublicType(parameter.ParameterType, member.Name);
+                }
+            }
+            else if (member is PropertyInfo property)
+            {
+                AssertAllowedPublicType(property.PropertyType, member.Name);
+            }
+            else if (member is ConstructorInfo constructor)
+            {
+                foreach (ParameterInfo parameter in constructor.GetParameters())
+                {
+                    AssertAllowedPublicType(parameter.ParameterType, member.Name);
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -118,6 +168,30 @@ public sealed class HostingProjectDisciplineTests
         }
 
         return delta;
+    }
+
+    private static void AssertAllowedPublicType(Type type, string memberName)
+    {
+        Type publicType = UnwrapType(type);
+        Assert.False(
+            publicType.Namespace?.StartsWith("PixelEngine.Simulation", StringComparison.Ordinal) == true ||
+            publicType.Namespace?.StartsWith("PixelEngine.Content", StringComparison.Ordinal) == true,
+            $"{memberName} 泄漏了实现类型 {publicType.FullName}。");
+        foreach (Type argument in publicType.GenericTypeArguments)
+        {
+            AssertAllowedPublicType(argument, memberName);
+        }
+    }
+
+    private static Type UnwrapType(Type type)
+    {
+        Type current = type;
+        while (current.IsByRef || current.IsPointer || current.IsArray)
+        {
+            current = current.GetElementType()!;
+        }
+
+        return current;
     }
 
     private static string[] ReadIncludes(XDocument project, string elementName)

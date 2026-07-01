@@ -45,6 +45,16 @@ public static class DemoProgram
 
         EngineProject project = BuildProject(options);
         using Engine engine = BuildEngine(options, project);
+        if (engine.HasContentPackage())
+        {
+            EngineContentPackage package = engine.LoadContentPackage();
+            Console.WriteLine($"内容包已加载：{package.MaterialCount} 个材质，{package.ReactionCount} 条反应。");
+        }
+        else
+        {
+            Console.WriteLine("内容包尚未就绪：缺少 materials.json 或 reactions.json，本次仅执行宿主启动冒烟。");
+        }
+
         engine.RegisterScriptAssembly(assembly);
         Console.WriteLine(options.HotReloadEnabled
             ? "脚本程序集已注册；热重载等待脚本宿主装配。"
@@ -109,12 +119,14 @@ public static class DemoProgram
         }
 
         string sceneName = Path.GetFileNameWithoutExtension(source);
-        return Directory.Exists(source) || File.Exists(source)
+        return Directory.Exists(source)
             ? new SceneDescriptor(sceneName, SceneSourceKind.SaveDirectory, source)
-            : new SceneDescriptor(
-                DemoStartupOptions.DefaultSceneName,
-                SceneSourceKind.Procedural,
-                DemoStartupOptions.DefaultProceduralSceneKey);
+            : File.Exists(source)
+                ? new SceneDescriptor(sceneName, SceneSourceKind.SceneFile, source)
+                : new SceneDescriptor(
+                    DemoStartupOptions.DefaultSceneName,
+                    SceneSourceKind.Procedural,
+                    DemoStartupOptions.DefaultProceduralSceneKey);
     }
 
     private static string WriteCrashLog(Exception exception, string? logDirectory)

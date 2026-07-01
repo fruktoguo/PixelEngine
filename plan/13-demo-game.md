@@ -114,14 +114,14 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 
 | 能力（Demo 需求） | 期望公开 API（签名意向） | 所属 plan | 状态 |
 |---|---|---|---|
-| 创建引擎 / 配置 / 运行主循环 | `EngineBuilder`、`EngineOptions`、`Engine.Run()`、`Engine.Shutdown()` | Hosting（plan/00 §5） | 已实现：Demo 可经 Hosting 构造 Engine 并 headless 冒烟运行；完整子系统一键装配仍需 Hosting API |
+| 创建引擎 / 配置 / 运行主循环 / 内容包加载 | `EngineBuilder`、`EngineOptions`、`Engine.Run()`、`Engine.Shutdown()`、`Engine.LoadContentPackage()` | Hosting（plan/00 §5） | 部分实现：Demo 可经 Hosting 构造 Engine、加载已存在的 materials/reactions 内容包并 headless 冒烟运行；完整子系统一键装配仍需 Hosting API |
 | 子系统访问门面 | `EngineContext`（暴露 `World/Camera/Input/Particles/Lighting/Audio/Physics/Content/Diagnostics/Gui`） | Hosting（plan/00 §5） | 需引擎补 API |
 | 注册 Demo 脚本程序集 / 实例化 Behaviour | `Engine.RegisterScriptAssembly(...)`、`Behaviour` 生命周期（`OnStart/OnUpdate/OnGui/OnDestroy`） | plan/11 / Hosting | 部分实现：`Engine.RegisterScriptAssembly(...)` 与 Hosting registry 已落地；脚本宿主发现并实例化 Behaviour 仍需装配 API |
 | 脚本服务句柄注入 | `Behaviour.World/Input/Camera/...` 属性 | plan/11 | 已规划（plan/11 世界脚本接口） |
-| 场景加载 / 保存 | `Engine.LoadScene(path)`、`.scene` 格式 | plan/07（序列化）+ plan/12（编辑器编排） | 需引擎补 API：当前仅有 `SceneDescriptor` / `ISceneService.SwitchTo` 描述切换，未实际物化 `.scene` 或 save directory |
+| 场景加载 / 保存 | `Engine.LoadScene(name)`、`SceneSourceKind.SceneFile`、`.scene` 格式 | plan/07（序列化）+ plan/12（编辑器编排） | 部分实现：Hosting 可切换已注册场景并区分 `.scene` 文件来源；仍未实际物化 `.scene`、save directory 或实体/脚本场景 |
 | 输入查询 | `IInput`（`IsDown/Pressed/Released(Key)`、`MousePosition`、`MouseButton`、`Wheel`） | plan/08（Silk.NET 输入）/ Hosting | 需引擎补 API（输入服务的脚本可见接口归属待定） |
 | 读写 cell（笔刷 / 关卡生成 / 危险采样） | `IWorld.GetCell/SetCell`、`FillRect/FillCircle/Stamp` | plan/11（世界脚本接口） | 已规划 |
-| 材质按名取 id | `IContent.GetMaterialId(string name)`、`TryGetMaterial(...)` | plan/04（Content） | 已规划 |
+| 材质按名取 id | `EngineContentPackage.ResolveMaterial/TryResolveMaterial(...)`、`IMaterialQuery.Resolve/TryResolve(...)` | plan/04（Content）+ Hosting/plan/11 | 部分实现：Hosting 内容包门面与脚本材质查询接口已可用，public API 不泄漏 Content/Simulation 实现类型；完整 Demo 内容资产仍未交付 |
 | 角色控制器（kinematic AABB vs 像素） | `IPhysics.CreateCharacterBody(aabb)`、`body.Move(delta) → CollisionResult{Grounded,OnWall,OnCeiling,Normal}` | plan/06（§8.5 角色控制器） | 已规划 |
 | 角色站在刚体 / 沙上 | 角色控制器采样 CA 权威场（含 owned-by-body stamp 像素） | plan/06 + 架构 §8.3 | 已规划（依赖双向耦合不变式） |
 | 角色推动 dynamic 刚体 | `IPhysics.ApplyImpulseAtContact(...)` 或角色控制器内建推力 | plan/06 | 需引擎补 API（kinematic→dynamic 推力交互） |
@@ -142,7 +142,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 
 工程与启动
 - [x] 建 `demo/PixelEngine.Demo/PixelEngine.Demo.csproj`（`Exe`，仅 `ProjectReference` 到 `PixelEngine.Hosting` 与 `PixelEngine.Scripting`，继承 `Directory.Build.props`，无新 NuGet）。〔plan/00 §5〕
-- [!] `Program.cs`：已用 `EngineBuilder`/`EngineProject` 构造 Engine，支持 `--editor/--headless/--scene/--content/--ticks/--no-hot-reload/--log-dir`，注册 Demo 脚本程序集并可 headless 冒烟；阻塞：Hosting 尚无内容包加载入口、`.scene` 实际物化入口、脚本宿主发现/实例化 Behaviour 装配入口、完整子系统一键装配 API，不能假装完成加载内容包与 `lava-mine.scene`。〔Hosting；§3.1〕
+- [!] `Program.cs`：已用 `EngineBuilder`/`EngineProject` 构造 Engine，支持 `--editor/--headless/--scene/--content/--ticks/--no-hot-reload/--log-dir`；已通过 `Engine.LoadContentPackage()` 在 materials/reactions 存在时加载内容包，已区分 save directory 与 `.scene` 来源，注册 Demo 脚本程序集并可 headless 冒烟；阻塞：缺少完整 Demo 内容资产、Hosting 尚无 `.scene` / save directory 实际世界与实体物化入口、脚本宿主发现/实例化 Behaviour 装配入口、完整子系统一键装配 API，不能假装完成 `lava-mine.scene` 加载。〔Hosting；§3.1〕
 - [x] CI 依赖方向断言：Demo 无对引擎内部 assembly 的越层 / 反向引用。〔plan/14；§2〕
 
 玩家与相机

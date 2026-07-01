@@ -1,6 +1,8 @@
 using PixelEngine.Core.Time;
 using PixelEngine.Core;
 using PixelEngine.Editor;
+using PixelEngine.Scripting;
+using PixelEngine.Simulation;
 using System.Reflection;
 using Xunit;
 
@@ -194,6 +196,45 @@ public sealed class EngineExecutionModeTests
         Assert.Equal([assembly], registry.Assemblies);
     }
 
+    /// <summary>
+    /// 验证 Engine 可从 ContentRoot 加载材质内容包并注册材质/反应服务。
+    /// </summary>
+    [Fact]
+    public void EngineLoadsContentPackageAndRegistersMaterialServices()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-content-{Guid.NewGuid():N}");
+        try
+        {
+            _ = Directory.CreateDirectory(contentRoot);
+            File.WriteAllText(Path.Combine(contentRoot, EngineContentLoader.MaterialsFileName), MaterialsJson);
+            File.WriteAllText(Path.Combine(contentRoot, EngineContentLoader.ReactionsFileName), ReactionsJson);
+            using Engine engine = new EngineBuilder()
+                .WithWorkerCount(1)
+                .WithContentRoot(contentRoot)
+                .Build();
+
+            EngineContentPackage package = engine.LoadContentPackage();
+
+            Assert.True(package.TryResolveMaterial("empty", out MaterialId emptyId));
+            Assert.Equal(0, emptyId.Value);
+            Assert.Equal(2, package.MaterialCount);
+            Assert.Equal(0, package.ReactionCount);
+            Assert.Same(package.Materials, engine.Context.GetService<IMaterialQuery>());
+            Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.MaterialRegistry));
+            Assert.Same(package.Materials, engine.Context.GetService<EngineMaterialRegistry>());
+            Assert.NotNull(engine.Context.GetService<MaterialTable>());
+            Assert.NotNull(engine.Context.GetService<ReactionTable>());
+            Assert.Same(package, engine.Context.GetService<EngineContentPackage>());
+        }
+        finally
+        {
+            if (Directory.Exists(contentRoot))
+            {
+                Directory.Delete(contentRoot, recursive: true);
+            }
+        }
+    }
+
     private static void RegisterAllPhases(EngineBuilder builder, List<EnginePhase> phases)
     {
         for (int i = 0; i < 12; i++)
@@ -219,4 +260,15 @@ public sealed class EngineExecutionModeTests
             return new SaveLoadOperationResult(true, "restored", null, null);
         }
     }
+
+    private const string MaterialsJson = """
+    {
+      "materials": [
+        { "name": "empty", "type": "Empty", "heatCapacity": 1 },
+        { "name": "stone", "type": "Solid", "density": 200, "heatCapacity": 1 }
+      ]
+    }
+    """;
+
+    private const string ReactionsJson = """{ "reactions": [] }""";
 }

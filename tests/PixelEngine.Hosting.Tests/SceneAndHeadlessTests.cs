@@ -49,16 +49,22 @@ public sealed class SceneAndHeadlessTests
             .WithWorkerCount(1)
             .AddScene(new SceneDescriptor("a"))
             .AddScene(new SceneDescriptor("b", SceneSourceKind.SaveDirectory, "saves/b"))
+            .AddScene(new SceneDescriptor("c", SceneSourceKind.SceneFile, "scenes/c.scene"))
             .Build();
         ISceneService scenes = engine.Context.GetService<ISceneService>();
 
-        Scene loaded = scenes.SwitchTo("b");
+        Scene loaded = engine.LoadScene("b");
 
         Assert.Same(loaded, scenes.Current);
         Assert.Equal(SceneSourceKind.SaveDirectory, loaded.Descriptor.SourceKind);
         Assert.Equal("saves/b", loaded.Descriptor.Source);
         Assert.Equal(Path.GetFullPath(Path.Combine(engine.Context.Options.ContentRoot, "saves/b")), loaded.ResolvedSource);
         Assert.True(loaded.WorldConstructionPending);
+
+        Scene sceneFile = engine.LoadScene("c");
+        Assert.Equal(SceneSourceKind.SceneFile, sceneFile.Descriptor.SourceKind);
+        Assert.Equal(Path.GetFullPath(Path.Combine(engine.Context.Options.ContentRoot, "scenes/c.scene")), sceneFile.ResolvedSource);
+        Assert.True(sceneFile.WorldConstructionPending);
 
         scenes.UnloadCurrent();
         Assert.Null(scenes.Current);
@@ -73,6 +79,7 @@ public sealed class SceneAndHeadlessTests
     {
         _ = Assert.Throws<ArgumentException>(() => new SceneDescriptor("empty", SceneSourceKind.Empty, "unexpected"));
         _ = Assert.Throws<ArgumentException>(() => new SceneDescriptor("save", SceneSourceKind.SaveDirectory));
+        _ = Assert.Throws<ArgumentException>(() => new SceneDescriptor("scene", SceneSourceKind.SceneFile));
         _ = Assert.Throws<ArgumentException>(() => new SceneDescriptor("proc", SceneSourceKind.Procedural));
     }
 

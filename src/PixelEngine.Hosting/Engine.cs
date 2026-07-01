@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
+using PixelEngine.Scripting;
 
 namespace PixelEngine.Hosting;
 
@@ -111,6 +112,43 @@ public sealed class Engine : IDisposable
     {
         ThrowIfShutdown();
         Context.GetService<ScriptAssemblyRegistry>().Register(assembly);
+    }
+
+    /// <summary>
+    /// 从当前 ContentRoot 加载材质与反应内容包，并注册材质/反应运行时服务。
+    /// </summary>
+    /// <returns>加载后的内容包。</returns>
+    public EngineContentPackage LoadContentPackage()
+    {
+        ThrowIfShutdown();
+        EngineContentPackage package = EngineContentLoader.LoadMaterialPackage(Context.Options.ContentRoot);
+        Context.RegisterService(package);
+        Context.RegisterService<IMaterialQuery>(EngineServiceRole.MaterialRegistry, package.MaterialRegistry);
+        Context.RegisterService(package.MaterialRegistry);
+        Context.RegisterService(package.MaterialTable);
+        Context.RegisterService(package.ReactionTable);
+        return package;
+    }
+
+    /// <summary>
+    /// 判断当前 ContentRoot 是否存在可加载的材质/反应内容包。
+    /// </summary>
+    /// <returns>materials.json 与 reactions.json 都存在时返回 true。</returns>
+    public bool HasContentPackage()
+    {
+        ThrowIfShutdown();
+        return EngineContentLoader.HasMaterialPackage(Context.Options.ContentRoot);
+    }
+
+    /// <summary>
+    /// 切换到已注册场景描述；实际世界构建由对应场景后端在后续装配中完成。
+    /// </summary>
+    /// <param name="name">场景稳定名称。</param>
+    /// <returns>当前场景实例。</returns>
+    public Scene LoadScene(string name)
+    {
+        ThrowIfShutdown();
+        return Context.GetService<ISceneService>().SwitchTo(name);
     }
 
     /// <summary>

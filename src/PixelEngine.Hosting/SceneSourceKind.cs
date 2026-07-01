@@ -16,6 +16,11 @@ public enum SceneSourceKind
     SaveDirectory,
 
     /// <summary>
+    /// 从编辑器序列化的 .scene 文件加载。
+    /// </summary>
+    SceneFile,
+
+    /// <summary>
     /// 由宿主注册的程序化生成器构建。
     /// </summary>
     Procedural,
