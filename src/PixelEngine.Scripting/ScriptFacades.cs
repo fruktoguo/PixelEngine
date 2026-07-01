@@ -46,6 +46,11 @@ public interface IScriptContext
     IInputApi Input { get; }
 
     /// <summary>
+    /// 光照与 fog-of-war 脚本请求能力。
+    /// </summary>
+    ILightingApi Lighting { get; }
+
+    /// <summary>
     /// 脚本事件订阅能力；事件在相位 1 分发。
     /// </summary>
     IEventBus Events { get; }
@@ -394,6 +399,60 @@ public interface IInputApi
     /// <param name="button">鼠标按键。</param>
     /// <returns>若本帧产生释放边沿则返回 true，否则返回 false。</returns>
     bool WasMouseReleased(MouseButton button);
+}
+
+/// <summary>
+/// 提供脚本可用的光照与 fog-of-war 请求 API。
+/// </summary>
+public interface ILightingApi
+{
+    /// <summary>
+    /// 请求在指定世界坐标周围揭示 fog-of-war。
+    /// </summary>
+    /// <param name="x">世界 X 坐标。</param>
+    /// <param name="y">世界 Y 坐标。</param>
+    /// <param name="radius">揭示半径，单位 cell。</param>
+    /// <param name="alpha">揭示强度。</param>
+    void RevealAround(float x, float y, float radius, byte alpha = byte.MaxValue);
+
+    /// <summary>
+    /// 添加一盏当前帧点光源；Hosting 在渲染相位消费后可清空。
+    /// </summary>
+    /// <param name="x">世界 X 坐标。</param>
+    /// <param name="y">世界 Y 坐标。</param>
+    /// <param name="radius">光照半径，单位 cell。</param>
+    /// <param name="colorBgra">BGRA 颜色。</param>
+    /// <param name="intensity">光照强度。</param>
+    void AddPointLight(float x, float y, float radius, uint colorBgra, float intensity = 1f);
+
+    /// <summary>
+    /// 当前待消费点光源数量。
+    /// </summary>
+    int PointLightCount { get; }
+
+    /// <summary>
+    /// 当前待消费 fog reveal 请求数量。
+    /// </summary>
+    int RevealCount { get; }
+
+    /// <summary>
+    /// 按索引读取点光源。
+    /// </summary>
+    /// <param name="index">点光源索引。</param>
+    /// <returns>点光源快照。</returns>
+    ScriptPointLight GetPointLight(int index);
+
+    /// <summary>
+    /// 按索引读取 fog reveal 请求。
+    /// </summary>
+    /// <param name="index">请求索引。</param>
+    /// <returns>fog reveal 请求。</returns>
+    FogRevealRequest GetReveal(int index);
+
+    /// <summary>
+    /// 清空瞬时点光源。
+    /// </summary>
+    void ClearPointLights();
 }
 
 /// <summary>
