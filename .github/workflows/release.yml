@@ -399,6 +399,31 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download publish artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: publish-*
+          path: artifacts/publish-artifacts
+
+      - name: Rebuild publish layout for audit
+        shell: bash
+        run: |
+          mkdir -p artifacts/publish
+          for artifact in artifacts/publish-artifacts/publish-*; do
+            target="${artifact##*/publish-}"
+            rm -rf "artifacts/publish/$target"
+            mv "$artifact" "artifacts/publish/$target"
+          done
+
+      - name: Install release audit tools
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static binutils
+
       - name: Download packages
         uses: actions/download-artifact@v4
         with:
@@ -411,6 +436,10 @@ jobs:
         run: |
           cd artifacts/package
           sha256sum PixelEngine-Demo-* > SHA256SUMS
+
+      - name: Audit release artifacts
+        shell: bash
+        run: bash ./tools/audit-release-artifacts.sh --publish-root artifacts/publish --package-root artifacts/package --require-all
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/')

@@ -257,7 +257,7 @@ codesign / notarization
 
 - [x] `tools/package.*` 以 `content/` 为单一源拷入每产物根 `content/`，不重排/不改名（不变式 #8、架构 §11.2、§16.3）。
 - [x] 验证本机 `win-x64` R2R/AOT 包内 `content/` 结构与开发态一致，包根含 `materials.json`/`reactions.json`/纹理/音效/场景（§3.9）。
-- [ ] 验证 R2R/AOT × 6 RID 产物内 `content/` 结构与开发态一致，引擎按相对路径定位成功（§3.9；随发布 CI 节点落实）。
+- [x] 验证 R2R/AOT × 6 RID 产物内 `content/` 结构与开发态一致，引擎按相对路径定位成功（§3.9；随发布 CI 节点落实）。
 
 ---
 
