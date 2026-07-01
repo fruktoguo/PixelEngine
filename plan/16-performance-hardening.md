@@ -123,7 +123,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] 基准对比「满屏静止」vs「满屏激活」帧时间，前者 sim 成本 ≈ 0。[plan/14 · §5.4/风险 R1]
 - [x] dirty rect 双缓冲（working/current）、cell 单缓冲。[plan/03 · §5.4/不变式 #3]
 - [x] KeepAlive 跨界正确传播且不致 rect 收不回（无永久唤醒）。[plan/03 · §5.5/风险 R2]
-- [ ] §17.2 dirty-rect 叠层目视确认 sleeping 区不再迭代。[plan/12 · §17.2]
+- [x] §17.2 dirty-rect 叠层目视确认 sleeping 区不再迭代。[plan/12 · §17.2]
 
 ### 4.9 过载降级链（绝不追帧）
 - [x] 一级：降低/关闭全分辨率热场（每 N 帧或仅接触式火传播）。[plan/04 · §4.3]
