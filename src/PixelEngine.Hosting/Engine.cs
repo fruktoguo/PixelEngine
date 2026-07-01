@@ -1111,9 +1111,17 @@ public sealed class Engine : IDisposable
         ulong worldSeed = 0,
         uint frameIndex = 0)
     {
+        ConfigureMaterialRuntimeBehaviours(materials, particles, temperature, out IReactionExecutor? reactionExecutor, out ILifetimeSink? lifetimeSink);
         MaterialPropsTable props = new(materials.Hot);
         CellGrid grid = new(chunks, props);
-        SimulationKernel kernel = new(chunks, props, worldSeed: worldSeed, profiler: Context.Profiler);
+        SimulationKernel kernel = new(
+            chunks,
+            props,
+            worldSeed: worldSeed,
+            reactionExecutor: reactionExecutor,
+            lifetimeSink: lifetimeSink,
+            customUpdateExecutor: materials,
+            profiler: Context.Profiler);
         if (frameIndex != 0)
         {
             kernel.RestoreFrameState(frameIndex, CurrentParityFromGameTime(frameIndex));
@@ -1133,6 +1141,53 @@ public sealed class Engine : IDisposable
         Context.RegisterService(EngineServiceRole.ParticleService, particles);
         Context.RegisterService(EngineServiceRole.MaterialRegistry, materials);
         return driver;
+    }
+
+    private void ConfigureMaterialRuntimeBehaviours(
+        MaterialTable materials,
+        ParticleSystem particles,
+        TemperatureField temperature,
+        out IReactionExecutor? reactionExecutor,
+        out ILifetimeSink? lifetimeSink)
+    {
+        SimulationReactionSideEffects sideEffects = new(temperature, particles, materials);
+        Context.RegisterService<IReactionSideEffectSink>(sideEffects);
+        Context.RegisterService(sideEffects);
+
+        reactionExecutor = null;
+        if (Context.TryGetService(out ReactionTable reactions))
+        {
+            ReactionEngine engine = new(materials, reactions, sideEffects);
+            Context.RegisterService<IReactionExecutor>(engine);
+            Context.RegisterService(engine);
+            reactionExecutor = engine;
+        }
+
+        lifetimeSink = null;
+        if (materials.TryGetId("fire", out _) && TryResolveBurnoutMaterial(materials, out ushort burnoutMaterial))
+        {
+            BurningCellSystem burning = new(materials, burnoutMaterial, sideEffects);
+            materials.RegisterCustomUpdate("fire", burning.UpdateBurning);
+            Context.RegisterService<ILifetimeSink>(burning);
+            Context.RegisterService(burning);
+            lifetimeSink = burning;
+        }
+    }
+
+    private static bool TryResolveBurnoutMaterial(MaterialTable materials, out ushort burnoutMaterial)
+    {
+        if (materials.TryGetId("ash", out burnoutMaterial))
+        {
+            return true;
+        }
+
+        if (materials.TryGetId("smoke", out burnoutMaterial))
+        {
+            return true;
+        }
+
+        burnoutMaterial = 0;
+        return materials.Count != 0;
     }
 
     private static byte CurrentParityFromGameTime(long gameTimeTicks)
