@@ -94,6 +94,26 @@ public sealed class EditorApp : IDisposable
     /// <param name="frameIndex">当前帧索引。</param>
     public void DrawFrame(float deltaSeconds, int width, int height, EngineCounters counters, long frameIndex)
     {
+        DrawFrame(deltaSeconds, width, height, counters, frameIndex, EditorPerformanceSnapshot.FromCounters(counters));
+    }
+
+    /// <summary>
+    /// 绘制一帧 Editor UI。
+    /// </summary>
+    /// <param name="deltaSeconds">帧间隔秒数。</param>
+    /// <param name="width">framebuffer 宽度。</param>
+    /// <param name="height">framebuffer 高度。</param>
+    /// <param name="counters">诊断计数器。</param>
+    /// <param name="frameIndex">当前帧索引。</param>
+    /// <param name="performance">性能 HUD 只读诊断快照。</param>
+    public void DrawFrame(
+        float deltaSeconds,
+        int width,
+        int height,
+        EngineCounters counters,
+        long frameIndex,
+        EditorPerformanceSnapshot performance)
+    {
         ArgumentNullException.ThrowIfNull(counters);
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!IsRunning)
@@ -103,7 +123,7 @@ public sealed class EditorApp : IDisposable
 
         _controller.NewFrame(deltaSeconds, width, height);
         _controller.DrawDockSpace();
-        EditorContext context = new(counters, Selection, frameIndex);
+        EditorContext context = new(counters, Selection, frameIndex, performance);
         for (int i = 0; i < _panels.Count; i++)
         {
             IEditorPanel panel = _panels[i];

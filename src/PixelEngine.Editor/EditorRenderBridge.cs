@@ -13,15 +13,24 @@ public sealed class EditorRenderBridge : IDisposable
     private readonly RenderPipeline _pipeline;
     private readonly EditorApp _editor;
     private readonly EngineCounters _counters;
+    private readonly FrameProfiler? _profiler;
+    private readonly Func<EditorRuntimeDiagnostics>? _runtimeDiagnostics;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private double _previousSeconds;
     private bool _disposed;
 
-    private EditorRenderBridge(RenderPipeline pipeline, EditorApp editor, EngineCounters counters)
+    private EditorRenderBridge(
+        RenderPipeline pipeline,
+        EditorApp editor,
+        EngineCounters counters,
+        FrameProfiler? profiler,
+        Func<EditorRuntimeDiagnostics>? runtimeDiagnostics)
     {
         _pipeline = pipeline;
         _editor = editor;
         _counters = counters;
+        _profiler = profiler;
+        _runtimeDiagnostics = runtimeDiagnostics;
         _previousSeconds = _clock.Elapsed.TotalSeconds;
         _pipeline.BeforePresentUi += OnBeforePresentUi;
     }
@@ -35,10 +44,23 @@ public sealed class EditorRenderBridge : IDisposable
     /// <returns>已绑定桥接器；禁用时为 null。</returns>
     public static EditorRenderBridge? AttachIfEnabled(RenderPipeline pipeline, EditorApp editor, EngineCounters counters)
     {
+        return AttachIfEnabled(pipeline, editor, counters, null, null);
+    }
+
+    /// <summary>
+    /// 若 Editor 启用，则绑定到渲染管线，并把 profiler/运行态快照传给 HUD。
+    /// </summary>
+    public static EditorRenderBridge? AttachIfEnabled(
+        RenderPipeline pipeline,
+        EditorApp editor,
+        EngineCounters counters,
+        FrameProfiler? profiler,
+        Func<EditorRuntimeDiagnostics>? runtimeDiagnostics)
+    {
         ArgumentNullException.ThrowIfNull(pipeline);
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(counters);
-        return editor.Options.Enabled ? new EditorRenderBridge(pipeline, editor, counters) : null;
+        return editor.Options.Enabled ? new EditorRenderBridge(pipeline, editor, counters, profiler, runtimeDiagnostics) : null;
     }
 
     /// <summary>
@@ -70,6 +92,10 @@ public sealed class EditorRenderBridge : IDisposable
         double now = _clock.Elapsed.TotalSeconds;
         float deltaSeconds = (float)Math.Max(0.0, now - _previousSeconds);
         _previousSeconds = now;
-        _editor.DrawFrame(deltaSeconds, _pipeline.Width, _pipeline.Height, _counters, ++FrameIndex);
+        EditorPerformanceSnapshot performance = EditorPerformanceSnapshot.Create(
+            _counters,
+            _profiler,
+            _runtimeDiagnostics?.Invoke() ?? EditorRuntimeDiagnostics.FullQuality);
+        _editor.DrawFrame(deltaSeconds, _pipeline.Width, _pipeline.Height, _counters, ++FrameIndex, performance);
     }
 }

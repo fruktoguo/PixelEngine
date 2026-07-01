@@ -1,5 +1,6 @@
 using Hexa.NET.ImGui;
 using Hexa.NET.ImGui.Backends.OpenGL3;
+using Hexa.NET.ImPlot;
 using System.Numerics;
 
 namespace PixelEngine.Editor;
@@ -12,6 +13,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
     private readonly EditorDockSpace _dockSpace = new();
     private readonly EditorFontManager _fontManager = new();
     private ImGuiContextPtr _context;
+    private ImPlotContextPtr _plotContext;
     private string _layoutPath = string.Empty;
     private bool _initialized;
 
@@ -40,8 +42,10 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
         }
 
         _context = ImGui.CreateContext();
+        _plotContext = ImPlot.CreateContext();
         _layoutPath = options.LayoutPath;
         ImGui.SetCurrentContext(_context);
+        ImPlot.SetCurrentContext(_plotContext);
         ImGuiIOPtr io = ImGui.GetIO();
         io.ConfigFlags |= EditorDockSpace.BuildConfigFlags(options.EnableMultiViewport);
         AddConfiguredFont(io, options);
@@ -151,6 +155,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
         }
 
         ImGuiImplOpenGL3.Shutdown();
+        ImPlot.DestroyContext(_plotContext);
         if (!string.IsNullOrWhiteSpace(_layoutPath))
         {
             ImGui.SaveIniSettingsToDisk(_layoutPath);
@@ -159,6 +164,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
         ImGui.DestroyContext(_context);
         _fontManager.Dispose();
         _context = default;
+        _plotContext = default;
         _layoutPath = string.Empty;
         _initialized = false;
     }
