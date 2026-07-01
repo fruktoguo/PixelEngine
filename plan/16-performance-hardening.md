@@ -157,7 +157,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 
 - [ ] **SoA 全覆盖**：所有 sim 热数据 SoA，per-cell 字节预算对账通过，AoS 仅工具路径，颜色不入 cell。[§7.1/不变式 #7]
 - [ ] **稳态零分配**：CA/粒子/render buffer/反应/温度/序列化六条热路径 `MemoryDiagnoser` 全报 `0 B`；热路径静态核查无 LINQ/闭包/装箱/迭代器。[§12.4/AGENTS §3]
-- [ ] **多线程齐全**：CA checkerboard、Box2D task 桥、render buffer、CCL/形状重建、粒子积分、温度 stencil、序列化字节准备七项均经持久线程池并行；无每帧 `Parallel.For`；活跃任务少时单线程回退生效。[§5.7/§12.7/§14.2/风险 R7]
+- [x] **多线程齐全**：CA checkerboard、Box2D task 桥、render buffer、CCL/形状重建、粒子积分、温度 stencil、序列化字节准备七项均经持久线程池并行；无每帧 `Parallel.For`；活跃任务少时单线程回退生效。[§5.7/§12.7/§14.2/风险 R7]
 - [ ] **SIMD 到位**：温度 stencil/色混合/bulk fill 等向量化且有 scalar fallback、运行时 light-up；sand movement 确认未向量化；AVX-512 gate 实测无降频净损。[§12.5/§2 挑战三]
 - [ ] **bounds-check 消除**：热方法反汇编无 `RNGCHKFAIL`、向量化 pass 见 ymm/zmm；`[DisassemblyDiagnoser]` 守门基线建立。[§12.6/§17.3]
 - [ ] **GC 定档**：Workstation vs Server 实测定档完成；压测下 Gen0 不增长、无可感知停顿；跨界缓冲零拷贝、池化覆盖短命对象。[§12.4]
