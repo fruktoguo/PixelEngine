@@ -67,7 +67,8 @@ internal static class ChunkUpdater
                 bool preferNegative = ((parityBit ^ (byte)(ly & 1)) & CellFlags.Parity) == 0;
                 int activeX = wx;
                 int activeY = wy;
-                bool moved = materials.TypeOf(material) switch
+                CellType materialType = materials.TypeOf(material);
+                bool moved = materialType switch
                 {
                     CellType.Empty => false,
                     CellType.Solid => false,
@@ -75,13 +76,13 @@ internal static class ChunkUpdater
                     CellType.Liquid => TryMoveLiquid(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, preferNegative, out activeX, out activeY),
                     CellType.Gas => TryMoveGas(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, ref rng, out activeX, out activeY),
                     CellType.Fire => false,
-                    _ => throw new InvalidOperationException($"未知 CellType：{materials.TypeOf(material)}。"),
+                    _ => throw new InvalidOperationException($"未知 CellType：{materialType}。"),
                 };
 
                 ushort activeMaterial = window.GetMaterial(activeX, activeY);
                 bool reacted = TryReactVonNeumann(ref window, chunks, materials, reactionExecutor, diagnostics, activeX, activeY, activeMaterial, parityBit, ref rng);
                 bool customUpdated = !reacted && TryRunCustomUpdate(ref window, chunks, materials, customUpdateExecutor, activeX, activeY, activeMaterial, parityBit);
-                if (!moved && !reacted && !customUpdated && materials.TypeOf(material) != CellType.Solid)
+                if (!moved && !reacted && !customUpdated && materialType == CellType.Fire)
                 {
                     window.SetFlags(wx, wy, CellFlags.SetParity(window.GetFlags(wx, wy), parityBit));
                 }

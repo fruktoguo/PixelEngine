@@ -78,6 +78,30 @@ public sealed class SimulationMovementTests
     }
 
     /// <summary>
+    /// 验证 gas 上升受阻后会侧向扩散，而不是保持干净柱状。
+    /// </summary>
+    [Fact]
+    public void StepCaMovesGasSidewaysWhenUpwardCellsAreBlocked()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        SetCurrentDirty(center, DirtyRect.Full);
+        Set(center, 20, 20, Gas);
+        Set(center, 19, 19, Solid);
+        Set(center, 20, 19, Solid);
+        Set(center, 21, 19, Solid);
+        SimulationKernel kernel = new(source, CreateMaterials(), worldSeed: 123);
+
+        kernel.StepCa();
+
+        Assert.Equal(0, Get(center, 20, 20));
+        Assert.True(
+            Get(center, 18, 20) == Gas ||
+            Get(center, 19, 20) == Gas ||
+            Get(center, 21, 20) == Gas ||
+            Get(center, 22, 20) == Gas);
+    }
+
+    /// <summary>
     /// 验证 Fire 与 Solid 不参与 swap movement；Fire 仍会打 parity 表示本帧已处理。
     /// </summary>
     [Fact]
@@ -198,6 +222,31 @@ public sealed class SimulationMovementTests
         Assert.Equal(0, Get(center, 10, 10));
         Assert.Equal(Water, Get(center, 10 + EngineConstants.MoveCap, 10));
         Assert.Equal(0, Get(center, 10 + EngineConstants.MoveCap + 1, 10));
+    }
+
+    /// <summary>
+    /// 验证较重水液会置换未移动的较轻油液，使油浮在水上。
+    /// </summary>
+    [Fact]
+    public void StepCaDisplacesUnmovedLighterOilSoOilFloatsOnWater()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        SetCurrentDirty(center, DirtyRect.Full);
+        Set(center, 10, 10, Water);
+        Set(center, 10, 11, Oil);
+        Set(center, 9, 10, Solid);
+        Set(center, 11, 10, Solid);
+        Set(center, 9, 11, Solid);
+        Set(center, 11, 11, Solid);
+        Set(center, 9, 12, Solid);
+        Set(center, 10, 12, Solid);
+        Set(center, 11, 12, Solid);
+        SimulationKernel kernel = new(source, CreateMaterials());
+
+        kernel.StepCa();
+
+        Assert.Equal(Oil, Get(center, 10, 10));
+        Assert.Equal(Water, Get(center, 10, 11));
     }
 
     /// <summary>
