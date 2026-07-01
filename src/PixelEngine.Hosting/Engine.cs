@@ -20,6 +20,9 @@ namespace PixelEngine.Hosting;
 /// </summary>
 public sealed class Engine : IDisposable
 {
+    private const int FullThermalStepInterval = 1;
+    private const int ReducedThermalStepInterval = 4;
+
     private readonly EngineLifecycle _lifecycle;
     private readonly List<IDisposable> _ownedRuntimeResources = [];
     private IScriptRuntime? _attachedScriptRuntime;
@@ -1536,6 +1539,7 @@ public sealed class Engine : IDisposable
         EngineQualityTier previousTier = Context.QualityTier;
         EngineQualityTier tier = overload.SubmitFrame(realDeltaSeconds * 1000.0);
         Context.SetQualityTier(tier);
+        ApplyThermalDegradation(tier);
         if (tier != previousTier && tier >= EngineQualityTier.ReducedLighting)
         {
             ApplyGpuComputeDegradation();
@@ -1544,6 +1548,18 @@ public sealed class Engine : IDisposable
         Context.Clock.SimHz = tier >= EngineQualityTier.Sim30Hz
             ? PixelEngine.Core.EngineConstants.SimHzDownscaled
             : RequestedSimHz;
+    }
+
+    private void ApplyThermalDegradation(EngineQualityTier tier)
+    {
+        if (!Context.TryGetService(out TemperatureField temperature))
+        {
+            return;
+        }
+
+        temperature.SetStepInterval(tier >= EngineQualityTier.ReducedThermal
+            ? ReducedThermalStepInterval
+            : FullThermalStepInterval);
     }
 
     private void ApplyGpuComputeDegradation()

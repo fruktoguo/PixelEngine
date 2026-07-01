@@ -3,6 +3,7 @@ using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
 using PixelEngine.Editor;
 using PixelEngine.Scripting;
+using PixelEngine.Simulation;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -65,6 +66,35 @@ public sealed class EngineOverloadControllerTests
         Assert.Equal(EngineQualityTier.Sim30Hz, engine.Context.QualityTier);
         Assert.Equal(EngineConstants.SimHzDownscaled, engine.Context.Clock.SimHz);
         Assert.Equal(EngineConstants.SimHzDownscaled, engine.Context.Counters.SimHz);
+    }
+
+    /// <summary>
+    /// 验证一级过载降级会真实下发温度场降频，并在恢复全质量时复位。
+    /// </summary>
+    [Fact]
+    public void EngineAppliesReducedThermalQualityTierToTemperatureField()
+    {
+        TemperatureField temperature = new();
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithOverloadPolicy(frameBudgetMs: 10, sustainWindow: 1)
+            .Build();
+        engine.Context.RegisterService(temperature);
+
+        _ = engine.RunOneTick(realDeltaSeconds: 0.011);
+
+        Assert.Equal(EngineQualityTier.ReducedThermal, engine.Context.QualityTier);
+        Assert.Equal(4, temperature.StepInterval);
+        Assert.True(temperature.ShouldRun(0));
+        Assert.False(temperature.ShouldRun(1));
+        Assert.True(temperature.ShouldRun(4));
+
+        engine.Context.GetService<EngineOverloadController>().ResetToFullQuality();
+        _ = engine.RunOneTick(realDeltaSeconds: 0);
+
+        Assert.Equal(EngineQualityTier.Full, engine.Context.QualityTier);
+        Assert.Equal(1, temperature.StepInterval);
+        Assert.True(temperature.ShouldRun(1));
     }
 
     /// <summary>
