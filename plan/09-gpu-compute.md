@@ -106,7 +106,7 @@ cascade 层数 `RadianceCascadeCount`、每层角度/空间分辨率、射线步
 - [x] 实现 `NullComputeBackend`（空实现，所有入口委派 `plan/08` fragment/CPU 路径）。
 - [x] 实现 `GpuCapabilities` 探测（GL 版本、compute/SSBO/image 扩展、`GL_MAX_COMPUTE_WORK_GROUP_*`、ANGLE/ES3、DX12），启动期探测一次并缓存。
 - [x] 实现 `ComputeCapabilityGate`：产出门控位 **G1**（GL≥4.3+扩展）、**G2**（Win+DX12+ComputeSharp 显式启用）、**G3**（基线回退到 plan/08）、**G4**（逐特性独立开关）。
-- [~] 后端选择优先级已通过 `ComputeBackendFactory` 落地（默认 GLComputeBackend；ComputeSharp 仅 G2 且显式选择时覆盖光照/bloom/air）；门控结果与所选后端注册到 Core 诊断待诊断字段扩展。
+- [x] 后端选择优先级已通过 `ComputeBackendFactory` 落地（默认 GLComputeBackend；ComputeSharp 仅 G2 且显式选择时覆盖光照/bloom/air）；门控结果与所选后端已发布到 Core 诊断计数器，供 HUD/预算监控读取。
 
 ### 4.2 与 plan/08 资源/上下文共享（§3.2）
 - [x] 复用 `plan/08` 的 `IRenderContext`/render graph，不新建 GL 上下文。

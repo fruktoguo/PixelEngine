@@ -73,9 +73,80 @@ public sealed class EngineCounters
     public long ResidentMemoryBytes { get => Volatile.Read(ref _residentMemoryBytes); set => Volatile.Write(ref _residentMemoryBytes, value); }
 
     /// <summary>
+    /// 获取或设置当前 GPU compute 后端枚举值。
+    /// </summary>
+    public long GpuComputeSelectedBackend { get; set; }
+
+    /// <summary>
+    /// 获取或设置 G1 GL compute 门控是否命中。
+    /// </summary>
+    public long GpuComputeGlAvailable { get; set; }
+
+    /// <summary>
+    /// 获取或设置 G2 ComputeSharp 门控是否命中。
+    /// </summary>
+    public long GpuComputeSharpAvailable { get; set; }
+
+    /// <summary>
+    /// 获取或设置 G3 基线回退门控是否命中。
+    /// </summary>
+    public long GpuComputeBaselineFallback { get; set; }
+
+    /// <summary>
+    /// 获取或设置 G4 compute bloom 开关是否开启。
+    /// </summary>
+    public long GpuComputeBloomEnabled { get; set; }
+
+    /// <summary>
+    /// 获取或设置 G4 Radiance Cascades 开关是否开启。
+    /// </summary>
+    public long GpuComputeRadianceCascadesEnabled { get; set; }
+
+    /// <summary>
+    /// 获取或设置 G4 GPU 粒子开关是否开启。
+    /// </summary>
+    public long GpuComputeParticlesEnabled { get; set; }
+
+    /// <summary>
+    /// 获取或设置 G4 非权威 air/smoke 开关是否开启。
+    /// </summary>
+    public long GpuComputeAirSmokeEnabled { get; set; }
+
+    /// <summary>
     /// 获取或设置当前 sim 频率。
     /// </summary>
     public double SimHz { get; set; }
+
+    /// <summary>
+    /// 批量发布 GPU compute 后端与 G1-G4 门控诊断，避免 HUD 读取到跨帧混合状态。
+    /// </summary>
+    /// <param name="selectedBackend">当前后端枚举值。</param>
+    /// <param name="glAvailable">G1 GL compute 是否可用。</param>
+    /// <param name="computeSharpAvailable">G2 ComputeSharp 是否可用。</param>
+    /// <param name="baselineFallback">G3 基线回退是否命中。</param>
+    /// <param name="bloomEnabled">G4 compute bloom 是否开启。</param>
+    /// <param name="radianceCascadesEnabled">G4 Radiance Cascades 是否开启。</param>
+    /// <param name="particlesEnabled">G4 GPU 粒子是否开启。</param>
+    /// <param name="airSmokeEnabled">G4 非权威 air/smoke 是否开启。</param>
+    public void SetGpuComputeDiagnostics(
+        long selectedBackend,
+        long glAvailable,
+        long computeSharpAvailable,
+        long baselineFallback,
+        long bloomEnabled,
+        long radianceCascadesEnabled,
+        long particlesEnabled,
+        long airSmokeEnabled)
+    {
+        GpuComputeSelectedBackend = selectedBackend;
+        GpuComputeGlAvailable = glAvailable;
+        GpuComputeSharpAvailable = computeSharpAvailable;
+        GpuComputeBaselineFallback = baselineFallback;
+        GpuComputeBloomEnabled = bloomEnabled;
+        GpuComputeRadianceCascadesEnabled = radianceCascadesEnabled;
+        GpuComputeParticlesEnabled = particlesEnabled;
+        GpuComputeAirSmokeEnabled = airSmokeEnabled;
+    }
 
     /// <summary>
     /// 线程安全地累加活跃 chunk 数。

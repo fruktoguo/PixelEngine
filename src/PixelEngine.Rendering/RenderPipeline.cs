@@ -133,6 +133,16 @@ public sealed class RenderPipeline : IDisposable
     }
 
     /// <summary>
+    /// 将当前 GPU compute 后端与 G1-G4 门控状态发布到 Core 诊断计数器。
+    /// </summary>
+    /// <param name="counters">Core 诊断计数器。</param>
+    public void PublishComputeDiagnostics(EngineCounters counters)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _computeGate.PublishDiagnostics(counters);
+    }
+
+    /// <summary>
     /// 视口 resize 时重建世界纹理、PBO 容量、FBO 链与 visibility mask。
     /// </summary>
     /// <param name="width">新宽度。</param>

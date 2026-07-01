@@ -1,3 +1,4 @@
+using PixelEngine.Core.Diagnostics;
 using PixelEngine.Rendering.Compute;
 using Xunit;
 
@@ -97,6 +98,65 @@ public sealed class ComputeCapabilityGateTests
         Assert.Equal(ComputeBackendKind.GlCompute, disabledGate.SelectedBackend);
         Assert.True(enabledGate.ComputeSharpAvailable);
         Assert.Equal(ComputeBackendKind.ComputeSharp, enabledGate.SelectedBackend);
+    }
+
+    [Fact]
+    public void GatePublishesSelectedBackendAndFeatureSwitchesToCoreCounters()
+    {
+        GpuCapabilities capabilities = CreateCapabilities(
+            glMajor: 4,
+            glMinor: 3,
+            hasCompute: true,
+            hasSsbo: true,
+            hasImageLoadStore: true);
+        ComputeFeatureSwitches features = new(
+            BloomComputeEnabled: true,
+            RadianceCascadesEnabled: true,
+            GpuParticlesEnabled: true,
+            NonAuthoritativeAirEnabled: true);
+        ComputeCapabilityGate gate = ComputeCapabilityGate.Evaluate(
+            capabilities,
+            features,
+            preferComputeSharp: false);
+        EngineCounters counters = new();
+
+        gate.PublishDiagnostics(counters);
+
+        Assert.Equal((long)ComputeBackendKind.GlCompute, counters.GpuComputeSelectedBackend);
+        Assert.Equal(1, counters.GpuComputeGlAvailable);
+        Assert.Equal(0, counters.GpuComputeSharpAvailable);
+        Assert.Equal(0, counters.GpuComputeBaselineFallback);
+        Assert.Equal(1, counters.GpuComputeBloomEnabled);
+        Assert.Equal(1, counters.GpuComputeRadianceCascadesEnabled);
+        Assert.Equal(1, counters.GpuComputeParticlesEnabled);
+        Assert.Equal(1, counters.GpuComputeAirSmokeEnabled);
+    }
+
+    [Fact]
+    public void BaselineFallbackPublishesDisabledFeatureSwitches()
+    {
+        GpuCapabilities capabilities = CreateCapabilities(
+            glMajor: 3,
+            glMinor: 3,
+            hasCompute: false,
+            hasSsbo: false,
+            hasImageLoadStore: false);
+        ComputeCapabilityGate gate = ComputeCapabilityGate.Evaluate(
+            capabilities,
+            ComputeFeatureSwitches.Default,
+            preferComputeSharp: false);
+        EngineCounters counters = new();
+
+        gate.PublishDiagnostics(counters);
+
+        Assert.Equal((long)ComputeBackendKind.Null, counters.GpuComputeSelectedBackend);
+        Assert.Equal(0, counters.GpuComputeGlAvailable);
+        Assert.Equal(0, counters.GpuComputeSharpAvailable);
+        Assert.Equal(1, counters.GpuComputeBaselineFallback);
+        Assert.Equal(0, counters.GpuComputeBloomEnabled);
+        Assert.Equal(0, counters.GpuComputeRadianceCascadesEnabled);
+        Assert.Equal(0, counters.GpuComputeParticlesEnabled);
+        Assert.Equal(0, counters.GpuComputeAirSmokeEnabled);
     }
 
     [Fact]
