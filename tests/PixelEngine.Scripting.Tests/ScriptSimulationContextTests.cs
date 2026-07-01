@@ -1,5 +1,6 @@
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
+using PixelEngine.Core.Time;
 using Xunit;
 using ScriptScene = PixelEngine.Scripting.Scene;
 
@@ -86,6 +87,29 @@ public sealed class ScriptSimulationContextTests
         Assert.Equal(4, first.Vy);
         Assert.Equal(sand.Value, first.Material);
         Assert.Equal(5, first.Life);
+    }
+
+    /// <summary>
+    /// 验证脚本时间 facade 从真实 FrameClock 读取固定步长、帧号与本帧 sim 决策。
+    /// </summary>
+    [Fact]
+    public void ScriptFrameTimeReadsFromFrameClock()
+    {
+        FrameClock clock = new(PixelEngine.Core.EngineConstants.SimHzDownscaled);
+        ScriptFrameTime time = new(clock);
+
+        _ = clock.BeginFrame(0);
+
+        Assert.Equal(1, time.FrameCount);
+        Assert.Equal((float)clock.Dt, time.FixedStep);
+        Assert.Equal((float)clock.Dt, time.DeltaTime);
+        Assert.True(time.SimSteppedThisFrame);
+
+        _ = clock.BeginFrame(clock.Dt * 2);
+
+        Assert.Equal(2, time.FrameCount);
+        Assert.False(time.SimSteppedThisFrame);
+        Assert.True(time.TimeScale < 1f);
     }
 
     private sealed class Fixture

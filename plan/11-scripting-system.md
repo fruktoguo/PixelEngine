@@ -291,7 +291,7 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 - [x] `HotReloadService.RequestReload()` 暴露为编辑器热重载入口（§3.7）
 - [x] `public interface IScriptRuntime`：`Initialize/BeginFrame/Update(dt)/FixedSimTick/EndFrame/Shutdown`，由 Hosting 主循环相位 1 驱动（§3.8，架构 §3.3）
 - [x] Hosting/Simulation 可接入 `ScriptSimulationContext`：`SimulationPhaseDriver` 支持绑定脚本上下文，并在 Simulation 相位安全窗口 flush cell/particle 命令（§3.8）。
-- [!] Hosting 装配期构造完整 `IScriptContext` 并注入各子系统公开 API（§3.8）。阻塞：cell/material/particle/solid facade 已有真实 Simulation 后端，但 physics/audio/input/camera/time 等 facade 后端尚未形成 Hosting 可注入的统一公开实现；不能用抛 `NotSupportedException` 的假实现冒充装配。
+- [!] Hosting 装配期构造完整 `IScriptContext` 并注入各子系统公开 API（§3.8）。阻塞：cell/material/particle/solid/time facade 已有真实后端，但 physics/audio/input/camera 等 facade 后端尚未形成 Hosting 可注入的统一公开实现；不能用抛 `NotSupportedException` 的假实现冒充装配。
 
 ---
 
@@ -301,7 +301,7 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 - [x] CS1591 在公开类型上为 error：缺任一公开成员 XML 注释则构建失败（§2.3，AGENTS §4）
 - [x] 一个继承 `Behaviour` 的脚本，其 `OnStart`/`OnUpdate(dt)`/`OnFixedSimTick`/`OnDestroy` 按相位 1 节奏被正确调用；sim 降到 30Hz 时 `OnFixedSimTick` 跳过、`OnUpdate` 仍每帧（§3.2，架构 §4.2）
 - [x] 组件挂载到 Demo 稀疏实体且**不**出现在 `PixelEngine.Simulation` 内核数据结构中（§3.2，架构 §13.1）
-- [x] 脚本经 Simulation-backed facade 完成：读写 cell、查材质（按 name）、spawn 粒子、raycast/采样固体，全部走公开 API，并由真实 `MaterialTable`/`CellGrid`/`ParticleSystem` 验收测试覆盖（§3.3）。
+- [x] 脚本经真实后端 facade 完成：读写 cell、查材质（按 name）、spawn 粒子、raycast/采样固体、读取时间，全部走公开 API，并由真实 `MaterialTable`/`CellGrid`/`ParticleSystem`/`FrameClock` 验收测试覆盖（§3.3）。
 - [!] 完整脚本 facade 能力：建/查/控刚体、驱动角色控制器、控相机、读输入、播放音效仍缺对应公开后端/phase-safe sink；订阅事件已有 `ScriptEventBus` 验收，但完整上下文装配未统一完成（§3.3）。
 - [x] 脚本写入类调用经命令队列在正确相位落地：cell 写标 working dirty 并在 dirty swap 后被下帧 CA 看见；particle 落相位 7；无跨相位竞争（架构 §3.3）。
 - [!] body/character 写入类命令相位落地：body 建于相位 8a、冲量 step 前、角色移动相位 8 仍缺真实 sink 与句柄 registry，不能勾选（架构 §3.3）。
