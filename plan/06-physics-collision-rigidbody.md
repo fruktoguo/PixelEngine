@@ -240,10 +240,10 @@
 ### 5.1 Interop 与 task 桥
 - [x] interop smoke test：建 world→建一动态体→`b2World_Step`→读回坐标确有重力下落（`plan/14`）。
 - [x] 全部绑定 blittable、零新 `DllImport`、`b2World_Step` 与 task 回调均无 `[SuppressGCTransition]`（代码审查 + 分析器）。
-- [ ] task 桥串行（workerCount=1）下 Step 结果正确；多线程下与串行**统计等价**（非 bit，架构 §6.1/§6.4）。
+- [x] task 桥串行（workerCount=1）下 Step 结果正确；多线程下与串行**统计等价**（非 bit，架构 §6.1/§6.4）。
 - [ ] task 桥多线程经 §17.1 计时确认 physics 真并行（4 worker 较 1 worker Step 显著加速，R14）。
-- [ ] `workerIndex` 无并发复用（压力测试 + 断言，R14）。
-- [ ] 确定性模式 `workerCount=1` 跨运行可复现（架构 §6.4）。
+- [x] `workerIndex` 无并发复用（压力测试 + 断言，R14）。
+- [x] 确定性模式 `workerCount=1` 跨运行可复现（架构 §6.4）。
 
 ### 5.2 转换管线与刚体
 - [x] 凸分解每片 **≤8 顶点且凸**（`plan/14` 性质测试，`AGENTS.md` §7）。
@@ -253,11 +253,11 @@
 - [x] 碎片 `< FragmentPixelThreshold` 转自由粒子而非建体（架构 §8.2/§8.4）。
 
 ### 5.3 两世界同步（不变式 #5）
-- [ ] **inverse-sampling 旋转水密无洞**：任意旋转角栅格化后刚体内部无空洞（`plan/14`，`AGENTS.md` §7）。
-- [ ] **无亚像素侵蚀**：刚体自由旋转/平移 N 帧后，从不可变 mask 重 stamp 的像素数与初始 mask 固体数一致（R6、不变式 #5）。
+- [x] **inverse-sampling 旋转水密无洞**：任意旋转角栅格化后刚体内部无空洞（`plan/14`，`AGENTS.md` §7）。
+- [x] **无亚像素侵蚀**：刚体自由旋转/平移 N 帧后，从不可变 mask 重 stamp 的像素数与初始 mask 固体数一致（R6、不变式 #5）。
 - [ ] **双向耦合**：沙能堆在刚体上、火能烧刚体、酸能蚀刚体、CA 能挖刚体（架构 §1.2/§8.3）。
 - [ ] 挖断的连通固体块掉落成刚体、可旋转、再被毁拆分为多体（架构 §8.2/§8.4，里程碑 M6）。
-- [ ] 刚体网格擦除/栅格化在相位 8、与 CA 相位 4 不竞争（架构 §3.3 约束）。
+- [x] 刚体网格擦除/栅格化在相位 8、与 CA 相位 4 不竞争（架构 §3.3 约束）。
 
 ### 5.4 破坏/挖掘节流
 - [x] 每帧每刚体至多一次重建；sleeping 刚体跳过（架构 §8.4）。
@@ -313,4 +313,4 @@
 - [x] 节点 8：`feat(physics): 静态地形局部用后即弃 collider`（对应 §4.8，架构 §8.1）。
 - [x] 节点 9：`feat(physics): 独立于 Box2D 的角色控制器(kinematic AABB vs 像素)`（对应 §4.9，架构 §8.5）。
 - [x] 节点 10：`feat(physics): PhysicsSystem 相位编排/诊断/存档快照 API`（对应 §4.10）。
-- [ ] 节点 11：`test(physics): 凸分解/水密/无侵蚀/边界/task 桥并行 验收测试`（对应第 5 章，`plan/14` 协同）。
+- [x] 节点 11：`test(physics): 凸分解/水密/无侵蚀/边界/task 桥并行 验收测试`（对应第 5 章，`plan/14` 协同）。
