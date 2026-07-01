@@ -99,4 +99,19 @@ public static partial class EngineConstants
     /// 单 tick cell→particle 抛射数量上限，防止爆炸尖峰。
     /// </summary>
     public const int ParticleEjectMaxPerTick = 4096;
+
+    /// <summary>
+    /// GPU compute 默认 work group X 尺寸，见 plan/09 §4.3。
+    /// </summary>
+    public const int GpuComputeWorkGroupSizeX = 16;
+
+    /// <summary>
+    /// GPU compute 默认 work group Y 尺寸，见 plan/09 §4.3。
+    /// </summary>
+    public const int GpuComputeWorkGroupSizeY = 16;
+
+    /// <summary>
+    /// GPU compute 默认 work group Z 尺寸，见 plan/09 §4.3。
+    /// </summary>
+    public const int GpuComputeWorkGroupSizeZ = 1;
 }
