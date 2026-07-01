@@ -65,6 +65,10 @@ public sealed class CheckerboardSchedulerTests
 
         kernel.StepCa(jobs);
 
+        CaIterationSnapshot[] iterations = new CaIterationSnapshot[activeCoords.Length];
+        int iterationCount = kernel.CopyCaIterationSnapshots(iterations);
+        Assert.Equal(activeCoords.Length, iterationCount);
+        Assert.All(iterations, static iteration => Assert.Equal(DirtyRect.Full, iteration.Rect));
         foreach (ChunkCoord coord in activeCoords)
         {
             Chunk chunk = source.GetRequired(coord);
@@ -126,6 +130,8 @@ public sealed class CheckerboardSchedulerTests
         kernel.StepCa(jobs);
         kernel.SwapDirtyRects();
 
+        CaIterationSnapshot[] iterations = new CaIterationSnapshot[1];
+        Assert.Equal(0, kernel.CopyCaIterationSnapshots(iterations));
         for (int cy = 0; cy < activeChunksPerAxis; cy++)
         {
             for (int cx = 0; cx < activeChunksPerAxis; cx++)

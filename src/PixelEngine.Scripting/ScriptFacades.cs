@@ -548,6 +548,11 @@ public enum DebugOverlayKind
     DirtyRects,
 
     /// <summary>
+    /// 本帧 CA 实际迭代的 dirty rectangle。
+    /// </summary>
+    CaIterationRects,
+
+    /// <summary>
     /// chunk 网格与 4-pass parity 着色边框。
     /// </summary>
     ChunkGridParity,

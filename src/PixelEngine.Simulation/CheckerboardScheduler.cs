@@ -253,8 +253,10 @@ public sealed class CheckerboardScheduler
 
         for (int i = start; i < end; i++)
         {
+            Chunk chunk = _activeBucket[i];
+            diagnostics.RecordCaIteration(chunk.Coord, chunk.CurrentDirty);
             ChunkUpdater.UpdateChunk(
-                _activeBucket[i],
+                chunk,
                 chunks,
                 materials,
                 _activeParityBit,

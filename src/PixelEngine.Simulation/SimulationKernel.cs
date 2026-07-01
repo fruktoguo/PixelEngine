@@ -123,6 +123,7 @@ public sealed class SimulationKernel(
     /// </summary>
     public void StepCa()
     {
+        Diagnostics.ResetCaIterationRecords();
         AdvanceParity();
         _scheduler.StepSingleThread(_chunks, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, _customUpdateExecutor, Diagnostics, Profiler);
     }
@@ -133,6 +134,7 @@ public sealed class SimulationKernel(
     public void StepCa(JobSystem jobs)
     {
         ArgumentNullException.ThrowIfNull(jobs);
+        Diagnostics.ResetCaIterationRecords();
         AdvanceParity();
         if (ForceSingleThread)
         {
@@ -241,6 +243,17 @@ public sealed class SimulationKernel(
             destination[i] = new BoundaryWakeSnapshot(record.TargetCoord, record.IncomingSlot, record.Rect);
         }
 
+        return count;
+    }
+
+    /// <summary>
+    /// 复制本帧实际进入 CA 更新器的 dirty rectangle，供 Editor 调试叠层确认 sleeping 区零迭代。
+    /// </summary>
+    public int CopyCaIterationSnapshots(Span<CaIterationSnapshot> destination)
+    {
+        ReadOnlySpan<CaIterationSnapshot> records = Diagnostics.CaIterationRecords;
+        int count = Math.Min(records.Length, destination.Length);
+        records[..count].CopyTo(destination);
         return count;
     }
 

@@ -13,6 +13,7 @@ public sealed class DebugOverlayController(DebugOverlaySettings settings, IRigid
 {
     private const uint DirtyCurrentColor = 0xD000FFFFu;
     private const uint DirtyWorkingColor = 0xD0FFAA00u;
+    private const uint CaIterationColor = 0xD000FF40u;
     private const uint KeepAliveColor = 0xA00000FFu;
     private const uint ParticleColor = 0xD0FFFFFFu;
     private const float ParticleTrailScale = 3f;
@@ -37,6 +38,7 @@ public sealed class DebugOverlayController(DebugOverlaySettings settings, IRigid
     public int BuildVectorOverlays(
         IChunkSource chunks,
         CameraState camera,
+        ReadOnlySpan<CaIterationSnapshot> caIterations,
         ReadOnlySpan<BoundaryWakeSnapshot> keepAlive,
         ReadOnlySpan<Particle> particles,
         ReadOnlySpan<ConnectedComponentDebugSnapshot> connectedComponents,
@@ -54,6 +56,11 @@ public sealed class DebugOverlayController(DebugOverlaySettings settings, IRigid
         if (Settings.IsEnabled(DebugOverlayFlags.DirtyRects))
         {
             AppendDirtyRects(chunks, camera, destination);
+        }
+
+        if (Settings.IsEnabled(DebugOverlayFlags.CaIterationRects))
+        {
+            AppendCaIterationRects(camera, caIterations, destination);
         }
 
         if (Settings.IsEnabled(DebugOverlayFlags.KeepAliveHotspots))
@@ -108,6 +115,15 @@ public sealed class DebugOverlayController(DebugOverlaySettings settings, IRigid
         {
             AppendDirtyRect(chunk.Coord, chunk.CurrentDirty, camera, DirtyCurrentColor, destination);
             AppendDirtyRect(chunk.Coord, chunk.WorkingDirty, camera, DirtyWorkingColor, destination);
+        }
+    }
+
+    private void AppendCaIterationRects(CameraState camera, ReadOnlySpan<CaIterationSnapshot> caIterations, ICollection<OverlayCommand> destination)
+    {
+        for (int i = 0; i < caIterations.Length; i++)
+        {
+            CaIterationSnapshot iteration = caIterations[i];
+            AppendDirtyRect(iteration.Coord, iteration.Rect, camera, CaIterationColor, destination);
         }
     }
 

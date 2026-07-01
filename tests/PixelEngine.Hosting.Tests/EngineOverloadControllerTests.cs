@@ -199,6 +199,9 @@ public sealed class EngineOverloadControllerTests
         Assert.True(api.IsOverlayEnabled(DebugOverlayKind.DirtyRects));
         api.SetOverlay(DebugOverlayKind.DirtyRects, enabled: false);
         Assert.False(api.IsOverlayEnabled(DebugOverlayKind.DirtyRects));
+        Assert.False(api.IsOverlayEnabled(DebugOverlayKind.CaIterationRects));
+        Assert.True(api.ToggleOverlay(DebugOverlayKind.CaIterationRects));
+        Assert.True(api.IsOverlayEnabled(DebugOverlayKind.CaIterationRects));
     }
 
     /// <summary>

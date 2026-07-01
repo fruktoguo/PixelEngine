@@ -40,6 +40,7 @@ public sealed class RenderPhaseDriver(
     private readonly RenderAuxBuffers _aux = new(1, 1);
     private readonly List<OverlayCommand> _overlayCommands = new(256);
     private readonly BoundaryWakeSnapshot[] _boundaryWakeBuffer = new BoundaryWakeSnapshot[256];
+    private readonly CaIterationSnapshot[] _caIterationBuffer = new CaIterationSnapshot[256];
     private readonly ConnectedComponentDebugSnapshot[] _connectedComponentBuffer = new ConnectedComponentDebugSnapshot[256];
     private CameraState _presentCamera = CameraState.OneToOne(0, 0, 1, 1);
     private bool _frameBuilt;
@@ -104,10 +105,12 @@ public sealed class RenderPhaseDriver(
 
         _overlayCommands.Clear();
         int wakeCount = _kernel?.CopyBoundaryWakeSnapshots(_boundaryWakeBuffer) ?? 0;
+        int caIterationCount = _kernel?.CopyCaIterationSnapshots(_caIterationBuffer) ?? 0;
         int componentCount = _physics?.CopyConnectedComponentDebugSnapshots(_connectedComponentBuffer) ?? 0;
         _ = _debugOverlays.BuildVectorOverlays(
             _chunks,
             _presentCamera,
+            _caIterationBuffer.AsSpan(0, caIterationCount),
             _boundaryWakeBuffer.AsSpan(0, wakeCount),
             activeParticles,
             _connectedComponentBuffer.AsSpan(0, componentCount),

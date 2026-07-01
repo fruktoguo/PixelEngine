@@ -28,6 +28,7 @@ public sealed class DebugOverlayPanel(DebugOverlaySettings settings) : IEditorPa
 
         Visible = visible;
         DrawToggle("Dirty rect", DebugOverlayFlags.DirtyRects);
+        DrawToggle("CA iteration", DebugOverlayFlags.CaIterationRects);
         DrawToggle("Chunk parity", DebugOverlayFlags.ChunkGridParity);
         DrawToggle("KeepAlive", DebugOverlayFlags.KeepAliveHotspots);
         DrawToggle("Cell parity", DebugOverlayFlags.CellParity);

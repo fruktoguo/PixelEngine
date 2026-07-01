@@ -5,12 +5,14 @@ internal sealed class SimulationDiagnostics
     private const int MaxRecordCount = 256;
     private readonly BoundaryWakeRecord[] _boundaryWakeRecords = new BoundaryWakeRecord[MaxRecordCount];
     private readonly ReactionProbeRecord[] _reactionRecords = new ReactionProbeRecord[MaxRecordCount];
+    private readonly CaIterationSnapshot[] _caIterationRecords = new CaIterationSnapshot[MaxRecordCount];
     private int _boundaryWakeCount;
     private int _boundaryWakeRecordCount;
     private int _reactionAttemptCount;
     private int _reactionSuccessCount;
     private int _boundaryReactionCount;
     private int _reactionRecordCount;
+    private int _caIterationRecordCount;
 
     public int BoundaryWakeCount => Volatile.Read(ref _boundaryWakeCount);
 
@@ -24,6 +26,8 @@ internal sealed class SimulationDiagnostics
 
     public ReadOnlySpan<ReactionProbeRecord> ReactionRecords => _reactionRecords.AsSpan(0, Math.Min(Volatile.Read(ref _reactionRecordCount), _reactionRecords.Length));
 
+    public ReadOnlySpan<CaIterationSnapshot> CaIterationRecords => _caIterationRecords.AsSpan(0, Math.Min(Volatile.Read(ref _caIterationRecordCount), _caIterationRecords.Length));
+
     public void ResetFrameCounters()
     {
         Volatile.Write(ref _boundaryWakeCount, 0);
@@ -32,6 +36,12 @@ internal sealed class SimulationDiagnostics
         Volatile.Write(ref _boundaryReactionCount, 0);
         Volatile.Write(ref _boundaryWakeRecordCount, 0);
         Volatile.Write(ref _reactionRecordCount, 0);
+        Volatile.Write(ref _caIterationRecordCount, 0);
+    }
+
+    public void ResetCaIterationRecords()
+    {
+        Volatile.Write(ref _caIterationRecordCount, 0);
     }
 
     public void RecordBoundaryWake(ChunkCoord targetCoord, int incomingSlot, DirtyRect rect)
@@ -62,6 +72,15 @@ internal sealed class SimulationDiagnostics
         if ((uint)recordIndex < (uint)_reactionRecords.Length)
         {
             _reactionRecords[recordIndex] = new ReactionProbeRecord(wx1, wy1, materialA, wx2, wy2, materialB, boundary);
+        }
+    }
+
+    public void RecordCaIteration(ChunkCoord coord, DirtyRect rect)
+    {
+        int recordIndex = Interlocked.Increment(ref _caIterationRecordCount) - 1;
+        if ((uint)recordIndex < (uint)_caIterationRecords.Length)
+        {
+            _caIterationRecords[recordIndex] = new CaIterationSnapshot(coord, rect);
         }
     }
 }
