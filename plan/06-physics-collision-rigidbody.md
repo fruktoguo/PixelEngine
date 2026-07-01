@@ -206,13 +206,13 @@
 - [x] CA 消耗 `RigidOwned` cell 时入 `RigidDamageQueue` 的接口（供 `plan/03` 反应/移动调用）。
 
 ### 4.7 PixelEngine.Physics — 破坏/挖掘（相位 8a，架构 §8.4/R4）
-- [ ] `RigidBodyDestruction.RebuildDirty`：剩余 mask→CCL→每块 MS→DP→PolyPartition→建新体→销旧体。
-- [ ] **父→子线/角速度转移**（`Get/SetLinearVelocity`+`Get/SetAngularVelocity`，含角速度诱导线速度分量）（架构 §8.4）。
-- [ ] (8a) CCL 检测地形改变区新脱落连通块→建新刚体。
-- [ ] 节流：每帧每刚体至多一次重建（合并移除）。
-- [ ] 节流：sleeping 刚体跳过（`b2Body_IsAwake`）。
-- [ ] 节流：CCL/MS/DP/PolyPartition off-thread（各刚体并行派发 JobSystem）。
-- [ ] 节流：碎片 `< FragmentPixelThreshold` 转粒子（`plan/05`）；body/shape/mask 池化。
+- [x] `RigidBodyDestruction.RebuildDirty`：剩余 mask→CCL→每块 MS→DP→PolyPartition→建新体→销旧体。
+- [x] **父→子线/角速度转移**（`Get/SetLinearVelocity`+`Get/SetAngularVelocity`，含角速度诱导线速度分量）（架构 §8.4）。
+- [x] (8a) CCL 检测地形改变区新脱落连通块→建新刚体。
+- [x] 节流：每帧每刚体至多一次重建（合并移除）。
+- [x] 节流：sleeping 刚体跳过（`b2Body_IsAwake`）。
+- [x] 节流：CCL/MS/DP/PolyPartition off-thread（各刚体并行派发 JobSystem）。
+- [x] 节流：碎片 `< FragmentPixelThreshold` 转粒子（`plan/05`）；body/shape/mask 池化。
 
 ### 4.8 PixelEngine.Physics — 静态地形 collider（架构 §8.1）
 - [ ] `StaticTerrainColliders`：仅为活跃刚体邻近 dirty chunk 生成；局部 mask（排除 `RigidOwned`）→MS→DP→`b2CreateChain` 静态链。
@@ -249,8 +249,8 @@
 - [x] 凸分解每片 **≤8 顶点且凸**（`plan/14` 性质测试，`AGENTS.md` §7）。
 - [x] 凸片并集**覆盖原 mask**（无丢面积，`AGENTS.md` §7）。
 - [x] 所有 `b2MakePolygon` **`radius=0`**（验证锐利边缘，`AGENTS.md` §7、R9）。
-- [ ] CCL 用显式栈非递归，大连通块不栈溢出（架构 §8.2）。
-- [ ] 碎片 `< FragmentPixelThreshold` 转自由粒子而非建体（架构 §8.2/§8.4）。
+- [x] CCL 用显式栈非递归，大连通块不栈溢出（架构 §8.2）。
+- [x] 碎片 `< FragmentPixelThreshold` 转自由粒子而非建体（架构 §8.2/§8.4）。
 
 ### 5.3 两世界同步（不变式 #5）
 - [ ] **inverse-sampling 旋转水密无洞**：任意旋转角栅格化后刚体内部无空洞（`plan/14`，`AGENTS.md` §7）。
@@ -260,7 +260,7 @@
 - [ ] 刚体网格擦除/栅格化在相位 8、与 CA 相位 4 不竞争（架构 §3.3 约束）。
 
 ### 5.4 破坏/挖掘节流
-- [ ] 每帧每刚体至多一次重建；sleeping 刚体跳过（架构 §8.4）。
+- [x] 每帧每刚体至多一次重建；sleeping 刚体跳过（架构 §8.4）。
 - [ ] CCL/MS/DP/PolyPartition off-thread 并行（§17.1 计时确认）。
 - [ ] 父→子速度/角速度转移使拆分物理合理（视觉 + 单测）。
 
@@ -309,7 +309,7 @@
 - [x] 节点 4：`feat(physics): 像素簇→刚体管线(CCL→MS→DP→PolyPartition→复合体)`（对应 §4.4，架构 §8.2）。
 - [x] 节点 5：`feat(physics): 不可变 body-local mask 与刚体包装/registry/damage queue`（对应 §4.5，架构 §8.3/R6）。
 - [x] 节点 6：`feat(physics): 两世界栅格化同步(erase→step→inverse-sample re-stamp)`（对应 §4.6，相位 8，不变式 #5）。
-- [ ] 节点 7：`feat(physics): 破坏/挖掘重建(CCL 拆分+父子速度转移+节流)`（对应 §4.7，架构 §8.4）。
+- [x] 节点 7：`feat(physics): 破坏/挖掘重建(CCL 拆分+父子速度转移+节流)`（对应 §4.7，架构 §8.4）。
 - [ ] 节点 8：`feat(physics): 静态地形局部用后即弃 collider`（对应 §4.8，架构 §8.1）。
 - [ ] 节点 9：`feat(physics): 独立于 Box2D 的角色控制器(kinematic AABB vs 像素)`（对应 §4.9，架构 §8.5）。
 - [ ] 节点 10：`feat(physics): PhysicsSystem 相位编排/诊断/存档快照 API`（对应 §4.10）。

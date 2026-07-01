@@ -1,4 +1,5 @@
 using PixelEngine.Interop.Box2D;
+using PixelEngine.Core.Threading;
 using PixelEngine.Simulation;
 
 namespace PixelEngine.Physics;
@@ -11,18 +12,24 @@ namespace PixelEngine.Physics;
 /// <param name="grid">权威 cell 网格。</param>
 /// <param name="registry">刚体 stamp registry。</param>
 /// <param name="damageQueue">相位 4 写入、相位 8a 排空的刚体 damage queue。</param>
+/// <param name="destruction">可选刚体 damage 重建服务。</param>
+/// <param name="jobs">可选持久线程池，用于相位 8a 的重建准备阶段。</param>
 public sealed class PhysicsSystem(
     B2WorldId worldId,
     PhysicsWorld physicsWorld,
     CellGrid grid,
     RigidStampRegistry registry,
-    RigidDamageQueue? damageQueue = null)
+    RigidDamageQueue? damageQueue = null,
+    RigidBodyDestruction? destruction = null,
+    JobSystem? jobs = null)
 {
     private readonly B2WorldId _worldId = worldId;
     private readonly PhysicsWorld _physicsWorld = physicsWorld ?? throw new ArgumentNullException(nameof(physicsWorld));
     private readonly CellGrid _grid = grid ?? throw new ArgumentNullException(nameof(grid));
     private readonly RigidStampRegistry _registry = registry ?? throw new ArgumentNullException(nameof(registry));
     private readonly RigidDamageQueue? _damageQueue = damageQueue;
+    private readonly RigidBodyDestruction? _destruction = destruction;
+    private readonly JobSystem? _jobs = jobs;
     private readonly List<RigidDamageEvent> _pendingDamage = new(256);
     private RigidDamageEvent[] _damageScratch = GC.AllocateArray<RigidDamageEvent>(256, pinned: true);
 
@@ -42,6 +49,11 @@ public sealed class PhysicsSystem(
     public int LastStampedCellCount { get; private set; }
 
     /// <summary>
+    /// 最近一次同步执行的刚体破坏重建结果。
+    /// </summary>
+    public RigidDestructionResult LastDestructionResult { get; private set; }
+
+    /// <summary>
     /// 相位 8：排空 damage queue、erase、Box2D step、读回 transform、inverse-sample re-stamp。
     /// </summary>
     /// <param name="dt">固定逻辑步长秒数。</param>
@@ -56,6 +68,9 @@ public sealed class PhysicsSystem(
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(subStepCount);
 
         DrainDamageQueue();
+        LastDestructionResult = _destruction is null
+            ? default
+            : _destruction.RebuildDirty(_worldId, _physicsWorld, _grid, _registry, _pendingDamage, _jobs);
         LastErasedCellCount = EraseAllBodies();
         _registry.Clear();
 
