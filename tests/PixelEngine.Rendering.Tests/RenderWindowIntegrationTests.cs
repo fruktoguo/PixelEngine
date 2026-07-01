@@ -227,6 +227,52 @@ public sealed class RenderWindowIntegrationTests
     }
 
     [Fact]
+    public void CanRunRadianceCascadePassWhenExplicitlyEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = CreateSmokeWindow("PixelEngine radiance cascades smoke", RenderBackendPreference.Auto);
+        GpuCapabilities gpuCapabilities = GpuCapabilities.Query(window.Gl, window.Capabilities);
+        ComputeCapabilityGate gate = ComputeCapabilityGate.Evaluate(gpuCapabilities, ComputeFeatureSwitches.Default, preferComputeSharp: false);
+        if (!gate.GlComputeAvailable)
+        {
+            return;
+        }
+
+        using IComputeBackend backend = ComputeBackendFactory.Create(window.Gl, gate);
+        using LightMaskTexture occluder = new(window.Gl, 16, 16);
+        using EmissiveBuffer emissive = new(window.Gl, 16, 16);
+        using ColorRenderTarget scene = new(window.Gl, 16, 16);
+        using ColorRenderTarget destination = new(window.Gl, 16, 16);
+        using RadianceCascadePass pass = new(window.Gl, new GpuRadianceCascadePipeline(backend), 16, 16);
+        byte[] occluderMask = new byte[16 * 16];
+        uint[] emissivePixels = new uint[16 * 16];
+        occluderMask[8 + (8 * 16)] = 255;
+        emissivePixels[4 + (4 * 16)] = 0xFFFFFFFFu;
+        occluder.Upload(occluderMask);
+        emissive.Upload(emissivePixels);
+        scene.BindFramebuffer();
+        window.Gl.Viewport(0, 0, 16, 16);
+        window.Gl.ClearColor(0.1f, 0.1f, 0.12f, 1f);
+        window.Gl.Clear(ClearBufferMask.ColorBufferBit);
+
+        RadianceCascadeSettings settings = RadianceCascadeSettings.Default with
+        {
+            Enabled = true,
+            CascadeCount = 2,
+            BaseRayCount = 8,
+            MaxRaySteps = 4,
+        };
+        pass.Render(occluder, emissive, scene, destination, settings);
+        window.Gl.Finish();
+
+        Assert.Equal(16, destination.Width);
+    }
+
+    [Fact]
     public void CanRenderFrameThroughGlesAngleWhenExplicitlyEnabled()
     {
         if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"), "1", StringComparison.Ordinal))

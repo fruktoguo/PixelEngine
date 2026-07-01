@@ -61,6 +61,40 @@ public sealed class GpuComputeShaderSourcesTests
     }
 
     [Fact]
+    public void ParticlePointSpriteSourcesExposeRenderSideContracts()
+    {
+        Assert.Equal("particle_pointsprite.vert", GpuComputeShaderSources.ParticlePointSpriteVertexName);
+        Assert.Equal("particle_pointsprite.frag", GpuComputeShaderSources.ParticlePointSpriteFragmentName);
+
+        string vertex = GpuComputeShaderSources.ParticlePointSpriteVertex;
+        Assert.Contains("#version 430", vertex, StringComparison.Ordinal);
+        Assert.Contains("particle_pointsprite.vert", vertex, StringComparison.Ordinal);
+        Assert.Contains("void main()", vertex, StringComparison.Ordinal);
+        Assert.Contains("aWorldPosition", vertex, StringComparison.Ordinal);
+        Assert.Contains("aMaterialId", vertex, StringComparison.Ordinal);
+        Assert.Contains("aColorVariant", vertex, StringComparison.Ordinal);
+        Assert.Contains("uCameraViewProjection", vertex, StringComparison.Ordinal);
+        Assert.Contains("uCameraWorldOrigin", vertex, StringComparison.Ordinal);
+        Assert.Contains("uViewportSize", vertex, StringComparison.Ordinal);
+        Assert.Contains("gl_Position", vertex, StringComparison.Ordinal);
+        Assert.Contains("gl_PointSize", vertex, StringComparison.Ordinal);
+        Assert.Contains("vMaterialId", vertex, StringComparison.Ordinal);
+        Assert.Contains("vColorVariant", vertex, StringComparison.Ordinal);
+
+        string fragment = GpuComputeShaderSources.ParticlePointSpriteFragment;
+        Assert.Contains("#version 430", fragment, StringComparison.Ordinal);
+        Assert.Contains("particle_pointsprite.frag", fragment, StringComparison.Ordinal);
+        Assert.Contains("void main()", fragment, StringComparison.Ordinal);
+        Assert.Contains("gl_PointCoord", fragment, StringComparison.Ordinal);
+        Assert.Contains("uMaterialTextureArray", fragment, StringComparison.Ordinal);
+        Assert.Contains("vMaterialId", fragment, StringComparison.Ordinal);
+        Assert.Contains("vColorVariant", fragment, StringComparison.Ordinal);
+        Assert.Contains("oSceneColor", fragment, StringComparison.Ordinal);
+        Assert.Contains("oEmissiveColor", fragment, StringComparison.Ordinal);
+        Assert.Contains("uEmissiveScale", fragment, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void GetSourceReturnsRegisteredSourcesOnly()
     {
         foreach (string passName in ExpectedPassNames)

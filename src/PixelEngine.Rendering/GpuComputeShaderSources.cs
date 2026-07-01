@@ -60,6 +60,16 @@ public static class GpuComputeShaderSources
     public const string RadianceCascadeApplyName = "rc_apply";
 
     /// <summary>
+    /// GPU 粒子 point-sprite 顶点 shader 文件名。
+    /// </summary>
+    public const string ParticlePointSpriteVertexName = "particle_pointsprite.vert";
+
+    /// <summary>
+    /// GPU 粒子 point-sprite 片元 shader 文件名。
+    /// </summary>
+    public const string ParticlePointSpriteFragmentName = "particle_pointsprite.frag";
+
+    /// <summary>
     /// 已注册的 compute pass 名称集合。
     /// </summary>
     public static IReadOnlyList<string> PassNames { get; } =
@@ -287,6 +297,8 @@ layout(rgba32f, binding = 0) writeonly uniform image2D uSdfImage;
 
 uniform ivec2 uOutputSize;
 uniform int uJumpStep;
+uniform int uInitialize;
+uniform float uOccluderThreshold;
 
 void main()
 {
@@ -298,8 +310,44 @@ void main()
     }
 
     vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(uOutputSize);
-    vec4 seed = texture(uSeedTexture, uv);
-    imageStore(uSdfImage, pixel, vec4(seed.xy, float(uJumpStep), seed.a));
+    if (uInitialize != 0)
+    {
+        float occluder = texture(uSeedTexture, uv).r;
+        vec2 seed = occluder >= uOccluderThreshold ? vec2(pixel) : vec2(-1.0);
+        float distance = occluder >= uOccluderThreshold ? 0.0 : 3.402823e+38;
+        imageStore(uSdfImage, pixel, vec4(seed, distance, occluder >= uOccluderThreshold ? 1.0 : 0.0));
+        return;
+    }
+
+    vec2 texel = 1.0 / vec2(uOutputSize);
+    vec4 best = texture(uSeedTexture, uv);
+    float bestDistance = best.w > 0.0 ? length(vec2(pixel) - best.xy) : 3.402823e+38;
+    for (int oy = -1; oy <= 1; oy++)
+    {
+        for (int ox = -1; ox <= 1; ox++)
+        {
+            vec2 sampleUv = uv + vec2(ox, oy) * texel * float(uJumpStep);
+            if (any(lessThan(sampleUv, vec2(0.0))) || any(greaterThan(sampleUv, vec2(1.0))))
+            {
+                continue;
+            }
+
+            vec4 candidate = texture(uSeedTexture, sampleUv);
+            if (candidate.w <= 0.0)
+            {
+                continue;
+            }
+
+            float distance = length(vec2(pixel) - candidate.xy);
+            if (distance < bestDistance)
+            {
+                best = candidate;
+                bestDistance = distance;
+            }
+        }
+    }
+
+    imageStore(uSdfImage, pixel, vec4(best.xy, bestDistance, best.w));
 }
 """;
 
@@ -318,6 +366,7 @@ uniform ivec2 uOutputSize;
 uniform int uCascadeIndex;
 uniform int uRayCount;
 uniform float uCascadeRadius;
+uniform int uMaxRaySteps;
 
 void main()
 {
@@ -329,10 +378,41 @@ void main()
     }
 
     vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(uOutputSize);
-    vec3 sdf = texture(uSdfTexture, uv).xyz;
-    vec3 emissive = texture(uEmissiveTexture, uv).rgb;
-    float cascadeWeight = float(uCascadeIndex + 1) / max(float(uRayCount), 1.0);
-    imageStore(uCascadeImage, pixel, vec4(emissive * cascadeWeight, min(sdf.z, uCascadeRadius)));
+    vec3 radiance = vec3(0.0);
+    int rayCount = max(uRayCount, 1);
+    int maxSteps = max(uMaxRaySteps, 1);
+    float stepLength = max(uCascadeRadius / float(maxSteps), 1.0);
+    for (int ray = 0; ray < rayCount; ray++)
+    {
+        float angle = (6.28318530718 * (float(ray) + 0.5)) / float(rayCount);
+        vec2 direction = vec2(cos(angle), sin(angle));
+        vec3 rayRadiance = vec3(0.0);
+        float transmittance = 1.0;
+        for (int stepIndex = 1; stepIndex <= maxSteps; stepIndex++)
+        {
+            vec2 samplePixel = vec2(pixel) + direction * stepLength * float(stepIndex);
+            vec2 sampleUv = (samplePixel + vec2(0.5)) / vec2(uOutputSize);
+            if (any(lessThan(sampleUv, vec2(0.0))) || any(greaterThan(sampleUv, vec2(1.0))))
+            {
+                break;
+            }
+
+            vec4 sdf = texture(uSdfTexture, sampleUv);
+            if (sdf.w > 0.0 && sdf.z <= 1.0)
+            {
+                break;
+            }
+
+            vec3 emissive = texture(uEmissiveTexture, sampleUv).rgb;
+            rayRadiance += emissive * transmittance;
+            transmittance *= 0.92;
+        }
+
+        radiance += rayRadiance / float(maxSteps);
+    }
+
+    float cascadeWeight = 1.0 / float(uCascadeIndex + 1);
+    imageStore(uCascadeImage, pixel, vec4(radiance * cascadeWeight / float(rayCount), 1.0));
 }
 """;
 
@@ -395,6 +475,92 @@ void main()
     vec4 scene = texture(uSceneTexture, uv);
     vec3 radiance = texture(uRadianceTexture, uv).rgb * uRadianceIntensity;
     imageStore(uOutputImage, pixel, vec4(clamp(scene.rgb + radiance, 0.0, 1.0), scene.a));
+}
+""";
+
+    /// <summary>
+    /// GPU 粒子 point-sprite 顶点 shader，定义 plan/09 §4.5 的粒子 buffer 到屏幕空间契约。
+    /// </summary>
+    public const string ParticlePointSpriteVertex = """
+#version 430
+
+// particle_pointsprite.vert
+layout(location = 0) in vec2 aWorldPosition;
+layout(location = 1) in uint aMaterialId;
+layout(location = 2) in uint aColorVariant;
+layout(location = 3) in float aRadiusPixels;
+layout(location = 4) in float aEmissive;
+
+uniform mat4 uCameraViewProjection;
+uniform vec2 uCameraWorldOrigin;
+uniform vec2 uViewportSize;
+uniform float uPixelsPerWorldUnit;
+uniform float uPointSizeScale;
+
+flat out uint vMaterialId;
+flat out uint vColorVariant;
+flat out float vEmissive;
+out vec2 vWorldPosition;
+
+void main()
+{
+    // GPU particle buffer attributes mirror the render-side particle SoA/VBO packing.
+    vec2 cameraRelativeWorldPosition = aWorldPosition - uCameraWorldOrigin;
+    gl_Position = uCameraViewProjection * vec4(cameraRelativeWorldPosition, 0.0, 1.0);
+    gl_PointSize = max(1.0, aRadiusPixels * 2.0 * uPixelsPerWorldUnit * uPointSizeScale);
+
+    vMaterialId = aMaterialId;
+    vColorVariant = aColorVariant;
+    vEmissive = aEmissive;
+    vWorldPosition = aWorldPosition;
+}
+""";
+
+    /// <summary>
+    /// GPU 粒子 point-sprite 片元 shader，定义材质纹理、colorVariant 与 emissive 输出契约。
+    /// </summary>
+    public const string ParticlePointSpriteFragment = """
+#version 430
+
+// particle_pointsprite.frag
+layout(binding = 0) uniform sampler2DArray uMaterialTextureArray;
+uniform float uAlphaCutoff;
+uniform float uEmissiveScale;
+
+flat in uint vMaterialId;
+flat in uint vColorVariant;
+flat in float vEmissive;
+in vec2 vWorldPosition;
+
+layout(location = 0) out vec4 oSceneColor;
+layout(location = 1) out vec4 oEmissiveColor;
+
+vec2 pointSpriteUv()
+{
+    return gl_PointCoord;
+}
+
+void main()
+{
+    vec2 spriteUv = pointSpriteUv();
+    vec2 centered = (spriteUv * 2.0) - vec2(1.0);
+    if (dot(centered, centered) > 1.0)
+    {
+        discard;
+    }
+
+    float materialLayer = float(vMaterialId);
+    vec4 materialSample = texture(uMaterialTextureArray, vec3(spriteUv, materialLayer));
+    float variant = float(vColorVariant & 255u) / 255.0;
+    vec3 variantTint = mix(vec3(0.9, 0.95, 1.0), vec3(1.1, 1.0, 0.9), variant);
+    vec4 scene = vec4(materialSample.rgb * variantTint, materialSample.a);
+    if (scene.a <= uAlphaCutoff)
+    {
+        discard;
+    }
+
+    oSceneColor = scene;
+    oEmissiveColor = vec4(scene.rgb * vEmissive * uEmissiveScale, scene.a);
 }
 """;
 

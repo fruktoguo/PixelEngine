@@ -123,11 +123,11 @@ cascade 层数 `RadianceCascadeCount`、每层角度/空间分辨率、射线步
 - [x] 工作组尺寸（16×16×1）已作 `EngineConstants` 常量并按 `GL_MAX_COMPUTE_WORK_GROUP_*` 校验；compute bloom 已接入 `RenderPipelineSettings.PreferComputeLighting` 热切换，并用 GL smoke 读回验证 solid 输入与 fragment bloom 像素等价。
 
 ### 4.4 Radiance Cascades 可选 GI（§3.4，架构 §9.4）
-- [~] `rc_sdf_jfa.comp`（CP-R0）：GLSL 430 compute skeleton 与 render-side no-readback 契约已登记；真实 JFA SDF 算法待补。
-- [~] `rc_cascade_build.comp`（CP-R1）：GLSL 430 compute skeleton、`uCascadeIndex`/`uRayCount`/`uSdfTexture` 契约已登记；真实 cascade 射线采样待补。
-- [~] `rc_merge.comp`（CP-R2）：GLSL 430 compute skeleton 与 merge image 契约已登记；真实高→低 cascade 合并待补。
-- [~] `rc_apply.comp`（CP-R3）：GLSL 430 compute skeleton 与 radiance apply 契约已登记；真实 GI 应用与视觉验收待补。
-- [x] `RadianceCascadeCount`/角度/空间分辨率/射线步数作 `EngineConstants` 常量与质量档；模式默认关、G4 控制、对 plan/08 透明。
+- [x] `rc_sdf_jfa.comp`（CP-R0）：occluder/solidity → Jump-Flood SDF，使用 ping-pong SDF 纹理并保持 render-side no-readback 契约。
+- [x] `rc_cascade_build.comp`（CP-R1）：逐 cascade 角度/空间分辨率射线区间采样，写 cascade 纹理。
+- [x] `rc_merge.comp`（CP-R2）：高→低 cascade 双线性射线合并。
+- [x] `rc_apply.comp`（CP-R3）：cascade 辐照应用到光照 buffer + 叠 emissive。
+- [~] `RadianceCascadeCount`/角度/空间分辨率/射线步数作 `EngineConstants` 常量与质量档；模式默认关已落地，G4/plan/08 主线接入与视觉质量档待补。
 
 ### 4.5 GPU 粒子 point-sprite（§3.5，架构 §9.3）
 - [ ] `GpuParticleRenderer`：读 `plan/05` 粒子 SoA 缓冲，POH 暂存→persistent-mapped/orphan VBO/SSBO 上传仅 `activeCount` 个，零 per-frame 托管分配。
