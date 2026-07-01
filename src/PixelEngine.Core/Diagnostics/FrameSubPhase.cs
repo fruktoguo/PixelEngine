@@ -41,6 +41,36 @@ public enum FrameSubPhase
     GpuUpload,
 
     /// <summary>
+    /// render buffer 构建。
+    /// </summary>
+    RenderBufferBuild,
+
+    /// <summary>
+    /// 自由粒子 stamp。
+    /// </summary>
+    ParticleStamp,
+
+    /// <summary>
+    /// 光照合成。
+    /// </summary>
+    Lighting,
+
+    /// <summary>
+    /// Bloom 后处理。
+    /// </summary>
+    Bloom,
+
+    /// <summary>
+    /// Dither、gamma 与 CRT 后处理。
+    /// </summary>
+    PostProcess,
+
+    /// <summary>
+    /// Present / SwapBuffers。
+    /// </summary>
+    Present,
+
+    /// <summary>
     /// 音频派发。
     /// </summary>
     AudioDispatch,

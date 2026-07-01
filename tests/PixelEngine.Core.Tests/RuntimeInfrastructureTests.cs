@@ -187,6 +187,23 @@ public sealed class RuntimeInfrastructureTests
     }
 
     /// <summary>
+    /// 验证 FrameProfiler 接受全部细分相位，包含渲染管线诊断项。
+    /// </summary>
+    [Fact]
+    public void FrameProfilerRecordsAllSubPhases()
+    {
+        FrameProfiler profiler = new();
+        profiler.BeginFrame();
+
+        foreach (FrameSubPhase phase in Enum.GetValues<FrameSubPhase>())
+        {
+            profiler.RecordSub(phase, 0.1 + (int)phase);
+        }
+
+        Assert.Equal(FrameStats.SubPhaseCount, Enum.GetValues<FrameSubPhase>().Length);
+    }
+
+    /// <summary>
     /// 验证关键编译期常量与架构值一致。
     /// </summary>
     [Fact]

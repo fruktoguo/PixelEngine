@@ -47,14 +47,39 @@ public sealed class CompositePass : IDisposable
         ArgumentNullException.ThrowIfNull(quad);
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        _program.Use();
+        Begin(emissive, visibility);
         world.Bind(0);
+        quad.Draw();
+    }
+
+    /// <summary>
+    /// 绘制 scene + emissive + visibility composite。输出 framebuffer 与 viewport 由调用者在进入 pass 前绑定。
+    /// </summary>
+    /// <param name="scene">world blit 与 overlay 后的 scene。</param>
+    /// <param name="emissive">emissive additive buffer。</param>
+    /// <param name="visibility">可见性遮罩，红通道 0..1。</param>
+    /// <param name="quad">全屏三角形。</param>
+    public void Render(ColorRenderTarget scene, EmissiveBuffer emissive, LightMaskTexture visibility, FullscreenQuad quad)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(emissive);
+        ArgumentNullException.ThrowIfNull(visibility);
+        ArgumentNullException.ThrowIfNull(quad);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        Begin(emissive, visibility);
+        scene.BindTexture(0);
+        quad.Draw();
+    }
+
+    private void Begin(EmissiveBuffer emissive, LightMaskTexture visibility)
+    {
+        _program.Use();
         emissive.BindTexture(1);
         visibility.Bind(2);
         _gl.Uniform1(_worldLocation, 0);
         _gl.Uniform1(_emissiveLocation, 1);
         _gl.Uniform1(_visibilityLocation, 2);
-        quad.Draw();
     }
 
     /// <inheritdoc />
