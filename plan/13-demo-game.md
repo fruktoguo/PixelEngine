@@ -151,7 +151,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 - [!] `CameraFollow : Behaviour`：源码已落地，可跟随同实体 `PlayerController`，支持阻尼、lookahead、边界夹取与缩放；阻塞：缺少 Hosting 将相机快照同步到 Rendering/World residency、脚本运行时自动注入与统一 Transform 后的 `Follow(Entity)`，不能完成画面跟随验收。〔plan/08；§3.4〕
 
 世界交互
-- [ ] `MaterialBrush : Behaviour`：左键放 / 右键擦 / 滚轮调半径 / 数字键 `1`–`0` 切材质，经 `World.SetCell/FillCircle` 写入，`Content.GetMaterialId` 取 id，`Camera.ScreenToWorld` 映射鼠标。〔plan/11、plan/04、plan/08；§3.5〕
+- [!] `MaterialBrush : Behaviour`：源码已落地，支持左键放置、右键擦除、滚轮调半径、数字键 `1`–`0` 切材质，经 `Cells.Paint` 写入，`Materials.Resolve` 取 id，`Camera.ScreenToWorld` 映射鼠标；阻塞：缺少 Hosting/Silk.NET 输入采集、相机快照同步、脚本运行时自动注入与场景 Behaviour 驱动，不能完成运行态验收。〔plan/11、plan/04、plan/08；§3.5〕
 - [ ] `ExplosiveTool : Behaviour`：触发 `World.Explode`（清 cell + 抛粒子 + 推刚体）+ 相机震动 + explosion 音效。〔plan/05、plan/06、plan/10;§3.5〕
 
 内容
