@@ -10,6 +10,7 @@ internal sealed class ScriptInvoker(IScriptDiagnosticSink? diagnostics = null)
 
     private readonly IScriptDiagnosticSink? _diagnostics = diagnostics;
     private readonly List<ScriptExceptionRecord> _exceptions = [];
+    private readonly HashSet<ISystem> _faultedSystems = [];
 
     public IReadOnlyList<ScriptExceptionRecord> Exceptions => _exceptions;
 
@@ -110,6 +111,40 @@ internal sealed class ScriptInvoker(IScriptDiagnosticSink? diagnostics = null)
         }
     }
 
+    public void InvokeFrameSystem(ISystem system, IScriptContext context, float dt)
+    {
+        if (_faultedSystems.Contains(system))
+        {
+            return;
+        }
+
+        try
+        {
+            system.OnFrame(context, dt);
+        }
+        catch (Exception exception)
+        {
+            MarkFaulted(system, "ISystem.OnFrame", exception, context);
+        }
+    }
+
+    public void InvokeSimSystem(ISystem system, IScriptContext context)
+    {
+        if (_faultedSystems.Contains(system))
+        {
+            return;
+        }
+
+        try
+        {
+            system.OnSimTick(context);
+        }
+        catch (Exception exception)
+        {
+            MarkFaulted(system, "ISystem.OnSimTick", exception, context);
+        }
+    }
+
     private static bool ShouldSkip(Behaviour behaviour)
     {
         return behaviour.Faulted || !behaviour.Enabled;
@@ -134,6 +169,31 @@ internal sealed class ScriptInvoker(IScriptDiagnosticSink? diagnostics = null)
             behaviour.TryGetFrameCount());
         _exceptions.Add(record);
         _diagnostics?.ReportScriptException(record);
+    }
+
+    private void MarkFaulted(ISystem system, string callback, Exception exception, IScriptContext context)
+    {
+        _ = _faultedSystems.Add(system);
+        ScriptExceptionRecord record = new(
+            system.GetType().FullName ?? system.GetType().Name,
+            callback,
+            exception.GetType().FullName ?? exception.GetType().Name,
+            exception.Message,
+            TryGetFrameCount(context));
+        _exceptions.Add(record);
+        _diagnostics?.ReportScriptException(record);
+    }
+
+    private static long TryGetFrameCount(IScriptContext context)
+    {
+        try
+        {
+            return context.Time.FrameCount;
+        }
+        catch (NotSupportedException)
+        {
+            return -1;
+        }
     }
 
     private readonly struct InvocationScope(Behaviour? previousBehaviour, ScriptInvoker? previousInvoker) : IDisposable

@@ -131,6 +131,58 @@ public sealed class SmokeTests
         Assert.Equal(["frame:a", "frame:b", "sim:a", "sim:b"], events);
     }
 
+    /// <summary>
+    /// 验证 ISystem 抛异常会被隔离，不影响同帧后续系统，且后续帧不重复刷异常。
+    /// </summary>
+    [Fact]
+    public void SceneIsolatesFaultedSystemCallbacks()
+    {
+        RecordingDiagnostics diagnostics = new();
+        Scene scene = new(diagnostics);
+        List<string> events = [];
+        scene.RegisterSystem(new FailingFrameSystem());
+        scene.RegisterSystem(new RecordingSystem("healthy", events));
+        FakeScriptContext context = new(scene, new FakeGameTime(456));
+
+        scene.DispatchFrameSystems(context, 0.016f);
+        scene.DispatchFrameSystems(context, 0.016f);
+
+        Assert.Equal(["frame:healthy", "frame:healthy"], events);
+        Assert.Equal(1, scene.ScriptExceptionCount);
+        ScriptExceptionRecord record = diagnostics.Records[0];
+        Assert.Equal(typeof(FailingFrameSystem).FullName, record.ScriptType);
+        Assert.Equal("ISystem.OnFrame", record.Callback);
+        Assert.Equal(typeof(InvalidOperationException).FullName, record.ExceptionType);
+        Assert.Equal("frame boom", record.Message);
+        Assert.Equal(456, record.FrameIndex);
+    }
+
+    /// <summary>
+    /// 验证固定 sim tick 系统异常同样被隔离。
+    /// </summary>
+    [Fact]
+    public void SceneIsolatesFaultedSimSystemCallbacks()
+    {
+        RecordingDiagnostics diagnostics = new();
+        Scene scene = new(diagnostics);
+        List<string> events = [];
+        scene.RegisterSystem(new FailingSimSystem());
+        scene.RegisterSystem(new RecordingSystem("healthy", events));
+        FakeScriptContext context = new(scene, new FakeGameTime(789));
+
+        scene.DispatchSimSystems(context);
+        scene.DispatchSimSystems(context);
+
+        Assert.Equal(["sim:healthy", "sim:healthy"], events);
+        Assert.Equal(1, scene.ScriptExceptionCount);
+        ScriptExceptionRecord record = diagnostics.Records[0];
+        Assert.Equal(typeof(FailingSimSystem).FullName, record.ScriptType);
+        Assert.Equal("ISystem.OnSimTick", record.Callback);
+        Assert.Equal(typeof(InvalidOperationException).FullName, record.ExceptionType);
+        Assert.Equal("sim boom", record.Message);
+        Assert.Equal(789, record.FrameIndex);
+    }
+
     private sealed class TestComponent : Behaviour
     {
         public int Value { get; set; }
@@ -179,6 +231,30 @@ public sealed class SmokeTests
         public void OnFrame(IScriptContext context, float dt)
         {
             events.Add($"frame:{name}");
+        }
+    }
+
+    private sealed class FailingFrameSystem : ISystem
+    {
+        public void OnSimTick(IScriptContext context)
+        {
+        }
+
+        public void OnFrame(IScriptContext context, float dt)
+        {
+            throw new InvalidOperationException("frame boom");
+        }
+    }
+
+    private sealed class FailingSimSystem : ISystem
+    {
+        public void OnSimTick(IScriptContext context)
+        {
+            throw new InvalidOperationException("sim boom");
+        }
+
+        public void OnFrame(IScriptContext context, float dt)
+        {
         }
     }
 

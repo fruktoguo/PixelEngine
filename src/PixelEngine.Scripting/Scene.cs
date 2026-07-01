@@ -222,7 +222,7 @@ public sealed class Scene
         ArgumentNullException.ThrowIfNull(context);
         for (int i = 0; i < _systems.Count; i++)
         {
-            _systems[i].OnFrame(context, dt);
+            _invoker.InvokeFrameSystem(_systems[i], context, dt);
         }
     }
 
@@ -234,7 +234,7 @@ public sealed class Scene
         ArgumentNullException.ThrowIfNull(context);
         for (int i = 0; i < _systems.Count; i++)
         {
-            _systems[i].OnSimTick(context);
+            _invoker.InvokeSimSystem(_systems[i], context);
         }
     }
 
