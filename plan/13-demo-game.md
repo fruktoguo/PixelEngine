@@ -146,9 +146,9 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 - [x] CI 依赖方向断言：Demo 无对引擎内部 assembly 的越层 / 反向引用。〔plan/14；§2〕
 
 玩家与相机
-- [!] `PlayerController : Behaviour`：角色脚本后端已可经 `ICharacterController.Create/SetPosition/Move/GetState` 创建、传送并移动 AABB，碰撞状态来自真实 Physics；Scripting 输入快照已支持跑 / 跳所需键位与边沿；阻塞：缺少 Hosting/Silk.NET 输入采集、脚本运行时自动注入与场景 Behaviour 驱动，不能完成可玩控制。〔plan/06、plan/08 输入；§3.3〕
+- [!] `PlayerController : Behaviour`：源码已落地，经 `ICharacterController.Create/SetPosition/Move/GetState` 创建、传送并移动 AABB，实现跑 / 跳 / 贴墙滑落 / 蹬墙、重力、coyote-time 与 jump-buffer；阻塞：缺少 Hosting/Silk.NET 输入采集、脚本运行时自动注入与场景 Behaviour 驱动，不能完成可玩控制验收。〔plan/06、plan/08 输入；§3.3〕
 - [ ] `PlayerHealth : Behaviour`：采样覆盖 cell 材质判定 lava/fire/acid 伤害，喷血粒子、死亡重生、受击 / 跳 / 落地音效。〔plan/11、plan/05、plan/10；§3.3〕
-- [!] `CameraFollow : Behaviour`：Scripting 相机后端已支持 `SetCenter/SetZoom/ScreenToWorld/WorldToScreen` 与快照；阻塞：缺少 Hosting 将相机快照同步到 Rendering/World residency、脚本运行时自动注入与统一 Transform 后的 `Follow(Entity)`。〔plan/08；§3.4〕
+- [!] `CameraFollow : Behaviour`：源码已落地，可跟随同实体 `PlayerController`，支持阻尼、lookahead、边界夹取与缩放；阻塞：缺少 Hosting 将相机快照同步到 Rendering/World residency、脚本运行时自动注入与统一 Transform 后的 `Follow(Entity)`，不能完成画面跟随验收。〔plan/08；§3.4〕
 
 世界交互
 - [ ] `MaterialBrush : Behaviour`：左键放 / 右键擦 / 滚轮调半径 / 数字键 `1`–`0` 切材质，经 `World.SetCell/FillCircle` 写入，`Content.GetMaterialId` 取 id，`Camera.ScreenToWorld` 映射鼠标。〔plan/11、plan/04、plan/08；§3.5〕
