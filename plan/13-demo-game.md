@@ -158,8 +158,8 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 - [x] `content/materials.json`：完整材质集（empty/sand/dirt/ash/water/oil/acid/lava/molten_metal/steam/smoke/acid_gas/fire/stone/wood/ice/metal/glass），含稳定 `Name`、CellType、密度 / 流散 / 可燃 / 相变阈值 / 温度参数 / PropertyFlags(emissive 等) / 纹理 / `AudioCues`，tag 归属。〔plan/04 格式；§3.6〕
 - [x] `content/reactions.json`：熔岩遇水成石、熔岩点燃木、火烧木传播、油速燃、水灭火、酸腐蚀、蒸汽冷凝、熔融金属遇水凝固，用 tag 书写。〔plan/04 格式；§3.6〕
 - [x] 温度相变内容校核：冰融化 / 水沸 / 水冻 / 熔岩冷却 / 金属熔化回凝 / 沙烤玻璃 经 `MaterialDef` 阈值（不进反应表）。〔plan/04 温度场、架构 §7.4;§3.6〕
-- [ ] `content/textures/`：各材质纹理（按世界坐标采样，颜色不入 cell，架构不变式 §7）。〔plan/04;§3.6〕
-- [ ] `content/audio/`：§3.10 音效资产清单全部就位并被 `AudioCues`/`PlayOneShot` 引用。〔plan/10;§3.10〕
+- [x] `content/textures/`：各材质纹理（按世界坐标采样，颜色不入 cell，架构不变式 §7）。〔plan/04;§3.6〕
+- [x] `content/audio/`：§3.10 音效资产清单全部就位并被 `AudioCues`/`PlayOneShot` 引用。〔plan/10;§3.10〕
 
 刚体 / 粒子 / 光照 / 音频（Demo 侧消费）
 - [ ] 木 / 金属可破坏结构布置，验证连通块脱落→Box2D 刚体、可推 / 砸 / 再破坏。〔plan/06;§3.7〕
