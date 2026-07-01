@@ -73,7 +73,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] 反应 pass（相位 4 内）稳态零分配，tag 在加载期展开、运行时零字符串/字典。[plan/04 · §7.4]
 - [x] 温度 stencil（相位 5）稳态零分配。[plan/04 · §7.5]
 - [x] 序列化字节准备（相位 11）用 POH/ArrayPool 缓冲，稳态零分配。[plan/07 · §11.5]
-- [ ] 全热路径静态核查无 LINQ/捕获闭包/装箱/`params`/迭代器/字符串拼接（分析器提升为 error）。[全子系统 · AGENTS §3]
+- [x] 全热路径静态核查无 LINQ/捕获闭包/装箱/`params`/迭代器/字符串拼接（分析器提升为 error）。[全子系统 · AGENTS §3]
 
 ### 4.3 多线程覆盖面
 - [x] CA 4-pass checkerboard 经 plan/02 持久线程池 per-chunk task 派发、遍间 barrier、无锁。[plan/03 · §5.7/不变式 #2]
@@ -156,7 +156,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 > 全部勾选方算本文档完成（AGENTS §7）。验收以**实测/反汇编**为准，不以代码存在为准。
 
 - [ ] **SoA 全覆盖**：所有 sim 热数据 SoA，per-cell 字节预算对账通过，AoS 仅工具路径，颜色不入 cell。[§7.1/不变式 #7]
-- [ ] **稳态零分配**：CA/粒子/render buffer/反应/温度/序列化六条热路径 `MemoryDiagnoser` 全报 `0 B`；热路径静态核查无 LINQ/闭包/装箱/迭代器。[§12.4/AGENTS §3]
+- [x] **稳态零分配**：CA/粒子/render buffer/反应/温度/序列化六条热路径 `MemoryDiagnoser` 全报 `0 B`；热路径静态核查无 LINQ/闭包/装箱/迭代器。[§12.4/AGENTS §3]
 - [x] **多线程齐全**：CA checkerboard、Box2D task 桥、render buffer、CCL/形状重建、粒子积分、温度 stencil、序列化字节准备七项均经持久线程池并行；无每帧 `Parallel.For`；活跃任务少时单线程回退生效。[§5.7/§12.7/§14.2/风险 R7]
 - [ ] **SIMD 到位**：温度 stencil/色混合/bulk fill 等向量化且有 scalar fallback、运行时 light-up；sand movement 确认未向量化；AVX-512 gate 实测无降频净损。[§12.5/§2 挑战三]
 - [ ] **bounds-check 消除**：热方法反汇编无 `RNGCHKFAIL`、向量化 pass 见 ymm/zmm；`[DisassemblyDiagnoser]` 守门基线建立。[§12.6/§17.3]
