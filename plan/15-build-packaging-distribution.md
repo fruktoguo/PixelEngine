@@ -271,8 +271,8 @@ codesign / notarization
 - [ ] Linux 两 RID 产物动态链 glibc（`ldd`/`otool` 等价检查无静态 libc），未 `-static` libc（架构 §14.4、§15）。
 - [ ] macOS arm64（及 x64）产物完成 codesign + notarization + staple，`spctl`/`codesign --verify` 通过（架构 §15）。
 - [x] 「debug 正常 publish 崩」防线：CI verify 阶段对 R2R（动态）与 AOT（静态）两条路径均跑 smoke/加载校验且全绿；任一路径失败即阻断 release（架构 R5）。
-- [ ] Trim：所有 `src/` 引擎库开启 trim/AOT 分析器，CI 下 `IL2xxx`/`IL3xxx` 零警告（即零 error）；无 `TrimmerRootDescriptor`，System.Text.Json 全走源生成（架构 §9.1、§16.3）。
-- [ ] 脚本子系统 trim 豁免生效：R2R 与 AOT 宿主下均能经 Roslyn+ALC 编译并热重载一个最小用户脚本（与 `plan/11` 验收联动）（架构 §13）。
+- [x] Trim：所有 `src/` 引擎库开启 trim/AOT 分析器，CI 下 `IL2xxx`/`IL3xxx` 零警告（即零 error）；无 `TrimmerRootDescriptor`，System.Text.Json 全走源生成（架构 §9.1、§16.3）。
+- [!] 阻塞：脚本子系统 trim 豁免生效：R2R 与 AOT 宿主下均能经 Roslyn+ALC 编译并热重载一个最小用户脚本（与 `plan/11` 验收联动）（架构 §13）。当前 `HotReloadService`/`ScriptLoadContext` 明确依赖 `RequiresDynamicCode` 与可卸载 ALC，NativeAOT 不支持该路径；AOT `--smoke` 已禁用 hot reload，需决策是将该验收改为“R2R 支持热重载、AOT 明确禁用并降级”还是放弃 NativeAOT 通道热重载。
 - [ ] 版本与命名：所有产物按 `PixelEngine-Demo-<version>-<rid>-<channel>` 命名，`InformationalVersion` 含 git sha，构建确定性可复现（同输入同产物 hash）。
 - [ ] 内容打包：每个产物根 `content/` 含 materials.json/reactions.json/纹理/音效/默认场景，结构与开发态一致，引擎加载成功（架构 §16.3、§11）。
 - [ ] `SHA256SUMS` 覆盖全部产物并随 GitHub Release 一并发布。
