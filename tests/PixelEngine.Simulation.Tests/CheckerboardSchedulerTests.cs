@@ -100,6 +100,46 @@ public sealed class CheckerboardSchedulerTests
         Assert.Equal(ChunkState.Sleeping, sleeping.State);
     }
 
+    /// <summary>
+    /// 验证满屏 footprint 常驻但 dirty 为空时，JobSystem 路径不会迭代任何 sleeping chunk。
+    /// </summary>
+    [Fact]
+    public void StepCaSkipsFullSleepingFootprint()
+    {
+        const int activeChunksPerAxis = 8;
+        TestChunkSource source = CreateDenseSource(-1, -1, activeChunksPerAxis, activeChunksPerAxis);
+        for (int cy = 0; cy < activeChunksPerAxis; cy++)
+        {
+            for (int cx = 0; cx < activeChunksPerAxis; cx++)
+            {
+                Chunk chunk = source.GetRequired(new ChunkCoord(cx, cy));
+                Set(chunk, 10, 10, Sand);
+            }
+        }
+
+        using JobSystem jobs = new(workerCount: 2)
+        {
+            SingleThreadThreshold = 0,
+        };
+        SimulationKernel kernel = new(source, CreateMaterials());
+
+        kernel.StepCa(jobs);
+        kernel.SwapDirtyRects();
+
+        for (int cy = 0; cy < activeChunksPerAxis; cy++)
+        {
+            for (int cx = 0; cx < activeChunksPerAxis; cx++)
+            {
+                Chunk chunk = source.GetRequired(new ChunkCoord(cx, cy));
+                Assert.Equal(Sand, Get(chunk, 10, 10));
+                Assert.Equal(0, Get(chunk, 10, 10 + EngineConstants.MoveCap));
+                Assert.Equal(DirtyRect.Empty, chunk.CurrentDirty);
+                Assert.Equal(DirtyRect.Empty, chunk.WorkingDirty);
+                Assert.Equal(ChunkState.Sleeping, chunk.State);
+            }
+        }
+    }
+
     private static MaterialPropsTable CreateMaterials()
     {
         return new MaterialPropsTable(

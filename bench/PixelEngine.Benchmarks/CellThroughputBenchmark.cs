@@ -14,6 +14,7 @@ public class CellThroughputBenchmark : IDisposable
     private const ushort Water = 1;
     private const ushort Oil = 2;
     private const ushort Sand = 3;
+    private const ushort Rock = 4;
     private const int ActiveChunksPerAxis = 8;
     private const int ResidentChunksPerAxis = ActiveChunksPerAxis + 2;
 
@@ -45,15 +46,19 @@ public class CellThroughputBenchmark : IDisposable
     /// <summary>
     /// 活跃 profile。
     /// </summary>
-    [Params(CellProfile.FullActiveLiquid, CellProfile.TypicalDirtyRect)]
+    [Params(CellProfile.FullActiveLiquid, CellProfile.FullStaticSleeping, CellProfile.TypicalDirtyRect)]
     public CellProfile Profile { get; set; }
 
     /// <summary>
     /// 当前 profile 的活跃 cell 数，用于从耗时换算 cells/s。
     /// </summary>
-    public int ActiveCells => Profile == CellProfile.FullActiveLiquid
-        ? ActiveChunksPerAxis * ActiveChunksPerAxis * EngineConstants.ChunkArea
-        : 16 * 16;
+    public int ActiveCells => Profile switch
+    {
+        CellProfile.FullActiveLiquid => ActiveChunksPerAxis * ActiveChunksPerAxis * EngineConstants.ChunkArea,
+        CellProfile.FullStaticSleeping => 0,
+        CellProfile.TypicalDirtyRect => 16 * 16,
+        _ => throw new InvalidOperationException($"未知 cell throughput profile：{Profile}。"),
+    };
 
     /// <summary>
     /// 每次迭代前重建可重复初态。
@@ -65,6 +70,10 @@ public class CellThroughputBenchmark : IDisposable
         if (Profile == CellProfile.FullActiveLiquid)
         {
             FillFullActiveLiquid();
+        }
+        else if (Profile == CellProfile.FullStaticSleeping)
+        {
+            FillFullStaticSleeping();
         }
         else
         {
@@ -129,6 +138,18 @@ public class CellThroughputBenchmark : IDisposable
         chunk.SetCurrentDirty(new DirtyRect(24, 24, 39, 39));
     }
 
+    private void FillFullStaticSleeping()
+    {
+        for (int cy = 0; cy < ActiveChunksPerAxis; cy++)
+        {
+            for (int cx = 0; cx < ActiveChunksPerAxis; cx++)
+            {
+                Chunk chunk = _source.GetRequired(new ChunkCoord(cx, cy));
+                Array.Fill(chunk.Material, Rock);
+            }
+        }
+    }
+
     private void ResetChunks()
     {
         for (int i = 0; i < _chunks.Length; i++)
@@ -141,12 +162,12 @@ public class CellThroughputBenchmark : IDisposable
     private static MaterialPropsTable CreateMaterials()
     {
         return new MaterialPropsTable(
-            [CellType.Empty, CellType.Liquid, CellType.Liquid, CellType.Powder],
-            [0, 120, 80, 180],
-            [0, 0, 0, 0],
-            [0, 0, 0, 0],
-            [0, 0, 0, 0],
-            [0, 0, 0, 0]);
+            [CellType.Empty, CellType.Liquid, CellType.Liquid, CellType.Powder, CellType.Solid],
+            [0, 120, 80, 180, 255],
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0]);
     }
 
     /// <summary>
@@ -156,6 +177,9 @@ public class CellThroughputBenchmark : IDisposable
     {
         /// <summary>64 个活跃 chunk，液体交错。</summary>
         FullActiveLiquid,
+
+        /// <summary>64 个常驻非空 chunk，但 dirty 为空并保持 sleeping。</summary>
+        FullStaticSleeping,
 
         /// <summary>单 chunk 16x16 dirty rect。</summary>
         TypicalDirtyRect,
