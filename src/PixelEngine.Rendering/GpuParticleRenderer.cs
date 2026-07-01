@@ -180,7 +180,6 @@ public sealed unsafe class GpuParticleRenderer : IDisposable
 
     private void UploadVertices(int count)
     {
-        _vertexBuffer.Allocate((nuint)(_vertices.Length * VertexStrideBytes), BufferUsageARB.DynamicDraw);
         _vertexBuffer.Bind();
         ref GpuParticleVertex first = ref MemoryMarshal.GetArrayDataReference(_vertices);
         fixed (GpuParticleVertex* data = &first)
