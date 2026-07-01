@@ -9,6 +9,25 @@ namespace PixelEngine.World.Tests;
 public sealed class ResidencyPlannerTests
 {
     /// <summary>
+    /// 验证默认驻留预算采用 512MB 硬上限，并拒绝高于上限的驱逐水位。
+    /// </summary>
+    [Fact]
+    public void StreamingConfigDefaultsTo512MbCapAndValidatesEvictionTarget()
+    {
+        WorldStreamingConfig defaults = new WorldStreamingConfig().Validate();
+
+        Assert.Equal(512L * 1024 * 1024, defaults.ResidentMemoryCapBytes);
+        Assert.Equal(448L * 1024 * 1024, defaults.EvictionTargetBytes);
+        ArgumentOutOfRangeException exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            _ = new WorldStreamingConfig
+            {
+                ResidentMemoryCapBytes = 1024,
+                EvictionTargetBytes = 2048,
+            }.Validate());
+        Assert.Equal("EvictionTargetBytes", exception.ParamName);
+    }
+
+    /// <summary>
     /// 验证 active/border 中缺失的 chunk 会进入装载计划，已有 chunk 会被重分类。
     /// </summary>
     [Fact]
