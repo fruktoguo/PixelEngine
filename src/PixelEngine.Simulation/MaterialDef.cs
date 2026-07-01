@@ -334,6 +334,11 @@ public readonly record struct AudioCueSet
     public int ExplosionCue { get; init; }
 
     /// <summary>
+    /// 刚体破碎 cue。
+    /// </summary>
+    public int ShatterCue { get; init; }
+
+    /// <summary>
     /// 区域 ambient cue。
     /// </summary>
     public int AmbientCue { get; init; }

@@ -459,6 +459,7 @@ public static class MaterialContentLoader
                 FireCue = json.Fire,
                 SplashCue = json.Splash,
                 ExplosionCue = json.Explosion,
+                ShatterCue = json.Shatter,
                 AmbientCue = json.Ambient,
             };
     }
@@ -613,6 +614,9 @@ public sealed class AudioCueSetJson
 
     /// <summary>爆炸 cue。</summary>
     public int Explosion { get; init; }
+
+    /// <summary>破碎 cue。</summary>
+    public int Shatter { get; init; }
 
     /// <summary>环境 cue。</summary>
     public int Ambient { get; init; }

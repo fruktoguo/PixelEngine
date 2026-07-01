@@ -33,6 +33,7 @@ public sealed class MaterialContentLoaderTests
         Assert.Equal(7, water.TextureId);
         Assert.Equal(6, water.ColorNoise);
         Assert.Equal(1, water.AudioCues.FireCue);
+        Assert.Equal(6, water.AudioCues.ShatterCue);
         Assert.True((water.PropertyFlags & MaterialProperty.BurnableFast) != 0);
         Assert.Equal(table.GetIdOrFallback("ice", 0), water.FreezeTarget);
         Assert.Equal(table.GetIdOrFallback("steam", 0), water.BoilTarget);
@@ -180,7 +181,7 @@ public sealed class MaterialContentLoaderTests
           "baseColor": 4281558681,
           "colorNoise": 6,
           "tags": [ "burnable_fast" ],
-          "audioCues": { "fire": 1, "splash": 2, "impact": 3, "explosion": 4, "ambient": 5 }
+          "audioCues": { "fire": 1, "splash": 2, "impact": 3, "explosion": 4, "ambient": 5, "shatter": 6 }
         },
         { "name": "steam", "type": "Gas", "density": 1, "heatCapacity": 1 },
         { "name": "fire", "type": "Fire", "density": 1, "heatCapacity": 1, "tags": [ "fire", "emissive" ] },
