@@ -120,7 +120,7 @@ cascade 层数 `RadianceCascadeCount`、每层角度/空间分辨率、射线步
 - [x] `bloom_dualkawase_down.comp`（CP-B3）/`bloom_dualkawase_up.comp`（CP-B4）：dual-Kawase 下/上行模糊（当前 GL compute 路径执行 CP-B4，上行 base-additive 保持 fragment 语义；CP-B3 源码已登记，后续可按质量档启用）。
 - [x] `bloom_upsample_composite.comp`（CP-B5）：逐级 additive 上采样合回 target。
 - [~] 可选 `light_composite.comp`（CP-L0）：源码、kernel 加载与 dispatch 入口已落地；与 fog-of-war/emissive fragment 路径切换待补。
-- [~] 工作组尺寸（16×16×1）已作 `EngineConstants` 常量并按 `GL_MAX_COMPUTE_WORK_GROUP_*` 校验；compute bloom 与 plan/08 fragment bloom 像素等价、可切换待后续 pass 接线。
+- [~] 工作组尺寸（16×16×1）已作 `EngineConstants` 常量并按 `GL_MAX_COMPUTE_WORK_GROUP_*` 校验；compute bloom 已接入 `RenderPipelineSettings.PreferComputeLighting` 热切换，像素级等价读回验收待补。
 
 ### 4.4 Radiance Cascades 可选 GI（§3.4，架构 §9.4）
 - [ ] `rc_sdf_jfa.comp`（CP-R0）：occluder/solidity → Jump-Flood SDF。
