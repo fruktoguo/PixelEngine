@@ -112,9 +112,9 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 ### 4.1 测试 / 基准工程骨架
 
-- [ ] 建 `tests/PixelEngine.Simulation.Tests`、`tests/PixelEngine.Physics.Tests`、`tests/PixelEngine.Serialization.Tests`、`tests/PixelEngine.Scripting.Tests` 四工程，引用 xUnit 三包，继承 `Directory.Build.props`，CPM 管版本（plan/00 §4/§6）。
-- [ ] 建 `bench/PixelEngine.Benchmarks`，引用 BenchmarkDotNet（含 `[DisassemblyDiagnoser]`/`[MemoryDiagnoser]`/`[ThreadingDiagnoser]`），Release/R2R 运行配置。
-- [ ] 各被测工程加 `InternalsVisibleTo` 暴露只读测试钩子（确定性模式开关、快照导出、dirty-rect/parity/KeepAlive 状态读取）；不暴露可变内部状态。
+- [x] 建 `tests/PixelEngine.Simulation.Tests`、`tests/PixelEngine.Physics.Tests`、`tests/PixelEngine.Serialization.Tests`、`tests/PixelEngine.Scripting.Tests` 四工程，引用 xUnit 三包，继承 `Directory.Build.props`，CPM 管版本（plan/00 §4/§6）。
+- [x] 建 `bench/PixelEngine.Benchmarks`，引用 BenchmarkDotNet（含 `[DisassemblyDiagnoser]`/`[MemoryDiagnoser]`/`[ThreadingDiagnoser]`），Release/R2R 运行配置。
+- [x] 各被测工程加 `InternalsVisibleTo` 暴露只读测试钩子（确定性模式开关、快照导出、dirty-rect/parity/KeepAlive 状态读取）；不暴露可变内部状态。
 - [x] `DeterministicSimFixture` + 规范化快照序列化器（material 用稳定 name，剔除瞬时位）+ golden 文件目录 `__golden__/`（被测子系统：CA 内核 §6.2/§11.3）。
 
 ### 4.2 Simulation.Tests — CA 内核性质测试（§16.2，最重要）
@@ -168,7 +168,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 ## 5. 验收标准
 
-- [ ] 四个测试工程与基准工程建立、被 `PixelEngine.sln` 包含、CPM 锁版本、`dotnet test` 与 `dotnet run --project bench/...` 均可执行（plan/00 §4/§6）。
+- [x] 四个测试工程与基准工程建立、被 `PixelEngine.sln` 包含、CPM 锁版本、`dotnet test` 与 `dotnet run --project bench/...` 均可执行（plan/00 §4/§6）。
 - [x] `MassConservationTests` 全绿：含跨 chunk 边界与四角用例，单 / 多线程均守恒，能复现并拦截人为注入的「边界吞 / 复制像素」回归（架构 §16.2、R2）。
 - [x] `ReactionConservationTests` 全绿：双输出 / 定向反应在所有边界配置下产物计数严格守恒，能拦截人为注入的「边界翻倍 / 丢失」回归（架构 §7.4、不变式 #4、R2）。
 - [x] `DeterministicRegressionTests` 全绿且 golden 稳定：确定性模式下重复运行 bit 一致，golden 更新有可审查 diff（架构 §6.2）。
@@ -208,8 +208,8 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 按 `AGENTS.md §6`，每完成一个节点用中文 git 提交（type 前缀英文，scope 用 `test`/`build`）：
 
-- [ ] `test(core): 建立四测试工程+基准工程骨架与确定性测试基座`（对应 §4.1）。
-- [ ] `test(sim): CA 内核质量/反应守恒与 parity/KeepAlive/oracle 性质测试`（对应 §4.2）。
+- [x] `test(core): 建立四测试工程+基准工程骨架与确定性测试基座`（对应 §4.1）。
+- [x] `test(sim): CA 内核质量/反应守恒与 parity/KeepAlive/oracle 性质测试`（对应 §4.2）。
 - [ ] `test(physics): 凸分解/inverse-sampling/刚体拆分守恒测试`（对应 §4.3）。
 - [ ] `test(serialization): save-load 往返/材质重映射/版本迁移测试`（对应 §4.4）。
 - [x] `test(script): 热重载/异常隔离/ALC 可回收测试`（对应 §4.5）。

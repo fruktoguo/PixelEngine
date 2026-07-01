@@ -1,3 +1,10 @@
+using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Running;
 
-BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
+IConfig config = DefaultConfig.Instance
+    .AddDiagnoser(MemoryDiagnoser.Default)
+    .AddDiagnoser(ThreadingDiagnoser.Default)
+    .AddDiagnoser(new DisassemblyDiagnoser(new DisassemblyDiagnoserConfig(maxDepth: 3)));
+
+BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config);
