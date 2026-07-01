@@ -1,0 +1,95 @@
+using PixelEngine.Core.Events;
+using PixelEngine.Simulation;
+using Xunit;
+
+namespace PixelEngine.Audio.Tests;
+
+public sealed class AmbientLoopManagerTests
+{
+    [Fact]
+    public void AmbientLoopManagerFadesInHysteresisAndFadesOut()
+    {
+        using NullAudioBackend backend = new();
+        MaterialAudioTable table = BuildTable(ambientCue: 9);
+        BufferResolver buffers = new();
+        AudioSettings settings = new()
+        {
+            MaxAmbientVoices = 1,
+            AmbientEnterThreshold = 0.3f,
+            AmbientExitThreshold = 0.2f,
+            AmbientFadeRate = 0.5f,
+        };
+        using AmbientLoopManager manager = new(backend, table, buffers, settings);
+        CoalescedAudioEvent ambient = new(AudioEventType.AmbientRegion, 0, 0, 1, 0.8f, 4);
+
+        manager.Update([ambient]);
+        manager.Update([]);
+        manager.Update([]);
+
+        Assert.Equal(1, backend.PlayCalls);
+        Assert.Equal(1, backend.StopCalls);
+        Assert.Equal(0, manager.ActiveVoiceCount);
+        Assert.Equal(9, buffers.LastCueHandle);
+    }
+
+    [Fact]
+    public void AmbientLoopManagerIgnoresBelowThresholdAndMissingCue()
+    {
+        using NullAudioBackend backend = new();
+        BufferResolver buffers = new();
+        using AmbientLoopManager manager = new(
+            backend,
+            BuildTable(ambientCue: 0),
+            buffers,
+            new AudioSettings { MaxAmbientVoices = 1, AmbientEnterThreshold = 0.5f });
+
+        manager.Update([new CoalescedAudioEvent(AudioEventType.AmbientRegion, 0, 0, 1, 0.2f, 1)]);
+        manager.Update([new CoalescedAudioEvent(AudioEventType.AmbientRegion, 0, 0, 1, 0.9f, 1)]);
+
+        Assert.Equal(0, backend.PlayCalls);
+        Assert.Equal(0, manager.ActiveVoiceCount);
+    }
+
+    [Fact]
+    public void AmbientLoopManagerCanBeDisabledWithZeroAmbientVoices()
+    {
+        using NullAudioBackend backend = new();
+        using AmbientLoopManager manager = new(
+            backend,
+            BuildTable(ambientCue: 9),
+            new BufferResolver(),
+            new AudioSettings { MaxAmbientVoices = 0 });
+
+        manager.Update([new CoalescedAudioEvent(AudioEventType.AmbientRegion, 0, 0, 1, 1f, 1)]);
+
+        Assert.Equal(0, backend.PlayCalls);
+        Assert.Equal(0, manager.ActiveVoiceCount);
+    }
+
+    private static MaterialAudioTable BuildTable(int ambientCue)
+    {
+        return MaterialAudioTable.FromDefinitions(
+        [
+            new() { Id = 0, Name = "empty", HeatCapacity = 1f },
+            new()
+            {
+                Id = 1,
+                Name = "water",
+                HeatCapacity = 1f,
+                AudioCues = new AudioCueSet { AmbientCue = ambientCue },
+            },
+        ]);
+    }
+
+    private sealed class BufferResolver : IAudioCueBufferResolver
+    {
+        public int LastCueHandle { get; private set; }
+
+        public bool TryResolveBuffer(int cueHandle, out uint buffer)
+        {
+            LastCueHandle = cueHandle;
+            buffer = (uint)cueHandle;
+            return cueHandle > 0;
+        }
+    }
+}

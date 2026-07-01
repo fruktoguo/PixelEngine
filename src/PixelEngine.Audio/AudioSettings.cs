@@ -91,6 +91,21 @@ public sealed class AudioSettings
     public int DefaultCooldownTicks { get; init; } = 4;
 
     /// <summary>
+    /// ambient 区域进入阈值，基于聚合事件 Magnitude。
+    /// </summary>
+    public float AmbientEnterThreshold { get; init; } = 0.35f;
+
+    /// <summary>
+    /// ambient 区域退出阈值，基于聚合事件 Magnitude。
+    /// </summary>
+    public float AmbientExitThreshold { get; init; } = 0.15f;
+
+    /// <summary>
+    /// ambient 每次 Update 的线性淡变步长。
+    /// </summary>
+    public float AmbientFadeRate { get; init; } = 0.08f;
+
+    /// <summary>
     /// 冷却表容量，必须是正的 2 的幂。
     /// </summary>
     public int CooldownTableCapacity { get; init; } = 1024;
@@ -123,6 +138,14 @@ public sealed class AudioSettings
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxAmbientRegionEventsPerFrame);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(CoalesceBucketSize);
         ArgumentOutOfRangeException.ThrowIfNegative(DefaultCooldownTicks);
+        ValidateUnitRange(AmbientEnterThreshold, nameof(AmbientEnterThreshold));
+        ValidateUnitRange(AmbientExitThreshold, nameof(AmbientExitThreshold));
+        ValidateUnitRange(AmbientFadeRate, nameof(AmbientFadeRate));
+        if (AmbientExitThreshold > AmbientEnterThreshold)
+        {
+            throw new ArgumentOutOfRangeException(nameof(AmbientExitThreshold), "AmbientExitThreshold 必须小于等于 AmbientEnterThreshold。");
+        }
+
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(CooldownTableCapacity);
         return System.Numerics.BitOperations.IsPow2(CooldownTableCapacity)
             ? this
@@ -143,6 +166,15 @@ public sealed class AudioSettings
         if (!float.IsFinite(value))
         {
             throw new ArgumentOutOfRangeException(parameterName, $"{parameterName} 必须为有限数。");
+        }
+    }
+
+    private static void ValidateUnitRange(float value, string parameterName)
+    {
+        ValidateFinite(value, parameterName);
+        if (value is < 0f or > 1f)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, $"{parameterName} 必须位于 [0,1]。");
         }
     }
 }
