@@ -104,7 +104,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 
 ### 4.6 GC 策略
 - [ ] BenchmarkDotNet 实测对比 Workstation+Concurrent vs Server GC，按最坏停顿定档。[plan/02/14 · §12.4]
-- [ ] 两模式均配 `GCSettings.LatencyMode = SustainedLowLatency`。[plan/02 · §12.4]
+- [x] 两模式均配 `GCSettings.LatencyMode = SustainedLowLatency`。[plan/02 · §12.4]
 - [ ] 跨界缓冲走 POH/`NativeMemory` 零拷贝双缓冲（sim/physics/render）。[plan/02 · §13/§14.3]
 - [ ] 对象池/粒子池覆盖全部短命对象（particle/body/shape/scratch）。[plan/02/05/06 · §12.4]
 - [ ] 关键段按需 `GC.TryStartNoGCRegion`。[plan/02 · §12.4]
