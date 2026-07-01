@@ -185,6 +185,36 @@ public sealed class EngineOverloadControllerTests
         Assert.False(api.IsOverlayEnabled(DebugOverlayKind.DirtyRects));
     }
 
+    /// <summary>
+    /// 验证脚本运行时控制 API 真实驱动 Engine Play/Edit 模式与关闭请求。
+    /// </summary>
+    [Fact]
+    public void ScriptRuntimeControlApiControlsEngineModeAndShutdownRequest()
+    {
+        using Engine engine = new EngineBuilder()
+            .UseHeadless()
+            .WithWorkerCount(1)
+            .Build();
+        EngineScriptRuntimeControlApi api = new(engine);
+
+        RuntimeControlSnapshot initial = api.Capture();
+        Assert.True(initial.IsPlaying);
+        Assert.False(initial.IsShutdownRequested);
+
+        api.PauseSimulation();
+        Assert.Equal(EngineExecutionMode.Edit, engine.Mode);
+        Assert.False(api.Capture().IsPlaying);
+
+        api.ResumeSimulation();
+        Assert.Equal(EngineExecutionMode.Play, engine.Mode);
+        Assert.True(api.Capture().IsPlaying);
+
+        RuntimeControlResult quit = api.RequestShutdown();
+        Assert.True(quit.Success);
+        Assert.True(engine.IsShutdownRequested);
+        Assert.True(api.Capture().IsShutdownRequested);
+    }
+
     private static void RegisterAllPhases(EngineBuilder builder, List<EnginePhase> phases)
     {
         for (int i = 0; i < 12; i++)

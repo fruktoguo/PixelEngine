@@ -22,7 +22,6 @@ public sealed class Engine : IDisposable
     private readonly EngineLifecycle _lifecycle;
     private readonly List<IDisposable> _ownedRuntimeResources = [];
     private IScriptRuntime? _attachedScriptRuntime;
-    private bool _shutdownRequested;
     private bool _disposed;
 
     internal Engine(EngineContext context, EnginePhasePipeline phases, EngineLifecycle lifecycle)
@@ -62,6 +61,11 @@ public sealed class Engine : IDisposable
     /// 当前由用户或工具请求的基础 sim 频率；自动降级可临时覆盖到更低档。
     /// </summary>
     public double RequestedSimHz { get; private set; }
+
+    /// <summary>
+    /// 是否已请求在当前 tick 结束后关闭。
+    /// </summary>
+    public bool IsShutdownRequested { get; private set; }
 
     /// <summary>
     /// 切换到运行模式，后续 tick 会推进 sim/physics。
@@ -113,6 +117,15 @@ public sealed class Engine : IDisposable
         {
             Mode = EngineExecutionMode.Edit;
         }
+    }
+
+    /// <summary>
+    /// 请求宿主在当前 tick 结束后关闭；若未处于 RunOneTick，可由下一次 tick 消费该请求。
+    /// </summary>
+    public void RequestShutdown()
+    {
+        ThrowIfShutdown();
+        IsShutdownRequested = true;
     }
 
     /// <summary>
@@ -242,7 +255,7 @@ public sealed class Engine : IDisposable
         {
             if (window.IsClosing)
             {
-                _shutdownRequested = true;
+                IsShutdownRequested = true;
             }
         });
         return window;
@@ -647,6 +660,7 @@ public sealed class Engine : IDisposable
         IInputApi input = ResolveInputApi();
         ILightingApi lighting = ResolveLightingApi();
         IDiagnosticsApi diagnostics = ResolveDiagnosticsApi();
+        IRuntimeControlApi runtimeControl = ResolveRuntimeControlApi();
         IAudioApi? audio = ResolveAudioApiOrNull();
         PhysicsSystem? physics = Context.TryGetService(out PhysicsSystem registeredPhysics)
             ? registeredPhysics
@@ -666,7 +680,8 @@ public sealed class Engine : IDisposable
             camera,
             input,
             lighting,
-            diagnostics);
+            diagnostics,
+            runtimeControl);
         Context.RegisterService(scriptContext);
         simulationDriver?.AttachScriptContext(scriptContext);
         AttachScripting(scriptContext, runtime);
@@ -867,6 +882,19 @@ public sealed class Engine : IDisposable
 
         EngineScriptDiagnosticsApi created = new(Context.Counters, Context.Clock, ResolveDebugOverlaySettings());
         Context.RegisterService<IDiagnosticsApi>(created);
+        Context.RegisterService(created);
+        return created;
+    }
+
+    private IRuntimeControlApi ResolveRuntimeControlApi()
+    {
+        if (Context.TryGetService(out IRuntimeControlApi runtime))
+        {
+            return runtime;
+        }
+
+        EngineScriptRuntimeControlApi created = new(this);
+        Context.RegisterService<IRuntimeControlApi>(created);
         Context.RegisterService(created);
         return created;
     }
@@ -1232,7 +1260,7 @@ public sealed class Engine : IDisposable
 
             Phases.Execute(this, timing);
             Context.Counters.SimHz = Context.Clock.SimHz;
-            if (_shutdownRequested)
+            if (IsShutdownRequested)
             {
                 Shutdown();
             }
@@ -1276,7 +1304,7 @@ public sealed class Engine : IDisposable
         Exception? lifecycleFailure = null;
         try
         {
-            _shutdownRequested = false;
+            IsShutdownRequested = false;
             _attachedScriptRuntime?.Shutdown();
             DisposeOwnedRuntimeResources();
             _lifecycle.Shutdown();

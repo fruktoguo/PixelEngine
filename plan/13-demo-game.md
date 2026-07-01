@@ -131,12 +131,12 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 | 点光源 / fog-of-war reveal | `ILighting.AddPointLight(...)`、`RevealAround(pos,radius)` | plan/08（光照） | 部分实现：Scripting 已有 `ScriptLightingApi`，Hosting 已有 `ScriptLightingSynchronizer` 同步 Rendering `LightSource` 与 `FogOfWarBuffer`，`RenderPhaseDriver` 已把 fog-of-war 与点光源传入 `RenderPipeline`，点光源已合成进 visibility mask；仍缺真实窗口光照验收 |
 | 一次性音效播放 | `IAudio.PlayOneShot(clip, worldPos?)` | plan/10 | 部分实现：Scripting `IAudioApi` 已支持 `PlayOneShot` 与 `PlayAt`，`ScriptAudioApi` 可桥接真实 `AudioSystem`；Hosting 已能从 `content/audio` 预加载 Demo wav clip 并注入脚本上下文，`audio/cues.json` 已把材质事件 cue 句柄映射到已加载 clip buffer，`World.Explode` 可触发 explosion 音频事件；仍缺窗口态音频验收 |
 | 材质化音效配置 | `MaterialDef.AudioCues`（materials.json 字段） | plan/04 + plan/10 | 已规划 |
-| 即时模式 HUD / 菜单 | `IGuiContext`（窗口 / 文本 / 按钮 / 色块），`Behaviour.OnGui` | plan/11 / plan/12 | 部分实现：脚本公开 `IGuiContext`、`Behaviour.OnGui` 调度链、Hosting/Editor ImGui host 与 DemoHud 已落地；PauseMenu 仍需脚本可见重开/退出/调试叠层/打开 Editor 控制 API |
+| 即时模式 HUD / 菜单 | `IGuiContext`（窗口 / 文本 / 按钮 / 色块），`Behaviour.OnGui` | plan/11 / plan/12 | 部分实现：脚本公开 `IGuiContext`、`Behaviour.OnGui` 调度链、Hosting/Editor ImGui host、DemoHud 与 PauseMenu 已落地；PauseMenu 已可继续/暂停、请求退出、切换调试叠层，仍缺脚本可见重开关卡 / 打开完整 Editor 控制 API |
 | 性能 / 状态诊断读取 | `IDiagnostics`（fps、sim 频率、活跃 chunk / 粒子 / 刚体计数） | plan/02（诊断） | 部分实现：脚本 `IDiagnosticsApi.Capture()` 已从 Hosting `EngineCounters` 暴露 FPS、SimHz、活跃/常驻 chunk、自由粒子与刚体数；仍缺更细分相位耗时、active/resident chunk 生产侧完整更新与窗口态 HUD 验收 |
 | 调试叠层开关 | `IDiagnostics.ToggleOverlay(OverlayKind)` | plan/12（调试叠层）+ 架构 §17.2 | 部分实现：脚本 `IDiagnosticsApi` 已可切换 dirty rect / chunk parity / KeepAlive / cell parity / temperature / owned body / particle / CCL 叠层，RenderPhaseDriver 已把 DebugOverlayController 接入逐 cell 着色与 overlay command；仍缺真实窗口验收 |
 | 确定性 RNG（关卡生成） | `IRandom`（可种子化） | plan/02（RNG） | 已规划 |
 
-API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosting 的 Physics 刚体快照恢复与 world seed/game time 完整恢复；plan/06 的 kinematic 角色推动 dynamic 刚体公开交互；脚本可见重开/退出/打开 Editor 控制 API；plan/08 的脚本点光源彩色照明窗口态验收。上述缺口均在本表中保持「需引擎补 API」或「部分实现但阻塞」状态，Demo 不允许绕过公开 API 直接引用内部实现。
+API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosting 的 Physics 刚体快照恢复与 world seed/game time 完整恢复；plan/06 的 kinematic 角色推动 dynamic 刚体公开交互；脚本可见重开关卡 / 打开完整 Editor 控制 API；plan/08 的脚本点光源彩色照明窗口态验收。上述缺口均在本表中保持「需引擎补 API」或「部分实现但阻塞」状态，Demo 不允许绕过公开 API 直接引用内部实现。
 
 ---
 
@@ -175,7 +175,7 @@ API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosti
 - [!] `GoalTrigger : Behaviour`：源码已落地，玩家进入触发区后触发通关状态、音效、粒子与光照反馈；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API，fog-of-war 与点光源请求已可进入 Rendering 管线；阻塞：缺少胜利菜单/GUI 服务、窗口态通关画面与音效触发验收。〔plan/11、plan/10;§3.11〕
 - [x] `content/scenes/lava-mine.scene`：已按 `.scene` 文档格式序列化 `LevelDirector` 入口与关卡参数，默认启动路径可加载并物化为等价脚本场景。〔plan/12、plan/07;§3.2、§3.11〕
 - [!] `DemoHud : Behaviour.OnGui`：源码已落地，经 `IGuiContext` 显示玩家生命、当前材质色块、笔刷半径、爆破次数、目标状态与 FPS/SimHz/Frame/活跃 chunk/自由粒子/刚体数；阻塞：缺真实窗口 HUD 验收。〔plan/11、plan/12、plan/02;§3.12〕
-- [!] `PauseMenu : Behaviour.OnGui`：阻塞：脚本层尚缺重开关卡 / 请求退出 / 打开内嵌 Editor 的公开控制 API；调试叠层切换 API 已落地但菜单本体仍未实现。〔plan/12、架构 §17.2;§3.12〕
+- [!] `PauseMenu : Behaviour.OnGui`：源码已落地，经 `IGuiContext` 绘制暂停窗口，Esc 切换暂停/继续，`Context.Runtime` 请求退出，`Context.Diagnostics` 切换 dirty rect / parity / KeepAlive / temperature / owned body / particle / CCL 调试叠层；阻塞：脚本层尚缺可完整重建 world/scene/script runtime 的重开关卡 API，以及从 HUD-only ImGui host 打开完整内嵌 Editor 面板的公开控制 API。〔plan/12、架构 §17.2;§3.12〕
 
 API 缺口登记
 - [x] 把 §3.13 表中所有「需引擎补 API」项作为引擎 API 缺口逐条登记并上报，确认被对应 plan（Hosting/06/05/08/10/11/12/07）接纳；未接纳者标 `- [!] 阻塞`。〔AGENTS.md §0、§2;§3.13〕
