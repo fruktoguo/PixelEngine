@@ -97,9 +97,9 @@ ambient 声部独立于 §3.3 的一次性 voice 池，使用单独的小型 sou
 
 ### 3.6 `MaterialDef.AudioCues` 映射
 
-`MaterialAudioTable` 把 materialId 映射到样本集与参数，是事件→具体 buffer 的解析层。`ResolveCue(ushort materialId, AudioEventType type)` 返回一个 `AudioCue`，据其在多个候选样本中随机选一（用 Core 的 RNG，不分配），并产出本次播放的音量 / 音高（在 cue 的范围内按 `Magnitude` / `Count` 插值 + 随机抖动）。表在初始化时由 Content 的 `MaterialDef[]` 一次性扁平化为按 `materialId × AudioEventType` 索引的数组，热路径零字典 / 零字符串（与架构 §7.4「加载期展开、运行时零字符串」同理）。
+`MaterialAudioTable` 把 materialId 映射到稳定 cue handle 与默认播放参数，是事件→具体 buffer 的解析层。`ResolveCue(ushort materialId, AudioEventType type)` 返回一个 `MaterialAudioPlayback`，包含 cue handle、音量、音高和优先级；其中音量 / 音高按 `Magnitude` / `Count` 插值并带确定性 pitch 抖动。表在初始化时由 `MaterialDef[]` 一次性扁平化为按 `materialId × AudioEventType` 索引的数组，热路径零字典 / 零字符串（与架构 §7.4「加载期展开、运行时零字符串」同理）。
 
-`AudioCueSet` / `AudioCue` 的数据形状作为对 plan/04（Content）的契约（由 Content 拥有定义以避免循环依赖），本文档规定其必需字段：`AudioCueSet` 按 `AudioEventType` 分组持有若干 `AudioCue`；每个 `AudioCue` 含样本 `assetId` 列表（多样本随机化）、音量范围 `VolumeMin/Max`、音高范围 `PitchMin/Max`、冷却 `CooldownTicks`、单材质同类并发上限 `MaxInstances`，以及发声判定阈值 `ImpactMinSpeed`（impact 用）/ ambient 占比 `EnterThreshold/ExitThreshold`。未配置某类型 cue 的材质对该类型静默（`ReactionCount==0` 式早退，零开销）。
+`AudioCueSet` 的数据形状沿用 plan/04 已完成契约：`ImpactCue` / `FireCue` / `SplashCue` / `ExplosionCue` / `ShatterCue` / `AmbientCue` 均为内容侧稳定 cue handle，0 表示未配置。`MaterialAudioPlayer` 通过 `IAudioCueBufferResolver` 把 cue handle 解析为已加载 OpenAL buffer；真实音频资产、clip cache、WAV 解码和流式播放由 §3.8 / 节点 4 接入。未配置某类型 cue 的材质对该类型静默（`ReactionCount==0` 式早退，零开销）。
 
 ### 3.7 与帧节奏的关系与音频派发步骤
 
@@ -133,21 +133,21 @@ OpenAL 封装与生命周期：
 
 事件消费与限频去重（消费侧，主线程帧尾）：
 
-- [ ] `AudioEventType` 消费侧语义对齐 Core 契约枚举：`ParticleImpact`/`FireCrackle`/`LiquidSplash`/`Explosion`/`RigidbodyShatter`/`AmbientRegion`（架构 §10.2，相位 3/4/5/7/8a）。
-- [ ] `AudioDispatcher.Dispatch`：排空 Core MPSC ring → coalesce → 冷却过滤 → 解析 → 取 voice → 播放，全程零分配（AGENTS §3，相位 8 后）。
-- [ ] `AudioEventCoalescer`：按类型每帧上限 `PerTypeCap`（impact/splash/shatter… 各自上限），超限合并 / 丢弃保留最大 `Magnitude`（架构 §10.2 强制限频）。
-- [ ] 近坐标合并：世界坐标量化到 `CoalesceBucketSize` 桶，同 `(type,bucket)` 合并（取 max `Magnitude`、累加 `Count`），开放寻址定容哈希、帧末整体清空（架构 §10.2 防满屏过载）。
-- [ ] `CooldownTracker`：`(materialId,type)` 冷却 `CooldownTicks` 去重，定容零分配。
+- [x] `AudioEventType` 消费侧语义对齐 Core 契约枚举：`ParticleImpact`/`FireCrackle`/`LiquidSplash`/`Explosion`/`RigidbodyShatter`/`AmbientRegion`（架构 §10.2，相位 3/4/5/7/8a）。
+- [x] `AudioDispatcher.Dispatch`：排空 Core MPSC ring → coalesce → 冷却过滤 → 解析 → 取 voice → 播放，全程零分配（AGENTS §3，相位 8 后）。
+- [x] `AudioEventCoalescer`：按类型每帧上限 `PerTypeCap`（impact/splash/shatter… 各自上限），超限合并 / 丢弃保留最大 `Magnitude`（架构 §10.2 强制限频）。
+- [x] 近坐标合并：世界坐标量化到 `CoalesceBucketSize` 桶，同 `(type,bucket)` 合并（取 max `Magnitude`、累加 `Count`），开放寻址定容哈希、帧末整体清空（架构 §10.2 防满屏过载）。
+- [x] `CooldownTracker`：`(materialId,type)` 冷却 `CooldownTicks` 去重，定容零分配。
 
 材质化映射与各事件类型：
 
-- [ ] `MaterialAudioTable`：初始化期把 `MaterialDef[].AudioCues` 扁平化为 `materialId × AudioEventType` 数组；`ResolveCue` 返回样本 + 音量 / 音高（按 `Magnitude`/`Count` 插值 + RNG 抖动），热路径零字符串 / 零字典（架构 §7.3/§7.4）。
-- [ ] 规定并文档化 `AudioCueSet` / `AudioCue` 契约形状（样本列表 / 音量范围 / 音高范围 / 冷却 / `MaxInstances` / `ImpactMinSpeed` / ambient 阈值），作为对 plan/04 的契约（架构 §7.3）。
-- [ ] impact 播放：相位 3 高速沉积事件 → 按材质 + 冲击速度选样 / 调音（架构 §3.3 相位 3、§7.6）。
-- [ ] fire crackle 播放：相位 4/5 燃烧聚合区域 → ambient 化，绝不每火 cell 一声（架构 §3.3 相位 4/5、§7.4/§7.5）。
-- [ ] splash 播放：相位 3/4 液体飞溅 / 落水（架构 §3.3 相位 3/4）。
-- [ ] explosion 播放：相位 7 冲击事件（架构 §3.3 相位 7、§7.6）。
-- [ ] shatter 播放：相位 8a 刚体破碎 / 拆分（架构 §3.3 相位 8a、§8.4）。
+- [x] `MaterialAudioTable`：初始化期把 `MaterialDef[].AudioCues` 扁平化为 `materialId × AudioEventType` 数组；`ResolveCue` 返回 cue handle + 音量 / 音高（按 `Magnitude`/`Count` 插值 + 确定性 pitch 抖动），热路径零字符串 / 零字典（架构 §7.3/§7.4）。
+- [x] 规定并文档化 `AudioCueSet` 契约形状（`ImpactCue`/`FireCue`/`SplashCue`/`ExplosionCue`/`ShatterCue`/`AmbientCue` 稳定 cue handle，buffer 解析由节点 4 接入），作为对 plan/04 的契约（架构 §7.3）。
+- [x] impact 播放：相位 3 高速沉积事件 → 按材质 + 冲击速度选样 / 调音（架构 §3.3 相位 3、§7.6）。
+- [x] fire crackle 播放：相位 4/5 燃烧聚合区域 → 按合并后的区域事件播放 FireCue，绝不每火 cell 一声（架构 §3.3 相位 4/5、§7.4/§7.5）。
+- [x] splash 播放：相位 3/4 液体飞溅 / 落水（架构 §3.3 相位 3/4）。
+- [x] explosion 播放：相位 7 冲击事件（架构 §3.3 相位 7、§7.6）。
+- [x] shatter 播放：相位 8a 刚体破碎 / 拆分（架构 §3.3 相位 8a、§8.4）。
 - [ ] `AmbientLoopManager` + `AmbientVoice`：材质化 ambient（熔岩咕嘟 / 深水低频），带滞回交叉淡变（`Enter/ExitThreshold`、`AmbientFadeRate`），独立 ambient source 集（架构 §10.2）。
 
 资产加载与播放接口：
@@ -172,10 +172,10 @@ OpenAL 封装与生命周期：
 
 - [ ] 设备打开成功时材质化音效按事件播放；headless / 无设备时静默降级、引擎不崩溃（架构 §10.1）。
 - [ ] impact / fire crackle / splash / explosion / shatter / 材质化 ambient 六类事件均能正确触发并听感区分（架构 §10.2）。
-- [ ] **限频生效**：单帧注入 1000 个同坐标同类 impact，实际取用 voice ≤ `PerTypeCap`，其余计入 `Dropped`（架构 §10.2，单元测试用 `NullAudioBackend`）。
-- [ ] **近坐标合并生效**：同帧大量相邻同类事件合并为按桶数量级的少量播放，非逐事件播放。
-- [ ] **冷却去重生效**：同 `(material,type)` 在 `CooldownTicks` 内的二次事件被抑制。
-- [ ] **零分配**：稳态帧的音频派发路径零托管堆分配（BenchmarkDotNet `MemoryDiagnoser` 或分配计数器验证，AGENTS §3/§7）。
+- [x] **限频生效**：单帧注入 1000 个同坐标同类 impact，实际取用 voice ≤ `PerTypeCap`，其余计入 `Dropped`（架构 §10.2，单元测试用 `NullAudioBackend`）。
+- [x] **近坐标合并生效**：同帧大量相邻同类事件合并为按桶数量级的少量播放，非逐事件播放。
+- [x] **冷却去重生效**：同 `(material,type)` 在 `CooldownTicks` 内的二次事件被抑制。
+- [x] **零分配**：稳态帧的音频派发路径零托管堆分配（BenchmarkDotNet `MemoryDiagnoser` 或分配计数器验证，AGENTS §3/§7）。
 - [ ] **预算达标**：音频派发耗时计入并满足 §1.4「游戏逻辑 + 音频派发 ≤1ms」；混音 / 解码不出现在主线程帧时间分项（架构 §10.3，诊断 HUD 验证）。
 - [ ] **定位正确**：声源 pan 与衰减随 listener / 相机移动正确变化（左右像素声像、远近音量）。
 - [ ] **与降频一致**：sim 降到 30Hz 时事件密度随之下降、听感与画面同步；render-only 帧声场连续无跳变（架构 §4.2/§10.3）。
@@ -209,8 +209,8 @@ OpenAL 封装与生命周期：
 对应架构 §18 里程碑 **M8（音频）**。按 AGENTS §6 每完成一个节点立即用中文 git 提交（`scope=audio`）：
 
 - [x] 节点 1 `feat(audio): OpenAL 设备/上下文/listener + positional source 池`（§3.1/§3.3 对应实现清单第 1 组）。
-- [ ] 节点 2 `feat(audio): 事件消费派发 + 限频去重(每帧上限/近坐标合并/冷却)`（§3.2/§3.4/§3.7 第 2 组）。
-- [ ] 节点 3 `feat(audio): 材质化音效映射(AudioCues) + impact/fire/splash/explosion/shatter`（§3.5/§3.6 第 3 组）。
+- [x] 节点 2 `feat(audio): 事件消费派发 + 限频去重(每帧上限/近坐标合并/冷却)`（§3.2/§3.4/§3.7 第 2 组）。
+- [x] 节点 3 `feat(audio): 材质化音效映射(AudioCues) + impact/fire/splash/explosion/shatter`（§3.5/§3.6 第 3 组）。
 - [ ] 节点 4 `feat(audio): 资产加载(WAV) + 流式播放 + 公开播放 API + 诊断接入`（§3.8/§3.9 第 4 组）。
 - [ ] 节点 5 `test(audio): 限频/去重/零分配/MPSC 线程安全/定位 验收测试`（§5 验收，随 plan/14）。
 
