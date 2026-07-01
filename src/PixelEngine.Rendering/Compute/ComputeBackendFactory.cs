@@ -10,15 +10,14 @@ public static class ComputeBackendFactory
     /// <summary>
     /// 创建门控选中的 compute 后端。GL 后端复用 plan/08 已创建的 OpenGL 上下文；不会创建新上下文。
     /// </summary>
-    /// <param name="gl">OpenGL 入口。</param>
+    /// <param name="gl">OpenGL 入口；仅 GL compute 后端需要，G3 回退创建 Null 后端时可为空。</param>
     /// <param name="gate">compute 门控结果。</param>
     /// <returns>compute 后端。</returns>
-    public static IComputeBackend Create(GL gl, ComputeCapabilityGate gate)
+    public static IComputeBackend Create(GL? gl, ComputeCapabilityGate gate)
     {
-        ArgumentNullException.ThrowIfNull(gl);
         return gate.SelectedBackend switch
         {
-            ComputeBackendKind.GlCompute => new GLComputeBackend(gl, gate),
+            ComputeBackendKind.GlCompute => new GLComputeBackend(gl ?? throw new ArgumentNullException(nameof(gl)), gate),
             ComputeBackendKind.ComputeSharp => new ComputeSharpBackend(),
             ComputeBackendKind.Null => new NullComputeBackend(),
             _ => throw new ArgumentOutOfRangeException(nameof(gate), "未知 compute 后端。"),

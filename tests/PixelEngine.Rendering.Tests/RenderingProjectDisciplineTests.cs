@@ -41,6 +41,18 @@ public sealed class RenderingProjectDisciplineTests
     }
 
     [Fact]
+    public void RenderingDoesNotHardDependOnVulkanGl4OrComputeSharpPackage()
+    {
+        string source = ReadRenderingSources();
+        string project = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "PixelEngine.Rendering.csproj"));
+
+        Assert.DoesNotContain("Vulkan", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("GLFW_CONTEXT_VERSION_MAJOR, 4", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ContextVersion = new API(4", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("PackageReference Include=\"ComputeSharp\"", project, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RenderingHotPathSourcesAvoidLinqAndIteratorAllocations()
     {
         string source = string.Join(
@@ -88,7 +100,7 @@ public sealed class RenderingProjectDisciplineTests
     {
         return string.Join(
             Environment.NewLine,
-            Directory.EnumerateFiles(ProjectPath("src", "PixelEngine.Rendering"), "*.cs")
+            Directory.EnumerateFiles(ProjectPath("src", "PixelEngine.Rendering"), "*.cs", SearchOption.AllDirectories)
                 .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
                                !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
                 .Select(File.ReadAllText));
