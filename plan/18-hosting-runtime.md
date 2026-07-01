@@ -74,12 +74,12 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [x] `EngineBuilder`:fluent 配置(窗口/内部 sim 分辨率/worker 数/GC 模式/Editor 开关/headless/确定性开关/GPU 门控/内容根/起始场景),`Build()→Engine`。[架构 §19.2 配置化]
 - [x] `Engine`:持有全部子系统 + `EngineContext`;`Run()`/`RunOneTick()`/`Shutdown()`。
 - [x] `EngineContext`:服务定位 + 诊断 + 事件总线 + 时间 + 当前质量档位。
-- [!] 子系统装配与**初始化顺序**(§3.1);native(Box2D/OpenAL/GL)与 ALC 的正确释放顺序。阻塞:Physics/Rendering/Audio/Scripting/Editor 目前缺真实 public 资源类型,Box2D/OpenAL/GL/ALC 释放顺序需对应子系统落地后接入。
+- [!] 子系统装配与**初始化顺序**(§3.1);native(Box2D/OpenAL/GL)与 ALC 的正确释放顺序。阻塞:Rendering/Audio/Scripting 已有 Hosting 装配与逆序释放基础,Physics/Editor 仍缺完整真实入口,Box2D/ALC 释放顺序需对应子系统落地后接入。
 - [x] `GameLoop.Tick()`:严格 12 相位编排(§3.2),相位间 barrier(plan/02 JobSystem),每帧至多一次 sim/physics step。[不变式 #6,架构 §3.3]
 - [x] sim 降频(30Hz)而 render 不降:render 复用上帧世界纹理(必要时整图相机偏移,不插值像素)。[架构 §4.2]
-- [!] 各相位入口的调用绑定(Input/Time、Scripts、Residency、Particle 沉积/抛射、CA、Temperature、DirtySwap、Physics、BuildFrame、Present、Streaming)。阻塞:已绑定现有相位 2/3/4/5/6/7/11,相位 1/8/9/10 仍等待 Scripting/Physics/Rendering/Editor 真实入口。
+- [!] 各相位入口的调用绑定(Input/Time、Scripts、Residency、Particle 沉积/抛射、CA、Temperature、DirtySwap、Physics、BuildFrame、Present、Streaming)。阻塞:已绑定现有相位 0/1/2/3/4/5/6/7/9/10/11,相位 8 仍等待 Physics 真实运行入口,相位 10 的 Editor.Render 叠加仍等待 Editor 后端。
 - [x] 过载降级编排:读诊断 → 五级降级决策 → 经 `EngineContext` 下发质量档位。[架构 §4.3,不变式 #6]
-- [!] 脚本服务后端聚合:`IWorldAccess`/`IParticleService`/`IPhysicsService`/`IMaterialRegistry`/`ICamera`/`IInput`/`IEventBus`/`IAudioService`/`ISceneService`/`IDiagnostics` 的实现注入(plan/11 契约的后端)。阻塞:plan/11 尚未定义脚本可见契约,Physics/Audio/Input/Camera 后端也未落地。
+- [!] 脚本服务后端聚合:`IWorldAccess`/`IParticleService`/`IPhysicsService`/`IMaterialRegistry`/`ICamera`/`IInput`/`IEventBus`/`IAudioService`/`ISceneService`/`IDiagnostics` 的实现注入(plan/11 契约的后端)。阻塞:cell/material/particle/solid/time/audio/input/camera/lighting facade 已有真实后端,PhysicsService 与 Diagnostics/GUI 仍未形成完整脚本可见聚合。
 - [x] 写操作延迟命令队列:脚本/玩法的世界写入入队,在正确相位 flush(配合 plan/11 相位安全模型)。
 - [!] `Scene` 模型 + `ISceneService`:加载/卸载/切换;从存档(plan/07)或程序化生成构建起始世界。阻塞:已完成来源校验与解析,但存档/程序化来源构建 live World 仍缺聚合后的 World/Simulation/脚本实体后端。
 - [x] 项目模型:内容根、materials/reactions、资产、起始场景引用;`EngineBuilder` 装载。
