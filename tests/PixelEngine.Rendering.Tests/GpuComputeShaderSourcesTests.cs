@@ -44,6 +44,8 @@ public sealed class GpuComputeShaderSourcesTests
         Assert.Contains("uSourceTexelSize", GpuComputeShaderSources.BloomDownsample, StringComparison.Ordinal);
         Assert.Contains("uBaseTexture", GpuComputeShaderSources.BloomDualKawaseUp, StringComparison.Ordinal);
         Assert.Contains("scene.rgb + bloom", GpuComputeShaderSources.BloomUpsampleComposite, StringComparison.Ordinal);
+        Assert.Contains("float visibility = texture(uVisibilityTexture, uv).r", GpuComputeShaderSources.LightComposite, StringComparison.Ordinal);
+        Assert.Contains("world.rgb * visibility * uExposure", GpuComputeShaderSources.LightComposite, StringComparison.Ordinal);
     }
 
     [Fact]

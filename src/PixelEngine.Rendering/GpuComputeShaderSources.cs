@@ -272,7 +272,7 @@ void main()
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(binding = 0) uniform sampler2D uWorldTexture;
-layout(binding = 1) uniform sampler2D uLightTexture;
+layout(binding = 1) uniform sampler2D uVisibilityTexture;
 layout(binding = 2) uniform sampler2D uEmissiveTexture;
 layout(rgba8, binding = 0) writeonly uniform image2D uOutputImage;
 
@@ -289,9 +289,9 @@ void main()
 
     vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(uOutputSize);
     vec4 world = texture(uWorldTexture, uv);
-    vec3 lighting = texture(uLightTexture, uv).rgb;
+    float visibility = texture(uVisibilityTexture, uv).r;
     vec3 emissive = texture(uEmissiveTexture, uv).rgb;
-    vec3 color = (world.rgb * lighting * uExposure) + emissive;
+    vec3 color = (world.rgb * visibility * uExposure) + emissive;
     imageStore(uOutputImage, pixel, vec4(clamp(color, 0.0, 1.0), world.a));
 }
 """;

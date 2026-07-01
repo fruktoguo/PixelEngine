@@ -38,6 +38,9 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("_crt.Render", source, StringComparison.Ordinal);
         Assert.Contains("BeforePresentUi?.Invoke", source, StringComparison.Ordinal);
         Assert.Contains("ShouldDelegateComputeLighting", source, StringComparison.Ordinal);
+        Assert.Contains("ShouldUseComputeLightComposite", source, StringComparison.Ordinal);
+        Assert.Contains("ComputeLightCompositePass", source, StringComparison.Ordinal);
+        Assert.Contains("FrameSubPhase.GpuLightComposite", source, StringComparison.Ordinal);
         Assert.Contains("DegradeGpuComputeOneStep", source, StringComparison.Ordinal);
         Assert.Contains("PublishComputeDiagnostics", source, StringComparison.Ordinal);
         Assert.Contains("_computeGate.PublishDiagnostics", source, StringComparison.Ordinal);

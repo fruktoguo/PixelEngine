@@ -124,16 +124,16 @@ public sealed class GpuComputeBloomPipeline
     /// <summary>
     /// 执行 CP-L0 light composite。
     /// </summary>
-    public void DispatchLightComposite(uint worldTexture, uint lightTexture, uint emissiveTexture, uint outputImage, int width, int height, float exposure)
+    public void DispatchLightComposite(uint worldTexture, uint visibilityTexture, uint emissiveTexture, uint outputImage, int width, int height, float exposure)
     {
-        ValidateHandles(worldTexture, lightTexture, emissiveTexture, outputImage);
+        ValidateHandles(worldTexture, visibilityTexture, emissiveTexture, outputImage);
         ComputeDispatchSize groups = GpuComputeDispatchGrid.ForTexture2D(width, height);
         _backend.BindTexture(0, worldTexture);
-        _backend.BindTexture(1, lightTexture);
+        _backend.BindTexture(1, visibilityTexture);
         _backend.BindTexture(2, emissiveTexture);
         BindOutput(outputImage);
         _backend.SetUniform1(_lightComposite, "uWorldTexture", 0);
-        _backend.SetUniform1(_lightComposite, "uLightTexture", 1);
+        _backend.SetUniform1(_lightComposite, "uVisibilityTexture", 1);
         _backend.SetUniform1(_lightComposite, "uEmissiveTexture", 2);
         _backend.SetUniform2(_lightComposite, "uOutputSize", width, height);
         _backend.SetUniform1(_lightComposite, "uExposure", exposure);

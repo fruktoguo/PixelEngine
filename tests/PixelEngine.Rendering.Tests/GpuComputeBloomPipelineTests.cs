@@ -57,7 +57,7 @@ public sealed class GpuComputeBloomPipelineTests
 
         pipeline.DispatchLightComposite(
             worldTexture: 1,
-            lightTexture: 2,
+            visibilityTexture: 2,
             emissiveTexture: 3,
             outputImage: 4,
             width: 16,
