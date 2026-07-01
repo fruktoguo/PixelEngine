@@ -78,9 +78,14 @@ public sealed class RenderingProjectDisciplineTests
         string converter = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "PaletteBgraConverter.cs"));
         string benchmark = File.ReadAllText(ProjectPath("bench", "PixelEngine.Benchmarks", "PaletteBgraConversionBenchmarks.cs"));
 
+        Assert.Contains("Ssse3.IsSupported", converter, StringComparison.Ordinal);
+        Assert.Contains("TryConvertSsse3Shuffle16", converter, StringComparison.Ordinal);
+        Assert.Contains("Shuffle", converter, StringComparison.Ordinal);
         Assert.Contains("Avx2.IsSupported", converter, StringComparison.Ordinal);
         Assert.Contains("GatherVector256", converter, StringComparison.Ordinal);
         Assert.Contains("ConvertScalar", converter, StringComparison.Ordinal);
+        Assert.Contains("Params(16, 256)", benchmark, StringComparison.Ordinal);
+        Assert.Contains("Convert()", benchmark, StringComparison.Ordinal);
         Assert.Contains("MemoryDiagnoser", benchmark, StringComparison.Ordinal);
         Assert.Contains("ConvertAvx2Experimental", benchmark, StringComparison.Ordinal);
     }
