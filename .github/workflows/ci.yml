@@ -73,8 +73,8 @@ jobs:
         shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
         run: dotnet test PixelEngine.sln -c Release --no-build
 
-  verify-publish:
-    name: verify-publish (win-x64)
+  benchmark-guard:
+    name: benchmark-guard (win-x64)
     runs-on: windows-latest
 
     steps:
@@ -92,6 +92,55 @@ jobs:
         shell: pwsh
         run: ./tools/build-native.ps1 -Rid win-x64 -Configuration Release
 
+      - name: Build solution
+        shell: pwsh
+        run: dotnet build PixelEngine.sln -c Release
+
+      - name: Disassembly guard
+        shell: pwsh
+        run: ./tools/disassembly-guard.ps1
+
+      - name: Benchmark regression guard
+        shell: pwsh
+        run: ./tools/benchmark-regression.ps1 -BaselinePath bench/PixelEngine.Benchmarks/baselines/ci-baseline.json
+
+  verify-publish:
+    name: verify-publish (${{ matrix.rid }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            runner: windows-latest
+          - rid: linux-x64
+            runner: ubuntu-latest
+          - rid: osx-x64
+            runner: macos-15-intel
+          - rid: osx-arm64
+            runner: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build native
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tools/build-native.ps1 -Rid ${{ matrix.rid }} -Configuration Release
+
+      - name: Build native
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash ./tools/build-native.sh --rid "${{ matrix.rid }}" --configuration Release
+
       - name: Verify publish
         shell: pwsh
-        run: ./tools/verify-publish.ps1 -Rid win-x64
+        run: ./tools/verify-publish.ps1 -Rid ${{ matrix.rid }}

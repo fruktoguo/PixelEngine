@@ -7,7 +7,7 @@ namespace PixelEngine.Benchmarks;
 /// Core JobSystem worker 数扩展性与单线程回退阈值基准。
 /// </summary>
 [MemoryDiagnoser]
-public sealed class CoreScalingBenchmark : IDisposable
+public class CoreScalingBenchmark : IDisposable
 {
     private static readonly RangeJob SumRangeJob = SumRange;
 
