@@ -1,0 +1,6 @@
+snapshot:v1
+chunks:-1,-1..1,1
+cells:
+10,42:sand:flags=00
+10,43:solid:flags=00
+nonEmpty:2

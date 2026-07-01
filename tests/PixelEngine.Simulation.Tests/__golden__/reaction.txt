@@ -1,0 +1,6 @@
+snapshot:v1
+chunks:-1,-1..1,1
+cells:
+63,10:rock:flags=00
+64,10:steam:flags=00
+nonEmpty:2

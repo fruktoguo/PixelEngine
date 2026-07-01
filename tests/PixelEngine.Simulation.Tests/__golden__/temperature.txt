@@ -1,0 +1,5 @@
+snapshot:v1
+chunks:-1,-1..1,1
+cells:
+12,12:water:flags=00
+nonEmpty:1
