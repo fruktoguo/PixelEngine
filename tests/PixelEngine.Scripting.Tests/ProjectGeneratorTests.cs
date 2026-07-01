@@ -183,6 +183,16 @@ public sealed class ProjectGeneratorTests
                 "Release");
 
             Assert.True(run.ExitCode == 0, run.Output);
+            string documentationPath = Path.Combine(
+                directory,
+                "bin",
+                "Release",
+                "net10.0",
+                "PixelEngine.Scripting.xml");
+            Assert.True(File.Exists(documentationPath), $"缺少脚本 IntelliSense XML 文档：{documentationPath}");
+            string documentation = File.ReadAllText(documentationPath);
+            Assert.Contains("脚本访问引擎能力的统一入口", documentation, StringComparison.Ordinal);
+            Assert.Contains("延迟移动角色控制器", documentation, StringComparison.Ordinal);
         }
         finally
         {
