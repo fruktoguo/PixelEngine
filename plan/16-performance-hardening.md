@@ -88,7 +88,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] per-thread/per-chunk 元数据填充到 64 字节 cache line 防 false sharing。[plan/02 · §12.7]
 
 ### 4.4 SIMD 落实点
-- [ ] 温度 5-point stencil 向量化（Intrinsics + scalar fallback）。[plan/04 · §12.5]
+- [x] 温度 5-point stencil 向量化（Intrinsics + scalar fallback）。[plan/04 · §12.5]
 - [ ] palette→BGRA 转色与色混合向量化。[plan/08 · §12.5]
 - [ ] bulk fill/clear、dirty flag 扫描/popcount 向量化。[plan/03 · §12.5]
 - [ ] 全部向量化 pass 具备强制 scalar fallback，运行时 light-up、不固定 ISA。[全子系统 · §12.3/§12.5]

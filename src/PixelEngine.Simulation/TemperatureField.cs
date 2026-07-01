@@ -1,6 +1,8 @@
 using PixelEngine.Core;
 using PixelEngine.Core.Threading;
 using System.Numerics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 
 namespace PixelEngine.Simulation;
@@ -50,6 +52,7 @@ public sealed class TemperatureField
     private Chunk[] _conductChunks = [];
     private TemperatureBlock[] _conductBlocks = [];
     private int[] _conductWorkerHits = [];
+    private int _lastConductStepVectorizedCellCount;
     private int _activeConductChunkCount;
     private MaterialHotTable? _activeConductMaterials;
     private uint _activeConductFrameIndex;
@@ -110,12 +113,16 @@ public sealed class TemperatureField
     public int LastConductStepWorkerCount { get; private set; }
 
     /// <summary>
+    /// 最近一次温度传导通过 Intrinsics SIMD 处理的温度 cell 数。
+    /// </summary>
+    public int LastConductStepVectorizedCellCount => Volatile.Read(ref _lastConductStepVectorizedCellCount);
+
+    /// <summary>
     /// 当前运行时是否具备 Vector SIMD 加速能力。
     /// </summary>
     public bool SimdAvailable => EnableSimd &&
         StorageKind == TemperatureStorageKind.Float32 &&
-        Vector.IsHardwareAccelerated &&
-        (Vector512.IsHardwareAccelerated || Vector<float>.Count > 1);
+        (Vector256.IsHardwareAccelerated || Vector128.IsHardwareAccelerated);
 
     /// <summary>
     /// 调整温度场降频间隔。
@@ -243,6 +250,7 @@ public sealed class TemperatureField
     {
         ArgumentNullException.ThrowIfNull(chunks);
         ArgumentNullException.ThrowIfNull(materials);
+        _lastConductStepVectorizedCellCount = 0;
         if (ContactFireOnly)
         {
             LastConductStepUsedJobSystem = false;
@@ -366,19 +374,22 @@ public sealed class TemperatureField
         int worldBaseY = chunk.Coord.Y << EngineConstants.ChunkSizeLog2;
         int row = ty * BlockSize;
         Span<byte> conductChanceRow = stackalloc byte[BlockSize];
-        Span<float> conductRow = stackalloc float[BlockSize];
         Span<float> capacityRow = stackalloc float[BlockSize];
         for (int tx = 0; tx < BlockSize; tx++)
         {
             conductChanceRow[tx] = AverageHeatConduct(chunk, materials, tx, ty);
-            conductRow[tx] = conductChanceRow[tx] == byte.MaxValue ? 1f : 0f;
             capacityRow[tx] = MathF.Max(AverageHeatCapacity(chunk, materials, tx, ty), 0.0001f);
         }
 
         if (SimdAvailable && ty > 0 && ty < BlockSize - 1 && CanVectorizeConductRow(conductChanceRow))
         {
             ConductCellScalar(block, conductChanceRow, capacityRow, worldBaseX, worldBaseY, 0, ty, frameIndex, worldSeed);
-            int nextScalar = ConductInteriorRowVectorized(block, conductRow, capacityRow, row);
+            int nextScalar = ConductInteriorRowIntrinsics(block, capacityRow, row, out int vectorizedCells);
+            if (vectorizedCells != 0)
+            {
+                _ = Interlocked.Add(ref _lastConductStepVectorizedCellCount, vectorizedCells);
+            }
+
             for (int tx = nextScalar; tx < BlockSize; tx++)
             {
                 ConductCellScalar(block, conductChanceRow, capacityRow, worldBaseX, worldBaseY, tx, ty, frameIndex, worldSeed);
@@ -479,28 +490,51 @@ public sealed class TemperatureField
         return true;
     }
 
-    private static int ConductInteriorRowVectorized(
+    private static int ConductInteriorRowIntrinsics(
         TemperatureBlock block,
-        ReadOnlySpan<float> conductRow,
         ReadOnlySpan<float> capacityRow,
-        int row)
+        int row,
+        out int vectorizedCells)
     {
-        int width = Vector<float>.Count;
+        float[] current = block.CurrentFloat;
+        float[] scratch = block.ScratchFloat;
+        ref float currentBase = ref MemoryMarshal.GetArrayDataReference(current);
+        ref float scratchBase = ref MemoryMarshal.GetArrayDataReference(scratch);
+        ref float capacityBase = ref MemoryMarshal.GetReference(capacityRow);
         int tx = 1;
-        for (; tx <= BlockSize - 1 - width; tx += width)
+        vectorizedCells = 0;
+        if (Vector256.IsHardwareAccelerated)
         {
-            float[] current = block.CurrentFloat;
-            float[] scratch = block.ScratchFloat;
-            Vector<float> center = new(current, row + tx);
-            Vector<float> left = new(current, row + tx - 1);
-            Vector<float> right = new(current, row + tx + 1);
-            Vector<float> up = new(current, row - BlockSize + tx);
-            Vector<float> down = new(current, row + BlockSize + tx);
-            Vector<float> conduct = new(conductRow.Slice(tx, width));
-            Vector<float> capacity = new(capacityRow.Slice(tx, width));
-            Vector<float> neighborAverage = (left + right + up + down) * new Vector<float>(0.25f);
-            Vector<float> result = center + ((neighborAverage - center) * conduct / capacity);
-            result.CopyTo(scratch.AsSpan(row + tx, width));
+            for (; tx <= BlockSize - 1 - Vector256<float>.Count; tx += Vector256<float>.Count)
+            {
+                Vector256<float> center = Vector256.LoadUnsafe(ref Unsafe.Add(ref currentBase, row + tx));
+                Vector256<float> left = Vector256.LoadUnsafe(ref Unsafe.Add(ref currentBase, row + tx - 1));
+                Vector256<float> right = Vector256.LoadUnsafe(ref Unsafe.Add(ref currentBase, row + tx + 1));
+                Vector256<float> up = Vector256.LoadUnsafe(ref Unsafe.Add(ref currentBase, row - BlockSize + tx));
+                Vector256<float> down = Vector256.LoadUnsafe(ref Unsafe.Add(ref currentBase, row + BlockSize + tx));
+                Vector256<float> capacity = Vector256.LoadUnsafe(ref Unsafe.Add(ref capacityBase, tx));
+                Vector256<float> neighborAverage = (left + right + up + down) * Vector256.Create(0.25f);
+                Vector256<float> result = center + ((neighborAverage - center) / capacity);
+                result.StoreUnsafe(ref Unsafe.Add(ref scratchBase, row + tx));
+                vectorizedCells += Vector256<float>.Count;
+            }
+        }
+
+        if (Vector128.IsHardwareAccelerated)
+        {
+            for (; tx <= BlockSize - 1 - Vector128<float>.Count; tx += Vector128<float>.Count)
+            {
+                Vector128<float> center = Vector128.LoadUnsafe(ref Unsafe.Add(ref currentBase, row + tx));
+                Vector128<float> left = Vector128.LoadUnsafe(ref Unsafe.Add(ref currentBase, row + tx - 1));
+                Vector128<float> right = Vector128.LoadUnsafe(ref Unsafe.Add(ref currentBase, row + tx + 1));
+                Vector128<float> up = Vector128.LoadUnsafe(ref Unsafe.Add(ref currentBase, row - BlockSize + tx));
+                Vector128<float> down = Vector128.LoadUnsafe(ref Unsafe.Add(ref currentBase, row + BlockSize + tx));
+                Vector128<float> capacity = Vector128.LoadUnsafe(ref Unsafe.Add(ref capacityBase, tx));
+                Vector128<float> neighborAverage = (left + right + up + down) * Vector128.Create(0.25f);
+                Vector128<float> result = center + ((neighborAverage - center) / capacity);
+                result.StoreUnsafe(ref Unsafe.Add(ref scratchBase, row + tx));
+                vectorizedCells += Vector128<float>.Count;
+            }
         }
 
         return tx;
