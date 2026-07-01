@@ -24,6 +24,7 @@ public sealed class RenderPipeline : IDisposable
     private readonly ComputeCapabilityGate _computeGate;
     private readonly GpuComputeProfiler _gpuComputeProfiler;
     private readonly ComputeBloomPass? _computeBloom;
+    private readonly ComputeLightCompositePass? _computeLightComposite;
     private readonly DitherPass _dither;
     private readonly GammaPass _gamma;
     private readonly CrtPass _crt;
@@ -64,8 +65,14 @@ public sealed class RenderPipeline : IDisposable
         _computeGate = ComputeCapabilityGate.Evaluate(gpuCapabilities, ComputeFeatureSwitches.Default, preferComputeSharp: false);
         _computeBackend = ComputeBackendFactory.Create(_gl, _computeGate);
         _gpuComputeProfiler = new GpuComputeProfiler(_computeBackend);
-        _computeBloom = _computeGate.SelectedBackend == ComputeBackendKind.GlCompute && _computeGate.FeatureSwitches.BloomComputeEnabled
-            ? new ComputeBloomPass(_gl, new GpuComputeBloomPipeline(_computeBackend))
+        GpuComputeBloomPipeline? computeBloomPipeline = _computeGate.SelectedBackend == ComputeBackendKind.GlCompute
+            ? new GpuComputeBloomPipeline(_computeBackend)
+            : null;
+        _computeBloom = computeBloomPipeline is not null && _computeGate.FeatureSwitches.BloomComputeEnabled
+            ? new ComputeBloomPass(_gl, computeBloomPipeline)
+            : null;
+        _computeLightComposite = computeBloomPipeline is not null
+            ? new ComputeLightCompositePass(computeBloomPipeline)
             : null;
         _dither = new DitherPass(_gl, profile);
         _gamma = new GammaPass(_gl, profile);
@@ -110,8 +117,7 @@ public sealed class RenderPipeline : IDisposable
     /// </summary>
     public bool ShouldDelegateComputeLighting =>
         Settings.PreferComputeLighting &&
-        _computeBloom is not null &&
-        _computeGate.FeatureSwitches.BloomComputeEnabled;
+        _computeLightComposite is not null;
 
     /// <summary>
     /// 创建 plan/09 compute pass 可复用的渲染资源句柄快照。本方法不创建新 GL 上下文，也不转移资源所有权。
@@ -273,9 +279,17 @@ public sealed class RenderPipeline : IDisposable
         _worldBlit.Render(_worldTexture, _scene, camera, _quad);
         RenderGpuParticlesIfEnabled(particles, materials, camera);
         _overlay.Render(overlays, _scene);
-        _lit.BindFramebuffer();
-        _gl.Viewport(0, 0, (uint)Width, (uint)Height);
-        _composite.Render(_scene, _emissive, _visibility, _quad);
+        if (ShouldUseComputeLightComposite())
+        {
+            using GpuComputeProfiler.GpuTimerScope _ = _gpuComputeProfiler.Measure("light_composite", FrameSubPhase.GpuLightComposite);
+            _computeLightComposite!.Render(_scene, _visibility, _emissive, _lit);
+        }
+        else
+        {
+            _lit.BindFramebuffer();
+            _gl.Viewport(0, 0, (uint)Width, (uint)Height);
+            _composite.Render(_scene, _emissive, _visibility, _quad);
+        }
         RecordSub(profiler, FrameSubPhase.Lighting, started);
 
         ColorRenderTarget current = _lit;
@@ -457,7 +471,15 @@ public sealed class RenderPipeline : IDisposable
 
     private bool ShouldUseComputeBloom(BloomSettings settings)
     {
-        return ShouldDelegateComputeLighting && settings.Normalize().Mode == BloomMode.DualKawase;
+        return ShouldDelegateComputeLighting &&
+            _computeBloom is not null &&
+            _computeGate.FeatureSwitches.BloomComputeEnabled &&
+            settings.Normalize().Mode == BloomMode.DualKawase;
+    }
+
+    private bool ShouldUseComputeLightComposite()
+    {
+        return ShouldDelegateComputeLighting;
     }
 
     private static void ValidateInputs(RenderBuffer renderBuffer, RenderAuxBuffers aux, CameraState camera)

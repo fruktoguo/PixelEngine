@@ -81,6 +81,11 @@ public enum FrameSubPhase
     Lighting,
 
     /// <summary>
+    /// GPU compute light composite。
+    /// </summary>
+    GpuLightComposite,
+
+    /// <summary>
     /// Bloom 后处理。
     /// </summary>
     Bloom,
