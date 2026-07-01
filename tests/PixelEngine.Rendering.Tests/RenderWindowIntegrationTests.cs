@@ -79,9 +79,16 @@ public sealed class RenderWindowIntegrationTests
         using EmissiveBuffer emissive = new(window.Gl, buffer.Width, buffer.Height);
         using LightMaskTexture occluder = new(window.Gl, buffer.Width, buffer.Height);
         using LightMaskTexture visibility = new(window.Gl, buffer.Width, buffer.Height);
+        using ColorRenderTarget scene = new(window.Gl, buffer.Width, buffer.Height);
+        using ColorRenderTarget postA = new(window.Gl, buffer.Width, buffer.Height);
+        using ColorRenderTarget postB = new(window.Gl, buffer.Width, buffer.Height);
         using FullscreenQuad quad = new(window.Gl);
         using ShadowMap1DPass shadow = new(window.Gl, profile, 32);
         using CompositePass composite = new(window.Gl, profile);
+        using BloomPass bloom = new(window.Gl, profile);
+        using DitherPass dither = new(window.Gl, profile);
+        using GammaPass gamma = new(window.Gl, profile);
+        using CrtPass crt = new(window.Gl, profile);
         byte[] mask = new byte[buffer.Width * buffer.Height];
         mask.AsSpan().Fill(255);
 
@@ -91,7 +98,13 @@ public sealed class RenderWindowIntegrationTests
         occluder.Upload(mask);
         visibility.Upload(mask);
         shadow.Render(occluder, new LightSource(8f, 8f, 12f, 0xFFFFFFFFu, 1f), quad);
+        scene.BindFramebuffer();
+        window.Gl.Viewport(0, 0, (uint)scene.Width, (uint)scene.Height);
         composite.Render(world, emissive, visibility, quad);
+        bloom.Render(scene, postA, quad, BloomSettings.Default);
+        dither.Render(postA, postB, quad);
+        gamma.Render(postB, postA, quad);
+        crt.Render(postA, postB, quad);
         window.SwapBuffers();
 
         Assert.Equal(32, shadow.RayCount);
