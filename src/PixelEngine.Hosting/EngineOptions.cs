@@ -25,6 +25,7 @@ public sealed class EngineOptions
         string? startScene,
         double simHz,
         int eventCapacityPerChannel,
+        long noGcRegionBudgetBytes,
         EngineOverloadOptions overload)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(windowWidth);
@@ -43,6 +44,7 @@ public sealed class EngineOptions
             throw new ArgumentOutOfRangeException(nameof(eventCapacityPerChannel), eventCapacityPerChannel, "事件通道容量必须是正的 2 的幂。");
         }
 
+        ArgumentOutOfRangeException.ThrowIfNegative(noGcRegionBudgetBytes);
         ArgumentNullException.ThrowIfNull(overload);
         WindowWidth = windowWidth;
         WindowHeight = windowHeight;
@@ -58,6 +60,7 @@ public sealed class EngineOptions
         StartScene = startScene;
         SimHz = simHz;
         EventCapacityPerChannel = eventCapacityPerChannel;
+        NoGcRegionBudgetBytes = noGcRegionBudgetBytes;
         Overload = overload;
     }
 
@@ -157,6 +160,11 @@ public sealed class EngineOptions
     public int EventCapacityPerChannel { get; }
 
     /// <summary>
+    /// 每帧关键段 no-GC region 预算字节数；0 表示关闭。
+    /// </summary>
+    public long NoGcRegionBudgetBytes { get; }
+
+    /// <summary>
     /// 过载降级配置。
     /// </summary>
     public EngineOverloadOptions Overload { get; }
@@ -181,6 +189,7 @@ public sealed class EngineOptions
             startScene: null,
             simHz: EngineConstants.DefaultSimHz,
             eventCapacityPerChannel: DefaultEventCapacityPerChannel,
+            noGcRegionBudgetBytes: 0,
             overload: EngineOverloadOptions.CreateDefault());
     }
 }

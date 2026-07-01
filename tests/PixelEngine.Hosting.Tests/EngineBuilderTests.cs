@@ -39,6 +39,7 @@ public sealed class EngineBuilderTests
         Assert.Equal("content-test", context.Options.ContentRoot);
         Assert.Equal("scenes/start.scene", context.Options.StartScene);
         Assert.Equal(64, context.Events.CapacityPerChannel);
+        Assert.Equal(0, context.Options.NoGcRegionBudgetBytes);
         Assert.Same(context, context.GetService<EngineContext>());
         Assert.Same(context.Jobs, context.GetService<JobSystem>());
         Assert.Same(context.Clock, context.GetService<FrameClock>());
@@ -108,6 +109,46 @@ public sealed class EngineBuilderTests
         Assert.Equal(1, second.SimTickIndex);
         Assert.Equal(2, second.FrameIndex);
         Assert.Equal(EngineConstants.SimHzDownscaled, engine.Context.Counters.SimHz);
+    }
+
+    /// <summary>
+    /// 验证 no-GC region 默认关闭，避免未配置时改变宿主 GC 行为。
+    /// </summary>
+    [Fact]
+    public void NoGcRegionIsDisabledByDefault()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+
+        _ = engine.RunOneTick();
+
+        Assert.Equal(0, engine.Context.Options.NoGcRegionBudgetBytes);
+        Assert.Equal(0, engine.Context.Counters.NoGcRegionBudgetBytes);
+        Assert.Equal(0, engine.Context.Counters.NoGcRegionStartAttempts);
+        Assert.False(engine.Context.Counters.NoGcRegionStartedLastFrame);
+    }
+
+    /// <summary>
+    /// 验证配置预算后，单帧关键段会尝试进入并正常结束 no-GC region。
+    /// </summary>
+    [Fact]
+    public void RunOneTickCanWrapCriticalFrameInNoGcRegion()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithNoGcRegionBudget(64 * 1024 * 1024)
+            .Build();
+
+        _ = engine.RunOneTick();
+
+        Assert.Equal(64 * 1024 * 1024, engine.Context.Options.NoGcRegionBudgetBytes);
+        Assert.Equal(64 * 1024 * 1024, engine.Context.Counters.NoGcRegionBudgetBytes);
+        Assert.Equal(1, engine.Context.Counters.NoGcRegionStartAttempts);
+        Assert.Equal(0, engine.Context.Counters.NoGcRegionStartFailures);
+        Assert.Equal(1, engine.Context.Counters.NoGcRegionSuccessfulFrames);
+        Assert.Equal(0, engine.Context.Counters.NoGcRegionEndFailures);
+        Assert.True(engine.Context.Counters.NoGcRegionStartedLastFrame);
     }
 
     /// <summary>
@@ -189,6 +230,7 @@ public sealed class EngineBuilderTests
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new EngineBuilder().WithWorkerCount(-1));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new EngineBuilder().WithWindow(0, 720));
         _ = Assert.Throws<ArgumentException>(() => new EngineBuilder().WithContentRoot(""));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => new EngineBuilder().WithNoGcRegionBudget(-1));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new EngineBuilder().WithEventCapacityPerChannel(63).Build());
     }
 
