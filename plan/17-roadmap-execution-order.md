@@ -109,11 +109,11 @@
 
 ## 6. 验收(本路线图)
 
-- [ ] M0–M12 全部退出标准达成。
-- [ ] 架构 §1.4 成功度量在目标硬件实测达标。
-- [ ] `plan/01`–`plan/16` 各文档「验收标准」全部勾选。
-- [ ] Demo 仅依赖引擎公开 API 跑通(无引擎内部后门)。
-- [ ] 每个里程碑均有对应中文 git 提交记录。
+- [!] M0–M12 全部退出标准达成。阻塞：`plan/00`、`plan/06`、`plan/09`、`plan/13`、`plan/14`、`plan/15`、`plan/16`、`plan/18` 仍保留目标硬件、6-RID CI/发行产物、macOS 签名公证、真实窗口人工验收、AVX-512/硬件计数器、NativeAOT 热重载策略与完整 world/script runtime 重建等外部或架构决策阻塞，不能假装已达成。
+- [!] 架构 §1.4 成功度量在目标硬件实测达标。阻塞：当前只有本机 win-x64 / Ryzen 7 5800X 短基准与局部报告；仍缺 6 RID 代表硬件长跑、AVX-512 降频净损、ETW 硬件计数器、真实窗口 Demo 玩法与完整帧预算闭合。
+- [!] `plan/01`–`plan/16` 各文档「验收标准」全部勾选。阻塞：`rg -n "^- \[!\]" plan` 仍能看到多个明确阻塞项，尤其集中在真实窗口验收、发行矩阵、目标硬件性能与少量架构决策；需先解除这些阻塞后才能改为完成。
+- [x] Demo 仅依赖引擎公开 API 跑通(无引擎内部后门)：`HostingProjectDisciplineTests` 已验证 Demo csproj 只引用 `PixelEngine.Hosting` / `PixelEngine.Scripting`、源码不绕过 Hosting facade、默认 `.scene` 通过公开文档格式引用 `LevelDirector`、可见内容包 API 不泄漏 Content / Simulation 实现类型；本轮 `dotnet test tests\PixelEngine.Hosting.Tests\PixelEngine.Hosting.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName~HostingProjectDisciplineTests"` 通过 5 项。
+- [x] 每个里程碑均有对应中文 git 提交记录：`git log --format="%s" --all` 显示 297 条符合 `<type>(<scope>): <中文简述>` 的本地提交，覆盖 core/sim/physics/render/audio/world/serialize/host/script/editor/demo/build/perf 等里程碑 scope；本轮 M12 Demo 收口也已按节点提交。
 
 ## 7. 提交节点
 
