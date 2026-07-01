@@ -91,6 +91,34 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("[yz]mm", aotProbeSh, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证 CA 最内层邻居访问经 3x3 窗口基址与 Unsafe.Add 漫游，不在热更新器内直接数组索引。
+    /// </summary>
+    [Fact]
+    public void SimulationHotNeighborAccessUsesUnsafeBaseRefs()
+    {
+        string chunk = ReadRepositoryFile("src", "PixelEngine.Simulation", "Chunk.cs");
+        string window = ReadRepositoryFile("src", "PixelEngine.Simulation", "NeighborWindow.cs");
+        string updater = ReadRepositoryFile("src", "PixelEngine.Simulation", "ChunkUpdater.cs");
+
+        Assert.Contains("MemoryMarshal.GetArrayDataReference(Material)", chunk, StringComparison.Ordinal);
+        Assert.Contains("MemoryMarshal.GetArrayDataReference(Flags)", chunk, StringComparison.Ordinal);
+        Assert.Contains("MemoryMarshal.GetArrayDataReference(Lifetime)", chunk, StringComparison.Ordinal);
+
+        Assert.Contains("ref struct NeighborWindow", window, StringComparison.Ordinal);
+        Assert.Contains("ref ushort _matBase0", window, StringComparison.Ordinal);
+        Assert.Contains("ref byte _flagsBase0", window, StringComparison.Ordinal);
+        Assert.Contains("ref byte _lifeBase0", window, StringComparison.Ordinal);
+        Assert.Contains("Unsafe.Add(ref SelectMaterialBase(slot), local)", window, StringComparison.Ordinal);
+        Assert.Contains("Unsafe.Add(ref SelectFlagsBase(slot), local)", window, StringComparison.Ordinal);
+        Assert.Contains("Unsafe.Add(ref SelectLifetimeBase(slot), local)", window, StringComparison.Ordinal);
+
+        Assert.Contains("NeighborWindow window = new(chunks, chunk.Coord);", updater, StringComparison.Ordinal);
+        Assert.DoesNotContain("chunk.Material[", updater, StringComparison.Ordinal);
+        Assert.DoesNotContain("chunk.Flags[", updater, StringComparison.Ordinal);
+        Assert.DoesNotContain("chunk.Lifetime[", updater, StringComparison.Ordinal);
+    }
+
     private static string ReadRepositoryFile(params string[] relativePath)
     {
         return File.ReadAllText(Path.Combine([FindRepositoryRoot(), .. relativePath]));
