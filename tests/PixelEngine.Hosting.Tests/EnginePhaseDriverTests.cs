@@ -564,6 +564,8 @@ public sealed class EnginePhaseDriverTests
 
         public int FixedCount { get; private set; }
 
+        public int GuiCount { get; private set; }
+
         public int EndCount { get; private set; }
 
         public void Initialize(IScriptContext context)
@@ -584,6 +586,12 @@ public sealed class EnginePhaseDriverTests
         public void FixedSimTick()
         {
             FixedCount++;
+        }
+
+        public void DrawGui(IGuiContext gui)
+        {
+            ArgumentNullException.ThrowIfNull(gui);
+            GuiCount++;
         }
 
         public void EndFrame()

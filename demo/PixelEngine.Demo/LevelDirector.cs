@@ -194,6 +194,8 @@ public sealed class LevelDirector : Behaviour
         goal.Width = 34f;
         goal.Height = 54f;
 
+        _ = playerEntity.AddComponent<DemoHud>();
+
         CreateEmitter(156f, 86f, "water", 0f, 1f, 0.18f, 2, "splash_water.wav", addLight: false);
         CreateEmitter(314f, 146f, "oil", -0.25f, 1f, 0.35f, 2, string.Empty, addLight: false);
         CreateEmitter(438f, 236f, "lava", 0f, 1f, 0.45f, 2, "lava_bubble_loop.wav", addLight: true);

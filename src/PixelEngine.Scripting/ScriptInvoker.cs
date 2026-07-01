@@ -75,6 +75,24 @@ internal sealed class ScriptInvoker(IScriptDiagnosticSink? diagnostics = null)
         }
     }
 
+    public void InvokeGui(Behaviour behaviour, IScriptContext context, IGuiContext gui)
+    {
+        if (ShouldSkip(behaviour))
+        {
+            return;
+        }
+
+        try
+        {
+            using InvocationScope scope = Enter(behaviour);
+            behaviour.InvokeGui(context, gui);
+        }
+        catch (Exception exception)
+        {
+            MarkFaulted(behaviour, "OnGui", exception);
+        }
+    }
+
     public void InvokeDestroy(Behaviour behaviour, IScriptContext context)
     {
         try

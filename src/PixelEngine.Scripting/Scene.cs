@@ -233,6 +233,19 @@ public sealed class Scene
     }
 
     /// <summary>
+    /// 分发 Behaviour 的 GUI 绘制回调。
+    /// </summary>
+    internal void DispatchGui(IScriptContext context, IGuiContext gui)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(gui);
+        foreach (IComponentBucket bucket in _buckets.Values)
+        {
+            bucket.DispatchGui(context, gui, _invoker);
+        }
+    }
+
+    /// <summary>
     /// 刷新延迟销毁队列并分发 OnDestroy。
     /// </summary>
     internal void FlushDestroyed(IScriptContext context)
@@ -350,6 +363,8 @@ public sealed class Scene
         void DispatchUpdate(IScriptContext context, float dt, ScriptInvoker invoker);
 
         void DispatchFixedSimTick(IScriptContext context, ScriptInvoker invoker);
+
+        void DispatchGui(IScriptContext context, IGuiContext gui, ScriptInvoker invoker);
 
         void CaptureBehaviours(List<ScriptBehaviourRecord> records);
 
@@ -472,6 +487,17 @@ public sealed class Scene
                 if (_components[i] is Behaviour behaviour)
                 {
                     invoker.InvokeFixedSimTick(behaviour, context);
+                }
+            }
+        }
+
+        public void DispatchGui(IScriptContext context, IGuiContext gui, ScriptInvoker invoker)
+        {
+            for (int i = 0; i < Count; i++)
+            {
+                if (_components[i] is Behaviour behaviour)
+                {
+                    invoker.InvokeGui(behaviour, context, gui);
                 }
             }
         }
@@ -617,6 +643,17 @@ public sealed class Scene
                 if (_components[i] is Behaviour behaviour)
                 {
                     invoker.InvokeFixedSimTick(behaviour, context);
+                }
+            }
+        }
+
+        public void DispatchGui(IScriptContext context, IGuiContext gui, ScriptInvoker invoker)
+        {
+            for (int i = 0; i < Count; i++)
+            {
+                if (_components[i] is Behaviour behaviour)
+                {
+                    invoker.InvokeGui(behaviour, context, gui);
                 }
             }
         }

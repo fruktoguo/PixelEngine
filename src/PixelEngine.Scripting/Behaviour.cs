@@ -57,6 +57,14 @@ public abstract class Behaviour : IComponent
     }
 
     /// <summary>
+    /// 每个 GUI 绘制相位调用一次；运行在相位 1，用于提交脚本侧 HUD、暂停菜单等即时模式 GUI。
+    /// </summary>
+    /// <param name="gui">本次 GUI 绘制相位的上下文，由 Hosting 或 Editor 层提供。</param>
+    protected virtual void OnGui(IGuiContext gui)
+    {
+    }
+
+    /// <summary>
     /// 组件或实体销毁、或热重载卸载前调用一次；运行在相位 1。
     /// </summary>
     protected virtual void OnDestroy()
@@ -96,6 +104,12 @@ public abstract class Behaviour : IComponent
     {
         Context = context;
         OnFixedSimTick();
+    }
+
+    internal void InvokeGui(IScriptContext context, IGuiContext gui)
+    {
+        Context = context;
+        OnGui(gui);
     }
 
     internal void InvokeDestroy(IScriptContext context)

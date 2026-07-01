@@ -69,6 +69,17 @@ public sealed class ScriptRuntime : IScriptRuntime
     }
 
     /// <summary>
+    /// GUI 绘制相位在相位 1 派发 Behaviour OnGui。
+    /// </summary>
+    /// <param name="gui">本次 GUI 绘制相位的上下文。</param>
+    public void DrawGui(IGuiContext gui)
+    {
+        ArgumentNullException.ThrowIfNull(gui);
+        IScriptContext context = RequireContext();
+        context.Scene.DispatchGui(context, gui);
+    }
+
+    /// <summary>
     /// 相位 1 结束时刷新延迟销毁。
     /// </summary>
     public void EndFrame()

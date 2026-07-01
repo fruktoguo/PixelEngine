@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Rendering;
+using PixelEngine.Scripting;
 using Silk.NET.OpenGL;
 
 namespace PixelEngine.Editor;
@@ -15,6 +16,7 @@ public sealed class EditorRenderBridge : IDisposable
     private readonly EngineCounters _counters;
     private readonly FrameProfiler? _profiler;
     private readonly Func<EditorRuntimeDiagnostics>? _runtimeDiagnostics;
+    private readonly IScriptRuntime? _scriptRuntime;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private double _previousSeconds;
     private bool _disposed;
@@ -24,13 +26,15 @@ public sealed class EditorRenderBridge : IDisposable
         EditorApp editor,
         EngineCounters counters,
         FrameProfiler? profiler,
-        Func<EditorRuntimeDiagnostics>? runtimeDiagnostics)
+        Func<EditorRuntimeDiagnostics>? runtimeDiagnostics,
+        IScriptRuntime? scriptRuntime)
     {
         _pipeline = pipeline;
         _editor = editor;
         _counters = counters;
         _profiler = profiler;
         _runtimeDiagnostics = runtimeDiagnostics;
+        _scriptRuntime = scriptRuntime;
         _previousSeconds = _clock.Elapsed.TotalSeconds;
         _pipeline.BeforePresentUi += OnBeforePresentUi;
     }
@@ -44,7 +48,7 @@ public sealed class EditorRenderBridge : IDisposable
     /// <returns>已绑定桥接器；禁用时为 null。</returns>
     public static EditorRenderBridge? AttachIfEnabled(RenderPipeline pipeline, EditorApp editor, EngineCounters counters)
     {
-        return AttachIfEnabled(pipeline, editor, counters, null, null);
+        return AttachIfEnabled(pipeline, editor, counters, null, null, null);
     }
 
     /// <summary>
@@ -57,10 +61,26 @@ public sealed class EditorRenderBridge : IDisposable
         FrameProfiler? profiler,
         Func<EditorRuntimeDiagnostics>? runtimeDiagnostics)
     {
+        return AttachIfEnabled(pipeline, editor, counters, profiler, runtimeDiagnostics, null);
+    }
+
+    /// <summary>
+    /// 若 GUI host 启用，则绑定到渲染管线，并可在同一 ImGui frame 内调度脚本 GUI。
+    /// </summary>
+    public static EditorRenderBridge? AttachIfEnabled(
+        RenderPipeline pipeline,
+        EditorApp editor,
+        EngineCounters counters,
+        FrameProfiler? profiler,
+        Func<EditorRuntimeDiagnostics>? runtimeDiagnostics,
+        IScriptRuntime? scriptRuntime)
+    {
         ArgumentNullException.ThrowIfNull(pipeline);
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(counters);
-        return editor.Options.Enabled ? new EditorRenderBridge(pipeline, editor, counters, profiler, runtimeDiagnostics) : null;
+        return editor.Options.Enabled
+            ? new EditorRenderBridge(pipeline, editor, counters, profiler, runtimeDiagnostics, scriptRuntime)
+            : null;
     }
 
     /// <summary>
@@ -96,6 +116,13 @@ public sealed class EditorRenderBridge : IDisposable
             _counters,
             _profiler,
             _runtimeDiagnostics?.Invoke() ?? EditorRuntimeDiagnostics.FullQuality);
-        _editor.DrawFrame(deltaSeconds, _pipeline.Width, _pipeline.Height, _counters, ++FrameIndex, performance);
+        _editor.DrawFrame(
+            deltaSeconds,
+            _pipeline.Width,
+            _pipeline.Height,
+            _counters,
+            ++FrameIndex,
+            performance,
+            _scriptRuntime is null ? null : _scriptRuntime.DrawGui);
     }
 }
