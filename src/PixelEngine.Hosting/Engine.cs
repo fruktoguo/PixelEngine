@@ -4,6 +4,7 @@ using PixelEngine.Audio;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
 using PixelEngine.Physics;
+using PixelEngine.Rendering;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
@@ -178,6 +179,30 @@ public sealed class Engine : IDisposable
         RegisterScriptAudioApi(audio, cache);
         EnsureAudioPhaseDriver(audio);
         return cache.LoadedCount;
+    }
+
+    /// <summary>
+    /// 将已创建的渲染窗口输入接入脚本输入 API；窗口态每帧在相位 0 更新输入快照。
+    /// </summary>
+    /// <param name="window">渲染窗口。</param>
+    /// <param name="routeProvider">可选输入门控；Editor/ImGui 可用它屏蔽脚本通道。</param>
+    /// <returns>脚本输入 API 实例。</returns>
+    public ScriptInputApi AttachWindowInput(RenderWindow window, Func<EngineTickContext, ScriptInputRoute>? routeProvider = null)
+    {
+        ThrowIfShutdown();
+        ArgumentNullException.ThrowIfNull(window);
+        if (Context.TryGetService(out SilkInputPhaseDriver existing))
+        {
+            return Context.GetService<ScriptInputApi>();
+        }
+
+        ScriptInputApi input = ResolveConcreteInputApi();
+        Context.RegisterService(EngineServiceRole.Input, input);
+        Context.RegisterService<IInputApi>(input);
+        SilkInputPhaseDriver driver = new(window, input, routeProvider);
+        Context.RegisterService(driver.GetType(), driver);
+        driver.RegisterPhases(Phases);
+        return input;
     }
 
     /// <summary>
@@ -472,15 +497,7 @@ public sealed class Engine : IDisposable
 
     private IInputApi ResolveInputApi()
     {
-        if (Context.TryGetService(out IInputApi input))
-        {
-            return input;
-        }
-
-        ScriptInputApi created = new();
-        Context.RegisterService<IInputApi>(EngineServiceRole.Input, created);
-        Context.RegisterService(created);
-        return created;
+        return Context.TryGetService(out IInputApi input) ? input : ResolveConcreteInputApi();
     }
 
     private ILightingApi ResolveLightingApi()
@@ -492,6 +509,19 @@ public sealed class Engine : IDisposable
 
         ScriptLightingApi created = new();
         Context.RegisterService<ILightingApi>(created);
+        Context.RegisterService(created);
+        return created;
+    }
+
+    private ScriptInputApi ResolveConcreteInputApi()
+    {
+        if (Context.TryGetService(out ScriptInputApi input))
+        {
+            return input;
+        }
+
+        ScriptInputApi created = new();
+        Context.RegisterService<IInputApi>(EngineServiceRole.Input, created);
         Context.RegisterService(created);
         return created;
     }

@@ -25,6 +25,9 @@ public sealed class DemoRuntimeScriptingTests
             .Build();
         engine.Context.RegisterService(materials);
         _ = engine.AttachResidentSimulationWorld(worldWidthCells: 64, worldHeightCells: 64, particleCapacity: 16);
+        ScriptInputApi input = new();
+        engine.Context.RegisterService<IInputApi>(EngineServiceRole.Input, input);
+        engine.Context.RegisterService(input);
 
         engine.RegisterScriptAssembly(typeof(DemoRuntimeBehaviour).Assembly);
         ScriptScene scriptScene = engine.Context.GetService<ScriptScene>();
@@ -39,6 +42,7 @@ public sealed class DemoRuntimeScriptingTests
         Assert.NotNull(current);
         Assert.Same(scriptScene, current.ScriptScene);
         Assert.Same(scriptContext, engine.Context.GetService<IScriptContext>());
+        Assert.Same(input, scriptContext.Input);
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.Scripting));
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.WorldAccess));
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.ParticleService));
