@@ -34,12 +34,9 @@ if ($combined -match 'RNGCHKFAIL') {
   throw "Disassembly guard failed: RNGCHKFAIL was found in generated assembly."
 }
 
-$renderingAssembly = Join-Path $repoRoot 'src/PixelEngine.Rendering/bin/Release/net10.0/PixelEngine.Rendering.dll'
-$requireSimd = $false
-if (Test-Path $renderingAssembly) {
-  [System.Reflection.Assembly]::LoadFrom($renderingAssembly) | Out-Null
-  $requireSimd = [PixelEngine.Rendering.PaletteBgraConverter]::IsAvx2Accelerated
-}
+$diagnosticFiles = Get-ChildItem -LiteralPath $artifactsPath -Recurse -File -Include '*.log','*report*.md','*report*.html','*report*.csv' -ErrorAction SilentlyContinue
+$diagnostics = ($diagnosticFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join [Environment]::NewLine
+$requireSimd = $diagnostics -match 'HardwareIntrinsics=.*\bAVX2\b'
 
 if ($requireSimd -and $combined -notmatch '\b(ymm|zmm)[0-9]+\b|vpgather|gather') {
   throw "Disassembly guard failed: AVX2 is supported but no ymm/zmm/gather instruction marker was found."

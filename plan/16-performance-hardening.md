@@ -98,8 +98,8 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 ### 4.5 bounds-check 消除验证
 - [x] 最内层邻居访问用 `MemoryMarshal.GetArrayDataReference` + `Unsafe.Add` 或 `fixed` 指针漫游。[plan/03 · §12.6]
 - [ ] 沿 scanline 漫游 ref/指针，避免每访问重算 `y*width+x`。[plan/03 · §12.6]
-- [ ] 反汇编确认热方法 `RNGCHKFAIL`（bounds-check）消失。[plan/14 · §12.6/§17.3]
-- [ ] 反汇编确认向量化 pass 出现 ymm/zmm 寄存器。[plan/14 · §12.6/§17.3]
+- [x] 反汇编确认热方法 `RNGCHKFAIL`（bounds-check）消失。[plan/14 · §12.6/§17.3]
+- [x] 反汇编确认向量化 pass 出现 ymm/zmm 寄存器。[plan/14 · §12.6/§17.3]
 - [x] BenchmarkDotNet `[DisassemblyDiagnoser]` 守门，反汇编基线纳入回归。[plan/14 · §17.3]
 
 ### 4.6 GC 策略
