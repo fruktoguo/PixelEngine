@@ -158,7 +158,7 @@ API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosti
 
 内容
 - [x] `content/materials.json`：完整材质集（empty/sand/dirt/ash/water/oil/acid/lava/molten_metal/steam/smoke/acid_gas/fire/stone/wood/ice/metal/glass），含稳定 `Name`、CellType、密度 / 流散 / 可燃 / 相变阈值 / 温度参数 / PropertyFlags(emissive 等) / 纹理 / `AudioCues`，tag 归属。〔plan/04 格式；§3.6〕
-- [x] `content/reactions.json`：熔岩遇水成石、熔岩点燃木、火烧木传播、油速燃、水灭火、酸腐蚀、蒸汽冷凝、熔融金属遇水凝固，用 tag 书写。〔plan/04 格式；§3.6〕
+- [x] `content/reactions.json`：熔岩遇水成石、熔岩点燃木、火烧木传播、油速燃、水灭火、酸腐蚀、蒸汽冷凝、熔融金属遇水凝固，用 tag 书写；Hosting 已在装配 Simulation world 时接入 `ReactionEngine`、反应副作用与 `BurningCellSystem`，并用 headless 集成测试验证已加载 `ReactionTable` 会进入 CA 主循环。〔plan/04 格式；§3.6〕
 - [x] 温度相变内容校核：冰融化 / 水沸 / 水冻 / 熔岩冷却 / 金属熔化回凝 / 沙烤玻璃 经 `MaterialDef` 阈值（不进反应表）。〔plan/04 温度场、架构 §7.4;§3.6〕
 - [x] `content/textures/`：各材质纹理（按世界坐标采样，颜色不入 cell，架构不变式 §7）。〔plan/04;§3.6〕
 - [x] `content/audio/`：§3.10 音效资产清单全部就位并被 `AudioCues`/`PlayOneShot` 引用。〔plan/10;§3.10〕
@@ -188,7 +188,7 @@ API 缺口登记
 - [ ] 玩家可跑 / 跳 / 蹬墙，**站在 settled 沙堆与掉落的木 / 金属刚体上不穿不陷**（验证角色控制器读到刚体往返像素，架构 §8.3 双向耦合）。〔§3.3〕
 - [ ] 相机平滑跟随玩家、夹在关卡边界、滚轮缩放生效；sim 降频时画面仍流畅（引擎整图偏移）。〔§3.4〕
 - [ ] 数字键切材质、左键放 / 右键擦 / 滚轮调半径在正确世界坐标写入 cell 并被 CA 接管（沙堆休止角、水找平、油浮于水、气体上升）。〔§3.5、§3.6〕
-- [ ] 反应可观测：水灭火（火→烟、水→蒸汽）、火沿木 / 油传播、熔岩遇水成石冒蒸汽、酸腐蚀 stone/wood/metal、蒸汽冷凝回水、熔融金属遇水凝固。〔§3.6〕
+- [!] 反应可观测：headless 路径已验证 Hosting 会把已加载 `ReactionTable` 接入 CA 主循环；阻塞：仍缺真实窗口中水灭火（火→烟、水→蒸汽）、火沿木 / 油传播、熔岩遇水成石冒蒸汽、酸腐蚀 stone/wood/metal、蒸汽冷凝回水、熔融金属遇水凝固的可视化验收。〔§3.6〕
 - [ ] 温度相变可观测：lava / fire 附近 ice 融化、water 沸腾成 steam、lava 冷却成 stone、metal 近熔岩熔化、sand 烤成 glass。〔§3.6〕
 - [ ] 玩家挖断木栈桥 → 连通块掉落为 Box2D 刚体，可被推动、被砸、被继续挖 / 烧 / 酸蚀而再破碎；金属梁近熔岩熔化致结构坍塌。〔§3.7〕
 - [ ] 火花 / 血 / 碎屑粒子按弹道飞行、碎屑落定回沉积为 cell、发光火花产生 bloom；爆炸抛射 cell 成粒子并推动邻近刚体；无粒子泄漏。〔§3.8、§3.9〕

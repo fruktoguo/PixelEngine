@@ -13,6 +13,12 @@ namespace PixelEngine.Hosting.Tests;
 /// </summary>
 public sealed class SceneAndHeadlessTests
 {
+    private const ushort Empty = 0;
+    private const ushort Fire = 1;
+    private const ushort Wood = 2;
+    private const ushort Stone = 3;
+    private const ushort Ash = 4;
+
     /// <summary>
     /// 验证 EngineBuilder 能从项目模型注册场景并切到起始场景。
     /// </summary>
@@ -75,6 +81,54 @@ public sealed class SceneAndHeadlessTests
         scenes.UnloadCurrent();
         Assert.Null(scenes.Current);
         _ = Assert.Throws<InvalidOperationException>(() => scenes.SwitchTo("missing"));
+    }
+
+    /// <summary>
+    /// 验证 Hosting 装配 Simulation world 时会把已加载 ReactionTable 接入 CA 主循环。
+    /// </summary>
+    [Fact]
+    public void ResidentSimulationWorldRunsLoadedReactionTable()
+    {
+        MaterialDef[] definitions = CreateReactionMaterials();
+        MaterialTable materials = new(definitions);
+        ReactionTable reactions = new(
+            [
+                new Reaction
+                {
+                    InputA = Fire,
+                    InputB = Wood,
+                    OutputA = Stone,
+                    OutputB = Ash,
+                    Probability = byte.MaxValue,
+                    Flags = ReactionFlags.Fast,
+                },
+                new Reaction
+                {
+                    InputA = Wood,
+                    InputB = Fire,
+                    OutputA = Ash,
+                    OutputB = Stone,
+                    Probability = byte.MaxValue,
+                    Flags = ReactionFlags.Fast,
+                },
+            ],
+            definitions);
+
+        using Engine engine = new EngineBuilder()
+            .UseHeadless()
+            .WithWorkerCount(1)
+            .Build();
+        engine.Context.RegisterService(materials);
+        engine.Context.RegisterService(reactions);
+        SimulationPhaseDriver simulation = engine.AttachResidentSimulationWorld(128, 128);
+        simulation.Kernel.EditCellAtInputPhase(10, 10, Fire, persistentFlags: 0);
+        simulation.Kernel.EditCellAtInputPhase(11, 10, Wood, persistentFlags: 0);
+
+        _ = engine.RunOneTick(1.0 / 60.0);
+
+        Assert.Equal(Stone, simulation.Grid.GetMaterial(10, 10));
+        Assert.Equal(Ash, simulation.Grid.GetMaterial(11, 10));
+        Assert.True(engine.Context.GetService<ReactionEngine>() is not null);
     }
 
     /// <summary>
@@ -473,6 +527,37 @@ public sealed class SceneAndHeadlessTests
         }
 
         return new MaterialTable(materials);
+    }
+
+    private static MaterialDef[] CreateReactionMaterials()
+    {
+        return
+        [
+            Material(Empty, "empty", CellType.Empty, reactionStart: 0, reactionCount: 0),
+            Material(Fire, "fire", CellType.Fire, reactionStart: 0, reactionCount: 1),
+            Material(Wood, "wood", CellType.Solid, reactionStart: 1, reactionCount: 1),
+            Material(Stone, "stone", CellType.Solid, reactionStart: 0, reactionCount: 0),
+            Material(Ash, "ash", CellType.Solid, reactionStart: 0, reactionCount: 0),
+        ];
+    }
+
+    private static MaterialDef Material(ushort id, string name, CellType type, int reactionStart, byte reactionCount)
+    {
+        return new MaterialDef
+        {
+            Id = id,
+            Name = name,
+            Type = type,
+            Density = id == 0 ? (byte)0 : (byte)100,
+            ReactionStart = reactionStart,
+            ReactionCount = reactionCount,
+            DefaultLifetime = type == CellType.Gas ? (ushort)120 : (ushort)0,
+            HeatCapacity = 1,
+            TextureId = -1,
+            MeltPoint = float.NaN,
+            FreezePoint = float.NaN,
+            BoilPoint = float.NaN,
+        };
     }
 
     private sealed class FakeWorldStateBridge(
