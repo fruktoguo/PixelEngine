@@ -221,11 +221,11 @@
 - [x] `TilemapCollider` 粗回退路径（架构 §8.1 方案 b）。
 
 ### 4.9 PixelEngine.Physics — 角色控制器（架构 §8.5，供 `plan/13`）
-- [ ] `CharacterController`：kinematic AABB/小 bitmap，**独立于 Box2D**，运行相位 1，读相位起点稳定网格。
-- [ ] speculative contacts + 多 sub-iteration 推出墙/地/坡（架构 §8.5）。
-- [ ] 沿 AABB 边采样固体像素做地面/墙/坡检测：`IsGrounded`/`WallContact`/`SlopeAngle`；step-up；skin width、最大 sub-iteration 可配。
-- [ ] 把 `RigidOwned` cell 视为固体；可选对刚体施反作用冲量（`b2Body_ApplyLinearImpulse`）。
-- [ ] 公开 `Move(in Vector2 desired, out CharacterCollisionInfo)` + 形状/查询 API，完整中文 XML 注释，零稳态分配。
+- [x] `CharacterController`：kinematic AABB/小 bitmap，**独立于 Box2D**，运行相位 1，读相位起点稳定网格。
+- [x] speculative contacts + 多 sub-iteration 推出墙/地/坡（架构 §8.5）。
+- [x] 沿 AABB 边采样固体像素做地面/墙/坡检测：`IsGrounded`/`WallContact`/`SlopeAngle`；step-up；skin width、最大 sub-iteration 可配。
+- [x] 把 `RigidOwned` cell 视为固体；可选对刚体施反作用冲量（`b2Body_ApplyLinearImpulse`）。
+- [x] 公开 `Move(in Vector2 desired, out CharacterCollisionInfo)` + 形状/查询 API，完整中文 XML 注释，零稳态分配。
 
 ### 4.10 PixelEngine.Physics — 编排/诊断/快照
 - [ ] `PhysicsSystem.Initialize`/`SyncStep`/`Shutdown`（建/注入桥/毁 world）。
@@ -266,9 +266,9 @@
 
 ### 5.5 静态地形与角色
 - [x] 地形不整体喂 Box2D；动态刚体与地形碰撞经局部用后即弃静态 collider（架构 §8.1）。
-- [ ] 角色控制器独立于 Box2D、与 `b2World_Step` 解耦，移动手感不受刚体负载影响（架构 §8.5）。
-- [ ] 角色对固体像素场正确解算：不穿墙、正确地面/墙/坡检测、可爬小坡/台阶（架构 §8.5）。
-- [ ] 角色把 `RigidOwned` cell 当固体（能站上动态刚体）。
+- [x] 角色控制器独立于 Box2D、与 `b2World_Step` 解耦，移动手感不受刚体负载影响（架构 §8.5）。
+- [x] 角色对固体像素场正确解算：不穿墙、正确地面/墙/坡检测、可爬小坡/台阶（架构 §8.5）。
+- [x] 角色把 `RigidOwned` cell 当固体（能站上动态刚体）。
 
 ### 5.6 性能与纪律
 - [ ] 刚体 Step + 形状重建符合帧预算 ≤3–4ms（架构 §1.4，目标机 BenchmarkDotNet）。
@@ -311,6 +311,6 @@
 - [x] 节点 6：`feat(physics): 两世界栅格化同步(erase→step→inverse-sample re-stamp)`（对应 §4.6，相位 8，不变式 #5）。
 - [x] 节点 7：`feat(physics): 破坏/挖掘重建(CCL 拆分+父子速度转移+节流)`（对应 §4.7，架构 §8.4）。
 - [x] 节点 8：`feat(physics): 静态地形局部用后即弃 collider`（对应 §4.8，架构 §8.1）。
-- [ ] 节点 9：`feat(physics): 独立于 Box2D 的角色控制器(kinematic AABB vs 像素)`（对应 §4.9，架构 §8.5）。
+- [x] 节点 9：`feat(physics): 独立于 Box2D 的角色控制器(kinematic AABB vs 像素)`（对应 §4.9，架构 §8.5）。
 - [ ] 节点 10：`feat(physics): PhysicsSystem 相位编排/诊断/存档快照 API`（对应 §4.10）。
 - [ ] 节点 11：`test(physics): 凸分解/水密/无侵蚀/边界/task 桥并行 验收测试`（对应第 5 章，`plan/14` 协同）。
