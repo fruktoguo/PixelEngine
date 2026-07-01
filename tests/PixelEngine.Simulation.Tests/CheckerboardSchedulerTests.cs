@@ -1,3 +1,4 @@
+using PixelEngine.Core;
 using PixelEngine.Core.Threading;
 using Xunit;
 
@@ -27,7 +28,7 @@ public sealed class CheckerboardSchedulerTests
         kernel.StepCa(jobs);
 
         Assert.Equal(0, Get(center, 10, 10));
-        Assert.Equal(Sand, Get(center, 10, 11));
+        Assert.Equal(Sand, Get(center, 10, 10 + EngineConstants.MoveCap));
     }
 
     /// <summary>
@@ -68,7 +69,7 @@ public sealed class CheckerboardSchedulerTests
         {
             Chunk chunk = source.GetRequired(coord);
             Assert.Equal(0, Get(chunk, 10, 10));
-            Assert.Equal(Sand, Get(chunk, 10, 11));
+            Assert.Equal(Sand, Get(chunk, 10, 10 + EngineConstants.MoveCap));
         }
     }
 
@@ -93,7 +94,7 @@ public sealed class CheckerboardSchedulerTests
         kernel.StepCa(jobs);
 
         Assert.Equal(0, Get(active, 10, 10));
-        Assert.Equal(Sand, Get(active, 10, 11));
+        Assert.Equal(Sand, Get(active, 10, 10 + EngineConstants.MoveCap));
         Assert.Equal(Sand, Get(sleeping, 10, 10));
         Assert.Equal(0, Get(sleeping, 10, 11));
         Assert.Equal(ChunkState.Sleeping, sleeping.State);

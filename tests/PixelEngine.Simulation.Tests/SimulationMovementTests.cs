@@ -24,6 +24,7 @@ public sealed class SimulationMovementTests
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         SetCurrentDirty(center, DirtyRect.Full);
         Set(center, 10, 10, Sand);
+        Set(center, 10, 12, Solid);
         SimulationKernel kernel = new(source, CreateMaterials());
 
         kernel.StepCa();
@@ -56,6 +57,44 @@ public sealed class SimulationMovementTests
         Assert.Equal(Sand, Get(center, 10, 10));
         Assert.Equal(0, Get(center, 9, 10));
         Assert.Equal(0, Get(center, 11, 10));
+    }
+
+    /// <summary>
+    /// 验证 powder 在一遍 bottom-up 扫描内坍塌到同列障碍上方。
+    /// </summary>
+    [Fact]
+    public void StepCaCollapsesPowderDownToObstacleInOneTick()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        SetCurrentDirty(center, DirtyRect.Full);
+        Set(center, 10, 10, Sand);
+        Set(center, 10, 30, Solid);
+        SimulationKernel kernel = new(source, CreateMaterials());
+
+        kernel.StepCa();
+
+        Assert.Equal(0, Get(center, 10, 10));
+        Assert.Equal(0, Get(center, 10, 11));
+        Assert.Equal(Sand, Get(center, 10, 29));
+        Assert.Equal(Solid, Get(center, 10, 30));
+    }
+
+    /// <summary>
+    /// 验证 powder 垂直坍塌被 32px MoveCap 钳制。
+    /// </summary>
+    [Fact]
+    public void StepCaClampsPowderVerticalCollapseToMoveCap()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        SetCurrentDirty(center, DirtyRect.Full);
+        Set(center, 10, 10, Sand);
+        SimulationKernel kernel = new(source, CreateMaterials());
+
+        kernel.StepCa();
+
+        Assert.Equal(0, Get(center, 10, 10));
+        Assert.Equal(Sand, Get(center, 10, 10 + EngineConstants.MoveCap));
+        Assert.Equal(0, Get(center, 10, 10 + EngineConstants.MoveCap + 1));
     }
 
     /// <summary>
@@ -249,9 +288,9 @@ public sealed class SimulationMovementTests
         kernel.StepCa();
 
         Assert.Equal(0, Get(center, 10, 63));
-        Assert.Equal(Sand, Get(south, 10, 0));
+        Assert.Equal(Sand, Get(south, 10, EngineConstants.MoveCap - 1));
         Assert.Equal(DirtyRect.Empty, south.WorkingDirty);
-        Assert.Equal(new DirtyRect(8, 0, 12, 2), south.GetIncomingDirty(1));
+        Assert.Equal(new DirtyRect(8, 29, 12, 33), south.GetIncomingDirty(1));
     }
 
     /// <summary>

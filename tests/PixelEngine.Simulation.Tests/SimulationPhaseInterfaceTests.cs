@@ -1,3 +1,4 @@
+using PixelEngine.Core;
 using PixelEngine.Core.Threading;
 using Xunit;
 
@@ -32,7 +33,7 @@ public sealed class SimulationPhaseInterfaceTests
         kernel.StepCa();
 
         Assert.Equal(0, Get(center, 10, 10));
-        Assert.Equal(Sand, Get(center, 10, 11));
+        Assert.Equal(Sand, Get(center, 10, 10 + EngineConstants.MoveCap));
     }
 
     /// <summary>
@@ -80,7 +81,7 @@ public sealed class SimulationPhaseInterfaceTests
         kernel.StepCa();
 
         Assert.Equal(0, Get(center, 10, 10));
-        Assert.Equal(Sand, Get(center, 10, 11));
+        Assert.Equal(Sand, Get(center, 10, 10 + EngineConstants.MoveCap));
     }
 
     /// <summary>
@@ -141,7 +142,7 @@ public sealed class SimulationPhaseInterfaceTests
         BoundaryWakeRecord record = kernel.Diagnostics.BoundaryWakeRecords[0];
         Assert.Equal(new ChunkCoord(0, 1), record.TargetCoord);
         Assert.Equal(KeepAliveDirections.SlotNorth, record.IncomingSlot);
-        Assert.Equal(new DirtyRect(8, 0, 12, 2), record.Rect);
+        Assert.Equal(new DirtyRect(8, 29, 12, 33), record.Rect);
     }
 
     /// <summary>
@@ -187,7 +188,7 @@ public sealed class SimulationPhaseInterfaceTests
         kernel.StepCa(jobs);
 
         Assert.Equal(0, Get(center, 10, 10));
-        Assert.Equal(Sand, Get(center, 10, 11));
+        Assert.Equal(Sand, Get(center, 10, 10 + EngineConstants.MoveCap));
     }
 
     private static MaterialPropsTable CreateMaterials()
