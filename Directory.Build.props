@@ -14,10 +14,19 @@
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest</AnalysisLevel>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <PixelEngineIsSourceProject>$([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('\', '/').Contains('/src/PixelEngine.'))</PixelEngineIsSourceProject>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(CI)' == 'true'">
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsAsErrors>$(WarningsAsErrors);IL2026;IL2046;IL2057;IL2062;IL2067;IL2070;IL2072;IL2073;IL2075;IL2104;IL3000;IL3002;IL3050;IL3056</WarningsAsErrors>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PixelEngineIsSourceProject)' == 'True'">
+    <IsTrimmable>true</IsTrimmable>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
   </PropertyGroup>
 
   <!-- 由 tools/publish-r2r.* 以 -p:Channel=R2R 激活；不设置 baseline ISA，保留 CoreCLR 运行时 light-up。 -->
@@ -31,6 +40,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <PublishTrimmed>true</PublishTrimmed>
     <TrimMode>partial</TrimMode>
+    <NoWarn>$(NoWarn);IL2104</NoWarn>
   </PropertyGroup>
 
   <!-- 由 tools/publish-aot.* 以 -p:Channel=AOT 激活；AOT 产物限定已知硬件，逐 RID 显式 ISA。 -->
@@ -39,6 +49,7 @@
     <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
     <TrimMode>full</TrimMode>
+    <NoWarn>$(NoWarn);IL2104;IL3000;IL3002</NoWarn>
     <IlcOptimizationPreference>Speed</IlcOptimizationPreference>
     <IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
   </PropertyGroup>

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
@@ -63,6 +64,10 @@ internal sealed class ScriptCompiler
             : ScriptCompilationResult.Failed(diagnostics);
     }
 
+    [UnconditionalSuppressMessage(
+        "SingleFile",
+        "IL3000",
+        Justification = "Runtime script compilation treats empty Assembly.Location as unavailable and falls back to TRUSTED_PLATFORM_ASSEMBLIES.")]
     private static MetadataReference[] BuildReferences(IEnumerable<Assembly> assemblies)
     {
         Dictionary<string, MetadataReference> references = new(StringComparer.OrdinalIgnoreCase);
