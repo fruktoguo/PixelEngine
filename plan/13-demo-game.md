@@ -129,7 +129,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 | 自由粒子发射 | `IParticles.Emit/Burst(origin,count,velDist,materialId,life)` | plan/05 | 需引擎补 API（脚本可见的发射接口；池由引擎管理） |
 | 相机控制 | `ICamera.Position/Zoom`、`WorldToScreen/ScreenToWorld`、`Follow(target,damping)` | plan/08（相机） | 部分实现：Scripting 已有 `ScriptCameraApi`，支持中心、缩放、视口、屏幕/世界坐标转换与 `CameraSnapshot`；仍缺 Hosting 将快照同步到 Rendering/World residency、统一 Transform 后的 `Follow(Entity)` |
 | 点光源 / fog-of-war reveal | `ILighting.AddPointLight(...)`、`RevealAround(pos,radius)` | plan/08（光照） | 部分实现：Scripting 已有 `ScriptLightingApi`，可记录 `RevealAround` 与点光源请求；仍缺 Hosting/Rendering 消费这些请求并同步到 `FogOfWarBuffer`/light pass |
-| 一次性音效播放 | `IAudio.PlayOneShot(clip, worldPos?)` | plan/10 | 需引擎补 API（脚本可见的播放接口；材质化事件自动） |
+| 一次性音效播放 | `IAudio.PlayOneShot(clip, worldPos?)` | plan/10 | 部分实现：Scripting `IAudioApi` 已支持 `PlayOneShot` 与 `PlayAt`，`ScriptAudioApi` 可桥接真实 `AudioSystem`；仍缺 Hosting 自动加载 Demo audio clips 并注入脚本上下文 |
 | 材质化音效配置 | `MaterialDef.AudioCues`（materials.json 字段） | plan/04 + plan/10 | 已规划 |
 | 即时模式 HUD / 菜单 | `IGuiContext`（窗口 / 文本 / 按钮 / 色块），`Behaviour.OnGui` | plan/11 / plan/12 | 需引擎补 API（游戏 HUD 用 GUI 服务，区别于编辑器 UI） |
 | 性能 / 状态诊断读取 | `IDiagnostics`（fps、sim 频率、活跃 chunk / 粒子 / 刚体计数） | plan/02（诊断） | 已规划 |
@@ -165,12 +165,12 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 - [ ] 木 / 金属可破坏结构布置，验证连通块脱落→Box2D 刚体、可推 / 砸 / 再破坏。〔plan/06;§3.7〕
 - [ ] 火花 / 血 / 碎屑发射经 `Particles.Emit/Burst`，爆炸抛射经 `World.Explode`。〔plan/05;§3.8〕
 - [!] emissive 材质标注正确（lava/molten_metal/fire/火花），Scripting 已有 `Lighting.RevealAround` + `AddPointLight` 请求 API；阻塞：缺少 Hosting/Rendering 将脚本光照请求同步到 `FogOfWarBuffer` 与 light pass 的运行态消费。〔plan/08;§3.9〕
-- [ ] `materials.json` 的 `AudioCues` 覆盖 impact/fire/splash/explosion/ambient；玩法音效经 `Audio.PlayOneShot`。〔plan/04、plan/10;§3.10〕
+- [!] `materials.json` 的 `AudioCues` 已覆盖 impact/fire/splash/ambient/shatter，玩法脚本可经 `Audio.PlayOneShot`/`PlayAt` 请求音效；阻塞：缺少爆炸复合 API 触发 explosion cue，以及 Hosting 自动加载 Demo audio clips 并注入脚本上下文。〔plan/04、plan/10;§3.10〕
 
 关卡与 UI
-- [ ] `LevelDirector : Behaviour`：脚本生成「熔岩矿洞逃生」（出生 / 出口 / 熔岩湖 / 水龙头 / 沙漏斗 / 木栈桥 / 金属梁 / 酸池 / 冰晶 / 油池 / 锚定边界），确定性 RNG 种子。〔plan/11、plan/02;§3.11〕
-- [ ] `MaterialEmitter : Behaviour`（材质 + 速率 + 喷口）：水 / 沙 / 熔岩源。〔plan/11;§3.11〕
-- [ ] `GoalTrigger : Behaviour`：玩家进入触发区判通关 + 胜利菜单 + 音效。〔plan/11、plan/10;§3.11〕
+- [!] `LevelDirector : Behaviour`：源码已落地，脚本生成「熔岩矿洞逃生」基础布局并装配玩家、相机、笔刷、喷口和目标触发器；阻塞：Hosting procedural scene source 尚不会自动挂载 `LevelDirector` 到脚本场景，且 save directory/world 物化与运行态脚本注入仍未完成。〔plan/11、plan/02;§3.11〕
+- [!] `MaterialEmitter : Behaviour`（材质 + 速率 + 喷口）：源码已落地，支持周期性 cell 注入、粒子、音频和点光源请求；阻塞：缺少 Hosting 自动驱动脚本场景、音频 clip 自动加载与光照请求运行态消费。〔plan/11;§3.11〕
+- [!] `GoalTrigger : Behaviour`：源码已落地，玩家进入触发区后触发通关状态、音效、粒子与光照反馈；阻塞：缺少胜利菜单/GUI 服务、脚本运行时自动注入和音频/光照后端消费。〔plan/11、plan/10;§3.11〕
 - [ ] `content/scenes/lava-mine.scene`：编辑器编排并序列化，与 `LevelDirector` 等价。〔plan/12、plan/07;§3.2、§3.11〕
 - [ ] `DemoHud : Behaviour.OnGui`：当前材质 / 笔刷 / 玩家状态 / 操作提示 / 性能行。〔plan/11、plan/12、plan/02;§3.12〕
 - [ ] `PauseMenu : Behaviour.OnGui`：继续 / 重开 / 调试叠层切换 / 打开编辑器 / 退出。〔plan/12、架构 §17.2;§3.12〕

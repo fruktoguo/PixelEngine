@@ -14,6 +14,12 @@ public sealed class ScriptAudioApi(AudioSystem audio, AudioClipCache clips) : IA
     private readonly AudioClipCache _clips = clips ?? throw new ArgumentNullException(nameof(clips));
 
     /// <inheritdoc />
+    public void PlayOneShot(string cue, float volume = 1f)
+    {
+        PlayAt(cue, 0f, 0f, volume);
+    }
+
+    /// <inheritdoc />
     public void PlayAt(string cue, float x, float y, float volume = 1f)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(cue);

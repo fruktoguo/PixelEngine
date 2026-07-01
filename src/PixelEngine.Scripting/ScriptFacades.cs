@@ -476,6 +476,13 @@ public interface IEventBus
 public interface IAudioApi
 {
     /// <summary>
+    /// 播放非空间化一次性音效；脚本可在相位 1 调用，请求由音频后端异步消费。
+    /// </summary>
+    /// <param name="cue">音效 cue 名。</param>
+    /// <param name="volume">播放音量。</param>
+    void PlayOneShot(string cue, float volume = 1f);
+
+    /// <summary>
     /// 在指定世界坐标播放音效；脚本可在相位 1 调用，请求由音频后端异步消费。
     /// </summary>
     /// <param name="cue">音效 cue 名。</param>
