@@ -7,6 +7,17 @@ namespace PixelEngine.Audio.Tests;
 public sealed class AudioAcceptanceTests
 {
     [Fact]
+    public void AudioSystemDefaultBackendInitializesOrFallsBackWithoutCrashing()
+    {
+        using AudioSystem audio = new();
+
+        audio.Initialize(new AudioSettings { MaxVoices = 1, MaxAmbientVoices = 0 });
+
+        Assert.NotNull(audio.Backend);
+        audio.Shutdown();
+    }
+
+    [Fact]
     public void DispatcherPlacesSourceInMeterSpaceForPositionedEvents()
     {
         AudioSettings settings = new()

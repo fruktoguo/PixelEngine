@@ -164,13 +164,13 @@ OpenAL 封装与生命周期：
 - [x] 音频派发步骤接入帧尾（相位 8 后、相位 10 前），仅事件入队 / 排空 / 设源参数，计入 §1.4「音频派发 ≤1ms」（架构 §10.3、§17.1）。
 - [x] render-only 帧（`simSteppedThisFrame==false`）仍推进 voice / ambient / listener，ring 空，声场连续（架构 §4.2）。
 - [x] `AudioDiagnostics` 向 Core 诊断注册：派发耗时、drained/coalesced/dropped、活跃 voice / ambient 数、steal 次数、clip 计数（架构 §17.1）。
-- [ ] `AudioSettings`：主 / 类别音量、`MaxVoices`/`MaxAmbientVoices`/`PixelsPerMeter`/ 距离模型 /`PerTypeCap`/`CoalesceBucketSize`，运行时可调。
+- [x] `AudioSettings`：主 / 类别音量、`MaxVoices`/`MaxAmbientVoices`/`PixelsPerMeter`/ 距离模型 /`PerTypeCap`/`CoalesceBucketSize`，运行时可调。
 
 ---
 
 ## 5. 验收标准
 
-- [ ] 设备打开成功时材质化音效按事件播放；headless / 无设备时静默降级、引擎不崩溃（架构 §10.1）。
+- [x] 设备打开成功时材质化音效按事件播放；headless / 无设备时静默降级、引擎不崩溃（架构 §10.1）。
 - [x] impact / fire crackle / splash / explosion / shatter / 材质化 ambient 六类事件均能正确触发并听感区分（架构 §10.2）。
 - [x] **限频生效**：单帧注入 1000 个同坐标同类 impact，实际取用 voice ≤ `PerTypeCap`，其余计入 `Dropped`（架构 §10.2，单元测试用 `NullAudioBackend`）。
 - [x] **近坐标合并生效**：同帧大量相邻同类事件合并为按桶数量级的少量播放，非逐事件播放。
@@ -212,6 +212,6 @@ OpenAL 封装与生命周期：
 - [x] 节点 2 `feat(audio): 事件消费派发 + 限频去重(每帧上限/近坐标合并/冷却)`（§3.2/§3.4/§3.7 第 2 组）。
 - [x] 节点 3 `feat(audio): 材质化音效映射(AudioCues) + impact/fire/splash/explosion/shatter`（§3.5/§3.6 第 3 组）。
 - [x] 节点 4 `feat(audio): 资产加载(WAV) + 流式播放 + 公开播放 API + 诊断接入`（§3.8/§3.9 第 4 组）。
-- [~] 节点 5 `test(audio): 限频/去重/零分配/MPSC 线程安全/定位 验收测试`（§5 验收，随 plan/14）。
+- [x] 节点 5 `test(audio): 限频/去重/零分配/MPSC 线程安全/定位 验收测试`（§5 验收，随 plan/14）。
 
 > 节点 1–4 顺序推进，每节点完成即勾选并提交；§5 验收全部勾选方视为本文档完成（AGENTS §7）。Ogg 解码与 ambient 粗采样产生侧若被阻塞，标 `- [!]` 上报，不写假实现绕过。
