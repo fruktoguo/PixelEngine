@@ -490,6 +490,27 @@ public interface IDiagnosticsApi
     /// </summary>
     /// <returns>诊断快照。</returns>
     EngineDiagnosticsSnapshot Capture();
+
+    /// <summary>
+    /// 判断指定调试叠层是否启用。
+    /// </summary>
+    /// <param name="overlay">调试叠层类型。</param>
+    /// <returns>启用时返回 true。</returns>
+    bool IsOverlayEnabled(DebugOverlayKind overlay);
+
+    /// <summary>
+    /// 设置指定调试叠层开关。
+    /// </summary>
+    /// <param name="overlay">调试叠层类型。</param>
+    /// <param name="enabled">是否启用。</param>
+    void SetOverlay(DebugOverlayKind overlay, bool enabled);
+
+    /// <summary>
+    /// 切换指定调试叠层开关。
+    /// </summary>
+    /// <param name="overlay">调试叠层类型。</param>
+    /// <returns>切换后的启用状态。</returns>
+    bool ToggleOverlay(DebugOverlayKind overlay);
 }
 
 /// <summary>
@@ -510,6 +531,52 @@ public readonly record struct EngineDiagnosticsSnapshot(
     long ResidentChunks,
     long FreeParticles,
     long RigidBodies);
+
+/// <summary>
+/// 脚本可切换的调试叠层类型。
+/// </summary>
+public enum DebugOverlayKind
+{
+    /// <summary>
+    /// dirty rectangle 边框。
+    /// </summary>
+    DirtyRects,
+
+    /// <summary>
+    /// chunk 网格与 4-pass parity 着色边框。
+    /// </summary>
+    ChunkGridParity,
+
+    /// <summary>
+    /// KeepAlive / 边界唤醒热点。
+    /// </summary>
+    KeepAliveHotspots,
+
+    /// <summary>
+    /// cell parity 位着色。
+    /// </summary>
+    CellParity,
+
+    /// <summary>
+    /// 温度热力图。
+    /// </summary>
+    TemperatureHeatmap,
+
+    /// <summary>
+    /// owned-by-body 着色。
+    /// </summary>
+    OwnedByBody,
+
+    /// <summary>
+    /// 自由粒子轨迹。
+    /// </summary>
+    ParticleTrails,
+
+    /// <summary>
+    /// 刚体连通块区域。
+    /// </summary>
+    ConnectedComponents,
+}
 
 /// <summary>
 /// 提供脚本可用的事件订阅 API。

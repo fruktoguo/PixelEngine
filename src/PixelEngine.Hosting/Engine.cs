@@ -307,7 +307,10 @@ public sealed class Engine : IDisposable
             camera,
             lighting,
             sink,
-            Context.Jobs);
+            Context.Jobs,
+            kernel: simulation.Kernel,
+            physics: Context.TryGetService(out PhysicsSystem physics) ? physics : null,
+            debugOverlays: ResolveDebugOverlayController());
         Context.RegisterService(pipeline);
         Context.RegisterService<IGpuComputeQualityDegrader>(pipeline);
         Context.RegisterService<IRenderFrameSink>(sink);
@@ -368,6 +371,11 @@ public sealed class Engine : IDisposable
                 EnableDockSpace = enableDockSpace,
                 LayoutPath = Path.Combine(Context.Options.ContentRoot, "imgui.ini"),
             });
+        if (enableDockSpace)
+        {
+            created.AddPanel(new DebugOverlayPanel(ResolveDebugOverlaySettings()));
+        }
+
         Context.RegisterService(created);
         _ownedRuntimeResources.Add(created);
         return created;
@@ -857,8 +865,34 @@ public sealed class Engine : IDisposable
             return diagnostics;
         }
 
-        EngineScriptDiagnosticsApi created = new(Context.Counters, Context.Clock);
+        EngineScriptDiagnosticsApi created = new(Context.Counters, Context.Clock, ResolveDebugOverlaySettings());
         Context.RegisterService<IDiagnosticsApi>(created);
+        Context.RegisterService(created);
+        return created;
+    }
+
+    private DebugOverlaySettings ResolveDebugOverlaySettings()
+    {
+        if (Context.TryGetService(out DebugOverlaySettings settings))
+        {
+            return settings;
+        }
+
+        DebugOverlaySettings created = new();
+        Context.RegisterService(created);
+        return created;
+    }
+
+    private DebugOverlayController ResolveDebugOverlayController()
+    {
+        if (Context.TryGetService(out DebugOverlayController controller))
+        {
+            return controller;
+        }
+
+        DebugOverlayController created = new(
+            ResolveDebugOverlaySettings(),
+            Context.TryGetService(out RigidStampRegistry registry) ? registry : null);
         Context.RegisterService(created);
         return created;
     }
