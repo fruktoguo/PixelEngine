@@ -38,7 +38,7 @@ function Invoke-Checked([string]$filePath, [string[]]$arguments) {
 }
 
 if (-not $SkipNativeBuild) {
-  Invoke-Checked (Join-Path $PSScriptRoot 'build-native.ps1') @('-Rid', $Rid, '-Configuration', $Configuration)
+  & (Join-Path $PSScriptRoot 'build-native.ps1') -Rid $Rid -Configuration $Configuration
 }
 
 $publishProperties = @('-p:Channel=R2R')
@@ -51,7 +51,7 @@ if ($InformationalVersion) {
 }
 
 Remove-Item -LiteralPath $Output -Recurse -Force -ErrorAction SilentlyContinue
-Invoke-Checked 'dotnet' @(
+Invoke-Checked 'dotnet' -arguments @(
   'publish', $demoProject,
   '-c', $Configuration,
   '-r', $Rid,
