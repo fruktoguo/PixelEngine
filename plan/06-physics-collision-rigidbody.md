@@ -228,10 +228,10 @@
 - [x] 公开 `Move(in Vector2 desired, out CharacterCollisionInfo)` + 形状/查询 API，完整中文 XML 注释，零稳态分配。
 
 ### 4.10 PixelEngine.Physics — 编排/诊断/快照
-- [ ] `PhysicsSystem.Initialize`/`SyncStep`/`Shutdown`（建/注入桥/毁 world）。
-- [ ] 向 Core 诊断注册分项耗时（CCL/重建/Step/erase/inverse-sample/静态 collider/角色）（架构 §17.1）。
-- [ ] 刚体破碎事件入事件总线供音频（`plan/10`）。
-- [ ] 只读快照 API（不可变 mask + transform + 线/角速度）供 `plan/07` 存档。
+- [x] `PhysicsSystem.Initialize`/`SyncStep`/`Shutdown`（建/注入桥/毁 world）。
+- [x] 向 Core 诊断注册分项耗时（CCL/重建/Step/erase/inverse-sample/静态 collider/角色）（架构 §17.1）。
+- [x] 刚体破碎事件入事件总线供音频（`plan/10`）。
+- [x] 只读快照 API（不可变 mask + transform + 线/角速度）供 `plan/07` 存档。
 
 ---
 
@@ -312,5 +312,5 @@
 - [x] 节点 7：`feat(physics): 破坏/挖掘重建(CCL 拆分+父子速度转移+节流)`（对应 §4.7，架构 §8.4）。
 - [x] 节点 8：`feat(physics): 静态地形局部用后即弃 collider`（对应 §4.8，架构 §8.1）。
 - [x] 节点 9：`feat(physics): 独立于 Box2D 的角色控制器(kinematic AABB vs 像素)`（对应 §4.9，架构 §8.5）。
-- [ ] 节点 10：`feat(physics): PhysicsSystem 相位编排/诊断/存档快照 API`（对应 §4.10）。
+- [x] 节点 10：`feat(physics): PhysicsSystem 相位编排/诊断/存档快照 API`（对应 §4.10）。
 - [ ] 节点 11：`test(physics): 凸分解/水密/无侵蚀/边界/task 桥并行 验收测试`（对应第 5 章，`plan/14` 协同）。
