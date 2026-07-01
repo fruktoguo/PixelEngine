@@ -1,5 +1,6 @@
 using PixelEngine.Audio;
 using PixelEngine.Core;
+using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Events;
 using PixelEngine.Core.Time;
 using PixelEngine.Simulation;
@@ -128,6 +129,52 @@ public sealed class AudioPhaseDriverTests
         Assert.Equal(0, engine.Context.Counters.AudioDrained);
         Assert.Equal(1, player.PlayedCount);
         Assert.Equal(2, backend.ListenerUpdates);
+    }
+
+    /// <summary>
+    /// 验证音频派发耗时写入 HUD 计数器和子阶段。
+    /// </summary>
+    [Fact]
+    public void AudioPhaseDriverRecordsDispatchDiagnostics()
+    {
+        AudioSettings settings = new()
+        {
+            MaxVoices = 64,
+            MaxParticleImpactEventsPerFrame = 32,
+            MaxDrainedAudioEventsPerFrame = 64,
+            CoalesceBucketSize = 1,
+            DefaultCooldownTicks = 0,
+        };
+        using NullAudioBackend backend = new();
+        using AudioSystem audio = new();
+        audio.Initialize(settings, backend);
+        MpscRingBuffer<AudioEvent> ring = new(128);
+        AudioDispatcher dispatcher = new(ring, audio.Voices, settings);
+        CountingEventPlayer player = new();
+        Engine engine = new EngineBuilder()
+            .UseHeadless()
+            .AddPhaseDriver(new AudioPhaseDriver(
+                audio,
+                _ => new AudioListenerView(0f, 0f, 1f, 64, 64),
+                dispatcher,
+                player))
+            .Build();
+        engine.EnterEditMode();
+
+        Assert.True(ring.TryEnqueue(new AudioEvent(AudioEventType.ParticleImpact, -4, 0, 1, 1f)));
+        _ = engine.RunOneTick();
+        for (int i = 0; i < 32; i++)
+        {
+            Assert.True(ring.TryEnqueue(new AudioEvent(AudioEventType.ParticleImpact, i * 4, 0, 1, 1f)));
+        }
+
+        _ = engine.RunOneTick();
+
+        double profiled = engine.Context.Profiler.LastSubFrame[(int)FrameSubPhase.AudioDispatch];
+        Assert.Equal(32, engine.Context.Counters.AudioDrained);
+        Assert.Equal(32, engine.Context.Counters.AudioPlayed);
+        Assert.True(engine.Context.Counters.AudioDispatchMilliseconds > 0);
+        Assert.True(profiled > 0);
     }
 
     private static MaterialAudioTable BuildAmbientTable()
