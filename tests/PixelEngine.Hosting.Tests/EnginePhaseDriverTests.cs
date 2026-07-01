@@ -63,7 +63,7 @@ public sealed class EnginePhaseDriverTests
     }
 
     /// <summary>
-    /// 验证 RenderPhaseDriver 会在相位 9 构建 CPU render buffer，并把脚本相机、粒子与 fog-of-war 结果提交到渲染 sink。
+    /// 验证 RenderPhaseDriver 会在相位 9 构建 CPU render buffer，并在相位 10 把脚本相机、粒子与 fog-of-war 结果提交到渲染 sink。
     /// </summary>
     [Fact]
     public void RenderPhaseDriverBuildsBufferAndSubmitsFrame()
@@ -105,6 +105,7 @@ public sealed class EnginePhaseDriverTests
         Assert.Equal(32, sink.AuxWidth);
         Assert.Equal(16, sink.AuxHeight);
         Assert.Equal(1, engine.Phases.Count(EnginePhase.BuildRenderBuffer));
+        Assert.Equal(1, engine.Phases.Count(EnginePhase.GpuUploadAndRender));
         Assert.Equal(1, sink.ParticleCount);
         Assert.Equal(1, sink.DirtyRectCount);
         Assert.Equal(new PixelUploadRect(0, 0, 32, 16), sink.FirstDirtyRect);
