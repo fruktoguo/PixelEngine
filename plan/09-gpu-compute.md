@@ -100,17 +100,17 @@ cascade 层数 `RadianceCascadeCount`、每层角度/空间分辨率、射线步
 ## 4. 实现清单
 
 ### 4.1 后端抽象与能力门控（§3.1，架构 §9.5）
-- [ ] 定义 `IComputeBackend` 接口（kernel 加载、SSBO/image 绑定、`Dispatch`、`MemoryBarrier`、GPU 计时），带完整中文 XML 注释。
-- [ ] 实现 `GLComputeBackend`（Silk.NET GL 4.3 compute：`ARB_compute_shader`/SSBO/image load-store），GLSL `#version 430`，运行时编译、无反射。
-- [ ] 实现 `ComputeSharpBackend`（Windows/DX12，可选，经 `IComputeBackend` 隔离，未启用时不被引用/AOT 触及）；在 `Directory.Packages.props` 登记 `ComputeSharp`（CPM）。
-- [ ] 实现 `NullComputeBackend`（空实现，所有入口委派 `plan/08` fragment/CPU 路径）。
-- [ ] 实现 `GpuCapabilities` 探测（GL 版本、compute/SSBO/image 扩展、`GL_MAX_COMPUTE_WORK_GROUP_*`、ANGLE/ES3、DX12），启动期探测一次并缓存。
-- [ ] 实现 `ComputeCapabilityGate`：产出门控位 **G1**（GL≥4.3+扩展）、**G2**（Win+DX12+ComputeSharp 显式启用）、**G3**（基线回退到 plan/08）、**G4**（逐特性独立开关）。
-- [ ] 后端选择优先级落地（默认 GLComputeBackend；ComputeSharp 仅 G2 且显式选择时覆盖光照/bloom/air）；门控结果与所选后端注册到 Core 诊断。
+- [x] 定义 `IComputeBackend` 接口（kernel 加载、SSBO/image 绑定、`Dispatch`、`MemoryBarrier`、GPU 计时），带完整中文 XML 注释。
+- [x] 实现 `GLComputeBackend`（Silk.NET GL 4.3 compute：`ARB_compute_shader`/SSBO/image load-store），GLSL `#version 430`，运行时编译、无反射。
+- [!] 阻塞：`ComputeSharpBackend` 已经接口隔离且 `Directory.Packages.props` 登记 `ComputeSharp` 3.2.0；真实 Windows/DX12 执行后端需 `plan/15` 明确 AOT/打包与 PackageReference 策略后实现，当前不可假装可执行。
+- [x] 实现 `NullComputeBackend`（空实现，所有入口委派 `plan/08` fragment/CPU 路径）。
+- [x] 实现 `GpuCapabilities` 探测（GL 版本、compute/SSBO/image 扩展、`GL_MAX_COMPUTE_WORK_GROUP_*`、ANGLE/ES3、DX12），启动期探测一次并缓存。
+- [x] 实现 `ComputeCapabilityGate`：产出门控位 **G1**（GL≥4.3+扩展）、**G2**（Win+DX12+ComputeSharp 显式启用）、**G3**（基线回退到 plan/08）、**G4**（逐特性独立开关）。
+- [~] 后端选择优先级已通过 `ComputeBackendFactory` 落地（默认 GLComputeBackend；ComputeSharp 仅 G2 且显式选择时覆盖光照/bloom/air）；门控结果与所选后端注册到 Core 诊断待诊断字段扩展。
 
 ### 4.2 与 plan/08 资源/上下文共享（§3.2）
-- [ ] 复用 `plan/08` 的 `IRenderContext`/render graph，不新建 GL 上下文。
-- [ ] 实现 `GpuComputeResources`：持有世界纹理/emissive/occluder/bloom mip/合成 target 句柄引用，管理 compute 专属中间资源（SSBO/cascade/SDF）。
+- [x] 复用 `plan/08` 的 `IRenderContext`/render graph，不新建 GL 上下文。
+- [~] 实现 `GpuComputeResources`：已持有世界纹理/emissive/occluder/bloom mip/合成 target 句柄引用；compute 专属中间资源（SSBO/cascade/SDF）随后续 pass 落地。
 - [ ] 资源随 `plan/08` swapchain/resize 事件重建；compute↔graphics 间插入正确 `glMemoryBarrier`。
 - [ ] 所有 compute pass 限定在架构 §3.3 相位 10 内执行，不跨相位、不碰 sim 权威数据。
 

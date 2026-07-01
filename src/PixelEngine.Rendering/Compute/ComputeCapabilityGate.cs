@@ -1,0 +1,72 @@
+namespace PixelEngine.Rendering.Compute;
+
+/// <summary>
+/// plan/09 G1-G4 compute 能力门控与后端选择结果。
+/// </summary>
+public readonly record struct ComputeCapabilityGate
+{
+    private ComputeCapabilityGate(
+        bool glComputeAvailable,
+        bool computeSharpAvailable,
+        bool baselineFallback,
+        ComputeFeatureSwitches featureSwitches,
+        ComputeBackendKind selectedBackend)
+    {
+        GlComputeAvailable = glComputeAvailable;
+        ComputeSharpAvailable = computeSharpAvailable;
+        BaselineFallback = baselineFallback;
+        FeatureSwitches = featureSwitches;
+        SelectedBackend = selectedBackend;
+    }
+
+    /// <summary>G1：GL 4.3 compute + SSBO + image load/store 是否可用。</summary>
+    public bool GlComputeAvailable { get; }
+
+    /// <summary>G2：Windows/DX12/ComputeSharp 显式启用路径是否可用。</summary>
+    public bool ComputeSharpAvailable { get; }
+
+    /// <summary>G3：是否回退到 plan/08 fragment/CPU 基线路径。</summary>
+    public bool BaselineFallback { get; }
+
+    /// <summary>G4：逐特性开关。</summary>
+    public ComputeFeatureSwitches FeatureSwitches { get; }
+
+    /// <summary>最终选择的后端。</summary>
+    public ComputeBackendKind SelectedBackend { get; }
+
+    /// <summary>
+    /// 根据能力和用户配置计算门控结果。
+    /// </summary>
+    /// <param name="capabilities">GPU compute 能力。</param>
+    /// <param name="features">逐特性开关。</param>
+    /// <param name="preferComputeSharp">是否显式优先选择 ComputeSharp。</param>
+    /// <returns>门控结果。</returns>
+    public static ComputeCapabilityGate Evaluate(
+        GpuCapabilities capabilities,
+        ComputeFeatureSwitches features,
+        bool preferComputeSharp)
+    {
+        bool glComputeAvailable =
+            !capabilities.IsGles &&
+            !capabilities.IsAngle &&
+            capabilities.HasComputeShader &&
+            capabilities.HasShaderStorageBufferObject &&
+            capabilities.HasShaderImageLoadStore;
+        bool computeSharpAvailable =
+            preferComputeSharp &&
+            capabilities.IsWindows &&
+            capabilities.IsDx12Available &&
+            capabilities.IsComputeSharpCompiled;
+        ComputeBackendKind backend = computeSharpAvailable
+            ? ComputeBackendKind.ComputeSharp
+            : glComputeAvailable
+                ? ComputeBackendKind.GlCompute
+                : ComputeBackendKind.Null;
+        return new ComputeCapabilityGate(
+            glComputeAvailable,
+            computeSharpAvailable,
+            backend == ComputeBackendKind.Null,
+            backend == ComputeBackendKind.Null ? ComputeFeatureSwitches.Disabled : features,
+            backend);
+    }
+}

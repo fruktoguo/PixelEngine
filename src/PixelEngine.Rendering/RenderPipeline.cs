@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using PixelEngine.Core.Diagnostics;
+using PixelEngine.Rendering.Compute;
 using Silk.NET.OpenGL;
 
 namespace PixelEngine.Rendering;
@@ -93,6 +94,25 @@ public sealed class RenderPipeline : IDisposable
     /// 当设置允许且上下文支持 compute shader 时，plan/09 可接管高质量光照/RC。
     /// </summary>
     public bool ShouldDelegateComputeLighting => Settings.PreferComputeLighting && _window.Capabilities.HasComputeShader;
+
+    /// <summary>
+    /// 创建 plan/09 compute pass 可复用的渲染资源句柄快照。本方法不创建新 GL 上下文，也不转移资源所有权。
+    /// </summary>
+    public GpuComputeResources CreateComputeResourcesSnapshot()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return new GpuComputeResources(
+            Width,
+            Height,
+            _worldTexture.Handle,
+            _emissive.Handle,
+            _occluder.Handle,
+            _visibility.Handle,
+            _scene.Handle,
+            _lit.Handle,
+            _postA.Handle,
+            _postB.Handle);
+    }
 
     /// <summary>
     /// 视口 resize 时重建世界纹理、PBO 容量、FBO 链与 visibility mask。
