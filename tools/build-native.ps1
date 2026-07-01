@@ -25,6 +25,24 @@ if (-not $Rid) {
   }
 }
 
+function Assert-HostSupportsRid([string]$rid) {
+  $hostIsWindows = $IsWindows -or $env:OS -eq 'Windows_NT'
+  $hostIsMacOS = $IsMacOS
+  $hostIsLinux = $IsLinux
+
+  if ($rid.StartsWith('win-') -and -not $hostIsWindows) {
+    throw "RID $rid must be built from Windows."
+  }
+
+  if ($rid.StartsWith('linux-') -and -not $hostIsLinux) {
+    throw "RID $rid must be built from Linux."
+  }
+
+  if ($rid.StartsWith('osx-') -and -not $hostIsMacOS) {
+    throw "RID $rid must be built from macOS."
+  }
+}
+
 function Find-VsTool([string]$relativePath) {
   $vswhereCandidates = @(
     "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe",
@@ -99,6 +117,7 @@ function Invoke-Native([string]$filePath, [string[]]$arguments) {
   }
 }
 
+Assert-HostSupportsRid $Rid
 Import-VcVars $Rid
 
 $cmake = Resolve-Tool $CMakePath 'cmake' 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
@@ -132,6 +151,17 @@ if (-not $sharedLibraries) {
   throw "未在共享输出目录找到动态库产物。"
 }
 
+$staticDir = Join-Path $nativeRoot "out/$Rid/static"
+$staticLibraries = if (Test-Path $staticDir) {
+  Get-ChildItem $staticDir -File -Include *.lib,*.a -Recurse
+} else {
+  @()
+}
+
+if (-not $staticLibraries) {
+  throw "未在静态输出目录找到静态库产物。"
+}
+
 foreach ($library in $sharedLibraries) {
   Copy-Item -LiteralPath $library.FullName -Destination $sharedDir -Force
   Copy-Item -LiteralPath $library.FullName -Destination $runtimeDir -Force
@@ -139,4 +169,4 @@ foreach ($library in $sharedLibraries) {
 
 Write-Host "Native build completed for $Rid."
 Write-Host "Shared runtime: $runtimeDir"
-Write-Host "Static output:  $(Join-Path $nativeRoot "out/$Rid/static")"
+Write-Host "Static output:  $staticDir"

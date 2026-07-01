@@ -1,0 +1,40 @@
+<Project>
+  <PropertyGroup>
+    <PixelEngineBox2DRid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</PixelEngineBox2DRid>
+    <PixelEngineBox2DRid Condition="'$(PixelEngineBox2DRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</PixelEngineBox2DRid>
+    <PixelEngineBox2DRoot>$(MSBuildThisFileDirectory)..\</PixelEngineBox2DRoot>
+    <PixelEngineBox2DRuntimeDir>$(PixelEngineBox2DRoot)runtimes\$(PixelEngineBox2DRid)\native\</PixelEngineBox2DRuntimeDir>
+    <PixelEngineBox2DStaticDir>$(MSBuildThisFileDirectory)out\$(PixelEngineBox2DRid)\static\</PixelEngineBox2DStaticDir>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PixelEngineBox2DRid)' == 'win-x64' or '$(PixelEngineBox2DRid)' == 'win-arm64'">
+    <PixelEngineBox2DDynamicLibraryName>box2d.dll</PixelEngineBox2DDynamicLibraryName>
+    <PixelEngineBox2DStaticLibraryName>box2d.lib</PixelEngineBox2DStaticLibraryName>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PixelEngineBox2DRid)' == 'linux-x64' or '$(PixelEngineBox2DRid)' == 'linux-arm64'">
+    <PixelEngineBox2DDynamicLibraryName>libbox2d.so</PixelEngineBox2DDynamicLibraryName>
+    <PixelEngineBox2DStaticLibraryName>libbox2d.a</PixelEngineBox2DStaticLibraryName>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PixelEngineBox2DRid)' == 'osx-x64' or '$(PixelEngineBox2DRid)' == 'osx-arm64'">
+    <PixelEngineBox2DDynamicLibraryName>libbox2d.dylib</PixelEngineBox2DDynamicLibraryName>
+    <PixelEngineBox2DStaticLibraryName>libbox2d.a</PixelEngineBox2DStaticLibraryName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PixelEngineBox2DDynamicLibraryPath>$(PixelEngineBox2DRuntimeDir)$(PixelEngineBox2DDynamicLibraryName)</PixelEngineBox2DDynamicLibraryPath>
+    <PixelEngineBox2DStaticLibraryPath>$(PixelEngineBox2DStaticDir)$(PixelEngineBox2DStaticLibraryName)</PixelEngineBox2DStaticLibraryPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(PixelEngineBox2DRid)' != '' and '$(PixelEngineBox2DDynamicLibraryName)' != '' and Exists('$(PixelEngineBox2DDynamicLibraryPath)') and '$(PublishAot)' != 'true'">
+    <None Include="$(PixelEngineBox2DDynamicLibraryPath)"
+          Link="runtimes\$(PixelEngineBox2DRid)\native\$(PixelEngineBox2DDynamicLibraryName)"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(PixelEngineBox2DRid)' != '' and '$(PixelEngineBox2DStaticLibraryName)' != '' and Exists('$(PixelEngineBox2DStaticLibraryPath)') and '$(PublishAot)' == 'true'">
+    <NativeLibrary Include="$(PixelEngineBox2DStaticLibraryPath)" />
+  </ItemGroup>
+</Project>
