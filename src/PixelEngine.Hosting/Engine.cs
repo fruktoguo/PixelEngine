@@ -148,7 +148,17 @@ public sealed class Engine : IDisposable
     public Scene LoadScene(string name)
     {
         ThrowIfShutdown();
-        return Context.GetService<ISceneService>().SwitchTo(name);
+        Scene scene = Context.GetService<ISceneService>().SwitchTo(name);
+        if (scene.Descriptor.SourceKind == SceneSourceKind.SceneFile && scene.ResolvedSource is not null)
+        {
+            PixelEngine.Scripting.Scene scriptScene = EngineSceneDocumentLoader.Load(
+                scene.ResolvedSource,
+                Context.GetService<ScriptAssemblyRegistry>());
+            scene.AttachScriptScene(scriptScene);
+            Context.RegisterService(scriptScene);
+        }
+
+        return scene;
     }
 
     /// <summary>

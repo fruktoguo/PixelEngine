@@ -33,6 +33,16 @@ public sealed class Entity
     }
 
     /// <summary>
+    /// 向实体添加运行时确定的组件类型；供场景文件加载与脚本热重载装配使用。
+    /// </summary>
+    /// <param name="componentType">要添加的组件类型，必须实现 IComponent 且提供无参构造。</param>
+    /// <returns>新创建并挂载到该实体的组件实例。</returns>
+    public IComponent AddComponent(Type componentType)
+    {
+        return Scene.AddComponent(this, componentType);
+    }
+
+    /// <summary>
     /// 尝试读取指定组件类型；脚本可在相位 1 调用。
     /// </summary>
     /// <typeparam name="T">要读取的组件类型。</typeparam>
