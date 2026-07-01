@@ -29,6 +29,7 @@ public sealed class ScriptInspectorTests
         Assert.True(publicField.CanWrite);
         Assert.True(publicField.IsPublic);
         Assert.False(publicField.IsSerializedPrivate);
+        Assert.Equal(ScriptFieldKind.Number, publicField.Kind);
 
         ScriptFieldDescriptor privateField = fields.Single(field => field.Name == "privateValue");
         Assert.Equal(13, privateField.Value);
@@ -54,6 +55,25 @@ public sealed class ScriptInspectorTests
         Assert.Equal(0, behaviour.HiddenValue);
     }
 
+    /// <summary>
+    /// 验证 Inspector 字段描述会识别范围、向量、枚举与材质引用。
+    /// </summary>
+    [Fact]
+    public void InspectFieldsClassifiesEditorFieldKindsAndRanges()
+    {
+        AdvancedBehaviour behaviour = new();
+
+        ScriptFieldDescriptor[] fields = ScriptInspector.InspectFields(behaviour);
+
+        ScriptFieldDescriptor ranged = fields.Single(field => field.Name == nameof(AdvancedBehaviour.Ranged));
+        Assert.Equal(ScriptFieldKind.Number, ranged.Kind);
+        Assert.Equal(0d, ranged.RangeMinimum);
+        Assert.Equal(10d, ranged.RangeMaximum);
+        Assert.Equal(ScriptFieldKind.Vector, fields.Single(field => field.Name == nameof(AdvancedBehaviour.Position)).Kind);
+        Assert.Equal(ScriptFieldKind.Enum, fields.Single(field => field.Name == nameof(AdvancedBehaviour.Mode)).Kind);
+        Assert.Equal(ScriptFieldKind.Material, fields.Single(field => field.Name == nameof(AdvancedBehaviour.Material)).Kind);
+    }
+
     private sealed class InspectableBehaviour : Behaviour
     {
         [SerializeField]
@@ -73,5 +93,23 @@ public sealed class ScriptInspectorTests
         {
             privateValue = value;
         }
+    }
+
+    private sealed class AdvancedBehaviour : Behaviour
+    {
+        [Range(0, 10)]
+        public int Ranged = 4;
+
+        public System.Numerics.Vector2 Position = new(1, 2);
+
+        public TestMode Mode = TestMode.A;
+
+        public MaterialId Material = new(1);
+    }
+
+    private enum TestMode
+    {
+        A,
+        B,
     }
 }

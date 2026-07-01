@@ -42,6 +42,27 @@ public sealed class Scene
     public int ScriptExceptionCount => _invoker.Exceptions.Count;
 
     /// <summary>
+    /// 捕获当前脚本实体与 Behaviour 组件快照，供 Editor 层级与 Inspector 使用。
+    /// </summary>
+    /// <returns>按实体 id 升序排列的只读快照数组。</returns>
+    public ScriptEntityInspection[] CaptureInspectionSnapshot()
+    {
+        List<ScriptEntityInspection> snapshots = new(_entities.Count);
+        foreach (Entity entity in _entities.Values.OrderBy(static item => item.Id))
+        {
+            List<ScriptComponentInspection> components = [];
+            foreach (IComponentBucket bucket in _buckets.Values)
+            {
+                bucket.CaptureInspectionComponents(entity.Id, components);
+            }
+
+            snapshots.Add(new ScriptEntityInspection(entity.Id, $"script:{entity.Id}", [.. components]));
+        }
+
+        return [.. snapshots];
+    }
+
+    /// <summary>
     /// 创建一个脚本实体；脚本可在相位 1 调用。
     /// </summary>
     /// <returns>新创建的脚本实体。</returns>
@@ -306,6 +327,8 @@ public sealed class Scene
         void DispatchFixedSimTick(IScriptContext context, ScriptInvoker invoker);
 
         void CaptureBehaviours(List<ScriptBehaviourRecord> records);
+
+        void CaptureInspectionComponents(int entityId, List<ScriptComponentInspection> records);
     }
 
     private sealed class ComponentBucket<T> : IComponentBucket
@@ -427,6 +450,19 @@ public sealed class Scene
             }
         }
 
+        public void CaptureInspectionComponents(int entityId, List<ScriptComponentInspection> records)
+        {
+            if (_indices.TryGetValue(entityId, out int index) && _components[index] is Behaviour behaviour)
+            {
+                Type type = behaviour.GetType();
+                records.Add(new ScriptComponentInspection(
+                    type.FullName ?? type.Name,
+                    behaviour,
+                    behaviour.Enabled,
+                    behaviour.Faulted));
+            }
+        }
+
         private void EnsureCapacity(int required)
         {
             if (_components.Length >= required)
@@ -544,6 +580,19 @@ public sealed class Scene
                 {
                     records.Add(new ScriptBehaviourRecord(_entities[i], behaviour));
                 }
+            }
+        }
+
+        public void CaptureInspectionComponents(int entityId, List<ScriptComponentInspection> records)
+        {
+            if (_indices.TryGetValue(entityId, out int index) && _components[index] is Behaviour behaviour)
+            {
+                Type type = behaviour.GetType();
+                records.Add(new ScriptComponentInspection(
+                    type.FullName ?? type.Name,
+                    behaviour,
+                    behaviour.Enabled,
+                    behaviour.Faulted));
             }
         }
 
