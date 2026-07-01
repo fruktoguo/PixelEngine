@@ -58,14 +58,27 @@ public sealed class ComputeBloomPass : IDisposable
         {
             ColorRenderTarget previous = _mips[i - 1];
             ColorRenderTarget current = _mips[i];
-            _pipeline.DispatchDualKawaseDown(
-                previous.Handle,
-                current.Handle,
-                current.Width,
-                current.Height,
-                1f / previous.Width,
-                1f / previous.Height,
-                normalized.KawaseOffset);
+            if (i == 1)
+            {
+                _pipeline.DispatchDownsample(
+                    previous.Handle,
+                    current.Handle,
+                    current.Width,
+                    current.Height,
+                    1f / previous.Width,
+                    1f / previous.Height);
+            }
+            else
+            {
+                _pipeline.DispatchDualKawaseDown(
+                    previous.Handle,
+                    current.Handle,
+                    current.Width,
+                    current.Height,
+                    1f / previous.Width,
+                    1f / previous.Height,
+                    normalized.KawaseOffset);
+            }
         }
 
         ColorRenderTarget bloom = UpsampleBloom(normalized.KawaseOffset);
