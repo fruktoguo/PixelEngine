@@ -135,6 +135,11 @@ public sealed class RenderBufferBuilder(
                     CellAddressing.LocalIndexFromLocal(localX, localY),
                     run);
                 PaletteBgraConverter.Convert(materials, palette, pixelRun);
+                if (hot.HasColorNoise)
+                {
+                    BgraColorMixer.ApplyColorNoise(materials, hot.ColorNoise, pixelRun, worldX, worldY);
+                }
+
                 FillAuxFast(materials, hot, pixelRun, emissive.Slice(row + sx, run), occluder.Slice(row + sx, run));
                 sx += run;
             }
@@ -150,7 +155,6 @@ public sealed class RenderBufferBuilder(
             camera.OriginWorldY == MathF.Truncate(camera.OriginWorldY) &&
             context.DebugCellColors is null &&
             !context.Temperature.HasActiveBlocks &&
-            !hot.HasColorNoise &&
             (_textures is null || !hot.HasTexturedMaterials);
     }
 
