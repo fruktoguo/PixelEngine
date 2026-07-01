@@ -93,11 +93,11 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] bulk fill/clear、dirty flag 扫描/popcount 向量化。[plan/03 · §12.5]
 - [x] 全部向量化 pass 具备强制 scalar fallback，运行时 light-up、不固定 ISA。[全子系统 · §12.3/§12.5]
 - [x] sand/liquid movement 内层**明确不向量化**（数据相关 gather/scatter），保留 scalar。[plan/03 · §2 挑战三/§12.5]
-- [ ] AVX-512 路径 gate on `Vector512.IsHardwareAccelerated` 并逐目标实测（防降频净变慢）。[plan/14 · §12.5]
+- [!] 阻塞：AVX-512 路径 gate on `Vector512.IsHardwareAccelerated` 并逐目标实测（防降频净变慢）。[plan/14 · §12.5] 当前本机 BenchmarkDotNet 诊断仅报告 AVX2（Ryzen 7 5800X），无 AVX-512/Vector512 硬件，不能实测 AVX-512 降频净损；需 AVX-512 目标机或 CI runner 后再判定。
 
 ### 4.5 bounds-check 消除验证
 - [x] 最内层邻居访问用 `MemoryMarshal.GetArrayDataReference` + `Unsafe.Add` 或 `fixed` 指针漫游。[plan/03 · §12.6]
-- [ ] 沿 scanline 漫游 ref/指针，避免每访问重算 `y*width+x`。[plan/03 · §12.6]
+- [x] 沿 scanline 漫游 ref/指针，避免每访问重算 `y*width+x`。[plan/03 · §12.6]
 - [x] 反汇编确认热方法 `RNGCHKFAIL`（bounds-check）消失。[plan/14 · §12.6/§17.3]
 - [x] 反汇编确认向量化 pass 出现 ymm/zmm 寄存器。[plan/14 · §12.6/§17.3]
 - [x] BenchmarkDotNet `[DisassemblyDiagnoser]` 守门，反汇编基线纳入回归。[plan/14 · §17.3]

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using PixelEngine.Core;
 using PixelEngine.Core.Random;
 
@@ -32,22 +33,29 @@ internal static class ChunkUpdater
         Pcg32 rng = RngFactory.ForChunk(worldSeed, chunk.Coord.X, chunk.Coord.Y, frameIndex);
         int worldBaseX = chunk.Coord.X << EngineConstants.ChunkSizeLog2;
         int worldBaseY = chunk.Coord.Y << EngineConstants.ChunkSizeLog2;
+        ref ushort materialBase = ref chunk.GetMaterialBase();
+        ref byte flagsBase = ref chunk.GetFlagsBase();
 
         for (int ly = rect.MaxY; ly >= rect.MinY; ly--)
         {
             int wy = worldBaseY + ly;
+            int wx = worldBaseX + rect.MinX;
+            int localOffset = (ly * EngineConstants.ChunkSize) + rect.MinX;
             for (int lx = rect.MinX; lx <= rect.MaxX; lx++)
             {
-                int wx = worldBaseX + lx;
-                ushort material = window.GetMaterial(wx, wy);
+                ushort material = Unsafe.Add(ref materialBase, localOffset);
                 if (material == 0)
                 {
+                    wx++;
+                    localOffset++;
                     continue;
                 }
 
-                byte flags = window.GetFlags(wx, wy);
+                byte flags = Unsafe.Add(ref flagsBase, localOffset);
                 if (CellFlags.MatchesFrame(flags, parityBit) || CellFlags.Has(flags, CellFlags.RigidOwned))
                 {
+                    wx++;
+                    localOffset++;
                     continue;
                 }
 
@@ -86,6 +94,9 @@ internal static class ChunkUpdater
                 {
                     window.SetFlags(wx, wy, CellFlags.SetParity(window.GetFlags(wx, wy), parityBit));
                 }
+
+                wx++;
+                localOffset++;
             }
         }
     }
