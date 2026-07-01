@@ -7,8 +7,10 @@ namespace PixelEngine.Rendering;
 /// </summary>
 public sealed unsafe class PboUploader : IDisposable
 {
+    private const ulong FenceWaitNanoseconds = 1_000_000;
+
     private readonly GL _gl;
-    private readonly GlBuffer[] _pbos;
+    private readonly PboSlot[] _slots;
     private int _index;
     private bool _disposed;
 
@@ -18,6 +20,26 @@ public sealed unsafe class PboUploader : IDisposable
     /// <param name="gl">OpenGL 入口。</param>
     /// <param name="initialCapacityBytes">初始 PBO 容量。</param>
     public PboUploader(GL gl, int initialCapacityBytes)
+        : this(gl, initialCapacityBytes, PboUploadMode.OrphanMap)
+    {
+    }
+
+    /// <summary>
+    /// 创建 PBO 上传器，并按能力快照选择实际上传路径。
+    /// </summary>
+    /// <param name="gl">OpenGL 入口。</param>
+    /// <param name="initialCapacityBytes">初始 PBO 容量。</param>
+    /// <param name="capabilities">OpenGL 能力快照。</param>
+    /// <param name="preferredMode">期望上传路径。persistent 路径会被 <see cref="GlCapabilities.HasBufferStorage"/> gate。</param>
+    public PboUploader(GL gl, int initialCapacityBytes, GlCapabilities capabilities, PboUploadMode preferredMode)
+        : this(
+            gl,
+            initialCapacityBytes,
+            SelectActualMode(capabilities, preferredMode))
+    {
+    }
+
+    private PboUploader(GL gl, int initialCapacityBytes, PboUploadMode mode)
     {
         ArgumentNullException.ThrowIfNull(gl);
         if (initialCapacityBytes <= 0)
@@ -26,10 +48,11 @@ public sealed unsafe class PboUploader : IDisposable
         }
 
         _gl = gl;
-        _pbos =
+        Mode = mode;
+        _slots =
         [
-            new GlBuffer(gl, BufferTargetARB.PixelUnpackBuffer),
-            new GlBuffer(gl, BufferTargetARB.PixelUnpackBuffer),
+            new PboSlot(gl),
+            new PboSlot(gl),
         ];
         EnsureCapacity(initialCapacityBytes);
     }
@@ -38,6 +61,11 @@ public sealed unsafe class PboUploader : IDisposable
     /// 当前 PBO 容量。
     /// </summary>
     public int CapacityBytes { get; private set; }
+
+    /// <summary>
+    /// 实际启用的 PBO 上传路径。默认是 <see cref="PboUploadMode.OrphanMap"/>。
+    /// </summary>
+    public PboUploadMode Mode { get; }
 
     /// <summary>
     /// 上传整张 render buffer 到世界纹理。
@@ -51,8 +79,8 @@ public sealed unsafe class PboUploader : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         ValidateSameSize(texture, buffer);
 
-        GlBuffer pbo = CopyBufferToNextPbo(buffer);
-        pbo.Bind();
+        PboSlot slot = CopyBufferToNextPbo(buffer);
+        slot.Buffer.Bind();
         texture.Bind();
         _gl.TexSubImage2D(
             TextureTarget.Texture2D,
@@ -64,6 +92,7 @@ public sealed unsafe class PboUploader : IDisposable
             PixelFormat.Bgra,
             PixelType.UnsignedInt8888Rev,
             null);
+        InsertFence(slot);
         _gl.BindBuffer(BufferTargetARB.PixelUnpackBuffer, 0);
     }
 
@@ -89,8 +118,8 @@ public sealed unsafe class PboUploader : IDisposable
             buffer.ValidateRect(rect);
         }
 
-        GlBuffer pbo = CopyBufferToNextPbo(buffer);
-        pbo.Bind();
+        PboSlot slot = CopyBufferToNextPbo(buffer);
+        slot.Buffer.Bind();
         texture.Bind();
         _gl.PixelStore(GLEnum.UnpackRowLength, buffer.Width);
 
@@ -110,6 +139,7 @@ public sealed unsafe class PboUploader : IDisposable
                 null);
         }
 
+        InsertFence(slot);
         _gl.PixelStore(GLEnum.UnpackRowLength, 0);
         _gl.PixelStore(GLEnum.UnpackSkipPixels, 0);
         _gl.PixelStore(GLEnum.UnpackSkipRows, 0);
@@ -128,10 +158,20 @@ public sealed unsafe class PboUploader : IDisposable
             return;
         }
 
-        foreach (GlBuffer pbo in _pbos)
+        if (Mode == PboUploadMode.PersistentMapped)
         {
-            pbo.Bind();
-            pbo.Allocate((nuint)requiredBytes, BufferUsageARB.StreamDraw);
+            foreach (PboSlot slot in _slots)
+            {
+                RecreatePersistentSlot(slot, requiredBytes);
+            }
+        }
+        else
+        {
+            foreach (PboSlot slot in _slots)
+            {
+                slot.Buffer.Bind();
+                slot.Buffer.Allocate((nuint)requiredBytes, BufferUsageARB.StreamDraw);
+            }
         }
 
         CapacityBytes = requiredBytes;
@@ -145,22 +185,30 @@ public sealed unsafe class PboUploader : IDisposable
             return;
         }
 
-        foreach (GlBuffer pbo in _pbos)
+        foreach (PboSlot slot in _slots)
         {
-            pbo.Dispose();
+            ReleasePersistentResources(slot);
+            slot.Buffer.Dispose();
         }
 
         _disposed = true;
     }
 
-    private GlBuffer CopyBufferToNextPbo(RenderBuffer buffer)
+    private PboSlot CopyBufferToNextPbo(RenderBuffer buffer)
     {
         EnsureCapacity(buffer.ByteLength);
-        GlBuffer pbo = _pbos[_index];
+        PboSlot slot = _slots[_index];
         _index = (_index + 1) & 1;
-        pbo.Bind();
-        pbo.Allocate((nuint)buffer.ByteLength, BufferUsageARB.StreamDraw);
-        void* destination = pbo.Map(
+
+        if (Mode == PboUploadMode.PersistentMapped)
+        {
+            CopyToPersistentPbo(slot, buffer);
+            return slot;
+        }
+
+        slot.Buffer.Bind();
+        slot.Buffer.Allocate((nuint)buffer.ByteLength, BufferUsageARB.StreamDraw);
+        void* destination = slot.Buffer.Map(
             0,
             (nuint)buffer.ByteLength,
             MapBufferAccessMask.WriteBit |
@@ -171,8 +219,17 @@ public sealed unsafe class PboUploader : IDisposable
             System.Buffer.MemoryCopy(source, destination, buffer.ByteLength, buffer.ByteLength);
         }
 
-        _ = pbo.Unmap();
-        return pbo;
+        _ = slot.Buffer.Unmap();
+        return slot;
+    }
+
+    private void CopyToPersistentPbo(PboSlot slot, RenderBuffer buffer)
+    {
+        WaitAndDeleteFence(slot);
+        fixed (uint* source = buffer.Pixels)
+        {
+            System.Buffer.MemoryCopy(source, slot.PersistentPointer, CapacityBytes, buffer.ByteLength);
+        }
     }
 
     private static void ValidateSameSize(WorldTexture texture, RenderBuffer buffer)
@@ -180,6 +237,104 @@ public sealed unsafe class PboUploader : IDisposable
         if (texture.Width != buffer.Width || texture.Height != buffer.Height)
         {
             throw new ArgumentException("世界纹理与 render buffer 尺寸必须一致。", nameof(buffer));
+        }
+    }
+
+    private static PboUploadMode SelectActualMode(GlCapabilities capabilities, PboUploadMode preferredMode)
+    {
+        ArgumentNullException.ThrowIfNull(capabilities);
+        return preferredMode == PboUploadMode.PersistentMapped && capabilities.HasBufferStorage
+            ? PboUploadMode.PersistentMapped
+            : PboUploadMode.OrphanMap;
+    }
+
+    private void RecreatePersistentSlot(PboSlot slot, int requiredBytes)
+    {
+        ReleasePersistentResources(slot);
+        slot.Buffer.Dispose();
+        slot.Buffer = new GlBuffer(_gl, BufferTargetARB.PixelUnpackBuffer);
+        slot.Buffer.Bind();
+        slot.Buffer.AllocateImmutable(
+            (nuint)requiredBytes,
+            BufferStorageMask.MapWriteBit |
+            BufferStorageMask.MapPersistentBit |
+            BufferStorageMask.MapCoherentBit);
+        slot.PersistentPointer = slot.Buffer.Map(
+            0,
+            (nuint)requiredBytes,
+            MapBufferAccessMask.WriteBit |
+            MapBufferAccessMask.PersistentBit |
+            MapBufferAccessMask.CoherentBit);
+        if (slot.PersistentPointer is null)
+        {
+            throw new InvalidOperationException("无法映射 persistent PBO。");
+        }
+    }
+
+    private void ReleasePersistentResources(PboSlot slot)
+    {
+        if (slot.Fence != IntPtr.Zero)
+        {
+            _gl.DeleteSync(slot.Fence);
+            slot.Fence = IntPtr.Zero;
+        }
+
+        if (slot.PersistentPointer is not null)
+        {
+            slot.Buffer.Bind();
+            _ = slot.Buffer.Unmap();
+            slot.PersistentPointer = null;
+        }
+    }
+
+    private void WaitAndDeleteFence(PboSlot slot)
+    {
+        if (slot.Fence == IntPtr.Zero)
+        {
+            return;
+        }
+
+        while (true)
+        {
+            GLEnum status = _gl.ClientWaitSync(slot.Fence, SyncObjectMask.Bit, FenceWaitNanoseconds);
+            if (status is GLEnum.AlreadySignaled or GLEnum.ConditionSatisfied)
+            {
+                break;
+            }
+
+            if (status == GLEnum.WaitFailed)
+            {
+                throw new InvalidOperationException("等待 persistent PBO fence 失败。");
+            }
+
+            _ = Thread.Yield();
+        }
+
+        _gl.DeleteSync(slot.Fence);
+        slot.Fence = IntPtr.Zero;
+    }
+
+    private void InsertFence(PboSlot slot)
+    {
+        if (Mode != PboUploadMode.PersistentMapped)
+        {
+            return;
+        }
+
+        slot.Fence = _gl.FenceSync(SyncCondition.SyncGpuCommandsComplete, SyncBehaviorFlags.None);
+    }
+
+    private sealed class PboSlot(GL gl) : IDisposable
+    {
+        public GlBuffer Buffer { get; set; } = new(gl, BufferTargetARB.PixelUnpackBuffer);
+
+        public void* PersistentPointer { get; set; }
+
+        public IntPtr Fence { get; set; }
+
+        public void Dispose()
+        {
+            Buffer.Dispose();
         }
     }
 }

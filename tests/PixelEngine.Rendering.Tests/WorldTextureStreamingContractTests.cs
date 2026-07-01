@@ -94,6 +94,25 @@ public sealed class WorldTextureStreamingContractTests
             source);
     }
 
+    [Fact]
+    public void PboUploaderExposesNonDefaultPersistentMappedPath()
+    {
+        string source = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "PboUploader.cs"));
+        string modeSource = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "PboUploadMode.cs"));
+        string bufferSource = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "GlBuffer.cs"));
+
+        Assert.Contains("PboUploadMode.OrphanMap", source, StringComparison.Ordinal);
+        Assert.Contains("PboUploadMode.PersistentMapped", source, StringComparison.Ordinal);
+        Assert.Contains("HasBufferStorage", source, StringComparison.Ordinal);
+        Assert.Contains("BufferStorage", bufferSource, StringComparison.Ordinal);
+        Assert.Contains("MapPersistentBit", source, StringComparison.Ordinal);
+        Assert.Contains("MapCoherentBit", source, StringComparison.Ordinal);
+        Assert.Contains("FenceSync", source, StringComparison.Ordinal);
+        Assert.Contains("ClientWaitSync", source, StringComparison.Ordinal);
+        Assert.Contains("默认路径", modeSource, StringComparison.Ordinal);
+        Assert.Contains("仅在", modeSource, StringComparison.Ordinal);
+    }
+
     private static string ProjectPath(params string[] parts)
     {
         string path = AppContext.BaseDirectory;
