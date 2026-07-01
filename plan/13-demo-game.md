@@ -164,13 +164,13 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 刚体 / 粒子 / 光照 / 音频（Demo 侧消费）
 - [ ] 木 / 金属可破坏结构布置，验证连通块脱落→Box2D 刚体、可推 / 砸 / 再破坏。〔plan/06;§3.7〕
 - [ ] 火花 / 血 / 碎屑发射经 `Particles.Emit/Burst`，爆炸抛射经 `World.Explode`。〔plan/05;§3.8〕
-- [!] emissive 材质标注正确（lava/molten_metal/fire/火花），Scripting 已有 `Lighting.RevealAround` + `AddPointLight` 请求 API；阻塞：缺少 Hosting/Rendering 将脚本光照请求同步到 `FogOfWarBuffer` 与 light pass 的运行态消费。〔plan/08;§3.9〕
+- [!] emissive 材质标注正确（lava/molten_metal/fire/火花），Scripting 已有 `Lighting.RevealAround` + `AddPointLight` 请求 API，Hosting 已有 `ScriptLightingSynchronizer` 将脚本请求同步为 Rendering `LightSource` 与 `FogOfWarBuffer`；阻塞：缺少非 headless 渲染 runtime 将同步结果传入 light pass 的窗口态消费验收。〔plan/08;§3.9〕
 - [!] `materials.json` 的 `AudioCues` 已覆盖 impact/fire/splash/ambient/shatter，玩法脚本可经 `Audio.PlayOneShot`/`PlayAt` 请求音效；Hosting 已能从 `content/audio` 预加载 19 个 wav clip 并注入脚本上下文；阻塞：缺少爆炸复合 API 触发 explosion cue，以及材质事件 cue 句柄到 clip buffer 的 Demo 映射/消费验收。〔plan/04、plan/10;§3.10〕
 
 关卡与 UI
 - [!] `LevelDirector : Behaviour`：源码已落地，脚本生成「熔岩矿洞逃生」基础布局并装配玩家、相机、笔刷、喷口和目标触发器；Hosting procedural scene source 已可按入口 Behaviour 名自动物化 `LevelDirector` 到脚本场景，且 headless resident world 可经 `AttachScriptingFromServices()` 自动驱动；阻塞：save directory/world 物化与窗口态完整后端装配仍未完成。〔plan/11、plan/02;§3.11〕
-- [!] `MaterialEmitter : Behaviour`（材质 + 速率 + 喷口）：源码已落地，支持周期性 cell 注入、粒子、音频和点光源请求；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API；阻塞：缺少光照请求运行态消费与喷口音频触发验收。〔plan/11;§3.11〕
-- [!] `GoalTrigger : Behaviour`：源码已落地，玩家进入触发区后触发通关状态、音效、粒子与光照反馈；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API；阻塞：缺少胜利菜单/GUI 服务、光照后端消费与通关音效触发验收。〔plan/11、plan/10;§3.11〕
+- [!] `MaterialEmitter : Behaviour`（材质 + 速率 + 喷口）：源码已落地，支持周期性 cell 注入、粒子、音频和点光源请求；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API，光照请求已可同步到 Rendering 数据结构；阻塞：缺少窗口态渲染消费与喷口音频触发验收。〔plan/11;§3.11〕
+- [!] `GoalTrigger : Behaviour`：源码已落地，玩家进入触发区后触发通关状态、音效、粒子与光照反馈；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API，光照请求已可同步到 Rendering 数据结构；阻塞：缺少胜利菜单/GUI 服务、窗口态渲染消费与通关音效触发验收。〔plan/11、plan/10;§3.11〕
 - [ ] `content/scenes/lava-mine.scene`：编辑器编排并序列化，与 `LevelDirector` 等价。〔plan/12、plan/07;§3.2、§3.11〕
 - [ ] `DemoHud : Behaviour.OnGui`：当前材质 / 笔刷 / 玩家状态 / 操作提示 / 性能行。〔plan/11、plan/12、plan/02;§3.12〕
 - [ ] `PauseMenu : Behaviour.OnGui`：继续 / 重开 / 调试叠层切换 / 打开编辑器 / 退出。〔plan/12、架构 §17.2;§3.12〕
