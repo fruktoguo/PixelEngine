@@ -27,12 +27,12 @@
 
 容器格式：**WAV / PCM 为强制内建路径**（纯托管解码，无新依赖，在本文档范围内实现）。压缩格式 Ogg Vorbis 经纯托管解码器（NVorbis，无 native，符合不变式 10）支持，但该包**尚未列入 `00 §4` 技术栈表**——见 §4 对应阻塞条目，需先修订 plan/00 再实现，绝不静默引入。
 
-本子系统位于 `src/PixelEngine.Audio/`，依赖方向遵循 `00 §5`：`Audio → {Content, Core} → Interop → Core`，不反向依赖任何上层。`AllowUnsafeBlocks` 开启（与热路径项目一致）；公开 API 全带中文 XML 文档注释（脚本 / Demo IntelliSense 依赖）。
+本子系统位于 `src/PixelEngine.Audio/`，依赖方向遵循 `00 §5`：`Audio → {Content, Simulation, Core}`，不反向依赖任何上层。`AllowUnsafeBlocks` 开启（与热路径项目一致）；公开 API 全带中文 XML 文档注释（脚本 / Demo IntelliSense 依赖）。
 
 跨文档契约（本子系统消费，非本文档实现）：
 
 - plan/02 Core 提供：无锁 ring buffer 传输（MPSC，生产者为 sim/physics 多线程 worker、消费者为主线程派发）、blittable 事件结构 `AudioEvent` 与枚举 `AudioEventType`（按架构 §3.1「事件总线供音频消费」置于 Core 以便跨层生产者可见）、持久线程池（供解码 / 流式 worker 复用，避免与 sim 争用）、`EngineTime`（当前 sim tick / 帧序号）、相机视口 `CameraView`（listener 定位）、诊断 / 计时注册口、数学类型（`Vector2` 等）。
-- plan/04 / Content 提供：`MaterialDef.AudioCues`（类型 `AudioCueSet`，按架构 §7.3 字段；为避免 `Audio↔Content` 循环依赖，`AudioCueSet` / `AudioCue` 数据结构由 Content 拥有定义，本文档 §3.6 规定其必需形状作为契约），以及 name→id 表（按 materialId 索引 cue）。
+- plan/04 / Content 提供：materials JSON 中的 `audioCues` 字段加载；`MaterialDef.AudioCues` / `AudioCueSet` 类型按 `plan/00 §5.1` 归属 Simulation，Audio 只读取已加载的运行时材质定义并按 materialId 索引 cue。
 - Content 资产管线提供：按 `assetId` 取音效字节流（来自 `content/` 音效目录）。
 - plan/03、05、06 在各自相位调用发声契约（§3.2）把 `AudioEvent` 写入 ring；其调用点实现属于这些文档。
 - Hosting 在帧循环装配「音频派发步骤」（§3.7）并提供 `CameraView`、`AudioSettings`。
@@ -143,7 +143,7 @@ OpenAL 封装与生命周期：
 
 - [x] `MaterialAudioTable`：初始化期把 `MaterialDef[].AudioCues` 扁平化为 `materialId × AudioEventType` 数组；`ResolveCue` 返回 cue handle + 音量 / 音高（按 `Magnitude`/`Count` 插值 + 确定性 pitch 抖动），热路径零字符串 / 零字典（架构 §7.3/§7.4）。
 - [x] 规定并文档化 `AudioCueSet` 契约形状（`ImpactCue`/`FireCue`/`SplashCue`/`ExplosionCue`/`ShatterCue`/`AmbientCue` 稳定 cue handle，buffer 解析由节点 4 接入），作为对 plan/04 的契约（架构 §7.3）。
-- [x] impact 播放：相位 3 高速沉积事件 → 按材质 + 冲击速度选样 / 调音（架构 §3.3 相位 3、§7.6）。
+- [x] impact 播放：相位 3 高速沉积事件 → 按材质 cue handle + `Magnitude`/`Count` 调音（架构 §3.3 相位 3、§7.6）。
 - [x] fire crackle 播放：相位 4/5 燃烧聚合区域 → 按合并后的区域事件播放 FireCue，绝不每火 cell 一声（架构 §3.3 相位 4/5、§7.4/§7.5）。
 - [x] splash 播放：相位 3/4 液体飞溅 / 落水（架构 §3.3 相位 3/4）。
 - [x] explosion 播放：相位 7 冲击事件（架构 §3.3 相位 7、§7.6）。
@@ -192,7 +192,7 @@ OpenAL 封装与生命周期：
 
 前置（必须先完成）：plan/01（项目骨架、CPM、`Directory.Build`）；plan/02 Core（**事件总线 MPSC ring + `AudioEvent`/`AudioEventType` 契约**、持久线程池、`EngineTime`、`CameraView`、诊断、数学）。
 
-数据 / 资产前置：plan/04 / Content（`MaterialDef.AudioCues`、`AudioCueSet`/`AudioCue` 类型定义、name→id 表）；Content 资产管线（音效字节流、`content/` 音效目录）。
+数据 / 资产前置：plan/04 / Content（materials JSON 的 `audioCues` 加载、name→id 表；`AudioCueSet` 类型按 plan/00 归属 Simulation）；Content 资产管线（音效字节流、`content/` 音效目录）。
 
 产生侧契约（并行，钩子实现属对方文档）：plan/03 CA 内核（相位 3 沉积、相位 4 反应 / 点燃、相位 5 热场相变发声钩子；ambient 粗采样）、plan/05 粒子（相位 3 落定、相位 7 抛射发声钩子）、plan/06 物理（相位 8a 破碎发声钩子）。
 
@@ -200,7 +200,7 @@ OpenAL 封装与生命周期：
 
 外部：Silk.NET.OpenAL（`00 §4`）；（待批）NVorbis（仅当启用 Ogg，需先修订 `00 §4`）。
 
-阻塞：`AudioEvent`/`AudioEventType`/MPSC ring 须由 plan/02 落地后本子系统方能联测（产生—消费契约）。Ogg 解码阻塞于 plan/00 §4 修订。
+阻塞：Ogg 解码阻塞于 plan/00 §4 修订。
 
 ---
 

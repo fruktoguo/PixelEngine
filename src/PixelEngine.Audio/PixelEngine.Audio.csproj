@@ -6,6 +6,7 @@
   <ItemGroup>
     <ProjectReference Include="..\PixelEngine.Core\PixelEngine.Core.csproj" />
     <ProjectReference Include="..\PixelEngine.Content\PixelEngine.Content.csproj" />
+    <ProjectReference Include="..\PixelEngine.Simulation\PixelEngine.Simulation.csproj" />
   </ItemGroup>
 
   <ItemGroup>

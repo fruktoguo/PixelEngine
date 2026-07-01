@@ -141,6 +141,7 @@ public readonly record struct AudioCueSet
     public int FireCue;       // 燃烧 crackle（区域聚合）
     public int SplashCue;     // 液体飞溅/落水
     public int ExplosionCue;  // 爆炸/冲击
+    public int ShatterCue;    // 刚体破碎/拆分
     public int AmbientCue;    // 区域材质 ambient loop
 }
 ```
@@ -370,7 +371,7 @@ public sealed class TemperatureField
 - [x] `MaterialDef` `readonly record struct`，含 §3.2 全部字段（Id/Name/Type/Density/Dispersion/LiquidStatic/LiquidSand/Flammability/AutoIgnitionTemp/FireHp/TemperatureOfFire/GeneratesSmoke/Melt+Freeze+Boil(Point+Target)/HeatConduct/HeatCapacity/DefaultLifetime/Durability/TextureId/BaseColorBGRA/ColorNoise/PropertyFlags/ReactionStart/ReactionCount/AudioCues）（架构 §7.3）。
 - [x] `MaterialProperty : uint` `[Flags]`，含 8 个 tag 成员位 + `Emissive`/`HasCustomUpdate`/`Conductive` + 预留位（§3.2）。
 - [x] `MaterialTag : byte` 枚举与 `MaterialProperty` 位的固定映射（§3.4）。
-- [x] `AudioCueSet` `readonly record struct`（Impact/Fire/Splash/Explosion/Ambient cue，架构 §10.2）。
+- [x] `AudioCueSet` `readonly record struct`（Impact/Fire/Splash/Explosion/Shatter/Ambient cue，架构 §10.2）。
 - [x] `MaterialDef.Type` 引用 plan/03 的 `CellType`（不重复定义，架构 §7.2）。
 - [x] `MaterialHotTable` SoA 热表：从 `MaterialDef[]` 派生热路径字段并列数组（Density/Dispersion/Type/HeatConduct/HeatCapacity/相变阈值/ReactionStart/ReactionCount/PropertyFlags），冷字段不入热表（架构 §7.1 / §12.1）。
 
