@@ -113,6 +113,81 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 render buffer 构建按屏幕行分块经 JobSystem 并行。
+    /// </summary>
+    [Fact]
+    public void RenderBufferBuilderDispatchesRowsThroughJobSystem()
+    {
+        string source = ReadProductionSource("src", "PixelEngine.Rendering", "RenderBufferBuilder.cs");
+
+        Assert.Contains("JobSystem? jobs = null", source, StringComparison.Ordinal);
+        Assert.Contains("private readonly JobSystem? _jobs = jobs", source, StringComparison.Ordinal);
+        Assert.Contains("BuildRows(0, target.Height, 0, _state)", source, StringComparison.Ordinal);
+        Assert.Contains("_jobs.ParallelRange(target.Height, Math.Max(1, _options.MinRowsPerJob), BuildRows, _state)", source, StringComparison.Ordinal);
+        Assert.Contains("private static void BuildRows(int start, int end, int workerIndex, object? state)", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证粒子积分按活跃前缀分段经 JobSystem 并行，沉积写回保持在后续串行阶段。
+    /// </summary>
+    [Fact]
+    public void ParticleIntegrationDispatchesActivePrefixThroughJobSystem()
+    {
+        string source = ReadProductionSource("src", "PixelEngine.Simulation", "Particles", "ParticleSystem.cs");
+
+        Assert.Contains("private static readonly RangeJob IntegrateRangeJob", source, StringComparison.Ordinal);
+        Assert.Contains("public void IntegrateAndAdvance(JobSystem jobs, CellGrid grid)", source, StringComparison.Ordinal);
+        Assert.Contains("jobs.ParallelRange(ActiveCount, 256, IntegrateRangeJob, this)", source, StringComparison.Ordinal);
+        Assert.Contains("private void IntegrateRange(int start, int end)", source, StringComparison.Ordinal);
+        Assert.Contains("public void ResolveDeposits(SimulationKernel kernel, CellGrid grid)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("jobs.ParallelRange(ActiveCount, 256", source[source.IndexOf("public void ResolveDeposits", StringComparison.Ordinal)..], StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 CCL、轮廓/凸分解准备阶段按刚体工作项经 JobSystem 并行，Box2D apply 留在同步阶段。
+    /// </summary>
+    [Fact]
+    public void RigidBodyDestructionPreparesRebuildPlansThroughJobSystem()
+    {
+        string source = ReadProductionSource("src", "PixelEngine.Physics", "RigidBodyDestruction.cs");
+
+        Assert.Contains("private static readonly RangeJob PreparePlansJob", source, StringComparison.Ordinal);
+        Assert.Contains("jobs.ParallelRange(workItems.Count, 1, PreparePlansJob, batch)", source, StringComparison.Ordinal);
+        Assert.Contains("ConnectedComponentLabeler.Label", source, StringComparison.Ordinal);
+        Assert.Contains("RigidBodyMaskShapeBuilder.TryBuildConvexPieces", source, StringComparison.Ordinal);
+        Assert.Contains("Box2D.b2DestroyBody", source, StringComparison.Ordinal);
+        Assert.True(
+            source.IndexOf("jobs.ParallelRange(workItems.Count, 1, PreparePlansJob, batch)", StringComparison.Ordinal) <
+            source.IndexOf("private RigidDestructionResult ApplyPlan", StringComparison.Ordinal),
+            "刚体重建准备阶段必须先并行生成离线计划，再进入 Box2D apply 阶段。");
+    }
+
+    /// <summary>
+    /// 验证相位 11 序列化字节准备可经 JobSystem 并行，并且 live map 只在提交/应用阶段触碰。
+    /// </summary>
+    [Fact]
+    public void WorldStreamerPreparesOfflineSerializationBatchThroughJobSystem()
+    {
+        string source = ReadProductionSource("src", "PixelEngine.World", "WorldStreamer.cs");
+
+        Assert.Contains("public int ProcessIoOnce(JobSystem? jobs)", source, StringComparison.Ordinal);
+        Assert.Contains("jobs.ParallelRange(requestCount, 1, PrepareRange, _preparationBatch)", source, StringComparison.Ordinal);
+        Assert.Contains("private static void PrepareRange(int start, int end, int workerIndex, object? context)", source, StringComparison.Ordinal);
+        Assert.Contains("private PreparedStreamingOperation PrepareLoad(ChunkCoord coord)", source, StringComparison.Ordinal);
+        Assert.Contains("private PreparedStreamingOperation PrepareUnload(StreamingRequest request)", source, StringComparison.Ordinal);
+        Assert.Contains("ThreadLocal<PooledByteBufferWriter>", source, StringComparison.Ordinal);
+
+        int prepareLoad = source.IndexOf("private PreparedStreamingOperation PrepareLoad", StringComparison.Ordinal);
+        int prepareUnload = source.IndexOf("private PreparedStreamingOperation PrepareUnload", StringComparison.Ordinal);
+        int ensureRequestCapacity = source.IndexOf("private void EnsureRequestCapacity", StringComparison.Ordinal);
+        string prepareSection = source[prepareLoad..ensureRequestCapacity];
+
+        Assert.DoesNotContain("_chunks.Add", prepareSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("_chunks.TryRemove", prepareSection, StringComparison.Ordinal);
+        Assert.True(prepareUnload > prepareLoad);
+    }
+
+    /// <summary>
     /// 验证 worker-local 槽位至少填充到一个 cache line，避免相邻 worker 元数据 false sharing。
     /// </summary>
     [Fact]
@@ -201,6 +276,11 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
         }
 
         return builder.ToString();
+    }
+
+    private static string ReadProductionSource(params string[] relativePath)
+    {
+        return StripComments(File.ReadAllText(Path.Combine([FindRepositoryRoot(), .. relativePath])));
     }
 
     private static string FindRepositoryRoot()
