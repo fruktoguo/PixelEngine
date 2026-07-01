@@ -1,4 +1,6 @@
 using System.Buffers;
+using System.Numerics;
+using PixelEngine.Physics;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 
@@ -14,6 +16,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     private readonly MaterialFacade _materials;
     private readonly ParticleFacade _particles;
     private readonly SolidFacade _solids;
+    private readonly CharacterFacade _character;
     private ScriptCommand[] _drainBuffer = ArrayPool<ScriptCommand>.Shared.Rent(16);
     private bool _disposed;
 
@@ -28,6 +31,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     /// <param name="events">脚本事件总线；未提供时访问 <see cref="Events" /> 会抛出明确异常。</param>
     /// <param name="time">时间 facade；未提供时访问 <see cref="Time" /> 会抛出明确异常。</param>
     /// <param name="audio">音频 facade；未提供时访问 <see cref="Audio" /> 会抛出明确异常。</param>
+    /// <param name="physics">物理系统 facade；提供时角色移动经其记录诊断，否则直接使用角色控制器解算。</param>
     public ScriptSimulationContext(
         Scene scene,
         CellGrid grid,
@@ -36,7 +40,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         MaterialTable materials,
         IEventBus? events = null,
         IGameTime? time = null,
-        IAudioApi? audio = null)
+        IAudioApi? audio = null,
+        PhysicsSystem? physics = null)
     {
         Scene = scene ?? throw new ArgumentNullException(nameof(scene));
         ArgumentNullException.ThrowIfNull(grid);
@@ -48,6 +53,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         _materials = new MaterialFacade(materials);
         _particles = new ParticleFacade(_commands);
         _solids = new SolidFacade(grid);
+        _character = new CharacterFacade(grid, physics, time);
         Grid = grid;
         Kernel = kernel;
         ParticleSystem = particleSystem;
@@ -93,7 +99,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     public IRigidBodyApi Bodies => throw Unsupported(nameof(Bodies));
 
     /// <inheritdoc />
-    public ICharacterController Character => throw Unsupported(nameof(Character));
+    public ICharacterController Character => _character;
 
     /// <inheritdoc />
     public ICameraApi Camera => throw Unsupported(nameof(Camera));
@@ -420,6 +426,127 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         private bool IsSolidCell(int x, int y)
         {
             return grid.GetCellType(x, y) == CellType.Solid;
+        }
+    }
+
+    private sealed class CharacterFacade(CellGrid grid, PhysicsSystem? physics, IGameTime? time) : ICharacterController
+    {
+        private readonly List<CharacterSlot> _characters = [];
+
+        public CharacterHandle Create(float x, float y, float width, float height)
+        {
+            ValidateFinite(x, nameof(x));
+            ValidateFinite(y, nameof(y));
+            ValidatePositive(width, nameof(width));
+            ValidatePositive(height, nameof(height));
+
+            CharacterController controller = new(grid, new Vector2(x, y), new Vector2(width, height));
+            CharacterState state = Snapshot(controller, default);
+            _characters.Add(new CharacterSlot(controller, state));
+            return new CharacterHandle(_characters.Count - 1);
+        }
+
+        public CharacterState SetPosition(CharacterHandle handle, float x, float y)
+        {
+            CharacterSlot slot = GetSlot(handle);
+            ValidateFinite(x, nameof(x));
+            ValidateFinite(y, nameof(y));
+
+            slot.Controller.SetPosition(new Vector2(x, y));
+            CharacterState state = Snapshot(slot.Controller, default);
+            slot.State = state;
+            return state;
+        }
+
+        public CharacterState Move(CharacterHandle handle, float dx, float dy)
+        {
+            CharacterSlot slot = GetSlot(handle);
+            ValidateFinite(dx, nameof(dx));
+            ValidateFinite(dy, nameof(dy));
+
+            Vector2 desired = new(dx, dy);
+            CharacterCollisionInfo info;
+            if (physics is null)
+            {
+                slot.Controller.Move(in desired, out info);
+            }
+            else
+            {
+                physics.MoveCharacter(slot.Controller, in desired, out info);
+            }
+
+            CharacterState state = Snapshot(slot.Controller, in info);
+            slot.State = state;
+            return state;
+        }
+
+        public CharacterState GetState(CharacterHandle handle)
+        {
+            return GetSlot(handle).State;
+        }
+
+        private CharacterSlot GetSlot(CharacterHandle handle)
+        {
+            return (uint)handle.Value < (uint)_characters.Count
+                ? _characters[handle.Value]
+                : throw new ArgumentOutOfRangeException(nameof(handle), handle, "未知角色控制器句柄。");
+        }
+
+        private CharacterState Snapshot(CharacterController controller, in CharacterCollisionInfo collision)
+        {
+            float slope = collision == default ? (controller.IsGrounded ? controller.SlopeAngle : 0f) : collision.SlopeAngle;
+            bool grounded = collision == default ? controller.IsGrounded : collision.IsGrounded;
+            bool wallLeft = collision == default ? controller.IsTouchingWallLeft : collision.HitWallLeft;
+            bool wallRight = collision == default ? controller.IsTouchingWallRight : collision.HitWallRight;
+            bool ceiling = collision != default && collision.HitCeiling;
+            Vector2 requested = collision == default ? default : collision.RequestedDelta;
+            Vector2 applied = collision == default ? default : collision.AppliedDelta;
+            float dt = time?.FixedStep ?? 0f;
+            float velocityX = dt > 0f ? applied.X / dt : applied.X;
+            float velocityY = dt > 0f ? applied.Y / dt : applied.Y;
+            Vector2 normal = grounded ? new Vector2(-MathF.Sin(slope), -MathF.Cos(slope)) : default;
+
+            return new CharacterState(
+                controller.Position.X,
+                controller.Position.Y,
+                controller.Size.X,
+                controller.Size.Y,
+                grounded,
+                wallLeft,
+                wallRight,
+                ceiling,
+                velocityX,
+                velocityY,
+                requested.X,
+                requested.Y,
+                applied.X,
+                applied.Y,
+                normal.X,
+                normal.Y,
+                slope);
+        }
+
+        private static void ValidateFinite(float value, string name)
+        {
+            if (!float.IsFinite(value))
+            {
+                throw new ArgumentOutOfRangeException(name, value, "参数必须是有限数值。");
+            }
+        }
+
+        private static void ValidatePositive(float value, string name)
+        {
+            if (!float.IsFinite(value) || value <= 0f)
+            {
+                throw new ArgumentOutOfRangeException(name, value, "参数必须是有限正数。");
+            }
+        }
+
+        private sealed class CharacterSlot(CharacterController controller, CharacterState state)
+        {
+            public CharacterController Controller { get; } = controller;
+
+            public CharacterState State { get; set; } = state;
         }
     }
 }
