@@ -1,10 +1,12 @@
 using System.Diagnostics;
 using System.Numerics;
+using System.Buffers;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Events;
 using PixelEngine.Core.Mathematics;
 using PixelEngine.Core.Threading;
 using PixelEngine.Interop.Box2D;
+using PixelEngine.Physics.Geometry;
 using PixelEngine.Simulation;
 
 namespace PixelEngine.Physics;
@@ -296,6 +298,30 @@ public sealed class PhysicsSystem : IDisposable
     }
 
     /// <summary>
+    /// 将当前活跃刚体 mask 的 CCL 连通块复制为 editor 调试快照；目标 span 不足时只写入可容纳的前 N 个。
+    /// </summary>
+    public int CopyConnectedComponentDebugSnapshots(Span<ConnectedComponentDebugSnapshot> destination, int fragmentPixelThreshold = 1)
+    {
+        ObjectDisposedException.ThrowIf(_shutdown, this);
+        ArgumentOutOfRangeException.ThrowIfNegative(fragmentPixelThreshold);
+        int written = 0;
+        int slotCount = PhysicsWorld.BodySlotCount;
+        for (int i = 0; i < slotCount && written < destination.Length; i++)
+        {
+            if (!PhysicsWorld.TryGetBody(i, out PixelRigidBody? body))
+            {
+                continue;
+            }
+
+            B2Transform nativeTransform = Box2D.b2Body_GetTransform(body.BodyId);
+            Transform2D transform = PhysicsScale.ToTransform2D(nativeTransform);
+            written += CopyBodyConnectedComponents(body, in transform, fragmentPixelThreshold, destination[written..]);
+        }
+
+        return written;
+    }
+
+    /// <summary>
     /// 关闭物理系统，按所有权销毁 Box2D world 与 task bridge。
     /// </summary>
     public void Shutdown()
@@ -429,6 +455,67 @@ public sealed class PhysicsSystem : IDisposable
         }
 
         return stamped;
+    }
+
+    private static int CopyBodyConnectedComponents(
+        PixelRigidBody body,
+        in Transform2D transform,
+        int fragmentPixelThreshold,
+        Span<ConnectedComponentDebugSnapshot> destination)
+    {
+        BodyLocalMask mask = body.Mask;
+        int area = mask.Width * mask.Height;
+        int[] labels = ArrayPool<int>.Shared.Rent(area);
+        ConnectedComponent[] components = ArrayPool<ConnectedComponent>.Shared.Rent(area);
+        try
+        {
+            int componentCount = ConnectedComponentLabeler.Label(
+                mask.SolidBits,
+                mask.Width,
+                mask.Height,
+                labels.AsSpan(0, area),
+                components.AsSpan(0, area),
+                Connectivity.Four,
+                fragmentPixelThreshold);
+            int written = 0;
+            for (int i = 0; i < componentCount && written < destination.Length; i++)
+            {
+                ConnectedComponent component = components[i];
+                destination[written++] = new ConnectedComponentDebugSnapshot(
+                    body.BodyKey,
+                    component.Label,
+                    component.PixelCount,
+                    LocalBoundsToWorld(mask, in transform, component.Bounds),
+                    component.IsFragment);
+            }
+
+            return written;
+        }
+        finally
+        {
+            ArrayPool<int>.Shared.Return(labels);
+            ArrayPool<ConnectedComponent>.Shared.Return(components);
+        }
+    }
+
+    private static RectI LocalBoundsToWorld(BodyLocalMask mask, in Transform2D transform, in RectI bounds)
+    {
+        Vector2 origin = mask.LocalOrigin;
+        Vector2 p0 = transform.TransformPoint(new Vector2(bounds.MinX, bounds.MinY) - origin);
+        Vector2 p1 = transform.TransformPoint(new Vector2(bounds.MaxX, bounds.MinY) - origin);
+        Vector2 p2 = transform.TransformPoint(new Vector2(bounds.MaxX, bounds.MaxY) - origin);
+        Vector2 p3 = transform.TransformPoint(new Vector2(bounds.MinX, bounds.MaxY) - origin);
+
+        float minX = MathF.Min(MathF.Min(p0.X, p1.X), MathF.Min(p2.X, p3.X));
+        float minY = MathF.Min(MathF.Min(p0.Y, p1.Y), MathF.Min(p2.Y, p3.Y));
+        float maxX = MathF.Max(MathF.Max(p0.X, p1.X), MathF.Max(p2.X, p3.X));
+        float maxY = MathF.Max(MathF.Max(p0.Y, p1.Y), MathF.Max(p2.Y, p3.Y));
+
+        return RectI.FromBounds(
+            (int)MathF.Floor(minX),
+            (int)MathF.Floor(minY),
+            (int)MathF.Ceiling(maxX),
+            (int)MathF.Ceiling(maxY));
     }
 
     private int Measure(FrameSubPhase phase, Func<int> action)

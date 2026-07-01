@@ -206,9 +206,29 @@ public sealed unsafe class OverlayRenderer : IDisposable
                     true,
                     ref vertexCount);
                 return;
+            case OverlayPrimitiveType.Line:
+                AppendLine(command.ViewportX, command.ViewportY, command.LineEndX, command.LineEndY, command.OutlineThickness, command.ColorBgra, ref vertexCount);
+                return;
             default:
                 throw new ArgumentOutOfRangeException(nameof(command), "未知 Overlay 原语类型。");
         }
+    }
+
+    private void AppendLine(float x0, float y0, float x1, float y1, float thickness, uint colorBgra, ref int vertexCount)
+    {
+        float dx = x1 - x0;
+        float dy = y1 - y0;
+        float length = MathF.Sqrt((dx * dx) + (dy * dy));
+        float nx = -(dy / length) * thickness * 0.5f;
+        float ny = dx / length * thickness * 0.5f;
+        ColorToRgba(colorBgra, out float r, out float g, out float b, out float a);
+
+        AppendVertex(x0 + nx, y0 + ny, 0f, 0f, r, g, b, a, 0f, ref vertexCount);
+        AppendVertex(x1 + nx, y1 + ny, 0f, 0f, r, g, b, a, 0f, ref vertexCount);
+        AppendVertex(x1 - nx, y1 - ny, 0f, 0f, r, g, b, a, 0f, ref vertexCount);
+        AppendVertex(x0 + nx, y0 + ny, 0f, 0f, r, g, b, a, 0f, ref vertexCount);
+        AppendVertex(x1 - nx, y1 - ny, 0f, 0f, r, g, b, a, 0f, ref vertexCount);
+        AppendVertex(x0 - nx, y0 - ny, 0f, 0f, r, g, b, a, 0f, ref vertexCount);
     }
 
     private void AppendOutline(float x, float y, float width, float height, float thickness, uint colorBgra, ref int vertexCount)

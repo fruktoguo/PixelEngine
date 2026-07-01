@@ -10,12 +10,14 @@ namespace PixelEngine.Rendering;
 /// <param name="temperature">温度场。</param>
 /// <param name="camera">相机快照。</param>
 /// <param name="simStepped">本帧 sim 是否实际步进。</param>
+/// <param name="debugCellColors">可选逐 cell 调试着色钩子。</param>
 public sealed class RenderFrameContext(
     IChunkSource chunks,
     MaterialTable materials,
     TemperatureField temperature,
     CameraState camera,
-    bool simStepped)
+    bool simStepped,
+    IDebugCellColorProvider? debugCellColors = null)
 {
     /// <summary>
     /// 驻留 chunk 源。
@@ -41,4 +43,9 @@ public sealed class RenderFrameContext(
     /// 本帧 sim 是否实际执行。为 false 时 render buffer 复用上帧内容。
     /// </summary>
     public bool SimStepped { get; } = simStepped;
+
+    /// <summary>
+    /// 可选逐 cell 调试着色钩子；用于 editor overlay，不改变权威 cell 数据。
+    /// </summary>
+    public IDebugCellColorProvider? DebugCellColors { get; } = debugCellColors;
 }

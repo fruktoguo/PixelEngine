@@ -154,15 +154,15 @@ ImGui 集成与框架：
 - [x] `WorldInspectorPanel`：点选/跟随 cell → material(id+Name)/temperature/Flags 逐位/owned-by-body-K/坐标/chunk 信息/dirty rect/sleep（§3.5）
 
 调试可视化叠层（架构 §17.2）：
-- [ ] `DebugOverlayController` + `DebugOverlayPanel`：每种叠层独立可叠加开关（§3.6）
-- [ ] dirty rect 边框叠层（矢量，world→screen）（§3.6）
-- [ ] chunk 网格 + parity 着色叠层（4-pass 分区可视）（§3.6）
-- [ ] KeepAlive 唤醒热点叠层（读 Simulation KeepAlive 事件/计数）（§3.6）
-- [ ] cell parity 位叠层（经 Rendering debug 着色钩子）（§3.6）
-- [ ] 温度热力图叠层（经 Rendering debug 着色钩子）（§3.6）
-- [ ] owned-by-body-K 着色叠层（经 Rendering debug 着色钩子）（§3.6）
-- [ ] 自由粒子轨迹叠层（读 `plan/05` 粒子缓冲）（§3.6）
-- [ ] CCL 连通块着色叠层（读 `plan/06` 连通块/轮廓）（§3.6）
+- [x] `DebugOverlayController` + `DebugOverlayPanel`：每种叠层独立可叠加开关（§3.6）
+- [x] dirty rect 边框叠层（矢量，world→screen）（§3.6）
+- [x] chunk 网格 + parity 着色叠层（4-pass 分区可视）（§3.6）
+- [x] KeepAlive 唤醒热点叠层（读 Simulation KeepAlive 事件/计数）（§3.6）
+- [x] cell parity 位叠层（经 Rendering debug 着色钩子）（§3.6）
+- [x] 温度热力图叠层（经 Rendering debug 着色钩子）（§3.6）
+- [x] owned-by-body-K 着色叠层（经 Rendering debug 着色钩子）（§3.6）
+- [x] 自由粒子轨迹叠层（读 `plan/05` 粒子缓冲）（§3.6）
+- [x] CCL 连通块着色叠层（读 `plan/06` 连通块/轮廓）（§3.6）
 
 性能 HUD（架构 §17.1）：
 - [ ] `PerformanceHudPanel`：每相位耗时（particle/CA A–D/heat/physics/形状重建/render/upload/audio）（§3.7）
@@ -254,7 +254,7 @@ sim 控制 / 存读档 / 调参 / 模式：
 
 - [x] 节点 1：`feat(editor): 集成 Hexa.NET.ImGui(GL 后端+输入桥+docking+中文字体)`（§3.1–§3.3，实现清单「ImGui 集成与框架」全部）
 - [x] 节点 2：`feat(editor): 世界画刷调色板与世界检视器`（§3.4–§3.5）
-- [ ] 节点 3：`feat(editor): 调试可视化叠层(架构 §17.2)`（§3.6）
+- [x] 节点 3：`feat(editor): 调试可视化叠层(架构 §17.2)`（§3.6）
 - [ ] 节点 4：`feat(editor): 性能 HUD(架构 §17.1)`（§3.7）
 - [ ] 节点 5：`feat(editor): 材质+反应实时编辑器与 id 稳定热重载(架构 §17.4)`（§3.8）
 - [ ] 节点 6：`feat(editor): 脚本 Inspector/资源浏览器/层级面板`（§3.9–§3.11）

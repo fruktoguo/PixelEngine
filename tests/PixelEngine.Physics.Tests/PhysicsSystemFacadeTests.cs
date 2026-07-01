@@ -98,6 +98,45 @@ public sealed class PhysicsSystemFacadeTests
     }
 
     /// <summary>
+    /// 验证 CopyConnectedComponentDebugSnapshots 返回活跃刚体 mask 的 CCL 组件 bounds。
+    /// </summary>
+    [Fact]
+    public void CopyConnectedComponentDebugSnapshotsReturnsBodyMaskComponents()
+    {
+        PhysicsScale.ConfigureBox2DLengthUnits();
+        B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
+        worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
+        B2WorldId worldId = Box2D.b2CreateWorld(in worldDef);
+
+        try
+        {
+            TestChunkSource source = new(new Chunk(new ChunkCoord(0, 0)));
+            CellGrid grid = new(source, MaterialPropsTable.Empty);
+            PhysicsWorld physicsWorld = new();
+            RigidStampRegistry registry = new();
+            B2BodyId bodyId = CreateBoxBody(worldId, width: 16, height: 16, new Vector2(10, 10));
+            PixelRigidBody body = physicsWorld.AddBody(bodyId, CreateSplitMask());
+            PhysicsSystem system = new(worldId, physicsWorld, grid, registry);
+            ConnectedComponentDebugSnapshot[] snapshots = new ConnectedComponentDebugSnapshot[4];
+
+            int written = system.CopyConnectedComponentDebugSnapshots(snapshots);
+
+            Assert.Equal(2, written);
+            Assert.All(snapshots.AsSpan(0, written).ToArray(), snapshot =>
+            {
+                Assert.Equal(body.BodyKey, snapshot.BodyKey);
+                Assert.False(snapshot.WorldBounds.IsEmpty);
+            });
+            Assert.Contains(snapshots.AsSpan(0, written).ToArray(), static snapshot => snapshot.Label == 1);
+            Assert.Contains(snapshots.AsSpan(0, written).ToArray(), static snapshot => snapshot.Label == 2);
+        }
+        finally
+        {
+            Box2D.b2DestroyWorld(worldId);
+        }
+    }
+
+    /// <summary>
     /// 验证刚体破碎通过 PhysicsSystem 写入 RigidbodyShatter 音频事件。
     /// </summary>
     [Fact]
@@ -163,6 +202,20 @@ public sealed class PhysicsSystemFacadeTests
         Array.Fill(solid, (byte)1);
         Array.Fill(materials, material);
         return new BodyLocalMask(width, height, Vector2.Zero, solid, materials);
+    }
+
+    private static BodyLocalMask CreateSplitMask()
+    {
+        byte[] solid =
+        [
+            1, 1, 0, 1, 1,
+            1, 1, 0, 1, 1,
+            1, 1, 0, 1, 1,
+            1, 1, 0, 1, 1,
+        ];
+        ushort[] materials = new ushort[solid.Length];
+        Array.Fill(materials, (ushort)2);
+        return new BodyLocalMask(5, 4, Vector2.Zero, solid, materials);
     }
 
     private static B2BodyId CreateBoxBody(B2WorldId worldId, int width, int height, Vector2 bodyPositionPixels)
