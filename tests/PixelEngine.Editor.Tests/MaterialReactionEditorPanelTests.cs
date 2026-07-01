@@ -54,6 +54,93 @@ public sealed class MaterialReactionEditorPanelTests
         Assert.Contains("fire", File.ReadAllText(temp.MaterialsPath), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证预览会展开 reaction 输入 tag，并把输出 tag 映射到代表材质。
+    /// </summary>
+    [Fact]
+    public void PreviewExpandsTagInputsAndOutputRepresentatives()
+    {
+        using TempContent temp = TempContent.Create();
+        MaterialTable materials = new(
+        [
+            new MaterialDef { Id = 0, Name = "empty", Type = CellType.Empty, HeatCapacity = 1 },
+            new MaterialDef { Id = 1, Name = "water", Type = CellType.Liquid, HeatCapacity = 1 },
+            new MaterialDef { Id = 2, Name = "steam", Type = CellType.Gas, HeatCapacity = 1 },
+        ]);
+        FileMaterialReactionContentService service = new(
+            temp.MaterialsPath,
+            temp.ReactionsPath,
+            materials,
+            new TestChunkSource(),
+            fallbackMaterialId: 0,
+            applyReactions: static _ => { });
+        MaterialReactionEditorDocument document = new();
+        document.Materials.Add(new MaterialEditorRow { Name = "empty", Type = "Empty", HeatCapacity = 1, TextureId = -1 });
+        document.Materials.Add(new MaterialEditorRow { Name = "water", Type = "Liquid", HeatCapacity = 1, TextureId = -1, Tags = "Cold" });
+        document.Materials.Add(new MaterialEditorRow { Name = "steam", Type = "Gas", HeatCapacity = 1, TextureId = -1, Tags = "Fire" });
+        document.TagRepresentatives.Add(new TagRepresentativeEditorRow { Tag = "Fire", Material = "steam" });
+        document.Reactions.Add(new ReactionEditorRow { InputA = "[Cold]", InputB = "empty", OutputA = "[Fire]", OutputB = "empty", Probability = 100 });
+
+        MaterialReactionPreviewResult preview = service.Preview(document);
+
+        Assert.Equal(3, preview.MaterialCount);
+        Assert.Equal(1, preview.SourceReactionCount);
+        Assert.Equal(2, preview.PackedReactionCount);
+        Assert.Contains("展开后 packed reaction 2 条", preview.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证纹理或音效变化只产生资产重载请求，并保持既有 runtime id 不变。
+    /// </summary>
+    [Fact]
+    public void ApplyReloadsChangedAssetsWithoutChangingStableRuntimeId()
+    {
+        using TempContent temp = TempContent.Create();
+        MaterialTable materials = new(
+        [
+            new MaterialDef
+            {
+                Id = 0,
+                Name = "empty",
+                Type = CellType.Empty,
+                HeatCapacity = 1,
+                TextureId = 3,
+                AudioCues = new AudioCueSet { ImpactCue = 1 },
+            },
+        ]);
+        RecordingAssetReloadSink assetSink = new();
+        FileMaterialReactionContentService service = new(
+            temp.MaterialsPath,
+            temp.ReactionsPath,
+            materials,
+            new TestChunkSource(),
+            fallbackMaterialId: 0,
+            applyReactions: static _ => { },
+            assetReloadSink: assetSink);
+        MaterialReactionEditorDocument document = new();
+        document.Materials.Add(new MaterialEditorRow
+        {
+            Name = "empty",
+            Type = "Empty",
+            HeatCapacity = 1,
+            TextureId = 7,
+            ImpactCue = 2,
+        });
+
+        MaterialReactionApplyResult result = service.Apply(document);
+
+        Assert.Empty(result.MaterialReload.TombstoneIds);
+        Assert.Equal(0, result.MaterialReload.AddedCount);
+        Assert.True(materials.TryGetId("empty", out ushort emptyId));
+        Assert.Equal(0, emptyId);
+        MaterialAssetReloadRequest request = Assert.Single(result.AssetReloads);
+        Assert.Equal("empty", request.MaterialName);
+        Assert.Equal(0, request.RuntimeId);
+        Assert.True(request.TextureChanged);
+        Assert.True(request.AudioChanged);
+        Assert.Equal(result.AssetReloads, assetSink.Requests);
+    }
+
     private sealed class TestChunkSource(params Chunk[] chunks) : IChunkSource
     {
         private readonly Dictionary<ChunkCoord, Chunk> _byCoord = chunks.ToDictionary(static chunk => chunk.Coord);
@@ -103,6 +190,16 @@ public sealed class MaterialReactionEditorPanelTests
             {
                 Directory.Delete(Root, recursive: true);
             }
+        }
+    }
+
+    private sealed class RecordingAssetReloadSink : IMaterialAssetReloadSink
+    {
+        public IReadOnlyList<MaterialAssetReloadRequest> Requests { get; private set; } = [];
+
+        public void ReloadMaterialAssets(IReadOnlyList<MaterialAssetReloadRequest> requests)
+        {
+            Requests = requests;
         }
     }
 }
