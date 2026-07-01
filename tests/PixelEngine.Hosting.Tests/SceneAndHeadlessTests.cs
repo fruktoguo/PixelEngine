@@ -315,6 +315,70 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
+    /// 验证 .scene 的 InitialSaveDirectory 会按 .scene 文件目录解析，并显式装配当前场景世界。
+    /// </summary>
+    [Fact]
+    public void AttachCurrentSceneWorldLoadsSceneFileInitialSaveDirectory()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-scene-world-{Guid.NewGuid():N}");
+        try
+        {
+            string sceneDirectory = Path.Combine(contentRoot, "scenes");
+            string savePath = Path.Combine(contentRoot, "saves", "mine");
+            _ = Directory.CreateDirectory(sceneDirectory);
+            MaterialTable materials = Materials(("empty", CellType.Empty), ("sand", CellType.Powder));
+            ResidentChunkMap savedChunks = new();
+            Chunk chunk = new(new ChunkCoord(0, 0));
+            chunk.Material[0] = 1;
+            savedChunks.Add(chunk);
+            new WorldSaveService().SaveAll(
+                new WorldSaveContext(
+                    savedChunks,
+                    new ResidencyTable(),
+                    new TemperatureField(),
+                    materials,
+                    worldSeed: 9,
+                    gameTimeTicks: 10,
+                    playerStateBlob: ReadOnlyMemory<byte>.Empty,
+                    isFrameBoundary: true),
+                new FakeWorldStateBridge([], []),
+                savePath);
+            string scenePath = Path.Combine(sceneDirectory, "mine.scene");
+            File.WriteAllText(
+                scenePath,
+                """
+                {
+                  "formatVersion": 1,
+                  "name": "mine",
+                  "initialSaveDirectory": "../saves/mine",
+                  "entities": []
+                }
+                """);
+            using Engine engine = new EngineBuilder()
+                .WithWorkerCount(1)
+                .WithContentRoot(contentRoot)
+                .AddScene(new SceneDescriptor("mine", SceneSourceKind.SceneFile, "scenes/mine.scene"))
+                .WithStartScene("mine")
+                .Build();
+            engine.Context.RegisterService(materials);
+
+            WorldLoadResult? result = engine.AttachCurrentSceneWorld(particleCapacity: 4);
+
+            Assert.True(result.HasValue);
+            Assert.Equal(9UL, result.Value.WorldSeed);
+            Assert.Equal(10L, result.Value.GameTimeTicks);
+            Assert.Equal(1, engine.Context.GetService<CellGrid>().GetMaterial(0, 0));
+        }
+        finally
+        {
+            if (Directory.Exists(contentRoot))
+            {
+                Directory.Delete(contentRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证场景来源配置会快速拒绝无效组合。
     /// </summary>
     [Fact]

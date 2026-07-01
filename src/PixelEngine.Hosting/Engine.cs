@@ -423,6 +423,38 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>
+    /// 按当前场景来源显式装配初始世界；SaveDirectory 直接读档，SceneFile 读取 InitialSaveDirectory。
+    /// </summary>
+    /// <param name="particleCapacity">自由粒子池容量，必须能容纳存档中的在飞粒子。</param>
+    /// <param name="fallbackMaterialId">存档材质名在当前材质表中缺失时使用的 fallback 材质 id。</param>
+    /// <param name="streamingConfig">可选世界流式配置。</param>
+    /// <returns>装配了存档世界时返回读档结果；当前场景没有存档来源时返回 null。</returns>
+    public WorldLoadResult? AttachCurrentSceneWorld(
+        int particleCapacity = 32768,
+        ushort fallbackMaterialId = 0,
+        WorldStreamingConfig? streamingConfig = null)
+    {
+        ThrowIfShutdown();
+        Scene scene = Context.GetService<ISceneService>().Current ??
+            throw new InvalidOperationException("当前没有已加载场景，不能装配场景世界。");
+        return scene.Descriptor.SourceKind switch
+        {
+            SceneSourceKind.SaveDirectory => AttachWorldFromSaveDirectory(
+                scene.ResolvedSource ?? throw new InvalidOperationException("SaveDirectory 场景缺少解析后的存档路径。"),
+                particleCapacity,
+                fallbackMaterialId,
+                streamingConfig),
+            SceneSourceKind.SceneFile => AttachSceneFileInitialWorld(
+                scene.ResolvedSource ?? throw new InvalidOperationException(".scene 场景缺少解析后的文件路径。"),
+                particleCapacity,
+                fallbackMaterialId,
+                streamingConfig),
+            SceneSourceKind.Empty or SceneSourceKind.Procedural => null,
+            _ => throw new ArgumentOutOfRangeException(nameof(scene), scene.Descriptor.SourceKind, "未知场景来源类型。"),
+        };
+    }
+
+    /// <summary>
     /// 切换到已注册场景描述；实际世界构建由对应场景后端在后续装配中完成。
     /// </summary>
     /// <param name="name">场景稳定名称。</param>
@@ -879,6 +911,33 @@ public sealed class Engine : IDisposable
         Context.RegisterService(driver.GetType(), driver);
         driver.RegisterPhases(Phases);
         return driver;
+    }
+
+    private WorldLoadResult? AttachSceneFileInitialWorld(
+        string scenePath,
+        int particleCapacity,
+        ushort fallbackMaterialId,
+        WorldStreamingConfig? streamingConfig)
+    {
+        EngineSceneDocument document = EngineSceneDocumentLoader.LoadDocument(scenePath);
+        if (string.IsNullOrWhiteSpace(document.InitialSaveDirectory))
+        {
+            return null;
+        }
+
+        string savePath = ResolveSceneRelativePath(scenePath, document.InitialSaveDirectory);
+        return AttachWorldFromSaveDirectory(savePath, particleCapacity, fallbackMaterialId, streamingConfig);
+    }
+
+    private static string ResolveSceneRelativePath(string scenePath, string source)
+    {
+        if (Path.IsPathRooted(source))
+        {
+            return Path.GetFullPath(source);
+        }
+
+        string directory = Path.GetDirectoryName(scenePath) ?? Directory.GetCurrentDirectory();
+        return Path.GetFullPath(Path.Combine(directory, source));
     }
 
     private static PixelEngine.Scripting.Scene BuildProceduralScriptScene(
