@@ -68,6 +68,95 @@ public sealed class MaterialRemapTests
     }
 
     /// <summary>
+    /// 验证 materials.json 仅重排时，旧档 saved id 仍按 name 映射到当前 runtime id。
+    /// </summary>
+    [Fact]
+    public void MaterialRemapPreservesSemanticsWhenMaterialsJsonIsReordered()
+    {
+        MaterialNameTable saved = new(
+        [
+            (0, "empty"),
+            (1, "sand"),
+            (2, "water"),
+            (3, "stone"),
+        ]);
+        MaterialTable current = new(
+        [
+            Material(0, "empty"),
+            Material(1, "water"),
+            Material(2, "stone"),
+            Material(3, "sand"),
+        ]);
+        MaterialRemap remap = MaterialRemap.Build(saved, current, fallbackId: 0);
+        ushort[] material = [0, 1, 2, 3, 1, 2, 3];
+
+        remap.RemapInPlace(material);
+
+        Assert.Equal([0, 3, 1, 2, 3, 1, 2], material);
+        Assert.Equal(0, remap.FallbackHitCount);
+    }
+
+    /// <summary>
+    /// 验证 materials.json 中间插入新材质导致 runtime id 后移时，旧档仍按 name 重映射。
+    /// </summary>
+    [Fact]
+    public void MaterialRemapMapsByNameWhenMiddleInsertionShiftsRuntimeIds()
+    {
+        MaterialNameTable saved = new(
+        [
+            (0, "empty"),
+            (1, "sand"),
+            (2, "water"),
+            (3, "lava"),
+        ]);
+        MaterialTable current = new(
+        [
+            Material(0, "empty"),
+            Material(1, "sand"),
+            Material(2, "oil"),
+            Material(3, "water"),
+            Material(4, "lava"),
+        ]);
+        MaterialRemap remap = MaterialRemap.Build(saved, current, fallbackId: 0);
+        ushort[] material = [2, 3, 1, 0, 2, 3];
+
+        remap.RemapInPlace(material);
+
+        Assert.Equal([3, 4, 1, 0, 3, 4], material);
+        Assert.Equal(0, remap.FallbackHitCount);
+    }
+
+    /// <summary>
+    /// 验证 materials.json 删除旧材质时，该 saved id 映射 fallback，命中计数等于实际 cell 数。
+    /// </summary>
+    [Fact]
+    public void MaterialRemapMapsDeletedMaterialsToFallbackAndCountsHits()
+    {
+        MaterialNameTable saved = new(
+        [
+            (0, "empty"),
+            (1, "sand"),
+            (2, "water"),
+            (3, "acid"),
+            (4, "stone"),
+        ]);
+        MaterialTable current = new(
+        [
+            Material(0, "empty"),
+            Material(1, "sand"),
+            Material(2, "stone"),
+            Material(3, "water"),
+        ]);
+        MaterialRemap remap = MaterialRemap.Build(saved, current, fallbackId: 0);
+        ushort[] material = [3, 1, 4, 2, 3, 0, 3];
+
+        remap.RemapInPlace(material);
+
+        Assert.Equal([0, 1, 2, 3, 0, 0, 0], material);
+        Assert.Equal(3, remap.FallbackHitCount);
+    }
+
+    /// <summary>
     /// 验证 remap fallback 命中能发布到 Core 诊断计数器。
     /// </summary>
     [Fact]

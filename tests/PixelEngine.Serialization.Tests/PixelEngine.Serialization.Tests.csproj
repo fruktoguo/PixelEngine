@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/PixelEngine.Serialization/PixelEngine.Serialization.csproj" />
+    <ProjectReference Include="../../src/PixelEngine.World/PixelEngine.World.csproj" />
   </ItemGroup>
 
   <ItemGroup>
