@@ -94,7 +94,7 @@ public sealed class SimulationPhaseDriver(
             return;
         }
 
-        Temperature.ConductStep(_chunks, Materials.Hot, Kernel.FrameIndex, unchecked((uint)Kernel.WorldSeed));
+        Temperature.ConductStep(_chunks, Materials.Hot, context.Context.Jobs, Kernel.FrameIndex, unchecked((uint)Kernel.WorldSeed));
         Temperature.ApplyPhaseTransitions(_chunks, Materials, Kernel.CurrentParity);
     }
 

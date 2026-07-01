@@ -1,3 +1,4 @@
+using PixelEngine.Core.Threading;
 using Xunit;
 
 namespace PixelEngine.Simulation.Tests;
@@ -95,6 +96,61 @@ public sealed class TemperatureFieldTests
         Assert.Equal(scalar.GetTemperature(32, 32), simd.GetTemperature(32, 32), 5);
         Assert.Equal(scalar.GetTemperature(28, 32), simd.GetTemperature(28, 32), 5);
         Assert.Equal(scalar.GetTemperature(36, 32), simd.GetTemperature(36, 32), 5);
+    }
+
+    /// <summary>
+    /// 验证温度 stencil 经 JobSystem 行分块并行后与单线程入口保持同一结果。
+    /// </summary>
+    [Fact]
+    public void ParallelConductStepMatchesSingleThreadConductStep()
+    {
+        TestChunkSource parallelSource = CreateNeighborhood(new ChunkCoord(0, 0), out _);
+        TestChunkSource singleThreadSource = CreateNeighborhood(new ChunkCoord(0, 0), out _);
+        FillAll(parallelSource, Water);
+        FillAll(singleThreadSource, Water);
+        MaterialTable materials = CreateMaterials();
+        TemperatureField parallel = new(storageKind: TemperatureStorageKind.Float32);
+        TemperatureField singleThread = new(storageKind: TemperatureStorageKind.Float32);
+        AddHeatPattern(parallel);
+        AddHeatPattern(singleThread);
+        using JobSystem jobs = new(workerCount: 2)
+        {
+            SingleThreadThreshold = 0,
+        };
+
+        parallel.ConductStep(parallelSource, materials.Hot, jobs, frameIndex: 13, worldSeed: 17);
+        singleThread.ConductStep(singleThreadSource, materials.Hot, frameIndex: 13, worldSeed: 17);
+
+        Assert.True(parallel.LastConductStepUsedJobSystem);
+        Assert.InRange(parallel.LastConductStepWorkerCount, 1, jobs.WorkerCount);
+        Assert.Equal(singleThread.GetTemperature(32, 32), parallel.GetTemperature(32, 32), 5);
+        Assert.Equal(singleThread.GetTemperature(64, 32), parallel.GetTemperature(64, 32), 5);
+        Assert.Equal(singleThread.GetTemperature(-4, -4), parallel.GetTemperature(-4, -4), 5);
+        Assert.Equal(singleThread.GetTemperature(68, 68), parallel.GetTemperature(68, 68), 5);
+    }
+
+    /// <summary>
+    /// 验证活跃温度行较少时传入 JobSystem 仍走单线程回退，避免小任务 barrier 开销主导。
+    /// </summary>
+    [Fact]
+    public void ConductStepWithJobSystemFallsBackForSmallRowCounts()
+    {
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        Fill(chunk, Water);
+        TestChunkSource source = new(chunk);
+        MaterialTable materials = CreateMaterials();
+        TemperatureField field = new(storageKind: TemperatureStorageKind.Float32);
+        field.AddHeat(32, 32, 100);
+        using JobSystem jobs = new(workerCount: 2)
+        {
+            SingleThreadThreshold = 0,
+        };
+
+        field.ConductStep(source, materials.Hot, jobs);
+
+        Assert.False(field.LastConductStepUsedJobSystem);
+        Assert.Equal(1, field.LastConductStepWorkerCount);
+        Assert.True(field.GetTemperature(32, 32) < 100);
     }
 
     /// <summary>
@@ -235,6 +291,22 @@ public sealed class TemperatureFieldTests
     private static void Fill(Chunk chunk, ushort material)
     {
         Array.Fill(chunk.Material, material);
+    }
+
+    private static void FillAll(TestChunkSource source, ushort material)
+    {
+        foreach (Chunk chunk in source.ResidentChunks)
+        {
+            Fill(chunk, material);
+        }
+    }
+
+    private static void AddHeatPattern(TemperatureField field)
+    {
+        field.AddHeat(32, 32, 120);
+        field.AddHeat(64, 32, 80);
+        field.AddHeat(-4, -4, 40);
+        field.AddHeat(68, 68, 60);
     }
 
     private static void Set(Chunk chunk, int lx, int ly, ushort material)

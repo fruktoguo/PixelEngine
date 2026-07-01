@@ -188,6 +188,25 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     }
 
     /// <summary>
+    /// 验证温度 stencil 按温度子块行经 JobSystem 并行，Hosting 温度相位传入共享 worker。
+    /// </summary>
+    [Fact]
+    public void TemperatureStencilDispatchesRowsThroughJobSystem()
+    {
+        string temperature = ReadProductionSource("src", "PixelEngine.Simulation", "TemperatureField.cs");
+        string phaseDriver = ReadProductionSource("src", "PixelEngine.Hosting", "SimulationPhaseDriver.cs");
+
+        Assert.Contains("private static readonly RangeJob ConductRowsJob", temperature, StringComparison.Ordinal);
+        Assert.Contains("public void ConductStep(", temperature, StringComparison.Ordinal);
+        Assert.Contains("JobSystem jobs", temperature, StringComparison.Ordinal);
+        Assert.Contains("jobs.ParallelRange(rowCount, MinConductRowsPerJob, ConductRowsJob, this)", temperature, StringComparison.Ordinal);
+        Assert.Contains("private void ConductRows(int start, int end)", temperature, StringComparison.Ordinal);
+        Assert.Contains("rowIndex / BlockSize", temperature, StringComparison.Ordinal);
+        Assert.Contains("ShouldConductSingleThread(jobs, rowCount)", temperature, StringComparison.Ordinal);
+        Assert.Contains("Temperature.ConductStep(_chunks, Materials.Hot, context.Context.Jobs", phaseDriver, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 sand/liquid movement 内层保持标量 gather/scatter，不引入 SIMD 路径。
     /// </summary>
     [Fact]

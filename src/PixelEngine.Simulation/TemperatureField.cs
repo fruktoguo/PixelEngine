@@ -1,4 +1,5 @@
 using PixelEngine.Core;
+using PixelEngine.Core.Threading;
 using System.Numerics;
 using System.Runtime.Intrinsics;
 
@@ -25,6 +26,13 @@ public enum TemperatureStorageKind
 /// </summary>
 public sealed class TemperatureField
 {
+    private static readonly RangeJob ConductRowsJob = static (start, end, workerIndex, context) =>
+    {
+        TemperatureField field = (TemperatureField)context!;
+        field.MarkConductWorker(workerIndex);
+        field.ConductRows(start, end);
+    };
+
     /// <summary>
     /// 单 chunk 温度子块边长。
     /// </summary>
@@ -35,7 +43,17 @@ public sealed class TemperatureField
     /// </summary>
     public const int BlockArea = BlockSize * BlockSize;
 
+    private const int MinConductRowsPerJob = BlockSize;
+    private const int MinParallelConductRows = EngineConstants.SingleThreadChunkThreshold * BlockSize;
+
     private readonly Dictionary<ChunkCoord, TemperatureBlock> _blocks = [];
+    private Chunk[] _conductChunks = [];
+    private TemperatureBlock[] _conductBlocks = [];
+    private int[] _conductWorkerHits = [];
+    private int _activeConductChunkCount;
+    private MaterialHotTable? _activeConductMaterials;
+    private uint _activeConductFrameIndex;
+    private uint _activeConductWorldSeed;
 
     /// <summary>
     /// 创建温度场。
@@ -80,6 +98,16 @@ public sealed class TemperatureField
     public TemperatureStorageKind StorageKind { get; }
 
     private bool EnableSimd { get; }
+
+    /// <summary>
+    /// 最近一次温度传导是否通过 <see cref="JobSystem" /> 派发行分块工作。
+    /// </summary>
+    public bool LastConductStepUsedJobSystem { get; private set; }
+
+    /// <summary>
+    /// 最近一次温度传导触达的 JobSystem worker 数。单线程路径为 1；无行可处理为 0。
+    /// </summary>
+    public int LastConductStepWorkerCount { get; private set; }
 
     /// <summary>
     /// 当前运行时是否具备 Vector SIMD 加速能力。
@@ -189,22 +217,71 @@ public sealed class TemperatureField
     /// </summary>
     public void ConductStep(IChunkSource chunks, MaterialHotTable materials, uint frameIndex = 0, uint worldSeed = 0)
     {
+        ConductStepCore(chunks, materials, jobs: null, frameIndex, worldSeed);
+    }
+
+    /// <summary>
+    /// 使用 JobSystem 按温度子块行分块执行一次 5-point von Neumann 热传导；活跃行较少时回退单线程。
+    /// </summary>
+    public void ConductStep(
+        IChunkSource chunks,
+        MaterialHotTable materials,
+        JobSystem jobs,
+        uint frameIndex = 0,
+        uint worldSeed = 0)
+    {
+        ArgumentNullException.ThrowIfNull(jobs);
+        ConductStepCore(chunks, materials, jobs, frameIndex, worldSeed);
+    }
+
+    private void ConductStepCore(
+        IChunkSource chunks,
+        MaterialHotTable materials,
+        JobSystem? jobs,
+        uint frameIndex,
+        uint worldSeed)
+    {
         ArgumentNullException.ThrowIfNull(chunks);
         ArgumentNullException.ThrowIfNull(materials);
         if (ContactFireOnly)
         {
+            LastConductStepUsedJobSystem = false;
+            LastConductStepWorkerCount = 0;
             return;
         }
 
-        foreach (Chunk chunk in chunks.ResidentChunks)
+        int chunkCount = CaptureConductChunks(chunks.ResidentChunks);
+        int rowCount = chunkCount * BlockSize;
+        if (rowCount != 0)
         {
-            _ = GetOrCreateBlock(chunk.Coord);
+            _activeConductMaterials = materials;
+            _activeConductFrameIndex = frameIndex;
+            _activeConductWorldSeed = worldSeed;
+            try
+            {
+                if (ShouldConductSingleThread(jobs, rowCount))
+                {
+                    LastConductStepUsedJobSystem = false;
+                    LastConductStepWorkerCount = 1;
+                    ConductRows(0, rowCount);
+                }
+                else
+                {
+                    ClearWorkerHits(jobs!.WorkerCount);
+                    LastConductStepUsedJobSystem = true;
+                    jobs.ParallelRange(rowCount, MinConductRowsPerJob, ConductRowsJob, this);
+                    LastConductStepWorkerCount = CountWorkerHits(jobs.WorkerCount);
+                }
+            }
+            finally
+            {
+                ClearConductContext();
+            }
         }
-
-        foreach (Chunk chunk in chunks.ResidentChunks)
+        else
         {
-            TemperatureBlock block = GetOrCreateBlock(chunk.Coord);
-            ConductChunk(chunk, block, materials, frameIndex, worldSeed);
+            LastConductStepUsedJobSystem = false;
+            LastConductStepWorkerCount = 0;
         }
 
         foreach (TemperatureBlock block in _blocks.Values)
@@ -258,45 +335,135 @@ public sealed class TemperatureField
         }
     }
 
-    private void ConductChunk(
+    private void ConductRows(int start, int end)
+    {
+        MaterialHotTable materials = _activeConductMaterials ??
+            throw new InvalidOperationException("温度传导材质上下文未设置。");
+
+        for (int rowIndex = start; rowIndex < end; rowIndex++)
+        {
+            int chunkIndex = rowIndex / BlockSize;
+            int ty = rowIndex - (chunkIndex * BlockSize);
+            ConductChunkRow(
+                _conductChunks[chunkIndex],
+                _conductBlocks[chunkIndex],
+                materials,
+                ty,
+                _activeConductFrameIndex,
+                _activeConductWorldSeed);
+        }
+    }
+
+    private void ConductChunkRow(
         Chunk chunk,
         TemperatureBlock block,
         MaterialHotTable materials,
+        int ty,
         uint frameIndex,
         uint worldSeed)
     {
         int worldBaseX = chunk.Coord.X << EngineConstants.ChunkSizeLog2;
         int worldBaseY = chunk.Coord.Y << EngineConstants.ChunkSizeLog2;
+        int row = ty * BlockSize;
         Span<byte> conductChanceRow = stackalloc byte[BlockSize];
         Span<float> conductRow = stackalloc float[BlockSize];
         Span<float> capacityRow = stackalloc float[BlockSize];
-        for (int ty = 0; ty < BlockSize; ty++)
+        for (int tx = 0; tx < BlockSize; tx++)
         {
-            int row = ty * BlockSize;
-            for (int tx = 0; tx < BlockSize; tx++)
-            {
-                conductChanceRow[tx] = AverageHeatConduct(chunk, materials, tx, ty);
-                conductRow[tx] = conductChanceRow[tx] == byte.MaxValue ? 1f : 0f;
-                capacityRow[tx] = MathF.Max(AverageHeatCapacity(chunk, materials, tx, ty), 0.0001f);
-            }
+            conductChanceRow[tx] = AverageHeatConduct(chunk, materials, tx, ty);
+            conductRow[tx] = conductChanceRow[tx] == byte.MaxValue ? 1f : 0f;
+            capacityRow[tx] = MathF.Max(AverageHeatCapacity(chunk, materials, tx, ty), 0.0001f);
+        }
 
-            if (SimdAvailable && ty > 0 && ty < BlockSize - 1 && CanVectorizeConductRow(conductChanceRow))
+        if (SimdAvailable && ty > 0 && ty < BlockSize - 1 && CanVectorizeConductRow(conductChanceRow))
+        {
+            ConductCellScalar(block, conductChanceRow, capacityRow, worldBaseX, worldBaseY, 0, ty, frameIndex, worldSeed);
+            int nextScalar = ConductInteriorRowVectorized(block, conductRow, capacityRow, row);
+            for (int tx = nextScalar; tx < BlockSize; tx++)
             {
-                ConductCellScalar(block, conductChanceRow, capacityRow, worldBaseX, worldBaseY, 0, ty, frameIndex, worldSeed);
-                int nextScalar = ConductInteriorRowVectorized(block, conductRow, capacityRow, row);
-                for (int tx = nextScalar; tx < BlockSize; tx++)
-                {
-                    ConductCellScalar(block, conductChanceRow, capacityRow, worldBaseX, worldBaseY, tx, ty, frameIndex, worldSeed);
-                }
-            }
-            else
-            {
-                for (int tx = 0; tx < BlockSize; tx++)
-                {
-                    ConductCellScalar(block, conductChanceRow, capacityRow, worldBaseX, worldBaseY, tx, ty, frameIndex, worldSeed);
-                }
+                ConductCellScalar(block, conductChanceRow, capacityRow, worldBaseX, worldBaseY, tx, ty, frameIndex, worldSeed);
             }
         }
+        else
+        {
+            for (int tx = 0; tx < BlockSize; tx++)
+            {
+                ConductCellScalar(block, conductChanceRow, capacityRow, worldBaseX, worldBaseY, tx, ty, frameIndex, worldSeed);
+            }
+        }
+    }
+
+    private int CaptureConductChunks(ReadOnlySpan<Chunk> residentChunks)
+    {
+        EnsureConductCapacity(residentChunks.Length);
+        for (int i = 0; i < residentChunks.Length; i++)
+        {
+            Chunk chunk = residentChunks[i];
+            _conductChunks[i] = chunk;
+            _conductBlocks[i] = GetOrCreateBlock(chunk.Coord);
+        }
+
+        _activeConductChunkCount = residentChunks.Length;
+        return residentChunks.Length;
+    }
+
+    private void EnsureConductCapacity(int chunkCount)
+    {
+        if (_conductChunks.Length < chunkCount)
+        {
+            _conductChunks = new Chunk[chunkCount];
+            _conductBlocks = new TemperatureBlock[chunkCount];
+        }
+    }
+
+    private static bool ShouldConductSingleThread(JobSystem? jobs, int rowCount)
+    {
+        return jobs is null
+            || jobs.WorkerCount <= 1
+            || rowCount < MinParallelConductRows
+            || rowCount <= MinConductRowsPerJob
+            || rowCount <= Math.Max(1, jobs.SingleThreadThreshold);
+    }
+
+    private void ClearWorkerHits(int workerCount)
+    {
+        if (_conductWorkerHits.Length < workerCount)
+        {
+            _conductWorkerHits = GC.AllocateArray<int>(workerCount, pinned: true);
+            return;
+        }
+
+        Array.Clear(_conductWorkerHits, 0, workerCount);
+    }
+
+    private void MarkConductWorker(int workerIndex)
+    {
+        if ((uint)workerIndex < (uint)_conductWorkerHits.Length)
+        {
+            Volatile.Write(ref _conductWorkerHits[workerIndex], 1);
+        }
+    }
+
+    private int CountWorkerHits(int workerCount)
+    {
+        int count = 0;
+        int length = Math.Min(workerCount, _conductWorkerHits.Length);
+        for (int i = 0; i < length; i++)
+        {
+            count += Volatile.Read(ref _conductWorkerHits[i]) != 0 ? 1 : 0;
+        }
+
+        return count;
+    }
+
+    private void ClearConductContext()
+    {
+        Array.Clear(_conductChunks, 0, _activeConductChunkCount);
+        Array.Clear(_conductBlocks, 0, _activeConductChunkCount);
+        _activeConductChunkCount = 0;
+        _activeConductMaterials = null;
+        _activeConductFrameIndex = 0;
+        _activeConductWorldSeed = 0;
     }
 
     private static bool CanVectorizeConductRow(ReadOnlySpan<byte> conductChanceRow)
