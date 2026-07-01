@@ -1,6 +1,7 @@
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.Scripting;
+using PixelEngine.World;
 
 namespace PixelEngine.Hosting;
 
@@ -23,6 +24,8 @@ public sealed class SimulationPhaseDriver(
     MaterialTable materials,
     ScriptSimulationContext? scriptContext = null) : IEnginePhaseDriver
 {
+    private const int DistantThrottleFullRatePaddingChunks = 1;
+
     private readonly IChunkSource _chunks = chunks ?? throw new ArgumentNullException(nameof(chunks));
     private ScriptSimulationContext? _scriptContext = scriptContext;
 
@@ -84,7 +87,7 @@ public sealed class SimulationPhaseDriver(
 
     private void RunCaSimulation(EngineTickContext context)
     {
-        Kernel.StepCa(context.Context.Jobs);
+        Kernel.StepCa(context.Context.Jobs, BuildCaThrottlePolicy(context.Context));
     }
 
     private void RunTemperature(EngineTickContext context)
@@ -109,5 +112,25 @@ public sealed class SimulationPhaseDriver(
         _ = _scriptContext?.FlushParticleCommands();
         Particles.RunEjectionPass(Kernel, Grid);
         Particles.PublishDiagnostics(context.Context.Counters);
+    }
+
+    private static CaChunkThrottlePolicy BuildCaThrottlePolicy(EngineContext context)
+    {
+        if (context.QualityTier < EngineQualityTier.DistantChunkThrottle ||
+            !context.TryGetService(out WorldManager world))
+        {
+            return CaChunkThrottlePolicy.Disabled;
+        }
+
+        ChunkRect fullRate = world.ComputeVisibleChunks().Expand(DistantThrottleFullRatePaddingChunks);
+        return fullRate.IsEmpty
+            ? CaChunkThrottlePolicy.Disabled
+            : new CaChunkThrottlePolicy(
+            Enabled: true,
+            FullRateMinCx: fullRate.MinCx,
+            FullRateMinCy: fullRate.MinCy,
+            FullRateMaxCx: fullRate.MaxCx,
+            FullRateMaxCy: fullRate.MaxCy,
+            FrameIndex: 0);
     }
 }

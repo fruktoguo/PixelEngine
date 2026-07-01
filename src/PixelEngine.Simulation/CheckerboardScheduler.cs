@@ -25,6 +25,8 @@ public sealed class CheckerboardScheduler
     ];
 
     private readonly int[] _counts = new int[4];
+    private Chunk[] _parityPrepareChunks = [];
+    private int _parityPrepareCount;
     private Chunk[] _activeBucket = [];
     private IChunkSource? _activeChunks;
     private MaterialPropsTable? _activeMaterials;
@@ -52,7 +54,8 @@ public sealed class CheckerboardScheduler
         ILifetimeSink lifetimeSink,
         IMaterialCustomUpdateExecutor customUpdateExecutor,
         SimulationDiagnostics diagnostics,
-        FrameProfiler? profiler)
+        FrameProfiler? profiler,
+        CaChunkThrottlePolicy throttlePolicy = default)
     {
         ArgumentNullException.ThrowIfNull(chunks);
         ArgumentNullException.ThrowIfNull(jobs);
@@ -63,12 +66,13 @@ public sealed class CheckerboardScheduler
         ArgumentNullException.ThrowIfNull(customUpdateExecutor);
         ArgumentNullException.ThrowIfNull(diagnostics);
 
-        int awakeCount = BuildBuckets(chunks.ResidentChunks);
+        int awakeCount = BuildBuckets(chunks.ResidentChunks, throttlePolicy);
         if (awakeCount == 0)
         {
             return;
         }
 
+        PrepareThrottledChunkParity(parityBit);
         CaptureContext(chunks, materials, rigidDamageSink, reactionExecutor, lifetimeSink, customUpdateExecutor, diagnostics, parityBit, frameIndex, worldSeed);
         try
         {
@@ -112,7 +116,8 @@ public sealed class CheckerboardScheduler
         ILifetimeSink lifetimeSink,
         IMaterialCustomUpdateExecutor customUpdateExecutor,
         SimulationDiagnostics diagnostics,
-        FrameProfiler? profiler = null)
+        FrameProfiler? profiler = null,
+        CaChunkThrottlePolicy throttlePolicy = default)
     {
         ArgumentNullException.ThrowIfNull(chunks);
         ArgumentNullException.ThrowIfNull(materials);
@@ -122,11 +127,12 @@ public sealed class CheckerboardScheduler
         ArgumentNullException.ThrowIfNull(customUpdateExecutor);
         ArgumentNullException.ThrowIfNull(diagnostics);
 
-        if (BuildBuckets(chunks.ResidentChunks) == 0)
+        if (BuildBuckets(chunks.ResidentChunks, throttlePolicy) == 0)
         {
             return;
         }
 
+        PrepareThrottledChunkParity(parityBit);
         CaptureContext(chunks, materials, rigidDamageSink, reactionExecutor, lifetimeSink, customUpdateExecutor, diagnostics, parityBit, frameIndex, worldSeed);
         try
         {
@@ -138,10 +144,12 @@ public sealed class CheckerboardScheduler
         }
     }
 
-    private int BuildBuckets(ReadOnlySpan<Chunk> residentChunks)
+    private int BuildBuckets(ReadOnlySpan<Chunk> residentChunks, CaChunkThrottlePolicy throttlePolicy)
     {
         EnsureBucketCapacity(residentChunks.Length);
+        EnsureParityPrepareCapacity(residentChunks.Length);
         ClearBuckets();
+        _parityPrepareCount = 0;
 
         int awakeCount = 0;
         foreach (Chunk chunk in residentChunks)
@@ -149,6 +157,17 @@ public sealed class CheckerboardScheduler
             if (chunk.State != ChunkState.Awake || chunk.CurrentDirty.IsEmpty)
             {
                 continue;
+            }
+
+            if (!throttlePolicy.ShouldRunDistantThisFrame(chunk.Coord))
+            {
+                chunk.DeferCurrentDirty();
+                continue;
+            }
+
+            if (throttlePolicy.Enabled && !throttlePolicy.IsFullRate(chunk.Coord))
+            {
+                _parityPrepareChunks[_parityPrepareCount++] = chunk;
             }
 
             int bucket = (chunk.Coord.X & 1) | ((chunk.Coord.Y & 1) << 1);
@@ -170,12 +189,30 @@ public sealed class CheckerboardScheduler
         }
     }
 
+    private void EnsureParityPrepareCapacity(int capacity)
+    {
+        if (_parityPrepareChunks.Length < capacity)
+        {
+            _parityPrepareChunks = new Chunk[capacity];
+        }
+    }
+
     private void ClearBuckets()
     {
         for (int i = 0; i < _buckets.Length; i++)
         {
             Array.Clear(_buckets[i], 0, _counts[i]);
             _counts[i] = 0;
+        }
+
+        Array.Clear(_parityPrepareChunks, 0, _parityPrepareCount);
+    }
+
+    private void PrepareThrottledChunkParity(byte parityBit)
+    {
+        for (int i = 0; i < _parityPrepareCount; i++)
+        {
+            _parityPrepareChunks[i].PrepareCurrentDirtyForParity(parityBit);
         }
     }
 

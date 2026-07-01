@@ -121,28 +121,30 @@ public sealed class SimulationKernel(
     /// <summary>
     /// 执行一次单线程 CA step：翻转 parity，并顺序更新 awake chunk 的 current dirty。
     /// </summary>
-    public void StepCa()
+    public void StepCa(CaChunkThrottlePolicy throttlePolicy = default)
     {
         Diagnostics.ResetCaIterationRecords();
         AdvanceParity();
-        _scheduler.StepSingleThread(_chunks, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, _customUpdateExecutor, Diagnostics, Profiler);
+        throttlePolicy = throttlePolicy.ForFrame(FrameIndex);
+        _scheduler.StepSingleThread(_chunks, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, _customUpdateExecutor, Diagnostics, Profiler, throttlePolicy);
     }
 
     /// <summary>
     /// 使用 JobSystem 执行一次 4-pass checkerboard CA step，低活跃 chunk 数时回退单线程。
     /// </summary>
-    public void StepCa(JobSystem jobs)
+    public void StepCa(JobSystem jobs, CaChunkThrottlePolicy throttlePolicy = default)
     {
         ArgumentNullException.ThrowIfNull(jobs);
         Diagnostics.ResetCaIterationRecords();
         AdvanceParity();
+        throttlePolicy = throttlePolicy.ForFrame(FrameIndex);
         if (ForceSingleThread)
         {
-            _scheduler.StepSingleThread(_chunks, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, _customUpdateExecutor, Diagnostics, Profiler);
+            _scheduler.StepSingleThread(_chunks, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, _customUpdateExecutor, Diagnostics, Profiler, throttlePolicy);
             return;
         }
 
-        _scheduler.Step(_chunks, jobs, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, _customUpdateExecutor, Diagnostics, Profiler);
+        _scheduler.Step(_chunks, jobs, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, _customUpdateExecutor, Diagnostics, Profiler, throttlePolicy);
     }
 
     /// <summary>

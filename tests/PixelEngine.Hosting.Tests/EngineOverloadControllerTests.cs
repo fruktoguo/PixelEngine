@@ -4,6 +4,8 @@ using PixelEngine.Core.Time;
 using PixelEngine.Editor;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
+using PixelEngine.Simulation.Particles;
+using PixelEngine.World;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -162,6 +164,67 @@ public sealed class EngineOverloadControllerTests
     }
 
     /// <summary>
+    /// 验证三级过载降级会从 World 相机下发远区 chunk 隔帧降频策略。
+    /// </summary>
+    [Fact]
+    public void EngineAppliesDistantChunkThrottleFromWorldCamera()
+    {
+        string worldPath = Path.Combine(Path.GetTempPath(), $"pixelengine-throttle-{Guid.NewGuid():N}");
+        try
+        {
+            MaterialTable materials = Materials(("empty", CellType.Empty), ("sand", CellType.Powder));
+            TemperatureField temperature = new();
+            WorldManager world = new(
+                new WorldCamera(32, 32, 64, 64),
+                temperature,
+                materials,
+                worldPath,
+                fallbackMaterialId: 0,
+                new WorldStreamingConfig { ActivationMarginChunks = 2, BorderRingWidth = 1 });
+            AddDenseChunks(world.Chunks, -1, -1, 3, 2);
+            Chunk near = RequireChunk(world.Chunks, new ChunkCoord(0, 0));
+            Chunk far = RequireChunk(world.Chunks, new ChunkCoord(2, 0));
+            MaterialPropsTable props = new(materials.Hot);
+            CellGrid grid = new(world.Chunks, props);
+            SimulationKernel kernel = new(world.Chunks, props);
+            ParticleSystem particles = new(capacity: 16);
+
+            using Engine engine = new EngineBuilder()
+                .WithWorkerCount(1)
+                .WithOverloadPolicy(frameBudgetMs: 10, sustainWindow: 1)
+                .AddPhaseDriver(new SimulationPhaseDriver(world.Chunks, grid, kernel, particles, temperature, materials))
+                .OnPhase(EnginePhase.GameLogicAndScripts, _ =>
+                {
+                    Set(near, 10, 0, 1);
+                    near.SetCurrentDirty(DirtyRect.Full);
+                    Set(far, 10, 0, 1);
+                    far.SetCurrentDirty(DirtyRect.Full);
+                })
+                .Build();
+            engine.Context.RegisterService(world);
+
+            _ = engine.RunOneTick(realDeltaSeconds: 0.020);
+            _ = engine.RunOneTick(realDeltaSeconds: 0.020);
+            _ = engine.RunOneTick(realDeltaSeconds: 0.020);
+
+            Assert.Equal(EngineQualityTier.DistantChunkThrottle, engine.Context.QualityTier);
+            CaIterationSnapshot[] iterations = new CaIterationSnapshot[16];
+            int count = kernel.CopyCaIterationSnapshots(iterations);
+            Assert.True(ContainsIteration(iterations, count, near.Coord));
+            Assert.False(ContainsIteration(iterations, count, far.Coord));
+            Assert.Equal(1, far.Material[CellAddressing.LocalIndexFromLocal(10, 0)]);
+            Assert.Equal(DirtyRect.Full, far.CurrentDirty);
+        }
+        finally
+        {
+            if (Directory.Exists(worldPath))
+            {
+                Directory.Delete(worldPath, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证过载控制器通过 EngineContext 服务表暴露给脚本服务后端与 Editor。
     /// </summary>
     [Fact]
@@ -297,6 +360,66 @@ public sealed class EngineOverloadControllerTests
             EnginePhase phase = (EnginePhase)i;
             _ = builder.OnPhase(phase, context => phases.Add(context.Phase));
         }
+    }
+
+    private static MaterialTable Materials(params (string Name, CellType Type)[] definitions)
+    {
+        MaterialDef[] materials = new MaterialDef[definitions.Length];
+        for (int i = 0; i < materials.Length; i++)
+        {
+            materials[i] = new MaterialDef
+            {
+                Id = (ushort)i,
+                Name = definitions[i].Name,
+                Type = definitions[i].Type,
+                Density = i == 0 ? (byte)0 : (byte)120,
+                HeatCapacity = 1,
+                HeatConduct = 0,
+                TextureId = -1,
+                BaseColorBGRA = i == 0 ? 0 : 0xFF_80_80_80u,
+                MeltPoint = float.NaN,
+                FreezePoint = float.NaN,
+                BoilPoint = float.NaN,
+            };
+        }
+
+        return new MaterialTable(materials);
+    }
+
+    private static void AddDenseChunks(ResidentChunkMap chunks, int minX, int minY, int maxX, int maxY)
+    {
+        for (int y = minY; y <= maxY; y++)
+        {
+            for (int x = minX; x <= maxX; x++)
+            {
+                chunks.Add(new Chunk(new ChunkCoord(x, y)));
+            }
+        }
+    }
+
+    private static Chunk RequireChunk(ResidentChunkMap chunks, ChunkCoord coord)
+    {
+        return chunks.TryGetChunk(coord, out Chunk chunk)
+            ? chunk
+            : throw new InvalidOperationException($"测试缺少 chunk {coord}。");
+    }
+
+    private static void Set(Chunk chunk, int lx, int ly, ushort material)
+    {
+        chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
+    }
+
+    private static bool ContainsIteration(ReadOnlySpan<CaIterationSnapshot> iterations, int count, ChunkCoord coord)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            if (iterations[i].Coord == coord)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private sealed class RecordingGpuComputeQualityDegrader : IGpuComputeQualityDegrader

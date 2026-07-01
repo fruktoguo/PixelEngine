@@ -87,6 +87,14 @@ public sealed class WorldManager
     }
 
     /// <summary>
+    /// 计算当前相机视口覆盖的 chunk 矩形。
+    /// </summary>
+    public ChunkRect ComputeVisibleChunks()
+    {
+        return _activationPolicy.ComputeVisible(Camera);
+    }
+
+    /// <summary>
     /// 相位 2 前汇报上一帧 CA 产生的 KeepAlive / 边界唤醒；被唤醒的 border chunk 会临时进入 active，
     /// 以便其 32px halo 外圈在下一次模拟前保持驻留（架构 §3.4/§5.5）。
     /// </summary>

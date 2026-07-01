@@ -146,6 +146,81 @@ public sealed class CheckerboardSchedulerTests
         }
     }
 
+    /// <summary>
+    /// 验证远区 chunk 被降频跳过时会把 current dirty 保留到下一帧，不会在 dirty swap 后睡眠丢工作。
+    /// </summary>
+    [Fact]
+    public void DistantChunkThrottleDefersDirtyWhenCohortIsSkipped()
+    {
+        TestChunkSource source = CreateDenseSource(-1, -1, 2, 1);
+        Chunk distant = source.GetRequired(new ChunkCoord(2, 0));
+        Set(distant, 10, 10, Sand);
+        distant.SetCurrentDirty(DirtyRect.Full);
+        using JobSystem jobs = new(workerCount: 2)
+        {
+            SingleThreadThreshold = 0,
+        };
+        SimulationKernel kernel = new(source, CreateMaterials());
+        CaChunkThrottlePolicy policy = new(
+            Enabled: true,
+            FullRateMinCx: 0,
+            FullRateMinCy: 0,
+            FullRateMaxCx: 0,
+            FullRateMaxCy: 0,
+            FrameIndex: 0);
+
+        kernel.StepCa(jobs, policy);
+
+        CaIterationSnapshot[] iterations = new CaIterationSnapshot[1];
+        Assert.Equal(0, kernel.CopyCaIterationSnapshots(iterations));
+        Assert.Equal(Sand, Get(distant, 10, 10));
+        Assert.Equal(DirtyRect.Full, distant.WorkingDirty);
+
+        kernel.SwapDirtyRects();
+
+        Assert.Equal(DirtyRect.Full, distant.CurrentDirty);
+        Assert.Equal(ChunkState.Awake, distant.State);
+    }
+
+    /// <summary>
+    /// 验证远区 chunk 隔帧恢复运行前会预处理 parity，不会把上次处理过的 cell 误判为本帧已处理。
+    /// </summary>
+    [Fact]
+    public void DistantChunkThrottlePreparesParityBeforeDeferredChunkRunsAgain()
+    {
+        TestChunkSource source = CreateDenseSource(-1, -1, 2, 1);
+        Chunk distant = source.GetRequired(new ChunkCoord(1, 0));
+        Chunk below = source.GetRequired(new ChunkCoord(1, 1));
+        Set(distant, 10, 0, Sand);
+        distant.SetCurrentDirty(DirtyRect.Full);
+        using JobSystem jobs = new(workerCount: 2)
+        {
+            SingleThreadThreshold = 0,
+        };
+        SimulationKernel kernel = new(source, CreateMaterials());
+        CaChunkThrottlePolicy policy = new(
+            Enabled: true,
+            FullRateMinCx: 0,
+            FullRateMinCy: 0,
+            FullRateMaxCx: 0,
+            FullRateMaxCy: 0,
+            FrameIndex: 0);
+
+        kernel.StepCa(jobs, policy);
+        kernel.SwapDirtyRects();
+        Assert.Equal(0, Get(distant, 10, 0));
+        Assert.Equal(Sand, Get(distant, 10, EngineConstants.MoveCap));
+
+        kernel.StepCa(jobs, policy);
+        kernel.SwapDirtyRects();
+        Assert.Equal(Sand, Get(distant, 10, EngineConstants.MoveCap));
+
+        kernel.StepCa(jobs, policy);
+
+        Assert.Equal(0, Get(distant, 10, EngineConstants.MoveCap));
+        Assert.Equal(Sand, Get(below, 10, 0));
+    }
+
     private static MaterialPropsTable CreateMaterials()
     {
         return new MaterialPropsTable(
