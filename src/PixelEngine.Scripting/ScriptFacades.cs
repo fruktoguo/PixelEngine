@@ -609,6 +609,18 @@ public interface IRuntimeControlApi
     /// </summary>
     /// <returns>控制操作结果。</returns>
     RuntimeControlResult RequestShutdown();
+
+    /// <summary>
+    /// 请求宿主打开已启用的内嵌 Editor dockspace。
+    /// </summary>
+    /// <returns>控制操作结果。</returns>
+    RuntimeControlResult OpenEditor();
+
+    /// <summary>
+    /// 请求宿主在相位安全点重开当前关卡。
+    /// </summary>
+    /// <returns>控制操作结果。</returns>
+    RuntimeControlResult RequestRestartCurrentScene();
 }
 
 /// <summary>

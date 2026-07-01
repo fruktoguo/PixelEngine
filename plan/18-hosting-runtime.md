@@ -77,9 +77,9 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [!] 子系统装配与**初始化顺序**(§3.1);native(Box2D/OpenAL/GL)与 ALC 的正确释放顺序。阻塞:Rendering/Audio/Physics/Scripting 已有 Hosting 装配与逆序释放基础,Editor 仍缺完整真实入口,ALC 释放顺序需对应脚本子系统落地后接入。
 - [x] `GameLoop.Tick()`:严格 12 相位编排(§3.2),相位间 barrier(plan/02 JobSystem),每帧至多一次 sim/physics step。[不变式 #6,架构 §3.3]
 - [x] sim 降频(30Hz)而 render 不降:render 复用上帧世界纹理(必要时整图相机偏移,不插值像素)。[架构 §4.2]
-- [!] 各相位入口的调用绑定(Input/Time、Scripts、Residency、Particle 沉积/抛射、CA、Reaction/Lifetime/Material custom update、Temperature、DirtySwap、Physics、BuildFrame、Present、Streaming)。阻塞:已绑定现有相位 0/1/2/3/4/5/6/7/8/9/10/11,Simulation world 装配时已接入 `ReactionEngine`、反应副作用 sink 与 `BurningCellSystem`，相位 10 的 Editor.Render 叠加仍等待 Editor 后端。
+- [!] 各相位入口的调用绑定(Input/Time、Scripts、Residency、Particle 沉积/抛射、CA、Reaction/Lifetime/Material custom update、Temperature、DirtySwap、Physics、BuildFrame、Present、Streaming)。阻塞:已绑定现有相位 0/1/2/3/4/5/6/7/8/9/10/11,Simulation world 装配时已接入 `ReactionEngine`、反应副作用 sink 与 `BurningCellSystem`，窗口运行时已可把 EditorRenderBridge 接入相位 10 并注册有真实后端的一组 Editor 面板；剩余阻塞为稳定 60fps/真实窗口运行态验收与完整资源释放审计。
 - [x] 过载降级编排:读诊断 → 五级降级决策 → 经 `EngineContext` 下发质量档位。[架构 §4.3,不变式 #6]
-- [x] 脚本服务后端聚合:`IWorldAccess`/`IParticleService`/`IPhysicsService`/`IMaterialRegistry`/`ICamera`/`IInput`/`IEventBus`/`IAudioService`/`ISceneService`/`IDiagnostics` 的实现注入(plan/11 契约的后端)。cell/material/particle/solid/time/audio/input/camera/lighting/PhysicsSystem 后端已有真实注册，脚本可见刚体 façade 与角色移动已接入 phase 8 flush；Reaction/Lifetime/custom material update 后端已随 Simulation world 装配接入，Diagnostics 角色由 `EngineCounters` 注册，GUI/Editor 面板归 plan/12。
+- [x] 脚本服务后端聚合:`IWorldAccess`/`IParticleService`/`IPhysicsService`/`IMaterialRegistry`/`ICamera`/`IInput`/`IEventBus`/`IAudioService`/`ISceneService`/`IDiagnostics`/`IRuntimeControlApi` 的实现注入(plan/11 契约的后端)。cell/material/particle/solid/time/audio/input/camera/lighting/PhysicsSystem 后端已有真实注册，脚本可见刚体 façade 与角色移动已接入 phase 8 flush；Reaction/Lifetime/custom material update 后端已随 Simulation world 装配接入，Diagnostics 角色由 `EngineCounters` 注册，Runtime 控制可暂停/恢复/退出/打开已接入 Editor，并对未实现的重开关卡安全后端明确失败。
 - [x] 写操作延迟命令队列:脚本/玩法的世界写入入队,在正确相位 flush(配合 plan/11 相位安全模型)。
 - [!] `Scene` 模型 + `ISceneService`:加载/卸载/切换;从存档(plan/07)或程序化生成构建起始世界。阻塞:已完成来源校验与解析,`AttachCurrentSceneWorld` 可显式从 SaveDirectory 或 `.scene InitialSaveDirectory` 装配 live World/Simulation/粒子/Physics 后端并恢复 world seed/game time/刚体快照；程序化 world generator 仍未完成。
 - [x] 项目模型:内容根、materials/reactions、资产、起始场景引用;`EngineBuilder` 装载。
@@ -90,10 +90,10 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 
 ## 5. 验收标准
 
-- [!] `EngineBuilder().…​.Build().Run()` 能装配全部子系统并跑稳定 60fps 空场景。阻塞:Rendering/Audio/Physics/Scripting 已有真实运行入口,Editor 子系统尚未提供完整运行入口,稳定 60fps 空场景仍需 plan/14 运行态验证。
+- [!] `EngineBuilder().…​.Build().Run()` 能装配全部子系统并跑稳定 60fps 空场景。阻塞:Rendering/Audio/Physics/Scripting/Editor 已有真实运行入口,稳定 60fps 空场景仍需 plan/14 运行态验证。
 - [x] 12 相位顺序与架构 §3.3 完全一致;用诊断计时器可见各相位耗时。
 - [x] sim 降到 30Hz 时画面仍 60fps 出帧、世界慢放、无 death spiral(注入人工过载验证)。
-- [!] 过载降级按五级顺序触发且可在编辑器观测/覆盖。阻塞:五级顺序与 Sim30Hz 已测试,Editor 覆盖 UI 需 plan/12。
+- [!] 过载降级按五级顺序触发且可在编辑器观测/覆盖。阻塞:五级顺序与 Sim30Hz 已测试,Editor 运行入口与诊断面板已接入，仍需窗口态覆盖 UI 验收。
 - [x] 脚本经 `EngineContext` 能读写世界/建刚体/播音效,写操作落在正确相位(配合 plan/11 测试)。AudioService 与 PhysicsSystem 后端已注册，脚本可见 Physics 建/查/控/毁刚体命令与角色移动已在 phase 8 step 前 flush。
 - [!] Play/Edit/Step 切换正确:进入 Play 快照、退出回滚到编辑态,脚本 OnStart/OnDestroy 正确触发。阻塞:快照聚合与脚本生命周期需 plan/11/12。
 - [x] headless 模式可被 plan/14 测试/基准以确定步数驱动,无窗口依赖。

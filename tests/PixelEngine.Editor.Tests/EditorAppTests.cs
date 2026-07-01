@@ -85,6 +85,25 @@ public sealed class EditorAppTests
     }
 
     /// <summary>
+    /// 验证 EditorApp 可按标题重新显示已注册面板，未知标题不会伪造成功。
+    /// </summary>
+    [Fact]
+    public void TryShowPanelSetsRegisteredPanelVisible()
+    {
+        using EditorApp app = new(new RecordingBackend(), new EditorAppOptions());
+        RecordingPanel panel = new() { Visible = false };
+        app.AddPanel(panel);
+
+        Assert.True(app.TryShowPanel(panel.Title));
+        Assert.True(panel.Visible);
+        Assert.False(app.TryShowPanel("missing"));
+
+        panel.Visible = false;
+        Assert.Equal(1, app.ShowAllPanels());
+        Assert.True(panel.Visible);
+    }
+
+    /// <summary>
     /// 验证 ImGuiController 在禁用时不初始化后端，启用时能成对初始化与关闭。
     /// </summary>
     [Fact]
