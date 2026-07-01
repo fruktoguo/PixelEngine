@@ -31,6 +31,35 @@ public sealed class AudioAcceptanceTests
     }
 
     [Fact]
+    public void DispatcherPreservesLeftRightAndDistanceForPositionedSources()
+    {
+        AudioSettings settings = new()
+        {
+            MaxVoices = 3,
+            PixelsPerMeter = 32f,
+            MaxParticleImpactEventsPerFrame = 3,
+            CoalesceBucketSize = 1,
+            DefaultCooldownTicks = 0,
+        };
+        MpscRingBuffer<AudioEvent> ring = new(8);
+        Assert.True(ring.TryEnqueue(new AudioEvent(AudioEventType.ParticleImpact, -32, 0, 1, 1f)));
+        Assert.True(ring.TryEnqueue(new AudioEvent(AudioEventType.ParticleImpact, 32, 0, 1, 1f)));
+        Assert.True(ring.TryEnqueue(new AudioEvent(AudioEventType.ParticleImpact, 96, 0, 1, 1f)));
+        using NullAudioBackend backend = new();
+        using AudioVoicePool voices = new(backend, settings);
+        AudioDispatcher dispatcher = new(ring, voices, settings);
+        NonAllocEventPlayer player = new();
+        AudioListenerState listener = new(default, new(0f, 0f, -1f), new(0f, 1f, 0f), 1f);
+
+        AudioDispatchStats stats = dispatcher.Dispatch(listener, tick: 1, player);
+
+        Assert.Equal(3, stats.Played);
+        Assert.Equal(new System.Numerics.Vector3(-1f, 0f, 0f), backend.GetSourcePosition(voices[0].Source));
+        Assert.Equal(new System.Numerics.Vector3(1f, 0f, 0f), backend.GetSourcePosition(voices[1].Source));
+        Assert.Equal(new System.Numerics.Vector3(3f, 0f, 0f), backend.GetSourcePosition(voices[2].Source));
+    }
+
+    [Fact]
     public async Task MpscRingFeedsDispatcherFromConcurrentProducers()
     {
         const int producerCount = 4;
