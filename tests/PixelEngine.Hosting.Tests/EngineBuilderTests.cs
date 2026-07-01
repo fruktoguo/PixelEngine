@@ -3,6 +3,7 @@ using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Events;
 using PixelEngine.Core.Threading;
 using PixelEngine.Core.Time;
+using System.Runtime;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -43,6 +44,28 @@ public sealed class EngineBuilderTests
         Assert.Same(context.Clock, context.GetService<FrameClock>());
         Assert.Same(context.Events, context.GetService<EventBus>());
         Assert.Same(context.Counters, context.GetService<EngineCounters>());
+    }
+
+    /// <summary>
+    /// 验证默认构建会把托管 GC 延迟模式写入 SustainedLowLatency。
+    /// </summary>
+    [Fact]
+    public void BuildAppliesSustainedLowLatencyGcModeByDefault()
+    {
+        GCLatencyMode original = GCSettings.LatencyMode;
+        try
+        {
+            using Engine engine = new EngineBuilder()
+                .WithWorkerCount(1)
+                .Build();
+
+            Assert.Equal(EngineGcMode.SustainedLowLatency, engine.Context.Options.GcMode);
+            Assert.Equal(GCLatencyMode.SustainedLowLatency, GCSettings.LatencyMode);
+        }
+        finally
+        {
+            GCSettings.LatencyMode = original;
+        }
     }
 
     /// <summary>
