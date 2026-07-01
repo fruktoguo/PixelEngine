@@ -71,6 +71,33 @@ public sealed class AudioAcceptanceTests
     }
 
     [Fact]
+    public void AudioSystemUpdatesListenerFromCameraAndConfiguresDistanceAttenuation()
+    {
+        AudioSettings settings = new()
+        {
+            MaxVoices = 1,
+            MaxAmbientVoices = 0,
+            PixelsPerMeter = 16f,
+            ListenerDepth = 8f,
+            ReferenceDistance = 2f,
+            MaxDistance = 24f,
+            RolloffFactor = 0.75f,
+        };
+        using NullAudioBackend backend = new();
+        using AudioSystem audio = new();
+
+        audio.Initialize(settings, backend);
+        audio.Update(new AudioListenerView(32f, 48f, 2f, 20, 10), simTick: 1, simSteppedThisFrame: true);
+
+        Assert.Equal(new System.Numerics.Vector3(3.25f, 3.625f, 8f), backend.LastListener.Position);
+        Assert.Equal(new System.Numerics.Vector3(0f, 0f, -1f), backend.LastListener.Forward);
+        Assert.Equal(new System.Numerics.Vector3(0f, 1f, 0f), backend.LastListener.Up);
+        Assert.Equal(2f, backend.GetSourceReferenceDistance(audio.Voices[0].Source));
+        Assert.Equal(24f, backend.GetSourceMaxDistance(audio.Voices[0].Source));
+        Assert.Equal(0.75f, backend.GetSourceRolloffFactor(audio.Voices[0].Source));
+    }
+
+    [Fact]
     public async Task MpscRingFeedsDispatcherFromConcurrentProducers()
     {
         const int producerCount = 4;

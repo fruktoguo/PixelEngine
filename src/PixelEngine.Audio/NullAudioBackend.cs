@@ -133,8 +133,10 @@ public sealed class NullAudioBackend : IAudioBackend
     {
         SourceRecord record = Get(source);
         ArgumentNullException.ThrowIfNull(settings);
-        _ = record.Handle;
-        _ = settings.Validate();
+        AudioSettings validated = settings.Validate();
+        record.ReferenceDistance = validated.ReferenceDistance;
+        record.MaxDistance = validated.MaxDistance;
+        record.RolloffFactor = validated.RolloffFactor;
     }
 
     /// <inheritdoc />
@@ -196,6 +198,36 @@ public sealed class NullAudioBackend : IAudioBackend
     public float GetSourceGain(uint source)
     {
         return Get(source).Gain;
+    }
+
+    /// <summary>
+    /// 测试辅助：读取 source 最近配置的 reference distance。
+    /// </summary>
+    /// <param name="source">source 句柄。</param>
+    /// <returns>reference distance。</returns>
+    public float GetSourceReferenceDistance(uint source)
+    {
+        return Get(source).ReferenceDistance;
+    }
+
+    /// <summary>
+    /// 测试辅助：读取 source 最近配置的 max distance。
+    /// </summary>
+    /// <param name="source">source 句柄。</param>
+    /// <returns>max distance。</returns>
+    public float GetSourceMaxDistance(uint source)
+    {
+        return Get(source).MaxDistance;
+    }
+
+    /// <summary>
+    /// 测试辅助：读取 source 最近配置的 rolloff factor。
+    /// </summary>
+    /// <param name="source">source 句柄。</param>
+    /// <returns>rolloff factor。</returns>
+    public float GetSourceRolloffFactor(uint source)
+    {
+        return Get(source).RolloffFactor;
     }
 
     /// <summary>
@@ -266,6 +298,9 @@ public sealed class NullAudioBackend : IAudioBackend
         public Vector3 Position;
         public float Gain;
         public float Pitch;
+        public float ReferenceDistance;
+        public float MaxDistance;
+        public float RolloffFactor;
         public bool Deleted;
         public bool Looping;
         public int QueuedBuffers;
