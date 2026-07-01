@@ -33,6 +33,55 @@ internal static class DirtyRegionMarker
         }
     }
 
+    public static void MarkRectCurrent(
+        IChunkSource chunks,
+        int minX,
+        int minY,
+        int maxX,
+        int maxY,
+        int padding)
+    {
+        ArgumentNullException.ThrowIfNull(chunks);
+        if (minX > maxX || minY > maxY)
+        {
+            return;
+        }
+
+        int dirtyMinX = minX - padding;
+        int dirtyMinY = minY - padding;
+        int dirtyMaxX = maxX + padding;
+        int dirtyMaxY = maxY + padding;
+        ChunkCoord minCoord = CellAddressing.WorldToChunk(dirtyMinX, dirtyMinY);
+        ChunkCoord maxCoord = CellAddressing.WorldToChunk(dirtyMaxX, dirtyMaxY);
+        for (int cy = minCoord.Y; cy <= maxCoord.Y; cy++)
+        {
+            for (int cx = minCoord.X; cx <= maxCoord.X; cx++)
+            {
+                ChunkCoord coord = new(cx, cy);
+                if (!chunks.TryGetChunk(coord, out Chunk chunk))
+                {
+                    Debug.Assert(false, $"dirty 矩形传播目标 chunk 未驻留：{coord}。");
+                    throw new InvalidOperationException($"dirty 矩形传播目标 chunk 未驻留：{coord}。");
+                }
+
+                int chunkMinX = cx * EngineConstants.ChunkSize;
+                int chunkMinY = cy * EngineConstants.ChunkSize;
+                int chunkMaxX = chunkMinX + EngineConstants.ChunkSize - 1;
+                int chunkMaxY = chunkMinY + EngineConstants.ChunkSize - 1;
+                int intersectMinX = Math.Max(dirtyMinX, chunkMinX);
+                int intersectMinY = Math.Max(dirtyMinY, chunkMinY);
+                int intersectMaxX = Math.Min(dirtyMaxX, chunkMaxX);
+                int intersectMaxY = Math.Min(dirtyMaxY, chunkMaxY);
+                DirtyRect rect = new(
+                    CellAddressing.LocalCoord(intersectMinX),
+                    CellAddressing.LocalCoord(intersectMinY),
+                    CellAddressing.LocalCoord(intersectMaxX),
+                    CellAddressing.LocalCoord(intersectMaxY));
+                chunk.MarkCurrentDirty(rect);
+            }
+        }
+    }
+
     private static void MarkBoundaryNeighbors(
         IChunkSource chunks,
         ChunkCoord center,

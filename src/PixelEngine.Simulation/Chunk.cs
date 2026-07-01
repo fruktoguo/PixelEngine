@@ -165,17 +165,12 @@ public sealed class Chunk
         byte staleParity = (byte)((parityBit ^ CellFlags.Parity) & CellFlags.Parity);
         for (int ly = rect.MinY; ly <= rect.MaxY; ly++)
         {
-            int row = ly * EngineConstants.ChunkSize;
-            for (int lx = rect.MinX; lx <= rect.MaxX; lx++)
-            {
-                int local = row + lx;
-                if (Material[local] == 0 && Flags[local] == 0)
-                {
-                    continue;
-                }
-
-                Flags[local] = CellFlags.SetParity(Flags[local], staleParity);
-            }
+            int localStart = (ly * EngineConstants.ChunkSize) + rect.MinX;
+            int run = rect.MaxX - rect.MinX + 1;
+            CellSpanOps.SetParityForOccupiedCells(
+                Material.AsSpan(localStart, run),
+                Flags.AsSpan(localStart, run),
+                staleParity);
         }
     }
 

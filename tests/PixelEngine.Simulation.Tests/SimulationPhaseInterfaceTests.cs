@@ -81,6 +81,45 @@ public sealed class SimulationPhaseInterfaceTests
     }
 
     /// <summary>
+    /// 验证 phase [1] 矩形批量写入按 row-run 写 SoA，并一次性标记跨 chunk dirty。
+    /// </summary>
+    [Fact]
+    public void EditRectAtInputPhaseWritesRowsAndMarksPaddedDirtyAcrossChunks()
+    {
+        TestChunkSource source = CreateDenseSource(-1, -1, 2, 1);
+        Chunk center = source.GetRequired(new ChunkCoord(0, 0));
+        Chunk east = source.GetRequired(new ChunkCoord(1, 0));
+        SimulationKernel kernel = new(source, CreateMaterials());
+
+        int writes = kernel.EditRectAtInputPhase(62, 10, 65, 12, Sand, persistentFlags: 0);
+
+        Assert.Equal(12, writes);
+        Assert.Equal(Sand, Get(center, 62, 10));
+        Assert.Equal(Sand, Get(center, 63, 12));
+        Assert.Equal(Sand, Get(east, 0, 10));
+        Assert.Equal(Sand, Get(east, 1, 12));
+        Assert.Equal(7, GetLifetime(east, 1, 12));
+        Assert.True(CellFlags.MatchesFrame(GetFlags(center, 62, 10), kernel.CurrentParity));
+        Assert.Equal(new DirtyRect(60, 8, 63, 14), center.CurrentDirty);
+        Assert.Equal(new DirtyRect(0, 8, 3, 14), east.CurrentDirty);
+    }
+
+    /// <summary>
+    /// 验证 phase [1] 矩形批量清空空区域不会唤醒 dirty。
+    /// </summary>
+    [Fact]
+    public void ClearRectAtInputPhaseSkipsEmptyRowsWithoutDirty()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        SimulationKernel kernel = new(source, CreateMaterials());
+
+        int writes = kernel.ClearRectAtInputPhase(10, 10, 14, 14);
+
+        Assert.Equal(0, writes);
+        Assert.Equal(DirtyRect.Empty, center.CurrentDirty);
+    }
+
+    /// <summary>
     /// 验证相位 7 清 cell 返回原值并写 current dirty，使下一次 CA 立即看见变化。
     /// </summary>
     [Fact]
