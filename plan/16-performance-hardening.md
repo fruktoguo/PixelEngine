@@ -146,8 +146,8 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [ ] cells/frame 目标在 6 RID 代表硬件用 BenchmarkDotNet 确认、回填架构 §1.4/§12.8。[plan/14/15 · §12.8/§17.3]
 
 ### 4.12 profiling 工具链
-- [ ] BenchmarkDotNet 接入（`[MemoryDiagnoser]` + `[DisassemblyDiagnoser]`）作 CI perf 门禁。[plan/14 · §17.3]
-- [ ] `DOTNET_JitDisasm` + Disasmo/Rider 反汇编流程文档化、可复现。[plan/14 · §12.6/§17.3]
+- [x] BenchmarkDotNet 接入（`[MemoryDiagnoser]` + `[DisassemblyDiagnoser]`）作 CI perf 门禁。[plan/14 · §17.3]
+- [x] `DOTNET_JitDisasm` + Disasmo/Rider 反汇编流程文档化、可复现。[plan/14 · §12.6/§17.3]
 - [ ] Core 常驻 debug overlay 报每相位耗时/活跃 chunk/cell/粒子/刚体/常驻内存/sim 频率。[plan/12 · §17.1]
 - [ ] 发行编译模式审计：默认 R2R（运行时 light-up）；AOT 次级必须显式 `IlcInstructionSet` 并反汇编验证 ymm/zmm。[plan/15 · §12.3/风险 R3]
 
