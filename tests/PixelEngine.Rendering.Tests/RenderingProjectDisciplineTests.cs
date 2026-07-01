@@ -60,6 +60,7 @@ public sealed class RenderingProjectDisciplineTests
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderPipeline.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderBufferBuilder.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "PaletteBgraConverter.cs")),
+            File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "BgraColorMixer.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "ParticleCompositor.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "OverlayRenderer.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "BloomPass.cs")));
@@ -70,6 +71,21 @@ public sealed class RenderingProjectDisciplineTests
         Assert.DoesNotContain("yield return", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Func<", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Action<", source.Replace("event Action<GL>?", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BgraColorNoiseMixingHasSimdFallbackAndBenchmark()
+    {
+        string mixer = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "BgraColorMixer.cs"));
+        string builder = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderBufferBuilder.cs"));
+        string benchmark = File.ReadAllText(ProjectPath("bench", "PixelEngine.Benchmarks", "PaletteBgraConversionBenchmarks.cs"));
+
+        Assert.Contains("Sse41.IsSupported", mixer, StringComparison.Ordinal);
+        Assert.Contains("Ssse3.IsSupported", mixer, StringComparison.Ordinal);
+        Assert.Contains("ApplyColorNoiseScalar", mixer, StringComparison.Ordinal);
+        Assert.Contains("BgraColorMixer.ApplyColorNoise", builder, StringComparison.Ordinal);
+        Assert.DoesNotContain("!hot.HasColorNoise", builder, StringComparison.Ordinal);
+        Assert.Contains("BgraColorNoiseBenchmarks", benchmark, StringComparison.Ordinal);
     }
 
     [Fact]

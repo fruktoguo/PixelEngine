@@ -64,3 +64,57 @@ public class PaletteBgraConversionBenchmarks
         PaletteBgraConverter.ConvertAvx2Experimental(_materials, _palette, _destination);
     }
 }
+
+/// <summary>
+/// BGRA8 color-noise 混合标量与 SIMD 路径基准。
+/// </summary>
+[MemoryDiagnoser]
+public class BgraColorNoiseBenchmarks
+{
+    private readonly ushort[] _materials = new ushort[256 * 256];
+    private readonly uint[] _pixels = new uint[256 * 256];
+    private byte[] _noise = [];
+
+    /// <summary>
+    /// material 表大小。
+    /// </summary>
+    [Params(16, 256)]
+    public int MaterialCount { get; set; }
+
+    /// <summary>
+    /// 初始化 color-noise benchmark fixture。
+    /// </summary>
+    [GlobalSetup]
+    public void Setup()
+    {
+        _noise = new byte[MaterialCount];
+        for (int i = 0; i < _noise.Length; i++)
+        {
+            _noise[i] = (byte)((i * 37) & 0xFF);
+        }
+
+        for (int i = 0; i < _materials.Length; i++)
+        {
+            _materials[i] = (ushort)(((i * 11) + (i >> 3)) & (MaterialCount - 1));
+            _pixels[i] = 0xFF202040u + (uint)(i * 0x00030507u);
+        }
+    }
+
+    /// <summary>
+    /// 标量 color-noise 混合。
+    /// </summary>
+    [Benchmark(Baseline = true)]
+    public void ApplyColorNoiseScalar()
+    {
+        BgraColorMixer.ApplyColorNoiseScalar(_materials, _noise, _pixels, worldX: -37, worldY: 19);
+    }
+
+    /// <summary>
+    /// 运行时 light-up color-noise 混合。
+    /// </summary>
+    [Benchmark]
+    public void ApplyColorNoise()
+    {
+        BgraColorMixer.ApplyColorNoise(_materials, _noise, _pixels, worldX: -37, worldY: 19);
+    }
+}

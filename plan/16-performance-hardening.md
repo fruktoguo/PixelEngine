@@ -89,9 +89,9 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 
 ### 4.4 SIMD 落实点
 - [x] 温度 5-point stencil 向量化（Intrinsics + scalar fallback）。[plan/04 · §12.5]
-- [ ] palette→BGRA 转色与色混合向量化。[plan/08 · §12.5]
+- [x] palette→BGRA 转色与色混合向量化。[plan/08 · §12.5]
 - [x] bulk fill/clear、dirty flag 扫描/popcount 向量化。[plan/03 · §12.5]
-- [ ] 全部向量化 pass 具备强制 scalar fallback，运行时 light-up、不固定 ISA。[全子系统 · §12.3/§12.5]
+- [x] 全部向量化 pass 具备强制 scalar fallback，运行时 light-up、不固定 ISA。[全子系统 · §12.3/§12.5]
 - [x] sand/liquid movement 内层**明确不向量化**（数据相关 gather/scatter），保留 scalar。[plan/03 · §2 挑战三/§12.5]
 - [ ] AVX-512 路径 gate on `Vector512.IsHardwareAccelerated` 并逐目标实测（防降频净变慢）。[plan/14 · §12.5]
 

@@ -69,6 +69,30 @@ public sealed class RenderBufferBuilderTests
     }
 
     [Fact]
+    public void BuildPaletteFastPathAppliesColorNoise()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        SetMaterial(chunk, 3, 5, 1);
+        chunks.Add(chunk);
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "sand", CellType.Powder, 0xFF404040u) with { ColorNoise = 96 });
+        RenderBuffer target = new(1, 1);
+        RenderAuxBuffers aux = new(1, 1);
+        RenderFrameContext context = new(
+            chunks,
+            materials,
+            new TemperatureField(),
+            CameraState.OneToOne(3, 5, 1, 1),
+            simStepped: true);
+
+        new RenderBufferBuilder().Build(context, target, aux);
+
+        Assert.Equal(ExpectedColorNoise(0xFF404040u, 96, 3, 5), target.Pixels[0]);
+    }
+
+    [Fact]
     public void BuildAppliesTextureProviderTemperatureGlowAndAuxOutputs()
     {
         ResidentChunkMap chunks = new();
@@ -235,6 +259,22 @@ public sealed class RenderBufferBuilderTests
     private static MaterialTable Materials(params MaterialDef[] definitions)
     {
         return new MaterialTable(definitions);
+    }
+
+    private static uint ExpectedColorNoise(uint bgra, byte amount, int worldX, int worldY)
+    {
+        uint hash = unchecked((uint)(worldX * 73856093) ^ (uint)(worldY * 19349663));
+        int delta = ((int)(hash & 0xFF) - 128) * amount / 255;
+        byte b = Adjust((byte)bgra, delta);
+        byte g = Adjust((byte)(bgra >> 8), delta);
+        byte r = Adjust((byte)(bgra >> 16), delta);
+        byte a = (byte)(bgra >> 24);
+        return b | ((uint)g << 8) | ((uint)r << 16) | ((uint)a << 24);
+    }
+
+    private static byte Adjust(byte value, int delta)
+    {
+        return (byte)Math.Clamp(value + delta, 0, 255);
     }
 
     private sealed class TestTextureProvider : IMaterialTextureProvider
