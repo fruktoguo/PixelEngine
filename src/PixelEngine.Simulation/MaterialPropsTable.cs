@@ -48,7 +48,15 @@ public sealed class MaterialPropsTable
     /// <summary>
     /// 完整材质热表。
     /// </summary>
-    public MaterialHotTable Hot { get; }
+    public MaterialHotTable Hot { get; private set; }
+
+    /// <summary>
+    /// 刷新完整材质热表，供材质热重载后让持有同一 props 视图的系统立即看到新列。
+    /// </summary>
+    public void Reload(MaterialHotTable hot)
+    {
+        Hot = hot ?? throw new ArgumentNullException(nameof(hot));
+    }
 
     /// <summary>
     /// 材质类型列。

@@ -132,6 +132,48 @@ public sealed class MaterialContentLoaderTests
         Assert.Contains("HasCustomUpdate", exception.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证稳定热重载构建保留既有 name 的 runtime id，新材质追加，reaction 使用稳定 id。
+    /// </summary>
+    [Fact]
+    public void BuildStableReloadPreservesRuntimeIdsForDefinitionsAndReactions()
+    {
+        MaterialTable current = new(
+        [
+            new MaterialDef { Id = 0, Name = "empty", Type = CellType.Empty, HeatCapacity = 1 },
+            new MaterialDef { Id = 1, Name = "sand", Type = CellType.Powder, HeatCapacity = 1 },
+            new MaterialDef { Id = 2, Name = "water", Type = CellType.Liquid, HeatCapacity = 1 },
+        ]);
+        MaterialDocumentJson materials = new()
+        {
+            Materials =
+            [
+                new MaterialJson { Name = "water", Type = "Liquid", HeatCapacity = 1 },
+                new MaterialJson { Name = "empty", Type = "Empty", HeatCapacity = 1 },
+                new MaterialJson { Name = "fire", Type = "Fire", HeatCapacity = 1, Tags = ["fire"] },
+            ],
+        };
+        ReactionDocumentJson reactions = new()
+        {
+            Reactions =
+            [
+                new ReactionJson { InputA = "fire", InputB = "water", OutputA = "water", OutputB = "empty" },
+            ],
+        };
+
+        MaterialContentStableReloadResult result = MaterialContentLoader.BuildStableReload(materials, reactions, current);
+
+        Assert.Equal([2, 0, 3], result.Definitions.Select(static def => def.Id).ToArray());
+        ref readonly MaterialDef fire = ref result.Definitions[2];
+        Assert.Equal(3, fire.Id);
+        Assert.Equal(1, fire.ReactionCount);
+        int reactionIndex = result.Reactions.Find(3, 2, in fire);
+        Assert.True(reactionIndex >= 0);
+        ref readonly Reaction reaction = ref result.Reactions.At(reactionIndex);
+        Assert.Equal(2, reaction.OutputA);
+        Assert.Equal(0, reaction.OutputB);
+    }
+
     private const string EmptyReactionsJson = """{ "reactions": [] }""";
 
     private const string ReactionsJson = """
