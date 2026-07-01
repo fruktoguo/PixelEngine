@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -79,6 +80,18 @@ internal sealed class HotReloadService(Scene scene, IScriptContext context, Scri
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Hot reload loads Behaviour types from Roslyn-compiled runtime script assemblies; this is an editor/script boundary outside trimmed engine hot paths.")]
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2072",
+        Justification = "Reloaded Behaviour constructors live in the runtime script assembly and cannot be described by the trimmed engine closure.")]
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = "Hot reload depends on runtime-generated script assemblies and is intentionally outside NativeAOT-compatible execution.")]
     public HotReloadResult ApplyPendingReload()
     {
         PendingReload? pending;
@@ -122,12 +135,12 @@ internal sealed class HotReloadService(Scene scene, IScriptContext context, Scri
             for (int i = 0; i < records.Length; i++)
             {
                 Type? newType = assembly.GetType(typeNames[i], throwOnError: false);
-                if (newType is null || !typeof(Behaviour).IsAssignableFrom(newType))
+                if (!IsReloadableBehaviour(newType))
                 {
                     throw new InvalidOperationException($"热重载程序集缺少可替换脚本类型：{typeNames[i]}。");
                 }
 
-                Behaviour replacement = (Behaviour)Activator.CreateInstance(newType)!;
+                Behaviour replacement = CreateReloadedBehaviour(newType);
                 if (snapshots.Length != 0)
                 {
                     snapshots[i]?.Restore(replacement);
@@ -294,6 +307,24 @@ internal sealed class HotReloadService(Scene scene, IScriptContext context, Scri
         WeakReference reference = new(context, trackResurrection: false);
         context.Unload();
         return reference;
+    }
+
+    private static bool IsReloadableBehaviour(
+        [NotNullWhen(true)]
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)]
+        Type? type)
+    {
+        return type is not null &&
+            !type.IsAbstract &&
+            typeof(Behaviour).IsAssignableFrom(type) &&
+            type.GetConstructor(Type.EmptyTypes) is not null;
+    }
+
+    private static Behaviour CreateReloadedBehaviour(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)]
+        Type type)
+    {
+        return (Behaviour)Activator.CreateInstance(type)!;
     }
 
     private sealed record PendingReload(string AssemblyName, ScriptSourceFile[] Sources, HotReloadOptions Options);

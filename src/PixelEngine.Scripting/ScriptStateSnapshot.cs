@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace PixelEngine.Scripting;
@@ -8,6 +9,10 @@ internal sealed class ScriptStateSnapshot
 
     public int Count => _values.Count;
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2075",
+        Justification = "Hot reload state capture reflects over live runtime script Behaviour fields/properties, outside trimmed engine hot paths.")]
     public static ScriptStateSnapshot Capture(Behaviour behaviour)
     {
         ArgumentNullException.ThrowIfNull(behaviour);
@@ -36,6 +41,10 @@ internal sealed class ScriptStateSnapshot
         return snapshot;
     }
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2075",
+        Justification = "Hot reload state restore reflects over live runtime script Behaviour fields/properties, outside trimmed engine hot paths.")]
     public void Restore(Behaviour behaviour)
     {
         ArgumentNullException.ThrowIfNull(behaviour);

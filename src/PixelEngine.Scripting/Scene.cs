@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace PixelEngine.Scripting;
 
 /// <summary>
@@ -165,6 +167,14 @@ public sealed class Scene
         bucket.AddObject(entity, component);
     }
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2067",
+        Justification = "Script components are runtime Behaviour types validated before activation; they are outside the trimmed engine static closure.")]
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = "Constructor validation is performed over runtime script component types, not over trimmed engine metadata.")]
     internal IComponent AddComponent(Entity entity, Type componentType)
     {
         ValidateEntity(entity);

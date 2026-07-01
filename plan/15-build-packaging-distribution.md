@@ -228,10 +228,10 @@ Box2D dual-build 矩阵与 native 落位
 
 Trim 配置
 
-- [ ] 在 `Directory.Build.props` 对 `src/` 引擎库统一开 `IsTrimmable`/`IsAotCompatible`/`EnableTrimAnalyzer`/`EnableAotAnalyzer`（§3.6、架构 §9.1）。
-- [ ] CI 把 `IL2xxx`/`IL3xxx` trim/AOT 警告提升为 error（与 `AGENTS.md §4` 一致）。
-- [ ] 对脚本编译子系统程序集设 `IsTrimmable=false` 局部豁免（Roslyn/ALC 运行时代码加载），并确保 Roslyn 依赖随产物完整分发（§3.6、架构 §13、`plan/11`）。
-- [ ] 验证发行不引入任何 `TrimmerRootDescriptor`/反射回退（System.Text.Json 走 `PixelEngineJsonContext` 源生成）（架构 §16.3）。
+- [x] 在 `Directory.Build.props` 对 `src/` 引擎库统一开 `IsTrimmable`/`IsAotCompatible`/`EnableTrimAnalyzer`/`EnableAotAnalyzer`（§3.6、架构 §9.1）。
+- [x] CI 把 `IL2xxx`/`IL3xxx` trim/AOT 警告提升为 error（与 `AGENTS.md §4` 一致）。
+- [x] 对脚本编译子系统程序集设 `IsTrimmable=false` 局部豁免（Roslyn/ALC 运行时代码加载），并确保 Roslyn 依赖随产物完整分发（§3.6、架构 §13、`plan/11`）。
+- [x] 验证发行不引入任何 `TrimmerRootDescriptor`/反射回退（System.Text.Json 走 `PixelEngineJsonContext` 源生成）（架构 §16.3）。
 
 发布 CI 工作流
 
@@ -305,7 +305,7 @@ codesign / notarization
 - [x] `build(build): 落地 R2R 主发行配置与 publish 脚本（6 RID 自包含 + R2R composite，不固定 ISA）` — 对应 §3.3、实现清单「发行配置与脚本」R2R 项。
 - [x] `build(build): 落地 NativeAOT 次发行配置（每 RID 显式 IlcInstructionSet，限已知硬件）` — 对应 §3.4、AOT 项。
 - [x] `build(build): Box2D dual-build × 6 RID 构建矩阵与 native 资产落位 targets` — 对应 §3.5、Box2D 项。
-- [ ] `build(build): 引擎全程 trim/AOT-friendly 配置与脚本子系统豁免` — 对应 §3.6、Trim 项。
+- [x] `build(build): 引擎全程 trim/AOT-friendly 配置与脚本子系统豁免` — 对应 §3.6、Trim 项。
 - [ ] `build(build): 版本号、产物命名与内容资产打包脚本` — 对应 §3.8、§3.9、版本/内容项。
 - [ ] `build(build): macOS codesign + notarization 脚本` — 对应 codesign 项、架构 §15。
 - [ ] `build(build): 发布 CI release.yml（native→publish→verify→sign→release 五阶段，双路径冒烟）` — 对应 §3.10、CI 项，闭合架构 R5 防线。

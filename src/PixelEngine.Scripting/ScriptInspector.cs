@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace PixelEngine.Scripting;
@@ -12,6 +13,10 @@ public static class ScriptInspector
     /// </summary>
     /// <param name="behaviour">要检查的脚本组件实例。</param>
     /// <returns>字段描述数组，包含字段名、类型、当前值与可写性。</returns>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2075",
+        Justification = "Inspector reflects over live runtime script Behaviour instances for editor display; it is not used by trimmed engine hot paths.")]
     public static ScriptFieldDescriptor[] InspectFields(Behaviour behaviour)
     {
         ArgumentNullException.ThrowIfNull(behaviour);
@@ -46,6 +51,10 @@ public static class ScriptInspector
     /// <param name="fieldName">字段名。</param>
     /// <param name="value">要写入的值。</param>
     /// <returns>字段存在、可写且值类型兼容时返回 true。</returns>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2075",
+        Justification = "Inspector field mutation targets live runtime script Behaviour instances selected by editor tooling.")]
     public static bool TrySetFieldValue(Behaviour behaviour, string fieldName, object? value)
     {
         ArgumentNullException.ThrowIfNull(behaviour);

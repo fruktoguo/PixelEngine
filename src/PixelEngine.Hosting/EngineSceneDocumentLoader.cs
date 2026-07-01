@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json;
 using PixelEngine.Scripting;
@@ -81,6 +82,22 @@ public static class EngineSceneDocumentLoader
         }
     }
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = ".scene Behaviour types are resolved from runtime script assemblies; they are not discovered through trimmed engine metadata.")]
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2057",
+        Justification = ".scene type names are user content and may target runtime script assemblies, so static trimmer validation is intentionally not applicable.")]
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2072",
+        Justification = ".scene Behaviour constructors live in runtime script assemblies and cannot be described by the trimmed engine closure.")]
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2073",
+        Justification = ".scene returns Behaviour Type values from runtime script assemblies after validation; the trimmer cannot statically model those assemblies.")]
     private static Type ResolveBehaviourType(
         EngineSceneBehaviourDocument behaviour,
         ScriptAssemblyRegistry scriptAssemblies)
@@ -103,11 +120,27 @@ public static class EngineSceneDocumentLoader
         }
 
         Type resolved = type ?? throw new InvalidOperationException($"未找到 Behaviour 类型：{typeName}。");
-        return typeof(Behaviour).IsAssignableFrom(resolved)
+        return IsConcreteBehaviour(resolved)
             ? resolved
-            : throw new InvalidOperationException($"{typeName} 不是 Behaviour 类型。");
+            : throw new InvalidOperationException($"{typeName} 不是可实例化的 Behaviour 类型。");
     }
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = ".scene Behaviour constructor validation runs over runtime script types that are outside the trimmed engine closure.")]
+    private static bool IsConcreteBehaviour([NotNullWhen(true)] Type? type)
+    {
+        return type is not null &&
+            !type.IsAbstract &&
+            typeof(Behaviour).IsAssignableFrom(type) &&
+            type.GetConstructor(Type.EmptyTypes) is not null;
+    }
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2075",
+        Justification = "Serialized field binding is an editor/script content boundary over live Behaviour instances, not a trimmed engine hot path.")]
     private static void BindSerializedFields(IComponent component, Dictionary<string, string>? fields)
     {
         if (fields is null || fields.Count == 0)

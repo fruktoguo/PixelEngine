@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using PixelEngine.Audio;
 using PixelEngine.Core.Diagnostics;
@@ -1351,6 +1352,18 @@ public sealed class Engine : IDisposable
         return scriptScene;
     }
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Runtime scripting resolves Behaviour types from assemblies compiled or loaded at runtime; this boundary is outside trimmed engine hot paths.")]
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2072",
+        Justification = "Runtime script assemblies preserve their Behaviour constructors independently of the trimmed engine closure.")]
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2073",
+        Justification = "Behaviour Type values returned from runtime script assemblies are validated at load time; the trimmer cannot statically model those assemblies.")]
     private static Type ResolveBehaviourType(string typeName, ScriptAssemblyRegistry scriptAssemblies)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(typeName);
@@ -1375,7 +1388,11 @@ public sealed class Engine : IDisposable
         throw new InvalidOperationException($"无法在已注册脚本程序集中找到 procedural Behaviour：{typeName}。");
     }
 
-    private static bool IsConcreteBehaviour(Type? type)
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = "Behaviour constructor validation is performed against runtime script types that are outside the trimmed engine closure.")]
+    private static bool IsConcreteBehaviour([NotNullWhen(true)] Type? type)
     {
         return type is not null &&
             !type.IsAbstract &&
