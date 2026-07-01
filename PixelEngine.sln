@@ -83,6 +83,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PixelEngine.Hosting.Tests",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PixelEngine.Rendering.Tests", "tests\PixelEngine.Rendering.Tests\PixelEngine.Rendering.Tests.csproj", "{0D7C0F8C-5BCB-454F-A861-05F85D6B9490}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PixelEngine.Audio.Tests", "tests\PixelEngine.Audio.Tests\PixelEngine.Audio.Tests.csproj", "{777EDDD4-8B99-4069-8F19-DCDD3D4C3BC1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -369,6 +371,18 @@ Global
 		{0D7C0F8C-5BCB-454F-A861-05F85D6B9490}.Release|x64.Build.0 = Release|Any CPU
 		{0D7C0F8C-5BCB-454F-A861-05F85D6B9490}.Release|x86.ActiveCfg = Release|Any CPU
 		{0D7C0F8C-5BCB-454F-A861-05F85D6B9490}.Release|x86.Build.0 = Release|Any CPU
+		{777EDDD4-8B99-4069-8F19-DCDD3D4C3BC1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{777EDDD4-8B99-4069-8F19-DCDD3D4C3BC1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{777EDDD4-8B99-4069-8F19-DCDD3D4C3BC1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{777EDDD4-8B99-4069-8F19-DCDD3D4C3BC1}.Debug|x64.Build.0 = Debug|Any CPU
+		{777EDDD4-8B99-4069-8F19-DCDD3D4C3BC1}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{777EDDD4-8B99-4069-8F19-DCDD3D4C3BC1}.Debug|x86.Build.0 = Debug|Any CPU
+		{777EDDD4-8B99-4069-8F19-DCDD3D4C3BC1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{777EDDD4-8B99-4069-8F19-DCDD3D4C3BC1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{777EDDD4-8B99-4069-8F19-DCDD3D4C3BC1}.Release|x64.ActiveCfg = Release|Any CPU
+		{777EDDD4-8B99-4069-8F19-DCDD3D4C3BC1}.Release|x64.Build.0 = Release|Any CPU
+		{777EDDD4-8B99-4069-8F19-DCDD3D4C3BC1}.Release|x86.ActiveCfg = Release|Any CPU
+		{777EDDD4-8B99-4069-8F19-DCDD3D4C3BC1}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -397,5 +411,6 @@ Global
 		{98E15647-0B27-471E-99FC-F59ECADC99A5} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{478ACE1D-F02D-48AB-AD53-FD073260B614} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{0D7C0F8C-5BCB-454F-A861-05F85D6B9490} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{777EDDD4-8B99-4069-8F19-DCDD3D4C3BC1} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal
