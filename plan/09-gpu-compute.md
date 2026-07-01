@@ -151,8 +151,8 @@ cascade 层数 `RadianceCascadeCount`、每层角度/空间分辨率、射线步
 
 ## 5. 验收标准
 
-- [ ] **基线机回退**：在仅 GL 3.3（或 Mac GL 4.1 / ANGLE-ES3 / 关闭 compute）环境，G3 命中、整层降为 `NullComputeBackend`，引擎正常出帧，bloom/光照走 plan/08 fragment、粒子走 plan/08 CPU stamp，无报错、无功能缺失。
-- [ ] **不硬依赖 Vulkan/GL 4.x**：代码与启动路径不存在「无 GL4.3/Vulkan 即无法启动」的依赖；门控探测覆盖并验证 G1/G2/G3/G4 全分支（含 ComputeSharp 未编译进发行时 G2 恒假）。
+- [x] **基线机回退**：在仅 GL 3.3（或 Mac GL 4.1 / ANGLE-ES3 / 关闭 compute）环境，G3 命中、整层降为 `NullComputeBackend`，引擎正常出帧，bloom/光照走 plan/08 fragment、粒子走 plan/08 CPU stamp，无报错、无功能缺失。
+- [x] **不硬依赖 Vulkan/GL 4.x**：代码与启动路径不存在「无 GL4.3/Vulkan 即无法启动」的依赖；门控探测覆盖并验证 G1/G2/G3/G4 全分支（含 ComputeSharp 未编译进发行时 G2 恒假）。
 - [ ] **compute 与 fragment 等价**：GL-compute bloom（CP-B1..B5）输出与 plan/08 fragment bloom 在同一 emissive 输入下像素级一致（容差内），可运行时热切换无可见跳变。
 - [ ] **Radiance Cascades 模式**：启用后产出无噪/软/带 bounce 的 2D GI，禁用后无缝回退 fog-of-war+emissive；默认关、对 plan/08 透明、归入 §4.3 第二级降级。
 - [ ] **GPU 粒子**：从 plan/05 缓冲一次 draw call 批绘活跃粒子，发光粒子正确进 emissive 并产生 bloom 辉光；与 CPU stamp 路径视觉一致、可热切换；高密度（≥10 万）加色火花场景帧时间优于 CPU stamp（BenchmarkDotNet/帧计时实测）。

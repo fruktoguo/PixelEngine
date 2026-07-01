@@ -50,6 +50,27 @@ public sealed class ComputeCapabilityGateTests
     }
 
     [Fact]
+    public void MacGl41FallsBackToPlan08Baseline()
+    {
+        GpuCapabilities capabilities = CreateCapabilities(
+            glMajor: 4,
+            glMinor: 1,
+            hasCompute: false,
+            hasSsbo: false,
+            hasImageLoadStore: false);
+
+        ComputeCapabilityGate gate = ComputeCapabilityGate.Evaluate(
+            capabilities,
+            ComputeFeatureSwitches.Default,
+            preferComputeSharp: false);
+
+        Assert.False(gate.GlComputeAvailable);
+        Assert.True(gate.BaselineFallback);
+        Assert.Equal(ComputeBackendKind.Null, gate.SelectedBackend);
+        Assert.Equal(ComputeFeatureSwitches.Disabled, gate.FeatureSwitches);
+    }
+
+    [Fact]
     public void AngleContextFallsBackEvenWhenComputeFlagIsPresent()
     {
         GpuCapabilities capabilities = CreateCapabilities(
@@ -69,6 +90,26 @@ public sealed class ComputeCapabilityGateTests
         Assert.False(gate.GlComputeAvailable);
         Assert.True(gate.BaselineFallback);
         Assert.Equal(ComputeBackendKind.Null, gate.SelectedBackend);
+    }
+
+    [Fact]
+    public void DisabledComputeCreatesNullBackendWithoutGlEntryPoint()
+    {
+        GpuCapabilities capabilities = CreateCapabilities(
+            glMajor: 3,
+            glMinor: 3,
+            hasCompute: false,
+            hasSsbo: false,
+            hasImageLoadStore: false);
+        ComputeCapabilityGate gate = ComputeCapabilityGate.Evaluate(
+            capabilities,
+            ComputeFeatureSwitches.Default,
+            preferComputeSharp: false);
+
+        using IComputeBackend backend = ComputeBackendFactory.Create(gl: null, gate);
+
+        Assert.Equal(ComputeBackendKind.Null, backend.Kind);
+        Assert.False(backend.IsAvailable);
     }
 
     [Fact]
