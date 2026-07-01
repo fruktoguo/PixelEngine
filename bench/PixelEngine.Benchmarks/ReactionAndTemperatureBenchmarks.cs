@@ -7,7 +7,7 @@ namespace PixelEngine.Benchmarks;
 /// 反应表 cache-aware 查找策略基准。
 /// </summary>
 [MemoryDiagnoser]
-public class ReactionLookupBenchmarks
+public class ReactionLookupBenchmark
 {
     private readonly MaterialDef[] _materials;
     private readonly ReactionTable _table;
@@ -15,7 +15,7 @@ public class ReactionLookupBenchmarks
     /// <summary>
     /// 创建反应查找基准 fixture。
     /// </summary>
-    public ReactionLookupBenchmarks()
+    public ReactionLookupBenchmark()
     {
         _materials = CreateMaterials(96);
         _materials[0] = _materials[0] with { ReactionStart = 999, ReactionCount = 0 };
@@ -111,6 +111,13 @@ public class ReactionLookupBenchmarks
             Flags = ReactionFlags.None,
         };
     }
+}
+
+/// <summary>
+/// 旧入口保留给已有 benchmark filter/脚本；实际实现见 <see cref="ReactionLookupBenchmark"/>。
+/// </summary>
+public class ReactionLookupBenchmarks : ReactionLookupBenchmark
+{
 }
 
 /// <summary>

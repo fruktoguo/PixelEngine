@@ -12,7 +12,7 @@ namespace PixelEngine.Benchmarks;
 /// </summary>
 [MemoryDiagnoser]
 [DisassemblyDiagnoser(maxDepth: 3)]
-public class ParticleHandshakeBenchmarks
+public class ParticleIntegrationBenchmark
 {
     private const ushort Sand = 2;
     private const int SpawnChunksPerAxis = 8;
@@ -28,7 +28,7 @@ public class ParticleHandshakeBenchmarks
     /// <summary>
     /// 创建粒子 handshake benchmark fixture。
     /// </summary>
-    public ParticleHandshakeBenchmarks()
+    public ParticleIntegrationBenchmark()
     {
         int index = 0;
         for (int cy = 0; cy < ResidentChunksPerAxis; cy++)
@@ -195,4 +195,11 @@ public class ParticleHandshakeBenchmarks
             return true;
         }
     }
+}
+
+/// <summary>
+/// 旧入口保留给已有 benchmark filter/脚本；实际实现见 <see cref="ParticleIntegrationBenchmark"/>。
+/// </summary>
+public class ParticleHandshakeBenchmarks : ParticleIntegrationBenchmark
+{
 }
