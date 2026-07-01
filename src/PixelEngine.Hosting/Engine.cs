@@ -414,7 +414,14 @@ public sealed class Engine : IDisposable
                 currentParityBit: 0),
             stateBridge);
 
-        _ = AttachSimulationWorld(world.Chunks, materials, particles, temperature);
+        _ = AttachSimulationWorld(
+            world.Chunks,
+            materials,
+            particles,
+            temperature,
+            result.WorldSeed,
+            checked((uint)result.GameTimeTicks));
+        Context.Clock.RestoreCounters(result.GameTimeTicks, result.GameTimeTicks);
         _ = AttachWorldManager(world);
         Context.RegisterService<IWorldStateSnapshotSource>(stateBridge);
         Context.RegisterService<IWorldStateSnapshotSink>(stateBridge);
@@ -878,11 +885,18 @@ public sealed class Engine : IDisposable
         ResidentChunkMap chunks,
         MaterialTable materials,
         ParticleSystem particles,
-        TemperatureField temperature)
+        TemperatureField temperature,
+        ulong worldSeed = 0,
+        uint frameIndex = 0)
     {
         MaterialPropsTable props = new(materials.Hot);
         CellGrid grid = new(chunks, props);
-        SimulationKernel kernel = new(chunks, props, profiler: Context.Profiler);
+        SimulationKernel kernel = new(chunks, props, worldSeed: worldSeed, profiler: Context.Profiler);
+        if (frameIndex != 0)
+        {
+            kernel.RestoreFrameState(frameIndex, CurrentParityFromGameTime(frameIndex));
+        }
+
         SimulationPhaseDriver driver = new(chunks, grid, kernel, particles, temperature, materials);
         driver.RegisterPhases(Phases);
 
@@ -897,6 +911,11 @@ public sealed class Engine : IDisposable
         Context.RegisterService(EngineServiceRole.ParticleService, particles);
         Context.RegisterService(EngineServiceRole.MaterialRegistry, materials);
         return driver;
+    }
+
+    private static byte CurrentParityFromGameTime(long gameTimeTicks)
+    {
+        return (gameTimeTicks & 1L) == 0 ? (byte)0 : CellFlags.Parity;
     }
 
     private WorldPhaseDriver AttachWorldManager(WorldManager world)

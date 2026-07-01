@@ -143,6 +143,23 @@ public sealed class RuntimeInfrastructureTests
     }
 
     /// <summary>
+    /// 验证读档恢复帧计数不会触发补步，并拒绝非法 tick 关系。
+    /// </summary>
+    [Fact]
+    public void FrameClockRestoreCountersSetsSavedFrameState()
+    {
+        FrameClock clock = new();
+
+        clock.RestoreCounters(frameIndex: 10, simTickIndex: 7);
+
+        Assert.Equal(10, clock.FrameIndex);
+        Assert.Equal(7, clock.SimTickIndex);
+        Assert.False(clock.RunSimThisFrame);
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => clock.RestoreCounters(1, 2));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => clock.RestoreCounters(-1, 0));
+    }
+
+    /// <summary>
     /// 验证 BudgetMonitor 连续超预算后置位，回落后复位。
     /// </summary>
     [Fact]

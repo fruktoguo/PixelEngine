@@ -120,6 +120,28 @@ public sealed class FrameClock
             SimTickIndex);
     }
 
+    /// <summary>
+    /// 从粗粒度世界存档恢复帧计数；用于暂停点/读档路径，不执行任何补步。
+    /// </summary>
+    /// <param name="frameIndex">已开始的渲染帧数量。</param>
+    /// <param name="simTickIndex">已执行的 sim tick 数量。</param>
+    public void RestoreCounters(long frameIndex, long simTickIndex)
+    {
+        if (frameIndex < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(frameIndex), "帧序号不能为负。");
+        }
+
+        if (simTickIndex < 0 || simTickIndex > frameIndex)
+        {
+            throw new ArgumentOutOfRangeException(nameof(simTickIndex), "sim tick 序号必须位于 [0, frameIndex]。");
+        }
+
+        FrameIndex = frameIndex;
+        SimTickIndex = simTickIndex;
+        RunSimThisFrame = false;
+    }
+
     private bool ShouldRunSim(long frameIndex)
     {
         return _simStride <= 1 || (frameIndex & (_simStride - 1)) == 1;

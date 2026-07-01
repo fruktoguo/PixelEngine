@@ -60,6 +60,17 @@ public sealed class SimulationKernel(
     public uint FrameIndex { get; private set; }
 
     /// <summary>
+    /// 从世界存档恢复 CA 帧序号与 parity；不执行任何 CA step。
+    /// </summary>
+    /// <param name="frameIndex">已执行 CA tick 数。</param>
+    /// <param name="currentParity">当前 CA parity 位。</param>
+    public void RestoreFrameState(uint frameIndex, byte currentParity)
+    {
+        FrameIndex = frameIndex;
+        CurrentParity = (byte)(currentParity & CellFlags.Parity);
+    }
+
+    /// <summary>
     /// 强制 `StepCa(JobSystem)` 使用单线程路径，供确定性 oracle 和调试使用。
     /// </summary>
     public bool ForceSingleThread { get; set; }

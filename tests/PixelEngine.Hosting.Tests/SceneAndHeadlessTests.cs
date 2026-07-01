@@ -230,6 +230,8 @@ public sealed class SceneAndHeadlessTests
             Assert.Equal(123UL, result.WorldSeed);
             Assert.Equal(456L, result.GameTimeTicks);
             Assert.Equal(1, result.LoadedChunkCount);
+            Assert.Equal(456L, engine.Context.Clock.FrameIndex);
+            Assert.Equal(456L, engine.Context.Clock.SimTickIndex);
             CellGrid grid = engine.Context.GetService<CellGrid>();
             Assert.Equal(1, grid.GetMaterial(0, 0));
             Assert.Equal(9, grid.LifetimeAt(0, 0));
@@ -242,6 +244,9 @@ public sealed class SceneAndHeadlessTests
             Assert.Equal(1, engine.Phases.Count(EnginePhase.ResidencyApply));
             Assert.Equal(1, engine.Phases.Count(EnginePhase.WorldStreaming));
             Assert.Equal(1, engine.Phases.Count(EnginePhase.CaSimulation));
+            SimulationKernel kernel = engine.Context.GetService<SimulationKernel>();
+            Assert.Equal(123UL, kernel.WorldSeed);
+            Assert.Equal(456u, kernel.FrameIndex);
         }
         finally
         {
