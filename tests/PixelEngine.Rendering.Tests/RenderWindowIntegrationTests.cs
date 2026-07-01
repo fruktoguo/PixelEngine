@@ -55,4 +55,45 @@ public sealed class RenderWindowIntegrationTests
 
         Assert.True(uploader.CapacityBytes >= buffer.ByteLength);
     }
+
+    [Fact]
+    public void CanCreateLightingResourcesAndRunCompositeWhenExplicitlyEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine lighting smoke",
+            Width = 64,
+            Height = 64,
+            BackendPreference = RenderBackendPreference.Auto,
+            EnableDebugContext = true,
+        });
+        GlslProfile profile = window.Capabilities.IsGles ? GlslProfile.Gles300 : GlslProfile.DesktopGl330;
+        RenderBuffer buffer = new(16, 16);
+        using WorldTexture world = new(window.Gl, buffer.Width, buffer.Height);
+        using PboUploader uploader = new(window.Gl, buffer.ByteLength);
+        using EmissiveBuffer emissive = new(window.Gl, buffer.Width, buffer.Height);
+        using LightMaskTexture occluder = new(window.Gl, buffer.Width, buffer.Height);
+        using LightMaskTexture visibility = new(window.Gl, buffer.Width, buffer.Height);
+        using FullscreenQuad quad = new(window.Gl);
+        using ShadowMap1DPass shadow = new(window.Gl, profile, 32);
+        using CompositePass composite = new(window.Gl, profile);
+        byte[] mask = new byte[buffer.Width * buffer.Height];
+        mask.AsSpan().Fill(255);
+
+        buffer.Pixels.Fill(0xFF102030u);
+        uploader.UploadFull(world, buffer);
+        emissive.Upload(buffer.Pixels);
+        occluder.Upload(mask);
+        visibility.Upload(mask);
+        shadow.Render(occluder, new LightSource(8f, 8f, 12f, 0xFFFFFFFFu, 1f), quad);
+        composite.Render(world, emissive, visibility, quad);
+        window.SwapBuffers();
+
+        Assert.Equal(32, shadow.RayCount);
+    }
 }
