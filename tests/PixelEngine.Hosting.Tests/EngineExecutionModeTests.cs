@@ -1,6 +1,7 @@
 using PixelEngine.Core.Time;
 using PixelEngine.Core;
 using PixelEngine.Editor;
+using System.Reflection;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -173,6 +174,24 @@ public sealed class EngineExecutionModeTests
         Assert.Equal(["save", "restore"], store.Calls);
         Assert.False(edit.Snapshot.TemporarySnapshotActive);
         Assert.Equal(EngineExecutionMode.Edit, engine.Mode);
+    }
+
+    /// <summary>
+    /// 验证 Engine 暴露脚本程序集注册入口，且重复注册不会产生重复项。
+    /// </summary>
+    [Fact]
+    public void EngineRegistersScriptAssembliesForScriptingHost()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+        Assembly assembly = typeof(EngineExecutionModeTests).Assembly;
+
+        engine.RegisterScriptAssembly(assembly);
+        engine.RegisterScriptAssembly(assembly);
+
+        ScriptAssemblyRegistry registry = engine.Context.GetService<ScriptAssemblyRegistry>();
+        Assert.Equal([assembly], registry.Assemblies);
     }
 
     private static void RegisterAllPhases(EngineBuilder builder, List<EnginePhase> phases)
