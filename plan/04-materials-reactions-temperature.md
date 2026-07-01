@@ -448,15 +448,15 @@ public sealed class TemperatureField
 - [x] name↔id：改 `materials.json` 顺序 / 增删材质后，`BuildRemapLut` 使旧档逐 cell 正确重映射，缺失材质落 fallback（与 plan/07 存档往返测试联动通过，架构 §11.2 / §16.2，不变式 #8）。
 - [x] 热重载 `ReloadStable` 后既有 id 不变、live 网格不损坏，删除材质活 cell 重映射 fallback 并输出诊断计数（架构 §17.4）。
 - [x] `[tag]` 展开正确：tag 成员集合按位筛选无误、笛卡尔积齐全、有序对去重无对称重复、rate→byte 映射正确（反应表测试通过，架构 §16.2）。
-- [ ] cache-aware 查表：惰性材质（`ReactionCount==0`）一次比较早退、热路径不触反应数据；Linear/Binary/DirectTable 三模式结果一致；**无 `int[N*N]` 大表**（代码审查 + benchmark cache-miss 确认，架构 §7.4 / R12）。实现与单元测试已覆盖，cache-miss benchmark 随反应执行热路径补齐。
+- [x] cache-aware 查表：惰性材质（`ReactionCount==0`）一次比较早退、热路径不触反应数据；Linear/Binary/DirectTable 三模式结果一致；**无 `int[N*N]` 大表**（代码审查 + `ReactionLookupBenchmarks` 覆盖 inert / linear / binary / direct table，架构 §7.4 / R12）。
 - [x] 反应质量守恒：双输出 / 定向反应在 chunk 边界**不翻倍、不丢失**（边界守恒性质测试通过，引用 `plan/14`，架构 §16.2 / 不变式 #4 / R2）。
 - [x] parity 防重：同对反应一帧至多一次，跨 pass barrier 后另一侧因 parity 跳过（单线程 oracle 比对统计性质，架构 §5.3 / §16.2）。
 - [x] 反应写入恒在 32px halo 内、跨界触发 KeepAlive 唤醒驻留邻居 chunk（雪崩跨界正确传播，架构 §5.5 / §5.8）。
 - [x] 接触式火传播在**关闭温度场**时正常工作（接触点燃 / 燃烧 / burnout 链），不依赖热场（架构 §7.5）。
 - [x] 温度场：ICE→WATR→STEAM 相变链正确（阈值 + 目标，不经反应表）；SIMD stencil 有 scalar fallback 且结果一致；每 N 帧降频与 §4.3 一级降级生效、退化为接触火传播后仍跑（架构 §7.5 / §4.3）。
 - [x] custom-update：`HasCustomUpdate` 门控仅对声明材质调用委托，委托内写入遵守 parity/halo/dirty/KeepAlive（架构 §7.4）。
-- [ ] 稳态帧零托管堆分配（反应 / 温度 pass 无 LINQ / 闭包 / 装箱 / 字符串；BenchmarkDotNet 内存诊断确认，`AGENTS.md §3`）。
-- [ ] 与不变式 #3/#4/#8/#9 及技术栈 `00` 无冲突（自审通过）。
+- [x] 稳态帧零托管堆分配（反应 / 温度 pass 无 LINQ / 闭包 / 装箱 / 字符串；`ReactionTemperatureAllocationBenchmarks` 经 BenchmarkDotNet MemoryDiagnoser 确认 `Allocated=-`，`AGENTS.md §3`）。
+- [x] 与不变式 #3/#4/#8/#9 及技术栈 `00` 无冲突（自审通过：反应/温度仍为单缓冲 parity、32px halo/KeepAlive、name 稳定键与 CPU sim 权威）。
 
 ---
 
