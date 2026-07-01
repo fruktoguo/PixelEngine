@@ -38,6 +38,57 @@ public sealed class SimulationMovementTests
     }
 
     /// <summary>
+    /// 验证 powder 在正下与斜下都被阻挡时不会水平自流，保留休止角。
+    /// </summary>
+    [Fact]
+    public void StepCaDoesNotMovePowderHorizontallyOnFlatSupport()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        SetCurrentDirty(center, DirtyRect.Full);
+        Set(center, 10, 10, Sand);
+        Set(center, 9, 11, Solid);
+        Set(center, 10, 11, Solid);
+        Set(center, 11, 11, Solid);
+        SimulationKernel kernel = new(source, CreateMaterials());
+
+        kernel.StepCa();
+
+        Assert.Equal(Sand, Get(center, 10, 10));
+        Assert.Equal(0, Get(center, 9, 10));
+        Assert.Equal(0, Get(center, 11, 10));
+    }
+
+    /// <summary>
+    /// 验证 powder 左右斜下偏置随帧切换，避免稳定单侧漂移。
+    /// </summary>
+    [Fact]
+    public void StepCaAlternatesPowderDiagonalBiasAcrossFrames()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        SetCurrentDirty(center, DirtyRect.Full);
+        Set(center, 10, 10, Sand);
+        Set(center, 10, 11, Solid);
+        SimulationKernel kernel = new(source, CreateMaterials());
+
+        kernel.StepCa();
+
+        Assert.Equal(Sand, Get(center, 11, 11));
+
+        Set(center, 11, 11, 0);
+        SetFlags(center, 10, 10, 0);
+        SetFlags(center, 11, 11, 0);
+        SetCurrentDirty(center, DirtyRect.Full);
+        Set(center, 20, 10, Sand);
+        SetFlags(center, 20, 10, CellFlags.Parity);
+        Set(center, 20, 11, Solid);
+        SetFlags(center, 19, 11, CellFlags.Parity);
+
+        kernel.StepCa();
+
+        Assert.Equal(Sand, Get(center, 19, 11));
+    }
+
+    /// <summary>
     /// 验证液体水平铺开后，因 parity 标记不会在同一行后续扫描中再次移动。
     /// </summary>
     [Fact]

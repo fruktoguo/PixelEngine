@@ -364,13 +364,10 @@ internal static class ChunkUpdater
         int targetY,
         byte parityBit)
     {
-        if (CellFlags.MatchesFrame(window.GetFlags(targetX, targetY), parityBit))
-        {
-            return false;
-        }
-
         ushort targetMaterial = window.GetMaterial(targetX, targetY);
-        return targetMaterial == 0 || materials.DensityOf(targetMaterial) < materials.DensityOf(sourceMaterial);
+        return targetMaterial == 0 ||
+            (!CellFlags.MatchesFrame(window.GetFlags(targetX, targetY), parityBit) &&
+            materials.DensityOf(targetMaterial) < materials.DensityOf(sourceMaterial));
     }
 
     private static void MarkDirty(IChunkSource chunks, int wx, int wy)
