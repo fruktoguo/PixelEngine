@@ -76,16 +76,16 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [ ] 全热路径静态核查无 LINQ/捕获闭包/装箱/`params`/迭代器/字符串拼接（分析器提升为 error）。[全子系统 · AGENTS §3]
 
 ### 4.3 多线程覆盖面
-- [ ] CA 4-pass checkerboard 经 plan/02 持久线程池 per-chunk task 派发、遍间 barrier、无锁。[plan/03 · §5.7/不变式 #2]
-- [ ] Box2D task 桥把并行 for 派发到同一线程池，回调禁 `[SuppressGCTransition]`，分配稳定 workerIndex。[plan/06 · §14.2/风险 R14]
+- [x] CA 4-pass checkerboard 经 plan/02 持久线程池 per-chunk task 派发、遍间 barrier、无锁。[plan/03 · §5.7/不变式 #2]
+- [x] Box2D task 桥把并行 for 派发到同一线程池，回调禁 `[SuppressGCTransition]`，分配稳定 workerIndex。[plan/06 · §14.2/风险 R14]
 - [ ] render buffer 构建并行（按区块）。[plan/08 · §3.3 相位9]
 - [ ] CCL + 形状重建并行且 off-thread（相位 8a 各刚体）。[plan/06 · §8.4]
 - [ ] 粒子积分并行（`Span<Particle>` 分段）。[plan/05 · §7.6]
 - [ ] 温度 stencil 并行（行分块）。[plan/04 · §7.5]
 - [ ] 序列化字节准备在后台线程，只碰离线字节缓冲、不碰 live map。[plan/07 · §3.4/§11.5]
-- [ ] 全部并行工作走持久线程池，**无每帧 `Parallel.For`**。[plan/02 · §5.7/§12.7]
-- [ ] 活跃任务/活跃 chunk 低于阈值时回退单线程。[plan/02/03 · §5.7/风险 R7]
-- [ ] per-thread/per-chunk 元数据填充到 64 字节 cache line 防 false sharing。[plan/02 · §12.7]
+- [x] 全部并行工作走持久线程池，**无每帧 `Parallel.For`**。[plan/02 · §5.7/§12.7]
+- [x] 活跃任务/活跃 chunk 低于阈值时回退单线程。[plan/02/03 · §5.7/风险 R7]
+- [x] per-thread/per-chunk 元数据填充到 64 字节 cache line 防 false sharing。[plan/02 · §12.7]
 
 ### 4.4 SIMD 落实点
 - [ ] 温度 5-point stencil 向量化（Intrinsics + scalar fallback）。[plan/04 · §12.5]
