@@ -1,4 +1,5 @@
 using PixelEngine.Physics;
+using PixelEngine.Scripting;
 using PixelEngine.Simulation;
 
 namespace PixelEngine.Hosting;
@@ -28,6 +29,11 @@ public sealed class PhysicsPhaseDriver(PhysicsSystem physics, IChunkSource? chun
         if (!context.Timing.RunPhysics)
         {
             return;
+        }
+
+        if (context.Context.TryGetService(out ScriptSimulationContext scripts))
+        {
+            _ = scripts.FlushPhysicsCommands();
         }
 
         if (_chunks is not null)

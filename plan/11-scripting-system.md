@@ -265,7 +265,7 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 - [x] 事件订阅：`IEventBus.Subscribe<TEvent>` + `IDisposable` 句柄；引擎相位 1 排空 ring buffer 分发（plan/02，架构 §3.1）
 - [x] 只读值类型：`MaterialId`/`CellView`/`MaterialInfo`/`RaycastHit`/`BodyHandle`/`BodyTransform`/`CharacterHandle`/`CharacterState`/`ParticleSpawnDesc`/`RectF`（blittable `readonly struct`，零分配）
 - [x] `internal ScriptCommandQueue`：blittable 命令 struct + per-thread 缓冲（`ArrayPool`，零分配）；`ScriptSimulationContext` 已将 cell 写入、Paint 与粒子 Spawn/Burst 入队，并由 `SimulationPhaseDriver` 在 dirty swap 前/相位 7 安全窗口 flush 到真实 `CellGrid`/`ParticleSystem`（§3.3，架构 §3.3）。
-- [!] Physics/角色脚本命令 flush：`CreateBodyFromRegion/ApplyImpulse/DestroyBody/MoveCharacter` 仍缺统一 phase-safe sink 与句柄 registry；当前不可假装已接入相位 8a。
+- [!] Physics/角色脚本命令 flush：`CreateBodyFromRegion/ApplyImpulse/DestroyBody` 已经通过 `BodyFacade`、`ScriptCommandQueue` 与 Hosting phase 8 step 前 `FlushPhysicsCommands()` 落到真实 `PhysicsSystem`，并有句柄 registry；`MoveCharacter` 仍为当前 `CharacterFacade.Move` 即时调用，尚未统一成 phase 8 延迟命令。
 
 ### 4.4 Roslyn 热重载（§3.4）
 - [x] `internal sealed class ScriptCompiler`：`CSharpCompilation` + 引擎公开程序集 `MetadataReference` + BCL 参考程序集；`Emit` 到 `MemoryStream`；捕获并上报 `Diagnostics`（编译失败保留旧程序集，§3.4）
@@ -291,7 +291,7 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 - [x] `HotReloadService.RequestReload()` 暴露为编辑器热重载入口（§3.7）
 - [x] `public interface IScriptRuntime`：`Initialize/BeginFrame/Update(dt)/FixedSimTick/EndFrame/Shutdown`，由 Hosting 主循环相位 1 驱动（§3.8，架构 §3.3）
 - [x] Hosting/Simulation 可接入 `ScriptSimulationContext`：`SimulationPhaseDriver` 支持绑定脚本上下文，并在 Simulation 相位安全窗口 flush cell/particle 命令（§3.8）。
-- [!] Hosting 装配期构造完整 `IScriptContext` 并注入各子系统公开 API（§3.8）。阻塞：cell/material/particle/solid/time/audio facade 已有真实后端，但 physics/input/camera 等 facade 后端尚未形成 Hosting 可注入的统一公开实现；不能用抛 `NotSupportedException` 的假实现冒充装配。
+- [!] Hosting 装配期构造完整 `IScriptContext` 并注入各子系统公开 API（§3.8）。进展：cell/material/particle/solid/time/audio/input/camera/lighting/physics facade 已有真实后端，Hosting 会注册 `ScriptSimulationContext` 供相位 8 flush；阻塞：Diagnostics/GUI 等编辑器向后端尚未统一聚合，角色移动仍缺延迟命令 sink，不能用抛 `NotSupportedException` 的假实现冒充装配。
 
 ---
 
@@ -302,9 +302,9 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 - [x] 一个继承 `Behaviour` 的脚本，其 `OnStart`/`OnUpdate(dt)`/`OnFixedSimTick`/`OnDestroy` 按相位 1 节奏被正确调用；sim 降到 30Hz 时 `OnFixedSimTick` 跳过、`OnUpdate` 仍每帧（§3.2，架构 §4.2）
 - [x] 组件挂载到 Demo 稀疏实体且**不**出现在 `PixelEngine.Simulation` 内核数据结构中（§3.2，架构 §13.1）
 - [x] 脚本经真实后端 facade 完成：读写 cell、查材质（按 name）、spawn 粒子、raycast/采样固体、读取时间、播放已加载音效，全部走公开 API，并由真实 `MaterialTable`/`CellGrid`/`ParticleSystem`/`FrameClock`/`AudioSystem` 验收测试覆盖（§3.3）。
-- [!] 完整脚本 facade 能力：建/查/控刚体、驱动角色控制器、控相机、读输入仍缺对应公开后端/phase-safe sink；订阅事件已有 `ScriptEventBus` 验收，但完整上下文装配未统一完成（§3.3）。
+- [!] 完整脚本 facade 能力：建/查/控刚体、驱动角色控制器、控相机、读输入已有真实后端与验收覆盖；阻塞：角色 `MoveCharacter` 尚未改为 phase 8 延迟命令，Diagnostics/GUI 等完整上下文装配仍未统一完成（§3.3）。
 - [x] 脚本写入类调用经命令队列在正确相位落地：cell 写标 working dirty 并在 dirty swap 后被下帧 CA 看见；particle 落相位 7；无跨相位竞争（架构 §3.3）。
-- [!] body/character 写入类命令相位落地：body 建于相位 8a、冲量 step 前、角色移动相位 8 仍缺真实 sink 与句柄 registry，不能勾选（架构 §3.3）。
+- [!] body/character 写入类命令相位落地：body 建/毁与冲量已在 Hosting phase 8 step 前落到真实 `PhysicsSystem` 并维护脚本句柄 registry；角色移动相位 8 延迟 sink 仍缺，不能勾选（架构 §3.3）。
 - [x] 修改脚本源文件后自动重编译并热重载：旧 ALC 成功 `Unload` 并被 GC 回收（弱引用确认）、组件实例重建、`[Persist]`/公开字段状态按策略恢复（§3.4）
 - [x] 编译错误不中断运行：保留旧程序集，诊断（行列+中文摘要）上报编辑器（§3.4）
 - [x] 脚本任一回调抛异常被捕获、记录、该脚本被禁用，**引擎主循环继续、同帧其它脚本不受影响、进程不崩溃**（§3.5，AGENTS §4）

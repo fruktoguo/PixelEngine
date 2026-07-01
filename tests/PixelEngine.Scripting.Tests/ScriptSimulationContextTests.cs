@@ -1,4 +1,7 @@
 using System.Buffers.Binary;
+using PixelEngine.Core.Threading;
+using PixelEngine.Interop.Box2D;
+using PixelEngine.Physics;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.Core.Time;
@@ -126,6 +129,42 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
+    /// 验证脚本刚体命令延迟到 Physics flush 后创建、查询和销毁真实刚体。
+    /// </summary>
+    [Fact]
+    public void BodyFacadeFlushesCreateQueryImpulseAndDestroyThroughPhysics()
+    {
+        using Fixture fixture = Fixture.Create(withPhysics: true);
+        FillRect(fixture.Chunk, minX: 8, minY: 8, maxX: 24, maxY: 24, material: 2);
+
+        BodyHandle handle = fixture.Context.Bodies.CreateFromRegion(8, 8, 16, 16);
+
+        Assert.False(fixture.Context.Bodies.TryGetTransform(handle, out _));
+        Assert.Equal(0, fixture.Physics!.PhysicsWorld.ActiveBodyCount);
+        Assert.Equal((ushort)2, fixture.Grid.GetMaterial(16, 16));
+
+        int created = fixture.Context.FlushPhysicsCommands();
+
+        Assert.Equal(1, created);
+        Assert.Equal(1, fixture.Physics.PhysicsWorld.ActiveBodyCount);
+        Assert.True(CellFlags.Has(fixture.Grid.FlagsAt(16, 16), CellFlags.RigidOwned));
+        Assert.True(fixture.Context.Bodies.TryGetTransform(handle, out BodyTransform transform));
+        Assert.Equal(16f, transform.X, precision: 3);
+        Assert.Equal(16f, transform.Y, precision: 3);
+
+        fixture.Context.Bodies.ApplyImpulse(handle, 32, 0);
+        Assert.Equal(1, fixture.Context.FlushPhysicsCommands());
+
+        fixture.Context.Bodies.Destroy(handle);
+        Assert.Equal(1, fixture.Context.FlushPhysicsCommands());
+
+        Assert.Equal(0, fixture.Physics.PhysicsWorld.ActiveBodyCount);
+        Assert.False(fixture.Context.Bodies.TryGetTransform(handle, out _));
+        Assert.Equal((ushort)0, fixture.Grid.GetMaterial(16, 16));
+        Assert.False(CellFlags.Has(fixture.Grid.FlagsAt(16, 16), CellFlags.RigidOwned));
+    }
+
+    /// <summary>
     /// 验证脚本时间 facade 从真实 FrameClock 读取固定步长、帧号与本帧 sim 决策。
     /// </summary>
     [Fact]
@@ -194,20 +233,24 @@ public sealed class ScriptSimulationContextTests
         audio.Shutdown();
     }
 
-    private sealed class Fixture
+    private sealed class Fixture : IDisposable
     {
         private Fixture(
             Chunk chunk,
             CellGrid grid,
             SimulationKernel kernel,
             ParticleSystem particles,
-            ScriptSimulationContext context)
+            ScriptSimulationContext context,
+            PhysicsSystem? physics,
+            JobSystem? jobs)
         {
             Chunk = chunk;
             Grid = grid;
             Kernel = kernel;
             Particles = particles;
             Context = context;
+            Physics = physics;
+            Jobs = jobs;
         }
 
         public Chunk Chunk { get; }
@@ -220,7 +263,15 @@ public sealed class ScriptSimulationContextTests
 
         public ScriptSimulationContext Context { get; }
 
-        public static Fixture Create(ICameraApi? camera = null, IInputApi? input = null, ILightingApi? lighting = null)
+        public PhysicsSystem? Physics { get; }
+
+        private JobSystem? Jobs { get; }
+
+        public static Fixture Create(
+            ICameraApi? camera = null,
+            IInputApi? input = null,
+            ILightingApi? lighting = null,
+            bool withPhysics = false)
         {
             MaterialTable materials = Materials(
                 ("empty", CellType.Empty),
@@ -232,8 +283,25 @@ public sealed class ScriptSimulationContextTests
             CellGrid grid = new(chunks, props);
             SimulationKernel kernel = new(chunks, props);
             ParticleSystem particles = new(capacity: 16);
-            ScriptSimulationContext context = new(new ScriptScene(), grid, kernel, particles, materials, camera: camera, input: input, lighting: lighting);
-            return new Fixture(chunk, grid, kernel, particles, context);
+            JobSystem? jobs = null;
+            PhysicsSystem? physics = null;
+            if (withPhysics)
+            {
+                jobs = new JobSystem(workerCount: 1);
+                B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
+                worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
+                physics = PhysicsSystem.Initialize(grid, jobs, worldDef: worldDef);
+            }
+
+            ScriptSimulationContext context = new(new ScriptScene(), grid, kernel, particles, materials, physics: physics, camera: camera, input: input, lighting: lighting);
+            return new Fixture(chunk, grid, kernel, particles, context, physics, jobs);
+        }
+
+        public void Dispose()
+        {
+            Context.Dispose();
+            Physics?.Dispose();
+            Jobs?.Dispose();
         }
     }
 

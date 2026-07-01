@@ -260,6 +260,56 @@ public sealed class EnginePhaseDriverTests
     }
 
     /// <summary>
+    /// 验证 Hosting 相位 8 会自动 flush 脚本刚体命令，再执行真实 Physics step。
+    /// </summary>
+    [Fact]
+    public void PhysicsPhaseFlushesScriptBodyCommandsBeforeStep()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+        using Engine engine = new EngineBuilder()
+            .UseHeadless()
+            .UseDeterministicMode()
+            .WithWorkerCount(1)
+            .Build();
+        engine.Context.RegisterService(materials);
+        _ = engine.AttachResidentSimulationWorld(worldWidthCells: 64, worldHeightCells: 64, particleCapacity: 16);
+        _ = engine.AttachPhysics();
+
+        CellGrid grid = engine.Context.GetService<CellGrid>();
+        for (int y = 8; y < 24; y++)
+        {
+            for (int x = 8; x < 24; x++)
+            {
+                grid.MaterialAt(x, y) = 1;
+                grid.FlagsAt(x, y) = 0;
+                grid.LifetimeAt(x, y) = 0;
+            }
+        }
+
+        ScriptSimulationContext scripts = new(
+            new ScriptScene(),
+            grid,
+            engine.Context.GetService<SimulationKernel>(),
+            engine.Context.GetService<ParticleSystem>(),
+            materials,
+            physics: engine.Context.GetService<PhysicsSystem>());
+        engine.Context.RegisterService(scripts);
+
+        BodyHandle handle = scripts.Bodies.CreateFromRegion(8, 8, 16, 16);
+        Assert.False(scripts.Bodies.TryGetTransform(handle, out _));
+        Assert.Equal(0, engine.Context.GetService<PhysicsSystem>().PhysicsWorld.ActiveBodyCount);
+
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(1, engine.Context.GetService<PhysicsSystem>().PhysicsWorld.ActiveBodyCount);
+        Assert.True(scripts.Bodies.TryGetTransform(handle, out BodyTransform transform));
+        Assert.InRange(transform.X, 15.9f, 16.1f);
+        Assert.InRange(transform.Y, 15.9f, 16.1f);
+        Assert.Equal(1, engine.Context.Counters.RigidBodies);
+        Assert.True(CellFlags.Has(grid.FlagsAt(16, 16), CellFlags.RigidOwned));
+    }
+
+    /// <summary>
     /// 验证脚本相位在 sim 降频时仍逐帧 Update，但 FixedSimTick 只随 sim tick 调用。
     /// </summary>
     [Fact]

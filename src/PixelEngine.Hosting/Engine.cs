@@ -589,6 +589,7 @@ public sealed class Engine : IDisposable
             camera,
             input,
             lighting);
+        Context.RegisterService(scriptContext);
         simulationDriver?.AttachScriptContext(scriptContext);
         AttachScripting(scriptContext, runtime);
         if (camera is ScriptCameraApi)
