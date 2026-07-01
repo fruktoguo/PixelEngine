@@ -40,6 +40,26 @@ public sealed unsafe class PhysicsWorld
     public int BodySlotCount => _bodies.Count;
 
     /// <summary>
+    /// 当前活跃 body 数量。
+    /// </summary>
+    public int ActiveBodyCount
+    {
+        get
+        {
+            int count = 0;
+            for (int i = 0; i < _bodies.Count; i++)
+            {
+                if (_bodies[i] is not null)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+    }
+
+    /// <summary>
     /// 移除刚体 key。
     /// </summary>
     public void RemoveBody(int bodyKey)
