@@ -148,6 +148,39 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>
+    /// 初始化音频系统并加载 ContentRoot/audio 下的 WAV clip，供脚本音频 API 使用。
+    /// </summary>
+    /// <param name="backend">可选音频后端；为 null 时优先 OpenAL，失败自动降级无声后端。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>已加载 clip 数。</returns>
+    public async ValueTask<int> AttachAudioFromContentAsync(
+        IAudioBackend? backend = null,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfShutdown();
+        string audioRoot = Path.Combine(Context.Options.ContentRoot, "audio");
+        if (!Directory.Exists(audioRoot))
+        {
+            throw new DirectoryNotFoundException($"音频内容目录不存在：{audioRoot}");
+        }
+
+        AudioSystem audio = ResolveAudioSystem(backend);
+        AudioClipCache cache = ResolveAudioClipCache(audio, audioRoot);
+        string[] wavFiles = Directory.GetFiles(audioRoot, "*.wav", SearchOption.AllDirectories);
+        Array.Sort(wavFiles, StringComparer.Ordinal);
+        for (int i = 0; i < wavFiles.Length; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string assetId = Path.GetRelativePath(audioRoot, wavFiles[i]).Replace('\\', '/');
+            _ = await cache.LoadAsync(assetId, cancellationToken).ConfigureAwait(false);
+        }
+
+        RegisterScriptAudioApi(audio, cache);
+        EnsureAudioPhaseDriver(audio);
+        return cache.LoadedCount;
+    }
+
+    /// <summary>
     /// 基于已加载材质表装配一个固定尺寸 resident world，并把真实 Simulation 相位接入主循环。
     /// </summary>
     /// <param name="worldWidthCells">可玩世界宽度，单位 cell。</param>
@@ -480,6 +513,71 @@ public sealed class Engine : IDisposable
         Context.RegisterService<IAudioApi>(EngineServiceRole.AudioService, created);
         Context.RegisterService(created);
         return created;
+    }
+
+    private AudioSystem ResolveAudioSystem(IAudioBackend? backend)
+    {
+        if (Context.TryGetService(out AudioSystem audio))
+        {
+            return backend is not null
+                ? throw new InvalidOperationException("AudioSystem 已存在，不能重新指定音频后端。")
+                : audio;
+        }
+
+        AudioSystem created = new();
+        created.Initialize(new AudioSettings(), backend);
+        Context.RegisterService(EngineServiceRole.AudioService, created);
+        Context.RegisterService(created);
+        return created;
+    }
+
+    private AudioClipCache ResolveAudioClipCache(AudioSystem audio, string audioRoot)
+    {
+        if (Context.TryGetService(out AudioClipCache cache))
+        {
+            audio.AttachClipCache(cache);
+            return cache;
+        }
+
+        AudioClipCache created = new(audio.Backend, new DirectoryAudioAssetStore(audioRoot), new WavDecoder());
+        audio.AttachClipCache(created);
+        Context.RegisterService(created);
+        return created;
+    }
+
+    private void RegisterScriptAudioApi(AudioSystem audio, AudioClipCache cache)
+    {
+        if (Context.TryGetService(out IAudioApi _))
+        {
+            return;
+        }
+
+        ScriptAudioApi created = new(audio, cache);
+        Context.RegisterService<IAudioApi>(created);
+        Context.RegisterService(created);
+    }
+
+    private void EnsureAudioPhaseDriver(AudioSystem audio)
+    {
+        if (Context.TryGetService(out AudioPhaseDriver _))
+        {
+            return;
+        }
+
+        AudioPhaseDriver driver = new(audio, BuildAudioListenerView);
+        Context.RegisterService(driver.GetType(), driver);
+        driver.RegisterPhases(Phases);
+    }
+
+    private AudioListenerView BuildAudioListenerView(EngineTickContext context)
+    {
+        if (Context.TryGetService(out ICameraApi camera))
+        {
+            RectF viewport = camera.Viewport;
+            return new AudioListenerView(camera.CenterX, camera.CenterY, camera.Zoom, (int)viewport.Width, (int)viewport.Height);
+        }
+
+        return new AudioListenerView(0f, 0f, 1f, Context.Options.InternalWidth, Context.Options.InternalHeight);
     }
 
     private void RegisterSimulationRolesIfMissing(

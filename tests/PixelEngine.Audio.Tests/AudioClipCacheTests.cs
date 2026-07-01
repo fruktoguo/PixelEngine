@@ -86,6 +86,34 @@ public sealed class AudioClipCacheTests
     }
 
     [Fact]
+    public async Task DirectoryAssetStoreLoadsRelativeAudioAndRejectsEscapes()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"pixelengine-audio-assets-{Guid.NewGuid():N}");
+        try
+        {
+            string nested = Path.Combine(root, "sfx");
+            _ = Directory.CreateDirectory(nested);
+            string path = Path.Combine(nested, "hit.wav");
+            byte[] wav = CreateWav(channels: 1, bitsPerSample: 8, sampleRate: 8_000, [128]);
+            await File.WriteAllBytesAsync(path, wav);
+            DirectoryAudioAssetStore store = new(root);
+
+            byte[] loaded = await store.LoadBytesAsync("sfx/hit.wav");
+
+            Assert.Equal(wav, loaded);
+            _ = Assert.Throws<ArgumentException>(() => store.LoadBytesAsync("../hit.wav").AsTask().GetAwaiter().GetResult());
+            _ = Assert.Throws<ArgumentException>(() => store.LoadBytesAsync(path).AsTask().GetAwaiter().GetResult());
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task AudioSystemPlaysLoadedOneShotAndPublishesDiagnostics()
     {
         byte[] wav = CreateWav(channels: 1, bitsPerSample: 8, sampleRate: 8_000, [128]);

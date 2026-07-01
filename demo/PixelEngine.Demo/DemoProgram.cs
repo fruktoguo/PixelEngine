@@ -53,8 +53,9 @@ public static class DemoProgram
         {
             EngineContentPackage package = engine.LoadContentPackage();
             _ = engine.AttachResidentSimulationWorld(DemoWorldWidthCells, DemoWorldHeightCells);
+            int audioClips = engine.AttachAudioFromContentAsync().AsTask().GetAwaiter().GetResult();
             contentLoaded = true;
-            Console.WriteLine($"内容包已加载：{package.MaterialCount} 个材质，{package.ReactionCount} 条反应。");
+            Console.WriteLine($"内容包已加载：{package.MaterialCount} 个材质，{package.ReactionCount} 条反应，{audioClips} 个音频 clip。");
         }
         else
         {

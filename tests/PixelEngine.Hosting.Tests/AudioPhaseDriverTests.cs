@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using PixelEngine.Audio;
 using PixelEngine.Core;
 using PixelEngine.Core.Diagnostics;
@@ -13,6 +14,47 @@ namespace PixelEngine.Hosting.Tests;
 /// </summary>
 public sealed class AudioPhaseDriverTests
 {
+    /// <summary>
+    /// 验证 Hosting 能从 content/audio 预加载 WAV，并把脚本音频 API 接到真实 AudioSystem。
+    /// </summary>
+    [Fact]
+    public async Task EngineLoadsContentAudioAndInjectsScriptAudioApi()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-hosting-audio-{Guid.NewGuid():N}");
+        try
+        {
+            string audioRoot = Path.Combine(contentRoot, "audio");
+            _ = Directory.CreateDirectory(audioRoot);
+            await File.WriteAllBytesAsync(
+                Path.Combine(audioRoot, "ui_click.wav"),
+                CreateWav(channels: 1, bitsPerSample: 8, sampleRate: 8_000, [128]));
+            using NullAudioBackend backend = new();
+            using Engine engine = new EngineBuilder()
+                .UseHeadless()
+                .WithContentRoot(contentRoot)
+                .Build();
+
+            int loaded = await engine.AttachAudioFromContentAsync(backend);
+            PixelEngine.Scripting.IAudioApi api = engine.Context.GetService<PixelEngine.Scripting.IAudioApi>();
+            api.PlayOneShot("ui_click.wav");
+            _ = engine.RunOneTick();
+
+            Assert.Equal(1, loaded);
+            Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.AudioService));
+            Assert.Equal(1, engine.Context.GetService<AudioClipCache>().LoadedCount);
+            Assert.Equal(1, engine.Phases.Count(EnginePhase.BuildRenderBuffer));
+            Assert.Equal(1, backend.PlayCalls);
+            Assert.Equal(1, engine.Context.Counters.AudioLoadedClips);
+        }
+        finally
+        {
+            if (Directory.Exists(contentRoot))
+            {
+                Directory.Delete(contentRoot, recursive: true);
+            }
+        }
+    }
+
     /// <summary>
     /// 验证 render-only 帧仍推进 listener 与 voice 状态。
     /// </summary>
@@ -212,6 +254,36 @@ public sealed class AudioPhaseDriverTests
             voice.Play(buffer: 1, gain: 1f, pitch: 1f);
             PlayedCount++;
             return true;
+        }
+    }
+
+    private static byte[] CreateWav(short channels, short bitsPerSample, int sampleRate, ReadOnlySpan<byte> pcm)
+    {
+        short blockAlign = (short)(channels * bitsPerSample / 8);
+        int byteRate = sampleRate * blockAlign;
+        byte[] wav = new byte[44 + pcm.Length];
+        WriteAscii(wav, 0, "RIFF");
+        BinaryPrimitives.WriteInt32LittleEndian(wav.AsSpan(4, 4), 36 + pcm.Length);
+        WriteAscii(wav, 8, "WAVE");
+        WriteAscii(wav, 12, "fmt ");
+        BinaryPrimitives.WriteInt32LittleEndian(wav.AsSpan(16, 4), 16);
+        BinaryPrimitives.WriteInt16LittleEndian(wav.AsSpan(20, 2), 1);
+        BinaryPrimitives.WriteInt16LittleEndian(wav.AsSpan(22, 2), channels);
+        BinaryPrimitives.WriteInt32LittleEndian(wav.AsSpan(24, 4), sampleRate);
+        BinaryPrimitives.WriteInt32LittleEndian(wav.AsSpan(28, 4), byteRate);
+        BinaryPrimitives.WriteInt16LittleEndian(wav.AsSpan(32, 2), blockAlign);
+        BinaryPrimitives.WriteInt16LittleEndian(wav.AsSpan(34, 2), bitsPerSample);
+        WriteAscii(wav, 36, "data");
+        BinaryPrimitives.WriteInt32LittleEndian(wav.AsSpan(40, 4), pcm.Length);
+        pcm.CopyTo(wav.AsSpan(44));
+        return wav;
+    }
+
+    private static void WriteAscii(byte[] target, int offset, string text)
+    {
+        for (int i = 0; i < text.Length; i++)
+        {
+            target[offset + i] = (byte)text[i];
         }
     }
 }
