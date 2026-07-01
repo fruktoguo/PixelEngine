@@ -60,7 +60,7 @@ public static class GpuComputeShaderSources
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(binding = 0) uniform sampler2D uSourceTexture;
-layout(rgba16f, binding = 0) writeonly uniform image2D uOutputImage;
+layout(rgba8, binding = 0) writeonly uniform image2D uOutputImage;
 
 uniform ivec2 uOutputSize;
 uniform float uThreshold;
@@ -76,7 +76,7 @@ void main()
     vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(uOutputSize);
     vec4 color = texture(uSourceTexture, uv);
     float luminance = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
-    float factor = step(uThreshold, luminance);
+    float factor = smoothstep(uThreshold, uThreshold + 0.2, luminance);
     imageStore(uOutputImage, pixel, vec4(color.rgb * factor, color.a));
 }
 """;
@@ -89,7 +89,7 @@ void main()
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(binding = 0) uniform sampler2D uSourceTexture;
-layout(rgba16f, binding = 0) writeonly uniform image2D uOutputImage;
+layout(rgba8, binding = 0) writeonly uniform image2D uOutputImage;
 
 uniform ivec2 uOutputSize;
 uniform vec2 uSourceTexelSize;
@@ -103,12 +103,22 @@ void main()
     }
 
     vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(uOutputSize);
-    vec2 halfTexel = uSourceTexelSize * 0.5;
-    vec3 color = texture(uSourceTexture, uv + vec2(-halfTexel.x, -halfTexel.y)).rgb;
-    color += texture(uSourceTexture, uv + vec2(halfTexel.x, -halfTexel.y)).rgb;
-    color += texture(uSourceTexture, uv + vec2(-halfTexel.x, halfTexel.y)).rgb;
-    color += texture(uSourceTexture, uv + vec2(halfTexel.x, halfTexel.y)).rgb;
-    imageStore(uOutputImage, pixel, vec4(color * 0.25, 1.0));
+    vec2 x = vec2(uSourceTexelSize.x, 0.0);
+    vec2 y = vec2(0.0, uSourceTexelSize.y);
+    vec3 color = texture(uSourceTexture, uv).rgb * 0.125;
+    color += texture(uSourceTexture, uv - x).rgb * 0.0625;
+    color += texture(uSourceTexture, uv + x).rgb * 0.0625;
+    color += texture(uSourceTexture, uv - y).rgb * 0.0625;
+    color += texture(uSourceTexture, uv + y).rgb * 0.0625;
+    color += texture(uSourceTexture, uv - x - y).rgb * 0.125;
+    color += texture(uSourceTexture, uv + x - y).rgb * 0.125;
+    color += texture(uSourceTexture, uv - x + y).rgb * 0.125;
+    color += texture(uSourceTexture, uv + x + y).rgb * 0.125;
+    color += texture(uSourceTexture, uv - (x * 2.0)).rgb * 0.03125;
+    color += texture(uSourceTexture, uv + (x * 2.0)).rgb * 0.03125;
+    color += texture(uSourceTexture, uv - (y * 2.0)).rgb * 0.03125;
+    color += texture(uSourceTexture, uv + (y * 2.0)).rgb * 0.03125;
+    imageStore(uOutputImage, pixel, vec4(color, 1.0));
 }
 """;
 
@@ -120,7 +130,7 @@ void main()
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(binding = 0) uniform sampler2D uSourceTexture;
-layout(rgba16f, binding = 0) writeonly uniform image2D uOutputImage;
+layout(rgba8, binding = 0) writeonly uniform image2D uOutputImage;
 
 uniform ivec2 uOutputSize;
 uniform vec2 uTexelSize;
@@ -153,7 +163,8 @@ void main()
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(binding = 0) uniform sampler2D uSourceTexture;
-layout(rgba16f, binding = 0) writeonly uniform image2D uOutputImage;
+layout(binding = 1) uniform sampler2D uBaseTexture;
+layout(rgba8, binding = 0) writeonly uniform image2D uOutputImage;
 
 uniform ivec2 uOutputSize;
 uniform vec2 uTexelSize;
@@ -170,11 +181,12 @@ void main()
 
     vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(uOutputSize);
     vec2 offset = uTexelSize * uOffset;
+    vec3 base = texture(uBaseTexture, uv).rgb;
     vec3 color = texture(uSourceTexture, uv + vec2(-offset.x, 0.0)).rgb;
     color += texture(uSourceTexture, uv + vec2(offset.x, 0.0)).rgb;
     color += texture(uSourceTexture, uv + vec2(0.0, -offset.y)).rgb;
     color += texture(uSourceTexture, uv + vec2(0.0, offset.y)).rgb;
-    imageStore(uOutputImage, pixel, vec4(color * 0.25 * uIntensity, 1.0));
+    imageStore(uOutputImage, pixel, vec4(clamp(base + (color * 0.25 * uIntensity), 0.0, 1.0), 1.0));
 }
 """;
 
@@ -187,7 +199,7 @@ layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(binding = 0) uniform sampler2D uSceneTexture;
 layout(binding = 1) uniform sampler2D uBloomTexture;
-layout(rgba16f, binding = 0) writeonly uniform image2D uOutputImage;
+layout(rgba8, binding = 0) writeonly uniform image2D uOutputImage;
 
 uniform ivec2 uOutputSize;
 uniform float uBloomIntensity;
@@ -217,7 +229,7 @@ layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(binding = 0) uniform sampler2D uWorldTexture;
 layout(binding = 1) uniform sampler2D uLightTexture;
 layout(binding = 2) uniform sampler2D uEmissiveTexture;
-layout(rgba16f, binding = 0) writeonly uniform image2D uOutputImage;
+layout(rgba8, binding = 0) writeonly uniform image2D uOutputImage;
 
 uniform ivec2 uOutputSize;
 uniform float uExposure;

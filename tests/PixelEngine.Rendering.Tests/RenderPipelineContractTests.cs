@@ -27,6 +27,8 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("_overlay.Render", source, StringComparison.Ordinal);
         Assert.Contains("_composite.Render", source, StringComparison.Ordinal);
         Assert.Contains("_bloom.Render", source, StringComparison.Ordinal);
+        Assert.Contains("_computeBloom!.Render", source, StringComparison.Ordinal);
+        Assert.Contains("ComputeCapabilityGate.Evaluate", source, StringComparison.Ordinal);
         Assert.Contains("_dither.Render", source, StringComparison.Ordinal);
         Assert.Contains("_gamma.Render", source, StringComparison.Ordinal);
         Assert.Contains("_crt.Render", source, StringComparison.Ordinal);

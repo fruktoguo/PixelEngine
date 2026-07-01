@@ -168,6 +168,18 @@ public sealed class RenderWindowIntegrationTests
     }
 
     [Fact]
+    public void CanRenderFrameThroughComputeBloomWhenExplicitlyEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = CreateSmokeWindow("PixelEngine compute bloom smoke", RenderBackendPreference.Auto);
+        RenderPipelineFrame(window, preferComputeLighting: true);
+    }
+
+    [Fact]
     public void CanRenderFrameThroughGlesAngleWhenExplicitlyEnabled()
     {
         if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"), "1", StringComparison.Ordinal))
@@ -200,7 +212,7 @@ public sealed class RenderWindowIntegrationTests
         });
     }
 
-    private static void RenderPipelineFrame(RenderWindow window)
+    private static void RenderPipelineFrame(RenderWindow window, bool preferComputeLighting = false)
     {
         using RenderPipeline pipeline = new(window, 16, 16);
         RenderBuffer buffer = new(16, 16);
@@ -215,6 +227,7 @@ public sealed class RenderWindowIntegrationTests
         ];
 
         pipeline.Settings.EnableCrt = true;
+        pipeline.Settings.PreferComputeLighting = preferComputeLighting;
         pipeline.RenderFrame(buffer, aux, CameraState.OneToOne(0, 0, 16, 16), [], overlays);
         window.SwapBuffers();
 

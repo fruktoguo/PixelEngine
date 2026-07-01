@@ -28,7 +28,17 @@ public sealed class GpuComputeShaderSourcesTests
         Assert.False(string.IsNullOrWhiteSpace(source));
         Assert.Contains("#version 430", source, StringComparison.Ordinal);
         Assert.Contains("layout(local_size_x", source, StringComparison.Ordinal);
+        Assert.Contains("layout(rgba8", source, StringComparison.Ordinal);
         Assert.Contains("void main", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BloomComputeSourcesMatchFragmentBloomSemantics()
+    {
+        Assert.Contains("smoothstep(uThreshold, uThreshold + 0.2", GpuComputeShaderSources.BloomBrightPass, StringComparison.Ordinal);
+        Assert.Contains("uSourceTexelSize", GpuComputeShaderSources.BloomDownsample, StringComparison.Ordinal);
+        Assert.Contains("uBaseTexture", GpuComputeShaderSources.BloomDualKawaseUp, StringComparison.Ordinal);
+        Assert.Contains("scene.rgb + bloom", GpuComputeShaderSources.BloomUpsampleComposite, StringComparison.Ordinal);
     }
 
     [Fact]

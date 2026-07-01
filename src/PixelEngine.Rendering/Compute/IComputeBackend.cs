@@ -36,6 +36,13 @@ public interface IComputeBackend : IDisposable
     void BindStorageBuffer(uint bindingIndex, uint bufferHandle);
 
     /// <summary>
+    /// 绑定 2D texture 到指定 sampler texture unit。
+    /// </summary>
+    /// <param name="unit">texture unit。</param>
+    /// <param name="textureHandle">OpenGL texture 句柄；其它后端可把该值解释为后端资源句柄。</param>
+    void BindTexture(uint unit, uint textureHandle);
+
+    /// <summary>
     /// 绑定 image load/store 纹理到指定 image unit。
     /// </summary>
     /// <param name="unit">image unit。</param>
@@ -53,6 +60,26 @@ public interface IComputeBackend : IDisposable
         int layer,
         GLEnum access,
         GLEnum format);
+
+    /// <summary>
+    /// 设置 int uniform。
+    /// </summary>
+    void SetUniform1(ComputeKernel kernel, string name, int value);
+
+    /// <summary>
+    /// 设置 float uniform。
+    /// </summary>
+    void SetUniform1(ComputeKernel kernel, string name, float value);
+
+    /// <summary>
+    /// 设置 ivec2 uniform。
+    /// </summary>
+    void SetUniform2(ComputeKernel kernel, string name, int x, int y);
+
+    /// <summary>
+    /// 设置 vec2 uniform。
+    /// </summary>
+    void SetUniform2(ComputeKernel kernel, string name, float x, float y);
 
     /// <summary>
     /// 使用指定 kernel dispatch compute 工作组。

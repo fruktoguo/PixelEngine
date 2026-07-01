@@ -29,7 +29,37 @@ public sealed class ComputeSharpBackend : IComputeBackend
     }
 
     /// <inheritdoc />
+    public void BindTexture(uint unit, uint textureHandle)
+    {
+        throw CreateUnavailableException();
+    }
+
+    /// <inheritdoc />
     public void BindImage(uint unit, uint textureHandle, int level, bool layered, int layer, GLEnum access, GLEnum format)
+    {
+        throw CreateUnavailableException();
+    }
+
+    /// <inheritdoc />
+    public void SetUniform1(ComputeKernel kernel, string name, int value)
+    {
+        throw CreateUnavailableException();
+    }
+
+    /// <inheritdoc />
+    public void SetUniform1(ComputeKernel kernel, string name, float value)
+    {
+        throw CreateUnavailableException();
+    }
+
+    /// <inheritdoc />
+    public void SetUniform2(ComputeKernel kernel, string name, int x, int y)
+    {
+        throw CreateUnavailableException();
+    }
+
+    /// <inheritdoc />
+    public void SetUniform2(ComputeKernel kernel, string name, float x, float y)
     {
         throw CreateUnavailableException();
     }

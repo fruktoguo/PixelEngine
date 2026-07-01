@@ -76,10 +76,46 @@ public sealed class GLComputeBackend : IComputeBackend
     }
 
     /// <inheritdoc />
+    public void BindTexture(uint unit, uint textureHandle)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _gl.ActiveTexture((TextureUnit)((uint)TextureUnit.Texture0 + unit));
+        _gl.BindTexture(TextureTarget.Texture2D, textureHandle);
+    }
+
+    /// <inheritdoc />
     public void BindImage(uint unit, uint textureHandle, int level, bool layered, int layer, GLEnum access, GLEnum format)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         _gl.BindImageTexture(unit, textureHandle, level, layered, layer, access, format);
+    }
+
+    /// <inheritdoc />
+    public void SetUniform1(ComputeKernel kernel, string name, int value)
+    {
+        int location = GetUniformLocation(kernel, name);
+        _gl.Uniform1(location, value);
+    }
+
+    /// <inheritdoc />
+    public void SetUniform1(ComputeKernel kernel, string name, float value)
+    {
+        int location = GetUniformLocation(kernel, name);
+        _gl.Uniform1(location, value);
+    }
+
+    /// <inheritdoc />
+    public void SetUniform2(ComputeKernel kernel, string name, int x, int y)
+    {
+        int location = GetUniformLocation(kernel, name);
+        _gl.Uniform2(location, x, y);
+    }
+
+    /// <inheritdoc />
+    public void SetUniform2(ComputeKernel kernel, string name, float x, float y)
+    {
+        int location = GetUniformLocation(kernel, name);
+        _gl.Uniform2(location, x, y);
     }
 
     /// <inheritdoc />
@@ -191,5 +227,18 @@ public sealed class GLComputeBackend : IComputeBackend
             _gl.DeleteShader(shader);
             throw;
         }
+    }
+
+    private int GetUniformLocation(ComputeKernel kernel, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (kernel.Handle == 0)
+        {
+            throw new ArgumentException("GL compute kernel 句柄无效。", nameof(kernel));
+        }
+
+        _gl.UseProgram(kernel.Handle);
+        return _gl.GetUniformLocation(kernel.Handle, name);
     }
 }
