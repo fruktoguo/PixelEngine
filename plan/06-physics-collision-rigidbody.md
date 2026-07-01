@@ -176,9 +176,9 @@
 - [x] 注入 `B2WorldDef`：`&EnqueueTask`/`&FinishTask`/`workerCount=JobSystem.WorkerCount`/`userTaskContext=&BridgeContext`。
 
 ### 4.3 PixelEngine.Physics — 尺度与转换
-- [ ] `PhysicsScale`：消费 `EngineConstants.PhysicsPixelsPerMeter=16`，`b2SetLengthUnitsPerMeter(16)` 一次（架构 §8.1，R9）。
-- [ ] `PixelToPhysics`/`PhysicsToPixel`/`ToPhysics(CellPos)`/`ToCell(B2Vec2)` 内联零分配转换。
-- [ ] 全 `b2MakePolygon` 调用点 `radius=0`（架构 §8.2 修正，R9）；加断言/分析守门。
+- [x] `PhysicsScale`：消费 `EngineConstants.PhysicsPixelsPerMeter=16`，`b2SetLengthUnitsPerMeter(16)` 一次（架构 §8.1，R9）。
+- [x] `PixelToPhysics`/`PhysicsToPixel`/`ToPhysics(CellPos)`/`ToCell(B2Vec2)` 内联零分配转换。
+- [x] 全 `b2MakePolygon` 调用点 `radius=0`（架构 §8.2 修正，R9）；加断言/分析守门。
 
 ### 4.4 PixelEngine.Physics — 像素簇→刚体管线（架构 §8.2）
 - [ ] `ConnectedComponentLabeler`：**显式栈非递归** flood fill，4/8 连通可选；`ArrayPool`/`stackalloc` scratch 零稳态分配。
@@ -248,7 +248,7 @@
 ### 5.2 转换管线与刚体
 - [ ] 凸分解每片 **≤8 顶点且凸**（`plan/14` 性质测试，`AGENTS.md` §7）。
 - [ ] 凸片并集**覆盖原 mask**（无丢面积，`AGENTS.md` §7）。
-- [ ] 所有 `b2MakePolygon` **`radius=0`**（验证锐利边缘，`AGENTS.md` §7、R9）。
+- [x] 所有 `b2MakePolygon` **`radius=0`**（验证锐利边缘，`AGENTS.md` §7、R9）。
 - [ ] CCL 用显式栈非递归，大连通块不栈溢出（架构 §8.2）。
 - [ ] 碎片 `< FragmentPixelThreshold` 转自由粒子而非建体（架构 §8.2/§8.4）。
 
@@ -305,7 +305,7 @@
 
 - [x] 节点 1：`feat(physics): Box2D v3.1 [LibraryImport] 薄绑定与 blittable 类型`（对应 §4.1，架构 §8.2/§14.3）。
 - [x] 节点 2：`feat(physics): 自建 Box2D task-callback 桥(同步 fork-join)派发到 JobSystem`（对应 §4.2，架构 §14.2）。
-- [ ] 节点 3：`feat(physics): 物理尺度与坐标转换(16px=1m, radius=0)`（对应 §4.3，架构 §8.1）。
+- [x] 节点 3：`feat(physics): 物理尺度与坐标转换(16px=1m, radius=0)`（对应 §4.3，架构 §8.1）。
 - [ ] 节点 4：`feat(physics): 像素簇→刚体管线(CCL→MS→DP→PolyPartition→复合体)`（对应 §4.4，架构 §8.2）。
 - [ ] 节点 5：`feat(physics): 不可变 body-local mask 与刚体包装/registry/damage queue`（对应 §4.5，架构 §8.3/R6）。
 - [ ] 节点 6：`feat(physics): 两世界栅格化同步(erase→step→inverse-sample re-stamp)`（对应 §4.6，相位 8，不变式 #5）。

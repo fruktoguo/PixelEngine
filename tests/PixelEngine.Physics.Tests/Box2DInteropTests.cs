@@ -1,7 +1,6 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using PixelEngine.Core;
 using PixelEngine.Interop.Box2D;
 using Xunit;
 
@@ -58,7 +57,7 @@ public sealed unsafe class Box2DInteropTests
     [Fact]
     public void Box2DWorldCanStepDynamicBody()
     {
-        Box2D.b2SetLengthUnitsPerMeter(EngineConstants.PhysicsPixelsPerMeter);
+        PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         worldDef.Gravity = new B2Vec2 { X = 0f, Y = 10f };
         B2WorldId worldId = Box2D.b2CreateWorld(in worldDef);
@@ -78,7 +77,7 @@ public sealed unsafe class Box2DInteropTests
 
             B2Hull hull = Box2D.b2ComputeHull(points, 4);
             Assert.Equal(4, hull.Count);
-            B2Polygon polygon = Box2D.b2MakePolygon(in hull, radius: 0f);
+            B2Polygon polygon = PhysicsScale.MakeSharpPolygon(in hull);
             Assert.Equal(0f, polygon.Radius);
 
             B2ShapeDef shapeDef = Box2D.b2DefaultShapeDef();
