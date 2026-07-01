@@ -95,6 +95,33 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
+    /// 验证脚本世界爆炸 API 会在安全相位触发 cell 抛射，并对半径内刚体施加径向冲量。
+    /// </summary>
+    [Fact]
+    public void WorldExplodeFlushesCellEjectionAndRigidImpulse()
+    {
+        using Fixture fixture = Fixture.Create(withPhysics: true);
+        MaterialId sand = fixture.Context.Materials.Resolve("sand");
+        FillRect(fixture.Chunk, minX: 48, minY: 48, maxX: 60, maxY: 60, material: 2);
+        BodyHandle handle = fixture.Context.Bodies.CreateFromRegion(48, 48, 12, 12);
+        Assert.Equal(1, fixture.Context.FlushPhysicsCommands());
+        Assert.True(fixture.Context.Bodies.TryGetTransform(handle, out _));
+        FillRect(fixture.Chunk, minX: 32, minY: 32, maxX: 36, maxY: 36, material: sand.Value);
+
+        fixture.Context.World.Explode(34f, 34f, radius: 32, force: 80f);
+
+        Assert.Equal(1, fixture.Context.FlushParticleCommands());
+        fixture.Particles.RunEjectionPass(fixture.Kernel, fixture.Grid);
+        Assert.True(fixture.Particles.ActiveCount > 0);
+        Assert.True(AnyCleared(fixture.Grid, minX: 32, minY: 32, maxX: 36, maxY: 36));
+
+        Assert.Equal(1, fixture.Context.FlushPhysicsCommands());
+        PixelRigidBody body = fixture.Physics!.PhysicsWorld.GetBody(0);
+        B2Vec2 velocity = Box2D.b2Body_GetLinearVelocity(body.BodyId);
+        Assert.True(velocity.X > 0f);
+    }
+
+    /// <summary>
     /// 验证脚本角色控制器 facade 延迟到 Physics flush 后使用真实像素碰撞后端更新状态。
     /// </summary>
     [Fact]
@@ -372,6 +399,22 @@ public sealed class ScriptSimulationContextTests
                 chunk.Material[CellAddressing.LocalIndexFromLocal(x, y)] = material;
             }
         }
+    }
+
+    private static bool AnyCleared(CellGrid grid, int minX, int minY, int maxX, int maxY)
+    {
+        for (int y = minY; y < maxY; y++)
+        {
+            for (int x = minX; x < maxX; x++)
+            {
+                if (grid.GetMaterial(x, y) == 0)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static void WriteAscii(byte[] destination, int offset, string text)

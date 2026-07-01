@@ -106,8 +106,8 @@ public sealed class SimulationPhaseDriver(
 
     private void RunCellToParticle(EngineTickContext context)
     {
-        Particles.RunEjectionPass(Kernel, Grid);
         _ = _scriptContext?.FlushParticleCommands();
+        Particles.RunEjectionPass(Kernel, Grid);
         Particles.PublishDiagnostics(context.Context.Counters);
     }
 }

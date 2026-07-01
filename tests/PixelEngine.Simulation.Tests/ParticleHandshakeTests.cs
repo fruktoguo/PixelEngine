@@ -95,6 +95,29 @@ public sealed class ParticleHandshakeTests
     }
 
     /// <summary>
+    /// 验证抛射清除 RigidOwned cell 时会通知刚体 damage sink，供 Physics 相位重建破碎刚体。
+    /// </summary>
+    [Fact]
+    public void RunEjectionPassReportsRigidOwnedSourceDamage()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Set(center, 10, 10, Solid);
+        center.Flags[CellAddressing.LocalIndexFromLocal(10, 10)] = CellFlags.RigidOwned;
+        CountingRigidDamageSink damageSink = new();
+        MaterialPropsTable materials = CreateMaterials();
+        CellGrid grid = new(source, materials, damageSink);
+        SimulationKernel kernel = new(source, materials, rigidDamageSink: damageSink);
+        ParticleSystem particles = new(capacity: 4);
+
+        Assert.True(particles.RequestEjection(new EjectionRequest(10, 10, 0, 2, 0, EjectMask.Solid)));
+        particles.RunEjectionPass(kernel, grid);
+
+        Assert.Equal(0, Get(center, 10, 10));
+        Assert.Equal(1, damageSink.Count);
+        Assert.Equal((10, 10), damageSink.Last);
+    }
+
+    /// <summary>
     /// 验证抛射粒子寿命来自材质默认 lifetime，并被粒子系统最大寿命钳制。
     /// </summary>
     [Fact]
@@ -372,6 +395,19 @@ public sealed class ParticleHandshakeTests
 
             neighborhood = new ChunkNeighborhood(slot0, slot1, slot2, slot3, slot4, slot5, slot6, slot7, slot8);
             return true;
+        }
+    }
+
+    private sealed class CountingRigidDamageSink : IRigidDamageSink
+    {
+        public int Count { get; private set; }
+
+        public (int X, int Y) Last { get; private set; }
+
+        public void OnOwnedCellDamaged(int wx, int wy)
+        {
+            Count++;
+            Last = (wx, wy);
         }
     }
 }

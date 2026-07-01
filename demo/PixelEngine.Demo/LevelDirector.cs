@@ -185,6 +185,9 @@ public sealed class LevelDirector : Behaviour
         MaterialBrush brush = playerEntity.AddComponent<MaterialBrush>();
         _ = brush;
 
+        ExplosiveTool explosive = playerEntity.AddComponent<ExplosiveTool>();
+        _ = explosive;
+
         GoalTrigger goal = playerEntity.AddComponent<GoalTrigger>();
         goal.X = GoalX;
         goal.Y = GoalY;

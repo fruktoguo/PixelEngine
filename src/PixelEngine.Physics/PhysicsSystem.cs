@@ -521,6 +521,82 @@ public sealed class PhysicsSystem : IDisposable
     }
 
     /// <summary>
+    /// 对半径内全部活跃刚体施加由中心向外的径向冲量。
+    /// </summary>
+    /// <param name="centerX">爆炸中心 X 坐标，单位像素。</param>
+    /// <param name="centerY">爆炸中心 Y 坐标，单位像素。</param>
+    /// <param name="radius">作用半径，单位像素。</param>
+    /// <param name="impulsePixels">中心处冲量强度，单位为像素质量单位每秒。</param>
+    /// <returns>成功施加冲量的刚体数量。</returns>
+    public int ApplyRadialImpulse(float centerX, float centerY, float radius, float impulsePixels)
+    {
+        ObjectDisposedException.ThrowIf(_shutdown, this);
+        if (!float.IsFinite(centerX) || !float.IsFinite(centerY) ||
+            !float.IsFinite(radius) || !float.IsFinite(impulsePixels))
+        {
+            throw new ArgumentOutOfRangeException(nameof(centerX), "径向冲量参数必须是有限数值。");
+        }
+
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(impulsePixels);
+        float radiusSquared = radius * radius;
+        int applied = 0;
+        int slotCount = PhysicsWorld.BodySlotCount;
+        for (int bodyKey = 0; bodyKey < slotCount; bodyKey++)
+        {
+            if (!PhysicsWorld.TryGetBody(bodyKey, out PixelRigidBody? body))
+            {
+                continue;
+            }
+
+            Transform2D transform = PhysicsScale.ToTransform2D(Box2D.b2Body_GetTransform(body.BodyId));
+            float dx = transform.Position.X - centerX;
+            float dy = transform.Position.Y - centerY;
+            float distanceSquared = (dx * dx) + (dy * dy);
+            if (distanceSquared > radiusSquared)
+            {
+                continue;
+            }
+
+            float distance = MathF.Sqrt(distanceSquared);
+            float normalX;
+            float normalY;
+            if (distance <= 0.001f)
+            {
+                normalX = 0f;
+                normalY = -1f;
+                distance = 0f;
+            }
+            else
+            {
+                float invDistance = 1f / distance;
+                normalX = dx * invDistance;
+                normalY = dy * invDistance;
+            }
+
+            float falloff = 1f - Math.Clamp(distance / radius, 0f, 1f);
+            if (falloff <= 0f)
+            {
+                continue;
+            }
+
+            B2Vec2 point = Box2D.b2Body_GetPosition(body.BodyId);
+            Box2D.b2Body_ApplyLinearImpulse(
+                body.BodyId,
+                new B2Vec2
+                {
+                    X = PhysicsScale.PixelToPhysics(normalX * impulsePixels * falloff),
+                    Y = PhysicsScale.PixelToPhysics(normalY * impulsePixels * falloff),
+                },
+                point,
+                wake: 1);
+            applied++;
+        }
+
+        return applied;
+    }
+
+    /// <summary>
     /// 销毁指定刚体，并清除它上一帧 stamp 的 RigidOwned 像素。
     /// </summary>
     /// <param name="bodyKey">刚体 bodyKey。</param>

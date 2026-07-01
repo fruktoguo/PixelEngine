@@ -11,6 +11,11 @@ public interface IScriptContext
     IWorldCellAccess Cells { get; }
 
     /// <summary>
+    /// 世界级复合效果能力；写操作延迟到对应安全相位落地。
+    /// </summary>
+    IWorldEffects World { get; }
+
+    /// <summary>
     /// 材质查询能力。
     /// </summary>
     IMaterialQuery Materials { get; }
@@ -116,6 +121,21 @@ public interface IWorldCellAccess
     /// <param name="radius">绘制半径，单位像素。</param>
     /// <param name="material">要写入的材质句柄。</param>
     void Paint(int x, int y, int radius, MaterialId material);
+}
+
+/// <summary>
+/// 提供脚本可用的世界级复合效果 API。
+/// </summary>
+public interface IWorldEffects
+{
+    /// <summary>
+    /// 延迟触发一次爆炸：把半径内可抛射 cell 转为自由粒子，并对邻近刚体施加径向冲量。
+    /// </summary>
+    /// <param name="x">爆炸中心 X 坐标。</param>
+    /// <param name="y">爆炸中心 Y 坐标。</param>
+    /// <param name="radius">爆炸半径，单位 cell。</param>
+    /// <param name="force">径向冲量强度，单位为像素质量单位每秒。</param>
+    void Explode(float x, float y, int radius, float force);
 }
 
 /// <summary>

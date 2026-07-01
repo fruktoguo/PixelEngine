@@ -57,6 +57,8 @@ public sealed class ScriptDispatchAllocationTests
     {
         public IWorldCellAccess Cells => throw new NotSupportedException();
 
+        public IWorldEffects World => throw new NotSupportedException();
+
         public IMaterialQuery Materials => throw new NotSupportedException();
 
         public IParticleSpawner Particles => throw new NotSupportedException();

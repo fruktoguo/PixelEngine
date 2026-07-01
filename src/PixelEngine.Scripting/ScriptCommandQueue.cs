@@ -13,10 +13,12 @@ internal enum ScriptCommandKind
 {
     SetCell,
     Paint,
+    Explode,
     SpawnParticle,
     BurstParticles,
     CreateBodyFromRegion,
     ApplyImpulse,
+    ApplyRadialImpulse,
     DestroyBody,
     MoveCharacter,
 }
@@ -42,6 +44,11 @@ internal readonly record struct ScriptCommand(
     public static ScriptCommand Paint(int x, int y, int radius, MaterialId material)
     {
         return new ScriptCommand(ScriptCommandKind.Paint, x, y, radius, 0, material, default, default, default, 0, 0);
+    }
+
+    public static ScriptCommand Explode(int x, int y, int radius, float force, float jitter)
+    {
+        return new ScriptCommand(ScriptCommandKind.Explode, x, y, radius, 0, default, default, default, default, force, jitter);
     }
 
     public static ScriptCommand SpawnParticle(in ParticleSpawnDesc particle)
@@ -73,6 +80,11 @@ internal readonly record struct ScriptCommand(
     public static ScriptCommand ApplyImpulse(BodyHandle body, float impulseX, float impulseY)
     {
         return new ScriptCommand(ScriptCommandKind.ApplyImpulse, 0, 0, 0, 0, default, default, body, default, impulseX, impulseY);
+    }
+
+    public static ScriptCommand ApplyRadialImpulse(int x, int y, int radius, float force)
+    {
+        return new ScriptCommand(ScriptCommandKind.ApplyRadialImpulse, x, y, radius, 0, default, default, default, default, force, 0);
     }
 
     public static ScriptCommand DestroyBody(BodyHandle body)
