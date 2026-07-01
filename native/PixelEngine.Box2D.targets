@@ -23,6 +23,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
+    <PixelEngineBox2DDirectPInvokeName>box2d</PixelEngineBox2DDirectPInvokeName>
     <PixelEngineBox2DDynamicLibraryPath>$(PixelEngineBox2DRuntimeDir)$(PixelEngineBox2DDynamicLibraryName)</PixelEngineBox2DDynamicLibraryPath>
     <PixelEngineBox2DStaticLibraryPath>$(PixelEngineBox2DStaticDir)$(PixelEngineBox2DStaticLibraryName)</PixelEngineBox2DStaticLibraryPath>
   </PropertyGroup>
@@ -35,6 +36,7 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(PixelEngineBox2DRid)' != '' and '$(PixelEngineBox2DStaticLibraryName)' != '' and Exists('$(PixelEngineBox2DStaticLibraryPath)') and '$(PublishAot)' == 'true'">
+    <DirectPInvoke Include="$(PixelEngineBox2DDirectPInvokeName)" />
     <NativeLibrary Include="$(PixelEngineBox2DStaticLibraryPath)" />
   </ItemGroup>
 </Project>

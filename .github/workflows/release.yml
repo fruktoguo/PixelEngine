@@ -1,0 +1,429 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  CI: true
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  native:
+    name: native (${{ matrix.group }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: windows
+            runner: windows-latest
+            shell: pwsh
+            rids: win-x64 win-arm64
+          - group: linux
+            runner: ubuntu-latest
+            shell: bash
+            rids: linux-x64 linux-arm64
+          - group: macos
+            runner: macos-14
+            shell: bash
+            rids: osx-x64 osx-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Linux arm64 cross toolchain
+        if: matrix.group == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Build native
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
+        env:
+          RIDS: ${{ matrix.rids }}
+        run: |
+          foreach ($rid in $env:RIDS.Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries)) {
+            ./tools/build-native.ps1 -Rid $rid -Configuration Release
+          }
+
+      - name: Build native
+        if: matrix.shell == 'bash'
+        shell: bash
+        env:
+          RIDS: ${{ matrix.rids }}
+        run: |
+          for rid in $RIDS; do
+            bash ./tools/build-native.sh --rid "$rid" --configuration Release
+          done
+
+      - name: Upload native artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.group }}
+          if-no-files-found: error
+          path: |
+            native/out
+            runtimes
+
+  publish:
+    name: publish (${{ matrix.rid }}, ${{ matrix.channel }})
+    needs: native
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [win-x64, win-arm64, linux-x64, linux-arm64, osx-x64, osx-arm64]
+        channel: [r2r, aot]
+        include:
+          - rid: win-x64
+            runner: windows-latest
+            shell: pwsh
+          - rid: win-arm64
+            runner: windows-latest
+            shell: pwsh
+          - rid: linux-x64
+            runner: ubuntu-latest
+            shell: bash
+          - rid: linux-arm64
+            runner: ubuntu-latest
+            shell: bash
+          - rid: osx-x64
+            runner: macos-15-intel
+            shell: bash
+          - rid: osx-arm64
+            runner: macos-14
+            shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          merge-multiple: true
+
+      - name: Resolve release version
+        shell: pwsh
+        run: |
+          $refName = '${{ github.ref_name }}'
+          $version = if ($refName.StartsWith('v')) { $refName.Substring(1) } else { '0.1.0-dev' }
+          $shortSha = $env:GITHUB_SHA.Substring(0, 8)
+          "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
+          "INFORMATIONAL_VERSION=$version+$shortSha" >> $env:GITHUB_ENV
+
+      - name: Publish
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
+        run: |
+          ./tools/publish-${{ matrix.channel }}.ps1 `
+            -Rid ${{ matrix.rid }} `
+            -Configuration Release `
+            -Version $env:RELEASE_VERSION `
+            -InformationalVersion $env:INFORMATIONAL_VERSION `
+            -SkipNativeBuild
+
+      - name: Publish
+        if: matrix.shell == 'bash'
+        shell: bash
+        run: |
+          bash ./tools/publish-${{ matrix.channel }}.sh \
+            --rid "${{ matrix.rid }}" \
+            --configuration Release \
+            --version "$RELEASE_VERSION" \
+            --informational-version "$INFORMATIONAL_VERSION" \
+            --skip-native-build
+
+      - name: AOT SIMD probe
+        if: matrix.channel == 'aot' && endsWith(matrix.rid, '-x64') && matrix.shell == 'pwsh'
+        shell: pwsh
+        run: ./tools/aot-simd-probe.ps1 -Rid ${{ matrix.rid }} -PublishDir artifacts/publish/${{ matrix.rid }}-${{ matrix.channel }}
+
+      - name: AOT SIMD probe
+        if: matrix.channel == 'aot' && endsWith(matrix.rid, '-x64') && matrix.shell == 'bash'
+        shell: bash
+        run: bash ./tools/aot-simd-probe.sh --rid "${{ matrix.rid }}" --publish-dir "artifacts/publish/${{ matrix.rid }}-${{ matrix.channel }}"
+
+      - name: Upload publish artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-${{ matrix.rid }}-${{ matrix.channel }}
+          if-no-files-found: error
+          path: artifacts/publish/${{ matrix.rid }}-${{ matrix.channel }}
+
+  verify:
+    name: verify (${{ matrix.rid }}, ${{ matrix.channel }})
+    needs: publish
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [win-x64, win-arm64, linux-x64, linux-arm64, osx-x64, osx-arm64]
+        channel: [r2r, aot]
+        include:
+          - rid: win-x64
+            runner: windows-latest
+            shell: pwsh
+            allow_load_only: 'false'
+          - rid: win-arm64
+            runner: windows-latest
+            shell: pwsh
+            allow_load_only: 'true'
+          - rid: linux-x64
+            runner: ubuntu-latest
+            shell: bash
+            allow_load_only: 'false'
+          - rid: linux-arm64
+            runner: ubuntu-latest
+            shell: bash
+            allow_load_only: 'false'
+          - rid: osx-x64
+            runner: macos-15-intel
+            shell: bash
+            allow_load_only: 'false'
+          - rid: osx-arm64
+            runner: macos-14
+            shell: bash
+            allow_load_only: 'false'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux arm64 smoke runner
+        if: matrix.rid == 'linux-arm64'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static
+
+      - name: Download publish artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: publish-${{ matrix.rid }}-${{ matrix.channel }}
+          path: artifacts/publish/${{ matrix.rid }}-${{ matrix.channel }}
+
+      - name: Verify publish
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
+        run: |
+          $arguments = @(
+            '-Rid', '${{ matrix.rid }}',
+            '-Channel', '${{ matrix.channel }}',
+            '-PublishDir', 'artifacts/publish/${{ matrix.rid }}-${{ matrix.channel }}',
+            '-SkipPublish'
+          )
+          if ('${{ matrix.allow_load_only }}' -eq 'true') {
+            $arguments += '-AllowLoadOnly'
+          }
+          ./tools/verify-publish.ps1 @arguments
+
+      - name: Verify publish
+        if: matrix.shell == 'bash'
+        shell: bash
+        run: |
+          args=(
+            --rid "${{ matrix.rid }}"
+            --channel "${{ matrix.channel }}"
+            --publish-dir "artifacts/publish/${{ matrix.rid }}-${{ matrix.channel }}"
+          )
+          if [[ "${{ matrix.allow_load_only }}" == "true" ]]; then
+            args+=(--allow-load-only)
+          fi
+          bash ./tools/verify-publish.sh "${args[@]}"
+
+  sign-package:
+    name: sign-package (${{ matrix.rid }}, ${{ matrix.channel }})
+    needs: verify
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [win-x64, win-arm64, linux-x64, linux-arm64, osx-x64, osx-arm64]
+        channel: [r2r, aot]
+        include:
+          - rid: win-x64
+            runner: windows-latest
+            shell: pwsh
+          - rid: win-arm64
+            runner: windows-latest
+            shell: pwsh
+          - rid: linux-x64
+            runner: ubuntu-latest
+            shell: bash
+          - rid: linux-arm64
+            runner: ubuntu-latest
+            shell: bash
+          - rid: osx-x64
+            runner: macos-15-intel
+            shell: bash
+          - rid: osx-arm64
+            runner: macos-14
+            shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download publish artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: publish-${{ matrix.rid }}-${{ matrix.channel }}
+          path: artifacts/publish/${{ matrix.rid }}-${{ matrix.channel }}
+
+      - name: Resolve release version
+        shell: pwsh
+        run: |
+          $refName = '${{ github.ref_name }}'
+          $version = if ($refName.StartsWith('v')) { $refName.Substring(1) } else { '0.1.0-dev' }
+          "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Configure Apple signing keychain
+        if: startsWith(matrix.rid, 'osx-')
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_CODESIGN_IDENTITY: ${{ secrets.APPLE_CODESIGN_IDENTITY }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          APPLE_NOTARY_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+        run: |
+          required=(
+            APPLE_CERTIFICATE_P12_BASE64
+            APPLE_CERTIFICATE_PASSWORD
+            APPLE_CODESIGN_IDENTITY
+            APPLE_NOTARY_KEY_ID
+            APPLE_NOTARY_ISSUER_ID
+            APPLE_NOTARY_KEY_P8_BASE64
+          )
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing required macOS signing secret: $name"
+              exit 1
+            fi
+          done
+
+          keychain="$RUNNER_TEMP/pixelengine-signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain-db
+          security default-keychain -s "$keychain"
+
+          cert_path="$RUNNER_TEMP/developer-id.p12"
+          notary_key_path="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$APPLE_CERTIFICATE_P12_BASE64" | base64 --decode > "$cert_path"
+          printf '%s' "$APPLE_NOTARY_KEY_P8_BASE64" | base64 --decode > "$notary_key_path"
+          security import "$cert_path" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain"
+          xcrun notarytool store-credentials pixelengine-notary \
+            --key "$notary_key_path" \
+            --key-id "$APPLE_NOTARY_KEY_ID" \
+            --issuer "$APPLE_NOTARY_ISSUER_ID"
+
+      - name: codesign and notarize macOS publish directory
+        if: startsWith(matrix.rid, 'osx-')
+        shell: bash
+        env:
+          APPLE_CODESIGN_IDENTITY: ${{ secrets.APPLE_CODESIGN_IDENTITY }}
+          APPLE_NOTARY_PROFILE: pixelengine-notary
+        run: |
+          bash ./tools/codesign-macos.sh \
+            --path "artifacts/publish/${{ matrix.rid }}-${{ matrix.channel }}" \
+            --identity "$APPLE_CODESIGN_IDENTITY" \
+            --notary-profile "$APPLE_NOTARY_PROFILE"
+
+      - name: Package
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
+        run: |
+          ./tools/package.ps1 `
+            -Rid ${{ matrix.rid }} `
+            -Channel ${{ matrix.channel }} `
+            -Version $env:RELEASE_VERSION `
+            -PublishDir artifacts/publish/${{ matrix.rid }}-${{ matrix.channel }}
+
+      - name: Package
+        if: matrix.shell == 'bash'
+        shell: bash
+        run: |
+          bash ./tools/package.sh \
+            --rid "${{ matrix.rid }}" \
+            --channel "${{ matrix.channel }}" \
+            --version "$RELEASE_VERSION" \
+            --publish-dir "artifacts/publish/${{ matrix.rid }}-${{ matrix.channel }}"
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.rid }}-${{ matrix.channel }}
+          if-no-files-found: error
+          path: |
+            artifacts/package/PixelEngine-Demo-*.zip
+            artifacts/package/PixelEngine-Demo-*.tar.gz
+
+  release:
+    name: release
+    needs: sign-package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          path: artifacts/package
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS
+        shell: bash
+        run: |
+          cd artifacts/package
+          sha256sum PixelEngine-Demo-* > SHA256SUMS
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          fail_on_unmatched_files: true
+          body: |
+            PixelEngine Demo release.
+
+            Verification notes:
+            - win-arm64 is load-only checked on the Windows x64 runner and remains a manual hardware gate.
+            - linux-arm64 is smoke-tested through QEMU when available.
+            - macOS x64 and arm64 are smoke-tested on matching GitHub-hosted runners before signing/package upload.
+          files: |
+            artifacts/package/PixelEngine-Demo-*
+            artifacts/package/SHA256SUMS

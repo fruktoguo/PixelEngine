@@ -6,6 +6,8 @@ param(
   [string]$Configuration = 'Release',
 
   [string]$Output,
+  [string]$Version,
+  [string]$InformationalVersion,
   [switch]$SkipNativeBuild
 )
 
@@ -39,12 +41,21 @@ if (-not $SkipNativeBuild) {
   Invoke-Checked (Join-Path $PSScriptRoot 'build-native.ps1') @('-Rid', $Rid, '-Configuration', $Configuration)
 }
 
+$publishProperties = @('-p:Channel=R2R')
+if ($Version) {
+  $publishProperties += "-p:Version=$Version"
+}
+
+if ($InformationalVersion) {
+  $publishProperties += "-p:InformationalVersion=$InformationalVersion"
+}
+
 Remove-Item -LiteralPath $Output -Recurse -Force -ErrorAction SilentlyContinue
 Invoke-Checked 'dotnet' @(
   'publish', $demoProject,
   '-c', $Configuration,
   '-r', $Rid,
-  '-p:Channel=R2R',
+  $publishProperties,
   '-o', $Output
 )
 

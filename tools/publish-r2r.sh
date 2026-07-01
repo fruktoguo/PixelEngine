@@ -3,13 +3,15 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: tools/publish-r2r.sh --rid <RID> [--configuration <Config>] [--output <dir>] [--skip-native-build]
+Usage: tools/publish-r2r.sh --rid <RID> [--configuration <Config>] [--output <dir>] [--version <semver>] [--informational-version <value>] [--skip-native-build]
 EOF
 }
 
 rid=""
 configuration="Release"
 output=""
+version=""
+informational_version=""
 skip_native_build=0
 
 while [[ $# -gt 0 ]]; do
@@ -39,6 +41,24 @@ while [[ $# -gt 0 ]]; do
         exit 2
       fi
       output="$2"
+      shift 2
+      ;;
+    --version)
+      if [[ $# -lt 2 || "$2" == --* ]]; then
+        echo "Missing value for --version." >&2
+        usage
+        exit 2
+      fi
+      version="$2"
+      shift 2
+      ;;
+    --informational-version)
+      if [[ $# -lt 2 || "$2" == --* ]]; then
+        echo "Missing value for --informational-version." >&2
+        usage
+        exit 2
+      fi
+      informational_version="$2"
       shift 2
       ;;
     --skip-native-build)
@@ -97,10 +117,19 @@ if [[ "$skip_native_build" == "0" ]]; then
   bash "$repo_root/tools/build-native.sh" --rid "$rid" --configuration "$configuration"
 fi
 
+publish_properties=("-p:Channel=R2R")
+if [[ -n "$version" ]]; then
+  publish_properties+=("-p:Version=$version")
+fi
+
+if [[ -n "$informational_version" ]]; then
+  publish_properties+=("-p:InformationalVersion=$informational_version")
+fi
+
 dotnet publish "$demo_project" \
   -c "$configuration" \
   -r "$rid" \
-  -p:Channel=R2R \
+  "${publish_properties[@]}" \
   -o "$output"
 
 echo "R2R publish completed for $rid."
