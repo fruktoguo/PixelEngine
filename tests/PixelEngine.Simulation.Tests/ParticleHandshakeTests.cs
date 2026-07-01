@@ -235,7 +235,7 @@ public sealed class ParticleHandshakeTests
         kernel.StepCa();
 
         Assert.Equal(0, Get(center, 10, 10));
-        Assert.Equal(Sand, Get(center, 10, 11));
+        Assert.Equal(Sand, Get(center, 10, 10 + EngineConstants.MoveCap));
     }
 
     /// <summary>

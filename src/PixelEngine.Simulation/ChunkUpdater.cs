@@ -105,9 +105,48 @@ internal static class ChunkUpdater
         out int targetY)
     {
         int firstDx = preferNegative ? -1 : 1;
-        return TryMoveTo(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx, wy + 1, material, parityBit, out targetX, out targetY) ||
+        return TryMoveDown(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, out targetX, out targetY) ||
             TryMoveTo(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx + firstDx, wy + 1, material, parityBit, out targetX, out targetY) ||
             TryMoveTo(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx - firstDx, wy + 1, material, parityBit, out targetX, out targetY);
+    }
+
+    private static bool TryMoveDown(
+        ref NeighborWindow window,
+        IChunkSource chunks,
+        MaterialPropsTable materials,
+        IRigidDamageSink rigidDamageSink,
+        SimulationDiagnostics diagnostics,
+        int wx,
+        int wy,
+        ushort material,
+        byte parityBit,
+        out int movedX,
+        out int movedY)
+    {
+        movedX = wx;
+        movedY = wy;
+        int targetY = wy;
+        for (int step = 1; step <= EngineConstants.MoveCap; step++)
+        {
+            int candidateY = wy + step;
+            ushort targetMaterial = window.GetMaterial(wx, candidateY);
+            if (targetMaterial == 0)
+            {
+                targetY = candidateY;
+                continue;
+            }
+
+            if (!CellFlags.MatchesFrame(window.GetFlags(wx, candidateY), parityBit) &&
+                materials.DensityOf(targetMaterial) < materials.DensityOf(material))
+            {
+                targetY = candidateY;
+            }
+
+            break;
+        }
+
+        return targetY != wy &&
+            TryMoveTo(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx, targetY, material, parityBit, out movedX, out movedY);
     }
 
     private static bool TryMoveLiquid(
