@@ -92,6 +92,40 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
+    /// 验证脚本角色控制器 facade 使用真实像素碰撞后端，并在同一调用返回移动结果。
+    /// </summary>
+    [Fact]
+    public void CharacterFacadeMovesAgainstSolidPixelsAndReturnsCollisionState()
+    {
+        Fixture fixture = Fixture.Create();
+        FillRect(fixture.Chunk, minX: 0, minY: 10, maxX: 32, maxY: 11, material: 2);
+        CharacterHandle handle = fixture.Context.Character.Create(4, 0, 4, 4);
+
+        CharacterState state = fixture.Context.Character.Move(handle, 0, 20);
+
+        Assert.True(state.OnGround);
+        Assert.False(state.OnCeiling);
+        Assert.False(state.OnWall);
+        Assert.Equal(4f, state.X);
+        Assert.Equal(6f, state.Y);
+        Assert.Equal(4f, state.Width);
+        Assert.Equal(4f, state.Height);
+        Assert.Equal(20f, state.RequestedDeltaY);
+        Assert.Equal(6f, state.AppliedDeltaY);
+        Assert.Equal(0f, state.GroundNormalX, precision: 5);
+        Assert.Equal(-1f, state.GroundNormalY, precision: 5);
+        Assert.Equal(state, fixture.Context.Character.GetState(handle));
+
+        CharacterState teleported = fixture.Context.Character.SetPosition(handle, 12, 1);
+
+        Assert.Equal(12f, teleported.X);
+        Assert.Equal(1f, teleported.Y);
+        Assert.Equal(0f, teleported.AppliedDeltaX);
+        Assert.Equal(0f, teleported.AppliedDeltaY);
+        Assert.Equal(teleported, fixture.Context.Character.GetState(handle));
+    }
+
+    /// <summary>
     /// 验证脚本时间 facade 从真实 FrameClock 读取固定步长、帧号与本帧 sim 决策。
     /// </summary>
     [Fact]
@@ -223,6 +257,17 @@ public sealed class ScriptSimulationContextTests
         BinaryPrimitives.WriteInt32LittleEndian(wav.AsSpan(40, 4), pcm.Length);
         pcm.CopyTo(wav.AsSpan(44));
         return wav;
+    }
+
+    private static void FillRect(Chunk chunk, int minX, int minY, int maxX, int maxY, ushort material)
+    {
+        for (int y = minY; y < maxY; y++)
+        {
+            for (int x = minX; x < maxX; x++)
+            {
+                chunk.Material[CellAddressing.LocalIndexFromLocal(x, y)] = material;
+            }
+        }
     }
 
     private static void WriteAscii(byte[] destination, int offset, string text)

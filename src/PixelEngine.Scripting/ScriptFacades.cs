@@ -245,12 +245,22 @@ public interface ICharacterController
     CharacterHandle Create(float x, float y, float width, float height);
 
     /// <summary>
-    /// 延迟移动角色控制器；脚本可在相位 1 调用，实际移动在角色解算安全相位落地。
+    /// 立即设置角色控制器 AABB 左上角位置，并清空本次移动位移；用于出生点放置、重生或传送。
+    /// </summary>
+    /// <param name="handle">角色控制器句柄。</param>
+    /// <param name="x">目标 X 坐标。</param>
+    /// <param name="y">目标 Y 坐标。</param>
+    /// <returns>设置后的角色状态。</returns>
+    CharacterState SetPosition(CharacterHandle handle, float x, float y);
+
+    /// <summary>
+    /// 移动角色控制器并立即返回本次碰撞解算状态；脚本可在相位 1 调用。
     /// </summary>
     /// <param name="handle">角色控制器句柄。</param>
     /// <param name="dx">X 方向位移。</param>
     /// <param name="dy">Y 方向位移。</param>
-    void Move(CharacterHandle handle, float dx, float dy);
+    /// <returns>本次移动后的角色状态。</returns>
+    CharacterState Move(CharacterHandle handle, float dx, float dy);
 
     /// <summary>
     /// 读取角色控制器状态；脚本可在相位 1 调用。

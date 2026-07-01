@@ -65,13 +65,49 @@ public readonly record struct BodyTransform(float X, float Y, float RotationRadi
 public readonly record struct CharacterHandle(int Value);
 
 /// <summary>
-/// 角色控制器状态快照。
+/// 角色控制器移动 / 状态快照；坐标为 AABB 左上角，单位为世界像素。
 /// </summary>
+/// <param name="X">AABB 左上角 X 坐标。</param>
+/// <param name="Y">AABB 左上角 Y 坐标。</param>
+/// <param name="Width">AABB 宽度。</param>
+/// <param name="Height">AABB 高度。</param>
 /// <param name="OnGround">是否接触地面。</param>
-/// <param name="OnWall">是否接触墙面。</param>
-/// <param name="VelocityX">X 方向速度。</param>
-/// <param name="VelocityY">Y 方向速度。</param>
-public readonly record struct CharacterState(bool OnGround, bool OnWall, float VelocityX, float VelocityY);
+/// <param name="OnWallLeft">是否接触左侧墙面。</param>
+/// <param name="OnWallRight">是否接触右侧墙面。</param>
+/// <param name="OnCeiling">本次移动是否撞到上方固体。</param>
+/// <param name="VelocityX">X 方向估算速度，单位像素/秒。</param>
+/// <param name="VelocityY">Y 方向估算速度，单位像素/秒。</param>
+/// <param name="RequestedDeltaX">本次请求位移 X 分量。</param>
+/// <param name="RequestedDeltaY">本次请求位移 Y 分量。</param>
+/// <param name="AppliedDeltaX">本次实际位移 X 分量。</param>
+/// <param name="AppliedDeltaY">本次实际位移 Y 分量。</param>
+/// <param name="GroundNormalX">地面估算法线 X 分量；未接地时为 0。</param>
+/// <param name="GroundNormalY">地面估算法线 Y 分量；未接地时为 0。</param>
+/// <param name="GroundSlopeRadians">地面估算坡度，单位弧度。</param>
+public readonly record struct CharacterState(
+    float X,
+    float Y,
+    float Width,
+    float Height,
+    bool OnGround,
+    bool OnWallLeft,
+    bool OnWallRight,
+    bool OnCeiling,
+    float VelocityX,
+    float VelocityY,
+    float RequestedDeltaX,
+    float RequestedDeltaY,
+    float AppliedDeltaX,
+    float AppliedDeltaY,
+    float GroundNormalX,
+    float GroundNormalY,
+    float GroundSlopeRadians)
+{
+    /// <summary>
+    /// 是否接触任一侧墙面。
+    /// </summary>
+    public bool OnWall => OnWallLeft || OnWallRight;
+}
 
 /// <summary>
 /// 脚本请求生成自由粒子的描述。
