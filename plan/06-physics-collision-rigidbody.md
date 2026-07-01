@@ -215,10 +215,10 @@
 - [x] 节流：碎片 `< FragmentPixelThreshold` 转粒子（`plan/05`）；body/shape/mask 池化。
 
 ### 4.8 PixelEngine.Physics — 静态地形 collider（架构 §8.1）
-- [ ] `StaticTerrainColliders`：仅为活跃刚体邻近 dirty chunk 生成；局部 mask（排除 `RigidOwned`）→MS→DP→`b2CreateChain` 静态链。
-- [ ] chunk 再 dirty / 刚体离域时 `b2DestroyChain` 用后即弃重建。
-- [ ] 生成范围按「活跃刚体 AABB 膨胀 N chunk」圈定，绝不整体喂 Box2D（架构 §8.1）。
-- [ ] `TilemapCollider` 粗回退路径（架构 §8.1 方案 b）。
+- [x] `StaticTerrainColliders`：仅为活跃刚体邻近 dirty chunk 生成；局部 mask（排除 `RigidOwned`）→MS→DP→`b2CreateChain` 静态链。
+- [x] chunk 再 dirty / 刚体离域时 `b2DestroyChain` 用后即弃重建。
+- [x] 生成范围按「活跃刚体 AABB 膨胀 N chunk」圈定，绝不整体喂 Box2D（架构 §8.1）。
+- [x] `TilemapCollider` 粗回退路径（架构 §8.1 方案 b）。
 
 ### 4.9 PixelEngine.Physics — 角色控制器（架构 §8.5，供 `plan/13`）
 - [ ] `CharacterController`：kinematic AABB/小 bitmap，**独立于 Box2D**，运行相位 1，读相位起点稳定网格。
@@ -265,7 +265,7 @@
 - [ ] 父→子速度/角速度转移使拆分物理合理（视觉 + 单测）。
 
 ### 5.5 静态地形与角色
-- [ ] 地形不整体喂 Box2D；动态刚体与地形碰撞经局部用后即弃静态 collider（架构 §8.1）。
+- [x] 地形不整体喂 Box2D；动态刚体与地形碰撞经局部用后即弃静态 collider（架构 §8.1）。
 - [ ] 角色控制器独立于 Box2D、与 `b2World_Step` 解耦，移动手感不受刚体负载影响（架构 §8.5）。
 - [ ] 角色对固体像素场正确解算：不穿墙、正确地面/墙/坡检测、可爬小坡/台阶（架构 §8.5）。
 - [ ] 角色把 `RigidOwned` cell 当固体（能站上动态刚体）。
@@ -310,7 +310,7 @@
 - [x] 节点 5：`feat(physics): 不可变 body-local mask 与刚体包装/registry/damage queue`（对应 §4.5，架构 §8.3/R6）。
 - [x] 节点 6：`feat(physics): 两世界栅格化同步(erase→step→inverse-sample re-stamp)`（对应 §4.6，相位 8，不变式 #5）。
 - [x] 节点 7：`feat(physics): 破坏/挖掘重建(CCL 拆分+父子速度转移+节流)`（对应 §4.7，架构 §8.4）。
-- [ ] 节点 8：`feat(physics): 静态地形局部用后即弃 collider`（对应 §4.8，架构 §8.1）。
+- [x] 节点 8：`feat(physics): 静态地形局部用后即弃 collider`（对应 §4.8，架构 §8.1）。
 - [ ] 节点 9：`feat(physics): 独立于 Box2D 的角色控制器(kinematic AABB vs 像素)`（对应 §4.9，架构 §8.5）。
 - [ ] 节点 10：`feat(physics): PhysicsSystem 相位编排/诊断/存档快照 API`（对应 §4.10）。
 - [ ] 节点 11：`test(physics): 凸分解/水密/无侵蚀/边界/task 桥并行 验收测试`（对应第 5 章，`plan/14` 协同）。
