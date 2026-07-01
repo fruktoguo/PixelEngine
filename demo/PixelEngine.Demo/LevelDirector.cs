@@ -195,6 +195,8 @@ public sealed class LevelDirector : Behaviour
         CreateEmitter(314f, 146f, "oil", -0.25f, 1f, 0.35f, 2, string.Empty, addLight: false);
         CreateEmitter(438f, 236f, "lava", 0f, 1f, 0.45f, 2, "lava_bubble_loop.wav", addLight: true);
         CreateEmitter(508f, 150f, "acid", 0f, 1f, 0.32f, 2, "splash_acid.wav", addLight: false);
+        CreateSparkEmitter(294f, 214f, count: 6, intervalSeconds: 0.07f);
+        CreateSparkEmitter(438f, 232f, count: 5, intervalSeconds: 0.09f);
         _entitiesBuilt = true;
     }
 
@@ -221,6 +223,16 @@ public sealed class LevelDirector : Behaviour
         emitter.AudioCue = audioCue;
         emitter.AddLight = addLight;
         emitter.LightColorBgra = materialName == "lava" ? 0xFF_20_70_FF : 0xFF_40_80_FF;
+    }
+
+    private void CreateSparkEmitter(float x, float y, int count, float intervalSeconds)
+    {
+        Entity entity = Context.Scene.CreateEntity();
+        SparkEmitter emitter = entity.AddComponent<SparkEmitter>();
+        emitter.X = x;
+        emitter.Y = y;
+        emitter.Count = count;
+        emitter.IntervalSeconds = intervalSeconds;
     }
 
     private void ClearPlayableArea(int width, int height)

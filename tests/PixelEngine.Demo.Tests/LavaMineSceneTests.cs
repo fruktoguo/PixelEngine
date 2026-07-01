@@ -1,6 +1,7 @@
 using PixelEngine.Hosting;
 using PixelEngine.Physics;
 using PixelEngine.Simulation;
+using PixelEngine.Simulation.Particles;
 using PixelEngine.Scripting;
 using Xunit;
 using ScriptScene = PixelEngine.Scripting.Scene;
@@ -43,6 +44,9 @@ public sealed class LavaMineSceneTests
         LevelDirector director = FindBehaviour<LevelDirector>(engine.Context.GetService<ScriptScene>());
         Assert.True(director.RigidStructuresQueued);
         Assert.Equal(6, director.RigidStructureCount);
+        Assert.True(CountBehaviours<SparkEmitter>(engine.Context.GetService<ScriptScene>()) >= 2);
+        ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
+        Assert.True(particles.ActiveCount > 0);
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
         Assert.True(physics.PhysicsWorld.ActiveBodyCount >= director.RigidStructureCount);
         Assert.True(physics.LastStampedCellCount > 0);
@@ -74,6 +78,24 @@ public sealed class LavaMineSceneTests
         }
 
         throw new InvalidOperationException($"未找到 Behaviour：{typeof(TBehaviour).FullName}。");
+    }
+
+    private static int CountBehaviours<TBehaviour>(ScriptScene scene)
+        where TBehaviour : Behaviour
+    {
+        int count = 0;
+        foreach (ScriptEntityInspection entity in scene.CaptureInspectionSnapshot())
+        {
+            foreach (ScriptComponentInspection component in entity.Components)
+            {
+                if (component.Behaviour is TBehaviour)
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
     }
 
     private static void QueueVerticalCut(CellGrid grid, RigidDamageQueue damageQueue, int x, int minY, int maxY)
