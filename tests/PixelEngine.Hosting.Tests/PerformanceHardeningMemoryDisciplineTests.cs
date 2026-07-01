@@ -70,6 +70,21 @@ public sealed class PerformanceHardeningMemoryDisciplineTests
         Assert.Contains("ArrayPool<Half>.Shared.Return", streamer, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证 GC 对比基准在进程内显式切入低延迟模式并在结束后恢复。
+    /// </summary>
+    [Fact]
+    public void GcPauseBenchmarkUsesSustainedLowLatencyAndRestoresOriginalMode()
+    {
+        string benchmark = ReadProductionSource("bench", "PixelEngine.Benchmarks", "GcPauseBenchmark.cs");
+        Assert.Contains("[GlobalSetup]", benchmark, StringComparison.Ordinal);
+        Assert.Contains("[GlobalCleanup]", benchmark, StringComparison.Ordinal);
+        Assert.Contains("_originalLatencyMode = System.Runtime.GCSettings.LatencyMode", benchmark, StringComparison.Ordinal);
+        Assert.Contains("System.Runtime.GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency", benchmark, StringComparison.Ordinal);
+        Assert.Contains("System.Runtime.GCSettings.LatencyMode = _originalLatencyMode", benchmark, StringComparison.Ordinal);
+        Assert.Contains("public bool IsServerGc => System.Runtime.GCSettings.IsServerGC", benchmark, StringComparison.Ordinal);
+    }
+
     private static string ReadProductionSource(params string[] relativePath)
     {
         return File.ReadAllText(Path.Combine([FindRepositoryRoot(), .. relativePath]));

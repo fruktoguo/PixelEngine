@@ -103,12 +103,12 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] BenchmarkDotNet `[DisassemblyDiagnoser]` 守门，反汇编基线纳入回归。[plan/14 · §17.3]
 
 ### 4.6 GC 策略
-- [ ] BenchmarkDotNet 实测对比 Workstation+Concurrent vs Server GC，按最坏停顿定档。[plan/02/14 · §12.4]
+- [x] BenchmarkDotNet 实测对比 Workstation+Concurrent vs Server GC，按最坏停顿定档。[plan/02/14 · §12.4]
 - [x] 两模式均配 `GCSettings.LatencyMode = SustainedLowLatency`。[plan/02 · §12.4]
 - [x] 跨界缓冲走 POH/`NativeMemory` 零拷贝双缓冲（sim/physics/render）。[plan/02 · §13/§14.3]
 - [x] 对象池/粒子池覆盖全部短命对象（particle/body/shape/scratch）。[plan/02/05/06 · §12.4]
 - [ ] 关键段按需 `GC.TryStartNoGCRegion`。[plan/02 · §12.4]
-- [ ] 压测下 Gen0 计数长时间不增长、无可感知 GC 停顿。[plan/14 · §1.4/§12.4]
+- [x] 压测下 Gen0 计数长时间不增长、无可感知 GC 停顿。[plan/14 · §1.4/§12.4]
 
 ### 4.7 GPU 计算下放
 - [x] 光照（emissive/fog-of-war/bloom/dither/gamma）在 GPU。[plan/08/09 · §9.4]
