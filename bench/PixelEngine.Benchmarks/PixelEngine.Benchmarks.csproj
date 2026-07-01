@@ -10,6 +10,7 @@
     <ProjectReference Include="../../src/PixelEngine.Physics/PixelEngine.Physics.csproj" />
     <ProjectReference Include="../../src/PixelEngine.Rendering/PixelEngine.Rendering.csproj" />
     <ProjectReference Include="../../src/PixelEngine.Serialization/PixelEngine.Serialization.csproj" />
+    <ProjectReference Include="../../src/PixelEngine.Audio/PixelEngine.Audio.csproj" />
   </ItemGroup>
 
   <ItemGroup>
