@@ -51,6 +51,18 @@ public sealed class RenderWindowIntegrationTests
         uploader.UploadFull(texture, buffer);
         buffer.Pixels[0] = 0xFFFFFFFFu;
         uploader.UploadDirtyRects(texture, buffer, [new PixelUploadRect(0, 0, 4, 4)]);
+
+        if (window.Capabilities.HasBufferStorage)
+        {
+            using PboUploader persistentUploader = new(
+                window.Gl,
+                buffer.ByteLength,
+                window.Capabilities,
+                PboUploadMode.PersistentMapped);
+            persistentUploader.UploadFull(texture, buffer);
+            Assert.Equal(PboUploadMode.PersistentMapped, persistentUploader.Mode);
+        }
+
         window.SwapBuffers();
 
         Assert.True(uploader.CapacityBytes >= buffer.ByteLength);

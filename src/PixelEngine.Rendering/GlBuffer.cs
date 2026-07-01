@@ -55,6 +55,18 @@ public sealed unsafe class GlBuffer : IDisposable
     }
 
     /// <summary>
+    /// 分配 immutable buffer storage，用于 persistent mapping 等显式能力路径。
+    /// </summary>
+    /// <param name="sizeBytes">大小，单位为字节。</param>
+    /// <param name="flags">storage 访问标志。</param>
+    public void AllocateImmutable(nuint sizeBytes, BufferStorageMask flags)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        Bind();
+        _gl.BufferStorage((BufferStorageTarget)Target, sizeBytes, null, flags);
+    }
+
+    /// <summary>
     /// 映射 buffer 子区间。
     /// </summary>
     /// <param name="offset">起始偏移。</param>
