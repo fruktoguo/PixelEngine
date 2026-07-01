@@ -114,12 +114,12 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 
 | 能力（Demo 需求） | 期望公开 API（签名意向） | 所属 plan | 状态 |
 |---|---|---|---|
-| 创建引擎 / 配置 / 运行主循环 / 内容包加载 | `EngineBuilder`、`EngineOptions`、`Engine.Run()`、`Engine.Shutdown()`、`Engine.LoadContentPackage()` | Hosting（plan/00 §5） | 部分实现：Demo 可经 Hosting 构造 Engine、加载已存在的 materials/reactions 内容包并 headless 冒烟运行；完整子系统一键装配仍需 Hosting API |
-| 子系统访问门面 | `EngineContext`（暴露 `World/Camera/Input/Particles/Lighting/Audio/Physics/Content/Diagnostics/Gui`） | Hosting（plan/00 §5） | 部分实现：`EngineContext` 可注册/查询 typed service 与 role availability，脚本后端已能自动装配 World/Camera/Input/Particles/Lighting/Audio/Content/Time/Event；仍缺 GUI 与完整窗口 runtime 组合门面 |
+| 创建引擎 / 配置 / 运行主循环 / 内容包加载 | `EngineBuilder`、`EngineOptions`、`Engine.Run()`、`Engine.Shutdown()`、`Engine.LoadContentPackage()` | Hosting（plan/00 §5） | 部分实现：Demo 可经 Hosting 构造 Engine、加载已存在的 materials/reactions 内容包并 headless 冒烟运行；非 headless 路径已调用 `Engine.AttachWindowRuntime()` 接入窗口、输入与 Rendering 相位；仍缺 save directory/world 物化与真实窗口端到端验收 |
+| 子系统访问门面 | `EngineContext`（暴露 `World/Camera/Input/Particles/Lighting/Audio/Physics/Content/Diagnostics/Gui`） | Hosting（plan/00 §5） | 部分实现：`EngineContext` 可注册/查询 typed service 与 role availability，脚本后端已能自动装配 World/Camera/Input/Particles/Lighting/Audio/Content/Time/Event；窗口态已有 `AttachWindowRuntime()` 组合 RenderWindow/Input/Rendering；仍缺 GUI 与 save directory/world 组合门面 |
 | 注册 Demo 脚本程序集 / 实例化 Behaviour | `Engine.RegisterScriptAssembly(...)`、`Behaviour` 生命周期（`OnStart/OnUpdate/OnGui/OnDestroy`） | plan/11 / Hosting | 部分实现：`Engine.RegisterScriptAssembly(...)`、Hosting registry、procedural/scene file Behaviour 物化、`Engine.AttachScripting(...)` 与 `AttachScriptingFromServices()` 已落地；仍缺 `OnGui` |
 | 脚本服务句柄注入 | `Behaviour.World/Input/Camera/...` 属性 | plan/11 | 已规划（plan/11 世界脚本接口） |
 | 场景加载 / 保存 | `Engine.LoadScene(name)`、`SceneSourceKind.SceneFile`、`.scene` 格式 | plan/07（序列化）+ plan/12（编辑器编排） | 部分实现：Hosting 可切换已注册场景、区分 `.scene` 文件来源，并从 `.scene` 物化脚本实体/Behaviour 参数；仍未物化 save directory 世界、`.scene` 初始世界引用或编辑器导出格式 |
-| 输入查询 | `IInput`（`IsDown/Pressed/Released(Key)`、`MousePosition`、`MouseButton`、`Wheel`） | plan/08（Silk.NET 输入）/ Hosting | 部分实现：Scripting 已有 `ScriptInputApi`、完整 Demo 所需键位/鼠标枚举、键鼠边沿、滚轮与轴快照；Hosting 已有 `SilkInputPhaseDriver` 采集窗口键鼠并支持通道门控；仍缺非 headless 窗口 runtime 装配验收 |
+| 输入查询 | `IInput`（`IsDown/Pressed/Released(Key)`、`MousePosition`、`MouseButton`、`Wheel`） | plan/08（Silk.NET 输入）/ Hosting | 部分实现：Scripting 已有 `ScriptInputApi`、完整 Demo 所需键位/鼠标枚举、键鼠边沿、滚轮与轴快照；Hosting 已有 `SilkInputPhaseDriver` 采集窗口键鼠并支持通道门控，且已被 `AttachWindowRuntime()` 装配；仍缺真实窗口输入验收 |
 | 读写 cell（笔刷 / 关卡生成 / 危险采样） | `IWorld.GetCell/SetCell`、`FillRect/FillCircle/Stamp` | plan/11（世界脚本接口） | 已规划 |
 | 材质按名取 id | `EngineContentPackage.ResolveMaterial/TryResolveMaterial(...)`、`IMaterialQuery.Resolve/TryResolve(...)` | plan/04（Content）+ Hosting/plan/11 | 部分实现：Hosting 内容包门面与脚本材质查询接口已可用，public API 不泄漏 Content/Simulation 实现类型；Demo materials/reactions/textures/audio 已就位 |
 | 角色控制器（kinematic AABB vs 像素） | `IPhysics.CreateCharacterBody(aabb)`、`body.Move(delta) → CollisionResult{Grounded,OnWall,OnCeiling,Normal}` | plan/06（§8.5 角色控制器） | 部分实现：Scripting `ICharacterController.Create/SetPosition/Move/GetState` 已接入真实 Physics 像素 AABB 控制器，返回位置、左右墙、天花板、实际位移与地面法线；尚未封装为 `ICharacterBody2D` 对象式 API |
@@ -127,8 +127,8 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 | 角色推动 dynamic 刚体 | `IPhysics.ApplyImpulseAtContact(...)` 或角色控制器内建推力 | plan/06 | 需引擎补 API（kinematic→dynamic 推力交互） |
 | 爆炸（清 cell + 抛粒子 + 推刚体） | `IWorld.Explode(center,radius,force)` | plan/05 + plan/06 | 需引擎补 API（复合爆炸 helper；可由 cell→particle + impulse 原语组合） |
 | 自由粒子发射 | `IParticles.Emit/Burst(origin,count,velDist,materialId,life)` | plan/05 | 部分实现：脚本 `IParticleSpawner.Spawn/Burst` 已经延迟到粒子安全相位并接入真实 `ParticleSystem`；仍缺更丰富的速度分布 Emit API 与爆炸抛射复合入口 |
-| 相机控制 | `ICamera.Position/Zoom`、`WorldToScreen/ScreenToWorld`、`Follow(target,damping)` | plan/08（相机） | 部分实现：Scripting 已有 `ScriptCameraApi`，支持中心、缩放、视口、屏幕/世界坐标转换与 `CameraSnapshot`；Hosting 已有 `ScriptCameraSynchronizer` 同步 Rendering `CameraState` 与 World residency；仍缺统一 Transform 后的 `Follow(Entity)` 与窗口渲染消费验收 |
-| 点光源 / fog-of-war reveal | `ILighting.AddPointLight(...)`、`RevealAround(pos,radius)` | plan/08（光照） | 部分实现：Scripting 已有 `ScriptLightingApi`，Hosting 已有 `ScriptLightingSynchronizer` 同步 Rendering `LightSource` 与 `FogOfWarBuffer`；仍缺非 headless render pass 消费验收 |
+| 相机控制 | `ICamera.Position/Zoom`、`WorldToScreen/ScreenToWorld`、`Follow(target,damping)` | plan/08（相机） | 部分实现：Scripting 已有 `ScriptCameraApi`，支持中心、缩放、视口、屏幕/世界坐标转换与 `CameraSnapshot`；Hosting 已有 `ScriptCameraSynchronizer` 同步 Rendering `CameraState` 与 World residency，`RenderPhaseDriver` 已消费该快照构建 render buffer；仍缺统一 Transform 后的 `Follow(Entity)` 与真实窗口画面验收 |
+| 点光源 / fog-of-war reveal | `ILighting.AddPointLight(...)`、`RevealAround(pos,radius)` | plan/08（光照） | 部分实现：Scripting 已有 `ScriptLightingApi`，Hosting 已有 `ScriptLightingSynchronizer` 同步 Rendering `LightSource` 与 `FogOfWarBuffer`，`RenderPhaseDriver` 已把 fog-of-war 传入 `RenderPipeline`；仍缺 `RenderPipeline.RenderFrame` 对脚本点光源列表的消费入口与真实窗口光照验收 |
 | 一次性音效播放 | `IAudio.PlayOneShot(clip, worldPos?)` | plan/10 | 部分实现：Scripting `IAudioApi` 已支持 `PlayOneShot` 与 `PlayAt`，`ScriptAudioApi` 可桥接真实 `AudioSystem`；Hosting 已能从 `content/audio` 预加载 Demo wav clip 并注入脚本上下文；仍缺材质事件 cue 句柄到 clip buffer 映射验收 |
 | 材质化音效配置 | `MaterialDef.AudioCues`（materials.json 字段） | plan/04 + plan/10 | 已规划 |
 | 即时模式 HUD / 菜单 | `IGuiContext`（窗口 / 文本 / 按钮 / 色块），`Behaviour.OnGui` | plan/11 / plan/12 | 需引擎补 API（游戏 HUD 用 GUI 服务，区别于编辑器 UI） |
@@ -136,7 +136,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 | 调试叠层开关 | `IDiagnostics.ToggleOverlay(OverlayKind)` | plan/12（调试叠层）+ 架构 §17.2 | 需引擎补 API（叠层开关的脚本可见 API） |
 | 确定性 RNG（关卡生成） | `IRandom`（可种子化） | plan/02（RNG） | 已规划 |
 
-API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosting 的非 headless 窗口/渲染 runtime 一键装配与 save directory/world 物化；plan/06 的 kinematic 角色推动 dynamic 刚体公开交互；plan/05 + plan/06 + plan/10 的 `World.Explode(center,radius,force)` 复合入口；plan/11/12 的 `Behaviour.OnGui` 与 `IGuiContext` 游戏 HUD 服务；plan/12/架构 §17.2 的脚本可见调试叠层开关；plan/08/10 的 render pass 消费脚本光照同步结果与材质事件 cue→clip buffer 映射验收。上述缺口均在本表中保持「需引擎补 API」或「部分实现但阻塞」状态，Demo 不允许绕过公开 API 直接引用内部实现。
+API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosting 的 save directory/world 物化；plan/06 的 kinematic 角色推动 dynamic 刚体公开交互；plan/05 + plan/06 + plan/10 的 `World.Explode(center,radius,force)` 复合入口；plan/11/12 的 `Behaviour.OnGui` 与 `IGuiContext` 游戏 HUD 服务；plan/12/架构 §17.2 的脚本可见调试叠层开关；plan/08 的 render pass 消费脚本点光源列表入口；plan/10 的材质事件 cue→clip buffer 映射验收。上述缺口均在本表中保持「需引擎补 API」或「部分实现但阻塞」状态，Demo 不允许绕过公开 API 直接引用内部实现。
 
 ---
 
@@ -144,16 +144,16 @@ API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosti
 
 工程与启动
 - [x] 建 `demo/PixelEngine.Demo/PixelEngine.Demo.csproj`（`Exe`，仅 `ProjectReference` 到 `PixelEngine.Hosting` 与 `PixelEngine.Scripting`，继承 `Directory.Build.props`，无新 NuGet）。〔plan/00 §5〕
-- [!] `Program.cs`：已用 `EngineBuilder`/`EngineProject` 构造 Engine，支持 `--editor/--headless/--scene/--content/--ticks/--no-hot-reload/--log-dir`；已通过 `Engine.LoadContentPackage()` 加载 Demo materials/reactions 内容包，已区分 save directory 与 `.scene` 来源，已支持 `.scene` 与 procedural 脚本实体/Behaviour 物化，已用 `Engine.AttachResidentSimulationWorld(...)` + `Engine.AttachScriptingFromServices()` 接入 headless resident Simulation/Scripting 后端并跑通 2 tick 冒烟；阻塞：缺少 `lava-mine.scene`，Hosting 尚无 save directory 世界物化入口、窗口/渲染/输入后端装配与完整可玩关卡加载。〔Hosting；§3.1〕
+- [!] `Program.cs`：已用 `EngineBuilder`/`EngineProject` 构造 Engine，支持 `--editor/--headless/--scene/--content/--ticks/--no-hot-reload/--log-dir`；已通过 `Engine.LoadContentPackage()` 加载 Demo materials/reactions 内容包，已区分 save directory 与 `.scene` 来源，已支持 `.scene` 与 procedural 脚本实体/Behaviour 物化，已用 `Engine.AttachResidentSimulationWorld(...)` + `Engine.AttachScriptingFromServices()` 接入 headless resident Simulation/Scripting 后端并跑通 2 tick 冒烟；非 headless 路径已调用 `Engine.AttachWindowRuntime()` 接入窗口、输入与 Rendering 相位；阻塞：缺少 `lava-mine.scene`，Hosting 尚无 save directory 世界物化入口，且未完成真实窗口可玩关卡验收。〔Hosting；§3.1〕
 - [x] CI 依赖方向断言：Demo 无对引擎内部 assembly 的越层 / 反向引用。〔plan/14；§2〕
 
 玩家与相机
-- [!] `PlayerController : Behaviour`：源码已落地，经 `ICharacterController.Create/SetPosition/Move/GetState` 创建、传送并移动 AABB，实现跑 / 跳 / 贴墙滑落 / 蹬墙、重力、coyote-time 与 jump-buffer；headless 路径已能由 Hosting 自动注入脚本后端并驱动场景 Behaviour，Hosting 已有 `SilkInputPhaseDriver` 将窗口键盘快照写入 `ScriptInputApi`；阻塞：缺少非 headless 窗口/渲染 runtime 装配和真实窗口输入验收，不能完成可玩控制验收。〔plan/06、plan/08 输入；§3.3〕
+- [!] `PlayerController : Behaviour`：源码已落地，经 `ICharacterController.Create/SetPosition/Move/GetState` 创建、传送并移动 AABB，实现跑 / 跳 / 贴墙滑落 / 蹬墙、重力、coyote-time 与 jump-buffer；headless 路径已能由 Hosting 自动注入脚本后端并驱动场景 Behaviour，`AttachWindowRuntime()` 已装配 `SilkInputPhaseDriver` 将窗口键盘快照写入 `ScriptInputApi`；阻塞：缺少真实窗口输入与可玩控制验收。〔plan/06、plan/08 输入；§3.3〕
 - [!] `PlayerHealth : Behaviour`：源码已落地，按玩家 AABB 采样 `lava/fire/acid`，扣血、喷粒子、触发受击音效并死亡重生；headless 路径已能由 Hosting 自动驱动，并已通过 `AttachAudioFromContentAsync()` 预加载 Demo wav clip、注入脚本音频 API；阻塞：缺少窗口态输入/渲染运行验收与受击场景端到端验证。〔plan/11、plan/05、plan/10；§3.3〕
-- [!] `CameraFollow : Behaviour`：源码已落地，可跟随同实体 `PlayerController`，支持阻尼、lookahead、边界夹取与缩放；headless 路径已有默认脚本相机 API，Hosting 已有 `ScriptCameraSynchronizer` 将脚本相机快照同步为 Rendering `CameraState` 并可更新 World residency 相机；阻塞：缺少非 headless 窗口/渲染 runtime 消费该快照，以及统一 Transform 后的 `Follow(Entity)`，不能完成画面跟随验收。〔plan/08；§3.4〕
+- [!] `CameraFollow : Behaviour`：源码已落地，可跟随同实体 `PlayerController`，支持阻尼、lookahead、边界夹取与缩放；headless 路径已有默认脚本相机 API，Hosting 已有 `ScriptCameraSynchronizer` 将脚本相机快照同步为 Rendering `CameraState` 并可更新 World residency 相机，`RenderPhaseDriver` 已用该快照构建并提交 render buffer；阻塞：缺少统一 Transform 后的 `Follow(Entity)` 与真实窗口画面跟随验收。〔plan/08；§3.4〕
 
 世界交互
-- [!] `MaterialBrush : Behaviour`：源码已落地，支持左键放置、右键擦除、滚轮调半径、数字键 `1`–`0` 切材质，经 `Cells.Paint` 写入，`Materials.Resolve` 取 id，`Camera.ScreenToWorld` 映射鼠标；headless 路径已能由 Hosting 自动注入 cell/material/camera/input 后端，Hosting 已有 `SilkInputPhaseDriver` 将鼠标/滚轮快照写入 `ScriptInputApi` 并支持通道门控，且有脚本相机到 Rendering/World 的同步器；阻塞：缺少非 headless 窗口/渲染 runtime 装配，不能完成窗口态运行验收。〔plan/11、plan/04、plan/08；§3.5〕
+- [!] `MaterialBrush : Behaviour`：源码已落地，支持左键放置、右键擦除、滚轮调半径、数字键 `1`–`0` 切材质，经 `Cells.Paint` 写入，`Materials.Resolve` 取 id，`Camera.ScreenToWorld` 映射鼠标；headless 路径已能由 Hosting 自动注入 cell/material/camera/input 后端，`AttachWindowRuntime()` 已装配窗口鼠标/滚轮快照、脚本相机同步与 Rendering 提交；阻塞：缺少窗口态笔刷写入与画面反馈验收。〔plan/11、plan/04、plan/08；§3.5〕
 - [!] `ExplosiveTool : Behaviour`：阻塞：当前脚本公开 API 缺少 `World.Explode(center,radius,force)` 复合能力；底层只有 cell→particle ejection 与刚体 impulse 原语雏形，尚未有“清 cell + 抛粒子 + 推刚体 + 音频事件”的脚本安全入口，不能写缩水版冒充完成。〔plan/05、plan/06、plan/10;§3.5〕
 
 内容
@@ -166,13 +166,13 @@ API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosti
 刚体 / 粒子 / 光照 / 音频（Demo 侧消费）
 - [ ] 木 / 金属可破坏结构布置，验证连通块脱落→Box2D 刚体、可推 / 砸 / 再破坏。〔plan/06;§3.7〕
 - [ ] 火花 / 血 / 碎屑发射经 `Particles.Emit/Burst`，爆炸抛射经 `World.Explode`。〔plan/05;§3.8〕
-- [!] emissive 材质标注正确（lava/molten_metal/fire/火花），Scripting 已有 `Lighting.RevealAround` + `AddPointLight` 请求 API，Hosting 已有 `ScriptLightingSynchronizer` 将脚本请求同步为 Rendering `LightSource` 与 `FogOfWarBuffer`；阻塞：缺少非 headless 渲染 runtime 将同步结果传入 light pass 的窗口态消费验收。〔plan/08;§3.9〕
+- [!] emissive 材质标注正确（lava/molten_metal/fire/火花），Scripting 已有 `Lighting.RevealAround` + `AddPointLight` 请求 API，Hosting 已有 `ScriptLightingSynchronizer` 将脚本请求同步为 Rendering `LightSource` 与 `FogOfWarBuffer`，`RenderPhaseDriver` 已把 fog-of-war 传入 `RenderPipeline` 并 stamp 自由粒子到 emissive buffer；阻塞：`RenderPipeline.RenderFrame` 尚无脚本点光源列表参数，且缺少真实窗口光照验收。〔plan/08;§3.9〕
 - [!] `materials.json` 的 `AudioCues` 已覆盖 impact/fire/splash/ambient/shatter，玩法脚本可经 `Audio.PlayOneShot`/`PlayAt` 请求音效；Hosting 已能从 `content/audio` 预加载 19 个 wav clip 并注入脚本上下文；阻塞：缺少爆炸复合 API 触发 explosion cue，以及材质事件 cue 句柄到 clip buffer 的 Demo 映射/消费验收。〔plan/04、plan/10;§3.10〕
 
 关卡与 UI
-- [!] `LevelDirector : Behaviour`：源码已落地，脚本生成「熔岩矿洞逃生」基础布局并装配玩家、相机、笔刷、喷口和目标触发器；Hosting procedural scene source 已可按入口 Behaviour 名自动物化 `LevelDirector` 到脚本场景，且 headless resident world 可经 `AttachScriptingFromServices()` 自动驱动；阻塞：save directory/world 物化与窗口态完整后端装配仍未完成。〔plan/11、plan/02;§3.11〕
-- [!] `MaterialEmitter : Behaviour`（材质 + 速率 + 喷口）：源码已落地，支持周期性 cell 注入、粒子、音频和点光源请求；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API，光照请求已可同步到 Rendering 数据结构；阻塞：缺少窗口态渲染消费与喷口音频触发验收。〔plan/11;§3.11〕
-- [!] `GoalTrigger : Behaviour`：源码已落地，玩家进入触发区后触发通关状态、音效、粒子与光照反馈；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API，光照请求已可同步到 Rendering 数据结构；阻塞：缺少胜利菜单/GUI 服务、窗口态渲染消费与通关音效触发验收。〔plan/11、plan/10;§3.11〕
+- [!] `LevelDirector : Behaviour`：源码已落地，脚本生成「熔岩矿洞逃生」基础布局并装配玩家、相机、笔刷、喷口和目标触发器；Hosting procedural scene source 已可按入口 Behaviour 名自动物化 `LevelDirector` 到脚本场景，且 headless resident world 可经 `AttachScriptingFromServices()` 自动驱动；窗口态已可装配输入与 Rendering 相位；阻塞：save directory/world 物化与真实窗口可玩关卡验收仍未完成。〔plan/11、plan/02;§3.11〕
+- [!] `MaterialEmitter : Behaviour`（材质 + 速率 + 喷口）：源码已落地，支持周期性 cell 注入、粒子、音频和点光源请求；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API，fog-of-war 请求已可进入 Rendering 管线；阻塞：缺少点光源 render pass 消费、真实窗口喷口画面与音频触发验收。〔plan/11;§3.11〕
+- [!] `GoalTrigger : Behaviour`：源码已落地，玩家进入触发区后触发通关状态、音效、粒子与光照反馈；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API，fog-of-war 请求已可进入 Rendering 管线；阻塞：缺少胜利菜单/GUI 服务、点光源 render pass 消费、窗口态通关画面与音效触发验收。〔plan/11、plan/10;§3.11〕
 - [ ] `content/scenes/lava-mine.scene`：编辑器编排并序列化，与 `LevelDirector` 等价。〔plan/12、plan/07;§3.2、§3.11〕
 - [ ] `DemoHud : Behaviour.OnGui`：当前材质 / 笔刷 / 玩家状态 / 操作提示 / 性能行。〔plan/11、plan/12、plan/02;§3.12〕
 - [ ] `PauseMenu : Behaviour.OnGui`：继续 / 重开 / 调试叠层切换 / 打开编辑器 / 退出。〔plan/12、架构 §17.2;§3.12〕
