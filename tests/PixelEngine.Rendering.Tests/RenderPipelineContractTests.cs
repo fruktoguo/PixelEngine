@@ -67,6 +67,9 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("Settings.PreferComputeLighting = false", source, StringComparison.Ordinal);
         Assert.Contains("CreateComputeResourcesSnapshot", source, StringComparison.Ordinal);
         Assert.Contains("CurrentViewportTexture = new RenderViewportTexture", source, StringComparison.Ordinal);
+        Assert.Contains("ReadOnlySpan<LightSource> pointLights", source, StringComparison.Ordinal);
+        Assert.Contains("UploadVisibility(fogOfWar, pointLights)", source, StringComparison.Ordinal);
+        Assert.Contains("ApplyPointLights(mask, pointLights)", source, StringComparison.Ordinal);
         Assert.True(source.IndexOf("_worldBlit.Render", StringComparison.Ordinal) < source.IndexOf("_overlay.Render", StringComparison.Ordinal));
         Assert.True(source.IndexOf("_overlay.Render", StringComparison.Ordinal) < source.IndexOf("_composite.Render", StringComparison.Ordinal));
         Assert.True(source.IndexOf("CurrentViewportTexture = new RenderViewportTexture", StringComparison.Ordinal) < source.IndexOf("_present.Render", StringComparison.Ordinal));

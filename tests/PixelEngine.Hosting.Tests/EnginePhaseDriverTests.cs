@@ -103,6 +103,7 @@ public sealed class EnginePhaseDriverTests
         ScriptCameraSynchronizer cameraSync = new(camera);
         _ = cameraSync.Sync();
         ScriptLightingApi lighting = new();
+        lighting.AddPointLight(16, 8, radius: 5, colorBgra: 0xFF_40_80_FF, intensity: 0.75f);
         lighting.RevealAround(16, 8, radius: 4, alpha: 192);
         ScriptLightingSynchronizer lightingSync = new(lighting, cameraSync);
         lightingSync.Sync();
@@ -131,6 +132,7 @@ public sealed class EnginePhaseDriverTests
         Assert.Equal(1, engine.Phases.Count(EnginePhase.BuildRenderBuffer));
         Assert.Equal(1, engine.Phases.Count(EnginePhase.GpuUploadAndRender));
         Assert.Equal(1, sink.ParticleCount);
+        Assert.Equal(1, sink.PointLightCount);
         Assert.Equal(1, sink.DirtyRectCount);
         Assert.Equal(new PixelUploadRect(0, 0, 32, 16), sink.FirstDirtyRect);
         Assert.NotNull(sink.FogOfWar);
@@ -508,6 +510,8 @@ public sealed class EnginePhaseDriverTests
 
         public int ParticleCount { get; private set; }
 
+        public int PointLightCount { get; private set; }
+
         public int DirtyRectCount { get; private set; }
 
         public PixelUploadRect FirstDirtyRect { get; private set; }
@@ -524,6 +528,7 @@ public sealed class EnginePhaseDriverTests
             CameraState camera,
             ReadOnlySpan<PixelUploadRect> dirtyRects,
             ReadOnlySpan<OverlayCommand> overlays,
+            ReadOnlySpan<LightSource> pointLights,
             ReadOnlySpan<Particle> particles,
             MaterialTable materials,
             FogOfWarBuffer? fogOfWar,
@@ -539,6 +544,7 @@ public sealed class EnginePhaseDriverTests
             Height = renderBuffer.Height;
             AuxWidth = aux.Width;
             AuxHeight = aux.Height;
+            PointLightCount = pointLights.Length;
             ParticleCount = particles.Length;
             DirtyRectCount = dirtyRects.Length;
             FirstDirtyRect = dirtyRects.Length == 0 ? default : dirtyRects[0];
