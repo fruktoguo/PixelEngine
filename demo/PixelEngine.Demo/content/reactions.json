@@ -1,0 +1,13 @@
+{
+  "reactions": [
+    { "inputA": "lava", "inputB": "water", "outputA": "stone", "outputB": "steam", "probability": 80, "flags": [ "fast", "emit_heat" ] },
+    { "inputA": "molten_metal", "inputB": "water", "outputA": "metal", "outputB": "steam", "probability": 60, "flags": [ "emit_heat" ] },
+    { "inputA": "lava", "inputB": "wood", "outputA": "lava", "outputB": "fire", "probability": 60, "flags": [ "emit_heat" ] },
+    { "inputA": "fire", "inputB": "wood", "outputA": "fire", "outputB": "fire", "probability": 40, "flags": [ "emit_heat" ] },
+    { "inputA": "fire", "inputB": "oil", "outputA": "fire", "outputB": "fire", "probability": 75, "flags": [ "fast", "emit_heat" ] },
+    { "inputA": "water", "inputB": "fire", "outputA": "steam", "outputB": "smoke", "probability": 90, "flags": [ "fast" ] },
+    { "inputA": "acid", "inputB": "[corrodible]", "outputA": "acid_gas", "outputB": "acid", "probability": 50 },
+    { "inputA": "steam", "inputB": "stone", "outputA": "water", "outputB": "stone", "probability": 3 },
+    { "inputA": "steam", "inputB": "ice", "outputA": "water", "outputB": "ice", "probability": 8 }
+  ]
+}

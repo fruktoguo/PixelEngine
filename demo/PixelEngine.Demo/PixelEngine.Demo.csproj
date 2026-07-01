@@ -7,4 +7,10 @@
     <ProjectReference Include="../../src/PixelEngine.Hosting/PixelEngine.Hosting.csproj" />
     <ProjectReference Include="../../src/PixelEngine.Scripting/PixelEngine.Scripting.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="content\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 </Project>
