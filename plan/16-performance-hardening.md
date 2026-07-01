@@ -67,11 +67,11 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] `Temperature` 确为 1/4 分辨率（CELL=4）而非全分辨率每 cell。[plan/04 · §7.1/§7.5]
 
 ### 4.2 稳态零托管分配
-- [ ] CA pass（相位 4）稳态零分配，`MemoryDiagnoser` 报 `Allocated == 0 B`。[plan/03 · §12.4]
-- [ ] 粒子积分与沉积（相位 3/7）稳态零分配，粒子池 swap-remove 无 per-particle 分配。[plan/05 · §7.6/§12.4]
-- [ ] render buffer 构建（相位 9）稳态零分配。[plan/08 · §9.3/§12.4]
-- [ ] 反应 pass（相位 4 内）稳态零分配，tag 在加载期展开、运行时零字符串/字典。[plan/04 · §7.4]
-- [ ] 温度 stencil（相位 5）稳态零分配。[plan/04 · §7.5]
+- [x] CA pass（相位 4）稳态零分配，`MemoryDiagnoser` 报 `Allocated == 0 B`。[plan/03 · §12.4]
+- [x] 粒子积分与沉积（相位 3/7）稳态零分配，粒子池 swap-remove 无 per-particle 分配。[plan/05 · §7.6/§12.4]
+- [x] render buffer 构建（相位 9）稳态零分配。[plan/08 · §9.3/§12.4]
+- [x] 反应 pass（相位 4 内）稳态零分配，tag 在加载期展开、运行时零字符串/字典。[plan/04 · §7.4]
+- [x] 温度 stencil（相位 5）稳态零分配。[plan/04 · §7.5]
 - [x] 序列化字节准备（相位 11）用 POH/ArrayPool 缓冲，稳态零分配。[plan/07 · §11.5]
 - [ ] 全热路径静态核查无 LINQ/捕获闭包/装箱/`params`/迭代器/字符串拼接（分析器提升为 error）。[全子系统 · AGENTS §3]
 
