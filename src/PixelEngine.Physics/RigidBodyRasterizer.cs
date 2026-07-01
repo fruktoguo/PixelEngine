@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Numerics;
 using PixelEngine.Core.Mathematics;
 using PixelEngine.Simulation;
@@ -68,118 +67,22 @@ public static class RigidBodyRasterizer
         RectI bounds = ComputeWorldBounds(mask, in transform);
         List<RigidStampedCell> stamps = body.PreviousStamps;
         stamps.Clear();
-        int area = mask.Width * mask.Height;
-        byte[]? rentedHits = null;
-        Span<byte> localHits = area <= 4096
-            ? stackalloc byte[area]
-            : (rentedHits = ArrayPool<byte>.Shared.Rent(area)).AsSpan(0, area);
-        localHits.Clear();
 
-        try
-        {
-            int stamped = 0;
-            for (int wy = bounds.MinY; wy < bounds.MaxY; wy++)
-            {
-                for (int wx = bounds.MinX; wx < bounds.MaxX; wx++)
-                {
-                    Vector2 local = transform.InverseTransformPoint(new Vector2(wx + 0.5f, wy + 0.5f)) + mask.LocalOrigin;
-                    int localX = (int)MathF.Floor(local.X);
-                    int localY = (int)MathF.Floor(local.Y);
-                    if (!mask.IsSolid(localX, localY))
-                    {
-                        continue;
-                    }
-
-                    stamped += StampCell(body, grid, registry, stamps, localHits, wx, wy, localX, localY, allowOccupiedBySelf: false);
-                }
-            }
-
-            stamped += StampMissingLocalPixels(body, in transform, grid, registry, stamps, localHits);
-            return stamped;
-        }
-        finally
-        {
-            if (rentedHits is not null)
-            {
-                ArrayPool<byte>.Shared.Return(rentedHits);
-            }
-        }
-    }
-
-    private static int StampMissingLocalPixels(
-        PixelRigidBody body,
-        in Transform2D transform,
-        CellGrid grid,
-        RigidStampRegistry registry,
-        List<RigidStampedCell> stamps,
-        Span<byte> localHits)
-    {
-        BodyLocalMask mask = body.Mask;
         int stamped = 0;
-        Vector2 origin = mask.LocalOrigin;
-        for (int localY = 0; localY < mask.Height; localY++)
+        for (int wy = bounds.MinY; wy < bounds.MaxY; wy++)
         {
-            for (int localX = 0; localX < mask.Width; localX++)
+            for (int wx = bounds.MinX; wx < bounds.MaxX; wx++)
             {
-                int localIndex = (localY * mask.Width) + localX;
-                if (localHits[localIndex] != 0 || !mask.IsSolid(localX, localY) || mask.MaterialAt(localX, localY) == 0)
+                if (!TrySampleSolidLocal(mask, in transform, wx, wy, out int localX, out int localY))
                 {
                     continue;
                 }
 
-                Vector2 world = transform.TransformPoint(new Vector2(localX + 0.5f, localY + 0.5f) - origin);
-                int baseX = (int)MathF.Floor(world.X);
-                int baseY = (int)MathF.Floor(world.Y);
-                if (TryStampForwardCandidate(body, in transform, grid, registry, stamps, localHits, baseX, baseY, localX, localY))
-                {
-                    stamped++;
-                }
+                stamped += StampCell(body, grid, registry, stamps, wx, wy, localX, localY);
             }
         }
 
         return stamped;
-    }
-
-    private static bool TryStampForwardCandidate(
-        PixelRigidBody body,
-        in Transform2D transform,
-        CellGrid grid,
-        RigidStampRegistry registry,
-        List<RigidStampedCell> stamps,
-        Span<byte> localHits,
-        int baseX,
-        int baseY,
-        int localX,
-        int localY)
-    {
-        for (int radius = 0; radius <= 1; radius++)
-        {
-            for (int dy = -radius; dy <= radius; dy++)
-            {
-                for (int dx = -radius; dx <= radius; dx++)
-                {
-                    if (Math.Abs(dx) != radius && Math.Abs(dy) != radius)
-                    {
-                        continue;
-                    }
-
-                    int wx = baseX + dx;
-                    int wy = baseY + dy;
-                    Vector2 sampled = transform.InverseTransformPoint(new Vector2(wx + 0.5f, wy + 0.5f)) + body.Mask.LocalOrigin;
-                    if ((int)MathF.Floor(sampled.X) != localX || (int)MathF.Floor(sampled.Y) != localY)
-                    {
-                        continue;
-                    }
-
-                    if (StampCell(body, grid, registry, stamps, localHits, wx, wy, localX, localY, allowOccupiedBySelf: false) != 0)
-                    {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        return StampCell(body, grid, registry, stamps, localHits, baseX, baseY, localX, localY, allowOccupiedBySelf: false) != 0;
     }
 
     private static int StampCell(
@@ -187,20 +90,11 @@ public static class RigidBodyRasterizer
         CellGrid grid,
         RigidStampRegistry registry,
         List<RigidStampedCell> stamps,
-        Span<byte> localHits,
         int worldX,
         int worldY,
         int localX,
-        int localY,
-        bool allowOccupiedBySelf)
+        int localY)
     {
-        if (!allowOccupiedBySelf &&
-            registry.TryGet(worldX, worldY, out RigidStamp existing) &&
-            existing.BodyKey == body.BodyKey)
-        {
-            return 0;
-        }
-
         ushort material = body.Mask.MaterialAt(localX, localY);
         if (material == 0)
         {
@@ -211,8 +105,36 @@ public static class RigidBodyRasterizer
         grid.StampRigidOwnedCell(worldX, worldY, material);
         registry.Register(worldX, worldY, in stamp);
         stamps.Add(new RigidStampedCell(worldX, worldY, stamp));
-        localHits[(localY * body.Mask.Width) + localX] = 1;
         return 1;
+    }
+
+    private static bool TrySampleSolidLocal(
+        BodyLocalMask mask,
+        in Transform2D transform,
+        int worldX,
+        int worldY,
+        out int localX,
+        out int localY)
+    {
+        return TrySampleSolidAt(mask, in transform, worldX + 0.5f, worldY + 0.5f, out localX, out localY) ||
+            TrySampleSolidAt(mask, in transform, worldX + 0.25f, worldY + 0.25f, out localX, out localY) ||
+            TrySampleSolidAt(mask, in transform, worldX + 0.75f, worldY + 0.25f, out localX, out localY) ||
+            TrySampleSolidAt(mask, in transform, worldX + 0.25f, worldY + 0.75f, out localX, out localY) ||
+            TrySampleSolidAt(mask, in transform, worldX + 0.75f, worldY + 0.75f, out localX, out localY);
+    }
+
+    private static bool TrySampleSolidAt(
+        BodyLocalMask mask,
+        in Transform2D transform,
+        float worldX,
+        float worldY,
+        out int localX,
+        out int localY)
+    {
+        Vector2 local = transform.InverseTransformPoint(new Vector2(worldX, worldY)) + mask.LocalOrigin;
+        localX = (int)MathF.Floor(local.X);
+        localY = (int)MathF.Floor(local.Y);
+        return mask.IsSolid(localX, localY) && mask.MaterialAt(localX, localY) != 0;
     }
 
     private static RectI ComputeWorldBounds(BodyLocalMask mask, in Transform2D transform)

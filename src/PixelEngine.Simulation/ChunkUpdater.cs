@@ -80,7 +80,7 @@ internal static class ChunkUpdater
                 };
 
                 ushort activeMaterial = window.GetMaterial(activeX, activeY);
-                bool reacted = TryReactVonNeumann(ref window, chunks, materials, reactionExecutor, diagnostics, activeX, activeY, activeMaterial, parityBit, ref rng);
+                bool reacted = TryReactVonNeumann(ref window, chunks, materials, reactionExecutor, rigidDamageSink, diagnostics, activeX, activeY, activeMaterial, parityBit, ref rng);
                 bool customUpdated = !reacted && TryRunCustomUpdate(ref window, chunks, materials, customUpdateExecutor, activeX, activeY, activeMaterial, parityBit);
                 if (!moved && !reacted && !customUpdated && materialType == CellType.Fire)
                 {
@@ -305,6 +305,7 @@ internal static class ChunkUpdater
         IChunkSource chunks,
         MaterialPropsTable materials,
         IReactionExecutor reactionExecutor,
+        IRigidDamageSink rigidDamageSink,
         SimulationDiagnostics diagnostics,
         int wx,
         int wy,
@@ -314,10 +315,10 @@ internal static class ChunkUpdater
     {
         return material != 0 &&
             materials.ReactionCountOf(material) != 0 &&
-            (TryReactNeighbor(ref window, chunks, reactionExecutor, diagnostics, wx, wy, material, wx, wy - 1, parityBit, ref rng) ||
-            TryReactNeighbor(ref window, chunks, reactionExecutor, diagnostics, wx, wy, material, wx - 1, wy, parityBit, ref rng) ||
-            TryReactNeighbor(ref window, chunks, reactionExecutor, diagnostics, wx, wy, material, wx + 1, wy, parityBit, ref rng) ||
-            TryReactNeighbor(ref window, chunks, reactionExecutor, diagnostics, wx, wy, material, wx, wy + 1, parityBit, ref rng));
+            (TryReactNeighbor(ref window, chunks, reactionExecutor, rigidDamageSink, diagnostics, wx, wy, material, wx, wy - 1, parityBit, ref rng) ||
+            TryReactNeighbor(ref window, chunks, reactionExecutor, rigidDamageSink, diagnostics, wx, wy, material, wx - 1, wy, parityBit, ref rng) ||
+            TryReactNeighbor(ref window, chunks, reactionExecutor, rigidDamageSink, diagnostics, wx, wy, material, wx + 1, wy, parityBit, ref rng) ||
+            TryReactNeighbor(ref window, chunks, reactionExecutor, rigidDamageSink, diagnostics, wx, wy, material, wx, wy + 1, parityBit, ref rng));
     }
 
     private static bool TryRunCustomUpdate(
@@ -339,6 +340,7 @@ internal static class ChunkUpdater
         ref NeighborWindow window,
         IChunkSource chunks,
         IReactionExecutor reactionExecutor,
+        IRigidDamageSink rigidDamageSink,
         SimulationDiagnostics diagnostics,
         int wx,
         int wy,
@@ -355,17 +357,37 @@ internal static class ChunkUpdater
             return false;
         }
 
+        byte sourceFlagsBefore = window.GetFlags(wx, wy);
+        byte neighborFlagsBefore = window.GetFlags(neighborX, neighborY);
         diagnostics.RecordReactionAttempt();
         byte randomByte = (byte)(rng.NextUInt() >> 24);
         bool reacted = reactionExecutor.TryReact(ref window, wx, wy, material, neighborX, neighborY, neighborMaterial, parityBit, randomByte);
         if (reacted)
         {
+            NotifyRigidReactionDamage(ref window, rigidDamageSink, wx, wy, sourceFlagsBefore);
+            NotifyRigidReactionDamage(ref window, rigidDamageSink, neighborX, neighborY, neighborFlagsBefore);
             MarkReactionTouchedCell(ref window, chunks, wx, wy, diagnostics);
             MarkReactionTouchedCell(ref window, chunks, neighborX, neighborY, diagnostics);
             diagnostics.RecordReactionSuccess(wx, wy, material, neighborX, neighborY, neighborMaterial);
         }
 
         return reacted;
+    }
+
+    private static void NotifyRigidReactionDamage(
+        ref NeighborWindow window,
+        IRigidDamageSink rigidDamageSink,
+        int wx,
+        int wy,
+        byte flagsBefore)
+    {
+        if (!CellFlags.Has(flagsBefore, CellFlags.RigidOwned))
+        {
+            return;
+        }
+
+        rigidDamageSink.OnOwnedCellDamaged(wx, wy);
+        window.SetFlags(wx, wy, CellFlags.Clear(window.GetFlags(wx, wy), CellFlags.RigidOwned));
     }
 
     private static void ValidateReactionNeighbor(int wx, int wy, int neighborX, int neighborY)
