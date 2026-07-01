@@ -56,6 +56,69 @@ public sealed class AudioPhaseDriverTests
     }
 
     /// <summary>
+    /// 验证 Hosting 会按 audio/cues.json 把材质音频事件解析到已加载 clip buffer。
+    /// </summary>
+    [Fact]
+    public async Task EngineMapsMaterialAudioCuesToLoadedClips()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-hosting-audio-cues-{Guid.NewGuid():N}");
+        try
+        {
+            string audioRoot = Path.Combine(contentRoot, "audio");
+            _ = Directory.CreateDirectory(audioRoot);
+            await File.WriteAllBytesAsync(
+                Path.Combine(audioRoot, "impact_sand.wav"),
+                CreateWav(channels: 1, bitsPerSample: 8, sampleRate: 8_000, [128]));
+            await File.WriteAllTextAsync(
+                Path.Combine(audioRoot, "cues.json"),
+                """
+                {
+                  "cues": [
+                    { "handle": 1, "asset": "impact_sand.wav" }
+                  ]
+                }
+                """);
+            using NullAudioBackend backend = new();
+            using Engine engine = new EngineBuilder()
+                .UseHeadless()
+                .WithContentRoot(contentRoot)
+                .Build();
+            engine.Context.RegisterService(new MaterialTable(
+            [
+                new() { Id = 0, Name = "empty", Type = CellType.Empty, HeatCapacity = 1, TextureId = -1 },
+                new()
+                {
+                    Id = 1,
+                    Name = "sand",
+                    Type = CellType.Powder,
+                    Density = 90,
+                    HeatCapacity = 1,
+                    TextureId = -1,
+                    AudioCues = new AudioCueSet { ImpactCue = 1 },
+                },
+            ]));
+
+            int loaded = await engine.AttachAudioFromContentAsync(backend);
+            Assert.True(engine.Context.TryGetService(out IAudioCueBufferResolver _));
+            Assert.True(engine.Context.Events.Channel<AudioEvent>().TryEnqueue(
+                new AudioEvent(AudioEventType.ParticleImpact, 4, 8, materialId: 1, magnitude: 1f)));
+
+            _ = engine.RunOneTick();
+
+            Assert.Equal(1, loaded);
+            Assert.Equal(1, backend.PlayCalls);
+            Assert.Equal(1, engine.Context.Counters.AudioPlayed);
+        }
+        finally
+        {
+            if (Directory.Exists(contentRoot))
+            {
+                Directory.Delete(contentRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 render-only 帧仍推进 listener 与 voice 状态。
     /// </summary>
     [Fact]

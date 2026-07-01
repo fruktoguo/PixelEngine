@@ -170,6 +170,7 @@ public sealed class Engine : IDisposable
 
         AudioSystem audio = ResolveAudioSystem(backend);
         AudioClipCache cache = ResolveAudioClipCache(audio, audioRoot);
+        IReadOnlyDictionary<int, string> cueMap = AudioCueManifest.Load(audioRoot);
         string[] wavFiles = Directory.GetFiles(audioRoot, "*.wav", SearchOption.AllDirectories);
         Array.Sort(wavFiles, StringComparer.Ordinal);
         for (int i = 0; i < wavFiles.Length; i++)
@@ -180,7 +181,7 @@ public sealed class Engine : IDisposable
         }
 
         RegisterScriptAudioApi(audio, cache);
-        EnsureAudioPhaseDriver(audio);
+        EnsureAudioPhaseDriver(audio, cache, cueMap);
         return cache.LoadedCount;
     }
 
@@ -363,7 +364,7 @@ public sealed class Engine : IDisposable
         MaterialTable materials = Context.GetService<MaterialTable>();
         ResidentChunkMap chunks = new();
         AddResidentChunks(chunks, worldWidthCells, worldHeightCells);
-        ParticleSystem particles = new(particleCapacity);
+        ParticleSystem particles = new(particleCapacity, Context.Events);
         TemperatureField temperature = new();
         return AttachSimulationWorld(chunks, materials, particles, temperature);
     }
@@ -444,7 +445,7 @@ public sealed class Engine : IDisposable
             resolvedPath,
             fallbackMaterialId,
             streamingConfig);
-        ParticleSystem particles = new(particleCapacity);
+        ParticleSystem particles = new(particleCapacity, Context.Events);
         RuntimeWorldStateBridge stateBridge = new(particles);
         WorldLoadResult result = new WorldSaveService().LoadAll(
             resolvedPath,
@@ -867,16 +868,44 @@ public sealed class Engine : IDisposable
         Context.RegisterService(created);
     }
 
-    private void EnsureAudioPhaseDriver(AudioSystem audio)
+    private void EnsureAudioPhaseDriver(
+        AudioSystem audio,
+        AudioClipCache cache,
+        IReadOnlyDictionary<int, string> cueMap)
     {
         if (Context.TryGetService(out AudioPhaseDriver _))
         {
             return;
         }
 
-        AudioPhaseDriver driver = new(audio, BuildAudioListenerView);
+        AudioPhaseDriver driver = CreateAudioPhaseDriver(audio, cache, cueMap);
         Context.RegisterService(driver.GetType(), driver);
         driver.RegisterPhases(Phases);
+    }
+
+    private AudioPhaseDriver CreateAudioPhaseDriver(
+        AudioSystem audio,
+        AudioClipCache cache,
+        IReadOnlyDictionary<int, string> cueMap)
+    {
+        if (!Context.TryGetService(out MaterialTable materials) || cueMap.Count == 0)
+        {
+            return new AudioPhaseDriver(audio, BuildAudioListenerView);
+        }
+
+        AudioSettings settings = audio.Settings;
+        MaterialAudioTable table = MaterialAudioTable.FromMaterialTable(materials);
+        AudioCueClipResolver resolver = new(cache, cueMap);
+        Context.RegisterService(table);
+        Context.RegisterService<IAudioCueBufferResolver>(resolver);
+        if (audio.AmbientLoops is null)
+        {
+            audio.AttachAmbientLoopManager(new AmbientLoopManager(audio.Backend, table, resolver, settings));
+        }
+
+        AudioDispatcher dispatcher = new(Context.Events.Channel<PixelEngine.Core.Events.AudioEvent>(), audio.Voices, settings);
+        MaterialAudioPlayer player = new(table, resolver, settings);
+        return new AudioPhaseDriver(audio, BuildAudioListenerView, dispatcher, player);
     }
 
     private AudioListenerView BuildAudioListenerView(EngineTickContext context)
