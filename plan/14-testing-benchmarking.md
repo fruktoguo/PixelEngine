@@ -179,12 +179,12 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] `ConvexDecompositionTests`、`MarchingSquaresContourTests`、`InverseSamplingRasterizationTests`、`RigidBodySplitConservationTests` 全绿：每片 ≤8 顶点且凸且覆盖原 mask、radius=0、任意角栅格化水密无洞、破坏拆分守恒且速度转移（架构 §8.2/§8.3/§8.4、不变式 #5）。
 - [x] `SaveLoadRoundTripTests`、`MaterialRemapTests`、`VersionMigrationTests` 全绿：逐 cell 等价、改 materials.json 顺序 / 增删后旧档正确重映射、迁移链正确（架构 §11、不变式 #8、R15）。
 - [x] `HotReloadTests`、`ScriptExceptionIsolationTests`、`AlcCollectibilityTests` 全绿：热重载行为正确、异常隔离不崩、ALC 经 GC 可回收且无泄漏（架构 §17.2/§17.4）。
-- [ ] 六个基准可产出报告：cells/frame、每核加速曲线、纹理上传、反应 cache-miss、GC 停顿、粒子积分均有实测数据，并已回填 §1.4/§12.7/§12.8 的目标（架构 §12.7/§17.3，实测替代估算）。
-- [ ] `GcPauseBenchmark` 的 `[MemoryDiagnoser]` 报告稳态帧循环 Gen0/1/2 分配为 0（架构 §12.4、零分配纪律）。
+- [!] 六个基准可产出报告：cells/frame、每核加速曲线、纹理上传、GC 停顿、粒子积分与反应查表延迟已有 Short 报告并已回填 §1.4/§12.7/§12.8；阻塞：反应 cache-miss 硬件计数器需管理员 ETW Kernel Session / 专用 runner 才能产出 Cache Misses 列（架构 §12.7/§17.3，实测替代估算）。
+- [x] `GcPauseBenchmark` 的 `[MemoryDiagnoser]` 报告稳态帧循环 Gen0/1/2 分配为 0（架构 §12.4、零分配纪律）。
 - [x] `DisassemblyGuard` 全绿：热方法无 `RNGCHKFAIL`、热 SIMD 方法出现 ymm/zmm（架构 §12.6/§17.3）。
 - [x] 性能回归门禁生效：故意劣化某热方法会使 CI 判失败（`AGENTS.md §7`，回归即 bug）。
-- [ ] 6-RID build 全绿；可得 RID 的 `dotnet test` 全绿；CoreCLR/R2R 与 NativeAOT 两路径均验证通过（架构 §15、R5）。
-- [ ] §6 的「测试条目↔各 plan 验收」映射完整：各 plan 文档「验收标准」中需自动化的条目都有本文件对应测试 / 基准支撑（`AGENTS.md §7`）。
+- [!] 6-RID build 全绿；可得 RID 的 `dotnet test` 全绿；CoreCLR/R2R 与 NativeAOT 两路径均验证通过；阻塞：workflow 已接线，本地无法证明 GitHub Actions 6-RID hosted runner 全绿，需真实 CI 运行结果（架构 §15、R5）。
+- [x] §6 的「测试条目↔各 plan 验收」映射完整：各 plan 文档「验收标准」中需自动化的条目都有本文件对应测试 / 基准支撑（`AGENTS.md §7`）。
 
 ---
 
@@ -198,7 +198,24 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - plan 16（性能加固）：本文件提供度量与回归门禁，plan 16 提供优化手段；plan 16 的每项加固以本文件的基准 + 反汇编守门为验收工具。
 - plan 17（路线图）：每个里程碑（M0–M10）的验收依赖本文件对应测试 / 基准存在并通过；M0 即建 BenchmarkDotNet 基准与质量守恒测试（架构 §18/§19 R1/R2）。
 
-被测↔本文件测试映射（供 `AGENTS.md §7` 逐项核对）：plan 03 验收 → `MassConservationTests`/`KeepAliveBoundaryTests`/`ParityClockTests`/`MovementRuleTests`/`MultithreadOracleTests` + 内核基准；plan 04 → `ReactionConservationTests`/`ReactionTableTests` + 反应基准；plan 05 → 粒子积分基准 + handshake 用例；plan 06 → `Physics.Tests` 全部；plan 07 → `Serialization.Tests` 全部 + `ResidencyBoundaryTests`；plan 08 → 纹理上传基准；plan 11 → `Scripting.Tests` 全部。
+被测↔本文件测试映射（供 `AGENTS.md §7` 逐项核对）：
+
+- plan 01 验收 → 解决方案 / 项目引用 / CPM / `Directory.Build.props` / native 骨架 / CI 矩阵纪律由 `dotnet build PixelEngine.sln -c Release`、`dotnet test`、Demo / bench smoke、项目纪律测试与 §4.7 的 6-RID build+test 门禁覆盖。
+- plan 02 → `PixelEngine.Core.Tests`（数学、内存、JobSystem、RNG / 事件 / 时钟 / 诊断）+ `CoreAllocationBenchmarks` / `CoreScalingBenchmark` / `GcPauseBenchmark` + 反汇编守门。
+- plan 03 → `MassConservationTests` / `KeepAliveBoundaryTests` / `ParityClockTests` / `MovementRuleTests` / `MultithreadOracleTests` / `DirtyRectLifecycleTests` / `SimulationPhaseInterfaceTests` / `SimulationProjectDisciplineTests` + `CellThroughputBenchmark` / `SimulationAllocationBenchmarks`。
+- plan 04 → `MaterialTableTests` / `ReactionTableTests` / `ReactionEngineTests` / `ReactionConservationTests` / `TemperatureFieldTests` / `MaterialCustomUpdateTests` / `SimulationReactionLifetimeTests` + `ReactionAndTemperatureBenchmarks`。
+- plan 05 → `ParticleSystemTests` / `ParticleLifecycleTests` / `ParticleHandshakeTests` + `ParticleIntegrationBenchmark` / `ParticleSystemAllocationBenchmarks` / `ParticleHandshakeBenchmarks`。
+- plan 06 → `PixelEngine.Physics.Tests` 全部 + `PhysicsBenchmarks`。
+- plan 07 → `PixelEngine.World.Tests` + `PixelEngine.Serialization.Tests` + `ResidencyBoundaryTests`。
+- plan 08 → `PixelEngine.Rendering.Tests` 的渲染窗口 / 管线 / 上传 / 光照 / 粒子 / 项目纪律测试 + `TextureUploadBenchmark` / `RenderingUploadBenchmarks` / `RenderingAllocationBenchmarks` / `PaletteBgraConversionBenchmarks`。
+- plan 09 → `ComputeCapabilityGateTests` / `GpuComputeCapabilityTests` / `GpuComputeDispatchGridTests` / `GpuComputeBloomPipelineTests` / `GpuRadianceCascadePipelineTests` / `GpuParticleRendererContractTests` / `GpuAirSmokePipelineTests` / `GpuComputeProfilerTests` / `RenderPipelineContractTests` / `RenderWindowIntegrationTests` 的 compute smoke 与等价性用例。
+- plan 10 → `PixelEngine.Audio.Tests` 全部 + `MaterialContentLoaderTests` + `AudioDispatchBenchmarks`。
+- plan 11 → `PixelEngine.Scripting.Tests` 全部 + `PixelEngine.Hosting.Tests` 中脚本相位 / 输入 / 相机 / 光照同步与 Demo runtime scripting 用例。
+- plan 12 → `PixelEngine.Editor.Tests` 全部 + Hosting 的相位 / 诊断 / editor play session 相关测试，并复用 plan 07/11 的存档与脚本 Inspector 后端测试。
+- plan 13 → `PixelEngine.Demo.Tests` 的 headless 场景装配 / 内容加载 / 脚本注册测试 + Demo 公开 API / 项目引用纪律检查；真实窗口视觉、听感、手感、通关演示等人工或已标 `- [!]` 阻塞的验收不计入自动化映射缺口。
+- plan 14 → 本文件 §4.1–§4.7 与 §5 自验收（测试工程、bench、反汇编守门、性能回归、CI 门禁）。
+- plan 15 → §4.7 的 6-RID build+test、R2R / NativeAOT 双路径 publish smoke、trim/AOT 分析器、native 依赖与内容包加载校验消费其发行产物；codesign / notarization / SHA256 发布件校验归 release CI 步骤。
+- plan 16 → BenchmarkDotNet `[MemoryDiagnoser]` / `[ThreadingDiagnoser]` / `[DisassemblyDiagnoser]`、`GcPauseBenchmark`、cells/frame / 多核加速 / 纹理上传 / 反应 / 粒子 / 物理 / 音频基准、GPU capability / diagnostics contract、dirty-rect / overload / residency 边界测试与性能回归门禁共同覆盖；纯架构自审项保留为人工复核。
 
 本文件不被任何 `src/*` 工程反向依赖（plan/00 §5 依赖方向）。
 

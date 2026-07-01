@@ -7,4 +7,12 @@ IConfig config = DefaultConfig.Instance
     .AddDiagnoser(ThreadingDiagnoser.Default)
     .AddDiagnoser(new DisassemblyDiagnoser(new DisassemblyDiagnoserConfig(maxDepth: 3)));
 
+if (string.Equals(
+    Environment.GetEnvironmentVariable("PIXELENGINE_BENCH_HARDWARE_COUNTERS"),
+    "1",
+    StringComparison.Ordinal))
+{
+    config = config.AddHardwareCounters(HardwareCounter.CacheMisses);
+}
+
 BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config);
