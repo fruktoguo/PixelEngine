@@ -47,6 +47,25 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证 Demo 默认 lava-mine 场景以 .scene 文件落盘，并通过公开场景文档格式引用 LevelDirector。
+    /// </summary>
+    [Fact]
+    public void DemoDefaultSceneFileUsesLevelDirectorBehaviour()
+    {
+        string root = FindRepositoryRoot();
+        string scenePath = Path.Combine(root, "demo", "PixelEngine.Demo", "content", "scenes", "lava-mine.scene");
+
+        EngineSceneDocument document = EngineSceneDocumentLoader.LoadDocument(scenePath);
+
+        Assert.Equal("lava-mine", document.Name);
+        EngineSceneBehaviourDocument behaviour = Assert.Single(Assert.Single(document.Entities!).Behaviours!);
+        Assert.Equal("PixelEngine.Demo.LevelDirector", behaviour.TypeName);
+        Assert.Equal("640", behaviour.SerializedFields!["LevelWidth"]);
+        Assert.Equal("360", behaviour.SerializedFields["LevelHeight"]);
+        Assert.Equal("true", behaviour.SerializedFields["BuildScriptEntities"]);
+    }
+
+    /// <summary>
     /// 验证 Demo 可见内容包 API 不泄漏 Content / Simulation 实现类型。
     /// </summary>
     [Fact]
