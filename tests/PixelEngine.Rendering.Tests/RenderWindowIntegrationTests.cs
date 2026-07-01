@@ -163,14 +163,45 @@ public sealed class RenderWindowIntegrationTests
             return;
         }
 
-        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        using RenderWindow window = CreateSmokeWindow("PixelEngine pipeline smoke", RenderBackendPreference.Auto);
+        RenderPipelineFrame(window);
+    }
+
+    [Fact]
+    public void CanRenderFrameThroughGlesAngleWhenExplicitlyEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"), "1", StringComparison.Ordinal))
         {
-            Title = "PixelEngine pipeline smoke",
+            return;
+        }
+
+        using RenderWindow window = CreateSmokeWindow("PixelEngine ANGLE smoke", RenderBackendPreference.GlEs30Angle);
+
+        Assert.Equal(RenderBackend.GlEs30Angle, window.Backend);
+        Assert.True(window.Capabilities.IsGles, BackendMessage(window));
+        Assert.True(
+            window.Capabilities.MajorVersion > 3 ||
+            (window.Capabilities.MajorVersion == 3 && window.Capabilities.MinorVersion >= 0),
+            BackendMessage(window));
+        Assert.False(window.Capabilities.HasBufferStorage);
+
+        RenderPipelineFrame(window);
+    }
+
+    private static RenderWindow CreateSmokeWindow(string title, RenderBackendPreference preference)
+    {
+        return RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = title,
             Width = 64,
             Height = 64,
-            BackendPreference = RenderBackendPreference.Auto,
+            BackendPreference = preference,
             EnableDebugContext = true,
         });
+    }
+
+    private static void RenderPipelineFrame(RenderWindow window)
+    {
         using RenderPipeline pipeline = new(window, 16, 16);
         RenderBuffer buffer = new(16, 16);
         RenderAuxBuffers aux = new(16, 16);
@@ -185,7 +216,13 @@ public sealed class RenderWindowIntegrationTests
 
         pipeline.Settings.EnableCrt = true;
         pipeline.RenderFrame(buffer, aux, CameraState.OneToOne(0, 0, 16, 16), [], overlays);
+        window.SwapBuffers();
 
         Assert.Equal(16, pipeline.Width);
+    }
+
+    private static string BackendMessage(RenderWindow window)
+    {
+        return $"{window.Backend}: {window.Capabilities.Version} / {window.Capabilities.Renderer} / {window.Capabilities.Vendor}";
     }
 }

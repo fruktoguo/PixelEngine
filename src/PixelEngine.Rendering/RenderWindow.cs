@@ -157,21 +157,59 @@ public sealed class RenderWindow : IDisposable
     {
         WindowOptions windowOptions = RenderBackendSelector.CreateWindowOptions(options, backend);
         IWindow window = Window.Create(windowOptions);
+        IInputContext? input = null;
+        GL? gl = null;
+        GlDebugMessenger? debugMessenger = null;
         try
         {
             window.Initialize();
-            IInputContext input = window.CreateInput();
-            GL gl = GL.GetApi(window);
+            input = window.CreateInput();
+            gl = GL.GetApi(window);
             GlCapabilities capabilities = GlCapabilities.Query(gl);
-            GlDebugMessenger? debugMessenger = options.EnableDebugContext && diagnostics is not null
+            ValidateCapabilitiesForBackend(backend, capabilities);
+            debugMessenger = options.EnableDebugContext && diagnostics is not null
                 ? GlDebugMessenger.TryCreate(gl, capabilities, diagnostics)
                 : null;
             return new RenderWindow(window, input, gl, backend, capabilities, debugMessenger);
         }
         catch
         {
+            debugMessenger?.Dispose();
+            gl?.Dispose();
+            input?.Dispose();
             window.Dispose();
             throw;
         }
+    }
+
+    private static void ValidateCapabilitiesForBackend(RenderBackend backend, GlCapabilities capabilities)
+    {
+        switch (backend)
+        {
+            case RenderBackend.DesktopGl33:
+                if (capabilities.IsGles || !IsAtLeast(capabilities, 3, 3))
+                {
+                    throw new InvalidOperationException(
+                        $"请求桌面 OpenGL 3.3，但实际上下文为 {capabilities.Version} / {capabilities.Renderer}。");
+                }
+
+                break;
+            case RenderBackend.GlEs30Angle:
+                if (!capabilities.IsGles || !IsAtLeast(capabilities, 3, 0))
+                {
+                    throw new InvalidOperationException(
+                        $"请求 OpenGL ES 3.0/ANGLE，但实际上下文为 {capabilities.Version} / {capabilities.Renderer}。");
+                }
+
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(backend), backend, "未知渲染后端。");
+        }
+    }
+
+    private static bool IsAtLeast(GlCapabilities capabilities, int major, int minor)
+    {
+        return capabilities.MajorVersion > major ||
+            (capabilities.MajorVersion == major && capabilities.MinorVersion >= minor);
     }
 }
