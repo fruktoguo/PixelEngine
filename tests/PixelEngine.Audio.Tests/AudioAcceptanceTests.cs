@@ -117,6 +117,56 @@ public sealed class AudioAcceptanceTests
         Assert.Equal(1, backend.StopCalls);
     }
 
+    [Fact]
+    public void DispatcherTriggersAllMaterialEventFamiliesWithDistinctCues()
+    {
+        AudioSettings settings = new()
+        {
+            MaxVoices = 5,
+            MaxAmbientVoices = 1,
+            MaxParticleImpactEventsPerFrame = 4,
+            MaxFireCrackleEventsPerFrame = 4,
+            MaxLiquidSplashEventsPerFrame = 4,
+            MaxExplosionEventsPerFrame = 4,
+            MaxRigidbodyShatterEventsPerFrame = 4,
+            MaxAmbientRegionEventsPerFrame = 4,
+            CoalesceBucketSize = 1,
+            DefaultCooldownTicks = 0,
+            AmbientEnterThreshold = 0.3f,
+            AmbientExitThreshold = 0.2f,
+            AmbientFadeRate = 0.5f,
+        };
+        MpscRingBuffer<AudioEvent> ring = new(16);
+        Assert.True(ring.TryEnqueue(new AudioEvent(AudioEventType.ParticleImpact, 0, 0, 1, 1f)));
+        Assert.True(ring.TryEnqueue(new AudioEvent(AudioEventType.FireCrackle, 8, 0, 1, 1f)));
+        Assert.True(ring.TryEnqueue(new AudioEvent(AudioEventType.LiquidSplash, 16, 0, 1, 1f)));
+        Assert.True(ring.TryEnqueue(new AudioEvent(AudioEventType.Explosion, 24, 0, 1, 1f)));
+        Assert.True(ring.TryEnqueue(new AudioEvent(AudioEventType.RigidbodyShatter, 32, 0, 1, 1f)));
+        Assert.True(ring.TryEnqueue(new AudioEvent(AudioEventType.AmbientRegion, 40, 0, 1, 1f)));
+        using NullAudioBackend backend = new();
+        using AudioVoicePool voices = new(backend, settings);
+        AudioDispatcher dispatcher = new(ring, voices, settings);
+        MaterialAudioTable table = BuildAllCuesTable();
+        RecordingBufferResolver buffers = new();
+        MaterialAudioPlayer player = new(table, buffers, settings);
+        using AmbientLoopManager ambient = new(backend, table, buffers, settings);
+        AudioListenerState listener = new(default, new(0f, 0f, -1f), new(0f, 1f, 0f), 1f);
+
+        AudioDispatchStats stats = dispatcher.Dispatch(listener, tick: 1, player, ambient);
+
+        Assert.Equal(6, stats.Drained);
+        Assert.Equal(5, stats.Played);
+        Assert.Equal(5, voices.ActiveVoiceCount);
+        Assert.Equal(1, ambient.ActiveVoiceCount);
+        Assert.Equal(6, backend.PlayCalls);
+        Assert.Contains(10, buffers.ResolvedCueHandles);
+        Assert.Contains(20, buffers.ResolvedCueHandles);
+        Assert.Contains(30, buffers.ResolvedCueHandles);
+        Assert.Contains(40, buffers.ResolvedCueHandles);
+        Assert.Contains(50, buffers.ResolvedCueHandles);
+        Assert.Contains(60, buffers.ResolvedCueHandles);
+    }
+
     private static MaterialAudioTable BuildAmbientTable()
     {
         return MaterialAudioTable.FromDefinitions(
@@ -128,6 +178,29 @@ public sealed class AudioAcceptanceTests
                 Name = "water",
                 HeatCapacity = 1f,
                 AudioCues = new AudioCueSet { AmbientCue = 9 },
+            },
+        ]);
+    }
+
+    private static MaterialAudioTable BuildAllCuesTable()
+    {
+        return MaterialAudioTable.FromDefinitions(
+        [
+            new() { Id = 0, Name = "empty", HeatCapacity = 1f },
+            new()
+            {
+                Id = 1,
+                Name = "mixed",
+                HeatCapacity = 1f,
+                AudioCues = new AudioCueSet
+                {
+                    ImpactCue = 10,
+                    FireCue = 20,
+                    SplashCue = 30,
+                    ExplosionCue = 40,
+                    ShatterCue = 50,
+                    AmbientCue = 60,
+                },
             },
         ]);
     }
@@ -150,6 +223,18 @@ public sealed class AudioAcceptanceTests
     {
         public bool TryResolveBuffer(int cueHandle, out uint buffer)
         {
+            buffer = (uint)cueHandle;
+            return cueHandle > 0;
+        }
+    }
+
+    private sealed class RecordingBufferResolver : IAudioCueBufferResolver
+    {
+        public List<int> ResolvedCueHandles { get; } = [];
+
+        public bool TryResolveBuffer(int cueHandle, out uint buffer)
+        {
+            ResolvedCueHandles.Add(cueHandle);
             buffer = (uint)cueHandle;
             return cueHandle > 0;
         }
