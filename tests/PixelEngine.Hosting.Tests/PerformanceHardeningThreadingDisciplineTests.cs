@@ -188,6 +188,32 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 sand/liquid movement 内层保持标量 gather/scatter，不引入 SIMD 路径。
+    /// </summary>
+    [Fact]
+    public void SandAndLiquidMovementRemainScalar()
+    {
+        string source = ReadProductionSource("src", "PixelEngine.Simulation", "ChunkUpdater.cs");
+
+        int powderStart = source.IndexOf("private static bool TryMovePowder", StringComparison.Ordinal);
+        int lifetimeStart = source.IndexOf("private static void ProcessLifetime", StringComparison.Ordinal);
+        Assert.True(powderStart >= 0);
+        Assert.True(lifetimeStart > powderStart);
+
+        string movementSection = source[powderStart..lifetimeStart];
+        Assert.Contains("TryMoveTo", movementSection, StringComparison.Ordinal);
+        Assert.Contains("window.Swap(sourceX, sourceY, targetX, targetY)", movementSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("Vector<", movementSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("System.Numerics", movementSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("System.Runtime.Intrinsics", movementSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("Avx", movementSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("Sse", movementSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("Vector128", movementSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("Vector256", movementSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("Vector512", movementSection, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 worker-local 槽位至少填充到一个 cache line，避免相邻 worker 元数据 false sharing。
     /// </summary>
     [Fact]
