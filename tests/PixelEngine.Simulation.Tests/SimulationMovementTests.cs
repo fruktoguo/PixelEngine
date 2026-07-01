@@ -13,6 +13,7 @@ public sealed class SimulationMovementTests
     private const ushort Water = 3;
     private const ushort Gas = 4;
     private const ushort Fire = 5;
+    private const ushort Oil = 6;
 
     /// <summary>
     /// 验证 powder 按 bottom-up 扫描下落一格，并给源/目标 cell 标记当前 parity 与 working dirty。
@@ -199,15 +200,40 @@ public sealed class SimulationMovementTests
         Assert.Equal(0, Get(center, 10 + EngineConstants.MoveCap + 1, 10));
     }
 
+    /// <summary>
+    /// 验证较轻油液位于水上时不会下沉置换较重水液。
+    /// </summary>
+    [Fact]
+    public void StepCaKeepsLighterOilAboveWater()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        SetCurrentDirty(center, DirtyRect.Full);
+        Set(center, 10, 10, Oil);
+        Set(center, 10, 11, Water);
+        Set(center, 9, 10, Solid);
+        Set(center, 11, 10, Solid);
+        Set(center, 9, 11, Solid);
+        Set(center, 11, 11, Solid);
+        Set(center, 9, 12, Solid);
+        Set(center, 10, 12, Solid);
+        Set(center, 11, 12, Solid);
+        SimulationKernel kernel = new(source, CreateMaterials());
+
+        kernel.StepCa();
+
+        Assert.Equal(Oil, Get(center, 10, 10));
+        Assert.Equal(Water, Get(center, 10, 11));
+    }
+
     private static MaterialPropsTable CreateMaterials(byte waterDispersion = 3)
     {
         return new MaterialPropsTable(
-            [CellType.Empty, CellType.Solid, CellType.Powder, CellType.Liquid, CellType.Gas, CellType.Fire],
-            [0, 255, 120, 60, 1, 1],
-            [0, 0, 0, waterDispersion, 2, 0],
-            [0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0]);
+            [CellType.Empty, CellType.Solid, CellType.Powder, CellType.Liquid, CellType.Gas, CellType.Fire, CellType.Liquid],
+            [0, 255, 120, 60, 1, 1, 30],
+            [0, 0, 0, waterDispersion, 2, 0, waterDispersion],
+            [0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0]);
     }
 
     private static TestChunkSource CreateNeighborhood(ChunkCoord centerCoord, out Chunk center)
