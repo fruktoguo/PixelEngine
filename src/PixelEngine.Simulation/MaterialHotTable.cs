@@ -1,3 +1,6 @@
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
 namespace PixelEngine.Simulation;
 
 /// <summary>
@@ -198,6 +201,69 @@ public sealed class MaterialHotTable
     /// 反应数量列。
     /// </summary>
     public ReadOnlySpan<byte> ReactionCount => _reactionCount;
+
+    /// <summary>
+    /// 热路径 unchecked 读取材质类型；调用方保证 material id 来自有效网格数据。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal CellType TypeOfUnchecked(ushort materialId)
+    {
+        return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_type), materialId);
+    }
+
+    /// <summary>
+    /// 热路径 unchecked 读取材质密度；调用方保证 material id 来自有效网格数据。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal byte DensityOfUnchecked(ushort materialId)
+    {
+        return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_density), materialId);
+    }
+
+    /// <summary>
+    /// 热路径 unchecked 读取扩散距离；调用方保证 material id 来自有效网格数据。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal byte DispersionOfUnchecked(ushort materialId)
+    {
+        return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_dispersion), materialId);
+    }
+
+    /// <summary>
+    /// 热路径 unchecked 读取反应起始索引；调用方保证 material id 来自有效网格数据。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal int ReactionStartOfUnchecked(ushort materialId)
+    {
+        return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_reactionStart), materialId);
+    }
+
+    /// <summary>
+    /// 热路径 unchecked 读取反应数量；调用方保证 material id 来自有效网格数据。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal byte ReactionCountOfUnchecked(ushort materialId)
+    {
+        return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_reactionCount), materialId);
+    }
+
+    /// <summary>
+    /// 热路径 unchecked 读取默认 lifetime；调用方保证 material id 来自有效网格数据。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ushort DefaultLifetimeOfUnchecked(ushort materialId)
+    {
+        return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_defaultLifetime), materialId);
+    }
+
+    /// <summary>
+    /// 热路径 unchecked 读取材质属性位；调用方保证 material id 来自有效网格数据。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal MaterialProperty PropertyFlagsOfUnchecked(ushort materialId)
+    {
+        return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_propertyFlags), materialId);
+    }
 
     /// <summary>
     /// 从完整材质定义构建热路径 SoA 表。

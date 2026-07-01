@@ -331,7 +331,7 @@ internal static class ChunkUpdater
         byte parityBit)
     {
         return material != 0 &&
-            (materials.Hot.PropertyFlags[material] & MaterialProperty.HasCustomUpdate) != 0 &&
+            (materials.PropertyFlagsOf(material) & MaterialProperty.HasCustomUpdate) != 0 &&
             customUpdateExecutor.TryUpdate(ref window, chunks, wx, wy, material, parityBit);
     }
 

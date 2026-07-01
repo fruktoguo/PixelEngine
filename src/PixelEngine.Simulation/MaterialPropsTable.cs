@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace PixelEngine.Simulation;
 
 /// <summary>
@@ -81,48 +83,63 @@ public sealed class MaterialPropsTable
     /// <summary>
     /// 返回材质类型。
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public CellType TypeOf(ushort materialId)
     {
-        return Type[materialId];
+        return Hot.TypeOfUnchecked(materialId);
     }
 
     /// <summary>
     /// 返回材质密度。
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public byte DensityOf(ushort materialId)
     {
-        return Density[materialId];
+        return Hot.DensityOfUnchecked(materialId);
     }
 
     /// <summary>
     /// 返回材质扩散距离。
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public byte DispersionOf(ushort materialId)
     {
-        return Dispersion[materialId];
+        return Hot.DispersionOfUnchecked(materialId);
     }
 
     /// <summary>
     /// 返回材质反应表起始索引。
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int ReactionStartOf(ushort materialId)
     {
-        return ReactionStart[materialId];
+        return Hot.ReactionStartOfUnchecked(materialId);
     }
 
     /// <summary>
     /// 返回材质可触发反应数量。
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public byte ReactionCountOf(ushort materialId)
     {
-        return ReactionCount[materialId];
+        return Hot.ReactionCountOfUnchecked(materialId);
     }
 
     /// <summary>
     /// 返回材质默认 lifetime。
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ushort DefaultLifetimeOf(ushort materialId)
     {
-        return DefaultLifetime[materialId];
+        return Hot.DefaultLifetimeOfUnchecked(materialId);
+    }
+
+    /// <summary>
+    /// 返回材质属性位。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public MaterialProperty PropertyFlagsOf(ushort materialId)
+    {
+        return Hot.PropertyFlagsOfUnchecked(materialId);
     }
 }
