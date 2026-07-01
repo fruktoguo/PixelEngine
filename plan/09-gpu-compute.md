@@ -110,8 +110,8 @@ cascade 层数 `RadianceCascadeCount`、每层角度/空间分辨率、射线步
 
 ### 4.2 与 plan/08 资源/上下文共享（§3.2）
 - [x] 复用 `plan/08` 的 `IRenderContext`/render graph，不新建 GL 上下文。
-- [~] 实现 `GpuComputeResources`：已持有世界纹理/emissive/occluder/bloom mip/合成 target 句柄引用；compute 专属中间资源（SSBO/cascade/SDF）随后续 pass 落地。
-- [~] 资源随 `plan/08` swapchain/resize 事件重建；compute bloom 临时链已按输入尺寸懒重建且插入 `glMemoryBarrier`，其它 compute 专属资源待后续 pass 落地。
+- [x] 实现 `GpuComputeResources`：持有世界纹理/emissive/occluder/bloom mip/合成 target 句柄引用；compute 专属中间资源已由 compute bloom 链、`RadianceCascadeResources` 与 `AirSmokeResources` 落地。
+- [x] 资源随 `plan/08` swapchain/resize 事件重建；compute bloom 临时链、Radiance Cascades 纹理与 air/smoke density 纹理均按输入尺寸懒重建并插入必要 `glMemoryBarrier`。
 - [x] 所有 compute pass 限定在架构 §3.3 相位 10 内执行，不跨相位、不碰 sim 权威数据。
 
 ### 4.3 bloom/光照 compute（§3.3，架构 §9.4）
