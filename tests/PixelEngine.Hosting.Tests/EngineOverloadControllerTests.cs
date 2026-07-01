@@ -1,6 +1,7 @@
 using PixelEngine.Core;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
+using PixelEngine.Editor;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -127,6 +128,27 @@ public sealed class EngineOverloadControllerTests
 
         Assert.Same(overload, engine.Context.GetService<EngineOverloadController>());
         Assert.Equal(EngineQualityTier.Full, overload.QualityTier);
+    }
+
+    /// <summary>
+    /// 验证 Editor runtime diagnostics 从 Hosting 上下文读取真实时间膨胀与降级状态。
+    /// </summary>
+    [Fact]
+    public void EditorRuntimeDiagnosticsProviderMapsClockAndQualityTier()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithOverloadPolicy(frameBudgetMs: 10, sustainWindow: 1)
+            .Build();
+
+        _ = engine.RunOneTick(realDeltaSeconds: 0.020);
+
+        EditorRuntimeDiagnostics diagnostics = EditorRuntimeDiagnosticsProvider.Create(engine.Context);
+
+        Assert.True(diagnostics.TimeScale < 1.0);
+        Assert.Equal((int)EngineQualityTier.ReducedThermal, diagnostics.DegradationLevel);
+        Assert.Equal("ReducedThermal", diagnostics.DegradationName);
+        Assert.Equal(1, diagnostics.ConsecutiveOverBudgetFrames);
     }
 
     private static void RegisterAllPhases(EngineBuilder builder, List<EnginePhase> phases)

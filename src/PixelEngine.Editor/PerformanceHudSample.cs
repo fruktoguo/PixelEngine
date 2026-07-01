@@ -6,7 +6,10 @@ namespace PixelEngine.Editor;
 public readonly record struct PerformanceHudSample(
     double TotalFrameMs,
     double ParticleMs,
-    double CaMs,
+    double CaPassAMs,
+    double CaPassBMs,
+    double CaPassCMs,
+    double CaPassDMs,
     double HeatMs,
     double PhysicsMs,
     double ShapeRebuildMs,
@@ -25,6 +28,11 @@ public readonly record struct PerformanceHudSample(
     string DegradationName,
     int ConsecutiveOverBudgetFrames)
 {
+    /// <summary>
+    /// CA checkerboard A-D 四遍合计耗时。
+    /// </summary>
+    public double CaMs => CaPassAMs + CaPassBMs + CaPassCMs + CaPassDMs;
+
     /// <summary>
     /// 当前是否处于时间膨胀。
     /// </summary>

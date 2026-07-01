@@ -42,9 +42,10 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
         }
 
         _context = ImGui.CreateContext();
-        _plotContext = ImPlot.CreateContext();
         _layoutPath = options.LayoutPath;
         ImGui.SetCurrentContext(_context);
+        ImPlot.SetImGuiContext(_context);
+        _plotContext = ImPlot.CreateContext();
         ImPlot.SetCurrentContext(_plotContext);
         ImGuiIOPtr io = ImGui.GetIO();
         io.ConfigFlags |= EditorDockSpace.BuildConfigFlags(options.EnableMultiViewport);
