@@ -19,6 +19,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("ThreadingDiagnoser.Default", program, StringComparison.Ordinal);
         Assert.Contains("DisassemblyDiagnoser", program, StringComparison.Ordinal);
         Assert.Contains("DisassemblyDiagnoserConfig", program, StringComparison.Ordinal);
+        Assert.Contains("HardwareCounter.CacheMisses", program, StringComparison.Ordinal);
+        Assert.Contains("HardwareCounter.BranchMispredictions", program, StringComparison.Ordinal);
         Assert.Contains("BenchmarkSwitcher.FromAssembly", program, StringComparison.Ordinal);
     }
 

@@ -12,7 +12,9 @@ if (string.Equals(
     "1",
     StringComparison.Ordinal))
 {
-    config = config.AddHardwareCounters(HardwareCounter.CacheMisses);
+    config = config.AddHardwareCounters(
+        HardwareCounter.CacheMisses,
+        HardwareCounter.BranchMispredictions);
 }
 
 BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config);
