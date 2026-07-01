@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using PixelEngine.Hosting;
 
@@ -17,6 +18,17 @@ public static class DemoProgram
     /// </summary>
     /// <param name="args">命令行参数。</param>
     /// <returns>进程退出码。</returns>
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(CameraFollow))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(DemoHud))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(ExplosiveTool))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(GoalTrigger))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(LevelDirector))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(MaterialBrush))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(MaterialEmitter))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PauseMenu))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayerController))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayerHealth))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(SparkEmitter))]
     public static int Execute(string[] args)
     {
         DemoStartupOptions? options = null;

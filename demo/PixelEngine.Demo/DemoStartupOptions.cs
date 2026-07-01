@@ -77,6 +77,11 @@ public sealed class DemoStartupOptions
                 case "--headless":
                     headless = true;
                     break;
+                case "--smoke":
+                    headless = true;
+                    hotReload = false;
+                    ticks = 1;
+                    break;
                 case "--no-hot-reload":
                     hotReload = false;
                     break;
