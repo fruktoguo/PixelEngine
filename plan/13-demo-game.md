@@ -144,7 +144,7 @@ API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosti
 
 工程与启动
 - [x] 建 `demo/PixelEngine.Demo/PixelEngine.Demo.csproj`（`Exe`，仅 `ProjectReference` 到 `PixelEngine.Hosting` 与 `PixelEngine.Scripting`，继承 `Directory.Build.props`，无新 NuGet）。〔plan/00 §5〕
-- [!] `Program.cs`：已用 `EngineBuilder`/`EngineProject` 构造 Engine，支持 `--editor/--headless/--scene/--content/--ticks/--no-hot-reload/--log-dir`；已通过 `Engine.LoadContentPackage()` 加载 Demo materials/reactions 内容包，已区分 save directory 与 `.scene` 来源，已支持 `.scene` 与 procedural 脚本实体/Behaviour 物化，已用 `Engine.AttachResidentSimulationWorld(...)` + `Engine.AttachScriptingFromServices()` 接入 headless resident Simulation/Scripting 后端并跑通 2 tick 冒烟；save directory 与 `.scene InitialSaveDirectory` 场景可经 `Engine.AttachCurrentSceneWorld(...)` 显式装配 live World/Simulation/粒子后端；非 headless 路径已调用 `Engine.AttachWindowRuntime()` 接入窗口、输入与 Rendering 相位；阻塞：缺少 `lava-mine.scene`，且未完成真实窗口可玩关卡验收。〔Hosting；§3.1〕
+- [!] `Program.cs`：已用 `EngineBuilder`/`EngineProject` 构造 Engine，支持 `--editor/--headless/--scene/--content/--ticks/--no-hot-reload/--log-dir`；已通过 `Engine.LoadContentPackage()` 加载 Demo materials/reactions 内容包，已区分 save directory 与 `.scene` 来源，默认 `content/scenes/lava-mine.scene` 可加载并物化 `LevelDirector`；已支持 `.scene` 与 procedural 脚本实体/Behaviour 物化，已用 `Engine.AttachResidentSimulationWorld(...)` + `Engine.AttachScriptingFromServices()` 接入 headless resident Simulation/Scripting 后端并跑通 2 tick 冒烟；save directory 与 `.scene InitialSaveDirectory` 场景可经 `Engine.AttachCurrentSceneWorld(...)` 显式装配 live World/Simulation/粒子后端；非 headless 路径已调用 `Engine.AttachWindowRuntime()` 接入窗口、输入与 Rendering 相位；阻塞：未完成真实窗口可玩关卡验收。〔Hosting；§3.1〕
 - [x] CI 依赖方向断言：Demo 无对引擎内部 assembly 的越层 / 反向引用。〔plan/14；§2〕
 
 玩家与相机
@@ -173,7 +173,7 @@ API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosti
 - [!] `LevelDirector : Behaviour`：源码已落地，脚本生成「熔岩矿洞逃生」基础布局并装配玩家、相机、笔刷、喷口和目标触发器；Hosting procedural scene source 已可按入口 Behaviour 名自动物化 `LevelDirector` 到脚本场景，且 headless resident world 可经 `AttachScriptingFromServices()` 自动驱动；save directory 与 `.scene InitialSaveDirectory` 可显式装配 live World/Simulation/粒子后端，窗口态已可装配输入与 Rendering 相位；阻塞：真实窗口可玩关卡验收仍未完成。〔plan/11、plan/02;§3.11〕
 - [!] `MaterialEmitter : Behaviour`（材质 + 速率 + 喷口）：源码已落地，支持周期性 cell 注入、粒子、音频和点光源请求；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API，fog-of-war 请求已可进入 Rendering 管线；阻塞：缺少点光源 render pass 消费、真实窗口喷口画面与音频触发验收。〔plan/11;§3.11〕
 - [!] `GoalTrigger : Behaviour`：源码已落地，玩家进入触发区后触发通关状态、音效、粒子与光照反馈；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API，fog-of-war 请求已可进入 Rendering 管线；阻塞：缺少胜利菜单/GUI 服务、点光源 render pass 消费、窗口态通关画面与音效触发验收。〔plan/11、plan/10;§3.11〕
-- [ ] `content/scenes/lava-mine.scene`：编辑器编排并序列化，与 `LevelDirector` 等价。〔plan/12、plan/07;§3.2、§3.11〕
+- [x] `content/scenes/lava-mine.scene`：已按 `.scene` 文档格式序列化 `LevelDirector` 入口与关卡参数，默认启动路径可加载并物化为等价脚本场景。〔plan/12、plan/07;§3.2、§3.11〕
 - [ ] `DemoHud : Behaviour.OnGui`：当前材质 / 笔刷 / 玩家状态 / 操作提示 / 性能行。〔plan/11、plan/12、plan/02;§3.12〕
 - [ ] `PauseMenu : Behaviour.OnGui`：继续 / 重开 / 调试叠层切换 / 打开编辑器 / 退出。〔plan/12、架构 §17.2;§3.12〕
 
