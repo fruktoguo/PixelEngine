@@ -148,7 +148,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 ### 4.12 profiling 工具链
 - [x] BenchmarkDotNet 接入（`[MemoryDiagnoser]` + `[DisassemblyDiagnoser]`）作 CI perf 门禁。[plan/14 · §17.3]
 - [x] `DOTNET_JitDisasm` + Disasmo/Rider 反汇编流程文档化、可复现。[plan/14 · §12.6/§17.3]
-- [ ] Core 常驻 debug overlay 报每相位耗时/活跃 chunk/cell/粒子/刚体/常驻内存/sim 频率。[plan/12 · §17.1]
+- [x] Core 常驻 debug overlay 报每相位耗时/活跃 chunk/cell/粒子/刚体/常驻内存/sim 频率。[plan/12 · §17.1]
 - [x] 发行编译模式审计：默认 R2R（运行时 light-up）；AOT 次级必须显式 `IlcInstructionSet` 并反汇编验证 ymm/zmm。[plan/15 · §12.3/风险 R3]
 
 ## 5. 验收标准
@@ -166,7 +166,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [ ] **过载降级链可逐级触发**：五级降级 + 节流全部实现并可由诊断计时器触发；压力下绝不进入 death spiral（不变式 #6）。[§4.2/§4.3]
 - [ ] **内存上限守住**：常驻世界稳定 ≤ 配置上限，LRU 驱逐 + RLE+LZ4 生效，长漫游不无界增长。[§12.2]
 - [ ] **延迟+分支校准**：瓶颈分析以 cache-miss/分支误预测为据；多核加速曲线与 cells/frame 在目标硬件实测落表、回填架构指标。[§12.7/§12.8/§17.3]
-- [ ] **工具链门禁运行**：BenchmarkDotNet perf 门禁在 CI 跑、回归视为 bug；反汇编流程可复现；debug overlay 在线；发行编译模式审计通过。[§17.1/§17.3/§12.3]
+- [x] **工具链门禁运行**：BenchmarkDotNet perf 门禁在 CI 跑、回归视为 bug；反汇编流程可复现；debug overlay 在线；发行编译模式审计通过。[§17.1/§17.3/§12.3]
 - [ ] **帧预算达标**：目标硬件实测 CA ≤8ms、渲染+光照+post ≤4ms、物理+重建 ≤3–4ms、逻辑+音频 ≤1ms（典型场景留余量）。[§1.4]
 - [ ] **零冲突复核**：本表所有项与架构不变式（#2/#3/#6/#7/#9）及 plan/00 技术栈无冲突。[AGENTS §1]
 
