@@ -123,13 +123,13 @@ ambient 声部独立于 §3.3 的一次性 voice 池，使用单独的小型 sou
 
 OpenAL 封装与生命周期：
 
-- [ ] `AudioSystem` 门面：`Initialize` / `Update(in CameraView, long simTick, bool simSteppedThisFrame)` / `Shutdown`，聚合各组件（架构 §10、帧尾音频派发步骤）。
-- [ ] `IAudioBackend` 抽象 + `OpenAlBackend`（Silk.NET.OpenAL）+ `NullAudioBackend`（测试用，无声记录调用）。
-- [ ] `OpenAlDevice`：`TryInitialize` 打开默认设备 + 创建 / make-current `ALContext`，设置全局距离模型与 listener 增益；设备缺失走静默降级、不崩溃（架构 §10.1）。
-- [ ] `AudioListenerState` + `UpdateListener(in CameraView)`：2D listener 定位（相机中心、朝向 / up 约定）。
-- [ ] `AudioSpace.ToMeters(int cellX, int cellY)`：世界 cell→OpenAL 米空间，按 `AudioSettings.PixelsPerMeter`（建库即定常量）。
-- [ ] `AudioVoice`：封装 AL source（`Play`/`Stop`/`IsFinished`/`StealScore`），3D 位置 + 距离衰减参数（`ReferenceDistance`/`MaxDistance`/`RolloffFactor`）。
-- [ ] `AudioVoicePool`：预分配固定 voice，`Acquire(byte priority, AudioEventType)` + voice stealing（距离 + 优先级 + 年龄评分），池满丢弃计诊断（架构 §10.1 3D positional source 池）。
+- [x] `AudioSystem` 门面：`Initialize` / `Update(in CameraView, long simTick, bool simSteppedThisFrame)` / `Shutdown`，聚合各组件（架构 §10、帧尾音频派发步骤）。
+- [x] `IAudioBackend` 抽象 + `OpenAlBackend`（Silk.NET.OpenAL）+ `NullAudioBackend`（测试用，无声记录调用）。
+- [x] `OpenAlDevice`：`TryInitialize` 打开默认设备 + 创建 / make-current `ALContext`，设置全局距离模型与 listener 增益；设备缺失走静默降级、不崩溃（架构 §10.1）。
+- [x] `AudioListenerState` + `UpdateListener(in CameraView)`：2D listener 定位（相机中心、朝向 / up 约定）。
+- [x] `AudioSpace.ToMeters(int cellX, int cellY)`：世界 cell→OpenAL 米空间，按 `AudioSettings.PixelsPerMeter`（建库即定常量）。
+- [x] `AudioVoice`：封装 AL source（`Play`/`Stop`/`IsFinished`/`StealScore`），3D 位置 + 距离衰减参数（`ReferenceDistance`/`MaxDistance`/`RolloffFactor`）。
+- [x] `AudioVoicePool`：预分配固定 voice，`Acquire(byte priority, AudioEventType)` + voice stealing（距离 + 优先级 + 年龄评分），池满丢弃计诊断（架构 §10.1 3D positional source 池）。
 
 事件消费与限频去重（消费侧，主线程帧尾）：
 
@@ -208,7 +208,7 @@ OpenAL 封装与生命周期：
 
 对应架构 §18 里程碑 **M8（音频）**。按 AGENTS §6 每完成一个节点立即用中文 git 提交（`scope=audio`）：
 
-- [ ] 节点 1 `feat(audio): OpenAL 设备/上下文/listener + positional source 池`（§3.1/§3.3 对应实现清单第 1 组）。
+- [x] 节点 1 `feat(audio): OpenAL 设备/上下文/listener + positional source 池`（§3.1/§3.3 对应实现清单第 1 组）。
 - [ ] 节点 2 `feat(audio): 事件消费派发 + 限频去重(每帧上限/近坐标合并/冷却)`（§3.2/§3.4/§3.7 第 2 组）。
 - [ ] 节点 3 `feat(audio): 材质化音效映射(AudioCues) + impact/fire/splash/explosion/shatter`（§3.5/§3.6 第 3 组）。
 - [ ] 节点 4 `feat(audio): 资产加载(WAV) + 流式播放 + 公开播放 API + 诊断接入`（§3.8/§3.9 第 4 组）。
