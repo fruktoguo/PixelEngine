@@ -1,0 +1,77 @@
+using Silk.NET.OpenGL;
+
+namespace PixelEngine.Rendering.Compute;
+
+/// <summary>
+/// ComputeSharp 后端隔离类型。当前默认发行未引用 ComputeSharp 程序集，因此该类型不触碰任何 ComputeSharp API。
+/// </summary>
+/// <remarks>
+/// DX12 后端必须在 plan/15 打包与 AOT 策略明确后启用；当前类型只保证接口隔离和 G2 恒假时不会形成硬依赖。
+/// </remarks>
+public sealed class ComputeSharpBackend : IComputeBackend
+{
+    /// <inheritdoc />
+    public ComputeBackendKind Kind => ComputeBackendKind.ComputeSharp;
+
+    /// <inheritdoc />
+    public bool IsAvailable => false;
+
+    /// <inheritdoc />
+    public ComputeKernel LoadKernel(string name, string source)
+    {
+        throw CreateUnavailableException();
+    }
+
+    /// <inheritdoc />
+    public void BindStorageBuffer(uint bindingIndex, uint bufferHandle)
+    {
+        throw CreateUnavailableException();
+    }
+
+    /// <inheritdoc />
+    public void BindImage(uint unit, uint textureHandle, int level, bool layered, int layer, GLEnum access, GLEnum format)
+    {
+        throw CreateUnavailableException();
+    }
+
+    /// <inheritdoc />
+    public void Dispatch(ComputeKernel kernel, uint groupsX, uint groupsY, uint groupsZ)
+    {
+        throw CreateUnavailableException();
+    }
+
+    /// <inheritdoc />
+    public void MemoryBarrier(MemoryBarrierMask barriers)
+    {
+        throw CreateUnavailableException();
+    }
+
+    /// <inheritdoc />
+    public uint BeginTimerQuery(string passName)
+    {
+        throw CreateUnavailableException();
+    }
+
+    /// <inheritdoc />
+    public void EndTimerQuery()
+    {
+        throw CreateUnavailableException();
+    }
+
+    /// <inheritdoc />
+    public bool TryGetTimerResult(uint queryHandle, out ulong elapsedNanoseconds)
+    {
+        elapsedNanoseconds = 0;
+        throw CreateUnavailableException();
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+    }
+
+    private static InvalidOperationException CreateUnavailableException()
+    {
+        return new InvalidOperationException("ComputeSharp 后端尚未编译进当前发行；请使用 NullComputeBackend 或 GLComputeBackend。");
+    }
+}

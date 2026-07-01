@@ -32,6 +32,7 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("_crt.Render", source, StringComparison.Ordinal);
         Assert.Contains("BeforePresentUi?.Invoke", source, StringComparison.Ordinal);
         Assert.Contains("ShouldDelegateComputeLighting", source, StringComparison.Ordinal);
+        Assert.Contains("CreateComputeResourcesSnapshot", source, StringComparison.Ordinal);
         Assert.True(source.IndexOf("_worldBlit.Render", StringComparison.Ordinal) < source.IndexOf("_overlay.Render", StringComparison.Ordinal));
         Assert.True(source.IndexOf("_overlay.Render", StringComparison.Ordinal) < source.IndexOf("_composite.Render", StringComparison.Ordinal));
     }
