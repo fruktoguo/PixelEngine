@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 
@@ -62,30 +61,29 @@ public static unsafe class PaletteBgraConverter
     private static void ConvertAvx2(ReadOnlySpan<ushort> materialIds, ReadOnlySpan<uint> paletteBgra, Span<uint> destination)
     {
         int i = 0;
-        ref ushort materialRef = ref MemoryMarshal.GetReference(materialIds);
+        fixed (ushort* source = materialIds)
         fixed (uint* palette = paletteBgra)
         fixed (uint* target = destination)
         {
             for (; i <= materialIds.Length - 8; i += 8)
             {
-                ref ushort source = ref Unsafe.Add(ref materialRef, i);
                 Vector256<int> indices = Vector256.Create(
-                    source,
-                    Unsafe.Add(ref source, 1),
-                    Unsafe.Add(ref source, 2),
-                    Unsafe.Add(ref source, 3),
-                    Unsafe.Add(ref source, 4),
-                    Unsafe.Add(ref source, 5),
-                    Unsafe.Add(ref source, 6),
-                    Unsafe.Add(ref source, 7)).AsInt32();
+                    source[i],
+                    source[i + 1],
+                    source[i + 2],
+                    source[i + 3],
+                    source[i + 4],
+                    source[i + 5],
+                    source[i + 6],
+                    source[i + 7]).AsInt32();
                 Vector256<uint> colors = Avx2.GatherVector256(palette, indices, 4);
                 Unsafe.WriteUnaligned(target + i, colors);
             }
-        }
 
-        for (; i < materialIds.Length; i++)
-        {
-            destination[i] = paletteBgra[materialIds[i]];
+            for (; i < materialIds.Length; i++)
+            {
+                target[i] = palette[source[i]];
+            }
         }
     }
 

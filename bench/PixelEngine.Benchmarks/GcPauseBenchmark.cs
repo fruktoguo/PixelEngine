@@ -8,7 +8,7 @@ namespace PixelEngine.Benchmarks;
 /// 稳态帧循环零分配与 GC 模式观测基准。
 /// </summary>
 [MemoryDiagnoser]
-public sealed class GcPauseBenchmark
+public class GcPauseBenchmark
 {
     private const ushort Sand = 2;
     private readonly Chunk[] _chunks = new Chunk[9];

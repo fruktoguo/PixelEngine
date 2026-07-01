@@ -159,10 +159,10 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 ### 4.7 反汇编守门与 CI 门禁
 
-- [ ] `DisassemblyGuard`：用 `[DisassemblyDiagnoser]` 产出热方法汇编，解析断言 `RNGCHKFAIL` 不出现、热 SIMD 方法 ymm/zmm 出现，失败即构建失败（性能 §12.6/§17.3）。
-- [ ] 性能回归门禁：每基准维护可审查 baseline，CI 比对超阈值（建议 >5%，按噪声实测定档）即判失败（`AGENTS.md §7`）。
-- [ ] 6-RID 矩阵：六 RID 全 build；有 runner 的 RID 跑 `dotnet test`，其余 arm64 至少 build-verify；同时验证 CoreCLR/R2R（动态）与 NativeAOT（静态）两路径（架构 §15、R5、消费 plan 15 产物）。
-- [ ] CI 工作流接线：`dotnet build -c Release` → `dotnet test`（四工程）→ 反汇编守门 → 基准回归门禁；`src/*` 开 `TreatWarningsAsErrors`（plan/00 §1，与 plan 01 CI 骨架对接）。
+- [x] `DisassemblyGuard`：用 `[DisassemblyDiagnoser]` 产出热方法汇编，解析断言 `RNGCHKFAIL` 不出现、热 SIMD 方法 ymm/zmm 出现，失败即构建失败（性能 §12.6/§17.3）。
+- [x] 性能回归门禁：每基准维护可审查 baseline，CI 比对超阈值（建议 >5%，按噪声实测定档）即判失败（`AGENTS.md §7`）。
+- [x] 6-RID 矩阵：六 RID 全 build；有 runner 的 RID 跑 `dotnet test`，其余 arm64 至少 build-verify；同时验证 CoreCLR/R2R（动态）与 NativeAOT（静态）两路径（架构 §15、R5、消费 plan 15 产物）。
+- [x] CI 工作流接线：`dotnet build -c Release` → `dotnet test`（四工程）→ 反汇编守门 → 基准回归门禁；`src/*` 开 `TreatWarningsAsErrors`（plan/00 §1，与 plan 01 CI 骨架对接）。
 
 ---
 
@@ -181,8 +181,8 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] `HotReloadTests`、`ScriptExceptionIsolationTests`、`AlcCollectibilityTests` 全绿：热重载行为正确、异常隔离不崩、ALC 经 GC 可回收且无泄漏（架构 §17.2/§17.4）。
 - [ ] 六个基准可产出报告：cells/frame、每核加速曲线、纹理上传、反应 cache-miss、GC 停顿、粒子积分均有实测数据，并已回填 §1.4/§12.7/§12.8 的目标（架构 §12.7/§17.3，实测替代估算）。
 - [ ] `GcPauseBenchmark` 的 `[MemoryDiagnoser]` 报告稳态帧循环 Gen0/1/2 分配为 0（架构 §12.4、零分配纪律）。
-- [ ] `DisassemblyGuard` 全绿：热方法无 `RNGCHKFAIL`、热 SIMD 方法出现 ymm/zmm（架构 §12.6/§17.3）。
-- [ ] 性能回归门禁生效：故意劣化某热方法会使 CI 判失败（`AGENTS.md §7`，回归即 bug）。
+- [x] `DisassemblyGuard` 全绿：热方法无 `RNGCHKFAIL`、热 SIMD 方法出现 ymm/zmm（架构 §12.6/§17.3）。
+- [x] 性能回归门禁生效：故意劣化某热方法会使 CI 判失败（`AGENTS.md §7`，回归即 bug）。
 - [ ] 6-RID build 全绿；可得 RID 的 `dotnet test` 全绿；CoreCLR/R2R 与 NativeAOT 两路径均验证通过（架构 §15、R5）。
 - [ ] §6 的「测试条目↔各 plan 验收」映射完整：各 plan 文档「验收标准」中需自动化的条目都有本文件对应测试 / 基准支撑（`AGENTS.md §7`）。
 
@@ -214,4 +214,4 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] `test(serialization): save-load 往返/材质重映射/版本迁移测试`（对应 §4.4）。
 - [x] `test(script): 热重载/异常隔离/ALC 可回收测试`（对应 §4.5）。
 - [x] `test(bench): cells-frame/加速曲线/上传/反应/GC/粒子基准`（对应 §4.6）。
-- [ ] `build(ci): 反汇编守门+性能回归门禁+6-RID build-test`（对应 §4.7）。
+- [x] `build(ci): 反汇编守门+性能回归门禁+6-RID build-test`（对应 §4.7）。
