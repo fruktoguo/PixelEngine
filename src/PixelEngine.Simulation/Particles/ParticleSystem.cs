@@ -36,13 +36,15 @@ public sealed class ParticleSystem : IParticleReadback
     public ParticleSystem(
         int capacity = EngineConstants.ParticleCapacityDefault,
         EventBus? events = null,
-        DeterminismMode determinismMode = DeterminismMode.HighPerformance)
+        DeterminismMode determinismMode = DeterminismMode.HighPerformance,
+        ParticleSystemSettings? settings = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(capacity);
         _particles = GC.AllocateArray<Particle>(capacity, pinned: true);
         _outcomes = GC.AllocateArray<ParticleOutcome>(capacity, pinned: true);
         _ejectionRequests = GC.AllocateArray<EjectionRequest>(EngineConstants.ParticleEjectMaxPerTick, pinned: true);
         DeterminismMode = determinismMode;
+        Settings = (settings ?? ParticleSystemSettings.Default).Normalize(capacity);
         _audioEvents = events?.Channel<AudioEvent>();
     }
 
@@ -60,6 +62,11 @@ public sealed class ParticleSystem : IParticleReadback
     /// 粒子系统的确定性策略 seam。默认高性能；确定性数值实现留给后续确定性模式节点。
     /// </summary>
     public DeterminismMode DeterminismMode { get; }
+
+    /// <summary>
+    /// 当前粒子调参。所有值已按固定池容量归一化。
+    /// </summary>
+    public ParticleSystemSettings Settings { get; private set; }
 
     /// <summary>
     /// 活跃粒子的可写连续前缀视图。
@@ -85,6 +92,20 @@ public sealed class ParticleSystem : IParticleReadback
         _killedByLifetimeThisTick,
         _droppedThisTick,
         _droppedAudioEventsThisTick);
+
+    /// <summary>
+    /// 在帧边界应用新的粒子调参。若新的活跃上限低于当前数量，尾部粒子按容量丢弃计数释放。
+    /// </summary>
+    /// <param name="settings">新的粒子调参。</param>
+    public void ApplySettings(ParticleSystemSettings settings)
+    {
+        Settings = settings.Normalize(Capacity);
+        while (ActiveCount > Settings.MaxActiveCount)
+        {
+            RemoveAtSwapBack(ActiveCount - 1);
+            _droppedThisTick++;
+        }
+    }
 
     /// <summary>
     /// 清空本 tick 的增量诊断计数，不改变活跃粒子。
@@ -122,7 +143,7 @@ public sealed class ParticleSystem : IParticleReadback
             throw new ArgumentOutOfRangeException(nameof(request), request.Radius, "抛射半径不能为负。");
         }
 
-        if (_ejectionRequestCount >= _ejectionRequests.Length)
+        if (_ejectionRequestCount >= _ejectionRequests.Length || Settings.MaxEjectionPerTick == 0)
         {
             _droppedThisTick++;
             return false;
@@ -137,13 +158,13 @@ public sealed class ParticleSystem : IParticleReadback
     /// </summary>
     public bool TrySpawn(in ParticleSpawn spawn)
     {
-        if (ActiveCount >= _particles.Length)
+        if (ActiveCount >= Settings.MaxActiveCount)
         {
             _droppedThisTick++;
             return false;
         }
 
-        _particles[ActiveCount++] = spawn.ToParticle();
+        _particles[ActiveCount++] = spawn.ToParticle(Settings.MaxLifetimeTicks);
         _spawnedThisTick++;
         return true;
     }
@@ -268,15 +289,16 @@ public sealed class ParticleSystem : IParticleReadback
         ArgumentNullException.ThrowIfNull(grid);
 
         int ejected = 0;
-        for (int requestIndex = 0; requestIndex < _ejectionRequestCount && ejected < EngineConstants.ParticleEjectMaxPerTick; requestIndex++)
+        int ejectionLimit = Settings.MaxEjectionPerTick;
+        for (int requestIndex = 0; requestIndex < _ejectionRequestCount && ejected < ejectionLimit; requestIndex++)
         {
             EjectionRequest request = _ejectionRequests[requestIndex];
             int radiusSq = request.Radius * request.Radius;
             int requestEjected = 0;
             ushort firstMaterial = 0;
-            for (int y = request.CenterY - request.Radius; y <= request.CenterY + request.Radius && ejected < EngineConstants.ParticleEjectMaxPerTick; y++)
+            for (int y = request.CenterY - request.Radius; y <= request.CenterY + request.Radius && ejected < ejectionLimit; y++)
             {
-                for (int x = request.CenterX - request.Radius; x <= request.CenterX + request.Radius && ejected < EngineConstants.ParticleEjectMaxPerTick; x++)
+                for (int x = request.CenterX - request.Radius; x <= request.CenterX + request.Radius && ejected < ejectionLimit; x++)
                 {
                     int dx = x - request.CenterX;
                     int dy = y - request.CenterY;
@@ -288,7 +310,7 @@ public sealed class ParticleSystem : IParticleReadback
                         continue;
                     }
 
-                    ParticleSpawn spawn = CreateEjectionSpawn(DeterminismMode, grid.MaterialProps, request, x, y, dx, dy, material);
+                    ParticleSpawn spawn = CreateEjectionSpawn(Settings, DeterminismMode, grid.MaterialProps, request, x, y, dx, dy, material);
                     if (!TrySpawn(in spawn))
                     {
                         continue;
@@ -380,18 +402,18 @@ public sealed class ParticleSystem : IParticleReadback
             float moveVy = particle.Vy;
             particle.X += particle.Vx;
             particle.Y += particle.Vy;
-            particle.Vy += EngineConstants.ParticleGravityPerTick;
+            particle.Vy += Settings.GravityPerTick;
             if (particle.Life > 0)
             {
                 particle.Life--;
             }
 
             particleSlot = particle;
-            Unsafe.Add(ref outcomeBase, i) = ClassifyOutcome(grid, oldX, oldY, moveVx, moveVy, particle);
+            Unsafe.Add(ref outcomeBase, i) = ClassifyOutcome(grid, oldX, oldY, moveVx, moveVy, particle, Settings.DepositSpeedEpsilon);
         }
     }
 
-    private static ParticleOutcome ClassifyOutcome(CellGrid grid, float oldX, float oldY, float moveVx, float moveVy, Particle particle)
+    private static ParticleOutcome ClassifyOutcome(CellGrid grid, float oldX, float oldY, float moveVx, float moveVy, Particle particle, float depositSpeedEpsilon)
     {
         if (particle.Life == 0)
         {
@@ -433,7 +455,7 @@ public sealed class ParticleSystem : IParticleReadback
         }
 
         float speedSq = (moveVx * moveVx) + (moveVy * moveVy);
-        return speedSq <= EngineConstants.ParticleDepositSpeedEpsilon * EngineConstants.ParticleDepositSpeedEpsilon
+        return speedSq <= depositSpeedEpsilon * depositSpeedEpsilon
             ? ParticleOutcome.WantsDeposit(newCellX, newCellY)
             : ParticleOutcome.Flying;
     }
@@ -482,6 +504,7 @@ public sealed class ParticleSystem : IParticleReadback
     }
 
     private static ParticleSpawn CreateEjectionSpawn(
+        ParticleSystemSettings settings,
         DeterminismMode determinismMode,
         MaterialPropsTable materials,
         EjectionRequest request,
@@ -496,10 +519,10 @@ public sealed class ParticleSystem : IParticleReadback
         float ny = length > 0 ? dy / length : 0;
         byte jitterByte = JitterByte(determinismMode, x, y, material);
         float jitter = request.ImpulseJitter == 0 ? 0 : jitterByte / 255f * request.ImpulseJitter;
-        float speed = request.ImpulseSpeed + jitter;
+        float speed = (request.ImpulseSpeed + jitter) * settings.EjectionImpulseScale;
         ushort defaultLifetime = materials.DefaultLifetimeOf(material);
-        byte life = defaultLifetime > EngineConstants.ParticleMaxLifetimeTicks
-            ? EngineConstants.ParticleMaxLifetimeTicks
+        byte life = defaultLifetime > settings.MaxLifetimeTicks
+            ? (byte)settings.MaxLifetimeTicks
             : (byte)defaultLifetime;
         return new ParticleSpawn(
             x + 0.5f,

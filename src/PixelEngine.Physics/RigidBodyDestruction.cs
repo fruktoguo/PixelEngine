@@ -42,7 +42,17 @@ public sealed class RigidBodyDestruction
     /// <summary>
     /// 小于该像素数的连通块转为自由粒子。
     /// </summary>
-    public int FragmentPixelThreshold { get; }
+    public int FragmentPixelThreshold { get; private set; }
+
+    /// <summary>
+    /// 在帧边界更新碎片像素阈值，后续 damage 重建会使用新阈值。
+    /// </summary>
+    /// <param name="fragmentPixelThreshold">小于该像素数的连通块转为自由粒子。</param>
+    public void SetFragmentPixelThreshold(int fragmentPixelThreshold)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(fragmentPixelThreshold);
+        FragmentPixelThreshold = fragmentPixelThreshold;
+    }
 
     /// <summary>
     /// 最近一次 CCL、轮廓追踪与凸分解准备阶段耗时，单位毫秒。
