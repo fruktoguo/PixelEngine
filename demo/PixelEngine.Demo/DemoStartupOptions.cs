@@ -28,7 +28,7 @@ public sealed class DemoStartupOptions
     /// <summary>
     /// 是否以 headless 冒烟模式运行。
     /// </summary>
-    public bool Headless { get; init; } = true;
+    public bool Headless { get; init; }
 
     /// <summary>
     /// headless 模式下执行的 tick 数。
@@ -60,7 +60,7 @@ public sealed class DemoStartupOptions
         ArgumentNullException.ThrowIfNull(args);
         bool enableEditor = false;
         bool hotReload = true;
-        bool headless = true;
+        bool headless = false;
         int ticks = 1;
         string contentRoot = Path.Combine(AppContext.BaseDirectory, "content");
         string scene = Path.Combine("scenes", DefaultSceneName + ".scene");

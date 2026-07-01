@@ -66,9 +66,9 @@ public sealed class ScriptLightingSynchronizer(ScriptLightingApi lighting, Scrip
         for (int i = 0; i < count; i++)
         {
             FogRevealRequest reveal = _lighting.GetReveal(i);
-            int localX = (int)MathF.Round(reveal.X - camera.OriginWorldX);
-            int localY = (int)MathF.Round(reveal.Y - camera.OriginWorldY);
-            int radius = Math.Max(0, (int)MathF.Ceiling(reveal.Radius));
+            int localX = (int)MathF.Round((reveal.X - camera.OriginWorldX) / camera.CellsPerPixel);
+            int localY = (int)MathF.Round((reveal.Y - camera.OriginWorldY) / camera.CellsPerPixel);
+            int radius = Math.Max(0, (int)MathF.Ceiling(reveal.Radius / camera.CellsPerPixel));
             FogOfWar.RevealCircle(localX, localY, radius, reveal.Alpha);
         }
 
@@ -93,14 +93,12 @@ public sealed class ScriptLightingSynchronizer(ScriptLightingApi lighting, Scrip
 
     private void EnsureFogSize(CameraState camera)
     {
-        int widthCells = Math.Max(1, (int)MathF.Ceiling(camera.ViewportWidth * camera.CellsPerPixel));
-        int heightCells = Math.Max(1, (int)MathF.Ceiling(camera.ViewportHeight * camera.CellsPerPixel));
-        if (FogOfWar.ViewportCellWidth == widthCells &&
-            FogOfWar.ViewportCellHeight == heightCells)
+        if (FogOfWar.ViewportCellWidth == camera.ViewportWidth &&
+            FogOfWar.ViewportCellHeight == camera.ViewportHeight)
         {
             return;
         }
 
-        FogOfWar = new FogOfWarBuffer(widthCells, heightCells);
+        FogOfWar = new FogOfWarBuffer(camera.ViewportWidth, camera.ViewportHeight);
     }
 }

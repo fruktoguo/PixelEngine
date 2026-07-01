@@ -144,7 +144,7 @@ API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosti
 
 工程与启动
 - [x] 建 `demo/PixelEngine.Demo/PixelEngine.Demo.csproj`（`Exe`，仅 `ProjectReference` 到 `PixelEngine.Hosting` 与 `PixelEngine.Scripting`，继承 `Directory.Build.props`，无新 NuGet）。〔plan/00 §5〕
-- [!] `Program.cs`：已用 `EngineBuilder`/`EngineProject` 构造 Engine，支持 `--editor/--headless/--scene/--content/--ticks/--no-hot-reload/--log-dir`；已通过 `Engine.LoadContentPackage()` 加载 Demo materials/reactions 内容包，已区分 save directory 与 `.scene` 来源，默认 `content/scenes/lava-mine.scene` 可加载并物化 `LevelDirector`；已支持 `.scene` 与 procedural 脚本实体/Behaviour 物化，已用 `Engine.AttachResidentSimulationWorld(...)` + `Engine.AttachScriptingFromServices()` 接入 headless resident Simulation/Scripting 后端并跑通 2 tick 冒烟；`HotReloadEnabled` 为 true 且 Demo 源码目录可定位时会把源码 watcher 接入 `ScriptRuntime`，源码目录缺失时明确提示并继续运行；save directory 与 `.scene InitialSaveDirectory` 场景可经 `Engine.AttachCurrentSceneWorld(...)` 显式装配 live World/Simulation/粒子后端；非 headless 路径已调用 `Engine.AttachWindowRuntime()` 接入窗口、输入与 Rendering 相位；阻塞：未完成真实窗口可玩关卡验收。〔Hosting；§3.1〕
+- [x] `Program.cs`：已用 `EngineBuilder`/`EngineProject` 构造 Engine，支持 `--editor/--headless/--scene/--content/--ticks/--no-hot-reload/--log-dir`；已通过 `Engine.LoadContentPackage()` 加载 Demo materials/reactions 内容包，已区分 save directory 与 `.scene` 来源，默认 `content/scenes/lava-mine.scene` 可加载并物化 `LevelDirector`；已支持 `.scene` 与 procedural 脚本实体/Behaviour 物化，已用 `Engine.AttachResidentSimulationWorld(...)` + `Engine.AttachScriptingFromServices()` 接入 headless resident Simulation/Scripting 后端并跑通 2 tick 冒烟；`HotReloadEnabled` 为 true 且 Demo 源码目录可定位时会把源码 watcher 接入 `ScriptRuntime`，源码目录缺失时明确提示并继续运行；save directory 与 `.scene InitialSaveDirectory` 场景可经 `Engine.AttachCurrentSceneWorld(...)` 显式装配 live World/Simulation/粒子后端；裸启动默认进入窗口模式，非 headless 路径已调用 `Engine.AttachWindowRuntime()` 接入窗口、输入与 Rendering 相位，并通过 6 秒窗口 smoke 无 crash。〔Hosting；§3.1〕
 - [x] CI 依赖方向断言：Demo 无对引擎内部 assembly 的越层 / 反向引用。〔plan/14；§2〕
 
 玩家与相机
@@ -184,7 +184,7 @@ API 缺口登记
 
 ## 5. 验收标准
 
-- [ ] `dotnet run --project demo/PixelEngine.Demo -c Release` 开窗进入关卡，端到端跑通「引擎装配→内容加载→场景加载→主循环」，无内部类引用（编译期由 csproj 引用范围 + CI 断言保证）。〔§3.1、§2〕
+- [x] `dotnet run --project demo/PixelEngine.Demo -c Release` 开窗进入关卡，端到端跑通「引擎装配→内容加载→场景加载→主循环」，无内部类引用（编译期由 csproj 引用范围 + CI 断言保证）；本机窗口 smoke 运行 6 秒未退出且无 crash log，输出确认 Rendering/Input 后端已接入。〔§3.1、§2〕
 - [ ] 玩家可跑 / 跳 / 蹬墙，**站在 settled 沙堆与掉落的木 / 金属刚体上不穿不陷**（验证角色控制器读到刚体往返像素，架构 §8.3 双向耦合）。〔§3.3〕
 - [ ] 相机平滑跟随玩家、夹在关卡边界、滚轮缩放生效；sim 降频时画面仍流畅（引擎整图偏移）。〔§3.4〕
 - [ ] 数字键切材质、左键放 / 右键擦 / 滚轮调半径在正确世界坐标写入 cell 并被 CA 接管（沙堆休止角、水找平、油浮于水、气体上升）。〔§3.5、§3.6〕
