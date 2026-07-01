@@ -115,26 +115,28 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 | 能力（Demo 需求） | 期望公开 API（签名意向） | 所属 plan | 状态 |
 |---|---|---|---|
 | 创建引擎 / 配置 / 运行主循环 / 内容包加载 | `EngineBuilder`、`EngineOptions`、`Engine.Run()`、`Engine.Shutdown()`、`Engine.LoadContentPackage()` | Hosting（plan/00 §5） | 部分实现：Demo 可经 Hosting 构造 Engine、加载已存在的 materials/reactions 内容包并 headless 冒烟运行；完整子系统一键装配仍需 Hosting API |
-| 子系统访问门面 | `EngineContext`（暴露 `World/Camera/Input/Particles/Lighting/Audio/Physics/Content/Diagnostics/Gui`） | Hosting（plan/00 §5） | 需引擎补 API |
-| 注册 Demo 脚本程序集 / 实例化 Behaviour | `Engine.RegisterScriptAssembly(...)`、`Behaviour` 生命周期（`OnStart/OnUpdate/OnGui/OnDestroy`） | plan/11 / Hosting | 部分实现：`Engine.RegisterScriptAssembly(...)`、Hosting registry、procedural/scene file Behaviour 物化与 `Engine.AttachScripting(...)` 显式运行时接入已落地；仍缺默认后端一键装配与 `OnGui` |
+| 子系统访问门面 | `EngineContext`（暴露 `World/Camera/Input/Particles/Lighting/Audio/Physics/Content/Diagnostics/Gui`） | Hosting（plan/00 §5） | 部分实现：`EngineContext` 可注册/查询 typed service 与 role availability，脚本后端已能自动装配 World/Camera/Input/Particles/Lighting/Audio/Content/Time/Event；仍缺 GUI 与完整窗口 runtime 组合门面 |
+| 注册 Demo 脚本程序集 / 实例化 Behaviour | `Engine.RegisterScriptAssembly(...)`、`Behaviour` 生命周期（`OnStart/OnUpdate/OnGui/OnDestroy`） | plan/11 / Hosting | 部分实现：`Engine.RegisterScriptAssembly(...)`、Hosting registry、procedural/scene file Behaviour 物化、`Engine.AttachScripting(...)` 与 `AttachScriptingFromServices()` 已落地；仍缺 `OnGui` |
 | 脚本服务句柄注入 | `Behaviour.World/Input/Camera/...` 属性 | plan/11 | 已规划（plan/11 世界脚本接口） |
 | 场景加载 / 保存 | `Engine.LoadScene(name)`、`SceneSourceKind.SceneFile`、`.scene` 格式 | plan/07（序列化）+ plan/12（编辑器编排） | 部分实现：Hosting 可切换已注册场景、区分 `.scene` 文件来源，并从 `.scene` 物化脚本实体/Behaviour 参数；仍未物化 save directory 世界、`.scene` 初始世界引用或编辑器导出格式 |
-| 输入查询 | `IInput`（`IsDown/Pressed/Released(Key)`、`MousePosition`、`MouseButton`、`Wheel`） | plan/08（Silk.NET 输入）/ Hosting | 部分实现：Scripting 已有 `ScriptInputApi`、完整 Demo 所需键位/鼠标枚举、键鼠边沿、滚轮与轴快照；仍缺 Hosting/Silk.NET 窗口输入采集与脚本上下文自动注入 |
+| 输入查询 | `IInput`（`IsDown/Pressed/Released(Key)`、`MousePosition`、`MouseButton`、`Wheel`） | plan/08（Silk.NET 输入）/ Hosting | 部分实现：Scripting 已有 `ScriptInputApi`、完整 Demo 所需键位/鼠标枚举、键鼠边沿、滚轮与轴快照；Hosting 已有 `SilkInputPhaseDriver` 采集窗口键鼠并支持通道门控；仍缺非 headless 窗口 runtime 装配验收 |
 | 读写 cell（笔刷 / 关卡生成 / 危险采样） | `IWorld.GetCell/SetCell`、`FillRect/FillCircle/Stamp` | plan/11（世界脚本接口） | 已规划 |
 | 材质按名取 id | `EngineContentPackage.ResolveMaterial/TryResolveMaterial(...)`、`IMaterialQuery.Resolve/TryResolve(...)` | plan/04（Content）+ Hosting/plan/11 | 部分实现：Hosting 内容包门面与脚本材质查询接口已可用，public API 不泄漏 Content/Simulation 实现类型；Demo materials/reactions/textures/audio 已就位 |
 | 角色控制器（kinematic AABB vs 像素） | `IPhysics.CreateCharacterBody(aabb)`、`body.Move(delta) → CollisionResult{Grounded,OnWall,OnCeiling,Normal}` | plan/06（§8.5 角色控制器） | 部分实现：Scripting `ICharacterController.Create/SetPosition/Move/GetState` 已接入真实 Physics 像素 AABB 控制器，返回位置、左右墙、天花板、实际位移与地面法线；尚未封装为 `ICharacterBody2D` 对象式 API |
 | 角色站在刚体 / 沙上 | 角色控制器采样 CA 权威场（含 owned-by-body stamp 像素） | plan/06 + 架构 §8.3 | 已规划（依赖双向耦合不变式） |
 | 角色推动 dynamic 刚体 | `IPhysics.ApplyImpulseAtContact(...)` 或角色控制器内建推力 | plan/06 | 需引擎补 API（kinematic→dynamic 推力交互） |
 | 爆炸（清 cell + 抛粒子 + 推刚体） | `IWorld.Explode(center,radius,force)` | plan/05 + plan/06 | 需引擎补 API（复合爆炸 helper；可由 cell→particle + impulse 原语组合） |
-| 自由粒子发射 | `IParticles.Emit/Burst(origin,count,velDist,materialId,life)` | plan/05 | 需引擎补 API（脚本可见的发射接口；池由引擎管理） |
-| 相机控制 | `ICamera.Position/Zoom`、`WorldToScreen/ScreenToWorld`、`Follow(target,damping)` | plan/08（相机） | 部分实现：Scripting 已有 `ScriptCameraApi`，支持中心、缩放、视口、屏幕/世界坐标转换与 `CameraSnapshot`；仍缺 Hosting 将快照同步到 Rendering/World residency、统一 Transform 后的 `Follow(Entity)` |
-| 点光源 / fog-of-war reveal | `ILighting.AddPointLight(...)`、`RevealAround(pos,radius)` | plan/08（光照） | 部分实现：Scripting 已有 `ScriptLightingApi`，可记录 `RevealAround` 与点光源请求；仍缺 Hosting/Rendering 消费这些请求并同步到 `FogOfWarBuffer`/light pass |
-| 一次性音效播放 | `IAudio.PlayOneShot(clip, worldPos?)` | plan/10 | 部分实现：Scripting `IAudioApi` 已支持 `PlayOneShot` 与 `PlayAt`，`ScriptAudioApi` 可桥接真实 `AudioSystem`；仍缺 Hosting 自动加载 Demo audio clips 并注入脚本上下文 |
+| 自由粒子发射 | `IParticles.Emit/Burst(origin,count,velDist,materialId,life)` | plan/05 | 部分实现：脚本 `IParticleSpawner.Spawn/Burst` 已经延迟到粒子安全相位并接入真实 `ParticleSystem`；仍缺更丰富的速度分布 Emit API 与爆炸抛射复合入口 |
+| 相机控制 | `ICamera.Position/Zoom`、`WorldToScreen/ScreenToWorld`、`Follow(target,damping)` | plan/08（相机） | 部分实现：Scripting 已有 `ScriptCameraApi`，支持中心、缩放、视口、屏幕/世界坐标转换与 `CameraSnapshot`；Hosting 已有 `ScriptCameraSynchronizer` 同步 Rendering `CameraState` 与 World residency；仍缺统一 Transform 后的 `Follow(Entity)` 与窗口渲染消费验收 |
+| 点光源 / fog-of-war reveal | `ILighting.AddPointLight(...)`、`RevealAround(pos,radius)` | plan/08（光照） | 部分实现：Scripting 已有 `ScriptLightingApi`，Hosting 已有 `ScriptLightingSynchronizer` 同步 Rendering `LightSource` 与 `FogOfWarBuffer`；仍缺非 headless render pass 消费验收 |
+| 一次性音效播放 | `IAudio.PlayOneShot(clip, worldPos?)` | plan/10 | 部分实现：Scripting `IAudioApi` 已支持 `PlayOneShot` 与 `PlayAt`，`ScriptAudioApi` 可桥接真实 `AudioSystem`；Hosting 已能从 `content/audio` 预加载 Demo wav clip 并注入脚本上下文；仍缺材质事件 cue 句柄到 clip buffer 映射验收 |
 | 材质化音效配置 | `MaterialDef.AudioCues`（materials.json 字段） | plan/04 + plan/10 | 已规划 |
 | 即时模式 HUD / 菜单 | `IGuiContext`（窗口 / 文本 / 按钮 / 色块），`Behaviour.OnGui` | plan/11 / plan/12 | 需引擎补 API（游戏 HUD 用 GUI 服务，区别于编辑器 UI） |
 | 性能 / 状态诊断读取 | `IDiagnostics`（fps、sim 频率、活跃 chunk / 粒子 / 刚体计数） | plan/02（诊断） | 已规划 |
 | 调试叠层开关 | `IDiagnostics.ToggleOverlay(OverlayKind)` | plan/12（调试叠层）+ 架构 §17.2 | 需引擎补 API（叠层开关的脚本可见 API） |
 | 确定性 RNG（关卡生成） | `IRandom`（可种子化） | plan/02（RNG） | 已规划 |
+
+API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosting 的非 headless 窗口/渲染 runtime 一键装配与 save directory/world 物化；plan/06 的 kinematic 角色推动 dynamic 刚体公开交互；plan/05 + plan/06 + plan/10 的 `World.Explode(center,radius,force)` 复合入口；plan/11/12 的 `Behaviour.OnGui` 与 `IGuiContext` 游戏 HUD 服务；plan/12/架构 §17.2 的脚本可见调试叠层开关；plan/08/10 的 render pass 消费脚本光照同步结果与材质事件 cue→clip buffer 映射验收。上述缺口均在本表中保持「需引擎补 API」或「部分实现但阻塞」状态，Demo 不允许绕过公开 API 直接引用内部实现。
 
 ---
 
@@ -176,7 +178,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 - [ ] `PauseMenu : Behaviour.OnGui`：继续 / 重开 / 调试叠层切换 / 打开编辑器 / 退出。〔plan/12、架构 §17.2;§3.12〕
 
 API 缺口登记
-- [ ] 把 §3.13 表中所有「需引擎补 API」项作为引擎 API 缺口逐条登记并上报，确认被对应 plan（Hosting/06/05/08/10/11/12/07）接纳；未接纳者标 `- [!] 阻塞`。〔AGENTS.md §0、§2;§3.13〕
+- [x] 把 §3.13 表中所有「需引擎补 API」项作为引擎 API 缺口逐条登记并上报，确认被对应 plan（Hosting/06/05/08/10/11/12/07）接纳；未接纳者标 `- [!] 阻塞`。〔AGENTS.md §0、§2;§3.13〕
 
 ---
 
