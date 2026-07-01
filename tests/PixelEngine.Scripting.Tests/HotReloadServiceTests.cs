@@ -103,6 +103,32 @@ public sealed class HotReloadServiceTests
     }
 
     /// <summary>
+    /// 验证 ScriptRuntime 在相位 1 帧边界先应用待处理热重载，再派发启动回调。
+    /// </summary>
+    [Fact]
+    public void ScriptRuntimeBeginFrameAppliesPendingReloadBeforeStartDispatch()
+    {
+        Scene scene = new();
+        FakeScriptContext context = new(scene);
+        Entity entity = scene.CreateEntity();
+        HotReloadService service = CreateServiceWithVersionOne(scene, context, entity);
+        ScriptRuntime runtime = new(service);
+        runtime.Initialize(context);
+
+        service.RequestReload(
+            $"UserScripts.RuntimeReload.{Guid.NewGuid():N}",
+            [new ScriptSourceFile("ReloadableScript.cs", VersionTwoSource)]);
+
+        runtime.BeginFrame();
+        Behaviour replacement = scene.CaptureBehaviours()[0].Behaviour;
+
+        Assert.False(service.HasPendingReload);
+        Assert.Equal("v2", ReadVersion(replacement));
+        Assert.Equal(1, ReadField<int>(replacement, "StartedByReload"));
+        runtime.Shutdown();
+    }
+
+    /// <summary>
     /// 验证源文件 watcher 会去抖并把目录内脚本合并为待处理热重载。
     /// </summary>
     [Fact]

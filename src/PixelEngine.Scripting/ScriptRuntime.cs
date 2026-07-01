@@ -5,8 +5,21 @@ namespace PixelEngine.Scripting;
 /// </summary>
 public sealed class ScriptRuntime : IScriptRuntime
 {
+    private readonly HotReloadService? _hotReload;
     private IScriptContext? _context;
     private bool _shutdown;
+
+    /// <summary>
+    /// 创建默认脚本运行时。
+    /// </summary>
+    public ScriptRuntime()
+    {
+    }
+
+    internal ScriptRuntime(HotReloadService hotReload)
+    {
+        _hotReload = hotReload ?? throw new ArgumentNullException(nameof(hotReload));
+    }
 
     /// <summary>
     /// 使用脚本上下文初始化运行时；由 Hosting 在主循环启动前调用。
@@ -25,6 +38,7 @@ public sealed class ScriptRuntime : IScriptRuntime
     public void BeginFrame()
     {
         IScriptContext context = RequireContext();
+        _ = _hotReload?.ApplyPendingReload();
         context.Scene.DispatchStart(context);
     }
 
@@ -68,6 +82,7 @@ public sealed class ScriptRuntime : IScriptRuntime
     /// </summary>
     public void Shutdown()
     {
+        _hotReload?.Dispose();
         _shutdown = true;
         _context = null;
     }
