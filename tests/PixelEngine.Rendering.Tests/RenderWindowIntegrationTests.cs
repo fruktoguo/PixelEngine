@@ -1,3 +1,5 @@
+using PixelEngine.Rendering.Compute;
+using Silk.NET.OpenGL;
 using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
@@ -180,6 +182,51 @@ public sealed class RenderWindowIntegrationTests
     }
 
     [Fact]
+    public void ComputeBloomMatchesFragmentBloomForSolidInputWhenExplicitlyEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = CreateSmokeWindow("PixelEngine compute bloom equivalence smoke", RenderBackendPreference.Auto);
+        GpuCapabilities gpuCapabilities = GpuCapabilities.Query(window.Gl, window.Capabilities);
+        ComputeCapabilityGate gate = ComputeCapabilityGate.Evaluate(gpuCapabilities, ComputeFeatureSwitches.Default, preferComputeSharp: false);
+        if (!gate.GlComputeAvailable)
+        {
+            return;
+        }
+
+        using FullscreenQuad quad = new(window.Gl);
+        using ColorRenderTarget scene = new(window.Gl, 16, 16);
+        using ColorRenderTarget fragmentOutput = new(window.Gl, 16, 16);
+        using ColorRenderTarget computeOutput = new(window.Gl, 16, 16);
+        using BloomPass fragmentBloom = new(window.Gl, GlslProfile.DesktopGl330);
+        using IComputeBackend backend = ComputeBackendFactory.Create(window.Gl, gate);
+        using ComputeBloomPass computeBloom = new(window.Gl, new GpuComputeBloomPipeline(backend));
+        BloomSettings settings = new(BloomMode.DualKawase, Threshold: 0.1f, Intensity: 0.75f, Iterations: 3, KawaseOffset: 1.5f);
+
+        scene.BindFramebuffer();
+        window.Gl.Viewport(0, 0, 16, 16);
+        window.Gl.ClearColor(0.9f, 0.45f, 0.2f, 1f);
+        window.Gl.Clear(ClearBufferMask.ColorBufferBit);
+
+        fragmentBloom.Render(scene, fragmentOutput, quad, settings);
+        computeBloom.Render(scene, computeOutput, settings);
+        window.Gl.Finish();
+
+        byte[] fragmentPixels = ReadTarget(window, fragmentOutput);
+        byte[] computePixels = ReadTarget(window, computeOutput);
+
+        Assert.Equal(fragmentPixels.Length, computePixels.Length);
+        for (int i = 0; i < fragmentPixels.Length; i++)
+        {
+            int delta = Math.Abs(fragmentPixels[i] - computePixels[i]);
+            Assert.True(delta <= 2, $"像素 byte {i} 不等价：fragment={fragmentPixels[i]} compute={computePixels[i]} delta={delta}");
+        }
+    }
+
+    [Fact]
     public void CanRenderFrameThroughGlesAngleWhenExplicitlyEnabled()
     {
         if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"), "1", StringComparison.Ordinal))
@@ -237,5 +284,13 @@ public sealed class RenderWindowIntegrationTests
     private static string BackendMessage(RenderWindow window)
     {
         return $"{window.Backend}: {window.Capabilities.Version} / {window.Capabilities.Renderer} / {window.Capabilities.Vendor}";
+    }
+
+    private static byte[] ReadTarget(RenderWindow window, ColorRenderTarget target)
+    {
+        byte[] rgba = new byte[checked(target.Width * target.Height * 4)];
+        target.BindFramebuffer();
+        window.Gl.ReadPixels<byte>(0, 0, (uint)target.Width, (uint)target.Height, GLEnum.Rgba, GLEnum.UnsignedByte, out rgba[0]);
+        return rgba;
     }
 }

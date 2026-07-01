@@ -13,7 +13,17 @@ public sealed class GpuComputeBloomPipelineTests
 
         _ = new GpuComputeBloomPipeline(backend);
 
-        Assert.Equal(GpuComputeShaderSources.PassNames, backend.LoadedKernelNames);
+        string[] expectedBloomKernelNames =
+        [
+            GpuComputeShaderSources.BloomBrightPassName,
+            GpuComputeShaderSources.BloomDownsampleName,
+            GpuComputeShaderSources.BloomDualKawaseDownName,
+            GpuComputeShaderSources.BloomDualKawaseUpName,
+            GpuComputeShaderSources.BloomUpsampleCompositeName,
+            GpuComputeShaderSources.LightCompositeName,
+        ];
+
+        Assert.Equal(expectedBloomKernelNames, backend.LoadedKernelNames);
         Assert.All(backend.LoadedSources, static source => Assert.Contains("#version 430", source, StringComparison.Ordinal));
     }
 
