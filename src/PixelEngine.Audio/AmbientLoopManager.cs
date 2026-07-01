@@ -11,12 +11,12 @@ public sealed class AmbientLoopManager : IDisposable
     private readonly IAudioBackend _backend;
     private readonly MaterialAudioTable _table;
     private readonly IAudioCueBufferResolver _buffers;
-    private readonly AudioSettings _settings;
-    private readonly AmbientVoice[] _voices;
-    private readonly bool[] _touched;
-    private readonly AudioSpace _space;
-    private readonly float _enterThreshold;
-    private readonly float _exitThreshold;
+    private AudioSettings _settings;
+    private AmbientVoice[] _voices;
+    private bool[] _touched;
+    private AudioSpace _space;
+    private float _enterThreshold;
+    private float _exitThreshold;
     private bool _disposed;
 
     /// <summary>
@@ -54,6 +54,32 @@ public sealed class AmbientLoopManager : IDisposable
     /// 获取固定槽位中的 ambient voice。
     /// </summary>
     public AmbientVoice this[int index] => _voices[index];
+
+    /// <summary>
+    /// 应用新的运行时设置，必要时扩缩 ambient source 池。
+    /// </summary>
+    /// <param name="settings">新的音频设置。</param>
+    public void ApplySettings(AudioSettings settings)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(settings);
+        AudioSettings validated = settings.Validate();
+        _settings = validated;
+        _space = new AudioSpace(validated.PixelsPerMeter);
+        _enterThreshold = validated.AmbientEnterThreshold;
+        _exitThreshold = validated.AmbientExitThreshold;
+        if (validated.MaxAmbientVoices != _voices.Length)
+        {
+            Resize(validated);
+        }
+
+        for (int i = 0; i < _voices.Length; i++)
+        {
+            _voices[i].Configure(i, validated);
+        }
+
+        RefreshActiveVoiceCount();
+    }
 
     /// <summary>
     /// 用本帧聚合 ambient 区域事件推进循环声。
@@ -174,5 +200,49 @@ public sealed class AmbientLoopManager : IDisposable
         }
 
         return quietest;
+    }
+
+    private void Resize(AudioSettings settings)
+    {
+        AmbientVoice[] next = new AmbientVoice[settings.MaxAmbientVoices];
+        int kept = Math.Min(_voices.Length, next.Length);
+        for (int i = 0; i < kept; i++)
+        {
+            next[i] = _voices[i];
+        }
+
+        for (int i = kept; i < _voices.Length; i++)
+        {
+            AmbientVoice voice = _voices[i];
+            if (voice.IsActive)
+            {
+                _backend.Stop(voice.Source);
+            }
+
+            _backend.DeleteSource(voice.Source);
+        }
+
+        for (int i = kept; i < next.Length; i++)
+        {
+            next[i] = new AmbientVoice(_backend, _backend.CreateSource(), i, settings);
+        }
+
+        _voices = next;
+        _touched = new bool[next.Length];
+        RefreshActiveVoiceCount();
+    }
+
+    private void RefreshActiveVoiceCount()
+    {
+        int count = 0;
+        for (int i = 0; i < _voices.Length; i++)
+        {
+            if (_voices[i].IsActive)
+            {
+                count++;
+            }
+        }
+
+        ActiveVoiceCount = count;
     }
 }

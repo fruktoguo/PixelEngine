@@ -114,6 +114,24 @@ public sealed class AudioSystem : IDisposable
     }
 
     /// <summary>
+    /// 应用新的运行时设置并刷新 listener / voice / ambient 配置。
+    /// </summary>
+    /// <param name="settings">新的音频设置。</param>
+    public void ApplySettings(AudioSettings settings)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(settings);
+        AudioSettings validated = settings.Validate();
+        _settings = validated;
+        Voices.ApplySettings(validated);
+        AmbientLoops?.ApplySettings(validated);
+        CurrentListener = CurrentListener with { Gain = validated.MasterVolume };
+        AudioListenerState listener = CurrentListener;
+        Backend.SetListener(in listener);
+        RefreshDiagnostics(Diagnostics.LastDispatch);
+    }
+
+    /// <summary>
     /// 更新 listener 与 voice 完成状态。render-only 帧也必须调用以保持声场连续。
     /// </summary>
     /// <param name="view">listener 视口。</param>

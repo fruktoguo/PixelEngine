@@ -21,7 +21,7 @@ public sealed class AudioVoice
     /// <summary>
     /// voice 在池中的固定槽位。
     /// </summary>
-    public int SlotIndex { get; }
+    public int SlotIndex { get; private set; }
 
     /// <summary>
     /// 后端 source 句柄。
@@ -78,6 +78,11 @@ public sealed class AudioVoice
     {
         ArgumentNullException.ThrowIfNull(settings);
         _backend.ConfigureSource(Source, settings);
+    }
+
+    internal void ReassignSlot(int slotIndex)
+    {
+        SlotIndex = slotIndex;
     }
 
     /// <summary>

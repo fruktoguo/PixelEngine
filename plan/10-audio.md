@@ -25,7 +25,7 @@
 
 混音：OpenAL Soft 在其内部音频线程混音与重采样，本子系统不实现混音器。解码：短音效在加载期解码为 PCM 静态 buffer；长循环 / ambient 走 OpenAL 队列 buffer 流式播放，refill 在专属解码线程，**均不在主线程帧循环内**（架构 §10.1）。
 
-容器格式：**WAV / PCM 为强制内建路径**（纯托管解码，无新依赖，在本文档范围内实现）。压缩格式 Ogg Vorbis 经纯托管解码器（NVorbis，无 native，符合不变式 10）支持，但该包**尚未列入 `00 §4` 技术栈表**——见 §4 对应阻塞条目，需先修订 plan/00 再实现，绝不静默引入。
+容器格式：**WAV / PCM 为强制内建路径**（纯托管解码，无新依赖，在本文档范围内实现）。压缩格式 Ogg Vorbis 经纯托管解码器（NVorbis，无 native，符合不变式 10）支持；NVorbis 已列入 `00 §4` 可选增强技术栈。
 
 本子系统位于 `src/PixelEngine.Audio/`，依赖方向遵循 `00 §5`：`Audio → {Content, Simulation, Core}`，不反向依赖任何上层。`AllowUnsafeBlocks` 开启（与热路径项目一致）；公开 API 全带中文 XML 文档注释（脚本 / Demo IntelliSense 依赖）。
 
@@ -109,7 +109,7 @@ ambient 声部独立于 §3.3 的一次性 voice 池，使用单独的小型 sou
 
 ### 3.8 资产加载与播放接口（公开 API）
 
-`AudioClipCache` 提供 `AudioClip Load(string assetId)`：经 Content 资产管线取字节，按容器选 `IAudioDecoder`（`WavDecoder` 内建；`OggVorbisDecoder` 见 §4 阻塞项）解码为 PCM，上传为 `AudioBuffer`（封装 AL buffer id + 采样率 / 声道 / 位深）。短音效全量解码为静态 buffer；长循环 / ambient 经 `AudioStreamPlayer` 用 OpenAL 队列 buffer 流式（双 / 三 buffer），refill 在解码 worker（Core 线程池后台或专属 `AudioStreamThread`），**绝不在主线程**。`AudioClip` 引用计数，`Unload` 释放；解码异步，加载中以静默占位（不阻塞，不假实现——未加载完则该次播放跳过并记诊断）。
+`AudioClipCache` 提供 `AudioClip Load(string assetId)`：经 Content 资产管线取字节，按容器选 `IAudioDecoder`（`WavDecoder` 内建；`OggVorbisDecoder` 使用 NVorbis 纯托管路径）解码为 PCM，上传为 `AudioBuffer`（封装 AL buffer id + 采样率 / 声道 / 位深）。短音效全量解码为静态 buffer；长循环 / ambient 经 `AudioStreamPlayer` 用 OpenAL 队列 buffer 流式（双 / 三 buffer），refill 在解码 worker（Core 线程池后台或专属 `AudioStreamThread`），**绝不在主线程**。`AudioClip` 引用计数，`Unload` 释放；解码异步，加载中以静默占位（不阻塞，不假实现——未加载完则该次播放跳过并记诊断）。
 
 公开播放 API（供 Demo / 脚本，仅公开 API）：`AudioSystem.PlayOneShot(AudioClip clip, in Vector2 worldPos, float volume = 1, float pitch = 1)`（positional，走 voice 池）、`PlayUi(AudioClip clip, float volume = 1)`（非定位、`AL_SOURCE_RELATIVE` listener 处）、`PlayAmbient(ushort materialId)` / 内部由事件驱动。`AudioSettings` 公开主音量、各类别音量、`MaxVoices` / `MaxAmbientVoices`、`PixelsPerMeter`、距离模型参数、`PerTypeCap` / `CoalesceBucketSize`，运行时可调（编辑器 / Demo 设置）。
 
@@ -157,14 +157,14 @@ OpenAL 封装与生命周期：
 - [x] `AudioClipCache.Load(string assetId)` / `Unload`：经 Content 取字节、异步解码、上传 buffer；加载中静默占位不阻塞（架构 §10、AGENTS §2 不写假实现）。
 - [x] `AudioStreamPlayer` + 流式 refill worker（队列 buffer，解码在后台线程，不进主线程 / sim 热循环，架构 §10.1）。
 - [x] 公开播放 API：`PlayOneShot(AudioClip, in Vector2 worldPos, float volume, float pitch)` / `PlayUi` / 事件驱动 ambient（Demo 仅依赖公开 API，AGENTS §0）。
-- [!] `OggVorbisDecoder`（NVorbis 纯托管，符合不变式 10）—— 阻塞：NVorbis 未列入 plan/00 §4 技术栈表，需先修订 00 再实现，禁止静默引入。
+- [x] `OggVorbisDecoder`（NVorbis 纯托管，符合不变式 10）。
 
 帧节奏与诊断：
 
 - [x] 音频派发步骤接入帧尾（相位 8 后、相位 10 前），仅事件入队 / 排空 / 设源参数，计入 §1.4「音频派发 ≤1ms」（架构 §10.3、§17.1）。
 - [x] render-only 帧（`simSteppedThisFrame==false`）仍推进 voice / ambient / listener，ring 空，声场连续（架构 §4.2）。
 - [x] `AudioDiagnostics` 向 Core 诊断注册：派发耗时、drained/coalesced/dropped、活跃 voice / ambient 数、steal 次数、clip 计数（架构 §17.1）。
-- [ ] `AudioSettings`：主 / 类别音量、`MaxVoices`/`MaxAmbientVoices`/`PixelsPerMeter`/ 距离模型 /`PerTypeCap`/`CoalesceBucketSize`，运行时可调。
+- [x] `AudioSettings`：主 / 类别音量、`MaxVoices`/`MaxAmbientVoices`/`PixelsPerMeter`/ 距离模型 /`PerTypeCap`/`CoalesceBucketSize`，运行时可调。
 
 ---
 
@@ -198,9 +198,9 @@ OpenAL 封装与生命周期：
 
 装配方（下游）：Hosting（帧循环装配音频派发步骤、提供 `CameraView`/`AudioSettings`）；plan/12 编辑器（音量 / cue 调试面板、诊断 HUD 消费）；plan/13 Demo（仅经公开 API 播放）；plan/14 测试（限频 / 去重 / 线程安全 / 零分配验收）。
 
-外部：Silk.NET.OpenAL（`00 §4`）；（待批）NVorbis（仅当启用 Ogg，需先修订 `00 §4`）。
+外部：Silk.NET.OpenAL（`00 §4`）；NVorbis（`00 §4`）。
 
-阻塞：Ogg 解码阻塞于 plan/00 §4 修订。
+阻塞：无。
 
 ---
 
