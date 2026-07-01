@@ -39,6 +39,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     /// <param name="input">输入 facade；未提供时访问 <see cref="Input" /> 会抛出明确异常。</param>
     /// <param name="lighting">光照 facade；未提供时访问 <see cref="Lighting" /> 会抛出明确异常。</param>
     /// <param name="diagnostics">诊断 facade；未提供时访问 <see cref="Diagnostics" /> 会抛出明确异常。</param>
+    /// <param name="runtime">运行时控制 facade；未提供时访问 <see cref="Runtime" /> 会抛出明确异常。</param>
     public ScriptSimulationContext(
         Scene scene,
         CellGrid grid,
@@ -52,7 +53,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         ICameraApi? camera = null,
         IInputApi? input = null,
         ILightingApi? lighting = null,
-        IDiagnosticsApi? diagnostics = null)
+        IDiagnosticsApi? diagnostics = null,
+        IRuntimeControlApi? runtime = null)
     {
         Scene = scene ?? throw new ArgumentNullException(nameof(scene));
         ArgumentNullException.ThrowIfNull(grid);
@@ -77,6 +79,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         InputBackend = input;
         LightingBackend = lighting;
         DiagnosticsBackend = diagnostics;
+        RuntimeBackend = runtime;
     }
 
     private IEventBus? EventBackend { get; }
@@ -92,6 +95,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     private ILightingApi? LightingBackend { get; }
 
     private IDiagnosticsApi? DiagnosticsBackend { get; }
+
+    private IRuntimeControlApi? RuntimeBackend { get; }
 
     /// <summary>
     /// CA 内核，供 Hosting 相位驱动在 dirty swap 前落地脚本 cell 命令。
@@ -140,6 +145,9 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 
     /// <inheritdoc />
     public IDiagnosticsApi Diagnostics => DiagnosticsBackend ?? throw Unsupported(nameof(Diagnostics));
+
+    /// <inheritdoc />
+    public IRuntimeControlApi Runtime => RuntimeBackend ?? throw Unsupported(nameof(Runtime));
 
     /// <inheritdoc />
     public IEventBus Events => EventBackend ?? throw Unsupported(nameof(Events));

@@ -61,6 +61,11 @@ public interface IScriptContext
     IDiagnosticsApi Diagnostics { get; }
 
     /// <summary>
+    /// 运行时控制能力；用于脚本暂停/继续和请求关闭宿主。
+    /// </summary>
+    IRuntimeControlApi Runtime => throw new NotSupportedException("当前脚本上下文未注入 Runtime 控制后端。");
+
+    /// <summary>
     /// 脚本事件订阅能力；事件在相位 1 分发。
     /// </summary>
     IEventBus Events { get; }
@@ -577,6 +582,54 @@ public enum DebugOverlayKind
     /// </summary>
     ConnectedComponents,
 }
+
+/// <summary>
+/// 脚本可见的运行时控制能力。
+/// </summary>
+public interface IRuntimeControlApi
+{
+    /// <summary>
+    /// 捕获当前运行控制状态。
+    /// </summary>
+    /// <returns>运行控制快照。</returns>
+    RuntimeControlSnapshot Capture();
+
+    /// <summary>
+    /// 暂停 sim/physics；渲染、GUI、输入和后台流式相位仍继续出帧。
+    /// </summary>
+    void PauseSimulation();
+
+    /// <summary>
+    /// 恢复 sim/physics 运行。
+    /// </summary>
+    void ResumeSimulation();
+
+    /// <summary>
+    /// 请求宿主在当前 tick 结束后关闭。
+    /// </summary>
+    /// <returns>控制操作结果。</returns>
+    RuntimeControlResult RequestShutdown();
+}
+
+/// <summary>
+/// 运行时控制状态快照。
+/// </summary>
+/// <param name="IsPlaying">当前是否推进 sim/physics。</param>
+/// <param name="IsShutdownRequested">是否已请求关闭。</param>
+/// <param name="RequestedSimHz">当前请求的 sim 频率。</param>
+/// <param name="FrameCount">当前渲染帧序号。</param>
+public readonly record struct RuntimeControlSnapshot(
+    bool IsPlaying,
+    bool IsShutdownRequested,
+    double RequestedSimHz,
+    long FrameCount);
+
+/// <summary>
+/// 运行时控制操作结果。
+/// </summary>
+/// <param name="Success">操作是否已被宿主接纳。</param>
+/// <param name="Message">面向脚本/调试 UI 的简短说明。</param>
+public readonly record struct RuntimeControlResult(bool Success, string Message);
 
 /// <summary>
 /// 提供脚本可用的事件订阅 API。

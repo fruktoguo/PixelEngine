@@ -195,6 +195,7 @@ public sealed class LevelDirector : Behaviour
         goal.Height = 54f;
 
         _ = playerEntity.AddComponent<DemoHud>();
+        _ = playerEntity.AddComponent<PauseMenu>();
 
         CreateEmitter(156f, 86f, "water", 0f, 1f, 0.18f, 2, "splash_water.wav", addLight: false);
         CreateEmitter(314f, 146f, "oil", -0.25f, 1f, 0.35f, 2, string.Empty, addLight: false);
