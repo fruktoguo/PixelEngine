@@ -106,7 +106,11 @@ public sealed class Scene
         ValidateEntity(entity);
         if (_buckets.TryGetValue(typeof(T), out IComponentBucket? bucket))
         {
-            return ((ComponentBucket<T>)bucket).TryGet(entity.Id, out component);
+            if (bucket.TryGetObject(entity.Id, out IComponent value))
+            {
+                component = (T)value;
+                return true;
+            }
         }
 
         component = null!;
@@ -159,6 +163,25 @@ public sealed class Scene
         Type componentType = component.GetType();
         IComponentBucket bucket = GetOrCreateBucket(componentType);
         bucket.AddObject(entity, component);
+    }
+
+    internal IComponent AddComponent(Entity entity, Type componentType)
+    {
+        ValidateEntity(entity);
+        ArgumentNullException.ThrowIfNull(componentType);
+        if (!typeof(IComponent).IsAssignableFrom(componentType))
+        {
+            throw new ArgumentException("组件类型必须实现 IComponent。", nameof(componentType));
+        }
+
+        if (componentType.IsAbstract || componentType.GetConstructor(Type.EmptyTypes) is null)
+        {
+            throw new ArgumentException("组件类型必须是非抽象类型并提供无参构造。", nameof(componentType));
+        }
+
+        IComponent component = (IComponent)Activator.CreateInstance(componentType)!;
+        AddComponent(entity, component);
+        return component;
     }
 
     /// <summary>
@@ -316,6 +339,8 @@ public sealed class Scene
 
         void AddObject(Entity entity, IComponent component);
 
+        bool TryGetObject(int entityId, out IComponent component);
+
         void Remove(int entityId);
 
         void Destroy(int entityId, IScriptContext context, ScriptInvoker invoker);
@@ -362,6 +387,18 @@ public sealed class Scene
         public void AddObject(Entity entity, IComponent component)
         {
             Add(entity, (T)component);
+        }
+
+        public bool TryGetObject(int entityId, out IComponent component)
+        {
+            if (TryGet(entityId, out T typed))
+            {
+                component = typed;
+                return true;
+            }
+
+            component = null!;
+            return false;
         }
 
         public bool TryGet(int entityId, out T component)
@@ -507,6 +544,18 @@ public sealed class Scene
             _components[Count] = component;
             _indices.Add(entity.Id, Count);
             Count++;
+        }
+
+        public bool TryGetObject(int entityId, out IComponent component)
+        {
+            if (_indices.TryGetValue(entityId, out int index))
+            {
+                component = _components[index];
+                return true;
+            }
+
+            component = null!;
+            return false;
         }
 
         public void Remove(int entityId)

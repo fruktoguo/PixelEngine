@@ -1,3 +1,4 @@
+using PixelEngine.Scripting;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -61,7 +62,7 @@ public sealed class SceneAndHeadlessTests
         Assert.Equal(Path.GetFullPath(Path.Combine(engine.Context.Options.ContentRoot, "saves/b")), loaded.ResolvedSource);
         Assert.True(loaded.WorldConstructionPending);
 
-        Scene sceneFile = engine.LoadScene("c");
+        Scene sceneFile = scenes.SwitchTo("c");
         Assert.Equal(SceneSourceKind.SceneFile, sceneFile.Descriptor.SourceKind);
         Assert.Equal(Path.GetFullPath(Path.Combine(engine.Context.Options.ContentRoot, "scenes/c.scene")), sceneFile.ResolvedSource);
         Assert.True(sceneFile.WorldConstructionPending);
@@ -69,6 +70,70 @@ public sealed class SceneAndHeadlessTests
         scenes.UnloadCurrent();
         Assert.Null(scenes.Current);
         _ = Assert.Throws<InvalidOperationException>(() => scenes.SwitchTo("missing"));
+    }
+
+    /// <summary>
+    /// 验证 Engine.LoadScene 会从 .scene 文件物化脚本实体与 Behaviour 参数。
+    /// </summary>
+    [Fact]
+    public void LoadSceneFileInstantiatesScriptBehaviours()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-scene-file-{Guid.NewGuid():N}");
+        try
+        {
+            string sceneDirectory = Path.Combine(contentRoot, "scenes");
+            _ = Directory.CreateDirectory(sceneDirectory);
+            string scenePath = Path.Combine(sceneDirectory, "c.scene");
+            string behaviourType = typeof(SceneFileTestBehaviour).FullName!;
+            File.WriteAllText(
+                scenePath,
+                $$"""
+                {
+                  "formatVersion": 1,
+                  "name": "c",
+                  "entities": [
+                    {
+                      "stableId": 7,
+                      "name": "player",
+                      "behaviours": [
+                        {
+                          "typeName": "{{behaviourType}}",
+                          "serializedFields": {
+                            "Label": "hero",
+                            "Health": "42",
+                            "Enabled": "false"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """);
+            using Engine engine = new EngineBuilder()
+                .WithWorkerCount(1)
+                .WithContentRoot(contentRoot)
+                .AddScene(new SceneDescriptor("c", SceneSourceKind.SceneFile, "scenes/c.scene"))
+                .Build();
+            engine.RegisterScriptAssembly(typeof(SceneFileTestBehaviour).Assembly);
+
+            Scene loaded = engine.LoadScene("c");
+
+            Assert.NotNull(loaded.ScriptScene);
+            Assert.Equal(1, loaded.ScriptScene.EntityCount);
+            ScriptEntityInspection[] snapshot = loaded.ScriptScene.CaptureInspectionSnapshot();
+            SceneFileTestBehaviour behaviour = Assert.IsType<SceneFileTestBehaviour>(snapshot[0].Components[0].Behaviour);
+            Assert.Equal("hero", behaviour.Label);
+            Assert.Equal(42, behaviour.Health);
+            Assert.False(behaviour.Enabled);
+            Assert.Same(loaded.ScriptScene, engine.Context.GetService<PixelEngine.Scripting.Scene>());
+        }
+        finally
+        {
+            if (Directory.Exists(contentRoot))
+            {
+                Directory.Delete(contentRoot, recursive: true);
+            }
+        }
     }
 
     /// <summary>
@@ -104,5 +169,21 @@ public sealed class SceneAndHeadlessTests
             .WithWorkerCount(1)
             .Build();
         _ = Assert.Throws<InvalidOperationException>(() => windowed.RunHeadlessTicks(1));
+    }
+
+    /// <summary>
+    /// .scene 加载测试用 Behaviour。
+    /// </summary>
+    public sealed class SceneFileTestBehaviour : Behaviour
+    {
+        /// <summary>
+        /// 测试字符串字段。
+        /// </summary>
+        public string Label { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 测试数值字段。
+        /// </summary>
+        public int Health { get; set; }
     }
 }

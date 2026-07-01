@@ -33,12 +33,16 @@ public sealed class SmokeTests
         Entity entity = scene.CreateEntity();
 
         TestComponent component = entity.AddComponent<TestComponent>();
+        IComponent dynamicComponent = entity.AddComponent(typeof(DynamicComponent));
         component.Value = 42;
 
         Assert.Equal(1, scene.EntityCount);
         Assert.True(entity.TryGetComponent(out TestComponent loaded));
+        Assert.True(entity.TryGetComponent(out DynamicComponent loadedDynamic));
         Assert.Same(component, loaded);
+        Assert.Same(dynamicComponent, loadedDynamic);
         Assert.Equal(entity, component.Entity);
+        Assert.Equal(entity, loadedDynamic.Entity);
         Assert.Equal(42, loaded.Value);
 
         entity.RemoveComponent<TestComponent>();
@@ -186,6 +190,10 @@ public sealed class SmokeTests
     private sealed class TestComponent : Behaviour
     {
         public int Value { get; set; }
+    }
+
+    private sealed class DynamicComponent : Behaviour
+    {
     }
 
     private sealed class LifecycleComponent : Behaviour

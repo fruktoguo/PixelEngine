@@ -35,4 +35,14 @@ public sealed class Scene
     /// 当前场景是否仍等待 World/Simulation 后端真正构建起始世界。
     /// </summary>
     public bool WorldConstructionPending { get; }
+
+    /// <summary>
+    /// 从 .scene 文档物化出的脚本实体场景；非脚本场景来源时为空。
+    /// </summary>
+    public PixelEngine.Scripting.Scene? ScriptScene { get; private set; }
+
+    internal void AttachScriptScene(PixelEngine.Scripting.Scene scriptScene)
+    {
+        ScriptScene = scriptScene ?? throw new ArgumentNullException(nameof(scriptScene));
+    }
 }
