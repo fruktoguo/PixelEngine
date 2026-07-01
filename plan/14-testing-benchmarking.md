@@ -124,7 +124,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [ ] `DeterministicRegressionTests`：确定性模式下已知初态 + 固定种子 → golden 终态逐 cell 比对，覆盖 movement/reaction/temperature 各一组（CA 内核 §6.2）。
 - [x] `MovementRuleTests`：单柱沙一帧坍塌成休止角；水找平单层；油浮于水（密度位移）；气上升触顶扩散；偶数 tick 后无水平漂移偏置（CA 内核 §5.6/§7.3）。
 - [x] `ParityClockTests`：每 cell 每帧至多一次移动 / 反应；parity 每帧翻转含义而非清零（CA 内核 §5.3、不变式 #3）。
-- [ ] `KeepAliveBoundaryTests`：边界雪崩正确跨界传播、邻居 working rect 扩展并唤醒；沉降后 rect 收回、chunk 进 sleep；写入恒在 32px halo 内不越界（CA 内核 §5.5/§5.4/§5.8、不变式 #4）。
+- [x] `KeepAliveBoundaryTests`：边界雪崩正确跨界传播、邻居 incoming dirty 在帧边界唤醒为 current dirty 后继续传播；沉降后 rect 收回、chunk 进 sleep；写入恒在 32px halo 内不越界（CA 内核 §5.5/§5.4/§5.8、不变式 #4）。
 - [ ] `MultithreadOracleTests`：多线程终态 vs 单线程 oracle 比对统计 / 守恒性质（每材质总数、宏观直方图、堆 / 液面高度容差内一致、无边界伪影），非 bit 比对（CA 内核 §5.7/§6.1/§16.2）。
 - [x] `ReactionTableTests`：`[tag]` 加载期展开为具体材质对正确、概率 0–100→0–255 映射边界、有序对去重（min 归一）、惰性材质 `ReactionCount==0` 早退（材质 / 反应 §7.4）。
 - [ ] `ResidencyBoundaryTests`：border ring 使 32px-halo 跨界写入恒落驻留 chunk；结构性增删只在相位 2 单线程、不与 sim 相位并发（World 驻留 §3.4、不变式 #4）。
@@ -173,7 +173,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [ ] `ReactionConservationTests` 全绿：双输出 / 定向反应在所有边界配置下产物计数严格守恒，能拦截人为注入的「边界翻倍 / 丢失」回归（架构 §7.4、不变式 #4、R2）。
 - [ ] `DeterministicRegressionTests` 全绿且 golden 稳定：确定性模式下重复运行 bit 一致，golden 更新有可审查 diff（架构 §6.2）。
 - [x] `MovementRuleTests` 全绿：单柱沙坍塌 / 水找平 / 油浮水 / 气上升终态精确匹配、无水平漂移偏置（架构 §5.6/§7.3）。
-- [!] `ParityClockTests`、`KeepAliveBoundaryTests`、`ResidencyBoundaryTests` 全绿：`ParityClockTests` 已覆盖每帧至多一次与 parity 翻转；阻塞：仍缺独立 KeepAliveBoundaryTests 与 ResidencyBoundaryTests 全量边界驻留验收（架构 §5.3/§5.5/§5.8/§3.4、不变式 #3/#4）。
+- [!] `ParityClockTests`、`KeepAliveBoundaryTests`、`ResidencyBoundaryTests` 全绿：`ParityClockTests` 已覆盖每帧至多一次与 parity 翻转；`KeepAliveBoundaryTests` 已覆盖边界雪崩传播、dirty 收回 sleep 与 32px halo；阻塞：仍缺 ResidencyBoundaryTests 全量边界驻留验收（架构 §5.3/§5.5/§5.8/§3.4、不变式 #3/#4）。
 - [ ] `MultithreadOracleTests` 全绿：多线程终态相对单线程 oracle 的守恒量精确相等、统计量在容差内一致，无边界伪影（架构 §16.2，非 bit 比对）。
 - [x] `ReactionTableTests` 全绿：tag 展开 / 概率映射 / 去重 / 惰性早退正确（架构 §7.4）。
 - [ ] `ConvexDecompositionTests`、`MarchingSquaresContourTests`、`InverseSamplingRasterizationTests`、`RigidBodySplitConservationTests` 全绿：每片 ≤8 顶点且凸且覆盖原 mask、radius=0、任意角栅格化水密无洞、破坏拆分守恒且速度转移（架构 §8.2/§8.3/§8.4、不变式 #5）。
