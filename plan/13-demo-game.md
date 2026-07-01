@@ -148,10 +148,10 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 玩家与相机
 - [!] `PlayerController : Behaviour`：源码已落地，经 `ICharacterController.Create/SetPosition/Move/GetState` 创建、传送并移动 AABB，实现跑 / 跳 / 贴墙滑落 / 蹬墙、重力、coyote-time 与 jump-buffer；headless 路径已能由 Hosting 自动注入脚本后端并驱动场景 Behaviour，Hosting 已有 `SilkInputPhaseDriver` 将窗口键盘快照写入 `ScriptInputApi`；阻塞：缺少非 headless 窗口/渲染 runtime 装配和真实窗口输入验收，不能完成可玩控制验收。〔plan/06、plan/08 输入；§3.3〕
 - [!] `PlayerHealth : Behaviour`：源码已落地，按玩家 AABB 采样 `lava/fire/acid`，扣血、喷粒子、触发受击音效并死亡重生；headless 路径已能由 Hosting 自动驱动，并已通过 `AttachAudioFromContentAsync()` 预加载 Demo wav clip、注入脚本音频 API；阻塞：缺少窗口态输入/渲染运行验收与受击场景端到端验证。〔plan/11、plan/05、plan/10；§3.3〕
-- [!] `CameraFollow : Behaviour`：源码已落地，可跟随同实体 `PlayerController`，支持阻尼、lookahead、边界夹取与缩放；headless 路径已有默认脚本相机 API；阻塞：缺少 Hosting 将相机快照同步到 Rendering/World residency 与统一 Transform 后的 `Follow(Entity)`，不能完成画面跟随验收。〔plan/08；§3.4〕
+- [!] `CameraFollow : Behaviour`：源码已落地，可跟随同实体 `PlayerController`，支持阻尼、lookahead、边界夹取与缩放；headless 路径已有默认脚本相机 API，Hosting 已有 `ScriptCameraSynchronizer` 将脚本相机快照同步为 Rendering `CameraState` 并可更新 World residency 相机；阻塞：缺少非 headless 窗口/渲染 runtime 消费该快照，以及统一 Transform 后的 `Follow(Entity)`，不能完成画面跟随验收。〔plan/08；§3.4〕
 
 世界交互
-- [!] `MaterialBrush : Behaviour`：源码已落地，支持左键放置、右键擦除、滚轮调半径、数字键 `1`–`0` 切材质，经 `Cells.Paint` 写入，`Materials.Resolve` 取 id，`Camera.ScreenToWorld` 映射鼠标；headless 路径已能由 Hosting 自动注入 cell/material/camera/input 后端，Hosting 已有 `SilkInputPhaseDriver` 将鼠标/滚轮快照写入 `ScriptInputApi` 并支持通道门控；阻塞：缺少非 headless 窗口/渲染 runtime 装配与相机快照同步，不能完成窗口态运行验收。〔plan/11、plan/04、plan/08；§3.5〕
+- [!] `MaterialBrush : Behaviour`：源码已落地，支持左键放置、右键擦除、滚轮调半径、数字键 `1`–`0` 切材质，经 `Cells.Paint` 写入，`Materials.Resolve` 取 id，`Camera.ScreenToWorld` 映射鼠标；headless 路径已能由 Hosting 自动注入 cell/material/camera/input 后端，Hosting 已有 `SilkInputPhaseDriver` 将鼠标/滚轮快照写入 `ScriptInputApi` 并支持通道门控，且有脚本相机到 Rendering/World 的同步器；阻塞：缺少非 headless 窗口/渲染 runtime 装配，不能完成窗口态运行验收。〔plan/11、plan/04、plan/08；§3.5〕
 - [!] `ExplosiveTool : Behaviour`：阻塞：当前脚本公开 API 缺少 `World.Explode(center,radius,force)` 复合能力；底层只有 cell→particle ejection 与刚体 impulse 原语雏形，尚未有“清 cell + 抛粒子 + 推刚体 + 音频事件”的脚本安全入口，不能写缩水版冒充完成。〔plan/05、plan/06、plan/10;§3.5〕
 
 内容
