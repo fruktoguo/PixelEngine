@@ -18,11 +18,13 @@ public sealed class AmbientLoopManagerTests
             AmbientEnterThreshold = 0.3f,
             AmbientExitThreshold = 0.2f,
             AmbientFadeRate = 0.5f,
+            AmbientVolume = 0.25f,
         };
         using AmbientLoopManager manager = new(backend, table, buffers, settings);
         CoalescedAudioEvent ambient = new(AudioEventType.AmbientRegion, 0, 0, 1, 0.8f, 4);
 
         manager.Update([ambient]);
+        Assert.Equal(0.2f, manager[0].TargetGain, precision: 5);
         manager.Update([]);
         manager.Update([]);
 

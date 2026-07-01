@@ -68,18 +68,22 @@ public sealed class AudioClipCacheTests
         AudioClipCache cache = new(backend, assets, new WavDecoder());
         _ = await cache.LoadAsync("ui/click.wav");
         AudioSystem system = new();
-        system.Initialize(new AudioSettings { MaxVoices = 2 }, backend);
+        system.Initialize(new AudioSettings { MaxVoices = 2, SfxVolume = 0.25f, UiVolume = 0.5f }, backend);
         system.AttachClipCache(cache);
 
         bool played = system.TryPlayLoadedOneShot("ui/click.wav", new Vector2(32f, 0f), volume: 0.5f, pitch: 1.1f);
+        bool playedUi = cache.TryGetLoaded("ui/click.wav", out AudioClip? clip) && clip is not null && system.PlayUi(clip, volume: 0.5f);
 
         Assert.True(played);
-        Assert.Equal(1, backend.PlayCalls);
-        Assert.Equal(1, system.Diagnostics.ActiveVoices);
+        Assert.True(playedUi);
+        Assert.Equal(2, backend.PlayCalls);
+        Assert.Equal(0.125f, backend.GetSourceGain(1), precision: 5);
+        Assert.Equal(0.25f, backend.GetSourceGain(2), precision: 5);
+        Assert.Equal(2, system.Diagnostics.ActiveVoices);
         Assert.Equal(1, system.Diagnostics.LoadedClips);
         EngineCounters counters = new();
         system.PublishDiagnostics(counters);
-        Assert.Equal(1, counters.AudioActiveVoices);
+        Assert.Equal(2, counters.AudioActiveVoices);
         Assert.Equal(1, counters.AudioLoadedClips);
         system.Shutdown();
     }

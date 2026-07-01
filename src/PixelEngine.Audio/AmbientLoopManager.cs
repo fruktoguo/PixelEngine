@@ -11,6 +11,7 @@ public sealed class AmbientLoopManager : IDisposable
     private readonly IAudioBackend _backend;
     private readonly MaterialAudioTable _table;
     private readonly IAudioCueBufferResolver _buffers;
+    private readonly AudioSettings _settings;
     private readonly AmbientVoice[] _voices;
     private readonly bool[] _touched;
     private readonly AudioSpace _space;
@@ -32,6 +33,7 @@ public sealed class AmbientLoopManager : IDisposable
         _buffers = buffers ?? throw new ArgumentNullException(nameof(buffers));
         ArgumentNullException.ThrowIfNull(settings);
         AudioSettings validated = settings.Validate();
+        _settings = validated;
         _voices = new AmbientVoice[validated.MaxAmbientVoices];
         _touched = new bool[_voices.Length];
         _space = new AudioSpace(validated.PixelsPerMeter);
@@ -84,11 +86,11 @@ public sealed class AmbientLoopManager : IDisposable
             {
                 slot = FindFreeOrQuietest();
                 Vector3 position = _space.ToMeters(audioEvent.CellX, audioEvent.CellY);
-                _voices[slot].Begin(audioEvent.MaterialId, playback.CueHandle, buffer, in position, audioEvent.Magnitude);
+                _voices[slot].Begin(audioEvent.MaterialId, playback.CueHandle, buffer, in position, audioEvent.Magnitude * _settings.AmbientVolume);
             }
             else
             {
-                _voices[slot].SetTarget(audioEvent.Magnitude);
+                _voices[slot].SetTarget(audioEvent.Magnitude * _settings.AmbientVolume);
             }
 
             _touched[slot] = true;

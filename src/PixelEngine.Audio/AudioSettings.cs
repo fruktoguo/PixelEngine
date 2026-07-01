@@ -8,107 +8,138 @@ public sealed class AudioSettings
     /// <summary>
     /// 最大一次性 positional voice 数。
     /// </summary>
-    public int MaxVoices { get; init; } = 64;
+    public int MaxVoices { get; set; } = 64;
 
     /// <summary>
     /// 最大 ambient loop voice 数。
     /// </summary>
-    public int MaxAmbientVoices { get; init; } = 8;
+    public int MaxAmbientVoices { get; set; } = 8;
 
     /// <summary>
     /// 每米对应的世界 cell 数。
     /// </summary>
-    public float PixelsPerMeter { get; init; } = 32f;
+    public float PixelsPerMeter { get; set; } = 32f;
 
     /// <summary>
     /// listener 在 OpenAL 3D 空间中的 Z 深度。
     /// </summary>
-    public float ListenerDepth { get; init; } = 32f;
+    public float ListenerDepth { get; set; } = 32f;
 
     /// <summary>
     /// 全局主音量。
     /// </summary>
-    public float MasterVolume { get; init; } = 1f;
+    public float MasterVolume { get; set; } = 1f;
+
+    /// <summary>
+    /// 世界内一次性音效与材质事件音量。
+    /// </summary>
+    public float SfxVolume { get; set; } = 1f;
+
+    /// <summary>
+    /// UI 与非定位反馈音效音量。
+    /// </summary>
+    public float UiVolume { get; set; } = 1f;
+
+    /// <summary>
+    /// 材质区域 ambient loop 音量。
+    /// </summary>
+    public float AmbientVolume { get; set; } = 1f;
 
     /// <summary>
     /// OpenAL source reference distance。
     /// </summary>
-    public float ReferenceDistance { get; init; } = 1f;
+    public float ReferenceDistance { get; set; } = 1f;
 
     /// <summary>
     /// OpenAL source max distance。
     /// </summary>
-    public float MaxDistance { get; init; } = 64f;
+    public float MaxDistance { get; set; } = 64f;
 
     /// <summary>
     /// OpenAL source rolloff factor。
     /// </summary>
-    public float RolloffFactor { get; init; } = 1f;
+    public float RolloffFactor { get; set; } = 1f;
 
     /// <summary>
     /// 每帧最多消费的原始音频事件数；多余事件留在 ring 中由后续帧继续排空。
     /// </summary>
-    public int MaxDrainedAudioEventsPerFrame { get; init; } = 4096;
+    public int MaxDrainedAudioEventsPerFrame { get; set; } = 4096;
 
     /// <summary>
     /// 同帧可接收的 impact 事件上限。
     /// </summary>
-    public int MaxParticleImpactEventsPerFrame { get; init; } = 32;
+    public int MaxParticleImpactEventsPerFrame { get; set; } = 32;
 
     /// <summary>
     /// 同帧可接收的 fire crackle 事件上限。
     /// </summary>
-    public int MaxFireCrackleEventsPerFrame { get; init; } = 16;
+    public int MaxFireCrackleEventsPerFrame { get; set; } = 16;
 
     /// <summary>
     /// 同帧可接收的 splash 事件上限。
     /// </summary>
-    public int MaxLiquidSplashEventsPerFrame { get; init; } = 16;
+    public int MaxLiquidSplashEventsPerFrame { get; set; } = 16;
 
     /// <summary>
     /// 同帧可接收的 explosion 事件上限。
     /// </summary>
-    public int MaxExplosionEventsPerFrame { get; init; } = 8;
+    public int MaxExplosionEventsPerFrame { get; set; } = 8;
 
     /// <summary>
     /// 同帧可接收的 rigidbody shatter 事件上限。
     /// </summary>
-    public int MaxRigidbodyShatterEventsPerFrame { get; init; } = 8;
+    public int MaxRigidbodyShatterEventsPerFrame { get; set; } = 8;
 
     /// <summary>
     /// 同帧可接收的 ambient region 事件上限。
     /// </summary>
-    public int MaxAmbientRegionEventsPerFrame { get; init; } = 16;
+    public int MaxAmbientRegionEventsPerFrame { get; set; } = 16;
 
     /// <summary>
     /// 近坐标合并的世界 cell 桶尺寸。
     /// </summary>
-    public int CoalesceBucketSize { get; init; } = 16;
+    public int CoalesceBucketSize { get; set; } = 16;
 
     /// <summary>
     /// 同一材质同一事件类型的默认冷却 tick 数。
     /// </summary>
-    public int DefaultCooldownTicks { get; init; } = 4;
+    public int DefaultCooldownTicks { get; set; } = 4;
 
     /// <summary>
     /// ambient 区域进入阈值，基于聚合事件 Magnitude。
     /// </summary>
-    public float AmbientEnterThreshold { get; init; } = 0.35f;
+    public float AmbientEnterThreshold { get; set; } = 0.35f;
 
     /// <summary>
     /// ambient 区域退出阈值，基于聚合事件 Magnitude。
     /// </summary>
-    public float AmbientExitThreshold { get; init; } = 0.15f;
+    public float AmbientExitThreshold { get; set; } = 0.15f;
 
     /// <summary>
     /// ambient 每次 Update 的线性淡变步长。
     /// </summary>
-    public float AmbientFadeRate { get; init; } = 0.08f;
+    public float AmbientFadeRate { get; set; } = 0.08f;
 
     /// <summary>
     /// 冷却表容量，必须是正的 2 的幂。
     /// </summary>
-    public int CooldownTableCapacity { get; init; } = 1024;
+    public int CooldownTableCapacity { get; set; } = 1024;
+
+    /// <summary>
+    /// 获取指定混音类别的线性音量。
+    /// </summary>
+    /// <param name="category">混音类别。</param>
+    /// <returns>线性音量。</returns>
+    public float GetCategoryVolume(AudioVolumeCategory category)
+    {
+        return category switch
+        {
+            AudioVolumeCategory.Sfx => SfxVolume,
+            AudioVolumeCategory.Ui => UiVolume,
+            AudioVolumeCategory.Ambient => AmbientVolume,
+            _ => throw new ArgumentOutOfRangeException(nameof(category), category, "未知音频音量类别。"),
+        };
+    }
 
     /// <summary>
     /// 返回已校验设置。
@@ -126,6 +157,9 @@ public sealed class AudioSettings
             throw new ArgumentOutOfRangeException(nameof(MasterVolume), "MasterVolume 必须为非负有限数。");
         }
 
+        ValidateNonNegativeFinite(SfxVolume, nameof(SfxVolume));
+        ValidateNonNegativeFinite(UiVolume, nameof(UiVolume));
+        ValidateNonNegativeFinite(AmbientVolume, nameof(AmbientVolume));
         ValidatePositiveFinite(ReferenceDistance, nameof(ReferenceDistance));
         ValidatePositiveFinite(MaxDistance, nameof(MaxDistance));
         ValidatePositiveFinite(RolloffFactor, nameof(RolloffFactor));
@@ -158,6 +192,15 @@ public sealed class AudioSettings
         if (value <= 0f)
         {
             throw new ArgumentOutOfRangeException(parameterName, $"{parameterName} 必须为正有限数。");
+        }
+    }
+
+    private static void ValidateNonNegativeFinite(float value, string parameterName)
+    {
+        ValidateFinite(value, parameterName);
+        if (value < 0f)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, $"{parameterName} 必须为非负有限数。");
         }
     }
 
