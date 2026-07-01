@@ -1,11 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <IsHotPath>true</IsHotPath>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\PixelEngine.Core\PixelEngine.Core.csproj" />
     <ProjectReference Include="..\PixelEngine.Simulation\PixelEngine.Simulation.csproj" />
+    <ProjectReference Include="..\PixelEngine.Content\PixelEngine.Content.csproj" />
     <ProjectReference Include="..\PixelEngine.World\PixelEngine.World.csproj" />
   </ItemGroup>
 
