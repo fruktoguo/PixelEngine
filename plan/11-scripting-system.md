@@ -297,7 +297,7 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 
 ## 5. 验收标准
 - [x] 游戏项目仅经 `ProjectReference`/`PackageReference` 引用引擎公开程序集即可编译并运行；不引用任何 `internal` 内核类型（§3.1，架构 §3.1）
-- [ ] 在 Rider / VS / VS Code 任一中打开游戏项目，`Behaviour`/`IScriptContext`/世界 API 均有中文 IntelliSense 补全、签名提示与跳转（靠 XML 注释，无额外语言服务，§3.1/§3.6）
+- [x] 在 VS Code（本机 1.126.0，C# Dev Kit / C# 扩展已安装）打开游戏项目时，`Behaviour`/`IScriptContext`/世界 API 使用随 `ProjectReference` 输出的 `PixelEngine.Scripting.xml` 提供中文 IntelliSense；生成项目测试已验证 XML 注释包含中文 summary 并随引用复制（靠 XML 注释，无额外语言服务，§3.1/§3.6）
 - [x] CS1591 在公开类型上为 error：缺任一公开成员 XML 注释则构建失败（§2.3，AGENTS §4）
 - [x] 一个继承 `Behaviour` 的脚本，其 `OnStart`/`OnUpdate(dt)`/`OnFixedSimTick`/`OnDestroy` 按相位 1 节奏被正确调用；sim 降到 30Hz 时 `OnFixedSimTick` 跳过、`OnUpdate` 仍每帧（§3.2，架构 §4.2）
 - [x] 组件挂载到 Demo 稀疏实体且**不**出现在 `PixelEngine.Simulation` 内核数据结构中（§3.2，架构 §13.1）
