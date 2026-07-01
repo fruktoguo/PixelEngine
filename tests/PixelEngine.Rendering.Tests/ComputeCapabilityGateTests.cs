@@ -71,6 +71,37 @@ public sealed class ComputeCapabilityGateTests
     }
 
     [Fact]
+    public void GlComputeFallsBackWhenDeviceWorkGroupLimitIsBelowEngineLocalSize()
+    {
+        GpuCapabilities capabilities = new(
+            glMajorVersion: 4,
+            glMinorVersion: 3,
+            isGles: false,
+            isAngle: false,
+            hasComputeShader: true,
+            hasShaderStorageBufferObject: true,
+            hasShaderImageLoadStore: true,
+            maxWorkGroupCountX: 65_535,
+            maxWorkGroupCountY: 65_535,
+            maxWorkGroupCountZ: 65_535,
+            maxWorkGroupSizeX: 8,
+            maxWorkGroupSizeY: 16,
+            maxWorkGroupSizeZ: 1,
+            isWindows: false,
+            isDx12Available: false,
+            isComputeSharpCompiled: false);
+
+        ComputeCapabilityGate gate = ComputeCapabilityGate.Evaluate(
+            capabilities,
+            ComputeFeatureSwitches.Default,
+            preferComputeSharp: false);
+
+        Assert.False(gate.GlComputeAvailable);
+        Assert.True(gate.BaselineFallback);
+        Assert.Equal(ComputeBackendKind.Null, gate.SelectedBackend);
+    }
+
+    [Fact]
     public void AngleContextFallsBackEvenWhenComputeFlagIsPresent()
     {
         GpuCapabilities capabilities = CreateCapabilities(

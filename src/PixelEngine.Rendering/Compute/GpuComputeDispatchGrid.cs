@@ -40,6 +40,19 @@ public static class GpuComputeDispatchGrid
     }
 
     /// <summary>
+    /// 判断固定 work group 尺寸是否不超过当前 GPU 能力。
+    /// </summary>
+    /// <param name="capabilities">GPU compute 能力。</param>
+    /// <returns>是否可用。</returns>
+    public static bool IsLocalSizeSupported(in GpuCapabilities capabilities)
+    {
+        return
+            !ExceedsDeviceLimit(LocalSizeX, capabilities.MaxWorkGroupSizeX) &&
+            !ExceedsDeviceLimit(LocalSizeY, capabilities.MaxWorkGroupSizeY) &&
+            !ExceedsDeviceLimit(LocalSizeZ, capabilities.MaxWorkGroupSizeZ);
+    }
+
+    /// <summary>
     /// 验证固定 work group 尺寸不超过当前 GPU 能力。
     /// </summary>
     /// <param name="capabilities">GPU compute 能力。</param>

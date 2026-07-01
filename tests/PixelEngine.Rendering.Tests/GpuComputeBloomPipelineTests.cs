@@ -73,6 +73,29 @@ public sealed class GpuComputeBloomPipelineTests
     }
 
     [Fact]
+    public void DownsampleBindsSourceOutputTexelSizeAndDispatches()
+    {
+        RecordingComputeBackend backend = new();
+        GpuComputeBloomPipeline pipeline = new(backend);
+        backend.Events.Clear();
+
+        pipeline.DispatchDownsample(
+            sourceTexture: 10,
+            outputImage: 20,
+            width: 64,
+            height: 32,
+            texelX: 0.03125f,
+            texelY: 0.0625f);
+
+        Assert.Contains("Texture:0=10", backend.Events);
+        Assert.Contains("Image:0=20:WriteOnly:Rgba8", backend.Events);
+        Assert.Contains("Uniform1i:bloom_downsample:uSourceTexture=0", backend.Events);
+        Assert.Contains("Uniform2i:bloom_downsample:uOutputSize=64,32", backend.Events);
+        Assert.Contains("Uniform2f:bloom_downsample:uSourceTexelSize=0.03125,0.0625", backend.Events);
+        Assert.Contains("Dispatch:bloom_downsample=4,2,1", backend.Events);
+    }
+
+    [Fact]
     public void DualKawaseUpBindsBaseTextureForAdditiveUpsample()
     {
         RecordingComputeBackend backend = new();
@@ -96,6 +119,16 @@ public sealed class GpuComputeBloomPipelineTests
         Assert.Contains("Dispatch:bloom_dualkawase_up=2,1,1", backend.Events);
     }
 
+    [Fact]
+    public void ComputeBloomPassUsesCpB2DownsampleInRenderChain()
+    {
+        string source = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "ComputeBloomPass.cs"));
+
+        Assert.Contains("DispatchBrightPass", source, StringComparison.Ordinal);
+        Assert.Contains("DispatchDownsample", source, StringComparison.Ordinal);
+        Assert.Contains("DispatchDualKawaseDown", source, StringComparison.Ordinal);
+        Assert.True(source.IndexOf("DispatchDownsample", StringComparison.Ordinal) < source.IndexOf("DispatchDualKawaseDown", StringComparison.Ordinal));
+    }
 
     [Fact]
     public void RejectsZeroHandlesBeforeDispatch()
@@ -132,6 +165,17 @@ public sealed class GpuComputeBloomPipelineTests
         pipeline.DispatchDualKawaseUp(1, 2, 3, 16, 16, 1f / 16f, 1f / 16f, 1.5f, 1f);
         pipeline.DispatchUpsampleComposite(1, 2, 3, 16, 16, 1f);
         pipeline.DispatchLightComposite(1, 2, 3, 4, 16, 16, 1f);
+    }
+
+    private static string ProjectPath(params string[] parts)
+    {
+        string path = AppContext.BaseDirectory;
+        for (int i = 0; i < 6; i++)
+        {
+            path = Directory.GetParent(path)!.FullName;
+        }
+
+        return Path.Combine([path, .. parts]);
     }
 
     private sealed class RecordingComputeBackend : IComputeBackend

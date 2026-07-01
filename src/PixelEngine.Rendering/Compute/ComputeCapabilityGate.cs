@@ -53,7 +53,8 @@ public readonly record struct ComputeCapabilityGate
             !capabilities.IsAngle &&
             capabilities.HasComputeShader &&
             capabilities.HasShaderStorageBufferObject &&
-            capabilities.HasShaderImageLoadStore;
+            capabilities.HasShaderImageLoadStore &&
+            GpuComputeDispatchGrid.IsLocalSizeSupported(in capabilities);
         bool computeSharpAvailable =
             preferComputeSharp &&
             capabilities.IsWindows &&
