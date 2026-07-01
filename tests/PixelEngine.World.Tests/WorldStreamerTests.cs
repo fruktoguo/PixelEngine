@@ -209,6 +209,59 @@ public sealed class WorldStreamerTests
     }
 
     /// <summary>
+    /// 验证长时间平移后常驻预算稳定在配置上限内，不随漫游距离无界增长。
+    /// </summary>
+    [Fact]
+    public void StreamingLongPanningStressKeepsResidentMemoryUnderConfiguredCap()
+    {
+        using JobSystem jobs = new(workerCount: 2)
+        {
+            SingleThreadThreshold = 0,
+        };
+        using TempWorldDirectory world = TempWorldDirectory.Create();
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("sand", CellType.Powder));
+        int chunkBytes = ChunkMemoryBudget.EstimatedResidentChunkBytes;
+        long capBytes = chunkBytes * 12L;
+        WorldManager manager = new(
+            new WorldCamera(32, 32, viewportCellsX: 64, viewportCellsY: 64),
+            new TemperatureField(),
+            materials,
+            world.Path,
+            fallbackMaterialId: 0,
+            new WorldStreamingConfig
+            {
+                ActivationMarginChunks = 0,
+                BorderRingWidth = 1,
+                ResidentMemoryCapBytes = capBytes,
+                EvictionTargetBytes = chunkBytes * 9L,
+                MaxStreamOpsPerFrame = 128,
+            });
+        long frame = 1;
+        Pump(manager, jobs, ref frame, iterations: 4);
+        Assert.InRange(manager.MemoryBudget.ResidentBytes, 0, capBytes);
+
+        long[] focusX =
+        [
+            320, 640, 960, 1280,
+            960, 640, 320, 32,
+            -320, -640, -960, -1280,
+            -960, -640, -320, 32,
+        ];
+        for (int cycle = 0; cycle < 4; cycle++)
+        {
+            for (int i = 0; i < focusX.Length; i++)
+            {
+                manager.UpdateCamera(focusX[i], 32);
+                Pump(manager, jobs, ref frame, iterations: 4);
+
+                AssertNoDetachedResident(manager);
+                Assert.InRange(manager.MemoryBudget.ResidentBytes, 0, capBytes);
+                Assert.InRange(manager.Chunks.Count, 0, 12);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 ProcessIoOnce(JobSystem) 可并行准备多个 chunk 的装载解码结果。
     /// </summary>
     [Fact]
