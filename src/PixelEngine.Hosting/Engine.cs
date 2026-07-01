@@ -200,11 +200,25 @@ public sealed class Engine : IDisposable
     private void ApplyOverloadPolicy(double realDeltaSeconds)
     {
         EngineOverloadController overload = Context.GetService<EngineOverloadController>();
+        EngineQualityTier previousTier = Context.QualityTier;
         EngineQualityTier tier = overload.SubmitFrame(realDeltaSeconds * 1000.0);
         Context.SetQualityTier(tier);
+        if (tier != previousTier && tier >= EngineQualityTier.ReducedLighting)
+        {
+            ApplyGpuComputeDegradation();
+        }
+
         Context.Clock.SimHz = tier >= EngineQualityTier.Sim30Hz
             ? PixelEngine.Core.EngineConstants.SimHzDownscaled
             : Context.Options.SimHz;
+    }
+
+    private void ApplyGpuComputeDegradation()
+    {
+        if (Context.TryGetService(out IGpuComputeQualityDegrader degrader))
+        {
+            _ = degrader.DegradeGpuComputeOneStep();
+        }
     }
 
     private FrameTiming BeginRuntimeFrame(double realDeltaSeconds)

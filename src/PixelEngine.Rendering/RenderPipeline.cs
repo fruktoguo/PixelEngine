@@ -10,7 +10,7 @@ namespace PixelEngine.Rendering;
 /// <summary>
 /// 相位 10 渲染管线主入口，编排 GPU 上传、world blit、光照、bloom、post、UI hook 与 present。
 /// </summary>
-public sealed class RenderPipeline : IDisposable
+public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
 {
     private readonly RenderWindow _window;
     private readonly GL _gl;
