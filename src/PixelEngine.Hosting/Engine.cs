@@ -112,6 +112,7 @@ public sealed class Engine : IDisposable
     {
         ThrowIfShutdown();
         Context.GetService<ScriptAssemblyRegistry>().Register(assembly);
+        MaterializeCurrentSceneScriptsIfPossible();
     }
 
     /// <summary>
@@ -149,6 +150,27 @@ public sealed class Engine : IDisposable
     {
         ThrowIfShutdown();
         Scene scene = Context.GetService<ISceneService>().SwitchTo(name);
+        MaterializeSceneScripts(scene);
+        return scene;
+    }
+
+    private void MaterializeCurrentSceneScriptsIfPossible()
+    {
+        ISceneService scenes = Context.GetService<ISceneService>();
+        if (scenes.Current is not null)
+        {
+            MaterializeSceneScripts(scenes.Current);
+        }
+    }
+
+    private void MaterializeSceneScripts(Scene scene)
+    {
+        if (scene.ScriptScene is not null)
+        {
+            Context.RegisterService(scene.ScriptScene);
+            return;
+        }
+
         if (scene.Descriptor.SourceKind == SceneSourceKind.SceneFile && scene.ResolvedSource is not null)
         {
             PixelEngine.Scripting.Scene scriptScene = EngineSceneDocumentLoader.Load(
@@ -156,9 +178,60 @@ public sealed class Engine : IDisposable
                 Context.GetService<ScriptAssemblyRegistry>());
             scene.AttachScriptScene(scriptScene);
             Context.RegisterService(scriptScene);
+            return;
         }
 
-        return scene;
+        if (scene.Descriptor.SourceKind == SceneSourceKind.Procedural && scene.ResolvedSource is not null)
+        {
+            PixelEngine.Scripting.Scene scriptScene = BuildProceduralScriptScene(
+                scene.ResolvedSource,
+                Context.GetService<ScriptAssemblyRegistry>());
+            scene.AttachScriptScene(scriptScene);
+            Context.RegisterService(scriptScene);
+        }
+    }
+
+    private static PixelEngine.Scripting.Scene BuildProceduralScriptScene(
+        string entryBehaviourName,
+        ScriptAssemblyRegistry scriptAssemblies)
+    {
+        Type behaviourType = ResolveBehaviourType(entryBehaviourName, scriptAssemblies);
+        PixelEngine.Scripting.Scene scriptScene = new();
+        PixelEngine.Scripting.Entity entity = scriptScene.CreateEntity();
+        _ = entity.AddComponent(behaviourType);
+        return scriptScene;
+    }
+
+    private static Type ResolveBehaviourType(string typeName, ScriptAssemblyRegistry scriptAssemblies)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(typeName);
+        for (int i = 0; i < scriptAssemblies.Assemblies.Count; i++)
+        {
+            Assembly assembly = scriptAssemblies.Assemblies[i];
+            Type? exact = assembly.GetType(typeName, throwOnError: false, ignoreCase: false);
+            if (exact is not null && IsConcreteBehaviour(exact))
+            {
+                return exact;
+            }
+
+            foreach (Type type in assembly.GetTypes())
+            {
+                if (type.Name == typeName && IsConcreteBehaviour(type))
+                {
+                    return type;
+                }
+            }
+        }
+
+        throw new InvalidOperationException($"无法在已注册脚本程序集中找到 procedural Behaviour：{typeName}。");
+    }
+
+    private static bool IsConcreteBehaviour(Type? type)
+    {
+        return type is not null &&
+            !type.IsAbstract &&
+            typeof(Behaviour).IsAssignableFrom(type) &&
+            type.GetConstructor(Type.EmptyTypes) is not null;
     }
 
     /// <summary>
