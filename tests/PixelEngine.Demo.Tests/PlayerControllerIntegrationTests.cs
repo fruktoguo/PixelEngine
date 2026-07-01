@@ -1,0 +1,184 @@
+using PixelEngine.Hosting;
+using PixelEngine.Scripting;
+using PixelEngine.Simulation;
+using Xunit;
+using ScriptScene = PixelEngine.Scripting.Scene;
+
+namespace PixelEngine.Demo.Tests;
+
+/// <summary>
+/// Demo 玩家控制器端到端脚本集成测试。
+/// </summary>
+public sealed class PlayerControllerIntegrationTests
+{
+    /// <summary>
+    /// 验证玩家可在普通 settled cell 地面上接地、水平跑动并响应跳跃输入。
+    /// </summary>
+    [Fact]
+    public void PlayerRunsAndJumpsFromSettledTerrain()
+    {
+        using Engine engine = CreatePlayerEngine(out ScriptInputApi input, out CellGrid grid);
+        FillFloor(grid, material: 1, y: 46, x0: 0, x1: 96, rigidOwned: false);
+
+        engine.RunHeadlessTicks(20);
+        PlayerController player = FindPlayer(engine);
+        Assert.True(player.State.OnGround);
+
+        float startX = player.State.X;
+        input.Update([Key.D], [], mouseX: 0, mouseY: 0, wheelY: 0);
+        engine.RunHeadlessTicks(6);
+        Assert.True(player.State.X > startX, $"玩家应向右跑动，start={startX}, actual={player.State.X}");
+        Assert.True(player.State.OnGround);
+
+        input.Update([], [], mouseX: 0, mouseY: 0, wheelY: 0);
+        engine.RunHeadlessTicks(2);
+        Assert.True(player.State.OnGround);
+
+        input.Update([Key.Space], [], mouseX: 0, mouseY: 0, wheelY: 0);
+        Assert.True(input.WasPressed(Key.Space));
+        engine.RunHeadlessTicks(3);
+        Assert.True(
+            player.State.AppliedDeltaY < 0f,
+            $"跳跃后应产生向上的位移，state={Describe(player.State)}");
+    }
+
+    /// <summary>
+    /// 验证玩家可站在刚体往返 stamp 的 RigidOwned 像素上，不会穿透。
+    /// </summary>
+    [Fact]
+    public void PlayerStandsOnRigidOwnedPixels()
+    {
+        using Engine engine = CreatePlayerEngine(out _, out CellGrid grid);
+        FillFloor(grid, material: 0, y: 46, x0: 24, x1: 48, rigidOwned: true);
+
+        engine.RunHeadlessTicks(20);
+        PlayerController player = FindPlayer(engine);
+
+        Assert.True(player.State.OnGround);
+        Assert.True(player.State.Y + player.State.Height <= 46f);
+    }
+
+    /// <summary>
+    /// 验证贴墙时跳跃输入会触发蹬墙，离开墙面并获得反向水平位移。
+    /// </summary>
+    [Fact]
+    public void PlayerWallJumpsAwayFromSolidWall()
+    {
+        using Engine engine = CreatePlayerEngine(out ScriptInputApi input, out CellGrid grid);
+        FillWall(grid, material: 1, x: 32, y0: 16, y1: 48);
+
+        engine.RunHeadlessTicks(1);
+        PlayerController player = FindPlayer(engine);
+        player.SpawnX = 32.95f;
+        player.Respawn();
+
+        engine.RunHeadlessTicks(1);
+        Assert.True(player.State.OnWallLeft, $"玩家应贴左墙，state={Describe(player.State)}");
+
+        float beforeJumpX = player.State.X;
+        input.Update([Key.Space], [], mouseX: 0, mouseY: 0, wheelY: 0);
+        engine.RunHeadlessTicks(2);
+
+        Assert.True(player.State.X > beforeJumpX, $"蹬左墙后应向右离墙，before={beforeJumpX}, state={Describe(player.State)}");
+        Assert.True(player.State.AppliedDeltaY < 0f, $"蹬墙后应产生向上的位移，state={Describe(player.State)}");
+    }
+
+    private static Engine CreatePlayerEngine(out ScriptInputApi input, out CellGrid grid)
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+        Engine engine = new EngineBuilder()
+            .UseHeadless()
+            .UseDeterministicMode()
+            .AddScene(new SceneDescriptor("player", SceneSourceKind.Procedural, typeof(PlayerController).FullName!))
+            .WithStartScene("player")
+            .Build();
+        engine.Context.RegisterService(materials);
+        _ = engine.AttachResidentSimulationWorld(worldWidthCells: 96, worldHeightCells: 64, particleCapacity: 16);
+        _ = engine.AttachPhysics();
+        input = new ScriptInputApi();
+        engine.Context.RegisterService<IInputApi>(EngineServiceRole.Input, input);
+        engine.Context.RegisterService(input);
+        engine.Context.RegisterService<IAudioApi>(EngineServiceRole.AudioService, NoOpAudioApi.Instance);
+        engine.RegisterScriptAssembly(typeof(PlayerController).Assembly);
+        ScriptSimulationContext scripts = engine.AttachScriptingFromServices();
+        Assert.Same(input, scripts.Input);
+        grid = engine.Context.GetService<CellGrid>();
+        return engine;
+    }
+
+    private static PlayerController FindPlayer(Engine engine)
+    {
+        ScriptScene scene = engine.Context.GetService<ScriptScene>();
+        foreach (ScriptEntityInspection entity in scene.CaptureInspectionSnapshot())
+        {
+            foreach (ScriptComponentInspection component in entity.Components)
+            {
+                if (component.Behaviour is PlayerController player)
+                {
+                    return player;
+                }
+            }
+        }
+
+        throw new InvalidOperationException("未找到 PlayerController。");
+    }
+
+    private static string Describe(CharacterState state)
+    {
+        return $"x={state.X}, y={state.Y}, ground={state.OnGround}, wallL={state.OnWallLeft}, wallR={state.OnWallRight}, req=({state.RequestedDeltaX},{state.RequestedDeltaY}), applied=({state.AppliedDeltaX},{state.AppliedDeltaY})";
+    }
+
+    private static void FillFloor(CellGrid grid, ushort material, int y, int x0, int x1, bool rigidOwned)
+    {
+        for (int x = x0; x < x1; x++)
+        {
+            grid.MaterialAt(x, y) = material;
+            grid.FlagsAt(x, y) = rigidOwned ? CellFlags.RigidOwned : default;
+        }
+    }
+
+    private static void FillWall(CellGrid grid, ushort material, int x, int y0, int y1)
+    {
+        for (int y = y0; y < y1; y++)
+        {
+            grid.MaterialAt(x, y) = material;
+            grid.FlagsAt(x, y) = default;
+        }
+    }
+
+    private static MaterialTable Materials(params (string Name, CellType Type)[] definitions)
+    {
+        MaterialDef[] materials = new MaterialDef[definitions.Length];
+        for (int i = 0; i < materials.Length; i++)
+        {
+            materials[i] = new MaterialDef
+            {
+                Id = (ushort)i,
+                Name = definitions[i].Name,
+                Type = definitions[i].Type,
+                Density = i == 0 ? (byte)0 : (byte)100,
+                HeatCapacity = 1,
+                HeatConduct = byte.MaxValue,
+                TextureId = -1,
+                MeltPoint = float.NaN,
+                FreezePoint = float.NaN,
+                BoilPoint = float.NaN,
+            };
+        }
+
+        return new MaterialTable(materials);
+    }
+
+    private sealed class NoOpAudioApi : IAudioApi
+    {
+        public static NoOpAudioApi Instance { get; } = new();
+
+        public void PlayOneShot(string cue, float volume = 1f)
+        {
+        }
+
+        public void PlayAt(string cue, float x, float y, float volume = 1f)
+        {
+        }
+    }
+}
