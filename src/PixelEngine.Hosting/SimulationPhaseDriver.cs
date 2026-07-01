@@ -1,5 +1,6 @@
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
+using PixelEngine.Scripting;
 
 namespace PixelEngine.Hosting;
 
@@ -12,15 +13,18 @@ namespace PixelEngine.Hosting;
 /// <param name="particles">自由粒子系统。</param>
 /// <param name="temperature">温度场。</param>
 /// <param name="materials">材质注册表。</param>
+/// <param name="scriptContext">可选脚本 Simulation 上下文；提供时在相位安全窗口 flush 脚本命令。</param>
 public sealed class SimulationPhaseDriver(
     IChunkSource chunks,
     CellGrid grid,
     SimulationKernel kernel,
     ParticleSystem particles,
     TemperatureField temperature,
-    MaterialTable materials) : IEnginePhaseDriver
+    MaterialTable materials,
+    ScriptSimulationContext? scriptContext = null) : IEnginePhaseDriver
 {
     private readonly IChunkSource _chunks = chunks ?? throw new ArgumentNullException(nameof(chunks));
+    private ScriptSimulationContext? _scriptContext = scriptContext;
 
     /// <summary>
     /// 世界 cell 访问门面。
@@ -46,6 +50,15 @@ public sealed class SimulationPhaseDriver(
     /// 材质注册表。
     /// </summary>
     public MaterialTable Materials { get; } = materials ?? throw new ArgumentNullException(nameof(materials));
+
+    /// <summary>
+    /// 绑定脚本 Simulation 上下文，使脚本命令在对应 Simulation 相位安全落地。
+    /// </summary>
+    /// <param name="scriptContext">脚本 Simulation 上下文。</param>
+    public void AttachScriptContext(ScriptSimulationContext scriptContext)
+    {
+        _scriptContext = scriptContext ?? throw new ArgumentNullException(nameof(scriptContext));
+    }
 
     /// <summary>
     /// 注册相位 3、4、5、6、7 的真实 Simulation 入口。
@@ -87,12 +100,14 @@ public sealed class SimulationPhaseDriver(
 
     private void RunDirtyRectSwap(EngineTickContext context)
     {
+        _ = _scriptContext?.FlushCellCommands();
         Kernel.SwapDirtyRects();
     }
 
     private void RunCellToParticle(EngineTickContext context)
     {
         Particles.RunEjectionPass(Kernel, Grid);
+        _ = _scriptContext?.FlushParticleCommands();
         Particles.PublishDiagnostics(context.Context.Counters);
     }
 }

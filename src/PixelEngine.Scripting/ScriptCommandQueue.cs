@@ -49,6 +49,22 @@ internal readonly record struct ScriptCommand(
         return new ScriptCommand(ScriptCommandKind.SpawnParticle, 0, 0, 0, 0, default, particle, default, default, 0, 0);
     }
 
+    public static ScriptCommand BurstParticles(float x, float y, MaterialId material, int count, float speed)
+    {
+        return new ScriptCommand(
+            ScriptCommandKind.BurstParticles,
+            0,
+            0,
+            count,
+            0,
+            default,
+            new ParticleSpawnDesc(x, y, 0, 0, material, 0),
+            default,
+            default,
+            speed,
+            0);
+    }
+
     public static ScriptCommand CreateBodyFromRegion(int x, int y, int width, int height)
     {
         return new ScriptCommand(ScriptCommandKind.CreateBodyFromRegion, x, y, width, height, default, default, default, default, 0, 0);
