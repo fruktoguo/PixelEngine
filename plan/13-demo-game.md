@@ -191,7 +191,7 @@ API 缺口登记
 - [!] 反应可观测：headless 路径已验证 Hosting 会把已加载 `ReactionTable` 接入 CA 主循环；阻塞：仍缺真实窗口中水灭火（火→烟、水→蒸汽）、火沿木 / 油传播、熔岩遇水成石冒蒸汽、酸腐蚀 stone/wood/metal、蒸汽冷凝回水、熔融金属遇水凝固的可视化验收。〔§3.6〕
 - [!] 温度相变可观测：Demo 内容已校核完整材质集与阈值（ice→water、water→steam/ice、lava→stone、metal↔molten_metal、sand→glass），plan/04 已完成 `TemperatureField.ApplyPhaseTransitions`，`TemperatureFieldTests.ApplyPhaseTransitionsMeltsAndBoilsByThreshold` 覆盖阈值 melt/boil 写材质、parity 与 dirty；阻塞：仍缺真实窗口中 lava / fire 附近 ice 融化、water 沸腾、lava 冷却、metal 熔化、sand 烤玻璃的可视化验收。〔§3.6、plan/04〕
 - [!] 玩家挖断木栈桥 → 连通块掉落为 Box2D 刚体：`LavaMineSceneTests.LavaMineSceneRegistersDestructibleWoodAndMetalStructures` 已验证默认关卡经公开脚本 API 注册 6 个 wood/metal 动态刚体、Physics stamp 产生 owned cell，手动竖切后 1 个刚体销毁并拆成 2 个新刚体；阻塞：仍缺玩家真实挖断、推动/被砸、继续挖 / 烧 / 酸蚀破碎，以及 metal 近熔岩熔化导致结构坍塌的窗口玩法验收。〔§3.7、架构 §8.3〕
-- [ ] 火花 / 血 / 碎屑粒子按弹道飞行、碎屑落定回沉积为 cell、发光火花产生 bloom；爆炸抛射 cell 成粒子并推动邻近刚体；无粒子泄漏。〔§3.8、§3.9〕
+- [!] 火花 / 爆炸粒子与光照反馈：`LavaMineSceneTests` 已验证默认关卡 `SparkEmitter` 生成自由粒子；`PlayerControllerIntegrationTests.ExplosiveToolMiddleClickEjectsCellsAndQueuesLighting` 已验证 middle click 经 `ExplosiveTool` 触发 `World.Explode`、stone cell 抛射成粒子、清空源 cell，并经 `ScriptLightingSynchronizer` 产生点光与 fog reveal；阻塞：仍缺血 / 碎屑粒子、碎屑落定回沉积、发光火花 bloom、爆炸推动邻近刚体和长时间无粒子泄漏的窗口玩法验收。〔§3.8、§3.9〕
 - [ ] 矿洞默认黑暗，熔岩 / 火 / 熔融金属 emissive 发光，fog-of-war 在玩家与光源周围揭示；光照过载时引擎自动降级不卡顿。〔§3.9〕
 - [ ] 材质化音效随事件定位播放（沙 / 石 / 木 / 金属 impact、水 / 酸 splash、火 / 熔岩 ambient、熔岩遇水 sizzle、酸腐蚀、爆炸、刚体破碎），玩法音效（跳 / 落 / 受击 / 通关 / UI）正确触发，满屏事件下限频不过载。〔§3.10〕
 - [ ] 关卡可从出生点用至少一种解法（引水成石桥 / 坍塌木桥成路）抵达出口触发通关，全程演示全部材质 / 反应 / 刚体 / 粒子 / 光照 / 音频。〔§3.11〕

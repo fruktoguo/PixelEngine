@@ -1,4 +1,5 @@
 using PixelEngine.Hosting;
+using PixelEngine.Simulation.Particles;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
 using Xunit;
@@ -11,6 +12,37 @@ namespace PixelEngine.Demo.Tests;
 /// </summary>
 public sealed class PlayerControllerIntegrationTests
 {
+    /// <summary>
+    /// 验证 Demo 爆破工具会从鼠标世界坐标触发 cell 抛射、刚体冲量请求与光照反馈。
+    /// </summary>
+    [Fact]
+    public void ExplosiveToolMiddleClickEjectsCellsAndQueuesLighting()
+    {
+        MaterialTable materials = DemoMaterials();
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
+        ExplosiveTool tool = scene.CreateEntity().AddComponent<ExplosiveTool>();
+        tool.Radius = 5;
+        tool.Force = 20f;
+        tool.CooldownSeconds = 0f;
+        FillRect(grid, material: stone, minX: 10, minY: 10, maxX: 15, maxY: 15);
+
+        input.Update([], [MouseButton.Middle], mouseX: 12.25f, mouseY: 12.75f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(1, tool.ExplosionCount);
+        Assert.Equal(12.25f, tool.LastExplosionX, precision: 3);
+        Assert.Equal(12.75f, tool.LastExplosionY, precision: 3);
+        Assert.Equal((ushort)0, grid.MaterialAt(12, 12));
+
+        ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
+        Assert.True(particles.ActiveCount > 0);
+
+        ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
+        Assert.Equal(1, lighting.PointLights.Length);
+        Assert.True(lighting.FogOfWar.RevealAlpha(12, 13) > 0);
+    }
+
     /// <summary>
     /// 验证 Demo 材质笔刷会响应数字键、滚轮和鼠标按钮，并按相机世界坐标写入/擦除 cell。
     /// </summary>
@@ -265,6 +297,18 @@ public sealed class PlayerControllerIntegrationTests
         {
             grid.MaterialAt(x, y) = material;
             grid.FlagsAt(x, y) = default;
+        }
+    }
+
+    private static void FillRect(CellGrid grid, ushort material, int minX, int minY, int maxX, int maxY)
+    {
+        for (int y = minY; y < maxY; y++)
+        {
+            for (int x = minX; x < maxX; x++)
+            {
+                grid.MaterialAt(x, y) = material;
+                grid.FlagsAt(x, y) = default;
+            }
         }
     }
 
