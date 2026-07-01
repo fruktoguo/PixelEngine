@@ -31,9 +31,34 @@ public enum FrameSubPhase
     PhysicsStep,
 
     /// <summary>
-    /// 刚体形状重建。
+    /// 刚体破坏 CCL、轮廓追踪与凸分解准备。
+    /// </summary>
+    PhysicsCcl,
+
+    /// <summary>
+    /// 刚体 Box2D body 销毁、重建与碎片写出。
     /// </summary>
     ShapeRebuild,
+
+    /// <summary>
+    /// 刚体旧 stamp 从权威网格擦除。
+    /// </summary>
+    PhysicsErase,
+
+    /// <summary>
+    /// 刚体 inverse-sampling 写回权威网格。
+    /// </summary>
+    PhysicsInverseSample,
+
+    /// <summary>
+    /// 局部静态地形 collider 构建与回收。
+    /// </summary>
+    StaticCollider,
+
+    /// <summary>
+    /// 像素场角色控制器移动解算。
+    /// </summary>
+    CharacterController,
 
     /// <summary>
     /// GPU 上传。

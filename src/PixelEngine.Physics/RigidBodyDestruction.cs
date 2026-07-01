@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics;
 using System.Numerics;
 using PixelEngine.Core.Mathematics;
 using PixelEngine.Core.Threading;
@@ -44,6 +45,16 @@ public sealed class RigidBodyDestruction
     public int FragmentPixelThreshold { get; }
 
     /// <summary>
+    /// 最近一次 CCL、轮廓追踪与凸分解准备阶段耗时，单位毫秒。
+    /// </summary>
+    public double LastPreparationMilliseconds { get; private set; }
+
+    /// <summary>
+    /// 最近一次 Box2D body 销毁、重建与碎片写出阶段耗时，单位毫秒。
+    /// </summary>
+    public double LastApplyMilliseconds { get; private set; }
+
+    /// <summary>
     /// 最近一次 RebuildDirty 是否通过 JobSystem 派发了重建准备阶段。
     /// </summary>
     public bool LastPlanningUsedJobSystem { get; private set; }
@@ -73,6 +84,8 @@ public sealed class RigidBodyDestruction
         {
             LastPlanningUsedJobSystem = false;
             LastPlanningWorkerCount = 0;
+            LastPreparationMilliseconds = 0;
+            LastApplyMilliseconds = 0;
             return default;
         }
 
@@ -98,10 +111,13 @@ public sealed class RigidBodyDestruction
             workItems.Add(new RebuildWorkItem(body, ParentBodyState.Capture(body.BodyId), damagedLocals));
         }
 
+        long prepareStarted = Stopwatch.GetTimestamp();
         RebuildPlan[] plans = PreparePlans(workItems, jobs);
+        LastPreparationMilliseconds = ElapsedMilliseconds(prepareStarted);
         int destroyedBodies = 0;
         int createdBodies = 0;
         int fragmentPixels = 0;
+        long applyStarted = Stopwatch.GetTimestamp();
         for (int i = 0; i < plans.Length; i++)
         {
             RigidDestructionResult result = ApplyPlan(worldId, physicsWorld, grid, registry, plans[i]);
@@ -110,7 +126,14 @@ public sealed class RigidBodyDestruction
             fragmentPixels += result.FragmentPixels;
         }
 
+        LastApplyMilliseconds = ElapsedMilliseconds(applyStarted);
         return new RigidDestructionResult(damagedBodies, destroyedBodies, createdBodies, fragmentPixels, skippedSleeping);
+    }
+
+    private static double ElapsedMilliseconds(long started)
+    {
+        long elapsed = Stopwatch.GetTimestamp() - started;
+        return elapsed * 1000.0 / Stopwatch.Frequency;
     }
 
     private static Dictionary<int, HashSet<int>> BuildDamageMap(RigidStampRegistry registry, IReadOnlyList<RigidDamageEvent> damageEvents)
