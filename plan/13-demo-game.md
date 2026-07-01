@@ -189,7 +189,7 @@ API 缺口登记
 - [!] 相机平滑跟随玩家、夹在关卡边界、缩放写入生效：`PlayerControllerIntegrationTests.CameraFollowTracksPlayerZoomAndClampsToWorldBounds` 已用 headless 脚本 scene 验证 `CameraFollow` 读取玩家中心、驱动 `ScriptCameraApi`、随玩家右移、设置 `Zoom` 并按关卡边界 clamp；阻塞：仍缺真实窗口滚轮缩放输入与 sim 降频时渲染流畅度验收。〔§3.4〕
 - [!] 数字键切材质、左键放 / 右键擦 / 滚轮调半径在正确世界坐标写入 cell：`PlayerControllerIntegrationTests.MaterialBrushSelectsRadiusPaintsAndErasesWorldCells` 已用完整 Demo 默认材质名、`ScriptInputApi`、`ScriptCameraApi` 与真实 `CellGrid` 验证 Digit6 选 stone、滚轮调半径、左键按屏幕→世界坐标写入、右键擦除；阻塞：仍缺沙堆休止角、水找平、油浮于水、气体上升等 CA 接管后的窗口玩法验收。〔§3.5、§3.6〕
 - [!] 反应可观测：headless 路径已验证 Hosting 会把已加载 `ReactionTable` 接入 CA 主循环；阻塞：仍缺真实窗口中水灭火（火→烟、水→蒸汽）、火沿木 / 油传播、熔岩遇水成石冒蒸汽、酸腐蚀 stone/wood/metal、蒸汽冷凝回水、熔融金属遇水凝固的可视化验收。〔§3.6〕
-- [ ] 温度相变可观测：lava / fire 附近 ice 融化、water 沸腾成 steam、lava 冷却成 stone、metal 近熔岩熔化、sand 烤成 glass。〔§3.6〕
+- [!] 温度相变可观测：Demo 内容已校核完整材质集与阈值（ice→water、water→steam/ice、lava→stone、metal↔molten_metal、sand→glass），plan/04 已完成 `TemperatureField.ApplyPhaseTransitions`，`TemperatureFieldTests.ApplyPhaseTransitionsMeltsAndBoilsByThreshold` 覆盖阈值 melt/boil 写材质、parity 与 dirty；阻塞：仍缺真实窗口中 lava / fire 附近 ice 融化、water 沸腾、lava 冷却、metal 熔化、sand 烤玻璃的可视化验收。〔§3.6、plan/04〕
 - [ ] 玩家挖断木栈桥 → 连通块掉落为 Box2D 刚体，可被推动、被砸、被继续挖 / 烧 / 酸蚀而再破碎；金属梁近熔岩熔化致结构坍塌。〔§3.7〕
 - [ ] 火花 / 血 / 碎屑粒子按弹道飞行、碎屑落定回沉积为 cell、发光火花产生 bloom；爆炸抛射 cell 成粒子并推动邻近刚体；无粒子泄漏。〔§3.8、§3.9〕
 - [ ] 矿洞默认黑暗，熔岩 / 火 / 熔融金属 emissive 发光，fog-of-war 在玩家与光源周围揭示；光照过载时引擎自动降级不卡顿。〔§3.9〕
