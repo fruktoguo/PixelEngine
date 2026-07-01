@@ -210,11 +210,11 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 
 `internal sealed class HotReloadService`：`FileSystemWatcher` 监听脚本源目录（去抖合并连续写事件）；触发 `RequestReload()`（也供编辑器按钮直接调用，§3.6）。**重载在帧边界相位 1 开始处执行**（结构性变更，类比架构 §3.3 相位 2 的 residency apply，绝不在 sim 中途换程序集）：
 
-1. 对每个活跃 `Behaviour` 调 `OnDestroy()`（相位 1），并退订其事件/释放句柄；
-2. 用 `[Persist]`/公开字段反射把状态序列化进瞬态 `StateSnapshot`（按 `类型全名 + 字段名 + 类型` 为键）；
-3. 旧 `ScriptLoadContext.Unload()`，`GC.Collect()` + `WaitForPendingFinalizers()` 确认可回收（弱引用探测，超时则告警「ALC 未能卸载，存在泄漏引用」）；
-4. 装新程序集，重建组件实例，按键回填 `StateSnapshot`（类型/名字匹配的字段恢复，**不匹配或新增字段重置为默认**）；
-5. 调新实例 `OnStart()`，恢复事件订阅。
+1. 用 `[Persist]`/公开字段反射把状态序列化进瞬态 `StateSnapshot`（按 `类型全名 + 字段名 + 类型` 为键）；
+2. 装新程序集，在新 ALC 中预构建全部替换组件并按键回填 `StateSnapshot`（类型/名字匹配的字段恢复，**不匹配或新增字段重置为默认**）；
+3. 若装载、类型匹配、构造或状态恢复任一步失败，卸载新 ALC，返回 ApplyFailed，并**保留旧组件与旧 ALC 继续运行**；
+4. 预构建全部成功后，对每个活跃 `Behaviour` 调 `OnDestroy()`（相位 1），并退订其事件/释放句柄，随后原子式提交新组件；
+5. 旧 `ScriptLoadContext.Unload()`，`GC.Collect()` + `WaitForPendingFinalizers()` 确认可回收（弱引用探测，超时则告警「ALC 未能卸载，存在泄漏引用」），再调新实例 `OnStart()`，恢复事件订阅。
 
 状态保持策略（可配置）：默认**保留可序列化的公开/`[Persist]` 字段并重置其余**；提供「完全重置」开关供需要干净态的迭代。不可序列化的运行时句柄（`BodyHandle`/`CharacterHandle`/订阅）**不**保留，由 `OnStart` 重建——这是避免悬挂引用旧 ALC 的关键。**绝不**跨 ALC 缓存用户类型的 `Type`/委托/实例（否则旧 ALC 无法回收，遵循 .NET 可回收 ALC 最佳实践）。
 
@@ -271,7 +271,8 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 - [x] `internal sealed class ScriptCompiler`：`CSharpCompilation` + 引擎公开程序集 `MetadataReference` + BCL 参考程序集；`Emit` 到 `MemoryStream`；捕获并上报 `Diagnostics`（编译失败保留旧程序集，§3.4）
 - [x] `internal sealed class ScriptLoadContext : AssemblyLoadContext`（`isCollectible:true`；引擎/BCL 类型回退默认上下文，仅用户脚本私有装载）
 - [x] `internal sealed class HotReloadService`：`FileSystemWatcher` 去抖；`RequestReload()`；重载在**帧边界相位 1 开始**执行（§3.4，架构 §3.3 相位 2 同理）
-- [x] 热重载五步：OnDestroy+退订 → `StateSnapshot` 反射快照 → `Unload()`+GC 确认可回收（弱引用探测+超时告警）→ 重建实例+回填状态 → OnStart+恢复订阅（§3.4）
+- [x] 热重载五步：`StateSnapshot` 反射快照 → 新 ALC 预构建实例+回填状态 → OnDestroy+退订并提交新组件 → `Unload()`+GC 确认可回收（弱引用探测+超时告警）→ OnStart+恢复订阅（§3.4）
+- [x] 热重载两阶段提交：新程序集装载、类型匹配、构造或状态恢复失败时卸载新 ALC，保留旧组件与旧 ALC 继续运行，并返回 ApplyFailed（§3.4）
 - [x] 状态保持策略：默认保留 `[Persist]`/公开字段、其余重置；提供「完全重置」开关；句柄/订阅不保留由 OnStart 重建（§3.4）
 - [x] 防泄漏：禁止跨 ALC 缓存用户 `Type`/委托/实例；句柄经稳定 id 而非对象引用（§3.4，.NET 可回收 ALC 最佳实践）
 
@@ -307,6 +308,7 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 - [x] body/character 写入类命令相位落地：body 建/毁、冲量与角色移动已在 Hosting phase 8 step 前落到真实 `PhysicsSystem`/`CharacterController`，并维护脚本句柄/状态 registry（架构 §3.3）。
 - [x] 修改脚本源文件后自动重编译并热重载：旧 ALC 成功 `Unload` 并被 GC 回收（弱引用确认）、组件实例重建、`[Persist]`/公开字段状态按策略恢复（§3.4）
 - [x] 编译错误不中断运行：保留旧程序集，诊断（行列+中文摘要）上报编辑器（§3.4）
+- [x] 编译成功但新程序集缺少原脚本类型、构造失败或状态恢复失败时不中断运行：保留旧脚本实例与当前运行场景，后续修复后仍可继续热重载（§3.4）
 - [x] 脚本任一回调抛异常被捕获、记录、该脚本被禁用，**引擎主循环继续、同帧其它脚本不受影响、进程不崩溃**（§3.5，AGENTS §4）
 - [x] 反复热重载 N 次（如 50 次）无 ALC/内存泄漏（无残留可回收上下文，无单调增长的句柄/委托缓存，§3.4）
 - [x] 稳态帧脚本派发路径零托管堆分配（命令队列/事件分发/回调派发，BenchmarkDotNet 内存诊断为 0，§3.3/§3.5，AGENTS §3）

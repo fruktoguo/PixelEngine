@@ -30,6 +30,62 @@ public sealed class HotReloadServiceTests
     }
 
     /// <summary>
+    /// 验证编译成功但缺少原脚本类型时不会销毁旧组件。
+    /// </summary>
+    [Fact]
+    public void ApplyFailureForMissingTypeKeepsExistingScripts()
+    {
+        Scene scene = new();
+        FakeScriptContext context = new(scene);
+        Entity entity = scene.CreateEntity();
+        HotReloadService service = CreateServiceWithVersionOne(scene, context, entity);
+
+        service.RequestReload(
+            $"UserScripts.MissingType.{Guid.NewGuid():N}",
+            [new ScriptSourceFile("OtherScript.cs", MissingOriginalTypeSource)]);
+        HotReloadResult result = service.ApplyPendingReload();
+        Behaviour behaviour = scene.CaptureBehaviours()[0].Behaviour;
+
+        Assert.Equal(HotReloadStatus.ApplyFailed, result.Status);
+        Assert.NotNull(result.Exception);
+        Assert.Equal("v1", ReadVersion(behaviour));
+        Assert.Equal(42, ReadField<int>(behaviour, "Counter"));
+    }
+
+    /// <summary>
+    /// 验证新脚本构造失败时不会进入半替换场景，旧脚本仍可继续热重载。
+    /// </summary>
+    [Fact]
+    public void ApplyFailureForConstructorExceptionKeepsExistingScriptsAndCurrentContext()
+    {
+        Scene scene = new();
+        FakeScriptContext context = new(scene);
+        Entity entity = scene.CreateEntity();
+        HotReloadService service = CreateServiceWithVersionOne(scene, context, entity);
+
+        service.RequestReload(
+            $"UserScripts.ThrowingCtor.{Guid.NewGuid():N}",
+            [new ScriptSourceFile("ReloadableScript.cs", ThrowingConstructorSource)]);
+        HotReloadResult failed = service.ApplyPendingReload();
+        Behaviour oldBehaviour = scene.CaptureBehaviours()[0].Behaviour;
+
+        Assert.Equal(HotReloadStatus.ApplyFailed, failed.Status);
+        Assert.NotNull(failed.Exception);
+        Assert.Equal("v1", ReadVersion(oldBehaviour));
+        Assert.Equal(42, ReadField<int>(oldBehaviour, "Counter"));
+
+        service.RequestReload(
+            $"UserScripts.AfterFailure.{Guid.NewGuid():N}",
+            [new ScriptSourceFile("ReloadableScript.cs", VersionTwoSource)]);
+        HotReloadResult recovered = service.ApplyPendingReload();
+        Behaviour replacement = scene.CaptureBehaviours()[0].Behaviour;
+
+        Assert.Equal(HotReloadStatus.Reloaded, recovered.Status);
+        Assert.Equal("v2", ReadVersion(replacement));
+        Assert.Equal(42, ReadField<int>(replacement, "Counter"));
+    }
+
+    /// <summary>
     /// 验证成功热重载会替换同名脚本类型、恢复状态并卸载旧 ALC。
     /// </summary>
     [Fact]
@@ -321,6 +377,33 @@ public sealed class HotReloadServiceTests
             {
                 StartedByReload = 1;
             }
+        }
+        """;
+
+    private const string MissingOriginalTypeSource = """
+        using PixelEngine.Scripting;
+
+        namespace UserScripts;
+
+        public sealed class OtherScript : Behaviour
+        {
+        }
+        """;
+
+    private const string ThrowingConstructorSource = """
+        using System;
+        using PixelEngine.Scripting;
+
+        namespace UserScripts;
+
+        public sealed class ReloadableScript : Behaviour
+        {
+            public ReloadableScript()
+            {
+                throw new InvalidOperationException("ctor failed");
+            }
+
+            public string Version => "bad";
         }
         """;
 }

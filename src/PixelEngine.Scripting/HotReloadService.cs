@@ -111,31 +111,55 @@ internal sealed class HotReloadService(Scene scene, IScriptContext context, Scri
             }
 
             typeNames[i] = behaviour.GetType().FullName ?? behaviour.GetType().Name;
-            _scene.DestroyComponent(records[i].Entity, behaviour.GetType(), _context);
         }
 
         ScriptLoadContext newContext = new($"script-reload-{Guid.NewGuid():N}");
-        Assembly assembly = newContext.LoadFromImages(compilation.PeImage, compilation.PdbImage);
-        for (int i = 0; i < records.Length; i++)
+        ReloadReplacement[] replacements;
+        try
         {
-            Type? newType = assembly.GetType(typeNames[i], throwOnError: false);
-            if (newType is null || !typeof(Behaviour).IsAssignableFrom(newType))
+            Assembly assembly = newContext.LoadFromImages(compilation.PeImage, compilation.PdbImage);
+            replacements = new ReloadReplacement[records.Length];
+            for (int i = 0; i < records.Length; i++)
             {
-                continue;
-            }
+                Type? newType = assembly.GetType(typeNames[i], throwOnError: false);
+                if (newType is null || !typeof(Behaviour).IsAssignableFrom(newType))
+                {
+                    throw new InvalidOperationException($"热重载程序集缺少可替换脚本类型：{typeNames[i]}。");
+                }
 
-            Behaviour replacement = (Behaviour)Activator.CreateInstance(newType)!;
-            if (snapshots.Length != 0)
-            {
-                snapshots[i]?.Restore(replacement);
-            }
+                Behaviour replacement = (Behaviour)Activator.CreateInstance(newType)!;
+                if (snapshots.Length != 0)
+                {
+                    snapshots[i]?.Restore(replacement);
+                }
 
-            _scene.AddComponent(records[i].Entity, replacement);
+                replacements[i] = new ReloadReplacement(records[i].Entity, records[i].Behaviour.GetType(), replacement);
+            }
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            newContext.Unload();
+            return HotReloadResult.ApplyFailed(compilation.Diagnostics, exception);
         }
 
-        _scene.DispatchStart(_context);
+        for (int i = 0; i < replacements.Length; i++)
+        {
+            ReloadReplacement replacement = replacements[i];
+            _scene.DestroyComponent(replacement.Entity, replacement.OldType, _context);
+        }
+
+        for (int i = 0; i < replacements.Length; i++)
+        {
+            ReloadReplacement replacement = replacements[i];
+            if (replacement.Component is not null)
+            {
+                _scene.AddComponent(replacement.Entity, replacement.Component);
+            }
+        }
+
         records.AsSpan().Clear();
         WeakReference? oldReference = ReplaceCurrentContext(newContext);
+        _scene.DispatchStart(_context);
         return HotReloadResult.Reloaded(compilation.Diagnostics, oldReference);
     }
 
@@ -273,6 +297,8 @@ internal sealed class HotReloadService(Scene scene, IScriptContext context, Scri
     }
 
     private sealed record PendingReload(string AssemblyName, ScriptSourceFile[] Sources, HotReloadOptions Options);
+
+    private readonly record struct ReloadReplacement(Entity Entity, Type OldType, Behaviour? Component);
 }
 
 internal sealed record HotReloadWatchOptions(string AssemblyName, string SourceDirectory)
@@ -295,11 +321,16 @@ internal readonly record struct HotReloadOptions(bool PreserveState)
 
 internal sealed class HotReloadResult
 {
-    private HotReloadResult(HotReloadStatus status, ImmutableArray<Diagnostic> diagnostics, WeakReference? unloadedContext)
+    private HotReloadResult(
+        HotReloadStatus status,
+        ImmutableArray<Diagnostic> diagnostics,
+        WeakReference? unloadedContext,
+        Exception? exception)
     {
         Status = status;
         Diagnostics = diagnostics;
         UnloadedContext = unloadedContext;
+        Exception = exception;
     }
 
     public HotReloadStatus Status { get; }
@@ -308,21 +339,28 @@ internal sealed class HotReloadResult
 
     public WeakReference? UnloadedContext { get; }
 
+    public Exception? Exception { get; }
+
     public bool OldContextUnloaded => UnloadedContext is null || WaitForUnload(UnloadedContext);
 
     public static HotReloadResult NoPending()
     {
-        return new HotReloadResult(HotReloadStatus.NoPendingReload, [], null);
+        return new HotReloadResult(HotReloadStatus.NoPendingReload, [], null, null);
     }
 
     public static HotReloadResult CompileFailed(ImmutableArray<Diagnostic> diagnostics)
     {
-        return new HotReloadResult(HotReloadStatus.CompileFailed, diagnostics, null);
+        return new HotReloadResult(HotReloadStatus.CompileFailed, diagnostics, null, null);
+    }
+
+    public static HotReloadResult ApplyFailed(ImmutableArray<Diagnostic> diagnostics, Exception exception)
+    {
+        return new HotReloadResult(HotReloadStatus.ApplyFailed, diagnostics, null, exception);
     }
 
     public static HotReloadResult Reloaded(ImmutableArray<Diagnostic> diagnostics, WeakReference? unloadedContext)
     {
-        return new HotReloadResult(HotReloadStatus.Reloaded, diagnostics, unloadedContext);
+        return new HotReloadResult(HotReloadStatus.Reloaded, diagnostics, unloadedContext, null);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -343,5 +381,6 @@ internal enum HotReloadStatus
 {
     NoPendingReload,
     CompileFailed,
+    ApplyFailed,
     Reloaded,
 }
