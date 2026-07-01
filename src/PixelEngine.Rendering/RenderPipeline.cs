@@ -473,6 +473,11 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
             return;
         }
 
+        if (!_computeGate.FeatureSwitches.GpuParticlesEnabled)
+        {
+            return;
+        }
+
         if (materials is null)
         {
             throw new ArgumentNullException(nameof(materials), "GPU 粒子模式需要材质表。");

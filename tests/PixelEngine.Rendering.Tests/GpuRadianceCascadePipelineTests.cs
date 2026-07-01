@@ -69,6 +69,36 @@ public sealed class GpuRadianceCascadePipelineTests
         Assert.Contains("Uniform1f:rc_apply:uRadianceIntensity=0.75", backend.Events);
     }
 
+    [Fact]
+    public void DispatchMethodsDoNotAllocateManagedMemory()
+    {
+        SilentComputeBackend backend = new();
+        GpuRadianceCascadePipeline pipeline = new(backend);
+        RadianceCascadeSettings settings = RadianceCascadeSettings.Default with
+        {
+            CascadeCount = 2,
+            BaseRayCount = 8,
+            MaxRaySteps = 4,
+        };
+
+        DispatchAllRadianceMethods(pipeline, settings);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        DispatchAllRadianceMethods(pipeline, settings);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(0, allocated);
+    }
+
+    private static void DispatchAllRadianceMethods(GpuRadianceCascadePipeline pipeline, RadianceCascadeSettings settings)
+    {
+        pipeline.DispatchSdfInitialize(1, 2, 16, 16, 0.5f);
+        pipeline.DispatchSdfJump(2, 3, 16, 16, 4);
+        pipeline.DispatchCascadeBuild(3, 4, 5, 16, 16, settings, 0);
+        pipeline.DispatchMerge(5, 6, 7, 16, 16, 0, 0.5f);
+        pipeline.DispatchApply(8, 7, 9, 16, 16, 1f);
+    }
+
     private sealed class RecordingComputeBackend : IComputeBackend
     {
         private uint _nextHandle = 1;
@@ -129,6 +159,79 @@ public sealed class GpuRadianceCascadePipelineTests
         public void MemoryBarrier(MemoryBarrierMask barriers)
         {
             Events.Add($"Barrier:{barriers}");
+        }
+
+        public uint BeginTimerQuery(string passName)
+        {
+            return 0;
+        }
+
+        public void EndTimerQuery()
+        {
+        }
+
+        public bool TryGetTimerResult(uint queryHandle, out ulong elapsedNanoseconds)
+        {
+            elapsedNanoseconds = 0;
+            return false;
+        }
+
+        public void DeleteTimerQuery(uint queryHandle)
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class SilentComputeBackend : IComputeBackend
+    {
+        private uint _nextHandle = 1;
+
+        public ComputeBackendKind Kind => ComputeBackendKind.GlCompute;
+
+        public bool IsAvailable => true;
+
+        public ComputeKernel LoadKernel(string name, string source)
+        {
+            return new ComputeKernel(name, _nextHandle++);
+        }
+
+        public void BindStorageBuffer(uint bindingIndex, uint bufferHandle)
+        {
+        }
+
+        public void BindTexture(uint unit, uint textureHandle)
+        {
+        }
+
+        public void BindImage(uint unit, uint textureHandle, int level, bool layered, int layer, GLEnum access, GLEnum format)
+        {
+        }
+
+        public void SetUniform1(ComputeKernel kernel, string name, int value)
+        {
+        }
+
+        public void SetUniform1(ComputeKernel kernel, string name, float value)
+        {
+        }
+
+        public void SetUniform2(ComputeKernel kernel, string name, int x, int y)
+        {
+        }
+
+        public void SetUniform2(ComputeKernel kernel, string name, float x, float y)
+        {
+        }
+
+        public void Dispatch(ComputeKernel kernel, uint groupsX, uint groupsY, uint groupsZ)
+        {
+        }
+
+        public void MemoryBarrier(MemoryBarrierMask barriers)
+        {
         }
 
         public uint BeginTimerQuery(string passName)

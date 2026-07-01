@@ -87,6 +87,22 @@ public sealed class GpuAirSmokePipelineTests
         Assert.DoesNotContain("uDissipation", pipelineSource, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void DispatchDoesNotAllocateManagedMemory()
+    {
+        SilentComputeBackend backend = new();
+        GpuAirSmokePipeline pipeline = new(backend);
+        AirSmokeSettings settings = AirSmokeSettings.Default with { Enabled = true, Diffusion = 0.5f };
+
+        pipeline.DispatchMargolusStep(1, 2, 16, 16, 0, settings);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        pipeline.DispatchMargolusStep(1, 2, 16, 16, 1, settings);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(0, allocated);
+    }
+
     private static string ProjectPath(params string[] parts)
     {
         string path = AppContext.BaseDirectory;
@@ -159,6 +175,79 @@ public sealed class GpuAirSmokePipelineTests
         public void MemoryBarrier(MemoryBarrierMask barriers)
         {
             Events.Add($"Barrier:{barriers}");
+        }
+
+        public uint BeginTimerQuery(string passName)
+        {
+            return 0;
+        }
+
+        public void EndTimerQuery()
+        {
+        }
+
+        public bool TryGetTimerResult(uint queryHandle, out ulong elapsedNanoseconds)
+        {
+            elapsedNanoseconds = 0;
+            return false;
+        }
+
+        public void DeleteTimerQuery(uint queryHandle)
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class SilentComputeBackend : IComputeBackend
+    {
+        private uint _nextHandle = 1;
+
+        public ComputeBackendKind Kind => ComputeBackendKind.GlCompute;
+
+        public bool IsAvailable => true;
+
+        public ComputeKernel LoadKernel(string name, string source)
+        {
+            return new ComputeKernel(name, _nextHandle++);
+        }
+
+        public void BindStorageBuffer(uint bindingIndex, uint bufferHandle)
+        {
+        }
+
+        public void BindTexture(uint unit, uint textureHandle)
+        {
+        }
+
+        public void BindImage(uint unit, uint textureHandle, int level, bool layered, int layer, GLEnum access, GLEnum format)
+        {
+        }
+
+        public void SetUniform1(ComputeKernel kernel, string name, int value)
+        {
+        }
+
+        public void SetUniform1(ComputeKernel kernel, string name, float value)
+        {
+        }
+
+        public void SetUniform2(ComputeKernel kernel, string name, int x, int y)
+        {
+        }
+
+        public void SetUniform2(ComputeKernel kernel, string name, float x, float y)
+        {
+        }
+
+        public void Dispatch(ComputeKernel kernel, uint groupsX, uint groupsY, uint groupsZ)
+        {
+        }
+
+        public void MemoryBarrier(MemoryBarrierMask barriers)
+        {
         }
 
         public uint BeginTimerQuery(string passName)

@@ -39,7 +39,7 @@ public sealed class GpuComputeBloomPipeline
     /// </summary>
     public void DispatchBrightPass(uint sourceTexture, uint outputImage, int width, int height, float threshold)
     {
-        ValidateHandles(sourceTexture, outputImage);
+        ValidateHandlePair(sourceTexture, outputImage);
         ComputeDispatchSize groups = GpuComputeDispatchGrid.ForTexture2D(width, height);
         _backend.BindTexture(0, sourceTexture);
         BindOutput(outputImage);
@@ -55,7 +55,7 @@ public sealed class GpuComputeBloomPipeline
     /// </summary>
     public void DispatchDownsample(uint sourceTexture, uint outputImage, int width, int height, float texelX, float texelY)
     {
-        ValidateHandles(sourceTexture, outputImage);
+        ValidateHandlePair(sourceTexture, outputImage);
         ComputeDispatchSize groups = GpuComputeDispatchGrid.ForTexture2D(width, height);
         _backend.BindTexture(0, sourceTexture);
         BindOutput(outputImage);
@@ -88,7 +88,7 @@ public sealed class GpuComputeBloomPipeline
         float offset,
         float intensity)
     {
-        ValidateHandles(sourceTexture, baseTexture, outputImage);
+        ValidateHandleTriple(sourceTexture, baseTexture, outputImage);
         ComputeDispatchSize groups = GpuComputeDispatchGrid.ForTexture2D(width, height);
         _backend.BindTexture(0, sourceTexture);
         _backend.BindTexture(1, baseTexture);
@@ -108,7 +108,8 @@ public sealed class GpuComputeBloomPipeline
     /// </summary>
     public void DispatchUpsampleComposite(uint sceneTexture, uint bloomTexture, uint outputImage, int width, int height, float bloomIntensity)
     {
-        ValidateHandles(sceneTexture, bloomTexture, outputImage);
+        ValidateHandlePair(sceneTexture, bloomTexture);
+        ValidateHandle(outputImage);
         ComputeDispatchSize groups = GpuComputeDispatchGrid.ForTexture2D(width, height);
         _backend.BindTexture(0, sceneTexture);
         _backend.BindTexture(1, bloomTexture);
@@ -126,7 +127,7 @@ public sealed class GpuComputeBloomPipeline
     /// </summary>
     public void DispatchLightComposite(uint worldTexture, uint visibilityTexture, uint emissiveTexture, uint outputImage, int width, int height, float exposure)
     {
-        ValidateHandles(worldTexture, visibilityTexture, emissiveTexture, outputImage);
+        ValidateHandleQuad(worldTexture, visibilityTexture, emissiveTexture, outputImage);
         ComputeDispatchSize groups = GpuComputeDispatchGrid.ForTexture2D(width, height);
         _backend.BindTexture(0, worldTexture);
         _backend.BindTexture(1, visibilityTexture);
@@ -157,7 +158,7 @@ public sealed class GpuComputeBloomPipeline
         float offset,
         float? intensity)
     {
-        ValidateHandles(sourceTexture, outputImage);
+        ValidateHandlePair(sourceTexture, outputImage);
         ComputeDispatchSize groups = GpuComputeDispatchGrid.ForTexture2D(width, height);
         _backend.BindTexture(0, sourceTexture);
         BindOutput(outputImage);
@@ -184,14 +185,32 @@ public sealed class GpuComputeBloomPipeline
         _backend.MemoryBarrier(MemoryBarrierMask.ShaderImageAccessBarrierBit | MemoryBarrierMask.TextureFetchBarrierBit);
     }
 
-    private static void ValidateHandles(params uint[] handles)
+    private static void ValidateHandle(uint handle)
     {
-        foreach (uint handle in handles)
+        if (handle == 0)
         {
-            if (handle == 0)
-            {
-                throw new ArgumentException("compute 纹理句柄不能为 0。", nameof(handles));
-            }
+            throw new ArgumentException("compute 纹理句柄不能为 0。", nameof(handle));
         }
+    }
+
+    private static void ValidateHandlePair(uint first, uint second)
+    {
+        ValidateHandle(first);
+        ValidateHandle(second);
+    }
+
+    private static void ValidateHandleTriple(uint first, uint second, uint third)
+    {
+        ValidateHandle(first);
+        ValidateHandle(second);
+        ValidateHandle(third);
+    }
+
+    private static void ValidateHandleQuad(uint first, uint second, uint third, uint fourth)
+    {
+        ValidateHandle(first);
+        ValidateHandle(second);
+        ValidateHandle(third);
+        ValidateHandle(fourth);
     }
 }

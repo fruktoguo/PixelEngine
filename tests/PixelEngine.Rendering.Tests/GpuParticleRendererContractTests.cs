@@ -66,8 +66,24 @@ public sealed class GpuParticleRendererContractTests
         string source = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderPipeline.cs"));
 
         Assert.Contains("RenderGpuParticlesIfEnabled", source, StringComparison.Ordinal);
+        Assert.Contains("_computeGate.FeatureSwitches.GpuParticlesEnabled", source, StringComparison.Ordinal);
         Assert.True(source.IndexOf("_worldBlit.Render", StringComparison.Ordinal) < source.IndexOf("RenderGpuParticlesIfEnabled", StringComparison.Ordinal));
         Assert.True(source.IndexOf("RenderGpuParticlesIfEnabled", StringComparison.Ordinal) < source.IndexOf("_overlay.Render", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void RenderPipelineGatesGpuParticlesByG4FeatureSwitch()
+    {
+        string source = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderPipeline.cs"));
+        int methodStart = source.IndexOf("private void RenderGpuParticlesIfEnabled", StringComparison.Ordinal);
+        int methodEnd = source.IndexOf("private bool ShouldUseComputeBloom", StringComparison.Ordinal);
+
+        Assert.True(methodStart > 0);
+        Assert.True(methodEnd > methodStart);
+        string method = source[methodStart..methodEnd];
+        Assert.Contains("Settings.ParticleRenderMode != ParticleRenderMode.GpuPointSprite", method, StringComparison.Ordinal);
+        Assert.Contains("!_computeGate.FeatureSwitches.GpuParticlesEnabled", method, StringComparison.Ordinal);
+        Assert.True(method.IndexOf("!_computeGate.FeatureSwitches.GpuParticlesEnabled", StringComparison.Ordinal) < method.IndexOf("materials is null", StringComparison.Ordinal));
     }
 
     private static string ProjectPath(params string[] parts)

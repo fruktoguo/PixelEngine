@@ -109,6 +109,31 @@ public sealed class GpuComputeBloomPipelineTests
         Assert.Contains("句柄", exception.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void DispatchMethodsDoNotAllocateManagedMemory()
+    {
+        SilentComputeBackend backend = new();
+        GpuComputeBloomPipeline pipeline = new(backend);
+
+        DispatchAllBloomMethods(pipeline);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        DispatchAllBloomMethods(pipeline);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(0, allocated);
+    }
+
+    private static void DispatchAllBloomMethods(GpuComputeBloomPipeline pipeline)
+    {
+        pipeline.DispatchBrightPass(1, 2, 16, 16, 0.5f);
+        pipeline.DispatchDownsample(1, 2, 16, 16, 1f / 16f, 1f / 16f);
+        pipeline.DispatchDualKawaseDown(1, 2, 16, 16, 1f / 16f, 1f / 16f, 1.5f);
+        pipeline.DispatchDualKawaseUp(1, 2, 3, 16, 16, 1f / 16f, 1f / 16f, 1.5f, 1f);
+        pipeline.DispatchUpsampleComposite(1, 2, 3, 16, 16, 1f);
+        pipeline.DispatchLightComposite(1, 2, 3, 4, 16, 16, 1f);
+    }
+
     private sealed class RecordingComputeBackend : IComputeBackend
     {
         private uint _nextHandle = 1;
@@ -173,6 +198,79 @@ public sealed class GpuComputeBloomPipelineTests
         public void MemoryBarrier(MemoryBarrierMask barriers)
         {
             Events.Add($"Barrier:{barriers}");
+        }
+
+        public uint BeginTimerQuery(string passName)
+        {
+            return 0;
+        }
+
+        public void EndTimerQuery()
+        {
+        }
+
+        public bool TryGetTimerResult(uint queryHandle, out ulong elapsedNanoseconds)
+        {
+            elapsedNanoseconds = 0;
+            return false;
+        }
+
+        public void DeleteTimerQuery(uint queryHandle)
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class SilentComputeBackend : IComputeBackend
+    {
+        private uint _nextHandle = 1;
+
+        public ComputeBackendKind Kind => ComputeBackendKind.GlCompute;
+
+        public bool IsAvailable => true;
+
+        public ComputeKernel LoadKernel(string name, string source)
+        {
+            return new ComputeKernel(name, _nextHandle++);
+        }
+
+        public void BindStorageBuffer(uint bindingIndex, uint bufferHandle)
+        {
+        }
+
+        public void BindTexture(uint unit, uint textureHandle)
+        {
+        }
+
+        public void BindImage(uint unit, uint textureHandle, int level, bool layered, int layer, GLEnum access, GLEnum format)
+        {
+        }
+
+        public void SetUniform1(ComputeKernel kernel, string name, int value)
+        {
+        }
+
+        public void SetUniform1(ComputeKernel kernel, string name, float value)
+        {
+        }
+
+        public void SetUniform2(ComputeKernel kernel, string name, int x, int y)
+        {
+        }
+
+        public void SetUniform2(ComputeKernel kernel, string name, float x, float y)
+        {
+        }
+
+        public void Dispatch(ComputeKernel kernel, uint groupsX, uint groupsY, uint groupsZ)
+        {
+        }
+
+        public void MemoryBarrier(MemoryBarrierMask barriers)
+        {
         }
 
         public uint BeginTimerQuery(string passName)
