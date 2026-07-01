@@ -38,6 +38,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     /// <param name="camera">相机 facade；未提供时访问 <see cref="Camera" /> 会抛出明确异常。</param>
     /// <param name="input">输入 facade；未提供时访问 <see cref="Input" /> 会抛出明确异常。</param>
     /// <param name="lighting">光照 facade；未提供时访问 <see cref="Lighting" /> 会抛出明确异常。</param>
+    /// <param name="diagnostics">诊断 facade；未提供时访问 <see cref="Diagnostics" /> 会抛出明确异常。</param>
     public ScriptSimulationContext(
         Scene scene,
         CellGrid grid,
@@ -50,7 +51,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         PhysicsSystem? physics = null,
         ICameraApi? camera = null,
         IInputApi? input = null,
-        ILightingApi? lighting = null)
+        ILightingApi? lighting = null,
+        IDiagnosticsApi? diagnostics = null)
     {
         Scene = scene ?? throw new ArgumentNullException(nameof(scene));
         ArgumentNullException.ThrowIfNull(grid);
@@ -74,6 +76,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         CameraBackend = camera;
         InputBackend = input;
         LightingBackend = lighting;
+        DiagnosticsBackend = diagnostics;
     }
 
     private IEventBus? EventBackend { get; }
@@ -87,6 +90,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     private IInputApi? InputBackend { get; }
 
     private ILightingApi? LightingBackend { get; }
+
+    private IDiagnosticsApi? DiagnosticsBackend { get; }
 
     /// <summary>
     /// CA 内核，供 Hosting 相位驱动在 dirty swap 前落地脚本 cell 命令。
@@ -132,6 +137,9 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 
     /// <inheritdoc />
     public ILightingApi Lighting => LightingBackend ?? throw Unsupported(nameof(Lighting));
+
+    /// <inheritdoc />
+    public IDiagnosticsApi Diagnostics => DiagnosticsBackend ?? throw Unsupported(nameof(Diagnostics));
 
     /// <inheritdoc />
     public IEventBus Events => EventBackend ?? throw Unsupported(nameof(Events));

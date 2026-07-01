@@ -638,6 +638,7 @@ public sealed class Engine : IDisposable
         ICameraApi camera = ResolveCameraApi();
         IInputApi input = ResolveInputApi();
         ILightingApi lighting = ResolveLightingApi();
+        IDiagnosticsApi diagnostics = ResolveDiagnosticsApi();
         IAudioApi? audio = ResolveAudioApiOrNull();
         PhysicsSystem? physics = Context.TryGetService(out PhysicsSystem registeredPhysics)
             ? registeredPhysics
@@ -656,7 +657,8 @@ public sealed class Engine : IDisposable
             physics,
             camera,
             input,
-            lighting);
+            lighting,
+            diagnostics);
         Context.RegisterService(scriptContext);
         simulationDriver?.AttachScriptContext(scriptContext);
         AttachScripting(scriptContext, runtime);
@@ -846,6 +848,19 @@ public sealed class Engine : IDisposable
     private ILightingApi ResolveLightingApi()
     {
         return Context.TryGetService(out ILightingApi lighting) ? lighting : ResolveConcreteLightingApi();
+    }
+
+    private IDiagnosticsApi ResolveDiagnosticsApi()
+    {
+        if (Context.TryGetService(out IDiagnosticsApi diagnostics))
+        {
+            return diagnostics;
+        }
+
+        EngineScriptDiagnosticsApi created = new(Context.Counters, Context.Clock);
+        Context.RegisterService<IDiagnosticsApi>(created);
+        Context.RegisterService(created);
+        return created;
     }
 
     private ScriptLightingApi ResolveConcreteLightingApi()

@@ -2,6 +2,7 @@ using PixelEngine.Core;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
 using PixelEngine.Editor;
+using PixelEngine.Scripting;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -149,6 +150,34 @@ public sealed class EngineOverloadControllerTests
         Assert.Equal((int)EngineQualityTier.ReducedThermal, diagnostics.DegradationLevel);
         Assert.Equal("ReducedThermal", diagnostics.DegradationName);
         Assert.Equal(1, diagnostics.ConsecutiveOverBudgetFrames);
+    }
+
+    /// <summary>
+    /// 验证脚本诊断 API 从 Hosting 计数器导出 HUD 需要的核心指标。
+    /// </summary>
+    [Fact]
+    public void ScriptDiagnosticsApiCapturesHudCounters()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+        engine.Context.Counters.ActiveChunks = 3;
+        engine.Context.Counters.ResidentChunks = 5;
+        engine.Context.Counters.FreeParticles = 7;
+        engine.Context.Counters.RigidBodies = 2;
+        engine.Context.Counters.SimHz = 60;
+        _ = engine.RunOneTick(realDeltaSeconds: 0.02);
+
+        EngineScriptDiagnosticsApi api = new(engine.Context.Counters, engine.Context.Clock);
+        EngineDiagnosticsSnapshot snapshot = api.Capture();
+
+        Assert.Equal(engine.Context.Clock.FrameIndex, snapshot.FrameCount);
+        Assert.True(snapshot.FramesPerSecond > 0f);
+        Assert.Equal(60f, snapshot.SimHz);
+        Assert.Equal(3, snapshot.ActiveChunks);
+        Assert.Equal(5, snapshot.ResidentChunks);
+        Assert.Equal(7, snapshot.FreeParticles);
+        Assert.Equal(2, snapshot.RigidBodies);
     }
 
     private static void RegisterAllPhases(EngineBuilder builder, List<EnginePhase> phases)
