@@ -641,6 +641,7 @@ public sealed class ScriptInspectorHotReloadAdapter : IScriptInspectorHotReload
         {
             ScriptHotReloadStatus.NoPendingReload => "没有待处理脚本热重载",
             ScriptHotReloadStatus.CompileFailed => "脚本编译失败",
+            ScriptHotReloadStatus.ApplyFailed => "脚本热重载应用失败，旧脚本保持运行",
             ScriptHotReloadStatus.Reloaded => result.OldContextUnloaded ? "脚本热重载完成" : "脚本热重载完成，旧 ALC 尚未卸载",
             _ => throw new ArgumentOutOfRangeException(nameof(result), result.Status, "未知热重载状态。"),
         };

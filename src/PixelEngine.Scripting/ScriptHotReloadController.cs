@@ -80,7 +80,7 @@ public sealed class ScriptHotReloadController(Scene scene, IScriptContext contex
         HotReloadResult result = _service.ApplyPendingReload();
         return new ScriptHotReloadApplyResult(
             MapStatus(result.Status),
-            DiagnosticsToStrings(result.Diagnostics),
+            DiagnosticsToStrings(result.Diagnostics, result.Exception),
             result.OldContextUnloaded);
     }
 
@@ -96,17 +96,23 @@ public sealed class ScriptHotReloadController(Scene scene, IScriptContext contex
         {
             HotReloadStatus.NoPendingReload => ScriptHotReloadStatus.NoPendingReload,
             HotReloadStatus.CompileFailed => ScriptHotReloadStatus.CompileFailed,
+            HotReloadStatus.ApplyFailed => ScriptHotReloadStatus.ApplyFailed,
             HotReloadStatus.Reloaded => ScriptHotReloadStatus.Reloaded,
             _ => throw new ArgumentOutOfRangeException(nameof(status), status, "未知热重载状态。"),
         };
     }
 
-    private static string[] DiagnosticsToStrings(ImmutableArray<Diagnostic> diagnostics)
+    private static string[] DiagnosticsToStrings(ImmutableArray<Diagnostic> diagnostics, Exception? exception)
     {
-        string[] values = new string[diagnostics.Length];
+        string[] values = new string[diagnostics.Length + (exception is null ? 0 : 1)];
         for (int i = 0; i < diagnostics.Length; i++)
         {
             values[i] = diagnostics[i].ToString();
+        }
+
+        if (exception is not null)
+        {
+            values[^1] = exception.ToString();
         }
 
         return values;
@@ -161,6 +167,11 @@ public enum ScriptHotReloadStatus
     /// 脚本编译失败。
     /// </summary>
     CompileFailed,
+
+    /// <summary>
+    /// 脚本编译成功，但装载、实例化或状态恢复失败；旧脚本保持运行。
+    /// </summary>
+    ApplyFailed,
 
     /// <summary>
     /// 脚本已完成重载。
