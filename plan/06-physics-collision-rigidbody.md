@@ -190,11 +190,11 @@
 - [x] `ShapeBuilder.BuildBody`：`b2CreateBody`→每片 `b2ComputeHull`→`b2MakePolygon(radius=0)`→`b2CreatePolygonShape`→`b2Body_ApplyMassFromShapes`（绝不手填 `b2Polygon`）。
 
 ### 4.5 PixelEngine.Physics — 不可变 mask 与刚体包装（架构 §8.3/R6，不变式 #5）
-- [ ] `BodyLocalMask`：不可变 `{w,h,localOrigin,固体 bitset,material[]}`，POH 后备；作权威形状源，永不被往返侵蚀。
-- [ ] `PixelRigidBody`：`B2BodyId` + 不可变 mask + 上帧 transform + 上帧 stamp cell 列表 + bodyKey；owned 像素只存 `{bodyId,localX,localY,material}`。
-- [ ] `PhysicsWorld`：bodyKey↔`PixelRigidBody` 稠密数组 + 自由列表（池化）；`b2Body_SetUserData` 存 bodyKey（非托管指针）。
-- [ ] `RigidStampRegistry`：cell index→`{bodyKey,localX,localY}`，每帧 stamp 时重建，供 erase 与 damage 映射。
-- [ ] `RigidDamageQueue`：per-worker 无锁 MPSC 缓冲，相位 4 填充、相位 8a 排空。
+- [x] `BodyLocalMask`：不可变 `{w,h,localOrigin,固体 bitset,material[]}`，POH 后备；作权威形状源，永不被往返侵蚀。
+- [x] `PixelRigidBody`：`B2BodyId` + 不可变 mask + 上帧 transform + 上帧 stamp cell 列表 + bodyKey；owned 像素只存 `{bodyId,localX,localY,material}`。
+- [x] `PhysicsWorld`：bodyKey↔`PixelRigidBody` 稠密数组 + 自由列表（池化）；`b2Body_SetUserData` 存 bodyKey（非托管指针）。
+- [x] `RigidStampRegistry`：cell index→`{bodyKey,localX,localY}`，每帧 stamp 时重建，供 erase 与 damage 映射。
+- [x] `RigidDamageQueue`：per-worker 无锁 MPSC 缓冲，相位 4 填充、相位 8a 排空。
 
 ### 4.6 PixelEngine.Physics — 两世界同步（相位 8，不变式 #5）
 - [ ] `PhysicsSystem.SyncStep(dt)` 编排相位 8a→8e，严格与 CA 相位 4 错开（架构 §3.3）。
@@ -307,7 +307,7 @@
 - [x] 节点 2：`feat(physics): 自建 Box2D task-callback 桥(同步 fork-join)派发到 JobSystem`（对应 §4.2，架构 §14.2）。
 - [x] 节点 3：`feat(physics): 物理尺度与坐标转换(16px=1m, radius=0)`（对应 §4.3，架构 §8.1）。
 - [x] 节点 4：`feat(physics): 像素簇→刚体管线(CCL→MS→DP→PolyPartition→复合体)`（对应 §4.4，架构 §8.2）。
-- [ ] 节点 5：`feat(physics): 不可变 body-local mask 与刚体包装/registry/damage queue`（对应 §4.5，架构 §8.3/R6）。
+- [x] 节点 5：`feat(physics): 不可变 body-local mask 与刚体包装/registry/damage queue`（对应 §4.5，架构 §8.3/R6）。
 - [ ] 节点 6：`feat(physics): 两世界栅格化同步(erase→step→inverse-sample re-stamp)`（对应 §4.6，相位 8，不变式 #5）。
 - [ ] 节点 7：`feat(physics): 破坏/挖掘重建(CCL 拆分+父子速度转移+节流)`（对应 §4.7，架构 §8.4）。
 - [ ] 节点 8：`feat(physics): 静态地形局部用后即弃 collider`（对应 §4.8，架构 §8.1）。
