@@ -60,11 +60,11 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 > 这是性能加固的**审计表主体**。每项标注 [子系统/plan 文档 · 架构§]。完成并经判据验证后勾选。
 
 ### 4.1 SoA 数据布局
-- [ ] 确认 `Material`/`Flags`/`Lifetime`/`Temperature`/`Render` 均为独立连续数组（SoA），无 AoS struct 进 CA 热循环。[plan/03 · §7.1]
-- [ ] 对账每 cell 字节预算：sim 热态 ~5–7MB、含 render buffer ~17MB（1080p）、每常驻 chunk ~18–20KB；新增字段经评审。[plan/03/07 · §7.1/§12.2]
-- [ ] 确认颜色不入 cell（渲染色由材质纹理采样 + 温度 glow 在渲染相位生成）。[plan/08 · §7.1/不变式 #7]
-- [ ] 确认 AoS 16 字节 `Cell` 仅存在于工具/编辑路径，绝不进 sim pass。[plan/03/12 · §7.1]
-- [ ] `Temperature` 确为 1/4 分辨率（CELL=4）而非全分辨率每 cell。[plan/04 · §7.1/§7.5]
+- [x] 确认 `Material`/`Flags`/`Lifetime`/`Temperature`/`Render` 均为独立连续数组（SoA），无 AoS struct 进 CA 热循环。[plan/03 · §7.1]
+- [!] 阻塞：对账每 cell 字节预算：sim 热态 ~5–7MB、含 render buffer ~17MB（1080p）、每常驻 chunk ~18–20KB；新增字段经评审。[plan/03/07 · §7.1/§12.2] 当前 `Material ushort + Flags byte + Lifetime byte` 为 4B/cell，1080p sim 热态约 7.9MiB（8.3MB），加 BGRA render buffer 约 15.8MiB（16.6MB），单常驻 chunk 估算 19,968B 已落在 18–20KB；需决策是更新 sim 热态预算口径，还是进一步压缩 per-cell 热字段。
+- [x] 确认颜色不入 cell（渲染色由材质纹理采样 + 温度 glow 在渲染相位生成）。[plan/08 · §7.1/不变式 #7]
+- [x] 确认 AoS 16 字节 `Cell` 仅存在于工具/编辑路径，绝不进 sim pass。[plan/03/12 · §7.1]
+- [x] `Temperature` 确为 1/4 分辨率（CELL=4）而非全分辨率每 cell。[plan/04 · §7.1/§7.5]
 
 ### 4.2 稳态零托管分配
 - [ ] CA pass（相位 4）稳态零分配，`MemoryDiagnoser` 报 `Allocated == 0 B`。[plan/03 · §12.4]
