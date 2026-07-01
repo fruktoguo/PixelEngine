@@ -486,12 +486,12 @@ void main()
 
 // particle_pointsprite.vert
 layout(location = 0) in vec2 aWorldPosition;
-layout(location = 1) in uint aMaterialId;
-layout(location = 2) in uint aColorVariant;
-layout(location = 3) in float aRadiusPixels;
-layout(location = 4) in float aEmissive;
+layout(location = 1) in vec4 aColor;
+layout(location = 2) in uint aMaterialId;
+layout(location = 3) in uint aColorVariant;
+layout(location = 4) in float aRadiusPixels;
+layout(location = 5) in float aEmissive;
 
-uniform mat4 uCameraViewProjection;
 uniform vec2 uCameraWorldOrigin;
 uniform vec2 uViewportSize;
 uniform float uPixelsPerWorldUnit;
@@ -500,18 +500,24 @@ uniform float uPointSizeScale;
 flat out uint vMaterialId;
 flat out uint vColorVariant;
 flat out float vEmissive;
+out vec4 vColor;
 out vec2 vWorldPosition;
 
 void main()
 {
     // GPU particle buffer attributes mirror the render-side particle SoA/VBO packing.
     vec2 cameraRelativeWorldPosition = aWorldPosition - uCameraWorldOrigin;
-    gl_Position = uCameraViewProjection * vec4(cameraRelativeWorldPosition, 0.0, 1.0);
+    vec2 viewportPosition = cameraRelativeWorldPosition * uPixelsPerWorldUnit;
+    vec2 clipPosition = vec2(
+        (viewportPosition.x / max(uViewportSize.x, 1.0)) * 2.0 - 1.0,
+        1.0 - ((viewportPosition.y / max(uViewportSize.y, 1.0)) * 2.0));
+    gl_Position = vec4(clipPosition, 0.0, 1.0);
     gl_PointSize = max(1.0, aRadiusPixels * 2.0 * uPixelsPerWorldUnit * uPointSizeScale);
 
     vMaterialId = aMaterialId;
     vColorVariant = aColorVariant;
     vEmissive = aEmissive;
+    vColor = aColor;
     vWorldPosition = aWorldPosition;
 }
 """;
@@ -523,13 +529,13 @@ void main()
 #version 430
 
 // particle_pointsprite.frag
-layout(binding = 0) uniform sampler2DArray uMaterialTextureArray;
 uniform float uAlphaCutoff;
 uniform float uEmissiveScale;
 
 flat in uint vMaterialId;
 flat in uint vColorVariant;
 flat in float vEmissive;
+in vec4 vColor;
 in vec2 vWorldPosition;
 
 layout(location = 0) out vec4 oSceneColor;
@@ -549,11 +555,9 @@ void main()
         discard;
     }
 
-    float materialLayer = float(vMaterialId);
-    vec4 materialSample = texture(uMaterialTextureArray, vec3(spriteUv, materialLayer));
     float variant = float(vColorVariant & 255u) / 255.0;
     vec3 variantTint = mix(vec3(0.9, 0.95, 1.0), vec3(1.1, 1.0, 0.9), variant);
-    vec4 scene = vec4(materialSample.rgb * variantTint, materialSample.a);
+    vec4 scene = vec4(vColor.rgb * variantTint, vColor.a);
     if (scene.a <= uAlphaCutoff)
     {
         discard;

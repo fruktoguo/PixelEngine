@@ -73,9 +73,9 @@ public sealed class GpuComputeShaderSourcesTests
         Assert.Contains("aWorldPosition", vertex, StringComparison.Ordinal);
         Assert.Contains("aMaterialId", vertex, StringComparison.Ordinal);
         Assert.Contains("aColorVariant", vertex, StringComparison.Ordinal);
-        Assert.Contains("uCameraViewProjection", vertex, StringComparison.Ordinal);
         Assert.Contains("uCameraWorldOrigin", vertex, StringComparison.Ordinal);
         Assert.Contains("uViewportSize", vertex, StringComparison.Ordinal);
+        Assert.Contains("uPixelsPerWorldUnit", vertex, StringComparison.Ordinal);
         Assert.Contains("gl_Position", vertex, StringComparison.Ordinal);
         Assert.Contains("gl_PointSize", vertex, StringComparison.Ordinal);
         Assert.Contains("vMaterialId", vertex, StringComparison.Ordinal);
@@ -86,7 +86,7 @@ public sealed class GpuComputeShaderSourcesTests
         Assert.Contains("particle_pointsprite.frag", fragment, StringComparison.Ordinal);
         Assert.Contains("void main()", fragment, StringComparison.Ordinal);
         Assert.Contains("gl_PointCoord", fragment, StringComparison.Ordinal);
-        Assert.Contains("uMaterialTextureArray", fragment, StringComparison.Ordinal);
+        Assert.Contains("vColor", fragment, StringComparison.Ordinal);
         Assert.Contains("vMaterialId", fragment, StringComparison.Ordinal);
         Assert.Contains("vColorVariant", fragment, StringComparison.Ordinal);
         Assert.Contains("oSceneColor", fragment, StringComparison.Ordinal);

@@ -51,6 +51,11 @@ public sealed class RenderPipelineSettings
     public bool PreferComputeLighting { get; set; }
 
     /// <summary>
+    /// 自由粒子渲染模式。默认保持 plan/08 CPU stamp 路径；显式切到 GPU 时由管线在 world blit 后绘制 point-sprite。
+    /// </summary>
+    public ParticleRenderMode ParticleRenderMode { get; set; } = ParticleRenderMode.CpuStamp;
+
+    /// <summary>
     /// 校验当前设置。
     /// </summary>
     public void Validate()
@@ -74,6 +79,11 @@ public sealed class RenderPipelineSettings
         if (!float.IsFinite(CrtCurvature) || CrtCurvature < 0f)
         {
             throw new ArgumentOutOfRangeException(nameof(CrtCurvature), "CrtCurvature 必须为非负有限数值。");
+        }
+
+        if (!Enum.IsDefined(ParticleRenderMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(ParticleRenderMode), ParticleRenderMode, "未知自由粒子渲染模式。");
         }
     }
 }
