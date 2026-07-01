@@ -206,6 +206,32 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>
+    /// 接入脚本相机同步，使 Rendering/World 能消费脚本相机快照。
+    /// </summary>
+    /// <param name="window">可选渲染窗口；提供时每帧把窗口尺寸回写脚本相机视口。</param>
+    /// <returns>脚本相机同步器。</returns>
+    public ScriptCameraSynchronizer AttachCameraSynchronization(RenderWindow? window = null)
+    {
+        ThrowIfShutdown();
+        if (Context.TryGetService(out ScriptCameraSynchronizer existing))
+        {
+            return existing;
+        }
+
+        ScriptCameraApi camera = ResolveConcreteCameraApi();
+        WorldManager? world = Context.TryGetService(out WorldManager registeredWorld)
+            ? registeredWorld
+            : null;
+        ScriptCameraSynchronizer synchronizer = new(camera, world);
+        ScriptCameraSyncPhaseDriver driver = new(synchronizer, window);
+        Context.RegisterService(synchronizer);
+        Context.RegisterService(driver.GetType(), driver);
+        driver.RegisterPhases(Phases);
+        _ = synchronizer.Sync(window?.Width ?? 0, window?.Height ?? 0);
+        return synchronizer;
+    }
+
+    /// <summary>
     /// 基于已加载材质表装配一个固定尺寸 resident world，并把真实 Simulation 相位接入主循环。
     /// </summary>
     /// <param name="worldWidthCells">可玩世界宽度，单位 cell。</param>
@@ -332,6 +358,11 @@ public sealed class Engine : IDisposable
             lighting);
         simulationDriver?.AttachScriptContext(scriptContext);
         AttachScripting(scriptContext, runtime);
+        if (camera is ScriptCameraApi)
+        {
+            _ = AttachCameraSynchronization();
+        }
+
         return scriptContext;
     }
 
@@ -480,7 +511,12 @@ public sealed class Engine : IDisposable
 
     private ICameraApi ResolveCameraApi()
     {
-        if (Context.TryGetService(out ICameraApi camera))
+        return Context.TryGetService(out ICameraApi camera) ? camera : ResolveConcreteCameraApi();
+    }
+
+    private ScriptCameraApi ResolveConcreteCameraApi()
+    {
+        if (Context.TryGetService(out ScriptCameraApi camera))
         {
             return camera;
         }
