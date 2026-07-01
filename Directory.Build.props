@@ -20,4 +20,17 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
+  <!-- 由 tools/publish-r2r.* 以 -p:Channel=R2R 激活；不设置 baseline ISA，保留 CoreCLR 运行时 light-up。 -->
+  <PropertyGroup Condition="'$(Channel)' == 'R2R'">
+    <SelfContained>true</SelfContained>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <PublishReadyToRunComposite>true</PublishReadyToRunComposite>
+    <PublishSingleFile>false</PublishSingleFile>
+    <TieredCompilation>true</TieredCompilation>
+    <TieredPGO>true</TieredPGO>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+  </PropertyGroup>
+
 </Project>
