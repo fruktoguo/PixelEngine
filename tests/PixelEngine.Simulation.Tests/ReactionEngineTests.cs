@@ -123,6 +123,30 @@ public sealed class ReactionEngineTests
     }
 
     /// <summary>
+    /// 验证边界两侧 chunk 同帧均 dirty 时，反应只执行一次，另一侧因 parity 跳过。
+    /// </summary>
+    [Fact]
+    public void StepCaBoundaryReactionIsNotDoubledWhenBothChunksAreDirty()
+    {
+        TestChunkSource source = CreateHorizontalBoundaryNeighborhood(out Chunk center, out Chunk east);
+        Set(center, 63, 10, Fire);
+        Set(east, 0, 10, Wood);
+        center.SetCurrentDirty(DirtyRect.Full);
+        east.SetCurrentDirty(DirtyRect.Full);
+        ReactionSetup setup = CreateSetup(Reaction(Fire, Wood, Smoke, Ash, 255));
+        SimulationKernel kernel = new(source, new MaterialPropsTable(setup.Materials.Hot), reactionExecutor: setup.Engine);
+
+        kernel.StepCa();
+
+        Assert.Equal(Smoke, Get(center, 63, 10));
+        Assert.Equal(Ash, Get(east, 0, 10));
+        Assert.Equal(1, kernel.Diagnostics.ReactionSuccessCount);
+        Assert.Equal(1, kernel.Diagnostics.BoundaryReactionCount);
+        Assert.True(CellFlags.MatchesFrame(GetFlags(center, 63, 10), kernel.CurrentParity));
+        Assert.True(CellFlags.MatchesFrame(GetFlags(east, 0, 10), kernel.CurrentParity));
+    }
+
+    /// <summary>
     /// 验证 EmitHeat、SpawnParticle 与 GeneratesSmoke 副作用全部投递给 sink。
     /// </summary>
     [Fact]
@@ -331,6 +355,32 @@ public sealed class ReactionEngineTests
                 if (dx == 0 && dy == 0)
                 {
                     center = chunk;
+                }
+            }
+        }
+
+        return new TestChunkSource(chunks);
+    }
+
+    private static TestChunkSource CreateHorizontalBoundaryNeighborhood(out Chunk center, out Chunk east)
+    {
+        Chunk[] chunks = new Chunk[12];
+        int index = 0;
+        center = null!;
+        east = null!;
+        for (int dy = -1; dy <= 1; dy++)
+        {
+            for (int dx = -1; dx <= 2; dx++)
+            {
+                Chunk chunk = new(new ChunkCoord(dx, dy));
+                chunks[index++] = chunk;
+                if (dx == 0 && dy == 0)
+                {
+                    center = chunk;
+                }
+                else if (dx == 1 && dy == 0)
+                {
+                    east = chunk;
                 }
             }
         }
