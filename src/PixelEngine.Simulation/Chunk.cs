@@ -138,6 +138,48 @@ public sealed class Chunk
     }
 
     /// <summary>
+    /// 远区 chunk 本帧被降频跳过时，将 current dirty 保留到下一帧，避免 phase 6 swap 丢工作。
+    /// </summary>
+    internal void DeferCurrentDirty()
+    {
+        if (CurrentDirty.IsEmpty)
+        {
+            return;
+        }
+
+        WorkingDirty = WorkingDirty.Union(CurrentDirty);
+        State = ChunkState.Awake;
+    }
+
+    /// <summary>
+    /// 隔帧运行前将 dirty rect 内已有 cell 的 parity 调成“未处理本帧”。
+    /// </summary>
+    internal void PrepareCurrentDirtyForParity(byte parityBit)
+    {
+        DirtyRect rect = CurrentDirty;
+        if (rect.IsEmpty)
+        {
+            return;
+        }
+
+        byte staleParity = (byte)((parityBit ^ CellFlags.Parity) & CellFlags.Parity);
+        for (int ly = rect.MinY; ly <= rect.MaxY; ly++)
+        {
+            int row = ly * EngineConstants.ChunkSize;
+            for (int lx = rect.MinX; lx <= rect.MaxX; lx++)
+            {
+                int local = row + lx;
+                if (Material[local] == 0 && Flags[local] == 0)
+                {
+                    continue;
+                }
+
+                Flags[local] = CellFlags.SetParity(Flags[local], staleParity);
+            }
+        }
+    }
+
+    /// <summary>
     /// 直接设置当前 dirty rect，供测试、加载与后续帧边界 swap 使用。
     /// </summary>
     public void SetCurrentDirty(DirtyRect rect)
