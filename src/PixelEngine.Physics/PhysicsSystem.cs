@@ -419,6 +419,127 @@ public sealed class PhysicsSystem : IDisposable
     }
 
     /// <summary>
+    /// 从权威网格中的非空像素区域创建动态刚体，并把源像素转为 RigidOwned stamp。
+    /// </summary>
+    /// <param name="x">区域左上角 X 坐标。</param>
+    /// <param name="y">区域左上角 Y 坐标。</param>
+    /// <param name="width">区域宽度。</param>
+    /// <param name="height">区域高度。</param>
+    /// <returns>新建刚体的 bodyKey。</returns>
+    public int CreateBodyFromRegion(int x, int y, int width, int height)
+    {
+        ObjectDisposedException.ThrowIf(_shutdown, this);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        int area = checked(width * height);
+        byte[] solid = ArrayPool<byte>.Shared.Rent(area);
+        ushort[] materials = ArrayPool<ushort>.Shared.Rent(area);
+
+        try
+        {
+            solid.AsSpan(0, area).Clear();
+            materials.AsSpan(0, area).Clear();
+            int solidCount = CopyRegionMask(x, y, width, height, solid.AsSpan(0, area), materials.AsSpan(0, area));
+            if (solidCount == 0)
+            {
+                throw new InvalidOperationException("指定区域没有可转换为刚体的非空像素。");
+            }
+
+            Vector2 localOrigin = new(width * 0.5f, height * 0.5f);
+            BodyLocalMask mask = new(width, height, localOrigin, solid.AsSpan(0, area), materials.AsSpan(0, area));
+            if (!RigidBodyMaskShapeBuilder.TryBuildConvexPieces(mask, out ConvexPolygon[] pieces, out int pieceCount))
+            {
+                throw new InvalidOperationException("指定区域无法生成有效刚体凸片。");
+            }
+
+            Vector2 position = new(x + localOrigin.X, y + localOrigin.Y);
+            B2BodyId bodyId = ShapeBuilder.BuildBody(WorldId, pieces.AsSpan(0, pieceCount), position);
+            PixelRigidBody body = PhysicsWorld.AddBody(bodyId, mask);
+            ClearRegionMaskSource(x, y, width, height, solid.AsSpan(0, area));
+            Transform2D transform = new(position, 1f, 0f);
+            _ = RigidBodyRasterizer.StampInverseSampling(body, in transform, Grid, Registry);
+            body.PreviousTransform = transform;
+            return body.BodyKey;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(solid, clearArray: true);
+            ArrayPool<ushort>.Shared.Return(materials, clearArray: true);
+        }
+    }
+
+    /// <summary>
+    /// 尝试读取刚体当前 Box2D 变换。
+    /// </summary>
+    /// <param name="bodyKey">刚体 bodyKey。</param>
+    /// <param name="transform">读取成功时返回像素坐标系变换。</param>
+    /// <returns>刚体存在时返回 true。</returns>
+    public bool TryGetBodyTransform(int bodyKey, out Transform2D transform)
+    {
+        ObjectDisposedException.ThrowIf(_shutdown, this);
+        if (!PhysicsWorld.TryGetBody(bodyKey, out PixelRigidBody? body))
+        {
+            transform = default;
+            return false;
+        }
+
+        transform = PhysicsScale.ToTransform2D(Box2D.b2Body_GetTransform(body.BodyId));
+        return true;
+    }
+
+    /// <summary>
+    /// 对指定刚体施加线性冲量，冲量单位为像素质量单位每秒。
+    /// </summary>
+    /// <param name="bodyKey">刚体 bodyKey。</param>
+    /// <param name="impulsePixelsX">X 方向冲量。</param>
+    /// <param name="impulsePixelsY">Y 方向冲量。</param>
+    /// <returns>刚体存在并已施加时返回 true。</returns>
+    public bool ApplyLinearImpulse(int bodyKey, float impulsePixelsX, float impulsePixelsY)
+    {
+        ObjectDisposedException.ThrowIf(_shutdown, this);
+        if (!float.IsFinite(impulsePixelsX) || !float.IsFinite(impulsePixelsY))
+        {
+            throw new ArgumentOutOfRangeException(nameof(impulsePixelsX), "冲量必须是有限数值。");
+        }
+
+        if (!PhysicsWorld.TryGetBody(bodyKey, out PixelRigidBody? body))
+        {
+            return false;
+        }
+
+        B2Vec2 point = Box2D.b2Body_GetPosition(body.BodyId);
+        Box2D.b2Body_ApplyLinearImpulse(
+            body.BodyId,
+            new B2Vec2
+            {
+                X = PhysicsScale.PixelToPhysics(impulsePixelsX),
+                Y = PhysicsScale.PixelToPhysics(impulsePixelsY),
+            },
+            point,
+            wake: 1);
+        return true;
+    }
+
+    /// <summary>
+    /// 销毁指定刚体，并清除它上一帧 stamp 的 RigidOwned 像素。
+    /// </summary>
+    /// <param name="bodyKey">刚体 bodyKey。</param>
+    /// <returns>刚体存在并已销毁时返回 true。</returns>
+    public bool DestroyBody(int bodyKey)
+    {
+        ObjectDisposedException.ThrowIf(_shutdown, this);
+        if (!PhysicsWorld.TryGetBody(bodyKey, out PixelRigidBody? body))
+        {
+            return false;
+        }
+
+        _ = RigidBodyRasterizer.EraseAtCurrentTransform(body, Grid, Registry);
+        Box2D.b2DestroyBody(body.BodyId);
+        PhysicsWorld.RemoveBody(bodyKey);
+        return true;
+    }
+
+    /// <summary>
     /// 将当前活跃刚体 mask 的 CCL 连通块复制为 editor 调试快照；目标 span 不足时只写入可容纳的前 N 个。
     /// </summary>
     public int CopyConnectedComponentDebugSnapshots(Span<ConnectedComponentDebugSnapshot> destination, int fragmentPixelThreshold = 1)
@@ -541,6 +662,60 @@ public sealed class PhysicsSystem : IDisposable
             magnitude: result.CreatedBodies + result.FragmentPixels,
             count: (ushort)Math.Min(ushort.MaxValue, Math.Max(1, result.DamagedBodies)));
         _ = _eventBus.Channel<AudioEvent>().TryEnqueue(in audioEvent);
+    }
+
+    private int CopyRegionMask(
+        int worldX,
+        int worldY,
+        int width,
+        int height,
+        Span<byte> solid,
+        Span<ushort> materials)
+    {
+        int solidCount = 0;
+        for (int ly = 0; ly < height; ly++)
+        {
+            for (int lx = 0; lx < width; lx++)
+            {
+                int index = (ly * width) + lx;
+                int wx = worldX + lx;
+                int wy = worldY + ly;
+                ushort material = Grid.GetMaterial(wx, wy);
+                byte flags = Grid.FlagsAt(wx, wy);
+                if (material == 0 || CellFlags.Has(flags, CellFlags.RigidOwned))
+                {
+                    continue;
+                }
+
+                solid[index] = 1;
+                materials[index] = material;
+                solidCount++;
+            }
+        }
+
+        return solidCount;
+    }
+
+    private void ClearRegionMaskSource(int worldX, int worldY, int width, int height, ReadOnlySpan<byte> solid)
+    {
+        for (int ly = 0; ly < height; ly++)
+        {
+            for (int lx = 0; lx < width; lx++)
+            {
+                int index = (ly * width) + lx;
+                if (solid[index] == 0)
+                {
+                    continue;
+                }
+
+                int wx = worldX + lx;
+                int wy = worldY + ly;
+                Grid.MaterialAt(wx, wy) = 0;
+                Grid.FlagsAt(wx, wy) = 0;
+                Grid.LifetimeAt(wx, wy) = 0;
+                Grid.MarkDirty(wx, wy);
+            }
+        }
     }
 
     private int EraseAllBodies()

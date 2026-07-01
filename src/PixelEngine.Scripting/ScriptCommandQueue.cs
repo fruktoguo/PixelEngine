@@ -65,9 +65,9 @@ internal readonly record struct ScriptCommand(
             0);
     }
 
-    public static ScriptCommand CreateBodyFromRegion(int x, int y, int width, int height)
+    public static ScriptCommand CreateBodyFromRegion(BodyHandle body, int x, int y, int width, int height)
     {
-        return new ScriptCommand(ScriptCommandKind.CreateBodyFromRegion, x, y, width, height, default, default, default, default, 0, 0);
+        return new ScriptCommand(ScriptCommandKind.CreateBodyFromRegion, x, y, width, height, default, default, body, default, 0, 0);
     }
 
     public static ScriptCommand ApplyImpulse(BodyHandle body, float impulseX, float impulseY)

@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using PixelEngine.Physics;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
@@ -16,6 +17,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     private readonly MaterialFacade _materials;
     private readonly ParticleFacade _particles;
     private readonly SolidFacade _solids;
+    private readonly BodyFacade? _bodies;
     private readonly CharacterFacade _character;
     private ScriptCommand[] _drainBuffer = ArrayPool<ScriptCommand>.Shared.Rent(16);
     private bool _disposed;
@@ -59,6 +61,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         _materials = new MaterialFacade(materials);
         _particles = new ParticleFacade(_commands);
         _solids = new SolidFacade(grid);
+        _bodies = physics is null ? null : new BodyFacade(_commands, physics);
         _character = new CharacterFacade(grid, physics, time);
         Grid = grid;
         Kernel = kernel;
@@ -111,7 +114,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     public ISolidSampler Solids => _solids;
 
     /// <inheritdoc />
-    public IRigidBodyApi Bodies => throw Unsupported(nameof(Bodies));
+    public IRigidBodyApi Bodies => _bodies ?? throw Unsupported(nameof(Bodies));
 
     /// <inheritdoc />
     public ICharacterController Character => _character;
@@ -198,6 +201,48 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 case ScriptCommandKind.DestroyBody:
                 case ScriptCommandKind.MoveCharacter:
                     throw new InvalidOperationException($"脚本粒子命令目标收到不匹配命令：{command.Kind}。");
+                default:
+                    throw new InvalidOperationException($"未知脚本命令：{command.Kind}。");
+            }
+        }
+
+        return commands.Length;
+    }
+
+    /// <summary>
+    /// 在 Physics step 前落地脚本刚体命令。
+    /// </summary>
+    /// <returns>已消费的命令数量。</returns>
+    public int FlushPhysicsCommands()
+    {
+        ThrowIfDisposed();
+        Span<ScriptCommand> commands = Drain(ScriptCommandTarget.Physics);
+        if (commands.IsEmpty)
+        {
+            return 0;
+        }
+
+        BodyFacade bodies = _bodies ?? throw Unsupported(nameof(Bodies));
+        for (int i = 0; i < commands.Length; i++)
+        {
+            ref readonly ScriptCommand command = ref commands[i];
+            switch (command.Kind)
+            {
+                case ScriptCommandKind.CreateBodyFromRegion:
+                    bodies.CreateNow(command.Body, command.X, command.Y, command.Width, command.Height);
+                    break;
+                case ScriptCommandKind.ApplyImpulse:
+                    bodies.ApplyImpulseNow(command.Body, command.A, command.B);
+                    break;
+                case ScriptCommandKind.DestroyBody:
+                    bodies.DestroyNow(command.Body);
+                    break;
+                case ScriptCommandKind.SetCell:
+                case ScriptCommandKind.Paint:
+                case ScriptCommandKind.SpawnParticle:
+                case ScriptCommandKind.BurstParticles:
+                case ScriptCommandKind.MoveCharacter:
+                    throw new InvalidOperationException($"脚本 physics 命令目标收到不匹配命令：{command.Kind}。");
                 default:
                     throw new InvalidOperationException($"未知脚本命令：{command.Kind}。");
             }
@@ -444,6 +489,113 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         private bool IsSolidCell(int x, int y)
         {
             return grid.GetCellType(x, y) == CellType.Solid;
+        }
+    }
+
+    private sealed class BodyFacade(ScriptCommandQueue commands, PhysicsSystem physics) : IRigidBodyApi
+    {
+        private const int PendingBodyKey = -1;
+        private const int DestroyedBodyKey = -2;
+        private readonly List<int> _bodyKeys = [];
+
+        public BodyHandle CreateFromRegion(int x, int y, int width, int height)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+            BodyHandle handle = new(_bodyKeys.Count);
+            _bodyKeys.Add(PendingBodyKey);
+            commands.Enqueue(ScriptCommandTarget.Physics, ScriptCommand.CreateBodyFromRegion(handle, x, y, width, height));
+            return handle;
+        }
+
+        public bool TryGetTransform(BodyHandle handle, out BodyTransform transform)
+        {
+            if (!TryGetBodyKey(handle, out int bodyKey) || bodyKey < 0 ||
+                !physics.TryGetBodyTransform(bodyKey, out PixelEngine.Core.Mathematics.Transform2D physicsTransform))
+            {
+                transform = default;
+                return false;
+            }
+
+            transform = new BodyTransform(
+                physicsTransform.Position.X,
+                physicsTransform.Position.Y,
+                physicsTransform.Angle);
+            return true;
+        }
+
+        public void ApplyImpulse(BodyHandle handle, float impulseX, float impulseY)
+        {
+            ValidateFinite(impulseX, nameof(impulseX));
+            ValidateFinite(impulseY, nameof(impulseY));
+            _ = GetMappedSlot(handle);
+            commands.Enqueue(ScriptCommandTarget.Physics, ScriptCommand.ApplyImpulse(handle, impulseX, impulseY));
+        }
+
+        public void Destroy(BodyHandle handle)
+        {
+            _ = GetMappedSlot(handle);
+            commands.Enqueue(ScriptCommandTarget.Physics, ScriptCommand.DestroyBody(handle));
+        }
+
+        public void CreateNow(BodyHandle handle, int x, int y, int width, int height)
+        {
+            ref int slot = ref GetMappedSlot(handle);
+            if (slot != PendingBodyKey)
+            {
+                throw new InvalidOperationException("刚体创建命令对应的脚本句柄已被解析或销毁。");
+            }
+
+            slot = physics.CreateBodyFromRegion(x, y, width, height);
+        }
+
+        public void ApplyImpulseNow(BodyHandle handle, float impulseX, float impulseY)
+        {
+            if (TryGetBodyKey(handle, out int bodyKey) && bodyKey >= 0)
+            {
+                _ = physics.ApplyLinearImpulse(bodyKey, impulseX, impulseY);
+            }
+        }
+
+        public void DestroyNow(BodyHandle handle)
+        {
+            ref int slot = ref GetMappedSlot(handle);
+            if (slot >= 0)
+            {
+                _ = physics.DestroyBody(slot);
+            }
+
+            slot = DestroyedBodyKey;
+        }
+
+        private bool TryGetBodyKey(BodyHandle handle, out int bodyKey)
+        {
+            if ((uint)handle.Value >= (uint)_bodyKeys.Count)
+            {
+                bodyKey = DestroyedBodyKey;
+                return false;
+            }
+
+            bodyKey = _bodyKeys[handle.Value];
+            return bodyKey != DestroyedBodyKey;
+        }
+
+        private ref int GetMappedSlot(BodyHandle handle)
+        {
+            if ((uint)handle.Value >= (uint)_bodyKeys.Count)
+            {
+                throw new ArgumentOutOfRangeException(nameof(handle), handle, "未知刚体句柄。");
+            }
+
+            return ref CollectionsMarshal.AsSpan(_bodyKeys)[handle.Value];
+        }
+
+        private static void ValidateFinite(float value, string name)
+        {
+            if (!float.IsFinite(value))
+            {
+                throw new ArgumentOutOfRangeException(name, value, "参数必须是有限数值。");
+            }
         }
     }
 

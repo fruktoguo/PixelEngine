@@ -228,20 +228,24 @@ public sealed class ProjectGeneratorTests
             RedirectStandardOutput = true,
             UseShellExecute = false,
         };
+        startInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
+        startInfo.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
         foreach (string argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
         }
 
         using Process process = Process.Start(startInfo) ?? throw new InvalidOperationException("无法启动 dotnet。");
-        string output = process.StandardOutput.ReadToEnd();
-        string error = process.StandardError.ReadToEnd();
+        Task<string> outputTask = process.StandardOutput.ReadToEndAsync();
+        Task<string> errorTask = process.StandardError.ReadToEndAsync();
         if (!process.WaitForExit(milliseconds: 120_000))
         {
             process.Kill(entireProcessTree: true);
             throw new TimeoutException("dotnet run 超时。");
         }
 
+        string output = outputTask.GetAwaiter().GetResult();
+        string error = errorTask.GetAwaiter().GetResult();
         return new DotnetResult(process.ExitCode, output + error);
     }
 
