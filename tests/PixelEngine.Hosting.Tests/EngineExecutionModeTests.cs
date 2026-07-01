@@ -114,12 +114,90 @@ public sealed class EngineExecutionModeTests
         Assert.Equal(EngineConstants.SimHzDownscaled, engine.RequestedSimHz);
     }
 
+    /// <summary>
+    /// 验证 Editor Play session 服务经 Engine 切换当前态 Play/Edit。
+    /// </summary>
+    [Fact]
+    public void EngineEditorPlaySessionServiceDrivesCurrentStatePlay()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+        EngineEditorPlaySessionService service = new(engine);
+
+        EditorPlaySessionResult play = service.EnterPlayCurrent();
+        EditorPlaySessionResult edit = service.ExitPlay();
+
+        Assert.True(play.Succeeded);
+        Assert.True(edit.Succeeded);
+        Assert.Equal(EngineExecutionMode.Edit, engine.Mode);
+        Assert.Equal(EditorMode.Edit, edit.Snapshot.Mode);
+    }
+
+    /// <summary>
+    /// 验证临时 Play 缺少快照后端时明确失败，不进入 Play。
+    /// </summary>
+    [Fact]
+    public void EngineEditorPlaySessionServiceReportsMissingTemporarySnapshotStore()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+        EngineEditorPlaySessionService service = new(engine);
+        engine.EnterEditMode();
+
+        EditorPlaySessionResult result = service.EnterPlayTemporary();
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(EngineExecutionMode.Edit, engine.Mode);
+        Assert.Contains("缺少快照后端", result.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证临时 Play 经快照后端保存并在退出时恢复。
+    /// </summary>
+    [Fact]
+    public void EngineEditorPlaySessionServiceSavesAndRestoresTemporarySnapshot()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+        RecordingPlaySnapshotStore store = new();
+        EngineEditorPlaySessionService service = new(engine, store);
+
+        EditorPlaySessionResult play = service.EnterPlayTemporary();
+        EditorPlaySessionResult edit = service.ExitPlay();
+
+        Assert.True(play.Succeeded);
+        Assert.True(edit.Succeeded);
+        Assert.Equal(["save", "restore"], store.Calls);
+        Assert.False(edit.Snapshot.TemporarySnapshotActive);
+        Assert.Equal(EngineExecutionMode.Edit, engine.Mode);
+    }
+
     private static void RegisterAllPhases(EngineBuilder builder, List<EnginePhase> phases)
     {
         for (int i = 0; i < 12; i++)
         {
             EnginePhase phase = (EnginePhase)i;
             _ = builder.OnPhase(phase, context => phases.Add(context.Phase));
+        }
+    }
+
+    private sealed class RecordingPlaySnapshotStore : IEditorPlaySnapshotStore
+    {
+        public List<string> Calls { get; } = [];
+
+        public SaveLoadOperationResult SaveTemporarySnapshot()
+        {
+            Calls.Add("save");
+            return new SaveLoadOperationResult(true, "saved", null, null);
+        }
+
+        public SaveLoadOperationResult RestoreTemporarySnapshot()
+        {
+            Calls.Add("restore");
+            return new SaveLoadOperationResult(true, "restored", null, null);
         }
     }
 }

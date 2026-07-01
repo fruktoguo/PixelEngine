@@ -23,6 +23,7 @@ public sealed class EditorDockSpace
         PhysicsTuningWindowTitle,
         ParticleTuningWindowTitle,
         LightingTuningWindowTitle,
+        EditorModeWindowTitle,
         PerformanceHudWindowTitle,
         ConsoleDiagnosticsWindowTitle,
     ];
@@ -91,6 +92,11 @@ public sealed class EditorDockSpace
     /// 光照调参窗口标题。
     /// </summary>
     public const string LightingTuningWindowTitle = "光照调参";
+
+    /// <summary>
+    /// 编辑/运行模式窗口标题。
+    /// </summary>
+    public const string EditorModeWindowTitle = "编辑/运行";
 
     /// <summary>
     /// 性能 HUD 窗口标题。
@@ -186,6 +192,7 @@ public sealed class EditorDockSpace
         ImGuiP.DockBuilderDockWindow(PhysicsTuningWindowTitle, rightBottomNode);
         ImGuiP.DockBuilderDockWindow(ParticleTuningWindowTitle, rightBottomNode);
         ImGuiP.DockBuilderDockWindow(LightingTuningWindowTitle, rightBottomNode);
+        ImGuiP.DockBuilderDockWindow(EditorModeWindowTitle, bottomNode);
         ImGuiP.DockBuilderDockWindow(PerformanceHudWindowTitle, bottomNode);
         ImGuiP.DockBuilderDockWindow(ConsoleDiagnosticsWindowTitle, bottomNode);
         ImGuiP.DockBuilderFinish(dockspaceId);
