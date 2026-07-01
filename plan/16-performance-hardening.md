@@ -132,7 +132,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] 四级：整体 sim 降 30Hz（相位 3–8 每两帧一次，render 每帧，dt=1/30）。[plan/03 · §4.2/§4.3]
 - [x] 五级兜底：接受 <60fps 真实减速，**绝不 accumulator 追帧**。[plan/02 · §4.1/不变式 #6]
 - [x] 降级由 Core 诊断计时器驱动（连续超预算帧触发）。[plan/02 · §4.3/§17.1]
-- [ ] 每帧成本上限节流落实（形状重建每刚体每帧≤1次、合并像素移除、CCL off-thread）。[plan/06 · §4.3/§8.4/风险 R4]
+- [x] 每帧成本上限节流落实（形状重建每刚体每帧≤1次、合并像素移除、CCL off-thread）。[plan/06 · §4.3/§8.4/风险 R4]
 
 ### 4.10 大世界内存上限
 - [x] 常驻世界设硬上限（建议 ≤512MB，可配置）。[plan/07 · §12.2]
@@ -163,7 +163,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [ ] **GC 定档**：Workstation vs Server 实测定档完成；压测下 Gen0 不增长、无可感知停顿；跨界缓冲零拷贝、池化覆盖短命对象。[§12.4]
 - [x] **GPU 下放且权威留 CPU**：光照/bloom/高密度粒子/可选非权威 sim pass 在 GPU；权威网格在 CPU、无 readback 卡流水线；compute capability-gate 与回退生效。[§9.4/§9.5/不变式 #9]
 - [ ] **dirty-rect 真生效**：满屏静止场景 sim 成本实测 ≈ 0，叠层确认 sleeping 区零迭代；KeepAlive 无永久唤醒。[§5.4/风险 R1]
-- [ ] **过载降级链可逐级触发**：五级降级 + 节流全部实现并可由诊断计时器触发；压力下绝不进入 death spiral（不变式 #6）。[§4.2/§4.3]
+- [x] **过载降级链可逐级触发**：五级降级 + 节流全部实现并可由诊断计时器触发；压力下绝不进入 death spiral（不变式 #6）。[§4.2/§4.3]
 - [x] **内存上限守住**：常驻世界稳定 ≤ 配置上限，LRU 驱逐 + RLE+LZ4 生效，长漫游不无界增长。[§12.2]
 - [ ] **延迟+分支校准**：瓶颈分析以 cache-miss/分支误预测为据；多核加速曲线与 cells/frame 在目标硬件实测落表、回填架构指标。[§12.7/§12.8/§17.3]
 - [x] **工具链门禁运行**：BenchmarkDotNet perf 门禁在 CI 跑、回归视为 bug；反汇编流程可复现；debug overlay 在线；发行编译模式审计通过。[§17.1/§17.3/§12.3]
