@@ -64,7 +64,7 @@
 | body | `b2DefaultBodyDef` / `b2CreateBody` / `b2DestroyBody` | 相位 8a 建/毁刚体 |
 | 几何 | `b2ComputeHull` | 凸片顶点→凸包（架构 §8.2，恒先于 MakePolygon） |
 | 几何 | `b2MakePolygon` | `(in B2Hull, radius=0)` 锐利边缘（架构 §8.2 修正，R9） |
-| 几何 | `b2MakeSegment` | 静态地形短链段（§3.7） |
+| 几何 | `B2Segment` + `b2CreateSegmentShape` | Box2D v3.1.1 无 `b2MakeSegment` 导出，静态地形短链段直接传 segment 结构（§3.7） |
 | shape | `b2DefaultShapeDef` / `b2CreatePolygonShape` | 每凸片挂 body（v3 无 fixture，架构 §8.2） |
 | shape | `b2CreateSegmentShape` / `b2CreateChain` / `b2DestroyChain` | 静态地形 collider（§3.7） |
 | shape | `b2DestroyShape` | 重建时清旧 shape |
@@ -152,18 +152,18 @@
 ## 4. 实现清单
 
 ### 4.1 PixelEngine.Interop — Box2D 绑定
-- [ ] `Box2DLibrary`：库名常量 `"box2d"` + `ModuleInitializer` 注册 `NativeLibrary.SetDllImportResolver`（RID→`runtimes/<rid>/native/`），AOT 静态分歧留 `plan/15`（架构 §14.4）。
-- [ ] `Box2DTypes.cs`：blittable `readonly struct` 句柄 `B2WorldId`/`B2BodyId`/`B2ShapeId`/`B2ChainId`，与 v3.1 C ABI 逐字对齐。
-- [ ] `Box2DTypes.cs`：数学 `B2Vec2`/`B2Rot(C,S)`/`B2Transform`/`B2AABB`；几何 `B2Hull`/`B2Polygon`(inline fixed verts[8]/normals[8])/`B2Segment`。
-- [ ] `Box2DTypes.cs`：def 结构 `B2WorldDef`(含 enqueue/finish 函数指针 + workerCount + userTaskContext)/`B2BodyDef`/`B2ShapeDef`/`B2ChainDef`；枚举 `B2BodyType`。
-- [ ] 回调函数指针 typedef `b2TaskCallback`/`b2EnqueueTaskCallback`/`b2FinishTaskCallback`（`delegate* unmanaged`）。
-- [ ] `Box2DFunctions.cs`：`[LibraryImport]` 尺度 `b2SetLengthUnitsPerMeter`。
-- [ ] world：`b2DefaultWorldDef`/`b2CreateWorld`/`b2DestroyWorld`/`b2World_Step`/`b2World_GetBodyEvents`/`b2World_GetContactEvents`。
-- [ ] body：`b2DefaultBodyDef`/`b2CreateBody`/`b2DestroyBody`/`b2Body_GetUserData`/`b2Body_SetUserData`。
-- [ ] 几何：`b2ComputeHull`/`b2MakePolygon`(radius 参数)/`b2MakeSegment`。
-- [ ] shape：`b2DefaultShapeDef`/`b2CreatePolygonShape`/`b2CreateSegmentShape`/`b2CreateChain`/`b2DestroyChain`/`b2DestroyShape`。
-- [ ] 变换/速度/冲量/质量/休眠：`b2Body_GetPosition`/`GetRotation`/`GetTransform`/`SetTransform`/`GetLinearVelocity`/`SetLinearVelocity`/`GetAngularVelocity`/`SetAngularVelocity`/`ApplyLinearImpulse`/`ApplyForce`/`GetMass`/`ApplyMassFromShapes`/`SetAwake`/`IsAwake`/`Enable`/`Disable`。
-- [ ] 校验全部签名 blittable、无 `DllImport`、大 struct 走 `in`/`ref`/`out`（`AGENTS.md` §3）。
+- [x] `Box2DLibrary`：库名常量 `"box2d"` + `ModuleInitializer` 注册 `NativeLibrary.SetDllImportResolver`（RID→`runtimes/<rid>/native/`），AOT 静态分歧留 `plan/15`（架构 §14.4）。
+- [x] `Box2DTypes.cs`：blittable `readonly struct` 句柄 `B2WorldId`/`B2BodyId`/`B2ShapeId`/`B2ChainId`，与 v3.1 C ABI 逐字对齐。
+- [x] `Box2DTypes.cs`：数学 `B2Vec2`/`B2Rot(C,S)`/`B2Transform`/`B2AABB`；几何 `B2Hull`/`B2Polygon`(inline fixed verts[8]/normals[8])/`B2Segment`。
+- [x] `Box2DTypes.cs`：def 结构 `B2WorldDef`(含 enqueue/finish 函数指针 + workerCount + userTaskContext)/`B2BodyDef`/`B2ShapeDef`/`B2ChainDef`；枚举 `B2BodyType`。
+- [x] 回调函数指针 typedef `b2TaskCallback`/`b2EnqueueTaskCallback`/`b2FinishTaskCallback`（`delegate* unmanaged`）。
+- [x] `Box2DFunctions.cs`：`[LibraryImport]` 尺度 `b2SetLengthUnitsPerMeter`。
+- [x] world：`b2DefaultWorldDef`/`b2CreateWorld`/`b2DestroyWorld`/`b2World_Step`/`b2World_GetBodyEvents`/`b2World_GetContactEvents`。
+- [x] body：`b2DefaultBodyDef`/`b2CreateBody`/`b2DestroyBody`/`b2Body_GetUserData`/`b2Body_SetUserData`。
+- [x] 几何：`b2ComputeHull`/`b2MakePolygon`(radius 参数)；v3.1.1 header 无 `b2MakeSegment` 导出，segment 直接用 `B2Segment` + `b2CreateSegmentShape`。
+- [x] shape：`b2DefaultShapeDef`/`b2DefaultChainDef`/`b2CreatePolygonShape`/`b2CreateSegmentShape`/`b2CreateChain`/`b2DestroyChain`/`b2DestroyShape`。
+- [x] 变换/速度/冲量/质量/休眠：`b2Body_GetPosition`/`GetRotation`/`GetTransform`/`SetTransform`/`GetLinearVelocity`/`SetLinearVelocity`/`GetAngularVelocity`/`SetAngularVelocity`/`ApplyLinearImpulse`/`ApplyForce`/`GetMass`/`ApplyMassFromShapes`/`SetAwake`/`IsAwake`/`Enable`/`Disable`。
+- [x] 校验全部签名 blittable、无 `DllImport`、大 struct 走 `in`/`ref`/`out`（`AGENTS.md` §3）。
 
 ### 4.2 PixelEngine.Interop — task-callback 桥（架构 §14.2，R14）
 - [ ] `Box2DTaskBridge.BridgeContext`：pinned 结构，持 JobSystem 引用与批次状态（POH/`NativeMemory`）。
@@ -238,7 +238,7 @@
 ## 5. 验收标准
 
 ### 5.1 Interop 与 task 桥
-- [ ] interop smoke test：建 world→建一动态体→`b2World_Step`→读回坐标确有重力下落（`plan/14`）。
+- [x] interop smoke test：建 world→建一动态体→`b2World_Step`→读回坐标确有重力下落（`plan/14`）。
 - [ ] 全部绑定 blittable、零新 `DllImport`、`b2World_Step` 与 task 回调均无 `[SuppressGCTransition]`（代码审查 + 分析器）。
 - [ ] task 桥串行（workerCount=1）下 Step 结果正确；多线程下与串行**统计等价**（非 bit，架构 §6.1/§6.4）。
 - [ ] task 桥多线程经 §17.1 计时确认 physics 真并行（4 worker 较 1 worker Step 显著加速，R14）。
@@ -303,7 +303,7 @@
 
 按 `AGENTS.md` §6 每完成一个节点立即用中文 git 提交（`type(scope): 中文简述`，scope=`physics`/`core`，正文注明对应 plan 条目/架构 §）：
 
-- [ ] 节点 1：`feat(physics): Box2D v3.1 [LibraryImport] 薄绑定与 blittable 类型`（对应 §4.1，架构 §8.2/§14.3）。
+- [x] 节点 1：`feat(physics): Box2D v3.1 [LibraryImport] 薄绑定与 blittable 类型`（对应 §4.1，架构 §8.2/§14.3）。
 - [ ] 节点 2：`feat(physics): 自建 Box2D task-callback 桥(同步 fork-join)派发到 JobSystem`（对应 §4.2，架构 §14.2）。
 - [ ] 节点 3：`feat(physics): 物理尺度与坐标转换(16px=1m, radius=0)`（对应 §4.3，架构 §8.1）。
 - [ ] 节点 4：`feat(physics): 像素簇→刚体管线(CCL→MS→DP→PolyPartition→复合体)`（对应 §4.4，架构 §8.2）。
