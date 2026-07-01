@@ -24,7 +24,7 @@ public sealed class PauseMenu : Behaviour
     /// <summary>
     /// 最近一次阻塞原因；为空表示菜单可提供已落地的控制项。
     /// </summary>
-    public string BlockedReason { get; private set; } = "重开关卡 / 打开内嵌 Editor 的脚本公开控制 API 尚未落地。";
+    public string BlockedReason { get; private set; } = "重开关卡后端尚未接入。";
 
     /// <inheritdoc />
     protected override void OnUpdate(float dt)
@@ -71,6 +71,24 @@ public sealed class PauseMenu : Behaviour
         if (gui.Button("继续"))
         {
             CloseAndResume();
+        }
+
+        gui.SameLine();
+        if (gui.Button("打开 Editor"))
+        {
+            RuntimeControlResult result = Context.Runtime.OpenEditor();
+            _status = result.Message;
+        }
+
+        gui.SameLine();
+        if (gui.Button("重开"))
+        {
+            RuntimeControlResult result = Context.Runtime.RequestRestartCurrentScene();
+            _status = result.Message;
+            if (!result.Success)
+            {
+                BlockedReason = result.Message;
+            }
         }
 
         gui.SameLine();

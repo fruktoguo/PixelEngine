@@ -71,6 +71,47 @@ public sealed class EditorApp : IDisposable
     }
 
     /// <summary>
+    /// 将指定标题的已注册面板设为可见。
+    /// </summary>
+    /// <param name="title">面板标题。</param>
+    /// <returns>找到并打开面板时为 true。</returns>
+    public bool TryShowPanel(string title)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        for (int i = 0; i < _panels.Count; i++)
+        {
+            IEditorPanel panel = _panels[i];
+            if (string.Equals(panel.Title, title, StringComparison.Ordinal))
+            {
+                panel.Visible = true;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 将当前 dockspace 中注册的所有面板设为可见。
+    /// </summary>
+    /// <returns>被打开的面板数量。</returns>
+    public int ShowAllPanels()
+    {
+        int count = 0;
+        for (int i = 0; i < _panels.Count; i++)
+        {
+            if (!_panels[i].Visible)
+            {
+                _panels[i].Visible = true;
+            }
+
+            count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>
     /// 初始化 Editor。禁用时不触碰 ImGui 后端。
     /// </summary>
     public void Initialize()

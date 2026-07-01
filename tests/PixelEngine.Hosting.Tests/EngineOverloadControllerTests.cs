@@ -213,6 +213,32 @@ public sealed class EngineOverloadControllerTests
         Assert.True(quit.Success);
         Assert.True(engine.IsShutdownRequested);
         Assert.True(api.Capture().IsShutdownRequested);
+
+        RuntimeControlResult editor = api.OpenEditor();
+        Assert.False(editor.Success);
+        Assert.Contains("headless", editor.Message, StringComparison.Ordinal);
+
+        RuntimeControlResult restart = api.RequestRestartCurrentScene();
+        Assert.False(restart.Success);
+        Assert.Contains("重开关卡", restart.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证脚本请求打开 Editor 时不会在未接入窗口渲染桥的进程里伪造成功。
+    /// </summary>
+    [Fact]
+    public void ScriptRuntimeControlApiReportsEditorUnavailableBeforeWindowRuntime()
+    {
+        using Engine engine = new EngineBuilder()
+            .EnableEditor()
+            .WithWorkerCount(1)
+            .Build();
+        EngineScriptRuntimeControlApi api = new(engine);
+
+        RuntimeControlResult result = api.OpenEditor();
+
+        Assert.False(result.Success);
+        Assert.Contains("DockSpace", result.Message, StringComparison.Ordinal);
     }
 
     private static void RegisterAllPhases(EngineBuilder builder, List<EnginePhase> phases)

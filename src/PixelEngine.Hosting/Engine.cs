@@ -129,6 +129,24 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>
+    /// 请求显示已启用的内嵌 Editor dockspace；未以 Editor 模式启动时返回失败而不伪造 UI。
+    /// </summary>
+    /// <returns>运行时控制结果。</returns>
+    public RuntimeControlResult OpenEditor()
+    {
+        ThrowIfShutdown();
+        return Context.Options.Headless
+            ? new RuntimeControlResult(false, "headless 模式没有窗口，不能打开 Editor。")
+            : !Context.Options.EnableEditor
+            ? new RuntimeControlResult(false, "当前进程未启用 Editor，请使用 --editor 启动。")
+            : !Context.TryGetService(out EditorApp editor) || !editor.Options.EnableDockSpace
+            ? new RuntimeControlResult(false, "Editor DockSpace 尚未接入窗口运行时。")
+            : Context.TryGetService(out EditorRenderBridge _)
+            ? new RuntimeControlResult(true, $"内嵌 Editor 已打开，显示 {editor.ShowAllPanels()} 个面板。")
+            : new RuntimeControlResult(false, "Editor 渲染桥尚未接入 Rendering 管线。");
+    }
+
+    /// <summary>
     /// 注册包含 Demo Behaviour 的脚本程序集，供脚本宿主在装配期发现类型。
     /// </summary>
     /// <param name="assembly">脚本程序集。</param>
@@ -386,12 +404,59 @@ public sealed class Engine : IDisposable
             });
         if (enableDockSpace)
         {
-            created.AddPanel(new DebugOverlayPanel(ResolveDebugOverlaySettings()));
+            RegisterDefaultEditorPanels(created);
         }
 
         Context.RegisterService(created);
         _ownedRuntimeResources.Add(created);
         return created;
+    }
+
+    private void RegisterDefaultEditorPanels(EditorApp editor)
+    {
+        editor.AddPanel(new ViewportPanel(() => Context.TryGetService(out RenderPipeline pipeline)
+            ? pipeline.CurrentViewportTexture
+            : default));
+        editor.AddPanel(new SceneHierarchyPanel(new RuntimeSceneHierarchyDataSource(
+            Context.TryGetService(out PixelEngine.Scripting.Scene scriptScene) ? scriptScene : null,
+            Context.TryGetService(out PhysicsSystem physics) ? physics : null)));
+        editor.AddPanel(new AssetBrowserPanel(new FileSystemAssetBrowserDataSource(Context.Options.ContentRoot)));
+        if (Context.TryGetService(out PixelEngine.Scripting.Scene inspectorScene))
+        {
+            editor.AddPanel(new ScriptInspectorPanel(
+                inspectorScene,
+                Context.TryGetService(out MaterialTable inspectorMaterials) ? inspectorMaterials : null));
+        }
+
+        if (Context.TryGetService(out ISimulationEditApi editApi) &&
+            Context.TryGetService(out MaterialTable materials))
+        {
+            editor.AddPanel(new MaterialBrushPalettePanel(materials, editApi));
+        }
+
+        if (Context.TryGetService(out ISimulationInspectApi inspectApi))
+        {
+            editor.AddPanel(new WorldInspectorPanel(inspectApi));
+        }
+
+        editor.AddPanel(new DebugOverlayPanel(ResolveDebugOverlaySettings()));
+        editor.AddPanel(new PerformanceHudPanel());
+        editor.AddPanel(new SimulationControlToolbar(new EngineSimulationControlService(this)));
+        editor.AddPanel(new EditorModePanel(new EngineEditorPlaySessionService(this)));
+        if (Context.TryGetService(out PhysicsSystem tuningPhysics))
+        {
+            editor.AddPanel(new PhysicsTuningPanel(new PhysicsSystemTuningService(tuningPhysics)));
+        }
+
+        if (Context.TryGetService(out ParticleSystem particles))
+        {
+            editor.AddPanel(new ParticleTuningPanel(new ParticleSystemTuningService(particles)));
+        }
+
+        if (Context.TryGetService(out RenderPipeline renderPipeline))
+        {
+            editor.AddPanel(new LightingTuningPanel(new RenderPipelineLightingTuningService(renderPipeline.Settings)));
+        }
     }
 
     private ScriptInputRoute ResolveGuiInputRoute()
@@ -1129,6 +1194,11 @@ public sealed class Engine : IDisposable
 
         SimulationPhaseDriver driver = new(chunks, grid, kernel, particles, temperature, materials);
         driver.RegisterPhases(Phases);
+        SimulationEditApi editApi = new(
+            kernel,
+            materials,
+            temperature,
+            Context.TryGetService(out IRigidCellOwnershipLookup ownership) ? ownership : null);
 
         Context.RegisterService(driver.GetType(), driver);
         Context.RegisterService(chunks);
@@ -1137,6 +1207,9 @@ public sealed class Engine : IDisposable
         Context.RegisterService(kernel);
         Context.RegisterService(particles);
         Context.RegisterService(temperature);
+        Context.RegisterService<ISimulationEditApi>(editApi);
+        Context.RegisterService<ISimulationInspectApi>(editApi);
+        Context.RegisterService(editApi);
         Context.RegisterService(EngineServiceRole.WorldAccess, grid);
         Context.RegisterService(EngineServiceRole.ParticleService, particles);
         Context.RegisterService(EngineServiceRole.MaterialRegistry, materials);
