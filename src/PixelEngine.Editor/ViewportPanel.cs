@@ -7,20 +7,10 @@ namespace PixelEngine.Editor;
 /// <summary>
 /// 显示 Rendering 最终画面纹理的世界视口面板。
 /// </summary>
-#pragma warning disable IDE0290
-public sealed class ViewportPanel : IEditorPanel
-#pragma warning restore IDE0290
+/// <param name="textureProvider">最终画面纹理提供器。</param>
+public sealed class ViewportPanel(Func<RenderViewportTexture> textureProvider) : IEditorPanel
 {
-    private readonly Func<RenderViewportTexture> _textureProvider;
-
-    /// <summary>
-    /// 创建世界视口面板。
-    /// </summary>
-    /// <param name="textureProvider">最终画面纹理提供器。</param>
-    public ViewportPanel(Func<RenderViewportTexture> textureProvider)
-    {
-        _textureProvider = textureProvider ?? throw new ArgumentNullException(nameof(textureProvider));
-    }
+    private readonly Func<RenderViewportTexture> _textureProvider = textureProvider ?? throw new ArgumentNullException(nameof(textureProvider));
 
     /// <inheritdoc />
     public string Title => EditorDockSpace.ViewportWindowTitle;
