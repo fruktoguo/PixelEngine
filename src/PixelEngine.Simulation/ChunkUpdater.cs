@@ -308,6 +308,7 @@ internal static class ChunkUpdater
         byte parityBit,
         ref Pcg32 rng)
     {
+        ValidateReactionNeighbor(wx, wy, neighborX, neighborY);
         ushort neighborMaterial = window.GetMaterial(neighborX, neighborY);
         if (neighborMaterial == 0)
         {
@@ -325,6 +326,15 @@ internal static class ChunkUpdater
         }
 
         return reacted;
+    }
+
+    private static void ValidateReactionNeighbor(int wx, int wy, int neighborX, int neighborY)
+    {
+        int distance = Math.Abs(neighborX - wx) + Math.Abs(neighborY - wy);
+        if (distance != 1)
+        {
+            throw new InvalidOperationException("反应目标必须是 von Neumann 邻居，确保跨界写恒在 32px halo 内。");
+        }
     }
 
     private static void MarkReactionTouchedCell(
