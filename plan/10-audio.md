@@ -164,7 +164,7 @@ OpenAL 封装与生命周期：
 - [x] 音频派发步骤接入帧尾（相位 8 后、相位 10 前），仅事件入队 / 排空 / 设源参数，计入 §1.4「音频派发 ≤1ms」（架构 §10.3、§17.1）。
 - [x] render-only 帧（`simSteppedThisFrame==false`）仍推进 voice / ambient / listener，ring 空，声场连续（架构 §4.2）。
 - [x] `AudioDiagnostics` 向 Core 诊断注册：派发耗时、drained/coalesced/dropped、活跃 voice / ambient 数、steal 次数、clip 计数（架构 §17.1）。
-- [x] `AudioSettings`：主 / 类别音量、`MaxVoices`/`MaxAmbientVoices`/`PixelsPerMeter`/ 距离模型 /`PerTypeCap`/`CoalesceBucketSize`，运行时可调。
+- [ ] `AudioSettings`：主 / 类别音量、`MaxVoices`/`MaxAmbientVoices`/`PixelsPerMeter`/ 距离模型 /`PerTypeCap`/`CoalesceBucketSize`，运行时可调。
 
 ---
 
@@ -177,7 +177,7 @@ OpenAL 封装与生命周期：
 - [x] **冷却去重生效**：同 `(material,type)` 在 `CooldownTicks` 内的二次事件被抑制。
 - [x] **零分配**：稳态帧的音频派发路径零托管堆分配（BenchmarkDotNet `MemoryDiagnoser` 或分配计数器验证，AGENTS §3/§7）。
 - [x] **预算达标**：音频派发耗时计入并满足 §1.4「游戏逻辑 + 音频派发 ≤1ms」；混音 / 解码不出现在主线程帧时间分项（架构 §10.3，诊断 HUD 验证）。
-- [x] **定位正确**：声源 pan 与衰减随 listener / 相机移动正确变化（左右像素声像、远近音量）。
+- [ ] **定位正确**：声源 pan 与衰减随 listener / 相机移动正确变化（左右像素声像、远近音量）。
 - [x] **与降频一致**：sim 降到 30Hz 时事件密度随之下降、听感与画面同步；render-only 帧声场连续无跳变（架构 §4.2/§10.3）。
 - [x] **voice stealing**：voice 池压满时按优先级 / 距离 / 年龄抢占，无爆音 / 无泄漏。
 - [x] **ambient 交叉淡变**：材质区域进出时 ambient 平滑淡入淡出、滞回无反复启停。
