@@ -12,6 +12,36 @@ namespace PixelEngine.Demo.Tests;
 public sealed class PlayerControllerIntegrationTests
 {
     /// <summary>
+    /// 验证 Demo 材质笔刷会响应数字键、滚轮和鼠标按钮，并按相机世界坐标写入/擦除 cell。
+    /// </summary>
+    [Fact]
+    public void MaterialBrushSelectsRadiusPaintsAndErasesWorldCells()
+    {
+        MaterialTable materials = DemoMaterials();
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
+        MaterialBrush brush = scene.CreateEntity().AddComponent<MaterialBrush>();
+
+        engine.RunHeadlessTicks(1);
+        input.Update([Key.Digit6], [], mouseX: 12.25f, mouseY: 15.75f, wheelY: 1f);
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(5, brush.SelectedIndex);
+        Assert.Equal("stone", brush.SelectedMaterialName);
+        Assert.Equal(5, brush.Radius);
+
+        input.Update([], [MouseButton.Left], mouseX: 12.25f, mouseY: 15.75f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(stone, grid.MaterialAt(12, 15));
+
+        input.Update([], [MouseButton.Right], mouseX: 12.25f, mouseY: 15.75f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal((ushort)0, grid.MaterialAt(12, 15));
+    }
+
+    /// <summary>
     /// 验证 Demo 相机脚本会跟随玩家、写入缩放，并把中心夹在关卡边界内。
     /// </summary>
     [Fact]
@@ -134,9 +164,14 @@ public sealed class PlayerControllerIntegrationTests
         return CreateScriptEngine(typeof(PlayerController), out input, out grid, out _);
     }
 
-    private static Engine CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out ScriptCameraApi camera, out ScriptScene scene)
+    private static Engine CreateManualScriptEngine(
+        out ScriptInputApi input,
+        out CellGrid grid,
+        out ScriptCameraApi camera,
+        out ScriptScene scene,
+        MaterialTable? materials = null)
     {
-        Engine engine = CreateBaseEngine(out input, out grid, out camera);
+        Engine engine = CreateBaseEngine(out input, out grid, out camera, materials: materials);
         scene = new ScriptScene();
         engine.Context.RegisterService(scene);
         _ = engine.AttachScriptingFromServices();
@@ -154,9 +189,14 @@ public sealed class PlayerControllerIntegrationTests
         return engine;
     }
 
-    private static Engine CreateBaseEngine(out ScriptInputApi input, out CellGrid grid, out ScriptCameraApi camera, Type? entryType = null)
+    private static Engine CreateBaseEngine(
+        out ScriptInputApi input,
+        out CellGrid grid,
+        out ScriptCameraApi camera,
+        Type? entryType = null,
+        MaterialTable? materials = null)
     {
-        MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+        materials ??= Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
         EngineBuilder builder = new EngineBuilder()
             .UseHeadless()
             .UseDeterministicMode();
@@ -249,6 +289,22 @@ public sealed class PlayerControllerIntegrationTests
         }
 
         return new MaterialTable(materials);
+    }
+
+    private static MaterialTable DemoMaterials()
+    {
+        return Materials(
+            ("empty", CellType.Empty),
+            ("sand", CellType.Powder),
+            ("water", CellType.Liquid),
+            ("oil", CellType.Liquid),
+            ("lava", CellType.Liquid),
+            ("fire", CellType.Gas),
+            ("stone", CellType.Solid),
+            ("wood", CellType.Solid),
+            ("acid", CellType.Liquid),
+            ("ice", CellType.Solid),
+            ("metal", CellType.Solid));
     }
 
     private sealed class NoOpAudioApi : IAudioApi
