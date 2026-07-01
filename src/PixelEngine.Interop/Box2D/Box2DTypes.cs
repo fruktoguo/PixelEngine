@@ -215,7 +215,7 @@ public struct B2MassData
 public readonly unsafe struct B2TaskCallback
 {
     /// <summary>原生函数指针类型。</summary>
-    public readonly delegate* unmanaged<int, int, uint, void*, void> Pointer;
+    public readonly delegate* unmanaged[Cdecl]<int, int, uint, void*, void> Pointer;
 }
 
 /// <summary>
@@ -224,7 +224,7 @@ public readonly unsafe struct B2TaskCallback
 public readonly unsafe struct B2EnqueueTaskCallback
 {
     /// <summary>原生函数指针类型。</summary>
-    public readonly delegate* unmanaged<delegate* unmanaged<int, int, uint, void*, void>, int, int, void*, void*, void*> Pointer;
+    public readonly delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<int, int, uint, void*, void>, int, int, void*, void*, void*> Pointer;
 }
 
 /// <summary>
@@ -233,7 +233,7 @@ public readonly unsafe struct B2EnqueueTaskCallback
 public readonly unsafe struct B2FinishTaskCallback
 {
     /// <summary>原生函数指针类型。</summary>
-    public readonly delegate* unmanaged<void*, void*, void> Pointer;
+    public readonly delegate* unmanaged[Cdecl]<void*, void*, void> Pointer;
 }
 
 /// <summary>
@@ -242,7 +242,7 @@ public readonly unsafe struct B2FinishTaskCallback
 public readonly unsafe struct B2FrictionCallback
 {
     /// <summary>原生函数指针类型。</summary>
-    public readonly delegate* unmanaged<float, int, float, int, float> Pointer;
+    public readonly delegate* unmanaged[Cdecl]<float, int, float, int, float> Pointer;
 }
 
 /// <summary>
@@ -251,7 +251,7 @@ public readonly unsafe struct B2FrictionCallback
 public readonly unsafe struct B2RestitutionCallback
 {
     /// <summary>原生函数指针类型。</summary>
-    public readonly delegate* unmanaged<float, int, float, int, float> Pointer;
+    public readonly delegate* unmanaged[Cdecl]<float, int, float, int, float> Pointer;
 }
 
 /// <summary>
@@ -282,10 +282,10 @@ public unsafe struct B2WorldDef
     public float MaximumLinearSpeed;
 
     /// <summary>摩擦混合回调。</summary>
-    public delegate* unmanaged<float, int, float, int, float> FrictionCallback;
+    public delegate* unmanaged[Cdecl]<float, int, float, int, float> FrictionCallback;
 
     /// <summary>弹性混合回调。</summary>
-    public delegate* unmanaged<float, int, float, int, float> RestitutionCallback;
+    public delegate* unmanaged[Cdecl]<float, int, float, int, float> RestitutionCallback;
 
     /// <summary>是否启用 sleep。</summary>
     public byte EnableSleep;
@@ -297,10 +297,10 @@ public unsafe struct B2WorldDef
     public int WorkerCount;
 
     /// <summary>task enqueue 回调。</summary>
-    public delegate* unmanaged<delegate* unmanaged<int, int, uint, void*, void>, int, int, void*, void*, void*> EnqueueTask;
+    public delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<int, int, uint, void*, void>, int, int, void*, void*, void*> EnqueueTask;
 
     /// <summary>task finish 回调。</summary>
-    public delegate* unmanaged<void*, void*, void> FinishTask;
+    public delegate* unmanaged[Cdecl]<void*, void*, void> FinishTask;
 
     /// <summary>task 用户上下文。</summary>
     public void* UserTaskContext;

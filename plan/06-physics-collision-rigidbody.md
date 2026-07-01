@@ -166,14 +166,14 @@
 - [x] 校验全部签名 blittable、无 `DllImport`、大 struct 走 `in`/`ref`/`out`（`AGENTS.md` §3）。
 
 ### 4.2 PixelEngine.Interop — task-callback 桥（架构 §14.2，R14）
-- [ ] `Box2DTaskBridge.BridgeContext`：pinned 结构，持 JobSystem 引用与批次状态（POH/`NativeMemory`）。
-- [ ] `[UnmanagedCallersOnly(CallConvCdecl)] EnqueueTask`：切 `[0,itemCount)` 为 `≥minRange` 子区间，派发 JobSystem，稳定 `workerIndex`，IL `calli` 回调 `b2TaskCallback`，返回哑句柄。
-- [ ] `[UnmanagedCallersOnly(CallConvCdecl)] FinishTask`：等待该批（起步同步 fork-join 下为 no-op）。
-- [ ] 起步**同步 fork-join** 实现（`EnqueueTask` 内阻塞到完成，正确优先，架构 §14.2）。
-- [ ] 稳定 `workerIndex` 分配：用 JobSystem 物理线程槽位，保证 `[0,workerCount)` 无并发复用（R14；依赖 `plan/02` 协调 API）。
-- [ ] 回调内禁 `[SuppressGCTransition]`、不抛异常（try/catch 兜底记诊断，架构 §14.2/§14.3）。
-- [ ] 确定性模式 `workerCount=1` 串行路径（架构 §6.4），由配置开关切换。
-- [ ] 注入 `B2WorldDef`：`&EnqueueTask`/`&FinishTask`/`workerCount=JobSystem.WorkerCount`/`userTaskContext=&BridgeContext`。
+- [x] `Box2DTaskBridge.BridgeContext`：pinned 结构，持 JobSystem 引用与批次状态（POH/`NativeMemory`）。
+- [x] `[UnmanagedCallersOnly(CallConvCdecl)] EnqueueTask`：切 `[0,itemCount)` 为 `≥minRange` 子区间，派发 JobSystem，稳定 `workerIndex`，IL `calli` 回调 `b2TaskCallback`，返回哑句柄。
+- [x] `[UnmanagedCallersOnly(CallConvCdecl)] FinishTask`：等待该批（起步同步 fork-join 下为 no-op）。
+- [x] 起步**同步 fork-join** 实现（`EnqueueTask` 内阻塞到完成，正确优先，架构 §14.2）。
+- [x] 稳定 `workerIndex` 分配：用 JobSystem 物理线程槽位，保证 `[0,workerCount)` 无并发复用（R14；依赖 `plan/02` 协调 API）。
+- [x] 回调内禁 `[SuppressGCTransition]`、不抛异常（try/catch 兜底记诊断，架构 §14.2/§14.3）。
+- [x] 确定性模式 `workerCount=1` 串行路径（架构 §6.4），由配置开关切换。
+- [x] 注入 `B2WorldDef`：`&EnqueueTask`/`&FinishTask`/`workerCount=JobSystem.WorkerCount`/`userTaskContext=&BridgeContext`。
 
 ### 4.3 PixelEngine.Physics — 尺度与转换
 - [ ] `PhysicsScale`：消费 `EngineConstants.PhysicsPixelsPerMeter=16`，`b2SetLengthUnitsPerMeter(16)` 一次（架构 §8.1，R9）。
@@ -239,7 +239,7 @@
 
 ### 5.1 Interop 与 task 桥
 - [x] interop smoke test：建 world→建一动态体→`b2World_Step`→读回坐标确有重力下落（`plan/14`）。
-- [ ] 全部绑定 blittable、零新 `DllImport`、`b2World_Step` 与 task 回调均无 `[SuppressGCTransition]`（代码审查 + 分析器）。
+- [x] 全部绑定 blittable、零新 `DllImport`、`b2World_Step` 与 task 回调均无 `[SuppressGCTransition]`（代码审查 + 分析器）。
 - [ ] task 桥串行（workerCount=1）下 Step 结果正确；多线程下与串行**统计等价**（非 bit，架构 §6.1/§6.4）。
 - [ ] task 桥多线程经 §17.1 计时确认 physics 真并行（4 worker 较 1 worker Step 显著加速，R14）。
 - [ ] `workerIndex` 无并发复用（压力测试 + 断言，R14）。
@@ -304,7 +304,7 @@
 按 `AGENTS.md` §6 每完成一个节点立即用中文 git 提交（`type(scope): 中文简述`，scope=`physics`/`core`，正文注明对应 plan 条目/架构 §）：
 
 - [x] 节点 1：`feat(physics): Box2D v3.1 [LibraryImport] 薄绑定与 blittable 类型`（对应 §4.1，架构 §8.2/§14.3）。
-- [ ] 节点 2：`feat(physics): 自建 Box2D task-callback 桥(同步 fork-join)派发到 JobSystem`（对应 §4.2，架构 §14.2）。
+- [x] 节点 2：`feat(physics): 自建 Box2D task-callback 桥(同步 fork-join)派发到 JobSystem`（对应 §4.2，架构 §14.2）。
 - [ ] 节点 3：`feat(physics): 物理尺度与坐标转换(16px=1m, radius=0)`（对应 §4.3，架构 §8.1）。
 - [ ] 节点 4：`feat(physics): 像素簇→刚体管线(CCL→MS→DP→PolyPartition→复合体)`（对应 §4.4，架构 §8.2）。
 - [ ] 节点 5：`feat(physics): 不可变 body-local mask 与刚体包装/registry/damage queue`（对应 §4.5，架构 §8.3/R6）。
