@@ -28,6 +28,27 @@ public sealed class FrameProfiler
     public ReadOnlySpan<double> LastSubFrame => _subLast;
 
     /// <summary>
+    /// 将上一帧主相位与细分相位耗时复制到调用方缓冲区，供只读诊断快照消费。
+    /// </summary>
+    /// <param name="mainPhases">主相位目标缓冲区。</param>
+    /// <param name="subPhases">细分相位目标缓冲区。</param>
+    public void CopyLastFrame(Span<double> mainPhases, Span<double> subPhases)
+    {
+        if (mainPhases.Length < FrameStats.PhaseCount)
+        {
+            throw new ArgumentException("主相位缓冲区长度不足。", nameof(mainPhases));
+        }
+
+        if (subPhases.Length < FrameStats.SubPhaseCount)
+        {
+            throw new ArgumentException("细分相位缓冲区长度不足。", nameof(subPhases));
+        }
+
+        _last.CopyTo(mainPhases);
+        _subLast.CopyTo(subPhases);
+    }
+
+    /// <summary>
     /// 开始记录新一帧。
     /// </summary>
     public void BeginFrame()

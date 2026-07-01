@@ -45,6 +45,10 @@ public sealed class PerformanceHudPanelTests
             EditorPerformanceSnapshot.Create(counters, profiler, runtime));
 
         Assert.Equal(1.0, sample.ParticleMs, 3);
+        Assert.Equal(0.1, sample.CaPassAMs, 3);
+        Assert.Equal(0.2, sample.CaPassBMs, 3);
+        Assert.Equal(0.3, sample.CaPassCMs, 3);
+        Assert.Equal(0.4, sample.CaPassDMs, 3);
         Assert.Equal(1.0, sample.CaMs, 3);
         Assert.Equal(1.5, sample.HeatMs, 3);
         Assert.Equal(0.7, sample.PhysicsMs, 3);

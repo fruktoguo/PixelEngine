@@ -11,13 +11,28 @@ namespace PixelEngine.Editor;
 public sealed class PerformanceHudPanel : IEditorPanel
 {
     private const int HistoryLength = 240;
+    private const int PhaseBarCount = 11;
+    private static readonly string[] PhaseBarLabels =
+    [
+        "particle",
+        "CA A",
+        "CA B",
+        "CA C",
+        "CA D",
+        "heat",
+        "physics",
+        "shape",
+        "render",
+        "upload",
+        "audio",
+    ];
 
     private readonly float[] _frameHistory = new float[HistoryLength];
     private readonly float[] _caHistory = new float[HistoryLength];
     private readonly float[] _physicsHistory = new float[HistoryLength];
     private readonly float[] _renderHistory = new float[HistoryLength];
     private readonly float[] _audioHistory = new float[HistoryLength];
-    private readonly float[] _phaseBars = new float[6];
+    private readonly float[] _phaseBars = new float[PhaseBarCount];
     private long _lastCapturedFrame = -1;
     private int _historyOffset;
     private int _historyCount;
@@ -84,11 +99,15 @@ public sealed class PerformanceHudPanel : IEditorPanel
         double particleMs = Get(phases, FramePhase.ParticleToCell) +
             Get(phases, FramePhase.CellToParticle) +
             Get(subPhases, FrameSubPhase.ParticleStamp);
-        double caSubMs = Get(subPhases, FrameSubPhase.CaPassA) +
-            Get(subPhases, FrameSubPhase.CaPassB) +
-            Get(subPhases, FrameSubPhase.CaPassC) +
-            Get(subPhases, FrameSubPhase.CaPassD);
-        double caMs = caSubMs > 0 ? caSubMs : Get(phases, FramePhase.CaSimulation);
+        double caPassA = Get(subPhases, FrameSubPhase.CaPassA);
+        double caPassB = Get(subPhases, FrameSubPhase.CaPassB);
+        double caPassC = Get(subPhases, FrameSubPhase.CaPassC);
+        double caPassD = Get(subPhases, FrameSubPhase.CaPassD);
+        if (caPassA + caPassB + caPassC + caPassD <= 0)
+        {
+            caPassA = Get(phases, FramePhase.CaSimulation);
+        }
+
         double physicsMs = Get(subPhases, FrameSubPhase.PhysicsStep) +
             Get(subPhases, FrameSubPhase.PhysicsCcl) +
             Get(subPhases, FrameSubPhase.PhysicsErase) +
@@ -122,13 +141,16 @@ public sealed class PerformanceHudPanel : IEditorPanel
         double totalMs = Sum(phases);
         if (totalMs <= 0)
         {
-            totalMs = particleMs + caMs + Get(phases, FramePhase.Temperature) + physicsMs + shapeRebuildMs + renderMs + uploadMs + audioMs;
+            totalMs = particleMs + caPassA + caPassB + caPassC + caPassD + Get(phases, FramePhase.Temperature) + physicsMs + shapeRebuildMs + renderMs + uploadMs + audioMs;
         }
 
         return new PerformanceHudSample(
             totalMs,
             particleMs,
-            caMs,
+            caPassA,
+            caPassB,
+            caPassC,
+            caPassD,
             Get(phases, FramePhase.Temperature),
             physicsMs,
             shapeRebuildMs,
@@ -182,11 +204,16 @@ public sealed class PerformanceHudPanel : IEditorPanel
         _historyOffset = (_historyOffset + 1) % HistoryLength;
         _historyCount = Math.Min(_historyCount + 1, HistoryLength);
         _phaseBars[0] = (float)sample.ParticleMs;
-        _phaseBars[1] = (float)sample.CaMs;
-        _phaseBars[2] = (float)sample.HeatMs;
-        _phaseBars[3] = (float)(sample.PhysicsMs + sample.ShapeRebuildMs);
-        _phaseBars[4] = (float)(sample.RenderMs + sample.UploadMs);
-        _phaseBars[5] = (float)sample.AudioMs;
+        _phaseBars[1] = (float)sample.CaPassAMs;
+        _phaseBars[2] = (float)sample.CaPassBMs;
+        _phaseBars[3] = (float)sample.CaPassCMs;
+        _phaseBars[4] = (float)sample.CaPassDMs;
+        _phaseBars[5] = (float)sample.HeatMs;
+        _phaseBars[6] = (float)sample.PhysicsMs;
+        _phaseBars[7] = (float)sample.ShapeRebuildMs;
+        _phaseBars[8] = (float)sample.RenderMs;
+        _phaseBars[9] = (float)sample.UploadMs;
+        _phaseBars[10] = (float)sample.AudioMs;
     }
 
     private static void DrawSummary(PerformanceHudSample sample)
@@ -207,7 +234,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
     private static void DrawPhaseTimes(PerformanceHudSample sample)
     {
         ImGui.TextUnformatted($"particle: {sample.ParticleMs:F2} ms");
-        ImGui.TextUnformatted($"CA A-D: {sample.CaMs:F2} ms");
+        ImGui.TextUnformatted($"CA A/B/C/D: {sample.CaPassAMs:F2} / {sample.CaPassBMs:F2} / {sample.CaPassCMs:F2} / {sample.CaPassDMs:F2} ms");
         ImGui.TextUnformatted($"heat: {sample.HeatMs:F2} ms");
         ImGui.TextUnformatted($"physics: {sample.PhysicsMs:F2} ms");
         ImGui.TextUnformatted($"shape rebuild: {sample.ShapeRebuildMs:F2} ms");
@@ -246,7 +273,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
             ImPlot.SetupAxes("phase", "ms", ImPlotAxisFlags.NoTickLabels, ImPlotAxisFlags.AutoFit);
             fixed (float* bars = _phaseBars)
             {
-                ImPlot.PlotBars("particle/CA/heat/physics/render/audio", bars, _phaseBars.Length, 0.6);
+                ImPlot.PlotBarGroups(PhaseBarLabels, bars, PhaseBarCount, 1, 0.6, ImPlotBarGroupsFlags.Stacked);
             }
 
             ImPlot.EndPlot();
