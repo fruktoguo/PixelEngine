@@ -41,6 +41,37 @@ public sealed class PhysicsSystemFacadeTests
     }
 
     /// <summary>
+    /// 验证 PhysicsSystem 公开调参会修改 Box2D 重力、默认 sub-step 与碎片阈值。
+    /// </summary>
+    [Fact]
+    public void RuntimeTuningUpdatesGravitySubStepsAndFragmentThreshold()
+    {
+        TestChunkSource source = new(new Chunk(new ChunkCoord(0, 0)));
+        CellGrid grid = new(source, MaterialPropsTable.Empty);
+        using JobSystem jobs = new(workerCount: 1);
+        B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
+        worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
+        RigidBodyDestruction destruction = new(fragmentPixelThreshold: 4);
+        PhysicsSystem system = PhysicsSystem.Initialize(grid, jobs, destruction: destruction, worldDef: worldDef);
+
+        try
+        {
+            system.SetSubStepCount(8);
+            system.SetGravity(new Vector2(1.25f, 9.5f));
+            system.SetFragmentPixelThreshold(9);
+
+            Assert.Equal(8, system.SubStepCount);
+            Assert.Equal(new Vector2(1.25f, 9.5f), system.Gravity);
+            Assert.Equal(9, system.FragmentPixelThreshold);
+            Assert.Equal(9, destruction.FragmentPixelThreshold);
+        }
+        finally
+        {
+            system.Shutdown();
+        }
+    }
+
+    /// <summary>
     /// 验证 CopyBodySnapshots 返回 body-local 不可变 mask、像素变换、线速度和角速度。
     /// </summary>
     [Fact]

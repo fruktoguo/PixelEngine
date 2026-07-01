@@ -66,6 +66,26 @@ public sealed class ParticleSystemTests
     }
 
     /// <summary>
+    /// 验证运行时调参会限制活跃数量并钳制新粒子寿命。
+    /// </summary>
+    [Fact]
+    public void ApplySettingsLimitsActiveCountAndClampsLifetime()
+    {
+        ParticleSystem particles = new(capacity: 4);
+        _ = particles.TrySpawn(new ParticleSpawn(1, 0, 0, 0, 101, 1, 10));
+        _ = particles.TrySpawn(new ParticleSpawn(2, 0, 0, 0, 102, 2, 10));
+        _ = particles.TrySpawn(new ParticleSpawn(3, 0, 0, 0, 103, 3, 10));
+
+        particles.ApplySettings(new ParticleSystemSettings(2, 0.1f, 5, 0.05f, 1f, 16));
+        bool spawned = particles.TrySpawn(new ParticleSpawn(4, 0, 0, 0, 104, 4, 10));
+
+        Assert.False(spawned);
+        Assert.Equal(2, particles.ActiveCount);
+        Assert.Equal(2, particles.Settings.MaxActiveCount);
+        Assert.True(particles.Stats.DroppedThisTick >= 2);
+    }
+
+    /// <summary>
     /// 验证 swap-remove 释放保持活跃前缀紧密且不保留尾部旧粒子。
     /// </summary>
     [Fact]

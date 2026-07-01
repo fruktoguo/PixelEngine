@@ -173,6 +173,28 @@ public sealed class PhysicsSystem : IDisposable
     public int TaskBridgeFaultedCallbackCount => _taskBridge?.FaultedCallbackCount ?? 0;
 
     /// <summary>
+    /// Box2D 内部 step 子步数。相位 8 默认使用该值；它不是额外 CA tick，见架构 §4.1。
+    /// </summary>
+    public int SubStepCount { get; private set; } = 4;
+
+    /// <summary>
+    /// 当前 Box2D world 重力向量。
+    /// </summary>
+    public Vector2 Gravity
+    {
+        get
+        {
+            B2Vec2 gravity = Box2D.b2World_GetGravity(WorldId);
+            return new Vector2(gravity.X, gravity.Y);
+        }
+    }
+
+    /// <summary>
+    /// 当前刚体破坏碎片阈值；未配置破坏服务时为 0。
+    /// </summary>
+    public int FragmentPixelThreshold => _destruction?.FragmentPixelThreshold ?? 0;
+
+    /// <summary>
     /// 最近一次同步排空的 damage 事件。
     /// </summary>
     public IReadOnlyList<RigidDamageEvent> PendingDamage => _pendingDamage;
@@ -205,16 +227,62 @@ public sealed class PhysicsSystem : IDisposable
         TaskBridgeFaultedCallbackCount);
 
     /// <summary>
+    /// 设置后续相位 8 默认使用的 Box2D 子步数。
+    /// </summary>
+    /// <param name="subStepCount">Box2D 内部子步数量。</param>
+    public void SetSubStepCount(int subStepCount)
+    {
+        ObjectDisposedException.ThrowIf(_shutdown, this);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(subStepCount);
+        SubStepCount = subStepCount;
+    }
+
+    /// <summary>
+    /// 设置 Box2D world 重力，后续 step 立即使用。
+    /// </summary>
+    /// <param name="gravity">重力向量。</param>
+    public void SetGravity(Vector2 gravity)
+    {
+        ObjectDisposedException.ThrowIf(_shutdown, this);
+        if (!float.IsFinite(gravity.X) || !float.IsFinite(gravity.Y))
+        {
+            throw new ArgumentOutOfRangeException(nameof(gravity), gravity, "重力必须是有限数值。");
+        }
+
+        Box2D.b2World_SetGravity(WorldId, new B2Vec2 { X = gravity.X, Y = gravity.Y });
+    }
+
+    /// <summary>
+    /// 设置后续 damage 重建使用的碎片像素阈值。
+    /// </summary>
+    /// <param name="fragmentPixelThreshold">小于该像素数的连通块转为自由粒子。</param>
+    public void SetFragmentPixelThreshold(int fragmentPixelThreshold)
+    {
+        ObjectDisposedException.ThrowIf(_shutdown, this);
+        if (_destruction is null)
+        {
+            throw new InvalidOperationException("当前 PhysicsSystem 未配置 RigidBodyDestruction，不能设置碎片阈值。");
+        }
+
+        _destruction.SetFragmentPixelThreshold(fragmentPixelThreshold);
+    }
+
+    /// <summary>
     /// 相位 8：排空 damage queue、破坏重建、erase、Box2D step、读回 transform、inverse-sample re-stamp。
     /// </summary>
     /// <param name="dt">固定逻辑步长秒数。</param>
     /// <param name="subStepCount">Box2D sub-step 数，默认 4。</param>
-    public void SyncStep(float dt, int subStepCount = 4)
+    public void SyncStep(float dt, int subStepCount = 0)
     {
         ObjectDisposedException.ThrowIf(_shutdown, this);
         if (dt <= 0f || float.IsNaN(dt) || float.IsInfinity(dt))
         {
             throw new ArgumentOutOfRangeException(nameof(dt), dt, "dt 必须是有限正数。");
+        }
+
+        if (subStepCount == 0)
+        {
+            subStepCount = SubStepCount;
         }
 
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(subStepCount);

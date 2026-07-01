@@ -1,5 +1,6 @@
 using PixelEngine.Core.Time;
 using PixelEngine.Core;
+using PixelEngine.Editor;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -84,6 +85,33 @@ public sealed class EngineExecutionModeTests
         Assert.Equal(2, engine.Context.Clock.FrameIndex);
         Assert.Equal(1, engine.Context.Clock.SimTickIndex);
         Assert.Equal(EngineExecutionMode.Edit, engine.Mode);
+    }
+
+    /// <summary>
+    /// 验证 Editor sim 控制适配器只通过 Engine/FrameClock 控制暂停、单步与 60/30Hz。
+    /// </summary>
+    [Fact]
+    public void EngineSimulationControlServiceDrivesEngineClockAndModes()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+        EngineSimulationControlService control = new(engine);
+
+        control.EnterEditMode();
+        control.SetSimHz(EngineConstants.SimHzDownscaled);
+        control.StepOnce();
+        SimulationControlSnapshot stepped = control.Capture();
+        control.EnterPlayMode();
+        _ = engine.RunOneTick();
+        SimulationControlSnapshot playing = control.Capture();
+
+        Assert.False(stepped.IsPlaying);
+        Assert.Equal(EngineConstants.SimHzDownscaled, stepped.SimHz);
+        Assert.Equal(1, stepped.SimTickIndex);
+        Assert.True(playing.IsPlaying);
+        Assert.Equal(EngineConstants.SimHzDownscaled, engine.Context.Clock.SimHz);
+        Assert.Equal(EngineConstants.SimHzDownscaled, engine.RequestedSimHz);
     }
 
     private static void RegisterAllPhases(EngineBuilder builder, List<EnginePhase> phases)

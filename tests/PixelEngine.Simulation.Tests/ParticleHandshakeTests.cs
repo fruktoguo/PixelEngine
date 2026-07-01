@@ -115,6 +115,33 @@ public sealed class ParticleHandshakeTests
     }
 
     /// <summary>
+    /// 验证粒子调参影响抛射寿命、冲量倍率和单 tick 抛射上限。
+    /// </summary>
+    [Fact]
+    public void RuntimeSettingsAffectEjectionLifetimeImpulseAndLimit()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Set(center, 10, 10, Water);
+        Set(center, 11, 10, Water);
+        MaterialPropsTable materials = CreateMaterials();
+        CellGrid grid = new(source, materials);
+        SimulationKernel kernel = new(source, materials);
+        ParticleSystem particles = new(
+            capacity: 4,
+            settings: new ParticleSystemSettings(4, 0.2f, 12, 0.05f, 2f, 1));
+
+        Assert.True(particles.RequestEjection(new EjectionRequest(10, 10, 0, 3, 0, EjectMask.Liquid)));
+        Assert.True(particles.RequestEjection(new EjectionRequest(11, 10, 0, 3, 0, EjectMask.Liquid)));
+        particles.RunEjectionPass(kernel, grid);
+
+        Assert.Equal(1, particles.ActiveCount);
+        Assert.Equal(12, particles.ActiveReadOnly[0].Life);
+        Assert.Equal(6f, particles.ActiveReadOnly[0].Vx);
+        Assert.Equal(0, Get(center, 10, 10));
+        Assert.Equal(Water, Get(center, 11, 10));
+    }
+
+    /// <summary>
     /// 验证相位 7 抛射向 Core 事件总线投递 explosion 音频事件。
     /// </summary>
     [Fact]

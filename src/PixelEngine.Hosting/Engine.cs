@@ -22,6 +22,7 @@ public sealed class Engine : IDisposable
         _lifecycle = lifecycle;
         State = EngineRunState.Created;
         Mode = EngineExecutionMode.Play;
+        RequestedSimHz = context.Options.SimHz;
     }
 
     /// <summary>
@@ -45,6 +46,11 @@ public sealed class Engine : IDisposable
     public EngineExecutionMode Mode { get; private set; }
 
     /// <summary>
+    /// 当前由用户或工具请求的基础 sim 频率；自动降级可临时覆盖到更低档。
+    /// </summary>
+    public double RequestedSimHz { get; private set; }
+
+    /// <summary>
     /// 切换到运行模式，后续 tick 会推进 sim/physics。
     /// </summary>
     public void EnterPlayMode()
@@ -60,6 +66,18 @@ public sealed class Engine : IDisposable
     {
         ThrowIfShutdown();
         Mode = EngineExecutionMode.Edit;
+    }
+
+    /// <summary>
+    /// 设置基础 sim 频率；后续普通 tick 由 FrameClock 使用该频率，自动过载降级仍可临时降到 30Hz。
+    /// </summary>
+    /// <param name="simHz">目标 sim 频率，目前支持 60Hz 与 30Hz。</param>
+    public void SetRequestedSimHz(double simHz)
+    {
+        ThrowIfShutdown();
+        Context.Clock.SimHz = simHz;
+        Context.Counters.SimHz = simHz;
+        RequestedSimHz = simHz;
     }
 
     /// <summary>
@@ -210,7 +228,7 @@ public sealed class Engine : IDisposable
 
         Context.Clock.SimHz = tier >= EngineQualityTier.Sim30Hz
             ? PixelEngine.Core.EngineConstants.SimHzDownscaled
-            : Context.Options.SimHz;
+            : RequestedSimHz;
     }
 
     private void ApplyGpuComputeDegradation()

@@ -46,6 +46,22 @@ public static unsafe partial class Box2D
     public static partial void b2World_Step(B2WorldId worldId, float timeStep, int subStepCount);
 
     /// <summary>
+    /// 设置 world 重力。
+    /// </summary>
+    /// <param name="worldId">world 句柄。</param>
+    /// <param name="gravity">重力向量。</param>
+    [LibraryImport(Box2DLibrary.Name)]
+    public static partial void b2World_SetGravity(B2WorldId worldId, B2Vec2 gravity);
+
+    /// <summary>
+    /// 读取 world 重力。
+    /// </summary>
+    /// <param name="worldId">world 句柄。</param>
+    /// <returns>重力向量。</returns>
+    [LibraryImport(Box2DLibrary.Name)]
+    public static partial B2Vec2 b2World_GetGravity(B2WorldId worldId);
+
+    /// <summary>
     /// 读取本步 body move events。
     /// </summary>
     /// <param name="worldId">world 句柄。</param>

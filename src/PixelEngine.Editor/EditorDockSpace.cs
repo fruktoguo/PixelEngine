@@ -18,6 +18,11 @@ public sealed class EditorDockSpace
         MaterialBrushWindowTitle,
         MaterialReactionEditorWindowTitle,
         DebugOverlayWindowTitle,
+        SimulationControlWindowTitle,
+        SaveLoadWindowTitle,
+        PhysicsTuningWindowTitle,
+        ParticleTuningWindowTitle,
+        LightingTuningWindowTitle,
         PerformanceHudWindowTitle,
         ConsoleDiagnosticsWindowTitle,
     ];
@@ -61,6 +66,31 @@ public sealed class EditorDockSpace
     /// 调试叠层窗口标题。
     /// </summary>
     public const string DebugOverlayWindowTitle = "调试叠层";
+
+    /// <summary>
+    /// sim 控制条窗口标题。
+    /// </summary>
+    public const string SimulationControlWindowTitle = "Sim 控制";
+
+    /// <summary>
+    /// 存读档窗口标题。
+    /// </summary>
+    public const string SaveLoadWindowTitle = "存读档";
+
+    /// <summary>
+    /// 物理调参窗口标题。
+    /// </summary>
+    public const string PhysicsTuningWindowTitle = "物理调参";
+
+    /// <summary>
+    /// 粒子调参窗口标题。
+    /// </summary>
+    public const string ParticleTuningWindowTitle = "粒子调参";
+
+    /// <summary>
+    /// 光照调参窗口标题。
+    /// </summary>
+    public const string LightingTuningWindowTitle = "光照调参";
 
     /// <summary>
     /// 性能 HUD 窗口标题。
@@ -151,6 +181,11 @@ public sealed class EditorDockSpace
         ImGuiP.DockBuilderDockWindow(MaterialBrushWindowTitle, rightBottomNode);
         ImGuiP.DockBuilderDockWindow(MaterialReactionEditorWindowTitle, rightBottomNode);
         ImGuiP.DockBuilderDockWindow(DebugOverlayWindowTitle, rightBottomNode);
+        ImGuiP.DockBuilderDockWindow(SimulationControlWindowTitle, bottomNode);
+        ImGuiP.DockBuilderDockWindow(SaveLoadWindowTitle, bottomNode);
+        ImGuiP.DockBuilderDockWindow(PhysicsTuningWindowTitle, rightBottomNode);
+        ImGuiP.DockBuilderDockWindow(ParticleTuningWindowTitle, rightBottomNode);
+        ImGuiP.DockBuilderDockWindow(LightingTuningWindowTitle, rightBottomNode);
         ImGuiP.DockBuilderDockWindow(PerformanceHudWindowTitle, bottomNode);
         ImGuiP.DockBuilderDockWindow(ConsoleDiagnosticsWindowTitle, bottomNode);
         ImGuiP.DockBuilderFinish(dockspaceId);
