@@ -45,6 +45,38 @@ public sealed class MultithreadOracleTests
         Assert.Equal(CountBoundaryBandMaterials(singleSource), CountBoundaryBandMaterials(multiSource));
     }
 
+    /// <summary>
+    /// 验证多线程路径相对单线程 oracle 的宏观堆高、液面和气体分布在统计容差内一致。
+    /// </summary>
+    [Fact]
+    public void StepCaWithJobSystemMatchesSingleThreadOracleMacroProfiles()
+    {
+        TestChunkSource singleSource = CreateSeededSource();
+        TestChunkSource multiSource = CreateSeededSource();
+        SimulationKernel single = new(singleSource, CreateMaterials(), worldSeed: 77)
+        {
+            ForceSingleThread = true,
+        };
+        SimulationKernel multi = new(multiSource, CreateMaterials(), worldSeed: 77);
+        using JobSystem jobs = new(workerCount: 2)
+        {
+            SingleThreadThreshold = 0,
+        };
+
+        for (int i = 0; i < 4; i++)
+        {
+            single.StepCa();
+            single.SwapDirtyRects();
+            multi.StepCa(jobs);
+            multi.SwapDirtyRects();
+        }
+
+        Assert.Equal(CountMaterials(singleSource), CountMaterials(multiSource));
+        AssertProfileWithinTolerance(HeightProfile(singleSource, Sand), HeightProfile(multiSource, Sand), maxTotalDelta: 0, maxSingleDelta: 0);
+        AssertProfileWithinTolerance(HeightProfile(singleSource, Water), HeightProfile(multiSource, Water), maxTotalDelta: 0, maxSingleDelta: 0);
+        Assert.Equal(QuadrantCounts(singleSource, Gas), QuadrantCounts(multiSource, Gas));
+    }
+
     private static TestChunkSource CreateSeededSource()
     {
         TestChunkSource source = CreateDenseSource(-1, -1, 4, 3);
@@ -113,6 +145,76 @@ public sealed class MultithreadOracleTests
         }
 
         return counts;
+    }
+
+    private static int[] HeightProfile(TestChunkSource source, ushort material)
+    {
+        int minX = int.MaxValue;
+        int maxX = int.MinValue;
+        foreach (Chunk chunk in source.ResidentChunks)
+        {
+            int baseX = chunk.Coord.X << EngineConstants.ChunkSizeLog2;
+            minX = Math.Min(minX, baseX);
+            maxX = Math.Max(maxX, baseX + EngineConstants.ChunkSize - 1);
+        }
+
+        int[] heights = new int[maxX - minX + 1];
+        Array.Fill(heights, -1);
+        foreach (Chunk chunk in source.ResidentChunks)
+        {
+            int baseX = chunk.Coord.X << EngineConstants.ChunkSizeLog2;
+            int baseY = chunk.Coord.Y << EngineConstants.ChunkSizeLog2;
+            for (int ly = 0; ly < EngineConstants.ChunkSize; ly++)
+            {
+                for (int lx = 0; lx < EngineConstants.ChunkSize; lx++)
+                {
+                    if (chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] == material)
+                    {
+                        int profileIndex = baseX + lx - minX;
+                        heights[profileIndex] = Math.Max(heights[profileIndex], baseY + ly);
+                    }
+                }
+            }
+        }
+
+        return heights;
+    }
+
+    private static int[] QuadrantCounts(TestChunkSource source, ushort material)
+    {
+        int[] counts = new int[4];
+        foreach (Chunk chunk in source.ResidentChunks)
+        {
+            for (int ly = 0; ly < EngineConstants.ChunkSize; ly++)
+            {
+                for (int lx = 0; lx < EngineConstants.ChunkSize; lx++)
+                {
+                    if (chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] != material)
+                    {
+                        continue;
+                    }
+
+                    int index = (lx >= EngineConstants.ChunkSize / 2 ? 1 : 0) + (ly >= EngineConstants.ChunkSize / 2 ? 2 : 0);
+                    counts[index]++;
+                }
+            }
+        }
+
+        return counts;
+    }
+
+    private static void AssertProfileWithinTolerance(int[] expected, int[] actual, int maxTotalDelta, int maxSingleDelta)
+    {
+        Assert.Equal(expected.Length, actual.Length);
+        int totalDelta = 0;
+        for (int i = 0; i < expected.Length; i++)
+        {
+            int delta = Math.Abs(expected[i] - actual[i]);
+            Assert.True(delta <= maxSingleDelta, $"profile[{i}] delta {delta} > {maxSingleDelta}");
+            totalDelta += delta;
+        }
+
+        Assert.True(totalDelta <= maxTotalDelta, $"profile total delta {totalDelta} > {maxTotalDelta}");
     }
 
     private static void CountAt(Chunk chunk, int lx, int ly, int[] counts)
