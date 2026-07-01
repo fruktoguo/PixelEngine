@@ -189,6 +189,16 @@ public sealed class NullAudioBackend : IAudioBackend
     }
 
     /// <summary>
+    /// 测试辅助：读取 source 最近一次播放 / 更新后的增益。
+    /// </summary>
+    /// <param name="source">source 句柄。</param>
+    /// <returns>线性增益。</returns>
+    public float GetSourceGain(uint source)
+    {
+        return Get(source).Gain;
+    }
+
+    /// <summary>
     /// 测试辅助：模拟后端自然播放完成。
     /// </summary>
     /// <param name="source">source 句柄。</param>

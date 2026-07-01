@@ -27,6 +27,11 @@ public sealed class AudioSystem : IDisposable
     public AudioVoicePool Voices => _voices ?? throw new InvalidOperationException("AudioSystem 尚未 Initialize。");
 
     /// <summary>
+    /// ambient loop 管理器；未挂接时为 <see langword="null"/>。
+    /// </summary>
+    public AmbientLoopManager? AmbientLoops { get; private set; }
+
+    /// <summary>
     /// OpenAL 初始化失败原因；成功或使用显式 backend 时为 <see langword="null"/>。
     /// </summary>
     public string? InitializationWarning { get; private set; }
@@ -93,6 +98,22 @@ public sealed class AudioSystem : IDisposable
     }
 
     /// <summary>
+    /// 挂接 ambient loop 管理器，所有权转移给音频系统。
+    /// </summary>
+    /// <param name="ambientLoops">ambient loop 管理器。</param>
+    public void AttachAmbientLoopManager(AmbientLoopManager ambientLoops)
+    {
+        ThrowIfDisposed();
+        if (AmbientLoops is not null)
+        {
+            throw new InvalidOperationException("AudioSystem 已挂接 AmbientLoopManager。");
+        }
+
+        AmbientLoops = ambientLoops ?? throw new ArgumentNullException(nameof(ambientLoops));
+        RefreshDiagnostics(default);
+    }
+
+    /// <summary>
     /// 更新 listener 与 voice 完成状态。render-only 帧也必须调用以保持声场连续。
     /// </summary>
     /// <param name="view">listener 视口。</param>
@@ -132,7 +153,7 @@ public sealed class AudioSystem : IDisposable
             return false;
         }
 
-        voice.Play(clip.Buffer.Handle, volume, pitch);
+        voice.Play(clip.Buffer.Handle, volume * _settings.SfxVolume, pitch);
         RefreshDiagnostics(default);
         return true;
     }
@@ -154,7 +175,7 @@ public sealed class AudioSystem : IDisposable
             return false;
         }
 
-        voice.Play(clip.Buffer.Handle, volume, 1f);
+        voice.Play(clip.Buffer.Handle, volume * _settings.UiVolume, 1f);
         RefreshDiagnostics(default);
         return true;
     }
@@ -190,6 +211,7 @@ public sealed class AudioSystem : IDisposable
             diagnostics.LastDispatch.Dropped,
             diagnostics.LastDispatch.Played,
             diagnostics.ActiveVoices,
+            diagnostics.ActiveAmbientVoices,
             diagnostics.VoiceSteals,
             diagnostics.LoadedClips,
             diagnostics.LoadingClips,
@@ -206,6 +228,17 @@ public sealed class AudioSystem : IDisposable
     }
 
     /// <summary>
+    /// 推进 ambient loop 管理器；render-only 帧空事件也必须调用以完成淡出。
+    /// </summary>
+    /// <param name="events">本帧合并后的音频事件。</param>
+    public void UpdateAmbient(ReadOnlySpan<CoalescedAudioEvent> events)
+    {
+        ThrowIfDisposed();
+        AmbientLoops?.Update(events);
+        RefreshDiagnostics(Diagnostics.LastDispatch);
+    }
+
+    /// <summary>
     /// 关闭音频系统并释放后端资源。
     /// </summary>
     public void Shutdown()
@@ -217,6 +250,8 @@ public sealed class AudioSystem : IDisposable
 
         _voices?.Dispose();
         _voices = null;
+        AmbientLoops?.Dispose();
+        AmbientLoops = null;
 
         if (_device is not null)
         {
@@ -257,6 +292,7 @@ public sealed class AudioSystem : IDisposable
         Diagnostics = new AudioDiagnostics(
             dispatch,
             voices?.ActiveVoiceCount ?? 0,
+            AmbientLoops?.ActiveVoiceCount ?? 0,
             voices?.StealCount ?? 0,
             _clipCache?.LoadedCount ?? 0,
             _clipCache?.LoadingCount ?? 0);

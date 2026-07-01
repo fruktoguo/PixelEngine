@@ -56,8 +56,13 @@ public sealed class AudioDispatcher
     /// <param name="listener">当前 listener 状态，用于 voice stealing 距离评分。</param>
     /// <param name="tick">当前模拟 tick。</param>
     /// <param name="player">材质音效播放解析器。</param>
+    /// <param name="ambientLoops">可选 ambient loop 管理器；提供后 `AmbientRegion` 不占用 one-shot voice。</param>
     /// <returns>本帧派发统计。</returns>
-    public AudioDispatchStats Dispatch(in AudioListenerState listener, long tick, IAudioEventPlayer player)
+    public AudioDispatchStats Dispatch(
+        in AudioListenerState listener,
+        long tick,
+        IAudioEventPlayer player,
+        AmbientLoopManager? ambientLoops = null)
     {
         ArgumentNullException.ThrowIfNull(player);
         long startTimestamp = Stopwatch.GetTimestamp();
@@ -73,10 +78,16 @@ public sealed class AudioDispatcher
         int dropped = _coalescer.DroppedCount;
         int dispatched = 0;
         int played = 0;
+        ambientLoops?.Update(_coalescedScratch.AsSpan(0, coalescedEventCount));
 
         for (int i = 0; i < coalescedEventCount; i++)
         {
             CoalescedAudioEvent audioEvent = _coalescedScratch[i];
+            if (ambientLoops is not null && audioEvent.Type == AudioEventType.AmbientRegion)
+            {
+                continue;
+            }
+
             if (!_cooldowns.ShouldPlay(audioEvent.MaterialId, audioEvent.Type, tick, _cooldownTicks))
             {
                 dropped++;

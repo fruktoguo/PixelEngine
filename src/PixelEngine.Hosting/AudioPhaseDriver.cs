@@ -51,11 +51,19 @@ public sealed class AudioPhaseDriver : IEnginePhaseDriver
         if (_dispatcher is not null && _eventPlayer is not null)
         {
             long start = Stopwatch.GetTimestamp();
-            AudioDispatchStats stats = _dispatcher.Dispatch(_audio.CurrentListener, context.Timing.FrameIndex, _eventPlayer);
+            AudioDispatchStats stats = _dispatcher.Dispatch(
+                _audio.CurrentListener,
+                context.Timing.FrameIndex,
+                _eventPlayer,
+                _audio.AmbientLoops);
             long elapsed = Stopwatch.GetTimestamp() - start;
             double elapsedMs = elapsed * 1000.0 / Stopwatch.Frequency;
             context.Context.Profiler.RecordSub(FrameSubPhase.AudioDispatch, elapsedMs);
             _audio.RecordDispatchStats(stats with { DispatchMilliseconds = elapsedMs });
+        }
+        else
+        {
+            _audio.UpdateAmbient([]);
         }
 
         _audio.PublishDiagnostics(context.Context.Counters);

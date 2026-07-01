@@ -50,4 +50,11 @@ internal static class AudioEventTypeTraits
             _ => 0,
         };
     }
+
+    public static AudioVolumeCategory GetVolumeCategory(AudioEventType type)
+    {
+        return type == AudioEventType.AmbientRegion
+            ? AudioVolumeCategory.Ambient
+            : AudioVolumeCategory.Sfx;
+    }
 }

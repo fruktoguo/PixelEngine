@@ -83,6 +83,37 @@ public sealed class MaterialAudioTableTests
         Assert.Equal(7, buffers.LastCueHandle);
     }
 
+    [Fact]
+    public void MaterialAudioPlayerAppliesRuntimeCategoryVolume()
+    {
+        MaterialAudioTable table = MaterialAudioTable.FromDefinitions(
+        [
+            new() { Id = 0, Name = "empty", HeatCapacity = 1f },
+            new()
+            {
+                Id = 1,
+                Name = "stone",
+                HeatCapacity = 1f,
+                AudioCues = new AudioCueSet { ImpactCue = 7 },
+            },
+        ]);
+        BufferResolver buffers = new();
+        AudioSettings settings = new() { SfxVolume = 0.25f };
+        MaterialAudioPlayer player = new(table, buffers, settings);
+        using NullAudioBackend backend = new();
+        using AudioVoicePool voices = new(backend, new AudioSettings { MaxVoices = 1 });
+        AudioVoice voice = voices.Acquire(1, AudioEventType.ParticleImpact, default, default, 1)!;
+
+        bool played = player.TryPlay(new CoalescedAudioEvent(AudioEventType.ParticleImpact, 0, 0, 1, 1f, 1), voice, 1);
+        settings.SfxVolume = 0.5f;
+        voice = voices.Acquire(1, AudioEventType.ParticleImpact, default, default, 2)!;
+        bool playedAfterChange = player.TryPlay(new CoalescedAudioEvent(AudioEventType.ParticleImpact, 0, 0, 1, 1f, 1), voice, 2);
+
+        Assert.True(played);
+        Assert.True(playedAfterChange);
+        Assert.Equal(0.5f, backend.GetSourceGain(voices[0].Source), precision: 5);
+    }
+
     private static void AssertCue(MaterialAudioTable table, AudioEventType type, int expectedCue)
     {
         bool resolved = table.TryResolve(new CoalescedAudioEvent(type, 0, 0, 1, 0.8f, 4), 123, out MaterialAudioPlayback playback);

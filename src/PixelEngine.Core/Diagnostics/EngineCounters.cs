@@ -98,6 +98,11 @@ public sealed class EngineCounters
     public long AudioActiveVoices { get; set; }
 
     /// <summary>
+    /// 获取或设置活跃 ambient loop voice 数。
+    /// </summary>
+    public long AudioActiveAmbientVoices { get; set; }
+
+    /// <summary>
     /// 获取或设置累计 voice 抢占次数。
     /// </summary>
     public long AudioVoiceSteals { get; set; }
@@ -202,6 +207,7 @@ public sealed class EngineCounters
         long dropped,
         long played,
         long activeVoices,
+        long activeAmbientVoices,
         long voiceSteals,
         long loadedClips,
         long loadingClips,
@@ -212,6 +218,7 @@ public sealed class EngineCounters
         AudioDropped = dropped;
         AudioPlayed = played;
         AudioActiveVoices = activeVoices;
+        AudioActiveAmbientVoices = activeAmbientVoices;
         AudioVoiceSteals = voiceSteals;
         AudioLoadedClips = loadedClips;
         AudioLoadingClips = loadingClips;

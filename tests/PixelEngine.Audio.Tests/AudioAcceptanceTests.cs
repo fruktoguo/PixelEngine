@@ -1,4 +1,5 @@
 using PixelEngine.Core.Events;
+using PixelEngine.Simulation;
 using Xunit;
 
 namespace PixelEngine.Audio.Tests;
@@ -76,6 +77,61 @@ public sealed class AudioAcceptanceTests
         Assert.Equal(totalEvents, player.PlayedCount);
     }
 
+    [Fact]
+    public void DispatcherRoutesAmbientRegionToLoopManagerWithoutPositionalVoice()
+    {
+        AudioSettings settings = new()
+        {
+            MaxVoices = 1,
+            MaxAmbientVoices = 1,
+            MaxAmbientRegionEventsPerFrame = 4,
+            CoalesceBucketSize = 1,
+            DefaultCooldownTicks = 0,
+            AmbientEnterThreshold = 0.3f,
+            AmbientExitThreshold = 0.2f,
+            AmbientFadeRate = 0.5f,
+        };
+        MpscRingBuffer<AudioEvent> ring = new(8);
+        Assert.True(ring.TryEnqueue(new AudioEvent(AudioEventType.AmbientRegion, 4, 8, 1, 0.8f)));
+        using NullAudioBackend backend = new();
+        using AudioVoicePool voices = new(backend, settings);
+        AudioDispatcher dispatcher = new(ring, voices, settings);
+        using AmbientLoopManager ambient = new(backend, BuildAmbientTable(), new BufferResolver(), settings);
+        NonAllocEventPlayer player = new();
+        AudioListenerState listener = new(default, new(0f, 0f, -1f), new(0f, 1f, 0f), 1f);
+
+        AudioDispatchStats first = dispatcher.Dispatch(listener, tick: 1, player, ambient);
+        Assert.Equal(1, first.Drained);
+        Assert.Equal(0, first.Played);
+        Assert.Equal(0, player.PlayedCount);
+        Assert.Equal(0, voices.ActiveVoiceCount);
+        Assert.Equal(1, ambient.ActiveVoiceCount);
+        Assert.Equal(1, backend.PlayCalls);
+
+        AudioDispatchStats second = dispatcher.Dispatch(listener, tick: 2, player, ambient);
+        AudioDispatchStats third = dispatcher.Dispatch(listener, tick: 3, player, ambient);
+
+        Assert.Equal(0, second.Played);
+        Assert.Equal(0, third.Played);
+        Assert.Equal(0, ambient.ActiveVoiceCount);
+        Assert.Equal(1, backend.StopCalls);
+    }
+
+    private static MaterialAudioTable BuildAmbientTable()
+    {
+        return MaterialAudioTable.FromDefinitions(
+        [
+            new() { Id = 0, Name = "empty", HeatCapacity = 1f },
+            new()
+            {
+                Id = 1,
+                Name = "water",
+                HeatCapacity = 1f,
+                AudioCues = new AudioCueSet { AmbientCue = 9 },
+            },
+        ]);
+    }
+
     private sealed class NonAllocEventPlayer : IAudioEventPlayer
     {
         public int PlayedCount;
@@ -87,6 +143,15 @@ public sealed class AudioAcceptanceTests
             voice.Play(buffer: 1, gain: 1f, pitch: 1f);
             PlayedCount++;
             return true;
+        }
+    }
+
+    private sealed class BufferResolver : IAudioCueBufferResolver
+    {
+        public bool TryResolveBuffer(int cueHandle, out uint buffer)
+        {
+            buffer = (uint)cueHandle;
+            return cueHandle > 0;
         }
     }
 }
