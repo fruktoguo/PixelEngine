@@ -16,7 +16,21 @@ public sealed unsafe class PhysicsWorld
     /// </summary>
     public PixelRigidBody AddBody(B2BodyId bodyId, BodyLocalMask mask)
     {
-        int key = _freeKeys.Count > 0 ? _freeKeys.Pop() : _bodies.Count;
+        return AddBody(bodyId, mask, preferredBodyKey: null);
+    }
+
+    /// <summary>
+    /// 添加刚体并尽量恢复指定 bodyKey，用于读档重建稳定刚体 id。
+    /// </summary>
+    public PixelRigidBody AddBody(B2BodyId bodyId, BodyLocalMask mask, int preferredBodyKey)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(preferredBodyKey);
+        return AddBody(bodyId, mask, (int?)preferredBodyKey);
+    }
+
+    private PixelRigidBody AddBody(B2BodyId bodyId, BodyLocalMask mask, int? preferredBodyKey)
+    {
+        int key = preferredBodyKey.HasValue ? ReservePreferredKey(preferredBodyKey.Value) : ReserveNextKey();
         PixelRigidBody body = new(key, bodyId, mask)
         {
             PreviousTransform = PhysicsScale.ToTransform2D(Box2D.b2Body_GetTransform(bodyId)),
@@ -32,6 +46,51 @@ public sealed unsafe class PhysicsWorld
 
         Box2D.b2Body_SetUserData(bodyId, (void*)(nint)(key + 1));
         return body;
+    }
+
+    private int ReserveNextKey()
+    {
+        return _freeKeys.Count > 0 ? _freeKeys.Pop() : _bodies.Count;
+    }
+
+    private int ReservePreferredKey(int key)
+    {
+        while (_bodies.Count < key)
+        {
+            _freeKeys.Push(_bodies.Count);
+            _bodies.Add(null);
+        }
+
+        if (key == _bodies.Count)
+        {
+            return key;
+        }
+
+        if (_bodies[key] is not null)
+        {
+            throw new InvalidOperationException($"bodyKey {key} 已存在，不能重复恢复刚体。");
+        }
+
+        RemoveFromFreeKeys(key);
+        return key;
+    }
+
+    private void RemoveFromFreeKeys(int key)
+    {
+        if (_freeKeys.Count == 0)
+        {
+            return;
+        }
+
+        int[] keys = [.. _freeKeys];
+        _freeKeys.Clear();
+        for (int i = keys.Length - 1; i >= 0; i--)
+        {
+            if (keys[i] != key)
+            {
+                _freeKeys.Push(keys[i]);
+            }
+        }
     }
 
     /// <summary>

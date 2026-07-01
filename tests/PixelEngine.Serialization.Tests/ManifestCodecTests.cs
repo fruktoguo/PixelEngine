@@ -44,6 +44,8 @@ public sealed class ManifestCodecTests
         Assert.Equal(2.5f, decodedBody.LinVelX);
         Assert.Equal(-1.5f, decodedBody.LinVelY);
         Assert.Equal(0.125f, decodedBody.AngVel);
+        Assert.Equal(1.25f, decodedBody.LocalOriginX);
+        Assert.Equal(1.75f, decodedBody.LocalOriginY);
     }
 
     /// <summary>
@@ -148,7 +150,9 @@ public sealed class ManifestCodecTests
                 rotSin: 0.75f,
                 linVelX: 2.5f,
                 linVelY: -1.5f,
-                angVel: 0.125f),
+                angVel: 0.125f,
+                localOriginX: 1.25f,
+                localOriginY: 1.75f),
         ];
 
         return new WorldManifest(

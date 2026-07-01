@@ -328,7 +328,7 @@ public sealed class RigidBodyDestruction
             }
 
             Vector2 childOrigin = sourceMask.LocalOrigin - new Vector2(bounds.MinX, bounds.MinY);
-            if (!TryBuildConvexPieces(childSolid.AsSpan(0, area), width, height, childOrigin, out ConvexPolygon[] pieces, out int pieceCount))
+            if (!RigidBodyMaskShapeBuilder.TryBuildConvexPieces(childSolid.AsSpan(0, area), width, height, childOrigin, out ConvexPolygon[] pieces, out int pieceCount))
             {
                 return false;
             }
@@ -341,45 +341,6 @@ public sealed class RigidBodyDestruction
         {
             ArrayPool<byte>.Shared.Return(childSolid);
             ArrayPool<ushort>.Shared.Return(childMaterials);
-        }
-    }
-
-    private static bool TryBuildConvexPieces(
-        ReadOnlySpan<byte> solid,
-        int width,
-        int height,
-        Vector2 localOrigin,
-        out ConvexPolygon[] pieces,
-        out int pieceCount)
-    {
-        Vector2[] contour = ArrayPool<Vector2>.Shared.Rent(MarchingSquares.GetMaximumContourPointCount(width, height));
-        Vector2[] simplified = ArrayPool<Vector2>.Shared.Rent(contour.Length);
-        ConvexPolygon[] output = new ConvexPolygon[Math.Max(8, width * height)];
-
-        try
-        {
-            int contourCount = MarchingSquares.TraceOuterContour(solid, width, height, contour);
-            if (contourCount < 4)
-            {
-                pieces = [];
-                pieceCount = 0;
-                return false;
-            }
-
-            int simplifiedCount = DouglasPeucker.Simplify(contour.AsSpan(0, contourCount), simplified, epsilon: 0f, closed: true);
-            for (int i = 0; i < simplifiedCount; i++)
-            {
-                simplified[i] -= localOrigin;
-            }
-
-            pieceCount = ConvexDecomposer.Decompose(simplified.AsSpan(0, simplifiedCount), output);
-            pieces = output;
-            return pieceCount > 0;
-        }
-        finally
-        {
-            ArrayPool<Vector2>.Shared.Return(contour);
-            ArrayPool<Vector2>.Shared.Return(simplified);
         }
     }
 

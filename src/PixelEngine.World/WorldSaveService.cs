@@ -177,7 +177,9 @@ public sealed class WorldSaveService(ChunkCodec? chunkCodec = null, ManifestCode
                 body.RotSin,
                 body.LinVelX,
                 body.LinVelY,
-                body.AngVel);
+                body.AngVel,
+                body.LocalOriginX,
+                body.LocalOriginY);
         }
 
         return remapped;

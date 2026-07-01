@@ -23,7 +23,9 @@ public sealed class RigidBodySnapshot
         float rotSin,
         float linVelX,
         float linVelY,
-        float angVel)
+        float angVel,
+        float localOriginX = 0f,
+        float localOriginY = 0f)
     {
         if (width <= 0)
         {
@@ -58,6 +60,8 @@ public sealed class RigidBodySnapshot
         LinVelX = linVelX;
         LinVelY = linVelY;
         AngVel = angVel;
+        LocalOriginX = localOriginX;
+        LocalOriginY = localOriginY;
     }
 
     /// <summary>
@@ -119,4 +123,14 @@ public sealed class RigidBodySnapshot
     /// 角速度。
     /// </summary>
     public float AngVel { get; }
+
+    /// <summary>
+    /// body-local 原点 X，单位 cell。
+    /// </summary>
+    public float LocalOriginX { get; }
+
+    /// <summary>
+    /// body-local 原点 Y，单位 cell。
+    /// </summary>
+    public float LocalOriginY { get; }
 }

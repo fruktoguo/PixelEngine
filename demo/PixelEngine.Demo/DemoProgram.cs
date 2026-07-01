@@ -62,9 +62,10 @@ public static class DemoProgram
                 _ = engine.AttachResidentSimulationWorld(DemoWorldWidthCells, DemoWorldHeightCells);
             }
 
+            _ = engine.AttachPhysics();
             int audioClips = engine.AttachAudioFromContentAsync().AsTask().GetAwaiter().GetResult();
             contentLoaded = true;
-            Console.WriteLine($"内容包已加载：{package.MaterialCount} 个材质，{package.ReactionCount} 条反应，{audioClips} 个音频 clip。");
+            Console.WriteLine($"内容包已加载：{package.MaterialCount} 个材质，{package.ReactionCount} 条反应，{audioClips} 个音频 clip，Physics 已接入。");
         }
         else
         {

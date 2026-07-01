@@ -160,7 +160,10 @@ public sealed class PhysicsSystem : IDisposable
     /// </summary>
     public RigidStampRegistry Registry { get; }
 
-    private CellGrid Grid { get; }
+    /// <summary>
+    /// 获取 Physics 当前耦合的权威 cell 网格。
+    /// </summary>
+    public CellGrid Grid { get; }
 
     /// <summary>
     /// 获取由 <see cref="Initialize"/> 创建的 task bridge worker 数；外部 world 构造时为 0。
@@ -363,6 +366,56 @@ public sealed class PhysicsSystem : IDisposable
         }
 
         return written;
+    }
+
+    /// <summary>
+    /// 从只读快照恢复运行时刚体，重建 Box2D shape、速度与 RigidOwned stamp。
+    /// </summary>
+    /// <param name="snapshots">刚体快照。</param>
+    /// <returns>成功恢复的刚体数量。</returns>
+    public int RestoreBodySnapshots(ReadOnlySpan<RigidBodySnapshot> snapshots)
+    {
+        ObjectDisposedException.ThrowIf(_shutdown, this);
+        int restored = 0;
+        for (int i = 0; i < snapshots.Length; i++)
+        {
+            RigidBodySnapshot snapshot = snapshots[i];
+            BodyLocalMask mask = snapshot.Mask ?? throw new InvalidDataException("刚体快照缺少 body-local mask。");
+            if (!RigidBodyMaskShapeBuilder.TryBuildConvexPieces(mask, out ConvexPolygon[] pieces, out int pieceCount))
+            {
+                throw new InvalidDataException($"刚体 {snapshot.BodyKey} 的 body-local mask 无法生成有效凸片。");
+            }
+
+            B2BodyId bodyId = ShapeBuilder.BuildBody(
+                WorldId,
+                pieces.AsSpan(0, pieceCount),
+                snapshot.Transform.Position);
+            Box2D.b2Body_SetTransform(
+                bodyId,
+                new B2Vec2
+                {
+                    X = PhysicsScale.PixelToPhysics(snapshot.Transform.Position.X),
+                    Y = PhysicsScale.PixelToPhysics(snapshot.Transform.Position.Y),
+                },
+                new B2Rot
+                {
+                    C = snapshot.Transform.Cos,
+                    S = snapshot.Transform.Sin,
+                });
+            Box2D.b2Body_SetLinearVelocity(
+                bodyId,
+                new B2Vec2
+                {
+                    X = PhysicsScale.PixelToPhysics(snapshot.LinearVelocityPixelsPerSecond.X),
+                    Y = PhysicsScale.PixelToPhysics(snapshot.LinearVelocityPixelsPerSecond.Y),
+                });
+            Box2D.b2Body_SetAngularVelocity(bodyId, snapshot.AngularVelocityRadiansPerSecond);
+            PixelRigidBody body = PhysicsWorld.AddBody(bodyId, mask, snapshot.BodyKey);
+            _ = RigidBodyRasterizer.StampInverseSampling(body, snapshot.Transform, Grid, Registry);
+            restored++;
+        }
+
+        return restored;
     }
 
     /// <summary>
