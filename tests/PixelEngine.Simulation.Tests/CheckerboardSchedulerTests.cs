@@ -72,6 +72,33 @@ public sealed class CheckerboardSchedulerTests
         }
     }
 
+    /// <summary>
+    /// 验证 resident 但 sleeping 的 chunk 不进入调度桶，静止区域不会被下一帧迭代。
+    /// </summary>
+    [Fact]
+    public void StepCaSkipsSleepingChunksEvenWhenResident()
+    {
+        TestChunkSource source = CreateDenseSource(-1, -1, 2, 2);
+        Chunk active = source.GetRequired(new ChunkCoord(0, 0));
+        Chunk sleeping = source.GetRequired(new ChunkCoord(2, 2));
+        Set(active, 10, 10, Sand);
+        Set(sleeping, 10, 10, Sand);
+        active.SetCurrentDirty(DirtyRect.Full);
+        using JobSystem jobs = new(workerCount: 2)
+        {
+            SingleThreadThreshold = 0,
+        };
+        SimulationKernel kernel = new(source, CreateMaterials());
+
+        kernel.StepCa(jobs);
+
+        Assert.Equal(0, Get(active, 10, 10));
+        Assert.Equal(Sand, Get(active, 10, 11));
+        Assert.Equal(Sand, Get(sleeping, 10, 10));
+        Assert.Equal(0, Get(sleeping, 10, 11));
+        Assert.Equal(ChunkState.Sleeping, sleeping.State);
+    }
+
     private static MaterialPropsTable CreateMaterials()
     {
         return new MaterialPropsTable(
