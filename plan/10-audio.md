@@ -162,7 +162,7 @@ OpenAL 封装与生命周期：
 帧节奏与诊断：
 
 - [x] 音频派发步骤接入帧尾（相位 8 后、相位 10 前），仅事件入队 / 排空 / 设源参数，计入 §1.4「音频派发 ≤1ms」（架构 §10.3、§17.1）。
-- [ ] render-only 帧（`simSteppedThisFrame==false`）仍推进 voice / ambient / listener，ring 空，声场连续（架构 §4.2）。
+- [x] render-only 帧（`simSteppedThisFrame==false`）仍推进 voice / ambient / listener，ring 空，声场连续（架构 §4.2）。
 - [x] `AudioDiagnostics` 向 Core 诊断注册：派发耗时、drained/coalesced/dropped、活跃 voice / ambient 数、steal 次数、clip 计数（架构 §17.1）。
 - [ ] `AudioSettings`：主 / 类别音量、`MaxVoices`/`MaxAmbientVoices`/`PixelsPerMeter`/ 距离模型 /`PerTypeCap`/`CoalesceBucketSize`，运行时可调。
 
