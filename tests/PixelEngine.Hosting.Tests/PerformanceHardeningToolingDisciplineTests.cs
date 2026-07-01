@@ -40,6 +40,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("maxRatio", regression, StringComparison.Ordinal);
         Assert.Contains("RNGCHKFAIL", disassembly, StringComparison.Ordinal);
         Assert.Contains("ymm|zmm", disassembly, StringComparison.Ordinal);
+        Assert.Contains("HardwareIntrinsics", disassembly, StringComparison.Ordinal);
         Assert.Contains("\"benchmarks\"", baseline, StringComparison.Ordinal);
     }
 
