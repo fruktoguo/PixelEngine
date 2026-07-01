@@ -31,7 +31,7 @@ public sealed class GpuRadianceCascadePipeline
     /// </summary>
     public void DispatchSdfInitialize(uint occluderTexture, uint outputSdf, int width, int height, float threshold)
     {
-        ValidateHandles(occluderTexture, outputSdf);
+        ValidateHandlePair(occluderTexture, outputSdf);
         BindSdf(outputSdf);
         _backend.BindTexture(0, occluderTexture);
         _backend.SetUniform1(_sdfJfa, "uSeedTexture", 0);
@@ -47,7 +47,7 @@ public sealed class GpuRadianceCascadePipeline
     /// </summary>
     public void DispatchSdfJump(uint sourceSdf, uint outputSdf, int width, int height, int jumpStep)
     {
-        ValidateHandles(sourceSdf, outputSdf);
+        ValidateHandlePair(sourceSdf, outputSdf);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(jumpStep);
         BindSdf(outputSdf);
         _backend.BindTexture(0, sourceSdf);
@@ -65,7 +65,7 @@ public sealed class GpuRadianceCascadePipeline
     public void DispatchCascadeBuild(uint sdfTexture, uint emissiveTexture, uint outputCascade, int width, int height, RadianceCascadeSettings settings, int cascadeIndex)
     {
         settings = settings.Validate();
-        ValidateHandles(sdfTexture, emissiveTexture, outputCascade);
+        ValidateHandleTriple(sdfTexture, emissiveTexture, outputCascade);
         BindRadiance(outputCascade);
         _backend.BindTexture(0, sdfTexture);
         _backend.BindTexture(1, emissiveTexture);
@@ -84,7 +84,7 @@ public sealed class GpuRadianceCascadePipeline
     /// </summary>
     public void DispatchMerge(uint nearCascadeTexture, uint farCascadeTexture, uint outputCascade, int width, int height, int cascadeIndex, float mergeFactor)
     {
-        ValidateHandles(nearCascadeTexture, farCascadeTexture, outputCascade);
+        ValidateHandleTriple(nearCascadeTexture, farCascadeTexture, outputCascade);
         BindRadiance(outputCascade);
         _backend.BindTexture(0, nearCascadeTexture);
         _backend.BindTexture(1, farCascadeTexture);
@@ -101,7 +101,7 @@ public sealed class GpuRadianceCascadePipeline
     /// </summary>
     public void DispatchApply(uint sceneTexture, uint radianceTexture, uint outputTexture, int width, int height, float intensity)
     {
-        ValidateHandles(sceneTexture, radianceTexture, outputTexture);
+        ValidateHandleTriple(sceneTexture, radianceTexture, outputTexture);
         _backend.BindImage(0, outputTexture, level: 0, layered: false, layer: 0, GLEnum.WriteOnly, GLEnum.Rgba8);
         _backend.BindTexture(0, sceneTexture);
         _backend.BindTexture(1, radianceTexture);
@@ -134,14 +134,24 @@ public sealed class GpuRadianceCascadePipeline
         _backend.MemoryBarrier(barrier);
     }
 
-    private static void ValidateHandles(params uint[] handles)
+    private static void ValidateHandle(uint handle)
     {
-        foreach (uint handle in handles)
+        if (handle == 0)
         {
-            if (handle == 0)
-            {
-                throw new ArgumentException("compute 纹理句柄不能为 0。", nameof(handles));
-            }
+            throw new ArgumentException("compute 纹理句柄不能为 0。", nameof(handle));
         }
+    }
+
+    private static void ValidateHandlePair(uint first, uint second)
+    {
+        ValidateHandle(first);
+        ValidateHandle(second);
+    }
+
+    private static void ValidateHandleTriple(uint first, uint second, uint third)
+    {
+        ValidateHandle(first);
+        ValidateHandle(second);
+        ValidateHandle(third);
     }
 }
