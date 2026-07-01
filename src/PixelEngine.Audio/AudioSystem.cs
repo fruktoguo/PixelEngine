@@ -1,3 +1,6 @@
+using System.Numerics;
+using PixelEngine.Core.Diagnostics;
+
 namespace PixelEngine.Audio;
 
 /// <summary>
@@ -8,7 +11,9 @@ public sealed class AudioSystem : IDisposable
     private IAudioBackend? _backend;
     private OpenAlDevice? _device;
     private AudioVoicePool? _voices;
+    private AudioClipCache? _clipCache;
     private AudioSettings _settings = new();
+    private AudioListenerState _lastListener;
     private bool _ownsBackend;
     private bool _disposed;
 
@@ -26,6 +31,11 @@ public sealed class AudioSystem : IDisposable
     /// OpenAL 初始化失败原因；成功或使用显式 backend 时为 <see langword="null"/>。
     /// </summary>
     public string? InitializationWarning { get; private set; }
+
+    /// <summary>
+    /// 当前诊断快照。
+    /// </summary>
+    public AudioDiagnostics Diagnostics { get; private set; }
 
     /// <summary>
     /// 初始化音频系统。未提供 backend 时优先 OpenAL，失败则静默降级为 <see cref="NullAudioBackend"/>。
@@ -63,6 +73,19 @@ public sealed class AudioSystem : IDisposable
         }
 
         _voices = new AudioVoicePool(_backend, _settings);
+        _lastListener = new AudioListenerState(Vector3.Zero, -Vector3.UnitZ, Vector3.UnitY, _settings.MasterVolume);
+        RefreshDiagnostics(default);
+    }
+
+    /// <summary>
+    /// 挂接 clip cache，供公开播放 API 使用。
+    /// </summary>
+    /// <param name="clipCache">clip cache。</param>
+    public void AttachClipCache(AudioClipCache clipCache)
+    {
+        ThrowIfDisposed();
+        _clipCache = clipCache ?? throw new ArgumentNullException(nameof(clipCache));
+        RefreshDiagnostics(default);
     }
 
     /// <summary>
@@ -78,8 +101,95 @@ public sealed class AudioSystem : IDisposable
         ThrowIfDisposed();
         IAudioBackend backend = Backend;
         AudioListenerState listenerState = AudioListenerState.FromView(in view, _settings);
+        _lastListener = listenerState;
         backend.SetListener(in listenerState);
         Voices.RefreshFinishedVoices();
+        RefreshDiagnostics(default);
+    }
+
+    /// <summary>
+    /// 播放一个世界定位 one-shot clip。
+    /// </summary>
+    /// <param name="clip">已加载 clip。</param>
+    /// <param name="worldPos">世界 cell 坐标。</param>
+    /// <param name="volume">音量。</param>
+    /// <param name="pitch">音高。</param>
+    /// <returns>是否成功取到 voice 并播放。</returns>
+    public bool PlayOneShot(AudioClip clip, in Vector2 worldPos, float volume = 1f, float pitch = 1f)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(clip);
+        AudioSpace space = new(_settings.PixelsPerMeter);
+        Vector3 position = space.ToMeters(worldPos.X, worldPos.Y);
+        AudioVoice? voice = Voices.Acquire(128, PixelEngine.Core.Events.AudioEventType.ParticleImpact, position, _lastListener.Position, 0);
+        if (voice is null)
+        {
+            RefreshDiagnostics(default);
+            return false;
+        }
+
+        voice.Play(clip.Buffer.Handle, volume, pitch);
+        RefreshDiagnostics(default);
+        return true;
+    }
+
+    /// <summary>
+    /// 播放一个非定位 UI clip。当前实现把 source 放在 listener 位置，避免左右声像偏移。
+    /// </summary>
+    /// <param name="clip">已加载 clip。</param>
+    /// <param name="volume">音量。</param>
+    /// <returns>是否成功播放。</returns>
+    public bool PlayUi(AudioClip clip, float volume = 1f)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(clip);
+        AudioVoice? voice = Voices.Acquire(byte.MaxValue, PixelEngine.Core.Events.AudioEventType.AmbientRegion, _lastListener.Position, _lastListener.Position, 0);
+        if (voice is null)
+        {
+            RefreshDiagnostics(default);
+            return false;
+        }
+
+        voice.Play(clip.Buffer.Handle, volume, 1f);
+        RefreshDiagnostics(default);
+        return true;
+    }
+
+    /// <summary>
+    /// 尝试播放已加载的 asset id；未加载时静默返回 false，不阻塞主线程。
+    /// </summary>
+    /// <param name="assetId">资产 id。</param>
+    /// <param name="worldPos">世界 cell 坐标。</param>
+    /// <param name="volume">音量。</param>
+    /// <param name="pitch">音高。</param>
+    /// <returns>是否成功播放。</returns>
+    public bool TryPlayLoadedOneShot(string assetId, in Vector2 worldPos, float volume = 1f, float pitch = 1f)
+    {
+        ThrowIfDisposed();
+        return _clipCache is not null
+            && _clipCache.TryGetLoaded(assetId, out AudioClip? clip)
+            && clip is not null
+            && PlayOneShot(clip, in worldPos, volume, pitch);
+    }
+
+    /// <summary>
+    /// 发布当前音频诊断到 Core 计数器。
+    /// </summary>
+    /// <param name="counters">Core 诊断计数器。</param>
+    public void PublishDiagnostics(EngineCounters counters)
+    {
+        ArgumentNullException.ThrowIfNull(counters);
+        AudioDiagnostics diagnostics = Diagnostics;
+        counters.SetAudioDiagnostics(
+            diagnostics.LastDispatch.Drained,
+            diagnostics.LastDispatch.Coalesced,
+            diagnostics.LastDispatch.Dropped,
+            diagnostics.LastDispatch.Played,
+            diagnostics.ActiveVoices,
+            diagnostics.VoiceSteals,
+            diagnostics.LoadedClips,
+            diagnostics.LoadingClips,
+            diagnostics.LastDispatch.DispatchMilliseconds);
     }
 
     /// <summary>
@@ -107,6 +217,8 @@ public sealed class AudioSystem : IDisposable
 
         _backend = null;
         _ownsBackend = false;
+        _clipCache = null;
+        Diagnostics = default;
     }
 
     /// <inheritdoc />
@@ -124,5 +236,16 @@ public sealed class AudioSystem : IDisposable
     private void ThrowIfDisposed()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+    }
+
+    private void RefreshDiagnostics(AudioDispatchStats dispatch)
+    {
+        AudioVoicePool? voices = _voices;
+        Diagnostics = new AudioDiagnostics(
+            dispatch,
+            voices?.ActiveVoiceCount ?? 0,
+            voices?.StealCount ?? 0,
+            _clipCache?.LoadedCount ?? 0,
+            _clipCache?.LoadingCount ?? 0);
     }
 }

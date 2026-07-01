@@ -14,10 +14,53 @@ public interface IAudioBackend : IDisposable
     uint CreateSource();
 
     /// <summary>
+    /// 创建一个音频 buffer。
+    /// </summary>
+    /// <returns>后端 buffer 句柄。</returns>
+    uint CreateBuffer();
+
+    /// <summary>
     /// 删除 source。
     /// </summary>
     /// <param name="source">source 句柄。</param>
     void DeleteSource(uint source);
+
+    /// <summary>
+    /// 删除 buffer。
+    /// </summary>
+    /// <param name="buffer">buffer 句柄。</param>
+    void DeleteBuffer(uint buffer);
+
+    /// <summary>
+    /// 上传 PCM 数据到 buffer。
+    /// </summary>
+    /// <param name="buffer">buffer 句柄。</param>
+    /// <param name="format">PCM 样本格式。</param>
+    /// <param name="pcm">PCM 字节。</param>
+    /// <param name="sampleRate">采样率。</param>
+    void UploadBuffer(uint buffer, AudioSampleFormat format, ReadOnlySpan<byte> pcm, int sampleRate);
+
+    /// <summary>
+    /// 将一组 buffer 排入 streaming source。
+    /// </summary>
+    /// <param name="source">source 句柄。</param>
+    /// <param name="buffers">buffer 句柄列表。</param>
+    void QueueBuffers(uint source, ReadOnlySpan<uint> buffers);
+
+    /// <summary>
+    /// 从 streaming source 取回已处理 buffer。
+    /// </summary>
+    /// <param name="source">source 句柄。</param>
+    /// <param name="destination">目标 buffer 句柄列表。</param>
+    /// <returns>实际取回数量。</returns>
+    int UnqueueProcessedBuffers(uint source, Span<uint> destination);
+
+    /// <summary>
+    /// 查询 source 已处理的 queued buffer 数量。
+    /// </summary>
+    /// <param name="source">source 句柄。</param>
+    /// <returns>已处理 buffer 数。</returns>
+    int GetProcessedBufferCount(uint source);
 
     /// <summary>
     /// 配置 source 的距离衰减参数。

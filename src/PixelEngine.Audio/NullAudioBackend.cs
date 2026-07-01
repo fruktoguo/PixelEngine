@@ -8,6 +8,7 @@ namespace PixelEngine.Audio;
 public sealed class NullAudioBackend : IAudioBackend
 {
     private readonly List<SourceRecord> _sources = [];
+    private readonly List<BufferRecord> _buffers = [];
     private bool _disposed;
 
     /// <summary>
@@ -31,6 +32,16 @@ public sealed class NullAudioBackend : IAudioBackend
     public int SourceCount => _sources.Count;
 
     /// <summary>
+    /// 已创建 buffer 数。
+    /// </summary>
+    public int BufferCount => _buffers.Count;
+
+    /// <summary>
+    /// 已删除 buffer 数。
+    /// </summary>
+    public int DeletedBufferCount { get; private set; }
+
+    /// <summary>
     /// 最近一次 listener 状态。
     /// </summary>
     public AudioListenerState LastListener { get; private set; }
@@ -45,11 +56,71 @@ public sealed class NullAudioBackend : IAudioBackend
     }
 
     /// <inheritdoc />
+    public uint CreateBuffer()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        uint handle = (uint)(_buffers.Count + 1);
+        _buffers.Add(new BufferRecord(handle));
+        return handle;
+    }
+
+    /// <inheritdoc />
     public void DeleteSource(uint source)
     {
         SourceRecord record = Get(source);
         record.State = AudioSourceState.Stopped;
         record.Deleted = true;
+    }
+
+    /// <inheritdoc />
+    public void DeleteBuffer(uint buffer)
+    {
+        BufferRecord record = GetBuffer(buffer);
+        record.Deleted = true;
+        DeletedBufferCount++;
+    }
+
+    /// <inheritdoc />
+    public void UploadBuffer(uint buffer, AudioSampleFormat format, ReadOnlySpan<byte> pcm, int sampleRate)
+    {
+        BufferRecord record = GetBuffer(buffer);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sampleRate);
+        record.Format = format;
+        record.SampleRate = sampleRate;
+        record.ByteLength = pcm.Length;
+    }
+
+    /// <inheritdoc />
+    public void QueueBuffers(uint source, ReadOnlySpan<uint> buffers)
+    {
+        SourceRecord record = Get(source);
+        for (int i = 0; i < buffers.Length; i++)
+        {
+            _ = GetBuffer(buffers[i]);
+            record.QueuedBufferHandles.Enqueue(buffers[i]);
+            record.QueuedBuffers++;
+        }
+    }
+
+    /// <inheritdoc />
+    public int UnqueueProcessedBuffers(uint source, Span<uint> destination)
+    {
+        SourceRecord record = Get(source);
+        int count = Math.Min(record.ProcessedBuffers, destination.Length);
+        for (int i = 0; i < count; i++)
+        {
+            destination[i] = record.QueuedBufferHandles.TryDequeue(out uint buffer) ? buffer : 0;
+        }
+
+        record.ProcessedBuffers -= count;
+        record.QueuedBuffers -= count;
+        return count;
+    }
+
+    /// <inheritdoc />
+    public int GetProcessedBufferCount(uint source)
+    {
+        return Get(source).ProcessedBuffers;
     }
 
     /// <inheritdoc />
@@ -97,6 +168,18 @@ public sealed class NullAudioBackend : IAudioBackend
         record.State = AudioSourceState.Stopped;
     }
 
+    /// <summary>
+    /// 测试辅助：模拟 source 上有已处理 streaming buffer。
+    /// </summary>
+    /// <param name="source">source 句柄。</param>
+    /// <param name="count">已处理 buffer 数。</param>
+    public void MarkProcessedBuffers(uint source, int count)
+    {
+        SourceRecord record = Get(source);
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
+        record.ProcessedBuffers = count;
+    }
+
     /// <inheritdoc />
     public void SetListener(in AudioListenerState listener)
     {
@@ -123,6 +206,18 @@ public sealed class NullAudioBackend : IAudioBackend
         return record.Deleted ? throw new ObjectDisposedException(nameof(source)) : record;
     }
 
+    private BufferRecord GetBuffer(uint buffer)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (buffer == 0 || buffer > _buffers.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(buffer), "未知 buffer 句柄。");
+        }
+
+        BufferRecord record = _buffers[(int)buffer - 1];
+        return record.Deleted ? throw new ObjectDisposedException(nameof(buffer)) : record;
+    }
+
     private sealed class SourceRecord(uint handle)
     {
         public readonly uint Handle = handle;
@@ -131,6 +226,18 @@ public sealed class NullAudioBackend : IAudioBackend
         public Vector3 Position;
         public float Gain;
         public float Pitch;
+        public bool Deleted;
+        public int QueuedBuffers;
+        public int ProcessedBuffers;
+        public Queue<uint> QueuedBufferHandles { get; } = [];
+    }
+
+    private sealed class BufferRecord(uint handle)
+    {
+        public readonly uint Handle = handle;
+        public AudioSampleFormat Format;
+        public int SampleRate;
+        public int ByteLength;
         public bool Deleted;
     }
 }

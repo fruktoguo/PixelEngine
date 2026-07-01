@@ -10,6 +10,7 @@ namespace PixelEngine.Audio;
 /// <param name="Played">播放解析器确认播放的事件数。</param>
 /// <param name="ActiveVoices">派发后活跃 positional voice 数。</param>
 /// <param name="VoiceSteals">累计 voice 抢占次数。</param>
+/// <param name="DispatchMilliseconds">派发耗时，单位毫秒。</param>
 public readonly record struct AudioDispatchStats(
     int Drained,
     int Coalesced,
@@ -17,4 +18,5 @@ public readonly record struct AudioDispatchStats(
     int Dispatched,
     int Played,
     int ActiveVoices,
-    long VoiceSteals);
+    long VoiceSteals,
+    double DispatchMilliseconds = 0);
