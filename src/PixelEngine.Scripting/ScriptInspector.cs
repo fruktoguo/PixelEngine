@@ -30,7 +30,10 @@ public static class ScriptInspector
                 field.GetValue(behaviour),
                 !field.IsInitOnly,
                 field.IsPublic,
-                field.GetCustomAttribute<SerializeFieldAttribute>() is not null));
+                field.GetCustomAttribute<SerializeFieldAttribute>() is not null,
+                Classify(field.FieldType),
+                field.GetCustomAttribute<RangeAttribute>()?.Minimum,
+                field.GetCustomAttribute<RangeAttribute>()?.Maximum));
         }
 
         return [.. descriptors];
@@ -69,6 +72,85 @@ public static class ScriptInspector
             ? !targetType.IsValueType || Nullable.GetUnderlyingType(targetType) is not null
             : targetType.IsInstanceOfType(value);
     }
+
+    private static ScriptFieldKind Classify(Type type)
+    {
+        Type target = Nullable.GetUnderlyingType(type) ?? type;
+        return target == typeof(bool)
+            ? ScriptFieldKind.Boolean
+            : target == typeof(string)
+                ? ScriptFieldKind.String
+                : target.IsEnum
+                    ? ScriptFieldKind.Enum
+                    : target == typeof(MaterialId)
+                        ? ScriptFieldKind.Material
+                        : ClassifyNonScalar(target);
+    }
+
+    private static ScriptFieldKind ClassifyNonScalar(Type target)
+    {
+        return target == typeof(System.Numerics.Vector2) ||
+            target == typeof(System.Numerics.Vector3) ||
+            target == typeof(System.Numerics.Vector4)
+            ? ScriptFieldKind.Vector
+            : IsNumeric(target) ? ScriptFieldKind.Number : ScriptFieldKind.Unsupported;
+    }
+
+    private static bool IsNumeric(Type type)
+    {
+        return type == typeof(byte) ||
+            type == typeof(sbyte) ||
+            type == typeof(short) ||
+            type == typeof(ushort) ||
+            type == typeof(int) ||
+            type == typeof(uint) ||
+            type == typeof(long) ||
+            type == typeof(ulong) ||
+            type == typeof(float) ||
+            type == typeof(double) ||
+            type == typeof(decimal);
+    }
+}
+
+/// <summary>
+/// Inspector 可编辑字段的编辑器类别。
+/// </summary>
+public enum ScriptFieldKind
+{
+    /// <summary>
+    /// 当前 Editor 不支持的字段类型，仅展示文本。
+    /// </summary>
+    Unsupported,
+
+    /// <summary>
+    /// 布尔字段。
+    /// </summary>
+    Boolean,
+
+    /// <summary>
+    /// 数值字段。
+    /// </summary>
+    Number,
+
+    /// <summary>
+    /// 字符串字段。
+    /// </summary>
+    String,
+
+    /// <summary>
+    /// 枚举字段。
+    /// </summary>
+    Enum,
+
+    /// <summary>
+    /// System.Numerics 向量字段。
+    /// </summary>
+    Vector,
+
+    /// <summary>
+    /// PixelEngine 脚本材质引用字段。
+    /// </summary>
+    Material,
 }
 
 /// <summary>
@@ -80,10 +162,16 @@ public static class ScriptInspector
 /// <param name="CanWrite">字段是否可写。</param>
 /// <param name="IsPublic">字段是否为 public。</param>
 /// <param name="IsSerializedPrivate">字段是否通过 SerializeField 暴露。</param>
+/// <param name="Kind">字段在 Inspector 中的编辑器类别。</param>
+/// <param name="RangeMinimum">字段范围滑条最小值；无范围时为 null。</param>
+/// <param name="RangeMaximum">字段范围滑条最大值；无范围时为 null。</param>
 public readonly record struct ScriptFieldDescriptor(
     string Name,
     Type FieldType,
     object? Value,
     bool CanWrite,
     bool IsPublic,
-    bool IsSerializedPrivate);
+    bool IsSerializedPrivate,
+    ScriptFieldKind Kind,
+    double? RangeMinimum,
+    double? RangeMaximum);
