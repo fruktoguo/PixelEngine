@@ -1,4 +1,5 @@
 using PixelEngine.Core;
+using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
 using Xunit;
 
@@ -88,6 +89,31 @@ public sealed class EngineOverloadControllerTests
     }
 
     /// <summary>
+    /// 验证 Hosting 在进入光照降级层级后会调用已注册的 GPU compute 降级后端。
+    /// </summary>
+    [Fact]
+    public void EngineAppliesGpuComputeDegradationWhenReducedLightingTierIsReached()
+    {
+        RecordingGpuComputeQualityDegrader degrader = new();
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithOverloadPolicy(frameBudgetMs: 10, sustainWindow: 1)
+            .Build();
+        engine.Context.RegisterService<IGpuComputeQualityDegrader>(degrader);
+
+        _ = engine.RunOneTick(realDeltaSeconds: 0.011);
+        Assert.Equal(0, degrader.CallCount);
+
+        _ = engine.RunOneTick(realDeltaSeconds: 0.011);
+        Assert.Equal(1, degrader.CallCount);
+        Assert.Equal(EngineQualityTier.ReducedLighting, engine.Context.QualityTier);
+
+        _ = engine.RunOneTick(realDeltaSeconds: 0.011);
+        Assert.Equal(2, degrader.CallCount);
+        Assert.Equal(EngineQualityTier.DistantChunkThrottle, engine.Context.QualityTier);
+    }
+
+    /// <summary>
     /// 验证过载控制器通过 EngineContext 服务表暴露给脚本服务后端与 Editor。
     /// </summary>
     [Fact]
@@ -109,6 +135,17 @@ public sealed class EngineOverloadControllerTests
         {
             EnginePhase phase = (EnginePhase)i;
             _ = builder.OnPhase(phase, context => phases.Add(context.Phase));
+        }
+    }
+
+    private sealed class RecordingGpuComputeQualityDegrader : IGpuComputeQualityDegrader
+    {
+        public int CallCount { get; private set; }
+
+        public bool DegradeGpuComputeOneStep()
+        {
+            CallCount++;
+            return true;
         }
     }
 }
