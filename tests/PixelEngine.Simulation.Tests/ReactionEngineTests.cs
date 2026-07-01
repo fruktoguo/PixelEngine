@@ -147,6 +147,62 @@ public sealed class ReactionEngineTests
     }
 
     /// <summary>
+    /// 验证垂直 chunk 边界两侧同帧均 dirty 时，反应只执行一次。
+    /// </summary>
+    [Fact]
+    public void StepCaVerticalBoundaryReactionIsNotDoubledWhenBothChunksAreDirty()
+    {
+        TestChunkSource source = CreateVerticalBoundaryNeighborhood(out Chunk center, out Chunk south);
+        Set(center, 20, 63, Fire);
+        Set(south, 20, 0, Wood);
+        center.SetCurrentDirty(DirtyRect.Full);
+        south.SetCurrentDirty(DirtyRect.Full);
+        ReactionSetup setup = CreateSetup(Reaction(Fire, Wood, Smoke, Ash, 255));
+        SimulationKernel kernel = new(source, new MaterialPropsTable(setup.Materials.Hot), reactionExecutor: setup.Engine);
+
+        kernel.StepCa();
+
+        Assert.Equal(Smoke, Get(center, 20, 63));
+        Assert.Equal(Ash, Get(south, 20, 0));
+        Assert.Equal(1, kernel.Diagnostics.ReactionSuccessCount);
+        Assert.Equal(1, kernel.Diagnostics.BoundaryReactionCount);
+        Assert.True(CellFlags.MatchesFrame(GetFlags(center, 20, 63), kernel.CurrentParity));
+        Assert.True(CellFlags.MatchesFrame(GetFlags(south, 20, 0), kernel.CurrentParity));
+    }
+
+    /// <summary>
+    /// 验证 2x2 chunk 交汇附近的两组边界反应不会互相翻倍或丢失。
+    /// </summary>
+    [Fact]
+    public void StepCaFourCornerBoundaryReactionsAreCountedOncePerPair()
+    {
+        TestChunkSource source = CreateFourCornerBoundaryNeighborhood(
+            out Chunk northwest,
+            out Chunk northeast,
+            out Chunk southwest,
+            out Chunk southeast);
+        Set(northwest, 63, 63, Fire);
+        Set(southwest, 63, 0, Wood);
+        Set(northeast, 0, 63, Fire);
+        Set(southeast, 0, 0, Wood);
+        northwest.SetCurrentDirty(DirtyRect.Full);
+        northeast.SetCurrentDirty(DirtyRect.Full);
+        southwest.SetCurrentDirty(DirtyRect.Full);
+        southeast.SetCurrentDirty(DirtyRect.Full);
+        ReactionSetup setup = CreateSetup(Reaction(Fire, Wood, Smoke, Ash, 255));
+        SimulationKernel kernel = new(source, new MaterialPropsTable(setup.Materials.Hot), reactionExecutor: setup.Engine);
+
+        kernel.StepCa();
+
+        Assert.Equal(Smoke, Get(northwest, 63, 63));
+        Assert.Equal(Smoke, Get(northeast, 0, 63));
+        Assert.Equal(Ash, Get(southwest, 63, 0));
+        Assert.Equal(Ash, Get(southeast, 0, 0));
+        Assert.Equal(2, kernel.Diagnostics.ReactionSuccessCount);
+        Assert.Equal(2, kernel.Diagnostics.BoundaryReactionCount);
+    }
+
+    /// <summary>
     /// 验证 EmitHeat、SpawnParticle 与 GeneratesSmoke 副作用全部投递给 sink。
     /// </summary>
     [Fact]
@@ -381,6 +437,72 @@ public sealed class ReactionEngineTests
                 else if (dx == 1 && dy == 0)
                 {
                     east = chunk;
+                }
+            }
+        }
+
+        return new TestChunkSource(chunks);
+    }
+
+    private static TestChunkSource CreateVerticalBoundaryNeighborhood(out Chunk center, out Chunk south)
+    {
+        Chunk[] chunks = new Chunk[12];
+        int index = 0;
+        center = null!;
+        south = null!;
+        for (int dy = -1; dy <= 2; dy++)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                Chunk chunk = new(new ChunkCoord(dx, dy));
+                chunks[index++] = chunk;
+                if (dx == 0 && dy == 0)
+                {
+                    center = chunk;
+                }
+                else if (dx == 0 && dy == 1)
+                {
+                    south = chunk;
+                }
+            }
+        }
+
+        return new TestChunkSource(chunks);
+    }
+
+    private static TestChunkSource CreateFourCornerBoundaryNeighborhood(
+        out Chunk northwest,
+        out Chunk northeast,
+        out Chunk southwest,
+        out Chunk southeast)
+    {
+        Chunk[] chunks = new Chunk[16];
+        int index = 0;
+        northwest = null!;
+        northeast = null!;
+        southwest = null!;
+        southeast = null!;
+        for (int dy = -1; dy <= 2; dy++)
+        {
+            for (int dx = -1; dx <= 2; dx++)
+            {
+                Chunk chunk = new(new ChunkCoord(dx, dy));
+                chunks[index++] = chunk;
+                if (dx == 0 && dy == 0)
+                {
+                    northwest = chunk;
+                }
+                else if (dx == 1 && dy == 0)
+                {
+                    northeast = chunk;
+                }
+                else if (dx == 0 && dy == 1)
+                {
+                    southwest = chunk;
+                }
+                else if (dx == 1 && dy == 1)
+                {
+                    southeast = chunk;
                 }
             }
         }
