@@ -31,6 +31,22 @@ public sealed class EngineOverloadControllerTests
     }
 
     /// <summary>
+    /// 验证完整五级降级链最终封顶在 SlowMotion，不继续追帧或产生额外档位。
+    /// </summary>
+    [Fact]
+    public void OverloadControllerEscalatesThroughAllFiveTiersAndCapsAtSlowMotion()
+    {
+        EngineOverloadController controller = new(new EngineOverloadOptions(frameBudgetMs: 10, sustainWindow: 1));
+
+        Assert.Equal(EngineQualityTier.ReducedThermal, controller.SubmitFrame(11));
+        Assert.Equal(EngineQualityTier.ReducedLighting, controller.SubmitFrame(11));
+        Assert.Equal(EngineQualityTier.DistantChunkThrottle, controller.SubmitFrame(11));
+        Assert.Equal(EngineQualityTier.Sim30Hz, controller.SubmitFrame(11));
+        Assert.Equal(EngineQualityTier.SlowMotion, controller.SubmitFrame(11));
+        Assert.Equal(EngineQualityTier.SlowMotion, controller.SubmitFrame(11));
+    }
+
+    /// <summary>
     /// 验证 Engine 在降级到 Sim30Hz 后通过 FrameClock 下发 sim 降频。
     /// </summary>
     [Fact]
