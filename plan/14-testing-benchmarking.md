@@ -131,10 +131,10 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 ### 4.3 Physics.Tests（§8）
 
-- [ ] `ConvexDecompositionTests`：每片顶点 ≤ 8 且严格凸、并集覆盖原 mask（容差 = DP epsilon）、`radius=0`；退化输入走三角化回退不崩（物理 §8.2）。
-- [ ] `MarchingSquaresContourTests`：二值 mask 边界产出像素分辨率闭合折线（16 case 正确、含孔 / 多连通）（物理 §8.2）。
-- [ ] `InverseSamplingRasterizationTests`：刚体 mask 在一圈角度（含任意非整数角）下 inverse-sample 栅格化水密无洞、面积 ±1px 容差（物理 §8.3）。
-- [ ] `RigidBodySplitConservationTests`：挖断成 N 块后 CCL→重建得 N 体、像素总数守恒、父体速度转移子体、碎片下限以下转粒子（物理 §8.4、不变式 #5）。
+- [x] `ConvexDecompositionTests`：每片顶点 ≤ 8 且严格凸、并集覆盖原 mask（容差 = DP epsilon）、`radius=0`；退化输入走三角化回退不崩（物理 §8.2）。
+- [x] `MarchingSquaresContourTests`：二值 mask 边界产出像素分辨率闭合折线（16 case 正确、含孔 / 多连通）（物理 §8.2）。
+- [x] `InverseSamplingRasterizationTests`：刚体 mask 在一圈角度（含任意非整数角）下 inverse-sample 栅格化水密无洞、面积 ±1px 容差（物理 §8.3）。
+- [x] `RigidBodySplitConservationTests`：挖断成 N 块后 CCL→重建得 N 体、像素总数守恒、父体速度转移子体、碎片下限以下转粒子（物理 §8.4、不变式 #5）。
 
 ### 4.4 Serialization.Tests（§11）
 
@@ -176,7 +176,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] `ParityClockTests`、`KeepAliveBoundaryTests`、`ResidencyBoundaryTests` 全绿：`ParityClockTests` 已覆盖每帧至多一次与 parity 翻转；`KeepAliveBoundaryTests` 已覆盖边界雪崩传播、dirty 收回 sleep 与 32px halo；`ResidencyBoundaryTests` 已覆盖 World border ring 驻留、KeepAlive 唤醒补外圈与相位 2 结构性摘除边界（架构 §5.3/§5.5/§5.8/§3.4、不变式 #3/#4）。
 - [x] `MultithreadOracleTests` 全绿：多线程终态相对单线程 oracle 的守恒量精确相等、统计量在容差内一致，无边界伪影（架构 §16.2，非 bit 比对）。
 - [x] `ReactionTableTests` 全绿：tag 展开 / 概率映射 / 去重 / 惰性早退正确（架构 §7.4）。
-- [ ] `ConvexDecompositionTests`、`MarchingSquaresContourTests`、`InverseSamplingRasterizationTests`、`RigidBodySplitConservationTests` 全绿：每片 ≤8 顶点且凸且覆盖原 mask、radius=0、任意角栅格化水密无洞、破坏拆分守恒且速度转移（架构 §8.2/§8.3/§8.4、不变式 #5）。
+- [x] `ConvexDecompositionTests`、`MarchingSquaresContourTests`、`InverseSamplingRasterizationTests`、`RigidBodySplitConservationTests` 全绿：每片 ≤8 顶点且凸且覆盖原 mask、radius=0、任意角栅格化水密无洞、破坏拆分守恒且速度转移（架构 §8.2/§8.3/§8.4、不变式 #5）。
 - [ ] `SaveLoadRoundTripTests`、`MaterialRemapTests`、`VersionMigrationTests` 全绿：逐 cell 等价、改 materials.json 顺序 / 增删后旧档正确重映射、迁移链正确（架构 §11、不变式 #8、R15）。
 - [x] `HotReloadTests`、`ScriptExceptionIsolationTests`、`AlcCollectibilityTests` 全绿：热重载行为正确、异常隔离不崩、ALC 经 GC 可回收且无泄漏（架构 §17.2/§17.4）。
 - [ ] 六个基准可产出报告：cells/frame、每核加速曲线、纹理上传、反应 cache-miss、GC 停顿、粒子积分均有实测数据，并已回填 §1.4/§12.7/§12.8 的目标（架构 §12.7/§17.3，实测替代估算）。
@@ -210,7 +210,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 - [x] `test(core): 建立四测试工程+基准工程骨架与确定性测试基座`（对应 §4.1）。
 - [x] `test(sim): CA 内核质量/反应守恒与 parity/KeepAlive/oracle 性质测试`（对应 §4.2）。
-- [ ] `test(physics): 凸分解/inverse-sampling/刚体拆分守恒测试`（对应 §4.3）。
+- [x] `test(physics): 凸分解/inverse-sampling/刚体拆分守恒测试`（对应 §4.3）。
 - [ ] `test(serialization): save-load 往返/材质重映射/版本迁移测试`（对应 §4.4）。
 - [x] `test(script): 热重载/异常隔离/ALC 可回收测试`（对应 §4.5）。
 - [ ] `test(bench): cells-frame/加速曲线/上传/反应/GC/粒子基准`（对应 §4.6）。

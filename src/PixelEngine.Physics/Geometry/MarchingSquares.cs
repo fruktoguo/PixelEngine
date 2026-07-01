@@ -23,7 +23,7 @@ public static class MarchingSquares
     }
 
     /// <summary>
-    /// 追踪固体区域全部边界，输出一个 CCW 外轮廓和零个或多个 CW 内孔。
+    /// 追踪固体区域全部边界，输出 CCW 外轮廓和零个或多个 CW 内孔。
     /// </summary>
     /// <param name="solidMask">二值固体 mask，非 0 表示固体。</param>
     /// <param name="width">mask 宽度。</param>
@@ -44,26 +44,30 @@ public static class MarchingSquares
             throw new ArgumentException("ranges 不能为空。", nameof(ranges));
         }
 
-        Dictionary<EdgeKey, EdgeKey> nextByStart = BuildBoundaryEdges(solidMask, width, height);
-        if (nextByStart.Count == 0)
+        List<BoundaryEdge> edges = BuildBoundaryEdges(solidMask, width, height);
+        if (edges.Count == 0)
         {
             return 0;
         }
 
+        Dictionary<EdgeKey, List<int>> edgesByStart = BuildStartIndex(edges);
+        bool[] used = new bool[edges.Count];
         int written = 0;
         int rangeCount = 0;
-        int outerRangeIndex = -1;
-        float outerAreaMagnitude = 0f;
+        int remainingEdges = edges.Count;
 
-        while (nextByStart.Count > 0)
+        while (remainingEdges > 0)
         {
             if (rangeCount >= ranges.Length)
             {
                 throw new ArgumentException("ranges 缓冲不足。", nameof(ranges));
             }
 
-            EdgeKey start = FindStart(nextByStart);
+            int startEdgeIndex = FindStartEdge(edges, used);
+            BoundaryEdge startEdge = edges[startEdgeIndex];
+            EdgeKey start = startEdge.Start;
             EdgeKey current = start;
+            int currentEdgeIndex = startEdgeIndex;
             int startOffset = written;
 
             while (true)
@@ -74,11 +78,15 @@ public static class MarchingSquares
                 }
 
                 destination[written++] = current.ToVector2();
-                if (!nextByStart.Remove(current, out EdgeKey next))
+                if (used[currentEdgeIndex])
                 {
-                    throw new InvalidOperationException("边界链断裂。");
+                    throw new InvalidOperationException("边界链重复访问。");
                 }
 
+                used[currentEdgeIndex] = true;
+                remainingEdges--;
+                BoundaryEdge currentEdge = edges[currentEdgeIndex];
+                EdgeKey next = currentEdge.End;
                 current = next;
                 if (current.Equals(start))
                 {
@@ -90,34 +98,42 @@ public static class MarchingSquares
                     destination[written++] = start.ToVector2();
                     break;
                 }
+
+                currentEdgeIndex = FindNextEdge(edges, edgesByStart, used, currentEdge);
             }
 
             Span<Vector2> contour = destination[startOffset..written];
-            float areaMagnitude = Math.Abs(SignedArea(contour));
-            ranges[rangeCount] = new ContourRange(startOffset, contour.Length, IsHole: true);
-            if (areaMagnitude > outerAreaMagnitude)
-            {
-                outerAreaMagnitude = areaMagnitude;
-                outerRangeIndex = rangeCount;
-            }
-
+            bool isHole = SignedArea(contour) > 0f;
+            ranges[rangeCount] = new ContourRange(startOffset, contour.Length, isHole);
             rangeCount++;
         }
 
         for (int i = 0; i < rangeCount; i++)
         {
             ContourRange range = ranges[i];
-            bool isOuter = i == outerRangeIndex;
-            NormalizeWinding(destination.Slice(range.Start, range.Count), wantCounterClockwise: isOuter);
-            ranges[i] = range with { IsHole = !isOuter };
+            NormalizeWinding(destination.Slice(range.Start, range.Count), wantCounterClockwise: !range.IsHole);
         }
 
-        if (outerRangeIndex > 0)
+        int firstOuterIndex = FindFirstOuterRange(ranges, rangeCount);
+        if (firstOuterIndex > 0)
         {
-            (ranges[0], ranges[outerRangeIndex]) = (ranges[outerRangeIndex], ranges[0]);
+            (ranges[0], ranges[firstOuterIndex]) = (ranges[firstOuterIndex], ranges[0]);
         }
 
         return rangeCount;
+    }
+
+    private static int FindFirstOuterRange(Span<ContourRange> ranges, int rangeCount)
+    {
+        for (int i = 0; i < rangeCount; i++)
+        {
+            if (!ranges[i].IsHole)
+            {
+                return i;
+            }
+        }
+
+        return 0;
     }
 
     /// <summary>
@@ -133,9 +149,9 @@ public static class MarchingSquares
         return checked((width * height * 4) + 1);
     }
 
-    private static Dictionary<EdgeKey, EdgeKey> BuildBoundaryEdges(ReadOnlySpan<byte> solidMask, int width, int height)
+    private static List<BoundaryEdge> BuildBoundaryEdges(ReadOnlySpan<byte> solidMask, int width, int height)
     {
-        Dictionary<EdgeKey, EdgeKey> edges = new(width * height);
+        List<BoundaryEdge> edges = new(width * height * 2);
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
@@ -171,26 +187,111 @@ public static class MarchingSquares
         return edges;
     }
 
-    private static void AddEdge(Dictionary<EdgeKey, EdgeKey> edges, int startX, int startY, int endX, int endY)
+    private static void AddEdge(List<BoundaryEdge> edges, int startX, int startY, int endX, int endY)
     {
-        edges.Add(new EdgeKey(startX, startY), new EdgeKey(endX, endY));
+        edges.Add(new BoundaryEdge(new EdgeKey(startX, startY), new EdgeKey(endX, endY)));
     }
 
-    private static EdgeKey FindStart(Dictionary<EdgeKey, EdgeKey> edges)
+    private static Dictionary<EdgeKey, List<int>> BuildStartIndex(List<BoundaryEdge> edges)
     {
-        EdgeKey best = default;
-        bool hasBest = false;
-
-        foreach (EdgeKey key in edges.Keys)
+        Dictionary<EdgeKey, List<int>> edgesByStart = new(edges.Count);
+        for (int i = 0; i < edges.Count; i++)
         {
-            if (!hasBest || key.Y < best.Y || (key.Y == best.Y && key.X < best.X))
+            EdgeKey start = edges[i].Start;
+            if (!edgesByStart.TryGetValue(start, out List<int>? indices))
             {
-                best = key;
+                indices = [];
+                edgesByStart.Add(start, indices);
+            }
+
+            indices.Add(i);
+        }
+
+        return edgesByStart;
+    }
+
+    private static int FindStartEdge(List<BoundaryEdge> edges, bool[] used)
+    {
+        int bestIndex = -1;
+        BoundaryEdge best = default;
+        bool hasBest = false;
+        for (int i = 0; i < edges.Count; i++)
+        {
+            if (used[i])
+            {
+                continue;
+            }
+
+            BoundaryEdge edge = edges[i];
+            if (!hasBest ||
+                edge.Start.Y < best.Start.Y ||
+                (edge.Start.Y == best.Start.Y && edge.Start.X < best.Start.X) ||
+                (edge.Start.Equals(best.Start) && DirectionOrder(edge) < DirectionOrder(best)))
+            {
+                best = edge;
+                bestIndex = i;
                 hasBest = true;
             }
         }
 
-        return best;
+        return bestIndex >= 0 ? bestIndex : throw new InvalidOperationException("边界边集合为空。");
+    }
+
+    private static int FindNextEdge(
+        List<BoundaryEdge> edges,
+        Dictionary<EdgeKey, List<int>> edgesByStart,
+        bool[] used,
+        BoundaryEdge current)
+    {
+        if (!edgesByStart.TryGetValue(current.End, out List<int>? candidates))
+        {
+            throw new InvalidOperationException("边界链断裂。");
+        }
+
+        int bestIndex = -1;
+        int bestRank = int.MaxValue;
+        int currentDirection = DirectionOrder(current);
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            int edgeIndex = candidates[i];
+            if (used[edgeIndex])
+            {
+                continue;
+            }
+
+            int candidateDirection = DirectionOrder(edges[edgeIndex]);
+            int rank = TurnRank(currentDirection, candidateDirection);
+            if (rank < bestRank)
+            {
+                bestRank = rank;
+                bestIndex = edgeIndex;
+            }
+        }
+
+        return bestIndex >= 0 ? bestIndex : throw new InvalidOperationException("边界链断裂。");
+    }
+
+    private static int TurnRank(int currentDirection, int candidateDirection)
+    {
+        int delta = (candidateDirection - currentDirection + 4) & 3;
+        return delta switch
+        {
+            3 => 0,
+            0 => 1,
+            1 => 2,
+            _ => 3,
+        };
+    }
+
+    private static int DirectionOrder(BoundaryEdge edge)
+    {
+        int dx = edge.End.X - edge.Start.X;
+        int dy = edge.End.Y - edge.Start.Y;
+        return dx > 0 ? 0 :
+            dy > 0 ? 1 :
+            dx < 0 ? 2 :
+            dy < 0 ? 3 :
+            throw new InvalidOperationException("零长度边界边。");
     }
 
     private static void NormalizeWinding(Span<Vector2> contour, bool wantCounterClockwise)
@@ -240,4 +341,6 @@ public static class MarchingSquares
         }
 
     }
+
+    private readonly record struct BoundaryEdge(EdgeKey Start, EdgeKey End);
 }

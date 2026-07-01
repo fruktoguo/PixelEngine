@@ -82,7 +82,70 @@ public static class RigidBodyRasterizer
             }
         }
 
+        if (stamped < mask.SolidPixelCount)
+        {
+            stamped += StampAntiErosionCells(body, in transform, grid, registry, stamps, bounds, stamped);
+        }
+
         return stamped;
+    }
+
+    private static int StampAntiErosionCells(
+        PixelRigidBody body,
+        in Transform2D transform,
+        CellGrid grid,
+        RigidStampRegistry registry,
+        List<RigidStampedCell> stamps,
+        RectI bounds,
+        int currentStamped)
+    {
+        int added = 0;
+        int target = body.Mask.SolidPixelCount;
+        Transform2D sampleTransform = transform;
+        AddFromSampleOffset(0.25f, 0.25f, ref currentStamped, ref added);
+        AddFromSampleOffset(0.75f, 0.25f, ref currentStamped, ref added);
+        AddFromSampleOffset(0.25f, 0.75f, ref currentStamped, ref added);
+        AddFromSampleOffset(0.75f, 0.75f, ref currentStamped, ref added);
+        return added;
+
+        void AddFromSampleOffset(float offsetX, float offsetY, ref int stamped, ref int addedCount)
+        {
+            if (stamped >= target)
+            {
+                return;
+            }
+
+            BodyLocalMask mask = body.Mask;
+            for (int wy = bounds.MinY; wy < bounds.MaxY && stamped < target; wy++)
+            {
+                for (int wx = bounds.MinX; wx < bounds.MaxX && stamped < target; wx++)
+                {
+                    if (IsOwnedByBody(registry, body.BodyKey, wx, wy) ||
+                        !IsAdjacentToBody(registry, body.BodyKey, wx, wy) ||
+                        !TrySampleSolidAt(mask, in sampleTransform, wx + offsetX, wy + offsetY, out int localX, out int localY))
+                    {
+                        continue;
+                    }
+
+                    int stampedCell = StampCell(body, grid, registry, stamps, wx, wy, localX, localY);
+                    stamped += stampedCell;
+                    addedCount += stampedCell;
+                }
+            }
+        }
+    }
+
+    private static bool IsAdjacentToBody(RigidStampRegistry registry, int bodyKey, int worldX, int worldY)
+    {
+        return IsOwnedByBody(registry, bodyKey, worldX - 1, worldY) ||
+            IsOwnedByBody(registry, bodyKey, worldX + 1, worldY) ||
+            IsOwnedByBody(registry, bodyKey, worldX, worldY - 1) ||
+            IsOwnedByBody(registry, bodyKey, worldX, worldY + 1);
+    }
+
+    private static bool IsOwnedByBody(RigidStampRegistry registry, int bodyKey, int worldX, int worldY)
+    {
+        return registry.TryGet(worldX, worldY, out RigidStamp stamp) && stamp.BodyKey == bodyKey;
     }
 
     private static int StampCell(
@@ -116,11 +179,7 @@ public static class RigidBodyRasterizer
         out int localX,
         out int localY)
     {
-        return TrySampleSolidAt(mask, in transform, worldX + 0.5f, worldY + 0.5f, out localX, out localY) ||
-            TrySampleSolidAt(mask, in transform, worldX + 0.25f, worldY + 0.25f, out localX, out localY) ||
-            TrySampleSolidAt(mask, in transform, worldX + 0.75f, worldY + 0.25f, out localX, out localY) ||
-            TrySampleSolidAt(mask, in transform, worldX + 0.25f, worldY + 0.75f, out localX, out localY) ||
-            TrySampleSolidAt(mask, in transform, worldX + 0.75f, worldY + 0.75f, out localX, out localY);
+        return TrySampleSolidAt(mask, in transform, worldX + 0.5f, worldY + 0.5f, out localX, out localY);
     }
 
     private static bool TrySampleSolidAt(
