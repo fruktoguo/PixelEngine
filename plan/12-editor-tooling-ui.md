@@ -195,8 +195,8 @@ sim 控制 / 存读档 / 调参 / 模式：
 - [x] `PhysicsTuningPanel`（`plan/06`）：经 `PhysicsSystemTuningService` 实时应用 subStep、Box2D world 重力、碎片阈值；scale/workerCount 按创建期约束只读展示，不伪装为热改（§3.14）
 - [x] `ParticleTuningPanel`（`plan/05`）：经 `ParticleSystemSettings` / `ParticleSystemTuningService` 实时应用最大活跃数、重力、max-lifetime、沉积速度阈值、抛射冲量倍率、单 tick 抛射上限（§3.14）
 - [x] `LightingTuningPanel`（`plan/08`）：emissive/bloom/fog-of-war/dither/gamma/Radiance Cascades 开关（§3.14、架构 §9.4）
-- [ ] `EditorMode` 状态机（Edit/Play）+ 输入仲裁 + 切换经 Hosting 运行状态 API（§3.15）
-- [ ] Play 模式可选「当前态运行」或「存档点临时副本运行、退出还原」（经 `plan/07`）（§3.15）
+- [x] `EditorMode` 状态机（Edit/Play）+ 输入仲裁 + 切换经 Hosting 运行状态 API（§3.15）
+- [x] Play 模式可选「当前态运行」或「存档点临时副本运行、退出还原」（经 `IEditorPlaySnapshotStore` 接入 `plan/07` 存读档服务）（§3.15）
 
 ---
 
@@ -218,7 +218,7 @@ sim 控制 / 存读档 / 调参 / 模式：
 - [x] sim 控制条：Pause 停止 sim 但持续出帧；单步**恰执行一个 tick** 后回到暂停，绝不追帧/不多步；30Hz 降频时 render 仍每帧出帧（#6、§3.12、架构 §4.2）
 - [x] 存读档：保存→加载后世界逐 cell 等价；改 materials.json 顺序/增删后旧档正确重映射；缺失材质走 fallback 并提示（#8、架构 §11.2、§3.13）
 - [x] 三个调参面板的可编辑参数改动实时作用于对应子系统且不破坏其不变式；Box2D scale/workerCount 等创建期约束只读展示，不作为可编辑参数（§3.14）
-- [ ] Edit/Play 模式切换正确仲裁输入；「临时副本运行」退出后世界还原；切换不破坏帧节奏（#6、§3.15）
+- [x] Edit/Play 模式切换正确仲裁输入；「临时副本运行」退出后经 `IEditorPlaySnapshotStore` 恢复世界；切换不破坏帧节奏（#6、§3.15）
 - [ ] Editor 仅消费各子系统公开 read-only/tuning API，无任何对子系统内部类型/字段的直接访问；无反向依赖（§1、§2）
 - [ ] 编辑器禁用开关关闭后，主循环无 ImGui/叠层开销（§1）
 
@@ -259,5 +259,5 @@ sim 控制 / 存读档 / 调参 / 模式：
 - [x] 节点 5：`feat(editor): 材质+反应实时编辑器与 id 稳定热重载(架构 §17.4)`（§3.8）
 - [x] 节点 6：`feat(editor): 脚本 Inspector/资源浏览器/层级面板`（§3.9–§3.11）
 - [x] 节点 7：`feat(editor): sim 控制条/存读档 UI/子系统调参面板`（§3.12–§3.14）
-- [ ] 节点 8：`feat(editor): 编辑/运行(Play)模式切换`（§3.15）
+- [x] 节点 8：`feat(editor): 编辑/运行(Play)模式切换`（§3.15）
 - [ ] 节点 9：`docs(plan): 勾选 plan/12 验收并更新 README 进度`（§5 全部通过后）
