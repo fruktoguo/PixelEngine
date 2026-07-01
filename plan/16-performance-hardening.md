@@ -72,7 +72,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [ ] render buffer 构建（相位 9）稳态零分配。[plan/08 · §9.3/§12.4]
 - [ ] 反应 pass（相位 4 内）稳态零分配，tag 在加载期展开、运行时零字符串/字典。[plan/04 · §7.4]
 - [ ] 温度 stencil（相位 5）稳态零分配。[plan/04 · §7.5]
-- [ ] 序列化字节准备（相位 11）用 POH/ArrayPool 缓冲，稳态零分配。[plan/07 · §11.5]
+- [x] 序列化字节准备（相位 11）用 POH/ArrayPool 缓冲，稳态零分配。[plan/07 · §11.5]
 - [ ] 全热路径静态核查无 LINQ/捕获闭包/装箱/`params`/迭代器/字符串拼接（分析器提升为 error）。[全子系统 · AGENTS §3]
 
 ### 4.3 多线程覆盖面
