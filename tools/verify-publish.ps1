@@ -83,7 +83,7 @@ function Test-QemuAarch64Available {
 
 function Invoke-Smoke([string]$executable, [string]$targetRid) {
   if ((Get-HostRid) -eq $targetRid) {
-    Invoke-Checked $executable @('--smoke')
+    Invoke-Checked $executable -arguments @('--smoke')
     return
   }
 
@@ -93,7 +93,7 @@ function Invoke-Smoke([string]$executable, [string]$targetRid) {
       $qemu = Get-Command qemu-aarch64-static -ErrorAction Stop
     }
 
-    Invoke-Checked $qemu.Source @($executable, '--smoke')
+    Invoke-Checked $qemu.Source -arguments @($executable, '--smoke')
     return
   }
 

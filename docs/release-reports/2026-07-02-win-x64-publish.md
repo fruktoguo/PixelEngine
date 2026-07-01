@@ -1,0 +1,46 @@
+# 2026-07-02 win-x64 发布验证记录
+
+本记录覆盖 `plan/15` 的本机可验证部分。目标机为 Windows / win-x64，当前只验证 `win-x64` 的 R2R 与 AOT 两条发行通道；不代表 6 RID 全矩阵、macOS codesign/notarization、Linux glibc 动态链或跨硬件 SIMD light-up 已完成。
+
+## 执行命令
+
+```pwsh
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/publish-r2r.ps1 -Rid win-x64
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/verify-publish.ps1 -Rid win-x64 -Channel r2r -SkipPublish
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/publish-aot.ps1 -Rid win-x64
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/verify-publish.ps1 -Rid win-x64 -Channel aot -SkipPublish
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/package.ps1 -Rid win-x64 -Channel r2r
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/package.ps1 -Rid win-x64 -Channel aot
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/audit-release-artifacts.ps1
+```
+
+## 结果
+
+`tools/publish-r2r.ps1` 与 `tools/publish-aot.ps1` 均完成 native Box2D build、`dotnet publish` 与产物输出。`tools/verify-publish.ps1` 对两通道均完成 `--smoke`，输出显示内容包加载 18 个材质、22 条反应、19 个音频 clip，Physics 已接入，脚本程序集与 Hosting/Simulation 后端已接入，场景进入 `lava-mine` 第 1 帧。
+
+`tools/package.ps1` 生成两个包：
+
+| 产物 | 大小 |
+|---|---:|
+| `PixelEngine-Demo-0.1.0-win-x64-aot.zip` | 46,377,811 bytes |
+| `PixelEngine-Demo-0.1.0-win-x64-r2r.zip` | 51,260,056 bytes |
+
+`SHA256SUMS` 内容：
+
+```text
+434b70240a755e5f9c2b4f9e4b2ad448dd791e5e07d9b08a6a96e61e5baf82d3  PixelEngine-Demo-0.1.0-win-x64-aot.zip
+346abf6d2f79e807e1d8941c4a6a39bb64104362f9acbfec640e759eec068e86  PixelEngine-Demo-0.1.0-win-x64-r2r.zip
+```
+
+`tools/audit-release-artifacts.ps1` 通过：
+
+```text
+Publish artifact audit passed: win-x64/r2r
+Publish artifact audit passed: win-x64/aot
+Package audit passed. Packages: 2.
+Release artifact audit completed.
+```
+
+## 阻塞边界
+
+以下 `plan/15` 验收仍不能由本机结果闭合：6 RID R2R/AOT 全矩阵、每个 AOT 产物 SIMD 探针、R2R 在 AVX2/AVX-512 目标机的 runtime light-up、6 RID Box2D 12 件 native 产物、Linux glibc 动态链、macOS codesign/notarization/staple、所有产物的确定性 hash 与 GitHub Release 上传。

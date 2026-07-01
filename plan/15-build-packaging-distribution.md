@@ -263,19 +263,19 @@ codesign / notarization
 
 ## 5. 验收标准
 
-- [ ] 6 个 RID（win-x64/win-arm64/linux-x64/linux-arm64/osx-x64/osx-arm64）的 R2R 通道产物全部构建成功并产出（架构 §15）。
-- [ ] 6 个 RID 的 AOT 通道产物全部构建成功并产出；每个 AOT 产物经 SIMD 探针确认 x64 有 ymm（v4 变体有 zmm）、arm64 有 NEON 指令，**无 SSE2 静默退化**（架构 R3、§12.3）。
-- [ ] R2R 产物在目标机不固定 ISA：运行时 light-up 验证显示 sim 热方法在支持 AVX2/AVX-512 的机器上使用对应宽寄存器（Tier-1 重 JIT 生效）（架构 §12.3、§15）。
-- [ ] Box2D dual-build 完整：6 RID × {动态, 静态} = 12 件 native 产物齐备；R2R 产物 `runtimes/<rid>/native/` 含动态 Box2D，AOT 产物为含静态 Box2D 的单一可执行（架构 §14.4）。
-- [ ] OpenAL/ANGLE 在两通道均为动态分发，未被静态链；native 依赖 fan-out 仅 Box2D 一项（不变式 #10、架构 §14.4）。
-- [ ] Linux 两 RID 产物动态链 glibc（`ldd`/`otool` 等价检查无静态 libc），未 `-static` libc（架构 §14.4、§15）。
-- [ ] macOS arm64（及 x64）产物完成 codesign + notarization + staple，`spctl`/`codesign --verify` 通过（架构 §15）。
+- [!] 阻塞：6 个 RID（win-x64/win-arm64/linux-x64/linux-arm64/osx-x64/osx-arm64）的 R2R 通道产物全部构建成功并产出（架构 §15）。本机已验证 `win-x64/r2r`，其余 RID 需 release workflow 或对应目标 runner 产物闭合，证据见 `docs/release-reports/2026-07-02-win-x64-publish.md`。
+- [!] 阻塞：6 个 RID 的 AOT 通道产物全部构建成功并产出；每个 AOT 产物经 SIMD 探针确认 x64 有 ymm（v4 变体有 zmm）、arm64 有 NEON 指令，**无 SSE2 静默退化**（架构 R3、§12.3）。本机已验证 `win-x64/aot` publish + smoke；跨 RID 与每产物 SIMD 探针仍需目标 runner/硬件。
+- [!] 阻塞：R2R 产物在目标机不固定 ISA：运行时 light-up 验证显示 sim 热方法在支持 AVX2/AVX-512 的机器上使用对应宽寄存器（Tier-1 重 JIT 生效）（架构 §12.3、§15）。该项需要代表性 AVX2/AVX-512 目标机与 Tier-1 反汇编证据。
+- [!] 阻塞：Box2D dual-build 完整：6 RID × {动态, 静态} = 12 件 native 产物齐备；R2R 产物 `runtimes/<rid>/native/` 含动态 Box2D，AOT 产物为含静态 Box2D 的单一可执行（架构 §14.4）。本机仅验证 `win-x64` 动态/静态 build 与双通道打包。
+- [!] 阻塞：OpenAL/ANGLE 在两通道均为动态分发，未被静态链；native 依赖 fan-out 仅 Box2D 一项（不变式 #10、架构 §14.4）。本机 `win-x64` 审计通过；6 RID 双通道仍需 release artifact 审计。
+- [!] 阻塞：Linux 两 RID 产物动态链 glibc（`ldd`/`otool` 等价检查无静态 libc），未 `-static` libc（架构 §14.4、§15）。当前 Windows 本机不能验证 Linux 产物动态链。
+- [!] 阻塞：macOS arm64（及 x64）产物完成 codesign + notarization + staple，`spctl`/`codesign --verify` 通过（架构 §15）。该项需要 macOS runner 与 Developer ID/notary 凭据。
 - [x] 「debug 正常 publish 崩」防线：CI verify 阶段对 R2R（动态）与 AOT（静态）两条路径均跑 smoke/加载校验且全绿；任一路径失败即阻断 release（架构 R5）。
 - [x] Trim：所有 `src/` 引擎库开启 trim/AOT 分析器，CI 下 `IL2xxx`/`IL3xxx` 零警告（即零 error）；无 `TrimmerRootDescriptor`，System.Text.Json 全走源生成（架构 §9.1、§16.3）。
 - [!] 阻塞：脚本子系统 trim 豁免生效：R2R 与 AOT 宿主下均能经 Roslyn+ALC 编译并热重载一个最小用户脚本（与 `plan/11` 验收联动）（架构 §13）。当前 `HotReloadService`/`ScriptLoadContext` 明确依赖 `RequiresDynamicCode` 与可卸载 ALC，NativeAOT 不支持该路径；AOT `--smoke` 已禁用 hot reload，需决策是将该验收改为“R2R 支持热重载、AOT 明确禁用并降级”还是放弃 NativeAOT 通道热重载。
-- [ ] 版本与命名：所有产物按 `PixelEngine-Demo-<version>-<rid>-<channel>` 命名，`InformationalVersion` 含 git sha，构建确定性可复现（同输入同产物 hash）。
-- [ ] 内容打包：每个产物根 `content/` 含 materials.json/reactions.json/纹理/音效/默认场景，结构与开发态一致，引擎加载成功（架构 §16.3、§11）。
-- [ ] `SHA256SUMS` 覆盖全部产物并随 GitHub Release 一并发布。
+- [!] 阻塞：版本与命名：所有产物按 `PixelEngine-Demo-<version>-<rid>-<channel>` 命名，`InformationalVersion` 含 git sha，构建确定性可复现（同输入同产物 hash）。本机已验证 `PixelEngine-Demo-0.1.0-win-x64-{r2r,aot}.zip` 命名；tag 覆盖、git sha 与确定性 hash 需 release workflow 产物复核。
+- [!] 阻塞：内容打包：每个产物根 `content/` 含 materials.json/reactions.json/纹理/音效/默认场景，结构与开发态一致，引擎加载成功（架构 §16.3、§11）。本机 `win-x64` 双通道已由 smoke 与 artifact audit 验证；“每个产物”需 6 RID 全矩阵。
+- [!] 阻塞：`SHA256SUMS` 覆盖全部产物并随 GitHub Release 一并发布。本机已生成覆盖 2 个 `win-x64` 包的 `SHA256SUMS`；完整覆盖需 GitHub Release 全产物上传后复核。
 
 ---
 
