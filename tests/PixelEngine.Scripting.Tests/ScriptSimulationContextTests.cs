@@ -179,14 +179,17 @@ public sealed class ScriptSimulationContextTests
         AudioClipCache cache = new(backend, new MemoryAssetStore(wav), new WavDecoder());
         _ = await cache.LoadAsync("sfx/hit.wav");
         using AudioSystem audio = new();
-        audio.Initialize(new AudioSettings { MaxVoices = 1, PixelsPerMeter = 16f, SfxVolume = 0.5f }, backend);
+        audio.Initialize(new AudioSettings { MaxVoices = 2, PixelsPerMeter = 16f, SfxVolume = 0.5f }, backend);
         ScriptAudioApi api = new(audio, cache);
 
         api.PlayAt("sfx/hit.wav", 32, 16, volume: 0.25f);
+        api.PlayOneShot("sfx/hit.wav", volume: 0.5f);
 
-        Assert.Equal(1, backend.PlayCalls);
+        Assert.Equal(2, backend.PlayCalls);
         Assert.Equal(new System.Numerics.Vector3(2f, 1f, 0f), backend.GetSourcePosition(1));
         Assert.Equal(0.125f, backend.GetSourceGain(1), precision: 5);
+        Assert.Equal(System.Numerics.Vector3.Zero, backend.GetSourcePosition(2));
+        Assert.Equal(0.25f, backend.GetSourceGain(2), precision: 5);
         _ = Assert.Throws<InvalidOperationException>(() => api.PlayAt("sfx/missing.wav", 0, 0));
         audio.Shutdown();
     }
