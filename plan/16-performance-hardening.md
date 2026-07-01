@@ -155,19 +155,19 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 
 > 全部勾选方算本文档完成（AGENTS §7）。验收以**实测/反汇编**为准，不以代码存在为准。
 
-- [ ] **SoA 全覆盖**：所有 sim 热数据 SoA，per-cell 字节预算对账通过，AoS 仅工具路径，颜色不入 cell。[§7.1/不变式 #7]
+- [!] **SoA 全覆盖**：所有 sim 热数据 SoA，per-cell 字节预算对账通过，AoS 仅工具路径，颜色不入 cell。[§7.1/不变式 #7] 阻塞于 §4.1 per-cell 预算口径决策：当前 SoA/颜色/AoS 纪律已核实，但 1080p sim 热态约 7.9MiB（8.3MB）高于原 5–7MB 口径。
 - [x] **稳态零分配**：CA/粒子/render buffer/反应/温度/序列化六条热路径 `MemoryDiagnoser` 全报 `0 B`；热路径静态核查无 LINQ/闭包/装箱/迭代器。[§12.4/AGENTS §3]
 - [x] **多线程齐全**：CA checkerboard、Box2D task 桥、render buffer、CCL/形状重建、粒子积分、温度 stencil、序列化字节准备七项均经持久线程池并行；无每帧 `Parallel.For`；活跃任务少时单线程回退生效。[§5.7/§12.7/§14.2/风险 R7]
-- [ ] **SIMD 到位**：温度 stencil/色混合/bulk fill 等向量化且有 scalar fallback、运行时 light-up；sand movement 确认未向量化；AVX-512 gate 实测无降频净损。[§12.5/§2 挑战三]
-- [ ] **bounds-check 消除**：热方法反汇编无 `RNGCHKFAIL`、向量化 pass 见 ymm/zmm；`[DisassemblyDiagnoser]` 守门基线建立。[§12.6/§17.3]
-- [ ] **GC 定档**：Workstation vs Server 实测定档完成；压测下 Gen0 不增长、无可感知停顿；跨界缓冲零拷贝、池化覆盖短命对象。[§12.4]
+- [!] **SIMD 到位**：温度 stencil/色混合/bulk fill 等向量化且有 scalar fallback、运行时 light-up；sand movement 确认未向量化；AVX-512 gate 实测无降频净损。[§12.5/§2 挑战三] 阻塞于 §4.4 AVX-512 目标硬件实测；当前机器仅 AVX2，无法验证 Vector512 降频净损。
+- [x] **bounds-check 消除**：热方法反汇编无 `RNGCHKFAIL`、向量化 pass 见 ymm/zmm；`[DisassemblyDiagnoser]` 守门基线建立。[§12.6/§17.3]
+- [x] **GC 定档**：Workstation vs Server 实测定档完成；压测下 Gen0 不增长、无可感知停顿；跨界缓冲零拷贝、池化覆盖短命对象。[§12.4]
 - [x] **GPU 下放且权威留 CPU**：光照/bloom/高密度粒子/可选非权威 sim pass 在 GPU；权威网格在 CPU、无 readback 卡流水线；compute capability-gate 与回退生效。[§9.4/§9.5/不变式 #9]
-- [ ] **dirty-rect 真生效**：满屏静止场景 sim 成本实测 ≈ 0，叠层确认 sleeping 区零迭代；KeepAlive 无永久唤醒。[§5.4/风险 R1]
+- [x] **dirty-rect 真生效**：满屏静止场景 sim 成本实测 ≈ 0，叠层确认 sleeping 区零迭代；KeepAlive 无永久唤醒。[§5.4/风险 R1]
 - [x] **过载降级链可逐级触发**：五级降级 + 节流全部实现并可由诊断计时器触发；压力下绝不进入 death spiral（不变式 #6）。[§4.2/§4.3]
 - [x] **内存上限守住**：常驻世界稳定 ≤ 配置上限，LRU 驱逐 + RLE+LZ4 生效，长漫游不无界增长。[§12.2]
-- [ ] **延迟+分支校准**：瓶颈分析以 cache-miss/分支误预测为据；多核加速曲线与 cells/frame 在目标硬件实测落表、回填架构指标。[§12.7/§12.8/§17.3]
+- [!] **延迟+分支校准**：瓶颈分析以 cache-miss/分支误预测为据；多核加速曲线与 cells/frame 在目标硬件实测落表、回填架构指标。[§12.7/§12.8/§17.3] 阻塞于 §4.11：当前非管理员会话无法采集 ETW 硬件计数器，且缺少 6 RID 代表硬件 cells/frame 实测。
 - [x] **工具链门禁运行**：BenchmarkDotNet perf 门禁在 CI 跑、回归视为 bug；反汇编流程可复现；debug overlay 在线；发行编译模式审计通过。[§17.1/§17.3/§12.3]
-- [ ] **帧预算达标**：目标硬件实测 CA ≤8ms、渲染+光照+post ≤4ms、物理+重建 ≤3–4ms、逻辑+音频 ≤1ms（典型场景留余量）。[§1.4]
+- [!] **帧预算达标**：目标硬件实测 CA ≤8ms、渲染+光照+post ≤4ms、物理+重建 ≤3–4ms、逻辑+音频 ≤1ms（典型场景留余量）。[§1.4] 阻塞：当前已有 Short 报告显示 full-active CA 仍未达目标预算，且缺少目标硬件正式长跑。
 - [ ] **零冲突复核**：本表所有项与架构不变式（#2/#3/#6/#7/#9）及 plan/00 技术栈无冲突。[AGENTS §1]
 
 ## 6. 依赖关系
