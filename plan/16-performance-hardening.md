@@ -111,12 +111,12 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [ ] 压测下 Gen0 计数长时间不增长、无可感知 GC 停顿。[plan/14 · §1.4/§12.4]
 
 ### 4.7 GPU 计算下放
-- [ ] 光照（emissive/fog-of-war/bloom/dither/gamma）在 GPU。[plan/08/09 · §9.4]
-- [ ] bloom 链在 GPU。[plan/09 · §9.4]
-- [ ] 高密度粒子合成可走 GPU point-sprite 批绘（含 emissive pass）。[plan/09 · §9.3]
-- [ ] 可选非权威 sim pass（空气/烟扩散）下放 compute，**可丢弃、不回 readback**。[plan/09 · §9.5]
-- [ ] 权威网格留 CPU，无 GPU→CPU readback 卡流水线。[plan/03/09 · §9.5/不变式 #9]
-- [ ] compute 特性 capability-gate（GL 4.3+），缺失时 CPU 回退/降级。[plan/08/09 · §9.5]
+- [x] 光照（emissive/fog-of-war/bloom/dither/gamma）在 GPU。[plan/08/09 · §9.4]
+- [x] bloom 链在 GPU。[plan/09 · §9.4]
+- [x] 高密度粒子合成可走 GPU point-sprite 批绘（含 emissive pass）。[plan/09 · §9.3]
+- [x] 可选非权威 sim pass（空气/烟扩散）下放 compute，**可丢弃、不回 readback**。[plan/09 · §9.5]
+- [x] 权威网格留 CPU，无 GPU→CPU readback 卡流水线。[plan/03/09 · §9.5/不变式 #9]
+- [x] compute 特性 capability-gate（GL 4.3+），缺失时 CPU 回退/降级。[plan/08/09 · §9.5]
 
 ### 4.8 dirty-rect 真生效
 - [x] 静止 chunk working rect 收缩为空、进入 sleep、下帧零迭代。[plan/03 · §5.4]
@@ -161,7 +161,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [ ] **SIMD 到位**：温度 stencil/色混合/bulk fill 等向量化且有 scalar fallback、运行时 light-up；sand movement 确认未向量化；AVX-512 gate 实测无降频净损。[§12.5/§2 挑战三]
 - [ ] **bounds-check 消除**：热方法反汇编无 `RNGCHKFAIL`、向量化 pass 见 ymm/zmm；`[DisassemblyDiagnoser]` 守门基线建立。[§12.6/§17.3]
 - [ ] **GC 定档**：Workstation vs Server 实测定档完成；压测下 Gen0 不增长、无可感知停顿；跨界缓冲零拷贝、池化覆盖短命对象。[§12.4]
-- [ ] **GPU 下放且权威留 CPU**：光照/bloom/高密度粒子/可选非权威 sim pass 在 GPU；权威网格在 CPU、无 readback 卡流水线；compute capability-gate 与回退生效。[§9.4/§9.5/不变式 #9]
+- [x] **GPU 下放且权威留 CPU**：光照/bloom/高密度粒子/可选非权威 sim pass 在 GPU；权威网格在 CPU、无 readback 卡流水线；compute capability-gate 与回退生效。[§9.4/§9.5/不变式 #9]
 - [ ] **dirty-rect 真生效**：满屏静止场景 sim 成本实测 ≈ 0，叠层确认 sleeping 区零迭代；KeepAlive 无永久唤醒。[§5.4/风险 R1]
 - [ ] **过载降级链可逐级触发**：五级降级 + 节流全部实现并可由诊断计时器触发；压力下绝不进入 death spiral（不变式 #6）。[§4.2/§4.3]
 - [ ] **内存上限守住**：常驻世界稳定 ≤ 配置上限，LRU 驱逐 + RLE+LZ4 生效，长漫游不无界增长。[§12.2]
