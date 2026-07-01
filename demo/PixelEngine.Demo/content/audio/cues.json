@@ -1,0 +1,17 @@
+{
+  "cues": [
+    { "handle": 1, "asset": "impact_sand.wav" },
+    { "handle": 2, "asset": "splash_water.wav" },
+    { "handle": 3, "asset": "fire_crackle_loop.wav" },
+    { "handle": 4, "asset": "splash_acid.wav" },
+    { "handle": 5, "asset": "lava_bubble_loop.wav" },
+    { "handle": 6, "asset": "sizzle_lava_water.wav" },
+    { "handle": 7, "asset": "impact_stone.wav" },
+    { "handle": 8, "asset": "impact_wood.wav" },
+    { "handle": 9, "asset": "shatter_wood.wav" },
+    { "handle": 10, "asset": "impact_stone.wav" },
+    { "handle": 11, "asset": "shatter_glass.wav" },
+    { "handle": 12, "asset": "impact_metal.wav" },
+    { "handle": 13, "asset": "explosion.wav" }
+  ]
+}

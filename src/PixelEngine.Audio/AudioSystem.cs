@@ -12,7 +12,6 @@ public sealed class AudioSystem : IDisposable
     private OpenAlDevice? _device;
     private AudioVoicePool? _voices;
     private AudioClipCache? _clipCache;
-    private AudioSettings _settings = new();
     private bool _ownsBackend;
     private bool _disposed;
 
@@ -42,6 +41,11 @@ public sealed class AudioSystem : IDisposable
     public AudioDiagnostics Diagnostics { get; private set; }
 
     /// <summary>
+    /// 当前运行时音频设置快照。
+    /// </summary>
+    public AudioSettings Settings { get; private set; } = new();
+
+    /// <summary>
     /// 最近一次 listener 状态。
     /// </summary>
     public AudioListenerState CurrentListener { get; private set; }
@@ -60,14 +64,14 @@ public sealed class AudioSystem : IDisposable
         }
 
         ArgumentNullException.ThrowIfNull(settings);
-        _settings = settings.Validate();
+        Settings = settings.Validate();
         if (backend is not null)
         {
             _backend = backend;
             _ownsBackend = false;
             InitializationWarning = null;
         }
-        else if (OpenAlDevice.TryInitialize(_settings, out OpenAlDevice? device, out string? failureReason))
+        else if (OpenAlDevice.TryInitialize(Settings, out OpenAlDevice? device, out string? failureReason))
         {
             _device = device!;
             _backend = _device.Backend;
@@ -81,8 +85,8 @@ public sealed class AudioSystem : IDisposable
             InitializationWarning = failureReason ?? "OpenAL 初始化失败，已启用无声后端。";
         }
 
-        _voices = new AudioVoicePool(_backend, _settings);
-        CurrentListener = new AudioListenerState(Vector3.Zero, -Vector3.UnitZ, Vector3.UnitY, _settings.MasterVolume);
+        _voices = new AudioVoicePool(_backend, Settings);
+        CurrentListener = new AudioListenerState(Vector3.Zero, -Vector3.UnitZ, Vector3.UnitY, Settings.MasterVolume);
         RefreshDiagnostics(default);
     }
 
@@ -122,7 +126,7 @@ public sealed class AudioSystem : IDisposable
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(settings);
         AudioSettings validated = settings.Validate();
-        _settings = validated;
+        Settings = validated;
         Voices.ApplySettings(validated);
         AmbientLoops?.ApplySettings(validated);
         CurrentListener = CurrentListener with { Gain = validated.MasterVolume };
@@ -143,7 +147,7 @@ public sealed class AudioSystem : IDisposable
         _ = simSteppedThisFrame;
         ThrowIfDisposed();
         IAudioBackend backend = Backend;
-        AudioListenerState listenerState = AudioListenerState.FromView(in view, _settings);
+        AudioListenerState listenerState = AudioListenerState.FromView(in view, Settings);
         CurrentListener = listenerState;
         backend.SetListener(in listenerState);
         Voices.RefreshFinishedVoices();
@@ -162,7 +166,7 @@ public sealed class AudioSystem : IDisposable
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(clip);
-        AudioSpace space = new(_settings.PixelsPerMeter);
+        AudioSpace space = new(Settings.PixelsPerMeter);
         Vector3 position = space.ToMeters(worldPos.X, worldPos.Y);
         AudioVoice? voice = Voices.Acquire(128, PixelEngine.Core.Events.AudioEventType.ParticleImpact, position, CurrentListener.Position, 0);
         if (voice is null)
@@ -171,7 +175,7 @@ public sealed class AudioSystem : IDisposable
             return false;
         }
 
-        voice.Play(clip.Buffer.Handle, volume * _settings.SfxVolume, pitch);
+        voice.Play(clip.Buffer.Handle, volume * Settings.SfxVolume, pitch);
         RefreshDiagnostics(default);
         return true;
     }
@@ -193,7 +197,7 @@ public sealed class AudioSystem : IDisposable
             return false;
         }
 
-        voice.Play(clip.Buffer.Handle, volume * _settings.UiVolume, 1f);
+        voice.Play(clip.Buffer.Handle, volume * Settings.UiVolume, 1f);
         RefreshDiagnostics(default);
         return true;
     }

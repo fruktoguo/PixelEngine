@@ -128,15 +128,15 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 | 爆炸（清 cell + 抛粒子 + 推刚体） | `IWorld.Explode(center,radius,force)` | plan/05 + plan/06 | 需引擎补 API（复合爆炸 helper；可由 cell→particle + impulse 原语组合） |
 | 自由粒子发射 | `IParticles.Emit/Burst(origin,count,velDist,materialId,life)` | plan/05 | 部分实现：脚本 `IParticleSpawner.Spawn/Burst` 已经延迟到粒子安全相位并接入真实 `ParticleSystem`；仍缺更丰富的速度分布 Emit API 与爆炸抛射复合入口 |
 | 相机控制 | `ICamera.Position/Zoom`、`WorldToScreen/ScreenToWorld`、`Follow(target,damping)` | plan/08（相机） | 部分实现：Scripting 已有 `ScriptCameraApi`，支持中心、缩放、视口、屏幕/世界坐标转换与 `CameraSnapshot`；Hosting 已有 `ScriptCameraSynchronizer` 同步 Rendering `CameraState` 与 World residency，`RenderPhaseDriver` 已消费该快照构建 render buffer；仍缺统一 Transform 后的 `Follow(Entity)` 与真实窗口画面验收 |
-| 点光源 / fog-of-war reveal | `ILighting.AddPointLight(...)`、`RevealAround(pos,radius)` | plan/08（光照） | 部分实现：Scripting 已有 `ScriptLightingApi`，Hosting 已有 `ScriptLightingSynchronizer` 同步 Rendering `LightSource` 与 `FogOfWarBuffer`，`RenderPhaseDriver` 已把 fog-of-war 传入 `RenderPipeline`；仍缺 `RenderPipeline.RenderFrame` 对脚本点光源列表的消费入口与真实窗口光照验收 |
-| 一次性音效播放 | `IAudio.PlayOneShot(clip, worldPos?)` | plan/10 | 部分实现：Scripting `IAudioApi` 已支持 `PlayOneShot` 与 `PlayAt`，`ScriptAudioApi` 可桥接真实 `AudioSystem`；Hosting 已能从 `content/audio` 预加载 Demo wav clip 并注入脚本上下文；仍缺材质事件 cue 句柄到 clip buffer 映射验收 |
+| 点光源 / fog-of-war reveal | `ILighting.AddPointLight(...)`、`RevealAround(pos,radius)` | plan/08（光照） | 部分实现：Scripting 已有 `ScriptLightingApi`，Hosting 已有 `ScriptLightingSynchronizer` 同步 Rendering `LightSource` 与 `FogOfWarBuffer`，`RenderPhaseDriver` 已把 fog-of-war 与点光源传入 `RenderPipeline`，点光源已合成进 visibility mask；仍缺真实窗口光照验收 |
+| 一次性音效播放 | `IAudio.PlayOneShot(clip, worldPos?)` | plan/10 | 部分实现：Scripting `IAudioApi` 已支持 `PlayOneShot` 与 `PlayAt`，`ScriptAudioApi` 可桥接真实 `AudioSystem`；Hosting 已能从 `content/audio` 预加载 Demo wav clip 并注入脚本上下文，且 `audio/cues.json` 已把材质事件 cue 句柄映射到已加载 clip buffer；仍缺爆炸复合 API 与窗口态验收 |
 | 材质化音效配置 | `MaterialDef.AudioCues`（materials.json 字段） | plan/04 + plan/10 | 已规划 |
 | 即时模式 HUD / 菜单 | `IGuiContext`（窗口 / 文本 / 按钮 / 色块），`Behaviour.OnGui` | plan/11 / plan/12 | 需引擎补 API（游戏 HUD 用 GUI 服务，区别于编辑器 UI） |
 | 性能 / 状态诊断读取 | `IDiagnostics`（fps、sim 频率、活跃 chunk / 粒子 / 刚体计数） | plan/02（诊断） | 已规划 |
 | 调试叠层开关 | `IDiagnostics.ToggleOverlay(OverlayKind)` | plan/12（调试叠层）+ 架构 §17.2 | 需引擎补 API（叠层开关的脚本可见 API） |
 | 确定性 RNG（关卡生成） | `IRandom`（可种子化） | plan/02（RNG） | 已规划 |
 
-API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosting 的 Physics 刚体快照恢复与 world seed/game time 完整恢复；plan/06 的 kinematic 角色推动 dynamic 刚体公开交互；plan/05 + plan/06 + plan/10 的 `World.Explode(center,radius,force)` 复合入口；plan/11/12 的 `Behaviour.OnGui` 与 `IGuiContext` 游戏 HUD 服务；plan/12/架构 §17.2 的脚本可见调试叠层开关；plan/08 的 render pass 消费脚本点光源列表入口；plan/10 的材质事件 cue→clip buffer 映射验收。上述缺口均在本表中保持「需引擎补 API」或「部分实现但阻塞」状态，Demo 不允许绕过公开 API 直接引用内部实现。
+API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosting 的 Physics 刚体快照恢复与 world seed/game time 完整恢复；plan/06 的 kinematic 角色推动 dynamic 刚体公开交互；plan/05 + plan/06 + plan/10 的 `World.Explode(center,radius,force)` 复合入口；plan/11/12 的 `Behaviour.OnGui` 与 `IGuiContext` 游戏 HUD 服务；plan/12/架构 §17.2 的脚本可见调试叠层开关；plan/08 的脚本点光源彩色照明窗口态验收。上述缺口均在本表中保持「需引擎补 API」或「部分实现但阻塞」状态，Demo 不允许绕过公开 API 直接引用内部实现。
 
 ---
 
@@ -167,7 +167,7 @@ API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosti
 - [!] 木 / 金属可破坏结构布置：`LevelDirector` 已铺设木桥与金属梁，并经 `IRigidBodyApi.CreateFromRegion` 在 headless 真实 Hosting/Scripting/Physics 路径注册 6 个动态刚体；集成测试已切断其中一段木桥并验证 Physics 销毁父刚体、创建 2 个子刚体；阻塞：缺少窗口态可推 / 砸 / CA 挖断后再破坏端到端验收。〔plan/06;§3.7〕
 - [!] 火花 / 血 / 碎屑发射：`PlayerHealth` 已用 `Particles.Burst` 喷血，`MaterialEmitter` 已用 `Particles.Spawn` 做喷口粒子，`SparkEmitter` 已接入 lava 区域 fire 火花，刚体小碎片可由 Physics damage 重建写入自由粒子；阻塞：脚本公开 API 仍缺 `World.Explode(center,radius,force)`，不能完成爆炸抛射 cell 与推动刚体的复合验收。〔plan/05;§3.8〕
 - [!] emissive 材质标注正确（lava/molten_metal/fire/火花），Scripting 已有 `Lighting.RevealAround` + `AddPointLight` 请求 API，Hosting 已有 `ScriptLightingSynchronizer` 将脚本请求同步为 Rendering `LightSource` 与 `FogOfWarBuffer`，`RenderPhaseDriver` 已把 fog-of-war 与点光源传入 `RenderPipeline` 并 stamp 自由粒子到 emissive buffer；`RenderPipeline` 已把点光源合成进 visibility mask；阻塞：缺少真实窗口光照验收。〔plan/08;§3.9〕
-- [!] `materials.json` 的 `AudioCues` 已覆盖 impact/fire/splash/ambient/shatter，玩法脚本可经 `Audio.PlayOneShot`/`PlayAt` 请求音效；Hosting 已能从 `content/audio` 预加载 19 个 wav clip 并注入脚本上下文；阻塞：缺少爆炸复合 API 触发 explosion cue，以及材质事件 cue 句柄到 clip buffer 的 Demo 映射/消费验收。〔plan/04、plan/10;§3.10〕
+- [!] `materials.json` 的 `AudioCues` 已覆盖 impact/fire/splash/ambient/explosion/shatter，玩法脚本可经 `Audio.PlayOneShot`/`PlayAt` 请求音效；Hosting 已能从 `content/audio` 预加载 19 个 wav clip 并注入脚本上下文，`audio/cues.json` 已把材质事件 cue 句柄接到 `MaterialAudioPlayer`/已加载 clip buffer，粒子事件也接入 `Context.Events`；阻塞：缺少爆炸复合 API 触发 explosion cue，以及窗口态定位音频/ambient/sizzle/corrosion 满屏限频验收。〔plan/04、plan/10;§3.10〕
 
 关卡与 UI
 - [!] `LevelDirector : Behaviour`：源码已落地，脚本生成「熔岩矿洞逃生」基础布局并装配玩家、相机、笔刷、喷口和目标触发器；Hosting procedural scene source 已可按入口 Behaviour 名自动物化 `LevelDirector` 到脚本场景，且 headless resident world 可经 `AttachScriptingFromServices()` 自动驱动；save directory 与 `.scene InitialSaveDirectory` 可显式装配 live World/Simulation/粒子后端，窗口态已可装配输入与 Rendering 相位；阻塞：真实窗口可玩关卡验收仍未完成。〔plan/11、plan/02;§3.11〕
