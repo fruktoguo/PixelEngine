@@ -70,6 +70,11 @@ public sealed class TemperatureField
     public bool ContactFireOnly { get; private set; }
 
     /// <summary>
+    /// 是否存在活动温度 block；rendering 可据此决定是否允许跳过逐 cell 温度 glow 采样。
+    /// </summary>
+    public bool HasActiveBlocks => _blocks.Count != 0;
+
+    /// <summary>
     /// 温度子块存储格式。
     /// </summary>
     public TemperatureStorageKind StorageKind { get; }

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using PixelEngine.Core;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Threading;
 using PixelEngine.Simulation;
@@ -69,6 +70,12 @@ public sealed class RenderBufferBuilder(
         RenderBuffer target = buildState.Target!;
         RenderAuxBuffers aux = buildState.Aux!;
         RenderBufferBuilder builder = buildState.Builder!;
+        if (builder.CanUsePaletteFastPath(context))
+        {
+            builder.BuildRowsPaletteFast(context, target, aux, start, end);
+            return;
+        }
+
         Span<uint> pixels = target.Pixels;
         Span<uint> emissive = aux.Emissive;
         Span<byte> occluder = aux.Occluder;
@@ -91,6 +98,82 @@ public sealed class RenderBufferBuilder(
                 {
                     occluder[index] = byte.MaxValue;
                 }
+            }
+        }
+    }
+
+    private void BuildRowsPaletteFast(RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux, int start, int end)
+    {
+        Span<uint> pixels = target.Pixels;
+        Span<uint> emissive = aux.Emissive;
+        Span<byte> occluder = aux.Occluder;
+        MaterialHotTable hot = context.Materials.Hot;
+        ReadOnlySpan<uint> palette = hot.BaseColorBGRA;
+        int originX = (int)context.Camera.OriginWorldX;
+        int originY = (int)context.Camera.OriginWorldY;
+
+        for (int sy = start; sy < end; sy++)
+        {
+            int row = sy * target.Width;
+            int worldY = originY + sy;
+            int localY = CellAddressing.LocalCoord(worldY);
+            int sx = 0;
+            while (sx < target.Width)
+            {
+                int worldX = originX + sx;
+                int localX = CellAddressing.LocalCoord(worldX);
+                int run = Math.Min(target.Width - sx, EngineConstants.ChunkSize - localX);
+                Span<uint> pixelRun = pixels.Slice(row + sx, run);
+                if (!context.Chunks.TryGetChunk(CellAddressing.WorldToChunk(worldX, worldY), out Chunk chunk))
+                {
+                    pixelRun.Clear();
+                    sx += run;
+                    continue;
+                }
+
+                ReadOnlySpan<ushort> materials = chunk.Material.AsSpan(
+                    CellAddressing.LocalIndexFromLocal(localX, localY),
+                    run);
+                PaletteBgraConverter.Convert(materials, palette, pixelRun);
+                FillAuxFast(materials, hot, pixelRun, emissive.Slice(row + sx, run), occluder.Slice(row + sx, run));
+                sx += run;
+            }
+        }
+    }
+
+    private bool CanUsePaletteFastPath(RenderFrameContext context)
+    {
+        CameraState camera = context.Camera;
+        MaterialHotTable hot = context.Materials.Hot;
+        return camera.CellsPerPixel == 1f &&
+            camera.OriginWorldX == MathF.Truncate(camera.OriginWorldX) &&
+            camera.OriginWorldY == MathF.Truncate(camera.OriginWorldY) &&
+            !context.Temperature.HasActiveBlocks &&
+            !hot.HasColorNoise &&
+            (_textures is null || !hot.HasTexturedMaterials);
+    }
+
+    private static void FillAuxFast(
+        ReadOnlySpan<ushort> materials,
+        MaterialHotTable hot,
+        ReadOnlySpan<uint> colors,
+        Span<uint> emissive,
+        Span<byte> occluder)
+    {
+        ReadOnlySpan<MaterialProperty> propertyFlags = hot.PropertyFlags;
+        ReadOnlySpan<CellType> type = hot.Type;
+        for (int i = 0; i < materials.Length; i++)
+        {
+            ushort material = materials[i];
+            MaterialProperty flags = propertyFlags[material];
+            if ((flags & MaterialProperty.Emissive) != 0)
+            {
+                emissive[i] = colors[i];
+            }
+
+            if (type[material] == CellType.Solid || (flags & MaterialProperty.Static) != 0)
+            {
+                occluder[i] = byte.MaxValue;
             }
         }
     }

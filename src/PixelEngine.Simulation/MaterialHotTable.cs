@@ -28,6 +28,9 @@ public sealed class MaterialHotTable
     private readonly float[] _heatCapacity;
     private readonly ushort[] _defaultLifetime;
     private readonly byte[] _durability;
+    private readonly int[] _textureId;
+    private readonly uint[] _baseColorBgra;
+    private readonly byte[] _colorNoise;
     private readonly MaterialProperty[] _propertyFlags;
     private readonly int[] _reactionStart;
     private readonly byte[] _reactionCount;
@@ -53,6 +56,9 @@ public sealed class MaterialHotTable
         float[] heatCapacity,
         ushort[] defaultLifetime,
         byte[] durability,
+        int[] textureId,
+        uint[] baseColorBgra,
+        byte[] colorNoise,
         MaterialProperty[] propertyFlags,
         int[] reactionStart,
         byte[] reactionCount)
@@ -77,6 +83,9 @@ public sealed class MaterialHotTable
         _heatCapacity = heatCapacity;
         _defaultLifetime = defaultLifetime;
         _durability = durability;
+        _textureId = textureId;
+        _baseColorBgra = baseColorBgra;
+        _colorNoise = colorNoise;
         _propertyFlags = propertyFlags;
         _reactionStart = reactionStart;
         _reactionCount = reactionCount;
@@ -188,6 +197,31 @@ public sealed class MaterialHotTable
     public ReadOnlySpan<byte> Durability => _durability;
 
     /// <summary>
+    /// 材质纹理 id 列；-1 表示纯色。
+    /// </summary>
+    public ReadOnlySpan<int> TextureId => _textureId;
+
+    /// <summary>
+    /// BGRA8 基色 palette 列，供 rendering 相位 SIMD 转色。
+    /// </summary>
+    public ReadOnlySpan<uint> BaseColorBGRA => _baseColorBgra;
+
+    /// <summary>
+    /// 颜色噪声幅度列。
+    /// </summary>
+    public ReadOnlySpan<byte> ColorNoise => _colorNoise;
+
+    /// <summary>
+    /// 是否存在需要材质纹理采样的材质。
+    /// </summary>
+    public bool HasTexturedMaterials { get; private init; }
+
+    /// <summary>
+    /// 是否存在需要坐标噪声调色的材质。
+    /// </summary>
+    public bool HasColorNoise { get; private init; }
+
+    /// <summary>
     /// 材质属性位列。
     /// </summary>
     public ReadOnlySpan<MaterialProperty> PropertyFlags => _propertyFlags;
@@ -291,9 +325,14 @@ public sealed class MaterialHotTable
         float[] heatCapacity = new float[count];
         ushort[] defaultLifetime = new ushort[count];
         byte[] durability = new byte[count];
+        int[] textureId = new int[count];
+        uint[] baseColorBgra = new uint[count];
+        byte[] colorNoise = new byte[count];
         MaterialProperty[] propertyFlags = new MaterialProperty[count];
         int[] reactionStart = new int[count];
         byte[] reactionCount = new byte[count];
+        bool hasTexturedMaterials = false;
+        bool hasColorNoise = false;
 
         for (int i = 0; i < count; i++)
         {
@@ -318,9 +357,14 @@ public sealed class MaterialHotTable
             heatCapacity[i] = def.HeatCapacity;
             defaultLifetime[i] = def.DefaultLifetime;
             durability[i] = def.Durability;
+            textureId[i] = def.TextureId;
+            baseColorBgra[i] = def.BaseColorBGRA;
+            colorNoise[i] = def.ColorNoise;
             propertyFlags[i] = def.PropertyFlags;
             reactionStart[i] = def.ReactionStart;
             reactionCount[i] = def.ReactionCount;
+            hasTexturedMaterials |= def.TextureId >= 0;
+            hasColorNoise |= def.ColorNoise != 0;
         }
 
         return new MaterialHotTable(
@@ -344,9 +388,16 @@ public sealed class MaterialHotTable
             heatCapacity,
             defaultLifetime,
             durability,
+            textureId,
+            baseColorBgra,
+            colorNoise,
             propertyFlags,
             reactionStart,
-            reactionCount);
+            reactionCount)
+        {
+            HasTexturedMaterials = hasTexturedMaterials,
+            HasColorNoise = hasColorNoise,
+        };
     }
 
     /// <summary>
@@ -395,9 +446,19 @@ public sealed class MaterialHotTable
             heatCapacity,
             defaultLifetime,
             new byte[count],
+            CreateFilled(count, -1),
+            new uint[count],
+            new byte[count],
             new MaterialProperty[count],
             reactionStart,
             reactionCount);
+    }
+
+    private static int[] CreateFilled(int count, int value)
+    {
+        int[] result = new int[count];
+        Array.Fill(result, value);
+        return result;
     }
 
     private static void ValidateColumnLengths(
