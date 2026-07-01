@@ -76,6 +76,7 @@ public sealed class EngineScriptDiagnosticsApi(
         return overlay switch
         {
             DebugOverlayKind.DirtyRects => DebugOverlayFlags.DirtyRects,
+            DebugOverlayKind.CaIterationRects => DebugOverlayFlags.CaIterationRects,
             DebugOverlayKind.ChunkGridParity => DebugOverlayFlags.ChunkGridParity,
             DebugOverlayKind.KeepAliveHotspots => DebugOverlayFlags.KeepAliveHotspots,
             DebugOverlayKind.CellParity => DebugOverlayFlags.CellParity,

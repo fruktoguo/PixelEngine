@@ -25,6 +25,7 @@ public sealed class DebugOverlayControllerTests
         DebugOverlaySettings settings = new()
         {
             Enabled = DebugOverlayFlags.DirtyRects |
+                DebugOverlayFlags.CaIterationRects |
                 DebugOverlayFlags.ChunkGridParity |
                 DebugOverlayFlags.KeepAliveHotspots |
                 DebugOverlayFlags.ParticleTrails |
@@ -32,6 +33,7 @@ public sealed class DebugOverlayControllerTests
         };
         DebugOverlayController controller = new(settings);
         List<OverlayCommand> commands = [];
+        CaIterationSnapshot[] caIterations = [new(new ChunkCoord(0, 0), new DirtyRect(9, 10, 11, 12))];
         BoundaryWakeSnapshot[] wakes = [new(new ChunkCoord(1, 0), 2, new DirtyRect(0, 1, 2, 3))];
         Particle[] particles = [new() { X = 4, Y = 5, Vx = 1, Vy = 2, Life = 9, Material = 1 }];
         ConnectedComponentDebugSnapshot[] components = [new(5, 3, 42, RectI.FromBounds(8, 9, 18, 20), IsFragment: false)];
@@ -39,15 +41,17 @@ public sealed class DebugOverlayControllerTests
         int written = controller.BuildVectorOverlays(
             chunks,
             CameraState.OneToOne(0, 0, 128, 128),
+            caIterations,
             wakes,
             particles,
             components,
             commands);
 
         Assert.Equal(commands.Count, written);
-        Assert.Equal(6, commands.Count);
+        Assert.Equal(7, commands.Count);
         Assert.Contains(commands, static command => command.PrimitiveType == OverlayPrimitiveType.SolidRectangle);
         Assert.Contains(commands, static command => command.PrimitiveType == OverlayPrimitiveType.OutlineRectangle && command.ViewportX == 1f && command.ViewportY == 2f);
+        Assert.Contains(commands, static command => command.PrimitiveType == OverlayPrimitiveType.OutlineRectangle && command.ViewportX == 9f && command.ViewportY == 10f);
         Assert.Contains(commands, static command => command.PrimitiveType == OverlayPrimitiveType.Line);
         Assert.All(commands, static command => command.Validate());
     }

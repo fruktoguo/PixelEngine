@@ -50,4 +50,9 @@ public enum DebugOverlayFlags : ushort
     /// CCL 连通块着色区域。
     /// </summary>
     ConnectedComponents = 1 << 7,
+
+    /// <summary>
+    /// 本帧 CA 实际迭代的 dirty rectangle。
+    /// </summary>
+    CaIterationRects = 1 << 8,
 }
