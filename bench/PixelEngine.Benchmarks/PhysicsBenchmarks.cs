@@ -15,7 +15,6 @@ namespace PixelEngine.Benchmarks;
 public class PhysicsBenchmarks
 {
     private const int StepBodyCount = 512;
-    private const int RebuildBodyCount = 16;
     private const int SyncBodyCount = 32;
     private const float FixedDt = 1f / 60f;
 
@@ -33,6 +32,12 @@ public class PhysicsBenchmarks
     /// 最近一次 <see cref="RigidBodyDestruction.RebuildDirty"/> 的 Box2D apply 阶段耗时，单位毫秒。
     /// </summary>
     public double LastApplyMilliseconds { get; private set; }
+
+    /// <summary>
+    /// 本轮破坏重建基准中同帧受损刚体数量；1 用于帧预算，16 用于压力观测。
+    /// </summary>
+    [Params(1, 16)]
+    public int DamagedBodyCount { get; set; }
 
     /// <summary>
     /// 初始化可跨 invocation 复用的 Box2D step world 与 SyncStep fixture。
@@ -69,7 +74,7 @@ public class PhysicsBenchmarks
     public void SetupRebuildIteration()
     {
         _rebuildFixture?.Dispose();
-        _rebuildFixture = RebuildFixture.Create();
+        _rebuildFixture = RebuildFixture.Create(DamagedBodyCount);
     }
 
     /// <summary>
@@ -248,20 +253,20 @@ public class PhysicsBenchmarks
 
         public RigidBodyDestruction Destruction { get; }
 
-        public static RebuildFixture Create()
+        public static RebuildFixture Create(int bodyCount)
         {
             JobSystem jobs = new(workerCount: 4);
             TestChunkSource source = TestChunkSource.CreateRectangle(minChunkX: 0, minChunkY: 0, width: 10, height: 10);
             CellGrid grid = new(source, MaterialPropsTable.Empty);
             PhysicsWorld physicsWorld = new();
             RigidStampRegistry registry = new();
-            RigidDamageEvent[] damageEvents = new RigidDamageEvent[RebuildBodyCount * 24];
+            RigidDamageEvent[] damageEvents = new RigidDamageEvent[bodyCount * 24];
             B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
             worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
             worldDef.EnableSleep = 0;
             B2WorldId worldId = Box2D.b2CreateWorld(in worldDef);
 
-            for (int i = 0; i < RebuildBodyCount; i++)
+            for (int i = 0; i < bodyCount; i++)
             {
                 int column = i % 4;
                 int row = i / 4;
