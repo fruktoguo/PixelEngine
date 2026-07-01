@@ -151,6 +151,10 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     {
         string source = ReadProductionSource("src", "PixelEngine.Physics", "RigidBodyDestruction.cs");
 
+        Assert.Contains("Dictionary<int, HashSet<int>> damagedLocalByBody = BuildDamageMap", source, StringComparison.Ordinal);
+        Assert.Contains("if (!damagedLocalByBody.TryGetValue(stamp.BodyKey", source, StringComparison.Ordinal);
+        Assert.Contains("_ = locals.Add((stamp.LocalY << 16) ^ stamp.LocalX)", source, StringComparison.Ordinal);
+        _ = Assert.Single(Regex.Matches(source, "workItems\\.Add\\(new RebuildWorkItem").Cast<Match>());
         Assert.Contains("private static readonly RangeJob PreparePlansJob", source, StringComparison.Ordinal);
         Assert.Contains("jobs.ParallelRange(workItems.Count, 1, PreparePlansJob, batch)", source, StringComparison.Ordinal);
         Assert.Contains("ConnectedComponentLabeler.Label", source, StringComparison.Ordinal);
