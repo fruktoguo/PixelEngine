@@ -6,6 +6,7 @@ using PixelEngine.Core.Time;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
+using PixelEngine.Serialization;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.World;
@@ -362,25 +363,63 @@ public sealed class Engine : IDisposable
         MaterialTable materials = Context.GetService<MaterialTable>();
         ResidentChunkMap chunks = new();
         AddResidentChunks(chunks, worldWidthCells, worldHeightCells);
-        MaterialPropsTable props = new(materials.Hot);
-        CellGrid grid = new(chunks, props);
-        SimulationKernel kernel = new(chunks, props, profiler: Context.Profiler);
         ParticleSystem particles = new(particleCapacity);
         TemperatureField temperature = new();
-        SimulationPhaseDriver driver = new(chunks, grid, kernel, particles, temperature, materials);
-        driver.RegisterPhases(Phases);
+        return AttachSimulationWorld(chunks, materials, particles, temperature);
+    }
 
-        Context.RegisterService(driver.GetType(), driver);
-        Context.RegisterService(chunks);
-        Context.RegisterService<IChunkSource>(chunks);
-        Context.RegisterService(grid);
-        Context.RegisterService(kernel);
-        Context.RegisterService(particles);
-        Context.RegisterService(temperature);
-        Context.RegisterService(EngineServiceRole.WorldAccess, grid);
-        Context.RegisterService(EngineServiceRole.ParticleService, particles);
-        Context.RegisterService(EngineServiceRole.MaterialRegistry, materials);
-        return driver;
+    /// <summary>
+    /// 从 plan/07 save directory 读取整世界存档，并接入 Simulation/World/Streaming 后端。
+    /// </summary>
+    /// <param name="savePath">包含 manifest.bin 与 regions/ 的世界存档目录。</param>
+    /// <param name="particleCapacity">自由粒子池容量，必须能容纳存档中的在飞粒子。</param>
+    /// <param name="fallbackMaterialId">存档材质名在当前材质表中缺失时使用的 fallback 材质 id。</param>
+    /// <param name="streamingConfig">可选世界流式配置。</param>
+    /// <returns>读档结果。</returns>
+    public WorldLoadResult AttachWorldFromSaveDirectory(
+        string savePath,
+        int particleCapacity = 32768,
+        ushort fallbackMaterialId = 0,
+        WorldStreamingConfig? streamingConfig = null)
+    {
+        ThrowIfShutdown();
+        ArgumentException.ThrowIfNullOrWhiteSpace(savePath);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(particleCapacity);
+        if (Context.TryGetService(out SimulationPhaseDriver _))
+        {
+            throw new InvalidOperationException("当前 Engine 已接入 Simulation world，不能重复从存档目录装配世界。");
+        }
+
+        string resolvedPath = Path.GetFullPath(savePath);
+        MaterialTable materials = Context.GetService<MaterialTable>();
+        _ = materials.GetName(fallbackMaterialId);
+        TemperatureField temperature = new();
+        WorldManager world = new(
+            new WorldCamera(0, 0, Context.Options.InternalWidth, Context.Options.InternalHeight),
+            temperature,
+            materials,
+            resolvedPath,
+            fallbackMaterialId,
+            streamingConfig);
+        ParticleSystem particles = new(particleCapacity);
+        RuntimeWorldStateBridge stateBridge = new(particles);
+        WorldLoadResult result = new WorldSaveService().LoadAll(
+            resolvedPath,
+            new WorldLoadContext(
+                world.Chunks,
+                world.Residency,
+                temperature,
+                materials,
+                fallbackMaterialId,
+                currentParityBit: 0),
+            stateBridge);
+
+        _ = AttachSimulationWorld(world.Chunks, materials, particles, temperature);
+        _ = AttachWorldManager(world);
+        Context.RegisterService<IWorldStateSnapshotSource>(stateBridge);
+        Context.RegisterService<IWorldStateSnapshotSink>(stateBridge);
+        Context.RegisterService(stateBridge);
+        return result;
     }
 
     /// <summary>
@@ -801,6 +840,45 @@ public sealed class Engine : IDisposable
                 chunks.Add(new Chunk(new ChunkCoord(cx, cy)));
             }
         }
+    }
+
+    private SimulationPhaseDriver AttachSimulationWorld(
+        ResidentChunkMap chunks,
+        MaterialTable materials,
+        ParticleSystem particles,
+        TemperatureField temperature)
+    {
+        MaterialPropsTable props = new(materials.Hot);
+        CellGrid grid = new(chunks, props);
+        SimulationKernel kernel = new(chunks, props, profiler: Context.Profiler);
+        SimulationPhaseDriver driver = new(chunks, grid, kernel, particles, temperature, materials);
+        driver.RegisterPhases(Phases);
+
+        Context.RegisterService(driver.GetType(), driver);
+        Context.RegisterService(chunks);
+        Context.RegisterService<IChunkSource>(chunks);
+        Context.RegisterService(grid);
+        Context.RegisterService(kernel);
+        Context.RegisterService(particles);
+        Context.RegisterService(temperature);
+        Context.RegisterService(EngineServiceRole.WorldAccess, grid);
+        Context.RegisterService(EngineServiceRole.ParticleService, particles);
+        Context.RegisterService(EngineServiceRole.MaterialRegistry, materials);
+        return driver;
+    }
+
+    private WorldPhaseDriver AttachWorldManager(WorldManager world)
+    {
+        if (Context.TryGetService(out WorldPhaseDriver existing))
+        {
+            return existing;
+        }
+
+        Context.RegisterService(world);
+        WorldPhaseDriver driver = new(world);
+        Context.RegisterService(driver.GetType(), driver);
+        driver.RegisterPhases(Phases);
+        return driver;
     }
 
     private static PixelEngine.Scripting.Scene BuildProceduralScriptScene(

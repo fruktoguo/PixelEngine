@@ -1,4 +1,8 @@
+using PixelEngine.Serialization;
+using PixelEngine.Simulation;
+using PixelEngine.Simulation.Particles;
 using PixelEngine.Scripting;
+using PixelEngine.World;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -179,6 +183,138 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
+    /// 验证 Hosting 能从 save directory 物化 live World/Simulation 后端，并恢复自由粒子快照。
+    /// </summary>
+    [Fact]
+    public void AttachWorldFromSaveDirectoryLoadsWorldAndRegistersRuntimeServices()
+    {
+        string savePath = Path.Combine(Path.GetTempPath(), $"pixelengine-host-save-{Guid.NewGuid():N}");
+        try
+        {
+            MaterialTable materials = Materials(("empty", CellType.Empty), ("sand", CellType.Powder));
+            ResidentChunkMap savedChunks = new();
+            ResidencyTable savedResidency = new();
+            TemperatureField savedTemperature = new();
+            ChunkCoord coord = new(0, 0);
+            Chunk chunk = new(coord);
+            chunk.Material[0] = 1;
+            chunk.Lifetime[0] = 9;
+            savedChunks.Add(chunk);
+            savedTemperature.AddHeat(0, 0, 24.5f);
+            FakeWorldStateBridge savedState = new(
+                [new FreeParticleSnapshot(2, 3, 0.5f, -0.25f, 1, 7, 8)],
+                []);
+            new WorldSaveService().SaveAll(
+                new WorldSaveContext(
+                    savedChunks,
+                    savedResidency,
+                    savedTemperature,
+                    materials,
+                    worldSeed: 123,
+                    gameTimeTicks: 456,
+                    playerStateBlob: ReadOnlyMemory<byte>.Empty,
+                    isFrameBoundary: true),
+                savedState,
+                savePath);
+
+            using Engine engine = new EngineBuilder()
+                .WithWorkerCount(1)
+                .AddScene(new SceneDescriptor("save", SceneSourceKind.SaveDirectory, savePath))
+                .WithStartScene("save")
+                .Build();
+            engine.Context.RegisterService(materials);
+
+            Scene current = engine.Context.GetService<ISceneService>().Current!;
+            WorldLoadResult result = engine.AttachWorldFromSaveDirectory(current.ResolvedSource!, particleCapacity: 4);
+
+            Assert.Equal(123UL, result.WorldSeed);
+            Assert.Equal(456L, result.GameTimeTicks);
+            Assert.Equal(1, result.LoadedChunkCount);
+            CellGrid grid = engine.Context.GetService<CellGrid>();
+            Assert.Equal(1, grid.GetMaterial(0, 0));
+            Assert.Equal(9, grid.LifetimeAt(0, 0));
+            Assert.Equal(24.5f, engine.Context.GetService<TemperatureField>().GetTemperature(0, 0));
+            ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
+            Assert.Equal(1, particles.ActiveCount);
+            Assert.Equal((ushort)1, particles.ActiveReadOnly[0].Material);
+            WorldManager world = engine.Context.GetService<WorldManager>();
+            Assert.Same(world.Chunks, engine.Context.GetService<ResidentChunkMap>());
+            Assert.Equal(1, engine.Phases.Count(EnginePhase.ResidencyApply));
+            Assert.Equal(1, engine.Phases.Count(EnginePhase.WorldStreaming));
+            Assert.Equal(1, engine.Phases.Count(EnginePhase.CaSimulation));
+        }
+        finally
+        {
+            if (Directory.Exists(savePath))
+            {
+                Directory.Delete(savePath, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 Physics 后端接入前，含刚体快照的 save directory 会明确失败而不是静默丢失刚体。
+    /// </summary>
+    [Fact]
+    public void AttachWorldFromSaveDirectoryRejectsRigidBodySnapshotsUntilPhysicsBackendExists()
+    {
+        string savePath = Path.Combine(Path.GetTempPath(), $"pixelengine-host-rigidbody-save-{Guid.NewGuid():N}");
+        try
+        {
+            MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+            ResidentChunkMap savedChunks = new();
+            Chunk chunk = new(new ChunkCoord(0, 0));
+            savedChunks.Add(chunk);
+            FakeWorldStateBridge savedState = new(
+                [],
+                [
+                    new RigidBodySnapshot(
+                        id: 1,
+                        width: 1,
+                        height: 1,
+                        bodyLocalMask: [1],
+                        material: [1],
+                        posX: 0,
+                        posY: 0,
+                        rotCos: 1,
+                        rotSin: 0,
+                        linVelX: 0,
+                        linVelY: 0,
+                        angVel: 0),
+                ]);
+            new WorldSaveService().SaveAll(
+                new WorldSaveContext(
+                    savedChunks,
+                    new ResidencyTable(),
+                    new TemperatureField(),
+                    materials,
+                    worldSeed: 1,
+                    gameTimeTicks: 2,
+                    playerStateBlob: ReadOnlyMemory<byte>.Empty,
+                    isFrameBoundary: true),
+                savedState,
+                savePath);
+
+            using Engine engine = new EngineBuilder()
+                .WithWorkerCount(1)
+                .Build();
+            engine.Context.RegisterService(materials);
+
+            NotSupportedException exception = Assert.Throws<NotSupportedException>(() =>
+                engine.AttachWorldFromSaveDirectory(savePath));
+
+            Assert.Contains("Physics", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(savePath))
+            {
+                Directory.Delete(savePath, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证场景来源配置会快速拒绝无效组合。
     /// </summary>
     [Fact]
@@ -234,5 +370,46 @@ public sealed class SceneAndHeadlessTests
     /// </summary>
     public sealed class ProceduralEntryBehaviour : Behaviour
     {
+    }
+
+    private static MaterialTable Materials(params (string Name, CellType Type)[] definitions)
+    {
+        MaterialDef[] materials = new MaterialDef[definitions.Length];
+        for (int i = 0; i < materials.Length; i++)
+        {
+            materials[i] = new MaterialDef
+            {
+                Id = (ushort)i,
+                Name = definitions[i].Name,
+                Type = definitions[i].Type,
+                Density = i == 0 ? (byte)0 : (byte)100,
+                HeatCapacity = 1,
+                TextureId = -1,
+                MeltPoint = float.NaN,
+                FreezePoint = float.NaN,
+                BoilPoint = float.NaN,
+            };
+        }
+
+        return new MaterialTable(materials);
+    }
+
+    private sealed class FakeWorldStateBridge(
+        FreeParticleSnapshot[] particles,
+        RigidBodySnapshot[] bodies) : IWorldStateSnapshotSource
+    {
+        public int FreeParticleCount => particles.Length;
+
+        public int RigidBodyCount => bodies.Length;
+
+        public void CopyFreeParticles(Span<FreeParticleSnapshot> destination)
+        {
+            particles.CopyTo(destination);
+        }
+
+        public void CopyRigidBodies(Span<RigidBodySnapshot> destination)
+        {
+            bodies.CopyTo(destination);
+        }
     }
 }

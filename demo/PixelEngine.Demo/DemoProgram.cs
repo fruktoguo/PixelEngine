@@ -52,7 +52,17 @@ public static class DemoProgram
         if (engine.HasContentPackage())
         {
             EngineContentPackage package = engine.LoadContentPackage();
-            _ = engine.AttachResidentSimulationWorld(DemoWorldWidthCells, DemoWorldHeightCells);
+            Scene? currentScene = engine.Context.GetService<ISceneService>().Current;
+            if (currentScene?.Descriptor.SourceKind == SceneSourceKind.SaveDirectory)
+            {
+                _ = engine.AttachWorldFromSaveDirectory(currentScene.ResolvedSource!);
+                Console.WriteLine($"世界存档已加载：{currentScene.ResolvedSource}");
+            }
+            else
+            {
+                _ = engine.AttachResidentSimulationWorld(DemoWorldWidthCells, DemoWorldHeightCells);
+            }
+
             int audioClips = engine.AttachAudioFromContentAsync().AsTask().GetAwaiter().GetResult();
             contentLoaded = true;
             Console.WriteLine($"内容包已加载：{package.MaterialCount} 个材质，{package.ReactionCount} 条反应，{audioClips} 个音频 clip。");
