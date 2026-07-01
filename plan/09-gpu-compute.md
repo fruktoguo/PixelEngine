@@ -137,10 +137,10 @@ cascade 层数 `RadianceCascadeCount`、每层角度/空间分辨率、射线步
   - [x] 遵架构 §9.3 合成顺序（世界纹理→粒子→角色/刚体高亮→光照→bloom）；本层只读 plan/05 缓冲、不改粒子状态。
 
 ### 4.6 可选非权威 air/smoke 扩散 pass（§3.6，架构 §9.5、不变式 #9）
-- [ ] GPU 常驻 air/smoke density 场（独立于权威网格），CPU→GPU 单向播种、可随世界纹理同传。
-- [ ] `air_diffuse_margolus.comp`（CP-A1）：Margolus 2×2 block 守恒扩散，block 原点 parity 每步翻转，规避两 cell 入一格竞争。
-- [ ] 输出仅用于渲染合成，**实现零 GPU→CPU readback 进 sim tick**；默认关、G4+配置控制、无 fragment 回退义务。
-- [ ] 代码与文档显式标注「非权威/仅渲染/零 sim 回读」，权威像素网格始终在 CPU。
+- [x] GPU 常驻 air/smoke density 场（独立于权威网格），CPU→GPU 单向播种已落地，density 资源随渲染尺寸重建。
+- [x] `air_diffuse_margolus.comp`（CP-A1）：Margolus 2×2 block 守恒扩散，block 原点 parity 每步翻转，规避两 cell 入一格竞争。
+- [x] 输出仅用于渲染合成，**实现零 GPU→CPU readback 进 sim tick**；默认关、G4+配置控制、无 fragment 回退义务。
+- [x] 代码与文档显式标注「非权威/仅渲染/零 sim 回读」，权威像素网格始终在 CPU。
 
 ### 4.7 Profiling 与降级联动（§3.7，架构 §4.3、§12）
 - [ ] 每 pass GL timer query（双帧缓冲，异步取上一帧结果，不 stall），注册 Core 诊断分项。

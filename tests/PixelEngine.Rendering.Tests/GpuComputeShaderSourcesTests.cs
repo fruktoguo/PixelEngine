@@ -16,6 +16,7 @@ public sealed class GpuComputeShaderSourcesTests
         GpuComputeShaderSources.RadianceCascadeBuildName,
         GpuComputeShaderSources.RadianceCascadeMergeName,
         GpuComputeShaderSources.RadianceCascadeApplyName,
+        GpuComputeShaderSources.AirSmokeDiffuseMargolusName,
     ];
 
     [Fact]
@@ -92,6 +93,31 @@ public sealed class GpuComputeShaderSourcesTests
         Assert.Contains("oSceneColor", fragment, StringComparison.Ordinal);
         Assert.Contains("oEmissiveColor", fragment, StringComparison.Ordinal);
         Assert.Contains("uEmissiveScale", fragment, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AirSmokeDiffuseMargolusSourceExposesNonAuthoritativeDiffusionContract()
+    {
+        Assert.Equal("air_diffuse_margolus", GpuComputeShaderSources.AirSmokeDiffuseMargolusName);
+
+        string source = GpuComputeShaderSources.AirSmokeDiffuseMargolus;
+        Assert.False(string.IsNullOrWhiteSpace(source));
+        Assert.Contains("#version 430", source, StringComparison.Ordinal);
+        Assert.Contains("layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;", source, StringComparison.Ordinal);
+        Assert.Contains("layout(r16f", source, StringComparison.Ordinal);
+        Assert.Contains("uAirSmokeDensityInput", source, StringComparison.Ordinal);
+        Assert.Contains("uAirSmokeDensityOutput", source, StringComparison.Ordinal);
+        Assert.Contains("imageLoad", source, StringComparison.Ordinal);
+        Assert.Contains("imageStore", source, StringComparison.Ordinal);
+        Assert.Contains("uParity", source, StringComparison.Ordinal);
+        Assert.Contains("uDiffusion", source, StringComparison.Ordinal);
+        Assert.Contains("Margolus 2x2", source, StringComparison.Ordinal);
+        Assert.Contains("2x2 block", source, StringComparison.Ordinal);
+        Assert.Contains("Non-authoritative", source, StringComparison.Ordinal);
+        Assert.Contains("CPU authority grid", source, StringComparison.Ordinal);
+        Assert.Contains("zero GPU->CPU readback", source, StringComparison.Ordinal);
+        Assert.Contains("d00 + d10 + d01 + d11", source, StringComparison.Ordinal);
+        Assert.Contains("out11 = total - out00 - out10 - out01", source, StringComparison.Ordinal);
     }
 
     [Fact]

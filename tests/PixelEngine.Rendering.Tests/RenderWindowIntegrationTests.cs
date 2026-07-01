@@ -314,6 +314,34 @@ public sealed class RenderWindowIntegrationTests
     }
 
     [Fact]
+    public void CanRunAirSmokeDiffusePassWhenExplicitlyEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = CreateSmokeWindow("PixelEngine air smoke smoke", RenderBackendPreference.Auto);
+        GpuCapabilities gpuCapabilities = GpuCapabilities.Query(window.Gl, window.Capabilities);
+        ComputeCapabilityGate gate = ComputeCapabilityGate.Evaluate(gpuCapabilities, ComputeFeatureSwitches.Default, preferComputeSharp: false);
+        if (!gate.GlComputeAvailable)
+        {
+            return;
+        }
+
+        using IComputeBackend backend = ComputeBackendFactory.Create(window.Gl, gate);
+        using AirSmokePass pass = new(window.Gl, new GpuAirSmokePipeline(backend), 16, 16);
+        float[] seed = new float[16 * 16];
+        seed[8 + (8 * 16)] = 1f;
+
+        pass.UploadSeed(seed, 16, 16);
+        pass.Step(16, 16, AirSmokeSettings.Default with { Enabled = true, Diffusion = 0.5f });
+        window.Gl.Finish();
+
+        Assert.NotEqual(0u, pass.DensityTexture);
+    }
+
+    [Fact]
     public void CanRenderFrameThroughGlesAngleWhenExplicitlyEnabled()
     {
         if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"), "1", StringComparison.Ordinal))
