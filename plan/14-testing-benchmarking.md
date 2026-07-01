@@ -126,7 +126,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [ ] `ParityClockTests`：每 cell 每帧至多一次移动 / 反应；parity 每帧翻转含义而非清零（CA 内核 §5.3、不变式 #3）。
 - [ ] `KeepAliveBoundaryTests`：边界雪崩正确跨界传播、邻居 working rect 扩展并唤醒；沉降后 rect 收回、chunk 进 sleep；写入恒在 32px halo 内不越界（CA 内核 §5.5/§5.4/§5.8、不变式 #4）。
 - [ ] `MultithreadOracleTests`：多线程终态 vs 单线程 oracle 比对统计 / 守恒性质（每材质总数、宏观直方图、堆 / 液面高度容差内一致、无边界伪影），非 bit 比对（CA 内核 §5.7/§6.1/§16.2）。
-- [ ] `ReactionTableTests`：`[tag]` 加载期展开为具体材质对正确、概率 0–100→0–255 映射边界、有序对去重（min 归一）、惰性材质 `ReactionCount==0` 早退（材质 / 反应 §7.4）。
+- [x] `ReactionTableTests`：`[tag]` 加载期展开为具体材质对正确、概率 0–100→0–255 映射边界、有序对去重（min 归一）、惰性材质 `ReactionCount==0` 早退（材质 / 反应 §7.4）。
 - [ ] `ResidencyBoundaryTests`：border ring 使 32px-halo 跨界写入恒落驻留 chunk；结构性增删只在相位 2 单线程、不与 sim 相位并发（World 驻留 §3.4、不变式 #4）。
 
 ### 4.3 Physics.Tests（§8）
@@ -175,7 +175,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [ ] `MovementRuleTests` 全绿：单柱沙坍塌 / 水找平 / 油浮水 / 气上升终态精确匹配、无水平漂移偏置（架构 §5.6/§7.3）。
 - [ ] `ParityClockTests`、`KeepAliveBoundaryTests`、`ResidencyBoundaryTests` 全绿：parity 每帧至多一次、边界唤醒 / 收回 / sleep 正确、写入不越 32px halo、border ring 跨界目标必驻留（架构 §5.3/§5.5/§5.8/§3.4、不变式 #3/#4）。
 - [ ] `MultithreadOracleTests` 全绿：多线程终态相对单线程 oracle 的守恒量精确相等、统计量在容差内一致，无边界伪影（架构 §16.2，非 bit 比对）。
-- [ ] `ReactionTableTests` 全绿：tag 展开 / 概率映射 / 去重 / 惰性早退正确（架构 §7.4）。
+- [x] `ReactionTableTests` 全绿：tag 展开 / 概率映射 / 去重 / 惰性早退正确（架构 §7.4）。
 - [ ] `ConvexDecompositionTests`、`MarchingSquaresContourTests`、`InverseSamplingRasterizationTests`、`RigidBodySplitConservationTests` 全绿：每片 ≤8 顶点且凸且覆盖原 mask、radius=0、任意角栅格化水密无洞、破坏拆分守恒且速度转移（架构 §8.2/§8.3/§8.4、不变式 #5）。
 - [ ] `SaveLoadRoundTripTests`、`MaterialRemapTests`、`VersionMigrationTests` 全绿：逐 cell 等价、改 materials.json 顺序 / 增删后旧档正确重映射、迁移链正确（架构 §11、不变式 #8、R15）。
 - [x] `HotReloadTests`、`ScriptExceptionIsolationTests`、`AlcCollectibilityTests` 全绿：热重载行为正确、异常隔离不崩、ALC 经 GC 可回收且无泄漏（架构 §17.2/§17.4）。
