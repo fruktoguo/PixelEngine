@@ -1,0 +1,170 @@
+using PixelEngine.Core.Threading;
+using PixelEngine.Simulation;
+
+namespace PixelEngine.Rendering;
+
+/// <summary>
+/// 相位 9 CPU render buffer 构建器。只读 sim cell 与温度场，在本相位生成颜色，守护不变式 #7。
+/// </summary>
+/// <param name="jobs">可选 Core 持久线程池；为 null 时单线程执行。</param>
+/// <param name="textures">可选材质纹理提供器。</param>
+/// <param name="options">构建参数。</param>
+public sealed class RenderBufferBuilder(
+    JobSystem? jobs = null,
+    IMaterialTextureProvider? textures = null,
+    RenderBufferBuilderOptions? options = null)
+{
+    private readonly JobSystem? _jobs = jobs;
+    private readonly IMaterialTextureProvider? _textures = textures;
+    private readonly RenderBufferBuilderOptions _options = options ?? new RenderBufferBuilderOptions();
+
+    /// <summary>
+    /// 构建 BGRA8 render buffer 及 emissive/occluder 副输出。
+    /// </summary>
+    /// <param name="context">渲染帧上下文。</param>
+    /// <param name="target">目标 render buffer。</param>
+    /// <param name="aux">副输出 buffer。</param>
+    public void Build(RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(aux);
+        if (target.Width != context.Camera.ViewportWidth || target.Height != context.Camera.ViewportHeight)
+        {
+            target.Resize(context.Camera.ViewportWidth, context.Camera.ViewportHeight);
+        }
+
+        aux.Resize(target.Width, target.Height);
+        if (!context.SimStepped)
+        {
+            return;
+        }
+
+        aux.Clear();
+        if (_jobs is null)
+        {
+            BuildRows(0, target.Height, 0, (context, target, aux, this));
+            return;
+        }
+
+        _jobs.ParallelRange(target.Height, Math.Max(1, _options.MinRowsPerJob), BuildRows, (context, target, aux, this));
+    }
+
+    private static void BuildRows(int start, int end, int workerIndex, object? state)
+    {
+        (RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux, RenderBufferBuilder builder) =
+            ((RenderFrameContext, RenderBuffer, RenderAuxBuffers, RenderBufferBuilder))state!;
+        Span<uint> pixels = target.Pixels;
+        Span<uint> emissive = aux.Emissive;
+        Span<byte> occluder = aux.Occluder;
+        for (int sy = start; sy < end; sy++)
+        {
+            int row = sy * target.Width;
+            for (int sx = 0; sx < target.Width; sx++)
+            {
+                int worldX = builder.ScreenToWorldX(context.Camera, sx);
+                int worldY = builder.ScreenToWorldY(context.Camera, sy);
+                int index = row + sx;
+                uint color = builder.SampleCell(context, worldX, worldY, out bool isEmissive, out bool isOccluder);
+                pixels[index] = color;
+                if (isEmissive)
+                {
+                    emissive[index] = color;
+                }
+
+                if (isOccluder)
+                {
+                    occluder[index] = byte.MaxValue;
+                }
+            }
+        }
+    }
+
+    private int ScreenToWorldX(CameraState camera, int screenX)
+    {
+        return (int)MathF.Floor(camera.OriginWorldX + (screenX * camera.CellsPerPixel));
+    }
+
+    private int ScreenToWorldY(CameraState camera, int screenY)
+    {
+        return (int)MathF.Floor(camera.OriginWorldY + (screenY * camera.CellsPerPixel));
+    }
+
+    private uint SampleCell(RenderFrameContext context, int worldX, int worldY, out bool isEmissive, out bool isOccluder)
+    {
+        isEmissive = false;
+        isOccluder = false;
+        ChunkCoord coord = CellAddressing.WorldToChunk(worldX, worldY);
+        if (!context.Chunks.TryGetChunk(coord, out Chunk chunk))
+        {
+            return 0;
+        }
+
+        int local = CellAddressing.LocalIndex(worldX, worldY);
+        ushort materialId = chunk.Material[local];
+        ref readonly MaterialDef material = ref context.Materials.Get(materialId);
+        uint color = material.BaseColorBGRA;
+        if (material.TextureId >= 0 && _textures is not null &&
+            _textures.TrySample(in material, worldX, worldY, out uint textureColor))
+        {
+            color = textureColor;
+        }
+
+        color = ApplyColorNoise(color, material.ColorNoise, worldX, worldY);
+        float temperature = context.Temperature.GetTemperature(worldX, worldY);
+        color = ApplyTemperatureGlow(color, temperature);
+        MaterialProperty flags = material.PropertyFlags;
+        isEmissive = (flags & MaterialProperty.Emissive) != 0 ||
+            temperature > _options.TemperatureGlowThreshold;
+        isOccluder = material.Type == CellType.Solid || (flags & MaterialProperty.Static) != 0;
+        return color;
+    }
+
+    private uint ApplyTemperatureGlow(uint bgra, float temperature)
+    {
+        if (temperature <= _options.TemperatureGlowThreshold)
+        {
+            return bgra;
+        }
+
+        float glow = MathF.Min(1f, (temperature - _options.TemperatureGlowThreshold) * _options.TemperatureGlowScale);
+        byte b = (byte)(bgra & 0xFF);
+        byte g = (byte)((bgra >> 8) & 0xFF);
+        byte r = (byte)((bgra >> 16) & 0xFF);
+        byte a = (byte)((bgra >> 24) & 0xFF);
+        r = AddScaled(r, 255, glow);
+        g = AddScaled(g, 96, glow * 0.5f);
+        return PackBgra(b, g, r, a);
+    }
+
+    private static uint ApplyColorNoise(uint bgra, byte amount, int worldX, int worldY)
+    {
+        if (amount == 0)
+        {
+            return bgra;
+        }
+
+        uint hash = unchecked((uint)(worldX * 73856093) ^ (uint)(worldY * 19349663));
+        int delta = ((int)(hash & 0xFF) - 128) * amount / 255;
+        byte b = Adjust((byte)(bgra & 0xFF), delta);
+        byte g = Adjust((byte)((bgra >> 8) & 0xFF), delta);
+        byte r = Adjust((byte)((bgra >> 16) & 0xFF), delta);
+        byte a = (byte)((bgra >> 24) & 0xFF);
+        return PackBgra(b, g, r, a);
+    }
+
+    private static byte AddScaled(byte value, byte target, float amount)
+    {
+        return (byte)Math.Clamp(value + ((target - value) * amount), 0, 255);
+    }
+
+    private static byte Adjust(byte value, int delta)
+    {
+        return (byte)Math.Clamp(value + delta, 0, 255);
+    }
+
+    private static uint PackBgra(byte b, byte g, byte r, byte a)
+    {
+        return b | ((uint)g << 8) | ((uint)r << 16) | ((uint)a << 24);
+    }
+}
