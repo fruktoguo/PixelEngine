@@ -257,6 +257,7 @@ public sealed class EngineBuilder
         FrameProfiler profiler = new();
         EngineOverloadController overload = new(options.Overload);
         EngineCommandQueue commands = new();
+        ScriptAssemblyRegistry scriptAssemblies = new();
         EngineLifecycle lifecycle = BuildLifecycle();
         SceneService scenes = BuildSceneService(options);
         EngineContext context = new(options, jobs, clock, events, counters, profiler);
@@ -269,6 +270,7 @@ public sealed class EngineBuilder
         context.RegisterService(profiler);
         context.RegisterService(overload);
         context.RegisterService(commands);
+        context.RegisterService(scriptAssemblies);
         context.RegisterService(lifecycle);
         context.RegisterService<ISceneService>(EngineServiceRole.SceneService, scenes);
         context.RegisterService(scenes);

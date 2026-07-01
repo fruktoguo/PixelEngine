@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -8,6 +9,24 @@ namespace PixelEngine.Hosting.Tests;
 /// </summary>
 public sealed class HostingProjectDisciplineTests
 {
+    /// <summary>
+    /// 验证 Demo 只经 Hosting 与 Scripting 公开入口引用引擎。
+    /// </summary>
+    [Fact]
+    public void DemoProjectReferencesOnlyPublicEntryProjects()
+    {
+        string root = FindRepositoryRoot();
+        XDocument project = XDocument.Load(Path.Combine(root, "demo", "PixelEngine.Demo", "PixelEngine.Demo.csproj"));
+
+        Assert.Equal(
+            ["PixelEngine.Hosting", "PixelEngine.Scripting"],
+            [
+                .. ReadIncludes(project, "ProjectReference")
+                    .Select(include => Path.GetFileNameWithoutExtension(include)!),
+            ]);
+        Assert.Empty(ReadIncludes(project, "PackageReference"));
+    }
+
     /// <summary>
     /// 验证 Hosting 公开 API 都带中文 XML 文档注释。
     /// </summary>
@@ -99,6 +118,18 @@ public sealed class HostingProjectDisciplineTests
         }
 
         return delta;
+    }
+
+    private static string[] ReadIncludes(XDocument project, string elementName)
+    {
+        return
+        [
+            .. project
+                .Descendants(elementName)
+                .Select(element => element.Attribute("Include")?.Value)
+                .Where(include => !string.IsNullOrWhiteSpace(include))
+                .Select(include => include!),
+        ];
     }
 
     private static string FindRepositoryRoot()

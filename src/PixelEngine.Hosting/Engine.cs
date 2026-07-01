@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
 
@@ -100,6 +101,16 @@ public sealed class Engine : IDisposable
         {
             Mode = EngineExecutionMode.Edit;
         }
+    }
+
+    /// <summary>
+    /// 注册包含 Demo Behaviour 的脚本程序集，供脚本宿主在装配期发现类型。
+    /// </summary>
+    /// <param name="assembly">脚本程序集。</param>
+    public void RegisterScriptAssembly(Assembly assembly)
+    {
+        ThrowIfShutdown();
+        Context.GetService<ScriptAssemblyRegistry>().Register(assembly);
     }
 
     /// <summary>
