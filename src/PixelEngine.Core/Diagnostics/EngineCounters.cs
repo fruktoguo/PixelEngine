@@ -13,6 +13,11 @@ public sealed class EngineCounters
     private long _freeParticlesKilledThisTick;
     private long _freeParticlesSpawnedThisTick;
     private long _materialRemapFallbackHits;
+    private long _noGcRegionEndFailures;
+    private long _noGcRegionStartedLastFrame;
+    private long _noGcRegionStartFailures;
+    private long _noGcRegionStartAttempts;
+    private long _noGcRegionSuccessfulFrames;
     private long _rigidBodies;
     private long _residentChunks;
     private long _residentMemoryBytes;
@@ -56,6 +61,36 @@ public sealed class EngineCounters
     /// 获取或设置 material 重映射 fallback 命中次数。
     /// </summary>
     public long MaterialRemapFallbackHits { get => Volatile.Read(ref _materialRemapFallbackHits); set => Volatile.Write(ref _materialRemapFallbackHits, value); }
+
+    /// <summary>
+    /// 获取或设置 no-GC region 预算字节数；0 表示当前运行配置未启用。
+    /// </summary>
+    public long NoGcRegionBudgetBytes { get; set; }
+
+    /// <summary>
+    /// 获取 no-GC region 启动尝试次数。
+    /// </summary>
+    public long NoGcRegionStartAttempts => Volatile.Read(ref _noGcRegionStartAttempts);
+
+    /// <summary>
+    /// 获取 no-GC region 启动失败次数。
+    /// </summary>
+    public long NoGcRegionStartFailures => Volatile.Read(ref _noGcRegionStartFailures);
+
+    /// <summary>
+    /// 获取 no-GC region 成功覆盖帧数。
+    /// </summary>
+    public long NoGcRegionSuccessfulFrames => Volatile.Read(ref _noGcRegionSuccessfulFrames);
+
+    /// <summary>
+    /// 获取 no-GC region 结束失败次数；非零表示关键段内超预算或被外部终止。
+    /// </summary>
+    public long NoGcRegionEndFailures => Volatile.Read(ref _noGcRegionEndFailures);
+
+    /// <summary>
+    /// 获取最近一帧是否成功进入 no-GC region。
+    /// </summary>
+    public bool NoGcRegionStartedLastFrame => Volatile.Read(ref _noGcRegionStartedLastFrame) != 0;
 
     /// <summary>
     /// 获取或设置刚体数量。
@@ -223,6 +258,36 @@ public sealed class EngineCounters
         AudioLoadedClips = loadedClips;
         AudioLoadingClips = loadingClips;
         AudioDispatchMilliseconds = dispatchMilliseconds;
+    }
+
+    /// <summary>
+    /// 记录一次 no-GC region 启动尝试。
+    /// </summary>
+    public void RecordNoGcRegionStartAttempt(bool started)
+    {
+        _ = Interlocked.Increment(ref _noGcRegionStartAttempts);
+        Volatile.Write(ref _noGcRegionStartedLastFrame, started ? 1 : 0);
+        if (!started)
+        {
+            _ = Interlocked.Increment(ref _noGcRegionStartFailures);
+        }
+    }
+
+    /// <summary>
+    /// 记录一帧 no-GC region 成功结束。
+    /// </summary>
+    public void RecordNoGcRegionSuccess()
+    {
+        _ = Interlocked.Increment(ref _noGcRegionSuccessfulFrames);
+    }
+
+    /// <summary>
+    /// 记录 no-GC region 结束失败。
+    /// </summary>
+    public void RecordNoGcRegionEndFailure()
+    {
+        _ = Interlocked.Increment(ref _noGcRegionEndFailures);
+        Volatile.Write(ref _noGcRegionStartedLastFrame, 0);
     }
 
     /// <summary>

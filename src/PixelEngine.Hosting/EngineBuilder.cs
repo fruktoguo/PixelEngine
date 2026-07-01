@@ -26,6 +26,7 @@ public sealed class EngineBuilder
     private string? _startScene;
     private double _simHz = EngineConstants.DefaultSimHz;
     private int _eventCapacityPerChannel = EngineOptions.DefaultEventCapacityPerChannel;
+    private long _noGcRegionBudgetBytes;
     private EngineOverloadOptions _overload = EngineOverloadOptions.CreateDefault();
     private readonly List<(EnginePhase Phase, EnginePhaseAction Action)> _phaseActions = [];
     private readonly List<IEnginePhaseDriver> _phaseDrivers = [];
@@ -187,6 +188,16 @@ public sealed class EngineBuilder
     }
 
     /// <summary>
+    /// 配置每帧关键段 no-GC region 预算；0 表示关闭。
+    /// </summary>
+    public EngineBuilder WithNoGcRegionBudget(long budgetBytes)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(budgetBytes);
+        _noGcRegionBudgetBytes = budgetBytes;
+        return this;
+    }
+
+    /// <summary>
     /// 配置过载降级策略。
     /// </summary>
     public EngineBuilder WithOverloadPolicy(double frameBudgetMs, int sustainWindow)
@@ -245,6 +256,7 @@ public sealed class EngineBuilder
             _startScene,
             _simHz,
             _eventCapacityPerChannel,
+            _noGcRegionBudgetBytes,
             _overload);
         GCSettings.LatencyMode = options.GcMode.ToLatencyMode();
         JobSystem jobs = new(options.WorkerCount);
@@ -252,6 +264,7 @@ public sealed class EngineBuilder
         EventBus events = new(options.EventCapacityPerChannel);
         EngineCounters counters = new()
         {
+            NoGcRegionBudgetBytes = options.NoGcRegionBudgetBytes,
             SimHz = options.SimHz,
         };
         FrameProfiler profiler = new();

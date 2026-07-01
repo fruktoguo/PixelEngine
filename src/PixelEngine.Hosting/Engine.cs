@@ -1427,6 +1427,7 @@ public sealed class Engine : IDisposable
         ThrowIfShutdown();
         State = EngineRunState.Running;
         FrameProfiler profiler = Context.Profiler;
+        bool noGcRegionStarted = TryBeginNoGcRegion();
         profiler.BeginFrame();
         FrameTiming timing;
         try
@@ -1447,6 +1448,7 @@ public sealed class Engine : IDisposable
         finally
         {
             profiler.EndFrame();
+            EndNoGcRegionIfStarted(noGcRegionStarted);
         }
 
         return timing;
@@ -1579,5 +1581,46 @@ public sealed class Engine : IDisposable
             EngineExecutionMode.Play => Context.Clock.BeginFrame(realDeltaSeconds),
             _ => throw new InvalidOperationException($"未知 Engine 执行模式：{Mode}。"),
         };
+    }
+
+    private bool TryBeginNoGcRegion()
+    {
+        long budgetBytes = Context.Options.NoGcRegionBudgetBytes;
+        if (budgetBytes == 0)
+        {
+            return false;
+        }
+
+        bool started;
+        try
+        {
+            started = GC.TryStartNoGCRegion(budgetBytes, disallowFullBlockingGC: true);
+        }
+        catch (InvalidOperationException)
+        {
+            started = false;
+        }
+
+        Context.Counters.RecordNoGcRegionStartAttempt(started);
+        return started;
+    }
+
+    private void EndNoGcRegionIfStarted(bool started)
+    {
+        if (!started)
+        {
+            return;
+        }
+
+        try
+        {
+            GC.EndNoGCRegion();
+            Context.Counters.RecordNoGcRegionSuccess();
+        }
+        catch (InvalidOperationException)
+        {
+            Context.Counters.RecordNoGcRegionEndFailure();
+            throw;
+        }
     }
 }
