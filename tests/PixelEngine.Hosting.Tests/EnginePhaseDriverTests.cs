@@ -205,6 +205,33 @@ public sealed class EnginePhaseDriverTests
         Assert.Equal(["start", "update", "fixed", "update", "update", "fixed", "destroy"], events);
     }
 
+    /// <summary>
+    /// 验证 Engine.AttachScripting 会把脚本运行时接入相位 1 并注册服务。
+    /// </summary>
+    [Fact]
+    public void AttachScriptingRegistersRuntimeAndRunsPhaseOne()
+    {
+        RecordingScriptRuntime runtime = new();
+        FakeScriptContext context = new(new ScriptScene());
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithSimHz(PixelEngine.Core.EngineConstants.SimHzDownscaled)
+            .Build();
+
+        engine.AttachScripting(context, runtime);
+        _ = engine.RunOneTick();
+        _ = engine.RunOneTick();
+
+        Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.Scripting));
+        Assert.Same(runtime, engine.Context.GetService<IScriptRuntime>());
+        Assert.Same(context, engine.Context.GetService<IScriptContext>());
+        Assert.Equal(1, engine.Phases.Count(EnginePhase.GameLogicAndScripts));
+        Assert.Equal(1, runtime.InitializeCount);
+        Assert.Equal(2, runtime.UpdateCount);
+        Assert.Equal(1, runtime.FixedCount);
+        _ = Assert.Throws<InvalidOperationException>(() => engine.AttachScripting(context, new RecordingScriptRuntime()));
+    }
+
     private static MaterialTable Materials(params (string Name, CellType Type)[] definitions)
     {
         MaterialDef[] materials = new MaterialDef[definitions.Length];

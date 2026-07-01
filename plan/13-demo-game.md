@@ -116,7 +116,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 |---|---|---|---|
 | 创建引擎 / 配置 / 运行主循环 / 内容包加载 | `EngineBuilder`、`EngineOptions`、`Engine.Run()`、`Engine.Shutdown()`、`Engine.LoadContentPackage()` | Hosting（plan/00 §5） | 部分实现：Demo 可经 Hosting 构造 Engine、加载已存在的 materials/reactions 内容包并 headless 冒烟运行；完整子系统一键装配仍需 Hosting API |
 | 子系统访问门面 | `EngineContext`（暴露 `World/Camera/Input/Particles/Lighting/Audio/Physics/Content/Diagnostics/Gui`） | Hosting（plan/00 §5） | 需引擎补 API |
-| 注册 Demo 脚本程序集 / 实例化 Behaviour | `Engine.RegisterScriptAssembly(...)`、`Behaviour` 生命周期（`OnStart/OnUpdate/OnGui/OnDestroy`） | plan/11 / Hosting | 部分实现：`Engine.RegisterScriptAssembly(...)` 与 Hosting registry 已落地；脚本宿主发现并实例化 Behaviour 仍需装配 API |
+| 注册 Demo 脚本程序集 / 实例化 Behaviour | `Engine.RegisterScriptAssembly(...)`、`Behaviour` 生命周期（`OnStart/OnUpdate/OnGui/OnDestroy`） | plan/11 / Hosting | 部分实现：`Engine.RegisterScriptAssembly(...)`、Hosting registry、procedural/scene file Behaviour 物化与 `Engine.AttachScripting(...)` 显式运行时接入已落地；仍缺默认后端一键装配与 `OnGui` |
 | 脚本服务句柄注入 | `Behaviour.World/Input/Camera/...` 属性 | plan/11 | 已规划（plan/11 世界脚本接口） |
 | 场景加载 / 保存 | `Engine.LoadScene(name)`、`SceneSourceKind.SceneFile`、`.scene` 格式 | plan/07（序列化）+ plan/12（编辑器编排） | 部分实现：Hosting 可切换已注册场景、区分 `.scene` 文件来源，并从 `.scene` 物化脚本实体/Behaviour 参数；仍未物化 save directory 世界、`.scene` 初始世界引用或编辑器导出格式 |
 | 输入查询 | `IInput`（`IsDown/Pressed/Released(Key)`、`MousePosition`、`MouseButton`、`Wheel`） | plan/08（Silk.NET 输入）/ Hosting | 部分实现：Scripting 已有 `ScriptInputApi`、完整 Demo 所需键位/鼠标枚举、键鼠边沿、滚轮与轴快照；仍缺 Hosting/Silk.NET 窗口输入采集与脚本上下文自动注入 |
@@ -142,7 +142,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 
 工程与启动
 - [x] 建 `demo/PixelEngine.Demo/PixelEngine.Demo.csproj`（`Exe`，仅 `ProjectReference` 到 `PixelEngine.Hosting` 与 `PixelEngine.Scripting`，继承 `Directory.Build.props`，无新 NuGet）。〔plan/00 §5〕
-- [!] `Program.cs`：已用 `EngineBuilder`/`EngineProject` 构造 Engine，支持 `--editor/--headless/--scene/--content/--ticks/--no-hot-reload/--log-dir`；已通过 `Engine.LoadContentPackage()` 加载 Demo materials/reactions 内容包，已区分 save directory 与 `.scene` 来源，已支持 `.scene` 脚本实体/Behaviour 参数物化，注册 Demo 脚本程序集并可 headless 冒烟；阻塞：缺少 `lava-mine.scene`，Hosting 尚无 save directory 世界物化入口、脚本运行时自动接入场景实例、完整子系统一键装配 API，不能假装完成可玩关卡加载。〔Hosting；§3.1〕
+- [!] `Program.cs`：已用 `EngineBuilder`/`EngineProject` 构造 Engine，支持 `--editor/--headless/--scene/--content/--ticks/--no-hot-reload/--log-dir`；已通过 `Engine.LoadContentPackage()` 加载 Demo materials/reactions 内容包，已区分 save directory 与 `.scene` 来源，已支持 `.scene` 与 procedural 脚本实体/Behaviour 物化，注册 Demo 脚本程序集并可 headless 冒烟；阻塞：缺少 `lava-mine.scene`，Hosting 尚无 save directory 世界物化入口、脚本上下文默认后端一键装配 API，不能假装完成可玩关卡加载。〔Hosting；§3.1〕
 - [x] CI 依赖方向断言：Demo 无对引擎内部 assembly 的越层 / 反向引用。〔plan/14；§2〕
 
 玩家与相机
@@ -168,7 +168,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 - [!] `materials.json` 的 `AudioCues` 已覆盖 impact/fire/splash/ambient/shatter，玩法脚本可经 `Audio.PlayOneShot`/`PlayAt` 请求音效；阻塞：缺少爆炸复合 API 触发 explosion cue，以及 Hosting 自动加载 Demo audio clips 并注入脚本上下文。〔plan/04、plan/10;§3.10〕
 
 关卡与 UI
-- [!] `LevelDirector : Behaviour`：源码已落地，脚本生成「熔岩矿洞逃生」基础布局并装配玩家、相机、笔刷、喷口和目标触发器；Hosting procedural scene source 已可按入口 Behaviour 名自动物化 `LevelDirector` 到脚本场景；阻塞：save directory/world 物化与运行态脚本上下文注入仍未完成。〔plan/11、plan/02;§3.11〕
+- [!] `LevelDirector : Behaviour`：源码已落地，脚本生成「熔岩矿洞逃生」基础布局并装配玩家、相机、笔刷、喷口和目标触发器；Hosting procedural scene source 已可按入口 Behaviour 名自动物化 `LevelDirector` 到脚本场景，且 `Engine.AttachScripting(...)` 可显式接入运行时；阻塞：save directory/world 物化与脚本上下文默认后端一键装配仍未完成。〔plan/11、plan/02;§3.11〕
 - [!] `MaterialEmitter : Behaviour`（材质 + 速率 + 喷口）：源码已落地，支持周期性 cell 注入、粒子、音频和点光源请求；阻塞：缺少 Hosting 自动驱动脚本场景、音频 clip 自动加载与光照请求运行态消费。〔plan/11;§3.11〕
 - [!] `GoalTrigger : Behaviour`：源码已落地，玩家进入触发区后触发通关状态、音效、粒子与光照反馈；阻塞：缺少胜利菜单/GUI 服务、脚本运行时自动注入和音频/光照后端消费。〔plan/11、plan/10;§3.11〕
 - [ ] `content/scenes/lava-mine.scene`：编辑器编排并序列化，与 `LevelDirector` 等价。〔plan/12、plan/07;§3.2、§3.11〕
