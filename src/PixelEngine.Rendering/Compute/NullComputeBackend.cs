@@ -27,8 +27,37 @@ public sealed class NullComputeBackend : IComputeBackend
     }
 
     /// <inheritdoc />
+    public void BindTexture(uint unit, uint textureHandle)
+    {
+    }
+
+    /// <inheritdoc />
     public void BindImage(uint unit, uint textureHandle, int level, bool layered, int layer, GLEnum access, GLEnum format)
     {
+    }
+
+    /// <inheritdoc />
+    public void SetUniform1(ComputeKernel kernel, string name, int value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+    }
+
+    /// <inheritdoc />
+    public void SetUniform1(ComputeKernel kernel, string name, float value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+    }
+
+    /// <inheritdoc />
+    public void SetUniform2(ComputeKernel kernel, string name, int x, int y)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+    }
+
+    /// <inheritdoc />
+    public void SetUniform2(ComputeKernel kernel, string name, float x, float y)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
     }
 
     /// <inheritdoc />

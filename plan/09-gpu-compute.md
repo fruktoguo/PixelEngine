@@ -111,15 +111,15 @@ cascade 层数 `RadianceCascadeCount`、每层角度/空间分辨率、射线步
 ### 4.2 与 plan/08 资源/上下文共享（§3.2）
 - [x] 复用 `plan/08` 的 `IRenderContext`/render graph，不新建 GL 上下文。
 - [~] 实现 `GpuComputeResources`：已持有世界纹理/emissive/occluder/bloom mip/合成 target 句柄引用；compute 专属中间资源（SSBO/cascade/SDF）随后续 pass 落地。
-- [ ] 资源随 `plan/08` swapchain/resize 事件重建；compute↔graphics 间插入正确 `glMemoryBarrier`。
-- [ ] 所有 compute pass 限定在架构 §3.3 相位 10 内执行，不跨相位、不碰 sim 权威数据。
+- [~] 资源随 `plan/08` swapchain/resize 事件重建；compute bloom 临时链已按输入尺寸懒重建且插入 `glMemoryBarrier`，其它 compute 专属资源待后续 pass 落地。
+- [x] 所有 compute pass 限定在架构 §3.3 相位 10 内执行，不跨相位、不碰 sim 权威数据。
 
 ### 4.3 bloom/光照 compute（§3.3，架构 §9.4）
-- [ ] `bloom_brightpass.comp`（CP-B1）：emissive→mip0 阈值提取（threshold/soft-knee uniform）。
-- [ ] `bloom_downsample.comp`（CP-B2）：逐级 mip 降采样（13-tap/Kawase，逐 mip dispatch）。
-- [ ] `bloom_dualkawase_down.comp`（CP-B3）/`bloom_dualkawase_up.comp`（CP-B4）：dual-Kawase 下/上行模糊。
-- [ ] `bloom_upsample_composite.comp`（CP-B5）：逐级 additive 上采样合回 target。
-- [ ] 可选 `light_composite.comp`（CP-L0）：emissive additive + fog-of-war reveal 合成下放 compute（dither/gamma 可留 plan/08 fragment）。
+- [x] `bloom_brightpass.comp`（CP-B1）：emissive→mip0 阈值提取（threshold/soft-knee uniform）。
+- [x] `bloom_downsample.comp`（CP-B2）：逐级 mip 降采样（13-tap/Kawase，逐 mip dispatch）。
+- [x] `bloom_dualkawase_down.comp`（CP-B3）/`bloom_dualkawase_up.comp`（CP-B4）：dual-Kawase 下/上行模糊（当前 GL compute 路径执行 CP-B4，上行 base-additive 保持 fragment 语义；CP-B3 源码已登记，后续可按质量档启用）。
+- [x] `bloom_upsample_composite.comp`（CP-B5）：逐级 additive 上采样合回 target。
+- [~] 可选 `light_composite.comp`（CP-L0）：源码、kernel 加载与 dispatch 入口已落地；与 fog-of-war/emissive fragment 路径切换待补。
 - [~] 工作组尺寸（16×16×1）已作 `EngineConstants` 常量并按 `GL_MAX_COMPUTE_WORK_GROUP_*` 校验；compute bloom 与 plan/08 fragment bloom 像素等价、可切换待后续 pass 接线。
 
 ### 4.4 Radiance Cascades 可选 GI（§3.4，架构 §9.4）

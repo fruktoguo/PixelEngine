@@ -17,6 +17,9 @@ public sealed class RenderPipeline : IDisposable
     private readonly OverlayRenderer _overlay;
     private readonly CompositePass _composite;
     private readonly BloomPass _bloom;
+    private readonly IComputeBackend _computeBackend;
+    private readonly ComputeCapabilityGate _computeGate;
+    private readonly ComputeBloomPass? _computeBloom;
     private readonly DitherPass _dither;
     private readonly GammaPass _gamma;
     private readonly CrtPass _crt;
@@ -52,6 +55,12 @@ public sealed class RenderPipeline : IDisposable
         _overlay = new OverlayRenderer(_gl, profile);
         _composite = new CompositePass(_gl, profile);
         _bloom = new BloomPass(_gl, profile);
+        GpuCapabilities gpuCapabilities = GpuCapabilities.Query(_gl, window.Capabilities);
+        _computeGate = ComputeCapabilityGate.Evaluate(gpuCapabilities, ComputeFeatureSwitches.Default, preferComputeSharp: false);
+        _computeBackend = ComputeBackendFactory.Create(_gl, _computeGate);
+        _computeBloom = _computeGate.SelectedBackend == ComputeBackendKind.GlCompute && _computeGate.FeatureSwitches.BloomComputeEnabled
+            ? new ComputeBloomPass(_gl, _computeBackend, gpuCapabilities)
+            : null;
         _dither = new DitherPass(_gl, profile);
         _gamma = new GammaPass(_gl, profile);
         _crt = new CrtPass(_gl, profile);
@@ -93,7 +102,10 @@ public sealed class RenderPipeline : IDisposable
     /// <summary>
     /// 当设置允许且上下文支持 compute shader 时，plan/09 可接管高质量光照/RC。
     /// </summary>
-    public bool ShouldDelegateComputeLighting => Settings.PreferComputeLighting && _window.Capabilities.HasComputeShader;
+    public bool ShouldDelegateComputeLighting =>
+        Settings.PreferComputeLighting &&
+        _computeBloom is not null &&
+        _computeGate.FeatureSwitches.BloomComputeEnabled;
 
     /// <summary>
     /// 创建 plan/09 compute pass 可复用的渲染资源句柄快照。本方法不创建新 GL 上下文，也不转移资源所有权。
@@ -205,7 +217,15 @@ public sealed class RenderPipeline : IDisposable
         if (Settings.QualityLevel == LightingQualityLevel.Full)
         {
             started = Stopwatch.GetTimestamp();
-            _bloom.Render(current, _postA, _quad, Settings.Bloom);
+            if (ShouldUseComputeBloom(Settings.Bloom))
+            {
+                _computeBloom!.Render(current, _postA, Settings.Bloom);
+            }
+            else
+            {
+                _bloom.Render(current, _postA, _quad, Settings.Bloom);
+            }
+
             current = _postA;
             RecordSub(profiler, FrameSubPhase.Bloom, started);
         }
@@ -274,6 +294,8 @@ public sealed class RenderPipeline : IDisposable
         _crt.Dispose();
         _gamma.Dispose();
         _dither.Dispose();
+        _computeBloom?.Dispose();
+        _computeBackend.Dispose();
         _bloom.Dispose();
         _composite.Dispose();
         _overlay.Dispose();
@@ -347,6 +369,11 @@ public sealed class RenderPipeline : IDisposable
         }
 
         return current;
+    }
+
+    private bool ShouldUseComputeBloom(BloomSettings settings)
+    {
+        return ShouldDelegateComputeLighting && settings.Normalize().Mode == BloomMode.DualKawase;
     }
 
     private static void ValidateInputs(RenderBuffer renderBuffer, RenderAuxBuffers aux, CameraState camera)
