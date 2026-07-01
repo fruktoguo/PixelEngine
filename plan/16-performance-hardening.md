@@ -81,7 +81,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] render buffer 构建并行（按区块）。[plan/08 · §3.3 相位9]
 - [x] CCL + 形状重建并行且 off-thread（相位 8a 各刚体）。[plan/06 · §8.4]
 - [x] 粒子积分并行（`Span<Particle>` 分段）。[plan/05 · §7.6]
-- [ ] 温度 stencil 并行（行分块）。[plan/04 · §7.5]
+- [x] 温度 stencil 并行（行分块）。[plan/04 · §7.5]
 - [x] 序列化字节准备在后台线程，只碰离线字节缓冲、不碰 live map。[plan/07 · §3.4/§11.5]
 - [x] 全部并行工作走持久线程池，**无每帧 `Parallel.For`**。[plan/02 · §5.7/§12.7]
 - [x] 活跃任务/活跃 chunk 低于阈值时回退单线程。[plan/02/03 · §5.7/风险 R7]
