@@ -73,6 +73,36 @@ public sealed class HotReloadServiceTests
     }
 
     /// <summary>
+    /// 验证反复热重载不会留下可回收 ALC 引用。
+    /// </summary>
+    [Fact]
+    public void RepeatedReloadsUnloadPreviousContexts()
+    {
+        const int ReloadCount = 50;
+        Scene scene = new();
+        FakeScriptContext context = new(scene);
+        Entity entity = scene.CreateEntity();
+        HotReloadService service = CreateServiceWithVersionOne(scene, context, entity);
+        WeakReference[] unloadedContexts = new WeakReference[ReloadCount];
+
+        for (int i = 0; i < ReloadCount; i++)
+        {
+            service.RequestReload(
+                $"UserScripts.Repeated.{i}.{Guid.NewGuid():N}",
+                [new ScriptSourceFile("ReloadableScript.cs", VersionTwoSource)]);
+            HotReloadResult result = service.ApplyPendingReload();
+
+            Assert.Equal(HotReloadStatus.Reloaded, result.Status);
+            unloadedContexts[i] = result.UnloadedContext!;
+        }
+
+        for (int i = 0; i < unloadedContexts.Length; i++)
+        {
+            Assert.True(WaitForUnload(unloadedContexts[i]), $"第 {i} 次热重载旧 ALC 未释放。");
+        }
+    }
+
+    /// <summary>
     /// 验证源文件 watcher 会去抖并把目录内脚本合并为待处理热重载。
     /// </summary>
     [Fact]

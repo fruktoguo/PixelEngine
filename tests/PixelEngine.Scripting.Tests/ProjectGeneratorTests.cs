@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using System.Diagnostics;
 using Xunit;
 
 namespace PixelEngine.Scripting.Tests;
@@ -124,6 +125,71 @@ public sealed class ProjectGeneratorTests
         }
     }
 
+    /// <summary>
+    /// 验证生成的本地游戏项目只通过公开入口引用即可编译并运行。
+    /// </summary>
+    [Fact]
+    public void GeneratedLocalProjectCompilesAndRunsAgainstPublicApi()
+    {
+        string directory = CreateTempDirectory();
+        try
+        {
+            string root = FindRepositoryRoot();
+            ProjectGenerator generator = new();
+            ProjectGenerationResult result = generator.GenerateOrRefresh(new GameProjectGenerationOptions(
+                directory,
+                "RunnableGame",
+                GameProjectReferenceMode.Local)
+            {
+                EngineRoot = root,
+            });
+
+            string scriptsDirectory = Path.Combine(directory, "Scripts");
+            _ = Directory.CreateDirectory(scriptsDirectory);
+            File.WriteAllText(Path.Combine(directory, "Program.cs"), """
+                using RunnableGame;
+                using PixelEngine.Scripting;
+
+                Scene scene = new();
+                Entity entity = scene.CreateEntity();
+                _ = entity.AddComponent<PlayerBehaviour>();
+                return 0;
+                """);
+            File.WriteAllText(Path.Combine(scriptsDirectory, "PlayerBehaviour.cs"), """
+                using PixelEngine.Scripting;
+
+                namespace RunnableGame;
+
+                public sealed class PlayerBehaviour : Behaviour
+                {
+                    [Persist]
+                    public int Score;
+
+                    protected override void OnUpdate(float dt)
+                    {
+                        if (Context.Time.FrameCount >= 0)
+                        {
+                            Score++;
+                        }
+                    }
+                }
+                """);
+
+            DotnetResult run = RunDotnet(
+                "run",
+                "--project",
+                result.ProjectPath,
+                "-c",
+                "Release");
+
+            Assert.True(run.ExitCode == 0, run.Output);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static string? ReadProperty(XDocument project, string name)
     {
         return project.Descendants(name).SingleOrDefault()?.Value.Trim();
@@ -153,6 +219,32 @@ public sealed class ProjectGeneratorTests
         return path;
     }
 
+    private static DotnetResult RunDotnet(params string[] arguments)
+    {
+        ProcessStartInfo startInfo = new()
+        {
+            FileName = "dotnet",
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        foreach (string argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using Process process = Process.Start(startInfo) ?? throw new InvalidOperationException("无法启动 dotnet。");
+        string output = process.StandardOutput.ReadToEnd();
+        string error = process.StandardError.ReadToEnd();
+        if (!process.WaitForExit(milliseconds: 120_000))
+        {
+            process.Kill(entireProcessTree: true);
+            throw new TimeoutException("dotnet run 超时。");
+        }
+
+        return new DotnetResult(process.ExitCode, output + error);
+    }
+
     private static string FindRepositoryRoot()
     {
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
@@ -168,4 +260,6 @@ public sealed class ProjectGeneratorTests
 
         throw new InvalidOperationException("无法从测试输出目录定位 PixelEngine.sln。");
     }
+
+    private readonly record struct DotnetResult(int ExitCode, string Output);
 }
