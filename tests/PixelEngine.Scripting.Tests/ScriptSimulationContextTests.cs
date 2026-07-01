@@ -149,6 +149,23 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
+    /// 验证脚本上下文可注入相机与输入后端，供 Behaviour 通过统一入口访问。
+    /// </summary>
+    [Fact]
+    public void ScriptContextExposesInjectedCameraAndInputBackends()
+    {
+        Fixture fixture = Fixture.Create(
+            camera: new ScriptCameraApi(100, 50, centerX: 10, centerY: 20),
+            input: new ScriptInputApi());
+        ((ScriptInputApi)fixture.Context.Input).Update([Key.Space], [MouseButton.Middle], 1, 2, 3);
+
+        Assert.Equal(10f, fixture.Context.Camera.CenterX);
+        Assert.True(fixture.Context.Input.WasPressed(Key.Space));
+        Assert.True(fixture.Context.Input.WasMousePressed(MouseButton.Middle));
+        Assert.Equal(3f, fixture.Context.Input.MouseWheelY);
+    }
+
+    /// <summary>
     /// 验证脚本音频 facade 只播放已加载 cue，并把位置/音量交给真实 AudioSystem。
     /// </summary>
     [Fact]
@@ -197,7 +214,7 @@ public sealed class ScriptSimulationContextTests
 
         public ScriptSimulationContext Context { get; }
 
-        public static Fixture Create()
+        public static Fixture Create(ICameraApi? camera = null, IInputApi? input = null)
         {
             MaterialTable materials = Materials(
                 ("empty", CellType.Empty),
@@ -209,7 +226,7 @@ public sealed class ScriptSimulationContextTests
             CellGrid grid = new(chunks, props);
             SimulationKernel kernel = new(chunks, props);
             ParticleSystem particles = new(capacity: 16);
-            ScriptSimulationContext context = new(new ScriptScene(), grid, kernel, particles, materials);
+            ScriptSimulationContext context = new(new ScriptScene(), grid, kernel, particles, materials, camera: camera, input: input);
             return new Fixture(chunk, grid, kernel, particles, context);
         }
     }
