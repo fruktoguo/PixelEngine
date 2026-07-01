@@ -114,4 +114,24 @@ public static partial class EngineConstants
     /// GPU compute 默认 work group Z 尺寸，见 plan/09 §4.3。
     /// </summary>
     public const int GpuComputeWorkGroupSizeZ = 1;
+
+    /// <summary>
+    /// Radiance Cascades 默认 cascade 层数，默认关闭时仅作为质量档上限使用，见 plan/09 §4.4。
+    /// </summary>
+    public const int RadianceCascadeCount = 4;
+
+    /// <summary>
+    /// Radiance Cascades 第 0 层角度射线数量，后续层可按质量档扩展，见 plan/09 §4.4。
+    /// </summary>
+    public const int RadianceCascadeBaseRayCount = 64;
+
+    /// <summary>
+    /// Radiance Cascades 第 0 层空间步进像素数。
+    /// </summary>
+    public const int RadianceCascadeBaseStepPixels = 4;
+
+    /// <summary>
+    /// Radiance Cascades 单条射线默认最大步数。
+    /// </summary>
+    public const int RadianceCascadeMaxRaySteps = 64;
 }

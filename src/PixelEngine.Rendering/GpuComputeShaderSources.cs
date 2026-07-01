@@ -40,6 +40,26 @@ public static class GpuComputeShaderSources
     public const string LightCompositeName = "light_composite";
 
     /// <summary>
+    /// Radiance Cascades SDF Jump Flood compute pass 名称。
+    /// </summary>
+    public const string RadianceCascadeSdfJfaName = "rc_sdf_jfa";
+
+    /// <summary>
+    /// Radiance Cascades cascade build compute pass 名称。
+    /// </summary>
+    public const string RadianceCascadeBuildName = "rc_cascade_build";
+
+    /// <summary>
+    /// Radiance Cascades merge compute pass 名称。
+    /// </summary>
+    public const string RadianceCascadeMergeName = "rc_merge";
+
+    /// <summary>
+    /// Radiance Cascades apply compute pass 名称。
+    /// </summary>
+    public const string RadianceCascadeApplyName = "rc_apply";
+
+    /// <summary>
     /// 已注册的 compute pass 名称集合。
     /// </summary>
     public static IReadOnlyList<string> PassNames { get; } =
@@ -50,6 +70,10 @@ public static class GpuComputeShaderSources
         BloomDualKawaseUpName,
         BloomUpsampleCompositeName,
         LightCompositeName,
+        RadianceCascadeSdfJfaName,
+        RadianceCascadeBuildName,
+        RadianceCascadeMergeName,
+        RadianceCascadeApplyName,
     ];
 
     /// <summary>
@@ -252,6 +276,129 @@ void main()
 """;
 
     /// <summary>
+    /// Radiance Cascades SDF Jump Flood compute shader 入口，生成渲染侧 SDF image。
+    /// </summary>
+    public const string RadianceCascadeSdfJfa = """
+#version 430
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0) uniform sampler2D uSeedTexture;
+layout(rgba32f, binding = 0) writeonly uniform image2D uSdfImage;
+
+uniform ivec2 uOutputSize;
+uniform int uJumpStep;
+
+void main()
+{
+    // Render-side image output only; this pass has no GPU->CPU readback semantics.
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(pixel, uOutputSize)))
+    {
+        return;
+    }
+
+    vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(uOutputSize);
+    vec4 seed = texture(uSeedTexture, uv);
+    imageStore(uSdfImage, pixel, vec4(seed.xy, float(uJumpStep), seed.a));
+}
+""";
+
+    /// <summary>
+    /// Radiance Cascades cascade build compute shader 入口，构建单级 radiance cascade image。
+    /// </summary>
+    public const string RadianceCascadeBuild = """
+#version 430
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0) uniform sampler2D uSdfTexture;
+layout(binding = 1) uniform sampler2D uEmissiveTexture;
+layout(rgba16f, binding = 0) writeonly uniform image2D uCascadeImage;
+
+uniform ivec2 uOutputSize;
+uniform int uCascadeIndex;
+uniform int uRayCount;
+uniform float uCascadeRadius;
+
+void main()
+{
+    // Render-side image output only; this pass has no GPU->CPU readback semantics.
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(pixel, uOutputSize)))
+    {
+        return;
+    }
+
+    vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(uOutputSize);
+    vec3 sdf = texture(uSdfTexture, uv).xyz;
+    vec3 emissive = texture(uEmissiveTexture, uv).rgb;
+    float cascadeWeight = float(uCascadeIndex + 1) / max(float(uRayCount), 1.0);
+    imageStore(uCascadeImage, pixel, vec4(emissive * cascadeWeight, min(sdf.z, uCascadeRadius)));
+}
+""";
+
+    /// <summary>
+    /// Radiance Cascades merge compute shader 入口，合并相邻 cascade image。
+    /// </summary>
+    public const string RadianceCascadeMerge = """
+#version 430
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0) uniform sampler2D uNearCascadeTexture;
+layout(binding = 1) uniform sampler2D uFarCascadeTexture;
+layout(rgba16f, binding = 0) writeonly uniform image2D uMergedCascadeImage;
+
+uniform ivec2 uOutputSize;
+uniform int uCascadeIndex;
+uniform float uMergeFactor;
+
+void main()
+{
+    // Render-side image output only; this pass has no GPU->CPU readback semantics.
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(pixel, uOutputSize)))
+    {
+        return;
+    }
+
+    vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(uOutputSize);
+    vec4 nearRadiance = texture(uNearCascadeTexture, uv);
+    vec4 farRadiance = texture(uFarCascadeTexture, uv);
+    float factor = clamp(uMergeFactor + (float(uCascadeIndex) * 0.0), 0.0, 1.0);
+    imageStore(uMergedCascadeImage, pixel, mix(nearRadiance, farRadiance, factor));
+}
+""";
+
+    /// <summary>
+    /// Radiance Cascades apply compute shader 入口，把合并后的 radiance 写入渲染输出 image。
+    /// </summary>
+    public const string RadianceCascadeApply = """
+#version 430
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0) uniform sampler2D uSceneTexture;
+layout(binding = 1) uniform sampler2D uRadianceTexture;
+layout(rgba8, binding = 0) writeonly uniform image2D uOutputImage;
+
+uniform ivec2 uOutputSize;
+uniform float uRadianceIntensity;
+
+void main()
+{
+    // Render-side image output only; this pass has no GPU->CPU readback semantics.
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(pixel, uOutputSize)))
+    {
+        return;
+    }
+
+    vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(uOutputSize);
+    vec4 scene = texture(uSceneTexture, uv);
+    vec3 radiance = texture(uRadianceTexture, uv).rgb * uRadianceIntensity;
+    imageStore(uOutputImage, pixel, vec4(clamp(scene.rgb + radiance, 0.0, 1.0), scene.a));
+}
+""";
+
+    /// <summary>
     /// 按 pass 名称获取 compute shader 源码。
     /// </summary>
     /// <param name="passName">compute pass 名称。</param>
@@ -267,6 +414,10 @@ void main()
             BloomDualKawaseUpName => BloomDualKawaseUp,
             BloomUpsampleCompositeName => BloomUpsampleComposite,
             LightCompositeName => LightComposite,
+            RadianceCascadeSdfJfaName => RadianceCascadeSdfJfa,
+            RadianceCascadeBuildName => RadianceCascadeBuild,
+            RadianceCascadeMergeName => RadianceCascadeMerge,
+            RadianceCascadeApplyName => RadianceCascadeApply,
             _ => throw new ArgumentException($"未注册的 GPU compute shader pass：{passName}", nameof(passName)),
         };
     }

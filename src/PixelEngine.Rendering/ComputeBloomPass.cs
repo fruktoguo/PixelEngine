@@ -4,7 +4,7 @@ using Silk.NET.OpenGL;
 namespace PixelEngine.Rendering;
 
 /// <summary>
-/// GL compute bloom pass：bright-pass → 13-tap downsample → dual-Kawase upsample → additive composite。
+/// GL compute bloom pass：bright-pass → dual-Kawase downsample/upsample → additive composite。
 /// </summary>
 public sealed class ComputeBloomPass : IDisposable
 {
@@ -58,13 +58,14 @@ public sealed class ComputeBloomPass : IDisposable
         {
             ColorRenderTarget previous = _mips[i - 1];
             ColorRenderTarget current = _mips[i];
-            _pipeline.DispatchDownsample(
+            _pipeline.DispatchDualKawaseDown(
                 previous.Handle,
                 current.Handle,
                 current.Width,
                 current.Height,
                 1f / previous.Width,
-                1f / previous.Height);
+                1f / previous.Height,
+                normalized.KawaseOffset);
         }
 
         ColorRenderTarget bloom = UpsampleBloom(normalized.KawaseOffset);
