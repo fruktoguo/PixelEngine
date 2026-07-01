@@ -1,4 +1,5 @@
 using PixelEngine.Rendering.Compute;
+using Silk.NET.OpenGL;
 
 namespace PixelEngine.Rendering;
 
@@ -8,6 +9,7 @@ namespace PixelEngine.Rendering;
 public sealed class ComputeBloomPass : IDisposable
 {
     private readonly GpuComputeBloomPipeline _pipeline;
+    private readonly GL _gl;
     private ColorRenderTarget[] _mips = [];
     private ColorRenderTarget[] _upsampled = [];
     private int _chainWidth;
@@ -18,10 +20,13 @@ public sealed class ComputeBloomPass : IDisposable
     /// <summary>
     /// 创建 compute bloom pass。本类复用 plan/08 的 GL 上下文，不创建新上下文。
     /// </summary>
+    /// <param name="gl">OpenGL 入口。</param>
     /// <param name="pipeline">已加载 CP-B1..CP-B5 的 compute pipeline。</param>
-    public ComputeBloomPass(GpuComputeBloomPipeline pipeline)
+    public ComputeBloomPass(GL gl, GpuComputeBloomPipeline pipeline)
     {
+        ArgumentNullException.ThrowIfNull(gl);
         ArgumentNullException.ThrowIfNull(pipeline);
+        _gl = gl;
         _pipeline = pipeline;
     }
 
@@ -117,10 +122,10 @@ public sealed class ComputeBloomPass : IDisposable
         int mipHeight = height;
         for (int i = 0; i < iterations; i++)
         {
-            _mips[i] = new ColorRenderTarget(RenderPipelineContext.CurrentGl, mipWidth, mipHeight);
+            _mips[i] = new ColorRenderTarget(_gl, mipWidth, mipHeight);
             if (i < _upsampled.Length)
             {
-                _upsampled[i] = new ColorRenderTarget(RenderPipelineContext.CurrentGl, mipWidth, mipHeight);
+                _upsampled[i] = new ColorRenderTarget(_gl, mipWidth, mipHeight);
             }
 
             mipWidth = Math.Max(1, mipWidth / 2);

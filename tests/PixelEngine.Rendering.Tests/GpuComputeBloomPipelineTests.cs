@@ -63,6 +63,31 @@ public sealed class GpuComputeBloomPipelineTests
     }
 
     [Fact]
+    public void DualKawaseUpBindsBaseTextureForAdditiveUpsample()
+    {
+        RecordingComputeBackend backend = new();
+        GpuComputeBloomPipeline pipeline = new(backend);
+        backend.Events.Clear();
+
+        pipeline.DispatchDualKawaseUp(
+            sourceTexture: 10,
+            baseTexture: 11,
+            outputImage: 12,
+            width: 32,
+            height: 16,
+            texelX: 0.03125f,
+            texelY: 0.0625f,
+            offset: 1.5f,
+            intensity: 1f);
+
+        Assert.Contains("Texture:0=10", backend.Events);
+        Assert.Contains("Texture:1=11", backend.Events);
+        Assert.Contains("Uniform1i:bloom_dualkawase_up:uBaseTexture=1", backend.Events);
+        Assert.Contains("Dispatch:bloom_dualkawase_up=2,1,1", backend.Events);
+    }
+
+
+    [Fact]
     public void RejectsZeroHandlesBeforeDispatch()
     {
         RecordingComputeBackend backend = new();

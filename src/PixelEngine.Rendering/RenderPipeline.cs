@@ -59,7 +59,7 @@ public sealed class RenderPipeline : IDisposable
         _computeGate = ComputeCapabilityGate.Evaluate(gpuCapabilities, ComputeFeatureSwitches.Default, preferComputeSharp: false);
         _computeBackend = ComputeBackendFactory.Create(_gl, _computeGate);
         _computeBloom = _computeGate.SelectedBackend == ComputeBackendKind.GlCompute && _computeGate.FeatureSwitches.BloomComputeEnabled
-            ? new ComputeBloomPass(_gl, _computeBackend, gpuCapabilities)
+            ? new ComputeBloomPass(_gl, new GpuComputeBloomPipeline(_computeBackend))
             : null;
         _dither = new DitherPass(_gl, profile);
         _gamma = new GammaPass(_gl, profile);
