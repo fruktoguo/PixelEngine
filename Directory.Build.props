@@ -33,4 +33,38 @@
     <TrimMode>partial</TrimMode>
   </PropertyGroup>
 
+  <!-- 由 tools/publish-aot.* 以 -p:Channel=AOT 激活；AOT 产物限定已知硬件，逐 RID 显式 ISA。 -->
+  <PropertyGroup Condition="'$(Channel)' == 'AOT'">
+    <SelfContained>true</SelfContained>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <TrimMode>full</TrimMode>
+    <IlcOptimizationPreference>Speed</IlcOptimizationPreference>
+    <IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Channel)' == 'AOT' and '$(RuntimeIdentifier)' == 'win-x64'">
+    <IlcInstructionSet>x86-64-v3</IlcInstructionSet>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Channel)' == 'AOT' and '$(RuntimeIdentifier)' == 'linux-x64'">
+    <IlcInstructionSet>x86-64-v3</IlcInstructionSet>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Channel)' == 'AOT' and '$(RuntimeIdentifier)' == 'osx-x64'">
+    <IlcInstructionSet>x86-64-v3</IlcInstructionSet>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Channel)' == 'AOT' and '$(RuntimeIdentifier)' == 'win-arm64'">
+    <IlcInstructionSet>armv8.2-a,lse,rcpc</IlcInstructionSet>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Channel)' == 'AOT' and '$(RuntimeIdentifier)' == 'linux-arm64'">
+    <IlcInstructionSet>armv8.2-a,lse,rcpc</IlcInstructionSet>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Channel)' == 'AOT' and '$(RuntimeIdentifier)' == 'osx-arm64'">
+    <IlcInstructionSet>apple-m1,lse,rcpc</IlcInstructionSet>
+  </PropertyGroup>
+
 </Project>
