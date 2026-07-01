@@ -119,7 +119,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 | 注册 Demo 脚本程序集 / 实例化 Behaviour | `Engine.RegisterScriptAssembly(...)`、`Behaviour` 生命周期（`OnStart/OnUpdate/OnGui/OnDestroy`） | plan/11 / Hosting | 部分实现：`Engine.RegisterScriptAssembly(...)` 与 Hosting registry 已落地；脚本宿主发现并实例化 Behaviour 仍需装配 API |
 | 脚本服务句柄注入 | `Behaviour.World/Input/Camera/...` 属性 | plan/11 | 已规划（plan/11 世界脚本接口） |
 | 场景加载 / 保存 | `Engine.LoadScene(name)`、`SceneSourceKind.SceneFile`、`.scene` 格式 | plan/07（序列化）+ plan/12（编辑器编排） | 部分实现：Hosting 可切换已注册场景、区分 `.scene` 文件来源，并从 `.scene` 物化脚本实体/Behaviour 参数；仍未物化 save directory 世界、`.scene` 初始世界引用或编辑器导出格式 |
-| 输入查询 | `IInput`（`IsDown/Pressed/Released(Key)`、`MousePosition`、`MouseButton`、`Wheel`） | plan/08（Silk.NET 输入）/ Hosting | 需引擎补 API（当前只有脚本接口壳与编辑器捕获路由，缺游戏输入后端、Key/MouseButton 完整枚举与边沿快照） |
+| 输入查询 | `IInput`（`IsDown/Pressed/Released(Key)`、`MousePosition`、`MouseButton`、`Wheel`） | plan/08（Silk.NET 输入）/ Hosting | 部分实现：Scripting 已有 `ScriptInputApi`、完整 Demo 所需键位/鼠标枚举、键鼠边沿、滚轮与轴快照；仍缺 Hosting/Silk.NET 窗口输入采集与脚本上下文自动注入 |
 | 读写 cell（笔刷 / 关卡生成 / 危险采样） | `IWorld.GetCell/SetCell`、`FillRect/FillCircle/Stamp` | plan/11（世界脚本接口） | 已规划 |
 | 材质按名取 id | `EngineContentPackage.ResolveMaterial/TryResolveMaterial(...)`、`IMaterialQuery.Resolve/TryResolve(...)` | plan/04（Content）+ Hosting/plan/11 | 部分实现：Hosting 内容包门面与脚本材质查询接口已可用，public API 不泄漏 Content/Simulation 实现类型；Demo materials/reactions/textures/audio 已就位 |
 | 角色控制器（kinematic AABB vs 像素） | `IPhysics.CreateCharacterBody(aabb)`、`body.Move(delta) → CollisionResult{Grounded,OnWall,OnCeiling,Normal}` | plan/06（§8.5 角色控制器） | 部分实现：Scripting `ICharacterController.Create/SetPosition/Move/GetState` 已接入真实 Physics 像素 AABB 控制器，返回位置、左右墙、天花板、实际位移与地面法线；尚未封装为 `ICharacterBody2D` 对象式 API |
@@ -127,7 +127,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 | 角色推动 dynamic 刚体 | `IPhysics.ApplyImpulseAtContact(...)` 或角色控制器内建推力 | plan/06 | 需引擎补 API（kinematic→dynamic 推力交互） |
 | 爆炸（清 cell + 抛粒子 + 推刚体） | `IWorld.Explode(center,radius,force)` | plan/05 + plan/06 | 需引擎补 API（复合爆炸 helper；可由 cell→particle + impulse 原语组合） |
 | 自由粒子发射 | `IParticles.Emit/Burst(origin,count,velDist,materialId,life)` | plan/05 | 需引擎补 API（脚本可见的发射接口；池由引擎管理） |
-| 相机控制 | `ICamera.Position/Zoom`、`WorldToScreen/ScreenToWorld`、`Follow(target,damping)` | plan/08（相机） | 需引擎补 API（当前 Rendering 只有 `CameraState` 值对象，缺 Hosting 级可变相机服务、脚本注入与屏幕/世界坐标转换） |
+| 相机控制 | `ICamera.Position/Zoom`、`WorldToScreen/ScreenToWorld`、`Follow(target,damping)` | plan/08（相机） | 部分实现：Scripting 已有 `ScriptCameraApi`，支持中心、缩放、视口、屏幕/世界坐标转换与 `CameraSnapshot`；仍缺 Hosting 将快照同步到 Rendering/World residency、统一 Transform 后的 `Follow(Entity)` |
 | 点光源 / fog-of-war reveal | `ILighting.AddPointLight(...)`、`RevealAround(pos,radius)` | plan/08（光照） | 需引擎补 API（脚本可见的光照接口；emissive 自动无需 API） |
 | 一次性音效播放 | `IAudio.PlayOneShot(clip, worldPos?)` | plan/10 | 需引擎补 API（脚本可见的播放接口；材质化事件自动） |
 | 材质化音效配置 | `MaterialDef.AudioCues`（materials.json 字段） | plan/04 + plan/10 | 已规划 |
@@ -146,9 +146,9 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 - [x] CI 依赖方向断言：Demo 无对引擎内部 assembly 的越层 / 反向引用。〔plan/14；§2〕
 
 玩家与相机
-- [!] `PlayerController : Behaviour`：角色脚本后端已可经 `ICharacterController.Create/SetPosition/Move/GetState` 创建、传送并移动 AABB，碰撞状态来自真实 Physics；阻塞：缺少游戏输入后端、完整 Key/MouseButton 枚举与输入边沿快照，不能完成跑 / 跳 / 蹬墙控制。〔plan/06、plan/08 输入；§3.3〕
+- [!] `PlayerController : Behaviour`：角色脚本后端已可经 `ICharacterController.Create/SetPosition/Move/GetState` 创建、传送并移动 AABB，碰撞状态来自真实 Physics；Scripting 输入快照已支持跑 / 跳所需键位与边沿；阻塞：缺少 Hosting/Silk.NET 输入采集、脚本运行时自动注入与场景 Behaviour 驱动，不能完成可玩控制。〔plan/06、plan/08 输入；§3.3〕
 - [ ] `PlayerHealth : Behaviour`：采样覆盖 cell 材质判定 lava/fire/acid 伤害，喷血粒子、死亡重生、受击 / 跳 / 落地音效。〔plan/11、plan/05、plan/10；§3.3〕
-- [!] `CameraFollow : Behaviour`：阻塞：缺少 Hosting 级可变相机服务、`Position/Zoom`、`WorldToScreen/ScreenToWorld` 与脚本注入后端，当前 Rendering `CameraState` 不能被 Demo 脚本驱动。〔plan/08；§3.4〕
+- [!] `CameraFollow : Behaviour`：Scripting 相机后端已支持 `SetCenter/SetZoom/ScreenToWorld/WorldToScreen` 与快照；阻塞：缺少 Hosting 将相机快照同步到 Rendering/World residency、脚本运行时自动注入与统一 Transform 后的 `Follow(Entity)`。〔plan/08；§3.4〕
 
 世界交互
 - [ ] `MaterialBrush : Behaviour`：左键放 / 右键擦 / 滚轮调半径 / 数字键 `1`–`0` 切材质，经 `World.SetCell/FillCircle` 写入，`Content.GetMaterialId` 取 id，`Camera.ScreenToWorld` 映射鼠标。〔plan/11、plan/04、plan/08；§3.5〕

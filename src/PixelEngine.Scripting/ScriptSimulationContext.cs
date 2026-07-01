@@ -32,6 +32,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     /// <param name="time">时间 facade；未提供时访问 <see cref="Time" /> 会抛出明确异常。</param>
     /// <param name="audio">音频 facade；未提供时访问 <see cref="Audio" /> 会抛出明确异常。</param>
     /// <param name="physics">物理系统 facade；提供时角色移动经其记录诊断，否则直接使用角色控制器解算。</param>
+    /// <param name="camera">相机 facade；未提供时访问 <see cref="Camera" /> 会抛出明确异常。</param>
+    /// <param name="input">输入 facade；未提供时访问 <see cref="Input" /> 会抛出明确异常。</param>
     public ScriptSimulationContext(
         Scene scene,
         CellGrid grid,
@@ -41,7 +43,9 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         IEventBus? events = null,
         IGameTime? time = null,
         IAudioApi? audio = null,
-        PhysicsSystem? physics = null)
+        PhysicsSystem? physics = null,
+        ICameraApi? camera = null,
+        IInputApi? input = null)
     {
         Scene = scene ?? throw new ArgumentNullException(nameof(scene));
         ArgumentNullException.ThrowIfNull(grid);
@@ -60,6 +64,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         EventBackend = events;
         TimeBackend = time;
         AudioBackend = audio;
+        CameraBackend = camera;
+        InputBackend = input;
     }
 
     private IEventBus? EventBackend { get; }
@@ -67,6 +73,10 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     private IGameTime? TimeBackend { get; }
 
     private IAudioApi? AudioBackend { get; }
+
+    private ICameraApi? CameraBackend { get; }
+
+    private IInputApi? InputBackend { get; }
 
     /// <summary>
     /// CA 内核，供 Hosting 相位驱动在 dirty swap 前落地脚本 cell 命令。
@@ -102,10 +112,10 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     public ICharacterController Character => _character;
 
     /// <inheritdoc />
-    public ICameraApi Camera => throw Unsupported(nameof(Camera));
+    public ICameraApi Camera => CameraBackend ?? throw Unsupported(nameof(Camera));
 
     /// <inheritdoc />
-    public IInputApi Input => throw Unsupported(nameof(Input));
+    public IInputApi Input => InputBackend ?? throw Unsupported(nameof(Input));
 
     /// <inheritdoc />
     public IEventBus Events => EventBackend ?? throw Unsupported(nameof(Events));

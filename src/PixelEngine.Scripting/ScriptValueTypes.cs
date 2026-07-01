@@ -130,6 +130,28 @@ public readonly record struct ParticleSpawnDesc(float X, float Y, float Velocity
 public readonly record struct RectF(float X, float Y, float Width, float Height);
 
 /// <summary>
+/// 二维点，单位由调用接口约定。
+/// </summary>
+/// <param name="X">X 坐标。</param>
+/// <param name="Y">Y 坐标。</param>
+public readonly record struct Point2F(float X, float Y);
+
+/// <summary>
+/// 脚本相机快照；Hosting 可把它适配成 Rendering 的 CameraState。
+/// </summary>
+/// <param name="OriginWorldX">视口左上角对应世界 X 坐标。</param>
+/// <param name="OriginWorldY">视口左上角对应世界 Y 坐标。</param>
+/// <param name="CellsPerPixel">每个屏幕像素覆盖的世界 cell 数。</param>
+/// <param name="ViewportWidth">视口宽度，单位像素。</param>
+/// <param name="ViewportHeight">视口高度，单位像素。</param>
+public readonly record struct CameraSnapshot(
+    float OriginWorldX,
+    float OriginWorldY,
+    float CellsPerPixel,
+    int ViewportWidth,
+    int ViewportHeight);
+
+/// <summary>
 /// 脚本输入键枚举；具体映射由输入后端维护。
 /// </summary>
 public enum Key
@@ -138,6 +160,127 @@ public enum Key
     /// 未指定按键。
     /// </summary>
     Unknown,
+
+    /// <summary>
+    /// A 键。
+    /// </summary>
+    A,
+
+    /// <summary>
+    /// D 键。
+    /// </summary>
+    D,
+
+    /// <summary>
+    /// W 键。
+    /// </summary>
+    W,
+
+    /// <summary>
+    /// S 键。
+    /// </summary>
+    S,
+
+    /// <summary>
+    /// 左方向键。
+    /// </summary>
+    Left,
+
+    /// <summary>
+    /// 右方向键。
+    /// </summary>
+    Right,
+
+    /// <summary>
+    /// 上方向键。
+    /// </summary>
+    Up,
+
+    /// <summary>
+    /// 下方向键。
+    /// </summary>
+    Down,
+
+    /// <summary>
+    /// 空格键。
+    /// </summary>
+    Space,
+
+    /// <summary>
+    /// Escape 键。
+    /// </summary>
+    Escape,
+
+    /// <summary>
+    /// 数字键 0。
+    /// </summary>
+    Digit0,
+
+    /// <summary>
+    /// 数字键 1。
+    /// </summary>
+    Digit1,
+
+    /// <summary>
+    /// 数字键 2。
+    /// </summary>
+    Digit2,
+
+    /// <summary>
+    /// 数字键 3。
+    /// </summary>
+    Digit3,
+
+    /// <summary>
+    /// 数字键 4。
+    /// </summary>
+    Digit4,
+
+    /// <summary>
+    /// 数字键 5。
+    /// </summary>
+    Digit5,
+
+    /// <summary>
+    /// 数字键 6。
+    /// </summary>
+    Digit6,
+
+    /// <summary>
+    /// 数字键 7。
+    /// </summary>
+    Digit7,
+
+    /// <summary>
+    /// 数字键 8。
+    /// </summary>
+    Digit8,
+
+    /// <summary>
+    /// 数字键 9。
+    /// </summary>
+    Digit9,
+}
+
+/// <summary>
+/// 脚本鼠标按键枚举；具体映射由输入后端维护。
+/// </summary>
+public enum MouseButton
+{
+    /// <summary>
+    /// 左键。
+    /// </summary>
+    Left,
+
+    /// <summary>
+    /// 右键。
+    /// </summary>
+    Right,
+
+    /// <summary>
+    /// 中键。
+    /// </summary>
+    Middle,
 }
 
 /// <summary>

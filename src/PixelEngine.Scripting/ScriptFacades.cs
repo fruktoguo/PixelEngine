@@ -276,11 +276,32 @@ public interface ICharacterController
 public interface ICameraApi
 {
     /// <summary>
+    /// 当前相机中心 X 坐标。
+    /// </summary>
+    float CenterX { get; }
+
+    /// <summary>
+    /// 当前相机中心 Y 坐标。
+    /// </summary>
+    float CenterY { get; }
+
+    /// <summary>
+    /// 当前缩放倍率；1 表示 1 个世界 cell 对应 1 个屏幕像素，值越大越放大。
+    /// </summary>
+    float Zoom { get; }
+
+    /// <summary>
     /// 设置相机中心；脚本可在相位 1 调用。
     /// </summary>
     /// <param name="x">中心 X 坐标。</param>
     /// <param name="y">中心 Y 坐标。</param>
     void SetCenter(float x, float y);
+
+    /// <summary>
+    /// 设置缩放倍率；脚本可在相位 1 调用。
+    /// </summary>
+    /// <param name="zoom">缩放倍率，必须为有限正数。</param>
+    void SetZoom(float zoom);
 
     /// <summary>
     /// 让相机跟随指定实体；脚本可在相位 1 调用。
@@ -292,6 +313,22 @@ public interface ICameraApi
     /// 当前相机视口；脚本可在相位 1 读取。
     /// </summary>
     RectF Viewport { get; }
+
+    /// <summary>
+    /// 将屏幕像素坐标转换为世界坐标。
+    /// </summary>
+    /// <param name="screenX">屏幕 X 坐标。</param>
+    /// <param name="screenY">屏幕 Y 坐标。</param>
+    /// <returns>对应世界坐标。</returns>
+    Point2F ScreenToWorld(float screenX, float screenY);
+
+    /// <summary>
+    /// 将世界坐标转换为屏幕像素坐标。
+    /// </summary>
+    /// <param name="worldX">世界 X 坐标。</param>
+    /// <param name="worldY">世界 Y 坐标。</param>
+    /// <returns>对应屏幕坐标。</returns>
+    Point2F WorldToScreen(float worldX, float worldY);
 }
 
 /// <summary>
@@ -314,6 +351,13 @@ public interface IInputApi
     bool WasPressed(Key key);
 
     /// <summary>
+    /// 判断按键是否在本帧释放；脚本可在相位 1 调用，读取本帧输入快照。
+    /// </summary>
+    /// <param name="key">要查询的按键。</param>
+    /// <returns>若该按键在本帧产生释放边沿则返回 true，否则返回 false。</returns>
+    bool WasReleased(Key key);
+
+    /// <summary>
     /// 读取输入轴；脚本可在相位 1 调用，读取本帧输入快照。
     /// </summary>
     /// <param name="axis">要查询的输入轴。</param>
@@ -324,6 +368,32 @@ public interface IInputApi
     /// 鼠标所在像素坐标；脚本可在相位 1 读取本帧输入快照。
     /// </summary>
     (float X, float Y) MousePixel { get; }
+
+    /// <summary>
+    /// 当前帧鼠标滚轮纵向增量。
+    /// </summary>
+    float MouseWheelY { get; }
+
+    /// <summary>
+    /// 判断鼠标按键当前是否按下。
+    /// </summary>
+    /// <param name="button">鼠标按键。</param>
+    /// <returns>若当前按下则返回 true，否则返回 false。</returns>
+    bool IsMouseDown(MouseButton button);
+
+    /// <summary>
+    /// 判断鼠标按键是否在本帧按下。
+    /// </summary>
+    /// <param name="button">鼠标按键。</param>
+    /// <returns>若本帧产生按下边沿则返回 true，否则返回 false。</returns>
+    bool WasMousePressed(MouseButton button);
+
+    /// <summary>
+    /// 判断鼠标按键是否在本帧释放。
+    /// </summary>
+    /// <param name="button">鼠标按键。</param>
+    /// <returns>若本帧产生释放边沿则返回 true，否则返回 false。</returns>
+    bool WasMouseReleased(MouseButton button);
 }
 
 /// <summary>
