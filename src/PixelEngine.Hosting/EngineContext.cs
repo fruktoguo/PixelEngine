@@ -104,6 +104,18 @@ public sealed class EngineContext
         _serviceRoles[(int)role] = typeof(TService);
     }
 
+    internal void RegisterService(Type serviceType, object service)
+    {
+        ArgumentNullException.ThrowIfNull(serviceType);
+        ArgumentNullException.ThrowIfNull(service);
+        if (!serviceType.IsInstanceOfType(service))
+        {
+            throw new ArgumentException("服务实例必须能赋值给 serviceType。", nameof(service));
+        }
+
+        _services[serviceType] = service;
+    }
+
     /// <summary>
     /// 尝试获取指定服务。
     /// </summary>

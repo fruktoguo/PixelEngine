@@ -9,6 +9,9 @@ namespace PixelEngine.Demo;
 /// </summary>
 public static class DemoProgram
 {
+    private const int DemoWorldWidthCells = 640;
+    private const int DemoWorldHeightCells = 360;
+
     /// <summary>
     /// 执行 Demo 主入口。
     /// </summary>
@@ -45,9 +48,12 @@ public static class DemoProgram
 
         EngineProject project = BuildProject(options);
         using Engine engine = BuildEngine(options, project);
+        bool contentLoaded = false;
         if (engine.HasContentPackage())
         {
             EngineContentPackage package = engine.LoadContentPackage();
+            _ = engine.AttachResidentSimulationWorld(DemoWorldWidthCells, DemoWorldHeightCells);
+            contentLoaded = true;
             Console.WriteLine($"内容包已加载：{package.MaterialCount} 个材质，{package.ReactionCount} 条反应。");
         }
         else
@@ -59,6 +65,11 @@ public static class DemoProgram
         Console.WriteLine(options.HotReloadEnabled
             ? "脚本程序集已注册；热重载等待脚本宿主装配。"
             : "脚本程序集已注册；热重载已由参数关闭。");
+        if (contentLoaded)
+        {
+            _ = engine.AttachScriptingFromServices();
+            Console.WriteLine("脚本运行时已接入 Hosting/Simulation 后端。");
+        }
 
         if (options.Headless)
         {
