@@ -8,6 +8,7 @@
     <ProjectReference Include="../../src/PixelEngine.Core/PixelEngine.Core.csproj" />
     <ProjectReference Include="../../src/PixelEngine.Simulation/PixelEngine.Simulation.csproj" />
     <ProjectReference Include="../../src/PixelEngine.Physics/PixelEngine.Physics.csproj" />
+    <ProjectReference Include="../../src/PixelEngine.Rendering/PixelEngine.Rendering.csproj" />
     <ProjectReference Include="../../src/PixelEngine.Serialization/PixelEngine.Serialization.csproj" />
   </ItemGroup>
 

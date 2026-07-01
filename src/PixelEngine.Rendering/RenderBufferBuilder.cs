@@ -19,6 +19,7 @@ public sealed class RenderBufferBuilder(
     private readonly JobSystem? _jobs = jobs;
     private readonly IMaterialTextureProvider? _textures = textures;
     private readonly RenderBufferBuilderOptions _options = options ?? new RenderBufferBuilderOptions();
+    private readonly BuildState _state = new();
 
     /// <summary>
     /// 构建 BGRA8 render buffer 及 emissive/occluder 副输出。
@@ -46,21 +47,28 @@ public sealed class RenderBufferBuilder(
         }
 
         aux.Clear();
+        _state.Context = context;
+        _state.Target = target;
+        _state.Aux = aux;
+        _state.Builder = this;
         if (_jobs is null)
         {
-            BuildRows(0, target.Height, 0, (context, target, aux, this));
+            BuildRows(0, target.Height, 0, _state);
             RecordSub(profiler, started);
             return;
         }
 
-        _jobs.ParallelRange(target.Height, Math.Max(1, _options.MinRowsPerJob), BuildRows, (context, target, aux, this));
+        _jobs.ParallelRange(target.Height, Math.Max(1, _options.MinRowsPerJob), BuildRows, _state);
         RecordSub(profiler, started);
     }
 
     private static void BuildRows(int start, int end, int workerIndex, object? state)
     {
-        (RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux, RenderBufferBuilder builder) =
-            ((RenderFrameContext, RenderBuffer, RenderAuxBuffers, RenderBufferBuilder))state!;
+        BuildState buildState = (BuildState)state!;
+        RenderFrameContext context = buildState.Context!;
+        RenderBuffer target = buildState.Target!;
+        RenderAuxBuffers aux = buildState.Aux!;
+        RenderBufferBuilder builder = buildState.Builder!;
         Span<uint> pixels = target.Pixels;
         Span<uint> emissive = aux.Emissive;
         Span<byte> occluder = aux.Occluder;
@@ -184,5 +192,13 @@ public sealed class RenderBufferBuilder(
 
         long elapsed = Stopwatch.GetTimestamp() - started;
         profiler.RecordSub(FrameSubPhase.RenderBufferBuild, elapsed * 1000.0 / Stopwatch.Frequency);
+    }
+
+    private sealed class BuildState
+    {
+        public RenderFrameContext? Context;
+        public RenderBuffer? Target;
+        public RenderAuxBuffers? Aux;
+        public RenderBufferBuilder? Builder;
     }
 }
