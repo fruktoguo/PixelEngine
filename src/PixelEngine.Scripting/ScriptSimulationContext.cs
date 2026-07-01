@@ -34,6 +34,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     /// <param name="physics">物理系统 facade；提供时角色移动经其记录诊断，否则直接使用角色控制器解算。</param>
     /// <param name="camera">相机 facade；未提供时访问 <see cref="Camera" /> 会抛出明确异常。</param>
     /// <param name="input">输入 facade；未提供时访问 <see cref="Input" /> 会抛出明确异常。</param>
+    /// <param name="lighting">光照 facade；未提供时访问 <see cref="Lighting" /> 会抛出明确异常。</param>
     public ScriptSimulationContext(
         Scene scene,
         CellGrid grid,
@@ -45,7 +46,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         IAudioApi? audio = null,
         PhysicsSystem? physics = null,
         ICameraApi? camera = null,
-        IInputApi? input = null)
+        IInputApi? input = null,
+        ILightingApi? lighting = null)
     {
         Scene = scene ?? throw new ArgumentNullException(nameof(scene));
         ArgumentNullException.ThrowIfNull(grid);
@@ -66,6 +68,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         AudioBackend = audio;
         CameraBackend = camera;
         InputBackend = input;
+        LightingBackend = lighting;
     }
 
     private IEventBus? EventBackend { get; }
@@ -77,6 +80,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     private ICameraApi? CameraBackend { get; }
 
     private IInputApi? InputBackend { get; }
+
+    private ILightingApi? LightingBackend { get; }
 
     /// <summary>
     /// CA 内核，供 Hosting 相位驱动在 dirty swap 前落地脚本 cell 命令。
@@ -116,6 +121,9 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 
     /// <inheritdoc />
     public IInputApi Input => InputBackend ?? throw Unsupported(nameof(Input));
+
+    /// <inheritdoc />
+    public ILightingApi Lighting => LightingBackend ?? throw Unsupported(nameof(Lighting));
 
     /// <inheritdoc />
     public IEventBus Events => EventBackend ?? throw Unsupported(nameof(Events));

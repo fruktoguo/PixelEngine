@@ -152,6 +152,25 @@ public readonly record struct CameraSnapshot(
     int ViewportHeight);
 
 /// <summary>
+/// 脚本请求的点光源快照。
+/// </summary>
+/// <param name="X">光源世界 X 坐标。</param>
+/// <param name="Y">光源世界 Y 坐标。</param>
+/// <param name="Radius">光照半径，单位 cell。</param>
+/// <param name="ColorBgra">BGRA 颜色。</param>
+/// <param name="Intensity">光照强度。</param>
+public readonly record struct ScriptPointLight(float X, float Y, float Radius, uint ColorBgra, float Intensity);
+
+/// <summary>
+/// fog-of-war 揭示请求。
+/// </summary>
+/// <param name="X">揭示中心世界 X 坐标。</param>
+/// <param name="Y">揭示中心世界 Y 坐标。</param>
+/// <param name="Radius">揭示半径，单位 cell。</param>
+/// <param name="Alpha">揭示强度。</param>
+public readonly record struct FogRevealRequest(float X, float Y, float Radius, byte Alpha);
+
+/// <summary>
 /// 脚本输入键枚举；具体映射由输入后端维护。
 /// </summary>
 public enum Key

@@ -71,6 +71,8 @@ public sealed class ScriptDispatchAllocationTests
 
         public IInputApi Input => throw new NotSupportedException();
 
+        public ILightingApi Lighting => throw new NotSupportedException();
+
         public IEventBus Events => throw new NotSupportedException();
 
         public IAudioApi Audio => throw new NotSupportedException();

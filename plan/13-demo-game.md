@@ -128,7 +128,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 | 爆炸（清 cell + 抛粒子 + 推刚体） | `IWorld.Explode(center,radius,force)` | plan/05 + plan/06 | 需引擎补 API（复合爆炸 helper；可由 cell→particle + impulse 原语组合） |
 | 自由粒子发射 | `IParticles.Emit/Burst(origin,count,velDist,materialId,life)` | plan/05 | 需引擎补 API（脚本可见的发射接口；池由引擎管理） |
 | 相机控制 | `ICamera.Position/Zoom`、`WorldToScreen/ScreenToWorld`、`Follow(target,damping)` | plan/08（相机） | 部分实现：Scripting 已有 `ScriptCameraApi`，支持中心、缩放、视口、屏幕/世界坐标转换与 `CameraSnapshot`；仍缺 Hosting 将快照同步到 Rendering/World residency、统一 Transform 后的 `Follow(Entity)` |
-| 点光源 / fog-of-war reveal | `ILighting.AddPointLight(...)`、`RevealAround(pos,radius)` | plan/08（光照） | 需引擎补 API（脚本可见的光照接口；emissive 自动无需 API） |
+| 点光源 / fog-of-war reveal | `ILighting.AddPointLight(...)`、`RevealAround(pos,radius)` | plan/08（光照） | 部分实现：Scripting 已有 `ScriptLightingApi`，可记录 `RevealAround` 与点光源请求；仍缺 Hosting/Rendering 消费这些请求并同步到 `FogOfWarBuffer`/light pass |
 | 一次性音效播放 | `IAudio.PlayOneShot(clip, worldPos?)` | plan/10 | 需引擎补 API（脚本可见的播放接口；材质化事件自动） |
 | 材质化音效配置 | `MaterialDef.AudioCues`（materials.json 字段） | plan/04 + plan/10 | 已规划 |
 | 即时模式 HUD / 菜单 | `IGuiContext`（窗口 / 文本 / 按钮 / 色块），`Behaviour.OnGui` | plan/11 / plan/12 | 需引擎补 API（游戏 HUD 用 GUI 服务，区别于编辑器 UI） |
@@ -164,7 +164,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 刚体 / 粒子 / 光照 / 音频（Demo 侧消费）
 - [ ] 木 / 金属可破坏结构布置，验证连通块脱落→Box2D 刚体、可推 / 砸 / 再破坏。〔plan/06;§3.7〕
 - [ ] 火花 / 血 / 碎屑发射经 `Particles.Emit/Burst`，爆炸抛射经 `World.Explode`。〔plan/05;§3.8〕
-- [ ] emissive 材质标注正确（lava/molten_metal/fire/火花），fog-of-war 经 `Lighting.RevealAround` + 出口 / 玩家 `AddPointLight`。〔plan/08;§3.9〕
+- [!] emissive 材质标注正确（lava/molten_metal/fire/火花），Scripting 已有 `Lighting.RevealAround` + `AddPointLight` 请求 API；阻塞：缺少 Hosting/Rendering 将脚本光照请求同步到 `FogOfWarBuffer` 与 light pass 的运行态消费。〔plan/08;§3.9〕
 - [ ] `materials.json` 的 `AudioCues` 覆盖 impact/fire/splash/explosion/ambient；玩法音效经 `Audio.PlayOneShot`。〔plan/04、plan/10;§3.10〕
 
 关卡与 UI

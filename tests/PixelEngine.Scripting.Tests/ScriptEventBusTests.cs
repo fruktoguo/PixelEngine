@@ -160,6 +160,8 @@ public sealed class ScriptEventBusTests
 
         public IInputApi Input => throw new NotSupportedException();
 
+        public ILightingApi Lighting => throw new NotSupportedException();
+
         public IEventBus Events { get; } = events;
 
         public IAudioApi Audio => throw new NotSupportedException();
