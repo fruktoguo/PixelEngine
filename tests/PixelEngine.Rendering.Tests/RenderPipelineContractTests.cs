@@ -23,6 +23,21 @@ public sealed class RenderPipelineContractTests
     }
 
     [Fact]
+    public void RenderViewportTextureRequiresValidHandleAndDimensions()
+    {
+        RenderViewportTexture texture = new(handle: 7, width: 64, height: 32);
+
+        Assert.True(texture.IsValid);
+        Assert.Equal(7u, texture.Handle);
+        Assert.Equal(64, texture.Width);
+        Assert.Equal(32, texture.Height);
+        Assert.False(default(RenderViewportTexture).IsValid);
+        AssertThrows<ArgumentOutOfRangeException>(() => new RenderViewportTexture(0, 64, 32));
+        AssertThrows<ArgumentOutOfRangeException>(() => new RenderViewportTexture(7, 0, 32));
+        AssertThrows<ArgumentOutOfRangeException>(() => new RenderViewportTexture(7, 64, 0));
+    }
+
+    [Fact]
     public void RenderPipelineSourceDocumentsRequiredOrderingAndHooks()
     {
         string source = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderPipeline.cs"));
@@ -51,8 +66,10 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("RadianceCascades.Enabled", source, StringComparison.Ordinal);
         Assert.Contains("Settings.PreferComputeLighting = false", source, StringComparison.Ordinal);
         Assert.Contains("CreateComputeResourcesSnapshot", source, StringComparison.Ordinal);
+        Assert.Contains("CurrentViewportTexture = new RenderViewportTexture", source, StringComparison.Ordinal);
         Assert.True(source.IndexOf("_worldBlit.Render", StringComparison.Ordinal) < source.IndexOf("_overlay.Render", StringComparison.Ordinal));
         Assert.True(source.IndexOf("_overlay.Render", StringComparison.Ordinal) < source.IndexOf("_composite.Render", StringComparison.Ordinal));
+        Assert.True(source.IndexOf("CurrentViewportTexture = new RenderViewportTexture", StringComparison.Ordinal) < source.IndexOf("_present.Render", StringComparison.Ordinal));
     }
 
     private static string ProjectPath(params string[] parts)

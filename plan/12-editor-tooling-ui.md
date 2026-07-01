@@ -136,16 +136,16 @@ ImGui 表格编辑 `MaterialDef`（Name/CellType/Density/Dispersion/Flammability
 ## 4. 实现清单
 
 ImGui 集成与框架：
-- [ ] `PixelEngine.Editor` 项目建立，引用各子系统公开 API，依赖方向符合 `plan/00 §5`（无反向依赖）（§2）
-- [ ] `ImGuiController`：创建/销毁 ImGui context、字体 atlas → GL 纹理、`ImDrawData` → GL3 draw call、渲染后恢复 GL 状态（§3.3）
-- [ ] ImGui GL 后端**复用 Rendering 的同一 `GL` 实例与 GL context**，在架构相位 [10] 之后、present 之前绘制（§3.1、§3.3）
-- [ ] `ImGuiInputBridge`：Silk.NET 鼠标/键盘/滚轮/文本 → ImGuiIO；按 `WantCaptureMouse/Keyboard` 仲裁 UI 与世界输入（§3.3）
-- [ ] 启用 **docking**（`DockingEnable`）；`EditorDockSpace` 主机窗口 + 默认布局 + 布局保存/恢复（§3.3）
-- [ ] `EditorFontManager`：加载含 **中文 CJK glyph range** 的字体 + 拉丁/标点，支持 DPI 缩放与字号切换（§3.3）
-- [ ] 接入 **ImGuizmo / ImPlot**（ImNodes 可选）作为备用绘图/编辑控件（§2）
-- [ ] `EditorApp` 门面 + `IEditorPanel` 接口 + `EditorContext` + `EditorSelection`（§3.2）
-- [ ] `EditorFramePhase` 挂入 Hosting 主循环；世界经 Rendering 离屏 FBO 纹理显示于「世界视口」面板（`ViewportPanel`）（§3.1）
-- [ ] 编辑器整体可经编译/运行时开关禁用，禁用后零开销（§1）
+- [x] `PixelEngine.Editor` 项目建立，引用各子系统公开 API，依赖方向符合 `plan/00 §5`（无反向依赖）（§2）
+- [x] `ImGuiController`：创建/销毁 ImGui context、字体 atlas → GL 纹理、`ImDrawData` → GL3 draw call、渲染后恢复 GL 状态（§3.3）
+- [x] ImGui GL 后端**复用 Rendering 的同一 `GL` 实例与 GL context**，在架构相位 [10] 之后、present 之前绘制（§3.1、§3.3）
+- [x] `ImGuiInputBridge`：Silk.NET 鼠标/键盘/滚轮/文本 → ImGuiIO；按 `WantCaptureMouse/Keyboard` 仲裁 UI 与世界输入（§3.3）
+- [x] 启用 **docking**（`DockingEnable`）；`EditorDockSpace` 主机窗口 + 默认布局 + 布局保存/恢复（§3.3）
+- [x] `EditorFontManager`：加载含 **中文 CJK glyph range** 的字体 + 拉丁/标点，支持 DPI 缩放与字号切换（§3.3）
+- [x] 接入 **ImGuizmo / ImPlot**（ImNodes 可选）作为备用绘图/编辑控件（§2）
+- [x] `EditorApp` 门面 + `IEditorPanel` 接口 + `EditorContext` + `EditorSelection`（§3.2）
+- [x] `EditorFramePhase` 挂入 Hosting 主循环；世界经 Rendering 离屏 FBO 纹理显示于「世界视口」面板（`ViewportPanel`）（§3.1）
+- [x] 编辑器整体可经编译/运行时开关禁用，禁用后零开销（§1）
 
 世界编辑与检视：
 - [ ] `MaterialBrushPalettePanel`：画/挖/橡皮/温度笔刷 + 笔刷大小/形状/概率 + 材质选择（缩略图）（§3.4）
@@ -252,7 +252,7 @@ sim 控制 / 存读档 / 调参 / 模式：
 
 按 `AGENTS.md §6`，每个节点完成即用中文 git 提交（scope=`editor`）：
 
-- [ ] 节点 1：`feat(editor): 集成 Hexa.NET.ImGui(GL 后端+输入桥+docking+中文字体)`（§3.1–§3.3，实现清单「ImGui 集成与框架」全部）
+- [x] 节点 1：`feat(editor): 集成 Hexa.NET.ImGui(GL 后端+输入桥+docking+中文字体)`（§3.1–§3.3，实现清单「ImGui 集成与框架」全部）
 - [ ] 节点 2：`feat(editor): 世界画刷调色板与世界检视器`（§3.4–§3.5）
 - [ ] 节点 3：`feat(editor): 调试可视化叠层(架构 §17.2)`（§3.6）
 - [ ] 节点 4：`feat(editor): 性能 HUD(架构 §17.1)`（§3.7）
