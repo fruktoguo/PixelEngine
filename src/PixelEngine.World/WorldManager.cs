@@ -10,6 +10,7 @@ public sealed class WorldManager
 {
     private readonly ActivationPolicy _activationPolicy;
     private readonly ResidencyPlanner _residencyPlanner;
+    private readonly HashSet<ChunkCoord> _promotedActiveCoords = [];
 
     /// <summary>
     /// 创建 World 管理器。
@@ -86,6 +87,18 @@ public sealed class WorldManager
     }
 
     /// <summary>
+    /// 相位 2 前汇报上一帧 CA 产生的 KeepAlive / 边界唤醒；被唤醒的 border chunk 会临时进入 active，
+    /// 以便其 32px halo 外圈在下一次模拟前保持驻留（架构 §3.4/§5.5）。
+    /// </summary>
+    public void NotifyBoundaryWakes(ReadOnlySpan<BoundaryWakeSnapshot> wakes)
+    {
+        for (int i = 0; i < wakes.Length; i++)
+        {
+            _ = _promotedActiveCoords.Add(wakes[i].TargetCoord);
+        }
+    }
+
+    /// <summary>
     /// 相位 2：应用后台完成项，计算 active/border，并提交新的装卸计划。
     /// </summary>
     public void ApplyResidency(long frame)
@@ -93,7 +106,10 @@ public sealed class WorldManager
         _ = Streamer.ApplyPrepared(frame);
         ChunkRect active = _activationPolicy.ComputeActive(Camera, Config);
         ChunkRect border = _activationPolicy.ComputeBorder(active, Config);
+        active = IncludePromotedActiveCoords(active, border);
+        border = _activationPolicy.ComputeBorder(active, Config);
         ClassifyResidents(active, border, frame);
+        PruneInactivePromotions();
         ResidencyPlan plan = _residencyPlanner.Plan(active, border, Residency, MemoryBudget);
         Streamer.SubmitPlan(plan);
     }
@@ -129,5 +145,66 @@ public sealed class WorldManager
                     ChunkMemoryBudget.EstimatedResidentChunkBytes,
                     DirtySinceLoad: false));
         }
+    }
+
+    private ChunkRect IncludePromotedActiveCoords(ChunkRect active, ChunkRect border)
+    {
+        if (_promotedActiveCoords.Count == 0)
+        {
+            return active;
+        }
+
+        ChunkRect expanded = active;
+        foreach (ChunkCoord coord in _promotedActiveCoords)
+        {
+            if (!border.Contains(coord) || !Chunks.TryGetChunk(coord, out _))
+            {
+                continue;
+            }
+
+            expanded = Include(expanded, coord);
+        }
+
+        return expanded;
+    }
+
+    private void PruneInactivePromotions()
+    {
+        if (_promotedActiveCoords.Count == 0)
+        {
+            return;
+        }
+
+        _ = _promotedActiveCoords.RemoveWhere(coord =>
+            !Chunks.TryGetChunk(coord, out Chunk chunk) || !HasPendingSimulationWork(chunk));
+    }
+
+    private static ChunkRect Include(ChunkRect rect, ChunkCoord coord)
+    {
+        return rect.IsEmpty
+            ? new ChunkRect(coord.X, coord.Y, coord.X, coord.Y)
+            : new ChunkRect(
+                Math.Min(rect.MinCx, coord.X),
+                Math.Min(rect.MinCy, coord.Y),
+                Math.Max(rect.MaxCx, coord.X),
+                Math.Max(rect.MaxCy, coord.Y));
+    }
+
+    private static bool HasPendingSimulationWork(Chunk chunk)
+    {
+        if (!chunk.CurrentDirty.IsEmpty || !chunk.WorkingDirty.IsEmpty)
+        {
+            return true;
+        }
+
+        for (int i = 0; i < chunk.IncomingDirtySlotCount; i++)
+        {
+            if (!chunk.GetIncomingDirty(i).IsEmpty)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -169,6 +169,7 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
   - [x] RLE+LZ4 字节准备可派发 Core 线程池并行（多 chunk 并发），磁盘读写在 I/O 线程；缓冲走 `ArrayPool<byte>`。（AGENTS §3）
 - [x] `WorldManager`（facade，class）：拥有 `WorldCamera`、`ActivationPolicy`、`ResidencyTable`、`ResidencyPlanner`、`ChunkMemoryBudget`、`WorldStreamer`；引用 plan/03 的 `ChunkMap`。
   - [x] `UpdateCamera(...)`（相位 0/1）。
+  - [x] `NotifyBoundaryWakes(ReadOnlySpan<BoundaryWakeSnapshot>)`：相位 2 前汇总上一帧 CA KeepAlive / 边界唤醒，把被唤醒 border chunk 临时提升为 active，促使其新外圈 border 在下一次模拟前装载。（§3.4/§3.3，不变式 #4）
   - [x] `ApplyResidency(long frame)`（相位 2）：`WorldStreamer.ApplyPrepared` → 重算 active/border → `ResidencyPlanner.Plan` → border 提升 → `WorldStreamer.SubmitPlan`。结构性增删只在此发生（§3.4）。
   - [x] `RunStreaming(CancellationToken)`（相位 11，驱动 `WorldStreamer.ProcessIo`）。
 
