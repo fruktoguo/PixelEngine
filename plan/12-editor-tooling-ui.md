@@ -148,10 +148,10 @@ ImGui 集成与框架：
 - [x] 编辑器整体可经编译/运行时开关禁用，禁用后零开销（§1）
 
 世界编辑与检视：
-- [ ] `MaterialBrushPalettePanel`：画/挖/橡皮/温度笔刷 + 笔刷大小/形状/概率 + 材质选择（缩略图）（§3.4）
-- [ ] 画刷写入经 `ISimulationEditApi`，落相位 [1]，写后标 dirty + KeepAlive；不存 RGBA 入 cell（#4、#7、§3.4）
-- [ ] 温度笔刷读写 `plan/04` 粗温度场（§3.4、架构 §7.5）
-- [ ] `WorldInspectorPanel`：点选/跟随 cell → material(id+Name)/temperature/Flags 逐位/owned-by-body-K/坐标/chunk 信息/dirty rect/sleep（§3.5）
+- [x] `MaterialBrushPalettePanel`：画/挖/橡皮/温度笔刷 + 笔刷大小/形状/概率 + 材质选择（缩略图）（§3.4）
+- [x] 画刷写入经 `ISimulationEditApi`，落相位 [1]，写后标 dirty + KeepAlive；不存 RGBA 入 cell（#4、#7、§3.4）
+- [x] 温度笔刷读写 `plan/04` 粗温度场（§3.4、架构 §7.5）
+- [x] `WorldInspectorPanel`：点选/跟随 cell → material(id+Name)/temperature/Flags 逐位/owned-by-body-K/坐标/chunk 信息/dirty rect/sleep（§3.5）
 
 调试可视化叠层（架构 §17.2）：
 - [ ] `DebugOverlayController` + `DebugOverlayPanel`：每种叠层独立可叠加开关（§3.6）
@@ -253,7 +253,7 @@ sim 控制 / 存读档 / 调参 / 模式：
 按 `AGENTS.md §6`，每个节点完成即用中文 git 提交（scope=`editor`）：
 
 - [x] 节点 1：`feat(editor): 集成 Hexa.NET.ImGui(GL 后端+输入桥+docking+中文字体)`（§3.1–§3.3，实现清单「ImGui 集成与框架」全部）
-- [ ] 节点 2：`feat(editor): 世界画刷调色板与世界检视器`（§3.4–§3.5）
+- [x] 节点 2：`feat(editor): 世界画刷调色板与世界检视器`（§3.4–§3.5）
 - [ ] 节点 3：`feat(editor): 调试可视化叠层(架构 §17.2)`（§3.6）
 - [ ] 节点 4：`feat(editor): 性能 HUD(架构 §17.1)`（§3.7）
 - [ ] 节点 5：`feat(editor): 材质+反应实时编辑器与 id 稳定热重载(架构 §17.4)`（§3.8）

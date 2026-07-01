@@ -61,12 +61,33 @@ public sealed class SimulationKernel(
     /// </summary>
     public void DepositCell(int wx, int wy, ushort material, byte persistentFlags)
     {
+        WriteCellAndMarkCurrent(wx, wy, material, persistentFlags);
+    }
+
+    /// <summary>
+    /// 相位 1：编辑器/输入写入权威网格，并标记 current dirty 与边界唤醒，使本帧 CA 立即可见。
+    /// </summary>
+    public void EditCellAtInputPhase(int wx, int wy, ushort material, byte persistentFlags)
+    {
+        WriteCellAndMarkCurrent(wx, wy, material, persistentFlags);
+    }
+
+    /// <summary>
+    /// 相位 1：编辑器/输入清空权威网格 cell，并标记 current dirty 与边界唤醒。
+    /// </summary>
+    public void ClearCellAtInputPhase(int wx, int wy)
+    {
         Chunk chunk = RequireChunk(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
+        if (chunk.Material[local] == 0 && chunk.Flags[local] == 0 && chunk.Lifetime[local] == 0)
+        {
+            return;
+        }
+
         NotifyRigidDamageIfNeeded(wx, wy, chunk.Flags[local]);
-        chunk.Material[local] = material;
-        chunk.Flags[local] = CellFlags.SetParity(persistentFlags, CurrentParity);
-        chunk.Lifetime[local] = DefaultLifetimeByte(material);
+        chunk.Material[local] = 0;
+        chunk.Flags[local] = 0;
+        chunk.Lifetime[local] = 0;
         MarkDirty(wx, wy);
     }
 
@@ -135,6 +156,58 @@ public sealed class SimulationKernel(
         return material;
     }
 
+    /// <summary>
+    /// 读取一个 cell 与所属 chunk 的编辑器检视快照。
+    /// </summary>
+    public bool TryInspectCell(
+        int wx,
+        int wy,
+        MaterialTable materials,
+        TemperatureField? temperature,
+        IRigidCellOwnershipLookup? rigidOwnership,
+        out SimulationCellInspection inspection)
+    {
+        ArgumentNullException.ThrowIfNull(materials);
+        ChunkCoord coord = CellAddressing.WorldToChunk(wx, wy);
+        if (!_chunks.TryGetChunk(coord, out Chunk chunk))
+        {
+            inspection = default;
+            return false;
+        }
+
+        int localX = CellAddressing.LocalCoord(wx);
+        int localY = CellAddressing.LocalCoord(wy);
+        int local = CellAddressing.LocalIndexFromLocal(localX, localY);
+        ushort material = chunk.Material[local];
+        byte flags = chunk.Flags[local];
+        string materialName = material < materials.Count && !materials.IsTombstone(material)
+            ? materials.GetName(material)
+            : string.Empty;
+        bool hasTemperature = temperature is not null;
+        int? bodyId = CellFlags.Has(flags, CellFlags.RigidOwned) &&
+            rigidOwnership is not null &&
+            rigidOwnership.TryGetBodyAtCell(wx, wy, out int resolvedBodyId)
+            ? resolvedBodyId
+            : null;
+        inspection = new SimulationCellInspection(
+            wx,
+            wy,
+            coord,
+            localX,
+            localY,
+            material,
+            materialName,
+            hasTemperature ? temperature!.GetTemperature(wx, wy) : 0f,
+            hasTemperature,
+            SimulationCellFlags.FromRaw(flags),
+            bodyId,
+            chunk.CurrentDirty,
+            chunk.WorkingDirty,
+            chunk.State,
+            chunk.Parity);
+        return true;
+    }
+
     internal long CountNonEmptyCells()
     {
         long count = 0;
@@ -172,6 +245,17 @@ public sealed class SimulationKernel(
     {
         ChunkCoord coord = CellAddressing.WorldToChunk(wx, wy);
         return !_chunks.TryGetChunk(coord, out Chunk chunk) ? throw new InvalidOperationException($"目标 chunk 未驻留：{coord}。") : chunk;
+    }
+
+    private void WriteCellAndMarkCurrent(int wx, int wy, ushort material, byte persistentFlags)
+    {
+        Chunk chunk = RequireChunk(wx, wy);
+        int local = CellAddressing.LocalIndex(wx, wy);
+        NotifyRigidDamageIfNeeded(wx, wy, chunk.Flags[local]);
+        chunk.Material[local] = material;
+        chunk.Flags[local] = CellFlags.SetParity(persistentFlags, CurrentParity);
+        chunk.Lifetime[local] = DefaultLifetimeByte(material);
+        MarkDirty(wx, wy);
     }
 
     private byte DefaultLifetimeByte(ushort material)

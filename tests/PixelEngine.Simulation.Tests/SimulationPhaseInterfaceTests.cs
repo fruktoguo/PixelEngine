@@ -55,6 +55,32 @@ public sealed class SimulationPhaseInterfaceTests
     }
 
     /// <summary>
+    /// 验证 phase [1] 编辑写入会写 current dirty 并记录边界唤醒，供本帧 CA 安全可见。
+    /// </summary>
+    [Fact]
+    public void EditCellAtInputPhaseMarksCurrentDirtyAndBoundaryWake()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Chunk east = source.GetRequired(new ChunkCoord(1, 0));
+        MaterialTable materials = new(
+        [
+            new MaterialDef { Id = 0, Name = "empty", Type = CellType.Empty, HeatCapacity = 1f, TextureId = -1 },
+            new MaterialDef { Id = 1, Name = "sand", Type = CellType.Powder, HeatCapacity = 1f, TextureId = -1 },
+        ]);
+        SimulationKernel kernel = new(source, new MaterialPropsTable(materials.Hot));
+        SimulationEditApi edit = new(kernel, materials);
+
+        edit.PaintCell(63, 10, 1);
+
+        Assert.Equal(1, Get(center, 63, 10));
+        Assert.Equal(new DirtyRect(61, 8, 63, 12), center.CurrentDirty);
+        Assert.Equal(new DirtyRect(0, 8, 1, 12), east.CurrentDirty);
+        Assert.Equal(DirtyRect.Empty, center.WorkingDirty);
+        Assert.Equal(1, kernel.Diagnostics.BoundaryWakeCount);
+        Assert.Equal(new ChunkCoord(1, 0), kernel.Diagnostics.BoundaryWakeRecords[0].TargetCoord);
+    }
+
+    /// <summary>
     /// 验证相位 7 清 cell 返回原值并写 current dirty，使下一次 CA 立即看见变化。
     /// </summary>
     [Fact]
