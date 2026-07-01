@@ -16,6 +16,8 @@ public sealed class LevelDirector : Behaviour
     private MaterialId _oil;
     private MaterialId _lava;
     private MaterialId _acid;
+    private MaterialId _metal;
+    private readonly List<BodyHandle> _rigidStructures = [];
     private bool _materialsResolved;
     private bool _worldBuilt;
     private bool _entitiesBuilt;
@@ -57,6 +59,16 @@ public sealed class LevelDirector : Behaviour
     public bool BuildScriptEntities { get; set; } = true;
 
     /// <summary>
+    /// 已通过脚本刚体 API 注册的可破坏结构数量。
+    /// </summary>
+    public int RigidStructureCount => _rigidStructures.Count;
+
+    /// <summary>
+    /// 是否已把关卡中的木 / 金属结构排队转换为动态刚体。
+    /// </summary>
+    public bool RigidStructuresQueued { get; private set; }
+
+    /// <summary>
     /// 最近一次阻塞原因；为空表示脚本已完成初始化。
     /// </summary>
     public string BlockedReason { get; private set; } = string.Empty;
@@ -71,6 +83,7 @@ public sealed class LevelDirector : Behaviour
         }
 
         BuildWorld();
+        QueueRigidStructures();
         RegisterEntityBuildSystem();
     }
 
@@ -89,6 +102,7 @@ public sealed class LevelDirector : Behaviour
             BuildWorld();
         }
 
+        QueueRigidStructures();
         RegisterEntityBuildSystem();
     }
 
@@ -119,6 +133,7 @@ public sealed class LevelDirector : Behaviour
         _oil = Context.Materials.Resolve("oil");
         _lava = Context.Materials.Resolve("lava");
         _acid = Context.Materials.Resolve("acid");
+        _metal = Context.Materials.Resolve("metal");
         _materialsResolved = _empty.IsValid &&
             _stone.IsValid &&
             _dirt.IsValid &&
@@ -127,7 +142,8 @@ public sealed class LevelDirector : Behaviour
             _water.IsValid &&
             _oil.IsValid &&
             _lava.IsValid &&
-            _acid.IsValid;
+            _acid.IsValid &&
+            _metal.IsValid;
         BlockedReason = _materialsResolved ? string.Empty : "关卡生成所需材质未全部解析。";
     }
 
@@ -233,16 +249,46 @@ public sealed class LevelDirector : Behaviour
         FillRect(10, floorY + 18, width - 20, 16, _stone);
         FillRect(28, floorY - 14, 110, 14, _stone);
         FillRect(168, floorY - 42, 82, 10, _wood);
-        FillRect(276, floorY - 74, 92, 10, _stone);
+        FillRect(276, floorY - 74, 92, 10, _metal);
         FillRect(410, floorY - 52, 70, 10, _wood);
         FillRect(532, floorY - 66, 80, 12, _stone);
-        FillRect(98, floorY - 86, 64, 8, _stone);
+        FillRect(98, floorY - 86, 64, 8, _metal);
         FillRect(224, floorY - 122, 58, 8, _wood);
-        FillRect(372, floorY - 118, 72, 8, _stone);
+        FillRect(372, floorY - 118, 72, 8, _metal);
         FillRect(138, 108, 34, floorY - 108, _stone);
         FillRect(488, 120, 28, floorY - 52, _stone);
         FillSlope(32, floorY - 1, 88, 24, _sand);
         FillSlope(386, floorY - 1, 74, 22, _sand);
+    }
+
+    private void QueueRigidStructures()
+    {
+        if (!_worldBuilt || RigidStructuresQueued)
+        {
+            return;
+        }
+
+        int floorY = Math.Max(128, LevelHeight) - 72;
+        try
+        {
+            CreateRigidStructure(168, floorY - 42, 82, 10);
+            CreateRigidStructure(276, floorY - 74, 92, 10);
+            CreateRigidStructure(410, floorY - 52, 70, 10);
+            CreateRigidStructure(98, floorY - 86, 64, 8);
+            CreateRigidStructure(224, floorY - 122, 58, 8);
+            CreateRigidStructure(372, floorY - 118, 72, 8);
+            RigidStructuresQueued = true;
+            BlockedReason = string.Empty;
+        }
+        catch (InvalidOperationException exception)
+        {
+            BlockedReason = $"可破坏结构注册失败：{exception.Message}";
+        }
+    }
+
+    private void CreateRigidStructure(int x, int y, int width, int height)
+    {
+        _rigidStructures.Add(Context.Bodies.CreateFromRegion(x, y, width, height));
     }
 
     private void BuildHazards(int height)
