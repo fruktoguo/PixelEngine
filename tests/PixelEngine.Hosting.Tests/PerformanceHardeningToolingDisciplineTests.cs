@@ -60,6 +60,37 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("ymm", document, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证发行编译模式保持默认 R2R 运行时 light-up，AOT 显式 ISA 并跑 SIMD 反汇编探针。
+    /// </summary>
+    [Fact]
+    public void ReleasePublishModesPreserveR2RLightUpAndAotIsaAudit()
+    {
+        string props = ReadRepositoryFile("Directory.Build.props");
+        string release = ReadRepositoryFile(".github", "workflows", "release.yml");
+        string aotProbePs1 = ReadRepositoryFile("tools", "aot-simd-probe.ps1");
+        string aotProbeSh = ReadRepositoryFile("tools", "aot-simd-probe.sh");
+
+        Assert.Contains("Condition=\"'$(Channel)' == 'R2R'\"", props, StringComparison.Ordinal);
+        Assert.Contains("<PublishReadyToRun>true</PublishReadyToRun>", props, StringComparison.Ordinal);
+        Assert.Contains("<PublishReadyToRunComposite>true</PublishReadyToRunComposite>", props, StringComparison.Ordinal);
+        Assert.Contains("<TieredPGO>true</TieredPGO>", props, StringComparison.Ordinal);
+        Assert.Contains("不设置 baseline ISA", props, StringComparison.Ordinal);
+
+        Assert.Contains("Condition=\"'$(Channel)' == 'AOT'\"", props, StringComparison.Ordinal);
+        Assert.Contains("<PublishAot>true</PublishAot>", props, StringComparison.Ordinal);
+        Assert.Contains("<IlcInstructionSet>x86-64-v3</IlcInstructionSet>", props, StringComparison.Ordinal);
+        Assert.Contains("<IlcInstructionSet>armv8.2-a,lse,rcpc</IlcInstructionSet>", props, StringComparison.Ordinal);
+        Assert.Contains("<IlcInstructionSet>apple-m1,lse,rcpc</IlcInstructionSet>", props, StringComparison.Ordinal);
+
+        Assert.Contains("AOT SIMD probe", release, StringComparison.Ordinal);
+        Assert.Contains("matrix.channel == 'aot' && endsWith(matrix.rid, '-x64')", release, StringComparison.Ordinal);
+        Assert.Contains("aot-simd-probe.ps1", release, StringComparison.Ordinal);
+        Assert.Contains("aot-simd-probe.sh", release, StringComparison.Ordinal);
+        Assert.Contains("ymm/zmm", aotProbePs1, StringComparison.Ordinal);
+        Assert.Contains("[yz]mm", aotProbeSh, StringComparison.Ordinal);
+    }
+
     private static string ReadRepositoryFile(params string[] relativePath)
     {
         return File.ReadAllText(Path.Combine([FindRepositoryRoot(), .. relativePath]));
