@@ -142,7 +142,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 
 工程与启动
 - [x] 建 `demo/PixelEngine.Demo/PixelEngine.Demo.csproj`（`Exe`，仅 `ProjectReference` 到 `PixelEngine.Hosting` 与 `PixelEngine.Scripting`，继承 `Directory.Build.props`，无新 NuGet）。〔plan/00 §5〕
-- [!] `Program.cs`：已用 `EngineBuilder`/`EngineProject` 构造 Engine，支持 `--editor/--headless/--scene/--content/--ticks/--no-hot-reload/--log-dir`；已通过 `Engine.LoadContentPackage()` 在 materials/reactions 存在时加载内容包，已区分 save directory 与 `.scene` 来源，已支持 `.scene` 脚本实体/Behaviour 参数物化，注册 Demo 脚本程序集并可 headless 冒烟；阻塞：缺少完整 Demo 内容资产与 `lava-mine.scene`，Hosting 尚无 save directory 世界物化入口、脚本运行时自动接入场景实例、完整子系统一键装配 API，不能假装完成可玩关卡加载。〔Hosting；§3.1〕
+- [!] `Program.cs`：已用 `EngineBuilder`/`EngineProject` 构造 Engine，支持 `--editor/--headless/--scene/--content/--ticks/--no-hot-reload/--log-dir`；已通过 `Engine.LoadContentPackage()` 加载 Demo materials/reactions 内容包，已区分 save directory 与 `.scene` 来源，已支持 `.scene` 脚本实体/Behaviour 参数物化，注册 Demo 脚本程序集并可 headless 冒烟；阻塞：缺少纹理/音频资产与 `lava-mine.scene`，Hosting 尚无 save directory 世界物化入口、脚本运行时自动接入场景实例、完整子系统一键装配 API，不能假装完成可玩关卡加载。〔Hosting；§3.1〕
 - [x] CI 依赖方向断言：Demo 无对引擎内部 assembly 的越层 / 反向引用。〔plan/14；§2〕
 
 玩家与相机
@@ -155,9 +155,9 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 - [ ] `ExplosiveTool : Behaviour`：触发 `World.Explode`（清 cell + 抛粒子 + 推刚体）+ 相机震动 + explosion 音效。〔plan/05、plan/06、plan/10;§3.5〕
 
 内容
-- [ ] `content/materials.json`：完整材质集（empty/sand/dirt/ash/water/oil/acid/lava/molten_metal/steam/smoke/acid_gas/fire/stone/wood/ice/metal/glass），含稳定 `Name`、CellType、密度 / 流散 / 可燃 / 相变阈值 / 温度参数 / PropertyFlags(emissive 等) / 纹理 / `AudioCues`，tag 归属。〔plan/04 格式；§3.6〕
-- [ ] `content/reactions.json`：熔岩遇水成石、熔岩点燃木、火烧木传播、油速燃、水灭火、酸腐蚀、蒸汽冷凝、熔融金属遇水凝固，用 tag 书写。〔plan/04 格式；§3.6〕
-- [ ] 温度相变内容校核：冰融化 / 水沸 / 水冻 / 熔岩冷却 / 金属熔化回凝 / 沙烤玻璃 经 `MaterialDef` 阈值（不进反应表）。〔plan/04 温度场、架构 §7.4;§3.6〕
+- [x] `content/materials.json`：完整材质集（empty/sand/dirt/ash/water/oil/acid/lava/molten_metal/steam/smoke/acid_gas/fire/stone/wood/ice/metal/glass），含稳定 `Name`、CellType、密度 / 流散 / 可燃 / 相变阈值 / 温度参数 / PropertyFlags(emissive 等) / 纹理 / `AudioCues`，tag 归属。〔plan/04 格式；§3.6〕
+- [x] `content/reactions.json`：熔岩遇水成石、熔岩点燃木、火烧木传播、油速燃、水灭火、酸腐蚀、蒸汽冷凝、熔融金属遇水凝固，用 tag 书写。〔plan/04 格式；§3.6〕
+- [x] 温度相变内容校核：冰融化 / 水沸 / 水冻 / 熔岩冷却 / 金属熔化回凝 / 沙烤玻璃 经 `MaterialDef` 阈值（不进反应表）。〔plan/04 温度场、架构 §7.4;§3.6〕
 - [ ] `content/textures/`：各材质纹理（按世界坐标采样，颜色不入 cell，架构不变式 §7）。〔plan/04;§3.6〕
 - [ ] `content/audio/`：§3.10 音效资产清单全部就位并被 `AudioCues`/`PlayOneShot` 引用。〔plan/10;§3.10〕
 
