@@ -13,7 +13,6 @@ public sealed class AudioSystem : IDisposable
     private AudioVoicePool? _voices;
     private AudioClipCache? _clipCache;
     private AudioSettings _settings = new();
-    private AudioListenerState _lastListener;
     private bool _ownsBackend;
     private bool _disposed;
 
@@ -36,6 +35,11 @@ public sealed class AudioSystem : IDisposable
     /// 当前诊断快照。
     /// </summary>
     public AudioDiagnostics Diagnostics { get; private set; }
+
+    /// <summary>
+    /// 最近一次 listener 状态。
+    /// </summary>
+    public AudioListenerState CurrentListener { get; private set; }
 
     /// <summary>
     /// 初始化音频系统。未提供 backend 时优先 OpenAL，失败则静默降级为 <see cref="NullAudioBackend"/>。
@@ -73,7 +77,7 @@ public sealed class AudioSystem : IDisposable
         }
 
         _voices = new AudioVoicePool(_backend, _settings);
-        _lastListener = new AudioListenerState(Vector3.Zero, -Vector3.UnitZ, Vector3.UnitY, _settings.MasterVolume);
+        CurrentListener = new AudioListenerState(Vector3.Zero, -Vector3.UnitZ, Vector3.UnitY, _settings.MasterVolume);
         RefreshDiagnostics(default);
     }
 
@@ -101,7 +105,7 @@ public sealed class AudioSystem : IDisposable
         ThrowIfDisposed();
         IAudioBackend backend = Backend;
         AudioListenerState listenerState = AudioListenerState.FromView(in view, _settings);
-        _lastListener = listenerState;
+        CurrentListener = listenerState;
         backend.SetListener(in listenerState);
         Voices.RefreshFinishedVoices();
         RefreshDiagnostics(default);
@@ -121,7 +125,7 @@ public sealed class AudioSystem : IDisposable
         ArgumentNullException.ThrowIfNull(clip);
         AudioSpace space = new(_settings.PixelsPerMeter);
         Vector3 position = space.ToMeters(worldPos.X, worldPos.Y);
-        AudioVoice? voice = Voices.Acquire(128, PixelEngine.Core.Events.AudioEventType.ParticleImpact, position, _lastListener.Position, 0);
+        AudioVoice? voice = Voices.Acquire(128, PixelEngine.Core.Events.AudioEventType.ParticleImpact, position, CurrentListener.Position, 0);
         if (voice is null)
         {
             RefreshDiagnostics(default);
@@ -143,7 +147,7 @@ public sealed class AudioSystem : IDisposable
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(clip);
-        AudioVoice? voice = Voices.Acquire(byte.MaxValue, PixelEngine.Core.Events.AudioEventType.AmbientRegion, _lastListener.Position, _lastListener.Position, 0);
+        AudioVoice? voice = Voices.Acquire(byte.MaxValue, PixelEngine.Core.Events.AudioEventType.AmbientRegion, CurrentListener.Position, CurrentListener.Position, 0);
         if (voice is null)
         {
             RefreshDiagnostics(default);
@@ -190,6 +194,15 @@ public sealed class AudioSystem : IDisposable
             diagnostics.LoadedClips,
             diagnostics.LoadingClips,
             diagnostics.LastDispatch.DispatchMilliseconds);
+    }
+
+    /// <summary>
+    /// 记录本帧事件派发统计并刷新诊断快照。
+    /// </summary>
+    public void RecordDispatchStats(in AudioDispatchStats dispatch)
+    {
+        ThrowIfDisposed();
+        RefreshDiagnostics(dispatch);
     }
 
     /// <summary>
