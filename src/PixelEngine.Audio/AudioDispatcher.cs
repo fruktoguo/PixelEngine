@@ -11,12 +11,12 @@ public sealed class AudioDispatcher
 {
     private readonly MpscRingBuffer<AudioEvent> _events;
     private readonly AudioVoicePool _voices;
-    private readonly AudioEventCoalescer _coalescer;
-    private readonly CooldownTracker _cooldowns;
-    private readonly AudioEvent[] _eventScratch;
-    private readonly CoalescedAudioEvent[] _coalescedScratch;
-    private readonly AudioSpace _space;
-    private readonly int _cooldownTicks;
+    private AudioEventCoalescer _coalescer;
+    private CooldownTracker _cooldowns;
+    private AudioEvent[] _eventScratch;
+    private CoalescedAudioEvent[] _coalescedScratch;
+    private AudioSpace _space;
+    private int _cooldownTicks;
 
     /// <summary>
     /// 创建音频事件派发器。
@@ -33,14 +33,7 @@ public sealed class AudioDispatcher
         _coalescer = new AudioEventCoalescer(validated);
         _cooldowns = new CooldownTracker(validated.CooldownTableCapacity);
         _eventScratch = new AudioEvent[validated.MaxDrainedAudioEventsPerFrame];
-        int coalescedCapacity =
-            validated.MaxParticleImpactEventsPerFrame +
-            validated.MaxFireCrackleEventsPerFrame +
-            validated.MaxLiquidSplashEventsPerFrame +
-            validated.MaxExplosionEventsPerFrame +
-            validated.MaxRigidbodyShatterEventsPerFrame +
-            validated.MaxAmbientRegionEventsPerFrame;
-        _coalescedScratch = new CoalescedAudioEvent[coalescedCapacity];
+        _coalescedScratch = new CoalescedAudioEvent[CoalescedCapacity(validated)];
         _space = new AudioSpace(validated.PixelsPerMeter);
         _cooldownTicks = validated.DefaultCooldownTicks;
     }
@@ -49,6 +42,22 @@ public sealed class AudioDispatcher
     /// 最近一次派发统计。
     /// </summary>
     public AudioDispatchStats LastStats { get; private set; }
+
+    /// <summary>
+    /// 应用新的运行时设置，重建限频 / 合并 scratch 结构。
+    /// </summary>
+    /// <param name="settings">新的音频设置。</param>
+    public void ApplySettings(AudioSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        AudioSettings validated = settings.Validate();
+        _coalescer = new AudioEventCoalescer(validated);
+        _cooldowns = new CooldownTracker(validated.CooldownTableCapacity);
+        _eventScratch = new AudioEvent[validated.MaxDrainedAudioEventsPerFrame];
+        _coalescedScratch = new CoalescedAudioEvent[CoalescedCapacity(validated)];
+        _space = new AudioSpace(validated.PixelsPerMeter);
+        _cooldownTicks = validated.DefaultCooldownTicks;
+    }
 
     /// <summary>
     /// 执行一帧音频事件派发。
@@ -128,5 +137,16 @@ public sealed class AudioDispatcher
             _voices.StealCount,
             elapsedMilliseconds);
         return LastStats;
+    }
+
+    private static int CoalescedCapacity(AudioSettings settings)
+    {
+        return
+            settings.MaxParticleImpactEventsPerFrame +
+            settings.MaxFireCrackleEventsPerFrame +
+            settings.MaxLiquidSplashEventsPerFrame +
+            settings.MaxExplosionEventsPerFrame +
+            settings.MaxRigidbodyShatterEventsPerFrame +
+            settings.MaxAmbientRegionEventsPerFrame;
     }
 }

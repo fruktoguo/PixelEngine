@@ -9,7 +9,7 @@ namespace PixelEngine.Audio;
 public sealed class AudioVoicePool : IDisposable
 {
     private readonly IAudioBackend _backend;
-    private readonly AudioVoice[] _voices;
+    private AudioVoice[] _voices;
     private bool _disposed;
 
     /// <summary>
@@ -56,6 +56,28 @@ public sealed class AudioVoicePool : IDisposable
     /// <param name="index">槽位索引。</param>
     /// <returns>voice。</returns>
     public AudioVoice this[int index] => _voices[index];
+
+    /// <summary>
+    /// 应用新的运行时设置，必要时扩缩 source 池并重新配置距离衰减。
+    /// </summary>
+    /// <param name="settings">新的音频设置。</param>
+    public void ApplySettings(AudioSettings settings)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(settings);
+        AudioSettings validated = settings.Validate();
+        if (validated.MaxVoices != _voices.Length)
+        {
+            Resize(validated);
+        }
+
+        for (int i = 0; i < _voices.Length; i++)
+        {
+            _voices[i].Configure(validated);
+        }
+
+        RefreshFinishedVoices();
+    }
 
     /// <summary>
     /// 申请一个 voice。优先复用已完成槽位，池满时按优先级 / 距离 / 年龄抢占。
@@ -151,5 +173,30 @@ public sealed class AudioVoicePool : IDisposable
     private void ThrowIfDisposed()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+    }
+
+    private void Resize(AudioSettings settings)
+    {
+        AudioVoice[] next = new AudioVoice[settings.MaxVoices];
+        int kept = Math.Min(_voices.Length, next.Length);
+        for (int i = 0; i < kept; i++)
+        {
+            _voices[i].ReassignSlot(i);
+            next[i] = _voices[i];
+        }
+
+        for (int i = kept; i < _voices.Length; i++)
+        {
+            _voices[i].Stop();
+            _backend.DeleteSource(_voices[i].Source);
+        }
+
+        for (int i = kept; i < next.Length; i++)
+        {
+            uint source = _backend.CreateSource();
+            next[i] = new AudioVoice(_backend, source, i, settings);
+        }
+
+        _voices = next;
     }
 }

@@ -68,6 +68,37 @@ public sealed class AmbientLoopManagerTests
         Assert.Equal(0, manager.ActiveVoiceCount);
     }
 
+    [Fact]
+    public void AmbientLoopManagerApplySettingsResizesAndUpdatesThresholds()
+    {
+        using NullAudioBackend backend = new();
+        using AmbientLoopManager manager = new(
+            backend,
+            BuildTable(ambientCue: 9),
+            new BufferResolver(),
+            new AudioSettings
+            {
+                MaxAmbientVoices = 0,
+                AmbientEnterThreshold = 0.9f,
+                AmbientExitThreshold = 0.2f,
+                AmbientFadeRate = 0.5f,
+            });
+        CoalescedAudioEvent ambient = new(AudioEventType.AmbientRegion, 0, 0, 1, 0.5f, 1);
+
+        manager.Update([ambient]);
+        manager.ApplySettings(new AudioSettings
+        {
+            MaxAmbientVoices = 1,
+            AmbientEnterThreshold = 0.3f,
+            AmbientExitThreshold = 0.2f,
+            AmbientFadeRate = 0.5f,
+        });
+        manager.Update([ambient]);
+
+        Assert.Equal(1, manager.ActiveVoiceCount);
+        Assert.Equal(1, backend.PlayCalls);
+    }
+
     private static MaterialAudioTable BuildTable(int ambientCue)
     {
         return MaterialAudioTable.FromDefinitions(

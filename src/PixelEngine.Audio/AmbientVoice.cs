@@ -8,7 +8,7 @@ namespace PixelEngine.Audio;
 public sealed class AmbientVoice
 {
     private readonly IAudioBackend _backend;
-    private readonly float _fadeRate;
+    private float _fadeRate;
 
     internal AmbientVoice(IAudioBackend backend, uint source, int slotIndex, AudioSettings settings)
     {
@@ -27,7 +27,14 @@ public sealed class AmbientVoice
     /// <summary>
     /// 固定槽位索引。
     /// </summary>
-    public int SlotIndex { get; }
+    public int SlotIndex { get; private set; }
+
+    internal void Configure(int slotIndex, AudioSettings settings)
+    {
+        SlotIndex = slotIndex;
+        _fadeRate = settings.AmbientFadeRate;
+        _backend.ConfigureSource(Source, settings);
+    }
 
     /// <summary>
     /// 当前绑定材质 id。
