@@ -125,6 +125,20 @@ public sealed unsafe class OpenAlBackend : IAudioBackend
     }
 
     /// <inheritdoc />
+    public void SetSourceGain(uint source, float gain)
+    {
+        ThrowIfDisposed();
+        _al.SetSourceProperty(source, SourceFloat.Gain, gain);
+    }
+
+    /// <inheritdoc />
+    public void SetSourceLooping(uint source, bool looping)
+    {
+        ThrowIfDisposed();
+        _al.SetSourceProperty(source, SourceBoolean.Looping, looping);
+    }
+
+    /// <inheritdoc />
     public void Stop(uint source)
     {
         ThrowIfDisposed();

@@ -148,7 +148,7 @@ OpenAL 封装与生命周期：
 - [x] splash 播放：相位 3/4 液体飞溅 / 落水（架构 §3.3 相位 3/4）。
 - [x] explosion 播放：相位 7 冲击事件（架构 §3.3 相位 7、§7.6）。
 - [x] shatter 播放：相位 8a 刚体破碎 / 拆分（架构 §3.3 相位 8a、§8.4）。
-- [ ] `AmbientLoopManager` + `AmbientVoice`：材质化 ambient（熔岩咕嘟 / 深水低频），带滞回交叉淡变（`Enter/ExitThreshold`、`AmbientFadeRate`），独立 ambient source 集（架构 §10.2）。
+- [x] `AmbientLoopManager` + `AmbientVoice`：材质化 ambient（熔岩咕嘟 / 深水低频），带滞回交叉淡变（`Enter/ExitThreshold`、`AmbientFadeRate`），独立 ambient source 集（架构 §10.2）。
 
 资产加载与播放接口：
 
@@ -179,12 +179,12 @@ OpenAL 封装与生命周期：
 - [ ] **预算达标**：音频派发耗时计入并满足 §1.4「游戏逻辑 + 音频派发 ≤1ms」；混音 / 解码不出现在主线程帧时间分项（架构 §10.3，诊断 HUD 验证）。
 - [ ] **定位正确**：声源 pan 与衰减随 listener / 相机移动正确变化（左右像素声像、远近音量）。
 - [ ] **与降频一致**：sim 降到 30Hz 时事件密度随之下降、听感与画面同步；render-only 帧声场连续无跳变（架构 §4.2/§10.3）。
-- [ ] **voice stealing**：voice 池压满时按优先级 / 距离 / 年龄抢占，无爆音 / 无泄漏。
-- [ ] **ambient 交叉淡变**：材质区域进出时 ambient 平滑淡入淡出、滞回无反复启停。
-- [ ] **MPSC 线程安全**：多 worker 并发产生事件、主线程并发排空，无数据竞争 / 丢失 / 重复（与 Core ring 契约联测）。
+- [x] **voice stealing**：voice 池压满时按优先级 / 距离 / 年龄抢占，无爆音 / 无泄漏。
+- [x] **ambient 交叉淡变**：材质区域进出时 ambient 平滑淡入淡出、滞回无反复启停。
+- [x] **MPSC 线程安全**：多 worker 并发产生事件、主线程并发排空，无数据竞争 / 丢失 / 重复（与 Core ring 契约联测）。
 - [x] **资产加载**：WAV/PCM 正确加载与播放；加载中不阻塞主线程；`Unload` 无泄漏。
 - [ ] 不读取 sim 网格于热路径、不进 sim 热循环；混音 / 解码全在 OpenAL 音频线程 / 解码 worker（架构 §10.1）。
-- [ ] 未新增除 Silk.NET.OpenAL 外的 native 依赖（不变式 10）；无新 `DllImport`（AGENTS §3）。
+- [x] 未新增除 Silk.NET.OpenAL 外的 native 依赖（不变式 10）；无新 `DllImport`（AGENTS §3）。
 
 ---
 
@@ -212,6 +212,6 @@ OpenAL 封装与生命周期：
 - [x] 节点 2 `feat(audio): 事件消费派发 + 限频去重(每帧上限/近坐标合并/冷却)`（§3.2/§3.4/§3.7 第 2 组）。
 - [x] 节点 3 `feat(audio): 材质化音效映射(AudioCues) + impact/fire/splash/explosion/shatter`（§3.5/§3.6 第 3 组）。
 - [x] 节点 4 `feat(audio): 资产加载(WAV) + 流式播放 + 公开播放 API + 诊断接入`（§3.8/§3.9 第 4 组）。
-- [ ] 节点 5 `test(audio): 限频/去重/零分配/MPSC 线程安全/定位 验收测试`（§5 验收，随 plan/14）。
+- [~] 节点 5 `test(audio): 限频/去重/零分配/MPSC 线程安全/定位 验收测试`（§5 验收，随 plan/14）。
 
 > 节点 1–4 顺序推进，每节点完成即勾选并提交；§5 验收全部勾选方视为本文档完成（AGENTS §7）。Ogg 解码与 ambient 粗采样产生侧若被阻塞，标 `- [!]` 上报，不写假实现绕过。

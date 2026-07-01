@@ -27,6 +27,11 @@ public sealed class NullAudioBackend : IAudioBackend
     public int StopCalls { get; private set; }
 
     /// <summary>
+    /// source 增益更新次数。
+    /// </summary>
+    public int GainUpdates { get; private set; }
+
+    /// <summary>
     /// 已创建 source 数。
     /// </summary>
     public int SourceCount => _sources.Count;
@@ -145,6 +150,21 @@ public sealed class NullAudioBackend : IAudioBackend
     }
 
     /// <inheritdoc />
+    public void SetSourceGain(uint source, float gain)
+    {
+        SourceRecord record = Get(source);
+        record.Gain = gain;
+        GainUpdates++;
+    }
+
+    /// <inheritdoc />
+    public void SetSourceLooping(uint source, bool looping)
+    {
+        SourceRecord record = Get(source);
+        record.Looping = looping;
+    }
+
+    /// <inheritdoc />
     public void Stop(uint source)
     {
         SourceRecord record = Get(source);
@@ -156,6 +176,16 @@ public sealed class NullAudioBackend : IAudioBackend
     public AudioSourceState GetState(uint source)
     {
         return Get(source).State;
+    }
+
+    /// <summary>
+    /// 测试辅助：读取 source 最近播放位置。
+    /// </summary>
+    /// <param name="source">source 句柄。</param>
+    /// <returns>位置。</returns>
+    public Vector3 GetSourcePosition(uint source)
+    {
+        return Get(source).Position;
     }
 
     /// <summary>
@@ -227,6 +257,7 @@ public sealed class NullAudioBackend : IAudioBackend
         public float Gain;
         public float Pitch;
         public bool Deleted;
+        public bool Looping;
         public int QueuedBuffers;
         public int ProcessedBuffers;
         public Queue<uint> QueuedBufferHandles { get; } = [];

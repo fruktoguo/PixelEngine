@@ -80,6 +80,20 @@ public interface IAudioBackend : IDisposable
     void Play(uint source, uint buffer, in Vector3 position, float gain, float pitch);
 
     /// <summary>
+    /// 设置 source 增益。
+    /// </summary>
+    /// <param name="source">source 句柄。</param>
+    /// <param name="gain">线性增益。</param>
+    void SetSourceGain(uint source, float gain);
+
+    /// <summary>
+    /// 设置 source 是否循环播放当前 buffer。
+    /// </summary>
+    /// <param name="source">source 句柄。</param>
+    /// <param name="looping">是否循环。</param>
+    void SetSourceLooping(uint source, bool looping);
+
+    /// <summary>
     /// 停止 source。
     /// </summary>
     /// <param name="source">source 句柄。</param>
