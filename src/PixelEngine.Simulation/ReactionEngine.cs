@@ -8,8 +8,16 @@ namespace PixelEngine.Simulation;
 public sealed class ReactionEngine(MaterialTable materials, ReactionTable reactions, IReactionSideEffectSink? sideEffects = null) : IReactionExecutor
 {
     private readonly MaterialTable _materials = materials ?? throw new ArgumentNullException(nameof(materials));
-    private readonly ReactionTable _reactions = reactions ?? throw new ArgumentNullException(nameof(reactions));
     private readonly IReactionSideEffectSink? _sideEffects = sideEffects;
+    private ReactionTable _reactions = reactions ?? throw new ArgumentNullException(nameof(reactions));
+
+    /// <summary>
+    /// 替换 packed reaction table；由内容热重载在帧边界调用。
+    /// </summary>
+    public void ReloadReactions(ReactionTable reactions)
+    {
+        _reactions = reactions ?? throw new ArgumentNullException(nameof(reactions));
+    }
 
     /// <inheritdoc />
     public bool TryReact(

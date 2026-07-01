@@ -192,6 +192,7 @@ public sealed class MaterialTable : IMaterialCustomUpdateExecutor
 
         if (appended.Count != 0)
         {
+            appended.Sort(static (left, right) => left.Id.CompareTo(right.Id));
             int oldLength = _defs.Length;
             Array.Resize(ref _defs, oldLength + appended.Count);
             Array.Resize(ref _tombstones, _defs.Length);

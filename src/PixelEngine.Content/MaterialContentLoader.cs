@@ -21,6 +21,22 @@ public sealed class MaterialContentLoadResult(MaterialTable materials, ReactionT
 }
 
 /// <summary>
+/// 材质热重载构建结果，保留既有 name→id，并产出使用稳定 id 的 reaction table。
+/// </summary>
+public sealed class MaterialContentStableReloadResult(MaterialDef[] definitions, ReactionTable reactions)
+{
+    /// <summary>
+    /// 传给 <see cref="MaterialTable.ReloadStable" /> 的 live 材质定义。
+    /// </summary>
+    public MaterialDef[] Definitions { get; } = definitions;
+
+    /// <summary>
+    /// 使用稳定 runtime id 构建的 packed 反应表。
+    /// </summary>
+    public ReactionTable Reactions { get; } = reactions;
+}
+
+/// <summary>
 /// 将 materials.json / reactions.json 转换为 Simulation 运行时表。
 /// </summary>
 public static class MaterialContentLoader
@@ -55,6 +71,34 @@ public static class MaterialContentLoader
         MaterialTable materials = new(finalDefinitions);
         ReactionTable reactions = new(packed, finalDefinitions);
         return new MaterialContentLoadResult(materials, reactions);
+    }
+
+    /// <summary>
+    /// 从 DTO 构建稳定热重载产物：既有 name 保留 id，新 name 追加 id，reaction 输入/输出均使用稳定 id。
+    /// </summary>
+    public static MaterialContentStableReloadResult BuildStableReload(
+        MaterialDocumentJson materialsDocument,
+        ReactionDocumentJson reactionsDocument,
+        MaterialTable currentMaterials)
+    {
+        ArgumentNullException.ThrowIfNull(materialsDocument);
+        ArgumentNullException.ThrowIfNull(reactionsDocument);
+        ArgumentNullException.ThrowIfNull(currentMaterials);
+
+        MaterialJson[] materialJson = RequireNonEmpty(materialsDocument.Materials, "materials");
+        Dictionary<string, ushort> nameToId = BuildStableNameIndex(materialJson, currentMaterials);
+        MaterialDef[] liveDefinitions = BuildBaseDefinitions(materialJson, nameToId, stableIds: true);
+        MaterialDef[] stableSlots = BuildStableDefinitionSlots(liveDefinitions, currentMaterials.Count);
+        MaterialTagRepresentative[] representatives = BuildRepresentatives(materialsDocument.TagRepresentatives, nameToId);
+        Reaction[] packed = BuildPackedReactions(
+            reactionsDocument.Reactions ?? [],
+            stableSlots,
+            nameToId,
+            representatives,
+            out MaterialDef[] finalStableSlots);
+        MaterialDef[] reloadDefinitions = CopyLiveDefinitions(liveDefinitions, finalStableSlots);
+        ReactionTable reactions = new(packed, finalStableSlots);
+        return new MaterialContentStableReloadResult(reloadDefinitions, reactions);
     }
 
     private static MaterialDocumentJson DeserializeMaterialDocument(string json)
@@ -126,6 +170,11 @@ public static class MaterialContentLoader
 
     private static MaterialDef[] BuildBaseDefinitions(MaterialJson[] materials, Dictionary<string, ushort> nameToId)
     {
+        return BuildBaseDefinitions(materials, nameToId, stableIds: false);
+    }
+
+    private static MaterialDef[] BuildBaseDefinitions(MaterialJson[] materials, Dictionary<string, ushort> nameToId, bool stableIds)
+    {
         MaterialDef[] definitions = new MaterialDef[materials.Length];
         for (int i = 0; i < materials.Length; i++)
         {
@@ -133,7 +182,7 @@ public static class MaterialContentLoader
             string name = RequiredName(source.Name, i);
             definitions[i] = new MaterialDef
             {
-                Id = checked((ushort)i),
+                Id = stableIds ? nameToId[name] : checked((ushort)i),
                 Name = name,
                 Type = ParseEnum<CellType>(source.Type, $"materials[{i}].type"),
                 Density = source.Density,
@@ -164,6 +213,76 @@ public static class MaterialContentLoader
         }
 
         return definitions;
+    }
+
+    private static Dictionary<string, ushort> BuildStableNameIndex(MaterialJson[] materials, MaterialTable currentMaterials)
+    {
+        if (materials.Length > ushort.MaxValue)
+        {
+            throw new ArgumentException("材质数量超过 ushort id 上限。");
+        }
+
+        Dictionary<string, ushort> nameToId = new(materials.Length, StringComparer.Ordinal);
+        ushort nextId = checked((ushort)currentMaterials.Count);
+        for (int i = 0; i < materials.Length; i++)
+        {
+            string name = RequiredName(materials[i].Name, i);
+            if (nameToId.ContainsKey(name))
+            {
+                throw new ArgumentException($"重复材质 name：{name}。");
+            }
+
+            if (currentMaterials.TryGetId(name, out ushort existingId))
+            {
+                nameToId.Add(name, existingId);
+                continue;
+            }
+
+            nameToId.Add(name, nextId);
+            nextId = checked((ushort)(nextId + 1));
+        }
+
+        return nameToId;
+    }
+
+    private static MaterialDef[] BuildStableDefinitionSlots(ReadOnlySpan<MaterialDef> liveDefinitions, int currentCount)
+    {
+        int count = currentCount;
+        for (int i = 0; i < liveDefinitions.Length; i++)
+        {
+            count = Math.Max(count, liveDefinitions[i].Id + 1);
+        }
+
+        MaterialDef[] slots = new MaterialDef[count];
+        for (int i = 0; i < slots.Length; i++)
+        {
+            slots[i] = new MaterialDef
+            {
+                Id = checked((ushort)i),
+                Name = $"__deleted_{i}",
+                Type = CellType.Empty,
+                HeatCapacity = 1f,
+                TextureId = -1,
+            };
+        }
+
+        for (int i = 0; i < liveDefinitions.Length; i++)
+        {
+            slots[liveDefinitions[i].Id] = liveDefinitions[i];
+        }
+
+        return slots;
+    }
+
+    private static MaterialDef[] CopyLiveDefinitions(ReadOnlySpan<MaterialDef> liveDefinitions, ReadOnlySpan<MaterialDef> stableSlots)
+    {
+        MaterialDef[] reload = new MaterialDef[liveDefinitions.Length];
+        for (int i = 0; i < liveDefinitions.Length; i++)
+        {
+            reload[i] = stableSlots[liveDefinitions[i].Id];
+        }
+
+        return reload;
     }
 
     private static MaterialTagRepresentative[] BuildRepresentatives(TagRepresentativeJson[]? json, Dictionary<string, ushort> nameToId)

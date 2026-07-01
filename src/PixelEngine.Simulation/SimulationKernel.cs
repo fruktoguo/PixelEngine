@@ -32,6 +32,14 @@ public sealed class SimulationKernel(
     public MaterialPropsTable MaterialProps { get; } = materialProps ?? throw new ArgumentNullException(nameof(materialProps));
 
     /// <summary>
+    /// 刷新 CA movement / lifetime 消费的材质热表；由内容热重载在帧边界调用。
+    /// </summary>
+    public void ReloadMaterialHotTable(MaterialHotTable hot)
+    {
+        MaterialProps.Reload(hot);
+    }
+
+    /// <summary>
     /// 世界随机种子。
     /// </summary>
     public ulong WorldSeed { get; } = worldSeed;

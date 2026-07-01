@@ -16,6 +16,7 @@ public sealed class EditorDockSpace
         InspectorWindowTitle,
         WorldInspectorWindowTitle,
         MaterialBrushWindowTitle,
+        MaterialReactionEditorWindowTitle,
         DebugOverlayWindowTitle,
         PerformanceHudWindowTitle,
         ConsoleDiagnosticsWindowTitle,
@@ -50,6 +51,11 @@ public sealed class EditorDockSpace
     /// 材质与画刷窗口标题。
     /// </summary>
     public const string MaterialBrushWindowTitle = "材质/画刷";
+
+    /// <summary>
+    /// 材质/反应编辑器窗口标题。
+    /// </summary>
+    public const string MaterialReactionEditorWindowTitle = "材质/反应编辑器";
 
     /// <summary>
     /// 调试叠层窗口标题。
@@ -143,6 +149,7 @@ public sealed class EditorDockSpace
         ImGuiP.DockBuilderDockWindow(InspectorWindowTitle, rightTopNode);
         ImGuiP.DockBuilderDockWindow(WorldInspectorWindowTitle, rightTopNode);
         ImGuiP.DockBuilderDockWindow(MaterialBrushWindowTitle, rightBottomNode);
+        ImGuiP.DockBuilderDockWindow(MaterialReactionEditorWindowTitle, rightBottomNode);
         ImGuiP.DockBuilderDockWindow(DebugOverlayWindowTitle, rightBottomNode);
         ImGuiP.DockBuilderDockWindow(PerformanceHudWindowTitle, bottomNode);
         ImGuiP.DockBuilderDockWindow(ConsoleDiagnosticsWindowTitle, bottomNode);
