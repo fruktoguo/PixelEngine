@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using PixelEngine.Interop.Box2D;
 
 namespace PixelEngine.Physics;
@@ -16,7 +17,10 @@ public sealed unsafe class PhysicsWorld
     public PixelRigidBody AddBody(B2BodyId bodyId, BodyLocalMask mask)
     {
         int key = _freeKeys.Count > 0 ? _freeKeys.Pop() : _bodies.Count;
-        PixelRigidBody body = new(key, bodyId, mask);
+        PixelRigidBody body = new(key, bodyId, mask)
+        {
+            PreviousTransform = PhysicsScale.ToTransform2D(Box2D.b2Body_GetTransform(bodyId)),
+        };
         if (key == _bodies.Count)
         {
             _bodies.Add(body);
@@ -29,6 +33,11 @@ public sealed unsafe class PhysicsWorld
         Box2D.b2Body_SetUserData(bodyId, (void*)(nint)(key + 1));
         return body;
     }
+
+    /// <summary>
+    /// 当前 body slot 数量，包含可复用空洞。
+    /// </summary>
+    public int BodySlotCount => _bodies.Count;
 
     /// <summary>
     /// 移除刚体 key。
@@ -53,7 +62,7 @@ public sealed unsafe class PhysicsWorld
     /// <summary>
     /// 尝试获取指定 key 的刚体。
     /// </summary>
-    public bool TryGetBody(int bodyKey, out PixelRigidBody? body)
+    public bool TryGetBody(int bodyKey, [NotNullWhen(true)] out PixelRigidBody? body)
     {
         if ((uint)bodyKey >= (uint)_bodies.Count)
         {

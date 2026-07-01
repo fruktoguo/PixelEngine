@@ -197,13 +197,13 @@
 - [x] `RigidDamageQueue`：per-worker 无锁 MPSC 缓冲，相位 4 填充、相位 8a 排空。
 
 ### 4.6 PixelEngine.Physics — 两世界同步（相位 8，不变式 #5）
-- [ ] `PhysicsSystem.SyncStep(dt)` 编排相位 8a→8e，严格与 CA 相位 4 错开（架构 §3.3）。
-- [ ] (8b) `RigidBodyRasterizer.EraseAtCurrentTransform`：按上帧 stamp 列表在旧变换处清网格、清 `RigidOwned` 位（架构 §8.3 步1）。
-- [ ] (8c) 调 `b2World_Step(dt, subStepCount=4)` 经 task 桥（确定性 workerCount=1）（架构 §8.3 步2、§4.1）。
-- [ ] (8d) 读回 transform（`b2World_GetBodyEvents` 或逐体 `GetPosition`/`GetRotation`）（架构 §8.3 步3）。
-- [ ] (8e) `RigidBodyRasterizer.StampInverseSampling`：AABB 内每 cell 反变换最近邻采样 mask，写回 material+`RigidOwned`，登记 stamp+registry，标 chunk dirty（KeepAlive）（架构 §8.3 步4）。
-- [ ] **inverse sampling 旋转水密无洞**，绝不 forward sampling（架构 §8.3 [高]）。
-- [ ] CA 消耗 `RigidOwned` cell 时入 `RigidDamageQueue` 的接口（供 `plan/03` 反应/移动调用）。
+- [x] `PhysicsSystem.SyncStep(dt)` 编排相位 8a→8e，严格与 CA 相位 4 错开（架构 §3.3）。
+- [x] (8b) `RigidBodyRasterizer.EraseAtCurrentTransform`：按上帧 stamp 列表在旧变换处清网格、清 `RigidOwned` 位（架构 §8.3 步1）。
+- [x] (8c) 调 `b2World_Step(dt, subStepCount=4)` 经 task 桥（确定性 workerCount=1）（架构 §8.3 步2、§4.1）。
+- [x] (8d) 读回 transform（`b2World_GetBodyEvents` 或逐体 `GetPosition`/`GetRotation`）（架构 §8.3 步3）。
+- [x] (8e) `RigidBodyRasterizer.StampInverseSampling`：AABB 内每 cell 反变换最近邻采样 mask，写回 material+`RigidOwned`，登记 stamp+registry，标 chunk dirty（KeepAlive）（架构 §8.3 步4）。
+- [x] **inverse sampling 旋转水密无洞**，绝不 forward sampling（架构 §8.3 [高]）。
+- [x] CA 消耗 `RigidOwned` cell 时入 `RigidDamageQueue` 的接口（供 `plan/03` 反应/移动调用）。
 
 ### 4.7 PixelEngine.Physics — 破坏/挖掘（相位 8a，架构 §8.4/R4）
 - [ ] `RigidBodyDestruction.RebuildDirty`：剩余 mask→CCL→每块 MS→DP→PolyPartition→建新体→销旧体。
@@ -308,7 +308,7 @@
 - [x] 节点 3：`feat(physics): 物理尺度与坐标转换(16px=1m, radius=0)`（对应 §4.3，架构 §8.1）。
 - [x] 节点 4：`feat(physics): 像素簇→刚体管线(CCL→MS→DP→PolyPartition→复合体)`（对应 §4.4，架构 §8.2）。
 - [x] 节点 5：`feat(physics): 不可变 body-local mask 与刚体包装/registry/damage queue`（对应 §4.5，架构 §8.3/R6）。
-- [ ] 节点 6：`feat(physics): 两世界栅格化同步(erase→step→inverse-sample re-stamp)`（对应 §4.6，相位 8，不变式 #5）。
+- [x] 节点 6：`feat(physics): 两世界栅格化同步(erase→step→inverse-sample re-stamp)`（对应 §4.6，相位 8，不变式 #5）。
 - [ ] 节点 7：`feat(physics): 破坏/挖掘重建(CCL 拆分+父子速度转移+节流)`（对应 §4.7，架构 §8.4）。
 - [ ] 节点 8：`feat(physics): 静态地形局部用后即弃 collider`（对应 §4.8，架构 §8.1）。
 - [ ] 节点 9：`feat(physics): 独立于 Box2D 的角色控制器(kinematic AABB vs 像素)`（对应 §4.9，架构 §8.5）。
