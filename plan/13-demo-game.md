@@ -147,7 +147,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 
 玩家与相机
 - [!] `PlayerController : Behaviour`：源码已落地，经 `ICharacterController.Create/SetPosition/Move/GetState` 创建、传送并移动 AABB，实现跑 / 跳 / 贴墙滑落 / 蹬墙、重力、coyote-time 与 jump-buffer；headless 路径已能由 Hosting 自动注入脚本后端并驱动场景 Behaviour；阻塞：缺少 Hosting/Silk.NET 输入采集与窗口态输入快照，不能完成可玩控制验收。〔plan/06、plan/08 输入；§3.3〕
-- [!] `PlayerHealth : Behaviour`：源码已落地，按玩家 AABB 采样 `lava/fire/acid`，扣血、喷粒子、触发受击音效并死亡重生；headless 路径已能由 Hosting 自动驱动；阻塞：缺少 Hosting 自动加载 Demo 音频 clip，不能完成音效运行态验收。〔plan/11、plan/05、plan/10；§3.3〕
+- [!] `PlayerHealth : Behaviour`：源码已落地，按玩家 AABB 采样 `lava/fire/acid`，扣血、喷粒子、触发受击音效并死亡重生；headless 路径已能由 Hosting 自动驱动，并已通过 `AttachAudioFromContentAsync()` 预加载 Demo wav clip、注入脚本音频 API；阻塞：缺少窗口态输入/渲染运行验收与受击场景端到端验证。〔plan/11、plan/05、plan/10；§3.3〕
 - [!] `CameraFollow : Behaviour`：源码已落地，可跟随同实体 `PlayerController`，支持阻尼、lookahead、边界夹取与缩放；headless 路径已有默认脚本相机 API；阻塞：缺少 Hosting 将相机快照同步到 Rendering/World residency 与统一 Transform 后的 `Follow(Entity)`，不能完成画面跟随验收。〔plan/08；§3.4〕
 
 世界交互
@@ -165,12 +165,12 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 - [ ] 木 / 金属可破坏结构布置，验证连通块脱落→Box2D 刚体、可推 / 砸 / 再破坏。〔plan/06;§3.7〕
 - [ ] 火花 / 血 / 碎屑发射经 `Particles.Emit/Burst`，爆炸抛射经 `World.Explode`。〔plan/05;§3.8〕
 - [!] emissive 材质标注正确（lava/molten_metal/fire/火花），Scripting 已有 `Lighting.RevealAround` + `AddPointLight` 请求 API；阻塞：缺少 Hosting/Rendering 将脚本光照请求同步到 `FogOfWarBuffer` 与 light pass 的运行态消费。〔plan/08;§3.9〕
-- [!] `materials.json` 的 `AudioCues` 已覆盖 impact/fire/splash/ambient/shatter，玩法脚本可经 `Audio.PlayOneShot`/`PlayAt` 请求音效；阻塞：缺少爆炸复合 API 触发 explosion cue，以及 Hosting 自动加载 Demo audio clips 并注入脚本上下文。〔plan/04、plan/10;§3.10〕
+- [!] `materials.json` 的 `AudioCues` 已覆盖 impact/fire/splash/ambient/shatter，玩法脚本可经 `Audio.PlayOneShot`/`PlayAt` 请求音效；Hosting 已能从 `content/audio` 预加载 19 个 wav clip 并注入脚本上下文；阻塞：缺少爆炸复合 API 触发 explosion cue，以及材质事件 cue 句柄到 clip buffer 的 Demo 映射/消费验收。〔plan/04、plan/10;§3.10〕
 
 关卡与 UI
 - [!] `LevelDirector : Behaviour`：源码已落地，脚本生成「熔岩矿洞逃生」基础布局并装配玩家、相机、笔刷、喷口和目标触发器；Hosting procedural scene source 已可按入口 Behaviour 名自动物化 `LevelDirector` 到脚本场景，且 headless resident world 可经 `AttachScriptingFromServices()` 自动驱动；阻塞：save directory/world 物化与窗口态完整后端装配仍未完成。〔plan/11、plan/02;§3.11〕
-- [!] `MaterialEmitter : Behaviour`（材质 + 速率 + 喷口）：源码已落地，支持周期性 cell 注入、粒子、音频和点光源请求；headless 路径已能由 Hosting 自动驱动脚本场景；阻塞：缺少音频 clip 自动加载与光照请求运行态消费。〔plan/11;§3.11〕
-- [!] `GoalTrigger : Behaviour`：源码已落地，玩家进入触发区后触发通关状态、音效、粒子与光照反馈；headless 路径已能由 Hosting 自动驱动脚本场景；阻塞：缺少胜利菜单/GUI 服务和音频/光照后端消费。〔plan/11、plan/10;§3.11〕
+- [!] `MaterialEmitter : Behaviour`（材质 + 速率 + 喷口）：源码已落地，支持周期性 cell 注入、粒子、音频和点光源请求；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API；阻塞：缺少光照请求运行态消费与喷口音频触发验收。〔plan/11;§3.11〕
+- [!] `GoalTrigger : Behaviour`：源码已落地，玩家进入触发区后触发通关状态、音效、粒子与光照反馈；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API；阻塞：缺少胜利菜单/GUI 服务、光照后端消费与通关音效触发验收。〔plan/11、plan/10;§3.11〕
 - [ ] `content/scenes/lava-mine.scene`：编辑器编排并序列化，与 `LevelDirector` 等价。〔plan/12、plan/07;§3.2、§3.11〕
 - [ ] `DemoHud : Behaviour.OnGui`：当前材质 / 笔刷 / 玩家状态 / 操作提示 / 性能行。〔plan/11、plan/12、plan/02;§3.12〕
 - [ ] `PauseMenu : Behaviour.OnGui`：继续 / 重开 / 调试叠层切换 / 打开编辑器 / 退出。〔plan/12、架构 §17.2;§3.12〕
