@@ -1,6 +1,7 @@
 using BenchmarkDotNet.Attributes;
 using PixelEngine.Core.Memory;
 using PixelEngine.Simulation;
+using System.Runtime;
 
 namespace PixelEngine.Benchmarks;
 
@@ -15,6 +16,7 @@ public class GcPauseBenchmark
     private readonly TestChunkSource _source;
     private readonly SimulationKernel _kernel;
     private readonly Pool<object> _pool = new(static () => new object(), preallocate: 4);
+    private GCLatencyMode _originalLatencyMode;
 
     /// <summary>
     /// 创建 GC pause benchmark fixture。
@@ -39,6 +41,30 @@ public class GcPauseBenchmark
     /// 当前运行时是否启用 Server GC；用于报告中区分 Workstation / Server GC。
     /// </summary>
     public bool IsServerGc => System.Runtime.GCSettings.IsServerGC;
+
+    /// <summary>
+    /// 当前 GC 延迟模式；Workstation/Server 对比时保持同一低延迟配置。
+    /// </summary>
+    public GCLatencyMode LatencyMode => System.Runtime.GCSettings.LatencyMode;
+
+    /// <summary>
+    /// 基准进程内强制使用 SustainedLowLatency，与 Hosting 默认运行态一致。
+    /// </summary>
+    [GlobalSetup]
+    public void SetLatencyMode()
+    {
+        _originalLatencyMode = System.Runtime.GCSettings.LatencyMode;
+        System.Runtime.GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
+    }
+
+    /// <summary>
+    /// 恢复基准进程原始 GC latency mode。
+    /// </summary>
+    [GlobalCleanup]
+    public void RestoreLatencyMode()
+    {
+        System.Runtime.GCSettings.LatencyMode = _originalLatencyMode;
+    }
 
     /// <summary>
     /// 稳态 sim tick：MemoryDiagnoser 应报告 0 B/op。
