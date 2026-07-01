@@ -314,6 +314,44 @@ public sealed class RenderWindowIntegrationTests
     }
 
     [Fact]
+    public void CanRenderFrameThroughRadianceCascadesWhenExplicitlyEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = CreateSmokeWindow("PixelEngine render pipeline radiance cascades smoke", RenderBackendPreference.Auto);
+        GpuCapabilities gpuCapabilities = GpuCapabilities.Query(window.Gl, window.Capabilities);
+        ComputeCapabilityGate gate = ComputeCapabilityGate.Evaluate(gpuCapabilities, ComputeFeatureSwitches.Default, preferComputeSharp: false);
+        if (!gate.GlComputeAvailable)
+        {
+            return;
+        }
+
+        ComputeFeatureSwitches features = ComputeFeatureSwitches.Default with { RadianceCascadesEnabled = true };
+        using RenderPipeline pipeline = new(window, 16, 16, features);
+        RenderBuffer buffer = new(16, 16);
+        RenderAuxBuffers aux = new(16, 16);
+        buffer.Pixels.Fill(0xFF203040u);
+        aux.Emissive[4 + (4 * 16)] = 0xFFFFFFFFu;
+        aux.Occluder[8 + (8 * 16)] = 255;
+
+        pipeline.Settings.PreferComputeLighting = true;
+        pipeline.Settings.RadianceCascades = RadianceCascadeSettings.Default with
+        {
+            Enabled = true,
+            CascadeCount = 2,
+            BaseRayCount = 8,
+            MaxRaySteps = 4,
+        };
+        pipeline.RenderFrame(buffer, aux, CameraState.OneToOne(0, 0, 16, 16));
+        window.Gl.Finish();
+
+        Assert.Equal(16, pipeline.Width);
+    }
+
+    [Fact]
     public void CanRunAirSmokeDiffusePassWhenExplicitlyEnabled()
     {
         if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
