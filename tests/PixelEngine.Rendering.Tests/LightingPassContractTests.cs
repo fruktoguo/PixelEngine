@@ -1,0 +1,75 @@
+using Xunit;
+
+namespace PixelEngine.Rendering.Tests;
+
+public sealed class LightingPassContractTests
+{
+    [Fact]
+    public void CompositeShaderUsesWorldVisibilityAndEmissiveInputs()
+    {
+        string fragment = LightingShaderSources.CompositeFragment(GlslProfile.DesktopGl330);
+
+        Assert.Contains("#version 330 core", fragment, StringComparison.Ordinal);
+        Assert.Contains("uWorldTexture", fragment, StringComparison.Ordinal);
+        Assert.Contains("uEmissiveTexture", fragment, StringComparison.Ordinal);
+        Assert.Contains("uVisibilityTexture", fragment, StringComparison.Ordinal);
+        Assert.Contains("worldColor.rgb * visibility", fragment, StringComparison.Ordinal);
+        Assert.Contains("+ emissive", fragment, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShaderSourcesSupportGlesProfile()
+    {
+        string vertex = LightingShaderSources.FullscreenVertex(GlslProfile.Gles300);
+        string composite = LightingShaderSources.CompositeFragment(GlslProfile.Gles300);
+        string shadow = LightingShaderSources.Shadow1DFragment(GlslProfile.Gles300);
+
+        Assert.Contains("#version 300 es", vertex, StringComparison.Ordinal);
+        Assert.Contains("precision mediump float", composite, StringComparison.Ordinal);
+        Assert.Contains("textureSize", shadow, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShadowCpuFindsNearestOccluderPerRay()
+    {
+        byte[] occluder = new byte[9 * 9];
+        occluder[(6 * 9) + 6] = 255;
+        Span<float> distances = stackalloc float[4];
+        LightSource light = new(4f, 4f, 8f, 0xFFFFFFFFu, 1f);
+
+        ShadowMap1DPass.ComputeCpu(occluder, 9, 9, light, distances);
+
+        Assert.True(distances[0] < light.Radius);
+        Assert.Equal(light.Radius, distances[1]);
+        Assert.Equal(light.Radius, distances[2]);
+        Assert.Equal(light.Radius, distances[3]);
+    }
+
+    [Fact]
+    public void ShadowCpuValidatesDimensionsAndOutput()
+    {
+        LightSource light = new(0f, 0f, 1f, 0xFFFFFFFFu, 1f);
+        byte[] occluder = new byte[4];
+        float[] distances = new float[1];
+        float[] emptyDistances = [];
+
+        AssertThrows<ArgumentOutOfRangeException>(() => ShadowMap1DPass.ComputeCpu(occluder, 0, 2, light, distances));
+        AssertThrows<ArgumentException>(() => ShadowMap1DPass.ComputeCpu(occluder, 2, 3, light, distances));
+        AssertThrows<ArgumentException>(() => ShadowMap1DPass.ComputeCpu(occluder, 2, 2, light, emptyDistances));
+    }
+
+    [Fact]
+    public void LightSourceValidationRejectsInvalidValues()
+    {
+        AssertThrows<ArgumentOutOfRangeException>(() => new LightSource(float.NaN, 0f, 1f, 0, 1f).Validate());
+        AssertThrows<ArgumentOutOfRangeException>(() => new LightSource(0f, 0f, 0f, 0, 1f).Validate());
+        AssertThrows<ArgumentOutOfRangeException>(() => new LightSource(0f, 0f, 1f, 0, -1f).Validate());
+    }
+
+    private static void AssertThrows<T>(Action action)
+        where T : Exception
+    {
+        T exception = Assert.Throws<T>(action);
+        Assert.False(string.IsNullOrWhiteSpace(exception.Message));
+    }
+}
