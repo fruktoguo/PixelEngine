@@ -138,9 +138,9 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 ### 4.4 Serialization.Tests（§11）
 
-- [ ] `SaveLoadRoundTripTests`：含持久 flags/lifetime/温度子块/在飞粒子/刚体的世界 save→load 逐 cell 等价、瞬时位被重置、RLE+LZ4 往返（序列化 §11.3）。
-- [ ] `MaterialRemapTests`：改 `materials.json` 顺序 / 中间插入 / 删除材质后旧档按 name↔id 表正确重映射、被删材质走 fallback（序列化 §11.2、不变式 #8、R15）。
-- [ ] `VersionMigrationTests`：旧 `FormatVersion` 经迁移链逐步升级到当前且语义正确；每迁移为纯函数可单测；新增 / 重排材质不触发迁移（序列化 §11.4）。
+- [x] `SaveLoadRoundTripTests`：含持久 flags/lifetime/温度子块/在飞粒子/刚体的世界 save→load 逐 cell 等价、瞬时位被重置、RLE+LZ4 往返（序列化 §11.3）。
+- [x] `MaterialRemapTests`：改 `materials.json` 顺序 / 中间插入 / 删除材质后旧档按 name↔id 表正确重映射、被删材质走 fallback（序列化 §11.2、不变式 #8、R15）。
+- [x] `VersionMigrationTests`：旧 `FormatVersion` 经迁移链逐步升级到当前且语义正确；每迁移为纯函数可单测；新增 / 重排材质不触发迁移（序列化 §11.4）。
 
 ### 4.5 Scripting.Tests（§17.2、plan 11 项目引用 + ALC 热重载）
 
@@ -177,7 +177,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] `MultithreadOracleTests` 全绿：多线程终态相对单线程 oracle 的守恒量精确相等、统计量在容差内一致，无边界伪影（架构 §16.2，非 bit 比对）。
 - [x] `ReactionTableTests` 全绿：tag 展开 / 概率映射 / 去重 / 惰性早退正确（架构 §7.4）。
 - [x] `ConvexDecompositionTests`、`MarchingSquaresContourTests`、`InverseSamplingRasterizationTests`、`RigidBodySplitConservationTests` 全绿：每片 ≤8 顶点且凸且覆盖原 mask、radius=0、任意角栅格化水密无洞、破坏拆分守恒且速度转移（架构 §8.2/§8.3/§8.4、不变式 #5）。
-- [ ] `SaveLoadRoundTripTests`、`MaterialRemapTests`、`VersionMigrationTests` 全绿：逐 cell 等价、改 materials.json 顺序 / 增删后旧档正确重映射、迁移链正确（架构 §11、不变式 #8、R15）。
+- [x] `SaveLoadRoundTripTests`、`MaterialRemapTests`、`VersionMigrationTests` 全绿：逐 cell 等价、改 materials.json 顺序 / 增删后旧档正确重映射、迁移链正确（架构 §11、不变式 #8、R15）。
 - [x] `HotReloadTests`、`ScriptExceptionIsolationTests`、`AlcCollectibilityTests` 全绿：热重载行为正确、异常隔离不崩、ALC 经 GC 可回收且无泄漏（架构 §17.2/§17.4）。
 - [ ] 六个基准可产出报告：cells/frame、每核加速曲线、纹理上传、反应 cache-miss、GC 停顿、粒子积分均有实测数据，并已回填 §1.4/§12.7/§12.8 的目标（架构 §12.7/§17.3，实测替代估算）。
 - [ ] `GcPauseBenchmark` 的 `[MemoryDiagnoser]` 报告稳态帧循环 Gen0/1/2 分配为 0（架构 §12.4、零分配纪律）。
@@ -211,7 +211,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] `test(core): 建立四测试工程+基准工程骨架与确定性测试基座`（对应 §4.1）。
 - [x] `test(sim): CA 内核质量/反应守恒与 parity/KeepAlive/oracle 性质测试`（对应 §4.2）。
 - [x] `test(physics): 凸分解/inverse-sampling/刚体拆分守恒测试`（对应 §4.3）。
-- [ ] `test(serialization): save-load 往返/材质重映射/版本迁移测试`（对应 §4.4）。
+- [x] `test(serialization): save-load 往返/材质重映射/版本迁移测试`（对应 §4.4）。
 - [x] `test(script): 热重载/异常隔离/ALC 可回收测试`（对应 §4.5）。
 - [ ] `test(bench): cells-frame/加速曲线/上传/反应/GC/粒子基准`（对应 §4.6）。
 - [ ] `build(ci): 反汇编守门+性能回归门禁+6-RID build-test`（对应 §4.7）。
