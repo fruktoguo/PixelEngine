@@ -144,8 +144,8 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 ### 4.5 Scripting.Tests（§17.2、plan 11 项目引用 + ALC 热重载）
 
-- [!] `HotReloadTests`：改源 → Roslyn 重编译 → 卸旧 ALC / 加新 ALC，新行为生效、旧实例替换、世界状态一致；`HotReloadServiceTests` 已覆盖编译失败保留旧实例、成功替换、状态恢复、watcher、ApplyFailed 回滚与失败后继续重载；阻塞：仍缺按计划命名的端到端 world-state 一致性测试类（脚本 §17.2）。
-- [!] `ScriptExceptionIsolationTests`：脚本回调抛异常不崩主循环、被捕获上报诊断、其余子系统继续；`SmokeTests` 已覆盖 Behaviour/System 回调异常隔离；阻塞：仍缺独立命名测试类与主循环级脚本隔离验收（脚本，`AGENTS.md §4`）。
+- [x] `HotReloadTests`：改源 → Roslyn 重编译 → 卸旧 ALC / 加新 ALC，新行为生效、旧实例替换、世界状态一致；`HotReloadTests` 覆盖同实体 Behaviour 替换、公开字段状态恢复与旧 ALC 回收，`HotReloadServiceTests` 覆盖编译失败保留旧实例、watcher、ApplyFailed 回滚与失败后继续重载（脚本 §17.2）。
+- [x] `ScriptExceptionIsolationTests`：脚本回调抛异常不崩主循环、被捕获上报诊断、其余子系统继续；独立覆盖 Behaviour.OnUpdate、ISystem.OnFrame 与 ISystem.OnSimTick 异常隔离（脚本，`AGENTS.md §4`）。
 - [x] `AlcCollectibilityTests`：多轮 load→unload 后旧 ALC 的 `WeakReference` 经 GC 不再存活、托管堆稳态不增长（脚本 §17.4，无内存泄漏）。
 
 ### 4.6 Benchmarks（§17.3）
@@ -178,7 +178,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [ ] `ReactionTableTests` 全绿：tag 展开 / 概率映射 / 去重 / 惰性早退正确（架构 §7.4）。
 - [ ] `ConvexDecompositionTests`、`MarchingSquaresContourTests`、`InverseSamplingRasterizationTests`、`RigidBodySplitConservationTests` 全绿：每片 ≤8 顶点且凸且覆盖原 mask、radius=0、任意角栅格化水密无洞、破坏拆分守恒且速度转移（架构 §8.2/§8.3/§8.4、不变式 #5）。
 - [ ] `SaveLoadRoundTripTests`、`MaterialRemapTests`、`VersionMigrationTests` 全绿：逐 cell 等价、改 materials.json 顺序 / 增删后旧档正确重映射、迁移链正确（架构 §11、不变式 #8、R15）。
-- [!] `HotReloadTests`、`ScriptExceptionIsolationTests`、`AlcCollectibilityTests` 全绿：热重载行为正确、异常隔离不崩、ALC 经 GC 可回收且无泄漏；ALC 可回收已由 `AlcCollectibilityTests` 覆盖，热重载与异常隔离已有散落测试覆盖但仍缺计划命名的完整端到端测试类（架构 §17.2/§17.4）。
+- [x] `HotReloadTests`、`ScriptExceptionIsolationTests`、`AlcCollectibilityTests` 全绿：热重载行为正确、异常隔离不崩、ALC 经 GC 可回收且无泄漏（架构 §17.2/§17.4）。
 - [ ] 六个基准可产出报告：cells/frame、每核加速曲线、纹理上传、反应 cache-miss、GC 停顿、粒子积分均有实测数据，并已回填 §1.4/§12.7/§12.8 的目标（架构 §12.7/§17.3，实测替代估算）。
 - [ ] `GcPauseBenchmark` 的 `[MemoryDiagnoser]` 报告稳态帧循环 Gen0/1/2 分配为 0（架构 §12.4、零分配纪律）。
 - [ ] `DisassemblyGuard` 全绿：热方法无 `RNGCHKFAIL`、热 SIMD 方法出现 ymm/zmm（架构 §12.6/§17.3）。
@@ -212,6 +212,6 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [ ] `test(sim): CA 内核质量/反应守恒与 parity/KeepAlive/oracle 性质测试`（对应 §4.2）。
 - [ ] `test(physics): 凸分解/inverse-sampling/刚体拆分守恒测试`（对应 §4.3）。
 - [ ] `test(serialization): save-load 往返/材质重映射/版本迁移测试`（对应 §4.4）。
-- [!] `test(script): 热重载/异常隔离/ALC 可回收测试`（对应 §4.5）。阻塞：ALC 可回收已完成；热重载与异常隔离仍缺完整端到端命名测试类。
+- [x] `test(script): 热重载/异常隔离/ALC 可回收测试`（对应 §4.5）。
 - [ ] `test(bench): cells-frame/加速曲线/上传/反应/GC/粒子基准`（对应 §4.6）。
 - [ ] `build(ci): 反汇编守门+性能回归门禁+6-RID build-test`（对应 §4.7）。
