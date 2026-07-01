@@ -233,6 +233,44 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     }
 
     /// <summary>
+    /// 验证连续 material span 扫描使用 SIMD mask + popcount，而不是逐 cell 计数。
+    /// </summary>
+    [Fact]
+    public void MaterialSpanCountUsesSimdMaskPopCount()
+    {
+        string ops = ReadProductionSource("src", "PixelEngine.Simulation", "CellSpanOps.cs");
+        string kernel = ReadProductionSource("src", "PixelEngine.Simulation", "SimulationKernel.cs");
+        string chunk = ReadProductionSource("src", "PixelEngine.Simulation", "Chunk.cs");
+
+        Assert.Contains("Vector256<ushort>", ops, StringComparison.Ordinal);
+        Assert.Contains("Vector128<ushort>", ops, StringComparison.Ordinal);
+        Assert.Contains("ExtractMostSignificantBits", ops, StringComparison.Ordinal);
+        Assert.Contains("BitOperations.PopCount", ops, StringComparison.Ordinal);
+        Assert.Contains("CellSpanOps.CountNonZeroUShort(chunk.Material)", kernel, StringComparison.Ordinal);
+        Assert.Contains("CellSpanOps.SetParityForOccupiedCells", chunk, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证方形编辑批量写入使用 row-run Fill/Clear 和矩形 dirty 标记。
+    /// </summary>
+    [Fact]
+    public void BulkEditUsesRowRunFillClearAndRectDirty()
+    {
+        string kernel = ReadProductionSource("src", "PixelEngine.Simulation", "SimulationKernel.cs");
+        string marker = ReadProductionSource("src", "PixelEngine.Simulation", "DirtyRegionMarker.cs");
+        string brush = ReadProductionSource("src", "PixelEngine.Editor", "MaterialBrushApplicator.cs");
+
+        Assert.Contains("EditRectAtInputPhase", kernel, StringComparison.Ordinal);
+        Assert.Contains("ClearRectAtInputPhase", kernel, StringComparison.Ordinal);
+        Assert.Contains("chunk.Material.AsSpan(localStart, run).Fill(material)", kernel, StringComparison.Ordinal);
+        Assert.Contains("chunk.Material.AsSpan(localStart, run).Clear()", kernel, StringComparison.Ordinal);
+        Assert.Contains("DirtyRegionMarker.MarkRectCurrent", kernel, StringComparison.Ordinal);
+        Assert.Contains("public static void MarkRectCurrent", marker, StringComparison.Ordinal);
+        Assert.Contains("_editApi.PaintRect", brush, StringComparison.Ordinal);
+        Assert.Contains("_editApi.ClearRect", brush, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 sand/liquid movement 内层保持标量 gather/scatter，不引入 SIMD 路径。
     /// </summary>
     [Fact]

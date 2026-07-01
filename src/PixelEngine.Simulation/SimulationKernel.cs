@@ -1,3 +1,4 @@
+using PixelEngine.Core;
 using PixelEngine.Core.Threading;
 using PixelEngine.Core.Diagnostics;
 
@@ -92,6 +93,36 @@ public sealed class SimulationKernel(
     }
 
     /// <summary>
+    /// 相位 1：批量写入世界坐标闭区间矩形，并按 row-run 批量更新 SoA 与 dirty rect。
+    /// </summary>
+    public int EditRectAtInputPhase(int minX, int minY, int maxX, int maxY, ushort material, byte persistentFlags)
+    {
+        if (minX > maxX || minY > maxY)
+        {
+            return 0;
+        }
+
+        byte flags = CellFlags.SetParity(persistentFlags, CurrentParity);
+        byte lifetime = DefaultLifetimeByte(material);
+        int writes = 0;
+        ForEachChunkRowRun(minX, minY, maxX, maxY, (chunk, localStart, run, worldX, worldY) =>
+        {
+            for (int i = 0; i < run; i++)
+            {
+                NotifyRigidDamageIfNeeded(worldX + i, worldY, chunk.Flags[localStart + i]);
+            }
+
+            chunk.Material.AsSpan(localStart, run).Fill(material);
+            chunk.Flags.AsSpan(localStart, run).Fill(flags);
+            chunk.Lifetime.AsSpan(localStart, run).Fill(lifetime);
+            writes += run;
+        });
+
+        DirtyRegionMarker.MarkRectCurrent(_chunks, minX, minY, maxX, maxY, EngineConstants.DirtyRectPadding);
+        return writes;
+    }
+
+    /// <summary>
     /// 相位 1：编辑器/输入清空权威网格 cell，并标记 current dirty 与边界唤醒。
     /// </summary>
     public void ClearCellAtInputPhase(int wx, int wy)
@@ -108,6 +139,46 @@ public sealed class SimulationKernel(
         chunk.Flags[local] = 0;
         chunk.Lifetime[local] = 0;
         MarkDirty(wx, wy);
+    }
+
+    /// <summary>
+    /// 相位 1：批量清空世界坐标闭区间矩形，并按 row-run 批量清理 SoA 与 dirty rect。
+    /// </summary>
+    public int ClearRectAtInputPhase(int minX, int minY, int maxX, int maxY)
+    {
+        if (minX > maxX || minY > maxY)
+        {
+            return 0;
+        }
+
+        int writes = 0;
+        ForEachChunkRowRun(minX, minY, maxX, maxY, (chunk, localStart, run, worldX, worldY) =>
+        {
+            bool rowChanged = false;
+            for (int i = 0; i < run; i++)
+            {
+                int local = localStart + i;
+                rowChanged |= chunk.Material[local] != 0 || chunk.Flags[local] != 0 || chunk.Lifetime[local] != 0;
+                NotifyRigidDamageIfNeeded(worldX + i, worldY, chunk.Flags[local]);
+            }
+
+            if (!rowChanged)
+            {
+                return;
+            }
+
+            chunk.Material.AsSpan(localStart, run).Clear();
+            chunk.Flags.AsSpan(localStart, run).Clear();
+            chunk.Lifetime.AsSpan(localStart, run).Clear();
+            writes += run;
+        });
+
+        if (writes != 0)
+        {
+            DirtyRegionMarker.MarkRectCurrent(_chunks, minX, minY, maxX, maxY, EngineConstants.DirtyRectPadding);
+        }
+
+        return writes;
     }
 
     /// <summary>
@@ -264,14 +335,7 @@ public sealed class SimulationKernel(
         long count = 0;
         foreach (Chunk chunk in _chunks.ResidentChunks)
         {
-            ushort[] material = chunk.Material;
-            for (int i = 0; i < material.Length; i++)
-            {
-                if (material[i] != 0)
-                {
-                    count++;
-                }
-            }
+            count += CellSpanOps.CountNonZeroUShort(chunk.Material);
         }
 
         return count;
@@ -308,6 +372,42 @@ public sealed class SimulationKernel(
         chunk.Lifetime[local] = DefaultLifetimeByte(material);
         MarkDirty(wx, wy);
     }
+
+    private void ForEachChunkRowRun(int minX, int minY, int maxX, int maxY, RowRunAction action)
+    {
+        ChunkCoord minCoord = CellAddressing.WorldToChunk(minX, minY);
+        ChunkCoord maxCoord = CellAddressing.WorldToChunk(maxX, maxY);
+        for (int cy = minCoord.Y; cy <= maxCoord.Y; cy++)
+        {
+            for (int cx = minCoord.X; cx <= maxCoord.X; cx++)
+            {
+                ChunkCoord coord = new(cx, cy);
+                if (!_chunks.TryGetChunk(coord, out Chunk chunk))
+                {
+                    throw new InvalidOperationException($"目标 chunk 未驻留：{coord}。");
+                }
+
+                int chunkMinX = cx * EngineConstants.ChunkSize;
+                int chunkMinY = cy * EngineConstants.ChunkSize;
+                int chunkMaxX = chunkMinX + EngineConstants.ChunkSize - 1;
+                int chunkMaxY = chunkMinY + EngineConstants.ChunkSize - 1;
+                int runMinX = Math.Max(minX, chunkMinX);
+                int runMaxX = Math.Min(maxX, chunkMaxX);
+                int runMinY = Math.Max(minY, chunkMinY);
+                int runMaxY = Math.Min(maxY, chunkMaxY);
+                for (int wy = runMinY; wy <= runMaxY; wy++)
+                {
+                    int localY = CellAddressing.LocalCoord(wy);
+                    int localX = CellAddressing.LocalCoord(runMinX);
+                    int run = runMaxX - runMinX + 1;
+                    int localStart = CellAddressing.LocalIndexFromLocal(localX, localY);
+                    action(chunk, localStart, run, runMinX, wy);
+                }
+            }
+        }
+    }
+
+    private delegate void RowRunAction(Chunk chunk, int localStart, int run, int worldX, int worldY);
 
     private byte DefaultLifetimeByte(ushort material)
     {

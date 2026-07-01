@@ -21,6 +21,11 @@ public sealed class MaterialBrushApplicator(ISimulationEditApi editApi, uint see
     {
         ArgumentNullException.ThrowIfNull(settings);
         int radius = settings.ClampedRadius;
+        if (TryApplyBulkRect(centerX, centerY, radius, settings, out int bulkWrites))
+        {
+            return bulkWrites;
+        }
+
         int writes = 0;
         for (int dy = -radius; dy <= radius; dy++)
         {
@@ -44,6 +49,34 @@ public sealed class MaterialBrushApplicator(ISimulationEditApi editApi, uint see
         }
 
         return writes;
+    }
+
+    private bool TryApplyBulkRect(int centerX, int centerY, int radius, MaterialBrushSettings settings, out int writes)
+    {
+        writes = 0;
+        if (settings.Shape != EditorBrushShape.Square || settings.ClampedProbability < 1f)
+        {
+            return false;
+        }
+
+        int minX = centerX - radius;
+        int minY = centerY - radius;
+        int maxX = centerX + radius;
+        int maxY = centerY + radius;
+        switch (settings.Tool)
+        {
+            case EditorBrushTool.Paint:
+                writes = _editApi.PaintRect(minX, minY, maxX, maxY, settings.MaterialId);
+                return true;
+            case EditorBrushTool.Dig:
+            case EditorBrushTool.Erase:
+                writes = _editApi.ClearRect(minX, minY, maxX, maxY);
+                return true;
+            case EditorBrushTool.Temperature:
+                return false;
+            default:
+                return false;
+        }
     }
 
     private static bool Contains(EditorBrushShape shape, int radius, int dx, int dy)

@@ -55,6 +55,29 @@ public sealed class EditorWorldToolsTests
     }
 
     /// <summary>
+    /// 验证满概率方形材质画刷走批量矩形写入。
+    /// </summary>
+    [Fact]
+    public void BrushApplicatorUsesBulkRectForFullProbabilitySquare()
+    {
+        RecordingEditApi edit = new();
+        MaterialBrushApplicator applicator = new(edit);
+        MaterialBrushSettings settings = new()
+        {
+            Tool = EditorBrushTool.Paint,
+            Shape = EditorBrushShape.Square,
+            Radius = 2,
+            MaterialId = 4,
+        };
+
+        int writes = applicator.ApplyAt(10, 20, settings);
+
+        Assert.Equal(25, writes);
+        Assert.Equal([(8, 18, 12, 22, 4)], edit.PaintedRects);
+        Assert.Empty(edit.Painted);
+    }
+
+    /// <summary>
     /// 验证温度目标模式通过编辑 API 写入目标温度。
     /// </summary>
     [Fact]
@@ -208,7 +231,11 @@ public sealed class EditorWorldToolsTests
     {
         public List<(int X, int Y, ushort Material)> Painted { get; } = [];
 
+        public List<(int MinX, int MinY, int MaxX, int MaxY, ushort Material)> PaintedRects { get; } = [];
+
         public List<(int X, int Y)> Cleared { get; } = [];
+
+        public List<(int MinX, int MinY, int MaxX, int MaxY)> ClearedRects { get; } = [];
 
         public List<(int X, int Y, float Temperature)> AddedTemperatures { get; } = [];
 
@@ -219,9 +246,21 @@ public sealed class EditorWorldToolsTests
             Painted.Add((worldX, worldY, material));
         }
 
+        public int PaintRect(int minX, int minY, int maxX, int maxY, ushort material)
+        {
+            PaintedRects.Add((minX, minY, maxX, maxY, material));
+            return (maxX - minX + 1) * (maxY - minY + 1);
+        }
+
         public void ClearCell(int worldX, int worldY)
         {
             Cleared.Add((worldX, worldY));
+        }
+
+        public int ClearRect(int minX, int minY, int maxX, int maxY)
+        {
+            ClearedRects.Add((minX, minY, maxX, maxY));
+            return (maxX - minX + 1) * (maxY - minY + 1);
         }
 
         public void AddTemperature(int worldX, int worldY, float deltaCelsius)

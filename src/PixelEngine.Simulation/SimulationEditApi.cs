@@ -22,9 +22,22 @@ public sealed class SimulationEditApi(
     }
 
     /// <inheritdoc />
+    public int PaintRect(int minX, int minY, int maxX, int maxY, ushort material)
+    {
+        ValidateLiveMaterial(material);
+        return _kernel.EditRectAtInputPhase(minX, minY, maxX, maxY, material, persistentFlags: 0);
+    }
+
+    /// <inheritdoc />
     public void ClearCell(int worldX, int worldY)
     {
         _kernel.ClearCellAtInputPhase(worldX, worldY);
+    }
+
+    /// <inheritdoc />
+    public int ClearRect(int minX, int minY, int maxX, int maxY)
+    {
+        return _kernel.ClearRectAtInputPhase(minX, minY, maxX, maxY);
     }
 
     /// <inheritdoc />
