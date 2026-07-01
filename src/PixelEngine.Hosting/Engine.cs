@@ -232,6 +232,29 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>
+    /// 接入脚本光照同步，使 Rendering 能消费点光源与 fog-of-war 请求。
+    /// </summary>
+    /// <returns>脚本光照同步器。</returns>
+    public ScriptLightingSynchronizer AttachLightingSynchronization()
+    {
+        ThrowIfShutdown();
+        if (Context.TryGetService(out ScriptLightingSynchronizer existing))
+        {
+            return existing;
+        }
+
+        ScriptLightingApi lighting = ResolveConcreteLightingApi();
+        ScriptCameraSynchronizer camera = AttachCameraSynchronization();
+        ScriptLightingSynchronizer synchronizer = new(lighting, camera);
+        ScriptLightingSyncPhaseDriver driver = new(synchronizer);
+        Context.RegisterService(synchronizer);
+        Context.RegisterService(driver.GetType(), driver);
+        driver.RegisterPhases(Phases);
+        synchronizer.Sync();
+        return synchronizer;
+    }
+
+    /// <summary>
     /// 基于已加载材质表装配一个固定尺寸 resident world，并把真实 Simulation 相位接入主循环。
     /// </summary>
     /// <param name="worldWidthCells">可玩世界宽度，单位 cell。</param>
@@ -361,6 +384,11 @@ public sealed class Engine : IDisposable
         if (camera is ScriptCameraApi)
         {
             _ = AttachCameraSynchronization();
+        }
+
+        if (lighting is ScriptLightingApi)
+        {
+            _ = AttachLightingSynchronization();
         }
 
         return scriptContext;
@@ -538,7 +566,12 @@ public sealed class Engine : IDisposable
 
     private ILightingApi ResolveLightingApi()
     {
-        if (Context.TryGetService(out ILightingApi lighting))
+        return Context.TryGetService(out ILightingApi lighting) ? lighting : ResolveConcreteLightingApi();
+    }
+
+    private ScriptLightingApi ResolveConcreteLightingApi()
+    {
+        if (Context.TryGetService(out ScriptLightingApi lighting))
         {
             return lighting;
         }

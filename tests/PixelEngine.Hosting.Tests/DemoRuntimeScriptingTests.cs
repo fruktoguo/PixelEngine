@@ -44,6 +44,7 @@ public sealed class DemoRuntimeScriptingTests
         Assert.Same(scriptContext, engine.Context.GetService<IScriptContext>());
         Assert.Same(input, scriptContext.Input);
         Assert.True(engine.Context.TryGetService(out ScriptCameraSynchronizer _));
+        Assert.True(engine.Context.TryGetService(out ScriptLightingSynchronizer _));
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.Scripting));
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.WorldAccess));
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.ParticleService));
