@@ -118,6 +118,11 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
     public int Height => _worldTexture.Height;
 
     /// <summary>
+    /// 最近一帧 post-process 后、present 前的最终画面纹理；供 Editor 视口只读采样。
+    /// </summary>
+    public RenderViewportTexture CurrentViewportTexture { get; private set; }
+
+    /// <summary>
     /// 当设置允许且上下文支持 compute shader 时，plan/09 可接管高质量光照/RC。
     /// </summary>
     public bool ShouldDelegateComputeLighting =>
@@ -180,6 +185,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
         _visibilityMask.AsSpan().Fill(byte.MaxValue);
         _visibility.Upload(_visibilityMask);
         _hasUploadedWorld = false;
+        CurrentViewportTexture = default;
     }
 
     /// <summary>
@@ -324,6 +330,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
 
         started = Stopwatch.GetTimestamp();
         current = RenderPost(current);
+        CurrentViewportTexture = new RenderViewportTexture(current.Handle, current.Width, current.Height);
         RecordSub(profiler, FrameSubPhase.PostProcess, started);
 
         started = Stopwatch.GetTimestamp();
