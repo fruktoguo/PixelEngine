@@ -187,7 +187,7 @@ API 缺口登记
 - [x] `dotnet run --project demo/PixelEngine.Demo -c Release` 开窗进入关卡，端到端跑通「引擎装配→内容加载→场景加载→主循环」，无内部类引用（编译期由 csproj 引用范围 + CI 断言保证）；本机窗口 smoke 运行 6 秒未退出且无 crash log，输出确认 Rendering/Input 后端已接入。〔§3.1、§2〕
 - [!] 玩家可跑 / 跳 / 蹬墙，**站在 settled 沙堆与 RigidOwned 刚体 stamp 像素上不穿不陷**：`PlayerControllerIntegrationTests` 已用 headless 真实 `Engine` / `PhysicsSystem` / `ScriptInputApi` 验证跑、跳、蹬墙、普通 settled 地面与空材质 `RigidOwned` 像素承载；阻塞：仍缺窗口输入手感与“掉落的木 / 金属刚体”场景级站立验收。〔§3.3、架构 §8.3〕
 - [!] 相机平滑跟随玩家、夹在关卡边界、缩放写入生效：`PlayerControllerIntegrationTests.CameraFollowTracksPlayerZoomAndClampsToWorldBounds` 已用 headless 脚本 scene 验证 `CameraFollow` 读取玩家中心、驱动 `ScriptCameraApi`、随玩家右移、设置 `Zoom` 并按关卡边界 clamp；阻塞：仍缺真实窗口滚轮缩放输入与 sim 降频时渲染流畅度验收。〔§3.4〕
-- [ ] 数字键切材质、左键放 / 右键擦 / 滚轮调半径在正确世界坐标写入 cell 并被 CA 接管（沙堆休止角、水找平、油浮于水、气体上升）。〔§3.5、§3.6〕
+- [!] 数字键切材质、左键放 / 右键擦 / 滚轮调半径在正确世界坐标写入 cell：`PlayerControllerIntegrationTests.MaterialBrushSelectsRadiusPaintsAndErasesWorldCells` 已用完整 Demo 默认材质名、`ScriptInputApi`、`ScriptCameraApi` 与真实 `CellGrid` 验证 Digit6 选 stone、滚轮调半径、左键按屏幕→世界坐标写入、右键擦除；阻塞：仍缺沙堆休止角、水找平、油浮于水、气体上升等 CA 接管后的窗口玩法验收。〔§3.5、§3.6〕
 - [!] 反应可观测：headless 路径已验证 Hosting 会把已加载 `ReactionTable` 接入 CA 主循环；阻塞：仍缺真实窗口中水灭火（火→烟、水→蒸汽）、火沿木 / 油传播、熔岩遇水成石冒蒸汽、酸腐蚀 stone/wood/metal、蒸汽冷凝回水、熔融金属遇水凝固的可视化验收。〔§3.6〕
 - [ ] 温度相变可观测：lava / fire 附近 ice 融化、water 沸腾成 steam、lava 冷却成 stone、metal 近熔岩熔化、sand 烤成 glass。〔§3.6〕
 - [ ] 玩家挖断木栈桥 → 连通块掉落为 Box2D 刚体，可被推动、被砸、被继续挖 / 烧 / 酸蚀而再破碎；金属梁近熔岩熔化致结构坍塌。〔§3.7〕
