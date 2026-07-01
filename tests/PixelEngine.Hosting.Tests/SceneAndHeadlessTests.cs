@@ -137,6 +137,48 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
+    /// 验证 procedural scene source 会在脚本程序集注册后物化入口 Behaviour。
+    /// </summary>
+    [Fact]
+    public void RegisterScriptAssemblyMaterializesCurrentProceduralScene()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddScene(new SceneDescriptor("proc", SceneSourceKind.Procedural, nameof(ProceduralEntryBehaviour)))
+            .WithStartScene("proc")
+            .Build();
+
+        engine.RegisterScriptAssembly(typeof(ProceduralEntryBehaviour).Assembly);
+
+        Scene? current = engine.Context.GetService<ISceneService>().Current;
+        Assert.NotNull(current);
+        Assert.NotNull(current.ScriptScene);
+        Assert.Equal(1, current.ScriptScene.EntityCount);
+        ScriptEntityInspection[] snapshot = current.ScriptScene.CaptureInspectionSnapshot();
+        _ = Assert.IsType<ProceduralEntryBehaviour>(snapshot[0].Components[0].Behaviour);
+        Assert.Same(current.ScriptScene, engine.Context.GetService<PixelEngine.Scripting.Scene>());
+    }
+
+    /// <summary>
+    /// 验证手动 LoadScene 也会物化 procedural Behaviour。
+    /// </summary>
+    [Fact]
+    public void LoadSceneMaterializesProceduralBehaviour()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddScene(new SceneDescriptor("proc", SceneSourceKind.Procedural, typeof(ProceduralEntryBehaviour).FullName!))
+            .Build();
+        engine.RegisterScriptAssembly(typeof(ProceduralEntryBehaviour).Assembly);
+
+        Scene loaded = engine.LoadScene("proc");
+
+        Assert.NotNull(loaded.ScriptScene);
+        ScriptEntityInspection[] snapshot = loaded.ScriptScene.CaptureInspectionSnapshot();
+        _ = Assert.IsType<ProceduralEntryBehaviour>(snapshot[0].Components[0].Behaviour);
+    }
+
+    /// <summary>
     /// 验证场景来源配置会快速拒绝无效组合。
     /// </summary>
     [Fact]
@@ -185,5 +227,12 @@ public sealed class SceneAndHeadlessTests
         /// 测试数值字段。
         /// </summary>
         public int Health { get; set; }
+    }
+
+    /// <summary>
+    /// procedural scene 测试入口 Behaviour。
+    /// </summary>
+    public sealed class ProceduralEntryBehaviour : Behaviour
+    {
     }
 }

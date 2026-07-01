@@ -168,7 +168,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 - [!] `materials.json` 的 `AudioCues` 已覆盖 impact/fire/splash/ambient/shatter，玩法脚本可经 `Audio.PlayOneShot`/`PlayAt` 请求音效；阻塞：缺少爆炸复合 API 触发 explosion cue，以及 Hosting 自动加载 Demo audio clips 并注入脚本上下文。〔plan/04、plan/10;§3.10〕
 
 关卡与 UI
-- [!] `LevelDirector : Behaviour`：源码已落地，脚本生成「熔岩矿洞逃生」基础布局并装配玩家、相机、笔刷、喷口和目标触发器；阻塞：Hosting procedural scene source 尚不会自动挂载 `LevelDirector` 到脚本场景，且 save directory/world 物化与运行态脚本注入仍未完成。〔plan/11、plan/02;§3.11〕
+- [!] `LevelDirector : Behaviour`：源码已落地，脚本生成「熔岩矿洞逃生」基础布局并装配玩家、相机、笔刷、喷口和目标触发器；Hosting procedural scene source 已可按入口 Behaviour 名自动物化 `LevelDirector` 到脚本场景；阻塞：save directory/world 物化与运行态脚本上下文注入仍未完成。〔plan/11、plan/02;§3.11〕
 - [!] `MaterialEmitter : Behaviour`（材质 + 速率 + 喷口）：源码已落地，支持周期性 cell 注入、粒子、音频和点光源请求；阻塞：缺少 Hosting 自动驱动脚本场景、音频 clip 自动加载与光照请求运行态消费。〔plan/11;§3.11〕
 - [!] `GoalTrigger : Behaviour`：源码已落地，玩家进入触发区后触发通关状态、音效、粒子与光照反馈；阻塞：缺少胜利菜单/GUI 服务、脚本运行时自动注入和音频/光照后端消费。〔plan/11、plan/10;§3.11〕
 - [ ] `content/scenes/lava-mine.scene`：编辑器编排并序列化，与 `LevelDirector` 等价。〔plan/12、plan/07;§3.2、§3.11〕
