@@ -39,6 +39,8 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("BeforePresentUi?.Invoke", source, StringComparison.Ordinal);
         Assert.Contains("ShouldDelegateComputeLighting", source, StringComparison.Ordinal);
         Assert.Contains("DegradeGpuComputeOneStep", source, StringComparison.Ordinal);
+        Assert.Contains("PublishComputeDiagnostics", source, StringComparison.Ordinal);
+        Assert.Contains("_computeGate.PublishDiagnostics", source, StringComparison.Ordinal);
         Assert.Contains("RadianceCascades.Enabled", source, StringComparison.Ordinal);
         Assert.Contains("Settings.PreferComputeLighting = false", source, StringComparison.Ordinal);
         Assert.Contains("CreateComputeResourcesSnapshot", source, StringComparison.Ordinal);

@@ -1,3 +1,5 @@
+using PixelEngine.Core.Diagnostics;
+
 namespace PixelEngine.Rendering.Compute;
 
 /// <summary>
@@ -68,5 +70,28 @@ public readonly record struct ComputeCapabilityGate
             backend == ComputeBackendKind.Null,
             backend == ComputeBackendKind.Null ? ComputeFeatureSwitches.Disabled : features,
             backend);
+    }
+
+    /// <summary>
+    /// 将 G1-G4 门控结果发布到 Core 诊断计数器，供 HUD 与预算监控读取。
+    /// </summary>
+    /// <param name="counters">Core 诊断计数器。</param>
+    public void PublishDiagnostics(EngineCounters counters)
+    {
+        ArgumentNullException.ThrowIfNull(counters);
+        counters.SetGpuComputeDiagnostics(
+            (long)SelectedBackend,
+            ToCounter(GlComputeAvailable),
+            ToCounter(ComputeSharpAvailable),
+            ToCounter(BaselineFallback),
+            ToCounter(FeatureSwitches.BloomComputeEnabled),
+            ToCounter(FeatureSwitches.RadianceCascadesEnabled),
+            ToCounter(FeatureSwitches.GpuParticlesEnabled),
+            ToCounter(FeatureSwitches.NonAuthoritativeAirEnabled));
+    }
+
+    private static long ToCounter(bool value)
+    {
+        return value ? 1L : 0L;
     }
 }
