@@ -314,7 +314,9 @@ Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "workflow_run" -P
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "github_release_upload" -Path $githubReleaseUploadReport -DeclaredSha256 ([string]$manifest.githubRelease.uploadSha256)
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "github_release_upload" -Path $githubReleaseUploadReport -ExpectedValues @{ conclusion = "success" }
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "deterministic_hash" -Path ([string]$manifest.deterministicHashReport) -DeclaredSha256 ([string]$manifest.deterministicHashSha256)
+Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "deterministic_hash" -Path ([string]$manifest.deterministicHashReport) -ExpectedValues @{ conclusion = "success" }
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "r2r_lightup" -Path ([string]$manifest.r2rLightupReport) -DeclaredSha256 ([string]$manifest.r2rLightupSha256)
+Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "r2r_lightup" -Path ([string]$manifest.r2rLightupReport) -ExpectedValues @{ conclusion = "success" }
 
 foreach ($rid in $rids) {
     foreach ($channel in $channels) {
