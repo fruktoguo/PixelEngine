@@ -163,27 +163,20 @@ if [[ "$rid" == win-* ]]; then
   archive_name="$package_name.zip"
   archive_path="$output_root/$archive_name"
   rm -f "$archive_path"
-
-  host_os="$(uname -s)"
-  if [[ "$host_os" == MINGW* || "$host_os" == MSYS* || "$host_os" == CYGWIN* ]] && command -v powershell.exe >/dev/null 2>&1; then
-    powershell.exe -NoProfile -Command "\$ErrorActionPreference = 'Stop'; Compress-Archive -LiteralPath '$staging_dir' -DestinationPath '$archive_path' -CompressionLevel Optimal"
-  elif command -v zip >/dev/null 2>&1; then
-    (
-      cd "$staging_root"
-      zip -qr "$archive_path" "$package_name"
-    )
-  else
-    echo "Cannot create zip archive: run from Windows bash with powershell.exe, or install zip." >&2
-    exit 1
-  fi
+  dotnet run --project "$repo_root/tools/PixelEngine.Tools.DeterministicPackage/PixelEngine.Tools.DeterministicPackage.csproj" -c Release -- \
+    --source "$staging_dir" \
+    --output "$archive_path" \
+    --root-name "$package_name" \
+    --format zip
 else
   archive_name="$package_name.tar.gz"
   archive_path="$output_root/$archive_name"
   rm -f "$archive_path"
-  (
-    cd "$staging_root"
-    tar -czf "$archive_path" "$package_name"
-  )
+  dotnet run --project "$repo_root/tools/PixelEngine.Tools.DeterministicPackage/PixelEngine.Tools.DeterministicPackage.csproj" -c Release -- \
+    --source "$staging_dir" \
+    --output "$archive_path" \
+    --root-name "$package_name" \
+    --format tar.gz
 fi
 
 checksum_path="$output_root/SHA256SUMS"

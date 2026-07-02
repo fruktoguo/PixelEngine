@@ -704,6 +704,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     {
         string auditPs1 = ReadRepositoryFile("tools", "audit-release-artifacts.ps1");
         string auditSh = ReadRepositoryFile("tools", "audit-release-artifacts.sh");
+        string packagePs1 = ReadRepositoryFile("tools", "package.ps1");
+        string packageSh = ReadRepositoryFile("tools", "package.sh");
         string evidence = ReadRepositoryFile("tools", "release-evidence-preflight.ps1");
         string release = ReadRepositoryFile(".github", "workflows", "release.yml");
         string example = ReadRepositoryFile("docs", "release-reports", "release-evidence-manifest.example.json");
@@ -724,6 +726,13 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("SHA256SUMS 包含 package root 下不存在或非发行包的条目", auditPs1, StringComparison.Ordinal);
         Assert.Contains("SHA256SUMS 重复条目", auditPs1, StringComparison.Ordinal);
         Assert.Contains("SHA256SUMS 条目数与 package 数不一致", auditPs1, StringComparison.Ordinal);
+
+        Assert.Contains("PixelEngine.Tools.DeterministicPackage", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("PixelEngine.Tools.DeterministicPackage", packageSh, StringComparison.Ordinal);
+        Assert.DoesNotContain("Compress-Archive", packagePs1, StringComparison.Ordinal);
+        Assert.DoesNotContain("tar -czf", packagePs1, StringComparison.Ordinal);
+        Assert.DoesNotContain("zip -qr", packageSh, StringComparison.Ordinal);
+        Assert.DoesNotContain("tar -czf", packageSh, StringComparison.Ordinal);
 
         Assert.Contains("EvidenceManifestPath", evidence, StringComparison.Ordinal);
         Assert.Contains("schemaVersion", evidence, StringComparison.Ordinal);
@@ -827,6 +836,45 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.True(ridNode.TryGetProperty("r2r", out _), $"示例 manifest 缺少 {rid}/r2r");
             Assert.True(ridNode.TryGetProperty("aot", out System.Text.Json.JsonElement aotNode), $"示例 manifest 缺少 {rid}/aot");
             Assert.True(aotNode.TryGetProperty("simdProbeKind", out _), $"示例 manifest 缺少 {rid}/aot simdProbeKind");
+        }
+    }
+
+    /// <summary>
+    /// 验证 deterministic package 工具固定 entry 顺序、时间戳与归档实现，相同内容不同 metadata 仍产出相同 hash。
+    /// </summary>
+    [Fact]
+    public void DeterministicPackageToolProducesStableZipAndTarGzArchives()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-deterministic-package-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string sourceA = Path.Combine(temp, "source-a");
+            string sourceB = Path.Combine(temp, "source-b");
+            CreatePackageSource(sourceA, DateTimeOffset.FromUnixTimeSeconds(1));
+            CreatePackageSource(sourceB, DateTimeOffset.FromUnixTimeSeconds(1_700_000_000));
+
+            string zipA = Path.Combine(temp, "a.zip");
+            string zipB = Path.Combine(temp, "b.zip");
+            string tarA = Path.Combine(temp, "a.tar.gz");
+            string tarB = Path.Combine(temp, "b.tar.gz");
+            string project = Path.Combine(root, "tools", "PixelEngine.Tools.DeterministicPackage", "PixelEngine.Tools.DeterministicPackage.csproj");
+
+            Assert.Equal(0, RunDotNet(root, "run", "--project", project, "-c", "Release", "--", "--source", sourceA, "--output", zipA, "--root-name", "PixelEngine-Demo-test-win-x64-r2r", "--format", "zip").ExitCode);
+            Assert.Equal(0, RunDotNet(root, "run", "--project", project, "-c", "Release", "--", "--source", sourceB, "--output", zipB, "--root-name", "PixelEngine-Demo-test-win-x64-r2r", "--format", "zip").ExitCode);
+            Assert.Equal(GetSha256(zipA), GetSha256(zipB));
+
+            Assert.Equal(0, RunDotNet(root, "run", "--project", project, "-c", "Release", "--", "--source", sourceA, "--output", tarA, "--root-name", "PixelEngine-Demo-test-linux-x64-r2r", "--format", "tar.gz").ExitCode);
+            Assert.Equal(0, RunDotNet(root, "run", "--project", project, "-c", "Release", "--", "--source", sourceB, "--output", tarB, "--root-name", "PixelEngine-Demo-test-linux-x64-r2r", "--format", "tar.gz").ExitCode);
+            Assert.Equal(GetSha256(tarA), GetSha256(tarB));
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
         }
     }
 
@@ -1321,6 +1369,51 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
         process.WaitForExit();
         return new ScriptResult(process.ExitCode, output);
+    }
+
+    private static ScriptResult RunDotNet(string workingDirectory, params string[] arguments)
+    {
+        using System.Diagnostics.Process process = new();
+        process.StartInfo.FileName = "dotnet";
+        process.StartInfo.WorkingDirectory = workingDirectory;
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.UseShellExecute = false;
+        process.StartInfo.CreateNoWindow = true;
+        foreach (string argument in arguments)
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
+
+        _ = process.Start();
+        string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        return new ScriptResult(process.ExitCode, output);
+    }
+
+    private static void CreatePackageSource(string root, DateTimeOffset timestamp)
+    {
+        _ = Directory.CreateDirectory(Path.Combine(root, "content", "nested"));
+        _ = Directory.CreateDirectory(Path.Combine(root, "runtimes", "linux-x64", "native"));
+        _ = WriteTextEvidence(Path.Combine(root, "content", "nested", "b.txt"), "same content b");
+        _ = WriteTextEvidence(Path.Combine(root, "content", "a.txt"), "same content a");
+        _ = WriteTextEvidence(Path.Combine(root, "PixelEngine.Demo"), "executable");
+        _ = WriteTextEvidence(Path.Combine(root, "run.sh"), "#!/usr/bin/env bash\necho run\n");
+        _ = WriteTextEvidence(Path.Combine(root, "runtimes", "linux-x64", "native", "libbox2d.so"), "native");
+
+        foreach (string path in Directory.EnumerateFileSystemEntries(root, "*", SearchOption.AllDirectories))
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.SetLastWriteTimeUtc(path, timestamp.UtcDateTime);
+            }
+            else
+            {
+                File.SetLastWriteTimeUtc(path, timestamp.UtcDateTime);
+            }
+        }
+
+        Directory.SetLastWriteTimeUtc(root, timestamp.UtcDateTime);
     }
 
     private static string FindRepositoryRoot()
