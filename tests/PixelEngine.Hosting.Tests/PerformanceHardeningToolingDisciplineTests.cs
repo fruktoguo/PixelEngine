@@ -794,10 +794,15 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("Upload verify evidence", release, StringComparison.Ordinal);
         Assert.Contains("Upload package evidence", release, StringComparison.Ordinal);
         Assert.Contains("Download release evidence", release, StringComparison.Ordinal);
+        Assert.Contains("Verify deterministic package hashes", release, StringComparison.Ordinal);
+        Assert.Contains("artifacts/package-deterministic", release, StringComparison.Ordinal);
+        Assert.Contains("## Package rebuild comparison", release, StringComparison.Ordinal);
+        Assert.Contains("original_hash", release, StringComparison.Ordinal);
+        Assert.Contains("rebuilt_hash", release, StringComparison.Ordinal);
+        Assert.Contains("deterministic package command exited", release, StringComparison.Ordinal);
+        Assert.Contains("if [[ \"$conclusion\" != \"success\" ]]", release, StringComparison.Ordinal);
         Assert.Contains("Build release evidence manifest", release, StringComparison.Ordinal);
-        Assert.Contains("blocked_missing_reproducible_rebuild", release, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_disassembly", release, StringComparison.Ordinal);
-        Assert.Contains("Do not treat this report as deterministic build success", release, StringComparison.Ordinal);
         Assert.Contains("Do not treat this report as R2R light-up success", release, StringComparison.Ordinal);
         Assert.Contains("Preflight release evidence", release, StringComparison.Ordinal);
         Assert.Contains("release-evidence-preflight.ps1", release, StringComparison.Ordinal);
