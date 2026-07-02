@@ -56,14 +56,34 @@ public sealed class RenderWindow : IDisposable
     public bool IsClosing => _disposed || _window.IsClosing;
 
     /// <summary>
-    /// 当前窗口 framebuffer 宽度。
+    /// 当前 OpenGL 默认 framebuffer 宽度。渲染 viewport、FBO 链与脚本相机必须使用该尺寸。
     /// </summary>
-    public int Width => _window.Size.X;
+    public int Width => Math.Max(1, _window.FramebufferSize.X);
 
     /// <summary>
-    /// 当前窗口 framebuffer 高度。
+    /// 当前 OpenGL 默认 framebuffer 高度。渲染 viewport、FBO 链与脚本相机必须使用该尺寸。
     /// </summary>
-    public int Height => _window.Size.Y;
+    public int Height => Math.Max(1, _window.FramebufferSize.Y);
+
+    /// <summary>
+    /// 当前平台窗口逻辑宽度。Silk.NET 鼠标坐标使用该坐标系。
+    /// </summary>
+    public int LogicalWidth => Math.Max(1, _window.Size.X);
+
+    /// <summary>
+    /// 当前平台窗口逻辑高度。Silk.NET 鼠标坐标使用该坐标系。
+    /// </summary>
+    public int LogicalHeight => Math.Max(1, _window.Size.Y);
+
+    /// <summary>
+    /// 逻辑窗口坐标到 framebuffer 坐标的 X 轴缩放。
+    /// </summary>
+    public float FramebufferScaleX => Width / (float)LogicalWidth;
+
+    /// <summary>
+    /// 逻辑窗口坐标到 framebuffer 坐标的 Y 轴缩放。
+    /// </summary>
+    public float FramebufferScaleY => Height / (float)LogicalHeight;
 
     /// <summary>
     /// 创建并初始化渲染窗口。Auto 模式下桌面 GL 失败会继续尝试 ES3/ANGLE。

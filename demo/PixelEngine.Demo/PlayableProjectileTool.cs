@@ -116,6 +116,7 @@ public sealed class PlayableProjectileTool : Behaviour
         Context.World.Explode(hitX, hitY, Math.Max(1, ImpactRadius), MathF.Max(1f, ImpactForce));
         Context.Lighting.RevealAround(hitX, hitY, ImpactRadius * 2.5f);
         Context.Lighting.AddPointLight(hitX, hitY, ImpactRadius * 3f, 0xFF_60_D8_FF, 0.35f);
+        Context.Audio.PlayAt("explosion.wav", hitX, hitY, 0.85f);
         EmitTracer(startX, startY, hitX, hitY);
         LastShotStartX = startX;
         LastShotStartY = startY;

@@ -13,6 +13,7 @@ public sealed class PlayerController : Behaviour
     private float _velocityY;
     private float _coyoteTimer;
     private float _jumpBufferTimer;
+    private float _footstepTimer;
     private Transform? _transform;
 
     /// <summary>
@@ -43,22 +44,27 @@ public sealed class PlayerController : Behaviour
     /// <summary>
     /// 地面水平加速度，单位像素/秒平方。
     /// </summary>
-    public float GroundAcceleration { get; set; } = 900f;
+    public float GroundAcceleration { get; set; } = 1_650f;
 
     /// <summary>
     /// 空中水平加速度，单位像素/秒平方。
     /// </summary>
-    public float AirAcceleration { get; set; } = 420f;
+    public float AirAcceleration { get; set; } = 1_050f;
 
     /// <summary>
     /// 地面无输入时水平摩擦减速度，单位像素/秒平方。
     /// </summary>
-    public float GroundFriction { get; set; } = 1_200f;
+    public float GroundFriction { get; set; } = 2_800f;
+
+    /// <summary>
+    /// 空中无输入时水平阻尼减速度，单位像素/秒平方。
+    /// </summary>
+    public float AirFriction { get; set; } = 180f;
 
     /// <summary>
     /// 重力加速度，单位像素/秒平方；Y 正方向向下。
     /// </summary>
-    public float Gravity { get; set; } = 720f;
+    public float Gravity { get; set; } = 860f;
 
     /// <summary>
     /// 最大下落速度，单位像素/秒。
@@ -68,7 +74,7 @@ public sealed class PlayerController : Behaviour
     /// <summary>
     /// 跳跃初速度，单位像素/秒。
     /// </summary>
-    public float JumpSpeed { get; set; } = 210f;
+    public float JumpSpeed { get; set; } = 245f;
 
     /// <summary>
     /// 离开地面后仍允许跳跃的宽限时间，单位秒。
@@ -89,6 +95,11 @@ public sealed class PlayerController : Behaviour
     /// 蹬墙水平初速度，单位像素/秒。
     /// </summary>
     public float WallJumpXSpeed { get; set; } = 150f;
+
+    /// <summary>
+    /// 玩家奔跑脚步音效间隔，单位秒。
+    /// </summary>
+    public float FootstepIntervalSeconds { get; set; } = 0.18f;
 
     /// <summary>
     /// 最近一次角色状态。
@@ -115,6 +126,7 @@ public sealed class PlayerController : Behaviour
         _velocityY = 0f;
         _coyoteTimer = 0f;
         _jumpBufferTimer = 0f;
+        _footstepTimer = 0f;
         State = Context.Character.SetPosition(_body, SpawnX, SpawnY);
         SyncTransform();
     }
@@ -134,7 +146,10 @@ public sealed class PlayerController : Behaviour
         }
 
         EnsureBody();
+        CharacterState previousState = State;
         State = Context.Character.GetState(_body);
+        ResolveVelocityAfterCollision(State);
+        EmitMovementAudio(previousState, State, dt);
         float axis = Context.Input.Axis(Axis.Horizontal);
         bool jumpPressed = Context.Input.WasPressed(Key.Space) || Context.Input.WasPressed(Key.W) || Context.Input.WasPressed(Key.Up);
 
@@ -152,7 +167,7 @@ public sealed class PlayerController : Behaviour
 
         float dx = ClampDisplacement(_velocityX * dt);
         float dy = ClampDisplacement(_velocityY * dt);
-        CharacterState moved = Context.Character.Move(_body, dx, dy);
+        CharacterState moved = Context.Character.MoveNow(_body, dx, dy);
         ResolveVelocityAfterCollision(moved);
         State = moved;
         SyncTransform();
@@ -198,7 +213,10 @@ public sealed class PlayerController : Behaviour
         if (State.OnGround)
         {
             _velocityX = MoveTowards(_velocityX, 0f, GroundFriction * dt);
+            return;
         }
+
+        _velocityX = MoveTowards(_velocityX, 0f, AirFriction * dt);
     }
 
     private void ApplyVertical(float dt)
@@ -252,6 +270,28 @@ public sealed class PlayerController : Behaviour
         {
             _velocityY = 0f;
         }
+    }
+
+    private void EmitMovementAudio(in CharacterState previous, in CharacterState current, float dt)
+    {
+        if (!previous.OnGround && current.OnGround && current.AppliedDeltaY >= 0f)
+        {
+            Context.Audio.PlayAt("player_land.wav", CenterX, CenterY, 0.75f);
+        }
+
+        _footstepTimer = MathF.Max(0f, _footstepTimer - dt);
+        if (!current.OnGround || MathF.Abs(_velocityX) < MaxRunSpeed * 0.35f)
+        {
+            return;
+        }
+
+        if (_footstepTimer > 0f)
+        {
+            return;
+        }
+
+        Context.Audio.PlayAt("footstep_stone.wav", CenterX, CenterY, 0.35f);
+        _footstepTimer = MathF.Max(0.05f, FootstepIntervalSeconds);
     }
 
     private static float MoveTowards(float current, float target, float maxDelta)

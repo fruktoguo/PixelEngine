@@ -406,7 +406,7 @@ public sealed class PlayerControllerIntegrationTests
 
         engine.RunHeadlessTicks(20);
         PlayerController player = FindPlayer(engine);
-        Assert.True(player.State.OnGround);
+        Assert.True(player.State.OnGround, $"玩家应落在普通地面上，state={Describe(player.State)}");
 
         float startX = player.State.X;
         input.Update([Key.D], [], mouseX: 0, mouseY: 0, wheelY: 0);
@@ -440,6 +440,67 @@ public sealed class PlayerControllerIntegrationTests
 
         Assert.True(player.State.OnGround);
         Assert.True(player.State.Y + player.State.Height <= 46f);
+    }
+
+    /// <summary>
+    /// 验证玩家在粉末堆形成的非平整小台阶上仍可横向移动，不会把沙堆边缘误当成整面墙。
+    /// </summary>
+    [Fact]
+    public void PlayerRunsAcrossUnevenPowderPile()
+    {
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
+        Entity entity = scene.CreateEntity();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 26f;
+        player.MaxRunSpeed = 145f;
+        player.GroundAcceleration = 1_850f;
+        player.AirAcceleration = 1_150f;
+        Assert.True(materials.TryGetId("sand", out ushort sand));
+
+        FillSteppedPile(grid, sand, startX: 0, endX: 72, baseY: 42);
+        engine.RunHeadlessTicks(20);
+        Assert.True(player.State.OnGround, $"玩家应站在沙堆上，state={Describe(player.State)}");
+
+        float startX = player.State.X;
+        input.Update([Key.D], [], mouseX: 0, mouseY: 0, wheelY: 0);
+        engine.RunHeadlessTicks(24);
+
+        Assert.True(player.State.X > startX + 12f, $"玩家应能越过非平整粉末地面继续移动，start={startX}, state={Describe(player.State)}");
+        Assert.False(player.State.OnWallRight, $"沙堆小台阶不应长期被判为右墙，state={Describe(player.State)}");
+    }
+
+    /// <summary>
+    /// 验证可玩 Demo 左键射击会触发破坏弹、粒子和音效。
+    /// </summary>
+    [Fact]
+    public void PlayableProjectileLeftClickQueuesAudioAndParticles()
+    {
+        RecordingAudioApi audio = new();
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        FillFloor(grid, stone, y: 46, x0: 0, x1: 96, rigidOwned: false);
+        FillWall(grid, stone, x: 34, y0: 24, y1: 46);
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 14f;
+        player.SpawnY = 30f;
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.CooldownSeconds = 0f;
+        projectile.Range = 80f;
+        projectile.ImpactRadius = 3;
+
+        engine.RunHeadlessTicks(20);
+        input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(1, projectile.ShotsFired);
+        Assert.Equal("explosion.wav", audio.LastCue);
+        Assert.True(engine.Context.GetService<ParticleSystem>().ActiveCount > 0);
+        Assert.NotEqual(stone, grid.MaterialAt((int)MathF.Round(projectile.LastHitX), (int)MathF.Round(projectile.LastHitY)));
     }
 
     /// <summary>
@@ -583,6 +644,19 @@ public sealed class PlayerControllerIntegrationTests
         for (int y = minY; y < maxY; y++)
         {
             for (int x = minX; x < maxX; x++)
+            {
+                grid.MaterialAt(x, y) = material;
+                grid.FlagsAt(x, y) = default;
+            }
+        }
+    }
+
+    private static void FillSteppedPile(CellGrid grid, ushort material, int startX, int endX, int baseY)
+    {
+        for (int x = startX; x < endX; x++)
+        {
+            int surface = baseY - Math.Min(5, Math.Abs(x - 28) / 4);
+            for (int y = surface; y < 48; y++)
             {
                 grid.MaterialAt(x, y) = material;
                 grid.FlagsAt(x, y) = default;
