@@ -448,6 +448,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("tools/release-evidence-preflight.ps1", plan, StringComparison.Ordinal);
 
         Assert.Contains("tools/release-evidence-preflight.ps1", conventions, StringComparison.Ordinal);
+        Assert.Contains("发行与 Box2D dual-build 工具链已在 `plan/15`", conventions, StringComparison.Ordinal);
+        Assert.Contains("tools/audit-release-artifacts.*", conventions, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_release_manifest", conventions, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_release_scope_evidence", conventions, StringComparison.Ordinal);
         Assert.Contains("release_evidence_attached_pending_review", conventions, StringComparison.Ordinal);
