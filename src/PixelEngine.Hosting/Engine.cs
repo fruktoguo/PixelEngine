@@ -590,9 +590,7 @@ public sealed class Engine : IDisposable
 
         CellGrid grid = Context.GetService<CellGrid>();
         IChunkSource chunks = Context.GetService<IChunkSource>();
-        RigidDamageQueue damageQueue = Context.TryGetService(out RigidDamageQueue existingDamageQueue)
-            ? existingDamageQueue
-            : new RigidDamageQueue();
+        RigidDamageQueue damageQueue = ResolveRigidDamageQueue();
         ParticleSystem? particles = Context.TryGetService(out ParticleSystem registeredParticles)
             ? registeredParticles
             : null;
@@ -1413,11 +1411,13 @@ public sealed class Engine : IDisposable
     {
         ConfigureMaterialRuntimeBehaviours(materials, particles, temperature, out IReactionExecutor? reactionExecutor, out ILifetimeSink? lifetimeSink);
         MaterialPropsTable props = new(materials.Hot);
-        CellGrid grid = new(chunks, props);
+        RigidDamageQueue damageQueue = ResolveRigidDamageQueue();
+        CellGrid grid = new(chunks, props, damageQueue);
         SimulationKernel kernel = new(
             chunks,
             props,
             worldSeed: worldSeed,
+            rigidDamageSink: damageQueue,
             reactionExecutor: reactionExecutor,
             lifetimeSink: lifetimeSink,
             customUpdateExecutor: materials,
@@ -1449,6 +1449,18 @@ public sealed class Engine : IDisposable
         Context.RegisterService(EngineServiceRole.ParticleService, particles);
         Context.RegisterService(EngineServiceRole.MaterialRegistry, materials);
         return driver;
+    }
+
+    private RigidDamageQueue ResolveRigidDamageQueue()
+    {
+        if (Context.TryGetService(out RigidDamageQueue existingDamageQueue))
+        {
+            return existingDamageQueue;
+        }
+
+        RigidDamageQueue damageQueue = new();
+        Context.RegisterService(damageQueue);
+        return damageQueue;
     }
 
     private void ConfigureMaterialRuntimeBehaviours(
