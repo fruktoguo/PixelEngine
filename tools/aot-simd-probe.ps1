@@ -13,11 +13,6 @@ if (-not $PublishDir) {
   $PublishDir = Join-Path $repoRoot "artifacts/publish/$Rid-aot"
 }
 
-if (-not $Rid.EndsWith('-x64')) {
-  Write-Host "AOT SIMD probe skipped for non-x64 RID: $Rid"
-  return
-}
-
 $exeName = if ($Rid.StartsWith('win-')) { 'PixelEngine.Demo.exe' } else { 'PixelEngine.Demo' }
 $exePath = Join-Path $PublishDir $exeName
 if (-not (Test-Path -LiteralPath $exePath -PathType Leaf)) {
@@ -81,8 +76,18 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $combined = $assembly -join [Environment]::NewLine
-if ($combined -notmatch '\b[yz]mm[0-9]+\b') {
-  throw "AOT SIMD probe failed: $Rid 原生可执行反汇编中未发现 ymm/zmm 指令寄存器。"
+if ($Rid.EndsWith('-x64')) {
+  if ($combined -notmatch '\b[yz]mm[0-9]+\b') {
+    throw "AOT SIMD probe failed: $Rid 原生可执行反汇编中未发现 ymm/zmm 指令寄存器。"
+  }
+
+  Write-Host "AOT SIMD probe passed for ${Rid}: found ymm/zmm marker."
+  return
 }
 
-Write-Host "AOT SIMD probe passed for ${Rid}: found ymm/zmm marker."
+if ($combined -notmatch '\b(advSIMD|NEON|fmla|mla|umlal|smlal|addv|uaddlp|zip1|zip2|uzp1|uzp2|trn1|trn2|tbl|ld1|st1)\b' -and
+    -not $combined.Contains('NEON', [StringComparison]::OrdinalIgnoreCase)) {
+  throw "AOT SIMD probe failed: $Rid 原生可执行反汇编中未发现 NEON 证据。"
+}
+
+Write-Host "AOT SIMD probe passed for ${Rid}: found NEON marker."

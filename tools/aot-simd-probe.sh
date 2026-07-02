@@ -47,11 +47,7 @@ if [[ -z "$rid" ]]; then
 fi
 
 case "$rid" in
-  win-x64|linux-x64|osx-x64)
-    ;;
-  win-arm64|linux-arm64|osx-arm64)
-    echo "AOT SIMD probe skipped for non-x64 RID: $rid"
-    exit 0
+  win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64)
     ;;
   *)
     fail_usage "Unsupported RID: $rid"
@@ -89,9 +85,19 @@ else
   exit 1
 fi
 
-if ! grep -Eq '\b[yz]mm[0-9]+\b' <<<"$disassembly"; then
-  echo "AOT SIMD probe failed: no ymm/zmm register marker found in $rid executable." >&2
+if [[ "$rid" == *-x64 ]]; then
+  if ! grep -Eq '\b[yz]mm[0-9]+\b' <<<"$disassembly"; then
+    echo "AOT SIMD probe failed: no ymm/zmm register marker found in $rid executable." >&2
+    exit 1
+  fi
+
+  echo "AOT SIMD probe passed for $rid: found ymm/zmm marker."
+  exit 0
+fi
+
+if ! grep -Eiq '\b(advSIMD|NEON|fmla|mla|umlal|smlal|addv|uaddlp|zip1|zip2|uzp1|uzp2|trn1|trn2|tbl|ld1|st1)\b' <<<"$disassembly"; then
+  echo "AOT SIMD probe failed: no NEON marker found in $rid executable." >&2
   exit 1
 fi
 
-echo "AOT SIMD probe passed for $rid: found ymm/zmm marker."
+echo "AOT SIMD probe passed for $rid: found NEON marker."

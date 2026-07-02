@@ -157,7 +157,7 @@ jobs:
             --skip-native-build
 
       - name: AOT SIMD probe
-        if: matrix.channel == 'aot' && endsWith(matrix.rid, '-x64') && matrix.shell == 'pwsh'
+        if: matrix.channel == 'aot' && matrix.shell == 'pwsh'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts/release-evidence | Out-Null
@@ -178,7 +178,7 @@ jobs:
           }
 
       - name: AOT SIMD probe
-        if: matrix.channel == 'aot' && endsWith(matrix.rid, '-x64') && matrix.shell == 'bash'
+        if: matrix.channel == 'aot' && matrix.shell == 'bash'
         shell: bash
         run: |
           mkdir -p artifacts/release-evidence
@@ -189,7 +189,7 @@ jobs:
           exit "$status"
 
       - name: Write AOT SIMD evidence
-        if: always() && matrix.channel == 'aot' && endsWith(matrix.rid, '-x64')
+        if: always() && matrix.channel == 'aot'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts/release-evidence | Out-Null
@@ -214,7 +214,7 @@ jobs:
           ) | Set-Content -Path artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-simd.md -Encoding UTF8
 
       - name: Upload AOT SIMD evidence
-        if: always() && matrix.channel == 'aot' && endsWith(matrix.rid, '-x64')
+        if: always() && matrix.channel == 'aot'
         uses: actions/upload-artifact@v4
         with:
           name: release-evidence-simd-${{ matrix.rid }}-${{ matrix.channel }}
