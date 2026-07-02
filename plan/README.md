@@ -67,18 +67,19 @@
 | 17 路线图 | - [!] | M0-M12 总退出标准仍受外部证据阻塞 |
 | 18 宿主/运行时 | - [!] | Editor 人工验收与 native leak detector 证据待补 |
 
-## 证据预检状态索引
+## 证据 / 预检状态索引
 
-| 领域 | 工具 | 阻塞 / 待审状态 |
+| 领域 | 工具 | 阻塞 / 待审 / 检查状态 |
 |---|---|---|
+| 硬件计数器 | `tools/hardware-counter-preflight.ps1` | `blocked_non_windows`、`blocked_non_admin`、`missing_counter_columns`、`ready`、`counters_present` |
 | CI 矩阵 | `tools/ci-matrix-evidence-preflight.ps1` | `blocked_missing_ci_manifest`、`blocked_invalid_ci_evidence`、`blocked_missing_ci_scope_evidence`、`ci_matrix_evidence_attached_pending_review` |
 | 目标性能 | `tools/performance-target-evidence-preflight.ps1` | `blocked_missing_target_performance_manifest`、`blocked_invalid_target_performance_evidence`、`blocked_missing_target_performance_scope_evidence`、`target_performance_evidence_attached_pending_review` |
 | GPU 粒子长基准 | `tools/gpu-particle-benchmark-preflight.ps1` | `blocked_missing_target_gpu_evidence`、`local_probe_only`、`blocked_missing_target_gpu_scope_evidence`、`blocked_invalid_target_gpu_evidence`、`target_gpu_evidence_attached_pending_review` |
 | Demo 人工验收 | `tools/demo-manual-acceptance-preflight.ps1` | `blocked_missing_manual_evidence`、`scripted_probe_only`、`blocked_missing_manual_scope_evidence`、`blocked_invalid_manual_evidence`、`manual_evidence_attached_pending_review` |
 | Native leak | `tools/native-leak-preflight.ps1` | `blocked_missing_detector`、`process_smoke_only`、`detector_report_attached_pending_review`、`blocked_missing_scope_evidence`、`blocked_invalid_native_leak_evidence`、`detector_evidence_attached_pending_review` |
-| 发行证据 | `tools/release-evidence-preflight.ps1` | `blocked_missing_release_manifest`、`blocked_invalid_release_evidence`、`blocked_missing_release_scope_evidence`、`blocked_not_tag_release`、`release_evidence_attached_pending_review` |
+| 发行证据 | `tools/release-evidence-preflight.ps1` + release workflow 上传报告 | `blocked_missing_release_manifest`、`blocked_invalid_release_evidence`、`blocked_missing_release_scope_evidence`、`blocked_not_tag_release`、`release_evidence_attached_pending_review` |
 
-以上 `*_pending_review`、`local_probe_only`、`scripted_probe_only` 与 `process_smoke_only` 都不是验收通过状态，只说明证据入口可执行或待人工复核；对应 plan 条目仍保持 `- [!]`，直到外部证据内容本身闭合验收。
+以上 `*_pending_review`、`local_probe_only`、`scripted_probe_only`、`process_smoke_only`、`ready` 与 `counters_present` 都不是对应 plan 验收通过状态，只说明证据入口可执行、待人工复核或本地计数器列检查通过；对应 plan 条目仍保持 `- [!]`，直到外部证据内容本身闭合验收。
 
 ## 使用约定
 

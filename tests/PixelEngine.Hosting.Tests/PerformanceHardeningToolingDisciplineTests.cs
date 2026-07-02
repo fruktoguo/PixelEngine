@@ -174,6 +174,82 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 plan/README 的证据预检状态索引覆盖全部外部证据入口，并明确待审/本机探针状态不是验收通过。
+    /// </summary>
+    [Fact]
+    public void PlanReadmeIndexesAllEvidencePreflightStatusesAsNonPassing()
+    {
+        string readme = ReadRepositoryFile("plan", "README.md");
+
+        string[] tools =
+        [
+            "tools/hardware-counter-preflight.ps1",
+            "tools/ci-matrix-evidence-preflight.ps1",
+            "tools/performance-target-evidence-preflight.ps1",
+            "tools/gpu-particle-benchmark-preflight.ps1",
+            "tools/demo-manual-acceptance-preflight.ps1",
+            "tools/native-leak-preflight.ps1",
+            "tools/release-evidence-preflight.ps1",
+        ];
+        foreach (string tool in tools)
+        {
+            Assert.Contains(tool, readme, StringComparison.Ordinal);
+        }
+
+        string[] statuses =
+        [
+            "blocked_non_windows",
+            "blocked_non_admin",
+            "missing_counter_columns",
+            "ready",
+            "counters_present",
+            "blocked_missing_ci_manifest",
+            "blocked_invalid_ci_evidence",
+            "blocked_missing_ci_scope_evidence",
+            "ci_matrix_evidence_attached_pending_review",
+            "blocked_missing_target_performance_manifest",
+            "blocked_invalid_target_performance_evidence",
+            "blocked_missing_target_performance_scope_evidence",
+            "target_performance_evidence_attached_pending_review",
+            "blocked_missing_target_gpu_evidence",
+            "local_probe_only",
+            "blocked_missing_target_gpu_scope_evidence",
+            "blocked_invalid_target_gpu_evidence",
+            "target_gpu_evidence_attached_pending_review",
+            "blocked_missing_manual_evidence",
+            "scripted_probe_only",
+            "blocked_missing_manual_scope_evidence",
+            "blocked_invalid_manual_evidence",
+            "manual_evidence_attached_pending_review",
+            "blocked_missing_detector",
+            "process_smoke_only",
+            "detector_report_attached_pending_review",
+            "blocked_missing_scope_evidence",
+            "blocked_invalid_native_leak_evidence",
+            "detector_evidence_attached_pending_review",
+            "blocked_missing_release_manifest",
+            "blocked_invalid_release_evidence",
+            "blocked_missing_release_scope_evidence",
+            "blocked_not_tag_release",
+            "release_evidence_attached_pending_review",
+        ];
+        foreach (string status in statuses)
+        {
+            Assert.Contains(status, readme, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("*_pending_review", readme, StringComparison.Ordinal);
+        Assert.Contains("local_probe_only", readme, StringComparison.Ordinal);
+        Assert.Contains("scripted_probe_only", readme, StringComparison.Ordinal);
+        Assert.Contains("process_smoke_only", readme, StringComparison.Ordinal);
+        Assert.Contains("ready", readme, StringComparison.Ordinal);
+        Assert.Contains("counters_present", readme, StringComparison.Ordinal);
+        Assert.Contains("都不是对应 plan 验收通过状态", readme, StringComparison.Ordinal);
+        Assert.Contains("本地计数器列检查通过", readme, StringComparison.Ordinal);
+        Assert.Contains("对应 plan 条目仍保持 `- [!]`", readme, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 native 资源泄漏预检不会把进程 smoke 误当作 GL/OpenAL/Box2D/ALC 泄漏验收。
     /// </summary>
     [Fact]
