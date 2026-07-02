@@ -71,11 +71,12 @@ public sealed class DemoStartupOptionsTests
     [Fact]
     public void WindowTicksSelectsFiniteWindowedRuntime()
     {
-        DemoStartupOptions options = DemoStartupOptions.Parse(["--no-hot-reload", "--window-ticks", "60"]);
+        DemoStartupOptions options = DemoStartupOptions.Parse(["--no-hot-reload", "--window-ticks", "60", "--capture-frame", "artifacts/demo.bmp"]);
 
         Assert.False(options.Headless);
         Assert.False(options.HotReloadEnabled);
         Assert.Equal(60, options.WindowTicks);
+        Assert.Equal("artifacts/demo.bmp", options.CaptureFramePath);
     }
 
     /// <summary>

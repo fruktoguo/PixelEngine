@@ -86,6 +86,18 @@ public sealed class RenderWindow : IDisposable
     public float FramebufferScaleY => Height / (float)LogicalHeight;
 
     /// <summary>
+    /// 更新窗口标题，用于 Demo/Editor 暴露实时运行状态。
+    /// </summary>
+    /// <param name="title">新的窗口标题。</param>
+    public void SetTitle(string title)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _window.Title = string.IsNullOrWhiteSpace(title)
+            ? "PixelEngine"
+            : title;
+    }
+
+    /// <summary>
     /// 创建并初始化渲染窗口。Auto 模式下桌面 GL 失败会继续尝试 ES3/ANGLE。
     /// </summary>
     /// <param name="options">窗口参数。</param>

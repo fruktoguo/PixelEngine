@@ -12,6 +12,7 @@ public sealed class PlayableProjectileTool : Behaviour
     private int _pendingCollapseFrames;
     private int _pendingCollapseX;
     private int _pendingCollapseY;
+    private int _pendingCollapsePasses;
 
     /// <summary>
     /// 射击最大距离，单位 cell。
@@ -66,17 +67,22 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <summary>
     /// 爆破后局部扫描半径，用于把脱离主地形的小型固体岛转换为刚体。
     /// </summary>
-    public int CollapseScanRadius { get; set; } = 22;
+    public int CollapseScanRadius { get; set; } = 42;
 
     /// <summary>
     /// 可自动转换的最大连通块包围盒尺寸，避免误把整片程序化地形转成刚体。
     /// </summary>
-    public int MaxCollapseRegionSize { get; set; } = 30;
+    public int MaxCollapseRegionSize { get; set; } = 72;
 
     /// <summary>
     /// 可自动转换的最小固体像素数。
     /// </summary>
     public int MinCollapsePixels { get; set; } = 8;
+
+    /// <summary>
+    /// 单次爆破最多转换的悬空固体岛数量，避免一枪把整片程序化山体误拆成过多刚体。
+    /// </summary>
+    public int MaxCollapsedIslandsPerShot { get; set; } = 4;
 
     /// <summary>
     /// 已由破坏弹转换成刚体的悬空固体岛数量。
@@ -157,6 +163,7 @@ public sealed class PlayableProjectileTool : Behaviour
         _pendingCollapseX = (int)MathF.Round(hitX);
         _pendingCollapseY = (int)MathF.Round(hitY);
         _pendingCollapseFrames = 2;
+        _pendingCollapsePasses = Math.Clamp(MaxCollapsedIslandsPerShot, 1, 12);
     }
 
     private void ProcessPendingCollapseScan()
@@ -172,12 +179,14 @@ public sealed class PlayableProjectileTool : Behaviour
             return;
         }
 
-        ConvertFirstFloatingSolidIslandNear(_pendingCollapseX, _pendingCollapseY);
+        int converted = ConvertFloatingSolidIslandsNear(_pendingCollapseX, _pendingCollapseY, _pendingCollapsePasses);
+        _pendingCollapsePasses = 0;
+        _ = converted;
     }
 
-    private void ConvertFirstFloatingSolidIslandNear(int centerX, int centerY)
+    private int ConvertFloatingSolidIslandsNear(int centerX, int centerY, int maxConversions)
     {
-        int radius = Math.Clamp(CollapseScanRadius, 4, 48);
+        int radius = Math.Clamp(CollapseScanRadius, 4, 96);
         int size = (radius * 2) + 1;
         int originX = centerX - radius;
         int originY = centerY - radius;
@@ -185,6 +194,7 @@ public sealed class PlayableProjectileTool : Behaviour
         bool[] component = new bool[size * size];
         int[] queue = new int[size * size];
         int[] cells = new int[size * size];
+        int converted = 0;
 
         for (int localY = 0; localY < size; localY++)
         {
@@ -212,9 +222,15 @@ public sealed class PlayableProjectileTool : Behaviour
                 _ = Context.Bodies.CreateFromRegion(worldX, worldY, width, height);
                 LastCollapsedRegion = (worldX, worldY, width, height);
                 CollapsedFloatingIslands++;
-                return;
+                converted++;
+                if (converted >= Math.Max(1, maxConversions))
+                {
+                    return converted;
+                }
             }
         }
+
+        return converted;
     }
 
     private int FloodFillSolidIsland(
@@ -295,7 +311,7 @@ public sealed class PlayableProjectileTool : Behaviour
             return false;
         }
 
-        int maxSize = Math.Clamp(MaxCollapseRegionSize, 4, 64);
+        int maxSize = Math.Clamp(MaxCollapseRegionSize, 4, 128);
         return maxX - minX + 1 <= maxSize && maxY - minY + 1 <= maxSize;
     }
 

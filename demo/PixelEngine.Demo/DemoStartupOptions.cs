@@ -89,6 +89,11 @@ public sealed class DemoStartupOptions
     public string LogDirectory { get; init; } = Path.Combine(AppContext.BaseDirectory, "logs");
 
     /// <summary>
+    /// 窗口有限短跑结束时从默认 framebuffer 读回的 BMP 截图路径；空字符串表示不截图。
+    /// </summary>
+    public string CaptureFramePath { get; init; } = string.Empty;
+
+    /// <summary>
     /// 从命令行解析启动参数。
     /// </summary>
     /// <param name="args">命令行参数。</param>
@@ -110,6 +115,7 @@ public sealed class DemoStartupOptions
         string contentRoot = Path.Combine(AppContext.BaseDirectory, "content");
         string scene = Path.Combine("scenes", DefaultSceneName + ".scene");
         string logDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
+        string captureFramePath = string.Empty;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -192,6 +198,9 @@ public sealed class DemoStartupOptions
                 case "--log-dir":
                     logDirectory = ReadValue(args, ref i, "--log-dir");
                     break;
+                case "--capture-frame":
+                    captureFramePath = ReadValue(args, ref i, "--capture-frame");
+                    break;
                 default:
                     throw new ArgumentException($"未知 Demo 参数：{args[i]}", nameof(args));
             }
@@ -217,6 +226,7 @@ public sealed class DemoStartupOptions
             ContentRoot = contentRoot,
             Scene = scene,
             LogDirectory = logDirectory,
+            CaptureFramePath = captureFramePath,
         };
     }
 

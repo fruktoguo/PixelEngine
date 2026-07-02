@@ -75,7 +75,7 @@ public sealed unsafe class OverlayRenderer : IDisposable
         ArgumentNullException.ThrowIfNull(destination);
         ObjectDisposedException.ThrowIf(_disposed, this);
         destination.BindFramebuffer();
-        Render(commands, destination.Width, destination.Height);
+        RenderCore(commands, destination.Width, destination.Height, bindDefaultFramebuffer: false);
     }
 
     /// <summary>
@@ -85,6 +85,11 @@ public sealed unsafe class OverlayRenderer : IDisposable
     /// <param name="viewportWidth">当前 framebuffer viewport 宽度，单位为像素。</param>
     /// <param name="viewportHeight">当前 framebuffer viewport 高度，单位为像素。</param>
     public void Render(ReadOnlySpan<OverlayCommand> commands, int viewportWidth, int viewportHeight)
+    {
+        RenderCore(commands, viewportWidth, viewportHeight, bindDefaultFramebuffer: true);
+    }
+
+    private void RenderCore(ReadOnlySpan<OverlayCommand> commands, int viewportWidth, int viewportHeight, bool bindDefaultFramebuffer)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (viewportWidth <= 0 || viewportHeight <= 0)
@@ -97,19 +102,29 @@ public sealed unsafe class OverlayRenderer : IDisposable
             throw new ArgumentOutOfRangeException(nameof(commands), "Overlay 命令数超过构造时声明的容量。");
         }
 
-        if (commands.IsEmpty)
-        {
-            return;
-        }
-
         for (int i = 0; i < commands.Length; i++)
         {
             commands[i].Validate();
         }
 
+        if (bindDefaultFramebuffer)
+        {
+            _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+        }
+
         _gl.Viewport(0, 0, (uint)viewportWidth, (uint)viewportHeight);
+        _gl.Disable(EnableCap.DepthTest);
+        _gl.Disable(EnableCap.ScissorTest);
+        if (commands.IsEmpty)
+        {
+            _gl.Disable(EnableCap.Blend);
+            return;
+        }
+
         _program.Use();
-        _gl.Uniform2(_viewportLocation, viewportWidth, viewportHeight);
+        float viewportWidthValue = viewportWidth;
+        float viewportHeightValue = viewportHeight;
+        _gl.Uniform2(_viewportLocation, viewportWidthValue, viewportHeightValue);
         _gl.Uniform1(_spriteTextureLocation, 0);
         _gl.Enable(EnableCap.Blend);
         _gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
