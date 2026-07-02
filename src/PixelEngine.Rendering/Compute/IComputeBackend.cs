@@ -32,21 +32,21 @@ public interface IComputeBackend : IDisposable
     /// 绑定 shader storage buffer object 到指定 binding index。
     /// </summary>
     /// <param name="bindingIndex">SSBO binding index。</param>
-    /// <param name="bufferHandle">OpenGL buffer 句柄；其它后端可把该值解释为后端资源句柄。</param>
+    /// <param name="bufferHandle">OpenGL buffer object 名称。当前绑定 API 是 GL-only 契约；非 GL 后端必须先落地 D3D resource owner 或 GL-DX12 shared resource/fence 层，不能直接解释该值。</param>
     void BindStorageBuffer(uint bindingIndex, uint bufferHandle);
 
     /// <summary>
     /// 绑定 2D texture 到指定 sampler texture unit。
     /// </summary>
     /// <param name="unit">texture unit。</param>
-    /// <param name="textureHandle">OpenGL texture 句柄；其它后端可把该值解释为后端资源句柄。</param>
+    /// <param name="textureHandle">OpenGL texture name。当前绑定 API 是 GL-only 契约；非 GL 后端必须先落地 D3D resource owner 或 GL-DX12 shared resource/fence 层，不能直接解释该值。</param>
     void BindTexture(uint unit, uint textureHandle);
 
     /// <summary>
     /// 绑定 image load/store 纹理到指定 image unit。
     /// </summary>
     /// <param name="unit">image unit。</param>
-    /// <param name="textureHandle">OpenGL texture 句柄；其它后端可把该值解释为后端资源句柄。</param>
+    /// <param name="textureHandle">OpenGL texture name。当前绑定 API 是 GL-only 契约；非 GL 后端必须先落地 D3D resource owner 或 GL-DX12 shared resource/fence 层，不能直接解释该值。</param>
     /// <param name="level">mip level。</param>
     /// <param name="layered">是否按 layered image 绑定。</param>
     /// <param name="layer">layered 为 false 时的 layer。</param>
