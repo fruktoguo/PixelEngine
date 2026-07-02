@@ -196,6 +196,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("schemaVersion", evidence, StringComparison.Ordinal);
         Assert.Contains("未知 RID", evidence, StringComparison.Ordinal);
         Assert.Contains("未知 channel", evidence, StringComparison.Ordinal);
+        Assert.Contains("重复 evidence scope", evidence, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_release_manifest", evidence, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_release_scope_evidence", evidence, StringComparison.Ordinal);
         Assert.Contains("release_evidence_attached_pending_review", evidence, StringComparison.Ordinal);
