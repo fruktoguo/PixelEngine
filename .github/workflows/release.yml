@@ -648,6 +648,8 @@ jobs:
                 publishSha256 = Get-Sha256 "artifacts/release-evidence/$rid-$channel-publish.md"
                 verifyReport = "artifacts/release-evidence/$rid-$channel-verify.md"
                 verifySha256 = Get-Sha256 "artifacts/release-evidence/$rid-$channel-verify.md"
+                packageReport = "artifacts/release-evidence/$rid-$channel-package.md"
+                packageReportSha256 = Get-Sha256 "artifacts/release-evidence/$rid-$channel-package.md"
                 package = $packagePath
                 packageSha256 = Get-Sha256 $packagePath
                 checksum = "artifacts/package/SHA256SUMS"
