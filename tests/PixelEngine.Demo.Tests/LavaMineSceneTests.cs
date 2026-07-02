@@ -1,3 +1,4 @@
+using System.Numerics;
 using PixelEngine.Hosting;
 using PixelEngine.Physics;
 using PixelEngine.Simulation;
@@ -63,6 +64,21 @@ public sealed class LavaMineSceneTests
         Assert.Equal(1, physics.LastDestructionResult.DestroyedBodies);
         Assert.Equal(2, physics.LastDestructionResult.CreatedBodies);
         Assert.True(physics.PhysicsWorld.ActiveBodyCount > beforeCutBodies);
+
+        RigidBodySnapshot[] splitSnapshots = CopySnapshots(physics);
+        Assert.True(splitSnapshots.Length >= beforeCutBodies + 1);
+        Assert.Contains(splitSnapshots, snapshot => snapshot.AngularVelocityRadiansPerSecond != 0f);
+
+        engine.RunHeadlessTicks(6);
+
+        RigidBodySnapshot[] movedSnapshots = CopySnapshots(physics);
+        Assert.True(physics.LastStampedCellCount > 0);
+        Assert.Contains(
+            movedSnapshots,
+            moved => TryFindSnapshot(splitSnapshots, moved.BodyKey, out RigidBodySnapshot before) &&
+                (Vector2.Distance(before.Transform.Position, moved.Transform.Position) > 0.01f ||
+                    MathF.Abs(before.Transform.Sin - moved.Transform.Sin) > 0.0001f ||
+                    MathF.Abs(before.Transform.Cos - moved.Transform.Cos) > 0.0001f));
     }
 
     private static TBehaviour FindBehaviour<TBehaviour>(ScriptScene scene)
@@ -114,6 +130,29 @@ public sealed class LavaMineSceneTests
             grid.LifetimeAt(x, y) = 0;
             damageQueue.OnOwnedCellDamaged(x, y);
         }
+    }
+
+    private static RigidBodySnapshot[] CopySnapshots(PhysicsSystem physics)
+    {
+        RigidBodySnapshot[] snapshots = new RigidBodySnapshot[physics.PhysicsWorld.ActiveBodyCount];
+        int count = physics.CopyBodySnapshots(snapshots);
+        Array.Resize(ref snapshots, count);
+        return snapshots;
+    }
+
+    private static bool TryFindSnapshot(RigidBodySnapshot[] snapshots, int bodyKey, out RigidBodySnapshot snapshot)
+    {
+        for (int i = 0; i < snapshots.Length; i++)
+        {
+            if (snapshots[i].BodyKey == bodyKey)
+            {
+                snapshot = snapshots[i];
+                return true;
+            }
+        }
+
+        snapshot = default;
+        return false;
     }
 
     private static string FindRepositoryRoot()
