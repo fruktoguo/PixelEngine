@@ -216,6 +216,53 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 native leak 预检的真实脚本行为：hash 错误被拒绝，证据齐全也保持待审非零退出。
+    /// </summary>
+    [Fact]
+    public void NativeLeakPreflightRejectsBadHashesAndKeepsPendingReviewNonZero()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-native-leak-evidence-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string goodManifest = CreateNativeLeakEvidenceManifest(temp);
+            string badManifest = CreateNativeLeakEvidenceManifest(temp, corruptHashScope: "gl", suffix: "bad");
+
+            string badArtifacts = Path.Combine(temp, "bad-out");
+            ScriptResult bad = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "native-leak-preflight.ps1"),
+                "-EvidenceManifestPath",
+                badManifest,
+                "-Artifacts",
+                badArtifacts);
+            Assert.Equal(5, bad.ExitCode);
+            string badReport = File.ReadAllText(Path.Combine(badArtifacts, "native-leak-preflight.md"));
+            Assert.Contains("sha256 不匹配", badReport, StringComparison.Ordinal);
+
+            string goodArtifacts = Path.Combine(temp, "good-out");
+            ScriptResult good = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "native-leak-preflight.ps1"),
+                "-EvidenceManifestPath",
+                goodManifest,
+                "-Artifacts",
+                goodArtifacts);
+            Assert.Equal(2, good.ExitCode);
+            string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "native-leak-preflight.md"));
+            Assert.Contains("detector_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 GPU 粒子目标硬件基准预检只收集证据，不把本机短 probe 当作 plan/09 验收。
     /// </summary>
     [Fact]
@@ -263,6 +310,60 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("tools/gpu-particle-benchmark-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("local_probe_only", plan, StringComparison.Ordinal);
         Assert.Contains("target_gpu_evidence_attached_pending_review", plan, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 GPU 粒子目标硬件预检的真实脚本行为：缺 scope 被拒绝，证据齐全也保持待审非零退出。
+    /// </summary>
+    [Fact]
+    public void GpuParticleBenchmarkPreflightRejectsMissingScopesAndKeepsPendingReviewNonZero()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-evidence-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string goodManifest = CreateFlatEvidenceManifest(
+                temp,
+                ["targetHardwareReport", "cpuProbeReport", "gpuProbeReport", "comparisonReport"],
+                suffix: "good");
+            string badManifest = CreateFlatEvidenceManifest(
+                temp,
+                ["targetHardwareReport", "cpuProbeReport", "gpuProbeReport"],
+                suffix: "bad");
+
+            string badArtifacts = Path.Combine(temp, "bad-out");
+            ScriptResult bad = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
+                "-EvidenceManifestPath",
+                badManifest,
+                "-Artifacts",
+                badArtifacts);
+            Assert.Equal(5, bad.ExitCode);
+            string badReport = File.ReadAllText(Path.Combine(badArtifacts, "gpu-particle-benchmark-preflight.md"));
+            Assert.Contains("blocked_missing_target_gpu_scope_evidence", badReport, StringComparison.Ordinal);
+            Assert.Contains("comparisonReport", badReport, StringComparison.Ordinal);
+
+            string goodArtifacts = Path.Combine(temp, "good-out");
+            ScriptResult good = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
+                "-EvidenceManifestPath",
+                goodManifest,
+                "-Artifacts",
+                goodArtifacts);
+            Assert.Equal(2, good.ExitCode);
+            string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "gpu-particle-benchmark-preflight.md"));
+            Assert.Contains("target_gpu_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
     }
 
     /// <summary>
@@ -338,6 +439,66 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("manual_evidence_attached_pending_review", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("- [x] 过载降级按五级顺序触发", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("- [!] Editor 真实窗口观测/覆盖仍缺人工复核证据", hostingPlan, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 Demo 人工验收预检的真实脚本行为：缺人工 scope 被拒绝，证据齐全也保持待审非零退出。
+    /// </summary>
+    [Fact]
+    public void DemoManualAcceptancePreflightRejectsMissingScopesAndKeepsPendingReviewNonZero()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-evidence-" + Guid.NewGuid().ToString("N"));
+
+        string[] manualScopes =
+        [
+            "controlFeelReport",
+            "materialBrushAndReactionVideo",
+            "rigidBodyGameplayVideo",
+            "particleLightingVideo",
+            "audioListeningReport",
+            "fullRoutePlaythroughVideo",
+            "hudMenuEditorVideo",
+            "hotReloadWindowReport",
+        ];
+
+        try
+        {
+            string goodManifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "good");
+            string badManifest = CreateFlatEvidenceManifest(temp, manualScopes[..^1], suffix: "bad");
+
+            string badArtifacts = Path.Combine(temp, "bad-out");
+            ScriptResult bad = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
+                "-EvidenceManifestPath",
+                badManifest,
+                "-Artifacts",
+                badArtifacts);
+            Assert.Equal(5, bad.ExitCode);
+            string badReport = File.ReadAllText(Path.Combine(badArtifacts, "demo-manual-acceptance-preflight.md"));
+            Assert.Contains("blocked_missing_manual_scope_evidence", badReport, StringComparison.Ordinal);
+            Assert.Contains("hotReloadWindowReport", badReport, StringComparison.Ordinal);
+
+            string goodArtifacts = Path.Combine(temp, "good-out");
+            ScriptResult good = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
+                "-EvidenceManifestPath",
+                goodManifest,
+                "-Artifacts",
+                goodArtifacts);
+            Assert.Equal(2, good.ExitCode);
+            string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "demo-manual-acceptance-preflight.md"));
+            Assert.Contains("manual_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
     }
 
     /// <summary>
@@ -438,6 +599,53 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(2, good.ExitCode);
             string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "ci-matrix-evidence-preflight.md"));
             Assert.Contains("ci_matrix_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证目标性能证据预检的真实脚本行为：未知 scope 被拒绝，证据齐全也保持待审非零退出。
+    /// </summary>
+    [Fact]
+    public void PerformanceTargetEvidencePreflightRejectsUnknownScopesAndKeepsPendingReviewNonZero()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-evidence-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string goodManifest = CreatePerformanceTargetEvidenceManifest(temp);
+            string badManifest = CreatePerformanceTargetEvidenceManifest(temp, includeUnknownScope: true, suffix: "bad");
+
+            string badArtifacts = Path.Combine(temp, "bad-out");
+            ScriptResult bad = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                badManifest,
+                "-Artifacts",
+                badArtifacts);
+            Assert.Equal(5, bad.ExitCode);
+            string badReport = File.ReadAllText(Path.Combine(badArtifacts, "performance-target-evidence-preflight.md"));
+            Assert.Contains("未知 evidence scope", badReport, StringComparison.Ordinal);
+
+            string goodArtifacts = Path.Combine(temp, "good-out");
+            ScriptResult good = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                goodManifest,
+                "-Artifacts",
+                goodArtifacts);
+            Assert.Equal(2, good.ExitCode);
+            string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "performance-target-evidence-preflight.md"));
+            Assert.Contains("target_performance_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
         }
         finally
         {
@@ -858,6 +1066,129 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         };
 
         string manifestPath = Path.Combine(tempRoot, suffix, "release-evidence.json");
+        File.WriteAllText(
+            manifestPath,
+            System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        return manifestPath;
+    }
+
+    private static string CreateNativeLeakEvidenceManifest(string tempRoot, string corruptHashScope = "", string suffix = "good")
+    {
+        string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "native-leak-evidence");
+        _ = Directory.CreateDirectory(evidenceRoot);
+
+        Dictionary<string, object> scopes = [];
+        foreach (string scope in new[] { "gl", "openal", "box2d", "alc" })
+        {
+            string report = WriteTextEvidence(Path.Combine(evidenceRoot, $"{scope}.md"), $"{scope} detector report");
+            string hash = scope.Equals(corruptHashScope, StringComparison.Ordinal) ? new string('0', 64) : GetSha256(report);
+            scopes[scope] = new Dictionary<string, object>
+            {
+                ["detector"] = "external-detector",
+                ["report"] = report,
+                ["sha256"] = hash,
+            };
+        }
+
+        Dictionary<string, object> manifest = new()
+        {
+            ["schemaVersion"] = 1,
+            ["scopes"] = scopes,
+        };
+
+        string manifestPath = Path.Combine(tempRoot, suffix, "native-leak-evidence.json");
+        File.WriteAllText(
+            manifestPath,
+            System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        return manifestPath;
+    }
+
+    private static string CreateFlatEvidenceManifest(string tempRoot, IReadOnlyList<string> scopes, string suffix)
+    {
+        string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "flat-evidence");
+        _ = Directory.CreateDirectory(evidenceRoot);
+
+        List<Dictionary<string, object>> evidence = [];
+        foreach (string scope in scopes)
+        {
+            string safeScope = scope.Replace('/', '-');
+            string report = WriteTextEvidence(Path.Combine(evidenceRoot, $"{safeScope}.md"), $"{scope} evidence");
+            evidence.Add(new Dictionary<string, object>
+            {
+                ["scope"] = scope,
+                ["path"] = report,
+                ["sha256"] = GetSha256(report),
+            });
+        }
+
+        Dictionary<string, object> manifest = new()
+        {
+            ["schemaVersion"] = 1,
+            ["evidence"] = evidence,
+        };
+
+        string manifestPath = Path.Combine(tempRoot, suffix, "flat-evidence.json");
+        File.WriteAllText(
+            manifestPath,
+            System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        return manifestPath;
+    }
+
+    private static string CreatePerformanceTargetEvidenceManifest(string tempRoot, bool includeUnknownScope = false, string suffix = "good")
+    {
+        string[] rids = ["win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64"];
+        string[] scopes =
+        [
+            "avx512_downclock_net_loss",
+            "hardware_counters_cache_branch",
+            "frame_budget_target_hardware",
+            .. rids.Select(rid => $"cells_frame/{rid}"),
+        ];
+
+        string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "performance-target-evidence");
+        _ = Directory.CreateDirectory(evidenceRoot);
+
+        List<Dictionary<string, object>> evidence = [];
+        foreach (string scope in scopes)
+        {
+            string safeScope = scope.Replace('/', '-');
+            string report = WriteTextEvidence(Path.Combine(evidenceRoot, $"{safeScope}.md"), $"{scope} evidence");
+            evidence.Add(new Dictionary<string, object>
+            {
+                ["scope"] = scope,
+                ["path"] = report,
+                ["sha256"] = GetSha256(report),
+            });
+        }
+
+        if (includeUnknownScope)
+        {
+            string report = WriteTextEvidence(Path.Combine(evidenceRoot, "unknown-scope.md"), "unknown evidence");
+            evidence.Add(new Dictionary<string, object>
+            {
+                ["scope"] = "unexpected_scope",
+                ["path"] = report,
+                ["sha256"] = GetSha256(report),
+            });
+        }
+
+        Dictionary<string, object> cellsFrame = [];
+        foreach (string rid in rids)
+        {
+            cellsFrame[rid] = new Dictionary<string, object>
+            {
+                ["benchmarkDotNet"] = true,
+            };
+        }
+
+        Dictionary<string, object> manifest = new()
+        {
+            ["schemaVersion"] = 1,
+            ["evidence"] = evidence,
+            ["cellsFrame"] = cellsFrame,
+        };
+
+        string manifestPath = Path.Combine(tempRoot, suffix, "performance-target-evidence.json");
         File.WriteAllText(
             manifestPath,
             System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
