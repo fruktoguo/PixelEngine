@@ -1,4 +1,5 @@
 using PixelEngine.Scripting;
+using PixelEngine.Simulation;
 
 namespace PixelEngine.Demo;
 
@@ -13,6 +14,7 @@ public sealed class PlayableProjectileTool : Behaviour
     private int _pendingCollapseX;
     private int _pendingCollapseY;
     private int _pendingCollapsePasses;
+    private int _pendingCollapseScans;
 
     /// <summary>
     /// 射击最大距离，单位 cell。
@@ -67,12 +69,12 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <summary>
     /// 爆破后局部扫描半径，用于把脱离主地形的小型固体岛转换为刚体。
     /// </summary>
-    public int CollapseScanRadius { get; set; } = 144;
+    public int CollapseScanRadius { get; set; } = 220;
 
     /// <summary>
     /// 可自动转换的最大连通块包围盒尺寸，避免误把整片程序化地形转成刚体。
     /// </summary>
-    public int MaxCollapseRegionSize { get; set; } = 176;
+    public int MaxCollapseRegionSize { get; set; } = 320;
 
     /// <summary>
     /// 可自动转换的最小固体像素数。
@@ -82,7 +84,7 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <summary>
     /// 单次爆破最多转换的悬空固体岛数量，避免一枪把整片程序化山体误拆成过多刚体。
     /// </summary>
-    public int MaxCollapsedIslandsPerShot { get; set; } = 8;
+    public int MaxCollapsedIslandsPerShot { get; set; } = 10;
 
     /// <summary>
     /// 已由破坏弹转换成刚体的悬空固体岛数量。
@@ -93,6 +95,16 @@ public sealed class PlayableProjectileTool : Behaviour
     /// 最近一次悬空固体岛转换的包围盒。
     /// </summary>
     public (int X, int Y, int Width, int Height) LastCollapsedRegion { get; private set; }
+
+    /// <summary>
+    /// 最近一次悬空固体岛扫描跳过转换的原因，供 Demo 验收与问题排查。
+    /// </summary>
+    public string LastCollapseSkipReason { get; private set; } = "none";
+
+    /// <summary>
+    /// 最近一次悬空扫描读到的普通非空 cell 数量。
+    /// </summary>
+    public int LastCollapseSolidCandidates { get; private set; }
 
     /// <inheritdoc />
     protected override void OnStart()
@@ -162,8 +174,9 @@ public sealed class PlayableProjectileTool : Behaviour
     {
         _pendingCollapseX = (int)MathF.Round(hitX);
         _pendingCollapseY = (int)MathF.Round(hitY);
-        _pendingCollapseFrames = 4;
+        _pendingCollapseFrames = 2;
         _pendingCollapsePasses = Math.Clamp(MaxCollapsedIslandsPerShot, 1, 12);
+        _pendingCollapseScans = 5;
     }
 
     private void ProcessPendingCollapseScan()
@@ -180,13 +193,23 @@ public sealed class PlayableProjectileTool : Behaviour
         }
 
         int converted = ConvertFloatingSolidIslandsNear(_pendingCollapseX, _pendingCollapseY, _pendingCollapsePasses);
-        _pendingCollapsePasses = 0;
-        _ = converted;
+        if (converted > 0)
+        {
+            _pendingCollapsePasses = 0;
+            _pendingCollapseScans = 0;
+            return;
+        }
+
+        _pendingCollapseScans--;
+        if (_pendingCollapsePasses > 0 && _pendingCollapseScans > 0)
+        {
+            _pendingCollapseFrames = 2;
+        }
     }
 
     private int ConvertFloatingSolidIslandsNear(int centerX, int centerY, int maxConversions)
     {
-        int radius = Math.Clamp(CollapseScanRadius, 4, 224);
+        int radius = Math.Clamp(CollapseScanRadius, 4, 320);
         int size = (radius * 2) + 1;
         int originX = centerX - radius;
         int originY = centerY - radius;
@@ -195,6 +218,8 @@ public sealed class PlayableProjectileTool : Behaviour
         int[] queue = new int[size * size];
         int[] cells = new int[size * size];
         int converted = 0;
+        LastCollapseSkipReason = "scan_empty";
+        LastCollapseSolidCandidates = 0;
 
         for (int localY = 0; localY < size; localY++)
         {
@@ -209,9 +234,15 @@ public sealed class PlayableProjectileTool : Behaviour
 
                 Array.Clear(component);
                 int cellCount = FloodFillSolidIsland(localX, localY, originX, originY, size, visited, component, queue, cells, out int minX, out int minY, out int maxX, out int maxY, out ComponentBorderContact borderContact);
-                if (!CanConvertIsland(cellCount, minX, minY, maxX, maxY, borderContact) ||
-                    HasExternalSupport(originX, originY, size, cells, cellCount, component))
+                if (!CanConvertIsland(cellCount, minX, minY, maxX, maxY, borderContact, out string rejection))
                 {
+                    LastCollapseSkipReason = rejection;
+                    continue;
+                }
+
+                if (HasExternalSupport(originX, originY, size, cells, cellCount, component))
+                {
+                    LastCollapseSkipReason = "external_support";
                     continue;
                 }
 
@@ -221,6 +252,7 @@ public sealed class PlayableProjectileTool : Behaviour
                 int height = maxY - minY + 1;
                 _ = Context.Bodies.CreateFromRegion(worldX, worldY, width, height);
                 LastCollapsedRegion = (worldX, worldY, width, height);
+                LastCollapseSkipReason = "converted";
                 CollapsedFloatingIslands++;
                 converted++;
                 if (converted >= Math.Max(1, maxConversions))
@@ -304,20 +336,36 @@ public sealed class PlayableProjectileTool : Behaviour
         queue[tail++] = packed;
     }
 
-    private bool CanConvertIsland(int cellCount, int minX, int minY, int maxX, int maxY, ComponentBorderContact borderContact)
+    private bool CanConvertIsland(
+        int cellCount,
+        int minX,
+        int minY,
+        int maxX,
+        int maxY,
+        ComponentBorderContact borderContact,
+        out string rejection)
     {
         if (cellCount < Math.Max(1, MinCollapsePixels))
         {
+            rejection = "too_few_pixels";
             return false;
         }
 
         if ((borderContact & (ComponentBorderContact.Left | ComponentBorderContact.Right | ComponentBorderContact.Bottom)) != 0)
         {
+            rejection = $"scan_border_{borderContact}";
             return false;
         }
 
-        int maxSize = Math.Clamp(MaxCollapseRegionSize, 4, 224);
-        return maxX - minX + 1 <= maxSize && maxY - minY + 1 <= maxSize;
+        int maxSize = Math.Clamp(MaxCollapseRegionSize, 4, 320);
+        if (maxX - minX + 1 > maxSize || maxY - minY + 1 > maxSize)
+        {
+            rejection = "too_large";
+            return false;
+        }
+
+        rejection = "none";
+        return true;
     }
 
     private bool HasExternalSupport(int originX, int originY, int size, int[] cells, int cellCount, bool[] component)
@@ -344,7 +392,14 @@ public sealed class PlayableProjectileTool : Behaviour
 
     private bool IsSolid(int x, int y)
     {
-        return Context.Solids.SampleSolidAabb(x, y, 1f, 1f);
+        CellView cell = Context.Cells.Sample(x, y);
+        bool solid = cell.Material.Value != 0 && !CellFlags.Has(cell.Flags, CellFlags.RigidOwned);
+        if (solid)
+        {
+            LastCollapseSolidCandidates++;
+        }
+
+        return solid;
     }
 
     private static int Pack(int x, int y, int width)
