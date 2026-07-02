@@ -109,6 +109,22 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal("goal_reached.wav", audio.LastCue);
         Assert.Equal(14f, audio.LastX, precision: 3);
         Assert.Equal(14f, audio.LastY, precision: 3);
+
+        IScriptRuntime runtime = engine.Context.GetService<IScriptRuntime>();
+        RecordingGuiContext victoryGui = new();
+        runtime.DrawGui(victoryGui);
+
+        Assert.Contains("begin:demo-victory-menu:通关:NoResize, NoSavedSettings", victoryGui.Drawn);
+        Assert.Contains("text-colored:矿洞出口已抵达:FF80F080", victoryGui.Drawn);
+        Assert.Contains("text:目标完成", victoryGui.Drawn);
+        Assert.Contains("button:重开关卡", victoryGui.Drawn);
+        Assert.Contains("button:退出", victoryGui.Drawn);
+
+        RecordingGuiContext exitGui = new(clickedButtons: ["退出"]);
+        runtime.DrawGui(exitGui);
+
+        Assert.True(engine.IsShutdownRequested);
+        Assert.Contains("text:已请求关闭。", exitGui.Drawn);
     }
 
     /// <summary>

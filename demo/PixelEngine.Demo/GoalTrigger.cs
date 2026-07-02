@@ -11,6 +11,7 @@ public sealed class GoalTrigger : Behaviour
     private MaterialId _celebrationMaterial;
     private bool _materialResolved;
     private float _pulse;
+    private string _victoryStatus = string.Empty;
 
     /// <summary>
     /// 触发区域左上角 X 坐标。
@@ -73,6 +74,16 @@ public sealed class GoalTrigger : Behaviour
     public uint LightColorBgra { get; set; } = 0xFF_80_F0_FF;
 
     /// <summary>
+    /// 通关菜单宽度，单位像素。
+    /// </summary>
+    public float VictoryMenuWidth { get; set; } = 360f;
+
+    /// <summary>
+    /// 通关菜单高度，单位像素。
+    /// </summary>
+    public float VictoryMenuHeight { get; set; } = 150f;
+
+    /// <summary>
     /// 玩家是否已经触达该目标。
     /// </summary>
     public bool Reached { get; private set; }
@@ -119,6 +130,47 @@ public sealed class GoalTrigger : Behaviour
         {
             MarkReached(centerX, centerY);
         }
+    }
+
+    /// <inheritdoc />
+    protected override void OnGui(IGuiContext gui)
+    {
+        if (!Reached)
+        {
+            return;
+        }
+
+        float x = MathF.Max(12f, (gui.Width - VictoryMenuWidth) * 0.5f);
+        float y = MathF.Max(12f, (gui.Height - VictoryMenuHeight) * 0.5f);
+        gui.SetNextWindow(x, y, VictoryMenuWidth, VictoryMenuHeight, GuiCondition.FirstUseEver);
+        if (!gui.BeginWindow("demo-victory-menu", "通关", GuiWindowFlags.NoResize | GuiWindowFlags.NoSavedSettings))
+        {
+            gui.EndWindow();
+            return;
+        }
+
+        gui.TextColored("矿洞出口已抵达", 0xFF_80_F0_80);
+        gui.Text("目标完成");
+        if (gui.Button("重开关卡"))
+        {
+            RuntimeControlResult result = Context.Runtime.RequestRestartCurrentScene();
+            _victoryStatus = result.Message;
+        }
+
+        gui.SameLine();
+        if (gui.Button("退出"))
+        {
+            RuntimeControlResult result = Context.Runtime.RequestShutdown();
+            _victoryStatus = result.Message;
+        }
+
+        if (!string.IsNullOrEmpty(_victoryStatus))
+        {
+            gui.Separator();
+            gui.Text(_victoryStatus);
+        }
+
+        gui.EndWindow();
     }
 
     private void ResolveMaterial()
