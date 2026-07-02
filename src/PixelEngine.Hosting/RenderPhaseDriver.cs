@@ -67,7 +67,11 @@ public sealed class RenderPhaseDriver(
             CellDebugOverlaysEnabled() ? _debugOverlays : null);
         _builder.Build(frame, _renderBuffer, _aux, context.Context.Profiler);
         ReadOnlySpan<Particle> activeParticles = _particles.ActiveReadOnly;
-        _particleCompositor.Stamp(activeParticles, _materials, camera, _renderBuffer, _aux, context.Context.Profiler);
+        if (_sink.ParticleRenderMode == ParticleRenderMode.CpuStamp)
+        {
+            _particleCompositor.Stamp(activeParticles, _materials, camera, _renderBuffer, _aux, context.Context.Profiler);
+        }
+
         _presentCamera = camera;
         _frameBuilt = true;
     }

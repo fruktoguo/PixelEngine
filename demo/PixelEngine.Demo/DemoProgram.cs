@@ -124,6 +124,7 @@ public static class DemoProgram
         }
 
         PixelEngine.Rendering.RenderWindow window = engine.AttachWindowRuntime();
+        ApplyParticleRenderMode(engine, options);
         DemoWindowScriptedInput? scriptedInput = null;
         DemoWindowScriptedProbe? scriptedProbe = null;
         DemoReactionTemperatureProbe? reactionProbe = null;
@@ -203,6 +204,38 @@ public static class DemoProgram
         }
 
         engine.Run();
+    }
+
+    private static void ApplyParticleRenderMode(Engine engine, DemoStartupOptions options)
+    {
+        if (!options.ParticleRenderMode.HasValue)
+        {
+            return;
+        }
+
+        RenderPipeline pipeline = engine.Context.GetService<RenderPipeline>();
+        pipeline.Settings.ParticleRenderMode = options.ParticleRenderMode.Value;
+        bool gpuAvailable = pipeline.CanRenderParticlesOnGpu;
+        ParticleRenderMode effective = gpuAvailable
+            ? ParticleRenderMode.GpuPointSprite
+            : ParticleRenderMode.CpuStamp;
+        Console.WriteLine(
+            $"粒子渲染模式：requested={ParticleRenderModeName(options.ParticleRenderMode.Value)}, " +
+            $"effective={ParticleRenderModeName(effective)}, gpu_available={gpuAvailable}。");
+        if (options.ParticleRenderMode.Value == ParticleRenderMode.GpuPointSprite && !gpuAvailable)
+        {
+            Console.WriteLine("GPU 粒子模式不可用：需要 GL compute 能力门控与 GpuParticlesEnabled 同时可用，本次不会静默当作 GPU 样本。");
+        }
+    }
+
+    private static string ParticleRenderModeName(ParticleRenderMode mode)
+    {
+        return mode switch
+        {
+            ParticleRenderMode.CpuStamp => "cpu",
+            ParticleRenderMode.GpuPointSprite => "gpu",
+            _ => mode.ToString(),
+        };
     }
 
     private static double Sum(ReadOnlySpan<double> values)

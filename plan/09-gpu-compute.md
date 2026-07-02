@@ -130,7 +130,7 @@ cascade 层数 `RadianceCascadeCount`、每层角度/空间分辨率、射线步
 - [x] `RadianceCascadeCount`/角度/空间分辨率/射线步数作 `EngineConstants` 常量与质量档；模式默认关，已通过 G4 `ComputeFeatureSwitches` 与 `RenderPipelineSettings.RadianceCascades.Enabled` 双门控接入 plan/08 主线，显式启用时在 bloom 前应用 RC。
 
 ### 4.5 GPU 粒子 point-sprite（§3.5，架构 §9.3）
-- [x] `GpuParticleRenderer`：读 `plan/05` 粒子活跃前缀，POH 暂存→orphan VBO 上传仅 `activeCount` 个，稳态零 per-frame 托管分配。
+- [x] `GpuParticleRenderer`：读 `plan/05` 粒子活跃前缀，POH 暂存→orphan VBO 上传仅 `activeCount` 个，稳态零 per-frame 托管分配；Hosting 渲染相位已按 `IRenderFrameSink.ParticleRenderMode` 只在 CPU stamp 模式写入粒子，GPU point-sprite 可用时由 `RenderPipeline` 接管，避免同一批粒子双绘。
 - [x] `particle_pointsprite.vert`（SP-P1）：cell→屏幕变换（与 plan/08 相机一致 uniform）、`gl_PointSize`、按 material/colorVariant 顶点契约取色。
 - [x] `particle_pointsprite.frag`（SP-P2）：输出粒子色；发光粒子经第二 additive pass 写 emissive buffer 参与 bloom；加色混合 `glBlendFunc(GL_ONE,GL_ONE)`。
 - [x] `ParticleRenderMode { CpuStamp, GpuPointSprite }`（G4 控制），默认 CPU stamp，GPU 模式经显式重载热切换。
