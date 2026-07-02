@@ -227,6 +227,55 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 CI 矩阵证据预检要求真实 GitHub Actions 运行证据，不把本地 workflow 接线当作 plan/14 通过。
+    /// </summary>
+    [Fact]
+    public void CiMatrixEvidencePreflightRequiresWorkflowRunEvidence()
+    {
+        string script = ReadRepositoryFile("tools", "ci-matrix-evidence-preflight.ps1");
+        string ci = ReadRepositoryFile(".github", "workflows", "ci.yml");
+        string report = ReadRepositoryFile("docs", "benchmark-reports", "2026-07-02-ci-matrix-evidence.md");
+        string plan = ReadRepositoryFile("plan", "14-testing-benchmarking.md");
+
+        Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
+        Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
+        Assert.Contains("workflowRunReport", script, StringComparison.Ordinal);
+        Assert.Contains("benchmarkGuard", script, StringComparison.Ordinal);
+        Assert.Contains("buildTest", script, StringComparison.Ordinal);
+        Assert.Contains("verifyPublish", script, StringComparison.Ordinal);
+        Assert.Contains("testsRan=true", script, StringComparison.Ordinal);
+        Assert.Contains("win-arm64 当前 CI 设计应为 build-only", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_ci_manifest", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_ci_scope_evidence", script, StringComparison.Ordinal);
+        Assert.Contains("ci_matrix_evidence_attached_pending_review", script, StringComparison.Ordinal);
+        Assert.Contains("CI matrix evidence preflight failed", script, StringComparison.Ordinal);
+        Assert.Contains("exit 2", script, StringComparison.Ordinal);
+        Assert.Contains("exit 5", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("status \"passed\"", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("status = \"passed\"", script, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains("ci-evidence-build-test-${{ matrix.rid }}", ci, StringComparison.Ordinal);
+        Assert.Contains("ci-evidence-benchmark-guard", ci, StringComparison.Ordinal);
+        Assert.Contains("ci-evidence-verify-publish-${{ matrix.rid }}", ci, StringComparison.Ordinal);
+        Assert.Contains("ci-evidence:", ci, StringComparison.Ordinal);
+        Assert.Contains("Download CI evidence", ci, StringComparison.Ordinal);
+        Assert.Contains("Build CI evidence manifest", ci, StringComparison.Ordinal);
+        Assert.Contains("Preflight CI matrix evidence", ci, StringComparison.Ordinal);
+        Assert.Contains("ci-matrix-evidence-preflight.ps1", ci, StringComparison.Ordinal);
+        Assert.Contains("evidence.json", ci, StringComparison.Ordinal);
+        Assert.Contains("build-test-win-arm64.md", ci, StringComparison.Ordinal);
+        Assert.Contains("testsRan = $false", ci, StringComparison.Ordinal);
+        Assert.Contains("verify-publish-osx-arm64.md", ci, StringComparison.Ordinal);
+
+        Assert.Contains("tools/ci-matrix-evidence-preflight.ps1", report, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_ci_manifest", report, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_ci_scope_evidence", report, StringComparison.Ordinal);
+        Assert.Contains("ci_matrix_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        Assert.Contains("tools/ci-matrix-evidence-preflight.ps1", plan, StringComparison.Ordinal);
+        Assert.Contains("ci_matrix_evidence_attached_pending_review", plan, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证发行编译模式保持默认 R2R 运行时 light-up，AOT 显式 ISA 并跑 SIMD 反汇编探针。
     /// </summary>
     [Fact]

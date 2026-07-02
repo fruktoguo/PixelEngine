@@ -183,7 +183,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] `GcPauseBenchmark` 的 `[MemoryDiagnoser]` 报告稳态帧循环 Gen0/1/2 分配为 0（架构 §12.4、零分配纪律）。
 - [x] `DisassemblyGuard` 全绿：热方法无 `RNGCHKFAIL`、热 SIMD 方法出现 ymm/zmm（架构 §12.6/§17.3）。
 - [x] 性能回归门禁生效：故意劣化某热方法会使 CI 判失败（`AGENTS.md §7`，回归即 bug）。
-- [!] 6-RID build 全绿；可得 RID 的 `dotnet test` 全绿；CoreCLR/R2R 与 NativeAOT 两路径均验证通过；阻塞：workflow 已接线，本地无法证明 GitHub Actions 6-RID hosted runner 全绿，需真实 CI 运行结果（架构 §15、R5）。
+- [!] 6-RID build 全绿；可得 RID 的 `dotnet test` 全绿；CoreCLR/R2R 与 NativeAOT 两路径均验证通过；阻塞：workflow 已接线，本地无法证明 GitHub Actions 6-RID hosted runner 全绿，需真实 CI 运行结果（架构 §15、R5）。当前 `.github/workflows/ci.yml` 会上传 `ci-evidence-*` artifacts，并在 `ci-evidence` 汇总 job 中生成 manifest 后调用 `tools/ci-matrix-evidence-preflight.ps1`；缺证据时保持阻塞，证据齐全也仅为 `ci_matrix_evidence_attached_pending_review`，仍需人工确认对应 GitHub Actions run 的 job 结论。
 - [x] §6 的「测试条目↔各 plan 验收」映射完整：各 plan 文档「验收标准」中需自动化的条目都有本文件对应测试 / 基准支撑（`AGENTS.md §7`）。
 
 ---
