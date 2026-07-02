@@ -666,6 +666,32 @@ jobs:
             "| sha | ${{ github.sha }} |",
             "| conclusion | ${{ job.status }} |"
           ) | Set-Content -Path artifacts/release-evidence/github-release-upload.md -Encoding UTF8
+          @(
+            "# Deterministic hash evidence",
+            "",
+            "| Key | Value |",
+            "|---|---|",
+            "| run_id | ${{ github.run_id }} |",
+            "| sha | ${{ github.sha }} |",
+            "| conclusion | blocked_missing_reproducible_rebuild |",
+            "",
+            "## Detail",
+            "",
+            "This release run generated package SHA256 values, but it did not rebuild every package from the same inputs in an isolated second pass and compare byte-identical hashes. Do not treat this report as deterministic build success."
+          ) | Set-Content -Path artifacts/release-evidence/deterministic-hash.md -Encoding UTF8
+          @(
+            "# R2R light-up evidence",
+            "",
+            "| Key | Value |",
+            "|---|---|",
+            "| run_id | ${{ github.run_id }} |",
+            "| sha | ${{ github.sha }} |",
+            "| conclusion | blocked_missing_target_disassembly |",
+            "",
+            "## Detail",
+            "",
+            "This release run verifies R2R publish layout and smoke execution, but it does not capture Tier-1 target-machine disassembly proving runtime SIMD light-up on representative AVX2/AVX-512 hardware. Do not treat this report as R2R light-up success."
+          ) | Set-Content -Path artifacts/release-evidence/r2r-lightup.md -Encoding UTF8
           $rids = @('win-x64', 'win-arm64', 'linux-x64', 'linux-arm64', 'osx-x64', 'osx-arm64')
           $channels = @('r2r', 'aot')
           $artifacts = [ordered]@{}
