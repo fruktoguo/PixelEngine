@@ -51,3 +51,13 @@ RID: win-x64
 本机 `win-x64` Release 窗口路径已验证有限长跑后自然退出：非 Editor 路径 3600 tick，Editor 路径 1200 tick。两条路径都装配 Content、Simulation、Physics、Audio、Scripting、Rendering 与 Input；Editor 路径额外装配 EditorRenderBridge 与 Hexa ImGui OpenGL3 后端。
 
 该报告只覆盖本机进程级退出码、运行耗时和峰值工作集；不替代 6-RID runner、专用 native leak detector、GPU driver 资源审计、OpenAL/Box2D 工具级泄漏报告或人工玩法验收。
+
+## Native Leak 预检入口
+
+为避免进程级长跑被误当作 native 泄漏验收，新增统一预检脚本：
+
+```pwsh
+./tools/native-leak-preflight.ps1 -RunProcessSmoke -IncludeEditor
+```
+
+未传入 `-DetectorReportPath` 时，脚本会写出 `artifacts/native-leak-preflight/native-leak-preflight.md`，状态为 `process_smoke_only` 或 `blocked_missing_detector`，并以非零退出；仅用于本地记录 smoke 报告时可追加 `-AllowBlocked`。只有附带专用 detector 报告时才会进入 `detector_report_attached`，且仍需人工确认报告确实覆盖 GL、OpenAL、Box2D 与 ALC 释放路径无泄漏。
