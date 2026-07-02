@@ -173,6 +173,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string auditPs1 = ReadRepositoryFile("tools", "audit-release-artifacts.ps1");
         string auditSh = ReadRepositoryFile("tools", "audit-release-artifacts.sh");
         string evidence = ReadRepositoryFile("tools", "release-evidence-preflight.ps1");
+        string release = ReadRepositoryFile(".github", "workflows", "release.yml");
+        string example = ReadRepositoryFile("docs", "release-reports", "release-evidence-manifest.example.json");
         string releaseReport = ReadRepositoryFile("docs", "release-reports", "2026-07-02-win-x64-publish.md");
         string plan = ReadRepositoryFile("plan", "15-build-packaging-distribution.md");
 
@@ -191,6 +193,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("SHA256SUMS 条目数与 package 数不一致", auditPs1, StringComparison.Ordinal);
 
         Assert.Contains("EvidenceManifestPath", evidence, StringComparison.Ordinal);
+        Assert.Contains("schemaVersion", evidence, StringComparison.Ordinal);
+        Assert.Contains("未知 RID", evidence, StringComparison.Ordinal);
+        Assert.Contains("未知 channel", evidence, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_release_manifest", evidence, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_release_scope_evidence", evidence, StringComparison.Ordinal);
         Assert.Contains("release_evidence_attached_pending_review", evidence, StringComparison.Ordinal);
@@ -206,7 +211,28 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         Assert.Contains("tools/release-evidence-preflight.ps1", releaseReport, StringComparison.Ordinal);
         Assert.Contains("release_evidence_attached_pending_review", releaseReport, StringComparison.Ordinal);
+        Assert.Contains("release-evidence-manifest.example.json", releaseReport, StringComparison.Ordinal);
         Assert.Contains("tools/release-evidence-preflight.ps1", plan, StringComparison.Ordinal);
+
+        Assert.Contains("release-evidence-", release, StringComparison.Ordinal);
+        Assert.Contains("Upload publish evidence", release, StringComparison.Ordinal);
+        Assert.Contains("Upload verify evidence", release, StringComparison.Ordinal);
+        Assert.Contains("Upload package evidence", release, StringComparison.Ordinal);
+        Assert.Contains("Download release evidence", release, StringComparison.Ordinal);
+        Assert.Contains("Build release evidence manifest", release, StringComparison.Ordinal);
+        Assert.Contains("Preflight release evidence", release, StringComparison.Ordinal);
+        Assert.Contains("release-evidence-preflight.ps1", release, StringComparison.Ordinal);
+        Assert.Contains("evidence.json", release, StringComparison.Ordinal);
+        Assert.Contains("r2rLightupReport", release, StringComparison.Ordinal);
+        Assert.Contains("deterministicHashReport", release, StringComparison.Ordinal);
+
+        Assert.Contains("\"schemaVersion\": 1", example, StringComparison.Ordinal);
+        Assert.Contains("\"workflowRunReport\"", example, StringComparison.Ordinal);
+        Assert.Contains("\"r2rLightupReport\"", example, StringComparison.Ordinal);
+        Assert.Contains("\"githubRelease\"", example, StringComparison.Ordinal);
+        Assert.Contains("\"simdProbe\"", example, StringComparison.Ordinal);
+        Assert.Contains("\"codesignReport\"", example, StringComparison.Ordinal);
+        Assert.Contains("\"notarizationReport\"", example, StringComparison.Ordinal);
     }
 
     /// <summary>

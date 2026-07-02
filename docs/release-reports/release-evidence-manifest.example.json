@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "workflowRunReport": "artifacts/release-evidence/workflow-run.md",
+  "deterministicHashReport": "artifacts/release-evidence/deterministic-hash.md",
+  "r2rLightupReport": "artifacts/release-evidence/r2r-lightup.md",
+  "githubRelease": {
+    "uploadReport": "artifacts/release-evidence/github-release-upload.md"
+  },
+  "artifacts": {
+    "win-x64": {
+      "r2r": {
+        "publishReport": "artifacts/release-evidence/win-x64-r2r-publish.md",
+        "verifyReport": "artifacts/release-evidence/win-x64-r2r-verify.md",
+        "package": "artifacts/package/PixelEngine-Demo-0.1.0-win-x64-r2r.zip",
+        "checksum": "artifacts/package/SHA256SUMS"
+      },
+      "aot": {
+        "publishReport": "artifacts/release-evidence/win-x64-aot-publish.md",
+        "verifyReport": "artifacts/release-evidence/win-x64-aot-verify.md",
+        "simdProbe": "artifacts/release-evidence/win-x64-aot-simd.md",
+        "package": "artifacts/package/PixelEngine-Demo-0.1.0-win-x64-aot.zip",
+        "checksum": "artifacts/package/SHA256SUMS"
+      }
+    },
+    "osx-arm64": {
+      "r2r": {
+        "publishReport": "artifacts/release-evidence/osx-arm64-r2r-publish.md",
+        "verifyReport": "artifacts/release-evidence/osx-arm64-r2r-verify.md",
+        "codesignReport": "artifacts/release-evidence/osx-arm64-r2r-codesign.md",
+        "notarizationReport": "artifacts/release-evidence/osx-arm64-r2r-notarization.md",
+        "package": "artifacts/package/PixelEngine-Demo-0.1.0-osx-arm64-r2r.tar.gz",
+        "checksum": "artifacts/package/SHA256SUMS"
+      },
+      "aot": {
+        "publishReport": "artifacts/release-evidence/osx-arm64-aot-publish.md",
+        "verifyReport": "artifacts/release-evidence/osx-arm64-aot-verify.md",
+        "simdProbe": "artifacts/release-evidence/osx-arm64-aot-simd.md",
+        "codesignReport": "artifacts/release-evidence/osx-arm64-aot-codesign.md",
+        "notarizationReport": "artifacts/release-evidence/osx-arm64-aot-notarization.md",
+        "package": "artifacts/package/PixelEngine-Demo-0.1.0-osx-arm64-aot.tar.gz",
+        "checksum": "artifacts/package/SHA256SUMS"
+      }
+    }
+  }
+}
