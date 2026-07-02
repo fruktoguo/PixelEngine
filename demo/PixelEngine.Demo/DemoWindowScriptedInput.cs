@@ -55,6 +55,12 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
     {
         _ = context;
         int frame = FramesInjected++;
+        if (_routeProbe)
+        {
+            InjectRouteProbe(frame);
+            return;
+        }
+
         int keyCount = 0;
         int buttonCount = 0;
         Point2F target = BrushTargetWorld;
@@ -71,29 +77,13 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
         }
         else if (frame == 7)
         {
-            target = _routeProbe ? RouteColumnTargetWorld : ExplosionTargetWorld;
+            target = ExplosionTargetWorld;
             _buttons[buttonCount++] = MouseButton.Middle;
         }
         else if (frame is >= 9 and <= 16)
         {
             target = new Point2F(BridgeCutTargetWorld.X, BridgeCutTargetWorld.Y + (frame - 12));
             _buttons[buttonCount++] = MouseButton.Right;
-        }
-        else if (_routeProbe && frame is >= 21 and <= 88)
-        {
-            int sweep = frame - 21;
-            float sweepX = 142f + (sweep % 24);
-            float sweepY = 252f + (sweep / 24 * 8f);
-            target = new Point2F(sweepX, sweepY);
-            _buttons[buttonCount++] = MouseButton.Right;
-        }
-        else if (_routeProbe && frame >= 92)
-        {
-            _keys[keyCount++] = Key.D;
-            if (frame % 48 is 14 or 15)
-            {
-                _keys[keyCount++] = Key.Space;
-            }
         }
         else if (frame is >= 18 and <= 36)
         {
@@ -106,6 +96,80 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
         else if (frame == 70)
         {
             _keys[keyCount++] = Key.Escape;
+        }
+
+        Point2F screen = _camera.WorldToScreen(target.X, target.Y);
+        _input.Update(
+            _keys.AsSpan(0, keyCount),
+            _buttons.AsSpan(0, buttonCount),
+            screen.X,
+            screen.Y,
+            wheelY);
+    }
+
+    private void InjectRouteProbe(int frame)
+    {
+        int keyCount = 0;
+        int buttonCount = 0;
+        Point2F target = RouteColumnTargetWorld;
+        float wheelY = 0f;
+
+        if (frame == 2)
+        {
+            _keys[keyCount++] = Key.Digit6;
+            wheelY = 1f;
+        }
+        else if (frame is >= 3 and <= 10)
+        {
+            wheelY = 1f;
+        }
+        else if (frame is >= 12 and <= 83)
+        {
+            int sweep = frame - 12;
+            float sweepX = 136f + (sweep % 8 * 6f);
+            float sweepY = 232f + (sweep / 8 * 6f);
+            target = new Point2F(sweepX, sweepY);
+            _buttons[buttonCount++] = MouseButton.Right;
+        }
+        else if (frame is >= 84 and <= 147)
+        {
+            int sweep = frame - 84;
+            float sweepX = 250f + (sweep % 8 * 12f);
+            float sweepY = 276f + (sweep / 8 * 4f);
+            target = new Point2F(sweepX, sweepY);
+            _buttons[buttonCount++] = MouseButton.Right;
+        }
+        else if (frame is >= 148 and <= 211)
+        {
+            int sweep = frame - 148;
+            float sweepX = 410f + (sweep % 8 * 10f);
+            float sweepY = 224f + (sweep / 8 * 6f);
+            target = new Point2F(sweepX, sweepY);
+            _buttons[buttonCount++] = MouseButton.Right;
+        }
+        else if (frame is >= 212 and <= 267)
+        {
+            int sweep = frame - 212;
+            float sweepX = 486f + (sweep % 7 * 7f);
+            float sweepY = 198f + (sweep / 7 * 8f);
+            target = new Point2F(sweepX, sweepY);
+            _buttons[buttonCount++] = MouseButton.Right;
+        }
+        else if (frame is >= 268 and <= 331)
+        {
+            int sweep = frame - 268;
+            float sweepX = 336f + (sweep % 8 * 9f);
+            float sweepY = 258f + (sweep / 8 * 5f);
+            target = new Point2F(sweepX, sweepY);
+            _buttons[buttonCount++] = MouseButton.Right;
+        }
+        else if (frame >= 356)
+        {
+            _keys[keyCount++] = Key.D;
+            if (frame % 48 is 14 or 15)
+            {
+                _keys[keyCount++] = Key.Space;
+            }
         }
 
         Point2F screen = _camera.WorldToScreen(target.X, target.Y);

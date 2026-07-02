@@ -84,6 +84,38 @@ public sealed class ConvexDecomposerTests
         Assert.Equal(4, pieces[0].Count);
     }
 
+    /// <summary>
+    /// 验证多段凹形在合并相邻凸片时不会因凸包中间点数超过 Box2D 单片顶点上限而越界。
+    /// </summary>
+    [Fact]
+    public void DecomposeConcavePolygonWithWideHullMergeDoesNotOverflow()
+    {
+        Vector2[] polygon =
+        [
+            new(0, 0),
+            new(7, 0),
+            new(7, 2),
+            new(5, 2),
+            new(5, 4),
+            new(3, 3),
+            new(1, 4),
+            new(1, 2),
+            new(0, 2),
+        ];
+        Span<ConvexPolygon> pieces = stackalloc ConvexPolygon[16];
+        Span<Vector2> vertices = stackalloc Vector2[8];
+
+        int count = ConvexDecomposer.Decompose(polygon, pieces);
+
+        Assert.InRange(count, 1, 16);
+        for (int i = 0; i < count; i++)
+        {
+            int written = pieces[i].CopyTo(vertices);
+            Assert.InRange(written, 3, 8);
+            Assert.True(ConvexDecomposer.IsConvex(vertices[..written]));
+        }
+    }
+
     private static float SignedArea(ReadOnlySpan<Vector2> polygon)
     {
         float area = 0f;
