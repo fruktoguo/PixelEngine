@@ -175,7 +175,15 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             switch (command.Kind)
             {
                 case ScriptCommandKind.SetCell:
-                    Grid.SetMaterial(command.X, command.Y, command.Material.Value);
+                    if (command.Material.Value == 0)
+                    {
+                        Kernel.ClearCellAtInputPhase(command.X, command.Y);
+                    }
+                    else
+                    {
+                        Kernel.EditCellAtInputPhase(command.X, command.Y, command.Material.Value, persistentFlags: 0);
+                    }
+
                     break;
                 case ScriptCommandKind.Paint:
                     Paint(command.X, command.Y, command.Width, command.Material.Value);
@@ -330,7 +338,14 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 int dy = y - centerY;
                 if ((dx * dx) + (dy * dy) <= radiusSquared)
                 {
-                    Grid.SetMaterial(x, y, material);
+                    if (material == 0)
+                    {
+                        Kernel.ClearCellAtInputPhase(x, y);
+                    }
+                    else
+                    {
+                        Kernel.EditCellAtInputPhase(x, y, material, persistentFlags: 0);
+                    }
                 }
             }
         }

@@ -79,6 +79,7 @@ public sealed class SimulationPhaseDriver(
 
     private void RunParticleToCell(EngineTickContext context)
     {
+        _ = _scriptContext?.FlushCellCommands();
         Particles.ResetTickStats();
         Particles.IntegrateAndAdvance(context.Context.Jobs, Grid);
         Particles.ResolveDeposits(Kernel, Grid);
@@ -103,7 +104,6 @@ public sealed class SimulationPhaseDriver(
 
     private void RunDirtyRectSwap(EngineTickContext context)
     {
-        _ = _scriptContext?.FlushCellCommands();
         Kernel.SwapDirtyRects();
     }
 

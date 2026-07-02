@@ -7,7 +7,7 @@ namespace PixelEngine.Demo;
 /// </summary>
 public sealed class SparkEmitter : Behaviour
 {
-    private MaterialId _sparkMaterial;
+    private MaterialId _sparkMaterial = MaterialId.Invalid;
     private float _timer;
     private int _burstIndex;
 

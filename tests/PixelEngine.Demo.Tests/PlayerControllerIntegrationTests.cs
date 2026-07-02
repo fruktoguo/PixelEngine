@@ -1,4 +1,5 @@
 using PixelEngine.Hosting;
+using PixelEngine.Core.Time;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
@@ -224,6 +225,55 @@ public sealed class PlayerControllerIntegrationTests
         engine.RunHeadlessTicks(1);
 
         Assert.Equal((ushort)0, grid.MaterialAt(12, 15));
+    }
+
+    /// <summary>
+    /// 验证材质喷口会按公开脚本 API 写入 cell、生成粒子、播放音效并请求点光源。
+    /// </summary>
+    [Fact]
+    public void MaterialEmitterWritesCellsParticlesAudioAndLighting()
+    {
+        RecordingAudioApi audio = new();
+        MaterialTable materials = DemoMaterials();
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        MaterialEmitter emitter = scene.CreateEntity().AddComponent<MaterialEmitter>();
+        emitter.X = 18f;
+        emitter.Y = 14f;
+        emitter.MaterialName = "stone";
+        emitter.Radius = 1;
+        emitter.IntervalSeconds = 1f;
+        emitter.ParticleCount = 3;
+        emitter.AudioCue = "splash_water.wav";
+        emitter.AudioCooldownSeconds = 0f;
+        emitter.AddLight = true;
+        emitter.LightRadius = 24f;
+        emitter.LightIntensity = 0.5f;
+        ushort afterParticleToCell = ushort.MaxValue;
+        ushort afterCa = ushort.MaxValue;
+        ushort afterDirtySwap = ushort.MaxValue;
+        engine.Phases.Register(EnginePhase.ParticleToCell, _ => afterParticleToCell = grid.MaterialAt(18, 14));
+        engine.Phases.Register(EnginePhase.CaSimulation, _ => afterCa = grid.MaterialAt(18, 14));
+        engine.Phases.Register(EnginePhase.DirtyRectSwap, _ => afterDirtySwap = grid.MaterialAt(18, 14));
+
+        FrameTiming timing = engine.RunOneTick(1.0 / 60.0);
+
+        Assert.True(timing.RunSim);
+        Assert.False(emitter.Faulted, emitter.LastException?.ToString());
+        Assert.Equal(string.Empty, emitter.BlockedReason);
+        Assert.Equal(stone, afterParticleToCell);
+        Assert.Equal(stone, afterCa);
+        Assert.Equal(stone, afterDirtySwap);
+        Assert.Equal(stone, grid.MaterialAt(18, 14));
+        Assert.True(engine.Context.GetService<ParticleSystem>().ActiveCount >= emitter.ParticleCount);
+        Assert.Equal("splash_water.wav", audio.LastCue);
+        Assert.Equal(18f, audio.LastX, precision: 3);
+        Assert.Equal(14f, audio.LastY, precision: 3);
+
+        ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
+        Assert.Equal(1, lighting.PointLights.Length);
+        Assert.Equal(18f, lighting.PointLights[0].X, precision: 3);
+        Assert.Equal(14f, lighting.PointLights[0].Y, precision: 3);
     }
 
     /// <summary>
