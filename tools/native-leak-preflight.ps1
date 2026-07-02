@@ -307,6 +307,11 @@ if ($evidence.Count -eq 4) {
     $detail = "External detector evidence manifest attached. Four required scopes are present and SHA256 hashes were recorded. Human review must confirm the reports cover GL, OpenAL, Box2D and ALC with no leaks before plan/18 can be unblocked."
     Write-NativeLeakReport -Path $reportPath -Status "detector_evidence_attached_pending_review" -Detector $DetectorName -DetectorReport $DetectorReportPath -Evidence $evidence -Runs $runs -Detail $detail
     Write-Host "Native leak preflight detector_evidence_attached_pending_review. Report: $reportPath"
+    if (-not $AllowBlocked) {
+        [Console]::Error.WriteLine("Native leak preflight failed: detector_evidence_attached_pending_review")
+        exit 2
+    }
+
     exit 0
 }
 
@@ -329,3 +334,7 @@ $relativeDetectorReport = ConvertTo-RelativePath -Root $root -Path $DetectorRepo
 $detail = "External detector report attached. detector=$DetectorName report=$relativeDetectorReport sha256=$($hash.Hash). Human review must confirm the report covers GL, OpenAL, Box2D and ALC with no leaks before plan/18 can be unblocked."
 Write-NativeLeakReport -Path $reportPath -Status "detector_report_attached_pending_review" -Detector $DetectorName -DetectorReport $relativeDetectorReport -Evidence $evidence -Runs $runs -Detail $detail
 Write-Host "Native leak preflight detector_report_attached_pending_review. Report: $reportPath"
+if (-not $AllowBlocked) {
+    [Console]::Error.WriteLine("Native leak preflight failed: detector_report_attached_pending_review")
+    exit 2
+}
