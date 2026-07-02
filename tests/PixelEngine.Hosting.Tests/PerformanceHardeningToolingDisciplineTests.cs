@@ -109,8 +109,12 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string plan = ReadRepositoryFile("plan", "18-hosting-runtime.md");
 
         Assert.Contains("DetectorReportPath", script, StringComparison.Ordinal);
+        Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_detector", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_scope_evidence", script, StringComparison.Ordinal);
         Assert.Contains("process_smoke_only", script, StringComparison.Ordinal);
+        Assert.Contains("detector_evidence_attached_pending_review", script, StringComparison.Ordinal);
+        Assert.Contains("detector_report_attached_pending_review", script, StringComparison.Ordinal);
         Assert.Contains("Native leak preflight failed", script, StringComparison.Ordinal);
         Assert.Contains("RunProcessSmoke", script, StringComparison.Ordinal);
         Assert.Contains("PeakWorkingSetMB", script, StringComparison.Ordinal);
@@ -120,6 +124,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("Box2D", script, StringComparison.Ordinal);
         Assert.Contains("ALC", script, StringComparison.Ordinal);
         Assert.Contains("exit 2", script, StringComparison.Ordinal);
+        Assert.Contains("exit 5", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("status \"passed\"", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("status = \"passed\"", script, StringComparison.OrdinalIgnoreCase);
 
         Assert.Contains("tools/native-leak-preflight.ps1", report, StringComparison.Ordinal);
         Assert.Contains("process_smoke_only", report, StringComparison.Ordinal);
