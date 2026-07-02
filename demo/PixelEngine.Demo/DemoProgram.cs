@@ -126,6 +126,7 @@ public static class DemoProgram
         PixelEngine.Rendering.RenderWindow window = engine.AttachWindowRuntime();
         DemoWindowScriptedInput? scriptedInput = null;
         DemoWindowScriptedProbe? scriptedProbe = null;
+        DemoReactionTemperatureProbe? reactionProbe = null;
         if (options.ScriptedWindowDemo)
         {
             scriptedInput = new DemoWindowScriptedInput(
@@ -140,6 +141,16 @@ public static class DemoProgram
                 engine.Context.GetService<ScriptCameraApi>(),
                 engine.Context.GetService<ScriptCameraSynchronizer>());
             scriptedProbe.RegisterPhases(engine.Phases);
+            if (IsReactionProbeScene(options.Scene))
+            {
+                reactionProbe = new DemoReactionTemperatureProbe(
+                    engine.Context.GetService<CellGrid>(),
+                    engine.Context.GetService<TemperatureField>(),
+                    engine.Context.GetService<MaterialTable>(),
+                    engine.Context.GetService<SimulationKernel>());
+                reactionProbe.RegisterPhases(engine.Phases);
+            }
+
             Console.WriteLine("脚本化窗口输入已启用。");
         }
 
@@ -166,7 +177,7 @@ public static class DemoProgram
                 $"sub_top={SlowestSubPhase(engine.Context.Profiler.LastSubFrame)}。");
             if (scriptedInput is not null)
             {
-                WriteScriptedWindowSummary(engine, scriptedInput, scriptedProbe);
+                WriteScriptedWindowSummary(engine, scriptedInput, scriptedProbe, reactionProbe);
             }
 
             return;
@@ -219,7 +230,8 @@ public static class DemoProgram
     private static void WriteScriptedWindowSummary(
         Engine engine,
         DemoWindowScriptedInput scriptedInput,
-        DemoWindowScriptedProbe? scriptedProbe)
+        DemoWindowScriptedProbe? scriptedProbe,
+        DemoReactionTemperatureProbe? reactionProbe)
     {
         ScriptScene scene = engine.Context.GetService<ScriptScene>();
         DemoHud? hud = FindBehaviour<DemoHud>(scene);
@@ -287,7 +299,29 @@ public static class DemoProgram
             $"camera_x_range=({scriptedProbe?.CameraMinX ?? camera.CenterX:0.00},{scriptedProbe?.CameraMaxX ?? camera.CenterX:0.00}), " +
             $"render_origin_x_range=({scriptedProbe?.RenderOriginMinX ?? renderCamera.OriginWorldX:0.00},{scriptedProbe?.RenderOriginMaxX ?? renderCamera.OriginWorldX:0.00}), " +
             $"render_camera=({renderCamera.OriginWorldX:0.00},{renderCamera.OriginWorldY:0.00},{renderCamera.CellsPerPixel:0.000},{renderCamera.ViewportWidth}x{renderCamera.ViewportHeight}), " +
+            ReactionProbeSummary(reactionProbe) +
             $"player_center_material={playerCenterMaterial}。");
+    }
+
+    private static string ReactionProbeSummary(DemoReactionTemperatureProbe? probe)
+    {
+        return probe is null
+            ? string.Empty
+            :
+            $"reaction_probe_initialized={probe.Initialized}, " +
+            $"reactions_observed={probe.ReactionsObserved}, " +
+            $"phase_transitions_observed={probe.PhaseTransitionsObserved}, " +
+            $"reaction_cases=(lava_water={probe.LavaWater};molten_water={probe.MoltenWater};water_fire={probe.WaterFire};fire_wood={probe.FireWood};fire_oil={probe.FireOil};acid={probe.AcidCorrosion};steam_condense={probe.SteamCondense}), " +
+            $"phase_cases=(ice_melted={probe.IceMelted};water_boiled={probe.WaterBoiled};water_froze={probe.WaterFroze};lava_cooled={probe.LavaCooled};metal_melted={probe.MetalMelted};sand_glassed={probe.SandGlassed}), " +
+            $"probe_counts=({probe.CountSummary}), ";
+    }
+
+    private static bool IsReactionProbeScene(string scene)
+    {
+        return string.Equals(
+            Path.GetFileName(scene),
+            "lava-mine-reaction-probe.scene",
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private static TBehaviour? FindBehaviour<TBehaviour>(ScriptScene scene)

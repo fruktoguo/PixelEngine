@@ -32,6 +32,12 @@ dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --
 dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --no-build -- --no-hot-reload --window-ticks 80 --scripted-window-demo --content demo\PixelEngine.Demo\content --scene scenes\lava-mine-camera-probe.scene --log-dir artifacts\scripted-window-camera-probe-logs\runtime-3
 ```
 
+反应与温度相变窗口探针使用独立的空脚本场景，由 Demo 专用探针在真实窗口相位中布置玻璃容器内的材质样本，并在 CA/Temperature 后统计材质变化；它只验证真实窗口相位链路中的材质 before/after 变化，不代表反应和相变的视觉质量人工验收：
+
+```pwsh
+dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --no-build -- --no-hot-reload --window-ticks 180 --scripted-window-demo --content demo\PixelEngine.Demo\content --scene scenes\lava-mine-reaction-probe.scene --log-dir artifacts\scripted-window-reaction-probe-logs\runtime-7
+```
+
 ## 结果
 
 退出码：0。
@@ -102,6 +108,22 @@ RID: win-x64
 脚本化窗口输入摘要：frames=80, brush_material=stone, brush_radius=5, painted_material=13, explosions=1, last_explosion=(90.00,241.24), particles=29, max_particles=61, lights=2, max_lights=4, physics_destroyed=0, physics_created=0, max_physics_destroyed=2, max_physics_created=2, audio_played=0, audio_drained=0, max_audio_played=0, max_audio_drained=22, audio_loaded=19, hud_blocked=none, pause_open=True, goal_reached=False, player_health=100.00, damage_events=0, respawns=0, spawn_probe=False, player=(311.85,273.20,6.00,12.00), player_center=(314.85,279.20), camera_center=(314.87,270.00), camera_zoom=4.00, camera_samples=79, camera_followed=True, render_camera_synced=True, player_x_range=(303.00,314.85), camera_x_range=(303.00,336.29), render_origin_x_range=(143.00,176.29), render_camera=(154.87,180.00,0.250,1280x720), player_center_material=0。
 ```
 
+反应与温度相变窗口探针关键输出：
+
+```text
+PixelEngine.Demo 0.1.0.0
+RID: win-x64
+内容包已加载：18 个材质，22 条反应，19 个音频 clip，Physics 已接入。
+脚本程序集已注册；热重载已由参数关闭。
+脚本运行时已接入 Hosting/Simulation 后端。
+脚本化窗口输入已启用。
+窗口运行时已接入 Rendering/Input 后端。
+窗口短跑完成：frames=180, requested=180。
+窗口短跑耗时：elapsed_ms=6881.72, avg_tick_ms=38.23, last_profile_ms=30.40。
+窗口短跑最慢相位：main_top=BuildRenderBuffer=23.24, sub_top=RenderBufferBuild=22.78。
+脚本化窗口输入摘要：frames=180, brush_material=<missing>, brush_radius=0, painted_material=0, explosions=0, last_explosion=(0.00,0.00), particles=2052, max_particles=5003, lights=0, max_lights=0, physics_destroyed=0, physics_created=0, max_physics_destroyed=0, max_physics_created=0, audio_played=0, audio_drained=0, max_audio_played=0, max_audio_drained=316, audio_loaded=19, hud_blocked=none, pause_open=<missing>, goal_reached=<missing>, player_health=0.00, damage_events=0, respawns=0, spawn_probe=<missing>, player=(0.00,0.00,0.00,0.00), player_center=(0.00,0.00), camera_center=(320.00,180.00), camera_zoom=1.00, camera_samples=0, camera_followed=False, render_camera_synced=True, player_x_range=(0.00,0.00), camera_x_range=(0.00,0.00), render_origin_x_range=(0.00,0.00), render_camera=(-320.00,-180.00,1.000,1280x720), reaction_probe_initialized=True, reactions_observed=True, phase_transitions_observed=True, reaction_cases=(lava_water=True;molten_water=True;water_fire=True;fire_wood=True;fire_oil=True;acid=True;steam_condense=True), phase_cases=(ice_melted=True;water_boiled=True;water_froze=True;lava_cooled=True;metal_melted=True;sand_glassed=True), probe_counts=(water=444;lava=0;stone=1086;steam=600;fire=1;smoke=954;wood=36;oil=0;acid=432;acid_gas=430;ice=1336;metal=644;molten_metal=7;sand=15;glass=1335), player_center_material=0。
+```
+
 ## 结论
 
 该短跑证明真实窗口模式下，窗口创建、Silk 输入采样、脚本输入覆盖、脚本相机坐标转换、材质笔刷、爆破工具、自由粒子、脚本点光、Physics 刚体拆分、音频事件抽取、HUD 组件绑定、暂停菜单打开与渲染相位可以在同一运行态链路中自动触发并自然退出。
@@ -112,4 +134,6 @@ RID: win-x64
 
 相机跟随窗口探针额外证明真实窗口相位中 `CameraFollow` 可以在玩家移动后更新脚本相机中心，`ScriptCameraSynchronizer` 可以把脚本快照同步为 Rendering `CameraState`：本次有效相机采样 79 帧，`player_x_range=(303.00,314.85)`，`camera_x_range=(303.00,336.29)`，`render_origin_x_range=(143.00,176.29)`，并输出 `camera_followed=True` 与 `render_camera_synced=True`。
 
-这些验证不等同于人工窗口验收：它们不证明 HUD 像素布局、鼠标真实设备手感、音频听感、视觉 bloom/fog 质量、完整通关路线或开发态热重载体验。`max_audio_played=0` 表示本次只证明事件进入音频相位并被抽取，不证明实际可听播放；主线短跑的 `goal_reached=False` 表示固定输入脚本未覆盖完整通关路线，探针场景也不替代从出生点抵达出口的玩法验收；旧主线短跑的 `avg_tick_ms=71.66` 与 `last_profile_ms=31.27` 是空世界渲染快路径修复前的样本，不代表当前空场景帧预算，后者见 `docs/runtime-reports/2026-07-02-demo-window-smoke.md`。
+反应与温度相变窗口探针额外证明真实窗口相位中，已加载 `ReactionTable` 与 `TemperatureField.ApplyPhaseTransitions` 会在 CA/Temperature 后产生目标材质变化：`reactions_observed=True` 覆盖熔岩遇水、熔融金属遇水、水灭火、火烧木、火烧油、酸腐蚀与蒸汽冷凝；`phase_transitions_observed=True` 覆盖冰融化、水沸腾、水冻结、熔岩冷却、金属熔化与沙烤玻璃。
+
+这些验证不等同于人工窗口验收：它们不证明 HUD 像素布局、鼠标真实设备手感、音频听感、反应/相变视觉质量、视觉 bloom/fog 质量、完整通关路线或开发态热重载体验。`max_audio_played=0` 表示本次只证明事件进入音频相位并被抽取，不证明实际可听播放；主线短跑的 `goal_reached=False` 表示固定输入脚本未覆盖完整通关路线，探针场景也不替代从出生点抵达出口的玩法验收；旧主线短跑的 `avg_tick_ms=71.66` 与 `last_profile_ms=31.27` 是空世界渲染快路径修复前的样本，不代表当前空场景帧预算，后者见 `docs/runtime-reports/2026-07-02-demo-window-smoke.md`。
