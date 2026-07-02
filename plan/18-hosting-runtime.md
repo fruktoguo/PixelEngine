@@ -93,7 +93,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [x] `EngineBuilder().…​.Build().Run()` 能装配全部子系统并跑稳定 60fps 空场景。Rendering/Audio/Physics/Scripting/Editor 已有真实运行入口，`--window-ticks 3600` 本机窗口长跑已验证可有限运行并退出；有限窗口短跑会输出 `elapsed_ms`/`avg_tick_ms`/`last_profile_ms` 与最慢相位，`docs/runtime-reports/2026-07-02-demo-window-smoke.md` 已记录 `empty-window-probe.scene` 真实空 scene 120 tick 旧样本曾因 `BuildRenderBuffer=25.52` / `RenderBufferBuild=25.51` 超预算，后续修复纯矢量 debug overlay 误传与透明 Empty 全世界清屏路径后，120 tick 复验为 `avg_tick_ms=12.82`、`last_profile_ms=7.79`，600 tick 复验为 `avg_tick_ms=7.83`、`last_profile_ms=7.20`，均低于 16.67ms 帧预算。
 - [x] 12 相位顺序与架构 §3.3 完全一致;用诊断计时器可见各相位耗时。
 - [x] sim 降到 30Hz 时画面仍 60fps 出帧、世界慢放、无 death spiral(注入人工过载验证)。
-- [!] 过载降级按五级顺序触发且可在编辑器观测/覆盖。阻塞:五级顺序与 Sim30Hz 已测试,Editor 运行入口、Hexa ImGui OpenGL3 后端与诊断面板已接入，并通过 60 tick Editor 窗口短跑；脚本化窗口短跑已证明 Demo HUD 绑定诊断数据且 Escape 可进入暂停菜单状态，但仍缺真实窗口 UI 布局、鼠标点击和 Editor 覆盖操作验收。
+- [!] 过载降级按五级顺序触发且可在编辑器观测/覆盖。阻塞:五级顺序与 Sim30Hz 已测试,Editor 运行入口、Hexa ImGui OpenGL3 后端与诊断面板已接入，并通过 60 tick Editor 窗口短跑；脚本化窗口短跑已证明 Demo HUD 绑定诊断数据且 Escape 可进入暂停菜单状态；`tools/demo-manual-acceptance-preflight.ps1` 的 `hudMenuEditorVideo` scope 负责索引真实窗口 UI 布局、鼠标点击、Editor dockspace/覆盖操作和菜单链路证据，但 `manual_evidence_attached_pending_review` 仍不等于验收通过。仍缺对应人工复核证据。
 - [x] 脚本经 `EngineContext` 能读写世界/建刚体/播音效,写操作落在正确相位(配合 plan/11 测试)。AudioService 与 PhysicsSystem 后端已注册，脚本可见 Physics 建/查/控/毁刚体命令与角色移动已在 phase 8 step 前 flush。
 - [x] Play/Edit/Step 切换正确:进入 Play 快照、退出回滚到编辑态,脚本 OnStart/OnDestroy 正确触发。world 快照/回滚已由 `EngineWorldSnapshotStore` 接入 Editor 临时 Play，`EngineEditorPlaySessionService.ExitPlay()` 已结束脚本 Play Session 并允许再次进入 Play 时重新 OnStart，存活 Behaviour 字段与脚本 Scene 拓扑均可恢复。
 - [x] headless 模式可被 plan/14 测试/基准以确定步数驱动,无窗口依赖。
