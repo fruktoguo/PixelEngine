@@ -100,10 +100,24 @@ public sealed class ScriptRuntime : IScriptRuntime
     }
 
     /// <summary>
+    /// 结束 Play Session，对仍存活且已启动的 Behaviour 派发 OnDestroy 并重置启动状态。
+    /// </summary>
+    public void EndPlaySession()
+    {
+        IScriptContext context = RequireContext();
+        context.Scene.EndPlaySession(context);
+    }
+
+    /// <summary>
     /// 关闭脚本运行时；由 Hosting 生命周期关闭流程调用。
     /// </summary>
     public void Shutdown()
     {
+        if (!_shutdown && _context is not null)
+        {
+            _context.Scene.EndPlaySession(_context);
+        }
+
         _hotReload?.Dispose();
         _hotReloadController?.Dispose();
         _shutdown = true;

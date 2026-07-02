@@ -39,6 +39,11 @@ public interface IScriptRuntime
     void EndFrame();
 
     /// <summary>
+    /// 结束一次 Play Session，对仍存活且已启动的 Behaviour 派发 OnDestroy 并重置启动状态。
+    /// </summary>
+    void EndPlaySession();
+
+    /// <summary>
     /// 关闭运行时并释放脚本侧资源；由 Hosting 生命周期关闭流程调用。
     /// </summary>
     void Shutdown();

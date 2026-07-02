@@ -466,6 +466,34 @@ public sealed class EnginePhaseDriverTests
     }
 
     /// <summary>
+    /// 验证退出 Editor Play Session 会销毁已启动 Behaviour，并允许再次进入 Play 时重新启动。
+    /// </summary>
+    [Fact]
+    public void EditorPlaySessionExitEndsScriptPlayLifecycle()
+    {
+        ScriptScene scene = new();
+        Entity entity = scene.CreateEntity();
+        HostingLifecycleScript script = entity.AddComponent<HostingLifecycleScript>();
+        List<string> events = [];
+        script.Events = events;
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+        engine.AttachScripting(new FakeScriptContext(scene), new ScriptRuntime());
+        EngineEditorPlaySessionService service = new(engine);
+
+        _ = service.EnterPlayCurrent();
+        _ = engine.RunOneTick();
+        EditorPlaySessionResult exit = service.ExitPlay();
+        _ = service.EnterPlayCurrent();
+        _ = engine.RunOneTick();
+
+        Assert.True(exit.Succeeded);
+        Assert.Equal(EngineExecutionMode.Play, engine.Mode);
+        Assert.Equal(["start", "update", "fixed", "destroy", "start", "update", "fixed"], events);
+    }
+
+    /// <summary>
     /// 验证 Engine.AttachScripting 会把脚本运行时接入相位 1 并注册服务。
     /// </summary>
     [Fact]
@@ -652,6 +680,8 @@ public sealed class EnginePhaseDriverTests
 
         public int EndCount { get; private set; }
 
+        public int EndPlaySessionCount { get; private set; }
+
         public int ShutdownCount { get; private set; }
 
         public void Initialize(IScriptContext context)
@@ -683,6 +713,11 @@ public sealed class EnginePhaseDriverTests
         public void EndFrame()
         {
             EndCount++;
+        }
+
+        public void EndPlaySession()
+        {
+            EndPlaySessionCount++;
         }
 
         public void Shutdown()

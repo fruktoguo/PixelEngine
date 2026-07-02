@@ -73,6 +73,7 @@ public sealed class EngineEditorPlaySessionService(Engine engine, IEditorPlaySna
     /// <returns>模式切换结果。</returns>
     public EditorPlaySessionResult ExitPlay()
     {
+        _engine.EndScriptPlaySession();
         if (_temporarySnapshotActive)
         {
             SaveLoadOperationResult restore = _snapshotStore?.RestoreTemporarySnapshot()
