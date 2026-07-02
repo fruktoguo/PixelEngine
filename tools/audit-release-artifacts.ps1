@@ -58,6 +58,18 @@ function Assert-NoStaticOpenAlOrAngle([string]$directory) {
   }
 }
 
+function Assert-NoDynamicBox2D([string]$directory) {
+  $dynamicLibraries = Get-ChildItem -LiteralPath $directory -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object {
+      $_.Name -in @('box2d.dll', 'libbox2d.so', 'libbox2d.dylib')
+    }
+
+  if ($dynamicLibraries) {
+    $paths = ($dynamicLibraries | Select-Object -ExpandProperty FullName) -join [Environment]::NewLine
+    throw "AOT 产物不应携带动态 Box2D：$paths"
+  }
+}
+
 function Assert-LinuxDynamicLink([string]$entryPath, [string]$rid) {
   if (-not $IsLinux -or -not $rid.StartsWith('linux-')) {
     return
@@ -98,8 +110,8 @@ function Test-PublishDirectory([string]$rid, [string]$channel) {
   $box2D = Join-Path $directory "runtimes/$rid/native/$(Get-Box2DName $rid)"
   if ($channel -eq 'r2r') {
     Assert-FileExists $box2D 'R2R 产物缺少动态 Box2D'
-  } elseif (Test-Path -LiteralPath $box2D -PathType Leaf) {
-    throw "AOT 产物不应携带动态 Box2D: $box2D"
+  } else {
+    Assert-NoDynamicBox2D $directory
   }
 
   Assert-NoStaticOpenAlOrAngle $directory
@@ -117,12 +129,22 @@ function Get-PackageFiles {
   }
 
   return @(Get-ChildItem -LiteralPath $PackageRoot -File |
-    Where-Object { $_.Name -match '^PixelEngine-Demo-.+-(win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64)-(r2r|aot)\.(zip|tar\.gz)$' } |
+    Where-Object { $_.Name -match '^PixelEngine-Demo-.+\.(zip|tar\.gz)$' } |
     Sort-Object Name)
+}
+
+function Test-ReleasePackageName([string]$name) {
+  return $name -match '^PixelEngine-Demo-.+-(win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64)-(r2r|aot)\.(zip|tar\.gz)$'
 }
 
 function Assert-PackagesAndChecksums {
   $packages = Get-PackageFiles
+  foreach ($package in $packages) {
+    if (-not (Test-ReleasePackageName $package.Name)) {
+      throw "package 文件名不符合发行命名: $($package.Name)"
+    }
+  }
+
   if ($RequireAll -and $packages.Count -ne 12) {
     throw "package 数量不完整：期望 12，实际 $($packages.Count)。"
   }
@@ -133,9 +155,13 @@ function Assert-PackagesAndChecksums {
 
   foreach ($rid in $rids) {
     foreach ($channel in $channels) {
-      $exists = $packages | Where-Object { $_.Name -match "-$rid-$channel\.(zip|tar\.gz)$" }
-      if ($RequireAll -and -not $exists) {
+      $countForPair = @($packages | Where-Object { $_.Name -match "-$rid-$channel\.(zip|tar\.gz)$" }).Count
+      if ($RequireAll -and $countForPair -eq 0) {
         throw "缺少 package: $rid/$channel"
+      }
+
+      if ($countForPair -gt 1) {
+        throw "同一 RID/channel 存在多个 package: $rid/$channel"
       }
     }
   }
@@ -143,13 +169,31 @@ function Assert-PackagesAndChecksums {
   $checksumPath = Join-Path $PackageRoot 'SHA256SUMS'
   Assert-FileExists $checksumPath '缺少 SHA256SUMS'
   $checksumLines = Get-Content -LiteralPath $checksumPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-  $checksums = @{}
+  $checksums = [System.Collections.Generic.Dictionary[string, string]]::new([StringComparer]::Ordinal)
+  $packageNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+  foreach ($package in $packages) {
+    [void]$packageNames.Add($package.Name)
+  }
+
   foreach ($line in $checksumLines) {
     if ($line -notmatch '^([0-9a-fA-F]{64})\s+\*?(.+)$') {
       throw "SHA256SUMS 行格式无效: $line"
     }
 
-    $checksums[$Matches[2]] = $Matches[1].ToLowerInvariant()
+    $checksumName = $Matches[2] -replace '^\./', ''
+    if ($checksumName.Contains('/') -or $checksumName.Contains('\')) {
+      throw "SHA256SUMS 只允许 package root 下的文件名: $checksumName"
+    }
+
+    if (-not $packageNames.Contains($checksumName)) {
+      throw "SHA256SUMS 包含 package root 下不存在或非发行包的条目: $checksumName"
+    }
+
+    if ($checksums.ContainsKey($checksumName)) {
+      throw "SHA256SUMS 重复条目: $checksumName"
+    }
+
+    $checksums.Add($checksumName, $Matches[1].ToLowerInvariant())
   }
 
   foreach ($package in $packages) {
@@ -163,7 +207,7 @@ function Assert-PackagesAndChecksums {
     }
   }
 
-  if ($RequireAll -and $checksums.Count -ne $packages.Count) {
+  if ($checksums.Count -ne $packages.Count) {
     throw "SHA256SUMS 条目数与 package 数不一致。"
   }
 

@@ -95,6 +95,30 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 PowerShell/Bash 发行产物审计在 AOT Box2D 与 package/SHA256 规则上保持同等严格。
+    /// </summary>
+    [Fact]
+    public void ReleaseArtifactAuditsRejectMispackagedNativeAndChecksumOutputs()
+    {
+        string auditPs1 = ReadRepositoryFile("tools", "audit-release-artifacts.ps1");
+        string auditSh = ReadRepositoryFile("tools", "audit-release-artifacts.sh");
+
+        Assert.Contains("Assert-NoDynamicBox2D", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("box2d.dll", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("libbox2d.so", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("libbox2d.dylib", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("AOT 产物不应携带动态 Box2D", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("assert_no_dynamic_box2d", auditSh, StringComparison.Ordinal);
+
+        Assert.Contains("package 文件名不符合发行命名", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("同一 RID/channel 存在多个 package", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("SHA256SUMS 只允许 package root 下的文件名", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("SHA256SUMS 包含 package root 下不存在或非发行包的条目", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("SHA256SUMS 重复条目", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("SHA256SUMS 条目数与 package 数不一致", auditPs1, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 CA 最内层邻居访问经 3x3 窗口基址与 Unsafe.Add 漫游，不在热更新器内直接数组索引。
     /// </summary>
     [Fact]
