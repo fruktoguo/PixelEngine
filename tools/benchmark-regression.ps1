@@ -8,8 +8,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 function Convert-MeanToNanoseconds([string]$meanText) {
-  $normalized = $meanText -replace ',', ''
-  $match = [regex]::Match($normalized, '(?<value>[0-9]+(?:\.[0-9]+)?)\s*(?<unit>ns|us|µs|ms|s)')
+  $normalized = ($meanText -replace '\*', '') -replace ',', ''
+  $match = [regex]::Match($normalized, '(?<value>[0-9]+(?:\.[0-9]+)?)\s*(?<unit>ns|us|µs|μs|ms|s)')
   if (-not $match.Success) {
     throw "Could not parse mean value: '$meanText'."
   }
@@ -19,6 +19,7 @@ function Convert-MeanToNanoseconds([string]$meanText) {
     'ns' { return $value }
     'us' { return $value * 1000.0 }
     'µs' { return $value * 1000.0 }
+    'μs' { return $value * 1000.0 }
     'ms' { return $value * 1000000.0 }
     's' { return $value * 1000000000.0 }
     default { throw "Unsupported benchmark time unit: $($match.Groups['unit'].Value)" }
@@ -82,19 +83,39 @@ foreach ($entry in $baseline.benchmarks) {
 
   $escapedName = [regex]::Escape($name)
   $escapedMethod = [regex]::Escape($method)
-  $fullNamePattern = "\|\s*$escapedName\s*\|(?<cells>.*)"
-  $methodPattern = "\|\s*$escapedMethod\s*\|(?<cells>.*)"
-  $match = [regex]::Match($reports, $fullNamePattern)
-  if (-not $match.Success) {
-    $match = [regex]::Match($reports, $methodPattern)
+  $fullNamePattern = "\|\s*\*{0,2}$escapedName\*{0,2}\s*\|(?<cells>.*)"
+  $methodPattern = "\|\s*\*{0,2}$escapedMethod\*{0,2}\s*\|(?<cells>.*)"
+  $matches = @([regex]::Matches($reports, $fullNamePattern))
+  if ($matches.Count -eq 0) {
+    $matches = @([regex]::Matches($reports, $methodPattern))
   }
 
-  if (-not $match.Success) {
+  if ($matches.Count -eq 0) {
     throw "Benchmark '$name' (method '$method') was not found in BenchmarkDotNet report."
   }
 
+  $rowContains = @()
+  if ($entry.PSObject.Properties.Name -contains 'rowContains') {
+    $rowContains = @($entry.rowContains | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+  }
+
+  $match = $matches | Where-Object {
+    $row = $_.Value
+    foreach ($needle in $rowContains) {
+      if ($row -notlike "*$needle*") {
+        return $false
+      }
+    }
+
+    return $true
+  } | Select-Object -First 1
+
+  if (-not $match) {
+    throw "Benchmark '$name' (method '$method') did not contain a row matching: $($rowContains -join ', ')."
+  }
+
   $cells = $match.Groups['cells'].Value -split '\|'
-  $meanText = ($cells | Where-Object { $_ -match '\d' } | Select-Object -First 1).Trim()
+  $meanText = ($cells | Where-Object { $_ -match '(ns|us|µs|μs|ms|s)' } | Select-Object -First 1).Trim()
   $meanNs = Convert-MeanToNanoseconds $meanText
   $ratio = $meanNs / $baselineMeanNs
   Write-Host "$name mean=$([Math]::Round($meanNs, 3)) ns baseline=$baselineMeanNs ns ratio=$([Math]::Round($ratio, 3)) max=$maxRatio"
