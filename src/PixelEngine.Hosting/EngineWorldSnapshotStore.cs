@@ -8,9 +8,18 @@ namespace PixelEngine.Hosting;
 /// 基于 Engine resident world 快照的 Editor 临时 Play 快照后端。
 /// </summary>
 /// <param name="engine">运行时 Engine。</param>
-public sealed class EngineWorldSnapshotStore(Engine engine) : IEditorPlaySnapshotStore, IDisposable
+/// <param name="consumeOnRestore">恢复成功后是否释放并清空快照；Editor 临时 Play 使用一次性快照，关卡重开使用持久快照。</param>
+/// <param name="slotId">对外报告用的快照槽位标识。</param>
+public sealed class EngineWorldSnapshotStore(
+    Engine engine,
+    bool consumeOnRestore = true,
+    string slotId = "__editor_play_temp") : IEditorPlaySnapshotStore, IDisposable
 {
     private readonly Engine _engine = engine ?? throw new ArgumentNullException(nameof(engine));
+    private readonly bool _consumeOnRestore = consumeOnRestore;
+    private readonly string _slotId = string.IsNullOrWhiteSpace(slotId)
+        ? throw new ArgumentException("快照槽位标识不能为空。", nameof(slotId))
+        : slotId;
     private EngineWorldSnapshot? _snapshot;
     private ScriptPlaySessionSnapshot? _scriptSnapshot;
 
@@ -53,14 +62,18 @@ public sealed class EngineWorldSnapshotStore(Engine engine) : IEditorPlaySnapsho
             WorldLoadResult result = _engine.RestoreWorldSnapshot(_snapshot);
             _engine.RestoreScriptPlaySessionSnapshot(_scriptSnapshot);
             string path = _snapshot.DirectoryPath;
-            _snapshot.Dispose();
-            _snapshot = null;
-            _scriptSnapshot = null;
+            if (_consumeOnRestore)
+            {
+                _snapshot.Dispose();
+                _snapshot = null;
+                _scriptSnapshot = null;
+            }
+
             return new SaveLoadOperationResult(
                 true,
                 $"已恢复临时 Play 快照：tick={result.GameTimeTicks}, chunks={result.LoadedChunkCount}。",
                 new SaveSlotInfo(
-                    "__editor_play_temp",
+                    _slotId,
                     path,
                     DateTimeOffset.UtcNow,
                     0,
@@ -85,10 +98,10 @@ public sealed class EngineWorldSnapshotStore(Engine engine) : IEditorPlaySnapsho
         _scriptSnapshot = null;
     }
 
-    private static SaveSlotInfo CreateSlotInfo(EngineWorldSnapshot snapshot, int chunkCount)
+    private SaveSlotInfo CreateSlotInfo(EngineWorldSnapshot snapshot, int chunkCount)
     {
         return new SaveSlotInfo(
-            "__editor_play_temp",
+            _slotId,
             snapshot.DirectoryPath,
             DateTimeOffset.UtcNow,
             0,

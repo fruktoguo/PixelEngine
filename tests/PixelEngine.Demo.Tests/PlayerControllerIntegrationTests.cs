@@ -62,7 +62,7 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Contains("text:调试叠层", pauseGui.Drawn);
         Assert.Contains("checkbox:dirty rect:False", pauseGui.Drawn);
         Assert.Contains("checkbox:temperature:False", pauseGui.Drawn);
-        Assert.Contains("text-colored:重开关卡后端尚未接入。:FF4080FF", pauseGui.Drawn);
+        Assert.Contains("text-colored:重开关卡快照尚未捕获。:FF4080FF", pauseGui.Drawn);
 
         RecordingGuiContext continueGui = new(clickedButtons: ["继续"]);
         runtime.DrawGui(continueGui);

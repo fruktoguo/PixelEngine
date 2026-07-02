@@ -24,7 +24,7 @@ public sealed class PauseMenu : Behaviour
     /// <summary>
     /// 最近一次阻塞原因；为空表示菜单可提供已落地的控制项。
     /// </summary>
-    public string BlockedReason { get; private set; } = "重开关卡后端尚未接入。";
+    public string BlockedReason { get; private set; } = "重开关卡快照尚未捕获。";
 
     /// <inheritdoc />
     protected override void OnUpdate(float dt)

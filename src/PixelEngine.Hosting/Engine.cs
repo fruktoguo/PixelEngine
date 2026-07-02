@@ -26,6 +26,8 @@ public sealed class Engine : IDisposable
     private readonly EngineLifecycle _lifecycle;
     private readonly List<IDisposable> _ownedRuntimeResources = [];
     private IScriptRuntime? _attachedScriptRuntime;
+    private EngineWorldSnapshotStore? _restartSnapshotStore;
+    private bool _restartSnapshotCaptured;
     private bool _disposed;
 
     internal Engine(EngineContext context, EnginePhasePipeline phases, EngineLifecycle lifecycle)
@@ -148,6 +150,34 @@ public sealed class Engine : IDisposable
             : Context.TryGetService(out EditorRenderBridge _)
             ? new RuntimeControlResult(true, $"内嵌 Editor 已打开，显示 {editor.ShowAllPanels()} 个面板。")
             : new RuntimeControlResult(false, "Editor 渲染桥尚未接入 Rendering 管线。");
+    }
+
+    /// <summary>
+    /// 将当前关卡恢复到首次脚本 tick 后捕获的运行基线，并回到 Play 模式。
+    /// </summary>
+    /// <returns>重开请求结果。</returns>
+    public RuntimeControlResult RestartCurrentScene()
+    {
+        ThrowIfShutdown();
+        if (!_restartSnapshotCaptured || _restartSnapshotStore is null)
+        {
+            return new RuntimeControlResult(false, "重开关卡快照尚未捕获。");
+        }
+
+        EndScriptPlaySession();
+        SaveLoadOperationResult restore = _restartSnapshotStore.RestoreTemporarySnapshot();
+        if (!restore.Success)
+        {
+            return new RuntimeControlResult(false, restore.Message);
+        }
+
+        EnterPlayMode();
+        WorldLoadResult? load = restore.LoadResult;
+        return new RuntimeControlResult(
+            true,
+            load.HasValue
+                ? $"已重开当前关卡：tick={load.Value.GameTimeTicks}, chunks={load.Value.LoadedChunkCount}。"
+                : "已重开当前关卡。");
     }
 
     /// <summary>
@@ -537,6 +567,7 @@ public sealed class Engine : IDisposable
             return existing;
         }
 
+        ResetRestartSnapshot();
         MaterialTable materials = Context.GetService<MaterialTable>();
         ResidentChunkMap chunks = new();
         AddResidentChunks(chunks, worldWidthCells, worldHeightCells);
@@ -610,6 +641,7 @@ public sealed class Engine : IDisposable
             throw new InvalidOperationException("当前 Engine 已接入 Simulation world，不能重复从存档目录装配世界。");
         }
 
+        ResetRestartSnapshot();
         string resolvedPath = Path.GetFullPath(savePath);
         MaterialTable materials = Context.GetService<MaterialTable>();
         _ = materials.GetName(fallbackMaterialId);
@@ -779,6 +811,7 @@ public sealed class Engine : IDisposable
     public Scene LoadScene(string name)
     {
         ThrowIfShutdown();
+        ResetRestartSnapshot();
         Scene scene = Context.GetService<ISceneService>().SwitchTo(name);
         MaterializeSceneScripts(scene);
         return scene;
@@ -799,6 +832,7 @@ public sealed class Engine : IDisposable
         }
 
         runtime ??= new ScriptRuntime();
+        ResetRestartSnapshot();
         ScriptingPhaseDriver driver = new(runtime, scriptContext);
         driver.RegisterPhases(Phases);
         _attachedScriptRuntime = runtime;
@@ -1517,6 +1551,7 @@ public sealed class Engine : IDisposable
             throw new InvalidOperationException("当前 Engine 已接入 Simulation world，不能重复装配程序化世界。");
         }
 
+        ResetRestartSnapshot();
         string key = scene.ResolvedSource ??
             throw new InvalidOperationException("Procedural 场景缺少生成器键。");
         if (!Context.TryGetService(out ProceduralWorldGeneratorRegistry registry) ||
@@ -1676,6 +1711,7 @@ public sealed class Engine : IDisposable
 
             Phases.Execute(this, timing);
             Context.Counters.SimHz = Context.Clock.SimHz;
+            TryCaptureRestartSnapshot(timing);
             if (IsShutdownRequested)
             {
                 Shutdown();
@@ -1750,6 +1786,8 @@ public sealed class Engine : IDisposable
         }
 
         _ownedRuntimeResources.Clear();
+        _restartSnapshotStore = null;
+        _restartSnapshotCaptured = false;
     }
 
     /// <summary>
@@ -1806,6 +1844,56 @@ public sealed class Engine : IDisposable
         {
             _ = degrader.DegradeGpuComputeOneStep();
         }
+    }
+
+    private void TryCaptureRestartSnapshot(FrameTiming timing)
+    {
+        if (_restartSnapshotCaptured || !timing.RunSim || _attachedScriptRuntime is null)
+        {
+            return;
+        }
+
+        if (!Context.TryGetService(out ResidentChunkMap _) ||
+            !Context.TryGetService(out SimulationKernel _) ||
+            !Context.TryGetService(out ParticleSystem _) ||
+            !Context.TryGetService(out MaterialTable _))
+        {
+            return;
+        }
+
+        EngineWorldSnapshotStore store = EnsureRestartSnapshotStore();
+        SaveLoadOperationResult save = store.SaveTemporarySnapshot();
+        if (save.Success)
+        {
+            _restartSnapshotCaptured = true;
+        }
+    }
+
+    private EngineWorldSnapshotStore EnsureRestartSnapshotStore()
+    {
+        if (_restartSnapshotStore is not null)
+        {
+            return _restartSnapshotStore;
+        }
+
+        _restartSnapshotStore = new EngineWorldSnapshotStore(
+            this,
+            consumeOnRestore: false,
+            slotId: "__restart_baseline");
+        _ownedRuntimeResources.Add(_restartSnapshotStore);
+        return _restartSnapshotStore;
+    }
+
+    private void ResetRestartSnapshot()
+    {
+        if (_restartSnapshotStore is not null)
+        {
+            _restartSnapshotStore.Dispose();
+            _ = _ownedRuntimeResources.Remove(_restartSnapshotStore);
+            _restartSnapshotStore = null;
+        }
+
+        _restartSnapshotCaptured = false;
     }
 
     private FrameTiming BeginRuntimeFrame(double realDeltaSeconds)
