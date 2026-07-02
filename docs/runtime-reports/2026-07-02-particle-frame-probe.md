@@ -29,3 +29,13 @@ particle_frame_probe mode=gpu, gpu_available=True, requested_count=100000, activ
 ## 结论
 
 探针入口可用，并能在同一窗口链路中验证 10 万活跃粒子。GPU 模式已跳过 CPU stamp，且记录到 `GpuParticleDraw` 子相位；CPU 模式记录到 `ParticleStamp` 子相位。当前短样本只证明入口与子相位采样可用，总帧时间受窗口启动、BuildRenderBuffer 和桌面环境噪声影响，不能作为目标硬件“GPU 总帧时间优于 CPU stamp”的验收依据。
+
+## GPU 粒子基准预检入口
+
+新增 `tools/gpu-particle-benchmark-preflight.ps1` 作为 plan/09 目标硬件基准证据入口。无目标硬件 evidence manifest 时，默认报告 `blocked_missing_target_gpu_evidence`；加 `-RunProbe` 时会分别运行 `--particle-frame-probe --particle-render-mode cpu` 与 `--particle-frame-probe --particle-render-mode gpu`，并报告 `local_probe_only`。这两种状态都不是验收通过，只用于证明入口可执行与产出待审证据。
+
+```pwsh
+./tools/gpu-particle-benchmark-preflight.ps1 -RunProbe -AllowBlocked
+```
+
+目标硬件长基准完成后，可提供 `-EvidenceManifestPath <json>`。manifest 使用 `schemaVersion: 1`，并至少包含 `targetHardwareReport`、`cpuProbeReport`、`gpuProbeReport`、`comparisonReport` 四个 evidence scope。缺 scope 时报告 `blocked_missing_target_gpu_scope_evidence`；证据齐全时报告 `target_gpu_evidence_attached_pending_review`，仍需人工确认 comparisonReport 是否满足 plan/09 的“高密度 GPU 总帧时间优于 CPU stamp”验收语义。

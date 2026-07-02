@@ -134,6 +134,50 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 GPU 粒子目标硬件基准预检只收集证据，不把本机短 probe 当作 plan/09 验收。
+    /// </summary>
+    [Fact]
+    public void GpuParticleBenchmarkPreflightRequiresTargetHardwareEvidence()
+    {
+        string script = ReadRepositoryFile("tools", "gpu-particle-benchmark-preflight.ps1");
+        string report = ReadRepositoryFile("docs", "runtime-reports", "2026-07-02-particle-frame-probe.md");
+        string plan = ReadRepositoryFile("plan", "09-gpu-compute.md");
+
+        Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
+        Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
+        Assert.Contains("RunProbe", script, StringComparison.Ordinal);
+        Assert.Contains("--particle-frame-probe", script, StringComparison.Ordinal);
+        Assert.Contains("--particle-render-mode", script, StringComparison.Ordinal);
+        Assert.Contains("cpu", script, StringComparison.Ordinal);
+        Assert.Contains("gpu", script, StringComparison.Ordinal);
+        Assert.Contains("particle_frame_probe", script, StringComparison.Ordinal);
+        Assert.Contains("targetHardwareReport", script, StringComparison.Ordinal);
+        Assert.Contains("cpuProbeReport", script, StringComparison.Ordinal);
+        Assert.Contains("gpuProbeReport", script, StringComparison.Ordinal);
+        Assert.Contains("comparisonReport", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_target_gpu_evidence", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_target_gpu_scope_evidence", script, StringComparison.Ordinal);
+        Assert.Contains("local_probe_only", script, StringComparison.Ordinal);
+        Assert.Contains("target_gpu_evidence_attached_pending_review", script, StringComparison.Ordinal);
+        Assert.Contains("GPU particle benchmark preflight failed", script, StringComparison.Ordinal);
+        Assert.Contains("$exitCode = 2", script, StringComparison.Ordinal);
+        Assert.Contains("$exitCode = 5", script, StringComparison.Ordinal);
+        Assert.Contains("exit $exitCode", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("status \"passed\"", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("status = \"passed\"", script, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains("tools/gpu-particle-benchmark-preflight.ps1", report, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_target_gpu_evidence", report, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_target_gpu_scope_evidence", report, StringComparison.Ordinal);
+        Assert.Contains("local_probe_only", report, StringComparison.Ordinal);
+        Assert.Contains("target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
+
+        Assert.Contains("tools/gpu-particle-benchmark-preflight.ps1", plan, StringComparison.Ordinal);
+        Assert.Contains("local_probe_only", plan, StringComparison.Ordinal);
+        Assert.Contains("target_gpu_evidence_attached_pending_review", plan, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证发行编译模式保持默认 R2R 运行时 light-up，AOT 显式 ISA 并跑 SIMD 反汇编探针。
     /// </summary>
     [Fact]
