@@ -44,6 +44,12 @@ dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --
 dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --no-build -- --no-hot-reload --window-ticks 20 --scripted-window-demo --content demo\PixelEngine.Demo\content --scene scenes\lava-mine-audio-probe.scene --log-dir artifacts\scripted-window-audio-probe-logs\runtime-1
 ```
 
+粒子与光照窗口探针使用独立的空脚本场景，由 Demo 专用探针在真实窗口相位中一次性生成短寿命 fire 粒子，并发出点光与 fog reveal 请求；它只验证粒子 lifecycle、点光同步和 fog-of-war reveal 数据，不代表粒子/bloom/fog 的视觉质量人工验收：
+
+```pwsh
+dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --no-build -- --no-hot-reload --window-ticks 120 --scripted-window-demo --content demo\PixelEngine.Demo\content --scene scenes\lava-mine-particle-light-probe.scene --log-dir artifacts\scripted-window-particle-light-probe-logs\runtime-2
+```
+
 ## 结果
 
 退出码：0。
@@ -146,6 +152,22 @@ RID: win-x64
 脚本化窗口输入摘要：frames=20, brush_material=<missing>, brush_radius=0, painted_material=0, explosions=0, last_explosion=(0.00,0.00), particles=0, max_particles=0, lights=0, max_lights=0, physics_destroyed=0, physics_created=0, max_physics_destroyed=0, max_physics_created=0, audio_played=0, audio_drained=0, max_audio_played=2, max_audio_drained=3, audio_loaded=19, hud_blocked=none, pause_open=<missing>, goal_reached=<missing>, player_health=0.00, damage_events=0, respawns=0, spawn_probe=<missing>, player=(0.00,0.00,0.00,0.00), player_center=(0.00,0.00), camera_center=(320.00,180.00), camera_zoom=1.00, camera_samples=0, camera_followed=False, render_camera_synced=True, player_x_range=(0.00,0.00), camera_x_range=(0.00,0.00), render_origin_x_range=(0.00,0.00), render_camera=(-320.00,-180.00,1.000,1280x720), audio_probe_initialized=True, audio_probe_enqueued=True, audio_probe_one_shot_played=True, audio_probe_ambient_activated=True, audio_probe_max_drained=3, audio_probe_max_played=2, audio_probe_max_active_voices=2, audio_probe_max_active_ambient=1, player_center_material=0。
 ```
 
+粒子与光照窗口探针关键输出：
+
+```text
+PixelEngine.Demo 0.1.0.0
+RID: win-x64
+内容包已加载：18 个材质，22 条反应，19 个音频 clip，Physics 已接入。
+脚本程序集已注册；热重载已由参数关闭。
+脚本运行时已接入 Hosting/Simulation 后端。
+脚本化窗口输入已启用。
+窗口运行时已接入 Rendering/Input 后端。
+窗口短跑完成：frames=120, requested=120。
+窗口短跑耗时：elapsed_ms=4759.61, avg_tick_ms=39.67, last_profile_ms=27.43。
+窗口短跑最慢相位：main_top=BuildRenderBuffer=21.30, sub_top=RenderBufferBuild=21.28。
+脚本化窗口输入摘要：frames=120, brush_material=<missing>, brush_radius=0, painted_material=0, explosions=0, last_explosion=(0.00,0.00), particles=0, max_particles=96, lights=0, max_lights=1, physics_destroyed=0, physics_created=0, max_physics_destroyed=0, max_physics_created=0, audio_played=0, audio_drained=0, max_audio_played=0, max_audio_drained=3, audio_loaded=19, hud_blocked=none, pause_open=<missing>, goal_reached=<missing>, player_health=0.00, damage_events=0, respawns=0, spawn_probe=<missing>, player=(0.00,0.00,0.00,0.00), player_center=(0.00,0.00), camera_center=(320.00,180.00), camera_zoom=1.00, camera_samples=0, camera_followed=False, render_camera_synced=True, player_x_range=(0.00,0.00), camera_x_range=(0.00,0.00), render_origin_x_range=(0.00,0.00), render_camera=(-320.00,-180.00,1.000,1280x720), particle_light_probe_initialized=True, particle_light_probe_spawned=96, particle_light_probe_max_active=96, particle_light_probe_tail_max=0, particle_light_probe_last_active=0, particle_light_probe_lifetime_kill=True, particle_light_probe_depleted=True, particle_light_probe_light_observed=True, particle_light_probe_fog_alpha=220, particle_light_probe_lighting_synced=True, player_center_material=0。
+```
+
 ## 结论
 
 该短跑证明真实窗口模式下，窗口创建、Silk 输入采样、脚本输入覆盖、脚本相机坐标转换、材质笔刷、爆破工具、自由粒子、脚本点光、Physics 刚体拆分、音频事件抽取、HUD 组件绑定、暂停菜单打开与渲染相位可以在同一运行态链路中自动触发并自然退出。
@@ -159,5 +181,7 @@ RID: win-x64
 反应与温度相变窗口探针额外证明真实窗口相位中，已加载 `ReactionTable` 与 `TemperatureField.ApplyPhaseTransitions` 会在 CA/Temperature 后产生目标材质变化：`reactions_observed=True` 覆盖熔岩遇水、熔融金属遇水、水灭火、火烧木、火烧油、酸腐蚀与蒸汽冷凝；`phase_transitions_observed=True` 覆盖冰融化、水沸腾、水冻结、熔岩冷却、金属熔化与沙烤玻璃。
 
 音频窗口探针额外证明真实窗口相位中，`content/audio/cues.json` 与 `materials.json` 的 cue 映射可以把材质音频事件解析为已加载 clip，并交给后端 source：`audio_probe_one_shot_played=True` 覆盖 stone explosion 与 water splash 的 one-shot voice，`audio_probe_ambient_activated=True` 覆盖 lava ambient loop 激活。
+
+粒子与光照窗口探针额外证明真实窗口相位中，短寿命 fire 粒子会进入粒子系统并按 lifetime 退场：`particle_light_probe_spawned=96`、`particle_light_probe_max_active=96`、`particle_light_probe_tail_max=0`、`particle_light_probe_last_active=0`、`particle_light_probe_lifetime_kill=True` 与 `particle_light_probe_depleted=True`。同一探针还证明脚本点光与 fog reveal 请求会同步到 Rendering 可消费状态：`particle_light_probe_light_observed=True`、`particle_light_probe_fog_alpha=220` 与 `particle_light_probe_lighting_synced=True`。
 
 这些验证不等同于人工窗口验收：它们不证明 HUD 像素布局、鼠标真实设备手感、音频听感、反应/相变视觉质量、视觉 bloom/fog 质量、完整通关路线或开发态热重载体验。主线短跑的 `goal_reached=False` 表示固定输入脚本未覆盖完整通关路线，探针场景也不替代从出生点抵达出口的玩法验收；旧主线短跑的 `avg_tick_ms=71.66` 与 `last_profile_ms=31.27` 是空世界渲染快路径修复前的样本，不代表当前空场景帧预算，后者见 `docs/runtime-reports/2026-07-02-demo-window-smoke.md`。
