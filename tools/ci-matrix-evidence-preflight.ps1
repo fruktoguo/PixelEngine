@@ -45,7 +45,8 @@ function Add-EvidenceFile {
         [System.Collections.Generic.List[string]]$Missing,
         [string]$Root,
         [string]$Scope,
-        [string]$Path
+        [string]$Path,
+        [string]$DeclaredSha256
     )
 
     if ([string]::IsNullOrWhiteSpace($Path)) {
@@ -59,10 +60,22 @@ function Add-EvidenceFile {
         return
     }
 
+    if ([string]::IsNullOrWhiteSpace($DeclaredSha256)) {
+        $Missing.Add("scope $Scope 缺少 sha256")
+        return
+    }
+
+    $actualHash = Get-FileSha256 -Path $resolved
+    $expectedHash = $DeclaredSha256.Trim().ToLowerInvariant()
+    if ($actualHash -ne $expectedHash) {
+        $Missing.Add("scope $Scope sha256 不匹配：expected=$expectedHash actual=$actualHash")
+        return
+    }
+
     $Evidence.Add([pscustomobject]@{
         scope = $Scope
         path = ConvertTo-RepositoryRelativePath -Root $Root -Path $resolved
-        sha256 = Get-FileSha256 -Path $resolved
+        sha256 = $actualHash
     })
 }
 
@@ -73,6 +86,24 @@ function Get-JsonPropertyNames {
     }
 
     return @($Node.PSObject.Properties | ForEach-Object { $_.Name })
+}
+
+function Get-JsonPropertyValue {
+    param(
+        [object]$Node,
+        [string]$Name
+    )
+
+    if ($null -eq $Node) {
+        return $null
+    }
+
+    $property = $Node.PSObject.Properties | Where-Object { $_.Name -eq $Name } | Select-Object -First 1
+    if ($null -eq $property) {
+        return $null
+    }
+
+    return $property.Value
 }
 
 function Write-CiEvidenceReport {
@@ -171,8 +202,8 @@ foreach ($rid in $knownVerifyRids) {
     }
 }
 
-Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "workflow_run" -Path ([string]$manifest.workflowRunReport)
-Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "benchmark_guard" -Path ([string]$manifest.benchmarkGuard.report)
+Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "workflow_run" -Path ([string](Get-JsonPropertyValue -Node $manifest -Name "workflowRunReport")) -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $manifest -Name "workflowRunSha256"))
+Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "benchmark_guard" -Path ([string](Get-JsonPropertyValue -Node $manifest.benchmarkGuard -Name "report")) -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $manifest.benchmarkGuard -Name "sha256"))
 
 foreach ($rid in $rids) {
     $node = $manifest.buildTest.$rid
@@ -181,7 +212,7 @@ foreach ($rid in $rids) {
         continue
     }
 
-    Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "build_test/$rid/report" -Path ([string]$node.report)
+    Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "build_test/$rid/report" -Path ([string](Get-JsonPropertyValue -Node $node -Name "report")) -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $node -Name "sha256"))
     if ($rid -in $testRids -and -not [bool]$node.testsRan) {
         $missing.Add("buildTest.$rid 必须标记 testsRan=true")
     }
@@ -198,7 +229,7 @@ foreach ($rid in $verifyRids) {
         continue
     }
 
-    Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "verify_publish/$rid/report" -Path ([string]$node.report)
+    Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "verify_publish/$rid/report" -Path ([string](Get-JsonPropertyValue -Node $node -Name "report")) -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $node -Name "sha256"))
 }
 
 if ($missing.Count -gt 0) {
