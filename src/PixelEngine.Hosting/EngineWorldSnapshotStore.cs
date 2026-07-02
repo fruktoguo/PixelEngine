@@ -1,4 +1,5 @@
 using PixelEngine.Editor;
+using PixelEngine.Scripting;
 using PixelEngine.World;
 
 namespace PixelEngine.Hosting;
@@ -11,6 +12,7 @@ public sealed class EngineWorldSnapshotStore(Engine engine) : IEditorPlaySnapsho
 {
     private readonly Engine _engine = engine ?? throw new ArgumentNullException(nameof(engine));
     private EngineWorldSnapshot? _snapshot;
+    private ScriptPlaySessionSnapshot? _scriptSnapshot;
 
     /// <summary>
     /// 捕获当前 world 状态，覆盖旧的临时快照。
@@ -22,6 +24,7 @@ public sealed class EngineWorldSnapshotStore(Engine engine) : IEditorPlaySnapsho
         {
             _snapshot?.Dispose();
             _snapshot = _engine.CaptureWorldSnapshot();
+            _scriptSnapshot = _engine.CaptureScriptPlaySessionSnapshot();
             return new SaveLoadOperationResult(
                 true,
                 $"已保存临时 Play 快照：tick={_snapshot.GameTimeTicks}。",
@@ -48,9 +51,11 @@ public sealed class EngineWorldSnapshotStore(Engine engine) : IEditorPlaySnapsho
         try
         {
             WorldLoadResult result = _engine.RestoreWorldSnapshot(_snapshot);
+            _engine.RestoreScriptPlaySessionSnapshot(_scriptSnapshot);
             string path = _snapshot.DirectoryPath;
             _snapshot.Dispose();
             _snapshot = null;
+            _scriptSnapshot = null;
             return new SaveLoadOperationResult(
                 true,
                 $"已恢复临时 Play 快照：tick={result.GameTimeTicks}, chunks={result.LoadedChunkCount}。",
@@ -77,6 +82,7 @@ public sealed class EngineWorldSnapshotStore(Engine engine) : IEditorPlaySnapsho
     {
         _snapshot?.Dispose();
         _snapshot = null;
+        _scriptSnapshot = null;
     }
 
     private static SaveSlotInfo CreateSlotInfo(EngineWorldSnapshot snapshot, int chunkCount)

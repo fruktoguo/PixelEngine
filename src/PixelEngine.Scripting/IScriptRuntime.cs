@@ -44,6 +44,18 @@ public interface IScriptRuntime
     void EndPlaySession();
 
     /// <summary>
+    /// 捕获当前脚本 Play Session 字段状态，供 Editor 临时 Play 退出时恢复。
+    /// </summary>
+    /// <returns>脚本字段快照。</returns>
+    ScriptPlaySessionSnapshot CapturePlaySessionSnapshot();
+
+    /// <summary>
+    /// 恢复先前捕获的脚本 Play Session 字段状态。
+    /// </summary>
+    /// <param name="snapshot">由 <see cref="CapturePlaySessionSnapshot" /> 创建的字段快照。</param>
+    void RestorePlaySessionSnapshot(ScriptPlaySessionSnapshot snapshot);
+
+    /// <summary>
     /// 关闭运行时并释放脚本侧资源；由 Hosting 生命周期关闭流程调用。
     /// </summary>
     void Shutdown();
