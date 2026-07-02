@@ -196,6 +196,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         Assert.Contains("tools/native-leak-preflight.ps1", report, StringComparison.Ordinal);
         Assert.Contains("process_smoke_only", report, StringComparison.Ordinal);
+        Assert.Contains("- [x] 子系统装配与**初始化顺序**", plan, StringComparison.Ordinal);
+        Assert.Contains("native GL/OpenAL/Box2D 工具级泄漏审计仍由 §5 的 native leak detector 阻塞项闭合", plan, StringComparison.Ordinal);
         Assert.Contains("tools/native-leak-preflight.ps1", plan, StringComparison.Ordinal);
     }
 
@@ -295,6 +297,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("tools/demo-manual-acceptance-preflight.ps1", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("hudMenuEditorVideo", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", hostingPlan, StringComparison.Ordinal);
+        Assert.Contains("- [x] 过载降级按五级顺序触发", hostingPlan, StringComparison.Ordinal);
+        Assert.Contains("- [!] Editor 真实窗口观测/覆盖仍缺人工复核证据", hostingPlan, StringComparison.Ordinal);
     }
 
     /// <summary>
