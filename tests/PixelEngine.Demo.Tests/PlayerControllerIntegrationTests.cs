@@ -196,6 +196,7 @@ public sealed class PlayerControllerIntegrationTests
     {
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out ScriptCameraApi camera, out ScriptScene scene);
         Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
         PlayerController player = entity.AddComponent<PlayerController>();
         player.SpawnX = 32f;
         player.SpawnY = 32f;
@@ -215,6 +216,12 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal(2f, camera.Zoom);
         Assert.InRange(camera.CenterX, player.CenterX - 1f, player.CenterX + 1f);
         Assert.InRange(camera.CenterY, player.CenterY - 1f, player.CenterY + 1f);
+        Assert.True(entity.TryGetComponent(out Transform transform));
+        Assert.Equal(player.CenterX, transform.X, precision: 3);
+        Assert.Equal(player.CenterY, transform.Y, precision: 3);
+        camera.Follow(entity);
+        Assert.Equal(transform.X, camera.CenterX, precision: 3);
+        Assert.Equal(transform.Y, camera.CenterY, precision: 3);
 
         float startCameraX = camera.CenterX;
         input.Update([Key.D], [], mouseX: 0, mouseY: 0, wheelY: 0);

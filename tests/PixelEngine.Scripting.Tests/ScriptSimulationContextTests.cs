@@ -248,6 +248,25 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
+    /// 验证脚本相机可通过实体 Transform 执行基础 Follow(Entity)。
+    /// </summary>
+    [Fact]
+    public void ScriptCameraFollowsEntityTransform()
+    {
+        PixelEngine.Scripting.Scene scene = new();
+        Entity entity = scene.CreateEntity();
+        Transform transform = entity.AddComponent<Transform>();
+        transform.SetPosition(42f, 24f);
+        ScriptCameraApi camera = new(100, 50);
+
+        camera.Follow(entity);
+
+        Assert.Equal(42f, camera.CenterX);
+        Assert.Equal(24f, camera.CenterY);
+        _ = Assert.Throws<InvalidOperationException>(() => camera.Follow(scene.CreateEntity()));
+    }
+
+    /// <summary>
     /// 验证脚本音频 facade 只播放已加载 cue，并把位置/音量交给真实 AudioSystem。
     /// </summary>
     [Fact]

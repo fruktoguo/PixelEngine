@@ -167,6 +167,7 @@ public sealed class LevelDirector : Behaviour
         }
 
         Entity playerEntity = Context.Scene.CreateEntity();
+        _ = playerEntity.AddComponent<Transform>();
         PlayerController player = playerEntity.AddComponent<PlayerController>();
         player.SpawnX = PlayerSpawnX;
         player.SpawnY = PlayerSpawnY;
