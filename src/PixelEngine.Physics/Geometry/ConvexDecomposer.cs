@@ -244,9 +244,11 @@ public static class ConvexDecomposer
     private static int BuildConvexHull(ReadOnlySpan<Vector2> points, Span<Vector2> destination)
     {
         Vector2[] rented = ArrayPool<Vector2>.Shared.Rent(points.Length);
+        Vector2[] rentedHull = ArrayPool<Vector2>.Shared.Rent(Math.Max(1, points.Length * 2));
         try
         {
             Span<Vector2> sorted = rented.AsSpan(0, points.Length);
+            Span<Vector2> hull = rentedHull.AsSpan(0, points.Length * 2);
             points.CopyTo(sorted);
             sorted.Sort(static (a, b) =>
             {
@@ -262,24 +264,32 @@ public static class ConvexDecomposer
                     count--;
                 }
 
-                destination[count++] = sorted[i];
+                hull[count++] = sorted[i];
             }
 
             int lowerCount = count;
             for (int i = sorted.Length - 2; i >= 0; i--)
             {
-                while (count > lowerCount && Cross(destination[count - 1] - destination[count - 2], sorted[i] - destination[count - 1]) <= 0f)
+                while (count > lowerCount && Cross(hull[count - 1] - hull[count - 2], sorted[i] - hull[count - 1]) <= 0f)
                 {
                     count--;
                 }
 
-                destination[count++] = sorted[i];
+                hull[count++] = sorted[i];
             }
 
-            return count > 1 ? count - 1 : count;
+            int hullCount = count > 1 ? count - 1 : count;
+            if (hullCount > destination.Length)
+            {
+                return hullCount;
+            }
+
+            hull[..hullCount].CopyTo(destination);
+            return hullCount;
         }
         finally
         {
+            ArrayPool<Vector2>.Shared.Return(rentedHull);
             ArrayPool<Vector2>.Shared.Return(rented);
         }
     }

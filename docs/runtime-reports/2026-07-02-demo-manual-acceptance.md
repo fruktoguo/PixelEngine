@@ -18,7 +18,7 @@
 ./tools/demo-manual-acceptance-preflight.ps1 -RunScriptedProbes -AllowBlocked
 ```
 
-该入口会运行主场景、route-attempt、通关、生命、相机、反应/温度、音频、粒子/光照八个 scripted window probe，并要求各自输出关键摘要 marker，例如 `brush_material=stone`、`pause_open=False`、`goal_reached=True`、`damage_events=`、`camera_followed=True`、`reactions_observed=True`、`audio_probe_one_shot_played=True` 与 `particle_light_probe_depleted=True`。其中 route-attempt 使用 `--scripted-window-route` 在默认关卡中持续移动，用来捕捉长一点的真实窗口移动/物理同步问题；它不要求 `goal_reached=True`，不能替代 `fullRoutePlaythroughVideo` 人工完整路线证据。这些 marker 只证明真实窗口相位链路中的机器探针仍可复现，不证明视觉质量、听感、手感或完整路线体验通过。
+该入口会运行主场景、route-attempt、通关、生命、相机、反应/温度、音频、粒子/光照八个 scripted window probe，并要求各自输出关键摘要 marker，例如 `brush_material=stone`、`pause_open=False`、`goal_reached=True`、`damage_events=`、`camera_followed=True`、`reactions_observed=True`、`audio_probe_one_shot_played=True` 与 `particle_light_probe_depleted=True`。其中 route-attempt 使用 `--scripted-window-route` 在默认关卡中执行一条脚本化完整路线，并要求真实窗口链路输出 `goal_reached=True`，用来捕捉长一点的移动、碰撞、破坏重建与触发器同步问题；它仍不能替代 `fullRoutePlaythroughVideo` 人工完整路线证据。这些 marker 只证明真实窗口相位链路中的机器探针仍可复现，不证明视觉质量、听感、手感或真实玩家体验通过。
 
 附加人工 evidence manifest：
 
