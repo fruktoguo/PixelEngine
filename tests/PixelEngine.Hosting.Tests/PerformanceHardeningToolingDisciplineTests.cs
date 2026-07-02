@@ -178,6 +178,55 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 Demo 人工验收预检只索引视觉/听感/手感证据，不把 scripted probe 当作 plan/13 通过。
+    /// </summary>
+    [Fact]
+    public void DemoManualAcceptancePreflightRequiresHumanEvidence()
+    {
+        string script = ReadRepositoryFile("tools", "demo-manual-acceptance-preflight.ps1");
+        string report = ReadRepositoryFile("docs", "runtime-reports", "2026-07-02-demo-manual-acceptance.md");
+        string plan = ReadRepositoryFile("plan", "13-demo-game.md");
+
+        Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
+        Assert.Contains("RunScriptedProbes", script, StringComparison.Ordinal);
+        Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
+        Assert.Contains("--scripted-window-demo", script, StringComparison.Ordinal);
+        Assert.Contains("--window-ticks", script, StringComparison.Ordinal);
+        Assert.Contains("scenes/lava-mine.scene", script, StringComparison.Ordinal);
+        Assert.Contains("scenes/lava-mine-goal-probe.scene", script, StringComparison.Ordinal);
+        Assert.Contains("scenes/lava-mine-audio-probe.scene", script, StringComparison.Ordinal);
+        Assert.Contains("scenes/lava-mine-particle-light-probe.scene", script, StringComparison.Ordinal);
+
+        Assert.Contains("controlFeelReport", script, StringComparison.Ordinal);
+        Assert.Contains("materialBrushAndReactionVideo", script, StringComparison.Ordinal);
+        Assert.Contains("rigidBodyGameplayVideo", script, StringComparison.Ordinal);
+        Assert.Contains("particleLightingVideo", script, StringComparison.Ordinal);
+        Assert.Contains("audioListeningReport", script, StringComparison.Ordinal);
+        Assert.Contains("fullRoutePlaythroughVideo", script, StringComparison.Ordinal);
+        Assert.Contains("hudMenuEditorVideo", script, StringComparison.Ordinal);
+        Assert.Contains("hotReloadWindowReport", script, StringComparison.Ordinal);
+
+        Assert.Contains("blocked_missing_manual_evidence", script, StringComparison.Ordinal);
+        Assert.Contains("scripted_probe_only", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_manual_scope_evidence", script, StringComparison.Ordinal);
+        Assert.Contains("manual_evidence_attached_pending_review", script, StringComparison.Ordinal);
+        Assert.Contains("Demo manual acceptance preflight failed", script, StringComparison.Ordinal);
+        Assert.Contains("$exitCode = 2", script, StringComparison.Ordinal);
+        Assert.Contains("$exitCode = 5", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("status \"passed\"", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("status = \"passed\"", script, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains("tools/demo-manual-acceptance-preflight.ps1", report, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_manual_evidence", report, StringComparison.Ordinal);
+        Assert.Contains("scripted_probe_only", report, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_manual_scope_evidence", report, StringComparison.Ordinal);
+        Assert.Contains("manual_evidence_attached_pending_review", report, StringComparison.Ordinal);
+
+        Assert.Contains("tools/demo-manual-acceptance-preflight.ps1", plan, StringComparison.Ordinal);
+        Assert.Contains("manual_evidence_attached_pending_review", plan, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证发行编译模式保持默认 R2R 运行时 light-up，AOT 显式 ISA 并跑 SIMD 反汇编探针。
     /// </summary>
     [Fact]
