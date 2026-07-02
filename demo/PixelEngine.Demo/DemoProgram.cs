@@ -346,9 +346,13 @@ public static class DemoProgram
             :
             $"audio_probe_initialized={probe.Initialized}, " +
             $"audio_probe_enqueued={probe.Enqueued}, " +
+            $"audio_probe_stress_enqueued={probe.StressEnqueued}, " +
             $"audio_probe_one_shot_played={probe.OneShotPlayed}, " +
             $"audio_probe_ambient_activated={probe.AmbientActivated}, " +
+            $"audio_probe_limited={probe.Limited}, " +
             $"audio_probe_max_drained={probe.MaxDrained}, " +
+            $"audio_probe_max_coalesced={probe.MaxCoalesced}, " +
+            $"audio_probe_max_dropped={probe.MaxDropped}, " +
             $"audio_probe_max_played={probe.MaxPlayed}, " +
             $"audio_probe_max_active_voices={probe.MaxActiveVoices}, " +
             $"audio_probe_max_active_ambient={probe.MaxActiveAmbientVoices}, ";
