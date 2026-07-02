@@ -921,6 +921,72 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 Demo 人工验收预检会拒绝无效 metadata，避免空视频或无观察说明冒充人工验收。
+    /// </summary>
+    [Fact]
+    public void DemoManualAcceptancePreflightRejectsInvalidMetadata()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-metadata-" + Guid.NewGuid().ToString("N"));
+
+        string[] manualScopes =
+        [
+            "controlFeelReport",
+            "materialBrushAndReactionVideo",
+            "rigidBodyGameplayVideo",
+            "particleLightingVideo",
+            "audioListeningReport",
+            "fullRoutePlaythroughVideo",
+            "hudMenuEditorVideo",
+            "hotReloadWindowReport",
+        ];
+
+        try
+        {
+            string badDurationManifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "bad-duration", includeDemoManualMetadata: true);
+            SetFlatEvidenceProperty(badDurationManifest, "fullRoutePlaythroughVideo", "durationSeconds", 0.0);
+
+            string badNotesManifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "bad-notes", includeDemoManualMetadata: true);
+            SetFlatEvidenceProperty(badNotesManifest, "controlFeelReport", "notes", "too short");
+
+            string badDurationArtifacts = Path.Combine(temp, "bad-duration-out");
+            ScriptResult badDuration = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
+                "-EvidenceManifestPath",
+                badDurationManifest,
+                "-Artifacts",
+                badDurationArtifacts);
+            Assert.Equal(5, badDuration.ExitCode);
+            string badDurationReport = File.ReadAllText(Path.Combine(badDurationArtifacts, "demo-manual-acceptance-preflight.md"));
+            Assert.Contains("status: blocked_invalid_manual_evidence", badDuration.Output + badDurationReport, StringComparison.Ordinal);
+            Assert.Contains("fullRoutePlaythroughVideo durationSeconds 必须为正数", badDurationReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: manual_evidence_attached_pending_review", badDurationReport, StringComparison.Ordinal);
+
+            string badNotesArtifacts = Path.Combine(temp, "bad-notes-out");
+            ScriptResult badNotes = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
+                "-EvidenceManifestPath",
+                badNotesManifest,
+                "-Artifacts",
+                badNotesArtifacts);
+            Assert.Equal(5, badNotes.ExitCode);
+            string badNotesReport = File.ReadAllText(Path.Combine(badNotesArtifacts, "demo-manual-acceptance-preflight.md"));
+            Assert.Contains("status: blocked_invalid_manual_evidence", badNotes.Output + badNotesReport, StringComparison.Ordinal);
+            Assert.Contains("controlFeelReport notes 至少需要 20 个字符", badNotesReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: manual_evidence_attached_pending_review", badNotesReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 Demo 人工验收预检会实际拒绝 sha256 不匹配的人工 evidence，并写出可审计报告。
     /// </summary>
     [Fact]
@@ -2208,6 +2274,18 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         JsonNode? source = evidence.FirstOrDefault(node => string.Equals((string?)node?["scope"], scope, StringComparison.Ordinal));
         Assert.NotNull(source);
         evidence.Add(source.DeepClone());
+        File.WriteAllText(manifestPath, manifest.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static void SetFlatEvidenceProperty(string manifestPath, string scope, string propertyName, JsonNode? value)
+    {
+        JsonObject manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
+        JsonArray evidence = manifest["evidence"]!.AsArray();
+        JsonObject? entry = evidence
+            .Select(node => node?.AsObject())
+            .FirstOrDefault(node => string.Equals((string?)node?["scope"], scope, StringComparison.Ordinal));
+        Assert.NotNull(entry);
+        entry[propertyName] = value;
         File.WriteAllText(manifestPath, manifest.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
     }
 
