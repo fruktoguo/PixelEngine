@@ -116,7 +116,8 @@ function Read-EvidenceManifest {
         return @()
     }
 
-    if (-not (Test-Path $ManifestPath)) {
+    $resolvedManifestPath = if ([IO.Path]::IsPathRooted($ManifestPath)) { $ManifestPath } else { Join-Path $Root $ManifestPath }
+    if (-not (Test-Path -LiteralPath $resolvedManifestPath -PathType Leaf)) {
         return @(
             [pscustomobject]@{
                 MissingManifest = $true
@@ -125,9 +126,36 @@ function Read-EvidenceManifest {
         )
     }
 
-    $manifest = Get-Content -Raw -Path $ManifestPath | ConvertFrom-Json
+    $manifest = Get-Content -Raw -LiteralPath $resolvedManifestPath | ConvertFrom-Json
     $requiredScopes = @("gl", "openal", "box2d", "alc")
     $items = @()
+
+    if ($manifest.schemaVersion -ne 1) {
+        $items += [pscustomobject]@{
+            MissingScope = $true
+            Scope = "schemaVersion"
+            Message = "evidence manifest schemaVersion 必须为 1"
+        }
+    }
+
+    if ($null -eq $manifest.scopes) {
+        $items += [pscustomobject]@{
+            MissingScope = $true
+            Scope = "scopes"
+            Message = "evidence manifest 缺少 scopes 节点"
+        }
+    }
+    else {
+        foreach ($scopeName in @($manifest.scopes.PSObject.Properties | Select-Object -ExpandProperty Name)) {
+            if ($scopeName -notin $requiredScopes) {
+                $items += [pscustomobject]@{
+                    MissingScope = $true
+                    Scope = $scopeName
+                    Message = "evidence manifest 包含未知 scope：$scopeName"
+                }
+            }
+        }
+    }
 
     foreach ($scope in $requiredScopes) {
         $scopeNode = $manifest.scopes.$scope
@@ -291,7 +319,7 @@ function Invoke-WindowProbe {
 $root = Resolve-RepositoryRoot
 Set-Location $root
 
-$artifactRoot = Join-Path $root $Artifacts
+$artifactRoot = if ([IO.Path]::IsPathRooted($Artifacts)) { $Artifacts } else { Join-Path $root $Artifacts }
 $reportPath = Join-Path $artifactRoot "native-leak-preflight.md"
 $runs = @()
 $evidence = Read-EvidenceManifest -Root $root -ManifestPath $EvidenceManifestPath

@@ -62,4 +62,4 @@ RID: win-x64
 
 未传入 `-DetectorReportPath` 时，脚本会写出 `artifacts/native-leak-preflight/native-leak-preflight.md`，状态为 `process_smoke_only` 或 `blocked_missing_detector`，并以非零退出；仅用于本地记录 smoke 报告时可追加 `-AllowBlocked`。只有附带专用 detector 报告时才会进入 `detector_report_attached_pending_review`，且仍需人工确认报告确实覆盖 GL、OpenAL、Box2D 与 ALC 释放路径无泄漏。
 
-更严格的工具级证据入口是 `-EvidenceManifestPath`。manifest 需要列出 `gl`、`openal`、`box2d` 与 `alc` 四类 scope 及各自 report 文件和 `sha256`；脚本会重新计算文件 SHA256 并比对。四类证据齐全时状态为 `detector_evidence_attached_pending_review`，仍不自动代表无泄漏验收通过；未传 `-AllowBlocked` 时保持非零退出，避免把 pending review 当成 plan/18 验收完成。缺任一 scope/report/hash 或 hash 不匹配时状态为 `blocked_missing_scope_evidence`。
+更严格的工具级证据入口是 `-EvidenceManifestPath`。manifest 需要使用 `schemaVersion: 1`，只允许 `gl`、`openal`、`box2d` 与 `alc` 四类 scope，并为各自 report 文件声明 `sha256`；脚本会重新计算文件 SHA256 并比对。四类证据齐全时状态为 `detector_evidence_attached_pending_review`，仍不自动代表无泄漏验收通过；未传 `-AllowBlocked` 时保持非零退出，避免把 pending review 当成 plan/18 验收完成。缺任一 scope/report/hash、存在未知 scope 或 hash 不匹配时状态为 `blocked_missing_scope_evidence`。
