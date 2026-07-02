@@ -87,6 +87,7 @@ public sealed unsafe class LightMaskTexture : IDisposable
         Bind();
         fixed (byte* data = mask)
         {
+            _gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
             _gl.TexSubImage2D(
                 TextureTarget.Texture2D,
                 0,

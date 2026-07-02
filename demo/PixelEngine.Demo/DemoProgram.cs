@@ -331,6 +331,7 @@ public static class DemoProgram
         PlayerHealth? health = FindBehaviour<PlayerHealth>(scene);
         PlayerController? player = FindBehaviour<PlayerController>(scene);
         PlayerVisual? playerVisual = FindBehaviour<PlayerVisual>(scene);
+        PlayableProjectileTool? projectile = FindBehaviour<PlayableProjectileTool>(scene);
         LevelDirector? director = FindBehaviour<LevelDirector>(scene);
         EngineProbeApi probe = engine.Context.GetService<EngineProbeApi>();
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
@@ -357,6 +358,8 @@ public static class DemoProgram
             $"painted_material={paintedMaterial}, " +
             $"explosions={explosive?.ExplosionCount ?? 0}, " +
             $"last_explosion=({explosive?.LastExplosionX ?? 0:0.00},{explosive?.LastExplosionY ?? 0:0.00}), " +
+            $"playable_shots={projectile?.ShotsFired ?? 0}, " +
+            $"playable_last_hit=({projectile?.LastHitX ?? 0:0.00},{projectile?.LastHitY ?? 0:0.00}), " +
             $"particles={probe.ActiveParticles}, " +
             $"max_particles={scriptedProbe?.MaxParticles ?? probe.ActiveParticles}, " +
             $"lights={lighting.PointLights.Length}, " +

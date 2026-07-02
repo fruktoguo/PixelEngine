@@ -14,7 +14,7 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
     private readonly ScriptCameraApi _camera = camera ?? throw new ArgumentNullException(nameof(camera));
     private readonly bool _routeProbe = routeProbe;
     private readonly Key[] _keys = new Key[3];
-    private readonly MouseButton[] _buttons = new MouseButton[1];
+    private readonly MouseButton[] _buttons = new MouseButton[2];
 
     /// <summary>
     /// 已注入输入的帧数。
@@ -77,6 +77,7 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
         else if (frame == 7)
         {
             target = ExplosionTargetWorld;
+            _buttons[buttonCount++] = MouseButton.Left;
             _buttons[buttonCount++] = MouseButton.Middle;
         }
         else if (frame is >= 9 and <= 16)
