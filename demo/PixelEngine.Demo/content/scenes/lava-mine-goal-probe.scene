@@ -1,0 +1,24 @@
+{
+  "formatVersion": 1,
+  "name": "lava-mine-goal-probe",
+  "entities": [
+    {
+      "stableId": 1,
+      "name": "LevelDirector",
+      "behaviours": [
+        {
+          "typeName": "PixelEngine.Demo.LevelDirector",
+          "serializedFields": {
+            "LevelWidth": "640",
+            "LevelHeight": "360",
+            "PlayerSpawnX": "570",
+            "PlayerSpawnY": "224",
+            "GoalX": "570",
+            "GoalY": "208",
+            "BuildScriptEntities": "true"
+          }
+        }
+      ]
+    }
+  ]
+}
