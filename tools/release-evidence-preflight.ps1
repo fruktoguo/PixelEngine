@@ -284,13 +284,28 @@ if ([string]::IsNullOrWhiteSpace($EvidenceManifestPath) -or -not (Test-Path -Lit
     exit 2
 }
 
-$manifest = Get-Content -Raw -LiteralPath $EvidenceManifestPath | ConvertFrom-Json
+$manifest = $null
+try {
+    $manifest = Get-Content -Raw -LiteralPath $EvidenceManifestPath | ConvertFrom-Json
+    if ([int]$manifest.schemaVersion -ne 1) {
+        throw "release evidence manifest schemaVersion 必须为 1"
+    }
+}
+catch {
+    $reason = "release evidence manifest 无效：$($_.Exception.Message)"
+    $detail = "Release evidence preflight failed: manifest JSON 无法解析或 schemaVersion 不受支持。不得据此勾选 plan/15 阻塞项。"
+    Write-ReleaseEvidenceReport -Path $reportPath -Status "blocked_invalid_release_evidence" -Evidence $evidence -Missing @($reason) -Detail $detail
+    Write-Host "Release evidence preflight blocked_invalid_release_evidence. Report: $reportPath"
+
+    if ($AllowBlocked) {
+        exit 0
+    }
+
+    exit 5
+}
+
 $rids = @("win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64")
 $channels = @("r2r", "aot")
-
-if ([int]$manifest.schemaVersion -ne 1) {
-    $missing.Add("schemaVersion 必须为 1")
-}
 
 foreach ($ridName in Get-JsonPropertyNames $manifest.artifacts) {
     if ($ridName -notin $rids) {

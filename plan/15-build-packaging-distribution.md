@@ -263,7 +263,7 @@ codesign / notarization
 
 ## 5. 验收标准
 
-- [!] 阻塞：6 个 RID（win-x64/win-arm64/linux-x64/linux-arm64/osx-x64/osx-arm64）的 R2R 通道产物全部构建成功并产出（架构 §15）。本机已验证 `win-x64/r2r`，其余 RID 需 release workflow 或对应目标 runner 产物闭合；`release.yml` 已上传 publish/verify/package/signing evidence artifact，并在 release job 汇总 `evidence.json` 后调用 `tools/release-evidence-preflight.ps1`，缺证据时保持阻塞，证据齐全也仅为 `pending_review`，证据见 `docs/release-reports/2026-07-02-win-x64-publish.md`。
+- [!] 阻塞：6 个 RID（win-x64/win-arm64/linux-x64/linux-arm64/osx-x64/osx-arm64）的 R2R 通道产物全部构建成功并产出（架构 §15）。本机已验证 `win-x64/r2r`，其余 RID 需 release workflow 或对应目标 runner 产物闭合；`release.yml` 已上传 publish/verify/package/signing evidence artifact，并在 release job 汇总 `evidence.json` 后调用 `tools/release-evidence-preflight.ps1`，缺 manifest 为 `blocked_missing_release_manifest`，schema/JSON 错误为 `blocked_invalid_release_evidence`，缺 RID/channel/signing/hash/upload scope 为 `blocked_missing_release_scope_evidence`，证据齐全也仅为 `release_evidence_attached_pending_review`，证据见 `docs/release-reports/2026-07-02-win-x64-publish.md`。
 - [!] 阻塞：6 个 RID 的 AOT 通道产物全部构建成功并产出；每个 AOT 产物经 SIMD 探针确认 x64 有 ymm（v4 变体有 zmm）、arm64 有 NEON 指令，**无 SSE2 静默退化**（架构 R3、§12.3）。本机已验证 `win-x64/aot` publish + smoke；当前 release evidence 预检要求 AOT `simdProbeKind` 显式区分 `x64_ymm_zmm` 与 `arm64_neon`，并拒绝把 non-x64 skip 报告冒充 arm64 NEON 证明；跨 RID 与每产物 SIMD 探针仍需目标 runner/硬件。
 - [!] 阻塞：R2R 产物在目标机不固定 ISA：运行时 light-up 验证显示 sim 热方法在支持 AVX2/AVX-512 的机器上使用对应宽寄存器（Tier-1 重 JIT 生效）（架构 §12.3、§15）。该项需要代表性 AVX2/AVX-512 目标机与 Tier-1 反汇编证据。
 - [!] 阻塞：Box2D dual-build 完整：6 RID × {动态, 静态} = 12 件 native 产物齐备；R2R 产物 `runtimes/<rid>/native/` 含动态 Box2D，AOT 产物为含静态 Box2D 的单一可执行（架构 §14.4）。本机仅验证 `win-x64` 动态/静态 build 与双通道打包；`tools/audit-release-artifacts.ps1`/`.sh` 已对 AOT 产物递归拒绝动态 Box2D，避免错误路径漏检。
