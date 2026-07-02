@@ -46,6 +46,19 @@ public sealed class DemoStartupOptionsTests
     }
 
     /// <summary>
+    /// 验证脚本化窗口 Demo 只能绑定有限窗口短跑，避免伪装成 headless 验收。
+    /// </summary>
+    [Fact]
+    public void ScriptedWindowDemoRequiresFiniteWindowTicks()
+    {
+        DemoStartupOptions options = DemoStartupOptions.Parse(["--no-hot-reload", "--window-ticks", "60", "--scripted-window-demo"]);
+
+        Assert.True(options.ScriptedWindowDemo);
+        Assert.Equal(60, options.WindowTicks);
+        _ = Assert.Throws<ArgumentException>(() => DemoStartupOptions.Parse(["--scripted-window-demo"]));
+    }
+
+    /// <summary>
     /// 验证窗口短跑不能和 headless 冒烟混用，避免调用方误以为覆盖了窗口路径。
     /// </summary>
     [Fact]

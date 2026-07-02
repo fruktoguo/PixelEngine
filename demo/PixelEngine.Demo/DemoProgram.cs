@@ -4,6 +4,11 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using PixelEngine.Hosting;
+using PixelEngine.Physics;
+using PixelEngine.Scripting;
+using PixelEngine.Simulation;
+using PixelEngine.Simulation.Particles;
+using ScriptScene = PixelEngine.Scripting.Scene;
 
 namespace PixelEngine.Demo;
 
@@ -117,6 +122,22 @@ public static class DemoProgram
         }
 
         PixelEngine.Rendering.RenderWindow window = engine.AttachWindowRuntime();
+        DemoWindowScriptedInput? scriptedInput = null;
+        DemoWindowScriptedProbe? scriptedProbe = null;
+        if (options.ScriptedWindowDemo)
+        {
+            scriptedInput = new DemoWindowScriptedInput(
+                engine.Context.GetService<ScriptInputApi>(),
+                engine.Context.GetService<ScriptCameraApi>());
+            scriptedInput.RegisterPhases(engine.Phases);
+            scriptedProbe = new DemoWindowScriptedProbe(
+                engine.Context.GetService<PhysicsSystem>(),
+                engine.Context.GetService<ParticleSystem>(),
+                engine.Context.GetService<ScriptLightingSynchronizer>());
+            scriptedProbe.RegisterPhases(engine.Phases);
+            Console.WriteLine("脚本化窗口输入已启用。");
+        }
+
         Console.WriteLine("窗口运行时已接入 Rendering/Input 后端。");
         if (options.WindowTicks > 0)
         {
@@ -135,6 +156,11 @@ public static class DemoProgram
                 $"窗口短跑耗时：elapsed_ms={stopwatch.Elapsed.TotalMilliseconds:0.00}, " +
                 $"avg_tick_ms={(executed == 0 ? 0 : stopwatch.Elapsed.TotalMilliseconds / executed):0.00}, " +
                 $"last_profile_ms={Sum(engine.Context.Profiler.LastFrame):0.00}。");
+            if (scriptedInput is not null)
+            {
+                WriteScriptedWindowSummary(engine, scriptedInput, scriptedProbe);
+            }
+
             return;
         }
 
@@ -150,6 +176,57 @@ public static class DemoProgram
         }
 
         return total;
+    }
+
+    private static void WriteScriptedWindowSummary(
+        Engine engine,
+        DemoWindowScriptedInput scriptedInput,
+        DemoWindowScriptedProbe? scriptedProbe)
+    {
+        ScriptScene scene = engine.Context.GetService<ScriptScene>();
+        MaterialBrush? brush = FindBehaviour<MaterialBrush>(scene);
+        ExplosiveTool? explosive = FindBehaviour<ExplosiveTool>(scene);
+        CellGrid grid = engine.Context.GetService<CellGrid>();
+        ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
+        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
+        ushort paintedMaterial = grid.MaterialAt(
+            (int)MathF.Round(scriptedInput.BrushTargetWorld.X),
+            (int)MathF.Round(scriptedInput.BrushTargetWorld.Y));
+        string brushMaterial = brush?.SelectedMaterialName ?? "<missing>";
+
+        Console.WriteLine(
+            $"脚本化窗口输入摘要：frames={scriptedInput.FramesInjected}, " +
+            $"brush_material={brushMaterial}, " +
+            $"brush_radius={brush?.Radius ?? 0}, " +
+            $"painted_material={paintedMaterial}, " +
+            $"explosions={explosive?.ExplosionCount ?? 0}, " +
+            $"last_explosion=({explosive?.LastExplosionX ?? 0:0.00},{explosive?.LastExplosionY ?? 0:0.00}), " +
+            $"particles={particles.ActiveCount}, " +
+            $"max_particles={scriptedProbe?.MaxParticles ?? particles.ActiveCount}, " +
+            $"lights={lighting.PointLights.Length}, " +
+            $"max_lights={scriptedProbe?.MaxLights ?? lighting.PointLights.Length}, " +
+            $"physics_destroyed={physics.LastDestructionResult.DestroyedBodies}, " +
+            $"physics_created={physics.LastDestructionResult.CreatedBodies}, " +
+            $"max_physics_destroyed={scriptedProbe?.MaxDestroyedBodies ?? physics.LastDestructionResult.DestroyedBodies}, " +
+            $"max_physics_created={scriptedProbe?.MaxCreatedBodies ?? physics.LastDestructionResult.CreatedBodies}。");
+    }
+
+    private static TBehaviour? FindBehaviour<TBehaviour>(ScriptScene scene)
+        where TBehaviour : Behaviour
+    {
+        foreach (ScriptEntityInspection entity in scene.CaptureInspectionSnapshot())
+        {
+            foreach (ScriptComponentInspection component in entity.Components)
+            {
+                if (component.Behaviour is TBehaviour behaviour)
+                {
+                    return behaviour;
+                }
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
