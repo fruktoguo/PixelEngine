@@ -179,7 +179,8 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] `ConvexDecompositionTests`、`MarchingSquaresContourTests`、`InverseSamplingRasterizationTests`、`RigidBodySplitConservationTests` 全绿：每片 ≤8 顶点且凸且覆盖原 mask、radius=0、任意角栅格化水密无洞、破坏拆分守恒且速度转移（架构 §8.2/§8.3/§8.4、不变式 #5）。
 - [x] `SaveLoadRoundTripTests`、`MaterialRemapTests`、`VersionMigrationTests` 全绿：逐 cell 等价、改 materials.json 顺序 / 增删后旧档正确重映射、迁移链正确（架构 §11、不变式 #8、R15）。
 - [x] `HotReloadTests`、`ScriptExceptionIsolationTests`、`AlcCollectibilityTests` 全绿：热重载行为正确、异常隔离不崩、ALC 经 GC 可回收且无泄漏（架构 §17.2/§17.4）。
-- [!] 六个基准可产出报告：cells/frame、每核加速曲线、纹理上传、GC 停顿、粒子积分与反应查表延迟已有 Short 报告并已回填 §1.4/§12.7/§12.8；CI regression baseline 已覆盖 GC smoke、CA FullActive/TypicalDirtyRect、Reaction direct lookup 与 20 万粒子积分，并支持按 benchmark 参数行匹配；`tools/hardware-counter-preflight.ps1` 已能显式报告非管理员 ETW 阻塞并在专用 runner 检查 `Cache Misses` / `Branch Mispredictions` 列；阻塞：反应 cache-miss 硬件计数器仍需管理员 ETW Kernel Session / 专用 runner 才能产出真实计数器列（架构 §12.7/§17.3，实测替代估算）。
+- [x] 六个基准可产出报告：cells/frame、每核加速曲线、纹理上传、GC 停顿、粒子积分与反应查表延迟已有 Short 报告并已回填 §1.4/§12.7/§12.8；CI regression baseline 已覆盖 GC smoke、CA FullActive/TypicalDirtyRect、Reaction direct lookup 与 20 万粒子积分，并支持按 benchmark 参数行匹配；见 `docs/benchmark-reports/2026-07-02-plan14-short.md`。
+- [!] 反应 cache-miss / branch-misprediction 硬件计数器报告仍需管理员 ETW Kernel Session / 专用 runner 才能产出真实 `Cache Misses` / `Branch Mispredictions` 列（架构 §12.7/§17.3，实测替代估算）。`tools/hardware-counter-preflight.ps1` 已能显式报告非管理员 ETW 阻塞并在专用 runner 检查所需列，但当前本机会话不能据此勾选硬件计数器验收。
 - [x] `GcPauseBenchmark` 的 `[MemoryDiagnoser]` 报告稳态帧循环 Gen0/1/2 分配为 0（架构 §12.4、零分配纪律）。
 - [x] `DisassemblyGuard` 全绿：热方法无 `RNGCHKFAIL`、热 SIMD 方法出现 ymm/zmm（架构 §12.6/§17.3）。
 - [x] 性能回归门禁生效：故意劣化某热方法会使 CI 判失败（`AGENTS.md §7`，回归即 bug）。
