@@ -93,6 +93,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("ReactionLookupBenchmark.FindDirect", script, StringComparison.Ordinal);
         Assert.Contains("Cache Misses", script, StringComparison.Ordinal);
         Assert.Contains("Branch Mispredictions", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("-RequireCounters", script, StringComparison.Ordinal);
 
         Assert.Contains("tools/hardware-counter-preflight.ps1", report, StringComparison.Ordinal);
         Assert.Contains("blocked_non_admin", report, StringComparison.Ordinal);
