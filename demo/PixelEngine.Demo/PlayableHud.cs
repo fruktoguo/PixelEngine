@@ -30,7 +30,7 @@ public sealed class PlayableHud : Behaviour
     protected override void OnGui(IGuiContext gui)
     {
         ResolveComponents();
-        gui.SetNextWindow(X, Y, 280f, 108f, GuiCondition.FirstUseEver);
+        gui.SetNextWindow(X, Y, 330f, 126f, GuiCondition.FirstUseEver);
         GuiWindowFlags flags = GuiWindowFlags.NoResize |
             GuiWindowFlags.NoMove |
             GuiWindowFlags.NoSavedSettings |
@@ -48,7 +48,8 @@ public sealed class PlayableHud : Behaviour
         float frameMs = diagnostics.FramesPerSecond <= 0.01
             ? 0f
             : 1000f / (float)diagnostics.FramesPerSecond;
-        gui.Text($"FPS {diagnostics.FramesPerSecond:0}   {frameMs:0.0} ms   Sim {diagnostics.SimHz:0}Hz");
+        gui.Text($"Render FPS {diagnostics.FramesPerSecond:0.0}   {frameMs:0.0} ms");
+        gui.Text($"Sim {diagnostics.SimHz:0}Hz   Frame {diagnostics.FrameCount}   Bodies {diagnostics.RigidBodies}");
         gui.Text($"Chunks {diagnostics.ActiveChunks}/{diagnostics.ResidentChunks}   Particles {diagnostics.FreeParticles}");
         gui.EndWindow();
     }

@@ -278,7 +278,7 @@ public static class DemoProgram
 
             EngineDiagnosticsSnapshot diagnostics = engine.Context.GetService<IDiagnosticsApi>().Capture();
             window.SetTitle(
-                $"PixelEngine Demo | FPS {diagnostics.FramesPerSecond:0} | Sim {diagnostics.SimHz:0}Hz | Bodies {diagnostics.RigidBodies}");
+                $"PixelEngine Demo | Render FPS {diagnostics.FramesPerSecond:0.0} | Sim {diagnostics.SimHz:0}Hz | Bodies {diagnostics.RigidBodies}");
         });
     }
 

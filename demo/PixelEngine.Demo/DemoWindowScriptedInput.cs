@@ -172,6 +172,22 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
             }
         }
 
+        if (frame is >= 24 and <= 179)
+        {
+            _keys[keyCount++] = Key.D;
+        }
+
+        if (frame % 56 is 32 or 33 && frame >= 24)
+        {
+            _keys[keyCount++] = Key.Space;
+        }
+
+        if (frame is 44 or 92 or 140)
+        {
+            target = new Point2F(190f + (frame - 44), 272f);
+            _buttons[buttonCount++] = MouseButton.Left;
+        }
+
         Point2F screen = _camera.WorldToScreen(target.X, target.Y);
         _input.Update(
             _keys.AsSpan(0, keyCount),

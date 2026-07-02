@@ -46,7 +46,9 @@ public sealed class RenderPhaseDriver(
     private readonly CaIterationSnapshot[] _caIterationBuffer = new CaIterationSnapshot[256];
     private readonly ConnectedComponentDebugSnapshot[] _connectedComponentBuffer = new ConnectedComponentDebugSnapshot[256];
     private CameraState _presentCamera = CameraState.OneToOne(0, 0, 1, 1);
+    private CameraState _lastBuiltCamera = CameraState.OneToOne(0, 0, 1, 1);
     private bool _frameBuilt;
+    private bool _hasBuiltCamera;
     private bool _hadCpuParticleStamps;
 
     /// <summary>
@@ -70,12 +72,13 @@ public sealed class RenderPhaseDriver(
         ReadOnlySpan<Particle> activeParticles = _particles.ActiveReadOnly;
         bool forceRefreshForParticleErase = _sink.ParticleRenderMode == ParticleRenderMode.CpuStamp &&
             (_hadCpuParticleStamps || activeParticles.Length > 0);
+        bool forceRefreshForCamera = !_hasBuiltCamera || CameraChanged(_lastBuiltCamera, camera);
         RenderFrameContext frame = new(
             _chunks,
             _materials,
             _temperature,
             camera,
-            context.Timing.RunSim || forceRefreshForParticleErase,
+            context.Timing.RunSim || forceRefreshForParticleErase || forceRefreshForCamera,
             CellDebugOverlaysEnabled() ? _debugOverlays : null);
         _builder.Build(frame, _renderBuffer, _aux, context.Context.Profiler);
         if (_sink.ParticleRenderMode == ParticleRenderMode.CpuStamp)
@@ -89,7 +92,18 @@ public sealed class RenderPhaseDriver(
         }
 
         _presentCamera = camera;
+        _lastBuiltCamera = camera;
+        _hasBuiltCamera = true;
         _frameBuilt = true;
+    }
+
+    private static bool CameraChanged(in CameraState previous, in CameraState current)
+    {
+        return previous.ViewportWidth != current.ViewportWidth ||
+            previous.ViewportHeight != current.ViewportHeight ||
+            MathF.Abs(previous.OriginWorldX - current.OriginWorldX) > 0.0001f ||
+            MathF.Abs(previous.OriginWorldY - current.OriginWorldY) > 0.0001f ||
+            MathF.Abs(previous.CellsPerPixel - current.CellsPerPixel) > 0.0001f;
     }
 
     private bool CellDebugOverlaysEnabled()

@@ -238,6 +238,52 @@ public sealed class EnginePhaseDriverTests
     }
 
     /// <summary>
+    /// 验证 render-only 帧中相机移动会强制重建 render buffer，避免世界画面与 overlay/玩家移动之间产生残影。
+    /// </summary>
+    [Fact]
+    public void RenderPhaseDriverRefreshesRenderBufferWhenCameraMovesWithoutSimStep()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        chunk.Material[CellAddressing.LocalIndexFromLocal(0, 0)] = 1;
+        TestChunkSource chunks = new(chunk);
+        ParticleSystem particles = new(capacity: 16);
+        TemperatureField temperature = new();
+        ScriptCameraApi camera = new(viewportWidth: 2, viewportHeight: 1, centerX: 1, centerY: 0.5f, zoom: 1);
+        ScriptCameraSynchronizer cameraSync = new(camera);
+        _ = cameraSync.Sync();
+        ScriptLightingSynchronizer lightingSync = new(new ScriptLightingApi(), cameraSync);
+        lightingSync.Sync();
+        RecordingRenderFrameSink sink = new();
+        RenderPhaseDriver driver = new(
+            chunks,
+            materials,
+            temperature,
+            particles,
+            cameraSync,
+            lightingSync,
+            sink);
+
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddPhaseDriver(driver)
+            .Build();
+
+        FrameTiming first = engine.RunOneTick();
+        Assert.True(first.RunSim);
+        Assert.Equal(0xFF_80_80_80u, sink.FirstPixel);
+
+        engine.EnterEditMode();
+        camera.SetCenter(2, 0.5f);
+        _ = cameraSync.Sync();
+        FrameTiming second = engine.RunOneTick();
+
+        Assert.False(second.RunSim);
+        Assert.Equal(2, sink.FrameCount);
+        Assert.Equal(0u, sink.FirstPixel);
+    }
+
+    /// <summary>
     /// 验证 CA iteration 调试叠层只显示本帧实际迭代区域，resident sleeping chunk 不产生迭代矩形。
     /// </summary>
     [Fact]
