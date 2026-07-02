@@ -38,6 +38,11 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
     public Point2F BridgeCutTargetWorld { get; } = new(209f, 250f);
 
     /// <summary>
+    /// 完整路线探针中用于打开起点右侧石柱通道的目标世界坐标。
+    /// </summary>
+    public Point2F RouteColumnTargetWorld { get; } = new(154f, 262f);
+
+    /// <summary>
     /// 注册输入注入相位；该 hook 应在 Silk 输入采样之后注册，以便覆盖采样结果。
     /// </summary>
     public void RegisterPhases(EnginePhasePipeline phases)
@@ -66,7 +71,7 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
         }
         else if (frame == 7)
         {
-            target = ExplosionTargetWorld;
+            target = _routeProbe ? RouteColumnTargetWorld : ExplosionTargetWorld;
             _buttons[buttonCount++] = MouseButton.Middle;
         }
         else if (frame is >= 9 and <= 16)
@@ -74,10 +79,18 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
             target = new Point2F(BridgeCutTargetWorld.X, BridgeCutTargetWorld.Y + (frame - 12));
             _buttons[buttonCount++] = MouseButton.Right;
         }
-        else if (_routeProbe && frame >= 18)
+        else if (_routeProbe && frame is >= 21 and <= 88)
+        {
+            int sweep = frame - 21;
+            float sweepX = 142f + (sweep % 24);
+            float sweepY = 252f + (sweep / 24 * 8f);
+            target = new Point2F(sweepX, sweepY);
+            _buttons[buttonCount++] = MouseButton.Right;
+        }
+        else if (_routeProbe && frame >= 92)
         {
             _keys[keyCount++] = Key.D;
-            if (frame % 52 is 20 or 21)
+            if (frame % 48 is 14 or 15)
             {
                 _keys[keyCount++] = Key.Space;
             }

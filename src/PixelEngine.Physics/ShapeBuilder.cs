@@ -23,6 +23,27 @@ public static unsafe class ShapeBuilder
         Vector2 bodyPositionPixels,
         float density = 1f)
     {
+        return TryBuildBody(worldId, convexPieces, bodyPositionPixels, out B2BodyId bodyId, density)
+            ? bodyId
+            : throw new InvalidOperationException("所有凸片均退化，无法创建 Box2D shape。");
+    }
+
+    /// <summary>
+    /// 尝试创建动态 body；所有凸片退化时返回 false 且不保留 Box2D body。
+    /// </summary>
+    /// <param name="worldId">Box2D world。</param>
+    /// <param name="convexPieces">≤8 顶点凸片。</param>
+    /// <param name="bodyPositionPixels">body 原点像素坐标。</param>
+    /// <param name="bodyId">成功时返回 body 句柄。</param>
+    /// <param name="density">shape 密度。</param>
+    /// <returns>至少创建一个 shape 时返回 true。</returns>
+    public static bool TryBuildBody(
+        B2WorldId worldId,
+        ReadOnlySpan<ConvexPolygon> convexPieces,
+        Vector2 bodyPositionPixels,
+        out B2BodyId bodyId,
+        float density = 1f)
+    {
         if (convexPieces.IsEmpty)
         {
             throw new ArgumentException("至少需要一个凸片。", nameof(convexPieces));
@@ -40,7 +61,7 @@ public static unsafe class ShapeBuilder
             X = PhysicsScale.PixelToPhysics(bodyPositionPixels.X),
             Y = PhysicsScale.PixelToPhysics(bodyPositionPixels.Y),
         };
-        B2BodyId bodyId = Box2D.b2CreateBody(worldId, in bodyDef);
+        bodyId = Box2D.b2CreateBody(worldId, in bodyDef);
 
         B2ShapeDef shapeDef = Box2D.b2DefaultShapeDef();
         shapeDef.Density = density;
@@ -76,10 +97,11 @@ public static unsafe class ShapeBuilder
         if (createdShapes == 0)
         {
             Box2D.b2DestroyBody(bodyId);
-            throw new InvalidOperationException("所有凸片均退化，无法创建 Box2D shape。");
+            bodyId = default;
+            return false;
         }
 
         Box2D.b2Body_ApplyMassFromShapes(bodyId);
-        return bodyId;
+        return true;
     }
 }

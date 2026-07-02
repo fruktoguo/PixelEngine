@@ -225,7 +225,16 @@ public sealed class RigidBodyDestruction
         int created = 0;
         foreach (ChildBodyPlan child in plan.Children)
         {
-            B2BodyId childBodyId = ShapeBuilder.BuildBody(worldId, child.ConvexPieces.AsSpan(0, child.ConvexPieceCount), plan.Parent.PositionPixels);
+            if (!ShapeBuilder.TryBuildBody(
+                worldId,
+                child.ConvexPieces.AsSpan(0, child.ConvexPieceCount),
+                plan.Parent.PositionPixels,
+                out B2BodyId childBodyId))
+            {
+                fragments += SpawnDegenerateChildFragments(child, plan.Parent);
+                continue;
+            }
+
             Box2D.b2Body_SetTransform(childBodyId, plan.Parent.NativeTransform.P, plan.Parent.NativeTransform.Q);
             TransferVelocity(childBodyId, child.SourceBounds, plan.Body.Mask.LocalOrigin, plan.Parent);
             _ = physicsWorld.AddBody(childBodyId, child.Mask);
@@ -233,6 +242,39 @@ public sealed class RigidBodyDestruction
         }
 
         return new RigidDestructionResult(1, 1, created, fragments, 0);
+    }
+
+    private int SpawnDegenerateChildFragments(ChildBodyPlan child, in ParentBodyState parent)
+    {
+        int fragments = 0;
+        BodyLocalMask mask = child.Mask;
+        for (int y = 0; y < mask.Height; y++)
+        {
+            for (int x = 0; x < mask.Width; x++)
+            {
+                if (!mask.IsSolid(x, y))
+                {
+                    continue;
+                }
+
+                ushort material = mask.MaterialAt(x, y);
+                if (material == 0)
+                {
+                    continue;
+                }
+
+                Vector2 local = new Vector2(x + 0.5f, y + 0.5f) - mask.LocalOrigin;
+                Vector2 world = parent.Transform.TransformPoint(local);
+                if (_particles is not null)
+                {
+                    _ = _particles.TrySpawn(new ParticleSpawn(world.X, world.Y, 0f, 0f, material, ColorVariant: 0, Life: 0));
+                }
+
+                fragments++;
+            }
+        }
+
+        return fragments;
     }
 
     private static RebuildPlan PreparePlan(RebuildWorkItem workItem, int fragmentPixelThreshold)
