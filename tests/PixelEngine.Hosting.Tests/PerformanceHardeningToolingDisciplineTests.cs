@@ -680,14 +680,20 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("<IlcInstructionSet>apple-m1,lse,rcpc</IlcInstructionSet>", props, StringComparison.Ordinal);
 
         Assert.Contains("AOT SIMD probe", release, StringComparison.Ordinal);
-        Assert.Contains("matrix.channel == 'aot' && endsWith(matrix.rid, '-x64')", release, StringComparison.Ordinal);
+        Assert.Contains("matrix.channel == 'aot' && matrix.shell == 'pwsh'", release, StringComparison.Ordinal);
+        Assert.Contains("matrix.channel == 'aot' && matrix.shell == 'bash'", release, StringComparison.Ordinal);
+        Assert.Contains("if: always() && matrix.channel == 'aot'", release, StringComparison.Ordinal);
         Assert.Contains("aot-simd-probe.ps1", release, StringComparison.Ordinal);
         Assert.Contains("aot-simd-probe.sh", release, StringComparison.Ordinal);
         Assert.Contains("-simd-output.txt", release, StringComparison.Ordinal);
         Assert.Contains("## Probe output", release, StringComparison.Ordinal);
         Assert.Contains("$probeOutput", release, StringComparison.Ordinal);
         Assert.Contains("ymm/zmm", aotProbePs1, StringComparison.Ordinal);
+        Assert.Contains("NEON marker", aotProbePs1, StringComparison.Ordinal);
         Assert.Contains("[yz]mm", aotProbeSh, StringComparison.Ordinal);
+        Assert.Contains("NEON marker", aotProbeSh, StringComparison.Ordinal);
+        Assert.DoesNotContain("skipped for non-x64", aotProbePs1, StringComparison.Ordinal);
+        Assert.DoesNotContain("skipped for non-x64", aotProbeSh, StringComparison.Ordinal);
     }
 
     /// <summary>
