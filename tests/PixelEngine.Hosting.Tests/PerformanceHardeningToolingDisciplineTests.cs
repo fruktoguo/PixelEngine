@@ -246,6 +246,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string script = ReadRepositoryFile("tools", "demo-manual-acceptance-preflight.ps1");
         string report = ReadRepositoryFile("docs", "runtime-reports", "2026-07-02-demo-manual-acceptance.md");
         string plan = ReadRepositoryFile("plan", "13-demo-game.md");
+        string hostingPlan = ReadRepositoryFile("plan", "18-hosting-runtime.md");
 
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
         Assert.Contains("RunScriptedProbes", script, StringComparison.Ordinal);
@@ -284,6 +285,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         Assert.Contains("tools/demo-manual-acceptance-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", plan, StringComparison.Ordinal);
+
+        Assert.Contains("tools/demo-manual-acceptance-preflight.ps1", hostingPlan, StringComparison.Ordinal);
+        Assert.Contains("hudMenuEditorVideo", hostingPlan, StringComparison.Ordinal);
+        Assert.Contains("manual_evidence_attached_pending_review", hostingPlan, StringComparison.Ordinal);
     }
 
     /// <summary>
