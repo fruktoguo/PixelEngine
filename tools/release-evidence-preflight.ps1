@@ -38,7 +38,8 @@ function Add-EvidenceFile {
         [System.Collections.Generic.List[string]]$Missing,
         [string]$Root,
         [string]$Scope,
-        [string]$Path
+        [string]$Path,
+        [string]$DeclaredSha256
     )
 
     if ([string]::IsNullOrWhiteSpace($Path)) {
@@ -59,10 +60,22 @@ function Add-EvidenceFile {
     }
 
     $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $resolved
+    if ([string]::IsNullOrWhiteSpace($DeclaredSha256)) {
+        $Missing.Add("$Scope 缺少 sha256")
+        return
+    }
+
+    $expectedHash = $DeclaredSha256.Trim().ToUpperInvariant()
+    $actualHash = $hash.Hash.ToUpperInvariant()
+    if ($expectedHash -ne $actualHash) {
+        $Missing.Add("$Scope sha256 不匹配：expected=$expectedHash actual=$actualHash")
+        return
+    }
+
     $Evidence.Add([pscustomobject]@{
         Scope = $Scope
         Path = ConvertTo-RelativePath -Root $Root -Path $resolved
-        Sha256 = $hash.Hash
+        Sha256 = $actualHash
     })
 }
 
@@ -200,7 +213,7 @@ function Write-ReleaseEvidenceReport {
 $root = Resolve-RepositoryRoot
 Set-Location $root
 
-$artifactRoot = Join-Path $root $Artifacts
+$artifactRoot = if ([IO.Path]::IsPathRooted($Artifacts)) { $Artifacts } else { Join-Path $root $Artifacts }
 $reportPath = Join-Path $artifactRoot "release-evidence-preflight.md"
 $evidence = [System.Collections.Generic.List[object]]::new()
 $missing = [System.Collections.Generic.List[string]]::new()
@@ -240,10 +253,10 @@ foreach ($ridName in Get-JsonPropertyNames $manifest.artifacts) {
     }
 }
 
-Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "workflow_run" -Path ([string]$manifest.workflowRunReport)
-Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "github_release_upload" -Path ([string]$manifest.githubRelease.uploadReport)
-Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "deterministic_hash" -Path ([string]$manifest.deterministicHashReport)
-Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "r2r_lightup" -Path ([string]$manifest.r2rLightupReport)
+Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "workflow_run" -Path ([string]$manifest.workflowRunReport) -DeclaredSha256 ([string]$manifest.workflowRunSha256)
+Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "github_release_upload" -Path ([string]$manifest.githubRelease.uploadReport) -DeclaredSha256 ([string]$manifest.githubRelease.uploadSha256)
+Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "deterministic_hash" -Path ([string]$manifest.deterministicHashReport) -DeclaredSha256 ([string]$manifest.deterministicHashSha256)
+Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "r2r_lightup" -Path ([string]$manifest.r2rLightupReport) -DeclaredSha256 ([string]$manifest.r2rLightupSha256)
 
 foreach ($rid in $rids) {
     foreach ($channel in $channels) {
@@ -253,19 +266,19 @@ foreach ($rid in $rids) {
             continue
         }
 
-        Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/publish" -Path ([string]$node.publishReport)
-        Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/verify" -Path ([string]$node.verifyReport)
-        Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/package" -Path ([string]$node.package)
-        Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/checksum" -Path ([string]$node.checksum)
+        Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/publish" -Path ([string]$node.publishReport) -DeclaredSha256 ([string]$node.publishSha256)
+        Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/verify" -Path ([string]$node.verifyReport) -DeclaredSha256 ([string]$node.verifySha256)
+        Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/package" -Path ([string]$node.package) -DeclaredSha256 ([string]$node.packageSha256)
+        Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/checksum" -Path ([string]$node.checksum) -DeclaredSha256 ([string]$node.checksumSha256)
 
         if ($channel -eq "aot") {
-            Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/simd_probe" -Path ([string]$node.simdProbe)
+            Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/simd_probe" -Path ([string]$node.simdProbe) -DeclaredSha256 ([string]$node.simdProbeSha256)
             Test-AotSimdEvidence -Missing $missing -Root $root -Rid $rid -Node $node
         }
 
         if ($rid.StartsWith("osx-", [StringComparison]::Ordinal)) {
-            Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/codesign" -Path ([string]$node.codesignReport)
-            Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/notarization" -Path ([string]$node.notarizationReport)
+            Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/codesign" -Path ([string]$node.codesignReport) -DeclaredSha256 ([string]$node.codesignSha256)
+            Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/notarization" -Path ([string]$node.notarizationReport) -DeclaredSha256 ([string]$node.notarizationSha256)
         }
     }
 }
@@ -282,7 +295,7 @@ if ($missing.Count -gt 0) {
     exit 5
 }
 
-$detail = "Release evidence manifest is complete and SHA256 hashes were recorded. Human review still must confirm the reports prove 6 RID R2R/AOT outputs, AOT SIMD probes, R2R runtime light-up, macOS codesign/notarization, deterministic hashes and GitHub Release upload before plan/15 can be unblocked."
+$detail = "Release evidence manifest is complete and declared SHA256 hashes matched the evidence files. Human review still must confirm the reports prove 6 RID R2R/AOT outputs, AOT SIMD probes, R2R runtime light-up, macOS codesign/notarization, deterministic hashes and GitHub Release upload before plan/15 can be unblocked."
 Write-ReleaseEvidenceReport -Path $reportPath -Status "release_evidence_attached_pending_review" -Evidence $evidence -Missing $missing -Detail $detail
 Write-Host "Release evidence preflight release_evidence_attached_pending_review. Report: $reportPath"
 

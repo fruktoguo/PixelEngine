@@ -1,46 +1,72 @@
 {
   "schemaVersion": 1,
   "workflowRunReport": "artifacts/release-evidence/workflow-run.md",
+  "workflowRunSha256": "<sha256>",
   "deterministicHashReport": "artifacts/release-evidence/deterministic-hash.md",
+  "deterministicHashSha256": "<sha256>",
   "r2rLightupReport": "artifacts/release-evidence/r2r-lightup.md",
+  "r2rLightupSha256": "<sha256>",
   "githubRelease": {
-    "uploadReport": "artifacts/release-evidence/github-release-upload.md"
+    "uploadReport": "artifacts/release-evidence/github-release-upload.md",
+    "uploadSha256": "<sha256>"
   },
   "artifacts": {
     "win-x64": {
       "r2r": {
         "publishReport": "artifacts/release-evidence/win-x64-r2r-publish.md",
+        "publishSha256": "<sha256>",
         "verifyReport": "artifacts/release-evidence/win-x64-r2r-verify.md",
+        "verifySha256": "<sha256>",
         "package": "artifacts/package/PixelEngine-Demo-0.1.0-win-x64-r2r.zip",
-        "checksum": "artifacts/package/SHA256SUMS"
+        "packageSha256": "<sha256>",
+        "checksum": "artifacts/package/SHA256SUMS",
+        "checksumSha256": "<sha256>"
       },
       "aot": {
         "publishReport": "artifacts/release-evidence/win-x64-aot-publish.md",
+        "publishSha256": "<sha256>",
         "verifyReport": "artifacts/release-evidence/win-x64-aot-verify.md",
+        "verifySha256": "<sha256>",
         "simdProbe": "artifacts/release-evidence/win-x64-aot-simd.md",
+        "simdProbeSha256": "<sha256>",
         "simdProbeKind": "x64_ymm_zmm",
         "package": "artifacts/package/PixelEngine-Demo-0.1.0-win-x64-aot.zip",
-        "checksum": "artifacts/package/SHA256SUMS"
+        "packageSha256": "<sha256>",
+        "checksum": "artifacts/package/SHA256SUMS",
+        "checksumSha256": "<sha256>"
       }
     },
     "osx-arm64": {
       "r2r": {
         "publishReport": "artifacts/release-evidence/osx-arm64-r2r-publish.md",
+        "publishSha256": "<sha256>",
         "verifyReport": "artifacts/release-evidence/osx-arm64-r2r-verify.md",
+        "verifySha256": "<sha256>",
         "codesignReport": "artifacts/release-evidence/osx-arm64-r2r-codesign.md",
+        "codesignSha256": "<sha256>",
         "notarizationReport": "artifacts/release-evidence/osx-arm64-r2r-notarization.md",
+        "notarizationSha256": "<sha256>",
         "package": "artifacts/package/PixelEngine-Demo-0.1.0-osx-arm64-r2r.tar.gz",
-        "checksum": "artifacts/package/SHA256SUMS"
+        "packageSha256": "<sha256>",
+        "checksum": "artifacts/package/SHA256SUMS",
+        "checksumSha256": "<sha256>"
       },
       "aot": {
         "publishReport": "artifacts/release-evidence/osx-arm64-aot-publish.md",
+        "publishSha256": "<sha256>",
         "verifyReport": "artifacts/release-evidence/osx-arm64-aot-verify.md",
+        "verifySha256": "<sha256>",
         "simdProbe": "artifacts/release-evidence/osx-arm64-aot-simd.md",
+        "simdProbeSha256": "<sha256>",
         "simdProbeKind": "arm64_neon",
         "codesignReport": "artifacts/release-evidence/osx-arm64-aot-codesign.md",
+        "codesignSha256": "<sha256>",
         "notarizationReport": "artifacts/release-evidence/osx-arm64-aot-notarization.md",
+        "notarizationSha256": "<sha256>",
         "package": "artifacts/package/PixelEngine-Demo-0.1.0-osx-arm64-aot.tar.gz",
-        "checksum": "artifacts/package/SHA256SUMS"
+        "packageSha256": "<sha256>",
+        "checksum": "artifacts/package/SHA256SUMS",
+        "checksumSha256": "<sha256>"
       }
     }
   }

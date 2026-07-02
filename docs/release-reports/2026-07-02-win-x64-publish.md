@@ -53,6 +53,6 @@ Release artifact audit completed.
 ./tools/release-evidence-preflight.ps1 -EvidenceManifestPath artifacts/release-evidence/evidence.json -AllowBlocked
 ```
 
-未提供 manifest 时状态为 `blocked_missing_release_manifest`；manifest 存在但缺任一 RID/channel、AOT SIMD、macOS codesign/notarization、R2R light-up、确定性 hash 或 GitHub Release 上传报告时状态为 `blocked_missing_release_scope_evidence`；证据文件齐全时状态为 `release_evidence_attached_pending_review`，仍需人工确认这些报告确实闭合 plan/15 的外部验收。AOT SIMD evidence 必须带 `simdProbeKind`，x64 为 `x64_ymm_zmm` 且报告包含 ymm/zmm，arm64 为 `arm64_neon` 且报告包含 NEON；skip 报告不能冒充 SIMD 证明。未传 `-AllowBlocked` 时，即使证据齐全也会以非零退出，避免把 pending review 误当成验收通过。
+未提供 manifest 时状态为 `blocked_missing_release_manifest`；manifest 存在但缺任一 RID/channel、AOT SIMD、macOS codesign/notarization、R2R light-up、确定性 hash 或 GitHub Release 上传报告时状态为 `blocked_missing_release_scope_evidence`；manifest 中每个 evidence path 必须带对应 `sha256` 字段，预检会重新计算并拒绝缺失或不匹配的 hash；证据文件齐全且 hash 匹配时状态为 `release_evidence_attached_pending_review`，仍需人工确认这些报告确实闭合 plan/15 的外部验收。AOT SIMD evidence 必须带 `simdProbeKind`，x64 为 `x64_ymm_zmm` 且报告包含 ymm/zmm，arm64 为 `arm64_neon` 且报告包含 NEON；skip 报告不能冒充 SIMD 证明。未传 `-AllowBlocked` 时，即使证据齐全也会以非零退出，避免把 pending review 误当成验收通过。
 
 manifest schema 示例见 `docs/release-reports/release-evidence-manifest.example.json`。示例只描述字段契约，不作为验收证据。
