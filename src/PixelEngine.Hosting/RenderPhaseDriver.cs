@@ -47,6 +47,7 @@ public sealed class RenderPhaseDriver(
     private readonly ConnectedComponentDebugSnapshot[] _connectedComponentBuffer = new ConnectedComponentDebugSnapshot[256];
     private CameraState _presentCamera = CameraState.OneToOne(0, 0, 1, 1);
     private bool _frameBuilt;
+    private bool _hadCpuParticleStamps;
 
     /// <summary>
     /// 最近一次相位 10 实际提交给 Rendering 的 overlay 命令数量，用于 Demo/测试诊断脚本可见层是否进入渲染链路。
@@ -66,18 +67,25 @@ public sealed class RenderPhaseDriver(
     private void BuildFrame(EngineTickContext context)
     {
         CameraState camera = _camera.Current;
+        ReadOnlySpan<Particle> activeParticles = _particles.ActiveReadOnly;
+        bool forceRefreshForParticleErase = _sink.ParticleRenderMode == ParticleRenderMode.CpuStamp &&
+            (_hadCpuParticleStamps || activeParticles.Length > 0);
         RenderFrameContext frame = new(
             _chunks,
             _materials,
             _temperature,
             camera,
-            context.Timing.RunSim,
+            context.Timing.RunSim || forceRefreshForParticleErase,
             CellDebugOverlaysEnabled() ? _debugOverlays : null);
         _builder.Build(frame, _renderBuffer, _aux, context.Context.Profiler);
-        ReadOnlySpan<Particle> activeParticles = _particles.ActiveReadOnly;
         if (_sink.ParticleRenderMode == ParticleRenderMode.CpuStamp)
         {
             _particleCompositor.Stamp(activeParticles, _materials, camera, _renderBuffer, _aux, context.Context.Profiler);
+            _hadCpuParticleStamps = activeParticles.Length > 0;
+        }
+        else
+        {
+            _hadCpuParticleStamps = false;
         }
 
         _presentCamera = camera;

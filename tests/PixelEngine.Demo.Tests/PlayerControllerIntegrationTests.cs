@@ -15,7 +15,7 @@ namespace PixelEngine.Demo.Tests;
 public sealed class PlayerControllerIntegrationTests
 {
     /// <summary>
-    /// 验证 Demo HUD 与暂停菜单只经脚本 GUI 门面绘制玩家状态、笔刷、性能行、菜单按钮和调试叠层。
+    /// 验证 Demo HUD 与暂停菜单只经脚本 GUI 门面绘制玩家状态、笔刷、性能行、菜单按钮和默认折叠的调试叠层。
     /// </summary>
     [Fact]
     public void DemoHudAndPauseMenuDrawExpectedGuiThroughScriptContext()
@@ -61,9 +61,9 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Contains("button:打开 Editor", pauseGui.Drawn);
         Assert.Contains("button:重开", pauseGui.Drawn);
         Assert.Contains("button:退出", pauseGui.Drawn);
-        Assert.Contains("text:调试叠层", pauseGui.Drawn);
-        Assert.Contains("checkbox:dirty rect:False", pauseGui.Drawn);
-        Assert.Contains("checkbox:temperature:False", pauseGui.Drawn);
+        Assert.Contains("text:调试", pauseGui.Drawn);
+        Assert.Contains("checkbox:显示调试叠层:False", pauseGui.Drawn);
+        Assert.DoesNotContain("checkbox:dirty rect:False", pauseGui.Drawn);
         Assert.Contains("text-colored:重开关卡快照尚未捕获。:FF4080FF", pauseGui.Drawn);
 
         RecordingGuiContext continueGui = new(clickedButtons: ["继续"]);
@@ -98,6 +98,9 @@ public sealed class PlayerControllerIntegrationTests
 
         Assert.Contains("button:打开 Editor", editorGui.Drawn);
         Assert.False(runtimeControl.Capture().IsPlaying);
+
+        RecordingGuiContext revealGui = new(toggledCheckboxes: ["显示调试叠层"]);
+        runtime.DrawGui(revealGui);
 
         RecordingGuiContext overlayGui = new(toggledCheckboxes: ["dirty rect"]);
         runtime.DrawGui(overlayGui);

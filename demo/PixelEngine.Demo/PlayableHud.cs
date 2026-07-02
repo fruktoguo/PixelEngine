@@ -45,7 +45,10 @@ public sealed class PlayableHud : Behaviour
         gui.Text($"射击 {_projectile?.ShotsFired ?? 0}");
         EngineDiagnosticsSnapshot diagnostics = Context.Diagnostics.Capture();
         gui.Separator();
-        gui.Text($"FPS {diagnostics.FramesPerSecond:0}   Sim {diagnostics.SimHz:0}Hz");
+        float frameMs = diagnostics.FramesPerSecond <= 0.01
+            ? 0f
+            : 1000f / (float)diagnostics.FramesPerSecond;
+        gui.Text($"FPS {diagnostics.FramesPerSecond:0}   {frameMs:0.0} ms   Sim {diagnostics.SimHz:0}Hz");
         gui.Text($"Chunks {diagnostics.ActiveChunks}/{diagnostics.ResidentChunks}   Particles {diagnostics.FreeParticles}");
         gui.EndWindow();
     }
