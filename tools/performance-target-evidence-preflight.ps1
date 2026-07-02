@@ -168,7 +168,7 @@ if ([string]::IsNullOrWhiteSpace($EvidenceManifestPath)) {
     Write-PerformanceEvidenceReport -Path $reportPath -Status "blocked_missing_target_performance_manifest" -ExitCode 2 -Evidence @($evidence) -Missing @("performance target evidence manifest 不存在") -Detail $detail
     Write-Host "Performance target evidence preflight blocked_missing_target_performance_manifest. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
     if (-not $AllowBlocked) {
-        Write-Error "Performance target evidence preflight failed: blocked_missing_target_performance_manifest"
+        [Console]::Error.WriteLine("Performance target evidence preflight failed: blocked_missing_target_performance_manifest")
         exit 2
     }
 
@@ -181,7 +181,7 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
     Write-PerformanceEvidenceReport -Path $reportPath -Status "blocked_missing_target_performance_manifest" -ExitCode 2 -Evidence @($evidence) -Missing @("performance target evidence manifest 不存在：$EvidenceManifestPath") -Detail $detail
     Write-Host "Performance target evidence preflight blocked_missing_target_performance_manifest. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
     if (-not $AllowBlocked) {
-        Write-Error "Performance target evidence preflight failed: blocked_missing_target_performance_manifest"
+        [Console]::Error.WriteLine("Performance target evidence preflight failed: blocked_missing_target_performance_manifest")
         exit 2
     }
 
@@ -244,7 +244,7 @@ if ($missing.Count -gt 0) {
     Write-PerformanceEvidenceReport -Path $reportPath -Status "blocked_missing_target_performance_scope_evidence" -ExitCode 5 -Evidence @($evidence) -Missing @($missing) -Detail $detail
     Write-Host "Performance target evidence preflight blocked_missing_target_performance_scope_evidence. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
     if (-not $AllowBlocked) {
-        Write-Error "Performance target evidence preflight failed: blocked_missing_target_performance_scope_evidence"
+        [Console]::Error.WriteLine("Performance target evidence preflight failed: blocked_missing_target_performance_scope_evidence")
         exit 5
     }
 
@@ -256,7 +256,7 @@ Write-PerformanceEvidenceReport -Path $reportPath -Status "target_performance_ev
 Write-Host "Performance target evidence preflight target_performance_evidence_attached_pending_review. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
 
 if (-not $AllowBlocked) {
-    Write-Error "Performance target evidence preflight failed: target_performance_evidence_attached_pending_review"
+    [Console]::Error.WriteLine("Performance target evidence preflight failed: target_performance_evidence_attached_pending_review")
     exit 2
 }
 

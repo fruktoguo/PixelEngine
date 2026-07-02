@@ -132,7 +132,7 @@ if ([string]::IsNullOrWhiteSpace($EvidenceManifestPath)) {
     Write-CiEvidenceReport -Path $reportPath -Status "blocked_missing_ci_manifest" -ExitCode 2 -Evidence @($evidence) -Missing @("ci evidence manifest 不存在") -Detail $detail
     Write-Host "CI matrix evidence preflight blocked_missing_ci_manifest. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
     if (-not $AllowBlocked) {
-        Write-Error "CI matrix evidence preflight failed: blocked_missing_ci_manifest"
+        [Console]::Error.WriteLine("CI matrix evidence preflight failed: blocked_missing_ci_manifest")
         exit 2
     }
 
@@ -145,7 +145,7 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
     Write-CiEvidenceReport -Path $reportPath -Status "blocked_missing_ci_manifest" -ExitCode 2 -Evidence @($evidence) -Missing @("ci evidence manifest 不存在：$EvidenceManifestPath") -Detail $detail
     Write-Host "CI matrix evidence preflight blocked_missing_ci_manifest. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
     if (-not $AllowBlocked) {
-        Write-Error "CI matrix evidence preflight failed: blocked_missing_ci_manifest"
+        [Console]::Error.WriteLine("CI matrix evidence preflight failed: blocked_missing_ci_manifest")
         exit 2
     }
 
@@ -206,7 +206,7 @@ if ($missing.Count -gt 0) {
     Write-CiEvidenceReport -Path $reportPath -Status "blocked_missing_ci_scope_evidence" -ExitCode 5 -Evidence @($evidence) -Missing @($missing) -Detail $detail
     Write-Host "CI matrix evidence preflight blocked_missing_ci_scope_evidence. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
     if (-not $AllowBlocked) {
-        Write-Error "CI matrix evidence preflight failed: blocked_missing_ci_scope_evidence"
+        [Console]::Error.WriteLine("CI matrix evidence preflight failed: blocked_missing_ci_scope_evidence")
         exit 5
     }
 
@@ -218,7 +218,7 @@ Write-CiEvidenceReport -Path $reportPath -Status "ci_matrix_evidence_attached_pe
 Write-Host "CI matrix evidence preflight ci_matrix_evidence_attached_pending_review. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
 
 if (-not $AllowBlocked) {
-    Write-Error "CI matrix evidence preflight failed: ci_matrix_evidence_attached_pending_review"
+    [Console]::Error.WriteLine("CI matrix evidence preflight failed: ci_matrix_evidence_attached_pending_review")
     exit 2
 }
 
