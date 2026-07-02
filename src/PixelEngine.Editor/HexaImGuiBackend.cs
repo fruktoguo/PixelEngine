@@ -44,6 +44,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
         _context = ImGui.CreateContext();
         _layoutPath = options.LayoutPath;
         ImGui.SetCurrentContext(_context);
+        ImGuiImplOpenGL3.SetCurrentContext(_context);
         ImPlot.SetImGuiContext(_context);
         _plotContext = ImPlot.CreateContext();
         ImPlot.SetCurrentContext(_plotContext);

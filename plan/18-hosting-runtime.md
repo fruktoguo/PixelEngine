@@ -74,10 +74,10 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [x] `EngineBuilder`:fluent 配置(窗口/内部 sim 分辨率/worker 数/GC 模式/Editor 开关/headless/确定性开关/GPU 门控/内容根/起始场景),`Build()→Engine`。[架构 §19.2 配置化]
 - [x] `Engine`:持有全部子系统 + `EngineContext`;`Run()`/`RunOneTick()`/`Shutdown()`。
 - [x] `EngineContext`:服务定位 + 诊断 + 事件总线 + 时间 + 当前质量档位。
-- [!] 子系统装配与**初始化顺序**(§3.1);native(Box2D/OpenAL/GL)与 ALC 的正确释放顺序。`EngineBuilderTests.SubsystemsInitializeInOrderAndShutdownInReverseOrder` 已覆盖 Hosting 子系统逆序关闭；`EnginePhaseDriverTests.EngineShutdownDisposesAttachedScriptRuntime` 已覆盖 Engine 关闭会调用已接入 `IScriptRuntime.Shutdown()`；`HotReloadServiceTests`/`AlcCollectibilityTests` 已覆盖热重载旧 ALC 可回收；`docs/runtime-reports/2026-07-02-demo-window-smoke.md` 已记录真实窗口 Content/Simulation/Physics/Audio/Scripting/Rendering/Input 装配后 120 tick 正常退出。阻塞:仍缺真实窗口完整长跑后 GL/OpenAL/Box2D/native 资源释放审计与 Editor 窗口入口长跑证据。
+- [!] 子系统装配与**初始化顺序**(§3.1);native(Box2D/OpenAL/GL)与 ALC 的正确释放顺序。`EngineBuilderTests.SubsystemsInitializeInOrderAndShutdownInReverseOrder` 已覆盖 Hosting 子系统逆序关闭；`EnginePhaseDriverTests.EngineShutdownDisposesAttachedScriptRuntime` 已覆盖 Engine 关闭会调用已接入 `IScriptRuntime.Shutdown()`；`HotReloadServiceTests`/`AlcCollectibilityTests` 已覆盖热重载旧 ALC 可回收；`docs/runtime-reports/2026-07-02-demo-window-smoke.md` 已记录真实窗口 Content/Simulation/Physics/Audio/Scripting/Rendering/Input 装配后 120 tick 正常退出，并记录 EditorRenderBridge/Hexa ImGui OpenGL3 后端 60 tick 正常退出。阻塞:仍缺真实窗口完整长跑后 GL/OpenAL/Box2D/native 资源释放审计与 Editor 窗口长跑证据。
 - [x] `GameLoop.Tick()`:严格 12 相位编排(§3.2),相位间 barrier(plan/02 JobSystem),每帧至多一次 sim/physics step。[不变式 #6,架构 §3.3]
 - [x] sim 降频(30Hz)而 render 不降:render 复用上帧世界纹理(必要时整图相机偏移,不插值像素)。[架构 §4.2]
-- [!] 各相位入口的调用绑定(Input/Time、Scripts、Residency、Particle 沉积/抛射、CA、Reaction/Lifetime/Material custom update、Temperature、DirtySwap、Physics、BuildFrame、Present、Streaming)。阻塞:已绑定现有相位 0/1/2/3/4/5/6/7/8/9/10/11,Simulation world 装配时已接入 `ReactionEngine`、反应副作用 sink 与 `BurningCellSystem`，窗口运行时已可把 EditorRenderBridge 接入相位 10 并注册有真实后端的一组 Editor 面板，且本机 120 tick 窗口短跑已通过；剩余阻塞为稳定 60fps/真实窗口运行态验收与完整资源释放审计。
+- [!] 各相位入口的调用绑定(Input/Time、Scripts、Residency、Particle 沉积/抛射、CA、Reaction/Lifetime/Material custom update、Temperature、DirtySwap、Physics、BuildFrame、Present、Streaming)。阻塞:已绑定现有相位 0/1/2/3/4/5/6/7/8/9/10/11,Simulation world 装配时已接入 `ReactionEngine`、反应副作用 sink 与 `BurningCellSystem`，窗口运行时已可把 EditorRenderBridge 接入相位 10 并注册有真实后端的一组 Editor 面板，本机 120 tick 窗口短跑与 60 tick Editor 窗口短跑已通过；剩余阻塞为稳定 60fps/真实窗口运行态验收与完整资源释放审计。
 - [x] 过载降级编排:读诊断 → 五级降级决策 → 经 `EngineContext` 下发质量档位。[架构 §4.3,不变式 #6]
 - [x] 脚本服务后端聚合:`IWorldAccess`/`IParticleService`/`IPhysicsService`/`IMaterialRegistry`/`ICamera`/`IInput`/`IEventBus`/`IAudioService`/`ISceneService`/`IDiagnostics`/`IRuntimeControlApi` 的实现注入(plan/11 契约的后端)。cell/material/particle/solid/time/audio/input/camera/lighting/PhysicsSystem 后端已有真实注册，脚本可见刚体 façade 与角色移动已接入 phase 8 flush；Reaction/Lifetime/custom material update 后端已随 Simulation world 装配接入，Diagnostics 角色由 `EngineCounters` 注册，Runtime 控制可暂停/恢复/退出/打开已接入 Editor，并可通过重开关卡快照恢复首个脚本 tick 后的 world/script 基线；脚本热重载可由 `ScriptHotReloadRuntimeOptions` 在 Hosting 装配期创建 watcher，并由 `ScriptRuntime.BeginFrame()` 在相位 1 应用。
 - [x] 写操作延迟命令队列:脚本/玩法的世界写入入队,在正确相位 flush(配合 plan/11 相位安全模型)。
@@ -93,7 +93,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [!] `EngineBuilder().…​.Build().Run()` 能装配全部子系统并跑稳定 60fps 空场景。阻塞:Rendering/Audio/Physics/Scripting/Editor 已有真实运行入口，`--window-ticks 120` 本机窗口短跑已验证可有限运行并退出；稳定 60fps 空场景与长跑仍需 plan/14 运行态验证。
 - [x] 12 相位顺序与架构 §3.3 完全一致;用诊断计时器可见各相位耗时。
 - [x] sim 降到 30Hz 时画面仍 60fps 出帧、世界慢放、无 death spiral(注入人工过载验证)。
-- [!] 过载降级按五级顺序触发且可在编辑器观测/覆盖。阻塞:五级顺序与 Sim30Hz 已测试,Editor 运行入口与诊断面板已接入，仍需窗口态覆盖 UI 验收。
+- [!] 过载降级按五级顺序触发且可在编辑器观测/覆盖。阻塞:五级顺序与 Sim30Hz 已测试,Editor 运行入口、Hexa ImGui OpenGL3 后端与诊断面板已接入，并通过 60 tick Editor 窗口短跑；仍需窗口态覆盖 UI 验收。
 - [x] 脚本经 `EngineContext` 能读写世界/建刚体/播音效,写操作落在正确相位(配合 plan/11 测试)。AudioService 与 PhysicsSystem 后端已注册，脚本可见 Physics 建/查/控/毁刚体命令与角色移动已在 phase 8 step 前 flush。
 - [x] Play/Edit/Step 切换正确:进入 Play 快照、退出回滚到编辑态,脚本 OnStart/OnDestroy 正确触发。world 快照/回滚已由 `EngineWorldSnapshotStore` 接入 Editor 临时 Play，`EngineEditorPlaySessionService.ExitPlay()` 已结束脚本 Play Session 并允许再次进入 Play 时重新 OnStart，存活 Behaviour 字段与脚本 Scene 拓扑均可恢复。
 - [x] headless 模式可被 plan/14 测试/基准以确定步数驱动,无窗口依赖。
