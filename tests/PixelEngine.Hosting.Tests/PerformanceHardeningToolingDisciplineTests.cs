@@ -1728,6 +1728,48 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证非 tag workflow_dispatch 的 GitHub Release 上传报告不能冒充正式发布成功证据。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsNonTagUploadReportAsReleaseSuccess()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-non-tag-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(
+                temp,
+                packageConclusion: "success",
+                suffix: "blocked-not-tag",
+                githubReleaseConclusion: "blocked_not_tag_release");
+
+            string artifacts = Path.Combine(temp, "non-tag-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("github_release_upload 报告 conclusion 必须为 success，实际为 blocked_not_tag_release", report, StringComparison.Ordinal);
+            Assert.Contains("github_release_upload", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 CA 最内层邻居访问经 3x3 窗口基址与 Unsafe.Add 漫游，不在热更新器内直接数组索引。
     /// </summary>
     [Fact]
@@ -1861,7 +1903,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string packageConclusion,
         string suffix = "good",
         string deterministicConclusion = "success",
-        string r2rLightupConclusion = "success")
+        string r2rLightupConclusion = "success",
+        string githubReleaseConclusion = "success")
     {
         string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "release-evidence");
         string packageRoot = Path.Combine(tempRoot, suffix, "artifacts", "package");
@@ -1869,7 +1912,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         _ = Directory.CreateDirectory(packageRoot);
 
         string workflow = WriteMarkdownEvidence(Path.Combine(evidenceRoot, "workflow-run.md"), new Dictionary<string, string> { ["conclusion"] = "success" });
-        string upload = WriteMarkdownEvidence(Path.Combine(evidenceRoot, "github-release-upload.md"), new Dictionary<string, string> { ["conclusion"] = "success" });
+        string upload = WriteMarkdownEvidence(Path.Combine(evidenceRoot, "github-release-upload.md"), new Dictionary<string, string> { ["conclusion"] = githubReleaseConclusion });
         string deterministic = WriteMarkdownEvidence(
             Path.Combine(evidenceRoot, "deterministic-hash.md"),
             new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["conclusion"] = deterministicConclusion });
