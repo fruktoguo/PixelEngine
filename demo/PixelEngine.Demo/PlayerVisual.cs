@@ -105,11 +105,6 @@ public sealed class PlayerVisual : Behaviour
         Context.Overlay.SolidRectangle(eyeX, eyeY, MathF.Max(2f, scale * 1.2f), MathF.Max(2f, scale * 1.2f), 0xFF_10_18_22);
         LastOverlayCommandsSubmitted++;
 
-        if (!state.OnGround)
-        {
-            Context.Overlay.Line(x + (width * 0.5f), y + height, x + (width * 0.5f), y + height + 8f, 2f, 0xAA_FF_FF_FF);
-            LastOverlayCommandsSubmitted++;
-        }
     }
 
     private void DrawCrosshair()

@@ -204,11 +204,17 @@ public sealed class PlayableProjectileTool : Behaviour
             return;
         }
 
-        int converted = ConvertFloatingSolidIslandsNear(_pendingCollapseX, _pendingCollapseY, _pendingCollapsePasses);
+        int converted = ConvertFloatingSolidIslandsNear(_pendingCollapseX, _pendingCollapseY, maxConversions: 1);
         if (converted > 0)
         {
-            _pendingCollapsePasses = 0;
-            _pendingCollapseScans = 0;
+            _pendingCollapsePasses -= converted;
+            if (_pendingCollapsePasses <= 0)
+            {
+                _pendingCollapseScans = 0;
+                return;
+            }
+
+            _pendingCollapseFrames = 2;
             return;
         }
 
@@ -274,9 +280,9 @@ public sealed class PlayableProjectileTool : Behaviour
             }
         }
 
-        if (converted == 0)
+        if (converted < Math.Max(1, maxConversions))
         {
-            converted += ConvertUnsupportedOverhangNear(centerX, centerY, maxConversions);
+            converted += ConvertUnsupportedOverhangNear(centerX, centerY, Math.Max(1, maxConversions) - converted);
         }
 
         if (converted == 0)
