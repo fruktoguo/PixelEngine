@@ -189,6 +189,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("Get-FileHash", script, StringComparison.Ordinal);
         Assert.Contains("sha256 不匹配", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_detector", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_native_leak_evidence", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_scope_evidence", script, StringComparison.Ordinal);
         Assert.Contains("process_smoke_only", script, StringComparison.Ordinal);
         Assert.Contains("detector_evidence_attached_pending_review", script, StringComparison.Ordinal);
@@ -213,13 +214,15 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("process_smoke_only", report, StringComparison.Ordinal);
         Assert.Contains("schemaVersion: 1", report, StringComparison.Ordinal);
         Assert.Contains("未知 scope", report, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_native_leak_evidence", report, StringComparison.Ordinal);
         Assert.Contains("- [x] 子系统装配与**初始化顺序**", plan, StringComparison.Ordinal);
         Assert.Contains("native GL/OpenAL/Box2D 工具级泄漏审计仍由 §5 的 native leak detector 阻塞项闭合", plan, StringComparison.Ordinal);
         Assert.Contains("tools/native-leak-preflight.ps1", plan, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_native_leak_evidence", plan, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// 验证 native leak 预检的真实脚本行为：hash 错误被拒绝，证据齐全也保持待审非零退出。
+    /// 验证 native leak 预检的真实脚本行为：hash 错误被拒绝为 invalid，证据齐全也保持待审非零退出。
     /// </summary>
     [Fact]
     public void NativeLeakPreflightRejectsBadHashesAndKeepsPendingReviewNonZero()
@@ -242,6 +245,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 badArtifacts);
             Assert.Equal(5, bad.ExitCode);
             string badReport = File.ReadAllText(Path.Combine(badArtifacts, "native-leak-preflight.md"));
+            Assert.Contains("blocked_invalid_native_leak_evidence", bad.Output + badReport, StringComparison.Ordinal);
             Assert.Contains("sha256 不匹配", badReport, StringComparison.Ordinal);
 
             string goodArtifacts = Path.Combine(temp, "good-out");
@@ -255,6 +259,45 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(2, good.ExitCode);
             string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "native-leak-preflight.md"));
             Assert.Contains("detector_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 native leak 预检会把 schema/JSON 错误落成稳定报告，而不是直接抛出无报告异常。
+    /// </summary>
+    [Fact]
+    public void NativeLeakPreflightRejectsInvalidSchemaWithReport()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-native-leak-schema-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateNativeLeakEvidenceManifest(temp);
+            string json = File.ReadAllText(manifest).Replace("\"schemaVersion\": 1", "\"schemaVersion\": 2", StringComparison.Ordinal);
+            File.WriteAllText(manifest, json);
+
+            string artifacts = Path.Combine(temp, "schema-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "native-leak-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "native-leak-preflight.md"));
+            Assert.Contains("blocked_invalid_native_leak_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("schemaVersion 必须为 1", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | detector_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
         {

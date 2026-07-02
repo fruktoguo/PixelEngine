@@ -126,13 +126,25 @@ function Read-EvidenceManifest {
         )
     }
 
-    $manifest = Get-Content -Raw -LiteralPath $resolvedManifestPath | ConvertFrom-Json
+    try {
+        $manifest = Get-Content -Raw -LiteralPath $resolvedManifestPath | ConvertFrom-Json
+    }
+    catch {
+        return @(
+            [pscustomobject]@{
+                InvalidManifest = $true
+                Scope = "manifest"
+                Message = "evidence manifest JSON 无法解析：$($_.Exception.Message)"
+            }
+        )
+    }
+
     $requiredScopes = @("gl", "openal", "box2d", "alc")
     $items = @()
 
     if ($manifest.schemaVersion -ne 1) {
         $items += [pscustomobject]@{
-            MissingScope = $true
+            InvalidManifest = $true
             Scope = "schemaVersion"
             Message = "evidence manifest schemaVersion 必须为 1"
         }
@@ -149,7 +161,7 @@ function Read-EvidenceManifest {
         foreach ($scopeName in @($manifest.scopes.PSObject.Properties | Select-Object -ExpandProperty Name)) {
             if ($scopeName -notin $requiredScopes) {
                 $items += [pscustomobject]@{
-                    MissingScope = $true
+                    InvalidManifest = $true
                     Scope = $scopeName
                     Message = "evidence manifest 包含未知 scope：$scopeName"
                 }
@@ -203,7 +215,7 @@ function Read-EvidenceManifest {
         $expectedHash = $declaredHash.Trim().ToLowerInvariant()
         if ($actualHash -ne $expectedHash) {
             $items += [pscustomobject]@{
-                MissingScope = $true
+                InvalidManifest = $true
                 Scope = $scope
                 Message = "evidence manifest scope sha256 不匹配：$scope expected=$expectedHash actual=$actualHash"
             }
@@ -340,6 +352,19 @@ if ($RunProcessSmoke) {
 }
 
 $missingEvidence = @($evidence | Where-Object { $_.MissingManifest -or $_.MissingScope })
+$invalidEvidence = @($evidence | Where-Object { $_.InvalidManifest })
+if ($invalidEvidence.Count -gt 0) {
+    $detail = "Native leak preflight failed: evidence manifest JSON、schema、scope 或 SHA256 无效。错误项：" + (($invalidEvidence | ForEach-Object { $_.Message }) -join "; ")
+    Write-NativeLeakReport -Path $reportPath -Status "blocked_invalid_native_leak_evidence" -Detector $DetectorName -DetectorReport $DetectorReportPath -Evidence $evidence -Runs $runs -Detail $detail
+    Write-Host "Native leak preflight blocked_invalid_native_leak_evidence. Report: $reportPath"
+
+    if ($AllowBlocked) {
+        exit 0
+    }
+
+    exit 5
+}
+
 if ($missingEvidence.Count -gt 0) {
     $detail = "Native leak preflight failed: evidence manifest 缺少 GL/OpenAL/Box2D/ALC 中的一个或多个工具级报告。缺失项：" + (($missingEvidence | ForEach-Object { $_.Message }) -join "; ")
     Write-NativeLeakReport -Path $reportPath -Status "blocked_missing_scope_evidence" -Detector $DetectorName -DetectorReport $DetectorReportPath -Evidence $evidence -Runs $runs -Detail $detail
