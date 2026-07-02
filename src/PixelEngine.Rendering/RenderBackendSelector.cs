@@ -22,10 +22,17 @@ public static class RenderBackendSelector
             throw new ArgumentOutOfRangeException(nameof(options), "窗口尺寸必须为正数。");
         }
 
+        ValidateRate(options.FramesPerSecond, nameof(options.FramesPerSecond));
+        ValidateRate(options.UpdatesPerSecond, nameof(options.UpdatesPerSecond));
+
         WindowOptions windowOptions = WindowOptions.Default;
         windowOptions.Title = options.Title;
         windowOptions.Size = new Vector2D<int>(options.Width, options.Height);
         windowOptions.API = CreateGraphicsApi(backend, options.EnableDebugContext);
+        windowOptions.VSync = options.VSync;
+        windowOptions.FramesPerSecond = options.FramesPerSecond;
+        windowOptions.UpdatesPerSecond = options.UpdatesPerSecond;
+        windowOptions.ShouldSwapAutomatically = false;
         return windowOptions;
     }
 
@@ -62,5 +69,13 @@ public static class RenderBackendSelector
                 new APIVersion(3, 0)),
             _ => throw new ArgumentOutOfRangeException(nameof(backend)),
         };
+    }
+
+    private static void ValidateRate(double rate, string parameterName)
+    {
+        if (!double.IsFinite(rate) || rate < 0)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, rate, "窗口频率必须是非负有限数；0 表示不节流。");
+        }
     }
 }

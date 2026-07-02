@@ -26,6 +26,21 @@ public sealed record RenderWindowOptions
     public RenderBackendPreference BackendPreference { get; init; } = RenderBackendPreference.Auto;
 
     /// <summary>
+    /// 是否启用垂直同步；开启时 <see cref="RenderWindow.SwapBuffers" /> 可能受显示器刷新率阻塞。
+    /// </summary>
+    public bool VSync { get; init; } = true;
+
+    /// <summary>
+    /// Silk 窗口帧率节流；0 表示不由 Silk run loop 限制帧率。
+    /// </summary>
+    public double FramesPerSecond { get; init; }
+
+    /// <summary>
+    /// Silk 窗口更新频率节流；0 表示不由 Silk run loop 限制更新频率。
+    /// </summary>
+    public double UpdatesPerSecond { get; init; }
+
+    /// <summary>
     /// 是否请求 OpenGL debug context。Debug 构建默认启用。
     /// </summary>
     public bool EnableDebugContext { get; init; } =
