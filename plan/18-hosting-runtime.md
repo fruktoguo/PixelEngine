@@ -83,7 +83,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [x] 写操作延迟命令队列:脚本/玩法的世界写入入队,在正确相位 flush(配合 plan/11 相位安全模型)。
 - [x] `Scene` 模型 + `ISceneService`:加载/卸载/切换;从存档(plan/07)或程序化生成构建起始世界。已完成来源校验与解析,`AttachCurrentSceneWorld` 可显式从 SaveDirectory 或 `.scene InitialSaveDirectory` 装配 live World/Simulation/粒子/Physics 后端并恢复 world seed/game time/刚体快照；`SceneSourceKind.Procedural` 可通过注册式 `IProceduralWorldGenerator` 构建 resident world 并填充初始内容，见 `SceneAndHeadlessTests.AttachCurrentSceneWorldBuildsRegisteredProceduralWorld`。
 - [x] 项目模型:内容根、materials/reactions、资产、起始场景引用;`EngineBuilder` 装载。
-- [!] Play/Edit/Step 三态机 + 进入 Play 前世界快照、退出回滚(plan/07 快照),脚本生命周期协调(plan/11、plan/12)。阻塞:已完成模式驱动与 StepOnce,快照回滚需要完整 world snapshot 聚合,脚本生命周期需 plan/11 Behaviour 宿主。
+- [!] Play/Edit/Step 三态机 + 进入 Play 前世界快照、退出回滚(plan/07 快照),脚本生命周期协调(plan/11、plan/12)。阻塞:已完成模式驱动、StepOnce、resident world 快照/恢复与 Editor 临时 Play 快照后端；剩余缺口为退出 Play 时对存活 Behaviour 派发 OnDestroy、再次进入 Play 时重新 OnStart，以及脚本 Scene/字段状态快照或重建策略。
 - [x] **headless 模式**:无窗口/渲染/音频,跑 Core+Sim+Physics+World,固定步数驱动(供 plan/14)。
 - [x] 帧节奏与 `FrameClock`(plan/02)对接:固定 dt、时间膨胀、sim/render 解耦的频率管理。
 - [x] 公开 API 全部中文 XML 文档注释(脚本 IntelliSense,plan/11/00 §7)。
@@ -95,7 +95,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [x] sim 降到 30Hz 时画面仍 60fps 出帧、世界慢放、无 death spiral(注入人工过载验证)。
 - [!] 过载降级按五级顺序触发且可在编辑器观测/覆盖。阻塞:五级顺序与 Sim30Hz 已测试,Editor 运行入口与诊断面板已接入，仍需窗口态覆盖 UI 验收。
 - [x] 脚本经 `EngineContext` 能读写世界/建刚体/播音效,写操作落在正确相位(配合 plan/11 测试)。AudioService 与 PhysicsSystem 后端已注册，脚本可见 Physics 建/查/控/毁刚体命令与角色移动已在 phase 8 step 前 flush。
-- [!] Play/Edit/Step 切换正确:进入 Play 快照、退出回滚到编辑态,脚本 OnStart/OnDestroy 正确触发。阻塞:快照聚合与脚本生命周期需 plan/11/12。
+- [!] Play/Edit/Step 切换正确:进入 Play 快照、退出回滚到编辑态,脚本 OnStart/OnDestroy 正确触发。阻塞:world 快照/回滚已由 `EngineWorldSnapshotStore` 接入 Editor 临时 Play；脚本 OnStart/OnDestroy 的 Play Session 边界与脚本状态回滚仍需 plan/11/12。
 - [x] headless 模式可被 plan/14 测试/基准以确定步数驱动,无窗口依赖。
 - [!] 关闭时 native 资源与 ALC 正确释放,无泄漏(配合 plan/14 scripting 测试)。Hosting 已验证关闭时释放 `IScriptRuntime`，Scripting 已验证热重载旧 ALC 可回收；阻塞:仍缺真实窗口 Rendering/OpenAL/Box2D native 资源长跑关闭审计和跨平台 runner 泄漏证据。
 - [x] Demo(plan/13)仅经 Hosting 公开 API 启动,无引擎内部后门。
@@ -112,4 +112,4 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [x] `feat(host): EngineBuilder/Engine/EngineContext 装配与生命周期`
 - [x] `feat(host): 12 相位主循环编排 + 固定步长不追帧 + sim 降频`
 - [x] `feat(host): 过载降级编排 + 脚本服务后端聚合`。
-- [!] `feat(host): 场景/项目模型 + Play/Edit/Step 模式 + headless`。阻塞:模型/模式/headless/Physics phase 8 基础已落地,完整快照/脚本生命周期仍需后续计划。
+- [!] `feat(host): 场景/项目模型 + Play/Edit/Step 模式 + headless`。阻塞:模型/模式/headless/Physics phase 8/world 快照回滚基础已落地,脚本生命周期与脚本状态回滚仍需后续计划。

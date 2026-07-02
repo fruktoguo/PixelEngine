@@ -2,6 +2,7 @@ using PixelEngine.Serialization;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.Scripting;
+using PixelEngine.Editor;
 using PixelEngine.World;
 using Xunit;
 using PhysicsSystem = PixelEngine.Physics.PhysicsSystem;
@@ -265,6 +266,38 @@ public sealed class SceneAndHeadlessTests
         Assert.Equal(32.5f, engine.Context.GetService<TemperatureField>().GetTemperature(4, 5));
         Assert.Equal(1, engine.Phases.Count(EnginePhase.CaSimulation));
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.WorldAccess));
+    }
+
+    /// <summary>
+    /// 验证 Engine world 快照可恢复 resident chunks、温度与游戏 tick。
+    /// </summary>
+    [Fact]
+    public void EngineWorldSnapshotStoreRestoresResidentWorld()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+        engine.Context.RegisterService(materials);
+        _ = engine.AttachResidentSimulationWorld(128, 128, particleCapacity: 8);
+        ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
+        edit.PaintCell(4, 5, 1);
+        edit.SetTemperature(4, 5, 24.5f);
+        engine.Context.Clock.RestoreCounters(frameIndex: 9, simTickIndex: 9);
+        using EngineWorldSnapshotStore store = new(engine);
+
+        SaveLoadOperationResult save = store.SaveTemporarySnapshot();
+        edit.PaintCell(4, 5, 0);
+        edit.SetTemperature(4, 5, 80f);
+        engine.Context.Clock.RestoreCounters(frameIndex: 13, simTickIndex: 13);
+        SaveLoadOperationResult restore = store.RestoreTemporarySnapshot();
+
+        Assert.True(save.Success, save.Message);
+        Assert.True(restore.Success, restore.Message);
+        Assert.Equal(1, engine.Context.GetService<CellGrid>().GetMaterial(4, 5));
+        Assert.Equal(24.5f, engine.Context.GetService<TemperatureField>().GetTemperature(4, 5));
+        Assert.Equal(9L, engine.Context.Clock.FrameIndex);
+        Assert.Equal(9L, engine.Context.Clock.SimTickIndex);
     }
 
     /// <summary>
