@@ -40,6 +40,130 @@
         "checksumSha256": "<sha256>"
       }
     },
+    "win-arm64": {
+      "r2r": {
+        "publishReport": "artifacts/release-evidence/win-arm64-r2r-publish.md",
+        "publishSha256": "<sha256>",
+        "verifyReport": "artifacts/release-evidence/win-arm64-r2r-verify.md",
+        "verifySha256": "<sha256>",
+        "packageReport": "artifacts/release-evidence/win-arm64-r2r-package.md",
+        "packageReportSha256": "<sha256>",
+        "package": "artifacts/package/PixelEngine-Demo-0.1.0-win-arm64-r2r.zip",
+        "packageSha256": "<sha256>",
+        "checksum": "artifacts/package/SHA256SUMS",
+        "checksumSha256": "<sha256>"
+      },
+      "aot": {
+        "publishReport": "artifacts/release-evidence/win-arm64-aot-publish.md",
+        "publishSha256": "<sha256>",
+        "verifyReport": "artifacts/release-evidence/win-arm64-aot-verify.md",
+        "verifySha256": "<sha256>",
+        "packageReport": "artifacts/release-evidence/win-arm64-aot-package.md",
+        "packageReportSha256": "<sha256>",
+        "simdProbe": "artifacts/release-evidence/win-arm64-aot-simd.md",
+        "simdProbeSha256": "<sha256>",
+        "simdProbeKind": "arm64_neon",
+        "package": "artifacts/package/PixelEngine-Demo-0.1.0-win-arm64-aot.zip",
+        "packageSha256": "<sha256>",
+        "checksum": "artifacts/package/SHA256SUMS",
+        "checksumSha256": "<sha256>"
+      }
+    },
+    "linux-x64": {
+      "r2r": {
+        "publishReport": "artifacts/release-evidence/linux-x64-r2r-publish.md",
+        "publishSha256": "<sha256>",
+        "verifyReport": "artifacts/release-evidence/linux-x64-r2r-verify.md",
+        "verifySha256": "<sha256>",
+        "packageReport": "artifacts/release-evidence/linux-x64-r2r-package.md",
+        "packageReportSha256": "<sha256>",
+        "package": "artifacts/package/PixelEngine-Demo-0.1.0-linux-x64-r2r.tar.gz",
+        "packageSha256": "<sha256>",
+        "checksum": "artifacts/package/SHA256SUMS",
+        "checksumSha256": "<sha256>"
+      },
+      "aot": {
+        "publishReport": "artifacts/release-evidence/linux-x64-aot-publish.md",
+        "publishSha256": "<sha256>",
+        "verifyReport": "artifacts/release-evidence/linux-x64-aot-verify.md",
+        "verifySha256": "<sha256>",
+        "packageReport": "artifacts/release-evidence/linux-x64-aot-package.md",
+        "packageReportSha256": "<sha256>",
+        "simdProbe": "artifacts/release-evidence/linux-x64-aot-simd.md",
+        "simdProbeSha256": "<sha256>",
+        "simdProbeKind": "x64_ymm_zmm",
+        "package": "artifacts/package/PixelEngine-Demo-0.1.0-linux-x64-aot.tar.gz",
+        "packageSha256": "<sha256>",
+        "checksum": "artifacts/package/SHA256SUMS",
+        "checksumSha256": "<sha256>"
+      }
+    },
+    "linux-arm64": {
+      "r2r": {
+        "publishReport": "artifacts/release-evidence/linux-arm64-r2r-publish.md",
+        "publishSha256": "<sha256>",
+        "verifyReport": "artifacts/release-evidence/linux-arm64-r2r-verify.md",
+        "verifySha256": "<sha256>",
+        "packageReport": "artifacts/release-evidence/linux-arm64-r2r-package.md",
+        "packageReportSha256": "<sha256>",
+        "package": "artifacts/package/PixelEngine-Demo-0.1.0-linux-arm64-r2r.tar.gz",
+        "packageSha256": "<sha256>",
+        "checksum": "artifacts/package/SHA256SUMS",
+        "checksumSha256": "<sha256>"
+      },
+      "aot": {
+        "publishReport": "artifacts/release-evidence/linux-arm64-aot-publish.md",
+        "publishSha256": "<sha256>",
+        "verifyReport": "artifacts/release-evidence/linux-arm64-aot-verify.md",
+        "verifySha256": "<sha256>",
+        "packageReport": "artifacts/release-evidence/linux-arm64-aot-package.md",
+        "packageReportSha256": "<sha256>",
+        "simdProbe": "artifacts/release-evidence/linux-arm64-aot-simd.md",
+        "simdProbeSha256": "<sha256>",
+        "simdProbeKind": "arm64_neon",
+        "package": "artifacts/package/PixelEngine-Demo-0.1.0-linux-arm64-aot.tar.gz",
+        "packageSha256": "<sha256>",
+        "checksum": "artifacts/package/SHA256SUMS",
+        "checksumSha256": "<sha256>"
+      }
+    },
+    "osx-x64": {
+      "r2r": {
+        "publishReport": "artifacts/release-evidence/osx-x64-r2r-publish.md",
+        "publishSha256": "<sha256>",
+        "verifyReport": "artifacts/release-evidence/osx-x64-r2r-verify.md",
+        "verifySha256": "<sha256>",
+        "packageReport": "artifacts/release-evidence/osx-x64-r2r-package.md",
+        "packageReportSha256": "<sha256>",
+        "codesignReport": "artifacts/release-evidence/osx-x64-r2r-codesign.md",
+        "codesignSha256": "<sha256>",
+        "notarizationReport": "artifacts/release-evidence/osx-x64-r2r-notarization.md",
+        "notarizationSha256": "<sha256>",
+        "package": "artifacts/package/PixelEngine-Demo-0.1.0-osx-x64-r2r.tar.gz",
+        "packageSha256": "<sha256>",
+        "checksum": "artifacts/package/SHA256SUMS",
+        "checksumSha256": "<sha256>"
+      },
+      "aot": {
+        "publishReport": "artifacts/release-evidence/osx-x64-aot-publish.md",
+        "publishSha256": "<sha256>",
+        "verifyReport": "artifacts/release-evidence/osx-x64-aot-verify.md",
+        "verifySha256": "<sha256>",
+        "packageReport": "artifacts/release-evidence/osx-x64-aot-package.md",
+        "packageReportSha256": "<sha256>",
+        "simdProbe": "artifacts/release-evidence/osx-x64-aot-simd.md",
+        "simdProbeSha256": "<sha256>",
+        "simdProbeKind": "x64_ymm_zmm",
+        "codesignReport": "artifacts/release-evidence/osx-x64-aot-codesign.md",
+        "codesignSha256": "<sha256>",
+        "notarizationReport": "artifacts/release-evidence/osx-x64-aot-notarization.md",
+        "notarizationSha256": "<sha256>",
+        "package": "artifacts/package/PixelEngine-Demo-0.1.0-osx-x64-aot.tar.gz",
+        "packageSha256": "<sha256>",
+        "checksum": "artifacts/package/SHA256SUMS",
+        "checksumSha256": "<sha256>"
+      }
+    },
     "osx-arm64": {
       "r2r": {
         "publishReport": "artifacts/release-evidence/osx-arm64-r2r-publish.md",
