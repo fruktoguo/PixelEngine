@@ -51,6 +51,8 @@ public sealed class PlayableWorldDirector : Behaviour
             return;
         }
 
+        DisableDebugOverlaysForPlayableScene();
+
         Entity playerEntity = Context.Scene.CreateEntity();
         _ = playerEntity.AddComponent<Transform>();
         PlayerController player = playerEntity.AddComponent<PlayerController>();
@@ -83,6 +85,19 @@ public sealed class PlayableWorldDirector : Behaviour
         _ = playerEntity.AddComponent<PlayableHud>();
         _ = playerEntity.AddComponent<PauseMenu>();
         _entitiesBuilt = true;
+    }
+
+    private void DisableDebugOverlaysForPlayableScene()
+    {
+        Context.Diagnostics.SetOverlay(DebugOverlayKind.DirtyRects, enabled: false);
+        Context.Diagnostics.SetOverlay(DebugOverlayKind.CaIterationRects, enabled: false);
+        Context.Diagnostics.SetOverlay(DebugOverlayKind.ChunkGridParity, enabled: false);
+        Context.Diagnostics.SetOverlay(DebugOverlayKind.KeepAliveHotspots, enabled: false);
+        Context.Diagnostics.SetOverlay(DebugOverlayKind.CellParity, enabled: false);
+        Context.Diagnostics.SetOverlay(DebugOverlayKind.TemperatureHeatmap, enabled: false);
+        Context.Diagnostics.SetOverlay(DebugOverlayKind.OwnedByBody, enabled: false);
+        Context.Diagnostics.SetOverlay(DebugOverlayKind.ParticleTrails, enabled: false);
+        Context.Diagnostics.SetOverlay(DebugOverlayKind.ConnectedComponents, enabled: false);
     }
 
     private sealed class EntityBuildSystem(PlayableWorldDirector director) : ISystem

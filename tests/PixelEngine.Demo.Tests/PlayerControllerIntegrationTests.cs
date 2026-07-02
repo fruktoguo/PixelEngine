@@ -1,5 +1,6 @@
 using PixelEngine.Hosting;
 using PixelEngine.Core.Time;
+using PixelEngine.Editor;
 using PixelEngine.Physics;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.Scripting;
@@ -576,6 +577,75 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal(1, projectile.ShotsFired);
         Assert.True(projectile.CollapsedFloatingIslands >= 1, $"应转换贴近扫描框上边界的悬空石块，region={projectile.LastCollapsedRegion}");
         Assert.True(physics.Stats.ActiveBodyCount >= 1);
+    }
+
+    /// <summary>
+    /// 验证一次射击转换首个悬空块后仍会分帧继续扫描，避免较大的残留碎块长时间静态浮空。
+    /// </summary>
+    [Fact]
+    public void PlayableProjectileContinuesCollapseScanAfterFirstConvertedIsland()
+    {
+        RecordingAudioApi audio = new();
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        FillRect(grid, stone, minX: 40, minY: 22, maxX: 48, maxY: 30);
+        FillRect(grid, stone, minX: 56, minY: 20, maxX: 72, maxY: 32);
+
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 16f;
+        player.SpawnY = 26f;
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.CooldownSeconds = 0f;
+        projectile.Range = 96f;
+        projectile.ImpactRadius = 1;
+        projectile.CollapseScanRadius = 48;
+        projectile.MaxCollapsedIslandsPerShot = 3;
+
+        engine.RunHeadlessTicks(2);
+        input.Update([], [MouseButton.Left], mouseX: 41f, mouseY: 26f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        input.Update([], [], mouseX: 41f, mouseY: 26f, wheelY: 0f);
+        engine.RunHeadlessTicks(18);
+
+        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        Assert.Equal(1, projectile.ShotsFired);
+        Assert.True(projectile.CollapsedFloatingIslands >= 2, $"应继续转换后续悬空块，status={projectile.CollapseStatus}");
+        Assert.True(physics.Stats.ActiveBodyCount >= 2);
+    }
+
+    /// <summary>
+    /// 验证可玩 Demo 进入场景时会显式关闭调试叠层，避免 dirty rect / 粒子轨迹等诊断点污染真实游玩画面。
+    /// </summary>
+    [Fact]
+    public void PlayableWorldDirectorDisablesDebugOverlaysOnSceneStart()
+    {
+        using Engine engine = CreateScriptEngine(typeof(PlayableWorldDirector), out _, out _, out _);
+        IDiagnosticsApi diagnostics = engine.Context.GetService<IDiagnosticsApi>();
+        DebugOverlayKind[] overlays =
+        [
+            DebugOverlayKind.DirtyRects,
+            DebugOverlayKind.CaIterationRects,
+            DebugOverlayKind.ChunkGridParity,
+            DebugOverlayKind.KeepAliveHotspots,
+            DebugOverlayKind.CellParity,
+            DebugOverlayKind.TemperatureHeatmap,
+            DebugOverlayKind.OwnedByBody,
+            DebugOverlayKind.ParticleTrails,
+            DebugOverlayKind.ConnectedComponents,
+        ];
+        foreach (DebugOverlayKind overlay in overlays)
+        {
+            diagnostics.SetOverlay(overlay, enabled: true);
+        }
+
+        engine.RunHeadlessTicks(3);
+
+        DebugOverlaySettings settings = engine.Context.GetService<DebugOverlaySettings>();
+        Assert.Equal(default, settings.Enabled);
+        Assert.All(overlays, overlay => Assert.False(diagnostics.IsOverlayEnabled(overlay)));
     }
 
     /// <summary>
