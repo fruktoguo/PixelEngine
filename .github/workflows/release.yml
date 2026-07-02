@@ -159,18 +159,42 @@ jobs:
       - name: AOT SIMD probe
         if: matrix.channel == 'aot' && endsWith(matrix.rid, '-x64') && matrix.shell == 'pwsh'
         shell: pwsh
-        run: ./tools/aot-simd-probe.ps1 -Rid ${{ matrix.rid }} -PublishDir artifacts/publish/${{ matrix.rid }}-${{ matrix.channel }}
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/release-evidence | Out-Null
+          $outputPath = "artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-simd-output.txt"
+          try {
+            $output = & ./tools/aot-simd-probe.ps1 -Rid ${{ matrix.rid }} -PublishDir artifacts/publish/${{ matrix.rid }}-${{ matrix.channel }} 2>&1
+            $exitCode = $LASTEXITCODE
+          }
+          catch {
+            $output = @($_.Exception.Message)
+            $exitCode = 1
+          }
+
+          $output | Set-Content -Path $outputPath -Encoding UTF8
+          $output | ForEach-Object { Write-Host $_ }
+          if ($exitCode -ne 0) {
+            exit $exitCode
+          }
 
       - name: AOT SIMD probe
         if: matrix.channel == 'aot' && endsWith(matrix.rid, '-x64') && matrix.shell == 'bash'
         shell: bash
-        run: bash ./tools/aot-simd-probe.sh --rid "${{ matrix.rid }}" --publish-dir "artifacts/publish/${{ matrix.rid }}-${{ matrix.channel }}"
+        run: |
+          mkdir -p artifacts/release-evidence
+          set +e
+          bash ./tools/aot-simd-probe.sh --rid "${{ matrix.rid }}" --publish-dir "artifacts/publish/${{ matrix.rid }}-${{ matrix.channel }}" 2>&1 | tee "artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-simd-output.txt"
+          status=${PIPESTATUS[0]}
+          set -e
+          exit "$status"
 
       - name: Write AOT SIMD evidence
         if: always() && matrix.channel == 'aot' && endsWith(matrix.rid, '-x64')
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts/release-evidence | Out-Null
+          $probeOutputPath = "artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-simd-output.txt"
+          $probeOutput = if (Test-Path -LiteralPath $probeOutputPath -PathType Leaf) { Get-Content -LiteralPath $probeOutputPath -Raw } else { "probe output missing" }
           @(
             "# AOT SIMD evidence: ${{ matrix.rid }}/${{ matrix.channel }}",
             "",
@@ -180,7 +204,13 @@ jobs:
             "| channel | ${{ matrix.channel }} |",
             "| run_id | ${{ github.run_id }} |",
             "| sha | ${{ github.sha }} |",
-            "| conclusion | ${{ job.status }} |"
+            "| conclusion | ${{ job.status }} |",
+            "",
+            "## Probe output",
+            "",
+            "```text",
+            $probeOutput,
+            "```"
           ) | Set-Content -Path artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-simd.md -Encoding UTF8
 
       - name: Upload AOT SIMD evidence

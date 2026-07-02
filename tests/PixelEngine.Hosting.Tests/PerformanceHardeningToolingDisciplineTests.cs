@@ -683,6 +683,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("matrix.channel == 'aot' && endsWith(matrix.rid, '-x64')", release, StringComparison.Ordinal);
         Assert.Contains("aot-simd-probe.ps1", release, StringComparison.Ordinal);
         Assert.Contains("aot-simd-probe.sh", release, StringComparison.Ordinal);
+        Assert.Contains("-simd-output.txt", release, StringComparison.Ordinal);
+        Assert.Contains("## Probe output", release, StringComparison.Ordinal);
+        Assert.Contains("$probeOutput", release, StringComparison.Ordinal);
         Assert.Contains("ymm/zmm", aotProbePs1, StringComparison.Ordinal);
         Assert.Contains("[yz]mm", aotProbeSh, StringComparison.Ordinal);
     }
