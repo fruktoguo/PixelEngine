@@ -350,6 +350,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("tools/gpu-particle-benchmark-preflight.ps1", report, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_gpu_evidence", report, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_gpu_scope_evidence", report, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
         Assert.Contains("local_probe_only", report, StringComparison.Ordinal);
         Assert.Contains("target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
         Assert.Contains("未知 scope", report, StringComparison.Ordinal);
@@ -459,6 +460,48 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 GPU 粒子目标硬件预检会把 schema/JSON 错误落成稳定报告。
+    /// </summary>
+    [Fact]
+    public void GpuParticleBenchmarkPreflightRejectsInvalidSchemaWithReport()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-schema-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateFlatEvidenceManifest(
+                temp,
+                ["targetHardwareReport", "cpuProbeReport", "gpuProbeReport", "comparisonReport"],
+                suffix: "schema");
+            string json = File.ReadAllText(manifest).Replace("\"schemaVersion\": 1", "\"schemaVersion\": 2", StringComparison.Ordinal);
+            File.WriteAllText(manifest, json);
+
+            string artifacts = Path.Combine(temp, "schema-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
+            Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("schemaVersion 必须为 1", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 Demo 人工验收预检只索引视觉/听感/手感证据，不把 scripted probe 当作 plan/13 通过。
     /// </summary>
     [Fact]
@@ -529,6 +572,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("blocked_missing_manual_evidence", report, StringComparison.Ordinal);
         Assert.Contains("scripted_probe_only", report, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_manual_scope_evidence", report, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_manual_evidence", report, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", report, StringComparison.Ordinal);
         Assert.Contains("playable_shots=1", report, StringComparison.Ordinal);
         Assert.Contains("未知 scope", report, StringComparison.Ordinal);
@@ -645,6 +689,56 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Contains("sha256 不匹配", badReport, StringComparison.Ordinal);
             Assert.Contains("controlFeelReport", badReport, StringComparison.Ordinal);
             Assert.DoesNotContain("status: manual_evidence_attached_pending_review", badReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 Demo 人工验收预检会把 schema/JSON 错误落成稳定报告。
+    /// </summary>
+    [Fact]
+    public void DemoManualAcceptancePreflightRejectsInvalidSchemaWithReport()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-schema-" + Guid.NewGuid().ToString("N"));
+        string[] manualScopes =
+        [
+            "controlFeelReport",
+            "materialBrushAndReactionVideo",
+            "rigidBodyGameplayVideo",
+            "particleLightingVideo",
+            "audioListeningReport",
+            "fullRoutePlaythroughVideo",
+            "hudMenuEditorVideo",
+            "hotReloadWindowReport",
+        ];
+
+        try
+        {
+            string manifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "schema", includeDemoManualMetadata: true);
+            string json = File.ReadAllText(manifest).Replace("\"schemaVersion\": 1", "\"schemaVersion\": 2", StringComparison.Ordinal);
+            File.WriteAllText(manifest, json);
+
+            string artifacts = Path.Combine(temp, "schema-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "demo-manual-acceptance-preflight.md"));
+            Assert.Contains("status: blocked_invalid_manual_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("schemaVersion 必须为 1", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: manual_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
         {
