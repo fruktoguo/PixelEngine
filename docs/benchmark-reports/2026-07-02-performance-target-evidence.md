@@ -20,7 +20,7 @@
 
 ## 状态语义
 
-`blocked_missing_target_performance_manifest` 表示缺少目标性能 evidence manifest。`blocked_missing_target_performance_scope_evidence` 表示 manifest 存在，但缺少必要 scope、文件不存在、SHA256 不匹配，或 6 RID cells/frame 没有逐 RID 标记 `benchmarkDotNet=true`。`target_performance_evidence_attached_pending_review` 表示所有必需证据文件都存在且 hash 匹配，但仍需人工确认报告内容确实证明 AVX-512 无降频净损、6 RID cells/frame 达标、帧预算达标，并且硬件计数器报告包含 Cache Misses 与 Branch Mispredictions。
+`blocked_missing_target_performance_manifest` 表示缺少目标性能 evidence manifest。`blocked_invalid_target_performance_evidence` 表示 manifest JSON 无法解析或 `schemaVersion` 不为 1。`blocked_missing_target_performance_scope_evidence` 表示 manifest 存在且 schema 有效，但缺少必要 scope、文件不存在、SHA256 不匹配，或 6 RID cells/frame 没有逐 RID 标记 `benchmarkDotNet=true`。`target_performance_evidence_attached_pending_review` 表示所有必需证据文件都存在且 hash 匹配，但仍需人工确认报告内容确实证明 AVX-512 无降频净损、6 RID cells/frame 达标、帧预算达标，并且硬件计数器报告包含 Cache Misses 与 Branch Mispredictions。
 
 ## Manifest 结构
 

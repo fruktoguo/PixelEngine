@@ -188,9 +188,22 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
     exit 0
 }
 
-$manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-if ((Get-JsonPropertyValue -Node $manifest -Name "schemaVersion") -ne 1) {
-    throw "Performance target evidence manifest schemaVersion 必须为 1。"
+try {
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    if ((Get-JsonPropertyValue -Node $manifest -Name "schemaVersion") -ne 1) {
+        throw "Performance target evidence manifest schemaVersion 必须为 1。"
+    }
+}
+catch {
+    $detail = "Target performance evidence preflight failed: evidence manifest JSON 或 schema 无效。不得据此勾选 plan/16 的目标硬件阻塞项。"
+    Write-PerformanceEvidenceReport -Path $reportPath -Status "blocked_invalid_target_performance_evidence" -ExitCode 5 -Evidence @($evidence) -Missing @("performance target evidence manifest 无效：$($_.Exception.Message)") -Detail $detail
+    Write-Host "Performance target evidence preflight blocked_invalid_target_performance_evidence. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
+    if (-not $AllowBlocked) {
+        [Console]::Error.WriteLine("Performance target evidence preflight failed: blocked_invalid_target_performance_evidence")
+        exit 5
+    }
+
+    exit 0
 }
 
 $rawEntries = Get-JsonPropertyValue -Node $manifest -Name "evidence"

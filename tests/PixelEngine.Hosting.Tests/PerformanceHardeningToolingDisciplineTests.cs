@@ -124,6 +124,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("sha256 不匹配", script, StringComparison.Ordinal);
         Assert.Contains("未知 evidence scope", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_performance_manifest", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_target_performance_evidence", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_performance_scope_evidence", script, StringComparison.Ordinal);
         Assert.Contains("target_performance_evidence_attached_pending_review", script, StringComparison.Ordinal);
         Assert.Contains("[Console]::Error.WriteLine", script, StringComparison.Ordinal);
@@ -150,6 +151,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         Assert.Contains("tools/performance-target-evidence-preflight.ps1", report, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_performance_manifest", report, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_target_performance_evidence", report, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
         Assert.Contains("target_performance_evidence_attached_pending_review", report, StringComparison.Ordinal);
         Assert.Contains("avx512_downclock_net_loss", report, StringComparison.Ordinal);
@@ -160,6 +162,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         Assert.Contains("tools/performance-target-evidence-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_performance_manifest", plan, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_target_performance_evidence", plan, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_performance_scope_evidence", plan, StringComparison.Ordinal);
         Assert.Contains("target_performance_evidence_attached_pending_review", plan, StringComparison.Ordinal);
         Assert.Contains("avx512_downclock_net_loss", plan, StringComparison.Ordinal);
@@ -754,6 +757,87 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(2, good.ExitCode);
             string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "performance-target-evidence-preflight.md"));
             Assert.Contains("target_performance_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证目标性能证据预检会把 schema 错误写入报告，而不是直接抛异常丢失审计上下文。
+    /// </summary>
+    [Fact]
+    public void PerformanceTargetEvidencePreflightRejectsInvalidSchemaWithReport()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-schema-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreatePerformanceTargetEvidenceManifest(temp);
+            string json = File.ReadAllText(manifest);
+            json = json.Replace("\"schemaVersion\": 1", "\"schemaVersion\": 2", StringComparison.Ordinal);
+            File.WriteAllText(manifest, json);
+
+            string artifacts = Path.Combine(temp, "out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
+            Assert.Contains("status: blocked_invalid_target_performance_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("schemaVersion 必须为 1", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_performance_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证目标性能证据预检会实际拒绝 sha256 不匹配的目标硬件 evidence。
+    /// </summary>
+    [Fact]
+    public void PerformanceTargetEvidencePreflightRejectsMismatchedEvidenceHash()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-hash-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreatePerformanceTargetEvidenceManifest(temp);
+            string json = File.ReadAllText(manifest);
+            json = json.Replace("\"sha256\": \"", "\"sha256\": \"0000", StringComparison.Ordinal);
+            File.WriteAllText(manifest, json);
+
+            string artifacts = Path.Combine(temp, "out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("sha256 不匹配", report, StringComparison.Ordinal);
+            Assert.Contains("avx512_downclock_net_loss", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_performance_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
         {
