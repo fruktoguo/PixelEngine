@@ -99,6 +99,34 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 native 资源泄漏预检不会把进程 smoke 误当作 GL/OpenAL/Box2D/ALC 泄漏验收。
+    /// </summary>
+    [Fact]
+    public void NativeLeakPreflightRequiresExternalDetectorEvidence()
+    {
+        string script = ReadRepositoryFile("tools", "native-leak-preflight.ps1");
+        string report = ReadRepositoryFile("docs", "runtime-reports", "2026-07-02-demo-window-longrun.md");
+        string plan = ReadRepositoryFile("plan", "18-hosting-runtime.md");
+
+        Assert.Contains("DetectorReportPath", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_detector", script, StringComparison.Ordinal);
+        Assert.Contains("process_smoke_only", script, StringComparison.Ordinal);
+        Assert.Contains("Native leak preflight failed", script, StringComparison.Ordinal);
+        Assert.Contains("RunProcessSmoke", script, StringComparison.Ordinal);
+        Assert.Contains("PeakWorkingSetMB", script, StringComparison.Ordinal);
+        Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
+        Assert.Contains("GL", script, StringComparison.Ordinal);
+        Assert.Contains("OpenAL", script, StringComparison.Ordinal);
+        Assert.Contains("Box2D", script, StringComparison.Ordinal);
+        Assert.Contains("ALC", script, StringComparison.Ordinal);
+        Assert.Contains("exit 2", script, StringComparison.Ordinal);
+
+        Assert.Contains("tools/native-leak-preflight.ps1", report, StringComparison.Ordinal);
+        Assert.Contains("process_smoke_only", report, StringComparison.Ordinal);
+        Assert.Contains("tools/native-leak-preflight.ps1", plan, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证发行编译模式保持默认 R2R 运行时 light-up，AOT 显式 ISA 并跑 SIMD 反汇编探针。
     /// </summary>
     [Fact]
