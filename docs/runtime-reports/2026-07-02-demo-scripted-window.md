@@ -38,6 +38,12 @@ dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --
 dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --no-build -- --no-hot-reload --window-ticks 180 --scripted-window-demo --content demo\PixelEngine.Demo\content --scene scenes\lava-mine-reaction-probe.scene --log-dir artifacts\scripted-window-reaction-probe-logs\runtime-7
 ```
 
+音频窗口探针使用独立的空脚本场景，由 Demo 专用探针在真实窗口相位中向 Core 音频事件 ring 注入 stone explosion、water splash 与 lava ambient 事件；它只验证材质 cue 解析、事件派发、one-shot voice 与 ambient voice 激活，不代表真实设备听感验收：
+
+```pwsh
+dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --no-build -- --no-hot-reload --window-ticks 20 --scripted-window-demo --content demo\PixelEngine.Demo\content --scene scenes\lava-mine-audio-probe.scene --log-dir artifacts\scripted-window-audio-probe-logs\runtime-1
+```
+
 ## 结果
 
 退出码：0。
@@ -124,6 +130,22 @@ RID: win-x64
 脚本化窗口输入摘要：frames=180, brush_material=<missing>, brush_radius=0, painted_material=0, explosions=0, last_explosion=(0.00,0.00), particles=2052, max_particles=5003, lights=0, max_lights=0, physics_destroyed=0, physics_created=0, max_physics_destroyed=0, max_physics_created=0, audio_played=0, audio_drained=0, max_audio_played=0, max_audio_drained=316, audio_loaded=19, hud_blocked=none, pause_open=<missing>, goal_reached=<missing>, player_health=0.00, damage_events=0, respawns=0, spawn_probe=<missing>, player=(0.00,0.00,0.00,0.00), player_center=(0.00,0.00), camera_center=(320.00,180.00), camera_zoom=1.00, camera_samples=0, camera_followed=False, render_camera_synced=True, player_x_range=(0.00,0.00), camera_x_range=(0.00,0.00), render_origin_x_range=(0.00,0.00), render_camera=(-320.00,-180.00,1.000,1280x720), reaction_probe_initialized=True, reactions_observed=True, phase_transitions_observed=True, reaction_cases=(lava_water=True;molten_water=True;water_fire=True;fire_wood=True;fire_oil=True;acid=True;steam_condense=True), phase_cases=(ice_melted=True;water_boiled=True;water_froze=True;lava_cooled=True;metal_melted=True;sand_glassed=True), probe_counts=(water=444;lava=0;stone=1086;steam=600;fire=1;smoke=954;wood=36;oil=0;acid=432;acid_gas=430;ice=1336;metal=644;molten_metal=7;sand=15;glass=1335), player_center_material=0。
 ```
 
+音频窗口探针关键输出：
+
+```text
+PixelEngine.Demo 0.1.0.0
+RID: win-x64
+内容包已加载：18 个材质，22 条反应，19 个音频 clip，Physics 已接入。
+脚本程序集已注册；热重载已由参数关闭。
+脚本运行时已接入 Hosting/Simulation 后端。
+脚本化窗口输入已启用。
+窗口运行时已接入 Rendering/Input 后端。
+窗口短跑完成：frames=20, requested=20。
+窗口短跑耗时：elapsed_ms=1033.42, avg_tick_ms=51.68, last_profile_ms=10.39。
+窗口短跑最慢相位：main_top=Temperature=4.56, sub_top=GpuUpload=3.80。
+脚本化窗口输入摘要：frames=20, brush_material=<missing>, brush_radius=0, painted_material=0, explosions=0, last_explosion=(0.00,0.00), particles=0, max_particles=0, lights=0, max_lights=0, physics_destroyed=0, physics_created=0, max_physics_destroyed=0, max_physics_created=0, audio_played=0, audio_drained=0, max_audio_played=2, max_audio_drained=3, audio_loaded=19, hud_blocked=none, pause_open=<missing>, goal_reached=<missing>, player_health=0.00, damage_events=0, respawns=0, spawn_probe=<missing>, player=(0.00,0.00,0.00,0.00), player_center=(0.00,0.00), camera_center=(320.00,180.00), camera_zoom=1.00, camera_samples=0, camera_followed=False, render_camera_synced=True, player_x_range=(0.00,0.00), camera_x_range=(0.00,0.00), render_origin_x_range=(0.00,0.00), render_camera=(-320.00,-180.00,1.000,1280x720), audio_probe_initialized=True, audio_probe_enqueued=True, audio_probe_one_shot_played=True, audio_probe_ambient_activated=True, audio_probe_max_drained=3, audio_probe_max_played=2, audio_probe_max_active_voices=2, audio_probe_max_active_ambient=1, player_center_material=0。
+```
+
 ## 结论
 
 该短跑证明真实窗口模式下，窗口创建、Silk 输入采样、脚本输入覆盖、脚本相机坐标转换、材质笔刷、爆破工具、自由粒子、脚本点光、Physics 刚体拆分、音频事件抽取、HUD 组件绑定、暂停菜单打开与渲染相位可以在同一运行态链路中自动触发并自然退出。
@@ -136,4 +158,6 @@ RID: win-x64
 
 反应与温度相变窗口探针额外证明真实窗口相位中，已加载 `ReactionTable` 与 `TemperatureField.ApplyPhaseTransitions` 会在 CA/Temperature 后产生目标材质变化：`reactions_observed=True` 覆盖熔岩遇水、熔融金属遇水、水灭火、火烧木、火烧油、酸腐蚀与蒸汽冷凝；`phase_transitions_observed=True` 覆盖冰融化、水沸腾、水冻结、熔岩冷却、金属熔化与沙烤玻璃。
 
-这些验证不等同于人工窗口验收：它们不证明 HUD 像素布局、鼠标真实设备手感、音频听感、反应/相变视觉质量、视觉 bloom/fog 质量、完整通关路线或开发态热重载体验。`max_audio_played=0` 表示本次只证明事件进入音频相位并被抽取，不证明实际可听播放；主线短跑的 `goal_reached=False` 表示固定输入脚本未覆盖完整通关路线，探针场景也不替代从出生点抵达出口的玩法验收；旧主线短跑的 `avg_tick_ms=71.66` 与 `last_profile_ms=31.27` 是空世界渲染快路径修复前的样本，不代表当前空场景帧预算，后者见 `docs/runtime-reports/2026-07-02-demo-window-smoke.md`。
+音频窗口探针额外证明真实窗口相位中，`content/audio/cues.json` 与 `materials.json` 的 cue 映射可以把材质音频事件解析为已加载 clip，并交给后端 source：`audio_probe_one_shot_played=True` 覆盖 stone explosion 与 water splash 的 one-shot voice，`audio_probe_ambient_activated=True` 覆盖 lava ambient loop 激活。
+
+这些验证不等同于人工窗口验收：它们不证明 HUD 像素布局、鼠标真实设备手感、音频听感、反应/相变视觉质量、视觉 bloom/fog 质量、完整通关路线或开发态热重载体验。主线短跑的 `goal_reached=False` 表示固定输入脚本未覆盖完整通关路线，探针场景也不替代从出生点抵达出口的玩法验收；旧主线短跑的 `avg_tick_ms=71.66` 与 `last_profile_ms=31.27` 是空世界渲染快路径修复前的样本，不代表当前空场景帧预算，后者见 `docs/runtime-reports/2026-07-02-demo-window-smoke.md`。
