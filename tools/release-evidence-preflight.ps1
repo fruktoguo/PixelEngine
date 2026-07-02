@@ -46,6 +46,12 @@ function Add-EvidenceFile {
         return
     }
 
+    $existingScope = $Evidence | Where-Object { $_.Scope -eq $Scope } | Select-Object -First 1
+    if ($null -ne $existingScope) {
+        $Missing.Add("重复 evidence scope：$Scope")
+        return
+    }
+
     $resolved = if ([IO.Path]::IsPathRooted($Path)) { $Path } else { Join-Path $Root $Path }
     if (-not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
         $Missing.Add("$Scope 文件不存在：$Path")
