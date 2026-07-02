@@ -2,7 +2,6 @@ using PixelEngine.Hosting;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
-using PixelEngine.Simulation.Particles;
 
 namespace PixelEngine.Demo;
 
@@ -187,14 +186,14 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
 /// </summary>
 internal sealed class DemoWindowScriptedProbe(
     PhysicsSystem physics,
-    ParticleSystem particles,
+    EngineProbeApi probe,
     ScriptLightingSynchronizer lighting,
     PixelEngine.Scripting.Scene scene,
     ScriptCameraApi camera,
     ScriptCameraSynchronizer cameraSync) : IEnginePhaseDriver
 {
     private readonly PhysicsSystem _physics = physics ?? throw new ArgumentNullException(nameof(physics));
-    private readonly ParticleSystem _particles = particles ?? throw new ArgumentNullException(nameof(particles));
+    private readonly EngineProbeApi _probe = probe ?? throw new ArgumentNullException(nameof(probe));
     private readonly ScriptLightingSynchronizer _lighting = lighting ?? throw new ArgumentNullException(nameof(lighting));
     private readonly PixelEngine.Scripting.Scene _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly ScriptCameraApi _camera = camera ?? throw new ArgumentNullException(nameof(camera));
@@ -294,7 +293,7 @@ internal sealed class DemoWindowScriptedProbe(
         _ = context;
         MaxDestroyedBodies = Math.Max(MaxDestroyedBodies, _physics.LastDestructionResult.DestroyedBodies);
         MaxCreatedBodies = Math.Max(MaxCreatedBodies, _physics.LastDestructionResult.CreatedBodies);
-        MaxParticles = Math.Max(MaxParticles, _particles.ActiveCount);
+        MaxParticles = Math.Max(MaxParticles, _probe.ActiveParticles);
         MaxLights = Math.Max(MaxLights, _lighting.PointLights.Length);
     }
 

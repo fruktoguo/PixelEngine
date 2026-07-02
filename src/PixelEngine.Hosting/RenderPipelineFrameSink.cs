@@ -7,11 +7,24 @@ namespace PixelEngine.Hosting;
 /// <summary>
 /// 将 Hosting 渲染相位输出提交到真实 RenderPipeline。
 /// </summary>
-public sealed class RenderPipelineFrameSink(RenderPipeline pipeline) : IRenderFrameSink
+public sealed class RenderPipelineFrameSink : IRenderFrameSink
 {
-    private readonly RenderPipeline _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
+    private readonly RenderPipeline _pipeline;
 
-    /// <inheritdoc />
+#pragma warning disable IDE0290 // 普通构造器保留独立 XML 文档，供公开 API 文档纪律测试识别。
+    /// <summary>
+    /// 创建真实渲染管线帧提交器。
+    /// </summary>
+    /// <param name="pipeline">真实 Rendering 管线。</param>
+    public RenderPipelineFrameSink(RenderPipeline pipeline)
+    {
+        _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
+    }
+#pragma warning restore IDE0290
+
+    /// <summary>
+    /// 当前真实渲染管线实际使用的自由粒子渲染模式。
+    /// </summary>
     public ParticleRenderMode ParticleRenderMode => _pipeline.CanRenderParticlesOnGpu
         ? ParticleRenderMode.GpuPointSprite
         : ParticleRenderMode.CpuStamp;

@@ -1,8 +1,6 @@
 using PixelEngine.Hosting;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
-using PixelEngine.Simulation;
-using PixelEngine.Simulation.Particles;
 
 namespace PixelEngine.Demo;
 
@@ -10,8 +8,7 @@ namespace PixelEngine.Demo;
 /// Demo 窗口粒子 / 光照长跑探针，验证短寿命粒子退场与光照请求同步。
 /// </summary>
 internal sealed class DemoParticleLightProbe(
-    ParticleSystem particles,
-    MaterialTable materials,
+    EngineProbeApi probe,
     ScriptLightingApi lighting,
     ScriptLightingSynchronizer lightingSync,
     ScriptCameraSynchronizer cameraSync) : IEnginePhaseDriver
@@ -21,8 +18,7 @@ internal sealed class DemoParticleLightProbe(
     private const float CenterX = 320f;
     private const float CenterY = 180f;
 
-    private readonly ParticleSystem _particles = particles ?? throw new ArgumentNullException(nameof(particles));
-    private readonly MaterialTable _materials = materials ?? throw new ArgumentNullException(nameof(materials));
+    private readonly EngineProbeApi _probe = probe ?? throw new ArgumentNullException(nameof(probe));
     private readonly ScriptLightingApi _lighting = lighting ?? throw new ArgumentNullException(nameof(lighting));
     private readonly ScriptLightingSynchronizer _lightingSync = lightingSync ?? throw new ArgumentNullException(nameof(lightingSync));
     private readonly ScriptCameraSynchronizer _cameraSync = cameraSync ?? throw new ArgumentNullException(nameof(cameraSync));
@@ -96,7 +92,7 @@ internal sealed class DemoParticleLightProbe(
         _ = context;
         if (!Initialized)
         {
-            Initialized = _materials.TryGetId("fire", out _fire);
+            Initialized = _probe.TryResolveMaterial("fire", out _fire);
         }
 
         if (!Initialized || _frames++ > 0)
@@ -108,15 +104,14 @@ internal sealed class DemoParticleLightProbe(
         {
             float angle = MathF.Tau * i / BurstCount;
             float speed = 0.35f + (i % 7 * 0.03f);
-            ParticleSpawn spawn = new(
+            if (_probe.TrySpawnParticle(
                 CenterX,
                 CenterY,
                 MathF.Cos(angle) * speed,
                 MathF.Sin(angle) * speed,
                 _fire,
-                ColorVariant: 0,
-                Life: 24);
-            if (_particles.TrySpawn(in spawn))
+                colorVariant: 0,
+                life: 24))
             {
                 Spawned++;
             }
@@ -128,7 +123,7 @@ internal sealed class DemoParticleLightProbe(
 
     private void Capture(EngineTickContext context)
     {
-        int active = _particles.ActiveCount;
+        int active = _probe.ActiveParticles;
         MaxActive = Math.Max(MaxActive, active);
         LastActive = active;
         if (_frames >= TailStartFrame)

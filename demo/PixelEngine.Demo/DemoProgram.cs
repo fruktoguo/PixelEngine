@@ -8,8 +8,6 @@ using PixelEngine.Hosting;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
-using PixelEngine.Simulation;
-using PixelEngine.Simulation.Particles;
 using ScriptScene = PixelEngine.Scripting.Scene;
 
 namespace PixelEngine.Demo;
@@ -135,8 +133,7 @@ public static class DemoProgram
         if (options.ParticleFrameProbe)
         {
             particleFrameProbe = new DemoParticleFrameTimeProbe(
-                engine.Context.GetService<ParticleSystem>(),
-                engine.Context.GetService<MaterialTable>(),
+                engine.Context.GetService<EngineProbeApi>(),
                 options.ParticleProbeCount,
                 options.ParticleProbeWarmupFrames,
                 DemoWorldWidthCells,
@@ -160,7 +157,7 @@ public static class DemoProgram
             scriptedInput.RegisterPhases(engine.Phases);
             scriptedProbe = new DemoWindowScriptedProbe(
                 engine.Context.GetService<PhysicsSystem>(),
-                engine.Context.GetService<ParticleSystem>(),
+                engine.Context.GetService<EngineProbeApi>(),
                 engine.Context.GetService<ScriptLightingSynchronizer>(),
                 engine.Context.GetService<ScriptScene>(),
                 engine.Context.GetService<ScriptCameraApi>(),
@@ -169,24 +166,20 @@ public static class DemoProgram
             if (IsReactionProbeScene(options.Scene))
             {
                 reactionProbe = new DemoReactionTemperatureProbe(
-                    engine.Context.GetService<CellGrid>(),
-                    engine.Context.GetService<TemperatureField>(),
-                    engine.Context.GetService<MaterialTable>(),
-                    engine.Context.GetService<SimulationKernel>());
+                    engine.Context.GetService<EngineProbeApi>());
                 reactionProbe.RegisterPhases(engine.Phases);
             }
 
             if (IsAudioProbeScene(options.Scene))
             {
-                audioProbe = new DemoAudioProbe(engine.Context.GetService<MaterialTable>());
+                audioProbe = new DemoAudioProbe(engine.Context.GetService<EngineProbeApi>());
                 audioProbe.RegisterPhases(engine.Phases);
             }
 
             if (IsParticleLightProbeScene(options.Scene))
             {
                 particleLightProbe = new DemoParticleLightProbe(
-                    engine.Context.GetService<ParticleSystem>(),
-                    engine.Context.GetService<MaterialTable>(),
+                    engine.Context.GetService<EngineProbeApi>(),
                     engine.Context.GetService<ScriptLightingApi>(),
                     engine.Context.GetService<ScriptLightingSynchronizer>(),
                     engine.Context.GetService<ScriptCameraSynchronizer>());
@@ -335,13 +328,12 @@ public static class DemoProgram
         PlayerHealth? health = FindBehaviour<PlayerHealth>(scene);
         PlayerController? player = FindBehaviour<PlayerController>(scene);
         LevelDirector? director = FindBehaviour<LevelDirector>(scene);
-        CellGrid grid = engine.Context.GetService<CellGrid>();
-        ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
+        EngineProbeApi probe = engine.Context.GetService<EngineProbeApi>();
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
         ScriptCameraApi camera = engine.Context.GetService<ScriptCameraApi>();
         ScriptCameraSynchronizer cameraSync = engine.Context.GetService<ScriptCameraSynchronizer>();
         ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
-        ushort paintedMaterial = grid.MaterialAt(
+        ushort paintedMaterial = probe.MaterialAt(
             (int)MathF.Round(scriptedInput.BrushTargetWorld.X),
             (int)MathF.Round(scriptedInput.BrushTargetWorld.Y));
         string brushMaterial = brush?.SelectedMaterialName ?? "<missing>";
@@ -351,7 +343,7 @@ public static class DemoProgram
         CharacterState playerState = player?.State ?? default;
         int playerCenterX = (int)MathF.Round(player?.CenterX ?? 0f);
         int playerCenterY = (int)MathF.Round(player?.CenterY ?? 0f);
-        ushort playerCenterMaterial = grid.MaterialAt(playerCenterX, playerCenterY);
+        ushort playerCenterMaterial = probe.MaterialAt(playerCenterX, playerCenterY);
         CameraState renderCamera = cameraSync.Current;
 
         Console.WriteLine(
@@ -361,8 +353,8 @@ public static class DemoProgram
             $"painted_material={paintedMaterial}, " +
             $"explosions={explosive?.ExplosionCount ?? 0}, " +
             $"last_explosion=({explosive?.LastExplosionX ?? 0:0.00},{explosive?.LastExplosionY ?? 0:0.00}), " +
-            $"particles={particles.ActiveCount}, " +
-            $"max_particles={scriptedProbe?.MaxParticles ?? particles.ActiveCount}, " +
+            $"particles={probe.ActiveParticles}, " +
+            $"max_particles={scriptedProbe?.MaxParticles ?? probe.ActiveParticles}, " +
             $"lights={lighting.PointLights.Length}, " +
             $"max_lights={scriptedProbe?.MaxLights ?? lighting.PointLights.Length}, " +
             $"physics_destroyed={physics.LastDestructionResult.DestroyedBodies}, " +
