@@ -7,7 +7,7 @@ namespace PixelEngine.Demo;
 /// </summary>
 public sealed class MaterialEmitter : Behaviour
 {
-    private MaterialId _material;
+    private MaterialId _material = MaterialId.Invalid;
     private float _timer;
     private float _audioTimer;
     private int _burstIndex;

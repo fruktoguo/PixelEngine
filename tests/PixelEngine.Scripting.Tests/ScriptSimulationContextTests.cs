@@ -44,7 +44,7 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
-    /// 验证脚本 cell 写命令延迟到 flush 后写入 working dirty，供下一次 CA 可见。
+    /// 验证脚本 cell 写命令延迟到 flush 后写入 current dirty，供本次 CA 可见。
     /// </summary>
     [Fact]
     public void CellCommandsFlushIntoWorkingDirtyWithoutImmediateMutation()
@@ -60,12 +60,34 @@ public sealed class ScriptSimulationContextTests
 
         Assert.Equal(1, flushed);
         Assert.Equal(sand.Value, fixture.Grid.GetMaterial(2, 2));
-        Assert.True(fixture.Chunk.CurrentDirty.IsEmpty);
-        Assert.False(fixture.Chunk.WorkingDirty.IsEmpty);
-
-        fixture.Kernel.SwapDirtyRects();
         Assert.False(fixture.Chunk.CurrentDirty.IsEmpty);
         Assert.True(fixture.Chunk.WorkingDirty.IsEmpty);
+
+        fixture.Kernel.SwapDirtyRects();
+        Assert.True(fixture.Chunk.CurrentDirty.IsEmpty);
+        Assert.True(fixture.Chunk.WorkingDirty.IsEmpty);
+    }
+
+    /// <summary>
+    /// 验证脚本 Paint 与 SpawnParticle 进入独立队列，分别 flush 后互不丢失。
+    /// </summary>
+    [Fact]
+    public void CellAndParticleCommandsFlushIndependently()
+    {
+        Fixture fixture = Fixture.Create();
+        MaterialId stone = fixture.Context.Materials.Resolve("stone");
+
+        fixture.Context.Cells.Paint(6, 6, radius: 1, stone);
+        fixture.Context.Particles.Spawn(new ParticleSpawnDesc(6, 6, 0, 0, stone, 10));
+
+        Assert.Equal(1, fixture.Context.FlushCellCommands());
+        Assert.Equal(stone.Value, fixture.Grid.GetMaterial(6, 6));
+        Assert.False(fixture.Chunk.CurrentDirty.IsEmpty);
+        Assert.Equal(0, fixture.Particles.ActiveCount);
+
+        Assert.Equal(1, fixture.Context.FlushParticleCommands());
+        Assert.Equal(1, fixture.Particles.ActiveCount);
+        Assert.Equal(stone.Value, fixture.Particles.ActiveReadOnly[0].Material);
     }
 
     /// <summary>

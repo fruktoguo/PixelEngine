@@ -164,14 +164,14 @@ API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosti
 - [x] `content/audio/`：§3.10 音效资产清单全部就位并被 `AudioCues`/`PlayOneShot` 引用。〔plan/10;§3.10〕
 
 刚体 / 粒子 / 光照 / 音频（Demo 侧消费）
-- [!] 木 / 金属可破坏结构布置：`LevelDirector` 已铺设木桥与金属梁，并经 `IRigidBodyApi.CreateFromRegion` 在 headless 真实 Hosting/Scripting/Physics 路径注册 6 个动态刚体；集成测试已切断其中一段木桥并验证 Physics 销毁父刚体、创建 2 个子刚体；`MaterialBrushCanDigRigidBridgeThroughPublicInput` 已经通过公开输入、相机和材质笔刷链路擦断默认木桥，并验证共享 `RigidDamageQueue` 触发刚体销毁与新刚体创建；阻塞：缺少窗口态可推 / 砸 / CA 挖断后再破坏端到端验收。〔plan/06;§3.7〕
+- [!] 木 / 金属可破坏结构布置：`LevelDirector` 已铺设木桥与金属梁，并经 `IRigidBodyApi.CreateFromRegion` 在 headless 真实 Hosting/Scripting/Physics 路径注册 6 个动态刚体；集成测试已切断其中一段木桥并验证 Physics 至少销毁父刚体、创建 2 个以上子刚体且 active body 增长；`MaterialBrushCanDigRigidBridgeThroughPublicInput` 已经通过公开输入、相机和材质笔刷链路擦断默认木桥，并验证共享 `RigidDamageQueue` 触发刚体销毁与新刚体创建；阻塞：缺少窗口态可推 / 砸 / CA 挖断后再破坏端到端验收。〔plan/06;§3.7〕
 - [!] 火花 / 血 / 碎屑发射：`PlayerHealth` 已用 `Particles.Burst` 喷血，`MaterialEmitter` 已用 `Particles.Spawn` 做喷口粒子，`SparkEmitter` 已接入 lava 区域 fire 火花，刚体小碎片可由 Physics damage 重建写入自由粒子；`World.Explode` 已可把 cell 抛射为粒子并推动邻近刚体；阻塞：缺少真实窗口爆炸粒子、刚体推动与无粒子泄漏端到端验收。〔plan/05;§3.8〕
 - [!] emissive 材质标注正确（lava/molten_metal/fire/火花），Scripting 已有 `Lighting.RevealAround` + `AddPointLight` 请求 API，Hosting 已有 `ScriptLightingSynchronizer` 将脚本请求同步为 Rendering `LightSource` 与 `FogOfWarBuffer`，`RenderPhaseDriver` 已把 fog-of-war 与点光源传入 `RenderPipeline` 并 stamp 自由粒子到 emissive buffer；`RenderPipeline` 已把点光源合成进 visibility mask；阻塞：缺少真实窗口光照验收。〔plan/08;§3.9〕
 - [!] `materials.json` 的 `AudioCues` 已覆盖 impact/fire/splash/ambient/explosion/shatter，玩法脚本可经 `Audio.PlayOneShot`/`PlayAt` 请求音效；Hosting 已能从 `content/audio` 预加载 19 个 wav clip 并注入脚本上下文，`audio/cues.json` 已把材质事件 cue 句柄接到 `MaterialAudioPlayer`/已加载 clip buffer，粒子事件也接入 `Context.Events`，`World.Explode` 已可触发 explosion cue；阻塞：缺少窗口态定位音频/ambient/sizzle/corrosion 满屏限频验收。〔plan/04、plan/10;§3.10〕
 
 关卡与 UI
 - [!] `LevelDirector : Behaviour`：源码已落地，脚本生成「熔岩矿洞逃生」基础布局并装配玩家、相机、笔刷、喷口和目标触发器；Hosting procedural scene source 已可按入口 Behaviour 名自动物化 `LevelDirector` 到脚本场景，且 headless resident world 可经 `AttachScriptingFromServices()` 自动驱动；save directory 与 `.scene InitialSaveDirectory` 可显式装配 live World/Simulation/粒子后端，窗口态已可装配输入与 Rendering 相位；阻塞：真实窗口可玩关卡验收仍未完成。〔plan/11、plan/02;§3.11〕
-- [!] `MaterialEmitter : Behaviour`（材质 + 速率 + 喷口）：源码已落地，支持周期性 cell 注入、粒子、音频和点光源请求；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API，fog-of-war 与点光源请求已可进入 Rendering 管线；阻塞：缺少真实窗口喷口画面与音频触发验收。〔plan/11;§3.11〕
+- [!] `MaterialEmitter : Behaviour`（材质 + 速率 + 喷口）：源码已落地，支持周期性 cell 注入、粒子、音频和点光源请求；`MaterialEmitterWritesCellsParticlesAudioAndLighting` 已用 headless 真实 `Engine` 验证喷口材质按名解析后在 ParticleToCell/CA/dirty swap 链路写入 cell、生成自由粒子、播放定位音效并同步点光源；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API，fog-of-war 与点光源请求已可进入 Rendering 管线；阻塞：缺少真实窗口喷口画面与音频触发验收。〔plan/11;§3.11〕
 - [!] `GoalTrigger : Behaviour`：源码已落地，玩家进入触发区后触发通关状态、音效、粒子与光照反馈，并经 `IGuiContext` 绘制通关菜单、提供重开关卡与退出按钮；headless 路径已能由 Hosting 自动驱动脚本场景并注入已加载脚本音频 API，fog-of-war 与点光源请求已可进入 Rendering 管线；阻塞：缺少窗口态通关画面与音效触发验收。〔plan/11、plan/10;§3.11〕
 - [x] `content/scenes/lava-mine.scene`：已按 `.scene` 文档格式序列化 `LevelDirector` 入口与关卡参数，默认启动路径可加载并物化为等价脚本场景。〔plan/12、plan/07;§3.2、§3.11〕
 - [!] `DemoHud : Behaviour.OnGui`：源码已落地，经 `IGuiContext` 显示玩家生命、当前材质色块、笔刷半径、爆破次数、目标状态与 FPS/SimHz/Frame/活跃 chunk/自由粒子/刚体数；阻塞：缺真实窗口 HUD 验收。〔plan/11、plan/12、plan/02;§3.12〕
