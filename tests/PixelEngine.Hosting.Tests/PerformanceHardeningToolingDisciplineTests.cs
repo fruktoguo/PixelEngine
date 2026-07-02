@@ -638,6 +638,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("testsRan=true", script, StringComparison.Ordinal);
         Assert.Contains("win-arm64 当前 CI 设计应为 build-only", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_ci_manifest", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_ci_evidence", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_ci_scope_evidence", script, StringComparison.Ordinal);
         Assert.Contains("ci_matrix_evidence_attached_pending_review", script, StringComparison.Ordinal);
         Assert.Contains("[Console]::Error.WriteLine", script, StringComparison.Ordinal);
@@ -665,11 +666,13 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         Assert.Contains("tools/ci-matrix-evidence-preflight.ps1", report, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_ci_manifest", report, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_ci_evidence", report, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_ci_scope_evidence", report, StringComparison.Ordinal);
         Assert.Contains("ci_matrix_evidence_attached_pending_review", report, StringComparison.Ordinal);
         Assert.Contains("conclusion", report, StringComparison.Ordinal);
         Assert.Contains("channels: r2r,aot", report, StringComparison.Ordinal);
         Assert.Contains("tools/ci-matrix-evidence-preflight.ps1", plan, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_ci_evidence", plan, StringComparison.Ordinal);
         Assert.Contains("ci_matrix_evidence_attached_pending_review", plan, StringComparison.Ordinal);
     }
 
@@ -710,6 +713,85 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(2, good.ExitCode);
             string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "ci-matrix-evidence-preflight.md"));
             Assert.Contains("ci_matrix_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 CI evidence 预检会把 schema/JSON 错误落成稳定报告，而不是直接抛出无报告异常。
+    /// </summary>
+    [Fact]
+    public void CiMatrixEvidencePreflightRejectsInvalidSchemaWithReport()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ci-schema-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateCiEvidenceManifest(temp, benchmarkConclusion: "success");
+            string json = File.ReadAllText(manifest).Replace("\"schemaVersion\": 1", "\"schemaVersion\": 2", StringComparison.Ordinal);
+            File.WriteAllText(manifest, json);
+
+            string artifacts = Path.Combine(temp, "schema-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "ci-matrix-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "ci-matrix-evidence-preflight.md"));
+            Assert.Contains("status: blocked_invalid_ci_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("schemaVersion 必须为 1", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: ci_matrix_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 CI evidence 预检会真实拒绝 manifest 中声明 hash 与文件内容不一致的证据。
+    /// </summary>
+    [Fact]
+    public void CiMatrixEvidencePreflightRejectsMismatchedEvidenceHash()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ci-hash-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateCiEvidenceManifest(temp, benchmarkConclusion: "success");
+            string json = File.ReadAllText(manifest).Replace("\"sha256\": \"", "\"sha256\": \"0000", StringComparison.Ordinal);
+            File.WriteAllText(manifest, json);
+
+            string artifacts = Path.Combine(temp, "hash-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "ci-matrix-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "ci-matrix-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_ci_scope_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("sha256 不匹配", report, StringComparison.Ordinal);
+            Assert.Contains("benchmark_guard", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: ci_matrix_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
         {
