@@ -87,6 +87,31 @@ RID: win-x64
 窗口短跑完成：frames=60, requested=60。
 ```
 
+## 帧耗时指标采样
+
+在 `DemoProgram` 的有限窗口短跑路径中增加 wall-clock tick 摘要后，复跑 30 tick 短样本，确认窗口运行态可以直接输出本轮总耗时、平均 tick 耗时与最后一帧诊断计时器合计。
+
+命令：
+
+```pwsh
+dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --no-restore -- --no-hot-reload --window-ticks 30 --content demo\PixelEngine.Demo\content --log-dir artifacts\window-metrics-smoke-logs\runtime
+```
+
+结果：
+
+```text
+PixelEngine.Demo 0.1.0.0
+RID: win-x64
+内容包已加载：18 个材质，22 条反应，19 个音频 clip，Physics 已接入。
+脚本程序集已注册；热重载已由参数关闭。
+脚本运行时已接入 Hosting/Simulation 后端。
+窗口运行时已接入 Rendering/Input 后端。
+窗口短跑完成：frames=30, requested=30。
+窗口短跑耗时：elapsed_ms=3220.07, avg_tick_ms=107.34, last_profile_ms=49.20。
+```
+
+该样本只证明指标采集链路可用；`avg_tick_ms=107.34` 与 `last_profile_ms=49.20` 仍不满足稳定 60fps 帧预算，不能替代 plan/14 的正式运行态性能验收。
+
 ## 结论
 
 本机真实窗口路径能装配 Content、Simulation、Physics、Audio、Scripting、Rendering 与 Input 后端，并稳定执行 120 个 Engine tick 后正常释放退出。Editor 窗口路径能额外装配 EditorRenderBridge 与 Hexa ImGui OpenGL3 后端，并执行 60 个 Engine tick 后正常退出。

@@ -90,7 +90,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 
 ## 5. 验收标准
 
-- [!] `EngineBuilder().…​.Build().Run()` 能装配全部子系统并跑稳定 60fps 空场景。阻塞:Rendering/Audio/Physics/Scripting/Editor 已有真实运行入口，`--window-ticks 3600` 本机窗口长跑已验证可有限运行并退出；稳定 60fps 空场景帧预算仍需 plan/14 运行态验证。
+- [!] `EngineBuilder().…​.Build().Run()` 能装配全部子系统并跑稳定 60fps 空场景。阻塞:Rendering/Audio/Physics/Scripting/Editor 已有真实运行入口，`--window-ticks 3600` 本机窗口长跑已验证可有限运行并退出；有限窗口短跑现在会输出 `elapsed_ms`/`avg_tick_ms`/`last_profile_ms`，`docs/runtime-reports/2026-07-02-demo-window-smoke.md` 的 30 tick 样本为 `avg_tick_ms=107.34`、`last_profile_ms=49.20`，仍不满足稳定 60fps 帧预算；正式空场景帧预算仍需 plan/14 运行态验证。
 - [x] 12 相位顺序与架构 §3.3 完全一致;用诊断计时器可见各相位耗时。
 - [x] sim 降到 30Hz 时画面仍 60fps 出帧、世界慢放、无 death spiral(注入人工过载验证)。
 - [!] 过载降级按五级顺序触发且可在编辑器观测/覆盖。阻塞:五级顺序与 Sim30Hz 已测试,Editor 运行入口、Hexa ImGui OpenGL3 后端与诊断面板已接入，并通过 60 tick Editor 窗口短跑；仍需窗口态覆盖 UI 验收。

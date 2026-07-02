@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
@@ -119,19 +120,36 @@ public static class DemoProgram
         Console.WriteLine("窗口运行时已接入 Rendering/Input 后端。");
         if (options.WindowTicks > 0)
         {
-            for (int i = 0; i < options.WindowTicks &&
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            int executed = 0;
+            for (; executed < options.WindowTicks &&
                 engine.State != EngineRunState.Shutdown &&
                 !engine.IsShutdownRequested &&
-                !window.IsClosing; i++)
+                !window.IsClosing; executed++)
             {
                 _ = engine.RunOneTick();
             }
 
             Console.WriteLine($"窗口短跑完成：frames={engine.Context.Clock.FrameIndex}, requested={options.WindowTicks}。");
+            Console.WriteLine(
+                $"窗口短跑耗时：elapsed_ms={stopwatch.Elapsed.TotalMilliseconds:0.00}, " +
+                $"avg_tick_ms={(executed == 0 ? 0 : stopwatch.Elapsed.TotalMilliseconds / executed):0.00}, " +
+                $"last_profile_ms={Sum(engine.Context.Profiler.LastFrame):0.00}。");
             return;
         }
 
         engine.Run();
+    }
+
+    private static double Sum(ReadOnlySpan<double> values)
+    {
+        double total = 0;
+        for (int i = 0; i < values.Length; i++)
+        {
+            total += values[i];
+        }
+
+        return total;
     }
 
     /// <summary>
