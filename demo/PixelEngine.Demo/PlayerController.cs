@@ -13,6 +13,7 @@ public sealed class PlayerController : Behaviour
     private float _velocityY;
     private float _coyoteTimer;
     private float _jumpBufferTimer;
+    private Transform? _transform;
 
     /// <summary>
     /// 出生点 X 坐标。
@@ -115,6 +116,7 @@ public sealed class PlayerController : Behaviour
         _coyoteTimer = 0f;
         _jumpBufferTimer = 0f;
         State = Context.Character.SetPosition(_body, SpawnX, SpawnY);
+        SyncTransform();
     }
 
     /// <inheritdoc />
@@ -153,6 +155,7 @@ public sealed class PlayerController : Behaviour
         CharacterState moved = Context.Character.Move(_body, dx, dy);
         ResolveVelocityAfterCollision(moved);
         State = moved;
+        SyncTransform();
     }
 
     private void EnsureBody()
@@ -165,6 +168,22 @@ public sealed class PlayerController : Behaviour
         _body = Context.Character.Create(SpawnX, SpawnY, Width, Height);
         State = Context.Character.GetState(_body);
         _hasBody = true;
+        SyncTransform();
+    }
+
+    private void SyncTransform()
+    {
+        if (_transform is null)
+        {
+            if (!Entity.TryGetComponent(out Transform transform))
+            {
+                return;
+            }
+
+            _transform = transform;
+        }
+
+        _transform.SetPosition(CenterX, CenterY);
     }
 
     private void ApplyHorizontal(float axis, float dt)

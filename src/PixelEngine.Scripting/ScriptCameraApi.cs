@@ -79,7 +79,12 @@ public sealed class ScriptCameraApi : ICameraApi
     public void Follow(Entity target)
     {
         ArgumentNullException.ThrowIfNull(target);
-        throw new NotSupportedException("当前脚本实体尚无统一 Transform，不能通过 Entity 自动跟随；请由脚本读取目标位置后调用 SetCenter。");
+        if (!target.TryGetComponent(out Transform transform))
+        {
+            throw new InvalidOperationException($"实体 {target.Id} 没有 Transform，不能作为相机跟随目标。");
+        }
+
+        SetCenter(transform.X, transform.Y);
     }
 
     /// <inheritdoc />
