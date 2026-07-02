@@ -102,7 +102,7 @@ cascade 层数 `RadianceCascadeCount`、每层角度/空间分辨率、射线步
 ### 4.1 后端抽象与能力门控（§3.1，架构 §9.5）
 - [x] 定义 `IComputeBackend` 接口（kernel 加载、SSBO/image 绑定、`Dispatch`、`MemoryBarrier`、GPU 计时），带完整中文 XML 注释。
 - [x] 实现 `GLComputeBackend`（Silk.NET GL 4.3 compute：`ARB_compute_shader`/SSBO/image load-store），GLSL `#version 430`，运行时编译、无反射。
-- [!] 阻塞：`ComputeSharpBackend` 已经接口隔离且 `Directory.Packages.props` 登记 `ComputeSharp` 3.2.0；真实 Windows/DX12 执行后端需 `plan/15` 明确 AOT/打包与 PackageReference 策略后实现，当前不可假装可执行。
+- [!] 阻塞：`ComputeSharpBackend` 已经接口隔离且 `Directory.Packages.props` 登记 `ComputeSharp` 3.2.0；`plan/15` 已明确发行与 AOT/打包策略，但 Rendering 项目当前仍不引用 `ComputeSharp`，该后端仍是未编译进发行的隔离 stub，真实 Windows/DX12 执行后端与可选编译开关尚未实现，当前不可假装可执行。
 - [x] 实现 `NullComputeBackend`（空实现，所有入口委派 `plan/08` fragment/CPU 路径）。
 - [x] 实现 `GpuCapabilities` 探测（GL 版本、compute/SSBO/image 扩展、`GL_MAX_COMPUTE_WORK_GROUP_*`、ANGLE/ES3、DX12），启动期探测一次并缓存。
 - [x] 实现 `ComputeCapabilityGate`：产出门控位 **G1**（GL≥4.3+扩展）、**G2**（Win+DX12+ComputeSharp 显式启用）、**G3**（基线回退到 plan/08）、**G4**（逐特性独立开关）。
