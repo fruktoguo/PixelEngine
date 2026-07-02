@@ -9,6 +9,7 @@ public sealed class PauseMenu : Behaviour
 {
     private string _status = string.Empty;
     private long _lastEscapeFrame = -1;
+    private bool _showDebugOverlays;
 
     /// <summary>
     /// 菜单窗口宽度，单位像素。
@@ -105,7 +106,13 @@ public sealed class PauseMenu : Behaviour
 
     private void DrawOverlays(IGuiContext gui)
     {
-        gui.Text("调试叠层");
+        gui.Text("调试");
+        _ = gui.Checkbox("显示调试叠层", ref _showDebugOverlays);
+        if (!_showDebugOverlays)
+        {
+            return;
+        }
+
         DrawOverlay(gui, DebugOverlayKind.DirtyRects, "dirty rect");
         DrawOverlay(gui, DebugOverlayKind.ChunkGridParity, "chunk parity");
         DrawOverlay(gui, DebugOverlayKind.KeepAliveHotspots, "KeepAlive");

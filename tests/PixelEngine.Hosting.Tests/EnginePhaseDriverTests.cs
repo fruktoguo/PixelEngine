@@ -1,6 +1,7 @@
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.Editor;
+using PixelEngine.Core.Time;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
@@ -188,6 +189,51 @@ public sealed class EnginePhaseDriverTests
 
         Assert.Equal(1, sink.FrameCount);
         Assert.Equal(1, sink.ParticleCount);
+        Assert.Equal(0u, sink.ParticlePixel);
+    }
+
+    /// <summary>
+    /// 验证上一帧 CPU stamp 的粒子在 render-only 帧会触发 render buffer 重建，避免暂停或跳帧时留下粒子残影。
+    /// </summary>
+    [Fact]
+    public void RenderPhaseDriverRefreshesRenderBufferAfterCpuParticleStamp()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("spark", CellType.Fire));
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        TestChunkSource chunks = new(chunk);
+        ParticleSystem particles = new(capacity: 16);
+        Assert.True(particles.TrySpawn(new ParticleSpawn(1, 0, 0, 0, Material: 1, ColorVariant: 0, Life: 10)));
+        TemperatureField temperature = new();
+        ScriptCameraApi camera = new(viewportWidth: 32, viewportHeight: 16, centerX: 16, centerY: 8, zoom: 1);
+        ScriptCameraSynchronizer cameraSync = new(camera);
+        _ = cameraSync.Sync();
+        ScriptLightingSynchronizer lightingSync = new(new ScriptLightingApi(), cameraSync);
+        lightingSync.Sync();
+        RecordingRenderFrameSink sink = new();
+        RenderPhaseDriver driver = new(
+            chunks,
+            materials,
+            temperature,
+            particles,
+            cameraSync,
+            lightingSync,
+            sink);
+
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddPhaseDriver(driver)
+            .Build();
+
+        FrameTiming first = engine.RunOneTick();
+        Assert.True(first.RunSim);
+        Assert.Equal(0xFF_80_80_80u, sink.ParticlePixel);
+
+        particles.Clear();
+        engine.EnterEditMode();
+        FrameTiming second = engine.RunOneTick();
+
+        Assert.False(second.RunSim);
+        Assert.Equal(2, sink.FrameCount);
         Assert.Equal(0u, sink.ParticlePixel);
     }
 

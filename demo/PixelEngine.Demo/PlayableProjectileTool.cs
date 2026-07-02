@@ -67,12 +67,12 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <summary>
     /// 爆破后局部扫描半径，用于把脱离主地形的小型固体岛转换为刚体。
     /// </summary>
-    public int CollapseScanRadius { get; set; } = 42;
+    public int CollapseScanRadius { get; set; } = 96;
 
     /// <summary>
     /// 可自动转换的最大连通块包围盒尺寸，避免误把整片程序化地形转成刚体。
     /// </summary>
-    public int MaxCollapseRegionSize { get; set; } = 72;
+    public int MaxCollapseRegionSize { get; set; } = 120;
 
     /// <summary>
     /// 可自动转换的最小固体像素数。
@@ -82,7 +82,7 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <summary>
     /// 单次爆破最多转换的悬空固体岛数量，避免一枪把整片程序化山体误拆成过多刚体。
     /// </summary>
-    public int MaxCollapsedIslandsPerShot { get; set; } = 4;
+    public int MaxCollapsedIslandsPerShot { get; set; } = 8;
 
     /// <summary>
     /// 已由破坏弹转换成刚体的悬空固体岛数量。
@@ -162,7 +162,7 @@ public sealed class PlayableProjectileTool : Behaviour
     {
         _pendingCollapseX = (int)MathF.Round(hitX);
         _pendingCollapseY = (int)MathF.Round(hitY);
-        _pendingCollapseFrames = 2;
+        _pendingCollapseFrames = 4;
         _pendingCollapsePasses = Math.Clamp(MaxCollapsedIslandsPerShot, 1, 12);
     }
 
@@ -186,7 +186,7 @@ public sealed class PlayableProjectileTool : Behaviour
 
     private int ConvertFloatingSolidIslandsNear(int centerX, int centerY, int maxConversions)
     {
-        int radius = Math.Clamp(CollapseScanRadius, 4, 96);
+        int radius = Math.Clamp(CollapseScanRadius, 4, 160);
         int size = (radius * 2) + 1;
         int originX = centerX - radius;
         int originY = centerY - radius;
@@ -311,7 +311,7 @@ public sealed class PlayableProjectileTool : Behaviour
             return false;
         }
 
-        int maxSize = Math.Clamp(MaxCollapseRegionSize, 4, 128);
+        int maxSize = Math.Clamp(MaxCollapseRegionSize, 4, 192);
         return maxX - minX + 1 <= maxSize && maxY - minY + 1 <= maxSize;
     }
 
