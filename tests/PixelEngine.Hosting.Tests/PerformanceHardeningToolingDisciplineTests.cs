@@ -470,6 +470,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("blocked_missing_manual_evidence", script, StringComparison.Ordinal);
         Assert.Contains("scripted_probe_only", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_manual_scope_evidence", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_manual_evidence", script, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", script, StringComparison.Ordinal);
         Assert.Contains("[Console]::Error.WriteLine", script, StringComparison.Ordinal);
         Assert.Contains("Demo manual acceptance preflight failed", script, StringComparison.Ordinal);
@@ -546,6 +547,58 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(2, good.ExitCode);
             string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "demo-manual-acceptance-preflight.md"));
             Assert.Contains("manual_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 Demo 人工验收预检会实际拒绝 sha256 不匹配的人工 evidence，并写出可审计报告。
+    /// </summary>
+    [Fact]
+    public void DemoManualAcceptancePreflightRejectsMismatchedEvidenceHash()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-bad-hash-" + Guid.NewGuid().ToString("N"));
+        string[] manualScopes =
+        [
+            "controlFeelReport",
+            "materialBrushAndReactionVideo",
+            "rigidBodyGameplayVideo",
+            "particleLightingVideo",
+            "audioListeningReport",
+            "fullRoutePlaythroughVideo",
+            "hudMenuEditorVideo",
+            "hotReloadWindowReport",
+        ];
+
+        try
+        {
+            string badManifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "bad-hash", includeDemoManualMetadata: true);
+            string json = File.ReadAllText(badManifest);
+            json = json.Replace("\"sha256\": \"", "\"sha256\": \"0000", StringComparison.Ordinal);
+            File.WriteAllText(badManifest, json);
+
+            string badArtifacts = Path.Combine(temp, "bad-hash-out");
+            ScriptResult bad = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
+                "-EvidenceManifestPath",
+                badManifest,
+                "-Artifacts",
+                badArtifacts);
+
+            Assert.Equal(5, bad.ExitCode);
+            string badReport = File.ReadAllText(Path.Combine(badArtifacts, "demo-manual-acceptance-preflight.md"));
+            Assert.Contains("status: blocked_invalid_manual_evidence", badReport, StringComparison.Ordinal);
+            Assert.Contains("sha256 不匹配", badReport, StringComparison.Ordinal);
+            Assert.Contains("controlFeelReport", badReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: manual_evidence_attached_pending_review", badReport, StringComparison.Ordinal);
         }
         finally
         {

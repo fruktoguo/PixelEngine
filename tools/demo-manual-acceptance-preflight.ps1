@@ -336,6 +336,7 @@ function Write-ManualAcceptanceReport {
         [int]$ExitCode,
         [object[]]$Evidence,
         [object[]]$Missing,
+        [object[]]$Issues,
         [object[]]$ProbeRuns
     )
 
@@ -393,6 +394,15 @@ function Write-ManualAcceptanceReport {
         $lines.Add("")
     }
 
+    if ($Issues.Count -gt 0) {
+        $lines.Add("## 证据问题")
+        $lines.Add("")
+        foreach ($issue in $Issues) {
+            $lines.Add("- $issue")
+        }
+        $lines.Add("")
+    }
+
     [System.IO.File]::WriteAllLines($Path, $lines, [System.Text.UTF8Encoding]::new($false))
 }
 
@@ -404,6 +414,7 @@ $status = "blocked_missing_manual_evidence"
 $exitCode = 2
 $evidence = @()
 $missing = @()
+$issues = @()
 $probeRuns = [System.Collections.Generic.List[object]]::new()
 
 if ($RunScriptedProbes) {
@@ -423,19 +434,28 @@ if ($RunScriptedProbes) {
 
 if (-not [string]::IsNullOrWhiteSpace($EvidenceManifestPath)) {
     $manifestPath = if ([System.IO.Path]::IsPathRooted($EvidenceManifestPath)) { $EvidenceManifestPath } else { Join-Path $root $EvidenceManifestPath }
-    $manifestResult = Read-EvidenceManifest -Root $root -ManifestPath $manifestPath
-    $status = $manifestResult.status
-    $evidence = @($manifestResult.evidence)
-    $missing = @($manifestResult.missing)
-    if ($missing.Count -gt 0) {
-        $exitCode = 5
+    try {
+        $manifestResult = Read-EvidenceManifest -Root $root -ManifestPath $manifestPath
+        $status = $manifestResult.status
+        $evidence = @($manifestResult.evidence)
+        $missing = @($manifestResult.missing)
+        if ($missing.Count -gt 0) {
+            $exitCode = 5
+        }
+        else {
+            $exitCode = 2
+        }
     }
-    else {
-        $exitCode = 2
+    catch {
+        $status = "blocked_invalid_manual_evidence"
+        $evidence = @()
+        $missing = @()
+        $issues = @("人工验收 evidence manifest 无效：$($_.Exception.Message)")
+        $exitCode = 5
     }
 }
 
-Write-ManualAcceptanceReport -Path $reportPath -Status $status -ExitCode $exitCode -Evidence $evidence -Missing $missing -ProbeRuns @($probeRuns)
+Write-ManualAcceptanceReport -Path $reportPath -Status $status -ExitCode $exitCode -Evidence $evidence -Missing $missing -Issues $issues -ProbeRuns @($probeRuns)
 Write-Host "Demo manual acceptance preflight status: $status"
 Write-Host "Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
 
