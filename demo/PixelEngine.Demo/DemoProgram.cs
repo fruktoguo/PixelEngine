@@ -115,8 +115,19 @@ public static class DemoProgram
             return;
         }
 
-        _ = engine.AttachWindowRuntime();
+        PixelEngine.Rendering.RenderWindow window = engine.AttachWindowRuntime();
         Console.WriteLine("窗口运行时已接入 Rendering/Input 后端。");
+        if (options.WindowTicks > 0)
+        {
+            for (int i = 0; i < options.WindowTicks && !window.IsClosing && !engine.IsShutdownRequested; i++)
+            {
+                _ = engine.RunOneTick();
+            }
+
+            Console.WriteLine($"窗口短跑完成：frames={engine.Context.Clock.FrameIndex}, requested={options.WindowTicks}。");
+            return;
+        }
+
         engine.Run();
     }
 

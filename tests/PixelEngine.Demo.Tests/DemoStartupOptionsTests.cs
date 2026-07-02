@@ -33,6 +33,28 @@ public sealed class DemoStartupOptionsTests
     }
 
     /// <summary>
+    /// 验证窗口短跑参数保持真实窗口模式，但允许测试/发行脚本在固定 tick 后退出。
+    /// </summary>
+    [Fact]
+    public void WindowTicksSelectsFiniteWindowedRuntime()
+    {
+        DemoStartupOptions options = DemoStartupOptions.Parse(["--no-hot-reload", "--window-ticks", "60"]);
+
+        Assert.False(options.Headless);
+        Assert.False(options.HotReloadEnabled);
+        Assert.Equal(60, options.WindowTicks);
+    }
+
+    /// <summary>
+    /// 验证窗口短跑不能和 headless 冒烟混用，避免调用方误以为覆盖了窗口路径。
+    /// </summary>
+    [Fact]
+    public void WindowTicksRejectsHeadlessRuntime()
+    {
+        _ = Assert.Throws<ArgumentException>(() => DemoStartupOptions.Parse(["--headless", "--window-ticks", "1"]));
+    }
+
+    /// <summary>
     /// 验证 NativeAOT 等不支持动态代码的运行时会显式禁用脚本热重载，而不是尝试走 Roslyn/ALC 路径。
     /// </summary>
     [Fact]

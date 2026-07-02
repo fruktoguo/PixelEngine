@@ -36,6 +36,11 @@ public sealed class DemoStartupOptions
     public int HeadlessTicks { get; init; } = 1;
 
     /// <summary>
+    /// 窗口模式下执行的有限 tick 数；0 表示进入持续运行主循环。
+    /// </summary>
+    public int WindowTicks { get; init; }
+
+    /// <summary>
     /// 内容根目录。
     /// </summary>
     public string ContentRoot { get; init; } = Path.Combine(AppContext.BaseDirectory, "content");
@@ -62,6 +67,7 @@ public sealed class DemoStartupOptions
         bool hotReload = true;
         bool headless = false;
         int ticks = 1;
+        int windowTicks = 0;
         string contentRoot = Path.Combine(AppContext.BaseDirectory, "content");
         string scene = Path.Combine("scenes", DefaultSceneName + ".scene");
         string logDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
@@ -101,6 +107,16 @@ public sealed class DemoStartupOptions
 
                         break;
                     }
+                case "--window-ticks":
+                    {
+                        string value = ReadValue(args, ref i, "--window-ticks");
+                        if (!int.TryParse(value, out windowTicks) || windowTicks < 0)
+                        {
+                            throw new ArgumentOutOfRangeException(nameof(args), value, "--window-ticks 必须是非负整数。");
+                        }
+
+                        break;
+                    }
                 case "--log-dir":
                     logDirectory = ReadValue(args, ref i, "--log-dir");
                     break;
@@ -109,16 +125,25 @@ public sealed class DemoStartupOptions
             }
         }
 
+        ValidateWindowTicks(headless, windowTicks);
         return new DemoStartupOptions
         {
             EnableEditor = enableEditor,
             HotReloadEnabled = hotReload,
             Headless = headless,
             HeadlessTicks = ticks,
+            WindowTicks = windowTicks,
             ContentRoot = contentRoot,
             Scene = scene,
             LogDirectory = logDirectory,
         };
+    }
+
+    private static void ValidateWindowTicks(bool headless, int windowTicks)
+    {
+        _ = headless && windowTicks > 0
+            ? throw new ArgumentException("--window-ticks 只能用于窗口模式，不能与 --headless/--smoke 同时使用。", nameof(windowTicks))
+            : true;
     }
 
     private static string ReadValue(string[] args, ref int index, string option)
