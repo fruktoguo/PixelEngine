@@ -247,6 +247,36 @@ internal sealed class DemoWindowScriptedProbe(
     public float PlayerMaxX { get; private set; }
 
     /// <summary>
+    /// 玩家中心 Y 的最小观测值。
+    /// </summary>
+    public float PlayerMinY { get; private set; }
+
+    /// <summary>
+    /// 玩家中心 Y 的最大观测值。
+    /// </summary>
+    public float PlayerMaxY { get; private set; }
+
+    /// <summary>
+    /// 玩家处于地面的采样帧数。
+    /// </summary>
+    public int PlayerGroundedSamples { get; private set; }
+
+    /// <summary>
+    /// 玩家处于空中的采样帧数。
+    /// </summary>
+    public int PlayerAirborneSamples { get; private set; }
+
+    /// <summary>
+    /// 玩家空中阶段中心 X 的最小观测值。
+    /// </summary>
+    public float PlayerAirMinX { get; private set; }
+
+    /// <summary>
+    /// 玩家空中阶段中心 X 的最大观测值。
+    /// </summary>
+    public float PlayerAirMaxX { get; private set; }
+
+    /// <summary>
     /// 脚本相机中心 X 的最小观测值。
     /// </summary>
     public float CameraMinX { get; private set; }
@@ -277,6 +307,26 @@ internal sealed class DemoWindowScriptedProbe(
     public bool CameraFollowed => CameraSamples > 1 &&
         PlayerMaxX - PlayerMinX > 1f &&
         CameraMaxX - CameraMinX > 1f;
+
+    /// <summary>
+    /// 玩家在真实窗口短跑中是否离开过地面。
+    /// </summary>
+    public bool PlayerLeftGround => PlayerAirborneSamples > 0;
+
+    /// <summary>
+    /// 玩家真实窗口短跑中的垂直活动范围。
+    /// </summary>
+    public float PlayerYRange => CameraSamples == 0 ? 0f : PlayerMaxY - PlayerMinY;
+
+    /// <summary>
+    /// 玩家真实窗口短跑中空中阶段的水平活动范围。
+    /// </summary>
+    public float PlayerAirXRange => PlayerAirborneSamples == 0 ? 0f : PlayerAirMaxX - PlayerAirMinX;
+
+    /// <summary>
+    /// 玩家在空中时是否仍保有可观测的水平控制。
+    /// </summary>
+    public bool PlayerAirControl => PlayerAirborneSamples > 1 && PlayerAirXRange > 4f;
 
     /// <summary>
     /// 注册物理与音频之后的采样相位。
@@ -328,10 +378,13 @@ internal sealed class DemoWindowScriptedProbe(
             renderCamera.ViewportHeight == scriptSnapshot.ViewportHeight;
 
         float playerX = player.CenterX;
+        float playerY = player.CenterY;
         if (CameraSamples == 0)
         {
             PlayerMinX = playerX;
             PlayerMaxX = playerX;
+            PlayerMinY = playerY;
+            PlayerMaxY = playerY;
             CameraMinX = _camera.CenterX;
             CameraMaxX = _camera.CenterX;
             RenderOriginMinX = renderCamera.OriginWorldX;
@@ -341,10 +394,32 @@ internal sealed class DemoWindowScriptedProbe(
         {
             PlayerMinX = Math.Min(PlayerMinX, playerX);
             PlayerMaxX = Math.Max(PlayerMaxX, playerX);
+            PlayerMinY = Math.Min(PlayerMinY, playerY);
+            PlayerMaxY = Math.Max(PlayerMaxY, playerY);
             CameraMinX = Math.Min(CameraMinX, _camera.CenterX);
             CameraMaxX = Math.Max(CameraMaxX, _camera.CenterX);
             RenderOriginMinX = Math.Min(RenderOriginMinX, renderCamera.OriginWorldX);
             RenderOriginMaxX = Math.Max(RenderOriginMaxX, renderCamera.OriginWorldX);
+        }
+
+        if (state.OnGround)
+        {
+            PlayerGroundedSamples++;
+        }
+        else
+        {
+            if (PlayerAirborneSamples == 0)
+            {
+                PlayerAirMinX = playerX;
+                PlayerAirMaxX = playerX;
+            }
+            else
+            {
+                PlayerAirMinX = Math.Min(PlayerAirMinX, playerX);
+                PlayerAirMaxX = Math.Max(PlayerAirMaxX, playerX);
+            }
+
+            PlayerAirborneSamples++;
         }
 
         CameraSamples++;
