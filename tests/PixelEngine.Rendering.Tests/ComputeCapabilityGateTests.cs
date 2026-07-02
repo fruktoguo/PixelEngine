@@ -144,7 +144,7 @@ public sealed class ComputeCapabilityGateTests
     }
 
     [Fact]
-    public void ComputeSharpGateRequiresExplicitAvailability()
+    public void ComputeSharpGateRequiresResourceContractAndExecutableBackend()
     {
         GpuCapabilities notCompiled = CreateCapabilities(
             glMajor: 4,
@@ -155,47 +155,41 @@ public sealed class ComputeCapabilityGateTests
             isWindows: true,
             isDx12Available: true,
             isComputeSharpCompiled: false);
-        GpuCapabilities compiled = notCompiled with { IsComputeSharpCompiled = true };
+        GpuCapabilities compiledWithoutContract = notCompiled with { IsComputeSharpCompiled = true };
+        GpuCapabilities compiledWithContract = compiledWithoutContract with { HasComputeSharpResourceContract = true };
 
         ComputeCapabilityGate disabledGate = ComputeCapabilityGate.Evaluate(
             notCompiled,
             ComputeFeatureSwitches.Default,
             preferComputeSharp: true);
-        ComputeCapabilityGate enabledGate = ComputeCapabilityGate.Evaluate(
-            compiled,
+        ComputeCapabilityGate noContractGate = ComputeCapabilityGate.Evaluate(
+            compiledWithoutContract,
+            ComputeFeatureSwitches.Default,
+            preferComputeSharp: true);
+        ComputeCapabilityGate contractButStubGate = ComputeCapabilityGate.Evaluate(
+            compiledWithContract,
             ComputeFeatureSwitches.Default,
             preferComputeSharp: true);
 
         Assert.False(disabledGate.ComputeSharpAvailable);
         Assert.Equal(ComputeBackendKind.GlCompute, disabledGate.SelectedBackend);
-        Assert.True(enabledGate.ComputeSharpAvailable);
-        Assert.Equal(ComputeBackendKind.ComputeSharp, enabledGate.SelectedBackend);
+        Assert.False(noContractGate.ComputeSharpAvailable);
+        Assert.Equal(ComputeBackendKind.GlCompute, noContractGate.SelectedBackend);
+        Assert.False(contractButStubGate.ComputeSharpAvailable);
+        Assert.Equal(ComputeBackendKind.GlCompute, contractButStubGate.SelectedBackend);
     }
 
     [Fact]
-    public void ComputeSharpFactorySelectionReturnsUnavailableStubUntilBackendIsCompiled()
+    public void ComputeSharpBackendRemainsUnavailableWhenInstantiatedDirectly()
     {
-        GpuCapabilities capabilities = CreateCapabilities(
-            glMajor: 4,
-            glMinor: 3,
-            hasCompute: true,
-            hasSsbo: true,
-            hasImageLoadStore: true,
-            isWindows: true,
-            isDx12Available: true,
-            isComputeSharpCompiled: true);
-        ComputeCapabilityGate gate = ComputeCapabilityGate.Evaluate(
-            capabilities,
-            ComputeFeatureSwitches.Default,
-            preferComputeSharp: true);
-
-        using IComputeBackend backend = ComputeBackendFactory.Create(gl: null, gate);
+        using IComputeBackend backend = new ComputeSharpBackend();
 
         Assert.Equal(ComputeBackendKind.ComputeSharp, backend.Kind);
         Assert.False(backend.IsAvailable);
+        Assert.False(ComputeSharpBackend.IsExecutable);
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
             () => backend.LoadKernel("stub", "unused"));
-        Assert.Contains("尚未编译进当前发行", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("资源契约", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -327,7 +321,8 @@ public sealed class ComputeCapabilityGateTests
         bool isAngle = false,
         bool isWindows = false,
         bool isDx12Available = false,
-        bool isComputeSharpCompiled = false)
+        bool isComputeSharpCompiled = false,
+        bool hasComputeSharpResourceContract = false)
     {
         return new GpuCapabilities(
             glMajor,
@@ -345,6 +340,7 @@ public sealed class ComputeCapabilityGateTests
             maxWorkGroupSizeZ: 64,
             isWindows,
             isDx12Available,
-            isComputeSharpCompiled);
+            isComputeSharpCompiled,
+            hasComputeSharpResourceContract);
     }
 }

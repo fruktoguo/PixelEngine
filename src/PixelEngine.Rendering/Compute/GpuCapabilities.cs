@@ -27,7 +27,8 @@ public readonly record struct GpuCapabilities
         int maxWorkGroupSizeZ,
         bool isWindows,
         bool isDx12Available,
-        bool isComputeSharpCompiled)
+        bool isComputeSharpCompiled,
+        bool hasComputeSharpResourceContract = false)
     {
         GlMajorVersion = glMajorVersion;
         GlMinorVersion = glMinorVersion;
@@ -45,6 +46,7 @@ public readonly record struct GpuCapabilities
         IsWindows = isWindows;
         IsDx12Available = isDx12Available;
         IsComputeSharpCompiled = isComputeSharpCompiled;
+        HasComputeSharpResourceContract = hasComputeSharpResourceContract;
     }
 
     /// <summary>GL 主版本号。</summary>
@@ -94,6 +96,11 @@ public readonly record struct GpuCapabilities
 
     /// <summary>当前发行是否编译进 ComputeSharp 后端。</summary>
     public bool IsComputeSharpCompiled { get; init; }
+
+    /// <summary>
+    /// 是否已落地 D3D-only 或 GL-DX12 shared resource/fence 契约。未满足时 ComputeSharp 不得消费 GL texture name。
+    /// </summary>
+    public bool HasComputeSharpResourceContract { get; init; }
 
     /// <summary>
     /// 从 plan/08 的 GL 能力快照构造 compute 能力。无 GL 上下文的测试可直接构造本类型。

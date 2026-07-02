@@ -59,7 +59,9 @@ public readonly record struct ComputeCapabilityGate
             preferComputeSharp &&
             capabilities.IsWindows &&
             capabilities.IsDx12Available &&
-            capabilities.IsComputeSharpCompiled;
+            capabilities.IsComputeSharpCompiled &&
+            capabilities.HasComputeSharpResourceContract &&
+            ComputeSharpBackend.IsExecutable;
         ComputeBackendKind backend = computeSharpAvailable
             ? ComputeBackendKind.ComputeSharp
             : glComputeAvailable

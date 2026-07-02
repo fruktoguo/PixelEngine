@@ -74,6 +74,8 @@ public sealed class RenderingProjectDisciplineTests
         Assert.Contains("fallback", document, StringComparison.Ordinal);
         Assert.Contains("no-readback", document, StringComparison.Ordinal);
         Assert.Contains("IsComputeSharpCompiled=false", document, StringComparison.Ordinal);
+        Assert.Contains("HasComputeSharpResourceContract", document, StringComparison.Ordinal);
+        Assert.Contains("ComputeSharpBackend.IsExecutable", document, StringComparison.Ordinal);
         Assert.Contains("plan/15", document, StringComparison.Ordinal);
 
         Assert.Contains("docs/rendering-computesharp-resource-contract.md", plan, StringComparison.Ordinal);
@@ -87,7 +89,9 @@ public sealed class RenderingProjectDisciplineTests
         Assert.DoesNotContain("其它后端可把该值解释为后端资源句柄", interfaceSource, StringComparison.Ordinal);
         Assert.Contains("uint textureHandle", interfaceSource, StringComparison.Ordinal);
         Assert.Contains("plan/08 世界纹理句柄", resources, StringComparison.Ordinal);
-        Assert.Contains("ComputeSharp 后端尚未编译进当前发行", backend, StringComparison.Ordinal);
+        Assert.Contains("资源契约", backend, StringComparison.Ordinal);
+        Assert.Contains("真实可执行实现", backend, StringComparison.Ordinal);
+        Assert.Contains("IsExecutable = false", backend, StringComparison.Ordinal);
         Assert.Contains("IsAvailable => false", backend, StringComparison.Ordinal);
         Assert.DoesNotContain("using ComputeSharp", backend, StringComparison.Ordinal);
         Assert.DoesNotContain("PackageReference Include=\"ComputeSharp\"", project, StringComparison.Ordinal);

@@ -20,6 +20,6 @@
 
 ## 最小启用条件
 
-启用 ComputeSharp 必须同时满足这些条件：`Directory.Packages.props` 明确登记 ComputeSharp 包版本；Rendering 项目在条件编译或独立后端项目中引用 ComputeSharp，且非 Windows/未启用发行不触碰其类型；`GpuCapabilities.IsComputeSharpCompiled` 由真实编译条件设置为 true；资源绑定 API 不再把 GL texture name 传给 DX12；对应测试覆盖 D3D-only 或 GL-DX12 shared resource 的 resize、barrier、fallback 与 no-readback 路径；plan/15 发行矩阵覆盖 win-x64/win-arm64 R2R/AOT 的 ComputeSharp 依赖和 AOT 行为。
+启用 ComputeSharp 必须同时满足这些条件：`Directory.Packages.props` 明确登记 ComputeSharp 包版本；Rendering 项目在条件编译或独立后端项目中引用 ComputeSharp，且非 Windows/未启用发行不触碰其类型；`GpuCapabilities.IsComputeSharpCompiled` 由真实编译条件设置为 true；`GpuCapabilities.HasComputeSharpResourceContract` 只能在 D3D-only 或 GL-DX12 shared resource/fence 契约真实落地后为 true；`ComputeSharpBackend.IsExecutable` 只能在后端不再是隔离占位、能真实执行 kernel 后为 true；资源绑定 API 不再把 GL texture name 传给 DX12；对应测试覆盖 D3D-only 或 GL-DX12 shared resource 的 resize、barrier、fallback 与 no-readback 路径；plan/15 发行矩阵覆盖 win-x64/win-arm64 R2R/AOT 的 ComputeSharp 依赖和 AOT 行为。
 
-在这些条件满足前，plan/09 的 ComputeSharp/DX12 项保持 `[!]`。当前仓库的正确状态是：GL compute 与 GL point-sprite 路径可用，ComputeSharp 后端为隔离 stub，不能把该 stub 记为完成。
+在这些条件满足前，plan/09 的 ComputeSharp/DX12 项保持 `[!]`。当前仓库的正确状态是：GL compute 与 GL point-sprite 路径可用，ComputeSharp 后端为隔离 stub，`ComputeCapabilityGate` 即使在测试中看到 Windows/DX12/compiled 标志，也会因为缺少资源契约与可执行后端而回退 GL compute 或基线路径，不能把该 stub 记为完成。

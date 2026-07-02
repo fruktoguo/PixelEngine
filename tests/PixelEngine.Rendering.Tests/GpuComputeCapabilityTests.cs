@@ -73,7 +73,7 @@ public sealed class GpuComputeCapabilityTests
     }
 
     [Fact]
-    public void ComputeSharpRequiresExplicitPreferenceAndCompiledSupport()
+    public void ComputeSharpRequiresExplicitPreferenceResourceContractAndExecutableBackend()
     {
         GpuCapabilities gpu = new(
             glMajorVersion: 4,
@@ -91,7 +91,8 @@ public sealed class GpuComputeCapabilityTests
             maxWorkGroupSizeZ: 0,
             isWindows: true,
             isDx12Available: true,
-            isComputeSharpCompiled: true);
+            isComputeSharpCompiled: true,
+            hasComputeSharpResourceContract: true);
 
         ComputeCapabilityGate withoutPreference = ComputeCapabilityGate.Evaluate(
             gpu,
@@ -103,8 +104,9 @@ public sealed class GpuComputeCapabilityTests
             preferComputeSharp: true);
 
         Assert.True(withoutPreference.BaselineFallback);
-        Assert.Equal(ComputeBackendKind.ComputeSharp, withPreference.SelectedBackend);
-        Assert.True(withPreference.ComputeSharpAvailable);
+        Assert.True(withPreference.BaselineFallback);
+        Assert.Equal(ComputeBackendKind.Null, withPreference.SelectedBackend);
+        Assert.False(withPreference.ComputeSharpAvailable);
     }
 
     [Fact]
