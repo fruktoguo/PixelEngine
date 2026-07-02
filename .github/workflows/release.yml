@@ -751,6 +751,8 @@ jobs:
             "| ref | ${{ github.ref }} |",
             "| conclusion | ${{ job.status }} |"
           ) | Set-Content -Path artifacts/release-evidence/workflow-run.md -Encoding UTF8
+          $isReleaseTag = '${{ startsWith(github.ref, 'refs/tags/') }}' -eq 'true'
+          $githubReleaseConclusion = if ($isReleaseTag) { '${{ job.status }}' } else { 'blocked_not_tag_release' }
           @(
             "# GitHub Release upload evidence",
             "",
@@ -759,7 +761,8 @@ jobs:
             "| tag | ${{ github.ref_name }} |",
             "| run_id | ${{ github.run_id }} |",
             "| sha | ${{ github.sha }} |",
-            "| conclusion | ${{ job.status }} |"
+            "| release_tag | $isReleaseTag |",
+            "| conclusion | $githubReleaseConclusion |"
           ) | Set-Content -Path artifacts/release-evidence/github-release-upload.md -Encoding UTF8
           @(
             "# R2R light-up evidence",

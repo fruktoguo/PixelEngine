@@ -802,6 +802,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("deterministic package command exited", release, StringComparison.Ordinal);
         Assert.Contains("if [[ \"$conclusion\" != \"success\" ]]", release, StringComparison.Ordinal);
         Assert.Contains("Build release evidence manifest", release, StringComparison.Ordinal);
+        Assert.Contains("blocked_not_tag_release", release, StringComparison.Ordinal);
+        Assert.Contains("release_tag", release, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_disassembly", release, StringComparison.Ordinal);
         Assert.Contains("Do not treat this report as R2R light-up success", release, StringComparison.Ordinal);
         Assert.Contains("Preflight release evidence", release, StringComparison.Ordinal);
