@@ -59,11 +59,11 @@ public sealed class EngineScriptRuntimeControlApi(Engine engine) : IRuntimeContr
     }
 
     /// <summary>
-    /// 请求重开当前关卡；当前 Hosting 尚未接入可替换 world/script runtime 的安全重启后端。
+    /// 请求重开当前关卡；Hosting 会恢复首次脚本 tick 后捕获的 world/script 运行基线。
     /// </summary>
     /// <returns>重开请求结果。</returns>
     public RuntimeControlResult RequestRestartCurrentScene()
     {
-        return new RuntimeControlResult(false, "重开关卡需要可替换 world/script runtime 的安全重启后端，当前尚未接入。");
+        return _engine.RestartCurrentScene();
     }
 }

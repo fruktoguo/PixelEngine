@@ -369,6 +369,43 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
+    /// 验证脚本运行时重开关卡会恢复首个脚本 tick 后捕获的 world 与脚本字段基线，且快照可重复使用。
+    /// </summary>
+    [Fact]
+    public void RuntimeRestartRestoresCapturedWorldAndScriptBaseline()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+        PixelEngine.Scripting.Scene scriptScene = new();
+        Entity entity = scriptScene.CreateEntity();
+        SnapshotCounterBehaviour script = entity.AddComponent<SnapshotCounterBehaviour>();
+        script.Score = 7;
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+        engine.Context.RegisterService(materials);
+        engine.Context.RegisterService(scriptScene);
+        _ = engine.AttachResidentSimulationWorld(128, 128, particleCapacity: 8);
+        _ = engine.AttachScriptingFromServices();
+        ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
+        IRuntimeControlApi runtime = engine.Context.GetService<IRuntimeControlApi>();
+
+        _ = engine.RunOneTick();
+        edit.PaintCell(4, 5, 1);
+        script.Score = 99;
+        engine.EnterEditMode();
+        RuntimeControlResult firstRestart = runtime.RequestRestartCurrentScene();
+        edit.PaintCell(4, 5, 1);
+        script.Score = 55;
+        RuntimeControlResult secondRestart = runtime.RequestRestartCurrentScene();
+
+        Assert.True(firstRestart.Success, firstRestart.Message);
+        Assert.True(secondRestart.Success, secondRestart.Message);
+        Assert.Equal(EngineExecutionMode.Play, engine.Mode);
+        Assert.Equal(0, engine.Context.GetService<CellGrid>().GetMaterial(4, 5));
+        Assert.Equal(7, script.Score);
+    }
+
+    /// <summary>
     /// 验证 Hosting 能从 save directory 物化 live World/Simulation 后端，并恢复自由粒子快照。
     /// </summary>
     [Fact]
