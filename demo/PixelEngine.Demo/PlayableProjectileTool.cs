@@ -9,8 +9,9 @@ public sealed class PlayableProjectileTool : Behaviour
 {
     private PlayerController? _player;
     private float _cooldownRemaining;
-    private MaterialId _sparkMaterial;
-    private bool _materialResolved;
+    private int _pendingCollapseFrames;
+    private int _pendingCollapseX;
+    private int _pendingCollapseY;
 
     /// <summary>
     /// 射击最大距离，单位 cell。
@@ -62,10 +63,34 @@ public sealed class PlayableProjectileTool : Behaviour
     /// </summary>
     public float TracerRemainingSeconds { get; private set; }
 
+    /// <summary>
+    /// 爆破后局部扫描半径，用于把脱离主地形的小型固体岛转换为刚体。
+    /// </summary>
+    public int CollapseScanRadius { get; set; } = 22;
+
+    /// <summary>
+    /// 可自动转换的最大连通块包围盒尺寸，避免误把整片程序化地形转成刚体。
+    /// </summary>
+    public int MaxCollapseRegionSize { get; set; } = 30;
+
+    /// <summary>
+    /// 可自动转换的最小固体像素数。
+    /// </summary>
+    public int MinCollapsePixels { get; set; } = 8;
+
+    /// <summary>
+    /// 已由破坏弹转换成刚体的悬空固体岛数量。
+    /// </summary>
+    public int CollapsedFloatingIslands { get; private set; }
+
+    /// <summary>
+    /// 最近一次悬空固体岛转换的包围盒。
+    /// </summary>
+    public (int X, int Y, int Width, int Height) LastCollapsedRegion { get; private set; }
+
     /// <inheritdoc />
     protected override void OnStart()
     {
-        ResolveMaterial();
         _player = Entity.TryGetComponent<PlayerController>(out PlayerController player) ? player : null;
     }
 
@@ -75,6 +100,7 @@ public sealed class PlayableProjectileTool : Behaviour
         float safeDt = MathF.Max(0f, dt);
         _cooldownRemaining = MathF.Max(0f, _cooldownRemaining - safeDt);
         TracerRemainingSeconds = MathF.Max(0f, TracerRemainingSeconds - safeDt);
+        ProcessPendingCollapseScan();
         if (_cooldownRemaining > 0f || !Context.Input.WasMousePressed(MouseButton.Left))
         {
             return;
@@ -90,7 +116,6 @@ public sealed class PlayableProjectileTool : Behaviour
             _player = player;
         }
 
-        ResolveMaterial();
         (float mouseX, float mouseY) = Context.Input.MousePixel;
         Point2F target = Context.Camera.ScreenToWorld(mouseX, mouseY);
         float startX = _player.CenterX;
@@ -117,51 +142,192 @@ public sealed class PlayableProjectileTool : Behaviour
         Context.Lighting.RevealAround(hitX, hitY, ImpactRadius * 2.5f);
         Context.Lighting.AddPointLight(hitX, hitY, ImpactRadius * 3f, 0xFF_60_D8_FF, 0.35f);
         Context.Audio.PlayAt("explosion.wav", hitX, hitY, 0.85f);
-        EmitTracer(startX, startY, hitX, hitY);
         LastShotStartX = startX;
         LastShotStartY = startY;
         LastHitX = hitX;
         LastHitY = hitY;
         TracerRemainingSeconds = 0.10f;
         ShotsFired++;
+        QueueCollapseScan(hitX, hitY);
         _cooldownRemaining = MathF.Max(0f, CooldownSeconds);
     }
 
-    private void EmitTracer(float startX, float startY, float hitX, float hitY)
+    private void QueueCollapseScan(float hitX, float hitY)
     {
-        if (!_sparkMaterial.IsValid)
+        _pendingCollapseX = (int)MathF.Round(hitX);
+        _pendingCollapseY = (int)MathF.Round(hitY);
+        _pendingCollapseFrames = 2;
+    }
+
+    private void ProcessPendingCollapseScan()
+    {
+        if (_pendingCollapseFrames <= 0)
         {
             return;
         }
 
-        float dx = hitX - startX;
-        float dy = hitY - startY;
-        float length = MathF.Max(1f, MathF.Sqrt((dx * dx) + (dy * dy)));
-        dx /= length;
-        dy /= length;
-        int count = Math.Clamp((int)(length / 18f), 3, 10);
-        for (int i = 1; i <= count; i++)
+        _pendingCollapseFrames--;
+        if (_pendingCollapseFrames > 0)
         {
-            float t = i / (float)(count + 1);
-            ParticleSpawnDesc particle = new(
-                startX + ((hitX - startX) * t),
-                startY + ((hitY - startY) * t),
-                dx * 90f,
-                dy * 90f,
-                _sparkMaterial,
-                14);
-            Context.Particles.Spawn(in particle);
+            return;
+        }
+
+        ConvertFirstFloatingSolidIslandNear(_pendingCollapseX, _pendingCollapseY);
+    }
+
+    private void ConvertFirstFloatingSolidIslandNear(int centerX, int centerY)
+    {
+        int radius = Math.Clamp(CollapseScanRadius, 4, 48);
+        int size = (radius * 2) + 1;
+        int originX = centerX - radius;
+        int originY = centerY - radius;
+        bool[] visited = new bool[size * size];
+        bool[] component = new bool[size * size];
+        int[] queue = new int[size * size];
+        int[] cells = new int[size * size];
+
+        for (int localY = 0; localY < size; localY++)
+        {
+            for (int localX = 0; localX < size; localX++)
+            {
+                int startIndex = Pack(localX, localY, size);
+                if (visited[startIndex] || !IsSolid(originX + localX, originY + localY))
+                {
+                    visited[startIndex] = true;
+                    continue;
+                }
+
+                Array.Clear(component);
+                int cellCount = FloodFillSolidIsland(localX, localY, originX, originY, size, visited, component, queue, cells, out int minX, out int minY, out int maxX, out int maxY, out bool touchesScanBorder);
+                if (!CanConvertIsland(cellCount, minX, minY, maxX, maxY, touchesScanBorder) ||
+                    HasExternalSupport(originX, originY, size, cells, cellCount, component))
+                {
+                    continue;
+                }
+
+                int worldX = originX + minX;
+                int worldY = originY + minY;
+                int width = maxX - minX + 1;
+                int height = maxY - minY + 1;
+                _ = Context.Bodies.CreateFromRegion(worldX, worldY, width, height);
+                LastCollapsedRegion = (worldX, worldY, width, height);
+                CollapsedFloatingIslands++;
+                return;
+            }
         }
     }
 
-    private void ResolveMaterial()
+    private int FloodFillSolidIsland(
+        int startX,
+        int startY,
+        int originX,
+        int originY,
+        int size,
+        bool[] visited,
+        bool[] component,
+        int[] queue,
+        int[] cells,
+        out int minX,
+        out int minY,
+        out int maxX,
+        out int maxY,
+        out bool touchesScanBorder)
     {
-        if (_materialResolved)
+        int head = 0;
+        int tail = 0;
+        int count = 0;
+        minX = maxX = startX;
+        minY = maxY = startY;
+        touchesScanBorder = false;
+        int start = Pack(startX, startY, size);
+        queue[tail++] = start;
+        visited[start] = true;
+        component[start] = true;
+
+        while (head < tail)
+        {
+            int packed = queue[head++];
+            cells[count++] = packed;
+            int x = packed % size;
+            int y = packed / size;
+            minX = Math.Min(minX, x);
+            minY = Math.Min(minY, y);
+            maxX = Math.Max(maxX, x);
+            maxY = Math.Max(maxY, y);
+            touchesScanBorder |= x == 0 || y == 0 || x == size - 1 || y == size - 1;
+
+            TryEnqueueSolidNeighbor(x - 1, y, originX, originY, size, visited, component, queue, ref tail);
+            TryEnqueueSolidNeighbor(x + 1, y, originX, originY, size, visited, component, queue, ref tail);
+            TryEnqueueSolidNeighbor(x, y - 1, originX, originY, size, visited, component, queue, ref tail);
+            TryEnqueueSolidNeighbor(x, y + 1, originX, originY, size, visited, component, queue, ref tail);
+        }
+
+        return count;
+    }
+
+    private void TryEnqueueSolidNeighbor(int x, int y, int originX, int originY, int size, bool[] visited, bool[] component, int[] queue, ref int tail)
+    {
+        if ((uint)x >= (uint)size || (uint)y >= (uint)size)
         {
             return;
         }
 
-        _sparkMaterial = Context.Materials.Resolve("fire");
-        _materialResolved = _sparkMaterial.IsValid;
+        int packed = Pack(x, y, size);
+        if (visited[packed])
+        {
+            return;
+        }
+
+        visited[packed] = true;
+        if (!IsSolid(originX + x, originY + y))
+        {
+            return;
+        }
+
+        component[packed] = true;
+        queue[tail++] = packed;
+    }
+
+    private bool CanConvertIsland(int cellCount, int minX, int minY, int maxX, int maxY, bool touchesScanBorder)
+    {
+        if (touchesScanBorder || cellCount < Math.Max(1, MinCollapsePixels))
+        {
+            return false;
+        }
+
+        int maxSize = Math.Clamp(MaxCollapseRegionSize, 4, 64);
+        return maxX - minX + 1 <= maxSize && maxY - minY + 1 <= maxSize;
+    }
+
+    private bool HasExternalSupport(int originX, int originY, int size, int[] cells, int cellCount, bool[] component)
+    {
+        for (int i = 0; i < cellCount; i++)
+        {
+            int packed = cells[i];
+            int x = packed % size;
+            int y = packed / size;
+            int belowY = y + 1;
+            if (belowY < size && component[Pack(x, belowY, size)])
+            {
+                continue;
+            }
+
+            if (IsSolid(originX + x, originY + belowY))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsSolid(int x, int y)
+    {
+        return Context.Solids.SampleSolidAabb(x, y, 1f, 1f);
+    }
+
+    private static int Pack(int x, int y, int width)
+    {
+        return (y * width) + x;
     }
 }

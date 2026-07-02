@@ -338,6 +338,7 @@ public static class DemoProgram
         ScriptCameraApi camera = engine.Context.GetService<ScriptCameraApi>();
         ScriptCameraSynchronizer cameraSync = engine.Context.GetService<ScriptCameraSynchronizer>();
         ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
+        EngineDiagnosticsSnapshot diagnostics = engine.Context.GetService<IDiagnosticsApi>().Capture();
         ushort paintedMaterial = probe.MaterialAt(
             (int)MathF.Round(scriptedInput.BrushTargetWorld.X),
             (int)MathF.Round(scriptedInput.BrushTargetWorld.Y));
@@ -360,6 +361,8 @@ public static class DemoProgram
             $"last_explosion=({explosive?.LastExplosionX ?? 0:0.00},{explosive?.LastExplosionY ?? 0:0.00}), " +
             $"playable_shots={projectile?.ShotsFired ?? 0}, " +
             $"playable_last_hit=({projectile?.LastHitX ?? 0:0.00},{projectile?.LastHitY ?? 0:0.00}), " +
+            $"playable_collapsed_islands={projectile?.CollapsedFloatingIslands ?? 0}, " +
+            $"playable_last_collapse=({projectile?.LastCollapsedRegion.X ?? 0},{projectile?.LastCollapsedRegion.Y ?? 0},{projectile?.LastCollapsedRegion.Width ?? 0},{projectile?.LastCollapsedRegion.Height ?? 0}), " +
             $"particles={probe.ActiveParticles}, " +
             $"max_particles={scriptedProbe?.MaxParticles ?? probe.ActiveParticles}, " +
             $"lights={lighting.PointLights.Length}, " +
@@ -374,6 +377,9 @@ public static class DemoProgram
             $"max_audio_drained={scriptedProbe?.MaxAudioDrained ?? engine.Context.Counters.AudioDrained}, " +
             $"audio_loaded={engine.Context.Counters.AudioLoadedClips}, " +
             $"hud_blocked={hudBlocked}, " +
+            $"fps={diagnostics.FramesPerSecond:0.0}, " +
+            $"sim_hz={diagnostics.SimHz:0.0}, " +
+            $"diagnostic_frame={diagnostics.FrameCount}, " +
             $"pause_open={pauseOpen}, " +
             $"goal_reached={goalReached}, " +
             $"player_health={health?.Health ?? 0:0.00}, " +

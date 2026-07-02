@@ -9,8 +9,6 @@ public sealed class PlayerVisual : Behaviour
 {
     private PlayerController? _player;
     private PlayableProjectileTool? _projectile;
-    private MaterialId _glowMaterial;
-    private bool _glowMaterialResolved;
     private float _facing = 1f;
 
     /// <summary>
@@ -37,7 +35,6 @@ public sealed class PlayerVisual : Behaviour
     protected override void OnStart()
     {
         ResolveComponents();
-        ResolveGlowMaterial();
     }
 
     /// <inheritdoc />
@@ -45,7 +42,6 @@ public sealed class PlayerVisual : Behaviour
     {
         _ = dt;
         ResolveComponents();
-        ResolveGlowMaterial();
         if (_player is null)
         {
             return;
@@ -65,22 +61,10 @@ public sealed class PlayerVisual : Behaviour
 
         LastOverlayCommandsSubmitted = 0;
         DrawPlayer(state);
-        SpawnGlowMarker(state);
         DrawCrosshair();
         DrawTracer();
         Context.Lighting.RevealAround(_player.CenterX, _player.CenterY, 86f);
         Context.Lighting.AddPointLight(_player.CenterX, _player.CenterY, 96f, 0xFF_F8_DA_8C, 0.42f);
-    }
-
-    private void ResolveGlowMaterial()
-    {
-        if (_glowMaterialResolved)
-        {
-            return;
-        }
-
-        _glowMaterial = Context.Materials.Resolve("fire");
-        _glowMaterialResolved = _glowMaterial.IsValid;
     }
 
     private void ResolveComponents()
@@ -135,30 +119,6 @@ public sealed class PlayerVisual : Behaviour
         LastOverlayCommandsSubmitted++;
         Context.Overlay.Line(mouseX, mouseY + 2f, mouseX, mouseY + 7f, 2f, CrosshairColorBgra);
         LastOverlayCommandsSubmitted++;
-    }
-
-    private void SpawnGlowMarker(CharacterState state)
-    {
-        if (!_glowMaterial.IsValid)
-        {
-            return;
-        }
-
-        float cx = state.X + (state.Width * 0.5f);
-        Span<float> xs = [cx - 2f, cx, cx + 2f];
-        Span<float> ys = [state.Y + 2f, state.Y + 5f, state.Y + 8f, state.Y + state.Height - 2f];
-        for (int y = 0; y < ys.Length; y++)
-        {
-            for (int x = 0; x < xs.Length; x++)
-            {
-                if (y == 0 && x != 1)
-                {
-                    continue;
-                }
-
-                Context.Particles.Spawn(new ParticleSpawnDesc(xs[x], ys[y], 0f, 0f, _glowMaterial, 1));
-            }
-        }
     }
 
     private void DrawTracer()

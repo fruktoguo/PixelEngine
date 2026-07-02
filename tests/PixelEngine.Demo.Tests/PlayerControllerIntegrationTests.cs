@@ -1,5 +1,6 @@
 using PixelEngine.Hosting;
 using PixelEngine.Core.Time;
+using PixelEngine.Physics;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
@@ -393,6 +394,7 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Contains(
             Enumerable.Range(0, overlay.CommandCount).Select(overlay.GetCommand),
             command => command.Primitive == ScriptOverlayPrimitive.SolidRectangle && command.ColorBgra == 0xFF_F2_D0_5E);
+        Assert.Equal(0, engine.Context.GetService<ParticleSystem>().ActiveCount);
     }
 
     /// <summary>
@@ -501,6 +503,41 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal("explosion.wav", audio.LastCue);
         Assert.True(engine.Context.GetService<ParticleSystem>().ActiveCount > 0);
         Assert.NotEqual(stone, grid.MaterialAt((int)MathF.Round(projectile.LastHitX), (int)MathF.Round(projectile.LastHitY)));
+    }
+
+    /// <summary>
+    /// 验证可玩 Demo 的破坏弹会在爆破后把局部脱离主地形的小型固体岛转换成刚体，避免石块长时间静态浮空。
+    /// </summary>
+    [Fact]
+    public void PlayableProjectileConvertsDetachedSolidIslandIntoRigidBody()
+    {
+        RecordingAudioApi audio = new();
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        FillRect(grid, stone, minX: 40, minY: 26, maxX: 50, maxY: 34);
+
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 16f;
+        player.SpawnY = 26f;
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.CooldownSeconds = 0f;
+        projectile.Range = 80f;
+        projectile.ImpactRadius = 2;
+        projectile.CollapseScanRadius = 18;
+
+        engine.RunHeadlessTicks(2);
+        input.Update([], [MouseButton.Left], mouseX: 41f, mouseY: 30f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        input.Update([], [], mouseX: 41f, mouseY: 30f, wheelY: 0f);
+        engine.RunHeadlessTicks(6);
+
+        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        Assert.Equal(1, projectile.ShotsFired);
+        Assert.True(projectile.CollapsedFloatingIslands >= 1, $"应转换悬空石块，region={projectile.LastCollapsedRegion}");
+        Assert.True(physics.Stats.ActiveBodyCount >= 1);
     }
 
     /// <summary>
