@@ -384,6 +384,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string example = ReadRepositoryFile("docs", "release-reports", "release-evidence-manifest.example.json");
         string releaseReport = ReadRepositoryFile("docs", "release-reports", "2026-07-02-win-x64-publish.md");
         string plan = ReadRepositoryFile("plan", "15-build-packaging-distribution.md");
+        string conventions = ReadRepositoryFile("plan", "00-conventions-and-techstack.md");
 
         Assert.Contains("Assert-NoDynamicBox2D", auditPs1, StringComparison.Ordinal);
         Assert.Contains("box2d.dll", auditPs1, StringComparison.Ordinal);
@@ -407,6 +408,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("blocked_missing_release_manifest", evidence, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_release_scope_evidence", evidence, StringComparison.Ordinal);
         Assert.Contains("release_evidence_attached_pending_review", evidence, StringComparison.Ordinal);
+        Assert.Contains("Release evidence preflight failed: release_evidence_attached_pending_review", evidence, StringComparison.Ordinal);
+        Assert.Contains("if (-not $AllowBlocked)", evidence, StringComparison.Ordinal);
+        Assert.Contains("exit 2", evidence, StringComparison.Ordinal);
         Assert.Contains("win-x64", evidence, StringComparison.Ordinal);
         Assert.Contains("osx-arm64", evidence, StringComparison.Ordinal);
         Assert.Contains("simdProbe", evidence, StringComparison.Ordinal);
@@ -419,8 +423,15 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         Assert.Contains("tools/release-evidence-preflight.ps1", releaseReport, StringComparison.Ordinal);
         Assert.Contains("release_evidence_attached_pending_review", releaseReport, StringComparison.Ordinal);
+        Assert.Contains("-AllowBlocked", releaseReport, StringComparison.Ordinal);
+        Assert.Contains("pending review 误当成验收通过", releaseReport, StringComparison.Ordinal);
         Assert.Contains("release-evidence-manifest.example.json", releaseReport, StringComparison.Ordinal);
         Assert.Contains("tools/release-evidence-preflight.ps1", plan, StringComparison.Ordinal);
+
+        Assert.Contains("tools/release-evidence-preflight.ps1", conventions, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_release_manifest", conventions, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_release_scope_evidence", conventions, StringComparison.Ordinal);
+        Assert.Contains("release_evidence_attached_pending_review", conventions, StringComparison.Ordinal);
 
         Assert.Contains("release-evidence-", release, StringComparison.Ordinal);
         Assert.Contains("Upload publish evidence", release, StringComparison.Ordinal);
