@@ -55,8 +55,23 @@ public sealed class DemoStartupOptionsTests
         DemoStartupOptions options = DemoStartupOptions.Parse(["--no-hot-reload", "--window-ticks", "60", "--scripted-window-demo"]);
 
         Assert.True(options.ScriptedWindowDemo);
+        Assert.False(options.ScriptedWindowRoute);
         Assert.Equal(60, options.WindowTicks);
         _ = Assert.Throws<ArgumentException>(() => DemoStartupOptions.Parse(["--scripted-window-demo"]));
+    }
+
+    /// <summary>
+    /// 验证完整路线窗口探针复用真实窗口短跑约束，并显式进入 route 输入脚本。
+    /// </summary>
+    [Fact]
+    public void ScriptedWindowRouteEnablesRouteInputOnlyForFiniteWindowRuns()
+    {
+        DemoStartupOptions options = DemoStartupOptions.Parse(["--no-hot-reload", "--window-ticks", "600", "--scripted-window-route"]);
+
+        Assert.True(options.ScriptedWindowDemo);
+        Assert.True(options.ScriptedWindowRoute);
+        Assert.Equal(600, options.WindowTicks);
+        _ = Assert.Throws<ArgumentException>(() => DemoStartupOptions.Parse(["--scripted-window-route"]));
     }
 
     /// <summary>

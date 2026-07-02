@@ -9,10 +9,11 @@ namespace PixelEngine.Demo;
 /// <summary>
 /// Demo 窗口短跑的固定输入脚本，用于在真实窗口相位链路中自动触发玩法动作。
 /// </summary>
-internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCameraApi camera) : IEnginePhaseDriver
+internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCameraApi camera, bool routeProbe = false) : IEnginePhaseDriver
 {
     private readonly ScriptInputApi _input = input ?? throw new ArgumentNullException(nameof(input));
     private readonly ScriptCameraApi _camera = camera ?? throw new ArgumentNullException(nameof(camera));
+    private readonly bool _routeProbe = routeProbe;
     private readonly Key[] _keys = new Key[3];
     private readonly MouseButton[] _buttons = new MouseButton[1];
 
@@ -72,6 +73,14 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
         {
             target = new Point2F(BridgeCutTargetWorld.X, BridgeCutTargetWorld.Y + (frame - 12));
             _buttons[buttonCount++] = MouseButton.Right;
+        }
+        else if (_routeProbe && frame >= 18)
+        {
+            _keys[keyCount++] = Key.D;
+            if (frame % 52 is 20 or 21)
+            {
+                _keys[keyCount++] = Key.Space;
+            }
         }
         else if (frame is >= 18 and <= 36)
         {

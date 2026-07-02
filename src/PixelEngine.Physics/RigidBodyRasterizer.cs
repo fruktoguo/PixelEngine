@@ -165,7 +165,11 @@ public static class RigidBodyRasterizer
         }
 
         RigidStamp stamp = new(body.BodyKey, localX, localY, material);
-        grid.StampRigidOwnedCell(worldX, worldY, material);
+        if (!grid.TryStampRigidOwnedCell(worldX, worldY, material))
+        {
+            return 0;
+        }
+
         registry.Register(worldX, worldY, in stamp);
         stamps.Add(new RigidStampedCell(worldX, worldY, stamp));
         return 1;

@@ -151,7 +151,8 @@ public static class DemoProgram
         {
             scriptedInput = new DemoWindowScriptedInput(
                 engine.Context.GetService<ScriptInputApi>(),
-                engine.Context.GetService<ScriptCameraApi>());
+                engine.Context.GetService<ScriptCameraApi>(),
+                options.ScriptedWindowRoute);
             scriptedInput.RegisterPhases(engine.Phases);
             scriptedProbe = new DemoWindowScriptedProbe(
                 engine.Context.GetService<PhysicsSystem>(),

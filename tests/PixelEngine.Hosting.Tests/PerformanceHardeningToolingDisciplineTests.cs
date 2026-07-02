@@ -385,7 +385,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("sha256 不匹配", script, StringComparison.Ordinal);
         Assert.Contains("未知 evidence scope", script, StringComparison.Ordinal);
         Assert.Contains("--scripted-window-demo", script, StringComparison.Ordinal);
+        Assert.Contains("--scripted-window-route", script, StringComparison.Ordinal);
         Assert.Contains("--window-ticks", script, StringComparison.Ordinal);
+        Assert.Contains("route-attempt", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine.scene", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine-goal-probe.scene", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine-health-probe.scene", script, StringComparison.Ordinal);
