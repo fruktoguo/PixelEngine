@@ -330,6 +330,45 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
+    /// 验证临时 Play 退出会恢复脚本 Scene 拓扑，删除 Play 中新增实体并重建被删 Behaviour。
+    /// </summary>
+    [Fact]
+    public void TemporaryPlayExitRestoresScriptSceneTopology()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+        PixelEngine.Scripting.Scene scriptScene = new();
+        Entity entity = scriptScene.CreateEntity();
+        SnapshotCounterBehaviour script = entity.AddComponent<SnapshotCounterBehaviour>();
+        script.Score = 7;
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+        engine.Context.RegisterService(materials);
+        engine.Context.RegisterService(scriptScene);
+        _ = engine.AttachResidentSimulationWorld(128, 128, particleCapacity: 8);
+        _ = engine.AttachScriptingFromServices();
+        using EngineWorldSnapshotStore store = new(engine);
+        EngineEditorPlaySessionService session = new(engine, store);
+
+        EditorPlaySessionResult play = session.EnterPlayTemporary();
+        script.Score = 99;
+        Entity transient = scriptScene.CreateEntity();
+        transient.AddComponent<SnapshotCounterBehaviour>().Score = 123;
+        entity.Destroy();
+        _ = engine.RunOneTick();
+        EditorPlaySessionResult exit = session.ExitPlay();
+
+        ScriptEntityInspection[] restored = scriptScene.CaptureInspectionSnapshot();
+        Assert.True(play.Succeeded, play.Message);
+        Assert.True(exit.Succeeded, exit.Message);
+        Assert.Equal(EngineExecutionMode.Edit, engine.Mode);
+        _ = Assert.Single(restored);
+        ScriptComponentInspection component = Assert.Single(restored[0].Components);
+        SnapshotCounterBehaviour restoredScript = Assert.IsType<SnapshotCounterBehaviour>(component.Behaviour);
+        Assert.Equal(7, restoredScript.Score);
+    }
+
+    /// <summary>
     /// 验证 Hosting 能从 save directory 物化 live World/Simulation 后端，并恢复自由粒子快照。
     /// </summary>
     [Fact]
