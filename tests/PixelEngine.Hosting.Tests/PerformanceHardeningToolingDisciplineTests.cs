@@ -342,6 +342,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
         Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
+        Assert.Contains("DeclaredSha256", script, StringComparison.Ordinal);
+        Assert.Contains("sha256 不匹配", script, StringComparison.Ordinal);
         Assert.Contains("workflowRunReport", script, StringComparison.Ordinal);
         Assert.Contains("benchmarkGuard", script, StringComparison.Ordinal);
         Assert.Contains("buildTest", script, StringComparison.Ordinal);
@@ -367,6 +369,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("Preflight CI matrix evidence", ci, StringComparison.Ordinal);
         Assert.Contains("ci-matrix-evidence-preflight.ps1", ci, StringComparison.Ordinal);
         Assert.Contains("evidence.json", ci, StringComparison.Ordinal);
+        Assert.Contains("Get-Sha256", ci, StringComparison.Ordinal);
+        Assert.Contains("workflowRunSha256", ci, StringComparison.Ordinal);
+        Assert.Contains("sha256 = Get-Sha256", ci, StringComparison.Ordinal);
         Assert.Contains("build-test-win-arm64.md", ci, StringComparison.Ordinal);
         Assert.Contains("testsRan = $false", ci, StringComparison.Ordinal);
         Assert.Contains("verify-publish-osx-arm64.md", ci, StringComparison.Ordinal);
