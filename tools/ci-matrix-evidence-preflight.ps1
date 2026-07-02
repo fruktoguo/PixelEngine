@@ -254,9 +254,25 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
     exit 0
 }
 
-$manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-if ($manifest.schemaVersion -ne 1) {
-    throw "CI evidence manifest schemaVersion 必须为 1。"
+$manifest = $null
+try {
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    $schemaVersion = Get-JsonPropertyValue -Node $manifest -Name "schemaVersion"
+    if ($schemaVersion -ne 1) {
+        throw "CI evidence manifest schemaVersion 必须为 1。"
+    }
+}
+catch {
+    $reason = "ci evidence manifest 无效：$($_.Exception.Message)"
+    $detail = "CI matrix evidence preflight failed: manifest JSON 无法解析或 schemaVersion 不受支持。不得据此勾选 plan/14 的 CI 矩阵阻塞项。"
+    Write-CiEvidenceReport -Path $reportPath -Status "blocked_invalid_ci_evidence" -ExitCode 5 -Evidence @($evidence) -Missing @($reason) -Detail $detail
+    Write-Host "CI matrix evidence preflight blocked_invalid_ci_evidence. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
+    if (-not $AllowBlocked) {
+        [Console]::Error.WriteLine("CI matrix evidence preflight failed: blocked_invalid_ci_evidence")
+        exit 5
+    }
+
+    exit 0
 }
 
 $knownBuildRids = Get-JsonPropertyNames $manifest.buildTest

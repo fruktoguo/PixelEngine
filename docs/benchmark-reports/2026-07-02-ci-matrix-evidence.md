@@ -20,7 +20,7 @@ CI 汇总 job 会下载 `ci-evidence-*` artifacts，生成 `artifacts/ci-matrix-
 
 ## 状态语义
 
-`blocked_missing_ci_manifest` 表示缺少 CI evidence manifest。`blocked_missing_ci_scope_evidence` 表示 manifest 存在但缺少 6-RID build-test、benchmark guard 或 publish verify 的某个必要证据，或 evidence markdown 中的 `conclusion`、`rid`、`tests_ran`、`build_only`、`channels` 等关键字段与 manifest/矩阵语义不一致。`ci_matrix_evidence_attached_pending_review` 表示证据文件、SHA256 和基础 markdown 字段已齐全，但仍需人工确认对应 GitHub Actions run 的 job 结论确实闭合 plan/14 的 6-RID build/test 与 R2R/AOT verify 语义。
+`blocked_missing_ci_manifest` 表示缺少 CI evidence manifest。`blocked_invalid_ci_evidence` 表示 manifest JSON 无法解析或 `schemaVersion` 不为 1。`blocked_missing_ci_scope_evidence` 表示 manifest 存在且 schema 有效，但缺少 6-RID build-test、benchmark guard 或 publish verify 的某个必要证据，文件 SHA256 不匹配，或 evidence markdown 中的 `conclusion`、`rid`、`tests_ran`、`build_only`、`channels` 等关键字段与 manifest/矩阵语义不一致。`ci_matrix_evidence_attached_pending_review` 表示证据文件、SHA256 和基础 markdown 字段已齐全，但仍需人工确认对应 GitHub Actions run 的 job 结论确实闭合 plan/14 的 6-RID build/test 与 R2R/AOT verify 语义。
 
 ## 必需证据
 
