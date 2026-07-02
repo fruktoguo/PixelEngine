@@ -76,6 +76,42 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证暂停菜单按钮会经公开 Runtime/Diagnostics API 触发 Editor、重开与调试叠层控制。
+    /// </summary>
+    [Fact]
+    public void PauseMenuButtonsDriveEditorRestartAndDiagnosticsFacades()
+    {
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out _, out _, out ScriptScene scene, DemoMaterials());
+        _ = scene.CreateEntity().AddComponent<PauseMenu>();
+        engine.RunHeadlessTicks(1);
+
+        input.Update([Key.Escape], [], mouseX: 0, mouseY: 0, wheelY: 0);
+        engine.RunHeadlessTicks(1);
+
+        IScriptRuntime runtime = engine.Context.GetService<IScriptRuntime>();
+        IRuntimeControlApi runtimeControl = engine.Context.GetService<IRuntimeControlApi>();
+        IDiagnosticsApi diagnostics = engine.Context.GetService<IDiagnosticsApi>();
+
+        RecordingGuiContext editorGui = new(clickedButtons: ["打开 Editor"]);
+        runtime.DrawGui(editorGui);
+
+        Assert.Contains("button:打开 Editor", editorGui.Drawn);
+        Assert.False(runtimeControl.Capture().IsPlaying);
+
+        RecordingGuiContext overlayGui = new(toggledCheckboxes: ["dirty rect"]);
+        runtime.DrawGui(overlayGui);
+
+        Assert.True(diagnostics.IsOverlayEnabled(DebugOverlayKind.DirtyRects));
+
+        RecordingGuiContext restartGui = new(clickedButtons: ["重开"]);
+        runtime.DrawGui(restartGui);
+
+        Assert.Contains(restartGui.Drawn, line => line.StartsWith("text:已重开当前关卡", StringComparison.Ordinal));
+        Assert.True(runtimeControl.Capture().IsPlaying);
+
+    }
+
+    /// <summary>
     /// 验证 Demo 终点触发器会在玩家进入出口区域时标记通关，并产生粒子、光照、fog 与音效反馈。
     /// </summary>
     [Fact]
@@ -602,11 +638,16 @@ public sealed class PlayerControllerIntegrationTests
         }
     }
 
-    private sealed class RecordingGuiContext(IEnumerable<string>? clickedButtons = null) : IGuiContext
+    private sealed class RecordingGuiContext(
+        IEnumerable<string>? clickedButtons = null,
+        IEnumerable<string>? toggledCheckboxes = null) : IGuiContext
     {
         private readonly HashSet<string> _clickedButtons = clickedButtons is null
             ? []
             : new HashSet<string>(clickedButtons, StringComparer.Ordinal);
+        private readonly HashSet<string> _toggledCheckboxes = toggledCheckboxes is null
+            ? []
+            : new HashSet<string>(toggledCheckboxes, StringComparer.Ordinal);
 
         public int Width => 800;
 
@@ -665,7 +706,13 @@ public sealed class PlayerControllerIntegrationTests
         public bool Checkbox(string label, ref bool value)
         {
             Drawn.Add($"checkbox:{label}:{value}");
-            return false;
+            if (!_toggledCheckboxes.Contains(label))
+            {
+                return false;
+            }
+
+            value = !value;
+            return true;
         }
 
         public void ProgressBar(float value01, string? label = null)
