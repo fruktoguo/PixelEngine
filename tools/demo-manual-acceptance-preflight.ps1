@@ -299,7 +299,7 @@ Write-Host "Demo manual acceptance preflight status: $status"
 Write-Host "Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
 
 if ($exitCode -ne 0 -and -not $AllowBlocked) {
-    Write-Error "Demo manual acceptance preflight failed: $status"
+    [Console]::Error.WriteLine("Demo manual acceptance preflight failed: $status")
     exit $exitCode
 }
 

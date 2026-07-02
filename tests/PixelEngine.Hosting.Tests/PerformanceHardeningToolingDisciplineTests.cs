@@ -124,6 +124,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("blocked_missing_target_performance_manifest", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_performance_scope_evidence", script, StringComparison.Ordinal);
         Assert.Contains("target_performance_evidence_attached_pending_review", script, StringComparison.Ordinal);
+        Assert.Contains("[Console]::Error.WriteLine", script, StringComparison.Ordinal);
         Assert.Contains("Performance target evidence preflight failed", script, StringComparison.Ordinal);
         Assert.Contains("本机短样本", script, StringComparison.Ordinal);
         Assert.Contains("exit 2", script, StringComparison.Ordinal);
@@ -227,6 +228,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("blocked_missing_target_gpu_scope_evidence", script, StringComparison.Ordinal);
         Assert.Contains("local_probe_only", script, StringComparison.Ordinal);
         Assert.Contains("target_gpu_evidence_attached_pending_review", script, StringComparison.Ordinal);
+        Assert.Contains("[Console]::Error.WriteLine", script, StringComparison.Ordinal);
         Assert.Contains("GPU particle benchmark preflight failed", script, StringComparison.Ordinal);
         Assert.Contains("$exitCode = 2", script, StringComparison.Ordinal);
         Assert.Contains("$exitCode = 5", script, StringComparison.Ordinal);
@@ -279,6 +281,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("scripted_probe_only", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_manual_scope_evidence", script, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", script, StringComparison.Ordinal);
+        Assert.Contains("[Console]::Error.WriteLine", script, StringComparison.Ordinal);
         Assert.Contains("Demo manual acceptance preflight failed", script, StringComparison.Ordinal);
         Assert.Contains("$exitCode = 2", script, StringComparison.Ordinal);
         Assert.Contains("$exitCode = 5", script, StringComparison.Ordinal);
@@ -323,6 +326,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("blocked_missing_ci_manifest", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_ci_scope_evidence", script, StringComparison.Ordinal);
         Assert.Contains("ci_matrix_evidence_attached_pending_review", script, StringComparison.Ordinal);
+        Assert.Contains("[Console]::Error.WriteLine", script, StringComparison.Ordinal);
         Assert.Contains("CI matrix evidence preflight failed", script, StringComparison.Ordinal);
         Assert.Contains("exit 2", script, StringComparison.Ordinal);
         Assert.Contains("exit 5", script, StringComparison.Ordinal);

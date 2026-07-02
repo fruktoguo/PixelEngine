@@ -267,7 +267,7 @@ Write-Host "GPU particle benchmark preflight status: $status"
 Write-Host "Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
 
 if ($exitCode -ne 0 -and -not $AllowBlocked) {
-    Write-Error "GPU particle benchmark preflight failed: $status"
+    [Console]::Error.WriteLine("GPU particle benchmark preflight failed: $status")
     exit $exitCode
 }
 
