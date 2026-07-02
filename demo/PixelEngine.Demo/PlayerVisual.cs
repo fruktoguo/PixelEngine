@@ -88,6 +88,10 @@ public sealed class PlayerVisual : Behaviour
         float height = MathF.Max(18f, state.Height * scale);
         float x = topLeft.X;
         float y = topLeft.Y;
+        if (!float.IsFinite(x) || !float.IsFinite(y) || !float.IsFinite(width) || !float.IsFinite(height))
+        {
+            return;
+        }
 
         Context.Overlay.SolidRectangle(x + 1f, y + height - 3f, width + 4f, 3f, 0x80_00_00_00);
         LastOverlayCommandsSubmitted++;
@@ -111,6 +115,12 @@ public sealed class PlayerVisual : Behaviour
     private void DrawCrosshair()
     {
         (float mouseX, float mouseY) = Context.Input.MousePixel;
+        RectF viewport = Context.Camera.Viewport;
+        if (mouseX < -8f || mouseY < -8f || mouseX > viewport.Width + 8f || mouseY > viewport.Height + 8f)
+        {
+            return;
+        }
+
         Context.Overlay.Line(mouseX - 7f, mouseY, mouseX - 2f, mouseY, 2f, CrosshairColorBgra);
         LastOverlayCommandsSubmitted++;
         Context.Overlay.Line(mouseX + 2f, mouseY, mouseX + 7f, mouseY, 2f, CrosshairColorBgra);
@@ -130,9 +140,28 @@ public sealed class PlayerVisual : Behaviour
 
         Point2F start = Context.Camera.WorldToScreen(_projectile.LastShotStartX, _projectile.LastShotStartY);
         Point2F end = Context.Camera.WorldToScreen(_projectile.LastHitX, _projectile.LastHitY);
+        RectF viewport = Context.Camera.Viewport;
+        if (!IntersectsViewport(
+            MathF.Min(start.X, end.X) - 4f,
+            MathF.Min(start.Y, end.Y) - 4f,
+            MathF.Abs(end.X - start.X) + 8f,
+            MathF.Abs(end.Y - start.Y) + 8f,
+            viewport))
+        {
+            return;
+        }
+
         Context.Overlay.Line(start.X, start.Y, end.X, end.Y, 3f, 0xFF_60_D8_FF);
         LastOverlayCommandsSubmitted++;
         Context.Overlay.Line(start.X, start.Y, end.X, end.Y, 1f, 0xFF_FF_FF_FF);
         LastOverlayCommandsSubmitted++;
+    }
+
+    private static bool IntersectsViewport(float x, float y, float width, float height, RectF viewport)
+    {
+        return x + width >= viewport.X &&
+            y + height >= viewport.Y &&
+            x <= viewport.X + viewport.Width &&
+            y <= viewport.Y + viewport.Height;
     }
 }
