@@ -10,6 +10,11 @@ namespace PixelEngine.Rendering.Compute;
 /// </remarks>
 public sealed class ComputeSharpBackend : IComputeBackend
 {
+    /// <summary>
+    /// 当前后端是否具备真实可执行实现。资源契约和 ComputeSharp 引用未落地前必须保持 false。
+    /// </summary>
+    public const bool IsExecutable = false;
+
     /// <inheritdoc />
     public ComputeBackendKind Kind => ComputeBackendKind.ComputeSharp;
 
@@ -108,6 +113,6 @@ public sealed class ComputeSharpBackend : IComputeBackend
 
     private static InvalidOperationException CreateUnavailableException()
     {
-        return new InvalidOperationException("ComputeSharp 后端尚未编译进当前发行；请使用 NullComputeBackend 或 GLComputeBackend。");
+        return new InvalidOperationException("ComputeSharp 后端尚未具备 D3D/GL-DX12 资源契约和真实可执行实现；请使用 NullComputeBackend 或 GLComputeBackend。");
     }
 }
