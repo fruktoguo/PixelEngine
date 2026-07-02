@@ -49,6 +49,11 @@ public sealed class RenderPhaseDriver(
     private bool _frameBuilt;
 
     /// <summary>
+    /// 最近一次相位 10 实际提交给 Rendering 的 overlay 命令数量，用于 Demo/测试诊断脚本可见层是否进入渲染链路。
+    /// </summary>
+    public int LastOverlayCount { get; private set; }
+
+    /// <summary>
     /// 注册相位 9 render buffer 构建与相位 10 GPU 上传/窗口 present。
     /// </summary>
     public void RegisterPhases(EnginePhasePipeline phases)
@@ -94,6 +99,7 @@ public sealed class RenderPhaseDriver(
         Span<PixelUploadRect> dirtyRects = [new PixelUploadRect(0, 0, _renderBuffer.Width, _renderBuffer.Height)];
         ReadOnlySpan<Particle> activeParticles = _particles.ActiveReadOnly;
         ReadOnlySpan<OverlayCommand> overlays = BuildOverlays(activeParticles);
+        LastOverlayCount = overlays.Length;
         _sink.Render(
             _renderBuffer,
             _aux,

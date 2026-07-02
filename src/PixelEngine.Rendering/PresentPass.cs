@@ -47,6 +47,8 @@ public sealed class PresentPass : IDisposable
         _gl.Disable(EnableCap.Blend);
         _gl.Disable(EnableCap.DepthTest);
         _gl.Disable(EnableCap.ScissorTest);
+        _gl.ClearColor(0f, 0f, 0f, 1f);
+        _gl.Clear(ClearBufferMask.ColorBufferBit);
         _program.Use();
         source.BindTexture(0);
         _gl.Uniform1(_sourceLocation, 0);

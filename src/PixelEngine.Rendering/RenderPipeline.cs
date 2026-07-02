@@ -103,6 +103,11 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
     public event Action<GL>? BeforePresentUi;
 
     /// <summary>
+    /// UI 与 overlay 已写入默认 framebuffer、交换缓冲前的 hook。仅用于 Demo/测试截图等验收工具，不应在热路径做重工作。
+    /// </summary>
+    public event Action<GL>? BeforeSwapBuffers;
+
+    /// <summary>
     /// 管线设置。
     /// </summary>
     public RenderPipelineSettings Settings { get; } = new();
@@ -371,6 +376,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
         _present.Render(current, Width, Height, _quad);
         _overlay.Render(overlays, Width, Height);
         BeforePresentUi?.Invoke(_gl);
+        BeforeSwapBuffers?.Invoke(_gl);
         _window.SwapBuffers();
         RecordSub(profiler, FrameSubPhase.Present, started);
     }

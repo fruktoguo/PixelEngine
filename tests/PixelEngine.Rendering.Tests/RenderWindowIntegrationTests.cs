@@ -242,9 +242,12 @@ public sealed class RenderWindowIntegrationTests
         ];
 
         overlay.Render(commands, target);
+        target.BindFramebuffer();
+        byte[] rectanglePixel = ReadPixelRgba(window.Gl, x: 8, y: 64 - 8 - 1);
         window.SwapBuffers();
 
         Assert.Equal(4, overlay.MaxCommandCount);
+        Assert.True(rectanglePixel[0] > rectanglePixel[2], $"overlay 实色矩形应写入红色像素，actual rgba=({rectanglePixel[0]},{rectanglePixel[1]},{rectanglePixel[2]},{rectanglePixel[3]})");
     }
 
     private static byte[] ReadPixelRgba(GL gl, int x, int y)

@@ -8,6 +8,7 @@ using PixelEngine.Hosting;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
+using Silk.NET.OpenGL;
 using ScriptScene = PixelEngine.Scripting.Scene;
 
 namespace PixelEngine.Demo;
@@ -145,6 +146,8 @@ public static class DemoProgram
         }
 
         PixelEngine.Rendering.RenderWindow window = engine.AttachWindowRuntime();
+        RegisterWindowTitleDiagnostics(engine, window);
+        FrameCaptureState? frameCapture = RegisterFrameCapture(engine, window, options);
         ApplyParticleRenderMode(engine, options);
         DemoWindowScriptedInput? scriptedInput = null;
         DemoWindowScriptedProbe? scriptedProbe = null;
@@ -235,6 +238,7 @@ public static class DemoProgram
                 Console.WriteLine(particleFrameProbe.BuildSummary(effective, pipeline.CanRenderParticlesOnGpu));
             }
 
+            CaptureFrameIfRequested(window, options, frameCapture);
             return;
         }
 
@@ -261,6 +265,122 @@ public static class DemoProgram
         {
             Console.WriteLine("GPU 粒子模式不可用：需要 GL compute 能力门控与 GpuParticlesEnabled 同时可用，本次不会静默当作 GPU 样本。");
         }
+    }
+
+    private static void RegisterWindowTitleDiagnostics(Engine engine, RenderWindow window)
+    {
+        engine.Phases.Register(EnginePhase.GpuUploadAndRender, context =>
+        {
+            if ((context.Context.Clock.FrameIndex & 15) != 0)
+            {
+                return;
+            }
+
+            EngineDiagnosticsSnapshot diagnostics = engine.Context.GetService<IDiagnosticsApi>().Capture();
+            window.SetTitle(
+                $"PixelEngine Demo | FPS {diagnostics.FramesPerSecond:0} | Sim {diagnostics.SimHz:0}Hz | Bodies {diagnostics.RigidBodies}");
+        });
+    }
+
+    private static FrameCaptureState? RegisterFrameCapture(Engine engine, RenderWindow window, DemoStartupOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.CaptureFramePath) || options.WindowTicks <= 0)
+        {
+            return null;
+        }
+
+        RenderPipeline pipeline = engine.Context.GetService<RenderPipeline>();
+        FrameCaptureState state = new(Path.GetFullPath(options.CaptureFramePath));
+        pipeline.BeforeSwapBuffers += _ =>
+        {
+            if (state.Captured || engine.Context.Clock.FrameIndex < options.WindowTicks)
+            {
+                return;
+            }
+
+            CaptureFramebuffer(window, state.Path);
+            state.Captured = true;
+            Console.WriteLine($"窗口 framebuffer 截图已写入：{state.Path}");
+        };
+        return state;
+    }
+
+    private static void CaptureFrameIfRequested(RenderWindow window, DemoStartupOptions options, FrameCaptureState? state)
+    {
+        if (string.IsNullOrWhiteSpace(options.CaptureFramePath))
+        {
+            return;
+        }
+
+        if (state?.Captured == true)
+        {
+            return;
+        }
+
+        string path = state?.Path ?? Path.GetFullPath(options.CaptureFramePath);
+        CaptureFramebuffer(window, path);
+        if (state is { } captureState)
+        {
+            captureState.Captured = true;
+        }
+
+        Console.WriteLine($"窗口 framebuffer 截图已写入：{path}");
+    }
+
+    private static void CaptureFramebuffer(RenderWindow window, string path)
+    {
+        string? directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            _ = Directory.CreateDirectory(directory);
+        }
+
+        int width = window.Width;
+        int height = window.Height;
+        byte[] bgra = new byte[checked(width * height * 4)];
+        window.Gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+        window.Gl.ReadPixels<byte>(0, 0, (uint)width, (uint)height, PixelFormat.Bgra, PixelType.UnsignedByte, bgra);
+        WriteBgraBottomUpBmp(path, width, height, bgra);
+    }
+
+    private static void WriteBgraBottomUpBmp(string path, int width, int height, ReadOnlySpan<byte> bgra)
+    {
+        int pixelBytes = checked(width * height * 4);
+        if (bgra.Length != pixelBytes)
+        {
+            throw new ArgumentException("BMP 像素数据尺寸与宽高不一致。", nameof(bgra));
+        }
+
+        const int fileHeaderBytes = 14;
+        const int infoHeaderBytes = 40;
+        int pixelOffset = fileHeaderBytes + infoHeaderBytes;
+        int fileSize = checked(pixelOffset + pixelBytes);
+        using FileStream stream = File.Create(path);
+        using BinaryWriter writer = new(stream);
+        writer.Write((byte)'B');
+        writer.Write((byte)'M');
+        writer.Write(fileSize);
+        writer.Write(0);
+        writer.Write(pixelOffset);
+        writer.Write(infoHeaderBytes);
+        writer.Write(width);
+        writer.Write(height);
+        writer.Write((ushort)1);
+        writer.Write((ushort)32);
+        writer.Write(0);
+        writer.Write(pixelBytes);
+        writer.Write(2_835);
+        writer.Write(2_835);
+        writer.Write(0);
+        writer.Write(0);
+        writer.Write(bgra);
+    }
+
+    private sealed class FrameCaptureState(string path)
+    {
+        public string Path { get; } = path;
+
+        public bool Captured { get; set; }
     }
 
     private static string ParticleRenderModeName(ParticleRenderMode mode)
@@ -339,6 +459,9 @@ public static class DemoProgram
         ScriptCameraSynchronizer cameraSync = engine.Context.GetService<ScriptCameraSynchronizer>();
         ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
         EngineDiagnosticsSnapshot diagnostics = engine.Context.GetService<IDiagnosticsApi>().Capture();
+        RenderPhaseDriver? renderDriver = engine.Context.TryGetService(out RenderPhaseDriver registeredRenderDriver)
+            ? registeredRenderDriver
+            : null;
         ushort paintedMaterial = probe.MaterialAt(
             (int)MathF.Round(scriptedInput.BrushTargetWorld.X),
             (int)MathF.Round(scriptedInput.BrushTargetWorld.Y));
@@ -390,6 +513,7 @@ public static class DemoProgram
             $"player_center=({player?.CenterX ?? 0f:0.00},{player?.CenterY ?? 0f:0.00}), " +
             $"player_visual={(playerVisual is not null ? "present" : "missing")}, " +
             $"player_visual_overlays={playerVisual?.LastOverlayCommandsSubmitted ?? 0}, " +
+            $"render_overlays={renderDriver?.LastOverlayCount ?? -1}, " +
             $"camera_center=({camera.CenterX:0.00},{camera.CenterY:0.00}), " +
             $"camera_zoom={camera.Zoom:0.00}, " +
             $"camera_samples={scriptedProbe?.CameraSamples ?? 0}, " +
