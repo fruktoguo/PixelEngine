@@ -172,6 +172,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     {
         string auditPs1 = ReadRepositoryFile("tools", "audit-release-artifacts.ps1");
         string auditSh = ReadRepositoryFile("tools", "audit-release-artifacts.sh");
+        string evidence = ReadRepositoryFile("tools", "release-evidence-preflight.ps1");
+        string releaseReport = ReadRepositoryFile("docs", "release-reports", "2026-07-02-win-x64-publish.md");
+        string plan = ReadRepositoryFile("plan", "15-build-packaging-distribution.md");
 
         Assert.Contains("Assert-NoDynamicBox2D", auditPs1, StringComparison.Ordinal);
         Assert.Contains("box2d.dll", auditPs1, StringComparison.Ordinal);
@@ -186,6 +189,24 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("SHA256SUMS 包含 package root 下不存在或非发行包的条目", auditPs1, StringComparison.Ordinal);
         Assert.Contains("SHA256SUMS 重复条目", auditPs1, StringComparison.Ordinal);
         Assert.Contains("SHA256SUMS 条目数与 package 数不一致", auditPs1, StringComparison.Ordinal);
+
+        Assert.Contains("EvidenceManifestPath", evidence, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_release_manifest", evidence, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_release_scope_evidence", evidence, StringComparison.Ordinal);
+        Assert.Contains("release_evidence_attached_pending_review", evidence, StringComparison.Ordinal);
+        Assert.Contains("win-x64", evidence, StringComparison.Ordinal);
+        Assert.Contains("osx-arm64", evidence, StringComparison.Ordinal);
+        Assert.Contains("simdProbe", evidence, StringComparison.Ordinal);
+        Assert.Contains("codesignReport", evidence, StringComparison.Ordinal);
+        Assert.Contains("notarizationReport", evidence, StringComparison.Ordinal);
+        Assert.Contains("r2rLightupReport", evidence, StringComparison.Ordinal);
+        Assert.Contains("githubRelease", evidence, StringComparison.Ordinal);
+        Assert.Contains("deterministicHashReport", evidence, StringComparison.Ordinal);
+        Assert.DoesNotContain("status \"passed\"", evidence, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains("tools/release-evidence-preflight.ps1", releaseReport, StringComparison.Ordinal);
+        Assert.Contains("release_evidence_attached_pending_review", releaseReport, StringComparison.Ordinal);
+        Assert.Contains("tools/release-evidence-preflight.ps1", plan, StringComparison.Ordinal);
     }
 
     /// <summary>
