@@ -75,6 +75,27 @@ public sealed class DemoStartupOptionsTests
     }
 
     /// <summary>
+    /// 验证高密度粒子帧时间探针只能绑定有限窗口短跑，并解析粒子数与预热帧。
+    /// </summary>
+    [Fact]
+    public void ParticleFrameProbeRequiresFiniteWindowTicksAndParsesParameters()
+    {
+        DemoStartupOptions options = DemoStartupOptions.Parse([
+            "--window-ticks", "12",
+            "--particle-frame-probe",
+            "--particle-count", "100000",
+            "--particle-probe-warmup", "3",
+        ]);
+
+        Assert.True(options.ParticleFrameProbe);
+        Assert.Equal(100_000, options.ParticleProbeCount);
+        Assert.Equal(3, options.ParticleProbeWarmupFrames);
+        _ = Assert.Throws<ArgumentException>(() => DemoStartupOptions.Parse(["--particle-frame-probe"]));
+        _ = Assert.Throws<ArgumentException>(() => DemoStartupOptions.Parse(["--headless", "--particle-frame-probe"]));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => DemoStartupOptions.Parse(["--window-ticks", "1", "--particle-frame-probe", "--particle-count", "262145"]));
+    }
+
+    /// <summary>
     /// 验证窗口短跑不能和 headless 冒烟混用，避免调用方误以为覆盖了窗口路径。
     /// </summary>
     [Fact]

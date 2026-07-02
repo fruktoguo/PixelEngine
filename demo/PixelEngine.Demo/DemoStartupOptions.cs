@@ -1,4 +1,5 @@
 using PixelEngine.Rendering;
+using PixelEngine.Core;
 
 namespace PixelEngine.Demo;
 
@@ -53,6 +54,21 @@ public sealed class DemoStartupOptions
     public ParticleRenderMode? ParticleRenderMode { get; init; }
 
     /// <summary>
+    /// 是否启用高密度粒子帧时间探针。
+    /// </summary>
+    public bool ParticleFrameProbe { get; init; }
+
+    /// <summary>
+    /// 粒子帧时间探针请求的活跃粒子数。
+    /// </summary>
+    public int ParticleProbeCount { get; init; } = 100_000;
+
+    /// <summary>
+    /// 粒子帧时间探针跳过统计的预热帧数。
+    /// </summary>
+    public int ParticleProbeWarmupFrames { get; init; } = 5;
+
+    /// <summary>
     /// 内容根目录。
     /// </summary>
     public string ContentRoot { get; init; } = Path.Combine(AppContext.BaseDirectory, "content");
@@ -82,6 +98,9 @@ public sealed class DemoStartupOptions
         int windowTicks = 0;
         bool scriptedWindowDemo = false;
         ParticleRenderMode? particleRenderMode = null;
+        bool particleFrameProbe = false;
+        int particleProbeCount = 100_000;
+        int particleProbeWarmupFrames = 5;
         string contentRoot = Path.Combine(AppContext.BaseDirectory, "content");
         string scene = Path.Combine("scenes", DefaultSceneName + ".scene");
         string logDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
@@ -137,6 +156,29 @@ public sealed class DemoStartupOptions
                 case "--particle-render-mode":
                     particleRenderMode = ParseParticleRenderMode(ReadValue(args, ref i, "--particle-render-mode"));
                     break;
+                case "--particle-frame-probe":
+                    particleFrameProbe = true;
+                    break;
+                case "--particle-count":
+                    {
+                        string value = ReadValue(args, ref i, "--particle-count");
+                        if (!int.TryParse(value, out particleProbeCount) || particleProbeCount <= 0)
+                        {
+                            throw new ArgumentOutOfRangeException(nameof(args), value, "--particle-count 必须是正整数。");
+                        }
+
+                        break;
+                    }
+                case "--particle-probe-warmup":
+                    {
+                        string value = ReadValue(args, ref i, "--particle-probe-warmup");
+                        if (!int.TryParse(value, out particleProbeWarmupFrames) || particleProbeWarmupFrames < 0)
+                        {
+                            throw new ArgumentOutOfRangeException(nameof(args), value, "--particle-probe-warmup 必须是非负整数。");
+                        }
+
+                        break;
+                    }
                 case "--log-dir":
                     logDirectory = ReadValue(args, ref i, "--log-dir");
                     break;
@@ -148,6 +190,7 @@ public sealed class DemoStartupOptions
         ValidateWindowTicks(headless, windowTicks);
         ValidateScriptedWindowDemo(headless, windowTicks, scriptedWindowDemo);
         ValidateParticleRenderMode(headless, particleRenderMode);
+        ValidateParticleFrameProbe(headless, windowTicks, particleFrameProbe, particleProbeCount);
         return new DemoStartupOptions
         {
             EnableEditor = enableEditor,
@@ -157,6 +200,9 @@ public sealed class DemoStartupOptions
             WindowTicks = windowTicks,
             ScriptedWindowDemo = scriptedWindowDemo,
             ParticleRenderMode = particleRenderMode,
+            ParticleFrameProbe = particleFrameProbe,
+            ParticleProbeCount = particleProbeCount,
+            ParticleProbeWarmupFrames = particleProbeWarmupFrames,
             ContentRoot = contentRoot,
             Scene = scene,
             LogDirectory = logDirectory,
@@ -181,6 +227,16 @@ public sealed class DemoStartupOptions
     {
         _ = headless && particleRenderMode.HasValue
             ? throw new ArgumentException("--particle-render-mode 只能用于窗口模式。", nameof(particleRenderMode))
+            : true;
+    }
+
+    private static void ValidateParticleFrameProbe(bool headless, int windowTicks, bool particleFrameProbe, int particleProbeCount)
+    {
+        _ = particleFrameProbe && (headless || windowTicks <= 0)
+            ? throw new ArgumentException("--particle-frame-probe 只能与窗口有限短跑 --window-ticks 一起使用。", nameof(particleFrameProbe))
+            : true;
+        _ = particleProbeCount > EngineConstants.ParticleCapacityDefault
+            ? throw new ArgumentOutOfRangeException(nameof(particleProbeCount), particleProbeCount, $"--particle-count 不能超过固定粒子容量 {EngineConstants.ParticleCapacityDefault}。")
             : true;
     }
 

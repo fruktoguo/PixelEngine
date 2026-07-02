@@ -21,6 +21,7 @@ public static class DemoProgram
 {
     private const int DemoWorldWidthCells = 640;
     private const int DemoWorldHeightCells = 360;
+    private const int DemoParticleCapacityDefault = 32_768;
 
     /// <summary>
     /// 执行 Demo 主入口。
@@ -73,14 +74,17 @@ public static class DemoProgram
         if (engine.HasContentPackage())
         {
             EngineContentPackage package = engine.LoadContentPackage();
-            object? worldLoad = engine.AttachCurrentSceneWorld();
+            int particleCapacity = options.ParticleFrameProbe
+                ? Math.Max(DemoParticleCapacityDefault, options.ParticleProbeCount)
+                : DemoParticleCapacityDefault;
+            object? worldLoad = engine.AttachCurrentSceneWorld(particleCapacity);
             if (worldLoad is not null)
             {
                 Console.WriteLine("世界存档已加载。");
             }
             else
             {
-                _ = engine.AttachResidentSimulationWorld(DemoWorldWidthCells, DemoWorldHeightCells);
+                _ = engine.AttachResidentSimulationWorld(DemoWorldWidthCells, DemoWorldHeightCells, particleCapacity);
             }
 
             _ = engine.AttachPhysics();
@@ -121,6 +125,19 @@ public static class DemoProgram
             PixelEngine.Hosting.Scene? current = engine.Context.GetService<ISceneService>().Current;
             Console.WriteLine($"Engine frame: {engine.Context.Clock.FrameIndex}, scene: {current?.Name}");
             return;
+        }
+
+        DemoParticleFrameTimeProbe? particleFrameProbe = null;
+        if (options.ParticleFrameProbe)
+        {
+            particleFrameProbe = new DemoParticleFrameTimeProbe(
+                engine.Context.GetService<ParticleSystem>(),
+                engine.Context.GetService<MaterialTable>(),
+                options.ParticleProbeCount,
+                options.ParticleProbeWarmupFrames,
+                DemoWorldWidthCells,
+                DemoWorldHeightCells);
+            particleFrameProbe.RegisterPhases(engine.Phases);
         }
 
         PixelEngine.Rendering.RenderWindow window = engine.AttachWindowRuntime();
@@ -184,7 +201,10 @@ public static class DemoProgram
                 !engine.IsShutdownRequested &&
                 !window.IsClosing; executed++)
             {
+                long tickStart = Stopwatch.GetTimestamp();
                 _ = engine.RunOneTick();
+                double tickMs = (Stopwatch.GetTimestamp() - tickStart) * 1000.0 / Stopwatch.Frequency;
+                particleFrameProbe?.RecordFrame(tickMs, engine.Context.Profiler.LastSubFrame);
             }
 
             Console.WriteLine($"窗口短跑完成：frames={engine.Context.Clock.FrameIndex}, requested={options.WindowTicks}。");
@@ -198,6 +218,15 @@ public static class DemoProgram
             if (scriptedInput is not null)
             {
                 WriteScriptedWindowSummary(engine, scriptedInput, scriptedProbe, reactionProbe, audioProbe, particleLightProbe);
+            }
+
+            if (particleFrameProbe is not null)
+            {
+                RenderPipeline pipeline = engine.Context.GetService<RenderPipeline>();
+                ParticleRenderMode effective = pipeline.CanRenderParticlesOnGpu
+                    ? ParticleRenderMode.GpuPointSprite
+                    : ParticleRenderMode.CpuStamp;
+                Console.WriteLine(particleFrameProbe.BuildSummary(effective, pipeline.CanRenderParticlesOnGpu));
             }
 
             return;
