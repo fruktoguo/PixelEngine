@@ -571,6 +571,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
       - name: Download publish artifacts
         uses: actions/download-artifact@v4
         with:
@@ -616,6 +621,96 @@ jobs:
       - name: Audit release artifacts
         shell: bash
         run: bash ./tools/audit-release-artifacts.sh --publish-root artifacts/publish --package-root artifacts/package --require-all
+
+      - name: Verify deterministic package hashes
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p artifacts/release-evidence artifacts/package-deterministic
+          report="artifacts/release-evidence/deterministic-hash.md"
+          rids=(win-x64 win-arm64 linux-x64 linux-arm64 osx-x64 osx-arm64)
+          channels=(r2r aot)
+          conclusion=success
+          rows=()
+
+          sha256_file() {
+            sha256sum "$1" | awk '{print $1}'
+          }
+
+          package_extension_for_rid() {
+            case "$1" in
+              win-*) printf 'zip' ;;
+              *) printf 'tar.gz' ;;
+            esac
+          }
+
+          for rid in "${rids[@]}"; do
+            for channel in "${channels[@]}"; do
+              extension="$(package_extension_for_rid "$rid")"
+              original="$(find artifacts/package -maxdepth 1 -type f -name "PixelEngine-Demo-*-$rid-$channel.$extension" | sort | head -n 1)"
+              publish_dir="artifacts/publish/$rid-$channel"
+              if [[ -z "$original" || ! -d "$publish_dir" ]]; then
+                conclusion=failure
+                rows+=("| $rid | $channel | missing | missing original package or publish directory |")
+                continue
+              fi
+
+              name="$(basename "$original")"
+              version="${name#PixelEngine-Demo-}"
+              version="${version%-$rid-$channel.$extension}"
+              rm -f "artifacts/package-deterministic/PixelEngine-Demo-"*"-$rid-$channel.$extension"
+              set +e
+              bash ./tools/package.sh \
+                --rid "$rid" \
+                --channel "$channel" \
+                --version "$version" \
+                --publish-dir "$publish_dir" \
+                --output-root artifacts/package-deterministic \
+                --content-root demo/PixelEngine.Demo/content
+              package_status=$?
+              set -e
+              if [[ "$package_status" -ne 0 ]]; then
+                conclusion=failure
+                rows+=("| $rid | $channel | failure | deterministic package command exited $package_status |")
+                continue
+              fi
+
+              rebuilt="artifacts/package-deterministic/$name"
+              if [[ ! -f "$rebuilt" ]]; then
+                conclusion=failure
+                rows+=("| $rid | $channel | missing | deterministic package was not produced |")
+                continue
+              fi
+
+              original_hash="$(sha256_file "$original")"
+              rebuilt_hash="$(sha256_file "$rebuilt")"
+              if [[ "$original_hash" == "$rebuilt_hash" ]]; then
+                rows+=("| $rid | $channel | match | $original_hash |")
+              else
+                conclusion=failure
+                rows+=("| $rid | $channel | mismatch | original=$original_hash rebuilt=$rebuilt_hash |")
+              fi
+            done
+          done
+
+          {
+            echo "# Deterministic hash evidence"
+            echo
+            echo "| Key | Value |"
+            echo "|---|---|"
+            echo "| run_id | ${{ github.run_id }} |"
+            echo "| sha | ${{ github.sha }} |"
+            echo "| conclusion | $conclusion |"
+            echo
+            echo "## Package rebuild comparison"
+            echo
+            echo "| RID | Channel | Result | Detail |"
+            echo "|---|---|---|---|"
+            printf '%s\n' "${rows[@]}"
+          } > "$report"
+          if [[ "$conclusion" != "success" ]]; then
+            exit 1
+          fi
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -666,19 +761,6 @@ jobs:
             "| sha | ${{ github.sha }} |",
             "| conclusion | ${{ job.status }} |"
           ) | Set-Content -Path artifacts/release-evidence/github-release-upload.md -Encoding UTF8
-          @(
-            "# Deterministic hash evidence",
-            "",
-            "| Key | Value |",
-            "|---|---|",
-            "| run_id | ${{ github.run_id }} |",
-            "| sha | ${{ github.sha }} |",
-            "| conclusion | blocked_missing_reproducible_rebuild |",
-            "",
-            "## Detail",
-            "",
-            "This release run generated package SHA256 values, but it did not rebuild every package from the same inputs in an isolated second pass and compare byte-identical hashes. Do not treat this report as deterministic build success."
-          ) | Set-Content -Path artifacts/release-evidence/deterministic-hash.md -Encoding UTF8
           @(
             "# R2R light-up evidence",
             "",
