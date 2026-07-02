@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using PixelEngine.Hosting;
 
@@ -90,9 +91,15 @@ public static class DemoProgram
             : "脚本程序集已注册；热重载已由参数关闭。");
         if (contentLoaded)
         {
-            PixelEngine.Scripting.ScriptHotReloadRuntimeOptions? hotReload = CreateHotReloadOptions(options);
+            PixelEngine.Scripting.ScriptHotReloadRuntimeOptions? hotReload = CreateHotReloadOptions(
+                options,
+                RuntimeFeature.IsDynamicCodeSupported);
             _ = engine.AttachScriptingFromServices(hotReload: hotReload);
-            if (options.HotReloadEnabled && hotReload is null)
+            if (options.HotReloadEnabled && !RuntimeFeature.IsDynamicCodeSupported)
+            {
+                Console.WriteLine("脚本热重载未启用：当前运行时不支持动态代码（NativeAOT 通道显式降级）。");
+            }
+            else if (options.HotReloadEnabled && hotReload is null)
             {
                 Console.WriteLine("脚本热重载未启用：未找到 Demo 源码目录。");
             }
@@ -113,12 +120,31 @@ public static class DemoProgram
         engine.Run();
     }
 
-    private static PixelEngine.Scripting.ScriptHotReloadRuntimeOptions? CreateHotReloadOptions(DemoStartupOptions options)
+    /// <summary>
+    /// 判断当前启动参数和运行时能力是否允许启用脚本热重载。
+    /// </summary>
+    /// <param name="options">启动参数。</param>
+    /// <param name="dynamicCodeSupported">当前运行时是否支持动态代码生成与加载；NativeAOT 通道通常为 false。</param>
+    /// <returns>允许启用热重载时返回 true。</returns>
+    public static bool CanEnableHotReload(DemoStartupOptions options, bool dynamicCodeSupported)
     {
+        ArgumentNullException.ThrowIfNull(options);
+        return options.HotReloadEnabled && dynamicCodeSupported;
+    }
+
+    private static PixelEngine.Scripting.ScriptHotReloadRuntimeOptions? CreateHotReloadOptions(
+        DemoStartupOptions options,
+        bool dynamicCodeSupported)
+    {
+        if (!CanEnableHotReload(options, dynamicCodeSupported))
+        {
+            return null;
+        }
+
         string contentRoot = Path.GetFullPath(options.ContentRoot);
         DirectoryInfo? contentDirectory = new(contentRoot);
         string? sourceDirectory = contentDirectory.Parent?.FullName;
-        return !options.HotReloadEnabled || string.IsNullOrWhiteSpace(sourceDirectory) || !Directory.Exists(sourceDirectory)
+        return string.IsNullOrWhiteSpace(sourceDirectory) || !Directory.Exists(sourceDirectory)
             ? null
             : new PixelEngine.Scripting.ScriptHotReloadRuntimeOptions(
                 "PixelEngine.Demo.HotReload",
