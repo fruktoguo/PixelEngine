@@ -35,6 +35,10 @@ public sealed class RenderBackendSelectorTests
         Assert.Equal("render-test", windowOptions.Title);
         Assert.Equal(320, windowOptions.Size.X);
         Assert.Equal(180, windowOptions.Size.Y);
+        Assert.True(windowOptions.VSync);
+        Assert.Equal(0, windowOptions.FramesPerSecond);
+        Assert.Equal(0, windowOptions.UpdatesPerSecond);
+        Assert.False(windowOptions.ShouldSwapAutomatically);
     }
 
     [Fact]
@@ -51,5 +55,34 @@ public sealed class RenderBackendSelectorTests
         Assert.Equal(ContextProfile.Core, windowOptions.API.Profile);
         Assert.Equal(ContextFlags.Default, windowOptions.API.Flags);
         Assert.Equal(new APIVersion(3, 0), windowOptions.API.Version);
+    }
+
+    [Fact]
+    public void WindowTimingOptionsAreForwardedToSilk()
+    {
+        RenderWindowOptions options = new()
+        {
+            VSync = false,
+            FramesPerSecond = 144,
+            UpdatesPerSecond = 60,
+        };
+
+        WindowOptions windowOptions = RenderBackendSelector.CreateWindowOptions(options, RenderBackend.DesktopGl33);
+
+        Assert.False(windowOptions.VSync);
+        Assert.Equal(144, windowOptions.FramesPerSecond);
+        Assert.Equal(60, windowOptions.UpdatesPerSecond);
+        Assert.False(windowOptions.ShouldSwapAutomatically);
+    }
+
+    [Fact]
+    public void RejectsInvalidWindowTimingRates()
+    {
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => RenderBackendSelector.CreateWindowOptions(
+            new RenderWindowOptions { FramesPerSecond = double.NaN },
+            RenderBackend.DesktopGl33));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => RenderBackendSelector.CreateWindowOptions(
+            new RenderWindowOptions { UpdatesPerSecond = -1 },
+            RenderBackend.DesktopGl33));
     }
 }
