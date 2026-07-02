@@ -402,6 +402,53 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 CI evidence 预检的真实脚本行为：失败 conclusion 被拒绝，证据齐全也保持待审非零退出。
+    /// </summary>
+    [Fact]
+    public void CiMatrixEvidencePreflightRejectsFailedReportsAndKeepsPendingReviewNonZero()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ci-evidence-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string goodManifest = CreateCiEvidenceManifest(temp, benchmarkConclusion: "success");
+            string badManifest = CreateCiEvidenceManifest(temp, benchmarkConclusion: "failure", suffix: "bad");
+
+            string badArtifacts = Path.Combine(temp, "bad-out");
+            ScriptResult bad = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "ci-matrix-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                badManifest,
+                "-Artifacts",
+                badArtifacts);
+            Assert.Equal(5, bad.ExitCode);
+            string badReport = File.ReadAllText(Path.Combine(badArtifacts, "ci-matrix-evidence-preflight.md"));
+            Assert.Contains("报告 conclusion 必须为 success", badReport, StringComparison.Ordinal);
+
+            string goodArtifacts = Path.Combine(temp, "good-out");
+            ScriptResult good = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "ci-matrix-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                goodManifest,
+                "-Artifacts",
+                goodArtifacts);
+            Assert.Equal(2, good.ExitCode);
+            string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "ci-matrix-evidence-preflight.md"));
+            Assert.Contains("ci_matrix_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证发行编译模式保持默认 R2R 运行时 light-up，AOT 显式 ISA 并跑 SIMD 反汇编探针。
     /// </summary>
     [Fact]
@@ -589,6 +636,148 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         return File.ReadAllText(Path.Combine([FindRepositoryRoot(), .. relativePath]));
     }
 
+    private static string CreateCiEvidenceManifest(string tempRoot, string benchmarkConclusion, string suffix = "good")
+    {
+        string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "ci-matrix-evidence");
+        _ = Directory.CreateDirectory(evidenceRoot);
+
+        string workflow = WriteMarkdownEvidence(
+            Path.Combine(evidenceRoot, "workflow-run.md"),
+            new Dictionary<string, string>
+            {
+                ["run_id"] = "1",
+                ["sha"] = "abc",
+                ["ref"] = "refs/heads/main",
+                ["conclusion"] = "success",
+            });
+
+        string benchmark = WriteMarkdownEvidence(
+            Path.Combine(evidenceRoot, "benchmark-guard.md"),
+            new Dictionary<string, string>
+            {
+                ["run_id"] = "1",
+                ["sha"] = "abc",
+                ["conclusion"] = benchmarkConclusion,
+            });
+
+        string[] rids = ["win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64"];
+        string[] verifyRids = ["win-x64", "linux-x64", "osx-x64", "osx-arm64"];
+        Dictionary<string, object> buildTest = [];
+        foreach (string rid in rids)
+        {
+            bool testsRan = rid != "win-arm64";
+            string report = WriteMarkdownEvidence(
+                Path.Combine(evidenceRoot, $"build-test-{rid}.md"),
+                new Dictionary<string, string>
+                {
+                    ["rid"] = rid,
+                    ["build_only"] = testsRan ? "false" : "true",
+                    ["tests_ran"] = testsRan ? "true" : "false",
+                    ["run_id"] = "1",
+                    ["sha"] = "abc",
+                    ["conclusion"] = "success",
+                });
+            buildTest[rid] = new Dictionary<string, object>
+            {
+                ["report"] = report,
+                ["sha256"] = GetSha256(report),
+                ["testsRan"] = testsRan,
+            };
+        }
+
+        Dictionary<string, object> verifyPublish = [];
+        foreach (string rid in verifyRids)
+        {
+            string report = WriteMarkdownEvidence(
+                Path.Combine(evidenceRoot, $"verify-publish-{rid}.md"),
+                new Dictionary<string, string>
+                {
+                    ["rid"] = rid,
+                    ["channels"] = "r2r,aot",
+                    ["run_id"] = "1",
+                    ["sha"] = "abc",
+                    ["conclusion"] = "success",
+                });
+            verifyPublish[rid] = new Dictionary<string, object>
+            {
+                ["report"] = report,
+                ["sha256"] = GetSha256(report),
+            };
+        }
+
+        Dictionary<string, object> manifest = new()
+        {
+            ["schemaVersion"] = 1,
+            ["workflowRunReport"] = workflow,
+            ["workflowRunSha256"] = GetSha256(workflow),
+            ["benchmarkGuard"] = new Dictionary<string, object>
+            {
+                ["report"] = benchmark,
+                ["sha256"] = GetSha256(benchmark),
+            },
+            ["buildTest"] = buildTest,
+            ["verifyPublish"] = verifyPublish,
+        };
+
+        string manifestPath = Path.Combine(tempRoot, suffix, "evidence.json");
+        File.WriteAllText(
+            manifestPath,
+            System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        return manifestPath;
+    }
+
+    private static string WriteMarkdownEvidence(string path, IReadOnlyDictionary<string, string> values)
+    {
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        List<string> lines =
+        [
+            "# evidence",
+            "",
+            "| Key | Value |",
+            "|---|---|",
+        ];
+
+        foreach (KeyValuePair<string, string> item in values)
+        {
+            lines.Add($"| {item.Key} | {item.Value} |");
+        }
+
+        File.WriteAllLines(path, lines);
+        return path;
+    }
+
+    private static string GetSha256(string path)
+    {
+        using System.Security.Cryptography.SHA256 sha = System.Security.Cryptography.SHA256.Create();
+        using FileStream stream = File.OpenRead(path);
+        return Convert.ToHexString(sha.ComputeHash(stream)).ToLowerInvariant();
+    }
+
+    private static ScriptResult RunPowerShellScript(string workingDirectory, string scriptPath, params string[] arguments)
+    {
+        using System.Diagnostics.Process process = new();
+        process.StartInfo.FileName = "pwsh";
+        process.StartInfo.WorkingDirectory = workingDirectory;
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.UseShellExecute = false;
+        process.StartInfo.CreateNoWindow = true;
+        process.StartInfo.ArgumentList.Add("-NoProfile");
+        process.StartInfo.ArgumentList.Add("-ExecutionPolicy");
+        process.StartInfo.ArgumentList.Add("Bypass");
+        process.StartInfo.ArgumentList.Add("-File");
+        process.StartInfo.ArgumentList.Add(scriptPath);
+        foreach (string argument in arguments)
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
+
+        _ = process.Start();
+        string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        return new ScriptResult(process.ExitCode, output);
+    }
+
     private static string FindRepositoryRoot()
     {
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
@@ -604,4 +793,6 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         throw new InvalidOperationException("无法从测试输出目录定位 PixelEngine.sln。");
     }
+
+    private readonly record struct ScriptResult(int ExitCode, string Output);
 }
