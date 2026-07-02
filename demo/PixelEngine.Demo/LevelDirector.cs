@@ -59,6 +59,11 @@ public sealed class LevelDirector : Behaviour
     public bool BuildScriptEntities { get; set; } = true;
 
     /// <summary>
+    /// 是否在玩家出生 AABB 内铺设熔岩；仅用于窗口健康链路探针。
+    /// </summary>
+    public bool BuildSpawnHazardProbe { get; set; }
+
+    /// <summary>
     /// 已通过脚本刚体 API 注册的可破坏结构数量。
     /// </summary>
     public int RigidStructureCount => _rigidStructures.Count;
@@ -102,6 +107,7 @@ public sealed class LevelDirector : Behaviour
             BuildWorld();
         }
 
+        BuildSpawnHazardProbeArea();
         QueueRigidStructures();
         RegisterEntityBuildSystem();
     }
@@ -155,6 +161,7 @@ public sealed class LevelDirector : Behaviour
         BuildBounds(width, height);
         BuildTerrain(width, height);
         BuildHazards(height);
+        BuildSpawnHazardProbeArea();
         BuildGoalMarker();
         _worldBuilt = true;
     }
@@ -174,7 +181,8 @@ public sealed class LevelDirector : Behaviour
         player.Width = 6f;
         player.Height = 12f;
 
-        _ = playerEntity.AddComponent<PlayerHealth>();
+        PlayerHealth health = playerEntity.AddComponent<PlayerHealth>();
+        health.ForceHazardForProbe = BuildSpawnHazardProbe;
 
         CameraFollow camera = playerEntity.AddComponent<CameraFollow>();
         camera.MinX = 0f;
@@ -321,6 +329,18 @@ public sealed class LevelDirector : Behaviour
         FillRect(306, 148, 16, 18, _oil);
         FillRect(436, 236, 16, 18, _lava);
         FillRect(504, 152, 16, 18, _acid);
+    }
+
+    private void BuildSpawnHazardProbeArea()
+    {
+        if (!BuildSpawnHazardProbe)
+        {
+            return;
+        }
+
+        int x = (int)MathF.Floor(PlayerSpawnX);
+        int y = (int)MathF.Floor(PlayerSpawnY);
+        FillRect(x, y, 8, 14, _lava);
     }
 
     private void BuildGoalMarker()

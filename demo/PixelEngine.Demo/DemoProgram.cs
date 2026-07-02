@@ -223,6 +223,9 @@ public static class DemoProgram
         GoalTrigger? goal = FindBehaviour<GoalTrigger>(scene);
         MaterialBrush? brush = FindBehaviour<MaterialBrush>(scene);
         ExplosiveTool? explosive = FindBehaviour<ExplosiveTool>(scene);
+        PlayerHealth? health = FindBehaviour<PlayerHealth>(scene);
+        PlayerController? player = FindBehaviour<PlayerController>(scene);
+        LevelDirector? director = FindBehaviour<LevelDirector>(scene);
         CellGrid grid = engine.Context.GetService<CellGrid>();
         ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
@@ -234,6 +237,10 @@ public static class DemoProgram
         string hudBlocked = string.IsNullOrEmpty(hud?.BlockedReason) ? "none" : hud.BlockedReason;
         string pauseOpen = pause?.IsOpen.ToString() ?? "<missing>";
         string goalReached = goal?.Reached.ToString() ?? "<missing>";
+        CharacterState playerState = player?.State ?? default;
+        int playerCenterX = (int)MathF.Round(player?.CenterX ?? 0f);
+        int playerCenterY = (int)MathF.Round(player?.CenterY ?? 0f);
+        ushort playerCenterMaterial = grid.MaterialAt(playerCenterX, playerCenterY);
 
         Console.WriteLine(
             $"脚本化窗口输入摘要：frames={scriptedInput.FramesInjected}, " +
@@ -257,7 +264,13 @@ public static class DemoProgram
             $"audio_loaded={engine.Context.Counters.AudioLoadedClips}, " +
             $"hud_blocked={hudBlocked}, " +
             $"pause_open={pauseOpen}, " +
-            $"goal_reached={goalReached}。");
+            $"goal_reached={goalReached}, " +
+            $"player_health={health?.Health ?? 0:0.00}, " +
+            $"damage_events={health?.DamageEventCount ?? 0}, " +
+            $"respawns={health?.RespawnCount ?? 0}, " +
+            $"spawn_probe={director?.BuildSpawnHazardProbe.ToString() ?? "<missing>"}, " +
+            $"player=({playerState.X:0.00},{playerState.Y:0.00},{playerState.Width:0.00},{playerState.Height:0.00}), " +
+            $"player_center_material={playerCenterMaterial}。");
     }
 
     private static TBehaviour? FindBehaviour<TBehaviour>(ScriptScene scene)

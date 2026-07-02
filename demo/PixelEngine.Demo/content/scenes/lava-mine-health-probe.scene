@@ -1,0 +1,25 @@
+{
+  "formatVersion": 1,
+  "name": "lava-mine-health-probe",
+  "entities": [
+    {
+      "stableId": 1,
+      "name": "LevelDirector",
+      "behaviours": [
+        {
+          "typeName": "PixelEngine.Demo.LevelDirector",
+          "serializedFields": {
+            "LevelWidth": "640",
+            "LevelHeight": "360",
+            "PlayerSpawnX": "260",
+            "PlayerSpawnY": "288",
+            "GoalX": "570",
+            "GoalY": "208",
+            "BuildScriptEntities": "true",
+            "BuildSpawnHazardProbe": "true"
+          }
+        }
+      ]
+    }
+  ]
+}
