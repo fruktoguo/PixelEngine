@@ -182,6 +182,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("process_smoke_only", script, StringComparison.Ordinal);
         Assert.Contains("detector_evidence_attached_pending_review", script, StringComparison.Ordinal);
         Assert.Contains("detector_report_attached_pending_review", script, StringComparison.Ordinal);
+        Assert.Contains("[Console]::Error.WriteLine", script, StringComparison.Ordinal);
+        Assert.Contains("Native leak preflight failed: detector_evidence_attached_pending_review", script, StringComparison.Ordinal);
+        Assert.Contains("Native leak preflight failed: detector_report_attached_pending_review", script, StringComparison.Ordinal);
         Assert.Contains("Native leak preflight failed", script, StringComparison.Ordinal);
         Assert.Contains("RunProcessSmoke", script, StringComparison.Ordinal);
         Assert.Contains("PeakWorkingSetMB", script, StringComparison.Ordinal);
