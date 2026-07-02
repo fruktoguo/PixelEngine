@@ -1451,6 +1451,47 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证目标性能证据预检会拒绝未声明 BenchmarkDotNet 实测的 RID cells/frame 节点。
+    /// </summary>
+    [Fact]
+    public void PerformanceTargetEvidencePreflightRejectsCellsFrameWithoutBenchmarkDotNet()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-cells-frame-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreatePerformanceTargetEvidenceManifest(temp);
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject cellsFrame = rootNode["cellsFrame"]!.AsObject();
+            cellsFrame["win-arm64"]!.AsObject()["benchmarkDotNet"] = false;
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "cells-frame-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_target_performance_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("cellsFrame.win-arm64 必须标记 benchmarkDotNet=true", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_performance_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证发行编译模式保持默认 R2R 运行时 light-up，AOT 显式 ISA 并跑 SIMD 反汇编探针。
     /// </summary>
     [Fact]
