@@ -114,7 +114,7 @@ PixelEngine.sln
 - [x] 所有其它 plan 文档的「技术栈」段不与本表冲突（已复核 plan/01–18：均继承 .NET 10/C# 14、Silk.NET、Box2D 自建 `[LibraryImport]`、Hexa.NET.ImGui、Roslyn+ALC、System.Text.Json、K4os LZ4、xUnit、BenchmarkDotNet、ComputeSharp/NVorbis 可选门控与无通用 ECS 约束；未发现另立选型）。
 - [x] 解决方案结构与 §5 一致，依赖方向被 `.csproj` ProjectReference 强制（无反向依赖）。
 - [x] `Directory.Build.props` / `Directory.Packages.props` 建立并被所有项目继承。
-- [!] 阻塞：发行与 Box2D dual-build 工具链已在 `plan/15`、`release.yml`、`tools/audit-release-artifacts.*` 与 `tools/release-evidence-preflight.ps1` 落地，且本机 `win-x64` R2R/AOT 发行验证通过；`tools/release-evidence-preflight.ps1` 会把缺 manifest 标为 `blocked_missing_release_manifest`、schema/JSON 错误标为 `blocked_invalid_release_evidence`、缺 RID/channel/signing/hash/upload scope 标为 `blocked_missing_release_scope_evidence`、证据齐全标为 `release_evidence_attached_pending_review` 且默认非零退出。完整 6 RID 发行管线仍需对应 runner、目标硬件、macOS 签名凭据与 GitHub Release 产物证据经人工复核闭合。
+- [!] 阻塞：发行与 Box2D dual-build 工具链已在 `plan/15`、`release.yml`、`tools/audit-release-artifacts.*` 与 `tools/release-evidence-preflight.ps1` 落地，且本机 `win-x64` R2R/AOT 发行验证通过；`tools/release-evidence-preflight.ps1` 会把缺 manifest 标为 `blocked_missing_release_manifest`、schema/JSON 错误标为 `blocked_invalid_release_evidence`、缺 RID/channel/signing/hash/upload scope 标为 `blocked_missing_release_scope_evidence`、非 tag `workflow_dispatch` 上传标为 `blocked_not_tag_release`、证据齐全标为 `release_evidence_attached_pending_review` 且默认非零退出。完整 6 RID 发行管线仍需对应 runner、目标硬件、macOS 签名凭据与 GitHub Release 产物证据经人工复核闭合。
 
 ## 9. 提交节点
 
