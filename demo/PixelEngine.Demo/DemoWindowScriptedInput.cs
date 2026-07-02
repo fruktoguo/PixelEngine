@@ -1,5 +1,6 @@
 using PixelEngine.Hosting;
 using PixelEngine.Physics;
+using PixelEngine.Rendering;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation.Particles;
 
@@ -101,11 +102,18 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
 internal sealed class DemoWindowScriptedProbe(
     PhysicsSystem physics,
     ParticleSystem particles,
-    ScriptLightingSynchronizer lighting) : IEnginePhaseDriver
+    ScriptLightingSynchronizer lighting,
+    PixelEngine.Scripting.Scene scene,
+    ScriptCameraApi camera,
+    ScriptCameraSynchronizer cameraSync) : IEnginePhaseDriver
 {
     private readonly PhysicsSystem _physics = physics ?? throw new ArgumentNullException(nameof(physics));
     private readonly ParticleSystem _particles = particles ?? throw new ArgumentNullException(nameof(particles));
     private readonly ScriptLightingSynchronizer _lighting = lighting ?? throw new ArgumentNullException(nameof(lighting));
+    private readonly PixelEngine.Scripting.Scene _scene = scene ?? throw new ArgumentNullException(nameof(scene));
+    private readonly ScriptCameraApi _camera = camera ?? throw new ArgumentNullException(nameof(camera));
+    private readonly ScriptCameraSynchronizer _cameraSync = cameraSync ?? throw new ArgumentNullException(nameof(cameraSync));
+    private PlayerController? _player;
 
     /// <summary>
     /// 短跑期间观测到的最大刚体销毁数量。
@@ -138,6 +146,53 @@ internal sealed class DemoWindowScriptedProbe(
     public long MaxAudioPlayed { get; private set; }
 
     /// <summary>
+    /// 已采样的相机窗口帧数。
+    /// </summary>
+    public int CameraSamples { get; private set; }
+
+    /// <summary>
+    /// 玩家中心 X 的最小观测值。
+    /// </summary>
+    public float PlayerMinX { get; private set; }
+
+    /// <summary>
+    /// 玩家中心 X 的最大观测值。
+    /// </summary>
+    public float PlayerMaxX { get; private set; }
+
+    /// <summary>
+    /// 脚本相机中心 X 的最小观测值。
+    /// </summary>
+    public float CameraMinX { get; private set; }
+
+    /// <summary>
+    /// 脚本相机中心 X 的最大观测值。
+    /// </summary>
+    public float CameraMaxX { get; private set; }
+
+    /// <summary>
+    /// Rendering 相机左上角 X 的最小观测值。
+    /// </summary>
+    public float RenderOriginMinX { get; private set; }
+
+    /// <summary>
+    /// Rendering 相机左上角 X 的最大观测值。
+    /// </summary>
+    public float RenderOriginMaxX { get; private set; }
+
+    /// <summary>
+    /// 所有采样中脚本相机快照是否与 Rendering 相机状态一致。
+    /// </summary>
+    public bool RenderCameraSynced { get; private set; } = true;
+
+    /// <summary>
+    /// 玩家与相机在窗口短跑中是否均发生水平移动。
+    /// </summary>
+    public bool CameraFollowed => CameraSamples > 1 &&
+        PlayerMaxX - PlayerMinX > 1f &&
+        CameraMaxX - CameraMinX > 1f;
+
+    /// <summary>
     /// 注册物理与音频之后的采样相位。
     /// </summary>
     public void RegisterPhases(EnginePhasePipeline phases)
@@ -145,6 +200,7 @@ internal sealed class DemoWindowScriptedProbe(
         ArgumentNullException.ThrowIfNull(phases);
         phases.Register(EnginePhase.PhysicsSync, Capture);
         phases.Register(EnginePhase.BuildRenderBuffer, CaptureAudio);
+        phases.Register(EnginePhase.BuildRenderBuffer, CaptureCamera);
     }
 
     private void Capture(EngineTickContext context)
@@ -160,5 +216,73 @@ internal sealed class DemoWindowScriptedProbe(
     {
         MaxAudioDrained = Math.Max(MaxAudioDrained, context.Context.Counters.AudioDrained);
         MaxAudioPlayed = Math.Max(MaxAudioPlayed, context.Context.Counters.AudioPlayed);
+    }
+
+    private void CaptureCamera(EngineTickContext context)
+    {
+        _ = context;
+        PlayerController? player = ResolvePlayer();
+        if (player is null)
+        {
+            return;
+        }
+
+        CharacterState state = player.State;
+        if (state.Width <= 0f || state.Height <= 0f)
+        {
+            return;
+        }
+
+        CameraState renderCamera = _cameraSync.Current;
+        CameraSnapshot scriptSnapshot = _camera.Snapshot();
+        RenderCameraSynced &= Math.Abs(renderCamera.OriginWorldX - scriptSnapshot.OriginWorldX) <= 0.05f &&
+            Math.Abs(renderCamera.OriginWorldY - scriptSnapshot.OriginWorldY) <= 0.05f &&
+            Math.Abs(renderCamera.CellsPerPixel - scriptSnapshot.CellsPerPixel) <= 0.001f &&
+            renderCamera.ViewportWidth == scriptSnapshot.ViewportWidth &&
+            renderCamera.ViewportHeight == scriptSnapshot.ViewportHeight;
+
+        float playerX = player.CenterX;
+        if (CameraSamples == 0)
+        {
+            PlayerMinX = playerX;
+            PlayerMaxX = playerX;
+            CameraMinX = _camera.CenterX;
+            CameraMaxX = _camera.CenterX;
+            RenderOriginMinX = renderCamera.OriginWorldX;
+            RenderOriginMaxX = renderCamera.OriginWorldX;
+        }
+        else
+        {
+            PlayerMinX = Math.Min(PlayerMinX, playerX);
+            PlayerMaxX = Math.Max(PlayerMaxX, playerX);
+            CameraMinX = Math.Min(CameraMinX, _camera.CenterX);
+            CameraMaxX = Math.Max(CameraMaxX, _camera.CenterX);
+            RenderOriginMinX = Math.Min(RenderOriginMinX, renderCamera.OriginWorldX);
+            RenderOriginMaxX = Math.Max(RenderOriginMaxX, renderCamera.OriginWorldX);
+        }
+
+        CameraSamples++;
+    }
+
+    private PlayerController? ResolvePlayer()
+    {
+        if (_player is not null)
+        {
+            return _player;
+        }
+
+        foreach (ScriptEntityInspection entity in _scene.CaptureInspectionSnapshot())
+        {
+            foreach (ScriptComponentInspection component in entity.Components)
+            {
+                if (component.Behaviour is PlayerController player)
+                {
+                    _player = player;
+                    return player;
+                }
+            }
+        }
+
+        return null;
     }
 }
