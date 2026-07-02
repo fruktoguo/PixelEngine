@@ -119,7 +119,10 @@ public static class DemoProgram
         Console.WriteLine("窗口运行时已接入 Rendering/Input 后端。");
         if (options.WindowTicks > 0)
         {
-            for (int i = 0; i < options.WindowTicks && !window.IsClosing && !engine.IsShutdownRequested; i++)
+            for (int i = 0; i < options.WindowTicks &&
+                engine.State != EngineRunState.Shutdown &&
+                !engine.IsShutdownRequested &&
+                !window.IsClosing; i++)
             {
                 _ = engine.RunOneTick();
             }

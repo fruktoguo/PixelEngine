@@ -53,7 +53,7 @@ public sealed class RenderWindow : IDisposable
     /// <summary>
     /// 窗口是否正在关闭。
     /// </summary>
-    public bool IsClosing => _window.IsClosing;
+    public bool IsClosing => _disposed || _window.IsClosing;
 
     /// <summary>
     /// 当前窗口 framebuffer 宽度。
@@ -143,11 +143,11 @@ public sealed class RenderWindow : IDisposable
             return;
         }
 
+        _disposed = true;
         _debugMessenger?.Dispose();
         Gl.Dispose();
         Input.Dispose();
         _window.Dispose();
-        _disposed = true;
     }
 
     private static RenderWindow CreateForBackend(
