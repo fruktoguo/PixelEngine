@@ -28,13 +28,17 @@ RID: win-x64
 脚本运行时已接入 Hosting/Simulation 后端。
 脚本化窗口输入已启用。
 窗口运行时已接入 Rendering/Input 后端。
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
+libpng warning: iCCP: known incorrect sRGB profile
 窗口短跑完成：frames=80, requested=80。
-窗口短跑耗时：elapsed_ms=4985.59, avg_tick_ms=62.32, last_profile_ms=34.33。
-脚本化窗口输入摘要：frames=80, brush_material=stone, brush_radius=5, painted_material=13, explosions=1, last_explosion=(90.00,240.00), particles=31, max_particles=61, lights=2, max_lights=4, physics_destroyed=0, physics_created=0, max_physics_destroyed=2, max_physics_created=2, audio_played=0, audio_drained=10, audio_loaded=19。
+窗口短跑耗时：elapsed_ms=5732.84, avg_tick_ms=71.66, last_profile_ms=31.27。
+脚本化窗口输入摘要：frames=80, brush_material=stone, brush_radius=5, painted_material=13, explosions=1, last_explosion=(90.00,240.00), particles=32, max_particles=61, lights=2, max_lights=4, physics_destroyed=0, physics_created=0, max_physics_destroyed=2, max_physics_created=2, audio_played=0, audio_drained=0, max_audio_played=0, max_audio_drained=20, audio_loaded=19, hud_blocked=none, pause_open=True, goal_reached=False。
 ```
 
 ## 结论
 
-该短跑证明真实窗口模式下，窗口创建、Silk 输入采样、脚本输入覆盖、脚本相机坐标转换、材质笔刷、爆破工具、自由粒子、脚本点光、Physics 刚体拆分、音频事件抽取与渲染相位可以在同一运行态链路中自动触发并自然退出。
+该短跑证明真实窗口模式下，窗口创建、Silk 输入采样、脚本输入覆盖、脚本相机坐标转换、材质笔刷、爆破工具、自由粒子、脚本点光、Physics 刚体拆分、音频事件抽取、HUD 组件绑定、暂停菜单打开与渲染相位可以在同一运行态链路中自动触发并自然退出。
 
-该验证不等同于人工窗口验收：它不证明 HUD 像素布局、鼠标真实设备手感、音频听感、视觉 bloom/fog 质量、完整通关路线或开发态热重载体验。`audio_played=0` 表示本次只证明事件进入音频相位并被抽取，不证明实际可听播放；`avg_tick_ms=62.32` 与 `last_profile_ms=34.33` 仍不满足稳定 60fps 帧预算。
+该验证不等同于人工窗口验收：它不证明 HUD 像素布局、鼠标真实设备手感、音频听感、视觉 bloom/fog 质量、完整通关路线或开发态热重载体验。`max_audio_played=0` 表示本次只证明事件进入音频相位并被抽取，不证明实际可听播放；`goal_reached=False` 表示本脚本未覆盖完整通关路线；`avg_tick_ms=71.66` 与 `last_profile_ms=31.27` 仍不满足稳定 60fps 帧预算。

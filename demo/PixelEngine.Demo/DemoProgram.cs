@@ -184,6 +184,9 @@ public static class DemoProgram
         DemoWindowScriptedProbe? scriptedProbe)
     {
         ScriptScene scene = engine.Context.GetService<ScriptScene>();
+        DemoHud? hud = FindBehaviour<DemoHud>(scene);
+        PauseMenu? pause = FindBehaviour<PauseMenu>(scene);
+        GoalTrigger? goal = FindBehaviour<GoalTrigger>(scene);
         MaterialBrush? brush = FindBehaviour<MaterialBrush>(scene);
         ExplosiveTool? explosive = FindBehaviour<ExplosiveTool>(scene);
         CellGrid grid = engine.Context.GetService<CellGrid>();
@@ -194,6 +197,9 @@ public static class DemoProgram
             (int)MathF.Round(scriptedInput.BrushTargetWorld.X),
             (int)MathF.Round(scriptedInput.BrushTargetWorld.Y));
         string brushMaterial = brush?.SelectedMaterialName ?? "<missing>";
+        string hudBlocked = string.IsNullOrEmpty(hud?.BlockedReason) ? "none" : hud.BlockedReason;
+        string pauseOpen = pause?.IsOpen.ToString() ?? "<missing>";
+        string goalReached = goal?.Reached.ToString() ?? "<missing>";
 
         Console.WriteLine(
             $"脚本化窗口输入摘要：frames={scriptedInput.FramesInjected}, " +
@@ -212,7 +218,12 @@ public static class DemoProgram
             $"max_physics_created={scriptedProbe?.MaxCreatedBodies ?? physics.LastDestructionResult.CreatedBodies}, " +
             $"audio_played={engine.Context.Counters.AudioPlayed}, " +
             $"audio_drained={engine.Context.Counters.AudioDrained}, " +
-            $"audio_loaded={engine.Context.Counters.AudioLoadedClips}。");
+            $"max_audio_played={scriptedProbe?.MaxAudioPlayed ?? engine.Context.Counters.AudioPlayed}, " +
+            $"max_audio_drained={scriptedProbe?.MaxAudioDrained ?? engine.Context.Counters.AudioDrained}, " +
+            $"audio_loaded={engine.Context.Counters.AudioLoadedClips}, " +
+            $"hud_blocked={hudBlocked}, " +
+            $"pause_open={pauseOpen}, " +
+            $"goal_reached={goalReached}。");
     }
 
     private static TBehaviour? FindBehaviour<TBehaviour>(ScriptScene scene)
