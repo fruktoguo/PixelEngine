@@ -31,6 +31,27 @@ public sealed class RenderWindowIntegrationTests
     }
 
     [Fact]
+    public void IsClosingReturnsTrueAfterDisposeWhenExplicitlyEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine disposed window smoke",
+            Width = 64,
+            Height = 64,
+            BackendPreference = RenderBackendPreference.Auto,
+        });
+
+        window.Dispose();
+
+        Assert.True(window.IsClosing);
+    }
+
+    [Fact]
     public void CanUploadWorldTextureThroughPboWhenExplicitlyEnabled()
     {
         if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
