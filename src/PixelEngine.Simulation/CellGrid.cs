@@ -59,8 +59,14 @@ public sealed class CellGrid(
     {
         ref ushort target = ref MaterialAt(wx, wy);
         ref byte flags = ref FlagsAt(wx, wy);
-        NotifyRigidDamageIfNeeded(wx, wy, flags);
+        bool wasRigidOwned = NotifyRigidDamageIfNeeded(wx, wy, flags);
         target = material;
+        if (wasRigidOwned)
+        {
+            flags = 0;
+            LifetimeAt(wx, wy) = 0;
+        }
+
         MarkDirty(wx, wy);
     }
 
@@ -75,8 +81,14 @@ public sealed class CellGrid(
         }
 
         int local = CellAddressing.LocalIndex(wx, wy);
-        NotifyRigidDamageIfNeeded(wx, wy, chunk.Flags[local]);
+        bool wasRigidOwned = NotifyRigidDamageIfNeeded(wx, wy, chunk.Flags[local]);
         chunk.Material[local] = material;
+        if (wasRigidOwned)
+        {
+            chunk.Flags[local] = 0;
+            chunk.Lifetime[local] = 0;
+        }
+
         MarkDirty(wx, wy);
         return true;
     }
@@ -173,11 +185,14 @@ public sealed class CellGrid(
         DirtyRegionMarker.MarkCell(_chunks, wx, wy, DirtyPhaseTarget.Working, includeBoundaryNeighbors: true);
     }
 
-    private void NotifyRigidDamageIfNeeded(int wx, int wy, byte flags)
+    private bool NotifyRigidDamageIfNeeded(int wx, int wy, byte flags)
     {
         if (CellFlags.Has(flags, CellFlags.RigidOwned))
         {
             _rigidDamageSink.OnOwnedCellDamaged(wx, wy);
+            return true;
         }
+
+        return false;
     }
 }

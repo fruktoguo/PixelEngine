@@ -110,12 +110,15 @@ public sealed class SimulationDataStructureTests
 
         ref byte flags = ref grid.FlagsAt(64, -1);
         flags = CellFlags.Set(flags, CellFlags.RigidOwned);
+        grid.LifetimeAt(64, -1) = 9;
 
         grid.SetMaterial(64, -1, 2);
 
         Assert.True(grid.TryGetMaterial(64, -1, out ushort material));
         Assert.Equal(2, material);
         Assert.Equal(CellType.Powder, grid.GetCellType(64, -1));
+        Assert.Equal(0, grid.FlagsAt(64, -1));
+        Assert.Equal(0, grid.LifetimeAt(64, -1));
         Assert.Equal(new DirtyRect(0, 61, 2, 63), chunk.WorkingDirty);
         Assert.Equal(ChunkState.Awake, chunk.State);
         Assert.Equal(1, damageSink.Count);
