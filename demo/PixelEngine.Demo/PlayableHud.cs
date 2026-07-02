@@ -30,11 +30,12 @@ public sealed class PlayableHud : Behaviour
     protected override void OnGui(IGuiContext gui)
     {
         ResolveComponents();
-        gui.SetNextWindow(X, Y, 330f, 126f, GuiCondition.FirstUseEver);
+        gui.SetNextWindow(X, Y, 420f, 184f, GuiCondition.FirstUseEver);
         GuiWindowFlags flags = GuiWindowFlags.NoResize |
             GuiWindowFlags.NoMove |
             GuiWindowFlags.NoSavedSettings |
-            GuiWindowFlags.NoTitleBar;
+            GuiWindowFlags.NoTitleBar |
+            GuiWindowFlags.NoScrollbar;
         if (!gui.BeginWindow("playable-hud", "Playable HUD", flags))
         {
             gui.EndWindow();
@@ -51,6 +52,13 @@ public sealed class PlayableHud : Behaviour
         gui.Text($"Render FPS {diagnostics.FramesPerSecond:0.0}   {frameMs:0.0} ms");
         gui.Text($"Sim {diagnostics.SimHz:0}Hz   Frame {diagnostics.FrameCount}   Bodies {diagnostics.RigidBodies}");
         gui.Text($"Chunks {diagnostics.ActiveChunks}/{diagnostics.ResidentChunks}   Particles {diagnostics.FreeParticles}");
+        if (_projectile is not null)
+        {
+            gui.Text(
+                $"Collapse {_projectile.CollapsedFloatingIslands}   {_projectile.CollapseStatus}   " +
+                $"scan {_projectile.LastCollapseSolidCandidates}");
+        }
+
         gui.EndWindow();
     }
 

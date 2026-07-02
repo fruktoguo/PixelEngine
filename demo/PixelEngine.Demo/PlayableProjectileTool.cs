@@ -74,7 +74,7 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <summary>
     /// 可自动转换的最大连通块包围盒尺寸，避免误把整片程序化地形转成刚体。
     /// </summary>
-    public int MaxCollapseRegionSize { get; set; } = 320;
+    public int MaxCollapseRegionSize { get; set; } = 192;
 
     /// <summary>
     /// 可自动转换的最小固体像素数。
@@ -85,6 +85,11 @@ public sealed class PlayableProjectileTool : Behaviour
     /// 单次爆破最多转换的悬空固体岛数量，避免一枪把整片程序化山体误拆成过多刚体。
     /// </summary>
     public int MaxCollapsedIslandsPerShot { get; set; } = 10;
+
+    /// <summary>
+    /// 常规连通块扫描失败时，围绕弹坑把局部悬空边缘提升为刚体的最大半径。
+    /// </summary>
+    public int FallbackOverhangRadius { get; set; } = 56;
 
     /// <summary>
     /// 已由破坏弹转换成刚体的悬空固体岛数量。
@@ -100,6 +105,13 @@ public sealed class PlayableProjectileTool : Behaviour
     /// 最近一次悬空固体岛扫描跳过转换的原因，供 Demo 验收与问题排查。
     /// </summary>
     public string LastCollapseSkipReason { get; private set; } = "none";
+
+    /// <summary>
+    /// 面向 HUD 的悬空块转换状态；成功后优先显示最近一次转换区域。
+    /// </summary>
+    public string CollapseStatus => CollapsedFloatingIslands > 0
+        ? $"converted {LastCollapsedRegion.X},{LastCollapsedRegion.Y},{LastCollapsedRegion.Width}x{LastCollapsedRegion.Height}"
+        : LastCollapseSkipReason;
 
     /// <summary>
     /// 最近一次悬空扫描读到的普通非空 cell 数量。
@@ -262,6 +274,16 @@ public sealed class PlayableProjectileTool : Behaviour
             }
         }
 
+        if (converted == 0)
+        {
+            converted += ConvertUnsupportedOverhangNear(centerX, centerY, maxConversions);
+        }
+
+        if (converted == 0)
+        {
+            converted += ConvertImpactFractureChunk(centerX, centerY);
+        }
+
         return converted;
     }
 
@@ -351,7 +373,7 @@ public sealed class PlayableProjectileTool : Behaviour
             return false;
         }
 
-        if ((borderContact & (ComponentBorderContact.Left | ComponentBorderContact.Right | ComponentBorderContact.Bottom)) != 0)
+        if ((borderContact & ComponentBorderContact.Bottom) != 0)
         {
             rejection = $"scan_border_{borderContact}";
             return false;
@@ -388,6 +410,229 @@ public sealed class PlayableProjectileTool : Behaviour
         }
 
         return false;
+    }
+
+    private int ConvertUnsupportedOverhangNear(int centerX, int centerY, int maxConversions)
+    {
+        int radius = Math.Clamp(FallbackOverhangRadius, 12, 96);
+        int size = (radius * 2) + 1;
+        int originX = centerX - radius;
+        int originY = centerY - radius;
+        bool[] visited = new bool[size * size];
+        bool[] candidate = new bool[size * size];
+        int[] queue = new int[size * size];
+        int converted = 0;
+
+        for (int localY = 0; localY < size; localY++)
+        {
+            for (int localX = 0; localX < size; localX++)
+            {
+                int worldX = originX + localX;
+                int worldY = originY + localY;
+                candidate[Pack(localX, localY, size)] = IsSolid(worldX, worldY) && HasOpenAirBelow(worldX, worldY);
+            }
+        }
+
+        for (int localY = 0; localY < size; localY++)
+        {
+            for (int localX = 0; localX < size; localX++)
+            {
+                int start = Pack(localX, localY, size);
+                if (visited[start] || !candidate[start])
+                {
+                    visited[start] = true;
+                    continue;
+                }
+
+                int count = FloodFillCandidate(localX, localY, size, candidate, visited, queue, out int minX, out int minY, out int maxX, out int maxY);
+                if (count < Math.Max(1, MinCollapsePixels))
+                {
+                    LastCollapseSkipReason = "fallback_too_few_pixels";
+                    continue;
+                }
+
+                int growX = Math.Clamp(ImpactRadius + 4, 6, 18);
+                int growUp = Math.Clamp(ImpactRadius * 3, 16, 42);
+                int growDown = Math.Clamp(ImpactRadius, 4, 14);
+                int worldX0 = originX + Math.Max(0, minX - growX);
+                int worldY0 = originY + Math.Max(0, minY - growUp);
+                int worldX1 = originX + Math.Min(size - 1, maxX + growX);
+                int worldY1 = originY + Math.Min(size - 1, maxY + growDown);
+                int width = worldX1 - worldX0 + 1;
+                int height = worldY1 - worldY0 + 1;
+                if (width > MaxCollapseRegionSize || height > MaxCollapseRegionSize)
+                {
+                    LastCollapseSkipReason = "fallback_too_large";
+                    continue;
+                }
+
+                int solidCount = CountConvertibleSolids(worldX0, worldY0, width, height);
+                if (solidCount < Math.Max(1, MinCollapsePixels))
+                {
+                    LastCollapseSkipReason = "fallback_empty_region";
+                    continue;
+                }
+
+                _ = Context.Bodies.CreateFromRegion(worldX0, worldY0, width, height);
+                LastCollapsedRegion = (worldX0, worldY0, width, height);
+                LastCollapseSkipReason = "fallback_converted";
+                CollapsedFloatingIslands++;
+                converted++;
+                if (converted >= Math.Max(1, maxConversions))
+                {
+                    return converted;
+                }
+            }
+        }
+
+        return converted;
+    }
+
+    private int ConvertImpactFractureChunk(int centerX, int centerY)
+    {
+        int halfWidth = Math.Clamp(ImpactRadius * 5, 22, 48);
+        int growUp = Math.Clamp(ImpactRadius * 4, 20, 48);
+        int growDown = Math.Clamp(ImpactRadius * 3, 12, 32);
+        int x = centerX - halfWidth;
+        int y = centerY - growUp;
+        int width = (halfWidth * 2) + 1;
+        int height = growUp + growDown + 1;
+        if (width > MaxCollapseRegionSize || height > MaxCollapseRegionSize)
+        {
+            LastCollapseSkipReason = "impact_fracture_too_large";
+            return 0;
+        }
+
+        int solidCount = CountConvertibleSolids(x, y, width, height);
+        if (solidCount < Math.Max(MinCollapsePixels, ImpactRadius * ImpactRadius))
+        {
+            LastCollapseSkipReason = "impact_fracture_no_solid";
+            return 0;
+        }
+
+        int emptyCount = CountEmptyCells(x, y, width, height);
+        if (emptyCount < Math.Max(4, ImpactRadius))
+        {
+            LastCollapseSkipReason = "impact_fracture_no_crater";
+            return 0;
+        }
+
+        _ = Context.Bodies.CreateFromRegion(x, y, width, height);
+        LastCollapsedRegion = (x, y, width, height);
+        LastCollapseSkipReason = "impact_fracture_converted";
+        CollapsedFloatingIslands++;
+        return 1;
+    }
+
+    private int FloodFillCandidate(
+        int startX,
+        int startY,
+        int size,
+        bool[] candidate,
+        bool[] visited,
+        int[] queue,
+        out int minX,
+        out int minY,
+        out int maxX,
+        out int maxY)
+    {
+        int head = 0;
+        int tail = 0;
+        int count = 0;
+        minX = maxX = startX;
+        minY = maxY = startY;
+        int start = Pack(startX, startY, size);
+        queue[tail++] = start;
+        visited[start] = true;
+
+        while (head < tail)
+        {
+            int packed = queue[head++];
+            count++;
+            int x = packed % size;
+            int y = packed / size;
+            minX = Math.Min(minX, x);
+            minY = Math.Min(minY, y);
+            maxX = Math.Max(maxX, x);
+            maxY = Math.Max(maxY, y);
+
+            TryEnqueueCandidate(x - 1, y, size, candidate, visited, queue, ref tail);
+            TryEnqueueCandidate(x + 1, y, size, candidate, visited, queue, ref tail);
+            TryEnqueueCandidate(x, y - 1, size, candidate, visited, queue, ref tail);
+            TryEnqueueCandidate(x, y + 1, size, candidate, visited, queue, ref tail);
+        }
+
+        return count;
+    }
+
+    private static void TryEnqueueCandidate(int x, int y, int size, bool[] candidate, bool[] visited, int[] queue, ref int tail)
+    {
+        if ((uint)x >= (uint)size || (uint)y >= (uint)size)
+        {
+            return;
+        }
+
+        int packed = Pack(x, y, size);
+        if (visited[packed])
+        {
+            return;
+        }
+
+        visited[packed] = true;
+        if (!candidate[packed])
+        {
+            return;
+        }
+
+        queue[tail++] = packed;
+    }
+
+    private bool HasOpenAirBelow(int x, int y)
+    {
+        int probe = Math.Clamp(ImpactRadius + 2, 4, 14);
+        for (int dy = 1; dy <= probe; dy++)
+        {
+            if (!IsSolid(x, y + dy))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private int CountConvertibleSolids(int x, int y, int width, int height)
+    {
+        int count = 0;
+        for (int yy = y; yy < y + height; yy++)
+        {
+            for (int xx = x; xx < x + width; xx++)
+            {
+                if (IsSolid(xx, yy))
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private int CountEmptyCells(int x, int y, int width, int height)
+    {
+        int count = 0;
+        for (int yy = y; yy < y + height; yy++)
+        {
+            for (int xx = x; xx < x + width; xx++)
+            {
+                if (Context.Cells.Sample(xx, yy).Material.Value == 0)
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
     }
 
     private bool IsSolid(int x, int y)
