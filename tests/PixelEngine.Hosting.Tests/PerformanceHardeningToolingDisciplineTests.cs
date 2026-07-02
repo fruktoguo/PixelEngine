@@ -355,6 +355,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
         Assert.Contains("DeclaredSha256", script, StringComparison.Ordinal);
         Assert.Contains("sha256 不匹配", script, StringComparison.Ordinal);
+        Assert.Contains("Read-MarkdownEvidenceTable", script, StringComparison.Ordinal);
+        Assert.Contains("conclusion", script, StringComparison.Ordinal);
+        Assert.Contains("channels", script, StringComparison.Ordinal);
+        Assert.Contains("报告 $key 必须为 $expected", script, StringComparison.Ordinal);
         Assert.Contains("workflowRunReport", script, StringComparison.Ordinal);
         Assert.Contains("benchmarkGuard", script, StringComparison.Ordinal);
         Assert.Contains("buildTest", script, StringComparison.Ordinal);
@@ -391,6 +395,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("blocked_missing_ci_manifest", report, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_ci_scope_evidence", report, StringComparison.Ordinal);
         Assert.Contains("ci_matrix_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        Assert.Contains("conclusion", report, StringComparison.Ordinal);
+        Assert.Contains("channels: r2r,aot", report, StringComparison.Ordinal);
         Assert.Contains("tools/ci-matrix-evidence-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("ci_matrix_evidence_attached_pending_review", plan, StringComparison.Ordinal);
     }

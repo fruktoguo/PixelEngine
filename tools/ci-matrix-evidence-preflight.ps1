@@ -79,6 +79,77 @@ function Add-EvidenceFile {
     })
 }
 
+function Resolve-EvidencePath {
+    param(
+        [string]$Root,
+        [string]$Path
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return ""
+    }
+
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return $Path
+    }
+
+    return Join-Path $Root $Path
+}
+
+function Read-MarkdownEvidenceTable {
+    param([string]$Path)
+
+    $values = @{}
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return $values
+    }
+
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        if ($line -notmatch '^\|\s*([^|]+?)\s*\|\s*([^|]*?)\s*\|$') {
+            continue
+        }
+
+        $key = $Matches[1].Trim()
+        $value = $Matches[2].Trim()
+        if ([string]::IsNullOrWhiteSpace($key) -or $key -eq "Key" -or $key -match '^-+$') {
+            continue
+        }
+
+        $values[$key] = $value
+    }
+
+    return $values
+}
+
+function Add-MarkdownEvidenceCheck {
+    param(
+        [System.Collections.Generic.List[string]]$Missing,
+        [string]$Root,
+        [string]$Scope,
+        [string]$Path,
+        [hashtable]$ExpectedValues
+    )
+
+    $resolved = Resolve-EvidencePath -Root $Root -Path $Path
+    if ([string]::IsNullOrWhiteSpace($resolved) -or -not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+        return
+    }
+
+    $values = Read-MarkdownEvidenceTable -Path $resolved
+    foreach ($key in $ExpectedValues.Keys) {
+        $expected = [string]$ExpectedValues[$key]
+        if (-not $values.ContainsKey($key)) {
+            $Missing.Add("$Scope 报告缺少 $key 字段")
+            continue
+        }
+
+        $actual = [string]$values[$key]
+        if (-not [string]::Equals($actual, $expected, [StringComparison]::OrdinalIgnoreCase)) {
+            $Missing.Add("$Scope 报告 $key 必须为 $expected，实际为 $actual")
+        }
+    }
+}
+
 function Get-JsonPropertyNames {
     param([object]$Node)
     if ($null -eq $Node) {
@@ -202,8 +273,12 @@ foreach ($rid in $knownVerifyRids) {
     }
 }
 
-Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "workflow_run" -Path ([string](Get-JsonPropertyValue -Node $manifest -Name "workflowRunReport")) -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $manifest -Name "workflowRunSha256"))
-Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "benchmark_guard" -Path ([string](Get-JsonPropertyValue -Node $manifest.benchmarkGuard -Name "report")) -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $manifest.benchmarkGuard -Name "sha256"))
+$workflowRunReport = [string](Get-JsonPropertyValue -Node $manifest -Name "workflowRunReport")
+$benchmarkGuardReport = [string](Get-JsonPropertyValue -Node $manifest.benchmarkGuard -Name "report")
+Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $manifest -Name "workflowRunSha256"))
+Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -ExpectedValues @{ conclusion = "success" }
+Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "benchmark_guard" -Path $benchmarkGuardReport -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $manifest.benchmarkGuard -Name "sha256"))
+Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "benchmark_guard" -Path $benchmarkGuardReport -ExpectedValues @{ conclusion = "success" }
 
 foreach ($rid in $rids) {
     $node = $manifest.buildTest.$rid
@@ -212,7 +287,17 @@ foreach ($rid in $rids) {
         continue
     }
 
-    Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "build_test/$rid/report" -Path ([string](Get-JsonPropertyValue -Node $node -Name "report")) -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $node -Name "sha256"))
+    $buildReportPath = [string](Get-JsonPropertyValue -Node $node -Name "report")
+    Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "build_test/$rid/report" -Path $buildReportPath -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $node -Name "sha256"))
+    $expectedTestsRan = [bool]$node.testsRan
+    $expectedBuildOnly = if ($rid -eq "win-arm64") { "true" } else { "false" }
+    Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "build_test/$rid/report" -Path $buildReportPath -ExpectedValues @{
+        rid = $rid
+        build_only = $expectedBuildOnly
+        tests_ran = $expectedTestsRan.ToString().ToLowerInvariant()
+        conclusion = "success"
+    }
+
     if ($rid -in $testRids -and -not [bool]$node.testsRan) {
         $missing.Add("buildTest.$rid 必须标记 testsRan=true")
     }
@@ -229,7 +314,13 @@ foreach ($rid in $verifyRids) {
         continue
     }
 
-    Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "verify_publish/$rid/report" -Path ([string](Get-JsonPropertyValue -Node $node -Name "report")) -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $node -Name "sha256"))
+    $verifyReportPath = [string](Get-JsonPropertyValue -Node $node -Name "report")
+    Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "verify_publish/$rid/report" -Path $verifyReportPath -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $node -Name "sha256"))
+    Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "verify_publish/$rid/report" -Path $verifyReportPath -ExpectedValues @{
+        rid = $rid
+        channels = "r2r,aot"
+        conclusion = "success"
+    }
 }
 
 if ($missing.Count -gt 0) {
@@ -244,7 +335,7 @@ if ($missing.Count -gt 0) {
     exit 0
 }
 
-$detail = "CI matrix evidence manifest is complete and SHA256 hashes were recorded. Human review still must confirm the GitHub Actions run proves 6-RID build, available-RID dotnet test, benchmark guard, and R2R/AOT publish verify before plan/14 can be unblocked."
+$detail = "CI matrix evidence manifest is complete, SHA256 hashes matched, and markdown evidence fields reported success for required jobs. Human review still must confirm the GitHub Actions run proves 6-RID build, available-RID dotnet test, benchmark guard, and R2R/AOT publish verify before plan/14 can be unblocked."
 Write-CiEvidenceReport -Path $reportPath -Status "ci_matrix_evidence_attached_pending_review" -ExitCode 2 -Evidence @($evidence) -Missing @($missing) -Detail $detail
 Write-Host "CI matrix evidence preflight ci_matrix_evidence_attached_pending_review. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
 
