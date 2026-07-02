@@ -342,26 +342,137 @@ public sealed class Scene
                 ScriptStateSnapshot.Capture(behaviour));
         }
 
-        return new ScriptPlaySessionSnapshot(snapshots);
+        return new ScriptPlaySessionSnapshot([.. _entities.Keys], snapshots);
     }
 
     internal void RestorePlaySessionSnapshot(ScriptPlaySessionSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        HashSet<int> savedEntityIds = [.. snapshot.EntityIds];
+        Entity[] currentEntities = [.. _entities.Values];
+        for (int i = 0; i < currentEntities.Length; i++)
+        {
+            if (!savedEntityIds.Contains(currentEntities[i].Id))
+            {
+                RemoveEntityImmediate(currentEntities[i].Id);
+            }
+        }
+
+        for (int i = 0; i < snapshot.EntityIds.Length; i++)
+        {
+            if (!_entities.ContainsKey(snapshot.EntityIds[i]))
+            {
+                _ = CreateEntityWithId(snapshot.EntityIds[i]);
+            }
+        }
+
         ScriptBehaviourRecord[] records = CaptureBehaviours();
+        for (int recordIndex = 0; recordIndex < records.Length; recordIndex++)
+        {
+            ScriptBehaviourRecord current = records[recordIndex];
+            if (!ContainsSnapshotBehaviour(snapshot, current.Entity.Id, current.Behaviour.GetType()))
+            {
+                RemoveComponent(current.Entity, current.Behaviour.GetType());
+            }
+        }
+
         for (int snapshotIndex = 0; snapshotIndex < snapshot.Behaviours.Length; snapshotIndex++)
         {
             ScriptPlaySessionBehaviourSnapshot saved = snapshot.Behaviours[snapshotIndex];
-            for (int recordIndex = 0; recordIndex < records.Length; recordIndex++)
+            Entity entity = _entities[saved.EntityId];
+            if (!TryGetComponent(entity, saved.BehaviourType, out IComponent component))
             {
-                ScriptBehaviourRecord current = records[recordIndex];
-                if (current.Entity.Id == saved.EntityId && current.Behaviour.GetType() == saved.BehaviourType)
-                {
-                    saved.State.Restore(current.Behaviour);
-                    break;
-                }
+                component = AddComponent(entity, saved.BehaviourType);
+            }
+
+            if (component is Behaviour behaviour)
+            {
+                saved.State.Restore(behaviour);
             }
         }
+    }
+
+    private bool TryGetComponent(Entity entity, Type componentType, out IComponent component)
+    {
+        ValidateEntity(entity);
+        if (_buckets.TryGetValue(componentType, out IComponentBucket? bucket))
+        {
+            return bucket.TryGetObject(entity.Id, out component);
+        }
+
+        component = null!;
+        return false;
+    }
+
+    private Entity CreateEntityWithId(int id)
+    {
+        if (id <= 0)
+        {
+            throw new InvalidOperationException("脚本快照包含非法实体 id。");
+        }
+
+        if (_entities.ContainsKey(id))
+        {
+            throw new InvalidOperationException($"脚本快照重复实体 id：{id}。");
+        }
+
+        Entity entity = new(id, this);
+        _entities.Add(id, entity);
+        if (id > _nextEntityId)
+        {
+            _nextEntityId = id;
+        }
+
+        RebuildFreeEntityIds();
+        return entity;
+    }
+
+    private void RemoveEntityImmediate(int entityId)
+    {
+        List<Type> emptyBuckets = [];
+        foreach (KeyValuePair<Type, IComponentBucket> pair in _buckets)
+        {
+            pair.Value.Remove(entityId);
+            if (pair.Value.Count == 0)
+            {
+                emptyBuckets.Add(pair.Key);
+            }
+        }
+
+        for (int i = 0; i < emptyBuckets.Count; i++)
+        {
+            _ = _buckets.Remove(emptyBuckets[i]);
+        }
+
+        _ = _entities.Remove(entityId);
+        _ = _destroyQueue.RemoveAll(entity => entity.Id == entityId);
+        RebuildFreeEntityIds();
+    }
+
+    private void RebuildFreeEntityIds()
+    {
+        _freeEntityIds.Clear();
+        for (int id = _nextEntityId; id >= 1; id--)
+        {
+            if (!_entities.ContainsKey(id))
+            {
+                _freeEntityIds.Push(id);
+            }
+        }
+    }
+
+    private static bool ContainsSnapshotBehaviour(ScriptPlaySessionSnapshot snapshot, int entityId, Type behaviourType)
+    {
+        for (int i = 0; i < snapshot.Behaviours.Length; i++)
+        {
+            ScriptPlaySessionBehaviourSnapshot saved = snapshot.Behaviours[i];
+            if (saved.EntityId == entityId && saved.BehaviourType == behaviourType)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void ValidateEntity(Entity entity)

@@ -5,12 +5,20 @@ namespace PixelEngine.Scripting;
 /// </summary>
 public sealed class ScriptPlaySessionSnapshot
 {
-    internal ScriptPlaySessionSnapshot(ScriptPlaySessionBehaviourSnapshot[] behaviours)
+    internal ScriptPlaySessionSnapshot(int[] entityIds, ScriptPlaySessionBehaviourSnapshot[] behaviours)
     {
+        EntityIds = entityIds ?? throw new ArgumentNullException(nameof(entityIds));
         Behaviours = behaviours ?? throw new ArgumentNullException(nameof(behaviours));
     }
 
+    internal int[] EntityIds { get; }
+
     internal ScriptPlaySessionBehaviourSnapshot[] Behaviours { get; }
+
+    /// <summary>
+    /// 快照中记录的实体数量。
+    /// </summary>
+    public int EntityCount => EntityIds.Length;
 
     /// <summary>
     /// 快照中记录的 Behaviour 数量。
