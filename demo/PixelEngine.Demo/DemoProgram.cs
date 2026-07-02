@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using PixelEngine.Core.Diagnostics;
 using PixelEngine.Hosting;
 using PixelEngine.Physics;
 using PixelEngine.Scripting;
@@ -156,6 +157,9 @@ public static class DemoProgram
                 $"窗口短跑耗时：elapsed_ms={stopwatch.Elapsed.TotalMilliseconds:0.00}, " +
                 $"avg_tick_ms={(executed == 0 ? 0 : stopwatch.Elapsed.TotalMilliseconds / executed):0.00}, " +
                 $"last_profile_ms={Sum(engine.Context.Profiler.LastFrame):0.00}。");
+            Console.WriteLine(
+                $"窗口短跑最慢相位：main_top={SlowestMainPhase(engine.Context.Profiler.LastFrame)}, " +
+                $"sub_top={SlowestSubPhase(engine.Context.Profiler.LastSubFrame)}。");
             if (scriptedInput is not null)
             {
                 WriteScriptedWindowSummary(engine, scriptedInput, scriptedProbe);
@@ -176,6 +180,36 @@ public static class DemoProgram
         }
 
         return total;
+    }
+
+    private static string SlowestMainPhase(ReadOnlySpan<double> values)
+    {
+        int index = SlowestIndex(values);
+        return index < 0 ? "none=0.00" : $"{(FramePhase)index}={values[index]:0.00}";
+    }
+
+    private static string SlowestSubPhase(ReadOnlySpan<double> values)
+    {
+        int index = SlowestIndex(values);
+        return index < 0 ? "none=0.00" : $"{(FrameSubPhase)index}={values[index]:0.00}";
+    }
+
+    private static int SlowestIndex(ReadOnlySpan<double> values)
+    {
+        int bestIndex = -1;
+        double best = 0;
+        for (int i = 0; i < values.Length; i++)
+        {
+            if (values[i] <= best)
+            {
+                continue;
+            }
+
+            best = values[i];
+            bestIndex = i;
+        }
+
+        return bestIndex;
     }
 
     private static void WriteScriptedWindowSummary(

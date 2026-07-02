@@ -48,6 +48,13 @@ public sealed class RenderBufferBuilder(
         }
 
         aux.Clear();
+        if (CanClearEmptyWorld(context))
+        {
+            target.Pixels.Clear();
+            RecordSub(profiler, started);
+            return;
+        }
+
         _state.Context = context;
         _state.Target = target;
         _state.Aux = aux;
@@ -156,6 +163,39 @@ public sealed class RenderBufferBuilder(
             context.DebugCellColors is null &&
             !context.Temperature.HasActiveBlocks &&
             (_textures is null || !hot.HasTexturedMaterials);
+    }
+
+    private bool CanClearEmptyWorld(RenderFrameContext context)
+    {
+        if (context.DebugCellColors is not null || context.Temperature.HasActiveBlocks)
+        {
+            return false;
+        }
+
+        MaterialHotTable hot = context.Materials.Hot;
+        if (hot.Count == 0 ||
+            hot.BaseColorBGRA[0] != 0 ||
+            hot.ColorNoise[0] != 0 ||
+            hot.Type[0] != CellType.Empty ||
+            (hot.PropertyFlags[0] & (MaterialProperty.Emissive | MaterialProperty.Static)) != 0)
+        {
+            return false;
+        }
+
+        ReadOnlySpan<Chunk> chunks = context.Chunks.ResidentChunks;
+        for (int chunkIndex = 0; chunkIndex < chunks.Length; chunkIndex++)
+        {
+            ReadOnlySpan<ushort> materials = chunks[chunkIndex].Material;
+            for (int i = 0; i < materials.Length; i++)
+            {
+                if (materials[i] != 0)
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     private static void FillAuxFast(

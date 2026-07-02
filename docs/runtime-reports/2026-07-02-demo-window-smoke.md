@@ -132,10 +132,11 @@ RID: win-x64
 脚本运行时已接入 Hosting/Simulation 后端。
 窗口运行时已接入 Rendering/Input 后端。
 窗口短跑完成：frames=120, requested=120。
-窗口短跑耗时：elapsed_ms=4991.27, avg_tick_ms=41.60, last_profile_ms=29.93。
+窗口短跑耗时：elapsed_ms=4751.20, avg_tick_ms=39.60, last_profile_ms=31.24。
+窗口短跑最慢相位：main_top=BuildRenderBuffer=25.52, sub_top=RenderBufferBuild=25.51。
 ```
 
-该探针退出码为 0，证明空 scene 窗口链路可自然退出；但 `avg_tick_ms=41.60` 与 `last_profile_ms=29.93` 仍高于 16.67ms 帧预算，不能勾选稳定 60fps 验收。
+该探针退出码为 0，证明空 scene 窗口链路可自然退出；但 `avg_tick_ms=39.60` 与 `last_profile_ms=31.24` 仍高于 16.67ms 帧预算，不能勾选稳定 60fps 验收。相位拆分显示当前瓶颈集中在 `BuildRenderBuffer` / `RenderBufferBuild`。
 
 ## 结论
 
