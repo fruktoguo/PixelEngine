@@ -77,6 +77,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string script = ReadRepositoryFile("tools", "hardware-counter-preflight.ps1");
         string report = ReadRepositoryFile("docs", "benchmark-reports", "2026-07-02-latency-branch-calibration.md");
         string plan = ReadRepositoryFile("plan", "16-performance-hardening.md");
+        string testingPlan = ReadRepositoryFile("plan", "14-testing-benchmarking.md");
 
         Assert.Contains("PIXELENGINE_BENCH_HARDWARE_COUNTERS", script, StringComparison.Ordinal);
         Assert.Contains("HardwareCounter.CacheMisses", script, StringComparison.Ordinal);
@@ -96,6 +97,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("tools/hardware-counter-preflight.ps1", report, StringComparison.Ordinal);
         Assert.Contains("blocked_non_admin", report, StringComparison.Ordinal);
         Assert.Contains("tools/hardware-counter-preflight.ps1", plan, StringComparison.Ordinal);
+
+        Assert.Contains("- [x] 六个基准可产出报告", testingPlan, StringComparison.Ordinal);
+        Assert.Contains("docs/benchmark-reports/2026-07-02-plan14-short.md", testingPlan, StringComparison.Ordinal);
+        Assert.Contains("- [!] 反应 cache-miss / branch-misprediction 硬件计数器报告仍需管理员 ETW Kernel Session", testingPlan, StringComparison.Ordinal);
+        Assert.Contains("tools/hardware-counter-preflight.ps1", testingPlan, StringComparison.Ordinal);
     }
 
     /// <summary>
