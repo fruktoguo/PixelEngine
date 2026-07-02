@@ -49,6 +49,7 @@ public sealed class RenderingProjectDisciplineTests
         Assert.DoesNotContain("Vulkan", source, StringComparison.Ordinal);
         Assert.DoesNotContain("GLFW_CONTEXT_VERSION_MAJOR, 4", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ContextVersion = new API(4", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("using ComputeSharp", source, StringComparison.Ordinal);
         Assert.DoesNotContain("PackageReference Include=\"ComputeSharp\"", project, StringComparison.Ordinal);
     }
 

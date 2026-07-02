@@ -173,6 +173,32 @@ public sealed class ComputeCapabilityGateTests
     }
 
     [Fact]
+    public void ComputeSharpFactorySelectionReturnsUnavailableStubUntilBackendIsCompiled()
+    {
+        GpuCapabilities capabilities = CreateCapabilities(
+            glMajor: 4,
+            glMinor: 3,
+            hasCompute: true,
+            hasSsbo: true,
+            hasImageLoadStore: true,
+            isWindows: true,
+            isDx12Available: true,
+            isComputeSharpCompiled: true);
+        ComputeCapabilityGate gate = ComputeCapabilityGate.Evaluate(
+            capabilities,
+            ComputeFeatureSwitches.Default,
+            preferComputeSharp: true);
+
+        using IComputeBackend backend = ComputeBackendFactory.Create(gl: null, gate);
+
+        Assert.Equal(ComputeBackendKind.ComputeSharp, backend.Kind);
+        Assert.False(backend.IsAvailable);
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => backend.LoadKernel("stub", "unused"));
+        Assert.Contains("尚未编译进当前发行", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void GatePublishesSelectedBackendAndFeatureSwitchesToCoreCounters()
     {
         GpuCapabilities capabilities = CreateCapabilities(
