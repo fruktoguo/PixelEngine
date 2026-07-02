@@ -724,6 +724,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("Read-MarkdownEvidenceTable", evidence, StringComparison.Ordinal);
         Assert.Contains("报告 $key 必须为 $expected", evidence, StringComparison.Ordinal);
         Assert.Contains("packageReport", evidence, StringComparison.Ordinal);
+        Assert.Contains("deterministic_hash", evidence, StringComparison.Ordinal);
+        Assert.Contains("r2r_lightup", evidence, StringComparison.Ordinal);
         Assert.Contains("未知 RID", evidence, StringComparison.Ordinal);
         Assert.Contains("未知 channel", evidence, StringComparison.Ordinal);
         Assert.Contains("重复 evidence scope", evidence, StringComparison.Ordinal);
@@ -818,6 +820,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         {
             string goodManifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success");
             string badManifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "failure", suffix: "bad");
+            string badR2RManifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success", r2rLightupConclusion: "failure", suffix: "bad-r2r");
 
             string badArtifacts = Path.Combine(temp, "bad-out");
             ScriptResult bad = RunPowerShellScript(
@@ -830,6 +833,18 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(5, bad.ExitCode);
             string badReport = File.ReadAllText(Path.Combine(badArtifacts, "release-evidence-preflight.md"));
             Assert.Contains("报告 conclusion 必须为 success", badReport, StringComparison.Ordinal);
+
+            string badR2RArtifacts = Path.Combine(temp, "bad-r2r-out");
+            ScriptResult badR2R = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                badR2RManifest,
+                "-Artifacts",
+                badR2RArtifacts);
+            Assert.Equal(5, badR2R.ExitCode);
+            string badR2RReport = File.ReadAllText(Path.Combine(badR2RArtifacts, "release-evidence-preflight.md"));
+            Assert.Contains("r2r_lightup 报告 conclusion 必须为 success", badR2RReport, StringComparison.Ordinal);
 
             string goodArtifacts = Path.Combine(temp, "good-out");
             ScriptResult good = RunPowerShellScript(
@@ -981,7 +996,12 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         return manifestPath;
     }
 
-    private static string CreateReleaseEvidenceManifest(string tempRoot, string packageConclusion, string suffix = "good")
+    private static string CreateReleaseEvidenceManifest(
+        string tempRoot,
+        string packageConclusion,
+        string suffix = "good",
+        string deterministicConclusion = "success",
+        string r2rLightupConclusion = "success")
     {
         string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "release-evidence");
         string packageRoot = Path.Combine(tempRoot, suffix, "artifacts", "package");
@@ -990,8 +1010,12 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         string workflow = WriteMarkdownEvidence(Path.Combine(evidenceRoot, "workflow-run.md"), new Dictionary<string, string> { ["conclusion"] = "success" });
         string upload = WriteMarkdownEvidence(Path.Combine(evidenceRoot, "github-release-upload.md"), new Dictionary<string, string> { ["conclusion"] = "success" });
-        string deterministic = WriteTextEvidence(Path.Combine(evidenceRoot, "deterministic-hash.md"), "deterministic hash evidence");
-        string r2rLightup = WriteTextEvidence(Path.Combine(evidenceRoot, "r2r-lightup.md"), "r2r light-up evidence");
+        string deterministic = WriteMarkdownEvidence(
+            Path.Combine(evidenceRoot, "deterministic-hash.md"),
+            new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["conclusion"] = deterministicConclusion });
+        string r2rLightup = WriteMarkdownEvidence(
+            Path.Combine(evidenceRoot, "r2r-lightup.md"),
+            new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["conclusion"] = r2rLightupConclusion });
         string checksum = WriteTextEvidence(Path.Combine(packageRoot, "SHA256SUMS"), "placeholder checksum");
 
         string[] rids = ["win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64"];
