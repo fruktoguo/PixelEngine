@@ -9,7 +9,6 @@ public sealed class PauseMenu : Behaviour
 {
     private string _status = string.Empty;
     private long _lastEscapeFrame = -1;
-    private bool _open;
 
     /// <summary>
     /// 菜单窗口宽度，单位像素。
@@ -26,6 +25,11 @@ public sealed class PauseMenu : Behaviour
     /// </summary>
     public string BlockedReason { get; private set; } = "重开关卡快照尚未捕获。";
 
+    /// <summary>
+    /// 暂停菜单当前是否打开。
+    /// </summary>
+    public bool IsOpen { get; private set; }
+
     /// <inheritdoc />
     protected override void OnUpdate(float dt)
     {
@@ -37,7 +41,7 @@ public sealed class PauseMenu : Behaviour
     protected override void OnGui(IGuiContext gui)
     {
         ToggleFromEscape();
-        if (!_open)
+        if (!IsOpen)
         {
             return;
         }
@@ -135,13 +139,13 @@ public sealed class PauseMenu : Behaviour
         }
 
         _lastEscapeFrame = frame;
-        if (_open)
+        if (IsOpen)
         {
             CloseAndResume();
             return;
         }
 
-        _open = true;
+        IsOpen = true;
         Context.Runtime.PauseSimulation();
         _status = "已暂停。";
     }
@@ -149,7 +153,7 @@ public sealed class PauseMenu : Behaviour
     private void CloseAndResume()
     {
         Context.Runtime.ResumeSimulation();
-        _open = false;
+        IsOpen = false;
         _status = string.Empty;
     }
 }

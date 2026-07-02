@@ -80,6 +80,10 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
                 _keys[keyCount++] = Key.Space;
             }
         }
+        else if (frame == 70)
+        {
+            _keys[keyCount++] = Key.Escape;
+        }
 
         Point2F screen = _camera.WorldToScreen(target.X, target.Y);
         _input.Update(
@@ -124,12 +128,23 @@ internal sealed class DemoWindowScriptedProbe(
     public int MaxLights { get; private set; }
 
     /// <summary>
-    /// 注册物理之后的采样相位。
+    /// 短跑期间观测到的最大音频抽取事件数量。
+    /// </summary>
+    public long MaxAudioDrained { get; private set; }
+
+    /// <summary>
+    /// 短跑期间观测到的最大音频播放数量。
+    /// </summary>
+    public long MaxAudioPlayed { get; private set; }
+
+    /// <summary>
+    /// 注册物理与音频之后的采样相位。
     /// </summary>
     public void RegisterPhases(EnginePhasePipeline phases)
     {
         ArgumentNullException.ThrowIfNull(phases);
         phases.Register(EnginePhase.PhysicsSync, Capture);
+        phases.Register(EnginePhase.BuildRenderBuffer, CaptureAudio);
     }
 
     private void Capture(EngineTickContext context)
@@ -139,5 +154,11 @@ internal sealed class DemoWindowScriptedProbe(
         MaxCreatedBodies = Math.Max(MaxCreatedBodies, _physics.LastDestructionResult.CreatedBodies);
         MaxParticles = Math.Max(MaxParticles, _particles.ActiveCount);
         MaxLights = Math.Max(MaxLights, _lighting.PointLights.Length);
+    }
+
+    private void CaptureAudio(EngineTickContext context)
+    {
+        MaxAudioDrained = Math.Max(MaxAudioDrained, context.Context.Counters.AudioDrained);
+        MaxAudioPlayed = Math.Max(MaxAudioPlayed, context.Context.Counters.AudioPlayed);
     }
 }
