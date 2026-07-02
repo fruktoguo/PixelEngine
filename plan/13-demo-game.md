@@ -149,7 +149,7 @@ API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosti
 
 玩家与相机
 - [!] `PlayerController : Behaviour`：源码已落地，经 `ICharacterController.Create/SetPosition/Move/GetState` 创建、传送并移动 AABB，实现跑 / 跳 / 贴墙滑落 / 蹬墙、重力、coyote-time 与 jump-buffer；headless 路径已能由 Hosting 自动注入脚本后端并驱动场景 Behaviour，`AttachWindowRuntime()` 已装配 `SilkInputPhaseDriver` 将窗口键盘快照写入 `ScriptInputApi`；阻塞：缺少真实窗口输入与可玩控制验收。〔plan/06、plan/08 输入；§3.3〕
-- [!] `PlayerHealth : Behaviour`：源码已落地，按玩家 AABB 采样 `lava/fire/acid`，扣血、喷粒子、触发受击音效并死亡重生；headless 路径已能由 Hosting 自动驱动，并已通过 `AttachAudioFromContentAsync()` 预加载 Demo wav clip、注入脚本音频 API；阻塞：缺少窗口态输入/渲染运行验收与受击场景端到端验证。〔plan/11、plan/05、plan/10；§3.3〕
+- [!] `PlayerHealth : Behaviour`：源码已落地，按玩家 AABB 采样 `lava/fire/acid`，扣血、喷粒子、触发受击音效并死亡重生；`PlayerHealthSamplesHazardsEmitsFeedbackAndRespawns` 已用 headless 真实 `Engine` / `CellGrid` / `ParticleSystem` / 录制音频 API 验证 lava 覆盖玩家 AABB 后扣血、播放 `player_hurt.wav`、生成受击粒子并在致命伤害后回到出生点；Hosting 已通过 `AttachAudioFromContentAsync()` 预加载 Demo wav clip、注入脚本音频 API；阻塞：缺少窗口态输入/渲染运行验收。〔plan/11、plan/05、plan/10；§3.3〕
 - [!] `CameraFollow : Behaviour`：源码已落地，可跟随同实体 `PlayerController`，支持阻尼、lookahead、边界夹取与缩放；脚本层已有通用 `Transform` 组件与 `ScriptCameraApi.Follow(Entity)`，`PlayerController` 可把角色中心同步到 Transform；headless 路径已有默认脚本相机 API，Hosting 已有 `ScriptCameraSynchronizer` 将脚本相机快照同步为 Rendering `CameraState` 并可更新 World residency 相机，`RenderPhaseDriver` 已用该快照构建并提交 render buffer；阻塞：缺少真实窗口画面跟随验收。〔plan/08；§3.4〕
 
 世界交互

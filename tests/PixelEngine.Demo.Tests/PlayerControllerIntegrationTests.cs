@@ -128,6 +128,44 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证 PlayerHealth 会按玩家 AABB 采样危险材质，造成伤害、喷粒子、播放受击音效并在死亡后重生。
+    /// </summary>
+    [Fact]
+    public void PlayerHealthSamplesHazardsEmitsFeedbackAndRespawns()
+    {
+        RecordingAudioApi audio = new();
+        MaterialTable materials = DemoMaterials();
+        Assert.True(materials.TryGetId("lava", out ushort lava));
+        using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        Entity entity = scene.CreateEntity();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 12f;
+        PlayerHealth health = entity.AddComponent<PlayerHealth>();
+        health.MaxHealth = 20f;
+        health.LavaDamagePerSecond = 60f;
+        health.HurtParticleCount = 4;
+        health.HurtParticleSpeed = 20f;
+        health.HurtSoundCooldown = 0f;
+        FillRect(grid, lava, minX: 12, minY: 12, maxX: 18, maxY: 24);
+
+        engine.RunHeadlessTicks(1);
+
+        Assert.InRange(health.Health, 0.01f, health.MaxHealth - 0.01f);
+        Assert.Equal("player_hurt.wav", audio.LastCue);
+        Assert.Equal(player.CenterX, audio.LastX, precision: 3);
+        Assert.Equal(player.CenterY, audio.LastY, precision: 3);
+        Assert.True(engine.Context.GetService<ParticleSystem>().ActiveCount > 0);
+
+        health.LavaDamagePerSecond = 2_000f;
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(health.MaxHealth, health.Health);
+        Assert.Equal(player.SpawnX, player.State.X, precision: 3);
+        Assert.Equal(player.SpawnY, player.State.Y, precision: 3);
+    }
+
+    /// <summary>
     /// 验证 Demo 爆破工具会从鼠标世界坐标触发 cell 抛射、刚体冲量请求与光照反馈。
     /// </summary>
     [Fact]
@@ -472,7 +510,8 @@ public sealed class PlayerControllerIntegrationTests
             ("wood", CellType.Solid),
             ("acid", CellType.Liquid),
             ("ice", CellType.Solid),
-            ("metal", CellType.Solid));
+            ("metal", CellType.Solid),
+            ("ash", CellType.Powder));
     }
 
     private sealed class NoOpAudioApi : IAudioApi
