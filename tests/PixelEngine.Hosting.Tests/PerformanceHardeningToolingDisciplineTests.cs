@@ -446,6 +446,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         Assert.Contains("EvidenceManifestPath", evidence, StringComparison.Ordinal);
         Assert.Contains("schemaVersion", evidence, StringComparison.Ordinal);
+        Assert.Contains("DeclaredSha256", evidence, StringComparison.Ordinal);
+        Assert.Contains("缺少 sha256", evidence, StringComparison.Ordinal);
+        Assert.Contains("sha256 不匹配", evidence, StringComparison.Ordinal);
         Assert.Contains("未知 RID", evidence, StringComparison.Ordinal);
         Assert.Contains("未知 channel", evidence, StringComparison.Ordinal);
         Assert.Contains("重复 evidence scope", evidence, StringComparison.Ordinal);
@@ -475,6 +478,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("tools/release-evidence-preflight.ps1", releaseReport, StringComparison.Ordinal);
         Assert.Contains("release_evidence_attached_pending_review", releaseReport, StringComparison.Ordinal);
         Assert.Contains("-AllowBlocked", releaseReport, StringComparison.Ordinal);
+        Assert.Contains("sha256", releaseReport, StringComparison.Ordinal);
+        Assert.Contains("重新计算", releaseReport, StringComparison.Ordinal);
         Assert.Contains("simdProbeKind", releaseReport, StringComparison.Ordinal);
         Assert.Contains("arm64_neon", releaseReport, StringComparison.Ordinal);
         Assert.Contains("pending review 误当成验收通过", releaseReport, StringComparison.Ordinal);
@@ -499,18 +504,25 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("evidence.json", release, StringComparison.Ordinal);
         Assert.Contains("r2rLightupReport", release, StringComparison.Ordinal);
         Assert.Contains("deterministicHashReport", release, StringComparison.Ordinal);
+        Assert.Contains("function Get-Sha256", release, StringComparison.Ordinal);
+        Assert.Contains("workflowRunSha256", release, StringComparison.Ordinal);
+        Assert.Contains("publishSha256", release, StringComparison.Ordinal);
         Assert.Contains("simdProbeKind", release, StringComparison.Ordinal);
         Assert.Contains("x64_ymm_zmm", release, StringComparison.Ordinal);
         Assert.Contains("arm64_neon", release, StringComparison.Ordinal);
 
         Assert.Contains("\"schemaVersion\": 1", example, StringComparison.Ordinal);
         Assert.Contains("\"workflowRunReport\"", example, StringComparison.Ordinal);
+        Assert.Contains("\"workflowRunSha256\"", example, StringComparison.Ordinal);
         Assert.Contains("\"r2rLightupReport\"", example, StringComparison.Ordinal);
+        Assert.Contains("\"r2rLightupSha256\"", example, StringComparison.Ordinal);
         Assert.Contains("\"githubRelease\"", example, StringComparison.Ordinal);
         Assert.Contains("\"simdProbe\"", example, StringComparison.Ordinal);
+        Assert.Contains("\"simdProbeSha256\"", example, StringComparison.Ordinal);
         Assert.Contains("\"simdProbeKind\": \"x64_ymm_zmm\"", example, StringComparison.Ordinal);
         Assert.Contains("\"simdProbeKind\": \"arm64_neon\"", example, StringComparison.Ordinal);
         Assert.Contains("\"codesignReport\"", example, StringComparison.Ordinal);
+        Assert.Contains("\"codesignSha256\"", example, StringComparison.Ordinal);
         Assert.Contains("\"notarizationReport\"", example, StringComparison.Ordinal);
     }
 

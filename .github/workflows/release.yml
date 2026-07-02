@@ -607,6 +607,14 @@ jobs:
         if: always()
         shell: pwsh
         run: |
+          function Get-Sha256($path) {
+            if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              return ''
+            }
+
+            return (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash
+          }
+
           New-Item -ItemType Directory -Force -Path artifacts/release-evidence | Out-Null
           @(
             "# Workflow run evidence",
@@ -634,19 +642,27 @@ jobs:
           foreach ($rid in $rids) {
             $ridNode = [ordered]@{}
             foreach ($channel in $channels) {
+              $packagePath = (Get-ChildItem -Path artifacts/package -File -Filter "PixelEngine-Demo-*-$rid-$channel.*" | Select-Object -First 1 -ExpandProperty FullName)
               $node = [ordered]@{
                 publishReport = "artifacts/release-evidence/$rid-$channel-publish.md"
+                publishSha256 = Get-Sha256 "artifacts/release-evidence/$rid-$channel-publish.md"
                 verifyReport = "artifacts/release-evidence/$rid-$channel-verify.md"
-                package = (Get-ChildItem -Path artifacts/package -File -Filter "PixelEngine-Demo-*-$rid-$channel.*" | Select-Object -First 1 -ExpandProperty FullName)
+                verifySha256 = Get-Sha256 "artifacts/release-evidence/$rid-$channel-verify.md"
+                package = $packagePath
+                packageSha256 = Get-Sha256 $packagePath
                 checksum = "artifacts/package/SHA256SUMS"
+                checksumSha256 = Get-Sha256 "artifacts/package/SHA256SUMS"
               }
               if ($channel -eq 'aot') {
                 $node.simdProbe = "artifacts/release-evidence/$rid-$channel-simd.md"
+                $node.simdProbeSha256 = Get-Sha256 "artifacts/release-evidence/$rid-$channel-simd.md"
                 $node.simdProbeKind = if ($rid.EndsWith('-x64')) { 'x64_ymm_zmm' } else { 'arm64_neon' }
               }
               if ($rid.StartsWith('osx-')) {
                 $node.codesignReport = "artifacts/release-evidence/$rid-$channel-codesign.md"
+                $node.codesignSha256 = Get-Sha256 "artifacts/release-evidence/$rid-$channel-codesign.md"
                 $node.notarizationReport = "artifacts/release-evidence/$rid-$channel-notarization.md"
+                $node.notarizationSha256 = Get-Sha256 "artifacts/release-evidence/$rid-$channel-notarization.md"
               }
               $ridNode[$channel] = $node
             }
@@ -655,9 +671,15 @@ jobs:
           $manifest = [ordered]@{
             schemaVersion = 1
             workflowRunReport = 'artifacts/release-evidence/workflow-run.md'
+            workflowRunSha256 = Get-Sha256 'artifacts/release-evidence/workflow-run.md'
             deterministicHashReport = 'artifacts/release-evidence/deterministic-hash.md'
+            deterministicHashSha256 = Get-Sha256 'artifacts/release-evidence/deterministic-hash.md'
             r2rLightupReport = 'artifacts/release-evidence/r2r-lightup.md'
-            githubRelease = [ordered]@{ uploadReport = 'artifacts/release-evidence/github-release-upload.md' }
+            r2rLightupSha256 = Get-Sha256 'artifacts/release-evidence/r2r-lightup.md'
+            githubRelease = [ordered]@{
+              uploadReport = 'artifacts/release-evidence/github-release-upload.md'
+              uploadSha256 = Get-Sha256 'artifacts/release-evidence/github-release-upload.md'
+            }
             artifacts = $artifacts
           }
           $manifest | ConvertTo-Json -Depth 10 | Set-Content -Path artifacts/release-evidence/evidence.json -Encoding UTF8
