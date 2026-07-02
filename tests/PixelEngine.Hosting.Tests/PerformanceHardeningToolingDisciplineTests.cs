@@ -598,6 +598,53 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 release evidence 预检的真实脚本行为：失败 package 报告被拒绝，证据齐全也保持待审非零退出。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsFailedReportsAndKeepsPendingReviewNonZero()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-evidence-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string goodManifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success");
+            string badManifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "failure", suffix: "bad");
+
+            string badArtifacts = Path.Combine(temp, "bad-out");
+            ScriptResult bad = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                badManifest,
+                "-Artifacts",
+                badArtifacts);
+            Assert.Equal(5, bad.ExitCode);
+            string badReport = File.ReadAllText(Path.Combine(badArtifacts, "release-evidence-preflight.md"));
+            Assert.Contains("报告 conclusion 必须为 success", badReport, StringComparison.Ordinal);
+
+            string goodArtifacts = Path.Combine(temp, "good-out");
+            ScriptResult good = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                goodManifest,
+                "-Artifacts",
+                goodArtifacts);
+            Assert.Equal(2, good.ExitCode);
+            string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "release-evidence-preflight.md"));
+            Assert.Contains("release_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 CA 最内层邻居访问经 3x3 窗口基址与 Unsafe.Add 漫游，不在热更新器内直接数组索引。
     /// </summary>
     [Fact]
@@ -726,6 +773,97 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         return manifestPath;
     }
 
+    private static string CreateReleaseEvidenceManifest(string tempRoot, string packageConclusion, string suffix = "good")
+    {
+        string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "release-evidence");
+        string packageRoot = Path.Combine(tempRoot, suffix, "artifacts", "package");
+        _ = Directory.CreateDirectory(evidenceRoot);
+        _ = Directory.CreateDirectory(packageRoot);
+
+        string workflow = WriteMarkdownEvidence(Path.Combine(evidenceRoot, "workflow-run.md"), new Dictionary<string, string> { ["conclusion"] = "success" });
+        string upload = WriteMarkdownEvidence(Path.Combine(evidenceRoot, "github-release-upload.md"), new Dictionary<string, string> { ["conclusion"] = "success" });
+        string deterministic = WriteTextEvidence(Path.Combine(evidenceRoot, "deterministic-hash.md"), "deterministic hash evidence");
+        string r2rLightup = WriteTextEvidence(Path.Combine(evidenceRoot, "r2r-lightup.md"), "r2r light-up evidence");
+        string checksum = WriteTextEvidence(Path.Combine(packageRoot, "SHA256SUMS"), "placeholder checksum");
+
+        string[] rids = ["win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64"];
+        string[] channels = ["r2r", "aot"];
+        Dictionary<string, object> artifacts = [];
+        foreach (string rid in rids)
+        {
+            Dictionary<string, object> ridNode = [];
+            foreach (string channel in channels)
+            {
+                string publish = WriteReleaseJobEvidence(evidenceRoot, rid, channel, "publish", "success");
+                string verify = WriteReleaseJobEvidence(evidenceRoot, rid, channel, "verify", "success");
+                string currentPackageConclusion = rid == "win-x64" && channel == "r2r" ? packageConclusion : "success";
+                string packageReport = WriteReleaseJobEvidence(evidenceRoot, rid, channel, "package", currentPackageConclusion);
+                string extension = rid.StartsWith("win-", StringComparison.Ordinal) ? "zip" : "tar.gz";
+                string package = WriteTextEvidence(Path.Combine(packageRoot, $"PixelEngine-Demo-0.1.0-{rid}-{channel}.{extension}"), $"package {rid} {channel}");
+
+                Dictionary<string, object> node = new()
+                {
+                    ["publishReport"] = publish,
+                    ["publishSha256"] = GetSha256(publish),
+                    ["verifyReport"] = verify,
+                    ["verifySha256"] = GetSha256(verify),
+                    ["packageReport"] = packageReport,
+                    ["packageReportSha256"] = GetSha256(packageReport),
+                    ["package"] = package,
+                    ["packageSha256"] = GetSha256(package),
+                    ["checksum"] = checksum,
+                    ["checksumSha256"] = GetSha256(checksum),
+                };
+
+                if (channel == "aot")
+                {
+                    string simdExtra = rid.EndsWith("-x64", StringComparison.Ordinal) ? "SIMD evidence contains ymm and zmm." : "SIMD evidence contains NEON.";
+                    string simd = WriteReleaseJobEvidence(evidenceRoot, rid, channel, "simd", "success", simdExtra);
+                    node["simdProbe"] = simd;
+                    node["simdProbeSha256"] = GetSha256(simd);
+                    node["simdProbeKind"] = rid.EndsWith("-x64", StringComparison.Ordinal) ? "x64_ymm_zmm" : "arm64_neon";
+                }
+
+                if (rid.StartsWith("osx-", StringComparison.Ordinal))
+                {
+                    string codesign = WriteReleaseJobEvidence(evidenceRoot, rid, channel, "codesign", "success");
+                    string notarization = WriteReleaseJobEvidence(evidenceRoot, rid, channel, "notarization", "success");
+                    node["codesignReport"] = codesign;
+                    node["codesignSha256"] = GetSha256(codesign);
+                    node["notarizationReport"] = notarization;
+                    node["notarizationSha256"] = GetSha256(notarization);
+                }
+
+                ridNode[channel] = node;
+            }
+
+            artifacts[rid] = ridNode;
+        }
+
+        Dictionary<string, object> manifest = new()
+        {
+            ["schemaVersion"] = 1,
+            ["workflowRunReport"] = workflow,
+            ["workflowRunSha256"] = GetSha256(workflow),
+            ["deterministicHashReport"] = deterministic,
+            ["deterministicHashSha256"] = GetSha256(deterministic),
+            ["r2rLightupReport"] = r2rLightup,
+            ["r2rLightupSha256"] = GetSha256(r2rLightup),
+            ["githubRelease"] = new Dictionary<string, object>
+            {
+                ["uploadReport"] = upload,
+                ["uploadSha256"] = GetSha256(upload),
+            },
+            ["artifacts"] = artifacts,
+        };
+
+        string manifestPath = Path.Combine(tempRoot, suffix, "release-evidence.json");
+        File.WriteAllText(
+            manifestPath,
+            System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        return manifestPath;
+    }
+
     private static string WriteMarkdownEvidence(string path, IReadOnlyDictionary<string, string> values)
     {
         _ = Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -743,6 +881,35 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         }
 
         File.WriteAllLines(path, lines);
+        return path;
+    }
+
+    private static string WriteReleaseJobEvidence(string evidenceRoot, string rid, string channel, string name, string conclusion, string extra = "")
+    {
+        string path = Path.Combine(evidenceRoot, $"{rid}-{channel}-{name}.md");
+        string written = WriteMarkdownEvidence(
+            path,
+            new Dictionary<string, string>
+            {
+                ["rid"] = rid,
+                ["channel"] = channel,
+                ["run_id"] = "1",
+                ["sha"] = "abc",
+                ["conclusion"] = conclusion,
+            });
+
+        if (!string.IsNullOrWhiteSpace(extra))
+        {
+            File.AppendAllText(written, Environment.NewLine + extra + Environment.NewLine);
+        }
+
+        return written;
+    }
+
+    private static string WriteTextEvidence(string path, string content)
+    {
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, content);
         return path;
     }
 
