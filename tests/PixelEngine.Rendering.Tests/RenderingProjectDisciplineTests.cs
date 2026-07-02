@@ -54,6 +54,38 @@ public sealed class RenderingProjectDisciplineTests
     }
 
     [Fact]
+    public void ComputeSharpDx12ResourceContractIsDocumentedAndBlockedUntilRealInteropExists()
+    {
+        string document = File.ReadAllText(ProjectPath("docs", "rendering-computesharp-resource-contract.md"));
+        string plan = File.ReadAllText(ProjectPath("plan", "09-gpu-compute.md"));
+        string resources = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Compute", "GpuComputeResources.cs"));
+        string backend = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Compute", "ComputeSharpBackend.cs"));
+        string interfaceSource = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Compute", "IComputeBackend.cs"));
+        string project = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "PixelEngine.Rendering.csproj"));
+
+        Assert.Contains("OpenGL texture handle", document, StringComparison.Ordinal);
+        Assert.Contains("不能直接消费这些句柄", document, StringComparison.Ordinal);
+        Assert.Contains("不得在 `ComputeSharpBackend` 中把 `uint textureHandle` 当作 DX12 资源使用", document, StringComparison.Ordinal);
+        Assert.Contains("D3D 渲染后端", document, StringComparison.Ordinal);
+        Assert.Contains("GL-DX12 共享资源层", document, StringComparison.Ordinal);
+        Assert.Contains("GPU→CPU readback", document, StringComparison.Ordinal);
+        Assert.Contains("IsComputeSharpCompiled=false", document, StringComparison.Ordinal);
+        Assert.Contains("plan/15", document, StringComparison.Ordinal);
+
+        Assert.Contains("docs/rendering-computesharp-resource-contract.md", plan, StringComparison.Ordinal);
+        Assert.Contains("禁止路线", plan, StringComparison.Ordinal);
+        Assert.Contains("不能用 GL 句柄模拟 DX12 resource", plan, StringComparison.Ordinal);
+
+        Assert.Contains("OpenGL texture 句柄", interfaceSource, StringComparison.Ordinal);
+        Assert.Contains("uint textureHandle", interfaceSource, StringComparison.Ordinal);
+        Assert.Contains("plan/08 世界纹理句柄", resources, StringComparison.Ordinal);
+        Assert.Contains("ComputeSharp 后端尚未编译进当前发行", backend, StringComparison.Ordinal);
+        Assert.Contains("IsAvailable => false", backend, StringComparison.Ordinal);
+        Assert.DoesNotContain("using ComputeSharp", backend, StringComparison.Ordinal);
+        Assert.DoesNotContain("PackageReference Include=\"ComputeSharp\"", project, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RenderingHotPathSourcesAvoidLinqAndIteratorAllocations()
     {
         string source = string.Join(
