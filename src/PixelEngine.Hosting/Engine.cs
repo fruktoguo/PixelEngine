@@ -463,7 +463,9 @@ public sealed class Engine : IDisposable
         editor.AddPanel(new DebugOverlayPanel(ResolveDebugOverlaySettings()));
         editor.AddPanel(new PerformanceHudPanel());
         editor.AddPanel(new SimulationControlToolbar(new EngineSimulationControlService(this)));
-        editor.AddPanel(new EditorModePanel(new EngineEditorPlaySessionService(this)));
+        EngineWorldSnapshotStore playSnapshotStore = new(this);
+        editor.AddPanel(new EditorModePanel(new EngineEditorPlaySessionService(this, playSnapshotStore)));
+        _ownedRuntimeResources.Add(playSnapshotStore);
         if (Context.TryGetService(out PhysicsSystem tuningPhysics))
         {
             editor.AddPanel(new PhysicsTuningPanel(new PhysicsSystemTuningService(tuningPhysics)));
@@ -683,6 +685,76 @@ public sealed class Engine : IDisposable
             SceneSourceKind.Empty => null,
             _ => throw new ArgumentOutOfRangeException(nameof(scene), scene.Descriptor.SourceKind, "未知场景来源类型。"),
         };
+    }
+
+    /// <summary>
+    /// 在当前暂停点捕获 resident world 快照；供 Play/Edit 回滚或关卡重开使用。
+    /// </summary>
+    /// <returns>需要由调用方释放的临时世界快照。</returns>
+    public EngineWorldSnapshot CaptureWorldSnapshot()
+    {
+        ThrowIfShutdown();
+        ResidentChunkMap chunks = Context.GetService<ResidentChunkMap>();
+        TemperatureField temperature = Context.GetService<TemperatureField>();
+        MaterialTable materials = Context.GetService<MaterialTable>();
+        SimulationKernel kernel = Context.GetService<SimulationKernel>();
+        ParticleSystem particles = Context.GetService<ParticleSystem>();
+        RuntimeWorldStateBridge stateBridge = EnsureRuntimeWorldStateBridge(particles);
+        ResidencyTable residency = ResolveSnapshotResidency(chunks);
+        long gameTimeTicks = Context.Clock.SimTickIndex;
+        string snapshotPath = Path.Combine(
+            Path.GetTempPath(),
+            "PixelEngine",
+            "world-snapshots",
+            Guid.NewGuid().ToString("N"));
+
+        new WorldSaveService().SaveAll(
+            new WorldSaveContext(
+                chunks,
+                residency,
+                temperature,
+                materials,
+                kernel.WorldSeed,
+                gameTimeTicks,
+                ReadOnlyMemory<byte>.Empty,
+                isFrameBoundary: true),
+            stateBridge,
+            snapshotPath);
+        return new EngineWorldSnapshot(snapshotPath, gameTimeTicks, kernel.WorldSeed);
+    }
+
+    /// <summary>
+    /// 将当前 resident world 恢复到指定快照状态。
+    /// </summary>
+    /// <param name="snapshot">由 <see cref="CaptureWorldSnapshot" /> 创建的世界快照。</param>
+    /// <param name="fallbackMaterialId">快照材质名在当前材质表中缺失时使用的 fallback 材质 id。</param>
+    /// <returns>读档恢复结果。</returns>
+    public WorldLoadResult RestoreWorldSnapshot(EngineWorldSnapshot snapshot, ushort fallbackMaterialId = 0)
+    {
+        ThrowIfShutdown();
+        ArgumentNullException.ThrowIfNull(snapshot);
+        MaterialTable materials = Context.GetService<MaterialTable>();
+        _ = materials.GetName(fallbackMaterialId);
+        ResidentChunkMap chunks = Context.GetService<ResidentChunkMap>();
+        TemperatureField temperature = Context.GetService<TemperatureField>();
+        ParticleSystem particles = Context.GetService<ParticleSystem>();
+        RuntimeWorldStateBridge stateBridge = EnsureRuntimeWorldStateBridge(particles);
+        WorldLoadResult result = new WorldSaveService().LoadAll(
+            snapshot.DirectoryPath,
+            new WorldLoadContext(
+                chunks,
+                ResolveSnapshotResidency(chunks),
+                temperature,
+                materials,
+                fallbackMaterialId,
+                currentParityBit: 0),
+            stateBridge);
+
+        Context.GetService<SimulationKernel>().RestoreFrameState(
+            checked((uint)result.GameTimeTicks),
+            CurrentParityFromGameTime(result.GameTimeTicks));
+        Context.Clock.RestoreCounters(result.GameTimeTicks, result.GameTimeTicks);
+        return result;
     }
 
     /// <summary>
@@ -1233,6 +1305,47 @@ public sealed class Engine : IDisposable
                 chunks.Add(new Chunk(new ChunkCoord(cx, cy)));
             }
         }
+    }
+
+    private RuntimeWorldStateBridge EnsureRuntimeWorldStateBridge(ParticleSystem particles)
+    {
+        if (Context.TryGetService(out RuntimeWorldStateBridge existing))
+        {
+            return existing;
+        }
+
+        RuntimeWorldStateBridge stateBridge = new(particles);
+        if (Context.TryGetService(out PhysicsSystem physics))
+        {
+            stateBridge.AttachPhysics(physics);
+        }
+
+        Context.RegisterService<IWorldStateSnapshotSource>(stateBridge);
+        Context.RegisterService<IWorldStateSnapshotSink>(stateBridge);
+        Context.RegisterService(stateBridge);
+        return stateBridge;
+    }
+
+    private ResidencyTable ResolveSnapshotResidency(ResidentChunkMap chunks)
+    {
+        if (Context.TryGetService(out WorldManager world))
+        {
+            return world.Residency;
+        }
+
+        ResidencyTable residency = new();
+        foreach (Chunk chunk in chunks.ResidentChunks)
+        {
+            residency.Set(
+                chunk.Coord,
+                new ChunkResidencyInfo(
+                    ChunkResidencyState.Cached,
+                    Context.Clock.FrameIndex,
+                    ChunkMemoryBudget.EstimatedResidentChunkBytes,
+                    DirtySinceLoad: false));
+        }
+
+        return residency;
     }
 
     private SimulationPhaseDriver AttachSimulationWorld(
