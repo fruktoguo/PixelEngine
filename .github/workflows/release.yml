@@ -642,6 +642,7 @@ jobs:
               }
               if ($channel -eq 'aot') {
                 $node.simdProbe = "artifacts/release-evidence/$rid-$channel-simd.md"
+                $node.simdProbeKind = if ($rid.EndsWith('-x64')) { 'x64_ymm_zmm' } else { 'arm64_neon' }
               }
               if ($rid.StartsWith('osx-')) {
                 $node.codesignReport = "artifacts/release-evidence/$rid-$channel-codesign.md"

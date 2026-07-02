@@ -18,6 +18,7 @@
         "publishReport": "artifacts/release-evidence/win-x64-aot-publish.md",
         "verifyReport": "artifacts/release-evidence/win-x64-aot-verify.md",
         "simdProbe": "artifacts/release-evidence/win-x64-aot-simd.md",
+        "simdProbeKind": "x64_ymm_zmm",
         "package": "artifacts/package/PixelEngine-Demo-0.1.0-win-x64-aot.zip",
         "checksum": "artifacts/package/SHA256SUMS"
       }
@@ -35,6 +36,7 @@
         "publishReport": "artifacts/release-evidence/osx-arm64-aot-publish.md",
         "verifyReport": "artifacts/release-evidence/osx-arm64-aot-verify.md",
         "simdProbe": "artifacts/release-evidence/osx-arm64-aot-simd.md",
+        "simdProbeKind": "arm64_neon",
         "codesignReport": "artifacts/release-evidence/osx-arm64-aot-codesign.md",
         "notarizationReport": "artifacts/release-evidence/osx-arm64-aot-notarization.md",
         "package": "artifacts/package/PixelEngine-Demo-0.1.0-osx-arm64-aot.tar.gz",

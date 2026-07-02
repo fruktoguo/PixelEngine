@@ -66,6 +66,64 @@ function Add-EvidenceFile {
     })
 }
 
+function Resolve-EvidencePath {
+    param(
+        [string]$Root,
+        [string]$Path
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return ""
+    }
+
+    if ([IO.Path]::IsPathRooted($Path)) {
+        return $Path
+    }
+
+    return Join-Path $Root $Path
+}
+
+function Test-AotSimdEvidence {
+    param(
+        [System.Collections.Generic.List[string]]$Missing,
+        [string]$Root,
+        [string]$Rid,
+        [object]$Node
+    )
+
+    $expectedKind = if ($Rid.EndsWith("-x64", [StringComparison]::Ordinal)) { "x64_ymm_zmm" } else { "arm64_neon" }
+    $actualKind = [string]$Node.simdProbeKind
+    if ([string]::IsNullOrWhiteSpace($actualKind)) {
+        $Missing.Add("artifacts.$Rid.aot.simdProbeKind 缺失，必须为 $expectedKind")
+    }
+    elseif ($actualKind -ne $expectedKind) {
+        $Missing.Add("artifacts.$Rid.aot.simdProbeKind 必须为 $expectedKind，不能用 skip 或其它报告冒充 SIMD 证据")
+    }
+
+    $simdProbePath = [string]$Node.simdProbe
+    $resolved = Resolve-EvidencePath -Root $Root -Path $simdProbePath
+    if ([string]::IsNullOrWhiteSpace($resolved) -or -not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+        return
+    }
+
+    $content = Get-Content -Raw -LiteralPath $resolved
+    if ($content.Contains("skip", [StringComparison]::OrdinalIgnoreCase) -or
+        $content.Contains("skipped", [StringComparison]::OrdinalIgnoreCase)) {
+        $Missing.Add("artifacts.$Rid.aot.simdProbe 不能是 skip 报告：$simdProbePath")
+    }
+
+    if ($expectedKind -eq "x64_ymm_zmm" -and
+        -not ($content.Contains("ymm", [StringComparison]::OrdinalIgnoreCase) -or
+              $content.Contains("zmm", [StringComparison]::OrdinalIgnoreCase))) {
+        $Missing.Add("artifacts.$Rid.aot.simdProbe 必须包含 ymm 或 zmm 证据：$simdProbePath")
+    }
+
+    if ($expectedKind -eq "arm64_neon" -and
+        -not $content.Contains("NEON", [StringComparison]::OrdinalIgnoreCase)) {
+        $Missing.Add("artifacts.$Rid.aot.simdProbe 必须包含 NEON 证据：$simdProbePath")
+    }
+}
+
 function Get-JsonPropertyNames {
     param([object]$Node)
 
@@ -202,6 +260,7 @@ foreach ($rid in $rids) {
 
         if ($channel -eq "aot") {
             Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/simd_probe" -Path ([string]$node.simdProbe)
+            Test-AotSimdEvidence -Missing $missing -Root $root -Rid $rid -Node $node
         }
 
         if ($rid.StartsWith("osx-", [StringComparison]::Ordinal)) {
