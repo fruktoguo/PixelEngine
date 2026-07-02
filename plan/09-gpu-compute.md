@@ -156,7 +156,7 @@ cascade 层数 `RadianceCascadeCount`、每层角度/空间分辨率、射线步
 - [x] **compute 与 fragment 等价**：GL-compute bloom（CP-B1..B5）输出与 plan/08 fragment bloom 在同一 emissive 输入下像素级一致（容差内），可运行时热切换无可见跳变。
 - [x] **Radiance Cascades 模式**：启用后产出无噪/软/带 bounce 的 2D GI，禁用后无缝回退 fog-of-war+emissive；默认关、对 plan/08 透明、归入 §4.3 第二级降级。
 - [x] **GPU 粒子功能路径**：从 plan/05 缓冲一次 draw call 批绘活跃粒子，发光粒子正确进 emissive 并产生 bloom 辉光；与 CPU stamp 路径视觉一致、可热切换，且受 G4 `GpuParticlesEnabled` 门控。
-- [!] 阻塞：高密度（≥10 万）加色火花场景帧时间优于 CPU stamp 的 BenchmarkDotNet/帧计时实测仍缺目标 GPU 硬件基准，不能仅凭合同测试勾选；当前已新增 `--particle-frame-probe` 真实窗口入口并在本机 win-x64 以 10 万粒子跑通 CPU/GPU 短样本（见 `docs/runtime-reports/2026-07-02-particle-frame-probe.md`），并提供 `tools/gpu-particle-benchmark-preflight.ps1` 收集本机 probe 与校验目标硬件 evidence manifest。该脚本的 `local_probe_only` / `target_gpu_evidence_attached_pending_review` 都不是验收通过状态，短样本与待审证据不能替代目标 GPU 长基准结论。
+- [!] 阻塞：高密度（≥10 万）加色火花场景帧时间优于 CPU stamp 的 BenchmarkDotNet/帧计时实测仍缺目标 GPU 硬件基准，不能仅凭合同测试勾选；当前已新增 `--particle-frame-probe` 真实窗口入口并在本机 win-x64 以 10 万粒子跑通 CPU/GPU 短样本（见 `docs/runtime-reports/2026-07-02-particle-frame-probe.md`），并提供 `tools/gpu-particle-benchmark-preflight.ps1` 收集本机 probe 与校验目标硬件 evidence manifest。该脚本的 `local_probe_only` / `target_gpu_evidence_attached_pending_review` 都不是验收通过状态，短样本与待审证据不能替代目标 GPU 长基准结论；`blocked_invalid_target_gpu_evidence` 会把 schema、未知 scope、缺文件或 sha256 不匹配等清单错误写入报告并以 5 退出，避免坏证据被静默接受。
 - [x] **零 per-frame 托管分配**：GPU 粒子上传与所有 compute dispatch 在稳态帧循环内零托管堆分配（`AGENTS.md §3`，分析器/基准验证）。
 - [x] **非权威约束（硬）**：air/smoke pass 不读写权威网格、零 GPU→CPU readback 进 sim tick；权威像素网格始终在 CPU；Margolus block 扩散守恒、无两 cell 入一格（性质测试）。default-off 且显式标注非权威。
 - [x] **资源/上下文共享**：本层不创建 GL 上下文，复用 plan/08 资源；compute↔graphics 屏障正确（无读写竞争/可见性 bug）；resize 后资源正确重建。

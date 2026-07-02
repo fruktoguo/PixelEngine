@@ -290,6 +290,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("comparisonReport", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_gpu_evidence", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_gpu_scope_evidence", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_target_gpu_evidence", script, StringComparison.Ordinal);
         Assert.Contains("local_probe_only", script, StringComparison.Ordinal);
         Assert.Contains("target_gpu_evidence_attached_pending_review", script, StringComparison.Ordinal);
         Assert.Contains("[Console]::Error.WriteLine", script, StringComparison.Ordinal);
@@ -356,6 +357,51 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(2, good.ExitCode);
             string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("target_gpu_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 GPU 粒子目标硬件预检会实际拒绝 sha256 不匹配的 evidence，而不是只做脚本文本约束。
+    /// </summary>
+    [Fact]
+    public void GpuParticleBenchmarkPreflightRejectsMismatchedEvidenceHash()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-bad-hash-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string badManifest = CreateFlatEvidenceManifest(
+                temp,
+                ["targetHardwareReport", "cpuProbeReport", "gpuProbeReport", "comparisonReport"],
+                suffix: "bad-hash");
+            string json = File.ReadAllText(badManifest);
+            json = json.Replace("\"sha256\": \"", "\"sha256\": \"0000", StringComparison.Ordinal);
+            File.WriteAllText(badManifest, json);
+
+            string badArtifacts = Path.Combine(temp, "bad-hash-out");
+            ScriptResult bad = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
+                "-EvidenceManifestPath",
+                badManifest,
+                "-Artifacts",
+                badArtifacts);
+
+            Assert.Equal(5, bad.ExitCode);
+            string badReport = File.ReadAllText(Path.Combine(badArtifacts, "gpu-particle-benchmark-preflight.md"));
+            Assert.Contains("blocked_invalid_target_gpu_evidence", bad.Output + badReport, StringComparison.Ordinal);
+            Assert.Contains("status: blocked_invalid_target_gpu_evidence", badReport, StringComparison.Ordinal);
+            Assert.Contains("sha256 不匹配", badReport, StringComparison.Ordinal);
+            Assert.Contains("targetHardwareReport", badReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_gpu_evidence_attached_pending_review", badReport, StringComparison.Ordinal);
         }
         finally
         {

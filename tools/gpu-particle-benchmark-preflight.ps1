@@ -266,16 +266,24 @@ if ($RunProbe) {
 
 if (-not [string]::IsNullOrWhiteSpace($EvidenceManifestPath)) {
     $manifestPath = if ([System.IO.Path]::IsPathRooted($EvidenceManifestPath)) { $EvidenceManifestPath } else { Join-Path $root $EvidenceManifestPath }
-    $manifestResult = Read-EvidenceManifest -Root $root -ManifestPath $manifestPath
-    $status = $manifestResult.status
-    $evidence = @($manifestResult.evidence)
-    if ($manifestResult.missing.Count -gt 0) {
-        $notes.Add("缺少目标 GPU evidence scope：$($manifestResult.missing -join ', ')。")
-        $exitCode = 5
+    try {
+        $manifestResult = Read-EvidenceManifest -Root $root -ManifestPath $manifestPath
+        $status = $manifestResult.status
+        $evidence = @($manifestResult.evidence)
+        if ($manifestResult.missing.Count -gt 0) {
+            $notes.Add("缺少目标 GPU evidence scope：$($manifestResult.missing -join ', ')。")
+            $exitCode = 5
+        }
+        else {
+            $notes.Add("已附加目标 GPU 硬件基准证据清单，但仍需人工确认 comparisonReport 与 plan/09 验收语义。")
+            $exitCode = 2
+        }
     }
-    else {
-        $notes.Add("已附加目标 GPU 硬件基准证据清单，但仍需人工确认 comparisonReport 与 plan/09 验收语义。")
-        $exitCode = 2
+    catch {
+        $status = "blocked_invalid_target_gpu_evidence"
+        $evidence = @()
+        $notes.Add("目标 GPU evidence manifest 无效：$($_.Exception.Message)")
+        $exitCode = 5
     }
 }
 
