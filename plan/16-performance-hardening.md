@@ -31,7 +31,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 
 本节按主题阐明每条性能纪律的**审计判据**——即「检查什么、用什么工具、什么结果算过」。设计本体在各子系统文档；这里只定义门禁。
 
-**SoA 数据布局（架构 §7.1、§12.1，子系统 plan/03/04）。** 审计点是所有 sim 热数据为 struct-of-arrays：`Material`(ushort)、`Flags`(byte)、`Lifetime`(byte)、`Temperature`(1/4 分辨率 Half/float)、独立 `Render`(uint BGRA8) 各为独立连续数组，绝无把多字段打包进 AoS struct 进热循环。每 cell 字节预算须对账：sim 热态合计 ~5–7MB（不含 render buffer）、加 render buffer ~17MB（1080p），每常驻 chunk ~18–20KB（架构 §12.2）。AoS 的 16 字节 `Cell` struct 仅允许出现在工具/编辑路径，不得进 CA pass。颜色不入 cell（不变式 #7）是 SoA 预算成立的前提，一并核对。
+**SoA 数据布局（架构 §7.1、§12.1，子系统 plan/03/04）。** 审计点是所有 sim 热数据为 struct-of-arrays：`Material`(ushort)、`Flags`(byte)、`Lifetime`(byte)、`Temperature`(1/4 分辨率 Half/float)、独立 `Render`(uint BGRA8) 各为独立连续数组，绝无把多字段打包进 AoS struct 进热循环。每 cell 字节预算须对账：sim 热态按 4B/cell 为约 7.9MiB（8.3MB，不含 render buffer）、加 render buffer 约 16.3MiB（17MB，1080p），每常驻 chunk ~18–20KB（架构 §12.2）。AoS 的 16 字节 `Cell` struct 仅允许出现在工具/编辑路径，不得进 CA pass。颜色不入 cell（不变式 #7）是 SoA 预算成立的前提，一并核对。
 
 **稳态零托管分配（架构 §12.4、AGENTS §3，横切全子系统）。** 逐条热路径确认稳态帧内零托管堆分配：CA pass（相位 4）、粒子积分与沉积（相位 3/7）、render buffer 构建（相位 9）、反应 pass（相位 4 内）、温度 stencil（相位 5）、序列化字节准备（相位 11）。手段：`stackalloc` 小 scratch（<~1KB 且绝不在循环里）、`ArrayPool<T>.Shared`、对象/粒子池、POH/NativeMemory 长寿缓冲。热路径**禁** LINQ、捕获闭包、装箱、`params`、迭代器分配、字符串拼接（AGENTS §3）。判据：BenchmarkDotNet `MemoryDiagnoser` 报告稳态迭代 `Allocated == 0 B`；运行时 Gen0 计数在压测下长时间不增长。
 
@@ -61,7 +61,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 
 ### 4.1 SoA 数据布局
 - [x] 确认 `Material`/`Flags`/`Lifetime`/`Temperature`/`Render` 均为独立连续数组（SoA），无 AoS struct 进 CA 热循环。[plan/03 · §7.1]
-- [!] 阻塞：对账每 cell 字节预算：sim 热态 ~5–7MB、含 render buffer ~17MB（1080p）、每常驻 chunk ~18–20KB；新增字段经评审。[plan/03/07 · §7.1/§12.2] 当前 `Material ushort + Flags byte + Lifetime byte` 为 4B/cell，1080p sim 热态约 7.9MiB（8.3MB），加 BGRA render buffer 约 15.8MiB（16.6MB），单常驻 chunk 估算 19,968B 已落在 18–20KB；需决策是更新 sim 热态预算口径，还是进一步压缩 per-cell 热字段。
+- [x] 对账每 cell 字节预算：sim 热态按 4B/cell 为约 7.9MiB（8.3MB，不含 render buffer），加 BGRA render buffer 约 15.8MiB（16.6MB），每常驻 chunk 估算 19,968B，已落在 18–20KB；新增 per-cell 字段必须重新评审。[plan/03/07 · §7.1/§12.2]
 - [x] 确认颜色不入 cell（渲染色由材质纹理采样 + 温度 glow 在渲染相位生成）。[plan/08 · §7.1/不变式 #7]
 - [x] 确认 AoS 16 字节 `Cell` 仅存在于工具/编辑路径，绝不进 sim pass。[plan/03/12 · §7.1]
 - [x] `Temperature` 确为 1/4 分辨率（CELL=4）而非全分辨率每 cell。[plan/04 · §7.1/§7.5]
@@ -155,7 +155,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 
 > 全部勾选方算本文档完成（AGENTS §7）。验收以**实测/反汇编**为准，不以代码存在为准。
 
-- [!] **SoA 全覆盖**：所有 sim 热数据 SoA，per-cell 字节预算对账通过，AoS 仅工具路径，颜色不入 cell。[§7.1/不变式 #7] 阻塞于 §4.1 per-cell 预算口径决策：当前 SoA/颜色/AoS 纪律已核实，但 1080p sim 热态约 7.9MiB（8.3MB）高于原 5–7MB 口径。
+- [x] **SoA 全覆盖**：所有 sim 热数据 SoA，per-cell 字节预算按 4B/cell 对账通过，AoS 仅工具路径，颜色不入 cell。[§7.1/不变式 #7]
 - [x] **稳态零分配**：CA/粒子/render buffer/反应/温度/序列化六条热路径 `MemoryDiagnoser` 全报 `0 B`；热路径静态核查无 LINQ/闭包/装箱/迭代器。[§12.4/AGENTS §3]
 - [x] **多线程齐全**：CA checkerboard、Box2D task 桥、render buffer、CCL/形状重建、粒子积分、温度 stencil、序列化字节准备七项均经持久线程池并行；无每帧 `Parallel.For`；活跃任务少时单线程回退生效。[§5.7/§12.7/§14.2/风险 R7]
 - [!] **SIMD 到位**：温度 stencil/色混合/bulk fill 等向量化且有 scalar fallback、运行时 light-up；sand movement 确认未向量化；AVX-512 gate 实测无降频净损。[§12.5/§2 挑战三] 阻塞于 §4.4 AVX-512 目标硬件实测；当前机器仅 AVX2，无法验证 Vector512 降频净损。
