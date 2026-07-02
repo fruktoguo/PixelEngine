@@ -102,7 +102,7 @@ cascade 层数 `RadianceCascadeCount`、每层角度/空间分辨率、射线步
 ### 4.1 后端抽象与能力门控（§3.1，架构 §9.5）
 - [x] 定义 `IComputeBackend` 接口（kernel 加载、SSBO/image 绑定、`Dispatch`、`MemoryBarrier`、GPU 计时），带完整中文 XML 注释。
 - [x] 实现 `GLComputeBackend`（Silk.NET GL 4.3 compute：`ARB_compute_shader`/SSBO/image load-store），GLSL `#version 430`，运行时编译、无反射。
-- [!] 阻塞：当前 bloom/light/air compute pass 与 `RenderPipeline` 资源契约均绑定 OpenGL texture/image/SSBO 句柄；`ComputeSharpBackend` 只是隔离 stub，Rendering 项目未引用 `ComputeSharp`，能力探测中 DX12/ComputeSharp 编译位恒 false。ComputeSharp/DX12 不能直接消费现有 GL texture handle；若要真实执行现有 pass，需先设计跨 API GPU 资源抽象与 GL-DX12 共享/同步方案，或引入 D3D 渲染后端。当前不能把该项勾选，也不能用 GL 句柄模拟 DX12 resource。
+- [!] 阻塞：当前 bloom/light/air compute pass 与 `RenderPipeline` 资源契约均绑定 OpenGL texture/image/SSBO 句柄；`ComputeSharpBackend` 只是隔离 stub，Rendering 项目未引用 `ComputeSharp`，能力探测中 DX12/ComputeSharp 编译位恒 false。ComputeSharp/DX12 不能直接消费现有 GL texture handle；`docs/rendering-computesharp-resource-contract.md` 已记录可接受路线（D3D 渲染后端或显式 GL-DX12 shared resource/fence 层）与禁止路线（把 GL texture name 解释为 DX12 resource）。真实执行现有 pass 仍需实现该资源契约或 D3D 后端；当前不能把该项勾选，也不能用 GL 句柄模拟 DX12 resource。
 - [x] 实现 `NullComputeBackend`（空实现，所有入口委派 `plan/08` fragment/CPU 路径）。
 - [x] 实现 `GpuCapabilities` 探测（GL 版本、compute/SSBO/image 扩展、`GL_MAX_COMPUTE_WORK_GROUP_*`、ANGLE/ES3、DX12），启动期探测一次并缓存。
 - [x] 实现 `ComputeCapabilityGate`：产出门控位 **G1**（GL≥4.3+扩展）、**G2**（Win+DX12+ComputeSharp 显式启用）、**G3**（基线回退到 plan/08）、**G4**（逐特性独立开关）。
