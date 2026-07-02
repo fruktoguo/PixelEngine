@@ -47,6 +47,46 @@ RID: win-x64
 窗口短跑完成：frames=60, requested=60。
 ```
 
+## 当前提交复验
+
+在 `1e02ce3 fix(sim): 修复窗口短跑边界调度崩溃` 后复跑窗口短跑，确认脚本 cell 同 tick 生效、固定 resident world guard chunk 调度过滤、带孔刚体 mask 外轮廓修复没有破坏真实窗口路径。
+
+普通窗口复验命令：
+
+```pwsh
+dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --no-restore -- --no-hot-reload --window-ticks 120 --content demo\PixelEngine.Demo\content --log-dir artifacts\window-smoke-logs-current
+```
+
+结果：
+
+```text
+PixelEngine.Demo 0.1.0.0
+RID: win-x64
+内容包已加载：18 个材质，22 条反应，19 个音频 clip，Physics 已接入。
+脚本程序集已注册；热重载已由参数关闭。
+脚本运行时已接入 Hosting/Simulation 后端。
+窗口运行时已接入 Rendering/Input 后端。
+窗口短跑完成：frames=120, requested=120。
+```
+
+Editor 窗口复验命令：
+
+```pwsh
+dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --no-restore -- --editor --no-hot-reload --window-ticks 60 --content demo\PixelEngine.Demo\content --log-dir artifacts\editor-window-smoke-logs-current
+```
+
+结果：
+
+```text
+PixelEngine.Demo 0.1.0.0
+RID: win-x64
+内容包已加载：18 个材质，22 条反应，19 个音频 clip，Physics 已接入。
+脚本程序集已注册；热重载已由参数关闭。
+脚本运行时已接入 Hosting/Simulation 后端。
+窗口运行时已接入 Rendering/Input 后端。
+窗口短跑完成：frames=60, requested=60。
+```
+
 ## 结论
 
 本机真实窗口路径能装配 Content、Simulation、Physics、Audio、Scripting、Rendering 与 Input 后端，并稳定执行 120 个 Engine tick 后正常释放退出。Editor 窗口路径能额外装配 EditorRenderBridge 与 Hexa ImGui OpenGL3 后端，并执行 60 个 Engine tick 后正常退出。
