@@ -148,6 +148,73 @@ public sealed class RenderWindowIntegrationTests
     }
 
     [Fact]
+    public void CanUploadUnalignedLightMaskWidthWhenExplicitlyEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine light mask alignment smoke",
+            Width = 64,
+            Height = 64,
+            BackendPreference = RenderBackendPreference.Auto,
+            EnableDebugContext = true,
+        });
+        using LightMaskTexture texture = new(window.Gl, 7, 5);
+        byte[] mask = new byte[texture.Width * texture.Height];
+        mask.AsSpan().Fill(255);
+
+        texture.Upload(mask);
+        window.SwapBuffers();
+
+        Assert.Equal(7, texture.Width);
+        Assert.Equal(5, texture.Height);
+    }
+
+    [Fact]
+    public void WorldBlitKeepsCpuTopRowAtViewportTopWhenExplicitlyEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine world blit orientation smoke",
+            Width = 64,
+            Height = 64,
+            BackendPreference = RenderBackendPreference.Auto,
+            EnableDebugContext = true,
+        });
+        GlslProfile profile = window.Capabilities.IsGles ? GlslProfile.Gles300 : GlslProfile.DesktopGl330;
+        RenderBuffer buffer = new(8, 8);
+        using WorldTexture world = new(window.Gl, buffer.Width, buffer.Height);
+        using PboUploader uploader = new(window.Gl, buffer.ByteLength);
+        using ColorRenderTarget target = new(window.Gl, buffer.Width, buffer.Height);
+        using FullscreenQuad quad = new(window.Gl);
+        using WorldBlitPass blit = new(window.Gl, profile);
+
+        for (int y = 0; y < buffer.Height; y++)
+        {
+            uint color = y < buffer.Height / 2 ? 0xFFFF0000u : 0xFF0000FFu;
+            buffer.Pixels.Slice(y * buffer.Width, buffer.Width).Fill(color);
+        }
+
+        uploader.UploadFull(world, buffer);
+        blit.Render(world, target, CameraState.OneToOne(0, 0, buffer.Width, buffer.Height), quad);
+        target.BindFramebuffer();
+        byte[] top = ReadPixelRgba(window.Gl, x: 4, y: buffer.Height - 1);
+        byte[] bottom = ReadPixelRgba(window.Gl, x: 4, y: 0);
+
+        Assert.True(top[0] > top[2], $"视口顶部应为 CPU 第 0 行红色，actual rgba=({top[0]},{top[1]},{top[2]},{top[3]})");
+        Assert.True(bottom[2] > bottom[0], $"视口底部应为 CPU 末行蓝色，actual rgba=({bottom[0]},{bottom[1]},{bottom[2]},{bottom[3]})");
+    }
+
+    [Fact]
     public void CanRenderOverlayWhenExplicitlyEnabled()
     {
         if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
@@ -178,6 +245,14 @@ public sealed class RenderWindowIntegrationTests
         window.SwapBuffers();
 
         Assert.Equal(4, overlay.MaxCommandCount);
+    }
+
+    private static byte[] ReadPixelRgba(GL gl, int x, int y)
+    {
+        byte[] pixel = new byte[4];
+        gl.ReadPixels<byte>(x, y, 1, 1, PixelFormat.Rgba, PixelType.UnsignedByte, pixel);
+
+        return pixel;
     }
 
     [Fact]

@@ -73,7 +73,7 @@ uniform sampler2D uWorldTexture;
 
 void main()
 {
-    fragColor = texture(uWorldTexture, vUv);
+    fragColor = texture(uWorldTexture, vec2(vUv.x, 1.0 - vUv.y));
 }
 """;
     }

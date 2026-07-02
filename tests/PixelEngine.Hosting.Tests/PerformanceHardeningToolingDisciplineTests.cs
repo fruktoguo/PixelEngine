@@ -387,6 +387,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("--scripted-window-demo", script, StringComparison.Ordinal);
         Assert.Contains("--scripted-window-route", script, StringComparison.Ordinal);
         Assert.Contains("--window-ticks", script, StringComparison.Ordinal);
+        Assert.Contains("playable-world", script, StringComparison.Ordinal);
         Assert.Contains("route-attempt", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine.scene", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine-goal-probe.scene", script, StringComparison.Ordinal);
@@ -396,6 +397,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("scenes/lava-mine-audio-probe.scene", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine-particle-light-probe.scene", script, StringComparison.Ordinal);
         Assert.Contains("RequiredSummaryMarkers", script, StringComparison.Ordinal);
+        Assert.Contains("player_visual=present", script, StringComparison.Ordinal);
+        Assert.Contains("playable_shots=1", script, StringComparison.Ordinal);
         Assert.Contains("brush_material=stone", script, StringComparison.Ordinal);
         Assert.Contains("painted_material=13", script, StringComparison.Ordinal);
         Assert.Contains("goal_reached=True", script, StringComparison.Ordinal);
@@ -431,6 +434,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("scripted_probe_only", report, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_manual_scope_evidence", report, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        Assert.Contains("playable_shots=1", report, StringComparison.Ordinal);
         Assert.Contains("未知 scope", report, StringComparison.Ordinal);
 
         Assert.Contains("tools/demo-manual-acceptance-preflight.ps1", plan, StringComparison.Ordinal);
