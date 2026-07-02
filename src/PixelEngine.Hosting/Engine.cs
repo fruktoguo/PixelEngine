@@ -162,6 +162,23 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>
+    /// 注册程序化世界生成器，供 <see cref="SceneSourceKind.Procedural" /> 场景构建起始世界。
+    /// </summary>
+    /// <param name="key">场景描述中的生成器键。</param>
+    /// <param name="generator">程序化世界生成器。</param>
+    public void RegisterProceduralWorldGenerator(string key, IProceduralWorldGenerator generator)
+    {
+        ThrowIfShutdown();
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        ArgumentNullException.ThrowIfNull(generator);
+        ProceduralWorldGeneratorRegistry registry = Context.TryGetService(out ProceduralWorldGeneratorRegistry existing)
+            ? existing
+            : new ProceduralWorldGeneratorRegistry();
+        registry.Register(key, generator);
+        Context.RegisterService(registry);
+    }
+
+    /// <summary>
     /// 从当前 ContentRoot 加载材质与反应内容包，并注册材质/反应运行时服务。
     /// </summary>
     /// <returns>加载后的内容包。</returns>
@@ -636,7 +653,7 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>
-    /// 按当前场景来源显式装配初始世界；SaveDirectory 直接读档，SceneFile 读取 InitialSaveDirectory。
+    /// 按当前场景来源显式装配初始世界；SaveDirectory 直接读档，SceneFile 读取 InitialSaveDirectory，Procedural 调用已注册生成器。
     /// </summary>
     /// <param name="particleCapacity">自由粒子池容量，必须能容纳存档中的在飞粒子。</param>
     /// <param name="fallbackMaterialId">存档材质名在当前材质表中缺失时使用的 fallback 材质 id。</param>
@@ -662,9 +679,24 @@ public sealed class Engine : IDisposable
                 particleCapacity,
                 fallbackMaterialId,
                 streamingConfig),
-            SceneSourceKind.Empty or SceneSourceKind.Procedural => null,
+            SceneSourceKind.Procedural => AttachCurrentProceduralSceneWorld(scene, particleCapacity),
+            SceneSourceKind.Empty => null,
             _ => throw new ArgumentOutOfRangeException(nameof(scene), scene.Descriptor.SourceKind, "未知场景来源类型。"),
         };
+    }
+
+    /// <summary>
+    /// 按当前程序化场景的生成器键装配 resident world 并填充初始内容。
+    /// </summary>
+    /// <param name="particleCapacity">自由粒子池容量。</param>
+    /// <returns>成功装配程序化世界时返回 true；当前场景不是程序化来源时返回 false。</returns>
+    public bool AttachProceduralSceneWorld(int particleCapacity = 32768)
+    {
+        ThrowIfShutdown();
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(particleCapacity);
+        Scene scene = Context.GetService<ISceneService>().Current ??
+            throw new InvalidOperationException("当前没有已加载场景，不能装配程序化世界。");
+        return AttachProceduralSceneWorld(scene, particleCapacity);
     }
 
     /// <summary>
@@ -1331,6 +1363,76 @@ public sealed class Engine : IDisposable
 
         string savePath = ResolveSceneRelativePath(scenePath, document.InitialSaveDirectory);
         return AttachWorldFromSaveDirectory(savePath, particleCapacity, fallbackMaterialId, streamingConfig);
+    }
+
+    private WorldLoadResult? AttachCurrentProceduralSceneWorld(Scene scene, int particleCapacity)
+    {
+        _ = AttachProceduralSceneWorld(scene, particleCapacity);
+        return null;
+    }
+
+    private bool AttachProceduralSceneWorld(Scene scene, int particleCapacity)
+    {
+        if (scene.Descriptor.SourceKind != SceneSourceKind.Procedural)
+        {
+            return false;
+        }
+
+        if (Context.TryGetService(out SimulationPhaseDriver _))
+        {
+            throw new InvalidOperationException("当前 Engine 已接入 Simulation world，不能重复装配程序化世界。");
+        }
+
+        string key = scene.ResolvedSource ??
+            throw new InvalidOperationException("Procedural 场景缺少生成器键。");
+        if (!Context.TryGetService(out ProceduralWorldGeneratorRegistry registry) ||
+            !registry.TryGet(key, out IProceduralWorldGenerator generator))
+        {
+            throw new InvalidOperationException($"未注册程序化世界生成器：{key}。");
+        }
+
+        MaterialTable materials = Context.GetService<MaterialTable>();
+        IMaterialQuery materialQuery = ResolveMaterialQuery(materials);
+        ProceduralWorldBuildRequest request = new(key, materialQuery);
+        ProceduralWorldDescriptor descriptor = generator.Describe(in request).Validate();
+        ResidentChunkMap chunks = new();
+        AddResidentChunks(chunks, descriptor.WidthCells, descriptor.HeightCells);
+        ParticleSystem particles = new(particleCapacity, Context.Events);
+        TemperatureField temperature = new();
+        _ = AttachSimulationWorld(
+            chunks,
+            materials,
+            particles,
+            temperature,
+            descriptor.WorldSeed,
+            descriptor.FrameIndex);
+        Context.Clock.RestoreCounters(descriptor.FrameIndex, descriptor.FrameIndex);
+        ProceduralWorldBuildContext context = new(
+            key,
+            materialQuery,
+            Context.GetService<ISimulationEditApi>(),
+            descriptor.WidthCells,
+            descriptor.HeightCells);
+        generator.Populate(in context);
+        return true;
+    }
+
+    private IMaterialQuery ResolveMaterialQuery(MaterialTable materials)
+    {
+        if (Context.TryGetService(out IMaterialQuery existing))
+        {
+            return existing;
+        }
+
+        EngineMaterialRegistry registry = new(materials);
+        Context.RegisterService<IMaterialQuery>(registry);
+        Context.RegisterService(registry);
+        if (!Context.IsServiceAvailable(EngineServiceRole.MaterialRegistry))
+        {
+            Context.RegisterService(EngineServiceRole.MaterialRegistry, registry);
+        }
+
+        return registry;
     }
 
     private static string ResolveSceneRelativePath(string scenePath, string source)

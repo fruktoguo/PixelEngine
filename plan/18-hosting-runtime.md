@@ -81,7 +81,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [x] 过载降级编排:读诊断 → 五级降级决策 → 经 `EngineContext` 下发质量档位。[架构 §4.3,不变式 #6]
 - [x] 脚本服务后端聚合:`IWorldAccess`/`IParticleService`/`IPhysicsService`/`IMaterialRegistry`/`ICamera`/`IInput`/`IEventBus`/`IAudioService`/`ISceneService`/`IDiagnostics`/`IRuntimeControlApi` 的实现注入(plan/11 契约的后端)。cell/material/particle/solid/time/audio/input/camera/lighting/PhysicsSystem 后端已有真实注册，脚本可见刚体 façade 与角色移动已接入 phase 8 flush；Reaction/Lifetime/custom material update 后端已随 Simulation world 装配接入，Diagnostics 角色由 `EngineCounters` 注册，Runtime 控制可暂停/恢复/退出/打开已接入 Editor，并对未实现的重开关卡安全后端明确失败；脚本热重载可由 `ScriptHotReloadRuntimeOptions` 在 Hosting 装配期创建 watcher，并由 `ScriptRuntime.BeginFrame()` 在相位 1 应用。
 - [x] 写操作延迟命令队列:脚本/玩法的世界写入入队,在正确相位 flush(配合 plan/11 相位安全模型)。
-- [!] `Scene` 模型 + `ISceneService`:加载/卸载/切换;从存档(plan/07)或程序化生成构建起始世界。阻塞:已完成来源校验与解析,`AttachCurrentSceneWorld` 可显式从 SaveDirectory 或 `.scene InitialSaveDirectory` 装配 live World/Simulation/粒子/Physics 后端并恢复 world seed/game time/刚体快照；程序化 world generator 仍未完成。
+- [x] `Scene` 模型 + `ISceneService`:加载/卸载/切换;从存档(plan/07)或程序化生成构建起始世界。已完成来源校验与解析,`AttachCurrentSceneWorld` 可显式从 SaveDirectory 或 `.scene InitialSaveDirectory` 装配 live World/Simulation/粒子/Physics 后端并恢复 world seed/game time/刚体快照；`SceneSourceKind.Procedural` 可通过注册式 `IProceduralWorldGenerator` 构建 resident world 并填充初始内容，见 `SceneAndHeadlessTests.AttachCurrentSceneWorldBuildsRegisteredProceduralWorld`。
 - [x] 项目模型:内容根、materials/reactions、资产、起始场景引用;`EngineBuilder` 装载。
 - [!] Play/Edit/Step 三态机 + 进入 Play 前世界快照、退出回滚(plan/07 快照),脚本生命周期协调(plan/11、plan/12)。阻塞:已完成模式驱动与 StepOnce,快照回滚需要完整 world snapshot 聚合,脚本生命周期需 plan/11 Behaviour 宿主。
 - [x] **headless 模式**:无窗口/渲染/音频,跑 Core+Sim+Physics+World,固定步数驱动(供 plan/14)。

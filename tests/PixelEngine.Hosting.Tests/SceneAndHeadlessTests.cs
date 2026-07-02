@@ -238,6 +238,36 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
+    /// 验证 procedural scene source 可通过注册生成器构建真实 resident Simulation world。
+    /// </summary>
+    [Fact]
+    public void AttachCurrentSceneWorldBuildsRegisteredProceduralWorld()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddScene(new SceneDescriptor("proc-world", SceneSourceKind.Procedural, "test-world"))
+            .WithStartScene("proc-world")
+            .Build();
+        engine.Context.RegisterService(materials);
+        engine.RegisterProceduralWorldGenerator("test-world", new TestProceduralWorldGenerator());
+
+        WorldLoadResult? result = engine.AttachCurrentSceneWorld(particleCapacity: 8);
+
+        Assert.Null(result);
+        Assert.Equal(77L, engine.Context.Clock.FrameIndex);
+        Assert.Equal(77L, engine.Context.Clock.SimTickIndex);
+        SimulationKernel kernel = engine.Context.GetService<SimulationKernel>();
+        Assert.Equal(42UL, kernel.WorldSeed);
+        Assert.Equal(77u, kernel.FrameIndex);
+        CellGrid grid = engine.Context.GetService<CellGrid>();
+        Assert.Equal(1, grid.GetMaterial(4, 5));
+        Assert.Equal(32.5f, engine.Context.GetService<TemperatureField>().GetTemperature(4, 5));
+        Assert.Equal(1, engine.Phases.Count(EnginePhase.CaSimulation));
+        Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.WorldAccess));
+    }
+
+    /// <summary>
     /// 验证 Hosting 能从 save directory 物化 live World/Simulation 后端，并恢复自由粒子快照。
     /// </summary>
     [Fact]
@@ -505,6 +535,27 @@ public sealed class SceneAndHeadlessTests
     /// </summary>
     public sealed class ProceduralEntryBehaviour : Behaviour
     {
+    }
+
+    private sealed class TestProceduralWorldGenerator : IProceduralWorldGenerator
+    {
+        public ProceduralWorldDescriptor Describe(in ProceduralWorldBuildRequest request)
+        {
+            Assert.Equal("test-world", request.Key);
+            Assert.True(request.Materials.TryResolve("stone", out MaterialId stone));
+            Assert.Equal(1, stone.Value);
+            return new ProceduralWorldDescriptor(128, 96, WorldSeed: 42, FrameIndex: 77);
+        }
+
+        public void Populate(in ProceduralWorldBuildContext context)
+        {
+            Assert.Equal("test-world", context.Key);
+            Assert.Equal(128, context.WidthCells);
+            Assert.Equal(96, context.HeightCells);
+            MaterialId stone = context.Materials.Resolve("stone");
+            context.Edit.PaintCell(4, 5, stone.Value);
+            context.Edit.SetTemperature(4, 5, 32.5f);
+        }
     }
 
     private static MaterialTable Materials(params (string Name, CellType Type)[] definitions)
