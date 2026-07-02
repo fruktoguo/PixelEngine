@@ -166,12 +166,62 @@ jobs:
         shell: bash
         run: bash ./tools/aot-simd-probe.sh --rid "${{ matrix.rid }}" --publish-dir "artifacts/publish/${{ matrix.rid }}-${{ matrix.channel }}"
 
+      - name: Write AOT SIMD evidence
+        if: always() && matrix.channel == 'aot' && endsWith(matrix.rid, '-x64')
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/release-evidence | Out-Null
+          @(
+            "# AOT SIMD evidence: ${{ matrix.rid }}/${{ matrix.channel }}",
+            "",
+            "| Key | Value |",
+            "|---|---|",
+            "| rid | ${{ matrix.rid }} |",
+            "| channel | ${{ matrix.channel }} |",
+            "| run_id | ${{ github.run_id }} |",
+            "| sha | ${{ github.sha }} |",
+            "| conclusion | ${{ job.status }} |"
+          ) | Set-Content -Path artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-simd.md -Encoding UTF8
+
+      - name: Upload AOT SIMD evidence
+        if: always() && matrix.channel == 'aot' && endsWith(matrix.rid, '-x64')
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-simd-${{ matrix.rid }}-${{ matrix.channel }}
+          if-no-files-found: error
+          path: artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-simd.md
+
       - name: Upload publish artifact
         uses: actions/upload-artifact@v4
         with:
           name: publish-${{ matrix.rid }}-${{ matrix.channel }}
           if-no-files-found: error
           path: artifacts/publish/${{ matrix.rid }}-${{ matrix.channel }}
+
+      - name: Write publish evidence
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/release-evidence | Out-Null
+          @(
+            "# Publish evidence: ${{ matrix.rid }}/${{ matrix.channel }}",
+            "",
+            "| Key | Value |",
+            "|---|---|",
+            "| rid | ${{ matrix.rid }} |",
+            "| channel | ${{ matrix.channel }} |",
+            "| run_id | ${{ github.run_id }} |",
+            "| sha | ${{ github.sha }} |",
+            "| conclusion | ${{ job.status }} |"
+          ) | Set-Content -Path artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-publish.md -Encoding UTF8
+
+      - name: Upload publish evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-publish-${{ matrix.rid }}-${{ matrix.channel }}
+          if-no-files-found: error
+          path: artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-publish.md
 
   verify:
     name: verify (${{ matrix.rid }}, ${{ matrix.channel }})
@@ -253,6 +303,32 @@ jobs:
             args+=(--allow-load-only)
           fi
           bash ./tools/verify-publish.sh "${args[@]}"
+
+      - name: Write verify evidence
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/release-evidence | Out-Null
+          @(
+            "# Verify evidence: ${{ matrix.rid }}/${{ matrix.channel }}",
+            "",
+            "| Key | Value |",
+            "|---|---|",
+            "| rid | ${{ matrix.rid }} |",
+            "| channel | ${{ matrix.channel }} |",
+            "| allow_load_only | ${{ matrix.allow_load_only }} |",
+            "| run_id | ${{ github.run_id }} |",
+            "| sha | ${{ github.sha }} |",
+            "| conclusion | ${{ job.status }} |"
+          ) | Set-Content -Path artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-verify.md -Encoding UTF8
+
+      - name: Upload verify evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-verify-${{ matrix.rid }}-${{ matrix.channel }}
+          if-no-files-found: error
+          path: artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-verify.md
 
   sign-package:
     name: sign-package (${{ matrix.rid }}, ${{ matrix.channel }})
@@ -362,6 +438,44 @@ jobs:
             --identity "$APPLE_CODESIGN_IDENTITY" \
             --notary-profile "$APPLE_NOTARY_PROFILE"
 
+      - name: Write macOS signing evidence
+        if: always() && startsWith(matrix.rid, 'osx-')
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/release-evidence | Out-Null
+          @(
+            "# macOS codesign evidence: ${{ matrix.rid }}/${{ matrix.channel }}",
+            "",
+            "| Key | Value |",
+            "|---|---|",
+            "| rid | ${{ matrix.rid }} |",
+            "| channel | ${{ matrix.channel }} |",
+            "| run_id | ${{ github.run_id }} |",
+            "| sha | ${{ github.sha }} |",
+            "| conclusion | ${{ job.status }} |"
+          ) | Set-Content -Path artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-codesign.md -Encoding UTF8
+          @(
+            "# macOS notarization evidence: ${{ matrix.rid }}/${{ matrix.channel }}",
+            "",
+            "| Key | Value |",
+            "|---|---|",
+            "| rid | ${{ matrix.rid }} |",
+            "| channel | ${{ matrix.channel }} |",
+            "| run_id | ${{ github.run_id }} |",
+            "| sha | ${{ github.sha }} |",
+            "| conclusion | ${{ job.status }} |"
+          ) | Set-Content -Path artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-notarization.md -Encoding UTF8
+
+      - name: Upload macOS signing evidence
+        if: always() && startsWith(matrix.rid, 'osx-')
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-signing-${{ matrix.rid }}-${{ matrix.channel }}
+          if-no-files-found: error
+          path: |
+            artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-codesign.md
+            artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-notarization.md
+
       - name: Package
         if: matrix.shell == 'pwsh'
         shell: pwsh
@@ -390,6 +504,31 @@ jobs:
           path: |
             artifacts/package/PixelEngine-Demo-*.zip
             artifacts/package/PixelEngine-Demo-*.tar.gz
+
+      - name: Write package evidence
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/release-evidence | Out-Null
+          @(
+            "# Package evidence: ${{ matrix.rid }}/${{ matrix.channel }}",
+            "",
+            "| Key | Value |",
+            "|---|---|",
+            "| rid | ${{ matrix.rid }} |",
+            "| channel | ${{ matrix.channel }} |",
+            "| run_id | ${{ github.run_id }} |",
+            "| sha | ${{ github.sha }} |",
+            "| conclusion | ${{ job.status }} |"
+          ) | Set-Content -Path artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-package.md -Encoding UTF8
+
+      - name: Upload package evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-package-${{ matrix.rid }}-${{ matrix.channel }}
+          if-no-files-found: error
+          path: artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-package.md
 
   release:
     name: release
@@ -431,6 +570,13 @@ jobs:
           path: artifacts/package
           merge-multiple: true
 
+      - name: Download release evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-evidence-*
+          path: artifacts/release-evidence
+          merge-multiple: true
+
       - name: Generate SHA256SUMS
         shell: bash
         run: |
@@ -456,3 +602,74 @@ jobs:
           files: |
             artifacts/package/PixelEngine-Demo-*
             artifacts/package/SHA256SUMS
+
+      - name: Build release evidence manifest
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/release-evidence | Out-Null
+          @(
+            "# Workflow run evidence",
+            "",
+            "| Key | Value |",
+            "|---|---|",
+            "| run_id | ${{ github.run_id }} |",
+            "| sha | ${{ github.sha }} |",
+            "| ref | ${{ github.ref }} |",
+            "| conclusion | ${{ job.status }} |"
+          ) | Set-Content -Path artifacts/release-evidence/workflow-run.md -Encoding UTF8
+          @(
+            "# GitHub Release upload evidence",
+            "",
+            "| Key | Value |",
+            "|---|---|",
+            "| tag | ${{ github.ref_name }} |",
+            "| run_id | ${{ github.run_id }} |",
+            "| sha | ${{ github.sha }} |",
+            "| conclusion | ${{ job.status }} |"
+          ) | Set-Content -Path artifacts/release-evidence/github-release-upload.md -Encoding UTF8
+          $rids = @('win-x64', 'win-arm64', 'linux-x64', 'linux-arm64', 'osx-x64', 'osx-arm64')
+          $channels = @('r2r', 'aot')
+          $artifacts = [ordered]@{}
+          foreach ($rid in $rids) {
+            $ridNode = [ordered]@{}
+            foreach ($channel in $channels) {
+              $node = [ordered]@{
+                publishReport = "artifacts/release-evidence/$rid-$channel-publish.md"
+                verifyReport = "artifacts/release-evidence/$rid-$channel-verify.md"
+                package = (Get-ChildItem -Path artifacts/package -File -Filter "PixelEngine-Demo-*-$rid-$channel.*" | Select-Object -First 1 -ExpandProperty FullName)
+                checksum = "artifacts/package/SHA256SUMS"
+              }
+              if ($channel -eq 'aot') {
+                $node.simdProbe = "artifacts/release-evidence/$rid-$channel-simd.md"
+              }
+              if ($rid.StartsWith('osx-')) {
+                $node.codesignReport = "artifacts/release-evidence/$rid-$channel-codesign.md"
+                $node.notarizationReport = "artifacts/release-evidence/$rid-$channel-notarization.md"
+              }
+              $ridNode[$channel] = $node
+            }
+            $artifacts[$rid] = $ridNode
+          }
+          $manifest = [ordered]@{
+            schemaVersion = 1
+            workflowRunReport = 'artifacts/release-evidence/workflow-run.md'
+            deterministicHashReport = 'artifacts/release-evidence/deterministic-hash.md'
+            r2rLightupReport = 'artifacts/release-evidence/r2r-lightup.md'
+            githubRelease = [ordered]@{ uploadReport = 'artifacts/release-evidence/github-release-upload.md' }
+            artifacts = $artifacts
+          }
+          $manifest | ConvertTo-Json -Depth 10 | Set-Content -Path artifacts/release-evidence/evidence.json -Encoding UTF8
+
+      - name: Preflight release evidence
+        if: always()
+        shell: pwsh
+        run: ./tools/release-evidence-preflight.ps1 -EvidenceManifestPath artifacts/release-evidence/evidence.json -AllowBlocked
+
+      - name: Upload release evidence report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-final
+          if-no-files-found: error
+          path: artifacts/release-evidence

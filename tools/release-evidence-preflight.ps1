@@ -60,6 +60,16 @@ function Add-EvidenceFile {
     })
 }
 
+function Get-JsonPropertyNames {
+    param([object]$Node)
+
+    if ($null -eq $Node) {
+        return @()
+    }
+
+    return @($Node.PSObject.Properties | Select-Object -ExpandProperty Name)
+}
+
 function Write-ReleaseEvidenceReport {
     param(
         [string]$Path,
@@ -146,6 +156,25 @@ if ([string]::IsNullOrWhiteSpace($EvidenceManifestPath) -or -not (Test-Path -Lit
 $manifest = Get-Content -Raw -LiteralPath $EvidenceManifestPath | ConvertFrom-Json
 $rids = @("win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64")
 $channels = @("r2r", "aot")
+
+if ([int]$manifest.schemaVersion -ne 1) {
+    $missing.Add("schemaVersion 必须为 1")
+}
+
+foreach ($ridName in Get-JsonPropertyNames $manifest.artifacts) {
+    if ($ridName -notin $rids) {
+        $missing.Add("artifacts 包含未知 RID：$ridName")
+    }
+}
+
+foreach ($ridName in Get-JsonPropertyNames $manifest.artifacts) {
+    $ridNode = $manifest.artifacts.$ridName
+    foreach ($channelName in Get-JsonPropertyNames $ridNode) {
+        if ($channelName -notin $channels) {
+            $missing.Add("artifacts.$ridName 包含未知 channel：$channelName")
+        }
+    }
+}
 
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "workflow_run" -Path ([string]$manifest.workflowRunReport)
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "github_release_upload" -Path ([string]$manifest.githubRelease.uploadReport)
