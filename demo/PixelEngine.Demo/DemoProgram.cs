@@ -127,6 +127,7 @@ public static class DemoProgram
         DemoWindowScriptedInput? scriptedInput = null;
         DemoWindowScriptedProbe? scriptedProbe = null;
         DemoReactionTemperatureProbe? reactionProbe = null;
+        DemoAudioProbe? audioProbe = null;
         if (options.ScriptedWindowDemo)
         {
             scriptedInput = new DemoWindowScriptedInput(
@@ -149,6 +150,12 @@ public static class DemoProgram
                     engine.Context.GetService<MaterialTable>(),
                     engine.Context.GetService<SimulationKernel>());
                 reactionProbe.RegisterPhases(engine.Phases);
+            }
+
+            if (IsAudioProbeScene(options.Scene))
+            {
+                audioProbe = new DemoAudioProbe(engine.Context.GetService<MaterialTable>());
+                audioProbe.RegisterPhases(engine.Phases);
             }
 
             Console.WriteLine("脚本化窗口输入已启用。");
@@ -177,7 +184,7 @@ public static class DemoProgram
                 $"sub_top={SlowestSubPhase(engine.Context.Profiler.LastSubFrame)}。");
             if (scriptedInput is not null)
             {
-                WriteScriptedWindowSummary(engine, scriptedInput, scriptedProbe, reactionProbe);
+                WriteScriptedWindowSummary(engine, scriptedInput, scriptedProbe, reactionProbe, audioProbe);
             }
 
             return;
@@ -231,7 +238,8 @@ public static class DemoProgram
         Engine engine,
         DemoWindowScriptedInput scriptedInput,
         DemoWindowScriptedProbe? scriptedProbe,
-        DemoReactionTemperatureProbe? reactionProbe)
+        DemoReactionTemperatureProbe? reactionProbe,
+        DemoAudioProbe? audioProbe)
     {
         ScriptScene scene = engine.Context.GetService<ScriptScene>();
         DemoHud? hud = FindBehaviour<DemoHud>(scene);
@@ -300,6 +308,7 @@ public static class DemoProgram
             $"render_origin_x_range=({scriptedProbe?.RenderOriginMinX ?? renderCamera.OriginWorldX:0.00},{scriptedProbe?.RenderOriginMaxX ?? renderCamera.OriginWorldX:0.00}), " +
             $"render_camera=({renderCamera.OriginWorldX:0.00},{renderCamera.OriginWorldY:0.00},{renderCamera.CellsPerPixel:0.000},{renderCamera.ViewportWidth}x{renderCamera.ViewportHeight}), " +
             ReactionProbeSummary(reactionProbe) +
+            AudioProbeSummary(audioProbe) +
             $"player_center_material={playerCenterMaterial}。");
     }
 
@@ -316,11 +325,34 @@ public static class DemoProgram
             $"probe_counts=({probe.CountSummary}), ";
     }
 
+    private static string AudioProbeSummary(DemoAudioProbe? probe)
+    {
+        return probe is null
+            ? string.Empty
+            :
+            $"audio_probe_initialized={probe.Initialized}, " +
+            $"audio_probe_enqueued={probe.Enqueued}, " +
+            $"audio_probe_one_shot_played={probe.OneShotPlayed}, " +
+            $"audio_probe_ambient_activated={probe.AmbientActivated}, " +
+            $"audio_probe_max_drained={probe.MaxDrained}, " +
+            $"audio_probe_max_played={probe.MaxPlayed}, " +
+            $"audio_probe_max_active_voices={probe.MaxActiveVoices}, " +
+            $"audio_probe_max_active_ambient={probe.MaxActiveAmbientVoices}, ";
+    }
+
     private static bool IsReactionProbeScene(string scene)
     {
         return string.Equals(
             Path.GetFileName(scene),
             "lava-mine-reaction-probe.scene",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsAudioProbeScene(string scene)
+    {
+        return string.Equals(
+            Path.GetFileName(scene),
+            "lava-mine-audio-probe.scene",
             StringComparison.OrdinalIgnoreCase);
     }
 
