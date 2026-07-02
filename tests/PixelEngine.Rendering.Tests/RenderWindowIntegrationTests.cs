@@ -255,6 +255,22 @@ public sealed class RenderWindowIntegrationTests
         return pixel;
     }
 
+    private static byte[] ReadTextureRgba(GL gl, uint texture, int width, int height)
+    {
+        byte[] pixels = new byte[checked(width * height * 4)];
+        gl.BindTexture(TextureTarget.Texture2D, texture);
+        gl.GetTexImage<byte>(TextureTarget.Texture2D, 0, PixelFormat.Rgba, PixelType.UnsignedByte, pixels);
+        return pixels;
+    }
+
+    private static byte[] PixelAtTopLeftOrigin(byte[] pixels, int width, int x, int y)
+    {
+        int height = pixels.Length / (width * 4);
+        int glY = height - 1 - y;
+        int offset = ((glY * width) + x) * 4;
+        return [pixels[offset], pixels[offset + 1], pixels[offset + 2], pixels[offset + 3]];
+    }
+
     [Fact]
     public void CanRenderFrameThroughRenderPipelineWhenExplicitlyEnabled()
     {
@@ -265,6 +281,71 @@ public sealed class RenderWindowIntegrationTests
 
         using RenderWindow window = CreateSmokeWindow("PixelEngine pipeline smoke", RenderBackendPreference.Auto);
         RenderPipelineFrame(window);
+    }
+
+    [Fact]
+    public void RenderPipelineViewportKeepsSingleTopBottomOrientationWhenExplicitlyEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = CreateSmokeWindow("PixelEngine pipeline orientation smoke", RenderBackendPreference.Auto);
+        using RenderPipeline pipeline = new(window, 16, 16);
+        RenderBuffer buffer = new(16, 16);
+        RenderAuxBuffers aux = new(16, 16);
+        for (int y = 0; y < buffer.Height; y++)
+        {
+            uint color = y < buffer.Height / 2 ? 0xFFFF0000u : 0xFF0000FFu;
+            buffer.Pixels.Slice(y * buffer.Width, buffer.Width).Fill(color);
+        }
+
+        pipeline.Settings.QualityLevel = LightingQualityLevel.BloomDisabled;
+        pipeline.Settings.EnableDither = false;
+        pipeline.Settings.Gamma = 1f;
+        pipeline.RenderFrame(buffer, aux, CameraState.OneToOne(0, 0, buffer.Width, buffer.Height), [], []);
+        RenderViewportTexture viewport = pipeline.CurrentViewportTexture;
+        byte[] pixels = ReadTextureRgba(window.Gl, viewport.Handle, viewport.Width, viewport.Height);
+        byte[] top = PixelAtTopLeftOrigin(pixels, viewport.Width, x: 8, y: 0);
+        byte[] bottom = PixelAtTopLeftOrigin(pixels, viewport.Width, x: 8, y: viewport.Height - 1);
+
+        Assert.True(top[0] > top[2], $"最终 viewport 顶部应为 CPU 第 0 行红色，actual rgba=({top[0]},{top[1]},{top[2]},{top[3]})");
+        Assert.True(bottom[2] > bottom[0], $"最终 viewport 底部应为 CPU 末行蓝色，actual rgba=({bottom[0]},{bottom[1]},{bottom[2]},{bottom[3]})");
+    }
+
+    [Fact]
+    public void RenderPipelineBloomDoesNotMirrorTopAndBottomHalvesWhenExplicitlyEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = CreateSmokeWindow("PixelEngine bloom orientation smoke", RenderBackendPreference.Auto);
+        using RenderPipeline pipeline = new(window, 32, 32);
+        RenderBuffer buffer = new(32, 32);
+        RenderAuxBuffers aux = new(32, 32);
+        for (int y = 0; y < buffer.Height; y++)
+        {
+            uint color = y < buffer.Height / 2 ? 0xFFFF0000u : 0xFF0000FFu;
+            buffer.Pixels.Slice(y * buffer.Width, buffer.Width).Fill(color);
+        }
+
+        pipeline.Settings.EnableDither = false;
+        pipeline.Settings.Gamma = 1f;
+        pipeline.RenderFrame(buffer, aux, CameraState.OneToOne(0, 0, buffer.Width, buffer.Height), [], []);
+        RenderViewportTexture viewport = pipeline.CurrentViewportTexture;
+        byte[] pixels = ReadTextureRgba(window.Gl, viewport.Handle, viewport.Width, viewport.Height);
+        byte[] top = PixelAtTopLeftOrigin(pixels, viewport.Width, x: 16, y: 2);
+        byte[] middleTop = PixelAtTopLeftOrigin(pixels, viewport.Width, x: 16, y: 10);
+        byte[] middleBottom = PixelAtTopLeftOrigin(pixels, viewport.Width, x: 16, y: 21);
+        byte[] bottom = PixelAtTopLeftOrigin(pixels, viewport.Width, x: 16, y: 29);
+
+        Assert.True(top[0] > top[2], $"bloom 后顶部应保持红色，actual rgba=({top[0]},{top[1]},{top[2]},{top[3]})");
+        Assert.True(middleTop[0] > middleTop[2], $"bloom 后上半部应保持红色，actual rgba=({middleTop[0]},{middleTop[1]},{middleTop[2]},{middleTop[3]})");
+        Assert.True(middleBottom[2] > middleBottom[0], $"bloom 后下半部应保持蓝色，actual rgba=({middleBottom[0]},{middleBottom[1]},{middleBottom[2]},{middleBottom[3]})");
+        Assert.True(bottom[2] > bottom[0], $"bloom 后底部应保持蓝色，actual rgba=({bottom[0]},{bottom[1]},{bottom[2]},{bottom[3]})");
     }
 
     [Fact]

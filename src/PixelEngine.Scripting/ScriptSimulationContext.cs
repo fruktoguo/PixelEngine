@@ -283,7 +283,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                     (_bodies ?? throw Unsupported(nameof(Bodies))).DestroyNow(command.Body);
                     break;
                 case ScriptCommandKind.MoveCharacter:
-                    _character.MoveNow(command.Character, command.A, command.B);
+                    _ = _character.MoveNow(command.Character, command.A, command.B);
                     break;
                 case ScriptCommandKind.SetCell:
                 case ScriptCommandKind.Paint:
@@ -738,7 +738,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             return slot.State;
         }
 
-        public void MoveNow(CharacterHandle handle, float dx, float dy)
+        public CharacterState MoveNow(CharacterHandle handle, float dx, float dy)
         {
             CharacterSlot slot = GetSlot(handle);
             Vector2 desired = new(dx, dy);
@@ -754,6 +754,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 
             CharacterState state = Snapshot(slot.Controller, in info);
             slot.State = state;
+            return state;
         }
 
         public CharacterState GetState(CharacterHandle handle)

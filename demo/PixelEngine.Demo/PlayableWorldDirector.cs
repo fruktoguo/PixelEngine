@@ -56,8 +56,13 @@ public sealed class PlayableWorldDirector : Behaviour
         PlayerController player = playerEntity.AddComponent<PlayerController>();
         player.SpawnX = PlayerSpawnX;
         player.SpawnY = PlayerSpawnY;
-        player.MaxRunSpeed = 150f;
-        player.JumpSpeed = 235f;
+        player.MaxRunSpeed = 145f;
+        player.GroundAcceleration = 1_850f;
+        player.AirAcceleration = 1_150f;
+        player.GroundFriction = 3_100f;
+        player.AirFriction = 220f;
+        player.JumpSpeed = 250f;
+        player.Gravity = 900f;
 
         PlayerHealth health = playerEntity.AddComponent<PlayerHealth>();
         health.LavaDamagePerSecond = 40f;

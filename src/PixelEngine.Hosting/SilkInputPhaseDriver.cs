@@ -108,7 +108,10 @@ public sealed class SilkInputPhaseDriver(
         float currentWheelY = mouse.ScrollWheels.Count == 0 ? 0f : mouse.ScrollWheels[0].Y;
         float wheelDelta = allowMouse ? currentWheelY - _lastWheelY : 0f;
         _lastWheelY = currentWheelY;
-        return (mouse.Position.X, mouse.Position.Y, wheelDelta);
+        return (
+            mouse.Position.X * _window.FramebufferScaleX,
+            mouse.Position.Y * _window.FramebufferScaleY,
+            wheelDelta);
     }
 
     private static void AddIfDown(IKeyboard keyboard, SilkKey source, ScriptKey target, Span<ScriptKey> destination, ref int count)

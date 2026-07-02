@@ -9,6 +9,9 @@ namespace PixelEngine.Physics;
 /// </summary>
 public sealed class CharacterController
 {
+    private const float CollisionStep = 0.25f;
+    private const float GroundProbeDistance = CollisionStep + 0.1f;
+
     private readonly CellGrid _grid;
 
     /// <summary>
@@ -47,12 +50,12 @@ public sealed class CharacterController
     /// <summary>
     /// 每次 Move 单轴最多子迭代数。
     /// </summary>
-    public int MaxSubIterations { get; set; } = 64;
+    public int MaxSubIterations { get; set; } = 128;
 
     /// <summary>
     /// 水平移动受阻时允许尝试向上爬升的像素高度。
     /// </summary>
-    public int StepUpHeight { get; set; } = 2;
+    public int StepUpHeight { get; set; } = 6;
 
     /// <summary>
     /// 当前 AABB。
@@ -154,7 +157,7 @@ public sealed class CharacterController
         int iterations = 0;
         while (remaining > 0f && iterations++ < MaxSubIterations)
         {
-            float step = MathF.Min(1f, remaining) * sign;
+            float step = MathF.Min(CollisionStep, remaining) * sign;
             Vector2 next = Position + new Vector2(step, 0f);
             if (!OverlapsSolid(BoundsAt(next)))
             {
@@ -189,7 +192,7 @@ public sealed class CharacterController
         int iterations = 0;
         while (remaining > 0f && iterations++ < MaxSubIterations)
         {
-            float step = MathF.Min(1f, remaining) * sign;
+            float step = MathF.Min(CollisionStep, remaining) * sign;
             Vector2 next = Position + new Vector2(0f, step);
             if (!OverlapsSolid(BoundsAt(next)))
             {
@@ -238,7 +241,7 @@ public sealed class CharacterController
     private bool ProbeBelow(Vector2 position)
     {
         AABB bounds = BoundsAt(position);
-        float y = bounds.Max.Y + 0.05f;
+        float y = bounds.Max.Y + GroundProbeDistance;
         int minX = (int)MathF.Floor(bounds.Min.X + SkinWidth);
         int maxX = (int)MathF.Ceiling(bounds.Max.X - SkinWidth) - 1;
         int cellY = (int)MathF.Floor(y);
@@ -276,7 +279,7 @@ public sealed class CharacterController
         AABB bounds = BoundsAt(position);
         int leftX = (int)MathF.Floor(bounds.Min.X + SkinWidth);
         int rightX = (int)MathF.Ceiling(bounds.Max.X - SkinWidth) - 1;
-        int baseY = (int)MathF.Floor(bounds.Max.Y + 0.05f);
+        int baseY = (int)MathF.Floor(bounds.Max.Y + GroundProbeDistance);
         int leftHeight = FindGroundOffset(leftX, baseY);
         int rightHeight = FindGroundOffset(rightX, baseY);
         return MathF.Atan2(rightHeight - leftHeight, Math.Max(1, rightX - leftX));

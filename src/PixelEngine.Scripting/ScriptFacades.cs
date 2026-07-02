@@ -303,6 +303,15 @@ public interface ICharacterController
     CharacterState Move(CharacterHandle handle, float dx, float dy);
 
     /// <summary>
+    /// 立即移动角色控制器并完成像素碰撞解算；用于玩家控制这类需要当前帧手感反馈的脚本。
+    /// </summary>
+    /// <param name="handle">角色控制器句柄。</param>
+    /// <param name="dx">X 方向位移。</param>
+    /// <param name="dy">Y 方向位移。</param>
+    /// <returns>移动后的角色状态。</returns>
+    CharacterState MoveNow(CharacterHandle handle, float dx, float dy);
+
+    /// <summary>
     /// 读取角色控制器状态；脚本可在相位 1 调用。
     /// </summary>
     /// <param name="handle">角色控制器句柄。</param>
