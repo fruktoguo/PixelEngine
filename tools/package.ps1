@@ -63,19 +63,25 @@ if ($Rid.StartsWith('win-')) {
   $archiveName = "$packageName.zip"
   $archivePath = Join-Path $OutputRoot $archiveName
   Remove-Item -LiteralPath $archivePath -Force -ErrorAction SilentlyContinue
-  Compress-Archive -LiteralPath $stagingDir -DestinationPath $archivePath -CompressionLevel Optimal
+  dotnet run --project (Join-Path $repoRoot 'tools/PixelEngine.Tools.DeterministicPackage/PixelEngine.Tools.DeterministicPackage.csproj') -c Release -- `
+    --source $stagingDir `
+    --output $archivePath `
+    --root-name $packageName `
+    --format zip
+  if ($LASTEXITCODE -ne 0) {
+    throw "deterministic zip 打包失败: $archivePath"
+  }
 } else {
   $archiveName = "$packageName.tar.gz"
   $archivePath = Join-Path $OutputRoot $archiveName
   Remove-Item -LiteralPath $archivePath -Force -ErrorAction SilentlyContinue
-  Push-Location $stagingRoot
-  try {
-    & tar -czf $archivePath $packageName
-    if ($LASTEXITCODE -ne 0) {
-      throw "tar 打包失败: $archivePath"
-    }
-  } finally {
-    Pop-Location
+  dotnet run --project (Join-Path $repoRoot 'tools/PixelEngine.Tools.DeterministicPackage/PixelEngine.Tools.DeterministicPackage.csproj') -c Release -- `
+    --source $stagingDir `
+    --output $archivePath `
+    --root-name $packageName `
+    --format tar.gz
+  if ($LASTEXITCODE -ne 0) {
+    throw "deterministic tar.gz 打包失败: $archivePath"
   }
 }
 
