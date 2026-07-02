@@ -262,7 +262,7 @@
 ### 5.4 破坏/挖掘节流
 - [x] 每帧每刚体至多一次重建；sleeping 刚体跳过（架构 §8.4）。
 - [x] CCL/MS/DP/PolyPartition off-thread 并行（§17.1 计时确认）。
-- [!] 阻塞：父→子速度/角速度转移已有单测覆盖；视觉验收依赖 `plan/08`/`plan/13` 可视化或 Demo 链路完成后补验。
+- [x] 父→子速度/角速度转移已有单测覆盖；`LavaMineSceneTests.LavaMineSceneRegistersDestructibleWoodAndMetalStructures` 已在 Demo lava-mine 公开脚本链路中切断木桥，验证父刚体销毁、创建 2 个子刚体，子刚体保留角速度，并在后续 headless tick 继续移动 / 旋转、inverse-sample stamp 回网格，补齐可视化链路前的自动化 Demo 运行态证据。
 
 ### 5.5 静态地形与角色
 - [x] 地形不整体喂 Box2D；动态刚体与地形碰撞经局部用后即弃静态 collider（架构 §8.1）。
