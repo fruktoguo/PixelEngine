@@ -35,7 +35,7 @@ public sealed class RigidBodyDestructionTests
             Box2D.b2Body_SetAngularVelocity(bodyId, 2f);
             BodyLocalMask mask = CreateFilledMask(48, 16, material: 2);
             PixelRigidBody body = physicsWorld.AddBody(bodyId, mask);
-            _ = RigidBodyRasterizer.StampInverseSampling(body, body.PreviousTransform, grid, registry);
+            _ = RigidBodyRasterizer.StampInverseSampling(body, PhysicsScale.ToTransform2D(Box2D.b2Body_GetTransform(bodyId)), grid, registry);
             RigidDamageEvent[] damage = CreateVerticalCutDamage(grid, x: 32, minY: 8, maxY: 24);
             RigidBodyDestruction destruction = new(fragmentPixelThreshold: 4);
             using JobSystem jobs = new(workerCount: 2);
@@ -77,7 +77,7 @@ public sealed class RigidBodyDestructionTests
             B2BodyId bodyId = CreateBoxBody(worldId, width: 16, height: 16, new Vector2(8, 8));
             BodyLocalMask mask = CreateFilledMask(2, 2, material: 2);
             PixelRigidBody body = physicsWorld.AddBody(bodyId, mask);
-            _ = RigidBodyRasterizer.StampInverseSampling(body, body.PreviousTransform, grid, registry);
+            _ = RigidBodyRasterizer.StampInverseSampling(body, PhysicsScale.ToTransform2D(Box2D.b2Body_GetTransform(bodyId)), grid, registry);
             RigidStampedCell damaged = body.PreviousStamps[0];
             grid.FlagsAt(damaged.WorldX, damaged.WorldY) = 0;
             grid.MaterialAt(damaged.WorldX, damaged.WorldY) = 0;
@@ -92,6 +92,45 @@ public sealed class RigidBodyDestructionTests
             Assert.Equal(0, physicsWorld.ActiveBodyCount);
             Assert.Equal(3, particles.ActiveCount);
             Assert.All(particles.ActiveReadOnly.ToArray(), static particle => Assert.Equal((ushort)2, particle.Material));
+        }
+        finally
+        {
+            Box2D.b2DestroyWorld(worldId);
+        }
+    }
+
+    /// <summary>
+    /// 验证破坏后剩余的高像素数退化细线不会让 Box2D 重建崩溃，而是转为碎片。
+    /// </summary>
+    [Fact]
+    public void RebuildDirtyTurnsDegenerateRemainingComponentIntoFragments()
+    {
+        PhysicsScale.ConfigureBox2DLengthUnits();
+        B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
+        worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
+        B2WorldId worldId = Box2D.b2CreateWorld(in worldDef);
+
+        try
+        {
+            TestChunkSource source = new(new Chunk(new ChunkCoord(0, 0)));
+            CellGrid grid = new(source, MaterialPropsTable.Empty);
+            PhysicsWorld physicsWorld = new();
+            RigidStampRegistry registry = new();
+            B2BodyId bodyId = CreateBoxBody(worldId, width: 8, height: 8, new Vector2(8, 8));
+            BodyLocalMask mask = CreateFilledMask(8, 8, material: 2);
+            PixelRigidBody body = physicsWorld.AddBody(bodyId, mask);
+            _ = RigidBodyRasterizer.StampInverseSampling(body, PhysicsScale.ToTransform2D(Box2D.b2Body_GetTransform(bodyId)), grid, registry);
+            RigidDamageEvent[] damage = CreateAllButOneColumnDamage(grid, body, keepX: 3);
+            ParticleSystem particles = new(capacity: 16);
+            RigidBodyDestruction destruction = new(fragmentPixelThreshold: 4, particles);
+
+            RigidDestructionResult result = destruction.RebuildDirty(worldId, physicsWorld, grid, registry, damage);
+
+            Assert.Equal(1, result.DestroyedBodies);
+            Assert.Equal(0, result.CreatedBodies);
+            Assert.Equal(8, result.FragmentPixels);
+            Assert.Equal(0, physicsWorld.ActiveBodyCount);
+            Assert.Equal(8, particles.ActiveCount);
         }
         finally
         {
@@ -119,7 +158,7 @@ public sealed class RigidBodyDestructionTests
             B2BodyId bodyId = CreateBoxBody(worldId, width: 16, height: 16, new Vector2(8, 8));
             BodyLocalMask mask = CreateFilledMask(16, 16, material: 2);
             PixelRigidBody body = physicsWorld.AddBody(bodyId, mask);
-            _ = RigidBodyRasterizer.StampInverseSampling(body, body.PreviousTransform, grid, registry);
+            _ = RigidBodyRasterizer.StampInverseSampling(body, PhysicsScale.ToTransform2D(Box2D.b2Body_GetTransform(bodyId)), grid, registry);
             Box2D.b2Body_SetAwake(bodyId, 0);
             RigidDamageEvent[] damage = [new(12, 12)];
             RigidBodyDestruction destruction = new(fragmentPixelThreshold: 4);
@@ -172,6 +211,24 @@ public sealed class RigidBodyDestructionTests
         }
 
         return damage;
+    }
+
+    private static RigidDamageEvent[] CreateAllButOneColumnDamage(CellGrid grid, PixelRigidBody body, int keepX)
+    {
+        List<RigidDamageEvent> damage = [];
+        foreach (RigidStampedCell stamp in body.PreviousStamps)
+        {
+            if (stamp.Stamp.LocalX == keepX)
+            {
+                continue;
+            }
+
+            grid.FlagsAt(stamp.WorldX, stamp.WorldY) = 0;
+            grid.MaterialAt(stamp.WorldX, stamp.WorldY) = 0;
+            damage.Add(new RigidDamageEvent(stamp.WorldX, stamp.WorldY));
+        }
+
+        return [.. damage];
     }
 
     private static void AssertChildVelocityTransferred(PhysicsWorld physicsWorld)
