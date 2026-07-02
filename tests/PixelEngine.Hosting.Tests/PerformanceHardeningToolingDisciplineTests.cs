@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -297,6 +299,47 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string report = File.ReadAllText(Path.Combine(artifacts, "native-leak-preflight.md"));
             Assert.Contains("blocked_invalid_native_leak_evidence", result.Output + report, StringComparison.Ordinal);
             Assert.Contains("schemaVersion 必须为 1", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | detector_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 native leak 预检会真实拒绝缺失必需 detector scope 的 manifest。
+    /// </summary>
+    [Fact]
+    public void NativeLeakPreflightRejectsMissingRequiredScopeWithReport()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-native-leak-missing-scope-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateNativeLeakEvidenceManifest(temp);
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject scopes = rootNode["scopes"]!.AsObject();
+            _ = scopes.Remove("alc");
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "missing-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "native-leak-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "native-leak-preflight.md"));
+            Assert.Contains("blocked_missing_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("evidence manifest 缺少 scope：alc", report, StringComparison.Ordinal);
             Assert.DoesNotContain("status | detector_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
@@ -1068,6 +1111,50 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证目标性能证据预检会真实拒绝缺失必需 scope 的 manifest。
+    /// </summary>
+    [Fact]
+    public void PerformanceTargetEvidencePreflightRejectsMissingRequiredScopeWithReport()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-missing-scope-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreatePerformanceTargetEvidenceManifest(temp);
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonArray evidence = rootNode["evidence"]!.AsArray();
+            JsonNode? target = evidence.FirstOrDefault(node =>
+                string.Equals((string?)node?["scope"], "hardware_counters_cache_branch", StringComparison.Ordinal));
+            Assert.NotNull(target);
+            _ = evidence.Remove(target);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "missing-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("缺少 evidence scope：hardware_counters_cache_branch", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_performance_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证发行编译模式保持默认 R2R 运行时 light-up，AOT 显式 ISA 并跑 SIMD 反汇编探针。
     /// </summary>
     [Fact]
@@ -1387,6 +1474,86 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
             Assert.Contains("blocked_invalid_release_evidence", result.Output + report, StringComparison.Ordinal);
             Assert.Contains("schemaVersion 必须为 1", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 release evidence 预检会把 malformed JSON 落成稳定报告。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsMalformedJsonWithReport()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-malformed-json-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            _ = Directory.CreateDirectory(temp);
+            string manifest = Path.Combine(temp, "release-evidence.json");
+            File.WriteAllText(manifest, "{ invalid");
+
+            string artifacts = Path.Combine(temp, "json-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("blocked_invalid_release_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("manifest JSON 无法解析", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 release evidence 预检会真实拒绝缺失必需 RID/channel 节点的 manifest。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsMissingRequiredScopesWithReport()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-missing-scope-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject artifacts = rootNode["artifacts"]!.AsObject();
+            _ = artifacts["win-x64"]!.AsObject().Remove("r2r");
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string output = Path.Combine(temp, "missing-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                output);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(output, "release-evidence-preflight.md"));
+            Assert.Contains("blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("artifacts.win-x64.r2r 缺失", report, StringComparison.Ordinal);
             Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
