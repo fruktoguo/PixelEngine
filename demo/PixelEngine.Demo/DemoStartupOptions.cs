@@ -41,6 +41,11 @@ public sealed class DemoStartupOptions
     public int WindowTicks { get; init; }
 
     /// <summary>
+    /// 是否在有限窗口短跑中注入固定的 Demo 键鼠脚本，用于自动化窗口态玩法链路验收。
+    /// </summary>
+    public bool ScriptedWindowDemo { get; init; }
+
+    /// <summary>
     /// 内容根目录。
     /// </summary>
     public string ContentRoot { get; init; } = Path.Combine(AppContext.BaseDirectory, "content");
@@ -68,6 +73,7 @@ public sealed class DemoStartupOptions
         bool headless = false;
         int ticks = 1;
         int windowTicks = 0;
+        bool scriptedWindowDemo = false;
         string contentRoot = Path.Combine(AppContext.BaseDirectory, "content");
         string scene = Path.Combine("scenes", DefaultSceneName + ".scene");
         string logDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
@@ -117,6 +123,9 @@ public sealed class DemoStartupOptions
 
                         break;
                     }
+                case "--scripted-window-demo":
+                    scriptedWindowDemo = true;
+                    break;
                 case "--log-dir":
                     logDirectory = ReadValue(args, ref i, "--log-dir");
                     break;
@@ -126,6 +135,7 @@ public sealed class DemoStartupOptions
         }
 
         ValidateWindowTicks(headless, windowTicks);
+        ValidateScriptedWindowDemo(headless, windowTicks, scriptedWindowDemo);
         return new DemoStartupOptions
         {
             EnableEditor = enableEditor,
@@ -133,6 +143,7 @@ public sealed class DemoStartupOptions
             Headless = headless,
             HeadlessTicks = ticks,
             WindowTicks = windowTicks,
+            ScriptedWindowDemo = scriptedWindowDemo,
             ContentRoot = contentRoot,
             Scene = scene,
             LogDirectory = logDirectory,
@@ -143,6 +154,13 @@ public sealed class DemoStartupOptions
     {
         _ = headless && windowTicks > 0
             ? throw new ArgumentException("--window-ticks 只能用于窗口模式，不能与 --headless/--smoke 同时使用。", nameof(windowTicks))
+            : true;
+    }
+
+    private static void ValidateScriptedWindowDemo(bool headless, int windowTicks, bool scriptedWindowDemo)
+    {
+        _ = scriptedWindowDemo && (headless || windowTicks <= 0)
+            ? throw new ArgumentException("--scripted-window-demo 只能与窗口有限短跑 --window-ticks 一起使用。", nameof(scriptedWindowDemo))
             : true;
     }
 
