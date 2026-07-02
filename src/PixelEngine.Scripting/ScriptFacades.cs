@@ -56,6 +56,11 @@ public interface IScriptContext
     ILightingApi Lighting { get; }
 
     /// <summary>
+    /// 屏幕空间 overlay 绘制能力；只影响本帧渲染，不写入权威世界。
+    /// </summary>
+    IOverlayApi Overlay => throw new NotSupportedException("当前脚本上下文未注入 Overlay 后端。");
+
+    /// <summary>
     /// 引擎只读诊断能力。
     /// </summary>
     IDiagnosticsApi Diagnostics { get; }
@@ -483,6 +488,44 @@ public interface ILightingApi
     /// 清空瞬时点光源。
     /// </summary>
     void ClearPointLights();
+}
+
+/// <summary>
+/// 提供脚本可用的屏幕空间 overlay 绘制 API。
+/// </summary>
+public interface IOverlayApi
+{
+    /// <summary>
+    /// 绘制实色矩形。
+    /// </summary>
+    /// <param name="x">矩形左上角 X，单位屏幕像素。</param>
+    /// <param name="y">矩形左上角 Y，单位屏幕像素。</param>
+    /// <param name="width">矩形宽度，单位屏幕像素。</param>
+    /// <param name="height">矩形高度，单位屏幕像素。</param>
+    /// <param name="colorBgra">BGRA8 非预乘颜色。</param>
+    void SolidRectangle(float x, float y, float width, float height, uint colorBgra);
+
+    /// <summary>
+    /// 绘制矩形描边。
+    /// </summary>
+    /// <param name="x">矩形左上角 X，单位屏幕像素。</param>
+    /// <param name="y">矩形左上角 Y，单位屏幕像素。</param>
+    /// <param name="width">矩形宽度，单位屏幕像素。</param>
+    /// <param name="height">矩形高度，单位屏幕像素。</param>
+    /// <param name="thickness">描边厚度，单位屏幕像素。</param>
+    /// <param name="colorBgra">BGRA8 非预乘颜色。</param>
+    void OutlineRectangle(float x, float y, float width, float height, float thickness, uint colorBgra);
+
+    /// <summary>
+    /// 绘制带厚度线段。
+    /// </summary>
+    /// <param name="startX">起点 X，单位屏幕像素。</param>
+    /// <param name="startY">起点 Y，单位屏幕像素。</param>
+    /// <param name="endX">终点 X，单位屏幕像素。</param>
+    /// <param name="endY">终点 Y，单位屏幕像素。</param>
+    /// <param name="thickness">线段厚度，单位屏幕像素。</param>
+    /// <param name="colorBgra">BGRA8 非预乘颜色。</param>
+    void Line(float startX, float startY, float endX, float endY, float thickness, uint colorBgra);
 }
 
 /// <summary>

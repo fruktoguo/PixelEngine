@@ -76,9 +76,9 @@ public sealed class PlayableCavernWorldGenerator : IProceduralWorldGenerator
 
     private static void CarveSpawnPocket(in ProceduralWorldBuildContext context, ushort empty, ushort wood)
     {
-        _ = context.Edit.PaintRect(24, 260, 180, 390, empty);
-        _ = context.Edit.PaintRect(28, 382, 168, 390, wood);
-        _ = context.Edit.PaintRect(190, 320, 270, 380, empty);
+        _ = context.Edit.PaintRect(24, 210, 180, 338, empty);
+        _ = context.Edit.PaintRect(28, 330, 168, 338, wood);
+        _ = context.Edit.PaintRect(190, 260, 270, 330, empty);
     }
 
     private static void CarveCaves(in ProceduralWorldBuildContext context, ushort empty)

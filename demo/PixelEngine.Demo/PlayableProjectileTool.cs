@@ -38,6 +38,16 @@ public sealed class PlayableProjectileTool : Behaviour
     public int ShotsFired { get; private set; }
 
     /// <summary>
+    /// 最近一次射击起点 X 坐标。
+    /// </summary>
+    public float LastShotStartX { get; private set; }
+
+    /// <summary>
+    /// 最近一次射击起点 Y 坐标。
+    /// </summary>
+    public float LastShotStartY { get; private set; }
+
+    /// <summary>
     /// 最近一次命中 X 坐标。
     /// </summary>
     public float LastHitX { get; private set; }
@@ -46,6 +56,11 @@ public sealed class PlayableProjectileTool : Behaviour
     /// 最近一次命中 Y 坐标。
     /// </summary>
     public float LastHitY { get; private set; }
+
+    /// <summary>
+    /// 弹道 overlay 剩余显示时间，单位秒。
+    /// </summary>
+    public float TracerRemainingSeconds { get; private set; }
 
     /// <inheritdoc />
     protected override void OnStart()
@@ -57,7 +72,9 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <inheritdoc />
     protected override void OnUpdate(float dt)
     {
-        _cooldownRemaining = MathF.Max(0f, _cooldownRemaining - MathF.Max(0f, dt));
+        float safeDt = MathF.Max(0f, dt);
+        _cooldownRemaining = MathF.Max(0f, _cooldownRemaining - safeDt);
+        TracerRemainingSeconds = MathF.Max(0f, TracerRemainingSeconds - safeDt);
         if (_cooldownRemaining > 0f || !Context.Input.WasMousePressed(MouseButton.Left))
         {
             return;
@@ -100,8 +117,11 @@ public sealed class PlayableProjectileTool : Behaviour
         Context.Lighting.RevealAround(hitX, hitY, ImpactRadius * 2.5f);
         Context.Lighting.AddPointLight(hitX, hitY, ImpactRadius * 3f, 0xFF_60_D8_FF, 0.35f);
         EmitTracer(startX, startY, hitX, hitY);
+        LastShotStartX = startX;
+        LastShotStartY = startY;
         LastHitX = hitX;
         LastHitY = hitY;
+        TracerRemainingSeconds = 0.10f;
         ShotsFired++;
         _cooldownRemaining = MathF.Max(0f, CooldownSeconds);
     }

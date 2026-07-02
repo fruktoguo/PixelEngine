@@ -397,6 +397,7 @@ public sealed class Engine : IDisposable
             Context.Jobs,
             kernel: simulation.Kernel,
             physics: Context.TryGetService(out PhysicsSystem physics) ? physics : null,
+            scriptOverlays: Context.TryGetService(out ScriptOverlayApi overlays) ? overlays : null,
             debugOverlays: ResolveDebugOverlayController());
         Context.RegisterService(pipeline);
         Context.RegisterService<IGpuComputeQualityDegrader>(pipeline);
@@ -898,6 +899,7 @@ public sealed class Engine : IDisposable
         ICameraApi camera = ResolveCameraApi();
         IInputApi input = ResolveInputApi();
         ILightingApi lighting = ResolveLightingApi();
+        IOverlayApi overlay = ResolveOverlayApi();
         IDiagnosticsApi diagnostics = ResolveDiagnosticsApi();
         IRuntimeControlApi runtimeControl = ResolveRuntimeControlApi();
         IAudioApi? audio = ResolveAudioApiOrNull();
@@ -919,6 +921,7 @@ public sealed class Engine : IDisposable
             camera,
             input,
             lighting,
+            overlay,
             diagnostics,
             runtimeControl);
         Context.RegisterService(scriptContext);
@@ -1133,6 +1136,19 @@ public sealed class Engine : IDisposable
     private ILightingApi ResolveLightingApi()
     {
         return Context.TryGetService(out ILightingApi lighting) ? lighting : ResolveConcreteLightingApi();
+    }
+
+    private IOverlayApi ResolveOverlayApi()
+    {
+        if (Context.TryGetService(out IOverlayApi overlay))
+        {
+            return overlay;
+        }
+
+        ScriptOverlayApi created = new();
+        Context.RegisterService<IOverlayApi>(created);
+        Context.RegisterService(created);
+        return created;
     }
 
     private IDiagnosticsApi ResolveDiagnosticsApi()

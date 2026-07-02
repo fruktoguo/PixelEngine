@@ -255,18 +255,24 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void ScriptContextExposesInjectedCameraAndInputBackends()
     {
+        ScriptOverlayApi overlay = new();
         Fixture fixture = Fixture.Create(
             camera: new ScriptCameraApi(100, 50, centerX: 10, centerY: 20),
             input: new ScriptInputApi(),
-            lighting: new ScriptLightingApi());
+            lighting: new ScriptLightingApi(),
+            overlay: overlay);
         ((ScriptInputApi)fixture.Context.Input).Update([Key.Space], [MouseButton.Middle], 1, 2, 3);
         fixture.Context.Lighting.RevealAround(10, 20, 8);
+        fixture.Context.Overlay.SolidRectangle(4, 5, 6, 7, 0xFF010203u);
 
         Assert.Equal(10f, fixture.Context.Camera.CenterX);
         Assert.True(fixture.Context.Input.WasPressed(Key.Space));
         Assert.True(fixture.Context.Input.WasMousePressed(MouseButton.Middle));
         Assert.Equal(3f, fixture.Context.Input.MouseWheelY);
         Assert.Equal(1, fixture.Context.Lighting.RevealCount);
+        Assert.Equal(1, overlay.CommandCount);
+        Assert.Equal(ScriptOverlayPrimitive.SolidRectangle, overlay.GetCommand(0).Primitive);
+        Assert.Equal(0xFF010203u, overlay.GetCommand(0).ColorBgra);
     }
 
     /// <summary>
@@ -352,6 +358,7 @@ public sealed class ScriptSimulationContextTests
             ICameraApi? camera = null,
             IInputApi? input = null,
             ILightingApi? lighting = null,
+            IOverlayApi? overlay = null,
             bool withPhysics = false)
         {
             MaterialTable materials = Materials(
@@ -374,7 +381,7 @@ public sealed class ScriptSimulationContextTests
                 physics = PhysicsSystem.Initialize(grid, jobs, worldDef: worldDef);
             }
 
-            ScriptSimulationContext context = new(new ScriptScene(), grid, kernel, particles, materials, physics: physics, camera: camera, input: input, lighting: lighting);
+            ScriptSimulationContext context = new(new ScriptScene(), grid, kernel, particles, materials, physics: physics, camera: camera, input: input, lighting: lighting, overlay: overlay);
             return new Fixture(chunk, grid, kernel, particles, context, physics, jobs);
         }
 

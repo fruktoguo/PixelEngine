@@ -370,6 +370,32 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证可玩 Demo 玩家可见层会提交玩家、准星与光照 overlay，不再只有不可见的碰撞 AABB。
+    /// </summary>
+    [Fact]
+    public void PlayerVisualSubmitsOverlayAndLocalLight()
+    {
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, DemoMaterials());
+        FillFloor(grid, material: 6, y: 46, x0: 0, x1: 96, rigidOwned: false);
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 16f;
+        player.SpawnY = 30f;
+        _ = entity.AddComponent<PlayableProjectileTool>();
+        _ = entity.AddComponent<PlayerVisual>();
+        ScriptOverlayApi overlay = engine.Context.GetService<ScriptOverlayApi>();
+
+        input.Update([], [], mouseX: 20, mouseY: 10, wheelY: 0);
+        engine.RunHeadlessTicks(2);
+
+        Assert.True(overlay.CommandCount >= 7);
+        Assert.Contains(
+            Enumerable.Range(0, overlay.CommandCount).Select(overlay.GetCommand),
+            command => command.Primitive == ScriptOverlayPrimitive.SolidRectangle && command.ColorBgra == 0xFF_F2_D0_5E);
+    }
+
+    /// <summary>
     /// 验证玩家可在普通 settled cell 地面上接地、水平跑动并响应跳跃输入。
     /// </summary>
     [Fact]

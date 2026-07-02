@@ -3,6 +3,7 @@ using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
+using PixelEngine.Scripting;
 using System.Runtime.InteropServices;
 
 namespace PixelEngine.Hosting;
@@ -22,6 +23,7 @@ public sealed class RenderPhaseDriver(
     IMaterialTextureProvider? textures = null,
     SimulationKernel? kernel = null,
     PhysicsSystem? physics = null,
+    ScriptOverlayApi? scriptOverlays = null,
     DebugOverlayController? debugOverlays = null) : IEnginePhaseDriver
 {
     private readonly IChunkSource _chunks = chunks ?? throw new ArgumentNullException(nameof(chunks));
@@ -33,6 +35,7 @@ public sealed class RenderPhaseDriver(
     private readonly IRenderFrameSink _sink = sink ?? throw new ArgumentNullException(nameof(sink));
     private readonly SimulationKernel? _kernel = kernel;
     private readonly PhysicsSystem? _physics = physics;
+    private readonly ScriptOverlayApi? _scriptOverlays = scriptOverlays;
     private readonly DebugOverlayController? _debugOverlays = debugOverlays;
     private readonly RenderBufferBuilder _builder = new(jobs, textures);
     private readonly ParticleCompositor _particleCompositor = new(textures);
@@ -90,7 +93,7 @@ public sealed class RenderPhaseDriver(
 
         Span<PixelUploadRect> dirtyRects = [new PixelUploadRect(0, 0, _renderBuffer.Width, _renderBuffer.Height)];
         ReadOnlySpan<Particle> activeParticles = _particles.ActiveReadOnly;
-        ReadOnlySpan<OverlayCommand> overlays = BuildDebugOverlays(activeParticles);
+        ReadOnlySpan<OverlayCommand> overlays = BuildOverlays(activeParticles);
         _sink.Render(
             _renderBuffer,
             _aux,
@@ -105,25 +108,69 @@ public sealed class RenderPhaseDriver(
         _frameBuilt = false;
     }
 
-    private ReadOnlySpan<OverlayCommand> BuildDebugOverlays(ReadOnlySpan<Particle> activeParticles)
+    private ReadOnlySpan<OverlayCommand> BuildOverlays(ReadOnlySpan<Particle> activeParticles)
     {
-        if (_debugOverlays is null)
+        if (_scriptOverlays is null && _debugOverlays is null)
         {
             return [];
         }
 
         _overlayCommands.Clear();
-        int wakeCount = _kernel?.CopyBoundaryWakeSnapshots(_boundaryWakeBuffer) ?? 0;
-        int caIterationCount = _kernel?.CopyCaIterationSnapshots(_caIterationBuffer) ?? 0;
-        int componentCount = _physics?.CopyConnectedComponentDebugSnapshots(_connectedComponentBuffer) ?? 0;
-        _ = _debugOverlays.BuildVectorOverlays(
-            _chunks,
-            _presentCamera,
-            _caIterationBuffer.AsSpan(0, caIterationCount),
-            _boundaryWakeBuffer.AsSpan(0, wakeCount),
-            activeParticles,
-            _connectedComponentBuffer.AsSpan(0, componentCount),
-            _overlayCommands);
+        AddScriptOverlays();
+        if (_debugOverlays is not null)
+        {
+            int wakeCount = _kernel?.CopyBoundaryWakeSnapshots(_boundaryWakeBuffer) ?? 0;
+            int caIterationCount = _kernel?.CopyCaIterationSnapshots(_caIterationBuffer) ?? 0;
+            int componentCount = _physics?.CopyConnectedComponentDebugSnapshots(_connectedComponentBuffer) ?? 0;
+            _ = _debugOverlays.BuildVectorOverlays(
+                _chunks,
+                _presentCamera,
+                _caIterationBuffer.AsSpan(0, caIterationCount),
+                _boundaryWakeBuffer.AsSpan(0, wakeCount),
+                activeParticles,
+                _connectedComponentBuffer.AsSpan(0, componentCount),
+                _overlayCommands);
+        }
+
         return _overlayCommands.Count == 0 ? [] : CollectionsMarshal.AsSpan(_overlayCommands);
+    }
+
+    private void AddScriptOverlays()
+    {
+        if (_scriptOverlays is null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _scriptOverlays.CommandCount; i++)
+        {
+            ScriptOverlayCommand command = _scriptOverlays.GetCommand(i);
+            _overlayCommands.Add(command.Primitive switch
+            {
+                ScriptOverlayPrimitive.SolidRectangle => OverlayCommand.SolidRectangle(
+                    command.X,
+                    command.Y,
+                    command.Width,
+                    command.Height,
+                    command.ColorBgra),
+                ScriptOverlayPrimitive.OutlineRectangle => OverlayCommand.OutlineRectangle(
+                    command.X,
+                    command.Y,
+                    command.Width,
+                    command.Height,
+                    command.Thickness,
+                    command.ColorBgra),
+                ScriptOverlayPrimitive.Line => OverlayCommand.Line(
+                    command.X,
+                    command.Y,
+                    command.EndX,
+                    command.EndY,
+                    command.Thickness,
+                    command.ColorBgra),
+                _ => throw new ArgumentOutOfRangeException(nameof(command), command.Primitive, "未知脚本 overlay 原语。"),
+            });
+        }
+
+        _scriptOverlays.Clear();
     }
 }

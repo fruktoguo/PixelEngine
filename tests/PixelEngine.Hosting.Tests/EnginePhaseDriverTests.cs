@@ -110,6 +110,8 @@ public sealed class EnginePhaseDriverTests
         lightingSync.Sync();
         RecordingRenderFrameSink sink = new();
         DebugOverlayController overlays = new(new DebugOverlaySettings { Enabled = DebugOverlayFlags.ParticleTrails });
+        ScriptOverlayApi scriptOverlays = new();
+        scriptOverlays.SolidRectangle(2, 3, 4, 5, 0xFF_10_20_30);
         RenderPhaseDriver driver = new(
             chunks,
             materials,
@@ -118,6 +120,7 @@ public sealed class EnginePhaseDriverTests
             cameraSync,
             lightingSync,
             sink,
+            scriptOverlays: scriptOverlays,
             debugOverlays: overlays);
 
         using Engine engine = new EngineBuilder()
@@ -137,6 +140,7 @@ public sealed class EnginePhaseDriverTests
         Assert.Equal(1, sink.ParticleCount);
         Assert.Equal(1, sink.PointLightCount);
         Assert.True(sink.OverlayCount > 0);
+        Assert.Contains(sink.Overlays, command => command.ColorBgra == 0xFF_10_20_30);
         Assert.Equal(1, sink.DirtyRectCount);
         Assert.Equal(new PixelUploadRect(0, 0, 32, 16), sink.FirstDirtyRect);
         Assert.NotNull(sink.FogOfWar);

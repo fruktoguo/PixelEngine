@@ -20,6 +20,8 @@ public static class DemoProgram
     private const int DemoWorldWidthCells = 640;
     private const int DemoWorldHeightCells = 360;
     private const int DemoParticleCapacityDefault = 32_768;
+    private const int PlayableWindowWidth = 854;
+    private const int PlayableWindowHeight = 480;
 
     /// <summary>
     /// 执行 Demo 主入口。
@@ -39,6 +41,7 @@ public static class DemoProgram
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayableWorldDirector))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayerController))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayerHealth))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayerVisual))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(SparkEmitter))]
     public static int Execute(string[] args)
     {
@@ -327,6 +330,7 @@ public static class DemoProgram
         ExplosiveTool? explosive = FindBehaviour<ExplosiveTool>(scene);
         PlayerHealth? health = FindBehaviour<PlayerHealth>(scene);
         PlayerController? player = FindBehaviour<PlayerController>(scene);
+        PlayerVisual? playerVisual = FindBehaviour<PlayerVisual>(scene);
         LevelDirector? director = FindBehaviour<LevelDirector>(scene);
         EngineProbeApi probe = engine.Context.GetService<EngineProbeApi>();
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
@@ -375,6 +379,8 @@ public static class DemoProgram
             $"spawn_probe={director?.BuildSpawnHazardProbe.ToString() ?? "<missing>"}, " +
             $"player=({playerState.X:0.00},{playerState.Y:0.00},{playerState.Width:0.00},{playerState.Height:0.00}), " +
             $"player_center=({player?.CenterX ?? 0f:0.00},{player?.CenterY ?? 0f:0.00}), " +
+            $"player_visual={(playerVisual is not null ? "present" : "missing")}, " +
+            $"player_visual_overlays={playerVisual?.LastOverlayCommandsSubmitted ?? 0}, " +
             $"camera_center=({camera.CenterX:0.00},{camera.CenterY:0.00}), " +
             $"camera_zoom={camera.Zoom:0.00}, " +
             $"camera_samples={scriptedProbe?.CameraSamples ?? 0}, " +
@@ -539,6 +545,7 @@ public static class DemoProgram
         ArgumentNullException.ThrowIfNull(project);
         EngineBuilder builder = new EngineBuilder()
             .WithProject(project)
+            .WithWindow(PlayableWindowWidth, PlayableWindowHeight)
             .UseDeterministicMode();
         if (options.Headless)
         {

@@ -324,7 +324,6 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
         started = Stopwatch.GetTimestamp();
         _worldBlit.Render(_worldTexture, _scene, camera, _quad);
         RenderGpuParticlesIfEnabled(particles, materials, camera);
-        _overlay.Render(overlays, _scene);
         if (ShouldUseComputeLightComposite())
         {
             using GpuComputeProfiler.GpuTimerScope _ = _gpuComputeProfiler.Measure("light_composite", FrameSubPhase.GpuLightComposite);
@@ -370,6 +369,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
 
         started = Stopwatch.GetTimestamp();
         _present.Render(current, Width, Height, _quad);
+        _overlay.Render(overlays, Width, Height);
         BeforePresentUi?.Invoke(_gl);
         _window.SwapBuffers();
         RecordSub(profiler, FrameSubPhase.Present, started);

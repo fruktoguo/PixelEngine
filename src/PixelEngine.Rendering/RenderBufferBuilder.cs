@@ -87,6 +87,12 @@ public sealed class RenderBufferBuilder(
             return;
         }
 
+        if (builder.TryGetPaletteZoomPixelsPerCell(context, out int pixelsPerCell))
+        {
+            builder.BuildRowsPaletteZoomFast(context, target, aux, start, end, pixelsPerCell);
+            return;
+        }
+
         Span<uint> pixels = target.Pixels;
         Span<uint> emissive = aux.Emissive;
         Span<byte> occluder = aux.Occluder;
@@ -109,6 +115,64 @@ public sealed class RenderBufferBuilder(
                 {
                     occluder[index] = byte.MaxValue;
                 }
+            }
+        }
+    }
+
+    private void BuildRowsPaletteZoomFast(
+        RenderFrameContext context,
+        RenderBuffer target,
+        RenderAuxBuffers aux,
+        int start,
+        int end,
+        int pixelsPerCell)
+    {
+        Span<uint> pixels = target.Pixels;
+        Span<uint> emissive = aux.Emissive;
+        Span<byte> occluder = aux.Occluder;
+        MaterialHotTable hot = context.Materials.Hot;
+        ReadOnlySpan<uint> palette = hot.BaseColorBGRA;
+        ReadOnlySpan<byte> colorNoise = hot.ColorNoise;
+        int originX = (int)context.Camera.OriginWorldX;
+        int originY = (int)context.Camera.OriginWorldY;
+        bool hasColorNoise = hot.HasColorNoise;
+
+        for (int sy = start; sy < end; sy++)
+        {
+            int row = sy * target.Width;
+            int worldY = originY + (sy / pixelsPerCell);
+            for (int sx = 0; sx < target.Width;)
+            {
+                int worldX = originX + (sx / pixelsPerCell);
+                int repeat = Math.Min(pixelsPerCell - (sx % pixelsPerCell), target.Width - sx);
+                int index = row + sx;
+                if (!context.Chunks.TryGetChunk(CellAddressing.WorldToChunk(worldX, worldY), out Chunk chunk))
+                {
+                    pixels.Slice(index, repeat).Clear();
+                    sx += repeat;
+                    continue;
+                }
+
+                ushort material = chunk.Material[CellAddressing.LocalIndex(worldX, worldY)];
+                uint color = palette[material];
+                if (hasColorNoise)
+                {
+                    color = ApplyColorNoise(color, colorNoise[material], worldX, worldY);
+                }
+
+                pixels.Slice(index, repeat).Fill(color);
+                MaterialProperty flags = hot.PropertyFlags[material];
+                if ((flags & MaterialProperty.Emissive) != 0)
+                {
+                    emissive.Slice(index, repeat).Fill(color);
+                }
+
+                if (hot.Type[material] == CellType.Solid || (flags & MaterialProperty.Static) != 0)
+                {
+                    occluder.Slice(index, repeat).Fill(byte.MaxValue);
+                }
+
+                sx += repeat;
             }
         }
     }
@@ -167,6 +231,33 @@ public sealed class RenderBufferBuilder(
             context.DebugCellColors is null &&
             !context.Temperature.HasActiveBlocks &&
             (_textures is null || !hot.HasTexturedMaterials);
+    }
+
+    private bool TryGetPaletteZoomPixelsPerCell(RenderFrameContext context, out int pixelsPerCell)
+    {
+        pixelsPerCell = 0;
+        CameraState camera = context.Camera;
+        MaterialHotTable hot = context.Materials.Hot;
+        if (camera.CellsPerPixel <= 0f ||
+            camera.CellsPerPixel >= 1f ||
+            camera.OriginWorldX != MathF.Truncate(camera.OriginWorldX) ||
+            camera.OriginWorldY != MathF.Truncate(camera.OriginWorldY) ||
+            context.DebugCellColors is not null ||
+            context.Temperature.HasActiveBlocks ||
+            (_textures is not null && hot.HasTexturedMaterials))
+        {
+            return false;
+        }
+
+        float reciprocal = 1f / camera.CellsPerPixel;
+        int rounded = (int)MathF.Round(reciprocal);
+        if (rounded <= 1 || rounded > 8 || MathF.Abs(reciprocal - rounded) > 0.0001f)
+        {
+            return false;
+        }
+
+        pixelsPerCell = rounded;
+        return true;
     }
 
     private bool CanClearEmptyWorld(RenderFrameContext context)
