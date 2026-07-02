@@ -18,6 +18,24 @@ public sealed class DemoStartupOptionsTests
 
         Assert.False(options.Headless);
         Assert.True(options.HotReloadEnabled);
+        Assert.Contains(DemoStartupOptions.DefaultSceneName, options.Scene);
+        Assert.Equal("playable-world", DemoStartupOptions.DefaultSceneName);
+    }
+
+    /// <summary>
+    /// 验证默认项目模型进入可玩程序化场景，而不是 lava-mine 验收场景。
+    /// </summary>
+    [Fact]
+    public void DefaultProjectUsesPlayableProceduralScene()
+    {
+        DemoStartupOptions options = DemoStartupOptions.Parse([]);
+
+        PixelEngine.Hosting.EngineProject project = DemoProgram.BuildProject(options);
+        PixelEngine.Hosting.SceneDescriptor scene = project.Scenes[0];
+
+        Assert.Equal("playable-world", project.StartScene);
+        Assert.Equal(PixelEngine.Hosting.SceneSourceKind.Procedural, scene.SourceKind);
+        Assert.Equal(DemoStartupOptions.DefaultProceduralSceneKey, scene.Source);
     }
 
     /// <summary>

@@ -11,12 +11,12 @@ public sealed class DemoStartupOptions
     /// <summary>
     /// 默认关卡名称。
     /// </summary>
-    public const string DefaultSceneName = "lava-mine";
+    public const string DefaultSceneName = "playable-world";
 
     /// <summary>
     /// 默认程序化关卡生成器键。
     /// </summary>
-    public const string DefaultProceduralSceneKey = "LevelDirector";
+    public const string DefaultProceduralSceneKey = "PixelEngine.Demo.PlayableWorldDirector";
 
     /// <summary>
     /// 是否启用内嵌编辑器。
