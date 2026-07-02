@@ -390,6 +390,12 @@ public static class DemoProgram
             $"camera_followed={scriptedProbe?.CameraFollowed.ToString() ?? "<missing>"}, " +
             $"render_camera_synced={scriptedProbe?.RenderCameraSynced.ToString() ?? "<missing>"}, " +
             $"player_x_range=({scriptedProbe?.PlayerMinX ?? player?.CenterX ?? 0f:0.00},{scriptedProbe?.PlayerMaxX ?? player?.CenterX ?? 0f:0.00}), " +
+            $"player_y_range={scriptedProbe?.PlayerYRange ?? 0f:0.00}, " +
+            $"player_ground_samples={scriptedProbe?.PlayerGroundedSamples ?? 0}, " +
+            $"player_air_samples={scriptedProbe?.PlayerAirborneSamples ?? 0}, " +
+            $"player_left_ground={scriptedProbe?.PlayerLeftGround.ToString() ?? "<missing>"}, " +
+            $"player_air_x_range={scriptedProbe?.PlayerAirXRange ?? 0f:0.00}, " +
+            $"player_air_control={scriptedProbe?.PlayerAirControl.ToString() ?? "<missing>"}, " +
             $"camera_x_range=({scriptedProbe?.CameraMinX ?? camera.CenterX:0.00},{scriptedProbe?.CameraMaxX ?? camera.CenterX:0.00}), " +
             $"render_origin_x_range=({scriptedProbe?.RenderOriginMinX ?? renderCamera.OriginWorldX:0.00},{scriptedProbe?.RenderOriginMaxX ?? renderCamera.OriginWorldX:0.00}), " +
             $"render_camera=({renderCamera.OriginWorldX:0.00},{renderCamera.OriginWorldY:0.00},{renderCamera.CellsPerPixel:0.000},{renderCamera.ViewportWidth}x{renderCamera.ViewportHeight}), " +
