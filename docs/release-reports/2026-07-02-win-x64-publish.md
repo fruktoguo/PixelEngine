@@ -50,9 +50,9 @@ Release artifact audit completed.
 `tools/audit-release-artifacts.ps1 -RequireAll` 负责检查已下载到本地的发布目录与 package root；外部 runner、签名、公证、SIMD probe、R2R light-up、确定性 hash 和 GitHub Release 上传证据由 release evidence manifest 汇总：
 
 ```pwsh
-./tools/release-evidence-preflight.ps1 -EvidenceManifestPath artifacts/release-evidence/evidence.json
+./tools/release-evidence-preflight.ps1 -EvidenceManifestPath artifacts/release-evidence/evidence.json -AllowBlocked
 ```
 
-未提供 manifest 时状态为 `blocked_missing_release_manifest`；manifest 存在但缺任一 RID/channel、AOT SIMD、macOS codesign/notarization、R2R light-up、确定性 hash 或 GitHub Release 上传报告时状态为 `blocked_missing_release_scope_evidence`；证据文件齐全时状态为 `release_evidence_attached_pending_review`，仍需人工确认这些报告确实闭合 plan/15 的外部验收。
+未提供 manifest 时状态为 `blocked_missing_release_manifest`；manifest 存在但缺任一 RID/channel、AOT SIMD、macOS codesign/notarization、R2R light-up、确定性 hash 或 GitHub Release 上传报告时状态为 `blocked_missing_release_scope_evidence`；证据文件齐全时状态为 `release_evidence_attached_pending_review`，仍需人工确认这些报告确实闭合 plan/15 的外部验收。未传 `-AllowBlocked` 时，即使证据齐全也会以非零退出，避免把 pending review 误当成验收通过。
 
 manifest schema 示例见 `docs/release-reports/release-evidence-manifest.example.json`。示例只描述字段契约，不作为验收证据。

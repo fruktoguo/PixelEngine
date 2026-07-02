@@ -114,7 +114,7 @@ PixelEngine.sln
 - [x] 所有其它 plan 文档的「技术栈」段不与本表冲突（已复核 plan/01–18：均继承 .NET 10/C# 14、Silk.NET、Box2D 自建 `[LibraryImport]`、Hexa.NET.ImGui、Roslyn+ALC、System.Text.Json、K4os LZ4、xUnit、BenchmarkDotNet、ComputeSharp/NVorbis 可选门控与无通用 ECS 约束；未发现另立选型）。
 - [x] 解决方案结构与 §5 一致，依赖方向被 `.csproj` ProjectReference 强制（无反向依赖）。
 - [x] `Directory.Build.props` / `Directory.Packages.props` 建立并被所有项目继承。
-- [!] 阻塞：六个 RID 的发行管线在 `plan/15` 落实；Box2D dual-build 在 `plan/01`/`plan/06` 落实。当前 `plan/15` 脚本与 workflow 已落地，且本机 `win-x64` R2R/AOT 发行验证通过；完整 6 RID 发行管线仍需对应 runner、目标硬件、macOS 签名凭据与 GitHub Release 产物证据闭合。
+- [!] 阻塞：六个 RID 的发行管线在 `plan/15` 落实；Box2D dual-build 在 `plan/01`/`plan/06` 落实。当前 `plan/15` 脚本与 workflow 已落地，且本机 `win-x64` R2R/AOT 发行验证通过；`tools/release-evidence-preflight.ps1` 会把缺 manifest 标为 `blocked_missing_release_manifest`、缺 RID/channel/signing/hash/upload scope 标为 `blocked_missing_release_scope_evidence`、证据齐全标为 `release_evidence_attached_pending_review` 且默认非零退出。完整 6 RID 发行管线仍需对应 runner、目标硬件、macOS 签名凭据与 GitHub Release 产物证据经人工复核闭合。
 
 ## 9. 提交节点
 

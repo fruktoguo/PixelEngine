@@ -226,3 +226,10 @@ if ($missing.Count -gt 0) {
 $detail = "Release evidence manifest is complete and SHA256 hashes were recorded. Human review still must confirm the reports prove 6 RID R2R/AOT outputs, AOT SIMD probes, R2R runtime light-up, macOS codesign/notarization, deterministic hashes and GitHub Release upload before plan/15 can be unblocked."
 Write-ReleaseEvidenceReport -Path $reportPath -Status "release_evidence_attached_pending_review" -Evidence $evidence -Missing $missing -Detail $detail
 Write-Host "Release evidence preflight release_evidence_attached_pending_review. Report: $reportPath"
+
+if (-not $AllowBlocked) {
+    [Console]::Error.WriteLine("Release evidence preflight failed: release_evidence_attached_pending_review")
+    exit 2
+}
+
+exit 0
