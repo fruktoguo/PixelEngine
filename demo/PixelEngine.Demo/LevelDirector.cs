@@ -64,6 +64,11 @@ public sealed class LevelDirector : Behaviour
     public bool BuildSpawnHazardProbe { get; set; }
 
     /// <summary>
+    /// Demo 相机默认缩放倍率；窗口探针可调小视野以验证真实跟随。
+    /// </summary>
+    public float CameraZoom { get; set; } = 2f;
+
+    /// <summary>
     /// 已通过脚本刚体 API 注册的可破坏结构数量。
     /// </summary>
     public int RigidStructureCount => _rigidStructures.Count;
@@ -189,7 +194,7 @@ public sealed class LevelDirector : Behaviour
         camera.MinY = 0f;
         camera.MaxX = LevelWidth;
         camera.MaxY = LevelHeight;
-        camera.Zoom = 2f;
+        camera.Zoom = CameraZoom;
 
         MaterialBrush brush = playerEntity.AddComponent<MaterialBrush>();
         _ = brush;

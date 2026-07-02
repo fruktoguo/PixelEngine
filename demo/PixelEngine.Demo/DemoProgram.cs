@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Hosting;
 using PixelEngine.Physics;
+using PixelEngine.Rendering;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
@@ -134,7 +135,10 @@ public static class DemoProgram
             scriptedProbe = new DemoWindowScriptedProbe(
                 engine.Context.GetService<PhysicsSystem>(),
                 engine.Context.GetService<ParticleSystem>(),
-                engine.Context.GetService<ScriptLightingSynchronizer>());
+                engine.Context.GetService<ScriptLightingSynchronizer>(),
+                engine.Context.GetService<ScriptScene>(),
+                engine.Context.GetService<ScriptCameraApi>(),
+                engine.Context.GetService<ScriptCameraSynchronizer>());
             scriptedProbe.RegisterPhases(engine.Phases);
             Console.WriteLine("脚本化窗口输入已启用。");
         }
@@ -229,6 +233,8 @@ public static class DemoProgram
         CellGrid grid = engine.Context.GetService<CellGrid>();
         ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        ScriptCameraApi camera = engine.Context.GetService<ScriptCameraApi>();
+        ScriptCameraSynchronizer cameraSync = engine.Context.GetService<ScriptCameraSynchronizer>();
         ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
         ushort paintedMaterial = grid.MaterialAt(
             (int)MathF.Round(scriptedInput.BrushTargetWorld.X),
@@ -241,6 +247,7 @@ public static class DemoProgram
         int playerCenterX = (int)MathF.Round(player?.CenterX ?? 0f);
         int playerCenterY = (int)MathF.Round(player?.CenterY ?? 0f);
         ushort playerCenterMaterial = grid.MaterialAt(playerCenterX, playerCenterY);
+        CameraState renderCamera = cameraSync.Current;
 
         Console.WriteLine(
             $"脚本化窗口输入摘要：frames={scriptedInput.FramesInjected}, " +
@@ -270,6 +277,16 @@ public static class DemoProgram
             $"respawns={health?.RespawnCount ?? 0}, " +
             $"spawn_probe={director?.BuildSpawnHazardProbe.ToString() ?? "<missing>"}, " +
             $"player=({playerState.X:0.00},{playerState.Y:0.00},{playerState.Width:0.00},{playerState.Height:0.00}), " +
+            $"player_center=({player?.CenterX ?? 0f:0.00},{player?.CenterY ?? 0f:0.00}), " +
+            $"camera_center=({camera.CenterX:0.00},{camera.CenterY:0.00}), " +
+            $"camera_zoom={camera.Zoom:0.00}, " +
+            $"camera_samples={scriptedProbe?.CameraSamples ?? 0}, " +
+            $"camera_followed={scriptedProbe?.CameraFollowed.ToString() ?? "<missing>"}, " +
+            $"render_camera_synced={scriptedProbe?.RenderCameraSynced.ToString() ?? "<missing>"}, " +
+            $"player_x_range=({scriptedProbe?.PlayerMinX ?? player?.CenterX ?? 0f:0.00},{scriptedProbe?.PlayerMaxX ?? player?.CenterX ?? 0f:0.00}), " +
+            $"camera_x_range=({scriptedProbe?.CameraMinX ?? camera.CenterX:0.00},{scriptedProbe?.CameraMaxX ?? camera.CenterX:0.00}), " +
+            $"render_origin_x_range=({scriptedProbe?.RenderOriginMinX ?? renderCamera.OriginWorldX:0.00},{scriptedProbe?.RenderOriginMaxX ?? renderCamera.OriginWorldX:0.00}), " +
+            $"render_camera=({renderCamera.OriginWorldX:0.00},{renderCamera.OriginWorldY:0.00},{renderCamera.CellsPerPixel:0.000},{renderCamera.ViewportWidth}x{renderCamera.ViewportHeight}), " +
             $"player_center_material={playerCenterMaterial}。");
     }
 
