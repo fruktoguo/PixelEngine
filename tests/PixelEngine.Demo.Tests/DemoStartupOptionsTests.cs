@@ -31,4 +31,17 @@ public sealed class DemoStartupOptionsTests
         Assert.False(options.HotReloadEnabled);
         Assert.Equal(1, options.HeadlessTicks);
     }
+
+    /// <summary>
+    /// 验证 NativeAOT 等不支持动态代码的运行时会显式禁用脚本热重载，而不是尝试走 Roslyn/ALC 路径。
+    /// </summary>
+    [Fact]
+    public void HotReloadRequiresDynamicCodeSupport()
+    {
+        DemoStartupOptions options = DemoStartupOptions.Parse([]);
+
+        Assert.True(DemoProgram.CanEnableHotReload(options, dynamicCodeSupported: true));
+        Assert.False(DemoProgram.CanEnableHotReload(options, dynamicCodeSupported: false));
+        Assert.False(DemoProgram.CanEnableHotReload(DemoStartupOptions.Parse(["--no-hot-reload"]), dynamicCodeSupported: true));
+    }
 }
