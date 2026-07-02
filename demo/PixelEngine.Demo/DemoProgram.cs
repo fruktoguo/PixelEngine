@@ -36,6 +36,9 @@ public static class DemoProgram
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(MaterialBrush))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(MaterialEmitter))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PauseMenu))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayableHud))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayableProjectileTool))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayableWorldDirector))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayerController))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayerHealth))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(SparkEmitter))]
@@ -70,6 +73,7 @@ public static class DemoProgram
 
         EngineProject project = BuildProject(options);
         using Engine engine = BuildEngine(options, project);
+        engine.RegisterProceduralWorldGenerator(PlayableCavernWorldGenerator.Key, new PlayableCavernWorldGenerator());
         bool contentLoaded = false;
         if (engine.HasContentPackage())
         {
@@ -193,6 +197,11 @@ public static class DemoProgram
         }
 
         Console.WriteLine("窗口运行时已接入 Rendering/Input 后端。");
+        if (!options.ScriptedWindowDemo)
+        {
+            Console.WriteLine("可玩 Demo 控制：A/D 或方向键移动，Space/W/Up 跳跃，鼠标左键射击破坏地形，Esc 暂停。");
+        }
+
         if (options.WindowTicks > 0)
         {
             Stopwatch stopwatch = Stopwatch.StartNew();
@@ -514,7 +523,7 @@ public static class DemoProgram
     }
 
     /// <summary>
-    /// 构造 Demo 项目模型。若场景文件不存在，则回退到程序化 LevelDirector 来源。
+    /// 构造 Demo 项目模型。若场景文件不存在，则回退到程序化可玩场景来源。
     /// </summary>
     /// <param name="options">启动参数。</param>
     /// <returns>EngineProject。</returns>
@@ -565,10 +574,7 @@ public static class DemoProgram
             ? new SceneDescriptor(sceneName, SceneSourceKind.SaveDirectory, source)
             : File.Exists(source)
                 ? new SceneDescriptor(sceneName, SceneSourceKind.SceneFile, source)
-                : new SceneDescriptor(
-                    DemoStartupOptions.DefaultSceneName,
-                    SceneSourceKind.Procedural,
-                    DemoStartupOptions.DefaultProceduralSceneKey);
+                : new SceneDescriptor(sceneName, SceneSourceKind.Procedural, DemoStartupOptions.DefaultProceduralSceneKey);
     }
 
     private static string WriteCrashLog(Exception exception, string? logDirectory)

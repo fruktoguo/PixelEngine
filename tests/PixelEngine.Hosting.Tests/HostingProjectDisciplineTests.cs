@@ -47,10 +47,10 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
-    /// 验证 Demo 默认 lava-mine 场景以 .scene 文件落盘，并通过公开场景文档格式引用 LevelDirector。
+    /// 验证 Demo lava-mine 验收场景以 .scene 文件落盘，并通过公开场景文档格式引用 LevelDirector。
     /// </summary>
     [Fact]
-    public void DemoDefaultSceneFileUsesLevelDirectorBehaviour()
+    public void DemoLavaMineSceneFileUsesLevelDirectorBehaviour()
     {
         string root = FindRepositoryRoot();
         string scenePath = Path.Combine(root, "demo", "PixelEngine.Demo", "content", "scenes", "lava-mine.scene");
