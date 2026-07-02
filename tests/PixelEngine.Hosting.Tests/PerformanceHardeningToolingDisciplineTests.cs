@@ -268,8 +268,21 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("--window-ticks", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine.scene", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine-goal-probe.scene", script, StringComparison.Ordinal);
+        Assert.Contains("scenes/lava-mine-health-probe.scene", script, StringComparison.Ordinal);
+        Assert.Contains("scenes/lava-mine-camera-probe.scene", script, StringComparison.Ordinal);
+        Assert.Contains("scenes/lava-mine-reaction-probe.scene", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine-audio-probe.scene", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine-particle-light-probe.scene", script, StringComparison.Ordinal);
+        Assert.Contains("RequiredSummaryMarkers", script, StringComparison.Ordinal);
+        Assert.Contains("brush_material=stone", script, StringComparison.Ordinal);
+        Assert.Contains("painted_material=13", script, StringComparison.Ordinal);
+        Assert.Contains("goal_reached=True", script, StringComparison.Ordinal);
+        Assert.Contains("damage_events=", script, StringComparison.Ordinal);
+        Assert.Contains("camera_followed=True", script, StringComparison.Ordinal);
+        Assert.Contains("reactions_observed=True", script, StringComparison.Ordinal);
+        Assert.Contains("phase_transitions_observed=True", script, StringComparison.Ordinal);
+        Assert.Contains("audio_probe_one_shot_played=True", script, StringComparison.Ordinal);
+        Assert.Contains("particle_light_probe_depleted=True", script, StringComparison.Ordinal);
 
         Assert.Contains("controlFeelReport", script, StringComparison.Ordinal);
         Assert.Contains("materialBrushAndReactionVideo", script, StringComparison.Ordinal);
