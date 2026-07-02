@@ -18,7 +18,7 @@ public sealed class PlayableWorldDirector : Behaviour
     /// <summary>
     /// 玩家出生点 Y 坐标。
     /// </summary>
-    public float PlayerSpawnY { get; set; } = 292f;
+    public float PlayerSpawnY { get; set; } = 250f;
 
     /// <inheritdoc />
     protected override void OnStart()
@@ -68,12 +68,13 @@ public sealed class PlayableWorldDirector : Behaviour
         camera.MinY = 0f;
         camera.MaxX = 1536f;
         camera.MaxY = 384f;
-        camera.Zoom = 3f;
+        camera.Zoom = 2.5f;
 
         PlayableProjectileTool projectile = playerEntity.AddComponent<PlayableProjectileTool>();
         projectile.ImpactRadius = 9;
         projectile.ImpactForce = 24f;
 
+        _ = playerEntity.AddComponent<PlayerVisual>();
         _ = playerEntity.AddComponent<PlayableHud>();
         _ = playerEntity.AddComponent<PauseMenu>();
         _entitiesBuilt = true;

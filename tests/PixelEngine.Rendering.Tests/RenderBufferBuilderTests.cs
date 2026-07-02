@@ -93,6 +93,65 @@ public sealed class RenderBufferBuilderTests
     }
 
     [Fact]
+    public void BuildPaletteZoomFastPathRepeatsCellsAcrossChunkRowsAndWritesAux()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk left = new(new ChunkCoord(0, 0));
+        Chunk right = new(new ChunkCoord(1, 0));
+        SetMaterial(left, 62, 0, 1);
+        SetMaterial(left, 63, 0, 2);
+        SetMaterial(right, 0, 0, 3);
+        SetMaterial(left, 62, 1, 2);
+        SetMaterial(left, 63, 1, 1);
+        SetMaterial(right, 0, 1, 0);
+        chunks.Add(left);
+        chunks.Add(right);
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "glow", CellType.Powder, 0xFF202020u) with
+            {
+                ColorNoise = 32,
+                PropertyFlags = MaterialProperty.Emissive,
+            },
+            Material(2, "rock", CellType.Solid, 0xFF040506u),
+            Material(3, "static", CellType.Powder, 0xFF070809u) with { PropertyFlags = MaterialProperty.Static });
+        RenderBuffer target = new(5, 3);
+        RenderAuxBuffers aux = new(5, 3);
+        RenderFrameContext context = new(
+            chunks,
+            materials,
+            new TemperatureField(),
+            new CameraState(62, 0, 0.5f, 5, 3),
+            simStepped: true);
+
+        new RenderBufferBuilder().Build(context, target, aux);
+
+        uint glow00 = ExpectedColorNoise(0xFF202020u, 32, 62, 0);
+        uint glow11 = ExpectedColorNoise(0xFF202020u, 32, 63, 1);
+        Assert.Equal(
+            [
+                glow00, glow00, 0xFF040506u, 0xFF040506u, 0xFF070809u,
+                glow00, glow00, 0xFF040506u, 0xFF040506u, 0xFF070809u,
+                0xFF040506u, 0xFF040506u, glow11, glow11, 0u,
+            ],
+            target.Pixels.ToArray());
+        Assert.Equal(
+            [
+                glow00, glow00, 0u, 0u, 0u,
+                glow00, glow00, 0u, 0u, 0u,
+                0u, 0u, glow11, glow11, 0u,
+            ],
+            aux.Emissive.ToArray());
+        byte[] expectedOccluder =
+        [
+            0, 0, byte.MaxValue, byte.MaxValue, byte.MaxValue,
+            0, 0, byte.MaxValue, byte.MaxValue, byte.MaxValue,
+            byte.MaxValue, byte.MaxValue, 0, 0, 0,
+        ];
+        Assert.Equal(expectedOccluder, aux.Occluder.ToArray());
+    }
+
+    [Fact]
     public void BuildAppliesTextureProviderTemperatureGlowAndAuxOutputs()
     {
         ResidentChunkMap chunks = new();

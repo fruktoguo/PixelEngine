@@ -38,6 +38,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     /// <param name="camera">相机 facade；未提供时访问 <see cref="Camera" /> 会抛出明确异常。</param>
     /// <param name="input">输入 facade；未提供时访问 <see cref="Input" /> 会抛出明确异常。</param>
     /// <param name="lighting">光照 facade；未提供时访问 <see cref="Lighting" /> 会抛出明确异常。</param>
+    /// <param name="overlay">overlay facade；未提供时访问 <see cref="Overlay" /> 会抛出明确异常。</param>
     /// <param name="diagnostics">诊断 facade；未提供时访问 <see cref="Diagnostics" /> 会抛出明确异常。</param>
     /// <param name="runtime">运行时控制 facade；未提供时访问 <see cref="Runtime" /> 会抛出明确异常。</param>
     public ScriptSimulationContext(
@@ -53,6 +54,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         ICameraApi? camera = null,
         IInputApi? input = null,
         ILightingApi? lighting = null,
+        IOverlayApi? overlay = null,
         IDiagnosticsApi? diagnostics = null,
         IRuntimeControlApi? runtime = null)
     {
@@ -78,6 +80,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         CameraBackend = camera;
         InputBackend = input;
         LightingBackend = lighting;
+        OverlayBackend = overlay;
         DiagnosticsBackend = diagnostics;
         RuntimeBackend = runtime;
     }
@@ -93,6 +96,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     private IInputApi? InputBackend { get; }
 
     private ILightingApi? LightingBackend { get; }
+
+    private IOverlayApi? OverlayBackend { get; }
 
     private IDiagnosticsApi? DiagnosticsBackend { get; }
 
@@ -142,6 +147,9 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 
     /// <inheritdoc />
     public ILightingApi Lighting => LightingBackend ?? throw Unsupported(nameof(Lighting));
+
+    /// <inheritdoc />
+    public IOverlayApi Overlay => OverlayBackend ?? throw Unsupported(nameof(Overlay));
 
     /// <inheritdoc />
     public IDiagnosticsApi Diagnostics => DiagnosticsBackend ?? throw Unsupported(nameof(Diagnostics));

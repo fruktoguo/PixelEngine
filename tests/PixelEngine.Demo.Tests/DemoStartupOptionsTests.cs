@@ -39,6 +39,20 @@ public sealed class DemoStartupOptionsTests
     }
 
     /// <summary>
+    /// 验证默认 Demo 使用能在普通桌面首屏完整看见玩家和地形的窗口尺寸。
+    /// </summary>
+    [Fact]
+    public void DefaultEngineUsesPlayableWindowSize()
+    {
+        DemoStartupOptions options = DemoStartupOptions.Parse(["--no-hot-reload"]);
+        PixelEngine.Hosting.EngineProject project = DemoProgram.BuildProject(options);
+        using PixelEngine.Hosting.Engine engine = DemoProgram.BuildEngine(options, project);
+
+        Assert.Equal(854, engine.Context.Options.WindowWidth);
+        Assert.Equal(480, engine.Context.Options.WindowHeight);
+    }
+
+    /// <summary>
     /// 验证发行冒烟参数显式进入 headless、禁用 hot reload，并只执行一个 tick。
     /// </summary>
     [Fact]

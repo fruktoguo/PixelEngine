@@ -162,6 +162,135 @@ public readonly record struct CameraSnapshot(
 public readonly record struct ScriptPointLight(float X, float Y, float Radius, uint ColorBgra, float Intensity);
 
 /// <summary>
+/// 脚本 overlay 绘制原语类型。
+/// </summary>
+public enum ScriptOverlayPrimitive
+{
+    /// <summary>
+    /// 实色矩形。
+    /// </summary>
+    SolidRectangle,
+
+    /// <summary>
+    /// 矩形描边。
+    /// </summary>
+    OutlineRectangle,
+
+    /// <summary>
+    /// 带厚度线段。
+    /// </summary>
+    Line,
+}
+
+/// <summary>
+/// 脚本提交的屏幕空间 overlay 命令。
+/// </summary>
+/// <param name="Primitive">绘制原语。</param>
+/// <param name="X">起点或矩形左上角 X，单位屏幕像素。</param>
+/// <param name="Y">起点或矩形左上角 Y，单位屏幕像素。</param>
+/// <param name="Width">矩形宽度，单位屏幕像素。</param>
+/// <param name="Height">矩形高度，单位屏幕像素。</param>
+/// <param name="ColorBgra">BGRA8 非预乘颜色。</param>
+/// <param name="Thickness">描边或线段厚度，单位屏幕像素。</param>
+/// <param name="EndX">线段终点 X，单位屏幕像素。</param>
+/// <param name="EndY">线段终点 Y，单位屏幕像素。</param>
+public readonly record struct ScriptOverlayCommand(
+    ScriptOverlayPrimitive Primitive,
+    float X,
+    float Y,
+    float Width,
+    float Height,
+    uint ColorBgra,
+    float Thickness,
+    float EndX,
+    float EndY)
+{
+    /// <summary>
+    /// 创建实色矩形命令。
+    /// </summary>
+    /// <param name="x">矩形左上角 X。</param>
+    /// <param name="y">矩形左上角 Y。</param>
+    /// <param name="width">矩形宽度。</param>
+    /// <param name="height">矩形高度。</param>
+    /// <param name="colorBgra">BGRA8 非预乘颜色。</param>
+    /// <returns>实色矩形命令。</returns>
+    public static ScriptOverlayCommand SolidRectangle(float x, float y, float width, float height, uint colorBgra)
+    {
+        return new ScriptOverlayCommand(ScriptOverlayPrimitive.SolidRectangle, x, y, width, height, colorBgra, 0f, 0f, 0f);
+    }
+
+    /// <summary>
+    /// 创建矩形描边命令。
+    /// </summary>
+    /// <param name="x">矩形左上角 X。</param>
+    /// <param name="y">矩形左上角 Y。</param>
+    /// <param name="width">矩形宽度。</param>
+    /// <param name="height">矩形高度。</param>
+    /// <param name="thickness">描边厚度。</param>
+    /// <param name="colorBgra">BGRA8 非预乘颜色。</param>
+    /// <returns>矩形描边命令。</returns>
+    public static ScriptOverlayCommand OutlineRectangle(float x, float y, float width, float height, float thickness, uint colorBgra)
+    {
+        return new ScriptOverlayCommand(ScriptOverlayPrimitive.OutlineRectangle, x, y, width, height, colorBgra, thickness, 0f, 0f);
+    }
+
+    /// <summary>
+    /// 创建带厚度线段命令。
+    /// </summary>
+    /// <param name="startX">线段起点 X。</param>
+    /// <param name="startY">线段起点 Y。</param>
+    /// <param name="endX">线段终点 X。</param>
+    /// <param name="endY">线段终点 Y。</param>
+    /// <param name="thickness">线段厚度。</param>
+    /// <param name="colorBgra">BGRA8 非预乘颜色。</param>
+    /// <returns>线段命令。</returns>
+    public static ScriptOverlayCommand Line(float startX, float startY, float endX, float endY, float thickness, uint colorBgra)
+    {
+        return new ScriptOverlayCommand(ScriptOverlayPrimitive.Line, startX, startY, 1f, 1f, colorBgra, thickness, endX, endY);
+    }
+
+    /// <summary>
+    /// 校验 overlay 命令参数。
+    /// </summary>
+    public void Validate()
+    {
+        if (!float.IsFinite(X) || !float.IsFinite(Y))
+        {
+            throw new ArgumentOutOfRangeException(nameof(X), "Overlay 坐标必须为有限数值。");
+        }
+
+        if (!float.IsFinite(Width) || !float.IsFinite(Height) || Width <= 0f || Height <= 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(Width), "Overlay 尺寸必须为正有限数值。");
+        }
+
+        if (Primitive == ScriptOverlayPrimitive.OutlineRectangle &&
+            (!float.IsFinite(Thickness) || Thickness <= 0f))
+        {
+            throw new ArgumentOutOfRangeException(nameof(Thickness), "Overlay 描边厚度必须为正有限数值。");
+        }
+
+        if (Primitive == ScriptOverlayPrimitive.Line)
+        {
+            if (!float.IsFinite(EndX) || !float.IsFinite(EndY))
+            {
+                throw new ArgumentOutOfRangeException(nameof(EndX), "Overlay 线段终点必须为有限数值。");
+            }
+
+            if (!float.IsFinite(Thickness) || Thickness <= 0f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(Thickness), "Overlay 线段厚度必须为正有限数值。");
+            }
+
+            if (X == EndX && Y == EndY)
+            {
+                throw new ArgumentOutOfRangeException(nameof(EndX), "Overlay 线段长度必须大于 0。");
+            }
+        }
+    }
+}
+
+/// <summary>
 /// fog-of-war 揭示请求。
 /// </summary>
 /// <param name="X">揭示中心世界 X 坐标。</param>
