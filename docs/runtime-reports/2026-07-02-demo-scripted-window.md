@@ -38,10 +38,10 @@ dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --
 dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --no-build -- --no-hot-reload --window-ticks 180 --scripted-window-demo --content demo\PixelEngine.Demo\content --scene scenes\lava-mine-reaction-probe.scene --log-dir artifacts\scripted-window-reaction-probe-logs\runtime-7
 ```
 
-音频窗口探针使用独立的空脚本场景，由 Demo 专用探针在真实窗口相位中向 Core 音频事件 ring 注入 stone explosion、water splash 与 lava ambient 事件；它只验证材质 cue 解析、事件派发、one-shot voice 与 ambient voice 激活，不代表真实设备听感验收：
+音频窗口探针使用独立的空脚本场景，由 Demo 专用探针在真实窗口相位中向 Core 音频事件 ring 注入 stone explosion、water splash 与 lava ambient 事件，并追加 64 个高密度 water splash 压力事件；它只验证材质 cue 解析、事件派发、one-shot voice、ambient voice 与高密度事件限流，不代表真实设备听感验收：
 
 ```pwsh
-dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --no-build -- --no-hot-reload --window-ticks 20 --scripted-window-demo --content demo\PixelEngine.Demo\content --scene scenes\lava-mine-audio-probe.scene --log-dir artifacts\scripted-window-audio-probe-logs\runtime-1
+dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --no-build -- --no-hot-reload --window-ticks 30 --scripted-window-demo --content demo\PixelEngine.Demo\content --scene scenes\lava-mine-audio-probe.scene --log-dir artifacts\scripted-window-audio-probe-logs\runtime-3
 ```
 
 粒子与光照窗口探针使用独立的空脚本场景，由 Demo 专用探针在真实窗口相位中一次性生成短寿命 fire 粒子，并发出点光与 fog reveal 请求；它只验证粒子 lifecycle、点光同步和 fog-of-war reveal 数据，不代表粒子/bloom/fog 的视觉质量人工验收：
@@ -146,10 +146,10 @@ RID: win-x64
 脚本运行时已接入 Hosting/Simulation 后端。
 脚本化窗口输入已启用。
 窗口运行时已接入 Rendering/Input 后端。
-窗口短跑完成：frames=20, requested=20。
-窗口短跑耗时：elapsed_ms=1033.42, avg_tick_ms=51.68, last_profile_ms=10.39。
-窗口短跑最慢相位：main_top=Temperature=4.56, sub_top=GpuUpload=3.80。
-脚本化窗口输入摘要：frames=20, brush_material=<missing>, brush_radius=0, painted_material=0, explosions=0, last_explosion=(0.00,0.00), particles=0, max_particles=0, lights=0, max_lights=0, physics_destroyed=0, physics_created=0, max_physics_destroyed=0, max_physics_created=0, audio_played=0, audio_drained=0, max_audio_played=2, max_audio_drained=3, audio_loaded=19, hud_blocked=none, pause_open=<missing>, goal_reached=<missing>, player_health=0.00, damage_events=0, respawns=0, spawn_probe=<missing>, player=(0.00,0.00,0.00,0.00), player_center=(0.00,0.00), camera_center=(320.00,180.00), camera_zoom=1.00, camera_samples=0, camera_followed=False, render_camera_synced=True, player_x_range=(0.00,0.00), camera_x_range=(0.00,0.00), render_origin_x_range=(0.00,0.00), render_camera=(-320.00,-180.00,1.000,1280x720), audio_probe_initialized=True, audio_probe_enqueued=True, audio_probe_one_shot_played=True, audio_probe_ambient_activated=True, audio_probe_max_drained=3, audio_probe_max_played=2, audio_probe_max_active_voices=2, audio_probe_max_active_ambient=1, player_center_material=0。
+窗口短跑完成：frames=30, requested=30。
+窗口短跑耗时：elapsed_ms=1221.22, avg_tick_ms=40.71, last_profile_ms=6.99。
+窗口短跑最慢相位：main_top=GpuUploadRender=3.89, sub_top=GpuUpload=3.57。
+脚本化窗口输入摘要：frames=30, brush_material=<missing>, brush_radius=0, painted_material=0, explosions=0, last_explosion=(0.00,0.00), particles=0, max_particles=0, lights=0, max_lights=0, physics_destroyed=0, physics_created=0, max_physics_destroyed=0, max_physics_created=0, audio_played=0, audio_drained=0, max_audio_played=2, max_audio_drained=64, audio_loaded=19, hud_blocked=none, pause_open=<missing>, goal_reached=<missing>, player_health=0.00, damage_events=0, respawns=0, spawn_probe=<missing>, player=(0.00,0.00,0.00,0.00), player_center=(0.00,0.00), camera_center=(320.00,180.00), camera_zoom=1.00, camera_samples=0, camera_followed=False, render_camera_synced=True, player_x_range=(0.00,0.00), camera_x_range=(0.00,0.00), render_origin_x_range=(0.00,0.00), render_camera=(-320.00,-180.00,1.000,1280x720), audio_probe_initialized=True, audio_probe_enqueued=True, audio_probe_stress_enqueued=64, audio_probe_one_shot_played=True, audio_probe_ambient_activated=True, audio_probe_limited=True, audio_probe_max_drained=64, audio_probe_max_coalesced=0, audio_probe_max_dropped=64, audio_probe_max_played=2, audio_probe_max_active_voices=2, audio_probe_max_active_ambient=1, player_center_material=0。
 ```
 
 粒子与光照窗口探针关键输出：
@@ -180,7 +180,7 @@ RID: win-x64
 
 反应与温度相变窗口探针额外证明真实窗口相位中，已加载 `ReactionTable` 与 `TemperatureField.ApplyPhaseTransitions` 会在 CA/Temperature 后产生目标材质变化：`reactions_observed=True` 覆盖熔岩遇水、熔融金属遇水、水灭火、火烧木、火烧油、酸腐蚀与蒸汽冷凝；`phase_transitions_observed=True` 覆盖冰融化、水沸腾、水冻结、熔岩冷却、金属熔化与沙烤玻璃。
 
-音频窗口探针额外证明真实窗口相位中，`content/audio/cues.json` 与 `materials.json` 的 cue 映射可以把材质音频事件解析为已加载 clip，并交给后端 source：`audio_probe_one_shot_played=True` 覆盖 stone explosion 与 water splash 的 one-shot voice，`audio_probe_ambient_activated=True` 覆盖 lava ambient loop 激活。
+音频窗口探针额外证明真实窗口相位中，`content/audio/cues.json` 与 `materials.json` 的 cue 映射可以把材质音频事件解析为已加载 clip，并交给后端 source：`audio_probe_one_shot_played=True` 覆盖 stone explosion 与 water splash 的 one-shot voice，`audio_probe_ambient_activated=True` 覆盖 lava ambient loop 激活。高密度样本额外证明窗口态音频派发会对满屏 splash 事件限流：`audio_probe_stress_enqueued=64`、`audio_probe_limited=True` 与 `audio_probe_max_dropped=64`。
 
 粒子与光照窗口探针额外证明真实窗口相位中，短寿命 fire 粒子会进入粒子系统并按 lifetime 退场：`particle_light_probe_spawned=96`、`particle_light_probe_max_active=96`、`particle_light_probe_tail_max=0`、`particle_light_probe_last_active=0`、`particle_light_probe_lifetime_kill=True` 与 `particle_light_probe_depleted=True`。同一探针还证明脚本点光与 fog reveal 请求会同步到 Rendering 可消费状态：`particle_light_probe_light_observed=True`、`particle_light_probe_fog_alpha=220` 与 `particle_light_probe_lighting_synced=True`。
 
