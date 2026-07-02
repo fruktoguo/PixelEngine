@@ -192,10 +192,22 @@ function Read-EvidenceManifest {
             throw "evidence scope $scope 指向文件不存在：$path"
         }
 
+        $hashProperty = $entry.PSObject.Properties | Where-Object { $_.Name -eq "sha256" } | Select-Object -First 1
+        $declaredHash = if ($null -eq $hashProperty) { "" } else { [string]$hashProperty.Value }
+        if ([string]::IsNullOrWhiteSpace($declaredHash)) {
+            throw "evidence scope $scope 缺少 sha256。"
+        }
+
+        $actualHash = Get-FileSha256 -Path $path
+        $expectedHash = $declaredHash.Trim().ToLowerInvariant()
+        if ($actualHash -ne $expectedHash) {
+            throw "evidence scope $scope sha256 不匹配：expected=$expectedHash actual=$actualHash"
+        }
+
         $evidence.Add([pscustomobject]@{
             scope = $scope
             path = ConvertTo-RepositoryRelativePath -Root $Root -Path $path
-            sha256 = Get-FileSha256 -Path $path
+            sha256 = $actualHash
         })
     }
 

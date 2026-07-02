@@ -221,6 +221,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
         Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
         Assert.Contains("RunProbe", script, StringComparison.Ordinal);
+        Assert.Contains("sha256", script, StringComparison.Ordinal);
+        Assert.Contains("Get-FileHash", script, StringComparison.Ordinal);
+        Assert.Contains("sha256 不匹配", script, StringComparison.Ordinal);
         Assert.Contains("--particle-frame-probe", script, StringComparison.Ordinal);
         Assert.Contains("--particle-render-mode", script, StringComparison.Ordinal);
         Assert.Contains("cpu", script, StringComparison.Ordinal);
@@ -267,6 +270,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
         Assert.Contains("RunScriptedProbes", script, StringComparison.Ordinal);
         Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
+        Assert.Contains("sha256", script, StringComparison.Ordinal);
+        Assert.Contains("Get-FileHash", script, StringComparison.Ordinal);
+        Assert.Contains("sha256 不匹配", script, StringComparison.Ordinal);
         Assert.Contains("--scripted-window-demo", script, StringComparison.Ordinal);
         Assert.Contains("--window-ticks", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine.scene", script, StringComparison.Ordinal);
