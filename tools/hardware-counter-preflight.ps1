@@ -82,11 +82,11 @@ Set-Location $root
 
 $isWindowsHost = $IsWindows
 $isAdministrator = Test-IsWindowsAdministrator
-$artifactRoot = Join-Path $root $Artifacts
+$artifactRoot = if ([IO.Path]::IsPathRooted($Artifacts)) { $Artifacts } else { Join-Path $root $Artifacts }
 $reportPath = Join-Path $artifactRoot "hardware-counter-preflight.md"
 $projectPath = Join-Path $root $Project
 
-if (-not (Test-Path $projectPath)) {
+if (-not (Test-Path -LiteralPath $projectPath -PathType Leaf)) {
     throw "Benchmark project 不存在：$Project"
 }
 
@@ -130,7 +130,7 @@ if ($isWindowsHost -and -not $isAdministrator) {
 }
 
 if (-not $RunBenchmark) {
-    $detail = "当前会话通过权限预检。重新运行并追加 -RunBenchmark 可执行 BenchmarkDotNet；在强制硬件计数器的 runner 中追加 -RequireCounters。"
+    $detail = "当前会话通过权限预检。重新运行并追加 -RunBenchmark 可执行 BenchmarkDotNet；脚本会在运行后强制检查 markdown 报告是否包含 Cache Misses 与 Branch Mispredictions 列。"
     Write-PreflightReport -Path $reportPath -Status "ready" -IsWindowsHost $isWindowsHost -IsAdministrator $isAdministrator -BenchmarkRequested $false -CommandLine $commandLine -Detail $detail
     Write-Host "Hardware counter preflight ready. Report: $reportPath"
     exit 0
