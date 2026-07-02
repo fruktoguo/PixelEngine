@@ -88,6 +88,7 @@ public sealed class ColorRenderTarget : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         BindFramebuffer();
+        _gl.Disable(EnableCap.ScissorTest);
         _gl.ClearColor(0f, 0f, 0f, 0f);
         _gl.Clear(ClearBufferMask.ColorBufferBit);
     }

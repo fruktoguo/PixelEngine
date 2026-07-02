@@ -67,12 +67,12 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <summary>
     /// 爆破后局部扫描半径，用于把脱离主地形的小型固体岛转换为刚体。
     /// </summary>
-    public int CollapseScanRadius { get; set; } = 96;
+    public int CollapseScanRadius { get; set; } = 144;
 
     /// <summary>
     /// 可自动转换的最大连通块包围盒尺寸，避免误把整片程序化地形转成刚体。
     /// </summary>
-    public int MaxCollapseRegionSize { get; set; } = 120;
+    public int MaxCollapseRegionSize { get; set; } = 176;
 
     /// <summary>
     /// 可自动转换的最小固体像素数。
@@ -186,7 +186,7 @@ public sealed class PlayableProjectileTool : Behaviour
 
     private int ConvertFloatingSolidIslandsNear(int centerX, int centerY, int maxConversions)
     {
-        int radius = Math.Clamp(CollapseScanRadius, 4, 160);
+        int radius = Math.Clamp(CollapseScanRadius, 4, 224);
         int size = (radius * 2) + 1;
         int originX = centerX - radius;
         int originY = centerY - radius;
@@ -208,8 +208,8 @@ public sealed class PlayableProjectileTool : Behaviour
                 }
 
                 Array.Clear(component);
-                int cellCount = FloodFillSolidIsland(localX, localY, originX, originY, size, visited, component, queue, cells, out int minX, out int minY, out int maxX, out int maxY, out bool touchesScanBorder);
-                if (!CanConvertIsland(cellCount, minX, minY, maxX, maxY, touchesScanBorder) ||
+                int cellCount = FloodFillSolidIsland(localX, localY, originX, originY, size, visited, component, queue, cells, out int minX, out int minY, out int maxX, out int maxY, out ComponentBorderContact borderContact);
+                if (!CanConvertIsland(cellCount, minX, minY, maxX, maxY, borderContact) ||
                     HasExternalSupport(originX, originY, size, cells, cellCount, component))
                 {
                     continue;
@@ -247,14 +247,14 @@ public sealed class PlayableProjectileTool : Behaviour
         out int minY,
         out int maxX,
         out int maxY,
-        out bool touchesScanBorder)
+        out ComponentBorderContact borderContact)
     {
         int head = 0;
         int tail = 0;
         int count = 0;
         minX = maxX = startX;
         minY = maxY = startY;
-        touchesScanBorder = false;
+        borderContact = ComponentBorderContact.None;
         int start = Pack(startX, startY, size);
         queue[tail++] = start;
         visited[start] = true;
@@ -270,7 +270,7 @@ public sealed class PlayableProjectileTool : Behaviour
             minY = Math.Min(minY, y);
             maxX = Math.Max(maxX, x);
             maxY = Math.Max(maxY, y);
-            touchesScanBorder |= x == 0 || y == 0 || x == size - 1 || y == size - 1;
+            borderContact |= BorderContact(x, y, size);
 
             TryEnqueueSolidNeighbor(x - 1, y, originX, originY, size, visited, component, queue, ref tail);
             TryEnqueueSolidNeighbor(x + 1, y, originX, originY, size, visited, component, queue, ref tail);
@@ -304,14 +304,19 @@ public sealed class PlayableProjectileTool : Behaviour
         queue[tail++] = packed;
     }
 
-    private bool CanConvertIsland(int cellCount, int minX, int minY, int maxX, int maxY, bool touchesScanBorder)
+    private bool CanConvertIsland(int cellCount, int minX, int minY, int maxX, int maxY, ComponentBorderContact borderContact)
     {
-        if (touchesScanBorder || cellCount < Math.Max(1, MinCollapsePixels))
+        if (cellCount < Math.Max(1, MinCollapsePixels))
         {
             return false;
         }
 
-        int maxSize = Math.Clamp(MaxCollapseRegionSize, 4, 192);
+        if ((borderContact & (ComponentBorderContact.Left | ComponentBorderContact.Right | ComponentBorderContact.Bottom)) != 0)
+        {
+            return false;
+        }
+
+        int maxSize = Math.Clamp(MaxCollapseRegionSize, 4, 224);
         return maxX - minX + 1 <= maxSize && maxY - minY + 1 <= maxSize;
     }
 
@@ -345,5 +350,41 @@ public sealed class PlayableProjectileTool : Behaviour
     private static int Pack(int x, int y, int width)
     {
         return (y * width) + x;
+    }
+
+    private static ComponentBorderContact BorderContact(int x, int y, int size)
+    {
+        ComponentBorderContact contact = ComponentBorderContact.None;
+        if (x == 0)
+        {
+            contact |= ComponentBorderContact.Left;
+        }
+
+        if (x == size - 1)
+        {
+            contact |= ComponentBorderContact.Right;
+        }
+
+        if (y == 0)
+        {
+            contact |= ComponentBorderContact.Top;
+        }
+
+        if (y == size - 1)
+        {
+            contact |= ComponentBorderContact.Bottom;
+        }
+
+        return contact;
+    }
+
+    [Flags]
+    private enum ComponentBorderContact : byte
+    {
+        None = 0,
+        Left = 1,
+        Right = 2,
+        Top = 4,
+        Bottom = 8,
     }
 }

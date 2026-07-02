@@ -544,6 +544,41 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证爆破扫描允许悬空块接触扫描框上边界，避免打掉支撑后上方石块因局部窗口过小被误判为不可转换。
+    /// </summary>
+    [Fact]
+    public void PlayableProjectileConvertsTopBorderDetachedIslandIntoRigidBody()
+    {
+        RecordingAudioApi audio = new();
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        FillRect(grid, stone, minX: 40, minY: 20, maxX: 50, maxY: 31);
+
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 16f;
+        player.SpawnY = 26f;
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.CooldownSeconds = 0f;
+        projectile.Range = 80f;
+        projectile.ImpactRadius = 1;
+        projectile.CollapseScanRadius = 10;
+
+        engine.RunHeadlessTicks(2);
+        input.Update([], [MouseButton.Left], mouseX: 41f, mouseY: 30f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        input.Update([], [], mouseX: 41f, mouseY: 30f, wheelY: 0f);
+        engine.RunHeadlessTicks(6);
+
+        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        Assert.Equal(1, projectile.ShotsFired);
+        Assert.True(projectile.CollapsedFloatingIslands >= 1, $"应转换贴近扫描框上边界的悬空石块，region={projectile.LastCollapsedRegion}");
+        Assert.True(physics.Stats.ActiveBodyCount >= 1);
+    }
+
+    /// <summary>
     /// 验证贴墙时跳跃输入会触发蹬墙，离开墙面并获得反向水平位移。
     /// </summary>
     [Fact]

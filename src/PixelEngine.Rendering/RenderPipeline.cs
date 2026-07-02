@@ -327,16 +327,21 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
         RecordSub(profiler, FrameSubPhase.GpuUpload, started);
 
         started = Stopwatch.GetTimestamp();
+        _scene.Clear();
         _worldBlit.Render(_worldTexture, _scene, camera, _quad);
         RenderGpuParticlesIfEnabled(particles, materials, camera);
         if (ShouldUseComputeLightComposite())
         {
             using GpuComputeProfiler.GpuTimerScope _ = _gpuComputeProfiler.Measure("light_composite", FrameSubPhase.GpuLightComposite);
+            _lit.Clear();
             _computeLightComposite!.Render(_scene, _visibility, _emissive, _lit);
         }
         else
         {
             _lit.BindFramebuffer();
+            _gl.Disable(EnableCap.ScissorTest);
+            _gl.ClearColor(0f, 0f, 0f, 0f);
+            _gl.Clear(ClearBufferMask.ColorBufferBit);
             _gl.Viewport(0, 0, (uint)Width, (uint)Height);
             _composite.Render(_scene, _emissive, _visibility, _quad);
         }
