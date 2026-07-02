@@ -46,37 +46,132 @@ function Get-ManualScopes {
     @(
         [pscustomobject]@{
             scope = "controlFeelReport"
+            kind = "report"
             title = "角色跑/跳/蹬墙、站在 settled 沙堆与 RigidOwned 刚体 stamp 像素上不穿不陷"
         },
         [pscustomobject]@{
             scope = "materialBrushAndReactionVideo"
+            kind = "video"
             title = "真实鼠标/滚轮/数字键操作材质笔刷，并观察沙堆休止角、水找平、油浮水、气体上升、反应和温度相变视觉质量"
         },
         [pscustomobject]@{
             scope = "rigidBodyGameplayVideo"
+            kind = "video"
             title = "真实窗口推动/被砸、挖断木桥转刚体、继续挖/烧/酸蚀破碎、metal 近熔岩熔化坍塌"
         },
         [pscustomobject]@{
             scope = "particleLightingVideo"
+            kind = "video"
             title = "血/碎屑/发光火花、爆炸推动邻近刚体、bloom/fog/mining lighting 视觉质量和长时间玩法无粒子泄漏"
         },
         [pscustomobject]@{
             scope = "audioListeningReport"
+            kind = "report"
             title = "真实设备听感与空间感：impact、splash、ambient、反应音、爆炸/破碎、玩家/UI/通关音效"
         },
         [pscustomobject]@{
             scope = "fullRoutePlaythroughVideo"
+            kind = "video"
             title = "从出生点用至少一种解法完整抵达出口，贯穿材质/反应/刚体/粒子/光照/音频"
         },
         [pscustomobject]@{
             scope = "hudMenuEditorVideo"
+            kind = "video"
             title = "HUD 像素布局、菜单点击、Editor dockspace 打开、重开、退出请求与叠层切换"
         },
         [pscustomobject]@{
             scope = "hotReloadWindowReport"
+            kind = "report"
             title = "开发态真实窗口修改 Behaviour 后 Roslyn + ALC 热重载，场景与世界状态保留"
         }
     )
+}
+
+function Get-JsonPropertyValue {
+    param(
+        [object]$Object,
+        [string]$Name
+    )
+
+    $property = $Object.PSObject.Properties | Where-Object { $_.Name -eq $Name } | Select-Object -First 1
+    if ($null -eq $property) {
+        return $null
+    }
+
+    return $property.Value
+}
+
+function Get-RequiredJsonString {
+    param(
+        [object]$Object,
+        [string]$Name,
+        [string]$Scope
+    )
+
+    $value = Get-JsonPropertyValue -Object $Object -Name $Name
+    if ([string]::IsNullOrWhiteSpace([string]$value)) {
+        throw "evidence scope $Scope 缺少 $Name。"
+    }
+
+    return [string]$value
+}
+
+function Assert-ManualEvidenceMetadata {
+    param(
+        [object]$Entry,
+        [object]$ScopeDefinition,
+        [string]$ResolvedPath
+    )
+
+    $scope = [string]$ScopeDefinition.scope
+    $expectedKind = [string]$ScopeDefinition.kind
+    $kind = Get-RequiredJsonString -Object $Entry -Name "kind" -Scope $scope
+    if ($kind -ne $expectedKind) {
+        throw "evidence scope $scope kind 必须为 $expectedKind，实际为 $kind。"
+    }
+
+    $reviewer = Get-RequiredJsonString -Object $Entry -Name "reviewer" -Scope $scope
+    if ($reviewer.Length -lt 2) {
+        throw "evidence scope $scope reviewer 过短。"
+    }
+
+    $capturedAt = Get-RequiredJsonString -Object $Entry -Name "capturedAt" -Scope $scope
+    $parsedCapturedAt = [DateTimeOffset]::MinValue
+    if (-not [DateTimeOffset]::TryParse($capturedAt, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$parsedCapturedAt)) {
+        throw "evidence scope $scope capturedAt 不是可解析时间：$capturedAt"
+    }
+
+    $notes = Get-RequiredJsonString -Object $Entry -Name "notes" -Scope $scope
+    if ($notes.Trim().Length -lt 20) {
+        throw "evidence scope $scope notes 至少需要 20 个字符，说明观察结论与残余风险。"
+    }
+
+    $extension = [System.IO.Path]::GetExtension($ResolvedPath).ToLowerInvariant()
+    if ($expectedKind -eq "video") {
+        $allowedVideo = @(".mp4", ".mov", ".mkv", ".webm")
+        if ($extension -notin $allowedVideo) {
+            throw "evidence scope $scope 是 video，文件扩展名必须为 $($allowedVideo -join ', ')。"
+        }
+
+        $duration = Get-JsonPropertyValue -Object $Entry -Name "durationSeconds"
+        if ($null -eq $duration) {
+            throw "evidence scope $scope 是 video，缺少 durationSeconds。"
+        }
+
+        $durationValue = [double]$duration
+        if ($durationValue -le 0) {
+            throw "evidence scope $scope durationSeconds 必须为正数。"
+        }
+    }
+    elseif ($expectedKind -eq "report") {
+        $allowedReport = @(".md", ".txt", ".pdf")
+        if ($extension -notin $allowedReport) {
+            throw "evidence scope $scope 是 report，文件扩展名必须为 $($allowedReport -join ', ')。"
+        }
+    }
+    else {
+        throw "未知人工证据 kind：$expectedKind"
+    }
 }
 
 function Invoke-ScriptedProbe {
@@ -156,7 +251,12 @@ function Read-EvidenceManifest {
         throw "Demo manual acceptance manifest schemaVersion 必须为 1。"
     }
 
-    $requiredScopes = @(Get-ManualScopes | ForEach-Object { $_.scope })
+    $scopeDefinitions = @(Get-ManualScopes)
+    $requiredScopes = @($scopeDefinitions | ForEach-Object { $_.scope })
+    $scopeByName = @{}
+    foreach ($definition in $scopeDefinitions) {
+        $scopeByName[[string]$definition.scope] = $definition
+    }
     $entries = @($manifest.evidence)
     $scopes = @{}
     foreach ($entry in $entries) {
@@ -200,6 +300,8 @@ function Read-EvidenceManifest {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
             throw "evidence scope $scope 指向文件不存在：$path"
         }
+
+        Assert-ManualEvidenceMetadata -Entry $entry -ScopeDefinition $scopeByName[$scope] -ResolvedPath $path
 
         $hashProperty = $entry.PSObject.Properties | Where-Object { $_.Name -eq "sha256" } | Select-Object -First 1
         $declaredHash = if ($null -eq $hashProperty) { "" } else { [string]$hashProperty.Value }
@@ -250,7 +352,7 @@ function Write-ManualAcceptanceReport {
     $lines.Add("## 人工验收 scope")
     $lines.Add("")
     foreach ($scope in Get-ManualScopes) {
-        $lines.Add("- $($scope.scope): $($scope.title)")
+        $lines.Add("- $($scope.scope) [$($scope.kind)]: $($scope.title)")
     }
     $lines.Add("")
 
@@ -307,7 +409,7 @@ $probeRuns = [System.Collections.Generic.List[object]]::new()
 if ($RunScriptedProbes) {
     $probeRoot = Join-Path $artifactRoot "scripted-probes"
     New-Item -ItemType Directory -Force -Path $probeRoot | Out-Null
-    $probeRuns.Add((Invoke-ScriptedProbe -Name "playable-world" -Ticks 120 -Scene "scenes/playable-world.scene" -RequiredSummaryMarkers @("player_visual=present", "player_visual_overlays=", "playable_shots=1", "camera_followed=True", "render_camera_synced=True", "player_left_ground=True", "player_air_control=True", "player_ground_samples=", "player_air_samples=", "max_particles=", "hud_blocked=none") -Root $root -OutputRoot $probeRoot))
+    $probeRuns.Add((Invoke-ScriptedProbe -Name "playable-world" -Ticks 120 -Scene "scenes/playable-world.scene" -RequiredSummaryMarkers @("player_visual=present", "player_visual_overlays=", "playable_shots=1", "particles=0", "fps=", "sim_hz=", "camera_followed=True", "render_camera_synced=True", "player_left_ground=True", "player_air_control=True", "player_ground_samples=", "player_air_samples=", "max_particles=", "hud_blocked=none") -Root $root -OutputRoot $probeRoot))
     $probeRuns.Add((Invoke-ScriptedProbe -Name "main" -Ticks 80 -Scene "scenes/lava-mine.scene" -RequiredSummaryMarkers @("brush_material=stone", "brush_radius=5", "painted_material=13", "explosions=1", "max_particles=", "max_lights=4", "max_physics_destroyed=2", "hud_blocked=none") -Root $root -OutputRoot $probeRoot))
     $probeRuns.Add((Invoke-ScriptedProbe -Name "route-attempt" -Ticks 1500 -Scene "scenes/lava-mine.scene" -RequiredSummaryMarkers @("pause_open=False", "hud_blocked=none", "render_camera_synced=True", "goal_reached=True", "player_x_range=") -Root $root -OutputRoot $probeRoot -ExtraArguments @("--scripted-window-route")))
     $probeRuns.Add((Invoke-ScriptedProbe -Name "goal" -Ticks 40 -Scene "scenes/lava-mine-goal-probe.scene" -RequiredSummaryMarkers @("goal_reached=True", "painted_material=13", "max_particles=", "max_lights=4") -Root $root -OutputRoot $probeRoot))

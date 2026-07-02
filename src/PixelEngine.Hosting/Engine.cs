@@ -418,12 +418,12 @@ public sealed class Engine : IDisposable
         }
 
         bool wantsEditor = Context.Options.EnableEditor;
-        if (!wantsEditor)
+        bool hasScriptGui = Context.TryGetService(out IScriptRuntime scriptRuntime);
+        if (!wantsEditor && !hasScriptGui)
         {
             return;
         }
 
-        bool hasScriptGui = Context.TryGetService(out IScriptRuntime scriptRuntime);
         EditorApp editor = ResolveEditorApp(wantsEditor);
         EditorInputConnector input = new(window, editor.Input);
         EditorRenderBridge? bridge = EditorRenderBridge.AttachIfEnabled(

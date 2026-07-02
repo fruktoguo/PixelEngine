@@ -399,6 +399,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("RequiredSummaryMarkers", script, StringComparison.Ordinal);
         Assert.Contains("player_visual=present", script, StringComparison.Ordinal);
         Assert.Contains("playable_shots=1", script, StringComparison.Ordinal);
+        Assert.Contains("particles=0", script, StringComparison.Ordinal);
+        Assert.Contains("fps=", script, StringComparison.Ordinal);
+        Assert.Contains("sim_hz=", script, StringComparison.Ordinal);
         Assert.Contains("brush_material=stone", script, StringComparison.Ordinal);
         Assert.Contains("painted_material=13", script, StringComparison.Ordinal);
         Assert.Contains("goal_reached=True", script, StringComparison.Ordinal);
@@ -470,8 +473,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         try
         {
-            string goodManifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "good");
-            string badManifest = CreateFlatEvidenceManifest(temp, manualScopes[..^1], suffix: "bad");
+            string goodManifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "good", includeDemoManualMetadata: true);
+            string badManifest = CreateFlatEvidenceManifest(temp, manualScopes[..^1], suffix: "bad", includeDemoManualMetadata: true);
 
             string badArtifacts = Path.Combine(temp, "bad-out");
             ScriptResult bad = RunPowerShellScript(
@@ -1211,7 +1214,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         return manifestPath;
     }
 
-    private static string CreateFlatEvidenceManifest(string tempRoot, IReadOnlyList<string> scopes, string suffix)
+    private static string CreateFlatEvidenceManifest(
+        string tempRoot,
+        IReadOnlyList<string> scopes,
+        string suffix,
+        bool includeDemoManualMetadata = false)
     {
         string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "flat-evidence");
         _ = Directory.CreateDirectory(evidenceRoot);
@@ -1220,13 +1227,29 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         foreach (string scope in scopes)
         {
             string safeScope = scope.Replace('/', '-');
-            string report = WriteTextEvidence(Path.Combine(evidenceRoot, $"{safeScope}.md"), $"{scope} evidence");
-            evidence.Add(new Dictionary<string, object>
+            bool isVideo = includeDemoManualMetadata && scope.EndsWith("Video", StringComparison.Ordinal);
+            string extension = isVideo ? ".mp4" : ".md";
+            string report = WriteTextEvidence(Path.Combine(evidenceRoot, $"{safeScope}{extension}"), $"{scope} evidence");
+            Dictionary<string, object> entry = new()
             {
                 ["scope"] = scope,
                 ["path"] = report,
                 ["sha256"] = GetSha256(report),
-            });
+            };
+
+            if (includeDemoManualMetadata)
+            {
+                entry["kind"] = isVideo ? "video" : "report";
+                entry["reviewer"] = "test-reviewer";
+                entry["capturedAt"] = "2026-07-03T00:00:00Z";
+                entry["notes"] = $"{scope} notes";
+                if (isVideo)
+                {
+                    entry["durationSeconds"] = 1.0;
+                }
+            }
+
+            evidence.Add(entry);
         }
 
         Dictionary<string, object> manifest = new()
