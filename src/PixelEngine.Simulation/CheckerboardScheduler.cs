@@ -66,7 +66,7 @@ public sealed class CheckerboardScheduler
         ArgumentNullException.ThrowIfNull(customUpdateExecutor);
         ArgumentNullException.ThrowIfNull(diagnostics);
 
-        int awakeCount = BuildBuckets(chunks.ResidentChunks, throttlePolicy);
+        int awakeCount = BuildBuckets(chunks, throttlePolicy);
         if (awakeCount == 0)
         {
             return;
@@ -127,7 +127,7 @@ public sealed class CheckerboardScheduler
         ArgumentNullException.ThrowIfNull(customUpdateExecutor);
         ArgumentNullException.ThrowIfNull(diagnostics);
 
-        if (BuildBuckets(chunks.ResidentChunks, throttlePolicy) == 0)
+        if (BuildBuckets(chunks, throttlePolicy) == 0)
         {
             return;
         }
@@ -144,8 +144,9 @@ public sealed class CheckerboardScheduler
         }
     }
 
-    private int BuildBuckets(ReadOnlySpan<Chunk> residentChunks, CaChunkThrottlePolicy throttlePolicy)
+    private int BuildBuckets(IChunkSource chunks, CaChunkThrottlePolicy throttlePolicy)
     {
+        ReadOnlySpan<Chunk> residentChunks = chunks.ResidentChunks;
         EnsureBucketCapacity(residentChunks.Length);
         EnsureParityPrepareCapacity(residentChunks.Length);
         ClearBuckets();
@@ -162,6 +163,14 @@ public sealed class CheckerboardScheduler
             if (!throttlePolicy.ShouldRunDistantThisFrame(chunk.Coord))
             {
                 chunk.DeferCurrentDirty();
+                continue;
+            }
+
+            if (!chunks.ResolveNeighborhood(chunk.Coord, out _))
+            {
+                // 固定 resident world 的最外圈 guard chunk 只提供 halo 读写缓冲，不应被 CA 调度。
+                // 缺少完整 3x3 邻域时直接丢弃这圈 dirty，避免边缘传播把有限世界外壳唤醒成非法 active chunk。
+                chunk.ClearDirty();
                 continue;
             }
 

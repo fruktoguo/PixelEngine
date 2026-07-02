@@ -62,6 +62,29 @@ public sealed class MarchingSquaresTests
     }
 
     /// <summary>
+    /// 验证外轮廓便捷入口能处理带内孔 mask，只返回 CCW 外轮廓。
+    /// </summary>
+    [Fact]
+    public void TraceOuterContourWithHoleReturnsOnlyOuterBoundary()
+    {
+        byte[] mask =
+        [
+            1, 1, 1,
+            1, 0, 1,
+            1, 1, 1,
+        ];
+        Span<Vector2> contour = stackalloc Vector2[MarchingSquares.GetMaximumContourPointCount(3, 3)];
+
+        int written = MarchingSquares.TraceOuterContour(mask, 3, 3, contour);
+
+        Assert.Equal(13, written);
+        Assert.Equal(contour[0], contour[written - 1]);
+        Assert.True(SignedArea(contour[..written]) > 0f);
+        Assert.Contains(new Vector2(0, 0), contour[..written].ToArray());
+        Assert.Contains(new Vector2(3, 3), contour[..written].ToArray());
+    }
+
+    /// <summary>
     /// 验证带内孔 mask 会输出外轮廓和 CW 内孔。
     /// </summary>
     [Fact]

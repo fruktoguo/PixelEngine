@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Numerics;
 
 namespace PixelEngine.Physics.Geometry;
@@ -17,9 +18,27 @@ public static class MarchingSquares
     /// <returns>写入点数；包含重复的闭合终点。</returns>
     public static int TraceOuterContour(ReadOnlySpan<byte> solidMask, int width, int height, Span<Vector2> destination)
     {
-        Span<ContourRange> ranges = stackalloc ContourRange[1];
-        int count = TraceContours(solidMask, width, height, destination, ranges);
-        return count == 0 ? 0 : ranges[0].Count;
+        ContourRange[] ranges = ArrayPool<ContourRange>.Shared.Rent(GetMaximumContourRangeCount(width, height));
+        try
+        {
+            int count = TraceContours(solidMask, width, height, destination, ranges);
+            if (count == 0)
+            {
+                return 0;
+            }
+
+            ContourRange outer = ranges[0];
+            if (outer.Start != 0)
+            {
+                destination.Slice(outer.Start, outer.Count).CopyTo(destination);
+            }
+
+            return outer.Count;
+        }
+        finally
+        {
+            ArrayPool<ContourRange>.Shared.Return(ranges);
+        }
     }
 
     /// <summary>
@@ -147,6 +166,19 @@ public static class MarchingSquares
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
         return checked((width * height * 4) + 1);
+    }
+
+    /// <summary>
+    /// 获取最坏情况下的轮廓条数上界。
+    /// </summary>
+    /// <param name="width">mask 宽度。</param>
+    /// <param name="height">mask 高度。</param>
+    /// <returns>轮廓条数上界。</returns>
+    public static int GetMaximumContourRangeCount(int width, int height)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        return checked(width * height);
     }
 
     private static List<BoundaryEdge> BuildBoundaryEdges(ReadOnlySpan<byte> solidMask, int width, int height)

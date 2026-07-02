@@ -134,6 +134,24 @@ public sealed class ResidencyBoundaryTests
         }
     }
 
+    /// <summary>
+    /// 验证固定 resident world 的最外圈 guard chunk 被 dirty 唤醒时不会进入 CA 调度。
+    /// </summary>
+    [Fact]
+    public void CaSchedulerDropsDirtyGuardChunkWithoutFullNeighborhood()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk guard = new(new ChunkCoord(0, 0));
+        chunks.Add(guard);
+        guard.SetCurrentDirty(DirtyRect.Full);
+        SimulationKernel kernel = new(chunks, CreateProps());
+
+        kernel.StepCa();
+
+        Assert.Equal(DirtyRect.Empty, guard.CurrentDirty);
+        Assert.Equal(ChunkState.Sleeping, guard.State);
+    }
+
     private static WorldManager CreateManager(
         string worldPath,
         long focusX,
