@@ -146,6 +146,48 @@ public sealed class EnginePhaseDriverTests
     }
 
     /// <summary>
+    /// 验证 GPU 粒子输出端接管粒子时，相位 9 不再把同一批粒子 CPU stamp 进 render buffer。
+    /// </summary>
+    [Fact]
+    public void RenderPhaseDriverSkipsCpuParticleStampWhenSinkUsesGpuParticles()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("spark", CellType.Fire));
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        TestChunkSource chunks = new(chunk);
+        ParticleSystem particles = new(capacity: 16);
+        Assert.True(particles.TrySpawn(new ParticleSpawn(1, 0, 0, 0, Material: 1, ColorVariant: 0, Life: 10)));
+        TemperatureField temperature = new();
+        ScriptCameraApi camera = new(viewportWidth: 32, viewportHeight: 16, centerX: 16, centerY: 8, zoom: 1);
+        ScriptCameraSynchronizer cameraSync = new(camera);
+        _ = cameraSync.Sync();
+        ScriptLightingSynchronizer lightingSync = new(new ScriptLightingApi(), cameraSync);
+        lightingSync.Sync();
+        RecordingRenderFrameSink sink = new()
+        {
+            ParticleRenderMode = ParticleRenderMode.GpuPointSprite,
+        };
+        RenderPhaseDriver driver = new(
+            chunks,
+            materials,
+            temperature,
+            particles,
+            cameraSync,
+            lightingSync,
+            sink);
+
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddPhaseDriver(driver)
+            .Build();
+
+        _ = engine.RunOneTick();
+
+        Assert.Equal(1, sink.FrameCount);
+        Assert.Equal(1, sink.ParticleCount);
+        Assert.Equal(0u, sink.ParticlePixel);
+    }
+
+    /// <summary>
     /// 验证 CA iteration 调试叠层只显示本帧实际迭代区域，resident sleeping chunk 不产生迭代矩形。
     /// </summary>
     [Fact]
@@ -605,6 +647,8 @@ public sealed class EnginePhaseDriverTests
 
     private sealed class RecordingRenderFrameSink : IRenderFrameSink
     {
+        public ParticleRenderMode ParticleRenderMode { get; init; } = ParticleRenderMode.CpuStamp;
+
         public int FrameCount { get; private set; }
 
         public int Width { get; private set; }

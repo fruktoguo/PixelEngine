@@ -1,3 +1,4 @@
+using PixelEngine.Rendering;
 using Xunit;
 
 namespace PixelEngine.Demo.Tests;
@@ -56,6 +57,21 @@ public sealed class DemoStartupOptionsTests
         Assert.True(options.ScriptedWindowDemo);
         Assert.Equal(60, options.WindowTicks);
         _ = Assert.Throws<ArgumentException>(() => DemoStartupOptions.Parse(["--scripted-window-demo"]));
+    }
+
+    /// <summary>
+    /// 验证窗口态可显式请求 CPU/GPU 粒子渲染模式，作为真实窗口粒子帧时间 probe 的前置开关。
+    /// </summary>
+    [Fact]
+    public void ParticleRenderModeOptionIsWindowOnlyAndParsesCpuGpu()
+    {
+        DemoStartupOptions cpu = DemoStartupOptions.Parse(["--window-ticks", "1", "--particle-render-mode", "cpu"]);
+        DemoStartupOptions gpu = DemoStartupOptions.Parse(["--window-ticks", "1", "--particle-render-mode", "gpu"]);
+
+        Assert.Equal(ParticleRenderMode.CpuStamp, cpu.ParticleRenderMode);
+        Assert.Equal(ParticleRenderMode.GpuPointSprite, gpu.ParticleRenderMode);
+        _ = Assert.Throws<ArgumentException>(() => DemoStartupOptions.Parse(["--headless", "--particle-render-mode", "gpu"]));
+        _ = Assert.Throws<ArgumentException>(() => DemoStartupOptions.Parse(["--window-ticks", "1", "--particle-render-mode", "bad"]));
     }
 
     /// <summary>

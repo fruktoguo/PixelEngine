@@ -11,6 +11,11 @@ public sealed class RenderPipelineFrameSink(RenderPipeline pipeline) : IRenderFr
 {
     private readonly RenderPipeline _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
 
+    /// <inheritdoc />
+    public ParticleRenderMode ParticleRenderMode => _pipeline.CanRenderParticlesOnGpu
+        ? ParticleRenderMode.GpuPointSprite
+        : ParticleRenderMode.CpuStamp;
+
     /// <summary>
     /// 把 Hosting 构建出的 CPU render buffer、辅助 buffer、相机、dirty rect、overlay、粒子与 fog-of-war 数据提交给真实 Rendering 管线。
     /// </summary>

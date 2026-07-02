@@ -10,6 +10,11 @@ namespace PixelEngine.Hosting;
 public interface IRenderFrameSink
 {
     /// <summary>
+    /// 当前帧输出端实际接管的自由粒子渲染模式。默认由相位 9 CPU stamp 粒子。
+    /// </summary>
+    ParticleRenderMode ParticleRenderMode => ParticleRenderMode.CpuStamp;
+
+    /// <summary>
     /// 提交一帧渲染。
     /// </summary>
     void Render(

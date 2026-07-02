@@ -7,6 +7,7 @@ using PixelEngine.Core.Time;
 using PixelEngine.Editor;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
+using PixelEngine.Rendering.Compute;
 using PixelEngine.Scripting;
 using PixelEngine.Serialization;
 using PixelEngine.Simulation;
@@ -379,7 +380,11 @@ public sealed class Engine : IDisposable
         SimulationPhaseDriver simulation = Context.GetService<SimulationPhaseDriver>();
         ScriptCameraSynchronizer camera = AttachCameraSynchronization(window);
         ScriptLightingSynchronizer lighting = AttachLightingSynchronization();
-        RenderPipeline pipeline = new(window, Math.Max(1, window.Width), Math.Max(1, window.Height));
+        ComputeFeatureSwitches computeFeatures = ComputeFeatureSwitches.Default with
+        {
+            GpuParticlesEnabled = Context.Options.EnableGpu,
+        };
+        RenderPipeline pipeline = new(window, Math.Max(1, window.Width), Math.Max(1, window.Height), computeFeatures);
         RenderPipelineFrameSink sink = new(pipeline);
         RenderPhaseDriver driver = new(
             Context.GetService<IChunkSource>(),

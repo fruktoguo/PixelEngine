@@ -108,6 +108,13 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
     public RenderPipelineSettings Settings { get; } = new();
 
     /// <summary>
+    /// 当前管线是否可在 GPU point-sprite 路径接管自由粒子渲染。
+    /// </summary>
+    public bool CanRenderParticlesOnGpu =>
+        Settings.ParticleRenderMode == ParticleRenderMode.GpuPointSprite &&
+        _computeGate.FeatureSwitches.GpuParticlesEnabled;
+
+    /// <summary>
     /// 当前宽度。
     /// </summary>
     public int Width => _worldTexture.Width;

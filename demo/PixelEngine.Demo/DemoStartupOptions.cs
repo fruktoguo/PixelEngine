@@ -1,3 +1,5 @@
+using PixelEngine.Rendering;
+
 namespace PixelEngine.Demo;
 
 /// <summary>
@@ -46,6 +48,11 @@ public sealed class DemoStartupOptions
     public bool ScriptedWindowDemo { get; init; }
 
     /// <summary>
+    /// 显式请求的自由粒子渲染模式；为空表示使用渲染管线默认值。
+    /// </summary>
+    public ParticleRenderMode? ParticleRenderMode { get; init; }
+
+    /// <summary>
     /// 内容根目录。
     /// </summary>
     public string ContentRoot { get; init; } = Path.Combine(AppContext.BaseDirectory, "content");
@@ -74,6 +81,7 @@ public sealed class DemoStartupOptions
         int ticks = 1;
         int windowTicks = 0;
         bool scriptedWindowDemo = false;
+        ParticleRenderMode? particleRenderMode = null;
         string contentRoot = Path.Combine(AppContext.BaseDirectory, "content");
         string scene = Path.Combine("scenes", DefaultSceneName + ".scene");
         string logDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
@@ -126,6 +134,9 @@ public sealed class DemoStartupOptions
                 case "--scripted-window-demo":
                     scriptedWindowDemo = true;
                     break;
+                case "--particle-render-mode":
+                    particleRenderMode = ParseParticleRenderMode(ReadValue(args, ref i, "--particle-render-mode"));
+                    break;
                 case "--log-dir":
                     logDirectory = ReadValue(args, ref i, "--log-dir");
                     break;
@@ -136,6 +147,7 @@ public sealed class DemoStartupOptions
 
         ValidateWindowTicks(headless, windowTicks);
         ValidateScriptedWindowDemo(headless, windowTicks, scriptedWindowDemo);
+        ValidateParticleRenderMode(headless, particleRenderMode);
         return new DemoStartupOptions
         {
             EnableEditor = enableEditor,
@@ -144,6 +156,7 @@ public sealed class DemoStartupOptions
             HeadlessTicks = ticks,
             WindowTicks = windowTicks,
             ScriptedWindowDemo = scriptedWindowDemo,
+            ParticleRenderMode = particleRenderMode,
             ContentRoot = contentRoot,
             Scene = scene,
             LogDirectory = logDirectory,
@@ -162,6 +175,23 @@ public sealed class DemoStartupOptions
         _ = scriptedWindowDemo && (headless || windowTicks <= 0)
             ? throw new ArgumentException("--scripted-window-demo 只能与窗口有限短跑 --window-ticks 一起使用。", nameof(scriptedWindowDemo))
             : true;
+    }
+
+    private static void ValidateParticleRenderMode(bool headless, ParticleRenderMode? particleRenderMode)
+    {
+        _ = headless && particleRenderMode.HasValue
+            ? throw new ArgumentException("--particle-render-mode 只能用于窗口模式。", nameof(particleRenderMode))
+            : true;
+    }
+
+    private static ParticleRenderMode ParseParticleRenderMode(string value)
+    {
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "cpu" or "cpu-stamp" => PixelEngine.Rendering.ParticleRenderMode.CpuStamp,
+            "gpu" or "gpu-point-sprite" => PixelEngine.Rendering.ParticleRenderMode.GpuPointSprite,
+            _ => throw new ArgumentException("--particle-render-mode 仅支持 cpu 或 gpu。", nameof(value)),
+        };
     }
 
     private static string ReadValue(string[] args, ref int index, string option)
