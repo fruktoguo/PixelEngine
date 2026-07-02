@@ -18,6 +18,8 @@
 ./tools/demo-manual-acceptance-preflight.ps1 -RunScriptedProbes -AllowBlocked
 ```
 
+该入口会运行主场景、通关、生命、相机、反应/温度、音频、粒子/光照七个 scripted window probe，并要求各自输出关键摘要 marker，例如 `brush_material=stone`、`goal_reached=True`、`damage_events=`、`camera_followed=True`、`reactions_observed=True`、`audio_probe_one_shot_played=True` 与 `particle_light_probe_depleted=True`。这些 marker 只证明真实窗口相位链路中的机器探针仍可复现，不证明视觉质量、听感、手感或完整路线体验通过。
+
 附加人工 evidence manifest：
 
 ```pwsh

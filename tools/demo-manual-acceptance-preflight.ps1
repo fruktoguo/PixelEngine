@@ -84,6 +84,7 @@ function Invoke-ScriptedProbe {
         [string]$Name,
         [int]$Ticks,
         [string]$Scene,
+        [string[]]$RequiredSummaryMarkers,
         [string]$Root,
         [string]$OutputRoot
     )
@@ -115,13 +116,24 @@ function Invoke-ScriptedProbe {
         throw "scripted window probe $Name 退出码为 $($process.ExitCode)。"
     }
 
+    if ([string]::IsNullOrWhiteSpace($summary)) {
+        throw "scripted window probe $Name 未输出脚本化窗口输入摘要。"
+    }
+
+    foreach ($marker in $RequiredSummaryMarkers) {
+        if (-not $summary.Contains($marker, [StringComparison]::Ordinal)) {
+            throw "scripted window probe $Name 摘要缺少标记：$marker。摘要：$summary"
+        }
+    }
+
     [pscustomobject]@{
         name = $Name
         scene = $Scene
         ticks = $Ticks
         stdout = ConvertTo-RepositoryRelativePath -Root $Root -Path $stdoutPath
         stderr = ConvertTo-RepositoryRelativePath -Root $Root -Path $stderrPath
-        summary = if ([string]::IsNullOrWhiteSpace($summary)) { "<missing>" } else { $summary }
+        required = $RequiredSummaryMarkers
+        summary = $summary
     }
 }
 
@@ -231,6 +243,7 @@ function Write-ManualAcceptanceReport {
             $lines.Add("ticks: $($run.ticks)")
             $lines.Add(('stdout: `{0}`' -f $run.stdout))
             $lines.Add(('stderr: `{0}`' -f $run.stderr))
+            $lines.Add("required_markers: $($run.required -join '; ')")
             $lines.Add("")
             $lines.Add('```text')
             $lines.Add($run.summary)
@@ -273,10 +286,13 @@ $probeRuns = [System.Collections.Generic.List[object]]::new()
 if ($RunScriptedProbes) {
     $probeRoot = Join-Path $artifactRoot "scripted-probes"
     New-Item -ItemType Directory -Force -Path $probeRoot | Out-Null
-    $probeRuns.Add((Invoke-ScriptedProbe -Name "main" -Ticks 80 -Scene "scenes/lava-mine.scene" -Root $root -OutputRoot $probeRoot))
-    $probeRuns.Add((Invoke-ScriptedProbe -Name "goal" -Ticks 40 -Scene "scenes/lava-mine-goal-probe.scene" -Root $root -OutputRoot $probeRoot))
-    $probeRuns.Add((Invoke-ScriptedProbe -Name "audio" -Ticks 30 -Scene "scenes/lava-mine-audio-probe.scene" -Root $root -OutputRoot $probeRoot))
-    $probeRuns.Add((Invoke-ScriptedProbe -Name "particle-light" -Ticks 120 -Scene "scenes/lava-mine-particle-light-probe.scene" -Root $root -OutputRoot $probeRoot))
+    $probeRuns.Add((Invoke-ScriptedProbe -Name "main" -Ticks 80 -Scene "scenes/lava-mine.scene" -RequiredSummaryMarkers @("brush_material=stone", "brush_radius=5", "painted_material=13", "explosions=1", "max_particles=", "max_lights=4", "max_physics_destroyed=2", "hud_blocked=none") -Root $root -OutputRoot $probeRoot))
+    $probeRuns.Add((Invoke-ScriptedProbe -Name "goal" -Ticks 40 -Scene "scenes/lava-mine-goal-probe.scene" -RequiredSummaryMarkers @("goal_reached=True", "painted_material=13", "max_particles=", "max_lights=4") -Root $root -OutputRoot $probeRoot))
+    $probeRuns.Add((Invoke-ScriptedProbe -Name "health" -Ticks 80 -Scene "scenes/lava-mine-health-probe.scene" -RequiredSummaryMarkers @("spawn_probe=True", "damage_events=", "player_health=", "player_center_material=13") -Root $root -OutputRoot $probeRoot))
+    $probeRuns.Add((Invoke-ScriptedProbe -Name "camera" -Ticks 80 -Scene "scenes/lava-mine-camera-probe.scene" -RequiredSummaryMarkers @("camera_followed=True", "render_camera_synced=True", "camera_zoom=4.00", "camera_samples=") -Root $root -OutputRoot $probeRoot))
+    $probeRuns.Add((Invoke-ScriptedProbe -Name "reaction" -Ticks 180 -Scene "scenes/lava-mine-reaction-probe.scene" -RequiredSummaryMarkers @("reaction_probe_initialized=True", "reactions_observed=True", "phase_transitions_observed=True", "lava_water=True", "sand_glassed=True") -Root $root -OutputRoot $probeRoot))
+    $probeRuns.Add((Invoke-ScriptedProbe -Name "audio" -Ticks 30 -Scene "scenes/lava-mine-audio-probe.scene" -RequiredSummaryMarkers @("audio_probe_one_shot_played=True", "audio_probe_ambient_activated=True", "audio_probe_limited=True", "audio_probe_max_dropped=64") -Root $root -OutputRoot $probeRoot))
+    $probeRuns.Add((Invoke-ScriptedProbe -Name "particle-light" -Ticks 120 -Scene "scenes/lava-mine-particle-light-probe.scene" -RequiredSummaryMarkers @("particle_light_probe_spawned=96", "particle_light_probe_lifetime_kill=True", "particle_light_probe_depleted=True", "particle_light_probe_light_observed=True", "particle_light_probe_lighting_synced=True") -Root $root -OutputRoot $probeRoot))
     $status = "scripted_probe_only"
 }
 
