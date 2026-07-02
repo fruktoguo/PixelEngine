@@ -98,7 +98,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [x] 脚本经 `EngineContext` 能读写世界/建刚体/播音效,写操作落在正确相位(配合 plan/11 测试)。AudioService 与 PhysicsSystem 后端已注册，脚本可见 Physics 建/查/控/毁刚体命令与角色移动已在 phase 8 step 前 flush。
 - [x] Play/Edit/Step 切换正确:进入 Play 快照、退出回滚到编辑态,脚本 OnStart/OnDestroy 正确触发。world 快照/回滚已由 `EngineWorldSnapshotStore` 接入 Editor 临时 Play，`EngineEditorPlaySessionService.ExitPlay()` 已结束脚本 Play Session 并允许再次进入 Play 时重新 OnStart，存活 Behaviour 字段与脚本 Scene 拓扑均可恢复。
 - [x] headless 模式可被 plan/14 测试/基准以确定步数驱动,无窗口依赖。
-- [!] 关闭时 native 资源与 ALC 正确释放,无泄漏(配合 plan/14 scripting 测试)。Hosting 已验证关闭时释放 `IScriptRuntime`，Scripting 已验证热重载旧 ALC 可回收；本机真实窗口非 Editor 3600 tick 与 Editor 1200 tick 进程均 exit=0，外部采样峰值工作集约 163 MB；`tools/native-leak-preflight.ps1` 可生成 process smoke、detector 报告索引与四类 evidence manifest hash 清单，但无 detector 时默认失败，证据齐全也仅为 `pending_review`。阻塞:仍缺跨平台 runner 与专用 GL/OpenAL/Box2D native leak detector 证据。
+- [!] 关闭时 native 资源与 ALC 正确释放,无泄漏(配合 plan/14 scripting 测试)。Hosting 已验证关闭时释放 `IScriptRuntime`，Scripting 已验证热重载旧 ALC 可回收；本机真实窗口非 Editor 3600 tick 与 Editor 1200 tick 进程均 exit=0，外部采样峰值工作集约 163 MB；`tools/native-leak-preflight.ps1` 可生成 process smoke、detector 报告索引与四类 evidence manifest hash 清单，缺 scope/report/hash 为 `blocked_missing_scope_evidence`，JSON/schema/未知 scope/hash mismatch 为 `blocked_invalid_native_leak_evidence`，但无 detector 时默认失败，证据齐全也仅为 `detector_evidence_attached_pending_review`。阻塞:仍缺跨平台 runner 与专用 GL/OpenAL/Box2D native leak detector 证据。
 - [x] Demo(plan/13)仅经 Hosting 公开 API 启动,无引擎内部后门。
 
 ## 6. 依赖关系
