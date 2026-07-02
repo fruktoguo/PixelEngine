@@ -118,6 +118,11 @@ public abstract class Behaviour : IComponent
         OnDestroy();
     }
 
+    internal void ResetPlaySessionLifecycle()
+    {
+        Started = false;
+    }
+
     internal void TrackSubscription(IDisposable subscription)
     {
         ArgumentNullException.ThrowIfNull(subscription);

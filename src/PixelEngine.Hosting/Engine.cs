@@ -806,6 +806,12 @@ public sealed class Engine : IDisposable
         Context.RegisterService(scriptContext);
     }
 
+    internal void EndScriptPlaySession()
+    {
+        ThrowIfShutdown();
+        _attachedScriptRuntime?.EndPlaySession();
+    }
+
     /// <summary>
     /// 从 Hosting 已注册的真实 Simulation/Physics/Audio/Input/Camera 服务创建脚本上下文并接入相位管线。
     /// </summary>

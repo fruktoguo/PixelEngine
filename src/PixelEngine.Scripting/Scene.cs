@@ -282,6 +282,19 @@ public sealed class Scene
     }
 
     /// <summary>
+    /// 结束 Play Session：对仍存活且已启动的 Behaviour 派发 OnDestroy，并保留编辑态实体与组件。
+    /// </summary>
+    internal void EndPlaySession(IScriptContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        _destroyQueue.Clear();
+        foreach (IComponentBucket bucket in _buckets.Values)
+        {
+            bucket.EndPlaySession(context, _invoker);
+        }
+    }
+
+    /// <summary>
     /// 按注册顺序分发系统逐帧回调。
     /// </summary>
     internal void DispatchFrameSystems(IScriptContext context, float dt)
@@ -375,6 +388,8 @@ public sealed class Scene
         void DispatchFixedSimTick(IScriptContext context, ScriptInvoker invoker);
 
         void DispatchGui(IScriptContext context, IGuiContext gui, ScriptInvoker invoker);
+
+        void EndPlaySession(IScriptContext context, ScriptInvoker invoker);
 
         void CaptureBehaviours(List<ScriptBehaviourRecord> records);
 
@@ -508,6 +523,18 @@ public sealed class Scene
                 if (_components[i] is Behaviour behaviour)
                 {
                     invoker.InvokeGui(behaviour, context, gui);
+                }
+            }
+        }
+
+        public void EndPlaySession(IScriptContext context, ScriptInvoker invoker)
+        {
+            for (int i = 0; i < Count; i++)
+            {
+                if (_components[i] is Behaviour { Started: true } behaviour)
+                {
+                    invoker.InvokeDestroy(behaviour, context);
+                    behaviour.ResetPlaySessionLifecycle();
                 }
             }
         }
@@ -664,6 +691,18 @@ public sealed class Scene
                 if (_components[i] is Behaviour behaviour)
                 {
                     invoker.InvokeGui(behaviour, context, gui);
+                }
+            }
+        }
+
+        public void EndPlaySession(IScriptContext context, ScriptInvoker invoker)
+        {
+            for (int i = 0; i < Count; i++)
+            {
+                if (_components[i] is Behaviour { Started: true } behaviour)
+                {
+                    invoker.InvokeDestroy(behaviour, context);
+                    behaviour.ResetPlaySessionLifecycle();
                 }
             }
         }
