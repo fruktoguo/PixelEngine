@@ -26,6 +26,16 @@ public sealed class PlayerHealth : Behaviour
     public float Health { get; private set; }
 
     /// <summary>
+    /// 本次运行累计受到危险材质伤害的次数，供窗口探针与 HUD 验证。
+    /// </summary>
+    public int DamageEventCount { get; private set; }
+
+    /// <summary>
+    /// 本次运行累计重生次数。
+    /// </summary>
+    public int RespawnCount { get; private set; }
+
+    /// <summary>
     /// 熔岩每秒伤害。
     /// </summary>
     public float LavaDamagePerSecond { get; set; } = 75f;
@@ -54,6 +64,11 @@ public sealed class PlayerHealth : Behaviour
     /// 受击粒子速度。
     /// </summary>
     public float HurtParticleSpeed { get; set; } = 70f;
+
+    /// <summary>
+    /// 强制按熔岩伤害计算；仅供窗口运行态健康链路探针使用。
+    /// </summary>
+    public bool ForceHazardForProbe { get; set; }
 
     /// <inheritdoc />
     protected override void OnStart()
@@ -97,6 +112,7 @@ public sealed class PlayerHealth : Behaviour
     public void Respawn()
     {
         Health = MaxHealth;
+        RespawnCount++;
         _player?.Respawn();
     }
 
@@ -116,6 +132,11 @@ public sealed class PlayerHealth : Behaviour
 
     private float SampleHazardDamage()
     {
+        if (ForceHazardForProbe)
+        {
+            return LavaDamagePerSecond;
+        }
+
         CharacterState state = _player!.State;
         int minX = (int)MathF.Floor(state.X);
         int minY = (int)MathF.Floor(state.Y);
@@ -148,6 +169,7 @@ public sealed class PlayerHealth : Behaviour
     private void ApplyDamage(float amount)
     {
         Health = MathF.Max(0f, Health - amount);
+        DamageEventCount++;
         EmitHurtFeedback();
         if (Health <= 0f)
         {

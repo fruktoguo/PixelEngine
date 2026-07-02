@@ -153,6 +153,8 @@ public sealed class PlayerControllerIntegrationTests
         engine.RunHeadlessTicks(1);
 
         Assert.InRange(health.Health, 0.01f, health.MaxHealth - 0.01f);
+        Assert.Equal(1, health.DamageEventCount);
+        Assert.Equal(0, health.RespawnCount);
         Assert.Equal("player_hurt.wav", audio.LastCue);
         Assert.Equal(player.CenterX, audio.LastX, precision: 3);
         Assert.Equal(player.CenterY, audio.LastY, precision: 3);
@@ -162,6 +164,8 @@ public sealed class PlayerControllerIntegrationTests
         engine.RunHeadlessTicks(1);
 
         Assert.Equal(health.MaxHealth, health.Health);
+        Assert.True(health.DamageEventCount >= 2);
+        Assert.Equal(1, health.RespawnCount);
         Assert.Equal(player.SpawnX, player.State.X, precision: 3);
         Assert.Equal(player.SpawnY, player.State.Y, precision: 3);
     }
