@@ -492,6 +492,25 @@ public sealed class EnginePhaseDriverTests
         _ = Assert.Throws<InvalidOperationException>(() => engine.AttachScripting(context, new RecordingScriptRuntime()));
     }
 
+    /// <summary>
+    /// 验证 Engine 关闭时会释放已接入的脚本运行时，避免热重载控制器和可回收 ALC 泄漏。
+    /// </summary>
+    [Fact]
+    public void EngineShutdownDisposesAttachedScriptRuntime()
+    {
+        RecordingScriptRuntime runtime = new();
+        FakeScriptContext context = new(new ScriptScene());
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+
+        engine.AttachScripting(context, runtime);
+        engine.Shutdown();
+
+        Assert.Equal(1, runtime.ShutdownCount);
+        Assert.Equal(EngineRunState.Shutdown, engine.State);
+    }
+
     private static MaterialTable Materials(params (string Name, CellType Type)[] definitions)
     {
         MaterialDef[] materials = new MaterialDef[definitions.Length];
@@ -633,6 +652,8 @@ public sealed class EnginePhaseDriverTests
 
         public int EndCount { get; private set; }
 
+        public int ShutdownCount { get; private set; }
+
         public void Initialize(IScriptContext context)
         {
             InitializeCount++;
@@ -666,6 +687,7 @@ public sealed class EnginePhaseDriverTests
 
         public void Shutdown()
         {
+            ShutdownCount++;
         }
     }
 

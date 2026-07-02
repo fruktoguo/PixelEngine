@@ -74,7 +74,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [x] `EngineBuilder`:fluent 配置(窗口/内部 sim 分辨率/worker 数/GC 模式/Editor 开关/headless/确定性开关/GPU 门控/内容根/起始场景),`Build()→Engine`。[架构 §19.2 配置化]
 - [x] `Engine`:持有全部子系统 + `EngineContext`;`Run()`/`RunOneTick()`/`Shutdown()`。
 - [x] `EngineContext`:服务定位 + 诊断 + 事件总线 + 时间 + 当前质量档位。
-- [!] 子系统装配与**初始化顺序**(§3.1);native(Box2D/OpenAL/GL)与 ALC 的正确释放顺序。阻塞:Rendering/Audio/Physics/Scripting 已有 Hosting 装配与逆序释放基础,Editor 仍缺完整真实入口,ALC 释放顺序需对应脚本子系统落地后接入。
+- [!] 子系统装配与**初始化顺序**(§3.1);native(Box2D/OpenAL/GL)与 ALC 的正确释放顺序。`EngineBuilderTests.SubsystemsInitializeInOrderAndShutdownInReverseOrder` 已覆盖 Hosting 子系统逆序关闭；`EnginePhaseDriverTests.EngineShutdownDisposesAttachedScriptRuntime` 已覆盖 Engine 关闭会调用已接入 `IScriptRuntime.Shutdown()`；`HotReloadServiceTests`/`AlcCollectibilityTests` 已覆盖热重载旧 ALC 可回收。阻塞:仍缺真实窗口完整运行后 GL/OpenAL/Box2D/native 资源释放审计与 Editor 窗口入口长跑证据。
 - [x] `GameLoop.Tick()`:严格 12 相位编排(§3.2),相位间 barrier(plan/02 JobSystem),每帧至多一次 sim/physics step。[不变式 #6,架构 §3.3]
 - [x] sim 降频(30Hz)而 render 不降:render 复用上帧世界纹理(必要时整图相机偏移,不插值像素)。[架构 §4.2]
 - [!] 各相位入口的调用绑定(Input/Time、Scripts、Residency、Particle 沉积/抛射、CA、Reaction/Lifetime/Material custom update、Temperature、DirtySwap、Physics、BuildFrame、Present、Streaming)。阻塞:已绑定现有相位 0/1/2/3/4/5/6/7/8/9/10/11,Simulation world 装配时已接入 `ReactionEngine`、反应副作用 sink 与 `BurningCellSystem`，窗口运行时已可把 EditorRenderBridge 接入相位 10 并注册有真实后端的一组 Editor 面板；剩余阻塞为稳定 60fps/真实窗口运行态验收与完整资源释放审计。
@@ -97,7 +97,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [x] 脚本经 `EngineContext` 能读写世界/建刚体/播音效,写操作落在正确相位(配合 plan/11 测试)。AudioService 与 PhysicsSystem 后端已注册，脚本可见 Physics 建/查/控/毁刚体命令与角色移动已在 phase 8 step 前 flush。
 - [!] Play/Edit/Step 切换正确:进入 Play 快照、退出回滚到编辑态,脚本 OnStart/OnDestroy 正确触发。阻塞:快照聚合与脚本生命周期需 plan/11/12。
 - [x] headless 模式可被 plan/14 测试/基准以确定步数驱动,无窗口依赖。
-- [!] 关闭时 native 资源与 ALC 正确释放,无泄漏(配合 plan/14 scripting 测试)。阻塞:ALC 与 native 子系统尚未落地。
+- [!] 关闭时 native 资源与 ALC 正确释放,无泄漏(配合 plan/14 scripting 测试)。Hosting 已验证关闭时释放 `IScriptRuntime`，Scripting 已验证热重载旧 ALC 可回收；阻塞:仍缺真实窗口 Rendering/OpenAL/Box2D native 资源长跑关闭审计和跨平台 runner 泄漏证据。
 - [x] Demo(plan/13)仅经 Hosting 公开 API 启动,无引擎内部后门。
 
 ## 6. 依赖关系
