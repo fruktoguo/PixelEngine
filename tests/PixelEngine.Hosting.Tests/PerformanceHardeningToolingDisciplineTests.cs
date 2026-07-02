@@ -99,6 +99,66 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证目标硬件性能证据预检要求 AVX-512、6 RID cells/frame、帧预算与硬件计数器 scope/hash，不把本机短样本当作通过。
+    /// </summary>
+    [Fact]
+    public void PerformanceTargetEvidencePreflightRequiresManifestScopesAndHashes()
+    {
+        string script = ReadRepositoryFile("tools", "performance-target-evidence-preflight.ps1");
+        string report = ReadRepositoryFile("docs", "benchmark-reports", "2026-07-02-performance-target-evidence.md");
+        string plan = ReadRepositoryFile("plan", "16-performance-hardening.md");
+
+        Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
+        Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
+        Assert.Contains("schemaVersion", script, StringComparison.Ordinal);
+        Assert.Contains("evidence[]", script, StringComparison.Ordinal);
+        Assert.Contains("sha256", script, StringComparison.Ordinal);
+        Assert.Contains("Get-FileHash", script, StringComparison.Ordinal);
+        Assert.Contains("sha256 不匹配", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_target_performance_manifest", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_target_performance_scope_evidence", script, StringComparison.Ordinal);
+        Assert.Contains("target_performance_evidence_attached_pending_review", script, StringComparison.Ordinal);
+        Assert.Contains("Performance target evidence preflight failed", script, StringComparison.Ordinal);
+        Assert.Contains("本机短样本", script, StringComparison.Ordinal);
+        Assert.Contains("exit 2", script, StringComparison.Ordinal);
+        Assert.Contains("exit 5", script, StringComparison.Ordinal);
+
+        Assert.Contains("avx512_downclock_net_loss", script, StringComparison.Ordinal);
+        Assert.Contains("hardware_counters_cache_branch", script, StringComparison.Ordinal);
+        Assert.Contains("frame_budget_target_hardware", script, StringComparison.Ordinal);
+        Assert.Contains("Cache Misses", script, StringComparison.Ordinal);
+        Assert.Contains("Branch Mispredictions", script, StringComparison.Ordinal);
+        Assert.Contains("cells_frame/$rid", script, StringComparison.Ordinal);
+        Assert.Contains("benchmarkDotNet=true", script, StringComparison.Ordinal);
+        Assert.Contains("win-x64", script, StringComparison.Ordinal);
+        Assert.Contains("win-arm64", script, StringComparison.Ordinal);
+        Assert.Contains("linux-x64", script, StringComparison.Ordinal);
+        Assert.Contains("linux-arm64", script, StringComparison.Ordinal);
+        Assert.Contains("osx-x64", script, StringComparison.Ordinal);
+        Assert.Contains("osx-arm64", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("status \"passed\"", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("status = \"passed\"", script, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains("tools/performance-target-evidence-preflight.ps1", report, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_target_performance_manifest", report, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
+        Assert.Contains("target_performance_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        Assert.Contains("avx512_downclock_net_loss", report, StringComparison.Ordinal);
+        Assert.Contains("hardware_counters_cache_branch", report, StringComparison.Ordinal);
+        Assert.Contains("frame_budget_target_hardware", report, StringComparison.Ordinal);
+        Assert.Contains("cells_frame/osx-arm64", report, StringComparison.Ordinal);
+
+        Assert.Contains("tools/performance-target-evidence-preflight.ps1", plan, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_target_performance_manifest", plan, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_target_performance_scope_evidence", plan, StringComparison.Ordinal);
+        Assert.Contains("target_performance_evidence_attached_pending_review", plan, StringComparison.Ordinal);
+        Assert.Contains("avx512_downclock_net_loss", plan, StringComparison.Ordinal);
+        Assert.Contains("hardware_counters_cache_branch", plan, StringComparison.Ordinal);
+        Assert.Contains("frame_budget_target_hardware", plan, StringComparison.Ordinal);
+        Assert.Contains("cells_frame/<rid>", plan, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 native 资源泄漏预检不会把进程 smoke 误当作 GL/OpenAL/Box2D/ALC 泄漏验收。
     /// </summary>
     [Fact]
