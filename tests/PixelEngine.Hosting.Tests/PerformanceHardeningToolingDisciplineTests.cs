@@ -121,6 +121,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("sha256", script, StringComparison.Ordinal);
         Assert.Contains("Get-FileHash", script, StringComparison.Ordinal);
         Assert.Contains("sha256 不匹配", script, StringComparison.Ordinal);
+        Assert.Contains("未知 evidence scope", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_performance_manifest", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_performance_scope_evidence", script, StringComparison.Ordinal);
         Assert.Contains("target_performance_evidence_attached_pending_review", script, StringComparison.Ordinal);
@@ -154,6 +155,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("hardware_counters_cache_branch", report, StringComparison.Ordinal);
         Assert.Contains("frame_budget_target_hardware", report, StringComparison.Ordinal);
         Assert.Contains("cells_frame/osx-arm64", report, StringComparison.Ordinal);
+        Assert.Contains("未知 scope", report, StringComparison.Ordinal);
 
         Assert.Contains("tools/performance-target-evidence-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_performance_manifest", plan, StringComparison.Ordinal);
@@ -228,6 +230,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("sha256", script, StringComparison.Ordinal);
         Assert.Contains("Get-FileHash", script, StringComparison.Ordinal);
         Assert.Contains("sha256 不匹配", script, StringComparison.Ordinal);
+        Assert.Contains("未知 evidence scope", script, StringComparison.Ordinal);
         Assert.Contains("--particle-frame-probe", script, StringComparison.Ordinal);
         Assert.Contains("--particle-render-mode", script, StringComparison.Ordinal);
         Assert.Contains("cpu", script, StringComparison.Ordinal);
@@ -254,6 +257,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("blocked_missing_target_gpu_scope_evidence", report, StringComparison.Ordinal);
         Assert.Contains("local_probe_only", report, StringComparison.Ordinal);
         Assert.Contains("target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        Assert.Contains("未知 scope", report, StringComparison.Ordinal);
 
         Assert.Contains("tools/gpu-particle-benchmark-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("local_probe_only", plan, StringComparison.Ordinal);
@@ -277,6 +281,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("sha256", script, StringComparison.Ordinal);
         Assert.Contains("Get-FileHash", script, StringComparison.Ordinal);
         Assert.Contains("sha256 不匹配", script, StringComparison.Ordinal);
+        Assert.Contains("未知 evidence scope", script, StringComparison.Ordinal);
         Assert.Contains("--scripted-window-demo", script, StringComparison.Ordinal);
         Assert.Contains("--window-ticks", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine.scene", script, StringComparison.Ordinal);
@@ -322,6 +327,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("scripted_probe_only", report, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_manual_scope_evidence", report, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        Assert.Contains("未知 scope", report, StringComparison.Ordinal);
 
         Assert.Contains("tools/demo-manual-acceptance-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", plan, StringComparison.Ordinal);

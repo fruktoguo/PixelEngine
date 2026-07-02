@@ -200,10 +200,23 @@ if ($entries.Count -eq 0) {
 }
 
 $entriesByScope = @{}
+$requiredEvidenceScopes = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+$requiredEvidenceScopes.Add("avx512_downclock_net_loss") | Out-Null
+$requiredEvidenceScopes.Add("hardware_counters_cache_branch") | Out-Null
+$requiredEvidenceScopes.Add("frame_budget_target_hardware") | Out-Null
+foreach ($rid in $rids) {
+    $requiredEvidenceScopes.Add("cells_frame/$rid") | Out-Null
+}
+
 foreach ($entry in $entries) {
     $scope = [string](Get-JsonPropertyValue -Node $entry -Name "scope")
     if ([string]::IsNullOrWhiteSpace($scope)) {
         $missing.Add("evidence entry 缺少 scope")
+        continue
+    }
+
+    if (-not $requiredEvidenceScopes.Contains($scope)) {
+        $missing.Add("未知 evidence scope：$scope")
         continue
     }
 
