@@ -128,6 +128,7 @@ public static class DemoProgram
         DemoWindowScriptedProbe? scriptedProbe = null;
         DemoReactionTemperatureProbe? reactionProbe = null;
         DemoAudioProbe? audioProbe = null;
+        DemoParticleLightProbe? particleLightProbe = null;
         if (options.ScriptedWindowDemo)
         {
             scriptedInput = new DemoWindowScriptedInput(
@@ -158,6 +159,17 @@ public static class DemoProgram
                 audioProbe.RegisterPhases(engine.Phases);
             }
 
+            if (IsParticleLightProbeScene(options.Scene))
+            {
+                particleLightProbe = new DemoParticleLightProbe(
+                    engine.Context.GetService<ParticleSystem>(),
+                    engine.Context.GetService<MaterialTable>(),
+                    engine.Context.GetService<ScriptLightingApi>(),
+                    engine.Context.GetService<ScriptLightingSynchronizer>(),
+                    engine.Context.GetService<ScriptCameraSynchronizer>());
+                particleLightProbe.RegisterPhases(engine.Phases);
+            }
+
             Console.WriteLine("脚本化窗口输入已启用。");
         }
 
@@ -184,7 +196,7 @@ public static class DemoProgram
                 $"sub_top={SlowestSubPhase(engine.Context.Profiler.LastSubFrame)}。");
             if (scriptedInput is not null)
             {
-                WriteScriptedWindowSummary(engine, scriptedInput, scriptedProbe, reactionProbe, audioProbe);
+                WriteScriptedWindowSummary(engine, scriptedInput, scriptedProbe, reactionProbe, audioProbe, particleLightProbe);
             }
 
             return;
@@ -239,7 +251,8 @@ public static class DemoProgram
         DemoWindowScriptedInput scriptedInput,
         DemoWindowScriptedProbe? scriptedProbe,
         DemoReactionTemperatureProbe? reactionProbe,
-        DemoAudioProbe? audioProbe)
+        DemoAudioProbe? audioProbe,
+        DemoParticleLightProbe? particleLightProbe)
     {
         ScriptScene scene = engine.Context.GetService<ScriptScene>();
         DemoHud? hud = FindBehaviour<DemoHud>(scene);
@@ -309,6 +322,7 @@ public static class DemoProgram
             $"render_camera=({renderCamera.OriginWorldX:0.00},{renderCamera.OriginWorldY:0.00},{renderCamera.CellsPerPixel:0.000},{renderCamera.ViewportWidth}x{renderCamera.ViewportHeight}), " +
             ReactionProbeSummary(reactionProbe) +
             AudioProbeSummary(audioProbe) +
+            ParticleLightProbeSummary(particleLightProbe) +
             $"player_center_material={playerCenterMaterial}。");
     }
 
@@ -340,6 +354,23 @@ public static class DemoProgram
             $"audio_probe_max_active_ambient={probe.MaxActiveAmbientVoices}, ";
     }
 
+    private static string ParticleLightProbeSummary(DemoParticleLightProbe? probe)
+    {
+        return probe is null
+            ? string.Empty
+            :
+            $"particle_light_probe_initialized={probe.Initialized}, " +
+            $"particle_light_probe_spawned={probe.Spawned}, " +
+            $"particle_light_probe_max_active={probe.MaxActive}, " +
+            $"particle_light_probe_tail_max={probe.TailMaxActive}, " +
+            $"particle_light_probe_last_active={probe.LastActive}, " +
+            $"particle_light_probe_lifetime_kill={probe.LifetimeKillObserved}, " +
+            $"particle_light_probe_depleted={probe.Depleted}, " +
+            $"particle_light_probe_light_observed={probe.LightObserved}, " +
+            $"particle_light_probe_fog_alpha={probe.MaxFogAlpha}, " +
+            $"particle_light_probe_lighting_synced={probe.LightingSynced}, ";
+    }
+
     private static bool IsReactionProbeScene(string scene)
     {
         return string.Equals(
@@ -353,6 +384,14 @@ public static class DemoProgram
         return string.Equals(
             Path.GetFileName(scene),
             "lava-mine-audio-probe.scene",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsParticleLightProbeScene(string scene)
+    {
+        return string.Equals(
+            Path.GetFileName(scene),
+            "lava-mine-particle-light-probe.scene",
             StringComparison.OrdinalIgnoreCase);
     }
 
