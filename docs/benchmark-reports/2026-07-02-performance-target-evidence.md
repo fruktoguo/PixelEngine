@@ -24,7 +24,7 @@
 
 ## Manifest 结构
 
-manifest 使用 `schemaVersion: 1`。`evidence[]` 每项必须包含 `scope`、`path`、`sha256`，脚本会重新计算文件 SHA256 并比对。必需 scope 为 `avx512_downclock_net_loss`、`hardware_counters_cache_branch`、`frame_budget_target_hardware`，以及 `cells_frame/win-x64`、`cells_frame/win-arm64`、`cells_frame/linux-x64`、`cells_frame/linux-arm64`、`cells_frame/osx-x64`、`cells_frame/osx-arm64`。`cellsFrame` 对象必须覆盖同样六个 RID，且每个 RID 都必须标记 `benchmarkDotNet: true`。
+manifest 使用 `schemaVersion: 1`。`evidence[]` 每项必须包含 `scope`、`path`、`sha256`，脚本会重新计算文件 SHA256 并比对。允许且必需的 scope 为 `avx512_downclock_net_loss`、`hardware_counters_cache_branch`、`frame_budget_target_hardware`，以及 `cells_frame/win-x64`、`cells_frame/win-arm64`、`cells_frame/linux-x64`、`cells_frame/linux-arm64`、`cells_frame/osx-x64`、`cells_frame/osx-arm64`；未知 scope 会被拒绝。`cellsFrame` 对象必须覆盖同样六个 RID，且每个 RID 都必须标记 `benchmarkDotNet: true`。
 
 最小示例：
 

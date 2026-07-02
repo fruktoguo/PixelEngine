@@ -32,6 +32,6 @@
 
 ## 必须 scope
 
-manifest 使用 `schemaVersion: 1`，`evidence` 数组至少包含这些 scope：`controlFeelReport`、`materialBrushAndReactionVideo`、`rigidBodyGameplayVideo`、`particleLightingVideo`、`audioListeningReport`、`fullRoutePlaythroughVideo`、`hudMenuEditorVideo`、`hotReloadWindowReport`。每个 entry 必须声明 `path` 与 `sha256`，脚本会重新计算文件 SHA256 并比对。
+manifest 使用 `schemaVersion: 1`，`evidence` 数组只能包含这些 scope：`controlFeelReport`、`materialBrushAndReactionVideo`、`rigidBodyGameplayVideo`、`particleLightingVideo`、`audioListeningReport`、`fullRoutePlaythroughVideo`、`hudMenuEditorVideo`、`hotReloadWindowReport`。每个 entry 必须声明 `path` 与 `sha256`，脚本会重新计算文件 SHA256 并比对；缺失或未知 scope 都不能进入待审状态。
 
 这些 scope 对应 plan/13 剩余阻塞：真实输入手感、真实鼠标/滚轮/数字键操作与 CA 视觉接管、刚体可推/可砸/可继续破坏、粒子与 bloom/fog 视觉质量、音频听感与空间感、完整路线通关、HUD/菜单/Editor 交互、开发态热重载体验。

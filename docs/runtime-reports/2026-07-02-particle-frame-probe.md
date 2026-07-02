@@ -38,4 +38,4 @@ particle_frame_probe mode=gpu, gpu_available=True, requested_count=100000, activ
 ./tools/gpu-particle-benchmark-preflight.ps1 -RunProbe -AllowBlocked
 ```
 
-目标硬件长基准完成后，可提供 `-EvidenceManifestPath <json>`。manifest 使用 `schemaVersion: 1`，并至少包含 `targetHardwareReport`、`cpuProbeReport`、`gpuProbeReport`、`comparisonReport` 四个 evidence scope；每个 entry 必须声明 `path` 与 `sha256`，脚本会重新计算文件 SHA256 并比对。缺 scope 时报告 `blocked_missing_target_gpu_scope_evidence`；证据齐全时报告 `target_gpu_evidence_attached_pending_review`，仍需人工确认 comparisonReport 是否满足 plan/09 的“高密度 GPU 总帧时间优于 CPU stamp”验收语义。
+目标硬件长基准完成后，可提供 `-EvidenceManifestPath <json>`。manifest 使用 `schemaVersion: 1`，并且只能包含 `targetHardwareReport`、`cpuProbeReport`、`gpuProbeReport`、`comparisonReport` 四个 evidence scope；每个 entry 必须声明 `path` 与 `sha256`，脚本会重新计算文件 SHA256 并比对。缺 scope 时报告 `blocked_missing_target_gpu_scope_evidence`，未知 scope 会被拒绝；证据齐全时报告 `target_gpu_evidence_attached_pending_review`，仍需人工确认 comparisonReport 是否满足 plan/09 的“高密度 GPU 总帧时间优于 CPU stamp”验收语义。

@@ -182,11 +182,16 @@ function Read-EvidenceManifest {
             throw "evidence entry 缺少 scope。"
         }
 
-        if ($scopes.ContainsKey([string]$entry.scope)) {
-            throw "重复 evidence scope：$($entry.scope)"
+        $scope = [string]$entry.scope
+        if ($scope -notin $requiredScopes) {
+            throw "未知 evidence scope：$scope"
         }
 
-        $scopes[[string]$entry.scope] = $entry
+        if ($scopes.ContainsKey($scope)) {
+            throw "重复 evidence scope：$scope"
+        }
+
+        $scopes[$scope] = $entry
     }
 
     $missing = @($requiredScopes | Where-Object { -not $scopes.ContainsKey($_) })
