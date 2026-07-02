@@ -96,6 +96,60 @@ function Resolve-EvidencePath {
     return Join-Path $Root $Path
 }
 
+function Read-MarkdownEvidenceTable {
+    param([string]$Path)
+
+    $values = @{}
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return $values
+    }
+
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        if ($line -notmatch '^\|\s*([^|]+?)\s*\|\s*([^|]*?)\s*\|$') {
+            continue
+        }
+
+        $key = $Matches[1].Trim()
+        $value = $Matches[2].Trim()
+        if ([string]::IsNullOrWhiteSpace($key) -or $key -eq "Key" -or $key -match '^-+$') {
+            continue
+        }
+
+        $values[$key] = $value
+    }
+
+    return $values
+}
+
+function Add-MarkdownEvidenceCheck {
+    param(
+        [System.Collections.Generic.List[string]]$Missing,
+        [string]$Root,
+        [string]$Scope,
+        [string]$Path,
+        [hashtable]$ExpectedValues
+    )
+
+    $resolved = Resolve-EvidencePath -Root $Root -Path $Path
+    if ([string]::IsNullOrWhiteSpace($resolved) -or -not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+        return
+    }
+
+    $values = Read-MarkdownEvidenceTable -Path $resolved
+    foreach ($key in $ExpectedValues.Keys) {
+        $expected = [string]$ExpectedValues[$key]
+        if (-not $values.ContainsKey($key)) {
+            $Missing.Add("$Scope 报告缺少 $key 字段")
+            continue
+        }
+
+        $actual = [string]$values[$key]
+        if (-not [string]::Equals($actual, $expected, [StringComparison]::OrdinalIgnoreCase)) {
+            $Missing.Add("$Scope 报告 $key 必须为 $expected，实际为 $actual")
+        }
+    }
+}
+
 function Test-AotSimdEvidence {
     param(
         [System.Collections.Generic.List[string]]$Missing,
@@ -253,8 +307,12 @@ foreach ($ridName in Get-JsonPropertyNames $manifest.artifacts) {
     }
 }
 
-Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "workflow_run" -Path ([string]$manifest.workflowRunReport) -DeclaredSha256 ([string]$manifest.workflowRunSha256)
-Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "github_release_upload" -Path ([string]$manifest.githubRelease.uploadReport) -DeclaredSha256 ([string]$manifest.githubRelease.uploadSha256)
+$workflowRunReport = [string]$manifest.workflowRunReport
+$githubReleaseUploadReport = [string]$manifest.githubRelease.uploadReport
+Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -DeclaredSha256 ([string]$manifest.workflowRunSha256)
+Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -ExpectedValues @{ conclusion = "success" }
+Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "github_release_upload" -Path $githubReleaseUploadReport -DeclaredSha256 ([string]$manifest.githubRelease.uploadSha256)
+Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "github_release_upload" -Path $githubReleaseUploadReport -ExpectedValues @{ conclusion = "success" }
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "deterministic_hash" -Path ([string]$manifest.deterministicHashReport) -DeclaredSha256 ([string]$manifest.deterministicHashSha256)
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "r2r_lightup" -Path ([string]$manifest.r2rLightupReport) -DeclaredSha256 ([string]$manifest.r2rLightupSha256)
 
@@ -266,19 +324,32 @@ foreach ($rid in $rids) {
             continue
         }
 
-        Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/publish" -Path ([string]$node.publishReport) -DeclaredSha256 ([string]$node.publishSha256)
-        Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/verify" -Path ([string]$node.verifyReport) -DeclaredSha256 ([string]$node.verifySha256)
+        $publishReportPath = [string]$node.publishReport
+        $verifyReportPath = [string]$node.verifyReport
+        $packageReportPath = [string]$node.packageReport
+        Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/publish" -Path $publishReportPath -DeclaredSha256 ([string]$node.publishSha256)
+        Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "$rid/$channel/publish" -Path $publishReportPath -ExpectedValues @{ rid = $rid; channel = $channel; conclusion = "success" }
+        Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/verify" -Path $verifyReportPath -DeclaredSha256 ([string]$node.verifySha256)
+        Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "$rid/$channel/verify" -Path $verifyReportPath -ExpectedValues @{ rid = $rid; channel = $channel; conclusion = "success" }
+        Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/package_report" -Path $packageReportPath -DeclaredSha256 ([string]$node.packageReportSha256)
+        Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "$rid/$channel/package_report" -Path $packageReportPath -ExpectedValues @{ rid = $rid; channel = $channel; conclusion = "success" }
         Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/package" -Path ([string]$node.package) -DeclaredSha256 ([string]$node.packageSha256)
         Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/checksum" -Path ([string]$node.checksum) -DeclaredSha256 ([string]$node.checksumSha256)
 
         if ($channel -eq "aot") {
-            Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/simd_probe" -Path ([string]$node.simdProbe) -DeclaredSha256 ([string]$node.simdProbeSha256)
+            $simdProbePath = [string]$node.simdProbe
+            Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/simd_probe" -Path $simdProbePath -DeclaredSha256 ([string]$node.simdProbeSha256)
+            Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "$rid/$channel/simd_probe" -Path $simdProbePath -ExpectedValues @{ rid = $rid; channel = $channel; conclusion = "success" }
             Test-AotSimdEvidence -Missing $missing -Root $root -Rid $rid -Node $node
         }
 
         if ($rid.StartsWith("osx-", [StringComparison]::Ordinal)) {
-            Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/codesign" -Path ([string]$node.codesignReport) -DeclaredSha256 ([string]$node.codesignSha256)
-            Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/notarization" -Path ([string]$node.notarizationReport) -DeclaredSha256 ([string]$node.notarizationSha256)
+            $codesignReportPath = [string]$node.codesignReport
+            $notarizationReportPath = [string]$node.notarizationReport
+            Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/codesign" -Path $codesignReportPath -DeclaredSha256 ([string]$node.codesignSha256)
+            Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "$rid/$channel/codesign" -Path $codesignReportPath -ExpectedValues @{ rid = $rid; channel = $channel; conclusion = "success" }
+            Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/notarization" -Path $notarizationReportPath -DeclaredSha256 ([string]$node.notarizationSha256)
+            Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "$rid/$channel/notarization" -Path $notarizationReportPath -ExpectedValues @{ rid = $rid; channel = $channel; conclusion = "success" }
         }
     }
 }
@@ -295,7 +366,7 @@ if ($missing.Count -gt 0) {
     exit 5
 }
 
-$detail = "Release evidence manifest is complete and declared SHA256 hashes matched the evidence files. Human review still must confirm the reports prove 6 RID R2R/AOT outputs, AOT SIMD probes, R2R runtime light-up, macOS codesign/notarization, deterministic hashes and GitHub Release upload before plan/15 can be unblocked."
+$detail = "Release evidence manifest is complete, declared SHA256 hashes matched, and markdown evidence fields reported success for required jobs. Human review still must confirm the reports prove 6 RID R2R/AOT outputs, AOT SIMD probes, R2R runtime light-up, macOS codesign/notarization, deterministic hashes and GitHub Release upload before plan/15 can be unblocked."
 Write-ReleaseEvidenceReport -Path $reportPath -Status "release_evidence_attached_pending_review" -Evidence $evidence -Missing $missing -Detail $detail
 Write-Host "Release evidence preflight release_evidence_attached_pending_review. Report: $reportPath"
 
