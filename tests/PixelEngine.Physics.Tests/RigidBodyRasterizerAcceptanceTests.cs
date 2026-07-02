@@ -84,6 +84,28 @@ public sealed class RigidBodyRasterizerAcceptanceTests
         Assert.False(CellFlags.Has(grid.FlagsAt(consumed.WorldX, consumed.WorldY), CellFlags.RigidOwned));
     }
 
+    /// <summary>
+    /// 验证刚体离开当前驻留 ring 时，不会把 stamp 写入缺少 dirty 邻居保障的边界 cell。
+    /// </summary>
+    [Fact]
+    public void StampNearMissingBoundaryNeighborSkipsCellInsteadOfThrowing()
+    {
+        TestChunkSource source = new(new Chunk(new ChunkCoord(0, 0)));
+        CellGrid grid = new(source, MaterialPropsTable.Empty);
+        BodyLocalMask mask = CreateFilledMask(width: 1, height: 1, material: 4, origin: Vector2.Zero);
+        PixelRigidBody body = new(13, default, mask);
+        RigidStampRegistry registry = new();
+        Transform2D transform = new(new Vector2(63f, 20f), 0f);
+
+        int stamped = RigidBodyRasterizer.StampInverseSampling(body, in transform, grid, registry);
+
+        Assert.Equal(0, stamped);
+        Assert.Empty(body.PreviousStamps);
+        Assert.False(registry.TryGet(63, 20, out _));
+        Assert.Equal((ushort)0, grid.GetMaterial(63, 20));
+        Assert.False(CellFlags.Has(grid.FlagsAt(63, 20), CellFlags.RigidOwned));
+    }
+
     private static BodyLocalMask CreateFilledMask(int width, int height, ushort material, Vector2 origin)
     {
         int area = width * height;

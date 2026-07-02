@@ -18,7 +18,7 @@
 ./tools/demo-manual-acceptance-preflight.ps1 -RunScriptedProbes -AllowBlocked
 ```
 
-该入口会运行主场景、通关、生命、相机、反应/温度、音频、粒子/光照七个 scripted window probe，并要求各自输出关键摘要 marker，例如 `brush_material=stone`、`goal_reached=True`、`damage_events=`、`camera_followed=True`、`reactions_observed=True`、`audio_probe_one_shot_played=True` 与 `particle_light_probe_depleted=True`。这些 marker 只证明真实窗口相位链路中的机器探针仍可复现，不证明视觉质量、听感、手感或完整路线体验通过。
+该入口会运行主场景、route-attempt、通关、生命、相机、反应/温度、音频、粒子/光照八个 scripted window probe，并要求各自输出关键摘要 marker，例如 `brush_material=stone`、`pause_open=False`、`goal_reached=True`、`damage_events=`、`camera_followed=True`、`reactions_observed=True`、`audio_probe_one_shot_played=True` 与 `particle_light_probe_depleted=True`。其中 route-attempt 使用 `--scripted-window-route` 在默认关卡中持续移动，用来捕捉长一点的真实窗口移动/物理同步问题；它不要求 `goal_reached=True`，不能替代 `fullRoutePlaythroughVideo` 人工完整路线证据。这些 marker 只证明真实窗口相位链路中的机器探针仍可复现，不证明视觉质量、听感、手感或完整路线体验通过。
 
 附加人工 evidence manifest：
 
@@ -28,7 +28,7 @@
 
 ## 状态语义
 
-`blocked_missing_manual_evidence` 表示尚未提供人工 evidence manifest。`scripted_probe_only` 表示只跑了 `--scripted-window-demo` 机器 probe，不能替代人工验收。`blocked_missing_manual_scope_evidence` 表示 manifest 缺少必须 scope。`manual_evidence_attached_pending_review` 表示所有必须 scope 都有文件且 manifest 声明的 SHA256 与实际文件匹配，但仍需人工复核证据是否真的覆盖 plan/13 的 `[!]` 项。
+`blocked_missing_manual_evidence` 表示尚未提供人工 evidence manifest。`scripted_probe_only` 表示只跑了 `--scripted-window-demo` / `--scripted-window-route` 机器 probe，不能替代人工验收。`blocked_missing_manual_scope_evidence` 表示 manifest 缺少必须 scope。`manual_evidence_attached_pending_review` 表示所有必须 scope 都有文件且 manifest 声明的 SHA256 与实际文件匹配，但仍需人工复核证据是否真的覆盖 plan/13 的 `[!]` 项。
 
 ## 必须 scope
 

@@ -49,6 +49,11 @@ public sealed class DemoStartupOptions
     public bool ScriptedWindowDemo { get; init; }
 
     /// <summary>
+    /// 是否启用完整路线脚本化窗口探针；该模式会在默认关卡中持续输入移动，而不是打开暂停菜单。
+    /// </summary>
+    public bool ScriptedWindowRoute { get; init; }
+
+    /// <summary>
     /// 显式请求的自由粒子渲染模式；为空表示使用渲染管线默认值。
     /// </summary>
     public ParticleRenderMode? ParticleRenderMode { get; init; }
@@ -97,6 +102,7 @@ public sealed class DemoStartupOptions
         int ticks = 1;
         int windowTicks = 0;
         bool scriptedWindowDemo = false;
+        bool scriptedWindowRoute = false;
         ParticleRenderMode? particleRenderMode = null;
         bool particleFrameProbe = false;
         int particleProbeCount = 100_000;
@@ -153,6 +159,10 @@ public sealed class DemoStartupOptions
                 case "--scripted-window-demo":
                     scriptedWindowDemo = true;
                     break;
+                case "--scripted-window-route":
+                    scriptedWindowDemo = true;
+                    scriptedWindowRoute = true;
+                    break;
                 case "--particle-render-mode":
                     particleRenderMode = ParseParticleRenderMode(ReadValue(args, ref i, "--particle-render-mode"));
                     break;
@@ -199,6 +209,7 @@ public sealed class DemoStartupOptions
             HeadlessTicks = ticks,
             WindowTicks = windowTicks,
             ScriptedWindowDemo = scriptedWindowDemo,
+            ScriptedWindowRoute = scriptedWindowRoute,
             ParticleRenderMode = particleRenderMode,
             ParticleFrameProbe = particleFrameProbe,
             ParticleProbeCount = particleProbeCount,

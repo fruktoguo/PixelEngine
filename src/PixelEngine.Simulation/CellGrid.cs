@@ -166,6 +166,30 @@ public sealed class CellGrid(
         MarkRigidDirty(wx, wy);
     }
 
+    /// <summary>
+    /// 相位 8：尝试写回刚体像素。目标 cell 或 dirty padding 所需邻居未驻留时返回 false。
+    /// </summary>
+    public bool TryStampRigidOwnedCell(int wx, int wy, ushort material)
+    {
+        if (material == 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(material), material, "刚体 stamp 材质不能是 Empty。");
+        }
+
+        ChunkCoord coord = CellAddressing.WorldToChunk(wx, wy);
+        if (!_chunks.TryGetChunk(coord, out Chunk chunk) ||
+            !DirtyRegionMarker.TryMarkCell(_chunks, wx, wy, DirtyPhaseTarget.Working, includeBoundaryNeighbors: true))
+        {
+            return false;
+        }
+
+        int local = CellAddressing.LocalIndex(wx, wy);
+        chunk.Material[local] = material;
+        chunk.Flags[local] = CellFlags.RigidOwned;
+        chunk.Lifetime[local] = 0;
+        return true;
+    }
+
     private Chunk RequireChunk(int wx, int wy)
     {
         ChunkCoord coord = CellAddressing.WorldToChunk(wx, wy);

@@ -33,6 +33,36 @@ internal static class DirtyRegionMarker
         }
     }
 
+    public static bool TryMarkCell(
+        IChunkSource chunks,
+        int wx,
+        int wy,
+        DirtyPhaseTarget target,
+        bool includeBoundaryNeighbors,
+        SimulationDiagnostics? diagnostics = null)
+    {
+        ArgumentNullException.ThrowIfNull(chunks);
+
+        ChunkCoord coord = CellAddressing.WorldToChunk(wx, wy);
+        if (!chunks.TryGetChunk(coord, out Chunk chunk))
+        {
+            return false;
+        }
+
+        if (includeBoundaryNeighbors && !BoundaryNeighborsResident(chunks, coord, wx, wy))
+        {
+            return false;
+        }
+
+        DirtyRect localRect = DirtyRect.Empty.Union(
+            CellAddressing.LocalCoord(wx),
+            CellAddressing.LocalCoord(wy),
+            EngineConstants.DirtyRectPadding);
+        MarkChunkDirty(chunk, localRect, target);
+
+        return !includeBoundaryNeighbors || TryMarkBoundaryNeighbors(chunks, coord, wx, wy, target, diagnostics);
+    }
+
     public static void MarkRectCurrent(
         IChunkSource chunks,
         int minX,
@@ -90,6 +120,18 @@ internal static class DirtyRegionMarker
         DirtyPhaseTarget target,
         SimulationDiagnostics? diagnostics)
     {
+        _ = TryMarkBoundaryNeighbors(chunks, center, wx, wy, target, diagnostics, throwOnMissing: true);
+    }
+
+    private static bool TryMarkBoundaryNeighbors(
+        IChunkSource chunks,
+        ChunkCoord center,
+        int wx,
+        int wy,
+        DirtyPhaseTarget target,
+        SimulationDiagnostics? diagnostics,
+        bool throwOnMissing = false)
+    {
         const int chunkSize = EngineConstants.ChunkSize;
         int padding = EngineConstants.DirtyRectPadding;
         int dirtyMinX = wx - padding;
@@ -123,6 +165,11 @@ internal static class DirtyRegionMarker
 
                 if (!chunks.TryGetChunk(neighborCoord, out Chunk neighbor))
                 {
+                    if (!throwOnMissing)
+                    {
+                        return false;
+                    }
+
                     Debug.Assert(false, $"dirty 边界传播目标 chunk 未驻留：{neighborCoord}。");
                     throw new InvalidOperationException($"dirty 边界传播目标 chunk 未驻留：{neighborCoord}。");
                 }
@@ -155,6 +202,51 @@ internal static class DirtyRegionMarker
                 }
             }
         }
+
+        return true;
+    }
+
+    private static bool BoundaryNeighborsResident(IChunkSource chunks, ChunkCoord center, int wx, int wy)
+    {
+        const int chunkSize = EngineConstants.ChunkSize;
+        int padding = EngineConstants.DirtyRectPadding;
+        int dirtyMinX = wx - padding;
+        int dirtyMinY = wy - padding;
+        int dirtyMaxX = wx + padding;
+        int dirtyMaxY = wy + padding;
+
+        for (int dy = -1; dy <= 1; dy++)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                if (dx == 0 && dy == 0)
+                {
+                    continue;
+                }
+
+                ChunkCoord neighborCoord = new(center.X + dx, center.Y + dy);
+                int neighborMinX = neighborCoord.X * chunkSize;
+                int neighborMinY = neighborCoord.Y * chunkSize;
+                int neighborMaxX = neighborMinX + chunkSize - 1;
+                int neighborMaxY = neighborMinY + chunkSize - 1;
+
+                int intersectMinX = Math.Max(dirtyMinX, neighborMinX);
+                int intersectMinY = Math.Max(dirtyMinY, neighborMinY);
+                int intersectMaxX = Math.Min(dirtyMaxX, neighborMaxX);
+                int intersectMaxY = Math.Min(dirtyMaxY, neighborMaxY);
+                if (intersectMinX > intersectMaxX || intersectMinY > intersectMaxY)
+                {
+                    continue;
+                }
+
+                if (!chunks.TryGetChunk(neighborCoord, out _))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     private static void MarkChunkDirty(Chunk chunk, DirtyRect rect, DirtyPhaseTarget target)
