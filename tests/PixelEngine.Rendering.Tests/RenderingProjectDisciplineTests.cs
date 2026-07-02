@@ -69,6 +69,10 @@ public sealed class RenderingProjectDisciplineTests
         Assert.Contains("D3D 渲染后端", document, StringComparison.Ordinal);
         Assert.Contains("GL-DX12 共享资源层", document, StringComparison.Ordinal);
         Assert.Contains("GPU→CPU readback", document, StringComparison.Ordinal);
+        Assert.Contains("resize", document, StringComparison.Ordinal);
+        Assert.Contains("barrier", document, StringComparison.Ordinal);
+        Assert.Contains("fallback", document, StringComparison.Ordinal);
+        Assert.Contains("no-readback", document, StringComparison.Ordinal);
         Assert.Contains("IsComputeSharpCompiled=false", document, StringComparison.Ordinal);
         Assert.Contains("plan/15", document, StringComparison.Ordinal);
 
@@ -76,7 +80,11 @@ public sealed class RenderingProjectDisciplineTests
         Assert.Contains("禁止路线", plan, StringComparison.Ordinal);
         Assert.Contains("不能用 GL 句柄模拟 DX12 resource", plan, StringComparison.Ordinal);
 
-        Assert.Contains("OpenGL texture 句柄", interfaceSource, StringComparison.Ordinal);
+        Assert.Contains("OpenGL texture name", interfaceSource, StringComparison.Ordinal);
+        Assert.Contains("GL-only 契约", interfaceSource, StringComparison.Ordinal);
+        Assert.Contains("D3D resource owner", interfaceSource, StringComparison.Ordinal);
+        Assert.Contains("GL-DX12 shared resource/fence 层", interfaceSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("其它后端可把该值解释为后端资源句柄", interfaceSource, StringComparison.Ordinal);
         Assert.Contains("uint textureHandle", interfaceSource, StringComparison.Ordinal);
         Assert.Contains("plan/08 世界纹理句柄", resources, StringComparison.Ordinal);
         Assert.Contains("ComputeSharp 后端尚未编译进当前发行", backend, StringComparison.Ordinal);
