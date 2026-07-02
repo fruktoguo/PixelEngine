@@ -40,10 +40,15 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("./tools/benchmark-regression.ps1", ci, StringComparison.Ordinal);
         Assert.Contains("BenchmarkDotNet regression run", regression, StringComparison.Ordinal);
         Assert.Contains("maxRatio", regression, StringComparison.Ordinal);
+        Assert.Contains("rowContains", regression, StringComparison.Ordinal);
         Assert.Contains("RNGCHKFAIL", disassembly, StringComparison.Ordinal);
         Assert.Contains("ymm|zmm", disassembly, StringComparison.Ordinal);
         Assert.Contains("HardwareIntrinsics", disassembly, StringComparison.Ordinal);
         Assert.Contains("\"benchmarks\"", baseline, StringComparison.Ordinal);
+        Assert.Contains("CellThroughputBenchmark.StepJobSystem.FullActiveLiquid", baseline, StringComparison.Ordinal);
+        Assert.Contains("CellThroughputBenchmark.StepJobSystem.TypicalDirtyRect", baseline, StringComparison.Ordinal);
+        Assert.Contains("ReactionLookupBenchmark.FindDirect", baseline, StringComparison.Ordinal);
+        Assert.Contains("ParticleIntegrationBenchmark.IntegrateFlyingParticles.200000", baseline, StringComparison.Ordinal);
     }
 
     /// <summary>

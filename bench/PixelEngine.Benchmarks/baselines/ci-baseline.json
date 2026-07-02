@@ -7,6 +7,37 @@
       "filter": "*GcPauseBenchmark.SteadyPoolRentReturn*",
       "baselineMeanNs": 1000000.0,
       "maxRatio": 1.0
+    },
+    {
+      "name": "PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem.FullActiveLiquid",
+      "method": "StepJobSystem",
+      "filter": "*CellThroughputBenchmark.StepJobSystem*",
+      "rowContains": ["FullActiveLiquid"],
+      "baselineMeanNs": 100000000.0,
+      "maxRatio": 1.0
+    },
+    {
+      "name": "PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem.TypicalDirtyRect",
+      "method": "StepJobSystem",
+      "filter": "*CellThroughputBenchmark.StepJobSystem*",
+      "rowContains": ["TypicalDirtyRect"],
+      "baselineMeanNs": 5000000.0,
+      "maxRatio": 1.0
+    },
+    {
+      "name": "PixelEngine.Benchmarks.ReactionLookupBenchmark.FindDirect",
+      "method": "FindDirect",
+      "filter": "*ReactionLookupBenchmark.FindDirect*",
+      "baselineMeanNs": 100.0,
+      "maxRatio": 1.0
+    },
+    {
+      "name": "PixelEngine.Benchmarks.ParticleIntegrationBenchmark.IntegrateFlyingParticles.200000",
+      "method": "IntegrateFlyingParticles",
+      "filter": "*ParticleIntegrationBenchmark.IntegrateFlyingParticles*",
+      "rowContains": ["200000"],
+      "baselineMeanNs": 10000000.0,
+      "maxRatio": 1.0
     }
   ]
 }
