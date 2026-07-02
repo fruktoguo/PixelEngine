@@ -177,6 +177,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         Assert.Contains("DetectorReportPath", script, StringComparison.Ordinal);
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
+        Assert.Contains("schemaVersion 必须为 1", script, StringComparison.Ordinal);
+        Assert.Contains("包含未知 scope", script, StringComparison.Ordinal);
         Assert.Contains("sha256", script, StringComparison.Ordinal);
         Assert.Contains("Get-FileHash", script, StringComparison.Ordinal);
         Assert.Contains("sha256 不匹配", script, StringComparison.Ordinal);
@@ -203,6 +205,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         Assert.Contains("tools/native-leak-preflight.ps1", report, StringComparison.Ordinal);
         Assert.Contains("process_smoke_only", report, StringComparison.Ordinal);
+        Assert.Contains("schemaVersion: 1", report, StringComparison.Ordinal);
+        Assert.Contains("未知 scope", report, StringComparison.Ordinal);
         Assert.Contains("- [x] 子系统装配与**初始化顺序**", plan, StringComparison.Ordinal);
         Assert.Contains("native GL/OpenAL/Box2D 工具级泄漏审计仍由 §5 的 native leak detector 阻塞项闭合", plan, StringComparison.Ordinal);
         Assert.Contains("tools/native-leak-preflight.ps1", plan, StringComparison.Ordinal);
