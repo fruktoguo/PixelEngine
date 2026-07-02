@@ -1022,6 +1022,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("未知 channel", evidence, StringComparison.Ordinal);
         Assert.Contains("重复 evidence scope", evidence, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_release_manifest", evidence, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_release_evidence", evidence, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_release_scope_evidence", evidence, StringComparison.Ordinal);
         Assert.Contains("release_evidence_attached_pending_review", evidence, StringComparison.Ordinal);
         Assert.Contains("Release evidence preflight failed: release_evidence_attached_pending_review", evidence, StringComparison.Ordinal);
@@ -1046,6 +1047,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         Assert.Contains("tools/release-evidence-preflight.ps1", releaseReport, StringComparison.Ordinal);
         Assert.Contains("release_evidence_attached_pending_review", releaseReport, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_release_evidence", releaseReport, StringComparison.Ordinal);
         Assert.Contains("-AllowBlocked", releaseReport, StringComparison.Ordinal);
         Assert.Contains("sha256", releaseReport, StringComparison.Ordinal);
         Assert.Contains("重新计算", releaseReport, StringComparison.Ordinal);
@@ -1060,6 +1062,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("发行与 Box2D dual-build 工具链已在 `plan/15`", conventions, StringComparison.Ordinal);
         Assert.Contains("tools/audit-release-artifacts.*", conventions, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_release_manifest", conventions, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_release_evidence", conventions, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_release_scope_evidence", conventions, StringComparison.Ordinal);
         Assert.Contains("release_evidence_attached_pending_review", conventions, StringComparison.Ordinal);
 
@@ -1209,6 +1212,85 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(2, good.ExitCode);
             string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "release-evidence-preflight.md"));
             Assert.Contains("release_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 release evidence 预检会把 schema/JSON 错误落成稳定报告，而不是直接抛出无报告异常。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsInvalidSchemaWithReport()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-schema-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success");
+            string json = File.ReadAllText(manifest).Replace("\"schemaVersion\": 1", "\"schemaVersion\": 2", StringComparison.Ordinal);
+            File.WriteAllText(manifest, json);
+
+            string artifacts = Path.Combine(temp, "schema-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("blocked_invalid_release_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("schemaVersion 必须为 1", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 release evidence 预检会真实拒绝 manifest 中声明 hash 与文件内容不一致的证据。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsMismatchedEvidenceHash()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-hash-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success");
+            string json = File.ReadAllText(manifest).Replace("\"workflowRunSha256\": \"", "\"workflowRunSha256\": \"0000", StringComparison.Ordinal);
+            File.WriteAllText(manifest, json);
+
+            string artifacts = Path.Combine(temp, "hash-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("sha256 不匹配", report, StringComparison.Ordinal);
+            Assert.Contains("workflow_run", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
         {
