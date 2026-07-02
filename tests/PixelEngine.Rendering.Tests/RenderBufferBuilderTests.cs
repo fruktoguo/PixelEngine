@@ -264,6 +264,67 @@ public sealed class RenderBufferBuilderTests
     }
 
     [Fact]
+    public void BuildClearsTransparentEmptyWorldEvenWhenTemperatureBlocksExist()
+    {
+        ResidentChunkMap chunks = new();
+        chunks.Add(new Chunk(new ChunkCoord(0, 0)));
+        MaterialTable materials = Materials(Material(0, "empty", CellType.Empty, 0));
+        TemperatureField temperature = new();
+        temperature.AddHeat(0, 0, 1000f);
+        RenderBuffer target = new(1, 1);
+        RenderAuxBuffers aux = new(1, 1);
+        target.Pixels[0] = 0xFFEEDDCCu;
+        aux.Emissive[0] = 0xFF101010u;
+        aux.Occluder[0] = 123;
+        RenderFrameContext context = new(
+            chunks,
+            materials,
+            temperature,
+            CameraState.OneToOne(0, 0, 1, 1),
+            simStepped: true);
+
+        new RenderBufferBuilder().Build(context, target, aux);
+
+        Assert.Equal(0u, target.Pixels[0]);
+        Assert.Equal(0u, aux.Emissive[0]);
+        Assert.Equal(0, aux.Occluder[0]);
+    }
+
+    [Fact]
+    public void BuildInvalidatesEmptyWorldCacheWhenChunkBecomesDirty()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        chunks.Add(chunk);
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "sand", CellType.Powder, 0xFF112233u));
+        RenderBuffer target = new(1, 1);
+        RenderAuxBuffers aux = new(1, 1);
+        RenderFrameContext empty = new(
+            chunks,
+            materials,
+            new TemperatureField(),
+            CameraState.OneToOne(0, 0, 1, 1),
+            simStepped: true);
+        RenderBufferBuilder builder = new();
+
+        builder.Build(empty, target, aux);
+        SetMaterial(chunk, 0, 0, 1);
+        chunk.SetCurrentDirty(new DirtyRect(0, 0, 0, 0));
+        RenderFrameContext dirty = new(
+            chunks,
+            materials,
+            new TemperatureField(),
+            CameraState.OneToOne(0, 0, 1, 1),
+            simStepped: true);
+
+        builder.Build(dirty, target, aux);
+
+        Assert.Equal(0xFF112233u, target.Pixels[0]);
+    }
+
+    [Fact]
     public void BuildDoesNotClearWhenMaterialZeroIsVisible()
     {
         ResidentChunkMap chunks = new();

@@ -64,12 +64,17 @@ public sealed class RenderPhaseDriver(
             _temperature,
             camera,
             context.Timing.RunSim,
-            _debugOverlays);
+            CellDebugOverlaysEnabled() ? _debugOverlays : null);
         _builder.Build(frame, _renderBuffer, _aux, context.Context.Profiler);
         ReadOnlySpan<Particle> activeParticles = _particles.ActiveReadOnly;
         _particleCompositor.Stamp(activeParticles, _materials, camera, _renderBuffer, _aux, context.Context.Profiler);
         _presentCamera = camera;
         _frameBuilt = true;
+    }
+
+    private bool CellDebugOverlaysEnabled()
+    {
+        return _debugOverlays?.HasCellColorOverlays == true;
     }
 
     private void PresentFrame(EngineTickContext context)
