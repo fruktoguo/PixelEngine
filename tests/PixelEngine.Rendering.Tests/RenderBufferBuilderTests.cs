@@ -238,6 +238,51 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(123, aux.Occluder[0]);
     }
 
+    [Fact]
+    public void BuildClearsBuffersForTransparentEmptyWorld()
+    {
+        ResidentChunkMap chunks = new();
+        chunks.Add(new Chunk(new ChunkCoord(0, 0)));
+        MaterialTable materials = Materials(Material(0, "empty", CellType.Empty, 0));
+        RenderBuffer target = new(2, 2);
+        RenderAuxBuffers aux = new(2, 2);
+        target.Pixels.Fill(0xFFEEDDCCu);
+        aux.Emissive.Fill(0xFF101010u);
+        aux.Occluder.Fill(123);
+        RenderFrameContext context = new(
+            chunks,
+            materials,
+            new TemperatureField(),
+            CameraState.OneToOne(0, 0, 2, 2),
+            simStepped: true);
+
+        new RenderBufferBuilder().Build(context, target, aux);
+
+        Assert.All(target.Pixels.ToArray(), static value => Assert.Equal(0u, value));
+        Assert.All(aux.Emissive.ToArray(), static value => Assert.Equal(0u, value));
+        Assert.All(aux.Occluder.ToArray(), static value => Assert.Equal((byte)0, value));
+    }
+
+    [Fact]
+    public void BuildDoesNotClearWhenMaterialZeroIsVisible()
+    {
+        ResidentChunkMap chunks = new();
+        chunks.Add(new Chunk(new ChunkCoord(0, 0)));
+        MaterialTable materials = Materials(Material(0, "empty", CellType.Empty, 0xFF010203u));
+        RenderBuffer target = new(1, 1);
+        RenderAuxBuffers aux = new(1, 1);
+        RenderFrameContext context = new(
+            chunks,
+            materials,
+            new TemperatureField(),
+            CameraState.OneToOne(0, 0, 1, 1),
+            simStepped: true);
+
+        new RenderBufferBuilder().Build(context, target, aux);
+
+        Assert.Equal(0xFF010203u, target.Pixels[0]);
+    }
+
     private static void SetMaterial(Chunk chunk, int lx, int ly, ushort material)
     {
         chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
