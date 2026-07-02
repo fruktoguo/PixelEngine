@@ -808,6 +808,16 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("\"codesignReport\"", example, StringComparison.Ordinal);
         Assert.Contains("\"codesignSha256\"", example, StringComparison.Ordinal);
         Assert.Contains("\"notarizationReport\"", example, StringComparison.Ordinal);
+
+        using System.Text.Json.JsonDocument exampleManifest = System.Text.Json.JsonDocument.Parse(example);
+        System.Text.Json.JsonElement artifacts = exampleManifest.RootElement.GetProperty("artifacts");
+        foreach (string rid in new[] { "win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64" })
+        {
+            Assert.True(artifacts.TryGetProperty(rid, out System.Text.Json.JsonElement ridNode), $"示例 manifest 缺少 {rid}");
+            Assert.True(ridNode.TryGetProperty("r2r", out _), $"示例 manifest 缺少 {rid}/r2r");
+            Assert.True(ridNode.TryGetProperty("aot", out System.Text.Json.JsonElement aotNode), $"示例 manifest 缺少 {rid}/aot");
+            Assert.True(aotNode.TryGetProperty("simdProbeKind", out _), $"示例 manifest 缺少 {rid}/aot simdProbeKind");
+        }
     }
 
     /// <summary>
