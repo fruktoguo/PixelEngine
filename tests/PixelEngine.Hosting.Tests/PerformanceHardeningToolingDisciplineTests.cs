@@ -108,6 +108,56 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证硬件计数器预检脚本在当前宿主上真实写出权限 / 平台边界报告，且默认不运行 benchmark。
+    /// </summary>
+    [Fact]
+    public void HardwareCounterPreflightWritesHostBoundaryReport()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-hardware-counter-preflight-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "hardware-counter-preflight.ps1"),
+                "-Artifacts",
+                temp,
+                "-AllowBlocked");
+
+            Assert.Equal(0, result.ExitCode);
+            string preflightReport = File.ReadAllText(Path.Combine(temp, "hardware-counter-preflight.md"));
+            Assert.Contains("benchmark_requested | False", preflightReport, StringComparison.Ordinal);
+            Assert.Contains("Cache Misses; Branch Mispredictions", preflightReport, StringComparison.Ordinal);
+            Assert.Contains("PIXELENGINE_BENCH_HARDWARE_COUNTERS", preflightReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("counters_present", preflightReport, StringComparison.Ordinal);
+
+            if (!OperatingSystem.IsWindows())
+            {
+                Assert.Contains("status | blocked_non_windows", preflightReport, StringComparison.Ordinal);
+                Assert.Contains("非 Windows runner 不作为 Cache Misses / Branch Mispredictions 验收环境", preflightReport, StringComparison.Ordinal);
+            }
+            else if (!IsWindowsAdministrator())
+            {
+                Assert.Contains("status | blocked_non_admin", preflightReport, StringComparison.Ordinal);
+                Assert.Contains("elevated ETW Kernel Session", preflightReport, StringComparison.Ordinal);
+            }
+            else
+            {
+                Assert.Contains("status | ready", preflightReport, StringComparison.Ordinal);
+                Assert.Contains("追加 -RunBenchmark 可执行 BenchmarkDotNet", preflightReport, StringComparison.Ordinal);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证目标硬件性能证据预检要求 AVX-512、6 RID cells/frame、帧预算与硬件计数器 scope/hash，不把本机短样本当作通过。
     /// </summary>
     [Fact]
@@ -1806,6 +1856,18 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     private static string ReadRepositoryFile(params string[] relativePath)
     {
         return File.ReadAllText(Path.Combine([FindRepositoryRoot(), .. relativePath]));
+    }
+
+    private static bool IsWindowsAdministrator()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        using System.Security.Principal.WindowsIdentity identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+        System.Security.Principal.WindowsPrincipal principal = new(identity);
+        return principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
     }
 
     private static string CreateCiEvidenceManifest(string tempRoot, string benchmarkConclusion, string suffix = "good")
