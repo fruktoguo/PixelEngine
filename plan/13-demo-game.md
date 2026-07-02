@@ -118,7 +118,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 | 子系统访问门面 | `EngineContext`（暴露 `World/Camera/Input/Particles/Lighting/Audio/Physics/Content/Diagnostics/Gui`） | Hosting（plan/00 §5） | 部分实现：`EngineContext` 可注册/查询 typed service 与 role availability，脚本后端已能自动装配 World/Camera/Input/Particles/Lighting/Audio/Content/Time/Event；窗口态已有 `AttachWindowRuntime()` 组合 RenderWindow/Input/Rendering；仍缺 GUI 与 save directory/world 组合门面 |
 | 注册 Demo 脚本程序集 / 实例化 Behaviour | `Engine.RegisterScriptAssembly(...)`、`Behaviour` 生命周期（`OnStart/OnUpdate/OnGui/OnDestroy`） | plan/11 / Hosting | 部分实现：`Engine.RegisterScriptAssembly(...)`、Hosting registry、procedural/scene file Behaviour 物化、`Engine.AttachScripting(...)`、`AttachScriptingFromServices()` 与 `Behaviour.OnGui`/`IGuiContext` 调度已落地；仍缺真实窗口端到端 GUI 验收 |
 | 脚本服务句柄注入 | `Behaviour.World/Input/Camera/...` 属性 | plan/11 | 已规划（plan/11 世界脚本接口） |
-| 场景加载 / 保存 | `Engine.LoadScene(name)`、`SceneSourceKind.SceneFile`、`.scene` 格式 | plan/07（序列化）+ plan/12（编辑器编排） | 部分实现：Hosting 可切换已注册场景、区分 `.scene` 文件来源，并从 `.scene` 物化脚本实体/Behaviour 参数；`AttachCurrentSceneWorld` 已可显式从 save directory 或 `.scene InitialSaveDirectory` 装配 live World/Simulation/粒子后端；仍缺刚体快照恢复、world seed/game time 完整恢复与编辑器导出格式 |
+| 场景加载 / 保存 | `Engine.LoadScene(name)`、`SceneSourceKind.SceneFile`、`.scene` 格式 | plan/07（序列化）+ plan/12（编辑器编排） | 部分实现：Hosting 可切换已注册场景、区分 `.scene` 文件来源，并从 `.scene` 物化脚本实体/Behaviour 参数；`AttachCurrentSceneWorld` 已可显式从 save directory 或 `.scene InitialSaveDirectory` 装配 live World/Simulation/粒子/Physics 后端，并恢复 world seed、game time 与刚体快照；仍缺编辑器导出格式 |
 | 输入查询 | `IInput`（`IsDown/Pressed/Released(Key)`、`MousePosition`、`MouseButton`、`Wheel`） | plan/08（Silk.NET 输入）/ Hosting | 部分实现：Scripting 已有 `ScriptInputApi`、完整 Demo 所需键位/鼠标枚举、键鼠边沿、滚轮与轴快照；Hosting 已有 `SilkInputPhaseDriver` 采集窗口键鼠并支持通道门控，且已被 `AttachWindowRuntime()` 装配；仍缺真实窗口输入验收 |
 | 读写 cell（笔刷 / 关卡生成 / 危险采样） | `IWorld.GetCell/SetCell`、`FillRect/FillCircle/Stamp` | plan/11（世界脚本接口） | 已规划 |
 | 材质按名取 id | `EngineContentPackage.ResolveMaterial/TryResolveMaterial(...)`、`IMaterialQuery.Resolve/TryResolve(...)` | plan/04（Content）+ Hosting/plan/11 | 部分实现：Hosting 内容包门面与脚本材质查询接口已可用，public API 不泄漏 Content/Simulation 实现类型；Demo materials/reactions/textures/audio 已就位 |
@@ -136,7 +136,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 | 调试叠层开关 | `IDiagnostics.ToggleOverlay(OverlayKind)` | plan/12（调试叠层）+ 架构 §17.2 | 部分实现：脚本 `IDiagnosticsApi` 已可切换 dirty rect / chunk parity / KeepAlive / cell parity / temperature / owned body / particle / CCL 叠层，RenderPhaseDriver 已把 DebugOverlayController 接入逐 cell 着色与 overlay command；仍缺真实窗口验收 |
 | 确定性 RNG（关卡生成） | `IRandom`（可种子化） | plan/02（RNG） | 已规划 |
 
-API 缺口登记结果：仍需由引擎公开 API 接纳的阻塞项为：Hosting 的 Physics 刚体快照恢复；plan/06 的 kinematic 角色推动 dynamic 刚体公开交互；plan/08 的脚本点光源彩色照明窗口态验收。world seed/game time 恢复、脚本可见重开关卡安全后端、打开完整 Editor dockspace 的脚本控制 API 已落地；Editor 仍要求进程以 `--editor` 启动并已接入窗口/Rendering。上述缺口均在本表中保持「需引擎补 API」或「部分实现但阻塞」状态，Demo 不允许绕过公开 API 直接引用内部实现。
+API 缺口登记结果：仍需由引擎公开 API 接纳或用真实窗口验收闭合的阻塞项为：plan/06 的 kinematic 角色推动 dynamic 刚体公开交互；plan/08 的脚本点光源彩色照明窗口态验收。Hosting 的 Physics 刚体快照恢复、world seed/game time 恢复、脚本可见重开关卡安全后端、打开完整 Editor dockspace 的脚本控制 API 已落地；Editor 仍要求进程以 `--editor` 启动并已接入窗口/Rendering。上述缺口均在本表中保持「需引擎补 API」或「部分实现但阻塞」状态，Demo 不允许绕过公开 API 直接引用内部实现。
 
 ---
 

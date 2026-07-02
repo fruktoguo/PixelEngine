@@ -92,7 +92,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 
 - [x] `EngineBuilder().…​.Build().Run()` 能装配全部子系统并跑稳定 60fps 空场景。Rendering/Audio/Physics/Scripting/Editor 已有真实运行入口，`--window-ticks 3600` 本机窗口长跑已验证可有限运行并退出；有限窗口短跑会输出 `elapsed_ms`/`avg_tick_ms`/`last_profile_ms` 与最慢相位，`docs/runtime-reports/2026-07-02-demo-window-smoke.md` 已记录 `empty-window-probe.scene` 真实空 scene 120 tick 旧样本曾因 `BuildRenderBuffer=25.52` / `RenderBufferBuild=25.51` 超预算，后续修复纯矢量 debug overlay 误传与透明 Empty 全世界清屏路径后，120 tick 复验为 `avg_tick_ms=12.82`、`last_profile_ms=7.79`，600 tick 复验为 `avg_tick_ms=7.83`、`last_profile_ms=7.20`，均低于 16.67ms 帧预算。
 - [x] 12 相位顺序与架构 §3.3 完全一致;用诊断计时器可见各相位耗时。
-- [x] sim 降到 30Hz 时画面仍 60fps 出帧、世界慢放、无 death spiral(注入人工过载验证)。
+- [x] sim 降到 30Hz 时画面仍 60fps 出帧、世界慢放、无 death spiral：`EnginePhasePipelineTests` 覆盖 30Hz 跳帧仍执行 render/streaming 相位且不 accumulator 追帧，`EngineOverloadControllerTests.OverloadedSim30HzKeepsRenderFramesWithoutCatchUp` 覆盖人工过载进入 Sim30Hz 后 render 逐帧执行。
 - [x] 过载降级按五级顺序触发：`EngineOverloadControllerTests` 已覆盖五级 tier 推进、Sim30Hz 下发给 `FrameClock`、降温度场、降光照、远区 chunk 隔帧、render 不追帧与质量档位服务注册。
 - [!] Editor 真实窗口观测/覆盖仍缺人工复核证据：Editor 运行入口、Hexa ImGui OpenGL3 后端与诊断面板已接入，并通过 60 tick Editor 窗口短跑；脚本化窗口短跑已证明 Demo HUD 绑定诊断数据且 Escape 可进入暂停菜单状态；`tools/demo-manual-acceptance-preflight.ps1` 的 `hudMenuEditorVideo` scope 负责索引真实窗口 UI 布局、鼠标点击、Editor dockspace/覆盖操作和菜单链路证据，但 `manual_evidence_attached_pending_review` 仍不等于验收通过。
 - [x] 脚本经 `EngineContext` 能读写世界/建刚体/播音效,写操作落在正确相位(配合 plan/11 测试)。AudioService 与 PhysicsSystem 后端已注册，脚本可见 Physics 建/查/控/毁刚体命令与角色移动已在 phase 8 step 前 flush。
