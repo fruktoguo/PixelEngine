@@ -675,6 +675,64 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 GPU 粒子目标硬件预检会真实拒绝未知或重复 evidence scope。
+    /// </summary>
+    [Fact]
+    public void GpuParticleBenchmarkPreflightRejectsUnknownAndDuplicateScopes()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-scope-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string unknownManifest = CreateFlatEvidenceManifest(
+                temp,
+                ["targetHardwareReport", "cpuProbeReport", "gpuProbeReport", "comparisonReport", "localProbeOnly"],
+                suffix: "unknown-scope");
+            string duplicateManifest = CreateFlatEvidenceManifest(
+                temp,
+                ["targetHardwareReport", "cpuProbeReport", "gpuProbeReport", "comparisonReport"],
+                suffix: "duplicate-scope");
+            AddDuplicateFlatEvidenceScope(duplicateManifest, "comparisonReport");
+
+            string unknownArtifacts = Path.Combine(temp, "unknown-out");
+            ScriptResult unknown = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
+                "-EvidenceManifestPath",
+                unknownManifest,
+                "-Artifacts",
+                unknownArtifacts);
+            Assert.Equal(5, unknown.ExitCode);
+            string unknownReport = File.ReadAllText(Path.Combine(unknownArtifacts, "gpu-particle-benchmark-preflight.md"));
+            Assert.Contains("status: blocked_invalid_target_gpu_evidence", unknown.Output + unknownReport, StringComparison.Ordinal);
+            Assert.Contains("未知 evidence scope：localProbeOnly", unknownReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_gpu_evidence_attached_pending_review", unknownReport, StringComparison.Ordinal);
+
+            string duplicateArtifacts = Path.Combine(temp, "duplicate-out");
+            ScriptResult duplicate = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
+                "-EvidenceManifestPath",
+                duplicateManifest,
+                "-Artifacts",
+                duplicateArtifacts);
+            Assert.Equal(5, duplicate.ExitCode);
+            string duplicateReport = File.ReadAllText(Path.Combine(duplicateArtifacts, "gpu-particle-benchmark-preflight.md"));
+            Assert.Contains("status: blocked_invalid_target_gpu_evidence", duplicate.Output + duplicateReport, StringComparison.Ordinal);
+            Assert.Contains("重复 evidence scope：comparisonReport", duplicateReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_gpu_evidence_attached_pending_review", duplicateReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 GPU 粒子目标硬件预检会把 schema/JSON 错误落成稳定报告。
     /// </summary>
     [Fact]
@@ -2141,6 +2199,16 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             manifestPath,
             System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         return manifestPath;
+    }
+
+    private static void AddDuplicateFlatEvidenceScope(string manifestPath, string scope)
+    {
+        JsonObject manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
+        JsonArray evidence = manifest["evidence"]!.AsArray();
+        JsonNode? source = evidence.FirstOrDefault(node => string.Equals((string?)node?["scope"], scope, StringComparison.Ordinal));
+        Assert.NotNull(source);
+        evidence.Add(source.DeepClone());
+        File.WriteAllText(manifestPath, manifest.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
     }
 
     private static string CreatePerformanceTargetEvidenceManifest(string tempRoot, bool includeUnknownScope = false, string suffix = "good")
