@@ -1,17 +1,16 @@
 using PixelEngine.Core.Events;
 using PixelEngine.Hosting;
-using PixelEngine.Simulation;
 
 namespace PixelEngine.Demo;
 
 /// <summary>
 /// Demo 窗口音频探针，在真实窗口相位中注入材质音频事件并采样派发诊断。
 /// </summary>
-internal sealed class DemoAudioProbe(MaterialTable materials) : IEnginePhaseDriver
+internal sealed class DemoAudioProbe(EngineProbeApi probe) : IEnginePhaseDriver
 {
     private const int StressEventCount = 64;
 
-    private readonly MaterialTable _materials = materials ?? throw new ArgumentNullException(nameof(materials));
+    private readonly EngineProbeApi _probe = probe ?? throw new ArgumentNullException(nameof(probe));
     private ushort _stone;
     private ushort _water;
     private ushort _lava;
@@ -146,6 +145,6 @@ internal sealed class DemoAudioProbe(MaterialTable materials) : IEnginePhaseDriv
 
     private ushort ResolveMaterial(string name)
     {
-        return _materials.TryGetId(name, out ushort id) ? id : (ushort)0;
+        return _probe.TryResolveMaterial(name, out ushort id) ? id : (ushort)0;
     }
 }

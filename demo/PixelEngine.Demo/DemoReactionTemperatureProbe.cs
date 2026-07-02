@@ -1,5 +1,4 @@
 using PixelEngine.Hosting;
-using PixelEngine.Simulation;
 
 namespace PixelEngine.Demo;
 
@@ -7,15 +6,9 @@ namespace PixelEngine.Demo;
 /// Demo 专用窗口探针，预布置反应与温度相变样本并在真实窗口相位中统计结果。
 /// </summary>
 internal sealed class DemoReactionTemperatureProbe(
-    CellGrid grid,
-    TemperatureField temperature,
-    MaterialTable materials,
-    SimulationKernel kernel) : IEnginePhaseDriver
+    EngineProbeApi probe) : IEnginePhaseDriver
 {
-    private readonly CellGrid _grid = grid ?? throw new ArgumentNullException(nameof(grid));
-    private readonly TemperatureField _temperature = temperature ?? throw new ArgumentNullException(nameof(temperature));
-    private readonly MaterialTable _materials = materials ?? throw new ArgumentNullException(nameof(materials));
-    private readonly SimulationKernel _kernel = kernel ?? throw new ArgumentNullException(nameof(kernel));
+    private readonly EngineProbeApi _probe = probe ?? throw new ArgumentNullException(nameof(probe));
 
     private ushort _empty;
     private ushort _water;
@@ -203,9 +196,7 @@ internal sealed class DemoReactionTemperatureProbe(
 
     private ushort Require(string name)
     {
-        return _materials.TryGetId(name, out ushort id)
-            ? id
-            : throw new InvalidOperationException($"Demo 反应探针缺少材质：{name}。");
+        return _probe.ResolveMaterial(name);
     }
 
     private void BuildReactionPairs()
@@ -279,13 +270,12 @@ internal sealed class DemoReactionTemperatureProbe(
 
     private void WriteProbeCell(int x, int y, ushort material)
     {
-        _kernel.EditCellAtInputPhase(x, y, material, persistentFlags: 0);
+        _probe.EditCellAtInputPhase(x, y, material);
     }
 
     private void SetTemperature(int x, int y, float targetTemperature)
     {
-        float current = _temperature.GetTemperature(x, y);
-        _temperature.AddHeat(x, y, targetTemperature - current);
+        _probe.SetTemperature(x, y, targetTemperature);
     }
 
     private void ClearArea(int minX, int minY, int maxX, int maxY)
@@ -316,7 +306,7 @@ internal sealed class DemoReactionTemperatureProbe(
         {
             for (int x = minX; x <= maxX; x++)
             {
-                if (_grid.MaterialAt(x, y) == material)
+                if (_probe.MaterialAt(x, y) == material)
                 {
                     count++;
                 }
@@ -333,7 +323,7 @@ internal sealed class DemoReactionTemperatureProbe(
         {
             for (int x = minX; x <= maxX; x++)
             {
-                ushort material = _grid.MaterialAt(x, y);
+                ushort material = _probe.MaterialAt(x, y);
                 for (int i = 0; i < materials.Length; i++)
                 {
                     if (material == materials[i])

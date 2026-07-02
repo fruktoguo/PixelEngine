@@ -1,8 +1,6 @@
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Hosting;
 using PixelEngine.Rendering;
-using PixelEngine.Simulation;
-using PixelEngine.Simulation.Particles;
 
 namespace PixelEngine.Demo;
 
@@ -10,15 +8,13 @@ namespace PixelEngine.Demo;
 /// 高密度自由粒子帧时间探针，用于真实窗口 CPU stamp 与 GPU point-sprite 路径对比。
 /// </summary>
 internal sealed class DemoParticleFrameTimeProbe(
-    ParticleSystem particles,
-    MaterialTable materials,
+    EngineProbeApi probe,
     int requestedCount,
     int warmupFrames,
     int worldWidth,
     int worldHeight)
 {
-    private readonly ParticleSystem _particles = particles ?? throw new ArgumentNullException(nameof(particles));
-    private readonly MaterialTable _materials = materials ?? throw new ArgumentNullException(nameof(materials));
+    private readonly EngineProbeApi _probe = probe ?? throw new ArgumentNullException(nameof(probe));
     private readonly List<double> _wallMs = [];
     private readonly List<double> _stampMs = [];
     private readonly List<double> _gpuDrawMs = [];
@@ -77,19 +73,16 @@ internal sealed class DemoParticleFrameTimeProbe(
         _ = context;
         if (!_initialized)
         {
-            _initialized = _materials.TryGetId("fire", out _material);
+            _initialized = _probe.TryResolveMaterial("fire", out _material);
             if (!_initialized)
             {
                 throw new InvalidOperationException("粒子帧时间探针需要 content/materials.json 中存在 fire 材质。");
             }
 
-            if (_particles.Settings.MaxActiveCount < requestedCount)
-            {
-                _particles.ApplySettings(_particles.Settings with { MaxActiveCount = requestedCount });
-            }
+            _probe.EnsureParticleCapacity(requestedCount);
         }
 
-        _particles.Clear();
+        _probe.ClearParticles();
         int columns = Math.Max(1, worldWidth);
         int rows = Math.Max(1, worldHeight);
         int spawned = 0;
@@ -98,8 +91,7 @@ internal sealed class DemoParticleFrameTimeProbe(
             float x = (i % columns) + 0.5f;
             float y = (i / columns % rows) + 0.5f;
             byte variant = (byte)((i * 37) & 0xFF);
-            ParticleSpawn spawn = new(x, y, 0f, 0f, _material, variant, Life: 240);
-            if (_particles.TrySpawn(in spawn))
+            if (_probe.TrySpawnParticle(x, y, 0f, 0f, _material, variant, life: 240))
             {
                 spawned++;
             }

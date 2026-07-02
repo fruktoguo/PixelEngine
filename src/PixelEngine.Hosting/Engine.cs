@@ -1450,6 +1450,7 @@ public sealed class Engine : IDisposable
         Context.RegisterService(kernel);
         Context.RegisterService(particles);
         Context.RegisterService(temperature);
+        Context.RegisterService(new EngineProbeApi(grid, kernel, temperature, materials, particles));
         Context.RegisterService<ISimulationEditApi>(editApi);
         Context.RegisterService<ISimulationInspectApi>(editApi);
         Context.RegisterService(editApi);
