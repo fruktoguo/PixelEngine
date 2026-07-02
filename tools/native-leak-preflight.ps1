@@ -160,12 +160,33 @@ function Read-EvidenceManifest {
             continue
         }
 
+        $declaredHash = [string]$scopeNode.sha256
+        if ([string]::IsNullOrWhiteSpace($declaredHash)) {
+            $items += [pscustomobject]@{
+                MissingScope = $true
+                Scope = $scope
+                Message = "evidence manifest scope 缺少 sha256：$scope"
+            }
+            continue
+        }
+
         $hash = Get-FileHash -Algorithm SHA256 -Path $reportPath
+        $actualHash = $hash.Hash.ToLowerInvariant()
+        $expectedHash = $declaredHash.Trim().ToLowerInvariant()
+        if ($actualHash -ne $expectedHash) {
+            $items += [pscustomobject]@{
+                MissingScope = $true
+                Scope = $scope
+                Message = "evidence manifest scope sha256 不匹配：$scope expected=$expectedHash actual=$actualHash"
+            }
+            continue
+        }
+
         $items += [pscustomobject]@{
             Scope = $scope
             Detector = [string]$scopeNode.detector
             Report = ConvertTo-RelativePath -Root $Root -Path $reportPath
-            Sha256 = $hash.Hash
+            Sha256 = $actualHash
         }
     }
 

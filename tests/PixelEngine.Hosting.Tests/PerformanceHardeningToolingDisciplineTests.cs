@@ -177,6 +177,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         Assert.Contains("DetectorReportPath", script, StringComparison.Ordinal);
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
+        Assert.Contains("sha256", script, StringComparison.Ordinal);
+        Assert.Contains("Get-FileHash", script, StringComparison.Ordinal);
+        Assert.Contains("sha256 不匹配", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_detector", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_scope_evidence", script, StringComparison.Ordinal);
         Assert.Contains("process_smoke_only", script, StringComparison.Ordinal);
