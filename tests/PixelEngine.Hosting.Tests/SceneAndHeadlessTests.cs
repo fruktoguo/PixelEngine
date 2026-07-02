@@ -301,6 +301,35 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
+    /// 验证 Engine world 快照后端也会恢复存活脚本 Behaviour 的字段状态。
+    /// </summary>
+    [Fact]
+    public void EngineWorldSnapshotStoreRestoresScriptBehaviourFields()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+        PixelEngine.Scripting.Scene scriptScene = new();
+        Entity entity = scriptScene.CreateEntity();
+        SnapshotCounterBehaviour script = entity.AddComponent<SnapshotCounterBehaviour>();
+        script.Score = 7;
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+        engine.Context.RegisterService(materials);
+        engine.Context.RegisterService(scriptScene);
+        _ = engine.AttachResidentSimulationWorld(128, 128, particleCapacity: 8);
+        _ = engine.AttachScriptingFromServices();
+        using EngineWorldSnapshotStore store = new(engine);
+
+        SaveLoadOperationResult save = store.SaveTemporarySnapshot();
+        script.Score = 99;
+        SaveLoadOperationResult restore = store.RestoreTemporarySnapshot();
+
+        Assert.True(save.Success, save.Message);
+        Assert.True(restore.Success, restore.Message);
+        Assert.Equal(7, script.Score);
+    }
+
+    /// <summary>
     /// 验证 Hosting 能从 save directory 物化 live World/Simulation 后端，并恢复自由粒子快照。
     /// </summary>
     [Fact]
@@ -589,6 +618,11 @@ public sealed class SceneAndHeadlessTests
             context.Edit.PaintCell(4, 5, stone.Value);
             context.Edit.SetTemperature(4, 5, 32.5f);
         }
+    }
+
+    private sealed class SnapshotCounterBehaviour : Behaviour
+    {
+        public int Score { get; set; }
     }
 
     private static MaterialTable Materials(params (string Name, CellType Type)[] definitions)

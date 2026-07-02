@@ -812,6 +812,21 @@ public sealed class Engine : IDisposable
         _attachedScriptRuntime?.EndPlaySession();
     }
 
+    internal ScriptPlaySessionSnapshot? CaptureScriptPlaySessionSnapshot()
+    {
+        ThrowIfShutdown();
+        return _attachedScriptRuntime?.CapturePlaySessionSnapshot();
+    }
+
+    internal void RestoreScriptPlaySessionSnapshot(ScriptPlaySessionSnapshot? snapshot)
+    {
+        ThrowIfShutdown();
+        if (snapshot is not null)
+        {
+            _attachedScriptRuntime?.RestorePlaySessionSnapshot(snapshot);
+        }
+    }
+
     /// <summary>
     /// 从 Hosting 已注册的真实 Simulation/Physics/Audio/Input/Camera 服务创建脚本上下文并接入相位管线。
     /// </summary>

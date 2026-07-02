@@ -329,6 +329,41 @@ public sealed class Scene
         return [.. records];
     }
 
+    internal ScriptPlaySessionSnapshot CapturePlaySessionSnapshot()
+    {
+        ScriptBehaviourRecord[] records = CaptureBehaviours();
+        ScriptPlaySessionBehaviourSnapshot[] snapshots = new ScriptPlaySessionBehaviourSnapshot[records.Length];
+        for (int i = 0; i < records.Length; i++)
+        {
+            Behaviour behaviour = records[i].Behaviour;
+            snapshots[i] = new ScriptPlaySessionBehaviourSnapshot(
+                records[i].Entity.Id,
+                behaviour.GetType(),
+                ScriptStateSnapshot.Capture(behaviour));
+        }
+
+        return new ScriptPlaySessionSnapshot(snapshots);
+    }
+
+    internal void RestorePlaySessionSnapshot(ScriptPlaySessionSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ScriptBehaviourRecord[] records = CaptureBehaviours();
+        for (int snapshotIndex = 0; snapshotIndex < snapshot.Behaviours.Length; snapshotIndex++)
+        {
+            ScriptPlaySessionBehaviourSnapshot saved = snapshot.Behaviours[snapshotIndex];
+            for (int recordIndex = 0; recordIndex < records.Length; recordIndex++)
+            {
+                ScriptBehaviourRecord current = records[recordIndex];
+                if (current.Entity.Id == saved.EntityId && current.Behaviour.GetType() == saved.BehaviourType)
+                {
+                    saved.State.Restore(current.Behaviour);
+                    break;
+                }
+            }
+        }
+    }
+
     private void ValidateEntity(Entity entity)
     {
         ArgumentNullException.ThrowIfNull(entity);

@@ -109,6 +109,26 @@ public sealed class ScriptRuntime : IScriptRuntime
     }
 
     /// <summary>
+    /// 捕获当前脚本字段状态，供 Editor 临时 Play 回滚。
+    /// </summary>
+    /// <returns>脚本字段快照。</returns>
+    public ScriptPlaySessionSnapshot CapturePlaySessionSnapshot()
+    {
+        IScriptContext context = RequireContext();
+        return context.Scene.CapturePlaySessionSnapshot();
+    }
+
+    /// <summary>
+    /// 恢复先前捕获的脚本字段状态。
+    /// </summary>
+    /// <param name="snapshot">脚本字段快照。</param>
+    public void RestorePlaySessionSnapshot(ScriptPlaySessionSnapshot snapshot)
+    {
+        IScriptContext context = RequireContext();
+        context.Scene.RestorePlaySessionSnapshot(snapshot);
+    }
+
+    /// <summary>
     /// 关闭脚本运行时；由 Hosting 生命周期关闭流程调用。
     /// </summary>
     public void Shutdown()

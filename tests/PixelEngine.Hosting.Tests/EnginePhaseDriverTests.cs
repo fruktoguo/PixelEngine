@@ -682,6 +682,10 @@ public sealed class EnginePhaseDriverTests
 
         public int EndPlaySessionCount { get; private set; }
 
+        public int CapturePlaySessionSnapshotCount { get; private set; }
+
+        public int RestorePlaySessionSnapshotCount { get; private set; }
+
         public int ShutdownCount { get; private set; }
 
         public void Initialize(IScriptContext context)
@@ -718,6 +722,20 @@ public sealed class EnginePhaseDriverTests
         public void EndPlaySession()
         {
             EndPlaySessionCount++;
+        }
+
+        public ScriptPlaySessionSnapshot CapturePlaySessionSnapshot()
+        {
+            CapturePlaySessionSnapshotCount++;
+            ScriptRuntime runtime = new();
+            runtime.Initialize(new FakeScriptContext(new ScriptScene()));
+            return runtime.CapturePlaySessionSnapshot();
+        }
+
+        public void RestorePlaySessionSnapshot(ScriptPlaySessionSnapshot snapshot)
+        {
+            ArgumentNullException.ThrowIfNull(snapshot);
+            RestorePlaySessionSnapshotCount++;
         }
 
         public void Shutdown()
