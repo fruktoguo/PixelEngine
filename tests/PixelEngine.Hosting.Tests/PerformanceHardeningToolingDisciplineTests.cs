@@ -352,6 +352,52 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证各 evidence preflight 都会把 malformed JSON 写成稳定 invalid 报告，而不是直接抛出无报告异常。
+    /// </summary>
+    [Theory]
+    [InlineData("ci-matrix-evidence-preflight.ps1", "ci-matrix-evidence-preflight.md", "blocked_invalid_ci_evidence")]
+    [InlineData("performance-target-evidence-preflight.ps1", "performance-target-evidence-preflight.md", "blocked_invalid_target_performance_evidence")]
+    [InlineData("gpu-particle-benchmark-preflight.ps1", "gpu-particle-benchmark-preflight.md", "blocked_invalid_target_gpu_evidence")]
+    [InlineData("demo-manual-acceptance-preflight.ps1", "demo-manual-acceptance-preflight.md", "blocked_invalid_manual_evidence")]
+    [InlineData("native-leak-preflight.ps1", "native-leak-preflight.md", "blocked_invalid_native_leak_evidence")]
+    public void EvidencePreflightsRejectMalformedJsonWithReport(string scriptName, string reportName, string expectedStatus)
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-malformed-evidence-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            _ = Directory.CreateDirectory(temp);
+            string manifest = Path.Combine(temp, "evidence.json");
+            File.WriteAllText(manifest, "{ invalid");
+
+            string artifacts = Path.Combine(temp, "out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", scriptName),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, reportName));
+            Assert.True(
+                report.Contains($"status: {expectedStatus}", StringComparison.Ordinal) ||
+                report.Contains($"| status | {expectedStatus} |", StringComparison.Ordinal),
+                $"report did not contain expected status {expectedStatus}:{Environment.NewLine}{report}");
+            Assert.Contains("JSON", report, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 GPU 粒子目标硬件基准预检只收集证据，不把本机短 probe 当作 plan/09 验收。
     /// </summary>
     [Fact]
