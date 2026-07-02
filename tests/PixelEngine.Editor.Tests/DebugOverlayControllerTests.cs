@@ -13,6 +13,32 @@ namespace PixelEngine.Editor.Tests;
 public sealed class DebugOverlayControllerTests
 {
     /// <summary>
+    /// 验证只有逐 cell 着色叠层会要求 RenderBufferBuilder 逐 cell 重建。
+    /// </summary>
+    [Fact]
+    public void HasCellColorOverlaysOnlyTracksPerCellDebugModes()
+    {
+        DebugOverlaySettings settings = new()
+        {
+            Enabled = DebugOverlayFlags.ParticleTrails | DebugOverlayFlags.DirtyRects,
+        };
+        DebugOverlayController controller = new(settings);
+
+        Assert.False(controller.HasCellColorOverlays);
+
+        settings.Set(DebugOverlayFlags.CellParity, enabled: true);
+        Assert.True(controller.HasCellColorOverlays);
+
+        settings.Set(DebugOverlayFlags.CellParity, enabled: false);
+        settings.Set(DebugOverlayFlags.TemperatureHeatmap, enabled: true);
+        Assert.True(controller.HasCellColorOverlays);
+
+        settings.Set(DebugOverlayFlags.TemperatureHeatmap, enabled: false);
+        settings.Set(DebugOverlayFlags.OwnedByBody, enabled: true);
+        Assert.True(controller.HasCellColorOverlays);
+    }
+
+    /// <summary>
     /// 验证矢量叠层可从各子系统只读快照生成 overlay command。
     /// </summary>
     [Fact]

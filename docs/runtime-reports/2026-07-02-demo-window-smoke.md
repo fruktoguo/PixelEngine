@@ -136,10 +136,36 @@ RID: win-x64
 窗口短跑最慢相位：main_top=BuildRenderBuffer=25.52, sub_top=RenderBufferBuild=25.51。
 ```
 
-该探针退出码为 0，证明空 scene 窗口链路可自然退出；但 `avg_tick_ms=39.60` 与 `last_profile_ms=31.24` 仍高于 16.67ms 帧预算，不能勾选稳定 60fps 验收。相位拆分显示当前瓶颈集中在 `BuildRenderBuffer` / `RenderBufferBuild`。
+该探针退出码为 0，证明空 scene 窗口链路可自然退出；但 `avg_tick_ms=39.60` 与 `last_profile_ms=31.24` 仍高于 16.67ms 帧预算。相位拆分显示当时瓶颈集中在 `BuildRenderBuffer` / `RenderBufferBuild`。
+
+修复 `RenderPhaseDriver` 对纯矢量 debug overlay 的逐 cell 着色误传，并让透明 Empty 全世界清屏路径不再被空温度 block 阻断后，复验同一空场景：
+
+```pwsh
+dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --no-build -- --no-hot-reload --window-ticks 120 --content demo\PixelEngine.Demo\content --scene scenes\empty-window-probe.scene --log-dir artifacts\empty-window-probe-logs\empty-cache-runtime-3
+```
+
+```text
+窗口短跑完成：frames=120, requested=120。
+窗口短跑耗时：elapsed_ms=1538.65, avg_tick_ms=12.82, last_profile_ms=7.79。
+窗口短跑最慢相位：main_top=Temperature=3.74, sub_top=GpuUpload=3.33。
+```
+
+随后执行 600 tick 空场景窗口复验：
+
+```pwsh
+dotnet run --project demo\PixelEngine.Demo\PixelEngine.Demo.csproj -c Release --no-build -- --no-hot-reload --window-ticks 600 --content demo\PixelEngine.Demo\content --scene scenes\empty-window-probe.scene --log-dir artifacts\empty-window-probe-logs\empty-cache-runtime-600
+```
+
+```text
+窗口短跑完成：frames=600, requested=600。
+窗口短跑耗时：elapsed_ms=4697.28, avg_tick_ms=7.83, last_profile_ms=7.20。
+窗口短跑最慢相位：main_top=GpuUploadRender=3.56, sub_top=GpuUpload=3.43。
+```
+
+上述 120 tick 与 600 tick 真实窗口样本均低于 16.67ms 帧预算，可作为 plan/18 空场景稳定 60fps 验收证据；完整 Demo 关卡、真实玩家输入手感、视觉/音频听感和 native 泄漏仍按各自验收项单独阻塞。
 
 ## 结论
 
 本机真实窗口路径能装配 Content、Simulation、Physics、Audio、Scripting、Rendering 与 Input 后端，并稳定执行 120 个 Engine tick 后正常释放退出。Editor 窗口路径能额外装配 EditorRenderBridge 与 Hexa ImGui OpenGL3 后端，并执行 60 个 Engine tick 后正常退出。
 
-该验证只证明窗口运行态 smoke、空场景窗口探针与 Editor 首帧 UI 后端初始化通过；不替代真实玩家输入手感、GUI 鼠标交互、完整关卡通关、视觉/音频听感、长跑 60fps 或 native 泄漏审计。
+该验证只证明窗口运行态 smoke、空场景窗口 60fps 探针与 Editor 首帧 UI 后端初始化通过；不替代真实玩家输入手感、GUI 鼠标交互、完整关卡通关、视觉/音频听感或 native 泄漏审计。

@@ -33,6 +33,14 @@ public sealed class DebugOverlayController(DebugOverlaySettings settings, IRigid
     public DebugOverlaySettings Settings { get; } = settings ?? throw new ArgumentNullException(nameof(settings));
 
     /// <summary>
+    /// 当前是否启用了会改变逐 cell 着色的叠层；纯矢量叠层不需要重建 render buffer。
+    /// </summary>
+    public bool HasCellColorOverlays =>
+        Settings.IsEnabled(DebugOverlayFlags.CellParity) ||
+        Settings.IsEnabled(DebugOverlayFlags.TemperatureHeatmap) ||
+        Settings.IsEnabled(DebugOverlayFlags.OwnedByBody);
+
+    /// <summary>
     /// 构建屏幕空间矢量 overlay 命令。
     /// </summary>
     public int BuildVectorOverlays(

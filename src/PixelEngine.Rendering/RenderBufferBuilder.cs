@@ -21,6 +21,10 @@ public sealed class RenderBufferBuilder(
     private readonly IMaterialTextureProvider? _textures = textures;
     private readonly RenderBufferBuilderOptions _options = options ?? new RenderBufferBuilderOptions();
     private readonly BuildState _state = new();
+    private Chunk[] _emptyWorldChunks = [];
+    private int _emptyWorldChunkCount;
+    private IChunkSource? _emptyWorldSource;
+    private MaterialTable? _emptyWorldMaterials;
 
     /// <summary>
     /// 构建 BGRA8 render buffer 及 emissive/occluder 副输出。
@@ -167,8 +171,9 @@ public sealed class RenderBufferBuilder(
 
     private bool CanClearEmptyWorld(RenderFrameContext context)
     {
-        if (context.DebugCellColors is not null || context.Temperature.HasActiveBlocks)
+        if (context.DebugCellColors is not null)
         {
+            InvalidateEmptyWorldCache();
             return false;
         }
 
@@ -179,23 +184,119 @@ public sealed class RenderBufferBuilder(
             hot.Type[0] != CellType.Empty ||
             (hot.PropertyFlags[0] & (MaterialProperty.Emissive | MaterialProperty.Static)) != 0)
         {
+            InvalidateEmptyWorldCache();
             return false;
         }
 
         ReadOnlySpan<Chunk> chunks = context.Chunks.ResidentChunks;
+        if (CanReuseEmptyWorldCache(context, chunks))
+        {
+            return true;
+        }
+
+        bool canCache = true;
         for (int chunkIndex = 0; chunkIndex < chunks.Length; chunkIndex++)
         {
-            ReadOnlySpan<ushort> materials = chunks[chunkIndex].Material;
+            Chunk chunk = chunks[chunkIndex];
+            if (HasDirtyMetadata(chunk))
+            {
+                canCache = false;
+            }
+
+            ReadOnlySpan<ushort> materials = chunk.Material;
             for (int i = 0; i < materials.Length; i++)
             {
                 if (materials[i] != 0)
                 {
+                    InvalidateEmptyWorldCache();
                     return false;
                 }
             }
         }
 
+        if (canCache)
+        {
+            StoreEmptyWorldCache(context, chunks);
+        }
+        else
+        {
+            InvalidateEmptyWorldCache();
+        }
+
         return true;
+    }
+
+    private bool CanReuseEmptyWorldCache(RenderFrameContext context, ReadOnlySpan<Chunk> chunks)
+    {
+        if (!ReferenceEquals(_emptyWorldSource, context.Chunks) ||
+            !ReferenceEquals(_emptyWorldMaterials, context.Materials) ||
+            _emptyWorldChunkCount != chunks.Length)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < chunks.Length; i++)
+        {
+            Chunk chunk = chunks[i];
+            if (!ReferenceEquals(_emptyWorldChunks[i], chunk) || HasDirtyMetadata(chunk))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private void StoreEmptyWorldCache(RenderFrameContext context, ReadOnlySpan<Chunk> chunks)
+    {
+        if (_emptyWorldChunks.Length < chunks.Length)
+        {
+            Array.Resize(ref _emptyWorldChunks, chunks.Length);
+        }
+
+        for (int i = 0; i < chunks.Length; i++)
+        {
+            _emptyWorldChunks[i] = chunks[i];
+        }
+
+        if (_emptyWorldChunkCount > chunks.Length)
+        {
+            Array.Clear(_emptyWorldChunks, chunks.Length, _emptyWorldChunkCount - chunks.Length);
+        }
+
+        _emptyWorldChunkCount = chunks.Length;
+        _emptyWorldSource = context.Chunks;
+        _emptyWorldMaterials = context.Materials;
+    }
+
+    private void InvalidateEmptyWorldCache()
+    {
+        if (_emptyWorldChunkCount > 0)
+        {
+            Array.Clear(_emptyWorldChunks, 0, _emptyWorldChunkCount);
+        }
+
+        _emptyWorldChunkCount = 0;
+        _emptyWorldSource = null;
+        _emptyWorldMaterials = null;
+    }
+
+    private static bool HasDirtyMetadata(Chunk chunk)
+    {
+        if (!chunk.CurrentDirty.IsEmpty || !chunk.WorkingDirty.IsEmpty)
+        {
+            return true;
+        }
+
+        for (int slot = 0; slot < chunk.IncomingDirtySlotCount; slot++)
+        {
+            if (!chunk.GetIncomingDirty(slot).IsEmpty)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void FillAuxFast(
