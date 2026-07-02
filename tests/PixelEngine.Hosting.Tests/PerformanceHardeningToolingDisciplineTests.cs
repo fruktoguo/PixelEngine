@@ -69,6 +69,36 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证硬件计数器阻塞项有显式预检脚本，非管理员 ETW 场景不会被静默当作成功。
+    /// </summary>
+    [Fact]
+    public void HardwareCounterPreflightReportsPrivilegeAndCounterColumns()
+    {
+        string script = ReadRepositoryFile("tools", "hardware-counter-preflight.ps1");
+        string report = ReadRepositoryFile("docs", "benchmark-reports", "2026-07-02-latency-branch-calibration.md");
+        string plan = ReadRepositoryFile("plan", "16-performance-hardening.md");
+
+        Assert.Contains("PIXELENGINE_BENCH_HARDWARE_COUNTERS", script, StringComparison.Ordinal);
+        Assert.Contains("HardwareCounter.CacheMisses", script, StringComparison.Ordinal);
+        Assert.Contains("HardwareCounter.BranchMispredictions", script, StringComparison.Ordinal);
+        Assert.Contains("WindowsBuiltInRole", script, StringComparison.Ordinal);
+        Assert.Contains("Administrator", script, StringComparison.Ordinal);
+        Assert.Contains("ETW Kernel Session", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_non_admin", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_non_windows", script, StringComparison.Ordinal);
+        Assert.Contains("Hardware counter preflight failed", script, StringComparison.Ordinal);
+        Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
+        Assert.Contains("LASTEXITCODE", script, StringComparison.Ordinal);
+        Assert.Contains("ReactionLookupBenchmark.FindDirect", script, StringComparison.Ordinal);
+        Assert.Contains("Cache Misses", script, StringComparison.Ordinal);
+        Assert.Contains("Branch Mispredictions", script, StringComparison.Ordinal);
+
+        Assert.Contains("tools/hardware-counter-preflight.ps1", report, StringComparison.Ordinal);
+        Assert.Contains("blocked_non_admin", report, StringComparison.Ordinal);
+        Assert.Contains("tools/hardware-counter-preflight.ps1", plan, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证发行编译模式保持默认 R2R 运行时 light-up，AOT 显式 ISA 并跑 SIMD 反汇编探针。
     /// </summary>
     [Fact]

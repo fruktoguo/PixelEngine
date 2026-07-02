@@ -10,6 +10,14 @@ $env:PIXELENGINE_BENCH_HARDWARE_COUNTERS='1'; dotnet run --project bench/PixelEn
 
 当前结果：BenchmarkDotNet 验证阶段提示 `Must be elevated (Admin) to use ETW Kernel Session (required for Hardware Counters and EtwProfiler).`，因此本机非管理员会话无法产出 Cache Misses / Branch Mispredictions 列。结论是工具链已经接入 cache-miss 与 branch-misprediction 计数器，但 §4.11 的实际硬件计数器分析需要管理员 PowerShell 或专用 CI runner 才能完成。
 
+为避免该阻塞被静默跳过，新增硬件计数器预检脚本：
+
+```pwsh
+./tools/hardware-counter-preflight.ps1 -RunBenchmark
+```
+
+非 Windows runner 会写出 `blocked_non_windows` 报告；非管理员 Windows 会话会写出 `artifacts/hardware-counters/hardware-counter-preflight.md`，状态为 `blocked_non_admin`，并以非零退出；管理员 PowerShell 或专用 runner 会继续运行 BenchmarkDotNet，并检查 markdown 报告是否实际包含 `Cache Misses` 与 `Branch Mispredictions` 列。仅用于本地记录阻塞报告时可追加 `-AllowBlocked`，该模式不得作为硬件计数器验收依据。
+
 多核曲线命令：
 
 ```pwsh
