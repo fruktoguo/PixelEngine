@@ -204,7 +204,8 @@ public sealed class PlayableProjectileTool : Behaviour
             return;
         }
 
-        int converted = ConvertFloatingSolidIslandsNear(_pendingCollapseX, _pendingCollapseY, maxConversions: 1);
+        int perScanConversions = Math.Clamp(_pendingCollapsePasses, 1, 3);
+        int converted = ConvertFloatingSolidIslandsNear(_pendingCollapseX, _pendingCollapseY, perScanConversions);
         if (converted > 0)
         {
             _pendingCollapsePasses -= converted;
