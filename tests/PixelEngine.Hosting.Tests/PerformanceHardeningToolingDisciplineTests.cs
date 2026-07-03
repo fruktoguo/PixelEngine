@@ -2108,6 +2108,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("SHA256SUMS 条目数与 package 数不一致", auditPs1, StringComparison.Ordinal);
         Assert.Contains("Assert-FriendlyPackageLayout", auditPs1, StringComparison.Ordinal);
         Assert.Contains("Assert-FriendlyExpandedPackageLayout", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("Assert-NoDuplicateContentUnderApp", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("不应在 app/ 下重复打包 content", auditPs1, StringComparison.Ordinal);
         Assert.Contains("package 缺少同名展开目录", auditPs1, StringComparison.Ordinal);
         Assert.Contains("展开 package 目录缺少对应归档", auditPs1, StringComparison.Ordinal);
         Assert.Contains("展开 package 根目录不应包含运行时依赖，请放入 app/", auditPs1, StringComparison.Ordinal);
@@ -2120,6 +2122,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("content/materials.json", auditPs1, StringComparison.Ordinal);
         Assert.Contains("assert_friendly_package_layout", auditSh, StringComparison.Ordinal);
         Assert.Contains("assert_friendly_expanded_package_layout", auditSh, StringComparison.Ordinal);
+        Assert.Contains("assert_no_duplicate_content_under_app", auditSh, StringComparison.Ordinal);
+        Assert.Contains("不应在 app/ 下重复打包 content", auditSh, StringComparison.Ordinal);
         Assert.Contains("package 缺少同名展开目录", auditSh, StringComparison.Ordinal);
         Assert.Contains("展开 package 目录缺少对应归档", auditSh, StringComparison.Ordinal);
         Assert.Contains("展开 package 根目录不应包含运行时依赖，请放入 app/", auditSh, StringComparison.Ordinal);
@@ -2150,6 +2154,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("PixelEngine Demo.sh", packageSh, StringComparison.Ordinal);
         Assert.Contains("README.txt", packageSh, StringComparison.Ordinal);
         Assert.Contains("remove_player_package_noise", packageSh, StringComparison.Ordinal);
+        Assert.Contains("rm -rf \"$app_dir/content\" \"$content_dir\"", packageSh, StringComparison.Ordinal);
         Assert.Contains("*.resources.dll", packageSh, StringComparison.Ordinal);
         Assert.Contains("package_checksum_path=\"$staging_dir/SHA256SUMS\"", packageSh, StringComparison.Ordinal);
         Assert.Contains("package_dir=\"$output_root/$package_name\"", packageSh, StringComparison.Ordinal);
@@ -2346,6 +2351,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.False(File.Exists(Path.Combine(expandedPackageDir, "app", "PixelEngine.Demo.xml")));
             Assert.False(File.Exists(Path.Combine(expandedPackageDir, "app", "zh-Hans", "PixelEngine.Demo.resources.dll")));
             Assert.False(Directory.Exists(Path.Combine(expandedPackageDir, "app", "zh-Hans")));
+            Assert.False(Directory.Exists(Path.Combine(expandedPackageDir, "app", "content")));
             string extract = Path.Combine(temp, "extract");
             System.IO.Compression.ZipFile.ExtractToDirectory(archive, extract);
             string packageDir = Path.Combine(extract, "PixelEngine-Demo-9.9.9-win-x64-r2r");
@@ -2364,6 +2370,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.True(File.Exists(Path.Combine(packageDir, "content", "materials.json")));
             Assert.True(File.Exists(Path.Combine(packageDir, "content", "reactions.json")));
             Assert.True(File.Exists(Path.Combine(packageDir, "content", "scenes", "lava-mine.scene")));
+            Assert.False(Directory.Exists(Path.Combine(packageDir, "app", "content")));
             Assert.False(File.Exists(Path.Combine(packageDir, "PixelEngine.Demo.dll")));
             Assert.False(File.Exists(Path.Combine(packageDir, "PixelEngine.Demo.pdb")));
             Assert.False(File.Exists(Path.Combine(packageDir, "PixelEngine.Demo.xml")));
@@ -2411,6 +2418,19 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.NotEqual(0, appNoiseAudit.ExitCode);
             Assert.Contains("展开 package 不应包含玩家无关的调试、文档或本地化卫星资源文件", appNoiseAudit.Output, StringComparison.Ordinal);
             File.Delete(Path.Combine(expandedPackageDir, "app", "PixelEngine.Demo.pdb"));
+
+            _ = Directory.CreateDirectory(Path.Combine(expandedPackageDir, "app", "content"));
+            _ = WriteTextEvidence(Path.Combine(expandedPackageDir, "app", "content", "materials.json"), "{}");
+            ScriptResult duplicateContentAudit = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "audit-release-artifacts.ps1"),
+                "-PublishRoot",
+                Path.Combine(temp, "missing-publish"),
+                "-PackageRoot",
+                packageRoot);
+            Assert.NotEqual(0, duplicateContentAudit.ExitCode);
+            Assert.Contains("展开 package 不应在 app/ 下重复打包 content", duplicateContentAudit.Output, StringComparison.Ordinal);
+            Directory.Delete(Path.Combine(expandedPackageDir, "app", "content"), recursive: true);
 
             ScriptResult audit = RunPowerShellScript(
                 root,

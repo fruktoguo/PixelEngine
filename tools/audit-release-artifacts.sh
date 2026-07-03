@@ -237,6 +237,15 @@ is_disallowed_player_package_file() {
   [[ "$name" == *.pdb || "$name" == *.xml || "$name" == *.resources.dll ]]
 }
 
+assert_no_duplicate_content_under_app() {
+  local relative="$1"
+  local package_name="$2"
+  local prefix="$3"
+  if [[ "$relative" == "app/content" || "$relative" == app/content/* ]]; then
+    fail_audit "$prefix 不应在 app/ 下重复打包 content；content 只能位于包根 content/: $package_name -> $relative"
+  fi
+}
+
 contains_item() {
   local needle="$1"
   shift
@@ -299,6 +308,7 @@ assert_friendly_package_layout() {
     [[ "$root" == "$root_name" ]] || fail_audit "package 内根目录名称不符合包名: $name -> $root"
     local relative="${archive_entry#*/}"
     [[ -z "$relative" ]] && continue
+    assert_no_duplicate_content_under_app "$relative" "$name" "package"
 
     case "$relative" in
       README.txt) has_readme=1 ;;
@@ -398,6 +408,7 @@ assert_friendly_expanded_package_layout() {
     local relative="${path#"$directory"/}"
     relative="${relative//\\//}"
     expanded_entries+=("$relative")
+    assert_no_duplicate_content_under_app "$relative" "$name" "展开 package"
 
     case "$relative" in
       README.txt) has_readme=1 ;;
