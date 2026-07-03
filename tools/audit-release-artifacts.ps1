@@ -171,7 +171,9 @@ function Test-DisallowedPlayerPackageFile([string]$relativePath) {
   $name = [IO.Path]::GetFileName($relativePath)
   return $name.EndsWith('.pdb', [StringComparison]::OrdinalIgnoreCase) -or
     $name.EndsWith('.xml', [StringComparison]::OrdinalIgnoreCase) -or
-    $name.EndsWith('.resources.dll', [StringComparison]::OrdinalIgnoreCase)
+    $name.EndsWith('.resources.dll', [StringComparison]::OrdinalIgnoreCase) -or
+    $name.Equals('createdump.exe', [StringComparison]::OrdinalIgnoreCase) -or
+    $name.Equals('createdump', [StringComparison]::OrdinalIgnoreCase)
 }
 
 function Assert-NoDuplicateContentUnderApp([string]$relativePath, [string]$packageName, [string]$prefix) {
@@ -249,7 +251,7 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
 
   foreach ($relative in $relativeFileEntries) {
     if (Test-DisallowedPlayerPackageFile $relative) {
-      throw "package 不应包含玩家无关的调试、文档或本地化卫星资源文件: $($package.Name) -> $relative"
+      throw "package 不应包含玩家无关的调试、文档、诊断辅助或本地化卫星资源文件: $($package.Name) -> $relative"
     }
   }
 
@@ -354,7 +356,7 @@ function Assert-FriendlyExpandedPackageLayout([System.IO.DirectoryInfo]$packageD
 
   foreach ($relative in $relativeFileEntries) {
     if (Test-DisallowedPlayerPackageFile $relative) {
-      throw "展开 package 不应包含玩家无关的调试、文档或本地化卫星资源文件: $($packageDirectory.Name) -> $relative"
+      throw "展开 package 不应包含玩家无关的调试、文档、诊断辅助或本地化卫星资源文件: $($packageDirectory.Name) -> $relative"
     }
   }
 

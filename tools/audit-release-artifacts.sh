@@ -234,7 +234,7 @@ is_disallowed_runtime_root_file() {
 is_disallowed_player_package_file() {
   local relative="$1"
   local name="${relative##*/}"
-  [[ "$name" == *.pdb || "$name" == *.xml || "$name" == *.resources.dll ]]
+  [[ "$name" == *.pdb || "$name" == *.xml || "$name" == *.resources.dll || "$name" == "createdump.exe" || "$name" == "createdump" ]]
 }
 
 assert_no_duplicate_content_under_app() {
@@ -341,7 +341,7 @@ assert_friendly_package_layout() {
 
     if (( ! is_directory )); then
       if is_disallowed_player_package_file "$relative"; then
-        fail_audit "package 不应包含玩家无关的调试、文档或本地化卫星资源文件: $name -> $relative"
+        fail_audit "package 不应包含玩家无关的调试、文档、诊断辅助或本地化卫星资源文件: $name -> $relative"
       fi
 
       app_files+=("$relative")
@@ -442,7 +442,7 @@ assert_friendly_expanded_package_layout() {
 
     if [[ -f "$path" ]]; then
       if is_disallowed_player_package_file "$relative"; then
-        fail_audit "展开 package 不应包含玩家无关的调试、文档或本地化卫星资源文件: $name -> $relative"
+        fail_audit "展开 package 不应包含玩家无关的调试、文档、诊断辅助或本地化卫星资源文件: $name -> $relative"
       fi
 
       expanded_files+=("$relative")

@@ -61,7 +61,9 @@ function Remove-PlayerPackageNoise([string]$Directory) {
   Get-ChildItem -LiteralPath $Directory -Recurse -File -Force -ErrorAction SilentlyContinue |
     Where-Object {
       $_.Extension -in @('.pdb', '.xml') -or
-      $_.Name.EndsWith('.resources.dll', [StringComparison]::OrdinalIgnoreCase)
+      $_.Name.EndsWith('.resources.dll', [StringComparison]::OrdinalIgnoreCase) -or
+      $_.Name.Equals('createdump.exe', [StringComparison]::OrdinalIgnoreCase) -or
+      $_.Name.Equals('createdump', [StringComparison]::OrdinalIgnoreCase)
     } |
     ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
 
@@ -149,7 +151,7 @@ Start the game from this folder:
   Linux/macOS: ./PixelEngine Demo.sh
 
 Runtime dependencies are under app/. Game content is under content/.
-Debug symbols, XML documentation, and localized satellite resource DLLs are stripped from player packages.
+Debug symbols, XML documentation, diagnostic dump helpers, and localized satellite resource DLLs are stripped from player packages.
 "@
 Set-Content -LiteralPath (Join-Path $stagingDir 'README.txt') -Value $readme -Encoding ASCII
 
