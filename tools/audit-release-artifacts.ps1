@@ -494,9 +494,15 @@ function Assert-PackagesAndChecksums {
 
   foreach ($rid in $rids) {
     foreach ($channel in $channels) {
-      $countForPair = @($packages | Where-Object { $_.Name -match "-$rid-$channel\.(zip|tar\.gz)$" }).Count
+      $pairSuffixZip = '-' + $rid + '-' + $channel + '.zip'
+      $pairSuffixTar = '-' + $rid + '-' + $channel + '.tar.gz'
+      $matchingPackages = @($packages | Where-Object {
+          $_.Name.EndsWith($pairSuffixZip, [StringComparison]::Ordinal) -or
+          $_.Name.EndsWith($pairSuffixTar, [StringComparison]::Ordinal)
+        })
+      $countForPair = $matchingPackages.Count
       if ($RequireAll -and $countForPair -eq 0) {
-        throw "缺少 package: $rid/$channel"
+        throw "missing package: $rid/$channel"
       }
 
       if ($countForPair -gt 1) {
