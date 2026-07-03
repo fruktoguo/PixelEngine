@@ -62,6 +62,19 @@ public sealed class FogOfWarBufferTests
     }
 
     [Fact]
+    public void RevealAllMarksEveryViewportTile()
+    {
+        FogOfWarBuffer fog = new(96, 64);
+
+        fog.RevealAll(180);
+
+        Assert.Equal(180, fog.RevealAlpha(0, 0));
+        Assert.Equal(180, fog.RevealAlpha(95, 0));
+        Assert.Equal(180, fog.RevealAlpha(0, 63));
+        Assert.Equal(180, fog.RevealAlpha(95, 63));
+    }
+
+    [Fact]
     public void ValidationRejectsInvalidSizesAndRadius()
     {
         AssertThrows<ArgumentOutOfRangeException>(() => new FogOfWarBuffer(0, 1));

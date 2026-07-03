@@ -441,6 +441,11 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             return grid.GetCellType(x, y) == CellType.Solid;
         }
 
+        public bool IsRigidOwned(int x, int y)
+        {
+            return CellFlags.Has(grid.FlagsAt(x, y), CellFlags.RigidOwned);
+        }
+
         public void SetCell(int x, int y, MaterialId material)
         {
             commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.SetCell(x, y, material));

@@ -121,6 +121,14 @@ public interface IWorldCellAccess
     bool IsSolid(int x, int y);
 
     /// <summary>
+    /// 即时判断指定世界坐标是否由动态刚体 stamp 占用；用于脚本避免把刚体像素再次当作静态地形处理。
+    /// </summary>
+    /// <param name="x">世界 X 坐标。</param>
+    /// <param name="y">世界 Y 坐标。</param>
+    /// <returns>若该 cell 当前带有 rigid-owned 标记则返回 true，否则返回 false。</returns>
+    bool IsRigidOwned(int x, int y);
+
+    /// <summary>
     /// 延迟写入指定 cell，并在相位安全窗口落地时标记 dirty；脚本可在相位 1 调用。
     /// </summary>
     /// <param name="x">世界 X 坐标。</param>
@@ -458,6 +466,12 @@ public interface ILightingApi
     /// <param name="radius">揭示半径，单位 cell。</param>
     /// <param name="alpha">揭示强度。</param>
     void RevealAround(float x, float y, float radius, byte alpha = byte.MaxValue);
+
+    /// <summary>
+    /// 请求揭示当前完整渲染视口，用于不希望 fog-of-war 圆形遮罩裁掉屏幕边角的玩法场景。
+    /// </summary>
+    /// <param name="alpha">揭示强度。</param>
+    void RevealViewport(byte alpha = byte.MaxValue);
 
     /// <summary>
     /// 添加一盏当前帧点光源；Hosting 在渲染相位消费后可清空。

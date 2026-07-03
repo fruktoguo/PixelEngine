@@ -35,6 +35,7 @@ public sealed class ScriptSimulationContextTests
         Assert.Equal(stone, fixture.Context.Cells.GetMaterial(4, 4));
         Assert.Equal(new CellView(stone, 7, 9), fixture.Context.Cells.Sample(4, 4));
         Assert.True(fixture.Context.Cells.IsSolid(4, 4));
+        Assert.False(fixture.Context.Cells.IsRigidOwned(4, 4));
         Assert.True(fixture.Context.Solids.SampleSolidAabb(3.5f, 3.5f, 2, 2));
 
         Assert.True(fixture.Context.Solids.Raycast(0, 4, 1, 0, 8, out RaycastHit hit));

@@ -22,6 +22,9 @@ public sealed class ScriptLightingApiTests
         Assert.Equal(new FogRevealRequest(10, 20, 30, 128), lighting.GetReveal(0));
         Assert.Equal(1, lighting.PointLightCount);
         Assert.Equal(new ScriptPointLight(12, 24, 40, 0xFFFF8040u, 0.75f), lighting.GetPointLight(0));
+        lighting.RevealViewport(64);
+        lighting.RevealViewport(192);
+        Assert.Equal(192, lighting.ViewportRevealAlpha);
 
         lighting.ClearPointLights();
 
@@ -29,6 +32,7 @@ public sealed class ScriptLightingApiTests
         Assert.Equal(1, lighting.RevealCount);
         lighting.ClearReveals();
         Assert.Equal(0, lighting.RevealCount);
+        Assert.Equal(0, lighting.ViewportRevealAlpha);
     }
 
     /// <summary>

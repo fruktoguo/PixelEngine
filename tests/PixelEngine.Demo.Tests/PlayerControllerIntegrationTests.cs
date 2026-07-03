@@ -776,6 +776,77 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证破坏弹不会把扫描窗口上边界之外仍相连的主地形误判成独立碎块。
+    /// </summary>
+    [Fact]
+    public void PlayableProjectileDoesNotConvertTerrainConnectedAboveScanWindow()
+    {
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        FillRect(grid, stone, minX: 40, minY: 18, maxX: 49, maxY: 33);
+
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 28f;
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.CooldownSeconds = 0f;
+        projectile.Range = 96f;
+        projectile.ImpactRadius = 1;
+        projectile.CollapseScanRadius = 10;
+
+        engine.RunHeadlessTicks(2);
+        input.Update([], [MouseButton.Left], mouseX: 42f, mouseY: 30f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        input.Update([], [], mouseX: 42f, mouseY: 30f, wheelY: 0f);
+        engine.RunHeadlessTicks(8);
+
+        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        Assert.Equal(1, projectile.ShotsFired);
+        Assert.Equal(0, projectile.CollapsedFloatingIslands);
+        Assert.Equal(0, physics.Stats.ActiveBodyCount);
+        Assert.Equal("scan_window_external_connection", projectile.LastCollapseSkipReason);
+    }
+
+    /// <summary>
+    /// 验证坍塌扫描跳过受支撑地形后，射击组件不会 fault，后续点击仍可继续开火。
+    /// </summary>
+    [Fact]
+    public void PlayableProjectileKeepsFiringAfterCollapseScanSkipsSupportedTerrain()
+    {
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        FillRect(grid, stone, minX: 28, minY: 20, maxX: 82, maxY: 50);
+
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 28f;
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.CooldownSeconds = 0f;
+        projectile.Range = 96f;
+        projectile.ImpactRadius = 2;
+        projectile.CollapseScanRadius = 24;
+        projectile.PlayerSupportProtectionRadius = 48;
+
+        engine.RunHeadlessTicks(2);
+        input.Update([], [MouseButton.Left], mouseX: 48f, mouseY: 34f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        input.Update([], [], mouseX: 48f, mouseY: 34f, wheelY: 0f);
+        engine.RunHeadlessTicks(4);
+        input.Update([], [MouseButton.Left], mouseX: 58f, mouseY: 34f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+
+        Assert.False(projectile.Faulted, projectile.LastException?.ToString());
+        Assert.Equal(2, projectile.ShotsFired);
+        Assert.DoesNotContain("collapse_error", projectile.LastCollapseSkipReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// 验证一次射击转换首个悬空块后仍会分帧继续扫描，避免较大的残留碎块长时间静态浮空。
     /// </summary>
     [Fact]
@@ -855,13 +926,14 @@ public sealed class PlayerControllerIntegrationTests
         engine.RunHeadlessTicks(3);
 
         PlayableProjectileTool projectile = FindBehaviour<PlayableProjectileTool>(engine);
-        Assert.Equal(9, projectile.ImpactRadius);
-        Assert.Equal(18f, projectile.ImpactForce);
-        Assert.Equal(112, projectile.CollapseScanRadius);
-        Assert.Equal(32, projectile.FallbackOverhangRadius);
-        Assert.Equal(64, projectile.MaxCollapseRegionSize);
-        Assert.Equal(384, projectile.MaxCollapsePixels);
+        Assert.Equal(5, projectile.ImpactRadius);
+        Assert.Equal(12f, projectile.ImpactForce);
+        Assert.Equal(72, projectile.CollapseScanRadius);
+        Assert.Equal(24, projectile.FallbackOverhangRadius);
+        Assert.Equal(48, projectile.MaxCollapseRegionSize);
+        Assert.Equal(160, projectile.MaxCollapsePixels);
         Assert.Equal(1, projectile.MaxCollapsedIslandsPerShot);
+        Assert.Equal(48, projectile.PlayerSupportProtectionRadius);
         Assert.False(projectile.AllowOverhangFallbackCollapse);
         Assert.False(projectile.AllowImpactFallbackCollapse);
     }
