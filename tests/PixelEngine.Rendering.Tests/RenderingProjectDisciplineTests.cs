@@ -99,8 +99,11 @@ public sealed class RenderingProjectDisciplineTests
         Assert.Contains("GlDx12SharedResources", contractKind, StringComparison.Ordinal);
         Assert.Contains("ComputeSharpResourceContractKind", capabilities, StringComparison.Ordinal);
         Assert.Contains("不能声明为 OpenGL texture name", capabilities, StringComparison.Ordinal);
+        Assert.Contains("ArgumentOutOfRangeException", capabilities, StringComparison.Ordinal);
         Assert.Contains("ComputeSharpResourceContractKind != GpuResourceContractKind.OpenGlTextureNames", gate, StringComparison.Ordinal);
         Assert.Contains("不能使用 OpenGL texture name", contract, StringComparison.Ordinal);
+        Assert.Contains("ValidateKind", contract, StringComparison.Ordinal);
+        Assert.Contains("未知的 ComputeSharp/DX12 资源契约类型", contract, StringComparison.Ordinal);
         Assert.Contains("FenceHandle", contract, StringComparison.Ordinal);
         Assert.Contains("CreateD3D12", contract, StringComparison.Ordinal);
         Assert.Contains("CreateGlDx12Shared", contract, StringComparison.Ordinal);

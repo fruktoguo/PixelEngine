@@ -235,6 +235,15 @@ public sealed class ComputeCapabilityGateTests
                 hasImageLoadStore: true,
                 hasComputeSharpResourceContract: true,
                 computeSharpResourceContractKind: GpuResourceContractKind.OpenGlTextureNames));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(
+            () => CreateCapabilities(
+                glMajor: 4,
+                glMinor: 3,
+                hasCompute: true,
+                hasSsbo: true,
+                hasImageLoadStore: true,
+                hasComputeSharpResourceContract: true,
+                computeSharpResourceContractKind: (GpuResourceContractKind)999));
 
         ArgumentException openGl = Assert.Throws<ArgumentException>(
             () => ComputeSharpResourceContract.Create(
@@ -253,6 +262,23 @@ public sealed class ComputeCapabilityGateTests
                 postBResource: 10,
                 fenceHandle: 11));
         Assert.Contains("OpenGL texture name", openGl.Message, StringComparison.Ordinal);
+        ArgumentOutOfRangeException unknownKind = Assert.Throws<ArgumentOutOfRangeException>(
+            () => ComputeSharpResourceContract.Create(
+                (GpuResourceContractKind)999,
+                width: 320,
+                height: 180,
+                deviceHandle: 1,
+                commandQueueHandle: 2,
+                worldResource: 3,
+                emissiveResource: 4,
+                occluderResource: 5,
+                visibilityResource: 6,
+                sceneResource: 7,
+                litResource: 8,
+                postAResource: 9,
+                postBResource: 10,
+                fenceHandle: 11));
+        Assert.Contains("未知", unknownKind.Message, StringComparison.Ordinal);
 
         _ = Assert.Throws<ArgumentException>(
             () => ComputeSharpResourceContract.CreateD3D12(

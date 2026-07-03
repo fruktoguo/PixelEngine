@@ -36,6 +36,16 @@ public readonly record struct GpuCapabilities
             throw new ArgumentException("ComputeSharp 资源契约不能声明为 OpenGL texture name。", nameof(computeSharpResourceContractKind));
         }
 
+        if (hasComputeSharpResourceContract &&
+            computeSharpResourceContractKind != GpuResourceContractKind.D3D12RenderGraph &&
+            computeSharpResourceContractKind != GpuResourceContractKind.GlDx12SharedResources)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(computeSharpResourceContractKind),
+                computeSharpResourceContractKind,
+                "未知的 ComputeSharp/DX12 资源契约类型。");
+        }
+
         GlMajorVersion = glMajorVersion;
         GlMinorVersion = glMinorVersion;
         IsGles = isGles;
