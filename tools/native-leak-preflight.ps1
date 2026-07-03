@@ -62,6 +62,18 @@ function Read-MarkdownEvidenceTable {
     return $values
 }
 
+function Get-NativeLeakScopeRequiredMetric {
+    param([string]$Scope)
+
+    switch ($Scope) {
+        "gl" { return "glObjectsLiveAfterShutdown" }
+        "openal" { return "openAlObjectsLiveAfterShutdown" }
+        "box2d" { return "box2DBodiesLiveAfterShutdown" }
+        "alc" { return "alcLoadContextsAliveAfterUnload" }
+        default { throw "未知 native leak scope：$Scope" }
+    }
+}
+
 function Write-NativeLeakReport {
     param(
         [string]$Path,
@@ -292,6 +304,28 @@ function Read-EvidenceManifest {
                     Message = "evidence report $scope conclusion 必须为 no_leaks，实际为 $($reportValues["conclusion"])"
                 }
                 $semanticInvalid = $true
+            }
+
+            $requiredMetric = Get-NativeLeakScopeRequiredMetric -Scope $scope
+            if (-not $reportValues.ContainsKey($requiredMetric)) {
+                $items += [pscustomobject]@{
+                    InvalidManifest = $true
+                    Scope = $scope
+                    Message = "evidence report $scope 缺少 $requiredMetric 字段"
+                }
+                $semanticInvalid = $true
+            }
+            else {
+                $liveCount = 0
+                $rawLiveCount = [string]$reportValues[$requiredMetric]
+                if (-not [int]::TryParse($rawLiveCount, [ref]$liveCount) -or $liveCount -ne 0) {
+                    $items += [pscustomobject]@{
+                        InvalidManifest = $true
+                        Scope = $scope
+                        Message = "evidence report $scope $requiredMetric 必须为 0，实际为 $rawLiveCount"
+                    }
+                    $semanticInvalid = $true
+                }
             }
         }
 

@@ -342,6 +342,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("schemaVersion 必须为 1", script, StringComparison.Ordinal);
         Assert.Contains("包含未知 scope", script, StringComparison.Ordinal);
         Assert.Contains("conclusion 必须为 no_leaks", script, StringComparison.Ordinal);
+        Assert.Contains("glObjectsLiveAfterShutdown", script, StringComparison.Ordinal);
+        Assert.Contains("openAlObjectsLiveAfterShutdown", script, StringComparison.Ordinal);
+        Assert.Contains("box2DBodiesLiveAfterShutdown", script, StringComparison.Ordinal);
+        Assert.Contains("alcLoadContextsAliveAfterUnload", script, StringComparison.Ordinal);
+        Assert.Contains("必须为 0", script, StringComparison.Ordinal);
         Assert.Contains("scope 缺少 detector", script, StringComparison.Ordinal);
         Assert.Contains("sha256", script, StringComparison.Ordinal);
         Assert.Contains("Get-FileHash", script, StringComparison.Ordinal);
@@ -593,6 +598,57 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string preflightReport = File.ReadAllText(Path.Combine(artifacts, "native-leak-preflight.md"));
             Assert.Contains("blocked_invalid_native_leak_evidence", result.Output + preflightReport, StringComparison.Ordinal);
             Assert.Contains("evidence report gl conclusion 必须为 no_leaks，实际为 leaks_detected", preflightReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | detector_evidence_attached_pending_review", preflightReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 native leak 预检会拒绝缺少释放后 live-object 归零证据的 detector 报告。
+    /// </summary>
+    [Fact]
+    public void NativeLeakPreflightRejectsDetectorReportWithoutZeroLiveCounts()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-native-leak-live-count-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateNativeLeakEvidenceManifest(temp);
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject gl = rootNode["scopes"]!["gl"]!.AsObject();
+            string report = (string)gl["report"]!;
+            _ = WriteMarkdownEvidence(
+                report,
+                new Dictionary<string, string>
+                {
+                    ["scope"] = "gl",
+                    ["detector"] = "external-detector",
+                    ["conclusion"] = "no_leaks",
+                    ["glObjectsLiveAfterShutdown"] = "1",
+                });
+            gl["sha256"] = GetSha256(report);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "live-count-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "native-leak-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string preflightReport = File.ReadAllText(Path.Combine(artifacts, "native-leak-preflight.md"));
+            Assert.Contains("blocked_invalid_native_leak_evidence", result.Output + preflightReport, StringComparison.Ordinal);
+            Assert.Contains("evidence report gl glObjectsLiveAfterShutdown 必须为 0，实际为 1", preflightReport, StringComparison.Ordinal);
             Assert.DoesNotContain("status | detector_evidence_attached_pending_review", preflightReport, StringComparison.Ordinal);
         }
         finally
@@ -3487,6 +3543,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                     ["scope"] = scope,
                     ["detector"] = "external-detector",
                     ["conclusion"] = "no_leaks",
+                    [GetNativeLeakScopeRequiredMetric(scope)] = "0",
                 });
             string hash = scope.Equals(corruptHashScope, StringComparison.Ordinal) ? new string('0', 64) : GetSha256(report);
             scopes[scope] = new Dictionary<string, object>
@@ -3508,6 +3565,18 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             manifestPath,
             System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         return manifestPath;
+    }
+
+    private static string GetNativeLeakScopeRequiredMetric(string scope)
+    {
+        return scope switch
+        {
+            "gl" => "glObjectsLiveAfterShutdown",
+            "openal" => "openAlObjectsLiveAfterShutdown",
+            "box2d" => "box2DBodiesLiveAfterShutdown",
+            "alc" => "alcLoadContextsAliveAfterUnload",
+            _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, "Unknown native leak scope."),
+        };
     }
 
     private static string CreateGpuParticleEvidenceManifest(
