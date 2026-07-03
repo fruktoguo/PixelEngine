@@ -1735,6 +1735,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("scenes/lava-mine-audio-probe.scene", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine-particle-light-probe.scene", script, StringComparison.Ordinal);
         Assert.Contains("RequiredSummaryMarkers", script, StringComparison.Ordinal);
+        Assert.Contains("ConvertFrom-ScriptedProbeSummary", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-ScriptedProbeSummarySemantics", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-ScriptedProbeNumberAtLeast", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-ScriptedProbeBoolean", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-ScriptedProbeRangeWidthAtLeast", script, StringComparison.Ordinal);
         Assert.Contains("player_visual=present", script, StringComparison.Ordinal);
         Assert.Contains("playable_shots=", script, StringComparison.Ordinal);
         Assert.Contains("720x480", script, StringComparison.Ordinal);
@@ -1756,6 +1761,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("phase_transitions_observed=True", script, StringComparison.Ordinal);
         Assert.Contains("audio_probe_one_shot_played=True", script, StringComparison.Ordinal);
         Assert.Contains("particle_light_probe_depleted=True", script, StringComparison.Ordinal);
+        Assert.Contains("playable_shots", script, StringComparison.Ordinal);
+        Assert.Contains("player_ground_samples", script, StringComparison.Ordinal);
+        Assert.Contains("audio_probe_max_dropped", script, StringComparison.Ordinal);
+        Assert.Contains("particle_light_probe_spawned", script, StringComparison.Ordinal);
 
         Assert.Contains("controlFeelReport", script, StringComparison.Ordinal);
         Assert.Contains("materialBrushAndReactionVideo", script, StringComparison.Ordinal);
@@ -1831,6 +1840,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("--capture-frame", report, StringComparison.Ordinal);
         Assert.Contains("capture.bmp", report, StringComparison.Ordinal);
         Assert.Contains("capture_unique_visible_pixels", report, StringComparison.Ordinal);
+        Assert.Contains("语义阈值", report, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_manual_scope_evidence", report, StringComparison.Ordinal);
         Assert.Contains("blocked_invalid_manual_evidence", report, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", report, StringComparison.Ordinal);
@@ -1856,6 +1866,55 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("manual_evidence_attached_pending_review", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("- [x] 过载降级按五级顺序触发", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("- [!] Editor 真实窗口观测/覆盖仍缺人工复核证据", hostingPlan, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 scripted probe 摘要不仅检查字段存在，还会拒绝关键数值不达标的机器证据。
+    /// </summary>
+    [Fact]
+    public void DemoManualAcceptancePreflightRejectsScriptedProbeSummaryBelowSemanticThreshold()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-summary-semantics-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            _ = Directory.CreateDirectory(temp);
+            string source = ReadRepositoryFile("tools", "demo-manual-acceptance-preflight.ps1");
+            int start = source.IndexOf("function ConvertFrom-ScriptedProbeSummary", StringComparison.Ordinal);
+            int end = source.IndexOf("function Invoke-ScriptedProbe", StringComparison.Ordinal);
+            Assert.True(start >= 0);
+            Assert.True(end > start);
+            string harness = string.Concat(
+                "$ErrorActionPreference='Stop'\n",
+                source[start..end],
+                "\n$good = '脚本化窗口输入摘要：frames=240, playable_shots=2, max_particles=316, frame_samples=240, camera_samples=239, player_ground_samples=105, player_air_samples=134, player_left_ground=True, player_air_control=True, camera_followed=True, render_camera_synced=True。'\n",
+                "$values = ConvertFrom-ScriptedProbeSummary -Summary $good\n",
+                "Assert-ScriptedProbeSummarySemantics -Name 'playable-world' -Values $values\n",
+                "$bad = '脚本化窗口输入摘要：frames=240, playable_shots=0, max_particles=316, frame_samples=240, camera_samples=239, player_ground_samples=105, player_air_samples=134, player_left_ground=True, player_air_control=True, camera_followed=True, render_camera_synced=True。'\n",
+                "try {\n",
+                "  Assert-ScriptedProbeSummarySemantics -Name 'playable-world' -Values (ConvertFrom-ScriptedProbeSummary -Summary $bad)\n",
+                "  throw 'expected semantic failure missing'\n",
+                "} catch {\n",
+                "  if ($_.Exception.Message -notlike '*playable_shots*') { throw }\n",
+                "  Write-Output $_.Exception.Message\n",
+                "}\n");
+            string harnessPath = Path.Combine(temp, "summary-semantics-harness.ps1");
+            File.WriteAllText(harnessPath, harness);
+
+            ScriptResult result = RunPowerShellScript(root, harnessPath);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("playable_shots", result.Output, StringComparison.Ordinal);
+            Assert.Contains("必须 >=", result.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
     }
 
     /// <summary>

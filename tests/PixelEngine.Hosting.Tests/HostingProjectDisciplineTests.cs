@@ -66,6 +66,30 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证音频窗口探针不是黑屏空场景，截图门禁能观察到真实可见内容。
+    /// </summary>
+    [Fact]
+    public void DemoAudioProbeSceneMaterializesVisibleLevelDirector()
+    {
+        string root = FindRepositoryRoot();
+        string scenePath = Path.Combine(root, "demo", "PixelEngine.Demo", "content", "scenes", "lava-mine-audio-probe.scene");
+
+        AssertProbeSceneUsesVisibleLevelDirector(scenePath, "lava-mine-audio-probe");
+    }
+
+    /// <summary>
+    /// 验证粒子 / 光照窗口探针不是黑屏空场景，截图门禁能观察到真实可见内容。
+    /// </summary>
+    [Fact]
+    public void DemoParticleLightProbeSceneMaterializesVisibleLevelDirector()
+    {
+        string root = FindRepositoryRoot();
+        string scenePath = Path.Combine(root, "demo", "PixelEngine.Demo", "content", "scenes", "lava-mine-particle-light-probe.scene");
+
+        AssertProbeSceneUsesVisibleLevelDirector(scenePath, "lava-mine-particle-light-probe");
+    }
+
+    /// <summary>
     /// 验证 Demo 可见内容包 API 不泄漏 Content / Simulation 实现类型。
     /// </summary>
     [Fact]
@@ -200,6 +224,18 @@ public sealed class HostingProjectDisciplineTests
         {
             AssertAllowedPublicType(argument, memberName);
         }
+    }
+
+    private static void AssertProbeSceneUsesVisibleLevelDirector(string scenePath, string expectedName)
+    {
+        EngineSceneDocument document = EngineSceneDocumentLoader.LoadDocument(scenePath);
+
+        Assert.Equal(expectedName, document.Name);
+        EngineSceneBehaviourDocument behaviour = Assert.Single(Assert.Single(document.Entities!).Behaviours!);
+        Assert.Equal("PixelEngine.Demo.LevelDirector", behaviour.TypeName);
+        Assert.Equal("true", behaviour.SerializedFields!["BuildScriptEntities"]);
+        Assert.Equal("640", behaviour.SerializedFields["LevelWidth"]);
+        Assert.Equal("360", behaviour.SerializedFields["LevelHeight"]);
     }
 
     private static Type UnwrapType(Type type)
