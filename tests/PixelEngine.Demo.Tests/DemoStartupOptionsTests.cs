@@ -233,13 +233,16 @@ public sealed class DemoStartupOptionsTests
             "--particle-frame-probe",
             "--particle-count", "100000",
             "--particle-probe-warmup", "3",
+            "--particle-probe-run-id", "run-123",
         ]);
 
         Assert.True(options.ParticleFrameProbe);
         Assert.Equal(100_000, options.ParticleProbeCount);
         Assert.Equal(3, options.ParticleProbeWarmupFrames);
+        Assert.Equal("run-123", options.ParticleProbeRunId);
         _ = Assert.Throws<ArgumentException>(() => DemoStartupOptions.Parse(["--particle-frame-probe"]));
         _ = Assert.Throws<ArgumentException>(() => DemoStartupOptions.Parse(["--headless", "--particle-frame-probe"]));
+        _ = Assert.Throws<ArgumentException>(() => DemoStartupOptions.Parse(["--window-ticks", "1", "--particle-frame-probe", "--particle-probe-run-id", " "]));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => DemoStartupOptions.Parse(["--window-ticks", "1", "--particle-frame-probe", "--particle-count", "262145"]));
     }
 

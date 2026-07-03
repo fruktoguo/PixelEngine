@@ -11,10 +11,14 @@ internal sealed class DemoParticleFrameTimeProbe(
     EngineProbeApi probe,
     int requestedCount,
     int warmupFrames,
+    string benchmarkRunId,
     int worldWidth,
     int worldHeight)
 {
     private readonly EngineProbeApi _probe = probe ?? throw new ArgumentNullException(nameof(probe));
+    private readonly string _benchmarkRunId = string.IsNullOrWhiteSpace(benchmarkRunId)
+        ? throw new ArgumentException("Benchmark run id must be non-empty.", nameof(benchmarkRunId))
+        : benchmarkRunId;
     private readonly List<double> _wallMs = [];
     private readonly List<double> _stampMs = [];
     private readonly List<double> _gpuDrawMs = [];
@@ -56,9 +60,10 @@ internal sealed class DemoParticleFrameTimeProbe(
     public string BuildSummary(ParticleRenderMode mode, bool gpuAvailable)
     {
         return
-            $"particle_frame_probe mode={ModeName(mode)}, gpu_available={gpuAvailable}, " +
+            $"particle_frame_probe source=PixelEngineParticleFrameProbe, benchmark_run_id={_benchmarkRunId}, " +
+            $"mode={ModeName(mode)}, gpu_available={gpuAvailable}, " +
             $"requested_count={requestedCount}, active_count={LastSpawned}, " +
-            $"warmup_frames={warmupFrames}, measured_frames={MeasuredFrames}, " +
+            $"warmup_frames={warmupFrames}, measured_frames={MeasuredFrames}, sample_seconds={SampleSeconds():0.###}, " +
             Stats("wall", _wallMs) + ", " +
             Stats("particle_stamp", _stampMs) + ", " +
             Stats("gpu_particle", _gpuDrawMs) + ", " +
@@ -66,6 +71,17 @@ internal sealed class DemoParticleFrameTimeProbe(
             Stats("lighting", _lightingMs) + ", " +
             Stats("bloom", _bloomMs) + ", " +
             Stats("present", _presentMs);
+    }
+
+    private double SampleSeconds()
+    {
+        double sum = 0;
+        for (int i = 0; i < _wallMs.Count; i++)
+        {
+            sum += _wallMs[i];
+        }
+
+        return sum / 1000.0;
     }
 
     private void FillParticles(EngineTickContext context)

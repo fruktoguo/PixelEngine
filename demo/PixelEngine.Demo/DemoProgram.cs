@@ -168,6 +168,7 @@ public static class DemoProgram
                 engine.Context.GetService<EngineProbeApi>(),
                 options.ParticleProbeCount,
                 options.ParticleProbeWarmupFrames,
+                options.ParticleProbeRunId,
                 DemoWorldWidthCells,
                 DemoWorldHeightCells);
             particleFrameProbe.RegisterPhases(engine.Phases);
