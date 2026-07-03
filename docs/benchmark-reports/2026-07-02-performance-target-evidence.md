@@ -20,7 +20,7 @@
 
 ## 状态语义
 
-`blocked_missing_target_performance_manifest` 表示缺少目标性能 evidence manifest。`blocked_invalid_target_performance_evidence` 表示 manifest JSON 无法解析或 `schemaVersion` 不为 1。`blocked_missing_target_performance_scope_evidence` 表示 manifest 存在且 schema 有效，但缺少必要 scope、文件不存在、SHA256 不匹配、6 RID cells/frame 没有逐 RID 标记 `benchmarkDotNet=true`，或 evidence 报告缺少/未满足必要机器可读字段。`target_performance_evidence_attached_pending_review` 表示所有必需证据文件都存在、hash 匹配且机器可读字段满足最低阈值，但仍需人工确认原始报告、硬件环境、采样过程与统计结论确实证明 plan/16 阻塞项。
+`blocked_missing_target_performance_manifest` 表示缺少目标性能 evidence manifest。`blocked_invalid_target_performance_evidence` 表示 manifest JSON 无法解析或 `schemaVersion` 不为 1。`blocked_missing_target_performance_scope_evidence` 表示 manifest 存在且 schema 有效，但缺少必要 scope、文件不存在、SHA256 不匹配、6 RID cells/frame 没有逐 RID 标记 `benchmarkDotNet=true`，或 evidence 报告缺少/未满足必要机器可读字段与 BenchmarkDotNet 报告特征。`target_performance_evidence_attached_pending_review` 表示所有必需证据文件都存在、hash 匹配且机器可读字段满足最低阈值，但仍需人工确认原始报告、硬件环境、采样过程与统计结论确实证明 plan/16 阻塞项。
 
 ## Manifest 结构
 
@@ -33,7 +33,7 @@ manifest 使用 `schemaVersion: 1`。`evidence[]` 每项必须包含 `scope`、`
 - `avx512_downclock_net_loss` 必须包含 `targetCpuName`、`dotnetVersion`，且 `benchmarkDotNet=true`、`vector512HardwareAccelerated=true`、`avx512Enabled=true`、`noNetDownclockLoss=true`。
 - `hardware_counters_cache_branch` 必须包含 `benchmarkDotNet=true`、`elevatedEtwKernelSession=true`、`cacheMissesPresent=true`、`branchMispredictionsPresent=true`，并且报告文本包含 `Cache Misses` 与 `Branch Mispredictions` 列名。
 - `frame_budget_target_hardware` 必须包含 `targetHardware`、`sampleSeconds>=60`、`caP99Ms<=8`、`renderP99Ms<=4`、`physicsP99Ms<=4`、`logicAudioP99Ms<=1`。
-- 每个 `cells_frame/<rid>` 必须包含 `rid=<rid>`、`benchmarkDotNet=true`、`representativeHardware=true`、`activeCellsPerFrame>=2000000`、`caFrameMs<=8`、`measuredIterations>=3`。
+- 每个 `cells_frame/<rid>` 必须包含 `rid=<rid>`、`benchmarkDotNet=true`、`representativeHardware=true`、`activeCellsPerFrame>=2000000`、`caFrameMs<=8`、`measuredIterations>=3`、`iterationCount>=measuredIterations`，且报告正文必须包含 `BenchmarkDotNet v`、`CellThroughputBenchmark.StepJobSystem` 与 `FullActiveLiquid`，不能只附手写 key-value 摘要。
 
 最小示例：
 
@@ -106,4 +106,9 @@ representativeHardware: true
 activeCellsPerFrame: 2500000
 caFrameMs: 7.2
 measuredIterations: 5
+iterationCount: 5
+
+// BenchmarkDotNet v0.15.8
+// Benchmark: PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem
+// Scenario: FullActiveLiquid
 ```

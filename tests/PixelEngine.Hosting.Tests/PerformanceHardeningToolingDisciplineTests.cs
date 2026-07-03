@@ -212,6 +212,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             "activeCellsPerFrame",
             "caFrameMs",
             "measuredIterations",
+            "iterationCount",
         ];
         foreach (string field in requiredMachineFields)
         {
@@ -238,6 +239,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("hardware_counters_cache_branch", report, StringComparison.Ordinal);
         Assert.Contains("frame_budget_target_hardware", report, StringComparison.Ordinal);
         Assert.Contains("cells_frame/osx-arm64", report, StringComparison.Ordinal);
+        Assert.Contains("BenchmarkDotNet v", report, StringComparison.Ordinal);
+        Assert.Contains("CellThroughputBenchmark.StepJobSystem", report, StringComparison.Ordinal);
+        Assert.Contains("FullActiveLiquid", report, StringComparison.Ordinal);
         Assert.Contains("未知 scope", report, StringComparison.Ordinal);
 
         Assert.Contains("tools/performance-target-evidence-preflight.ps1", plan, StringComparison.Ordinal);
@@ -2364,6 +2368,55 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 cells/frame evidence 不能只写机器可读字段，必须附 BenchmarkDotNet 目标基准报告特征。
+    /// </summary>
+    [Fact]
+    public void PerformanceTargetEvidencePreflightRejectsCellsFramePlainKeyValueSummary()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-cells-plain-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreatePerformanceTargetEvidenceManifest(temp);
+            SetFlatEvidenceFileContent(
+                manifest,
+                "cells_frame/win-x64",
+                """
+                rid: win-x64
+                benchmarkDotNet: true
+                representativeHardware: true
+                activeCellsPerFrame: 2500000
+                caFrameMs: 7.2
+                measuredIterations: 5
+                iterationCount: 5
+                """);
+
+            string artifacts = Path.Combine(temp, "cells-plain-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("cells_frame/win-x64 必须包含 BenchmarkDotNet v 报告头", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_performance_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 AVX-512 evidence 必须声明无净降频损失，不能只附一个空报告。
     /// </summary>
     [Fact]
@@ -2525,12 +2578,16 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 manifest,
                 "cells_frame/linux-x64",
                 """
+                // BenchmarkDotNet v0.15.8
+                // Benchmark: PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem
+                // Scenario: FullActiveLiquid
                 rid: linux-x64
                 benchmarkDotNet: true
                 representativeHardware: true
                 activeCellsPerFrame: 1500000
                 caFrameMs: 7.2
                 measuredIterations: 5
+                iterationCount: 5
                 """);
 
             string artifacts = Path.Combine(temp, "cells-target-out");
@@ -2573,12 +2630,16 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 manifest,
                 "cells_frame/win-arm64",
                 """
+                // BenchmarkDotNet v0.15.8
+                // Benchmark: PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem
+                // Scenario: FullActiveLiquid
                 rid: win-arm64
                 benchmarkDotNet: true
                 representativeHardware: false
                 activeCellsPerFrame: 2500000
                 caFrameMs: 7.2
                 measuredIterations: 5
+                iterationCount: 5
                 """);
 
             string artifacts = Path.Combine(temp, "cells-representative-out");
@@ -2621,12 +2682,16 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 manifest,
                 "cells_frame/osx-arm64",
                 """
+                // BenchmarkDotNet v0.15.8
+                // Benchmark: PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem
+                // Scenario: FullActiveLiquid
                 rid: osx-arm64
                 benchmarkDotNet: true
                 representativeHardware: true
                 activeCellsPerFrame: 2500000
                 caFrameMs: 7.2
                 measuredIterations: 2
+                iterationCount: 5
                 """);
 
             string artifacts = Path.Combine(temp, "cells-iterations-out");
@@ -4300,12 +4365,16 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                     logicAudioP99Ms: 0.8
                     """,
                 _ when scope.StartsWith("cells_frame/", StringComparison.Ordinal) => $"""
+                    // BenchmarkDotNet v0.15.8
+                    // Benchmark: PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem
+                    // Scenario: FullActiveLiquid
                     rid: {scope["cells_frame/".Length..]}
                     benchmarkDotNet: true
                     representativeHardware: true
                     activeCellsPerFrame: 2500000
                     caFrameMs: 7.2
                     measuredIterations: 5
+                    iterationCount: 5
                     """,
                 _ => $"{scope} evidence",
             };
