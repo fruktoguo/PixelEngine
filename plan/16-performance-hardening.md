@@ -73,6 +73,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] 反应 pass（相位 4 内）稳态零分配，tag 在加载期展开、运行时零字符串/字典。[plan/04 · §7.4]
 - [x] 温度 stencil（相位 5）稳态零分配。[plan/04 · §7.5]
 - [x] 序列化字节准备（相位 11）用 POH/ArrayPool 缓冲，稳态零分配。[plan/07 · §11.5]
+- [x] JobSystem `ParallelRange` / `ParallelRangeRaw` 多 worker fork-join 派发本身稳态零分配，避免调度器在每帧热路径制造 Gen0 压力。[plan/02/14 · §12.4/§12.7/§14.2]
 - [x] 全热路径静态核查无 LINQ/捕获闭包/装箱/`params`/迭代器/字符串拼接（分析器提升为 error）。[全子系统 · AGENTS §3]
 
 ### 4.3 多线程覆盖面
@@ -84,6 +85,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] 温度 stencil 并行（行分块）。[plan/04 · §7.5]
 - [x] 序列化字节准备在后台线程，只碰离线字节缓冲、不碰 live map。[plan/07 · §3.4/§11.5]
 - [x] 全部并行工作走持久线程池，**无每帧 `Parallel.For`**。[plan/02 · §5.7/§12.7]
+- [x] 持久线程池多 worker 派发对象复用，`ParallelRange` / `ParallelRangeRaw` 经单测与 `MemoryDiagnoser` 证实零分配。[plan/02/14 · §12.4/§14.2]
 - [x] 活跃任务/活跃 chunk 低于阈值时回退单线程。[plan/02/03 · §5.7/风险 R7]
 - [x] per-thread/per-chunk 元数据填充到 64 字节 cache line 防 false sharing。[plan/02 · §12.7]
 
@@ -156,7 +158,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 > 全部勾选方算本文档完成（AGENTS §7）。验收以**实测/反汇编**为准，不以代码存在为准。
 
 - [x] **SoA 全覆盖**：所有 sim 热数据 SoA，per-cell 字节预算按 4B/cell 对账通过，AoS 仅工具路径，颜色不入 cell。[§7.1/不变式 #7]
-- [x] **稳态零分配**：CA/粒子/render buffer/反应/温度/序列化六条热路径 `MemoryDiagnoser` 全报 `0 B`；热路径静态核查无 LINQ/闭包/装箱/迭代器。[§12.4/AGENTS §3]
+- [x] **稳态零分配**：CA/粒子/render buffer/反应/温度/序列化六条业务热路径与 JobSystem 多 worker 派发热路径 `MemoryDiagnoser` 全报 `0 B`；热路径静态核查无 LINQ/闭包/装箱/迭代器。[§12.4/AGENTS §3]
 - [x] **多线程齐全**：CA checkerboard、Box2D task 桥、render buffer、CCL/形状重建、粒子积分、温度 stencil、序列化字节准备七项均经持久线程池并行；无每帧 `Parallel.For`；活跃任务少时单线程回退生效。[§5.7/§12.7/§14.2/风险 R7]
 - [!] **SIMD 到位**：温度 stencil/色混合/bulk fill 等向量化且有 scalar fallback、运行时 light-up；sand movement 确认未向量化；AVX-512 gate 实测无降频净损。[§12.5/§2 挑战三] 阻塞于 §4.4 AVX-512 目标硬件实测；当前机器仅 AVX2，无法验证 Vector512 降频净损。`tools/performance-target-evidence-preflight.ps1` 只索引 `avx512_downclock_net_loss` 证据并进入 pending review，不自动勾选。
 - [x] **bounds-check 消除**：热方法反汇编无 `RNGCHKFAIL`、向量化 pass 见 ymm/zmm；`[DisassemblyDiagnoser]` 守门基线建立。[§12.6/§17.3]

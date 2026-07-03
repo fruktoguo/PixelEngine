@@ -34,19 +34,44 @@ public sealed unsafe partial class JobSystem
             return;
         }
 
-        JobHandle handle = ScheduleBatch(new RawRangeBatch(itemCount, minRange, body, context, WorkerCount));
+        JobHandle handle = ScheduleRawRangeBatch(itemCount, minRange, body, context);
         Wait(in handle);
     }
 
-    private sealed class RawRangeBatch(
+    private JobHandle ScheduleRawRangeBatch(
         int itemCount,
         int minRange,
         delegate* unmanaged<int, int, int, void*, void> body,
-        void* context,
-        int workerCount) : WorkBatch(itemCount, minRange, workerCount)
+        void* context)
     {
-        private readonly delegate* unmanaged<int, int, int, void*, void> _body = body;
-        private readonly void* _context = context;
+        EnterDispatch();
+        try
+        {
+            _rawRangeBatch.Configure(itemCount, minRange, body, context);
+            return PublishBatch(_rawRangeBatch);
+        }
+        catch
+        {
+            _ = Interlocked.Exchange(ref _activeDispatch, 0);
+            throw;
+        }
+    }
+
+    private sealed class RawRangeBatch(int workerCount) : WorkBatch(workerCount, disposeAfterWait: false)
+    {
+        private delegate* unmanaged<int, int, int, void*, void> _body;
+        private void* _context;
+
+        public void Configure(
+            int itemCount,
+            int minRange,
+            delegate* unmanaged<int, int, int, void*, void> body,
+            void* context)
+        {
+            _body = body;
+            _context = context;
+            Reset(itemCount, minRange);
+        }
 
         protected override void ExecuteRange(int start, int end, int workerIndex)
         {

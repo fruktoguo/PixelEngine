@@ -50,6 +50,8 @@ public sealed unsafe partial class JobSystem : IDisposable
 {
     private readonly object _gate = new();
     private readonly Thread[] _workers;
+    private readonly RangeBatch _rangeBatch;
+    private readonly RawRangeBatch _rawRangeBatch;
     private WorkBatch? _currentBatch;
     private long _batchVersion;
     private int _activeDispatch;
@@ -69,6 +71,8 @@ public sealed unsafe partial class JobSystem : IDisposable
         WorkerCount = workerCount == 0 ? Math.Max(1, Environment.ProcessorCount) : workerCount;
         SingleThreadThreshold = 1;
         _workers = new Thread[WorkerCount];
+        _rangeBatch = new RangeBatch(WorkerCount);
+        _rawRangeBatch = new RawRangeBatch(WorkerCount);
 
         for (int i = 0; i < _workers.Length; i++)
         {
@@ -169,7 +173,7 @@ public sealed unsafe partial class JobSystem : IDisposable
             return default;
         }
 
-        return ScheduleBatch(new RangeBatch(itemCount, minRange, body, context, WorkerCount));
+        return ScheduleRangeBatch(itemCount, minRange, body, context);
     }
 
     /// <summary>
@@ -191,10 +195,14 @@ public sealed unsafe partial class JobSystem : IDisposable
         }
         finally
         {
-            batch.Dispose();
             if (ReferenceEquals(_currentBatch, batch))
             {
                 _currentBatch = null;
+            }
+
+            if (batch.DisposeAfterWait)
+            {
+                batch.Dispose();
             }
 
             _ = Interlocked.Exchange(ref _activeDispatch, 0);
@@ -222,18 +230,56 @@ public sealed unsafe partial class JobSystem : IDisposable
         {
             worker.Join();
         }
+
+        _rangeBatch.Dispose();
+        _rawRangeBatch.Dispose();
+    }
+
+    private JobHandle ScheduleRangeBatch(int itemCount, int minRange, RangeJob body, object? context)
+    {
+        EnterDispatch();
+        try
+        {
+            _rangeBatch.Configure(itemCount, minRange, body, context);
+            return PublishBatch(_rangeBatch);
+        }
+        catch
+        {
+            _ = Interlocked.Exchange(ref _activeDispatch, 0);
+            throw;
+        }
     }
 
     private JobHandle ScheduleBatch(WorkBatch batch)
     {
-        ThrowIfDisposed();
+        EnterDispatch();
+        try
+        {
+            return PublishBatch(batch);
+        }
+        catch
+        {
+            if (batch.DisposeAfterWait)
+            {
+                batch.Dispose();
+            }
 
+            _ = Interlocked.Exchange(ref _activeDispatch, 0);
+            throw;
+        }
+    }
+
+    private void EnterDispatch()
+    {
+        ThrowIfDisposed();
         if (Interlocked.CompareExchange(ref _activeDispatch, 1, 0) != 0)
         {
-            batch.Dispose();
             throw new InvalidOperationException("JobSystem 当前已有未 Wait 的任务；不支持并发派发或重入派发。");
         }
+    }
 
+    private JobHandle PublishBatch(WorkBatch batch)
+    {
         try
         {
             lock (_gate)
@@ -246,8 +292,6 @@ public sealed unsafe partial class JobSystem : IDisposable
         }
         catch
         {
-            batch.Dispose();
-            _ = Interlocked.Exchange(ref _activeDispatch, 0);
             throw;
         }
 
@@ -299,11 +343,12 @@ public sealed unsafe partial class JobSystem : IDisposable
         }
     }
 
-    internal abstract class WorkBatch(int itemCount, int minRange, int workerCount) : IDisposable
+    internal abstract class WorkBatch(int workerCount, bool disposeAfterWait) : IDisposable
     {
         private readonly ManualResetEventSlim _completed = new(false);
-        private readonly int _rangeSize = Math.Max(1, minRange);
-        private readonly int _itemCount = itemCount;
+        private readonly int _workerCount = workerCount;
+        private int _rangeSize = 1;
+        private int _itemCount;
         private int _nextStart;
         private int _remainingWorkers = workerCount;
         private int _completedFlag;
@@ -311,6 +356,20 @@ public sealed unsafe partial class JobSystem : IDisposable
         private ExceptionDispatchInfo? _exception;
 
         public bool IsCompleted => Volatile.Read(ref _completedFlag) != 0;
+
+        public bool DisposeAfterWait { get; } = disposeAfterWait;
+
+        protected void Reset(int itemCount, int minRange)
+        {
+            _rangeSize = Math.Max(1, minRange);
+            _itemCount = itemCount;
+            _nextStart = 0;
+            _remainingWorkers = _workerCount;
+            _completedFlag = 0;
+            _faulted = 0;
+            _exception = null;
+            _completed.Reset();
+        }
 
         public void Execute(int workerIndex)
         {
@@ -367,22 +426,37 @@ public sealed unsafe partial class JobSystem : IDisposable
         }
     }
 
-    private sealed class RangeBatch(int itemCount, int minRange, RangeJob body, object? context, int workerCount) : WorkBatch(itemCount, minRange, workerCount)
+    private sealed class RangeBatch(int workerCount) : WorkBatch(workerCount, disposeAfterWait: false)
     {
-        private readonly RangeJob _body = body;
-        private readonly object? _context = context;
+        private RangeJob? _body;
+        private object? _context;
+
+        public void Configure(int itemCount, int minRange, RangeJob body, object? context)
+        {
+            _body = body;
+            _context = context;
+            Reset(itemCount, minRange);
+        }
 
         protected override void ExecuteRange(int start, int end, int workerIndex)
         {
-            _body(start, end, workerIndex, _context);
+            _body!(start, end, workerIndex, _context);
         }
     }
 
-    private sealed class SpanBatch<TState>(TState* items, int itemCount, ChunkJob<TState> body, int workerCount) : WorkBatch(itemCount, 1, workerCount)
+    private sealed class SpanBatch<TState> : WorkBatch
         where TState : unmanaged
     {
-        private readonly TState* _items = items;
-        private readonly ChunkJob<TState> _body = body;
+        private readonly TState* _items;
+        private readonly ChunkJob<TState> _body;
+
+        public SpanBatch(TState* items, int itemCount, ChunkJob<TState> body, int workerCount)
+            : base(workerCount, disposeAfterWait: true)
+        {
+            _items = items;
+            _body = body;
+            Reset(itemCount, 1);
+        }
 
         protected override void ExecuteRange(int start, int end, int workerIndex)
         {
