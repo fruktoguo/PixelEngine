@@ -67,6 +67,12 @@ public sealed class GpuComputeResources
     /// <summary>资源高度。</summary>
     public int Height { get; }
 
+    /// <summary>资源句柄契约。当前 plan/08 OpenGL 渲染路径只暴露 GL texture name。</summary>
+    public GpuResourceContractKind ResourceContractKind => GpuResourceContractKind.OpenGlTextureNames;
+
+    /// <summary>当前资源是否可由 ComputeSharp/DX12 直接消费。</summary>
+    public bool CanBeConsumedByComputeSharp => false;
+
     /// <summary>plan/08 世界纹理句柄。</summary>
     public uint WorldTexture { get; }
 
