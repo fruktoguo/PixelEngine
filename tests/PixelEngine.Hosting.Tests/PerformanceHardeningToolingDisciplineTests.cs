@@ -950,7 +950,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("scenes/lava-mine-particle-light-probe.scene", script, StringComparison.Ordinal);
         Assert.Contains("RequiredSummaryMarkers", script, StringComparison.Ordinal);
         Assert.Contains("player_visual=present", script, StringComparison.Ordinal);
-        Assert.Contains("playable_shots=3", script, StringComparison.Ordinal);
+        Assert.Contains("playable_shots=5", script, StringComparison.Ordinal);
         Assert.Contains("720x480", script, StringComparison.Ordinal);
         Assert.Contains("particles=", script, StringComparison.Ordinal);
         Assert.Contains("fps=", script, StringComparison.Ordinal);
@@ -993,7 +993,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("blocked_missing_manual_scope_evidence", report, StringComparison.Ordinal);
         Assert.Contains("blocked_invalid_manual_evidence", report, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", report, StringComparison.Ordinal);
-        Assert.Contains("playable_shots=3", report, StringComparison.Ordinal);
+        Assert.Contains("playable_shots=5", report, StringComparison.Ordinal);
         Assert.Contains("未知 scope", report, StringComparison.Ordinal);
 
         Assert.Contains("tools/demo-manual-acceptance-preflight.ps1", plan, StringComparison.Ordinal);
