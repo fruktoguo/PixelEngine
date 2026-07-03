@@ -419,7 +419,13 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("PixelEngine.Scripting.csproj", project, StringComparison.Ordinal);
         Assert.Contains("managed-native-leak-detector", program, StringComparison.Ordinal);
         Assert.Contains("managedProbe", program, StringComparison.Ordinal);
+        Assert.Contains("RenderWindow.Create", program, StringComparison.Ordinal);
+        Assert.Contains("gl_context_rendering_wrappers", program, StringComparison.Ordinal);
         Assert.Contains("managed_no_gl_context", program, StringComparison.Ordinal);
+        Assert.Contains("GlTexture", program, StringComparison.Ordinal);
+        Assert.Contains("GlBuffer", program, StringComparison.Ordinal);
+        Assert.Contains("Framebuffer", program, StringComparison.Ordinal);
+        Assert.Contains("ShaderProgram.Create", program, StringComparison.Ordinal);
         Assert.Contains("GlResourceTracker.Snapshot().Total", program, StringComparison.Ordinal);
         Assert.Contains("still requires external driver-level GL leak evidence", program, StringComparison.Ordinal);
         Assert.Contains("glObjectsLiveAfterShutdown", program, StringComparison.Ordinal);
@@ -432,8 +438,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("evidence.json", program, StringComparison.Ordinal);
 
         Assert.Contains("tools/PixelEngine.Tools.ManagedNativeLeakDetector", report, StringComparison.Ordinal);
+        Assert.Contains("gl_context_rendering_wrappers", report, StringComparison.Ordinal);
         Assert.Contains("managed_no_gl_context", report, StringComparison.Ordinal);
         Assert.Contains("tools/PixelEngine.Tools.ManagedNativeLeakDetector", plan, StringComparison.Ordinal);
+        Assert.Contains("gl_context_rendering_wrappers", plan, StringComparison.Ordinal);
         Assert.Contains("managed_no_gl_context", plan, StringComparison.Ordinal);
         Assert.Contains("GL driver 级", plan, StringComparison.Ordinal);
     }
@@ -490,7 +498,12 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Contains("\"openal\"", manifestText, StringComparison.Ordinal);
             Assert.Contains("\"box2d\"", manifestText, StringComparison.Ordinal);
             Assert.Contains("\"alc\"", manifestText, StringComparison.Ordinal);
-            Assert.Contains("managed_no_gl_context", File.ReadAllText(Path.Combine(output, "gl.md")), StringComparison.Ordinal);
+            string glReport = File.ReadAllText(Path.Combine(output, "gl.md"));
+            Assert.Contains("still requires external driver-level GL leak evidence", glReport, StringComparison.Ordinal);
+            Assert.True(
+                glReport.Contains("gl_context_rendering_wrappers", StringComparison.Ordinal) ||
+                glReport.Contains("managed_no_gl_context", StringComparison.Ordinal),
+                glReport);
 
             string artifacts = Path.Combine(temp, "preflight");
             ScriptResult preflight = RunPowerShellScript(
