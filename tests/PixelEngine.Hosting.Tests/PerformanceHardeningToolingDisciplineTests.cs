@@ -1809,11 +1809,13 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("PixelEngine Demo.sh", packagePs1, StringComparison.Ordinal);
         Assert.Contains("README.txt", packagePs1, StringComparison.Ordinal);
         Assert.Contains("Join-Path $stagingDir 'SHA256SUMS'", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("Remove-Item -LiteralPath $stagingDir -Recurse -Force", packagePs1, StringComparison.Ordinal);
         Assert.Contains("app_dir=\"$staging_dir/app\"", packageSh, StringComparison.Ordinal);
         Assert.Contains("PixelEngine Demo.cmd", packageSh, StringComparison.Ordinal);
         Assert.Contains("PixelEngine Demo.sh", packageSh, StringComparison.Ordinal);
         Assert.Contains("README.txt", packageSh, StringComparison.Ordinal);
         Assert.Contains("package_checksum_path=\"$staging_dir/SHA256SUMS\"", packageSh, StringComparison.Ordinal);
+        Assert.Contains("rm -rf \"$staging_dir\"", packageSh, StringComparison.Ordinal);
         Assert.DoesNotContain("Compress-Archive", packagePs1, StringComparison.Ordinal);
         Assert.DoesNotContain("tar -czf", packagePs1, StringComparison.Ordinal);
         Assert.DoesNotContain("zip -qr", packageSh, StringComparison.Ordinal);
