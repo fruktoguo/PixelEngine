@@ -5,7 +5,9 @@ namespace PixelEngine.Scripting;
 /// </summary>
 public sealed class ScriptRuntime : IScriptRuntime
 {
+#if !PIXELENGINE_NATIVEAOT
     private readonly HotReloadService? _hotReload;
+#endif
     private readonly ScriptHotReloadController? _hotReloadController;
     private IScriptContext? _context;
     private bool _shutdown;
@@ -26,10 +28,12 @@ public sealed class ScriptRuntime : IScriptRuntime
         _hotReloadController = hotReloadController ?? throw new ArgumentNullException(nameof(hotReloadController));
     }
 
+#if !PIXELENGINE_NATIVEAOT
     internal ScriptRuntime(HotReloadService hotReload)
     {
         _hotReload = hotReload ?? throw new ArgumentNullException(nameof(hotReload));
     }
+#endif
 
     /// <summary>
     /// 使用脚本上下文初始化运行时；由 Hosting 在主循环启动前调用。
@@ -48,7 +52,9 @@ public sealed class ScriptRuntime : IScriptRuntime
     public void BeginFrame()
     {
         IScriptContext context = RequireContext();
+#if !PIXELENGINE_NATIVEAOT
         _ = _hotReload?.ApplyPendingReload();
+#endif
         _ = _hotReloadController?.ApplyPendingReload();
         context.Scene.DispatchStart(context);
     }
@@ -138,7 +144,9 @@ public sealed class ScriptRuntime : IScriptRuntime
             _context.Scene.EndPlaySession(_context);
         }
 
+#if !PIXELENGINE_NATIVEAOT
         _hotReload?.Dispose();
+#endif
         _hotReloadController?.Dispose();
         _shutdown = true;
         _context = null;

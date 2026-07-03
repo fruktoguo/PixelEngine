@@ -126,6 +126,22 @@ if [[ -n "$informational_version" ]]; then
   publish_properties+=("-p:InformationalVersion=$informational_version")
 fi
 
+target_framework="$(dotnet msbuild "$demo_project" -nologo -getProperty:TargetFramework | tr -d '\r' | xargs)"
+if [[ -z "$target_framework" ]]; then
+  echo "Failed to read TargetFramework from $demo_project." >&2
+  exit 1
+fi
+
+rid_arch="${rid##*-}"
+rm -rf "$output"
+rm -rf "$repo_root/demo/PixelEngine.Demo/bin/$rid_arch/$configuration/$target_framework/$rid"
+rm -rf "$repo_root/demo/PixelEngine.Demo/obj/$rid_arch/$configuration/$target_framework/$rid"
+for project_dir in "$repo_root"/src/PixelEngine.*; do
+  [[ -d "$project_dir" ]] || continue
+  rm -rf "$project_dir/bin/$rid_arch/$configuration/$target_framework"
+  rm -rf "$project_dir/obj/$rid_arch/$configuration/$target_framework"
+done
+
 dotnet publish "$demo_project" \
   -c "$configuration" \
   -r "$rid" \

@@ -46,6 +46,10 @@ public static class DemoProgram
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayerHealth))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayerVisual))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(SparkEmitter))]
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050",
+        Justification = "NativeAOT win-x64 publish is smoke-tested from this entry point; remaining Enum.GetValues(Type) analysis comes from the Silk.NET/System.Text.Json dependency closure rather than Demo startup code.")]
     public static int Execute(string[] args)
     {
         ConfigurePackagedNativeSearchPath();
