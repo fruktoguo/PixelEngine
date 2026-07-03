@@ -179,6 +179,46 @@ function Get-ExpectedRunIdentity {
     }
 }
 
+function Add-WorkflowRunMetadataCheck {
+    param(
+        [System.Collections.Generic.List[string]]$Missing,
+        [hashtable]$Values
+    )
+
+    foreach ($key in @("workflow", "event", "run_attempt", "ref")) {
+        if (-not $Values.ContainsKey($key) -or [string]::IsNullOrWhiteSpace([string]$Values[$key])) {
+            $Missing.Add("workflow_run 报告缺少 $key 字段")
+        }
+    }
+
+    if ($Values.ContainsKey("workflow") -and
+        -not [string]::Equals([string]$Values["workflow"], "CI", [StringComparison]::Ordinal)) {
+        $Missing.Add("workflow_run 报告 workflow 必须为 CI，实际为 $($Values["workflow"])")
+    }
+
+    if ($Values.ContainsKey("event")) {
+        $event = [string]$Values["event"]
+        if ($event -notin @("push", "pull_request")) {
+            $Missing.Add("workflow_run 报告 event 必须为 push 或 pull_request，实际为 $event")
+        }
+    }
+
+    if ($Values.ContainsKey("run_attempt")) {
+        $runAttempt = 0
+        if (-not [int]::TryParse([string]$Values["run_attempt"], [ref]$runAttempt) -or $runAttempt -lt 1) {
+            $Missing.Add("workflow_run 报告 run_attempt 必须为 >= 1 的整数，实际为 $($Values["run_attempt"])")
+        }
+    }
+
+    if ($Values.ContainsKey("ref")) {
+        $ref = [string]$Values["ref"]
+        if (-not ($ref.StartsWith("refs/heads/", [StringComparison]::Ordinal) -or
+                $ref.StartsWith("refs/pull/", [StringComparison]::Ordinal))) {
+            $Missing.Add("workflow_run 报告 ref 必须来自分支或 PR，实际为 $ref")
+        }
+    }
+}
+
 function Add-RunIdentityCheck {
     param(
         [System.Collections.Generic.List[string]]$Missing,
@@ -390,6 +430,8 @@ $workflowRunReport = [string](Get-JsonPropertyValue -Node $manifest -Name "workf
 $benchmarkGuardReport = [string](Get-JsonPropertyValue -Node $manifest.benchmarkGuard -Name "report")
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $manifest -Name "workflowRunSha256"))
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -ExpectedValues @{ conclusion = "success" }
+$workflowRunValues = Read-MarkdownEvidenceTable -Path (Resolve-EvidencePath -Root $root -Path $workflowRunReport)
+Add-WorkflowRunMetadataCheck -Missing $missing -Values $workflowRunValues
 $expectedRunIdentity = Get-ExpectedRunIdentity -Missing $missing -Root $root -WorkflowRunReport $workflowRunReport
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "benchmark_guard" -Path $benchmarkGuardReport -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $manifest.benchmarkGuard -Name "sha256"))
 Add-ManifestStringCheck -Missing $missing -Scope "benchmarkGuard" -Field "runner" -Node $manifest.benchmarkGuard -Expected $benchmarkRunner
@@ -464,7 +506,7 @@ if ($missing.Count -gt 0) {
     exit 0
 }
 
-$detail = "CI matrix evidence manifest is complete, SHA256 hashes matched, and markdown evidence fields reported success for required jobs. Human review still must confirm the GitHub Actions run proves 6-RID build, available-RID dotnet test, benchmark guard, and R2R/AOT publish verify before plan/14 can be unblocked."
+$detail = "CI matrix evidence manifest is complete, SHA256 hashes matched, workflow metadata identified the CI push/pull_request run, and markdown evidence fields reported success for required jobs. Human review still must confirm the GitHub Actions run proves 6-RID build, available-RID dotnet test, benchmark guard, and R2R/AOT publish verify before plan/14 can be unblocked."
 Write-CiEvidenceReport -Path $reportPath -Status "ci_matrix_evidence_attached_pending_review" -ExitCode 2 -Evidence @($evidence) -Missing @($missing) -Detail $detail
 Write-Host "CI matrix evidence preflight ci_matrix_evidence_attached_pending_review. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
 

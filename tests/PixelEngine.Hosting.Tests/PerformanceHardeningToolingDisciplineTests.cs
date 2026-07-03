@@ -2466,6 +2466,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("evidence.json", ci, StringComparison.Ordinal);
         Assert.Contains("Get-Sha256", ci, StringComparison.Ordinal);
         Assert.Contains("workflowRunSha256", ci, StringComparison.Ordinal);
+        Assert.Contains("| workflow | CI |", ci, StringComparison.Ordinal);
+        Assert.Contains("| event | ${{ github.event_name }} |", ci, StringComparison.Ordinal);
+        Assert.Contains("| run_attempt | ${{ github.run_attempt }} |", ci, StringComparison.Ordinal);
         Assert.Contains("sha256 = Get-Sha256", ci, StringComparison.Ordinal);
         Assert.Contains("build-test-win-arm64.md", ci, StringComparison.Ordinal);
         Assert.Contains("testsRan = $false", ci, StringComparison.Ordinal);
@@ -2481,10 +2484,14 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("conclusion", report, StringComparison.Ordinal);
         Assert.Contains("channels: r2r,aot", report, StringComparison.Ordinal);
         Assert.Contains("runner", report, StringComparison.Ordinal);
+        Assert.Contains("workflow", report, StringComparison.Ordinal);
+        Assert.Contains("run_attempt", report, StringComparison.Ordinal);
+        Assert.Contains("push/pull_request", report, StringComparison.Ordinal);
         Assert.Contains("同一个 GitHub Actions run", report, StringComparison.Ordinal);
         Assert.Contains("tools/ci-matrix-evidence-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("blocked_invalid_ci_evidence", plan, StringComparison.Ordinal);
         Assert.Contains("ci_matrix_evidence_attached_pending_review", plan, StringComparison.Ordinal);
+        Assert.Contains("CiMatrixEvidencePreflightRejectsWrongWorkflowMetadata", plan, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -2777,6 +2784,56 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Contains("status: blocked_missing_ci_scope_evidence", result.Output + report, StringComparison.Ordinal);
             Assert.Contains("buildTest.linux-arm64 runner 必须为 ubuntu-24.04-arm，实际为 ubuntu-latest", report, StringComparison.Ordinal);
             Assert.Contains("build_test/linux-arm64/report 报告 runner 必须为 ubuntu-24.04-arm，实际为 ubuntu-latest", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: ci_matrix_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 CI evidence 预检会拒绝错误 workflow/event/run_attempt/ref 元数据，避免其它 workflow 报告冒充 CI 矩阵。
+    /// </summary>
+    [Fact]
+    public void CiMatrixEvidencePreflightRejectsWrongWorkflowMetadata()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ci-workflow-metadata-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateCiEvidenceManifest(temp, benchmarkConclusion: "success");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            string workflowRunReport = (string)rootNode["workflowRunReport"]!;
+            string text = File.ReadAllText(workflowRunReport)
+                .Replace("| workflow | CI |", "| workflow | Release |", StringComparison.Ordinal)
+                .Replace("| event | push |", "| event | workflow_dispatch |", StringComparison.Ordinal)
+                .Replace("| run_attempt | 1 |", "| run_attempt | 0 |", StringComparison.Ordinal)
+                .Replace("| ref | refs/heads/main |", "| ref | refs/tags/v0.1.0 |", StringComparison.Ordinal);
+            File.WriteAllText(workflowRunReport, text);
+            rootNode["workflowRunSha256"] = GetSha256(workflowRunReport);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "workflow-metadata-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "ci-matrix-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "ci-matrix-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_ci_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("workflow_run 报告 workflow 必须为 CI", report, StringComparison.Ordinal);
+            Assert.Contains("workflow_run 报告 event 必须为 push 或 pull_request", report, StringComparison.Ordinal);
+            Assert.Contains("workflow_run 报告 run_attempt 必须为 >= 1 的整数", report, StringComparison.Ordinal);
+            Assert.Contains("workflow_run 报告 ref 必须来自分支或 PR", report, StringComparison.Ordinal);
             Assert.DoesNotContain("status: ci_matrix_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
@@ -4647,6 +4704,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             new Dictionary<string, string>
             {
                 ["run_id"] = "1",
+                ["workflow"] = "CI",
+                ["event"] = "push",
+                ["run_attempt"] = "1",
                 ["sha"] = "abc",
                 ["ref"] = "refs/heads/main",
                 ["conclusion"] = "success",
