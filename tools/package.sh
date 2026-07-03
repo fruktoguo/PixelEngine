@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: tools/package.sh --rid <RID> --channel <r2r|aot> [--version <semver>] [--publish-dir <dir>] [--output-root <dir>] [--content-root <dir>]
+Usage: tools/package.sh --rid <RID> --channel <r2r|aot> [--version <semver>] [--publish-dir <dir>] [--output-root <dir>] [--player-output-dir <dir>] [--content-root <dir>]
 EOF
 }
 
@@ -47,6 +47,7 @@ channel=""
 version=""
 publish_dir=""
 output_root=""
+player_output_dir=""
 content_root=""
 
 while [[ $# -gt 0 ]]; do
@@ -74,6 +75,11 @@ while [[ $# -gt 0 ]]; do
     --output-root)
       require_value "$1" "${2:-}"
       output_root="$2"
+      shift 2
+      ;;
+    --player-output-dir)
+      require_value "$1" "${2:-}"
+      player_output_dir="$2"
       shift 2
       ;;
     --content-root)
@@ -126,6 +132,10 @@ if [[ -z "$output_root" ]]; then
   output_root="$repo_root/artifacts/package"
 fi
 
+if [[ -z "$player_output_dir" ]]; then
+  player_output_dir="$repo_root/artifacts/PixelEngine Demo"
+fi
+
 if [[ -z "$publish_dir" ]]; then
   publish_dir="$repo_root/artifacts/publish/$rid-$channel"
 fi
@@ -146,6 +156,8 @@ fi
 
 mkdir -p "$output_root"
 output_root="$(cd "$output_root" && pwd)"
+mkdir -p "$(dirname "$player_output_dir")"
+player_output_dir="$(cd "$(dirname "$player_output_dir")" && pwd)/$(basename "$player_output_dir")"
 publish_dir="$(cd "$publish_dir" && pwd)"
 content_root="$(cd "$content_root" && pwd)"
 
@@ -278,9 +290,12 @@ mv "$tmp_checksum" "$checksum_path"
 
 rm -rf "$package_dir"
 mv "$staging_dir" "$package_dir"
+rm -rf "$player_output_dir"
+cp -a "$package_dir" "$player_output_dir"
 rmdir "$staging_root" 2>/dev/null || true
 
 echo "Package completed for $rid/$channel."
 echo "Archive: $archive_path"
 echo "Expanded: $package_dir"
+echo "PlayerOutput: $player_output_dir"
 echo "Checksums: $checksum_path"
