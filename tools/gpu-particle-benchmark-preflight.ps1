@@ -129,11 +129,49 @@ function Assert-TargetHardwareReport {
     param([string]$Path)
 
     $fields = Read-MachineReadableFields -Path $Path
-    foreach ($required in @("targetGpuName", "targetGpuDriver", "gpuBackend", "operatingSystem", "cpuName", "dotnetVersion", "gitCommit", "particleCount")) {
+    foreach ($required in @("targetGpuName", "targetGpuDriver", "gpuBackend", "operatingSystem", "cpuName", "dotnetVersion", "gitCommit", "particleCount", "benchmarkRunId")) {
         [void](Get-RequiredField -Fields $fields -Name $required -Scope "targetHardwareReport")
     }
 
     return $fields
+}
+
+function Assert-TargetEvidenceIdentity {
+    param(
+        [hashtable]$ResolvedPaths,
+        [System.Collections.IDictionary]$HardwareFields,
+        [System.Collections.IDictionary]$CpuMetrics,
+        [System.Collections.IDictionary]$GpuMetrics
+    )
+
+    $expectedRunId = Get-RequiredField -Fields $HardwareFields -Name "benchmarkRunId" -Scope "targetHardwareReport"
+    $expectedGitCommit = Get-RequiredField -Fields $HardwareFields -Name "gitCommit" -Scope "targetHardwareReport"
+    foreach ($probe in @(
+        [pscustomobject]@{ Scope = "cpuProbeReport"; Metrics = $CpuMetrics },
+        [pscustomobject]@{ Scope = "gpuProbeReport"; Metrics = $GpuMetrics }
+    )) {
+        $actualRunId = [string]$probe.Metrics["benchmark_run_id"]
+        if (-not [string]::Equals($actualRunId, $expectedRunId, [StringComparison]::Ordinal)) {
+            throw "$($probe.Scope) benchmark_run_id 必须与 targetHardwareReport benchmarkRunId 一致：expected=$expectedRunId actual=$actualRunId。"
+        }
+
+        $fields = Read-MachineReadableFields -Path $ResolvedPaths[$probe.Scope]
+        $actualGitCommit = Get-RequiredField -Fields $fields -Name "gitCommit" -Scope $probe.Scope
+        if (-not [string]::Equals($actualGitCommit, $expectedGitCommit, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "$($probe.Scope) gitCommit 必须与 targetHardwareReport 一致：expected=$expectedGitCommit actual=$actualGitCommit。"
+        }
+    }
+
+    $comparisonFields = Read-MachineReadableFields -Path $ResolvedPaths["comparisonReport"]
+    $actualRunId = Get-RequiredField -Fields $comparisonFields -Name "benchmarkRunId" -Scope "comparisonReport"
+    $actualGitCommit = Get-RequiredField -Fields $comparisonFields -Name "gitCommit" -Scope "comparisonReport"
+    if (-not [string]::Equals($actualRunId, $expectedRunId, [StringComparison]::Ordinal)) {
+        throw "comparisonReport benchmarkRunId 必须与 targetHardwareReport 一致：expected=$expectedRunId actual=$actualRunId。"
+    }
+
+    if (-not [string]::Equals($actualGitCommit, $expectedGitCommit, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "comparisonReport gitCommit 必须与 targetHardwareReport 一致：expected=$expectedGitCommit actual=$actualGitCommit。"
+    }
 }
 
 function Assert-ComparisonReport {
@@ -179,6 +217,12 @@ function Assert-ComparisonReport {
         throw "comparisonReport sampleSeconds 必须至少为 10 秒。"
     }
 
+    $cpuProbeSampleSeconds = Get-MetricDouble -Metrics $CpuMetrics -Name "sample_seconds"
+    $gpuProbeSampleSeconds = Get-MetricDouble -Metrics $GpuMetrics -Name "sample_seconds"
+    if ($sampleSeconds -gt $cpuProbeSampleSeconds -or $sampleSeconds -gt $gpuProbeSampleSeconds) {
+        throw "comparisonReport sampleSeconds 不能大于 cpu/gpu probe summary 的 sample_seconds。"
+    }
+
     $cpuProbeFrames = Get-MetricInt -Metrics $CpuMetrics -Name "measured_frames"
     $gpuProbeFrames = Get-MetricInt -Metrics $GpuMetrics -Name "measured_frames"
     if ($measuredFrames -gt $cpuProbeFrames -or $measuredFrames -gt $gpuProbeFrames) {
@@ -209,10 +253,15 @@ function Assert-TargetProbeReport {
     $scopeName = "${ExpectedMode}ProbeReport"
     $summary = Get-ParticleProbeSummaryFromReport -Path $Path -Scope $scopeName
     $metrics = Convert-ParticleProbeSummaryToMetrics -SummaryLine $summary
-    foreach ($required in @("mode", "gpu_available", "requested_count", "active_count", "measured_frames", "wall_avg_ms", "particle_stamp_avg_ms", "gpu_particle_avg_ms")) {
+    foreach ($required in @("source", "benchmark_run_id", "mode", "gpu_available", "requested_count", "active_count", "measured_frames", "sample_seconds", "wall_avg_ms", "particle_stamp_avg_ms", "gpu_particle_avg_ms")) {
         if (-not $metrics.Contains($required)) {
             throw "$scopeName 摘要缺少字段 $required。"
         }
+    }
+
+    $source = [string]$metrics["source"]
+    if (-not [string]::Equals($source, "PixelEngineParticleFrameProbe", [StringComparison]::Ordinal)) {
+        throw "$scopeName source 必须为 PixelEngineParticleFrameProbe。"
     }
 
     $actualMode = [string]$metrics["mode"]
@@ -233,6 +282,11 @@ function Assert-TargetProbeReport {
 
     if ($measured -lt 300) {
         throw "$scopeName measured_frames 必须至少为 300。"
+    }
+
+    $sampleSeconds = Get-MetricDouble -Metrics $metrics -Name "sample_seconds"
+    if ($sampleSeconds -le 0) {
+        throw "$scopeName sample_seconds 必须大于 0。"
     }
 
     $cpuStampAvg = Get-MetricDouble -Metrics $metrics -Name "particle_stamp_avg_ms"
@@ -347,10 +401,15 @@ function Assert-LocalProbeMetrics {
     )
 
     $metrics = $Probe.metrics
-    foreach ($required in @("mode", "gpu_available", "requested_count", "active_count", "measured_frames", "wall_avg_ms", "particle_stamp_avg_ms", "gpu_particle_avg_ms")) {
+    foreach ($required in @("source", "benchmark_run_id", "mode", "gpu_available", "requested_count", "active_count", "measured_frames", "sample_seconds", "wall_avg_ms", "particle_stamp_avg_ms", "gpu_particle_avg_ms")) {
         if (-not $metrics.Contains($required)) {
             throw "$ExpectedMode probe 摘要缺少字段 $required。"
         }
+    }
+
+    $source = [string]$metrics["source"]
+    if (-not [string]::Equals($source, "PixelEngineParticleFrameProbe", [StringComparison]::Ordinal)) {
+        throw "$ExpectedMode probe source 必须为 PixelEngineParticleFrameProbe。"
     }
 
     $actualMode = [string]$metrics["mode"]
@@ -372,6 +431,11 @@ function Assert-LocalProbeMetrics {
     $measured = Get-MetricInt -Metrics $metrics -Name "measured_frames"
     if ($expectedMeasuredFrames -le 0 -or $measured -ne $expectedMeasuredFrames) {
         throw "$ExpectedMode probe measured_frames=$measured，期望 $expectedMeasuredFrames；window_ticks 必须大于 warmup_frames 且样本帧完整。"
+    }
+
+    $sampleSeconds = Get-MetricDouble -Metrics $metrics -Name "sample_seconds"
+    if ($sampleSeconds -le 0) {
+        throw "$ExpectedMode probe sample_seconds 必须大于 0。"
     }
 
     $cpuStampAvg = Get-MetricDouble -Metrics $metrics -Name "particle_stamp_avg_ms"
@@ -576,6 +640,7 @@ function Invoke-ParticleProbe {
         "--particle-render-mode", $Mode,
         "--particle-count", $ParticleCount.ToString([Globalization.CultureInfo]::InvariantCulture),
         "--particle-probe-warmup", $WarmupFrames.ToString([Globalization.CultureInfo]::InvariantCulture),
+        "--particle-probe-run-id", "local-preflight",
         "--content", $Content,
         "--log-dir", $logDirectory
     )
@@ -694,6 +759,7 @@ function Read-EvidenceManifest {
     $hardwareFields = Assert-TargetHardwareReport -Path $resolvedPaths["targetHardwareReport"]
     $cpuMetrics = Assert-TargetProbeReport -Path $resolvedPaths["cpuProbeReport"] -ExpectedMode "cpu"
     $gpuMetrics = Assert-TargetProbeReport -Path $resolvedPaths["gpuProbeReport"] -ExpectedMode "gpu"
+    Assert-TargetEvidenceIdentity -ResolvedPaths $resolvedPaths -HardwareFields $hardwareFields -CpuMetrics $cpuMetrics -GpuMetrics $gpuMetrics
     Assert-TargetProbePair -CpuMetrics $cpuMetrics -GpuMetrics $gpuMetrics -HardwareFields $hardwareFields
     Assert-ComparisonReport -Path $resolvedPaths["comparisonReport"] -CpuMetrics $cpuMetrics -GpuMetrics $gpuMetrics
 

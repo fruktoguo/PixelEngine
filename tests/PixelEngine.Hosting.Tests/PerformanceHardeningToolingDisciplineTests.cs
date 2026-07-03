@@ -826,6 +826,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("targetGpuDriver", script, StringComparison.Ordinal);
         Assert.Contains("gpuBackend", script, StringComparison.Ordinal);
         Assert.Contains("particleCount", script, StringComparison.Ordinal);
+        Assert.Contains("benchmarkRunId", script, StringComparison.Ordinal);
+        Assert.Contains("gitCommit 必须与 targetHardwareReport 一致", script, StringComparison.Ordinal);
         Assert.Contains("measured_frames 必须至少为 300", script, StringComparison.Ordinal);
         Assert.Contains("sampleSeconds 必须至少为 10 秒", script, StringComparison.Ordinal);
         Assert.Contains("speedupRatio 必须大于 1", script, StringComparison.Ordinal);
@@ -851,6 +853,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
         Assert.Contains("gpuFasterThanCpu", report, StringComparison.Ordinal);
         Assert.Contains("targetGpuName", report, StringComparison.Ordinal);
+        Assert.Contains("benchmarkRunId", report, StringComparison.Ordinal);
         Assert.Contains("measured_frames", report, StringComparison.Ordinal);
         Assert.Contains("sampleSeconds", report, StringComparison.Ordinal);
         Assert.Contains("local-comparison.md", report, StringComparison.Ordinal);
@@ -966,7 +969,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 fakeDotNet,
                 """
                 @echo off
-                echo particle_frame_probe mode=cpu, gpu_available=False, requested_count=100000, active_count=100000, warmup_frames=1, measured_frames=3, wall_avg_ms=1.000, wall_p50_ms=1.000, wall_p95_ms=1.000, wall_max_ms=1.000, particle_stamp_avg_ms=0.800, particle_stamp_p50_ms=0.800, particle_stamp_p95_ms=0.800, particle_stamp_max_ms=0.800, gpu_particle_avg_ms=0.000, gpu_particle_p50_ms=0.000, gpu_particle_p95_ms=0.000, gpu_particle_max_ms=0.000, gpu_upload_avg_ms=0.000, gpu_upload_p50_ms=0.000, gpu_upload_p95_ms=0.000, gpu_upload_max_ms=0.000, lighting_avg_ms=0.000, lighting_p50_ms=0.000, lighting_p95_ms=0.000, lighting_max_ms=0.000, bloom_avg_ms=0.000, bloom_p50_ms=0.000, bloom_p95_ms=0.000, bloom_max_ms=0.000, present_avg_ms=0.000, present_p50_ms=0.000, present_p95_ms=0.000, present_max_ms=0.000
+                echo particle_frame_probe source=PixelEngineParticleFrameProbe, benchmark_run_id=local-preflight, mode=cpu, gpu_available=False, requested_count=100000, active_count=100000, warmup_frames=1, measured_frames=3, sample_seconds=1.0, wall_avg_ms=1.000, wall_p50_ms=1.000, wall_p95_ms=1.000, wall_max_ms=1.000, particle_stamp_avg_ms=0.800, particle_stamp_p50_ms=0.800, particle_stamp_p95_ms=0.800, particle_stamp_max_ms=0.800, gpu_particle_avg_ms=0.000, gpu_particle_p50_ms=0.000, gpu_particle_p95_ms=0.000, gpu_particle_max_ms=0.000, gpu_upload_avg_ms=0.000, gpu_upload_p50_ms=0.000, gpu_upload_p95_ms=0.000, gpu_upload_max_ms=0.000, lighting_avg_ms=0.000, lighting_p50_ms=0.000, lighting_p95_ms=0.000, lighting_max_ms=0.000, bloom_avg_ms=0.000, bloom_p50_ms=0.000, bloom_p95_ms=0.000, bloom_max_ms=0.000, present_avg_ms=0.000, present_p50_ms=0.000, present_p95_ms=0.000, present_max_ms=0.000
                 exit /b 0
                 """);
 
@@ -1014,7 +1017,19 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         try
         {
             string manifest = CreateGpuParticleEvidenceManifest(temp, suffix: "bad-comparison");
-            SetFlatEvidenceFileContent(manifest, "comparisonReport", "gpuFasterThanCpu: false");
+            SetFlatEvidenceFileContent(
+                manifest,
+                "comparisonReport",
+                """
+                benchmarkRunId: run-20260703-target-gpu
+                gitCommit: abcdef123456
+                gpuFasterThanCpu: false
+                cpuWallAvgMs: 6.4
+                gpuWallAvgMs: 3.2
+                speedupRatio: 2.0
+                measuredFrames: 600
+                sampleSeconds: 20.0
+                """);
 
             string artifacts = Path.Combine(temp, "bad-comparison-out");
             ScriptResult result = RunPowerShellScript(
@@ -1166,6 +1181,47 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 comparisonReport 的 sampleSeconds 不能只靠手写声明，必须由 CPU/GPU probe summary 的真实采样秒数支撑。
+    /// </summary>
+    [Fact]
+    public void GpuParticleBenchmarkPreflightRejectsComparisonSampleSecondsNotBackedByProbeSummaries()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-sample-backed-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateGpuParticleEvidenceManifest(
+                temp,
+                suffix: "bad-sample-backed",
+                sampleSeconds: 20.0,
+                probeSampleSeconds: 2.0);
+
+            string artifacts = Path.Combine(temp, "bad-sample-backed-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
+            Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("comparisonReport sampleSeconds 不能大于 cpu/gpu probe summary 的 sample_seconds", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 GPU 粒子目标硬件预检要求硬件报告包含可审查的机器字段。
     /// </summary>
     [Fact]
@@ -1192,6 +1248,50 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
             Assert.Contains("targetHardwareReport 缺少机器可读字段 targetGpuDriver", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证目标 GPU 硬件、CPU probe、GPU probe 与 comparison 证据必须来自同一个 benchmark run 和 git commit。
+    /// </summary>
+    [Fact]
+    public void GpuParticleBenchmarkPreflightRejectsMismatchedTargetEvidenceIdentity()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-identity-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateGpuParticleEvidenceManifest(temp, suffix: "bad-identity");
+            SetFlatEvidenceFileContent(
+                manifest,
+                "gpuProbeReport",
+                """
+                gitCommit: different-commit
+                particle_frame_probe source=PixelEngineParticleFrameProbe, benchmark_run_id=run-20260703-target-gpu, mode=gpu, gpu_available=True, requested_count=100000, active_count=100000, warmup_frames=60, measured_frames=600, sample_seconds=20.0, wall_avg_ms=3.200, wall_p50_ms=3.000, wall_p95_ms=4.000, wall_max_ms=5.000, particle_stamp_avg_ms=0.000, gpu_particle_avg_ms=0.900, gpu_particle_p50_ms=0.850, gpu_particle_p95_ms=1.050, gpu_particle_max_ms=1.200
+                """);
+
+            string artifacts = Path.Combine(temp, "bad-identity-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
+            Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("gpuProbeReport gitCommit 必须与 targetHardwareReport 一致", report, StringComparison.Ordinal);
             Assert.DoesNotContain("status: target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
@@ -4337,6 +4437,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         double sampleSeconds = 20.0,
         double cpuWallAvgMs = 6.4,
         double gpuWallAvgMs = 3.2,
+        double probeSampleSeconds = 20.0,
         double? comparisonCpuWallAvgMs = null,
         double? comparisonGpuWallAvgMs = null,
         double? comparisonSpeedupRatio = null)
@@ -4360,21 +4461,26 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             dotnetVersion: 10.0.8
             gitCommit: abcdef123456
             particleCount: {particleCount}
+            benchmarkRunId: run-20260703-target-gpu
             """);
 
         string cpuProbe = WriteTextEvidence(
             Path.Combine(evidenceRoot, "cpu-probe.md"),
-            "particle_frame_probe mode=cpu, gpu_available=False, requested_count=" + particleCount.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+            "gitCommit: abcdef123456" + Environment.NewLine +
+            "particle_frame_probe source=PixelEngineParticleFrameProbe, benchmark_run_id=run-20260703-target-gpu, mode=cpu, gpu_available=False, requested_count=" + particleCount.ToString(System.Globalization.CultureInfo.InvariantCulture) +
             ", active_count=" + particleCount.ToString(System.Globalization.CultureInfo.InvariantCulture) +
             ", warmup_frames=60, measured_frames=" + measuredFrames.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+            ", sample_seconds=" + probeSampleSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) +
             ", wall_avg_ms=" + cpuWallAvgMs.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) +
             ", wall_p50_ms=6.000, wall_p95_ms=7.000, wall_max_ms=8.000, particle_stamp_avg_ms=2.400, particle_stamp_p50_ms=2.300, particle_stamp_p95_ms=2.600, particle_stamp_max_ms=2.900, gpu_particle_avg_ms=0.000");
 
         string gpuProbe = WriteTextEvidence(
             Path.Combine(evidenceRoot, "gpu-probe.md"),
-            "particle_frame_probe mode=gpu, gpu_available=True, requested_count=" + particleCount.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+            "gitCommit: abcdef123456" + Environment.NewLine +
+            "particle_frame_probe source=PixelEngineParticleFrameProbe, benchmark_run_id=run-20260703-target-gpu, mode=gpu, gpu_available=True, requested_count=" + particleCount.ToString(System.Globalization.CultureInfo.InvariantCulture) +
             ", active_count=" + particleCount.ToString(System.Globalization.CultureInfo.InvariantCulture) +
             ", warmup_frames=60, measured_frames=" + measuredFrames.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+            ", sample_seconds=" + probeSampleSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) +
             ", wall_avg_ms=" + gpuWallAvgMs.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) +
             ", wall_p50_ms=3.000, wall_p95_ms=4.000, wall_max_ms=5.000, particle_stamp_avg_ms=0.000, gpu_particle_avg_ms=0.900, gpu_particle_p50_ms=0.850, gpu_particle_p95_ms=1.050, gpu_particle_max_ms=1.200");
 
@@ -4384,6 +4490,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             # Target GPU comparison
 
             gpuFasterThanCpu: true
+            benchmarkRunId: run-20260703-target-gpu
+            gitCommit: abcdef123456
             cpuWallAvgMs: {comparisonCpuWall.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}
             gpuWallAvgMs: {comparisonGpuWall.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}
             speedupRatio: {comparisonSpeedup.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}

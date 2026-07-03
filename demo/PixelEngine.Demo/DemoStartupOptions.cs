@@ -74,6 +74,11 @@ public sealed class DemoStartupOptions
     public int ParticleProbeWarmupFrames { get; init; } = 5;
 
     /// <summary>
+    /// 粒子帧时间探针本次采样 run 的外部可审计标识。
+    /// </summary>
+    public string ParticleProbeRunId { get; init; } = "local";
+
+    /// <summary>
     /// 内容根目录。
     /// </summary>
     public string ContentRoot { get; init; } = ResolveDefaultContentRoot(AppContext.BaseDirectory);
@@ -112,6 +117,7 @@ public sealed class DemoStartupOptions
         bool particleFrameProbe = false;
         int particleProbeCount = 100_000;
         int particleProbeWarmupFrames = 5;
+        string particleProbeRunId = "local";
         string contentRoot = ResolveDefaultContentRoot(AppContext.BaseDirectory);
         string scene = Path.Combine("scenes", DefaultSceneName + ".scene");
         string logDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
@@ -195,6 +201,9 @@ public sealed class DemoStartupOptions
 
                         break;
                     }
+                case "--particle-probe-run-id":
+                    particleProbeRunId = ReadValue(args, ref i, "--particle-probe-run-id");
+                    break;
                 case "--log-dir":
                     logDirectory = ReadValue(args, ref i, "--log-dir");
                     break;
@@ -209,7 +218,7 @@ public sealed class DemoStartupOptions
         ValidateWindowTicks(headless, windowTicks);
         ValidateScriptedWindowDemo(headless, windowTicks, scriptedWindowDemo);
         ValidateParticleRenderMode(headless, particleRenderMode);
-        ValidateParticleFrameProbe(headless, windowTicks, particleFrameProbe, particleProbeCount);
+        ValidateParticleFrameProbe(headless, windowTicks, particleFrameProbe, particleProbeCount, particleProbeRunId);
         return new DemoStartupOptions
         {
             EnableEditor = enableEditor,
@@ -223,6 +232,7 @@ public sealed class DemoStartupOptions
             ParticleFrameProbe = particleFrameProbe,
             ParticleProbeCount = particleProbeCount,
             ParticleProbeWarmupFrames = particleProbeWarmupFrames,
+            ParticleProbeRunId = particleProbeRunId,
             ContentRoot = contentRoot,
             Scene = scene,
             LogDirectory = logDirectory,
@@ -251,13 +261,16 @@ public sealed class DemoStartupOptions
             : true;
     }
 
-    private static void ValidateParticleFrameProbe(bool headless, int windowTicks, bool particleFrameProbe, int particleProbeCount)
+    private static void ValidateParticleFrameProbe(bool headless, int windowTicks, bool particleFrameProbe, int particleProbeCount, string particleProbeRunId)
     {
         _ = particleFrameProbe && (headless || windowTicks <= 0)
             ? throw new ArgumentException("--particle-frame-probe 只能与窗口有限短跑 --window-ticks 一起使用。", nameof(particleFrameProbe))
             : true;
         _ = particleProbeCount > EngineConstants.ParticleCapacityDefault
             ? throw new ArgumentOutOfRangeException(nameof(particleProbeCount), particleProbeCount, $"--particle-count 不能超过固定粒子容量 {EngineConstants.ParticleCapacityDefault}。")
+            : true;
+        _ = particleFrameProbe && string.IsNullOrWhiteSpace(particleProbeRunId)
+            ? throw new ArgumentException("--particle-probe-run-id 必须是非空字符串。", nameof(particleProbeRunId))
             : true;
     }
 
