@@ -94,6 +94,25 @@ function Test-NativeLeakLiveCountZero {
     return ""
 }
 
+function Get-RequiredManifestString {
+    param(
+        [object]$Node,
+        [string]$Name,
+        [string]$Prefix
+    )
+
+    if ($null -eq $Node) {
+        return ""
+    }
+
+    $property = $Node.PSObject.Properties | Where-Object { $_.Name -eq $Name } | Select-Object -First 1
+    if ($null -eq $property -or [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+        return ""
+    }
+
+    return [string]$property.Value
+}
+
 function Test-SingleDetectorReport {
     param(
         [string]$Path,
@@ -250,6 +269,24 @@ function Read-EvidenceManifest {
         }
     }
 
+    $manifestDetectorRunId = Get-RequiredManifestString -Node $manifest -Name "detectorRunId" -Prefix "evidence manifest"
+    if ([string]::IsNullOrWhiteSpace($manifestDetectorRunId)) {
+        $items += [pscustomobject]@{
+            InvalidManifest = $true
+            Scope = "manifest"
+            Message = "evidence manifest 缺少 detectorRunId。"
+        }
+    }
+
+    $manifestGitCommit = Get-RequiredManifestString -Node $manifest -Name "gitCommit" -Prefix "evidence manifest"
+    if ([string]::IsNullOrWhiteSpace($manifestGitCommit)) {
+        $items += [pscustomobject]@{
+            InvalidManifest = $true
+            Scope = "manifest"
+            Message = "evidence manifest 缺少 gitCommit。"
+        }
+    }
+
     if ($null -eq $manifest.scopes) {
         $items += [pscustomobject]@{
             MissingScope = $true
@@ -332,9 +369,49 @@ function Read-EvidenceManifest {
             continue
         }
 
+        $scopeDetectorRunId = Get-RequiredManifestString -Node $scopeNode -Name "detectorRunId" -Prefix "scope $scope"
+        if ([string]::IsNullOrWhiteSpace($scopeDetectorRunId)) {
+            $items += [pscustomobject]@{
+                InvalidManifest = $true
+                Scope = $scope
+                Message = "evidence manifest scope $scope 缺少 detectorRunId。"
+            }
+            continue
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($manifestDetectorRunId) -and
+            -not [string]::Equals($scopeDetectorRunId, $manifestDetectorRunId, [StringComparison]::Ordinal)) {
+            $items += [pscustomobject]@{
+                InvalidManifest = $true
+                Scope = $scope
+                Message = "evidence scope $scope detectorRunId 必须与 manifest detectorRunId 一致：expected=$manifestDetectorRunId actual=$scopeDetectorRunId"
+            }
+            continue
+        }
+
+        $scopeGitCommit = Get-RequiredManifestString -Node $scopeNode -Name "gitCommit" -Prefix "scope $scope"
+        if ([string]::IsNullOrWhiteSpace($scopeGitCommit)) {
+            $items += [pscustomobject]@{
+                InvalidManifest = $true
+                Scope = $scope
+                Message = "evidence manifest scope $scope 缺少 gitCommit。"
+            }
+            continue
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($manifestGitCommit) -and
+            -not [string]::Equals($scopeGitCommit, $manifestGitCommit, [StringComparison]::OrdinalIgnoreCase)) {
+            $items += [pscustomobject]@{
+                InvalidManifest = $true
+                Scope = $scope
+                Message = "evidence scope $scope gitCommit 必须与 manifest gitCommit 一致：expected=$manifestGitCommit actual=$scopeGitCommit"
+            }
+            continue
+        }
+
         $reportValues = Read-MarkdownEvidenceTable -Path $reportPath
         $semanticInvalid = $false
-        foreach ($key in @("scope", "detector", "conclusion")) {
+        foreach ($key in @("scope", "detector", "detectorRunId", "gitCommit", "conclusion")) {
             if (-not $reportValues.ContainsKey($key)) {
                 $items += [pscustomobject]@{
                     InvalidManifest = $true
@@ -360,6 +437,24 @@ function Read-EvidenceManifest {
                     InvalidManifest = $true
                     Scope = $scope
                     Message = "evidence report $scope detector 必须为 $detectorName，实际为 $($reportValues["detector"])"
+                }
+                $semanticInvalid = $true
+            }
+
+            if (-not [string]::Equals([string]$reportValues["detectorRunId"], $manifestDetectorRunId, [StringComparison]::Ordinal)) {
+                $items += [pscustomobject]@{
+                    InvalidManifest = $true
+                    Scope = $scope
+                    Message = "evidence report $scope detectorRunId 必须为 $manifestDetectorRunId，实际为 $($reportValues["detectorRunId"])"
+                }
+                $semanticInvalid = $true
+            }
+
+            if (-not [string]::Equals([string]$reportValues["gitCommit"], $manifestGitCommit, [StringComparison]::OrdinalIgnoreCase)) {
+                $items += [pscustomobject]@{
+                    InvalidManifest = $true
+                    Scope = $scope
+                    Message = "evidence report $scope gitCommit 必须为 $manifestGitCommit，实际为 $($reportValues["gitCommit"])"
                 }
                 $semanticInvalid = $true
             }

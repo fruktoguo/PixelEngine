@@ -360,6 +360,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("sha256", script, StringComparison.Ordinal);
         Assert.Contains("Get-FileHash", script, StringComparison.Ordinal);
         Assert.Contains("sha256 不匹配", script, StringComparison.Ordinal);
+        Assert.Contains("detectorRunId", script, StringComparison.Ordinal);
+        Assert.Contains("gitCommit", script, StringComparison.Ordinal);
+        Assert.Contains("必须与 manifest detectorRunId 一致", script, StringComparison.Ordinal);
+        Assert.Contains("必须与 manifest gitCommit 一致", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_detector", script, StringComparison.Ordinal);
         Assert.Contains("blocked_invalid_native_leak_evidence", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_scope_evidence", script, StringComparison.Ordinal);
@@ -431,6 +435,47 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(2, good.ExitCode);
             string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "native-leak-preflight.md"));
             Assert.Contains("detector_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 native leak evidence 不能由不同 detector run 或不同提交的 scope 拼接而成。
+    /// </summary>
+    [Fact]
+    public void NativeLeakPreflightRejectsMixedDetectorRunIds()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-native-leak-mixed-run-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateNativeLeakEvidenceManifest(temp);
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject gl = rootNode["scopes"]!["gl"]!.AsObject();
+            gl["detectorRunId"] = "run-older-gl";
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "mixed-run-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "native-leak-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "native-leak-preflight.md"));
+            Assert.Contains("blocked_invalid_native_leak_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("evidence scope gl detectorRunId 必须与 manifest detectorRunId 一致", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | detector_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
         {
@@ -655,6 +700,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 {
                     ["scope"] = "gl",
                     ["detector"] = "external-detector",
+                    ["detectorRunId"] = "run-20260704-native-001",
+                    ["gitCommit"] = "abcdef123456",
                     ["conclusion"] = "leaks_detected",
                 });
             gl["sha256"] = GetSha256(report);
@@ -705,6 +752,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 {
                     ["scope"] = "gl",
                     ["detector"] = "external-detector",
+                    ["detectorRunId"] = "run-20260704-native-001",
+                    ["gitCommit"] = "abcdef123456",
                     ["conclusion"] = "no_leaks",
                     ["glObjectsLiveAfterShutdown"] = "1",
                 });
@@ -1643,6 +1692,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("blocked_missing_manual_scope_evidence", script, StringComparison.Ordinal);
         Assert.Contains("blocked_invalid_manual_evidence", script, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", script, StringComparison.Ordinal);
+        Assert.Contains("reviewSessionId", script, StringComparison.Ordinal);
+        Assert.Contains("gitCommit", script, StringComparison.Ordinal);
+        Assert.Contains("必须为 $reviewSessionId", script, StringComparison.Ordinal);
+        Assert.Contains("必须为 $gitCommit", script, StringComparison.Ordinal);
         Assert.Contains("[Console]::Error.WriteLine", script, StringComparison.Ordinal);
         Assert.Contains("Demo manual acceptance preflight failed", script, StringComparison.Ordinal);
         Assert.Contains("$exitCode = 2", script, StringComparison.Ordinal);
@@ -1782,6 +1835,56 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(2, good.ExitCode);
             string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "demo-manual-acceptance-preflight.md"));
             Assert.Contains("manual_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 Demo 人工验收 evidence 不能由不同 review session 或不同提交的片段拼接而成。
+    /// </summary>
+    [Fact]
+    public void DemoManualAcceptancePreflightRejectsMixedReviewSessionIds()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-mixed-session-" + Guid.NewGuid().ToString("N"));
+
+        string[] manualScopes =
+        [
+            "controlFeelReport",
+            "materialBrushAndReactionVideo",
+            "rigidBodyGameplayVideo",
+            "particleLightingVideo",
+            "audioListeningReport",
+            "fullRoutePlaythroughVideo",
+            "hudMenuEditorVideo",
+            "hotReloadWindowReport",
+        ];
+
+        try
+        {
+            string manifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "mixed-session", includeDemoManualMetadata: true);
+            SetFlatEvidenceProperty(manifest, "hudMenuEditorVideo", "reviewSessionId", "session-old-ui");
+
+            string artifacts = Path.Combine(temp, "mixed-session-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "demo-manual-acceptance-preflight.md"));
+            Assert.Contains("status: blocked_invalid_manual_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("evidence scope hudMenuEditorVideo reviewSessionId 必须为 session-20260704-demo-001，实际为 session-old-ui", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: manual_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
         {
@@ -4514,6 +4617,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     {
         string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "native-leak-evidence");
         _ = Directory.CreateDirectory(evidenceRoot);
+        const string detectorRunId = "run-20260704-native-001";
+        const string gitCommit = "abcdef123456";
 
         Dictionary<string, object> scopes = [];
         foreach (string scope in new[] { "gl", "openal", "box2d", "alc" })
@@ -4524,6 +4629,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 {
                     ["scope"] = scope,
                     ["detector"] = "external-detector",
+                    ["detectorRunId"] = detectorRunId,
+                    ["gitCommit"] = gitCommit,
                     ["conclusion"] = "no_leaks",
                     [GetNativeLeakScopeRequiredMetric(scope)] = "0",
                 });
@@ -4531,6 +4638,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             scopes[scope] = new Dictionary<string, object>
             {
                 ["detector"] = "external-detector",
+                ["detectorRunId"] = detectorRunId,
+                ["gitCommit"] = gitCommit,
                 ["report"] = report,
                 ["sha256"] = hash,
             };
@@ -4539,6 +4648,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Dictionary<string, object> manifest = new()
         {
             ["schemaVersion"] = 1,
+            ["detectorRunId"] = detectorRunId,
+            ["gitCommit"] = gitCommit,
             ["scopes"] = scopes,
         };
 
@@ -4660,6 +4771,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     {
         string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "flat-evidence");
         _ = Directory.CreateDirectory(evidenceRoot);
+        const string reviewSessionId = "session-20260704-demo-001";
+        const string gitCommit = "abcdef123456";
 
         List<Dictionary<string, object>> evidence = [];
         foreach (string scope in scopes)
@@ -4680,6 +4793,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             if (includeDemoManualMetadata)
             {
                 entry["kind"] = isVideo ? "video" : "report";
+                entry["reviewSessionId"] = reviewSessionId;
+                entry["gitCommit"] = gitCommit;
                 entry["reviewer"] = "test-reviewer";
                 entry["capturedAt"] = "2026-07-03T00:00:00Z";
                 entry["notes"] = $"{scope} notes";
@@ -4703,6 +4818,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             ["schemaVersion"] = 1,
             ["evidence"] = evidence,
         };
+        if (includeDemoManualMetadata)
+        {
+            manifest["reviewSessionId"] = reviewSessionId;
+            manifest["gitCommit"] = gitCommit;
+        }
 
         string manifestPath = Path.Combine(tempRoot, suffix, "flat-evidence.json");
         File.WriteAllText(

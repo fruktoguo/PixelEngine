@@ -795,6 +795,16 @@ function Read-EvidenceManifest {
         throw "Demo manual acceptance manifest schemaVersion 必须为 1。"
     }
 
+    $reviewSessionId = [string](Get-JsonPropertyValue -Object $manifest -Name "reviewSessionId")
+    if ([string]::IsNullOrWhiteSpace($reviewSessionId)) {
+        throw "evidence manifest 缺少 reviewSessionId。"
+    }
+
+    $gitCommit = [string](Get-JsonPropertyValue -Object $manifest -Name "gitCommit")
+    if ([string]::IsNullOrWhiteSpace($gitCommit)) {
+        throw "evidence manifest 缺少 gitCommit。"
+    }
+
     $scopeDefinitions = @(Get-ManualScopes)
     $requiredScopes = @($scopeDefinitions | ForEach-Object { $_.scope })
     $scopeByName = @{}
@@ -846,6 +856,24 @@ function Read-EvidenceManifest {
         }
 
         Assert-ManualEvidenceMetadata -Entry $entry -ScopeDefinition $scopeByName[$scope] -ResolvedPath $path
+
+        $entryReviewSessionId = [string](Get-JsonPropertyValue -Object $entry -Name "reviewSessionId")
+        if ([string]::IsNullOrWhiteSpace($entryReviewSessionId)) {
+            throw "evidence scope $scope 缺少 reviewSessionId。"
+        }
+
+        if (-not [string]::Equals($entryReviewSessionId, $reviewSessionId, [StringComparison]::Ordinal)) {
+            throw "evidence scope $scope reviewSessionId 必须为 $reviewSessionId，实际为 $entryReviewSessionId。"
+        }
+
+        $entryGitCommit = [string](Get-JsonPropertyValue -Object $entry -Name "gitCommit")
+        if ([string]::IsNullOrWhiteSpace($entryGitCommit)) {
+            throw "evidence scope $scope 缺少 gitCommit。"
+        }
+
+        if (-not [string]::Equals($entryGitCommit, $gitCommit, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "evidence scope $scope gitCommit 必须为 $gitCommit，实际为 $entryGitCommit。"
+        }
 
         $hashProperty = $entry.PSObject.Properties | Where-Object { $_.Name -eq "sha256" } | Select-Object -First 1
         $declaredHash = if ($null -eq $hashProperty) { "" } else { [string]$hashProperty.Value }
