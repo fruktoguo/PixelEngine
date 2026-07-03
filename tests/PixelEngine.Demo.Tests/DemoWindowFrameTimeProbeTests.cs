@@ -1,0 +1,87 @@
+using PixelEngine.Core.Diagnostics;
+using Xunit;
+
+namespace PixelEngine.Demo.Tests;
+
+/// <summary>
+/// 真实窗口帧时间探针输出格式测试。
+/// </summary>
+public sealed class DemoWindowFrameTimeProbeTests
+{
+    /// <summary>
+    /// 验证窗口探针排除预热帧并输出性能 HUD 验收需要的分位数与负载字段。
+    /// </summary>
+    [Fact]
+    public void BuildSummaryReportsWarmupExcludedPercentilesAndLoadCounters()
+    {
+        DemoWindowFrameTimeProbe probe = new(2, "static");
+        double[] sub = new double[FrameStats.SubPhaseCount];
+        sub[(int)FrameSubPhase.CaPassA] = 0.1;
+        sub[(int)FrameSubPhase.CaPassB] = 0.2;
+        sub[(int)FrameSubPhase.PhysicsStep] = 0.3;
+        sub[(int)FrameSubPhase.RenderBufferBuild] = 0.4;
+        sub[(int)FrameSubPhase.GpuUpload] = 0.5;
+        sub[(int)FrameSubPhase.Present] = 0.6;
+
+        for (int i = 1; i <= 6; i++)
+        {
+            EngineCounters counters = new()
+            {
+                FrameCpuWorkMilliseconds = i,
+                FrameGpuTimerAvailable = true,
+                FrameGpuWorkMilliseconds = i * 0.5,
+                FramePresentWaitMilliseconds = i * 0.25,
+                EffectiveFrameMilliseconds = i * 0.75,
+                ActiveCells = i * 1000,
+                ActiveChunks = i,
+                FreeParticles = i * 2,
+                RigidBodies = i % 2,
+            };
+            probe.RecordFrame(i, sub, counters);
+        }
+
+        string summary = probe.BuildSummary(gpuTimerAvailable: true, vSyncEnabled: false);
+
+        Assert.Contains("window_frame_probe source=PixelEngineWindowFrameProbe", summary);
+        Assert.Contains("scenario=static", summary);
+        Assert.Contains("warmup_frames=2", summary);
+        Assert.Contains("measured_frames=4", summary);
+        Assert.Contains("wall_avg_ms=4.500", summary);
+        Assert.Contains("wall_p50_ms=4.000", summary);
+        Assert.Contains("wall_p95_ms=6.000", summary);
+        Assert.Contains("wall_p99_ms=6.000", summary);
+        Assert.Contains("cpu_work_avg_ms=4.500", summary);
+        Assert.Contains("gpu_frame_avg_ms=2.250", summary);
+        Assert.Contains("present_wait_avg_ms=1.125", summary);
+        Assert.Contains("active_cells_avg=4500.000", summary);
+        Assert.Contains("active_chunks_avg=4.500", summary);
+        Assert.Contains("free_particles_avg=9.000", summary);
+    }
+
+    /// <summary>
+    /// 验证 GPU timer 不可用时 GPU 分位数字段显式为 0，而不是伪造 GPU 执行时间。
+    /// </summary>
+    [Fact]
+    public void BuildSummaryMarksGpuFrameStatsEmptyWhenTimerUnavailable()
+    {
+        DemoWindowFrameTimeProbe probe = new(0, "scripted_demo");
+        double[] sub = new double[FrameStats.SubPhaseCount];
+        EngineCounters counters = new()
+        {
+            FrameCpuWorkMilliseconds = 3,
+            FrameGpuTimerAvailable = false,
+            FrameGpuWorkMilliseconds = 10,
+            FramePresentWaitMilliseconds = 1,
+            EffectiveFrameMilliseconds = 4,
+        };
+
+        probe.RecordFrame(5, sub, counters);
+
+        string summary = probe.BuildSummary(gpuTimerAvailable: false, vSyncEnabled: true);
+
+        Assert.Contains("gpu_timer_available=False", summary);
+        Assert.Contains("vsync=True", summary);
+        Assert.Contains("gpu_frame_avg_ms=0.000", summary);
+        Assert.Contains("gpu_frame_p99_ms=0.000", summary);
+    }
+}

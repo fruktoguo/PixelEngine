@@ -210,7 +210,7 @@ sim 控制 / 存读档 / 调参 / 模式：
 - [x] 画刷在 Edit 模式可画/挖/擦/加温；写入仅落相位 [1]、标 dirty + KeepAlive；与 CA 多线程相位无竞争、无边界像素消失/复制（#1/#2/#4、§3.4）
 - [x] 世界检视器点选任一 cell 正确显示 material/temperature/Flags 逐位/owned-by-body/坐标/chunk/dirty/sleep（§3.5）
 - [x] 八种调试叠层（dirty rect/chunk+parity/KeepAlive/cell parity/温度热图/owned-by-body/粒子轨迹/CCL）均可独立切换并与世界对齐，能复现并定位边界/parity/刚体往返问题（架构 §17.2、§3.6）
-- [~] 性能 HUD 各相位耗时、计数、内存、sim 频率、降级级别与诊断快照一致；CPU/GPU/present-wait 三分口径、预热剔除滚动百分位、尖刺/稳态标注与负载成本结构已接入，仍需完成真实窗口静态/高活跃场景数百帧稳态验收（架构 §17.1、§3.7）
+- [x] 性能 HUD 各相位耗时、计数、内存、sim 频率、降级级别与诊断快照一致；CPU/GPU/present-wait 三分口径、预热剔除滚动百分位、尖刺/稳态标注与负载成本结构已接入；真实窗口静态/高活跃场景各 720 帧、预热 120 帧、稳态 600 帧样本已记录于 `docs/runtime-reports/2026-07-04-performance-hud-steady-window-samples.md`（架构 §17.1、§3.7）
 - [x] 材质/反应编辑后热重载即时生效；新增材质追加 id、删除材质 id 不被复用、既有 id 不重排（#8、§3.8）
 - [x] 删除被使用中的材质后，live 网格引用 cell 被替换为 fallback，并输出「替换了 N 个活 cell」诊断；不出现 id 错位损坏（#8、架构 §17.4）
 - [x] 改材质纹理/音效仅重载资产，运行时 id 不变（§3.8）

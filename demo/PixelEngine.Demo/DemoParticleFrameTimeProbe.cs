@@ -139,7 +139,7 @@ internal sealed class DemoParticleFrameTimeProbe(
     {
         if (samples.Count == 0)
         {
-            return $"{name}_avg_ms=0.000, {name}_p50_ms=0.000, {name}_p95_ms=0.000, {name}_max_ms=0.000";
+            return $"{name}_avg_ms=0.000, {name}_p50_ms=0.000, {name}_p95_ms=0.000, {name}_p99_ms=0.000, {name}_max_ms=0.000";
         }
 
         double[] sorted = [.. samples];
@@ -154,6 +154,7 @@ internal sealed class DemoParticleFrameTimeProbe(
             $"{name}_avg_ms={sum / sorted.Length:0.000}, " +
             $"{name}_p50_ms={Percentile(sorted, 0.50):0.000}, " +
             $"{name}_p95_ms={Percentile(sorted, 0.95):0.000}, " +
+            $"{name}_p99_ms={Percentile(sorted, 0.99):0.000}, " +
             $"{name}_max_ms={sorted[^1]:0.000}";
     }
 
