@@ -66,6 +66,8 @@ function Get-BmpFrameEvidence {
                 throw "脚本化窗口 probe 截图缺少 BMP 签名：$Path"
             }
 
+            $stream.Seek(10, [System.IO.SeekOrigin]::Begin) | Out-Null
+            $pixelOffset = [int64]$reader.ReadUInt32()
             $stream.Seek(18, [System.IO.SeekOrigin]::Begin) | Out-Null
             $width = $reader.ReadInt32()
             $height = $reader.ReadInt32()
@@ -75,13 +77,72 @@ function Get-BmpFrameEvidence {
                 throw "脚本化窗口 probe 截图 BMP 头无效：width=$width height=$height bitsPerPixel=$bitsPerPixel"
             }
 
+            $compression = $reader.ReadUInt32()
+            if ($compression -ne 0) {
+                throw "脚本化窗口 probe 截图必须是未压缩 BMP：compression=$compression"
+            }
+
+            if ($bitsPerPixel -ne 24 -and $bitsPerPixel -ne 32) {
+                throw "脚本化窗口 probe 截图必须是 24/32bpp BMP，实际为 $bitsPerPixel"
+            }
+
+            $absHeight = [int]([Math]::Abs([int64]$height))
+            $rowStride = [int]([Math]::Floor((($width * $bitsPerPixel) + 31) / 32.0) * 4)
+            $pixelBytes = [int64]$rowStride * [int64]$absHeight
+            if ($pixelOffset -lt 54 -or $pixelOffset + $pixelBytes -gt $fileInfo.Length) {
+                throw "脚本化窗口 probe 截图 BMP 像素数据不完整：offset=$pixelOffset bytes=$pixelBytes file=$($fileInfo.Length)"
+            }
+
+            $uniquePixels = [System.Collections.Generic.HashSet[int]]::new()
+            $visiblePixelCount = 0
+            $hasNonBlankPixel = $false
+            $bytesPerPixel = [int]($bitsPerPixel / 8)
+            $stream.Seek($pixelOffset, [System.IO.SeekOrigin]::Begin) | Out-Null
+            for ($row = 0; $row -lt $absHeight; $row++) {
+                $rowBytes = $reader.ReadBytes($rowStride)
+                if ($rowBytes.Length -ne $rowStride) {
+                    throw "脚本化窗口 probe 截图 BMP 行数据不完整：row=$row"
+                }
+
+                for ($x = 0; $x -lt $width; $x++) {
+                    $index = $x * $bytesPerPixel
+                    $b = [int]$rowBytes[$index]
+                    $g = [int]$rowBytes[$index + 1]
+                    $r = [int]$rowBytes[$index + 2]
+                    $a = if ($bitsPerPixel -eq 32) { [int]$rowBytes[$index + 3] } else { 255 }
+                    if ($a -eq 0) {
+                        continue
+                    }
+
+                    $visiblePixelCount++
+                    $pixel = ($a -shl 24) -bor ($r -shl 16) -bor ($g -shl 8) -bor $b
+                    $uniquePixels.Add($pixel) | Out-Null
+                    if (-not (($r -eq 0 -and $g -eq 0 -and $b -eq 0) -or ($r -eq 255 -and $g -eq 255 -and $b -eq 255))) {
+                        $hasNonBlankPixel = $true
+                    }
+                }
+            }
+
+            if ($visiblePixelCount -eq 0) {
+                throw "脚本化窗口 probe 截图没有可见像素，不能作为窗口画面证据：$Path"
+            }
+
+            if (-not $hasNonBlankPixel) {
+                throw "脚本化窗口 probe 截图只有黑/白空白像素，不能作为窗口画面证据：$Path"
+            }
+
+            if ($uniquePixels.Count -lt 2) {
+                throw "脚本化窗口 probe 截图近似纯色，不能作为窗口画面证据：$Path"
+            }
+
             [pscustomobject]@{
                 path = ConvertTo-RepositoryRelativePath -Root $Root -Path $Path
                 sha256 = Get-FileSha256 -Path $Path
                 bytes = [int64]$fileInfo.Length
                 width = [int]$width
-                height = [int]([Math]::Abs([int64]$height))
+                height = $absHeight
                 bitsPerPixel = [int]$bitsPerPixel
+                uniqueVisiblePixels = [int]$uniquePixels.Count
             }
         }
         finally {
@@ -382,6 +443,7 @@ function Invoke-ScriptedProbe {
         captureWidth = $capture.width
         captureHeight = $capture.height
         captureBitsPerPixel = $capture.bitsPerPixel
+        captureUniqueVisiblePixels = $capture.uniqueVisiblePixels
         required = $RequiredSummaryMarkers
         summary = $summary
     }
@@ -527,6 +589,7 @@ function Write-ManualAcceptanceReport {
             $lines.Add("capture_sha256: $($run.captureSha256)")
             $lines.Add("capture_size: $($run.captureBytes) bytes")
             $lines.Add("capture_dimensions: $($run.captureWidth)x$($run.captureHeight)x$($run.captureBitsPerPixel)")
+            $lines.Add("capture_unique_visible_pixels: $($run.captureUniqueVisiblePixels)")
             $lines.Add("required_markers: $($run.required -join '; ')")
             $lines.Add("")
             $lines.Add('```text')
