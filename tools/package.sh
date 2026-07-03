@@ -152,6 +152,7 @@ content_root="$(cd "$content_root" && pwd)"
 package_name="PixelEngine-Demo-$version-$rid-$channel"
 staging_root="$output_root/staging"
 staging_dir="$staging_root/$package_name"
+package_dir="$output_root/$package_name"
 app_dir="$staging_dir/app"
 content_dir="$staging_dir/content"
 
@@ -183,6 +184,9 @@ PY
   exit 1
 }
 
+find "$output_root" -mindepth 1 -maxdepth 1 \
+  \( -name "PixelEngine-Demo-*-$rid-$channel" -o -name "PixelEngine-Demo-*-$rid-$channel.zip" -o -name "PixelEngine-Demo-*-$rid-$channel.tar.gz" \) \
+  -exec rm -rf -- {} +
 rm -rf "$staging_dir"
 mkdir -p "$app_dir"
 
@@ -262,9 +266,11 @@ done < <(find "$output_root" -maxdepth 1 -type f \( -name 'PixelEngine-Demo-*-r2
 
 mv "$tmp_checksum" "$checksum_path"
 
-rm -rf "$staging_dir"
+rm -rf "$package_dir"
+mv "$staging_dir" "$package_dir"
 rmdir "$staging_root" 2>/dev/null || true
 
 echo "Package completed for $rid/$channel."
 echo "Archive: $archive_path"
+echo "Expanded: $package_dir"
 echo "Checksums: $checksum_path"
