@@ -1042,6 +1042,12 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("--scripted-window-demo", script, StringComparison.Ordinal);
         Assert.Contains("--scripted-window-route", script, StringComparison.Ordinal);
         Assert.Contains("--window-ticks", script, StringComparison.Ordinal);
+        Assert.Contains("--capture-frame", script, StringComparison.Ordinal);
+        Assert.Contains("Get-BmpFrameEvidence", script, StringComparison.Ordinal);
+        Assert.Contains("capture.bmp", script, StringComparison.Ordinal);
+        Assert.Contains("capture_sha256", script, StringComparison.Ordinal);
+        Assert.Contains("capture_dimensions", script, StringComparison.Ordinal);
+        Assert.Contains("captureBitsPerPixel", script, StringComparison.Ordinal);
         Assert.Contains("playable-world", script, StringComparison.Ordinal);
         Assert.Contains("route-attempt", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine.scene", script, StringComparison.Ordinal);
@@ -1099,6 +1105,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("tools/demo-manual-acceptance-preflight.ps1", report, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_manual_evidence", report, StringComparison.Ordinal);
         Assert.Contains("scripted_probe_only", report, StringComparison.Ordinal);
+        Assert.Contains("--capture-frame", report, StringComparison.Ordinal);
+        Assert.Contains("capture.bmp", report, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_manual_scope_evidence", report, StringComparison.Ordinal);
         Assert.Contains("blocked_invalid_manual_evidence", report, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", report, StringComparison.Ordinal);
@@ -1106,9 +1114,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("未知 scope", report, StringComparison.Ordinal);
 
         Assert.Contains("tools/demo-manual-acceptance-preflight.ps1", plan, StringComparison.Ordinal);
+        Assert.Contains("capture.bmp", plan, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", plan, StringComparison.Ordinal);
 
         Assert.Contains("tools/demo-manual-acceptance-preflight.ps1", hostingPlan, StringComparison.Ordinal);
+        Assert.Contains("capture.bmp", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("hudMenuEditorVideo", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("- [x] 过载降级按五级顺序触发", hostingPlan, StringComparison.Ordinal);

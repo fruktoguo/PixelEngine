@@ -47,6 +47,7 @@ worlds/*.world
 *.world.tmp
 logs/
 *.log
+imgui.ini
 
 # ---- OS ----
 Thumbs.db
