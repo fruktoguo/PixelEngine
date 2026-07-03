@@ -292,14 +292,31 @@ function Assert-FrameBudgetEvidence {
     $scope = "frame_budget_target_hardware"
     $fields = Read-MachineReadableFields -Path $Path
     [void](Get-RequiredField -Fields $fields -Name "targetHardware" -Scope $scope)
+    $source = Get-RequiredField -Fields $fields -Name "source" -Scope $scope
+    $scenario = Get-RequiredField -Fields $fields -Name "scenario" -Scope $scope
     $sampleSeconds = Get-RequiredDouble -Fields $fields -Name "sampleSeconds" -Scope $scope
+    $frameSamples = Get-RequiredInt -Fields $fields -Name "frameSamples" -Scope $scope
     $caP99Ms = Get-RequiredDouble -Fields $fields -Name "caP99Ms" -Scope $scope
     $renderP99Ms = Get-RequiredDouble -Fields $fields -Name "renderP99Ms" -Scope $scope
     $physicsP99Ms = Get-RequiredDouble -Fields $fields -Name "physicsP99Ms" -Scope $scope
     $logicAudioP99Ms = Get-RequiredDouble -Fields $fields -Name "logicAudioP99Ms" -Scope $scope
+    Assert-TrueField -Fields $fields -Name "fixedTickNoCatchUp" -Scope $scope
+
+    if (-not [string]::Equals($source, "PixelEngineDiagnostics", [StringComparison]::Ordinal)) {
+        throw "$scope source 必须为 PixelEngineDiagnostics。"
+    }
+
+    $allowedScenarios = @("lava_mine_typical", "streaming_long_march", "full_active_liquid_stress")
+    if ($scenario -notin $allowedScenarios) {
+        throw "$scope scenario 必须为 lava_mine_typical、streaming_long_march 或 full_active_liquid_stress。"
+    }
 
     if ($sampleSeconds -lt 60.0) {
         throw "$scope sampleSeconds 必须至少为 60 秒。"
+    }
+
+    if ($frameSamples -lt 3600) {
+        throw "$scope frameSamples 必须至少为 3600。"
     }
 
     if ($caP99Ms -gt 8.0) {

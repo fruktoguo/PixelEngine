@@ -203,7 +203,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             "cacheMissesPresent",
             "branchMispredictionsPresent",
             "targetHardware",
+            "source",
+            "scenario",
             "sampleSeconds",
+            "frameSamples",
+            "fixedTickNoCatchUp",
             "caP99Ms",
             "renderP99Ms",
             "physicsP99Ms",
@@ -2531,7 +2535,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "frame_budget_target_hardware",
                 """
                 targetHardware: representative-target
+                source: PixelEngineDiagnostics
+                scenario: lava_mine_typical
                 sampleSeconds: 120
+                frameSamples: 7200
+                fixedTickNoCatchUp: true
                 caP99Ms: 8.5
                 renderP99Ms: 3.5
                 physicsP99Ms: 3.5
@@ -2551,6 +2559,54 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
             Assert.Contains("frame_budget_target_hardware caP99Ms 必须 <= 8ms", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_performance_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证目标硬件帧预算 evidence 必须来自引擎诊断长跑，而不是只写 p99 数字摘要。
+    /// </summary>
+    [Fact]
+    public void PerformanceTargetEvidencePreflightRejectsFrameBudgetWithoutDiagnosticsSource()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-frame-budget-source-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreatePerformanceTargetEvidenceManifest(temp);
+            SetFlatEvidenceFileContent(
+                manifest,
+                "frame_budget_target_hardware",
+                """
+                targetHardware: representative-target
+                sampleSeconds: 120
+                caP99Ms: 7.5
+                renderP99Ms: 3.5
+                physicsP99Ms: 3.5
+                logicAudioP99Ms: 0.8
+                """);
+
+            string artifacts = Path.Combine(temp, "frame-budget-source-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("frame_budget_target_hardware 缺少机器可读字段 source", report, StringComparison.Ordinal);
             Assert.DoesNotContain("status: target_performance_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
@@ -4358,7 +4414,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                     """,
                 "frame_budget_target_hardware" => """
                     targetHardware: representative-target
+                    source: PixelEngineDiagnostics
+                    scenario: lava_mine_typical
                     sampleSeconds: 120
+                    frameSamples: 7200
+                    fixedTickNoCatchUp: true
                     caP99Ms: 7.5
                     renderP99Ms: 3.5
                     physicsP99Ms: 3.5
