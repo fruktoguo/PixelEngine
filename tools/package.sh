@@ -171,7 +171,7 @@ content_dir="$staging_dir/content"
 remove_player_package_noise() {
   local directory="$1"
   find "$directory" -type f \
-    \( -name '*.pdb' -o -name '*.xml' -o -name '*.resources.dll' \) \
+    \( -name '*.pdb' -o -name '*.xml' -o -name '*.resources.dll' -o -name 'createdump.exe' -o -name 'createdump' \) \
     -delete
   find "$directory" -depth -type d -empty -delete
 }
@@ -232,7 +232,7 @@ Start the game from this folder:
   Linux/macOS: ./PixelEngine Demo.sh
 
 Runtime dependencies are under app/. Game content is under content/.
-Debug symbols, XML documentation, and localized satellite resource DLLs are stripped from player packages.
+Debug symbols, XML documentation, diagnostic dump helpers, and localized satellite resource DLLs are stripped from player packages.
 EOF
 
 if [[ "$rid" != win-* ]]; then
