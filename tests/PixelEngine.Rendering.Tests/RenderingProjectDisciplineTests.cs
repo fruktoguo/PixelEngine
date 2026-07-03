@@ -106,6 +106,12 @@ public sealed class RenderingProjectDisciplineTests
         Assert.Contains("TrackDeleted(GlResourceKind.Shader", compute, StringComparison.Ordinal);
         Assert.Contains("TrackCreated(GlResourceKind.TimerQuery", compute, StringComparison.Ordinal);
         Assert.Contains("TrackDeleted(GlResourceKind.TimerQuery", compute, StringComparison.Ordinal);
+        Assert.Contains("RenderWindow.Create", detector, StringComparison.Ordinal);
+        Assert.Contains("GlTexture", detector, StringComparison.Ordinal);
+        Assert.Contains("GlBuffer", detector, StringComparison.Ordinal);
+        Assert.Contains("Framebuffer", detector, StringComparison.Ordinal);
+        Assert.Contains("ShaderProgram.Create", detector, StringComparison.Ordinal);
+        Assert.Contains("gl_context_rendering_wrappers", detector, StringComparison.Ordinal);
         Assert.Contains("GlResourceTracker.Snapshot().Total", detector, StringComparison.Ordinal);
     }
 

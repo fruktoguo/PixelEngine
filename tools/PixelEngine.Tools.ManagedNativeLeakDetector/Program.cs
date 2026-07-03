@@ -8,6 +8,7 @@ using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
+using Silk.NET.OpenGL;
 
 namespace PixelEngine.Tools.ManagedNativeLeakDetector;
 
@@ -50,12 +51,87 @@ internal static class Program
 
     private static ScopeResult CollectGl()
     {
+        try
+        {
+            using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+            {
+                Title = "PixelEngine managed native leak GL probe",
+                Width = 64,
+                Height = 64,
+                VSync = false,
+                BackendPreference = RenderBackendPreference.Auto,
+                EnableDebugContext = false,
+            });
+
+            using GlTexture texture = new(window.Gl, 8, 8);
+            using GlBuffer buffer = new(window.Gl, BufferTargetARB.ArrayBuffer);
+            buffer.Allocate(256, BufferUsageARB.DynamicDraw);
+            using PixelEngine.Rendering.Framebuffer framebuffer = new(window.Gl);
+            framebuffer.AttachColorTexture(texture);
+            (string vertexShader, string fragmentShader) = CreateDetectorShaders(window.Capabilities.IsGles);
+            using ShaderProgram program = ShaderProgram.Create(
+                window.Gl,
+                vertexShader,
+                fragmentShader);
+            program.Use();
+            window.Gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            return new ScopeResult(
+                Scope: "gl",
+                MetricName: "glObjectsLiveAfterShutdown",
+                LiveCount: GlResourceTracker.Snapshot().Total,
+                Coverage: "managed_no_gl_context",
+                Detail: "The managed detector attempted to create a RenderWindow GL context and Rendering wrapper resources, but the host rejected the GL probe. This remains a host-boundary report and still requires external driver-level GL leak evidence for plan/18 review. Failure: " + exception.GetType().Name + ": " + exception.Message);
+        }
+
         return new ScopeResult(
             Scope: "gl",
             MetricName: "glObjectsLiveAfterShutdown",
             LiveCount: GlResourceTracker.Snapshot().Total,
-            Coverage: "managed_no_gl_context",
-            Detail: "No OpenGL context is created by this managed detector; it records the in-process GlResourceTracker live count and still requires external driver-level GL leak evidence for plan/18 review.");
+            Coverage: "gl_context_rendering_wrappers",
+            Detail: "Created a real RenderWindow GL context, allocated and disposed Rendering-owned texture, buffer, framebuffer and shader program wrappers, then recorded the in-process GlResourceTracker live count. This strengthens managed coverage but still requires external driver-level GL leak evidence for plan/18 review.");
+    }
+
+    private static (string VertexShader, string FragmentShader) CreateDetectorShaders(bool gles)
+    {
+        return gles
+            ? (
+                """
+                #version 300 es
+                layout(location = 0) in vec2 position;
+                void main()
+                {
+                    gl_Position = vec4(position, 0.0, 1.0);
+                }
+                """,
+                """
+                #version 300 es
+                precision mediump float;
+                out vec4 color;
+                void main()
+                {
+                    color = vec4(1.0, 0.0, 0.0, 1.0);
+                }
+                """)
+            : (
+                """
+                #version 330 core
+                layout(location = 0) in vec2 position;
+                void main()
+                {
+                    gl_Position = vec4(position, 0.0, 1.0);
+                }
+                """,
+                """
+                #version 330 core
+                out vec4 color;
+                void main()
+                {
+                    color = vec4(1.0, 0.0, 0.0, 1.0);
+                }
+                """);
     }
 
     private static ScopeResult CollectOpenAl()
