@@ -179,6 +179,38 @@ function Get-ExpectedRunIdentity {
     }
 }
 
+function Add-WorkflowRunMetadataCheck {
+    param(
+        [System.Collections.Generic.List[string]]$Missing,
+        [hashtable]$Values
+    )
+
+    foreach ($key in @("workflow", "event", "run_attempt")) {
+        if (-not $Values.ContainsKey($key) -or [string]::IsNullOrWhiteSpace([string]$Values[$key])) {
+            $Missing.Add("workflow_run 报告缺少 $key 字段")
+        }
+    }
+
+    if ($Values.ContainsKey("workflow") -and
+        -not [string]::Equals([string]$Values["workflow"], "Release", [StringComparison]::Ordinal)) {
+        $Missing.Add("workflow_run 报告 workflow 必须为 Release，实际为 $($Values["workflow"])")
+    }
+
+    if ($Values.ContainsKey("event")) {
+        $event = [string]$Values["event"]
+        if ($event -notin @("push", "workflow_dispatch")) {
+            $Missing.Add("workflow_run 报告 event 必须为 push 或 workflow_dispatch，实际为 $event")
+        }
+    }
+
+    if ($Values.ContainsKey("run_attempt")) {
+        $runAttempt = 0
+        if (-not [int]::TryParse([string]$Values["run_attempt"], [ref]$runAttempt) -or $runAttempt -lt 1) {
+            $Missing.Add("workflow_run 报告 run_attempt 必须为 >= 1 的整数，实际为 $($Values["run_attempt"])")
+        }
+    }
+}
+
 function Add-RunIdentityCheck {
     param(
         [System.Collections.Generic.List[string]]$Missing,
@@ -689,6 +721,8 @@ $githubReleaseUploadReport = [string]$manifest.githubRelease.uploadReport
 $artifactAuditReport = [string]$manifest.artifactAuditReport
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -DeclaredSha256 ([string]$manifest.workflowRunSha256)
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -ExpectedValues @{ conclusion = "success" }
+$workflowRunValues = Read-MarkdownEvidenceTable -Path (Resolve-EvidencePath -Root $root -Path $workflowRunReport)
+Add-WorkflowRunMetadataCheck -Missing $missing -Values $workflowRunValues
 $expectedRunIdentity = Get-ExpectedRunIdentity -Missing $missing -Root $root -WorkflowRunReport $workflowRunReport
 $releaseVersion = Get-ReleaseTagVersion -Missing $missing -Root $root -WorkflowRunReport $workflowRunReport -UploadReport $githubReleaseUploadReport
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "artifact_audit" -Path $artifactAuditReport -DeclaredSha256 ([string]$manifest.artifactAuditSha256)

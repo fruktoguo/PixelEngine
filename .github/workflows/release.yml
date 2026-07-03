@@ -778,7 +778,10 @@ jobs:
             "",
             "| Key | Value |",
             "|---|---|",
+            "| workflow | Release |",
+            "| event | ${{ github.event_name }} |",
             "| run_id | ${{ github.run_id }} |",
+            "| run_attempt | ${{ github.run_attempt }} |",
             "| sha | ${{ github.sha }} |",
             "| ref | ${{ github.ref }} |",
             "| conclusion | ${{ job.status }} |"
