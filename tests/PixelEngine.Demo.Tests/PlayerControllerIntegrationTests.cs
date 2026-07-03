@@ -380,6 +380,9 @@ public sealed class PlayerControllerIntegrationTests
         engine.RunHeadlessTicks(4);
 
         Assert.Equal(2f, camera.Zoom);
+        CameraSnapshot firstSnapshot = camera.Snapshot();
+        Assert.Equal(MathF.Truncate(firstSnapshot.OriginWorldX), firstSnapshot.OriginWorldX);
+        Assert.Equal(MathF.Truncate(firstSnapshot.OriginWorldY), firstSnapshot.OriginWorldY);
         Assert.InRange(camera.CenterX, player.CenterX - 1f, player.CenterX + 1f);
         Assert.InRange(camera.CenterY, player.CenterY - 1f, player.CenterY + 1f);
         Assert.True(entity.TryGetComponent(out Transform transform));
@@ -394,6 +397,9 @@ public sealed class PlayerControllerIntegrationTests
         engine.RunHeadlessTicks(8);
 
         Assert.True(camera.CenterX > startCameraX, $"相机应随玩家右移，start={startCameraX}, actual={camera.CenterX}");
+        CameraSnapshot movedSnapshot = camera.Snapshot();
+        Assert.Equal(MathF.Truncate(movedSnapshot.OriginWorldX), movedSnapshot.OriginWorldX);
+        Assert.Equal(MathF.Truncate(movedSnapshot.OriginWorldY), movedSnapshot.OriginWorldY);
 
         player.SpawnX = -20f;
         player.SpawnY = -20f;
@@ -405,6 +411,9 @@ public sealed class PlayerControllerIntegrationTests
         float minCenterY = follow.MinY + (camera.Viewport.Height / (2f * camera.Zoom));
         Assert.Equal(minCenterX, camera.CenterX, precision: 3);
         Assert.Equal(minCenterY, camera.CenterY, precision: 3);
+        CameraSnapshot clampedSnapshot = camera.Snapshot();
+        Assert.Equal(0f, clampedSnapshot.OriginWorldX, precision: 3);
+        Assert.Equal(0f, clampedSnapshot.OriginWorldY, precision: 3);
     }
 
     /// <summary>
@@ -432,14 +441,23 @@ public sealed class PlayerControllerIntegrationTests
 
         engine.RunHeadlessTicks(2);
         Assert.Equal(2f, camera.Zoom);
+        CameraSnapshot zoomedSnapshot = camera.Snapshot();
+        Assert.Equal(MathF.Truncate(zoomedSnapshot.OriginWorldX), zoomedSnapshot.OriginWorldX);
+        Assert.Equal(MathF.Truncate(zoomedSnapshot.OriginWorldY), zoomedSnapshot.OriginWorldY);
 
         input.Update([], [], mouseX: 0, mouseY: 0, wheelY: -1f);
         engine.RunHeadlessTicks(1);
         Assert.Equal(1f, camera.Zoom);
+        CameraSnapshot oneToOneSnapshot = camera.Snapshot();
+        Assert.Equal(MathF.Truncate(oneToOneSnapshot.OriginWorldX), oneToOneSnapshot.OriginWorldX);
+        Assert.Equal(MathF.Truncate(oneToOneSnapshot.OriginWorldY), oneToOneSnapshot.OriginWorldY);
 
         input.Update([], [], mouseX: 0, mouseY: 0, wheelY: 1f);
         engine.RunHeadlessTicks(1);
         Assert.Equal(2f, camera.Zoom);
+        CameraSnapshot zoomedAgainSnapshot = camera.Snapshot();
+        Assert.Equal(MathF.Truncate(zoomedAgainSnapshot.OriginWorldX), zoomedAgainSnapshot.OriginWorldX);
+        Assert.Equal(MathF.Truncate(zoomedAgainSnapshot.OriginWorldY), zoomedAgainSnapshot.OriginWorldY);
     }
 
     /// <summary>
@@ -466,6 +484,9 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Contains(
             Enumerable.Range(0, overlay.CommandCount).Select(overlay.GetCommand),
             command => command.Primitive == ScriptOverlayPrimitive.SolidRectangle && command.ColorBgra == 0xFF_F2_D0_5E);
+        ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
+        Assert.True(lighting.FogOfWar.RevealAlpha(0, 0) > 0);
+        Assert.True(lighting.FogOfWar.RevealAlpha(39, 19) > 0);
         Assert.Equal(0, engine.Context.GetService<ParticleSystem>().ActiveCount);
     }
 
@@ -699,8 +720,11 @@ public sealed class PlayerControllerIntegrationTests
         projectile.Range = 96f;
         projectile.ImpactRadius = 4;
         projectile.MinCollapsePixels = 4;
+        projectile.MaxCollapsePixels = 2_048;
         projectile.CollapseScanRadius = 28;
         projectile.FallbackOverhangRadius = 20;
+        projectile.AllowOverhangFallbackCollapse = true;
+        projectile.AllowImpactFallbackCollapse = true;
 
         engine.RunHeadlessTicks(2);
         input.Update([], [MouseButton.Left], mouseX: 52f, mouseY: 34f, wheelY: 0f);
@@ -713,6 +737,42 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Contains("converted", projectile.CollapseStatus, StringComparison.Ordinal);
         Assert.True(projectile.CollapsedFloatingIslands >= 1, $"应转换弹坑上沿悬空块，status={projectile.CollapseStatus}");
         Assert.True(physics.Stats.ActiveBodyCount >= 1);
+    }
+
+    /// <summary>
+    /// 验证默认破坏弹不会把仍连接主地形的受支撑大块误转成刚体，避免玩家脚下碰撞被整体清空。
+    /// </summary>
+    [Fact]
+    public void PlayableProjectileDoesNotConvertSupportedTerrainSlabByDefault()
+    {
+        RecordingAudioApi audio = new();
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        FillRect(grid, stone, minX: 22, minY: 20, maxX: 82, maxY: 50);
+
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 28f;
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.CooldownSeconds = 0f;
+        projectile.Range = 96f;
+        projectile.ImpactRadius = 4;
+        projectile.CollapseScanRadius = 28;
+
+        engine.RunHeadlessTicks(2);
+        input.Update([], [MouseButton.Left], mouseX: 48f, mouseY: 34f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        input.Update([], [], mouseX: 48f, mouseY: 34f, wheelY: 0f);
+        engine.RunHeadlessTicks(10);
+
+        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        Assert.Equal(1, projectile.ShotsFired);
+        Assert.Equal(0, projectile.CollapsedFloatingIslands);
+        Assert.Equal(0, physics.Stats.ActiveBodyCount);
+        Assert.DoesNotContain("converted", projectile.CollapseStatus, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -797,9 +857,13 @@ public sealed class PlayerControllerIntegrationTests
         PlayableProjectileTool projectile = FindBehaviour<PlayableProjectileTool>(engine);
         Assert.Equal(9, projectile.ImpactRadius);
         Assert.Equal(18f, projectile.ImpactForce);
-        Assert.Equal(260, projectile.CollapseScanRadius);
-        Assert.Equal(88, projectile.FallbackOverhangRadius);
-        Assert.Equal(224, projectile.MaxCollapseRegionSize);
+        Assert.Equal(112, projectile.CollapseScanRadius);
+        Assert.Equal(32, projectile.FallbackOverhangRadius);
+        Assert.Equal(64, projectile.MaxCollapseRegionSize);
+        Assert.Equal(384, projectile.MaxCollapsePixels);
+        Assert.Equal(1, projectile.MaxCollapsedIslandsPerShot);
+        Assert.False(projectile.AllowOverhangFallbackCollapse);
+        Assert.False(projectile.AllowImpactFallbackCollapse);
     }
 
     /// <summary>

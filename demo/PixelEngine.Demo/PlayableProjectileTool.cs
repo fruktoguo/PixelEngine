@@ -67,6 +67,11 @@ public sealed class PlayableProjectileTool : Behaviour
     public float TracerRemainingSeconds { get; private set; }
 
     /// <summary>
+    /// 弹道 overlay 显示时长，单位秒。保持很短，避免射击失败时被误读成卡住的实体。
+    /// </summary>
+    public float TracerDurationSeconds { get; set; } = 0.04f;
+
+    /// <summary>
     /// 爆破后局部扫描半径，用于把脱离主地形的小型固体岛转换为刚体。
     /// </summary>
     public int CollapseScanRadius { get; set; } = 260;
@@ -74,7 +79,12 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <summary>
     /// 可自动转换的最大连通块包围盒尺寸，避免误把整片程序化地形转成刚体。
     /// </summary>
-    public int MaxCollapseRegionSize { get; set; } = 224;
+    public int MaxCollapseRegionSize { get; set; } = 64;
+
+    /// <summary>
+    /// 可自动转换的最大固体像素数，避免把玩家脚下主地形整体提升成刚体导致碰撞丢失。
+    /// </summary>
+    public int MaxCollapsePixels { get; set; } = 384;
 
     /// <summary>
     /// 可自动转换的最小固体像素数。
@@ -84,12 +94,22 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <summary>
     /// 单次爆破最多转换的悬空固体岛数量，避免一枪把整片程序化山体误拆成过多刚体。
     /// </summary>
-    public int MaxCollapsedIslandsPerShot { get; set; } = 10;
+    public int MaxCollapsedIslandsPerShot { get; set; } = 1;
 
     /// <summary>
     /// 常规连通块扫描失败时，围绕弹坑把局部悬空边缘提升为刚体的最大半径。
     /// </summary>
-    public int FallbackOverhangRadius { get; set; } = 88;
+    public int FallbackOverhangRadius { get; set; } = 32;
+
+    /// <summary>
+    /// 是否启用局部悬挑兜底刚体化。默认关闭，避免把仍连接主地形的弹坑边缘误拆掉。
+    /// </summary>
+    public bool AllowOverhangFallbackCollapse { get; set; }
+
+    /// <summary>
+    /// 是否启用弹坑兜底刚体化。默认关闭，避免可玩 Demo 把仍受支撑的地形 slab 误转为刚体。
+    /// </summary>
+    public bool AllowImpactFallbackCollapse { get; set; }
 
     /// <summary>
     /// 已由破坏弹转换成刚体的悬空固体岛数量。
@@ -186,7 +206,7 @@ public sealed class PlayableProjectileTool : Behaviour
         LastShotStartY = startY;
         LastHitX = hitX;
         LastHitY = hitY;
-        TracerRemainingSeconds = 0.10f;
+        TracerRemainingSeconds = Math.Clamp(TracerDurationSeconds, 0f, 0.25f);
         ShotsFired++;
         QueueCollapseScan(hitX, hitY);
         _cooldownRemaining = MathF.Max(0f, CooldownSeconds);
@@ -294,17 +314,17 @@ public sealed class PlayableProjectileTool : Behaviour
             }
         }
 
-        if (converted < Math.Max(1, maxConversions))
+        if (converted < Math.Max(1, maxConversions) && AllowOverhangFallbackCollapse)
         {
             converted += ConvertUnsupportedOverhangNear(centerX, centerY, Math.Max(1, maxConversions) - converted);
         }
 
-        if (converted == 0)
+        if (converted == 0 && AllowImpactFallbackCollapse)
         {
             converted += ConvertImpactFractureChunk(centerX, centerY);
         }
 
-        if (converted == 0)
+        if (converted == 0 && AllowImpactFallbackCollapse)
         {
             converted += ConvertLocalImpactSlab(centerX, centerY);
         }
@@ -398,7 +418,7 @@ public sealed class PlayableProjectileTool : Behaviour
             return false;
         }
 
-        if ((borderContact & ComponentBorderContact.Bottom) != 0)
+        if ((borderContact & (ComponentBorderContact.Left | ComponentBorderContact.Right | ComponentBorderContact.Bottom)) != 0)
         {
             rejection = $"scan_border_{borderContact}";
             return false;
@@ -408,6 +428,12 @@ public sealed class PlayableProjectileTool : Behaviour
         if (maxX - minX + 1 > maxSize || maxY - minY + 1 > maxSize)
         {
             rejection = "too_large";
+            return false;
+        }
+
+        if (cellCount > Math.Max(Math.Max(1, MinCollapsePixels), MaxCollapsePixels))
+        {
+            rejection = "too_many_pixels";
             return false;
         }
 
@@ -498,6 +524,12 @@ public sealed class PlayableProjectileTool : Behaviour
                     continue;
                 }
 
+                if (solidCount > Math.Max(Math.Max(1, MinCollapsePixels), MaxCollapsePixels))
+                {
+                    LastCollapseSkipReason = "fallback_too_many_pixels";
+                    continue;
+                }
+
                 if (!TryCreateBodyFromSolidBounds(worldX0, worldY0, width, height, "fallback_degenerate"))
                 {
                     continue;
@@ -575,6 +607,12 @@ public sealed class PlayableProjectileTool : Behaviour
         if (solidCount < Math.Max(MinCollapsePixels, ImpactRadius * 2))
         {
             LastCollapseSkipReason = "impact_slab_too_few_pixels";
+            return 0;
+        }
+
+        if (solidCount > Math.Max(Math.Max(1, MinCollapsePixels), MaxCollapsePixels))
+        {
+            LastCollapseSkipReason = "impact_slab_too_many_pixels";
             return 0;
         }
 
@@ -769,6 +807,12 @@ public sealed class PlayableProjectileTool : Behaviour
             return false;
         }
 
+        if (solidCount > Math.Max(Math.Max(1, MinCollapsePixels), MaxCollapsePixels))
+        {
+            LastCollapseSkipReason = "too_many_pixels";
+            return false;
+        }
+
         int tightWidth = maxX - minX + 1;
         int tightHeight = maxY - minY + 1;
         if (tightWidth > MaxCollapseRegionSize || tightHeight > MaxCollapseRegionSize ||
@@ -834,6 +878,7 @@ public sealed class PlayableProjectileTool : Behaviour
         int tightWidth = maxX - minX + 1;
         int tightHeight = maxY - minY + 1;
         if (count < Math.Max(1, MinCollapsePixels) ||
+            count > Math.Max(Math.Max(1, MinCollapsePixels), MaxCollapsePixels) ||
             tightWidth > MaxCollapseRegionSize ||
             tightHeight > MaxCollapseRegionSize ||
             !HasSolidBlock2x2(minX, minY, tightWidth, tightHeight))
@@ -911,7 +956,7 @@ public sealed class PlayableProjectileTool : Behaviour
     private bool IsSolid(int x, int y)
     {
         CellView cell = Context.Cells.Sample(x, y);
-        bool solid = cell.Material.Value != 0 && !CellFlags.Has(cell.Flags, CellFlags.RigidOwned);
+        bool solid = Context.Cells.IsSolid(x, y) && !CellFlags.Has(cell.Flags, CellFlags.RigidOwned);
         if (solid)
         {
             LastCollapseSolidCandidates++;
