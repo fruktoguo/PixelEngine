@@ -39,6 +39,94 @@ function Get-FileSha256 {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
+function Read-MachineReadableFields {
+    param([string]$Path)
+
+    $fields = @{}
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        $trimmed = $line.Trim()
+        if ([string]::IsNullOrWhiteSpace($trimmed)) {
+            continue
+        }
+
+        if ($trimmed -match '^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|?$') {
+            $key = $Matches[1].Trim()
+            $value = $Matches[2].Trim()
+            if ($key -notin @("Key", "---", "metric", "scope") -and -not $key.StartsWith("---", [StringComparison]::Ordinal)) {
+                $fields[$key] = $value
+            }
+
+            continue
+        }
+
+        if ($trimmed -match '^([A-Za-z][A-Za-z0-9_.-]*)\s*[:=]\s*(.+?)\s*$') {
+            $fields[$Matches[1].Trim()] = $Matches[2].Trim()
+        }
+    }
+
+    return $fields
+}
+
+function Get-RequiredField {
+    param(
+        [System.Collections.IDictionary]$Fields,
+        [string]$Name,
+        [string]$Scope
+    )
+
+    if (-not $Fields.Contains($Name) -or [string]::IsNullOrWhiteSpace([string]$Fields[$Name])) {
+        throw "$Scope 缺少机器可读字段 $Name"
+    }
+
+    return [string]$Fields[$Name]
+}
+
+function Get-RequiredBool {
+    param(
+        [System.Collections.IDictionary]$Fields,
+        [string]$Name,
+        [string]$Scope
+    )
+
+    $value = Get-RequiredField -Fields $Fields -Name $Name -Scope $Scope
+    $parsed = $false
+    if ([bool]::TryParse($value, [ref]$parsed)) {
+        return [bool]::Parse($value)
+    }
+
+    if ($value -in @("1", "yes", "present")) {
+        return $true
+    }
+
+    if ($value -in @("0", "no", "missing")) {
+        return $false
+    }
+
+    throw "$Scope $Name 必须为 true/false。"
+}
+
+function Get-RequiredDouble {
+    param(
+        [System.Collections.IDictionary]$Fields,
+        [string]$Name,
+        [string]$Scope
+    )
+
+    $value = Get-RequiredField -Fields $Fields -Name $Name -Scope $Scope
+    return [double]::Parse($value, [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Get-RequiredInt {
+    param(
+        [System.Collections.IDictionary]$Fields,
+        [string]$Name,
+        [string]$Scope
+    )
+
+    $value = Get-RequiredField -Fields $Fields -Name $Name -Scope $Scope
+    return [int]::Parse($value, [Globalization.CultureInfo]::InvariantCulture)
+}
+
 function Get-JsonPropertyNames {
     param([object]$Node)
     if ($null -eq $Node) {
@@ -153,6 +241,114 @@ function Add-ScopedEvidence {
         path = ConvertTo-RepositoryRelativePath -Root $Root -Path $resolved
         sha256 = $actualHash
     })
+
+    return $resolved
+}
+
+function Assert-TrueField {
+    param(
+        [System.Collections.IDictionary]$Fields,
+        [string]$Name,
+        [string]$Scope
+    )
+
+    if (-not (Get-RequiredBool -Fields $Fields -Name $Name -Scope $Scope)) {
+        throw "$Scope $Name 必须为 true。"
+    }
+}
+
+function Assert-Avx512Evidence {
+    param([string]$Path)
+
+    $scope = "avx512_downclock_net_loss"
+    $fields = Read-MachineReadableFields -Path $Path
+    [void](Get-RequiredField -Fields $fields -Name "targetCpuName" -Scope $scope)
+    [void](Get-RequiredField -Fields $fields -Name "dotnetVersion" -Scope $scope)
+    Assert-TrueField -Fields $fields -Name "benchmarkDotNet" -Scope $scope
+    Assert-TrueField -Fields $fields -Name "vector512HardwareAccelerated" -Scope $scope
+    Assert-TrueField -Fields $fields -Name "avx512Enabled" -Scope $scope
+    Assert-TrueField -Fields $fields -Name "noNetDownclockLoss" -Scope $scope
+}
+
+function Assert-HardwareCounterEvidence {
+    param([string]$Path)
+
+    $scope = "hardware_counters_cache_branch"
+    $fields = Read-MachineReadableFields -Path $Path
+    Assert-TrueField -Fields $fields -Name "benchmarkDotNet" -Scope $scope
+    Assert-TrueField -Fields $fields -Name "elevatedEtwKernelSession" -Scope $scope
+    Assert-TrueField -Fields $fields -Name "cacheMissesPresent" -Scope $scope
+    Assert-TrueField -Fields $fields -Name "branchMispredictionsPresent" -Scope $scope
+
+    $content = Get-Content -LiteralPath $Path -Raw
+    if ($content -notmatch 'Cache Misses' -or $content -notmatch 'Branch Mispredictions') {
+        throw "$scope 必须包含 Cache Misses 与 Branch Mispredictions 列名。"
+    }
+}
+
+function Assert-FrameBudgetEvidence {
+    param([string]$Path)
+
+    $scope = "frame_budget_target_hardware"
+    $fields = Read-MachineReadableFields -Path $Path
+    [void](Get-RequiredField -Fields $fields -Name "targetHardware" -Scope $scope)
+    $sampleSeconds = Get-RequiredDouble -Fields $fields -Name "sampleSeconds" -Scope $scope
+    $caP99Ms = Get-RequiredDouble -Fields $fields -Name "caP99Ms" -Scope $scope
+    $renderP99Ms = Get-RequiredDouble -Fields $fields -Name "renderP99Ms" -Scope $scope
+    $physicsP99Ms = Get-RequiredDouble -Fields $fields -Name "physicsP99Ms" -Scope $scope
+    $logicAudioP99Ms = Get-RequiredDouble -Fields $fields -Name "logicAudioP99Ms" -Scope $scope
+
+    if ($sampleSeconds -lt 60.0) {
+        throw "$scope sampleSeconds 必须至少为 60 秒。"
+    }
+
+    if ($caP99Ms -gt 8.0) {
+        throw "$scope caP99Ms 必须 <= 8ms。"
+    }
+
+    if ($renderP99Ms -gt 4.0) {
+        throw "$scope renderP99Ms 必须 <= 4ms。"
+    }
+
+    if ($physicsP99Ms -gt 4.0) {
+        throw "$scope physicsP99Ms 必须 <= 4ms。"
+    }
+
+    if ($logicAudioP99Ms -gt 1.0) {
+        throw "$scope logicAudioP99Ms 必须 <= 1ms。"
+    }
+}
+
+function Assert-CellsFrameEvidence {
+    param(
+        [string]$Path,
+        [string]$Rid
+    )
+
+    $scope = "cells_frame/$Rid"
+    $fields = Read-MachineReadableFields -Path $Path
+    $reportedRid = Get-RequiredField -Fields $fields -Name "rid" -Scope $scope
+    if (-not [string]::Equals($reportedRid, $Rid, [StringComparison]::Ordinal)) {
+        throw "$scope rid 必须为 $Rid，实际为 $reportedRid。"
+    }
+
+    Assert-TrueField -Fields $fields -Name "benchmarkDotNet" -Scope $scope
+    Assert-TrueField -Fields $fields -Name "representativeHardware" -Scope $scope
+    $activeCellsPerFrame = Get-RequiredInt -Fields $fields -Name "activeCellsPerFrame" -Scope $scope
+    $caFrameMs = Get-RequiredDouble -Fields $fields -Name "caFrameMs" -Scope $scope
+    $measuredIterations = Get-RequiredInt -Fields $fields -Name "measuredIterations" -Scope $scope
+
+    if ($activeCellsPerFrame -lt 2000000) {
+        throw "$scope activeCellsPerFrame 必须至少为 2000000。"
+    }
+
+    if ($caFrameMs -gt 8.0) {
+        throw "$scope caFrameMs 必须 <= 8ms。"
+    }
+
+    if ($measuredIterations -lt 3) {
+        throw "$scope measuredIterations 必须至少为 3。"
+    }
 }
 
 $root = Resolve-RepositoryRoot
@@ -213,6 +409,7 @@ if ($entries.Count -eq 0) {
 }
 
 $entriesByScope = @{}
+$resolvedEvidencePaths = @{}
 $requiredEvidenceScopes = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 $requiredEvidenceScopes.Add("avx512_downclock_net_loss") | Out-Null
 $requiredEvidenceScopes.Add("hardware_counters_cache_branch") | Out-Null
@@ -249,9 +446,12 @@ foreach ($rid in $knownRidNodes) {
     }
 }
 
-Add-ScopedEvidence -Evidence $evidence -Missing $missing -Root $root -EntriesByScope $entriesByScope -Scope "avx512_downclock_net_loss"
-Add-ScopedEvidence -Evidence $evidence -Missing $missing -Root $root -EntriesByScope $entriesByScope -Scope "hardware_counters_cache_branch"
-Add-ScopedEvidence -Evidence $evidence -Missing $missing -Root $root -EntriesByScope $entriesByScope -Scope "frame_budget_target_hardware"
+$resolved = Add-ScopedEvidence -Evidence $evidence -Missing $missing -Root $root -EntriesByScope $entriesByScope -Scope "avx512_downclock_net_loss"
+if (-not [string]::IsNullOrWhiteSpace($resolved)) { $resolvedEvidencePaths["avx512_downclock_net_loss"] = $resolved }
+$resolved = Add-ScopedEvidence -Evidence $evidence -Missing $missing -Root $root -EntriesByScope $entriesByScope -Scope "hardware_counters_cache_branch"
+if (-not [string]::IsNullOrWhiteSpace($resolved)) { $resolvedEvidencePaths["hardware_counters_cache_branch"] = $resolved }
+$resolved = Add-ScopedEvidence -Evidence $evidence -Missing $missing -Root $root -EntriesByScope $entriesByScope -Scope "frame_budget_target_hardware"
+if (-not [string]::IsNullOrWhiteSpace($resolved)) { $resolvedEvidencePaths["frame_budget_target_hardware"] = $resolved }
 
 foreach ($rid in $rids) {
     $ridNode = Get-JsonPropertyValue -Node $cellsFrame -Name $rid
@@ -262,7 +462,23 @@ foreach ($rid in $rids) {
         $missing.Add("cellsFrame.$rid 必须标记 benchmarkDotNet=true")
     }
 
-    Add-ScopedEvidence -Evidence $evidence -Missing $missing -Root $root -EntriesByScope $entriesByScope -Scope "cells_frame/$rid"
+    $scope = "cells_frame/$rid"
+    $resolved = Add-ScopedEvidence -Evidence $evidence -Missing $missing -Root $root -EntriesByScope $entriesByScope -Scope $scope
+    if (-not [string]::IsNullOrWhiteSpace($resolved)) { $resolvedEvidencePaths[$scope] = $resolved }
+}
+
+if ($missing.Count -eq 0) {
+    try {
+        Assert-Avx512Evidence -Path $resolvedEvidencePaths["avx512_downclock_net_loss"]
+        Assert-HardwareCounterEvidence -Path $resolvedEvidencePaths["hardware_counters_cache_branch"]
+        Assert-FrameBudgetEvidence -Path $resolvedEvidencePaths["frame_budget_target_hardware"]
+        foreach ($rid in $rids) {
+            Assert-CellsFrameEvidence -Path $resolvedEvidencePaths["cells_frame/$rid"] -Rid $rid
+        }
+    }
+    catch {
+        $missing.Add("目标性能 evidence 语义无效：$($_.Exception.Message)")
+    }
 }
 
 if ($missing.Count -gt 0) {
