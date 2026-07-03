@@ -32,7 +32,7 @@ manifest 使用 `schemaVersion: 1`。`evidence[]` 每项必须包含 `scope`、`
 
 - `avx512_downclock_net_loss` 必须包含 `targetCpuName`、`dotnetVersion`，且 `benchmarkDotNet=true`、`vector512HardwareAccelerated=true`、`avx512Enabled=true`、`noNetDownclockLoss=true`。
 - `hardware_counters_cache_branch` 必须包含 `benchmarkDotNet=true`、`elevatedEtwKernelSession=true`、`cacheMissesPresent=true`、`branchMispredictionsPresent=true`，并且报告文本包含 `Cache Misses` 与 `Branch Mispredictions` 列名。
-- `frame_budget_target_hardware` 必须包含 `targetHardware`、`sampleSeconds>=60`、`caP99Ms<=8`、`renderP99Ms<=4`、`physicsP99Ms<=4`、`logicAudioP99Ms<=1`。
+- `frame_budget_target_hardware` 必须包含 `targetHardware`、`source=PixelEngineDiagnostics`、`scenario`（`lava_mine_typical` / `streaming_long_march` / `full_active_liquid_stress`）、`sampleSeconds>=60`、`frameSamples>=3600`、`fixedTickNoCatchUp=true`、`caP99Ms<=8`、`renderP99Ms<=4`、`physicsP99Ms<=4`、`logicAudioP99Ms<=1`。
 - 每个 `cells_frame/<rid>` 必须包含 `rid=<rid>`、`benchmarkDotNet=true`、`representativeHardware=true`、`activeCellsPerFrame>=2000000`、`caFrameMs<=8`、`measuredIterations>=3`、`iterationCount>=measuredIterations`，且报告正文必须包含 `BenchmarkDotNet v`、`CellThroughputBenchmark.StepJobSystem` 与 `FullActiveLiquid`，不能只附手写 key-value 摘要。
 
 最小示例：
@@ -90,7 +90,11 @@ branchMispredictionsPresent: true
 
 ```md
 targetHardware: representative-target
+source: PixelEngineDiagnostics
+scenario: lava_mine_typical
 sampleSeconds: 120
+frameSamples: 7200
+fixedTickNoCatchUp: true
 caP99Ms: 7.5
 renderP99Ms: 3.5
 physicsP99Ms: 3.5
