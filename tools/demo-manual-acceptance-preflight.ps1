@@ -42,6 +42,51 @@ function Get-FileSha256 {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
+function Assert-VideoContainerHeader {
+    param(
+        [string]$Path,
+        [string]$Extension,
+        [string]$Scope
+    )
+
+    $file = Get-Item -LiteralPath $Path
+    if ($file.Length -lt 8) {
+        throw "evidence scope $Scope video 文件太小，缺少可识别容器头：$Path"
+    }
+
+    $readLength = [int][Math]::Min(16L, $file.Length)
+    $buffer = [byte[]]::new($readLength)
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $bytesRead = $stream.Read($buffer, 0, $buffer.Length)
+    }
+    finally {
+        $stream.Dispose()
+    }
+
+    if ($Extension -in @(".mp4", ".mov")) {
+        if ($bytesRead -lt 8 -or
+            $buffer[4] -ne [byte][char]'f' -or
+            $buffer[5] -ne [byte][char]'t' -or
+            $buffer[6] -ne [byte][char]'y' -or
+            $buffer[7] -ne [byte][char]'p') {
+            throw "evidence scope $Scope video 文件头必须包含 MP4/MOV ftyp box，不能用文本或随机字节改名冒充视频：$Path"
+        }
+
+        return
+    }
+
+    if ($Extension -in @(".mkv", ".webm")) {
+        if ($bytesRead -lt 4 -or
+            $buffer[0] -ne 0x1A -or
+            $buffer[1] -ne 0x45 -or
+            $buffer[2] -ne 0xDF -or
+            $buffer[3] -ne 0xA3) {
+            throw "evidence scope $Scope video 文件头必须包含 WebM/MKV EBML magic，不能用文本或随机字节改名冒充视频：$Path"
+        }
+    }
+}
+
 function Get-BmpFrameEvidence {
     param(
         [string]$Root,
@@ -353,6 +398,8 @@ function Assert-ManualEvidenceMetadata {
         if ($extension -notin $allowedVideo) {
             throw "evidence scope $scope 是 video，文件扩展名必须为 $($allowedVideo -join ', ')。"
         }
+
+        Assert-VideoContainerHeader -Path $ResolvedPath -Extension $extension -Scope $scope
 
         $duration = Get-JsonPropertyValue -Object $Entry -Name "durationSeconds"
         if ($null -eq $duration) {
