@@ -93,11 +93,6 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
                 _keys[keyCount++] = Key.Space;
             }
         }
-        else if (frame == 70)
-        {
-            _keys[keyCount++] = Key.Escape;
-        }
-
         Point2F screen = _camera.WorldToScreen(target.X, target.Y);
         _input.Update(
             _keys.AsSpan(0, keyCount),
