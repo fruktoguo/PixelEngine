@@ -140,6 +140,12 @@ public sealed class RenderBufferBuilder(
         for (int sy = start; sy < end; sy++)
         {
             int row = sy * target.Width;
+            if (sy > start && sy % pixelsPerCell != 0)
+            {
+                CopyPreviousZoomRow(target, aux, row);
+                continue;
+            }
+
             int worldY = originY + (sy / pixelsPerCell);
             for (int sx = 0; sx < target.Width;)
             {
@@ -175,6 +181,14 @@ public sealed class RenderBufferBuilder(
                 sx += repeat;
             }
         }
+    }
+
+    private static void CopyPreviousZoomRow(RenderBuffer target, RenderAuxBuffers aux, int row)
+    {
+        int previous = row - target.Width;
+        target.Pixels.Slice(previous, target.Width).CopyTo(target.Pixels.Slice(row, target.Width));
+        aux.Emissive.Slice(previous, target.Width).CopyTo(aux.Emissive.Slice(row, target.Width));
+        aux.Occluder.Slice(previous, target.Width).CopyTo(aux.Occluder.Slice(row, target.Width));
     }
 
     private void BuildRowsPaletteFast(RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux, int start, int end)
