@@ -156,6 +156,14 @@ package_dir="$output_root/$package_name"
 app_dir="$staging_dir/app"
 content_dir="$staging_dir/content"
 
+remove_player_package_noise() {
+  local directory="$1"
+  find "$directory" -type f \
+    \( -name '*.pdb' -o -name '*.xml' -o -name '*.resources.dll' \) \
+    -delete
+  find "$directory" -depth -type d -empty -delete
+}
+
 patch_apphost_relative_assembly() {
   local apphost="$1"
   local relative_assembly="$2"
@@ -191,6 +199,7 @@ rm -rf "$staging_dir"
 mkdir -p "$app_dir"
 
 cp -a "$publish_dir"/. "$app_dir"/
+remove_player_package_noise "$app_dir"
 rm -rf "$app_dir/content" "$content_dir"
 cp -a "$content_root" "$content_dir"
 
@@ -211,6 +220,7 @@ Start the game from this folder:
   Linux/macOS: ./PixelEngine Demo.sh
 
 Runtime dependencies are under app/. Game content is under content/.
+Debug symbols, XML documentation, and localized satellite resource DLLs are stripped from player packages.
 EOF
 
 if [[ "$rid" != win-* ]]; then

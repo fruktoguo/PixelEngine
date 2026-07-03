@@ -167,6 +167,13 @@ function Test-DisallowedRuntimeRootFile([string]$relativePath) {
     $name -match '\.runtimeconfig\.json$'
 }
 
+function Test-DisallowedPlayerPackageFile([string]$relativePath) {
+  $name = [IO.Path]::GetFileName($relativePath)
+  return $name.EndsWith('.pdb', [StringComparison]::OrdinalIgnoreCase) -or
+    $name.EndsWith('.xml', [StringComparison]::OrdinalIgnoreCase) -or
+    $name.EndsWith('.resources.dll', [StringComparison]::OrdinalIgnoreCase)
+}
+
 function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
   if ($package.Name -notmatch '^PixelEngine-Demo-.+-(?<rid>win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64)-(?<channel>r2r|aot)\.(zip|tar\.gz)$') {
     throw "package 文件名不符合发行命名: $($package.Name)"
@@ -225,6 +232,12 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
   foreach ($required in $requiredEntries) {
     if (-not $relativeEntries.Contains($required)) {
       throw "package 缺少玩家友好布局入口、app 依赖或 content 内容: $($package.Name) -> $required"
+    }
+  }
+
+  foreach ($relative in $relativeFileEntries) {
+    if (Test-DisallowedPlayerPackageFile $relative) {
+      throw "package 不应包含玩家无关的调试、文档或本地化卫星资源文件: $($package.Name) -> $relative"
     }
   }
 
@@ -321,6 +334,12 @@ function Assert-FriendlyExpandedPackageLayout([System.IO.DirectoryInfo]$packageD
   foreach ($required in $requiredEntries) {
     if (-not $relativeEntries.Contains($required)) {
       throw "展开 package 缺少玩家友好布局入口、app 依赖或 content 内容: $($packageDirectory.Name) -> $required"
+    }
+  }
+
+  foreach ($relative in $relativeFileEntries) {
+    if (Test-DisallowedPlayerPackageFile $relative) {
+      throw "展开 package 不应包含玩家无关的调试、文档或本地化卫星资源文件: $($packageDirectory.Name) -> $relative"
     }
   }
 

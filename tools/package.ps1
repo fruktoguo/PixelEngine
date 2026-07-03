@@ -52,6 +52,22 @@ $packageDir = Join-Path $OutputRoot $packageName
 $appDir = Join-Path $stagingDir 'app'
 $stagedContent = Join-Path $stagingDir 'content'
 
+function Remove-PlayerPackageNoise([string]$Directory) {
+  Get-ChildItem -LiteralPath $Directory -Recurse -File -Force -ErrorAction SilentlyContinue |
+    Where-Object {
+      $_.Extension -in @('.pdb', '.xml') -or
+      $_.Name.EndsWith('.resources.dll', [StringComparison]::OrdinalIgnoreCase)
+    } |
+    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
+
+  Get-ChildItem -LiteralPath $Directory -Recurse -Directory -Force -ErrorAction SilentlyContinue |
+    Sort-Object FullName -Descending |
+    Where-Object {
+      -not (Get-ChildItem -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue | Select-Object -First 1)
+    } |
+    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
+}
+
 function Set-AppHostRelativeAssemblyPath([string]$AppHostPath, [string]$RelativeAssemblyPath) {
   $bytes = [IO.File]::ReadAllBytes($AppHostPath)
   $old = [Text.Encoding]::UTF8.GetBytes('PixelEngine.Demo.dll')
@@ -105,6 +121,7 @@ Get-ChildItem -LiteralPath $PublishDir -Force | ForEach-Object {
 
   Copy-Item -LiteralPath $_.FullName -Destination $appDir -Recurse -Force
 }
+Remove-PlayerPackageNoise $appDir
 Remove-Item -LiteralPath $stagedContent -Recurse -Force -ErrorAction SilentlyContinue
 Copy-Item -LiteralPath $ContentRoot -Destination $stagedContent -Recurse -Force
 
@@ -127,6 +144,7 @@ Start the game from this folder:
   Linux/macOS: ./PixelEngine Demo.sh
 
 Runtime dependencies are under app/. Game content is under content/.
+Debug symbols, XML documentation, and localized satellite resource DLLs are stripped from player packages.
 "@
 Set-Content -LiteralPath (Join-Path $stagingDir 'README.txt') -Value $readme -Encoding ASCII
 
