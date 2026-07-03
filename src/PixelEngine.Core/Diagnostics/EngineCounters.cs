@@ -133,6 +133,16 @@ public sealed class EngineCounters
     public long AudioActiveVoices { get; set; }
 
     /// <summary>
+    /// 获取或设置最近一次窗口运行时真实渲染帧率；0 表示尚未收到墙钟帧间隔。
+    /// </summary>
+    public double RenderFramesPerSecond { get; set; }
+
+    /// <summary>
+    /// 获取或设置最近一次窗口运行时真实渲染帧耗时，单位毫秒；0 表示尚未收到墙钟帧间隔。
+    /// </summary>
+    public double RenderFrameMilliseconds { get; set; }
+
+    /// <summary>
     /// 获取或设置活跃 ambient loop voice 数。
     /// </summary>
     public long AudioActiveAmbientVoices { get; set; }

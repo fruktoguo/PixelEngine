@@ -580,6 +580,44 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证打掉连续石块的下半部后，弹坑上沿局部悬空块会被提升为刚体，而不是继续静态浮空。
+    /// </summary>
+    [Fact]
+    public void PlayableProjectileConvertsImpactFracturedShelfIntoRigidBody()
+    {
+        RecordingAudioApi audio = new();
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        FillRect(grid, stone, minX: 38, minY: 18, maxX: 70, maxY: 42);
+
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 16f;
+        player.SpawnY = 26f;
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.CooldownSeconds = 0f;
+        projectile.Range = 96f;
+        projectile.ImpactRadius = 4;
+        projectile.MinCollapsePixels = 4;
+        projectile.CollapseScanRadius = 28;
+        projectile.FallbackOverhangRadius = 20;
+
+        engine.RunHeadlessTicks(2);
+        input.Update([], [MouseButton.Left], mouseX: 52f, mouseY: 34f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        input.Update([], [], mouseX: 52f, mouseY: 34f, wheelY: 0f);
+        engine.RunHeadlessTicks(10);
+
+        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        Assert.Equal(1, projectile.ShotsFired);
+        Assert.Contains("converted", projectile.CollapseStatus, StringComparison.Ordinal);
+        Assert.True(projectile.CollapsedFloatingIslands >= 1, $"应转换弹坑上沿悬空块，status={projectile.CollapseStatus}");
+        Assert.True(physics.Stats.ActiveBodyCount >= 1);
+    }
+
+    /// <summary>
     /// 验证一次射击转换首个悬空块后仍会分帧继续扫描，避免较大的残留碎块长时间静态浮空。
     /// </summary>
     [Fact]
@@ -646,6 +684,24 @@ public sealed class PlayerControllerIntegrationTests
         DebugOverlaySettings settings = engine.Context.GetService<DebugOverlaySettings>();
         Assert.Equal(default, settings.Enabled);
         Assert.All(overlays, overlay => Assert.False(diagnostics.IsOverlayEnabled(overlay)));
+    }
+
+    /// <summary>
+    /// 验证真实可玩场景使用受控爆破与更宽的悬空块扫描配置，避免满屏高速碎点和弹坑残块长时间浮空。
+    /// </summary>
+    [Fact]
+    public void PlayableWorldDirectorConfiguresProjectileForReadablePlayableDemo()
+    {
+        using Engine engine = CreateScriptEngine(typeof(PlayableWorldDirector), out _, out _, out _);
+
+        engine.RunHeadlessTicks(3);
+
+        PlayableProjectileTool projectile = FindBehaviour<PlayableProjectileTool>(engine);
+        Assert.Equal(9, projectile.ImpactRadius);
+        Assert.Equal(18f, projectile.ImpactForce);
+        Assert.Equal(260, projectile.CollapseScanRadius);
+        Assert.Equal(88, projectile.FallbackOverhangRadius);
+        Assert.Equal(224, projectile.MaxCollapseRegionSize);
     }
 
     /// <summary>

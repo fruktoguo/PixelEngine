@@ -204,6 +204,7 @@ public static class DemoProgram
         if (options.WindowTicks > 0)
         {
             Stopwatch stopwatch = Stopwatch.StartNew();
+            double previousSeconds = stopwatch.Elapsed.TotalSeconds;
             int executed = 0;
             for (; executed < options.WindowTicks &&
                 engine.State != EngineRunState.Shutdown &&
@@ -211,7 +212,9 @@ public static class DemoProgram
                 !window.IsClosing; executed++)
             {
                 long tickStart = Stopwatch.GetTimestamp();
-                _ = engine.RunOneTick();
+                double now = stopwatch.Elapsed.TotalSeconds;
+                _ = engine.RunOneTick(now - previousSeconds);
+                previousSeconds = now;
                 double tickMs = (Stopwatch.GetTimestamp() - tickStart) * 1000.0 / Stopwatch.Frequency;
                 particleFrameProbe?.RecordFrame(tickMs, engine.Context.Profiler.LastSubFrame);
             }

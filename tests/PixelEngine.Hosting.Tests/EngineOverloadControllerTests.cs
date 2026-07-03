@@ -281,7 +281,7 @@ public sealed class EngineOverloadControllerTests
         EngineDiagnosticsSnapshot snapshot = api.Capture();
 
         Assert.Equal(engine.Context.Clock.FrameIndex, snapshot.FrameCount);
-        Assert.True(snapshot.FramesPerSecond > 0f);
+        Assert.Equal(50f, snapshot.FramesPerSecond, precision: 2);
         Assert.Equal(60f, snapshot.SimHz);
         Assert.Equal(3, snapshot.ActiveChunks);
         Assert.Equal(5, snapshot.ResidentChunks);
