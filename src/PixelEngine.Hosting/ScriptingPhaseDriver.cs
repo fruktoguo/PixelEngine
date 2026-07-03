@@ -33,12 +33,23 @@ public sealed class ScriptingPhaseDriver(IScriptRuntime runtime, IScriptContext 
     private void RunScripts(EngineTickContext context)
     {
         Runtime.BeginFrame();
-        Runtime.Update((float)(context.Timing.Dt * context.Context.Clock.TimeScale));
+        Runtime.Update((float)ResolveUpdateDeltaSeconds(context));
         if (context.Timing.RunSim)
         {
             Runtime.FixedSimTick();
         }
 
         Runtime.EndFrame();
+    }
+
+    private static double ResolveUpdateDeltaSeconds(EngineTickContext context)
+    {
+        double timeScale = context.Context.Clock.TimeScale;
+        double dt = context.Timing.RealDeltaSeconds > 0
+            ? context.Timing.RealDeltaSeconds * timeScale
+            : context.Timing.Dt * timeScale;
+        return !double.IsFinite(dt) || dt <= 0
+            ? 0
+            : Math.Min(dt, context.Timing.Dt);
     }
 }

@@ -588,7 +588,13 @@ public interface IDiagnosticsApi
 /// 脚本 HUD 可消费的引擎诊断快照。
 /// </summary>
 /// <param name="FrameCount">当前渲染帧序号。</param>
-/// <param name="FramesPerSecond">最近一次窗口真实帧间隔估算的 render FPS；无墙钟样本时回退为当前固定步长帧率。</param>
+/// <param name="FramesPerSecond">长窗口平均 render FPS；无墙钟样本时回退为当前固定步长帧率。</param>
+/// <param name="FrameMilliseconds">长窗口平均渲染帧耗时，单位毫秒。</param>
+/// <param name="FrameLastMilliseconds">最近一帧渲染耗时，单位毫秒。</param>
+/// <param name="FrameP99Milliseconds">长窗口 99 分位渲染帧耗时，单位毫秒。</param>
+/// <param name="FrameLow1PercentFps">基于 99 分位帧耗时计算的 1% low FPS。</param>
+/// <param name="FrameJitterMilliseconds">长窗口渲染帧耗时标准差，单位毫秒。</param>
+/// <param name="FrameSampleCount">渲染帧率统计窗口内的样本数。</param>
 /// <param name="SimHz">当前 sim 频率。</param>
 /// <param name="ActiveChunks">活跃 chunk 数。</param>
 /// <param name="ResidentChunks">常驻 chunk 数。</param>
@@ -597,6 +603,12 @@ public interface IDiagnosticsApi
 public readonly record struct EngineDiagnosticsSnapshot(
     long FrameCount,
     float FramesPerSecond,
+    float FrameMilliseconds,
+    float FrameLastMilliseconds,
+    float FrameP99Milliseconds,
+    float FrameLow1PercentFps,
+    float FrameJitterMilliseconds,
+    int FrameSampleCount,
     float SimHz,
     long ActiveChunks,
     long ResidentChunks,
