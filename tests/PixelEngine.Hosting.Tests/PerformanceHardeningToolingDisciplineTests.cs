@@ -196,6 +196,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         [
             "targetCpuName",
             "dotnetVersion",
+            "benchmarkRunId",
+            "gitCommit",
             "vector512HardwareAccelerated",
             "avx512Enabled",
             "noNetDownclockLoss",
@@ -2767,6 +2769,60 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证目标性能 evidence 不能拼接不同 benchmark run 的报告。
+    /// </summary>
+    [Fact]
+    public void PerformanceTargetEvidencePreflightRejectsMixedBenchmarkRunIds()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-run-id-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreatePerformanceTargetEvidenceManifest(temp);
+            SetFlatEvidenceFileContent(
+                manifest,
+                "frame_budget_target_hardware",
+                """
+                benchmarkRunId: run-old-frame-budget
+                gitCommit: abcdef123456
+                targetHardware: representative-target
+                source: PixelEngineDiagnostics
+                scenario: lava_mine_typical
+                sampleSeconds: 120
+                frameSamples: 7200
+                fixedTickNoCatchUp: true
+                caP99Ms: 7.5
+                renderP99Ms: 3.5
+                physicsP99Ms: 3.5
+                logicAudioP99Ms: 0.8
+                """);
+
+            string artifacts = Path.Combine(temp, "run-id-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("frame_budget_target_hardware benchmarkRunId 必须与 manifest benchmarkRunId 一致", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_performance_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证目标性能证据预检会拒绝未声明 BenchmarkDotNet 实测的 RID cells/frame 节点。
     /// </summary>
     [Fact]
@@ -5039,6 +5095,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     private static string CreatePerformanceTargetEvidenceManifest(string tempRoot, bool includeUnknownScope = false, string suffix = "good")
     {
         string[] rids = ["win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64"];
+        const string BenchmarkRunId = "run-20260704-performance-001";
+        const string GitCommit = "abcdef123456";
         string[] scopes =
         [
             "avx512_downclock_net_loss",
@@ -5057,6 +5115,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string content = scope switch
             {
                 "avx512_downclock_net_loss" => """
+                    benchmarkRunId: run-20260704-performance-001
+                    gitCommit: abcdef123456
                     targetCpuName: Test AVX512 CPU
                     dotnetVersion: 10.0.8
                     benchmarkDotNet: true
@@ -5065,6 +5125,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                     noNetDownclockLoss: true
                     """,
                 "hardware_counters_cache_branch" => """
+                    benchmarkRunId: run-20260704-performance-001
+                    gitCommit: abcdef123456
                     benchmarkDotNet: true
                     elevatedEtwKernelSession: true
                     cacheMissesPresent: true
@@ -5075,6 +5137,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                     | Reaction | 100 | 12 |
                     """,
                 "frame_budget_target_hardware" => """
+                    benchmarkRunId: run-20260704-performance-001
+                    gitCommit: abcdef123456
                     targetHardware: representative-target
                     source: PixelEngineDiagnostics
                     scenario: lava_mine_typical
@@ -5090,6 +5154,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                     // BenchmarkDotNet v0.15.8
                     // Benchmark: PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem
                     // Scenario: FullActiveLiquid
+                    benchmarkRunId: run-20260704-performance-001
+                    gitCommit: abcdef123456
                     rid: {scope["cells_frame/".Length..]}
                     benchmarkDotNet: true
                     representativeHardware: true
@@ -5132,6 +5198,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Dictionary<string, object> manifest = new()
         {
             ["schemaVersion"] = 1,
+            ["benchmarkRunId"] = BenchmarkRunId,
+            ["gitCommit"] = GitCommit,
             ["evidence"] = evidence,
             ["cellsFrame"] = cellsFrame,
         };

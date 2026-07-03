@@ -154,6 +154,20 @@ function Get-JsonPropertyValue {
     return $property.Value
 }
 
+function Get-RequiredManifestString {
+    param(
+        [object]$Node,
+        [string]$Name
+    )
+
+    $value = [string](Get-JsonPropertyValue -Node $Node -Name $Name)
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        throw "Performance target evidence manifest 缺少 $Name。"
+    }
+
+    return $value.Trim()
+}
+
 function Write-PerformanceEvidenceReport {
     param(
         [string]$Path,
@@ -257,8 +271,31 @@ function Assert-TrueField {
     }
 }
 
+function Assert-EvidenceRunIdentity {
+    param(
+        [System.Collections.IDictionary]$Fields,
+        [string]$Scope,
+        [string]$BenchmarkRunId,
+        [string]$GitCommit
+    )
+
+    $actualRunId = Get-RequiredField -Fields $Fields -Name "benchmarkRunId" -Scope $Scope
+    if (-not [string]::Equals($actualRunId, $BenchmarkRunId, [StringComparison]::Ordinal)) {
+        throw "$Scope benchmarkRunId 必须与 manifest benchmarkRunId 一致：expected=$BenchmarkRunId actual=$actualRunId"
+    }
+
+    $actualGitCommit = Get-RequiredField -Fields $Fields -Name "gitCommit" -Scope $Scope
+    if (-not [string]::Equals($actualGitCommit, $GitCommit, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "$Scope gitCommit 必须与 manifest gitCommit 一致：expected=$GitCommit actual=$actualGitCommit"
+    }
+}
+
 function Assert-Avx512Evidence {
-    param([string]$Path)
+    param(
+        [string]$Path,
+        [string]$BenchmarkRunId,
+        [string]$GitCommit
+    )
 
     $scope = "avx512_downclock_net_loss"
     $fields = Read-MachineReadableFields -Path $Path
@@ -268,10 +305,15 @@ function Assert-Avx512Evidence {
     Assert-TrueField -Fields $fields -Name "vector512HardwareAccelerated" -Scope $scope
     Assert-TrueField -Fields $fields -Name "avx512Enabled" -Scope $scope
     Assert-TrueField -Fields $fields -Name "noNetDownclockLoss" -Scope $scope
+    Assert-EvidenceRunIdentity -Fields $fields -Scope $scope -BenchmarkRunId $BenchmarkRunId -GitCommit $GitCommit
 }
 
 function Assert-HardwareCounterEvidence {
-    param([string]$Path)
+    param(
+        [string]$Path,
+        [string]$BenchmarkRunId,
+        [string]$GitCommit
+    )
 
     $scope = "hardware_counters_cache_branch"
     $fields = Read-MachineReadableFields -Path $Path
@@ -284,10 +326,16 @@ function Assert-HardwareCounterEvidence {
     if ($content -notmatch 'Cache Misses' -or $content -notmatch 'Branch Mispredictions') {
         throw "$scope 必须包含 Cache Misses 与 Branch Mispredictions 列名。"
     }
+
+    Assert-EvidenceRunIdentity -Fields $fields -Scope $scope -BenchmarkRunId $BenchmarkRunId -GitCommit $GitCommit
 }
 
 function Assert-FrameBudgetEvidence {
-    param([string]$Path)
+    param(
+        [string]$Path,
+        [string]$BenchmarkRunId,
+        [string]$GitCommit
+    )
 
     $scope = "frame_budget_target_hardware"
     $fields = Read-MachineReadableFields -Path $Path
@@ -334,12 +382,16 @@ function Assert-FrameBudgetEvidence {
     if ($logicAudioP99Ms -gt 1.0) {
         throw "$scope logicAudioP99Ms 必须 <= 1ms。"
     }
+
+    Assert-EvidenceRunIdentity -Fields $fields -Scope $scope -BenchmarkRunId $BenchmarkRunId -GitCommit $GitCommit
 }
 
 function Assert-CellsFrameEvidence {
     param(
         [string]$Path,
-        [string]$Rid
+        [string]$Rid,
+        [string]$BenchmarkRunId,
+        [string]$GitCommit
     )
 
     $scope = "cells_frame/$Rid"
@@ -388,6 +440,8 @@ function Assert-CellsFrameEvidence {
     if ($content -notmatch 'FullActiveLiquid') {
         throw "$scope 必须包含 FullActiveLiquid cells/frame 场景。"
     }
+
+    Assert-EvidenceRunIdentity -Fields $fields -Scope $scope -BenchmarkRunId $BenchmarkRunId -GitCommit $GitCommit
 }
 
 $root = Resolve-RepositoryRoot
@@ -428,6 +482,9 @@ try {
     if ((Get-JsonPropertyValue -Node $manifest -Name "schemaVersion") -ne 1) {
         throw "Performance target evidence manifest schemaVersion 必须为 1。"
     }
+
+    $manifestBenchmarkRunId = Get-RequiredManifestString -Node $manifest -Name "benchmarkRunId"
+    $manifestGitCommit = Get-RequiredManifestString -Node $manifest -Name "gitCommit"
 }
 catch {
     $detail = "Target performance evidence preflight failed: evidence manifest JSON 或 schema 无效。不得据此勾选 plan/16 的目标硬件阻塞项。"
@@ -508,11 +565,11 @@ foreach ($rid in $rids) {
 
 if ($missing.Count -eq 0) {
     try {
-        Assert-Avx512Evidence -Path $resolvedEvidencePaths["avx512_downclock_net_loss"]
-        Assert-HardwareCounterEvidence -Path $resolvedEvidencePaths["hardware_counters_cache_branch"]
-        Assert-FrameBudgetEvidence -Path $resolvedEvidencePaths["frame_budget_target_hardware"]
+        Assert-Avx512Evidence -Path $resolvedEvidencePaths["avx512_downclock_net_loss"] -BenchmarkRunId $manifestBenchmarkRunId -GitCommit $manifestGitCommit
+        Assert-HardwareCounterEvidence -Path $resolvedEvidencePaths["hardware_counters_cache_branch"] -BenchmarkRunId $manifestBenchmarkRunId -GitCommit $manifestGitCommit
+        Assert-FrameBudgetEvidence -Path $resolvedEvidencePaths["frame_budget_target_hardware"] -BenchmarkRunId $manifestBenchmarkRunId -GitCommit $manifestGitCommit
         foreach ($rid in $rids) {
-            Assert-CellsFrameEvidence -Path $resolvedEvidencePaths["cells_frame/$rid"] -Rid $rid
+            Assert-CellsFrameEvidence -Path $resolvedEvidencePaths["cells_frame/$rid"] -Rid $rid -BenchmarkRunId $manifestBenchmarkRunId -GitCommit $manifestGitCommit
         }
     }
     catch {

@@ -20,15 +20,15 @@
 
 ## 状态语义
 
-`blocked_missing_target_performance_manifest` 表示缺少目标性能 evidence manifest。`blocked_invalid_target_performance_evidence` 表示 manifest JSON 无法解析或 `schemaVersion` 不为 1。`blocked_missing_target_performance_scope_evidence` 表示 manifest 存在且 schema 有效，但缺少必要 scope、文件不存在、SHA256 不匹配、6 RID cells/frame 没有逐 RID 标记 `benchmarkDotNet=true`，或 evidence 报告缺少/未满足必要机器可读字段与 BenchmarkDotNet 报告特征。`target_performance_evidence_attached_pending_review` 表示所有必需证据文件都存在、hash 匹配且机器可读字段满足最低阈值，但仍需人工确认原始报告、硬件环境、采样过程与统计结论确实证明 plan/16 阻塞项。
+`blocked_missing_target_performance_manifest` 表示缺少目标性能 evidence manifest。`blocked_invalid_target_performance_evidence` 表示 manifest JSON 无法解析、`schemaVersion` 不为 1，或缺少顶层 `benchmarkRunId/gitCommit` 同源字段。`blocked_missing_target_performance_scope_evidence` 表示 manifest 存在且 schema 有效，但缺少必要 scope、文件不存在、SHA256 不匹配、6 RID cells/frame 没有逐 RID 标记 `benchmarkDotNet=true`，或 evidence 报告缺少/未满足必要机器可读字段、BenchmarkDotNet 报告特征与 `benchmarkRunId/gitCommit` 同源约束。`target_performance_evidence_attached_pending_review` 表示所有必需证据文件都存在、hash 匹配且机器可读字段满足最低阈值，但仍需人工确认原始报告、硬件环境、采样过程与统计结论确实证明 plan/16 阻塞项。
 
 ## Manifest 结构
 
-manifest 使用 `schemaVersion: 1`。`evidence[]` 每项必须包含 `scope`、`path`、`sha256`，脚本会重新计算文件 SHA256 并比对。允许且必需的 scope 为 `avx512_downclock_net_loss`、`hardware_counters_cache_branch`、`frame_budget_target_hardware`，以及 `cells_frame/win-x64`、`cells_frame/win-arm64`、`cells_frame/linux-x64`、`cells_frame/linux-arm64`、`cells_frame/osx-x64`、`cells_frame/osx-arm64`；未知 scope 会被拒绝。`cellsFrame` 对象必须覆盖同样六个 RID，且每个 RID 都必须标记 `benchmarkDotNet: true`。
+manifest 使用 `schemaVersion: 1`，顶层必须包含同一次目标性能采样的 `benchmarkRunId` 与 `gitCommit`。`evidence[]` 每项必须包含 `scope`、`path`、`sha256`，脚本会重新计算文件 SHA256 并比对。允许且必需的 scope 为 `avx512_downclock_net_loss`、`hardware_counters_cache_branch`、`frame_budget_target_hardware`，以及 `cells_frame/win-x64`、`cells_frame/win-arm64`、`cells_frame/linux-x64`、`cells_frame/linux-arm64`、`cells_frame/osx-x64`、`cells_frame/osx-arm64`；未知 scope 会被拒绝。`cellsFrame` 对象必须覆盖同样六个 RID，且每个 RID 都必须标记 `benchmarkDotNet: true`。
 
 ## Evidence 报告机器可读字段
 
-每个 evidence 文件可以使用 `key: value`、`key=value` 或 Markdown 表格 `| Key | Value |` 形式写入字段。预检只做最低语义门禁，不替代人工复核原始 BenchmarkDotNet、ETW、帧时间图或硬件环境。
+每个 evidence 文件可以使用 `key: value`、`key=value` 或 Markdown 表格 `| Key | Value |` 形式写入字段。每个文件都必须声明与 manifest 顶层完全一致的 `benchmarkRunId` 与 `gitCommit`，避免把不同目标硬件 run 或不同提交的报告拼成一份伪证据。预检只做最低语义门禁，不替代人工复核原始 BenchmarkDotNet、ETW、帧时间图或硬件环境。
 
 - `avx512_downclock_net_loss` 必须包含 `targetCpuName`、`dotnetVersion`，且 `benchmarkDotNet=true`、`vector512HardwareAccelerated=true`、`avx512Enabled=true`、`noNetDownclockLoss=true`。
 - `hardware_counters_cache_branch` 必须包含 `benchmarkDotNet=true`、`elevatedEtwKernelSession=true`、`cacheMissesPresent=true`、`branchMispredictionsPresent=true`，并且报告文本包含 `Cache Misses` 与 `Branch Mispredictions` 列名。
@@ -40,6 +40,8 @@ manifest 使用 `schemaVersion: 1`。`evidence[]` 每项必须包含 `scope`、`
 ```json
 {
   "schemaVersion": 1,
+  "benchmarkRunId": "run-20260704-performance-001",
+  "gitCommit": "abcdef123456",
   "cellsFrame": {
     "win-x64": { "benchmarkDotNet": true },
     "win-arm64": { "benchmarkDotNet": true },
@@ -66,6 +68,8 @@ manifest 使用 `schemaVersion: 1`。`evidence[]` 每项必须包含 `scope`、`
 
 ```md
 targetCpuName: Example AVX-512 CPU
+benchmarkRunId: run-20260704-performance-001
+gitCommit: abcdef123456
 dotnetVersion: 10.0.8
 benchmarkDotNet: true
 vector512HardwareAccelerated: true
@@ -77,6 +81,8 @@ noNetDownclockLoss: true
 
 ```md
 benchmarkDotNet: true
+benchmarkRunId: run-20260704-performance-001
+gitCommit: abcdef123456
 elevatedEtwKernelSession: true
 cacheMissesPresent: true
 branchMispredictionsPresent: true
@@ -90,6 +96,8 @@ branchMispredictionsPresent: true
 
 ```md
 targetHardware: representative-target
+benchmarkRunId: run-20260704-performance-001
+gitCommit: abcdef123456
 source: PixelEngineDiagnostics
 scenario: lava_mine_typical
 sampleSeconds: 120
@@ -105,6 +113,8 @@ logicAudioP99Ms: 0.8
 
 ```md
 rid: linux-x64
+benchmarkRunId: run-20260704-performance-001
+gitCommit: abcdef123456
 benchmarkDotNet: true
 representativeHardware: true
 activeCellsPerFrame: 2500000
