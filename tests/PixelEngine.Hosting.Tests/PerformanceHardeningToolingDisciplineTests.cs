@@ -400,6 +400,124 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 managed native leak detector 已进入 solution，并明确 GL 只提供托管覆盖边界说明。
+    /// </summary>
+    [Fact]
+    public void ManagedNativeLeakDetectorIsSolutionTrackedAndDocumentsManagedCoverage()
+    {
+        string solution = ReadRepositoryFile("PixelEngine.sln");
+        string project = ReadRepositoryFile("tools", "PixelEngine.Tools.ManagedNativeLeakDetector", "PixelEngine.Tools.ManagedNativeLeakDetector.csproj");
+        string program = ReadRepositoryFile("tools", "PixelEngine.Tools.ManagedNativeLeakDetector", "Program.cs");
+        string report = ReadRepositoryFile("docs", "runtime-reports", "2026-07-02-demo-window-longrun.md");
+        string plan = ReadRepositoryFile("plan", "18-hosting-runtime.md");
+
+        Assert.Contains("tools\\PixelEngine.Tools.ManagedNativeLeakDetector\\PixelEngine.Tools.ManagedNativeLeakDetector.csproj", solution, StringComparison.Ordinal);
+        Assert.Contains("PixelEngine.Audio.csproj", project, StringComparison.Ordinal);
+        Assert.Contains("PixelEngine.Interop.csproj", project, StringComparison.Ordinal);
+        Assert.Contains("PixelEngine.Physics.csproj", project, StringComparison.Ordinal);
+        Assert.Contains("PixelEngine.Scripting.csproj", project, StringComparison.Ordinal);
+        Assert.Contains("managed-native-leak-detector", program, StringComparison.Ordinal);
+        Assert.Contains("managedProbe", program, StringComparison.Ordinal);
+        Assert.Contains("managed_no_gl_context", program, StringComparison.Ordinal);
+        Assert.Contains("external driver-level GL leak evidence is still required", program, StringComparison.Ordinal);
+        Assert.Contains("glObjectsLiveAfterShutdown", program, StringComparison.Ordinal);
+        Assert.Contains("openAlObjectsLiveAfterShutdown", program, StringComparison.Ordinal);
+        Assert.Contains("box2DBodiesLiveAfterShutdown", program, StringComparison.Ordinal);
+        Assert.Contains("alcLoadContextsAliveAfterUnload", program, StringComparison.Ordinal);
+        Assert.Contains("OpenAlDevice.TryInitialize", program, StringComparison.Ordinal);
+        Assert.Contains("PhysicsSystem.Initialize", program, StringComparison.Ordinal);
+        Assert.Contains("ScriptHotReloadController", program, StringComparison.Ordinal);
+        Assert.Contains("evidence.json", program, StringComparison.Ordinal);
+
+        Assert.Contains("tools/PixelEngine.Tools.ManagedNativeLeakDetector", report, StringComparison.Ordinal);
+        Assert.Contains("managed_no_gl_context", report, StringComparison.Ordinal);
+        Assert.Contains("tools/PixelEngine.Tools.ManagedNativeLeakDetector", plan, StringComparison.Ordinal);
+        Assert.Contains("managed_no_gl_context", plan, StringComparison.Ordinal);
+        Assert.Contains("GL driver 级", plan, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 managed native leak detector 真实输出四类 report/manifest，且可被 native-leak-preflight 进入待审状态。
+    /// </summary>
+    [Fact]
+    public void ManagedNativeLeakDetectorWritesManifestAcceptedByNativeLeakPreflight()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-managed-native-leak-detector-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string output = Path.Combine(temp, "detector");
+            ScriptResult detector = RunDotNet(
+                root,
+                "run",
+                "--project",
+                Path.Combine(root, "tools", "PixelEngine.Tools.ManagedNativeLeakDetector", "PixelEngine.Tools.ManagedNativeLeakDetector.csproj"),
+                "-c",
+                "Release",
+                "--",
+                "--output",
+                output,
+                "--detector-run-id",
+                "managed-test",
+                "--git-commit",
+                "abcdef123456");
+
+            Assert.Equal(0, detector.ExitCode);
+            string manifest = Path.Combine(output, "evidence.json");
+            Assert.True(File.Exists(manifest), detector.Output);
+
+            foreach (string scope in new[] { "gl", "openal", "box2d", "alc" })
+            {
+                string scopeReport = Path.Combine(output, scope + ".md");
+                Assert.True(File.Exists(scopeReport), detector.Output);
+                string scopeText = File.ReadAllText(scopeReport);
+                Assert.Contains("| detector | managed-native-leak-detector |", scopeText, StringComparison.Ordinal);
+                Assert.Contains("| detectorRunId | managed-test |", scopeText, StringComparison.Ordinal);
+                Assert.Contains("| gitCommit | abcdef123456 |", scopeText, StringComparison.Ordinal);
+                Assert.Contains("| conclusion | no_leaks |", scopeText, StringComparison.Ordinal);
+                Assert.Contains("| managedProbe | true |", scopeText, StringComparison.Ordinal);
+            }
+
+            string manifestText = File.ReadAllText(manifest);
+            Assert.Contains("\"schemaVersion\": 1", manifestText, StringComparison.Ordinal);
+            Assert.Contains("\"detector\": \"managed-native-leak-detector\"", manifestText, StringComparison.Ordinal);
+            Assert.Contains("\"detectorRunId\": \"managed-test\"", manifestText, StringComparison.Ordinal);
+            Assert.Contains("\"gitCommit\": \"abcdef123456\"", manifestText, StringComparison.Ordinal);
+            Assert.Contains("\"gl\"", manifestText, StringComparison.Ordinal);
+            Assert.Contains("\"openal\"", manifestText, StringComparison.Ordinal);
+            Assert.Contains("\"box2d\"", manifestText, StringComparison.Ordinal);
+            Assert.Contains("\"alc\"", manifestText, StringComparison.Ordinal);
+            Assert.Contains("managed_no_gl_context", File.ReadAllText(Path.Combine(output, "gl.md")), StringComparison.Ordinal);
+
+            string artifacts = Path.Combine(temp, "preflight");
+            ScriptResult preflight = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "native-leak-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts,
+                "-AllowBlocked");
+            Assert.Equal(0, preflight.ExitCode);
+            string preflightReport = File.ReadAllText(Path.Combine(artifacts, "native-leak-preflight.md"));
+            Assert.Contains("status | detector_evidence_attached_pending_review", preflightReport, StringComparison.Ordinal);
+            Assert.Contains("managed-native-leak-detector", preflightReport, StringComparison.Ordinal);
+            Assert.Contains("gl", preflightReport, StringComparison.Ordinal);
+            Assert.Contains("openal", preflightReport, StringComparison.Ordinal);
+            Assert.Contains("box2d", preflightReport, StringComparison.Ordinal);
+            Assert.Contains("alc", preflightReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 native leak 预检的真实脚本行为：hash 错误被拒绝为 invalid，证据齐全也保持待审非零退出。
     /// </summary>
     [Fact]
