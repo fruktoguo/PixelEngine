@@ -98,46 +98,94 @@ function Get-ManualScopes {
         [pscustomobject]@{
             scope = "controlFeelReport"
             kind = "report"
+            checklist = @("runJumpWallKick", "sandPileTraversal", "rigidOwnedStanding")
+            criteria = @{
+                runJumpWallKick = "报告必须说明真实键盘输入下跑、跳、蹬墙均可控，且没有卡死或帧率导致速度漂移。"
+                sandPileTraversal = "报告必须说明玩家站在或穿过 settled 沙堆斜面时仍能移动、跳跃，且没有陷入粉末堆。"
+                rigidOwnedStanding = "报告必须说明玩家站在 RigidOwned 刚体 stamp 像素上不穿透、不抖动，并能离开。"
+            }
             title = "角色跑/跳/蹬墙、站在 settled 沙堆与 RigidOwned 刚体 stamp 像素上不穿不陷"
         },
         [pscustomobject]@{
             scope = "materialBrushAndReactionVideo"
             kind = "video"
             minDurationSeconds = 10.0
+            checklist = @("realMouseWheelDigits", "sandWaterOilGasObserved", "reactionTemperatureObserved")
+            criteria = @{
+                realMouseWheelDigits = "视频必须展示真实鼠标、滚轮和数字键切换材质后在正确世界坐标写入。"
+                sandWaterOilGasObserved = "视频必须展示沙堆休止角、水找平、油浮水和气体上升在真实窗口中可见。"
+                reactionTemperatureObserved = "视频必须展示至少一种反应和温度相变的视觉结果，并说明是否有异常残留。"
+            }
             title = "真实鼠标/滚轮/数字键操作材质笔刷，并观察沙堆休止角、水找平、油浮水、气体上升、反应和温度相变视觉质量"
         },
         [pscustomobject]@{
             scope = "rigidBodyGameplayVideo"
             kind = "video"
             minDurationSeconds = 10.0
+            checklist = @("pushAndImpact", "digBridgeCollapse", "continuedDamage")
+            criteria = @{
+                pushAndImpact = "视频必须展示玩家或场景物体推动、碰撞动态刚体，且碰撞反馈可见。"
+                digBridgeCollapse = "视频必须展示挖断木桥或结构后独立连通块转为刚体并掉落。"
+                continuedDamage = "视频必须展示掉落刚体继续被挖、烧或酸蚀破坏，且没有长期悬空静态块。"
+            }
             title = "真实窗口推动/被砸、挖断木桥转刚体、继续挖/烧/酸蚀破碎、metal 近熔岩熔化坍塌"
         },
         [pscustomobject]@{
             scope = "particleLightingVideo"
             kind = "video"
             minDurationSeconds = 10.0
+            checklist = @("particlesVisible", "bloomFogLighting", "noParticleLeak")
+            criteria = @{
+                particlesVisible = "视频必须展示血、碎屑、发光火花或爆炸粒子在真实窗口中清晰出现并消散。"
+                bloomFogLighting = "视频必须展示 bloom、fog reveal 或点光照明随玩法事件变化。"
+                noParticleLeak = "视频必须说明长时间玩法后没有持续残留未知点、粒子尾迹或泄漏迹象。"
+            }
             title = "血/碎屑/发光火花、爆炸推动邻近刚体、bloom/fog/mining lighting 视觉质量和长时间玩法无粒子泄漏"
         },
         [pscustomobject]@{
             scope = "audioListeningReport"
             kind = "report"
+            checklist = @("materialImpacts", "ambientAndReaction", "spatialMix")
+            criteria = @{
+                materialImpacts = "报告必须说明 sand、stone、wood、metal impact 与 splash 等材质音效均能听到。"
+                ambientAndReaction = "报告必须说明 fire/lava ambient、反应音、爆炸破碎、玩家/UI/通关音效触发正常。"
+                spatialMix = "报告必须说明真实设备上的空间定位、音量混合和限频效果是否可接受。"
+            }
             title = "真实设备听感与空间感：impact、splash、ambient、反应音、爆炸/破碎、玩家/UI/通关音效"
         },
         [pscustomobject]@{
             scope = "fullRoutePlaythroughVideo"
             kind = "video"
             minDurationSeconds = 30.0
+            checklist = @("routeCompleted", "materialsReactionsBodiesShown", "audioLightingHudShown")
+            criteria = @{
+                routeCompleted = "视频必须展示从出生点用至少一种解法抵达出口并触发通关状态。"
+                materialsReactionsBodiesShown = "视频必须在路线中展示材质、反应、刚体破坏或坍塌参与解法。"
+                audioLightingHudShown = "视频必须展示路线中的音频、光照或 HUD 状态，并能看清通关反馈。"
+            }
             title = "从出生点用至少一种解法完整抵达出口，贯穿材质/反应/刚体/粒子/光照/音频"
         },
         [pscustomobject]@{
             scope = "hudMenuEditorVideo"
             kind = "video"
             minDurationSeconds = 10.0
+            checklist = @("hudReadable", "menuButtonsClicked", "editorDockspaceOpened")
+            criteria = @{
+                hudReadable = "视频必须展示 HUD 文本、材质、性能行和状态信息在真实窗口中可读且不重叠。"
+                menuButtonsClicked = "视频必须展示暂停菜单按钮点击，包括继续、重开、退出或叠层切换链路。"
+                editorDockspaceOpened = "视频必须展示从菜单打开 Editor dockspace 或相关编辑器窗口，并能正常交互。"
+            }
             title = "HUD 像素布局、菜单点击、Editor dockspace 打开、重开、退出请求与叠层切换"
         },
         [pscustomobject]@{
             scope = "hotReloadWindowReport"
             kind = "report"
+            checklist = @("behaviourSourceEdited", "alcReloadObserved", "statePreserved")
+            criteria = @{
+                behaviourSourceEdited = "报告必须说明真实开发态窗口运行时修改了某个 Behaviour 源码文件。"
+                alcReloadObserved = "报告必须说明 Roslyn 编译和 ALC 热重载被观察到且旧脚本实例被替换。"
+                statePreserved = "报告必须说明热重载后场景、世界或关键脚本状态保留，没有重启丢失。"
+            }
             title = "开发态真实窗口修改 Behaviour 后 Roslyn + ALC 热重载，场景与世界状态保留"
         }
     )
@@ -148,6 +196,18 @@ function Get-JsonPropertyValue {
         [object]$Object,
         [string]$Name
     )
+
+    if ($null -eq $Object) {
+        return $null
+    }
+
+    if ($Object -is [System.Collections.IDictionary]) {
+        if ($Object.Contains($Name)) {
+            return $Object[$Name]
+        }
+
+        return $null
+    }
 
     $property = $Object.PSObject.Properties | Where-Object { $_.Name -eq $Name } | Select-Object -First 1
     if ($null -eq $property) {
@@ -200,6 +260,30 @@ function Assert-ManualEvidenceMetadata {
     $notes = Get-RequiredJsonString -Object $Entry -Name "notes" -Scope $scope
     if ($notes.Trim().Length -lt 20) {
         throw "evidence scope $scope notes 至少需要 20 个字符，说明观察结论与残余风险。"
+    }
+
+    $checklist = Get-JsonPropertyValue -Object $Entry -Name "checklist"
+    if ($null -eq $checklist) {
+        throw "evidence scope $scope 缺少 checklist。"
+    }
+
+    foreach ($key in @($ScopeDefinition.checklist)) {
+        $value = Get-JsonPropertyValue -Object $checklist -Name $key
+        if ($null -eq $value -or -not ($value -is [bool]) -or -not [bool]$value) {
+            throw "evidence scope $scope checklist.$key 必须为 true。"
+        }
+    }
+
+    $criteria = Get-JsonPropertyValue -Object $Entry -Name "criteria"
+    if ($null -eq $criteria) {
+        throw "evidence scope $scope 缺少 criteria。"
+    }
+
+    foreach ($key in @($ScopeDefinition.checklist)) {
+        $criterion = [string](Get-JsonPropertyValue -Object $criteria -Name $key)
+        if ([string]::IsNullOrWhiteSpace($criterion) -or $criterion.Trim().Length -lt 20) {
+            throw "evidence scope $scope criteria.$key 至少需要 20 个字符。"
+        }
     }
 
     $extension = [System.IO.Path]::GetExtension($ResolvedPath).ToLowerInvariant()
@@ -422,6 +506,10 @@ function Write-ManualAcceptanceReport {
     foreach ($scope in Get-ManualScopes) {
         $durationText = if ($scope.kind -eq "video") { " minDurationSeconds=$($scope.minDurationSeconds)" } else { "" }
         $lines.Add(("- {0} [{1}]{2}: {3}" -f $scope.scope, $scope.kind, $durationText, $scope.title))
+        $lines.Add(("  checklist: {0}" -f (($scope.checklist) -join ", ")))
+        foreach ($key in @($scope.checklist)) {
+            $lines.Add(("  criteria.{0}: {1}" -f $key, (Get-JsonPropertyValue -Object $scope.criteria -Name $key)))
+        }
     }
     $lines.Add("")
 
