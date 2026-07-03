@@ -150,6 +150,68 @@ function Add-MarkdownEvidenceCheck {
     }
 }
 
+function Get-ExpectedRunIdentity {
+    param(
+        [System.Collections.Generic.List[string]]$Missing,
+        [string]$Root,
+        [string]$WorkflowRunReport
+    )
+
+    $resolved = Resolve-EvidencePath -Root $Root -Path $WorkflowRunReport
+    if ([string]::IsNullOrWhiteSpace($resolved) -or -not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+        return $null
+    }
+
+    $values = Read-MarkdownEvidenceTable -Path $resolved
+    foreach ($key in @("run_id", "sha")) {
+        if (-not $values.ContainsKey($key) -or [string]::IsNullOrWhiteSpace([string]$values[$key])) {
+            $Missing.Add("workflow_run 报告缺少 $key 字段")
+        }
+    }
+
+    if (-not $values.ContainsKey("run_id") -or -not $values.ContainsKey("sha")) {
+        return $null
+    }
+
+    return [pscustomobject]@{
+        RunId = [string]$values["run_id"]
+        Sha = [string]$values["sha"]
+    }
+}
+
+function Add-RunIdentityCheck {
+    param(
+        [System.Collections.Generic.List[string]]$Missing,
+        [string]$Root,
+        [string]$Scope,
+        [string]$Path,
+        [object]$ExpectedIdentity
+    )
+
+    if ($null -eq $ExpectedIdentity) {
+        return
+    }
+
+    $resolved = Resolve-EvidencePath -Root $Root -Path $Path
+    if ([string]::IsNullOrWhiteSpace($resolved) -or -not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+        return
+    }
+
+    $values = Read-MarkdownEvidenceTable -Path $resolved
+    foreach ($key in @("run_id", "sha")) {
+        if (-not $values.ContainsKey($key)) {
+            $Missing.Add("$Scope 报告缺少 $key 字段，不能证明与 workflow_run 同源")
+            continue
+        }
+
+        $actual = [string]$values[$key]
+        $expected = if ($key -eq "run_id") { [string]$ExpectedIdentity.RunId } else { [string]$ExpectedIdentity.Sha }
+        if (-not [string]::Equals($actual, $expected, [StringComparison]::OrdinalIgnoreCase)) {
+            $Missing.Add("$Scope 报告 $key 必须与 workflow_run 一致：expected=$expected actual=$actual")
+        }
+    }
+}
+
 function Get-JsonPropertyNames {
     param([object]$Node)
     if ($null -eq $Node) {
@@ -293,8 +355,10 @@ $workflowRunReport = [string](Get-JsonPropertyValue -Node $manifest -Name "workf
 $benchmarkGuardReport = [string](Get-JsonPropertyValue -Node $manifest.benchmarkGuard -Name "report")
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $manifest -Name "workflowRunSha256"))
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -ExpectedValues @{ conclusion = "success" }
+$expectedRunIdentity = Get-ExpectedRunIdentity -Missing $missing -Root $root -WorkflowRunReport $workflowRunReport
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "benchmark_guard" -Path $benchmarkGuardReport -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $manifest.benchmarkGuard -Name "sha256"))
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "benchmark_guard" -Path $benchmarkGuardReport -ExpectedValues @{ conclusion = "success" }
+Add-RunIdentityCheck -Missing $missing -Root $root -Scope "benchmark_guard" -Path $benchmarkGuardReport -ExpectedIdentity $expectedRunIdentity
 
 foreach ($rid in $rids) {
     $node = $manifest.buildTest.$rid
@@ -318,6 +382,7 @@ foreach ($rid in $rids) {
         tests_ran = $expectedTestsRan.ToString().ToLowerInvariant()
         conclusion = "success"
     }
+    Add-RunIdentityCheck -Missing $missing -Root $root -Scope "build_test/$rid/report" -Path $buildReportPath -ExpectedIdentity $expectedRunIdentity
 
     if ($rid -in $testRids -and -not $expectedTestsRan) {
         $missing.Add("buildTest.$rid 必须标记 testsRan=true")
@@ -342,6 +407,7 @@ foreach ($rid in $verifyRids) {
         channels = "r2r,aot"
         conclusion = "success"
     }
+    Add-RunIdentityCheck -Missing $missing -Root $root -Scope "verify_publish/$rid/report" -Path $verifyReportPath -ExpectedIdentity $expectedRunIdentity
 }
 
 if ($missing.Count -gt 0) {
