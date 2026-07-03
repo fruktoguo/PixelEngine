@@ -13,6 +13,7 @@ internal sealed class HotReloadService(Scene scene, IScriptContext context, Scri
     private readonly Scene _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly IScriptContext _context = context ?? throw new ArgumentNullException(nameof(context));
     private readonly ScriptCompiler _compiler = compiler ?? throw new ArgumentNullException(nameof(compiler));
+    private readonly List<WeakReference> _unloadedContexts = [];
     private PendingReload? _pending;
     private ScriptLoadContext? _currentLoadContext = currentLoadContext;
     private FileSystemWatcher? _watcher;
@@ -32,6 +33,13 @@ internal sealed class HotReloadService(Scene scene, IScriptContext context, Scri
     }
 
     public Exception? LastWatcherException { get; private set; }
+
+    public int UnloadedLoadContextAliveCount => CountUnloadedLoadContexts(forceFullCollection: false);
+
+    public int CollectAndCountUnloadedLoadContextsAlive()
+    {
+        return CountUnloadedLoadContexts(forceFullCollection: true);
+    }
 
     public void RequestReload(string assemblyName, IReadOnlyList<ScriptSourceFile> sources)
     {
@@ -306,7 +314,38 @@ internal sealed class HotReloadService(Scene scene, IScriptContext context, Scri
 
         WeakReference reference = new(context, trackResurrection: false);
         context.Unload();
+        lock (_gate)
+        {
+            _unloadedContexts.Add(reference);
+        }
+
         return reference;
+    }
+
+    private int CountUnloadedLoadContexts(bool forceFullCollection)
+    {
+        if (forceFullCollection)
+        {
+            for (int i = 0; i < 50; i++)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+            }
+        }
+
+        lock (_gate)
+        {
+            for (int i = _unloadedContexts.Count - 1; i >= 0; i--)
+            {
+                if (!_unloadedContexts[i].IsAlive)
+                {
+                    _unloadedContexts.RemoveAt(i);
+                }
+            }
+
+            return _unloadedContexts.Count;
+        }
     }
 
     private static bool IsReloadableBehaviour(
