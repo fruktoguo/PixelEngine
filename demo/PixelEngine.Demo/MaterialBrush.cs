@@ -50,6 +50,11 @@ public sealed class MaterialBrush : Behaviour
     /// </summary>
     public string SelectedMaterialName => DefaultMaterialNames[SelectedIndex];
 
+    /// <summary>
+    /// 是否响应键鼠输入写入世界。真实可玩关卡可关闭它，把左键交给射击工具；测试/编辑沙盒可显式开启。
+    /// </summary>
+    public bool InputEnabled { get; set; } = true;
+
     /// <inheritdoc />
     protected override void OnStart()
     {
@@ -61,6 +66,11 @@ public sealed class MaterialBrush : Behaviour
     {
         _ = dt;
         ResolveMaterials();
+        if (!InputEnabled)
+        {
+            return;
+        }
+
         HandleMaterialSelection();
         HandleRadius();
         HandlePaint();

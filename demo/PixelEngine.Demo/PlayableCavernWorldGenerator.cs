@@ -6,12 +6,17 @@ namespace PixelEngine.Demo;
 /// <summary>
 /// 面向直接试玩的确定性洞穴世界生成器，生成宽幅地形、洞穴、矿脉与少量危险池。
 /// </summary>
-public sealed class PlayableCavernWorldGenerator : IProceduralWorldGenerator
+public sealed class PlayableCavernWorldGenerator(string? materialMapPath = null) : IProceduralWorldGenerator
 {
     /// <summary>
     /// 程序化场景键，同时也是入口 Behaviour 的完整类型名。
     /// </summary>
     public const string Key = "PixelEngine.Demo.PlayableWorldDirector";
+
+    /// <summary>
+    /// 默认 AI 材质地图相对路径。
+    /// </summary>
+    public const string DefaultMaterialMapRelativePath = "maps/ai-cavern-material-map.png";
 
     private const int Width = 1536;
     private const int Height = 384;
@@ -27,6 +32,13 @@ public sealed class PlayableCavernWorldGenerator : IProceduralWorldGenerator
     /// <inheritdoc />
     public void Populate(in ProceduralWorldBuildContext context)
     {
+        string? mapPath = ResolveMaterialMapPath();
+        if (mapPath is not null &&
+            ImageMaterialMapWorldPainter.TryPaint(mapPath, context, out _))
+        {
+            return;
+        }
+
         MaterialId empty = context.Materials.Resolve("empty");
         MaterialId dirt = context.Materials.Resolve("dirt");
         MaterialId stone = context.Materials.Resolve("stone");
@@ -63,6 +75,23 @@ public sealed class PlayableCavernWorldGenerator : IProceduralWorldGenerator
         PaintDeposits(context, metal.Value, stone.Value);
         PaintHazards(context, water.Value, lava.Value, stone.Value);
         PaintBounds(context, stone.Value);
+    }
+
+    private string? ResolveMaterialMapPath()
+    {
+        if (!string.IsNullOrWhiteSpace(materialMapPath))
+        {
+            return Path.GetFullPath(materialMapPath);
+        }
+
+        string outputContentPath = Path.Combine(AppContext.BaseDirectory, "content", DefaultMaterialMapRelativePath);
+        if (File.Exists(outputContentPath))
+        {
+            return outputContentPath;
+        }
+
+        string sourceContentPath = Path.Combine("demo", "PixelEngine.Demo", "content", DefaultMaterialMapRelativePath);
+        return File.Exists(sourceContentPath) ? Path.GetFullPath(sourceContentPath) : null;
     }
 
     private static int SurfaceY(int x, int floorBase)

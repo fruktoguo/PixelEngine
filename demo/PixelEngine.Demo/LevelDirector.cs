@@ -59,6 +59,16 @@ public sealed class LevelDirector : Behaviour
     public bool BuildScriptEntities { get; set; } = true;
 
     /// <summary>
+    /// 是否创建持续喷发的测试火花。默认关闭，避免真实游玩画面出现难以辨识的上方散点。
+    /// </summary>
+    public bool BuildAmbientSparkEmitters { get; set; }
+
+    /// <summary>
+    /// 是否创建持续喷口发射器。默认关闭，避免真实游玩入口出现测试用的上方滴落点。
+    /// </summary>
+    public bool BuildAmbientMaterialEmitters { get; set; }
+
+    /// <summary>
     /// 是否在玩家出生 AABB 内铺设熔岩；仅用于窗口健康链路探针。
     /// </summary>
     public bool BuildSpawnHazardProbe { get; set; }
@@ -197,10 +207,17 @@ public sealed class LevelDirector : Behaviour
         camera.Zoom = CameraZoom;
 
         MaterialBrush brush = playerEntity.AddComponent<MaterialBrush>();
-        _ = brush;
+        brush.InputEnabled = false;
 
         ExplosiveTool explosive = playerEntity.AddComponent<ExplosiveTool>();
         _ = explosive;
+
+        PlayableProjectileTool projectile = playerEntity.AddComponent<PlayableProjectileTool>();
+        projectile.ImpactRadius = 8;
+        projectile.ImpactForce = 18f;
+        projectile.CollapseScanRadius = 220;
+        projectile.FallbackOverhangRadius = 82;
+        projectile.MaxCollapseRegionSize = 192;
 
         GoalTrigger goal = playerEntity.AddComponent<GoalTrigger>();
         goal.X = GoalX;
@@ -208,15 +225,26 @@ public sealed class LevelDirector : Behaviour
         goal.Width = 34f;
         goal.Height = 54f;
 
-        _ = playerEntity.AddComponent<DemoHud>();
+        _ = playerEntity.AddComponent<PlayerVisual>();
+        PlayableHud playableHud = playerEntity.AddComponent<PlayableHud>();
+        playableHud.X = 14f;
+        playableHud.Y = 14f;
         _ = playerEntity.AddComponent<PauseMenu>();
 
-        CreateEmitter(156f, 86f, "water", 0f, 1f, 0.18f, 2, "splash_water.wav", addLight: false);
-        CreateEmitter(314f, 146f, "oil", -0.25f, 1f, 0.35f, 2, string.Empty, addLight: false);
-        CreateEmitter(438f, 236f, "lava", 0f, 1f, 0.45f, 2, "lava_bubble_loop.wav", addLight: true);
-        CreateEmitter(508f, 150f, "acid", 0f, 1f, 0.32f, 2, "splash_acid.wav", addLight: false);
-        CreateSparkEmitter(294f, 214f, count: 6, intervalSeconds: 0.07f);
-        CreateSparkEmitter(438f, 232f, count: 5, intervalSeconds: 0.09f);
+        if (BuildAmbientMaterialEmitters)
+        {
+            CreateEmitter(156f, 86f, "water", 0f, 1f, 0.18f, 2, "splash_water.wav", addLight: false);
+            CreateEmitter(314f, 146f, "oil", -0.25f, 1f, 0.35f, 2, string.Empty, addLight: false);
+            CreateEmitter(438f, 236f, "lava", 0f, 1f, 0.45f, 2, "lava_bubble_loop.wav", addLight: true);
+            CreateEmitter(508f, 150f, "acid", 0f, 1f, 0.32f, 2, "splash_acid.wav", addLight: false);
+        }
+
+        if (BuildAmbientSparkEmitters)
+        {
+            CreateSparkEmitter(294f, 214f, count: 6, intervalSeconds: 0.07f);
+            CreateSparkEmitter(438f, 232f, count: 5, intervalSeconds: 0.09f);
+        }
+
         _entitiesBuilt = true;
     }
 
@@ -330,10 +358,6 @@ public sealed class LevelDirector : Behaviour
         FillRect(496, floorY - 1, 52, 18, _acid);
         FillRect(338, floorY - 18, 44, 16, _water);
         FillRect(188, floorY - 31, 34, 20, _oil);
-        FillRect(150, 88, 12, 26, _water);
-        FillRect(306, 148, 16, 18, _oil);
-        FillRect(436, 236, 16, 18, _lava);
-        FillRect(504, 152, 16, 18, _acid);
     }
 
     private void BuildSpawnHazardProbeArea()

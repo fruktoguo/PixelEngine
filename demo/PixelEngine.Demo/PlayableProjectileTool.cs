@@ -118,6 +118,11 @@ public sealed class PlayableProjectileTool : Behaviour
     /// </summary>
     public int LastCollapseSolidCandidates { get; private set; }
 
+    /// <summary>
+    /// 是否响应鼠标输入。真实可玩关卡默认开启；笔刷/编辑验收可显式关闭以避免左键工具冲突。
+    /// </summary>
+    public bool InputEnabled { get; set; } = true;
+
     /// <inheritdoc />
     protected override void OnStart()
     {
@@ -131,6 +136,11 @@ public sealed class PlayableProjectileTool : Behaviour
         _cooldownRemaining = MathF.Max(0f, _cooldownRemaining - safeDt);
         TracerRemainingSeconds = MathF.Max(0f, TracerRemainingSeconds - safeDt);
         ProcessPendingCollapseScan();
+        if (!InputEnabled)
+        {
+            return;
+        }
+
         if (_cooldownRemaining > 0f || !Context.Input.WasMousePressed(MouseButton.Left))
         {
             return;
@@ -169,7 +179,6 @@ public sealed class PlayableProjectileTool : Behaviour
         }
 
         Context.World.Explode(hitX, hitY, Math.Max(1, ImpactRadius), MathF.Max(1f, ImpactForce));
-        QueueImpactBodyConversion(hitX, hitY);
         Context.Lighting.RevealAround(hitX, hitY, ImpactRadius * 2.5f);
         Context.Lighting.AddPointLight(hitX, hitY, ImpactRadius * 3f, 0xFF_60_D8_FF, 0.35f);
         Context.Audio.PlayAt("explosion.wav", hitX, hitY, 0.85f);
@@ -181,23 +190,6 @@ public sealed class PlayableProjectileTool : Behaviour
         ShotsFired++;
         QueueCollapseScan(hitX, hitY);
         _cooldownRemaining = MathF.Max(0f, CooldownSeconds);
-    }
-
-    private void QueueImpactBodyConversion(float hitX, float hitY)
-    {
-        int centerX = (int)MathF.Round(hitX);
-        int centerY = (int)MathF.Round(hitY);
-        int halfWidth = Math.Clamp(ImpactRadius * 3, 14, 34);
-        int growUp = Math.Clamp(ImpactRadius * 4, 18, 46);
-        int growDown = Math.Clamp(ImpactRadius, 6, 16);
-        int x = centerX - halfWidth;
-        int y = centerY - growUp;
-        int width = (halfWidth * 2) + 1;
-        int height = growUp + growDown + 1;
-        _ = Context.Bodies.CreateFromRegion(x, y, width, height);
-        LastCollapsedRegion = (x, y, width, height);
-        LastCollapseSkipReason = "impact_body_queued";
-        CollapsedFloatingIslands++;
     }
 
     private void QueueCollapseScan(float hitX, float hitY)

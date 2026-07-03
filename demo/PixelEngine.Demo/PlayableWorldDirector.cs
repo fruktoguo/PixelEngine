@@ -18,7 +18,7 @@ public sealed class PlayableWorldDirector : Behaviour
     /// <summary>
     /// 玩家出生点 Y 坐标。
     /// </summary>
-    public float PlayerSpawnY { get; set; } = 250f;
+    public float PlayerSpawnY { get; set; } = 172f;
 
     /// <inheritdoc />
     protected override void OnStart()
