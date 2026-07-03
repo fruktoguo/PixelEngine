@@ -2,6 +2,8 @@
   "schemaVersion": 1,
   "workflowRunReport": "artifacts/release-evidence/workflow-run.md",
   "workflowRunSha256": "<sha256>",
+  "artifactAuditReport": "artifacts/release-evidence/artifact-audit.md",
+  "artifactAuditSha256": "<sha256>",
   "deterministicHashReport": "artifacts/release-evidence/deterministic-hash.md",
   "deterministicHashSha256": "<sha256>",
   "r2rLightupReport": "artifacts/release-evidence/r2r-lightup.md",

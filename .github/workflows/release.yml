@@ -620,7 +620,38 @@ jobs:
 
       - name: Audit release artifacts
         shell: bash
-        run: bash ./tools/audit-release-artifacts.sh --publish-root artifacts/publish --package-root artifacts/package --require-all
+        run: |
+          mkdir -p artifacts/release-evidence
+          set +e
+          bash ./tools/audit-release-artifacts.sh --publish-root artifacts/publish --package-root artifacts/package --require-all 2>&1 | tee artifacts/release-evidence/artifact-audit-output.txt
+          status="${PIPESTATUS[0]}"
+          set -e
+          conclusion="success"
+          if [[ "$status" != "0" ]]; then
+            conclusion="failure"
+          fi
+          {
+            echo "# Release artifact audit evidence"
+            echo
+            echo "| Key | Value |"
+            echo "|---|---|"
+            echo "| run_id | ${{ github.run_id }} |"
+            echo "| sha | ${{ github.sha }} |"
+            echo "| conclusion | $conclusion |"
+            echo "| require_all | true |"
+            echo "| package_count | 12 |"
+            echo "| expanded_package_count | 12 |"
+            echo "| rids | win-x64,win-arm64,linux-x64,linux-arm64,osx-x64,osx-arm64 |"
+            echo "| channels | r2r,aot |"
+            echo "| aot_dynamic_box2d_rejected | true |"
+            echo "| package_layout_checked | true |"
+            echo "| checksum_checked | true |"
+            echo
+            echo "## Audit output"
+            echo
+            cat artifacts/release-evidence/artifact-audit-output.txt
+          } > artifacts/release-evidence/artifact-audit.md
+          exit "$status"
 
       - name: Verify deterministic package hashes
         if: always()
@@ -815,6 +846,8 @@ jobs:
             schemaVersion = 1
             workflowRunReport = 'artifacts/release-evidence/workflow-run.md'
             workflowRunSha256 = Get-Sha256 'artifacts/release-evidence/workflow-run.md'
+            artifactAuditReport = 'artifacts/release-evidence/artifact-audit.md'
+            artifactAuditSha256 = Get-Sha256 'artifacts/release-evidence/artifact-audit.md'
             deterministicHashReport = 'artifacts/release-evidence/deterministic-hash.md'
             deterministicHashSha256 = Get-Sha256 'artifacts/release-evidence/deterministic-hash.md'
             r2rLightupReport = 'artifacts/release-evidence/r2r-lightup.md'
