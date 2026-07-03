@@ -41,6 +41,27 @@ function ConvertTo-RelativePath {
     return [IO.Path]::GetRelativePath($fullRoot, $fullPath).Replace("\", "/")
 }
 
+function Read-MarkdownEvidenceTable {
+    param([string]$Path)
+
+    $values = @{}
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        if ($line -notmatch '^\|\s*([^|]+?)\s*\|\s*([^|]*?)\s*\|$') {
+            continue
+        }
+
+        $key = $Matches[1].Trim()
+        $value = $Matches[2].Trim()
+        if ([string]::IsNullOrWhiteSpace($key) -or $key -eq "Key" -or $key -match '^-+$') {
+            continue
+        }
+
+        $values[$key] = $value
+    }
+
+    return $values
+}
+
 function Write-NativeLeakReport {
     param(
         [string]$Path,
@@ -222,9 +243,65 @@ function Read-EvidenceManifest {
             continue
         }
 
+        $detectorName = [string]$scopeNode.detector
+        if ([string]::IsNullOrWhiteSpace($detectorName)) {
+            $items += [pscustomobject]@{
+                InvalidManifest = $true
+                Scope = $scope
+                Message = "evidence manifest scope 缺少 detector：$scope"
+            }
+            continue
+        }
+
+        $reportValues = Read-MarkdownEvidenceTable -Path $reportPath
+        $semanticInvalid = $false
+        foreach ($key in @("scope", "detector", "conclusion")) {
+            if (-not $reportValues.ContainsKey($key)) {
+                $items += [pscustomobject]@{
+                    InvalidManifest = $true
+                    Scope = $scope
+                    Message = "evidence report $scope 缺少 $key 字段"
+                }
+                $semanticInvalid = $true
+            }
+        }
+
+        if (-not $semanticInvalid) {
+            if (-not [string]::Equals([string]$reportValues["scope"], $scope, [StringComparison]::OrdinalIgnoreCase)) {
+                $items += [pscustomobject]@{
+                    InvalidManifest = $true
+                    Scope = $scope
+                    Message = "evidence report $scope scope 必须为 $scope，实际为 $($reportValues["scope"])"
+                }
+                $semanticInvalid = $true
+            }
+
+            if (-not [string]::Equals([string]$reportValues["detector"], $detectorName, [StringComparison]::Ordinal)) {
+                $items += [pscustomobject]@{
+                    InvalidManifest = $true
+                    Scope = $scope
+                    Message = "evidence report $scope detector 必须为 $detectorName，实际为 $($reportValues["detector"])"
+                }
+                $semanticInvalid = $true
+            }
+
+            if (-not [string]::Equals([string]$reportValues["conclusion"], "no_leaks", [StringComparison]::OrdinalIgnoreCase)) {
+                $items += [pscustomobject]@{
+                    InvalidManifest = $true
+                    Scope = $scope
+                    Message = "evidence report $scope conclusion 必须为 no_leaks，实际为 $($reportValues["conclusion"])"
+                }
+                $semanticInvalid = $true
+            }
+        }
+
+        if ($semanticInvalid) {
+            continue
+        }
+
         $items += [pscustomobject]@{
             Scope = $scope
-            Detector = [string]$scopeNode.detector
+            Detector = $detectorName
             Report = ConvertTo-RelativePath -Root $Root -Path $reportPath
             Sha256 = $actualHash
         }
