@@ -644,6 +644,18 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("cpu", script, StringComparison.Ordinal);
         Assert.Contains("gpu", script, StringComparison.Ordinal);
         Assert.Contains("particle_frame_probe", script, StringComparison.Ordinal);
+        Assert.Contains("Convert-ParticleProbeSummaryToMetrics", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-LocalProbeMetrics", script, StringComparison.Ordinal);
+        Assert.Contains("Write-LocalComparison", script, StringComparison.Ordinal);
+        Assert.Contains("DotNetPath", script, StringComparison.Ordinal);
+        Assert.Contains("local-comparison.md", script, StringComparison.Ordinal);
+        Assert.Contains("local-comparison.json", script, StringComparison.Ordinal);
+        Assert.Contains("local_only: true", script, StringComparison.Ordinal);
+        Assert.Contains("target_gpu_evidence: false", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_local_probe", script, StringComparison.Ordinal);
+        Assert.Contains("probe 退出码为", script, StringComparison.Ordinal);
+        Assert.Contains("gpu_available 必须为 True", script, StringComparison.Ordinal);
+        Assert.Contains("实际 mode=", script, StringComparison.Ordinal);
         Assert.Contains("targetHardwareReport", script, StringComparison.Ordinal);
         Assert.Contains("cpuProbeReport", script, StringComparison.Ordinal);
         Assert.Contains("gpuProbeReport", script, StringComparison.Ordinal);
@@ -669,6 +681,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("local_probe_only", report, StringComparison.Ordinal);
         Assert.Contains("target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
         Assert.Contains("gpuFasterThanCpu", report, StringComparison.Ordinal);
+        Assert.Contains("local-comparison.md", report, StringComparison.Ordinal);
+        Assert.Contains("target_gpu_evidence: false", report, StringComparison.Ordinal);
         Assert.Contains("未知 scope", report, StringComparison.Ordinal);
 
         Assert.Contains("tools/gpu-particle-benchmark-preflight.ps1", plan, StringComparison.Ordinal);
@@ -721,6 +735,95 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(2, good.ExitCode);
             string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("target_gpu_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证本机 GPU 粒子 probe 子进程失败会被标为 invalid local probe，不能误报 local_probe_only。
+    /// </summary>
+    [Fact]
+    public void GpuParticleBenchmarkPreflightRejectsFailedLocalProbe()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-local-fail-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
+                "-RunProbe",
+                "-Project",
+                Path.Combine(temp, "missing.csproj"),
+                "-Artifacts",
+                temp);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(temp, "gpu-particle-benchmark-preflight.md"));
+            Assert.Contains("status: blocked_invalid_local_probe", report, StringComparison.Ordinal);
+            Assert.Contains("本机 probe 失败", report, StringComparison.Ordinal);
+            Assert.Contains("probe 退出码", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: local_probe_only", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 GPU 请求若实际回退成 CPU summary，即使子进程 0 退出也不能报告 local_probe_only。
+    /// </summary>
+    [Fact]
+    public void GpuParticleBenchmarkPreflightRejectsGpuProbeThatFallsBackToCpuSummary()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-local-mode-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            _ = Directory.CreateDirectory(temp);
+            string fakeDotNet = Path.Combine(temp, "fake-dotnet.cmd");
+            File.WriteAllText(
+                fakeDotNet,
+                """
+                @echo off
+                echo particle_frame_probe mode=cpu, gpu_available=False, requested_count=100000, active_count=100000, warmup_frames=1, measured_frames=3, wall_avg_ms=1.000, wall_p50_ms=1.000, wall_p95_ms=1.000, wall_max_ms=1.000, particle_stamp_avg_ms=0.800, particle_stamp_p50_ms=0.800, particle_stamp_p95_ms=0.800, particle_stamp_max_ms=0.800, gpu_particle_avg_ms=0.000, gpu_particle_p50_ms=0.000, gpu_particle_p95_ms=0.000, gpu_particle_max_ms=0.000, gpu_upload_avg_ms=0.000, gpu_upload_p50_ms=0.000, gpu_upload_p95_ms=0.000, gpu_upload_max_ms=0.000, lighting_avg_ms=0.000, lighting_p50_ms=0.000, lighting_p95_ms=0.000, lighting_max_ms=0.000, bloom_avg_ms=0.000, bloom_p50_ms=0.000, bloom_p95_ms=0.000, bloom_max_ms=0.000, present_avg_ms=0.000, present_p50_ms=0.000, present_p95_ms=0.000, present_max_ms=0.000
+                exit /b 0
+                """);
+
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
+                "-RunProbe",
+                "-DotNetPath",
+                fakeDotNet,
+                "-WindowTicks",
+                "4",
+                "-WarmupFrames",
+                "1",
+                "-ParticleCount",
+                "100000",
+                "-Artifacts",
+                temp);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(temp, "gpu-particle-benchmark-preflight.md"));
+            Assert.Contains("status: blocked_invalid_local_probe", report, StringComparison.Ordinal);
+            Assert.Contains("gpu probe 实际 mode=cpu", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: local_probe_only", report, StringComparison.Ordinal);
+            Assert.False(File.Exists(Path.Combine(temp, "local-comparison.md")));
+            Assert.False(File.Exists(Path.Combine(temp, "local-comparison.json")));
         }
         finally
         {
