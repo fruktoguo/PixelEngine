@@ -37,6 +37,7 @@ public sealed unsafe class GlTexture : IDisposable
         Width = width;
         Height = height;
         Handle = gl.GenTexture();
+        GlResourceTracker.TrackCreated(GlResourceKind.Texture, Handle);
         gl.BindTexture(TextureTarget.Texture2D, Handle);
         gl.TexImage2D(TextureTarget.Texture2D, 0, internalFormat, (uint)width, (uint)height, 0, pixelFormat, pixelType, null);
         gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)GLEnum.Nearest);
@@ -80,6 +81,7 @@ public sealed unsafe class GlTexture : IDisposable
         }
 
         _gl.DeleteTexture(Handle);
+        GlResourceTracker.TrackDeleted(GlResourceKind.Texture, Handle);
         _disposed = true;
     }
 }

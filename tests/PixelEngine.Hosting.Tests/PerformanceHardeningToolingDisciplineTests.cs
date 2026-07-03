@@ -415,11 +415,13 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("PixelEngine.Audio.csproj", project, StringComparison.Ordinal);
         Assert.Contains("PixelEngine.Interop.csproj", project, StringComparison.Ordinal);
         Assert.Contains("PixelEngine.Physics.csproj", project, StringComparison.Ordinal);
+        Assert.Contains("PixelEngine.Rendering.csproj", project, StringComparison.Ordinal);
         Assert.Contains("PixelEngine.Scripting.csproj", project, StringComparison.Ordinal);
         Assert.Contains("managed-native-leak-detector", program, StringComparison.Ordinal);
         Assert.Contains("managedProbe", program, StringComparison.Ordinal);
         Assert.Contains("managed_no_gl_context", program, StringComparison.Ordinal);
-        Assert.Contains("external driver-level GL leak evidence is still required", program, StringComparison.Ordinal);
+        Assert.Contains("GlResourceTracker.Snapshot().Total", program, StringComparison.Ordinal);
+        Assert.Contains("still requires external driver-level GL leak evidence", program, StringComparison.Ordinal);
         Assert.Contains("glObjectsLiveAfterShutdown", program, StringComparison.Ordinal);
         Assert.Contains("openAlObjectsLiveAfterShutdown", program, StringComparison.Ordinal);
         Assert.Contains("box2DBodiesLiveAfterShutdown", program, StringComparison.Ordinal);

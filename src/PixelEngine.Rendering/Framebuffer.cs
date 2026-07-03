@@ -19,6 +19,7 @@ public sealed class Framebuffer : IDisposable
         ArgumentNullException.ThrowIfNull(gl);
         _gl = gl;
         Handle = gl.GenFramebuffer();
+        GlResourceTracker.TrackCreated(GlResourceKind.Framebuffer, Handle);
     }
 
     /// <summary>
@@ -77,6 +78,7 @@ public sealed class Framebuffer : IDisposable
         }
 
         _gl.DeleteFramebuffer(Handle);
+        GlResourceTracker.TrackDeleted(GlResourceKind.Framebuffer, Handle);
         _disposed = true;
     }
 }

@@ -21,6 +21,8 @@ public sealed unsafe class FullscreenQuad : IDisposable
         _gl = gl;
         Vao = gl.GenVertexArray();
         _vbo = gl.GenBuffer();
+        GlResourceTracker.TrackCreated(GlResourceKind.VertexArray, Vao);
+        GlResourceTracker.TrackCreated(GlResourceKind.Buffer, _vbo);
 
         ReadOnlySpan<float> vertices =
         [
@@ -68,7 +70,9 @@ public sealed unsafe class FullscreenQuad : IDisposable
         }
 
         _gl.DeleteBuffer(_vbo);
+        GlResourceTracker.TrackDeleted(GlResourceKind.Buffer, _vbo);
         _gl.DeleteVertexArray(Vao);
+        GlResourceTracker.TrackDeleted(GlResourceKind.VertexArray, Vao);
         _disposed = true;
     }
 }

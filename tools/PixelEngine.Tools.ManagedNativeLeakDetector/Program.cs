@@ -5,6 +5,7 @@ using PixelEngine.Audio;
 using PixelEngine.Core.Threading;
 using PixelEngine.Interop.Box2D;
 using PixelEngine.Physics;
+using PixelEngine.Rendering;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
 
@@ -52,9 +53,9 @@ internal static class Program
         return new ScopeResult(
             Scope: "gl",
             MetricName: "glObjectsLiveAfterShutdown",
-            LiveCount: 0,
+            LiveCount: GlResourceTracker.Snapshot().Total,
             Coverage: "managed_no_gl_context",
-            Detail: "No OpenGL context is created by this managed detector; external driver-level GL leak evidence is still required for plan/18 review.");
+            Detail: "No OpenGL context is created by this managed detector; it records the in-process GlResourceTracker live count and still requires external driver-level GL leak evidence for plan/18 review.");
     }
 
     private static ScopeResult CollectOpenAl()

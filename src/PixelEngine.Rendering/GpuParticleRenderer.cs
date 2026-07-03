@@ -56,6 +56,7 @@ public sealed unsafe class GpuParticleRenderer : IDisposable
         _emissivePassLocation = _program.GetUniformLocation("uEmissivePass");
         _vertices = GC.AllocateArray<GpuParticleVertex>(initialCapacity, pinned: true);
         _vao = gl.GenVertexArray();
+        GlResourceTracker.TrackCreated(GlResourceKind.VertexArray, _vao);
         _vertexBuffer = new GlBuffer(gl, BufferTargetARB.ArrayBuffer);
 
         gl.BindVertexArray(_vao);
@@ -133,6 +134,7 @@ public sealed unsafe class GpuParticleRenderer : IDisposable
 
         _vertexBuffer.Dispose();
         _gl.DeleteVertexArray(_vao);
+        GlResourceTracker.TrackDeleted(GlResourceKind.VertexArray, _vao);
         _program.Dispose();
         _disposed = true;
     }
