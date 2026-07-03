@@ -478,6 +478,53 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 native leak 预检会拒绝未知 detector scope，避免额外报告冒充必需四类审计。
+    /// </summary>
+    [Fact]
+    public void NativeLeakPreflightRejectsUnknownScopeWithReport()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-native-leak-unknown-scope-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateNativeLeakEvidenceManifest(temp);
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject scopes = rootNode["scopes"]!.AsObject();
+            string report = WriteTextEvidence(Path.Combine(temp, "unknown", "d3d.md"), "unexpected detector report");
+            scopes["d3d"] = new JsonObject
+            {
+                ["detector"] = "external-detector",
+                ["report"] = report,
+                ["sha256"] = GetSha256(report),
+            };
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "unknown-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "native-leak-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string preflightReport = File.ReadAllText(Path.Combine(artifacts, "native-leak-preflight.md"));
+            Assert.Contains("blocked_invalid_native_leak_evidence", result.Output + preflightReport, StringComparison.Ordinal);
+            Assert.Contains("evidence manifest 包含未知 scope：d3d", preflightReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | detector_evidence_attached_pending_review", preflightReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证各 evidence preflight 都会把 malformed JSON 写成稳定 invalid 报告，而不是直接抛出无报告异常。
     /// </summary>
     [Theory]
