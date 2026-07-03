@@ -29,6 +29,11 @@ public sealed class DemoStartupOptions
     public bool HotReloadEnabled { get; init; } = true;
 
     /// <summary>
+    /// 窗口模式是否启用垂直同步。
+    /// </summary>
+    public bool VSync { get; init; } = true;
+
+    /// <summary>
     /// 是否以 headless 冒烟模式运行。
     /// </summary>
     public bool Headless { get; init; }
@@ -108,6 +113,7 @@ public sealed class DemoStartupOptions
         ArgumentNullException.ThrowIfNull(args);
         bool enableEditor = false;
         bool hotReload = true;
+        bool vSync = true;
         bool headless = false;
         int ticks = 1;
         int windowTicks = 0;
@@ -141,6 +147,12 @@ public sealed class DemoStartupOptions
                     break;
                 case "--no-hot-reload":
                     hotReload = false;
+                    break;
+                case "--vsync":
+                    vSync = true;
+                    break;
+                case "--no-vsync":
+                    vSync = false;
                     break;
                 case "--scene":
                     scene = ReadValue(args, ref i, "--scene");
@@ -223,6 +235,7 @@ public sealed class DemoStartupOptions
         {
             EnableEditor = enableEditor,
             HotReloadEnabled = hotReload,
+            VSync = vSync,
             Headless = headless,
             HeadlessTicks = ticks,
             WindowTicks = windowTicks,

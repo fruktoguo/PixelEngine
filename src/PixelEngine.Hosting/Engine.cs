@@ -326,9 +326,11 @@ public sealed class Engine : IDisposable
             Title = "PixelEngine Demo",
             Width = Context.Options.WindowWidth,
             Height = Context.Options.WindowHeight,
+            VSync = Context.Options.VSync,
         });
         _ownedRuntimeResources.Add(window);
         Context.RegisterService(window);
+        Context.Counters.VSyncEnabled = window.VSyncEnabled;
         _ = AttachWindowInput(window, _ => ResolveGuiInputRoute());
         _ = AttachCameraSynchronization(window);
         _ = AttachRendering(window);
@@ -406,6 +408,7 @@ public sealed class Engine : IDisposable
             Math.Max(1, Context.Options.InternalWidth),
             Math.Max(1, Context.Options.InternalHeight),
             computeFeatures);
+        Context.Counters.FrameGpuTimerAvailable = pipeline.GpuFrameTimerAvailable;
         RenderPipelineFrameSink sink = new(pipeline);
         RenderPhaseDriver driver = new(
             Context.GetService<IChunkSource>(),
@@ -422,6 +425,7 @@ public sealed class Engine : IDisposable
             debugOverlays: ResolveDebugOverlayController());
         Context.RegisterService(pipeline);
         Context.RegisterService<IGpuComputeQualityDegrader>(pipeline);
+        Context.RegisterService<IRenderPresentationControl>(pipeline);
         Context.RegisterService<IRenderFrameSink>(sink);
         Context.RegisterService(sink);
         Context.RegisterService(driver.GetType(), driver);
@@ -1779,6 +1783,7 @@ public sealed class Engine : IDisposable
         finally
         {
             profiler.EndFrame();
+            PublishFrameBreakdown(profiler);
             EndNoGcRegionIfStarted(noGcRegionStarted);
         }
 
@@ -1872,7 +1877,14 @@ public sealed class Engine : IDisposable
     {
         EngineOverloadController overload = Context.GetService<EngineOverloadController>();
         EngineQualityTier previousTier = Context.QualityTier;
-        EngineQualityTier tier = overload.SubmitFrame(realDeltaSeconds * 1000.0);
+        bool hasPresentationTiming =
+            Context.Counters.FramePresentSubmitMilliseconds > 0 ||
+            Context.Counters.FramePresentWaitMilliseconds > 0 ||
+            Context.Counters.FrameGpuTimerAvailable;
+        double frameMs = hasPresentationTiming && Context.Counters.EffectiveFrameMilliseconds > 0
+            ? Context.Counters.EffectiveFrameMilliseconds
+            : realDeltaSeconds * 1000.0;
+        EngineQualityTier tier = overload.SubmitFrame(frameMs);
         Context.SetQualityTier(tier);
         ApplyThermalDegradation(tier);
         if (tier != previousTier && tier >= EngineQualityTier.ReducedLighting)
@@ -1929,6 +1941,54 @@ public sealed class Engine : IDisposable
         Context.Counters.RenderFrameLow1PercentFps = p99Ms > 0 ? 1000.0 / p99Ms : 0;
         Context.Counters.RenderFrameJitterMilliseconds = Math.Sqrt(varianceSum / _renderFrameSampleCount);
         Context.Counters.RenderFrameSampleCount = _renderFrameSampleCount;
+    }
+
+    private void PublishFrameBreakdown(FrameProfiler profiler)
+    {
+        ReadOnlySpan<double> phases = profiler.LastFrame;
+        ReadOnlySpan<double> subPhases = profiler.LastSubFrame;
+        double wallMs = profiler.LastWallMilliseconds;
+        double presentSubmitMs = GetSubPhase(subPhases, FrameSubPhase.Present);
+        double presentWaitMs = GetSubPhase(subPhases, FrameSubPhase.PresentWait);
+        double waitMs = presentWaitMs;
+        double profileTotalMs = Sum(phases);
+        double cpuWorkMs = Math.Max(0.0, profileTotalMs - waitMs);
+        double gpuWorkMs = GetSubPhase(subPhases, FrameSubPhase.GpuFrame);
+        double effectiveMs = Math.Max(0.0, wallMs - waitMs);
+
+        Context.Counters.FrameCpuWorkMilliseconds = cpuWorkMs;
+        Context.Counters.FrameGpuWorkMilliseconds = gpuWorkMs;
+        Context.Counters.FramePresentSubmitMilliseconds = presentSubmitMs;
+        Context.Counters.FramePresentWaitMilliseconds = presentWaitMs;
+        Context.Counters.FrameWaitMilliseconds = waitMs;
+        Context.Counters.EffectiveFrameMilliseconds = effectiveMs;
+        Context.Counters.EffectiveFramesPerSecond = effectiveMs > 0.0001 ? 1000.0 / effectiveMs : 0.0;
+        if (Context.TryGetService(out RenderWindow window))
+        {
+            Context.Counters.VSyncEnabled = window.VSyncEnabled;
+        }
+
+        if (Context.TryGetService(out RenderPipeline pipeline))
+        {
+            Context.Counters.FrameGpuTimerAvailable = pipeline.GpuFrameTimerAvailable;
+        }
+    }
+
+    private static double Sum(ReadOnlySpan<double> values)
+    {
+        double total = 0;
+        for (int i = 0; i < values.Length; i++)
+        {
+            total += values[i];
+        }
+
+        return total;
+    }
+
+    private static double GetSubPhase(ReadOnlySpan<double> subPhases, FrameSubPhase phase)
+    {
+        int index = (int)phase;
+        return (uint)index < (uint)subPhases.Length ? subPhases[index] : 0.0;
     }
 
     private void ApplyThermalDegradation(EngineQualityTier tier)

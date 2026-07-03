@@ -843,6 +843,14 @@ function Assert-ScriptedProbeSummarySemantics {
             Assert-ScriptedProbeRangeWidthAtLeast -Values $Values -ProbeName $Name -Key "player_x_range" -MinimumWidth 10
             Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "render_camera_synced" -Expected $true
         }
+        "editor-window" {
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "frame_samples" -Minimum 60
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "editor_enabled" -Expected $true
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "editor_running" -Expected $true
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "editor_panels" -Minimum 1
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "editor_bridge_frames" -Minimum 1
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "render_camera_synced" -Expected $true
+        }
         "goal" {
             Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "goal_reached" -Expected $true
             Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "max_particles" -Minimum 1
@@ -1185,6 +1193,7 @@ if ($RunScriptedProbes) {
     $probeRuns.Add((Invoke-ScriptedProbe -Name "playable-world" -Ticks 240 -Scene "scenes/playable-world.scene" -RequiredSummaryMarkers @("player_visual=present", "player_visual_overlays=", "playable_shots=", "particles=", "fps=", "frame_ms=", "frame_p99_ms=", "frame_low1_fps=", "frame_jitter_ms=", "frame_samples=", "sim_hz=", "camera_followed=True", "render_camera_synced=True", "render_camera=", "720x480", "player_left_ground=True", "player_air_control=True", "player_ground_samples=", "player_air_samples=", "max_particles=", "hud_blocked=none") -Root $root -OutputRoot $probeRoot))
     $probeRuns.Add((Invoke-ScriptedProbe -Name "main" -Ticks 80 -Scene "scenes/lava-mine.scene" -RequiredSummaryMarkers @("brush_material=", "brush_radius=", "painted_material=", "explosions=", "max_particles=", "max_lights=", "max_physics_destroyed=", "hud_blocked=none") -Root $root -OutputRoot $probeRoot))
     $probeRuns.Add((Invoke-ScriptedProbe -Name "route-attempt" -Ticks 1500 -Scene "scenes/lava-mine.scene" -RequiredSummaryMarkers @("pause_open=False", "hud_blocked=none", "render_camera_synced=True", "goal_reached=", "player_x_range=", "frame_samples=") -Root $root -OutputRoot $probeRoot -ExtraArguments @("--scripted-window-route")))
+    $probeRuns.Add((Invoke-ScriptedProbe -Name "editor-window" -Ticks 180 -Scene "scenes/lava-mine.scene" -RequiredSummaryMarkers @("editor_enabled=True", "editor_running=True", "editor_bridge_frames=", "editor_panels=", "hud_blocked=none", "render_camera_synced=True") -Root $root -OutputRoot $probeRoot -ExtraArguments @("--editor")))
     $probeRuns.Add((Invoke-ScriptedProbe -Name "goal" -Ticks 40 -Scene "scenes/lava-mine-goal-probe.scene" -RequiredSummaryMarkers @("goal_reached=True", "player_center_material=13", "max_particles=", "max_lights=") -Root $root -OutputRoot $probeRoot))
     $probeRuns.Add((Invoke-ScriptedProbe -Name "health" -Ticks 80 -Scene "scenes/lava-mine-health-probe.scene" -RequiredSummaryMarkers @("spawn_probe=True", "damage_events=", "player_health=", "player_center_material=") -Root $root -OutputRoot $probeRoot))
     $probeRuns.Add((Invoke-ScriptedProbe -Name "camera" -Ticks 80 -Scene "scenes/lava-mine-camera-probe.scene" -RequiredSummaryMarkers @("camera_followed=True", "render_camera_synced=True", "camera_zoom=4.00", "camera_samples=") -Root $root -OutputRoot $probeRoot))

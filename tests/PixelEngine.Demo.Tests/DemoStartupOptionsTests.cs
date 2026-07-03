@@ -125,6 +125,24 @@ public sealed class DemoStartupOptionsTests
         Assert.Equal(720, engine.Context.Options.WindowHeight);
         Assert.Equal(720, engine.Context.Options.InternalWidth);
         Assert.Equal(480, engine.Context.Options.InternalHeight);
+        Assert.Equal(1000.0 / 30.0, engine.Context.Options.Overload.FrameBudgetMs, precision: 3);
+        Assert.Equal(120, engine.Context.Options.Overload.SustainWindow);
+    }
+
+    /// <summary>
+    /// 验证窗口 VSync 默认开启，并可通过 --no-vsync 显式关闭供性能 baseline 使用。
+    /// </summary>
+    [Fact]
+    public void WindowVSyncDefaultsOnAndCanBeDisabledForProfiling()
+    {
+        DemoStartupOptions defaultOptions = DemoStartupOptions.Parse(["--window-ticks", "1"]);
+        DemoStartupOptions noVSync = DemoStartupOptions.Parse(["--window-ticks", "1", "--no-vsync"]);
+        PixelEngine.Hosting.EngineProject project = DemoProgram.BuildProject(noVSync);
+        using PixelEngine.Hosting.Engine engine = DemoProgram.BuildEngine(noVSync, project);
+
+        Assert.True(defaultOptions.VSync);
+        Assert.False(noVSync.VSync);
+        Assert.False(engine.Context.Options.VSync);
     }
 
     /// <summary>

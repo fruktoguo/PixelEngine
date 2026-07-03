@@ -21,6 +21,7 @@ public sealed class EngineBuilder
     private bool _headless;
     private bool _deterministicMode;
     private bool _enableGpu = true;
+    private bool _vSync = true;
     private string _contentRoot = "content";
     private string? _startScene;
     private double _simHz = EngineConstants.DefaultSimHz;
@@ -119,6 +120,15 @@ public sealed class EngineBuilder
     public EngineBuilder EnableGpu(bool enabled = true)
     {
         _enableGpu = enabled && !_headless;
+        return this;
+    }
+
+    /// <summary>
+    /// 配置窗口 VSync；headless 模式下保留配置但不会创建窗口。
+    /// </summary>
+    public EngineBuilder UseVSync(bool enabled = true)
+    {
+        _vSync = enabled;
         return this;
     }
 
@@ -251,6 +261,7 @@ public sealed class EngineBuilder
             _headless,
             _deterministicMode,
             _enableGpu,
+            _vSync,
             _contentRoot,
             _startScene,
             _simHz,

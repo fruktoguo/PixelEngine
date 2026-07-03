@@ -222,6 +222,9 @@ public sealed class RuntimeInfrastructureTests
         Assert.Equal(FrameStats.SubPhaseCount, Enum.GetValues<FrameSubPhase>().Length);
         Assert.Equal(0.1 + (int)FrameSubPhase.GpuComputeBloom, profiler.LastSubFrame[(int)FrameSubPhase.GpuComputeBloom]);
         Assert.Equal(0.1 + (int)FrameSubPhase.GpuLightComposite, profiler.LastSubFrame[(int)FrameSubPhase.GpuLightComposite]);
+        Assert.Equal(0.1 + (int)FrameSubPhase.PresentWait, profiler.LastSubFrame[(int)FrameSubPhase.PresentWait]);
+        Assert.Equal(0.1 + (int)FrameSubPhase.GpuFrame, profiler.LastSubFrame[(int)FrameSubPhase.GpuFrame]);
+        Assert.True(profiler.LastWallMilliseconds >= 0);
     }
 
     /// <summary>

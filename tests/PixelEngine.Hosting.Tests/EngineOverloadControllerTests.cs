@@ -71,6 +71,25 @@ public sealed class EngineOverloadControllerTests
     }
 
     /// <summary>
+    /// 验证过载判定优先使用扣除 present/vsync 等待后的 effective frame，避免把锁帧等待当成计算过载。
+    /// </summary>
+    [Fact]
+    public void EngineOverloadPolicyUsesEffectiveFrameTimeWhenAvailable()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithOverloadPolicy(frameBudgetMs: 10, sustainWindow: 1)
+            .Build();
+
+        engine.Context.Counters.EffectiveFrameMilliseconds = 5;
+        engine.Context.Counters.FramePresentSubmitMilliseconds = 1;
+        _ = engine.RunOneTick(realDeltaSeconds: 0.050);
+
+        Assert.Equal(EngineQualityTier.Full, engine.Context.QualityTier);
+        Assert.Equal(0, engine.Context.GetService<EngineOverloadController>().ConsecutiveOverBudgetFrames);
+    }
+
+    /// <summary>
     /// 验证一级过载降级会真实下发温度场降频，并在恢复全质量时复位。
     /// </summary>
     [Fact]

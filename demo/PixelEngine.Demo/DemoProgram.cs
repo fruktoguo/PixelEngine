@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using PixelEngine.Core.Diagnostics;
+using PixelEngine.Editor;
 using PixelEngine.Hosting;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
@@ -25,6 +26,8 @@ public static class DemoProgram
     private const int PlayableInternalHeight = 480;
     private const int PlayableWindowWidth = 1080;
     private const int PlayableWindowHeight = 720;
+    private const double PlayableOverloadFrameBudgetMs = 1000.0 / 30.0;
+    private const int PlayableOverloadSustainWindow = 120;
 
     /// <summary>
     /// 执行 Demo 主入口。
@@ -245,7 +248,7 @@ public static class DemoProgram
                 _ = engine.RunOneTick(now - previousSeconds);
                 previousSeconds = now;
                 double tickMs = (Stopwatch.GetTimestamp() - tickStart) * 1000.0 / Stopwatch.Frequency;
-                particleFrameProbe?.RecordFrame(tickMs, engine.Context.Profiler.LastSubFrame);
+                particleFrameProbe?.RecordFrame(tickMs, engine.Context.Profiler.LastSubFrame, engine.Context.Counters);
             }
 
             Console.WriteLine($"窗口短跑完成：frames={engine.Context.Clock.FrameIndex}, requested={options.WindowTicks}。");
@@ -256,6 +259,12 @@ public static class DemoProgram
             Console.WriteLine(
                 $"窗口短跑最慢相位：main_top={SlowestMainPhase(engine.Context.Profiler.LastFrame)}, " +
                 $"sub_top={SlowestSubPhase(engine.Context.Profiler.LastSubFrame)}。");
+            Console.WriteLine(
+                $"窗口性能拆分：cpu_work_ms={engine.Context.Counters.FrameCpuWorkMilliseconds:0.00}, " +
+                $"gpu_frame_ms={(engine.Context.Counters.FrameGpuTimerAvailable ? engine.Context.Counters.FrameGpuWorkMilliseconds.ToString("0.00") : "N/A")}, " +
+                $"present_wait_ms={engine.Context.Counters.FramePresentWaitMilliseconds:0.00}, " +
+                $"effective_fps={engine.Context.Counters.EffectiveFramesPerSecond:0.0}, " +
+                $"vsync={(engine.Context.Counters.VSyncEnabled ? "on" : "off")}。");
             if (scriptedInput is not null)
             {
                 WriteScriptedWindowSummary(engine, scriptedInput, scriptedProbe, reactionProbe, audioProbe, particleLightProbe);
@@ -494,6 +503,12 @@ public static class DemoProgram
         RenderPhaseDriver? renderDriver = engine.Context.TryGetService(out RenderPhaseDriver registeredRenderDriver)
             ? registeredRenderDriver
             : null;
+        EditorApp? editor = engine.Context.TryGetService(out EditorApp registeredEditor)
+            ? registeredEditor
+            : null;
+        EditorRenderBridge? editorBridge = engine.Context.TryGetService(out EditorRenderBridge registeredEditorBridge)
+            ? registeredEditorBridge
+            : null;
         ushort paintedMaterial = probe.MaterialAt(
             (int)MathF.Round(scriptedInput.BrushTargetWorld.X),
             (int)MathF.Round(scriptedInput.BrushTargetWorld.Y));
@@ -546,6 +561,10 @@ public static class DemoProgram
             $"frame_samples={diagnostics.FrameSampleCount}, " +
             $"sim_hz={diagnostics.SimHz:0.0}, " +
             $"diagnostic_frame={diagnostics.FrameCount}, " +
+            $"editor_enabled={engine.Context.Options.EnableEditor}, " +
+            $"editor_running={editor?.IsRunning.ToString() ?? "<missing>"}, " +
+            $"editor_panels={editor?.PanelCount ?? 0}, " +
+            $"editor_bridge_frames={editorBridge?.FrameIndex ?? 0}, " +
             $"pause_open={pauseOpen}, " +
             $"goal_reached={goalReached}, " +
             $"player_health={health?.Health ?? 0:0.00}, " +
@@ -729,6 +748,8 @@ public static class DemoProgram
             .WithProject(project)
             .WithWindow(PlayableWindowWidth, PlayableWindowHeight)
             .WithInternalResolution(PlayableInternalWidth, PlayableInternalHeight)
+            .WithOverloadPolicy(PlayableOverloadFrameBudgetMs, PlayableOverloadSustainWindow)
+            .UseVSync(options.VSync)
             .UseDeterministicMode();
         if (options.Headless)
         {
