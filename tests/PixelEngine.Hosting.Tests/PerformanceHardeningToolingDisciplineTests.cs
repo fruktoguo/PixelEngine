@@ -1129,6 +1129,55 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证目标硬件报告必须声明 particleCount，不能让硬件描述与 CPU/GPU probe 粒子数脱钩。
+    /// </summary>
+    [Fact]
+    public void GpuParticleBenchmarkPreflightRejectsTargetHardwareReportWithoutParticleCount()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-hardware-count-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateGpuParticleEvidenceManifest(temp, suffix: "bad-hardware-count");
+            SetFlatEvidenceFileContent(
+                manifest,
+                "targetHardwareReport",
+                """
+                targetGpuName: Test GPU 4090
+                targetGpuDriver: 999.1
+                gpuBackend: OpenGL
+                operatingSystem: TestOS
+                cpuName: Test CPU
+                dotnetVersion: 10.0.8
+                gitCommit: abcdef123456
+                """);
+
+            string artifacts = Path.Combine(temp, "bad-hardware-count-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
+            Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("targetHardwareReport 缺少机器可读字段 particleCount", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 GPU 粒子目标硬件预检要求目标 probe 至少包含长样本帧数。
     /// </summary>
     [Fact]

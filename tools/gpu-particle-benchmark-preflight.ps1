@@ -129,7 +129,7 @@ function Assert-TargetHardwareReport {
     param([string]$Path)
 
     $fields = Read-MachineReadableFields -Path $Path
-    foreach ($required in @("targetGpuName", "targetGpuDriver", "gpuBackend", "operatingSystem", "cpuName", "dotnetVersion", "gitCommit")) {
+    foreach ($required in @("targetGpuName", "targetGpuDriver", "gpuBackend", "operatingSystem", "cpuName", "dotnetVersion", "gitCommit", "particleCount")) {
         [void](Get-RequiredField -Fields $fields -Name $required -Scope "targetHardwareReport")
     }
 
