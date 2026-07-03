@@ -305,7 +305,12 @@ foreach ($rid in $rids) {
 
     $buildReportPath = [string](Get-JsonPropertyValue -Node $node -Name "report")
     Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "build_test/$rid/report" -Path $buildReportPath -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $node -Name "sha256"))
-    $expectedTestsRan = [bool]$node.testsRan
+    $testsRanProperty = $node.PSObject.Properties | Where-Object { $_.Name -eq "testsRan" } | Select-Object -First 1
+    if ($null -eq $testsRanProperty) {
+        $missing.Add("buildTest.$rid 缺少 testsRan 字段")
+    }
+
+    $expectedTestsRan = if ($null -eq $testsRanProperty) { $false } else { [bool]$testsRanProperty.Value }
     $expectedBuildOnly = if ($rid -eq "win-arm64") { "true" } else { "false" }
     Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "build_test/$rid/report" -Path $buildReportPath -ExpectedValues @{
         rid = $rid
@@ -314,11 +319,11 @@ foreach ($rid in $rids) {
         conclusion = "success"
     }
 
-    if ($rid -in $testRids -and -not [bool]$node.testsRan) {
+    if ($rid -in $testRids -and -not $expectedTestsRan) {
         $missing.Add("buildTest.$rid 必须标记 testsRan=true")
     }
 
-    if ($rid -eq "win-arm64" -and [bool]$node.testsRan) {
+    if ($rid -eq "win-arm64" -and $expectedTestsRan) {
         $missing.Add("buildTest.win-arm64 当前 CI 设计应为 build-only，不能伪装成真实 arm64 测试")
     }
 }
