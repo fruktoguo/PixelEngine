@@ -59,6 +59,8 @@ public sealed class RenderingProjectDisciplineTests
         string document = File.ReadAllText(ProjectPath("docs", "rendering-computesharp-resource-contract.md"));
         string plan = File.ReadAllText(ProjectPath("plan", "09-gpu-compute.md"));
         string resources = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Compute", "GpuComputeResources.cs"));
+        string contract = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Compute", "ComputeSharpResourceContract.cs"));
+        string contractKind = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Compute", "GpuResourceContractKind.cs"));
         string backend = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Compute", "ComputeSharpBackend.cs"));
         string interfaceSource = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Compute", "IComputeBackend.cs"));
         string project = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "PixelEngine.Rendering.csproj"));
@@ -89,7 +91,16 @@ public sealed class RenderingProjectDisciplineTests
         Assert.DoesNotContain("其它后端可把该值解释为后端资源句柄", interfaceSource, StringComparison.Ordinal);
         Assert.Contains("uint textureHandle", interfaceSource, StringComparison.Ordinal);
         Assert.Contains("plan/08 世界纹理句柄", resources, StringComparison.Ordinal);
+        Assert.Contains("ResourceContractKind => GpuResourceContractKind.OpenGlTextureNames", resources, StringComparison.Ordinal);
+        Assert.Contains("CanBeConsumedByComputeSharp => false", resources, StringComparison.Ordinal);
+        Assert.Contains("D3D12RenderGraph", contractKind, StringComparison.Ordinal);
+        Assert.Contains("GlDx12SharedResources", contractKind, StringComparison.Ordinal);
+        Assert.Contains("不能使用 OpenGL texture name", contract, StringComparison.Ordinal);
+        Assert.Contains("FenceHandle", contract, StringComparison.Ordinal);
+        Assert.Contains("CreateD3D12", contract, StringComparison.Ordinal);
+        Assert.Contains("CreateGlDx12Shared", contract, StringComparison.Ordinal);
         Assert.Contains("资源契约", backend, StringComparison.Ordinal);
+        Assert.Contains("ComputeSharpResourceContract", backend, StringComparison.Ordinal);
         Assert.Contains("真实可执行实现", backend, StringComparison.Ordinal);
         Assert.Contains("IsExecutable = false", backend, StringComparison.Ordinal);
         Assert.Contains("IsAvailable => false", backend, StringComparison.Ordinal);

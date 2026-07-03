@@ -7,6 +7,7 @@ namespace PixelEngine.Rendering.Compute;
 /// </summary>
 /// <remarks>
 /// DX12 后端必须在 plan/15 打包与 AOT 策略明确后启用；当前类型只保证接口隔离和 G2 恒假时不会形成硬依赖。
+/// 后续真实实现必须接收 <see cref="ComputeSharpResourceContract"/>，不得消费 <see cref="GpuComputeResources"/> 的 OpenGL texture name。
 /// </remarks>
 public sealed class ComputeSharpBackend : IComputeBackend
 {
@@ -113,6 +114,6 @@ public sealed class ComputeSharpBackend : IComputeBackend
 
     private static InvalidOperationException CreateUnavailableException()
     {
-        return new InvalidOperationException("ComputeSharp 后端尚未具备 D3D/GL-DX12 资源契约和真实可执行实现；请使用 NullComputeBackend 或 GLComputeBackend。");
+        return new InvalidOperationException("ComputeSharp 后端尚未具备 ComputeSharpResourceContract 资源契约、D3D/GL-DX12 同步和真实可执行实现；请使用 NullComputeBackend 或 GLComputeBackend。");
     }
 }

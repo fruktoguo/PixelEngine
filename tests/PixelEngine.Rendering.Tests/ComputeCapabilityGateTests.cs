@@ -189,7 +189,100 @@ public sealed class ComputeCapabilityGateTests
         Assert.False(ComputeSharpBackend.IsExecutable);
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
             () => backend.LoadKernel("stub", "unused"));
+        Assert.Contains("ComputeSharpResourceContract", exception.Message, StringComparison.Ordinal);
         Assert.Contains("资源契约", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OpenGlGpuComputeResourcesDeclareTheyCannotBeConsumedByComputeSharp()
+    {
+        GpuComputeResources resources = new(
+            width: 320,
+            height: 180,
+            worldTexture: 1,
+            emissiveTexture: 2,
+            occluderTexture: 3,
+            visibilityTexture: 4,
+            sceneTexture: 5,
+            litTexture: 6,
+            postATexture: 7,
+            postBTexture: 8);
+
+        Assert.Equal(GpuResourceContractKind.OpenGlTextureNames, resources.ResourceContractKind);
+        Assert.False(resources.CanBeConsumedByComputeSharp);
+    }
+
+    [Fact]
+    public void ComputeSharpResourceContractRequiresD3DOrSharedResourcesAndFence()
+    {
+        ArgumentException openGl = Assert.Throws<ArgumentException>(
+            () => ComputeSharpResourceContract.Create(
+                GpuResourceContractKind.OpenGlTextureNames,
+                width: 320,
+                height: 180,
+                deviceHandle: 1,
+                commandQueueHandle: 2,
+                worldResource: 3,
+                emissiveResource: 4,
+                occluderResource: 5,
+                visibilityResource: 6,
+                sceneResource: 7,
+                litResource: 8,
+                postAResource: 9,
+                postBResource: 10,
+                fenceHandle: 11));
+        Assert.Contains("OpenGL texture name", openGl.Message, StringComparison.Ordinal);
+
+        _ = Assert.Throws<ArgumentException>(
+            () => ComputeSharpResourceContract.CreateD3D12(
+                width: 320,
+                height: 180,
+                deviceHandle: 1,
+                commandQueueHandle: 2,
+                worldResource: 3,
+                emissiveResource: 4,
+                occluderResource: 5,
+                visibilityResource: 6,
+                sceneResource: 7,
+                litResource: 8,
+                postAResource: 9,
+                postBResource: 10,
+                fenceHandle: 0));
+
+        ComputeSharpResourceContract d3d = ComputeSharpResourceContract.CreateD3D12(
+            width: 320,
+            height: 180,
+            deviceHandle: 1,
+            commandQueueHandle: 2,
+            worldResource: 3,
+            emissiveResource: 4,
+            occluderResource: 5,
+            visibilityResource: 6,
+            sceneResource: 7,
+            litResource: 8,
+            postAResource: 9,
+            postBResource: 10,
+            fenceHandle: 11);
+        ComputeSharpResourceContract shared = ComputeSharpResourceContract.CreateGlDx12Shared(
+            width: 320,
+            height: 180,
+            deviceHandle: 1,
+            commandQueueHandle: 2,
+            worldResource: 3,
+            emissiveResource: 4,
+            occluderResource: 5,
+            visibilityResource: 6,
+            sceneResource: 7,
+            litResource: 8,
+            postAResource: 9,
+            postBResource: 10,
+            fenceHandle: 11);
+
+        Assert.Equal(GpuResourceContractKind.D3D12RenderGraph, d3d.Kind);
+        Assert.Equal(GpuResourceContractKind.GlDx12SharedResources, shared.Kind);
+        Assert.Equal(320, d3d.Width);
+        Assert.Equal(180, d3d.Height);
+        Assert.Equal(11, d3d.FenceHandle);
     }
 
     [Fact]
