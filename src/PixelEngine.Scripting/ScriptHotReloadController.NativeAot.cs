@@ -21,6 +21,20 @@ public sealed class ScriptHotReloadController(Scene scene, IScriptContext contex
     public Exception? LastWatcherException => null;
 
     /// <summary>
+    /// NativeAOT 通道没有可卸载脚本 ALC。
+    /// </summary>
+    public int UnloadedLoadContextAliveCount => 0;
+
+    /// <summary>
+    /// NativeAOT 通道没有可卸载脚本 ALC，因此泄漏检测计数恒为 0。
+    /// </summary>
+    /// <returns>0。</returns>
+    public int CollectAndCountUnloadedLoadContextsAlive()
+    {
+        return 0;
+    }
+
+    /// <summary>
     /// NativeAOT 通道不支持从源码目录动态编译脚本。
     /// </summary>
     /// <param name="assemblyName">动态脚本程序集名。</param>

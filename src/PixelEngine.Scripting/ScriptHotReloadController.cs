@@ -27,6 +27,20 @@ public sealed class ScriptHotReloadController(Scene scene, IScriptContext contex
     public Exception? LastWatcherException => _service.LastWatcherException;
 
     /// <summary>
+    /// 已调用 Unload 但尚未被 GC 回收的旧脚本 ALC 数量。
+    /// </summary>
+    public int UnloadedLoadContextAliveCount => _service.UnloadedLoadContextAliveCount;
+
+    /// <summary>
+    /// 触发完整 GC 后返回仍存活的旧脚本 ALC 数量，用于泄漏检测证据采集。
+    /// </summary>
+    /// <returns>已卸载但仍存活的旧脚本 ALC 数量。</returns>
+    public int CollectAndCountUnloadedLoadContextsAlive()
+    {
+        return _service.CollectAndCountUnloadedLoadContextsAlive();
+    }
+
+    /// <summary>
     /// 从源目录读取 C# 脚本并排队一次热重载。
     /// </summary>
     /// <param name="assemblyName">动态脚本程序集名。</param>

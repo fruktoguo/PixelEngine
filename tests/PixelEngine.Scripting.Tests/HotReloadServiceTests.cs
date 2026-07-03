@@ -156,6 +156,8 @@ public sealed class HotReloadServiceTests
         {
             Assert.True(WaitForUnload(unloadedContexts[i]), $"第 {i} 次热重载旧 ALC 未释放。");
         }
+
+        Assert.Equal(0, service.CollectAndCountUnloadedLoadContextsAlive());
     }
 
     /// <summary>
