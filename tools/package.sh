@@ -233,6 +233,9 @@ done < <(find "$output_root" -maxdepth 1 -type f \( -name 'PixelEngine-Demo-*-r2
 
 mv "$tmp_checksum" "$checksum_path"
 
+rm -rf "$staging_dir"
+rmdir "$staging_root" 2>/dev/null || true
+
 echo "Package completed for $rid/$channel."
 echo "Archive: $archive_path"
 echo "Checksums: $checksum_path"

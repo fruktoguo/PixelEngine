@@ -142,6 +142,12 @@ $lines = foreach ($archive in $archives) {
 
 Set-Content -LiteralPath $checksumPath -Value $lines -Encoding ASCII
 
+Remove-Item -LiteralPath $stagingDir -Recurse -Force -ErrorAction SilentlyContinue
+if ((Test-Path -LiteralPath $stagingRoot -PathType Container) -and
+  -not (Get-ChildItem -LiteralPath $stagingRoot -Force -ErrorAction SilentlyContinue | Select-Object -First 1)) {
+  Remove-Item -LiteralPath $stagingRoot -Force -ErrorAction SilentlyContinue
+}
+
 Write-Host "Package completed for $Rid/$Channel."
 Write-Host "Archive: $archivePath"
 Write-Host "Checksums: $checksumPath"
