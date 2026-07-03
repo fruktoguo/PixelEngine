@@ -354,6 +354,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("openAlObjectsLiveAfterShutdown", script, StringComparison.Ordinal);
         Assert.Contains("box2DBodiesLiveAfterShutdown", script, StringComparison.Ordinal);
         Assert.Contains("alcLoadContextsAliveAfterUnload", script, StringComparison.Ordinal);
+        Assert.Contains("单 detector report", script, StringComparison.Ordinal);
         Assert.Contains("必须为 0", script, StringComparison.Ordinal);
         Assert.Contains("scope 缺少 detector", script, StringComparison.Ordinal);
         Assert.Contains("sha256", script, StringComparison.Ordinal);
@@ -430,6 +431,72 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(2, good.ExitCode);
             string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "native-leak-preflight.md"));
             Assert.Contains("detector_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证单个 detector report 入口也必须有机器可读 no-leaks 覆盖证据，不能任意文本进入 pending review。
+    /// </summary>
+    [Fact]
+    public void NativeLeakPreflightRejectsSingleDetectorReportWithoutMachineReadableCoverage()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-native-leak-single-detector-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string badReport = WriteTextEvidence(Path.Combine(temp, "bad-detector.md"), "no leaks, trust me");
+            string badArtifacts = Path.Combine(temp, "bad-out");
+            ScriptResult bad = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "native-leak-preflight.ps1"),
+                "-DetectorName",
+                "external-detector",
+                "-DetectorReportPath",
+                badReport,
+                "-Artifacts",
+                badArtifacts);
+
+            Assert.Equal(5, bad.ExitCode);
+            string badPreflightReport = File.ReadAllText(Path.Combine(badArtifacts, "native-leak-preflight.md"));
+            Assert.Contains("blocked_invalid_native_leak_evidence", bad.Output + badPreflightReport, StringComparison.Ordinal);
+            Assert.Contains("单 detector report 缺少 detector 字段", badPreflightReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | detector_report_attached_pending_review", badPreflightReport, StringComparison.Ordinal);
+
+            string goodReport = WriteMarkdownEvidence(
+                Path.Combine(temp, "good-detector.md"),
+                new Dictionary<string, string>
+                {
+                    ["detector"] = "external-detector",
+                    ["conclusion"] = "no_leaks",
+                    ["scopes"] = "GL; OpenAL; Box2D; ALC",
+                    ["glObjectsLiveAfterShutdown"] = "0",
+                    ["openAlObjectsLiveAfterShutdown"] = "0",
+                    ["box2DBodiesLiveAfterShutdown"] = "0",
+                    ["alcLoadContextsAliveAfterUnload"] = "0",
+                });
+            string goodArtifacts = Path.Combine(temp, "good-out");
+            ScriptResult good = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "native-leak-preflight.ps1"),
+                "-DetectorName",
+                "external-detector",
+                "-DetectorReportPath",
+                goodReport,
+                "-Artifacts",
+                goodArtifacts);
+
+            Assert.Equal(2, good.ExitCode);
+            string goodPreflightReport = File.ReadAllText(Path.Combine(goodArtifacts, "native-leak-preflight.md"));
+            Assert.Contains("detector_report_attached_pending_review", good.Output + goodPreflightReport, StringComparison.Ordinal);
+            Assert.Contains("Machine-readable no-leaks coverage", goodPreflightReport, StringComparison.Ordinal);
         }
         finally
         {

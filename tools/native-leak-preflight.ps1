@@ -74,6 +74,73 @@ function Get-NativeLeakScopeRequiredMetric {
     }
 }
 
+function Test-NativeLeakLiveCountZero {
+    param(
+        [hashtable]$Values,
+        [string]$Metric,
+        [string]$Prefix
+    )
+
+    if (-not $Values.ContainsKey($Metric)) {
+        return "$Prefix 缺少 $Metric 字段"
+    }
+
+    $liveCount = 0
+    $rawLiveCount = [string]$Values[$Metric]
+    if (-not [int]::TryParse($rawLiveCount, [ref]$liveCount) -or $liveCount -ne 0) {
+        return "$Prefix $Metric 必须为 0，实际为 $rawLiveCount"
+    }
+
+    return ""
+}
+
+function Test-SingleDetectorReport {
+    param(
+        [string]$Path,
+        [string]$DetectorName
+    )
+
+    $issues = [System.Collections.Generic.List[string]]::new()
+    if ([string]::IsNullOrWhiteSpace($DetectorName)) {
+        $issues.Add("单 detector report 必须显式传入 DetectorName")
+    }
+
+    $values = Read-MarkdownEvidenceTable -Path $Path
+    foreach ($key in @("detector", "conclusion", "scopes")) {
+        if (-not $values.ContainsKey($key)) {
+            $issues.Add("单 detector report 缺少 $key 字段")
+        }
+    }
+
+    if ($values.ContainsKey("detector") -and -not [string]::IsNullOrWhiteSpace($DetectorName) -and
+        -not [string]::Equals([string]$values["detector"], $DetectorName, [StringComparison]::Ordinal)) {
+        $issues.Add("单 detector report detector 必须为 $DetectorName，实际为 $($values["detector"])")
+    }
+
+    if ($values.ContainsKey("conclusion") -and
+        -not [string]::Equals([string]$values["conclusion"], "no_leaks", [StringComparison]::OrdinalIgnoreCase)) {
+        $issues.Add("单 detector report conclusion 必须为 no_leaks，实际为 $($values["conclusion"])")
+    }
+
+    if ($values.ContainsKey("scopes")) {
+        $scopeText = [string]$values["scopes"]
+        foreach ($scope in @("GL", "OpenAL", "Box2D", "ALC")) {
+            if ($scopeText -notmatch [regex]::Escape($scope)) {
+                $issues.Add("单 detector report scopes 必须包含 $scope")
+            }
+        }
+    }
+
+    foreach ($metric in @("glObjectsLiveAfterShutdown", "openAlObjectsLiveAfterShutdown", "box2DBodiesLiveAfterShutdown", "alcLoadContextsAliveAfterUnload")) {
+        $issue = Test-NativeLeakLiveCountZero -Values $values -Metric $metric -Prefix "单 detector report"
+        if (-not [string]::IsNullOrWhiteSpace($issue)) {
+            $issues.Add($issue)
+        }
+    }
+
+    return @($issues)
+}
+
 function Write-NativeLeakReport {
     param(
         [string]$Path,
@@ -307,25 +374,14 @@ function Read-EvidenceManifest {
             }
 
             $requiredMetric = Get-NativeLeakScopeRequiredMetric -Scope $scope
-            if (-not $reportValues.ContainsKey($requiredMetric)) {
+            $liveCountIssue = Test-NativeLeakLiveCountZero -Values $reportValues -Metric $requiredMetric -Prefix "evidence report $scope"
+            if (-not [string]::IsNullOrWhiteSpace($liveCountIssue)) {
                 $items += [pscustomobject]@{
                     InvalidManifest = $true
                     Scope = $scope
-                    Message = "evidence report $scope 缺少 $requiredMetric 字段"
+                    Message = $liveCountIssue
                 }
                 $semanticInvalid = $true
-            }
-            else {
-                $liveCount = 0
-                $rawLiveCount = [string]$reportValues[$requiredMetric]
-                if (-not [int]::TryParse($rawLiveCount, [ref]$liveCount) -or $liveCount -ne 0) {
-                    $items += [pscustomobject]@{
-                        InvalidManifest = $true
-                        Scope = $scope
-                        Message = "evidence report $scope $requiredMetric 必须为 0，实际为 $rawLiveCount"
-                    }
-                    $semanticInvalid = $true
-                }
             }
         }
 
@@ -514,9 +570,22 @@ if (-not $hasDetectorReport) {
     exit 2
 }
 
+$singleDetectorIssues = @(Test-SingleDetectorReport -Path $DetectorReportPath -DetectorName $DetectorName)
+if ($singleDetectorIssues.Count -gt 0) {
+    $detail = "Native leak preflight failed: 单 detector report 缺少机器可读 no-leaks 覆盖证据。错误项：" + ($singleDetectorIssues -join "; ")
+    Write-NativeLeakReport -Path $reportPath -Status "blocked_invalid_native_leak_evidence" -Detector $DetectorName -DetectorReport $DetectorReportPath -Evidence $evidence -Runs $runs -Detail $detail
+    Write-Host "Native leak preflight blocked_invalid_native_leak_evidence. Report: $reportPath"
+
+    if ($AllowBlocked) {
+        exit 0
+    }
+
+    exit 5
+}
+
 $hash = Get-FileHash -Algorithm SHA256 -Path $DetectorReportPath
 $relativeDetectorReport = ConvertTo-RelativePath -Root $root -Path $DetectorReportPath
-$detail = "External detector report attached. detector=$DetectorName report=$relativeDetectorReport sha256=$($hash.Hash). Human review must confirm the report covers GL, OpenAL, Box2D and ALC with no leaks before plan/18 can be unblocked."
+$detail = "External detector report attached. detector=$DetectorName report=$relativeDetectorReport sha256=$($hash.Hash). Machine-readable no-leaks coverage for GL, OpenAL, Box2D and ALC is present; human review must still confirm detector quality before plan/18 can be unblocked."
 Write-NativeLeakReport -Path $reportPath -Status "detector_report_attached_pending_review" -Detector $DetectorName -DetectorReport $relativeDetectorReport -Evidence $evidence -Runs $runs -Detail $detail
 Write-Host "Native leak preflight detector_report_attached_pending_review. Report: $reportPath"
 if (-not $AllowBlocked) {
