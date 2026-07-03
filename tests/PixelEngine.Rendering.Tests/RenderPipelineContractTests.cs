@@ -38,6 +38,29 @@ public sealed class RenderPipelineContractTests
     }
 
     [Fact]
+    public void PresentationViewportFitsInternalCanvasIntoFramebuffer()
+    {
+        PresentationViewport wide = PresentationViewport.Fit(720, 480, 1920, 1080);
+
+        Assert.Equal(150, wide.X);
+        Assert.Equal(0, wide.Y);
+        Assert.Equal(1620, wide.Width);
+        Assert.Equal(1080, wide.Height);
+        Assert.Equal(720, wide.SourceWidth);
+        Assert.Equal(480, wide.SourceHeight);
+        Assert.Equal(1920, wide.TargetWidth);
+        Assert.Equal(1080, wide.TargetHeight);
+        Assert.Equal((0f, 0f), wide.MapFramebufferToSource(150f, 0f));
+        Assert.Equal((720f, 480f), wide.MapFramebufferToSource(1770f, 1080f));
+
+        PresentationViewport tall = PresentationViewport.Fit(720, 480, 600, 1200);
+        Assert.Equal(0, tall.X);
+        Assert.Equal(400, tall.Y);
+        Assert.Equal(600, tall.Width);
+        Assert.Equal(400, tall.Height);
+    }
+
+    [Fact]
     public void RenderPipelineSourceDocumentsRequiredOrderingAndHooks()
     {
         string source = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderPipeline.cs"));

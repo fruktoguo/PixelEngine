@@ -21,8 +21,10 @@ public static class DemoProgram
     private const int DemoWorldWidthCells = 640;
     private const int DemoWorldHeightCells = 360;
     private const int DemoParticleCapacityDefault = 32_768;
-    private const int PlayableWindowWidth = 854;
-    private const int PlayableWindowHeight = 480;
+    private const int PlayableInternalWidth = 720;
+    private const int PlayableInternalHeight = 480;
+    private const int PlayableWindowWidth = 1080;
+    private const int PlayableWindowHeight = 720;
 
     /// <summary>
     /// 执行 Demo 主入口。
@@ -693,6 +695,7 @@ public static class DemoProgram
         EngineBuilder builder = new EngineBuilder()
             .WithProject(project)
             .WithWindow(PlayableWindowWidth, PlayableWindowHeight)
+            .WithInternalResolution(PlayableInternalWidth, PlayableInternalHeight)
             .UseDeterministicMode();
         if (options.Headless)
         {

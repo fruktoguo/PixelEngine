@@ -112,7 +112,7 @@ public sealed class DemoStartupOptionsTests
     }
 
     /// <summary>
-    /// 验证默认 Demo 使用能在普通桌面首屏完整看见玩家和地形的窗口尺寸。
+    /// 验证默认 Demo 使用玩家友好的窗口尺寸，并把内部渲染画布固定为 720x480。
     /// </summary>
     [Fact]
     public void DefaultEngineUsesPlayableWindowSize()
@@ -121,8 +121,10 @@ public sealed class DemoStartupOptionsTests
         PixelEngine.Hosting.EngineProject project = DemoProgram.BuildProject(options);
         using PixelEngine.Hosting.Engine engine = DemoProgram.BuildEngine(options, project);
 
-        Assert.Equal(854, engine.Context.Options.WindowWidth);
-        Assert.Equal(480, engine.Context.Options.WindowHeight);
+        Assert.Equal(1080, engine.Context.Options.WindowWidth);
+        Assert.Equal(720, engine.Context.Options.WindowHeight);
+        Assert.Equal(720, engine.Context.Options.InternalWidth);
+        Assert.Equal(480, engine.Context.Options.InternalHeight);
     }
 
     /// <summary>

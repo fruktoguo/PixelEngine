@@ -29,26 +29,22 @@ public sealed class PresentPass : IDisposable
     /// 绘制到默认 framebuffer。调用后由外层交换缓冲。
     /// </summary>
     /// <param name="source">输入颜色目标。</param>
-    /// <param name="viewportWidth">默认 framebuffer viewport 宽度。</param>
-    /// <param name="viewportHeight">默认 framebuffer viewport 高度。</param>
+    /// <param name="viewport">内部画布在默认 framebuffer 中的呈现区域。</param>
     /// <param name="quad">全屏三角形。</param>
-    public void Render(ColorRenderTarget source, int viewportWidth, int viewportHeight, FullscreenQuad quad)
+    public void Render(ColorRenderTarget source, PresentationViewport viewport, FullscreenQuad quad)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(quad);
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (viewportWidth <= 0 || viewportHeight <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(viewportWidth), "Present viewport 尺寸必须为正数。");
-        }
 
         _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-        _gl.Viewport(0, 0, (uint)viewportWidth, (uint)viewportHeight);
+        _gl.Viewport(0, 0, (uint)viewport.TargetWidth, (uint)viewport.TargetHeight);
         _gl.Disable(EnableCap.Blend);
         _gl.Disable(EnableCap.DepthTest);
         _gl.Disable(EnableCap.ScissorTest);
         _gl.ClearColor(0f, 0f, 0f, 1f);
         _gl.Clear(ClearBufferMask.ColorBufferBit);
+        _gl.Viewport(viewport.X, viewport.Y, (uint)viewport.Width, (uint)viewport.Height);
         _program.Use();
         source.BindTexture(0);
         _gl.Uniform1(_sourceLocation, 0);

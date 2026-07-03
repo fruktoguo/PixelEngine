@@ -141,7 +141,7 @@ public sealed class PlayableProjectileTool : Behaviour
             return;
         }
 
-        if (_cooldownRemaining > 0f || !Context.Input.WasMousePressed(MouseButton.Left))
+        if (_cooldownRemaining > 0f || !Context.Input.IsMouseDown(MouseButton.Left))
         {
             return;
         }

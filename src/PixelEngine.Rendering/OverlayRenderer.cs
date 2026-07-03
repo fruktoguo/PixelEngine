@@ -86,16 +86,29 @@ public sealed unsafe class OverlayRenderer : IDisposable
     /// <param name="viewportHeight">当前 framebuffer viewport 高度，单位为像素。</param>
     public void Render(ReadOnlySpan<OverlayCommand> commands, int viewportWidth, int viewportHeight)
     {
-        RenderCore(commands, viewportWidth, viewportHeight, bindDefaultFramebuffer: true);
+        PresentationViewport viewport = PresentationViewport.Fit(viewportWidth, viewportHeight, viewportWidth, viewportHeight);
+        RenderCore(commands, viewport, bindDefaultFramebuffer: true);
+    }
+
+    /// <summary>
+    /// 将内部画布坐标系的 overlay 命令绘制到默认 framebuffer 的等比呈现区域。
+    /// </summary>
+    /// <param name="commands">只读 overlay 命令列表。</param>
+    /// <param name="viewport">内部画布在默认 framebuffer 中的呈现区域。</param>
+    public void Render(ReadOnlySpan<OverlayCommand> commands, PresentationViewport viewport)
+    {
+        RenderCore(commands, viewport, bindDefaultFramebuffer: true);
     }
 
     private void RenderCore(ReadOnlySpan<OverlayCommand> commands, int viewportWidth, int viewportHeight, bool bindDefaultFramebuffer)
     {
+        PresentationViewport viewport = PresentationViewport.Fit(viewportWidth, viewportHeight, viewportWidth, viewportHeight);
+        RenderCore(commands, viewport, bindDefaultFramebuffer);
+    }
+
+    private void RenderCore(ReadOnlySpan<OverlayCommand> commands, PresentationViewport viewport, bool bindDefaultFramebuffer)
+    {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (viewportWidth <= 0 || viewportHeight <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(viewportWidth), "Overlay viewport 尺寸必须为正数。");
-        }
 
         if (commands.Length > MaxCommandCount)
         {
@@ -112,7 +125,7 @@ public sealed unsafe class OverlayRenderer : IDisposable
             _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
         }
 
-        _gl.Viewport(0, 0, (uint)viewportWidth, (uint)viewportHeight);
+        _gl.Viewport(viewport.X, viewport.Y, (uint)viewport.Width, (uint)viewport.Height);
         _gl.Disable(EnableCap.DepthTest);
         _gl.Disable(EnableCap.ScissorTest);
         if (commands.IsEmpty)
@@ -122,8 +135,8 @@ public sealed unsafe class OverlayRenderer : IDisposable
         }
 
         _program.Use();
-        float viewportWidthValue = viewportWidth;
-        float viewportHeightValue = viewportHeight;
+        float viewportWidthValue = viewport.SourceWidth;
+        float viewportHeightValue = viewport.SourceHeight;
         _gl.Uniform2(_viewportLocation, viewportWidthValue, viewportHeightValue);
         _gl.Uniform1(_spriteTextureLocation, 0);
         _gl.Enable(EnableCap.Blend);

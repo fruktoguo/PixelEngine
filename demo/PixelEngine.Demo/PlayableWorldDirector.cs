@@ -75,7 +75,7 @@ public sealed class PlayableWorldDirector : Behaviour
         camera.MinY = 0f;
         camera.MaxX = 1536f;
         camera.MaxY = 384f;
-        camera.Zoom = 2.5f;
+        camera.Zoom = 2f;
 
         PlayableProjectileTool projectile = playerEntity.AddComponent<PlayableProjectileTool>();
         projectile.ImpactRadius = 9;

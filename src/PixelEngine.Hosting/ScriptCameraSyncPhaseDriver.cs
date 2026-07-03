@@ -7,17 +7,23 @@ namespace PixelEngine.Hosting;
 /// </summary>
 public sealed class ScriptCameraSyncPhaseDriver(
     ScriptCameraSynchronizer synchronizer,
-    RenderWindow? window = null) : IEnginePhaseDriver
+    RenderWindow? window = null,
+    int fixedViewportWidth = 0,
+    int fixedViewportHeight = 0) : IEnginePhaseDriver
 {
     private readonly ScriptCameraSynchronizer _synchronizer = synchronizer ?? throw new ArgumentNullException(nameof(synchronizer));
+    private int _fixedViewportWidth = fixedViewportWidth;
+    private int _fixedViewportHeight = fixedViewportHeight;
     private RenderWindow? _window = window;
 
     /// <summary>
     /// 绑定或替换窗口尺寸来源。
     /// </summary>
-    public void AttachWindow(RenderWindow window)
+    public void AttachWindow(RenderWindow window, int fixedViewportWidth = 0, int fixedViewportHeight = 0)
     {
         _window = window ?? throw new ArgumentNullException(nameof(window));
+        _fixedViewportWidth = fixedViewportWidth;
+        _fixedViewportHeight = fixedViewportHeight;
     }
 
     /// <summary>
@@ -38,6 +44,8 @@ public sealed class ScriptCameraSyncPhaseDriver(
             return;
         }
 
-        _ = _synchronizer.Sync(_window.Width, _window.Height);
+        int viewportWidth = _fixedViewportWidth > 0 ? _fixedViewportWidth : _window.Width;
+        int viewportHeight = _fixedViewportHeight > 0 ? _fixedViewportHeight : _window.Height;
+        _ = _synchronizer.Sync(viewportWidth, viewportHeight);
     }
 }

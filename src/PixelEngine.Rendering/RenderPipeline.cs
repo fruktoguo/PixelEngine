@@ -378,8 +378,10 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
         RecordSub(profiler, FrameSubPhase.PostProcess, started);
 
         started = Stopwatch.GetTimestamp();
-        _present.Render(current, Width, Height, _quad);
-        _overlay.Render(overlays, Width, Height);
+        PresentationViewport presentation = PresentationViewport.Fit(Width, Height, _window.Width, _window.Height);
+        _present.Render(current, presentation, _quad);
+        _overlay.Render(overlays, presentation);
+        _gl.Viewport(0, 0, (uint)_window.Width, (uint)_window.Height);
         BeforePresentUi?.Invoke(_gl);
         BeforeSwapBuffers?.Invoke(_gl);
         _window.SwapBuffers();

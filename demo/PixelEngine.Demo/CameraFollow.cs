@@ -33,6 +33,26 @@ public sealed class CameraFollow : Behaviour
     public float Zoom { get; set; } = 1f;
 
     /// <summary>
+    /// 滚轮缩放允许的最小倍率。
+    /// </summary>
+    public float MinZoom { get; set; } = 1f;
+
+    /// <summary>
+    /// 滚轮缩放允许的最大倍率。
+    /// </summary>
+    public float MaxZoom { get; set; } = 4f;
+
+    /// <summary>
+    /// 每格滚轮改变的缩放倍率。
+    /// </summary>
+    public float ZoomStep { get; set; } = 1f;
+
+    /// <summary>
+    /// 是否允许鼠标滚轮调整视野缩放。
+    /// </summary>
+    public bool MouseWheelZoomEnabled { get; set; } = true;
+
+    /// <summary>
     /// 关卡左边界。
     /// </summary>
     public float MinX { get; set; } = 0f;
@@ -91,6 +111,7 @@ public sealed class CameraFollow : Behaviour
             return;
         }
 
+        ApplyMouseWheelZoom();
         float targetX = _target.CenterX + (MathF.Sign(_target.State.VelocityX) * LookaheadX);
         float targetY = _target.CenterY + (MathF.Sign(_target.State.VelocityY) * LookaheadY);
         if (!_initialized)
@@ -115,6 +136,25 @@ public sealed class CameraFollow : Behaviour
         float clampedX = ClampWithFallback(x, MinX + halfWidth, MaxX - halfWidth);
         float clampedY = ClampWithFallback(y, MinY + halfHeight, MaxY - halfHeight);
         Context.Camera.SetCenter(clampedX, clampedY);
+    }
+
+    private void ApplyMouseWheelZoom()
+    {
+        if (!MouseWheelZoomEnabled)
+        {
+            return;
+        }
+
+        float wheel = Context.Input.MouseWheelY;
+        if (MathF.Abs(wheel) <= 0.001f)
+        {
+            return;
+        }
+
+        float min = MathF.Max(0.1f, MathF.Min(MinZoom, MaxZoom));
+        float max = MathF.Max(min, MathF.Max(MinZoom, MaxZoom));
+        float step = MathF.Max(0.1f, ZoomStep);
+        Zoom = Math.Clamp(MathF.Round((Zoom + (MathF.Sign(wheel) * step)) / step) * step, min, max);
     }
 
     private static float ClampWithFallback(float value, float min, float max)
