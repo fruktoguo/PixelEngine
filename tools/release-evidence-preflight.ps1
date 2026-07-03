@@ -611,10 +611,24 @@ foreach ($ridName in Get-JsonPropertyNames $manifest.artifacts) {
 
 $workflowRunReport = [string]$manifest.workflowRunReport
 $githubReleaseUploadReport = [string]$manifest.githubRelease.uploadReport
+$artifactAuditReport = [string]$manifest.artifactAuditReport
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -DeclaredSha256 ([string]$manifest.workflowRunSha256)
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -ExpectedValues @{ conclusion = "success" }
 $expectedRunIdentity = Get-ExpectedRunIdentity -Missing $missing -Root $root -WorkflowRunReport $workflowRunReport
 $releaseVersion = Get-ReleaseTagVersion -Missing $missing -Root $root -WorkflowRunReport $workflowRunReport -UploadReport $githubReleaseUploadReport
+Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "artifact_audit" -Path $artifactAuditReport -DeclaredSha256 ([string]$manifest.artifactAuditSha256)
+Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "artifact_audit" -Path $artifactAuditReport -ExpectedValues @{
+    conclusion = "success"
+    require_all = "true"
+    package_count = "12"
+    expanded_package_count = "12"
+    rids = "win-x64,win-arm64,linux-x64,linux-arm64,osx-x64,osx-arm64"
+    channels = "r2r,aot"
+    aot_dynamic_box2d_rejected = "true"
+    package_layout_checked = "true"
+    checksum_checked = "true"
+}
+Add-RunIdentityCheck -Missing $missing -Root $root -Scope "artifact_audit" -Path $artifactAuditReport -ExpectedIdentity $expectedRunIdentity
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "github_release_upload" -Path $githubReleaseUploadReport -DeclaredSha256 ([string]$manifest.githubRelease.uploadSha256)
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "github_release_upload" -Path $githubReleaseUploadReport -ExpectedValues @{ conclusion = "success" }
 Add-RunIdentityCheck -Missing $missing -Root $root -Scope "github_release_upload" -Path $githubReleaseUploadReport -ExpectedIdentity $expectedRunIdentity

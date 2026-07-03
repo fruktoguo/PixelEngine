@@ -2801,6 +2801,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("github_release_upload release_tag 必须为 true", evidence, StringComparison.Ordinal);
         Assert.Contains("Test-PackageVersionsMatchReleaseTag", evidence, StringComparison.Ordinal);
         Assert.Contains("packageReport", evidence, StringComparison.Ordinal);
+        Assert.Contains("artifactAuditReport", evidence, StringComparison.Ordinal);
+        Assert.Contains("artifact_audit", evidence, StringComparison.Ordinal);
+        Assert.Contains("aot_dynamic_box2d_rejected", evidence, StringComparison.Ordinal);
+        Assert.Contains("package_layout_checked", evidence, StringComparison.Ordinal);
+        Assert.Contains("checksum_checked", evidence, StringComparison.Ordinal);
         Assert.Contains("deterministic_hash", evidence, StringComparison.Ordinal);
         Assert.Contains("Test-ReleaseChecksumRows", evidence, StringComparison.Ordinal);
         Assert.Contains("SHA256SUMS 缺少 package 条目", evidence, StringComparison.Ordinal);
@@ -2879,6 +2884,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("evidence.json", release, StringComparison.Ordinal);
         Assert.Contains("r2rLightupReport", release, StringComparison.Ordinal);
         Assert.Contains("deterministicHashReport", release, StringComparison.Ordinal);
+        Assert.Contains("artifactAuditReport", release, StringComparison.Ordinal);
         Assert.Contains("function Get-Sha256", release, StringComparison.Ordinal);
         Assert.Contains("workflowRunSha256", release, StringComparison.Ordinal);
         Assert.Contains("publishSha256", release, StringComparison.Ordinal);
@@ -2890,6 +2896,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("\"schemaVersion\": 1", example, StringComparison.Ordinal);
         Assert.Contains("\"workflowRunReport\"", example, StringComparison.Ordinal);
         Assert.Contains("\"workflowRunSha256\"", example, StringComparison.Ordinal);
+        Assert.Contains("\"artifactAuditReport\"", example, StringComparison.Ordinal);
+        Assert.Contains("\"artifactAuditSha256\"", example, StringComparison.Ordinal);
         Assert.Contains("\"r2rLightupReport\"", example, StringComparison.Ordinal);
         Assert.Contains("\"r2rLightupSha256\"", example, StringComparison.Ordinal);
         Assert.Contains("\"githubRelease\"", example, StringComparison.Ordinal);
@@ -3452,6 +3460,47 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 release evidence 预检要求 artifact audit 报告进入 manifest 且声明 require-all 审计成功。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsMissingArtifactAuditReport()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-audit-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            _ = rootNode.Remove("artifactAuditReport");
+            _ = rootNode.Remove("artifactAuditSha256");
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "audit-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("artifact_audit 缺少路径", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证非 tag workflow_dispatch 的 GitHub Release 上传报告不能冒充正式发布成功证据。
     /// </summary>
     [Fact]
@@ -3803,6 +3852,22 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string r2rLightup = WriteMarkdownEvidence(
             Path.Combine(evidenceRoot, "r2r-lightup.md"),
             new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["conclusion"] = r2rLightupConclusion });
+        string artifactAudit = WriteMarkdownEvidence(
+            Path.Combine(evidenceRoot, "artifact-audit.md"),
+            new Dictionary<string, string>
+            {
+                ["run_id"] = "1",
+                ["sha"] = "abc",
+                ["conclusion"] = "success",
+                ["require_all"] = "true",
+                ["package_count"] = "12",
+                ["expanded_package_count"] = "12",
+                ["rids"] = "win-x64,win-arm64,linux-x64,linux-arm64,osx-x64,osx-arm64",
+                ["channels"] = "r2r,aot",
+                ["aot_dynamic_box2d_rejected"] = "true",
+                ["package_layout_checked"] = "true",
+                ["checksum_checked"] = "true",
+            });
         string checksum = Path.Combine(packageRoot, "SHA256SUMS");
         List<(string Name, string Hash)> packageChecksums = [];
         List<Dictionary<string, object>> packageNodes = [];
@@ -3884,6 +3949,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             ["schemaVersion"] = 1,
             ["workflowRunReport"] = workflow,
             ["workflowRunSha256"] = GetSha256(workflow),
+            ["artifactAuditReport"] = artifactAudit,
+            ["artifactAuditSha256"] = GetSha256(artifactAudit),
             ["deterministicHashReport"] = deterministic,
             ["deterministicHashSha256"] = GetSha256(deterministic),
             ["r2rLightupReport"] = r2rLightup,
