@@ -42,6 +42,11 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
     public Point2F RouteColumnTargetWorld { get; } = new(154f, 262f);
 
     /// <summary>
+    /// 可玩 Demo 普通脚本短跑中用于验证射击坍塌的右侧山体目标。
+    /// </summary>
+    public Point2F PlayableCollapseTargetWorld { get; } = new(360f, 280f);
+
+    /// <summary>
     /// 注册输入注入相位；该 hook 应在 Silk 输入采样之后注册，以便覆盖采样结果。
     /// </summary>
     public void RegisterPhases(EnginePhasePipeline phases)
@@ -70,25 +75,28 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
             _keys[keyCount++] = Key.Digit6;
             wheelY = 1f;
         }
-        else if (frame is >= 3 and <= 5)
-        {
-            _buttons[buttonCount++] = MouseButton.Left;
-        }
-        else if (frame == 7)
-        {
-            target = ExplosionTargetWorld;
-            _buttons[buttonCount++] = MouseButton.Left;
-            _buttons[buttonCount++] = MouseButton.Middle;
-        }
-        else if (frame is >= 9 and <= 16)
-        {
-            target = new Point2F(BridgeCutTargetWorld.X, BridgeCutTargetWorld.Y + (frame - 12));
-            _buttons[buttonCount++] = MouseButton.Right;
-        }
-        else if (frame is >= 18 and <= 36)
+        else if (frame is >= 7 and <= 118)
         {
             _keys[keyCount++] = Key.D;
-            if (frame == 20)
+            if (frame is 28 or 29 or 74 or 75)
+            {
+                _keys[keyCount++] = Key.Space;
+            }
+        }
+        else if (frame == 124)
+        {
+            target = PlayableCollapseTargetWorld;
+            _buttons[buttonCount++] = MouseButton.Left;
+        }
+        else if (frame is >= 132 and <= 147)
+        {
+            target = new Point2F(PlayableCollapseTargetWorld.X + ((frame - 132) % 4 * 4f), PlayableCollapseTargetWorld.Y + ((frame - 132) / 4 * 4f));
+            _buttons[buttonCount++] = MouseButton.Right;
+        }
+        else if (frame is >= 150 and <= 178)
+        {
+            _keys[keyCount++] = Key.D;
+            if (frame == 158)
             {
                 _keys[keyCount++] = Key.Space;
             }
@@ -223,6 +231,11 @@ internal sealed class DemoWindowScriptedProbe(
     public int MaxCreatedBodies { get; private set; }
 
     /// <summary>
+    /// 短跑期间观测到的最大活跃刚体数量。
+    /// </summary>
+    public int MaxActiveBodies { get; private set; }
+
+    /// <summary>
     /// 短跑期间观测到的最大自由粒子数量。
     /// </summary>
     public int MaxParticles { get; private set; }
@@ -355,6 +368,7 @@ internal sealed class DemoWindowScriptedProbe(
         _ = context;
         MaxDestroyedBodies = Math.Max(MaxDestroyedBodies, _physics.LastDestructionResult.DestroyedBodies);
         MaxCreatedBodies = Math.Max(MaxCreatedBodies, _physics.LastDestructionResult.CreatedBodies);
+        MaxActiveBodies = Math.Max(MaxActiveBodies, _physics.PhysicsWorld.ActiveBodyCount);
         MaxParticles = Math.Max(MaxParticles, _probe.ActiveParticles);
         MaxLights = Math.Max(MaxLights, _lighting.PointLights.Length);
     }
