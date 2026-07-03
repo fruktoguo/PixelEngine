@@ -287,7 +287,12 @@ public sealed class Engine : IDisposable
         ScriptInputApi input = ResolveConcreteInputApi();
         Context.RegisterService(EngineServiceRole.Input, input);
         Context.RegisterService<IInputApi>(input);
-        SilkInputPhaseDriver driver = new(window, input, routeProvider);
+        SilkInputPhaseDriver driver = new(
+            window,
+            input,
+            routeProvider,
+            Context.Options.InternalWidth,
+            Context.Options.InternalHeight);
         Context.RegisterService(driver.GetType(), driver);
         driver.RegisterPhases(Phases);
         return input;
@@ -343,8 +348,8 @@ public sealed class Engine : IDisposable
         {
             if (window is not null && Context.TryGetService(out ScriptCameraSyncPhaseDriver existingDriver))
             {
-                existingDriver.AttachWindow(window);
-                _ = existing.Sync(window.Width, window.Height);
+                existingDriver.AttachWindow(window, Context.Options.InternalWidth, Context.Options.InternalHeight);
+                _ = existing.Sync(Context.Options.InternalWidth, Context.Options.InternalHeight);
             }
 
             return existing;
@@ -355,11 +360,17 @@ public sealed class Engine : IDisposable
             ? registeredWorld
             : null;
         ScriptCameraSynchronizer synchronizer = new(camera, world);
-        ScriptCameraSyncPhaseDriver driver = new(synchronizer, window);
+        ScriptCameraSyncPhaseDriver driver = new(
+            synchronizer,
+            window,
+            window is null ? 0 : Context.Options.InternalWidth,
+            window is null ? 0 : Context.Options.InternalHeight);
         Context.RegisterService(synchronizer);
         Context.RegisterService(driver.GetType(), driver);
         driver.RegisterPhases(Phases);
-        _ = synchronizer.Sync(window?.Width ?? 0, window?.Height ?? 0);
+        _ = synchronizer.Sync(
+            window is null ? 0 : Context.Options.InternalWidth,
+            window is null ? 0 : Context.Options.InternalHeight);
         return synchronizer;
     }
 
@@ -384,7 +395,11 @@ public sealed class Engine : IDisposable
         {
             GpuParticlesEnabled = Context.Options.EnableGpu,
         };
-        RenderPipeline pipeline = new(window, Math.Max(1, window.Width), Math.Max(1, window.Height), computeFeatures);
+        RenderPipeline pipeline = new(
+            window,
+            Math.Max(1, Context.Options.InternalWidth),
+            Math.Max(1, Context.Options.InternalHeight),
+            computeFeatures);
         RenderPipelineFrameSink sink = new(pipeline);
         RenderPhaseDriver driver = new(
             Context.GetService<IChunkSource>(),

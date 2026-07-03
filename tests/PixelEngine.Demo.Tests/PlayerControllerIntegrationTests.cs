@@ -408,6 +408,41 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证可玩相机使用滚轮在固定整数倍率间缩放视野，避免窗口尺寸直接改变内部像素数量。
+    /// </summary>
+    [Fact]
+    public void CameraFollowMouseWheelAdjustsIntegerZoomLevels()
+    {
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out ScriptCameraApi camera, out ScriptScene scene);
+        Entity entity = scene.CreateEntity();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 32f;
+        player.SpawnY = 32f;
+        CameraFollow follow = entity.AddComponent<CameraFollow>();
+        follow.Zoom = 2f;
+        follow.MinZoom = 1f;
+        follow.MaxZoom = 4f;
+        follow.ZoomStep = 1f;
+        follow.Damping = 240f;
+        follow.LookaheadX = 0f;
+        follow.LookaheadY = 0f;
+        follow.MaxX = 180f;
+        follow.MaxY = 120f;
+        FillFloor(grid, material: 1, y: 46, x0: 0, x1: 96, rigidOwned: false);
+
+        engine.RunHeadlessTicks(2);
+        Assert.Equal(2f, camera.Zoom);
+
+        input.Update([], [], mouseX: 0, mouseY: 0, wheelY: -1f);
+        engine.RunHeadlessTicks(1);
+        Assert.Equal(1f, camera.Zoom);
+
+        input.Update([], [], mouseX: 0, mouseY: 0, wheelY: 1f);
+        engine.RunHeadlessTicks(1);
+        Assert.Equal(2f, camera.Zoom);
+    }
+
+    /// <summary>
     /// 验证可玩 Demo 玩家可见层会提交玩家、准星与光照 overlay，不再只有不可见的碰撞 AABB。
     /// </summary>
     [Fact]
@@ -540,6 +575,36 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal("explosion.wav", audio.LastCue);
         Assert.True(engine.Context.GetService<ParticleSystem>().ActiveCount > 0);
         Assert.NotEqual(stone, grid.MaterialAt((int)MathF.Round(projectile.LastHitX), (int)MathF.Round(projectile.LastHitY)));
+    }
+
+    /// <summary>
+    /// 验证按住左键会按冷却连续发射破坏弹，而不是只响应第一帧点击边沿。
+    /// </summary>
+    [Fact]
+    public void PlayableProjectileAutoFiresWhileLeftMouseIsHeld()
+    {
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        FillWall(grid, stone, x: 54, y0: 12, y1: 54);
+        Entity entity = scene.CreateEntity();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 14f;
+        player.SpawnY = 30f;
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.CooldownSeconds = 0f;
+        projectile.Range = 96f;
+        projectile.ImpactRadius = 1;
+        projectile.CollapseScanRadius = 6;
+
+        engine.RunHeadlessTicks(2);
+        for (int i = 0; i < 4; i++)
+        {
+            input.Update([], [MouseButton.Left], mouseX: 64f, mouseY: 30f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+        }
+
+        Assert.True(projectile.ShotsFired >= 4, $"按住左键应持续开火，actual={projectile.ShotsFired}");
     }
 
     /// <summary>

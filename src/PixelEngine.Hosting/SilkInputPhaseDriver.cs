@@ -14,11 +14,15 @@ namespace PixelEngine.Hosting;
 public sealed class SilkInputPhaseDriver(
     RenderWindow window,
     ScriptInputApi input,
-    Func<EngineTickContext, ScriptInputRoute>? routeProvider = null) : IEnginePhaseDriver
+    Func<EngineTickContext, ScriptInputRoute>? routeProvider = null,
+    int logicalViewportWidth = 0,
+    int logicalViewportHeight = 0) : IEnginePhaseDriver
 {
     private readonly RenderWindow _window = window ?? throw new ArgumentNullException(nameof(window));
     private readonly ScriptInputApi _input = input ?? throw new ArgumentNullException(nameof(input));
     private readonly Func<EngineTickContext, ScriptInputRoute> _routeProvider = routeProvider ?? (_ => ScriptInputRoute.Allowed);
+    private readonly int _logicalViewportWidth = logicalViewportWidth;
+    private readonly int _logicalViewportHeight = logicalViewportHeight;
     private readonly ScriptKey[] _keyBuffer = new ScriptKey[20];
     private readonly ScriptMouseButton[] _mouseBuffer = new ScriptMouseButton[3];
     private float _lastWheelY;
@@ -108,9 +112,22 @@ public sealed class SilkInputPhaseDriver(
         float currentWheelY = mouse.ScrollWheels.Count == 0 ? 0f : mouse.ScrollWheels[0].Y;
         float wheelDelta = allowMouse ? currentWheelY - _lastWheelY : 0f;
         _lastWheelY = currentWheelY;
+        float framebufferX = mouse.Position.X * _window.FramebufferScaleX;
+        float framebufferY = mouse.Position.Y * _window.FramebufferScaleY;
+        if (_logicalViewportWidth > 0 && _logicalViewportHeight > 0)
+        {
+            PresentationViewport viewport = PresentationViewport.Fit(
+                _logicalViewportWidth,
+                _logicalViewportHeight,
+                _window.Width,
+                _window.Height);
+            (float sourceX, float sourceY) = viewport.MapFramebufferToSource(framebufferX, framebufferY);
+            return (sourceX, sourceY, wheelDelta);
+        }
+
         return (
-            mouse.Position.X * _window.FramebufferScaleX,
-            mouse.Position.Y * _window.FramebufferScaleY,
+            framebufferX,
+            framebufferY,
             wheelDelta);
     }
 

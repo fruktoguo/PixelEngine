@@ -73,7 +73,6 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
         if (frame == 2)
         {
             _keys[keyCount++] = Key.Digit6;
-            wheelY = 1f;
         }
         else if (frame is >= 7 and <= 118)
         {
@@ -83,20 +82,20 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
                 _keys[keyCount++] = Key.Space;
             }
         }
-        else if (frame == 124)
+        else if (frame is >= 124 and <= 146)
         {
             target = PlayableCollapseTargetWorld;
             _buttons[buttonCount++] = MouseButton.Left;
         }
-        else if (frame is >= 132 and <= 147)
+        else if (frame is >= 150 and <= 165)
         {
-            target = new Point2F(PlayableCollapseTargetWorld.X + ((frame - 132) % 4 * 4f), PlayableCollapseTargetWorld.Y + ((frame - 132) / 4 * 4f));
+            target = new Point2F(PlayableCollapseTargetWorld.X + ((frame - 150) % 4 * 4f), PlayableCollapseTargetWorld.Y + ((frame - 150) / 4 * 4f));
             _buttons[buttonCount++] = MouseButton.Right;
         }
-        else if (frame is >= 150 and <= 178)
+        else if (frame is >= 168 and <= 196)
         {
             _keys[keyCount++] = Key.D;
-            if (frame == 158)
+            if (frame == 176)
             {
                 _keys[keyCount++] = Key.Space;
             }
@@ -120,11 +119,6 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
         if (frame == 2)
         {
             _keys[keyCount++] = Key.Digit6;
-            wheelY = 1f;
-        }
-        else if (frame is >= 3 and <= 10)
-        {
-            wheelY = 1f;
         }
         else if (frame is >= 12 and <= 83)
         {
