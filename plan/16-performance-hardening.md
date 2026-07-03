@@ -78,7 +78,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 ### 4.3 多线程覆盖面
 - [x] CA 4-pass checkerboard 经 plan/02 持久线程池 per-chunk task 派发、遍间 barrier、无锁。[plan/03 · §5.7/不变式 #2]
 - [x] Box2D task 桥把并行 for 派发到同一线程池，回调禁 `[SuppressGCTransition]`，分配稳定 workerIndex。[plan/06 · §14.2/风险 R14]
-- [x] render buffer 构建并行（按区块）。[plan/08 · §3.3 相位9]
+- [x] render buffer 构建并行（按区块），整数 zoom palette fast path 会复制重复屏幕行避免 2x/3x/4x 像素缩放下重复采样同一 world row；`BuildPaletteZoomFastPathCopiesRepeatedScreenRows` 已用计数型 `IChunkSource` 锁定 2x 默认相机只访问真实 world row。[plan/08 · §3.3 相位9]
 - [x] CCL + 形状重建并行且 off-thread（相位 8a 各刚体）。[plan/06 · §8.4]
 - [x] 粒子积分并行（`Span<Particle>` 分段）。[plan/05 · §7.6]
 - [x] 温度 stencil 并行（行分块）。[plan/04 · §7.5]
@@ -104,10 +104,10 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 
 ### 4.6 GC 策略
 - [x] BenchmarkDotNet 实测对比 Workstation+Concurrent vs Server GC，按最坏停顿定档。[plan/02/14 · §12.4]
-- [x] 两模式均配 `GCSettings.LatencyMode = SustainedLowLatency`。[plan/02 · §12.4]
+- [x] 两模式均配 `GCSettings.LatencyMode = SustainedLowLatency`，Hosting 通过 `EngineGcCoordinator` 串行化 GC latency mode 与 NoGCRegion 这两类进程级状态切换，避免并发 Engine 构建 / 临界帧互相踩踏。[plan/02 · §12.4]
 - [x] 跨界缓冲走 POH/`NativeMemory` 零拷贝双缓冲（sim/physics/render）。[plan/02 · §13/§14.3]
 - [x] 对象池/粒子池覆盖全部短命对象（particle/body/shape/scratch）。[plan/02/05/06 · §12.4]
-- [x] 关键段按需 `GC.TryStartNoGCRegion`。[plan/02 · §12.4]
+- [x] 关键段按需 `GC.TryStartNoGCRegion`，成功进入后持有全局 GC 状态门直到 `EndNoGcRegion`，失败仍按原诊断路径记录并继续帧循环。[plan/02 · §12.4]
 - [x] 压测下 Gen0 计数长时间不增长、无可感知 GC 停顿。[plan/14 · §1.4/§12.4]
 
 ### 4.7 GPU 计算下放
@@ -160,7 +160,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] **多线程齐全**：CA checkerboard、Box2D task 桥、render buffer、CCL/形状重建、粒子积分、温度 stencil、序列化字节准备七项均经持久线程池并行；无每帧 `Parallel.For`；活跃任务少时单线程回退生效。[§5.7/§12.7/§14.2/风险 R7]
 - [!] **SIMD 到位**：温度 stencil/色混合/bulk fill 等向量化且有 scalar fallback、运行时 light-up；sand movement 确认未向量化；AVX-512 gate 实测无降频净损。[§12.5/§2 挑战三] 阻塞于 §4.4 AVX-512 目标硬件实测；当前机器仅 AVX2，无法验证 Vector512 降频净损。`tools/performance-target-evidence-preflight.ps1` 只索引 `avx512_downclock_net_loss` 证据并进入 pending review，不自动勾选。
 - [x] **bounds-check 消除**：热方法反汇编无 `RNGCHKFAIL`、向量化 pass 见 ymm/zmm；`[DisassemblyDiagnoser]` 守门基线建立。[§12.6/§17.3]
-- [x] **GC 定档**：Workstation vs Server 实测定档完成；压测下 Gen0 不增长、无可感知停顿；跨界缓冲零拷贝、池化覆盖短命对象。[§12.4]
+- [x] **GC 定档**：Workstation vs Server 实测定档完成；压测下 Gen0 不增长、无可感知停顿；跨界缓冲零拷贝、池化覆盖短命对象；Hosting GC 全局状态切换经 `EngineGcCoordinator` 串行化并由 `HostingGcStateChangesAreSerializedThroughCoordinator` 锁定。[§12.4]
 - [x] **GPU 下放且权威留 CPU**：光照/bloom/高密度粒子/可选非权威 sim pass 在 GPU；权威网格在 CPU、无 readback 卡流水线；compute capability-gate 与回退生效。[§9.4/§9.5/不变式 #9]
 - [x] **dirty-rect 真生效**：满屏静止场景 sim 成本实测 ≈ 0，叠层确认 sleeping 区零迭代；KeepAlive 无永久唤醒。[§5.4/风险 R1]
 - [x] **过载降级链可逐级触发**：五级降级 + 节流全部实现并可由诊断计时器触发；压力下绝不进入 death spiral（不变式 #6）。[§4.2/§4.3]

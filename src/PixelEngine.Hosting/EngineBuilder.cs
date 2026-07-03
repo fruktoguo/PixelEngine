@@ -1,4 +1,3 @@
-using System.Runtime;
 using PixelEngine.Core;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Events;
@@ -258,7 +257,7 @@ public sealed class EngineBuilder
             _eventCapacityPerChannel,
             _noGcRegionBudgetBytes,
             _overload);
-        GCSettings.LatencyMode = options.GcMode.ToLatencyMode();
+        EngineGcCoordinator.ApplyLatencyMode(options.GcMode.ToLatencyMode());
         JobSystem jobs = new(options.WorkerCount);
         FrameClock clock = new(options.SimHz);
         EventBus events = new(options.EventCapacityPerChannel);

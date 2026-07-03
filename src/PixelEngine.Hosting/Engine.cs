@@ -1982,7 +1982,7 @@ public sealed class Engine : IDisposable
         bool started;
         try
         {
-            started = GC.TryStartNoGCRegion(budgetBytes, disallowFullBlockingGC: true);
+            started = EngineGcCoordinator.TryBeginNoGcRegion(budgetBytes);
         }
         catch (InvalidOperationException)
         {
@@ -2002,7 +2002,7 @@ public sealed class Engine : IDisposable
 
         try
         {
-            GC.EndNoGCRegion();
+            EngineGcCoordinator.EndNoGcRegion();
             Context.Counters.RecordNoGcRegionSuccess();
         }
         catch (InvalidOperationException)

@@ -152,6 +152,48 @@ public sealed class RenderBufferBuilderTests
     }
 
     [Fact]
+    public void BuildPaletteZoomFastPathCopiesRepeatedScreenRows()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        SetMaterial(chunk, 0, 0, 1);
+        SetMaterial(chunk, 1, 0, 2);
+        SetMaterial(chunk, 2, 0, 3);
+        SetMaterial(chunk, 0, 1, 3);
+        SetMaterial(chunk, 1, 1, 2);
+        SetMaterial(chunk, 2, 1, 1);
+        chunks.Add(chunk);
+        CountingChunkSource counting = new(chunks);
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "sand", CellType.Powder, 0xFF101010u),
+            Material(2, "stone", CellType.Solid, 0xFF202020u),
+            Material(3, "glow", CellType.Powder, 0xFF303030u) with { PropertyFlags = MaterialProperty.Emissive });
+        RenderBuffer target = new(6, 4);
+        RenderAuxBuffers aux = new(6, 4);
+        RenderFrameContext context = new(
+            counting,
+            materials,
+            new TemperatureField(),
+            new CameraState(0, 0, 0.5f, 6, 4),
+            simStepped: true);
+
+        new RenderBufferBuilder().Build(context, target, aux);
+
+        Assert.Equal(
+            [
+                0xFF101010u, 0xFF101010u, 0xFF202020u, 0xFF202020u, 0xFF303030u, 0xFF303030u,
+                0xFF101010u, 0xFF101010u, 0xFF202020u, 0xFF202020u, 0xFF303030u, 0xFF303030u,
+                0xFF303030u, 0xFF303030u, 0xFF202020u, 0xFF202020u, 0xFF101010u, 0xFF101010u,
+                0xFF303030u, 0xFF303030u, 0xFF202020u, 0xFF202020u, 0xFF101010u, 0xFF101010u,
+            ],
+            target.Pixels.ToArray());
+        Assert.True(
+            counting.TryGetChunkCalls <= 6,
+            $"2x zoom 应只采样两个 world row 的三段水平 run，actual calls={counting.TryGetChunkCalls}。");
+    }
+
+    [Fact]
     public void BuildAppliesTextureProviderTemperatureGlowAndAuxOutputs()
     {
         ResidentChunkMap chunks = new();
@@ -448,6 +490,26 @@ public sealed class RenderBufferBuilderTests
         {
             bgra = material.TextureId == 7 ? 0xFF445566u : 0;
             return material.TextureId == 7;
+        }
+    }
+
+    private sealed class CountingChunkSource(IChunkSource inner) : IChunkSource
+    {
+        private readonly IChunkSource _inner = inner;
+
+        public int TryGetChunkCalls { get; private set; }
+
+        public ReadOnlySpan<Chunk> ResidentChunks => _inner.ResidentChunks;
+
+        public bool TryGetChunk(ChunkCoord coord, out Chunk chunk)
+        {
+            TryGetChunkCalls++;
+            return _inner.TryGetChunk(coord, out chunk);
+        }
+
+        public bool ResolveNeighborhood(ChunkCoord center, out ChunkNeighborhood neighborhood)
+        {
+            return _inner.ResolveNeighborhood(center, out neighborhood);
         }
     }
 

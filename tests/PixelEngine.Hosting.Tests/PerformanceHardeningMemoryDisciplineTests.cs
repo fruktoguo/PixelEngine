@@ -85,6 +85,26 @@ public sealed class PerformanceHardeningMemoryDisciplineTests
         Assert.Contains("public bool IsServerGc => System.Runtime.GCSettings.IsServerGC", benchmark, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证 Hosting 通过统一协调器操作进程级 GC 状态，避免并发 Engine 构建与 NoGCRegion 临界帧互相踩踏。
+    /// </summary>
+    [Fact]
+    public void HostingGcStateChangesAreSerializedThroughCoordinator()
+    {
+        string builder = ReadProductionSource("src", "PixelEngine.Hosting", "EngineBuilder.cs");
+        string engine = ReadProductionSource("src", "PixelEngine.Hosting", "Engine.cs");
+        string coordinator = ReadProductionSource("src", "PixelEngine.Hosting", "EngineGcCoordinator.cs");
+
+        Assert.Contains("EngineGcCoordinator.ApplyLatencyMode(options.GcMode.ToLatencyMode())", builder, StringComparison.Ordinal);
+        Assert.DoesNotContain("GCSettings.LatencyMode =", builder, StringComparison.Ordinal);
+        Assert.Contains("EngineGcCoordinator.TryBeginNoGcRegion(budgetBytes)", engine, StringComparison.Ordinal);
+        Assert.Contains("EngineGcCoordinator.EndNoGcRegion()", engine, StringComparison.Ordinal);
+        Assert.DoesNotContain("GC.TryStartNoGCRegion", engine, StringComparison.Ordinal);
+        Assert.Contains("private static readonly object Gate", coordinator, StringComparison.Ordinal);
+        Assert.Contains("System.Threading.Monitor.Enter(Gate)", coordinator, StringComparison.Ordinal);
+        Assert.Contains("System.Threading.Monitor.Exit(Gate)", coordinator, StringComparison.Ordinal);
+    }
+
     private static string ReadProductionSource(params string[] relativePath)
     {
         return File.ReadAllText(Path.Combine([FindRepositoryRoot(), .. relativePath]));
