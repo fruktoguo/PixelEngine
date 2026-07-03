@@ -91,6 +91,186 @@ function Assert-LinuxDynamicLink([string]$entryPath, [string]$rid) {
   }
 }
 
+function Get-PackageArchiveEntries([System.IO.FileInfo]$package) {
+  if ($package.Name.EndsWith('.zip', [StringComparison]::OrdinalIgnoreCase)) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($package.FullName)
+    try {
+      return @($archive.Entries | ForEach-Object { $_.FullName.Replace('\', '/') })
+    }
+    finally {
+      $archive.Dispose()
+    }
+  }
+
+  if ($package.Name.EndsWith('.tar.gz', [StringComparison]::OrdinalIgnoreCase)) {
+    $tar = Get-Command tar -ErrorAction SilentlyContinue
+    if (-not $tar) {
+      throw "检查 tar.gz package 布局需要 tar 命令: $($package.FullName)"
+    }
+
+    $output = & $tar.Source -tzf $package.FullName 2>&1
+    if ($LASTEXITCODE -ne 0) {
+      throw "读取 package 清单失败($LASTEXITCODE): $($package.FullName)`n$($output -join [Environment]::NewLine)"
+    }
+
+    return @($output | ForEach-Object { $_.ToString().Replace('\', '/') })
+  }
+
+  throw "未知 package 格式: $($package.Name)"
+}
+
+function Get-PackageArchiveTextEntry([System.IO.FileInfo]$package, [string]$entryName) {
+  if ($package.Name.EndsWith('.zip', [StringComparison]::OrdinalIgnoreCase)) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($package.FullName)
+    try {
+      $entry = $archive.Entries | Where-Object { $_.FullName.Replace('\', '/') -eq $entryName } | Select-Object -First 1
+      if (-not $entry) {
+        return $null
+      }
+
+      $reader = [IO.StreamReader]::new($entry.Open(), [Text.Encoding]::UTF8, $true)
+      try {
+        return $reader.ReadToEnd()
+      }
+      finally {
+        $reader.Dispose()
+      }
+    }
+    finally {
+      $archive.Dispose()
+    }
+  }
+
+  if ($package.Name.EndsWith('.tar.gz', [StringComparison]::OrdinalIgnoreCase)) {
+    $tar = Get-Command tar -ErrorAction SilentlyContinue
+    if (-not $tar) {
+      throw "读取 tar.gz package 条目需要 tar 命令: $($package.FullName)"
+    }
+
+    $output = & $tar.Source -xOf $package.FullName $entryName 2>$null
+    if ($LASTEXITCODE -ne 0) {
+      return $null
+    }
+
+    return ($output -join [Environment]::NewLine)
+  }
+
+  throw "未知 package 格式: $($package.Name)"
+}
+
+function Test-DisallowedRuntimeRootFile([string]$relativePath) {
+  $name = [IO.Path]::GetFileName($relativePath)
+  return $name -match '\.(dll|pdb|xml)$' -or
+    $name -match '\.deps\.json$' -or
+    $name -match '\.runtimeconfig\.json$'
+}
+
+function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
+  if ($package.Name -notmatch '^PixelEngine-Demo-.+-(?<rid>win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64)-(?<channel>r2r|aot)\.(zip|tar\.gz)$') {
+    throw "package 文件名不符合发行命名: $($package.Name)"
+  }
+
+  $rid = $Matches['rid']
+  $rootName = $package.Name -replace '\.zip$', '' -replace '\.tar\.gz$', ''
+  $relativeEntries = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+  $relativeFileEntries = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+  foreach ($entry in Get-PackageArchiveEntries $package) {
+    $raw = $entry.Trim().Replace('\', '/')
+    $isDirectory = $raw.EndsWith('/', [StringComparison]::Ordinal)
+    $normalized = $raw.TrimEnd('/')
+    if ([string]::IsNullOrWhiteSpace($normalized)) {
+      continue
+    }
+
+    $slash = $normalized.IndexOf('/')
+    if ($slash -lt 0) {
+      if ($normalized -ne $rootName) {
+        throw "package 内根目录名称不符合包名: $($package.Name) -> $normalized"
+      }
+
+      continue
+    }
+
+    $root = $normalized.Substring(0, $slash)
+    if ($root -ne $rootName) {
+      throw "package 内根目录名称不符合包名: $($package.Name) -> $root"
+    }
+
+    $relative = $normalized.Substring($slash + 1)
+    if ([string]::IsNullOrWhiteSpace($relative)) {
+      continue
+    }
+
+    [void]$relativeEntries.Add($relative)
+    if (-not $isDirectory) {
+      [void]$relativeFileEntries.Add($relative)
+    }
+  }
+
+  $launcher = if ($rid.StartsWith('win-')) { 'PixelEngine Demo.cmd' } else { 'PixelEngine Demo.sh' }
+  $entry = if ($rid.StartsWith('win-')) { 'app/PixelEngine.Demo.exe' } else { 'app/PixelEngine.Demo' }
+  foreach ($required in @('README.txt', 'SHA256SUMS', $launcher, $entry, 'app/content/materials.json', 'app/content/reactions.json', 'app/content/scenes/lava-mine.scene')) {
+    if (-not $relativeEntries.Contains($required)) {
+      throw "package 缺少玩家友好布局入口或 app 内容: $($package.Name) -> $required"
+    }
+  }
+
+  foreach ($relative in $relativeEntries) {
+    if (-not $relative.StartsWith('app/', [StringComparison]::Ordinal) -and
+        $relative -ne 'app' -and
+        $relative -ne 'README.txt' -and
+        $relative -ne 'SHA256SUMS' -and
+        $relative -ne $launcher -and
+        $relative -notmatch '^(LICENSE|NOTICE)(\..+)?$') {
+      throw "package 根目录只允许 launcher/README/SHA256SUMS/许可文件与 app/: $($package.Name) -> $relative"
+    }
+
+    if (Test-DisallowedRuntimeRootFile $relative) {
+      if (-not $relative.StartsWith('app/', [StringComparison]::Ordinal)) {
+        throw "package 根目录不应包含运行时依赖，请放入 app/: $($package.Name) -> $relative"
+      }
+    }
+  }
+
+  $checksumEntryName = "$rootName/SHA256SUMS"
+  $checksumText = Get-PackageArchiveTextEntry $package $checksumEntryName
+  if ([string]::IsNullOrWhiteSpace($checksumText)) {
+    throw "package 内 SHA256SUMS 为空或不可读: $($package.Name)"
+  }
+
+  $declared = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+  foreach ($line in $checksumText -split '\r?\n') {
+    if ([string]::IsNullOrWhiteSpace($line)) {
+      continue
+    }
+
+    if ($line -notmatch '^([0-9a-fA-F]{64})\s+\*?(.+)$') {
+      throw "package 内 SHA256SUMS 行格式无效: $($package.Name) -> $line"
+    }
+
+    $checksumName = $Matches[2] -replace '^\./', ''
+    if (-not $checksumName.StartsWith('app/', [StringComparison]::Ordinal)) {
+      throw "package 内 SHA256SUMS 只能覆盖 app/ 文件: $($package.Name) -> $checksumName"
+    }
+
+    if (-not $relativeFileEntries.Contains($checksumName)) {
+      throw "package 内 SHA256SUMS 指向不存在的 app 文件: $($package.Name) -> $checksumName"
+    }
+
+    if (-not $declared.Add($checksumName)) {
+      throw "package 内 SHA256SUMS 重复条目: $($package.Name) -> $checksumName"
+    }
+  }
+
+  foreach ($relative in $relativeFileEntries) {
+    if ($relative.StartsWith('app/', [StringComparison]::Ordinal) -and -not $declared.Contains($relative)) {
+      throw "package 内 SHA256SUMS 未覆盖 app 文件: $($package.Name) -> $relative"
+    }
+  }
+}
+
 function Test-PublishDirectory([string]$rid, [string]$channel) {
   $directory = Join-Path $PublishRoot "$rid-$channel"
   if (-not (Test-Path -LiteralPath $directory -PathType Container)) {
@@ -143,6 +323,8 @@ function Assert-PackagesAndChecksums {
     if (-not (Test-ReleasePackageName $package.Name)) {
       throw "package 文件名不符合发行命名: $($package.Name)"
     }
+
+    Assert-FriendlyPackageLayout $package
   }
 
   if ($RequireAll -and $packages.Count -ne 12) {

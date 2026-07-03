@@ -1791,9 +1791,29 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("SHA256SUMS 包含 package root 下不存在或非发行包的条目", auditPs1, StringComparison.Ordinal);
         Assert.Contains("SHA256SUMS 重复条目", auditPs1, StringComparison.Ordinal);
         Assert.Contains("SHA256SUMS 条目数与 package 数不一致", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("Assert-FriendlyPackageLayout", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("package 根目录不应包含运行时依赖，请放入 app/", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("package 根目录只允许 launcher/README/SHA256SUMS/许可文件与 app/", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("package 内 SHA256SUMS 未覆盖 app 文件", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("app/content/materials.json", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("assert_friendly_package_layout", auditSh, StringComparison.Ordinal);
+        Assert.Contains("package 根目录不应包含运行时依赖，请放入 app/", auditSh, StringComparison.Ordinal);
+        Assert.Contains("package 根目录只允许 launcher/README/SHA256SUMS/许可文件与 app/", auditSh, StringComparison.Ordinal);
+        Assert.Contains("package 内 SHA256SUMS 未覆盖 app 文件", auditSh, StringComparison.Ordinal);
+        Assert.Contains("app/content/materials.json", auditSh, StringComparison.Ordinal);
 
         Assert.Contains("PixelEngine.Tools.DeterministicPackage", packagePs1, StringComparison.Ordinal);
         Assert.Contains("PixelEngine.Tools.DeterministicPackage", packageSh, StringComparison.Ordinal);
+        Assert.Contains("$appDir = Join-Path $stagingDir 'app'", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("PixelEngine Demo.cmd", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("PixelEngine Demo.sh", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("README.txt", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("Join-Path $stagingDir 'SHA256SUMS'", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("app_dir=\"$staging_dir/app\"", packageSh, StringComparison.Ordinal);
+        Assert.Contains("PixelEngine Demo.cmd", packageSh, StringComparison.Ordinal);
+        Assert.Contains("PixelEngine Demo.sh", packageSh, StringComparison.Ordinal);
+        Assert.Contains("README.txt", packageSh, StringComparison.Ordinal);
+        Assert.Contains("package_checksum_path=\"$staging_dir/SHA256SUMS\"", packageSh, StringComparison.Ordinal);
         Assert.DoesNotContain("Compress-Archive", packagePs1, StringComparison.Ordinal);
         Assert.DoesNotContain("tar -czf", packagePs1, StringComparison.Ordinal);
         Assert.DoesNotContain("zip -qr", packageSh, StringComparison.Ordinal);
@@ -1911,6 +1931,98 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.True(ridNode.TryGetProperty("r2r", out _), $"示例 manifest 缺少 {rid}/r2r");
             Assert.True(ridNode.TryGetProperty("aot", out System.Text.Json.JsonElement aotNode), $"示例 manifest 缺少 {rid}/aot");
             Assert.True(aotNode.TryGetProperty("simdProbeKind", out _), $"示例 manifest 缺少 {rid}/aot simdProbeKind");
+        }
+    }
+
+    /// <summary>
+    /// 验证 package.ps1 输出玩家友好启动布局：包根只有 launcher/README，运行时依赖位于 app/。
+    /// </summary>
+    [Fact]
+    public void PackageScriptPlacesRuntimeFilesUnderAppAndAuditRejectsRootClutter()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-friendly-package-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string publish = Path.Combine(temp, "publish");
+            string content = Path.Combine(temp, "content");
+            string packageRoot = Path.Combine(temp, "package");
+            _ = Directory.CreateDirectory(publish);
+            _ = Directory.CreateDirectory(Path.Combine(publish, "runtimes", "win-x64", "native"));
+            _ = Directory.CreateDirectory(Path.Combine(content, "scenes"));
+            _ = WriteTextEvidence(Path.Combine(publish, "PixelEngine.Demo.exe"), "exe");
+            _ = WriteTextEvidence(Path.Combine(publish, "PixelEngine.Demo.dll"), "dll");
+            _ = WriteTextEvidence(Path.Combine(publish, "PixelEngine.Demo.pdb"), "pdb");
+            _ = WriteTextEvidence(Path.Combine(publish, "PixelEngine.Demo.xml"), "xml");
+            _ = WriteTextEvidence(Path.Combine(publish, "PixelEngine.Demo.deps.json"), "{}");
+            _ = WriteTextEvidence(Path.Combine(publish, "PixelEngine.Demo.runtimeconfig.json"), "{}");
+            _ = WriteTextEvidence(Path.Combine(publish, "runtimes", "win-x64", "native", "box2d.dll"), "native");
+            _ = WriteTextEvidence(Path.Combine(content, "materials.json"), "{}");
+            _ = WriteTextEvidence(Path.Combine(content, "reactions.json"), "{}");
+            _ = WriteTextEvidence(Path.Combine(content, "scenes", "lava-mine.scene"), "scene");
+
+            ScriptResult package = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "package.ps1"),
+                "-Rid",
+                "win-x64",
+                "-Channel",
+                "r2r",
+                "-Version",
+                "9.9.9",
+                "-PublishDir",
+                publish,
+                "-OutputRoot",
+                packageRoot,
+                "-ContentRoot",
+                content);
+            Assert.Equal(0, package.ExitCode);
+
+            string archive = Path.Combine(packageRoot, "PixelEngine-Demo-9.9.9-win-x64-r2r.zip");
+            Assert.True(File.Exists(archive), package.Output);
+            string extract = Path.Combine(temp, "extract");
+            System.IO.Compression.ZipFile.ExtractToDirectory(archive, extract);
+            string packageDir = Path.Combine(extract, "PixelEngine-Demo-9.9.9-win-x64-r2r");
+            Assert.True(File.Exists(Path.Combine(packageDir, "PixelEngine Demo.cmd")));
+            Assert.True(File.Exists(Path.Combine(packageDir, "README.txt")));
+            string packageChecksums = Path.Combine(packageDir, "SHA256SUMS");
+            Assert.True(File.Exists(packageChecksums));
+            Assert.True(File.Exists(Path.Combine(packageDir, "app", "PixelEngine.Demo.exe")));
+            Assert.True(File.Exists(Path.Combine(packageDir, "app", "PixelEngine.Demo.dll")));
+            Assert.True(File.Exists(Path.Combine(packageDir, "app", "PixelEngine.Demo.pdb")));
+            Assert.True(File.Exists(Path.Combine(packageDir, "app", "PixelEngine.Demo.xml")));
+            Assert.True(File.Exists(Path.Combine(packageDir, "app", "PixelEngine.Demo.deps.json")));
+            Assert.True(File.Exists(Path.Combine(packageDir, "app", "PixelEngine.Demo.runtimeconfig.json")));
+            Assert.True(File.Exists(Path.Combine(packageDir, "app", "content", "materials.json")));
+            Assert.True(File.Exists(Path.Combine(packageDir, "app", "content", "reactions.json")));
+            Assert.True(File.Exists(Path.Combine(packageDir, "app", "content", "scenes", "lava-mine.scene")));
+            Assert.False(File.Exists(Path.Combine(packageDir, "PixelEngine.Demo.dll")));
+            Assert.False(File.Exists(Path.Combine(packageDir, "PixelEngine.Demo.pdb")));
+            Assert.False(File.Exists(Path.Combine(packageDir, "PixelEngine.Demo.xml")));
+            Assert.False(File.Exists(Path.Combine(packageDir, "PixelEngine.Demo.deps.json")));
+            Assert.False(File.Exists(Path.Combine(packageDir, "PixelEngine.Demo.runtimeconfig.json")));
+            string packageChecksumsText = File.ReadAllText(packageChecksums);
+            Assert.Contains("app/PixelEngine.Demo.exe", packageChecksumsText, StringComparison.Ordinal);
+            Assert.Contains("app/PixelEngine.Demo.dll", packageChecksumsText, StringComparison.Ordinal);
+            Assert.Contains("app/content/materials.json", packageChecksumsText, StringComparison.Ordinal);
+
+            ScriptResult audit = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "audit-release-artifacts.ps1"),
+                "-PublishRoot",
+                Path.Combine(temp, "missing-publish"),
+                "-PackageRoot",
+                packageRoot);
+            Assert.Equal(0, audit.ExitCode);
+            Assert.Contains("Package audit passed", audit.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
         }
     }
 

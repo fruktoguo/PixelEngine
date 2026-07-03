@@ -152,12 +152,54 @@ content_root="$(cd "$content_root" && pwd)"
 package_name="PixelEngine-Demo-$version-$rid-$channel"
 staging_root="$output_root/staging"
 staging_dir="$staging_root/$package_name"
+app_dir="$staging_dir/app"
 rm -rf "$staging_dir"
-mkdir -p "$staging_dir"
+mkdir -p "$app_dir"
 
-cp -a "$publish_dir"/. "$staging_dir"/
-rm -rf "$staging_dir/content"
-cp -a "$content_root" "$staging_dir/content"
+cp -a "$publish_dir"/. "$app_dir"/
+rm -rf "$app_dir/content"
+cp -a "$content_root" "$app_dir/content"
+
+cat > "$staging_dir/README.txt" <<'EOF'
+PixelEngine Demo
+================
+
+Start the game from this folder:
+  Windows: PixelEngine Demo.cmd
+  Linux/macOS: ./PixelEngine Demo.sh
+
+The actual runtime files are under app/. This keeps the package root readable.
+Advanced users can also run app/PixelEngine.Demo directly.
+EOF
+
+if [[ "$rid" == win-* ]]; then
+  cat > "$staging_dir/PixelEngine Demo.cmd" <<'EOF'
+@echo off
+setlocal
+pushd "%~dp0app" >nul
+".\PixelEngine.Demo.exe" %*
+set "exitCode=%ERRORLEVEL%"
+popd >nul
+exit /b %exitCode%
+EOF
+else
+  cat > "$staging_dir/PixelEngine Demo.sh" <<'EOF'
+#!/usr/bin/env sh
+set -eu
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$script_dir/app"
+exec ./PixelEngine.Demo "$@"
+EOF
+  chmod +x "$staging_dir/PixelEngine Demo.sh"
+fi
+
+package_checksum_path="$staging_dir/SHA256SUMS"
+: > "$package_checksum_path"
+while IFS= read -r -d '' app_file; do
+  relative="app/${app_file#"$app_dir/"}"
+  hash="$(sha256_file "$app_file")"
+  printf '%s  %s\n' "$hash" "$relative" >> "$package_checksum_path"
+done < <(find "$app_dir" -type f -print0 | sort -z)
 
 if [[ "$rid" == win-* ]]; then
   archive_name="$package_name.zip"

@@ -159,6 +159,196 @@ assert_linux_dynamic_link() {
   fi
 }
 
+list_package_entries() {
+  local package="$1"
+  case "$package" in
+    *.zip)
+      if command -v python3 >/dev/null 2>&1; then
+        python3 - "$package" <<'PY'
+import sys
+import zipfile
+with zipfile.ZipFile(sys.argv[1]) as archive:
+    for name in archive.namelist():
+        print(name)
+PY
+        return
+      fi
+
+      if command -v unzip >/dev/null 2>&1; then
+        unzip -Z1 "$package"
+        return
+      fi
+
+      fail_audit "检查 zip package 布局需要 python3 或 unzip: $package"
+      ;;
+    *.tar.gz)
+      tar -tzf "$package"
+      ;;
+    *)
+      fail_audit "未知 package 格式: $package"
+      ;;
+  esac
+}
+
+read_package_text_entry() {
+  local package="$1"
+  local entry="$2"
+  case "$package" in
+    *.zip)
+      if command -v python3 >/dev/null 2>&1; then
+        python3 - "$package" "$entry" <<'PY'
+import sys
+import zipfile
+with zipfile.ZipFile(sys.argv[1]) as archive:
+    try:
+        data = archive.read(sys.argv[2])
+    except KeyError:
+        sys.exit(3)
+sys.stdout.buffer.write(data)
+PY
+        return
+      fi
+
+      if command -v unzip >/dev/null 2>&1; then
+        unzip -p "$package" "$entry"
+        return
+      fi
+
+      fail_audit "读取 zip package 条目需要 python3 或 unzip: $package"
+      ;;
+    *.tar.gz)
+      tar -xOf "$package" "$entry"
+      ;;
+    *)
+      fail_audit "未知 package 格式: $package"
+      ;;
+  esac
+}
+
+is_disallowed_runtime_root_file() {
+  local relative="$1"
+  local name="${relative##*/}"
+  [[ "$name" =~ \.(dll|pdb|xml)$ || "$name" =~ \.deps\.json$ || "$name" =~ \.runtimeconfig\.json$ ]]
+}
+
+contains_item() {
+  local needle="$1"
+  shift
+  local item
+  for item in "$@"; do
+    [[ "$item" == "$needle" ]] && return 0
+  done
+  return 1
+}
+
+assert_friendly_package_layout() {
+  local package="$1"
+  local name
+  name="$(basename "$package")"
+  local rid=""
+  if [[ "$name" =~ ^PixelEngine-Demo-.+-(win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64)-(r2r|aot)\.(zip|tar\.gz)$ ]]; then
+    rid="${BASH_REMATCH[1]}"
+  else
+    fail_audit "package 文件名不符合发行命名: $name"
+  fi
+
+  local root_name="$name"
+  case "$root_name" in
+    *.zip) root_name="${root_name%.zip}" ;;
+    *.tar.gz) root_name="${root_name%.tar.gz}" ;;
+  esac
+
+  local launcher
+  local entry
+  if [[ "$rid" == win-* ]]; then
+    launcher="PixelEngine Demo.cmd"
+    entry="app/PixelEngine.Demo.exe"
+  else
+    launcher="PixelEngine Demo.sh"
+    entry="app/PixelEngine.Demo"
+  fi
+
+  local has_readme=0
+  local has_launcher=0
+  local has_entry=0
+  local has_materials=0
+  local has_reactions=0
+  local has_scene=0
+  local app_files=()
+  local archive_entry
+  while IFS= read -r archive_entry || [[ -n "$archive_entry" ]]; do
+    local raw="$archive_entry"
+    local is_directory=0
+    [[ "$raw" == */ ]] && is_directory=1
+    archive_entry="${raw%/}"
+    [[ -z "$archive_entry" ]] && continue
+    if [[ "$archive_entry" != */* ]]; then
+      [[ "$archive_entry" == "$root_name" ]] || fail_audit "package 内根目录名称不符合包名: $name -> $archive_entry"
+      continue
+    fi
+
+    local root="${archive_entry%%/*}"
+    [[ "$root" == "$root_name" ]] || fail_audit "package 内根目录名称不符合包名: $name -> $root"
+    local relative="${archive_entry#*/}"
+    [[ -z "$relative" ]] && continue
+
+    case "$relative" in
+      README.txt) has_readme=1 ;;
+      SHA256SUMS) ;;
+      "$launcher") has_launcher=1 ;;
+      "$entry") has_entry=1 ;;
+      app/content/materials.json) has_materials=1 ;;
+      app/content/reactions.json) has_reactions=1 ;;
+      app/content/scenes/lava-mine.scene) has_scene=1 ;;
+    esac
+
+    if [[ "$relative" != app/* && "$relative" != app && "$relative" != "README.txt" && "$relative" != "SHA256SUMS" && "$relative" != "$launcher" && ! "$relative" =~ ^(LICENSE|NOTICE)(\..+)?$ ]]; then
+      fail_audit "package 根目录只允许 launcher/README/SHA256SUMS/许可文件与 app/: $name -> $relative"
+    fi
+
+    if is_disallowed_runtime_root_file "$relative" && [[ "$relative" != app/* ]]; then
+      fail_audit "package 根目录不应包含运行时依赖，请放入 app/: $name -> $relative"
+    fi
+
+    if (( ! is_directory )) && [[ "$relative" == app/* ]]; then
+      app_files+=("$relative")
+    fi
+  done < <(list_package_entries "$package")
+
+  (( has_readme )) || fail_audit "package 缺少 README.txt: $name"
+  (( has_launcher )) || fail_audit "package 缺少 launcher: $name -> $launcher"
+  (( has_entry )) || fail_audit "package 缺少 app 入口: $name -> $entry"
+  (( has_materials )) || fail_audit "package 缺少 app/content/materials.json: $name"
+  (( has_reactions )) || fail_audit "package 缺少 app/content/reactions.json: $name"
+  (( has_scene )) || fail_audit "package 缺少 app/content/scenes/lava-mine.scene: $name"
+
+  declare -A declared_app_files=()
+  local checksum_entry="$root_name/SHA256SUMS"
+  local checksum_line
+  local checksum_read=0
+  while IFS= read -r checksum_line || [[ -n "$checksum_line" ]]; do
+    checksum_line="${checksum_line%$'\r'}"
+    checksum_read=1
+    [[ -z "${checksum_line//[[:space:]]/}" ]] && continue
+    if [[ ! "$checksum_line" =~ ^([0-9a-fA-F]{64})[[:space:]]+\*?(.+)$ ]]; then
+      fail_audit "package 内 SHA256SUMS 行格式无效: $name -> $checksum_line"
+    fi
+
+    local checksum_name="${BASH_REMATCH[2]}"
+    checksum_name="${checksum_name#./}"
+    [[ "$checksum_name" == app/* ]] || fail_audit "package 内 SHA256SUMS 只能覆盖 app/ 文件: $name -> $checksum_name"
+    contains_item "$checksum_name" "${app_files[@]}" || fail_audit "package 内 SHA256SUMS 指向不存在的 app 文件: $name -> $checksum_name"
+    [[ -z "${declared_app_files[$checksum_name]+x}" ]] || fail_audit "package 内 SHA256SUMS 重复条目: $name -> $checksum_name"
+    declared_app_files["$checksum_name"]=1
+  done < <(read_package_text_entry "$package" "$checksum_entry")
+
+  (( checksum_read )) || fail_audit "package 内 SHA256SUMS 为空或不可读: $name"
+  local app_file
+  for app_file in "${app_files[@]}"; do
+    [[ -n "${declared_app_files[$app_file]+x}" ]] || fail_audit "package 内 SHA256SUMS 未覆盖 app 文件: $name -> $app_file"
+  done
+}
+
 audit_publish_directory() {
   local rid="$1"
   local channel="$2"
@@ -226,6 +416,8 @@ assert_expected_packages() {
     if ! is_release_package_name "$name"; then
       fail_audit "package 文件名不符合发行命名: $name"
     fi
+
+    assert_friendly_package_layout "$package"
   done
 
   if (( require_all && ${#packages[@]} != 12 )); then
@@ -280,6 +472,7 @@ assert_checksums() {
   local hash
   local checksum_name
   while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
     [[ -z "${line//[[:space:]]/}" ]] && continue
     if [[ ! "$line" =~ ^([0-9a-fA-F]{64})[[:space:]]+\*?(.+)$ ]]; then
       fail_audit "SHA256SUMS 行格式无效: $line"

@@ -48,16 +48,61 @@ if (-not (Test-Path $ContentRoot)) {
 $packageName = "PixelEngine-Demo-$Version-$Rid-$Channel"
 $stagingRoot = Join-Path $OutputRoot 'staging'
 $stagingDir = Join-Path $stagingRoot $packageName
+$appDir = Join-Path $stagingDir 'app'
 New-Item -ItemType Directory -Force $OutputRoot | Out-Null
 Remove-Item -LiteralPath $stagingDir -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force $stagingDir | Out-Null
+New-Item -ItemType Directory -Force $appDir | Out-Null
 
 Get-ChildItem -LiteralPath $PublishDir -Force | ForEach-Object {
-  Copy-Item -LiteralPath $_.FullName -Destination $stagingDir -Recurse -Force
+  Copy-Item -LiteralPath $_.FullName -Destination $appDir -Recurse -Force
 }
-$stagedContent = Join-Path $stagingDir 'content'
+$stagedContent = Join-Path $appDir 'content'
 Remove-Item -LiteralPath $stagedContent -Recurse -Force -ErrorAction SilentlyContinue
 Copy-Item -LiteralPath $ContentRoot -Destination $stagedContent -Recurse -Force
+
+$readme = @"
+PixelEngine Demo
+================
+
+Start the game from this folder:
+  Windows: PixelEngine Demo.cmd
+  Linux/macOS: ./PixelEngine Demo.sh
+
+The actual runtime files are under app/. This keeps the package root readable.
+Advanced users can also run app/PixelEngine.Demo directly.
+"@
+Set-Content -LiteralPath (Join-Path $stagingDir 'README.txt') -Value $readme -Encoding ASCII
+
+if ($Rid.StartsWith('win-')) {
+  $launcher = @"
+@echo off
+setlocal
+pushd "%~dp0app" >nul
+".\PixelEngine.Demo.exe" %*
+set "exitCode=%ERRORLEVEL%"
+popd >nul
+exit /b %exitCode%
+"@
+  Set-Content -LiteralPath (Join-Path $stagingDir 'PixelEngine Demo.cmd') -Value $launcher -Encoding ASCII
+} else {
+  $launcher = @"
+#!/usr/bin/env sh
+set -eu
+script_dir=`$(CDPATH= cd -- "`$(dirname -- "`$0")" && pwd)
+cd "`$script_dir/app"
+exec ./PixelEngine.Demo "`$@"
+"@
+  Set-Content -LiteralPath (Join-Path $stagingDir 'PixelEngine Demo.sh') -Value $launcher -Encoding ASCII
+}
+
+$packageChecksumLines = Get-ChildItem -LiteralPath $appDir -Recurse -File |
+  Sort-Object FullName |
+  ForEach-Object {
+    $relative = 'app/' + [IO.Path]::GetRelativePath($appDir, $_.FullName).Replace('\', '/')
+    $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    "$hash  $relative"
+  }
+Set-Content -LiteralPath (Join-Path $stagingDir 'SHA256SUMS') -Value $packageChecksumLines -Encoding ASCII
 
 if ($Rid.StartsWith('win-')) {
   $archiveName = "$packageName.zip"
