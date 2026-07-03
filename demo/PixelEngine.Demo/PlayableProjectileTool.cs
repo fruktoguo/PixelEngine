@@ -73,7 +73,12 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <summary>
     /// 爆破后局部扫描半径，用于把脱离主地形的小型固体岛转换为刚体。
     /// </summary>
-    public int CollapseScanRadius { get; set; } = 260;
+    public int CollapseScanRadius { get; set; } = 40;
+
+    /// <summary>
+    /// 单次射击后最多延迟扫描的帧数；保持较小，避免大窗口坍塌扫描拖住真实游玩输入。
+    /// </summary>
+    public int CollapseScanRetryFrames { get; set; } = 3;
 
     /// <summary>
     /// 可自动转换的最大连通块包围盒尺寸，避免误把整片程序化地形转成刚体。
@@ -159,17 +164,16 @@ public sealed class PlayableProjectileTool : Behaviour
         float safeDt = MathF.Max(0f, dt);
         _cooldownRemaining = MathF.Max(0f, _cooldownRemaining - safeDt);
         TracerRemainingSeconds = MathF.Max(0f, TracerRemainingSeconds - safeDt);
+        if (InputEnabled && _cooldownRemaining <= 0f && Context.Input.IsMouseDown(MouseButton.Left))
+        {
+            TryFire();
+        }
+
         ProcessPendingCollapseScanSafely();
-        if (!InputEnabled)
-        {
-            return;
-        }
+    }
 
-        if (_cooldownRemaining > 0f || !Context.Input.IsMouseDown(MouseButton.Left))
-        {
-            return;
-        }
-
+    private void TryFire()
+    {
         if (_player is null)
         {
             if (!Entity.TryGetComponent<PlayerController>(out PlayerController player))
@@ -238,7 +242,7 @@ public sealed class PlayableProjectileTool : Behaviour
         _pendingCollapseY = (int)MathF.Round(hitY);
         _pendingCollapseFrames = 1;
         _pendingCollapsePasses = Math.Clamp(MaxCollapsedIslandsPerShot, 1, 12);
-        _pendingCollapseScans = 8;
+        _pendingCollapseScans = Math.Clamp(CollapseScanRetryFrames, 1, 8);
     }
 
     private void ProcessPendingCollapseScan()

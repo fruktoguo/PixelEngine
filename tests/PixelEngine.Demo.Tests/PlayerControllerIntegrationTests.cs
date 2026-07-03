@@ -491,6 +491,41 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证退化为零长度的弹道不会让玩家可见层 fault，避免黄线停留后后续帧不再更新。
+    /// </summary>
+    [Fact]
+    public void PlayerVisualIgnoresDegenerateTracer()
+    {
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 16f;
+        player.SpawnY = 30f;
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.CooldownSeconds = 0f;
+        projectile.Range = 16f;
+        projectile.ImpactRadius = 1;
+        PlayerVisual visual = entity.AddComponent<PlayerVisual>();
+
+        engine.RunHeadlessTicks(2);
+        int muzzleX = (int)MathF.Floor(player.CenterX);
+        int muzzleY = (int)MathF.Floor(player.CenterY - 2f);
+        FillRect(grid, stone, muzzleX, muzzleY, muzzleX, muzzleY);
+        input.Update([], [MouseButton.Left], mouseX: player.CenterX + 12f, mouseY: player.CenterY - 2f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+
+        Assert.False(visual.Faulted, visual.LastException?.ToString());
+        Assert.True(projectile.TracerRemainingSeconds > 0f);
+        ScriptOverlayApi overlay = engine.Context.GetService<ScriptOverlayApi>();
+        Assert.DoesNotContain(
+            Enumerable.Range(0, overlay.CommandCount).Select(overlay.GetCommand),
+            command => command.Primitive == ScriptOverlayPrimitive.Line);
+    }
+
+    /// <summary>
     /// 验证玩家可在普通 settled cell 地面上接地、水平跑动并响应跳跃输入。
     /// </summary>
     [Fact]
@@ -926,16 +961,36 @@ public sealed class PlayerControllerIntegrationTests
         engine.RunHeadlessTicks(3);
 
         PlayableProjectileTool projectile = FindBehaviour<PlayableProjectileTool>(engine);
-        Assert.Equal(5, projectile.ImpactRadius);
-        Assert.Equal(12f, projectile.ImpactForce);
-        Assert.Equal(72, projectile.CollapseScanRadius);
-        Assert.Equal(24, projectile.FallbackOverhangRadius);
-        Assert.Equal(48, projectile.MaxCollapseRegionSize);
-        Assert.Equal(160, projectile.MaxCollapsePixels);
+        Assert.Equal(3, projectile.ImpactRadius);
+        Assert.Equal(9f, projectile.ImpactForce);
+        Assert.Equal(36, projectile.CollapseScanRadius);
+        Assert.Equal(2, projectile.CollapseScanRetryFrames);
+        Assert.Equal(18, projectile.FallbackOverhangRadius);
+        Assert.Equal(28, projectile.MaxCollapseRegionSize);
+        Assert.Equal(72, projectile.MaxCollapsePixels);
         Assert.Equal(1, projectile.MaxCollapsedIslandsPerShot);
-        Assert.Equal(48, projectile.PlayerSupportProtectionRadius);
+        Assert.Equal(72, projectile.PlayerSupportProtectionRadius);
         Assert.False(projectile.AllowOverhangFallbackCollapse);
         Assert.False(projectile.AllowImpactFallbackCollapse);
+    }
+
+    /// <summary>
+    /// 验证可玩 Demo 导演每帧揭示整个视口，避免真实游玩画面退化成点光源圆形可见范围。
+    /// </summary>
+    [Fact]
+    public void PlayableWorldDirectorRevealsFullViewport()
+    {
+        using Engine engine = CreateScriptEngine(typeof(PlayableWorldDirector), out _, out _, out _);
+
+        engine.RunHeadlessTicks(3);
+
+        ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
+        Assert.Equal(40, lighting.FogOfWar.ViewportCellWidth);
+        Assert.Equal(20, lighting.FogOfWar.ViewportCellHeight);
+        Assert.Equal(byte.MaxValue, lighting.FogOfWar.RevealAlpha(0, 0));
+        Assert.Equal(byte.MaxValue, lighting.FogOfWar.RevealAlpha(39, 0));
+        Assert.Equal(byte.MaxValue, lighting.FogOfWar.RevealAlpha(0, 19));
+        Assert.Equal(byte.MaxValue, lighting.FogOfWar.RevealAlpha(39, 19));
     }
 
     /// <summary>

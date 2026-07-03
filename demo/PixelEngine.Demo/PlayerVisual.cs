@@ -136,6 +136,13 @@ public sealed class PlayerVisual : Behaviour
 
         Point2F start = Context.Camera.WorldToScreen(_projectile.LastShotStartX, _projectile.LastShotStartY);
         Point2F end = Context.Camera.WorldToScreen(_projectile.LastHitX, _projectile.LastHitY);
+        float dx = end.X - start.X;
+        float dy = end.Y - start.Y;
+        if ((dx * dx) + (dy * dy) < 1f)
+        {
+            return;
+        }
+
         RectF viewport = Context.Camera.Viewport;
         if (!ContainsViewport(start.X, start.Y, viewport) || !ContainsViewport(end.X, end.Y, viewport))
         {
