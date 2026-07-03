@@ -176,6 +176,13 @@ public sealed class PhysicsSystem : IDisposable
     public int TaskBridgeFaultedCallbackCount => _taskBridge?.FaultedCallbackCount ?? 0;
 
     /// <summary>
+    /// 当前 PhysicsSystem 负责追踪的 live Box2D body 数，用于 native leak detector 采集关闭前后计数。
+    /// </summary>
+    public int LiveBodyCount => _shutdown && _ownsWorld
+        ? 0
+        : PhysicsWorld.ActiveBodyCount + (_staticTerrainColliders?.LiveBodyCount ?? 0);
+
+    /// <summary>
     /// Box2D 内部 step 子步数。相位 8 默认使用该值；它不是额外 CA tick，见架构 §4.1。
     /// </summary>
     public int SubStepCount { get; private set; } = 4;
@@ -654,6 +661,7 @@ public sealed class PhysicsSystem : IDisposable
         if (_ownsWorld)
         {
             Box2D.b2DestroyWorld(WorldId);
+            PhysicsWorld.Clear();
         }
 
         _taskBridge?.Dispose();
