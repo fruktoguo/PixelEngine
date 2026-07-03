@@ -2793,6 +2793,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("sha256 不匹配", evidence, StringComparison.Ordinal);
         Assert.Contains("Read-MarkdownEvidenceTable", evidence, StringComparison.Ordinal);
         Assert.Contains("报告 $key 必须为 $expected", evidence, StringComparison.Ordinal);
+        Assert.Contains("Get-ExpectedRunIdentity", evidence, StringComparison.Ordinal);
+        Assert.Contains("Add-RunIdentityCheck", evidence, StringComparison.Ordinal);
+        Assert.Contains("必须与 workflow_run 一致", evidence, StringComparison.Ordinal);
         Assert.Contains("packageReport", evidence, StringComparison.Ordinal);
         Assert.Contains("deterministic_hash", evidence, StringComparison.Ordinal);
         Assert.Contains("r2r_lightup", evidence, StringComparison.Ordinal);
@@ -2829,6 +2832,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("-AllowBlocked", releaseReport, StringComparison.Ordinal);
         Assert.Contains("sha256", releaseReport, StringComparison.Ordinal);
         Assert.Contains("重新计算", releaseReport, StringComparison.Ordinal);
+        Assert.Contains("同一个 GitHub Actions run", releaseReport, StringComparison.Ordinal);
         Assert.Contains("conclusion: success", releaseReport, StringComparison.Ordinal);
         Assert.Contains("simdProbeKind", releaseReport, StringComparison.Ordinal);
         Assert.Contains("arm64_neon", releaseReport, StringComparison.Ordinal);
@@ -3343,6 +3347,50 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 release evidence 预检要求所有报告来自同一个 workflow run / commit。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsMismatchedRunIdentity()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-run-identity-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject publishNode = rootNode["artifacts"]!["linux-x64"]!["r2r"]!.AsObject();
+            string publishReport = (string)publishNode["publishReport"]!;
+            string text = File.ReadAllText(publishReport).Replace("| sha | abc |", "| sha | different-commit |", StringComparison.Ordinal);
+            File.WriteAllText(publishReport, text);
+            publishNode["publishSha256"] = GetSha256(publishReport);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "run-identity-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("linux-x64/r2r/publish 报告 sha 必须与 workflow_run 一致", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证非 tag workflow_dispatch 的 GitHub Release 上传报告不能冒充正式发布成功证据。
     /// </summary>
     [Fact]
@@ -3638,8 +3686,12 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         _ = Directory.CreateDirectory(evidenceRoot);
         _ = Directory.CreateDirectory(packageRoot);
 
-        string workflow = WriteMarkdownEvidence(Path.Combine(evidenceRoot, "workflow-run.md"), new Dictionary<string, string> { ["conclusion"] = "success" });
-        string upload = WriteMarkdownEvidence(Path.Combine(evidenceRoot, "github-release-upload.md"), new Dictionary<string, string> { ["conclusion"] = githubReleaseConclusion });
+        string workflow = WriteMarkdownEvidence(
+            Path.Combine(evidenceRoot, "workflow-run.md"),
+            new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["conclusion"] = "success" });
+        string upload = WriteMarkdownEvidence(
+            Path.Combine(evidenceRoot, "github-release-upload.md"),
+            new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["conclusion"] = githubReleaseConclusion });
         string r2rLightup = WriteMarkdownEvidence(
             Path.Combine(evidenceRoot, "r2r-lightup.md"),
             new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["conclusion"] = r2rLightupConclusion });

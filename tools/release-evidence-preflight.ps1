@@ -150,6 +150,68 @@ function Add-MarkdownEvidenceCheck {
     }
 }
 
+function Get-ExpectedRunIdentity {
+    param(
+        [System.Collections.Generic.List[string]]$Missing,
+        [string]$Root,
+        [string]$WorkflowRunReport
+    )
+
+    $resolved = Resolve-EvidencePath -Root $Root -Path $WorkflowRunReport
+    if ([string]::IsNullOrWhiteSpace($resolved) -or -not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+        return $null
+    }
+
+    $values = Read-MarkdownEvidenceTable -Path $resolved
+    foreach ($key in @("run_id", "sha")) {
+        if (-not $values.ContainsKey($key) -or [string]::IsNullOrWhiteSpace([string]$values[$key])) {
+            $Missing.Add("workflow_run 报告缺少 $key 字段")
+        }
+    }
+
+    if (-not $values.ContainsKey("run_id") -or -not $values.ContainsKey("sha")) {
+        return $null
+    }
+
+    return [pscustomobject]@{
+        RunId = [string]$values["run_id"]
+        Sha = [string]$values["sha"]
+    }
+}
+
+function Add-RunIdentityCheck {
+    param(
+        [System.Collections.Generic.List[string]]$Missing,
+        [string]$Root,
+        [string]$Scope,
+        [string]$Path,
+        [object]$ExpectedIdentity
+    )
+
+    if ($null -eq $ExpectedIdentity) {
+        return
+    }
+
+    $resolved = Resolve-EvidencePath -Root $Root -Path $Path
+    if ([string]::IsNullOrWhiteSpace($resolved) -or -not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+        return
+    }
+
+    $values = Read-MarkdownEvidenceTable -Path $resolved
+    foreach ($key in @("run_id", "sha")) {
+        if (-not $values.ContainsKey($key)) {
+            $Missing.Add("$Scope 报告缺少 $key 字段，不能证明与 workflow_run 同源")
+            continue
+        }
+
+        $actual = [string]$values[$key]
+        $expected = if ($key -eq "run_id") { [string]$ExpectedIdentity.RunId } else { [string]$ExpectedIdentity.Sha }
+        if (-not [string]::Equals($actual, $expected, [StringComparison]::OrdinalIgnoreCase)) {
+            $Missing.Add("$Scope 报告 $key 必须与 workflow_run 一致：expected=$expected actual=$actual")
+        }
+    }
+}
+
 function Test-DeterministicHashRows {
     param(
         [System.Collections.Generic.List[string]]$Missing,
@@ -394,13 +456,17 @@ $workflowRunReport = [string]$manifest.workflowRunReport
 $githubReleaseUploadReport = [string]$manifest.githubRelease.uploadReport
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -DeclaredSha256 ([string]$manifest.workflowRunSha256)
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -ExpectedValues @{ conclusion = "success" }
+$expectedRunIdentity = Get-ExpectedRunIdentity -Missing $missing -Root $root -WorkflowRunReport $workflowRunReport
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "github_release_upload" -Path $githubReleaseUploadReport -DeclaredSha256 ([string]$manifest.githubRelease.uploadSha256)
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "github_release_upload" -Path $githubReleaseUploadReport -ExpectedValues @{ conclusion = "success" }
+Add-RunIdentityCheck -Missing $missing -Root $root -Scope "github_release_upload" -Path $githubReleaseUploadReport -ExpectedIdentity $expectedRunIdentity
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "deterministic_hash" -Path ([string]$manifest.deterministicHashReport) -DeclaredSha256 ([string]$manifest.deterministicHashSha256)
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "deterministic_hash" -Path ([string]$manifest.deterministicHashReport) -ExpectedValues @{ conclusion = "success" }
+Add-RunIdentityCheck -Missing $missing -Root $root -Scope "deterministic_hash" -Path ([string]$manifest.deterministicHashReport) -ExpectedIdentity $expectedRunIdentity
 Test-DeterministicHashRows -Missing $missing -Root $root -Path ([string]$manifest.deterministicHashReport) -RequiredRids $rids -RequiredChannels $channels
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "r2r_lightup" -Path ([string]$manifest.r2rLightupReport) -DeclaredSha256 ([string]$manifest.r2rLightupSha256)
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "r2r_lightup" -Path ([string]$manifest.r2rLightupReport) -ExpectedValues @{ conclusion = "success" }
+Add-RunIdentityCheck -Missing $missing -Root $root -Scope "r2r_lightup" -Path ([string]$manifest.r2rLightupReport) -ExpectedIdentity $expectedRunIdentity
 
 foreach ($rid in $rids) {
     foreach ($channel in $channels) {
@@ -415,10 +481,13 @@ foreach ($rid in $rids) {
         $packageReportPath = [string]$node.packageReport
         Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/publish" -Path $publishReportPath -DeclaredSha256 ([string]$node.publishSha256)
         Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "$rid/$channel/publish" -Path $publishReportPath -ExpectedValues @{ rid = $rid; channel = $channel; conclusion = "success" }
+        Add-RunIdentityCheck -Missing $missing -Root $root -Scope "$rid/$channel/publish" -Path $publishReportPath -ExpectedIdentity $expectedRunIdentity
         Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/verify" -Path $verifyReportPath -DeclaredSha256 ([string]$node.verifySha256)
         Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "$rid/$channel/verify" -Path $verifyReportPath -ExpectedValues @{ rid = $rid; channel = $channel; conclusion = "success" }
+        Add-RunIdentityCheck -Missing $missing -Root $root -Scope "$rid/$channel/verify" -Path $verifyReportPath -ExpectedIdentity $expectedRunIdentity
         Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/package_report" -Path $packageReportPath -DeclaredSha256 ([string]$node.packageReportSha256)
         Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "$rid/$channel/package_report" -Path $packageReportPath -ExpectedValues @{ rid = $rid; channel = $channel; conclusion = "success" }
+        Add-RunIdentityCheck -Missing $missing -Root $root -Scope "$rid/$channel/package_report" -Path $packageReportPath -ExpectedIdentity $expectedRunIdentity
         Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/package" -Path ([string]$node.package) -DeclaredSha256 ([string]$node.packageSha256)
         Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/checksum" -Path ([string]$node.checksum) -DeclaredSha256 ([string]$node.checksumSha256)
 
@@ -426,6 +495,7 @@ foreach ($rid in $rids) {
             $simdProbePath = [string]$node.simdProbe
             Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/simd_probe" -Path $simdProbePath -DeclaredSha256 ([string]$node.simdProbeSha256)
             Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "$rid/$channel/simd_probe" -Path $simdProbePath -ExpectedValues @{ rid = $rid; channel = $channel; conclusion = "success" }
+            Add-RunIdentityCheck -Missing $missing -Root $root -Scope "$rid/$channel/simd_probe" -Path $simdProbePath -ExpectedIdentity $expectedRunIdentity
             Test-AotSimdEvidence -Missing $missing -Root $root -Rid $rid -Node $node
         }
 
@@ -434,8 +504,10 @@ foreach ($rid in $rids) {
             $notarizationReportPath = [string]$node.notarizationReport
             Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/codesign" -Path $codesignReportPath -DeclaredSha256 ([string]$node.codesignSha256)
             Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "$rid/$channel/codesign" -Path $codesignReportPath -ExpectedValues @{ rid = $rid; channel = $channel; conclusion = "success" }
+            Add-RunIdentityCheck -Missing $missing -Root $root -Scope "$rid/$channel/codesign" -Path $codesignReportPath -ExpectedIdentity $expectedRunIdentity
             Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/notarization" -Path $notarizationReportPath -DeclaredSha256 ([string]$node.notarizationSha256)
             Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "$rid/$channel/notarization" -Path $notarizationReportPath -ExpectedValues @{ rid = $rid; channel = $channel; conclusion = "success" }
+            Add-RunIdentityCheck -Missing $missing -Root $root -Scope "$rid/$channel/notarization" -Path $notarizationReportPath -ExpectedIdentity $expectedRunIdentity
         }
     }
 }
