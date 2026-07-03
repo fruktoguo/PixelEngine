@@ -1,4 +1,5 @@
 using PixelEngine.Rendering;
+using PixelEngine.Simulation;
 using Xunit;
 
 namespace PixelEngine.Demo.Tests;
@@ -36,6 +37,78 @@ public sealed class DemoStartupOptionsTests
         Assert.Equal("playable-world", project.StartScene);
         Assert.Equal(PixelEngine.Hosting.SceneSourceKind.Procedural, scene.SourceKind);
         Assert.Equal(DemoStartupOptions.DefaultProceduralSceneKey, scene.Source);
+    }
+
+    /// <summary>
+    /// 验证默认可玩程序化场景从 AI 材质地图导入 cell，而不是只走旧的数学地形填充。
+    /// </summary>
+    [Fact]
+    public void DefaultPlayableWorldImportsAiMaterialMap()
+    {
+        string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
+        DemoStartupOptions options = DemoStartupOptions.Parse([
+            "--headless",
+            "--no-hot-reload",
+            "--content",
+            contentRoot,
+        ]);
+        PixelEngine.Hosting.EngineProject project = DemoProgram.BuildProject(options);
+        using PixelEngine.Hosting.Engine engine = DemoProgram.BuildEngine(options, project);
+        PlayableCavernWorldGenerator generator = new(Path.Combine(contentRoot, PlayableCavernWorldGenerator.DefaultMaterialMapRelativePath));
+        engine.RegisterProceduralWorldGenerator(
+            PlayableCavernWorldGenerator.Key,
+            generator);
+        PixelEngine.Hosting.EngineContentPackage package = engine.LoadContentPackage();
+        Assert.True(package.MaterialCount > 0);
+        PixelEngine.World.WorldLoadResult? worldLoad = engine.AttachCurrentSceneWorld();
+        Assert.Null(worldLoad);
+
+        MaterialTable materials = engine.Context.GetService<MaterialTable>();
+        CellGrid grid = engine.Context.GetService<CellGrid>();
+        PixelEngine.Hosting.ProceduralWorldDescriptor descriptor = generator.Describe(default);
+        Assert.True(materials.TryGetId("acid", out ushort acid));
+        Assert.True(materials.TryGetId("metal", out ushort metal));
+        Assert.True(materials.TryGetId("wood", out ushort wood));
+        Assert.True(materials.TryGetId("water", out ushort water));
+        Assert.True(materials.TryGetId("lava", out ushort lava));
+
+        int acidCells = 0;
+        int metalCells = 0;
+        int waterCells = 0;
+        int lavaCells = 0;
+        for (int y = 0; y < descriptor.HeightCells; y++)
+        {
+            for (int x = 0; x < descriptor.WidthCells; x++)
+            {
+                ushort material = grid.MaterialAt(x, y);
+                acidCells += material == acid ? 1 : 0;
+                metalCells += material == metal ? 1 : 0;
+                waterCells += material == water ? 1 : 0;
+                lavaCells += material == lava ? 1 : 0;
+            }
+        }
+
+        Assert.True(acidCells > 100, $"AI 图里的酸液区域应进入世界，actual={acidCells}");
+        Assert.True(metalCells > 100, $"AI 图里的矿脉应进入世界，actual={metalCells}");
+        Assert.True(waterCells > 100, $"AI 图里的水池应进入世界，actual={waterCells}");
+        Assert.True(lavaCells > 100, $"AI 图里的熔岩池应进入世界，actual={lavaCells}");
+        Assert.Equal(wood, grid.MaterialAt(72, 188));
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "PixelEngine.sln")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new InvalidOperationException("无法从测试输出目录定位 PixelEngine.sln。");
     }
 
     /// <summary>

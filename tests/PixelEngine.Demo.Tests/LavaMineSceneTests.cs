@@ -2,7 +2,6 @@ using System.Numerics;
 using PixelEngine.Hosting;
 using PixelEngine.Physics;
 using PixelEngine.Simulation;
-using PixelEngine.Simulation.Particles;
 using PixelEngine.Scripting;
 using Xunit;
 using ScriptScene = PixelEngine.Scripting.Scene;
@@ -26,11 +25,15 @@ public sealed class LavaMineSceneTests
         LevelDirector director = FindBehaviour<LevelDirector>(engine.Context.GetService<ScriptScene>());
         Assert.True(director.RigidStructuresQueued);
         Assert.Equal(6, director.RigidStructureCount);
-        _ = FindBehaviour<DemoHud>(engine.Context.GetService<ScriptScene>());
+        MaterialBrush brush = FindBehaviour<MaterialBrush>(engine.Context.GetService<ScriptScene>());
+        Assert.False(brush.InputEnabled);
+        _ = FindBehaviour<PlayableHud>(engine.Context.GetService<ScriptScene>());
+        _ = FindBehaviour<PlayerVisual>(engine.Context.GetService<ScriptScene>());
+        _ = FindBehaviour<PlayableProjectileTool>(engine.Context.GetService<ScriptScene>());
         _ = FindBehaviour<PauseMenu>(engine.Context.GetService<ScriptScene>());
-        Assert.True(CountBehaviours<SparkEmitter>(engine.Context.GetService<ScriptScene>()) >= 2);
-        ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
-        Assert.True(particles.ActiveCount > 0);
+        Assert.Equal(0, CountBehaviours<DemoHud>(engine.Context.GetService<ScriptScene>()));
+        Assert.Equal(0, CountBehaviours<MaterialEmitter>(engine.Context.GetService<ScriptScene>()));
+        Assert.Equal(0, CountBehaviours<SparkEmitter>(engine.Context.GetService<ScriptScene>()));
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
         Assert.True(physics.PhysicsWorld.ActiveBodyCount >= director.RigidStructureCount);
         Assert.True(physics.LastStampedCellCount > 0);
@@ -72,7 +75,9 @@ public sealed class LavaMineSceneTests
         engine.RunHeadlessTicks(2);
 
         ScriptScene scene = engine.Context.GetService<ScriptScene>();
-        _ = FindBehaviour<MaterialBrush>(scene);
+        MaterialBrush brush = FindBehaviour<MaterialBrush>(scene);
+        brush.InputEnabled = true;
+        FindBehaviour<PlayableProjectileTool>(scene).InputEnabled = false;
         CameraFollow follow = FindBehaviour<CameraFollow>(scene);
         follow.Damping = 0f;
         follow.LookaheadX = 0f;
@@ -112,7 +117,9 @@ public sealed class LavaMineSceneTests
         engine.RunHeadlessTicks(2);
 
         ScriptScene scene = engine.Context.GetService<ScriptScene>();
-        _ = FindBehaviour<MaterialBrush>(scene);
+        MaterialBrush brush = FindBehaviour<MaterialBrush>(scene);
+        brush.InputEnabled = true;
+        FindBehaviour<PlayableProjectileTool>(scene).InputEnabled = false;
         CameraFollow follow = FindBehaviour<CameraFollow>(scene);
         follow.Damping = 0f;
         follow.LookaheadX = 0f;
@@ -160,6 +167,51 @@ public sealed class LavaMineSceneTests
         Assert.True(sandInitial > 0, "MaterialBrush 应先在测试区域写入 sand。");
         Assert.True(settledSand >= 20, $"sand 应被 CA 接管并沉积到接料槽底部，initial={sandInitial}, settled={settledSand}");
         Assert.True(steamAverageYAfter < steamAverageYBefore - 4.0, $"steam 气体应上升，beforeY={steamAverageYBefore:F2}, afterY={steamAverageYAfter:F2}");
+    }
+
+    /// <summary>
+    /// 验证 Demo 内容包中的 acid 腐蚀反应会损坏 RigidOwned 木结构，并触发 Physics 刚体重建。
+    /// </summary>
+    [Fact]
+    public async Task AcidCorrosionDamagesRigidWoodAndRebuildsBody()
+    {
+        using Engine engine = await CreateLavaMineEngineAsync();
+        engine.RunHeadlessTicks(2);
+
+        CellGrid grid = engine.Context.GetService<CellGrid>();
+        ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
+        MaterialTable materials = engine.Context.GetService<MaterialTable>();
+        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        Assert.True(materials.TryGetId("wood", out ushort wood));
+        Assert.True(materials.TryGetId("acid", out ushort acid));
+
+        ClearRect(edit, 40, 40, 96, 80);
+        FillRect(edit, wood, minX: 48, minY: 56, maxX: 88, maxY: 64);
+        engine.RunHeadlessTicks(1);
+        int beforeBodies = physics.PhysicsWorld.ActiveBodyCount;
+        _ = physics.CreateBodyFromRegion(48, 56, 40, 8);
+        int ownedBefore = CountRigidOwned(grid, 48, 56, 88, 64);
+        Assert.True(ownedBefore > 0);
+
+        FillRect(edit, acid, minX: 66, minY: 54, maxX: 70, maxY: 58);
+        int maxDestroyed = 0;
+        int maxCreated = 0;
+        for (int i = 0; i < 160; i++)
+        {
+            engine.RunHeadlessTicks(1);
+            maxDestroyed = Math.Max(maxDestroyed, physics.LastDestructionResult.DestroyedBodies);
+            maxCreated = Math.Max(maxCreated, physics.LastDestructionResult.CreatedBodies);
+            if (CountRigidOwned(grid, 48, 56, 88, 64) < ownedBefore)
+            {
+                break;
+            }
+        }
+
+        int ownedAfter = CountRigidOwned(grid, 48, 56, 88, 64);
+        Assert.True(ownedAfter < ownedBefore, $"acid 腐蚀 RigidOwned wood 后 owned cell 应下降，before={ownedBefore}, after={ownedAfter}。");
+        Assert.True(
+            maxDestroyed > 0 || physics.PhysicsWorld.ActiveBodyCount >= beforeBodies,
+            $"acid 腐蚀后物理系统不应丢失所有结构，destroyed={maxDestroyed}, created={maxCreated}, active={physics.PhysicsWorld.ActiveBodyCount}, before={beforeBodies}。");
     }
 
     private static async Task<Engine> CreateLavaMineEngineAsync()
@@ -270,6 +322,23 @@ public sealed class LavaMineSceneTests
             for (int x = minX; x < maxX; x++)
             {
                 if (grid.MaterialAt(x, y) == material)
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private static int CountRigidOwned(CellGrid grid, int minX, int minY, int maxX, int maxY)
+    {
+        int count = 0;
+        for (int y = minY; y < maxY; y++)
+        {
+            for (int x = minX; x < maxX; x++)
+            {
+                if (CellFlags.Has(grid.FlagsAt(x, y), CellFlags.RigidOwned))
                 {
                     count++;
                 }
