@@ -660,6 +660,16 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("cpuProbeReport", script, StringComparison.Ordinal);
         Assert.Contains("gpuProbeReport", script, StringComparison.Ordinal);
         Assert.Contains("comparisonReport", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-TargetHardwareReport", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-TargetProbeReport", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-TargetProbePair", script, StringComparison.Ordinal);
+        Assert.Contains("targetGpuName", script, StringComparison.Ordinal);
+        Assert.Contains("targetGpuDriver", script, StringComparison.Ordinal);
+        Assert.Contains("gpuBackend", script, StringComparison.Ordinal);
+        Assert.Contains("particleCount", script, StringComparison.Ordinal);
+        Assert.Contains("measured_frames 必须至少为 300", script, StringComparison.Ordinal);
+        Assert.Contains("sampleSeconds 必须至少为 10 秒", script, StringComparison.Ordinal);
+        Assert.Contains("speedupRatio 必须大于 1", script, StringComparison.Ordinal);
         Assert.Contains("gpuFasterThanCpu", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_gpu_evidence", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_gpu_scope_evidence", script, StringComparison.Ordinal);
@@ -681,6 +691,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("local_probe_only", report, StringComparison.Ordinal);
         Assert.Contains("target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
         Assert.Contains("gpuFasterThanCpu", report, StringComparison.Ordinal);
+        Assert.Contains("targetGpuName", report, StringComparison.Ordinal);
+        Assert.Contains("measured_frames", report, StringComparison.Ordinal);
+        Assert.Contains("sampleSeconds", report, StringComparison.Ordinal);
         Assert.Contains("local-comparison.md", report, StringComparison.Ordinal);
         Assert.Contains("target_gpu_evidence: false", report, StringComparison.Ordinal);
         Assert.Contains("未知 scope", report, StringComparison.Ordinal);
@@ -701,11 +714,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         try
         {
-            string goodManifest = CreateFlatEvidenceManifest(
-                temp,
-                ["targetHardwareReport", "cpuProbeReport", "gpuProbeReport", "comparisonReport"],
-                suffix: "good");
-            SetFlatEvidenceFileContent(goodManifest, "comparisonReport", "gpuFasterThanCpu: true");
+            string goodManifest = CreateGpuParticleEvidenceManifest(temp, suffix: "good");
             string badManifest = CreateFlatEvidenceManifest(
                 temp,
                 ["targetHardwareReport", "cpuProbeReport", "gpuProbeReport"],
@@ -845,10 +854,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         try
         {
-            string manifest = CreateFlatEvidenceManifest(
-                temp,
-                ["targetHardwareReport", "cpuProbeReport", "gpuProbeReport", "comparisonReport"],
-                suffix: "bad-comparison");
+            string manifest = CreateGpuParticleEvidenceManifest(temp, suffix: "bad-comparison");
             SetFlatEvidenceFileContent(manifest, "comparisonReport", "gpuFasterThanCpu: false");
 
             string artifacts = Path.Combine(temp, "bad-comparison-out");
@@ -877,6 +883,81 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 GPU 粒子目标硬件预检要求硬件报告包含可审查的机器字段。
+    /// </summary>
+    [Fact]
+    public void GpuParticleBenchmarkPreflightRejectsTargetHardwareReportWithoutMachineFields()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-hardware-fields-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateGpuParticleEvidenceManifest(temp, suffix: "bad-hardware");
+            SetFlatEvidenceFileContent(manifest, "targetHardwareReport", "targetGpuName: Test GPU");
+
+            string artifacts = Path.Combine(temp, "bad-hardware-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
+            Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("targetHardwareReport 缺少机器可读字段 targetGpuDriver", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 GPU 粒子目标硬件预检要求目标 probe 至少包含长样本帧数。
+    /// </summary>
+    [Fact]
+    public void GpuParticleBenchmarkPreflightRejectsTargetProbeWithTooFewMeasuredFrames()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-probe-frames-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateGpuParticleEvidenceManifest(temp, suffix: "bad-frames", measuredFrames: 120);
+
+            string artifacts = Path.Combine(temp, "bad-frames-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
+            Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("cpuProbeReport measured_frames 必须至少为 300", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 GPU 粒子目标硬件预检会实际拒绝 sha256 不匹配的 evidence，而不是只做脚本文本约束。
     /// </summary>
     [Fact]
@@ -887,10 +968,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         try
         {
-            string badManifest = CreateFlatEvidenceManifest(
-                temp,
-                ["targetHardwareReport", "cpuProbeReport", "gpuProbeReport", "comparisonReport"],
-                suffix: "bad-hash");
+            string badManifest = CreateGpuParticleEvidenceManifest(temp, suffix: "bad-hash");
             string json = File.ReadAllText(badManifest);
             json = json.Replace("\"sha256\": \"", "\"sha256\": \"0000", StringComparison.Ordinal);
             File.WriteAllText(badManifest, json);
@@ -936,10 +1014,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 temp,
                 ["targetHardwareReport", "cpuProbeReport", "gpuProbeReport", "comparisonReport", "localProbeOnly"],
                 suffix: "unknown-scope");
-            string duplicateManifest = CreateFlatEvidenceManifest(
-                temp,
-                ["targetHardwareReport", "cpuProbeReport", "gpuProbeReport", "comparisonReport"],
-                suffix: "duplicate-scope");
+            string duplicateManifest = CreateGpuParticleEvidenceManifest(temp, suffix: "duplicate-scope");
             AddDuplicateFlatEvidenceScope(duplicateManifest, "comparisonReport");
 
             string unknownArtifacts = Path.Combine(temp, "unknown-out");
@@ -990,10 +1065,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         try
         {
-            string manifest = CreateFlatEvidenceManifest(
-                temp,
-                ["targetHardwareReport", "cpuProbeReport", "gpuProbeReport", "comparisonReport"],
-                suffix: "schema");
+            string manifest = CreateGpuParticleEvidenceManifest(temp, suffix: "schema");
             string json = File.ReadAllText(manifest).Replace("\"schemaVersion\": 1", "\"schemaVersion\": 2", StringComparison.Ordinal);
             File.WriteAllText(manifest, json);
 
@@ -2861,6 +2933,83 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         };
 
         string manifestPath = Path.Combine(tempRoot, suffix, "native-leak-evidence.json");
+        File.WriteAllText(
+            manifestPath,
+            System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        return manifestPath;
+    }
+
+    private static string CreateGpuParticleEvidenceManifest(
+        string tempRoot,
+        string suffix = "good",
+        int particleCount = 100_000,
+        int measuredFrames = 600,
+        double sampleSeconds = 20.0,
+        double cpuWallAvgMs = 6.4,
+        double gpuWallAvgMs = 3.2)
+    {
+        string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "gpu-particle-evidence");
+        _ = Directory.CreateDirectory(evidenceRoot);
+
+        string hardware = WriteTextEvidence(
+            Path.Combine(evidenceRoot, "target-hardware.md"),
+            $"""
+            # Target GPU hardware
+
+            targetGpuName: Test GPU 4090
+            targetGpuDriver: 999.1
+            gpuBackend: OpenGL
+            operatingSystem: Windows 11
+            cpuName: Test CPU
+            dotnetVersion: 10.0.8
+            gitCommit: abcdef123456
+            particleCount: {particleCount}
+            """);
+
+        string cpuProbe = WriteTextEvidence(
+            Path.Combine(evidenceRoot, "cpu-probe.md"),
+            "particle_frame_probe mode=cpu, gpu_available=False, requested_count=" + particleCount.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+            ", active_count=" + particleCount.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+            ", warmup_frames=60, measured_frames=" + measuredFrames.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+            ", wall_avg_ms=" + cpuWallAvgMs.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) +
+            ", wall_p50_ms=6.000, wall_p95_ms=7.000, wall_max_ms=8.000, particle_stamp_avg_ms=2.400, particle_stamp_p50_ms=2.300, particle_stamp_p95_ms=2.600, particle_stamp_max_ms=2.900, gpu_particle_avg_ms=0.000");
+
+        string gpuProbe = WriteTextEvidence(
+            Path.Combine(evidenceRoot, "gpu-probe.md"),
+            "particle_frame_probe mode=gpu, gpu_available=True, requested_count=" + particleCount.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+            ", active_count=" + particleCount.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+            ", warmup_frames=60, measured_frames=" + measuredFrames.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+            ", wall_avg_ms=" + gpuWallAvgMs.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) +
+            ", wall_p50_ms=3.000, wall_p95_ms=4.000, wall_max_ms=5.000, particle_stamp_avg_ms=0.000, gpu_particle_avg_ms=0.900, gpu_particle_p50_ms=0.850, gpu_particle_p95_ms=1.050, gpu_particle_max_ms=1.200");
+
+        string comparison = WriteTextEvidence(
+            Path.Combine(evidenceRoot, "comparison.md"),
+            $"""
+            # Target GPU comparison
+
+            gpuFasterThanCpu: true
+            cpuWallAvgMs: {cpuWallAvgMs.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}
+            gpuWallAvgMs: {gpuWallAvgMs.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}
+            speedupRatio: {(cpuWallAvgMs / gpuWallAvgMs).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}
+            measuredFrames: {measuredFrames}
+            sampleSeconds: {sampleSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}
+            """);
+
+        Dictionary<string, object>[] evidence =
+        [
+            new() { ["scope"] = "targetHardwareReport", ["path"] = hardware, ["sha256"] = GetSha256(hardware) },
+            new() { ["scope"] = "cpuProbeReport", ["path"] = cpuProbe, ["sha256"] = GetSha256(cpuProbe) },
+            new() { ["scope"] = "gpuProbeReport", ["path"] = gpuProbe, ["sha256"] = GetSha256(gpuProbe) },
+            new() { ["scope"] = "comparisonReport", ["path"] = comparison, ["sha256"] = GetSha256(comparison) },
+        ];
+
+        Dictionary<string, object> manifest = new()
+        {
+            ["schemaVersion"] = 1,
+            ["evidence"] = evidence,
+        };
+
+        string manifestPath = Path.Combine(tempRoot, suffix, "gpu-particle-evidence.json");
         File.WriteAllText(
             manifestPath,
             System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
