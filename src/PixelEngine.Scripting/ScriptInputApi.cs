@@ -5,14 +5,17 @@ namespace PixelEngine.Scripting;
 /// </summary>
 public sealed class ScriptInputApi : IInputApi
 {
-    private readonly bool[] _downKeys = new bool[Enum.GetValues<Key>().Length];
-    private readonly bool[] _previousKeys = new bool[Enum.GetValues<Key>().Length];
-    private readonly bool[] _pressedKeys = new bool[Enum.GetValues<Key>().Length];
-    private readonly bool[] _releasedKeys = new bool[Enum.GetValues<Key>().Length];
-    private readonly bool[] _downButtons = new bool[Enum.GetValues<MouseButton>().Length];
-    private readonly bool[] _previousButtons = new bool[Enum.GetValues<MouseButton>().Length];
-    private readonly bool[] _pressedButtons = new bool[Enum.GetValues<MouseButton>().Length];
-    private readonly bool[] _releasedButtons = new bool[Enum.GetValues<MouseButton>().Length];
+    private const int KeyCount = (int)Key.Digit9 + 1;
+    private const int MouseButtonCount = (int)MouseButton.Middle + 1;
+
+    private readonly bool[] _downKeys = new bool[KeyCount];
+    private readonly bool[] _previousKeys = new bool[KeyCount];
+    private readonly bool[] _pressedKeys = new bool[KeyCount];
+    private readonly bool[] _releasedKeys = new bool[KeyCount];
+    private readonly bool[] _downButtons = new bool[MouseButtonCount];
+    private readonly bool[] _previousButtons = new bool[MouseButtonCount];
+    private readonly bool[] _pressedButtons = new bool[MouseButtonCount];
+    private readonly bool[] _releasedButtons = new bool[MouseButtonCount];
 
     /// <summary>
     /// 用窗口层采集到的输入状态更新本帧脚本输入快照。
@@ -123,15 +126,17 @@ public sealed class ScriptInputApi : IInputApi
 
     private static int Index(Key key)
     {
-        return Enum.IsDefined(key)
-            ? (int)key
+        int index = (int)key;
+        return (uint)index < KeyCount
+            ? index
             : throw new ArgumentOutOfRangeException(nameof(key), key, "未知脚本按键。");
     }
 
     private static int Index(MouseButton button)
     {
-        return Enum.IsDefined(button)
-            ? (int)button
+        int index = (int)button;
+        return (uint)index < MouseButtonCount
+            ? index
             : throw new ArgumentOutOfRangeException(nameof(button), button, "未知鼠标按键。");
     }
 

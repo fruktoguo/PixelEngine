@@ -47,6 +47,16 @@ function Invoke-Checked([string]$filePath, [string[]]$arguments) {
   }
 }
 
+function Remove-RepositoryDirectory([string]$Path) {
+  $repoFullPath = [IO.Path]::GetFullPath($repoRoot)
+  $fullPath = [IO.Path]::GetFullPath($Path)
+  if (-not $fullPath.StartsWith($repoFullPath, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "拒绝删除仓库外目录: $fullPath"
+  }
+
+  Remove-Item -LiteralPath $fullPath -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 if (-not $SkipNativeBuild) {
   & (Join-Path $PSScriptRoot 'build-native.ps1') -Rid $Rid -Configuration $Configuration
 }
@@ -60,7 +70,20 @@ if ($InformationalVersion) {
   $publishProperties += "-p:InformationalVersion=$InformationalVersion"
 }
 
-Remove-Item -LiteralPath $Output -Recurse -Force -ErrorAction SilentlyContinue
+$targetFramework = (& dotnet msbuild $demoProject -nologo -getProperty:TargetFramework).Trim()
+if ([string]::IsNullOrWhiteSpace($targetFramework)) {
+  throw '无法读取 TargetFramework。'
+}
+
+$ridArchitecture = ($Rid -split '-')[-1]
+Remove-RepositoryDirectory $Output
+Remove-RepositoryDirectory (Join-Path $repoRoot "demo/PixelEngine.Demo/bin/$ridArchitecture/$Configuration/$targetFramework/$Rid")
+Remove-RepositoryDirectory (Join-Path $repoRoot "demo/PixelEngine.Demo/obj/$ridArchitecture/$Configuration/$targetFramework/$Rid")
+Get-ChildItem -LiteralPath (Join-Path $repoRoot 'src') -Directory -Filter 'PixelEngine.*' | ForEach-Object {
+  Remove-RepositoryDirectory (Join-Path $_.FullName "bin/$ridArchitecture/$Configuration/$targetFramework")
+  Remove-RepositoryDirectory (Join-Path $_.FullName "obj/$ridArchitecture/$Configuration/$targetFramework")
+}
+
 Invoke-Checked 'dotnet' -arguments @(
   'publish', $demoProject,
   '-c', $Configuration,

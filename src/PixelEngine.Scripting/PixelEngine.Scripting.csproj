@@ -8,6 +8,10 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(PublishAot)' == 'true'">
+    <DefineConstants>$(DefineConstants);PIXELENGINE_NATIVEAOT</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\PixelEngine.Core\PixelEngine.Core.csproj" />
     <ProjectReference Include="..\PixelEngine.Simulation\PixelEngine.Simulation.csproj" />
@@ -17,7 +21,15 @@
     <ProjectReference Include="..\PixelEngine.Audio\PixelEngine.Audio.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(PublishAot)' != 'true'">
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <Compile Remove="ScriptHotReloadController.NativeAot.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(PublishAot)' == 'true'">
+    <Compile Remove="HotReloadService.cs" />
+    <Compile Remove="ScriptCompiler.cs" />
+    <Compile Remove="ScriptHotReloadController.cs" />
+    <Compile Remove="ScriptLoadContext.cs" />
   </ItemGroup>
 </Project>

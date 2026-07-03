@@ -36,4 +36,73 @@ public sealed class ScriptInputApiTests
         Assert.Equal(-1f, input.Axis(Axis.Horizontal));
         Assert.Equal(-1f, input.MouseWheelY);
     }
+
+    /// <summary>
+    /// 验证输入枚举保持从 0 开始的连续布局，使脚本输入 API 可用 AOT-safe 数组索引替代运行时反射。
+    /// </summary>
+    [Fact]
+    public void InputEnumsRemainDenseForAotSafeIndexing()
+    {
+        AssertDenseEnum<Key>();
+        AssertDenseEnum<MouseButton>();
+    }
+
+    /// <summary>
+    /// 验证未知输入值被显式拒绝，而不是越界访问输入快照数组。
+    /// </summary>
+    [Fact]
+    public void UnknownInputValuesAreRejected()
+    {
+        ScriptInputApi input = new();
+
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => input.IsDown((Key)(-1)));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => input.WasPressed((Key)999));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => input.IsMouseDown((MouseButton)(-1)));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => input.WasMousePressed((MouseButton)999));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => input.Update([(Key)999], [], 0, 0, 0));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => input.Update([], [(MouseButton)999], 0, 0, 0));
+    }
+
+    /// <summary>
+    /// 验证运行时代码不再使用 NativeAOT 会警告的枚举反射来初始化脚本输入快照。
+    /// </summary>
+    [Fact]
+    public void ScriptInputApiAvoidsRuntimeEnumReflection()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string source = File.ReadAllText(Path.Combine(repositoryRoot, "src", "PixelEngine.Scripting", "ScriptInputApi.cs"));
+
+        Assert.DoesNotContain("Enum.GetValues", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Enum.IsDefined", source, StringComparison.Ordinal);
+    }
+
+    private static void AssertDenseEnum<T>()
+        where T : struct, Enum
+    {
+        int[] values =
+        [
+            .. Enum.GetValues<T>()
+            .Select(static value => Convert.ToInt32(value))
+            .Order(),
+        ];
+
+        Assert.NotEmpty(values);
+        Assert.Equal(Enumerable.Range(0, values.Length), values);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "PixelEngine.sln")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("无法定位 PixelEngine 仓库根目录。");
+    }
 }
