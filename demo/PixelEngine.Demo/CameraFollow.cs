@@ -53,6 +53,11 @@ public sealed class CameraFollow : Behaviour
     public bool MouseWheelZoomEnabled { get; set; } = true;
 
     /// <summary>
+    /// 是否在整数缩放下把视口左上角对齐到整数 cell，避免像素风格相机落回逐像素重采样慢路径。
+    /// </summary>
+    public bool SnapOriginToCellGrid { get; set; } = true;
+
+    /// <summary>
     /// 关卡左边界。
     /// </summary>
     public float MinX { get; set; } = 0f;
@@ -135,6 +140,12 @@ public sealed class CameraFollow : Behaviour
         float halfHeight = viewport.Height / (2f * MathF.Max(Zoom, 0.001f));
         float clampedX = ClampWithFallback(x, MinX + halfWidth, MaxX - halfWidth);
         float clampedY = ClampWithFallback(y, MinY + halfHeight, MaxY - halfHeight);
+        if (SnapOriginToCellGrid && IsIntegerZoom(Zoom))
+        {
+            clampedX = SnapCenterToIntegerOrigin(clampedX, halfWidth, MinX, MaxX);
+            clampedY = SnapCenterToIntegerOrigin(clampedY, halfHeight, MinY, MaxY);
+        }
+
         Context.Camera.SetCenter(clampedX, clampedY);
     }
 
@@ -160,6 +171,31 @@ public sealed class CameraFollow : Behaviour
     private static float ClampWithFallback(float value, float min, float max)
     {
         return min <= max ? Math.Clamp(value, min, max) : (min + max) * 0.5f;
+    }
+
+    private static bool IsIntegerZoom(float zoom)
+    {
+        if (!float.IsFinite(zoom) || zoom <= 0f)
+        {
+            return false;
+        }
+
+        float rounded = MathF.Round(zoom);
+        return rounded >= 1f && MathF.Abs(zoom - rounded) <= 0.0001f;
+    }
+
+    private static float SnapCenterToIntegerOrigin(float center, float halfExtent, float minWorld, float maxWorld)
+    {
+        float visibleExtent = halfExtent * 2f;
+        int minOrigin = (int)MathF.Ceiling(minWorld);
+        int maxOrigin = (int)MathF.Floor(maxWorld - visibleExtent);
+        if (minOrigin > maxOrigin)
+        {
+            return center;
+        }
+
+        float snappedOrigin = Math.Clamp(MathF.Round(center - halfExtent), minOrigin, maxOrigin);
+        return snappedOrigin + halfExtent;
     }
 
     private static float Lerp(float a, float b, float t)

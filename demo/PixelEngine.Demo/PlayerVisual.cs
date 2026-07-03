@@ -31,6 +31,11 @@ public sealed class PlayerVisual : Behaviour
     /// </summary>
     public int LastOverlayCommandsSubmitted { get; private set; }
 
+    /// <summary>
+    /// 是否在可玩 Demo 中揭示整个当前视口，避免测试关卡被圆形 fog 范围遮住。
+    /// </summary>
+    public bool RevealFullViewport { get; set; } = true;
+
     /// <inheritdoc />
     protected override void OnStart()
     {
@@ -63,7 +68,7 @@ public sealed class PlayerVisual : Behaviour
         DrawPlayer(state);
         DrawCrosshair();
         DrawTracer();
-        Context.Lighting.RevealAround(_player.CenterX, _player.CenterY, 86f);
+        RevealViewport();
         Context.Lighting.AddPointLight(_player.CenterX, _player.CenterY, 96f, 0xFF_F8_DA_8C, 0.42f);
     }
 
@@ -141,6 +146,23 @@ public sealed class PlayerVisual : Behaviour
         LastOverlayCommandsSubmitted++;
         Context.Overlay.Line(start.X, start.Y, end.X, end.Y, 1f, 0xFF_FF_FF_FF);
         LastOverlayCommandsSubmitted++;
+    }
+
+    private void RevealViewport()
+    {
+        if (!RevealFullViewport)
+        {
+            Context.Lighting.RevealAround(_player!.CenterX, _player.CenterY, 86f);
+            return;
+        }
+
+        RectF viewport = Context.Camera.Viewport;
+        float zoom = MathF.Max(Context.Camera.Zoom, 0.001f);
+        Point2F center = Context.Camera.ScreenToWorld(viewport.Width * 0.5f, viewport.Height * 0.5f);
+        float halfWidthCells = viewport.Width / (2f * zoom);
+        float halfHeightCells = viewport.Height / (2f * zoom);
+        float radius = MathF.Sqrt((halfWidthCells * halfWidthCells) + (halfHeightCells * halfHeightCells)) + 8f;
+        Context.Lighting.RevealAround(center.X, center.Y, radius);
     }
 
     private static bool ContainsViewport(float x, float y, RectF viewport)
