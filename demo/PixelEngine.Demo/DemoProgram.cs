@@ -235,6 +235,9 @@ public static class DemoProgram
 
         if (options.WindowTicks > 0)
         {
+            DemoWindowFrameTimeProbe windowFrameProbe = new(
+                Math.Min(120, Math.Max(0, options.WindowTicks / 3)),
+                WindowProbeScenario(options));
             Stopwatch stopwatch = Stopwatch.StartNew();
             double previousSeconds = stopwatch.Elapsed.TotalSeconds;
             int executed = 0;
@@ -248,6 +251,7 @@ public static class DemoProgram
                 _ = engine.RunOneTick(now - previousSeconds);
                 previousSeconds = now;
                 double tickMs = (Stopwatch.GetTimestamp() - tickStart) * 1000.0 / Stopwatch.Frequency;
+                windowFrameProbe.RecordFrame(tickMs, engine.Context.Profiler.LastSubFrame, engine.Context.Counters);
                 particleFrameProbe?.RecordFrame(tickMs, engine.Context.Profiler.LastSubFrame, engine.Context.Counters);
             }
 
@@ -265,6 +269,9 @@ public static class DemoProgram
                 $"present_wait_ms={engine.Context.Counters.FramePresentWaitMilliseconds:0.00}, " +
                 $"effective_fps={engine.Context.Counters.EffectiveFramesPerSecond:0.0}, " +
                 $"vsync={(engine.Context.Counters.VSyncEnabled ? "on" : "off")}。");
+            Console.WriteLine(windowFrameProbe.BuildSummary(
+                engine.Context.Counters.FrameGpuTimerAvailable,
+                engine.Context.Counters.VSyncEnabled));
             if (scriptedInput is not null)
             {
                 WriteScriptedWindowSummary(engine, scriptedInput, scriptedProbe, reactionProbe, audioProbe, particleLightProbe);
@@ -284,6 +291,15 @@ public static class DemoProgram
         }
 
         engine.Run();
+    }
+
+    private static string WindowProbeScenario(DemoStartupOptions options)
+    {
+        return options.ParticleFrameProbe
+            ? $"particle_{options.ParticleRenderMode?.ToString() ?? "auto"}"
+            : options.ScriptedWindowRoute
+                ? "scripted_route"
+                : options.ScriptedWindowDemo ? "scripted_demo" : "static";
     }
 
     private static void ApplyParticleRenderMode(Engine engine, DemoStartupOptions options)
