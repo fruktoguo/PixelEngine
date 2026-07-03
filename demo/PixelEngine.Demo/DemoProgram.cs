@@ -511,6 +511,12 @@ public static class DemoProgram
             $"audio_loaded={engine.Context.Counters.AudioLoadedClips}, " +
             $"hud_blocked={hudBlocked}, " +
             $"fps={diagnostics.FramesPerSecond:0.0}, " +
+            $"frame_ms={diagnostics.FrameMilliseconds:0.0}, " +
+            $"frame_last_ms={diagnostics.FrameLastMilliseconds:0.0}, " +
+            $"frame_p99_ms={diagnostics.FrameP99Milliseconds:0.0}, " +
+            $"frame_low1_fps={diagnostics.FrameLow1PercentFps:0.0}, " +
+            $"frame_jitter_ms={diagnostics.FrameJitterMilliseconds:0.0}, " +
+            $"frame_samples={diagnostics.FrameSampleCount}, " +
             $"sim_hz={diagnostics.SimHz:0.0}, " +
             $"diagnostic_frame={diagnostics.FrameCount}, " +
             $"pause_open={pauseOpen}, " +
