@@ -10,6 +10,7 @@ param(
   [string]$Version,
   [string]$PublishDir,
   [string]$OutputRoot,
+  [string]$PlayerOutputDir,
   [string]$ContentRoot
 )
 
@@ -27,6 +28,10 @@ if (-not $Version) {
 
 if (-not $OutputRoot) {
   $OutputRoot = Join-Path $repoRoot 'artifacts/package'
+}
+
+if (-not $PlayerOutputDir) {
+  $PlayerOutputDir = Join-Path $repoRoot 'artifacts/PixelEngine Demo'
 }
 
 if (-not $PublishDir) {
@@ -209,6 +214,8 @@ Set-Content -LiteralPath $checksumPath -Value $lines -Encoding ASCII
 
 Remove-Item -LiteralPath $packageDir -Recurse -Force -ErrorAction SilentlyContinue
 Move-Item -LiteralPath $stagingDir -Destination $packageDir -Force
+Remove-Item -LiteralPath $PlayerOutputDir -Recurse -Force -ErrorAction SilentlyContinue
+Copy-Item -LiteralPath $packageDir -Destination $PlayerOutputDir -Recurse -Force
 if ((Test-Path -LiteralPath $stagingRoot -PathType Container) -and
   -not (Get-ChildItem -LiteralPath $stagingRoot -Force -ErrorAction SilentlyContinue | Select-Object -First 1)) {
   Remove-Item -LiteralPath $stagingRoot -Force -ErrorAction SilentlyContinue
@@ -217,4 +224,5 @@ if ((Test-Path -LiteralPath $stagingRoot -PathType Container) -and
 Write-Host "Package completed for $Rid/$Channel."
 Write-Host "Archive: $archivePath"
 Write-Host "Expanded: $packageDir"
+Write-Host "PlayerOutput: $PlayerOutputDir"
 Write-Host "Checksums: $checksumPath"
