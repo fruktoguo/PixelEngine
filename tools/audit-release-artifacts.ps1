@@ -174,6 +174,12 @@ function Test-DisallowedPlayerPackageFile([string]$relativePath) {
     $name.EndsWith('.resources.dll', [StringComparison]::OrdinalIgnoreCase)
 }
 
+function Assert-NoDuplicateContentUnderApp([string]$relativePath, [string]$packageName, [string]$prefix) {
+  if ($relativePath -eq 'app/content' -or $relativePath.StartsWith('app/content/', [StringComparison]::Ordinal)) {
+    throw "$prefix 不应在 app/ 下重复打包 content；content 只能位于包根 content/: $packageName -> $relativePath"
+  }
+}
+
 function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
   if ($package.Name -notmatch '^PixelEngine-Demo-.+-(?<rid>win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64)-(?<channel>r2r|aot)\.(zip|tar\.gz)$') {
     throw "package 文件名不符合发行命名: $($package.Name)"
@@ -242,6 +248,8 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
   }
 
   foreach ($relative in $relativeEntries) {
+    Assert-NoDuplicateContentUnderApp $relative $package.Name 'package'
+
     if (Test-DisallowedRuntimeRootFile $relative) {
       if (-not $relative.StartsWith('app/', [StringComparison]::Ordinal)) {
         throw "package 根目录不应包含运行时依赖，请放入 app/: $($package.Name) -> $relative"
@@ -344,6 +352,8 @@ function Assert-FriendlyExpandedPackageLayout([System.IO.DirectoryInfo]$packageD
   }
 
   foreach ($relative in $relativeEntries) {
+    Assert-NoDuplicateContentUnderApp $relative $packageDirectory.Name '展开 package'
+
     if (Test-DisallowedRuntimeRootFile $relative) {
       if (-not $relative.StartsWith('app/', [StringComparison]::Ordinal)) {
         throw "展开 package 根目录不应包含运行时依赖，请放入 app/: $($packageDirectory.Name) -> $relative"
