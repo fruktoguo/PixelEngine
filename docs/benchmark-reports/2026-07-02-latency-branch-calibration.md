@@ -2,6 +2,8 @@
 
 本记录覆盖 plan/16 §4.11。目标机为本机 Windows 11 / AMD Ryzen 7 5800X / .NET 10.0.8，BenchmarkDotNet v0.15.8。Benchmark 入口已在 `PIXELENGINE_BENCH_HARDWARE_COUNTERS=1` 时同时请求 `HardwareCounter.CacheMisses` 与 `HardwareCounter.BranchMispredictions`，用于后续按 cache miss / branch misprediction 分析热点，而不是按理论带宽下结论。
 
+> 下方多核曲线中的 `ParallelRangeSum` 分配数字保留为修复前短跑记录。JobSystem `ParallelRange` 与 `ParallelRangeRaw` 多 worker 派发的当前零分配证据见 `docs/benchmark-reports/2026-07-03-jobsystem-parallelrange-zero-allocation.md`。
+
 硬件计数器命令：
 
 ```pwsh

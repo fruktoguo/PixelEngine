@@ -214,7 +214,7 @@ plan/00 §7 明确要求把编译期常量**集中到 `PixelEngine.Core` 的 `En
 - [x] `ParallelRange`/`ParallelFor` 的 `workerIndex` 在整个生命周期对每个物理 worker 稳定且 `∈[0,WorkerCount)`（架构 §14.2、R14）。
 - [x] 每次派发构成完整 barrier：返回后所有区间/任务确已完成（并发正确性测试，含数据竞争探测）。
 - [x] 活跃任务数 < `SingleThreadThreshold` 时回退单线程、无派发开销（架构 R7，BenchmarkDotNet 对比确认）。
-- [x] `ParallelRangeRaw` 经 `delegate* unmanaged` 回调 path 零托管分配、可被 native 函数指针消费（模拟 Box2D `b2TaskCallback` 签名验证，架构 §14.2）。
+- [x] `ParallelRange` 与 `ParallelRangeRaw` 多 worker 稳态派发零托管分配；Raw path 可经 `delegate* unmanaged` 回调被 native 函数指针消费（模拟 Box2D `b2TaskCallback` 签名验证，架构 §14.2），见 `docs/benchmark-reports/2026-07-03-jobsystem-parallelrange-zero-allocation.md`。
 - [x] 稳态 `ParallelFor` 调用零分配（缓存委托/无闭包捕获，BenchmarkDotNet 证实）；确认**非** `Parallel.For`（代码审查）。
 - [x] `WorkerLocal<T>` 槽位间隔 ≥ 64 字节（反射/布局校验 false-sharing 填充，架构 §12.7）。
 

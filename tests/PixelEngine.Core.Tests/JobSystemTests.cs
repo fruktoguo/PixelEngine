@@ -10,6 +10,8 @@ namespace PixelEngine.Core.Tests;
 /// </summary>
 public sealed unsafe class JobSystemTests
 {
+    private static readonly RangeJob CountRangeJob = CountRange;
+
     /// <summary>
     /// 验证 ParallelRange workerIndex 范围稳定且全部任务执行一次。
     /// </summary>
@@ -101,6 +103,50 @@ public sealed unsafe class JobSystemTests
     }
 
     /// <summary>
+    /// 验证多 worker ParallelRange 稳态派发不再为 RangeBatch / ManualResetEventSlim 分配托管对象。
+    /// </summary>
+    [Fact]
+    public void ParallelRangeMultiWorkerDispatchDoesNotAllocate()
+    {
+        using JobSystem jobs = new(workerCount: 2)
+        {
+            SingleThreadThreshold = 0,
+        };
+        CounterContext context = new();
+        jobs.ParallelRange(128, 1, CountRangeJob, context);
+        context.Total = 0;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+
+        jobs.ParallelRange(128, 1, CountRangeJob, context);
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(128, context.Total);
+        Assert.Equal(0, allocated);
+    }
+
+    /// <summary>
+    /// 验证 Box2D task bridge 使用的 raw range 稳态派发同样不分配托管对象。
+    /// </summary>
+    [Fact]
+    public void ParallelRangeRawMultiWorkerDispatchDoesNotAllocate()
+    {
+        using JobSystem jobs = new(workerCount: 2)
+        {
+            SingleThreadThreshold = 0,
+        };
+        int total = 0;
+        jobs.ParallelRangeRaw(128, 1, &RawCallback, &total);
+        total = 0;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+
+        jobs.ParallelRangeRaw(128, 1, &RawCallback, &total);
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(128, total);
+        Assert.Equal(0, allocated);
+    }
+
+    /// <summary>
     /// 验证 WorkerLocal 内部槽位包含 64 字节 cache-line padding。
     /// </summary>
     [Fact]
@@ -120,6 +166,12 @@ public sealed unsafe class JobSystemTests
         public int Total;
 
         public int SeenMask;
+    }
+
+    private static void CountRange(int start, int end, int workerIndex, object? context)
+    {
+        _ = workerIndex;
+        _ = Interlocked.Add(ref Assert.IsType<CounterContext>(context).Total, end - start);
     }
 
     [UnmanagedCallersOnly]
