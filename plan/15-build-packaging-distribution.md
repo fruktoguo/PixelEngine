@@ -249,7 +249,7 @@ Trim 配置
 - [x] 阶段 2「publish」：6 RID × {r2r, aot} job 矩阵，下载 native artifact，跑对应 publish 脚本；AOT job 跑 SIMD 探针验证 ymm/zmm 出现（架构 R3）。
 - [x] 阶段 3「verify」：每产物跑 `tools/verify-publish.*`；跨架构按 §3.2（`linux-arm64` QEMU；`win-arm64`/`osx-x64` 降级加载校验 + release notes 人工门禁标注）（架构 R5）。
 - [x] 阶段 4「sign & package」：macOS 跑 `tools/codesign-macos.sh`；可选 Windows Authenticode；跑 `tools/package.*`。
-- [x] 阶段 5「release」：上传全部产物 + `SHA256SUMS` 到 GitHub Release。
+- [x] 阶段 5「release」：上传全部产物 + `SHA256SUMS` 到 GitHub Release；`github-release-upload.md` 必须声明 `uploaded_asset_count=13`，并列出 12 个 package 与 `SHA256SUMS` 的 `asset/<name>` → SHA256，`tools/release-evidence-preflight.ps1` 会对照 manifest/package hash 拒绝只写 `conclusion=success` 但没有 asset 覆盖清单的报告。
 
 codesign / notarization
 
@@ -285,7 +285,7 @@ codesign / notarization
 - [!] 阻塞：版本与命名：所有产物按 `PixelEngine-Demo-<version>-<rid>-<channel>` 命名，`InformationalVersion` 含 git sha，构建确定性可复现（同输入同产物 hash）。本机已验证 `PixelEngine-Demo-0.1.0-win-x64-{r2r,aot}.zip` 命名；`tools/PixelEngine.Tools.DeterministicPackage` 已替代 `Compress-Archive`/`zip`/`tar -czf`，固定 entry 顺序、时间戳、权限与 owner，并由测试证明相同内容不同 metadata 的 zip/tar.gz hash 稳定；`release.yml` 已在 release job 中二次 package 到 `artifacts/package-deterministic` 并生成 `deterministicHashReport`，`tools/release-evidence-preflight.ps1` 已要求该报告除 `conclusion=success` 外还必须列出 6 RID × 2 channel 的 `match` 明细行，`PerformanceHardeningToolingDisciplineTests.ReleaseEvidencePreflightRejectsDeterministicHashRowMismatch` 锁定 mismatch 不能冒充成功。该项仍需真实 release runner 产物、tag 覆盖与 evidence manifest 人工复核后才能勾选。
 - [!] 阻塞：内容打包：每个产物的包根 `content/` 含 materials.json/reactions.json/纹理/音效/默认场景，结构与开发态一致，引擎加载成功（架构 §16.3、§11）。本机 `win-x64` 双通道已由 smoke 与 artifact audit 验证；“每个产物”需 6 RID 全矩阵。
 - [x] 玩家友好启动布局：解压后的包根目录保留清晰启动入口、`content/`、`app/` 与少量说明/校验文件，`.dll`、`.deps.json`、`.runtimeconfig.json` 等运行必须依赖位于 `app/` 子目录；`.pdb`、XML 文档与多语言 `*.resources.dll` 卫星程序集不进入玩家包；Windows 根目录 `PixelEngine Demo.exe` 可直接启动，发行审计会拒绝运行时依赖堆在包根目录、`app/content/` 重复内容、`app/PixelEngine.Demo.exe` 重复启动入口，也会拒绝玩家包内调试/文档/本地化资源噪音。
-- [!] 阻塞：`SHA256SUMS` 覆盖全部产物并随 GitHub Release 一并发布。本机已生成覆盖 2 个 `win-x64` 包的 `SHA256SUMS`；PowerShell/Bash 审计已拒绝非发行包名、重复 RID/channel、路径型 checksum、重复/多余/缺失 checksum 条目；`tools/release-evidence-preflight.ps1` 也会解析 manifest 指向的 `SHA256SUMS`，要求 6 RID × 2 channel 的 12 个 package 全覆盖且每行 hash 与 `packageSha256` 一致，`PerformanceHardeningToolingDisciplineTests.ReleaseEvidencePreflightRejectsInvalidSha256SumsContent` 已锁定占位 checksum 文件不能冒充成功证据；完整覆盖仍需 GitHub Release 全产物上传后复核。
+- [!] 阻塞：`SHA256SUMS` 覆盖全部产物并随 GitHub Release 一并发布。本机已生成覆盖 2 个 `win-x64` 包的 `SHA256SUMS`；PowerShell/Bash 审计已拒绝非发行包名、重复 RID/channel、路径型 checksum、重复/多余/缺失 checksum 条目；`tools/release-evidence-preflight.ps1` 也会解析 manifest 指向的 `SHA256SUMS`，要求 6 RID × 2 channel 的 12 个 package 全覆盖且每行 hash 与 `packageSha256` 一致，并要求 `github_release_upload` 报告以 `uploaded_asset_count=13` 和逐个 `asset/<name>` hash 证明 GitHub Release 上传了 12 个 package 与唯一 `SHA256SUMS`；`PerformanceHardeningToolingDisciplineTests.ReleaseEvidencePreflightRejectsInvalidSha256SumsContent` 已锁定占位 checksum 文件不能冒充成功证据，`ReleaseEvidencePreflightRejectsUploadReportWithoutAssetCoverage` 已锁定只写 upload success 但缺 asset 清单不能冒充发布完成；完整覆盖仍需 GitHub Release 全产物上传后复核。
 
 ---
 

@@ -3831,6 +3831,49 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 GitHub Release 上传报告必须列出 12 个 package 与 SHA256SUMS 的 asset/hash 覆盖，不能只靠 success 冒充上传完成。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsUploadReportWithoutAssetCoverage()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-upload-assets-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(
+                temp,
+                packageConclusion: "success",
+                suffix: "missing-upload-assets",
+                includeUploadAssetCoverage: false);
+
+            string artifacts = Path.Combine(temp, "missing-upload-assets-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("github_release_upload 报告缺少 uploaded_asset_count 字段", report, StringComparison.Ordinal);
+            Assert.Contains("github_release_upload 缺少 SHA256SUMS 上传证据", report, StringComparison.Ordinal);
+            Assert.Contains("github_release_upload 缺少上传 asset：PixelEngine-Demo-0.1.0-win-x64-r2r.zip", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 deterministic hash 报告不能只靠 conclusion=success 冒充全部 RID/channel hash 匹配。
     /// </summary>
     [Fact]
@@ -4080,7 +4123,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string githubReleaseConclusion = "success",
         string workflowRef = "refs/tags/v0.1.0",
         string releaseTag = "true",
-        string uploadTag = "v0.1.0")
+        string uploadTag = "v0.1.0",
+        bool includeUploadAssetCoverage = true)
     {
         string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "release-evidence");
         string packageRoot = Path.Combine(tempRoot, suffix, "artifacts", "package");
@@ -4090,9 +4134,6 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string workflow = WriteMarkdownEvidence(
             Path.Combine(evidenceRoot, "workflow-run.md"),
             new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["ref"] = workflowRef, ["conclusion"] = "success" });
-        string upload = WriteMarkdownEvidence(
-            Path.Combine(evidenceRoot, "github-release-upload.md"),
-            new Dictionary<string, string> { ["tag"] = uploadTag, ["run_id"] = "1", ["sha"] = "abc", ["release_tag"] = releaseTag, ["conclusion"] = githubReleaseConclusion });
         string r2rLightup = WriteMarkdownEvidence(
             Path.Combine(evidenceRoot, "r2r-lightup.md"),
             new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["conclusion"] = r2rLightupConclusion });
@@ -4187,6 +4228,29 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         {
             node["checksumSha256"] = checksumHash;
         }
+
+        Dictionary<string, string> uploadEvidence = new()
+        {
+            ["tag"] = uploadTag,
+            ["run_id"] = "1",
+            ["sha"] = "abc",
+            ["release_tag"] = releaseTag,
+            ["conclusion"] = githubReleaseConclusion,
+        };
+        if (includeUploadAssetCoverage)
+        {
+            uploadEvidence["uploaded_asset_count"] = (packageChecksums.Count + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            foreach ((string name, string hash) in packageChecksums.OrderBy(item => item.Name, StringComparer.Ordinal))
+            {
+                uploadEvidence[$"asset/{name}"] = hash;
+            }
+
+            uploadEvidence["asset/SHA256SUMS"] = checksumHash;
+        }
+
+        string upload = WriteMarkdownEvidence(
+            Path.Combine(evidenceRoot, "github-release-upload.md"),
+            uploadEvidence);
 
         Dictionary<string, object> manifest = new()
         {
