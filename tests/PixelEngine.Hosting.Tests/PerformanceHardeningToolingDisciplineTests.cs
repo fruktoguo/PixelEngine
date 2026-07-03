@@ -1740,6 +1740,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("不能作为窗口画面证据", script, StringComparison.Ordinal);
         Assert.Contains("playable-world", script, StringComparison.Ordinal);
         Assert.Contains("route-attempt", script, StringComparison.Ordinal);
+        Assert.Contains("editor-window", script, StringComparison.Ordinal);
+        Assert.Contains("--editor", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine.scene", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine-goal-probe.scene", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine-health-probe.scene", script, StringComparison.Ordinal);
@@ -1774,6 +1776,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("phase_transitions_observed=True", script, StringComparison.Ordinal);
         Assert.Contains("audio_probe_one_shot_played=True", script, StringComparison.Ordinal);
         Assert.Contains("particle_light_probe_depleted=True", script, StringComparison.Ordinal);
+        Assert.Contains("editor_enabled=True", script, StringComparison.Ordinal);
+        Assert.Contains("editor_running=True", script, StringComparison.Ordinal);
+        Assert.Contains("editor_bridge_frames=", script, StringComparison.Ordinal);
+        Assert.Contains("editor_panels=", script, StringComparison.Ordinal);
         Assert.Contains("playable_shots", script, StringComparison.Ordinal);
         Assert.Contains("player_ground_samples", script, StringComparison.Ordinal);
         Assert.Contains("audio_probe_max_dropped", script, StringComparison.Ordinal);
@@ -1854,6 +1860,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("capture.bmp", report, StringComparison.Ordinal);
         Assert.Contains("capture_unique_visible_pixels", report, StringComparison.Ordinal);
         Assert.Contains("语义阈值", report, StringComparison.Ordinal);
+        Assert.Contains("editor-window", report, StringComparison.Ordinal);
+        Assert.Contains("editor_enabled=True", report, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_manual_scope_evidence", report, StringComparison.Ordinal);
         Assert.Contains("blocked_invalid_manual_evidence", report, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", report, StringComparison.Ordinal);
@@ -1872,6 +1880,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("tools/demo-manual-acceptance-preflight.ps1", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("capture.bmp", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("hudMenuEditorVideo", hostingPlan, StringComparison.Ordinal);
+        Assert.Contains("editor-window", hostingPlan, StringComparison.Ordinal);
+        Assert.Contains("editor_enabled", hostingPlan, StringComparison.Ordinal);
+        Assert.Contains("editor_bridge_frames", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("criteria", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("hudReadable", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("menuButtonsClicked", hostingPlan, StringComparison.Ordinal);
@@ -1904,12 +1915,22 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "\n$good = '脚本化窗口输入摘要：frames=240, playable_shots=2, max_particles=316, frame_samples=240, camera_samples=239, player_ground_samples=105, player_air_samples=134, player_left_ground=True, player_air_control=True, camera_followed=True, render_camera_synced=True。'\n",
                 "$values = ConvertFrom-ScriptedProbeSummary -Summary $good\n",
                 "Assert-ScriptedProbeSummarySemantics -Name 'playable-world' -Values $values\n",
+                "$goodEditor = '脚本化窗口输入摘要：frames=180, frame_samples=120, editor_enabled=True, editor_running=True, editor_panels=12, editor_bridge_frames=120, render_camera_synced=True。'\n",
+                "Assert-ScriptedProbeSummarySemantics -Name 'editor-window' -Values (ConvertFrom-ScriptedProbeSummary -Summary $goodEditor)\n",
                 "$bad = '脚本化窗口输入摘要：frames=240, playable_shots=0, max_particles=316, frame_samples=240, camera_samples=239, player_ground_samples=105, player_air_samples=134, player_left_ground=True, player_air_control=True, camera_followed=True, render_camera_synced=True。'\n",
                 "try {\n",
                 "  Assert-ScriptedProbeSummarySemantics -Name 'playable-world' -Values (ConvertFrom-ScriptedProbeSummary -Summary $bad)\n",
                 "  throw 'expected semantic failure missing'\n",
                 "} catch {\n",
                 "  if ($_.Exception.Message -notlike '*playable_shots*') { throw }\n",
+                "  Write-Output $_.Exception.Message\n",
+                "}\n",
+                "$badEditor = '脚本化窗口输入摘要：frames=180, frame_samples=120, editor_enabled=True, editor_running=False, editor_panels=12, editor_bridge_frames=120, render_camera_synced=True。'\n",
+                "try {\n",
+                "  Assert-ScriptedProbeSummarySemantics -Name 'editor-window' -Values (ConvertFrom-ScriptedProbeSummary -Summary $badEditor)\n",
+                "  throw 'expected editor semantic failure missing'\n",
+                "} catch {\n",
+                "  if ($_.Exception.Message -notlike '*editor_running*') { throw }\n",
                 "  Write-Output $_.Exception.Message\n",
                 "}\n");
             string harnessPath = Path.Combine(temp, "summary-semantics-harness.ps1");
@@ -1919,6 +1940,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
             Assert.Equal(0, result.ExitCode);
             Assert.Contains("playable_shots", result.Output, StringComparison.Ordinal);
+            Assert.Contains("editor_running", result.Output, StringComparison.Ordinal);
             Assert.Contains("必须 >=", result.Output, StringComparison.Ordinal);
         }
         finally

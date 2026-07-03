@@ -14,6 +14,7 @@ public sealed class FrameProfiler
     private readonly double[] _subCurrent = new double[FrameStats.SubPhaseCount];
     private readonly double[] _subLast = new double[FrameStats.SubPhaseCount];
     private readonly double[] _history = new double[FrameStats.PhaseCount * HistoryLength];
+    private long _frameStartTimestamp;
     private int _historyIndex;
     private int _historyCount;
 
@@ -26,6 +27,11 @@ public sealed class FrameProfiler
     /// 获取上一帧各细分相位耗时，单位毫秒。
     /// </summary>
     public ReadOnlySpan<double> LastSubFrame => _subLast;
+
+    /// <summary>
+    /// 获取上一帧从 <see cref="BeginFrame" /> 到 <see cref="EndFrame" /> 的真实墙钟耗时，单位毫秒。
+    /// </summary>
+    public double LastWallMilliseconds { get; private set; }
 
     /// <summary>
     /// 将上一帧主相位与细分相位耗时复制到调用方缓冲区，供只读诊断快照消费。
@@ -55,6 +61,7 @@ public sealed class FrameProfiler
     {
         Array.Clear(_current);
         Array.Clear(_subCurrent);
+        _frameStartTimestamp = Stopwatch.GetTimestamp();
     }
 
     /// <summary>
@@ -62,6 +69,8 @@ public sealed class FrameProfiler
     /// </summary>
     public void EndFrame()
     {
+        long elapsed = Stopwatch.GetTimestamp() - _frameStartTimestamp;
+        LastWallMilliseconds = elapsed * 1000.0 / Stopwatch.Frequency;
         _current.CopyTo(_last, 0);
         _subCurrent.CopyTo(_subLast, 0);
         int offset = _historyIndex * FrameStats.PhaseCount;

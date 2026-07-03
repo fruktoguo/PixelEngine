@@ -86,6 +86,24 @@ public sealed class RenderWindow : IDisposable
     public float FramebufferScaleY => Height / (float)LogicalHeight;
 
     /// <summary>
+    /// 当前 VSync 状态；开启时 <see cref="SwapBuffers" /> 可能阻塞到显示刷新。
+    /// </summary>
+    public bool VSyncEnabled
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return _window.VSync;
+        }
+
+        set
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _window.VSync = value;
+        }
+    }
+
+    /// <summary>
     /// 更新窗口标题，用于 Demo/Editor 暴露实时运行状态。
     /// </summary>
     /// <param name="title">新的窗口标题。</param>

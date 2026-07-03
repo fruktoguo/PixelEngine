@@ -25,7 +25,25 @@ public sealed class RenderingProjectDisciplineTests
 
         Assert.Contains(".DoEvents()", source, StringComparison.Ordinal);
         Assert.Contains(".SwapBuffers()", source, StringComparison.Ordinal);
+        Assert.Contains("VSyncEnabled", source, StringComparison.Ordinal);
+        Assert.Contains("_window.VSync", source, StringComparison.Ordinal);
         Assert.DoesNotContain(".Run(", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RenderPipelineUsesRealGpuTimestampAndSeparatesPresentWait()
+    {
+        string pipeline = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderPipeline.cs"));
+        string gpuFrame = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "GlGpuFrameProfiler.cs"));
+
+        Assert.Contains("IRenderPresentationControl", pipeline, StringComparison.Ordinal);
+        Assert.Contains("get => _window.VSyncEnabled", pipeline, StringComparison.Ordinal);
+        Assert.Contains("FrameSubPhase.PresentWait", pipeline, StringComparison.Ordinal);
+        Assert.Contains("FrameSubPhase.GpuFrame", gpuFrame, StringComparison.Ordinal);
+        Assert.Contains("QueryCounterTarget.Timestamp", gpuFrame, StringComparison.Ordinal);
+        Assert.Contains("QueryObjectParameterName.ResultAvailable", gpuFrame, StringComparison.Ordinal);
+        Assert.DoesNotContain("Finish()", gpuFrame, StringComparison.Ordinal);
+        Assert.DoesNotContain("Flush()", gpuFrame, StringComparison.Ordinal);
     }
 
     [Fact]

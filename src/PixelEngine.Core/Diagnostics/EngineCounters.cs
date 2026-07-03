@@ -168,6 +168,51 @@ public sealed class EngineCounters
     public int RenderFrameSampleCount { get; set; }
 
     /// <summary>
+    /// 获取或设置最近一帧 CPU 实际工作耗时，单位毫秒；不包含 present/vsync 等待。
+    /// </summary>
+    public double FrameCpuWorkMilliseconds { get; set; }
+
+    /// <summary>
+    /// 获取或设置最近一次异步回读到的整帧 GPU 执行耗时，单位毫秒；不可用时为 0。
+    /// </summary>
+    public double FrameGpuWorkMilliseconds { get; set; }
+
+    /// <summary>
+    /// 获取或设置当前 GL 后端是否支持整帧 GPU timer query。
+    /// </summary>
+    public bool FrameGpuTimerAvailable { get; set; }
+
+    /// <summary>
+    /// 获取或设置最近一帧 present 提交与 UI 绘制的 CPU 工作耗时，单位毫秒。
+    /// </summary>
+    public double FramePresentSubmitMilliseconds { get; set; }
+
+    /// <summary>
+    /// 获取或设置最近一帧 SwapBuffers / vsync / present 阻塞等待耗时，单位毫秒。
+    /// </summary>
+    public double FramePresentWaitMilliseconds { get; set; }
+
+    /// <summary>
+    /// 获取或设置最近一帧已确认的非工作等待耗时，单位毫秒。
+    /// </summary>
+    public double FrameWaitMilliseconds { get; set; }
+
+    /// <summary>
+    /// 获取或设置扣除 present/vsync 等待后的有效帧耗时，单位毫秒。
+    /// </summary>
+    public double EffectiveFrameMilliseconds { get; set; }
+
+    /// <summary>
+    /// 获取或设置扣除 present/vsync 等待后的理论有效帧率。
+    /// </summary>
+    public double EffectiveFramesPerSecond { get; set; }
+
+    /// <summary>
+    /// 获取或设置当前窗口 VSync 是否开启。
+    /// </summary>
+    public bool VSyncEnabled { get; set; }
+
+    /// <summary>
     /// 获取或设置活跃 ambient loop voice 数。
     /// </summary>
     public long AudioActiveAmbientVoices { get; set; }

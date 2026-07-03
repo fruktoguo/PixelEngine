@@ -27,6 +27,7 @@ public sealed class EngineBuilderTests
             .WithContentRoot("content-test")
             .WithStartScene("scenes/start.scene")
             .WithEventCapacityPerChannel(64)
+            .UseVSync(false)
             .Build();
 
         EngineContext context = engine.Context;
@@ -38,6 +39,7 @@ public sealed class EngineBuilderTests
         Assert.Equal(EngineGcMode.SustainedLowLatency, context.Options.GcMode);
         Assert.Equal("content-test", context.Options.ContentRoot);
         Assert.Equal("scenes/start.scene", context.Options.StartScene);
+        Assert.False(context.Options.VSync);
         Assert.Equal(64, context.Events.CapacityPerChannel);
         Assert.Equal(0, context.Options.NoGcRegionBudgetBytes);
         Assert.Same(context, context.GetService<EngineContext>());

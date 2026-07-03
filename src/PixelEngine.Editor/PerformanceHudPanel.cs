@@ -33,6 +33,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
     private readonly float[] _renderHistory = new float[HistoryLength];
     private readonly float[] _audioHistory = new float[HistoryLength];
     private readonly float[] _phaseBars = new float[PhaseBarCount];
+    private PixelEngine.Rendering.IRenderPresentationControl? _presentationControl;
     private long _lastCapturedFrame = -1;
     private int _historyOffset;
     private int _historyCount;
@@ -77,6 +78,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
     public PerformanceHudSample CaptureSample(in EditorContext context)
     {
         PerformanceHudSample sample = BuildSample(context.Performance);
+        _presentationControl = context.Performance.PresentationControl;
         LastSample = sample;
         if (context.FrameIndex == _lastCapturedFrame)
         {
@@ -123,26 +125,60 @@ public sealed class PerformanceHudPanel : IEditorPanel
         double renderMs = Get(phases, FramePhase.BuildRenderBuffer) +
             Get(subPhases, FrameSubPhase.RenderBufferBuild) +
             Get(subPhases, FrameSubPhase.Lighting) +
-            Get(subPhases, FrameSubPhase.GpuLightComposite) +
             Get(subPhases, FrameSubPhase.Bloom) +
-            Get(subPhases, FrameSubPhase.GpuParticleDraw) +
-            Get(subPhases, FrameSubPhase.GpuComputeBloom) +
-            Get(subPhases, FrameSubPhase.GpuRadianceCascades) +
-            Get(subPhases, FrameSubPhase.GpuAirSmoke) +
             Get(subPhases, FrameSubPhase.PostProcess) +
             Get(subPhases, FrameSubPhase.Present);
         double uploadMs = Get(subPhases, FrameSubPhase.GpuUpload);
+        double presentWaitMs = Get(subPhases, FrameSubPhase.PresentWait);
+        double gpuFrameMs = Get(subPhases, FrameSubPhase.GpuFrame);
+        if (gpuFrameMs <= 0 && counters is not null)
+        {
+            gpuFrameMs = counters.FrameGpuWorkMilliseconds;
+        }
+
+        double waitMs = counters?.FrameWaitMilliseconds ?? presentWaitMs;
+        if (waitMs <= 0)
+        {
+            waitMs = presentWaitMs;
+        }
+
         double audioMs = Get(subPhases, FrameSubPhase.AudioDispatch);
         if (audioMs <= 0 && counters is not null)
         {
             audioMs = counters.AudioDispatchMilliseconds;
         }
 
-        double totalMs = Sum(phases);
+        double totalMs = snapshot.LastWallMilliseconds;
+        if (totalMs <= 0 && counters is not null)
+        {
+            totalMs = counters.RenderFrameLastMilliseconds;
+        }
+
+        double phaseTotalMs = Sum(phases);
+        double cpuWorkMs = counters?.FrameCpuWorkMilliseconds ?? 0.0;
+        if (cpuWorkMs <= 0)
+        {
+            cpuWorkMs = Math.Max(0.0, phaseTotalMs - waitMs);
+        }
+
         if (totalMs <= 0)
         {
-            totalMs = particleMs + caPassA + caPassB + caPassC + caPassD + Get(phases, FramePhase.Temperature) + physicsMs + shapeRebuildMs + renderMs + uploadMs + audioMs;
+            totalMs = phaseTotalMs > 0
+                ? phaseTotalMs
+                : particleMs + caPassA + caPassB + caPassC + caPassD + Get(phases, FramePhase.Temperature) + physicsMs + shapeRebuildMs + renderMs + uploadMs + audioMs + waitMs;
         }
+
+        double effectiveMs = counters?.EffectiveFrameMilliseconds ?? 0.0;
+        if (effectiveMs <= 0)
+        {
+            effectiveMs = Math.Max(0.0, totalMs - waitMs);
+        }
+
+        bool gpuTimerAvailable = snapshot.PresentationControl?.GpuFrameTimerAvailable ??
+            (counters?.FrameGpuTimerAvailable == true);
+        bool vSyncEnabled = snapshot.PresentationControl?.VSyncEnabled ??
+            (counters?.VSyncEnabled == true);
+        string boundType = DetermineBoundType(cpuWorkMs, gpuFrameMs, waitMs, totalMs, vSyncEnabled, gpuTimerAvailable);
 
         return new PerformanceHudSample(
             totalMs,
@@ -157,6 +193,16 @@ public sealed class PerformanceHudPanel : IEditorPanel
             renderMs,
             uploadMs,
             audioMs,
+            cpuWorkMs,
+            gpuFrameMs,
+            gpuTimerAvailable,
+            Get(subPhases, FrameSubPhase.Present),
+            presentWaitMs,
+            waitMs,
+            effectiveMs,
+            effectiveMs > 0.0001 ? 1000.0 / effectiveMs : (counters?.EffectiveFramesPerSecond ?? 0.0),
+            vSyncEnabled,
+            boundType,
             counters?.ActiveChunks ?? 0,
             counters?.ActiveCells ?? 0,
             counters?.FreeParticles ?? 0,
@@ -168,6 +214,23 @@ public sealed class PerformanceHudPanel : IEditorPanel
             snapshot.Runtime.DegradationLevel,
             snapshot.Runtime.DegradationName,
             snapshot.Runtime.ConsecutiveOverBudgetFrames);
+    }
+
+    private static string DetermineBoundType(
+        double cpuMs,
+        double gpuMs,
+        double waitMs,
+        double wallMs,
+        bool vSyncEnabled,
+        bool gpuTimerAvailable)
+    {
+        return wallMs > 0 && waitMs >= wallMs * 0.35
+            ? vSyncEnabled ? "vsync-bound" : "present-bound"
+            : gpuTimerAvailable && gpuMs > cpuMs * 1.20 && gpuMs > 0.25
+            ? "GPU-bound"
+            : cpuMs > Math.Max(gpuMs, 0.0) * 1.20 && cpuMs > 0.25
+                ? "CPU-bound"
+                : "balanced";
     }
 
     private static double Get(ReadOnlySpan<double> values, FramePhase phase)
@@ -216,9 +279,24 @@ public sealed class PerformanceHudPanel : IEditorPanel
         _phaseBars[10] = (float)sample.AudioMs;
     }
 
-    private static void DrawSummary(PerformanceHudSample sample)
+    private void DrawSummary(PerformanceHudSample sample)
     {
         ImGui.TextUnformatted($"Frame {sample.TotalFrameMs:F2} ms   Sim {sample.SimHz:F0} Hz   TimeScale {sample.TimeScale:F2}");
+        ImGui.TextUnformatted($"Bound {sample.BoundType}: CPU {sample.CpuWorkMs:F2} ms / GPU {(sample.GpuTimerAvailable ? sample.GpuWorkMs.ToString("F2") : "N/A")} ms / wait {sample.WaitMs:F2} ms");
+        ImGui.TextUnformatted($"Present submit/wait: {sample.PresentSubmitMs:F2} / {sample.PresentWaitMs:F2} ms   Effective {sample.EffectiveFps:F1} FPS");
+        bool vSync = sample.VSyncEnabled;
+        if (_presentationControl is not null && _presentationControl.CanToggleVSync)
+        {
+            if (ImGui.Checkbox("VSync", ref vSync))
+            {
+                _presentationControl.VSyncEnabled = vSync;
+            }
+        }
+        else
+        {
+            ImGui.TextUnformatted($"VSync: {(vSync ? "on" : "off")}");
+        }
+
         ImGui.TextUnformatted($"Degrade L{sample.DegradationLevel}: {sample.DegradationName}   OverBudget {sample.ConsecutiveOverBudgetFrames}");
     }
 

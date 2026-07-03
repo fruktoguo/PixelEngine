@@ -10,7 +10,7 @@ namespace PixelEngine.Rendering;
 /// <summary>
 /// 相位 10 渲染管线主入口，编排 GPU 上传、world blit、光照、bloom、post、UI hook 与 present。
 /// </summary>
-public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
+public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresentationControl, IDisposable
 {
     private readonly RenderWindow _window;
     private readonly GL _gl;
@@ -23,6 +23,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
     private readonly IComputeBackend _computeBackend;
     private readonly ComputeCapabilityGate _computeGate;
     private readonly GpuComputeProfiler _gpuComputeProfiler;
+    private readonly GlGpuFrameProfiler _gpuFrameProfiler;
     private readonly ComputeBloomPass? _computeBloom;
     private readonly ComputeLightCompositePass? _computeLightComposite;
     private readonly RadianceCascadePass? _radianceCascades;
@@ -67,6 +68,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
         _computeGate = ComputeCapabilityGate.Evaluate(gpuCapabilities, computeFeatures ?? ComputeFeatureSwitches.Default, preferComputeSharp: false);
         _computeBackend = ComputeBackendFactory.Create(_gl, _computeGate);
         _gpuComputeProfiler = new GpuComputeProfiler(_computeBackend);
+        _gpuFrameProfiler = new GlGpuFrameProfiler(_gl, window.Capabilities);
         GpuComputeBloomPipeline? computeBloomPipeline = _computeGate.SelectedBackend == ComputeBackendKind.GlCompute
             ? new GpuComputeBloomPipeline(_computeBackend)
             : null;
@@ -118,6 +120,19 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
     public bool CanRenderParticlesOnGpu =>
         Settings.ParticleRenderMode == ParticleRenderMode.GpuPointSprite &&
         _computeGate.FeatureSwitches.GpuParticlesEnabled;
+
+    /// <inheritdoc />
+    public bool VSyncEnabled
+    {
+        get => _window.VSyncEnabled;
+        set => _window.VSyncEnabled = value;
+    }
+
+    /// <inheritdoc />
+    public bool CanToggleVSync => true;
+
+    /// <inheritdoc />
+    public bool GpuFrameTimerAvailable => _gpuFrameProfiler.IsAvailable;
 
     /// <summary>
     /// 当前宽度。
@@ -316,8 +331,10 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         Settings.Validate();
         _gpuComputeProfiler.ResolveCompleted(profiler);
+        _gpuFrameProfiler.ResolveCompleted(profiler);
         ValidateInputs(renderBuffer, aux, camera);
         Resize(renderBuffer.Width, renderBuffer.Height);
+        GlGpuFrameProfiler.GpuFrameScope gpuFrame = _gpuFrameProfiler.Measure();
 
         long started = Stopwatch.GetTimestamp();
         UploadWorld(renderBuffer, dirtyRects);
@@ -384,8 +401,12 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
         _gl.Viewport(0, 0, (uint)_window.Width, (uint)_window.Height);
         BeforePresentUi?.Invoke(_gl);
         BeforeSwapBuffers?.Invoke(_gl);
-        _window.SwapBuffers();
         RecordSub(profiler, FrameSubPhase.Present, started);
+        gpuFrame.Dispose();
+
+        started = Stopwatch.GetTimestamp();
+        _window.SwapBuffers();
+        RecordSub(profiler, FrameSubPhase.PresentWait, started);
     }
 
     /// <summary>
@@ -443,6 +464,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IDisposable
         _dither.Dispose();
         _radianceCascades?.Dispose();
         _computeBloom?.Dispose();
+        _gpuFrameProfiler.Dispose();
         _gpuComputeProfiler.Dispose();
         _computeBackend.Dispose();
         _bloom.Dispose();

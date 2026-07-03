@@ -21,6 +21,7 @@ public sealed class EngineOptions
         bool headless,
         bool deterministicMode,
         bool enableGpu,
+        bool vSync,
         string contentRoot,
         string? startScene,
         double simHz,
@@ -56,6 +57,7 @@ public sealed class EngineOptions
         Headless = headless;
         DeterministicMode = deterministicMode;
         EnableGpu = enableGpu;
+        VSync = vSync;
         ContentRoot = contentRoot;
         StartScene = startScene;
         SimHz = simHz;
@@ -140,6 +142,11 @@ public sealed class EngineOptions
     public bool EnableGpu { get; }
 
     /// <summary>
+    /// 窗口模式是否启用垂直同步。
+    /// </summary>
+    public bool VSync { get; }
+
+    /// <summary>
     /// 内容根目录。
     /// </summary>
     public string ContentRoot { get; }
@@ -185,6 +192,7 @@ public sealed class EngineOptions
             headless: false,
             deterministicMode: false,
             enableGpu: true,
+            vSync: true,
             contentRoot: "content",
             startScene: null,
             simHz: EngineConstants.DefaultSimHz,

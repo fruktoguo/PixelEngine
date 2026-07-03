@@ -116,9 +116,19 @@ public enum FrameSubPhase
     PostProcess,
 
     /// <summary>
-    /// Present / SwapBuffers。
+    /// Present 提交、UI 绘制与交换前 hook 的 CPU 工作；不包含 SwapBuffers 阻塞等待。
     /// </summary>
     Present,
+
+    /// <summary>
+    /// SwapBuffers / present 阻塞等待；属于非工作时间，不计入 CPU/GPU busy。
+    /// </summary>
+    PresentWait,
+
+    /// <summary>
+    /// OpenGL timer query 异步回读的整帧 GPU 执行耗时；不可用后端保持 0。
+    /// </summary>
+    GpuFrame,
 
     /// <summary>
     /// 音频派发。

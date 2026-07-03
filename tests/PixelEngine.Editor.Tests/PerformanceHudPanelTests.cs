@@ -27,6 +27,12 @@ public sealed class PerformanceHudPanelTests
         profiler.RecordSub(FrameSubPhase.PhysicsStep, 0.7);
         profiler.RecordSub(FrameSubPhase.ShapeRebuild, 0.8);
         profiler.RecordSub(FrameSubPhase.GpuUpload, 0.9);
+        profiler.RecordSub(FrameSubPhase.Lighting, 1.1);
+        profiler.RecordSub(FrameSubPhase.PostProcess, 1.2);
+        profiler.RecordSub(FrameSubPhase.GpuLightComposite, 8.0);
+        profiler.RecordSub(FrameSubPhase.Present, 0.3);
+        profiler.RecordSub(FrameSubPhase.PresentWait, 16.0);
+        profiler.RecordSub(FrameSubPhase.GpuFrame, 2.5);
         profiler.RecordSub(FrameSubPhase.AudioDispatch, 0.25);
         profiler.EndFrame();
         EngineCounters counters = new()
@@ -38,6 +44,15 @@ public sealed class PerformanceHudPanelTests
             ResidentChunks = 55,
             ResidentMemoryBytes = 6_291_456,
             SimHz = 30,
+            FrameCpuWorkMilliseconds = 9.7,
+            FrameGpuWorkMilliseconds = 2.5,
+            FrameGpuTimerAvailable = true,
+            FramePresentSubmitMilliseconds = 0.3,
+            FramePresentWaitMilliseconds = 16.0,
+            FrameWaitMilliseconds = 16.0,
+            EffectiveFrameMilliseconds = 9.7,
+            EffectiveFramesPerSecond = 103.09,
+            VSyncEnabled = true,
         };
         EditorRuntimeDiagnostics runtime = new(0.5, 4, "Sim30Hz", 7);
 
@@ -53,9 +68,19 @@ public sealed class PerformanceHudPanelTests
         Assert.Equal(1.5, sample.HeatMs, 3);
         Assert.Equal(0.7, sample.PhysicsMs, 3);
         Assert.Equal(0.8, sample.ShapeRebuildMs, 3);
-        Assert.Equal(2.0, sample.RenderMs, 3);
+        Assert.Equal(4.6, sample.RenderMs, 3);
         Assert.Equal(0.9, sample.UploadMs, 3);
         Assert.Equal(0.25, sample.AudioMs, 3);
+        Assert.Equal(9.7, sample.CpuWorkMs, 3);
+        Assert.Equal(2.5, sample.GpuWorkMs, 3);
+        Assert.True(sample.GpuTimerAvailable);
+        Assert.Equal(0.3, sample.PresentSubmitMs, 3);
+        Assert.Equal(16.0, sample.PresentWaitMs, 3);
+        Assert.Equal(16.0, sample.WaitMs, 3);
+        Assert.Equal(9.7, sample.EffectiveFrameMs, 3);
+        Assert.Equal(103.09, sample.EffectiveFps, 2);
+        Assert.True(sample.VSyncEnabled);
+        Assert.Equal("vsync-bound", sample.BoundType);
         Assert.Equal(11, sample.ActiveChunks);
         Assert.Equal(222, sample.ActiveCells);
         Assert.Equal(33, sample.FreeParticles);

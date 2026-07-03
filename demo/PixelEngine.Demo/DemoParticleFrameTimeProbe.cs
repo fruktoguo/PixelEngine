@@ -26,6 +26,10 @@ internal sealed class DemoParticleFrameTimeProbe(
     private readonly List<double> _lightingMs = [];
     private readonly List<double> _bloomMs = [];
     private readonly List<double> _presentMs = [];
+    private readonly List<double> _presentWaitMs = [];
+    private readonly List<double> _gpuFrameMs = [];
+    private readonly List<double> _cpuWorkMs = [];
+    private readonly List<double> _effectiveFrameMs = [];
     private ushort _material;
     private int _framesSeen;
     private bool _initialized;
@@ -40,8 +44,9 @@ internal sealed class DemoParticleFrameTimeProbe(
         phases.Register(EnginePhase.BuildRenderBuffer, FillParticles);
     }
 
-    public void RecordFrame(double wallMilliseconds, ReadOnlySpan<double> subPhases)
+    public void RecordFrame(double wallMilliseconds, ReadOnlySpan<double> subPhases, EngineCounters counters)
     {
+        ArgumentNullException.ThrowIfNull(counters);
         _framesSeen++;
         if (_framesSeen <= warmupFrames)
         {
@@ -55,6 +60,10 @@ internal sealed class DemoParticleFrameTimeProbe(
         _lightingMs.Add(Sub(subPhases, FrameSubPhase.Lighting));
         _bloomMs.Add(Sub(subPhases, FrameSubPhase.Bloom));
         _presentMs.Add(Sub(subPhases, FrameSubPhase.Present));
+        _presentWaitMs.Add(Sub(subPhases, FrameSubPhase.PresentWait));
+        _gpuFrameMs.Add(Sub(subPhases, FrameSubPhase.GpuFrame));
+        _cpuWorkMs.Add(counters.FrameCpuWorkMilliseconds);
+        _effectiveFrameMs.Add(counters.EffectiveFrameMilliseconds);
     }
 
     public string BuildSummary(ParticleRenderMode mode, bool gpuAvailable)
@@ -70,7 +79,11 @@ internal sealed class DemoParticleFrameTimeProbe(
             Stats("gpu_upload", _uploadMs) + ", " +
             Stats("lighting", _lightingMs) + ", " +
             Stats("bloom", _bloomMs) + ", " +
-            Stats("present", _presentMs);
+            Stats("present_submit", _presentMs) + ", " +
+            Stats("present_wait", _presentWaitMs) + ", " +
+            Stats("gpu_frame", _gpuFrameMs) + ", " +
+            Stats("cpu_work", _cpuWorkMs) + ", " +
+            Stats("effective_frame", _effectiveFrameMs);
     }
 
     private double SampleSeconds()

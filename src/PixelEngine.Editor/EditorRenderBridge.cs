@@ -115,7 +115,8 @@ public sealed class EditorRenderBridge : IDisposable
         EditorPerformanceSnapshot performance = EditorPerformanceSnapshot.Create(
             _counters,
             _profiler,
-            _runtimeDiagnostics?.Invoke() ?? EditorRuntimeDiagnostics.FullQuality);
+            _runtimeDiagnostics?.Invoke() ?? EditorRuntimeDiagnostics.FullQuality,
+            _pipeline);
         _editor.DrawFrame(
             deltaSeconds,
             _pipeline.Width,
