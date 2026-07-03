@@ -7,6 +7,7 @@ param(
     [int]$WarmupFrames = 2,
     [switch]$RunProbe,
     [string]$EvidenceManifestPath = "",
+    [string]$DotNetPath = "dotnet",
     [switch]$AllowBlocked
 )
 
@@ -54,12 +55,216 @@ function Assert-ComparisonReport {
     }
 }
 
+function Convert-ParticleProbeSummaryToMetrics {
+    param([string]$SummaryLine)
+
+    $metrics = [ordered]@{}
+    foreach ($part in ($SummaryLine -split ',\s*')) {
+        $token = $part.Trim()
+        if ($token.StartsWith("particle_frame_probe ", [StringComparison]::Ordinal)) {
+            $token = $token.Substring("particle_frame_probe ".Length)
+        }
+
+        if ($token -match '^\s*([^=]+)=(.*?)\s*$') {
+            $metrics[$Matches[1].Trim()] = $Matches[2].Trim()
+        }
+    }
+
+    return $metrics
+}
+
+function Get-MetricDouble {
+    param(
+        [System.Collections.IDictionary]$Metrics,
+        [string]$Name
+    )
+
+    if (-not $Metrics.Contains($Name)) {
+        return [double]::NaN
+    }
+
+    return [double]::Parse([string]$Metrics[$Name], [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Get-MetricInt {
+    param(
+        [System.Collections.IDictionary]$Metrics,
+        [string]$Name
+    )
+
+    if (-not $Metrics.Contains($Name)) {
+        return 0
+    }
+
+    return [int]::Parse([string]$Metrics[$Name], [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Get-MetricBool {
+    param(
+        [System.Collections.IDictionary]$Metrics,
+        [string]$Name
+    )
+
+    if (-not $Metrics.Contains($Name)) {
+        return $false
+    }
+
+    return [bool]::Parse([string]$Metrics[$Name])
+}
+
+function Format-MetricDouble {
+    param([double]$Value)
+
+    if ([double]::IsNaN($Value) -or [double]::IsInfinity($Value)) {
+        return "n/a"
+    }
+
+    return $Value.ToString("0.###", [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Assert-LocalProbeMetrics {
+    param(
+        [object]$Probe,
+        [string]$ExpectedMode
+    )
+
+    $metrics = $Probe.metrics
+    foreach ($required in @("mode", "gpu_available", "requested_count", "active_count", "measured_frames", "wall_avg_ms", "particle_stamp_avg_ms", "gpu_particle_avg_ms")) {
+        if (-not $metrics.Contains($required)) {
+            throw "$ExpectedMode probe 摘要缺少字段 $required。"
+        }
+    }
+
+    $actualMode = [string]$metrics["mode"]
+    if (-not [string]::Equals($actualMode, $ExpectedMode, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "$ExpectedMode probe 实际 mode=$actualMode，可能发生 GPU/CPU 回退或输出混淆。"
+    }
+
+    $requested = Get-MetricInt -Metrics $metrics -Name "requested_count"
+    if ($requested -ne $ParticleCount) {
+        throw "$ExpectedMode probe requested_count=$requested，与请求粒子数 $ParticleCount 不一致。"
+    }
+
+    $active = Get-MetricInt -Metrics $metrics -Name "active_count"
+    if ($active -ne $ParticleCount) {
+        throw "$ExpectedMode probe active_count=$active，与请求粒子数 $ParticleCount 不一致。"
+    }
+
+    $expectedMeasuredFrames = $WindowTicks - $WarmupFrames
+    $measured = Get-MetricInt -Metrics $metrics -Name "measured_frames"
+    if ($expectedMeasuredFrames -le 0 -or $measured -ne $expectedMeasuredFrames) {
+        throw "$ExpectedMode probe measured_frames=$measured，期望 $expectedMeasuredFrames；window_ticks 必须大于 warmup_frames 且样本帧完整。"
+    }
+
+    $cpuStampAvg = Get-MetricDouble -Metrics $metrics -Name "particle_stamp_avg_ms"
+    $gpuParticleAvg = Get-MetricDouble -Metrics $metrics -Name "gpu_particle_avg_ms"
+    if ($ExpectedMode -eq "cpu") {
+        if ($cpuStampAvg -le 0) {
+            throw "cpu probe particle_stamp_avg_ms 必须大于 0。"
+        }
+
+        if ($gpuParticleAvg -ne 0) {
+            throw "cpu probe gpu_particle_avg_ms 必须为 0。"
+        }
+    }
+    else {
+        $gpuAvailable = Get-MetricBool -Metrics $metrics -Name "gpu_available"
+        if (-not $gpuAvailable) {
+            throw "gpu probe gpu_available 必须为 True，不能把 GPU 不可用回退当成本机 GPU probe。"
+        }
+
+        if ($gpuParticleAvg -le 0) {
+            throw "gpu probe gpu_particle_avg_ms 必须大于 0。"
+        }
+
+        if ($cpuStampAvg -ne 0) {
+            throw "gpu probe particle_stamp_avg_ms 必须为 0。"
+        }
+    }
+}
+
+function Write-LocalComparison {
+    param(
+        [string]$Root,
+        [string]$ArtifactRoot,
+        [object]$CpuProbe,
+        [object]$GpuProbe
+    )
+
+    $cpu = $CpuProbe.metrics
+    $gpu = $GpuProbe.metrics
+    $cpuStampAvg = Get-MetricDouble -Metrics $cpu -Name "particle_stamp_avg_ms"
+    $gpuParticleAvg = Get-MetricDouble -Metrics $gpu -Name "gpu_particle_avg_ms"
+    $cpuWallAvg = Get-MetricDouble -Metrics $cpu -Name "wall_avg_ms"
+    $gpuWallAvg = Get-MetricDouble -Metrics $gpu -Name "wall_avg_ms"
+    $particleDrawSpeedup = if ($gpuParticleAvg -gt 0) { $cpuStampAvg / $gpuParticleAvg } else { [double]::NaN }
+    $wallSpeedup = if ($gpuWallAvg -gt 0) { $cpuWallAvg / $gpuWallAvg } else { [double]::NaN }
+    $localGpuParticleDrawFaster = $gpuParticleAvg -gt 0 -and $cpuStampAvg -gt $gpuParticleAvg
+    $localGpuWallTimeFaster = $gpuWallAvg -gt 0 -and $cpuWallAvg -gt $gpuWallAvg
+
+    $jsonPath = Join-Path $ArtifactRoot "local-comparison.json"
+    $markdownPath = Join-Path $ArtifactRoot "local-comparison.md"
+    $comparison = [ordered]@{
+        localOnly = $true
+        targetGpuEvidence = $false
+        local_gpu_particle_draw_faster = $localGpuParticleDrawFaster
+        local_gpu_wall_time_faster = $localGpuWallTimeFaster
+        local_particle_draw_speedup = if ([double]::IsNaN($particleDrawSpeedup)) { $null } else { $particleDrawSpeedup }
+        local_wall_speedup = if ([double]::IsNaN($wallSpeedup)) { $null } else { $wallSpeedup }
+        cpu_measured_frames = Get-MetricInt -Metrics $cpu -Name "measured_frames"
+        gpu_measured_frames = Get-MetricInt -Metrics $gpu -Name "measured_frames"
+        cpu_active_count = Get-MetricInt -Metrics $cpu -Name "active_count"
+        gpu_active_count = Get-MetricInt -Metrics $gpu -Name "active_count"
+        gpu_available = Get-MetricBool -Metrics $gpu -Name "gpu_available"
+        cpu_wall_avg_ms = $cpuWallAvg
+        gpu_wall_avg_ms = $gpuWallAvg
+        cpu_particle_stamp_avg_ms = $cpuStampAvg
+        gpu_particle_avg_ms = $gpuParticleAvg
+    }
+
+    $comparison | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
+
+    $lines = [System.Collections.Generic.List[string]]::new()
+    $lines.Add("# GPU 粒子本机短 probe 对比")
+    $lines.Add("")
+    $lines.Add("local_only: true")
+    $lines.Add("target_gpu_evidence: false")
+    $lines.Add("local_gpu_particle_draw_faster: $($localGpuParticleDrawFaster.ToString().ToLowerInvariant())")
+    $lines.Add("local_gpu_wall_time_faster: $($localGpuWallTimeFaster.ToString().ToLowerInvariant())")
+    $lines.Add("local_particle_draw_speedup: $(Format-MetricDouble $particleDrawSpeedup)")
+    $lines.Add("local_wall_speedup: $(Format-MetricDouble $wallSpeedup)")
+    $lines.Add("cpu_measured_frames: $($comparison.cpu_measured_frames)")
+    $lines.Add("gpu_measured_frames: $($comparison.gpu_measured_frames)")
+    $lines.Add("cpu_active_count: $($comparison.cpu_active_count)")
+    $lines.Add("gpu_active_count: $($comparison.gpu_active_count)")
+    $lines.Add("gpu_available: $($comparison.gpu_available.ToString().ToLowerInvariant())")
+    $lines.Add("")
+    $lines.Add("| metric | cpu | gpu |")
+    $lines.Add("|---|---:|---:|")
+    $lines.Add("| wall_avg_ms | $(Format-MetricDouble $cpuWallAvg) | $(Format-MetricDouble $gpuWallAvg) |")
+    $lines.Add("| particle_stamp_avg_ms | $(Format-MetricDouble $cpuStampAvg) | 0 |")
+    $lines.Add("| gpu_particle_avg_ms | 0 | $(Format-MetricDouble $gpuParticleAvg) |")
+    $lines.Add("")
+    $lines.Add("该报告只来自本机短窗口 probe，不包含目标 GPU 硬件、驱动、采样时长与人工复核信息；不得作为 comparisonReport evidence，也不会被 `gpuFasterThanCpu` 目标验收规则接受。")
+    [System.IO.File]::WriteAllLines($markdownPath, $lines, [System.Text.UTF8Encoding]::new($false))
+
+    [pscustomobject]@{
+        markdown = ConvertTo-RepositoryRelativePath -Root $Root -Path $markdownPath
+        json = ConvertTo-RepositoryRelativePath -Root $Root -Path $jsonPath
+        localGpuParticleDrawFaster = $localGpuParticleDrawFaster
+        localGpuWallTimeFaster = $localGpuWallTimeFaster
+        localParticleDrawSpeedup = Format-MetricDouble $particleDrawSpeedup
+        localWallSpeedup = Format-MetricDouble $wallSpeedup
+    }
+}
+
 function Write-Report {
     param(
         [string]$ReportPath,
         [string]$Status,
         [object[]]$Evidence,
         [object[]]$ProbeSummaries,
+        [object]$LocalComparison,
         [string[]]$Notes,
         [int]$ExitCode
     )
@@ -93,6 +298,18 @@ function Write-Report {
             $lines.Add('```')
             $lines.Add("")
         }
+    }
+
+    if ($null -ne $LocalComparison) {
+        $lines.Add("## 本机短样本对比")
+        $lines.Add("")
+        $lines.Add(('local_comparison_markdown: `{0}`' -f $LocalComparison.markdown))
+        $lines.Add(('local_comparison_json: `{0}`' -f $LocalComparison.json))
+        $lines.Add("local_gpu_particle_draw_faster: $($LocalComparison.localGpuParticleDrawFaster.ToString().ToLowerInvariant())")
+        $lines.Add("local_gpu_wall_time_faster: $($LocalComparison.localGpuWallTimeFaster.ToString().ToLowerInvariant())")
+        $lines.Add("local_particle_draw_speedup: $($LocalComparison.localParticleDrawSpeedup)")
+        $lines.Add("local_wall_speedup: $($LocalComparison.localWallSpeedup)")
+        $lines.Add("")
     }
 
     if ($Evidence.Count -gt 0) {
@@ -145,8 +362,13 @@ function Invoke-ParticleProbe {
         "--log-dir", $logDirectory
     )
 
-    $process = Start-Process -FilePath "dotnet" -ArgumentList $arguments -WorkingDirectory $Root -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+    $process = Start-Process -FilePath $DotNetPath -ArgumentList $arguments -WorkingDirectory $Root -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
     $stdout = Get-Content -LiteralPath $stdoutPath -Raw
+    $stderr = Get-Content -LiteralPath $stderrPath -Raw
+    if ($process.ExitCode -ne 0) {
+        throw "$Mode probe 退出码为 $($process.ExitCode)。stdout=$stdoutPath stderr=$stderrPath stderr_tail=$($stderr.Trim())"
+    }
+
     $summaryLine = ($stdout -split "`r?`n" | Where-Object { $_.StartsWith("particle_frame_probe", [StringComparison]::Ordinal) } | Select-Object -Last 1)
 
     if ([string]::IsNullOrWhiteSpace($summaryLine)) {
@@ -159,6 +381,7 @@ function Invoke-ParticleProbe {
         stderr = ConvertTo-RepositoryRelativePath -Root $Root -Path $stderrPath
         exitCode = $process.ExitCode
         summaryLine = $summaryLine
+        metrics = Convert-ParticleProbeSummaryToMetrics -SummaryLine $summaryLine
     }
 }
 
@@ -264,20 +487,34 @@ New-Item -ItemType Directory -Force -Path $artifactRoot | Out-Null
 $reportPath = Join-Path $artifactRoot "gpu-particle-benchmark-preflight.md"
 $notes = [System.Collections.Generic.List[string]]::new()
 $probeSummaries = [System.Collections.Generic.List[object]]::new()
+$localComparison = $null
 $evidence = @()
 $status = "blocked_missing_target_gpu_evidence"
 $exitCode = 2
 
 if ($RunProbe) {
-    $probeRoot = Join-Path $artifactRoot "local-probe"
-    New-Item -ItemType Directory -Force -Path $probeRoot | Out-Null
-    $probeSummaries.Add((Invoke-ParticleProbe -Mode "cpu" -Root $root -ProbeArtifacts $probeRoot))
-    $probeSummaries.Add((Invoke-ParticleProbe -Mode "gpu" -Root $root -ProbeArtifacts $probeRoot))
-    $status = "local_probe_only"
-    $notes.Add("本机 probe 只能证明 --particle-frame-probe 与 cpu/gpu 路径可执行，不能替代目标 GPU 硬件长基准。")
+    try {
+        $probeRoot = Join-Path $artifactRoot "local-probe"
+        New-Item -ItemType Directory -Force -Path $probeRoot | Out-Null
+        $cpuProbe = Invoke-ParticleProbe -Mode "cpu" -Root $root -ProbeArtifacts $probeRoot
+        $gpuProbe = Invoke-ParticleProbe -Mode "gpu" -Root $root -ProbeArtifacts $probeRoot
+        Assert-LocalProbeMetrics -Probe $cpuProbe -ExpectedMode "cpu"
+        Assert-LocalProbeMetrics -Probe $gpuProbe -ExpectedMode "gpu"
+        $probeSummaries.Add($cpuProbe)
+        $probeSummaries.Add($gpuProbe)
+        $localComparison = Write-LocalComparison -Root $root -ArtifactRoot $artifactRoot -CpuProbe $cpuProbe -GpuProbe $gpuProbe
+        $status = "local_probe_only"
+        $notes.Add("本机 probe 只能证明 --particle-frame-probe 与 cpu/gpu 路径可执行，不能替代目标 GPU 硬件长基准。")
+        $notes.Add("本机短样本对比已写入 $($localComparison.markdown) 与 $($localComparison.json)，且显式 local_only/target_gpu_evidence=false。")
+    }
+    catch {
+        $status = "blocked_invalid_local_probe"
+        $exitCode = 5
+        $notes.Add("本机 probe 失败：$($_.Exception.Message)")
+    }
 }
 
-if (-not [string]::IsNullOrWhiteSpace($EvidenceManifestPath)) {
+if (-not [string]::IsNullOrWhiteSpace($EvidenceManifestPath) -and $status -ne "blocked_invalid_local_probe") {
     $manifestPath = if ([System.IO.Path]::IsPathRooted($EvidenceManifestPath)) { $EvidenceManifestPath } else { Join-Path $root $EvidenceManifestPath }
     try {
         $manifestResult = Read-EvidenceManifest -Root $root -ManifestPath $manifestPath
@@ -300,7 +537,7 @@ if (-not [string]::IsNullOrWhiteSpace($EvidenceManifestPath)) {
     }
 }
 
-Write-Report -ReportPath $reportPath -Status $status -Evidence $evidence -ProbeSummaries @($probeSummaries) -Notes @($notes) -ExitCode $exitCode
+Write-Report -ReportPath $reportPath -Status $status -Evidence $evidence -ProbeSummaries @($probeSummaries) -LocalComparison $localComparison -Notes @($notes) -ExitCode $exitCode
 Write-Host "GPU particle benchmark preflight status: $status"
 Write-Host "Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
 

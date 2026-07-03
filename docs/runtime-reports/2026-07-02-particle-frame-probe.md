@@ -28,11 +28,11 @@ particle_frame_probe mode=gpu, gpu_available=True, requested_count=100000, activ
 
 ## 结论
 
-探针入口可用，并能在同一窗口链路中验证 10 万活跃粒子。GPU 模式已跳过 CPU stamp，且记录到 `GpuParticleDraw` 子相位；CPU 模式记录到 `ParticleStamp` 子相位。当前短样本只证明入口与子相位采样可用，总帧时间受窗口启动、BuildRenderBuffer 和桌面环境噪声影响，不能作为目标硬件“GPU 总帧时间优于 CPU stamp”的验收依据。
+探针入口可用，并能在同一窗口链路中验证 10 万活跃粒子。GPU 模式已跳过 CPU stamp，且记录到 `GpuParticleDraw` 子相位；CPU 模式记录到 `ParticleStamp` 子相位。当前代码的 summary 字段包含 `mode`、`gpu_available`、`requested_count`、`active_count`、`warmup_frames`、`measured_frames`，并对 `wall`、`particle_stamp`、`gpu_particle`、`gpu_upload`、`lighting`、`bloom`、`present` 输出 `avg_ms/p50_ms/p95_ms/max_ms`。当前短样本只证明入口与子相位采样可用，总帧时间受窗口启动、BuildRenderBuffer 和桌面环境噪声影响，不能作为目标硬件“GPU 总帧时间优于 CPU stamp”的验收依据。
 
 ## GPU 粒子基准预检入口
 
-新增 `tools/gpu-particle-benchmark-preflight.ps1` 作为 plan/09 目标硬件基准证据入口。无目标硬件 evidence manifest 时，默认报告 `blocked_missing_target_gpu_evidence`；加 `-RunProbe` 时会分别运行 `--particle-frame-probe --particle-render-mode cpu` 与 `--particle-frame-probe --particle-render-mode gpu`，并报告 `local_probe_only`。这两种状态都不是验收通过，只用于证明入口可执行与产出待审证据。
+新增 `tools/gpu-particle-benchmark-preflight.ps1` 作为 plan/09 目标硬件基准证据入口。无目标硬件 evidence manifest 时，默认报告 `blocked_missing_target_gpu_evidence`；加 `-RunProbe` 时会分别运行 `--particle-frame-probe --particle-render-mode cpu` 与 `--particle-frame-probe --particle-render-mode gpu`，解析 summary，生成 `local-comparison.md` / `local-comparison.json`，并报告 `local_probe_only`。本机对比报告会显式写出 `local_only: true` 与 `target_gpu_evidence: false`，且不会写 `gpuFasterThanCpu` 目标验收字段；probe 子进程非 0 或缺少 summary 时报告 `blocked_invalid_local_probe`。这些状态都不是验收通过，只用于证明入口可执行与产出待审证据。
 
 ```pwsh
 ./tools/gpu-particle-benchmark-preflight.ps1 -RunProbe -AllowBlocked
