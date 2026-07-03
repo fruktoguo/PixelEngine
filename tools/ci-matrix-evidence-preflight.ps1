@@ -290,6 +290,41 @@ $missing = [System.Collections.Generic.List[string]]::new()
 $rids = @("win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64")
 $testRids = @("win-x64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64")
 $verifyRids = @("win-x64", "linux-x64", "osx-x64", "osx-arm64")
+$buildRunners = @{
+    "win-x64" = "windows-latest"
+    "win-arm64" = "windows-latest"
+    "linux-x64" = "ubuntu-latest"
+    "linux-arm64" = "ubuntu-24.04-arm"
+    "osx-x64" = "macos-15-intel"
+    "osx-arm64" = "macos-14"
+}
+$verifyRunners = @{
+    "win-x64" = "windows-latest"
+    "linux-x64" = "ubuntu-latest"
+    "osx-x64" = "macos-15-intel"
+    "osx-arm64" = "macos-14"
+}
+$benchmarkRunner = "windows-latest"
+
+function Add-ManifestStringCheck {
+    param(
+        [System.Collections.Generic.List[string]]$Missing,
+        [string]$Scope,
+        [string]$Field,
+        [object]$Node,
+        [string]$Expected
+    )
+
+    $actual = [string](Get-JsonPropertyValue -Node $Node -Name $Field)
+    if ([string]::IsNullOrWhiteSpace($actual)) {
+        $Missing.Add("$Scope 缺少 $Field 字段")
+        return
+    }
+
+    if (-not [string]::Equals($actual, $Expected, [StringComparison]::OrdinalIgnoreCase)) {
+        $Missing.Add("$Scope $Field 必须为 $Expected，实际为 $actual")
+    }
+}
 
 if ([string]::IsNullOrWhiteSpace($EvidenceManifestPath)) {
     $detail = "CI matrix evidence preflight failed: 缺少 evidence manifest。本脚本只校验 GitHub Actions 6-RID build/test、benchmark guard 与 publish verify 运行证据，不生成 CI 运行结果。"
@@ -357,7 +392,8 @@ Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "workf
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -ExpectedValues @{ conclusion = "success" }
 $expectedRunIdentity = Get-ExpectedRunIdentity -Missing $missing -Root $root -WorkflowRunReport $workflowRunReport
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "benchmark_guard" -Path $benchmarkGuardReport -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $manifest.benchmarkGuard -Name "sha256"))
-Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "benchmark_guard" -Path $benchmarkGuardReport -ExpectedValues @{ conclusion = "success" }
+Add-ManifestStringCheck -Missing $missing -Scope "benchmarkGuard" -Field "runner" -Node $manifest.benchmarkGuard -Expected $benchmarkRunner
+Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "benchmark_guard" -Path $benchmarkGuardReport -ExpectedValues @{ conclusion = "success"; runner = $benchmarkRunner }
 Add-RunIdentityCheck -Missing $missing -Root $root -Scope "benchmark_guard" -Path $benchmarkGuardReport -ExpectedIdentity $expectedRunIdentity
 
 foreach ($rid in $rids) {
@@ -369,6 +405,8 @@ foreach ($rid in $rids) {
 
     $buildReportPath = [string](Get-JsonPropertyValue -Node $node -Name "report")
     Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "build_test/$rid/report" -Path $buildReportPath -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $node -Name "sha256"))
+    $expectedRunner = [string]$buildRunners[$rid]
+    Add-ManifestStringCheck -Missing $missing -Scope "buildTest.$rid" -Field "runner" -Node $node -Expected $expectedRunner
     $testsRanProperty = $node.PSObject.Properties | Where-Object { $_.Name -eq "testsRan" } | Select-Object -First 1
     if ($null -eq $testsRanProperty) {
         $missing.Add("buildTest.$rid 缺少 testsRan 字段")
@@ -378,6 +416,7 @@ foreach ($rid in $rids) {
     $expectedBuildOnly = if ($rid -eq "win-arm64") { "true" } else { "false" }
     Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "build_test/$rid/report" -Path $buildReportPath -ExpectedValues @{
         rid = $rid
+        runner = $expectedRunner
         build_only = $expectedBuildOnly
         tests_ran = $expectedTestsRan.ToString().ToLowerInvariant()
         conclusion = "success"
@@ -402,8 +441,11 @@ foreach ($rid in $verifyRids) {
 
     $verifyReportPath = [string](Get-JsonPropertyValue -Node $node -Name "report")
     Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "verify_publish/$rid/report" -Path $verifyReportPath -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $node -Name "sha256"))
+    $expectedRunner = [string]$verifyRunners[$rid]
+    Add-ManifestStringCheck -Missing $missing -Scope "verifyPublish.$rid" -Field "runner" -Node $node -Expected $expectedRunner
     Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "verify_publish/$rid/report" -Path $verifyReportPath -ExpectedValues @{
         rid = $rid
+        runner = $expectedRunner
         channels = "r2r,aot"
         conclusion = "success"
     }

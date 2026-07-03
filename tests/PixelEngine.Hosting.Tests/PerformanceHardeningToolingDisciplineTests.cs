@@ -2081,6 +2081,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("Get-ExpectedRunIdentity", script, StringComparison.Ordinal);
         Assert.Contains("Add-RunIdentityCheck", script, StringComparison.Ordinal);
         Assert.Contains("必须与 workflow_run 一致", script, StringComparison.Ordinal);
+        Assert.Contains("Add-ManifestStringCheck", script, StringComparison.Ordinal);
+        Assert.Contains("$Scope $Field 必须为 $Expected", script, StringComparison.Ordinal);
         Assert.Contains("benchmarkGuard", script, StringComparison.Ordinal);
         Assert.Contains("buildTest", script, StringComparison.Ordinal);
         Assert.Contains("verifyPublish", script, StringComparison.Ordinal);
@@ -2112,6 +2114,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("sha256 = Get-Sha256", ci, StringComparison.Ordinal);
         Assert.Contains("build-test-win-arm64.md", ci, StringComparison.Ordinal);
         Assert.Contains("testsRan = $false", ci, StringComparison.Ordinal);
+        Assert.Contains("runner = 'ubuntu-24.04-arm'", ci, StringComparison.Ordinal);
+        Assert.Contains("| runner | ${{ matrix.runner }} |", ci, StringComparison.Ordinal);
         Assert.Contains("verify-publish-osx-arm64.md", ci, StringComparison.Ordinal);
 
         Assert.Contains("tools/ci-matrix-evidence-preflight.ps1", report, StringComparison.Ordinal);
@@ -2121,6 +2125,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("ci_matrix_evidence_attached_pending_review", report, StringComparison.Ordinal);
         Assert.Contains("conclusion", report, StringComparison.Ordinal);
         Assert.Contains("channels: r2r,aot", report, StringComparison.Ordinal);
+        Assert.Contains("runner", report, StringComparison.Ordinal);
         Assert.Contains("同一个 GitHub Actions run", report, StringComparison.Ordinal);
         Assert.Contains("tools/ci-matrix-evidence-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("blocked_invalid_ci_evidence", plan, StringComparison.Ordinal);
@@ -2370,6 +2375,53 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string report = File.ReadAllText(Path.Combine(artifacts, "ci-matrix-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_ci_scope_evidence", result.Output + report, StringComparison.Ordinal);
             Assert.Contains("build_test/linux-x64/report 报告 sha 必须与 workflow_run 一致", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: ci_matrix_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 CI evidence 预检要求 RID 证据来自预期 GitHub hosted runner，避免错误 runner 报告冒充矩阵覆盖。
+    /// </summary>
+    [Fact]
+    public void CiMatrixEvidencePreflightRejectsMismatchedRunnerIdentity()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ci-runner-identity-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateCiEvidenceManifest(temp, benchmarkConclusion: "success");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject buildTest = rootNode["buildTest"]!.AsObject();
+            JsonObject linuxArm64 = buildTest["linux-arm64"]!.AsObject();
+            string reportPath = (string)linuxArm64["report"]!;
+            string text = File.ReadAllText(reportPath).Replace("| runner | ubuntu-24.04-arm |", "| runner | ubuntu-latest |", StringComparison.Ordinal);
+            File.WriteAllText(reportPath, text);
+            linuxArm64["runner"] = "ubuntu-latest";
+            linuxArm64["sha256"] = GetSha256(reportPath);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "runner-identity-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "ci-matrix-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "ci-matrix-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_ci_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("buildTest.linux-arm64 runner 必须为 ubuntu-24.04-arm，实际为 ubuntu-latest", report, StringComparison.Ordinal);
+            Assert.Contains("build_test/linux-arm64/report 报告 runner 必须为 ubuntu-24.04-arm，实际为 ubuntu-latest", report, StringComparison.Ordinal);
             Assert.DoesNotContain("status: ci_matrix_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
@@ -4128,6 +4180,22 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     {
         string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "ci-matrix-evidence");
         _ = Directory.CreateDirectory(evidenceRoot);
+        Dictionary<string, string> buildRunners = new()
+        {
+            ["win-x64"] = "windows-latest",
+            ["win-arm64"] = "windows-latest",
+            ["linux-x64"] = "ubuntu-latest",
+            ["linux-arm64"] = "ubuntu-24.04-arm",
+            ["osx-x64"] = "macos-15-intel",
+            ["osx-arm64"] = "macos-14",
+        };
+        Dictionary<string, string> verifyRunners = new()
+        {
+            ["win-x64"] = "windows-latest",
+            ["linux-x64"] = "ubuntu-latest",
+            ["osx-x64"] = "macos-15-intel",
+            ["osx-arm64"] = "macos-14",
+        };
 
         string workflow = WriteMarkdownEvidence(
             Path.Combine(evidenceRoot, "workflow-run.md"),
@@ -4143,6 +4211,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Path.Combine(evidenceRoot, "benchmark-guard.md"),
             new Dictionary<string, string>
             {
+                ["runner"] = "windows-latest",
                 ["run_id"] = "1",
                 ["sha"] = "abc",
                 ["conclusion"] = benchmarkConclusion,
@@ -4159,6 +4228,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 new Dictionary<string, string>
                 {
                     ["rid"] = rid,
+                    ["runner"] = buildRunners[rid],
                     ["build_only"] = testsRan ? "false" : "true",
                     ["tests_ran"] = testsRan ? "true" : "false",
                     ["run_id"] = "1",
@@ -4169,6 +4239,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             {
                 ["report"] = report,
                 ["sha256"] = GetSha256(report),
+                ["runner"] = buildRunners[rid],
                 ["testsRan"] = testsRan,
             };
         }
@@ -4181,6 +4252,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 new Dictionary<string, string>
                 {
                     ["rid"] = rid,
+                    ["runner"] = verifyRunners[rid],
                     ["channels"] = "r2r,aot",
                     ["run_id"] = "1",
                     ["sha"] = "abc",
@@ -4190,6 +4262,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             {
                 ["report"] = report,
                 ["sha256"] = GetSha256(report),
+                ["runner"] = verifyRunners[rid],
             };
         }
 
@@ -4202,6 +4275,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             {
                 ["report"] = benchmark,
                 ["sha256"] = GetSha256(benchmark),
+                ["runner"] = "windows-latest",
             },
             ["buildTest"] = buildTest,
             ["verifyPublish"] = verifyPublish,
