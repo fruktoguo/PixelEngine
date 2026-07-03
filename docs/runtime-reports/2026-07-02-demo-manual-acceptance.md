@@ -28,11 +28,11 @@
 
 ## 状态语义
 
-`blocked_missing_manual_evidence` 表示尚未提供人工 evidence manifest。`scripted_probe_only` 表示只跑了 `--scripted-window-demo` / `--scripted-window-route` 机器 probe，不能替代人工验收。`blocked_missing_manual_scope_evidence` 表示 manifest 缺少必须 scope。`blocked_invalid_manual_evidence` 表示 schema、未知 scope、元数据、缺 checklist/criteria、缺文件、视频时长不足、视频容器头无效或 sha256 不匹配等清单错误，脚本会写出报告并以 5 退出。`manual_evidence_attached_pending_review` 表示所有必须 scope 都有文件且 manifest 声明的 SHA256 与实际文件匹配，但仍需人工复核证据是否真的覆盖 plan/13 的 `[!]` 项。
+`blocked_missing_manual_evidence` 表示尚未提供人工 evidence manifest。`scripted_probe_only` 表示只跑了 `--scripted-window-demo` / `--scripted-window-route` 机器 probe，不能替代人工验收。`blocked_missing_manual_scope_evidence` 表示 manifest 缺少必须 scope。`blocked_invalid_manual_evidence` 表示 schema、未知 scope、元数据、缺 checklist/criteria、缺文件、视频时长不足、视频结构或实际 duration 无法校验、sha256 不匹配等清单错误，脚本会写出报告并以 5 退出。`manual_evidence_attached_pending_review` 表示所有必须 scope 都有文件且 manifest 声明的 SHA256 与实际文件匹配，但仍需人工复核证据是否真的覆盖 plan/13 的 `[!]` 项。
 
 ## 必须 scope
 
-manifest 使用 `schemaVersion: 1`，`evidence` 数组只能包含这些 scope：`controlFeelReport`、`materialBrushAndReactionVideo`、`rigidBodyGameplayVideo`、`particleLightingVideo`、`audioListeningReport`、`fullRoutePlaythroughVideo`、`hudMenuEditorVideo`、`hotReloadWindowReport`。每个 entry 必须声明 `path`、`sha256`、`kind`、`reviewer`、`capturedAt`、`notes` 与 `checklist`，脚本会重新计算文件 SHA256 并比对；视频 scope 还必须声明 `durationSeconds`，其中完整通关路线至少 30 秒，其它视频至少 10 秒。视频文件会做轻量容器头 sniff：`.mp4/.mov` 必须包含 `ftyp` box，`.mkv/.webm` 必须包含 EBML magic，文本或随机字节改名成视频不会进入待审状态。缺失、未知 scope、缺 checklist、时长不足或容器头无效都不能进入待审状态。
+manifest 使用 `schemaVersion: 1`，`evidence` 数组只能包含这些 scope：`controlFeelReport`、`materialBrushAndReactionVideo`、`rigidBodyGameplayVideo`、`particleLightingVideo`、`audioListeningReport`、`fullRoutePlaythroughVideo`、`hudMenuEditorVideo`、`hotReloadWindowReport`。每个 entry 必须声明 `path`、`sha256`、`kind`、`reviewer`、`capturedAt`、`notes` 与 `checklist`，脚本会重新计算文件 SHA256 并比对；视频 scope 还必须声明 `durationSeconds`，其中完整通关路线至少 30 秒，其它视频至少 10 秒。视频文件不再只做容器头 sniff：`.mp4/.mov` 必须能解析出 `ftyp`、`moov`、视频 track、正 duration 和非空 `mdat`，实际 duration 不能短于 scope 要求且 manifest 不得虚报超过实际时长；`.mkv/.webm` 必须能通过 `ffprobe` 确认 video stream 与 duration，否则拒绝进入待审。缺失、未知 scope、缺 checklist、时长不足、只有 `ftyp`/EBML 头、视频结构无效或 hash 不匹配都不能进入待审状态。
 
 这些 scope 对应 plan/13 剩余阻塞：真实输入手感、真实鼠标/滚轮/数字键操作与 CA 视觉接管、刚体可推/可砸/可继续破坏、粒子与 bloom/fog 视觉质量、音频听感与空间感、完整路线通关、HUD/菜单/Editor 交互、开发态热重载体验。
 

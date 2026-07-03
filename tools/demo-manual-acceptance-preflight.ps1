@@ -42,47 +42,331 @@ function Get-FileSha256 {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
-function Assert-VideoContainerHeader {
+function Read-UInt32BigEndian {
+    param([System.IO.BinaryReader]$Reader)
+
+    $bytes = $Reader.ReadBytes(4)
+    if ($bytes.Length -ne 4) {
+        throw "MP4 box 数据截断，无法读取 uint32。"
+    }
+
+    return [uint32]((([uint32]$bytes[0]) -shl 24) -bor (([uint32]$bytes[1]) -shl 16) -bor (([uint32]$bytes[2]) -shl 8) -bor ([uint32]$bytes[3]))
+}
+
+function Read-UInt64BigEndian {
+    param([System.IO.BinaryReader]$Reader)
+
+    $bytes = $Reader.ReadBytes(8)
+    if ($bytes.Length -ne 8) {
+        throw "MP4 box 数据截断，无法读取 uint64。"
+    }
+
+    $value = [uint64]0
+    foreach ($byte in $bytes) {
+        $value = ($value -shl 8) -bor [uint64]$byte
+    }
+
+    return $value
+}
+
+function Read-AsciiString {
+    param(
+        [System.IO.BinaryReader]$Reader,
+        [int]$Length
+    )
+
+    $bytes = $Reader.ReadBytes($Length)
+    if ($bytes.Length -ne $Length) {
+        throw "MP4 box 数据截断，无法读取字符串。"
+    }
+
+    return [System.Text.Encoding]::ASCII.GetString($bytes)
+}
+
+function Read-Mp4BoxHeader {
+    param(
+        [System.IO.BinaryReader]$Reader,
+        [int64]$ContainerEnd
+    )
+
+    if ($Reader.BaseStream.Position + 8 -gt $ContainerEnd) {
+        return $null
+    }
+
+    $start = [int64]$Reader.BaseStream.Position
+    $size = [uint64](Read-UInt32BigEndian -Reader $Reader)
+    $type = Read-AsciiString -Reader $Reader -Length 4
+    $headerSize = [uint64]8
+    if ($size -eq 1) {
+        $size = Read-UInt64BigEndian -Reader $Reader
+        $headerSize = 16
+    }
+    elseif ($size -eq 0) {
+        $size = [uint64]($ContainerEnd - $start)
+    }
+
+    if ($size -lt $headerSize) {
+        throw "MP4 box $type size 无效：$size"
+    }
+
+    $end = $start + [int64]$size
+    if ($end -gt $ContainerEnd) {
+        throw "MP4 box $type 越过容器边界：end=$end containerEnd=$ContainerEnd"
+    }
+
+    return [pscustomobject]@{
+        type = $type
+        start = $start
+        payloadStart = $start + [int64]$headerSize
+        end = $end
+        payloadBytes = [int64]$size - [int64]$headerSize
+    }
+}
+
+function Read-Mp4DurationSeconds {
+    param(
+        [System.IO.BinaryReader]$Reader,
+        [object]$Box
+    )
+
+    if ($Box.payloadBytes -lt 20) {
+        return 0.0
+    }
+
+    $Reader.BaseStream.Seek($Box.payloadStart, [System.IO.SeekOrigin]::Begin) | Out-Null
+    $version = $Reader.ReadByte()
+    $Reader.BaseStream.Seek(3, [System.IO.SeekOrigin]::Current) | Out-Null
+    if ($version -eq 1) {
+        if ($Box.payloadBytes -lt 32) {
+            return 0.0
+        }
+
+        $Reader.BaseStream.Seek(16, [System.IO.SeekOrigin]::Current) | Out-Null
+        $timescale = [double](Read-UInt32BigEndian -Reader $Reader)
+        $duration = [double](Read-UInt64BigEndian -Reader $Reader)
+    }
+    else {
+        $Reader.BaseStream.Seek(8, [System.IO.SeekOrigin]::Current) | Out-Null
+        $timescale = [double](Read-UInt32BigEndian -Reader $Reader)
+        $duration = [double](Read-UInt32BigEndian -Reader $Reader)
+    }
+
+    if ($timescale -le 0 -or $duration -le 0) {
+        return 0.0
+    }
+
+    return $duration / $timescale
+}
+
+function Read-Mp4MediaInfo {
+    param(
+        [System.IO.BinaryReader]$Reader,
+        [object]$MdiaBox
+    )
+
+    $hasVideoHandler = $false
+    $durationSeconds = 0.0
+    $Reader.BaseStream.Seek($MdiaBox.payloadStart, [System.IO.SeekOrigin]::Begin) | Out-Null
+    while ($Reader.BaseStream.Position + 8 -le $MdiaBox.end) {
+        $box = Read-Mp4BoxHeader -Reader $Reader -ContainerEnd $MdiaBox.end
+        if ($null -eq $box) {
+            break
+        }
+
+        if ($box.type -eq "hdlr" -and $box.payloadBytes -ge 12) {
+            $Reader.BaseStream.Seek($box.payloadStart + 8, [System.IO.SeekOrigin]::Begin) | Out-Null
+            $handler = Read-AsciiString -Reader $Reader -Length 4
+            if ($handler -eq "vide") {
+                $hasVideoHandler = $true
+            }
+        }
+        elseif ($box.type -eq "mdhd") {
+            $durationSeconds = [Math]::Max($durationSeconds, (Read-Mp4DurationSeconds -Reader $Reader -Box $box))
+        }
+
+        $Reader.BaseStream.Seek($box.end, [System.IO.SeekOrigin]::Begin) | Out-Null
+    }
+
+    return [pscustomobject]@{
+        hasVideoHandler = $hasVideoHandler
+        durationSeconds = $durationSeconds
+    }
+}
+
+function Read-Mp4TrackInfo {
+    param(
+        [System.IO.BinaryReader]$Reader,
+        [object]$TrakBox
+    )
+
+    $hasVideoTrack = $false
+    $durationSeconds = 0.0
+    $Reader.BaseStream.Seek($TrakBox.payloadStart, [System.IO.SeekOrigin]::Begin) | Out-Null
+    while ($Reader.BaseStream.Position + 8 -le $TrakBox.end) {
+        $box = Read-Mp4BoxHeader -Reader $Reader -ContainerEnd $TrakBox.end
+        if ($null -eq $box) {
+            break
+        }
+
+        if ($box.type -eq "mdia") {
+            $media = Read-Mp4MediaInfo -Reader $Reader -MdiaBox $box
+            if ($media.hasVideoHandler) {
+                $hasVideoTrack = $true
+                $durationSeconds = [Math]::Max($durationSeconds, [double]$media.durationSeconds)
+            }
+        }
+
+        $Reader.BaseStream.Seek($box.end, [System.IO.SeekOrigin]::Begin) | Out-Null
+    }
+
+    return [pscustomobject]@{
+        hasVideoTrack = $hasVideoTrack
+        durationSeconds = $durationSeconds
+    }
+}
+
+function Read-Mp4MovieInfo {
+    param(
+        [System.IO.BinaryReader]$Reader,
+        [object]$MoovBox
+    )
+
+    $movieDurationSeconds = 0.0
+    $videoDurationSeconds = 0.0
+    $hasVideoTrack = $false
+    $Reader.BaseStream.Seek($MoovBox.payloadStart, [System.IO.SeekOrigin]::Begin) | Out-Null
+    while ($Reader.BaseStream.Position + 8 -le $MoovBox.end) {
+        $box = Read-Mp4BoxHeader -Reader $Reader -ContainerEnd $MoovBox.end
+        if ($null -eq $box) {
+            break
+        }
+
+        if ($box.type -eq "mvhd") {
+            $movieDurationSeconds = [Math]::Max($movieDurationSeconds, (Read-Mp4DurationSeconds -Reader $Reader -Box $box))
+        }
+        elseif ($box.type -eq "trak") {
+            $track = Read-Mp4TrackInfo -Reader $Reader -TrakBox $box
+            if ($track.hasVideoTrack) {
+                $hasVideoTrack = $true
+                $videoDurationSeconds = [Math]::Max($videoDurationSeconds, [double]$track.durationSeconds)
+            }
+        }
+
+        $Reader.BaseStream.Seek($box.end, [System.IO.SeekOrigin]::Begin) | Out-Null
+    }
+
+    return [pscustomobject]@{
+        hasVideoTrack = $hasVideoTrack
+        durationSeconds = [Math]::Max($movieDurationSeconds, $videoDurationSeconds)
+    }
+}
+
+function Assert-Mp4VideoEvidence {
     param(
         [string]$Path,
-        [string]$Extension,
-        [string]$Scope
+        [string]$Scope,
+        [double]$DeclaredDurationSeconds,
+        [double]$MinDurationSeconds
     )
 
     $file = Get-Item -LiteralPath $Path
-    if ($file.Length -lt 8) {
-        throw "evidence scope $Scope video 文件太小，缺少可识别容器头：$Path"
+    if ($file.Length -lt 64) {
+        throw "evidence scope $Scope video 文件太小，缺少可解析 MP4/MOV 视频结构：$Path"
     }
 
-    $readLength = [int][Math]::Min(16L, $file.Length)
-    $buffer = [byte[]]::new($readLength)
     $stream = [System.IO.File]::OpenRead($Path)
     try {
-        $bytesRead = $stream.Read($buffer, 0, $buffer.Length)
+        $reader = [System.IO.BinaryReader]::new($stream)
+        try {
+            $hasFtyp = $false
+            $hasMoov = $false
+            $hasMdat = $false
+            $hasVideoTrack = $false
+            $actualDurationSeconds = 0.0
+            while ($stream.Position + 8 -le $stream.Length) {
+                $box = Read-Mp4BoxHeader -Reader $reader -ContainerEnd $stream.Length
+                if ($null -eq $box) {
+                    break
+                }
+
+                if ($box.type -eq "ftyp") {
+                    $hasFtyp = $true
+                }
+                elseif ($box.type -eq "moov") {
+                    $hasMoov = $true
+                    $movie = Read-Mp4MovieInfo -Reader $reader -MoovBox $box
+                    $hasVideoTrack = $hasVideoTrack -or [bool]$movie.hasVideoTrack
+                    $actualDurationSeconds = [Math]::Max($actualDurationSeconds, [double]$movie.durationSeconds)
+                }
+                elseif ($box.type -eq "mdat" -and $box.payloadBytes -gt 0) {
+                    $hasMdat = $true
+                }
+
+                $stream.Seek($box.end, [System.IO.SeekOrigin]::Begin) | Out-Null
+            }
+
+            if (-not $hasFtyp) {
+                throw "evidence scope $Scope video 文件必须包含 MP4/MOV ftyp box，不能用文本或随机字节改名冒充视频：$Path"
+            }
+
+            if (-not $hasMoov -or -not $hasVideoTrack -or $actualDurationSeconds -le 0) {
+                throw "evidence scope $Scope video 文件必须包含可解析 moov 视频 track 与正 duration，不能只用 ftyp 容器头冒充视频：$Path"
+            }
+
+            if (-not $hasMdat) {
+                throw "evidence scope $Scope video 文件必须包含非空 mdat 媒体数据，不能只用元数据冒充录屏：$Path"
+            }
+
+            if ($actualDurationSeconds + 0.001 -lt $MinDurationSeconds) {
+                throw "evidence scope $Scope video 实际 duration $actualDurationSeconds 秒小于要求的 $MinDurationSeconds 秒。"
+            }
+
+            if ($DeclaredDurationSeconds -gt $actualDurationSeconds + 0.5) {
+                throw "evidence scope $Scope durationSeconds 声明 $DeclaredDurationSeconds 秒超过视频实际 duration $actualDurationSeconds 秒。"
+            }
+        }
+        finally {
+            $reader.Dispose()
+        }
     }
     finally {
         $stream.Dispose()
     }
+}
+
+function Assert-VideoEvidence {
+    param(
+        [string]$Path,
+        [string]$Extension,
+        [string]$Scope,
+        [double]$DeclaredDurationSeconds,
+        [double]$MinDurationSeconds
+    )
 
     if ($Extension -in @(".mp4", ".mov")) {
-        if ($bytesRead -lt 8 -or
-            $buffer[4] -ne [byte][char]'f' -or
-            $buffer[5] -ne [byte][char]'t' -or
-            $buffer[6] -ne [byte][char]'y' -or
-            $buffer[7] -ne [byte][char]'p') {
-            throw "evidence scope $Scope video 文件头必须包含 MP4/MOV ftyp box，不能用文本或随机字节改名冒充视频：$Path"
-        }
-
+        Assert-Mp4VideoEvidence -Path $Path -Scope $Scope -DeclaredDurationSeconds $DeclaredDurationSeconds -MinDurationSeconds $MinDurationSeconds
         return
     }
 
     if ($Extension -in @(".mkv", ".webm")) {
-        if ($bytesRead -lt 4 -or
-            $buffer[0] -ne 0x1A -or
-            $buffer[1] -ne 0x45 -or
-            $buffer[2] -ne 0xDF -or
-            $buffer[3] -ne 0xA3) {
-            throw "evidence scope $Scope video 文件头必须包含 WebM/MKV EBML magic，不能用文本或随机字节改名冒充视频：$Path"
+        $ffprobe = Get-Command ffprobe -ErrorAction SilentlyContinue
+        if ($null -eq $ffprobe) {
+            throw "evidence scope $Scope WebM/MKV video 需要 ffprobe 校验真实视频 stream 与 duration，不能只靠 EBML 容器头进入待审：$Path"
+        }
+
+        $output = & $ffprobe.Source -v error -select_streams v:0 -show_entries stream=codec_type -show_entries format=duration -of default=noprint_wrappers=1:nokey=0 -- $Path 2>&1
+        $outputText = $output -join "`n"
+        if ($LASTEXITCODE -ne 0 -or -not ($outputText -match "codec_type=video") -or -not ($outputText -match "duration=([0-9]+(\.[0-9]+)?)")) {
+            throw "evidence scope $Scope WebM/MKV video 无法通过 ffprobe 确认真视频 stream 与 duration：$Path"
+        }
+
+        $actualDurationSeconds = [double]$Matches[1]
+        if ($actualDurationSeconds + 0.001 -lt $MinDurationSeconds) {
+            throw "evidence scope $Scope video 实际 duration $actualDurationSeconds 秒小于要求的 $MinDurationSeconds 秒。"
+        }
+
+        if ($DeclaredDurationSeconds -gt $actualDurationSeconds + 0.5) {
+            throw "evidence scope $Scope durationSeconds 声明 $DeclaredDurationSeconds 秒超过视频实际 duration $actualDurationSeconds 秒。"
         }
     }
 }
@@ -399,8 +683,6 @@ function Assert-ManualEvidenceMetadata {
             throw "evidence scope $scope 是 video，文件扩展名必须为 $($allowedVideo -join ', ')。"
         }
 
-        Assert-VideoContainerHeader -Path $ResolvedPath -Extension $extension -Scope $scope
-
         $duration = Get-JsonPropertyValue -Object $Entry -Name "durationSeconds"
         if ($null -eq $duration) {
             throw "evidence scope $scope 是 video，缺少 durationSeconds。"
@@ -411,6 +693,8 @@ function Assert-ManualEvidenceMetadata {
         if ($durationValue -lt $minDuration) {
             throw "evidence scope $scope durationSeconds 必须至少为 $minDuration 秒。"
         }
+
+        Assert-VideoEvidence -Path $ResolvedPath -Extension $extension -Scope $scope -DeclaredDurationSeconds $durationValue -MinDurationSeconds $minDuration
     }
     elseif ($expectedKind -eq "report") {
         $allowedReport = @(".md", ".txt", ".pdf")

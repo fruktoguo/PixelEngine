@@ -1595,8 +1595,13 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("hudMenuEditorVideo", script, StringComparison.Ordinal);
         Assert.Contains("hotReloadWindowReport", script, StringComparison.Ordinal);
         Assert.Contains("minDurationSeconds", script, StringComparison.Ordinal);
-        Assert.Contains("Assert-VideoContainerHeader", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-VideoEvidence", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-Mp4VideoEvidence", script, StringComparison.Ordinal);
+        Assert.Contains("Read-Mp4MovieInfo", script, StringComparison.Ordinal);
         Assert.Contains("ftyp", script, StringComparison.Ordinal);
+        Assert.Contains("moov", script, StringComparison.Ordinal);
+        Assert.Contains("mdat", script, StringComparison.Ordinal);
+        Assert.Contains("视频 track", script, StringComparison.Ordinal);
         Assert.Contains("EBML", script, StringComparison.Ordinal);
         string[] manualChecklistKeys =
         [
@@ -1944,7 +1949,60 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "demo-manual-acceptance-preflight.md"));
             Assert.Contains("status: blocked_invalid_manual_evidence", result.Output + report, StringComparison.Ordinal);
-            Assert.Contains("materialBrushAndReactionVideo video 文件头必须包含 MP4/MOV ftyp box", report, StringComparison.Ordinal);
+            Assert.Contains("materialBrushAndReactionVideo video 文件太小，缺少可解析 MP4/MOV 视频结构", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: manual_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 Demo 人工验收 video evidence 会拒绝只有 ftyp 的伪 MP4。
+    /// </summary>
+    [Fact]
+    public void DemoManualAcceptancePreflightRejectsFtypOnlyVideoEvidence()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-ftyp-only-video-" + Guid.NewGuid().ToString("N"));
+
+        string[] manualScopes =
+        [
+            "controlFeelReport",
+            "materialBrushAndReactionVideo",
+            "rigidBodyGameplayVideo",
+            "particleLightingVideo",
+            "audioListeningReport",
+            "fullRoutePlaythroughVideo",
+            "hudMenuEditorVideo",
+            "hotReloadWindowReport",
+        ];
+
+        try
+        {
+            string manifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "ftyp-only-video", includeDemoManualMetadata: true);
+            SetFlatEvidenceFileBytes(
+                manifest,
+                "materialBrushAndReactionVideo",
+                CreateFtypOnlyMp4Bytes());
+
+            string artifacts = Path.Combine(temp, "ftyp-only-video-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "demo-manual-acceptance-preflight.md"));
+            Assert.Contains("status: blocked_invalid_manual_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("materialBrushAndReactionVideo video 文件必须包含可解析 moov 视频 track 与正 duration", report, StringComparison.Ordinal);
             Assert.DoesNotContain("status: manual_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
@@ -4610,7 +4668,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             bool isVideo = includeDemoManualMetadata && scope.EndsWith("Video", StringComparison.Ordinal);
             string extension = isVideo ? ".mp4" : ".md";
             string report = isVideo
-                ? WriteTinyMp4Evidence(Path.Combine(evidenceRoot, $"{safeScope}{extension}"))
+                ? WriteMinimalMp4VideoEvidence(Path.Combine(evidenceRoot, $"{safeScope}{extension}"))
                 : WriteTextEvidence(Path.Combine(evidenceRoot, $"{safeScope}{extension}"), $"{scope} evidence");
             Dictionary<string, object> entry = new()
             {
@@ -4653,20 +4711,85 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         return manifestPath;
     }
 
-    private static string WriteTinyMp4Evidence(string path)
+    private static string WriteMinimalMp4VideoEvidence(string path)
     {
         _ = Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(
-            path,
-            [
-                0x00, 0x00, 0x00, 0x18,
-                (byte)'f', (byte)'t', (byte)'y', (byte)'p',
-                (byte)'i', (byte)'s', (byte)'o', (byte)'m',
-                0x00, 0x00, 0x00, 0x01,
-                (byte)'i', (byte)'s', (byte)'o', (byte)'m',
-                (byte)'m', (byte)'p', (byte)'4', (byte)'2',
-            ]);
+        File.WriteAllBytes(path, CreateMinimalMp4VideoBytes(durationSeconds: 60));
         return path;
+    }
+
+    private static byte[] CreateFtypOnlyMp4Bytes()
+    {
+        return Concat(Box("ftyp", Ascii("isom"), Be32(1), Ascii("isom"), Ascii("mp42")), Box("free", new byte[64]));
+    }
+
+    private static byte[] CreateMinimalMp4VideoBytes(uint durationSeconds)
+    {
+        const uint timescale = 1_000;
+        uint duration = durationSeconds * timescale;
+        byte[] mvhd = Box(
+            "mvhd",
+            [0, 0, 0, 0],
+            Be32(0),
+            Be32(0),
+            Be32(timescale),
+            Be32(duration),
+            new byte[80]);
+        byte[] mdhd = Box(
+            "mdhd",
+            [0, 0, 0, 0],
+            Be32(0),
+            Be32(0),
+            Be32(timescale),
+            Be32(duration),
+            Be32(0));
+        byte[] hdlr = Box(
+            "hdlr",
+            [0, 0, 0, 0],
+            Be32(0),
+            Ascii("vide"),
+            Ascii("VideoHandler\0"));
+        byte[] mdia = Box("mdia", mdhd, hdlr);
+        byte[] trak = Box("trak", mdia);
+        byte[] moov = Box("moov", mvhd, trak);
+        byte[] ftyp = CreateFtypOnlyMp4Bytes();
+        byte[] mdat = Box("mdat", [0x00]);
+        return Concat(ftyp, moov, mdat);
+    }
+
+    private static byte[] Box(string type, params byte[][] payloads)
+    {
+        byte[] payload = Concat(payloads);
+        return Concat(Be32((uint)(payload.Length + 8)), Ascii(type), payload);
+    }
+
+    private static byte[] Be32(uint value)
+    {
+        return
+        [
+            (byte)(value >> 24),
+            (byte)(value >> 16),
+            (byte)(value >> 8),
+            (byte)value,
+        ];
+    }
+
+    private static byte[] Ascii(string value)
+    {
+        return System.Text.Encoding.ASCII.GetBytes(value);
+    }
+
+    private static byte[] Concat(params byte[][] arrays)
+    {
+        byte[] result = new byte[arrays.Sum(static array => array.Length)];
+        int offset = 0;
+        foreach (byte[] array in arrays)
+        {
+            Buffer.BlockCopy(array, 0, result, offset, array.Length);
+            offset += array.Length;
+        }
+
+        return result;
     }
 
     private static IReadOnlyList<string> GetDemoManualChecklist(string scope)
@@ -4757,6 +4880,20 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.NotNull(entry);
         string path = (string?)entry["path"] ?? throw new InvalidOperationException("evidence entry 缺少 path。");
         File.WriteAllText(path, content);
+        entry["sha256"] = GetSha256(path);
+        File.WriteAllText(manifestPath, manifest.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static void SetFlatEvidenceFileBytes(string manifestPath, string scope, byte[] content)
+    {
+        JsonObject manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
+        JsonArray evidence = manifest["evidence"]!.AsArray();
+        JsonObject? entry = evidence
+            .Select(node => node?.AsObject())
+            .FirstOrDefault(node => string.Equals((string?)node?["scope"], scope, StringComparison.Ordinal));
+        Assert.NotNull(entry);
+        string path = (string?)entry["path"] ?? throw new InvalidOperationException("evidence entry 缺少 path。");
+        File.WriteAllBytes(path, content);
         entry["sha256"] = GetSha256(path);
         File.WriteAllText(manifestPath, manifest.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
     }
