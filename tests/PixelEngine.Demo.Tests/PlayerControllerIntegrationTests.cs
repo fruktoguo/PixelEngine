@@ -705,6 +705,38 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证普通脚本化窗口短跑的第一下左键用于右侧山体坍塌验证，而不是旧的起点刷子输入。
+    /// </summary>
+    [Fact]
+    public void ScriptedPlayableDemoFirstLeftClickTargetsCollapseTerrain()
+    {
+        using Engine engine = CreateBaseEngine(out ScriptInputApi input, out _, out ScriptCameraApi camera);
+        DemoWindowScriptedInput scripted = new(input, camera);
+        scripted.RegisterPhases(engine.Phases);
+
+        int firstLeftClickFrame = -1;
+        Point2F firstLeftClickWorld = default;
+        for (int frame = 0; frame < 140; frame++)
+        {
+            _ = engine.RunOneTick(1.0 / 60.0);
+            if (!input.WasMousePressed(MouseButton.Left))
+            {
+                continue;
+            }
+
+            firstLeftClickFrame = frame;
+            (float mouseX, float mouseY) = input.MousePixel;
+            firstLeftClickWorld = camera.ScreenToWorld(mouseX, mouseY);
+            break;
+        }
+
+        Assert.Equal(124, firstLeftClickFrame);
+        Assert.Equal(scripted.PlayableCollapseTargetWorld.X, firstLeftClickWorld.X, precision: 3);
+        Assert.Equal(scripted.PlayableCollapseTargetWorld.Y, firstLeftClickWorld.Y, precision: 3);
+        Assert.NotEqual(scripted.BrushTargetWorld, scripted.PlayableCollapseTargetWorld);
+    }
+
+    /// <summary>
     /// 验证贴墙时跳跃输入会触发蹬墙，离开墙面并获得反向水平位移。
     /// </summary>
     [Fact]
