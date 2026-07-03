@@ -150,6 +150,74 @@ function Add-MarkdownEvidenceCheck {
     }
 }
 
+function Test-DeterministicHashRows {
+    param(
+        [System.Collections.Generic.List[string]]$Missing,
+        [string]$Root,
+        [string]$Path,
+        [array]$RequiredRids,
+        [array]$RequiredChannels
+    )
+
+    $resolved = Resolve-EvidencePath -Root $Root -Path $Path
+    if ([string]::IsNullOrWhiteSpace($resolved) -or -not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+        return
+    }
+
+    $seen = @{}
+    $rowCount = 0
+    foreach ($line in Get-Content -LiteralPath $resolved) {
+        if ($line -notmatch '^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]*?)\s*\|$') {
+            continue
+        }
+
+        $rid = $Matches[1].Trim()
+        $channel = $Matches[2].Trim()
+        $result = $Matches[3].Trim()
+        $detail = $Matches[4].Trim()
+        if ([string]::IsNullOrWhiteSpace($rid) -or
+            $rid -eq "RID" -or
+            $rid -match '^-+$') {
+            continue
+        }
+
+        $rowCount++
+        if ($rid -notin $RequiredRids) {
+            $Missing.Add("deterministic_hash 报告包含未知 RID 行：$rid")
+            continue
+        }
+
+        if ($channel -notin $RequiredChannels) {
+            $Missing.Add("deterministic_hash 报告包含未知 channel 行：$rid/$channel")
+            continue
+        }
+
+        $key = "$rid/$channel"
+        if ($seen.ContainsKey($key)) {
+            $Missing.Add("deterministic_hash 报告重复 $key 行")
+            continue
+        }
+
+        $seen[$key] = $true
+        if (-not [string]::Equals($result, "match", [StringComparison]::OrdinalIgnoreCase)) {
+            $Missing.Add("deterministic_hash 报告 $key result 必须为 match，实际为 $result：$detail")
+        }
+    }
+
+    if ($rowCount -eq 0) {
+        $Missing.Add("deterministic_hash 报告缺少 RID/channel/result 明细表")
+    }
+
+    foreach ($rid in $RequiredRids) {
+        foreach ($channel in $RequiredChannels) {
+            $key = "$rid/$channel"
+            if (-not $seen.ContainsKey($key)) {
+                $Missing.Add("deterministic_hash 报告缺少 $key match 行")
+            }
+        }
+    }
+}
+
 function Test-AotSimdEvidence {
     param(
         [System.Collections.Generic.List[string]]$Missing,
@@ -330,6 +398,7 @@ Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "githu
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "github_release_upload" -Path $githubReleaseUploadReport -ExpectedValues @{ conclusion = "success" }
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "deterministic_hash" -Path ([string]$manifest.deterministicHashReport) -DeclaredSha256 ([string]$manifest.deterministicHashSha256)
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "deterministic_hash" -Path ([string]$manifest.deterministicHashReport) -ExpectedValues @{ conclusion = "success" }
+Test-DeterministicHashRows -Missing $missing -Root $root -Path ([string]$manifest.deterministicHashReport) -RequiredRids $rids -RequiredChannels $channels
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "r2r_lightup" -Path ([string]$manifest.r2rLightupReport) -DeclaredSha256 ([string]$manifest.r2rLightupSha256)
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "r2r_lightup" -Path ([string]$manifest.r2rLightupReport) -ExpectedValues @{ conclusion = "success" }
 

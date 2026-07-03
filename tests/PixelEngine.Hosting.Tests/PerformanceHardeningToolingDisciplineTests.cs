@@ -3235,6 +3235,54 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 deterministic hash 报告不能只靠 conclusion=success 冒充全部 RID/channel hash 匹配。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsDeterministicHashRowMismatch()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-deterministic-row-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            string deterministicReport = (string)rootNode["deterministicHashReport"]!;
+            _ = WriteDeterministicHashEvidence(
+                deterministicReport,
+                conclusion: "success",
+                rids: ["win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64"],
+                channels: ["r2r", "aot"],
+                mismatchRid: "win-x64",
+                mismatchChannel: "r2r");
+            rootNode["deterministicHashSha256"] = GetSha256(deterministicReport);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "deterministic-row-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("deterministic_hash 报告 win-x64/r2r result 必须为 match", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 AOT arm64 SIMD probe 不能用 skip 报告冒充 NEON 证据。
     /// </summary>
     [Fact]
@@ -3442,9 +3490,6 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         string workflow = WriteMarkdownEvidence(Path.Combine(evidenceRoot, "workflow-run.md"), new Dictionary<string, string> { ["conclusion"] = "success" });
         string upload = WriteMarkdownEvidence(Path.Combine(evidenceRoot, "github-release-upload.md"), new Dictionary<string, string> { ["conclusion"] = githubReleaseConclusion });
-        string deterministic = WriteMarkdownEvidence(
-            Path.Combine(evidenceRoot, "deterministic-hash.md"),
-            new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["conclusion"] = deterministicConclusion });
         string r2rLightup = WriteMarkdownEvidence(
             Path.Combine(evidenceRoot, "r2r-lightup.md"),
             new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["conclusion"] = r2rLightupConclusion });
@@ -3452,6 +3497,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         string[] rids = ["win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64"];
         string[] channels = ["r2r", "aot"];
+        string deterministic = WriteDeterministicHashEvidence(
+            Path.Combine(evidenceRoot, "deterministic-hash.md"),
+            deterministicConclusion,
+            rids,
+            channels);
         Dictionary<string, object> artifacts = [];
         foreach (string rid in rids)
         {
@@ -3930,6 +3980,47 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         {
             lines.Add("");
             lines.Add(extra);
+        }
+
+        File.WriteAllLines(path, lines);
+        return path;
+    }
+
+    private static string WriteDeterministicHashEvidence(
+        string path,
+        string conclusion,
+        IReadOnlyList<string> rids,
+        IReadOnlyList<string> channels,
+        string mismatchRid = "",
+        string mismatchChannel = "")
+    {
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        List<string> lines =
+        [
+            "# Deterministic hash evidence",
+            "",
+            "| Key | Value |",
+            "|---|---|",
+            "| run_id | 1 |",
+            "| sha | abc |",
+            $"| conclusion | {conclusion} |",
+            "",
+            "## Package rebuild comparison",
+            "",
+            "| RID | Channel | Result | Detail |",
+            "|---|---|---|---|",
+        ];
+
+        foreach (string rid in rids)
+        {
+            foreach (string channel in channels)
+            {
+                bool mismatch = string.Equals(rid, mismatchRid, StringComparison.Ordinal) &&
+                    string.Equals(channel, mismatchChannel, StringComparison.Ordinal);
+                lines.Add(mismatch
+                    ? $"| {rid} | {channel} | mismatch | original=abc rebuilt=def |"
+                    : $"| {rid} | {channel} | match | abc |");
+            }
         }
 
         File.WriteAllLines(path, lines);
