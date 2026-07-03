@@ -313,6 +313,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
         Assert.Contains("schemaVersion 必须为 1", script, StringComparison.Ordinal);
         Assert.Contains("包含未知 scope", script, StringComparison.Ordinal);
+        Assert.Contains("conclusion 必须为 no_leaks", script, StringComparison.Ordinal);
+        Assert.Contains("scope 缺少 detector", script, StringComparison.Ordinal);
         Assert.Contains("sha256", script, StringComparison.Ordinal);
         Assert.Contains("Get-FileHash", script, StringComparison.Ordinal);
         Assert.Contains("sha256 不匹配", script, StringComparison.Ordinal);
@@ -513,6 +515,56 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string preflightReport = File.ReadAllText(Path.Combine(artifacts, "native-leak-preflight.md"));
             Assert.Contains("blocked_invalid_native_leak_evidence", result.Output + preflightReport, StringComparison.Ordinal);
             Assert.Contains("evidence manifest 包含未知 scope：d3d", preflightReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | detector_evidence_attached_pending_review", preflightReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 native leak 预检会拒绝缺少 no_leaks 结论的 detector 报告。
+    /// </summary>
+    [Fact]
+    public void NativeLeakPreflightRejectsDetectorReportWithoutNoLeaksConclusion()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-native-leak-bad-conclusion-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateNativeLeakEvidenceManifest(temp);
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject gl = rootNode["scopes"]!["gl"]!.AsObject();
+            string report = (string)gl["report"]!;
+            _ = WriteMarkdownEvidence(
+                report,
+                new Dictionary<string, string>
+                {
+                    ["scope"] = "gl",
+                    ["detector"] = "external-detector",
+                    ["conclusion"] = "leaks_detected",
+                });
+            gl["sha256"] = GetSha256(report);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "bad-conclusion-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "native-leak-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string preflightReport = File.ReadAllText(Path.Combine(artifacts, "native-leak-preflight.md"));
+            Assert.Contains("blocked_invalid_native_leak_evidence", result.Output + preflightReport, StringComparison.Ordinal);
+            Assert.Contains("evidence report gl conclusion 必须为 no_leaks，实际为 leaks_detected", preflightReport, StringComparison.Ordinal);
             Assert.DoesNotContain("status | detector_evidence_attached_pending_review", preflightReport, StringComparison.Ordinal);
         }
         finally
@@ -2417,7 +2469,14 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Dictionary<string, object> scopes = [];
         foreach (string scope in new[] { "gl", "openal", "box2d", "alc" })
         {
-            string report = WriteTextEvidence(Path.Combine(evidenceRoot, $"{scope}.md"), $"{scope} detector report");
+            string report = WriteMarkdownEvidence(
+                Path.Combine(evidenceRoot, $"{scope}.md"),
+                new Dictionary<string, string>
+                {
+                    ["scope"] = scope,
+                    ["detector"] = "external-detector",
+                    ["conclusion"] = "no_leaks",
+                });
             string hash = scope.Equals(corruptHashScope, StringComparison.Ordinal) ? new string('0', 64) : GetSha256(report);
             scopes[scope] = new Dictionary<string, object>
             {
