@@ -231,6 +231,12 @@ is_disallowed_runtime_root_file() {
   [[ "$name" =~ \.(dll|pdb|xml)$ || "$name" =~ \.deps\.json$ || "$name" =~ \.runtimeconfig\.json$ ]]
 }
 
+is_disallowed_player_package_file() {
+  local relative="$1"
+  local name="${relative##*/}"
+  [[ "$name" == *.pdb || "$name" == *.xml || "$name" == *.resources.dll ]]
+}
+
 contains_item() {
   local needle="$1"
   shift
@@ -313,6 +319,10 @@ assert_friendly_package_layout() {
     fi
 
     if (( ! is_directory )); then
+      if is_disallowed_player_package_file "$relative"; then
+        fail_audit "package 不应包含玩家无关的调试、文档或本地化卫星资源文件: $name -> $relative"
+      fi
+
       app_files+=("$relative")
     fi
   done < <(list_package_entries "$package")
@@ -408,6 +418,10 @@ assert_friendly_expanded_package_layout() {
     fi
 
     if [[ -f "$path" ]]; then
+      if is_disallowed_player_package_file "$relative"; then
+        fail_audit "展开 package 不应包含玩家无关的调试、文档或本地化卫星资源文件: $name -> $relative"
+      fi
+
       expanded_files+=("$relative")
     fi
   done < <(find "$directory" -mindepth 1 -print0 | sort -z)
