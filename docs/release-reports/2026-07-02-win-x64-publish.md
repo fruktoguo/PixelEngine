@@ -41,6 +41,8 @@ Package audit passed. Packages: 2.
 Release artifact audit completed.
 ```
 
+后续打包布局已调整为包根 `PixelEngine Demo.exe` + `content/` + `app/`：根目录 exe 是玩家入口，`.dll`、`.pdb`、`.xml`、`.deps.json`、`.runtimeconfig.json`、runtime/native 等依赖进入 `app/`，内容资产位于包根 `content/`。旧记录中的 hash 仅代表当时产物。
+
 ## 阻塞边界
 
 以下 `plan/15` 验收仍不能由本机结果闭合：6 RID R2R/AOT 全矩阵、每个 AOT 产物 SIMD 探针、R2R 在 AVX2/AVX-512 目标机的 runtime light-up、6 RID Box2D 12 件 native 产物、Linux glibc 动态链、macOS codesign/notarization/staple、所有产物的确定性 hash 与 GitHub Release 上传。

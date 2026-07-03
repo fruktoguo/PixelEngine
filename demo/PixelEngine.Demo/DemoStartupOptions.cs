@@ -76,7 +76,7 @@ public sealed class DemoStartupOptions
     /// <summary>
     /// 内容根目录。
     /// </summary>
-    public string ContentRoot { get; init; } = Path.Combine(AppContext.BaseDirectory, "content");
+    public string ContentRoot { get; init; } = ResolveDefaultContentRoot(AppContext.BaseDirectory);
 
     /// <summary>
     /// 要加载的场景名或场景路径。
@@ -112,7 +112,7 @@ public sealed class DemoStartupOptions
         bool particleFrameProbe = false;
         int particleProbeCount = 100_000;
         int particleProbeWarmupFrames = 5;
-        string contentRoot = Path.Combine(AppContext.BaseDirectory, "content");
+        string contentRoot = ResolveDefaultContentRoot(AppContext.BaseDirectory);
         string scene = Path.Combine("scenes", DefaultSceneName + ".scene");
         string logDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
         string captureFramePath = string.Empty;
@@ -269,6 +269,30 @@ public sealed class DemoStartupOptions
             "gpu" or "gpu-point-sprite" => PixelEngine.Rendering.ParticleRenderMode.GpuPointSprite,
             _ => throw new ArgumentException("--particle-render-mode 仅支持 cpu 或 gpu。", nameof(value)),
         };
+    }
+
+    /// <summary>
+    /// 解析默认 content 目录；发行包允许真实程序集位于 <c>app/</c>，内容目录位于包根。
+    /// </summary>
+    /// <param name="baseDirectory">运行时基准目录，通常为 <see cref="AppContext.BaseDirectory"/>。</param>
+    /// <returns>默认 content 目录。</returns>
+    public static string ResolveDefaultContentRoot(string baseDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
+        string fullBase = Path.GetFullPath(baseDirectory);
+        string localContent = Path.Combine(fullBase, "content");
+        DirectoryInfo? directory = new(fullBase);
+        if (string.Equals(directory.Name, "app", StringComparison.OrdinalIgnoreCase) &&
+            directory.Parent is not null)
+        {
+            string packageRootContent = Path.Combine(directory.Parent.FullName, "content");
+            if (Directory.Exists(packageRootContent))
+            {
+                return packageRootContent;
+            }
+        }
+
+        return localContent;
     }
 
     private static string ReadValue(string[] args, ref int index, string option)

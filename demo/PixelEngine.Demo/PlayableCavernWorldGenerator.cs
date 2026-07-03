@@ -84,7 +84,9 @@ public sealed class PlayableCavernWorldGenerator(string? materialMapPath = null)
             return Path.GetFullPath(materialMapPath);
         }
 
-        string outputContentPath = Path.Combine(AppContext.BaseDirectory, "content", DefaultMaterialMapRelativePath);
+        string outputContentPath = Path.Combine(
+            DemoStartupOptions.ResolveDefaultContentRoot(AppContext.BaseDirectory),
+            DefaultMaterialMapRelativePath);
         if (File.Exists(outputContentPath))
         {
             return outputContentPath;

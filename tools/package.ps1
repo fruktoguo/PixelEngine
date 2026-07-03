@@ -49,56 +49,98 @@ $packageName = "PixelEngine-Demo-$Version-$Rid-$Channel"
 $stagingRoot = Join-Path $OutputRoot 'staging'
 $stagingDir = Join-Path $stagingRoot $packageName
 $appDir = Join-Path $stagingDir 'app'
+$stagedContent = Join-Path $stagingDir 'content'
+
+function Set-AppHostRelativeAssemblyPath([string]$AppHostPath, [string]$RelativeAssemblyPath) {
+  $bytes = [IO.File]::ReadAllBytes($AppHostPath)
+  $old = [Text.Encoding]::UTF8.GetBytes('PixelEngine.Demo.dll')
+  $new = [Text.Encoding]::UTF8.GetBytes($RelativeAssemblyPath)
+  $index = -1
+  for ($i = 0; $i -le $bytes.Length - $old.Length; $i++) {
+    $matched = $true
+    for ($j = 0; $j -lt $old.Length; $j++) {
+      if ($bytes[$i + $j] -ne $old[$j]) {
+        $matched = $false
+        break
+      }
+    }
+
+    if ($matched) {
+      $index = $i
+      break
+    }
+  }
+
+  if ($index -lt 0) {
+    throw "无法在 apphost 中定位 PixelEngine.Demo.dll: $AppHostPath"
+  }
+
+  for ($j = $old.Length; $j -le $new.Length; $j++) {
+    if ($index + $j -ge $bytes.Length -or $bytes[$index + $j] -ne 0) {
+      throw "apphost 中没有足够的空白空间写入相对程序集路径: $RelativeAssemblyPath"
+    }
+  }
+
+  for ($j = 0; $j -lt $new.Length; $j++) {
+    $bytes[$index + $j] = $new[$j]
+  }
+
+  $bytes[$index + $new.Length] = 0
+  [IO.File]::WriteAllBytes($AppHostPath, $bytes)
+}
+
 New-Item -ItemType Directory -Force $OutputRoot | Out-Null
 Remove-Item -LiteralPath $stagingDir -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $appDir | Out-Null
 
 Get-ChildItem -LiteralPath $PublishDir -Force | ForEach-Object {
+  if ($_.Name -eq 'content') {
+    return
+  }
+
   Copy-Item -LiteralPath $_.FullName -Destination $appDir -Recurse -Force
 }
-$stagedContent = Join-Path $appDir 'content'
 Remove-Item -LiteralPath $stagedContent -Recurse -Force -ErrorAction SilentlyContinue
 Copy-Item -LiteralPath $ContentRoot -Destination $stagedContent -Recurse -Force
+
+if ($Rid.StartsWith('win-')) {
+  $rootEntry = Join-Path $stagingDir 'PixelEngine Demo.exe'
+  Copy-Item -LiteralPath (Join-Path $PublishDir 'PixelEngine.Demo.exe') -Destination $rootEntry -Force
+  if ($Channel -eq 'r2r') {
+    Set-AppHostRelativeAssemblyPath $rootEntry 'app\PixelEngine.Demo.dll'
+  }
+
+  Remove-Item -LiteralPath (Join-Path $appDir 'PixelEngine.Demo.exe') -Force -ErrorAction SilentlyContinue
+}
 
 $readme = @"
 PixelEngine Demo
 ================
 
 Start the game from this folder:
-  Windows: PixelEngine Demo.cmd
+  Windows: PixelEngine Demo.exe
   Linux/macOS: ./PixelEngine Demo.sh
 
-The actual runtime files are under app/. This keeps the package root readable.
-Advanced users can also run app/PixelEngine.Demo directly.
+Runtime dependencies are under app/. Game content is under content/.
 "@
 Set-Content -LiteralPath (Join-Path $stagingDir 'README.txt') -Value $readme -Encoding ASCII
 
-if ($Rid.StartsWith('win-')) {
-  $launcher = @"
-@echo off
-setlocal
-pushd "%~dp0app" >nul
-".\PixelEngine.Demo.exe" %*
-set "exitCode=%ERRORLEVEL%"
-popd >nul
-exit /b %exitCode%
-"@
-  Set-Content -LiteralPath (Join-Path $stagingDir 'PixelEngine Demo.cmd') -Value $launcher -Encoding ASCII
-} else {
+if (-not $Rid.StartsWith('win-')) {
   $launcher = @"
 #!/usr/bin/env sh
 set -eu
 script_dir=`$(CDPATH= cd -- "`$(dirname -- "`$0")" && pwd)
 cd "`$script_dir/app"
-exec ./PixelEngine.Demo "`$@"
+exec ./PixelEngine.Demo --content "`$script_dir/content" "`$@"
 "@
   Set-Content -LiteralPath (Join-Path $stagingDir 'PixelEngine Demo.sh') -Value $launcher -Encoding ASCII
 }
 
-$packageChecksumLines = Get-ChildItem -LiteralPath $appDir -Recurse -File |
+$packageChecksumLines = Get-ChildItem -LiteralPath $stagingDir -Recurse -File |
+  Where-Object { $_.Name -ne 'SHA256SUMS' } |
   Sort-Object FullName |
   ForEach-Object {
-    $relative = 'app/' + [IO.Path]::GetRelativePath($appDir, $_.FullName).Replace('\', '/')
+    $relative = [IO.Path]::GetRelativePath($stagingDir, $_.FullName).Replace('\', '/')
     $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     "$hash  $relative"
   }

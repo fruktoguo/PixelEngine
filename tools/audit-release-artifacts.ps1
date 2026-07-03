@@ -173,6 +173,7 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
   }
 
   $rid = $Matches['rid']
+  $channel = $Matches['channel']
   $rootName = $package.Name -replace '\.zip$', '' -replace '\.tar\.gz$', ''
   $relativeEntries = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
   $relativeFileEntries = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -209,22 +210,34 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
     }
   }
 
-  $launcher = if ($rid.StartsWith('win-')) { 'PixelEngine Demo.cmd' } else { 'PixelEngine Demo.sh' }
-  $entry = if ($rid.StartsWith('win-')) { 'app/PixelEngine.Demo.exe' } else { 'app/PixelEngine.Demo' }
-  foreach ($required in @('README.txt', 'SHA256SUMS', $launcher, $entry, 'app/content/materials.json', 'app/content/reactions.json', 'app/content/scenes/lava-mine.scene')) {
+  $launcher = if ($rid.StartsWith('win-')) { 'PixelEngine Demo.exe' } else { 'PixelEngine Demo.sh' }
+  $requiredEntries = [System.Collections.Generic.List[string]]::new()
+  foreach ($required in @('README.txt', 'SHA256SUMS', $launcher, 'content/materials.json', 'content/reactions.json', 'content/scenes/lava-mine.scene')) {
+    $requiredEntries.Add($required)
+  }
+
+  if ($channel -eq 'r2r') {
+    $requiredEntries.Add($(if ($rid.StartsWith('win-')) { 'app/PixelEngine.Demo.dll' } else { 'app/PixelEngine.Demo' }))
+  } elseif (-not $rid.StartsWith('win-')) {
+    $requiredEntries.Add('app/PixelEngine.Demo')
+  }
+
+  foreach ($required in $requiredEntries) {
     if (-not $relativeEntries.Contains($required)) {
-      throw "package 缺少玩家友好布局入口或 app 内容: $($package.Name) -> $required"
+      throw "package 缺少玩家友好布局入口、app 依赖或 content 内容: $($package.Name) -> $required"
     }
   }
 
   foreach ($relative in $relativeEntries) {
     if (-not $relative.StartsWith('app/', [StringComparison]::Ordinal) -and
+        -not $relative.StartsWith('content/', [StringComparison]::Ordinal) -and
         $relative -ne 'app' -and
+        $relative -ne 'content' -and
         $relative -ne 'README.txt' -and
         $relative -ne 'SHA256SUMS' -and
         $relative -ne $launcher -and
         $relative -notmatch '^(LICENSE|NOTICE)(\..+)?$') {
-      throw "package 根目录只允许 launcher/README/SHA256SUMS/许可文件与 app/: $($package.Name) -> $relative"
+      throw "package 根目录只允许启动入口/README/SHA256SUMS/许可文件与 app/content 目录: $($package.Name) -> $relative"
     }
 
     if (Test-DisallowedRuntimeRootFile $relative) {
@@ -251,12 +264,12 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
     }
 
     $checksumName = $Matches[2] -replace '^\./', ''
-    if (-not $checksumName.StartsWith('app/', [StringComparison]::Ordinal)) {
-      throw "package 内 SHA256SUMS 只能覆盖 app/ 文件: $($package.Name) -> $checksumName"
+    if ($checksumName -eq 'SHA256SUMS') {
+      throw "package 内 SHA256SUMS 不应覆盖自身: $($package.Name)"
     }
 
     if (-not $relativeFileEntries.Contains($checksumName)) {
-      throw "package 内 SHA256SUMS 指向不存在的 app 文件: $($package.Name) -> $checksumName"
+      throw "package 内 SHA256SUMS 指向不存在的文件: $($package.Name) -> $checksumName"
     }
 
     if (-not $declared.Add($checksumName)) {
@@ -265,8 +278,8 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
   }
 
   foreach ($relative in $relativeFileEntries) {
-    if ($relative.StartsWith('app/', [StringComparison]::Ordinal) -and -not $declared.Contains($relative)) {
-      throw "package 内 SHA256SUMS 未覆盖 app 文件: $($package.Name) -> $relative"
+    if ($relative -ne 'SHA256SUMS' -and -not $declared.Contains($relative)) {
+      throw "package 内 SHA256SUMS 未覆盖文件: $($package.Name) -> $relative"
     }
   }
 }

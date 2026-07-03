@@ -246,8 +246,10 @@ assert_friendly_package_layout() {
   local name
   name="$(basename "$package")"
   local rid=""
+  local channel=""
   if [[ "$name" =~ ^PixelEngine-Demo-.+-(win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64)-(r2r|aot)\.(zip|tar\.gz)$ ]]; then
     rid="${BASH_REMATCH[1]}"
+    channel="${BASH_REMATCH[2]}"
   else
     fail_audit "package 文件名不符合发行命名: $name"
   fi
@@ -259,10 +261,10 @@ assert_friendly_package_layout() {
   esac
 
   local launcher
-  local entry
+  local entry=""
   if [[ "$rid" == win-* ]]; then
-    launcher="PixelEngine Demo.cmd"
-    entry="app/PixelEngine.Demo.exe"
+    launcher="PixelEngine Demo.exe"
+    [[ "$channel" == "r2r" ]] && entry="app/PixelEngine.Demo.dll"
   else
     launcher="PixelEngine Demo.sh"
     entry="app/PixelEngine.Demo"
@@ -297,30 +299,30 @@ assert_friendly_package_layout() {
       SHA256SUMS) ;;
       "$launcher") has_launcher=1 ;;
       "$entry") has_entry=1 ;;
-      app/content/materials.json) has_materials=1 ;;
-      app/content/reactions.json) has_reactions=1 ;;
-      app/content/scenes/lava-mine.scene) has_scene=1 ;;
+      content/materials.json) has_materials=1 ;;
+      content/reactions.json) has_reactions=1 ;;
+      content/scenes/lava-mine.scene) has_scene=1 ;;
     esac
 
-    if [[ "$relative" != app/* && "$relative" != app && "$relative" != "README.txt" && "$relative" != "SHA256SUMS" && "$relative" != "$launcher" && ! "$relative" =~ ^(LICENSE|NOTICE)(\..+)?$ ]]; then
-      fail_audit "package 根目录只允许 launcher/README/SHA256SUMS/许可文件与 app/: $name -> $relative"
+    if [[ "$relative" != app/* && "$relative" != content/* && "$relative" != app && "$relative" != content && "$relative" != "README.txt" && "$relative" != "SHA256SUMS" && "$relative" != "$launcher" && ! "$relative" =~ ^(LICENSE|NOTICE)(\..+)?$ ]]; then
+      fail_audit "package 根目录只允许启动入口/README/SHA256SUMS/许可文件与 app/content 目录: $name -> $relative"
     fi
 
     if is_disallowed_runtime_root_file "$relative" && [[ "$relative" != app/* ]]; then
       fail_audit "package 根目录不应包含运行时依赖，请放入 app/: $name -> $relative"
     fi
 
-    if (( ! is_directory )) && [[ "$relative" == app/* ]]; then
+    if (( ! is_directory )); then
       app_files+=("$relative")
     fi
   done < <(list_package_entries "$package")
 
   (( has_readme )) || fail_audit "package 缺少 README.txt: $name"
   (( has_launcher )) || fail_audit "package 缺少 launcher: $name -> $launcher"
-  (( has_entry )) || fail_audit "package 缺少 app 入口: $name -> $entry"
-  (( has_materials )) || fail_audit "package 缺少 app/content/materials.json: $name"
-  (( has_reactions )) || fail_audit "package 缺少 app/content/reactions.json: $name"
-  (( has_scene )) || fail_audit "package 缺少 app/content/scenes/lava-mine.scene: $name"
+  [[ -z "$entry" || "$has_entry" -eq 1 ]] || fail_audit "package 缺少 app 依赖入口: $name -> $entry"
+  (( has_materials )) || fail_audit "package 缺少 content/materials.json: $name"
+  (( has_reactions )) || fail_audit "package 缺少 content/reactions.json: $name"
+  (( has_scene )) || fail_audit "package 缺少 content/scenes/lava-mine.scene: $name"
 
   declare -A declared_app_files=()
   local checksum_entry="$root_name/SHA256SUMS"
@@ -336,8 +338,8 @@ assert_friendly_package_layout() {
 
     local checksum_name="${BASH_REMATCH[2]}"
     checksum_name="${checksum_name#./}"
-    [[ "$checksum_name" == app/* ]] || fail_audit "package 内 SHA256SUMS 只能覆盖 app/ 文件: $name -> $checksum_name"
-    contains_item "$checksum_name" "${app_files[@]}" || fail_audit "package 内 SHA256SUMS 指向不存在的 app 文件: $name -> $checksum_name"
+    [[ "$checksum_name" != "SHA256SUMS" ]] || fail_audit "package 内 SHA256SUMS 不应覆盖自身: $name"
+    contains_item "$checksum_name" "${app_files[@]}" || fail_audit "package 内 SHA256SUMS 指向不存在的文件: $name -> $checksum_name"
     [[ -z "${declared_app_files[$checksum_name]+x}" ]] || fail_audit "package 内 SHA256SUMS 重复条目: $name -> $checksum_name"
     declared_app_files["$checksum_name"]=1
   done < <(read_package_text_entry "$package" "$checksum_entry")
@@ -345,7 +347,8 @@ assert_friendly_package_layout() {
   (( checksum_read )) || fail_audit "package 内 SHA256SUMS 为空或不可读: $name"
   local app_file
   for app_file in "${app_files[@]}"; do
-    [[ -n "${declared_app_files[$app_file]+x}" ]] || fail_audit "package 内 SHA256SUMS 未覆盖 app 文件: $name -> $app_file"
+    [[ "$app_file" == "SHA256SUMS" ]] && continue
+    [[ -n "${declared_app_files[$app_file]+x}" ]] || fail_audit "package 内 SHA256SUMS 未覆盖文件: $name -> $app_file"
   done
 }
 

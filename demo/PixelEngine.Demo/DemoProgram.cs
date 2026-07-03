@@ -48,6 +48,7 @@ public static class DemoProgram
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(SparkEmitter))]
     public static int Execute(string[] args)
     {
+        ConfigurePackagedNativeSearchPath();
         DemoStartupOptions? options = null;
         try
         {
@@ -61,6 +62,27 @@ public static class DemoProgram
             Console.Error.WriteLine($"Demo 启动失败，异常已写入：{path}");
             return 1;
         }
+    }
+
+    private static void ConfigurePackagedNativeSearchPath()
+    {
+        string dependencyDirectory = Path.Combine(AppContext.BaseDirectory, "app");
+        if (!Directory.Exists(dependencyDirectory) || !RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return;
+        }
+
+        string current = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        if (current.Split(Path.PathSeparator).Any(path =>
+                string.Equals(
+                    Path.GetFullPath(string.IsNullOrWhiteSpace(path) ? "." : path),
+                    dependencyDirectory,
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        Environment.SetEnvironmentVariable("PATH", dependencyDirectory + Path.PathSeparator + current);
     }
 
     /// <summary>
