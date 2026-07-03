@@ -1158,6 +1158,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("benchmarkGuard", script, StringComparison.Ordinal);
         Assert.Contains("buildTest", script, StringComparison.Ordinal);
         Assert.Contains("verifyPublish", script, StringComparison.Ordinal);
+        Assert.Contains("缺少 testsRan 字段", script, StringComparison.Ordinal);
         Assert.Contains("testsRan=true", script, StringComparison.Ordinal);
         Assert.Contains("win-arm64 当前 CI 设计应为 build-only", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_ci_manifest", script, StringComparison.Ordinal);
@@ -1356,6 +1357,47 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Contains("status: blocked_missing_ci_scope_evidence", result.Output + report, StringComparison.Ordinal);
             Assert.Contains("buildTest.win-arm64 当前 CI 设计应为 build-only，不能伪装成真实 arm64 测试", report, StringComparison.Ordinal);
             Assert.Contains("build_test/win-arm64/report 报告 tests_ran 必须为 true，实际为 false", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: ci_matrix_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 CI evidence 预检要求每个 buildTest RID 显式声明 testsRan 字段。
+    /// </summary>
+    [Fact]
+    public void CiMatrixEvidencePreflightRequiresExplicitTestsRanField()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ci-tests-ran-required-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateCiEvidenceManifest(temp, benchmarkConclusion: "success");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject buildTest = rootNode["buildTest"]!.AsObject();
+            _ = buildTest["win-arm64"]!.AsObject().Remove("testsRan");
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "missing-tests-ran-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "ci-matrix-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "ci-matrix-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_ci_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("buildTest.win-arm64 缺少 testsRan 字段", report, StringComparison.Ordinal);
             Assert.DoesNotContain("status: ci_matrix_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
