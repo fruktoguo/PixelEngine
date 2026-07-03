@@ -119,6 +119,15 @@ public sealed unsafe class PhysicsWorld
     }
 
     /// <summary>
+    /// 清空托管刚体表。仅在 owning PhysicsSystem 已销毁 Box2D world 后调用，避免保留过期 native body 句柄。
+    /// </summary>
+    public void Clear()
+    {
+        _bodies.Clear();
+        _freeKeys.Clear();
+    }
+
+    /// <summary>
     /// 移除刚体 key。
     /// </summary>
     public void RemoveBody(int bodyKey)

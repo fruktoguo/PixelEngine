@@ -36,6 +36,11 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
     public int ColliderChunkCount => _colliders.Count;
 
     /// <summary>
+    /// 当前由地形 collider 持有的 Box2D static body 数。
+    /// </summary>
+    public int LiveBodyCount => _colliders.Count;
+
+    /// <summary>
     /// 最近一次 Update 新建或重建的 chunk collider 数。
     /// </summary>
     public int LastRebuiltChunkCount { get; private set; }

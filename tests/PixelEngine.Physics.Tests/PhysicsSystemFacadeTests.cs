@@ -41,6 +41,42 @@ public sealed class PhysicsSystemFacadeTests
     }
 
     /// <summary>
+    /// 验证 owned PhysicsSystem 暴露 Box2D body live-count，供 native leak detector 在 shutdown 后采集归零证据。
+    /// </summary>
+    [Fact]
+    public void OwnedWorldLiveBodyCountReturnsZeroAfterDestroyAndShutdown()
+    {
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        TestChunkSource source = new(chunk);
+        CellGrid grid = new(source, MaterialPropsTable.Empty);
+        using JobSystem jobs = new(workerCount: 1);
+        B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
+        worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
+        PhysicsSystem system = PhysicsSystem.Initialize(grid, jobs, worldDef: worldDef);
+
+        FillSolidRegion(grid, x: 8, y: 8, width: 8, height: 8, material: 2);
+        int firstBody = system.CreateBodyFromRegion(8, 8, 8, 8);
+
+        Assert.Equal(1, system.LiveBodyCount);
+
+        FillSolidRegion(grid, x: 40, y: 40, width: 8, height: 8, material: 3);
+        system.UpdateStaticTerrainColliders(source);
+        Assert.Equal(2, system.LiveBodyCount);
+
+        Assert.True(system.DestroyBody(firstBody));
+        Assert.Equal(1, system.LiveBodyCount);
+
+        FillSolidRegion(grid, x: 24, y: 8, width: 8, height: 8, material: 2);
+        _ = system.CreateBodyFromRegion(24, 8, 8, 8);
+        Assert.Equal(2, system.LiveBodyCount);
+
+        system.Shutdown();
+
+        Assert.Equal(0, system.LiveBodyCount);
+        Assert.Equal(0, system.PhysicsWorld.ActiveBodyCount);
+    }
+
+    /// <summary>
     /// 验证 PhysicsSystem 公开调参会修改 Box2D 重力、默认 sub-step 与碎片阈值。
     /// </summary>
     [Fact]
@@ -261,6 +297,19 @@ public sealed class PhysicsSystemFacadeTests
         ];
         pieces[0] = ConvexPolygon.From(vertices);
         return ShapeBuilder.BuildBody(worldId, pieces, bodyPositionPixels, density: 1f);
+    }
+
+    private static void FillSolidRegion(CellGrid grid, int x, int y, int width, int height, ushort material)
+    {
+        for (int py = y; py < y + height; py++)
+        {
+            for (int px = x; px < x + width; px++)
+            {
+                grid.MaterialAt(px, py) = material;
+                grid.FlagsAt(px, py) = 0;
+                grid.MarkDirty(px, py);
+            }
+        }
     }
 
     private static void QueueVerticalCutDamage(CellGrid grid, RigidDamageQueue damageQueue, int x, int minY, int maxY)
