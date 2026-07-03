@@ -1495,6 +1495,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("hudMenuEditorVideo", script, StringComparison.Ordinal);
         Assert.Contains("hotReloadWindowReport", script, StringComparison.Ordinal);
         Assert.Contains("minDurationSeconds", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-VideoContainerHeader", script, StringComparison.Ordinal);
+        Assert.Contains("ftyp", script, StringComparison.Ordinal);
+        Assert.Contains("EBML", script, StringComparison.Ordinal);
         string[] manualChecklistKeys =
         [
             "runJumpWallKick",
@@ -1790,6 +1793,59 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Contains("status: blocked_invalid_manual_evidence", badCriteria.Output + badCriteriaReport, StringComparison.Ordinal);
             Assert.Contains("hudMenuEditorVideo criteria.menuButtonsClicked 至少需要 20 个字符", badCriteriaReport, StringComparison.Ordinal);
             Assert.DoesNotContain("status: manual_evidence_attached_pending_review", badCriteriaReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 Demo 人工验收 video evidence 会拒绝文本文件改名成 .mp4。
+    /// </summary>
+    [Fact]
+    public void DemoManualAcceptancePreflightRejectsRenamedTextAsVideoEvidence()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-text-video-" + Guid.NewGuid().ToString("N"));
+
+        string[] manualScopes =
+        [
+            "controlFeelReport",
+            "materialBrushAndReactionVideo",
+            "rigidBodyGameplayVideo",
+            "particleLightingVideo",
+            "audioListeningReport",
+            "fullRoutePlaythroughVideo",
+            "hudMenuEditorVideo",
+            "hotReloadWindowReport",
+        ];
+
+        try
+        {
+            string manifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "text-video", includeDemoManualMetadata: true);
+            SetFlatEvidenceFileContent(
+                manifest,
+                "materialBrushAndReactionVideo",
+                "this is plain text renamed to mp4");
+
+            string artifacts = Path.Combine(temp, "text-video-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "demo-manual-acceptance-preflight.md"));
+            Assert.Contains("status: blocked_invalid_manual_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("materialBrushAndReactionVideo video 文件头必须包含 MP4/MOV ftyp box", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: manual_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
         {
@@ -4307,7 +4363,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string safeScope = scope.Replace('/', '-');
             bool isVideo = includeDemoManualMetadata && scope.EndsWith("Video", StringComparison.Ordinal);
             string extension = isVideo ? ".mp4" : ".md";
-            string report = WriteTextEvidence(Path.Combine(evidenceRoot, $"{safeScope}{extension}"), $"{scope} evidence");
+            string report = isVideo
+                ? WriteTinyMp4Evidence(Path.Combine(evidenceRoot, $"{safeScope}{extension}"))
+                : WriteTextEvidence(Path.Combine(evidenceRoot, $"{safeScope}{extension}"), $"{scope} evidence");
             Dictionary<string, object> entry = new()
             {
                 ["scope"] = scope,
@@ -4347,6 +4405,22 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             manifestPath,
             System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         return manifestPath;
+    }
+
+    private static string WriteTinyMp4Evidence(string path)
+    {
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(
+            path,
+            [
+                0x00, 0x00, 0x00, 0x18,
+                (byte)'f', (byte)'t', (byte)'y', (byte)'p',
+                (byte)'i', (byte)'s', (byte)'o', (byte)'m',
+                0x00, 0x00, 0x00, 0x01,
+                (byte)'i', (byte)'s', (byte)'o', (byte)'m',
+                (byte)'m', (byte)'p', (byte)'4', (byte)'2',
+            ]);
+        return path;
     }
 
     private static IReadOnlyList<string> GetDemoManualChecklist(string scope)
