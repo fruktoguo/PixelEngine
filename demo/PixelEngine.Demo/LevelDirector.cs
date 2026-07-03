@@ -213,14 +213,15 @@ public sealed class LevelDirector : Behaviour
         _ = explosive;
 
         PlayableProjectileTool projectile = playerEntity.AddComponent<PlayableProjectileTool>();
-        projectile.ImpactRadius = 5;
-        projectile.ImpactForce = 12f;
-        projectile.CollapseScanRadius = 72;
-        projectile.FallbackOverhangRadius = 24;
-        projectile.MaxCollapseRegionSize = 48;
-        projectile.MaxCollapsePixels = 160;
+        projectile.ImpactRadius = 3;
+        projectile.ImpactForce = 9f;
+        projectile.CollapseScanRadius = 36;
+        projectile.CollapseScanRetryFrames = 2;
+        projectile.FallbackOverhangRadius = 18;
+        projectile.MaxCollapseRegionSize = 28;
+        projectile.MaxCollapsePixels = 72;
         projectile.MaxCollapsedIslandsPerShot = 1;
-        projectile.PlayerSupportProtectionRadius = 48;
+        projectile.PlayerSupportProtectionRadius = 72;
 
         GoalTrigger goal = playerEntity.AddComponent<GoalTrigger>();
         goal.X = GoalX;
