@@ -2,6 +2,8 @@
   <PropertyGroup>
     <IsHotPath>true</IsHotPath>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <EnableComputeSharpBackend>false</EnableComputeSharpBackend>
+    <DefineConstants Condition="'$(EnableComputeSharpBackend)' == 'true'">$(DefineConstants);PIXELENGINE_COMPUTESHARP</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,5 +17,6 @@
     <PackageReference Include="Silk.NET.Windowing" />
     <PackageReference Include="Silk.NET.Input" />
     <PackageReference Include="Silk.NET.OpenGL" />
+    <PackageReference Include="ComputeSharp" Condition="'$(EnableComputeSharpBackend)' == 'true'" />
   </ItemGroup>
 </Project>
