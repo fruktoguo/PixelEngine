@@ -46,12 +46,207 @@ function Get-FileSha256 {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
-function Assert-ComparisonReport {
+function Read-MachineReadableFields {
     param([string]$Path)
+
+    $fields = @{}
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        $trimmed = $line.Trim()
+        if ([string]::IsNullOrWhiteSpace($trimmed)) {
+            continue
+        }
+
+        if ($trimmed -match '^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|?$') {
+            $key = $Matches[1].Trim()
+            $value = $Matches[2].Trim()
+            if ($key -notin @("Key", "---", "metric", "scope") -and -not $key.StartsWith("---", [StringComparison]::Ordinal)) {
+                $fields[$key] = $value
+            }
+
+            continue
+        }
+
+        if ($trimmed -match '^([A-Za-z][A-Za-z0-9_.-]*)\s*[:=]\s*(.+?)\s*$') {
+            $fields[$Matches[1].Trim()] = $Matches[2].Trim()
+        }
+    }
+
+    return $fields
+}
+
+function Get-RequiredField {
+    param(
+        [System.Collections.IDictionary]$Fields,
+        [string]$Name,
+        [string]$Scope
+    )
+
+    if (-not $Fields.Contains($Name) -or [string]::IsNullOrWhiteSpace([string]$Fields[$Name])) {
+        throw "$Scope 缺少机器可读字段 $Name。"
+    }
+
+    return [string]$Fields[$Name]
+}
+
+function Get-RequiredFieldDouble {
+    param(
+        [System.Collections.IDictionary]$Fields,
+        [string]$Name,
+        [string]$Scope
+    )
+
+    $value = Get-RequiredField -Fields $Fields -Name $Name -Scope $Scope
+    return [double]::Parse($value, [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Get-RequiredFieldInt {
+    param(
+        [System.Collections.IDictionary]$Fields,
+        [string]$Name,
+        [string]$Scope
+    )
+
+    $value = Get-RequiredField -Fields $Fields -Name $Name -Scope $Scope
+    return [int]::Parse($value, [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Assert-TargetHardwareReport {
+    param([string]$Path)
+
+    $fields = Read-MachineReadableFields -Path $Path
+    foreach ($required in @("targetGpuName", "targetGpuDriver", "gpuBackend", "operatingSystem", "cpuName", "dotnetVersion", "gitCommit")) {
+        [void](Get-RequiredField -Fields $fields -Name $required -Scope "targetHardwareReport")
+    }
+
+    return $fields
+}
+
+function Assert-ComparisonReport {
+    param(
+        [string]$Path,
+        [System.Collections.IDictionary]$CpuMetrics,
+        [System.Collections.IDictionary]$GpuMetrics
+    )
 
     $content = Get-Content -LiteralPath $Path -Raw
     if ($content -notmatch '(?im)^\s*gpuFasterThanCpu\s*[:=]\s*true\s*$') {
         throw "comparisonReport 必须包含机器可读字段 gpuFasterThanCpu: true，证明目标 GPU 高密度粒子总帧时间优于 CPU stamp。"
+    }
+
+    $fields = Read-MachineReadableFields -Path $Path
+    $cpuWall = Get-RequiredFieldDouble -Fields $fields -Name "cpuWallAvgMs" -Scope "comparisonReport"
+    $gpuWall = Get-RequiredFieldDouble -Fields $fields -Name "gpuWallAvgMs" -Scope "comparisonReport"
+    $speedupRatio = Get-RequiredFieldDouble -Fields $fields -Name "speedupRatio" -Scope "comparisonReport"
+    $measuredFrames = Get-RequiredFieldInt -Fields $fields -Name "measuredFrames" -Scope "comparisonReport"
+    $sampleSeconds = Get-RequiredFieldDouble -Fields $fields -Name "sampleSeconds" -Scope "comparisonReport"
+
+    if ($cpuWall -le $gpuWall) {
+        throw "comparisonReport cpuWallAvgMs 必须大于 gpuWallAvgMs，实际 cpu=$cpuWall gpu=$gpuWall。"
+    }
+
+    if ($speedupRatio -le 1.0) {
+        throw "comparisonReport speedupRatio 必须大于 1。"
+    }
+
+    if ($measuredFrames -lt 300) {
+        throw "comparisonReport measuredFrames 必须至少为 300。"
+    }
+
+    if ($sampleSeconds -lt 10.0) {
+        throw "comparisonReport sampleSeconds 必须至少为 10 秒。"
+    }
+
+    $cpuProbeFrames = Get-MetricInt -Metrics $CpuMetrics -Name "measured_frames"
+    $gpuProbeFrames = Get-MetricInt -Metrics $GpuMetrics -Name "measured_frames"
+    if ($measuredFrames -gt $cpuProbeFrames -or $measuredFrames -gt $gpuProbeFrames) {
+        throw "comparisonReport measuredFrames 不能大于 cpu/gpu probe 报告的 measured_frames。"
+    }
+}
+
+function Get-ParticleProbeSummaryFromReport {
+    param(
+        [string]$Path,
+        [string]$Scope
+    )
+
+    $summary = (Get-Content -LiteralPath $Path | Where-Object { $_.TrimStart().StartsWith("particle_frame_probe", [StringComparison]::Ordinal) } | Select-Object -Last 1)
+    if ([string]::IsNullOrWhiteSpace($summary)) {
+        throw "$Scope 必须包含 particle_frame_probe summary。"
+    }
+
+    return $summary
+}
+
+function Assert-TargetProbeReport {
+    param(
+        [string]$Path,
+        [string]$ExpectedMode
+    )
+
+    $scopeName = "${ExpectedMode}ProbeReport"
+    $summary = Get-ParticleProbeSummaryFromReport -Path $Path -Scope $scopeName
+    $metrics = Convert-ParticleProbeSummaryToMetrics -SummaryLine $summary
+    foreach ($required in @("mode", "gpu_available", "requested_count", "active_count", "measured_frames", "wall_avg_ms", "particle_stamp_avg_ms", "gpu_particle_avg_ms")) {
+        if (-not $metrics.Contains($required)) {
+            throw "$scopeName 摘要缺少字段 $required。"
+        }
+    }
+
+    $actualMode = [string]$metrics["mode"]
+    if (-not [string]::Equals($actualMode, $ExpectedMode, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "$scopeName 实际 mode=$actualMode。"
+    }
+
+    $requested = Get-MetricInt -Metrics $metrics -Name "requested_count"
+    $active = Get-MetricInt -Metrics $metrics -Name "active_count"
+    $measured = Get-MetricInt -Metrics $metrics -Name "measured_frames"
+    if ($requested -lt 100000 -or $active -lt 100000) {
+        throw "$scopeName requested_count/active_count 必须至少为 100000。"
+    }
+
+    if ($requested -ne $active) {
+        throw "$scopeName requested_count 必须等于 active_count。"
+    }
+
+    if ($measured -lt 300) {
+        throw "$scopeName measured_frames 必须至少为 300。"
+    }
+
+    $cpuStampAvg = Get-MetricDouble -Metrics $metrics -Name "particle_stamp_avg_ms"
+    $gpuParticleAvg = Get-MetricDouble -Metrics $metrics -Name "gpu_particle_avg_ms"
+    if ($ExpectedMode -eq "cpu") {
+        if ($cpuStampAvg -le 0 -or $gpuParticleAvg -ne 0) {
+            throw "cpuProbeReport 必须走 CPU stamp：particle_stamp_avg_ms>0 且 gpu_particle_avg_ms=0。"
+        }
+    }
+    else {
+        $gpuAvailable = Get-MetricBool -Metrics $metrics -Name "gpu_available"
+        if (-not $gpuAvailable -or $gpuParticleAvg -le 0 -or $cpuStampAvg -ne 0) {
+            throw "gpuProbeReport 必须走 GPU point-sprite：gpu_available=True、gpu_particle_avg_ms>0 且 particle_stamp_avg_ms=0。"
+        }
+    }
+
+    return $metrics
+}
+
+function Assert-TargetProbePair {
+    param(
+        [System.Collections.IDictionary]$CpuMetrics,
+        [System.Collections.IDictionary]$GpuMetrics,
+        [System.Collections.IDictionary]$HardwareFields
+    )
+
+    $cpuRequested = Get-MetricInt -Metrics $CpuMetrics -Name "requested_count"
+    $gpuRequested = Get-MetricInt -Metrics $GpuMetrics -Name "requested_count"
+    if ($cpuRequested -ne $gpuRequested) {
+        throw "cpuProbeReport 与 gpuProbeReport requested_count 必须一致。"
+    }
+
+    if ($HardwareFields.Contains("particleCount")) {
+        $hardwareParticleCount = [int]::Parse([string]$HardwareFields["particleCount"], [Globalization.CultureInfo]::InvariantCulture)
+        if ($hardwareParticleCount -ne $cpuRequested) {
+            throw "targetHardwareReport particleCount 必须与 probe requested_count 一致。"
+        }
     }
 }
 
@@ -436,6 +631,7 @@ function Read-EvidenceManifest {
     }
 
     $evidence = [System.Collections.Generic.List[object]]::new()
+    $resolvedPaths = @{}
     foreach ($scope in $requiredScopes) {
         $entry = $scopes[$scope]
         if ([string]::IsNullOrWhiteSpace([string]$entry.path)) {
@@ -463,9 +659,7 @@ function Read-EvidenceManifest {
             throw "evidence scope $scope sha256 不匹配：expected=$expectedHash actual=$actualHash"
         }
 
-        if ($scope -eq "comparisonReport") {
-            Assert-ComparisonReport -Path $path
-        }
+        $resolvedPaths[$scope] = $path
 
         $evidence.Add([pscustomobject]@{
             scope = $scope
@@ -473,6 +667,12 @@ function Read-EvidenceManifest {
             sha256 = $actualHash
         })
     }
+
+    $hardwareFields = Assert-TargetHardwareReport -Path $resolvedPaths["targetHardwareReport"]
+    $cpuMetrics = Assert-TargetProbeReport -Path $resolvedPaths["cpuProbeReport"] -ExpectedMode "cpu"
+    $gpuMetrics = Assert-TargetProbeReport -Path $resolvedPaths["gpuProbeReport"] -ExpectedMode "gpu"
+    Assert-TargetProbePair -CpuMetrics $cpuMetrics -GpuMetrics $gpuMetrics -HardwareFields $hardwareFields
+    Assert-ComparisonReport -Path $resolvedPaths["comparisonReport"] -CpuMetrics $cpuMetrics -GpuMetrics $gpuMetrics
 
     [pscustomobject]@{
         status = "target_gpu_evidence_attached_pending_review"
