@@ -28,8 +28,14 @@ public readonly record struct GpuCapabilities
         bool isWindows,
         bool isDx12Available,
         bool isComputeSharpCompiled,
-        bool hasComputeSharpResourceContract = false)
+        bool hasComputeSharpResourceContract = false,
+        GpuResourceContractKind computeSharpResourceContractKind = GpuResourceContractKind.OpenGlTextureNames)
     {
+        if (hasComputeSharpResourceContract && computeSharpResourceContractKind == GpuResourceContractKind.OpenGlTextureNames)
+        {
+            throw new ArgumentException("ComputeSharp 资源契约不能声明为 OpenGL texture name。", nameof(computeSharpResourceContractKind));
+        }
+
         GlMajorVersion = glMajorVersion;
         GlMinorVersion = glMinorVersion;
         IsGles = isGles;
@@ -47,6 +53,7 @@ public readonly record struct GpuCapabilities
         IsDx12Available = isDx12Available;
         IsComputeSharpCompiled = isComputeSharpCompiled;
         HasComputeSharpResourceContract = hasComputeSharpResourceContract;
+        ComputeSharpResourceContractKind = computeSharpResourceContractKind;
     }
 
     /// <summary>GL 主版本号。</summary>
@@ -101,6 +108,11 @@ public readonly record struct GpuCapabilities
     /// 是否已落地 D3D-only 或 GL-DX12 shared resource/fence 契约。未满足时 ComputeSharp 不得消费 GL texture name。
     /// </summary>
     public bool HasComputeSharpResourceContract { get; init; }
+
+    /// <summary>
+    /// ComputeSharp 可消费资源契约的类型；无契约时保持 <see cref="GpuResourceContractKind.OpenGlTextureNames"/>。
+    /// </summary>
+    public GpuResourceContractKind ComputeSharpResourceContractKind { get; init; }
 
     /// <summary>
     /// 从 plan/08 的 GL 能力快照构造 compute 能力。无 GL 上下文的测试可直接构造本类型。

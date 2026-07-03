@@ -156,7 +156,12 @@ public sealed class ComputeCapabilityGateTests
             isDx12Available: true,
             isComputeSharpCompiled: false);
         GpuCapabilities compiledWithoutContract = notCompiled with { IsComputeSharpCompiled = true };
-        GpuCapabilities compiledWithContract = compiledWithoutContract with { HasComputeSharpResourceContract = true };
+        GpuCapabilities compiledWithContract = compiledWithoutContract with
+        {
+            HasComputeSharpResourceContract = true,
+            ComputeSharpResourceContractKind = GpuResourceContractKind.D3D12RenderGraph,
+        };
+        GpuCapabilities forgedOpenGlContract = compiledWithoutContract with { HasComputeSharpResourceContract = true };
 
         ComputeCapabilityGate disabledGate = ComputeCapabilityGate.Evaluate(
             notCompiled,
@@ -170,6 +175,10 @@ public sealed class ComputeCapabilityGateTests
             compiledWithContract,
             ComputeFeatureSwitches.Default,
             preferComputeSharp: true);
+        ComputeCapabilityGate forgedOpenGlGate = ComputeCapabilityGate.Evaluate(
+            forgedOpenGlContract,
+            ComputeFeatureSwitches.Default,
+            preferComputeSharp: true);
 
         Assert.False(disabledGate.ComputeSharpAvailable);
         Assert.Equal(ComputeBackendKind.GlCompute, disabledGate.SelectedBackend);
@@ -177,6 +186,8 @@ public sealed class ComputeCapabilityGateTests
         Assert.Equal(ComputeBackendKind.GlCompute, noContractGate.SelectedBackend);
         Assert.False(contractButStubGate.ComputeSharpAvailable);
         Assert.Equal(ComputeBackendKind.GlCompute, contractButStubGate.SelectedBackend);
+        Assert.False(forgedOpenGlGate.ComputeSharpAvailable);
+        Assert.Equal(ComputeBackendKind.GlCompute, forgedOpenGlGate.SelectedBackend);
     }
 
     [Fact]
@@ -215,6 +226,16 @@ public sealed class ComputeCapabilityGateTests
     [Fact]
     public void ComputeSharpResourceContractRequiresD3DOrSharedResourcesAndFence()
     {
+        _ = Assert.Throws<ArgumentException>(
+            () => CreateCapabilities(
+                glMajor: 4,
+                glMinor: 3,
+                hasCompute: true,
+                hasSsbo: true,
+                hasImageLoadStore: true,
+                hasComputeSharpResourceContract: true,
+                computeSharpResourceContractKind: GpuResourceContractKind.OpenGlTextureNames));
+
         ArgumentException openGl = Assert.Throws<ArgumentException>(
             () => ComputeSharpResourceContract.Create(
                 GpuResourceContractKind.OpenGlTextureNames,
@@ -415,7 +436,8 @@ public sealed class ComputeCapabilityGateTests
         bool isWindows = false,
         bool isDx12Available = false,
         bool isComputeSharpCompiled = false,
-        bool hasComputeSharpResourceContract = false)
+        bool hasComputeSharpResourceContract = false,
+        GpuResourceContractKind computeSharpResourceContractKind = GpuResourceContractKind.OpenGlTextureNames)
     {
         return new GpuCapabilities(
             glMajor,
@@ -434,6 +456,7 @@ public sealed class ComputeCapabilityGateTests
             isWindows,
             isDx12Available,
             isComputeSharpCompiled,
-            hasComputeSharpResourceContract);
+            hasComputeSharpResourceContract,
+            computeSharpResourceContractKind);
     }
 }
