@@ -453,6 +453,80 @@ function Test-ReleaseChecksumRows {
     }
 }
 
+function Test-GitHubReleaseUploadedAssets {
+    param(
+        [System.Collections.Generic.List[string]]$Missing,
+        [string]$Root,
+        [string]$Path,
+        [hashtable]$ExpectedPackages,
+        [string]$ChecksumSha256
+    )
+
+    $resolved = Resolve-EvidencePath -Root $Root -Path $Path
+    if ([string]::IsNullOrWhiteSpace($resolved) -or -not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+        return
+    }
+
+    $values = Read-MarkdownEvidenceTable -Path $resolved
+    $expectedAssets = @{}
+    foreach ($name in $ExpectedPackages.Keys) {
+        $expectedAssets[$name] = ([string]$ExpectedPackages[$name]).ToUpperInvariant()
+    }
+
+    if ([string]::IsNullOrWhiteSpace($ChecksumSha256)) {
+        $Missing.Add("github_release_upload 无法校验 SHA256SUMS 上传证据：manifest 缺少 checksumSha256")
+    }
+    else {
+        $expectedAssets["SHA256SUMS"] = $ChecksumSha256.ToUpperInvariant()
+    }
+
+    if (-not $values.ContainsKey("uploaded_asset_count")) {
+        $Missing.Add("github_release_upload 报告缺少 uploaded_asset_count 字段")
+    }
+    else {
+        $rawCount = [string]$values["uploaded_asset_count"]
+        $actualCount = 0
+        if (-not [int]::TryParse($rawCount, [ref]$actualCount)) {
+            $Missing.Add("github_release_upload uploaded_asset_count 必须是整数，实际为 $rawCount")
+        }
+        elseif ($actualCount -ne $expectedAssets.Count) {
+            $Missing.Add("github_release_upload uploaded_asset_count 必须为 $($expectedAssets.Count)，实际为 $actualCount")
+        }
+    }
+
+    foreach ($name in $expectedAssets.Keys) {
+        $key = "asset/$name"
+        if (-not $values.ContainsKey($key)) {
+            if ($name -eq "SHA256SUMS") {
+                $Missing.Add("github_release_upload 缺少 SHA256SUMS 上传证据")
+            }
+            else {
+                $Missing.Add("github_release_upload 缺少上传 asset：$name")
+            }
+
+            continue
+        }
+
+        $actualHash = ([string]$values[$key]).Trim().ToUpperInvariant()
+        $expectedHash = ([string]$expectedAssets[$name]).Trim().ToUpperInvariant()
+        if (-not [string]::Equals($actualHash, $expectedHash, [StringComparison]::OrdinalIgnoreCase)) {
+            $Missing.Add("github_release_upload asset hash 不匹配：$name expected=$expectedHash actual=$actualHash")
+        }
+    }
+
+    foreach ($key in $values.Keys) {
+        $keyText = [string]$key
+        if (-not $keyText.StartsWith("asset/", [StringComparison]::Ordinal)) {
+            continue
+        }
+
+        $name = $keyText.Substring("asset/".Length)
+        if (-not $expectedAssets.ContainsKey($name)) {
+            $Missing.Add("github_release_upload 包含 manifest 未声明的上传 asset：$name")
+        }
+    }
+}
+
 function Test-PackageVersionsMatchReleaseTag {
     param(
         [System.Collections.Generic.List[string]]$Missing,
@@ -593,6 +667,7 @@ $rids = @("win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-ar
 $channels = @("r2r", "aot")
 $expectedChecksumPackages = @{}
 $checksumPaths = @{}
+$checksumSha256ByPath = @{}
 
 foreach ($ridName in Get-JsonPropertyNames $manifest.artifacts) {
     if ($ridName -notin $rids) {
@@ -665,6 +740,7 @@ foreach ($rid in $rids) {
         $checksumPath = [string]$node.checksum
         if (-not [string]::IsNullOrWhiteSpace($checksumPath)) {
             $checksumPaths[$checksumPath] = $true
+            $checksumSha256ByPath[$checksumPath] = [string]$node.checksumSha256
         }
 
         Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/publish" -Path $publishReportPath -DeclaredSha256 ([string]$node.publishSha256)
@@ -706,6 +782,7 @@ if ($checksumPaths.Count -gt 1) {
 elseif ($checksumPaths.Count -eq 1) {
     $checksumPath = [string](@($checksumPaths.Keys)[0])
     Test-ReleaseChecksumRows -Missing $missing -Root $root -Path $checksumPath -ExpectedPackages $expectedChecksumPackages
+    Test-GitHubReleaseUploadedAssets -Missing $missing -Root $root -Path $githubReleaseUploadReport -ExpectedPackages $expectedChecksumPackages -ChecksumSha256 ([string]$checksumSha256ByPath[$checksumPath])
 }
 
 Test-PackageVersionsMatchReleaseTag -Missing $missing -ReleaseVersion $releaseVersion -ExpectedPackages $expectedChecksumPackages

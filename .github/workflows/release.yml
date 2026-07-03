@@ -756,7 +756,8 @@ jobs:
             - linux-arm64 is smoke-tested through QEMU when available.
             - macOS x64 and arm64 are smoke-tested on matching GitHub-hosted runners before signing/package upload.
           files: |
-            artifacts/package/PixelEngine-Demo-*
+            artifacts/package/PixelEngine-Demo-*.zip
+            artifacts/package/PixelEngine-Demo-*.tar.gz
             artifacts/package/SHA256SUMS
 
       - name: Build release evidence manifest
@@ -784,7 +785,12 @@ jobs:
           ) | Set-Content -Path artifacts/release-evidence/workflow-run.md -Encoding UTF8
           $isReleaseTag = '${{ startsWith(github.ref, 'refs/tags/') }}' -eq 'true'
           $githubReleaseConclusion = if ($isReleaseTag) { '${{ job.status }}' } else { 'blocked_not_tag_release' }
-          @(
+          $releaseAssets = @(
+            Get-ChildItem -Path artifacts/package -File -Filter 'PixelEngine-Demo-*.zip' -ErrorAction SilentlyContinue
+            Get-ChildItem -Path artifacts/package -File -Filter 'PixelEngine-Demo-*.tar.gz' -ErrorAction SilentlyContinue
+            Get-Item -LiteralPath artifacts/package/SHA256SUMS -ErrorAction SilentlyContinue
+          ) | Where-Object { $null -ne $_ } | Sort-Object Name
+          $uploadEvidence = @(
             "# GitHub Release upload evidence",
             "",
             "| Key | Value |",
@@ -793,8 +799,13 @@ jobs:
             "| run_id | ${{ github.run_id }} |",
             "| sha | ${{ github.sha }} |",
             "| release_tag | $isReleaseTag |",
-            "| conclusion | $githubReleaseConclusion |"
-          ) | Set-Content -Path artifacts/release-evidence/github-release-upload.md -Encoding UTF8
+            "| conclusion | $githubReleaseConclusion |",
+            "| uploaded_asset_count | $($releaseAssets.Count) |"
+          )
+          foreach ($asset in $releaseAssets) {
+            $uploadEvidence += "| asset/$($asset.Name) | $(Get-Sha256 $asset.FullName) |"
+          }
+          $uploadEvidence | Set-Content -Path artifacts/release-evidence/github-release-upload.md -Encoding UTF8
           @(
             "# R2R light-up evidence",
             "",
