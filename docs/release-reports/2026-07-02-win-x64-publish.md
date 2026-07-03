@@ -16,7 +16,7 @@ pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/audit-release-artifa
 
 ## 结果
 
-`tools/publish-r2r.ps1` 与 `tools/publish-aot.ps1` 均完成 native Box2D build、`dotnet publish` 与产物输出。`tools/verify-publish.ps1` 对两通道均完成 `--smoke`，输出显示内容包加载 18 个材质、22 条反应、19 个音频 clip，Physics 已接入，脚本程序集与 Hosting/Simulation 后端已接入，场景进入 `lava-mine` 第 1 帧。
+`tools/publish-r2r.ps1` 与 `tools/publish-aot.ps1` 均完成 native Box2D build、`dotnet publish` 与产物输出。`artifacts/publish/<rid>-<channel>/` 是 raw dotnet publish 中间产物，根层保留 SDK 输出的 dll / runtime / pdb / xml 等文件供 CI、smoke 与 package assembly 使用，不是玩家入口目录；publish 脚本会写 `_PUBLISH_INTERMEDIATE_README.txt` 指向 `artifacts/package/PixelEngine-Demo-<version>-<rid>-<channel>/`。`tools/verify-publish.ps1` 对两通道均完成 `--smoke`，输出显示内容包加载 18 个材质、22 条反应、19 个音频 clip，Physics 已接入，脚本程序集与 Hosting/Simulation 后端已接入，场景进入 `lava-mine` 第 1 帧。
 
 `tools/package.ps1` 生成两个包：
 
@@ -41,7 +41,7 @@ Package audit passed. Packages: 2.
 Release artifact audit completed.
 ```
 
-后续打包布局已调整为包根 `PixelEngine Demo.exe` + `content/` + `app/`：根目录 exe 是玩家入口，`.dll`、`.deps.json`、`.runtimeconfig.json`、runtime/native 等运行必须依赖进入 `app/`，内容资产位于包根 `content/`；玩家包会剔除 `.pdb`、XML 文档与多语言 `*.resources.dll` 卫星程序集，并拒绝在 `app/` 下重复保留 Windows 原始 `PixelEngine.Demo.exe`。旧记录中的 hash 仅代表当时产物。
+后续打包布局已调整为包根 `PixelEngine Demo.exe` + `content/` + `app/`：根目录 exe 是玩家入口，`.dll`、`.deps.json`、`.runtimeconfig.json`、runtime/native 等运行必须依赖进入 `app/`，内容资产位于包根 `content/`；玩家包会剔除 `.pdb`、XML 文档与多语言 `*.resources.dll` 卫星程序集，跳过 publish 中间目录提示 `_PUBLISH_INTERMEDIATE_README.txt`，并拒绝在 `app/` 下重复保留 Windows 原始 `PixelEngine.Demo.exe`。旧记录中的 hash 仅代表当时产物。
 
 ## 阻塞边界
 

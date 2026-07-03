@@ -148,5 +148,15 @@ dotnet publish "$demo_project" \
   "${publish_properties[@]}" \
   -o "$output"
 
+cat > "$output/_PUBLISH_INTERMEDIATE_README.txt" <<EOF
+This directory is a raw dotnet publish output for CI/package assembly.
+It is not the player-facing package.
+
+Use tools/package.sh --rid $rid --channel r2r to create:
+  artifacts/package/PixelEngine-Demo-<version>-$rid-r2r/
+
+That package root contains the launcher, content/, and app/ dependency folder.
+EOF
+
 echo "R2R publish completed for $rid."
 echo "Output: $output"

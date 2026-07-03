@@ -200,7 +200,7 @@ mkdir -p "$app_dir"
 
 cp -a "$publish_dir"/. "$app_dir"/
 remove_player_package_noise "$app_dir"
-rm -rf "$app_dir/content" "$content_dir"
+rm -rf "$app_dir/content" "$app_dir/_PUBLISH_INTERMEDIATE_README.txt" "$content_dir"
 cp -a "$content_root" "$content_dir"
 
 if [[ "$rid" == win-* ]]; then
