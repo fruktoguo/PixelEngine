@@ -337,6 +337,7 @@ function Assert-CellsFrameEvidence {
     $activeCellsPerFrame = Get-RequiredInt -Fields $fields -Name "activeCellsPerFrame" -Scope $scope
     $caFrameMs = Get-RequiredDouble -Fields $fields -Name "caFrameMs" -Scope $scope
     $measuredIterations = Get-RequiredInt -Fields $fields -Name "measuredIterations" -Scope $scope
+    $iterationCount = Get-RequiredInt -Fields $fields -Name "iterationCount" -Scope $scope
 
     if ($activeCellsPerFrame -lt 2000000) {
         throw "$scope activeCellsPerFrame 必须至少为 2000000。"
@@ -348,6 +349,27 @@ function Assert-CellsFrameEvidence {
 
     if ($measuredIterations -lt 3) {
         throw "$scope measuredIterations 必须至少为 3。"
+    }
+
+    if ($iterationCount -lt 3) {
+        throw "$scope iterationCount 必须至少为 3，不能用 BenchmarkDotNet Short/单迭代校准冒充目标硬件实测。"
+    }
+
+    if ($iterationCount -lt $measuredIterations) {
+        throw "$scope iterationCount 必须 >= measuredIterations。"
+    }
+
+    $content = Get-Content -LiteralPath $Path -Raw
+    if ($content -notmatch 'BenchmarkDotNet\s+v') {
+        throw "$scope 必须包含 BenchmarkDotNet v 报告头，不能只附机器可读字段摘要。"
+    }
+
+    if ($content -notmatch 'CellThroughputBenchmark\.StepJobSystem') {
+        throw "$scope 必须包含 CellThroughputBenchmark.StepJobSystem 目标基准名称。"
+    }
+
+    if ($content -notmatch 'FullActiveLiquid') {
+        throw "$scope 必须包含 FullActiveLiquid cells/frame 场景。"
     }
 }
 
