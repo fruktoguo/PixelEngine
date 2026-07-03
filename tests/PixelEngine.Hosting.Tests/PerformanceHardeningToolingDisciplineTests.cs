@@ -1328,6 +1328,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("capture_sha256", script, StringComparison.Ordinal);
         Assert.Contains("capture_dimensions", script, StringComparison.Ordinal);
         Assert.Contains("captureBitsPerPixel", script, StringComparison.Ordinal);
+        Assert.Contains("uniqueVisiblePixels", script, StringComparison.Ordinal);
+        Assert.Contains("不能作为窗口画面证据", script, StringComparison.Ordinal);
         Assert.Contains("playable-world", script, StringComparison.Ordinal);
         Assert.Contains("route-attempt", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine.scene", script, StringComparison.Ordinal);
@@ -1421,6 +1423,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("scripted_probe_only", report, StringComparison.Ordinal);
         Assert.Contains("--capture-frame", report, StringComparison.Ordinal);
         Assert.Contains("capture.bmp", report, StringComparison.Ordinal);
+        Assert.Contains("capture_unique_visible_pixels", report, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_manual_scope_evidence", report, StringComparison.Ordinal);
         Assert.Contains("blocked_invalid_manual_evidence", report, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", report, StringComparison.Ordinal);
@@ -1446,6 +1449,55 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("manual_evidence_attached_pending_review", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("- [x] 过载降级按五级顺序触发", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("- [!] Editor 真实窗口观测/覆盖仍缺人工复核证据", hostingPlan, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 scripted probe 截图证据会拒绝纯黑 BMP，避免黑屏截图进入机器 probe 报告。
+    /// </summary>
+    [Fact]
+    public void DemoManualAcceptancePreflightRejectsBlankScriptedProbeCapture()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-blank-bmp-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            _ = Directory.CreateDirectory(temp);
+            string bmp = Path.Combine(temp, "blank.bmp");
+            WriteBmp24(bmp, width: 8, height: 8, static (_, _) => (0, 0, 0));
+
+            string source = ReadRepositoryFile("tools", "demo-manual-acceptance-preflight.ps1");
+            int start = source.IndexOf("function Resolve-RepositoryRoot", StringComparison.Ordinal);
+            int end = source.IndexOf("function Get-ManualScopes", StringComparison.Ordinal);
+            Assert.True(start >= 0);
+            Assert.True(end > start);
+            string harness = string.Concat(
+                "param([string]$Root,[string]$Bmp)\n",
+                source[start..end],
+                "\ntry {\n",
+                "  $capture = Get-BmpFrameEvidence -Root $Root -Path $Bmp\n",
+                "  $capture | ConvertTo-Json -Compress\n",
+                "  exit 0\n",
+                "} catch {\n",
+                "  Write-Output $_.Exception.Message\n",
+                "  exit 5\n",
+                "}\n");
+            string harnessPath = Path.Combine(temp, "bmp-harness.ps1");
+            File.WriteAllText(harnessPath, harness);
+
+            ScriptResult result = RunPowerShellScript(root, harnessPath, root, bmp);
+
+            Assert.Equal(5, result.ExitCode);
+            Assert.Contains("只有黑/白空白像素", result.Output, StringComparison.Ordinal);
+            Assert.Contains("不能作为窗口画面证据", result.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
     }
 
     /// <summary>
@@ -4054,6 +4106,48 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         _ = Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
         return path;
+    }
+
+    private static void WriteBmp24(string path, int width, int height, Func<int, int, (byte R, byte G, byte B)> pixel)
+    {
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        int stride = ((width * 3) + 3) & ~3;
+        int imageSize = stride * height;
+        int fileSize = 54 + imageSize;
+        using FileStream stream = File.Create(path);
+        using BinaryWriter writer = new(stream);
+        writer.Write((ushort)0x4D42);
+        writer.Write(fileSize);
+        writer.Write((ushort)0);
+        writer.Write((ushort)0);
+        writer.Write(54);
+        writer.Write(40);
+        writer.Write(width);
+        writer.Write(height);
+        writer.Write((ushort)1);
+        writer.Write((ushort)24);
+        writer.Write(0);
+        writer.Write(imageSize);
+        writer.Write(2835);
+        writer.Write(2835);
+        writer.Write(0);
+        writer.Write(0);
+
+        Span<byte> row = stackalloc byte[stride];
+        for (int y = height - 1; y >= 0; y--)
+        {
+            row.Clear();
+            for (int x = 0; x < width; x++)
+            {
+                (byte r, byte g, byte b) = pixel(x, y);
+                int offset = x * 3;
+                row[offset] = b;
+                row[offset + 1] = g;
+                row[offset + 2] = r;
+            }
+
+            writer.Write(row);
+        }
     }
 
     private static string GetSha256(string path)
