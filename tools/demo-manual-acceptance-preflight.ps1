@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Project = "demo/PixelEngine.Demo/PixelEngine.Demo.csproj",
     [string]$Content = "demo/PixelEngine.Demo/content",
     [string]$Artifacts = "artifacts/demo-manual-acceptance-preflight",
@@ -52,16 +52,19 @@ function Get-ManualScopes {
         [pscustomobject]@{
             scope = "materialBrushAndReactionVideo"
             kind = "video"
+            minDurationSeconds = 10.0
             title = "真实鼠标/滚轮/数字键操作材质笔刷，并观察沙堆休止角、水找平、油浮水、气体上升、反应和温度相变视觉质量"
         },
         [pscustomobject]@{
             scope = "rigidBodyGameplayVideo"
             kind = "video"
+            minDurationSeconds = 10.0
             title = "真实窗口推动/被砸、挖断木桥转刚体、继续挖/烧/酸蚀破碎、metal 近熔岩熔化坍塌"
         },
         [pscustomobject]@{
             scope = "particleLightingVideo"
             kind = "video"
+            minDurationSeconds = 10.0
             title = "血/碎屑/发光火花、爆炸推动邻近刚体、bloom/fog/mining lighting 视觉质量和长时间玩法无粒子泄漏"
         },
         [pscustomobject]@{
@@ -72,11 +75,13 @@ function Get-ManualScopes {
         [pscustomobject]@{
             scope = "fullRoutePlaythroughVideo"
             kind = "video"
+            minDurationSeconds = 30.0
             title = "从出生点用至少一种解法完整抵达出口，贯穿材质/反应/刚体/粒子/光照/音频"
         },
         [pscustomobject]@{
             scope = "hudMenuEditorVideo"
             kind = "video"
+            minDurationSeconds = 10.0
             title = "HUD 像素布局、菜单点击、Editor dockspace 打开、重开、退出请求与叠层切换"
         },
         [pscustomobject]@{
@@ -159,8 +164,9 @@ function Assert-ManualEvidenceMetadata {
         }
 
         $durationValue = [double]$duration
-        if ($durationValue -le 0) {
-            throw "evidence scope $scope durationSeconds 必须为正数。"
+        $minDuration = [double](Get-JsonPropertyValue -Object $ScopeDefinition -Name "minDurationSeconds")
+        if ($durationValue -lt $minDuration) {
+            throw "evidence scope $scope durationSeconds 必须至少为 $minDuration 秒。"
         }
     }
     elseif ($expectedKind -eq "report") {
@@ -353,7 +359,8 @@ function Write-ManualAcceptanceReport {
     $lines.Add("## 人工验收 scope")
     $lines.Add("")
     foreach ($scope in Get-ManualScopes) {
-        $lines.Add("- $($scope.scope) [$($scope.kind)]: $($scope.title)")
+        $durationText = if ($scope.kind -eq "video") { " minDurationSeconds=$($scope.minDurationSeconds)" } else { "" }
+        $lines.Add(("- {0} [{1}]{2}: {3}" -f $scope.scope, $scope.kind, $durationText, $scope.title))
     }
     $lines.Add("")
 

@@ -972,6 +972,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("fullRoutePlaythroughVideo", script, StringComparison.Ordinal);
         Assert.Contains("hudMenuEditorVideo", script, StringComparison.Ordinal);
         Assert.Contains("hotReloadWindowReport", script, StringComparison.Ordinal);
+        Assert.Contains("minDurationSeconds", script, StringComparison.Ordinal);
 
         Assert.Contains("blocked_missing_manual_evidence", script, StringComparison.Ordinal);
         Assert.Contains("scripted_probe_only", script, StringComparison.Ordinal);
@@ -1088,7 +1089,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         try
         {
             string badDurationManifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "bad-duration", includeDemoManualMetadata: true);
-            SetFlatEvidenceProperty(badDurationManifest, "fullRoutePlaythroughVideo", "durationSeconds", 0.0);
+            SetFlatEvidenceProperty(badDurationManifest, "fullRoutePlaythroughVideo", "durationSeconds", 1.0);
 
             string badNotesManifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "bad-notes", includeDemoManualMetadata: true);
             SetFlatEvidenceProperty(badNotesManifest, "controlFeelReport", "notes", "too short");
@@ -1104,7 +1105,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(5, badDuration.ExitCode);
             string badDurationReport = File.ReadAllText(Path.Combine(badDurationArtifacts, "demo-manual-acceptance-preflight.md"));
             Assert.Contains("status: blocked_invalid_manual_evidence", badDuration.Output + badDurationReport, StringComparison.Ordinal);
-            Assert.Contains("fullRoutePlaythroughVideo durationSeconds 必须为正数", badDurationReport, StringComparison.Ordinal);
+            Assert.Contains("fullRoutePlaythroughVideo durationSeconds 必须至少为 30 秒", badDurationReport, StringComparison.Ordinal);
             Assert.DoesNotContain("status: manual_evidence_attached_pending_review", badDurationReport, StringComparison.Ordinal);
 
             string badNotesArtifacts = Path.Combine(temp, "bad-notes-out");
@@ -2575,7 +2576,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 entry["notes"] = $"{scope} notes";
                 if (isVideo)
                 {
-                    entry["durationSeconds"] = 1.0;
+                    entry["durationSeconds"] = 60.0;
                 }
             }
 
