@@ -648,6 +648,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("cpuProbeReport", script, StringComparison.Ordinal);
         Assert.Contains("gpuProbeReport", script, StringComparison.Ordinal);
         Assert.Contains("comparisonReport", script, StringComparison.Ordinal);
+        Assert.Contains("gpuFasterThanCpu", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_gpu_evidence", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_gpu_scope_evidence", script, StringComparison.Ordinal);
         Assert.Contains("blocked_invalid_target_gpu_evidence", script, StringComparison.Ordinal);
@@ -667,6 +668,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
         Assert.Contains("local_probe_only", report, StringComparison.Ordinal);
         Assert.Contains("target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        Assert.Contains("gpuFasterThanCpu", report, StringComparison.Ordinal);
         Assert.Contains("未知 scope", report, StringComparison.Ordinal);
 
         Assert.Contains("tools/gpu-particle-benchmark-preflight.ps1", plan, StringComparison.Ordinal);
@@ -689,6 +691,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 temp,
                 ["targetHardwareReport", "cpuProbeReport", "gpuProbeReport", "comparisonReport"],
                 suffix: "good");
+            SetFlatEvidenceFileContent(goodManifest, "comparisonReport", "gpuFasterThanCpu: true");
             string badManifest = CreateFlatEvidenceManifest(
                 temp,
                 ["targetHardwareReport", "cpuProbeReport", "gpuProbeReport"],
@@ -718,6 +721,48 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(2, good.ExitCode);
             string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("target_gpu_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 GPU 粒子目标硬件预检要求 comparisonReport 明确声明 GPU 总帧时间优于 CPU stamp。
+    /// </summary>
+    [Fact]
+    public void GpuParticleBenchmarkPreflightRejectsComparisonReportWithoutGpuFasterThanCpu()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-comparison-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateFlatEvidenceManifest(
+                temp,
+                ["targetHardwareReport", "cpuProbeReport", "gpuProbeReport", "comparisonReport"],
+                suffix: "bad-comparison");
+            SetFlatEvidenceFileContent(manifest, "comparisonReport", "gpuFasterThanCpu: false");
+
+            string artifacts = Path.Combine(temp, "bad-comparison-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
+            Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("comparisonReport", report, StringComparison.Ordinal);
+            Assert.Contains("gpuFasterThanCpu", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
         {
@@ -2569,6 +2614,20 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             .FirstOrDefault(node => string.Equals((string?)node?["scope"], scope, StringComparison.Ordinal));
         Assert.NotNull(entry);
         entry[propertyName] = value;
+        File.WriteAllText(manifestPath, manifest.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static void SetFlatEvidenceFileContent(string manifestPath, string scope, string content)
+    {
+        JsonObject manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
+        JsonArray evidence = manifest["evidence"]!.AsArray();
+        JsonObject? entry = evidence
+            .Select(node => node?.AsObject())
+            .FirstOrDefault(node => string.Equals((string?)node?["scope"], scope, StringComparison.Ordinal));
+        Assert.NotNull(entry);
+        string path = (string?)entry["path"] ?? throw new InvalidOperationException("evidence entry 缺少 path。");
+        File.WriteAllText(path, content);
+        entry["sha256"] = GetSha256(path);
         File.WriteAllText(manifestPath, manifest.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
     }
 

@@ -45,6 +45,15 @@ function Get-FileSha256 {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
+function Assert-ComparisonReport {
+    param([string]$Path)
+
+    $content = Get-Content -LiteralPath $Path -Raw
+    if ($content -notmatch '(?im)^\s*gpuFasterThanCpu\s*[:=]\s*true\s*$') {
+        throw "comparisonReport 必须包含机器可读字段 gpuFasterThanCpu: true，证明目标 GPU 高密度粒子总帧时间优于 CPU stamp。"
+    }
+}
+
 function Write-Report {
     param(
         [string]$ReportPath,
@@ -229,6 +238,10 @@ function Read-EvidenceManifest {
         $expectedHash = $declaredHash.Trim().ToLowerInvariant()
         if ($actualHash -ne $expectedHash) {
             throw "evidence scope $scope sha256 不匹配：expected=$expectedHash actual=$actualHash"
+        }
+
+        if ($scope -eq "comparisonReport") {
+            Assert-ComparisonReport -Path $path
         }
 
         $evidence.Add([pscustomobject]@{
