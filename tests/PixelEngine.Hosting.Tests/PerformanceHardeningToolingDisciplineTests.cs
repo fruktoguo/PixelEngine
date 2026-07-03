@@ -1847,6 +1847,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("channels", script, StringComparison.Ordinal);
         Assert.Contains("报告 $key 必须为 $expected", script, StringComparison.Ordinal);
         Assert.Contains("workflowRunReport", script, StringComparison.Ordinal);
+        Assert.Contains("Get-ExpectedRunIdentity", script, StringComparison.Ordinal);
+        Assert.Contains("Add-RunIdentityCheck", script, StringComparison.Ordinal);
+        Assert.Contains("必须与 workflow_run 一致", script, StringComparison.Ordinal);
         Assert.Contains("benchmarkGuard", script, StringComparison.Ordinal);
         Assert.Contains("buildTest", script, StringComparison.Ordinal);
         Assert.Contains("verifyPublish", script, StringComparison.Ordinal);
@@ -1887,6 +1890,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("ci_matrix_evidence_attached_pending_review", report, StringComparison.Ordinal);
         Assert.Contains("conclusion", report, StringComparison.Ordinal);
         Assert.Contains("channels: r2r,aot", report, StringComparison.Ordinal);
+        Assert.Contains("同一个 GitHub Actions run", report, StringComparison.Ordinal);
         Assert.Contains("tools/ci-matrix-evidence-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("blocked_invalid_ci_evidence", plan, StringComparison.Ordinal);
         Assert.Contains("ci_matrix_evidence_attached_pending_review", plan, StringComparison.Ordinal);
@@ -2090,6 +2094,51 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string report = File.ReadAllText(Path.Combine(artifacts, "ci-matrix-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_ci_scope_evidence", result.Output + report, StringComparison.Ordinal);
             Assert.Contains("buildTest.win-arm64 缺少 testsRan 字段", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: ci_matrix_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 CI evidence 预检要求所有报告来自同一个 workflow run / commit。
+    /// </summary>
+    [Fact]
+    public void CiMatrixEvidencePreflightRejectsMismatchedRunIdentity()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ci-run-identity-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateCiEvidenceManifest(temp, benchmarkConclusion: "success");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject buildTest = rootNode["buildTest"]!.AsObject();
+            JsonObject linux = buildTest["linux-x64"]!.AsObject();
+            string reportPath = (string)linux["report"]!;
+            string text = File.ReadAllText(reportPath).Replace("| sha | abc |", "| sha | different-commit |", StringComparison.Ordinal);
+            File.WriteAllText(reportPath, text);
+            linux["sha256"] = GetSha256(reportPath);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "run-identity-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "ci-matrix-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "ci-matrix-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_ci_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("build_test/linux-x64/report 报告 sha 必须与 workflow_run 一致", report, StringComparison.Ordinal);
             Assert.DoesNotContain("status: ci_matrix_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
