@@ -50,6 +50,17 @@ public sealed class AudioProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证 OpenAL 后端暴露释放后 live-object 计数，供 native leak detector 证据采集。
+    /// </summary>
+    [Fact]
+    public void OpenAlBackendExposesLiveObjectCountsForLeakEvidence()
+    {
+        Assert.NotNull(typeof(OpenAlBackend).GetProperty("LiveSourceCount"));
+        Assert.NotNull(typeof(OpenAlBackend).GetProperty("LiveBufferCount"));
+        Assert.NotNull(typeof(OpenAlBackend).GetProperty("LiveObjectCount"));
+    }
+
+    /// <summary>
     /// 验证音频主派发路径不读取 sim 网格，也不调用加载 / 流式 worker。
     /// </summary>
     [Fact]

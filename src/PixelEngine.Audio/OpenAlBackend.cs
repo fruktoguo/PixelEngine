@@ -9,6 +9,8 @@ namespace PixelEngine.Audio;
 public sealed unsafe class OpenAlBackend : IAudioBackend
 {
     private readonly AL _al;
+    private readonly HashSet<uint> _liveSources = [];
+    private readonly HashSet<uint> _liveBuffers = [];
     private bool _disposed;
 
     internal OpenAlBackend(AL al)
@@ -16,18 +18,37 @@ public sealed unsafe class OpenAlBackend : IAudioBackend
         _al = al ?? throw new ArgumentNullException(nameof(al));
     }
 
+    /// <summary>
+    /// 当前仍未删除的 OpenAL source 数，用于 native leak detector 证据采集。
+    /// </summary>
+    public int LiveSourceCount => _liveSources.Count;
+
+    /// <summary>
+    /// 当前仍未删除的 OpenAL buffer 数，用于 native leak detector 证据采集。
+    /// </summary>
+    public int LiveBufferCount => _liveBuffers.Count;
+
+    /// <summary>
+    /// 当前仍未删除的 OpenAL source 与 buffer 总数。
+    /// </summary>
+    public int LiveObjectCount => LiveSourceCount + LiveBufferCount;
+
     /// <inheritdoc />
     public uint CreateSource()
     {
         ThrowIfDisposed();
-        return _al.GenSource();
+        uint source = _al.GenSource();
+        _ = _liveSources.Add(source);
+        return source;
     }
 
     /// <inheritdoc />
     public uint CreateBuffer()
     {
         ThrowIfDisposed();
-        return _al.GenBuffer();
+        uint buffer = _al.GenBuffer();
+        _ = _liveBuffers.Add(buffer);
+        return buffer;
     }
 
     /// <inheritdoc />
@@ -35,6 +56,7 @@ public sealed unsafe class OpenAlBackend : IAudioBackend
     {
         ThrowIfDisposed();
         _al.DeleteSource(source);
+        _ = _liveSources.Remove(source);
     }
 
     /// <inheritdoc />
@@ -42,6 +64,7 @@ public sealed unsafe class OpenAlBackend : IAudioBackend
     {
         ThrowIfDisposed();
         _al.DeleteBuffer(buffer);
+        _ = _liveBuffers.Remove(buffer);
     }
 
     /// <inheritdoc />

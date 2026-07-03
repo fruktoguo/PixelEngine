@@ -24,6 +24,20 @@ public sealed class AudioVoicePoolTests
     }
 
     [Fact]
+    public void VoicePoolDisposesAllPreallocatedSourcesForLeakEvidence()
+    {
+        using NullAudioBackend backend = new();
+        AudioVoicePool pool = new(backend, new AudioSettings { MaxVoices = 3 });
+
+        Assert.Equal(3, backend.LiveSourceCount);
+
+        pool.Dispose();
+
+        Assert.Equal(0, backend.LiveSourceCount);
+        Assert.Equal(0, backend.LiveObjectCount);
+    }
+
+    [Fact]
     public void VoicePoolStealsLowerPriorityFartherVoiceWhenFull()
     {
         using NullAudioBackend backend = new();
@@ -60,6 +74,7 @@ public sealed class AudioVoicePoolTests
     {
         using NullAudioBackend backend = new();
         uint source = backend.CreateSource();
+        uint buffer = backend.CreateBuffer();
         AudioListenerState listener = new(Vector3.One, new Vector3(0f, 0f, -1f), Vector3.UnitY, 0.5f);
 
         backend.SetListener(listener);
@@ -69,5 +84,10 @@ public sealed class AudioVoicePoolTests
         Assert.Equal(1, backend.ListenerUpdates);
         Assert.Equal(1, backend.PlayCalls);
         Assert.Equal(AudioSourceState.Playing, backend.GetState(source));
+        Assert.Equal(1, backend.LiveSourceCount);
+        Assert.Equal(1, backend.LiveBufferCount);
+        backend.DeleteSource(source);
+        backend.DeleteBuffer(buffer);
+        Assert.Equal(0, backend.LiveObjectCount);
     }
 }

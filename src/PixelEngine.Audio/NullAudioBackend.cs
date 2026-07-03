@@ -37,9 +37,54 @@ public sealed class NullAudioBackend : IAudioBackend
     public int SourceCount => _sources.Count;
 
     /// <summary>
+    /// 当前仍未删除的 source 数。
+    /// </summary>
+    public int LiveSourceCount
+    {
+        get
+        {
+            int count = 0;
+            for (int i = 0; i < _sources.Count; i++)
+            {
+                if (!_sources[i].Deleted)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+    }
+
+    /// <summary>
     /// 已创建 buffer 数。
     /// </summary>
     public int BufferCount => _buffers.Count;
+
+    /// <summary>
+    /// 当前仍未删除的 buffer 数。
+    /// </summary>
+    public int LiveBufferCount
+    {
+        get
+        {
+            int count = 0;
+            for (int i = 0; i < _buffers.Count; i++)
+            {
+                if (!_buffers[i].Deleted)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+    }
+
+    /// <summary>
+    /// 当前仍未删除的 source 与 buffer 总数。
+    /// </summary>
+    public int LiveObjectCount => LiveSourceCount + LiveBufferCount;
 
     /// <summary>
     /// 已删除 buffer 数。
