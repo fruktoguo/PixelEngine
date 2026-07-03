@@ -1919,14 +1919,18 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("PixelEngine Demo.sh", packagePs1, StringComparison.Ordinal);
         Assert.Contains("README.txt", packagePs1, StringComparison.Ordinal);
         Assert.Contains("Join-Path $stagingDir 'SHA256SUMS'", packagePs1, StringComparison.Ordinal);
-        Assert.Contains("Remove-Item -LiteralPath $stagingDir -Recurse -Force", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("$packageDir = Join-Path $OutputRoot $packageName", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("Move-Item -LiteralPath $stagingDir -Destination $packageDir -Force", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("$samePairPattern", packagePs1, StringComparison.Ordinal);
         Assert.Contains("app_dir=\"$staging_dir/app\"", packageSh, StringComparison.Ordinal);
         Assert.Contains("PixelEngine Demo.exe", packageSh, StringComparison.Ordinal);
         Assert.Contains("patch_apphost_relative_assembly", packageSh, StringComparison.Ordinal);
         Assert.Contains("PixelEngine Demo.sh", packageSh, StringComparison.Ordinal);
         Assert.Contains("README.txt", packageSh, StringComparison.Ordinal);
         Assert.Contains("package_checksum_path=\"$staging_dir/SHA256SUMS\"", packageSh, StringComparison.Ordinal);
-        Assert.Contains("rm -rf \"$staging_dir\"", packageSh, StringComparison.Ordinal);
+        Assert.Contains("package_dir=\"$output_root/$package_name\"", packageSh, StringComparison.Ordinal);
+        Assert.Contains("mv \"$staging_dir\" \"$package_dir\"", packageSh, StringComparison.Ordinal);
+        Assert.Contains("PixelEngine-Demo-*-$rid-$channel.zip", packageSh, StringComparison.Ordinal);
         Assert.DoesNotContain("Compress-Archive", packagePs1, StringComparison.Ordinal);
         Assert.DoesNotContain("tar -czf", packagePs1, StringComparison.Ordinal);
         Assert.DoesNotContain("zip -qr", packageSh, StringComparison.Ordinal);
@@ -2064,6 +2068,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             _ = Directory.CreateDirectory(publish);
             _ = Directory.CreateDirectory(Path.Combine(publish, "runtimes", "win-x64", "native"));
             _ = Directory.CreateDirectory(Path.Combine(content, "scenes"));
+            _ = Directory.CreateDirectory(Path.Combine(packageRoot, "PixelEngine-Demo-8.8.8-win-x64-r2r"));
+            _ = Directory.CreateDirectory(Path.Combine(packageRoot, "PixelEngine-Demo-8.8.8-win-x64-aot"));
+            _ = WriteTextEvidence(Path.Combine(packageRoot, "PixelEngine-Demo-8.8.8-win-x64-r2r.zip"), "stale archive");
+            _ = WriteTextEvidence(Path.Combine(packageRoot, "PixelEngine-Demo-8.8.8-win-x64-r2r", "stale.txt"), "stale expanded package");
+            _ = WriteTextEvidence(Path.Combine(packageRoot, "PixelEngine-Demo-8.8.8-win-x64-aot", "sentinel.txt"), "other channel");
             File.WriteAllBytes(
                 Path.Combine(publish, "PixelEngine.Demo.exe"),
                 System.Text.Encoding.ASCII.GetBytes("fake-apphost-prefix PixelEngine.Demo.dll\0\0\0\0\0\0\0\0\0\0\0\0fake-suffix"));
@@ -2096,6 +2105,17 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
             string archive = Path.Combine(packageRoot, "PixelEngine-Demo-9.9.9-win-x64-r2r.zip");
             Assert.True(File.Exists(archive), package.Output);
+            Assert.False(File.Exists(Path.Combine(packageRoot, "PixelEngine-Demo-8.8.8-win-x64-r2r.zip")));
+            Assert.False(Directory.Exists(Path.Combine(packageRoot, "PixelEngine-Demo-8.8.8-win-x64-r2r")));
+            Assert.True(Directory.Exists(Path.Combine(packageRoot, "PixelEngine-Demo-8.8.8-win-x64-aot")));
+            string expandedPackageDir = Path.Combine(packageRoot, "PixelEngine-Demo-9.9.9-win-x64-r2r");
+            Assert.True(Directory.Exists(expandedPackageDir), package.Output);
+            Assert.True(File.Exists(Path.Combine(expandedPackageDir, "PixelEngine Demo.exe")));
+            Assert.True(File.Exists(Path.Combine(expandedPackageDir, "app", "PixelEngine.Demo.dll")));
+            Assert.True(File.Exists(Path.Combine(expandedPackageDir, "content", "materials.json")));
+            Assert.False(File.Exists(Path.Combine(expandedPackageDir, "PixelEngine.Demo.dll")));
+            Assert.False(File.Exists(Path.Combine(expandedPackageDir, "PixelEngine.Demo.pdb")));
+            Assert.False(File.Exists(Path.Combine(expandedPackageDir, "PixelEngine.Demo.xml")));
             string extract = Path.Combine(temp, "extract");
             System.IO.Compression.ZipFile.ExtractToDirectory(archive, extract);
             string packageDir = Path.Combine(extract, "PixelEngine-Demo-9.9.9-win-x64-r2r");

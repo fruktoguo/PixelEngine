@@ -48,6 +48,7 @@ if (-not (Test-Path $ContentRoot)) {
 $packageName = "PixelEngine-Demo-$Version-$Rid-$Channel"
 $stagingRoot = Join-Path $OutputRoot 'staging'
 $stagingDir = Join-Path $stagingRoot $packageName
+$packageDir = Join-Path $OutputRoot $packageName
 $appDir = Join-Path $stagingDir 'app'
 $stagedContent = Join-Path $stagingDir 'content'
 
@@ -90,6 +91,10 @@ function Set-AppHostRelativeAssemblyPath([string]$AppHostPath, [string]$Relative
 }
 
 New-Item -ItemType Directory -Force $OutputRoot | Out-Null
+$samePairPattern = '^PixelEngine-Demo-.+-' + [regex]::Escape($Rid) + '-' + [regex]::Escape($Channel) + '(\.zip|\.tar\.gz)?$'
+Get-ChildItem -LiteralPath $OutputRoot -Force -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -match $samePairPattern } |
+  ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force }
 Remove-Item -LiteralPath $stagingDir -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $appDir | Out-Null
 
@@ -184,7 +189,8 @@ $lines = foreach ($archive in $archives) {
 
 Set-Content -LiteralPath $checksumPath -Value $lines -Encoding ASCII
 
-Remove-Item -LiteralPath $stagingDir -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $packageDir -Recurse -Force -ErrorAction SilentlyContinue
+Move-Item -LiteralPath $stagingDir -Destination $packageDir -Force
 if ((Test-Path -LiteralPath $stagingRoot -PathType Container) -and
   -not (Get-ChildItem -LiteralPath $stagingRoot -Force -ErrorAction SilentlyContinue | Select-Object -First 1)) {
   Remove-Item -LiteralPath $stagingRoot -Force -ErrorAction SilentlyContinue
@@ -192,4 +198,5 @@ if ((Test-Path -LiteralPath $stagingRoot -PathType Container) -and
 
 Write-Host "Package completed for $Rid/$Channel."
 Write-Host "Archive: $archivePath"
+Write-Host "Expanded: $packageDir"
 Write-Host "Checksums: $checksumPath"
