@@ -92,5 +92,16 @@ Invoke-Checked 'dotnet' -arguments @(
   '-o', $Output
 )
 
+$intermediateReadme = @"
+This directory is a raw dotnet publish output for CI/package assembly.
+It is not the player-facing package.
+
+Use tools/package.ps1 -Rid $Rid -Channel aot to create:
+  artifacts/package/PixelEngine-Demo-<version>-$Rid-aot/
+
+That package root contains the launcher, content/, and app/ dependency folder.
+"@
+Set-Content -LiteralPath (Join-Path $Output '_PUBLISH_INTERMEDIATE_README.txt') -Value $intermediateReadme -Encoding ASCII
+
 Write-Host "AOT publish completed for $Rid."
 Write-Host "Output: $Output"

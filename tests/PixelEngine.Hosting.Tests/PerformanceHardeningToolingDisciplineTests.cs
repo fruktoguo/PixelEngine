@@ -3260,6 +3260,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string auditSh = ReadRepositoryFile("tools", "audit-release-artifacts.sh");
         string packagePs1 = ReadRepositoryFile("tools", "package.ps1");
         string packageSh = ReadRepositoryFile("tools", "package.sh");
+        string publishR2rPs1 = ReadRepositoryFile("tools", "publish-r2r.ps1");
+        string publishAotPs1 = ReadRepositoryFile("tools", "publish-aot.ps1");
+        string publishR2rSh = ReadRepositoryFile("tools", "publish-r2r.sh");
+        string publishAotSh = ReadRepositoryFile("tools", "publish-aot.sh");
         string evidence = ReadRepositoryFile("tools", "release-evidence-preflight.ps1");
         string release = ReadRepositoryFile(".github", "workflows", "release.yml");
         string example = ReadRepositoryFile("docs", "release-reports", "release-evidence-manifest.example.json");
@@ -3332,7 +3336,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("PixelEngine Demo.sh", packageSh, StringComparison.Ordinal);
         Assert.Contains("README.txt", packageSh, StringComparison.Ordinal);
         Assert.Contains("remove_player_package_noise", packageSh, StringComparison.Ordinal);
-        Assert.Contains("rm -rf \"$app_dir/content\" \"$content_dir\"", packageSh, StringComparison.Ordinal);
+        Assert.Contains("rm -rf \"$app_dir/content\" \"$app_dir/_PUBLISH_INTERMEDIATE_README.txt\" \"$content_dir\"", packageSh, StringComparison.Ordinal);
         Assert.Contains("*.resources.dll", packageSh, StringComparison.Ordinal);
         Assert.Contains("package_checksum_path=\"$staging_dir/SHA256SUMS\"", packageSh, StringComparison.Ordinal);
         Assert.Contains("package_dir=\"$output_root/$package_name\"", packageSh, StringComparison.Ordinal);
@@ -3342,6 +3346,14 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.DoesNotContain("tar -czf", packagePs1, StringComparison.Ordinal);
         Assert.DoesNotContain("zip -qr", packageSh, StringComparison.Ordinal);
         Assert.DoesNotContain("tar -czf", packageSh, StringComparison.Ordinal);
+        Assert.Contains("_PUBLISH_INTERMEDIATE_README.txt", publishR2rPs1, StringComparison.Ordinal);
+        Assert.Contains("_PUBLISH_INTERMEDIATE_README.txt", publishAotPs1, StringComparison.Ordinal);
+        Assert.Contains("_PUBLISH_INTERMEDIATE_README.txt", publishR2rSh, StringComparison.Ordinal);
+        Assert.Contains("_PUBLISH_INTERMEDIATE_README.txt", publishAotSh, StringComparison.Ordinal);
+        Assert.Contains("raw dotnet publish output", publishR2rPs1, StringComparison.Ordinal);
+        Assert.Contains("not the player-facing package", publishAotPs1, StringComparison.Ordinal);
+        Assert.Contains("_PUBLISH_INTERMEDIATE_README.txt", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("_PUBLISH_INTERMEDIATE_README.txt", packageSh, StringComparison.Ordinal);
 
         Assert.Contains("EvidenceManifestPath", evidence, StringComparison.Ordinal);
         Assert.Contains("schemaVersion", evidence, StringComparison.Ordinal);
@@ -3511,6 +3523,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             _ = WriteTextEvidence(Path.Combine(publish, "zh-Hans", "PixelEngine.Demo.resources.dll"), "localized");
             _ = WriteTextEvidence(Path.Combine(publish, "PixelEngine.Demo.deps.json"), "{}");
             _ = WriteTextEvidence(Path.Combine(publish, "PixelEngine.Demo.runtimeconfig.json"), "{}");
+            _ = WriteTextEvidence(Path.Combine(publish, "_PUBLISH_INTERMEDIATE_README.txt"), "raw dotnet publish output");
             _ = WriteTextEvidence(Path.Combine(publish, "runtimes", "win-x64", "native", "box2d.dll"), "native");
             _ = WriteTextEvidence(Path.Combine(content, "materials.json"), "{}");
             _ = WriteTextEvidence(Path.Combine(content, "reactions.json"), "{}");
@@ -3546,6 +3559,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.False(File.Exists(Path.Combine(expandedPackageDir, "PixelEngine.Demo.dll")));
             Assert.False(File.Exists(Path.Combine(expandedPackageDir, "PixelEngine.Demo.pdb")));
             Assert.False(File.Exists(Path.Combine(expandedPackageDir, "PixelEngine.Demo.xml")));
+            Assert.False(File.Exists(Path.Combine(expandedPackageDir, "_PUBLISH_INTERMEDIATE_README.txt")));
+            Assert.False(File.Exists(Path.Combine(expandedPackageDir, "app", "_PUBLISH_INTERMEDIATE_README.txt")));
             Assert.False(File.Exists(Path.Combine(expandedPackageDir, "app", "PixelEngine.Demo.pdb")));
             Assert.False(File.Exists(Path.Combine(expandedPackageDir, "app", "PixelEngine.Demo.xml")));
             Assert.False(File.Exists(Path.Combine(expandedPackageDir, "app", "zh-Hans", "PixelEngine.Demo.resources.dll")));
@@ -3575,12 +3590,15 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.False(File.Exists(Path.Combine(packageDir, "PixelEngine.Demo.xml")));
             Assert.False(File.Exists(Path.Combine(packageDir, "PixelEngine.Demo.deps.json")));
             Assert.False(File.Exists(Path.Combine(packageDir, "PixelEngine.Demo.runtimeconfig.json")));
+            Assert.False(File.Exists(Path.Combine(packageDir, "_PUBLISH_INTERMEDIATE_README.txt")));
+            Assert.False(File.Exists(Path.Combine(packageDir, "app", "_PUBLISH_INTERMEDIATE_README.txt")));
             string packageChecksumsText = File.ReadAllText(packageChecksums);
             Assert.Contains("PixelEngine Demo.exe", packageChecksumsText, StringComparison.Ordinal);
             Assert.Contains("app/PixelEngine.Demo.dll", packageChecksumsText, StringComparison.Ordinal);
             Assert.DoesNotContain("PixelEngine.Demo.pdb", packageChecksumsText, StringComparison.Ordinal);
             Assert.DoesNotContain("PixelEngine.Demo.xml", packageChecksumsText, StringComparison.Ordinal);
             Assert.DoesNotContain("PixelEngine.Demo.resources.dll", packageChecksumsText, StringComparison.Ordinal);
+            Assert.DoesNotContain("_PUBLISH_INTERMEDIATE_README.txt", packageChecksumsText, StringComparison.Ordinal);
             Assert.Contains("content/materials.json", packageChecksumsText, StringComparison.Ordinal);
 
             ScriptResult staleExpandedAudit = RunPowerShellScript(

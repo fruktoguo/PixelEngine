@@ -115,7 +115,7 @@ Remove-Item -LiteralPath $stagingDir -Recurse -Force -ErrorAction SilentlyContin
 New-Item -ItemType Directory -Force $appDir | Out-Null
 
 Get-ChildItem -LiteralPath $PublishDir -Force | ForEach-Object {
-  if ($_.Name -eq 'content') {
+  if ($_.Name -eq 'content' -or $_.Name -eq '_PUBLISH_INTERMEDIATE_README.txt') {
     return
   }
 
