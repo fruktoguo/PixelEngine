@@ -641,7 +641,14 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 throw new InvalidOperationException("刚体创建命令对应的脚本句柄已被解析或销毁。");
             }
 
-            slot = physics.CreateBodyFromRegion(x, y, width, height);
+            try
+            {
+                slot = physics.CreateBodyFromRegion(x, y, width, height);
+            }
+            catch (InvalidOperationException)
+            {
+                slot = DestroyedBodyKey;
+            }
         }
 
         public void ApplyImpulseNow(BodyHandle handle, float impulseX, float impulseY)

@@ -26,12 +26,17 @@ public sealed class EngineScriptDiagnosticsApi(
     /// <returns>脚本可读诊断快照。</returns>
     public EngineDiagnosticsSnapshot Capture()
     {
-        double dt = _clock.Dt * _clock.TimeScale;
-        float fps = dt > 0 ? (float)(1.0 / dt) : 0f;
+        double renderFps = _counters.RenderFramesPerSecond;
+        if (renderFps <= 0 || !double.IsFinite(renderFps))
+        {
+            double dt = _clock.Dt * _clock.TimeScale;
+            renderFps = dt > 0 ? 1.0 / dt : 0.0;
+        }
+
         double simHz = _counters.SimHz > 0 ? _counters.SimHz : _clock.SimHz;
         return new EngineDiagnosticsSnapshot(
             _clock.FrameIndex,
-            fps,
+            (float)renderFps,
             (float)simHz,
             _counters.ActiveChunks,
             _counters.ResidentChunks,

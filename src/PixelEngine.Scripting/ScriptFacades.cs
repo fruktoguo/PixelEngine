@@ -574,7 +574,7 @@ public interface IDiagnosticsApi
 /// 脚本 HUD 可消费的引擎诊断快照。
 /// </summary>
 /// <param name="FrameCount">当前渲染帧序号。</param>
-/// <param name="FramesPerSecond">最近一帧估算 FPS。</param>
+/// <param name="FramesPerSecond">最近一次窗口真实帧间隔估算的 render FPS；无墙钟样本时回退为当前固定步长帧率。</param>
 /// <param name="SimHz">当前 sim 频率。</param>
 /// <param name="ActiveChunks">活跃 chunk 数。</param>
 /// <param name="ResidentChunks">常驻 chunk 数。</param>

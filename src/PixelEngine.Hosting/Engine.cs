@@ -1743,6 +1743,7 @@ public sealed class Engine : IDisposable
             using (profiler.Measure(FramePhase.InputAndTime))
             {
                 ApplyOverloadPolicy(realDeltaSeconds);
+                PublishRenderFrameRate(realDeltaSeconds);
                 timing = BeginRuntimeFrame(realDeltaSeconds);
             }
 
@@ -1861,6 +1862,17 @@ public sealed class Engine : IDisposable
         Context.Clock.SimHz = tier >= EngineQualityTier.Sim30Hz
             ? PixelEngine.Core.EngineConstants.SimHzDownscaled
             : RequestedSimHz;
+    }
+
+    private void PublishRenderFrameRate(double realDeltaSeconds)
+    {
+        if (realDeltaSeconds <= 0 || !double.IsFinite(realDeltaSeconds))
+        {
+            return;
+        }
+
+        Context.Counters.RenderFrameMilliseconds = realDeltaSeconds * 1000.0;
+        Context.Counters.RenderFramesPerSecond = 1.0 / realDeltaSeconds;
     }
 
     private void ApplyThermalDegradation(EngineQualityTier tier)

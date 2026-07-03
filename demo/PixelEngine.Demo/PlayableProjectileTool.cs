@@ -69,12 +69,12 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <summary>
     /// 爆破后局部扫描半径，用于把脱离主地形的小型固体岛转换为刚体。
     /// </summary>
-    public int CollapseScanRadius { get; set; } = 220;
+    public int CollapseScanRadius { get; set; } = 260;
 
     /// <summary>
     /// 可自动转换的最大连通块包围盒尺寸，避免误把整片程序化地形转成刚体。
     /// </summary>
-    public int MaxCollapseRegionSize { get; set; } = 192;
+    public int MaxCollapseRegionSize { get; set; } = 224;
 
     /// <summary>
     /// 可自动转换的最小固体像素数。
@@ -89,7 +89,7 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <summary>
     /// 常规连通块扫描失败时，围绕弹坑把局部悬空边缘提升为刚体的最大半径。
     /// </summary>
-    public int FallbackOverhangRadius { get; set; } = 56;
+    public int FallbackOverhangRadius { get; set; } = 88;
 
     /// <summary>
     /// 已由破坏弹转换成刚体的悬空固体岛数量。
@@ -186,9 +186,9 @@ public sealed class PlayableProjectileTool : Behaviour
     {
         _pendingCollapseX = (int)MathF.Round(hitX);
         _pendingCollapseY = (int)MathF.Round(hitY);
-        _pendingCollapseFrames = 2;
+        _pendingCollapseFrames = 1;
         _pendingCollapsePasses = Math.Clamp(MaxCollapsedIslandsPerShot, 1, 12);
-        _pendingCollapseScans = 5;
+        _pendingCollapseScans = 8;
     }
 
     private void ProcessPendingCollapseScan()
@@ -214,14 +214,14 @@ public sealed class PlayableProjectileTool : Behaviour
                 return;
             }
 
-            _pendingCollapseFrames = 2;
+            _pendingCollapseFrames = 1;
             return;
         }
 
         _pendingCollapseScans--;
         if (_pendingCollapsePasses > 0 && _pendingCollapseScans > 0)
         {
-            _pendingCollapseFrames = 2;
+            _pendingCollapseFrames = 1;
         }
     }
 
@@ -268,8 +268,11 @@ public sealed class PlayableProjectileTool : Behaviour
                 int worldY = originY + minY;
                 int width = maxX - minX + 1;
                 int height = maxY - minY + 1;
-                _ = Context.Bodies.CreateFromRegion(worldX, worldY, width, height);
-                LastCollapsedRegion = (worldX, worldY, width, height);
+                if (!TryCreateBodyFromSolidBounds(worldX, worldY, width, height, "degenerate"))
+                {
+                    continue;
+                }
+
                 LastCollapseSkipReason = "converted";
                 CollapsedFloatingIslands++;
                 converted++;
@@ -479,8 +482,11 @@ public sealed class PlayableProjectileTool : Behaviour
                     continue;
                 }
 
-                _ = Context.Bodies.CreateFromRegion(worldX0, worldY0, width, height);
-                LastCollapsedRegion = (worldX0, worldY0, width, height);
+                if (!TryCreateBodyFromSolidBounds(worldX0, worldY0, width, height, "fallback_degenerate"))
+                {
+                    continue;
+                }
+
                 LastCollapseSkipReason = "fallback_converted";
                 CollapsedFloatingIslands++;
                 converted++;
@@ -510,7 +516,7 @@ public sealed class PlayableProjectileTool : Behaviour
         }
 
         int solidCount = CountConvertibleSolids(x, y, width, height);
-        if (solidCount < Math.Max(MinCollapsePixels, ImpactRadius * ImpactRadius))
+        if (solidCount < Math.Max(1, MinCollapsePixels))
         {
             LastCollapseSkipReason = "impact_fracture_no_solid";
             return 0;
@@ -523,11 +529,78 @@ public sealed class PlayableProjectileTool : Behaviour
             return 0;
         }
 
-        _ = Context.Bodies.CreateFromRegion(x, y, width, height);
-        LastCollapsedRegion = (x, y, width, height);
+        if (TryConvertNearestShelfPatch(x, y, width, height))
+        {
+            LastCollapseSkipReason = "impact_fracture_shelf_converted";
+            CollapsedFloatingIslands++;
+            return 1;
+        }
+
+        if (!TryCreateBodyFromSolidBounds(x, y, width, height, "impact_fracture_degenerate"))
+        {
+            return 0;
+        }
+
         LastCollapseSkipReason = "impact_fracture_converted";
         CollapsedFloatingIslands++;
         return 1;
+    }
+
+    private bool TryConvertNearestShelfPatch(int x, int y, int width, int height)
+    {
+        int bestX = 0;
+        int bestY = 0;
+        int bestDistanceSq = int.MaxValue;
+        int centerX = x + (width / 2);
+        int centerY = y + Math.Clamp(ImpactRadius, 1, height);
+        for (int yy = y; yy < y + height - 1; yy++)
+        {
+            for (int xx = x; xx < x + width - 1; xx++)
+            {
+                if (!IsSolid(xx, yy) ||
+                    !IsSolid(xx + 1, yy) ||
+                    !IsSolid(xx, yy + 1) ||
+                    !IsSolid(xx + 1, yy + 1) ||
+                    !HasOpenAirBelow(xx, yy + 1))
+                {
+                    continue;
+                }
+
+                int dx = xx - centerX;
+                int dy = yy - centerY;
+                int distanceSq = (dx * dx) + (dy * dy);
+                if (distanceSq >= bestDistanceSq)
+                {
+                    continue;
+                }
+
+                bestDistanceSq = distanceSq;
+                bestX = xx;
+                bestY = yy;
+            }
+        }
+
+        if (bestDistanceSq == int.MaxValue)
+        {
+            LastCollapseSkipReason = "impact_fracture_no_shelf";
+            return false;
+        }
+
+        int halfWidth = Math.Clamp(ImpactRadius * 3, 12, 32);
+        int growUp = Math.Clamp(ImpactRadius * 4, 14, 42);
+        int growDown = Math.Clamp(ImpactRadius * 2, 8, 24);
+        int patchX = bestX - halfWidth;
+        int patchY = bestY - growUp;
+        int patchWidth = (halfWidth * 2) + 2;
+        int patchHeight = growUp + growDown + 2;
+        return TryCreateConnectedSolidBodyFromSeed(
+            patchX,
+            patchY,
+            patchWidth,
+            patchHeight,
+            bestX,
+            bestY,
+            "impact_fracture_shelf_degenerate");
     }
 
     private int FloodFillCandidate(
@@ -622,6 +695,158 @@ public sealed class PlayableProjectileTool : Behaviour
         }
 
         return count;
+    }
+
+    private bool TryCreateBodyFromSolidBounds(int x, int y, int width, int height, string degenerateReason)
+    {
+        int minX = int.MaxValue;
+        int minY = int.MaxValue;
+        int maxX = int.MinValue;
+        int maxY = int.MinValue;
+        int solidCount = 0;
+        for (int yy = y; yy < y + height; yy++)
+        {
+            for (int xx = x; xx < x + width; xx++)
+            {
+                if (!IsSolid(xx, yy))
+                {
+                    continue;
+                }
+
+                minX = Math.Min(minX, xx);
+                minY = Math.Min(minY, yy);
+                maxX = Math.Max(maxX, xx);
+                maxY = Math.Max(maxY, yy);
+                solidCount++;
+            }
+        }
+
+        if (solidCount < Math.Max(1, MinCollapsePixels))
+        {
+            LastCollapseSkipReason = degenerateReason;
+            return false;
+        }
+
+        int tightWidth = maxX - minX + 1;
+        int tightHeight = maxY - minY + 1;
+        if (tightWidth > MaxCollapseRegionSize || tightHeight > MaxCollapseRegionSize ||
+            !HasSolidBlock2x2(minX, minY, tightWidth, tightHeight))
+        {
+            LastCollapseSkipReason = degenerateReason;
+            return false;
+        }
+
+        _ = Context.Bodies.CreateFromRegion(minX, minY, tightWidth, tightHeight);
+        LastCollapsedRegion = (minX, minY, tightWidth, tightHeight);
+        return true;
+    }
+
+    private bool TryCreateConnectedSolidBodyFromSeed(
+        int x,
+        int y,
+        int width,
+        int height,
+        int seedX,
+        int seedY,
+        string degenerateReason)
+    {
+        if ((uint)(seedX - x) >= (uint)width || (uint)(seedY - y) >= (uint)height || !IsSolid(seedX, seedY))
+        {
+            LastCollapseSkipReason = degenerateReason;
+            return false;
+        }
+
+        int size = width * height;
+        bool[] visited = new bool[size];
+        int[] queue = new int[size];
+        int head = 0;
+        int tail = 0;
+        int count = 0;
+        int minX = seedX;
+        int minY = seedY;
+        int maxX = seedX;
+        int maxY = seedY;
+        int seedLocalX = seedX - x;
+        int seedLocalY = seedY - y;
+        int seed = Pack(seedLocalX, seedLocalY, width);
+        visited[seed] = true;
+        queue[tail++] = seed;
+        while (head < tail)
+        {
+            int packed = queue[head++];
+            int localX = packed % width;
+            int localY = packed / width;
+            int worldX = x + localX;
+            int worldY = y + localY;
+            count++;
+            minX = Math.Min(minX, worldX);
+            minY = Math.Min(minY, worldY);
+            maxX = Math.Max(maxX, worldX);
+            maxY = Math.Max(maxY, worldY);
+            TryEnqueueConnected(localX - 1, localY);
+            TryEnqueueConnected(localX + 1, localY);
+            TryEnqueueConnected(localX, localY - 1);
+            TryEnqueueConnected(localX, localY + 1);
+        }
+
+        int tightWidth = maxX - minX + 1;
+        int tightHeight = maxY - minY + 1;
+        if (count < Math.Max(1, MinCollapsePixels) ||
+            tightWidth > MaxCollapseRegionSize ||
+            tightHeight > MaxCollapseRegionSize ||
+            !HasSolidBlock2x2(minX, minY, tightWidth, tightHeight))
+        {
+            LastCollapseSkipReason = degenerateReason;
+            return false;
+        }
+
+        _ = Context.Bodies.CreateFromRegion(minX, minY, tightWidth, tightHeight);
+        LastCollapsedRegion = (minX, minY, tightWidth, tightHeight);
+        return true;
+
+        void TryEnqueueConnected(int localX, int localY)
+        {
+            if ((uint)localX >= (uint)width || (uint)localY >= (uint)height)
+            {
+                return;
+            }
+
+            int packed = Pack(localX, localY, width);
+            if (visited[packed])
+            {
+                return;
+            }
+
+            visited[packed] = true;
+            if (IsSolid(x + localX, y + localY))
+            {
+                queue[tail++] = packed;
+            }
+        }
+    }
+
+    private bool HasSolidBlock2x2(int x, int y, int width, int height)
+    {
+        if (width < 2 || height < 2)
+        {
+            return false;
+        }
+
+        for (int yy = y; yy < y + height - 1; yy++)
+        {
+            for (int xx = x; xx < x + width - 1; xx++)
+            {
+                if (IsSolid(xx, yy) &&
+                    IsSolid(xx + 1, yy) &&
+                    IsSolid(xx, yy + 1) &&
+                    IsSolid(xx + 1, yy + 1))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private int CountEmptyCells(int x, int y, int width, int height)
