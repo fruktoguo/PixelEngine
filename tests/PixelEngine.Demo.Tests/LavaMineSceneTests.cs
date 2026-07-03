@@ -102,6 +102,66 @@ public sealed class LavaMineSceneTests
         Assert.True(physics.PhysicsWorld.ActiveBodyCount > beforeCutBodies);
     }
 
+    /// <summary>
+    /// 验证 Demo 材质笔刷写入的 sand 会被真实 CA 接管，且内容包 water / oil / steam 密度规则会进入同一 CA。
+    /// </summary>
+    [Fact]
+    public async Task MaterialBrushPaintedMaterialsAreTakenOverByCaRules()
+    {
+        using Engine engine = await CreateLavaMineEngineAsync();
+        engine.RunHeadlessTicks(2);
+
+        ScriptScene scene = engine.Context.GetService<ScriptScene>();
+        _ = FindBehaviour<MaterialBrush>(scene);
+        CameraFollow follow = FindBehaviour<CameraFollow>(scene);
+        follow.Damping = 0f;
+        follow.LookaheadX = 0f;
+        follow.LookaheadY = 0f;
+        engine.RunHeadlessTicks(1);
+
+        ScriptInputApi input = engine.Context.GetService<ScriptInputApi>();
+        ScriptCameraApi camera = engine.Context.GetService<ScriptCameraApi>();
+        CellGrid grid = engine.Context.GetService<CellGrid>();
+        ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
+        MaterialTable materials = engine.Context.GetService<MaterialTable>();
+        Assert.True(materials.TryGetId("sand", out ushort sand));
+        Assert.True(materials.TryGetId("water", out ushort water));
+        Assert.True(materials.TryGetId("oil", out ushort oil));
+        Assert.True(materials.TryGetId("steam", out ushort steam));
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+
+        ClearRect(edit, 44, 82, 236, 260);
+        BuildBasin(edit, stone, minX: 48, minY: 92, maxX: 100, maxY: 160);
+        BuildBasin(edit, stone, minX: 118, minY: 92, maxX: 174, maxY: 150);
+        BuildBasin(edit, stone, minX: 188, minY: 92, maxX: 236, maxY: 150);
+
+        PaintWithBrush(engine, input, camera, Key.Digit1, worldX: 72f, worldY: 100f);
+        int sandInitial = CountMaterial(grid, sand, minX: 44, minY: 82, maxX: 100, maxY: 260);
+
+        FillRect(edit, stone, minX: 144, minY: 108, maxX: 145, maxY: 111);
+        FillRect(edit, stone, minX: 146, minY: 108, maxX: 147, maxY: 111);
+        FillRect(edit, stone, minX: 144, minY: 110, maxX: 147, maxY: 111);
+        FillRect(edit, water, minX: 145, minY: 108, maxX: 146, maxY: 109);
+        FillRect(edit, oil, minX: 145, minY: 109, maxX: 146, maxY: 110);
+
+        FillRect(edit, steam, minX: 204, minY: 132, maxX: 220, maxY: 142);
+        double steamAverageYBefore = AverageMaterialY(grid, steam, minX: 190, minY: 16, maxX: 234, maxY: 148);
+
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(oil, grid.MaterialAt(145, 108));
+        Assert.Equal(water, grid.MaterialAt(145, 109));
+
+        engine.RunHeadlessTicks(72);
+
+        int settledSand = CountMaterial(grid, sand, minX: 50, minY: 146, maxX: 98, maxY: 158);
+        double steamAverageYAfter = AverageMaterialY(grid, steam, minX: 190, minY: 16, maxX: 234, maxY: 148);
+
+        Assert.True(sandInitial > 0, "MaterialBrush 应先在测试区域写入 sand。");
+        Assert.True(settledSand >= 20, $"sand 应被 CA 接管并沉积到接料槽底部，initial={sandInitial}, settled={settledSand}");
+        Assert.True(steamAverageYAfter < steamAverageYBefore - 4.0, $"steam 气体应上升，beforeY={steamAverageYBefore:F2}, afterY={steamAverageYAfter:F2}");
+    }
+
     private static async Task<Engine> CreateLavaMineEngineAsync()
     {
         string root = FindRepositoryRoot();
@@ -200,6 +260,80 @@ public sealed class LavaMineSceneTests
         }
 
         return count;
+    }
+
+    private static int CountMaterial(CellGrid grid, ushort material, int minX, int minY, int maxX, int maxY)
+    {
+        int count = 0;
+        for (int y = minY; y < maxY; y++)
+        {
+            for (int x = minX; x < maxX; x++)
+            {
+                if (grid.MaterialAt(x, y) == material)
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private static double AverageMaterialY(CellGrid grid, ushort material, int minX, int minY, int maxX, int maxY)
+    {
+        long sum = 0;
+        int count = 0;
+        for (int y = minY; y < maxY; y++)
+        {
+            for (int x = minX; x < maxX; x++)
+            {
+                if (grid.MaterialAt(x, y) != material)
+                {
+                    continue;
+                }
+
+                sum += y;
+                count++;
+            }
+        }
+
+        return count == 0
+            ? throw new InvalidOperationException($"区域内没有材质 {material}。")
+            : sum / (double)count;
+    }
+
+    private static void ClearRect(ISimulationEditApi edit, int minX, int minY, int maxX, int maxY)
+    {
+        _ = edit.ClearRect(minX, minY, maxX - 1, maxY - 1);
+    }
+
+    private static void FillRect(ISimulationEditApi edit, ushort material, int minX, int minY, int maxX, int maxY)
+    {
+        _ = edit.PaintRect(minX, minY, maxX - 1, maxY - 1, material);
+    }
+
+    private static void BuildBasin(ISimulationEditApi edit, ushort stone, int minX, int minY, int maxX, int maxY)
+    {
+        FillRect(edit, stone, minX, maxY - 3, maxX, maxY);
+        FillRect(edit, stone, minX, minY, minX + 3, maxY);
+        FillRect(edit, stone, maxX - 3, minY, maxX, maxY);
+    }
+
+    private static void PaintWithBrush(
+        Engine engine,
+        ScriptInputApi input,
+        ScriptCameraApi camera,
+        Key materialKey,
+        float worldX,
+        float worldY)
+    {
+        Point2F screen = camera.WorldToScreen(worldX, worldY);
+        input.Update([materialKey], [], screen.X, screen.Y, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        input.Update([], [MouseButton.Left], screen.X, screen.Y, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        input.Update([], [], screen.X, screen.Y, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
     }
 
     private static bool TryFindSnapshot(RigidBodySnapshot[] snapshots, int bodyKey, out RigidBodySnapshot snapshot)
