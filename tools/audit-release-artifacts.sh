@@ -304,12 +304,12 @@ assert_friendly_package_layout() {
       content/scenes/lava-mine.scene) has_scene=1 ;;
     esac
 
-    if [[ "$relative" != app/* && "$relative" != content/* && "$relative" != app && "$relative" != content && "$relative" != "README.txt" && "$relative" != "SHA256SUMS" && "$relative" != "$launcher" && ! "$relative" =~ ^(LICENSE|NOTICE)(\..+)?$ ]]; then
-      fail_audit "package 根目录只允许启动入口/README/SHA256SUMS/许可文件与 app/content 目录: $name -> $relative"
-    fi
-
     if is_disallowed_runtime_root_file "$relative" && [[ "$relative" != app/* ]]; then
       fail_audit "package 根目录不应包含运行时依赖，请放入 app/: $name -> $relative"
+    fi
+
+    if [[ "$relative" != app/* && "$relative" != content/* && "$relative" != app && "$relative" != content && "$relative" != "README.txt" && "$relative" != "SHA256SUMS" && "$relative" != "$launcher" && ! "$relative" =~ ^(LICENSE|NOTICE)(\..+)?$ ]]; then
+      fail_audit "package 根目录只允许启动入口/README/SHA256SUMS/许可文件与 app/content 目录: $name -> $relative"
     fi
 
     if (( ! is_directory )); then
@@ -352,6 +352,99 @@ assert_friendly_package_layout() {
   done
 }
 
+assert_friendly_expanded_package_layout() {
+  local directory="$1"
+  local name
+  name="$(basename "$directory")"
+  local rid=""
+  local channel=""
+  if [[ "$name" =~ ^PixelEngine-Demo-.+-(win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64)-(r2r|aot)$ ]]; then
+    rid="${BASH_REMATCH[1]}"
+    channel="${BASH_REMATCH[2]}"
+  else
+    fail_audit "展开 package 目录名不符合发行命名: $name"
+  fi
+
+  local launcher
+  local entry=""
+  if [[ "$rid" == win-* ]]; then
+    launcher="PixelEngine Demo.exe"
+    [[ "$channel" == "r2r" ]] && entry="app/PixelEngine.Demo.dll"
+  else
+    launcher="PixelEngine Demo.sh"
+    entry="app/PixelEngine.Demo"
+  fi
+
+  local has_readme=0
+  local has_launcher=0
+  local has_entry=0
+  local has_materials=0
+  local has_reactions=0
+  local has_scene=0
+  local expanded_files=()
+  local expanded_entries=()
+  local path
+  while IFS= read -r -d '' path; do
+    local relative="${path#"$directory"/}"
+    relative="${relative//\\//}"
+    expanded_entries+=("$relative")
+
+    case "$relative" in
+      README.txt) has_readme=1 ;;
+      SHA256SUMS) ;;
+      "$launcher") has_launcher=1 ;;
+      "$entry") has_entry=1 ;;
+      content/materials.json) has_materials=1 ;;
+      content/reactions.json) has_reactions=1 ;;
+      content/scenes/lava-mine.scene) has_scene=1 ;;
+    esac
+
+    if is_disallowed_runtime_root_file "$relative" && [[ "$relative" != app/* ]]; then
+      fail_audit "展开 package 根目录不应包含运行时依赖，请放入 app/: $name -> $relative"
+    fi
+
+    if [[ "$relative" != app/* && "$relative" != content/* && "$relative" != app && "$relative" != content && "$relative" != "README.txt" && "$relative" != "SHA256SUMS" && "$relative" != "$launcher" && ! "$relative" =~ ^(LICENSE|NOTICE)(\..+)?$ ]]; then
+      fail_audit "展开 package 根目录只允许启动入口/README/SHA256SUMS/许可文件与 app/content 目录: $name -> $relative"
+    fi
+
+    if [[ -f "$path" ]]; then
+      expanded_files+=("$relative")
+    fi
+  done < <(find "$directory" -mindepth 1 -print0 | sort -z)
+
+  (( has_readme )) || fail_audit "展开 package 缺少 README.txt: $name"
+  (( has_launcher )) || fail_audit "展开 package 缺少 launcher: $name -> $launcher"
+  [[ -z "$entry" || "$has_entry" -eq 1 ]] || fail_audit "展开 package 缺少 app 依赖入口: $name -> $entry"
+  (( has_materials )) || fail_audit "展开 package 缺少 content/materials.json: $name"
+  (( has_reactions )) || fail_audit "展开 package 缺少 content/reactions.json: $name"
+  (( has_scene )) || fail_audit "展开 package 缺少 content/scenes/lava-mine.scene: $name"
+
+  local checksum_path="$directory/SHA256SUMS"
+  assert_file_exists "$checksum_path" "展开 package 缺少 SHA256SUMS"
+  declare -A declared_expanded_files=()
+  local checksum_line
+  while IFS= read -r checksum_line || [[ -n "$checksum_line" ]]; do
+    checksum_line="${checksum_line%$'\r'}"
+    [[ -z "${checksum_line//[[:space:]]/}" ]] && continue
+    if [[ ! "$checksum_line" =~ ^([0-9a-fA-F]{64})[[:space:]]+\*?(.+)$ ]]; then
+      fail_audit "展开 package 内 SHA256SUMS 行格式无效: $name -> $checksum_line"
+    fi
+
+    local checksum_name="${BASH_REMATCH[2]}"
+    checksum_name="${checksum_name#./}"
+    [[ "$checksum_name" != "SHA256SUMS" ]] || fail_audit "展开 package 内 SHA256SUMS 不应覆盖自身: $name"
+    contains_item "$checksum_name" "${expanded_files[@]}" || fail_audit "展开 package 内 SHA256SUMS 指向不存在的文件: $name -> $checksum_name"
+    [[ -z "${declared_expanded_files[$checksum_name]+x}" ]] || fail_audit "展开 package 内 SHA256SUMS 重复条目: $name -> $checksum_name"
+    declared_expanded_files["$checksum_name"]=1
+  done < "$checksum_path"
+
+  local expanded_file
+  for expanded_file in "${expanded_files[@]}"; do
+    [[ "$expanded_file" == "SHA256SUMS" ]] && continue
+    [[ -n "${declared_expanded_files[$expanded_file]+x}" ]] || fail_audit "展开 package 内 SHA256SUMS 未覆盖文件: $name -> $expanded_file"
+  done
+}
+
 audit_publish_directory() {
   local rid="$1"
   local channel="$2"
@@ -389,6 +482,7 @@ is_release_package_name() {
 
 collect_packages() {
   packages=()
+  package_dirs=()
   if [[ ! -d "$package_root" ]]; then
     if (( require_all )); then
       fail_audit "缺少 package 目录: $package_root"
@@ -404,6 +498,15 @@ collect_packages() {
       \( -name 'PixelEngine-Demo-*.zip' -o -name 'PixelEngine-Demo-*.tar.gz' \) \
       -print0 | sort -z
   )
+
+  local package_dir
+  while IFS= read -r -d '' package_dir; do
+    package_dirs+=("$package_dir")
+  done < <(
+    find "$package_root" -maxdepth 1 -type d \
+      -name 'PixelEngine-Demo-*' \
+      -print0 | sort -z
+  )
 }
 
 assert_expected_packages() {
@@ -413,6 +516,8 @@ assert_expected_packages() {
   local name
   local count_for_pair
   local expected_count=0
+  declare -A package_stems=()
+  declare -A expanded_stems=()
 
   for package in "${packages[@]}"; do
     name="$(basename "$package")"
@@ -421,6 +526,32 @@ assert_expected_packages() {
     fi
 
     assert_friendly_package_layout "$package"
+    local stem="$name"
+    case "$stem" in
+      *.zip) stem="${stem%.zip}" ;;
+      *.tar.gz) stem="${stem%.tar.gz}" ;;
+    esac
+    package_stems["$stem"]=1
+  done
+
+  for package_dir in "${package_dirs[@]}"; do
+    name="$(basename "$package_dir")"
+    if [[ ! "$name" =~ ^PixelEngine-Demo-.+-(win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64)-(r2r|aot)$ ]]; then
+      fail_audit "展开 package 目录名不符合发行命名: $name"
+    fi
+
+    if [[ -z "${package_stems[$name]+x}" ]]; then
+      fail_audit "展开 package 目录缺少对应归档: $name"
+    fi
+
+    expanded_stems["$name"]=1
+    assert_friendly_expanded_package_layout "$package_dir"
+  done
+
+  for name in "${!package_stems[@]}"; do
+    if [[ -z "${expanded_stems[$name]+x}" ]]; then
+      fail_audit "package 缺少同名展开目录: $name"
+    fi
   done
 
   if (( require_all && ${#packages[@]} != 12 )); then
@@ -522,7 +653,7 @@ audit_packages() {
   assert_expected_packages
   assert_checksums
   if (( ${#packages[@]} > 0 )); then
-    echo "Package OK: ${#packages[@]}"
+    echo "Package OK: ${#packages[@]} expanded=${#package_dirs[@]}"
   elif (( ! require_all )); then
     echo "Package skipped: no packages under $package_root"
   fi
@@ -561,6 +692,7 @@ done
 rids=(win-x64 win-arm64 linux-x64 linux-arm64 osx-x64 osx-arm64)
 channels=(r2r aot)
 packages=()
+package_dirs=()
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 

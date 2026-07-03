@@ -229,6 +229,12 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
   }
 
   foreach ($relative in $relativeEntries) {
+    if (Test-DisallowedRuntimeRootFile $relative) {
+      if (-not $relative.StartsWith('app/', [StringComparison]::Ordinal)) {
+        throw "package 根目录不应包含运行时依赖，请放入 app/: $($package.Name) -> $relative"
+      }
+    }
+
     if (-not $relative.StartsWith('app/', [StringComparison]::Ordinal) -and
         -not $relative.StartsWith('content/', [StringComparison]::Ordinal) -and
         $relative -ne 'app' -and
@@ -238,12 +244,6 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
         $relative -ne $launcher -and
         $relative -notmatch '^(LICENSE|NOTICE)(\..+)?$') {
       throw "package 根目录只允许启动入口/README/SHA256SUMS/许可文件与 app/content 目录: $($package.Name) -> $relative"
-    }
-
-    if (Test-DisallowedRuntimeRootFile $relative) {
-      if (-not $relative.StartsWith('app/', [StringComparison]::Ordinal)) {
-        throw "package 根目录不应包含运行时依赖，请放入 app/: $($package.Name) -> $relative"
-      }
     }
   }
 
@@ -280,6 +280,98 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
   foreach ($relative in $relativeFileEntries) {
     if ($relative -ne 'SHA256SUMS' -and -not $declared.Contains($relative)) {
       throw "package 内 SHA256SUMS 未覆盖文件: $($package.Name) -> $relative"
+    }
+  }
+}
+
+function Assert-FriendlyExpandedPackageLayout([System.IO.DirectoryInfo]$packageDirectory) {
+  if ($packageDirectory.Name -notmatch '^PixelEngine-Demo-.+-(?<rid>win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64)-(?<channel>r2r|aot)$') {
+    throw "展开 package 目录名不符合发行命名: $($packageDirectory.Name)"
+  }
+
+  $rid = $Matches['rid']
+  $channel = $Matches['channel']
+  $relativeEntries = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+  $relativeFileEntries = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+
+  foreach ($entry in Get-ChildItem -LiteralPath $packageDirectory.FullName -Recurse -Force) {
+    $relative = [IO.Path]::GetRelativePath($packageDirectory.FullName, $entry.FullName).Replace('\', '/')
+    if ([string]::IsNullOrWhiteSpace($relative)) {
+      continue
+    }
+
+    [void]$relativeEntries.Add($relative)
+    if (-not $entry.PSIsContainer) {
+      [void]$relativeFileEntries.Add($relative)
+    }
+  }
+
+  $launcher = if ($rid.StartsWith('win-')) { 'PixelEngine Demo.exe' } else { 'PixelEngine Demo.sh' }
+  $requiredEntries = [System.Collections.Generic.List[string]]::new()
+  foreach ($required in @('README.txt', 'SHA256SUMS', $launcher, 'content/materials.json', 'content/reactions.json', 'content/scenes/lava-mine.scene')) {
+    $requiredEntries.Add($required)
+  }
+
+  if ($channel -eq 'r2r') {
+    $requiredEntries.Add($(if ($rid.StartsWith('win-')) { 'app/PixelEngine.Demo.dll' } else { 'app/PixelEngine.Demo' }))
+  } elseif (-not $rid.StartsWith('win-')) {
+    $requiredEntries.Add('app/PixelEngine.Demo')
+  }
+
+  foreach ($required in $requiredEntries) {
+    if (-not $relativeEntries.Contains($required)) {
+      throw "展开 package 缺少玩家友好布局入口、app 依赖或 content 内容: $($packageDirectory.Name) -> $required"
+    }
+  }
+
+  foreach ($relative in $relativeEntries) {
+    if (Test-DisallowedRuntimeRootFile $relative) {
+      if (-not $relative.StartsWith('app/', [StringComparison]::Ordinal)) {
+        throw "展开 package 根目录不应包含运行时依赖，请放入 app/: $($packageDirectory.Name) -> $relative"
+      }
+    }
+
+    if (-not $relative.StartsWith('app/', [StringComparison]::Ordinal) -and
+        -not $relative.StartsWith('content/', [StringComparison]::Ordinal) -and
+        $relative -ne 'app' -and
+        $relative -ne 'content' -and
+        $relative -ne 'README.txt' -and
+        $relative -ne 'SHA256SUMS' -and
+        $relative -ne $launcher -and
+        $relative -notmatch '^(LICENSE|NOTICE)(\..+)?$') {
+      throw "展开 package 根目录只允许启动入口/README/SHA256SUMS/许可文件与 app/content 目录: $($packageDirectory.Name) -> $relative"
+    }
+  }
+
+  $checksumPath = Join-Path $packageDirectory.FullName 'SHA256SUMS'
+  Assert-FileExists $checksumPath '展开 package 缺少 SHA256SUMS'
+  $declared = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+  foreach ($line in Get-Content -LiteralPath $checksumPath) {
+    if ([string]::IsNullOrWhiteSpace($line)) {
+      continue
+    }
+
+    if ($line -notmatch '^([0-9a-fA-F]{64})\s+\*?(.+)$') {
+      throw "展开 package 内 SHA256SUMS 行格式无效: $($packageDirectory.Name) -> $line"
+    }
+
+    $checksumName = $Matches[2] -replace '^\./', ''
+    if ($checksumName -eq 'SHA256SUMS') {
+      throw "展开 package 内 SHA256SUMS 不应覆盖自身: $($packageDirectory.Name)"
+    }
+
+    if (-not $relativeFileEntries.Contains($checksumName)) {
+      throw "展开 package 内 SHA256SUMS 指向不存在的文件: $($packageDirectory.Name) -> $checksumName"
+    }
+
+    if (-not $declared.Add($checksumName)) {
+      throw "展开 package 内 SHA256SUMS 重复条目: $($packageDirectory.Name) -> $checksumName"
+    }
+  }
+
+  foreach ($relative in $relativeFileEntries) {
+    if ($relative -ne 'SHA256SUMS' -and -not $declared.Contains($relative)) {
+      throw "展开 package 内 SHA256SUMS 未覆盖文件: $($packageDirectory.Name) -> $relative"
     }
   }
 }
@@ -326,18 +418,51 @@ function Get-PackageFiles {
     Sort-Object Name)
 }
 
+function Get-PackageDirectories {
+  if (-not (Test-Path -LiteralPath $PackageRoot -PathType Container)) {
+    return @()
+  }
+
+  return @(Get-ChildItem -LiteralPath $PackageRoot -Directory |
+    Where-Object { $_.Name -match '^PixelEngine-Demo-.+-(win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64)-(r2r|aot)$' } |
+    Sort-Object Name)
+}
+
 function Test-ReleasePackageName([string]$name) {
   return $name -match '^PixelEngine-Demo-.+-(win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64)-(r2r|aot)\.(zip|tar\.gz)$'
 }
 
 function Assert-PackagesAndChecksums {
   $packages = Get-PackageFiles
+  $packageDirectories = Get-PackageDirectories
   foreach ($package in $packages) {
     if (-not (Test-ReleasePackageName $package.Name)) {
       throw "package 文件名不符合发行命名: $($package.Name)"
     }
 
     Assert-FriendlyPackageLayout $package
+  }
+
+  $packageNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+  foreach ($package in $packages) {
+    $stem = $package.Name -replace '\.zip$', '' -replace '\.tar\.gz$', ''
+    [void]$packageNames.Add($stem)
+  }
+
+  $directoryNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+  foreach ($directory in $packageDirectories) {
+    [void]$directoryNames.Add($directory.Name)
+    if (-not $packageNames.Contains($directory.Name)) {
+      throw "展开 package 目录缺少对应归档: $($directory.Name)"
+    }
+
+    Assert-FriendlyExpandedPackageLayout $directory
+  }
+
+  foreach ($packageName in $packageNames) {
+    if (-not $directoryNames.Contains($packageName)) {
+      throw "package 缺少同名展开目录: $packageName"
+    }
   }
 
   if ($RequireAll -and $packages.Count -ne 12) {
@@ -365,9 +490,9 @@ function Assert-PackagesAndChecksums {
   Assert-FileExists $checksumPath '缺少 SHA256SUMS'
   $checksumLines = Get-Content -LiteralPath $checksumPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
   $checksums = [System.Collections.Generic.Dictionary[string, string]]::new([StringComparer]::Ordinal)
-  $packageNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+  $packageArchiveNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
   foreach ($package in $packages) {
-    [void]$packageNames.Add($package.Name)
+    [void]$packageArchiveNames.Add($package.Name)
   }
 
   foreach ($line in $checksumLines) {
@@ -380,7 +505,7 @@ function Assert-PackagesAndChecksums {
       throw "SHA256SUMS 只允许 package root 下的文件名: $checksumName"
     }
 
-    if (-not $packageNames.Contains($checksumName)) {
+    if (-not $packageArchiveNames.Contains($checksumName)) {
       throw "SHA256SUMS 包含 package root 下不存在或非发行包的条目: $checksumName"
     }
 
@@ -406,7 +531,7 @@ function Assert-PackagesAndChecksums {
     throw "SHA256SUMS 条目数与 package 数不一致。"
   }
 
-  Write-Host "Package audit passed. Packages: $($packages.Count)."
+  Write-Host "Package audit passed. Packages: $($packages.Count). Expanded: $($packageDirectories.Count)."
 }
 
 foreach ($rid in $rids) {

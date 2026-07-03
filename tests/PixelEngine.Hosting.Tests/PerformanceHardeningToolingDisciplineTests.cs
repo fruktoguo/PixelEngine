@@ -1901,11 +1901,19 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("SHA256SUMS 重复条目", auditPs1, StringComparison.Ordinal);
         Assert.Contains("SHA256SUMS 条目数与 package 数不一致", auditPs1, StringComparison.Ordinal);
         Assert.Contains("Assert-FriendlyPackageLayout", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("Assert-FriendlyExpandedPackageLayout", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("package 缺少同名展开目录", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("展开 package 目录缺少对应归档", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("展开 package 根目录不应包含运行时依赖，请放入 app/", auditPs1, StringComparison.Ordinal);
         Assert.Contains("package 根目录不应包含运行时依赖，请放入 app/", auditPs1, StringComparison.Ordinal);
         Assert.Contains("package 根目录只允许启动入口/README/SHA256SUMS/许可文件与 app/content 目录", auditPs1, StringComparison.Ordinal);
         Assert.Contains("package 内 SHA256SUMS 未覆盖文件", auditPs1, StringComparison.Ordinal);
         Assert.Contains("content/materials.json", auditPs1, StringComparison.Ordinal);
         Assert.Contains("assert_friendly_package_layout", auditSh, StringComparison.Ordinal);
+        Assert.Contains("assert_friendly_expanded_package_layout", auditSh, StringComparison.Ordinal);
+        Assert.Contains("package 缺少同名展开目录", auditSh, StringComparison.Ordinal);
+        Assert.Contains("展开 package 目录缺少对应归档", auditSh, StringComparison.Ordinal);
+        Assert.Contains("展开 package 根目录不应包含运行时依赖，请放入 app/", auditSh, StringComparison.Ordinal);
         Assert.Contains("package 根目录不应包含运行时依赖，请放入 app/", auditSh, StringComparison.Ordinal);
         Assert.Contains("package 根目录只允许启动入口/README/SHA256SUMS/许可文件与 app/content 目录", auditSh, StringComparison.Ordinal);
         Assert.Contains("package 内 SHA256SUMS 未覆盖文件", auditSh, StringComparison.Ordinal);
@@ -2142,6 +2150,29 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Contains("app/PixelEngine.Demo.dll", packageChecksumsText, StringComparison.Ordinal);
             Assert.Contains("content/materials.json", packageChecksumsText, StringComparison.Ordinal);
 
+            ScriptResult staleExpandedAudit = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "audit-release-artifacts.ps1"),
+                "-PublishRoot",
+                Path.Combine(temp, "missing-publish"),
+                "-PackageRoot",
+                packageRoot);
+            Assert.NotEqual(0, staleExpandedAudit.ExitCode);
+            Assert.Contains("展开 package 目录缺少对应归档", staleExpandedAudit.Output, StringComparison.Ordinal);
+
+            Directory.Delete(Path.Combine(packageRoot, "PixelEngine-Demo-8.8.8-win-x64-aot"), recursive: true);
+            _ = WriteTextEvidence(Path.Combine(expandedPackageDir, "PixelEngine.Demo.dll"), "root clutter");
+            ScriptResult clutterAudit = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "audit-release-artifacts.ps1"),
+                "-PublishRoot",
+                Path.Combine(temp, "missing-publish"),
+                "-PackageRoot",
+                packageRoot);
+            Assert.NotEqual(0, clutterAudit.ExitCode);
+            Assert.Contains("展开 package 根目录不应包含运行时依赖，请放入 app/", clutterAudit.Output, StringComparison.Ordinal);
+            File.Delete(Path.Combine(expandedPackageDir, "PixelEngine.Demo.dll"));
+
             ScriptResult audit = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "audit-release-artifacts.ps1"),
@@ -2150,7 +2181,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-PackageRoot",
                 packageRoot);
             Assert.Equal(0, audit.ExitCode);
-            Assert.Contains("Package audit passed", audit.Output, StringComparison.Ordinal);
+            Assert.Contains("Package audit passed. Packages: 1. Expanded: 1.", audit.Output, StringComparison.Ordinal);
         }
         finally
         {
