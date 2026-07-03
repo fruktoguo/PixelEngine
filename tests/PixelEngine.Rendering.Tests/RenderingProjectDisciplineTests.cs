@@ -41,6 +41,75 @@ public sealed class RenderingProjectDisciplineTests
     }
 
     [Fact]
+    public void GlResourceCountsReportsTotalAndPerKind()
+    {
+        GlResourceCounts counts = new(
+            Textures: 1,
+            Buffers: 2,
+            Framebuffers: 3,
+            ShaderPrograms: 4,
+            ComputePrograms: 5,
+            Shaders: 6,
+            VertexArrays: 7,
+            TimerQueries: 8);
+
+        Assert.Equal(36, counts.Total);
+        Assert.Equal(1, counts.GetCount(GlResourceKind.Texture));
+        Assert.Equal(2, counts.GetCount(GlResourceKind.Buffer));
+        Assert.Equal(3, counts.GetCount(GlResourceKind.Framebuffer));
+        Assert.Equal(4, counts.GetCount(GlResourceKind.ShaderProgram));
+        Assert.Equal(5, counts.GetCount(GlResourceKind.ComputeProgram));
+        Assert.Equal(6, counts.GetCount(GlResourceKind.Shader));
+        Assert.Equal(7, counts.GetCount(GlResourceKind.VertexArray));
+        Assert.Equal(8, counts.GetCount(GlResourceKind.TimerQuery));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => counts.GetCount((GlResourceKind)int.MaxValue));
+    }
+
+    [Fact]
+    public void GlResourceTrackerCoversRenderingOwnedNativeObjects()
+    {
+        string tracker = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "GlResourceTracker.cs"));
+        string texture = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "GlTexture.cs"));
+        string buffer = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "GlBuffer.cs"));
+        string framebuffer = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Framebuffer.cs"));
+        string shaderProgram = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "ShaderProgram.cs"));
+        string fullscreenQuad = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "FullscreenQuad.cs"));
+        string gpuParticles = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "GpuParticleRenderer.cs"));
+        string overlay = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "OverlayRenderer.cs"));
+        string compute = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Compute", "GLComputeBackend.cs"));
+        string detector = File.ReadAllText(ProjectPath("tools", "PixelEngine.Tools.ManagedNativeLeakDetector", "Program.cs"));
+
+        Assert.Contains("Volatile.Read", tracker, StringComparison.Ordinal);
+        Assert.Contains("Interlocked.Increment", tracker, StringComparison.Ordinal);
+        Assert.Contains("Interlocked.Decrement", tracker, StringComparison.Ordinal);
+        Assert.Contains("TrackCreated(GlResourceKind.Texture", texture, StringComparison.Ordinal);
+        Assert.Contains("TrackDeleted(GlResourceKind.Texture", texture, StringComparison.Ordinal);
+        Assert.Contains("TrackCreated(GlResourceKind.Buffer", buffer, StringComparison.Ordinal);
+        Assert.Contains("TrackDeleted(GlResourceKind.Buffer", buffer, StringComparison.Ordinal);
+        Assert.Contains("TrackCreated(GlResourceKind.Framebuffer", framebuffer, StringComparison.Ordinal);
+        Assert.Contains("TrackDeleted(GlResourceKind.Framebuffer", framebuffer, StringComparison.Ordinal);
+        Assert.Contains("TrackCreated(GlResourceKind.ShaderProgram", shaderProgram, StringComparison.Ordinal);
+        Assert.Contains("TrackDeleted(GlResourceKind.ShaderProgram", shaderProgram, StringComparison.Ordinal);
+        Assert.Contains("TrackCreated(GlResourceKind.Shader", shaderProgram, StringComparison.Ordinal);
+        Assert.Contains("TrackDeleted(GlResourceKind.Shader", shaderProgram, StringComparison.Ordinal);
+        Assert.Contains("TrackCreated(GlResourceKind.VertexArray", fullscreenQuad, StringComparison.Ordinal);
+        Assert.Contains("TrackDeleted(GlResourceKind.VertexArray", fullscreenQuad, StringComparison.Ordinal);
+        Assert.Contains("TrackCreated(GlResourceKind.Buffer", fullscreenQuad, StringComparison.Ordinal);
+        Assert.Contains("TrackDeleted(GlResourceKind.Buffer", fullscreenQuad, StringComparison.Ordinal);
+        Assert.Contains("TrackCreated(GlResourceKind.VertexArray", gpuParticles, StringComparison.Ordinal);
+        Assert.Contains("TrackDeleted(GlResourceKind.VertexArray", gpuParticles, StringComparison.Ordinal);
+        Assert.Contains("TrackCreated(GlResourceKind.VertexArray", overlay, StringComparison.Ordinal);
+        Assert.Contains("TrackDeleted(GlResourceKind.VertexArray", overlay, StringComparison.Ordinal);
+        Assert.Contains("TrackCreated(GlResourceKind.ComputeProgram", compute, StringComparison.Ordinal);
+        Assert.Contains("TrackDeleted(GlResourceKind.ComputeProgram", compute, StringComparison.Ordinal);
+        Assert.Contains("TrackCreated(GlResourceKind.Shader", compute, StringComparison.Ordinal);
+        Assert.Contains("TrackDeleted(GlResourceKind.Shader", compute, StringComparison.Ordinal);
+        Assert.Contains("TrackCreated(GlResourceKind.TimerQuery", compute, StringComparison.Ordinal);
+        Assert.Contains("TrackDeleted(GlResourceKind.TimerQuery", compute, StringComparison.Ordinal);
+        Assert.Contains("GlResourceTracker.Snapshot().Total", detector, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RenderingDoesNotHardDependOnVulkanGl4OrComputeSharpPackage()
     {
         string source = ReadRenderingSources();

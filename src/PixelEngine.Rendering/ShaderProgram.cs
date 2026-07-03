@@ -35,11 +35,15 @@ public sealed class ShaderProgram : IDisposable
         ArgumentNullException.ThrowIfNull(vertexSource);
         ArgumentNullException.ThrowIfNull(fragmentSource);
 
-        uint vertex = Compile(gl, ShaderType.VertexShader, vertexSource);
-        uint fragment = Compile(gl, ShaderType.FragmentShader, fragmentSource);
-        uint program = gl.CreateProgram();
+        uint vertex = 0;
+        uint fragment = 0;
+        uint program = 0;
         try
         {
+            vertex = Compile(gl, ShaderType.VertexShader, vertexSource);
+            fragment = Compile(gl, ShaderType.FragmentShader, fragmentSource);
+            program = gl.CreateProgram();
+            GlResourceTracker.TrackCreated(GlResourceKind.ShaderProgram, program);
             gl.AttachShader(program, vertex);
             gl.AttachShader(program, fragment);
             gl.LinkProgram(program);
@@ -54,13 +58,27 @@ public sealed class ShaderProgram : IDisposable
         }
         catch
         {
-            gl.DeleteProgram(program);
+            if (program != 0)
+            {
+                gl.DeleteProgram(program);
+                GlResourceTracker.TrackDeleted(GlResourceKind.ShaderProgram, program);
+            }
+
             throw;
         }
         finally
         {
-            gl.DeleteShader(vertex);
-            gl.DeleteShader(fragment);
+            if (vertex != 0)
+            {
+                gl.DeleteShader(vertex);
+                GlResourceTracker.TrackDeleted(GlResourceKind.Shader, vertex);
+            }
+
+            if (fragment != 0)
+            {
+                gl.DeleteShader(fragment);
+                GlResourceTracker.TrackDeleted(GlResourceKind.Shader, fragment);
+            }
         }
     }
 
@@ -101,12 +119,14 @@ public sealed class ShaderProgram : IDisposable
         }
 
         _gl.DeleteProgram(Handle);
+        GlResourceTracker.TrackDeleted(GlResourceKind.ShaderProgram, Handle);
         _disposed = true;
     }
 
     private static uint Compile(GL gl, ShaderType type, string source)
     {
         uint shader = gl.CreateShader(type);
+        GlResourceTracker.TrackCreated(GlResourceKind.Shader, shader);
         try
         {
             gl.ShaderSource(shader, source);
@@ -123,6 +143,7 @@ public sealed class ShaderProgram : IDisposable
         catch
         {
             gl.DeleteShader(shader);
+            GlResourceTracker.TrackDeleted(GlResourceKind.Shader, shader);
             throw;
         }
     }

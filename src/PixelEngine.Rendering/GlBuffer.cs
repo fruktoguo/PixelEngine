@@ -21,6 +21,7 @@ public sealed unsafe class GlBuffer : IDisposable
         _gl = gl;
         Target = target;
         Handle = gl.GenBuffer();
+        GlResourceTracker.TrackCreated(GlResourceKind.Buffer, Handle);
     }
 
     /// <summary>
@@ -100,6 +101,7 @@ public sealed unsafe class GlBuffer : IDisposable
         }
 
         _gl.DeleteBuffer(Handle);
+        GlResourceTracker.TrackDeleted(GlResourceKind.Buffer, Handle);
         _disposed = true;
     }
 }

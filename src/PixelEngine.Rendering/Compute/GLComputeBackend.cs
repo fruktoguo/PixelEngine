@@ -43,6 +43,7 @@ public sealed class GLComputeBackend : IComputeBackend
 
         uint shader = CompileComputeShader(source);
         uint program = _gl.CreateProgram();
+        GlResourceTracker.TrackCreated(GlResourceKind.ComputeProgram, program);
         try
         {
             _gl.AttachShader(program, shader);
@@ -60,11 +61,13 @@ public sealed class GLComputeBackend : IComputeBackend
         catch
         {
             _gl.DeleteProgram(program);
+            GlResourceTracker.TrackDeleted(GlResourceKind.ComputeProgram, program);
             throw;
         }
         finally
         {
             _gl.DeleteShader(shader);
+            GlResourceTracker.TrackDeleted(GlResourceKind.Shader, shader);
         }
     }
 
@@ -149,6 +152,7 @@ public sealed class GLComputeBackend : IComputeBackend
         }
 
         uint query = _gl.GenQuery();
+        GlResourceTracker.TrackCreated(GlResourceKind.TimerQuery, query);
         _gl.BeginQuery(QueryTarget.TimeElapsed, query);
         _timerQueryActive = true;
         return query;
@@ -186,6 +190,7 @@ public sealed class GLComputeBackend : IComputeBackend
 
         _gl.GetQueryObject(queryHandle, QueryObjectParameterName.Result, out elapsedNanoseconds);
         _gl.DeleteQuery(queryHandle);
+        GlResourceTracker.TrackDeleted(GlResourceKind.TimerQuery, queryHandle);
         return true;
     }
 
@@ -196,6 +201,7 @@ public sealed class GLComputeBackend : IComputeBackend
         if (queryHandle != 0)
         {
             _gl.DeleteQuery(queryHandle);
+            GlResourceTracker.TrackDeleted(GlResourceKind.TimerQuery, queryHandle);
         }
     }
 
@@ -210,6 +216,7 @@ public sealed class GLComputeBackend : IComputeBackend
         foreach (uint program in _programs)
         {
             _gl.DeleteProgram(program);
+            GlResourceTracker.TrackDeleted(GlResourceKind.ComputeProgram, program);
         }
 
         _programs.Clear();
@@ -219,6 +226,7 @@ public sealed class GLComputeBackend : IComputeBackend
     private uint CompileComputeShader(string source)
     {
         uint shader = _gl.CreateShader(ShaderType.ComputeShader);
+        GlResourceTracker.TrackCreated(GlResourceKind.Shader, shader);
         try
         {
             _gl.ShaderSource(shader, source);
@@ -235,6 +243,7 @@ public sealed class GLComputeBackend : IComputeBackend
         catch
         {
             _gl.DeleteShader(shader);
+            GlResourceTracker.TrackDeleted(GlResourceKind.Shader, shader);
             throw;
         }
     }
