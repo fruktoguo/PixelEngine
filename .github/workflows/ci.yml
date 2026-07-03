@@ -84,6 +84,7 @@ jobs:
             "| Key | Value |",
             "|---|---|",
             "| rid | ${{ matrix.rid }} |",
+            "| runner | ${{ matrix.runner }} |",
             "| build_only | ${{ matrix.build_only }} |",
             "| tests_ran | ${{ matrix.build_only != 'true' }} |",
             "| run_id | ${{ github.run_id }} |",
@@ -140,6 +141,7 @@ jobs:
             "",
             "| Key | Value |",
             "|---|---|",
+            "| runner | windows-latest |",
             "| run_id | ${{ github.run_id }} |",
             "| sha | ${{ github.sha }} |",
             "| conclusion | ${{ job.status }} |"
@@ -205,6 +207,7 @@ jobs:
             "| Key | Value |",
             "|---|---|",
             "| rid | ${{ matrix.rid }} |",
+            "| runner | ${{ matrix.runner }} |",
             "| channels | r2r,aot |",
             "| run_id | ${{ github.run_id }} |",
             "| sha | ${{ github.sha }} |",
@@ -260,20 +263,21 @@ jobs:
             benchmarkGuard = [ordered]@{
               report = 'artifacts/ci-matrix-evidence/benchmark-guard.md'
               sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/benchmark-guard.md'
+              runner = 'windows-latest'
             }
             buildTest = [ordered]@{
-              'win-x64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/build-test-win-x64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/build-test-win-x64.md'; testsRan = $true }
-              'win-arm64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/build-test-win-arm64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/build-test-win-arm64.md'; testsRan = $false }
-              'linux-x64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/build-test-linux-x64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/build-test-linux-x64.md'; testsRan = $true }
-              'linux-arm64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/build-test-linux-arm64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/build-test-linux-arm64.md'; testsRan = $true }
-              'osx-x64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/build-test-osx-x64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/build-test-osx-x64.md'; testsRan = $true }
-              'osx-arm64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/build-test-osx-arm64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/build-test-osx-arm64.md'; testsRan = $true }
+              'win-x64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/build-test-win-x64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/build-test-win-x64.md'; testsRan = $true; runner = 'windows-latest' }
+              'win-arm64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/build-test-win-arm64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/build-test-win-arm64.md'; testsRan = $false; runner = 'windows-latest' }
+              'linux-x64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/build-test-linux-x64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/build-test-linux-x64.md'; testsRan = $true; runner = 'ubuntu-latest' }
+              'linux-arm64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/build-test-linux-arm64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/build-test-linux-arm64.md'; testsRan = $true; runner = 'ubuntu-24.04-arm' }
+              'osx-x64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/build-test-osx-x64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/build-test-osx-x64.md'; testsRan = $true; runner = 'macos-15-intel' }
+              'osx-arm64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/build-test-osx-arm64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/build-test-osx-arm64.md'; testsRan = $true; runner = 'macos-14' }
             }
             verifyPublish = [ordered]@{
-              'win-x64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/verify-publish-win-x64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/verify-publish-win-x64.md' }
-              'linux-x64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/verify-publish-linux-x64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/verify-publish-linux-x64.md' }
-              'osx-x64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/verify-publish-osx-x64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/verify-publish-osx-x64.md' }
-              'osx-arm64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/verify-publish-osx-arm64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/verify-publish-osx-arm64.md' }
+              'win-x64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/verify-publish-win-x64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/verify-publish-win-x64.md'; runner = 'windows-latest' }
+              'linux-x64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/verify-publish-linux-x64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/verify-publish-linux-x64.md'; runner = 'ubuntu-latest' }
+              'osx-x64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/verify-publish-osx-x64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/verify-publish-osx-x64.md'; runner = 'macos-15-intel' }
+              'osx-arm64' = [ordered]@{ report = 'artifacts/ci-matrix-evidence/verify-publish-osx-arm64.md'; sha256 = Get-Sha256 'artifacts/ci-matrix-evidence/verify-publish-osx-arm64.md'; runner = 'macos-14' }
             }
           }
           $manifest | ConvertTo-Json -Depth 10 | Set-Content -Path artifacts/ci-matrix-evidence/evidence.json -Encoding UTF8
