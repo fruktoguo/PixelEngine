@@ -2027,6 +2027,58 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 AOT arm64 SIMD probe 不能用 skip 报告冒充 NEON 证据。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsSkippedArm64SimdProbe()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-arm64-simd-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject node = rootNode["artifacts"]!["win-arm64"]!["aot"]!.AsObject();
+            string simdProbe = (string)node["simdProbe"]!;
+            _ = WriteMarkdownEvidence(
+                simdProbe,
+                new Dictionary<string, string>
+                {
+                    ["rid"] = "win-arm64",
+                    ["channel"] = "aot",
+                    ["conclusion"] = "success",
+                },
+                "skipped for non-x64");
+            node["simdProbeSha256"] = GetSha256(simdProbe);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "arm64-simd-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("artifacts.win-arm64.aot.simdProbe 不能是 skip 报告", report, StringComparison.Ordinal);
+            Assert.Contains("artifacts.win-arm64.aot.simdProbe 必须包含 NEON 证据", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 CA 最内层邻居访问经 3x3 窗口基址与 Unsafe.Add 漫游，不在热更新器内直接数组索引。
     /// </summary>
     [Fact]
@@ -2433,7 +2485,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         return manifestPath;
     }
 
-    private static string WriteMarkdownEvidence(string path, IReadOnlyDictionary<string, string> values)
+    private static string WriteMarkdownEvidence(string path, IReadOnlyDictionary<string, string> values, string extra = "")
     {
         _ = Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         List<string> lines =
@@ -2447,6 +2499,12 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         foreach (KeyValuePair<string, string> item in values)
         {
             lines.Add($"| {item.Key} | {item.Value} |");
+        }
+
+        if (!string.IsNullOrWhiteSpace(extra))
+        {
+            lines.Add("");
+            lines.Add(extra);
         }
 
         File.WriteAllLines(path, lines);
