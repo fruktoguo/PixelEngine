@@ -10,7 +10,9 @@ namespace PixelEngine.Editor;
 /// </summary>
 public sealed class PerformanceHudPanel : IEditorPanel
 {
-    private const int HistoryLength = 240;
+    private const int HistoryLength = 512;
+    private const int WarmupFrames = 60;
+    private const int SteadyMinimumFrames = 120;
     private const int PhaseBarCount = 11;
     private static readonly string[] PhaseBarLabels =
     [
@@ -32,11 +34,23 @@ public sealed class PerformanceHudPanel : IEditorPanel
     private readonly float[] _physicsHistory = new float[HistoryLength];
     private readonly float[] _renderHistory = new float[HistoryLength];
     private readonly float[] _audioHistory = new float[HistoryLength];
+    private readonly float[] _cpuHistory = new float[HistoryLength];
+    private readonly float[] _gpuHistory = new float[HistoryLength];
+    private readonly float[] _waitHistory = new float[HistoryLength];
+    private readonly float[] _effectiveHistory = new float[HistoryLength];
+    private readonly float[] _variableHistory = new float[HistoryLength];
+    private readonly float[] _fixedHistory = new float[HistoryLength];
+    private readonly float[] _activeChunksHistory = new float[HistoryLength];
+    private readonly float[] _activeCellsKHistory = new float[HistoryLength];
+    private readonly float[] _freeParticlesHistory = new float[HistoryLength];
+    private readonly float[] _rigidBodiesHistory = new float[HistoryLength];
     private readonly float[] _phaseBars = new float[PhaseBarCount];
+    private readonly float[] _statsScratch = new float[HistoryLength];
     private PixelEngine.Rendering.IRenderPresentationControl? _presentationControl;
     private long _lastCapturedFrame = -1;
     private int _historyOffset;
     private int _historyCount;
+    private int _capturedSampleCount;
 
     /// <inheritdoc />
     public string Title => EditorDockSpace.PerformanceHudWindowTitle;
@@ -48,6 +62,41 @@ public sealed class PerformanceHudPanel : IEditorPanel
     /// 最近一次采样结果，供测试和诊断读取。
     /// </summary>
     public PerformanceHudSample LastSample { get; private set; }
+
+    /// <summary>
+    /// 预热帧之后的滚动整帧墙钟统计。
+    /// </summary>
+    public PerformanceHudStatistics FrameStatistics { get; private set; }
+
+    /// <summary>
+    /// 预热帧之后的滚动 CPU busy 统计。
+    /// </summary>
+    public PerformanceHudStatistics CpuStatistics { get; private set; }
+
+    /// <summary>
+    /// 预热帧之后的滚动 GPU timer query 统计；GPU timer 不可用时样本为 0。
+    /// </summary>
+    public PerformanceHudStatistics GpuStatistics { get; private set; }
+
+    /// <summary>
+    /// 预热帧之后的滚动 present/vsync 等待统计。
+    /// </summary>
+    public PerformanceHudStatistics WaitStatistics { get; private set; }
+
+    /// <summary>
+    /// 预热帧之后的滚动有效帧耗时统计。
+    /// </summary>
+    public PerformanceHudStatistics EffectiveStatistics { get; private set; }
+
+    /// <summary>
+    /// 预热帧之后的滚动随负载变化工作统计。
+    /// </summary>
+    public PerformanceHudStatistics VariableWorkStatistics { get; private set; }
+
+    /// <summary>
+    /// 预热帧之后的滚动每帧固定开销统计。
+    /// </summary>
+    public PerformanceHudStatistics FixedOverheadStatistics { get; private set; }
 
     /// <inheritdoc />
     public unsafe void Draw(in EditorContext context)
@@ -179,6 +228,23 @@ public sealed class PerformanceHudPanel : IEditorPanel
         bool vSyncEnabled = snapshot.PresentationControl?.VSyncEnabled ??
             (counters?.VSyncEnabled == true);
         string boundType = DetermineBoundType(cpuWorkMs, gpuFrameMs, waitMs, totalMs, vSyncEnabled, gpuTimerAvailable);
+        double renderBufferMs = Get(subPhases, FrameSubPhase.RenderBufferBuild);
+        if (renderBufferMs <= 0)
+        {
+            renderBufferMs = Get(phases, FramePhase.BuildRenderBuffer);
+        }
+
+        double variableWorkMs = particleMs +
+            caPassA +
+            caPassB +
+            caPassC +
+            caPassD +
+            Get(phases, FramePhase.Temperature) +
+            physicsMs +
+            shapeRebuildMs +
+            uploadMs +
+            renderBufferMs;
+        double fixedOverheadMs = Math.Max(0.0, cpuWorkMs - variableWorkMs - Get(subPhases, FrameSubPhase.Present));
 
         return new PerformanceHudSample(
             totalMs,
@@ -209,6 +275,8 @@ public sealed class PerformanceHudPanel : IEditorPanel
             counters?.RigidBodies ?? 0,
             counters?.ResidentChunks ?? 0,
             counters?.ResidentMemoryBytes ?? 0,
+            variableWorkMs,
+            fixedOverheadMs,
             snapshot.SimHz,
             snapshot.Runtime.TimeScale,
             snapshot.Runtime.DegradationLevel,
@@ -264,8 +332,19 @@ public sealed class PerformanceHudPanel : IEditorPanel
         _physicsHistory[index] = (float)(sample.PhysicsMs + sample.ShapeRebuildMs);
         _renderHistory[index] = (float)(sample.RenderMs + sample.UploadMs);
         _audioHistory[index] = (float)sample.AudioMs;
+        _cpuHistory[index] = (float)sample.CpuWorkMs;
+        _gpuHistory[index] = (float)sample.GpuWorkMs;
+        _waitHistory[index] = (float)sample.WaitMs;
+        _effectiveHistory[index] = (float)sample.EffectiveFrameMs;
+        _variableHistory[index] = (float)sample.VariableWorkMs;
+        _fixedHistory[index] = (float)sample.FixedOverheadMs;
+        _activeChunksHistory[index] = sample.ActiveChunks;
+        _activeCellsKHistory[index] = sample.ActiveCells / 1000.0f;
+        _freeParticlesHistory[index] = sample.FreeParticles;
+        _rigidBodiesHistory[index] = sample.RigidBodies;
         _historyOffset = (_historyOffset + 1) % HistoryLength;
         _historyCount = Math.Min(_historyCount + 1, HistoryLength);
+        _capturedSampleCount++;
         _phaseBars[0] = (float)sample.ParticleMs;
         _phaseBars[1] = (float)sample.CaPassAMs;
         _phaseBars[2] = (float)sample.CaPassBMs;
@@ -277,6 +356,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
         _phaseBars[8] = (float)sample.RenderMs;
         _phaseBars[9] = (float)sample.UploadMs;
         _phaseBars[10] = (float)sample.AudioMs;
+        UpdateStatistics(sample);
     }
 
     private void DrawSummary(PerformanceHudSample sample)
@@ -284,6 +364,10 @@ public sealed class PerformanceHudPanel : IEditorPanel
         ImGui.TextUnformatted($"Frame {sample.TotalFrameMs:F2} ms   Sim {sample.SimHz:F0} Hz   TimeScale {sample.TimeScale:F2}");
         ImGui.TextUnformatted($"Bound {sample.BoundType}: CPU {sample.CpuWorkMs:F2} ms / GPU {(sample.GpuTimerAvailable ? sample.GpuWorkMs.ToString("F2") : "N/A")} ms / wait {sample.WaitMs:F2} ms");
         ImGui.TextUnformatted($"Present submit/wait: {sample.PresentSubmitMs:F2} / {sample.PresentWaitMs:F2} ms   Effective {sample.EffectiveFps:F1} FPS");
+        ImGui.TextUnformatted($"Stats {StatisticsStateText()}   samples {FrameStatistics.SampleCount}/{HistoryLength} after warmup {WarmupFrames}   Spike {(FrameStatistics.IsSpike ? "yes" : "no")}");
+        ImGui.TextUnformatted($"Frame avg/p50/p95/p99/max: {FrameStatistics.AverageMs:F2} / {FrameStatistics.P50Ms:F2} / {FrameStatistics.P95Ms:F2} / {FrameStatistics.P99Ms:F2} / {FrameStatistics.MaxMs:F2} ms");
+        ImGui.TextUnformatted($"CPU avg/p99: {CpuStatistics.AverageMs:F2} / {CpuStatistics.P99Ms:F2} ms   GPU avg/p99: {(sample.GpuTimerAvailable ? GpuStatistics.AverageMs.ToString("F2") : "N/A")} / {(sample.GpuTimerAvailable ? GpuStatistics.P99Ms.ToString("F2") : "N/A")} ms   wait avg/p99: {WaitStatistics.AverageMs:F2} / {WaitStatistics.P99Ms:F2} ms");
+        ImGui.TextUnformatted($"Effective avg/p99: {EffectiveStatistics.AverageMs:F2} / {EffectiveStatistics.P99Ms:F2} ms   variable/fixed avg: {VariableWorkStatistics.AverageMs:F2} / {FixedOverheadStatistics.AverageMs:F2} ms");
         bool vSync = sample.VSyncEnabled;
         if (_presentationControl is not null && _presentationControl.CanToggleVSync)
         {
@@ -307,6 +391,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
         ImGui.TextUnformatted($"Free particles: {sample.FreeParticles}");
         ImGui.TextUnformatted($"Rigid bodies: {sample.RigidBodies}");
         ImGui.TextUnformatted($"Estimated resident memory: {FormatBytes(sample.ResidentMemoryBytes)}");
+        ImGui.TextUnformatted($"Workload variable/fixed/wait: {sample.VariableWorkMs:F2} / {sample.FixedOverheadMs:F2} / {sample.WaitMs:F2} ms");
     }
 
     private static void DrawPhaseTimes(PerformanceHudSample sample)
@@ -335,12 +420,50 @@ public sealed class PerformanceHudPanel : IEditorPanel
             fixed (float* physics = _physicsHistory)
             fixed (float* render = _renderHistory)
             fixed (float* audio = _audioHistory)
+            fixed (float* cpu = _cpuHistory)
+            fixed (float* wait = _waitHistory)
+            fixed (float* effective = _effectiveHistory)
             {
                 ImPlot.PlotLine("frame", frame, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
+                ImPlot.PlotLine("CPU", cpu, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
+                ImPlot.PlotLine("wait", wait, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
+                ImPlot.PlotLine("effective", effective, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
                 ImPlot.PlotLine("CA", ca, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
                 ImPlot.PlotLine("physics", physics, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
                 ImPlot.PlotLine("render", render, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
                 ImPlot.PlotLine("audio", audio, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
+            }
+
+            ImPlot.EndPlot();
+        }
+
+        if (ImPlot.BeginPlot("负载计数趋势", new Vector2(-1, 120), ImPlotFlags.NoMouseText))
+        {
+            ImPlot.SetupAxes("frame", "count", ImPlotAxisFlags.NoTickLabels, ImPlotAxisFlags.AutoFit);
+            fixed (float* chunks = _activeChunksHistory)
+            fixed (float* cellsK = _activeCellsKHistory)
+            fixed (float* particles = _freeParticlesHistory)
+            fixed (float* bodies = _rigidBodiesHistory)
+            {
+                ImPlot.PlotLine("active chunks", chunks, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
+                ImPlot.PlotLine("active cells K", cellsK, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
+                ImPlot.PlotLine("particles", particles, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
+                ImPlot.PlotLine("rigid bodies", bodies, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
+            }
+
+            ImPlot.EndPlot();
+        }
+
+        if (ImPlot.BeginPlot("固定/负载成本结构", new Vector2(-1, 120), ImPlotFlags.NoMouseText))
+        {
+            ImPlot.SetupAxes("frame", "ms", ImPlotAxisFlags.NoTickLabels, ImPlotAxisFlags.AutoFit);
+            fixed (float* variable = _variableHistory)
+            fixed (float* fixedCost = _fixedHistory)
+            fixed (float* wait = _waitHistory)
+            {
+                ImPlot.PlotLine("variable", variable, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
+                ImPlot.PlotLine("fixed", fixedCost, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
+                ImPlot.PlotLine("wait", wait, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
             }
 
             ImPlot.EndPlot();
@@ -356,6 +479,64 @@ public sealed class PerformanceHudPanel : IEditorPanel
 
             ImPlot.EndPlot();
         }
+    }
+
+    private void UpdateStatistics(PerformanceHudSample sample)
+    {
+        FrameStatistics = CalculateStatistics(_frameHistory, sample.TotalFrameMs);
+        CpuStatistics = CalculateStatistics(_cpuHistory, sample.CpuWorkMs);
+        GpuStatistics = sample.GpuTimerAvailable ? CalculateStatistics(_gpuHistory, sample.GpuWorkMs) : PerformanceHudStatistics.Empty;
+        WaitStatistics = CalculateStatistics(_waitHistory, sample.WaitMs);
+        EffectiveStatistics = CalculateStatistics(_effectiveHistory, sample.EffectiveFrameMs);
+        VariableWorkStatistics = CalculateStatistics(_variableHistory, sample.VariableWorkMs);
+        FixedOverheadStatistics = CalculateStatistics(_fixedHistory, sample.FixedOverheadMs);
+    }
+
+    private string StatisticsStateText()
+    {
+        return _capturedSampleCount <= WarmupFrames
+            ? "warmup"
+            : FrameStatistics.IsSteady ? "steady" : "collecting";
+    }
+
+    private PerformanceHudStatistics CalculateStatistics(float[] history, double latestMs)
+    {
+        int warmedSamples = _capturedSampleCount - WarmupFrames;
+        if (warmedSamples <= 0)
+        {
+            return PerformanceHudStatistics.Empty;
+        }
+
+        int sampleCount = Math.Min(_historyCount, warmedSamples);
+        double total = 0;
+        double max = 0;
+        int start = (_historyOffset - sampleCount + HistoryLength) % HistoryLength;
+        for (int i = 0; i < sampleCount; i++)
+        {
+            int sourceIndex = (start + i) % HistoryLength;
+            float value = history[sourceIndex];
+            _statsScratch[i] = value;
+            total += value;
+            if (value > max)
+            {
+                max = value;
+            }
+        }
+
+        Array.Sort(_statsScratch, 0, sampleCount);
+        double average = total / sampleCount;
+        double p50 = Percentile(_statsScratch, sampleCount, 0.50);
+        double p95 = Percentile(_statsScratch, sampleCount, 0.95);
+        double p99 = Percentile(_statsScratch, sampleCount, 0.99);
+        bool isSteady = sampleCount >= SteadyMinimumFrames;
+        bool isSpike = sampleCount >= 32 && latestMs >= p95 * 1.25 && latestMs >= p50 + 2.0;
+        return new PerformanceHudStatistics(sampleCount, average, p50, p95, p99, max, isSteady, isSpike);
+    }
+
+    private static double Percentile(float[] sorted, int count, double percentile)
+    {
+        int index = Math.Clamp((int)Math.Ceiling(count * percentile) - 1, 0, count - 1);
+        return sorted[index];
     }
 
     private static string FormatBytes(long bytes)

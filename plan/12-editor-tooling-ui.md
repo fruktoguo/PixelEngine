@@ -167,7 +167,7 @@ ImGui 集成与框架：
 性能 HUD（架构 §17.1）：
 - [x] `PerformanceHudPanel`：每相位耗时（particle/CA A–D/heat/physics/形状重建/render/upload/audio）（§3.7）
 - [x] 性能 HUD 切片 1：CPU busy / OpenGL GPU elapsed / present-wait 三分口径跑通；`PresentWait` 不计入 render work；HUD 显示 VSync 状态、运行时开关、有效 FPS 与瓶颈摘要（§3.7）
-- [~] 性能 HUD 切片 2：滚动窗口 avg/p50/p95/p99/max、帧时间历史波动图、尖刺/稳态标注与负载计数关联已部分具备基础曲线和瓶颈摘要，仍需补齐百分位统计与静态/动态成本结构面板（§3.7）
+- [x] 性能 HUD 切片 2：滚动窗口 avg/p50/p95/p99/max、帧时间历史波动图、尖刺/稳态标注、有效帧耗时统计、负载计数趋势与静态/动态成本结构面板（§3.7）
 - [x] 活跃 chunk 数 / 活跃 cell 数 / 自由粒子数 / 刚体数 / 常驻 chunk 数 + 估算内存（§3.7、架构 §12.2）
 - [x] 当前 sim 频率（60/30Hz）+ 时间膨胀/§4.3 降级级别显示（§3.7）
 - [x] 用 ImPlot 绘制滚动耗时曲线与相位堆叠条（§3.7）
@@ -210,7 +210,7 @@ sim 控制 / 存读档 / 调参 / 模式：
 - [x] 画刷在 Edit 模式可画/挖/擦/加温；写入仅落相位 [1]、标 dirty + KeepAlive；与 CA 多线程相位无竞争、无边界像素消失/复制（#1/#2/#4、§3.4）
 - [x] 世界检视器点选任一 cell 正确显示 material/temperature/Flags 逐位/owned-by-body/坐标/chunk/dirty/sleep（§3.5）
 - [x] 八种调试叠层（dirty rect/chunk+parity/KeepAlive/cell parity/温度热图/owned-by-body/粒子轨迹/CCL）均可独立切换并与世界对齐，能复现并定位边界/parity/刚体往返问题（架构 §17.2、§3.6）
-- [~] 性能 HUD 各相位耗时、计数、内存、sim 频率、降级级别与诊断快照一致；CPU/GPU/present-wait 三分口径已接入，仍需完成百分位统计、尖刺标注与静态/高活跃场景数百帧稳态验收（架构 §17.1、§3.7）
+- [~] 性能 HUD 各相位耗时、计数、内存、sim 频率、降级级别与诊断快照一致；CPU/GPU/present-wait 三分口径、预热剔除滚动百分位、尖刺/稳态标注与负载成本结构已接入，仍需完成真实窗口静态/高活跃场景数百帧稳态验收（架构 §17.1、§3.7）
 - [x] 材质/反应编辑后热重载即时生效；新增材质追加 id、删除材质 id 不被复用、既有 id 不重排（#8、§3.8）
 - [x] 删除被使用中的材质后，live 网格引用 cell 被替换为 fallback，并输出「替换了 N 个活 cell」诊断；不出现 id 错位损坏（#8、架构 §17.4）
 - [x] 改材质纹理/音效仅重载资产，运行时 id 不变（§3.8）

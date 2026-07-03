@@ -152,7 +152,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] `DOTNET_JitDisasm` + Disasmo/Rider 反汇编流程文档化、可复现。[plan/14 · §12.6/§17.3]
 - [x] Core 常驻 debug overlay 报每相位耗时/活跃 chunk/cell/粒子/刚体/常驻内存/sim 频率。[plan/12 · §17.1]
 - [x] 真实窗口 HUD 切片 1 已把 CPU busy、OpenGL GPU elapsed 与 present-wait 分离；VSync 可运行时切换，present/vsync wait 标注为非工作时间。[plan/12/08 · §17.1/§17.3]
-- [~] 真实窗口 HUD 仍需补齐滚动窗口 avg/p50/p95/p99/max、尖刺标注、静态 vs 高活跃场景数百帧稳态样本与负载关联分析。[plan/12/14 · §17.1/§17.3]
+- [~] 真实窗口 HUD 已补齐预热剔除滚动窗口 avg/p50/p95/p99/max、尖刺/稳态标注、有效帧耗时、负载计数趋势与固定/随负载变化成本结构；仍需补齐静态 vs 高活跃场景数百帧稳态样本证据。[plan/12/14 · §17.1/§17.3]
 - [x] 发行编译模式审计：默认 R2R（运行时 light-up）；AOT 次级必须显式 `IlcInstructionSet` 并反汇编验证 ymm/zmm。[plan/15 · §12.3/风险 R3]
 
 ## 5. 验收标准
@@ -170,7 +170,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] **过载降级链可逐级触发**：五级降级 + 节流全部实现并可由诊断计时器触发；压力下绝不进入 death spiral（不变式 #6）。[§4.2/§4.3]
 - [x] **内存上限守住**：常驻世界稳定 ≤ 配置上限，LRU 驱逐 + RLE+LZ4 生效，长漫游不无界增长。[§12.2]
 - [!] **延迟+分支校准**：瓶颈分析以 cache-miss/分支误预测为据；多核加速曲线与 cells/frame 在目标硬件实测落表、回填架构指标。[§12.7/§12.8/§17.3] 阻塞于 §4.11：`tools/hardware-counter-preflight.ps1` 已能显式报告非管理员 ETW 阻塞并在专用 runner 检查 `Cache Misses` / `Branch Mispredictions` 列，且脚本宿主边界由 `PerformanceHardeningToolingDisciplineTests.HardwareCounterPreflightWritesHostBoundaryReport` 覆盖；但当前会话仍无法采集真实硬件计数器，且缺少 6 RID 代表硬件 cells/frame 实测。统一 manifest 预检为 `tools/performance-target-evidence-preflight.ps1`，缺 manifest 为 `blocked_missing_target_performance_manifest`，schema/JSON 错误或缺顶层 `benchmarkRunId/gitCommit` 为 `blocked_invalid_target_performance_evidence`，缺 scope/hash、机器可读字段语义无效、任一报告的 `benchmarkRunId/gitCommit` 与 manifest 不一致或 cells/frame 报告缺少 BenchmarkDotNet 正文特征为 `blocked_missing_target_performance_scope_evidence`，证据齐全仅 `target_performance_evidence_attached_pending_review`。当前预检还要求硬件计数器报告声明 `branchMispredictionsPresent=true`，cells/frame 报告声明 `activeCellsPerFrame>=2000000`、`representativeHardware=true`、`iterationCount>=measuredIterations`，并包含 `BenchmarkDotNet v`、`CellThroughputBenchmark.StepJobSystem` 与 `FullActiveLiquid`。
-- [~] **工具链门禁运行**：BenchmarkDotNet perf 门禁在 CI 跑、回归视为 bug；反汇编流程可复现；debug overlay 在线；发行编译模式审计通过；真实窗口 HUD 已完成 CPU/GPU/present-wait 三分切片，但仍需补齐百分位统计与静态/动态稳态样本验收。[§17.1/§17.3/§12.3]
+- [~] **工具链门禁运行**：BenchmarkDotNet perf 门禁在 CI 跑、回归视为 bug；反汇编流程可复现；debug overlay 在线；发行编译模式审计通过；真实窗口 HUD 已完成 CPU/GPU/present-wait 三分、滚动百分位、尖刺/稳态与负载成本结构切片，但仍需补齐静态/动态稳态样本验收。[§17.1/§17.3/§12.3]
 - [!] **帧预算达标**：目标硬件实测 CA ≤8ms、渲染+光照+post ≤4ms、物理+重建 ≤3–4ms、逻辑+音频 ≤1ms（典型场景留余量）。[§1.4] 阻塞：当前已有 Short 报告显示 full-active CA 仍未达目标预算，且缺少目标硬件正式长跑。目标硬件正式长跑报告需通过 `tools/performance-target-evidence-preflight.ps1` 的 `frame_budget_target_hardware` scope/hash 与 `targetHardware`、`source=PixelEngineDiagnostics`、`scenario` 枚举、`sampleSeconds>=60`、`frameSamples>=3600`、`fixedTickNoCatchUp=true`、`caP99Ms<=8`、`renderP99Ms<=4`、`physicsP99Ms<=4`、`logicAudioP99Ms<=1` 字段校验后再人工复核，不能用只写 p99 数字的摘要替代引擎诊断长跑。
 - [x] **零冲突复核**：本表所有项与架构不变式（#2/#3/#6/#7/#9）及 plan/00 技术栈无冲突。[AGENTS §1] 复核证据：§4.3 保持 checkerboard + 持久线程池、无 cell 级锁；§4.5/§4.8 保持单缓冲 + dirty-rect + parity；§4.9 明确绝不 accumulator 追帧；§4.1/§4.7 确认颜色不入 cell、CPU sim 权威且 GPU pass 非权威无 readback；技术栈仍沿用 plan/00 的 .NET 10/C# 14/Intrinsics/Silk.NET/Box2D/BenchmarkDotNet。
 

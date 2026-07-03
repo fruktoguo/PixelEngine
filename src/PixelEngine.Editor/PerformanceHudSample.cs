@@ -32,6 +32,8 @@ public readonly record struct PerformanceHudSample(
     long RigidBodies,
     long ResidentChunks,
     long ResidentMemoryBytes,
+    double VariableWorkMs,
+    double FixedOverheadMs,
     double SimHz,
     double TimeScale,
     int DegradationLevel,
