@@ -212,6 +212,66 @@ function Add-RunIdentityCheck {
     }
 }
 
+function Get-ReleaseTagVersion {
+    param(
+        [System.Collections.Generic.List[string]]$Missing,
+        [string]$Root,
+        [string]$WorkflowRunReport,
+        [string]$UploadReport
+    )
+
+    $workflowPath = Resolve-EvidencePath -Root $Root -Path $WorkflowRunReport
+    $uploadPath = Resolve-EvidencePath -Root $Root -Path $UploadReport
+    if ([string]::IsNullOrWhiteSpace($workflowPath) -or
+        [string]::IsNullOrWhiteSpace($uploadPath) -or
+        -not (Test-Path -LiteralPath $workflowPath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $uploadPath -PathType Leaf)) {
+        return ""
+    }
+
+    $workflow = Read-MarkdownEvidenceTable -Path $workflowPath
+    $upload = Read-MarkdownEvidenceTable -Path $uploadPath
+
+    $version = ""
+    $expectedTag = ""
+    if (-not $workflow.ContainsKey("ref")) {
+        $Missing.Add("workflow_run 报告缺少 ref 字段")
+    }
+    else {
+        $ref = [string]$workflow["ref"]
+        if ($ref -notmatch '^refs/tags/v(?<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$') {
+            $Missing.Add("workflow_run ref 必须是 refs/tags/v<semver>：actual=$ref")
+        }
+        else {
+            $version = $Matches["version"]
+            $expectedTag = "v$version"
+        }
+    }
+
+    foreach ($key in @("tag", "release_tag")) {
+        if (-not $upload.ContainsKey($key)) {
+            $Missing.Add("github_release_upload 报告缺少 $key 字段")
+        }
+    }
+
+    if ($upload.ContainsKey("release_tag")) {
+        $releaseTag = [string]$upload["release_tag"]
+        if (-not [string]::Equals($releaseTag, "true", [StringComparison]::OrdinalIgnoreCase)) {
+            $Missing.Add("github_release_upload release_tag 必须为 true，实际为 $releaseTag")
+        }
+    }
+
+    if ($upload.ContainsKey("tag")) {
+        $actualTag = [string]$upload["tag"]
+        if (-not [string]::IsNullOrWhiteSpace($expectedTag) -and
+            -not [string]::Equals($actualTag, $expectedTag, [StringComparison]::Ordinal)) {
+            $Missing.Add("github_release_upload tag 必须与 workflow_run ref 一致：expected=$expectedTag actual=$actualTag")
+        }
+    }
+
+    return $version
+}
+
 function Test-DeterministicHashRows {
     param(
         [System.Collections.Generic.List[string]]$Missing,
@@ -393,6 +453,29 @@ function Test-ReleaseChecksumRows {
     }
 }
 
+function Test-PackageVersionsMatchReleaseTag {
+    param(
+        [System.Collections.Generic.List[string]]$Missing,
+        [string]$ReleaseVersion,
+        [hashtable]$ExpectedPackages
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ReleaseVersion)) {
+        return
+    }
+
+    foreach ($name in $ExpectedPackages.Keys) {
+        if ($name -notmatch '^PixelEngine-Demo-(?<version>.+)-(win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64)-(r2r|aot)\.(zip|tar\.gz)$') {
+            continue
+        }
+
+        $packageVersion = $Matches["version"]
+        if (-not [string]::Equals($packageVersion, $ReleaseVersion, [StringComparison]::Ordinal)) {
+            $Missing.Add("package 文件名版本必须与 release tag 一致：$name expected=$ReleaseVersion actual=$packageVersion")
+        }
+    }
+}
+
 function Get-JsonPropertyNames {
     param([object]$Node)
 
@@ -531,6 +614,7 @@ $githubReleaseUploadReport = [string]$manifest.githubRelease.uploadReport
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -DeclaredSha256 ([string]$manifest.workflowRunSha256)
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -ExpectedValues @{ conclusion = "success" }
 $expectedRunIdentity = Get-ExpectedRunIdentity -Missing $missing -Root $root -WorkflowRunReport $workflowRunReport
+$releaseVersion = Get-ReleaseTagVersion -Missing $missing -Root $root -WorkflowRunReport $workflowRunReport -UploadReport $githubReleaseUploadReport
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "github_release_upload" -Path $githubReleaseUploadReport -DeclaredSha256 ([string]$manifest.githubRelease.uploadSha256)
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "github_release_upload" -Path $githubReleaseUploadReport -ExpectedValues @{ conclusion = "success" }
 Add-RunIdentityCheck -Missing $missing -Root $root -Scope "github_release_upload" -Path $githubReleaseUploadReport -ExpectedIdentity $expectedRunIdentity
@@ -609,6 +693,8 @@ elseif ($checksumPaths.Count -eq 1) {
     $checksumPath = [string](@($checksumPaths.Keys)[0])
     Test-ReleaseChecksumRows -Missing $missing -Root $root -Path $checksumPath -ExpectedPackages $expectedChecksumPackages
 }
+
+Test-PackageVersionsMatchReleaseTag -Missing $missing -ReleaseVersion $releaseVersion -ExpectedPackages $expectedChecksumPackages
 
 if ($missing.Count -gt 0) {
     $detail = "Release evidence preflight failed: release manifest 存在，但外部证据不完整。缺失项必须由 release workflow、目标 runner、macOS signing/notary 或 GitHub Release 上传结果补齐；不得据此勾选 plan/15 阻塞项。"

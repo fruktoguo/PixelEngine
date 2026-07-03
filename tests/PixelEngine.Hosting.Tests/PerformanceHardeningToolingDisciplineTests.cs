@@ -2796,6 +2796,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("Get-ExpectedRunIdentity", evidence, StringComparison.Ordinal);
         Assert.Contains("Add-RunIdentityCheck", evidence, StringComparison.Ordinal);
         Assert.Contains("必须与 workflow_run 一致", evidence, StringComparison.Ordinal);
+        Assert.Contains("Get-ReleaseTagVersion", evidence, StringComparison.Ordinal);
+        Assert.Contains("workflow_run ref 必须是 refs/tags/v<semver>", evidence, StringComparison.Ordinal);
+        Assert.Contains("github_release_upload release_tag 必须为 true", evidence, StringComparison.Ordinal);
+        Assert.Contains("Test-PackageVersionsMatchReleaseTag", evidence, StringComparison.Ordinal);
         Assert.Contains("packageReport", evidence, StringComparison.Ordinal);
         Assert.Contains("deterministic_hash", evidence, StringComparison.Ordinal);
         Assert.Contains("Test-ReleaseChecksumRows", evidence, StringComparison.Ordinal);
@@ -3490,6 +3494,50 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 release upload 即使写 success，也必须来自 tag ref 且 release_tag=true。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsSuccessfulUploadFromNonTagRef()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-success-non-tag-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(
+                temp,
+                packageConclusion: "success",
+                suffix: "success-non-tag",
+                workflowRef: "refs/heads/main",
+                releaseTag: "false",
+                uploadTag: "main");
+
+            string artifacts = Path.Combine(temp, "success-non-tag-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("workflow_run ref 必须是 refs/tags/v<semver>", report, StringComparison.Ordinal);
+            Assert.Contains("github_release_upload release_tag 必须为 true，实际为 false", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 deterministic hash 报告不能只靠 conclusion=success 冒充全部 RID/channel hash 匹配。
     /// </summary>
     [Fact]
@@ -3736,7 +3784,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string suffix = "good",
         string deterministicConclusion = "success",
         string r2rLightupConclusion = "success",
-        string githubReleaseConclusion = "success")
+        string githubReleaseConclusion = "success",
+        string workflowRef = "refs/tags/v0.1.0",
+        string releaseTag = "true",
+        string uploadTag = "v0.1.0")
     {
         string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "release-evidence");
         string packageRoot = Path.Combine(tempRoot, suffix, "artifacts", "package");
@@ -3745,10 +3796,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         string workflow = WriteMarkdownEvidence(
             Path.Combine(evidenceRoot, "workflow-run.md"),
-            new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["conclusion"] = "success" });
+            new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["ref"] = workflowRef, ["conclusion"] = "success" });
         string upload = WriteMarkdownEvidence(
             Path.Combine(evidenceRoot, "github-release-upload.md"),
-            new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["conclusion"] = githubReleaseConclusion });
+            new Dictionary<string, string> { ["tag"] = uploadTag, ["run_id"] = "1", ["sha"] = "abc", ["release_tag"] = releaseTag, ["conclusion"] = githubReleaseConclusion });
         string r2rLightup = WriteMarkdownEvidence(
             Path.Combine(evidenceRoot, "r2r-lightup.md"),
             new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["conclusion"] = r2rLightupConclusion });
