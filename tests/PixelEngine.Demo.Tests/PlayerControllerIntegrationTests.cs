@@ -243,6 +243,39 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证 Demo 爆破工具会通过公开 World.Explode 链路对邻近刚体施加径向冲量。
+    /// </summary>
+    [Fact]
+    public void ExplosiveToolMiddleClickPushesNearbyRigidBody()
+    {
+        MaterialTable materials = DemoMaterials();
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
+        FillRect(grid, stone, minX: 48, minY: 24, maxX: 60, maxY: 36);
+
+        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        int bodyKey = physics.CreateBodyFromRegion(48, 24, 12, 12);
+        RigidBodySnapshot before = SnapshotBody(physics, bodyKey);
+        Assert.Equal(0f, before.LinearVelocityPixelsPerSecond.X, precision: 3);
+
+        ExplosiveTool tool = scene.CreateEntity().AddComponent<ExplosiveTool>();
+        tool.Radius = 40;
+        tool.Force = 220f;
+        tool.CooldownSeconds = 0f;
+
+        input.Update([], [MouseButton.Middle], mouseX: 32f, mouseY: 30f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        input.Update([], [], mouseX: 32f, mouseY: 30f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+
+        RigidBodySnapshot after = SnapshotBody(physics, bodyKey);
+        Assert.Equal(1, tool.ExplosionCount);
+        Assert.True(
+            after.LinearVelocityPixelsPerSecond.X > before.LinearVelocityPixelsPerSecond.X + 0.1f,
+            $"爆炸应把左侧邻近刚体向右推出，before={before.LinearVelocityPixelsPerSecond}, after={after.LinearVelocityPixelsPerSecond}");
+    }
+
+    /// <summary>
     /// 验证 Demo 材质笔刷会响应数字键、滚轮和鼠标按钮，并按相机世界坐标写入/擦除 cell。
     /// </summary>
     [Fact]
@@ -852,6 +885,21 @@ public sealed class PlayerControllerIntegrationTests
     private static string Describe(CharacterState state)
     {
         return $"x={state.X}, y={state.Y}, ground={state.OnGround}, wallL={state.OnWallLeft}, wallR={state.OnWallRight}, req=({state.RequestedDeltaX},{state.RequestedDeltaY}), applied=({state.AppliedDeltaX},{state.AppliedDeltaY})";
+    }
+
+    private static RigidBodySnapshot SnapshotBody(PhysicsSystem physics, int bodyKey)
+    {
+        RigidBodySnapshot[] snapshots = new RigidBodySnapshot[Math.Max(1, physics.PhysicsWorld.ActiveBodyCount)];
+        int count = physics.CopyBodySnapshots(snapshots);
+        for (int i = 0; i < count; i++)
+        {
+            if (snapshots[i].BodyKey == bodyKey)
+            {
+                return snapshots[i];
+            }
+        }
+
+        throw new InvalidOperationException($"未找到刚体快照：bodyKey={bodyKey}。");
     }
 
     private static void FillFloor(CellGrid grid, ushort material, int y, int x0, int x1, bool rigidOwned)
