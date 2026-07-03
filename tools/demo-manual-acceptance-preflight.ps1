@@ -707,6 +707,183 @@ function Assert-ManualEvidenceMetadata {
     }
 }
 
+function ConvertFrom-ScriptedProbeSummary {
+    param([string]$Summary)
+
+    $values = [ordered]@{}
+    $normalized = $Summary
+    $prefix = "脚本化窗口输入摘要："
+    if ($normalized.StartsWith($prefix, [StringComparison]::Ordinal)) {
+        $normalized = $normalized.Substring($prefix.Length)
+    }
+
+    $normalized = $normalized.Trim().TrimEnd('。')
+    $matches = [regex]::Matches($normalized, '(?<key>[A-Za-z0-9_]+)=(?<value>.*?)(?=, [A-Za-z0-9_]+=|$)')
+    foreach ($match in $matches) {
+        $values[$match.Groups["key"].Value] = $match.Groups["value"].Value.Trim()
+    }
+
+    return $values
+}
+
+function Get-ScriptedProbeSummaryValue {
+    param(
+        [System.Collections.IDictionary]$Values,
+        [string]$ProbeName,
+        [string]$Key
+    )
+
+    if (-not $Values.Contains($Key)) {
+        throw "scripted window probe $ProbeName 摘要缺少语义字段：$Key。"
+    }
+
+    return [string]$Values[$Key]
+}
+
+function Assert-ScriptedProbeBoolean {
+    param(
+        [System.Collections.IDictionary]$Values,
+        [string]$ProbeName,
+        [string]$Key,
+        [bool]$Expected
+    )
+
+    $actual = Get-ScriptedProbeSummaryValue -Values $Values -ProbeName $ProbeName -Key $Key
+    if (-not [string]::Equals($actual, $Expected.ToString(), [StringComparison]::OrdinalIgnoreCase)) {
+        throw "scripted window probe $ProbeName 摘要字段 $Key 必须为 $Expected，实际为 $actual。"
+    }
+}
+
+function Assert-ScriptedProbeNumberAtLeast {
+    param(
+        [System.Collections.IDictionary]$Values,
+        [string]$ProbeName,
+        [string]$Key,
+        [double]$Minimum
+    )
+
+    $actualText = Get-ScriptedProbeSummaryValue -Values $Values -ProbeName $ProbeName -Key $Key
+    $actual = [double]0
+    if (-not [double]::TryParse($actualText, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$actual)) {
+        throw "scripted window probe $ProbeName 摘要字段 $Key 不是数字：$actualText。"
+    }
+
+    if ($actual -lt $Minimum) {
+        throw "scripted window probe $ProbeName 摘要字段 $Key 必须 >= $Minimum，实际为 $actual。"
+    }
+}
+
+function Assert-ScriptedProbeNumberBelow {
+    param(
+        [System.Collections.IDictionary]$Values,
+        [string]$ProbeName,
+        [string]$Key,
+        [double]$MaximumExclusive
+    )
+
+    $actualText = Get-ScriptedProbeSummaryValue -Values $Values -ProbeName $ProbeName -Key $Key
+    $actual = [double]0
+    if (-not [double]::TryParse($actualText, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$actual)) {
+        throw "scripted window probe $ProbeName 摘要字段 $Key 不是数字：$actualText。"
+    }
+
+    if ($actual -ge $MaximumExclusive) {
+        throw "scripted window probe $ProbeName 摘要字段 $Key 必须 < $MaximumExclusive，实际为 $actual。"
+    }
+}
+
+function Assert-ScriptedProbeRangeWidthAtLeast {
+    param(
+        [System.Collections.IDictionary]$Values,
+        [string]$ProbeName,
+        [string]$Key,
+        [double]$MinimumWidth
+    )
+
+    $actualText = Get-ScriptedProbeSummaryValue -Values $Values -ProbeName $ProbeName -Key $Key
+    $match = [regex]::Match($actualText, '^\((?<min>-?\d+(?:\.\d+)?),(?<max>-?\d+(?:\.\d+)?)\)$')
+    if (-not $match.Success) {
+        throw "scripted window probe $ProbeName 摘要字段 $Key 不是范围：$actualText。"
+    }
+
+    $min = [double]::Parse($match.Groups["min"].Value, [Globalization.CultureInfo]::InvariantCulture)
+    $max = [double]::Parse($match.Groups["max"].Value, [Globalization.CultureInfo]::InvariantCulture)
+    $width = $max - $min
+    if ($width -lt $MinimumWidth) {
+        throw "scripted window probe $ProbeName 摘要字段 $Key 宽度必须 >= $MinimumWidth，实际为 $width。"
+    }
+}
+
+function Assert-ScriptedProbeSummarySemantics {
+    param(
+        [string]$Name,
+        [System.Collections.IDictionary]$Values
+    )
+
+    switch ($Name) {
+        "playable-world" {
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "playable_shots" -Minimum 1
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "max_particles" -Minimum 1
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "frame_samples" -Minimum 120
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "camera_samples" -Minimum 1
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "player_ground_samples" -Minimum 1
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "player_air_samples" -Minimum 1
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "player_left_ground" -Expected $true
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "player_air_control" -Expected $true
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "camera_followed" -Expected $true
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "render_camera_synced" -Expected $true
+        }
+        "main" {
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "frame_samples" -Minimum 60
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "max_lights" -Minimum 1
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "player_air_samples" -Minimum 1
+        }
+        "route-attempt" {
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "frame_samples" -Minimum 120
+            Assert-ScriptedProbeRangeWidthAtLeast -Values $Values -ProbeName $Name -Key "player_x_range" -MinimumWidth 10
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "render_camera_synced" -Expected $true
+        }
+        "goal" {
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "goal_reached" -Expected $true
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "max_particles" -Minimum 1
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "max_lights" -Minimum 1
+        }
+        "health" {
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "spawn_probe" -Expected $true
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "damage_events" -Minimum 1
+            Assert-ScriptedProbeNumberBelow -Values $Values -ProbeName $Name -Key "player_health" -MaximumExclusive 100
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "max_particles" -Minimum 1
+        }
+        "camera" {
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "camera_followed" -Expected $true
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "render_camera_synced" -Expected $true
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "camera_samples" -Minimum 1
+        }
+        "reaction" {
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "reactions_observed" -Expected $true
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "phase_transitions_observed" -Expected $true
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "max_particles" -Minimum 1
+        }
+        "audio" {
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "audio_probe_one_shot_played" -Expected $true
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "audio_probe_ambient_activated" -Expected $true
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "audio_probe_limited" -Expected $true
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "audio_probe_max_played" -Minimum 1
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "audio_probe_max_dropped" -Minimum 1
+        }
+        "particle-light" {
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "particle_light_probe_spawned" -Minimum 96
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "particle_light_probe_depleted" -Expected $true
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "particle_light_probe_light_observed" -Expected $true
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "particle_light_probe_lighting_synced" -Expected $true
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "max_lights" -Minimum 1
+        }
+        default {
+            throw "未知 scripted window probe 名称，缺少语义校验：$Name。"
+        }
+    }
+}
+
 function Invoke-ScriptedProbe {
     param(
         [string]$Name,
@@ -759,6 +936,9 @@ function Invoke-ScriptedProbe {
             throw "scripted window probe $Name 摘要缺少标记：$marker。摘要：$summary"
         }
     }
+
+    $summaryValues = ConvertFrom-ScriptedProbeSummary -Summary $summary
+    Assert-ScriptedProbeSummarySemantics -Name $Name -Values $summaryValues
 
     $capture = Get-BmpFrameEvidence -Root $Root -Path $capturePath
 
