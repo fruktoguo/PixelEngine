@@ -42,6 +42,57 @@ function Get-FileSha256 {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
+function Get-BmpFrameEvidence {
+    param(
+        [string]$Root,
+        [string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "脚本化窗口 probe 未写出 framebuffer 截图：$Path"
+    }
+
+    $fileInfo = Get-Item -LiteralPath $Path
+    if ($fileInfo.Length -lt 54) {
+        throw "脚本化窗口 probe 截图不是有效 BMP：$Path"
+    }
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $reader = [System.IO.BinaryReader]::new($stream)
+        try {
+            $signature = $reader.ReadUInt16()
+            if ($signature -ne 0x4D42) {
+                throw "脚本化窗口 probe 截图缺少 BMP 签名：$Path"
+            }
+
+            $stream.Seek(18, [System.IO.SeekOrigin]::Begin) | Out-Null
+            $width = $reader.ReadInt32()
+            $height = $reader.ReadInt32()
+            $stream.Seek(28, [System.IO.SeekOrigin]::Begin) | Out-Null
+            $bitsPerPixel = $reader.ReadUInt16()
+            if ($width -le 0 -or $height -eq 0 -or $bitsPerPixel -le 0) {
+                throw "脚本化窗口 probe 截图 BMP 头无效：width=$width height=$height bitsPerPixel=$bitsPerPixel"
+            }
+
+            [pscustomobject]@{
+                path = ConvertTo-RepositoryRelativePath -Root $Root -Path $Path
+                sha256 = Get-FileSha256 -Path $Path
+                bytes = [int64]$fileInfo.Length
+                width = [int]$width
+                height = [int]([Math]::Abs([int64]$height))
+                bitsPerPixel = [int]$bitsPerPixel
+            }
+        }
+        finally {
+            $reader.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
 function Get-ManualScopes {
     @(
         [pscustomobject]@{
@@ -195,6 +246,7 @@ function Invoke-ScriptedProbe {
     New-Item -ItemType Directory -Force -Path $directory | Out-Null
     $stdoutPath = Join-Path $directory "stdout.txt"
     $stderrPath = Join-Path $directory "stderr.txt"
+    $capturePath = Join-Path $directory "capture.bmp"
     $logDirectory = Join-Path $directory "logs"
 
     $arguments = @(
@@ -208,6 +260,7 @@ function Invoke-ScriptedProbe {
         "--scripted-window-demo",
         "--content", $Content,
         "--scene", $Scene,
+        "--capture-frame", $capturePath,
         "--log-dir", $logDirectory
     )
     foreach ($argument in $ExtraArguments) {
@@ -231,12 +284,20 @@ function Invoke-ScriptedProbe {
         }
     }
 
+    $capture = Get-BmpFrameEvidence -Root $Root -Path $capturePath
+
     [pscustomobject]@{
         name = $Name
         scene = $Scene
         ticks = $Ticks
         stdout = ConvertTo-RepositoryRelativePath -Root $Root -Path $stdoutPath
         stderr = ConvertTo-RepositoryRelativePath -Root $Root -Path $stderrPath
+        capture = $capture.path
+        captureSha256 = $capture.sha256
+        captureBytes = $capture.bytes
+        captureWidth = $capture.width
+        captureHeight = $capture.height
+        captureBitsPerPixel = $capture.bitsPerPixel
         required = $RequiredSummaryMarkers
         summary = $summary
     }
@@ -374,6 +435,10 @@ function Write-ManualAcceptanceReport {
             $lines.Add("ticks: $($run.ticks)")
             $lines.Add(('stdout: `{0}`' -f $run.stdout))
             $lines.Add(('stderr: `{0}`' -f $run.stderr))
+            $lines.Add(('capture: `{0}`' -f $run.capture))
+            $lines.Add("capture_sha256: $($run.captureSha256)")
+            $lines.Add("capture_size: $($run.captureBytes) bytes")
+            $lines.Add("capture_dimensions: $($run.captureWidth)x$($run.captureHeight)x$($run.captureBitsPerPixel)")
             $lines.Add("required_markers: $($run.required -join '; ')")
             $lines.Add("")
             $lines.Add('```text')
