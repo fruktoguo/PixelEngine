@@ -2798,6 +2798,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("必须与 workflow_run 一致", evidence, StringComparison.Ordinal);
         Assert.Contains("packageReport", evidence, StringComparison.Ordinal);
         Assert.Contains("deterministic_hash", evidence, StringComparison.Ordinal);
+        Assert.Contains("Test-ReleaseChecksumRows", evidence, StringComparison.Ordinal);
+        Assert.Contains("SHA256SUMS 缺少 package 条目", evidence, StringComparison.Ordinal);
+        Assert.Contains("SHA256SUMS 包含无效行", evidence, StringComparison.Ordinal);
+        Assert.Contains("SHA256SUMS $name hash 必须匹配 packageSha256", evidence, StringComparison.Ordinal);
         Assert.Contains("r2r_lightup", evidence, StringComparison.Ordinal);
         Assert.Contains("未知 RID", evidence, StringComparison.Ordinal);
         Assert.Contains("未知 channel", evidence, StringComparison.Ordinal);
@@ -2832,6 +2836,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("-AllowBlocked", releaseReport, StringComparison.Ordinal);
         Assert.Contains("sha256", releaseReport, StringComparison.Ordinal);
         Assert.Contains("重新计算", releaseReport, StringComparison.Ordinal);
+        Assert.Contains("SHA256SUMS", releaseReport, StringComparison.Ordinal);
         Assert.Contains("同一个 GitHub Actions run", releaseReport, StringComparison.Ordinal);
         Assert.Contains("conclusion: success", releaseReport, StringComparison.Ordinal);
         Assert.Contains("simdProbeKind", releaseReport, StringComparison.Ordinal);
@@ -3391,6 +3396,58 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 release evidence 预检会解析 SHA256SUMS 内容，拒绝占位或伪造 checksum 文件。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsInvalidSha256SumsContent()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-checksum-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject artifactsNode = rootNode["artifacts"]!.AsObject();
+            string checksum = (string)artifactsNode["win-x64"]!["r2r"]!["checksum"]!;
+            File.WriteAllText(checksum, "placeholder checksum");
+            string checksumHash = GetSha256(checksum);
+            foreach (KeyValuePair<string, JsonNode?> ridNode in artifactsNode)
+            {
+                foreach (KeyValuePair<string, JsonNode?> channelNode in ridNode.Value!.AsObject())
+                {
+                    channelNode.Value!.AsObject()["checksumSha256"] = checksumHash;
+                }
+            }
+
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "checksum-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("SHA256SUMS 包含无效行", report, StringComparison.Ordinal);
+            Assert.Contains("SHA256SUMS 缺少 package hash 行", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证非 tag workflow_dispatch 的 GitHub Release 上传报告不能冒充正式发布成功证据。
     /// </summary>
     [Fact]
@@ -3695,7 +3752,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string r2rLightup = WriteMarkdownEvidence(
             Path.Combine(evidenceRoot, "r2r-lightup.md"),
             new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["conclusion"] = r2rLightupConclusion });
-        string checksum = WriteTextEvidence(Path.Combine(packageRoot, "SHA256SUMS"), "placeholder checksum");
+        string checksum = Path.Combine(packageRoot, "SHA256SUMS");
+        List<(string Name, string Hash)> packageChecksums = [];
+        List<Dictionary<string, object>> packageNodes = [];
 
         string[] rids = ["win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64"];
         string[] channels = ["r2r", "aot"];
@@ -3716,6 +3775,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 string packageReport = WriteReleaseJobEvidence(evidenceRoot, rid, channel, "package", currentPackageConclusion);
                 string extension = rid.StartsWith("win-", StringComparison.Ordinal) ? "zip" : "tar.gz";
                 string package = WriteTextEvidence(Path.Combine(packageRoot, $"PixelEngine-Demo-0.1.0-{rid}-{channel}.{extension}"), $"package {rid} {channel}");
+                string packageHash = GetSha256(package);
+                packageChecksums.Add((Path.GetFileName(package), packageHash));
 
                 Dictionary<string, object> node = new()
                 {
@@ -3726,10 +3787,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                     ["packageReport"] = packageReport,
                     ["packageReportSha256"] = GetSha256(packageReport),
                     ["package"] = package,
-                    ["packageSha256"] = GetSha256(package),
+                    ["packageSha256"] = packageHash,
                     ["checksum"] = checksum,
-                    ["checksumSha256"] = GetSha256(checksum),
                 };
+                packageNodes.Add(node);
 
                 if (channel == "aot")
                 {
@@ -3754,6 +3815,17 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             }
 
             artifacts[rid] = ridNode;
+        }
+
+        File.WriteAllLines(
+            checksum,
+            packageChecksums
+                .OrderBy(item => item.Name, StringComparer.Ordinal)
+                .Select(item => $"{item.Hash}  {item.Name}"));
+        string checksumHash = GetSha256(checksum);
+        foreach (Dictionary<string, object> node in packageNodes)
+        {
+            node["checksumSha256"] = checksumHash;
         }
 
         Dictionary<string, object> manifest = new()
