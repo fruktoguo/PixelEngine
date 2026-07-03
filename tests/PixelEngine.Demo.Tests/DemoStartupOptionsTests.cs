@@ -141,6 +141,31 @@ public sealed class DemoStartupOptionsTests
     }
 
     /// <summary>
+    /// 验证发行包中真实程序集位于 app/ 时，默认 content 目录仍指向玩家可见的包根 content/。
+    /// </summary>
+    [Fact]
+    public void DefaultContentRootPrefersPackageRootContentWhenBaseDirectoryIsApp()
+    {
+        string packageRoot = Path.Combine(Path.GetTempPath(), "pixelengine-content-root-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            string app = Path.Combine(packageRoot, "app");
+            string content = Path.Combine(packageRoot, "content");
+            _ = Directory.CreateDirectory(app);
+            _ = Directory.CreateDirectory(content);
+
+            Assert.Equal(content, DemoStartupOptions.ResolveDefaultContentRoot(app + Path.DirectorySeparatorChar));
+        }
+        finally
+        {
+            if (Directory.Exists(packageRoot))
+            {
+                Directory.Delete(packageRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证窗口短跑参数保持真实窗口模式，但允许测试/发行脚本在固定 tick 后退出。
     /// </summary>
     [Fact]

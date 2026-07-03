@@ -153,53 +153,82 @@ package_name="PixelEngine-Demo-$version-$rid-$channel"
 staging_root="$output_root/staging"
 staging_dir="$staging_root/$package_name"
 app_dir="$staging_dir/app"
+content_dir="$staging_dir/content"
+
+patch_apphost_relative_assembly() {
+  local apphost="$1"
+  local relative_assembly="$2"
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$apphost" "$relative_assembly" <<'PY'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+new = sys.argv[2].encode("utf-8")
+old = b"PixelEngine.Demo.dll"
+data = bytearray(path.read_bytes())
+index = data.find(old)
+if index < 0:
+    raise SystemExit(f"unable to locate PixelEngine.Demo.dll in apphost: {path}")
+for offset in range(len(old), len(new) + 1):
+    if index + offset >= len(data) or data[index + offset] != 0:
+        raise SystemExit(f"apphost has no room for relative assembly path: {sys.argv[2]}")
+data[index:index + len(new)] = new
+data[index + len(new)] = 0
+path.write_bytes(data)
+PY
+    return
+  fi
+
+  echo "Windows package layout needs python3 to patch the root apphost." >&2
+  exit 1
+}
+
 rm -rf "$staging_dir"
 mkdir -p "$app_dir"
 
 cp -a "$publish_dir"/. "$app_dir"/
-rm -rf "$app_dir/content"
-cp -a "$content_root" "$app_dir/content"
+rm -rf "$app_dir/content" "$content_dir"
+cp -a "$content_root" "$content_dir"
+
+if [[ "$rid" == win-* ]]; then
+  cp "$publish_dir/PixelEngine.Demo.exe" "$staging_dir/PixelEngine Demo.exe"
+  if [[ "$channel" == "r2r" ]]; then
+    patch_apphost_relative_assembly "$staging_dir/PixelEngine Demo.exe" 'app\PixelEngine.Demo.dll'
+  fi
+  rm -f "$app_dir/PixelEngine.Demo.exe"
+fi
 
 cat > "$staging_dir/README.txt" <<'EOF'
 PixelEngine Demo
 ================
 
 Start the game from this folder:
-  Windows: PixelEngine Demo.cmd
+  Windows: PixelEngine Demo.exe
   Linux/macOS: ./PixelEngine Demo.sh
 
-The actual runtime files are under app/. This keeps the package root readable.
-Advanced users can also run app/PixelEngine.Demo directly.
+Runtime dependencies are under app/. Game content is under content/.
 EOF
 
-if [[ "$rid" == win-* ]]; then
-  cat > "$staging_dir/PixelEngine Demo.cmd" <<'EOF'
-@echo off
-setlocal
-pushd "%~dp0app" >nul
-".\PixelEngine.Demo.exe" %*
-set "exitCode=%ERRORLEVEL%"
-popd >nul
-exit /b %exitCode%
-EOF
-else
+if [[ "$rid" != win-* ]]; then
   cat > "$staging_dir/PixelEngine Demo.sh" <<'EOF'
 #!/usr/bin/env sh
 set -eu
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$script_dir/app"
-exec ./PixelEngine.Demo "$@"
+exec ./PixelEngine.Demo --content "$script_dir/content" "$@"
 EOF
   chmod +x "$staging_dir/PixelEngine Demo.sh"
 fi
 
 package_checksum_path="$staging_dir/SHA256SUMS"
 : > "$package_checksum_path"
-while IFS= read -r -d '' app_file; do
-  relative="app/${app_file#"$app_dir/"}"
-  hash="$(sha256_file "$app_file")"
+while IFS= read -r -d '' staged_file; do
+  filename="$(basename "$staged_file")"
+  [[ "$filename" == "SHA256SUMS" ]] && continue
+  relative="${staged_file#"$staging_dir/"}"
+  hash="$(sha256_file "$staged_file")"
   printf '%s  %s\n' "$hash" "$relative" >> "$package_checksum_path"
-done < <(find "$app_dir" -type f -print0 | sort -z)
+done < <(find "$staging_dir" -type f -print0 | sort -z)
 
 if [[ "$rid" == win-* ]]; then
   archive_name="$package_name.zip"

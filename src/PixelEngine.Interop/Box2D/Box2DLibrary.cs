@@ -36,13 +36,31 @@ public static class Box2DLibrary
                 : "libbox2d.so";
         string baseDirectory = AppContext.BaseDirectory;
         string rid = RuntimeInformation.RuntimeIdentifier;
-        string ridPath = Path.Combine(baseDirectory, "runtimes", rid, "native", fileName);
-        if (NativeLibrary.TryLoad(ridPath, assembly, searchPath, out IntPtr handle))
+        foreach (string probeDirectory in GetProbeDirectories(baseDirectory))
         {
-            return handle;
+            string ridPath = Path.Combine(probeDirectory, "runtimes", rid, "native", fileName);
+            if (NativeLibrary.TryLoad(ridPath, assembly, searchPath, out IntPtr handle))
+            {
+                return handle;
+            }
+
+            string localPath = Path.Combine(probeDirectory, fileName);
+            if (NativeLibrary.TryLoad(localPath, assembly, searchPath, out handle))
+            {
+                return handle;
+            }
         }
 
-        string localPath = Path.Combine(baseDirectory, fileName);
-        return NativeLibrary.TryLoad(localPath, assembly, searchPath, out handle) ? handle : IntPtr.Zero;
+        return IntPtr.Zero;
+    }
+
+    private static IEnumerable<string> GetProbeDirectories(string baseDirectory)
+    {
+        yield return baseDirectory;
+        string packageDependencyDirectory = Path.Combine(baseDirectory, "app");
+        if (Directory.Exists(packageDependencyDirectory))
+        {
+            yield return packageDependencyDirectory;
+        }
     }
 }
