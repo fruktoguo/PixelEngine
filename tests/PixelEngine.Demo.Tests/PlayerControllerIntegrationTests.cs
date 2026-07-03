@@ -394,7 +394,7 @@ public sealed class PlayerControllerIntegrationTests
         input.Update([], [], mouseX: 20, mouseY: 10, wheelY: 0);
         engine.RunHeadlessTicks(2);
 
-        Assert.True(overlay.CommandCount >= 7);
+        Assert.True(overlay.CommandCount >= 6);
         Assert.Contains(
             Enumerable.Range(0, overlay.CommandCount).Select(overlay.GetCommand),
             command => command.Primitive == ScriptOverlayPrimitive.SolidRectangle && command.ColorBgra == 0xFF_F2_D0_5E);

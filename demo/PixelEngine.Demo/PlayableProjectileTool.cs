@@ -169,6 +169,7 @@ public sealed class PlayableProjectileTool : Behaviour
         }
 
         Context.World.Explode(hitX, hitY, Math.Max(1, ImpactRadius), MathF.Max(1f, ImpactForce));
+        QueueImpactBodyConversion(hitX, hitY);
         Context.Lighting.RevealAround(hitX, hitY, ImpactRadius * 2.5f);
         Context.Lighting.AddPointLight(hitX, hitY, ImpactRadius * 3f, 0xFF_60_D8_FF, 0.35f);
         Context.Audio.PlayAt("explosion.wav", hitX, hitY, 0.85f);
@@ -180,6 +181,23 @@ public sealed class PlayableProjectileTool : Behaviour
         ShotsFired++;
         QueueCollapseScan(hitX, hitY);
         _cooldownRemaining = MathF.Max(0f, CooldownSeconds);
+    }
+
+    private void QueueImpactBodyConversion(float hitX, float hitY)
+    {
+        int centerX = (int)MathF.Round(hitX);
+        int centerY = (int)MathF.Round(hitY);
+        int halfWidth = Math.Clamp(ImpactRadius * 3, 14, 34);
+        int growUp = Math.Clamp(ImpactRadius * 4, 18, 46);
+        int growDown = Math.Clamp(ImpactRadius, 6, 16);
+        int x = centerX - halfWidth;
+        int y = centerY - growUp;
+        int width = (halfWidth * 2) + 1;
+        int height = growUp + growDown + 1;
+        _ = Context.Bodies.CreateFromRegion(x, y, width, height);
+        LastCollapsedRegion = (x, y, width, height);
+        LastCollapseSkipReason = "impact_body_queued";
+        CollapsedFloatingIslands++;
     }
 
     private void QueueCollapseScan(float hitX, float hitY)
@@ -292,6 +310,11 @@ public sealed class PlayableProjectileTool : Behaviour
         if (converted == 0)
         {
             converted += ConvertImpactFractureChunk(centerX, centerY);
+        }
+
+        if (converted == 0)
+        {
+            converted += ConvertLocalImpactSlab(centerX, centerY);
         }
 
         return converted;
@@ -543,6 +566,32 @@ public sealed class PlayableProjectileTool : Behaviour
         }
 
         LastCollapseSkipReason = "impact_fracture_converted";
+        CollapsedFloatingIslands++;
+        return 1;
+    }
+
+    private int ConvertLocalImpactSlab(int centerX, int centerY)
+    {
+        int halfWidth = Math.Clamp(ImpactRadius * 3, 14, 34);
+        int growUp = Math.Clamp(ImpactRadius * 4, 18, 46);
+        int growDown = Math.Clamp(ImpactRadius, 6, 16);
+        int x = centerX - halfWidth;
+        int y = centerY - growUp;
+        int width = (halfWidth * 2) + 1;
+        int height = growUp + growDown + 1;
+        int solidCount = CountConvertibleSolids(x, y, width, height);
+        if (solidCount < Math.Max(MinCollapsePixels, ImpactRadius * 2))
+        {
+            LastCollapseSkipReason = "impact_slab_too_few_pixels";
+            return 0;
+        }
+
+        if (!TryCreateBodyFromSolidBounds(x, y, width, height, "impact_slab_degenerate"))
+        {
+            return 0;
+        }
+
+        LastCollapseSkipReason = "impact_slab_converted";
         CollapsedFloatingIslands++;
         return 1;
     }

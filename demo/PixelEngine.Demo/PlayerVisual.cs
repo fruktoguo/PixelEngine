@@ -24,7 +24,7 @@ public sealed class PlayerVisual : Behaviour
     /// <summary>
     /// 准星颜色。
     /// </summary>
-    public uint CrosshairColorBgra { get; set; } = 0xFF_60_D8_FF;
+    public uint CrosshairColorBgra { get; set; } = 0xFF_F8_DA_8C;
 
     /// <summary>
     /// 最近一帧提交的 overlay 命令数量。
@@ -116,13 +116,9 @@ public sealed class PlayerVisual : Behaviour
             return;
         }
 
-        Context.Overlay.Line(mouseX - 7f, mouseY, mouseX - 2f, mouseY, 2f, CrosshairColorBgra);
+        Context.Overlay.OutlineRectangle(mouseX - 5f, mouseY - 5f, 10f, 10f, 1.5f, CrosshairColorBgra);
         LastOverlayCommandsSubmitted++;
-        Context.Overlay.Line(mouseX + 2f, mouseY, mouseX + 7f, mouseY, 2f, CrosshairColorBgra);
-        LastOverlayCommandsSubmitted++;
-        Context.Overlay.Line(mouseX, mouseY - 7f, mouseX, mouseY - 2f, 2f, CrosshairColorBgra);
-        LastOverlayCommandsSubmitted++;
-        Context.Overlay.Line(mouseX, mouseY + 2f, mouseX, mouseY + 7f, 2f, CrosshairColorBgra);
+        Context.Overlay.SolidRectangle(mouseX - 1f, mouseY - 1f, 2f, 2f, CrosshairColorBgra);
         LastOverlayCommandsSubmitted++;
     }
 
@@ -136,26 +132,21 @@ public sealed class PlayerVisual : Behaviour
         Point2F start = Context.Camera.WorldToScreen(_projectile.LastShotStartX, _projectile.LastShotStartY);
         Point2F end = Context.Camera.WorldToScreen(_projectile.LastHitX, _projectile.LastHitY);
         RectF viewport = Context.Camera.Viewport;
-        if (!IntersectsViewport(
-            MathF.Min(start.X, end.X) - 4f,
-            MathF.Min(start.Y, end.Y) - 4f,
-            MathF.Abs(end.X - start.X) + 8f,
-            MathF.Abs(end.Y - start.Y) + 8f,
-            viewport))
+        if (!ContainsViewport(start.X, start.Y, viewport) || !ContainsViewport(end.X, end.Y, viewport))
         {
             return;
         }
 
-        Context.Overlay.Line(start.X, start.Y, end.X, end.Y, 3f, 0xFF_60_D8_FF);
+        Context.Overlay.Line(start.X, start.Y, end.X, end.Y, 3f, 0xFF_F8_DA_8C);
         LastOverlayCommandsSubmitted++;
         Context.Overlay.Line(start.X, start.Y, end.X, end.Y, 1f, 0xFF_FF_FF_FF);
         LastOverlayCommandsSubmitted++;
     }
 
-    private static bool IntersectsViewport(float x, float y, float width, float height, RectF viewport)
+    private static bool ContainsViewport(float x, float y, RectF viewport)
     {
-        return x + width >= viewport.X &&
-            y + height >= viewport.Y &&
+        return x >= viewport.X &&
+            y >= viewport.Y &&
             x <= viewport.X + viewport.Width &&
             y <= viewport.Y + viewport.Height;
     }

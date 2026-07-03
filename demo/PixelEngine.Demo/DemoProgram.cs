@@ -500,6 +500,8 @@ public static class DemoProgram
             $"physics_created={physics.LastDestructionResult.CreatedBodies}, " +
             $"max_physics_destroyed={scriptedProbe?.MaxDestroyedBodies ?? physics.LastDestructionResult.DestroyedBodies}, " +
             $"max_physics_created={scriptedProbe?.MaxCreatedBodies ?? physics.LastDestructionResult.CreatedBodies}, " +
+            $"active_bodies={physics.PhysicsWorld.ActiveBodyCount}, " +
+            $"max_active_bodies={scriptedProbe?.MaxActiveBodies ?? physics.PhysicsWorld.ActiveBodyCount}, " +
             $"audio_played={engine.Context.Counters.AudioPlayed}, " +
             $"audio_drained={engine.Context.Counters.AudioDrained}, " +
             $"max_audio_played={scriptedProbe?.MaxAudioPlayed ?? engine.Context.Counters.AudioPlayed}, " +
