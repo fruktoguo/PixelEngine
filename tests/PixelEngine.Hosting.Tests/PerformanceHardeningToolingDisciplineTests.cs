@@ -3675,7 +3675,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("报告 $key 必须为 $expected", evidence, StringComparison.Ordinal);
         Assert.Contains("Get-ExpectedRunIdentity", evidence, StringComparison.Ordinal);
         Assert.Contains("Add-RunIdentityCheck", evidence, StringComparison.Ordinal);
+        Assert.Contains("Add-WorkflowRunMetadataCheck", evidence, StringComparison.Ordinal);
         Assert.Contains("必须与 workflow_run 一致", evidence, StringComparison.Ordinal);
+        Assert.Contains("workflow_run 报告 workflow 必须为 Release", evidence, StringComparison.Ordinal);
+        Assert.Contains("workflow_run 报告 event 必须为 push 或 workflow_dispatch", evidence, StringComparison.Ordinal);
+        Assert.Contains("workflow_run 报告 run_attempt 必须为 >= 1 的整数", evidence, StringComparison.Ordinal);
         Assert.Contains("Get-ReleaseTagVersion", evidence, StringComparison.Ordinal);
         Assert.Contains("workflow_run ref 必须是 refs/tags/v<semver>", evidence, StringComparison.Ordinal);
         Assert.Contains("github_release_upload release_tag 必须为 true", evidence, StringComparison.Ordinal);
@@ -3767,6 +3771,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("artifactAuditReport", release, StringComparison.Ordinal);
         Assert.Contains("function Get-Sha256", release, StringComparison.Ordinal);
         Assert.Contains("workflowRunSha256", release, StringComparison.Ordinal);
+        Assert.Contains("| workflow | Release |", release, StringComparison.Ordinal);
+        Assert.Contains("| event | ${{ github.event_name }} |", release, StringComparison.Ordinal);
+        Assert.Contains("| run_attempt | ${{ github.run_attempt }} |", release, StringComparison.Ordinal);
         Assert.Contains("publishSha256", release, StringComparison.Ordinal);
         Assert.Contains("packageReportSha256", release, StringComparison.Ordinal);
         Assert.Contains("simdProbeKind", release, StringComparison.Ordinal);
@@ -4092,6 +4099,54 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(2, good.ExitCode);
             string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "release-evidence-preflight.md"));
             Assert.Contains("release_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 release evidence 预检会拒绝错误 workflow/event/run_attempt 元数据，避免其它 workflow 报告冒充发布证据。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsWrongWorkflowMetadata()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-workflow-metadata-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            string workflowRunReport = (string)rootNode["workflowRunReport"]!;
+            string text = File.ReadAllText(workflowRunReport)
+                .Replace("| workflow | Release |", "| workflow | CI |", StringComparison.Ordinal)
+                .Replace("| event | push |", "| event | pull_request |", StringComparison.Ordinal)
+                .Replace("| run_attempt | 1 |", "| run_attempt | 0 |", StringComparison.Ordinal);
+            File.WriteAllText(workflowRunReport, text);
+            rootNode["workflowRunSha256"] = GetSha256(workflowRunReport);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "workflow-metadata-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("status | blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("workflow_run 报告 workflow 必须为 Release", report, StringComparison.Ordinal);
+            Assert.Contains("workflow_run 报告 event 必须为 push 或 workflow_dispatch", report, StringComparison.Ordinal);
+            Assert.Contains("workflow_run 报告 run_attempt 必须为 >= 1 的整数", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
         {
@@ -4812,7 +4867,16 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         string workflow = WriteMarkdownEvidence(
             Path.Combine(evidenceRoot, "workflow-run.md"),
-            new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["ref"] = workflowRef, ["conclusion"] = "success" });
+            new Dictionary<string, string>
+            {
+                ["run_id"] = "1",
+                ["workflow"] = "Release",
+                ["event"] = "push",
+                ["run_attempt"] = "1",
+                ["sha"] = "abc",
+                ["ref"] = workflowRef,
+                ["conclusion"] = "success",
+            });
         string r2rLightup = WriteMarkdownEvidence(
             Path.Combine(evidenceRoot, "r2r-lightup.md"),
             new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["conclusion"] = r2rLightupConclusion });
