@@ -321,6 +321,78 @@ function Test-AotSimdEvidence {
     }
 }
 
+function Test-ReleaseChecksumRows {
+    param(
+        [System.Collections.Generic.List[string]]$Missing,
+        [string]$Root,
+        [string]$Path,
+        [hashtable]$ExpectedPackages
+    )
+
+    $resolved = Resolve-EvidencePath -Root $Root -Path $Path
+    if ([string]::IsNullOrWhiteSpace($resolved) -or -not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+        return
+    }
+
+    $seen = @{}
+    $rowCount = 0
+    foreach ($line in Get-Content -LiteralPath $resolved) {
+        if ([string]::IsNullOrWhiteSpace($line)) {
+            continue
+        }
+
+        if ($line -notmatch '^\s*([0-9a-fA-F]{64})\s+(.+?)\s*$') {
+            $Missing.Add("SHA256SUMS 包含无效行：$line")
+            continue
+        }
+
+        $hash = $Matches[1].ToUpperInvariant()
+        $name = $Matches[2].Trim()
+        $rowCount++
+
+        if ($name.Contains("/", [StringComparison]::Ordinal) -or $name.Contains("\", [StringComparison]::Ordinal)) {
+            $Missing.Add("SHA256SUMS 只允许 package 文件名，不能包含路径：$name")
+            continue
+        }
+
+        if ($name -notmatch '^PixelEngine-Demo-.+-(win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64)-(r2r|aot)\.(zip|tar\.gz)$') {
+            $Missing.Add("SHA256SUMS 包含非发行包条目：$name")
+            continue
+        }
+
+        if ($seen.ContainsKey($name)) {
+            $Missing.Add("SHA256SUMS 包含重复条目：$name")
+            continue
+        }
+
+        $seen[$name] = $true
+        if (-not $ExpectedPackages.ContainsKey($name)) {
+            $Missing.Add("SHA256SUMS 包含 manifest 未声明的 package：$name")
+            continue
+        }
+
+        $expectedHash = [string]$ExpectedPackages[$name]
+        if (-not [string]::Equals($hash, $expectedHash.ToUpperInvariant(), [StringComparison]::OrdinalIgnoreCase)) {
+            $Missing.Add("SHA256SUMS $name hash 必须匹配 packageSha256：expected=$expectedHash actual=$hash")
+        }
+    }
+
+    if ($rowCount -eq 0) {
+        $Missing.Add("SHA256SUMS 缺少 package hash 行")
+    }
+
+    foreach ($name in $ExpectedPackages.Keys) {
+        if ($name -notmatch '^PixelEngine-Demo-.+-(win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64)-(r2r|aot)\.(zip|tar\.gz)$') {
+            $Missing.Add("manifest package 文件名不符合发行包命名：$name")
+            continue
+        }
+
+        if (-not $seen.ContainsKey($name)) {
+            $Missing.Add("SHA256SUMS 缺少 package 条目：$name")
+        }
+    }
+}
+
 function Get-JsonPropertyNames {
     param([object]$Node)
 
@@ -436,6 +508,8 @@ catch {
 
 $rids = @("win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64")
 $channels = @("r2r", "aot")
+$expectedChecksumPackages = @{}
+$checksumPaths = @{}
 
 foreach ($ridName in Get-JsonPropertyNames $manifest.artifacts) {
     if ($ridName -notin $rids) {
@@ -479,6 +553,22 @@ foreach ($rid in $rids) {
         $publishReportPath = [string]$node.publishReport
         $verifyReportPath = [string]$node.verifyReport
         $packageReportPath = [string]$node.packageReport
+        $packagePath = [string]$node.package
+        $packageName = Split-Path -Leaf $packagePath
+        if (-not [string]::IsNullOrWhiteSpace($packageName)) {
+            if ($expectedChecksumPackages.ContainsKey($packageName)) {
+                $missing.Add("manifest 包含重复 package 文件名：$packageName")
+            }
+            else {
+                $expectedChecksumPackages[$packageName] = [string]$node.packageSha256
+            }
+        }
+
+        $checksumPath = [string]$node.checksum
+        if (-not [string]::IsNullOrWhiteSpace($checksumPath)) {
+            $checksumPaths[$checksumPath] = $true
+        }
+
         Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/publish" -Path $publishReportPath -DeclaredSha256 ([string]$node.publishSha256)
         Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "$rid/$channel/publish" -Path $publishReportPath -ExpectedValues @{ rid = $rid; channel = $channel; conclusion = "success" }
         Add-RunIdentityCheck -Missing $missing -Root $root -Scope "$rid/$channel/publish" -Path $publishReportPath -ExpectedIdentity $expectedRunIdentity
@@ -488,8 +578,8 @@ foreach ($rid in $rids) {
         Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/package_report" -Path $packageReportPath -DeclaredSha256 ([string]$node.packageReportSha256)
         Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "$rid/$channel/package_report" -Path $packageReportPath -ExpectedValues @{ rid = $rid; channel = $channel; conclusion = "success" }
         Add-RunIdentityCheck -Missing $missing -Root $root -Scope "$rid/$channel/package_report" -Path $packageReportPath -ExpectedIdentity $expectedRunIdentity
-        Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/package" -Path ([string]$node.package) -DeclaredSha256 ([string]$node.packageSha256)
-        Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/checksum" -Path ([string]$node.checksum) -DeclaredSha256 ([string]$node.checksumSha256)
+        Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/package" -Path $packagePath -DeclaredSha256 ([string]$node.packageSha256)
+        Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "$rid/$channel/checksum" -Path $checksumPath -DeclaredSha256 ([string]$node.checksumSha256)
 
         if ($channel -eq "aot") {
             $simdProbePath = [string]$node.simdProbe
@@ -510,6 +600,14 @@ foreach ($rid in $rids) {
             Add-RunIdentityCheck -Missing $missing -Root $root -Scope "$rid/$channel/notarization" -Path $notarizationReportPath -ExpectedIdentity $expectedRunIdentity
         }
     }
+}
+
+if ($checksumPaths.Count -gt 1) {
+    $missing.Add("manifest 中所有 checksum 必须指向同一个 SHA256SUMS 文件")
+}
+elseif ($checksumPaths.Count -eq 1) {
+    $checksumPath = [string](@($checksumPaths.Keys)[0])
+    Test-ReleaseChecksumRows -Missing $missing -Root $root -Path $checksumPath -ExpectedPackages $expectedChecksumPackages
 }
 
 if ($missing.Count -gt 0) {
