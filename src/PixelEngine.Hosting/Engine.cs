@@ -23,11 +23,17 @@ public sealed class Engine : IDisposable
 {
     private const int FullThermalStepInterval = 1;
     private const int ReducedThermalStepInterval = 4;
+    private const int RenderFrameSampleCapacity = 240;
 
     private readonly EngineLifecycle _lifecycle;
     private readonly List<IDisposable> _ownedRuntimeResources = [];
+    private readonly double[] _renderFrameSamplesMs = new double[RenderFrameSampleCapacity];
+    private readonly double[] _renderFrameSortScratchMs = new double[RenderFrameSampleCapacity];
     private IScriptRuntime? _attachedScriptRuntime;
     private EngineWorldSnapshotStore? _restartSnapshotStore;
+    private int _renderFrameSampleIndex;
+    private int _renderFrameSampleCount;
+    private double _renderFrameSampleSumMs;
     private bool _restartSnapshotCaptured;
     private bool _disposed;
 
@@ -1886,8 +1892,43 @@ public sealed class Engine : IDisposable
             return;
         }
 
-        Context.Counters.RenderFrameMilliseconds = realDeltaSeconds * 1000.0;
-        Context.Counters.RenderFramesPerSecond = 1.0 / realDeltaSeconds;
+        double frameMs = realDeltaSeconds * 1000.0;
+        if (_renderFrameSampleCount == RenderFrameSampleCapacity)
+        {
+            _renderFrameSampleSumMs -= _renderFrameSamplesMs[_renderFrameSampleIndex];
+        }
+        else
+        {
+            _renderFrameSampleCount++;
+        }
+
+        _renderFrameSamplesMs[_renderFrameSampleIndex] = frameMs;
+        _renderFrameSampleSumMs += frameMs;
+        _renderFrameSampleIndex = (_renderFrameSampleIndex + 1) % RenderFrameSampleCapacity;
+
+        double averageMs = _renderFrameSampleSumMs / _renderFrameSampleCount;
+        double varianceSum = 0;
+        for (int i = 0; i < _renderFrameSampleCount; i++)
+        {
+            double delta = _renderFrameSamplesMs[i] - averageMs;
+            varianceSum += delta * delta;
+            _renderFrameSortScratchMs[i] = _renderFrameSamplesMs[i];
+        }
+
+        Array.Sort(_renderFrameSortScratchMs, 0, _renderFrameSampleCount);
+        int p99Index = Math.Clamp(
+            (int)Math.Ceiling(_renderFrameSampleCount * 0.99) - 1,
+            0,
+            _renderFrameSampleCount - 1);
+        double p99Ms = _renderFrameSortScratchMs[p99Index];
+
+        Context.Counters.RenderFrameLastMilliseconds = frameMs;
+        Context.Counters.RenderFrameMilliseconds = averageMs;
+        Context.Counters.RenderFramesPerSecond = averageMs > 0 ? 1000.0 / averageMs : 0;
+        Context.Counters.RenderFrameP99Milliseconds = p99Ms;
+        Context.Counters.RenderFrameLow1PercentFps = p99Ms > 0 ? 1000.0 / p99Ms : 0;
+        Context.Counters.RenderFrameJitterMilliseconds = Math.Sqrt(varianceSum / _renderFrameSampleCount);
+        Context.Counters.RenderFrameSampleCount = _renderFrameSampleCount;
     }
 
     private void ApplyThermalDegradation(EngineQualityTier tier)

@@ -123,7 +123,8 @@ public sealed class DemoHud : Behaviour
     {
         EngineDiagnosticsSnapshot diagnostics = Context.Diagnostics.Capture();
         gui.Separator();
-        gui.Text($"FPS {diagnostics.FramesPerSecond:0}   Sim {diagnostics.SimHz:0}Hz   Frame {diagnostics.FrameCount}");
+        gui.Text($"FPS {diagnostics.FramesPerSecond:0} avg   p99 {diagnostics.FrameP99Milliseconds:0.0} ms   1% low {diagnostics.FrameLow1PercentFps:0}");
+        gui.Text($"Sim {diagnostics.SimHz:0}Hz   Frame {diagnostics.FrameCount}");
         gui.Text($"Chunks {diagnostics.ActiveChunks}/{diagnostics.ResidentChunks}   Particles {diagnostics.FreeParticles}   Bodies {diagnostics.RigidBodies}");
     }
 

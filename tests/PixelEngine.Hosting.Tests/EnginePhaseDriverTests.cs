@@ -579,6 +579,25 @@ public sealed class EnginePhaseDriverTests
     }
 
     /// <summary>
+    /// 验证脚本 Update 使用真实渲染间隔，并在慢帧下限制到一个固定逻辑步，避免控制速度随渲染帧率漂移。
+    /// </summary>
+    [Fact]
+    public void ScriptingPhaseDriverUsesWallClockDeltaClampedToFixedStep()
+    {
+        RecordingScriptRuntime runtime = new();
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddPhaseDriver(new ScriptingPhaseDriver(runtime, new FakeScriptContext(new ScriptScene())))
+            .Build();
+
+        _ = engine.RunOneTick(realDeltaSeconds: 1.0 / 120.0);
+        Assert.Equal(1f / 120f, runtime.LastUpdateDt, precision: 4);
+
+        _ = engine.RunOneTick(realDeltaSeconds: 1.0 / 30.0);
+        Assert.Equal(1f / 60f, runtime.LastUpdateDt, precision: 4);
+    }
+
+    /// <summary>
     /// 验证真实 ScriptRuntime 通过 Hosting 相位 1 派发 Behaviour 生命周期。
     /// </summary>
     [Fact]
@@ -814,6 +833,8 @@ public sealed class EnginePhaseDriverTests
 
         public int UpdateCount { get; private set; }
 
+        public float LastUpdateDt { get; private set; }
+
         public int FixedCount { get; private set; }
 
         public int GuiCount { get; private set; }
@@ -841,6 +862,7 @@ public sealed class EnginePhaseDriverTests
         public void Update(float dt)
         {
             UpdateCount++;
+            LastUpdateDt = dt;
         }
 
         public void FixedSimTick()

@@ -78,7 +78,8 @@ public sealed class FrameClock
             RunSimThisFrame,
             RunSimThisFrame,
             FrameIndex,
-            SimTickIndex);
+            SimTickIndex,
+            realDeltaSeconds);
     }
 
     /// <summary>
@@ -97,7 +98,8 @@ public sealed class FrameClock
             false,
             false,
             FrameIndex,
-            SimTickIndex);
+            SimTickIndex,
+            realDeltaSeconds);
     }
 
     /// <summary>
@@ -117,7 +119,8 @@ public sealed class FrameClock
             true,
             true,
             FrameIndex,
-            SimTickIndex);
+            SimTickIndex,
+            realDeltaSeconds);
     }
 
     /// <summary>

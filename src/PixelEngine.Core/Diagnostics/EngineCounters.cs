@@ -133,14 +133,39 @@ public sealed class EngineCounters
     public long AudioActiveVoices { get; set; }
 
     /// <summary>
-    /// 获取或设置最近一次窗口运行时真实渲染帧率；0 表示尚未收到墙钟帧间隔。
+    /// 获取或设置窗口运行时长窗口平均渲染帧率；0 表示尚未收到墙钟帧间隔。
     /// </summary>
     public double RenderFramesPerSecond { get; set; }
 
     /// <summary>
-    /// 获取或设置最近一次窗口运行时真实渲染帧耗时，单位毫秒；0 表示尚未收到墙钟帧间隔。
+    /// 获取或设置窗口运行时长窗口平均渲染帧耗时，单位毫秒；0 表示尚未收到墙钟帧间隔。
     /// </summary>
     public double RenderFrameMilliseconds { get; set; }
+
+    /// <summary>
+    /// 获取或设置最近一帧真实渲染耗时，单位毫秒。
+    /// </summary>
+    public double RenderFrameLastMilliseconds { get; set; }
+
+    /// <summary>
+    /// 获取或设置长窗口 99 分位渲染帧耗时，单位毫秒。
+    /// </summary>
+    public double RenderFrameP99Milliseconds { get; set; }
+
+    /// <summary>
+    /// 获取或设置基于 99 分位帧耗时计算的 1% low FPS。
+    /// </summary>
+    public double RenderFrameLow1PercentFps { get; set; }
+
+    /// <summary>
+    /// 获取或设置长窗口渲染帧耗时标准差，单位毫秒。
+    /// </summary>
+    public double RenderFrameJitterMilliseconds { get; set; }
+
+    /// <summary>
+    /// 获取或设置当前渲染帧率统计窗口内的样本数。
+    /// </summary>
+    public int RenderFrameSampleCount { get; set; }
 
     /// <summary>
     /// 获取或设置活跃 ambient loop voice 数。

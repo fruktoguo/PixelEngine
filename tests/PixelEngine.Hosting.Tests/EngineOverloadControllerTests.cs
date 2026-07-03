@@ -282,6 +282,10 @@ public sealed class EngineOverloadControllerTests
 
         Assert.Equal(engine.Context.Clock.FrameIndex, snapshot.FrameCount);
         Assert.Equal(50f, snapshot.FramesPerSecond, precision: 2);
+        Assert.Equal(20f, snapshot.FrameMilliseconds, precision: 2);
+        Assert.Equal(20f, snapshot.FrameP99Milliseconds, precision: 2);
+        Assert.Equal(50f, snapshot.FrameLow1PercentFps, precision: 2);
+        Assert.Equal(1, snapshot.FrameSampleCount);
         Assert.Equal(60f, snapshot.SimHz);
         Assert.Equal(3, snapshot.ActiveChunks);
         Assert.Equal(5, snapshot.ResidentChunks);
@@ -295,6 +299,32 @@ public sealed class EngineOverloadControllerTests
         Assert.False(api.IsOverlayEnabled(DebugOverlayKind.CaIterationRects));
         Assert.True(api.ToggleOverlay(DebugOverlayKind.CaIterationRects));
         Assert.True(api.IsOverlayEnabled(DebugOverlayKind.CaIterationRects));
+    }
+
+    /// <summary>
+    /// 验证渲染帧率诊断使用多帧窗口统计平均值、p99 与 1% low，而非只按最后一帧反推。
+    /// </summary>
+    [Fact]
+    public void ScriptDiagnosticsApiCapturesWindowedFrameRateStatistics()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+
+        _ = engine.RunOneTick(realDeltaSeconds: 0.010);
+        _ = engine.RunOneTick(realDeltaSeconds: 0.020);
+        _ = engine.RunOneTick(realDeltaSeconds: 0.030);
+
+        EngineScriptDiagnosticsApi api = new(engine.Context.Counters, engine.Context.Clock, new DebugOverlaySettings());
+        EngineDiagnosticsSnapshot snapshot = api.Capture();
+
+        Assert.Equal(3, snapshot.FrameSampleCount);
+        Assert.Equal(50f, snapshot.FramesPerSecond, precision: 2);
+        Assert.Equal(20f, snapshot.FrameMilliseconds, precision: 2);
+        Assert.Equal(30f, snapshot.FrameLastMilliseconds, precision: 2);
+        Assert.Equal(30f, snapshot.FrameP99Milliseconds, precision: 2);
+        Assert.Equal(33.333f, snapshot.FrameLow1PercentFps, precision: 2);
+        Assert.True(snapshot.FrameJitterMilliseconds > 8f);
     }
 
     /// <summary>

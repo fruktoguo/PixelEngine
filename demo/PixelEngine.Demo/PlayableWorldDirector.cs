@@ -59,13 +59,13 @@ public sealed class PlayableWorldDirector : Behaviour
         PlayerController player = playerEntity.AddComponent<PlayerController>();
         player.SpawnX = PlayerSpawnX;
         player.SpawnY = PlayerSpawnY;
-        player.MaxRunSpeed = 145f;
-        player.GroundAcceleration = 1_850f;
-        player.AirAcceleration = 1_150f;
-        player.GroundFriction = 3_100f;
-        player.AirFriction = 220f;
-        player.JumpSpeed = 250f;
-        player.Gravity = 900f;
+        player.MaxRunSpeed = 120f;
+        player.GroundAcceleration = 1_650f;
+        player.AirAcceleration = 1_050f;
+        player.GroundFriction = 2_800f;
+        player.AirFriction = 180f;
+        player.JumpSpeed = 245f;
+        player.Gravity = 860f;
 
         PlayerHealth health = playerEntity.AddComponent<PlayerHealth>();
         health.LavaDamagePerSecond = 40f;
@@ -84,8 +84,8 @@ public sealed class PlayableWorldDirector : Behaviour
         projectile.CollapseScanRadius = 36;
         projectile.CollapseScanRetryFrames = 2;
         projectile.FallbackOverhangRadius = 18;
-        projectile.MaxCollapseRegionSize = 28;
-        projectile.MaxCollapsePixels = 72;
+        projectile.MaxCollapseRegionSize = 48;
+        projectile.MaxCollapsePixels = 512;
         projectile.MaxCollapsedIslandsPerShot = 1;
         projectile.PlayerSupportProtectionRadius = 72;
 

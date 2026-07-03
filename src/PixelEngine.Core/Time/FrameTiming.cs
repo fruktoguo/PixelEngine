@@ -8,9 +8,11 @@ namespace PixelEngine.Core.Time;
 /// <param name="RunPhysics">本帧是否执行一次 physics step。</param>
 /// <param name="FrameIndex">当前渲染帧索引。</param>
 /// <param name="SimTickIndex">当前 sim tick 索引；若本帧不执行 sim，则为已完成 tick 数。</param>
+/// <param name="RealDeltaSeconds">上一渲染帧真实墙钟耗时；headless 或无样本时为 0。</param>
 public readonly record struct FrameTiming(
     double Dt,
     bool RunSim,
     bool RunPhysics,
     long FrameIndex,
-    long SimTickIndex);
+    long SimTickIndex,
+    double RealDeltaSeconds = 0);

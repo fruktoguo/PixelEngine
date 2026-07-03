@@ -775,6 +775,45 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证完全悬空且超过旧 72 cell 上限的固体岛仍会转成动态刚体，不会永久静态浮空。
+    /// </summary>
+    [Fact]
+    public void PlayableProjectileConvertsLargerFullyDetachedIslandIntoRigidBody()
+    {
+        RecordingAudioApi audio = new();
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        FillRect(grid, stone, minX: 40, minY: 18, maxX: 65, maxY: 36);
+
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 28f;
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.CooldownSeconds = 0f;
+        projectile.Range = 96f;
+        projectile.ImpactRadius = 2;
+        projectile.CollapseScanRadius = 36;
+        projectile.CollapseScanRetryFrames = 2;
+        projectile.MaxCollapseRegionSize = 48;
+        projectile.MaxCollapsePixels = 512;
+
+        engine.RunHeadlessTicks(2);
+        input.Update([], [MouseButton.Left], mouseX: 52f, mouseY: 28f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        input.Update([], [], mouseX: 52f, mouseY: 28f, wheelY: 0f);
+        engine.RunHeadlessTicks(10);
+
+        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        Assert.Equal(1, projectile.ShotsFired);
+        Assert.Contains("converted", projectile.CollapseStatus, StringComparison.Ordinal);
+        Assert.True(projectile.CollapsedFloatingIslands >= 1, $"完全悬空固体岛应变成刚体，status={projectile.CollapseStatus}, region={projectile.LastCollapsedRegion}");
+        Assert.True(physics.Stats.ActiveBodyCount >= 1);
+    }
+
+    /// <summary>
     /// 验证默认破坏弹不会把仍连接主地形的受支撑大块误转成刚体，避免玩家脚下碰撞被整体清空。
     /// </summary>
     [Fact]
@@ -966,8 +1005,8 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal(36, projectile.CollapseScanRadius);
         Assert.Equal(2, projectile.CollapseScanRetryFrames);
         Assert.Equal(18, projectile.FallbackOverhangRadius);
-        Assert.Equal(28, projectile.MaxCollapseRegionSize);
-        Assert.Equal(72, projectile.MaxCollapsePixels);
+        Assert.Equal(48, projectile.MaxCollapseRegionSize);
+        Assert.Equal(512, projectile.MaxCollapsePixels);
         Assert.Equal(1, projectile.MaxCollapsedIslandsPerShot);
         Assert.Equal(72, projectile.PlayerSupportProtectionRadius);
         Assert.False(projectile.AllowOverhangFallbackCollapse);

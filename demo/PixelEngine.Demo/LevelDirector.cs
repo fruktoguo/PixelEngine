@@ -218,8 +218,8 @@ public sealed class LevelDirector : Behaviour
         projectile.CollapseScanRadius = 36;
         projectile.CollapseScanRetryFrames = 2;
         projectile.FallbackOverhangRadius = 18;
-        projectile.MaxCollapseRegionSize = 28;
-        projectile.MaxCollapsePixels = 72;
+        projectile.MaxCollapseRegionSize = 48;
+        projectile.MaxCollapsePixels = 512;
         projectile.MaxCollapsedIslandsPerShot = 1;
         projectile.PlayerSupportProtectionRadius = 72;
 

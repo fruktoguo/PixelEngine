@@ -34,9 +34,33 @@ public sealed class EngineScriptDiagnosticsApi(
         }
 
         double simHz = _counters.SimHz > 0 ? _counters.SimHz : _clock.SimHz;
+        double frameMs = _counters.RenderFrameMilliseconds;
+        if (frameMs <= 0 || !double.IsFinite(frameMs))
+        {
+            frameMs = renderFps > 0 ? 1000.0 / renderFps : 0.0;
+        }
+
+        double p99Ms = _counters.RenderFrameP99Milliseconds;
+        if (p99Ms <= 0 || !double.IsFinite(p99Ms))
+        {
+            p99Ms = frameMs;
+        }
+
+        double low1PercentFps = _counters.RenderFrameLow1PercentFps;
+        if (low1PercentFps <= 0 || !double.IsFinite(low1PercentFps))
+        {
+            low1PercentFps = p99Ms > 0 ? 1000.0 / p99Ms : 0.0;
+        }
+
         return new EngineDiagnosticsSnapshot(
             _clock.FrameIndex,
             (float)renderFps,
+            (float)frameMs,
+            (float)_counters.RenderFrameLastMilliseconds,
+            (float)p99Ms,
+            (float)low1PercentFps,
+            (float)_counters.RenderFrameJitterMilliseconds,
+            _counters.RenderFrameSampleCount,
             (float)simHz,
             _counters.ActiveChunks,
             _counters.ResidentChunks,
