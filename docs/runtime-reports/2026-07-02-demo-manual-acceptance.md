@@ -28,10 +28,47 @@
 
 ## 状态语义
 
-`blocked_missing_manual_evidence` 表示尚未提供人工 evidence manifest。`scripted_probe_only` 表示只跑了 `--scripted-window-demo` / `--scripted-window-route` 机器 probe，不能替代人工验收。`blocked_missing_manual_scope_evidence` 表示 manifest 缺少必须 scope。`blocked_invalid_manual_evidence` 表示 schema、未知 scope、元数据、缺文件、视频时长不足或 sha256 不匹配等清单错误，脚本会写出报告并以 5 退出。`manual_evidence_attached_pending_review` 表示所有必须 scope 都有文件且 manifest 声明的 SHA256 与实际文件匹配，但仍需人工复核证据是否真的覆盖 plan/13 的 `[!]` 项。
+`blocked_missing_manual_evidence` 表示尚未提供人工 evidence manifest。`scripted_probe_only` 表示只跑了 `--scripted-window-demo` / `--scripted-window-route` 机器 probe，不能替代人工验收。`blocked_missing_manual_scope_evidence` 表示 manifest 缺少必须 scope。`blocked_invalid_manual_evidence` 表示 schema、未知 scope、元数据、缺 checklist/criteria、缺文件、视频时长不足或 sha256 不匹配等清单错误，脚本会写出报告并以 5 退出。`manual_evidence_attached_pending_review` 表示所有必须 scope 都有文件且 manifest 声明的 SHA256 与实际文件匹配，但仍需人工复核证据是否真的覆盖 plan/13 的 `[!]` 项。
 
 ## 必须 scope
 
-manifest 使用 `schemaVersion: 1`，`evidence` 数组只能包含这些 scope：`controlFeelReport`、`materialBrushAndReactionVideo`、`rigidBodyGameplayVideo`、`particleLightingVideo`、`audioListeningReport`、`fullRoutePlaythroughVideo`、`hudMenuEditorVideo`、`hotReloadWindowReport`。每个 entry 必须声明 `path` 与 `sha256`，脚本会重新计算文件 SHA256 并比对；视频 scope 还必须声明 `durationSeconds`，其中完整通关路线至少 30 秒，其它视频至少 10 秒。缺失、未知 scope 或时长不足都不能进入待审状态。
+manifest 使用 `schemaVersion: 1`，`evidence` 数组只能包含这些 scope：`controlFeelReport`、`materialBrushAndReactionVideo`、`rigidBodyGameplayVideo`、`particleLightingVideo`、`audioListeningReport`、`fullRoutePlaythroughVideo`、`hudMenuEditorVideo`、`hotReloadWindowReport`。每个 entry 必须声明 `path`、`sha256`、`kind`、`reviewer`、`capturedAt`、`notes` 与 `checklist`，脚本会重新计算文件 SHA256 并比对；视频 scope 还必须声明 `durationSeconds`，其中完整通关路线至少 30 秒，其它视频至少 10 秒。缺失、未知 scope、缺 checklist 或时长不足都不能进入待审状态。
 
 这些 scope 对应 plan/13 剩余阻塞：真实输入手感、真实鼠标/滚轮/数字键操作与 CA 视觉接管、刚体可推/可砸/可继续破坏、粒子与 bloom/fog 视觉质量、音频听感与空间感、完整路线通关、HUD/菜单/Editor 交互、开发态热重载体验。
+
+## Checklist 字段
+
+`checklist` 是每个 scope 的机器可读覆盖清单，所有 key 都必须为 `true`。`criteria` 必须使用同一组 key，并为每个 key 写明至少 20 个字符的人工判定标准。它们不代表验收自动通过，只用于拒绝没有明确覆盖体验点或判定标准的泛泛 notes/录屏。
+
+- `controlFeelReport`: `runJumpWallKick`、`sandPileTraversal`、`rigidOwnedStanding`
+- `materialBrushAndReactionVideo`: `realMouseWheelDigits`、`sandWaterOilGasObserved`、`reactionTemperatureObserved`
+- `rigidBodyGameplayVideo`: `pushAndImpact`、`digBridgeCollapse`、`continuedDamage`
+- `particleLightingVideo`: `particlesVisible`、`bloomFogLighting`、`noParticleLeak`
+- `audioListeningReport`: `materialImpacts`、`ambientAndReaction`、`spatialMix`
+- `fullRoutePlaythroughVideo`: `routeCompleted`、`materialsReactionsBodiesShown`、`audioLightingHudShown`
+- `hudMenuEditorVideo`: `hudReadable`、`menuButtonsClicked`、`editorDockspaceOpened`
+- `hotReloadWindowReport`: `behaviourSourceEdited`、`alcReloadObserved`、`statePreserved`
+
+最小 entry 结构示例：
+
+```json
+{
+  "scope": "controlFeelReport",
+  "kind": "report",
+  "path": "artifacts/demo-manual-acceptance/control-feel.md",
+  "sha256": "<sha256>",
+  "reviewer": "reviewer-name",
+  "capturedAt": "2026-07-03T00:00:00Z",
+  "notes": "真实设备操作后的观察结论与残余风险说明。",
+  "checklist": {
+    "runJumpWallKick": true,
+    "sandPileTraversal": true,
+    "rigidOwnedStanding": true
+  },
+  "criteria": {
+    "runJumpWallKick": "说明真实键盘输入下跑跳蹬墙可控且没有卡死。",
+    "sandPileTraversal": "说明玩家在 settled 沙堆斜面上可移动且不会陷入。",
+    "rigidOwnedStanding": "说明玩家站在 RigidOwned 刚体像素上不穿透。"
+  }
+}
+```

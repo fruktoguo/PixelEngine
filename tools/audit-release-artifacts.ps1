@@ -180,6 +180,12 @@ function Assert-NoDuplicateContentUnderApp([string]$relativePath, [string]$packa
   }
 }
 
+function Assert-NoDuplicateWindowsLauncherUnderApp([string]$relativePath, [string]$rid, [string]$packageName, [string]$prefix) {
+  if ($rid.StartsWith('win-') -and $relativePath -eq 'app/PixelEngine.Demo.exe') {
+    throw "$prefix 不应在 app/ 下重复保留原始启动 exe；根目录只允许 PixelEngine Demo.exe: $packageName -> $relativePath"
+  }
+}
+
 function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
   if ($package.Name -notmatch '^PixelEngine-Demo-.+-(?<rid>win-x64|win-arm64|linux-x64|linux-arm64|osx-x64|osx-arm64)-(?<channel>r2r|aot)\.(zip|tar\.gz)$') {
     throw "package 文件名不符合发行命名: $($package.Name)"
@@ -249,6 +255,7 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
 
   foreach ($relative in $relativeEntries) {
     Assert-NoDuplicateContentUnderApp $relative $package.Name 'package'
+    Assert-NoDuplicateWindowsLauncherUnderApp $relative $rid $package.Name 'package'
 
     if (Test-DisallowedRuntimeRootFile $relative) {
       if (-not $relative.StartsWith('app/', [StringComparison]::Ordinal)) {
@@ -353,6 +360,7 @@ function Assert-FriendlyExpandedPackageLayout([System.IO.DirectoryInfo]$packageD
 
   foreach ($relative in $relativeEntries) {
     Assert-NoDuplicateContentUnderApp $relative $packageDirectory.Name '展开 package'
+    Assert-NoDuplicateWindowsLauncherUnderApp $relative $rid $packageDirectory.Name '展开 package'
 
     if (Test-DisallowedRuntimeRootFile $relative) {
       if (-not $relative.StartsWith('app/', [StringComparison]::Ordinal)) {

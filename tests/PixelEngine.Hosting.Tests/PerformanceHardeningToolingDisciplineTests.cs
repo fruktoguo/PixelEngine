@@ -1313,6 +1313,40 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("hudMenuEditorVideo", script, StringComparison.Ordinal);
         Assert.Contains("hotReloadWindowReport", script, StringComparison.Ordinal);
         Assert.Contains("minDurationSeconds", script, StringComparison.Ordinal);
+        string[] manualChecklistKeys =
+        [
+            "runJumpWallKick",
+            "sandPileTraversal",
+            "rigidOwnedStanding",
+            "realMouseWheelDigits",
+            "sandWaterOilGasObserved",
+            "reactionTemperatureObserved",
+            "pushAndImpact",
+            "digBridgeCollapse",
+            "continuedDamage",
+            "particlesVisible",
+            "bloomFogLighting",
+            "noParticleLeak",
+            "materialImpacts",
+            "ambientAndReaction",
+            "spatialMix",
+            "routeCompleted",
+            "materialsReactionsBodiesShown",
+            "audioLightingHudShown",
+            "hudReadable",
+            "menuButtonsClicked",
+            "editorDockspaceOpened",
+            "behaviourSourceEdited",
+            "alcReloadObserved",
+            "statePreserved",
+        ];
+        Assert.Contains("checklist", script, StringComparison.Ordinal);
+        Assert.Contains("criteria", script, StringComparison.Ordinal);
+        foreach (string key in manualChecklistKeys)
+        {
+            Assert.Contains(key, script, StringComparison.Ordinal);
+            Assert.Contains(key, report, StringComparison.Ordinal);
+        }
 
         Assert.Contains("blocked_missing_manual_evidence", script, StringComparison.Ordinal);
         Assert.Contains("scripted_probe_only", script, StringComparison.Ordinal);
@@ -1339,11 +1373,20 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         Assert.Contains("tools/demo-manual-acceptance-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("capture.bmp", plan, StringComparison.Ordinal);
+        Assert.Contains("checklist", plan, StringComparison.Ordinal);
+        Assert.Contains("criteria", plan, StringComparison.Ordinal);
+        Assert.Contains("runJumpWallKick", plan, StringComparison.Ordinal);
+        Assert.Contains("routeCompleted", plan, StringComparison.Ordinal);
+        Assert.Contains("statePreserved", plan, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", plan, StringComparison.Ordinal);
 
         Assert.Contains("tools/demo-manual-acceptance-preflight.ps1", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("capture.bmp", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("hudMenuEditorVideo", hostingPlan, StringComparison.Ordinal);
+        Assert.Contains("criteria", hostingPlan, StringComparison.Ordinal);
+        Assert.Contains("hudReadable", hostingPlan, StringComparison.Ordinal);
+        Assert.Contains("menuButtonsClicked", hostingPlan, StringComparison.Ordinal);
+        Assert.Contains("editorDockspaceOpened", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("manual_evidence_attached_pending_review", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("- [x] 过载降级按五级顺序触发", hostingPlan, StringComparison.Ordinal);
         Assert.Contains("- [!] Editor 真实窗口观测/覆盖仍缺人工复核证据", hostingPlan, StringComparison.Ordinal);
@@ -1437,6 +1480,28 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
             string badNotesManifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "bad-notes", includeDemoManualMetadata: true);
             SetFlatEvidenceProperty(badNotesManifest, "controlFeelReport", "notes", "too short");
+            string badChecklistManifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "bad-checklist", includeDemoManualMetadata: true);
+            SetFlatEvidenceProperty(
+                badChecklistManifest,
+                "controlFeelReport",
+                "checklist",
+                new JsonObject
+                {
+                    ["runJumpWallKick"] = true,
+                    ["sandPileTraversal"] = false,
+                    ["rigidOwnedStanding"] = true,
+                });
+            string badCriteriaManifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "bad-criteria", includeDemoManualMetadata: true);
+            SetFlatEvidenceProperty(
+                badCriteriaManifest,
+                "hudMenuEditorVideo",
+                "criteria",
+                new JsonObject
+                {
+                    ["hudReadable"] = "HUD readable in screenshot",
+                    ["menuButtonsClicked"] = "too short",
+                    ["editorDockspaceOpened"] = "Editor dockspace is opened and visible during the manual video.",
+                });
 
             string badDurationArtifacts = Path.Combine(temp, "bad-duration-out");
             ScriptResult badDuration = RunPowerShellScript(
@@ -1465,6 +1530,34 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Contains("status: blocked_invalid_manual_evidence", badNotes.Output + badNotesReport, StringComparison.Ordinal);
             Assert.Contains("controlFeelReport notes 至少需要 20 个字符", badNotesReport, StringComparison.Ordinal);
             Assert.DoesNotContain("status: manual_evidence_attached_pending_review", badNotesReport, StringComparison.Ordinal);
+
+            string badChecklistArtifacts = Path.Combine(temp, "bad-checklist-out");
+            ScriptResult badChecklist = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
+                "-EvidenceManifestPath",
+                badChecklistManifest,
+                "-Artifacts",
+                badChecklistArtifacts);
+            Assert.Equal(5, badChecklist.ExitCode);
+            string badChecklistReport = File.ReadAllText(Path.Combine(badChecklistArtifacts, "demo-manual-acceptance-preflight.md"));
+            Assert.Contains("status: blocked_invalid_manual_evidence", badChecklist.Output + badChecklistReport, StringComparison.Ordinal);
+            Assert.Contains("controlFeelReport checklist.sandPileTraversal 必须为 true", badChecklistReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: manual_evidence_attached_pending_review", badChecklistReport, StringComparison.Ordinal);
+
+            string badCriteriaArtifacts = Path.Combine(temp, "bad-criteria-out");
+            ScriptResult badCriteria = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
+                "-EvidenceManifestPath",
+                badCriteriaManifest,
+                "-Artifacts",
+                badCriteriaArtifacts);
+            Assert.Equal(5, badCriteria.ExitCode);
+            string badCriteriaReport = File.ReadAllText(Path.Combine(badCriteriaArtifacts, "demo-manual-acceptance-preflight.md"));
+            Assert.Contains("status: blocked_invalid_manual_evidence", badCriteria.Output + badCriteriaReport, StringComparison.Ordinal);
+            Assert.Contains("hudMenuEditorVideo criteria.menuButtonsClicked 至少需要 20 个字符", badCriteriaReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: manual_evidence_attached_pending_review", badCriteriaReport, StringComparison.Ordinal);
         }
         finally
         {
@@ -2427,7 +2520,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("Assert-FriendlyPackageLayout", auditPs1, StringComparison.Ordinal);
         Assert.Contains("Assert-FriendlyExpandedPackageLayout", auditPs1, StringComparison.Ordinal);
         Assert.Contains("Assert-NoDuplicateContentUnderApp", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("Assert-NoDuplicateWindowsLauncherUnderApp", auditPs1, StringComparison.Ordinal);
         Assert.Contains("不应在 app/ 下重复打包 content", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("不应在 app/ 下重复保留原始启动 exe", auditPs1, StringComparison.Ordinal);
         Assert.Contains("package 缺少同名展开目录", auditPs1, StringComparison.Ordinal);
         Assert.Contains("展开 package 目录缺少对应归档", auditPs1, StringComparison.Ordinal);
         Assert.Contains("展开 package 根目录不应包含运行时依赖，请放入 app/", auditPs1, StringComparison.Ordinal);
@@ -2441,7 +2536,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("assert_friendly_package_layout", auditSh, StringComparison.Ordinal);
         Assert.Contains("assert_friendly_expanded_package_layout", auditSh, StringComparison.Ordinal);
         Assert.Contains("assert_no_duplicate_content_under_app", auditSh, StringComparison.Ordinal);
+        Assert.Contains("assert_no_duplicate_windows_launcher_under_app", auditSh, StringComparison.Ordinal);
         Assert.Contains("不应在 app/ 下重复打包 content", auditSh, StringComparison.Ordinal);
+        Assert.Contains("不应在 app/ 下重复保留原始启动 exe", auditSh, StringComparison.Ordinal);
         Assert.Contains("package 缺少同名展开目录", auditSh, StringComparison.Ordinal);
         Assert.Contains("展开 package 目录缺少对应归档", auditSh, StringComparison.Ordinal);
         Assert.Contains("展开 package 根目录不应包含运行时依赖，请放入 app/", auditSh, StringComparison.Ordinal);
@@ -2749,6 +2846,18 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.NotEqual(0, duplicateContentAudit.ExitCode);
             Assert.Contains("展开 package 不应在 app/ 下重复打包 content", duplicateContentAudit.Output, StringComparison.Ordinal);
             Directory.Delete(Path.Combine(expandedPackageDir, "app", "content"), recursive: true);
+
+            _ = WriteTextEvidence(Path.Combine(expandedPackageDir, "app", "PixelEngine.Demo.exe"), "duplicate launcher");
+            ScriptResult duplicateLauncherAudit = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "audit-release-artifacts.ps1"),
+                "-PublishRoot",
+                Path.Combine(temp, "missing-publish"),
+                "-PackageRoot",
+                packageRoot);
+            Assert.NotEqual(0, duplicateLauncherAudit.ExitCode);
+            Assert.Contains("展开 package 不应在 app/ 下重复保留原始启动 exe", duplicateLauncherAudit.Output, StringComparison.Ordinal);
+            File.Delete(Path.Combine(expandedPackageDir, "app", "PixelEngine.Demo.exe"));
 
             ScriptResult audit = RunPowerShellScript(
                 root,
@@ -3513,6 +3622,12 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 entry["reviewer"] = "test-reviewer";
                 entry["capturedAt"] = "2026-07-03T00:00:00Z";
                 entry["notes"] = $"{scope} notes";
+                entry["checklist"] = GetDemoManualChecklist(scope)
+                    .ToDictionary(static key => key, static _ => (object)true);
+                entry["criteria"] = GetDemoManualChecklist(scope)
+                    .ToDictionary(
+                        static key => key,
+                        key => (object)$"{scope} {key} manual criterion confirms the recorded evidence covers this requirement.");
                 if (isVideo)
                 {
                     entry["durationSeconds"] = 60.0;
@@ -3533,6 +3648,62 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             manifestPath,
             System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         return manifestPath;
+    }
+
+    private static IReadOnlyList<string> GetDemoManualChecklist(string scope)
+    {
+        return scope switch
+        {
+            "controlFeelReport" =>
+            [
+                "runJumpWallKick",
+                "sandPileTraversal",
+                "rigidOwnedStanding",
+            ],
+            "materialBrushAndReactionVideo" =>
+            [
+                "realMouseWheelDigits",
+                "sandWaterOilGasObserved",
+                "reactionTemperatureObserved",
+            ],
+            "rigidBodyGameplayVideo" =>
+            [
+                "pushAndImpact",
+                "digBridgeCollapse",
+                "continuedDamage",
+            ],
+            "particleLightingVideo" =>
+            [
+                "particlesVisible",
+                "bloomFogLighting",
+                "noParticleLeak",
+            ],
+            "audioListeningReport" =>
+            [
+                "materialImpacts",
+                "ambientAndReaction",
+                "spatialMix",
+            ],
+            "fullRoutePlaythroughVideo" =>
+            [
+                "routeCompleted",
+                "materialsReactionsBodiesShown",
+                "audioLightingHudShown",
+            ],
+            "hudMenuEditorVideo" =>
+            [
+                "hudReadable",
+                "menuButtonsClicked",
+                "editorDockspaceOpened",
+            ],
+            "hotReloadWindowReport" =>
+            [
+                "behaviourSourceEdited",
+                "alcReloadObserved",
+                "statePreserved",
+            ],
+            _ => [],
+        };
     }
 
     private static void AddDuplicateFlatEvidenceScope(string manifestPath, string scope)

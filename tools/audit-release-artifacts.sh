@@ -246,6 +246,16 @@ assert_no_duplicate_content_under_app() {
   fi
 }
 
+assert_no_duplicate_windows_launcher_under_app() {
+  local relative="$1"
+  local rid="$2"
+  local package_name="$3"
+  local prefix="$4"
+  if [[ "$rid" == win-* && "$relative" == "app/PixelEngine.Demo.exe" ]]; then
+    fail_audit "$prefix 不应在 app/ 下重复保留原始启动 exe；根目录只允许 PixelEngine Demo.exe: $package_name -> $relative"
+  fi
+}
+
 contains_item() {
   local needle="$1"
   shift
@@ -309,6 +319,7 @@ assert_friendly_package_layout() {
     local relative="${archive_entry#*/}"
     [[ -z "$relative" ]] && continue
     assert_no_duplicate_content_under_app "$relative" "$name" "package"
+    assert_no_duplicate_windows_launcher_under_app "$relative" "$rid" "$name" "package"
 
     case "$relative" in
       README.txt) has_readme=1 ;;
@@ -409,6 +420,7 @@ assert_friendly_expanded_package_layout() {
     relative="${relative//\\//}"
     expanded_entries+=("$relative")
     assert_no_duplicate_content_under_app "$relative" "$name" "展开 package"
+    assert_no_duplicate_windows_launcher_under_app "$relative" "$rid" "$name" "展开 package"
 
     case "$relative" in
       README.txt) has_readme=1 ;;

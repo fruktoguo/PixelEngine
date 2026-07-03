@@ -41,7 +41,7 @@ Package audit passed. Packages: 2.
 Release artifact audit completed.
 ```
 
-后续打包布局已调整为包根 `PixelEngine Demo.exe` + `content/` + `app/`：根目录 exe 是玩家入口，`.dll`、`.deps.json`、`.runtimeconfig.json`、runtime/native 等运行必须依赖进入 `app/`，内容资产位于包根 `content/`；玩家包会剔除 `.pdb`、XML 文档与多语言 `*.resources.dll` 卫星程序集。旧记录中的 hash 仅代表当时产物。
+后续打包布局已调整为包根 `PixelEngine Demo.exe` + `content/` + `app/`：根目录 exe 是玩家入口，`.dll`、`.deps.json`、`.runtimeconfig.json`、runtime/native 等运行必须依赖进入 `app/`，内容资产位于包根 `content/`；玩家包会剔除 `.pdb`、XML 文档与多语言 `*.resources.dll` 卫星程序集，并拒绝在 `app/` 下重复保留 Windows 原始 `PixelEngine.Demo.exe`。旧记录中的 hash 仅代表当时产物。
 
 ## 阻塞边界
 
