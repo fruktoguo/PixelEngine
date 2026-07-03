@@ -25,10 +25,7 @@ public sealed class ComputeSharpResourceContract
         nint postBResource,
         nint fenceHandle)
     {
-        if (kind == GpuResourceContractKind.OpenGlTextureNames)
-        {
-            throw new ArgumentException("ComputeSharp/DX12 资源契约不能使用 OpenGL texture name。", nameof(kind));
-        }
+        ValidateKind(kind);
 
         if (width <= 0 || height <= 0)
         {
@@ -216,6 +213,20 @@ public sealed class ComputeSharpResourceContract
         if (handle == 0)
         {
             throw new ArgumentException("ComputeSharp 资源契约句柄不能为 0。", parameterName);
+        }
+    }
+
+    private static void ValidateKind(GpuResourceContractKind kind)
+    {
+        switch (kind)
+        {
+            case GpuResourceContractKind.OpenGlTextureNames:
+                throw new ArgumentException("ComputeSharp/DX12 资源契约不能使用 OpenGL texture name。", nameof(kind));
+            case GpuResourceContractKind.D3D12RenderGraph:
+            case GpuResourceContractKind.GlDx12SharedResources:
+                return;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知的 ComputeSharp/DX12 资源契约类型。");
         }
     }
 }
