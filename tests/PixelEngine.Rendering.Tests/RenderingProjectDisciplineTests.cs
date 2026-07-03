@@ -45,12 +45,16 @@ public sealed class RenderingProjectDisciplineTests
     {
         string source = ReadRenderingSources();
         string project = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "PixelEngine.Rendering.csproj"));
+        string support = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Compute", "ComputeSharpSupport.cs"));
 
         Assert.DoesNotContain("Vulkan", source, StringComparison.Ordinal);
         Assert.DoesNotContain("GLFW_CONTEXT_VERSION_MAJOR, 4", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ContextVersion = new API(4", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("using ComputeSharp", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("PackageReference Include=\"ComputeSharp\"", project, StringComparison.Ordinal);
+        Assert.Contains("<EnableComputeSharpBackend>false</EnableComputeSharpBackend>", project, StringComparison.Ordinal);
+        Assert.Contains("<PackageReference Include=\"ComputeSharp\" Condition=\"'$(EnableComputeSharpBackend)' == 'true'\" />", project, StringComparison.Ordinal);
+        Assert.Contains("PIXELENGINE_COMPUTESHARP", support, StringComparison.Ordinal);
+        Assert.Contains("ComputeSharp.GraphicsDevice.EnumerateDevices()", support, StringComparison.Ordinal);
+        Assert.DoesNotContain("ComputeSharp.GraphicsDevice", source.Replace(support, string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -113,7 +117,7 @@ public sealed class RenderingProjectDisciplineTests
         Assert.Contains("IsExecutable = false", backend, StringComparison.Ordinal);
         Assert.Contains("IsAvailable => false", backend, StringComparison.Ordinal);
         Assert.DoesNotContain("using ComputeSharp", backend, StringComparison.Ordinal);
-        Assert.DoesNotContain("PackageReference Include=\"ComputeSharp\"", project, StringComparison.Ordinal);
+        Assert.Contains("PackageReference Include=\"ComputeSharp\" Condition=\"'$(EnableComputeSharpBackend)' == 'true'\"", project, StringComparison.Ordinal);
     }
 
     [Fact]

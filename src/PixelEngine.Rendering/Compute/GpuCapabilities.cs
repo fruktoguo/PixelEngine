@@ -156,8 +156,8 @@ public readonly record struct GpuCapabilities
             maxWorkGroupSizeY: 0,
             maxWorkGroupSizeZ: 0,
             RuntimeInformation.IsOSPlatform(OSPlatform.Windows),
-            isDx12Available: false,
-            isComputeSharpCompiled: false);
+            ComputeSharpSupport.TryProbeDx12Device(),
+            ComputeSharpSupport.IsCompiled);
     }
 
     /// <summary>
