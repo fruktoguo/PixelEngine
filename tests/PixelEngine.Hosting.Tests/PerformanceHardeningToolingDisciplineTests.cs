@@ -192,6 +192,34 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("Branch Mispredictions", script, StringComparison.Ordinal);
         Assert.Contains("cells_frame/$rid", script, StringComparison.Ordinal);
         Assert.Contains("benchmarkDotNet=true", script, StringComparison.Ordinal);
+        string[] requiredMachineFields =
+        [
+            "targetCpuName",
+            "dotnetVersion",
+            "vector512HardwareAccelerated",
+            "avx512Enabled",
+            "noNetDownclockLoss",
+            "elevatedEtwKernelSession",
+            "cacheMissesPresent",
+            "branchMispredictionsPresent",
+            "targetHardware",
+            "sampleSeconds",
+            "caP99Ms",
+            "renderP99Ms",
+            "physicsP99Ms",
+            "logicAudioP99Ms",
+            "representativeHardware",
+            "activeCellsPerFrame",
+            "caFrameMs",
+            "measuredIterations",
+        ];
+        foreach (string field in requiredMachineFields)
+        {
+            Assert.Contains(field, script, StringComparison.Ordinal);
+            Assert.Contains(field, report, StringComparison.Ordinal);
+            Assert.Contains(field, plan, StringComparison.Ordinal);
+        }
+
         Assert.Contains("win-x64", script, StringComparison.Ordinal);
         Assert.Contains("win-arm64", script, StringComparison.Ordinal);
         Assert.Contains("linux-x64", script, StringComparison.Ordinal);
@@ -2037,6 +2065,296 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 AVX-512 evidence 必须声明无净降频损失，不能只附一个空报告。
+    /// </summary>
+    [Fact]
+    public void PerformanceTargetEvidencePreflightRejectsAvx512ReportWithoutNoNetDownclockLoss()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-avx512-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreatePerformanceTargetEvidenceManifest(temp);
+            SetFlatEvidenceFileContent(
+                manifest,
+                "avx512_downclock_net_loss",
+                """
+                targetCpuName: Test AVX512 CPU
+                dotnetVersion: 10.0.8
+                benchmarkDotNet: true
+                vector512HardwareAccelerated: true
+                avx512Enabled: true
+                noNetDownclockLoss: false
+                """);
+
+            string artifacts = Path.Combine(temp, "avx512-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("avx512_downclock_net_loss noNetDownclockLoss 必须为 true", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_performance_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证硬件计数器 evidence 必须同时包含 Cache Misses 与 Branch Mispredictions。
+    /// </summary>
+    [Fact]
+    public void PerformanceTargetEvidencePreflightRejectsHardwareCounterReportWithoutBranchMispredictions()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-counters-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreatePerformanceTargetEvidenceManifest(temp);
+            SetFlatEvidenceFileContent(
+                manifest,
+                "hardware_counters_cache_branch",
+                """
+                benchmarkDotNet: true
+                elevatedEtwKernelSession: true
+                cacheMissesPresent: true
+                branchMispredictionsPresent: false
+
+                | Method | Cache Misses |
+                |---|---:|
+                | Reaction | 100 |
+                """);
+
+            string artifacts = Path.Combine(temp, "counters-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("hardware_counters_cache_branch branchMispredictionsPresent 必须为 true", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_performance_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证目标硬件帧预算 evidence 必须满足 plan/16 的 p99 阈值。
+    /// </summary>
+    [Fact]
+    public void PerformanceTargetEvidencePreflightRejectsFrameBudgetAbovePlanThreshold()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-frame-budget-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreatePerformanceTargetEvidenceManifest(temp);
+            SetFlatEvidenceFileContent(
+                manifest,
+                "frame_budget_target_hardware",
+                """
+                targetHardware: representative-target
+                sampleSeconds: 120
+                caP99Ms: 8.5
+                renderP99Ms: 3.5
+                physicsP99Ms: 3.5
+                logicAudioP99Ms: 0.8
+                """);
+
+            string artifacts = Path.Combine(temp, "frame-budget-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("frame_budget_target_hardware caP99Ms 必须 <= 8ms", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_performance_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 cells/frame evidence 必须与对应 RID 匹配并达到 2M active cells / 8ms 目标。
+    /// </summary>
+    [Fact]
+    public void PerformanceTargetEvidencePreflightRejectsCellsFrameReportBelowTarget()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-cells-target-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreatePerformanceTargetEvidenceManifest(temp);
+            SetFlatEvidenceFileContent(
+                manifest,
+                "cells_frame/linux-x64",
+                """
+                rid: linux-x64
+                benchmarkDotNet: true
+                representativeHardware: true
+                activeCellsPerFrame: 1500000
+                caFrameMs: 7.2
+                measuredIterations: 5
+                """);
+
+            string artifacts = Path.Combine(temp, "cells-target-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("cells_frame/linux-x64 activeCellsPerFrame 必须至少为 2000000", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_performance_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 cells/frame evidence 必须来自代表性硬件，不能用非代表环境冒充目标硬件实测。
+    /// </summary>
+    [Fact]
+    public void PerformanceTargetEvidencePreflightRejectsCellsFrameWithoutRepresentativeHardware()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-cells-representative-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreatePerformanceTargetEvidenceManifest(temp);
+            SetFlatEvidenceFileContent(
+                manifest,
+                "cells_frame/win-arm64",
+                """
+                rid: win-arm64
+                benchmarkDotNet: true
+                representativeHardware: false
+                activeCellsPerFrame: 2500000
+                caFrameMs: 7.2
+                measuredIterations: 5
+                """);
+
+            string artifacts = Path.Combine(temp, "cells-representative-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("cells_frame/win-arm64 representativeHardware 必须为 true", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_performance_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 cells/frame evidence 必须有足够 BenchmarkDotNet 迭代次数。
+    /// </summary>
+    [Fact]
+    public void PerformanceTargetEvidencePreflightRejectsCellsFrameWithTooFewMeasuredIterations()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-cells-iterations-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreatePerformanceTargetEvidenceManifest(temp);
+            SetFlatEvidenceFileContent(
+                manifest,
+                "cells_frame/osx-arm64",
+                """
+                rid: osx-arm64
+                benchmarkDotNet: true
+                representativeHardware: true
+                activeCellsPerFrame: 2500000
+                caFrameMs: 7.2
+                measuredIterations: 2
+                """);
+
+            string artifacts = Path.Combine(temp, "cells-iterations-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("cells_frame/osx-arm64 measuredIterations 必须至少为 3", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_performance_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证发行编译模式保持默认 R2R 运行时 light-up，AOT 显式 ISA 并跑 SIMD 反汇编探针。
     /// </summary>
     [Fact]
@@ -3271,7 +3589,45 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         foreach (string scope in scopes)
         {
             string safeScope = scope.Replace('/', '-');
-            string report = WriteTextEvidence(Path.Combine(evidenceRoot, $"{safeScope}.md"), $"{scope} evidence");
+            string content = scope switch
+            {
+                "avx512_downclock_net_loss" => """
+                    targetCpuName: Test AVX512 CPU
+                    dotnetVersion: 10.0.8
+                    benchmarkDotNet: true
+                    vector512HardwareAccelerated: true
+                    avx512Enabled: true
+                    noNetDownclockLoss: true
+                    """,
+                "hardware_counters_cache_branch" => """
+                    benchmarkDotNet: true
+                    elevatedEtwKernelSession: true
+                    cacheMissesPresent: true
+                    branchMispredictionsPresent: true
+
+                    | Method | Cache Misses | Branch Mispredictions |
+                    |---|---:|---:|
+                    | Reaction | 100 | 12 |
+                    """,
+                "frame_budget_target_hardware" => """
+                    targetHardware: representative-target
+                    sampleSeconds: 120
+                    caP99Ms: 7.5
+                    renderP99Ms: 3.5
+                    physicsP99Ms: 3.5
+                    logicAudioP99Ms: 0.8
+                    """,
+                _ when scope.StartsWith("cells_frame/", StringComparison.Ordinal) => $"""
+                    rid: {scope["cells_frame/".Length..]}
+                    benchmarkDotNet: true
+                    representativeHardware: true
+                    activeCellsPerFrame: 2500000
+                    caFrameMs: 7.2
+                    measuredIterations: 5
+                    """,
+                _ => $"{scope} evidence",
+            };
+            string report = WriteTextEvidence(Path.Combine(evidenceRoot, $"{safeScope}.md"), content);
             evidence.Add(new Dictionary<string, object>
             {
                 ["scope"] = scope,
