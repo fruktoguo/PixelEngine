@@ -883,6 +883,130 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 comparisonReport 不能用不同于 probe summary 的 wall_avg_ms 伪造 GPU 更快结论。
+    /// </summary>
+    [Fact]
+    public void GpuParticleBenchmarkPreflightRejectsComparisonWallValuesThatDoNotMatchProbeSummaries()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-wall-mismatch-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateGpuParticleEvidenceManifest(
+                temp,
+                suffix: "bad-wall",
+                cpuWallAvgMs: 1.0,
+                gpuWallAvgMs: 10.0,
+                comparisonCpuWallAvgMs: 10.0,
+                comparisonGpuWallAvgMs: 1.0,
+                comparisonSpeedupRatio: 10.0);
+
+            string artifacts = Path.Combine(temp, "bad-wall-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
+            Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("comparisonReport cpuWallAvgMs 必须与 probe summary 一致", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 comparisonReport 的 speedupRatio 必须由 cpuWallAvgMs/gpuWallAvgMs 重算得到。
+    /// </summary>
+    [Fact]
+    public void GpuParticleBenchmarkPreflightRejectsComparisonSpeedupRatioThatDoesNotMatchWallValues()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-ratio-mismatch-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateGpuParticleEvidenceManifest(
+                temp,
+                suffix: "bad-ratio",
+                cpuWallAvgMs: 6.0,
+                gpuWallAvgMs: 3.0,
+                comparisonSpeedupRatio: 9.0);
+
+            string artifacts = Path.Combine(temp, "bad-ratio-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
+            Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("comparisonReport speedupRatio", report, StringComparison.Ordinal);
+            Assert.Contains("重算值", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证目标 GPU comparisonReport 必须声明足够长的采样时长。
+    /// </summary>
+    [Fact]
+    public void GpuParticleBenchmarkPreflightRejectsComparisonWithTooShortSampleSeconds()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-short-sample-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateGpuParticleEvidenceManifest(temp, suffix: "bad-sample", sampleSeconds: 5.0);
+
+            string artifacts = Path.Combine(temp, "bad-sample-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
+            Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("comparisonReport sampleSeconds 必须至少为 10 秒", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_gpu_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 GPU 粒子目标硬件预检要求硬件报告包含可审查的机器字段。
     /// </summary>
     [Fact]
@@ -2946,10 +3070,16 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         int measuredFrames = 600,
         double sampleSeconds = 20.0,
         double cpuWallAvgMs = 6.4,
-        double gpuWallAvgMs = 3.2)
+        double gpuWallAvgMs = 3.2,
+        double? comparisonCpuWallAvgMs = null,
+        double? comparisonGpuWallAvgMs = null,
+        double? comparisonSpeedupRatio = null)
     {
         string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "gpu-particle-evidence");
         _ = Directory.CreateDirectory(evidenceRoot);
+        double comparisonCpuWall = comparisonCpuWallAvgMs ?? cpuWallAvgMs;
+        double comparisonGpuWall = comparisonGpuWallAvgMs ?? gpuWallAvgMs;
+        double comparisonSpeedup = comparisonSpeedupRatio ?? (comparisonCpuWall / comparisonGpuWall);
 
         string hardware = WriteTextEvidence(
             Path.Combine(evidenceRoot, "target-hardware.md"),
@@ -2988,9 +3118,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             # Target GPU comparison
 
             gpuFasterThanCpu: true
-            cpuWallAvgMs: {cpuWallAvgMs.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}
-            gpuWallAvgMs: {gpuWallAvgMs.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}
-            speedupRatio: {(cpuWallAvgMs / gpuWallAvgMs).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}
+            cpuWallAvgMs: {comparisonCpuWall.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}
+            gpuWallAvgMs: {comparisonGpuWall.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}
+            speedupRatio: {comparisonSpeedup.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}
             measuredFrames: {measuredFrames}
             sampleSeconds: {sampleSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}
             """);

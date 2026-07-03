@@ -110,6 +110,21 @@ function Get-RequiredFieldInt {
     return [int]::Parse($value, [Globalization.CultureInfo]::InvariantCulture)
 }
 
+function Assert-NearlyEqual {
+    param(
+        [double]$Actual,
+        [double]$Expected,
+        [string]$Scope,
+        [string]$Name,
+        [string]$Expectation = "probe summary"
+    )
+
+    $tolerance = [Math]::Max(0.001, [Math]::Abs($Expected) * 0.001)
+    if ([Math]::Abs($Actual - $Expected) -gt $tolerance) {
+        throw "$Scope $Name 必须与 $Expectation 一致：actual=$Actual expected=$Expected tolerance=$tolerance。"
+    }
+}
+
 function Assert-TargetHardwareReport {
     param([string]$Path)
 
@@ -143,6 +158,14 @@ function Assert-ComparisonReport {
     if ($cpuWall -le $gpuWall) {
         throw "comparisonReport cpuWallAvgMs 必须大于 gpuWallAvgMs，实际 cpu=$cpuWall gpu=$gpuWall。"
     }
+
+    $cpuProbeWall = Get-MetricDouble -Metrics $CpuMetrics -Name "wall_avg_ms"
+    $gpuProbeWall = Get-MetricDouble -Metrics $GpuMetrics -Name "wall_avg_ms"
+    Assert-NearlyEqual -Actual $cpuWall -Expected $cpuProbeWall -Scope "comparisonReport" -Name "cpuWallAvgMs"
+    Assert-NearlyEqual -Actual $gpuWall -Expected $gpuProbeWall -Scope "comparisonReport" -Name "gpuWallAvgMs"
+
+    $recomputedSpeedup = $cpuWall / $gpuWall
+    Assert-NearlyEqual -Actual $speedupRatio -Expected $recomputedSpeedup -Scope "comparisonReport" -Name "speedupRatio" -Expectation "cpuWallAvgMs/gpuWallAvgMs 重算值"
 
     if ($speedupRatio -le 1.0) {
         throw "comparisonReport speedupRatio 必须大于 1。"
