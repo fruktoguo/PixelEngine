@@ -92,7 +92,8 @@ public sealed class GpuComputeCapabilityTests
             isWindows: true,
             isDx12Available: true,
             isComputeSharpCompiled: true,
-            hasComputeSharpResourceContract: true);
+            hasComputeSharpResourceContract: true,
+            computeSharpResourceContractKind: GpuResourceContractKind.D3D12RenderGraph);
 
         ComputeCapabilityGate withoutPreference = ComputeCapabilityGate.Evaluate(
             gpu,

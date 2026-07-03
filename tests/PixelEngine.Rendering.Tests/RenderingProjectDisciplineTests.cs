@@ -61,6 +61,8 @@ public sealed class RenderingProjectDisciplineTests
         string resources = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Compute", "GpuComputeResources.cs"));
         string contract = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Compute", "ComputeSharpResourceContract.cs"));
         string contractKind = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Compute", "GpuResourceContractKind.cs"));
+        string capabilities = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Compute", "GpuCapabilities.cs"));
+        string gate = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Compute", "ComputeCapabilityGate.cs"));
         string backend = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Compute", "ComputeSharpBackend.cs"));
         string interfaceSource = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "Compute", "IComputeBackend.cs"));
         string project = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "PixelEngine.Rendering.csproj"));
@@ -95,6 +97,9 @@ public sealed class RenderingProjectDisciplineTests
         Assert.Contains("CanBeConsumedByComputeSharp => false", resources, StringComparison.Ordinal);
         Assert.Contains("D3D12RenderGraph", contractKind, StringComparison.Ordinal);
         Assert.Contains("GlDx12SharedResources", contractKind, StringComparison.Ordinal);
+        Assert.Contains("ComputeSharpResourceContractKind", capabilities, StringComparison.Ordinal);
+        Assert.Contains("不能声明为 OpenGL texture name", capabilities, StringComparison.Ordinal);
+        Assert.Contains("ComputeSharpResourceContractKind != GpuResourceContractKind.OpenGlTextureNames", gate, StringComparison.Ordinal);
         Assert.Contains("不能使用 OpenGL texture name", contract, StringComparison.Ordinal);
         Assert.Contains("FenceHandle", contract, StringComparison.Ordinal);
         Assert.Contains("CreateD3D12", contract, StringComparison.Ordinal);

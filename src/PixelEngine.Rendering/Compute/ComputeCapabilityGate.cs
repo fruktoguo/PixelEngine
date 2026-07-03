@@ -61,6 +61,7 @@ public readonly record struct ComputeCapabilityGate
             capabilities.IsDx12Available &&
             capabilities.IsComputeSharpCompiled &&
             capabilities.HasComputeSharpResourceContract &&
+            capabilities.ComputeSharpResourceContractKind != GpuResourceContractKind.OpenGlTextureNames &&
             ComputeSharpBackend.IsExecutable;
         ComputeBackendKind backend = computeSharpAvailable
             ? ComputeBackendKind.ComputeSharp
