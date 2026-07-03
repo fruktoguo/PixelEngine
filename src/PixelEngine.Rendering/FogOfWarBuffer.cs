@@ -73,6 +73,22 @@ public sealed class FogOfWarBuffer
     }
 
     /// <summary>
+    /// 揭示当前视口内全部 fog tile，用于可玩 Demo 这类不需要黑边遮罩的场景。
+    /// </summary>
+    /// <param name="revealAlpha">写入的 reveal alpha；已有 tile 会保留较大 alpha。</param>
+    public void RevealAll(byte revealAlpha = byte.MaxValue)
+    {
+        Span<byte> reveal = _reveal;
+        for (int i = 0; i < reveal.Length; i++)
+        {
+            if (revealAlpha > reveal[i])
+            {
+                reveal[i] = revealAlpha;
+            }
+        }
+    }
+
+    /// <summary>
     /// 在视口局部 cell 坐标中揭示一个圆形区域，边界会裁剪到当前视口。
     /// </summary>
     /// <param name="centerCellX">圆心 X，单位为视口局部 cell。</param>

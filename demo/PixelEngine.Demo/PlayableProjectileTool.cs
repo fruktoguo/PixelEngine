@@ -1,5 +1,4 @@
 using PixelEngine.Scripting;
-using PixelEngine.Simulation;
 
 namespace PixelEngine.Demo;
 
@@ -102,6 +101,11 @@ public sealed class PlayableProjectileTool : Behaviour
     public int FallbackOverhangRadius { get; set; } = 32;
 
     /// <summary>
+    /// 玩家周围不会被自动转换成刚体的保护半径，避免一枪把脚下承重地形转走导致穿模。
+    /// </summary>
+    public int PlayerSupportProtectionRadius { get; set; }
+
+    /// <summary>
     /// 是否启用局部悬挑兜底刚体化。默认关闭，避免把仍连接主地形的弹坑边缘误拆掉。
     /// </summary>
     public bool AllowOverhangFallbackCollapse { get; set; }
@@ -155,7 +159,7 @@ public sealed class PlayableProjectileTool : Behaviour
         float safeDt = MathF.Max(0f, dt);
         _cooldownRemaining = MathF.Max(0f, _cooldownRemaining - safeDt);
         TracerRemainingSeconds = MathF.Max(0f, TracerRemainingSeconds - safeDt);
-        ProcessPendingCollapseScan();
+        ProcessPendingCollapseScanSafely();
         if (!InputEnabled)
         {
             return;
@@ -210,6 +214,22 @@ public sealed class PlayableProjectileTool : Behaviour
         ShotsFired++;
         QueueCollapseScan(hitX, hitY);
         _cooldownRemaining = MathF.Max(0f, CooldownSeconds);
+    }
+
+    private void ProcessPendingCollapseScanSafely()
+    {
+        try
+        {
+            ProcessPendingCollapseScan();
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            _pendingCollapseFrames = 0;
+            _pendingCollapsePasses = 0;
+            _pendingCollapseScans = 0;
+            TracerRemainingSeconds = 0f;
+            LastCollapseSkipReason = $"collapse_error_{exception.GetType().Name}";
+        }
     }
 
     private void QueueCollapseScan(float hitX, float hitY)
@@ -292,6 +312,12 @@ public sealed class PlayableProjectileTool : Behaviour
                 if (HasExternalSupport(originX, originY, size, cells, cellCount, component))
                 {
                     LastCollapseSkipReason = "external_support";
+                    continue;
+                }
+
+                if (HasScanWindowExternalConnection(originX, originY, size, cells, cellCount))
+                {
+                    LastCollapseSkipReason = "scan_window_external_connection";
                     continue;
                 }
 
@@ -455,6 +481,22 @@ public sealed class PlayableProjectileTool : Behaviour
             }
 
             if (IsSolid(originX + x, originY + belowY))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool HasScanWindowExternalConnection(int originX, int originY, int size, int[] cells, int cellCount)
+    {
+        for (int i = 0; i < cellCount; i++)
+        {
+            int packed = cells[i];
+            int x = packed % size;
+            int y = packed / size;
+            if (y == 0 && IsSolid(originX + x, originY - 1))
             {
                 return true;
             }
@@ -815,6 +857,12 @@ public sealed class PlayableProjectileTool : Behaviour
 
         int tightWidth = maxX - minX + 1;
         int tightHeight = maxY - minY + 1;
+        if (IntersectsPlayerSupportZone(minX, minY, tightWidth, tightHeight))
+        {
+            LastCollapseSkipReason = "player_support_zone";
+            return false;
+        }
+
         if (tightWidth > MaxCollapseRegionSize || tightHeight > MaxCollapseRegionSize ||
             !HasSolidBlock2x2(minX, minY, tightWidth, tightHeight))
         {
@@ -877,6 +925,12 @@ public sealed class PlayableProjectileTool : Behaviour
 
         int tightWidth = maxX - minX + 1;
         int tightHeight = maxY - minY + 1;
+        if (IntersectsPlayerSupportZone(minX, minY, tightWidth, tightHeight))
+        {
+            LastCollapseSkipReason = "player_support_zone";
+            return false;
+        }
+
         if (count < Math.Max(1, MinCollapsePixels) ||
             count > Math.Max(Math.Max(1, MinCollapsePixels), MaxCollapsePixels) ||
             tightWidth > MaxCollapseRegionSize ||
@@ -936,6 +990,35 @@ public sealed class PlayableProjectileTool : Behaviour
         return false;
     }
 
+    private bool IntersectsPlayerSupportZone(int x, int y, int width, int height)
+    {
+        if (_player is null && Entity.TryGetComponent(out PlayerController player))
+        {
+            _player = player;
+        }
+
+        if (_player is null)
+        {
+            return false;
+        }
+
+        CharacterState state = _player.State;
+        int radius = Math.Clamp(PlayerSupportProtectionRadius, 0, 160);
+        if (radius <= 0)
+        {
+            return false;
+        }
+
+        float zoneX = state.X - radius;
+        float zoneY = state.Y - (radius * 0.5f);
+        float zoneWidth = state.Width + (radius * 2f);
+        float zoneHeight = state.Height + (radius * 1.75f);
+        return x < zoneX + zoneWidth &&
+            x + width > zoneX &&
+            y < zoneY + zoneHeight &&
+            y + height > zoneY;
+    }
+
     private int CountEmptyCells(int x, int y, int width, int height)
     {
         int count = 0;
@@ -955,8 +1038,7 @@ public sealed class PlayableProjectileTool : Behaviour
 
     private bool IsSolid(int x, int y)
     {
-        CellView cell = Context.Cells.Sample(x, y);
-        bool solid = Context.Cells.IsSolid(x, y) && !CellFlags.Has(cell.Flags, CellFlags.RigidOwned);
+        bool solid = Context.Cells.IsSolid(x, y) && !Context.Cells.IsRigidOwned(x, y);
         if (solid)
         {
             LastCollapseSolidCandidates++;

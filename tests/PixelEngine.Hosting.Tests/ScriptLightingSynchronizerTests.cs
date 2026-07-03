@@ -75,4 +75,27 @@ public sealed class ScriptLightingSynchronizerTests
         Assert.Equal(200, synchronizer.FogOfWar.RevealAlpha(50, 25));
         Assert.Equal(0, lighting.RevealCount);
     }
+
+    /// <summary>
+    /// 验证完整视口 reveal 会覆盖所有屏幕边角，避免可玩 Demo 出现圆形黑边。
+    /// </summary>
+    [Fact]
+    public void SynchronizerAppliesViewportRevealToEveryFogTile()
+    {
+        ScriptCameraApi camera = new(viewportWidth: 96, viewportHeight: 64, centerX: 48, centerY: 32, zoom: 1);
+        ScriptCameraSynchronizer cameraSync = new(camera);
+        _ = cameraSync.Sync();
+        ScriptLightingApi lighting = new();
+        ScriptLightingSynchronizer synchronizer = new(lighting, cameraSync);
+
+        lighting.RevealViewport(alpha: 210);
+        synchronizer.Sync();
+
+        Assert.Equal(0, lighting.RevealCount);
+        Assert.Equal(0, lighting.ViewportRevealAlpha);
+        Assert.True(synchronizer.FogOfWar.RevealAlpha(0, 0) >= 210);
+        Assert.True(synchronizer.FogOfWar.RevealAlpha(95, 0) >= 210);
+        Assert.True(synchronizer.FogOfWar.RevealAlpha(0, 63) >= 210);
+        Assert.True(synchronizer.FogOfWar.RevealAlpha(95, 63) >= 210);
+    }
 }

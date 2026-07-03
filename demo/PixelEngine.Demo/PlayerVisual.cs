@@ -156,13 +156,7 @@ public sealed class PlayerVisual : Behaviour
             return;
         }
 
-        RectF viewport = Context.Camera.Viewport;
-        float zoom = MathF.Max(Context.Camera.Zoom, 0.001f);
-        Point2F center = Context.Camera.ScreenToWorld(viewport.Width * 0.5f, viewport.Height * 0.5f);
-        float halfWidthCells = viewport.Width / (2f * zoom);
-        float halfHeightCells = viewport.Height / (2f * zoom);
-        float radius = MathF.Sqrt((halfWidthCells * halfWidthCells) + (halfHeightCells * halfHeightCells)) + 8f;
-        Context.Lighting.RevealAround(center.X, center.Y, radius);
+        Context.Lighting.RevealViewport();
     }
 
     private static bool ContainsViewport(float x, float y, RectF viewport)

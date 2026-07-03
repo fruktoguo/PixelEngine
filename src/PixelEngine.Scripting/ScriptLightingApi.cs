@@ -14,6 +14,11 @@ public sealed class ScriptLightingApi : ILightingApi
     /// <inheritdoc />
     public int RevealCount => _reveals.Count;
 
+    /// <summary>
+    /// 当前待消费的完整视口 reveal 强度；0 表示本帧未请求。
+    /// </summary>
+    public byte ViewportRevealAlpha { get; private set; }
+
     /// <inheritdoc />
     public void RevealAround(float x, float y, float radius, byte alpha = byte.MaxValue)
     {
@@ -21,6 +26,15 @@ public sealed class ScriptLightingApi : ILightingApi
         ValidateFinite(y, nameof(y));
         ValidatePositive(radius, nameof(radius));
         _reveals.Add(new FogRevealRequest(x, y, radius, alpha));
+    }
+
+    /// <inheritdoc />
+    public void RevealViewport(byte alpha = byte.MaxValue)
+    {
+        if (alpha > ViewportRevealAlpha)
+        {
+            ViewportRevealAlpha = alpha;
+        }
     }
 
     /// <inheritdoc />
@@ -66,6 +80,7 @@ public sealed class ScriptLightingApi : ILightingApi
     public void ClearReveals()
     {
         _reveals.Clear();
+        ViewportRevealAlpha = 0;
     }
 
     private static void ValidateFinite(float value, string name)

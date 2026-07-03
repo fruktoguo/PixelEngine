@@ -62,6 +62,12 @@ public sealed class ScriptLightingSynchronizer(ScriptLightingApi lighting, Scrip
 
     private void ApplyFogReveals(CameraState camera)
     {
+        byte viewportRevealAlpha = _lighting.ViewportRevealAlpha;
+        if (viewportRevealAlpha > 0)
+        {
+            FogOfWar.RevealAll(viewportRevealAlpha);
+        }
+
         int count = _lighting.RevealCount;
         for (int i = 0; i < count; i++)
         {
