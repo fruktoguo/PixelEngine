@@ -90,11 +90,74 @@ public sealed class HostingProjectDisciplineTests
     {
         string root = FindRepositoryRoot();
         string menu = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorMainMenuBar.cs"));
+        string layout = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellLayout.cs"));
+        string dockSpace = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "EditorDockSpace.cs"));
+        string host = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellHostExtension.cs"));
 
-        foreach (string item in new[] { "File", "Edit", "GameObject", "Window", "Play", "Help", "Build Settings...", "Reset Layout" })
+        foreach (string item in new[]
+        {
+            "File",
+            "Edit",
+            "GameObject",
+            "Window",
+            "Play",
+            "Help",
+            "Open Recent",
+            "New Scene",
+            "Open Scene",
+            "Build Settings...",
+            "Exit",
+            "Delete",
+            "Duplicate",
+            "Create Empty",
+            "Create Empty Child",
+            "Create with Component",
+            "Rename",
+            "Reset Layout",
+            "Hierarchy",
+            "Scene View",
+            "Inspector",
+            "Project",
+            "Console",
+            "Performance HUD",
+            "About",
+            "Shortcuts",
+        })
         {
             Assert.Contains(item, menu, StringComparison.Ordinal);
         }
+
+        Assert.Contains("DrawPanelMenuItem", menu, StringComparison.Ordinal);
+        Assert.Contains("app.ShowPanel(panelTitle)", menu, StringComparison.Ordinal);
+        Assert.Contains("app.NewScene()", menu, StringComparison.Ordinal);
+        Assert.Contains("app.OpenScene(scene.Path)", menu, StringComparison.Ordinal);
+        Assert.Contains("app.RequestExit()", menu, StringComparison.Ordinal);
+        Assert.Contains("app.DeleteSelectedGameObject()", menu, StringComparison.Ordinal);
+        Assert.Contains("app.DuplicateSelectedGameObject()", menu, StringComparison.Ordinal);
+        Assert.Contains("app.RenameSelectedGameObject()", menu, StringComparison.Ordinal);
+        Assert.Contains("app.CreateChildGameObject()", menu, StringComparison.Ordinal);
+        Assert.Contains("app.AddComponentToSelected", menu, StringComparison.Ordinal);
+        Assert.Contains("public const string BuildSettingsWindowTitle", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("DockBuilderDockWindow(BuildSettingsWindowTitle", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("DockBuilderDockWindow(AssetBrowserWindowTitle, bottomNode)", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("File.Delete(LayoutPath)", layout, StringComparison.Ordinal);
+        Assert.Contains("ResetLayoutState(buildDefaultLayout: true)", layout, StringComparison.Ordinal);
+        Assert.Contains("new EditorConsolePanel(_app)", host, StringComparison.Ordinal);
+        Assert.Contains("new BuildSettingsPanel(_project)", host, StringComparison.Ordinal);
+        string shellApp = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellApp.cs"));
+        Assert.Contains("--scripted-menu-layout-probe", File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellOptions.cs")), StringComparison.Ordinal);
+        Assert.Contains("editor_menu_layout_probe", shellApp, StringComparison.Ordinal);
+        Assert.Contains("RunScriptedMenuLayoutProbeActions", shellApp, StringComparison.Ordinal);
+        Assert.Contains("NewSceneAuto", File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorProjectSession.cs")), StringComparison.Ordinal);
+        Assert.Contains("ReplaceWith", File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorSceneModel.cs")), StringComparison.Ordinal);
+        Assert.Contains("ResetDockLayout", string.Join(
+            '\n',
+            File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "IEditorImGuiBackend.cs")),
+            File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "ImGuiController.cs")),
+            File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "EditorApp.cs")),
+            File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "HexaImGuiBackend.cs")),
+            File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellApp.cs")),
+            File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellHostExtension.cs"))), StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -44,6 +44,11 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
         return _editor.TryShowPanel(title);
     }
 
+    public void ResetLayout()
+    {
+        _editor.ResetDockLayout();
+    }
+
     public bool TryStartScriptedBuildProbe(string outputDirectory, bool runAfterBuild, out string diagnostic)
     {
         if (_buildSettingsPanel is null)
@@ -153,6 +158,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
 
         _buildSettingsPanel = new BuildSettingsPanel(_project);
         _editor.AddPanel(_buildSettingsPanel);
+        _editor.AddPanel(new EditorConsolePanel(_app));
         _editor.AddPanel(new PerformanceHudPanel());
         _editor.AddPanel(new SimulationControlToolbar(new EditorSimulationControlAdapter(_app)));
         _editor.AddPanel(new EditorModePanel(new EditorPlaySessionAdapter(_app)));

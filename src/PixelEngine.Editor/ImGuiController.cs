@@ -69,6 +69,15 @@ public sealed class ImGuiController
     }
 
     /// <summary>
+    /// 重置当前 dockspace 默认布局。
+    /// </summary>
+    public void ResetDockLayout()
+    {
+        ThrowIfNotInitialized();
+        Backend.ResetDockLayout();
+    }
+
+    /// <summary>
     /// 渲染 ImGui draw data。Hexa.NET OpenGL3 backend 负责恢复被它修改的 GL 状态。
     /// </summary>
     public void Render()

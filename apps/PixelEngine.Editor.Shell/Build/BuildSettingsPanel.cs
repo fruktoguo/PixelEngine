@@ -6,7 +6,7 @@ namespace PixelEngine.Editor.Shell.Build;
 
 internal sealed class BuildSettingsPanel : IEditorPanel
 {
-    public const string PanelTitle = "构建与发布";
+    public const string PanelTitle = EditorDockSpace.BuildSettingsWindowTitle;
     private static readonly string[] RidOptions = ["win-x64", "win-arm64"];
     private static readonly string[] ChannelOptions = ["R2R", "NativeAOT"];
     private static readonly string[] ConfigurationOptions = ["Release", "Debug"];

@@ -27,6 +27,11 @@ public interface IEditorImGuiBackend
     void DrawDockSpace();
 
     /// <summary>
+    /// 重置当前 dockspace，使下一帧重建默认布局。
+    /// </summary>
+    void ResetDockLayout();
+
+    /// <summary>
     /// 结束当前 ImGui 帧并渲染 draw data。
     /// </summary>
     void Render();
