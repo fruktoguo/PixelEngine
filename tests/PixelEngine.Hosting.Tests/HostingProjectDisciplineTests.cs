@@ -349,6 +349,32 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证独立编辑器壳复用 plan/12 的存读档面板，并通过 Hosting 公开持久世界存读档 API 恢复运行时计数。
+    /// </summary>
+    [Fact]
+    public void EditorShellRegistersSaveLoadPanelThroughHostingWorldSaveApi()
+    {
+        string root = FindRepositoryRoot();
+        string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
+        string source = string.Join(
+            '\n',
+            Directory.EnumerateFiles(shellDirectory, "*.cs").Select(File.ReadAllText));
+        string engine = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Hosting", "Engine.cs"));
+
+        Assert.Contains("new SaveLoadPanel(new EditorWorldSaveLoadService", source, StringComparison.Ordinal);
+        Assert.Contains("class EditorWorldSaveLoadService", source, StringComparison.Ordinal);
+        Assert.Contains("ISaveLoadService", source, StringComparison.Ordinal);
+        Assert.Contains("SaveWorldToDirectory", source, StringComparison.Ordinal);
+        Assert.Contains("LoadWorldFromDirectory", source, StringComparison.Ordinal);
+        Assert.Contains("Path.Combine(_project.ProjectRoot, \"saves\")", source, StringComparison.Ordinal);
+        Assert.Contains("public void SaveWorldToDirectory", engine, StringComparison.Ordinal);
+        Assert.Contains("public WorldLoadResult LoadWorldFromDirectory", engine, StringComparison.Ordinal);
+        Assert.Contains("Context.Clock.RestoreCounters", engine, StringComparison.Ordinal);
+        Assert.Contains("RestoreFrameState", engine, StringComparison.Ordinal);
+        Assert.DoesNotContain("new WorldSaveLoadPanelService", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 plan/15 §3.11 的 build-player 一键玩家包编排器与 player-only audit 契约落地。
     /// </summary>
     [Fact]

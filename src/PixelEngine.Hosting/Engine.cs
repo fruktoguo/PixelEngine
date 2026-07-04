@@ -782,6 +782,24 @@ public sealed class Engine : IDisposable
     public EngineWorldSnapshot CaptureWorldSnapshot()
     {
         ThrowIfShutdown();
+        string snapshotPath = Path.Combine(
+            Path.GetTempPath(),
+            "PixelEngine",
+            "world-snapshots",
+            Guid.NewGuid().ToString("N"));
+        SaveWorldToDirectory(snapshotPath);
+        SimulationKernel kernel = Context.GetService<SimulationKernel>();
+        return new EngineWorldSnapshot(snapshotPath, Context.Clock.SimTickIndex, kernel.WorldSeed);
+    }
+
+    /// <summary>
+    /// 将当前 resident world 持久保存到指定目录；目录内容使用 plan/07 world save 格式。
+    /// </summary>
+    /// <param name="savePath">目标存档目录。</param>
+    public void SaveWorldToDirectory(string savePath)
+    {
+        ThrowIfShutdown();
+        ArgumentException.ThrowIfNullOrWhiteSpace(savePath);
         ResidentChunkMap chunks = Context.GetService<ResidentChunkMap>();
         TemperatureField temperature = Context.GetService<TemperatureField>();
         MaterialTable materials = Context.GetService<MaterialTable>();
@@ -790,11 +808,6 @@ public sealed class Engine : IDisposable
         RuntimeWorldStateBridge stateBridge = EnsureRuntimeWorldStateBridge(particles);
         ResidencyTable residency = ResolveSnapshotResidency(chunks);
         long gameTimeTicks = Context.Clock.SimTickIndex;
-        string snapshotPath = Path.Combine(
-            Path.GetTempPath(),
-            "PixelEngine",
-            "world-snapshots",
-            Guid.NewGuid().ToString("N"));
 
         new WorldSaveService().SaveAll(
             new WorldSaveContext(
@@ -807,8 +820,7 @@ public sealed class Engine : IDisposable
                 ReadOnlyMemory<byte>.Empty,
                 isFrameBoundary: true),
             stateBridge,
-            snapshotPath);
-        return new EngineWorldSnapshot(snapshotPath, gameTimeTicks, kernel.WorldSeed);
+            Path.GetFullPath(savePath));
     }
 
     /// <summary>
@@ -821,6 +833,19 @@ public sealed class Engine : IDisposable
     {
         ThrowIfShutdown();
         ArgumentNullException.ThrowIfNull(snapshot);
+        return LoadWorldFromDirectory(snapshot.DirectoryPath, fallbackMaterialId);
+    }
+
+    /// <summary>
+    /// 从指定 plan/07 world save 目录覆盖恢复当前 resident world，并同步 kernel 与帧时钟计数。
+    /// </summary>
+    /// <param name="savePath">包含 manifest.bin 与 regions/ 的世界存档目录。</param>
+    /// <param name="fallbackMaterialId">快照材质名在当前材质表中缺失时使用的 fallback 材质 id。</param>
+    /// <returns>读档恢复结果。</returns>
+    public WorldLoadResult LoadWorldFromDirectory(string savePath, ushort fallbackMaterialId = 0)
+    {
+        ThrowIfShutdown();
+        ArgumentException.ThrowIfNullOrWhiteSpace(savePath);
         MaterialTable materials = Context.GetService<MaterialTable>();
         _ = materials.GetName(fallbackMaterialId);
         ResidentChunkMap chunks = Context.GetService<ResidentChunkMap>();
@@ -828,7 +853,7 @@ public sealed class Engine : IDisposable
         ParticleSystem particles = Context.GetService<ParticleSystem>();
         RuntimeWorldStateBridge stateBridge = EnsureRuntimeWorldStateBridge(particles);
         WorldLoadResult result = new WorldSaveService().LoadAll(
-            snapshot.DirectoryPath,
+            Path.GetFullPath(savePath),
             new WorldLoadContext(
                 chunks,
                 ResolveSnapshotResidency(chunks),
