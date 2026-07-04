@@ -81,6 +81,27 @@ public sealed class GuiApp : IDisposable
     }
 
     /// <summary>
+    /// 绘制一帧 GUI，并在同一 ImGui frame 内调度中性 GUI 绘制回调。
+    /// </summary>
+    public void DrawManagedFrame(float deltaSeconds, int width, int height, Action<IGuiDrawContext>? drawGui)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!IsRunning)
+        {
+            return;
+        }
+
+        _controller.NewFrame(deltaSeconds, width, height);
+        if (drawGui is not null)
+        {
+            ScriptGuiContext gui = new(width, height, deltaSeconds, Input.Capture);
+            drawGui(gui);
+        }
+
+        _controller.Render();
+    }
+
+    /// <summary>
     /// 关闭当前 GUI backend/context，但保留门面实例以便之后重新 Initialize。
     /// </summary>
     public void Shutdown()

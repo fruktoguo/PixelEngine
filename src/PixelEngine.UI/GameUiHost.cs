@@ -6,6 +6,7 @@ namespace PixelEngine.UI;
 public sealed class GameUiHost : IDisposable
 {
     private readonly IGameUiBackend _backend;
+    private readonly UiScreenStackEntry[] _screenStackBuffer;
     private bool _initialized;
 
     /// <summary>
@@ -18,6 +19,7 @@ public sealed class GameUiHost : IDisposable
         _backend = backend ?? throw new ArgumentNullException(nameof(backend));
         Options = options.Normalize();
         Documents = new UiDocumentManager(Options.MaxDocuments, Options.MaxStackDepth);
+        _screenStackBuffer = new UiScreenStackEntry[Options.MaxStackDepth];
     }
 
     /// <summary>
@@ -94,7 +96,9 @@ public sealed class GameUiHost : IDisposable
         UiDocumentHandle document = Documents.TryGetDocument(screenId, out UiDocumentHandle existing)
             ? existing
             : LoadDocument(screenId, in source);
-        return Documents.Show(screenId, document, modal: false);
+        UiScreenHandle handle = Documents.Show(screenId, document, modal: false);
+        PublishScreenStack();
+        return handle;
     }
 
     /// <summary>
@@ -110,7 +114,9 @@ public sealed class GameUiHost : IDisposable
         UiDocumentHandle document = Documents.TryGetDocument(screenId, out UiDocumentHandle existing)
             ? existing
             : LoadDocument(screenId, in source);
-        return Documents.Show(screenId, document, modal: true);
+        UiScreenHandle handle = Documents.Show(screenId, document, modal: true);
+        PublishScreenStack();
+        return handle;
     }
 
     /// <summary>
@@ -121,7 +127,13 @@ public sealed class GameUiHost : IDisposable
     public bool HideScreen(UiScreenHandle screen)
     {
         ThrowIfDisposed();
-        return Options.Enabled && Documents.Hide(screen);
+        if (!Options.Enabled || !Documents.Hide(screen))
+        {
+            return false;
+        }
+
+        PublishScreenStack();
+        return true;
     }
 
     /// <summary>
@@ -131,7 +143,13 @@ public sealed class GameUiHost : IDisposable
     public bool PopModal()
     {
         ThrowIfDisposed();
-        return Options.Enabled && Documents.PopModal(out _);
+        if (!Options.Enabled || !Documents.PopModal(out _))
+        {
+            return false;
+        }
+
+        PublishScreenStack();
+        return true;
     }
 
     /// <summary>
@@ -178,6 +196,12 @@ public sealed class GameUiHost : IDisposable
         {
             throw new InvalidOperationException("Game UI 已禁用，不能载入或显示 UI 文档。");
         }
+    }
+
+    private void PublishScreenStack()
+    {
+        int count = Documents.CopyStack(_screenStackBuffer);
+        _backend.SetScreenStack(_screenStackBuffer.AsSpan(0, count));
     }
 
     private void ThrowIfDisposed()

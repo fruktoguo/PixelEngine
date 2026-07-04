@@ -48,6 +48,12 @@ public interface IGameUiBackend : IDisposable
     void UnloadDocument(UiDocumentHandle document);
 
     /// <summary>
+    /// 同步当前可见屏栈；后端只能绘制此栈中的文档。
+    /// </summary>
+    /// <param name="stack">按底到顶排列的可见屏栈。</param>
+    void SetScreenStack(ReadOnlySpan<UiScreenStackEntry> stack);
+
+    /// <summary>
     /// 推进后端逻辑、布局与动画。
     /// </summary>
     /// <param name="deltaSeconds">渲染帧 dt，单位秒。</param>

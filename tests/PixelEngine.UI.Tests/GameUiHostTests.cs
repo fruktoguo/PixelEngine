@@ -18,6 +18,7 @@ public sealed class GameUiHostTests
         Assert.NotEqual(default, first);
         Assert.NotEqual(default, second);
         Assert.Equal(1, backend.LoadCount);
+        Assert.Equal(2, backend.LastScreenStackCount);
         Assert.Equal(1, host.Documents.DocumentCount);
         Assert.Equal(2, host.Documents.StackCount);
     }
@@ -35,8 +36,10 @@ public sealed class GameUiHostTests
         _ = host.PushModal(new UiScreenId(2), in modal);
 
         Assert.True(host.Documents.HasModalTop);
+        Assert.Equal(2, backend.LastScreenStackCount);
         Assert.True(host.PopModal());
         Assert.False(host.Documents.HasModalTop);
+        Assert.Equal(1, backend.LastScreenStackCount);
         Assert.False(host.PopModal());
     }
 
@@ -67,6 +70,8 @@ public sealed class GameUiHostTests
 
         public int LoadCount { get; private set; }
 
+        public int LastScreenStackCount { get; private set; }
+
         public void Initialize(in UiBackendInitializeInfo info)
         {
             info.Viewport.Validate();
@@ -87,6 +92,11 @@ public sealed class GameUiHostTests
 
         public void UnloadDocument(UiDocumentHandle document)
         {
+        }
+
+        public void SetScreenStack(ReadOnlySpan<UiScreenStackEntry> stack)
+        {
+            LastScreenStackCount = stack.Length;
         }
 
         public void Update(float deltaSeconds)
