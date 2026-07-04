@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: tools/verify-publish.sh --rid <RID> --channel <r2r|aot> [--publish-dir <dir>] [--allow-load-only] [--configuration <Config>]
+Usage: tools/verify-publish.sh --rid <RID> --channel <r2r|aot> [--publish-dir <dir>] [--allow-load-only] [--configuration <Config>] [--product-name <name>]
 
 Supported RID:
   win-x64 win-arm64 linux-x64 linux-arm64 osx-x64 osx-arm64
@@ -65,6 +65,19 @@ host_rid() {
 
 entry_name_for_rid() {
   local target_rid="$1"
+  if [[ -n "$product_name" ]]; then
+    local product_entry
+    if [[ "$target_rid" == win-* ]]; then
+      product_entry="$publish_dir/$product_name.exe"
+    else
+      product_entry="$publish_dir/$product_name"
+    fi
+    if [[ -f "$product_entry" ]]; then
+      basename "$product_entry"
+      return
+    fi
+  fi
+
   case "$target_rid" in
     win-*) echo "PixelEngine.Demo.exe" ;;
     *) echo "PixelEngine.Demo" ;;
@@ -163,6 +176,7 @@ rid=""
 channel=""
 publish_dir=""
 configuration="Release"
+product_name=""
 allow_load_only=0
 
 while [[ $# -gt 0 ]]; do
@@ -185,6 +199,11 @@ while [[ $# -gt 0 ]]; do
     --configuration)
       require_value "$1" "${2:-}"
       configuration="$2"
+      shift 2
+      ;;
+    --product-name)
+      require_value "$1" "${2:-}"
+      product_name="$2"
       shift 2
       ;;
     --allow-load-only)

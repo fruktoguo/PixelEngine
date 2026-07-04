@@ -233,7 +233,9 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
             BuildLogLevel level = TryGetString(root, "level", out string levelText) && Enum.TryParse(levelText, ignoreCase: true, out BuildLogLevel parsedLevel)
                 ? parsedLevel
                 : BuildLogLevel.Info;
-            float percent = TryGetSingle(root, "percent", out float parsedPercent) ? Math.Clamp(parsedPercent, 0, 1) : 0;
+            float percent = TryGetSingle(root, "percent", out float parsedPercent)
+                ? Math.Clamp(parsedPercent > 1 ? parsedPercent / 100 : parsedPercent, 0, 1)
+                : 0;
             string message = TryGetString(root, "message", out string parsedMessage) ? parsedMessage : string.Empty;
             DateTimeOffset timestamp = TryGetString(root, "timestamp", out string timestampText) &&
                 DateTimeOffset.TryParse(timestampText, out DateTimeOffset parsedTimestamp)

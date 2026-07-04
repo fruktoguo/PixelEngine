@@ -11,7 +11,11 @@ param(
   [string]$PublishDir,
   [string]$OutputRoot,
   [string]$PlayerOutputDir,
-  [string]$ContentRoot
+  [string]$ContentRoot,
+  [string]$ProductName,
+  [string]$StartScene,
+  [string[]]$IncludeScene = @(),
+  [switch]$IncludeSymbols
 )
 
 $ErrorActionPreference = 'Stop'
@@ -42,8 +46,23 @@ if (-not $ContentRoot) {
   $ContentRoot = Join-Path $repoRoot 'demo/PixelEngine.Demo/content'
 }
 
+if (-not $ProductName) {
+  $ProductName = 'PixelEngine Demo'
+}
+
+$assemblyBaseName = 'PixelEngine.Demo'
+$windowsLauncherName = "$ProductName.exe"
+$unixLauncherName = "$ProductName.sh"
+
 if (-not (Test-Path $PublishDir)) {
   throw "发布目录不存在: $PublishDir"
+}
+
+if ($PSBoundParameters.ContainsKey('ProductName') -and -not [string]::IsNullOrWhiteSpace($ProductName)) {
+  $candidate = Join-Path $PublishDir $(if ($Rid.StartsWith('win-')) { "$ProductName.exe" } else { $ProductName })
+  if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+    $assemblyBaseName = $ProductName
+  }
 }
 
 if (-not (Test-Path $ContentRoot)) {
@@ -57,10 +76,10 @@ $packageDir = Join-Path $OutputRoot $packageName
 $appDir = Join-Path $stagingDir 'app'
 $stagedContent = Join-Path $stagingDir 'content'
 
-function Remove-PlayerPackageNoise([string]$Directory) {
+function Remove-PlayerPackageNoise([string]$Directory, [bool]$KeepSymbols) {
   Get-ChildItem -LiteralPath $Directory -Recurse -File -Force -ErrorAction SilentlyContinue |
     Where-Object {
-      $_.Extension -in @('.pdb', '.xml') -or
+      (-not $KeepSymbols -and $_.Extension -in @('.pdb', '.xml')) -or
       $_.Name.EndsWith('.resources.dll', [StringComparison]::OrdinalIgnoreCase) -or
       $_.Name.Equals('createdump.exe', [StringComparison]::OrdinalIgnoreCase) -or
       $_.Name.Equals('createdump', [StringComparison]::OrdinalIgnoreCase)
@@ -75,9 +94,9 @@ function Remove-PlayerPackageNoise([string]$Directory) {
     ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
 }
 
-function Set-AppHostRelativeAssemblyPath([string]$AppHostPath, [string]$RelativeAssemblyPath) {
+function Set-AppHostRelativeAssemblyPath([string]$AppHostPath, [string]$AssemblyName, [string]$RelativeAssemblyPath) {
   $bytes = [IO.File]::ReadAllBytes($AppHostPath)
-  $old = [Text.Encoding]::UTF8.GetBytes('PixelEngine.Demo.dll')
+  $old = [Text.Encoding]::UTF8.GetBytes($AssemblyName)
   $new = [Text.Encoding]::UTF8.GetBytes($RelativeAssemblyPath)
   $index = -1
   for ($i = 0; $i -le $bytes.Length - $old.Length; $i++) {
@@ -96,7 +115,7 @@ function Set-AppHostRelativeAssemblyPath([string]$AppHostPath, [string]$Relative
   }
 
   if ($index -lt 0) {
-    throw "无法在 apphost 中定位 PixelEngine.Demo.dll: $AppHostPath"
+    throw "无法在 apphost 中定位 ${AssemblyName}: $AppHostPath"
   }
 
   for ($j = $old.Length; $j -le $new.Length; $j++) {
@@ -111,6 +130,61 @@ function Set-AppHostRelativeAssemblyPath([string]$AppHostPath, [string]$Relative
 
   $bytes[$index + $new.Length] = 0
   [IO.File]::WriteAllBytes($AppHostPath, $bytes)
+}
+
+function Normalize-ScenePath([string]$Scene) {
+  $normalized = $Scene.Replace('\', '/').TrimStart('/')
+  if (-not $normalized.StartsWith('scenes/', [StringComparison]::OrdinalIgnoreCase)) {
+    $normalized = "scenes/$normalized"
+  }
+
+  return $normalized
+}
+
+function Copy-FilteredContent([string]$SourceRoot, [string]$DestinationRoot, [string[]]$Scenes, [string]$StartupScene) {
+  Remove-Item -LiteralPath $DestinationRoot -Recurse -Force -ErrorAction SilentlyContinue
+  Copy-Item -LiteralPath $SourceRoot -Destination $DestinationRoot -Recurse -Force
+  $scenesToCopy = [System.Collections.Generic.List[string]]::new()
+  foreach ($scene in $Scenes) {
+    if (-not [string]::IsNullOrWhiteSpace($scene)) {
+      $scenesToCopy.Add((Normalize-ScenePath $scene))
+    }
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($StartupScene)) {
+    $startup = Normalize-ScenePath $StartupScene
+    $startupJson = @"
+{
+  "startScene": "$startup"
+}
+"@
+    Set-Content -LiteralPath (Join-Path $DestinationRoot 'startup.json') -Value $startupJson -Encoding UTF8
+    if (-not $scenesToCopy.Contains($startup)) {
+      $scenesToCopy.Add($startup)
+    }
+  }
+
+  if ($scenesToCopy.Count -eq 0) {
+    return
+  }
+
+  $sceneRoot = Join-Path $DestinationRoot 'scenes'
+  Remove-Item -LiteralPath $sceneRoot -Recurse -Force -ErrorAction SilentlyContinue
+  foreach ($scene in $scenesToCopy) {
+    $relative = $scene
+    if (-not $relative.EndsWith('.scene', [StringComparison]::OrdinalIgnoreCase)) {
+      $relative = "$relative.scene"
+    }
+
+    $source = Join-Path $SourceRoot $relative
+    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+      throw "入包场景不存在: $source"
+    }
+
+    $destination = Join-Path $DestinationRoot $relative
+    New-Item -ItemType Directory -Force (Split-Path -Parent $destination) | Out-Null
+    Copy-Item -LiteralPath $source -Destination $destination -Force
+  }
 }
 
 New-Item -ItemType Directory -Force $OutputRoot | Out-Null
@@ -128,30 +202,36 @@ Get-ChildItem -LiteralPath $PublishDir -Force | ForEach-Object {
 
   Copy-Item -LiteralPath $_.FullName -Destination $appDir -Recurse -Force
 }
-Remove-PlayerPackageNoise $appDir
+Remove-PlayerPackageNoise $appDir $IncludeSymbols.IsPresent
 Remove-Item -LiteralPath $stagedContent -Recurse -Force -ErrorAction SilentlyContinue
-Copy-Item -LiteralPath $ContentRoot -Destination $stagedContent -Recurse -Force
+Copy-FilteredContent $ContentRoot $stagedContent $IncludeScene $StartScene
 
 if ($Rid.StartsWith('win-')) {
-  $rootEntry = Join-Path $stagingDir 'PixelEngine Demo.exe'
-  Copy-Item -LiteralPath (Join-Path $PublishDir 'PixelEngine.Demo.exe') -Destination $rootEntry -Force
+  $rootEntry = Join-Path $stagingDir $windowsLauncherName
+  Copy-Item -LiteralPath (Join-Path $PublishDir "$assemblyBaseName.exe") -Destination $rootEntry -Force
   if ($Channel -eq 'r2r') {
-    Set-AppHostRelativeAssemblyPath $rootEntry 'app\PixelEngine.Demo.dll'
+    Set-AppHostRelativeAssemblyPath $rootEntry "$assemblyBaseName.dll" "app\$assemblyBaseName.dll"
   }
 
-  Remove-Item -LiteralPath (Join-Path $appDir 'PixelEngine.Demo.exe') -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath (Join-Path $appDir "$assemblyBaseName.exe") -Force -ErrorAction SilentlyContinue
+}
+
+$symbolLine = if ($IncludeSymbols) {
+  'This development layout keeps debug symbols for local debugging.'
+} else {
+  'Debug symbols, XML documentation, diagnostic dump helpers, and localized satellite resource DLLs are stripped from player packages.'
 }
 
 $readme = @"
-PixelEngine Demo
+${ProductName}
 ================
 
 Start the game from this folder:
-  Windows: PixelEngine Demo.exe
-  Linux/macOS: ./PixelEngine Demo.sh
+  Windows: ${windowsLauncherName}
+  Linux/macOS: ./${unixLauncherName}
 
 Runtime dependencies are under app/. Game content is under content/.
-Debug symbols, XML documentation, diagnostic dump helpers, and localized satellite resource DLLs are stripped from player packages.
+$symbolLine
 "@
 Set-Content -LiteralPath (Join-Path $stagingDir 'README.txt') -Value $readme -Encoding ASCII
 
@@ -161,9 +241,9 @@ if (-not $Rid.StartsWith('win-')) {
 set -eu
 script_dir=`$(CDPATH= cd -- "`$(dirname -- "`$0")" && pwd)
 cd "`$script_dir/app"
-exec ./PixelEngine.Demo --content "`$script_dir/content" "`$@"
+exec ./${assemblyBaseName} --content "`$script_dir/content" "`$@"
 "@
-  Set-Content -LiteralPath (Join-Path $stagingDir 'PixelEngine Demo.sh') -Value $launcher -Encoding ASCII
+  Set-Content -LiteralPath (Join-Path $stagingDir $unixLauncherName) -Value $launcher -Encoding ASCII
 }
 
 $packageChecksumLines = Get-ChildItem -LiteralPath $stagingDir -Recurse -File |

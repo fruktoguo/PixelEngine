@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: tools/publish-aot.sh --rid <RID> [--configuration <Config>] [--output <dir>] [--version <semver>] [--informational-version <value>] [--skip-native-build]
+Usage: tools/publish-aot.sh --rid <RID> [--configuration <Config>] [--output <dir>] [--version <semver>] [--informational-version <value>] [--product-name <name>] [--assembly-name <name>] [--application-icon <ico>] [--include-symbols] [--skip-native-build]
 EOF
 }
 
@@ -12,6 +12,10 @@ configuration="Release"
 output=""
 version=""
 informational_version=""
+product_name=""
+assembly_name=""
+application_icon=""
+include_symbols=0
 skip_native_build=0
 
 while [[ $# -gt 0 ]]; do
@@ -60,6 +64,37 @@ while [[ $# -gt 0 ]]; do
       fi
       informational_version="$2"
       shift 2
+      ;;
+    --product-name)
+      if [[ $# -lt 2 || "$2" == --* ]]; then
+        echo "Missing value for --product-name." >&2
+        usage
+        exit 2
+      fi
+      product_name="$2"
+      shift 2
+      ;;
+    --assembly-name)
+      if [[ $# -lt 2 || "$2" == --* ]]; then
+        echo "Missing value for --assembly-name." >&2
+        usage
+        exit 2
+      fi
+      assembly_name="$2"
+      shift 2
+      ;;
+    --application-icon|--icon-path)
+      if [[ $# -lt 2 || "$2" == --* ]]; then
+        echo "Missing value for $1." >&2
+        usage
+        exit 2
+      fi
+      application_icon="$2"
+      shift 2
+      ;;
+    --include-symbols)
+      include_symbols=1
+      shift
       ;;
     --skip-native-build)
       skip_native_build=1
@@ -117,13 +152,36 @@ if [[ "$skip_native_build" == "0" ]]; then
   bash "$repo_root/tools/build-native.sh" --rid "$rid" --configuration "$configuration"
 fi
 
-publish_properties=("-p:Channel=AOT")
+publish_properties=("-p:Channel=AOT" "-p:PixelEnginePlayerBuild=true")
 if [[ -n "$version" ]]; then
   publish_properties+=("-p:Version=$version")
 fi
 
 if [[ -n "$informational_version" ]]; then
   publish_properties+=("-p:InformationalVersion=$informational_version")
+fi
+
+if [[ -n "$product_name" ]]; then
+  publish_properties+=("-p:Product=$product_name")
+fi
+
+if [[ -n "$assembly_name" ]]; then
+  if [[ "$assembly_name" == *" "* ]]; then
+    echo "AssemblyName must not contain spaces: $assembly_name" >&2
+    exit 2
+  fi
+
+  publish_properties+=("-p:AssemblyName=$assembly_name")
+fi
+
+if [[ -n "$application_icon" ]]; then
+  publish_properties+=("-p:ApplicationIcon=$application_icon")
+fi
+
+if [[ "$include_symbols" == "1" ]]; then
+  publish_properties+=("-p:DebugSymbols=true" "-p:DebugType=portable")
+else
+  publish_properties+=("-p:DebugSymbols=false" "-p:DebugType=None")
 fi
 
 target_framework="$(dotnet msbuild "$demo_project" -nologo -getProperty:TargetFramework | tr -d '\r' | xargs)"

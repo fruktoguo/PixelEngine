@@ -40,6 +40,42 @@ public sealed class DemoStartupOptionsTests
     }
 
     /// <summary>
+    /// 验证玩家包 content/startup.json 能覆盖默认启动场景，且显式 --scene 仍有最高优先级。
+    /// </summary>
+    [Fact]
+    public void StartupJsonSelectsPackagedStartSceneUnlessSceneIsExplicit()
+    {
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-startup-json-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            _ = Directory.CreateDirectory(temp);
+            File.WriteAllText(
+                Path.Combine(temp, "startup.json"),
+                """
+                {
+                  "startScene": "scenes/lava-mine.scene"
+                }
+                """);
+
+            DemoStartupOptions packaged = DemoStartupOptions.Parse(["--content", temp]);
+            Assert.Equal("scenes/lava-mine.scene", packaged.Scene);
+
+            DemoStartupOptions explicitScene = DemoStartupOptions.Parse([
+                "--content", temp,
+                "--scene", "scenes/other.scene",
+            ]);
+            Assert.Equal("scenes/other.scene", explicitScene.Scene);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证默认可玩程序化场景从 AI 材质地图导入 cell，而不是只走旧的数学地形填充。
     /// </summary>
     [Fact]

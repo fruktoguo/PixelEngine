@@ -1,6 +1,10 @@
 param(
   [string]$PublishRoot,
   [string]$PackageRoot,
+  [string]$ProductName,
+  [string]$AssemblyName,
+  [string]$RequiredScene = 'scenes/lava-mine.scene',
+  [switch]$DevLayout,
   [switch]$RequireAll
 )
 
@@ -17,13 +21,23 @@ if (-not $PackageRoot) {
 
 $rids = @('win-x64', 'win-arm64', 'linux-x64', 'linux-arm64', 'osx-x64', 'osx-arm64')
 $channels = @('r2r', 'aot')
+$launcherBaseName = if ($ProductName) { $ProductName } else { 'PixelEngine Demo' }
+$assemblyBaseName = if ($AssemblyName) { $AssemblyName } else { 'PixelEngine.Demo' }
+$requiredScenePath = $RequiredScene.Replace('\', '/').TrimStart('/')
+if (-not $requiredScenePath.StartsWith('scenes/', [StringComparison]::OrdinalIgnoreCase)) {
+  $requiredScenePath = "scenes/$requiredScenePath"
+}
+if (-not $requiredScenePath.EndsWith('.scene', [StringComparison]::OrdinalIgnoreCase)) {
+  $requiredScenePath = "$requiredScenePath.scene"
+}
 
 function Get-EntryName([string]$rid) {
+  $baseName = $assemblyBaseName
   if ($rid.StartsWith('win-')) {
-    return 'PixelEngine.Demo.exe'
+    return "$baseName.exe"
   }
 
-  return 'PixelEngine.Demo'
+  return $baseName
 }
 
 function Get-Box2DName([string]$rid) {
@@ -169,11 +183,22 @@ function Test-DisallowedRuntimeRootFile([string]$relativePath) {
 
 function Test-DisallowedPlayerPackageFile([string]$relativePath) {
   $name = [IO.Path]::GetFileName($relativePath)
+  if ($DevLayout -and ($name.EndsWith('.pdb', [StringComparison]::OrdinalIgnoreCase) -or $name.EndsWith('.xml', [StringComparison]::OrdinalIgnoreCase))) {
+    return $false
+  }
+
   return $name.EndsWith('.pdb', [StringComparison]::OrdinalIgnoreCase) -or
     $name.EndsWith('.xml', [StringComparison]::OrdinalIgnoreCase) -or
     $name.EndsWith('.resources.dll', [StringComparison]::OrdinalIgnoreCase) -or
     $name.Equals('createdump.exe', [StringComparison]::OrdinalIgnoreCase) -or
     $name.Equals('createdump', [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Test-DisallowedPlayerOnlyFile([string]$relativePath) {
+  $name = [IO.Path]::GetFileName($relativePath)
+  return $name.Equals('PixelEngine.Editor.dll', [StringComparison]::OrdinalIgnoreCase) -or
+    $name.StartsWith('ImGuizmo', [StringComparison]::OrdinalIgnoreCase) -or
+    $name.StartsWith('ImPlot', [StringComparison]::OrdinalIgnoreCase)
 }
 
 function Assert-NoDuplicateContentUnderApp([string]$relativePath, [string]$packageName, [string]$prefix) {
@@ -183,8 +208,8 @@ function Assert-NoDuplicateContentUnderApp([string]$relativePath, [string]$packa
 }
 
 function Assert-NoDuplicateWindowsLauncherUnderApp([string]$relativePath, [string]$rid, [string]$packageName, [string]$prefix) {
-  if ($rid.StartsWith('win-') -and $relativePath -eq 'app/PixelEngine.Demo.exe') {
-    throw "$prefix 不应在 app/ 下重复保留原始启动 exe；根目录只允许 PixelEngine Demo.exe: $packageName -> $relativePath"
+  if ($rid.StartsWith('win-') -and $relativePath -eq "app/$assemblyBaseName.exe") {
+    throw "$prefix 不应在 app/ 下重复保留原始启动 exe；根目录只允许 $launcherBaseName.exe: $packageName -> $relativePath"
   }
 }
 
@@ -231,16 +256,16 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
     }
   }
 
-  $launcher = if ($rid.StartsWith('win-')) { 'PixelEngine Demo.exe' } else { 'PixelEngine Demo.sh' }
+  $launcher = if ($rid.StartsWith('win-')) { "$launcherBaseName.exe" } else { "$launcherBaseName.sh" }
   $requiredEntries = [System.Collections.Generic.List[string]]::new()
-  foreach ($required in @('README.txt', 'SHA256SUMS', $launcher, 'content/materials.json', 'content/reactions.json', 'content/scenes/lava-mine.scene')) {
+  foreach ($required in @('README.txt', 'SHA256SUMS', $launcher, 'content/materials.json', 'content/reactions.json', "content/$requiredScenePath")) {
     $requiredEntries.Add($required)
   }
 
   if ($channel -eq 'r2r') {
-    $requiredEntries.Add($(if ($rid.StartsWith('win-')) { 'app/PixelEngine.Demo.dll' } else { 'app/PixelEngine.Demo' }))
+    $requiredEntries.Add($(if ($rid.StartsWith('win-')) { "app/$assemblyBaseName.dll" } else { "app/$assemblyBaseName" }))
   } elseif (-not $rid.StartsWith('win-')) {
-    $requiredEntries.Add('app/PixelEngine.Demo')
+    $requiredEntries.Add("app/$assemblyBaseName")
   }
 
   foreach ($required in $requiredEntries) {
@@ -252,6 +277,10 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
   foreach ($relative in $relativeFileEntries) {
     if (Test-DisallowedPlayerPackageFile $relative) {
       throw "package 不应包含玩家无关的调试、文档、诊断辅助或本地化卫星资源文件: $($package.Name) -> $relative"
+    }
+
+    if ($relative.StartsWith('app/', [StringComparison]::Ordinal) -and (Test-DisallowedPlayerOnlyFile $relative)) {
+      throw "package 不应包含编辑器专属闭包: $($package.Name) -> $relative"
     }
   }
 
@@ -336,16 +365,16 @@ function Assert-FriendlyExpandedPackageLayout([System.IO.DirectoryInfo]$packageD
     }
   }
 
-  $launcher = if ($rid.StartsWith('win-')) { 'PixelEngine Demo.exe' } else { 'PixelEngine Demo.sh' }
+  $launcher = if ($rid.StartsWith('win-')) { "$launcherBaseName.exe" } else { "$launcherBaseName.sh" }
   $requiredEntries = [System.Collections.Generic.List[string]]::new()
-  foreach ($required in @('README.txt', 'SHA256SUMS', $launcher, 'content/materials.json', 'content/reactions.json', 'content/scenes/lava-mine.scene')) {
+  foreach ($required in @('README.txt', 'SHA256SUMS', $launcher, 'content/materials.json', 'content/reactions.json', "content/$requiredScenePath")) {
     $requiredEntries.Add($required)
   }
 
   if ($channel -eq 'r2r') {
-    $requiredEntries.Add($(if ($rid.StartsWith('win-')) { 'app/PixelEngine.Demo.dll' } else { 'app/PixelEngine.Demo' }))
+    $requiredEntries.Add($(if ($rid.StartsWith('win-')) { "app/$assemblyBaseName.dll" } else { "app/$assemblyBaseName" }))
   } elseif (-not $rid.StartsWith('win-')) {
-    $requiredEntries.Add('app/PixelEngine.Demo')
+    $requiredEntries.Add("app/$assemblyBaseName")
   }
 
   foreach ($required in $requiredEntries) {
@@ -357,6 +386,10 @@ function Assert-FriendlyExpandedPackageLayout([System.IO.DirectoryInfo]$packageD
   foreach ($relative in $relativeFileEntries) {
     if (Test-DisallowedPlayerPackageFile $relative) {
       throw "展开 package 不应包含玩家无关的调试、文档、诊断辅助或本地化卫星资源文件: $($packageDirectory.Name) -> $relative"
+    }
+
+    if ($relative.StartsWith('app/', [StringComparison]::Ordinal) -and (Test-DisallowedPlayerOnlyFile $relative)) {
+      throw "展开 package 不应包含编辑器专属闭包: $($packageDirectory.Name) -> $relative"
     }
   }
 
@@ -429,7 +462,7 @@ function Test-PublishDirectory([string]$rid, [string]$channel) {
   Assert-FileExists $entry '缺少发布入口'
   Assert-FileExists (Join-Path $directory 'content/materials.json') '缺少 content/materials.json'
   Assert-FileExists (Join-Path $directory 'content/reactions.json') '缺少 content/reactions.json'
-  Assert-FileExists (Join-Path $directory 'content/scenes/lava-mine.scene') '缺少默认场景'
+  Assert-FileExists (Join-Path $directory "content/$requiredScenePath") "缺少必需场景 $requiredScenePath"
 
   $box2D = Join-Path $directory "runtimes/$rid/native/$(Get-Box2DName $rid)"
   if ($channel -eq 'r2r') {

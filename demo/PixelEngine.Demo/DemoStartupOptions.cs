@@ -1,5 +1,6 @@
 using PixelEngine.Rendering;
 using PixelEngine.Core;
+using System.Text.Json;
 
 namespace PixelEngine.Demo;
 
@@ -125,7 +126,8 @@ public sealed class DemoStartupOptions
         int particleProbeWarmupFrames = 5;
         string particleProbeRunId = "local";
         string contentRoot = ResolveDefaultContentRoot(AppContext.BaseDirectory);
-        string scene = Path.Combine("scenes", DefaultSceneName + ".scene");
+        string scene = ResolveStartupScene(contentRoot);
+        bool sceneExplicitlySet = false;
         string logDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
         string captureFramePath = string.Empty;
 
@@ -156,9 +158,15 @@ public sealed class DemoStartupOptions
                     break;
                 case "--scene":
                     scene = ReadValue(args, ref i, "--scene");
+                    sceneExplicitlySet = true;
                     break;
                 case "--content":
                     contentRoot = ReadValue(args, ref i, "--content");
+                    if (!sceneExplicitlySet)
+                    {
+                        scene = ResolveStartupScene(contentRoot);
+                    }
+
                     break;
                 case "--ticks":
                     {
@@ -251,6 +259,38 @@ public sealed class DemoStartupOptions
             LogDirectory = logDirectory,
             CaptureFramePath = captureFramePath,
         };
+    }
+
+    private static string ResolveStartupScene(string contentRoot)
+    {
+        string startupPath = Path.Combine(contentRoot, "startup.json");
+        if (!File.Exists(startupPath))
+        {
+            return Path.Combine("scenes", DefaultSceneName + ".scene");
+        }
+
+        try
+        {
+            using FileStream stream = File.OpenRead(startupPath);
+            using JsonDocument document = JsonDocument.Parse(stream);
+            if (document.RootElement.TryGetProperty("startScene", out JsonElement startSceneElement) &&
+                startSceneElement.ValueKind == JsonValueKind.String)
+            {
+                string? startScene = startSceneElement.GetString();
+                if (!string.IsNullOrWhiteSpace(startScene))
+                {
+                    return startScene.Replace('\\', Path.DirectorySeparatorChar);
+                }
+            }
+        }
+        catch (JsonException)
+        {
+        }
+        catch (IOException)
+        {
+        }
+
+        return Path.Combine("scenes", DefaultSceneName + ".scene");
     }
 
     private static void ValidateWindowTicks(bool headless, int windowTicks)

@@ -318,7 +318,7 @@ Edit 模式实时投影：为让 Scene View 的 gizmo/拾取显示「活的」Ga
 
 ### 5.8 开发布局 vs 发行审计布局
 
-「含调试符号」为开发向：符号/Debug 构建产物落「开发布局」（保留 pdb），走宽松 dev-audit 校验（结构存在性 + player-only 断言），不进 `plan/15` 严格 release audit（后者强拒 pdb，见 `audit-release-artifacts` 的 `Test-DisallowedPlayerPackageFile`）。Release + 无符号构建走完整 `audit-release-artifacts`，保发行不变式不被削弱。面板明示当前布局类型。
+「含调试符号」为开发向：符号/Debug 构建产物落「开发布局」（保留 pdb/xml），走 `audit-release-artifacts -DevLayout` 宽松模式（放宽符号/文档噪音，保留结构存在性 + player-only 断言）。Release + 无符号构建走完整 `audit-release-artifacts`，保发行不变式不被削弱。面板明示当前布局类型。
 
 ### 5.9 §5 实现清单
 
@@ -345,18 +345,18 @@ Edit 模式实时投影：为让 Scene View 的 gizmo/拾取显示「活的」Ga
 - [x] AOT 通道仅宿主 RID 可选，跨架构灰显提示由 CI/CLI 出（§5.3/§5.5）
 
 player-only 与布局
-- [!] player 发布结构上排除 Editor+编辑器专属 ImGui 闭包（`ImGuizmo`/`ImPlot`）、保留 `Hexa.NET.ImGui` 核心——阻塞：前置 §0 GUI 宿主中性化落地（§5.7）
-- [ ] 开发(含符号)dev-audit 布局 vs 发行 audit-release-artifacts 布局分流，Release+无符号走完整 audit（§5.8）
+- [x] player 发布结构上排除 Editor+编辑器专属 ImGui 闭包（`ImGuizmo`/`ImPlot`）、保留 `Hexa.NET.ImGui` 核心（§5.7）
+- [x] 开发(含符号)dev-audit 布局 vs 发行 audit-release-artifacts 布局分流，Release+无符号走完整 audit（§5.8）
 
 ### 5.10 §5 验收标准
 
 - [ ] 在编辑器内点「Build」（win-x64 / R2R / Release）能起子进程跑通 native→publish→verify→package→audit，进度条随阶段推进，日志实时滚动，成功后结果区给出 zip 路径、大小、SHA256 与各阶段耗时；产物与 `tools/*` 手工出包**同等参数下字节级一致**（复用同一管线）（§5.4/§5.5）
 - [ ] 「Build And Run」成功后自动启动产出的 `PixelEngine Demo.exe` 并正常进入游戏（默认起始场景 playable-world 或面板选定场景）（§5.3/§5.6）
-- [ ] 产出 player 包 `app/` 内不含 `PixelEngine.Editor.dll` 与 `ImGuizmo*`/`ImPlot*`，但含玩家 HUD 所需 `Hexa.NET.ImGui` 核心，audit 校验通过（§5.7）
-- [ ] 场景清单：仅入包所选场景，启动场景经 `content/startup.json` 生效，player 不加 `--scene` 直接进选定启动场景（§5.6）
+- [x] 产出 player 包 `app/` 内不含 `PixelEngine.Editor.dll` 与 `ImGuizmo*`/`ImPlot*`，但含玩家 HUD 所需 `Hexa.NET.ImGui` 核心，audit 校验通过（§5.7）
+- [x] 场景清单：仅入包所选场景，启动场景经 `content/startup.json` 生效，player 不加 `--scene` 直接进选定启动场景（§5.6）
 - [ ] 失败诊断：故意造 publish/audit 失败时，面板高亮失败阶段并回显脚本断言原文与 exit code；缺 SDK/pwsh 时预检给出明确可执行提示，绝不静默（§5.4）
 - [ ] 取消运行中的构建能杀掉 dotnet/publish 子树，随后重跑构建成功（无残留污染）（§5.4）
-- [ ] 「含调试符号」开发构建保留 pdb 走 dev-audit 宽松校验；Release+无符号走严格 audit，二者产物布局符合各自规则（§5.8）
+- [x] 「含调试符号」开发构建保留 pdb 走 dev-audit 宽松校验；Release+无符号走严格 audit，二者产物布局符合各自规则（§5.8）
 - [ ] 构建全程 UI 不卡顿（后台线程 + 每帧 drain 队列），设置持久化重启后恢复（§5.2/§5.4）
 - [ ] 面板仅消费 `EditorContext` 只读 + `EngineProject` 只读 + 子进程，无引擎内部后门、无反向依赖/无循环（§5.1/§5.2）
 
@@ -469,6 +469,6 @@ GameObject authoring：
 - [x] 节点 7：`feat(editor-shell): .scene 保存往返（schema v2）+ 完整 prefab（含嵌套/传播）`（§4.9–§4.10）
 - [x] 节点 8：`feat(editor): Build 面板设置模型与 UI（平台/输出/产物名/图标/场景清单/配置/符号/内容选项）`（§5.2–§5.3，shell 程序集）
 - [x] 节点 9：`feat(editor): PlayerBuildService 子进程编排（起 build-player、NDJSON 回灌、exit code、取消、Build-And-Run）`（§5.4–§5.6）
-- [ ] 节点 10：`build(build): tools/build-player 编排器 + NDJSON/build-result 契约 + player-only audit 不变式`（`plan/15 §3.11`，scope=build）
+- [x] 节点 10：`build(build): tools/build-player 编排器 + NDJSON/build-result 契约 + player-only audit 不变式`（`plan/15 §3.11`，scope=build）
 - [ ] 节点 11：`refactor(demo): 玩家包与编辑器解耦（Demo 去 Editor 使用/EnableEditor 路径，改用 Gui host）+ 证据迁移`（§0.5、§4.12）
 - [ ] 节点 12：`docs(plan): 落地 plan/19 并修订 plan/00/12/13/15/18/README 交叉引用`（§8）

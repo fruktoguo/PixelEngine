@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: tools/audit-release-artifacts.sh [--publish-root <dir>] [--package-root <dir>] [--require-all]
+Usage: tools/audit-release-artifacts.sh [--publish-root <dir>] [--package-root <dir>] [--product-name <name>] [--required-scene <scene>] [--dev-layout] [--require-all]
 
 Defaults:
   --publish-root artifacts/publish
@@ -50,8 +50,8 @@ normalize_path() {
 entry_name_for_rid() {
   local rid="$1"
   case "$rid" in
-    win-*) echo "PixelEngine.Demo.exe" ;;
-    *) echo "PixelEngine.Demo" ;;
+    win-*) echo "$assembly_base.exe" ;;
+    *) echo "$assembly_base" ;;
   esac
 }
 
@@ -234,7 +234,17 @@ is_disallowed_runtime_root_file() {
 is_disallowed_player_package_file() {
   local relative="$1"
   local name="${relative##*/}"
+  if (( dev_layout )) && [[ "$name" == *.pdb || "$name" == *.xml ]]; then
+    return 1
+  fi
+
   [[ "$name" == *.pdb || "$name" == *.xml || "$name" == *.resources.dll || "$name" == "createdump.exe" || "$name" == "createdump" ]]
+}
+
+is_disallowed_player_only_file() {
+  local relative="$1"
+  local name="${relative##*/}"
+  [[ "${name,,}" == "pixelengine.editor.dll" || "$name" == ImGuizmo* || "$name" == ImPlot* ]]
 }
 
 assert_no_duplicate_content_under_app() {
@@ -251,8 +261,8 @@ assert_no_duplicate_windows_launcher_under_app() {
   local rid="$2"
   local package_name="$3"
   local prefix="$4"
-  if [[ "$rid" == win-* && "$relative" == "app/PixelEngine.Demo.exe" ]]; then
-    fail_audit "$prefix 不应在 app/ 下重复保留原始启动 exe；根目录只允许 PixelEngine Demo.exe: $package_name -> $relative"
+  if [[ "$rid" == win-* && "$relative" == "app/$assembly_base.exe" ]]; then
+    fail_audit "$prefix 不应在 app/ 下重复保留原始启动 exe；根目录只允许 $launcher_base.exe: $package_name -> $relative"
   fi
 }
 
@@ -288,11 +298,11 @@ assert_friendly_package_layout() {
   local launcher
   local entry=""
   if [[ "$rid" == win-* ]]; then
-    launcher="PixelEngine Demo.exe"
-    [[ "$channel" == "r2r" ]] && entry="app/PixelEngine.Demo.dll"
+    launcher="$launcher_base.exe"
+    [[ "$channel" == "r2r" ]] && entry="app/$assembly_base.dll"
   else
-    launcher="PixelEngine Demo.sh"
-    entry="app/PixelEngine.Demo"
+    launcher="$launcher_base.sh"
+    entry="app/$assembly_base"
   fi
 
   local has_readme=0
@@ -328,7 +338,7 @@ assert_friendly_package_layout() {
       "$entry") has_entry=1 ;;
       content/materials.json) has_materials=1 ;;
       content/reactions.json) has_reactions=1 ;;
-      content/scenes/lava-mine.scene) has_scene=1 ;;
+      "content/$required_scene") has_scene=1 ;;
     esac
 
     if is_disallowed_runtime_root_file "$relative" && [[ "$relative" != app/* ]]; then
@@ -344,6 +354,10 @@ assert_friendly_package_layout() {
         fail_audit "package 不应包含玩家无关的调试、文档、诊断辅助或本地化卫星资源文件: $name -> $relative"
       fi
 
+      if [[ "$relative" == app/* ]] && is_disallowed_player_only_file "$relative"; then
+        fail_audit "package 不应包含编辑器专属闭包: $name -> $relative"
+      fi
+
       app_files+=("$relative")
     fi
   done < <(list_package_entries "$package")
@@ -353,7 +367,7 @@ assert_friendly_package_layout() {
   [[ -z "$entry" || "$has_entry" -eq 1 ]] || fail_audit "package 缺少 app 依赖入口: $name -> $entry"
   (( has_materials )) || fail_audit "package 缺少 content/materials.json: $name"
   (( has_reactions )) || fail_audit "package 缺少 content/reactions.json: $name"
-  (( has_scene )) || fail_audit "package 缺少 content/scenes/lava-mine.scene: $name"
+  (( has_scene )) || fail_audit "package 缺少 content/$required_scene: $name"
 
   declare -A declared_app_files=()
   local checksum_entry="$root_name/SHA256SUMS"
@@ -399,11 +413,11 @@ assert_friendly_expanded_package_layout() {
   local launcher
   local entry=""
   if [[ "$rid" == win-* ]]; then
-    launcher="PixelEngine Demo.exe"
-    [[ "$channel" == "r2r" ]] && entry="app/PixelEngine.Demo.dll"
+    launcher="$launcher_base.exe"
+    [[ "$channel" == "r2r" ]] && entry="app/$assembly_base.dll"
   else
-    launcher="PixelEngine Demo.sh"
-    entry="app/PixelEngine.Demo"
+    launcher="$launcher_base.sh"
+    entry="app/$assembly_base"
   fi
 
   local has_readme=0
@@ -429,7 +443,7 @@ assert_friendly_expanded_package_layout() {
       "$entry") has_entry=1 ;;
       content/materials.json) has_materials=1 ;;
       content/reactions.json) has_reactions=1 ;;
-      content/scenes/lava-mine.scene) has_scene=1 ;;
+      "content/$required_scene") has_scene=1 ;;
     esac
 
     if is_disallowed_runtime_root_file "$relative" && [[ "$relative" != app/* ]]; then
@@ -445,6 +459,10 @@ assert_friendly_expanded_package_layout() {
         fail_audit "展开 package 不应包含玩家无关的调试、文档、诊断辅助或本地化卫星资源文件: $name -> $relative"
       fi
 
+      if [[ "$relative" == app/* ]] && is_disallowed_player_only_file "$relative"; then
+        fail_audit "展开 package 不应包含编辑器专属闭包: $name -> $relative"
+      fi
+
       expanded_files+=("$relative")
     fi
   done < <(find "$directory" -mindepth 1 -print0 | sort -z)
@@ -454,7 +472,7 @@ assert_friendly_expanded_package_layout() {
   [[ -z "$entry" || "$has_entry" -eq 1 ]] || fail_audit "展开 package 缺少 app 依赖入口: $name -> $entry"
   (( has_materials )) || fail_audit "展开 package 缺少 content/materials.json: $name"
   (( has_reactions )) || fail_audit "展开 package 缺少 content/reactions.json: $name"
-  (( has_scene )) || fail_audit "展开 package 缺少 content/scenes/lava-mine.scene: $name"
+  (( has_scene )) || fail_audit "展开 package 缺少 content/$required_scene: $name"
 
   local checksum_path="$directory/SHA256SUMS"
   assert_file_exists "$checksum_path" "展开 package 缺少 SHA256SUMS"
@@ -498,7 +516,7 @@ audit_publish_directory() {
   assert_file_exists "$entry" "缺少发布入口"
   assert_file_exists "$directory/content/materials.json" "缺少 content/materials.json"
   assert_file_exists "$directory/content/reactions.json" "缺少 content/reactions.json"
-  assert_file_exists "$directory/content/scenes/lava-mine.scene" "缺少 content/scenes/lava-mine.scene"
+  assert_file_exists "$directory/content/$required_scene" "缺少 content/$required_scene"
 
   local box2d_path="$directory/runtimes/$rid/native/$(box2d_dynamic_name_for_rid "$rid")"
   if [[ "$channel" == "r2r" ]]; then
@@ -698,6 +716,10 @@ audit_packages() {
 
 publish_root=""
 package_root=""
+product_name=""
+assembly_name=""
+required_scene="scenes/lava-mine.scene"
+dev_layout=0
 require_all=0
 
 while [[ $# -gt 0 ]]; do
@@ -711,6 +733,28 @@ while [[ $# -gt 0 ]]; do
       require_value "$1" "${2:-}"
       package_root="$2"
       shift 2
+      ;;
+    --product-name)
+      require_value "$1" "${2:-}"
+      product_name="$2"
+      shift 2
+      ;;
+    --assembly-name)
+      require_value "$1" "${2:-}"
+      assembly_name="$2"
+      shift 2
+      ;;
+    --required-scene|--start-scene)
+      require_value "$1" "${2:-}"
+      required_scene="${2//\\//}"
+      required_scene="${required_scene#/}"
+      [[ "$required_scene" == scenes/* ]] || required_scene="scenes/$required_scene"
+      [[ "$required_scene" == *.scene ]] || required_scene="$required_scene.scene"
+      shift 2
+      ;;
+    --dev-layout)
+      dev_layout=1
+      shift
       ;;
     --require-all)
       require_all=1
@@ -730,6 +774,13 @@ rids=(win-x64 win-arm64 linux-x64 linux-arm64 osx-x64 osx-arm64)
 channels=(r2r aot)
 packages=()
 package_dirs=()
+[[ "$required_scene" == *.scene ]] || required_scene="$required_scene.scene"
+launcher_base="${product_name:-PixelEngine Demo}"
+if [[ -n "$assembly_name" ]]; then
+  assembly_base="$assembly_name"
+else
+  assembly_base="PixelEngine.Demo"
+fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
