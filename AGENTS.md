@@ -27,7 +27,7 @@ PixelEngine 是一个自研的、对标 Noita 世界模拟的高性能 2D 像素
 7. **颜色不入 cell**：渲染色由材质纹理采样 + 温度 glow 在渲染相位生成；sim cell 不存 RGBA。（§7.1）
 8. **material 以稳定字符串键入盘**：运行时数值 id 仅作索引、绝不入盘；存档存 name↔id 表并在读档时 remap。（§11.2）
 9. **CPU sim 权威**：模拟主体在 CPU；GPU 仅承担渲染、光照、粒子合成、以及**可选**的非权威计算 pass。像素碰撞需要网格随时可读，不接受 GPU→CPU readback 卡流水线。（§9.5）
-10. **native 面收敛到 Box2D 一个依赖**：其余（OpenAL/ANGLE 等）走系统/动态分发，降低 dual-build fan-out。（§14.4）
+10. **权威 sim 热路径的静态 vendored native 收敛到 Box2D 一个依赖**：进入 sim/physics 权威热路径、随引擎静态 vendored 并纳入 dual-build 静态链的 native，永远仅 Box2D 一个。其余一律归为**门控类可选 native**——即非 sim 权威、可选、带纯托管默认回退、按 RID 动态/系统分发的 UI/渲染/音频内核（OpenAL/ANGLE，以及新增的游戏内 UI 内核 RmlUi/Ultralight 等）——它们**不计入本条「单 native 硬约束」**，但每一个都必须：(a) 走动态/系统分发，绝不进入 Box2D 的静态 dual-build fan-out；(b) 可经开关整体禁用并回退到纯托管基线（如 `PixelEngine.UI` 的 `ManagedFallbackBackend`），禁用后引擎在无该 native 时仍可运行。本条核心不变：Box2D 是唯一的 sim-native、唯一被 dual-build 静态承载的 native 依赖。（§14.4，门控依赖清单见 `plan/00-conventions-and-techstack.md` §4.1）
 
 任何 plan 条目若与以上冲突，停止并上报，不要自行变通。
 

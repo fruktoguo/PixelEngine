@@ -30,6 +30,7 @@ public sealed class EngineBuilder
     private EngineOverloadOptions _overload = EngineOverloadOptions.CreateDefault();
     private readonly List<(EnginePhase Phase, EnginePhaseAction Action)> _phaseActions = [];
     private readonly List<IEnginePhaseDriver> _phaseDrivers = [];
+    private readonly List<IEditorHostExtension> _editorHostExtensions = [];
     private readonly List<SceneDescriptor> _scenes = [];
     private readonly List<IEngineSubsystem> _subsystems = [];
 
@@ -246,6 +247,16 @@ public sealed class EngineBuilder
     }
 
     /// <summary>
+    /// 注册独立编辑器壳注入的中性 GUI/相位 [10] 扩展。Hosting 只保存接口，不引用 Editor 程序集。
+    /// </summary>
+    public EngineBuilder AddEditorHostExtension(IEditorHostExtension extension)
+    {
+        ArgumentNullException.ThrowIfNull(extension);
+        _editorHostExtensions.Add(extension);
+        return this;
+    }
+
+    /// <summary>
     /// 构建 Engine 并完成 Core 服务装配。
     /// </summary>
     public Engine Build()
@@ -297,6 +308,8 @@ public sealed class EngineBuilder
         context.RegisterService(lifecycle);
         context.RegisterService<ISceneService>(EngineServiceRole.SceneService, scenes);
         context.RegisterService(scenes);
+        IReadOnlyList<IEditorHostExtension> editorHostExtensions = [.. _editorHostExtensions];
+        context.RegisterService(editorHostExtensions);
         EnginePhasePipeline phases = new(commands);
         for (int i = 0; i < _phaseDrivers.Count; i++)
         {

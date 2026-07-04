@@ -1,4 +1,4 @@
-using PixelEngine.Editor;
+using PixelEngine.Gui;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Simulation;

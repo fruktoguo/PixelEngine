@@ -64,7 +64,7 @@ public readonly record struct MaterialDef
 
     // —— movement 消费字段（实现机制在 plan/03）——
     public byte     Density;             // 邻居 Density < 我 → swap（液/气位移；油浮水沉，架构 §7.3）
-    public byte     Dispersion;          // 液体每步水平铺开距离（viscosity 反量）
+    public byte     Dispersion;          // 液体/气体每 CA 步最大水平铺开 cell 数（viscosity 反量）；语义化对外别名 = FlowRate（编辑器/图例/GetInfo 读此值），加载期强制 clamp 到 [0, EngineConstants.MoveCap]=32 并加构建期断言（守 #4，杜绝越过 move cap，§3.11）
     public bool     LiquidStatic;        // 不流动的类固体液体（Noita liquid_static）
     public bool     LiquidSand;          // 粉末式液体（Noita liquid_sand）
 
@@ -86,12 +86,27 @@ public readonly record struct MaterialDef
 
     // —— 生命周期 / 耐久 ——
     public ushort   DefaultLifetime;     // fire/gas 默认倒计时（lifecycle 在 plan/05 消费）
-    public byte     Durability;          // 抗腐蚀/抗挖耐久
+    public byte     Durability;          // 抗性系数（被 sim ApplyDamage 真实消费，§3.11）：单次伤害 < Durability*DamageAbsorb 被完全吸收（不掉血）；取代原「抗腐蚀/抗挖」模糊语义，加载期沿用 durability 字段直迁移
+
+    // —— 结构完整度 / 破坏（数据驱动；per-cell 累计 Damage byte lane 与 ApplyDamage 执行在 plan/03，材质侧契约见 §3.11）——
+    public ushort   Integrity;           // 固体 cell 满结构完整度（生命值，单位=伤害点上限）；0 = 即时破坏（沙/水一碰即抛），>0 = per-cell 累计 Damage 达此值才破坏
+    public ushort   DestroyedTarget;     // 破坏产物材质 id（入盘写稳定 name，加载期 name→id 解析，守 #8）；stone→gravel、wood→ash；==0(Empty) 破坏后直接清空
+    public byte     DebrisCount;         // 破坏时抛出碎屑粒子数（0 = 不抛）；粒子材质 = DestroyedTarget 或本材质（handshake plan/05）
+    public byte     MineYield;           // 采集掉落值：>0 且置 Diggable 位时，该 cell 被玩家武器破坏发一次采集事件（crystal=1）；0 = 非矿物（§3.11）
 
     // —— 渲染 / 上色（采样实现在 plan/08）——
     public int      TextureId;           // 材质纹理索引（-1 = 仅用纯色）
     public uint     BaseColorBGRA;       // 基色（BGRA8，匹配上传格式，架构 §9.2）
     public byte     ColorNoise;          // 便宜噪声幅度（替代纹理）
+
+    // —— 视觉可辨识（渲染相位 CPU 按 id 查表算 BGRA，只存 MaterialDef，绝不写回 cell，守 #7；着色实现在 plan/08）——
+    public MaterialRenderStyle    RenderStyle;      // 着色风格；驱动 plan/08 差异化着色与图例分组（进 MaterialVisualTable 热列，§3.2）
+    public MaterialLegendCategory LegendCategory;   // 玩家图例分组（Terrain/Liquid/Gas/…）
+    public uint     EdgeColorBGRA;       // 固体/可破坏物边缘描边色（BGRA8，0 = 不描边）
+    public byte     Opacity;             // 渲染不透明度 0-255（气体半透明；默认 255）
+    public uint     HighlightColorBGRA;  // 液体流动高光/表面叠加色（BGRA8，0 = 不叠加）
+    public string   DisplayName;         // 玩家可读名（冷字段，绝不入 cell/热路径）
+    public bool     LegendVisible;       // 是否出现在玩家图例（中间产物如 acid_gas 置 false）
 
     // —— 标记 / 反应 / 音效 ——
     public uint     PropertyFlags;       // MaterialProperty 位域（含 tag 成员位，见 §3.4）
@@ -121,7 +136,10 @@ public enum MaterialProperty : uint
     Emissive      = 1u << 8,   // 发光（renderer/emissive buffer 消费，plan/08）
     HasCustomUpdate = 1u << 9, // 有 custom-update 委托（§3.8 快速门控）
     Conductive    = 1u << 10,  // 预留：导电（脚本/反应可用）
-    // bit11+ 预留
+    // 破坏行为位（§3.11 ApplyDamage 消费）
+    Indestructible = 1u << 11, // 免疫破坏：ApplyDamage 对其 no-op（如 boundary_stone / 关卡边界 bedrock），不累计 Damage
+    Diggable      = 1u << 12,  // 可被 Excavator/采矿工具挖掘；配合 MineYield 触发采集事件
+    // bit13+ 预留
 }
 
 /// <summary>[tag] 标签 → MaterialProperty 成员位 的固定映射，加载期 tag 展开使用（§3.4）。</summary>
@@ -129,6 +147,12 @@ public enum MaterialTag : byte
 {
     Meltable, Acid, Fire, Corrodible, Cold, MoltenMetal, Static, BurnableFast
 }
+
+/// <summary>材质着色风格（渲染相位按 id 查表算 BGRA，绝不写回 cell，守 #7；差异化着色在 plan/08）。</summary>
+public enum MaterialRenderStyle : byte { Ground, Powder, Liquid, Gas, Solid, Destructible, Hazard, Emissive }
+
+/// <summary>玩家材质图例分组（plan/13 MaterialLegendHud 消费，编辑器 MaterialLegendPreview 对照，plan/12）。</summary>
+public enum MaterialLegendCategory : byte { Terrain, Liquid, Gas, Destructible, Hazard, Resource, Special }
 ```
 
 `AudioCueSet`（音效挂点，句柄由 plan/10 解析）：
@@ -147,6 +171,8 @@ public readonly record struct AudioCueSet
 ```
 
 **`MaterialHotTable`（SoA 热表，性能优化）**：`MaterialDef[]` 含 `string` / `AudioCueSet` 等冷字段，热路径只读 `Density/Dispersion/Type/HeatConduct/HeatCapacity/相变阈值/ReactionStart/ReactionCount/PropertyFlags`。为避免把冷字段拉进 cache line（`AGENTS.md §3` SoA 纪律、架构 §7.1），加载期从 `MaterialDef[]` 派生一份 SoA 热表（按字段分列的并行数组），movement / reaction / temperature 内层循环只触碰热表。`MaterialDef[]` 保留为权威 / 工具 / 编辑路径。
+
+**破坏热路径列（§3.11）**：热表并列 `_durability` / `_integrity` / `_destroyedTarget` 列，且 `_propertyFlags` 列携带 `Indestructible` / `Diggable` 位，供 plan/03 `ApplyDamage` 按 id 单次只读查表判定抗性 / 生命值 / 产物 / 免疫，零热路径分配（守 SoA 纪律）。**渲染视觉表（`MaterialVisualTable`）**：视觉字段（`RenderStyle` / `EdgeColorBGRA` / `Opacity` / `HighlightColorBGRA` / `LegendCategory`）另加载期派生一份并列 SoA `MaterialVisualTable`，供 plan/08 渲染相位 CPU 按 id 查表算 BGRA、**绝不写回 cell（守 #7）**；`DisplayName` / `LegendVisible` 等纯冷字段仍留权威 `MaterialDef[]`，由图例 / 编辑器按需读（非每 cell 每帧热路径）。
 
 ### 3.3 name 稳定键 ↔ 运行时 id 映射（不变式 #8，架构 §11.2 / §17.4）
 
@@ -333,15 +359,54 @@ public sealed class TemperatureField
     "freezePoint": 0.0, "freezeTarget": "ice",      // 目标按 name
     "boilPoint": 100.0, "boilTarget": "steam",
     "heatConduct": 30, "heatCapacity": 4.18,        // 非零
-    "defaultLifetime": 0, "durability": 0,
+    "defaultLifetime": 0, "durability": 0,           // durability→Durability 抗性系数
+    "integrity": 0,                                  // 0 = 即时破坏（液体一碰即抛）
+    "destroyedTarget": null, "debrisCount": 0, "mineYield": 0,
     "textureId": -1, "baseColor": "#FF3366CC",      // BGRA8（或 #AARRGGBB，加载期归一）
     "colorNoise": 8,
+    "renderStyle": "Liquid", "legendCategory": "Liquid",
+    "opacity": 210, "edgeColor": "#00000000", "highlightColor": "#5533AAFF",
+    "displayName": "水", "legendVisible": true,
     "tags": ["corrodible"],                          // → PropertyFlags 位
     "emissive": false,
     "audioCues": { "impact": "drip", "splash": "splash_water", "ambient": "deep_water" }
+  },
+  {
+    "name": "stone", "type": "Solid", "density": 200,
+    "durability": 180, "integrity": 600,             // 高抗性 + 大生命值：需炸弹级累计当量才碎
+    "destroyedTarget": "gravel", "debrisCount": 4,   // 破坏产 gravel + 4 碎屑（by name → id，守 #8）
+    "heatConduct": 90, "heatCapacity": 2.5,
+    "renderStyle": "Ground", "legendCategory": "Terrain",
+    "edgeColor": "#FF202024", "opacity": 255,
+    "baseColor": "#FF6E6E7A", "colorNoise": 8,
+    "displayName": "岩石", "legendVisible": true,
+    "tags": ["static", "corrodible"]
+  },
+  {
+    "name": "gravel", "type": "Powder", "density": 190,
+    "durability": 40, "integrity": 0,                // stone 碎块：低抗、即时破坏、可再抛落
+    "destroyedTarget": null, "debrisCount": 0,
+    "heatConduct": 80, "heatCapacity": 2.2,
+    "renderStyle": "Powder", "legendCategory": "Terrain",
+    "baseColor": "#FF585862", "colorNoise": 12,
+    "displayName": "碎石", "legendVisible": true,
+    "tags": ["static"]
+  },
+  {
+    "name": "boundary_stone", "type": "Solid", "density": 255,
+    "durability": 255, "integrity": 0,               // integrity 无意义：Indestructible 位使 ApplyDamage no-op
+    "destroyedTarget": null, "debrisCount": 0,
+    "heatConduct": 0, "heatCapacity": 10.0,
+    "renderStyle": "Solid", "legendCategory": "Special",
+    "edgeColor": "#FF101014", "opacity": 255,
+    "baseColor": "#FF303038", "colorNoise": 0,
+    "displayName": "边界岩", "legendVisible": false,
+    "tags": ["static", "indestructible"]             // indestructible → PropertyFlags bit11
   }
 ]
 ```
+
+**新增字段语义（§3.2）**：`durability`（抗性系数）、`integrity`（满结构完整度，0=即时破坏）、`destroyedTarget`（破坏产物，**稳定 name**，加载期经 `MaterialTable` 解析为 id，缺失落 fallback，守 #8）、`debrisCount`、`mineYield`、`renderStyle`、`legendCategory`、`edgeColor`（BGRA8/`#AARRGGBB`）、`opacity`、`highlightColor`、`displayName`、`legendVisible`。tag 名 `indestructible` / `diggable` 加载期置对应 `PropertyFlags` 位（bit11/bit12）。任何指向材质的 name 引用（`destroyedTarget`、以及 Demo 侧 `buildMaterial` 等建材引用）一律入盘写 name、加载期 name→id 解析（守 #8），运行时热路径只用 id。所有视觉字段（`renderStyle`/`edgeColor`/`opacity`/`highlightColor`/`legendCategory`）只落进 `MaterialDef` 并派生 `MaterialVisualTable`，渲染相位 CPU 算 BGRA，**绝不写回 cell（守 #7）**。加载期校验增补：`dispersion` clamp 到 `[0, EngineConstants.MoveCap]` 并断言（守 #4）、`destroyedTarget`/tag 可解析、`Indestructible` 材质允许 `integrity==0`（免疫不依赖生命值）。DTO（`MaterialJson` 增上列字段）与反序列化 / 校验 / 热重载实现归属 Content；boundary_stone / gravel / crystal 等具体内容由 plan/13 填 `content/materials.json`。
 
 **`reactions.json`**（反应规则数组，input/output 可为具体 name 或 `[tag]`）：
 
@@ -360,6 +425,30 @@ public sealed class TemperatureField
 
 **tag 声明**（可在 materials.json 顶层或独立 `tags` 段声明代表材质，供输出 tag 解析，§3.4 规则 3）。Schema 校验（必填字段、name 唯一、target / tag 可解析、`HeatCapacity!=0`）在加载期执行（Content）。DTO（`MaterialJson` / `ReactionJson` / `JsonSerializerContext`）定义在 Content，本文档定义其字段契约。
 
+### 3.11 破坏 / 结构完整度消费契约（per-cell 累计伤害 + ApplyDamage，plan/03 执行）
+
+可玩化要求「持久破坏」：地形被武器 / 爆炸 / 激光 / 酸蚀按材质抗性差异化损毁并可入盘。破坏的**执行**（cell SoA lane、`ApplyDamage`、破坏动作）由 `plan/03-simulation-kernel.md` 落地（属 CA 内核安全相位的离散编辑）；本文档定义其消费的**材质侧契约**与破坏语义，并登记 cell lane 的存在与守则。
+
+**per-cell 累计伤害 lane（归属 plan/03）**：cell SoA 新增一条 **`Damage`（byte）平面**，记录该 cell 已累计承受的伤害（非满血值）。写入 / 相变 / 反应生成新 cell 时该 lane 归 0（自然默认，无额外 init）。**单缓冲原地读改写（守 #1，不双缓冲）**；`Damage` 非颜色，不违反「颜色不入 cell（守 #7）」。内存：64×64 chunk × 1B = 4KB/chunk，对应 cell 预算 4B→5B/cell（+25%）、每常驻 chunk 16KB→20KB（此预算数字须与 plan/03/07/16 三处一致，本处仅登记契约）。
+
+**`ApplyDamage(x, y, dmg, kind)` 规则（plan/03 实现，消费本文档材质字段）**，逐步裁决：
+
+1. **刚体像素守则（守 #5）**：写 cell 前必查 `CellFlags.RigidOwned`；命中刚体所属像素则**绝不在其上累加 `Damage`**，而经 `IRigidDamageSink.OnOwnedCellDamaged(x, y, dmg)` 路由给刚体系统触发受损像素剥离 / 形状重建（plan/06），CA 网格侧不改该 cell 材质。
+2. **免疫**：材质 `PropertyFlags` 含 `Indestructible`（bit11）→ `ApplyDamage` no-op（boundary_stone / bedrock）。
+3. **抗性吸收**：`effective = max(0, dmg - Durability * EngineConstants.DamageAbsorb)`（`DamageAbsorb` 为集中常量，不写死魔法数）。
+4. **即时破坏 vs 累计**：材质 `Integrity == 0` → 任意 `effective > 0` 立即破坏（沙 / 水 / gravel）；否则 `Damage += (byte)min(255, effective)`，当 `Damage * EngineConstants.DamageScale ≥ Integrity` 破坏（`DamageScale` 集中常量，把 byte lane 映射到 `ushort Integrity` 域）。
+5. **破坏动作**：cell 材质转 `DestroyedTarget`（或 `Empty`）、清 `Damage` lane、打本帧 parity、标所在 chunk dirty、跨界则对邻 chunk `KeepAlive`（守 #2/#3/#6）；按 `DebrisCount` 入粒子抛射请求（handshake plan/05 相位 7，粒子材质 = `DestroyedTarget` 或本材质）；若材质置 `Diggable` 且 `MineYield > 0` 则发一次采集事件（plan/13 GameDirector 订阅计数）。
+
+**破坏路径差异化抗性（`DamageKind` + `IWorldEffects`，API 缺口归 plan/05+plan/11 补）**：抗性差异全由 `materials.json` 数据表达，改数值即改表现。
+
+- **爆炸**：`IWorldEffects.DamageCircle(x, y, radius, damage, falloff, DamageKind.Explosive)`——半径内每 cell 按距离衰减调 `ApplyDamage`。sand/dirt（低 `Durability`、`Integrity`=0/小）一炸即碎抛为粒子；stone（高 `Durability`、大 `Integrity`）需炸弹级当量累计；metal 近乎免疫小爆破。取代原 `Explode`「无条件抛射半径内全部 cell」——旧 `EjectionRequest` 抛射改为破坏动作触发（`DestroyedTarget` 化 + 碎屑），使抗性生效；`Explode` 内部改为 `DamageCircle` 组合。
+- **激光**：`IWorldEffects.DamageBeam(x, y, dx, dy, length, damagePerCell, heatPerCell, DamageKind.Beam)`——沿束逐 cell `ApplyDamage` + `AddHeat`（§3.9）；穿透直到累计能量耗尽或遇超高 `Durability`。木 / 冰快速烧穿，metal 慢烧（配合熔点相变成 molten_metal）。
+- **酸蚀（既有反应）**：酸反应命中改为对 corrodible cell 调 `ApplyDamage`（按反应 `Probability` 与 `Durability` 折算 `DamageKind.Corrosion`），使 stone 比 metal 蚀得快，取代原「概率直接转 acid_gas」的一刀切。
+
+**不变式合规**：破坏是安全相位的**离散编辑**（写操作只在单线程输入 / 安全相位 + 标 dirty + KeepAlive，守 #2/#3/#6），**不受 32px halo 约束**（halo 与 #4 约束 CA movement，不约束离散破坏半径，切勿误引）；单缓冲原地（守 #1）；`Damage` 非颜色、视觉字段只存 MaterialDef（守 #7）。
+
+**存档（契约登记，落地在 plan/07）**：`Damage` lane 随 `ChunkSnapshot` / `ChunkCodec`（RLE 段）入盘；bump `SaveFormatVersion` 并提供旧档→新档迁移（旧档 `Damage=0`）；随 material remap，缺失材质落 fallback 后其 cell `Damage` 清 0（避免跨材质语义漂移）。
+
 ---
 
 ## 4. 实现清单
@@ -374,6 +463,11 @@ public sealed class TemperatureField
 - [x] `AudioCueSet` `readonly record struct`（Impact/Fire/Splash/Explosion/Shatter/Ambient cue，架构 §10.2）。
 - [x] `MaterialDef.Type` 引用 plan/03 的 `CellType`（不重复定义，架构 §7.2）。
 - [x] `MaterialHotTable` SoA 热表：从 `MaterialDef[]` 派生热路径字段并列数组（Density/Dispersion/Type/HeatConduct/HeatCapacity/相变阈值/ReactionStart/ReactionCount/PropertyFlags），冷字段不入热表（架构 §7.1 / §12.1）。
+- [ ] `MaterialDef` 增可玩性 / 破坏字段：`Integrity`(ushort)/`DestroyedTarget`(ushort，写稳定 name 加载 name→id 守 #8)/`DebrisCount`(byte)/`MineYield`(byte)；`Durability` 语义收紧为「被 sim 真实消费的抗性系数」（durability 字段直迁移，§3.2 / §3.11）。
+- [ ] `MaterialDef` 增视觉可辨识字段：`RenderStyle`/`LegendCategory`/`EdgeColorBGRA`(uint)/`Opacity`(byte)/`HighlightColorBGRA`(uint)/`DisplayName`(string 冷)/`LegendVisible`(bool)；新增 `MaterialRenderStyle`/`MaterialLegendCategory` 枚举（视觉只存 MaterialDef，渲染 CPU 算 BGRA 不写回 cell，守 #7，§3.2）。
+- [ ] `MaterialProperty` 增 `Indestructible`(bit11) / `Diggable`(bit12) 破坏行为位（§3.2 / §3.11）。
+- [ ] `Dispersion` 加载期 clamp 到 `[0, EngineConstants.MoveCap]` 并加**构建期断言**（守 #4）；`FlowRate` 作 `Dispersion` 语义别名对外暴露（不新增字段，§3.2）。
+- [ ] `MaterialHotTable` 增破坏热列 `_durability`/`_integrity`/`_destroyedTarget`（+ `_propertyFlags` 携 Indestructible/Diggable），供 plan/03 `ApplyDamage` 按 id 只读查表；另派生 `MaterialVisualTable`（RenderStyle/EdgeColorBGRA/Opacity/HighlightColorBGRA/LegendCategory）供 plan/08 渲染相位（§3.2）。
 
 ### 4.2 name↔id 映射与注册表（不变式 #8，架构 §11.2 / §17.4）
 
@@ -440,6 +534,17 @@ public sealed class TemperatureField
 - [x] `reactions.json` schema：input/output 支持具体 name 与 `[tag]`，`probability` 0-100，`flags` 字符串数组（§3.10）。
 - [x] tag 声明 + 代表材质 representative 字段契约（§3.4 规则 3）。
 - [x] 标注 DTO（`MaterialJson`/`ReactionJson`/`JsonSerializerContext`）与反序列化 / 展开 / name→id 分配实现归属 Content；内容由 plan/13 填 `content/`。
+- [ ] `materials.json` schema 增字段：`integrity`/`destroyedTarget`(name)/`debrisCount`/`mineYield`/`renderStyle`/`legendCategory`/`edgeColor`/`opacity`/`highlightColor`/`displayName`/`legendVisible`；`durability` 语义化；tag 名 `indestructible`/`diggable` → bit11/bit12（§3.10）。
+- [ ] `MaterialJson` DTO 增上列字段（实现归属 Content）；加载期 `destroyedTarget`/建材 name 引用经 `MaterialTable` name→id 解析（守 #8），`dispersion` clamp+断言（守 #4），`Indestructible` 材质允许 `integrity==0`（§3.10 / §3.11）。
+- [ ] 新增材质 `boundary_stone`（Indestructible 边界）/ `gravel`（stone 碎块 Powder，即时破坏）schema 示例齐备；具体内容与 crystal 由 plan/13 填 `content/`（§3.10）。
+
+### 4.10 破坏 / 结构完整度契约（材质侧定义，执行在 plan/03）
+
+- [ ] 登记 cell SoA 新增 `Damage`(byte) lane 契约（归属 plan/03）：默认 0、单缓冲原地（守 #1）、非颜色（守 #7）；预算 4B→5B/cell、常驻 chunk 16KB→20KB（与 plan/03/07/16 一致，§3.11）。
+- [ ] 定义 `ApplyDamage(x,y,dmg,kind)` 消费规则：`RigidOwned` 命中经 `IRigidDamageSink.OnOwnedCellDamaged` 路由（守 #5，不累加 Damage）→ `Indestructible` no-op → `effective=max(0,dmg-Durability*DamageAbsorb)` → `Integrity==0` 即时破坏 / 否则累计至 `Damage*DamageScale≥Integrity`（`DamageAbsorb`/`DamageScale` 集中常量，§3.11）。
+- [ ] 定义破坏动作：转 `DestroyedTarget`/`Empty` + 清 Damage + parity + dirty + 跨界 KeepAlive（守 #2/#3/#6）+ `DebrisCount` 碎屑请求（plan/05）+ `Diggable`&`MineYield` 采集事件（plan/13，§3.11）。
+- [ ] 定义 `DamageKind` 与三路径差异化抗性契约：爆炸 `DamageCircle`（`Explode` 内部改组合）、激光 `DamageBeam`(+AddHeat)、酸蚀反应改走 `ApplyDamage`；抗性差异全由 materials.json 表达（§3.11；API 缺口归 plan/05+plan/11）。
+- [ ] 登记 `Damage` lane 存档契约（落地 plan/07）：入 `ChunkSnapshot`/`ChunkCodec`(RLE)、bump `SaveFormatVersion`、旧档迁移 `Damage=0`、material remap 缺失 fallback 后 `Damage` 清 0（§3.11）。
 
 ---
 
@@ -458,6 +563,12 @@ public sealed class TemperatureField
 - [x] custom-update：`HasCustomUpdate` 门控仅对声明材质调用委托，委托内写入遵守 parity/halo/dirty/KeepAlive（架构 §7.4）。
 - [x] 稳态帧零托管堆分配（反应 / 温度 pass 无 LINQ / 闭包 / 装箱 / 字符串；`ReactionTemperatureAllocationBenchmarks` 经 BenchmarkDotNet MemoryDiagnoser 确认 `Allocated=-`，`AGENTS.md §3`）。
 - [x] 与不变式 #3/#4/#8/#9 及技术栈 `00` 无冲突（自审通过：反应/温度仍为单缓冲 parity、32px halo/KeepAlive、name 稳定键与 CPU sim 权威）。
+- [ ] 差异化破坏：同一 `DamageCircle(damage=X)` 下 sand/dirt 立即碎抛、stone 需累计多次 / 大当量才破坏、metal 小爆破近免疫、`boundary_stone`(Indestructible) 完全不破坏——差异全来自 `materials.json` 抗性数值（改数值即改表现，无写死；`MaterialDamageTests` 覆盖）。
+- [ ] cell 破坏归零转 `DestroyedTarget`（stone→gravel）并按 `DebrisCount` 抛碎屑；`Integrity==0` 材质即时破坏；`Diggable`&`MineYield` 材质（crystal）被武器破坏发一次采集事件；`Damage` lane 稳态帧零托管分配（守 #1，MemoryDiagnoser 确认）。
+- [ ] 刚体像素受击不累加 `Damage`、经 `IRigidDamageSink.OnOwnedCellDamaged` 路由触发形状重建（守 #5，与 plan/06 联动测试）。
+- [ ] `Dispersion` 加载期 clamp 生效、构建期断言拦截越 `MoveCap` 值；液体单步水平位移 ≤ 32px（守 #4，`MaterialDispersionClampTests`）。
+- [ ] 视觉字段只落 `MaterialDef`/`MaterialVisualTable`、渲染相位 CPU 算 BGRA，sim cell 无颜色写入（守 #7，字段审计 + 与 plan/08 着色联动）。
+- [ ] `Damage` lane 存档往返正确：新档写读一致、旧档迁移 `Damage=0`、material remap 缺失落 fallback 后 `Damage` 清 0（与 plan/07 往返测试联动，守 #8）。
 
 ---
 
@@ -466,7 +577,7 @@ public sealed class TemperatureField
 前置（必须先完成）：
 
 - `plan/02-core-infrastructure.md`：`EngineConstants`（ChunkSize/MoveCap/TempFieldDownscale）、RNG（counter-based）、内存（POH/ArrayPool）、诊断 / 降级控制器、SIMD 能力探测（`00 §7`）。
-- `plan/03-simulation-kernel.md`：`CellType`、`CellCursor` / `NeighborSet` / `ChunkWorkContext`、Material/Flags/Lifetime/Temperature SoA、parity 时钟位、dirty-rect、KeepAlive、checkerboard 相位 [4]/[5] 框架（本文档反应 / 温度 pass 挂入其中，架构 §5）。
+- `plan/03-simulation-kernel.md`：`CellType`、`CellCursor` / `NeighborSet` / `ChunkWorkContext`、Material/Flags/Lifetime/Temperature SoA、parity 时钟位、dirty-rect、KeepAlive、checkerboard 相位 [4]/[5] 框架（本文档反应 / 温度 pass 挂入其中，架构 §5）。**并新增 `Damage`(byte) cell SoA lane 与 `ApplyDamage` 执行**（消费本文档 `Durability`/`Integrity`/`DestroyedTarget`/`Indestructible`/`MineYield` 契约，§3.11；预算 4B→5B/cell 与 plan/03/07/16 一致）。
 
 并行 / 协作：
 
@@ -475,12 +586,13 @@ public sealed class TemperatureField
 
 下游消费：
 
-- `plan/05-particles-lifecycle.md`：消费 `DefaultLifetime`/`FireHp`/burning 位（lifetime 倒计时循环）、`SpawnParticle` 抛射请求 / handshake。
-- `plan/07-world-streaming-serialization.md`：消费 `BuildIdNameTable` / `BuildRemapLut`（存档 name↔id remap 落盘，不变式 #8）。
-- `plan/08-rendering.md`：消费 `BaseColorBGRA` / `TextureId` / `ColorNoise` / `Emissive`（上色与 emissive，架构 §9）。
+- `plan/05-particles-lifecycle.md`：消费 `DefaultLifetime`/`FireHp`/burning 位（lifetime 倒计时循环）、`SpawnParticle` 抛射请求 / handshake；**破坏碎屑 handshake（`DebrisCount`）与武器破坏 API `DamageCircle`/`DamageBeam`（§3.11 `IWorldEffects` 缺口，plan/05+plan/11 补）**。
+- `plan/06-rigidbody-integration.md`：消费 `IRigidDamageSink.OnOwnedCellDamaged`——`ApplyDamage` 命中 `RigidOwned` 像素时路由触发形状重建（守 #5，§3.11）。
+- `plan/07-world-streaming-serialization.md`：消费 `BuildIdNameTable` / `BuildRemapLut`（存档 name↔id remap 落盘，不变式 #8）；**落地 `Damage` lane 入 `ChunkSnapshot`/`ChunkCodec`、bump `SaveFormatVersion`、旧档迁移与 remap 清 0（§3.11）**。
+- `plan/08-rendering.md`：消费 `BaseColorBGRA` / `TextureId` / `ColorNoise` / `Emissive`（上色与 emissive，架构 §9）；**消费 `MaterialVisualTable`（`RenderStyle`/`EdgeColorBGRA`/`Opacity`/`HighlightColorBGRA`）做差异化着色 + `MaterialSwatchProvider` 图例采样，渲染相位 CPU 算 BGRA 不写回 cell（守 #7，§3.2）**。
 - `plan/10-audio.md`：消费 `AudioCueSet`（材质化音效，架构 §10.2）。
-- `plan/11-scripting-system.md`：消费 `MaterialTable.TryGetId`（按 name 查 id）、`RegisterCustomUpdate`（脚本注册 custom-update）。
-- `plan/13-demo-game.md`：填 `content/materials.json` / `reactions.json` 实际内容。
+- `plan/11-scripting-system.md`：消费 `MaterialTable.TryGetId`（按 name 查 id）、`RegisterCustomUpdate`（脚本注册 custom-update）；**门面公开 `IWorldEffects.DamageCircle/DamageBeam/AddHeat`、`MaterialInfo` 增 `DisplayName/Hardness(=Durability)/Integrity/MineYield/FlowRate/IsDestructible` 供武器与图例读（§3.11 / §C.4）**。
+- `plan/13-demo-game.md`：填 `content/materials.json` / `reactions.json` 实际内容（含 boundary_stone/gravel/crystal 及全材质抗性 / 视觉字段）；消费采集事件（`MineYield`）驱动可玩循环，`MaterialLegendHud` 经 `MaterialSwatchProvider` 展示 `LegendVisible` 材质。
 - `plan/14-testing-benchmarking.md`：边界反应守恒、tag 展开、name↔id remap、cache-miss、温度相变链测试与基准。
 
 > 执行顺序（`plan/README.md`）：`03 → 05 → 04 → 07`。本文档在 CA 内核（03）与粒子（05）之后落地。
@@ -497,5 +609,6 @@ public sealed class TemperatureField
 4. `feat(sim): 接触式火传播 + custom-update 委托钩子`（§4.6 / §4.7，对应 4.6–4.7）。
 5. `feat(sim): 温度场 TemperatureField（SIMD 概率传导 + 阈值相变 + 降频降级）`（§4.8，对应 4.8）。
 6. `feat(content): materials.json / reactions.json schema 与 tag 语法契约`（§4.9，对应 4.9；DTO/加载实现随 Content 计划提交）。
+7. `feat(sim): 材质可玩性/视觉字段 + 破坏契约（Durability 语义化/Integrity/DestroyedTarget/RenderStyle/MaterialVisualTable + Indestructible/Diggable + Dispersion clamp + ApplyDamage/Damage lane 契约）`（§3.2 / §3.11 / §4.1 / §4.10，对应新增可玩性字段与破坏契约；`Damage` lane 与 `ApplyDamage` 执行随 plan/03 提交，schema 新字段随 Content 提交）。
 
-> 每节点完成需对应 §5 验收条目自测通过并勾选；边界守恒 / name↔id remap 等跨文档验收随 `plan/14` 测试落地最终确认。
+> 每节点完成需对应 §5 验收条目自测通过并勾选；边界守恒 / name↔id remap / 破坏差异 / 存档往返等跨文档验收随 `plan/14` 与 plan/03/06/07 测试落地最终确认。

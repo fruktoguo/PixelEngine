@@ -1,12 +1,25 @@
-using PixelEngine.Editor;
-
 namespace PixelEngine.Hosting;
 
 /// <summary>
-/// 将 Editor SimulationControlToolbar 连接到真实 Engine 的控制适配器。
+/// Simulation 控制快照。
+/// </summary>
+/// <param name="IsPlaying">当前是否处于 Play 模式。</param>
+/// <param name="SimHz">当前请求的 sim 频率。</param>
+/// <param name="FrameIndex">当前渲染帧序号。</param>
+/// <param name="SimTickIndex">当前 sim tick 序号。</param>
+/// <param name="RunSimThisFrame">当前帧是否运行 sim。</param>
+public readonly record struct SimulationControlSnapshot(
+    bool IsPlaying,
+    double SimHz,
+    long FrameIndex,
+    long SimTickIndex,
+    bool RunSimThisFrame);
+
+/// <summary>
+/// 将 Simulation 控制命令连接到真实 Engine 的中性适配器。
 /// </summary>
 /// <param name="engine">运行时引擎。</param>
-public sealed class EngineSimulationControlService(Engine engine) : ISimulationControlService
+public sealed class EngineSimulationControlService(Engine engine)
 {
     private readonly Engine _engine = engine ?? throw new ArgumentNullException(nameof(engine));
 

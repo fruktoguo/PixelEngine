@@ -4,7 +4,7 @@ using PixelEngine.Rendering;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 
-namespace PixelEngine.Editor;
+namespace PixelEngine.Gui;
 
 /// <summary>
 /// 生成 editor 调试叠层命令，并为 Rendering 提供逐 cell debug 着色。

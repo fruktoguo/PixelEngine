@@ -4,7 +4,7 @@ using System.Reflection;
 using PixelEngine.Audio;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
-using PixelEngine.Editor;
+using PixelEngine.Gui;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Rendering.Compute;
@@ -31,6 +31,7 @@ public sealed class Engine : IDisposable
     private readonly double[] _renderFrameSortScratchMs = new double[RenderFrameSampleCapacity];
     private IScriptRuntime? _attachedScriptRuntime;
     private EngineWorldSnapshotStore? _restartSnapshotStore;
+    private bool _editorHostExtensionsAttached;
     private int _renderFrameSampleIndex;
     private int _renderFrameSampleCount;
     private double _renderFrameSampleSumMs;
@@ -150,13 +151,7 @@ public sealed class Engine : IDisposable
         ThrowIfShutdown();
         return Context.Options.Headless
             ? new RuntimeControlResult(false, "headless 模式没有窗口，不能打开 Editor。")
-            : !Context.Options.EnableEditor
-            ? new RuntimeControlResult(false, "当前进程未启用 Editor，请使用 --editor 启动。")
-            : !Context.TryGetService(out EditorApp editor) || !editor.Options.EnableDockSpace
-            ? new RuntimeControlResult(false, "Editor DockSpace 尚未接入窗口运行时。")
-            : Context.TryGetService(out EditorRenderBridge _)
-            ? new RuntimeControlResult(true, $"内嵌 Editor 已打开，显示 {editor.ShowAllPanels()} 个面板。")
-            : new RuntimeControlResult(false, "Editor 渲染桥尚未接入 Rendering 管线。");
+            : new RuntimeControlResult(false, "内嵌 Demo Editor 已迁移到独立编辑器壳；请启动 PixelEngine.Editor.Shell。");
     }
 
     /// <summary>
@@ -437,120 +432,102 @@ public sealed class Engine : IDisposable
 
     private void AttachGuiRuntime(RenderWindow window, RenderPipeline pipeline)
     {
-        if (Context.TryGetService(out EditorRenderBridge _))
-        {
-            return;
-        }
-
-        bool wantsEditor = Context.Options.EnableEditor;
         bool hasScriptGui = Context.TryGetService(out IScriptRuntime scriptRuntime);
-        if (!wantsEditor && !hasScriptGui)
+        bool hasGuiBridge = Context.TryGetService(out GuiRenderBridge _);
+        IReadOnlyList<IEditorHostExtension>? extensions = null;
+        bool hasEditorHostExtensions = false;
+        if (!_editorHostExtensionsAttached &&
+            Context.TryGetService(out IReadOnlyList<IEditorHostExtension> registeredExtensions) &&
+            registeredExtensions.Count > 0)
+        {
+            extensions = registeredExtensions;
+            hasEditorHostExtensions = true;
+        }
+
+        if ((!hasScriptGui || hasGuiBridge) && !hasEditorHostExtensions)
         {
             return;
         }
 
-        EditorApp editor = ResolveEditorApp(wantsEditor);
-        EditorInputConnector input = new(window, editor.Input);
-        EditorRenderBridge? bridge = EditorRenderBridge.AttachIfEnabled(
-            pipeline,
-            editor,
-            Context.Counters,
-            Context.Profiler,
-            () => EditorRuntimeDiagnosticsProvider.Create(Context),
-            hasScriptGui ? scriptRuntime : null);
-        if (bridge is null)
+        GuiApp gui = ResolveGuiApp();
+        EditorInputConnector input = new(window, gui.Input);
+        bool inputOwned = false;
+        if (hasScriptGui && !hasGuiBridge)
+        {
+            GuiRenderBridge? bridge = GuiRenderBridge.AttachIfEnabled(
+                pipeline,
+                gui,
+                scriptRuntime);
+            if (bridge is not null)
+            {
+                Context.RegisterService(bridge);
+                _ownedRuntimeResources.Add(bridge);
+                inputOwned = true;
+            }
+        }
+
+        if (hasEditorHostExtensions)
+        {
+            Debug.Assert(extensions is not null);
+            AttachEditorHostExtensions(extensions, window, pipeline);
+            inputOwned = true;
+        }
+
+        if (inputOwned)
+        {
+            _ownedRuntimeResources.Add(input);
+        }
+        else
         {
             input.Dispose();
-            return;
         }
-
-        Context.RegisterService(bridge);
-        _ownedRuntimeResources.Add(input);
-        _ownedRuntimeResources.Add(bridge);
     }
 
-    private EditorApp ResolveEditorApp(bool enableDockSpace)
+    private void AttachEditorHostExtensions(
+        IReadOnlyList<IEditorHostExtension> extensions,
+        RenderWindow window,
+        RenderPipeline pipeline)
     {
-        if (Context.TryGetService(out EditorApp existing))
+        for (int i = 0; i < extensions.Count; i++)
+        {
+            IDisposable? attached = extensions[i].Attach(this, window, pipeline);
+            if (attached is not null)
+            {
+                _ownedRuntimeResources.Add(attached);
+            }
+        }
+
+        _editorHostExtensionsAttached = true;
+    }
+
+    private GuiApp ResolveGuiApp()
+    {
+        if (Context.TryGetService(out GuiApp existing))
         {
             return existing;
         }
 
-        EditorApp created = new(
+        GuiApp created = new(
             new HexaImGuiBackend(),
-            new EditorAppOptions
+            new GuiAppOptions
             {
                 Enabled = true,
-                EnableDockSpace = enableDockSpace,
                 LayoutPath = Path.Combine(Context.Options.ContentRoot, "imgui.ini"),
             });
-        if (enableDockSpace)
-        {
-            RegisterDefaultEditorPanels(created);
-        }
 
         Context.RegisterService(created);
         _ownedRuntimeResources.Add(created);
         return created;
     }
 
-    private void RegisterDefaultEditorPanels(EditorApp editor)
-    {
-        editor.AddPanel(new ViewportPanel(() => Context.TryGetService(out RenderPipeline pipeline)
-            ? pipeline.CurrentViewportTexture
-            : default));
-        editor.AddPanel(new SceneHierarchyPanel(new RuntimeSceneHierarchyDataSource(
-            Context.TryGetService(out PixelEngine.Scripting.Scene scriptScene) ? scriptScene : null,
-            Context.TryGetService(out PhysicsSystem physics) ? physics : null)));
-        editor.AddPanel(new AssetBrowserPanel(new FileSystemAssetBrowserDataSource(Context.Options.ContentRoot)));
-        if (Context.TryGetService(out PixelEngine.Scripting.Scene inspectorScene))
-        {
-            editor.AddPanel(new ScriptInspectorPanel(
-                inspectorScene,
-                Context.TryGetService(out MaterialTable inspectorMaterials) ? inspectorMaterials : null));
-        }
-
-        if (Context.TryGetService(out ISimulationEditApi editApi) &&
-            Context.TryGetService(out MaterialTable materials))
-        {
-            editor.AddPanel(new MaterialBrushPalettePanel(materials, editApi));
-        }
-
-        if (Context.TryGetService(out ISimulationInspectApi inspectApi))
-        {
-            editor.AddPanel(new WorldInspectorPanel(inspectApi));
-        }
-
-        editor.AddPanel(new DebugOverlayPanel(ResolveDebugOverlaySettings()));
-        editor.AddPanel(new PerformanceHudPanel());
-        editor.AddPanel(new SimulationControlToolbar(new EngineSimulationControlService(this)));
-        EngineWorldSnapshotStore playSnapshotStore = new(this);
-        editor.AddPanel(new EditorModePanel(new EngineEditorPlaySessionService(this, playSnapshotStore)));
-        _ownedRuntimeResources.Add(playSnapshotStore);
-        if (Context.TryGetService(out PhysicsSystem tuningPhysics))
-        {
-            editor.AddPanel(new PhysicsTuningPanel(new PhysicsSystemTuningService(tuningPhysics)));
-        }
-
-        if (Context.TryGetService(out ParticleSystem particles))
-        {
-            editor.AddPanel(new ParticleTuningPanel(new ParticleSystemTuningService(particles)));
-        }
-
-        if (Context.TryGetService(out RenderPipeline renderPipeline))
-        {
-            editor.AddPanel(new LightingTuningPanel(new RenderPipelineLightingTuningService(renderPipeline.Settings)));
-        }
-    }
-
     private ScriptInputRoute ResolveGuiInputRoute()
     {
-        if (!Context.TryGetService(out EditorApp editor))
+        if (!Context.TryGetService(out GuiApp gui))
         {
             return ScriptInputRoute.Allowed;
         }
 
-        EditorInputSnapshot capture = editor.Input.Capture;
+        GuiInputSnapshot capture = gui.Input.Capture;
         return new ScriptInputRoute(capture.AllowWorldKeyboard, capture.AllowWorldMouse);
     }
 

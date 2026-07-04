@@ -1,13 +1,78 @@
-using PixelEngine.Editor;
+using PixelEngine.World;
 
 namespace PixelEngine.Hosting;
 
 /// <summary>
-/// 基于 Engine 执行模式的 Editor Play session 服务。
+/// 对外呈现的编辑/运行模式。
+/// </summary>
+public enum EditorMode
+{
+    /// <summary>
+    /// 编辑模式：编辑工具可接收输入，sim 可暂停或单步。
+    /// </summary>
+    Edit,
+
+    /// <summary>
+    /// 运行模式：输入交给游戏/脚本，编辑工具让位。
+    /// </summary>
+    Play,
+}
+
+/// <summary>
+/// 进入 Play 时使用的世界来源。
+/// </summary>
+public enum EditorPlaySource
+{
+    /// <summary>
+    /// 直接使用当前 live 世界运行。
+    /// </summary>
+    CurrentState,
+
+    /// <summary>
+    /// 进入 Play 前保存临时快照，退出 Play 时恢复。
+    /// </summary>
+    TemporarySnapshot,
+}
+
+/// <summary>
+/// Play session 当前状态。
+/// </summary>
+public readonly record struct EditorPlaySessionSnapshot(
+    EditorMode Mode,
+    EditorPlaySource Source,
+    bool TemporarySnapshotActive,
+    string StatusMessage);
+
+/// <summary>
+/// Play session 切换结果。
+/// </summary>
+public readonly record struct EditorPlaySessionResult(
+    bool Succeeded,
+    EditorPlaySessionSnapshot Snapshot,
+    string Message);
+
+/// <summary>
+/// 为临时 Play 提供保存/恢复快照的后端。
+/// </summary>
+public interface IEditorPlaySnapshotStore
+{
+    /// <summary>
+    /// 保存进入 Play 前的临时快照。
+    /// </summary>
+    SaveLoadOperationResult SaveTemporarySnapshot();
+
+    /// <summary>
+    /// 恢复进入 Play 前保存的临时快照。
+    /// </summary>
+    SaveLoadOperationResult RestoreTemporarySnapshot();
+}
+
+/// <summary>
+/// 基于 Engine 执行模式的 Play session 服务。
 /// </summary>
 /// <param name="engine">运行时 Engine。</param>
 /// <param name="snapshotStore">可选临时 Play 快照后端。</param>
-public sealed class EngineEditorPlaySessionService(Engine engine, IEditorPlaySnapshotStore? snapshotStore = null) : IEditorPlaySessionService
+public sealed class EngineEditorPlaySessionService(Engine engine, IEditorPlaySnapshotStore? snapshotStore = null)
 {
     private readonly Engine _engine = engine ?? throw new ArgumentNullException(nameof(engine));
     private readonly IEditorPlaySnapshotStore? _snapshotStore = snapshotStore;

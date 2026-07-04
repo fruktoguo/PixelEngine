@@ -2,7 +2,6 @@ using PixelEngine.Serialization;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.Scripting;
-using PixelEngine.Editor;
 using PixelEngine.World;
 using Xunit;
 using PhysicsSystem = PixelEngine.Physics.PhysicsSystem;

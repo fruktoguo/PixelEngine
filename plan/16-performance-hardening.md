@@ -31,7 +31,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 
 本节按主题阐明每条性能纪律的**审计判据**——即「检查什么、用什么工具、什么结果算过」。设计本体在各子系统文档；这里只定义门禁。
 
-**SoA 数据布局（架构 §7.1、§12.1，子系统 plan/03/04）。** 审计点是所有 sim 热数据为 struct-of-arrays：`Material`(ushort)、`Flags`(byte)、`Lifetime`(byte)、`Temperature`(1/4 分辨率 Half/float)、独立 `Render`(uint BGRA8) 各为独立连续数组，绝无把多字段打包进 AoS struct 进热循环。每 cell 字节预算须对账：sim 热态按 4B/cell 为约 7.9MiB（8.3MB，不含 render buffer）、加 render buffer 约 16.3MiB（17MB，1080p），每常驻 chunk ~18–20KB（架构 §12.2）。AoS 的 16 字节 `Cell` struct 仅允许出现在工具/编辑路径，不得进 CA pass。颜色不入 cell（不变式 #7）是 SoA 预算成立的前提，一并核对。
+**SoA 数据布局（架构 §7.1、§12.1，子系统 plan/03/04）。** 审计点是所有 sim 热数据为 struct-of-arrays：`Material`(ushort)、`Flags`(byte)、`Lifetime`(byte)、`Temperature`(1/4 分辨率 Half/float)、独立 `Render`(uint BGRA8) 各为独立连续数组，绝无把多字段打包进 AoS struct 进热循环。每 cell 字节预算须对账：sim 热态按 4B/cell 为约 7.9MiB（8.3MB，不含 render buffer）、加 render buffer 约 16.3MiB（17MB，1080p），每常驻 chunk ~18–20KB（架构 §12.2）。AoS 的 16 字节 `Cell` struct 仅允许出现在工具/编辑路径，不得进 CA pass。颜色不入 cell（不变式 #7）是 SoA 预算成立的前提，一并核对。持久破坏模型新增的 per-cell **Damage(byte) 平面**是本轮唯一的预算增项：它把 sim 热态从 4B/cell 抬到 5B/cell（+25%）、每常驻 chunk 16KB→20KB、~2M 全激活 cell 下 +2MB，须作为独立连续 SoA 数组单缓冲原地更新（守 #1/#3），并令 plan/03（SoA 定义）、plan/07（chunk 常驻/序列化）、本表 §4.1 三处预算行逐字一致；破坏的视觉表现（裂纹/边缘着色）由 MaterialDef 视觉字段在渲染相位算 BGRA，不占 cell 预算（守 #7）。
 
 **稳态零托管分配（架构 §12.4、AGENTS §3，横切全子系统）。** 逐条热路径确认稳态帧内零托管堆分配：CA pass（相位 4）、粒子积分与沉积（相位 3/7）、render buffer 构建（相位 9）、反应 pass（相位 4 内）、温度 stencil（相位 5）、序列化字节准备（相位 11）。手段：`stackalloc` 小 scratch（<~1KB 且绝不在循环里）、`ArrayPool<T>.Shared`、对象/粒子池、POH/NativeMemory 长寿缓冲。热路径**禁** LINQ、捕获闭包、装箱、`params`、迭代器分配、字符串拼接（AGENTS §3）。判据：BenchmarkDotNet `MemoryDiagnoser` 报告稳态迭代 `Allocated == 0 B`；运行时 Gen0 计数在压测下长时间不增长。
 
@@ -47,13 +47,13 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 
 **dirty-rect 真生效（架构 §5.4、风险 R1，子系统 plan/03）。** 这是全屏 60fps 的首要原因，必须验证而非假设：静止 chunk 的 working rect 收缩为空、chunk 进入 sleep、下帧零迭代；静止区边际成本经基准实测 ≈ 0（满屏静止场景帧时间应远低于满屏激活）。dirty rect 本身双缓冲（working/current），cell 单缓冲（不变式 #3）。KeepAlive 正确跨界传播但不导致 rect 收不回（架构 §5.5，风险 R2 的性能侧）。判据：BenchmarkDotNet 对比「满屏激活」vs「满屏静止」帧时间，后者应呈现近零 sim 成本；§17.2 的 dirty-rect 叠层目视确认 sleeping 区不再迭代。
 
-**过载降级链（架构 §4.3、不变式 #6，子系统 plan/02 诊断 + 各子系统）。** 逐级实现并可勾选，由 Core 诊断计时器驱动（架构 §17.1）：第一级降低/关闭全分辨率热场（相位 5 改每 N 帧或仅接触式火传播）；第二级降低光照质量（关 Radiance Cascades/bloom，回退 fog-of-war+emissive）；第三级远离相机的活跃 chunk 降频（隔帧更新外圈）；第四级整体 sim 降 30Hz（相位 3–8 每两帧一次，render 仍每帧出帧，dt=1/30）；第五级兜底接受 <60fps 真实减速。**关键不变式 #6**：绝不追帧、无 accumulator 补步，最坏只低帧率不 death spiral。每帧成本上限类节流（形状重建每刚体每帧至多一次、CCL off-thread）须实施以防单帧尖刺带偏降级逻辑（架构 §4.3、§8.4、风险 R4）。
+**过载降级链（架构 §4.3、不变式 #6，子系统 plan/02 诊断 + 各子系统）。** 逐级实现并可勾选，由 Core 诊断计时器驱动（架构 §17.1）：第一级降低/关闭全分辨率热场（相位 5 改每 N 帧或仅接触式火传播）；第二级降低光照质量（关 Radiance Cascades/bloom，回退 fog-of-war+emissive）；第三级远离相机的活跃 chunk 降频（隔帧更新外圈）；第四级整体 sim 降 30Hz（相位 3–8 每两帧一次，render 仍每帧出帧，dt=1/30）；第五级兜底接受 <60fps 真实减速。**关键不变式 #6**：绝不追帧、无 accumulator 补步，最坏只低帧率不 death spiral。每帧成本上限类节流（形状重建每刚体每帧至多一次、CCL off-thread）须实施以防单帧尖刺带偏降级逻辑（架构 §4.3、§8.4、风险 R4）。本轮新增两个可降项挂入同一链：plan/08 的 **RenderStyle 着色质量档**（流动噪声/裂纹/描边/emissive glow）作为独立于二级光照降级的着色降项，过载时先回退纯 palette；plan/20 的 **HTML UI（PixelEngine.UI）光栅化/合成落相位10、仅脏/动画帧执行**，UI 帧率独立下调，UI 尖刺只丢渲染帧而绝不拖慢 sim（守 #6）。
 
 **大世界常驻内存上限（架构 §12.2，子系统 plan/07）。** 常驻 chunk 按 ~18–20KB 计，激活区 + border ring 设硬上限（建议 ≤512MB，可配置）与 LRU 驱逐目标（按到相机距离 + 闲置时长）；超上限即便在激活半径内也提前驱逐最远 sleeping chunk 落盘。render buffer 是屏幕大小非 per-chunk。磁盘增长靠 RLE+LZ4 压制（架构 §11.3、§12.2）。判据：长时间漫游压测下常驻内存稳定在上限内、不无界增长。
 
 **瓶颈按延迟+分支而非带宽分析（架构 §12.7、§2 挑战三、风险 R1，工具 plan/14）。** 内核工作集 ~6MB 驻 L3、真实 DRAM 流量仅数 GB/s（远低于 ~50GB/s 带宽上限），瓶颈是内存延迟（散乱 L2/L3 访问）+ 数据相关 swap 的分支误预测，**不是带宽**。审计纪律：性能分析与优化围绕 cache-miss/分支误预测计数器（非带宽计），多核加速曲线在目标硬件实测（延迟约束代码常近线性缩放，仅 L3 争用时 sub-linear，故「5–6x sub-linear」估算无依据）；cells/frame 目标（量级 ~2–4M 全激活）必须 BenchmarkDotNet 在 6 RID 代表硬件确认、回填架构 §1.4/§12.8，**不当设计保证**（架构 §12.7、§12.8、§17.3，配合 plan/14）。
 
-**profiling 工具链（架构 §17.3、§12.6、AGENTS §3/§7，子系统 plan/14）。** BenchmarkDotNet（`[MemoryDiagnoser]` 验零分配、`[DisassemblyDiagnoser]` 验 codegen）作 CI perf 门禁，回归即视为 bug；`DOTNET_JitDisasm` + Disasmo/Rider 反汇编人工核验；Core 常驻 debug overlay 报每相位耗时/活跃 chunk/活跃 cell/粒子数/刚体数/常驻内存/当前 sim 频率（架构 §17.1）作运行时眼睛。真实窗口 HUD 必须明确区分 CPU busy、GPU elapsed 与 present/vsync wait：OpenGL GPU 时间用 timer query 异步回读，SwapBuffers 阻塞作为非工作等待单列，统计窗口排除预热帧并提供有效 FPS，避免用混合 wall-clock 错判瓶颈。
+**profiling 工具链（架构 §17.3、§12.6、AGENTS §3/§7，子系统 plan/14）。** BenchmarkDotNet（`[MemoryDiagnoser]` 验零分配、`[DisassemblyDiagnoser]` 验 codegen）作 CI perf 门禁，回归即视为 bug；`DOTNET_JitDisasm` + Disasmo/Rider 反汇编人工核验；Core 常驻 debug overlay 报每相位耗时/活跃 chunk/活跃 cell/粒子数/刚体数/常驻内存/当前 sim 频率（架构 §17.1）作运行时眼睛。真实窗口 HUD 必须明确区分 CPU busy、GPU elapsed 与 present/vsync wait：OpenGL GPU 时间用 timer query 异步回读，SwapBuffers 阻塞作为非工作等待单列，统计窗口排除预热帧并提供有效 FPS，避免用混合 wall-clock 错判瓶颈。本轮 HUD 再增一条「**UI**」相位计时口径（相位10：ImGui host 派发 + plan/20 PixelEngine.UI 光栅化/合成），与上述三类分列且仅计入 UI 脏/动画帧、静止 UI 帧为零成本，使 UI 尖刺不混入 sim/render 帧判读。profiling 负载矩阵在既有「满屏静止」「满屏激活」之外新增 Demo **熔岩矿洞逃生**可玩循环（采晶充能 + 上涨熔岩 + 限时抵达出口 + 密集破坏/碎屑/粒子）作为「高活跃 + 持续破坏」稳态样本，校验破坏 API 离散写与 Damage 平面读写下帧预算与多核加速曲线（延迟+分支口径）仍达标。
 
 ## 4. 实现清单
 
@@ -65,6 +65,9 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] 确认颜色不入 cell（渲染色由材质纹理采样 + 温度 glow 在渲染相位生成）。[plan/08 · §7.1/不变式 #7]
 - [x] 确认 AoS 16 字节 `Cell` 仅存在于工具/编辑路径，绝不进 sim pass。[plan/03/12 · §7.1]
 - [x] `Temperature` 确为 1/4 分辨率（CELL=4）而非全分辨率每 cell。[plan/04 · §7.1/§7.5]
+- [ ] 新增 per-cell **Damage(byte) SoA 平面**（持久破坏模型）纳入字节预算并按 §7.1 重评审：sim 热态 **4B→5B/cell（+25%）**，Damage 平面在 ~2M 全激活 cell 下约 **+2MB**，每常驻 chunk 由 **16KB（4B×4096）增至 20KB（5B×4096）**；须与 plan/03 SoA 定义、plan/07 chunk 常驻/序列化两处预算行**逐字对齐到统一 20KB 口径**（含本节现有 4B 明细 19,968B 的收敛复核）。[plan/03/07 · §7.1/§12.2]
+- [ ] Damage 平面**单缓冲原地更新**（守不变式 #1/#3，绝不双缓冲）、POH/`NativeMemory` 常驻，与其它 SoA lane 同为独立连续数组，绝不打包进 AoS 进 CA 热循环。[plan/03 · §7.1/不变式 #1/#3]
+- [ ] 确认破坏视觉字段（Integrity/裂纹表现）**不入 cell**：RenderStyle 边缘/裂纹着色一律在渲染相位由 MaterialDef 视觉字段 CPU 算 BGRA，绝不写回 cell（守 #7），不占 per-cell 预算。[plan/08 · §7.1/不变式 #7]
 
 ### 4.2 稳态零托管分配
 - [x] CA pass（相位 4）稳态零分配，`MemoryDiagnoser` 报 `Allocated == 0 B`。[plan/03 · §12.4]
@@ -75,6 +78,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] 序列化字节准备（相位 11）用 POH/ArrayPool 缓冲，稳态零分配。[plan/07 · §11.5]
 - [x] JobSystem `ParallelRange` / `ParallelRangeRaw` 多 worker fork-join 派发本身稳态零分配，避免调度器在每帧热路径制造 Gen0 压力。[plan/02/14 · §12.4/§12.7/§14.2]
 - [x] 全热路径静态核查无 LINQ/捕获闭包/装箱/`params`/迭代器/字符串拼接（分析器提升为 error）。[全子系统 · AGENTS §3]
+- [ ] Demo 破坏 API（`DamageCircle`/`DamageBeam`/`AddHeat`）经既有延迟命令队列落单线程输入/安全相位、写 Damage 平面 + 标 dirty + KeepAlive，稳态零托管分配；碎屑/采集事件复用粒子池与既有事件缓冲，无 per-hit 分配。破坏是安全相位的离散编辑、不受 32px halo 约束（不误引 #4 约束破坏半径）。[plan/03/11 · §12.4/不变式 #1/#6]
 
 ### 4.3 多线程覆盖面
 - [x] CA 4-pass checkerboard 经 plan/02 持久线程池 per-chunk task 派发、遍间 barrier、无锁。[plan/03 · §5.7/不变式 #2]
@@ -88,6 +92,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] 持久线程池多 worker 派发对象复用，`ParallelRange` / `ParallelRangeRaw` 经单测与 `MemoryDiagnoser` 证实零分配。[plan/02/14 · §12.4/§14.2]
 - [x] 活跃任务/活跃 chunk 低于阈值时回退单线程。[plan/02/03 · §5.7/风险 R7]
 - [x] per-thread/per-chunk 元数据填充到 64 字节 cache line 防 false sharing。[plan/02 · §12.7]
+- [ ] plan/08 新 **RenderStyle 着色质量档**（描边 EdgeColor / 流动噪声 flowTint / 裂纹 / emissive glow）开启时与整数 zoom palette **行复制快速路径**的共存判定：质量档启用即**禁用行复制、改按屏幕像素世界空间逐像素计算 BGRA**（行复制会丢失 per-pixel 噪声/描边），二者互斥选择，保持相位9**零托管分配**且并行区块调度不变。[plan/08 · §3.3 相位9/§9.3]
 
 ### 4.4 SIMD 落实点
 - [x] 温度 5-point stencil 向量化（Intrinsics + scalar fallback）。[plan/04 · §12.5]
@@ -95,6 +100,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] bulk fill/clear、dirty flag 扫描/popcount 向量化。[plan/03 · §12.5]
 - [x] 全部向量化 pass 具备强制 scalar fallback，运行时 light-up、不固定 ISA。[全子系统 · §12.3/§12.5]
 - [x] sand/liquid movement 内层**明确不向量化**（数据相关 gather/scatter），保留 scalar。[plan/03 · §2 挑战三/§12.5]
+- [ ] RenderStyle 流动噪声/裂纹/描边着色在**渲染相位**以世界坐标 + 帧相位廉价噪声（sin/hash）SIMD 计算 BGRA、不读 per-cell 速度、**绝不写回 cell（守 #7）**，具强制 scalar fallback、运行时 light-up。[plan/08 · §12.5/不变式 #7]
 - [!] 阻塞：AVX-512 路径 gate on `Vector512.IsHardwareAccelerated` 并逐目标实测（防降频净变慢）。[plan/14 · §12.5] 当前本机 BenchmarkDotNet 诊断仅报告 AVX2（Ryzen 7 5800X），无 AVX-512/Vector512 硬件，不能实测 AVX-512 降频净损；需 AVX-512 目标机或 CI runner 证据后再判定。统一证据入口为 `tools/performance-target-evidence-preflight.ps1`，它要求 `avx512_downclock_net_loss` scope 与 SHA256 匹配，并解析报告中的 `benchmarkDotNet=true`、`vector512HardwareAccelerated=true`、`avx512Enabled=true`、`noNetDownclockLoss=true`、`targetCpuName`、`dotnetVersion`，且所有目标性能 evidence 必须声明与 manifest 顶层一致的 `benchmarkRunId/gitCommit`，不能拼接不同 run 或不同提交；证据齐全也只进入 `target_performance_evidence_attached_pending_review`。
 
 ### 4.5 bounds-check 消除验证
@@ -135,17 +141,21 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] 五级兜底：接受 <60fps 真实减速，**绝不 accumulator 追帧**。[plan/02 · §4.1/不变式 #6]
 - [x] 降级由 Core 诊断计时器驱动（连续超预算帧触发）。[plan/02 · §4.3/§17.1]
 - [x] 每帧成本上限节流落实（形状重建每刚体每帧≤1次、合并像素移除、CCL off-thread）。[plan/06 · §4.3/§8.4/风险 R4]
+- [ ] plan/08 **RenderStyle 着色质量档**接入既有过载降级顺序：作为可独立触发的着色降项，过载时关流动噪声/裂纹/描边、回退纯 palette；与二级光照降级（关 RC/bloom、回退 fog-of-war+emissive）**不冲突、各自可独立触发**，回复（升档）由诊断计时器判定余量后进行。[plan/08 · §4.3]
+- [ ] plan/20 **HTML UI（PixelEngine.UI）光栅化/合成落相位10、仅在 UI 脏或有动画时执行**；过载时 UI 帧率可独立下调，UI 尖刺**只丢渲染帧、绝不拖慢 sim 或触发 accumulator 追帧（守 #6）**，sim 频率降级仍由 §4.9 一至五级独立驱动。[plan/20 · §4.3/不变式 #6]
 
 ### 4.10 大世界内存上限
 - [x] 常驻世界设硬上限（建议 ≤512MB，可配置）。[plan/07 · §12.2]
 - [x] LRU 驱逐（到相机距离 + 闲置时长），超上限提前驱逐最远 sleeping chunk 落盘。[plan/07 · §12.2]
 - [x] chunk payload RLE+LZ4 压制磁盘增长。[plan/07 · §11.3/§12.2]
 - [x] 长时间漫游压测常驻内存稳定在上限内、不无界增长。[plan/14 · §12.2]
+- [ ] Damage 平面进 ChunkSnapshot/ChunkCodec（RLE 段）后每常驻 chunk 序列化/常驻字节按 20KB 重算，确认 §4.10 硬上限（建议 ≤512MB）在 +25% per-cell 后仍守住，LRU 驱逐目标数按新 chunk 大小回校；SaveFormatVersion bump 后旧档→新档迁移（旧档 Damage=0）与 material remap 缺失 fallback 后 Damage 清 0 不产生额外常驻峰值。[plan/07 · §11.3/§12.2]
 
 ### 4.11 瓶颈按延迟+分支分析 + 目标硬件校准
 - [!] 阻塞：性能分析围绕 cache-miss/分支误预测计数器，**不按带宽**结论。[plan/14 · §12.7/§2 挑战三] 已接入 `HardwareCounter.CacheMisses` 与 `HardwareCounter.BranchMispredictions`，并新增 `tools/hardware-counter-preflight.ps1` 生成 `blocked_non_admin`/计数器列检查报告；`PerformanceHardeningToolingDisciplineTests.HardwareCounterPreflightWritesHostBoundaryReport` 已锁定脚本在当前宿主只产出平台/权限边界报告、默认不运行 benchmark。当前非管理员会话仍被 BenchmarkDotNet 拦截，需要 elevated ETW Kernel Session 才能采集真实硬件计数器。目标性能总证据还必须经 `tools/performance-target-evidence-preflight.ps1` 校验 `hardware_counters_cache_branch` scope/hash，并解析 `benchmarkDotNet=true`、`elevatedEtwKernelSession=true`、`cacheMissesPresent=true`、`branchMispredictionsPresent=true` 以及 `Cache Misses` / `Branch Mispredictions` 列名，不能用本机短样本替代。
 - [x] 多核加速曲线在目标硬件实测（不预设 sub-linear）。[plan/14 · §12.7]
 - [!] 阻塞：cells/frame 目标在 6 RID 代表硬件用 BenchmarkDotNet 确认、回填架构 §1.4/§12.8。[plan/14/15 · §12.8/§17.3] 当前只有本机 win-x64 / Ryzen 7 5800X 短基准，缺少 win-arm64、linux-x64、linux-arm64、osx-x64、osx-arm64 代表硬件或 CI runner 实测。`tools/performance-target-evidence-preflight.ps1` 要求 `cells_frame/<rid>` 覆盖六个 RID，且 `cellsFrame.<rid>.benchmarkDotNet=true` 与 SHA256 同时匹配；每个 RID 报告还必须声明 `rid=<rid>`、`benchmarkDotNet=true`、`representativeHardware=true`、`activeCellsPerFrame>=2000000`、`caFrameMs<=8`、`measuredIterations>=3`、`iterationCount>=measuredIterations`，并在正文包含 `BenchmarkDotNet v`、`CellThroughputBenchmark.StepJobSystem` 与 `FullActiveLiquid`。`PerformanceHardeningToolingDisciplineTests.PerformanceTargetEvidencePreflightRejectsCellsFrameWithoutBenchmarkDotNet` 与 `PerformanceTargetEvidencePreflightRejectsCellsFramePlainKeyValueSummary` 已锁定缺少 BenchmarkDotNet 语义确认或只写手工字段摘要的 RID 不能冒充 cells/frame 目标硬件实测。
+- [ ] Demo **熔岩矿洞逃生**可玩循环（采 3 水晶充能 + 上涨熔岩 + 限时抵达出口 + 密集破坏/碎屑/粒子 + 大面积熔岩流动）纳入 profiling 负载矩阵，作为「**高活跃 + 持续破坏**」稳态场景，与既有「满屏静止」「满屏激活」并列采集：验证破坏 API 离散写 + Damage 平面读写下 CA/render 帧预算仍达标、上涨熔岩相变热场不打爆二级热场降级、per-cell +25% 预算不导致 L2/L3 争用使多核加速曲线转 sub-linear（延迟+分支口径，非带宽）。[plan/14/13 · §12.7/§12.8/§17.3]
 
 ### 4.12 profiling 工具链
 - [x] BenchmarkDotNet 接入（`[MemoryDiagnoser]` + `[DisassemblyDiagnoser]`）作 CI perf 门禁。[plan/14 · §17.3]
@@ -154,12 +164,16 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] 真实窗口 HUD 切片 1 已把 CPU busy、OpenGL GPU elapsed 与 present-wait 分离；VSync 可运行时切换，present/vsync wait 标注为非工作时间。[plan/12/08 · §17.1/§17.3]
 - [x] 真实窗口 HUD 已补齐预热剔除滚动窗口 avg/p50/p95/p99/max、尖刺/稳态标注、有效帧耗时、负载计数趋势与固定/随负载变化成本结构；静态 vs 高活跃场景各 720 帧、预热 120 帧、稳态 600 帧样本见 `docs/runtime-reports/2026-07-04-performance-hud-steady-window-samples.md`。[plan/12/14 · §17.1/§17.3]
 - [x] 发行编译模式审计：默认 R2R（运行时 light-up）；AOT 次级必须显式 `IlcInstructionSet` 并反汇编验证 ymm/zmm。[plan/15 · §12.3/风险 R3]
+- [ ] 性能 HUD/debug overlay 增「**UI**」相位计时口径（相位10：ImGui host 派发 + plan/20 PixelEngine.UI 光栅化/合成耗时），与 CPU busy、GPU elapsed、present/vsync wait 分列；明确 UI **仅脏/动画帧计入、静止 UI 帧为零成本**，UI 尖刺单列以免混入 sim/render 帧判读误导降级逻辑。[plan/12/20 · §17.1]
+- [ ] 熔岩矿洞可玩循环下 debug overlay 的负载计数（活跃 chunk/cell、粒子、刚体、破坏事件/帧、上涨熔岩活跃面积、当前 sim 频率）随场景真实变化并纳入滚动窗口 avg/p50/p95/p99/max 与固定/随负载成本结构展示。[plan/12/14 · §17.1/§17.3]
 
 ## 5. 验收标准
 
 > 全部勾选方算本文档完成（AGENTS §7）。验收以**实测/反汇编**为准，不以代码存在为准。
 
 - [x] **SoA 全覆盖**：所有 sim 热数据 SoA，per-cell 字节预算按 4B/cell 对账通过，AoS 仅工具路径，颜色不入 cell。[§7.1/不变式 #7]
+- [ ] **per-cell 预算再对账（Damage 平面）**：加入 Damage(byte) 平面后 sim 热态 5B/cell（+25%）、每常驻 chunk 20KB、~2M cell +2MB 与 plan/03 SoA 定义、plan/07 chunk 常驻/序列化预算行**逐字一致**；Damage 平面单缓冲原地、POH 常驻，刚体像素经 IRigidDamageSink 路由重建、**绝不累加 Damage**（守 #1/#3/#5）复核通过。[§7.1/§12.2/不变式 #1/#3/#5]
+- [ ] **着色档与快速路径共存**：plan/08 RenderStyle 着色质量档接入既有二级光照降级顺序不冲突、可独立触发；开启时禁用 palette 行复制改世界空间逐像素计算、着色只在渲染相位算 BGRA 不写回 cell（守 #7）、相位9 稳态零分配。[§4.3/§4.9/不变式 #7]
 - [x] **稳态零分配**：CA/粒子/render buffer/反应/温度/序列化六条业务热路径与 JobSystem 多 worker 派发热路径 `MemoryDiagnoser` 全报 `0 B`；热路径静态核查无 LINQ/闭包/装箱/迭代器。[§12.4/AGENTS §3]
 - [x] **多线程齐全**：CA checkerboard、Box2D task 桥、render buffer、CCL/形状重建、粒子积分、温度 stencil、序列化字节准备七项均经持久线程池并行；无每帧 `Parallel.For`；活跃任务少时单线程回退生效。[§5.7/§12.7/§14.2/风险 R7]
 - [!] **SIMD 到位**：温度 stencil/色混合/bulk fill 等向量化且有 scalar fallback、运行时 light-up；sand movement 确认未向量化；AVX-512 gate 实测无降频净损。[§12.5/§2 挑战三] 阻塞于 §4.4 AVX-512 目标硬件实测；当前机器仅 AVX2，无法验证 Vector512 降频净损。`tools/performance-target-evidence-preflight.ps1` 索引 `avx512_downclock_net_loss` 证据并强制 `noNetDownclockLoss=true` 等机器可读字段，但只进入 pending review，不自动勾选。
@@ -172,13 +186,14 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [!] **延迟+分支校准**：瓶颈分析以 cache-miss/分支误预测为据；多核加速曲线与 cells/frame 在目标硬件实测落表、回填架构指标。[§12.7/§12.8/§17.3] 阻塞于 §4.11：`tools/hardware-counter-preflight.ps1` 已能显式报告非管理员 ETW 阻塞并在专用 runner 检查 `Cache Misses` / `Branch Mispredictions` 列，且脚本宿主边界由 `PerformanceHardeningToolingDisciplineTests.HardwareCounterPreflightWritesHostBoundaryReport` 覆盖；但当前会话仍无法采集真实硬件计数器，且缺少 6 RID 代表硬件 cells/frame 实测。统一 manifest 预检为 `tools/performance-target-evidence-preflight.ps1`，缺 manifest 为 `blocked_missing_target_performance_manifest`，schema/JSON 错误或缺顶层 `benchmarkRunId/gitCommit` 为 `blocked_invalid_target_performance_evidence`，缺 scope/hash、机器可读字段语义无效、任一报告的 `benchmarkRunId/gitCommit` 与 manifest 不一致或 cells/frame 报告缺少 BenchmarkDotNet 正文特征为 `blocked_missing_target_performance_scope_evidence`，证据齐全仅 `target_performance_evidence_attached_pending_review`。当前预检还要求硬件计数器报告声明 `branchMispredictionsPresent=true`，cells/frame 报告声明 `activeCellsPerFrame>=2000000`、`representativeHardware=true`、`iterationCount>=measuredIterations`，并包含 `BenchmarkDotNet v`、`CellThroughputBenchmark.StepJobSystem` 与 `FullActiveLiquid`。
 - [~] **工具链门禁运行**：BenchmarkDotNet perf 门禁在 CI 跑、回归视为 bug；反汇编流程可复现；debug overlay 在线；发行编译模式审计通过；真实窗口 HUD 已完成 CPU/GPU/present-wait 三分、滚动百分位、尖刺/稳态、负载成本结构与静态/动态稳态样本验收；本文档仍未整体完成的剩余项为目标硬件/CI runner 侧证据。[§17.1/§17.3/§12.3]
 - [!] **帧预算达标**：目标硬件实测 CA ≤8ms、渲染+光照+post ≤4ms、物理+重建 ≤3–4ms、逻辑+音频 ≤1ms（典型场景留余量）。[§1.4] 阻塞：当前已有 Short 报告显示 full-active CA 仍未达目标预算，且缺少目标硬件正式长跑。目标硬件正式长跑报告需通过 `tools/performance-target-evidence-preflight.ps1` 的 `frame_budget_target_hardware` scope/hash 与 `targetHardware`、`source=PixelEngineDiagnostics`、`scenario` 枚举、`sampleSeconds>=60`、`frameSamples>=3600`、`fixedTickNoCatchUp=true`、`caP99Ms<=8`、`renderP99Ms<=4`、`physicsP99Ms<=4`、`logicAudioP99Ms<=1` 字段校验后再人工复核，不能用只写 p99 数字的摘要替代引擎诊断长跑。
+- [ ] **UI 相位计时与不追帧**：性能 HUD 含独立「UI」相位计时（相位10），UI 仅脏/动画帧计入；plan/20 HTML UI 光栅化/合成落相位10、UI 尖刺只丢渲染帧、绝不拖慢 sim 或 accumulator 追帧（守 #6）；熔岩矿洞逃生可玩循环作为高活跃+持续破坏 profiling 负载纳入基准矩阵，实测帧预算达标、无 death spiral。[§17.1/§4.3/§12.7/不变式 #6]
 - [x] **零冲突复核**：本表所有项与架构不变式（#2/#3/#6/#7/#9）及 plan/00 技术栈无冲突。[AGENTS §1] 复核证据：§4.3 保持 checkerboard + 持久线程池、无 cell 级锁；§4.5/§4.8 保持单缓冲 + dirty-rect + parity；§4.9 明确绝不 accumulator 追帧；§4.1/§4.7 确认颜色不入 cell、CPU sim 权威且 GPU pass 非权威无 readback；技术栈仍沿用 plan/00 的 .NET 10/C# 14/Intrinsics/Silk.NET/Box2D/BenchmarkDotNet。
 
 ## 6. 依赖关系
 
 本文档是**横切审计**，逻辑上依赖被审计的全部子系统先成型（plan/02–plan/15），因此在 plan/README 的执行顺序中置于集成阶段末段（13 → 14 → 15 → 16）。但其**审计项必须自各子系统编码起就内建并随每个里程碑增量勾选**，而非交付前补做——性能纪律是「强制，非优化项」（AGENTS §3），事后加装代价极高。
 
-具体上游依赖：plan/02 提供持久线程池/barrier/POH/NativeMemory/对象池/诊断计时（4.3/4.6/4.9/4.12 的基础设施）；plan/03 提供 SoA/dirty-rect/checkerboard/parity/指针漫游（4.1/4.3/4.5/4.8）；plan/04 提供紧凑反应表与温度 stencil（4.2/4.4 反应与温度项）；plan/05 提供粒子池与积分（4.2/4.3 粒子项）；plan/06 提供 CCL/形状重建/Box2D task 桥与节流（4.3/4.9）；plan/07 提供内存上限 LRU 与序列化字节准备（4.2/4.10）；plan/08+plan/09 提供 render buffer 构建/纹理流式/光照/bloom/GPU compute（4.2/4.7）；plan/14 提供 BenchmarkDotNet/oracle/反汇编门禁（4.5/4.11/4.12 的判据执行）；plan/15 提供 R2R/AOT/ISA 发行模式（4.12 编译模式审计）。
+具体上游依赖：plan/02 提供持久线程池/barrier/POH/NativeMemory/对象池/诊断计时（4.3/4.6/4.9/4.12 的基础设施）；plan/03 提供 SoA/dirty-rect/checkerboard/parity/指针漫游（4.1/4.3/4.5/4.8）；plan/04 提供紧凑反应表与温度 stencil（4.2/4.4 反应与温度项）；plan/05 提供粒子池与积分（4.2/4.3 粒子项）；plan/06 提供 CCL/形状重建/Box2D task 桥与节流（4.3/4.9）；plan/07 提供内存上限 LRU 与序列化字节准备（4.2/4.10）；plan/08+plan/09 提供 render buffer 构建/纹理流式/光照/bloom/GPU compute（4.2/4.7）；plan/14 提供 BenchmarkDotNet/oracle/反汇编门禁（4.5/4.11/4.12 的判据执行）；plan/15 提供 R2R/AOT/ISA 发行模式（4.12 编译模式审计）。本轮新增上游：plan/03/07 定义 per-cell Damage 平面与 chunk 预算/序列化（4.1/4.10 的 +25% 预算对账）；plan/08 提供 RenderStyle 着色质量档与 palette 行复制快速路径（4.3/4.4/4.9 共存与降级）；plan/13 提供 Demo 熔岩矿洞逃生可玩循环（4.11/4.12 的高活跃+持续破坏 profiling 负载）；plan/20 提供 PixelEngine.UI 相位10 光栅化/合成（4.9/4.12 的 UI 相位计时与不追帧审计）。
 
 里程碑映射（架构 §18、plan/17）：4.1/4.5/4.8 自 M0–M1 起验证（垂直切片即建反汇编与静止区基准）；4.3/4.11 自 M2（多线程内核 + 每核加速曲线实测）；4.2/4.4 随 M3–M5（材质/反应/温度）；4.7 随 M5/M7（温度/光照）与 plan/09；4.9 随 M5–M7（降级目标逐级到位）；4.10 随 M9（流式/存档）；4.6/4.12 贯穿至 M10（GC 实测定档与全套基准落实）。本文档作为门禁在 M10 要求全绿。
 

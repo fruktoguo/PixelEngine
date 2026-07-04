@@ -10,6 +10,6 @@
     <ProjectReference Include="..\PixelEngine.Rendering\PixelEngine.Rendering.csproj" />
     <ProjectReference Include="..\PixelEngine.Audio\PixelEngine.Audio.csproj" />
     <ProjectReference Include="..\PixelEngine.Scripting\PixelEngine.Scripting.csproj" />
-    <ProjectReference Include="..\PixelEngine.Editor\PixelEngine.Editor.csproj" />
+    <ProjectReference Include="..\PixelEngine.Gui\PixelEngine.Gui.csproj" />
   </ItemGroup>
 </Project>

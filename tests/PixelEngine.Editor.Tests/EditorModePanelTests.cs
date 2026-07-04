@@ -1,3 +1,4 @@
+using PixelEngine.World;
 using Xunit;
 
 namespace PixelEngine.Editor.Tests;

@@ -1,7 +1,7 @@
 using PixelEngine.Core;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
-using PixelEngine.Editor;
+using PixelEngine.Gui;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
@@ -260,10 +260,10 @@ public sealed class EngineOverloadControllerTests
     }
 
     /// <summary>
-    /// 验证 Editor runtime diagnostics 从 Hosting 上下文读取真实时间膨胀与降级状态。
+    /// 验证 Hosting 上下文公开真实时间膨胀与降级状态，供外部 GUI 扩展读取。
     /// </summary>
     [Fact]
-    public void EditorRuntimeDiagnosticsProviderMapsClockAndQualityTier()
+    public void HostingContextExposesClockAndQualityTierForGuiExtensions()
     {
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
@@ -272,12 +272,11 @@ public sealed class EngineOverloadControllerTests
 
         _ = engine.RunOneTick(realDeltaSeconds: 0.020);
 
-        EditorRuntimeDiagnostics diagnostics = EditorRuntimeDiagnosticsProvider.Create(engine.Context);
+        EngineOverloadController overload = engine.Context.GetService<EngineOverloadController>();
 
-        Assert.True(diagnostics.TimeScale < 1.0);
-        Assert.Equal((int)EngineQualityTier.ReducedThermal, diagnostics.DegradationLevel);
-        Assert.Equal("ReducedThermal", diagnostics.DegradationName);
-        Assert.Equal(1, diagnostics.ConsecutiveOverBudgetFrames);
+        Assert.True(engine.Context.Clock.TimeScale < 1.0);
+        Assert.Equal(EngineQualityTier.ReducedThermal, engine.Context.QualityTier);
+        Assert.Equal(1, overload.ConsecutiveOverBudgetFrames);
     }
 
     /// <summary>
@@ -399,7 +398,7 @@ public sealed class EngineOverloadControllerTests
         RuntimeControlResult result = api.OpenEditor();
 
         Assert.False(result.Success);
-        Assert.Contains("DockSpace", result.Message, StringComparison.Ordinal);
+        Assert.Contains("独立编辑器壳", result.Message, StringComparison.Ordinal);
     }
 
     private static void RegisterAllPhases(EngineBuilder builder, List<EnginePhase> phases)

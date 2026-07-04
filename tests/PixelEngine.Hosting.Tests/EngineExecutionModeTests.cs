@@ -1,8 +1,8 @@
 using PixelEngine.Core.Time;
 using PixelEngine.Core;
-using PixelEngine.Editor;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
+using PixelEngine.World;
 using System.Reflection;
 using Xunit;
 

@@ -1,4 +1,4 @@
-namespace PixelEngine.Editor;
+namespace PixelEngine.Gui;
 
 /// <summary>
 /// Editor 调试叠层开关集合。

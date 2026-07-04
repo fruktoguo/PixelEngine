@@ -147,6 +147,18 @@
 
 `PhysicsSystem` 总门面：`Initialize(JobSystem, CellGrid, EngineContext)`（建 world、注入 task 桥）、`SyncStep(dt)`（相位 8a–8e）、`Shutdown`（`b2DestroyWorld`）。向 `PixelEngine.Core` 诊断/计时器注册分项耗时（`plan/00` §7、架构 §17.1）：CCL、形状重建、Step、erase、inverse-sample、静态 collider、角色控制器，供编辑器性能 HUD 与 §4.3 过载降级。向事件总线（`plan/02`）发刚体破碎事件供音频（`plan/10` shatter）。暴露只读快照 API（不可变 mask + transform + 线/角速度）供 `plan/07` 存档。
 
+### 3.11 Demo 破坏原语接入既有刚体路径（承接 `plan/03` 破坏平面 / `plan/13` 武器，守不变式 #5/#10，零新 native）
+
+本节把 `plan/13`（Demo 熔岩矿洞逃生：武器库 + 差异化破坏）与 `plan/03`（per-cell `Damage(byte)` SoA 破坏平面 + `ApplyStructuralDamage` 离散破坏 API）对刚体的作用，全部收敛到 §3.6/§3.7 **既有**同步与重建路径。**本节不新增任何 Box2D 函数、`[LibraryImport]` 或其它 native surface**（守不变式 #10）；它只规定破坏事件的路由与既有冲量/重建 API 的复用方式，属跨文档协调而非新增物理实现。
+
+**刚体像素绝不累加 per-cell `Damage`（守不变式 #5）**：`plan/03` 的 `ApplyStructuralDamage` 在把伤害累加进 `Damage` 平面前，必先查 `CellFlags.RigidOwned`（§3.6 取 bit4）。命中 `RigidOwned` cell 时**不**在该 cell 的 `Damage` 平面累加任何值，而是经 `IRigidDamageSink.OnOwnedCellDamaged(cellIndex, consumedMaterial)` 把这次消耗路由给 physics——这是 §3.6 末尾「CA 消耗 `RigidOwned` cell 入 `RigidDamageQueue`」钩子的正式接口化命名，由 `PhysicsSystem` 实现、`plan/03` 反应/破坏侧调用（协调点，见 §6）。`OnOwnedCellDamaged` 内把 cell 入 `RigidDamageQueue`（per-worker 无锁 MPSC，相位 4/安全相位填充、相位 8a 排空），8a 经 `RigidStampRegistry` 映射回 `{bodyKey, localX, localY}`、对不可变 `BodyLocalMask` 清对应位并标该刚体 dirty，随后 `RebuildDirty` 复用 §3.7 既有 `CCL→MS→DP→PolyPartition→父子速度转移` 路径重建。由此刚体既能被武器「挖动 / 炸断 / 烧穿」，`BodyLocalMask` 权威形状又只经显式破坏事件收缩、绝不被往返栅格化侵蚀，也**绝不引入第二套 per-cell 破坏累计状态**（避免与 §3.5 R6 无侵蚀保证冲突）。破坏原语是安全相位的离散编辑，不受 32px halo 约束，破坏半径不由 `MoveCap`/#4 约束。
+
+**`Explode` 重构对邻近刚体复用 `ApplyImpulse`**：`plan/13` 炸弹（`PlacedExplosive`）与手榴弹（`ThrownExplosive`）的区域爆破，由旧「无条件抛射半径内全部 cell」改为 `DamageCircle` 破坏驱动（材质抗性生效）后，对邻近**动态刚体**的推力**复用 §3.1 已绑定、§4.1 已落地的 `b2Body_ApplyLinearImpulse`**——沿爆心→刚体质心方向按距离衰减施径向冲量，在相位 8 内施加，对外经 Hosting 暴露的 `IRigidBodyApi.ApplyImpulse` 面（供 Demo 脚本调用，签约见 `plan/13`/§C.4）。爆破对 `RigidOwned` cell 的破坏仍走上一条 `OnOwnedCellDamaged` 路由；本节不新增任何 native（守不变式 #10）。
+
+**手榴弹弹道（open question，默认脚本积分）**：`plan/13` 的 `GrenadeProjectile` 抛物线实体默认在**相位 1（Game Logic）**由 Demo 脚本按 `dt` 积分（重力 + bounce，经只读 `ISolidSampler.Raycast` 检碰撞），**默认不驱动任何额外 `b2World_Step`**（符合架构 §4.4 单 sim step 纪律、不变式 #9 CPU sim 权威）。若后续选定「手榴弹作真实 Box2D 动态体」备选方案，则复用 §3.4 `ShapeBuilder` + §3.6 同步既有路径，仍不新增 native；该方案作为 open question 记录，本轮取脚本积分实现，`PhysicsSystem` 不为手榴弹开第二次 world step。
+
+**metal 梁近熔岩熔化→坍塌成刚体走既有相位 8**：`plan/04` 相变让承重 `metal` 梁近 `lava` 达熔点相变为 `molten_metal`（失去 `RigidOwned` 固体性）后，其上方原 stamp 在梁上的连通固体块因支撑消失，由 §3.7/§4.7 相位 8a **既有**「CCL 检测地形改变区新脱落连通块→建新刚体」逻辑自动掉落成动态刚体并按物理坍塌，**无需 Demo 侧特判、无新 native**。结构坍塌对玩家的砸伤判定由 `plan/13` `GameDirector` 侧读刚体运动完成；本文档只保证「支撑消失→脱落块建体」链路成立。
+
 ---
 
 ## 4. 实现清单
@@ -233,6 +245,13 @@
 - [x] 刚体破碎事件入事件总线供音频（`plan/10`）。
 - [x] 只读快照 API（不可变 mask + transform + 线/角速度）供 `plan/07` 存档。
 
+### 4.11 PixelEngine.Physics — Demo 破坏原语接入既有刚体路径（§3.11，守 #5/#10，零新 native）
+- [ ] `IRigidDamageSink` 接口（`OnOwnedCellDamaged(int cellIndex, ushort consumedMaterial)`）正式化 §3.6 damage 钩子并由 `PhysicsSystem` 实现；`plan/03` `ApplyStructuralDamage` 命中 `RigidOwned` cell 时改调它入 `RigidDamageQueue`，**绝不在刚体像素的 `Damage` 平面累加**（守 #5，协调点见 §6）。
+- [ ] `OnOwnedCellDamaged`→`RigidStampRegistry` 映射→`BodyLocalMask` 清位→标 dirty→相位 8a `RebuildDirty` **复用** §4.7 既有 `CCL→MS→DP→PolyPartition→父子速度转移` 路径（不新增重建代码，只接线）。
+- [ ] `Explode` 重构（`plan/13` 炸弹/手榴弹 `DamageCircle`）对邻近动态刚体径向冲量**复用** `b2Body_ApplyLinearImpulse`（沿爆心→质心、距离衰减），相位 8 内经 Hosting `IRigidBodyApi.ApplyImpulse` 面施加；不新增 native（守 #10）。
+- [ ] 手榴弹默认脚本积分实现**不驱动额外 `b2World_Step`**（架构 §4.4）；「手榴弹作 Box2D 动态体」列为 open question，若采纳复用 §3.4/§3.6 既有路径、仍不新增 native。
+- [ ] `metal` 梁近 `lava` 相变失去 `RigidOwned` 固体性后，上方脱落连通块由 §4.7 (8a) 既有「新脱落块→建新刚体」逻辑自动坍塌成动态刚体（无 Demo 特判、无新 native）。
+
 ---
 
 ## 5. 验收标准
@@ -276,6 +295,13 @@
 - [x] 所有公开 API 带完整中文 XML 注释（`plan/00` §7）。
 - [x] 与第 1 章不变式（#5/#9/#10）及 `plan/00` 技术栈无冲突（自审）。
 
+### 5.7 Demo 破坏原语接入既有刚体路径（§3.11，守 #5/#10）
+- [ ] 武器/酸蚀破坏命中 `RigidOwned` cell 时经 `IRigidDamageSink.OnOwnedCellDamaged` 路由；`Damage` 平面对刚体像素**恒为 0**（headless 断言，守 #5）。
+- [ ] 挖/炸/烧穿刚体后经 8a `RebuildDirty` 拆分为子刚体，`BodyLocalMask` 固体像素数只随显式破坏减少、无往返侵蚀（复用 §5.3「无亚像素侵蚀」性质，破坏场景下再验）。
+- [ ] 炸弹/手榴弹爆破对邻近动态刚体产生可观测径向位移/自旋（`b2Body_ApplyLinearImpulse` 复用，headless tick 断言）。
+- [ ] `metal` 梁近 `lava` 熔化后其上木结构脱落成动态刚体并下落（既有 8a 脱落链路，headless tick 断言）。
+- [ ] 本轮 Demo 破坏接入**零新增 Box2D native 函数 / 零新 `[LibraryImport]`/`DllImport`**（代码审查，守 #10）。
+
 ---
 
 ## 6. 依赖关系
@@ -283,19 +309,20 @@
 上游（须先就绪，否则相关条目记 `- [!]`）：
 - `plan/01`：解决方案骨架、`PixelEngine.Interop`/`PixelEngine.Physics` 工程、Box2D v3.1 vendored 源与 dual-build × 6 RID（native 产物到 `runtimes/<rid>/native/`）。
 - `plan/02`：`PixelEngine.Core` JobSystem 持久线程池 + barrier（task 桥与各刚体并行所需）、**稳定 workerIndex 区间派发 API**（task 桥所需协调点）、`EngineConstants.PhysicsPixelsPerMeter`、事件总线、诊断/计时、POH/`NativeMemory`、RNG。
-- `plan/03`：`PixelEngine.Simulation` 的 `CellGrid` SoA、`Chunk`、dirty rect + **KeepAlive** 唤醒接口、`CellType`、坐标系、`Flags` 字节布局须预留 **`RigidOwned` 位（bit4）** 与「消耗 owned cell 入 `RigidDamageQueue`」的反应/移动钩子（协调点）。
+- `plan/03`：`PixelEngine.Simulation` 的 `CellGrid` SoA、`Chunk`、dirty rect + **KeepAlive** 唤醒接口、`CellType`、坐标系、`Flags` 字节布局须预留 **`RigidOwned` 位（bit4）** 与「消耗 owned cell 入 `RigidDamageQueue`」的反应/移动钩子（协调点）。**per-cell `Damage(byte)` 破坏平面 + `ApplyStructuralDamage` 离散破坏 API（§3.11 协调点）**：`ApplyStructuralDamage` 写 `Damage` 前必查 `RigidOwned`，命中刚体像素改调本文档 `IRigidDamageSink.OnOwnedCellDamaged`（不在刚体像素累加 `Damage`，守 #5）。
+- `plan/04`：材质相变（`metal`→`molten_metal` 熔点相变、失去 `RigidOwned` 固体性），供 §3.11「梁熔化→上方脱落块相位 8a 自动坍塌成刚体」链路（无新 native）。
 - `plan/05`：自由粒子抛射 API（碎片转粒子调用）。
 
 下游（消费本文档产物）：
 - `plan/07`：刚体（不可变 mask + transform + 速度）与自由粒子的存档/续跑（用本文档只读快照 API）。
 - `plan/08`/`plan/12`：渲染刚体高亮、owned-by-body-K 着层、CCL 连通块叠层（架构 §17.2）。
 - `plan/10`：刚体破碎 shatter 音效（事件总线）。
-- `plan/13`：Demo 可挖掘刚体与可操作角色（`CharacterController` 公开 API）。
+- `plan/13`：Demo 可挖掘刚体与可操作角色（`CharacterController` 公开 API）；熔岩矿洞逃生武器库（炸弹/手榴弹/激光/挖掘/建造）的破坏经 §3.11 复用既有刚体路径与 `IRigidBodyApi.ApplyImpulse`（`b2Body_ApplyLinearImpulse`），无新 native（守 #10）。
 - `plan/14`：本文档全部性质测试（凸分解/水密/无侵蚀/边界）与 interop smoke test。
 - `plan/15`：Box2D dual-build、AOT `IlcInstructionSet`、native 打包到 6 RID。
 - `plan/16`：形状重建尖刺与 §4.3 过载降级联动（R4）。
 
-里程碑映射：本文档整体对应架构 §18 的 **M6（像素碰撞 + 刚体）**，刻意置于 sim 稳定（M0–M5）之后（`plan/README` 执行顺序、架构 §18 排序原则）。
+里程碑映射：本文档整体对应架构 §18 的 **M6（像素碰撞 + 刚体）**，刻意置于 sim 稳定（M0–M5）之后（`plan/README` 执行顺序、架构 §18 排序原则）。§3.11/§4.11/§5.7 的 Demo 破坏原语接入属 **M14「玩法深化与交互 UI」** 横切（`plan/13` 熔岩矿洞逃生 + `plan/03`/`plan/04` 破坏/相变底座）的一部分，是既有 M6 刚体路径的复用接线、不新增 native（守 #10）。
 
 ---
 
