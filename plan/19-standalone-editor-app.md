@@ -62,7 +62,7 @@ plan/19（独立编辑器壳）、`plan/15`（玩家包 player-only 审计）、
 - [x] 迁移 `ScriptGuiContext`（`IGuiContext` 运行时适配）到 `PixelEngine.Gui`，玩家 HUD/脚本 UI 引用改指 Gui（§0.3）
 - [x] `EditorFontManager → GuiFontManager`（含 CJK），玩家 HUD 与 `plan/20` UI 复用（§0.3）
 - [x] `PixelEngine.Hosting.csproj` 删 `PixelEngine.Editor` 引用、改引 `PixelEngine.Gui`；Hosting 内 Editor 类型消费改为面向 `IEditorHostExtension`/相位[10] 抽象（§0.4，配合 `plan/18` 修订）
-- [ ] `IEditorHostExtension`：Shell 侧 adapter 封装 `EditorApp` + 默认面板注册（原 `RegisterDefaultEditorPanels`），由 shell 开发构建注入 Hosting 相位[10] 钩子（§0.4）
+- [x] `IEditorHostExtension`：Shell 侧 adapter 封装 `EditorApp` + 默认面板注册（原 `RegisterDefaultEditorPanels`），由 shell 开发构建注入 Hosting 相位[10] 钩子（§0.4）
 - [x] `DemoProgram.cs` 去 `using PixelEngine.Editor` 与 `EnableEditor` 路径，玩家 HUD 改用 `PixelEngine.Gui` 中性 host（§0.5、`plan/13` 修订）
 - [x] 验证玩家闭包（`Demo→Hosting→{…,Gui}`）不再传递到 `PixelEngine.Editor`（§0.5、`plan/00 §8` 复核）
 
@@ -376,9 +376,9 @@ player-only 与布局
 - [x] `EditorShellLayout`：编辑器默认 dock 布局 + 保存/恢复 + Reset Layout（§4.3）
 
 in-process 宿主：
-- [ ] `EditorProjectSession`：用 `EngineBuilder` 装配引擎（Edit 模式默认暂停）、`engine.AttachWindowRuntime(shellWindow)` attach 既有窗口（Engine 不 own、Dispose 不销毁窗口）（§4.1、§4.4，前置 `plan/18` 窗口所有权解耦 API）
-- [ ] shell 经 `IEditorHostExtension`（§0.4）注入 Editor 面板宿主到 Hosting 相位[10]（前置 §0，Hosting 不再引用 Editor）（§4.4）
-- [ ] 复用 `EngineEditorPlaySessionService`/`EngineWorldSnapshotStore` 的 Play/Edit/Step 与快照回滚，绑定菜单/工具条（§4.4）
+- [x] `EditorProjectSession`：用 `EngineBuilder` 装配引擎（Edit 模式默认暂停）、`engine.AttachWindowRuntime(shellWindow)` attach 既有窗口（Engine 不 own、Dispose 不销毁窗口）（§4.1、§4.4，前置 `plan/18` 窗口所有权解耦 API）
+- [x] shell 经 `IEditorHostExtension`（§0.4）注入 Editor 面板宿主到 Hosting 相位[10]（前置 §0，Hosting 不再引用 Editor）（§4.4）
+- [x] 复用 `EngineEditorPlaySessionService`/`EngineWorldSnapshotStore` 的 Play/Edit/Step 与快照回滚，绑定菜单/工具条（§4.4）
 - [ ] 切换/关闭工程逆序释放 `Engine`、保留窗口/上下文、重建 session（§4.1、§4.4）
 
 GameObject authoring：
@@ -417,7 +417,7 @@ GameObject authoring：
 ## 7. 验收标准
 
 - [x] 独立 EXE 存在：`apps/PixelEngine.Editor.Shell` 可独立构建产出可执行文件，双击/命令行启动进入独立编辑器窗口，单独进程、独立顶层窗口（§4.1）
-- [ ] 启动时序正确：启动即立起唯一 `RenderWindow`+GL+中性 ImGui host（独立于 Engine），项目选择器在该上下文内绘制；选定工程后 Engine attach 到既有窗口且不 own（`Engine.Dispose` 不销毁窗口）（§4.1）
+- [x] 启动时序正确：启动即立起唯一 `RenderWindow`+GL+中性 ImGui host（独立于 Engine），项目选择器在该上下文内绘制；选定工程后 Engine attach 到既有窗口且不 own（`Engine.Dispose` 不销毁窗口）（§4.1）
 - [x] Shell 启动与项目选择阶段单进程、单 `RenderWindow`、单 GL 上下文；Edit/Play 同窗口宿主仍由 §4.4 后续节点闭合（守 `plan/12` 真约束，§2）
 - [x] 项目选择器可新建/打开工程、展示并打开最近工程；新建工程生成合法 `project.pixelproj` + `content/` 骨架 + 空场景（§4.2）
 - [ ] 主菜单栏 File/Edit/GameObject/Window/Play/Help 全部可用（含 Build Settings…）；默认 dock 布局呈现 Hierarchy/Scene View/Inspector/Project/Console/HUD/构建与发布，可保存恢复与 Reset（§4.3）
@@ -462,7 +462,7 @@ GameObject authoring：
 - [x] 节点 0：`refactor(gui): 新增 PixelEngine.Gui 中性 ImGui 宿主 + Hosting 去 Editor 硬引用（M13 入口门）`（§0，scope=gui/hosting）
 - [x] 节点 1：`feat(editor-shell): 独立编辑器可执行壳 + 启动即立窗口/单进程单上下文生命周期`（§4.1、apps 项目 + `.sln`/`plan/00` 结构）
 - [x] 节点 2：`feat(editor-shell): 工程模型/项目选择器/最近列表 + 主菜单栏与默认布局`（§4.2–§4.3）
-- [ ] 节点 3：`feat(editor-shell): in-process 宿主引擎 Edit/Play 接入（attach 既有窗口 + IEditorHostExtension 注入）`（§4.4，前置 `plan/18` API）
+- [x] 节点 3：`feat(editor-shell): in-process 宿主引擎 Edit/Play 接入（attach 既有窗口 + IEditorHostExtension 注入）`（§4.4，前置 `plan/18` API）
 - [ ] 节点 4：`feat(editor-shell): GameObject authoring 模型 + StableId 映射 + 层级面板 + 命令栈 Undo/Redo`（§4.5–§4.6）
 - [ ] 节点 5：`feat(editor-shell): GameObject Inspector（Transform/组件增删改/Add Component）`（§4.7）
 - [ ] 节点 6：`feat(editor-shell): Scene View 变换 gizmo 与拾取`（§4.8）

@@ -5,6 +5,8 @@ namespace PixelEngine.Editor.Shell;
 internal sealed class EditorShellApp
 {
     private readonly EditorShellOptions _options;
+    private EditorProject? _pendingProject;
+    private bool _closeProjectRequested;
 
     private EditorShellApp(EditorShellOptions options)
     {
@@ -22,6 +24,8 @@ internal sealed class EditorShellApp
     public RecentProjectsStore RecentProjects { get; }
 
     public string? LastProjectError { get; private set; }
+
+    public EditorProjectSession? CurrentSession { get; private set; }
 
     private ProjectPickerWindow ProjectPicker { get; }
 
@@ -51,6 +55,7 @@ internal sealed class EditorShellApp
         if (!string.IsNullOrWhiteSpace(_options.ProjectPath))
         {
             OpenProjectPath(_options.ProjectPath);
+            ApplyPendingProject(shellWindow);
         }
 
         UpdateTitle(shellWindow);
@@ -62,32 +67,42 @@ internal sealed class EditorShellApp
         bool configuredImGui = false;
         while (!shellWindow.Window.IsClosing)
         {
-            shellWindow.Window.DoEvents();
             double now = stopwatch.Elapsed.TotalSeconds;
             float deltaSeconds = (float)Math.Max(0.0, now - previousSeconds);
             previousSeconds = now;
-            if (!shellWindow.Gui.IsRunning)
+            if (CurrentSession is null)
             {
-                shellWindow.Gui.Initialize();
-            }
-
-            if (!configuredImGui)
-            {
-                Layout.ConfigureImGui();
-                configuredImGui = true;
-            }
-
-            shellWindow.Gui.DrawFrame(
-                deltaSeconds,
-                shellWindow.Window.Width,
-                shellWindow.Window.Height,
-                _ =>
+                shellWindow.Window.DoEvents();
+                if (!shellWindow.Gui.IsRunning)
                 {
-                    MainMenu.Draw(this);
-                    Layout.DrawDockSpace();
-                    ProjectPicker.Draw(this);
-                });
-            shellWindow.Window.SwapBuffers();
+                    shellWindow.Gui.Initialize();
+                }
+
+                if (!configuredImGui)
+                {
+                    Layout.ConfigureImGui();
+                    configuredImGui = true;
+                }
+
+                shellWindow.Gui.DrawFrame(
+                    deltaSeconds,
+                    shellWindow.Window.Width,
+                    shellWindow.Window.Height,
+                    _ =>
+                    {
+                        MainMenu.Draw(this);
+                        Layout.DrawDockSpace();
+                        ProjectPicker.Draw(this);
+                    });
+                shellWindow.Window.SwapBuffers();
+                ApplyPendingProject(shellWindow);
+            }
+            else
+            {
+                CurrentSession.RunOneTick(deltaSeconds);
+                ApplyDeferredClose();
+            }
+
             UpdateTitle(shellWindow);
             executed++;
             if (requestedTicks > 0 && executed >= requestedTicks)
@@ -101,8 +116,8 @@ internal sealed class EditorShellApp
             Console.WriteLine(
                 "editor_enabled=True, " +
                 "editor_running=True, " +
-                "editor_panels=0, " +
-                $"editor_bridge_frames={executed}, " +
+                $"editor_panels={CurrentSession?.PanelCount ?? 0}, " +
+                $"editor_bridge_frames={CurrentSession?.EditorBridgeFrameCount ?? executed}, " +
                 "render_camera_synced=False, " +
                 $"project_open={HasOpenProject}, " +
                 $"window_ticks={executed}");
@@ -138,15 +153,22 @@ internal sealed class EditorShellApp
     public void OpenProject(EditorProject project)
     {
         ArgumentNullException.ThrowIfNull(project);
-        CurrentProject = project;
         LastProjectError = null;
         RecentProjects.AddOrUpdate(project);
         RecentProjects.Save();
+        _pendingProject = project;
     }
 
     public void CloseProject()
     {
-        CurrentProject = null;
+        if (CurrentSession is null)
+        {
+            CurrentProject = null;
+            _pendingProject = null;
+            return;
+        }
+
+        _closeProjectRequested = true;
     }
 
     public void FocusProjectPicker(ProjectPickerMode mode)
@@ -157,6 +179,48 @@ internal sealed class EditorShellApp
     public void ResetLayout()
     {
         Layout.ResetLayout();
+    }
+
+    public void EnterPlayMode()
+    {
+        CurrentSession?.EnterPlayMode();
+    }
+
+    public void EnterEditMode()
+    {
+        CurrentSession?.EnterEditMode();
+    }
+
+    public void StepOnce()
+    {
+        CurrentSession?.StepOnce();
+    }
+
+    private void ApplyPendingProject(EditorShellWindow shellWindow)
+    {
+        if (_pendingProject is null)
+        {
+            return;
+        }
+
+        EditorProject project = _pendingProject;
+        _pendingProject = null;
+        CurrentSession?.Dispose();
+        CurrentSession = EditorProjectSession.Open(project, shellWindow.Window, this);
+        CurrentProject = project;
+    }
+
+    private void ApplyDeferredClose()
+    {
+        if (!_closeProjectRequested)
+        {
+            return;
+        }
+
+        CurrentSession?.Dispose();
+        CurrentSession = null;
+        CurrentProject = null;
+        _closeProjectRequested = false;
     }
 
     private void UpdateTitle(EditorShellWindow shellWindow)
