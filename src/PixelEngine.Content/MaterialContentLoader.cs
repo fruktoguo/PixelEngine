@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using PixelEngine.Core;
 using PixelEngine.Simulation;
 
 namespace PixelEngine.Content;
@@ -186,7 +188,7 @@ public static class MaterialContentLoader
                 Name = name,
                 Type = ParseEnum<CellType>(source.Type, $"materials[{i}].type"),
                 Density = source.Density,
-                Dispersion = source.Dispersion,
+                Dispersion = ClampDispersion(source.Dispersion),
                 LiquidStatic = source.LiquidStatic,
                 LiquidSand = source.LiquidSand,
                 Flammability = source.Flammability,
@@ -204,9 +206,20 @@ public static class MaterialContentLoader
                 HeatCapacity = source.HeatCapacity ?? 1f,
                 DefaultLifetime = source.DefaultLifetime,
                 Durability = source.Durability,
+                Integrity = source.Integrity,
+                DestroyedTarget = ResolveOptionalMaterial(source.DestroyedTarget, nameToId),
+                DebrisCount = source.DebrisCount,
+                MineYield = source.MineYield,
                 TextureId = source.TextureId ?? -1,
                 BaseColorBGRA = source.BaseColor,
                 ColorNoise = source.ColorNoise,
+                RenderStyle = ParseOptionalEnum(source.RenderStyle, MaterialRenderStyle.Ground, $"materials[{i}].renderStyle"),
+                LegendCategory = ParseOptionalEnum(source.LegendCategory, MaterialLegendCategory.Terrain, $"materials[{i}].legendCategory"),
+                EdgeColorBGRA = source.EdgeColorBGRA,
+                Opacity = source.Opacity ?? byte.MaxValue,
+                HighlightColorBGRA = source.HighlightColorBGRA,
+                DisplayName = string.IsNullOrWhiteSpace(source.DisplayName) ? string.Empty : source.DisplayName.Trim(),
+                LegendVisible = source.LegendVisible ?? true,
                 PropertyFlags = ParseMaterialProperties(source.Tags),
                 AudioCues = BuildAudioCues(source.AudioCues),
             };
@@ -545,6 +558,19 @@ public static class MaterialContentLoader
             : throw new ArgumentException($"{path} 包含未知 {typeof(TEnum).Name}：{value}。");
     }
 
+    private static TEnum ParseOptionalEnum<TEnum>(string? value, TEnum defaultValue, string path)
+        where TEnum : struct, Enum
+    {
+        return string.IsNullOrWhiteSpace(value) ? defaultValue : ParseEnum<TEnum>(value, path);
+    }
+
+    private static byte ClampDispersion(byte dispersion)
+    {
+        byte clamped = (byte)Math.Min((int)dispersion, EngineConstants.MoveCap);
+        Debug.Assert(clamped <= EngineConstants.MoveCap, "加载期 dispersion 必须收敛在 MoveCap 内。");
+        return clamped;
+    }
+
     private static ushort ResolveOptionalMaterial(string? name, Dictionary<string, ushort> nameToId)
     {
         return string.IsNullOrWhiteSpace(name) ? (ushort)0 : ResolveRequiredMaterial(name, nameToId, name);
@@ -688,6 +714,18 @@ public sealed class MaterialJson
     /// <summary>耐久。</summary>
     public byte Durability { get; init; }
 
+    /// <summary>结构完整度阈值；0 表示有效伤害即时破坏。</summary>
+    public ushort Integrity { get; init; }
+
+    /// <summary>破坏后的目标材质 name。</summary>
+    public string? DestroyedTarget { get; init; }
+
+    /// <summary>破坏时请求抛射的碎屑数量。</summary>
+    public byte DebrisCount { get; init; }
+
+    /// <summary>可采集材质破坏时产生的采集计数。</summary>
+    public byte MineYield { get; init; }
+
     /// <summary>纹理索引。</summary>
     public int? TextureId { get; init; }
 
@@ -697,6 +735,29 @@ public sealed class MaterialJson
 
     /// <summary>颜色噪声幅度。</summary>
     public byte ColorNoise { get; init; }
+
+    /// <summary>材质着色风格。</summary>
+    public string? RenderStyle { get; init; }
+
+    /// <summary>材质图例分类。</summary>
+    public string? LegendCategory { get; init; }
+
+    /// <summary>描边或裂纹叠色 BGRA8。</summary>
+    [JsonPropertyName("edgeColor")]
+    public uint EdgeColorBGRA { get; init; }
+
+    /// <summary>渲染 alpha；缺省为 255。</summary>
+    public byte? Opacity { get; init; }
+
+    /// <summary>高亮或 emissive 叠色 BGRA8。</summary>
+    [JsonPropertyName("highlightColor")]
+    public uint HighlightColorBGRA { get; init; }
+
+    /// <summary>编辑器 / HUD 展示名。</summary>
+    public string? DisplayName { get; init; }
+
+    /// <summary>是否在图例里默认展示。</summary>
+    public bool? LegendVisible { get; init; }
 
     /// <summary>tag / property 名称数组。</summary>
     public string[]? Tags { get; init; }

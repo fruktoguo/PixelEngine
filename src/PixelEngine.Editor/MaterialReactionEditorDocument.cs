@@ -195,6 +195,18 @@ public sealed class MaterialEditorRow
     /// <summary>刚体/破坏耐久度。</summary>
     public int Durability { get; set; }
 
+    /// <summary>结构完整度阈值；0 表示有效伤害即时破坏。</summary>
+    public int Integrity { get; set; }
+
+    /// <summary>破坏后的目标材质 name。</summary>
+    public string DestroyedTarget { get; set; } = string.Empty;
+
+    /// <summary>破坏时请求抛射的碎屑数量。</summary>
+    public int DebrisCount { get; set; }
+
+    /// <summary>可采集材质破坏时产生的采集计数。</summary>
+    public int MineYield { get; set; }
+
     /// <summary>材质纹理 id；负数表示未指定。</summary>
     public int TextureId { get; set; } = -1;
 
@@ -203,6 +215,27 @@ public sealed class MaterialEditorRow
 
     /// <summary>渲染色噪声强度。</summary>
     public int ColorNoise { get; set; }
+
+    /// <summary>材质着色风格。</summary>
+    public string RenderStyle { get; set; } = nameof(MaterialRenderStyle.Ground);
+
+    /// <summary>材质图例分类。</summary>
+    public string LegendCategory { get; set; } = nameof(MaterialLegendCategory.Terrain);
+
+    /// <summary>描边或裂纹叠色 BGRA8。</summary>
+    public uint EdgeColorBGRA { get; set; }
+
+    /// <summary>渲染 alpha。</summary>
+    public int Opacity { get; set; } = byte.MaxValue;
+
+    /// <summary>高亮或 emissive 叠色 BGRA8。</summary>
+    public uint HighlightColorBGRA { get; set; }
+
+    /// <summary>编辑器 / HUD 展示名。</summary>
+    public string DisplayName { get; set; } = string.Empty;
+
+    /// <summary>是否在图例里默认展示。</summary>
+    public bool LegendVisible { get; set; } = true;
 
     /// <summary>逗号分隔的 tag 列表。</summary>
     public string Tags { get; set; } = string.Empty;
@@ -255,9 +288,20 @@ public sealed class MaterialEditorRow
             HeatCapacity = source.HeatCapacity ?? 1f,
             DefaultLifetime = source.DefaultLifetime,
             Durability = source.Durability,
+            Integrity = source.Integrity,
+            DestroyedTarget = source.DestroyedTarget ?? string.Empty,
+            DebrisCount = source.DebrisCount,
+            MineYield = source.MineYield,
             TextureId = source.TextureId ?? -1,
             BaseColor = source.BaseColor,
             ColorNoise = source.ColorNoise,
+            RenderStyle = source.RenderStyle ?? nameof(MaterialRenderStyle.Ground),
+            LegendCategory = source.LegendCategory ?? nameof(MaterialLegendCategory.Terrain),
+            EdgeColorBGRA = source.EdgeColorBGRA,
+            Opacity = source.Opacity ?? byte.MaxValue,
+            HighlightColorBGRA = source.HighlightColorBGRA,
+            DisplayName = source.DisplayName ?? string.Empty,
+            LegendVisible = source.LegendVisible ?? true,
             Tags = MaterialReactionEditorDocument.JoinCsv(source.Tags),
             ImpactCue = source.AudioCues?.Impact ?? 0,
             FireCue = source.AudioCues?.Fire ?? 0,
@@ -296,9 +340,20 @@ public sealed class MaterialEditorRow
             HeatCapacity = HeatCapacity,
             DefaultLifetime = ClampUshort(DefaultLifetime),
             Durability = ClampByte(Durability),
+            Integrity = ClampUshort(Integrity),
+            DestroyedTarget = MaterialReactionEditorDocument.NullIfWhiteSpace(DestroyedTarget),
+            DebrisCount = ClampByte(DebrisCount),
+            MineYield = ClampByte(MineYield),
             TextureId = TextureId < 0 ? null : TextureId,
             BaseColor = BaseColor,
             ColorNoise = ClampByte(ColorNoise),
+            RenderStyle = MaterialReactionEditorDocument.NullIfWhiteSpace(RenderStyle),
+            LegendCategory = MaterialReactionEditorDocument.NullIfWhiteSpace(LegendCategory),
+            EdgeColorBGRA = EdgeColorBGRA,
+            Opacity = ClampByte(Opacity),
+            HighlightColorBGRA = HighlightColorBGRA,
+            DisplayName = MaterialReactionEditorDocument.NullIfWhiteSpace(DisplayName),
+            LegendVisible = LegendVisible,
             Tags = MaterialReactionEditorDocument.SplitCsv(Tags),
             AudioCues = new AudioCueSetJson
             {

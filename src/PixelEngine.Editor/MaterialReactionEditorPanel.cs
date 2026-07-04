@@ -172,6 +172,10 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
         _ = InputFloat("heat capacity", row.HeatCapacity, value => row.HeatCapacity = value);
         _ = InputInt("default lifetime", row.DefaultLifetime, value => row.DefaultLifetime = value);
         _ = InputInt("durability", row.Durability, value => row.Durability = value);
+        _ = InputInt("integrity", row.Integrity, value => row.Integrity = value);
+        _ = InputText("destroyed target", row.DestroyedTarget, value => row.DestroyedTarget = value, 96);
+        _ = InputInt("debris count", row.DebrisCount, value => row.DebrisCount = value);
+        _ = InputInt("mine yield", row.MineYield, value => row.MineYield = value);
         _ = InputInt("texture id", row.TextureId, value => row.TextureId = value);
         int baseColor = unchecked((int)row.BaseColor);
         if (ImGui.InputInt("base color BGRA", ref baseColor))
@@ -180,6 +184,23 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
         }
 
         _ = InputInt("color noise", row.ColorNoise, value => row.ColorNoise = value);
+        _ = InputText("render style", row.RenderStyle, value => row.RenderStyle = value, 64);
+        _ = InputText("legend category", row.LegendCategory, value => row.LegendCategory = value, 64);
+        int edgeColor = unchecked((int)row.EdgeColorBGRA);
+        if (ImGui.InputInt("edge color BGRA", ref edgeColor))
+        {
+            row.EdgeColorBGRA = unchecked((uint)edgeColor);
+        }
+
+        _ = InputInt("opacity", row.Opacity, value => row.Opacity = value);
+        int highlightColor = unchecked((int)row.HighlightColorBGRA);
+        if (ImGui.InputInt("highlight color BGRA", ref highlightColor))
+        {
+            row.HighlightColorBGRA = unchecked((uint)highlightColor);
+        }
+
+        _ = InputText("display name", row.DisplayName, value => row.DisplayName = value, 96);
+        _ = Checkbox("legend visible", row.LegendVisible, value => row.LegendVisible = value);
         _ = InputInt("audio impact", row.ImpactCue, value => row.ImpactCue = value);
         _ = InputInt("audio fire", row.FireCue, value => row.FireCue = value);
         _ = InputInt("audio splash", row.SplashCue, value => row.SplashCue = value);

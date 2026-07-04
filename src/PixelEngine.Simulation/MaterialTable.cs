@@ -20,6 +20,7 @@ public sealed class MaterialTable : IMaterialCustomUpdateExecutor
         _tombstones = new bool[_defs.Length];
         _customUpdates = new MaterialCustomUpdate[_defs.Length];
         Hot = MaterialHotTable.FromDefinitions(_defs);
+        Visual = MaterialVisualTable.FromDefinitions(_defs);
     }
 
     /// <summary>
@@ -31,6 +32,11 @@ public sealed class MaterialTable : IMaterialCustomUpdateExecutor
     /// 热路径 SoA 表。
     /// </summary>
     public MaterialHotTable Hot { get; private set; }
+
+    /// <summary>
+    /// 渲染相位只读视觉表。
+    /// </summary>
+    public MaterialVisualTable Visual { get; private set; }
 
     /// <summary>
     /// 按 runtime id 返回材质定义。
@@ -206,6 +212,7 @@ public sealed class MaterialTable : IMaterialCustomUpdateExecutor
 
         RebuildNameIndex();
         Hot = MaterialHotTable.FromDefinitions(_defs);
+        Visual = MaterialVisualTable.FromDefinitions(_defs);
         return new MaterialReloadResult([.. tombstones], appended.Count, preservedCount, fallbackReplacementCount);
     }
 
@@ -224,6 +231,7 @@ public sealed class MaterialTable : IMaterialCustomUpdateExecutor
         _customUpdates[id] = update;
         _defs[id] = _defs[id] with { PropertyFlags = _defs[id].PropertyFlags | MaterialProperty.HasCustomUpdate };
         Hot = MaterialHotTable.FromDefinitions(_defs);
+        Visual = MaterialVisualTable.FromDefinitions(_defs);
     }
 
     /// <inheritdoc />

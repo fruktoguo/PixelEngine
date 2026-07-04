@@ -32,11 +32,43 @@ public sealed class MaterialContentLoaderTests
         Assert.Equal(0xFF336699u, water.BaseColorBGRA);
         Assert.Equal(7, water.TextureId);
         Assert.Equal(6, water.ColorNoise);
+        Assert.Equal(20, water.Integrity);
+        Assert.Equal(table.GetIdOrFallback("ash", 0), water.DestroyedTarget);
+        Assert.Equal(2, water.DebrisCount);
+        Assert.Equal(1, water.MineYield);
+        Assert.Equal(MaterialRenderStyle.Liquid, water.RenderStyle);
+        Assert.Equal(MaterialLegendCategory.Liquid, water.LegendCategory);
+        Assert.Equal(0xFF112233u, water.EdgeColorBGRA);
+        Assert.Equal(180, water.Opacity);
+        Assert.Equal(0xFF445566u, water.HighlightColorBGRA);
+        Assert.Equal("Water", water.DisplayName);
+        Assert.False(water.LegendVisible);
         Assert.Equal(1, water.AudioCues.FireCue);
         Assert.Equal(6, water.AudioCues.ShatterCue);
         Assert.True((water.PropertyFlags & MaterialProperty.BurnableFast) != 0);
+        Assert.True((water.PropertyFlags & MaterialProperty.Diggable) != 0);
         Assert.Equal(table.GetIdOrFallback("ice", 0), water.FreezeTarget);
         Assert.Equal(table.GetIdOrFallback("steam", 0), water.BoilTarget);
+    }
+
+    /// <summary>
+    /// 验证加载期把 dispersion 收敛到 32px move cap，避免内容数据突破 halo 不变式。
+    /// </summary>
+    [Fact]
+    public void LoadClampsDispersionToMoveCap()
+    {
+        const string materialsJson = """
+        { "materials": [
+          { "name": "empty", "type": "Empty", "heatCapacity": 1 },
+          { "name": "water", "type": "Liquid", "dispersion": 255, "heatCapacity": 1 }
+        ] }
+        """;
+
+        MaterialContentLoadResult result = MaterialContentLoader.Load(materialsJson, EmptyReactionsJson);
+        ref readonly MaterialDef water = ref result.Materials.Get(1);
+
+        Assert.Equal(32, water.Dispersion);
+        Assert.Equal(32, result.Materials.Hot.FlowRate[1]);
     }
 
     /// <summary>
@@ -222,7 +254,18 @@ public sealed class MaterialContentLoaderTests
           "textureId": 7,
           "baseColor": 4281558681,
           "colorNoise": 6,
-          "tags": [ "burnable_fast" ],
+          "integrity": 20,
+          "destroyedTarget": "ash",
+          "debrisCount": 2,
+          "mineYield": 1,
+          "renderStyle": "Liquid",
+          "legendCategory": "Liquid",
+          "edgeColor": 4279312947,
+          "opacity": 180,
+          "highlightColor": 4282668390,
+          "displayName": "Water",
+          "legendVisible": false,
+          "tags": [ "burnable_fast", "diggable" ],
           "audioCues": { "fire": 1, "splash": 2, "impact": 3, "explosion": 4, "ambient": 5, "shatter": 6 }
         },
         { "name": "steam", "type": "Gas", "density": 1, "heatCapacity": 1 },

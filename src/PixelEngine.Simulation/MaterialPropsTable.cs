@@ -74,6 +74,11 @@ public sealed class MaterialPropsTable
     public ReadOnlySpan<byte> Dispersion => Hot.Dispersion;
 
     /// <summary>
+    /// <see cref="Dispersion" /> 的语义别名。
+    /// </summary>
+    public ReadOnlySpan<byte> FlowRate => Hot.FlowRate;
+
+    /// <summary>
     /// 反应表起始索引列。
     /// </summary>
     public ReadOnlySpan<int> ReactionStart => Hot.ReactionStart;
@@ -99,9 +104,19 @@ public sealed class MaterialPropsTable
     public ReadOnlySpan<ushort> MaxIntegrity => Hot.MaxIntegrity;
 
     /// <summary>
+    /// <see cref="MaxIntegrity" /> 的计划语义别名。
+    /// </summary>
+    public ReadOnlySpan<ushort> Integrity => Hot.Integrity;
+
+    /// <summary>
     /// 破坏目标材质列。
     /// </summary>
     public ReadOnlySpan<ushort> RubbleTarget => Hot.RubbleTarget;
+
+    /// <summary>
+    /// <see cref="RubbleTarget" /> 的计划语义别名。
+    /// </summary>
+    public ReadOnlySpan<ushort> DestroyedTarget => Hot.DestroyedTarget;
 
     /// <summary>
     /// 返回材质类型。
@@ -128,6 +143,15 @@ public sealed class MaterialPropsTable
     public byte DispersionOf(ushort materialId)
     {
         return Hot.DispersionOfUnchecked(materialId);
+    }
+
+    /// <summary>
+    /// 返回材质扩散距离语义别名。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public byte FlowRateOf(ushort materialId)
+    {
+        return Hot.FlowRateOfUnchecked(materialId);
     }
 
     /// <summary>
@@ -176,12 +200,30 @@ public sealed class MaterialPropsTable
     }
 
     /// <summary>
+    /// 返回材质结构完整度阈值的计划语义别名。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ushort IntegrityOf(ushort materialId)
+    {
+        return MaxIntegrityOf(materialId);
+    }
+
+    /// <summary>
     /// 返回材质破坏后的目标材质 id。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ushort RubbleTargetOf(ushort materialId)
     {
         return Hot.RubbleTargetOfUnchecked(materialId);
+    }
+
+    /// <summary>
+    /// 返回材质破坏目标 id 的计划语义别名。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ushort DestroyedTargetOf(ushort materialId)
+    {
+        return RubbleTargetOf(materialId);
     }
 
     /// <summary>

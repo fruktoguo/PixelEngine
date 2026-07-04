@@ -463,11 +463,11 @@ public sealed class TemperatureField
 - [x] `AudioCueSet` `readonly record struct`（Impact/Fire/Splash/Explosion/Shatter/Ambient cue，架构 §10.2）。
 - [x] `MaterialDef.Type` 引用 plan/03 的 `CellType`（不重复定义，架构 §7.2）。
 - [x] `MaterialHotTable` SoA 热表：从 `MaterialDef[]` 派生热路径字段并列数组（Density/Dispersion/Type/HeatConduct/HeatCapacity/相变阈值/ReactionStart/ReactionCount/PropertyFlags），冷字段不入热表（架构 §7.1 / §12.1）。
-- [ ] `MaterialDef` 增可玩性 / 破坏字段：`Integrity`(ushort)/`DestroyedTarget`(ushort，写稳定 name 加载 name→id 守 #8)/`DebrisCount`(byte)/`MineYield`(byte)；`Durability` 语义收紧为「被 sim 真实消费的抗性系数」（durability 字段直迁移，§3.2 / §3.11）。
-- [ ] `MaterialDef` 增视觉可辨识字段：`RenderStyle`/`LegendCategory`/`EdgeColorBGRA`(uint)/`Opacity`(byte)/`HighlightColorBGRA`(uint)/`DisplayName`(string 冷)/`LegendVisible`(bool)；新增 `MaterialRenderStyle`/`MaterialLegendCategory` 枚举（视觉只存 MaterialDef，渲染 CPU 算 BGRA 不写回 cell，守 #7，§3.2）。
-- [ ] `MaterialProperty` 增 `Indestructible`(bit11) / `Diggable`(bit12) 破坏行为位（§3.2 / §3.11）。
-- [ ] `Dispersion` 加载期 clamp 到 `[0, EngineConstants.MoveCap]` 并加**构建期断言**（守 #4）；`FlowRate` 作 `Dispersion` 语义别名对外暴露（不新增字段，§3.2）。
-- [ ] `MaterialHotTable` 增破坏热列 `_durability`/`_integrity`/`_destroyedTarget`（+ `_propertyFlags` 携 Indestructible/Diggable），供 plan/03 `ApplyDamage` 按 id 只读查表；另派生 `MaterialVisualTable`（RenderStyle/EdgeColorBGRA/Opacity/HighlightColorBGRA/LegendCategory）供 plan/08 渲染相位（§3.2）。
+- [x] `MaterialDef` 增可玩性 / 破坏字段：`Integrity`(ushort)/`DestroyedTarget`(ushort，写稳定 name 加载 name→id 守 #8)/`DebrisCount`(byte)/`MineYield`(byte)；`Durability` 语义收紧为「被 sim 真实消费的抗性系数」（durability 字段直迁移，§3.2 / §3.11）。
+- [x] `MaterialDef` 增视觉可辨识字段：`RenderStyle`/`LegendCategory`/`EdgeColorBGRA`(uint)/`Opacity`(byte)/`HighlightColorBGRA`(uint)/`DisplayName`(string 冷)/`LegendVisible`(bool)；新增 `MaterialRenderStyle`/`MaterialLegendCategory` 枚举（视觉只存 MaterialDef，渲染 CPU 算 BGRA 不写回 cell，守 #7，§3.2）。
+- [x] `MaterialProperty` 增 `Indestructible`(bit11) / `Diggable`(bit12) 破坏行为位（§3.2 / §3.11）。
+- [x] `Dispersion` 加载期 clamp 到 `[0, EngineConstants.MoveCap]` 并加**构建期断言**（守 #4）；`FlowRate` 作 `Dispersion` 语义别名对外暴露（不新增字段，§3.2）。
+- [x] `MaterialHotTable` 增破坏热列 `_durability`/`_integrity`/`_destroyedTarget`（+ `_propertyFlags` 携 Indestructible/Diggable），供 plan/03 `ApplyDamage` 按 id 只读查表；另派生 `MaterialVisualTable`（RenderStyle/EdgeColorBGRA/Opacity/HighlightColorBGRA/LegendCategory）供 plan/08 渲染相位（§3.2）。
 
 ### 4.2 name↔id 映射与注册表（不变式 #8，架构 §11.2 / §17.4）
 
@@ -534,17 +534,17 @@ public sealed class TemperatureField
 - [x] `reactions.json` schema：input/output 支持具体 name 与 `[tag]`，`probability` 0-100，`flags` 字符串数组（§3.10）。
 - [x] tag 声明 + 代表材质 representative 字段契约（§3.4 规则 3）。
 - [x] 标注 DTO（`MaterialJson`/`ReactionJson`/`JsonSerializerContext`）与反序列化 / 展开 / name→id 分配实现归属 Content；内容由 plan/13 填 `content/`。
-- [ ] `materials.json` schema 增字段：`integrity`/`destroyedTarget`(name)/`debrisCount`/`mineYield`/`renderStyle`/`legendCategory`/`edgeColor`/`opacity`/`highlightColor`/`displayName`/`legendVisible`；`durability` 语义化；tag 名 `indestructible`/`diggable` → bit11/bit12（§3.10）。
-- [ ] `MaterialJson` DTO 增上列字段（实现归属 Content）；加载期 `destroyedTarget`/建材 name 引用经 `MaterialTable` name→id 解析（守 #8），`dispersion` clamp+断言（守 #4），`Indestructible` 材质允许 `integrity==0`（§3.10 / §3.11）。
-- [ ] 新增材质 `boundary_stone`（Indestructible 边界）/ `gravel`（stone 碎块 Powder，即时破坏）schema 示例齐备；具体内容与 crystal 由 plan/13 填 `content/`（§3.10）。
+- [x] `materials.json` schema 增字段：`integrity`/`destroyedTarget`(name)/`debrisCount`/`mineYield`/`renderStyle`/`legendCategory`/`edgeColor`/`opacity`/`highlightColor`/`displayName`/`legendVisible`；`durability` 语义化；tag 名 `indestructible`/`diggable` → bit11/bit12（§3.10）。
+- [x] `MaterialJson` DTO 增上列字段（实现归属 Content）；加载期 `destroyedTarget`/建材 name 引用经 `MaterialTable` name→id 解析（守 #8），`dispersion` clamp+断言（守 #4），`Indestructible` 材质允许 `integrity==0`（§3.10 / §3.11）。
+- [x] 新增材质 `boundary_stone`（Indestructible 边界）/ `gravel`（stone 碎块 Powder，即时破坏）schema 示例齐备；具体内容与 crystal 由 plan/13 填 `content/`（§3.10）。
 
 ### 4.10 破坏 / 结构完整度契约（材质侧定义，执行在 plan/03）
 
-- [ ] 登记 cell SoA 新增 `Damage`(byte) lane 契约（归属 plan/03）：默认 0、单缓冲原地（守 #1）、非颜色（守 #7）；预算 4B→5B/cell、常驻 chunk 16KB→20KB（与 plan/03/07/16 一致，§3.11）。
-- [ ] 定义 `ApplyDamage(x,y,dmg,kind)` 消费规则：`RigidOwned` 命中经 `IRigidDamageSink.OnOwnedCellDamaged` 路由（守 #5，不累加 Damage）→ `Indestructible` no-op → `effective=max(0,dmg-Durability*DamageAbsorb)` → `Integrity==0` 即时破坏 / 否则累计至 `Damage*DamageScale≥Integrity`（`DamageAbsorb`/`DamageScale` 集中常量，§3.11）。
+- [x] 登记 cell SoA 新增 `Damage`(byte) lane 契约（归属 plan/03）：默认 0、单缓冲原地（守 #1）、非颜色（守 #7）；预算 4B→5B/cell、常驻 chunk 16KB→20KB（与 plan/03/07/16 一致，§3.11）。
+- [x] 定义 `ApplyDamage(x,y,dmg,kind)` 消费规则：`RigidOwned` 命中经 `IRigidDamageSink.OnOwnedCellDamaged` 路由（守 #5，不累加 Damage）→ `Indestructible` no-op → `effective=max(0,dmg-Durability*DamageAbsorb)` → `Integrity==0` 即时破坏 / 否则累计至 `Damage*DamageScale≥Integrity`（`DamageAbsorb`/`DamageScale` 集中常量，§3.11）。
 - [ ] 定义破坏动作：转 `DestroyedTarget`/`Empty` + 清 Damage + parity + dirty + 跨界 KeepAlive（守 #2/#3/#6）+ `DebrisCount` 碎屑请求（plan/05）+ `Diggable`&`MineYield` 采集事件（plan/13，§3.11）。
 - [ ] 定义 `DamageKind` 与三路径差异化抗性契约：爆炸 `DamageCircle`（`Explode` 内部改组合）、激光 `DamageBeam`(+AddHeat)、酸蚀反应改走 `ApplyDamage`；抗性差异全由 materials.json 表达（§3.11；API 缺口归 plan/05+plan/11）。
-- [ ] 登记 `Damage` lane 存档契约（落地 plan/07）：入 `ChunkSnapshot`/`ChunkCodec`(RLE)、bump `SaveFormatVersion`、旧档迁移 `Damage=0`、material remap 缺失 fallback 后 `Damage` 清 0（§3.11）。
+- [x] 登记 `Damage` lane 存档契约（落地 plan/07）：入 `ChunkSnapshot`/`ChunkCodec`(RLE)、bump `SaveFormatVersion`、旧档迁移 `Damage=0`、material remap 缺失 fallback 后 `Damage` 清 0（§3.11）。
 
 ---
 
@@ -566,9 +566,9 @@ public sealed class TemperatureField
 - [ ] 差异化破坏：同一 `DamageCircle(damage=X)` 下 sand/dirt 立即碎抛、stone 需累计多次 / 大当量才破坏、metal 小爆破近免疫、`boundary_stone`(Indestructible) 完全不破坏——差异全来自 `materials.json` 抗性数值（改数值即改表现，无写死；`MaterialDamageTests` 覆盖）。
 - [ ] cell 破坏归零转 `DestroyedTarget`（stone→gravel）并按 `DebrisCount` 抛碎屑；`Integrity==0` 材质即时破坏；`Diggable`&`MineYield` 材质（crystal）被武器破坏发一次采集事件；`Damage` lane 稳态帧零托管分配（守 #1，MemoryDiagnoser 确认）。
 - [ ] 刚体像素受击不累加 `Damage`、经 `IRigidDamageSink.OnOwnedCellDamaged` 路由触发形状重建（守 #5，与 plan/06 联动测试）。
-- [ ] `Dispersion` 加载期 clamp 生效、构建期断言拦截越 `MoveCap` 值；液体单步水平位移 ≤ 32px（守 #4，`MaterialDispersionClampTests`）。
-- [ ] 视觉字段只落 `MaterialDef`/`MaterialVisualTable`、渲染相位 CPU 算 BGRA，sim cell 无颜色写入（守 #7，字段审计 + 与 plan/08 着色联动）。
-- [ ] `Damage` lane 存档往返正确：新档写读一致、旧档迁移 `Damage=0`、material remap 缺失落 fallback 后 `Damage` 清 0（与 plan/07 往返测试联动，守 #8）。
+- [x] `Dispersion` 加载期 clamp 生效、构建期断言拦截越 `MoveCap` 值；液体单步水平位移 ≤ 32px（守 #4，`MaterialDispersionClampTests`）。
+- [x] 视觉字段只落 `MaterialDef`/`MaterialVisualTable`、渲染相位 CPU 算 BGRA，sim cell 无颜色写入（守 #7，字段审计 + 与 plan/08 着色联动）。
+- [x] `Damage` lane 存档往返正确：新档写读一致、旧档迁移 `Damage=0`、material remap 缺失落 fallback 后 `Damage` 清 0（与 plan/07 往返测试联动，守 #8）。
 
 ---
 

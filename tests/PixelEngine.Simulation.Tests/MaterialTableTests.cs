@@ -38,21 +38,33 @@ public sealed class MaterialTableTests
         Assert.Equal(9, table.Hot.Durability[1]);
         Assert.Equal(6, table.Hot.Hardness[1]);
         Assert.Equal(14, table.Hot.MaxIntegrity[1]);
+        Assert.Equal(14, table.Hot.Integrity[1]);
         Assert.Equal(2, table.Hot.RubbleTarget[1]);
+        Assert.Equal(2, table.Hot.DestroyedTarget[1]);
         Assert.True((table.Hot.PropertyFlags[1] & MaterialProperty.Corrodible) != 0);
+        Assert.True((table.Hot.PropertyFlags[1] & MaterialProperty.Diggable) != 0);
         Assert.Equal(11, table.Hot.ReactionStart[1]);
         Assert.Equal(2, table.Hot.ReactionCount[1]);
+        Assert.Equal(MaterialRenderStyle.Liquid, table.Visual.RenderStyle[1]);
+        Assert.Equal(MaterialLegendCategory.Liquid, table.Visual.LegendCategory[1]);
+        Assert.Equal(0xFF112233u, table.Visual.EdgeColorBGRA[1]);
+        Assert.Equal(200, table.Visual.Opacity[1]);
+        Assert.Equal(0xFF445566u, table.Visual.HighlightColorBGRA[1]);
+        Assert.True(table.Visual.LegendVisible[1]);
 
         MaterialPropsTable props = new(table.Hot);
         Assert.Equal(CellType.Liquid, props.TypeOf(1));
         Assert.Equal(100, props.DensityOf(1));
         Assert.Equal(5, props.DispersionOf(1));
+        Assert.Equal(5, props.FlowRateOf(1));
         Assert.Equal(11, props.ReactionStartOf(1));
         Assert.Equal(2, props.ReactionCountOf(1));
         Assert.Equal(120, props.DefaultLifetimeOf(1));
         Assert.Equal(6, props.HardnessOf(1));
         Assert.Equal(14, props.MaxIntegrityOf(1));
+        Assert.Equal(14, props.IntegrityOf(1));
         Assert.Equal(2, props.RubbleTargetOf(1));
+        Assert.Equal(2, props.DestroyedTargetOf(1));
     }
 
     /// <summary>
@@ -133,6 +145,8 @@ public sealed class MaterialTableTests
         Assert.Equal(MaterialProperty.MoltenMetal, MaterialTagMap.ToProperty(MaterialTag.MoltenMetal));
         Assert.Equal(MaterialProperty.Static, MaterialTagMap.ToProperty(MaterialTag.Static));
         Assert.Equal(MaterialProperty.BurnableFast, MaterialTagMap.ToProperty(MaterialTag.BurnableFast));
+        Assert.Equal(1u << 11, (uint)MaterialProperty.Indestructible);
+        Assert.Equal(1u << 12, (uint)MaterialProperty.Diggable);
     }
 
     private static MaterialDef[] CreateDefinitions()
@@ -162,12 +176,21 @@ public sealed class MaterialTableTests
                 DefaultLifetime = 120,
                 Durability = 9,
                 Hardness = 6,
-                MaxIntegrity = 14,
-                RubbleTarget = 2,
+                Integrity = 14,
+                DestroyedTarget = 2,
+                DebrisCount = 3,
+                MineYield = 1,
                 TextureId = 4,
                 BaseColorBGRA = 0xFFCC6633,
                 ColorNoise = 8,
-                PropertyFlags = MaterialProperty.Corrodible | MaterialProperty.Conductive,
+                RenderStyle = MaterialRenderStyle.Liquid,
+                LegendCategory = MaterialLegendCategory.Liquid,
+                EdgeColorBGRA = 0xFF112233,
+                Opacity = 200,
+                HighlightColorBGRA = 0xFF445566,
+                DisplayName = "Water",
+                LegendVisible = true,
+                PropertyFlags = MaterialProperty.Corrodible | MaterialProperty.Conductive | MaterialProperty.Diggable,
                 ReactionStart = 11,
                 ReactionCount = 2,
                 AudioCues = new AudioCueSet
