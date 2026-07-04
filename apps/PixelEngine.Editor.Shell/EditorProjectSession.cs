@@ -16,11 +16,20 @@ internal sealed class EditorProjectSession : IDisposable
     private readonly EngineSimulationControlService _simulationControl;
     private bool _disposed;
 
-    private EditorProjectSession(EditorProject project, Engine engine, EditorShellHostExtension editorHost)
+    private EditorProjectSession(
+        EditorProject project,
+        Engine engine,
+        EditorShellHostExtension editorHost,
+        EditorSceneModel sceneModel,
+        EditorUndoStack undoStack,
+        EditorSceneRuntimeProjection runtimeProjection)
     {
         Project = project;
         Engine = engine;
         _editorHost = editorHost;
+        SceneModel = sceneModel;
+        UndoStack = undoStack;
+        RuntimeProjection = runtimeProjection;
         _snapshotStore = new EngineWorldSnapshotStore(engine);
         _playSession = new EngineEditorPlaySessionService(engine, _snapshotStore);
         _simulationControl = new EngineSimulationControlService(engine);
@@ -29,6 +38,12 @@ internal sealed class EditorProjectSession : IDisposable
     public EditorProject Project { get; }
 
     public Engine Engine { get; }
+
+    public EditorSceneModel SceneModel { get; }
+
+    public EditorUndoStack UndoStack { get; }
+
+    public EditorSceneRuntimeProjection RuntimeProjection { get; private set; }
 
     public int PanelCount => _editorHost.PanelCount;
 
@@ -49,10 +64,14 @@ internal sealed class EditorProjectSession : IDisposable
         {
             AttachContentAndWorld(engine);
             _ = engine.AttachPhysics();
+            EditorSceneModel sceneModel = LoadSceneModel(project);
+            EditorUndoStack undoStack = new();
+            EditorSceneRuntimeProjection projection = ProjectAuthoringScene(engine, sceneModel);
+            editorHost.ConfigureAuthoring(sceneModel, undoStack);
             _ = engine.AttachScriptingFromServices();
             engine.EnterEditMode();
             _ = engine.AttachWindowRuntime(window);
-            return new EditorProjectSession(project, engine, editorHost);
+            return new EditorProjectSession(project, engine, editorHost, sceneModel, undoStack, projection);
         }
         catch
         {
@@ -83,6 +102,24 @@ internal sealed class EditorProjectSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         _ = Engine.StepOnce();
+    }
+
+    public void CreateGameObject()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        UndoStack.Execute(SceneModel, new CreateGameObjectCommand("GameObject", SceneModel.SelectedStableId));
+    }
+
+    public bool Undo()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return UndoStack.Undo(SceneModel);
+    }
+
+    public bool Redo()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return UndoStack.Redo(SceneModel);
     }
 
     public void SetSimHz(double simHz)
@@ -127,6 +164,25 @@ internal sealed class EditorProjectSession : IDisposable
                 DefaultEditorWorldHeight,
                 DefaultParticleCapacity);
         }
+    }
+
+    private static EditorSceneModel LoadSceneModel(EditorProject project)
+    {
+        string scenePath = Path.GetFullPath(Path.Combine(project.ContentRootPath, project.StartScene));
+        return File.Exists(scenePath)
+            ? EditorSceneModel.FromDocument(EngineSceneDocumentLoader.LoadDocument(scenePath))
+            : EditorSceneModel.Empty(project.ResolveDisplaySceneName(project.StartScene));
+    }
+
+    private static EditorSceneRuntimeProjection ProjectAuthoringScene(Engine engine, EditorSceneModel sceneModel)
+    {
+        EditorSceneRuntimeProjection projection = EditorSceneRuntimeProjection.Build(
+            sceneModel,
+            engine.Context.GetService<ScriptAssemblyRegistry>());
+        engine.AttachScriptScene(projection.Scene);
+        engine.Context.RegisterService(sceneModel);
+        engine.Context.RegisterService(projection);
+        return projection;
     }
 
     private static void RegisterFallbackEditorMaterials(Engine engine)

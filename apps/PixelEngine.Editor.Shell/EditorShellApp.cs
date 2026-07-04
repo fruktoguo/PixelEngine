@@ -196,6 +196,21 @@ internal sealed class EditorShellApp
         CurrentSession?.StepOnce();
     }
 
+    public void CreateGameObject()
+    {
+        CurrentSession?.CreateGameObject();
+    }
+
+    public bool Undo()
+    {
+        return CurrentSession?.Undo() == true;
+    }
+
+    public bool Redo()
+    {
+        return CurrentSession?.Redo() == true;
+    }
+
     private void ApplyPendingProject(EditorShellWindow shellWindow)
     {
         if (_pendingProject is null)

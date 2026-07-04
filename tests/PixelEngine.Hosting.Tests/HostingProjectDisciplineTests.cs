@@ -124,6 +124,41 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证编辑器壳按 plan/19 节点 4 拥有独立 authoring 模型、StableId 映射、层级面板与命令栈。
+    /// </summary>
+    [Fact]
+    public void EditorShellDeclaresGameObjectAuthoringModelAndHierarchy()
+    {
+        string root = FindRepositoryRoot();
+        string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
+        string source = string.Join(
+            '\n',
+            Directory.EnumerateFiles(shellDirectory, "*.cs").Select(File.ReadAllText));
+        string editorSelection = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "EditorSelection.cs"));
+        string hostingEngine = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Hosting", "Engine.cs"));
+
+        Assert.Contains("class EditorSceneModel", source, StringComparison.Ordinal);
+        Assert.Contains("class EditorGameObject", source, StringComparison.Ordinal);
+        Assert.Contains("class EditorComponentModel", source, StringComparison.Ordinal);
+        Assert.Contains("class EditorUndoStack", source, StringComparison.Ordinal);
+        Assert.Contains("interface IEditorCommand", source, StringComparison.Ordinal);
+        Assert.Contains("class GameObjectHierarchyPanel", source, StringComparison.Ordinal);
+        Assert.Contains("EditorSceneRuntimeProjection", source, StringComparison.Ordinal);
+        Assert.Contains("StableIdToEntityId", source, StringComparison.Ordinal);
+        Assert.Contains("EngineSceneDocument", source, StringComparison.Ordinal);
+        Assert.Contains("ConfigureAuthoring(sceneModel, undoStack)", source, StringComparison.Ordinal);
+        Assert.Contains("GameObjectHierarchyPanel(_sceneModel, _undoStack)", source, StringComparison.Ordinal);
+        Assert.Contains("new CreateGameObjectCommand", source, StringComparison.Ordinal);
+        Assert.Contains("new DeleteGameObjectCommand", source, StringComparison.Ordinal);
+        Assert.Contains("new ReparentGameObjectCommand", source, StringComparison.Ordinal);
+        Assert.Contains("new DuplicateGameObjectCommand", source, StringComparison.Ordinal);
+        Assert.Contains("GameObjectStableId", editorSelection, StringComparison.Ordinal);
+        Assert.Contains("SelectGameObject", editorSelection, StringComparison.Ordinal);
+        Assert.Contains("AttachScriptScene(PixelEngine.Scripting.Scene scriptScene)", hostingEngine, StringComparison.Ordinal);
+        Assert.DoesNotContain("new SceneHierarchyPanel", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Demo 源码不绕过 Hosting/Scripting 公开入口访问内容或模拟实现。
     /// </summary>
     [Fact]
