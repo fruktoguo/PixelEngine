@@ -6,6 +6,11 @@ namespace PixelEngine.Editor.Shell;
 
 internal sealed class EditorShellWindow : IDisposable
 {
+    public static readonly string DefaultLayoutPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "PixelEngine",
+        "editor-shell-imgui.ini");
+
     private readonly EditorHostBootstrap _bootstrap;
     private bool _disposed;
 
@@ -30,10 +35,7 @@ internal sealed class EditorShellWindow : IDisposable
         GuiAppOptions guiOptions = new()
         {
             Enabled = true,
-            LayoutPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "PixelEngine",
-                "editor-shell-imgui.ini"),
+            LayoutPath = DefaultLayoutPath,
         };
         return new EditorShellWindow(EditorHostBootstrap.Create(windowOptions, guiOptions));
     }
