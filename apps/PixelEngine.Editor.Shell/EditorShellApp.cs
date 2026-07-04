@@ -5,12 +5,29 @@ namespace PixelEngine.Editor.Shell;
 internal sealed class EditorShellApp
 {
     private readonly EditorShellOptions _options;
-    private readonly ProjectPickerWindow _projectPicker = new();
 
     private EditorShellApp(EditorShellOptions options)
     {
         _options = options;
+        ProjectPicker = new ProjectPickerWindow(options);
+        MainMenu = new EditorMainMenuBar();
+        Layout = new EditorShellLayout(EditorShellWindow.DefaultLayoutPath);
+        RecentProjects = RecentProjectsStore.LoadDefault();
     }
+
+    public EditorProject? CurrentProject { get; private set; }
+
+    public bool HasOpenProject => CurrentProject is not null;
+
+    public RecentProjectsStore RecentProjects { get; }
+
+    public string? LastProjectError { get; private set; }
+
+    private ProjectPickerWindow ProjectPicker { get; }
+
+    private EditorMainMenuBar MainMenu { get; }
+
+    private EditorShellLayout Layout { get; }
 
     public static int Execute(string[] args)
     {
@@ -31,12 +48,18 @@ internal sealed class EditorShellApp
     private int Run()
     {
         using EditorShellWindow shellWindow = EditorShellWindow.Create();
-        shellWindow.SetTitle(ProjectName(_options.ProjectPath), SceneName(_options.ScenePath), dirty: false);
+        if (!string.IsNullOrWhiteSpace(_options.ProjectPath))
+        {
+            OpenProjectPath(_options.ProjectPath);
+        }
+
+        UpdateTitle(shellWindow);
 
         Stopwatch stopwatch = Stopwatch.StartNew();
         double previousSeconds = stopwatch.Elapsed.TotalSeconds;
         int executed = 0;
         int requestedTicks = _options.WindowTicks;
+        bool configuredImGui = false;
         while (!shellWindow.Window.IsClosing)
         {
             shellWindow.Window.DoEvents();
@@ -48,12 +71,24 @@ internal sealed class EditorShellApp
                 shellWindow.Gui.Initialize();
             }
 
+            if (!configuredImGui)
+            {
+                Layout.ConfigureImGui();
+                configuredImGui = true;
+            }
+
             shellWindow.Gui.DrawFrame(
                 deltaSeconds,
                 shellWindow.Window.Width,
                 shellWindow.Window.Height,
-                _ => _projectPicker.Draw(_options));
+                _ =>
+                {
+                    MainMenu.Draw(this);
+                    Layout.DrawDockSpace();
+                    ProjectPicker.Draw(this);
+                });
             shellWindow.Window.SwapBuffers();
+            UpdateTitle(shellWindow);
             executed++;
             if (requestedTicks > 0 && executed >= requestedTicks)
             {
@@ -69,24 +104,67 @@ internal sealed class EditorShellApp
                 "editor_panels=0, " +
                 $"editor_bridge_frames={executed}, " +
                 "render_camera_synced=False, " +
+                $"project_open={HasOpenProject}, " +
                 $"window_ticks={executed}");
         }
 
         return 0;
     }
 
-    private static string ProjectName(string? projectPath)
+    public void CreateProject(string projectRoot, string name)
     {
-        return string.IsNullOrWhiteSpace(projectPath)
-            ? "No Project"
-            : Path.GetFileName(Path.GetFullPath(projectPath));
+        try
+        {
+            OpenProject(EditorProject.CreateNew(projectRoot, name));
+        }
+        catch (Exception exception)
+        {
+            LastProjectError = exception.Message;
+        }
     }
 
-    private static string SceneName(string? scenePath)
+    public void OpenProjectPath(string projectRootOrFile)
     {
-        return string.IsNullOrWhiteSpace(scenePath)
-            ? "No Scene"
-            : Path.GetFileName(scenePath);
+        try
+        {
+            OpenProject(EditorProject.Load(projectRootOrFile));
+        }
+        catch (Exception exception)
+        {
+            LastProjectError = exception.Message;
+        }
+    }
+
+    public void OpenProject(EditorProject project)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        CurrentProject = project;
+        LastProjectError = null;
+        RecentProjects.AddOrUpdate(project);
+        RecentProjects.Save();
+    }
+
+    public void CloseProject()
+    {
+        CurrentProject = null;
+    }
+
+    public void FocusProjectPicker(ProjectPickerMode mode)
+    {
+        ProjectPicker.Focus(mode);
+    }
+
+    public void ResetLayout()
+    {
+        Layout.ResetLayout();
+    }
+
+    private void UpdateTitle(EditorShellWindow shellWindow)
+    {
+        shellWindow.SetTitle(
+            CurrentProject?.Name,
+            CurrentProject?.ResolveDisplaySceneName(_options.ScenePath),
+            dirty: false);
     }
 
     private static string WriteCrashLog(Exception exception, string? logDirectory)

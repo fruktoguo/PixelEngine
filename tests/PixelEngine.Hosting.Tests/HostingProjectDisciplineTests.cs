@@ -62,6 +62,42 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证独立编辑器壳已经接入工程模型、最近工程、项目选择器、主菜单和布局宿主。
+    /// </summary>
+    [Fact]
+    public void EditorShellWiresProjectPickerMenuAndLayout()
+    {
+        string root = FindRepositoryRoot();
+        string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
+        string shellSource = string.Join(
+            '\n',
+            Directory.EnumerateFiles(shellDirectory, "*.cs").Select(File.ReadAllText));
+
+        Assert.Contains("project.pixelproj", shellSource, StringComparison.Ordinal);
+        Assert.Contains("EngineProject", shellSource, StringComparison.Ordinal);
+        Assert.Contains("RecentProjectsStore.LoadDefault()", shellSource, StringComparison.Ordinal);
+        Assert.Contains("ProjectPicker.Draw(this)", shellSource, StringComparison.Ordinal);
+        Assert.Contains("EditorMainMenuBar", shellSource, StringComparison.Ordinal);
+        Assert.Contains("EditorShellLayout", shellSource, StringComparison.Ordinal);
+        Assert.Contains("EditorDockSpace", shellSource, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 Shell 菜单覆盖 plan/19 要求的顶级菜单，并包含 Build Settings 与 Reset Layout 入口。
+    /// </summary>
+    [Fact]
+    public void EditorShellMainMenuDeclaresRequiredMenus()
+    {
+        string root = FindRepositoryRoot();
+        string menu = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorMainMenuBar.cs"));
+
+        foreach (string item in new[] { "File", "Edit", "GameObject", "Window", "Play", "Help", "Build Settings...", "Reset Layout" })
+        {
+            Assert.Contains(item, menu, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
     /// 验证 Demo 源码不绕过 Hosting/Scripting 公开入口访问内容或模拟实现。
     /// </summary>
     [Fact]
