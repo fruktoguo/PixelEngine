@@ -302,6 +302,60 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证 plan/15 §3.11 的 build-player 一键玩家包编排器与 player-only audit 契约落地。
+    /// </summary>
+    [Fact]
+    public void BuildPlayerScriptsDeclareNdjsonResultStartupAndPlayerOnlyAuditContracts()
+    {
+        string root = FindRepositoryRoot();
+        string buildPlayerPs1 = File.ReadAllText(Path.Combine(root, "tools", "build-player.ps1"));
+        string buildPlayerSh = File.ReadAllText(Path.Combine(root, "tools", "build-player.sh"));
+        string packagePs1 = File.ReadAllText(Path.Combine(root, "tools", "package.ps1"));
+        string packageSh = File.ReadAllText(Path.Combine(root, "tools", "package.sh"));
+        string auditPs1 = File.ReadAllText(Path.Combine(root, "tools", "audit-release-artifacts.ps1"));
+        string auditSh = File.ReadAllText(Path.Combine(root, "tools", "audit-release-artifacts.sh"));
+        string startupOptions = File.ReadAllText(Path.Combine(root, "demo", "PixelEngine.Demo", "DemoStartupOptions.cs"));
+
+        foreach (string script in new[] { buildPlayerPs1, buildPlayerSh })
+        {
+            Assert.Contains("pixelengine.build/v1", script, StringComparison.Ordinal);
+            Assert.Contains("build-result.json", script, StringComparison.Ordinal);
+            Assert.Contains("build-native", script, StringComparison.Ordinal);
+            Assert.Contains("publish-$Channel", script, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("verify-publish", script, StringComparison.Ordinal);
+            Assert.Contains("package", script, StringComparison.Ordinal);
+            Assert.Contains("audit-release-artifacts", script, StringComparison.Ordinal);
+            Assert.Contains("phaseTimingsMs", script, StringComparison.Ordinal);
+            Assert.Contains("launcherExe", script, StringComparison.Ordinal);
+        }
+
+        foreach (string script in new[] { packagePs1, packageSh })
+        {
+            string lower = script.ToLowerInvariant();
+            Assert.Contains("product", lower, StringComparison.Ordinal);
+            Assert.Contains("start", lower, StringComparison.Ordinal);
+            Assert.Contains("include", lower, StringComparison.Ordinal);
+            Assert.Contains("startup.json", script, StringComparison.Ordinal);
+            Assert.Contains("Debug symbols", script, StringComparison.Ordinal);
+        }
+
+        foreach (string script in new[] { auditPs1, auditSh })
+        {
+            string lower = script.ToLowerInvariant();
+            Assert.Contains("product", lower, StringComparison.Ordinal);
+            Assert.Contains("required", lower, StringComparison.Ordinal);
+            Assert.Contains("dev", lower, StringComparison.Ordinal);
+            Assert.Contains("PixelEngine.Editor.dll", script, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("ImGuizmo", script, StringComparison.Ordinal);
+            Assert.Contains("ImPlot", script, StringComparison.Ordinal);
+            Assert.DoesNotContain("Hexa.NET.ImGui*", script, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("ResolveStartupScene", startupOptions, StringComparison.Ordinal);
+        Assert.Contains("startup.json", startupOptions, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Demo 源码不绕过 Hosting/Scripting 公开入口访问内容或模拟实现。
     /// </summary>
     [Fact]

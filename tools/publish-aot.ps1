@@ -8,6 +8,10 @@ param(
   [string]$Output,
   [string]$Version,
   [string]$InformationalVersion,
+  [string]$ProductName,
+  [string]$AssemblyName,
+  [string]$ApplicationIcon,
+  [switch]$IncludeSymbols,
   [switch]$SkipNativeBuild
 )
 
@@ -61,13 +65,37 @@ if (-not $SkipNativeBuild) {
   & (Join-Path $PSScriptRoot 'build-native.ps1') -Rid $Rid -Configuration $Configuration
 }
 
-$publishProperties = @('-p:Channel=AOT')
+$publishProperties = @('-p:Channel=AOT', '-p:PixelEnginePlayerBuild=true')
 if ($Version) {
   $publishProperties += "-p:Version=$Version"
 }
 
 if ($InformationalVersion) {
   $publishProperties += "-p:InformationalVersion=$InformationalVersion"
+}
+
+if ($ProductName) {
+  $publishProperties += "-p:Product=$ProductName"
+}
+
+if ($AssemblyName) {
+  if ($AssemblyName.Contains(' ')) {
+    throw "AssemblyName 不能包含空格，当前值: $AssemblyName"
+  }
+
+  $publishProperties += "-p:AssemblyName=$AssemblyName"
+}
+
+if ($ApplicationIcon) {
+  $publishProperties += "-p:ApplicationIcon=$ApplicationIcon"
+}
+
+if ($IncludeSymbols) {
+  $publishProperties += '-p:DebugSymbols=true'
+  $publishProperties += '-p:DebugType=portable'
+} else {
+  $publishProperties += '-p:DebugSymbols=false'
+  $publishProperties += '-p:DebugType=None'
 }
 
 $targetFramework = (& dotnet msbuild $demoProject -nologo -getProperty:TargetFramework).Trim()
@@ -84,13 +112,13 @@ Get-ChildItem -LiteralPath (Join-Path $repoRoot 'src') -Directory -Filter 'Pixel
   Remove-RepositoryDirectory (Join-Path $_.FullName "obj/$ridArchitecture/$Configuration/$targetFramework")
 }
 
-Invoke-Checked 'dotnet' -arguments @(
+Invoke-Checked 'dotnet' -arguments (@(
   'publish', $demoProject,
   '-c', $Configuration,
-  '-r', $Rid,
-  $publishProperties,
+  '-r', $Rid
+) + $publishProperties + @(
   '-o', $Output
-)
+))
 
 $intermediateReadme = @"
 This directory is a raw dotnet publish output for CI/package assembly.

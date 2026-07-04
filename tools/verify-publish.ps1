@@ -8,6 +8,11 @@ param(
   [ValidateSet('Debug', 'Release')]
   [string]$Configuration = 'Release',
 
+  [string]$ProductName,
+  [string]$Version,
+  [string]$InformationalVersion,
+  [string]$ApplicationIcon,
+  [switch]$IncludeSymbols,
   [string]$PublishDir,
   [switch]$AllowLoadOnly,
   [switch]$SkipNativeBuild,
@@ -52,6 +57,13 @@ function Get-HostRid {
 }
 
 function Get-ExecutablePath([string]$directory, [string]$targetRid) {
+  if ($ProductName) {
+    $productEntry = Join-Path $directory $(if ($targetRid.StartsWith('win-')) { "$ProductName.exe" } else { $ProductName })
+    if (Test-Path -LiteralPath $productEntry -PathType Leaf) {
+      return $productEntry
+    }
+  }
+
   $name = if ($targetRid.StartsWith('win-')) { 'PixelEngine.Demo.exe' } else { 'PixelEngine.Demo' }
   return Join-Path $directory $name
 }
@@ -138,7 +150,7 @@ function Invoke-PublishIfNeeded([string]$targetRid, [string]$targetChannel, [str
   }
 
   $script = Join-Path $PSScriptRoot "publish-$targetChannel.ps1"
-  & $script -Rid $targetRid -Configuration $Configuration -Output $directory -SkipNativeBuild:$SkipNativeBuild.IsPresent
+  & $script -Rid $targetRid -Configuration $Configuration -Output $directory -Version $Version -InformationalVersion $InformationalVersion -ProductName $ProductName -ApplicationIcon $ApplicationIcon -IncludeSymbols:$IncludeSymbols.IsPresent -SkipNativeBuild:$SkipNativeBuild.IsPresent
   if ($LASTEXITCODE -ne 0) {
     throw "命令失败($LASTEXITCODE): $script -Rid $targetRid -Configuration $Configuration -Output $directory"
   }

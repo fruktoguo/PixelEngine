@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: tools/package.sh --rid <RID> --channel <r2r|aot> [--version <semver>] [--publish-dir <dir>] [--output-root <dir>] [--player-output-dir <dir>] [--content-root <dir>]
+Usage: tools/package.sh --rid <RID> --channel <r2r|aot> [--version <semver>] [--publish-dir <dir>] [--output-root <dir>] [--player-output-dir <dir>] [--content-root <dir>] [--product-name <name>] [--start-scene <scene>] [--include-scene <scene>] [--include-symbols]
 EOF
 }
 
@@ -49,6 +49,10 @@ publish_dir=""
 output_root=""
 player_output_dir=""
 content_root=""
+product_name=""
+start_scene=""
+include_symbols=0
+include_scenes=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -86,6 +90,25 @@ while [[ $# -gt 0 ]]; do
       require_value "$1" "${2:-}"
       content_root="$2"
       shift 2
+      ;;
+    --product-name)
+      require_value "$1" "${2:-}"
+      product_name="$2"
+      shift 2
+      ;;
+    --start-scene)
+      require_value "$1" "${2:-}"
+      start_scene="$2"
+      shift 2
+      ;;
+    --include-scene)
+      require_value "$1" "${2:-}"
+      include_scenes+=("$2")
+      shift 2
+      ;;
+    --include-symbols)
+      include_symbols=1
+      shift
       ;;
     *)
       fail_usage "Unknown argument: $1"
@@ -144,6 +167,15 @@ if [[ -z "$content_root" ]]; then
   content_root="$repo_root/demo/PixelEngine.Demo/content"
 fi
 
+launcher_base="${product_name:-PixelEngine Demo}"
+if [[ -n "$product_name" ]]; then
+  assembly_base="PixelEngine.Demo"
+else
+  assembly_base="PixelEngine.Demo"
+fi
+windows_launcher="$launcher_base.exe"
+unix_launcher="$launcher_base.sh"
+
 if [[ ! -d "$publish_dir" ]]; then
   echo "Publish directory does not exist: $publish_dir" >&2
   exit 1
@@ -160,6 +192,13 @@ mkdir -p "$(dirname "$player_output_dir")"
 player_output_dir="$(cd "$(dirname "$player_output_dir")" && pwd)/$(basename "$player_output_dir")"
 publish_dir="$(cd "$publish_dir" && pwd)"
 content_root="$(cd "$content_root" && pwd)"
+if [[ -n "$product_name" ]]; then
+  if [[ "$rid" == win-* && -f "$publish_dir/$product_name.exe" ]]; then
+    assembly_base="$product_name"
+  elif [[ "$rid" != win-* && -f "$publish_dir/$product_name" ]]; then
+    assembly_base="$product_name"
+  fi
+fi
 
 package_name="PixelEngine-Demo-$version-$rid-$channel"
 staging_root="$output_root/staging"
@@ -170,29 +209,36 @@ content_dir="$staging_dir/content"
 
 remove_player_package_noise() {
   local directory="$1"
-  find "$directory" -type f \
-    \( -name '*.pdb' -o -name '*.xml' -o -name '*.resources.dll' -o -name 'createdump.exe' -o -name 'createdump' \) \
-    -delete
+  if [[ "$include_symbols" == "1" ]]; then
+    find "$directory" -type f \
+      \( -name '*.resources.dll' -o -name 'createdump.exe' -o -name 'createdump' \) \
+      -delete
+  else
+    find "$directory" -type f \
+      \( -name '*.pdb' -o -name '*.xml' -o -name '*.resources.dll' -o -name 'createdump.exe' -o -name 'createdump' \) \
+      -delete
+  fi
   find "$directory" -depth -type d -empty -delete
 }
 
 patch_apphost_relative_assembly() {
   local apphost="$1"
-  local relative_assembly="$2"
+  local assembly_name="$2"
+  local relative_assembly="$3"
   if command -v python3 >/dev/null 2>&1; then
-    python3 - "$apphost" "$relative_assembly" <<'PY'
+    python3 - "$apphost" "$assembly_name" "$relative_assembly" <<'PY'
 import sys
 from pathlib import Path
 path = Path(sys.argv[1])
-new = sys.argv[2].encode("utf-8")
-old = b"PixelEngine.Demo.dll"
+old = sys.argv[2].encode("utf-8")
+new = sys.argv[3].encode("utf-8")
 data = bytearray(path.read_bytes())
 index = data.find(old)
 if index < 0:
-    raise SystemExit(f"unable to locate PixelEngine.Demo.dll in apphost: {path}")
+    raise SystemExit(f"unable to locate {sys.argv[2]} in apphost: {path}")
 for offset in range(len(old), len(new) + 1):
     if index + offset >= len(data) or data[index + offset] != 0:
-        raise SystemExit(f"apphost has no room for relative assembly path: {sys.argv[2]}")
+        raise SystemExit(f"apphost has no room for relative assembly path: {sys.argv[3]}")
 data[index:index + len(new)] = new
 data[index + len(new)] = 0
 path.write_bytes(data)
@@ -204,6 +250,59 @@ PY
   exit 1
 }
 
+normalize_scene_path() {
+  local scene="${1//\\//}"
+  scene="${scene#/}"
+  if [[ "$scene" != scenes/* ]]; then
+    scene="scenes/$scene"
+  fi
+  printf '%s\n' "$scene"
+}
+
+copy_filtered_content() {
+  rm -rf "$content_dir"
+  cp -a "$content_root" "$content_dir"
+  local scenes_to_copy=()
+  local scene
+  for scene in "${include_scenes[@]}"; do
+    [[ -z "$scene" ]] && continue
+    scenes_to_copy+=("$(normalize_scene_path "$scene")")
+  done
+
+  if [[ -n "$start_scene" ]]; then
+    local startup
+    startup="$(normalize_scene_path "$start_scene")"
+    cat > "$content_dir/startup.json" <<EOF
+{
+  "startScene": "$startup"
+}
+EOF
+    local found=0
+    for scene in "${scenes_to_copy[@]}"; do
+      [[ "$scene" == "$startup" ]] && found=1
+    done
+    (( found )) || scenes_to_copy+=("$startup")
+  fi
+
+  if (( ${#scenes_to_copy[@]} == 0 )); then
+    return
+  fi
+
+  rm -rf "$content_dir/scenes"
+  for scene in "${scenes_to_copy[@]}"; do
+    local relative="$scene"
+    [[ "$relative" == *.scene ]] || relative="$relative.scene"
+    local source="$content_root/$relative"
+    if [[ ! -f "$source" ]]; then
+      echo "Included scene does not exist: $source" >&2
+      exit 1
+    fi
+
+    mkdir -p "$(dirname "$content_dir/$relative")"
+    cp "$source" "$content_dir/$relative"
+  done
+}
+
 find "$output_root" -mindepth 1 -maxdepth 1 \
   \( -name "PixelEngine-Demo-*-$rid-$channel" -o -name "PixelEngine-Demo-*-$rid-$channel.zip" -o -name "PixelEngine-Demo-*-$rid-$channel.tar.gz" \) \
   -exec rm -rf -- {} +
@@ -213,37 +312,43 @@ mkdir -p "$app_dir"
 cp -a "$publish_dir"/. "$app_dir"/
 remove_player_package_noise "$app_dir"
 rm -rf "$app_dir/content" "$app_dir/_PUBLISH_INTERMEDIATE_README.txt" "$content_dir"
-cp -a "$content_root" "$content_dir"
+copy_filtered_content
 
 if [[ "$rid" == win-* ]]; then
-  cp "$publish_dir/PixelEngine.Demo.exe" "$staging_dir/PixelEngine Demo.exe"
+  cp "$publish_dir/$assembly_base.exe" "$staging_dir/$windows_launcher"
   if [[ "$channel" == "r2r" ]]; then
-    patch_apphost_relative_assembly "$staging_dir/PixelEngine Demo.exe" 'app\PixelEngine.Demo.dll'
+    patch_apphost_relative_assembly "$staging_dir/$windows_launcher" "$assembly_base.dll" "app\\$assembly_base.dll"
   fi
-  rm -f "$app_dir/PixelEngine.Demo.exe"
+  rm -f "$app_dir/$assembly_base.exe"
 fi
 
-cat > "$staging_dir/README.txt" <<'EOF'
-PixelEngine Demo
+if [[ "$include_symbols" == "1" ]]; then
+  symbol_line="This development layout keeps debug symbols for local debugging."
+else
+  symbol_line="Debug symbols, XML documentation, diagnostic dump helpers, and localized satellite resource DLLs are stripped from player packages."
+fi
+
+cat > "$staging_dir/README.txt" <<EOF
+$launcher_base
 ================
 
 Start the game from this folder:
-  Windows: PixelEngine Demo.exe
-  Linux/macOS: ./PixelEngine Demo.sh
+  Windows: $windows_launcher
+  Linux/macOS: ./$unix_launcher
 
 Runtime dependencies are under app/. Game content is under content/.
-Debug symbols, XML documentation, diagnostic dump helpers, and localized satellite resource DLLs are stripped from player packages.
+${symbol_line}
 EOF
 
 if [[ "$rid" != win-* ]]; then
-  cat > "$staging_dir/PixelEngine Demo.sh" <<'EOF'
+  cat > "$staging_dir/$unix_launcher" <<EOF
 #!/usr/bin/env sh
 set -eu
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-cd "$script_dir/app"
-exec ./PixelEngine.Demo --content "$script_dir/content" "$@"
+script_dir=\$(CDPATH= cd -- "\$(dirname -- "\$0")" && pwd)
+cd "\$script_dir/app"
+exec ./$assembly_base --content "\$script_dir/content" "\$@"
 EOF
-  chmod +x "$staging_dir/PixelEngine Demo.sh"
+  chmod +x "$staging_dir/$unix_launcher"
 fi
 
 package_checksum_path="$staging_dir/SHA256SUMS"

@@ -3649,9 +3649,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("PixelEngine.Tools.DeterministicPackage", packagePs1, StringComparison.Ordinal);
         Assert.Contains("PixelEngine.Tools.DeterministicPackage", packageSh, StringComparison.Ordinal);
         Assert.Contains("$appDir = Join-Path $stagingDir 'app'", packagePs1, StringComparison.Ordinal);
-        Assert.Contains("PixelEngine Demo.exe", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("$ProductName = 'PixelEngine Demo'", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("$windowsLauncherName = \"$ProductName.exe\"", packagePs1, StringComparison.Ordinal);
         Assert.Contains("Set-AppHostRelativeAssemblyPath", packagePs1, StringComparison.Ordinal);
-        Assert.Contains("PixelEngine Demo.sh", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("$unixLauncherName = \"$ProductName.sh\"", packagePs1, StringComparison.Ordinal);
         Assert.Contains("README.txt", packagePs1, StringComparison.Ordinal);
         Assert.Contains("Remove-PlayerPackageNoise", packagePs1, StringComparison.Ordinal);
         Assert.Contains(".resources.dll", packagePs1, StringComparison.Ordinal);
@@ -3664,9 +3665,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("Copy-Item -LiteralPath $packageDir -Destination $PlayerOutputDir", packagePs1, StringComparison.Ordinal);
         Assert.Contains("$samePairPattern", packagePs1, StringComparison.Ordinal);
         Assert.Contains("app_dir=\"$staging_dir/app\"", packageSh, StringComparison.Ordinal);
-        Assert.Contains("PixelEngine Demo.exe", packageSh, StringComparison.Ordinal);
+        Assert.Contains("launcher_base=\"${product_name:-PixelEngine Demo}\"", packageSh, StringComparison.Ordinal);
+        Assert.Contains("windows_launcher=\"$launcher_base.exe\"", packageSh, StringComparison.Ordinal);
         Assert.Contains("patch_apphost_relative_assembly", packageSh, StringComparison.Ordinal);
-        Assert.Contains("PixelEngine Demo.sh", packageSh, StringComparison.Ordinal);
+        Assert.Contains("unix_launcher=\"$launcher_base.sh\"", packageSh, StringComparison.Ordinal);
         Assert.Contains("README.txt", packageSh, StringComparison.Ordinal);
         Assert.Contains("remove_player_package_noise", packageSh, StringComparison.Ordinal);
         Assert.Contains("rm -rf \"$app_dir/content\" \"$app_dir/_PUBLISH_INTERMEDIATE_README.txt\" \"$content_dir\"", packageSh, StringComparison.Ordinal);
