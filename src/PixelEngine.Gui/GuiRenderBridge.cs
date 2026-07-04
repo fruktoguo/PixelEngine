@@ -12,16 +12,22 @@ public sealed class GuiRenderBridge : IUiPresentLayer, IDisposable
     private readonly RenderPipeline _pipeline;
     private readonly GuiApp _gui;
     private readonly IScriptRuntime? _scriptRuntime;
+    private readonly Action<IGuiDrawContext>? _managedGui;
     private readonly IDisposable _registration;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private double _previousSeconds;
     private bool _disposed;
 
-    private GuiRenderBridge(RenderPipeline pipeline, GuiApp gui, IScriptRuntime? scriptRuntime)
+    private GuiRenderBridge(
+        RenderPipeline pipeline,
+        GuiApp gui,
+        IScriptRuntime? scriptRuntime,
+        Action<IGuiDrawContext>? managedGui)
     {
         _pipeline = pipeline;
         _gui = gui;
         _scriptRuntime = scriptRuntime;
+        _managedGui = managedGui;
         _previousSeconds = _clock.Elapsed.TotalSeconds;
         _registration = _pipeline.RegisterUiLayer(UiPresentLayerOrders.Game, this);
     }
@@ -31,10 +37,22 @@ public sealed class GuiRenderBridge : IUiPresentLayer, IDisposable
     /// </summary>
     public static GuiRenderBridge? AttachIfEnabled(RenderPipeline pipeline, GuiApp gui, IScriptRuntime? scriptRuntime)
     {
+        return AttachIfEnabled(pipeline, gui, scriptRuntime, managedGui: null);
+    }
+
+    /// <summary>
+    /// 若 GUI host 启用，则绑定到渲染管线，并可在同一 ImGui frame 中调度 Managed UI 与脚本 GUI。
+    /// </summary>
+    public static GuiRenderBridge? AttachIfEnabled(
+        RenderPipeline pipeline,
+        GuiApp gui,
+        IScriptRuntime? scriptRuntime,
+        Action<IGuiDrawContext>? managedGui)
+    {
         ArgumentNullException.ThrowIfNull(pipeline);
         ArgumentNullException.ThrowIfNull(gui);
         return gui.Options.Enabled
-            ? new GuiRenderBridge(pipeline, gui, scriptRuntime)
+            ? new GuiRenderBridge(pipeline, gui, scriptRuntime, managedGui)
             : null;
     }
 
@@ -68,10 +86,11 @@ public sealed class GuiRenderBridge : IUiPresentLayer, IDisposable
         double now = _clock.Elapsed.TotalSeconds;
         float deltaSeconds = (float)Math.Max(0.0, now - _previousSeconds);
         _previousSeconds = now;
-        _gui.DrawFrame(
+        _gui.DrawCombinedFrame(
             deltaSeconds,
             _pipeline.Width,
             _pipeline.Height,
+            _managedGui,
             _scriptRuntime is null ? null : _scriptRuntime.DrawGui);
         FrameIndex++;
     }
