@@ -114,6 +114,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
         _editor.AddPanel(new BuildSettingsPanel(_project));
         _editor.AddPanel(new PerformanceHudPanel());
         _editor.AddPanel(new SimulationControlToolbar(new EditorSimulationControlAdapter(_app)));
+        _editor.AddPanel(new EditorModePanel(new EditorPlaySessionAdapter(_app)));
         if (engine.Context.TryGetService(out DebugOverlaySettings debugSettings))
         {
             _editor.AddPanel(new DebugOverlayPanel(debugSettings));
@@ -247,6 +248,72 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
         public void SetSimHz(double simHz)
         {
             app.CurrentSession?.SetSimHz(simHz);
+        }
+    }
+
+    private sealed class EditorPlaySessionAdapter(EditorShellApp app) : PixelEngine.Editor.IEditorPlaySessionService
+    {
+        public PixelEngine.Editor.EditorPlaySessionSnapshot Capture()
+        {
+            return app.CurrentSession is { } session
+                ? Convert(session.CaptureEditorPlaySession())
+                : new PixelEngine.Editor.EditorPlaySessionSnapshot(
+                    PixelEngine.Editor.EditorMode.Edit,
+                    PixelEngine.Editor.EditorPlaySource.CurrentState,
+                    false,
+                    "没有打开工程。");
+        }
+
+        public PixelEngine.Editor.EditorPlaySessionResult EnterPlayCurrent()
+        {
+            return app.CurrentSession is { } session
+                ? Convert(session.EnterPlayCurrent())
+                : MissingProjectResult();
+        }
+
+        public PixelEngine.Editor.EditorPlaySessionResult EnterPlayTemporary()
+        {
+            return app.CurrentSession is { } session
+                ? Convert(session.EnterPlayTemporary())
+                : MissingProjectResult();
+        }
+
+        public PixelEngine.Editor.EditorPlaySessionResult ExitPlay()
+        {
+            return app.CurrentSession is { } session
+                ? Convert(session.ExitEditorPlay())
+                : MissingProjectResult();
+        }
+
+        private static PixelEngine.Editor.EditorPlaySessionResult MissingProjectResult()
+        {
+            PixelEngine.Editor.EditorPlaySessionSnapshot snapshot = new(
+                PixelEngine.Editor.EditorMode.Edit,
+                PixelEngine.Editor.EditorPlaySource.CurrentState,
+                false,
+                "没有打开工程。");
+            return new PixelEngine.Editor.EditorPlaySessionResult(false, snapshot, snapshot.StatusMessage);
+        }
+
+        private static PixelEngine.Editor.EditorPlaySessionResult Convert(PixelEngine.Hosting.EditorPlaySessionResult result)
+        {
+            return new PixelEngine.Editor.EditorPlaySessionResult(
+                result.Succeeded,
+                Convert(result.Snapshot),
+                result.Message);
+        }
+
+        private static PixelEngine.Editor.EditorPlaySessionSnapshot Convert(PixelEngine.Hosting.EditorPlaySessionSnapshot snapshot)
+        {
+            return new PixelEngine.Editor.EditorPlaySessionSnapshot(
+                snapshot.Mode == PixelEngine.Hosting.EditorMode.Play
+                    ? PixelEngine.Editor.EditorMode.Play
+                    : PixelEngine.Editor.EditorMode.Edit,
+                snapshot.Source == PixelEngine.Hosting.EditorPlaySource.TemporarySnapshot
+                    ? PixelEngine.Editor.EditorPlaySource.TemporarySnapshot
+                    : PixelEngine.Editor.EditorPlaySource.CurrentState,
+                snapshot.TemporarySnapshotActive,
+                snapshot.StatusMessage);
         }
     }
 

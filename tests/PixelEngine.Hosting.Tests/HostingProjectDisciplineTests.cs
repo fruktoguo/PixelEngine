@@ -325,6 +325,30 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证独立编辑器壳复用 plan/12 的 Edit/Play 模式面板，并接到 Hosting 的临时快照 Play session。
+    /// </summary>
+    [Fact]
+    public void EditorShellRegistersEditorModePanelWithPlaySessionAdapter()
+    {
+        string root = FindRepositoryRoot();
+        string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
+        string source = string.Join(
+            '\n',
+            Directory.EnumerateFiles(shellDirectory, "*.cs").Select(File.ReadAllText));
+
+        Assert.Contains("new EditorModePanel(new EditorPlaySessionAdapter(_app))", source, StringComparison.Ordinal);
+        Assert.Contains("class EditorPlaySessionAdapter", source, StringComparison.Ordinal);
+        Assert.Contains("IEditorPlaySessionService", source, StringComparison.Ordinal);
+        Assert.Contains("CaptureEditorPlaySession", source, StringComparison.Ordinal);
+        Assert.Contains("EnterPlayCurrent", source, StringComparison.Ordinal);
+        Assert.Contains("EnterPlayTemporary", source, StringComparison.Ordinal);
+        Assert.Contains("ExitEditorPlay", source, StringComparison.Ordinal);
+        Assert.Contains("EngineEditorPlaySessionService", source, StringComparison.Ordinal);
+        Assert.Contains("EngineWorldSnapshotStore", source, StringComparison.Ordinal);
+        Assert.Contains("TemporarySnapshot", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 plan/15 §3.11 的 build-player 一键玩家包编排器与 player-only audit 契约落地。
     /// </summary>
     [Fact]
