@@ -76,6 +76,17 @@ public sealed class DemoStartupOptionsTests
     }
 
     /// <summary>
+    /// 验证 Demo 已下线内嵌编辑器入口，编辑器只能通过独立 Shell 进程启动。
+    /// </summary>
+    [Fact]
+    public void EditorFlagIsNoLongerAcceptedByDemo()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(() => DemoStartupOptions.Parse(["--editor"]));
+
+        Assert.Contains("未知 Demo 参数：--editor", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证默认可玩程序化场景从 AI 材质地图导入 cell，而不是只走旧的数学地形填充。
     /// </summary>
     [Fact]

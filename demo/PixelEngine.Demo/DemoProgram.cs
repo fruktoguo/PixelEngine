@@ -4,7 +4,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using PixelEngine.Core.Diagnostics;
-using PixelEngine.Gui;
 using PixelEngine.Hosting;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
@@ -519,9 +518,6 @@ public static class DemoProgram
         RenderPhaseDriver? renderDriver = engine.Context.TryGetService(out RenderPhaseDriver registeredRenderDriver)
             ? registeredRenderDriver
             : null;
-        GuiRenderBridge? guiBridge = engine.Context.TryGetService(out GuiRenderBridge registeredGuiBridge)
-            ? registeredGuiBridge
-            : null;
         ushort paintedMaterial = probe.MaterialAt(
             (int)MathF.Round(scriptedInput.BrushTargetWorld.X),
             (int)MathF.Round(scriptedInput.BrushTargetWorld.Y));
@@ -574,10 +570,6 @@ public static class DemoProgram
             $"frame_samples={diagnostics.FrameSampleCount}, " +
             $"sim_hz={diagnostics.SimHz:0.0}, " +
             $"diagnostic_frame={diagnostics.FrameCount}, " +
-            $"editor_enabled={engine.Context.Options.EnableEditor}, " +
-            $"editor_running=False, " +
-            $"editor_panels=0, " +
-            $"editor_bridge_frames={guiBridge?.FrameIndex ?? 0}, " +
             $"pause_open={pauseOpen}, " +
             $"goal_reached={goalReached}, " +
             $"player_health={health?.Health ?? 0:0.00}, " +

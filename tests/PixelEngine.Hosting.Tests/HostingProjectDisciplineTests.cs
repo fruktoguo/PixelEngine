@@ -374,6 +374,27 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证 Demo 已收敛为纯玩家运行时，不再暴露内嵌编辑器启动入口或旧 editor-window 证据字段。
+    /// </summary>
+    [Fact]
+    public void DemoRuntimeDoesNotExposeInProcessEditorEntry()
+    {
+        string root = FindRepositoryRoot();
+        string demoDirectory = Path.Combine(root, "demo", "PixelEngine.Demo");
+        string startupOptions = File.ReadAllText(Path.Combine(demoDirectory, "DemoStartupOptions.cs"));
+        string demoProgram = File.ReadAllText(Path.Combine(demoDirectory, "DemoProgram.cs"));
+        string pauseMenu = File.ReadAllText(Path.Combine(demoDirectory, "PauseMenu.cs"));
+
+        Assert.DoesNotContain("--editor", startupOptions, StringComparison.Ordinal);
+        Assert.DoesNotContain("EnableEditor", startupOptions, StringComparison.Ordinal);
+        Assert.DoesNotContain("editor_enabled=", demoProgram, StringComparison.Ordinal);
+        Assert.DoesNotContain("editor_running=", demoProgram, StringComparison.Ordinal);
+        Assert.DoesNotContain("editor_panels=", demoProgram, StringComparison.Ordinal);
+        Assert.DoesNotContain("editor_bridge_frames=", demoProgram, StringComparison.Ordinal);
+        Assert.DoesNotContain("打开 Editor", pauseMenu, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Demo lava-mine 验收场景以 .scene 文件落盘，并通过公开场景文档格式引用 LevelDirector。
     /// </summary>
     [Fact]

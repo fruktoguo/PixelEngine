@@ -59,7 +59,7 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Contains("begin:demo-pause-menu:暂停:NoResize, NoSavedSettings", pauseGui.Drawn);
         Assert.Contains("text:状态: 暂停", pauseGui.Drawn);
         Assert.Contains("button:继续", pauseGui.Drawn);
-        Assert.Contains("button:打开 Editor", pauseGui.Drawn);
+        Assert.DoesNotContain("button:打开 Editor", pauseGui.Drawn);
         Assert.Contains("button:重开", pauseGui.Drawn);
         Assert.Contains("button:退出", pauseGui.Drawn);
         Assert.Contains("text:调试", pauseGui.Drawn);
@@ -78,10 +78,10 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
-    /// 验证暂停菜单按钮会经公开 Runtime/Diagnostics API 触发 Editor、重开与调试叠层控制。
+    /// 验证暂停菜单按钮会经公开 Runtime/Diagnostics API 触发重开与调试叠层控制。
     /// </summary>
     [Fact]
-    public void PauseMenuButtonsDriveEditorRestartAndDiagnosticsFacades()
+    public void PauseMenuButtonsDriveRestartAndDiagnosticsFacades()
     {
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out _, out _, out ScriptScene scene, DemoMaterials());
         _ = scene.CreateEntity().AddComponent<PauseMenu>();
@@ -93,12 +93,6 @@ public sealed class PlayerControllerIntegrationTests
         IScriptRuntime runtime = engine.Context.GetService<IScriptRuntime>();
         IRuntimeControlApi runtimeControl = engine.Context.GetService<IRuntimeControlApi>();
         IDiagnosticsApi diagnostics = engine.Context.GetService<IDiagnosticsApi>();
-
-        RecordingGuiContext editorGui = new(clickedButtons: ["打开 Editor"]);
-        runtime.DrawGui(editorGui);
-
-        Assert.Contains("button:打开 Editor", editorGui.Drawn);
-        Assert.False(runtimeControl.Capture().IsPlaying);
 
         RecordingGuiContext revealGui = new(toggledCheckboxes: ["显示调试叠层"]);
         runtime.DrawGui(revealGui);

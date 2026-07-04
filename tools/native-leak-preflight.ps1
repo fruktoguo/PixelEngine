@@ -1,5 +1,6 @@
 param(
     [string]$Project = "demo/PixelEngine.Demo/PixelEngine.Demo.csproj",
+    [string]$EditorShellProject = "apps/PixelEngine.Editor.Shell/PixelEngine.Editor.Shell.csproj",
     [string]$Content = "demo/PixelEngine.Demo/content",
     [string]$Scene = "scenes/empty-window-probe.scene",
     [string]$Artifacts = "artifacts/native-leak-preflight",
@@ -495,6 +496,38 @@ function Read-EvidenceManifest {
     return $items
 }
 
+function New-EditorShellSmokeProject {
+    param([string]$OutputDirectory)
+
+    $projectRoot = Join-Path $OutputDirectory "editor-shell-project"
+    $sceneRoot = Join-Path $projectRoot "content/scenes"
+    New-Item -ItemType Directory -Force -Path $sceneRoot | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $projectRoot "scripts") | Out-Null
+    @"
+{
+  "formatVersion": 1,
+  "name": "Editor Shell Smoke",
+  "contentRoot": "content",
+  "scriptSourceDir": "scripts",
+  "startScene": "scenes/main.scene",
+  "scenes": [
+    {
+      "name": "main",
+      "path": "scenes/main.scene"
+    }
+  ]
+}
+"@ | Set-Content -LiteralPath (Join-Path $projectRoot "project.pixelproj") -Encoding UTF8
+    @"
+{
+  "formatVersion": 2,
+  "name": "main",
+  "entities": []
+}
+"@ | Set-Content -LiteralPath (Join-Path $sceneRoot "main.scene") -Encoding UTF8
+    return $projectRoot
+}
+
 function Invoke-WindowProbe {
     param(
         [string]$Root,
@@ -526,18 +559,18 @@ function Invoke-WindowProbe {
     )
 
     if ($Editor) {
+        $editorProjectRoot = New-EditorShellSmokeProject -OutputDirectory $OutputDirectory
         $arguments = @(
             "run",
-            "--project", $ProjectPath,
+            "--project", $EditorShellProject,
             "-c", "Release",
             "--no-restore",
             "--",
-            "--editor",
-            "--no-hot-reload",
+            "--project", $editorProjectRoot,
+            "--scene", "scenes/main.scene",
             "--window-ticks", $Ticks.ToString([Globalization.CultureInfo]::InvariantCulture),
-            "--content", $ContentRoot,
-            "--scene", $ScenePath,
-            "--log-dir", $runtimeLog
+            "--scripted-probe",
+            "--log-directory", $runtimeLog
         )
     }
 

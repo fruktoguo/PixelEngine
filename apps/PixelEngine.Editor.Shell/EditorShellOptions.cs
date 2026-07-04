@@ -5,6 +5,7 @@ internal sealed record EditorShellOptions(
     string? ScenePath,
     int WindowTicks,
     bool ScriptedProbe,
+    string? CaptureFramePath,
     string? LogDirectory)
 {
     public static EditorShellOptions Parse(string[] args)
@@ -12,6 +13,7 @@ internal sealed record EditorShellOptions(
         string? projectPath = null;
         string? scenePath = null;
         string? logDirectory = null;
+        string? captureFramePath = null;
         int windowTicks = 0;
         bool scriptedProbe = false;
 
@@ -37,6 +39,9 @@ internal sealed record EditorShellOptions(
                 case "--scripted-probe":
                     scriptedProbe = true;
                     break;
+                case "--capture-frame":
+                    captureFramePath = RequireValue(args, ref i, arg);
+                    break;
                 case "--log-directory":
                     logDirectory = RequireValue(args, ref i, arg);
                     break;
@@ -45,7 +50,7 @@ internal sealed record EditorShellOptions(
             }
         }
 
-        return new EditorShellOptions(projectPath, scenePath, windowTicks, scriptedProbe, logDirectory);
+        return new EditorShellOptions(projectPath, scenePath, windowTicks, scriptedProbe, captureFramePath, logDirectory);
     }
 
     private static string RequireValue(string[] args, ref int index, string option)
