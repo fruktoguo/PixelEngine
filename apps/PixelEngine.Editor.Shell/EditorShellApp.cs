@@ -85,6 +85,7 @@ internal sealed class EditorShellApp
         ScriptedBuildCancelProbeState scriptedBuildCancel = new();
         ScriptedBuildSettingsProbeState scriptedBuildSettings = new();
         ScriptedMenuLayoutProbeState scriptedMenuLayout = new();
+        ScriptedHierarchyProbeState scriptedHierarchy = new();
         ScriptedPlayerRunProbeResult scriptedPlayerRun = new();
         while (!shellWindow.Window.IsClosing && !_exitRequested)
         {
@@ -175,6 +176,10 @@ internal sealed class EditorShellApp
                 {
                     RunScriptedMenuLayoutProbeActions(scriptedMenuLayout);
                 }
+                else if (_options.ScriptedHierarchyProbe)
+                {
+                    RunScriptedHierarchyProbeActions(scriptedHierarchy);
+                }
             }
 
             UpdateTitle(shellWindow);
@@ -195,6 +200,11 @@ internal sealed class EditorShellApp
             }
 
             if (_options.ScriptedMenuLayoutProbe && scriptedMenuLayout.Completed)
+            {
+                break;
+            }
+
+            if (_options.ScriptedHierarchyProbe && scriptedHierarchy.Completed)
             {
                 break;
             }
@@ -248,6 +258,10 @@ internal sealed class EditorShellApp
         else if (_options.ScriptedMenuLayoutProbe)
         {
             WriteScriptedMenuLayoutProbeSummary(scriptedMenuLayout);
+        }
+        else if (_options.ScriptedHierarchyProbe)
+        {
+            WriteScriptedHierarchyProbeSummary(scriptedHierarchy);
         }
         else if (_options.ScriptedBuildCancelProbe)
         {
@@ -324,6 +338,57 @@ internal sealed class EditorShellApp
             state.ResetRequested = true;
             state.Completed = true;
             state.Diagnostic = "菜单与布局探针完成。";
+        }
+        catch (Exception ex) when (!OperatingSystem.IsBrowser())
+        {
+            state.Completed = true;
+            state.Diagnostic = ex.Message;
+        }
+    }
+
+    private void RunScriptedHierarchyProbeActions(ScriptedHierarchyProbeState state)
+    {
+        if (CurrentSession is null || state.Completed)
+        {
+            return;
+        }
+
+        try
+        {
+            EditorSceneModel scene = CurrentSession.SceneModel;
+            EditorUndoStack undo = CurrentSession.UndoStack;
+            state.InitialCount = scene.Count;
+            undo.Execute(scene, new CreateGameObjectCommand("Hierarchy Parent"));
+            int parent = scene.SelectedStableId ?? throw new InvalidOperationException("创建父节点后没有选择对象。");
+            undo.Execute(scene, new CreateGameObjectCommand("Hierarchy Child", parent));
+            int child = scene.SelectedStableId ?? throw new InvalidOperationException("创建子节点后没有选择对象。");
+            state.Created = scene.TryGet(parent, out _) && scene.TryGet(child, out _);
+            state.ChildParented = scene.Get(child).ParentId == parent;
+
+            try
+            {
+                undo.Execute(scene, new ReparentGameObjectCommand(parent, child));
+            }
+            catch (InvalidOperationException)
+            {
+                state.CycleRejected = true;
+            }
+
+            state.CyclePrevented = scene.Get(parent).ParentId is null && scene.Get(child).ParentId == parent;
+            undo.Execute(scene, new DuplicateGameObjectCommand(child));
+            int duplicate = scene.SelectedStableId ?? throw new InvalidOperationException("复制后没有选择对象。");
+            state.Duplicated = duplicate != child && scene.TryGet(duplicate, out _);
+            undo.Execute(scene, new RenameGameObjectCommand(duplicate, "Hierarchy Duplicate Renamed"));
+            state.Renamed = scene.Get(duplicate).Name == "Hierarchy Duplicate Renamed";
+            undo.Execute(scene, new ReparentGameObjectCommand(duplicate, null));
+            state.ReparentedToRoot = scene.Get(duplicate).ParentId is null;
+            scene.Select(duplicate);
+            state.SelectionLinked = scene.SelectedStableId == duplicate;
+            undo.Execute(scene, new DeleteGameObjectCommand(duplicate));
+            state.Deleted = !scene.TryGet(duplicate, out _);
+            state.FinalCount = scene.Count;
+            state.Completed = true;
+            state.Diagnostic = "层级面板命令探针完成。";
         }
         catch (Exception ex) when (!OperatingSystem.IsBrowser())
         {
@@ -740,6 +805,26 @@ internal sealed class EditorShellApp
             $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
     }
 
+    private static void WriteScriptedHierarchyProbeSummary(ScriptedHierarchyProbeState state)
+    {
+        Console.WriteLine(
+            "editor_hierarchy_probe " +
+            "schema=pixelengine.editor-hierarchy-probe/v1, " +
+            $"completed={state.Completed}, " +
+            $"created={state.Created}, " +
+            $"child_parented={state.ChildParented}, " +
+            $"cycle_rejected={state.CycleRejected}, " +
+            $"cycle_prevented={state.CyclePrevented}, " +
+            $"duplicated={state.Duplicated}, " +
+            $"renamed={state.Renamed}, " +
+            $"reparented_to_root={state.ReparentedToRoot}, " +
+            $"selection_linked={state.SelectionLinked}, " +
+            $"deleted={state.Deleted}, " +
+            $"initial_count={state.InitialCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"final_count={state.FinalCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
+    }
+
     private void RunScriptedProbeActions(
         int executedTicks,
         ref bool playEntered,
@@ -1125,6 +1210,23 @@ internal sealed class ScriptedMenuLayoutProbeState
     public bool OpenedOriginalScene;
     public int PanelCount;
     public string StartScene = string.Empty;
+    public string Diagnostic = string.Empty;
+}
+
+internal sealed class ScriptedHierarchyProbeState
+{
+    public bool Completed;
+    public bool Created;
+    public bool ChildParented;
+    public bool CycleRejected;
+    public bool CyclePrevented;
+    public bool Duplicated;
+    public bool Renamed;
+    public bool ReparentedToRoot;
+    public bool SelectionLinked;
+    public bool Deleted;
+    public int InitialCount;
+    public int FinalCount;
     public string Diagnostic = string.Empty;
 }
 

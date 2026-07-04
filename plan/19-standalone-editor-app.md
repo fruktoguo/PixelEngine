@@ -427,7 +427,7 @@ GameObject authoring：
 - [x] 项目选择器可新建/打开工程、展示并打开最近工程；新建工程生成合法 `project.pixelproj` + `content/` 骨架 + 空场景（§4.2）
 - [x] 主菜单栏 File/Edit/GameObject/Window/Play/Help 全部可用（含 Build Settings…）；默认 dock 布局呈现 Hierarchy/Scene View/Inspector/Project/Console/HUD/构建与发布，可保存恢复与 Reset（§4.3）
 - [x] Edit 模式 sim 暂停可编辑、Play 模式同窗口运行游戏、退出 Play 回滚到编辑态（复用既有快照，类 Unity），切换不破坏帧节奏（#6，§4.4）
-- [ ] 层级面板可创建/删除/重命名/复制 GameObject、拖拽重父（防环）、选中联动 Inspector 与 Scene View（§4.6）。节点 4 已落地层级树与 authoring selection；Inspector/Scene View 联动随节点 5/6 闭合。
+- [x] 层级面板可创建/删除/重命名/复制 GameObject、拖拽重父（防环）、选中联动 Inspector 与 Scene View（§4.6）。节点 4 已落地层级树与 authoring selection；Inspector/Scene View 联动随节点 5/6 闭合。
 - [x] Inspector 显示 Name/Enabled/Transform TRS/组件列表，可 Add/Remove 组件、编辑组件公开字段，改动经命令栈可 Undo/Redo（§4.5、§4.7）
 - [x] Scene View 内 gizmo 可平移/旋转/缩放选中 GameObject 并与 Inspector 双向联动；可点选拾取 GameObject（含空对象 billboard）；gizmo 与世界画刷输入正确仲裁（§4.8）
 - [x] 场景可 Save/Save As 为 `.scene`（v2），读→写→读逐字段等价；v1 旧场景可加载并升级（§4.9）
@@ -489,3 +489,4 @@ GameObject authoring：
 - [x] 节点 22：`test(editor-shell): shell probes 覆盖构建 UI 响应与设置持久化`（§5.2、§5.4、§5.10）
 - [x] 节点 23：`docs(plan): 勾选编辑器内构建与 shell 依赖边界验收`（§3、§5.10、§7）
 - [x] 节点 24：`feat(editor-shell): 完成主菜单窗口入口与默认 dock 布局`（§4.3、§7）
+- [x] 节点 25：`test(editor-shell): shell scripted-hierarchy-probe 覆盖层级面板交互`（§4.6、§7）

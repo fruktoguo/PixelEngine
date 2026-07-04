@@ -228,6 +228,11 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("GameObjectStableId", editorSelection, StringComparison.Ordinal);
         Assert.Contains("SelectGameObject", editorSelection, StringComparison.Ordinal);
         Assert.Contains("AttachScriptScene(PixelEngine.Scripting.Scene scriptScene)", hostingEngine, StringComparison.Ordinal);
+        Assert.Contains("--scripted-hierarchy-probe", File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellOptions.cs")), StringComparison.Ordinal);
+        Assert.Contains("editor_hierarchy_probe", source, StringComparison.Ordinal);
+        Assert.Contains("RunScriptedHierarchyProbeActions", source, StringComparison.Ordinal);
+        Assert.Contains("cycle_rejected", source, StringComparison.Ordinal);
+        Assert.Contains("selection_linked", source, StringComparison.Ordinal);
         Assert.DoesNotContain("new SceneHierarchyPanel", source, StringComparison.Ordinal);
     }
 
