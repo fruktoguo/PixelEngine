@@ -220,6 +220,7 @@ public sealed class RenderingProjectDisciplineTests
             Environment.NewLine,
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderPipeline.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderBufferBuilder.cs")),
+            File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderStyleSegmentScanner.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "PaletteBgraConverter.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "BgraColorMixer.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "ParticleCompositor.cs")),
@@ -265,6 +266,27 @@ public sealed class RenderingProjectDisciplineTests
         Assert.Contains("Convert()", benchmark, StringComparison.Ordinal);
         Assert.Contains("MemoryDiagnoser", benchmark, StringComparison.Ordinal);
         Assert.Contains("ConvertAvx2Experimental", benchmark, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RenderStyleSegmentedPathUsesPaletteSimdFallbackAndBenchmark()
+    {
+        string builder = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderBufferBuilder.cs"));
+        string scanner = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderStyleSegmentScanner.cs"));
+        string benchmark = File.ReadAllText(ProjectPath("bench", "PixelEngine.Benchmarks", "PaletteBgraConversionBenchmarks.cs"));
+
+        Assert.Contains("BuildRowsStyledSegmented", builder, StringComparison.Ordinal);
+        Assert.Contains("GetStyledPaletteRunLength", builder, StringComparison.Ordinal);
+        Assert.Contains("PaletteBgraConverter.Convert(materials, palette, pixelRun)", builder, StringComparison.Ordinal);
+        Assert.Contains("BgraColorMixer.ApplyColorNoise(materials, hot.ColorNoise, pixelRun", builder, StringComparison.Ordinal);
+        Assert.Contains("RenderStyleSegmentScanner.CountSolidUnbrokenRun", builder, StringComparison.Ordinal);
+        Assert.Contains("Vector256.IsHardwareAccelerated", scanner, StringComparison.Ordinal);
+        Assert.Contains("Vector128.IsHardwareAccelerated", scanner, StringComparison.Ordinal);
+        Assert.Contains("LoadUnsafe", scanner, StringComparison.Ordinal);
+        Assert.Contains("ExtractMostSignificantBits", scanner, StringComparison.Ordinal);
+        Assert.Contains("IsBoundaryEdge(context, materialId", builder, StringComparison.Ordinal);
+        Assert.Contains("RenderStyleSegmentedBenchmarks", benchmark, StringComparison.Ordinal);
+        Assert.Contains("BuildRenderBufferStyledSegmented", benchmark, StringComparison.Ordinal);
     }
 
     private static string ProjectPath(params string[] parts)

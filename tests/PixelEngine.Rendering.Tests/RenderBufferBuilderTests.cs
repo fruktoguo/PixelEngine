@@ -574,6 +574,115 @@ public sealed class RenderBufferBuilderTests
     }
 
     [Fact]
+    public void BuildUsesStyledSegmentedPalettePathForUnbrokenSolidRuns()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        for (int x = 0; x < 32; x++)
+        {
+            SetMaterial(chunk, x, 0, 1);
+        }
+
+        chunks.Add(chunk);
+        CountingChunkSource counting = new(chunks);
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "stone", CellType.Solid, 0xFF102030u) with
+            {
+                RenderStyle = MaterialRenderStyle.Solid,
+            });
+        RenderBuffer target = new(32, 1);
+        RenderAuxBuffers aux = new(32, 1);
+        RenderFrameContext context = new(
+            counting,
+            materials,
+            new TemperatureField(),
+            CameraState.OneToOne(0, 0, 32, 1),
+            simStepped: true);
+
+        new RenderBufferBuilder().Build(context, target, aux);
+
+        Assert.True(
+            counting.TryGetChunkCalls <= 2,
+            $"未破损纯固体样式段应按 chunk row 分段构建，避免逐像素取 chunk，actual calls={counting.TryGetChunkCalls}。");
+        Assert.All(target.Pixels.ToArray(), static value => Assert.Equal(0xFF102030u, value));
+        Assert.All(aux.Occluder.ToArray(), static value => Assert.Equal(byte.MaxValue, value));
+    }
+
+    [Fact]
+    public void BuildStyledSegmentedPathMatchesScalarPathForMixedRuns()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        SetMaterial(chunk, 0, 0, 1);
+        SetMaterial(chunk, 1, 0, 1);
+        SetMaterial(chunk, 2, 0, 1);
+        SetMaterial(chunk, 3, 0, 2);
+        SetMaterial(chunk, 4, 0, 3);
+        SetMaterial(chunk, 5, 0, 4);
+        SetMaterial(chunk, 6, 0, 5);
+        SetMaterial(chunk, 7, 0, 1);
+        chunk.Damage[CellAddressing.LocalIndexFromLocal(2, 0)] = 40;
+        chunks.Add(chunk);
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "stone", CellType.Solid, 0xFF404040u) with
+            {
+                Integrity = 100,
+                RenderStyle = MaterialRenderStyle.Destructible,
+                EdgeColorBGRA = 0xFFFFFFFFu,
+            },
+            Material(2, "water", CellType.Liquid, 0xFF001020u) with
+            {
+                RenderStyle = MaterialRenderStyle.Liquid,
+                HighlightColorBGRA = 0xFF80C0FFu,
+            },
+            Material(3, "smoke", CellType.Gas, 0xFF808080u) with
+            {
+                RenderStyle = MaterialRenderStyle.Gas,
+                Opacity = 128,
+            },
+            Material(4, "sand", CellType.Powder, 0xFF604020u) with
+            {
+                RenderStyle = MaterialRenderStyle.Powder,
+            },
+            Material(5, "lava", CellType.Liquid, 0xFF101000u) with
+            {
+                RenderStyle = MaterialRenderStyle.Hazard,
+                HighlightColorBGRA = 0xFFFF8000u,
+            });
+        RenderBuffer segmented = new(8, 1);
+        RenderAuxBuffers segmentedAux = new(8, 1);
+        RenderBuffer scalar = new(8, 1);
+        RenderAuxBuffers scalarAux = new(8, 1);
+
+        new RenderBufferBuilder().Build(
+            new RenderFrameContext(
+                chunks,
+                materials,
+                new TemperatureField(),
+                CameraState.OneToOne(0, 0, 8, 1),
+                simStepped: true,
+                frameTimeSeconds: 0.25f),
+            segmented,
+            segmentedAux);
+        new RenderBufferBuilder().Build(
+            new RenderFrameContext(
+                chunks,
+                materials,
+                new TemperatureField(),
+                CameraState.OneToOne(0.25f, 0, 8, 1),
+                simStepped: true,
+                frameTimeSeconds: 0.25f),
+            scalar,
+            scalarAux);
+
+        Assert.Equal(scalar.Pixels.ToArray(), segmented.Pixels.ToArray());
+        Assert.Equal(scalarAux.Emissive.ToArray(), segmentedAux.Emissive.ToArray());
+        Assert.Equal(scalarAux.Occluder.ToArray(), segmentedAux.Occluder.ToArray());
+    }
+
+    [Fact]
     public void MaterialSwatchProviderReturnsStableRepresentativeColor()
     {
         MaterialTable materials = Materials(
