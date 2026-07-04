@@ -81,6 +81,11 @@ public interface IScriptContext
     IAudioApi Audio { get; }
 
     /// <summary>
+    /// 游戏大 UI 控制能力；未启用 PixelEngine.UI 时访问会抛出明确异常。
+    /// </summary>
+    IGameUiService GameUi => throw new NotSupportedException("当前脚本上下文未注入 Game UI 后端。");
+
+    /// <summary>
     /// 当前运行时间信息。
     /// </summary>
     IGameTime Time { get; }
