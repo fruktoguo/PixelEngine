@@ -241,7 +241,8 @@ Edit 模式实时投影：为让 Scene View 的 gizmo/拾取显示「活的」Ga
 - 脚本 Inspector 字段编辑：并入 §4.7 GameObject Inspector 的组件区（复用其反射字段编辑），并保留「触发脚本热重载」按钮（`plan/11` Roslyn+ALC）。
 - 材质 + 反应实时编辑器（`MaterialReactionEditorPanel`）：id 稳定热重载（不变式 #8）原样复用；Shell 以 `FileMaterialReactionContentService` 接到工程 `content/materials.json`/`reactions.json`、`MaterialTable`、`SimulationKernel.ReloadMaterialHotTable`、`ReactionEngine.ReloadReactions` 与 live `IChunkSource` tombstone fallback remap，缺内容包时不注册假面板；本轮 demo-playability 新增材质字段的编辑由 `plan/12 §3.8` 修订承担。
 - Edit/Play 模式面板（`EditorModePanel`）：Shell 通过 `EditorPlaySessionAdapter` 复用 `EngineEditorPlaySessionService` + `EngineWorldSnapshotStore`，支持当前态 Play、临时快照 Play、退出恢复三条真实路径。
-- 世界画刷/检视器/调试叠层/性能 HUD/存读档/子系统调参：原样复用。
+- 存读档面板（`SaveLoadPanel`）：Shell 通过 `EditorWorldSaveLoadService` 复用 Hosting 公开 `SaveWorldToDirectory` / `LoadWorldFromDirectory`，存档落到 `<project>/saves`，读档后同步 `SimulationKernel` 与 `FrameClock`。
+- 世界画刷/检视器/调试叠层/性能 HUD/子系统调参：原样复用。
 
 ### 4.12 玩家包与编辑器解耦（player EXE 不含编辑器，纠正版）
 
@@ -403,9 +404,10 @@ GameObject authoring：
 - [x] `PrefabInstance` + `Overrides`：实例化、override 记录/加粗/Revert、**嵌套** prefab 递归展开、prefab 编辑向所有实例（含嵌套）override 传播、物化正确（§4.10）
 
 复用面板与解耦：
-- [ ] 在编辑器 dock 注册复用 `plan/12` 面板：AssetBrowser(Project)、材质+反应编辑器、世界画刷/检视器、调试叠层、性能 HUD、存读档、子系统调参、sim 控制条、Edit/Play 模式（§4.11）
+- [x] 在编辑器 dock 注册复用 `plan/12` 面板：AssetBrowser(Project)、材质+反应编辑器、世界画刷/检视器、调试叠层、性能 HUD、存读档、子系统调参、sim 控制条、Edit/Play 模式（§4.11）
 - [x] `MaterialReactionEditorPanel` 已在 Shell 中按真实依赖注册：工程内容文件 + `MaterialTable` + `SimulationKernel.ReloadMaterialHotTable` + `ReactionEngine.ReloadReactions` + live `IChunkSource` fallback remap；缺依赖时不注册占位面板（§4.11）
 - [x] `EditorModePanel` 已在 Shell 中通过 `EditorPlaySessionAdapter` 接到 `EngineEditorPlaySessionService` 与 `EngineWorldSnapshotStore`，支持当前态 Play、临时快照 Play、退出恢复（§4.11）
+- [x] `SaveLoadPanel` 已在 Shell 中通过 `EditorWorldSaveLoadService` 接到 Hosting 公开持久世界存读档 API，slot 存于 `<project>/saves`，读档恢复同步 kernel/clock（§4.11）
 - [x] 玩家包解耦（纠正版）：§0 中性化 + `Hosting.csproj` 去 Editor 引用 + `DemoProgram.cs` 去 `using PixelEngine.Editor`/`EnableEditor` 路径、改用 `PixelEngine.Gui` 中性 host；编辑器职责迁移 shell（§0.5、§4.12、`plan/13` 修订）
 - [x] `plan/15` 玩家包审计新增「拒绝 `PixelEngine.Editor.dll`/`ImGuizmo*`/`ImPlot*`、允许 `Hexa.NET.ImGui` 核心」；editor-window 证据入口迁移到 shell（§4.12、§8）
 
@@ -430,7 +432,7 @@ GameObject authoring：
 - [x] Scene View 内 gizmo 可平移/旋转/缩放选中 GameObject 并与 Inspector 双向联动；可点选拾取 GameObject（含空对象 billboard）；gizmo 与世界画刷输入正确仲裁（§4.8）
 - [x] 场景可 Save/Save As 为 `.scene`（v2），读→写→读逐字段等价；v1 旧场景可加载并升级（§4.9）
 - [x] prefab 完整可用：创建资产、实例化、记录/Revert override、编辑资产传播到实例、**嵌套** prefab 递归展开物化正确（§4.10）
-- [ ] 资源浏览/材质反应编辑/世界画刷/调试叠层/性能 HUD/存读档/调参面板在 shell 中复用可用，无重复实现（§4.11）。其中材质反应编辑器与 Edit/Play 模式面板已接入真实链路；存读档 Shell runtime adapter 仍待补。
+- [x] 资源浏览/材质反应编辑/世界画刷/调试叠层/性能 HUD/存读档/调参面板在 shell 中复用可用，无重复实现（§4.11）
 - [x] 玩家包解耦（纠正版）：§0 落地后玩家闭包 `Demo→Hosting→{…,Gui}` 不含 `PixelEngine.Editor`；玩家包发行审计拒绝 `PixelEngine.Editor.dll`/`ImGuizmo*`/`ImPlot*`、允许 `Hexa.NET.ImGui` 核心（§0.5、§4.12、`plan/15`）
 - [x] editor-window 证据迁移：shell `--window-ticks`/scripted-probe 产出与原 Demo `EnableEditor` 等价的 `editor_enabled`/`editor_running`/`editor_panels`/`editor_bridge_frames`，`plan/18 §5` 与相关 preflight/锁定测试保绿（§4.12）
 - [ ] 编辑器内构建：§5.10 全部验收通过（一键出 player-only 包、进度/日志/取消/失败诊断/Build-And-Run/开发 vs 发行布局）
@@ -477,3 +479,4 @@ GameObject authoring：
 - [x] 节点 12：`docs(plan): 落地 plan/19 并修订 plan/00/12/13/15/18/README 交叉引用`（§8）
 - [x] 节点 13：`feat(editor-shell): 接入 plan/12 材质反应编辑器真实热重载链路`（§4.11）
 - [x] 节点 14：`feat(editor-shell): 接入 plan/12 Edit/Play 模式面板与临时快照 Play session`（§4.11）
+- [x] 节点 15：`feat(editor-shell): 接入 plan/12 存读档面板与 Hosting 持久世界存读档 API`（§4.11）

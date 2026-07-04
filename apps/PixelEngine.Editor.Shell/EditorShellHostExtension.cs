@@ -115,6 +115,9 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
         _editor.AddPanel(new PerformanceHudPanel());
         _editor.AddPanel(new SimulationControlToolbar(new EditorSimulationControlAdapter(_app)));
         _editor.AddPanel(new EditorModePanel(new EditorPlaySessionAdapter(_app)));
+        _editor.AddPanel(new SaveLoadPanel(new EditorWorldSaveLoadService(
+            engine,
+            Path.Combine(_project.ProjectRoot, "saves"))));
         if (engine.Context.TryGetService(out DebugOverlaySettings debugSettings))
         {
             _editor.AddPanel(new DebugOverlayPanel(debugSettings));

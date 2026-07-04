@@ -574,6 +574,48 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
+    /// 验证 Engine 公开持久存读档 API 会恢复 resident world、温度、kernel 帧状态与 FrameClock。
+    /// </summary>
+    [Fact]
+    public void EnginePersistentWorldSaveLoadRestoresRuntimeCounters()
+    {
+        string savePath = Path.Combine(Path.GetTempPath(), $"pixelengine-host-persistent-save-{Guid.NewGuid():N}");
+        try
+        {
+            MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+            using Engine engine = new EngineBuilder()
+                .WithWorkerCount(1)
+                .Build();
+            engine.Context.RegisterService(materials);
+            _ = engine.AttachResidentSimulationWorld(128, 128, particleCapacity: 8);
+            ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
+            edit.PaintCell(4, 5, 1);
+            edit.SetTemperature(4, 5, 24.5f);
+            engine.Context.Clock.RestoreCounters(frameIndex: 11, simTickIndex: 11);
+
+            engine.SaveWorldToDirectory(savePath);
+            edit.PaintCell(4, 5, 0);
+            edit.SetTemperature(4, 5, 80f);
+            engine.Context.Clock.RestoreCounters(frameIndex: 17, simTickIndex: 17);
+            WorldLoadResult result = engine.LoadWorldFromDirectory(savePath);
+
+            Assert.Equal(11L, result.GameTimeTicks);
+            Assert.Equal(1, engine.Context.GetService<CellGrid>().GetMaterial(4, 5));
+            Assert.Equal(24.5f, engine.Context.GetService<TemperatureField>().GetTemperature(4, 5));
+            Assert.Equal(11L, engine.Context.Clock.FrameIndex);
+            Assert.Equal(11L, engine.Context.Clock.SimTickIndex);
+            Assert.Equal(11u, engine.Context.GetService<SimulationKernel>().FrameIndex);
+        }
+        finally
+        {
+            if (Directory.Exists(savePath))
+            {
+                Directory.Delete(savePath, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 Engine world 快照后端也会恢复存活脚本 Behaviour 的字段状态。
     /// </summary>
     [Fact]
