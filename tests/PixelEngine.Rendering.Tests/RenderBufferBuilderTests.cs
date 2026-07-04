@@ -445,6 +445,149 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(0xFF010203u, target.Pixels[0]);
     }
 
+    [Fact]
+    public void BuildAppliesRenderStylesAndDamageWithoutMutatingCells()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        SetMaterial(chunk, 0, 0, 1);
+        SetMaterial(chunk, 1, 0, 2);
+        SetMaterial(chunk, 2, 0, 3);
+        SetMaterial(chunk, 3, 0, 4);
+        int damagedLocal = CellAddressing.LocalIndexFromLocal(0, 0);
+        chunk.Damage[damagedLocal] = 50;
+        chunks.Add(chunk);
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "stone", CellType.Solid, 0xFF404040u) with
+            {
+                Integrity = 100,
+                RenderStyle = MaterialRenderStyle.Destructible,
+                EdgeColorBGRA = 0xFFFFFFFFu,
+            },
+            Material(2, "water", CellType.Liquid, 0xFF001020u) with
+            {
+                RenderStyle = MaterialRenderStyle.Liquid,
+                HighlightColorBGRA = 0xFF80C0FFu,
+            },
+            Material(3, "smoke", CellType.Gas, 0xFF808080u) with
+            {
+                RenderStyle = MaterialRenderStyle.Gas,
+                Opacity = 128,
+            },
+            Material(4, "lava", CellType.Liquid, 0xFF101000u) with
+            {
+                RenderStyle = MaterialRenderStyle.Hazard,
+                HighlightColorBGRA = 0xFFFF8000u,
+            });
+        RenderBuffer target = new(4, 1);
+        RenderAuxBuffers aux = new(4, 1);
+        RenderFrameContext context = new(
+            chunks,
+            materials,
+            new TemperatureField(),
+            CameraState.OneToOne(0, 0, 4, 1),
+            simStepped: true,
+            frameTimeSeconds: 0.5f);
+
+        new RenderBufferBuilder().Build(context, target, aux);
+
+        Assert.NotEqual(0xFF404040u, target.Pixels[0]);
+        Assert.NotEqual(0xFF001020u, target.Pixels[1]);
+        Assert.Equal(0x80404040u, target.Pixels[2]);
+        Assert.NotEqual(0u, aux.Emissive[3]);
+        Assert.Equal((ushort)1, chunk.Material[damagedLocal]);
+        Assert.Equal(50, chunk.Damage[damagedLocal]);
+    }
+
+    [Fact]
+    public void BuildStyleLevelOffFallsBackToBaseColor()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        SetMaterial(chunk, 0, 0, 1);
+        chunk.Damage[0] = 200;
+        chunks.Add(chunk);
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "stone", CellType.Solid, 0xFF404040u) with
+            {
+                Integrity = 100,
+                RenderStyle = MaterialRenderStyle.Destructible,
+                EdgeColorBGRA = 0xFFFFFFFFu,
+            });
+        RenderBuffer target = new(1, 1);
+        RenderAuxBuffers aux = new(1, 1);
+        RenderFrameContext context = new(
+            chunks,
+            materials,
+            new TemperatureField(),
+            CameraState.OneToOne(0, 0, 1, 1),
+            simStepped: true);
+
+        new RenderBufferBuilder(options: new RenderBufferBuilderOptions { StyleLevel = RenderBufferStyleLevel.Off })
+            .Build(context, target, aux);
+
+        Assert.Equal(0xFF404040u, target.Pixels[0]);
+        Assert.Equal(200, chunk.Damage[0]);
+    }
+
+    [Fact]
+    public void RenderStyleQualityGateControlsPaletteZoomFastPath()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        SetMaterial(chunk, 0, 0, 1);
+        SetMaterial(chunk, 1, 0, 1);
+        SetMaterial(chunk, 0, 1, 1);
+        SetMaterial(chunk, 1, 1, 1);
+        chunks.Add(chunk);
+        CountingChunkSource counting = new(chunks);
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "stone", CellType.Solid, 0xFF404040u) with
+            {
+                RenderStyle = MaterialRenderStyle.Destructible,
+                EdgeColorBGRA = 0xFFFFFFFFu,
+            });
+        RenderBuffer target = new(4, 4);
+        RenderAuxBuffers aux = new(4, 4);
+        RenderFrameContext context = new(
+            counting,
+            materials,
+            new TemperatureField(),
+            new CameraState(0, 0, 0.5f, 4, 4),
+            simStepped: true);
+
+        new RenderBufferBuilder(options: new RenderBufferBuilderOptions { StyleLevel = RenderBufferStyleLevel.Off })
+            .Build(context, target, aux);
+        int offCalls = counting.TryGetChunkCalls;
+
+        counting.Reset();
+        new RenderBufferBuilder().Build(context, target, aux);
+
+        Assert.True(offCalls <= 4, $"StyleLevel.Off 应继续命中 zoom 行复制快路径，actual calls={offCalls}。");
+        Assert.True(
+            counting.TryGetChunkCalls > offCalls,
+            $"StyleLevel.Full 且存在样式效果时应禁用 zoom 行复制快路径，off={offCalls}, full={counting.TryGetChunkCalls}。");
+    }
+
+    [Fact]
+    public void MaterialSwatchProviderReturnsStableRepresentativeColor()
+    {
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "crystal", CellType.Solid, 0xFF102030u) with
+            {
+                RenderStyle = MaterialRenderStyle.Emissive,
+                HighlightColorBGRA = 0xFF90A0B0u,
+            },
+            Material(2, "sand", CellType.Powder, 0xFF405060u));
+
+        Assert.Equal(0xFF90A0B0u, MaterialSwatchProvider.GetSwatch(materials, 1));
+        Assert.Equal(0xFF405060u, MaterialSwatchProvider.GetSwatch(materials, 2));
+    }
+
     private static void SetMaterial(Chunk chunk, int lx, int ly, ushort material)
     {
         chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
@@ -498,6 +641,11 @@ public sealed class RenderBufferBuilderTests
         private readonly IChunkSource _inner = inner;
 
         public int TryGetChunkCalls { get; private set; }
+
+        public void Reset()
+        {
+            TryGetChunkCalls = 0;
+        }
 
         public ReadOnlySpan<Chunk> ResidentChunks => _inner.ResidentChunks;
 
