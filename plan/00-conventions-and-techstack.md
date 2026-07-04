@@ -72,7 +72,7 @@ PixelEngine.sln
 │  ├─ PixelEngine.Rendering/     Silk.NET 封装/窗口/纹理流式(PBO)/粒子合成/光照/bloom/post/GPU compute
 │  ├─ PixelEngine.Audio/         OpenAL 封装/positional source 池/事件驱动材质音效
 │  ├─ PixelEngine.Scripting/     Roslyn 编译/ALC 热重载/Behaviour&Component API/世界脚本接口/IDE 启动
-│  ├─ PixelEngine.Gui/           中性 ImGui host(共享):HexaImGuiBackend/IGuiContext 运行时适配/EditorRenderBridge 中性部分/GuiFontManager(含 CJK 字体栈);玩家 HUD 与编辑器共用
+│  ├─ PixelEngine.Gui/           中性玩家 HUD ImGui host:HexaImGuiBackend/IGuiContext 运行时适配/GuiRenderBridge/GuiFontManager(含 CJK 字体栈);编辑器可复用中性类型但保留面板专用 backend/bridge
 │  ├─ PixelEngine.UI/            游戏内交互大 UI(HTML):IGameUiBackend/RmlUi 主后端/Ultralight 可选/ManagedFallbackBackend 基线/C#↔UI 桥/输入仲裁(依赖 Gui,Rendering,Core)
 │  ├─ PixelEngine.Editor/        ImGui 管理UI:面板框架/材质编辑器/世界编辑/调试叠层/检视器/资源浏览/sim 控制(依赖 Gui 与各子系统;由编辑器壳注入,Hosting 不再引用)
 │  └─ PixelEngine.Hosting/       引擎宿主:Engine 门面/主循环(帧相位)/子系统装配/EngineContext/项目装载/窗口所有权解耦/抽象 GUI+相位[10]钩子接口(编辑器实现由壳注入)
@@ -95,7 +95,7 @@ PixelEngine.sln
 └─ PixelEngine.sln
 ```
 
-依赖方向（定稿，绝不反向）：主链 `{Demo(玩家运行时), apps/PixelEngine.Editor.Shell(编辑器顶层)} → Hosting → {Scripting, Rendering, Audio, Physics, World, Serialization, Content, Simulation, UI, Gui} → Interop → Core`。补充边：`Editor → {Gui, 子系统}`；`apps/PixelEngine.Editor.Shell → {Hosting, Editor, Gui}`；`UI → {Gui, Rendering, Core}`；`Hosting → Gui`（**Hosting 不再引用 Editor** —— Hosting 暴露抽象 GUI/相位[10]钩子接口，Editor 实现由编辑器壳在开发构建注入）；`Demo → Hosting`（+可选 UI，**不含 Editor**）。要点：**Demo 不再依赖 Editor**（玩家运行时纯净化，玩家 HUD 经 `PixelEngine.Gui` 中性 host 而非 Editor）；**`apps/PixelEngine.Editor.Shell` 与 Demo 同层、均只依赖引擎公开 API**；`PixelEngine.Gui` 为 Rendering 之上、Editor 之下的**共享中性 GUI host 层**（玩家 HUD 与编辑器共用同一 ImGui host+字体栈）；`PixelEngine.UI` 只依赖 `{Gui, Rendering, Core}`。Editor 依赖各子系统只读 API；Simulation 不依赖 Rendering/Physics。
+依赖方向（定稿，绝不反向）：主链 `{Demo(玩家运行时), apps/PixelEngine.Editor.Shell(编辑器顶层)} → Hosting → {Scripting, Rendering, Audio, Physics, World, Serialization, Content, Simulation, UI, Gui} → Interop → Core`。补充边：`Editor → {Gui, 子系统}`；`apps/PixelEngine.Editor.Shell → {Hosting, Editor, Gui}`；`UI → {Gui, Rendering, Core}`；`Hosting → Gui`（**Hosting 不再引用 Editor** —— Hosting 暴露抽象 GUI/相位[10]钩子接口，Editor 实现由编辑器壳在开发构建注入）；`Demo → Hosting`（+可选 UI，**不含 Editor**）。要点：**Demo 不再依赖 Editor**（玩家运行时纯净化，玩家 HUD 经 `PixelEngine.Gui` 中性 host 而非 Editor）；**`apps/PixelEngine.Editor.Shell` 与 Demo 同层、均只依赖引擎公开 API**；`PixelEngine.Gui` 为 Rendering 之上、Editor 之下的**中性玩家 HUD GUI host 层**（编辑器可复用中性类型，但面板 backend / dockspace / bridge 仍归 `PixelEngine.Editor`）；`PixelEngine.UI` 只依赖 `{Gui, Rendering, Core}`。Editor 依赖各子系统只读 API；Simulation 不依赖 Rendering/Physics。
 
 ### 5.1 类型归属裁定（消除跨文档歧义,各 leaf 文档据此对齐）
 
@@ -123,9 +123,9 @@ PixelEngine.sln
 
 - [x] 所有其它 plan 文档的「技术栈」段不与本表冲突（已复核 plan/01–18：均继承 .NET 10/C# 14、Silk.NET、Box2D 自建 `[LibraryImport]`、Hexa.NET.ImGui、Roslyn+ALC、System.Text.Json、K4os LZ4、xUnit、BenchmarkDotNet、ComputeSharp/NVorbis 可选门控与无通用 ECS 约束；未发现另立选型）。
 - [x] 解决方案结构与 §5 一致，依赖方向被 `.csproj` ProjectReference 强制（无反向依赖）。
-- [ ] 复核 `apps/PixelEngine.Editor.Shell` 与 `src/PixelEngine.UI` 对引擎无反向依赖：EditorShell 与 Demo 同层、仅依赖 `{Hosting, Editor, Gui}` 公开 API；`PixelEngine.UI` 仅依赖 `{Gui, Rendering, Core}`，无子系统反向引用（沿用 plan/11 契约-后端范式，`IGameUiService` 契约声明所在程序集须避免 Scripting→UI 反向）。
-- [ ] 复核 `PixelEngine.Hosting.csproj` **不再 ProjectReference `PixelEngine.Editor`**：Hosting 通过抽象 GUI/相位[10]钩子接口解耦，Editor 实现由 `apps/PixelEngine.Editor.Shell`（开发构建）注入；玩家包（Demo）不含 `PixelEngine.Editor.dll` 及 ImGui 闭包（GUI 宿主中性化重构落地为前置，玩家包审计断言见 plan/15）。
-- [ ] 复核 `PixelEngine.Gui` 为 Rendering 之上、Editor 之下的**共享中性 GUI host 层**：玩家 HUD 与编辑器共用同一 ImGui host（HexaImGuiBackend）、`IGuiContext` 运行时适配与字体栈（GuiFontManager，含 CJK）；Demo 玩家 HUD 经 `PixelEngine.Gui` 而非经 Editor（`ScriptGuiContext`）取得 host。
+- [!] 阻塞：复核 `apps/PixelEngine.Editor.Shell` 与 `src/PixelEngine.UI` 对引擎无反向依赖：EditorShell 与 Demo 同层、仅依赖 `{Hosting, Editor, Gui}` 公开 API；`PixelEngine.UI` 仅依赖 `{Gui, Rendering, Core}`，无子系统反向引用。当前 EditorShell 依赖方向已复核，`src/PixelEngine.UI` 尚未落地，待 plan/20 实现后复核。
+- [x] 复核 `PixelEngine.Hosting.csproj` **不再 ProjectReference `PixelEngine.Editor`**：Hosting 通过抽象 GUI/相位[10]钩子接口解耦，Editor 实现由 `apps/PixelEngine.Editor.Shell`（开发构建）注入；玩家包（Demo）不含 `PixelEngine.Editor.dll` 与编辑器专属面板闭包，允许玩家 HUD 所需 `Hexa.NET.ImGui`（GUI 宿主中性化重构落地为前置，玩家包审计断言见 plan/15）。
+- [x] 复核 `PixelEngine.Gui` 为 Rendering 之上、Editor 之下的**中性玩家 HUD GUI host 层**：玩家 HUD 使用 `PixelEngine.Gui.HexaImGuiBackend`、`IGuiContext` 运行时适配与字体栈（GuiFontManager，含 CJK）；Demo 玩家 HUD 经 `PixelEngine.Gui` 而非经 Editor（`ScriptGuiContext`）取得 host。
 - [!] 阻塞：发行与 Box2D dual-build 工具链已在 `plan/15`、`release.yml`、`tools/audit-release-artifacts.*` 与 `tools/release-evidence-preflight.ps1` 落地，且本机 `win-x64` R2R/AOT 发行验证通过；`tools/release-evidence-preflight.ps1` 会把缺 manifest 标为 `blocked_missing_release_manifest`、schema/JSON 错误标为 `blocked_invalid_release_evidence`、缺 RID/channel/signing/hash/upload scope 标为 `blocked_missing_release_scope_evidence`、非 tag `workflow_dispatch` 上传标为 `blocked_not_tag_release`、证据齐全标为 `release_evidence_attached_pending_review` 且默认非零退出；其中 deterministic hash 报告必须包含 6 RID × 2 channel 全部 `match` 明细行，不能只靠 `conclusion=success` 通过，所有 markdown 报告还必须与 `workflow_run` 的 `run_id` / `sha` 同源，不能拼接不同 GitHub Actions run 或不同 commit 的证据。完整 6 RID 发行管线仍需对应 runner、目标硬件、macOS 签名凭据与 GitHub Release 产物证据经人工复核闭合。
 
 ## 9. 提交节点

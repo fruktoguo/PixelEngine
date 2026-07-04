@@ -8,7 +8,7 @@
 
 ## 1. 目标与范围
 
-本文件交付一个**侧视（side-view）落沙沙盒游戏**：一名可操作角色（kinematic AABB）在可被任意挖掘 / 爆破的像素地形上跑、跳、蹬墙，地形与物质遵循引擎的全像素 falling-sand 模拟。Demo 是「在引擎上做游戏」的端到端证明，必须把架构文档列出的全部世界能力——完整材质集与反应、像素簇→Box2D 刚体、自由粒子、emissive + fog-of-war 光照、材质化音频、脚本热重载、内嵌编辑器——在一个**可玩关卡**里串成最低完整玩法（架构 §18 M10、§1.2）。
+本文件交付一个**侧视（side-view）落沙沙盒游戏**：一名可操作角色（kinematic AABB）在可被任意挖掘 / 爆破的像素地形上跑、跳、蹬墙，地形与物质遵循引擎的全像素 falling-sand 模拟。Demo 是「在引擎上做游戏」的端到端证明，必须把架构文档列出的全部世界能力——完整材质集与反应、像素簇→Box2D 刚体、自由粒子、emissive + fog-of-war 光照、材质化音频、脚本热重载、独立 EditorShell 证据链——在一个**可玩关卡**里串成最低完整玩法（架构 §18 M10、§1.2）。
 
 落在范围内的内容是：宿主启动与主循环装配（经 `PixelEngine.Hosting`）；继承脚本基类 `Behaviour`（plan/11）的玩家角色控制器、相机跟随、材质笔刷、爆破工具、关卡生成器、物质发射器、HUD 与暂停菜单；Demo 自带的内容资产（`content/materials.json`、`content/reactions.json`、材质纹理、音效）；一个名为「熔岩矿洞逃生」的可玩关卡；以及一份**Demo 反推出的引擎公开 API 需求清单**，逐项标注所属 plan 文档与「已规划 / 需引擎补 API」状态（§3.13）。
 
@@ -22,15 +22,15 @@
 
 运行时与语言：**.NET 10 LTS / C# 14**，与全局一致（plan/00 §1）。`demo/PixelEngine.Demo` 是一个可执行项目（`OutputType=Exe`），`Program.cs` 为入口。Demo **不开 `AllowUnsafeBlocks`**（玩法层无需 unsafe；热路径在引擎内），`Nullable` / `ImplicitUsings` / file-scoped namespace 继承自 `Directory.Build.props`（plan/00 §6）。
 
-依赖方向严格单向（plan/00 §5）：`Demo → Hosting → {Editor, Scripting, Rendering, Audio, Physics, World, Serialization, Content, Simulation} → Interop → Core`。Demo 的 `.csproj` **只 `ProjectReference` 到 `PixelEngine.Hosting`**（门面）与 `PixelEngine.Scripting`（`Behaviour`/`Component` 基类与脚本服务接口）；其余子系统能力一律经由 Hosting 暴露的 `EngineContext` 服务接口取得，不直接引用 `PixelEngine.Simulation` 等内部装配（这正是「只用公开 API」的工程强制手段）。CI 用一条依赖方向检查（plan/14）确保 Demo 不出现对引擎内部 assembly 的反向 / 越层引用。
+依赖方向严格单向（plan/00 §5）：`Demo → Hosting → {Scripting, Rendering, Audio, Physics, World, Serialization, Content, Simulation, UI, Gui} → Interop → Core`，**不含 `PixelEngine.Editor`**。Demo 的 `.csproj` **只 `ProjectReference` 到 `PixelEngine.Hosting`**（门面）与 `PixelEngine.Scripting`（`Behaviour`/`Component` 基类与脚本服务接口）；其余子系统能力一律经由 Hosting 暴露的 `EngineContext` 服务接口取得，不直接引用 `PixelEngine.Simulation` 等内部装配（这正是「只用公开 API」的工程强制手段）。CI 用一条依赖方向检查（plan/14）确保 Demo 不出现对引擎内部 assembly 的反向 / 越层引用。
 
 第三方依赖：**零新增**。Demo 复用引擎已选定的 Silk.NET（窗口 / 输入 / GL / AL）、Hexa.NET.ImGui（HUD / 菜单经引擎 GUI 服务）、Roslyn + 可回收 ALC（脚本热重载）、System.Text.Json（内容加载），均通过引擎公开 API 间接使用，Demo 项目自身不直接 `PackageReference` 它们（plan/00 §4）。native 面收敛在引擎侧的 Box2D 唯一依赖（架构 §14.4），Demo 不引入任何 native。
 
-脚本模型：**项目引用 + Roslyn ALC 热重载**（plan/11）。Demo 的所有玩法脚本继承 `Behaviour`，既可作为编译进 Demo 程序集的常规类型由引擎实例化，也可在开发态被引擎的 Roslyn 编译 + 可回收 `AssemblyLoadContext` 热重载（Unity 式迭代，架构 §17.4、plan/00 §4）。编辑器为**内嵌 ImGui**（plan/12），用于关卡可视化编辑与调试叠层；Demo 同时提供脚本化关卡生成（§3.11），两条路径产出同一份场景。
+脚本模型：**项目引用 + Roslyn ALC 热重载**（plan/11）。Demo 的所有玩法脚本继承 `Behaviour`，既可作为编译进 Demo 程序集的常规类型由引擎实例化，也可在开发态被引擎的 Roslyn 编译 + 可回收 `AssemblyLoadContext` 热重载（Unity 式迭代，架构 §17.4、plan/00 §4）。编辑器托管由独立 `apps/PixelEngine.Editor.Shell` 承担（plan/19），用于关卡可视化编辑与调试叠层；Demo 进程收敛为纯玩家运行时，同时提供脚本化关卡生成（§3.11），两条路径产出同一份场景。
 
 内容资产（Demo 自带，由 `PixelEngine.Content` 在装载期加载，plan/04）：`content/materials.json`、`content/reactions.json`、`content/weapons.json`（数据驱动武器目录，§3.14）、`content/textures/`（材质纹理）、`content/audio/`（音效）、`content/scenes/lava-mine.scene`（关卡序列化产物，plan/07 场景格式）。所有材质以**稳定字符串键 `Name` 入盘**，运行时数值 id 仅作索引（架构不变式 §8、§11.2）。`content/weapons.json`（含材质 / 音效引用）同样经引擎**公开 Content/Config API** 加载，Demo **不直接 `System.Text.Json`**（保持 `HostingProjectDisciplineTests` 现有纪律，§3.14）。
 
-本轮 **M13「编辑器独立化与发行解耦」修订**收敛 Demo 为**纯玩家运行时**：移除 `--editor` in-demo 内嵌编辑器启动路径，编辑器托管整体迁移到独立可执行壳 `apps/PixelEngine.Editor.Shell`（plan/19），Demo 进程不再承载任何编辑器面板 / dockspace。依赖方向据此修正——**GUI 宿主中性化重构**新增中性程序集 `PixelEngine.Gui`（位于 Rendering 之上、Editor 之下），把玩家 HUD 需要的 ImGui host 从 Editor 下沉进来（`HexaImGuiBackend`、`IGuiContext` 运行时适配即原 `ScriptGuiContext`、`EditorRenderBridge` 中性部分、字体栈含 CJK）；`PixelEngine.Hosting` **删除对 `PixelEngine.Editor` 的硬 `ProjectReference`**，`Program.cs` 改用 `PixelEngine.Gui` 中性 host 承载 `DemoHud`/`PauseMenu`，不经 Editor。修正后依赖链为 `Demo → Hosting → {Scripting, Rendering, Audio, Physics, World, Serialization, Content, Simulation, UI, Gui} → Interop → Core`（Demo 可选依赖 plan/20 `PixelEngine.UI` 交互 HTML UI，**不含 Editor**）。**须澄清的事实**：Demo 此前**并无**对 `PixelEngine.Editor` 的直接 `ProjectReference`——旧耦合是经 `Hosting.csproj` 引用 Editor + 若干 Hosting 源文件使用 Editor 类型 + 玩家 HUD 经 `IGuiContext → ScriptGuiContext(在 Editor) → HexaImGuiBackend` 的**传递闭包**；故解耦的真正动作是「GUI 中性化重构 + Hosting 删 Editor 引用 + `Program.cs` 改用 Gui 中性 host」，而非「移除 Demo 对 Editor 的项目引用」。该重构是 plan/19 壳注入、plan/15 玩家包审计、plan/20 UI 字体 / 回退复用三者的共同前置（M13 入口门）。
+本轮 **M13「编辑器独立化与发行解耦」修订**收敛 Demo 为**纯玩家运行时**：移除 `--editor` in-demo 内嵌编辑器启动路径，编辑器托管整体迁移到独立可执行壳 `apps/PixelEngine.Editor.Shell`（plan/19），Demo 进程不再承载任何编辑器面板 / dockspace。依赖方向据此修正——**GUI 宿主中性化重构**新增中性程序集 `PixelEngine.Gui`（位于 Rendering 之上、Editor 之下），把玩家 HUD 需要的 ImGui host 从 Editor 下沉进来（`HexaImGuiBackend`、`IGuiContext` 运行时适配即原 `ScriptGuiContext`、`GuiRenderBridge`、字体栈含 CJK）；`PixelEngine.Hosting` **删除对 `PixelEngine.Editor` 的硬 `ProjectReference`**，`Program.cs` 改用 `PixelEngine.Gui` 中性 host 承载 `DemoHud`/`PauseMenu`，不经 Editor。修正后依赖链为 `Demo → Hosting → {Scripting, Rendering, Audio, Physics, World, Serialization, Content, Simulation, UI, Gui} → Interop → Core`（Demo 可选依赖 plan/20 `PixelEngine.UI` 交互 HTML UI，**不含 Editor**）。**须澄清的事实**：Demo 此前**并无**对 `PixelEngine.Editor` 的直接 `ProjectReference`——旧耦合是经 `Hosting.csproj` 引用 Editor + 若干 Hosting 源文件使用 Editor 类型 + 玩家 HUD 经 `IGuiContext → ScriptGuiContext(在 Editor) → HexaImGuiBackend` 的**传递闭包**；故解耦的真正动作是「GUI 中性化重构 + Hosting 删 Editor 引用 + `Program.cs` 改用 Gui 中性 host」，而非「移除 Demo 对 Editor 的项目引用」。该重构是 plan/19 壳注入、plan/15 玩家包审计、plan/20 UI 字体 / 回退复用三者的共同前置（M13 入口门）。
 
 ---
 
@@ -112,7 +112,7 @@ Demo 侧无需实现刚体逻辑——这正是反推点：刚体的产生 / 同
 
 ### 3.12 HUD / 菜单
 
-`DemoHud : Behaviour.OnGui` 用引擎 GUI 服务（即时模式，基于内嵌 ImGui，plan/11 `IGuiContext` + plan/12）绘制游戏内 HUD：当前选中材质（名 + 色块 + 数字键提示）、笔刷半径、玩家状态（生命、是否着火 / 接触危险）、操作提示（移动 / 跳 / 蹬墙 / 挖放 / 爆炸 / 切材质 / 暂停）、性能行（fps / sim 频率 / 活跃 chunk / 粒子 / 刚体数，取自引擎诊断服务 `Diagnostics`，架构 §17.1、plan/02）。`PauseMenu : Behaviour.OnGui`（Esc 切换）提供继续 / 重开关卡 / 切换调试叠层（dirty-rect / parity / owned-by-body 等，架构 §17.2，引擎提供开关 API）/ 打开内嵌编辑器（plan/12）/ 退出。HUD / 菜单**不直接调 Hexa.NET.ImGui**，而是经引擎 `IGuiContext` 公开 API，保持「只用公开 API」。
+`DemoHud : Behaviour.OnGui` 用引擎 GUI 服务（即时模式，基于 `PixelEngine.Gui` 中性 ImGui host，plan/11 `IGuiContext` + plan/12）绘制游戏内 HUD：当前选中材质（名 + 色块 + 数字键提示）、笔刷半径、玩家状态（生命、是否着火 / 接触危险）、操作提示（移动 / 跳 / 蹬墙 / 挖放 / 爆炸 / 切材质 / 暂停）、性能行（fps / sim 频率 / 活跃 chunk / 粒子 / 刚体数，取自引擎诊断服务 `Diagnostics`，架构 §17.1、plan/02）。`PauseMenu : Behaviour.OnGui`（Esc 切换）提供继续 / 重开关卡 / 切换调试叠层（dirty-rect / parity / owned-by-body 等，架构 §17.2，引擎提供开关 API）/ 退出；编辑器入口已迁移到独立 `apps/PixelEngine.Editor.Shell`，Demo 菜单不再打开编辑器。HUD / 菜单**不直接调 Hexa.NET.ImGui**，而是经引擎 `IGuiContext` 公开 API，保持「只用公开 API」。
 
 ### 3.13 引擎公开 API 需求清单（反推 API 完整性）
 
@@ -276,7 +276,7 @@ API 缺口登记
 
 横向约束：Demo 不得违反架构不变式（`AGENTS.md §1`），尤其帧节奏（不追帧、不驱动额外 sim step，架构 §4.4）与「只用公开 API」。
 
-备注（须上报）：plan/README 与 plan/00 §5 定义了 `PixelEngine.Hosting` 工程，但**未在 plan 清单里给出专属的 Hosting 计划文档**；Demo 的启动与主循环强依赖 Hosting 公开门面（`Engine`/`EngineBuilder`/`EngineContext`/场景加载）。此为 §3.13 多项「需引擎补 API」的根因，建议补一份 Hosting plan 或将其并入 plan/11，按 `AGENTS.md §5`「先改计划再改代码」处理。
+备注：Hosting 专属计划已由 `plan/18-hosting-runtime.md` 承接；Demo 的启动、主循环、场景加载、GUI host 与 editor-window 证据迁移均以 `plan/18` / `plan/19` 的公开 API 为前置，不再把 Hosting 计划缺失视为当前阻塞。
 
 ---
 
