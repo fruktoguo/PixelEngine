@@ -96,6 +96,12 @@ public sealed class RenderBufferBuilder(
             return;
         }
 
+        if (builder.CanUseStyledSegmentedFastPath(context))
+        {
+            builder.BuildRowsStyledSegmented(context, target, aux, start, end);
+            return;
+        }
+
         Span<uint> pixels = target.Pixels;
         Span<uint> emissive = aux.Emissive;
         Span<byte> occluder = aux.Occluder;
@@ -118,6 +124,64 @@ public sealed class RenderBufferBuilder(
                 {
                     occluder[index] = byte.MaxValue;
                 }
+            }
+        }
+    }
+
+    private void BuildRowsStyledSegmented(RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux, int start, int end)
+    {
+        Span<uint> pixels = target.Pixels;
+        Span<uint> emissive = aux.Emissive;
+        Span<byte> occluder = aux.Occluder;
+        MaterialHotTable hot = context.Materials.Hot;
+        ReadOnlySpan<uint> palette = hot.BaseColorBGRA;
+        int originX = (int)context.Camera.OriginWorldX;
+        int originY = (int)context.Camera.OriginWorldY;
+
+        for (int sy = start; sy < end; sy++)
+        {
+            int row = sy * target.Width;
+            int worldY = originY + sy;
+            int localY = CellAddressing.LocalCoord(worldY);
+            int sx = 0;
+            while (sx < target.Width)
+            {
+                int worldX = originX + sx;
+                int localX = CellAddressing.LocalCoord(worldX);
+                int run = Math.Min(target.Width - sx, EngineConstants.ChunkSize - localX);
+                int rowOffset = row + sx;
+                if (!context.Chunks.TryGetChunk(CellAddressing.WorldToChunk(worldX, worldY), out Chunk chunk))
+                {
+                    pixels.Slice(rowOffset, run).Clear();
+                    sx += run;
+                    continue;
+                }
+
+                int localStart = CellAddressing.LocalIndexFromLocal(localX, localY);
+                int offset = 0;
+                while (offset < run)
+                {
+                    int segment = GetStyledPaletteRunLength(context, chunk, localStart + offset, run - offset, worldX + offset, worldY);
+                    if (segment > 0)
+                    {
+                        ReadOnlySpan<ushort> materials = chunk.Material.AsSpan(localStart + offset, segment);
+                        Span<uint> pixelRun = pixels.Slice(rowOffset + offset, segment);
+                        PaletteBgraConverter.Convert(materials, palette, pixelRun);
+                        if (hot.HasColorNoise)
+                        {
+                            BgraColorMixer.ApplyColorNoise(materials, hot.ColorNoise, pixelRun, worldX + offset, worldY);
+                        }
+
+                        FillAuxFast(materials, hot, pixelRun, emissive.Slice(rowOffset + offset, segment), occluder.Slice(rowOffset + offset, segment));
+                        offset += segment;
+                        continue;
+                    }
+
+                    WriteScalarPixel(context, worldX + offset, worldY, rowOffset + offset, pixels, emissive, occluder);
+                    offset++;
+                }
+
+                sx += run;
             }
         }
     }
@@ -251,6 +315,19 @@ public sealed class RenderBufferBuilder(
             (_textures is null || !hot.HasTexturedMaterials);
     }
 
+    private bool CanUseStyledSegmentedFastPath(RenderFrameContext context)
+    {
+        CameraState camera = context.Camera;
+        MaterialHotTable hot = context.Materials.Hot;
+        return ShouldUseMaterialStyles(context) &&
+            camera.CellsPerPixel == 1f &&
+            camera.OriginWorldX == MathF.Truncate(camera.OriginWorldX) &&
+            camera.OriginWorldY == MathF.Truncate(camera.OriginWorldY) &&
+            context.DebugCellColors is null &&
+            !context.Temperature.HasActiveBlocks &&
+            (_textures is null || !hot.HasTexturedMaterials);
+    }
+
     private bool TryGetPaletteZoomPixelsPerCell(RenderFrameContext context, out int pixelsPerCell)
     {
         pixelsPerCell = 0;
@@ -282,6 +359,58 @@ public sealed class RenderBufferBuilder(
     private bool ShouldUseMaterialStyles(RenderFrameContext context)
     {
         return _options.StyleLevel == RenderBufferStyleLevel.Full && context.Materials.Visual.HasStyleEffects;
+    }
+
+    private int GetStyledPaletteRunLength(RenderFrameContext context, Chunk chunk, int localStart, int remaining, int worldX, int worldY)
+    {
+        MaterialHotTable hot = context.Materials.Hot;
+        MaterialVisualTable visual = context.Materials.Visual;
+        ushort materialId = chunk.Material[localStart];
+        if (!IsStyledPaletteFastMaterial(hot, visual, materialId))
+        {
+            return 0;
+        }
+
+        int unbrokenRun = RenderStyleSegmentScanner.CountSolidUnbrokenRun(
+            chunk.Material,
+            chunk.Damage,
+            localStart,
+            remaining,
+            materialId);
+        if (unbrokenRun == 0)
+        {
+            return 0;
+        }
+
+        uint edgeColor = visual.EdgeColorBGRA[materialId];
+        if (edgeColor == 0)
+        {
+            return unbrokenRun;
+        }
+
+        for (int length = 0; length < unbrokenRun; length++)
+        {
+            int currentX = worldX + length;
+            if (IsBoundaryEdge(context, materialId, currentX - 1, worldY) ||
+                IsBoundaryEdge(context, materialId, currentX, worldY - 1))
+            {
+                return length;
+            }
+        }
+
+        return unbrokenRun;
+    }
+
+    private static bool IsStyledPaletteFastMaterial(MaterialHotTable hot, MaterialVisualTable visual, ushort materialId)
+    {
+        MaterialRenderStyle style = visual.RenderStyle[materialId];
+        return (style is MaterialRenderStyle.Ground or MaterialRenderStyle.Solid or MaterialRenderStyle.Destructible) &&
+            (hot.Type[materialId] == CellType.Solid ||
+                (hot.PropertyFlags[materialId] & MaterialProperty.Static) != 0) &&
+            hot.TextureId[materialId] < 0 &&
+            visual.Opacity[materialId] == byte.MaxValue &&
+            visual.HighlightColorBGRA[materialId] == 0 &&
+            (hot.BaseColorBGRA[materialId] >> 24) == byte.MaxValue;
     }
 
     private bool CanClearEmptyWorld(RenderFrameContext context)
@@ -447,6 +576,28 @@ public sealed class RenderBufferBuilder(
     private int ScreenToWorldY(CameraState camera, int screenY)
     {
         return (int)MathF.Floor(camera.OriginWorldY + (screenY * camera.CellsPerPixel));
+    }
+
+    private void WriteScalarPixel(
+        RenderFrameContext context,
+        int worldX,
+        int worldY,
+        int index,
+        Span<uint> pixels,
+        Span<uint> emissive,
+        Span<byte> occluder)
+    {
+        uint color = SampleCell(context, worldX, worldY, out bool isEmissive, out bool isOccluder);
+        pixels[index] = color;
+        if (isEmissive)
+        {
+            emissive[index] = color;
+        }
+
+        if (isOccluder)
+        {
+            occluder[index] = byte.MaxValue;
+        }
     }
 
     private uint SampleCell(RenderFrameContext context, int worldX, int worldY, out bool isEmissive, out bool isOccluder)

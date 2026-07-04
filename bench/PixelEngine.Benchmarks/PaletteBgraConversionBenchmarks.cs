@@ -1,5 +1,6 @@
 using BenchmarkDotNet.Attributes;
 using PixelEngine.Rendering;
+using PixelEngine.Simulation;
 
 namespace PixelEngine.Benchmarks;
 
@@ -116,5 +117,98 @@ public class BgraColorNoiseBenchmarks
     public void ApplyColorNoise()
     {
         BgraColorMixer.ApplyColorNoise(_materials, _noise, _pixels, worldX: -37, worldY: 19);
+    }
+}
+
+/// <summary>
+/// RenderStyle 开启时，未破损纯固体段走 palette SIMD / color-noise SIMD 的相位 9 基准入口。
+/// </summary>
+[MemoryDiagnoser]
+public class RenderStyleSegmentedBenchmarks
+{
+    private const ushort Stone = 1;
+    private readonly Chunk _chunk = new(new ChunkCoord(0, 0));
+    private readonly TestChunkSource _chunks;
+    private readonly MaterialTable _materials;
+    private readonly TemperatureField _temperature = new();
+    private readonly RenderBuffer _target = new(256, 256);
+    private readonly RenderAuxBuffers _aux = new(256, 256);
+    private readonly RenderBufferBuilder _builder = new();
+    private readonly RenderFrameContext _context;
+
+    /// <summary>
+    /// 初始化 RenderStyle 分段快路径 benchmark fixture。
+    /// </summary>
+    public RenderStyleSegmentedBenchmarks()
+    {
+        _chunks = new TestChunkSource(_chunk);
+        _materials = new MaterialTable(
+        [
+            new MaterialDef
+            {
+                Id = 0,
+                Name = "empty",
+                Type = CellType.Empty,
+                BaseColorBGRA = 0,
+                TextureId = -1,
+                HeatCapacity = 1f,
+            },
+            new MaterialDef
+            {
+                Id = Stone,
+                Name = "stone",
+                Type = CellType.Solid,
+                BaseColorBGRA = 0xFF304050u,
+                ColorNoise = 16,
+                TextureId = -1,
+                HeatCapacity = 1f,
+                RenderStyle = MaterialRenderStyle.Solid,
+            },
+        ]);
+        _context = new RenderFrameContext(
+            _chunks,
+            _materials,
+            _temperature,
+            CameraState.OneToOne(0, 0, 256, 256),
+            simStepped: true);
+
+        for (int i = 0; i < _chunk.Material.Length; i++)
+        {
+            _chunk.Material[i] = Stone;
+        }
+    }
+
+    /// <summary>
+    /// 未破损 SolidOpaque 样式段的 render buffer 构建。
+    /// </summary>
+    [Benchmark]
+    public void BuildRenderBufferStyledSegmented()
+    {
+        _builder.Build(_context, _target, _aux);
+    }
+
+    private sealed class TestChunkSource(Chunk chunk) : IChunkSource
+    {
+        private readonly Chunk[] _resident = [chunk];
+
+        public ReadOnlySpan<Chunk> ResidentChunks => _resident;
+
+        public bool TryGetChunk(ChunkCoord coord, out Chunk result)
+        {
+            if (coord == chunk.Coord)
+            {
+                result = chunk;
+                return true;
+            }
+
+            result = null!;
+            return false;
+        }
+
+        public bool ResolveNeighborhood(ChunkCoord center, out ChunkNeighborhood neighborhood)
+        {
+            neighborhood = default;
+            return false;
+        }
     }
 }
