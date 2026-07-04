@@ -280,10 +280,13 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("editor_build_run_probe", source, StringComparison.Ordinal);
         Assert.Contains("phase_timing_count", source, StringComparison.Ordinal);
         Assert.Contains("phase_timings", source, StringComparison.Ordinal);
+        Assert.Contains("error_present", source, StringComparison.Ordinal);
+        Assert.Contains("SanitizeSummaryValue", source, StringComparison.Ordinal);
         Assert.Contains("window_completed", source, StringComparison.Ordinal);
         Assert.Contains("content_loaded", source, StringComparison.Ordinal);
         Assert.Contains("window_frame_probe", source, StringComparison.Ordinal);
         Assert.Contains("class BuildToolLocator", source, StringComparison.Ordinal);
+        Assert.Contains("PIXELENGINE_BUILD_PLAYER_PATH", source, StringComparison.Ordinal);
         Assert.Contains("interface IPlayerBuildService", source, StringComparison.Ordinal);
         Assert.Contains("class PlayerBuildService", source, StringComparison.Ordinal);
         Assert.Contains("PreflightAsync", source, StringComparison.Ordinal);
@@ -299,6 +302,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("TryParseProgressLine", source, StringComparison.Ordinal);
         Assert.Contains("pixelengine.build/v1", source, StringComparison.Ordinal);
         Assert.Contains("TryGetString(root, \"ts\"", source, StringComparison.Ordinal);
+        Assert.Contains("item.Phase == BuildPhase.Unknown && item.Level == BuildLogLevel.Error", source, StringComparison.Ordinal);
         Assert.Contains("build-result.json", source, StringComparison.Ordinal);
         Assert.Contains("Kill(entireProcessTree: true)", source, StringComparison.Ordinal);
         Assert.Contains("Process.Start(startInfo)", source, StringComparison.Ordinal);
