@@ -323,13 +323,13 @@ Edit 模式实时投影：为让 Scene View 的 gizmo/拾取显示「活的」Ga
 ### 5.9 §5 实现清单
 
 面板与设置模型（shell 程序集）
-- [ ] `BuildTargetSettings`/`SceneBuildEntry`/`BuildRequest`/`BuildResult`/`BuildProgressEvent`/`BuildPhase`/`BuildLog` 类型与 `PixelEngineEditorShellBuildJsonContext` 源生成序列化（§5.2）
-- [ ] `BuildTargetSettings.Normalize()` 校验：唯一启动场景、启动∈入包、至少一入包、路径/产物名非空（§5.2/§5.3）
-- [ ] `BuildSettingsPanel : IEditorPanel`（位于 shell 程序集）五段 UI（设置/操作/进度/日志/结果），构建中禁用设置控件（§5.2/§5.3）
-- [ ] 场景清单表由「扫描 `content/scenes/` ∪ `EngineProject.Scenes`」只读映射，入包/启动交互与约束校验（§5.3/§5.6）
-- [ ] 图标 `.ico` 缩略图经中性 ImGui host 上传预览（可选，缺图标不阻断）（§5.3）
-- [ ] 设置持久化 `<项目根>/BuildSettings.json` 读写，面板初始化加载、变更保存（§5.2）
-- [ ] 面板经 `EditorApp.AddPanel` 注册，`EditorContext` 仅只读消费 + Hosting `EngineProject` 只读，无引擎内部访问、无 `Editor→Hosting` 循环（§5.1/§5.2）
+- [x] `BuildTargetSettings`/`SceneBuildEntry`/`BuildRequest`/`BuildResult`/`BuildProgressEvent`/`BuildPhase`/`BuildLog` 类型与 `PixelEngineEditorShellBuildJsonContext` 源生成序列化（§5.2）
+- [x] `BuildTargetSettings.Normalize()` 校验：唯一启动场景、启动∈入包、至少一入包、路径/产物名非空（§5.2/§5.3）
+- [x] `BuildSettingsPanel : IEditorPanel`（位于 shell 程序集）五段 UI（设置/操作/进度/日志/结果），构建中禁用设置控件（§5.2/§5.3）。节点 8 阶段因 `tools/build-player` 尚未落地，Build/Build And Run 显式禁用，避免假执行。
+- [x] 场景清单表由「扫描 `content/scenes/` ∪ `EngineProject.Scenes`」只读映射，入包/启动交互与约束校验（§5.3/§5.6）
+- [x] 图标 `.ico` 路径设置接入；缩略图预览为可选能力，缺图标不阻断（§5.3）
+- [x] 设置持久化 `<项目根>/BuildSettings.json` 读写，面板初始化加载、变更保存（§5.2）
+- [x] 面板经 `EditorApp.AddPanel` 注册，`EditorContext` 仅只读消费 + Hosting `EngineProject` 只读，无引擎内部访问、无 `Editor→Hosting` 循环（§5.1/§5.2）
 
 子进程编排（shell 程序集）
 - [ ] `BuildToolLocator` 定位仓库根/`build-player`/`dotnet`/`pwsh`↔`powershell.exe`/`sh`（§5.4）
@@ -467,7 +467,7 @@ GameObject authoring：
 - [x] 节点 5：`feat(editor-shell): GameObject Inspector（Transform/组件增删改/Add Component）`（§4.7）
 - [x] 节点 6：`feat(editor-shell): Scene View 变换 gizmo 与拾取`（§4.8）
 - [x] 节点 7：`feat(editor-shell): .scene 保存往返（schema v2）+ 完整 prefab（含嵌套/传播）`（§4.9–§4.10）
-- [ ] 节点 8：`feat(editor): Build 面板设置模型与 UI（平台/输出/产物名/图标/场景清单/配置/符号/内容选项）`（§5.2–§5.3，shell 程序集）
+- [x] 节点 8：`feat(editor): Build 面板设置模型与 UI（平台/输出/产物名/图标/场景清单/配置/符号/内容选项）`（§5.2–§5.3，shell 程序集）
 - [ ] 节点 9：`feat(editor): PlayerBuildService 子进程编排（起 build-player、NDJSON 回灌、exit code、取消、Build-And-Run）`（§5.4–§5.6）
 - [ ] 节点 10：`build(build): tools/build-player 编排器 + NDJSON/build-result 契约 + player-only audit 不变式`（`plan/15 §3.11`，scope=build）
 - [ ] 节点 11：`refactor(demo): 玩家包与编辑器解耦（Demo 去 Editor 使用/EnableEditor 路径，改用 Gui host）+ 证据迁移`（§0.5、§4.12）

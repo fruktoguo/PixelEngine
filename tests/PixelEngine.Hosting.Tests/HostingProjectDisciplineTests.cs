@@ -237,6 +237,40 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证编辑器壳按 plan/19 节点 8 接入 Build Settings 设置模型与面板，但不伪造 build-player 执行。
+    /// </summary>
+    [Fact]
+    public void EditorShellDeclaresBuildSettingsModelAndPanelWithoutFakeBuildExecution()
+    {
+        string root = FindRepositoryRoot();
+        string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
+        string source = string.Join(
+            '\n',
+            Directory.EnumerateFiles(shellDirectory, "*.cs", SearchOption.AllDirectories).Select(File.ReadAllText));
+
+        Assert.Contains("namespace PixelEngine.Editor.Shell.Build", source, StringComparison.Ordinal);
+        Assert.Contains("class BuildSettingsPanel", source, StringComparison.Ordinal);
+        Assert.Contains("BuildTargetSettings", source, StringComparison.Ordinal);
+        Assert.Contains("SceneBuildEntry", source, StringComparison.Ordinal);
+        Assert.Contains("BuildRequest", source, StringComparison.Ordinal);
+        Assert.Contains("BuildResult", source, StringComparison.Ordinal);
+        Assert.Contains("BuildProgressEvent", source, StringComparison.Ordinal);
+        Assert.Contains("BuildLog", source, StringComparison.Ordinal);
+        Assert.Contains("PixelEngineEditorShellBuildJsonContext", source, StringComparison.Ordinal);
+        Assert.Contains("BuildSettings.json", source, StringComparison.Ordinal);
+        Assert.Contains("RefreshScenes", source, StringComparison.Ordinal);
+        Assert.Contains("PackageWholeContent ? []", source, StringComparison.Ordinal);
+        Assert.Contains("Version", source, StringComparison.Ordinal);
+        Assert.Contains("InformationalVersion", source, StringComparison.Ordinal);
+        Assert.Contains("BuildSettingsPanel(_project)", source, StringComparison.Ordinal);
+        Assert.Contains("ShowBuildSettings", source, StringComparison.Ordinal);
+        Assert.Contains("ImGui.BeginDisabled()", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Process.Start", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("build-result.json", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("tools/build-player", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Demo 源码不绕过 Hosting/Scripting 公开入口访问内容或模拟实现。
     /// </summary>
     [Fact]
