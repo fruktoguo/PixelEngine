@@ -147,9 +147,10 @@ internal sealed class SceneViewPanel(
 
     private void HandleSceneMouse(EditorSelection selection)
     {
+        bool hasSelection = selection.GameObjectStableId.HasValue || _scene.SelectedStableId.HasValue;
         if ((ImGui.GetIO().WantCaptureMouse && !IsMouseOverImage()) ||
             !IsMouseOverImage() ||
-            IsGizmoCapturingMouse())
+            (hasSelection && IsGizmoCapturingMouse()))
         {
             return;
         }

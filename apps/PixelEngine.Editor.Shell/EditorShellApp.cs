@@ -80,6 +80,7 @@ internal sealed class EditorShellApp
         bool scriptedBuildTimedOut = false;
         string scriptedBuildDiagnostic = string.Empty;
         ScriptedBuildProbeSnapshot scriptedBuildSnapshot = new();
+        ScriptedPlayerRunProbeResult scriptedPlayerRun = new();
         while (!shellWindow.Window.IsClosing)
         {
             double now = stopwatch.Elapsed.TotalSeconds;
@@ -191,12 +192,21 @@ internal sealed class EditorShellApp
 
         if (_options.ScriptedBuildProbe)
         {
+            if (_options.ScriptedBuildRunProbe)
+            {
+                scriptedPlayerRun = RunScriptedPlayerProbe(scriptedBuildSnapshot.Result);
+            }
+
             WriteScriptedBuildProbeSummary(
                 scriptedBuildStarted,
                 scriptedBuildCompleted,
                 scriptedBuildTimedOut,
                 scriptedBuildDiagnostic,
                 scriptedBuildSnapshot);
+            if (_options.ScriptedBuildRunProbe)
+            {
+                WriteScriptedPlayerRunProbeSummary(scriptedPlayerRun);
+            }
         }
 
         return 0;
@@ -273,6 +283,116 @@ internal sealed class EditorShellApp
             $"phase_timings={phaseTimings}, " +
             $"log_count={snapshot.LogCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
             $"diagnostic={diagnostic.Replace(',', ';')}");
+    }
+
+    private ScriptedPlayerRunProbeResult RunScriptedPlayerProbe(BuildResult? result)
+    {
+        if (result is null || !result.Ok)
+        {
+            return new ScriptedPlayerRunProbeResult(
+                Started: false,
+                Completed: false,
+                ExitCode: -1,
+                CaptureExists: false,
+                WindowCompleted: false,
+                ContentLoaded: false,
+                StdoutPath: string.Empty,
+                StderrPath: string.Empty,
+                CapturePath: string.Empty,
+                Diagnostic: "构建未成功，未启动 player。");
+        }
+
+        if (string.IsNullOrWhiteSpace(result.LauncherExe) || !File.Exists(result.LauncherExe))
+        {
+            return new ScriptedPlayerRunProbeResult(
+                Started: false,
+                Completed: false,
+                ExitCode: -1,
+                CaptureExists: false,
+                WindowCompleted: false,
+                ContentLoaded: false,
+                StdoutPath: string.Empty,
+                StderrPath: string.Empty,
+                CapturePath: string.Empty,
+                Diagnostic: "构建结果缺少可启动 LauncherExe。");
+        }
+
+        string root = string.IsNullOrWhiteSpace(_options.BuildOutputPath)
+            ? Path.Combine(Environment.CurrentDirectory, "artifacts", "editor-build-run-probe")
+            : Path.Combine(Path.GetFullPath(_options.BuildOutputPath), "run-probe");
+        _ = Directory.CreateDirectory(root);
+        string stdoutPath = Path.Combine(root, "player-stdout.txt");
+        string stderrPath = Path.Combine(root, "player-stderr.txt");
+        string capturePath = Path.Combine(root, "player-capture.bmp");
+        string workingDirectory = string.IsNullOrWhiteSpace(result.PlayerDir)
+            ? Path.GetDirectoryName(result.LauncherExe) ?? Environment.CurrentDirectory
+            : result.PlayerDir;
+        ProcessStartInfo startInfo = new()
+        {
+            FileName = result.LauncherExe,
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        startInfo.ArgumentList.Add("--window-ticks");
+        startInfo.ArgumentList.Add("80");
+        startInfo.ArgumentList.Add("--no-hot-reload");
+        startInfo.ArgumentList.Add("--capture-frame");
+        startInfo.ArgumentList.Add(capturePath);
+        try
+        {
+            using Process process = Process.Start(startInfo) ?? throw new InvalidOperationException("无法启动 player 进程。");
+            string stdout = process.StandardOutput.ReadToEnd();
+            string stderr = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            File.WriteAllText(stdoutPath, stdout);
+            File.WriteAllText(stderrPath, stderr);
+            return new ScriptedPlayerRunProbeResult(
+                Started: true,
+                Completed: process.ExitCode == 0,
+                ExitCode: process.ExitCode,
+                CaptureExists: File.Exists(capturePath),
+                WindowCompleted: stdout.Contains("window_frame_probe", StringComparison.Ordinal),
+                ContentLoaded: stdout.Contains("PixelEngine.Demo", StringComparison.Ordinal) &&
+                    stdout.Contains("RID:", StringComparison.Ordinal),
+                StdoutPath: stdoutPath,
+                StderrPath: stderrPath,
+                CapturePath: capturePath,
+                Diagnostic: process.ExitCode == 0 ? "player 短跑完成。" : $"player 退出码 {process.ExitCode}。");
+        }
+        catch (Exception ex) when (!OperatingSystem.IsBrowser())
+        {
+            return new ScriptedPlayerRunProbeResult(
+                Started: true,
+                Completed: false,
+                ExitCode: -1,
+                CaptureExists: File.Exists(capturePath),
+                WindowCompleted: false,
+                ContentLoaded: false,
+                StdoutPath: stdoutPath,
+                StderrPath: stderrPath,
+                CapturePath: capturePath,
+                Diagnostic: ex.Message);
+        }
+    }
+
+    private static void WriteScriptedPlayerRunProbeSummary(ScriptedPlayerRunProbeResult result)
+    {
+        Console.WriteLine(
+            "editor_build_run_probe " +
+            "schema=pixelengine.editor-build-run-probe/v1, " +
+            $"started={result.Started}, " +
+            $"completed={result.Completed}, " +
+            $"exit_code={result.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"capture_exists={result.CaptureExists}, " +
+            $"window_completed={result.WindowCompleted}, " +
+            $"content_loaded={result.ContentLoaded}, " +
+            $"stdout={result.StdoutPath}, " +
+            $"stderr={result.StderrPath}, " +
+            $"capture={result.CapturePath}, " +
+            $"diagnostic={result.Diagnostic.Replace(',', ';')}");
     }
 
     private void RunScriptedProbeActions(
@@ -540,3 +660,15 @@ internal sealed class EditorShellApp
         writer.Write(bgra);
     }
 }
+
+internal sealed record ScriptedPlayerRunProbeResult(
+    bool Started = false,
+    bool Completed = false,
+    int ExitCode = 0,
+    bool CaptureExists = false,
+    bool WindowCompleted = false,
+    bool ContentLoaded = false,
+    string StdoutPath = "",
+    string StderrPath = "",
+    string CapturePath = "",
+    string Diagnostic = "");
