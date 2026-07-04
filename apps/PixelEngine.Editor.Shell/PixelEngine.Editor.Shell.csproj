@@ -13,5 +13,6 @@
 
   <ItemGroup>
     <PackageReference Include="Hexa.NET.ImGui" />
+    <PackageReference Include="Hexa.NET.ImGuizmo" />
   </ItemGroup>
 </Project>

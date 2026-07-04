@@ -81,7 +81,19 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
                 engine.Context.GetService<ScriptAssemblyRegistry>()));
         }
 
-        _editor.AddPanel(new ViewportPanel(() => pipeline.CurrentViewportTexture));
+        MaterialBrushPalettePanel? brushPanel = null;
+        if (engine.Context.TryGetService(out MaterialTable materials) &&
+            engine.Context.TryGetService(out ISimulationEditApi editApi))
+        {
+            brushPanel = new MaterialBrushPalettePanel(materials, editApi);
+        }
+
+        _editor.AddPanel(new SceneViewPanel(
+            () => pipeline.CurrentViewportTexture,
+            engine.Context.GetService<ScriptCameraApi>(),
+            _sceneModel ?? throw new InvalidOperationException("Scene View 需要先配置 authoring scene model。"),
+            _undoStack ?? throw new InvalidOperationException("Scene View 需要先配置 authoring undo stack。"),
+            brushPanel));
         _editor.AddPanel(new AssetBrowserPanel(new FileSystemAssetBrowserDataSource(_project.ContentRootPath)));
         _editor.AddPanel(new PerformanceHudPanel());
         _editor.AddPanel(new SimulationControlToolbar(new EditorSimulationControlAdapter(_app)));
@@ -95,10 +107,9 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
             _editor.AddPanel(new WorldInspectorPanel(inspectApi));
         }
 
-        if (engine.Context.TryGetService(out MaterialTable materials) &&
-            engine.Context.TryGetService(out ISimulationEditApi editApi))
+        if (brushPanel is not null)
         {
-            _editor.AddPanel(new MaterialBrushPalettePanel(materials, editApi));
+            _editor.AddPanel(brushPanel);
         }
 
         if (engine.Context.TryGetService(out PhysicsSystem physics))
