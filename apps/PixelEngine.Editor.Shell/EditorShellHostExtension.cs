@@ -1,5 +1,6 @@
 using PixelEngine.Gui;
 using PixelEngine.Hosting;
+using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
@@ -36,6 +37,11 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
     public long BridgeFrameCount => Bridge?.FrameIndex ?? 0;
 
     public EditorRenderBridge? Bridge { get; private set; }
+
+    public bool TryShowPanel(string title)
+    {
+        return _editor.TryShowPanel(title);
+    }
 
     public void ConfigureAuthoring(EditorSceneModel sceneModel, EditorUndoStack undoStack, EditorPrefabAssetStore prefabs)
     {
@@ -99,6 +105,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
         _editor.AddPanel(new AssetBrowserPanel(
             new FileSystemAssetBrowserDataSource(_project.ContentRootPath),
             instantiatePrefab: _app.InstantiatePrefab));
+        _editor.AddPanel(new BuildSettingsPanel(_project));
         _editor.AddPanel(new PerformanceHudPanel());
         _editor.AddPanel(new SimulationControlToolbar(new EditorSimulationControlAdapter(_app)));
         if (engine.Context.TryGetService(out DebugOverlaySettings debugSettings))

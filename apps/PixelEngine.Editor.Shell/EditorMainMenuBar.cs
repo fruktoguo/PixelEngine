@@ -48,7 +48,10 @@ internal sealed class EditorMainMenuBar
             _ = app.SaveSceneAs();
         }
         ImGui.Separator();
-        _ = ImGui.MenuItem("Build Settings...", string.Empty, selected: false, enabled: app.HasOpenProject);
+        if (ImGui.MenuItem("Build Settings...", string.Empty, selected: false, enabled: app.HasOpenProject))
+        {
+            app.ShowBuildSettings();
+        }
         ImGui.Separator();
         if (ImGui.MenuItem("Close Project", string.Empty, selected: false, enabled: app.HasOpenProject))
         {

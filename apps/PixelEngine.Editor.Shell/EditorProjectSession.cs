@@ -1,4 +1,5 @@
 using PixelEngine.Hosting;
+using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
@@ -143,6 +144,12 @@ internal sealed class EditorProjectSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         UndoStack.Execute(SceneModel, new InstantiatePrefabCommand(Prefabs, assetPath, SceneModel.SelectedStableId));
+    }
+
+    public bool ShowBuildSettings()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryShowPanel(BuildSettingsPanel.PanelTitle);
     }
 
     public bool Undo()

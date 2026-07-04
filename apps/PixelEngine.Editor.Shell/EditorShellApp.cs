@@ -213,6 +213,11 @@ internal sealed class EditorShellApp
         CurrentSession?.InstantiatePrefab(assetPath);
     }
 
+    public void ShowBuildSettings()
+    {
+        _ = CurrentSession?.ShowBuildSettings();
+    }
+
     public bool Undo()
     {
         return CurrentSession?.Undo() == true;
