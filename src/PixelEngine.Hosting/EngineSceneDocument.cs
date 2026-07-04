@@ -45,9 +45,50 @@ public sealed class EngineSceneEntityDocument
     public string? Name { get; init; }
 
     /// <summary>
+    /// 父实体稳定 id；为空表示根实体。
+    /// </summary>
+    public int? ParentId { get; init; }
+
+    /// <summary>
+    /// 编辑态局部 Transform；v1 场景缺失时按单位 Transform 处理。
+    /// </summary>
+    public EngineSceneTransformDocument? Transform { get; init; }
+
+    /// <summary>
     /// 挂载在实体上的 Behaviour 文档数组。
     /// </summary>
     public EngineSceneBehaviourDocument[]? Behaviours { get; init; }
+}
+
+/// <summary>
+/// .scene 文件中的编辑态局部 2D Transform。
+/// </summary>
+public sealed class EngineSceneTransformDocument
+{
+    /// <summary>
+    /// 局部 X 坐标，单位 cell。
+    /// </summary>
+    public float X { get; init; }
+
+    /// <summary>
+    /// 局部 Y 坐标，单位 cell。
+    /// </summary>
+    public float Y { get; init; }
+
+    /// <summary>
+    /// 局部旋转角，单位弧度。
+    /// </summary>
+    public float RotationRadians { get; init; }
+
+    /// <summary>
+    /// 局部 X 方向缩放。
+    /// </summary>
+    public float ScaleX { get; init; } = 1f;
+
+    /// <summary>
+    /// 局部 Y 方向缩放。
+    /// </summary>
+    public float ScaleY { get; init; } = 1f;
 }
 
 /// <summary>

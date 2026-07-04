@@ -3,6 +3,7 @@ using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.Scripting;
 using PixelEngine.World;
+using System.Numerics;
 using Xunit;
 using PhysicsSystem = PixelEngine.Physics.PhysicsSystem;
 
@@ -183,6 +184,7 @@ public sealed class SceneAndHeadlessTests
             SceneFileTestBehaviour behaviour = Assert.IsType<SceneFileTestBehaviour>(snapshot[0].Components[0].Behaviour);
             Assert.Equal("hero", behaviour.Label);
             Assert.Equal(42, behaviour.Health);
+            Assert.Equal(Vector2.Zero, behaviour.Position);
             Assert.False(behaviour.Enabled);
             Assert.Same(loaded.ScriptScene, engine.Context.GetService<PixelEngine.Scripting.Scene>());
         }
@@ -193,6 +195,206 @@ public sealed class SceneAndHeadlessTests
                 Directory.Delete(contentRoot, recursive: true);
             }
         }
+    }
+
+    /// <summary>
+    /// 验证 Hosting 可稳定写出 .scene v2，并在读回时保持实体排序与字段排序。
+    /// </summary>
+    [Fact]
+    public void SaveSceneDocumentWritesStableV2Json()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-scene-save-{Guid.NewGuid():N}");
+        try
+        {
+            string scenePath = Path.Combine(contentRoot, "scenes", "saved.scene");
+            using Engine engine = new EngineBuilder()
+                .UseHeadless()
+                .UseDeterministicMode()
+                .WithContentRoot(contentRoot)
+                .Build();
+            EngineSceneDocument document = new()
+            {
+                FormatVersion = 1,
+                Name = "saved",
+                Entities =
+                [
+                    new EngineSceneEntityDocument
+                    {
+                        StableId = 20,
+                        Name = "child",
+                        ParentId = 10,
+                        Transform = new EngineSceneTransformDocument { X = 2, Y = 3, ScaleX = 2, ScaleY = 2 },
+                        Behaviours =
+                        [
+                            new EngineSceneBehaviourDocument
+                            {
+                                TypeName = typeof(SceneFileTestBehaviour).FullName!,
+                                SerializedFields = new Dictionary<string, string>
+                                {
+                                    ["Position"] = "8,9",
+                                    ["Label"] = "child",
+                                },
+                            },
+                        ],
+                    },
+                    new EngineSceneEntityDocument
+                    {
+                        StableId = 10,
+                        Name = "root",
+                        Transform = new EngineSceneTransformDocument { X = 5, Y = 7, RotationRadians = 0.5f },
+                    },
+                ],
+            };
+
+            engine.SaveSceneDocument(document, scenePath);
+
+            string json = File.ReadAllText(scenePath);
+            Assert.Contains("\"formatVersion\":2", json, StringComparison.Ordinal);
+            Assert.True(json.IndexOf("\"stableId\":10", StringComparison.Ordinal) < json.IndexOf("\"stableId\":20", StringComparison.Ordinal));
+            Assert.True(json.IndexOf("\"Label\"", StringComparison.Ordinal) < json.IndexOf("\"Position\"", StringComparison.Ordinal));
+            EngineSceneDocument loaded = EngineSceneDocumentLoader.LoadDocument(scenePath);
+            Assert.Equal(EngineSceneDocumentLoader.CurrentFormatVersion, loaded.FormatVersion);
+            Assert.Equal([10, 20], [.. loaded.Entities!.Select(static entity => entity.StableId)]);
+        }
+        finally
+        {
+            if (Directory.Exists(contentRoot))
+            {
+                Directory.Delete(contentRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 .scene v2 会物化 Transform、烘焙父子层级，并支持 Vector2 字段绑定。
+    /// </summary>
+    [Fact]
+    public void SceneDocumentV2BuildsTransformHierarchyAndVector2Fields()
+    {
+        EngineSceneDocument document = new()
+        {
+            FormatVersion = 2,
+            Name = "v2",
+            Entities =
+            [
+                new EngineSceneEntityDocument
+                {
+                    StableId = 1,
+                    Name = "root",
+                    Transform = new EngineSceneTransformDocument { X = 10, Y = 20, ScaleX = 2, ScaleY = 3 },
+                },
+                new EngineSceneEntityDocument
+                {
+                    StableId = 2,
+                    Name = "child",
+                    ParentId = 1,
+                    Transform = new EngineSceneTransformDocument { X = 5, Y = 6, RotationRadians = 0.25f, ScaleX = 4, ScaleY = 5 },
+                    Behaviours =
+                    [
+                        new EngineSceneBehaviourDocument
+                        {
+                            TypeName = typeof(SceneFileTestBehaviour).FullName!,
+                            SerializedFields = new Dictionary<string, string>
+                            {
+                                ["Position"] = "3.5,4.25",
+                                ["Label"] = "child",
+                            },
+                        },
+                    ],
+                },
+            ],
+        };
+        ScriptAssemblyRegistry scripts = new();
+        scripts.Register(typeof(SceneFileTestBehaviour).Assembly);
+
+        PixelEngine.Scripting.Scene scene = EngineSceneDocumentLoader.Build(document, scripts);
+
+        ScriptEntityInspection[] snapshot = scene.CaptureInspectionSnapshot();
+        Assert.Equal(2, snapshot.Length);
+        Assert.Equal(10, snapshot[0].Transform!.X);
+        Assert.Equal(20, snapshot[0].Transform!.Y);
+        Assert.Equal(20, snapshot[1].Transform!.X);
+        Assert.Equal(38, snapshot[1].Transform!.Y);
+        Assert.Equal(0.25f, snapshot[1].Transform!.RotationRadians);
+        Assert.Equal(8, snapshot[1].Transform!.ScaleX);
+        Assert.Equal(15, snapshot[1].Transform!.ScaleY);
+        SceneFileTestBehaviour behaviour = Assert.IsType<SceneFileTestBehaviour>(Assert.Single(snapshot[1].Components).Behaviour);
+        Assert.Equal("child", behaviour.Label);
+        Assert.Equal(new Vector2(3.5f, 4.25f), behaviour.Position);
+    }
+
+    /// <summary>
+    /// 验证 .scene v2 父级旋转与缩放会按 TRS 烘焙到运行时扁平 Transform。
+    /// </summary>
+    [Fact]
+    public void SceneDocumentV2BakesParentRotationAndScaleIntoRuntimeTransform()
+    {
+        EngineSceneDocument document = new()
+        {
+            FormatVersion = 2,
+            Entities =
+            [
+                new EngineSceneEntityDocument
+                {
+                    StableId = 1,
+                    Transform = new EngineSceneTransformDocument
+                    {
+                        X = 10,
+                        Y = 20,
+                        RotationRadians = MathF.PI / 2f,
+                        ScaleX = 2,
+                        ScaleY = 3,
+                    },
+                },
+                new EngineSceneEntityDocument
+                {
+                    StableId = 2,
+                    ParentId = 1,
+                    Transform = new EngineSceneTransformDocument { X = 5, Y = 6 },
+                },
+            ],
+        };
+        ScriptAssemblyRegistry scripts = new();
+
+        PixelEngine.Scripting.Scene scene = EngineSceneDocumentLoader.Build(document, scripts);
+
+        Transform child = scene.CaptureInspectionSnapshot()[1].Transform!;
+        Assert.InRange(child.X, -8.001f, -7.999f);
+        Assert.InRange(child.Y, 29.999f, 30.001f);
+        Assert.Equal(MathF.PI / 2f, child.RotationRadians);
+    }
+
+    /// <summary>
+    /// 验证 .scene 层级会拒绝重复 id、缺失父级与循环引用。
+    /// </summary>
+    [Fact]
+    public void SceneDocumentV2RejectsInvalidHierarchy()
+    {
+        ScriptAssemblyRegistry scripts = new();
+
+        _ = Assert.Throws<InvalidOperationException>(() => EngineSceneDocumentLoader.Build(new EngineSceneDocument
+        {
+            FormatVersion = 2,
+            Entities =
+            [
+                new EngineSceneEntityDocument { StableId = 1 },
+                new EngineSceneEntityDocument { StableId = 1 },
+            ],
+        }, scripts));
+        _ = Assert.Throws<InvalidOperationException>(() => EngineSceneDocumentLoader.Build(new EngineSceneDocument
+        {
+            FormatVersion = 2,
+            Entities = [new EngineSceneEntityDocument { StableId = 1, ParentId = 99 }],
+        }, scripts));
+        _ = Assert.Throws<InvalidOperationException>(() => EngineSceneDocumentLoader.Build(new EngineSceneDocument
+        {
+            FormatVersion = 2,
+            Entities =
+            [
+                new EngineSceneEntityDocument { StableId = 1, ParentId = 2 },
+                new EngineSceneEntityDocument { StableId = 2, ParentId = 1 },
+            ],
+        }, scripts));
     }
 
     /// <summary>
@@ -665,6 +867,11 @@ public sealed class SceneAndHeadlessTests
         /// 测试数值字段。
         /// </summary>
         public int Health { get; set; }
+
+        /// <summary>
+        /// 测试 Vector2 字段。
+        /// </summary>
+        public Vector2 Position { get; set; }
     }
 
     /// <summary>

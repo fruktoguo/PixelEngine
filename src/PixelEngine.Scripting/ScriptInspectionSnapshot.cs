@@ -5,10 +5,12 @@ namespace PixelEngine.Scripting;
 /// </summary>
 /// <param name="EntityId">脚本场景内实体 id。</param>
 /// <param name="Handle">Editor 选择态使用的稳定实体句柄。</param>
+/// <param name="Transform">实体当前 Transform；无 Transform 组件时为空。</param>
 /// <param name="Components">实体当前挂载的脚本组件快照。</param>
 public readonly record struct ScriptEntityInspection(
     int EntityId,
     string Handle,
+    Transform? Transform,
     ScriptComponentInspection[] Components);
 
 /// <summary>

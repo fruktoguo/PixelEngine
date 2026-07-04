@@ -58,7 +58,8 @@ public sealed class Scene
                 bucket.CaptureInspectionComponents(entity.Id, components);
             }
 
-            snapshots.Add(new ScriptEntityInspection(entity.Id, $"script:{entity.Id}", [.. components]));
+            bool hasTransform = TryGetComponent(entity, out Transform transform);
+            snapshots.Add(new ScriptEntityInspection(entity.Id, $"script:{entity.Id}", hasTransform ? transform : null, [.. components]));
         }
 
         return [.. snapshots];

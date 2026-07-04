@@ -95,7 +95,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 
 新增公开 API(均为**中性 Hosting API**,不依赖 `PixelEngine.Editor`;经 §3.7 GUI 宿主中性化后 Hosting 编译期不再出现 Editor 类型,编辑器面板注册经抽象 GUI 钩子由壳注入,故玩家包不含编辑器闭包靠的是「Hosting 不引用 Editor」,**不使用条件编译剥离**):
 - **窗口/GL 上下文所有权解耦**:把 `RenderWindow` + `RenderPipeline` 从 `Engine._ownedRuntimeResources` 解耦;新增「attach rendering 到壳**已拥有**的外部窗口、`Engine` **不 own** 该窗口、`Engine.Dispose()` **不销毁**它」的装配路径(`AttachWindowRuntime` 的外部窗口重载)。解 plan/19 standalone-editor blocker。
-- **公开编辑态宿主 bootstrap**:新增供壳使用的公开路径,允许**先于完整 Engine 装配**即可立窗口/GL/ImGui host(项目选择器阶段尚无工程时先出窗口,或创建空窗口只跑 ImGui);打开工程后 Edit 模式装配 → `AttachWindowRuntime`(外部窗口)复用现有窗口/输入/渲染/`EditorRenderBridge`/默认面板链路;`RegisterDefaultEditorPanels` 由私有**提升为公开**,返回 `EditorApp` 供壳追加 GameObject 层级/Inspector/gizmo/prefab 编辑面板(plan/19 §4.6–4.10)。
+- **公开编辑态宿主 bootstrap**:新增供壳使用的中性 `EditorHostBootstrap`,允许**先于完整 Engine 装配**即可立窗口/GL/`PixelEngine.Gui` ImGui host(项目选择器阶段尚无工程时先出窗口,或创建空窗口只跑 ImGui);打开工程后 Edit 模式装配 → `AttachWindowRuntime`(外部窗口)复用现有窗口/输入/渲染链路;默认编辑器面板注册留在 shell/Editor 侧 `IEditorHostExtension`,Hosting 不暴露或返回 `EditorApp`,避免重新引入 `Hosting→Editor`。
 - 与 Demo 路径差别仅在:宿主是壳、默认进入 Edit 模式(sim 暂停)、窗口标题走编辑器命名、并额外注册 GameObject 编辑面板;Play/Edit/Step 三态、快照回滚(`EngineEditorPlaySessionService` + `EngineWorldSnapshotStore`)、sim 控制(`EngineSimulationControlService`)均复用 §3.6 既有能力,不重造。
 
 ### 3.9 游戏内 HTML UI 装配(PixelEngine.UI,plan/20)
@@ -135,15 +135,16 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 
 ### 4.2 窗口/GL 所有权解耦 + 编辑态 bootstrap(§3.8,供 plan/19)
 
-- [ ] 把 `RenderWindow` + `RenderPipeline` 从 `Engine._ownedRuntimeResources` 解耦;新增 attach 到外部(壳拥有)窗口的装配路径,`Engine` 不 own、`Engine.Dispose()` 不销毁该窗口(解 plan/19 blocker)。
-- [ ] 公开编辑态宿主 bootstrap:先于完整 Engine 装配即可立窗口/GL/ImGui host(项目选择器阶段);打开工程后 Edit 装配 + `AttachWindowRuntime(外部窗口)` + `RegisterDefaultEditorPanels`(由私有**提升为公开**,返回 `EditorApp` 供壳追加 GameObject 面板)。
-- [ ] 上述窗口/GL 所有权解耦与编辑态 bootstrap 均为**中性 Hosting API**(不依赖 `PixelEngine.Editor`);编辑器面板经抽象 GUI 钩子由壳在装配期注入(§4.1),玩家包因 Hosting 不引用 Editor 而自然不含编辑器闭包,**不使用条件编译(`#if`)剥离**。
+- [x] 把 `RenderWindow` + `RenderPipeline` 所有权解耦;新增 attach 到外部(壳拥有)窗口的装配路径,`Engine` 不 own、`Engine.Dispose()` 不销毁该窗口(解 plan/19 blocker)。
+- [x] 公开编辑态宿主 bootstrap:先于完整 Engine 装配即可立窗口/GL/ImGui host(项目选择器阶段);打开工程后 Edit 装配 + `AttachWindowRuntime(外部窗口)`;默认编辑器面板注册留在 shell/Editor 侧 `IEditorHostExtension`,不让 Hosting 返回 `EditorApp`。
+- [x] 上述窗口/GL 所有权解耦与编辑态 bootstrap 均为**中性 Hosting API**(不依赖 `PixelEngine.Editor`);编辑器面板经抽象 GUI 钩子由壳在装配期注入(§4.1),玩家包因 Hosting 不引用 Editor 而自然不含编辑器闭包,**不使用条件编译(`#if`)剥离**。
 
 ### 4.3 场景保存往返 + authoring 物化公开 API(§3.5,供 plan/19)
 
-- [ ] `.scene` schema v2:`EngineSceneEntityDocument` 增 `ParentId` + `Transform`(TRS)块 + `Vector2` 字段类型;`FormatVersion` 1→2 且保 v1 兼容(v1 档按默认根实体 + 单位 Transform 物化)。
-- [ ] 新增 Hosting 公开 writer `SaveSceneDocument(EngineSceneDocument, path)`(源生成 `EngineSceneJsonContext` 扩展):稳定排序(按 StableId 升序)、往返等价(读→写→读逐字段一致,供 plan/14)。
-- [ ] authoring 场景模型 ⇄ `EngineSceneDocument` 双向映射 + authoring→运行时 `Scripting.Scene` 物化公开 API(Transform 世界 TRS 烘焙、字段绑定扩展 Transform TRS/Vector2);运行时 Scene 保持扁平 DOD 不引 parent 指针;material 引用走稳定 Name(守 #8)。authoring 层级模型 ⇄ `EngineSceneDocument` 映射归编辑器壳(plan/19);Hosting 侧 writer 与物化 API 为**中性**、玩家运行时亦复用(加载 `.scene`),**不条件编译剥离**。
+- [x] `.scene` schema v2:`EngineSceneEntityDocument` 增 `ParentId` + `Transform`(TRS)块 + `Vector2` 字段类型;`FormatVersion` 1→2 且保 v1 兼容(v1 档按默认根实体 + 单位 Transform 物化)。
+- [x] 新增 Hosting 公开 writer `SaveSceneDocument(EngineSceneDocument, path)`(源生成 `EngineSceneJsonContext` 扩展):稳定排序(按 StableId 升序)、往返等价(读→写→读逐字段一致,供 plan/14)。
+- [x] `EngineSceneDocument`→运行时 `Scripting.Scene` 物化公开 API(Transform 世界 TRS 烘焙、字段绑定扩展 Transform TRS/Vector2);运行时 Scene 保持扁平 DOD 不引 parent 指针;material 引用走稳定 Name(守 #8)。authoring 层级模型 ⇄ `EngineSceneDocument` 映射归编辑器壳(plan/19);Hosting 侧 writer 与物化 API 为**中性**、玩家运行时亦复用(加载 `.scene`),**不条件编译剥离**。
+- [ ] 编辑器壳侧 authoring 场景模型 ⇄ `EngineSceneDocument` 双向映射(EditorSceneModel/GameObject 层级命令栈),见 plan/19 §4.5/§4.9。
 
 ### 4.4 相位[10] 子序 + 游戏内 HTML UI 装配(§3.2/§3.9,配 plan/20)
 
@@ -170,8 +171,8 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [!] 关闭时 native 资源与 ALC 正确释放,无泄漏(配合 plan/14 scripting 测试)。Hosting 已验证关闭时释放 `IScriptRuntime`，Scripting 已验证热重载旧 ALC 可回收；本机真实窗口非 Editor 3600 tick 与 Editor 1200 tick 进程均 exit=0，外部采样峰值工作集约 163 MB；`OpenAlBackend`/`NullAudioBackend` 已暴露 `LiveSourceCount`、`LiveBufferCount` 与 `LiveObjectCount`，`AudioVoicePoolTests.VoicePoolDisposesAllPreallocatedSourcesForLeakEvidence` 覆盖 source 预分配后释放归零，后续 detector 可直接读取 OpenAL live object 计数；`PhysicsSystem.LiveBodyCount` 已覆盖动态刚体与静态地形 collider 的 live Box2D body 计数，`PhysicsSystemFacadeTests.OwnedWorldLiveBodyCountReturnsZeroAfterDestroyAndShutdown` 覆盖显式销毁与 owned world shutdown 后归零；`ScriptHotReloadController.CollectAndCountUnloadedLoadContextsAlive()` 已暴露旧脚本 ALC 调用 `Unload()` 后经完整 GC 仍存活的数量，`HotReloadServiceTests.RepeatedReloadsUnloadPreviousContexts` 覆盖 50 次热重载后该计数归零；Rendering 已新增 `GlResourceTracker`，覆盖引擎封装持有的 texture/buffer/framebuffer/shader program/compute program/shader/VAO/timer query live-count，用于本进程内 GL wrapper 泄漏定位，但不替代 driver 级 detector；`tools/native-leak-preflight.ps1` 可生成 process smoke、单 detector 报告索引与四类 evidence manifest hash 清单，无 detector 时为 `blocked_missing_detector` 或 `process_smoke_only`，单 detector 报告若缺 `detector`、`conclusion=no_leaks`、`scopes=GL; OpenAL; Box2D; ALC` 或四类 live count 归零字段会被拒绝为 `blocked_invalid_native_leak_evidence`，机器可读覆盖齐全也仅为 `detector_report_attached_pending_review`；manifest 缺 scope/report/hash 为 `blocked_missing_scope_evidence`，JSON/schema/未知 scope/hash mismatch、缺 `detectorRunId`/`gitCommit` 或不同 detector run/commit 拼接为 `blocked_invalid_native_leak_evidence`，其中未知 detector scope 由 `PerformanceHardeningToolingDisciplineTests.NativeLeakPreflightRejectsUnknownScopeWithReport` 锁定；四类 evidence manifest 还要求每个报告声明匹配的 `scope`/`detector`、同源 `detectorRunId`/`gitCommit`、`conclusion=no_leaks`，以及释放后 live-object 计数归零字段 `glObjectsLiveAfterShutdown`、`openAlObjectsLiveAfterShutdown`、`box2DBodiesLiveAfterShutdown`、`alcLoadContextsAliveAfterUnload`，由 `PerformanceHardeningToolingDisciplineTests.NativeLeakPreflightRejectsMixedDetectorRunIds`、`NativeLeakPreflightRejectsDetectorReportWithoutNoLeaksConclusion` 与 `NativeLeakPreflightRejectsDetectorReportWithoutZeroLiveCounts` 锁定；证据齐全也仅为 `detector_evidence_attached_pending_review`。`tools/PixelEngine.Tools.ManagedNativeLeakDetector` 已加入 solution，可生成本机 `evidence.json` 与四类 scope report，并通过 `OpenAlDevice`/`NullAudioBackend`、owned `PhysicsSystem` 和 `ScriptHotReloadController` 采集 `openAlObjectsLiveAfterShutdown=0`、`box2DBodiesLiveAfterShutdown=0`、`alcLoadContextsAliveAfterUnload=0`；GL scope 会先尝试创建真实 `RenderWindow` GL context 并分配/释放 `GlTexture`、`GlBuffer`、`Framebuffer`、`ShaderProgram` 等 Rendering wrapper，成功时以 `coverage=gl_context_rendering_wrappers` 采集 `glObjectsLiveAfterShutdown=0`，宿主不支持 GL 时才明确降级为 `managed_no_gl_context` 并记录失败原因。阻塞:仍缺跨平台 runner 与 GL driver 级专用 native leak detector 证据，managed detector 的 `gl_context_rendering_wrappers` 或 `managed_no_gl_context` 都不能替代真实 GL 对象创建/销毁后的外部 detector 或人工工具级报告。
 - [x] Demo(plan/13)仅经 Hosting 公开 API 启动,无引擎内部后门。
 - [ ] GUI 宿主中性化落地可验证:Hosting 编译期不含 `PixelEngine.Editor` 引用;发行玩家包传递闭包无 `PixelEngine.Editor.dll` 与编辑器专属面板,但保留 `PixelEngine.Gui` + `Hexa.NET.ImGui`;玩家 HUD 经 `PixelEngine.Gui` 中性 host 正常显示(plan/15 audit 前置)。[§3.7]
-- [ ] 编辑器壳可 attach Hosting 外部窗口装配 Engine、关闭工程时 `Engine.Dispose()` 逆序释放而**窗口保留**、重建 session 再装配成功;`RegisterDefaultEditorPanels` 公开路径返回 `EditorApp` 且壳可追加 GameObject 面板。[§3.8]
-- [ ] `SaveSceneDocument` 往返等价:`.scene` v2(ParentId/Transform/Vector2)读→写→读逐字段一致、稳定排序;v1 档可被 v2 loader 兼容读取;authoring→运行时物化后运行时 Scene 为扁平 DOD、层级已烘焙为世界 TRS(配 plan/14 性质测试)。[§3.5]
+- [ ] 编辑器壳可 attach Hosting 外部窗口装配 Engine、关闭工程时 `Engine.Dispose()` 逆序释放而**窗口保留**、重建 session 再装配成功;Shell 侧 `IEditorHostExtension` 可创建 `EditorApp` 并注册默认面板与 GameObject 面板。[§3.8]
+- [x] `SaveSceneDocument` 往返等价:`.scene` v2(ParentId/Transform/Vector2)读→写→读逐字段一致、稳定排序;v1 档可被 v2 loader 兼容读取;`EngineSceneDocument`→运行时物化后运行时 Scene 为扁平 DOD、层级已烘焙为世界 TRS(配 plan/14 性质测试)。[§3.5]
 - [ ] 启用 HTML UI 时相位[10]合成次序为 世界 → 游戏 UI → 编辑器叠层,合成后 GL 状态正确恢复;`IGameUiService` 事件在相位 1 派发、世界写入经延迟队列落正确相位不破坏帧节奏;禁用 HTML UI 零开销。[§3.2/§3.9,#6]
 - [ ] player `content/startup.json` 分派正确:`Procedural` 键 `PlayableWorldDirector` 构建 `playable-world.scene`、`FromSave` 从存档装配;两路径均无窗口/后门依赖。[§3.5]
 - [ ] **editor-window 证据入口迁移**:plan/18 §5 的 editor-window 人工验收/preflight/scripted-probe 证据入口从 Demo `--editor` **迁移到** `apps/PixelEngine.Editor.Shell`(壳提供等价 `--window-ticks`/scripted-probe/截图入口);`tools/demo-manual-acceptance-preflight.ps1` 的 editor-window probe 改由壳进程启动并输出 `editor_enabled=True`/`editor_running=True`/`editor_panels>=1`/`editor_bridge_frames>=1`/`render_camera_synced=True`,原 Demo `--editor` 入口下线。(上方 `- [!]` Editor 真实窗口观测阻塞项在迁移后继续由壳入口闭合,证据链契约不变。)[§3.8,plan/19 §5]
@@ -192,7 +193,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [x] `feat(host): 过载降级编排 + 脚本服务后端聚合`。
 - [x] `feat(host): 场景/项目模型 + Play/Edit/Step 模式 + headless`。
 - [x] `refactor(host): 新增 PixelEngine.Gui 中性 ImGui host + Hosting 删 Editor 引用 + 注入式相位[10] GUI 钩子`(M13 入口门,§3.7)。
-- [ ] `feat(host): 窗口/GL 所有权解耦 + 公开编辑态 bootstrap(供 EditorShell)`(§3.8)。
-- [ ] `feat(host): SaveSceneDocument 往返 writer + .scene v2 schema + authoring→运行时物化公开 API`(§3.5)。
+- [x] `feat(host): 窗口/GL 所有权解耦 + 公开编辑态 bootstrap(供 EditorShell)`(§3.8)。
+- [x] `feat(host): SaveSceneDocument 往返 writer + .scene v2 schema + EngineSceneDocument→运行时物化公开 API`(§3.5)。
 - [ ] `feat(host): EngineBuilder EnableHtmlUi/UseUiBackend + GameUiHost 装配 + 相位[10]子序 + IGameUiService 聚合`(§3.2/§3.9)。
 - [ ] `refactor(host): editor-window 证据入口从 Demo --editor 迁移到 EditorShell`(§5)。

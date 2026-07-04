@@ -37,7 +37,7 @@ plan/19（独立编辑器壳）、`plan/15`（玩家包 player-only 审计）、
 
 - `PixelEngine.Hosting.csproj` **删除**对 `PixelEngine.Editor` 的 `ProjectReference`（现第 13 行），改为引用 `PixelEngine.Gui`；`Hosting→Gui` 成立，`Hosting↛Editor`。
 - Hosting 内原直接使用 Editor 类型的路径改为面向**中性抽象**：Hosting 暴露 `IGuiHostHook` / 相位 [10] GUI 扩展点接口（在 Hosting 声明、由 Gui/Editor 分别提供运行时与编辑器实现），运行时 HUD 用 Gui 的 `IGuiContext`；编辑器面板宿主由外部注入，Hosting 不再静态知道 Editor。
-- 编辑器实现（`EditorApp` + 默认面板注册，即原 `Engine` 私有的 `RegisterDefaultEditorPanels` 那条路径）迁到 `PixelEngine.Editor`，封装为一个 `IEditorHostExtension`；**仅由编辑器壳（开发构建）在装配后注入** Hosting 的相位 [10] 钩子。玩家运行时永不注入，闭包中不出现 Editor。
+- 编辑器实现（`EditorApp` + 默认面板注册，即原 `Engine` 私有的 `RegisterDefaultEditorPanels` 那条路径）保留在 `PixelEngine.Editor` 面板层；真正实现 `IEditorHostExtension` 的适配器放在 `apps/PixelEngine.Editor.Shell`，由编辑器壳（开发构建）在装配后注入 Hosting 的相位 [10] 钩子。玩家运行时永不注入，闭包中不出现 Editor。
 
 ### 0.5 玩家包解耦的真正动作（纠正版）
 
@@ -62,7 +62,7 @@ plan/19（独立编辑器壳）、`plan/15`（玩家包 player-only 审计）、
 - [x] 迁移 `ScriptGuiContext`（`IGuiContext` 运行时适配）到 `PixelEngine.Gui`，玩家 HUD/脚本 UI 引用改指 Gui（§0.3）
 - [x] `EditorFontManager → GuiFontManager`（含 CJK），玩家 HUD 与 `plan/20` UI 复用（§0.3）
 - [x] `PixelEngine.Hosting.csproj` 删 `PixelEngine.Editor` 引用、改引 `PixelEngine.Gui`；Hosting 内 Editor 类型消费改为面向 `IEditorHostExtension`/相位[10] 抽象（§0.4，配合 `plan/18` 修订）
-- [ ] `IEditorHostExtension`：Editor 侧封装 `EditorApp` + 默认面板注册（原 `RegisterDefaultEditorPanels`），由 shell 开发构建注入 Hosting 相位[10] 钩子（§0.4）
+- [ ] `IEditorHostExtension`：Shell 侧 adapter 封装 `EditorApp` + 默认面板注册（原 `RegisterDefaultEditorPanels`），由 shell 开发构建注入 Hosting 相位[10] 钩子（§0.4）
 - [x] `DemoProgram.cs` 去 `using PixelEngine.Editor` 与 `EnableEditor` 路径，玩家 HUD 改用 `PixelEngine.Gui` 中性 host（§0.5、`plan/13` 修订）
 - [x] 验证玩家闭包（`Demo→Hosting→{…,Gui}`）不再传递到 `PixelEngine.Editor`（§0.5、`plan/00 §8` 复核）
 
@@ -159,11 +159,11 @@ plan/19（独立编辑器壳）、`plan/15`（玩家包 player-only 审计）、
 
 ### 4.4 in-process 宿主引擎（Edit / Play 两模式）（`EditorProjectSession`）
 
-`EditorProjectSession` 用 `EngineBuilder` 装配引擎：`.WithProject(engineProject).AttachToWindow(shellWindow, own:false)`（**attach 到 shell 既有窗口、Engine 不 own**，见 §4.1 步骤 3 与 `plan/18` 窗口所有权解耦 API）`.UseVSync(true)`，`Build()` 后由 shell 经 `IEditorHostExtension`（§0.4）注入 Editor 面板宿主到相位 [10]，默认进入 **Edit 模式**（sim 暂停）。与 Demo 玩家路径的差别：宿主是 shell、窗口归 shell、Editor 面板经外部注入（Hosting 本身不再引用 Editor）、额外注册 GameObject 编辑面板（§4.6–4.8）。
+`EditorProjectSession` 用 `EngineBuilder` 装配引擎：`.WithProject(engineProject).UseVSync(true).Build()`，随后调用 `engine.AttachWindowRuntime(shellWindow)`（**attach 到 shell 既有窗口、Engine 不 own**，见 §4.1 步骤 3 与 `plan/18` 窗口所有权解耦 API），再由 shell 经 `IEditorHostExtension`（§0.4）注入 Editor 面板宿主到相位 [10]，默认进入 **Edit 模式**（sim 暂停）。与 Demo 玩家路径的差别：宿主是 shell、窗口归 shell、Editor 面板经外部注入（Hosting 本身不再引用 Editor）、额外注册 GameObject 编辑面板（§4.6–4.8）。
 
 复用点（均为 `plan/18`/`plan/12` 既有能力，本文件只调用不重造）：Play/Edit/Step 三态与快照回滚经 `EngineEditorPlaySessionService` + `EngineWorldSnapshotStore`；sim 控制经 `EngineSimulationControlService`；世界画刷/检视器/叠层/HUD/材质编辑/存读档/调参面板经 `IEditorHostExtension` 默认面板注册（原 `RegisterDefaultEditorPanels`，§0.4 迁至 Editor）注册的既有面板。
 
-Hosting 侧须补的公开 API（列入 `plan/18` 修订，见 §8）：(1) **窗口/GL 上下文所有权解耦**——`AttachToWindow(externalWindow, own:false)` 路径，Engine 复用外部窗口/上下文且 `Engine.Dispose()` 不销毁它；(2) **公开编辑态 bootstrap**——`IEditorHostExtension` 注入点（原 `RegisterDefaultEditorPanels` 私有路径公开化，迁至 Editor，由 shell 注入）；(3) **`.scene` 文档保存 API**（`SaveSceneDocument(EngineSceneDocument, path)`，§4.9）；(4) authoring↔运行时物化边界 API。上述 (2) 相关的 Editor 耦合已由 §0 GUI 中性化处理，Hosting 不再静态依赖 Editor。
+Hosting 侧须补的公开 API（列入 `plan/18` 修订，见 §8）：(1) **窗口/GL 上下文所有权解耦**——`AttachWindowRuntime(externalWindow)` 路径，Engine 复用外部窗口/上下文且 `Engine.Dispose()` 不销毁它；(2) **公开编辑态 bootstrap**——`EditorHostBootstrap` 在 Engine 前立起中性窗口/Gui host，`IEditorHostExtension` 注入点由 shell adapter 承接默认面板注册；(3) **`.scene` 文档保存 API**（`SaveSceneDocument(EngineSceneDocument, path)`，§4.9）；(4) `EngineSceneDocument`→运行时物化边界 API。上述 (2) 相关的 Editor 耦合已由 §0 GUI 中性化处理，Hosting 不再静态依赖 Editor。
 
 Edit 模式语义：sim 暂停（相位 [3]–[8] 跳过，[9]–[10] 继续出帧，复用 `plan/12 §3.12` 语义），世界画刷/gizmo/拾取生效；Behaviour 的 `OnUpdate` 不派发（`ScriptRuntime` 仅在 Play 的相位 1 派发）。进入 Play：`EngineEditorPlaySessionService.EnterPlay()` 快照 world+script → 物化 authoring 模型到运行时 Scene（§4.5）→ 运行；退出 Play：回滚到 Edit 态，运行期对 GameObject 的改动被丢弃（类 Unity）。
 
@@ -217,7 +217,7 @@ Edit 模式实时投影：为让 Scene View 的 gizmo/拾取显示「活的」Ga
 现状：`EngineSceneDocumentLoader` 只有读（`Load`/`Build`），无写；`EngineSceneDocument` 缺 parent 与 Transform。本文件补齐往返：
 
 - schema 升版到 `FormatVersion=2`：`EngineSceneEntityDocument` 增 `int ParentId`（0=根）与 `EngineSceneTransformDocument Transform`（X/Y/RotationRadians/ScaleX/ScaleY，字段用 `Vector2` 表达位置/缩放）；`Behaviours` 语义不变。加载器**兼容 v1**（无 ParentId 视为根、无 Transform 用默认）并可升级另存为 v2。
-- 新增 writer：Hosting 侧 `SaveSceneDocument(EngineSceneDocument, path)`（§4.4 API (3)），把 authoring 模型序列化为 `.scene` JSON（`System.Text.Json` 源生成，扩展 `EngineSceneJsonContext`），稳定排序（按 StableId 升序）、往返等价（读→写→读逐字段一致，供 `plan/14` 性质测试）。authoring↔运行时物化 API 由 Hosting 公开，shell 只喂 `EngineSceneDocument`。
+- 新增 writer：Hosting 侧 `SaveSceneDocument(EngineSceneDocument, path)`（§4.4 API (3)），把 shell 已映射好的 `EngineSceneDocument` 序列化为 `.scene` JSON（`System.Text.Json` 源生成，扩展 `EngineSceneJsonContext`），稳定排序（按 StableId 升序）、往返等价（读→写→读逐字段一致，供 `plan/14` 性质测试）。`EngineSceneDocument`→运行时物化 API 由 Hosting 公开；authoring↔文档映射归 shell。
 - 保存流程：File ▸ Save Scene → writer 落盘 → 清脏标记 → 窗口标题去星号。Save As → 选路径另存并更新 `EditorProject.StartScene`/`Scenes`。
 - 材质引用稳定性：GameObject 字段里的 `MaterialId` 入盘仍走「材质稳定 Name」策略由 `plan/04`/`plan/12` 负责（不变式 #8），场景文档只存字段字符串值，不引入数值 id 依赖。
 
@@ -376,7 +376,7 @@ player-only 与布局
 - [ ] `EditorShellLayout`：编辑器默认 dock 布局 + 保存/恢复 + Reset Layout（§4.3）
 
 in-process 宿主：
-- [ ] `EditorProjectSession`：用 `EngineBuilder` 装配引擎（Edit 模式默认暂停）、`AttachToWindow(shellWindow, own:false)` attach 既有窗口（Engine 不 own、Dispose 不销毁窗口）（§4.1、§4.4，前置 `plan/18` 窗口所有权解耦 API）
+- [ ] `EditorProjectSession`：用 `EngineBuilder` 装配引擎（Edit 模式默认暂停）、`engine.AttachWindowRuntime(shellWindow)` attach 既有窗口（Engine 不 own、Dispose 不销毁窗口）（§4.1、§4.4，前置 `plan/18` 窗口所有权解耦 API）
 - [ ] shell 经 `IEditorHostExtension`（§0.4）注入 Editor 面板宿主到 Hosting 相位[10]（前置 §0，Hosting 不再引用 Editor）（§4.4）
 - [ ] 复用 `EngineEditorPlaySessionService`/`EngineWorldSnapshotStore` 的 Play/Edit/Step 与快照回滚，绑定菜单/工具条（§4.4）
 - [ ] 切换/关闭工程逆序释放 `Engine`、保留窗口/上下文、重建 session（§4.1、§4.4）
@@ -439,7 +439,7 @@ GameObject authoring：
 
 前置（须具备其公开 API）：
 - **§0 GUI 宿主中性化重构（`PixelEngine.Gui`）**：M13 入口门，plan/19 壳注入的**硬前置**——不落地则 shell 无法在 `Hosting↛Editor` 前提下宿主编辑器、玩家包无法结构解耦。
-- `plan/18`（Hosting）：`Engine`/`EngineBuilder`/Play-Edit-Step/`EngineEditorPlaySessionService`/`EngineWorldSnapshotStore`；**须新增**窗口/GL 所有权解耦 API（attach 既有窗口不 own、Dispose 不销毁）、公开编辑态 bootstrap（`IEditorHostExtension` 注入点，原 `RegisterDefaultEditorPanels`）、`SaveSceneDocument` writer、authoring↔运行时物化 API、editor-window 证据入口迁移。**顺序约束**：这些 API 先于 §4.1/§4.4 壳落地。
+- `plan/18`（Hosting）：`Engine`/`EngineBuilder`/Play-Edit-Step/`EngineEditorPlaySessionService`/`EngineWorldSnapshotStore`；已新增窗口/GL 所有权解耦 API（attach 既有窗口不 own、Dispose 不销毁）、公开编辑态 bootstrap（`EditorHostBootstrap` + `IEditorHostExtension` 注入点）、`SaveSceneDocument` writer、`EngineSceneDocument`→运行时物化 API；剩余 editor-window 证据入口迁移随 shell 落地。**顺序约束**：这些 API 先于 §4.1/§4.4 壳落地。
 - `plan/12`（编辑器面板层）：全套 `IEditorPanel` 面板、`EditorApp`/`EditorDockSpace`/`ImGuizmo` 接入；须修订 §1 锁定措辞（见 fileActions）。
 - `plan/11`（脚本）：`Scripting.Scene`/`Entity`/`Behaviour`/`Transform`/`ScriptAssemblyRegistry`、Roslyn+ALC 热重载、Add Component 类型来源。
 - `plan/08`（Rendering）：`RenderWindow`/GL 上下文/离屏 FBO 视口纹理/相机同步/UI 层注册接口。
