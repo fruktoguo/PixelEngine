@@ -20,11 +20,6 @@ public sealed class DemoStartupOptions
     public const string DefaultProceduralSceneKey = "PixelEngine.Demo.PlayableWorldDirector";
 
     /// <summary>
-    /// 是否启用内嵌编辑器。
-    /// </summary>
-    public bool EnableEditor { get; init; }
-
-    /// <summary>
     /// 是否启用脚本热重载。
     /// </summary>
     public bool HotReloadEnabled { get; init; } = true;
@@ -112,7 +107,6 @@ public sealed class DemoStartupOptions
     public static DemoStartupOptions Parse(string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
-        bool enableEditor = false;
         bool hotReload = true;
         bool vSync = true;
         bool headless = false;
@@ -135,10 +129,6 @@ public sealed class DemoStartupOptions
         {
             switch (args[i])
             {
-                case "--editor":
-                    enableEditor = true;
-                    headless = false;
-                    break;
                 case "--headless":
                     headless = true;
                     break;
@@ -241,7 +231,6 @@ public sealed class DemoStartupOptions
         ValidateParticleFrameProbe(headless, windowTicks, particleFrameProbe, particleProbeCount, particleProbeRunId);
         return new DemoStartupOptions
         {
-            EnableEditor = enableEditor,
             HotReloadEnabled = hotReload,
             VSync = vSync,
             Headless = headless,

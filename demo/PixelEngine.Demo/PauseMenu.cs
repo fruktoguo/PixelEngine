@@ -79,13 +79,6 @@ public sealed class PauseMenu : Behaviour
         }
 
         gui.SameLine();
-        if (gui.Button("打开 Editor"))
-        {
-            RuntimeControlResult result = Context.Runtime.OpenEditor();
-            _status = result.Message;
-        }
-
-        gui.SameLine();
         if (gui.Button("重开"))
         {
             RuntimeControlResult result = Context.Runtime.RequestRestartCurrentScene();

@@ -1741,7 +1741,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("playable-world", script, StringComparison.Ordinal);
         Assert.Contains("route-attempt", script, StringComparison.Ordinal);
         Assert.Contains("editor-window", script, StringComparison.Ordinal);
-        Assert.Contains("--editor", script, StringComparison.Ordinal);
+        Assert.Contains("EditorShellProject", script, StringComparison.Ordinal);
+        Assert.Contains("Invoke-EditorShellProbe", script, StringComparison.Ordinal);
+        Assert.Contains("apps/PixelEngine.Editor.Shell/PixelEngine.Editor.Shell.csproj", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("--editor", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine.scene", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine-goal-probe.scene", script, StringComparison.Ordinal);
         Assert.Contains("scenes/lava-mine-health-probe.scene", script, StringComparison.Ordinal);

@@ -1,5 +1,6 @@
 ﻿param(
     [string]$Project = "demo/PixelEngine.Demo/PixelEngine.Demo.csproj",
+    [string]$EditorShellProject = "apps/PixelEngine.Editor.Shell/PixelEngine.Editor.Shell.csproj",
     [string]$Content = "demo/PixelEngine.Demo/content",
     [string]$Artifacts = "artifacts/demo-manual-acceptance-preflight",
     [string]$EvidenceManifestPath = "",
@@ -562,10 +563,10 @@ function Get-ManualScopes {
             checklist = @("hudReadable", "menuButtonsClicked", "editorDockspaceOpened")
             criteria = @{
                 hudReadable = "视频必须展示 HUD 文本、材质、性能行和状态信息在真实窗口中可读且不重叠。"
-                menuButtonsClicked = "视频必须展示暂停菜单按钮点击，包括继续、重开、退出或叠层切换链路。"
-                editorDockspaceOpened = "视频必须展示从菜单打开 Editor dockspace 或相关编辑器窗口，并能正常交互。"
+                menuButtonsClicked = "视频必须展示玩家暂停菜单按钮点击，包括继续、重开、退出或叠层切换链路。"
+                editorDockspaceOpened = "视频必须展示独立 PixelEngine.Editor.Shell 的 Editor dockspace 或相关编辑器窗口，并能正常交互。"
             }
-            title = "HUD 像素布局、菜单点击、Editor dockspace 打开、重开、退出请求与叠层切换"
+            title = "HUD 像素布局、玩家菜单点击、独立 EditorShell dockspace、重开、退出请求与叠层切换"
         },
         [pscustomobject]@{
             scope = "hotReloadWindowReport"
@@ -968,6 +969,117 @@ function Invoke-ScriptedProbe {
     }
 }
 
+function New-EditorShellProbeProject {
+    param(
+        [string]$Root,
+        [string]$OutputRoot
+    )
+
+    $projectRoot = Join-Path $OutputRoot "editor-shell-project"
+    $contentRoot = Join-Path $projectRoot "content"
+    $sceneRoot = Join-Path $contentRoot "scenes"
+    New-Item -ItemType Directory -Force -Path $sceneRoot | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $projectRoot "scripts") | Out-Null
+
+    $projectDocument = @"
+{
+  "formatVersion": 1,
+  "name": "Editor Shell Probe",
+  "contentRoot": "content",
+  "scriptSourceDir": "scripts",
+  "startScene": "scenes/main.scene",
+  "scenes": [
+    {
+      "name": "main",
+      "path": "scenes/main.scene"
+    }
+  ]
+}
+"@
+    [System.IO.File]::WriteAllText((Join-Path $projectRoot "project.pixelproj"), $projectDocument, [System.Text.UTF8Encoding]::new($false))
+
+    $sceneDocument = @"
+{
+  "formatVersion": 2,
+  "name": "main",
+  "entities": []
+}
+"@
+    [System.IO.File]::WriteAllText((Join-Path $sceneRoot "main.scene"), $sceneDocument, [System.Text.UTF8Encoding]::new($false))
+    return $projectRoot
+}
+
+function Invoke-EditorShellProbe {
+    param(
+        [string]$Name,
+        [int]$Ticks,
+        [string[]]$RequiredSummaryMarkers,
+        [string]$Root,
+        [string]$OutputRoot
+    )
+
+    $directory = Join-Path $OutputRoot $Name
+    New-Item -ItemType Directory -Force -Path $directory | Out-Null
+    $stdoutPath = Join-Path $directory "stdout.txt"
+    $stderrPath = Join-Path $directory "stderr.txt"
+    $capturePath = Join-Path $directory "capture.bmp"
+    $logDirectory = Join-Path $directory "logs"
+    $projectRoot = New-EditorShellProbeProject -Root $Root -OutputRoot $directory
+
+    $arguments = @(
+        "run",
+        "--project", $EditorShellProject,
+        "-c", "Release",
+        "--no-build",
+        "--",
+        "--project", $projectRoot,
+        "--scene", "scenes/main.scene",
+        "--window-ticks", $Ticks.ToString([Globalization.CultureInfo]::InvariantCulture),
+        "--scripted-probe",
+        "--capture-frame", $capturePath,
+        "--log-directory", $logDirectory
+    )
+
+    $process = Start-Process -FilePath "dotnet" -ArgumentList $arguments -WorkingDirectory $Root -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+    $stdout = Get-Content -LiteralPath $stdoutPath -Raw
+    $summary = ($stdout -split "`r?`n" | Where-Object { $_.Contains("editor_enabled=", [StringComparison]::Ordinal) } | Select-Object -Last 1)
+    if ($process.ExitCode -ne 0) {
+        throw "editor shell probe $Name 退出码为 $($process.ExitCode)。"
+    }
+
+    if ([string]::IsNullOrWhiteSpace($summary)) {
+        throw "editor shell probe $Name 未输出编辑器摘要。"
+    }
+
+    foreach ($marker in $RequiredSummaryMarkers) {
+        if (-not $summary.Contains($marker, [StringComparison]::Ordinal)) {
+            throw "editor shell probe $Name 摘要缺少标记：$marker。摘要：$summary"
+        }
+    }
+
+    $summaryValues = ConvertFrom-ScriptedProbeSummary -Summary $summary
+    Assert-ScriptedProbeSummarySemantics -Name $Name -Values $summaryValues
+
+    $capture = Get-BmpFrameEvidence -Root $Root -Path $capturePath
+
+    [pscustomobject]@{
+        name = $Name
+        scene = "apps/PixelEngine.Editor.Shell"
+        ticks = $Ticks
+        stdout = ConvertTo-RepositoryRelativePath -Root $Root -Path $stdoutPath
+        stderr = ConvertTo-RepositoryRelativePath -Root $Root -Path $stderrPath
+        capture = $capture.path
+        captureSha256 = $capture.sha256
+        captureBytes = $capture.bytes
+        captureWidth = $capture.width
+        captureHeight = $capture.height
+        captureBitsPerPixel = $capture.bitsPerPixel
+        captureUniqueVisiblePixels = $capture.uniqueVisiblePixels
+        required = $RequiredSummaryMarkers
+        summary = $summary
+    }
+}
+
 function Read-EvidenceManifest {
     param(
         [string]$Root,
@@ -1193,7 +1305,7 @@ if ($RunScriptedProbes) {
     $probeRuns.Add((Invoke-ScriptedProbe -Name "playable-world" -Ticks 240 -Scene "scenes/playable-world.scene" -RequiredSummaryMarkers @("player_visual=present", "player_visual_overlays=", "playable_shots=", "particles=", "fps=", "frame_ms=", "frame_p99_ms=", "frame_low1_fps=", "frame_jitter_ms=", "frame_samples=", "sim_hz=", "camera_followed=True", "render_camera_synced=True", "render_camera=", "720x480", "player_left_ground=True", "player_air_control=True", "player_ground_samples=", "player_air_samples=", "max_particles=", "hud_blocked=none") -Root $root -OutputRoot $probeRoot))
     $probeRuns.Add((Invoke-ScriptedProbe -Name "main" -Ticks 80 -Scene "scenes/lava-mine.scene" -RequiredSummaryMarkers @("brush_material=", "brush_radius=", "painted_material=", "explosions=", "max_particles=", "max_lights=", "max_physics_destroyed=", "hud_blocked=none") -Root $root -OutputRoot $probeRoot))
     $probeRuns.Add((Invoke-ScriptedProbe -Name "route-attempt" -Ticks 1500 -Scene "scenes/lava-mine.scene" -RequiredSummaryMarkers @("pause_open=False", "hud_blocked=none", "render_camera_synced=True", "goal_reached=", "player_x_range=", "frame_samples=") -Root $root -OutputRoot $probeRoot -ExtraArguments @("--scripted-window-route")))
-    $probeRuns.Add((Invoke-ScriptedProbe -Name "editor-window" -Ticks 180 -Scene "scenes/lava-mine.scene" -RequiredSummaryMarkers @("editor_enabled=True", "editor_running=True", "editor_bridge_frames=", "editor_panels=", "hud_blocked=none", "render_camera_synced=True") -Root $root -OutputRoot $probeRoot -ExtraArguments @("--editor")))
+    $probeRuns.Add((Invoke-EditorShellProbe -Name "editor-window" -Ticks 180 -RequiredSummaryMarkers @("editor_enabled=True", "editor_running=True", "editor_bridge_frames=", "editor_panels=", "render_camera_synced=True") -Root $root -OutputRoot $probeRoot))
     $probeRuns.Add((Invoke-ScriptedProbe -Name "goal" -Ticks 40 -Scene "scenes/lava-mine-goal-probe.scene" -RequiredSummaryMarkers @("goal_reached=True", "player_center_material=13", "max_particles=", "max_lights=") -Root $root -OutputRoot $probeRoot))
     $probeRuns.Add((Invoke-ScriptedProbe -Name "health" -Ticks 80 -Scene "scenes/lava-mine-health-probe.scene" -RequiredSummaryMarkers @("spawn_probe=True", "damage_events=", "player_health=", "player_center_material=") -Root $root -OutputRoot $probeRoot))
     $probeRuns.Add((Invoke-ScriptedProbe -Name "camera" -Ticks 80 -Scene "scenes/lava-mine-camera-probe.scene" -RequiredSummaryMarkers @("camera_followed=True", "render_camera_synced=True", "camera_zoom=4.00", "camera_samples=") -Root $root -OutputRoot $probeRoot))

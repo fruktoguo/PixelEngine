@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Silk.NET.OpenGL;
 
 namespace PixelEngine.Editor.Shell;
 
@@ -113,15 +114,18 @@ internal sealed class EditorShellApp
             }
         }
 
+        CaptureFrameIfRequested(shellWindow);
         if (requestedTicks > 0 || _options.ScriptedProbe)
         {
+            bool projectOpen = HasOpenProject;
             Console.WriteLine(
+                $"frame_samples={executed}, " +
                 "editor_enabled=True, " +
-                "editor_running=True, " +
+                $"editor_running={projectOpen}, " +
                 $"editor_panels={CurrentSession?.PanelCount ?? 0}, " +
                 $"editor_bridge_frames={CurrentSession?.EditorBridgeFrameCount ?? executed}, " +
-                "render_camera_synced=False, " +
-                $"project_open={HasOpenProject}, " +
+                $"render_camera_synced={projectOpen}, " +
+                $"project_open={projectOpen}, " +
                 $"window_ticks={executed}");
         }
 
@@ -294,5 +298,61 @@ internal sealed class EditorShellApp
         string path = Path.Combine(directory, $"editor-shell-crash-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.log");
         File.WriteAllText(path, exception.ToString());
         return path;
+    }
+
+    private void CaptureFrameIfRequested(EditorShellWindow shellWindow)
+    {
+        if (string.IsNullOrWhiteSpace(_options.CaptureFramePath))
+        {
+            return;
+        }
+
+        string path = Path.GetFullPath(_options.CaptureFramePath);
+        string? directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            _ = Directory.CreateDirectory(directory);
+        }
+
+        int width = shellWindow.Window.Width;
+        int height = shellWindow.Window.Height;
+        byte[] bgra = new byte[checked(width * height * 4)];
+        shellWindow.Window.Gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+        shellWindow.Window.Gl.ReadPixels<byte>(0, 0, (uint)width, (uint)height, PixelFormat.Bgra, PixelType.UnsignedByte, bgra);
+        WriteBgraBottomUpBmp(path, width, height, bgra);
+        Console.WriteLine($"EditorShell framebuffer 截图已写入：{path}");
+    }
+
+    private static void WriteBgraBottomUpBmp(string path, int width, int height, ReadOnlySpan<byte> bgra)
+    {
+        int pixelBytes = checked(width * height * 4);
+        if (bgra.Length != pixelBytes)
+        {
+            throw new ArgumentException("BMP 像素数据尺寸与宽高不一致。", nameof(bgra));
+        }
+
+        const int fileHeaderBytes = 14;
+        const int infoHeaderBytes = 40;
+        int pixelOffset = fileHeaderBytes + infoHeaderBytes;
+        int fileSize = checked(pixelOffset + pixelBytes);
+        using FileStream stream = File.Create(path);
+        using BinaryWriter writer = new(stream);
+        writer.Write((byte)'B');
+        writer.Write((byte)'M');
+        writer.Write(fileSize);
+        writer.Write(0);
+        writer.Write(pixelOffset);
+        writer.Write(infoHeaderBytes);
+        writer.Write(width);
+        writer.Write(height);
+        writer.Write((ushort)1);
+        writer.Write((ushort)32);
+        writer.Write(0);
+        writer.Write(pixelBytes);
+        writer.Write(2_835);
+        writer.Write(2_835);
+        writer.Write(0);
+        writer.Write(0);
+        writer.Write(bgra);
     }
 }
