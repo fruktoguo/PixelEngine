@@ -435,8 +435,8 @@ GameObject authoring：
 - [x] 资源浏览/材质反应编辑/世界画刷/调试叠层/性能 HUD/存读档/调参面板在 shell 中复用可用，无重复实现（§4.11）
 - [x] 玩家包解耦（纠正版）：§0 落地后玩家闭包 `Demo→Hosting→{…,Gui}` 不含 `PixelEngine.Editor`；玩家包发行审计拒绝 `PixelEngine.Editor.dll`/`ImGuizmo*`/`ImPlot*`、允许 `Hexa.NET.ImGui` 核心（§0.5、§4.12、`plan/15`）
 - [x] editor-window 证据迁移：shell `--window-ticks`/scripted-probe 产出与原 Demo `EnableEditor` 等价的 `editor_enabled`/`editor_running`/`editor_panels`/`editor_bridge_frames`，`plan/18 §5` 与相关 preflight/锁定测试保绿（§4.12）
-- [ ] 编辑器内构建：§5.10 全部验收通过（一键出 player-only 包、进度/日志/取消/失败诊断/Build-And-Run/开发 vs 发行布局）
-- [ ] shell 仅消费 Hosting/Editor/Gui/各子系统公开 API，无对内部类型直接访问、无反向依赖/循环；不新增 native 依赖（不变式 #10，§3）
+- [x] 编辑器内构建：§5.10 全部验收通过（一键出 player-only 包、进度/日志/取消/失败诊断/Build-And-Run/开发 vs 发行布局）
+- [x] shell 仅消费 Hosting/Editor/Gui/各子系统公开 API，无对内部类型直接访问、无反向依赖/循环；不新增 native 依赖（不变式 #10，§3）
 
 ---
 
@@ -487,3 +487,4 @@ GameObject authoring：
 - [x] 节点 20：`test(editor-shell): shell scripted-build-probe 覆盖构建失败诊断`（§5.4、§5.10）
 - [x] 节点 21：`test(editor-shell): shell scripted-build-cancel-probe 覆盖取消后重跑`（§5.4、§5.10）
 - [x] 节点 22：`test(editor-shell): shell probes 覆盖构建 UI 响应与设置持久化`（§5.2、§5.4、§5.10）
+- [x] 节点 23：`docs(plan): 勾选编辑器内构建与 shell 依赖边界验收`（§3、§5.10、§7）
