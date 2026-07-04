@@ -80,6 +80,19 @@ public sealed class GuiApp : IDisposable
         _controller.Render();
     }
 
+    /// <summary>
+    /// 关闭当前 GUI backend/context，但保留门面实例以便之后重新 Initialize。
+    /// </summary>
+    public void Shutdown()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_initialized)
+        {
+            _controller.Shutdown();
+            _initialized = false;
+        }
+    }
+
     /// <inheritdoc />
     public void Dispose()
     {
@@ -88,12 +101,7 @@ public sealed class GuiApp : IDisposable
             return;
         }
 
-        if (_initialized)
-        {
-            _controller.Shutdown();
-            _initialized = false;
-        }
-
+        Shutdown();
         _disposed = true;
     }
 }

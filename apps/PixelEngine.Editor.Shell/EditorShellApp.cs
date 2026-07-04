@@ -71,6 +71,8 @@ internal sealed class EditorShellApp
         bool scriptedPlayEntered = false;
         bool scriptedPlayExited = false;
         bool scriptedSceneSaved = false;
+        bool scriptedProjectClosed = false;
+        bool scriptedProjectReopened = false;
         while (!shellWindow.Window.IsClosing)
         {
             double now = stopwatch.Elapsed.TotalSeconds;
@@ -78,6 +80,15 @@ internal sealed class EditorShellApp
             previousSeconds = now;
             if (CurrentSession is null)
             {
+                if (_options.ScriptedProbe &&
+                    scriptedProjectClosed &&
+                    !scriptedProjectReopened &&
+                    !string.IsNullOrWhiteSpace(_options.ProjectPath))
+                {
+                    OpenProjectPath(_options.ProjectPath);
+                    scriptedProjectReopened = true;
+                }
+
                 shellWindow.Window.DoEvents();
                 if (!shellWindow.Gui.IsRunning)
                 {
@@ -112,7 +123,8 @@ internal sealed class EditorShellApp
                         executed,
                         ref scriptedPlayEntered,
                         ref scriptedPlayExited,
-                        ref scriptedSceneSaved);
+                        ref scriptedSceneSaved,
+                        ref scriptedProjectClosed);
                 }
 
                 ApplyDeferredClose();
@@ -140,6 +152,8 @@ internal sealed class EditorShellApp
                 $"scripted_play_entered={scriptedPlayEntered}, " +
                 $"scripted_play_exited={scriptedPlayExited}, " +
                 $"scripted_scene_saved={scriptedSceneSaved}, " +
+                $"scripted_project_closed={scriptedProjectClosed}, " +
+                $"scripted_project_reopened={scriptedProjectReopened}, " +
                 $"project_open={projectOpen}, " +
                 $"window_ticks={executed}");
         }
@@ -151,7 +165,8 @@ internal sealed class EditorShellApp
         int executedTicks,
         ref bool playEntered,
         ref bool playExited,
-        ref bool sceneSaved)
+        ref bool sceneSaved,
+        ref bool projectClosed)
     {
         if (CurrentSession is null)
         {
@@ -176,6 +191,13 @@ internal sealed class EditorShellApp
         {
             CurrentSession.SaveScene();
             sceneSaved = true;
+            return;
+        }
+
+        if (sceneSaved && !projectClosed && executedTicks >= 40)
+        {
+            CloseProject();
+            projectClosed = true;
         }
     }
 
@@ -311,6 +333,7 @@ internal sealed class EditorShellApp
         EditorProject project = _pendingProject;
         _pendingProject = null;
         CurrentSession?.Dispose();
+        shellWindow.ShutdownProjectPickerGui();
         CurrentSession = EditorProjectSession.Open(project, shellWindow.Window, this);
         CurrentProject = project;
     }

@@ -21,6 +21,7 @@ public sealed class EngineBuilder
     private bool _headless;
     private bool _deterministicMode;
     private bool _enableGpu = true;
+    private bool _enableGuiRuntime = true;
     private bool _vSync = true;
     private string _contentRoot = "content";
     private string? _startScene;
@@ -96,6 +97,7 @@ public sealed class EngineBuilder
         {
             _enableEditor = false;
             _enableGpu = false;
+            _enableGuiRuntime = false;
         }
 
         return this;
@@ -121,6 +123,15 @@ public sealed class EngineBuilder
     public EngineBuilder EnableGpu(bool enabled = true)
     {
         _enableGpu = enabled && !_headless;
+        return this;
+    }
+
+    /// <summary>
+    /// 配置是否允许 Hosting 自建脚本 GUI runtime；外部编辑器宿主可关闭以避免接管窗口上下文资源。
+    /// </summary>
+    public EngineBuilder UseGuiRuntime(bool enabled = true)
+    {
+        _enableGuiRuntime = enabled && !_headless;
         return this;
     }
 
@@ -272,6 +283,7 @@ public sealed class EngineBuilder
             _headless,
             _deterministicMode,
             _enableGpu,
+            _enableGuiRuntime,
             _vSync,
             _contentRoot,
             _startScene,

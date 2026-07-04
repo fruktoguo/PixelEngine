@@ -482,7 +482,14 @@ public sealed class Engine : IDisposable
 
     private void AttachGuiRuntime(RenderWindow window, RenderPipeline pipeline)
     {
-        bool hasScriptGui = Context.TryGetService(out IScriptRuntime scriptRuntime);
+        IScriptRuntime? scriptRuntime = null;
+        bool hasScriptGui = false;
+        if (Context.Options.EnableGuiRuntime &&
+            Context.TryGetService(out IScriptRuntime resolvedScriptRuntime))
+        {
+            scriptRuntime = resolvedScriptRuntime;
+            hasScriptGui = true;
+        }
         bool hasGuiBridge = Context.TryGetService(out GuiRenderBridge _);
         IReadOnlyList<IEditorHostExtension>? extensions = null;
         bool hasEditorHostExtensions = false;
@@ -499,11 +506,12 @@ public sealed class Engine : IDisposable
             return;
         }
 
-        GuiApp gui = ResolveGuiApp();
-        GuiWindowInputConnector input = new(window, gui.Input);
-        bool inputOwned = false;
+        GuiWindowInputConnector? input = null;
+        bool scriptInputOwned = false;
         if (hasScriptGui && !hasGuiBridge)
         {
+            GuiApp gui = ResolveGuiApp();
+            input = new GuiWindowInputConnector(window, gui.Input);
             GuiRenderBridge? bridge = GuiRenderBridge.AttachIfEnabled(
                 pipeline,
                 gui,
@@ -512,7 +520,7 @@ public sealed class Engine : IDisposable
             {
                 Context.RegisterService(bridge);
                 _ownedRuntimeResources.Add(bridge);
-                inputOwned = true;
+                scriptInputOwned = true;
             }
         }
 
@@ -520,10 +528,14 @@ public sealed class Engine : IDisposable
         {
             Debug.Assert(extensions is not null);
             AttachEditorHostExtensions(extensions, window, pipeline);
-            inputOwned = true;
         }
 
-        if (inputOwned)
+        if (input is null)
+        {
+            return;
+        }
+
+        if (scriptInputOwned)
         {
             _ownedRuntimeResources.Add(input);
         }

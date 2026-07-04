@@ -41,6 +41,7 @@ public sealed class EngineBuilderTests
         Assert.Equal("content-test", context.Options.ContentRoot);
         Assert.Equal("scenes/start.scene", context.Options.StartScene);
         Assert.False(context.Options.VSync);
+        Assert.True(context.Options.EnableGuiRuntime);
         Assert.Equal(64, context.Events.CapacityPerChannel);
         Assert.Equal(0, context.Options.NoGcRegionBudgetBytes);
         Assert.Same(context, context.GetService<EngineContext>());
@@ -48,6 +49,27 @@ public sealed class EngineBuilderTests
         Assert.Same(context.Clock, context.GetService<FrameClock>());
         Assert.Same(context.Events, context.GetService<EventBus>());
         Assert.Same(context.Counters, context.GetService<EngineCounters>());
+    }
+
+    /// <summary>
+    /// 验证宿主可关闭 Hosting 自建脚本 GUI runtime，供独立编辑器保留窗口/上下文所有权。
+    /// </summary>
+    [Fact]
+    public void UseGuiRuntimeWritesOptionsAndHeadlessDisablesIt()
+    {
+        using Engine disabled = new EngineBuilder()
+            .WithWorkerCount(1)
+            .UseGuiRuntime(false)
+            .Build();
+
+        using Engine headless = new EngineBuilder()
+            .WithWorkerCount(1)
+            .UseHeadless()
+            .UseGuiRuntime()
+            .Build();
+
+        Assert.False(disabled.Context.Options.EnableGuiRuntime);
+        Assert.False(headless.Context.Options.EnableGuiRuntime);
     }
 
     /// <summary>

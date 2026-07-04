@@ -72,6 +72,7 @@ internal sealed class EditorProjectSession : IDisposable
         Engine engine = new EngineBuilder()
             .WithProject(project.ToEngineProject(sceneRelativePath))
             .UseVSync(true)
+            .UseGuiRuntime(false)
             .AddEditorHostExtension(editorHost)
             .Build();
         try
