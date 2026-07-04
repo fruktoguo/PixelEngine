@@ -14,6 +14,7 @@ public readonly record struct PerformanceHudSample(
     double PhysicsMs,
     double ShapeRebuildMs,
     double RenderMs,
+    double RenderStyleMs,
     double UploadMs,
     double AudioMs,
     double CpuWorkMs,

@@ -29,6 +29,7 @@ public sealed class PerformanceHudPanelTests
         profiler.RecordSub(FrameSubPhase.GpuUpload, 0.9);
         profiler.RecordSub(FrameSubPhase.Lighting, 1.1);
         profiler.RecordSub(FrameSubPhase.PostProcess, 1.2);
+        profiler.RecordSub(FrameSubPhase.RenderStyleShading, 0.45);
         profiler.RecordSub(FrameSubPhase.GpuLightComposite, 8.0);
         profiler.RecordSub(FrameSubPhase.Present, 0.3);
         profiler.RecordSub(FrameSubPhase.PresentWait, 16.0);
@@ -69,6 +70,7 @@ public sealed class PerformanceHudPanelTests
         Assert.Equal(0.7, sample.PhysicsMs, 3);
         Assert.Equal(0.8, sample.ShapeRebuildMs, 3);
         Assert.Equal(4.6, sample.RenderMs, 3);
+        Assert.Equal(0.45, sample.RenderStyleMs, 3);
         Assert.Equal(0.9, sample.UploadMs, 3);
         Assert.Equal(0.25, sample.AudioMs, 3);
         Assert.Equal(9.7, sample.CpuWorkMs, 3);

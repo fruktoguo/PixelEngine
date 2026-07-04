@@ -59,6 +59,7 @@ public sealed class RenderBufferBuilder(
             return;
         }
 
+        bool useMaterialStyles = ShouldUseMaterialStyles(context);
         _state.Context = context;
         _state.Target = target;
         _state.Aux = aux;
@@ -66,11 +67,13 @@ public sealed class RenderBufferBuilder(
         if (_jobs is null)
         {
             BuildRows(0, target.Height, 0, _state);
+            RecordStyleSub(profiler, started, useMaterialStyles);
             RecordSub(profiler, started);
             return;
         }
 
         _jobs.ParallelRange(target.Height, Math.Max(1, _options.MinRowsPerJob), BuildRows, _state);
+        RecordStyleSub(profiler, started, useMaterialStyles);
         RecordSub(profiler, started);
     }
 
@@ -710,6 +713,17 @@ public sealed class RenderBufferBuilder(
 
         long elapsed = Stopwatch.GetTimestamp() - started;
         profiler.RecordSub(FrameSubPhase.RenderBufferBuild, elapsed * 1000.0 / Stopwatch.Frequency);
+    }
+
+    private static void RecordStyleSub(FrameProfiler? profiler, long started, bool active)
+    {
+        if (!active || profiler is null)
+        {
+            return;
+        }
+
+        long elapsed = Stopwatch.GetTimestamp() - started;
+        profiler.RecordSub(FrameSubPhase.RenderStyleShading, elapsed * 1000.0 / Stopwatch.Frequency);
     }
 
     private sealed class BuildState

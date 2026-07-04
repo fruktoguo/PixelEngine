@@ -71,6 +71,11 @@ public enum FrameSubPhase
     RenderBufferBuild,
 
     /// <summary>
+    /// RenderStyle 差异化着色路径。
+    /// </summary>
+    RenderStyleShading,
+
+    /// <summary>
     /// 自由粒子 stamp。
     /// </summary>
     ParticleStamp,
