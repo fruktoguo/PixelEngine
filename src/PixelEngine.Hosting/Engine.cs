@@ -32,6 +32,7 @@ public sealed class Engine : IDisposable
     private IScriptRuntime? _attachedScriptRuntime;
     private EngineWorldSnapshotStore? _restartSnapshotStore;
     private bool _editorHostExtensionsAttached;
+    private bool _windowRuntimeAttached;
     private int _renderFrameSampleIndex;
     private int _renderFrameSampleCount;
     private double _renderFrameSampleSumMs;
@@ -227,6 +228,17 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>
+    /// 以稳定顺序保存 .scene 文档，供独立编辑器壳写回场景文件。
+    /// </summary>
+    /// <param name="document">待保存的场景文档。</param>
+    /// <param name="path">目标 .scene 文件路径。</param>
+    public void SaveSceneDocument(EngineSceneDocument document, string path)
+    {
+        ThrowIfShutdown();
+        EngineSceneDocumentLoader.SaveDocument(document, path);
+    }
+
+    /// <summary>
     /// 判断当前 ContentRoot 是否存在可加载的材质/反应内容包。
     /// </summary>
     /// <returns>materials.json 与 reactions.json 都存在时返回 true。</returns>
@@ -323,19 +335,57 @@ public sealed class Engine : IDisposable
             Height = Context.Options.WindowHeight,
             VSync = Context.Options.VSync,
         });
-        _ownedRuntimeResources.Add(window);
+        return AttachWindowRuntime(window, takeOwnership: true);
+    }
+
+    /// <summary>
+    /// 接入由外部宿主拥有的窗口、输入与真实 Rendering 管线；Engine 关闭时不会销毁该窗口。
+    /// </summary>
+    /// <param name="window">外部宿主已创建并持有所有权的渲染窗口。</param>
+    /// <returns>接入的渲染窗口。</returns>
+    public RenderWindow AttachWindowRuntime(RenderWindow window)
+    {
+        return AttachWindowRuntime(window, takeOwnership: false);
+    }
+
+    private RenderWindow AttachWindowRuntime(RenderWindow window, bool takeOwnership)
+    {
+        ThrowIfShutdown();
+        ArgumentNullException.ThrowIfNull(window);
+        if (Context.Options.Headless)
+        {
+            throw new InvalidOperationException("headless Engine 不能接入窗口运行时。");
+        }
+
+        if (Context.TryGetService(out RenderWindow existing))
+        {
+            return ReferenceEquals(existing, window)
+                ? existing
+                : throw new InvalidOperationException("Engine 已接入另一个渲染窗口。");
+        }
+
+        if (takeOwnership)
+        {
+            _ownedRuntimeResources.Add(window);
+        }
+
         Context.RegisterService(window);
         Context.Counters.VSyncEnabled = window.VSyncEnabled;
         _ = AttachWindowInput(window, _ => ResolveGuiInputRoute());
         _ = AttachCameraSynchronization(window);
         _ = AttachRendering(window);
-        Phases.Register(EnginePhase.InputAndTime, _ =>
+        if (!_windowRuntimeAttached)
         {
-            if (window.IsClosing)
+            Phases.Register(EnginePhase.InputAndTime, _ =>
             {
-                IsShutdownRequested = true;
-            }
-        });
+                if (window.IsClosing)
+                {
+                    IsShutdownRequested = true;
+                }
+            });
+            _windowRuntimeAttached = true;
+        }
+
         return window;
     }
 
@@ -450,7 +500,7 @@ public sealed class Engine : IDisposable
         }
 
         GuiApp gui = ResolveGuiApp();
-        EditorInputConnector input = new(window, gui.Input);
+        GuiWindowInputConnector input = new(window, gui.Input);
         bool inputOwned = false;
         if (hasScriptGui && !hasGuiBridge)
         {
