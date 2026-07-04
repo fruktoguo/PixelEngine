@@ -302,6 +302,29 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证独立编辑器壳复用 plan/12 的材质/反应编辑器，并接到真实内容文件与运行时热重载服务。
+    /// </summary>
+    [Fact]
+    public void EditorShellRegistersMaterialReactionEditorWithRuntimeReloadServices()
+    {
+        string root = FindRepositoryRoot();
+        string source = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellHostExtension.cs"));
+
+        Assert.Contains("TryCreateMaterialReactionPanel", source, StringComparison.Ordinal);
+        Assert.Contains("MaterialReactionEditorPanel panel = new(content)", source, StringComparison.Ordinal);
+        Assert.Contains("FileMaterialReactionContentService content = new(", source, StringComparison.Ordinal);
+        Assert.Contains("EngineContentLoader.MaterialsFileName", source, StringComparison.Ordinal);
+        Assert.Contains("EngineContentLoader.ReactionsFileName", source, StringComparison.Ordinal);
+        Assert.Contains("ReactionEngine reactions", source, StringComparison.Ordinal);
+        Assert.Contains("SimulationKernel kernel", source, StringComparison.Ordinal);
+        Assert.Contains("IChunkSource chunks", source, StringComparison.Ordinal);
+        Assert.Contains("reactions.ReloadReactions", source, StringComparison.Ordinal);
+        Assert.Contains("kernel.ReloadMaterialHotTable", source, StringComparison.Ordinal);
+        Assert.Contains("engine.Context.Counters", source, StringComparison.Ordinal);
+        Assert.Contains("panel.Reload()", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 plan/15 §3.11 的 build-player 一键玩家包编排器与 player-only audit 契约落地。
     /// </summary>
     [Fact]

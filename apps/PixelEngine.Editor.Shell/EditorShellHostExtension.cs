@@ -105,6 +105,12 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
         _editor.AddPanel(new AssetBrowserPanel(
             new FileSystemAssetBrowserDataSource(_project.ContentRootPath),
             instantiatePrefab: _app.InstantiatePrefab));
+        MaterialReactionEditorPanel? materialReactionPanel = TryCreateMaterialReactionPanel(engine);
+        if (materialReactionPanel is not null)
+        {
+            _editor.AddPanel(materialReactionPanel);
+        }
+
         _editor.AddPanel(new BuildSettingsPanel(_project));
         _editor.AddPanel(new PerformanceHudPanel());
         _editor.AddPanel(new SimulationControlToolbar(new EditorSimulationControlAdapter(_app)));
@@ -135,6 +141,50 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
 
         _editor.AddPanel(new LightingTuningPanel(new RenderPipelineLightingTuningService(pipeline.Settings)));
         _panelsRegistered = true;
+    }
+
+    private MaterialReactionEditorPanel? TryCreateMaterialReactionPanel(Engine engine)
+    {
+        if (!engine.Context.TryGetService(out MaterialTable materials) ||
+            !engine.Context.TryGetService(out ReactionEngine reactions) ||
+            !engine.Context.TryGetService(out SimulationKernel kernel) ||
+            !engine.Context.TryGetService(out IChunkSource chunks) ||
+            !TryResolveMaterialFallback(materials, out ushort fallbackMaterialId))
+        {
+            return null;
+        }
+
+        string materialsPath = Path.Combine(_project.ContentRootPath, EngineContentLoader.MaterialsFileName);
+        string reactionsPath = Path.Combine(_project.ContentRootPath, EngineContentLoader.ReactionsFileName);
+        if (!File.Exists(materialsPath) || !File.Exists(reactionsPath))
+        {
+            return null;
+        }
+
+        FileMaterialReactionContentService content = new(
+            materialsPath,
+            reactionsPath,
+            materials,
+            chunks,
+            fallbackMaterialId,
+            reactions.ReloadReactions,
+            kernel.ReloadMaterialHotTable,
+            counters: engine.Context.Counters);
+        MaterialReactionEditorPanel panel = new(content);
+        panel.Reload();
+        return panel;
+    }
+
+    private static bool TryResolveMaterialFallback(MaterialTable materials, out ushort fallbackMaterialId)
+    {
+        if (materials.TryGetId("empty", out fallbackMaterialId) ||
+            materials.TryGetId("air", out fallbackMaterialId))
+        {
+            return true;
+        }
+
+        fallbackMaterialId = 0;
+        return materials.Count != 0;
     }
 
     private static EditorRuntimeDiagnostics BuildRuntimeDiagnostics(Engine engine)
