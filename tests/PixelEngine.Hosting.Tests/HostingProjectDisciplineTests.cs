@@ -29,6 +29,39 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证独立编辑器壳位于 apps 层，只引用 Hosting、Editor 与 Gui 三个公开装配入口。
+    /// </summary>
+    [Fact]
+    public void EditorShellProjectReferencesOnlyShellEntryProjects()
+    {
+        string root = FindRepositoryRoot();
+        XDocument project = XDocument.Load(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "PixelEngine.Editor.Shell.csproj"));
+
+        Assert.Equal(
+            ["PixelEngine.Hosting", "PixelEngine.Editor", "PixelEngine.Gui"],
+            [
+                .. ReadIncludes(project, "ProjectReference")
+                    .Select(include => Path.GetFileNameWithoutExtension(include)!),
+            ]);
+    }
+
+    /// <summary>
+    /// 验证编辑器壳只通过中性 bootstrap 创建唯一窗口，不直接散落创建 RenderWindow。
+    /// </summary>
+    [Fact]
+    public void EditorShellCreatesWindowOnlyThroughNeutralBootstrap()
+    {
+        string root = FindRepositoryRoot();
+        string shellSource = string.Join(
+            '\n',
+            Directory.EnumerateFiles(Path.Combine(root, "apps", "PixelEngine.Editor.Shell"), "*.cs").Select(File.ReadAllText));
+
+        Assert.Contains("EditorShellWindow.Create()", shellSource, StringComparison.Ordinal);
+        Assert.Contains("EditorHostBootstrap.Create", shellSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("RenderWindow.Create", shellSource.Replace("EditorHostBootstrap.Create", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Demo 源码不绕过 Hosting/Scripting 公开入口访问内容或模拟实现。
     /// </summary>
     [Fact]

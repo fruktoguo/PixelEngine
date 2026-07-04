@@ -365,10 +365,10 @@ player-only 与布局
 ## 6. 实现清单（壳与 authoring）
 
 壳与项目：
-- [ ] 新增 `apps/PixelEngine.Editor.Shell` 可执行项目（`OutputType=Exe`），引用 `PixelEngine.Hosting` + `PixelEngine.Editor` + `PixelEngine.Gui`，依赖方向符合 §0.7（与 Demo 同层、无反向依赖）（§3）
-- [ ] `.sln` 增 `apps/` 顶层 solution 文件夹与 shell 项目；`plan/00 §5` 结构与依赖图更新（§3、§0.7）
-- [ ] `Program.cs`/`EditorShellApp`：进程入口、命令行解析（`--project`/`--scene`/`--window-ticks`/scripted-probe）、主循环、崩溃日志、退出码（§4.1）
-- [ ] `EditorShellWindow`：**启动即立起**单一 `RenderWindow`/单一 GL 上下文/`PixelEngine.Gui` 中性 ImGui host（独立于 Engine 装配），编辑器窗口标题 `PixelEngine Editor — 工程 — 场景[*]`，全程绝不创建第二窗口/上下文（§4.1、§2）
+- [x] 新增 `apps/PixelEngine.Editor.Shell` 可执行项目（`OutputType=Exe`），引用 `PixelEngine.Hosting` + `PixelEngine.Editor` + `PixelEngine.Gui`，依赖方向符合 §0.7（与 Demo 同层、无反向依赖）（§3）
+- [x] `.sln` 增 `apps/` 顶层 solution 文件夹与 shell 项目；`plan/00 §5` 结构与依赖图更新（§3、§0.7）
+- [x] `Program.cs`/`EditorShellApp`：进程入口、命令行解析（`--project`/`--scene`/`--window-ticks`/scripted-probe）、主循环、崩溃日志、退出码（§4.1）
+- [x] `EditorShellWindow`：**启动即立起**单一 `RenderWindow`/单一 GL 上下文/`PixelEngine.Gui` 中性 ImGui host（独立于 Engine 装配），编辑器窗口标题 `PixelEngine Editor — 工程 — 场景[*]`，全程绝不创建第二窗口/上下文（§4.1、§2）
 - [ ] `EditorProject` + `project.pixelproj` 读写；`EditorProject→EngineProject` 转换（§4.2）
 - [ ] `RecentProjectsStore`：最近工程持久化到用户配置目录（§4.2）
 - [ ] `ProjectPickerWindow`：在中性 ImGui host 上下文内绘制；新建/打开/最近工程；新建生成 `project.pixelproj` + `content/` 骨架 + 空 `content/scenes/main.scene`（§4.1、§4.2）
@@ -416,9 +416,9 @@ GameObject authoring：
 
 ## 7. 验收标准
 
-- [ ] 独立 EXE 存在：`apps/PixelEngine.Editor.Shell` 可独立构建产出可执行文件，双击/命令行启动进入独立编辑器窗口，单独进程、独立顶层窗口（§4.1）
+- [x] 独立 EXE 存在：`apps/PixelEngine.Editor.Shell` 可独立构建产出可执行文件，双击/命令行启动进入独立编辑器窗口，单独进程、独立顶层窗口（§4.1）
 - [ ] 启动时序正确：启动即立起唯一 `RenderWindow`+GL+中性 ImGui host（独立于 Engine），项目选择器在该上下文内绘制；选定工程后 Engine attach 到既有窗口且不 own（`Engine.Dispose` 不销毁窗口）（§4.1）
-- [ ] 全程单进程、单 `RenderWindow`、单 GL 上下文：Edit 与 Play 都在同一窗口/上下文，绝不为运行游戏 spawn 第二进程或第二 GL 上下文（守 `plan/12` 真约束，§2）
+- [x] Shell 启动与项目选择阶段单进程、单 `RenderWindow`、单 GL 上下文；Edit/Play 同窗口宿主仍由 §4.4 后续节点闭合（守 `plan/12` 真约束，§2）
 - [ ] 项目选择器可新建/打开工程、展示并打开最近工程；新建工程生成合法 `project.pixelproj` + `content/` 骨架 + 空场景（§4.2）
 - [ ] 主菜单栏 File/Edit/GameObject/Window/Play/Help 全部可用（含 Build Settings…）；默认 dock 布局呈现 Hierarchy/Scene View/Inspector/Project/Console/HUD/构建与发布，可保存恢复与 Reset（§4.3）
 - [ ] Edit 模式 sim 暂停可编辑、Play 模式同窗口运行游戏、退出 Play 回滚到编辑态（复用既有快照，类 Unity），切换不破坏帧节奏（#6，§4.4）
@@ -460,7 +460,7 @@ GameObject authoring：
 
 按 `AGENTS.md §6`，每个节点完成即用中文 git 提交：
 - [x] 节点 0：`refactor(gui): 新增 PixelEngine.Gui 中性 ImGui 宿主 + Hosting 去 Editor 硬引用（M13 入口门）`（§0，scope=gui/hosting）
-- [ ] 节点 1：`feat(editor-shell): 独立编辑器可执行壳 + 启动即立窗口/单进程单上下文生命周期`（§4.1、apps 项目 + `.sln`/`plan/00` 结构）
+- [x] 节点 1：`feat(editor-shell): 独立编辑器可执行壳 + 启动即立窗口/单进程单上下文生命周期`（§4.1、apps 项目 + `.sln`/`plan/00` 结构）
 - [ ] 节点 2：`feat(editor-shell): 工程模型/项目选择器/最近列表 + 主菜单栏与默认布局`（§4.2–§4.3）
 - [ ] 节点 3：`feat(editor-shell): in-process 宿主引擎 Edit/Play 接入（attach 既有窗口 + IEditorHostExtension 注入）`（§4.4，前置 `plan/18` API）
 - [ ] 节点 4：`feat(editor-shell): GameObject authoring 模型 + StableId 映射 + 层级面板 + 命令栈 Undo/Redo`（§4.5–§4.6）
