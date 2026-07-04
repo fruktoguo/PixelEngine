@@ -55,6 +55,11 @@ public sealed class EngineSceneEntityDocument
     public EngineSceneTransformDocument? Transform { get; init; }
 
     /// <summary>
+    /// 可选 Prefab authoring 元数据；运行时物化会忽略该字段，编辑器用于保持 prefab 实例关系。
+    /// </summary>
+    public EngineScenePrefabDocument? Prefab { get; init; }
+
+    /// <summary>
     /// 挂载在实体上的 Behaviour 文档数组。
     /// </summary>
     public EngineSceneBehaviourDocument[]? Behaviours { get; init; }
@@ -89,6 +94,48 @@ public sealed class EngineSceneTransformDocument
     /// 局部 Y 方向缩放。
     /// </summary>
     public float ScaleY { get; init; } = 1f;
+}
+
+/// <summary>
+/// .scene 文件中的 Prefab 实例 authoring 元数据。
+/// </summary>
+public sealed class EngineScenePrefabDocument
+{
+    /// <summary>
+    /// 相对 content 根目录的 prefab 资产路径。
+    /// </summary>
+    public string? AssetPath { get; init; }
+
+    /// <summary>
+    /// prefab 资产内源对象稳定路径或局部 id。
+    /// </summary>
+    public string? SourceStableId { get; init; }
+
+    /// <summary>
+    /// 该实例记录的属性覆盖。
+    /// </summary>
+    public EngineScenePrefabOverrideDocument[]? Overrides { get; init; }
+}
+
+/// <summary>
+/// .scene 文件中的 Prefab override 条目。
+/// </summary>
+public sealed class EngineScenePrefabOverrideDocument
+{
+    /// <summary>
+    /// prefab 资产内对象稳定路径或局部 id。
+    /// </summary>
+    public string? SourceStableId { get; init; }
+
+    /// <summary>
+    /// 被覆盖的属性路径，例如 Transform.X 或 Component:Type.Field。
+    /// </summary>
+    public string? PropertyPath { get; init; }
+
+    /// <summary>
+    /// 覆盖后的字符串值。
+    /// </summary>
+    public string? Value { get; init; }
 }
 
 /// <summary>

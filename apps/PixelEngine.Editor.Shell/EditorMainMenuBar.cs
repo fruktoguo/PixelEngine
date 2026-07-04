@@ -38,8 +38,15 @@ internal sealed class EditorMainMenuBar
             app.FocusProjectPicker(ProjectPickerMode.OpenProject);
         }
 
-        _ = ImGui.MenuItem("Save Scene", "Ctrl+S", selected: false, enabled: app.HasOpenProject);
-        _ = ImGui.MenuItem("Save Scene As...", "Ctrl+Shift+S", selected: false, enabled: app.HasOpenProject);
+        if (ImGui.MenuItem("Save Scene", "Ctrl+S", selected: false, enabled: app.HasOpenProject))
+        {
+            _ = app.SaveScene();
+        }
+
+        if (ImGui.MenuItem("Save Scene As...", "Ctrl+Shift+S", selected: false, enabled: app.HasOpenProject))
+        {
+            _ = app.SaveSceneAs();
+        }
         ImGui.Separator();
         _ = ImGui.MenuItem("Build Settings...", string.Empty, selected: false, enabled: app.HasOpenProject);
         ImGui.Separator();

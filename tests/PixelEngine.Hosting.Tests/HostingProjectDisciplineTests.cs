@@ -110,7 +110,7 @@ public sealed class HostingProjectDisciplineTests
             Directory.EnumerateFiles(shellDirectory, "*.cs").Select(File.ReadAllText));
 
         Assert.Contains("EditorProjectSession.Open", source, StringComparison.Ordinal);
-        Assert.Contains(".WithProject(project.ToEngineProject())", source, StringComparison.Ordinal);
+        Assert.Contains(".WithProject(project.ToEngineProject(sceneRelativePath))", source, StringComparison.Ordinal);
         Assert.Contains(".UseVSync(true)", source, StringComparison.Ordinal);
         Assert.Contains(".AddEditorHostExtension(editorHost)", source, StringComparison.Ordinal);
         Assert.Contains("engine.AttachWindowRuntime(window)", source, StringComparison.Ordinal);
@@ -147,8 +147,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("EditorSceneRuntimeProjection", source, StringComparison.Ordinal);
         Assert.Contains("StableIdToEntityId", source, StringComparison.Ordinal);
         Assert.Contains("EngineSceneDocument", source, StringComparison.Ordinal);
-        Assert.Contains("ConfigureAuthoring(sceneModel, undoStack)", source, StringComparison.Ordinal);
-        Assert.Contains("GameObjectHierarchyPanel(_sceneModel, _undoStack)", source, StringComparison.Ordinal);
+        Assert.Contains("ConfigureAuthoring(sceneModel, undoStack, prefabs)", source, StringComparison.Ordinal);
+        Assert.Contains("GameObjectHierarchyPanel(_sceneModel, _undoStack, _prefabs)", source, StringComparison.Ordinal);
         Assert.Contains("GameObjectInspectorPanel(", source, StringComparison.Ordinal);
         Assert.Contains("engine.Context.GetService<ScriptAssemblyRegistry>()", source, StringComparison.Ordinal);
         Assert.Contains("new CreateGameObjectCommand", source, StringComparison.Ordinal);
@@ -201,6 +201,39 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("ImGuizmoOperation.Scale", source, StringComparison.Ordinal);
         Assert.Contains("new SetTransformCommand", source, StringComparison.Ordinal);
         Assert.DoesNotContain("new ViewportPanel(", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证编辑器壳按 plan/19 节点 7 接入 .scene 保存/Save As、当前场景路径与 prefab authoring 边界。
+    /// </summary>
+    [Fact]
+    public void EditorShellDeclaresSceneSaveAndPrefabAuthoring()
+    {
+        string root = FindRepositoryRoot();
+        string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
+        string source = string.Join(
+            '\n',
+            Directory.EnumerateFiles(shellDirectory, "*.cs").Select(File.ReadAllText));
+        string editorAssetSource = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "AssetBrowserDataSource.cs"));
+        string hostingSceneDocument = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Hosting", "EngineSceneDocument.cs"));
+
+        Assert.Contains("SceneOverridePath", source, StringComparison.Ordinal);
+        Assert.Contains("CurrentSceneRelativePath", source, StringComparison.Ordinal);
+        Assert.Contains("SaveSceneAsAuto", source, StringComparison.Ordinal);
+        Assert.Contains("SaveSceneAs(", source, StringComparison.Ordinal);
+        Assert.Contains("Project.UpsertScene", source, StringComparison.Ordinal);
+        Assert.Contains("Engine.SaveSceneDocument", source, StringComparison.Ordinal);
+        Assert.Contains("class EditorPrefabAssetStore", source, StringComparison.Ordinal);
+        Assert.Contains("CreatePrefabFromSubtree", source, StringComparison.Ordinal);
+        Assert.Contains("InstantiatePrefab", source, StringComparison.Ordinal);
+        Assert.Contains("CreatePrefabAssetCommand", source, StringComparison.Ordinal);
+        Assert.Contains("InstantiatePrefabCommand", source, StringComparison.Ordinal);
+        Assert.Contains("RevertPrefabOverridesCommand", source, StringComparison.Ordinal);
+        Assert.Contains("RecordPrefabOverride", source, StringComparison.Ordinal);
+        Assert.Contains("EngineScenePrefabDocument", hostingSceneDocument, StringComparison.Ordinal);
+        Assert.Contains("AssetBrowserItemKind.Prefab", editorAssetSource, StringComparison.Ordinal);
+        Assert.Contains(".prefab", editorAssetSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("EditorPrefabAssetStore", File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Scripting", "Scene.cs")), StringComparison.Ordinal);
     }
 
     /// <summary>

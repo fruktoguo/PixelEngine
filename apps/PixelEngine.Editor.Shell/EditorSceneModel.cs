@@ -42,6 +42,7 @@ internal sealed class EditorSceneModel
             {
                 ParentId = entity.ParentId,
                 Transform = FromDocumentTransform(entity.Transform),
+                PrefabLink = FromDocumentPrefab(entity.Prefab),
             };
 
             EngineSceneBehaviourDocument[] behaviours = entity.Behaviours ?? [];
@@ -100,6 +101,7 @@ internal sealed class EditorSceneModel
                 Name = gameObject.Name,
                 ParentId = gameObject.ParentId,
                 Transform = ToDocumentTransform(gameObject.Transform),
+                Prefab = ToDocumentPrefab(gameObject.PrefabLink),
                 Behaviours = behaviours,
             };
         }
@@ -266,6 +268,79 @@ internal sealed class EditorSceneModel
         MarkDirty();
     }
 
+    public void SetPrefabLink(int stableId, EditorPrefabLink? prefabLink)
+    {
+        Get(stableId).PrefabLink = prefabLink?.Clone();
+        MarkDirty();
+    }
+
+    public void RecordPrefabOverride(int stableId, string propertyPath, string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(propertyPath);
+        EditorGameObject gameObject = Get(stableId);
+        if (gameObject.PrefabLink is null)
+        {
+            return;
+        }
+
+        EditorPrefabLink link = gameObject.PrefabLink;
+        string sourceStableId = string.IsNullOrWhiteSpace(link.SourceStableId)
+            ? stableId.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : link.SourceStableId!;
+        for (int i = 0; i < link.Overrides.Count; i++)
+        {
+            EditorPrefabOverride existing = link.Overrides[i];
+            if (string.Equals(existing.SourceStableId, sourceStableId, StringComparison.Ordinal) &&
+                string.Equals(existing.PropertyPath, propertyPath, StringComparison.Ordinal))
+            {
+                existing.Value = value;
+                MarkDirty();
+                return;
+            }
+        }
+
+        link.Overrides.Add(new EditorPrefabOverride
+        {
+            SourceStableId = sourceStableId,
+            PropertyPath = propertyPath,
+            Value = value,
+        });
+        MarkDirty();
+    }
+
+    public void ClearPrefabOverrides(int stableId)
+    {
+        EditorGameObject gameObject = Get(stableId);
+        if (gameObject.PrefabLink is null || gameObject.PrefabLink.Overrides.Count == 0)
+        {
+            return;
+        }
+
+        gameObject.PrefabLink.Overrides.Clear();
+        MarkDirty();
+    }
+
+    public EditorGameObject ImportSubtree(IReadOnlyList<EditorGameObject> sourceObjects, int sourceRootStableId, int? parentId)
+    {
+        ArgumentNullException.ThrowIfNull(sourceObjects);
+        Dictionary<int, EditorGameObject> sourceById = new(sourceObjects.Count);
+        for (int i = 0; i < sourceObjects.Count; i++)
+        {
+            sourceById.Add(sourceObjects[i].StableId, sourceObjects[i]);
+        }
+
+        if (!sourceById.TryGetValue(sourceRootStableId, out EditorGameObject? sourceRoot))
+        {
+            throw new InvalidOperationException($"导入子树缺少根对象：{sourceRootStableId}。");
+        }
+
+        Dictionary<int, int> remap = [];
+        EditorGameObject importedRoot = ImportRecursive(sourceRoot, parentId, sourceById, remap);
+        Select(importedRoot.StableId);
+        MarkDirty();
+        return importedRoot;
+    }
+
     public void Move(int stableId, int? parentId, int? insertIndex = null)
     {
         EditorGameObject gameObject = Get(stableId);
@@ -295,6 +370,11 @@ internal sealed class EditorSceneModel
         }
 
         SelectedStableId = stableId;
+    }
+
+    public void MarkSaved()
+    {
+        IsDirty = false;
     }
 
     public IEnumerable<EditorGameObject> EnumerateDepthFirst()
@@ -379,6 +459,36 @@ internal sealed class EditorSceneModel
         }
 
         return copy;
+    }
+
+    private EditorGameObject ImportRecursive(
+        EditorGameObject source,
+        int? parentId,
+        Dictionary<int, EditorGameObject> sourceById,
+        Dictionary<int, int> remap)
+    {
+        EditorGameObject imported = new(AllocateStableId(), source.Name)
+        {
+            Enabled = source.Enabled,
+            Transform = source.Transform.Clone(),
+            PrefabLink = source.PrefabLink?.Clone(),
+        };
+        for (int i = 0; i < source.Components.Count; i++)
+        {
+            imported.Components.Add(source.Components[i].Clone());
+        }
+
+        Insert(imported, parentId, null);
+        remap[source.StableId] = imported.StableId;
+        for (int i = 0; i < source.Children.Count; i++)
+        {
+            if (sourceById.TryGetValue(source.Children[i], out EditorGameObject? child))
+            {
+                _ = ImportRecursive(child, imported.StableId, sourceById, remap);
+            }
+        }
+
+        return imported;
     }
 
     private void CaptureRecursive(EditorGameObject gameObject, List<EditorGameObject> objects)
@@ -492,6 +602,58 @@ internal sealed class EditorSceneModel
             RotationRadians = transform.RotationRadians,
             ScaleX = transform.ScaleX,
             ScaleY = transform.ScaleY,
+        };
+    }
+
+    private static EditorPrefabLink? FromDocumentPrefab(EngineScenePrefabDocument? prefab)
+    {
+        if (prefab is null)
+        {
+            return null;
+        }
+
+        EditorPrefabLink link = new()
+        {
+            AssetPath = prefab.AssetPath,
+            SourceStableId = prefab.SourceStableId,
+        };
+        EngineScenePrefabOverrideDocument[] overrides = prefab.Overrides ?? [];
+        for (int i = 0; i < overrides.Length; i++)
+        {
+            link.Overrides.Add(new EditorPrefabOverride
+            {
+                SourceStableId = overrides[i].SourceStableId,
+                PropertyPath = overrides[i].PropertyPath,
+                Value = overrides[i].Value,
+            });
+        }
+
+        return link;
+    }
+
+    private static EngineScenePrefabDocument? ToDocumentPrefab(EditorPrefabLink? prefab)
+    {
+        if (prefab is null)
+        {
+            return null;
+        }
+
+        EngineScenePrefabOverrideDocument[] overrides = new EngineScenePrefabOverrideDocument[prefab.Overrides.Count];
+        for (int i = 0; i < prefab.Overrides.Count; i++)
+        {
+            overrides[i] = new EngineScenePrefabOverrideDocument
+            {
+                SourceStableId = prefab.Overrides[i].SourceStableId,
+                PropertyPath = prefab.Overrides[i].PropertyPath,
+                Value = prefab.Overrides[i].Value,
+            };
+        }
+
+        return new EngineScenePrefabDocument
+        {
+            AssetPath = prefab.AssetPath,
+            SourceStableId = prefab.SourceStableId,
+            Overrides = overrides,
         };
     }
 

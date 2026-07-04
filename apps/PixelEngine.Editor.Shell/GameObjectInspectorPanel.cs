@@ -57,9 +57,19 @@ internal sealed class GameObjectInspectorPanel(EditorSceneModel scene, EditorUnd
         }
 
         ImGui.TextUnformatted($"StableId: {gameObject.StableId}");
-        ImGui.TextUnformatted(gameObject.PrefabLink?.AssetPath is { Length: > 0 } prefab
-            ? $"Prefab: {prefab}"
-            : "Prefab: none");
+        if (gameObject.PrefabLink?.AssetPath is { Length: > 0 } prefab)
+        {
+            ImGui.TextUnformatted($"Prefab: {prefab}");
+            ImGui.TextUnformatted($"Overrides: {gameObject.PrefabLink.Overrides.Count}");
+            if (gameObject.PrefabLink.Overrides.Count != 0 && ImGui.Button("Revert Overrides"))
+            {
+                _undo.Execute(_scene, new RevertPrefabOverridesCommand(gameObject.StableId));
+            }
+        }
+        else
+        {
+            ImGui.TextUnformatted("Prefab: none");
+        }
     }
 
     private void DrawTransform(EditorGameObject gameObject)
