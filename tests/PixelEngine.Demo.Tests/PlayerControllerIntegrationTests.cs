@@ -1,6 +1,6 @@
 using PixelEngine.Hosting;
 using PixelEngine.Core.Time;
-using PixelEngine.Editor;
+using PixelEngine.Gui;
 using PixelEngine.Physics;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.Scripting;

@@ -182,6 +182,59 @@ public ParticleSystemStats Stats { get; }
 | [7] 抛射 | `RunEjectionPass`：读 cell→确认 spawn→写 Empty→设速 | 单线程 | 写 + dirty |
 | [9] 渲染合成 | plan/08 消费 `IParticleReadback`（本文不实现） | 并行 | 无 |
 
+### 3.12 破坏驱动的碎屑抛射与武器粒子发射（demo-playability 增补）
+
+demo-playability（`plan/13` 武器库 + `plan/03`/`plan/04` 破坏模型）要求把「爆炸把半径内 cell **无条件**全部抛为飞行粒子」改为**破坏驱动**：cell 是否销毁由 `plan/03` 的 `ApplyDamage` 依材质抗性（`Hardness`/`MaxIntegrity`/`Integrity` lane）判定（契约在 `plan/04 §3.11`），**只有被判定破坏的 cell 才抛出碎屑粒子**。本文负责其中「被破坏 cell → 碎屑粒子」这一段 handshake 与武器可见粒子的发射入口；抗性判定与 Integrity lane 归 `plan/03`/`plan/04`，本文不做伤害数值。
+
+**语义变更：`Explode`/无条件 `EjectionRequest` 抛射不再供武器爆炸使用**。`§3.4` 的 `EjectionRequest`/`RunEjectionPass`（相位 7、单线程、写 Empty + 抛射）**保留**，作为**非破坏类冲击溅射**通路（如刚体高速撞击把浮沙溅飞、`plan/06` 冲击），其「读匹配 `Mask` 的 cell → 清源 → 抛射」机制不变、既有 `- [x]` 实现与验收不动。Demo 的炸弹/手榴弹/激光/挖掘一律改走下述破坏驱动路径，`plan/13` 旧 `ExplosiveTool`/`PlayableProjectileTool` 的「无条件抛射半径内全部 cell」断言随之迁移（见 `§4`/`§5` 登记项，与 `plan/14` 联动）。
+
+**碎屑 handshake（`DebrisEjectionRequest`，破坏侧 → 本文）**：`ApplyDamage` 判定某 cell 破坏时（发生在**单线程输入/安全相位**），除转 `RubbleTarget`/`Empty` + 清 `Integrity` + 打 parity + 标 dirty + 跨界 KeepAlive 外，按材质 `DebrisCount`（`plan/04` 冷字段，`0` = 不抛）向本文投一条碎屑抛射请求：
+
+```csharp
+public readonly struct DebrisEjectionRequest
+{
+    public readonly int    CellX, CellY;      // 被破坏 cell 整数坐标
+    public readonly ushort Material;          // 碎屑材质：RubbleTarget（有）否则本材质
+    public readonly byte   Count;             // = MaterialDef.DebrisCount（0 时调用方不投）
+    public readonly float  ImpulseX, ImpulseY;// 伤害源径向方向 × 基础速度（背离冲击中心）
+    public readonly float  ImpulseJitter;     // 速度散布（RNG 抖动）
+    public readonly byte   LifeTicks;         // 碎屑寿命（<= ParticleMaxLifetimeTicks）
+    public readonly byte   ColorVariantSeed;  // 色噪声种子（颜色不入数据，§1.7）
+}
+
+public void RequestDebris(in DebrisEjectionRequest req);   // 破坏侧在单线程输入/安全相位调用
+```
+
+- 落库时机与线程：碎屑请求在**破坏所在的单线程输入/安全相位内同步**经 `TrySpawn` 抽干（与 `RunEjectionPass` 同为单线程写 `active-count`，不产生并行结构变更竞争，守 `§3.5` 「写 active-count 只在单线程」纪律）；容量满时 `TrySpawn` 返回 `false` 并计 `DroppedThisTick`，**不扩容**（稳态零分配）。碎屑速度 = `Impulse` 方向 × 基速 + `ImpulseJitter` RNG 抖动（走 `§3.7` 确定性 seam）。
+- 与 `§3.4` 的关系：破坏侧**不经** `ReadAndClearCell` 二次清 cell（cell 已由 `ApplyDamage` 转 `RubbleTarget`/`Empty`），仅按 `DebrisCount` 追加飞行粒子，避免与破坏动作重复写网格。碎屑粒子此后走既有 `§3.3` 积分 / `§3.5` 沉积 / `§3.6` R13 生命周期，无新生命周期路径。
+
+**武器可见粒子发射（`IParticleSpawner.Emit`，富速度分布）**：为 `plan/13` 枪口火花锥、`DamageBeam` 束火花等纯视觉/半物理粒子提供公开发射入口（`plan/11` facade 透传），带速度锥分布：
+
+```csharp
+public interface IParticleSpawner
+{
+    /// <summary>按速度锥发射一批粒子，返回实际发射数（容量/封顶截断）。</summary>
+    int Emit(in ParticleEmit emit);
+}
+
+public readonly struct ParticleEmit
+{
+    public readonly float  OriginX, OriginY;    // 世界 cell 亚像素坐标
+    public readonly int    Count;               // 期望发射数（受容量与 ParticleEjectMaxPerTick 封顶）
+    public readonly float  BaseSpeed, SpeedJitter;
+    public readonly float  DirAngle, DirSpreadRad; // 速度锥中心方向 + 半角（弧度）
+    public readonly ushort Material;
+    public readonly byte   LifeTicks;           // <= ParticleMaxLifetimeTicks
+    public readonly byte   ColorVariantSeed;
+}
+```
+
+- `Emit` 走 `§3.7` 确定性 RNG seam 在 `[DirAngle-DirSpreadRad, DirAngle+DirSpreadRad]` 内采样方向、在 `[BaseSpeed±SpeedJitter]` 采样速度量级；**只在单线程输入/安全相位调用**（写 `active-count`），复用 `ParticleEjectMaxPerTick` 与容量满截断，稳态零分配。发光与否仍由 `Material` 查 `MaterialDef` emissive 标志在渲染相位决定（`§3.8`，本文只透传 `Material`/`ColorVariant`）。
+- **`DamageBeam`/`DamageBeam` 火花**（`plan/13` 激光枪）：`plan/11` 的 `DamageBeam` 沿束逐 cell 调 `ApplyDamage`（伤害 + `AddHeat` 在 `plan/03`/`plan/04`）；其**命中点火花**经本文 `Emit` 发射——短 `LifeTicks`、小 `Count`、方向锥沿束反射/背向、emissive 材质。这些火花是普通飞行粒子，或沉积（若命中可停留处）或 `Life` 到期被 `§3.6` R13 清除，**不新增泄漏路径**。
+- **`DamageKind` 语义透传**：碎屑/火花的材质、`Count`、是否 emissive 由伤害类型（爆炸/光束/酸蚀/挖掘）决定，`DamageKind` 枚举权威定义在 `plan/11` `IWorldEffects`；本文只按调用方传入的 `Material`/`Count`/`Life` 发射，不在本文分类伤害。
+
+**相位归属**：`RequestDebris` 与 `Emit` 均在破坏/武器输入发生的**单线程输入/安全相位**执行（与 `§3.11` 表 [1]/[7] 单线程写网格/写 active-count 同纪律），发射后的粒子从下一 `§3.3` 积分帧起正常参与 handshake；不引入新相位、不违 `plan/03` 相位顺序。
+
 ---
 
 ## 4. 实现清单
@@ -207,6 +260,10 @@ public ParticleSystemStats Stats { get; }
 - [x] 在 `PixelEngine.Simulation.Tests` 加测试（§5）。
 - [x] 在 `PixelEngine.Benchmarks` 加粒子池化基准（BenchmarkDotNet + `[MemoryDiagnoser]`，AGENTS §3/§7），覆盖节点 1 的 `TrySpawn` + swap-remove 零分配。
 - [x] 在 `PixelEngine.Benchmarks` 加粒子积分/沉积基准（BenchmarkDotNet + `[DisassemblyDiagnoser]`，AGENTS §3/§7）。
+- [ ] 定义 `DebrisEjectionRequest` struct 与 `void RequestDebris(in DebrisEjectionRequest)`（§3.12）：破坏侧（plan/03 `ApplyDamage` / plan/04 §3.11 破坏契约）在**单线程输入/安全相位**内同步经 `TrySpawn` 抽干；材质取 `RubbleTarget` 否则本材质，`Count = MaterialDef.DebrisCount`（0 不投），速度 = 径向 `Impulse` + `ImpulseJitter` RNG 抖动（走 §3.7 确定性 seam）；容量满 `TrySpawn` 返回 `false` 且 `DroppedThisTick++`，**不扩容**；**不二次经 `ReadAndClearCell` 清 cell**（cell 已由破坏动作 Empty/RubbleTarget 化）。
+- [ ] 定义 `IParticleSpawner.Emit(in ParticleEmit)` 与 `ParticleEmit` struct（§3.12，plan/11 facade 透传）：按速度锥（`DirAngle±DirSpreadRad`、`BaseSpeed±SpeedJitter`）走 §3.7 确定性 RNG seam 采样发射一批粒子，返回实际发射数；**只在单线程输入/安全相位调用**，复用 `ParticleEjectMaxPerTick` 与容量满截断，稳态零分配。
+- [ ] `DamageBeam`/`DamageBeam` 命中点火花（§3.12）：经 `Emit` 发射短 `LifeTicks`、小 `Count`、方向锥沿束的 emissive 碎火花（伤害/注热在 plan/03/04），火花走既有 §3.3/§3.5/§3.6 生命周期，**不新增泄漏路径**（R13 兜底）。
+- [ ] **语义迁移登记**（§3.12，与 plan/13/14 联动）：`§3.4` `EjectionRequest`/`RunEjectionPass` 保留为非破坏冲击溅射通路、既有 `- [x]` 不动；Demo 爆炸/激光/挖掘改走破坏驱动碎屑路径；`plan/13` 旧 `ExplosiveTool`/`PlayableProjectileTool` 的「无条件抛射半径内全部 cell」相关抛射断言测试须随新语义迁移（具体测试变更在 plan/14 登记，本文只标注语义变更点）。
 
 ## 5. 验收标准
 
@@ -224,11 +281,17 @@ public ParticleSystemStats Stats { get; }
 - [x] 渲染接口可用：plan/08 能经 `IParticleReadback` 只读取得活跃粒子并 stamp（本文侧仅验证接口暴露与 pinned 稳定，不验证渲染像素）。
 - [x] 诊断接口可用：`Stats` 各计数随 tick 正确更新并出现在 Core 诊断/编辑器 HUD（plan/12）。
 - [x] 本文所有公开 API 带完整中文 XML 注释（脚本 IntelliSense 依赖，AGENTS §4）。
+- [ ] **破坏驱动碎屑（§3.12）**：cell 仅在 `ApplyDamage` 判定破坏时才经 `RequestDebris` 抛碎屑，`DebrisCount=0` 材质不抛；同一 `DamageCircle`（plan/13）当量下抗性差异生效（低 `Hardness` 材质立即抛碎、高 `Hardness`/`MaxIntegrity` 需累计，判定归 plan/03/04），验证「破坏才抛」而非旧「无条件全清」。
+- [ ] **`Emit` 速度锥分布（§3.12）**：发射粒子方向落在 `[DirAngle-DirSpreadRad, DirAngle+DirSpreadRad]`、速度落在 `[BaseSpeed±SpeedJitter]`，`Count`/容量满截断返回值正确；确定性 seam 开启时同 seed 逐位可复现。
+- [ ] **碎屑/火花稳态零分配**：`RequestDebris` 与 `Emit` 批量发射在稳态帧 `MemoryDiagnoser` 测得 Gen0/Alloc = 0（复用 `TrySpawn`/swap-remove，AGENTS §3）。
+- [ ] **`DamageBeam` 火花 R13 合规**：持续激光束火花压力场景下活跃粒子有界收敛，火花或沉积或 `Life` 到期被清（`KilledByLifetimeThisTick` 反映），无泄漏。
+- [ ] **语义迁移一致性**（与 plan/14 联动）：`plan/13` 旧 `ExplosiveTool`/`PlayableProjectileTool` 无条件抛射断言随破坏驱动语义更新；`§3.4` 非破坏冲击溅射通路的既有断言仍绿（保留通路未破坏）。
 
 ## 6. 依赖关系
 
 - **前置（必须先完成）**：plan/02（Core：pinned 缓冲/`Pool`/`JobSystem`/`EngineConstants`/RNG/诊断/事件总线）；plan/03（CellGrid：材质/cell-type 采样、SimulationKernel 相位 3/7 写网格入口、chunk 驻留与 border ring）。
-- **软依赖（接口对齐，可并行推进）**：plan/04（`MaterialDef.Density` 与 emissive 标志，按 id 只读）。
+- **软依赖（接口对齐，可并行推进）**：plan/04（`MaterialDef.Density` 与 emissive 标志，按 id 只读；§3.12 碎屑材质/`DebrisCount` 与破坏契约 plan/04 §3.11）。
+- **破坏驱动新增耦合（§3.12，demo-playability）**：plan/03（`ApplyDamage` 判定破坏、`Integrity` lane，破坏侧调用 `RequestDebris`）、plan/11（`IParticleSpawner.Emit`/`IWorldEffects.DamageCircle/DamageBeam` facade 透传与 `DamageKind` 定义）、plan/13（武器库触发方与旧抛射断言迁移方）、plan/14（`ExplosiveTool`/`PlayableProjectileTool` 语义迁移测试登记方）。
 - **被依赖（消费本文接口）**：plan/08（相位 9 CPU stamp + emissive）、plan/09（GPU point-sprite，零拷贝映射 pinned 缓冲）、plan/12（粒子计数 + 轨迹叠层）、plan/10（音频事件）、plan/07（在飞粒子序列化/重映射）。
 - 执行顺序（plan/README）：03 → **05** → 04 → 07，渲染 08 可并行起步但其粒子合成需本文接口先定。
 - 阻塞处置：若 plan/03 未提供等价相位写入 / 只读采样 API，标 `- [!] 阻塞：原因` 上报，不私自绕过 SimulationKernel 相位入口直写 SoA（AGENTS §1、§5）。

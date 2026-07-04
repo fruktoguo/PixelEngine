@@ -3,6 +3,7 @@ using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Events;
 using PixelEngine.Core.Threading;
 using PixelEngine.Core.Time;
+using PixelEngine.Rendering;
 using System.Runtime;
 using Xunit;
 
@@ -275,8 +276,33 @@ public sealed class EngineBuilderTests
         Assert.Equal(typeof(FakeWorldAccess), engine.Context.GetServiceAvailability(EngineServiceRole.WorldAccess).ServiceType);
     }
 
+    /// <summary>
+    /// 验证独立编辑器壳扩展通过中性接口注册，Hosting 不需要引用 Editor 程序集。
+    /// </summary>
+    [Fact]
+    public void BuilderRegistersEditorHostExtensionsAsNeutralServices()
+    {
+        RecordingEditorHostExtension extension = new();
+
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddEditorHostExtension(extension)
+            .Build();
+
+        IReadOnlyList<IEditorHostExtension> extensions = engine.Context.GetService<IReadOnlyList<IEditorHostExtension>>();
+        Assert.Same(extension, Assert.Single(extensions));
+    }
+
     private sealed class FakeWorldAccess
     {
+    }
+
+    private sealed class RecordingEditorHostExtension : IEditorHostExtension
+    {
+        public IDisposable? Attach(Engine engine, RenderWindow window, RenderPipeline pipeline)
+        {
+            throw new NotSupportedException("本测试只验证中性注册路径。");
+        }
     }
 
     private sealed class RecordingSubsystem(string name, List<string> events, bool failInitialize = false) : IEngineSubsystem

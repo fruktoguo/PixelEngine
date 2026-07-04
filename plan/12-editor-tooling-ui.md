@@ -12,7 +12,8 @@
 
 锁定决策（本文档核心、不可偏离）：
 
-- 编辑器/管理 UI = **引擎内嵌 Dear ImGui（Hexa.NET.ImGui）停靠式面板**，**与 `plan/08`（Rendering）共享同一个 OpenGL 上下文**，ImGui 在世界渲染（架构帧相位 [10]）之后、`present` 之前绘制于顶层。绝不另起进程 / 另开窗口 / 另建 GL 上下文。
+- 编辑器/管理 UI = **引擎内嵌 Dear ImGui（Hexa.NET.ImGui）停靠式面板**，**与 `plan/08`（Rendering）共享同一个 OpenGL 上下文**，ImGui 在世界渲染（架构帧相位 [10]）之后、`present` 之前绘制于顶层。**面板层 `PixelEngine.Editor` 恒保持引擎内嵌、面板不另起进程 / 不另开窗口 / 不另建 GL 上下文——该约束是相对「被编辑 / 运行的游戏世界」成立的**：面板层不为运行游戏 spawn 第二进程、第二窗口或第二 GL 上下文。承载编辑器面板层的**宿主进程本身由独立顶层应用 `apps/PixelEngine.Editor.Shell`（见 `plan/19`）承载**（该壳拥有唯一 `RenderWindow`+GL 上下文，`plan/18` 提供 attach/不 own 的窗口所有权解耦 API）；编辑器进程内始终是**单窗口 / 单 GL 上下文**跑 Edit/Play，本条约束在该进程内仍完全成立。
+- **ImGui 恒为编辑器 / 开发（dev）向 UI**：调试叠层、检视器、调参、性能 HUD、材质编辑器一律 ImGui。**面向玩家的发行级大 UI（主菜单 / 背包 / 对话 / 设置等）归 `PixelEngine.UI`（`plan/20`）的 HTML 后端**，与 ImGui 是两套并存 UI，共享同一 GL 上下文但职责不重叠（合成次序 / 输入仲裁见 §3.3 与本节新增小节）。ImGui host（`HexaImGuiBackend`、`IGuiContext` 运行时适配即现 `ScriptGuiContext`、字体栈）下沉至中性程序集 `PixelEngine.Gui`（位于 Rendering 之上、Editor 之下），供玩家 HUD 与编辑器共用；`plan/20` 的字体 / 回退复用该中性栈。
 - 编辑器**只消费各子系统的只读 / 调参（read-only / tuning）公开 API，绝不实现任何子系统逻辑**。画刷写 cell 走 Simulation 的公开编辑 API；调试叠层的逐 cell 着色走 Rendering 的 debug overlay 钩子；逐项数据读 `plan/02` 的诊断 / 计时器快照。
 - 一步到位，无 MVP：面板、叠层、调参项一次性做全。
 - 编辑器是工具层，**不在 sim 热路径内**，但仍遵守「能多线程 / 省内存就上」：叠层几何构建、资源缩略图生成等离线工作可并行；逐帧避免明显的托管堆 churn（预分配缓冲、缓存格式化字符串）。编辑器可在发行构建中通过编译开关 / 运行时开关整体禁用，禁用后零开销。
@@ -20,6 +21,13 @@
 范围内：ImGui 集成（GL 后端 + 输入桥 + docking + 中文字体 + ImGuizmo/ImPlot 备用）、材质/笔刷调色板、世界检视器、调试可视化叠层、性能 HUD、材质+反应实时编辑器（含 id 稳定热重载）、实体/脚本 Inspector、资源浏览器、场景/世界层级、sim 控制条、存读档 UI、刚体/粒子/光照调参、编辑/运行模式切换。
 
 范围外（仅消费其 API，不在此实现）：CA 内核（`plan/03`）、材质反应温度逻辑（`plan/04`）、粒子（`plan/05`）、物理（`plan/06`）、存档序列化（`plan/07`）、渲染管线（`plan/08`）、脚本编译/热重载机制（`plan/11`）、宿主主循环与帧节奏（Hosting / 架构 §4）。这些子系统必须提供编辑器所需的公开 read-only/tuning API；若缺失，按 `AGENTS.md §2` 标 `- [!] 阻塞` 上报，由对应 plan 补 API，不在 Editor 里开后门访问内部类型。
+
+职责边界（与 `plan/19`、`plan/20` 的划分，防止重复实现）：
+
+- **本文件（`plan/12`）继续拥有全部编辑器面板实现**（`PixelEngine.Editor` 面板层：调色板/检视器/叠层/HUD/材质编辑器/Inspector/调参/存读档/模式切换等），但由独立壳 `apps/PixelEngine.Editor.Shell` 经 Hosting 的 `IEditorHostExtension` 注入；`Hosting` 编译期不再静态引用 `PixelEngine.Editor`。
+- **`plan/19`（`apps/PixelEngine.Editor.Shell`）拥有壳应用 / 进程 / 窗口生命周期、Project 模型、类 Unity 的 GameObject 层级 + Inspector + 变换 gizmo + 拾取 + prefab + `.scene` 保存往返等 authoring UX**，并**注入**本文件的面板层（开发构建经 `RegisterDefaultEditorPanels` 公开 bootstrap）。壳复用本文件既有 ImGui 面板，不重造。
+- **编辑器内构建（Build Settings 一键出包）面板由 `plan/19` 承载**（因需读 Hosting 的 `EngineProject`，必须位于 Hosting 之上的壳程序集，放 `PixelEngine.Editor` 会造成 `Editor→Hosting` 循环），其只**编排**、消费 `plan/15` §3.11 的 `build-player` 契约，不在此重实现打包。
+- **本文件已 `- [x]` 的节点 1–9 与 §5 验收不重开**：以上均为交叉引用与新增 `- [ ]` 条目，不改动任何已完成条目的语义与勾选。
 
 ---
 
@@ -30,7 +38,7 @@
 - 诊断 / 计时：`PixelEngine.Core`（`plan/02`）的诊断与分项计时器快照（架构 §17.1、`plan/00 §7`）。
 - JSON：`System.Text.Json + 源生成器`（材质/反应编辑器读写 `content/*.json`，与 `plan/04`/`plan/07` 同一序列化设施）。
 - 目标框架/语言：`.NET 10 / C# 14`，`Nullable enable`，file-scoped namespace，命名空间根 `PixelEngine.Editor`。Editor 项目**不**开 `AllowUnsafeBlocks`（非热路径；除 ImGui 后端 buffer 上传必需的最小 unsafe 块外）。
-- 依赖方向（`plan/00 §5`，绝不反向）：`Demo → Hosting → { Editor, ... }`。Editor 引用 `Core / Simulation / Physics / World / Serialization / Content / Rendering / Audio / Scripting / Hosting` 的**公开 API**；被引用方绝不反向依赖 Editor。
+- 依赖方向（`plan/00 §5`，绝不反向）：`{ Demo, apps/PixelEngine.Editor.Shell } → Hosting → { ..., Gui }`，`EditorShell → { Hosting, Editor, Gui }`，`Editor → { Gui, Core, Simulation, Physics, World, Serialization, Content, Rendering, Audio, Scripting }`。Editor 只引用这些公开 API；被引用方绝不反向依赖 Editor。壳应用 `apps/PixelEngine.Editor.Shell`（`plan/19`）位于 Hosting 之上、与 Demo 同层，注入本文件面板层。
 
 ---
 
@@ -44,15 +52,15 @@
 
 ### 3.2 模块与类型
 
-`EditorApp`（顶层门面，由 Hosting 在启用编辑器时装配）持有：`ImGuiController`（GL 后端 + draw data 渲染）、`ImGuiInputBridge`（Silk.NET 输入 → ImGui IO）、`EditorFontManager`（字体/中文）、`EditorDockSpace`（docking 布局）、`EditorMode` 状态机（Edit/Play）、以及 `IEditorPanel` 面板集合与 `DebugOverlayController`。所有面板实现统一接口 `IEditorPanel { string Title; bool Visible; void Draw(in EditorContext ctx); }`。`EditorContext` 是传入各面板的只读句柄集合（Engine 门面、各子系统 read-only/tuning 接口、诊断快照、相机、选中态 `EditorSelection`）。
+`EditorApp`（编辑器面板层顶层门面，由独立编辑器壳经 `IEditorHostExtension` 注入 Hosting 相位 [10]）持有：`ImGuiController`（GL 后端 + draw data 渲染）、`ImGuiInputBridge`（Silk.NET 输入 → ImGui IO）、`EditorFontManager`/`GuiFontManager` 字体栈、`EditorDockSpace`（docking 布局）、`EditorMode` 状态机（Edit/Play）、以及 `IEditorPanel` 面板集合与 `DebugOverlayController`。所有面板实现统一接口 `IEditorPanel { string Title; bool Visible; void Draw(in EditorContext ctx); }`。`EditorContext` 是传入各面板的只读句柄集合（Engine 门面、各子系统 read-only/tuning 接口、诊断快照、相机、选中态 `EditorSelection`）。
 
 `EditorSelection` 集中保存当前选中：cell 坐标、实体/脚本句柄、刚体 id、资产路径、材质 id，供检视器与 Inspector 共享。
 
 ### 3.3 ImGui 集成
 
 - `ImGuiController`：创建/销毁 ImGui context；上传字体 atlas 为 GL 纹理；每帧把 `ImDrawData` 翻译为 GL3 draw call（VBO/EBO/scissor）。复用 Rendering 的 `GL` 实例，渲染后恢复 GL 状态（program/blend/scissor/vao）避免污染世界渲染状态。开启 `ImGuiConfigFlags.DockingEnable`；视情况开 `ViewportsEnable`（多视口，需 Silk.NET 多窗口支持，作可选）。
-- `ImGuiInputBridge`：把 Silk.NET 的鼠标/键盘/滚轮/文本输入事件灌入 `ImGuiIO`；处理 `WantCaptureMouse/WantCaptureKeyboard`——当 ImGui 捕获时，游戏/画刷不消费该输入，反之亦然，避免 UI 与世界交互打架。
-- `EditorFontManager`：加载支持 **中文（CJK）** 的字体（如 Noto Sans CJK / 思源黑体子集），构建含 `GetGlyphRangesChineseFull` / 自定义常用字范围 + 拉丁 + 标点的 glyph range；支持 DPI 缩放与字号切换；合并 icon font（可选）。
+- `ImGuiInputBridge`：把 Silk.NET 的鼠标/键盘/滚轮/文本输入事件灌入 `ImGuiIO`；处理 `WantCaptureMouse/WantCaptureKeyboard`——当 ImGui 捕获时，游戏/画刷不消费该输入，反之亦然，避免 UI 与世界交互打架。**多级输入仲裁（扩展 `plan/20` HTML UI 共存后的确定性路由）**：单一 `WantCapture` 布尔不足以协调三套输入消费者，须建立显式优先级链 **编辑器 ImGui > 模态游戏 UI（`plan/20` 模态 HTML 面板，如对话/背包全屏）> 非模态 HUD（准星/图例/血条，不吞输入）> 世界（画刷/gizmo/玩家控制器）**。仲裁在每帧输入分发前求值：编辑器 ImGui 若 `WantCaptureMouse/Keyboard` 命中则独占；否则若存在 open 的模态 HTML UI 则由其消费；非模态 HUD 只绘制不拦截；剩余落世界。Play 模式下编辑器工具让位（编辑器仅保留调试叠层/HUD 显示，见 §3.15），输入优先级降为 HTML UI 之下，游戏玩家控制器接管世界层。该仲裁器为单一真相，`plan/20` 与 `plan/13` 均从此读优先级，不各自实现 capture 逻辑。
+- `EditorFontManager`（已下沉为 `PixelEngine.Gui` 的 `GuiFontManager`，见 §1；本面板层复用中性字体栈）：加载支持 **中文（CJK）** 的字体（如 Noto Sans CJK / 思源黑体子集），构建含 `GetGlyphRangesChineseFull` / 自定义常用字范围 + 拉丁 + 标点的 glyph range；支持 DPI 缩放与字号切换；合并 icon font（可选）。玩家 HUD（`plan/13`）与 `plan/20` 的 HTML 回退基线复用同一 CJK 字体栈，避免各自加载重复 atlas。
 - `EditorDockSpace`：建立全窗口 dockspace 主机窗口；提供默认停靠布局（左：层级 + 资源浏览；中：世界视口；右：Inspector + 检视器 + 调色板；下：性能 HUD + 控制台/诊断）；布局可保存/恢复（`imgui.ini` 或自管布局）。
 
 ### 3.4 材质 / 笔刷调色板面板（`MaterialBrushPalettePanel`）
@@ -89,6 +97,10 @@ ImGui 表格编辑 `MaterialDef`（Name/CellType/Density/Dispersion/Flammability
 - 编辑器对运行时数值 id 只读展示、绝不允许手工指定/重排（id 是内部索引，入盘的永远是 Name）。
 
 可选用 ImNodes 以节点图方式编辑反应（备用）。
+
+**demo-playability 新增可玩性 / 视觉字段编辑（`plan/04` §3.2 `MaterialDef` 扩展）**：材质表新增可编辑列——可玩性字段 `Durability`（被 sim 真实消费的抗性系数）/`MaxIntegrity`/`RubbleTarget`（破坏后转化目标，写稳定 name、加载期经 `MaterialTable` 解析为 id，守 #8）/`DebrisCount`/`MineYield`/`FlowRate`（语义锚定既有 `Dispersion`，加载期 clamp `<= EngineConstants.MoveCap`，守 #4），与视觉辨识字段 `RenderStyle`/`LegendCategory`/`OutlineColorBGRA`/`Alpha`/`FlowTintBGRA`/`DisplayName`/`LegendVisible`。这些字段**只存 `MaterialDef`、绝不写回 cell**（渲染相位 CPU 算 BGRA，守 #7）；编辑后同 §3.8 现有路径写回 `content/materials.json` 并触发 `plan/04` 的 **id 稳定热重载（`ReloadStable`）**——保留既有 `Name→id` 映射、绝不重排 id，视觉/可玩性字段变更为整表值刷新、下一帧生效，`RubbleTarget` 的 name→id 解析在重载期完成并对缺失目标走 fallback（复用 §3.8 tombstone/fallback 计数诊断）。
+
+**只读 `MaterialLegendPreview`（编辑器内材质图例预览，作者调参对照）**：材质编辑器面板内嵌一个只读预览区，按 `LegendCategory` 分组列出全材质的 swatch（`BaseColor`/`OutlineColorBGRA` 描边 + `Alpha` 半透 + `FlowTintBGRA` 流动着色预览）与关键可玩性数值（`MaxIntegrity`/`FlowRate`/`RenderStyle`），供作者边调参边核对视觉辨识度。**它与玩家可见的材质图例 HUD（`plan/13` §3.16 `MaterialLegendHud`，游戏内、经 `IGuiContext`）是两套独立 UI**：`MaterialLegendPreview` 是编辑器调参工具、只读、不进玩家包；`MaterialLegendHud` 是玩家运行时 UI、走玩家 HUD 输入路径。二者只共享同一份 `MaterialDef` 视觉字段作为数据源，互不复用输入路径或渲染代码。
 
 ### 3.9 实体 / 脚本 Inspector（`ScriptInspectorPanel`，配合 `plan/11`）
 
@@ -130,6 +142,15 @@ ImGui 表格编辑 `MaterialDef`（Name/CellType/Density/Dispersion/Flammability
 - Play 模式：输入交给 Demo/脚本（玩家控制器），编辑工具让位；调试叠层与 HUD 仍可显示；可随时切回 Edit。
 - 进入 Play 可选「以当前世界态运行」或「从存档点临时副本运行、退出还原」（后者经 `plan/07` 快照），避免编辑态被运行修改污染。
 模式切换经 Hosting 的运行状态 API；切换不破坏帧节奏（#6）。
+
+### 3.16 编辑器 ImGui 与游戏 HTML UI（`plan/20`）共存
+
+编辑器 ImGui 与 `PixelEngine.UI`（`plan/20`，游戏内 HTML 大 UI）同处一个 GL 上下文、同在世界渲染（相位 [10]）之后叠加，须建立确定性协作，不靠订阅顺序隐式决定叠放：
+
+- **合成次序（UI 先 / 编辑器后）**：经 `plan/08` 新增的**显式带序号 / 优先级的 UI 层注册接口**（替代脆弱的多播订阅顺序），叠放顺序固定为 **世界 → 游戏 HTML UI（`plan/20`）→ 编辑器 ImGui（本文件）**——编辑器面板恒绘制在游戏 UI 之上，便于开发期覆盖调试。两订阅者各自 `Composite`/`Render` 后恢复 GL 状态（program/blend/scissor/vao），互不污染（呼应 §3.3 GL 状态恢复）。发行构建禁用编辑器后仅 HTML UI 存在，零编辑器开销（守 §1）。
+- **输入仲裁**：沿用 §3.3 的多级优先级链 **编辑器 ImGui > 模态游戏 UI > 非模态 HUD > 世界**。
+- **Play 让位**：进入 Play 模式，编辑器工具让位（仅保留调试叠层/HUD 显示），游戏 HTML UI 接管玩家交互（呼应 §3.15 `EditorMode`）。
+- **性能 HUD 增 UI 分项**：`PerformanceHudPanel`（§3.7）新增 `ui.update` / `ui.paint` / `ui.upload` / `ui.composite` 四个分项计时口径（读 `plan/02` 诊断快照中 `plan/20` 上报的 UI 相位），区分 UI 逻辑更新（相位 0/1）与光栅化 / 纹理上传 / 合成（相位 10），使 UI 尖刺可与世界相位区分定位；UI 相位仅脏 / 动画时执行，尖刺只掉渲染帧不违 #6（呼应 `plan/16`）。
 
 ---
 
@@ -182,6 +203,10 @@ ImGui 集成与框架：
 - [x] 改纹理/音效仅重载资产、不动 id（§3.8）
 - [x] 输出诊断「重载后用 fallback 替换了 N 个被删材质的活 cell」（§3.8、架构 §17.4）
 - [x] 运行时数值 id 只读展示，禁止手工指定/重排（#8、§3.8）
+- [ ] 材质编辑器新增可玩性字段列（`Durability`/`MaxIntegrity`/`RubbleTarget`/`DebrisCount`/`MineYield`/`FlowRate`）编辑，`RubbleTarget` 写稳定 name、加载期解析为 id，`FlowRate` clamp `<= EngineConstants.MoveCap`（守 #4/#8、§3.8、`plan/04` §3.2）
+- [ ] 材质编辑器新增视觉辨识字段列（`RenderStyle`/`LegendCategory`/`OutlineColorBGRA`/`Alpha`/`FlowTintBGRA`/`DisplayName`/`LegendVisible`）编辑，仅存 `MaterialDef` 不写回 cell（守 #7、§3.8）
+- [ ] 新增字段编辑后经 `plan/04` `ReloadStable` id 稳定热重载生效，`RubbleTarget` 缺失走 fallback 并复用 tombstone 计数诊断（#8、§3.8）
+- [ ] 只读 `MaterialLegendPreview`：按 `LegendCategory` 分组的全材质 swatch（描边/alpha/flowTint 预览）+ 关键可玩性数值，与玩家 `MaterialLegendHud`（`plan/13` §3.16）为两套独立 UI、只共享 `MaterialDef` 数据源（§3.8）
 
 Inspector / 浏览 / 层级：
 - [x] `ScriptInspectorPanel`：反射展示/编辑脚本组件公开字段（配合 `plan/11` 元数据），支持基础/向量/枚举/材质引用/范围滑条（§3.9）
@@ -199,6 +224,13 @@ sim 控制 / 存读档 / 调参 / 模式：
 - [x] `LightingTuningPanel`（`plan/08`）：emissive/bloom/fog-of-war/dither/gamma/Radiance Cascades 开关（§3.14、架构 §9.4）
 - [x] `EditorMode` 状态机（Edit/Play）+ 输入仲裁 + 切换经 Hosting 运行状态 API（§3.15）
 - [x] Play 模式可选「当前态运行」或「存档点临时副本运行、退出还原」（经 `IEditorPlaySnapshotStore` 接入 `plan/07` 存读档服务）（§3.15）
+
+GUI 宿主中性化与壳/UI 共存（跨 `plan/19`/`plan/20` 前置，见 §1、§3.16）：
+- [ ] ImGui host 下沉至中性程序集 `PixelEngine.Gui`：`HexaImGuiBackend`、`IGuiContext` 运行时适配（现 `ScriptGuiContext`）、`EditorRenderBridge` 中性部分、`EditorFontManager`→`GuiFontManager`（含 CJK）迁入；Editor 依赖 Gui，玩家 HUD 与编辑器共用中性 host（§1）
+- [ ] 面板层由 `apps/PixelEngine.Editor.Shell`（开发构建）经公开 `RegisterDefaultEditorPanels` bootstrap 注入；本文件面板实现保持位于 Hosting 之下、不反向依赖壳（§1 职责边界、`plan/19`）
+- [ ] 多级输入仲裁器：编辑器 ImGui > 模态游戏 UI（`plan/20`）> 非模态 HUD > 世界，单一真相供 `plan/13`/`plan/20` 复用，Play 模式下编辑器降级让位（§3.3、§3.16）
+- [ ] 编辑器 ImGui 与游戏 HTML UI（`plan/20`）合成次序经 `plan/08` 显式 UI 层注册接口固定为 世界→HTML UI→编辑器，各自 `Render` 后恢复 GL 状态（§3.16）
+- [ ] `PerformanceHudPanel` 新增 `ui.update`/`ui.paint`/`ui.upload`/`ui.composite` 分项计时口径，区分 UI 逻辑（相位 0/1）与光栅化/上传/合成（相位 10）（§3.7、§3.16）
 
 ---
 
@@ -223,6 +255,11 @@ sim 控制 / 存读档 / 调参 / 模式：
 - [x] Edit/Play 模式切换正确仲裁输入；「临时副本运行」退出后经 `IEditorPlaySnapshotStore` 恢复世界；切换不破坏帧节奏（#6、§3.15）
 - [x] Editor 仅消费各子系统公开 read-only/tuning API，无任何对子系统内部类型/字段的直接访问；无反向依赖（§1、§2）
 - [x] 编辑器禁用开关关闭后，主循环无 ImGui/叠层开销（§1）
+- [ ] 材质编辑器可编辑 demo-playability 全部可玩性/视觉字段并经 `ReloadStable` 热重载生效、id 不重排、`RubbleTarget` 缺失走 fallback；`FlowRate` 超 `MoveCap` 被 clamp（#4/#7/#8、§3.8）
+- [ ] 只读 `MaterialLegendPreview` 正确按类别分组预览全材质 swatch 与描边/alpha/flowTint/关键数值，且与玩家 `MaterialLegendHud` 输入/渲染路径互不复用（§3.8）
+- [ ] ImGui host（backend/`IGuiContext`/字体栈）已下沉 `PixelEngine.Gui`，玩家 HUD 与编辑器共用中性 host；面板层经 `RegisterDefaultEditorPanels` 由壳注入且无反向依赖（§1）
+- [ ] 编辑器 ImGui 与游戏 HTML UI（`plan/20`）确定性叠放（世界→HTML UI→编辑器）、各自恢复 GL 状态无互相污染；多级输入仲裁按 编辑器>模态 UI>非模态 HUD>世界 生效，Play 模式编辑器让位（§3.3、§3.16）
+- [ ] 性能 HUD 显示 `ui.update`/`ui.paint`/`ui.upload`/`ui.composite` 四分项且与 `plan/20` 上报口径一致（§3.7、§3.16）
 
 ---
 
@@ -242,7 +279,13 @@ sim 控制 / 存读档 / 调参 / 模式：
 - `plan/11`（脚本）：组件字段反射元数据 + 安全 get/set、Roslyn+ALC 热重载入口、实体注册表。
 - Hosting：主循环相位挂载点、运行状态（Edit/Play、sim run/step）API。
 
-被依赖：`plan/13`（Demo 借编辑器调参/调试，但 Demo 仅依赖引擎公开 API）；`plan/14`（测试可验证编辑器读 API 的正确性）。
+被依赖：`plan/13`（Demo 借编辑器调参/调试，但 Demo 仅依赖引擎公开 API）；`plan/14`（测试可验证编辑器读 API 的正确性）；`plan/19`（`apps/PixelEngine.Editor.Shell` 复用并注入本文件面板层，经 `RegisterDefaultEditorPanels`）；`plan/20`（`PixelEngine.UI` 与编辑器 ImGui 共存，复用 §3.3 输入仲裁与 `PixelEngine.Gui` 字体栈）。
+
+新增关联（本轮）：
+
+- `PixelEngine.Gui`（新增中性程序集）：ImGui host（`HexaImGuiBackend`）、`IGuiContext` 运行时适配（现 `ScriptGuiContext`）、`GuiFontManager`（含 CJK）下沉至此，位于 Rendering 之上、Editor 之下；Editor 依赖 Gui。此中性化是 `plan/19` 壳注入、`plan/15` 玩家包 player-only 审计、`plan/20` UI 字体/回退复用三者的共同前置。
+- `plan/04`（材质）：`MaterialDef` 新增可玩性/视觉字段与 `ReloadStable` id 稳定热重载 API（供 §3.8 材质编辑器编辑与 `MaterialLegendPreview` 预览）。
+- `plan/08`（Rendering）：显式带序号/优先级的 UI 层注册接口（供编辑器与 `plan/20` HTML UI 确定性叠放，替代多播订阅顺序）。
 
 并行关系：本文档须在所消费 API 就绪后实施；各面板之间可并行开发。精确顺序见 `plan/17`。
 
@@ -263,3 +306,6 @@ sim 控制 / 存读档 / 调参 / 模式：
 - [x] 节点 7：`feat(editor): sim 控制条/存读档 UI/子系统调参面板`（§3.12–§3.14）
 - [x] 节点 8：`feat(editor): 编辑/运行(Play)模式切换`（§3.15）
 - [x] 节点 9：`docs(plan): 勾选 plan/12 验收并更新 README 进度`（§5 全部通过后）
+- [ ] 节点 10：`refactor(gui): ImGui host/IGuiContext/字体栈下沉 PixelEngine.Gui 中性程序集`（§1、§6，`plan/19`/`plan/15`/`plan/20` 共同前置）
+- [ ] 节点 11：`feat(editor): 材质编辑器可玩性/视觉字段编辑+MaterialLegendPreview+ReloadStable 热重载`（§3.8）
+- [ ] 节点 12：`feat(editor): 多级输入仲裁与 HTML UI(plan/20)共存合成次序+性能 HUD ui.* 分项`（§3.3、§3.16）

@@ -23,12 +23,14 @@
 | 12 | `12-editor-tooling-ui.md` | ImGui 管理UI：面板框架/材质编辑器/世界编辑/调试叠层/检视器/资源浏览/sim 控制 | 08、03、06、11 |
 | 13 | `13-demo-game.md` | 落沙游戏 Demo：可操作角色/玩法/关卡/内容（仅依赖引擎公开 API） | 11、全部引擎子系统 |
 | 14 | `14-testing-benchmarking.md` | 测试策略/性质测试/oracle 比对/基准/CI 门禁 | 02–13 |
-| 15 | `15-build-packaging-distribution.md` | 6-RID/R2R/AOT/native dual-build/打包/codesign/分发 | 01、06 |
+| 15 | `15-build-packaging-distribution.md` | Windows 优先发行+跨平台矩阵保留/R2R/AOT/app 布局/build-player/native dual-build/打包/codesign/分发 | 01、06 |
 | 16 | `16-performance-hardening.md` | 跨切面性能加固清单：多线程/内存/SIMD/GC/GPU/profiling | 02–13 |
 | 17 | `17-roadmap-execution-order.md` | 执行顺序/依赖图/里程碑映射(M0–M12)/提交节点总表 | 全部 |
 | 18 | `18-hosting-runtime.md` | 引擎宿主:Engine 门面/12 相位主循环编排/子系统装配/场景/Play-Edit 模式/过载降级编排/headless | 02–10 |
+| 19 | `19-standalone-editor-app.md` | 独立编辑器应用：顶层壳/项目/窗口生命周期/GameObject authoring/gizmo/prefab/.scene 保存/编辑器内构建面板(build-player)/玩家包解耦 | 12、18、11、08、15 |
+| 20 | `20-interactive-html-ui.md` | 交互界面/HTML 大 UI(PixelEngine.UI)：后端选型/BeforePresentUi 合成/C#↔UI 桥/输入三级仲裁/相位0-1-10 挂载 | 08、12、18、13、11 |
 
-> 模块归属与编号说明（见 `00-conventions-and-techstack.md §5.1`）：数据模型类型(`MaterialDef`/`Reaction`/`CellType`/`AudioCueSet`)归 `Simulation`、事件类型(`AudioEvent`)归 `Core`；`PixelEngine.Content` 无独立文档,其设计分布于 `plan/04`(加载器+schema)、`plan/07`(id 重映射)、`plan/12`(编辑器热重载);**12 相位帧循环的编排者是 `Hosting`(`plan/18`)**。
+> 模块归属与编号说明（见 `00-conventions-and-techstack.md §5.1`）：数据模型类型(`MaterialDef`/`Reaction`/`CellType`/`AudioCueSet`)归 `Simulation`、事件类型(`AudioEvent`)归 `Core`；`PixelEngine.Content` 无独立文档,其设计分布于 `plan/04`(加载器+schema)、`plan/07`(id 重映射)、`plan/12`(编辑器热重载);**12 相位帧循环的编排者是 `Hosting`(`plan/18`)**。编辑器面板实现归 `plan/12`，独立编辑器壳应用与 GameObject authoring UX 及编辑器内构建面板归 `plan/19`；游戏内 HTML 大 UI 归 `plan/20`（`PixelEngine.UI`），编辑器 ImGui 与游戏 HTML UI 为两套并存 UI（共享 ImGui host 与字体栈的中性 `PixelEngine.Gui` 见 `plan/19`/`plan/20`）。
 
 ## 执行顺序（vertical-slice-first）
 
@@ -38,6 +40,9 @@
 碰撞物理：**06**（像素碰撞与刚体，刻意置于 sim 稳定之后）。
 宿主与可编程：**18 → 11**（引擎宿主/主循环编排 → 脚本系统）。
 可编辑：**12**（编辑器 UI）。
+GUI 宿主中性化重构（入口门）：把玩家 HUD 所需的 ImGui host+字体栈从 Editor 下沉进新中性程序集 **`PixelEngine.Gui`**、`Hosting` 删除对 `PixelEngine.Editor` 的硬引用改暴露抽象 GUI/相位[10] 钩子——此重构是 plan/19 壳注入、plan/15 玩家包审计、plan/20 UI 字体/回退复用三者的共同强前置。
+独立编辑器壳与编辑器内构建：**19**（在 12 与 GUI 中性化重构之后，先于玩家包审计新规则）。
+交互界面：**20** HTML 大 UI（在 12/13 之后）。
 集成与交付：**13 → 14 → 15 → 16**（Demo → 测试 → 打包 → 性能加固）。
 **17** 给出精确的依赖图与里程碑（M0–M12）映射，实际编码以 17 为节奏表。
 
@@ -62,10 +67,12 @@
 | 12 编辑器 UI | - [x] | plan/12 节点 1–9 与验收标准已完成 |
 | 13 Demo 游戏 | - [!] | 真实窗口玩法、听感、手感与人工验收证据待补 |
 | 14 测试/基准 | - [!] | 硬件计数器与 6-RID CI 运行证据待补 |
-| 15 打包/分发 | - [!] | 6-RID 发行、macOS 签名公证、GitHub Release 证据待补 |
+| 15 打包/分发 | - [!] | Windows 优先激活+跨平台矩阵保留 dormant、app/ 布局、build-player、玩家包/编辑器工具包分流待补；macOS 签名公证、GitHub Release 证据待补 |
 | 16 性能加固 | - [!] | AVX-512、目标硬件性能、硬件计数器与帧预算证据待补 |
 | 17 路线图 | - [!] | M0-M12 总退出标准仍受外部证据阻塞 |
 | 18 宿主/运行时 | - [!] | Editor 人工验收与 native leak detector 证据待补 |
+| 19 独立编辑器应用 | - [!] | 顶层壳/GameObject authoring/编辑器内构建/玩家包解耦待实现与人工验收 |
+| 20 交互界面/HTML UI | - [!] | HTML 后端选型/GL 合成/输入仲裁待实现，#10 处置待用户拍板 |
 
 ## 证据 / 预检状态索引
 
@@ -78,6 +85,7 @@
 | Demo 人工验收 | `tools/demo-manual-acceptance-preflight.ps1` | `blocked_missing_manual_evidence`、`scripted_probe_only`、`blocked_missing_manual_scope_evidence`、`blocked_invalid_manual_evidence`、`manual_evidence_attached_pending_review` |
 | Native leak | `tools/native-leak-preflight.ps1` | `blocked_missing_detector`、`process_smoke_only`、`detector_report_attached_pending_review`、`blocked_missing_scope_evidence`、`blocked_invalid_native_leak_evidence`、`detector_evidence_attached_pending_review` |
 | 发行证据 | `tools/release-evidence-preflight.ps1` + release workflow 上传报告 | `blocked_missing_release_manifest`、`blocked_invalid_release_evidence`、`blocked_missing_release_scope_evidence`、`blocked_not_tag_release`、`release_evidence_attached_pending_review` |
+| build-player 产物校验 | `tools/build-player.ps1`/`.sh`（NDJSON `schema=pixelengine.build/v1` + `build-result.json`；`audit` 分 dev-audit 结构存在性+player-only 断言 与严格 `audit-release-artifacts`） | build-player 产物校验+player-only 闭包审计（拒绝 app/ 含 `PixelEngine.Editor.dll` 及编辑器专属面板闭包，允许玩家 HUD 所需 `Hexa.NET.ImGui`；player-only 断言以 GUI 宿主中性化重构落地为前置，标 blocked-on-req1）待补 |
 
 以上 `*_pending_review`、`local_probe_only`、`scripted_probe_only`、`process_smoke_only`、`ready` 与 `counters_present` 都不是对应 plan 验收通过状态，只说明证据入口可执行、待人工复核或本地计数器列检查通过；对应 plan 条目仍保持 `- [!]`，直到外部证据内容本身闭合验收。
 

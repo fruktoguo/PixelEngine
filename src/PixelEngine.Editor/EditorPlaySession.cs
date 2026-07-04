@@ -1,3 +1,5 @@
+using PixelEngine.World;
+
 namespace PixelEngine.Editor;
 
 /// <summary>

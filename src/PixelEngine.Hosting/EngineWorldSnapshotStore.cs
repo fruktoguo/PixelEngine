@@ -1,4 +1,3 @@
-using PixelEngine.Editor;
 using PixelEngine.Scripting;
 using PixelEngine.World;
 

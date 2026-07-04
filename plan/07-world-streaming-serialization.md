@@ -90,6 +90,8 @@ RLE+LZ4 的 CPU 字节准备可在 Core 线程池并行（多 chunk 并发编解
 
 不可用单屏 ~17MB 数字。按 chunk 核算：每常驻 chunk 的 sim 态 = 64×64 × (2B Material + 1B Flags + 1B Lifetime) ≈ 16KB，加粗温度子块 ~1KB 与元数据，约 **~18–20KB/chunk**（架构 §12.2）。render buffer 是屏幕大小、非 per-chunk，不计入此预算。
 
+**per-cell Damage 平面纳入后的预算修订（plan/03 引入持久破坏模型，§3.11、AGENTS §7.1）**：Cell SoA 新增 1B `Damage` 平面（每 cell 累计破坏度），核心 sim 态从 **4B/cell → 5B/cell（+25%）**，即 64×64 × (2B Material + 1B Flags + 1B Lifetime + 1B Damage) 从 16KB → **20KB/chunk**（不含温度子块与元数据）。`ChunkMemoryBudget` 的 per-chunk 核算基数须同步由 16KB 提升到 20KB，与 plan/03、plan/16 三处数字保持一致；`ResidentMemoryCapBytes` 默认值不变，但同一 cap 下常驻 chunk 上限相应下降约 20%，档位须按目标机实测复核。
+
 `ChunkMemoryBudget` 跟踪 `ResidentBytes` 总和与 `ResidentMemoryCapBytes`（默认 512MB，可配）。`ResidencyPlanner` 在相位 2 执行驱逐：当 `ResidentBytes > Cap` 时，即便仍在激活半径内，也按 **LRU 评分**（`LastTouchedFrame` 越旧 + 到相机 chunk 距离越远，评分越高）选最该走的 **sleeping 且在 border 之外** 的 chunk 提前卸载，直到降到 `EvictionTargetBytes`（低于 cap 的水位，避免抖动）。永不驱逐激活区内正在活动的 chunk 或 border chunk。磁盘侧已探索区随游玩增长，靠 §3.6 的 RLE+LZ4 压制（均匀 chunk 压缩率极高）。
 
 `LastTouchedFrame` 在 chunk 进入激活区 / 被 CA 标记 dirty / 被 KeepAlive 唤醒时更新（由 World 在相位 2 汇总上一帧的活动信号，不进相位 4 热循环逐 cell 写）。
@@ -141,6 +143,21 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 
 `RegionFileStore : IChunkStore`（Serialization）：`bool TryRead(ChunkCoord, IBufferWriter<byte>)`、`void Write(ChunkCoord, ReadOnlySpan<byte>)`、`bool Exists(ChunkCoord)`、`void Delete(ChunkCoord)`。流式（§3.1）走 region 存储增量读写；存档（§3.8）在其上叠加 manifest 与一致性快照。所有磁盘写经临时文件 + 原子 rename 防半写损坏。
 
+### 3.11 per-cell Damage 平面的持久化契约（持久破坏模型，plan/03/16 配套，不变式 #1/#5/#8）
+
+plan/03 为 Cell 新增一条 per-cell `Damage`（`byte`）SoA 平面：单缓冲原地累加（守 #1，不双缓冲），记录每 cell 被武器 / 破坏 API 累计造成的破坏度；达到材质 `Integrity` 阈值时该 cell 被消费为 `DestroyedTarget`（语义在 plan/04/16，本文档不解释触发规则）。本文档负责该平面在**磁盘往返**中的落盘契约，判定如下（synthesis verdict 必须项）：
+
+**Damage 是持久 lane，不是瞬时 lane。** 存档 / 流式往返**保留**累计破坏度——玩家挖开一半的墙、被激光烧蚀的岩层，卸载重入或读档后破坏进度不丢失，与 `Material`/`Lifetime` 同属需逐 cell 复原的持久数据。因此 Damage 段进入 `ChunkSnapshot` 与 `ChunkCodec` 编解码，**不**进入 `PersistentFlagMask` 的瞬时位重置规则（§3.6 的 parity/settled/freefalling 清零只作用于 `Flags`，与 Damage 无关）。
+
+落盘细节：
+- `ChunkSnapshot` 增只读 / 可写 `Span<byte> Damage` 视图（64×64），与 `Material`/`Flags`/`Lifetime`/`Temperature` 并列；World 在 `Chunk`↔`ChunkSnapshot` 适配时一并搬运 Damage 平面。
+- `ChunkCodec.Encode` 在既有各段之后追加一个 **Damage RLE 段**（`RleCodec.EncodeU8`，破坏度大片为 0，均匀区 RLE 收益高），随整 blob 一起 LZ4；`Decode` 对称解出 Damage 段写回 `ChunkSnapshot.Damage`。段的未压缩长度进 `ChunkBlobHeader`（与其它段同机制）。
+- **版本迁移**：新增 Damage 段使 blob 段结构变化，须 bump `SaveFormatVersions`（chunk blob 与存档头各自的当前版本 +1），并注册一个 `ISaveMigrator`：旧版本 blob 无 Damage 段，迁移时**缺省填 0**（旧世界视为无累计破坏），其余段原样透传。旧档读取不报错、逐 cell 语义等价（除 Damage 全 0 外）。
+- **material 重映射不受影响、但 fallback 命中须清 Damage**：`MaterialRemap` 只重写 `Material` id 的 LUT（§3.7），Damage 段按 cell 位置原样透传、**不参与 id 重映射**。唯一例外：某 cell 的 saved material name 在当前定义里已删除、被映射到 fallback（§3.7）时，该 cell 的累计 Damage **清 0**——破坏度是相对原材质 `Integrity` 的累计量，材质已被替换后旧破坏度语义失效，保留会导致新材质凭空半损。fallback 命中的 Damage 清零计数与 §3.7 的重映射诊断一并输出。
+- 单缓冲 / 相位纪律：Damage 平面的编解码只在相位 11 后台对游离 `Chunk`/`ChunkSnapshot` 进行（守 §3.4 屏障），装载后随 chunk 一并入 live map；本文档不写 cell Damage（写入是 plan/16 安全相位的离散编辑），只做磁盘往返的搬运与复原。
+
+与 plan/14 挂钩：§5.3 的存档往返逐 cell 等价测试纳入 Damage 平面（Encode→Decode 后逐 cell 等价）；新增旧档→新档迁移测试断言旧档 Damage 缺省 0；重映射测试断言 fallback 命中 cell 的 Damage 被清 0。
+
 ---
 
 ## 4. 实现清单
@@ -176,21 +193,25 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 ### 4.3 Serialization — chunk 二进制（架构 §11.3，不变式 #8）
 
 - [x] `ChunkSnapshot`（ref struct）：持 `Span<ushort> Material`、`Span<byte> Flags`、`Span<byte> Lifetime`、`Span<Half> Temperature` 视图；World 在 `Chunk`↔`ChunkSnapshot` 间适配（隔离 Serialization 不依赖 plan/03 `Chunk` 内部）。（§3.6）
+- [ ] `ChunkSnapshot` 增 `Span<byte> Damage` 视图（64×64，per-cell 累计破坏度）：与 `Material`/`Flags`/`Lifetime`/`Temperature` 并列；World 在 `Chunk`↔`ChunkSnapshot` 适配时一并搬运该平面，隔离 Serialization 不依赖 plan/03 `Chunk` Damage 布局。（§3.11，持久 lane）
 - [x] `PersistentFlagMask`（const byte）= bit2(burning)；XML 注释列明 bit0 parity / bit1 settled-sleep / bit3 freefalling / bit4 rigid-owned 为瞬时位不入盘（架构 §7.1/§11.3）。（§3.6）
 - [x] `RleCodec`（static）：`EncodeU16(ReadOnlySpan<ushort>, IBufferWriter<byte>)`/`DecodeU16`、`EncodeU8`/`DecodeU8`；行程编码大片均匀区。（§3.6）
 - [x] `Lz4BlockCodec`（static，封装 K4os）：`Compress(ReadOnlySpan<byte>, IBufferWriter<byte>)`、`Decompress(ReadOnlySpan<byte>, Span<byte>)`，存未压缩长度便于预分配。（§3.6）
 - [x] `ChunkBlobHeader`（struct）：magic、`FormatVersion`、`ChunkCoord`、各段未压缩长度、压缩标志。（§3.6/§3.9）
 - [x] `ChunkCodec`（class）：`Encode(in ChunkSnapshot, IBufferWriter<byte>)`——Flags 先 `& PersistentFlagMask`，各段 RLE 后拼接再 LZ4；`Decode(ReadOnlySpan<byte>, ChunkSnapshot dst)`——LZ4 解→分段 RLE 解→瞬时位重置规则（parity 置异、settled/freefalling 清零）。（相位 11，§3.6）
+- [ ] `ChunkCodec` 增 **Damage RLE 段**：`Encode` 在既有各段之后追加 `RleCodec.EncodeU8(snapshot.Damage, ...)`（大片 0 破坏度 RLE 收益高），随整 blob 一起 LZ4；`Decode` 对称解出 Damage 段写回 `dst.Damage`；该段未压缩长度进 `ChunkBlobHeader`。Damage 属持久 lane，**不**参与瞬时位重置规则。（§3.11）
 
 ### 4.4 Serialization — material 重映射、manifest、迁移、磁盘（架构 §11.2/§11.3/§11.4）
 
 - [x] `MaterialNameTable`（class）：`ushort id`↔`string name` 双向；`Write/Read`（紧凑二进制）。（§3.7）
 - [x] `MaterialRemap`（class）：`Build(MaterialNameTable saved, MaterialRegistry current, ushort fallbackId)`；`ushort Map(ushort savedId)`；`RemapInPlace(Span<ushort> material)`；记 fallback 命中计数并经 Core 诊断输出。（§3.7，不变式 #8）
+- [ ] `MaterialRemap.RemapInPlace` 增 Damage 联动重载 `RemapInPlace(Span<ushort> material, Span<byte> damage)`：material id 按 LUT 重写，Damage 段随 cell 位置原样透传、**不参与 id 重映射**；仅对**映射到 fallback**（原 name 已删除）的 cell 将其 `Damage` 清 0（破坏度相对原材质 Integrity 失效），并记入 fallback 清零计数一并诊断。（§3.11，不变式 #8）
 - [x] `FreeParticleSnapshot`（struct DTO：`float x,y,vx,vy; ushort material; byte colorVariant; byte life`，对齐 plan/05 §7.6）。（§3.8）
 - [x] `RigidBodySnapshot`（DTO：`int id`、不可变 body-local mask（`byte[]` + 尺寸）+ 每像素 `ushort material`、`float posX,posY,rotCos,rotSin`、`float linVelX,linVelY,angVel`，足以由 plan/06 重建 Box2D 刚体）。（§3.8）
 - [x] `IWorldStateSnapshotSource` / `IWorldStateSnapshotSink`（接口）：供 plan/05/06 导出 / 重建 particles 与 bodies；Serialization 只读写 DTO。（§3.8）
 - [x] `WorldManifest`（class）+ `ManifestCodec`：`FormatVersion`、`WorldSeed`、`GameTimeTicks`、`PlayerStateBlob`、`MaterialNameTable`、`FreeParticleSnapshot[]`、`RigidBodySnapshot[]`、chunk 索引；紧凑二进制读写（非 JSON）。（§3.8）
 - [x] `SaveFormatVersions`（const）；`ISaveMigrator { int FromVersion; void Migrate(MigrationContext); }`；`MigrationChain.Upgrade(stream/bytes, int fromVersion)` 逐级应用。（§3.9）
+- [ ] bump `SaveFormatVersions`（chunk blob 头与存档头当前版本各 +1，因 blob 段结构新增 Damage 段）；注册 `DamageLaneMigrator : ISaveMigrator`：旧版本 blob 无 Damage 段，迁移时该段**缺省填 0**、其余段原样透传，旧档读取不报错且逐 cell 语义等价（除 Damage 全 0）。（§3.11/§3.9）
 - [x] `IChunkStore` 接口 + `RegionFileStore`（class）：`TryRead/Write/Exists/Delete(ChunkCoord)`；region 文件（32×32 chunk/文件）+ 文件内偏移索引；临时文件 + 原子 rename。（§3.10）
 - [x] `WorldSaveService`（class）：`SaveAll(WorldManager, IWorldStateSnapshotSource, string savePath)`（相位 2/暂停点：flush dirty chunk→region→写 manifest 快照）；`LoadAll(string savePath, IWorldStateSnapshotSink)`（读 manifest→迁移链→remap→装载）。（相位 2，§3.8）
 
@@ -213,12 +234,15 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 - [x] `ChunkMemoryBudget` 以 ~18–20KB/chunk 核算常驻字节，不用单屏数字（架构 §12.2）。
 - [x] 常驻字节超 `ResidentMemoryCapBytes`（默认 512MB，可配）时，即便仍在激活半径内，也按 LRU + 距离提前驱逐最远 sleeping（border 外）chunk 至 `EvictionTargetBytes`，且不抖动（架构 §1.4/§12.2）。
 - [x] 激活区内活动 chunk 与 border chunk 永不被内存驱逐。
+- [ ] **纳入 Damage 平面后的 per-chunk 预算基数为 20KB**（核心 sim 态 4B/cell → 5B/cell，+25%）：`ChunkMemoryBudget` 核算基数由 16KB 提升到 20KB，与 plan/03、plan/16 三处数字一致；同一 `ResidentMemoryCapBytes` 下常驻 chunk 上限相应下调约 20%，档位按目标机实测复核（§3.5/§3.11，AGENTS §7.1 per-cell 字节预算评审）。
 
 ### 5.3 chunk 格式与位区分
 
 - [x] **存档往返逐 cell 等价测试通过**（引用 plan/14）：`ChunkCodec.Encode→Decode` 后 `Material`/`Lifetime`/持久 `Flags`/`Temperature` 逐 cell 等价（架构 §16.2）。
 - [x] 持久位（burning 等）入盘并读回；瞬时位（parity、settled/sleep、freefalling）不入盘，读档时按规则重置（架构 §11.3/§7.1）。
 - [x] chunk payload 经 RLE+LZ4（K4os），均匀 chunk 压缩率高（架构 §11.3）。
+- [ ] **per-cell Damage 平面为持久 lane**：`ChunkCodec.Encode→Decode` 后 `Damage` 段逐 cell 等价（累计破坏度不丢），存档 / 流式往返均保留；Damage 不被瞬时位重置规则触及（§3.11，plan/14 逐 cell 等价测试纳入 Damage）。
+- [ ] **旧档→新档迁移**：`SaveFormatVersions` 已 bump，旧版本无 Damage 段的 blob 经 `DamageLaneMigrator` 升级后 Damage 缺省全 0、其余段逐 cell 等价，读取不报错（§3.11/§3.9，plan/14 迁移测试）。
 
 ### 5.4 material 稳定性与 manifest
 
@@ -226,6 +250,7 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 - [x] **存档往返 + 重映射测试通过**（引用 plan/14）：改 materials.json 顺序、增删材质后旧档仍逐 cell 语义正确重映射；删除材质的 cell 走 fallback 并有诊断计数（架构 §16.2、R15）。
 - [x] manifest 持久化 world seed / 版本 / 游戏时间 / 玩家态 / id↔name 表 / 在飞自由粒子 / 刚体（足以读档重建并续跑）；温度场随 chunk 子块落盘（架构 §11.3）。
 - [x] 整世界存档在帧边界对一致快照执行，不读半更新网格（架构 §11.5）。
+- [ ] **重映射对 Damage 的处理正确**（引用 plan/14）：material id 重映射时 Damage 段按 cell 位置原样透传、不参与 id 映射；仅**映射到 fallback** 的 cell 的 Damage 被清 0 并计入 fallback 清零诊断（§3.11）。
 
 ### 5.5 版本迁移与两类持久化区分
 
@@ -274,5 +299,6 @@ blob 结构：`ChunkBlobHeader`（magic、`FormatVersion`、coord、各段未压
 - [x] `feat(serialization): 实现 world manifest、全局态持久化与磁盘 region 布局`（对应清单 §4.4 manifest/store、§3.8/§3.10）
 - [x] `feat(serialization): 实现版本迁移链与显式存档/读档服务`（对应清单 §4.4 migration/save、§3.9）
 - [x] `test(world,serialization): 接入流式线程安全/存档往返/重映射/迁移测试（plan/14）`（对应验收 §5，测试实现引用 plan/14）
+- [ ] `feat(serialization): 落盘 per-cell Damage 持久 lane（RLE 段+版本迁移+fallback 清零+预算修订）`（对应清单 §4.3/§4.4 Damage 项、§3.11，预算 §3.5；plan/14 逐 cell 等价/迁移/重映射测试）
 
 > 每节点完成即勾选并提交；与架构文档 / 不变式冲突先改计划再改代码（AGENTS §5）。

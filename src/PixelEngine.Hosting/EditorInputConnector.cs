@@ -1,4 +1,4 @@
-using PixelEngine.Editor;
+using PixelEngine.Gui;
 using PixelEngine.Rendering;
 using Silk.NET.Input;
 using System.Numerics;
@@ -11,7 +11,7 @@ namespace PixelEngine.Hosting;
 internal sealed class EditorInputConnector : IDisposable
 {
     private readonly RenderWindow _window;
-    private readonly ImGuiInputBridge _input;
+    private readonly GuiInputBridge _input;
     private bool _disposed;
 
     /// <summary>
@@ -19,7 +19,7 @@ internal sealed class EditorInputConnector : IDisposable
     /// </summary>
     /// <param name="window">渲染窗口。</param>
     /// <param name="input">ImGui 输入桥。</param>
-    public EditorInputConnector(RenderWindow window, ImGuiInputBridge input)
+    public EditorInputConnector(RenderWindow window, GuiInputBridge input)
     {
         _window = window ?? throw new ArgumentNullException(nameof(window));
         _input = input ?? throw new ArgumentNullException(nameof(input));

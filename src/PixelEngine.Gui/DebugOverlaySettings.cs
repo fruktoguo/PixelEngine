@@ -1,4 +1,4 @@
-namespace PixelEngine.Editor;
+namespace PixelEngine.Gui;
 
 /// <summary>
 /// 调试叠层运行时设置。

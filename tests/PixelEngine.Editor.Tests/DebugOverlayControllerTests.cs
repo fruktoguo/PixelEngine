@@ -1,6 +1,7 @@
 using PixelEngine.Rendering;
 using PixelEngine.Physics;
 using PixelEngine.Core.Mathematics;
+using PixelEngine.Gui;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 using Xunit;

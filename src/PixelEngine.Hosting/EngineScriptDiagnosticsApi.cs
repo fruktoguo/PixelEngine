@@ -1,7 +1,7 @@
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
-using PixelEngine.Editor;
 using PixelEngine.Scripting;
+using PixelEngine.Gui;
 
 namespace PixelEngine.Hosting;
 

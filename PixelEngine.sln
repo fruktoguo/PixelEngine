@@ -99,6 +99,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{07C2787E
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PixelEngine.Tools.ManagedNativeLeakDetector", "tools\PixelEngine.Tools.ManagedNativeLeakDetector\PixelEngine.Tools.ManagedNativeLeakDetector.csproj", "{5629FB73-4C0D-4FAF-89DD-29403056C232}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PixelEngine.Gui", "src\PixelEngine.Gui\PixelEngine.Gui.csproj", "{0EACF436-2C6E-42DF-B449-560D2879A705}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -433,6 +435,18 @@ Global
 		{5629FB73-4C0D-4FAF-89DD-29403056C232}.Release|x64.Build.0 = Release|Any CPU
 		{5629FB73-4C0D-4FAF-89DD-29403056C232}.Release|x86.ActiveCfg = Release|Any CPU
 		{5629FB73-4C0D-4FAF-89DD-29403056C232}.Release|x86.Build.0 = Release|Any CPU
+		{0EACF436-2C6E-42DF-B449-560D2879A705}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0EACF436-2C6E-42DF-B449-560D2879A705}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0EACF436-2C6E-42DF-B449-560D2879A705}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{0EACF436-2C6E-42DF-B449-560D2879A705}.Debug|x64.Build.0 = Debug|Any CPU
+		{0EACF436-2C6E-42DF-B449-560D2879A705}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{0EACF436-2C6E-42DF-B449-560D2879A705}.Debug|x86.Build.0 = Debug|Any CPU
+		{0EACF436-2C6E-42DF-B449-560D2879A705}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0EACF436-2C6E-42DF-B449-560D2879A705}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0EACF436-2C6E-42DF-B449-560D2879A705}.Release|x64.ActiveCfg = Release|Any CPU
+		{0EACF436-2C6E-42DF-B449-560D2879A705}.Release|x64.Build.0 = Release|Any CPU
+		{0EACF436-2C6E-42DF-B449-560D2879A705}.Release|x86.ActiveCfg = Release|Any CPU
+		{0EACF436-2C6E-42DF-B449-560D2879A705}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -465,5 +479,6 @@ Global
 		{A0F2E9AC-1AF7-43D0-880A-20E0C65D16EF} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{5D083983-1D52-40A1-8F60-67392F6E6802} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{5629FB73-4C0D-4FAF-89DD-29403056C232} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
+		{0EACF436-2C6E-42DF-B449-560D2879A705} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal
