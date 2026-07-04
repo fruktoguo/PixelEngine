@@ -352,7 +352,7 @@ player-only 与布局
 
 ### 5.10 §5 验收标准
 
-- [ ] 在编辑器内点「Build」（win-x64 / R2R / Release）能起子进程跑通 native→publish→verify→package→audit，进度条随阶段推进，日志实时滚动，成功后结果区给出 zip 路径、大小、SHA256 与各阶段耗时；产物与 `tools/*` 手工出包**同等参数下字节级一致**（复用同一管线）（§5.4/§5.5）
+- [x] 在编辑器内点「Build」（win-x64 / R2R / Release）能起子进程跑通 native→publish→verify→package→audit，进度条随阶段推进，日志实时滚动，成功后结果区给出 zip 路径、大小、SHA256 与各阶段耗时；产物与 `tools/*` 手工出包**同等参数下字节级一致**（复用同一管线）（§5.4/§5.5）
 - [ ] 「Build And Run」成功后自动启动产出的 `PixelEngine Demo.exe` 并正常进入游戏（默认起始场景 playable-world 或面板选定场景）（§5.3/§5.6）
 - [x] 产出 player 包 `app/` 内不含 `PixelEngine.Editor.dll` 与 `ImGuizmo*`/`ImPlot*`，但含玩家 HUD 所需 `Hexa.NET.ImGui` 核心，audit 校验通过（§5.7）
 - [x] 场景清单：仅入包所选场景，启动场景经 `content/startup.json` 生效，player 不加 `--scene` 直接进选定启动场景（§5.6）
@@ -482,3 +482,4 @@ GameObject authoring：
 - [x] 节点 15：`feat(editor-shell): 接入 plan/12 存读档面板与 Hosting 持久世界存读档 API`（§4.11）
 - [x] 节点 16：`test(editor-shell): shell scripted-probe 覆盖 Edit→Play→Edit 回滚与保存场景冒烟`（§6、§7）
 - [x] 节点 17：`test(editor-shell): shell scripted-probe 覆盖关闭工程与同窗口重建 session`（§4.1、§4.4、§6）
+- [x] 节点 18：`test(editor-shell): shell scripted-build-probe 覆盖编辑器内 Build 与手工 tools 出包字节一致`（§5.4、§5.5、§5.10）
