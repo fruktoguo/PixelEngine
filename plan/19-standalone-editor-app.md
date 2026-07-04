@@ -415,7 +415,7 @@ GameObject authoring：
 - [x] `.scene` v1/v2 读写往返等价、schema 升级、字段类型（含 `Vector2`/MaterialId）转换测试
 - [x] authoring→运行时物化正确性（层级世界 TRS 烘焙、StableId→Entity.Id 映射、组件/字段还原）与 Undo/Redo 命令栈结构测试；组件/字段 UI 交互测试随节点 5 补齐
 - [x] prefab 完整性：实例化/override/Revert/嵌套展开/传播 测试
-- [ ] shell 短跑冒烟：打开工程→Edit 装配（attach 既有窗口）→进入 Play→退出回滚→保存场景（`--window-ticks` 有限 tick，产出 editor-window 证据 `editor_enabled`/`editor_running`/`editor_panels`/`editor_bridge_frames`）
+- [x] shell 短跑冒烟：打开工程→Edit 装配（attach 既有窗口）→进入 Play→退出回滚→保存场景（`--window-ticks` 有限 tick，产出 editor-window 证据 `editor_enabled`/`editor_running`/`editor_panels`/`editor_bridge_frames`/`scripted_play_entered`/`scripted_play_exited`/`scripted_scene_saved`）
 
 ---
 
@@ -426,7 +426,7 @@ GameObject authoring：
 - [x] Shell 启动与项目选择阶段单进程、单 `RenderWindow`、单 GL 上下文；Edit/Play 同窗口宿主仍由 §4.4 后续节点闭合（守 `plan/12` 真约束，§2）
 - [x] 项目选择器可新建/打开工程、展示并打开最近工程；新建工程生成合法 `project.pixelproj` + `content/` 骨架 + 空场景（§4.2）
 - [ ] 主菜单栏 File/Edit/GameObject/Window/Play/Help 全部可用（含 Build Settings…）；默认 dock 布局呈现 Hierarchy/Scene View/Inspector/Project/Console/HUD/构建与发布，可保存恢复与 Reset（§4.3）
-- [ ] Edit 模式 sim 暂停可编辑、Play 模式同窗口运行游戏、退出 Play 回滚到编辑态（复用既有快照，类 Unity），切换不破坏帧节奏（#6，§4.4）
+- [x] Edit 模式 sim 暂停可编辑、Play 模式同窗口运行游戏、退出 Play 回滚到编辑态（复用既有快照，类 Unity），切换不破坏帧节奏（#6，§4.4）
 - [ ] 层级面板可创建/删除/重命名/复制 GameObject、拖拽重父（防环）、选中联动 Inspector 与 Scene View（§4.6）。节点 4 已落地层级树与 authoring selection；Inspector/Scene View 联动随节点 5/6 闭合。
 - [x] Inspector 显示 Name/Enabled/Transform TRS/组件列表，可 Add/Remove 组件、编辑组件公开字段，改动经命令栈可 Undo/Redo（§4.5、§4.7）
 - [x] Scene View 内 gizmo 可平移/旋转/缩放选中 GameObject 并与 Inspector 双向联动；可点选拾取 GameObject（含空对象 billboard）；gizmo 与世界画刷输入正确仲裁（§4.8）
@@ -480,3 +480,4 @@ GameObject authoring：
 - [x] 节点 13：`feat(editor-shell): 接入 plan/12 材质反应编辑器真实热重载链路`（§4.11）
 - [x] 节点 14：`feat(editor-shell): 接入 plan/12 Edit/Play 模式面板与临时快照 Play session`（§4.11）
 - [x] 节点 15：`feat(editor-shell): 接入 plan/12 存读档面板与 Hosting 持久世界存读档 API`（§4.11）
+- [x] 节点 16：`test(editor-shell): shell scripted-probe 覆盖 Edit→Play→Edit 回滚与保存场景冒烟`（§6、§7）
