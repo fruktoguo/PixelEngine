@@ -194,6 +194,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("brushPanel.ApplyAt", source, StringComparison.Ordinal);
         Assert.Contains("WantCaptureMouse", source, StringComparison.Ordinal);
         Assert.Contains("IsGizmoCapturingMouse", source, StringComparison.Ordinal);
+        Assert.Contains("hasSelection && IsGizmoCapturingMouse()", source, StringComparison.Ordinal);
         Assert.Contains("TryPick", source, StringComparison.Ordinal);
         Assert.Contains("SelectGameObject", source, StringComparison.Ordinal);
         Assert.Contains("ImGuizmo.Manipulate", source, StringComparison.Ordinal);
@@ -273,10 +274,15 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("TryStartScriptedBuildProbe", source, StringComparison.Ordinal);
         Assert.Contains("CaptureScriptedBuildProbe", source, StringComparison.Ordinal);
         Assert.Contains("--scripted-build-probe", source, StringComparison.Ordinal);
+        Assert.Contains("--scripted-build-run-probe", source, StringComparison.Ordinal);
         Assert.Contains("--build-output", source, StringComparison.Ordinal);
         Assert.Contains("editor_build_probe", source, StringComparison.Ordinal);
+        Assert.Contains("editor_build_run_probe", source, StringComparison.Ordinal);
         Assert.Contains("phase_timing_count", source, StringComparison.Ordinal);
         Assert.Contains("phase_timings", source, StringComparison.Ordinal);
+        Assert.Contains("window_completed", source, StringComparison.Ordinal);
+        Assert.Contains("content_loaded", source, StringComparison.Ordinal);
+        Assert.Contains("window_frame_probe", source, StringComparison.Ordinal);
         Assert.Contains("class BuildToolLocator", source, StringComparison.Ordinal);
         Assert.Contains("interface IPlayerBuildService", source, StringComparison.Ordinal);
         Assert.Contains("class PlayerBuildService", source, StringComparison.Ordinal);
