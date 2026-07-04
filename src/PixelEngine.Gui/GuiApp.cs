@@ -64,26 +64,26 @@ public sealed class GuiApp : IDisposable
     /// </summary>
     public void DrawFrame(float deltaSeconds, int width, int height, Action<IGuiContext>? drawScriptGui)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        if (!IsRunning)
-        {
-            return;
-        }
-
-        _controller.NewFrame(deltaSeconds, width, height);
-        if (drawScriptGui is not null)
-        {
-            ScriptGuiContext gui = new(width, height, deltaSeconds, Input.Capture);
-            drawScriptGui(gui);
-        }
-
-        _controller.Render();
+        DrawCombinedFrame(deltaSeconds, width, height, drawManagedGui: null, drawScriptGui);
     }
 
     /// <summary>
     /// 绘制一帧 GUI，并在同一 ImGui frame 内调度中性 GUI 绘制回调。
     /// </summary>
     public void DrawManagedFrame(float deltaSeconds, int width, int height, Action<IGuiDrawContext>? drawGui)
+    {
+        DrawCombinedFrame(deltaSeconds, width, height, drawGui, drawScriptGui: null);
+    }
+
+    /// <summary>
+    /// 绘制一帧 GUI，并按固定顺序在同一个 ImGui frame 内调度 Managed UI 与脚本 GUI。
+    /// </summary>
+    public void DrawCombinedFrame(
+        float deltaSeconds,
+        int width,
+        int height,
+        Action<IGuiDrawContext>? drawManagedGui,
+        Action<IGuiContext>? drawScriptGui)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!IsRunning)
@@ -92,10 +92,11 @@ public sealed class GuiApp : IDisposable
         }
 
         _controller.NewFrame(deltaSeconds, width, height);
-        if (drawGui is not null)
+        ScriptGuiContext gui = new(width, height, deltaSeconds, Input.Capture);
+        drawManagedGui?.Invoke(gui);
+        if (drawScriptGui is not null)
         {
-            ScriptGuiContext gui = new(width, height, deltaSeconds, Input.Capture);
-            drawGui(gui);
+            drawScriptGui(gui);
         }
 
         _controller.Render();
