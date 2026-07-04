@@ -1,3 +1,5 @@
+using PixelEngine.Gui;
+
 namespace PixelEngine.UI;
 
 /// <summary>
@@ -175,6 +177,19 @@ public sealed class GameUiHost : IDisposable
         if (Options.Enabled && _initialized && NeedsComposite)
         {
             _backend.Composite(in context);
+        }
+    }
+
+    /// <summary>
+    /// 在既有 Gui frame 内绘制托管 UI；后端不支持时为空操作。
+    /// </summary>
+    /// <param name="gui">中性 Gui 绘制上下文。</param>
+    public void DrawGui(IGuiDrawContext gui)
+    {
+        ThrowIfDisposed();
+        if (Options.Enabled && _initialized && _backend is IManagedGuiDrawable drawable)
+        {
+            drawable.DrawGui(gui);
         }
     }
 

@@ -4,6 +4,7 @@ using PixelEngine.Core.Events;
 using PixelEngine.Core.Threading;
 using PixelEngine.Core.Time;
 using PixelEngine.Rendering;
+using PixelEngine.UI;
 using System.Runtime;
 using Xunit;
 
@@ -42,6 +43,8 @@ public sealed class EngineBuilderTests
         Assert.Equal("scenes/start.scene", context.Options.StartScene);
         Assert.False(context.Options.VSync);
         Assert.True(context.Options.EnableGuiRuntime);
+        Assert.False(context.Options.EnableGameUi);
+        Assert.Equal(UiBackendKind.ManagedFallback, context.Options.GameUiBackend);
         Assert.Equal(64, context.Events.CapacityPerChannel);
         Assert.Equal(0, context.Options.NoGcRegionBudgetBytes);
         Assert.Same(context, context.GetService<EngineContext>());
@@ -70,6 +73,36 @@ public sealed class EngineBuilderTests
 
         Assert.False(disabled.Context.Options.EnableGuiRuntime);
         Assert.False(headless.Context.Options.EnableGuiRuntime);
+    }
+
+    /// <summary>
+    /// 验证游戏大 UI 配置受 GUI runtime 与 headless 门控约束。
+    /// </summary>
+    [Fact]
+    public void EnableGameUiWritesOptionsAndRuntimeGatesDisableIt()
+    {
+        using Engine enabled = new EngineBuilder()
+            .WithWorkerCount(1)
+            .EnableGameUi()
+            .UseUiBackend(UiBackendKind.ManagedFallback)
+            .Build();
+
+        using Engine guiDisabled = new EngineBuilder()
+            .WithWorkerCount(1)
+            .EnableGameUi()
+            .UseGuiRuntime(false)
+            .Build();
+
+        using Engine headless = new EngineBuilder()
+            .WithWorkerCount(1)
+            .UseHeadless()
+            .EnableGameUi()
+            .Build();
+
+        Assert.True(enabled.Context.Options.EnableGameUi);
+        Assert.Equal(UiBackendKind.ManagedFallback, enabled.Context.Options.GameUiBackend);
+        Assert.False(guiDisabled.Context.Options.EnableGameUi);
+        Assert.False(headless.Context.Options.EnableGameUi);
     }
 
     /// <summary>

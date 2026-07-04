@@ -6,7 +6,7 @@ namespace PixelEngine.UI;
 /// <summary>
 /// 纯托管游戏 UI 后端，复用同一个 PixelEngine.Gui host 绘制 XHTML 子集控件。
 /// </summary>
-public sealed class ManagedFallbackBackend : IGameUiBackend
+public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
 {
     private readonly IManagedFallbackGuiHost _gui;
     private readonly ManagedUiDocument?[] _documents;
@@ -216,13 +216,25 @@ public sealed class ManagedFallbackBackend : IGameUiBackend
         }
 
         _gui.DrawFrame(_deltaSeconds, context.FramebufferWidth, context.FramebufferHeight, _drawCallback);
-        Dirty = false;
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
         _disposed = true;
+    }
+
+    /// <inheritdoc />
+    public void DrawGui(IGuiDrawContext gui)
+    {
+        ThrowIfDisposed();
+        if (!_initialized || _visibleScreenCount == 0)
+        {
+            return;
+        }
+
+        DrawVisibleScreens(gui);
+        Dirty = false;
     }
 
     private void DrawVisibleScreens(IGuiDrawContext gui)

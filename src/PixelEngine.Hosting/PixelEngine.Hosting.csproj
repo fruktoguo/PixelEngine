@@ -11,5 +11,6 @@
     <ProjectReference Include="..\PixelEngine.Audio\PixelEngine.Audio.csproj" />
     <ProjectReference Include="..\PixelEngine.Scripting\PixelEngine.Scripting.csproj" />
     <ProjectReference Include="..\PixelEngine.Gui\PixelEngine.Gui.csproj" />
+    <ProjectReference Include="..\PixelEngine.UI\PixelEngine.UI.csproj" />
   </ItemGroup>
 </Project>
