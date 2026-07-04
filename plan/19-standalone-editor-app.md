@@ -404,7 +404,7 @@ GameObject authoring：
 复用面板与解耦：
 - [ ] 在编辑器 dock 注册复用 `plan/12` 面板：AssetBrowser(Project)、材质+反应编辑器、世界画刷/检视器、调试叠层、性能 HUD、存读档、子系统调参、sim 控制条、Edit/Play 模式（§4.11）
 - [x] 玩家包解耦（纠正版）：§0 中性化 + `Hosting.csproj` 去 Editor 引用 + `DemoProgram.cs` 去 `using PixelEngine.Editor`/`EnableEditor` 路径、改用 `PixelEngine.Gui` 中性 host；编辑器职责迁移 shell（§0.5、§4.12、`plan/13` 修订）
-- [ ] `plan/15` 玩家包审计新增「拒绝 `PixelEngine.Editor.dll`/`ImGuizmo*`/`ImPlot*`、允许 `Hexa.NET.ImGui` 核心」；editor-window 证据入口迁移到 shell（§4.12、§8）
+- [x] `plan/15` 玩家包审计新增「拒绝 `PixelEngine.Editor.dll`/`ImGuizmo*`/`ImPlot*`、允许 `Hexa.NET.ImGui` 核心」；editor-window 证据入口迁移到 shell（§4.12、§8）
 
 测试（配合 `plan/14`）：
 - [x] `.scene` v1/v2 读写往返等价、schema 升级、字段类型（含 `Vector2`/MaterialId）转换测试
@@ -439,7 +439,7 @@ GameObject authoring：
 
 前置（须具备其公开 API）：
 - **§0 GUI 宿主中性化重构（`PixelEngine.Gui`）**：M13 入口门，plan/19 壳注入的**硬前置**——不落地则 shell 无法在 `Hosting↛Editor` 前提下宿主编辑器、玩家包无法结构解耦。
-- `plan/18`（Hosting）：`Engine`/`EngineBuilder`/Play-Edit-Step/`EngineEditorPlaySessionService`/`EngineWorldSnapshotStore`；已新增窗口/GL 所有权解耦 API（attach 既有窗口不 own、Dispose 不销毁）、公开编辑态 bootstrap（`EditorHostBootstrap` + `IEditorHostExtension` 注入点）、`SaveSceneDocument` writer、`EngineSceneDocument`→运行时物化 API；剩余 editor-window 证据入口迁移随 shell 落地。**顺序约束**：这些 API 先于 §4.1/§4.4 壳落地。
+- `plan/18`（Hosting）：`Engine`/`EngineBuilder`/Play-Edit-Step/`EngineEditorPlaySessionService`/`EngineWorldSnapshotStore`；已新增窗口/GL 所有权解耦 API（attach 既有窗口不 own、Dispose 不销毁）、公开编辑态 bootstrap（`EditorHostBootstrap` + `IEditorHostExtension` 注入点）、`SaveSceneDocument` writer、`EngineSceneDocument`→运行时物化 API；editor-window 证据入口已迁移到 shell。**顺序约束**：这些 API 先于 §4.1/§4.4 壳落地。
 - `plan/12`（编辑器面板层）：全套 `IEditorPanel` 面板、`EditorApp`/`EditorDockSpace`/`ImGuizmo` 接入；须修订 §1 锁定措辞（见 fileActions）。
 - `plan/11`（脚本）：`Scripting.Scene`/`Entity`/`Behaviour`/`Transform`/`ScriptAssemblyRegistry`、Roslyn+ALC 热重载、Add Component 类型来源。
 - `plan/08`（Rendering）：`RenderWindow`/GL 上下文/离屏 FBO 视口纹理/相机同步/UI 层注册接口。
@@ -471,4 +471,4 @@ GameObject authoring：
 - [x] 节点 9：`feat(editor): PlayerBuildService 子进程编排（起 build-player、NDJSON 回灌、exit code、取消、Build-And-Run）`（§5.4–§5.6）
 - [x] 节点 10：`build(build): tools/build-player 编排器 + NDJSON/build-result 契约 + player-only audit 不变式`（`plan/15 §3.11`，scope=build）
 - [x] 节点 11：`refactor(demo): 玩家包与编辑器解耦（Demo 去 Editor 使用/EnableEditor 路径，改用 Gui host）+ 证据迁移`（§0.5、§4.12）
-- [ ] 节点 12：`docs(plan): 落地 plan/19 并修订 plan/00/12/13/15/18/README 交叉引用`（§8）
+- [x] 节点 12：`docs(plan): 落地 plan/19 并修订 plan/00/12/13/15/18/README 交叉引用`（§8）
