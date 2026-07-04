@@ -75,6 +75,11 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("_gamma.Render", source, StringComparison.Ordinal);
         Assert.Contains("_crt.Render", source, StringComparison.Ordinal);
         Assert.Contains("BeforePresentUi?.Invoke", source, StringComparison.Ordinal);
+        Assert.Contains("RegisterUiLayer", source, StringComparison.Ordinal);
+        Assert.Contains("PresentUiLayers(new UiPresentContext", source, StringComparison.Ordinal);
+        Assert.Contains("CompareUiLayers", source, StringComparison.Ordinal);
+        Assert.Contains("PrepareUiState", source, StringComparison.Ordinal);
+        Assert.Contains("BlendingFactor.SrcAlpha", source, StringComparison.Ordinal);
         Assert.Contains("ShouldDelegateComputeLighting", source, StringComparison.Ordinal);
         Assert.Contains("ShouldUseComputeLightComposite", source, StringComparison.Ordinal);
         Assert.Contains("ComputeLightCompositePass", source, StringComparison.Ordinal);
@@ -96,6 +101,27 @@ public sealed class RenderPipelineContractTests
         Assert.True(source.IndexOf("_worldBlit.Render", StringComparison.Ordinal) < source.IndexOf("_composite.Render", StringComparison.Ordinal));
         Assert.True(source.IndexOf("_composite.Render", StringComparison.Ordinal) < source.IndexOf("_overlay.Render", StringComparison.Ordinal));
         Assert.True(source.IndexOf("CurrentViewportTexture = new RenderViewportTexture", StringComparison.Ordinal) < source.IndexOf("_present.Render", StringComparison.Ordinal));
+        Assert.True(source.IndexOf("PresentUiLayers(new UiPresentContext", StringComparison.Ordinal) < source.IndexOf("BeforePresentUi?.Invoke", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void UiPresentLayersUseStableOrdersForGameAndEditor()
+    {
+        string pipeline = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderPipeline.cs"));
+        string orders = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiPresentLayerOrders.cs"));
+        string guiBridge = File.ReadAllText(ProjectPath("src", "PixelEngine.Gui", "GuiRenderBridge.cs"));
+        string editorBridge = File.ReadAllText(ProjectPath("src", "PixelEngine.Editor", "EditorRenderBridge.cs"));
+
+        Assert.Contains("public interface IUiPresentLayer", File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "IUiPresentLayer.cs")), StringComparison.Ordinal);
+        Assert.Contains("public readonly record struct UiPresentContext", File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiPresentContext.cs")), StringComparison.Ordinal);
+        Assert.Contains("public const int Game = 100", orders, StringComparison.Ordinal);
+        Assert.Contains("public const int Editor = 1000", orders, StringComparison.Ordinal);
+        Assert.Contains("while (index > 0 && CompareUiLayers(entry, _uiLayers[index - 1]) < 0)", pipeline, StringComparison.Ordinal);
+        Assert.Contains("UiLayerEntry(int Order, int Sequence, IUiPresentLayer Layer)", pipeline, StringComparison.Ordinal);
+        Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Game, this)", guiBridge, StringComparison.Ordinal);
+        Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Editor, this)", editorBridge, StringComparison.Ordinal);
+        Assert.Contains("IUiPresentLayer, IDisposable", guiBridge, StringComparison.Ordinal);
+        Assert.Contains("IUiPresentLayer, IDisposable", editorBridge, StringComparison.Ordinal);
     }
 
     private static string ProjectPath(params string[] parts)

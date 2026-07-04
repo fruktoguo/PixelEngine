@@ -1,18 +1,18 @@
 using System.Diagnostics;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
-using Silk.NET.OpenGL;
 
 namespace PixelEngine.Gui;
 
 /// <summary>
 /// 将中性 GUI 宿主挂到 Rendering 的 present 前 UI hook。
 /// </summary>
-public sealed class GuiRenderBridge : IDisposable
+public sealed class GuiRenderBridge : IUiPresentLayer, IDisposable
 {
     private readonly RenderPipeline _pipeline;
     private readonly GuiApp _gui;
     private readonly IScriptRuntime? _scriptRuntime;
+    private readonly IDisposable _registration;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private double _previousSeconds;
     private bool _disposed;
@@ -23,7 +23,7 @@ public sealed class GuiRenderBridge : IDisposable
         _gui = gui;
         _scriptRuntime = scriptRuntime;
         _previousSeconds = _clock.Elapsed.TotalSeconds;
-        _pipeline.BeforePresentUi += OnBeforePresentUi;
+        _registration = _pipeline.RegisterUiLayer(UiPresentLayerOrders.Game, this);
     }
 
     /// <summary>
@@ -51,14 +51,15 @@ public sealed class GuiRenderBridge : IDisposable
             return;
         }
 
-        _pipeline.BeforePresentUi -= OnBeforePresentUi;
+        _registration.Dispose();
         _disposed = true;
     }
 
-    private void OnBeforePresentUi(GL gl)
+    /// <inheritdoc />
+    public void Present(in UiPresentContext context)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        ArgumentNullException.ThrowIfNull(gl);
+        ArgumentNullException.ThrowIfNull(context.Gl);
         if (!_gui.IsRunning)
         {
             _gui.Initialize();

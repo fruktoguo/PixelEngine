@@ -41,6 +41,8 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
     private readonly ColorRenderTarget _postA;
     private readonly ColorRenderTarget _postB;
     private byte[] _visibilityMask;
+    private UiLayerEntry[] _uiLayers = [];
+    private int _nextUiLayerSequence;
     private bool _hasUploadedWorld;
     private bool _disposed;
 
@@ -148,6 +150,63 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
     /// 最近一帧 post-process 后、present 前的最终画面纹理；供 Editor 视口只读采样。
     /// </summary>
     public RenderViewportTexture CurrentViewportTexture { get; private set; }
+
+    /// <summary>
+    /// 已注册 UI present 层数量。
+    /// </summary>
+    public int UiLayerCount { get; private set; }
+
+    /// <summary>
+    /// 注册一个 present 前 UI 层。层按 order 升序、同 order 按注册顺序确定性绘制。
+    /// </summary>
+    /// <param name="order">排序值；越小越早绘制。</param>
+    /// <param name="layer">UI 层实例。</param>
+    /// <returns>释放即可注销该层。</returns>
+    public IDisposable RegisterUiLayer(int order, IUiPresentLayer layer)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(layer);
+        EnsureUiLayerCapacity(UiLayerCount + 1);
+        UiLayerEntry entry = new(order, _nextUiLayerSequence++, layer);
+        int index = UiLayerCount;
+        while (index > 0 && CompareUiLayers(entry, _uiLayers[index - 1]) < 0)
+        {
+            _uiLayers[index] = _uiLayers[index - 1];
+            index--;
+        }
+
+        _uiLayers[index] = entry;
+        UiLayerCount++;
+        return new UiLayerRegistration(this, layer);
+    }
+
+    /// <summary>
+    /// 注销已注册 UI present 层。
+    /// </summary>
+    /// <param name="layer">UI 层实例。</param>
+    /// <returns>若找到并注销返回 true。</returns>
+    public bool UnregisterUiLayer(IUiPresentLayer layer)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        for (int i = 0; i < UiLayerCount; i++)
+        {
+            if (!ReferenceEquals(_uiLayers[i].Layer, layer))
+            {
+                continue;
+            }
+
+            int moveCount = UiLayerCount - i - 1;
+            if (moveCount > 0)
+            {
+                Array.Copy(_uiLayers, i + 1, _uiLayers, i, moveCount);
+            }
+
+            _uiLayers[--UiLayerCount] = default;
+            return true;
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// 当设置允许且上下文支持 compute shader 时，plan/09 可接管高质量光照/RC。
@@ -399,6 +458,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         _present.Render(current, presentation, _quad);
         _overlay.Render(overlays, presentation);
         _gl.Viewport(0, 0, (uint)_window.Width, (uint)_window.Height);
+        PresentUiLayers(new UiPresentContext(_gl, _window.Width, _window.Height, presentation));
         BeforePresentUi?.Invoke(_gl);
         BeforeSwapBuffers?.Invoke(_gl);
         RecordSub(profiler, FrameSubPhase.Present, started);
@@ -621,6 +681,47 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
             Settings.RadianceCascades.Validate().Enabled;
     }
 
+    private void PresentUiLayers(in UiPresentContext context)
+    {
+        for (int i = 0; i < UiLayerCount; i++)
+        {
+            PrepareUiState(context);
+            _uiLayers[i].Layer.Present(in context);
+        }
+    }
+
+    private void PrepareUiState(in UiPresentContext context)
+    {
+        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+        _gl.Viewport(0, 0, (uint)context.FramebufferWidth, (uint)context.FramebufferHeight);
+        _gl.Disable(EnableCap.DepthTest);
+        _gl.Disable(EnableCap.CullFace);
+        _gl.Enable(EnableCap.Blend);
+        _gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+    }
+
+    private void EnsureUiLayerCapacity(int required)
+    {
+        if (_uiLayers.Length >= required)
+        {
+            return;
+        }
+
+        int capacity = _uiLayers.Length == 0 ? 4 : _uiLayers.Length * 2;
+        while (capacity < required)
+        {
+            capacity *= 2;
+        }
+
+        Array.Resize(ref _uiLayers, capacity);
+    }
+
+    private static int CompareUiLayers(in UiLayerEntry left, in UiLayerEntry right)
+    {
+        int order = left.Order.CompareTo(right.Order);
+        return order != 0 ? order : left.Sequence.CompareTo(right.Sequence);
+    }
+
     private static void ValidateInputs(RenderBuffer renderBuffer, RenderAuxBuffers aux, CameraState camera)
     {
         if (renderBuffer.Width != aux.Width || renderBuffer.Height != aux.Height)
@@ -651,5 +752,24 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
 
         long elapsed = Stopwatch.GetTimestamp() - started;
         profiler.RecordSub(subPhase, elapsed * 1000.0 / Stopwatch.Frequency);
+    }
+
+    private readonly record struct UiLayerEntry(int Order, int Sequence, IUiPresentLayer Layer);
+
+    private sealed class UiLayerRegistration(RenderPipeline pipeline, IUiPresentLayer layer) : IDisposable
+    {
+        private RenderPipeline? _pipeline = pipeline;
+
+        public void Dispose()
+        {
+            RenderPipeline? pipeline = _pipeline;
+            if (pipeline is null)
+            {
+                return;
+            }
+
+            _ = pipeline.UnregisterUiLayer(layer);
+            _pipeline = null;
+        }
     }
 }

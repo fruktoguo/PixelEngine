@@ -2,14 +2,13 @@ using System.Diagnostics;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
-using Silk.NET.OpenGL;
 
 namespace PixelEngine.Editor;
 
 /// <summary>
 /// 将 Editor 挂到 Rendering 的 present 前 UI hook，确保 ImGui 复用同一个 OpenGL context。
 /// </summary>
-public sealed class EditorRenderBridge : IDisposable
+public sealed class EditorRenderBridge : IUiPresentLayer, IDisposable
 {
     private readonly RenderPipeline _pipeline;
     private readonly EditorApp _editor;
@@ -17,6 +16,7 @@ public sealed class EditorRenderBridge : IDisposable
     private readonly FrameProfiler? _profiler;
     private readonly Func<EditorRuntimeDiagnostics>? _runtimeDiagnostics;
     private readonly IScriptRuntime? _scriptRuntime;
+    private readonly IDisposable _registration;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private double _previousSeconds;
     private bool _disposed;
@@ -36,7 +36,7 @@ public sealed class EditorRenderBridge : IDisposable
         _runtimeDiagnostics = runtimeDiagnostics;
         _scriptRuntime = scriptRuntime;
         _previousSeconds = _clock.Elapsed.TotalSeconds;
-        _pipeline.BeforePresentUi += OnBeforePresentUi;
+        _registration = _pipeline.RegisterUiLayer(UiPresentLayerOrders.Editor, this);
     }
 
     /// <summary>
@@ -96,14 +96,15 @@ public sealed class EditorRenderBridge : IDisposable
             return;
         }
 
-        _pipeline.BeforePresentUi -= OnBeforePresentUi;
+        _registration.Dispose();
         _disposed = true;
     }
 
-    private void OnBeforePresentUi(GL gl)
+    /// <inheritdoc />
+    public void Present(in UiPresentContext context)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        ArgumentNullException.ThrowIfNull(gl);
+        ArgumentNullException.ThrowIfNull(context.Gl);
         if (!_editor.IsRunning)
         {
             _editor.Initialize();
