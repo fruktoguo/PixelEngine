@@ -80,7 +80,9 @@ internal sealed class EditorShellApp
         bool scriptedBuildTimedOut = false;
         string scriptedBuildDiagnostic = string.Empty;
         ScriptedBuildProbeSnapshot scriptedBuildSnapshot = new();
+        ScriptedBuildFrameStats scriptedBuildFrameStats = new();
         ScriptedBuildCancelProbeState scriptedBuildCancel = new();
+        ScriptedBuildSettingsProbeState scriptedBuildSettings = new();
         ScriptedPlayerRunProbeResult scriptedPlayerRun = new();
         while (!shellWindow.Window.IsClosing)
         {
@@ -96,6 +98,15 @@ internal sealed class EditorShellApp
                 {
                     OpenProjectPath(_options.ProjectPath);
                     scriptedProjectReopened = true;
+                }
+
+                if (_options.ScriptedBuildSettingsProbe &&
+                    scriptedBuildSettings.CloseRequested &&
+                    !scriptedBuildSettings.Reopened &&
+                    !string.IsNullOrWhiteSpace(_options.ProjectPath))
+                {
+                    OpenProjectPath(_options.ProjectPath);
+                    scriptedBuildSettings.Reopened = true;
                 }
 
                 shellWindow.Window.DoEvents();
@@ -146,6 +157,10 @@ internal sealed class EditorShellApp
                     scriptedBuildCompleted = scriptedBuildCancel.Completed;
                     scriptedBuildDiagnostic = scriptedBuildCancel.Diagnostic;
                 }
+                else if (_options.ScriptedBuildSettingsProbe)
+                {
+                    RunScriptedBuildSettingsProbeActions(scriptedBuildSettings);
+                }
                 else if (_options.ScriptedBuildProbe)
                 {
                     RunScriptedBuildProbeActions(
@@ -157,8 +172,18 @@ internal sealed class EditorShellApp
             }
 
             UpdateTitle(shellWindow);
+            if (_options.ScriptedBuildProbe && scriptedBuildStarted && !scriptedBuildCompleted)
+            {
+                scriptedBuildFrameStats.Record(deltaSeconds);
+            }
+
             executed++;
             if (_options.ScriptedBuildCancelProbe && scriptedBuildCancel.Completed)
+            {
+                break;
+            }
+
+            if (_options.ScriptedBuildSettingsProbe && scriptedBuildSettings.Completed)
             {
                 break;
             }
@@ -205,7 +230,11 @@ internal sealed class EditorShellApp
                 $"window_ticks={executed}");
         }
 
-        if (_options.ScriptedBuildCancelProbe)
+        if (_options.ScriptedBuildSettingsProbe)
+        {
+            WriteScriptedBuildSettingsProbeSummary(scriptedBuildSettings);
+        }
+        else if (_options.ScriptedBuildCancelProbe)
         {
             WriteScriptedBuildCancelProbeSummary(scriptedBuildCancel);
         }
@@ -221,7 +250,8 @@ internal sealed class EditorShellApp
                 scriptedBuildCompleted,
                 scriptedBuildTimedOut,
                 scriptedBuildDiagnostic,
-                scriptedBuildSnapshot);
+                scriptedBuildSnapshot,
+                scriptedBuildFrameStats);
             if (_options.ScriptedBuildRunProbe)
             {
                 WriteScriptedPlayerRunProbeSummary(scriptedPlayerRun);
@@ -229,6 +259,49 @@ internal sealed class EditorShellApp
         }
 
         return 0;
+    }
+
+    private void RunScriptedBuildSettingsProbeActions(ScriptedBuildSettingsProbeState state)
+    {
+        if (CurrentSession is null || state.Completed)
+        {
+            return;
+        }
+
+        if (!state.Applied)
+        {
+            try
+            {
+                state.Before = CurrentSession.ApplyScriptedBuildSettingsProbe(ResolveScriptedBuildOutputDirectory());
+                state.Applied = true;
+                CloseProject();
+                state.CloseRequested = true;
+                state.Diagnostic = "构建设置探针已保存并请求关闭工程。";
+            }
+            catch (Exception ex) when (!OperatingSystem.IsBrowser())
+            {
+                state.Diagnostic = ex.Message;
+                state.Completed = true;
+            }
+
+            return;
+        }
+
+        if (state.Reopened && !state.Captured)
+        {
+            try
+            {
+                state.After = CurrentSession.CaptureScriptedBuildSettingsProbe();
+                state.Captured = true;
+                state.Completed = true;
+                state.Diagnostic = "构建设置探针重启恢复完成。";
+            }
+            catch (Exception ex) when (!OperatingSystem.IsBrowser())
+            {
+                state.Diagnostic = ex.Message;
+                state.Completed = true;
+            }
+        }
     }
 
     private void RunScriptedBuildCancelProbeActions(ScriptedBuildCancelProbeState state)
@@ -346,7 +419,8 @@ internal sealed class EditorShellApp
         bool completed,
         bool timedOut,
         string diagnostic,
-        ScriptedBuildProbeSnapshot snapshot)
+        ScriptedBuildProbeSnapshot snapshot,
+        ScriptedBuildFrameStats frameStats)
     {
         BuildResult? result = snapshot.Result;
         string phaseTimings = result is null || result.PhaseTimingsMs.Count == 0
@@ -376,6 +450,9 @@ internal sealed class EditorShellApp
             $"error={SanitizeSummaryValue(result?.Error ?? "<missing>")}, " +
             $"phase_timing_count={result?.PhaseTimingsMs.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "0"}, " +
             $"phase_timings={phaseTimings}, " +
+            $"ui_frame_count={frameStats.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"ui_avg_delta_ms={frameStats.AverageMilliseconds.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"ui_max_delta_ms={frameStats.MaxMilliseconds.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}, " +
             $"log_count={snapshot.LogCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
             $"diagnostic={SanitizeSummaryValue(diagnostic)}");
     }
@@ -549,6 +626,28 @@ internal sealed class EditorShellApp
             $"package_archive={rerun?.PackageArchive ?? "<missing>"}, " +
             $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}, " +
             $"rerun_diagnostic={SanitizeSummaryValue(state.RerunDiagnostic)}");
+    }
+
+    private static void WriteScriptedBuildSettingsProbeSummary(ScriptedBuildSettingsProbeState state)
+    {
+        bool matches = state.Before == state.After;
+        Console.WriteLine(
+            "editor_build_settings_probe " +
+            "schema=pixelengine.editor-build-settings-probe/v1, " +
+            $"applied={state.Applied}, " +
+            $"close_requested={state.CloseRequested}, " +
+            $"reopened={state.Reopened}, " +
+            $"captured={state.Captured}, " +
+            $"matches={matches}, " +
+            $"product={SanitizeSummaryValue(state.After.ProductName)}, " +
+            $"version={SanitizeSummaryValue(state.After.Version)}, " +
+            $"configuration={SanitizeSummaryValue(state.After.Configuration)}, " +
+            $"include_symbols={state.After.IncludeSymbols}, " +
+            $"package_whole_content={state.After.PackageWholeContent}, " +
+            $"run_after_build={state.After.RunAfterBuild}, " +
+            $"included_scene_count={state.After.IncludedSceneCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"startup_scene={SanitizeSummaryValue(state.After.StartupScene)}, " +
+            $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
     }
 
     private void RunScriptedProbeActions(
@@ -846,4 +945,34 @@ internal sealed class ScriptedBuildCancelProbeState
     public string RerunDiagnostic = string.Empty;
     public ScriptedBuildProbeSnapshot FirstSnapshot = new();
     public ScriptedBuildProbeSnapshot RerunSnapshot = new();
+}
+
+internal sealed class ScriptedBuildSettingsProbeState
+{
+    public bool Applied;
+    public bool CloseRequested;
+    public bool Reopened;
+    public bool Captured;
+    public bool Completed;
+    public string Diagnostic = string.Empty;
+    public ScriptedBuildSettingsProbeSnapshot Before = new();
+    public ScriptedBuildSettingsProbeSnapshot After = new();
+}
+
+internal sealed class ScriptedBuildFrameStats
+{
+    private double _totalSeconds;
+
+    public int Count { get; private set; }
+
+    public double MaxMilliseconds { get; private set; }
+
+    public double AverageMilliseconds => Count == 0 ? 0 : _totalSeconds * 1000 / Count;
+
+    public void Record(float deltaSeconds)
+    {
+        Count++;
+        _totalSeconds += deltaSeconds;
+        MaxMilliseconds = Math.Max(MaxMilliseconds, deltaSeconds * 1000);
+    }
 }

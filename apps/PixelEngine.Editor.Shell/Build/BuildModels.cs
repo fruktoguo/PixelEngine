@@ -411,6 +411,33 @@ internal sealed record ScriptedBuildProbeSnapshot
     public int LogCount { get; init; }
 }
 
+internal sealed record ScriptedBuildSettingsProbeSnapshot
+{
+    public string Rid { get; init; } = string.Empty;
+
+    public BuildChannel Channel { get; init; }
+
+    public string Configuration { get; init; } = string.Empty;
+
+    public string OutputDirectory { get; init; } = string.Empty;
+
+    public string ProductName { get; init; } = string.Empty;
+
+    public string Version { get; init; } = string.Empty;
+
+    public string InformationalVersion { get; init; } = string.Empty;
+
+    public bool IncludeSymbols { get; init; }
+
+    public bool PackageWholeContent { get; init; }
+
+    public bool RunAfterBuild { get; init; }
+
+    public int IncludedSceneCount { get; init; }
+
+    public string StartupScene { get; init; } = string.Empty;
+}
+
 internal sealed class BuildLog(int capacity = 512)
 {
     private readonly BuildProgressEvent[] _events = new BuildProgressEvent[Math.Max(8, capacity)];
