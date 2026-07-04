@@ -1,0 +1,61 @@
+namespace PixelEngine.Editor.Shell;
+
+internal sealed record EditorShellOptions(
+    string? ProjectPath,
+    string? ScenePath,
+    int WindowTicks,
+    bool ScriptedProbe,
+    string? LogDirectory)
+{
+    public static EditorShellOptions Parse(string[] args)
+    {
+        string? projectPath = null;
+        string? scenePath = null;
+        string? logDirectory = null;
+        int windowTicks = 0;
+        bool scriptedProbe = false;
+
+        for (int i = 0; i < args.Length; i++)
+        {
+            string arg = args[i];
+            switch (arg)
+            {
+                case "--project":
+                    projectPath = RequireValue(args, ref i, arg);
+                    break;
+                case "--scene":
+                    scenePath = RequireValue(args, ref i, arg);
+                    break;
+                case "--window-ticks":
+                    windowTicks = int.Parse(RequireValue(args, ref i, arg), System.Globalization.CultureInfo.InvariantCulture);
+                    if (windowTicks < 0)
+                    {
+                        throw new ArgumentOutOfRangeException(nameof(args), "window-ticks 不能为负数。");
+                    }
+
+                    break;
+                case "--scripted-probe":
+                    scriptedProbe = true;
+                    break;
+                case "--log-directory":
+                    logDirectory = RequireValue(args, ref i, arg);
+                    break;
+                default:
+                    throw new ArgumentException($"未知参数：{arg}");
+            }
+        }
+
+        return new EditorShellOptions(projectPath, scenePath, windowTicks, scriptedProbe, logDirectory);
+    }
+
+    private static string RequireValue(string[] args, ref int index, string option)
+    {
+        if (index + 1 >= args.Length)
+        {
+            throw new ArgumentException($"{option} 缺少参数值。");
+        }
+
+        index++;
+        return args[index];
+    }
+}

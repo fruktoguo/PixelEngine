@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>PixelEngine.Editor.Shell</AssemblyName>
+    <RootNamespace>PixelEngine.Editor.Shell</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PixelEngine.Hosting\PixelEngine.Hosting.csproj" />
+    <ProjectReference Include="..\..\src\PixelEngine.Editor\PixelEngine.Editor.csproj" />
+    <ProjectReference Include="..\..\src\PixelEngine.Gui\PixelEngine.Gui.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Hexa.NET.ImGui" />
+  </ItemGroup>
+</Project>
