@@ -23,6 +23,14 @@ internal sealed class EditorShellWindow : IDisposable
 
     public GuiApp Gui => _bootstrap.Gui;
 
+    public void ShutdownProjectPickerGui()
+    {
+        if (Gui.IsRunning)
+        {
+            Gui.Shutdown();
+        }
+    }
+
     public static EditorShellWindow Create()
     {
         RenderWindowOptions windowOptions = new()

@@ -854,6 +854,8 @@ function Assert-ScriptedProbeSummarySemantics {
             Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "scripted_play_entered" -Expected $true
             Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "scripted_play_exited" -Expected $true
             Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "scripted_scene_saved" -Expected $true
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "scripted_project_closed" -Expected $true
+            Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "scripted_project_reopened" -Expected $true
         }
         "goal" {
             Assert-ScriptedProbeBoolean -Values $Values -ProbeName $Name -Key "goal_reached" -Expected $true

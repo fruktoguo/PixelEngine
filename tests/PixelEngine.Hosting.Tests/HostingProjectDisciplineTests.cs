@@ -112,6 +112,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("EditorProjectSession.Open", source, StringComparison.Ordinal);
         Assert.Contains(".WithProject(project.ToEngineProject(sceneRelativePath))", source, StringComparison.Ordinal);
         Assert.Contains(".UseVSync(true)", source, StringComparison.Ordinal);
+        Assert.Contains(".UseGuiRuntime(false)", source, StringComparison.Ordinal);
         Assert.Contains(".AddEditorHostExtension(editorHost)", source, StringComparison.Ordinal);
         Assert.Contains("engine.AttachWindowRuntime(window)", source, StringComparison.Ordinal);
         Assert.Contains("EditorShellHostExtension : IEditorHostExtension", source, StringComparison.Ordinal);

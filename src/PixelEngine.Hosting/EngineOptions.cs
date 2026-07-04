@@ -21,6 +21,7 @@ public sealed class EngineOptions
         bool headless,
         bool deterministicMode,
         bool enableGpu,
+        bool enableGuiRuntime,
         bool vSync,
         string contentRoot,
         string? startScene,
@@ -57,6 +58,7 @@ public sealed class EngineOptions
         Headless = headless;
         DeterministicMode = deterministicMode;
         EnableGpu = enableGpu;
+        EnableGuiRuntime = enableGuiRuntime;
         VSync = vSync;
         ContentRoot = contentRoot;
         StartScene = startScene;
@@ -142,6 +144,11 @@ public sealed class EngineOptions
     public bool EnableGpu { get; }
 
     /// <summary>
+    /// 是否允许 Hosting 自建脚本 GUI runtime；外部编辑器宿主可关闭它以保留窗口/上下文所有权。
+    /// </summary>
+    public bool EnableGuiRuntime { get; }
+
+    /// <summary>
     /// 窗口模式是否启用垂直同步。
     /// </summary>
     public bool VSync { get; }
@@ -192,6 +199,7 @@ public sealed class EngineOptions
             headless: false,
             deterministicMode: false,
             enableGpu: true,
+            enableGuiRuntime: true,
             vSync: true,
             contentRoot: "content",
             startScene: null,

@@ -381,7 +381,7 @@ in-process 宿主：
 - [x] `EditorProjectSession`：用 `EngineBuilder` 装配引擎（Edit 模式默认暂停）、`engine.AttachWindowRuntime(shellWindow)` attach 既有窗口（Engine 不 own、Dispose 不销毁窗口）（§4.1、§4.4，前置 `plan/18` 窗口所有权解耦 API）
 - [x] shell 经 `IEditorHostExtension`（§0.4）注入 Editor 面板宿主到 Hosting 相位[10]（前置 §0，Hosting 不再引用 Editor）（§4.4）
 - [x] 复用 `EngineEditorPlaySessionService`/`EngineWorldSnapshotStore` 的 Play/Edit/Step 与快照回滚，绑定菜单/工具条（§4.4）
-- [ ] 切换/关闭工程逆序释放 `Engine`、保留窗口/上下文、重建 session（§4.1、§4.4）
+- [x] 切换/关闭工程逆序释放 `Engine`、保留窗口/上下文、重建 session（§4.1、§4.4）
 
 GameObject authoring：
 - [x] `EditorSceneModel` + `EditorGameObject`（StableId/Name/Enabled/ParentId/Children/Transform/Components/PrefabLink）+ `EditorComponentModel`（§4.5）
@@ -415,7 +415,7 @@ GameObject authoring：
 - [x] `.scene` v1/v2 读写往返等价、schema 升级、字段类型（含 `Vector2`/MaterialId）转换测试
 - [x] authoring→运行时物化正确性（层级世界 TRS 烘焙、StableId→Entity.Id 映射、组件/字段还原）与 Undo/Redo 命令栈结构测试；组件/字段 UI 交互测试随节点 5 补齐
 - [x] prefab 完整性：实例化/override/Revert/嵌套展开/传播 测试
-- [x] shell 短跑冒烟：打开工程→Edit 装配（attach 既有窗口）→进入 Play→退出回滚→保存场景（`--window-ticks` 有限 tick，产出 editor-window 证据 `editor_enabled`/`editor_running`/`editor_panels`/`editor_bridge_frames`/`scripted_play_entered`/`scripted_play_exited`/`scripted_scene_saved`）
+- [x] shell 短跑冒烟：打开工程→Edit 装配（attach 既有窗口）→进入 Play→退出回滚→保存场景→关闭工程→同窗口重开工程（`--window-ticks` 有限 tick，产出 editor-window 证据 `editor_enabled`/`editor_running`/`editor_panels`/`editor_bridge_frames`/`scripted_play_entered`/`scripted_play_exited`/`scripted_scene_saved`/`scripted_project_closed`/`scripted_project_reopened`）
 
 ---
 
@@ -481,3 +481,4 @@ GameObject authoring：
 - [x] 节点 14：`feat(editor-shell): 接入 plan/12 Edit/Play 模式面板与临时快照 Play session`（§4.11）
 - [x] 节点 15：`feat(editor-shell): 接入 plan/12 存读档面板与 Hosting 持久世界存读档 API`（§4.11）
 - [x] 节点 16：`test(editor-shell): shell scripted-probe 覆盖 Edit→Play→Edit 回滚与保存场景冒烟`（§6、§7）
+- [x] 节点 17：`test(editor-shell): shell scripted-probe 覆盖关闭工程与同窗口重建 session`（§4.1、§4.4、§6）
