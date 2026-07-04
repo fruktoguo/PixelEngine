@@ -75,6 +75,10 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
         if (_sceneModel is not null && _undoStack is not null)
         {
             _editor.AddPanel(new GameObjectHierarchyPanel(_sceneModel, _undoStack));
+            _editor.AddPanel(new GameObjectInspectorPanel(
+                _sceneModel,
+                _undoStack,
+                engine.Context.GetService<ScriptAssemblyRegistry>()));
         }
 
         _editor.AddPanel(new ViewportPanel(() => pipeline.CurrentViewportTexture));
