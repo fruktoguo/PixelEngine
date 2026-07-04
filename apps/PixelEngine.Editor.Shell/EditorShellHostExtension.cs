@@ -66,6 +66,23 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
         _buildSettingsPanel?.CancelScriptedBuildProbe();
     }
 
+    public ScriptedBuildSettingsProbeSnapshot ApplyScriptedBuildSettingsProbe(string outputDirectory)
+    {
+        if (_buildSettingsPanel is null)
+        {
+            throw new InvalidOperationException("Build Settings 面板尚未注册。");
+        }
+
+        _ = _editor.TryShowPanel(BuildSettingsPanel.PanelTitle);
+        return _buildSettingsPanel.ApplyScriptedBuildSettingsProbe(outputDirectory);
+    }
+
+    public ScriptedBuildSettingsProbeSnapshot CaptureScriptedBuildSettingsProbe()
+    {
+        return _buildSettingsPanel?.CaptureScriptedBuildSettingsProbe() ??
+            throw new InvalidOperationException("Build Settings 面板尚未注册。");
+    }
+
     public void ConfigureAuthoring(EditorSceneModel sceneModel, EditorUndoStack undoStack, EditorPrefabAssetStore prefabs)
     {
         if (_panelsRegistered)

@@ -87,6 +87,64 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         };
     }
 
+    public ScriptedBuildSettingsProbeSnapshot ApplyScriptedBuildSettingsProbe(string outputDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
+        DrainEvents();
+        RefreshTasks();
+        if (_view.IsRunning)
+        {
+            throw new InvalidOperationException("构建运行中不能修改构建设置。");
+        }
+
+        _settings.Rid = BuildHostRid.Current;
+        _settings.Channel = BuildChannel.R2R;
+        _settings.Configuration = "Debug";
+        _settings.OutputDirectory = outputDirectory;
+        _settings.ProductName = "PixelEngine Settings Probe";
+        _settings.Version = "9.8.7";
+        _settings.InformationalVersion = "9.8.7+settings-probe";
+        _settings.IconPath = null;
+        _settings.IncludeSymbols = true;
+        _settings.PackageWholeContent = false;
+        _settings.RunAfterBuild = true;
+        _settings.RefreshScenes(_project);
+        for (int i = 0; i < _settings.Scenes.Count; i++)
+        {
+            _settings.Scenes[i].Included = true;
+        }
+
+        if (!_settings.TryNormalize(out string error))
+        {
+            throw new InvalidOperationException(error);
+        }
+
+        Save();
+        return CaptureScriptedBuildSettingsProbe();
+    }
+
+    public ScriptedBuildSettingsProbeSnapshot CaptureScriptedBuildSettingsProbe()
+    {
+        DrainEvents();
+        RefreshTasks();
+        SceneBuildEntry? startup = _settings.Scenes.FirstOrDefault(static scene => scene.IsStartup);
+        return new ScriptedBuildSettingsProbeSnapshot
+        {
+            Rid = _settings.Rid,
+            Channel = _settings.Channel,
+            Configuration = _settings.Configuration,
+            OutputDirectory = _settings.OutputDirectory,
+            ProductName = _settings.ProductName,
+            Version = _settings.Version,
+            InformationalVersion = _settings.InformationalVersion,
+            IncludeSymbols = _settings.IncludeSymbols,
+            PackageWholeContent = _settings.PackageWholeContent,
+            RunAfterBuild = _settings.RunAfterBuild,
+            IncludedSceneCount = _settings.Scenes.Count(static scene => scene.Included),
+            StartupScene = startup?.Source ?? startup?.SceneName ?? string.Empty,
+        };
+    }
+
     public void Draw(in EditorContext context)
     {
         _ = context;

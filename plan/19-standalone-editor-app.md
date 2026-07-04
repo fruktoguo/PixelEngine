@@ -359,7 +359,7 @@ player-only 与布局
 - [x] 失败诊断：故意造 publish/audit 失败时，面板高亮失败阶段并回显脚本断言原文与 exit code；缺 SDK/pwsh 时预检给出明确可执行提示，绝不静默（§5.4）
 - [x] 取消运行中的构建能杀掉 dotnet/publish 子树，随后重跑构建成功（无残留污染）（§5.4）
 - [x] 「含调试符号」开发构建保留 pdb 走 dev-audit 宽松校验；Release+无符号走严格 audit，二者产物布局符合各自规则（§5.8）
-- [ ] 构建全程 UI 不卡顿（后台线程 + 每帧 drain 队列），设置持久化重启后恢复（§5.2/§5.4）
+- [x] 构建全程 UI 不卡顿（后台线程 + 每帧 drain 队列），设置持久化重启后恢复（§5.2/§5.4）
 - [x] 面板仅消费 `EditorContext` 只读 + `EngineProject` 只读 + 子进程，无引擎内部后门、无反向依赖/无循环（§5.1/§5.2）
 
 ---
@@ -486,3 +486,4 @@ GameObject authoring：
 - [x] 节点 19：`test(editor-shell): shell scripted-build-run-probe 覆盖 Build And Run 启动玩家包短跑`（§5.3、§5.6、§5.10）
 - [x] 节点 20：`test(editor-shell): shell scripted-build-probe 覆盖构建失败诊断`（§5.4、§5.10）
 - [x] 节点 21：`test(editor-shell): shell scripted-build-cancel-probe 覆盖取消后重跑`（§5.4、§5.10）
+- [x] 节点 22：`test(editor-shell): shell probes 覆盖构建 UI 响应与设置持久化`（§5.2、§5.4、§5.10）
