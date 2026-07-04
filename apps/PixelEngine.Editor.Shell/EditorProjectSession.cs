@@ -14,6 +14,7 @@ internal sealed class EditorProjectSession : IDisposable
     private readonly EngineWorldSnapshotStore _snapshotStore;
     private readonly EngineEditorPlaySessionService _playSession;
     private readonly EngineSimulationControlService _simulationControl;
+    private int _runtimeProjectionVersion;
     private bool _disposed;
 
     private EditorProjectSession(
@@ -22,7 +23,9 @@ internal sealed class EditorProjectSession : IDisposable
         EditorShellHostExtension editorHost,
         EditorSceneModel sceneModel,
         EditorUndoStack undoStack,
-        EditorSceneRuntimeProjection runtimeProjection)
+        EditorSceneRuntimeProjection runtimeProjection,
+        EditorPrefabAssetStore prefabs,
+        string currentSceneRelativePath)
     {
         Project = project;
         Engine = engine;
@@ -30,6 +33,9 @@ internal sealed class EditorProjectSession : IDisposable
         SceneModel = sceneModel;
         UndoStack = undoStack;
         RuntimeProjection = runtimeProjection;
+        Prefabs = prefabs;
+        CurrentSceneRelativePath = currentSceneRelativePath;
+        _runtimeProjectionVersion = sceneModel.Version;
         _snapshotStore = new EngineWorldSnapshotStore(engine);
         _playSession = new EngineEditorPlaySessionService(engine, _snapshotStore);
         _simulationControl = new EngineSimulationControlService(engine);
@@ -45,6 +51,12 @@ internal sealed class EditorProjectSession : IDisposable
 
     public EditorSceneRuntimeProjection RuntimeProjection { get; private set; }
 
+    public EditorPrefabAssetStore Prefabs { get; }
+
+    public string CurrentSceneRelativePath { get; private set; }
+
+    public string CurrentSceneDisplayName => Project.ResolveDisplaySceneName(CurrentSceneRelativePath);
+
     public int PanelCount => _editorHost.PanelCount;
 
     public long EditorBridgeFrameCount => _editorHost.BridgeFrameCount;
@@ -55,8 +67,9 @@ internal sealed class EditorProjectSession : IDisposable
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(app);
         EditorShellHostExtension editorHost = new(project, app);
+        string sceneRelativePath = project.ResolveSceneRelativePath(app.SceneOverridePath);
         Engine engine = new EngineBuilder()
-            .WithProject(project.ToEngineProject())
+            .WithProject(project.ToEngineProject(sceneRelativePath))
             .UseVSync(true)
             .AddEditorHostExtension(editorHost)
             .Build();
@@ -64,14 +77,15 @@ internal sealed class EditorProjectSession : IDisposable
         {
             AttachContentAndWorld(engine);
             _ = engine.AttachPhysics();
-            EditorSceneModel sceneModel = LoadSceneModel(project);
+            EditorSceneModel sceneModel = LoadSceneModel(project, sceneRelativePath);
             EditorUndoStack undoStack = new();
+            EditorPrefabAssetStore prefabs = new(project.ContentRootPath);
             EditorSceneRuntimeProjection projection = ProjectAuthoringScene(engine, sceneModel);
-            editorHost.ConfigureAuthoring(sceneModel, undoStack);
+            editorHost.ConfigureAuthoring(sceneModel, undoStack, prefabs);
             _ = engine.AttachScriptingFromServices();
             engine.EnterEditMode();
             _ = engine.AttachWindowRuntime(window);
-            return new EditorProjectSession(project, engine, editorHost, sceneModel, undoStack, projection);
+            return new EditorProjectSession(project, engine, editorHost, sceneModel, undoStack, projection, prefabs, sceneRelativePath);
         }
         catch
         {
@@ -83,12 +97,14 @@ internal sealed class EditorProjectSession : IDisposable
     public void RunOneTick(double deltaSeconds)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        RefreshEditProjectionIfNeeded();
         _ = Engine.RunOneTick(deltaSeconds);
     }
 
     public void EnterPlayMode()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        RefreshEditProjectionIfNeeded(force: true);
         _ = _playSession.EnterPlayTemporary();
     }
 
@@ -96,6 +112,7 @@ internal sealed class EditorProjectSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         _ = _playSession.ExitPlay();
+        RefreshEditProjectionIfNeeded();
     }
 
     public void StepOnce()
@@ -108,6 +125,24 @@ internal sealed class EditorProjectSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         UndoStack.Execute(SceneModel, new CreateGameObjectCommand("GameObject", SceneModel.SelectedStableId));
+    }
+
+    public void CreatePrefabFromSelection()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (SceneModel.SelectedStableId is not { } stableId)
+        {
+            return;
+        }
+
+        string assetPath = Prefabs.AllocatePrefabPath(SceneModel.Get(stableId).Name);
+        UndoStack.Execute(SceneModel, new CreatePrefabAssetCommand(Prefabs, stableId, assetPath));
+    }
+
+    public void InstantiatePrefab(string assetPath)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        UndoStack.Execute(SceneModel, new InstantiatePrefabCommand(Prefabs, assetPath, SceneModel.SelectedStableId));
     }
 
     public bool Undo()
@@ -132,6 +167,36 @@ internal sealed class EditorProjectSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _simulationControl.Capture();
+    }
+
+    public string SceneFilePath => Project.ResolveSceneFullPath(CurrentSceneRelativePath);
+
+    public void SaveScene()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        Prefabs.RefreshPrefabInstances(SceneModel);
+        Engine.SaveSceneDocument(SceneModel.ToDocument(), SceneFilePath);
+        SceneModel.MarkSaved();
+    }
+
+    public string SaveSceneAsAuto()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        string next = AllocateCopyScenePath(CurrentSceneRelativePath);
+        SaveSceneAs(next, makeStartScene: false);
+        return next;
+    }
+
+    public void SaveSceneAs(string sceneRelativePath, bool makeStartScene)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        string normalized = Project.ResolveSceneRelativePath(sceneRelativePath);
+        Prefabs.RefreshPrefabInstances(SceneModel);
+        Engine.SaveSceneDocument(SceneModel.ToDocument(), Project.ResolveSceneFullPath(normalized));
+        Project.UpsertScene(normalized, makeStartScene);
+        CurrentSceneRelativePath = normalized;
+        SceneModel.Name = Project.ResolveDisplaySceneName(normalized);
+        SceneModel.MarkSaved();
     }
 
     public void Dispose()
@@ -166,12 +231,12 @@ internal sealed class EditorProjectSession : IDisposable
         }
     }
 
-    private static EditorSceneModel LoadSceneModel(EditorProject project)
+    private static EditorSceneModel LoadSceneModel(EditorProject project, string sceneRelativePath)
     {
-        string scenePath = Path.GetFullPath(Path.Combine(project.ContentRootPath, project.StartScene));
+        string scenePath = project.ResolveSceneFullPath(sceneRelativePath);
         return File.Exists(scenePath)
             ? EditorSceneModel.FromDocument(EngineSceneDocumentLoader.LoadDocument(scenePath))
-            : EditorSceneModel.Empty(project.ResolveDisplaySceneName(project.StartScene));
+            : EditorSceneModel.Empty(project.ResolveDisplaySceneName(sceneRelativePath));
     }
 
     private static EditorSceneRuntimeProjection ProjectAuthoringScene(Engine engine, EditorSceneModel sceneModel)
@@ -183,6 +248,43 @@ internal sealed class EditorProjectSession : IDisposable
         engine.Context.RegisterService(sceneModel);
         engine.Context.RegisterService(projection);
         return projection;
+    }
+
+    private void RefreshEditProjectionIfNeeded(bool force = false)
+    {
+        if (Engine.Mode == EngineExecutionMode.Play || (!force && SceneModel.Version == _runtimeProjectionVersion))
+        {
+            return;
+        }
+
+        Prefabs.RefreshPrefabInstances(SceneModel);
+        RuntimeProjection = ProjectAuthoringScene(Engine, SceneModel);
+        _runtimeProjectionVersion = SceneModel.Version;
+    }
+
+    private string AllocateCopyScenePath(string sourceRelativePath)
+    {
+        string directory = Path.GetDirectoryName(sourceRelativePath)?.Replace('\\', '/') ?? string.Empty;
+        string fileName = Path.GetFileNameWithoutExtension(sourceRelativePath);
+        string extension = Path.GetExtension(sourceRelativePath);
+        if (string.IsNullOrWhiteSpace(extension))
+        {
+            extension = ".scene";
+        }
+
+        for (int i = 1; i < 1000; i++)
+        {
+            string suffix = i == 1 ? "-copy" : $"-copy-{i}";
+            string relative = string.IsNullOrEmpty(directory)
+                ? $"{fileName}{suffix}{extension}"
+                : $"{directory}/{fileName}{suffix}{extension}";
+            if (!File.Exists(Project.ResolveSceneFullPath(relative)))
+            {
+                return relative;
+            }
+        }
+
+        throw new InvalidOperationException("无法为 Save Scene As 分配可用文件名。");
     }
 
     private static void RegisterFallbackEditorMaterials(Engine engine)

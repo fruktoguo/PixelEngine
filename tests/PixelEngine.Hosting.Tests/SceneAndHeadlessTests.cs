@@ -277,6 +277,20 @@ public sealed class SceneAndHeadlessTests
                         Name = "child",
                         ParentId = 10,
                         Transform = new EngineSceneTransformDocument { X = 2, Y = 3, ScaleX = 2, ScaleY = 2 },
+                        Prefab = new EngineScenePrefabDocument
+                        {
+                            AssetPath = "prefabs/rock.prefab",
+                            SourceStableId = "2",
+                            Overrides =
+                            [
+                                new EngineScenePrefabOverrideDocument
+                                {
+                                    SourceStableId = "2",
+                                    PropertyPath = "Transform.X",
+                                    Value = "42",
+                                },
+                            ],
+                        },
                         Behaviours =
                         [
                             new EngineSceneBehaviourDocument
@@ -307,7 +321,12 @@ public sealed class SceneAndHeadlessTests
             Assert.True(json.IndexOf("\"Label\"", StringComparison.Ordinal) < json.IndexOf("\"Position\"", StringComparison.Ordinal));
             EngineSceneDocument loaded = EngineSceneDocumentLoader.LoadDocument(scenePath);
             Assert.Equal(EngineSceneDocumentLoader.CurrentFormatVersion, loaded.FormatVersion);
-            Assert.Equal([10, 20], [.. loaded.Entities!.Select(static entity => entity.StableId)]);
+            EngineSceneEntityDocument[] loadedEntities = loaded.Entities!;
+            Assert.Equal([10, 20], [.. loadedEntities.Select(static entity => entity.StableId)]);
+            EngineScenePrefabDocument prefab = loadedEntities[1].Prefab!;
+            Assert.Equal("prefabs/rock.prefab", prefab.AssetPath);
+            EngineScenePrefabOverrideDocument prefabOverride = Assert.Single(prefab.Overrides!);
+            Assert.Equal("Transform.X", prefabOverride.PropertyPath);
         }
         finally
         {

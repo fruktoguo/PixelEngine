@@ -395,11 +395,11 @@ GameObject authoring：
 - [x] Scene View 点选拾取 GameObject（屏幕空间命中，空对象 gizmo 图标 billboard 作命中目标）+ 与世界画刷/gizmo 输入仲裁（`WantCaptureMouse`）（§4.8）
 
 场景保存与 prefab：
-- [ ] `.scene` schema 升版 `FormatVersion=2`（ParentId + Transform 块 + `Vector2`），加载器兼容 v1 并可升级另存 v2（§4.9）
-- [ ] Hosting `SaveSceneDocument(EngineSceneDocument, path)` writer：authoring→`.scene` JSON 稳定排序、往返等价（源生成上下文扩展）（§4.9，前置 `plan/18` API）
-- [ ] File ▸ Save/Save As 流程：落盘、清脏、标题去星号、更新工程场景引用（§4.9）
-- [ ] `EditorPrefab`/`.prefab` 资产：从 GameObject 创建、存 `content/prefabs/`（§4.10）
-- [ ] `PrefabInstance` + `Overrides`：实例化、override 记录/加粗/Revert、**嵌套** prefab 递归展开、prefab 编辑向所有实例（含嵌套）override 传播、物化正确（§4.10）
+- [x] `.scene` schema 升版 `FormatVersion=2`（ParentId + Transform 块 + `Vector2`），加载器兼容 v1 并可升级另存 v2（§4.9）
+- [x] Hosting `SaveSceneDocument(EngineSceneDocument, path)` writer：authoring→`.scene` JSON 稳定排序、往返等价（源生成上下文扩展）（§4.9，前置 `plan/18` API）
+- [x] File ▸ Save/Save As 流程：落盘、清脏、标题去星号、更新工程场景引用（§4.9）
+- [x] `EditorPrefab`/`.prefab` 资产：从 GameObject 创建、存 `content/prefabs/`（§4.10）
+- [x] `PrefabInstance` + `Overrides`：实例化、override 记录/加粗/Revert、**嵌套** prefab 递归展开、prefab 编辑向所有实例（含嵌套）override 传播、物化正确（§4.10）
 
 复用面板与解耦：
 - [ ] 在编辑器 dock 注册复用 `plan/12` 面板：AssetBrowser(Project)、材质+反应编辑器、世界画刷/检视器、调试叠层、性能 HUD、存读档、子系统调参、sim 控制条、Edit/Play 模式（§4.11）
@@ -407,9 +407,9 @@ GameObject authoring：
 - [ ] `plan/15` 玩家包审计新增「拒绝 `PixelEngine.Editor.dll`/`ImGuizmo*`/`ImPlot*`、允许 `Hexa.NET.ImGui` 核心」；editor-window 证据入口迁移到 shell（§4.12、§8）
 
 测试（配合 `plan/14`）：
-- [ ] `.scene` v1/v2 读写往返等价、schema 升级、字段类型（含 `Vector2`/MaterialId）转换测试
+- [x] `.scene` v1/v2 读写往返等价、schema 升级、字段类型（含 `Vector2`/MaterialId）转换测试
 - [x] authoring→运行时物化正确性（层级世界 TRS 烘焙、StableId→Entity.Id 映射、组件/字段还原）与 Undo/Redo 命令栈结构测试；组件/字段 UI 交互测试随节点 5 补齐
-- [ ] prefab 完整性：实例化/override/Revert/嵌套展开/传播 测试
+- [x] prefab 完整性：实例化/override/Revert/嵌套展开/传播 测试
 - [ ] shell 短跑冒烟：打开工程→Edit 装配（attach 既有窗口）→进入 Play→退出回滚→保存场景（`--window-ticks` 有限 tick，产出 editor-window 证据 `editor_enabled`/`editor_running`/`editor_panels`/`editor_bridge_frames`）
 
 ---
@@ -425,8 +425,8 @@ GameObject authoring：
 - [ ] 层级面板可创建/删除/重命名/复制 GameObject、拖拽重父（防环）、选中联动 Inspector 与 Scene View（§4.6）。节点 4 已落地层级树与 authoring selection；Inspector/Scene View 联动随节点 5/6 闭合。
 - [x] Inspector 显示 Name/Enabled/Transform TRS/组件列表，可 Add/Remove 组件、编辑组件公开字段，改动经命令栈可 Undo/Redo（§4.5、§4.7）
 - [x] Scene View 内 gizmo 可平移/旋转/缩放选中 GameObject 并与 Inspector 双向联动；可点选拾取 GameObject（含空对象 billboard）；gizmo 与世界画刷输入正确仲裁（§4.8）
-- [ ] 场景可 Save/Save As 为 `.scene`（v2），读→写→读逐字段等价；v1 旧场景可加载并升级（§4.9）
-- [ ] prefab 完整可用：创建资产、实例化、记录/Revert override、编辑资产传播到实例、**嵌套** prefab 递归展开物化正确（§4.10）
+- [x] 场景可 Save/Save As 为 `.scene`（v2），读→写→读逐字段等价；v1 旧场景可加载并升级（§4.9）
+- [x] prefab 完整可用：创建资产、实例化、记录/Revert override、编辑资产传播到实例、**嵌套** prefab 递归展开物化正确（§4.10）
 - [ ] 资源浏览/材质反应编辑/世界画刷/调试叠层/性能 HUD/存读档/调参面板在 shell 中复用可用，无重复实现（§4.11）
 - [ ] 玩家包解耦（纠正版）：§0 落地后玩家闭包 `Demo→Hosting→{…,Gui}` 不含 `PixelEngine.Editor`；玩家包发行审计拒绝 `PixelEngine.Editor.dll`/`ImGuizmo*`/`ImPlot*`、允许 `Hexa.NET.ImGui` 核心（§0.5、§4.12、`plan/15`）
 - [ ] editor-window 证据迁移：shell `--window-ticks`/scripted-probe 产出与原 Demo `EnableEditor` 等价的 `editor_enabled`/`editor_running`/`editor_panels`/`editor_bridge_frames`，`plan/18 §5` 与相关 preflight/锁定测试保绿（§4.12）
@@ -466,7 +466,7 @@ GameObject authoring：
 - [x] 节点 4：`feat(editor-shell): GameObject authoring 模型 + StableId 映射 + 层级面板 + 命令栈 Undo/Redo`（§4.5–§4.6）
 - [x] 节点 5：`feat(editor-shell): GameObject Inspector（Transform/组件增删改/Add Component）`（§4.7）
 - [x] 节点 6：`feat(editor-shell): Scene View 变换 gizmo 与拾取`（§4.8）
-- [ ] 节点 7：`feat(editor-shell): .scene 保存往返（schema v2）+ 完整 prefab（含嵌套/传播）`（§4.9–§4.10）
+- [x] 节点 7：`feat(editor-shell): .scene 保存往返（schema v2）+ 完整 prefab（含嵌套/传播）`（§4.9–§4.10）
 - [ ] 节点 8：`feat(editor): Build 面板设置模型与 UI（平台/输出/产物名/图标/场景清单/配置/符号/内容选项）`（§5.2–§5.3，shell 程序集）
 - [ ] 节点 9：`feat(editor): PlayerBuildService 子进程编排（起 build-player、NDJSON 回灌、exit code、取消、Build-And-Run）`（§5.4–§5.6）
 - [ ] 节点 10：`build(build): tools/build-player 编排器 + NDJSON/build-result 契约 + player-only audit 不变式`（`plan/15 §3.11`，scope=build）

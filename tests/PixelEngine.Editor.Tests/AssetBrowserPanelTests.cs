@@ -23,6 +23,8 @@ public sealed class AssetBrowserPanelTests
             _ = Directory.CreateDirectory(Path.Combine(root, "audio"));
             File.WriteAllBytes(Path.Combine(root, "audio", "hit.wav"), [4, 5, 6]);
             File.WriteAllText(Path.Combine(root, "demo.scene"), "{}");
+            _ = Directory.CreateDirectory(Path.Combine(root, "prefabs"));
+            File.WriteAllText(Path.Combine(root, "prefabs", "rock.prefab"), "{}");
             RecordingThumbnailProvider thumbnails = new();
             FileSystemAssetBrowserDataSource source = new(root, thumbnails);
 
@@ -34,6 +36,7 @@ public sealed class AssetBrowserPanelTests
             Assert.Equal(new AssetThumbnail(12, 16, 16), texture.Thumbnail);
             Assert.Contains(assets, item => item.Path == "audio/hit.wav" && item.Kind == AssetBrowserItemKind.Audio);
             Assert.Contains(assets, item => item.Path == "demo.scene" && item.Kind == AssetBrowserItemKind.Scene);
+            Assert.Contains(assets, item => item.Path == "prefabs/rock.prefab" && item.Kind == AssetBrowserItemKind.Prefab);
         }
         finally
         {

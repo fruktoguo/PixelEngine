@@ -26,6 +26,11 @@ public enum AssetBrowserItemKind
     Scene,
 
     /// <summary>
+    /// 预制体资产。
+    /// </summary>
+    Prefab,
+
+    /// <summary>
     /// 普通 JSON 资产。
     /// </summary>
     Json,
@@ -165,6 +170,7 @@ public sealed class FileSystemAssetBrowserDataSource(string contentRoot, ITextur
                 ".png" or ".jpg" or ".jpeg" or ".bmp" or ".tga" or ".webp" => AssetBrowserItemKind.Texture,
                 ".wav" or ".ogg" or ".flac" or ".mp3" => AssetBrowserItemKind.Audio,
                 ".scene" or ".world" => AssetBrowserItemKind.Scene,
+                ".prefab" => AssetBrowserItemKind.Prefab,
                 ".json" => AssetBrowserItemKind.Json,
                 _ => AssetBrowserItemKind.Other,
             };

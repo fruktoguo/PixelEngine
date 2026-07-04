@@ -28,7 +28,7 @@ internal sealed class EditorProject
 
     public string ProjectFilePath { get; }
 
-    public EditorProjectDocument Document { get; }
+    public EditorProjectDocument Document { get; private set; }
 
     public string Name => Document.Name;
 
@@ -42,7 +42,7 @@ internal sealed class EditorProject
 
     public string ScriptSourcePath => Path.GetFullPath(Path.Combine(ProjectRoot, ScriptSourceDir));
 
-    public IReadOnlyList<EditorProjectSceneEntry> Scenes { get; }
+    public IReadOnlyList<EditorProjectSceneEntry> Scenes { get; private set; }
 
     public static EditorProject CreateNew(string projectRoot, string name)
     {
@@ -129,42 +129,93 @@ internal sealed class EditorProject
         SaveDocument(ProjectFilePath, Document);
     }
 
-    public EngineProject ToEngineProject()
+    public EngineProject ToEngineProject(string? sceneOverridePath = null)
     {
-        SceneDescriptor[] descriptors = new SceneDescriptor[Scenes.Count];
-        for (int i = 0; i < Scenes.Count; i++)
+        string startScenePath = ResolveSceneRelativePath(sceneOverridePath);
+        EditorProjectSceneEntry[] entries = EnsureSceneEntry([.. Scenes], startScenePath);
+        SceneDescriptor[] descriptors = new SceneDescriptor[entries.Length];
+        for (int i = 0; i < entries.Length; i++)
         {
-            EditorProjectSceneEntry scene = Scenes[i];
+            EditorProjectSceneEntry scene = entries[i];
             descriptors[i] = new SceneDescriptor(scene.Name, SceneSourceKind.SceneFile, scene.Path);
         }
 
-        string startSceneName = ResolveStartSceneName();
+        string startSceneName = ResolveSceneName(startScenePath);
         return new EngineProject(ContentRootPath, startSceneName, descriptors);
     }
 
     public string ResolveDisplaySceneName(string? overrideScenePath)
     {
-        return !string.IsNullOrWhiteSpace(overrideScenePath)
-            ? Path.GetFileNameWithoutExtension(overrideScenePath) ?? overrideScenePath
-            : ResolveStartSceneName();
+        return ResolveSceneName(ResolveSceneRelativePath(overrideScenePath));
     }
 
-    private string ResolveStartSceneName()
+    public string ResolveSceneRelativePath(string? overrideScenePath)
     {
-        return FindStartSceneName() ?? Path.GetFileNameWithoutExtension(StartScene) ?? StartScene;
+        string scenePath = string.IsNullOrWhiteSpace(overrideScenePath) ? StartScene : overrideScenePath.Trim();
+        string relative = Path.IsPathRooted(scenePath)
+            ? Path.GetRelativePath(ContentRootPath, scenePath)
+            : scenePath;
+        return relative.Replace('\\', '/');
     }
 
-    private string? FindStartSceneName()
+    public string ResolveSceneFullPath(string? overrideScenePath)
+    {
+        return Path.GetFullPath(Path.Combine(ContentRootPath, ResolveSceneRelativePath(overrideScenePath)));
+    }
+
+    public void UpsertScene(string relativePath, bool makeStartScene)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
+        string normalizedPath = relativePath.Replace('\\', '/').TrimStart('/');
+        EditorProjectSceneEntry[] entries = EnsureSceneEntry([.. Scenes], normalizedPath);
+        Document = new EditorProjectDocument
+        {
+            FormatVersion = CurrentFormatVersion,
+            Name = Name,
+            ContentRoot = ContentRoot,
+            ScriptSourceDir = ScriptSourceDir,
+            StartScene = makeStartScene ? normalizedPath : StartScene,
+            Scenes = entries,
+        };
+        Scenes = entries;
+        Save();
+    }
+
+    private string ResolveSceneName(string relativePath)
     {
         for (int i = 0; i < Scenes.Count; i++)
         {
-            if (string.Equals(Scenes[i].Path, StartScene, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(Scenes[i].Path, relativePath, StringComparison.OrdinalIgnoreCase))
             {
-                return Scenes[i].Name;
+                return string.IsNullOrWhiteSpace(Scenes[i].Name)
+                    ? Path.GetFileNameWithoutExtension(relativePath) ?? relativePath
+                    : Scenes[i].Name;
             }
         }
 
-        return null;
+        return Path.GetFileNameWithoutExtension(relativePath) ?? relativePath;
+    }
+
+    private static EditorProjectSceneEntry[] EnsureSceneEntry(EditorProjectSceneEntry[] entries, string relativePath)
+    {
+        for (int i = 0; i < entries.Length; i++)
+        {
+            if (string.Equals(entries[i].Path, relativePath, StringComparison.OrdinalIgnoreCase))
+            {
+                return entries;
+            }
+        }
+
+        string name = Path.GetFileNameWithoutExtension(relativePath) ?? relativePath;
+        return
+        [
+            .. entries,
+            new EditorProjectSceneEntry
+            {
+                Name = name,
+                Path = relativePath,
+            },
+        ];
     }
 
     private static void SaveDocument(string projectFile, EditorProjectDocument document)

@@ -124,6 +124,7 @@ internal sealed class RenameGameObjectCommand(int stableId, string newName) : IE
         EditorGameObject gameObject = scene.Get(stableId);
         _oldName ??= gameObject.Name;
         scene.Rename(stableId, newName);
+        scene.RecordPrefabOverride(stableId, "Name", newName);
     }
 
     public void Undo(EditorSceneModel scene)
@@ -146,6 +147,7 @@ internal sealed class SetGameObjectEnabledCommand(int stableId, bool enabled) : 
         EditorGameObject gameObject = scene.Get(stableId);
         _oldEnabled ??= gameObject.Enabled;
         scene.SetEnabled(stableId, enabled);
+        scene.RecordPrefabOverride(stableId, "Enabled", enabled.ToString());
     }
 
     public void Undo(EditorSceneModel scene)
@@ -167,6 +169,11 @@ internal sealed class SetTransformCommand(int stableId, EditorSceneTransform new
     {
         _oldTransform ??= scene.Get(stableId).Transform.Clone();
         scene.SetTransform(stableId, newTransform);
+        scene.RecordPrefabOverride(stableId, "Transform.X", newTransform.X.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        scene.RecordPrefabOverride(stableId, "Transform.Y", newTransform.Y.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        scene.RecordPrefabOverride(stableId, "Transform.RotationRadians", newTransform.RotationRadians.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        scene.RecordPrefabOverride(stableId, "Transform.ScaleX", newTransform.ScaleX.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        scene.RecordPrefabOverride(stableId, "Transform.ScaleY", newTransform.ScaleY.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     public void Undo(EditorSceneModel scene)
@@ -246,6 +253,7 @@ internal sealed class SetComponentFieldCommand(int stableId, int componentIndex,
         }
 
         scene.SetComponentField(stableId, componentIndex, fieldName, value);
+        scene.RecordPrefabOverride(stableId, $"Component:{component.TypeName}:{fieldName}", value ?? string.Empty);
     }
 
     public void Undo(EditorSceneModel scene)
@@ -303,6 +311,95 @@ internal sealed class DuplicateGameObjectCommand(int stableId) : IEditorCommand
         if (_duplicate is not null)
         {
             _duplicate = scene.DeleteSubtree(_duplicate.Objects[0].StableId);
+        }
+    }
+}
+
+internal sealed class CreatePrefabAssetCommand(EditorPrefabAssetStore prefabs, int stableId, string assetPath) : IEditorCommand
+{
+    private EditorSceneObjectSnapshot? _before;
+    private byte[]? _previousAssetBytes;
+    private bool _hadPreviousAsset;
+    private bool _capturedAsset;
+
+    public string Name => "Create Prefab";
+
+    public void Execute(EditorSceneModel scene)
+    {
+        _before ??= scene.CaptureSubtree(stableId);
+        if (!_capturedAsset)
+        {
+            _hadPreviousAsset = prefabs.TryReadAsset(assetPath, out _previousAssetBytes);
+            _capturedAsset = true;
+        }
+
+        prefabs.CreatePrefabFromSubtree(scene, stableId, assetPath);
+    }
+
+    public void Undo(EditorSceneModel scene)
+    {
+        if (_before is null)
+        {
+            return;
+        }
+
+        _ = scene.DeleteSubtree(stableId);
+        scene.RestoreSubtree(_before);
+        if (_hadPreviousAsset && _previousAssetBytes is not null)
+        {
+            prefabs.RestoreAsset(assetPath, _previousAssetBytes);
+        }
+        else
+        {
+            prefabs.DeleteAsset(assetPath);
+        }
+    }
+}
+
+internal sealed class InstantiatePrefabCommand(EditorPrefabAssetStore prefabs, string assetPath, int? parentId) : IEditorCommand
+{
+    private EditorSceneObjectSnapshot? _created;
+
+    public string Name => "Instantiate Prefab";
+
+    public void Execute(EditorSceneModel scene)
+    {
+        if (_created is null)
+        {
+            EditorGameObject created = prefabs.InstantiatePrefab(scene, assetPath, parentId);
+            _created = scene.CaptureSubtree(created.StableId);
+            return;
+        }
+
+        scene.RestoreSubtree(_created);
+    }
+
+    public void Undo(EditorSceneModel scene)
+    {
+        if (_created is not null)
+        {
+            _created = scene.DeleteSubtree(_created.Objects[0].StableId);
+        }
+    }
+}
+
+internal sealed class RevertPrefabOverridesCommand(int stableId) : IEditorCommand
+{
+    private EditorPrefabLink? _oldLink;
+
+    public string Name => "Revert Prefab Overrides";
+
+    public void Execute(EditorSceneModel scene)
+    {
+        _oldLink ??= scene.Get(stableId).PrefabLink?.Clone();
+        scene.ClearPrefabOverrides(stableId);
+    }
+
+    public void Undo(EditorSceneModel scene)
+    {
+        if (_oldLink is not null)
+        {
+            scene.SetPrefabLink(stableId, _oldLink);
         }
     }
 }

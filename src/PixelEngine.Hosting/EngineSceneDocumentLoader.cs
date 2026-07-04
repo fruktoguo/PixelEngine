@@ -155,6 +155,7 @@ public static class EngineSceneDocumentLoader
                 Name = sorted[i].Name,
                 ParentId = sorted[i].ParentId,
                 Transform = sorted[i].Transform ?? new EngineSceneTransformDocument(),
+                Prefab = NormalizePrefab(sorted[i].Prefab),
                 Behaviours = normalizedBehaviours,
             };
         }
@@ -182,6 +183,33 @@ public static class EngineSceneDocumentLoader
         }
 
         return normalized;
+    }
+
+    private static EngineScenePrefabDocument? NormalizePrefab(EngineScenePrefabDocument? prefab)
+    {
+        if (prefab is null)
+        {
+            return null;
+        }
+
+        EngineScenePrefabOverrideDocument[] overrides = prefab.Overrides ?? [];
+        return new EngineScenePrefabDocument
+        {
+            AssetPath = prefab.AssetPath,
+            SourceStableId = prefab.SourceStableId,
+            Overrides =
+            [
+                .. overrides
+                    .OrderBy(static item => item.SourceStableId, StringComparer.Ordinal)
+                    .ThenBy(static item => item.PropertyPath, StringComparer.Ordinal)
+                    .Select(static item => new EngineScenePrefabOverrideDocument
+                    {
+                        SourceStableId = item.SourceStableId,
+                        PropertyPath = item.PropertyPath,
+                        Value = item.Value,
+                    }),
+            ],
+        };
     }
 
     private static EngineSceneTransformDocument ResolveWorldTransform(

@@ -21,6 +21,8 @@ internal sealed class EditorShellApp
 
     public bool HasOpenProject => CurrentProject is not null;
 
+    public string? SceneOverridePath => _options.ScenePath;
+
     public RecentProjectsStore RecentProjects { get; }
 
     public string? LastProjectError { get; private set; }
@@ -201,6 +203,16 @@ internal sealed class EditorShellApp
         CurrentSession?.CreateGameObject();
     }
 
+    public void CreatePrefabFromSelection()
+    {
+        CurrentSession?.CreatePrefabFromSelection();
+    }
+
+    public void InstantiatePrefab(string assetPath)
+    {
+        CurrentSession?.InstantiatePrefab(assetPath);
+    }
+
     public bool Undo()
     {
         return CurrentSession?.Undo() == true;
@@ -209,6 +221,28 @@ internal sealed class EditorShellApp
     public bool Redo()
     {
         return CurrentSession?.Redo() == true;
+    }
+
+    public bool SaveScene()
+    {
+        if (CurrentSession is null)
+        {
+            return false;
+        }
+
+        CurrentSession.SaveScene();
+        return true;
+    }
+
+    public bool SaveSceneAs()
+    {
+        if (CurrentSession is null)
+        {
+            return false;
+        }
+
+        _ = CurrentSession.SaveSceneAsAuto();
+        return true;
     }
 
     private void ApplyPendingProject(EditorShellWindow shellWindow)
@@ -242,8 +276,8 @@ internal sealed class EditorShellApp
     {
         shellWindow.SetTitle(
             CurrentProject?.Name,
-            CurrentProject?.ResolveDisplaySceneName(_options.ScenePath),
-            dirty: false);
+            CurrentSession?.CurrentSceneDisplayName ?? CurrentProject?.ResolveDisplaySceneName(_options.ScenePath),
+            dirty: CurrentSession?.SceneModel.IsDirty == true);
     }
 
     private static string WriteCrashLog(Exception exception, string? logDirectory)

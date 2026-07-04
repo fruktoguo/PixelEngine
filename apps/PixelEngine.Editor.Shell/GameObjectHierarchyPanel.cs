@@ -2,10 +2,11 @@ using Hexa.NET.ImGui;
 
 namespace PixelEngine.Editor.Shell;
 
-internal sealed class GameObjectHierarchyPanel(EditorSceneModel scene, EditorUndoStack undo) : IEditorPanel
+internal sealed class GameObjectHierarchyPanel(EditorSceneModel scene, EditorUndoStack undo, EditorPrefabAssetStore prefabs) : IEditorPanel
 {
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly EditorUndoStack _undo = undo ?? throw new ArgumentNullException(nameof(undo));
+    private readonly EditorPrefabAssetStore _prefabs = prefabs ?? throw new ArgumentNullException(nameof(prefabs));
     private int _renameTarget;
     private int? _draggingStableId;
     private string _renameBuffer = string.Empty;
@@ -243,6 +244,12 @@ internal sealed class GameObjectHierarchyPanel(EditorSceneModel scene, EditorUnd
             if (ImGui.MenuItem("Duplicate"))
             {
                 _undo.Execute(_scene, new DuplicateGameObjectCommand(stableId.Value));
+            }
+
+            if (ImGui.MenuItem("Create Prefab"))
+            {
+                string assetPath = _prefabs.AllocatePrefabPath(gameObject.Name);
+                _undo.Execute(_scene, new CreatePrefabAssetCommand(_prefabs, stableId.Value, assetPath));
             }
 
             if (ImGui.MenuItem("Delete"))

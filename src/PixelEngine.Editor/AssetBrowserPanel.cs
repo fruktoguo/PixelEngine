@@ -7,10 +7,15 @@ namespace PixelEngine.Editor;
 /// </summary>
 /// <param name="source">资产数据源。</param>
 /// <param name="audioPreview">音频试听服务。</param>
-public sealed class AssetBrowserPanel(IAssetBrowserDataSource source, IAudioPreviewService? audioPreview = null) : IEditorPanel
+/// <param name="instantiatePrefab">可选 prefab 实例化回调。</param>
+public sealed class AssetBrowserPanel(
+    IAssetBrowserDataSource source,
+    IAudioPreviewService? audioPreview = null,
+    Action<string>? instantiatePrefab = null) : IEditorPanel
 {
     private readonly IAssetBrowserDataSource _source = source ?? throw new ArgumentNullException(nameof(source));
     private readonly IAudioPreviewService? _audioPreview = audioPreview;
+    private readonly Action<string>? _instantiatePrefab = instantiatePrefab;
     private string _search = string.Empty;
 
     /// <inheritdoc />
@@ -150,6 +155,15 @@ public sealed class AssetBrowserPanel(IAssetBrowserDataSource source, IAudioPrev
             if (ImGui.Button($"试听##{item.Path}"))
             {
                 _ = TryPreviewAudio(item.Path);
+            }
+        }
+        else if (item.Kind == AssetBrowserItemKind.Prefab)
+        {
+            ImGui.SameLine();
+            if (ImGui.Button($"实例化##{item.Path}"))
+            {
+                _instantiatePrefab?.Invoke(item.Path);
+                Status = $"实例化 {item.Path}";
             }
         }
     }

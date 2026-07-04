@@ -15,6 +15,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
     private readonly EditorApp _editor;
     private EditorSceneModel? _sceneModel;
     private EditorUndoStack? _undoStack;
+    private EditorPrefabAssetStore? _prefabs;
     private bool _panelsRegistered;
 
     public EditorShellHostExtension(EditorProject project, EditorShellApp app)
@@ -36,7 +37,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
 
     public EditorRenderBridge? Bridge { get; private set; }
 
-    public void ConfigureAuthoring(EditorSceneModel sceneModel, EditorUndoStack undoStack)
+    public void ConfigureAuthoring(EditorSceneModel sceneModel, EditorUndoStack undoStack, EditorPrefabAssetStore prefabs)
     {
         if (_panelsRegistered)
         {
@@ -45,6 +46,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
 
         _sceneModel = sceneModel ?? throw new ArgumentNullException(nameof(sceneModel));
         _undoStack = undoStack ?? throw new ArgumentNullException(nameof(undoStack));
+        _prefabs = prefabs ?? throw new ArgumentNullException(nameof(prefabs));
     }
 
     public IDisposable? Attach(Engine engine, RenderWindow window, RenderPipeline pipeline)
@@ -72,9 +74,9 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
         }
 
         _editor.AddPanel(new EditorMainMenuPanel(_app));
-        if (_sceneModel is not null && _undoStack is not null)
+        if (_sceneModel is not null && _undoStack is not null && _prefabs is not null)
         {
-            _editor.AddPanel(new GameObjectHierarchyPanel(_sceneModel, _undoStack));
+            _editor.AddPanel(new GameObjectHierarchyPanel(_sceneModel, _undoStack, _prefabs));
             _editor.AddPanel(new GameObjectInspectorPanel(
                 _sceneModel,
                 _undoStack,
@@ -94,7 +96,9 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
             _sceneModel ?? throw new InvalidOperationException("Scene View 需要先配置 authoring scene model。"),
             _undoStack ?? throw new InvalidOperationException("Scene View 需要先配置 authoring undo stack。"),
             brushPanel));
-        _editor.AddPanel(new AssetBrowserPanel(new FileSystemAssetBrowserDataSource(_project.ContentRootPath)));
+        _editor.AddPanel(new AssetBrowserPanel(
+            new FileSystemAssetBrowserDataSource(_project.ContentRootPath),
+            instantiatePrefab: _app.InstantiatePrefab));
         _editor.AddPanel(new PerformanceHudPanel());
         _editor.AddPanel(new SimulationControlToolbar(new EditorSimulationControlAdapter(_app)));
         if (engine.Context.TryGetService(out DebugOverlaySettings debugSettings))
