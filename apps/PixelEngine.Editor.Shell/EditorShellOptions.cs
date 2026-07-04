@@ -7,6 +7,7 @@ internal sealed record EditorShellOptions(
     bool ScriptedProbe,
     bool ScriptedBuildProbe,
     bool ScriptedBuildRunProbe,
+    bool ScriptedBuildCancelProbe,
     string? BuildOutputPath,
     string? CaptureFramePath,
     string? LogDirectory)
@@ -22,6 +23,7 @@ internal sealed record EditorShellOptions(
         bool scriptedProbe = false;
         bool scriptedBuildProbe = false;
         bool scriptedBuildRunProbe = false;
+        bool scriptedBuildCancelProbe = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -52,6 +54,10 @@ internal sealed record EditorShellOptions(
                     scriptedBuildProbe = true;
                     scriptedBuildRunProbe = true;
                     break;
+                case "--scripted-build-cancel-probe":
+                    scriptedBuildProbe = true;
+                    scriptedBuildCancelProbe = true;
+                    break;
                 case "--build-output":
                     buildOutputPath = RequireValue(args, ref i, arg);
                     break;
@@ -66,7 +72,7 @@ internal sealed record EditorShellOptions(
             }
         }
 
-        return new EditorShellOptions(projectPath, scenePath, windowTicks, scriptedProbe, scriptedBuildProbe, scriptedBuildRunProbe, buildOutputPath, captureFramePath, logDirectory);
+        return new EditorShellOptions(projectPath, scenePath, windowTicks, scriptedProbe, scriptedBuildProbe, scriptedBuildRunProbe, scriptedBuildCancelProbe, buildOutputPath, captureFramePath, logDirectory);
     }
 
     private static string RequireValue(string[] args, ref int index, string option)
