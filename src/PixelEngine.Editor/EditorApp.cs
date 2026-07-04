@@ -112,6 +112,20 @@ public sealed class EditorApp : IDisposable
     }
 
     /// <summary>
+    /// 重置当前 Editor dockspace 布局并显示所有已注册面板。
+    /// </summary>
+    public void ResetDockLayout()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_initialized && Options.EnableDockSpace)
+        {
+            _controller.ResetDockLayout();
+        }
+
+        _ = ShowAllPanels();
+    }
+
+    /// <summary>
     /// 初始化 Editor。禁用时不触碰 ImGui 后端。
     /// </summary>
     public void Initialize()

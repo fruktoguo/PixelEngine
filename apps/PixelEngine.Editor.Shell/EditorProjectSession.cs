@@ -155,6 +155,78 @@ internal sealed class EditorProjectSession : IDisposable
         UndoStack.Execute(SceneModel, new CreateGameObjectCommand("GameObject", SceneModel.SelectedStableId));
     }
 
+    public void CreateRootGameObject()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        UndoStack.Execute(SceneModel, new CreateGameObjectCommand("GameObject"));
+    }
+
+    public void CreateChildGameObject()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        UndoStack.Execute(SceneModel, new CreateGameObjectCommand("GameObject", SceneModel.SelectedStableId));
+    }
+
+    public void DeleteSelectedGameObject()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (SceneModel.SelectedStableId is { } stableId)
+        {
+            UndoStack.Execute(SceneModel, new DeleteGameObjectCommand(stableId));
+        }
+    }
+
+    public void DuplicateSelectedGameObject()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (SceneModel.SelectedStableId is { } stableId)
+        {
+            UndoStack.Execute(SceneModel, new DuplicateGameObjectCommand(stableId));
+        }
+    }
+
+    public void RenameSelectedGameObject()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (SceneModel.SelectedStableId is { } stableId)
+        {
+            EditorGameObject gameObject = SceneModel.Get(stableId);
+            UndoStack.Execute(SceneModel, new RenameGameObjectCommand(stableId, $"{gameObject.Name} Renamed"));
+        }
+    }
+
+    public void AddComponentToSelected(string typeName)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(typeName);
+        if (SceneModel.SelectedStableId is { } stableId)
+        {
+            UndoStack.Execute(SceneModel, new AddComponentCommand(stableId, new EditorComponentModel(typeName)));
+        }
+    }
+
+    public string[] GetBehaviourTypeNames()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ScriptAssemblyRegistry scripts = Engine.Context.GetService<ScriptAssemblyRegistry>();
+        List<string> result = [];
+        for (int i = 0; i < scripts.Assemblies.Count; i++)
+        {
+            foreach (Type type in scripts.Assemblies[i].GetTypes())
+            {
+                if (type is { IsAbstract: false } &&
+                    typeof(Behaviour).IsAssignableFrom(type) &&
+                    type.GetConstructor(Type.EmptyTypes) is not null)
+                {
+                    result.Add(type.FullName ?? type.Name);
+                }
+            }
+        }
+
+        result.Sort(StringComparer.Ordinal);
+        return [.. result];
+    }
+
     public void CreatePrefabFromSelection()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -177,6 +249,18 @@ internal sealed class EditorProjectSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _editorHost.TryShowPanel(BuildSettingsPanel.PanelTitle);
+    }
+
+    public bool ShowPanel(string title)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryShowPanel(title);
+    }
+
+    public void ResetLayout()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.ResetLayout();
     }
 
     public bool TryStartScriptedBuildProbe(string outputDirectory, bool runAfterBuild, out string diagnostic)
@@ -267,6 +351,30 @@ internal sealed class EditorProjectSession : IDisposable
         SceneModel.MarkSaved();
     }
 
+    public string NewSceneAuto()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        string relative = AllocateNewScenePath();
+        EditorSceneModel empty = EditorSceneModel.Empty(Path.GetFileNameWithoutExtension(relative) ?? "scene");
+        SceneModel.ReplaceWith(empty, markDirty: false);
+        UndoStack.Clear();
+        CurrentSceneRelativePath = Project.ResolveSceneRelativePath(relative);
+        Project.UpsertScene(CurrentSceneRelativePath, makeStartScene: true);
+        SaveScene();
+        return CurrentSceneRelativePath;
+    }
+
+    public void OpenScene(string sceneRelativePath)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        string normalized = Project.ResolveSceneRelativePath(sceneRelativePath);
+        EditorSceneModel loaded = LoadSceneModel(Project, normalized);
+        SceneModel.ReplaceWith(loaded, markDirty: false);
+        UndoStack.Clear();
+        CurrentSceneRelativePath = normalized;
+        Project.UpsertScene(normalized, makeStartScene: true);
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -353,6 +461,23 @@ internal sealed class EditorProjectSession : IDisposable
         }
 
         throw new InvalidOperationException("无法为 Save Scene As 分配可用文件名。");
+    }
+
+    private string AllocateNewScenePath()
+    {
+        string sceneRoot = Path.Combine(Project.ContentRootPath, "scenes");
+        _ = Directory.CreateDirectory(sceneRoot);
+        for (int i = 1; i < 10_000; i++)
+        {
+            string fileName = i == 1 ? "new-scene.scene" : $"new-scene-{i}.scene";
+            string relative = $"scenes/{fileName}";
+            if (!File.Exists(Project.ResolveSceneFullPath(relative)))
+            {
+                return relative;
+            }
+        }
+
+        throw new InvalidOperationException("无法分配新的场景文件名。");
     }
 
     private static void RegisterFallbackEditorMaterials(Engine engine)

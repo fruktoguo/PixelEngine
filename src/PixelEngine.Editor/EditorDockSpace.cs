@@ -26,6 +26,7 @@ public sealed class EditorDockSpace
         EditorModeWindowTitle,
         PerformanceHudWindowTitle,
         ConsoleDiagnosticsWindowTitle,
+        BuildSettingsWindowTitle,
     ];
 
     /// <summary>
@@ -108,6 +109,11 @@ public sealed class EditorDockSpace
     /// </summary>
     public const string ConsoleDiagnosticsWindowTitle = "控制台/诊断";
 
+    /// <summary>
+    /// 构建与发布窗口标题。
+    /// </summary>
+    public const string BuildSettingsWindowTitle = "构建与发布";
+
     private bool _layoutBuilt;
 
     /// <summary>
@@ -180,7 +186,6 @@ public sealed class EditorDockSpace
         _ = ImGuiP.DockBuilderSplitNode(rightNode, ImGuiDir.Down, 0.34f, &rightBottomNode, &rightTopNode);
 
         ImGuiP.DockBuilderDockWindow(SceneHierarchyWindowTitle, leftNode);
-        ImGuiP.DockBuilderDockWindow(AssetBrowserWindowTitle, leftNode);
         ImGuiP.DockBuilderDockWindow(ViewportWindowTitle, centerNode);
         ImGuiP.DockBuilderDockWindow(InspectorWindowTitle, rightTopNode);
         ImGuiP.DockBuilderDockWindow(WorldInspectorWindowTitle, rightTopNode);
@@ -192,9 +197,11 @@ public sealed class EditorDockSpace
         ImGuiP.DockBuilderDockWindow(PhysicsTuningWindowTitle, rightBottomNode);
         ImGuiP.DockBuilderDockWindow(ParticleTuningWindowTitle, rightBottomNode);
         ImGuiP.DockBuilderDockWindow(LightingTuningWindowTitle, rightBottomNode);
+        ImGuiP.DockBuilderDockWindow(AssetBrowserWindowTitle, bottomNode);
         ImGuiP.DockBuilderDockWindow(EditorModeWindowTitle, bottomNode);
         ImGuiP.DockBuilderDockWindow(PerformanceHudWindowTitle, bottomNode);
         ImGuiP.DockBuilderDockWindow(ConsoleDiagnosticsWindowTitle, bottomNode);
+        ImGuiP.DockBuilderDockWindow(BuildSettingsWindowTitle, bottomNode);
         ImGuiP.DockBuilderFinish(dockspaceId);
     }
 }

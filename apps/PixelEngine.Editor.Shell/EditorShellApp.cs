@@ -10,6 +10,7 @@ internal sealed class EditorShellApp
     private readonly EditorShellOptions _options;
     private EditorProject? _pendingProject;
     private bool _closeProjectRequested;
+    private bool _exitRequested;
 
     private EditorShellApp(EditorShellOptions options)
     {
@@ -83,8 +84,9 @@ internal sealed class EditorShellApp
         ScriptedBuildFrameStats scriptedBuildFrameStats = new();
         ScriptedBuildCancelProbeState scriptedBuildCancel = new();
         ScriptedBuildSettingsProbeState scriptedBuildSettings = new();
+        ScriptedMenuLayoutProbeState scriptedMenuLayout = new();
         ScriptedPlayerRunProbeResult scriptedPlayerRun = new();
-        while (!shellWindow.Window.IsClosing)
+        while (!shellWindow.Window.IsClosing && !_exitRequested)
         {
             double now = stopwatch.Elapsed.TotalSeconds;
             float deltaSeconds = (float)Math.Max(0.0, now - previousSeconds);
@@ -169,6 +171,10 @@ internal sealed class EditorShellApp
                         ref scriptedBuildDiagnostic,
                         ref scriptedBuildSnapshot);
                 }
+                else if (_options.ScriptedMenuLayoutProbe)
+                {
+                    RunScriptedMenuLayoutProbeActions(scriptedMenuLayout);
+                }
             }
 
             UpdateTitle(shellWindow);
@@ -184,6 +190,11 @@ internal sealed class EditorShellApp
             }
 
             if (_options.ScriptedBuildSettingsProbe && scriptedBuildSettings.Completed)
+            {
+                break;
+            }
+
+            if (_options.ScriptedMenuLayoutProbe && scriptedMenuLayout.Completed)
             {
                 break;
             }
@@ -234,6 +245,10 @@ internal sealed class EditorShellApp
         {
             WriteScriptedBuildSettingsProbeSummary(scriptedBuildSettings);
         }
+        else if (_options.ScriptedMenuLayoutProbe)
+        {
+            WriteScriptedMenuLayoutProbeSummary(scriptedMenuLayout);
+        }
         else if (_options.ScriptedBuildCancelProbe)
         {
             WriteScriptedBuildCancelProbeSummary(scriptedBuildCancel);
@@ -259,6 +274,62 @@ internal sealed class EditorShellApp
         }
 
         return 0;
+    }
+
+    private void RunScriptedMenuLayoutProbeActions(ScriptedMenuLayoutProbeState state)
+    {
+        if (CurrentSession is null || state.Completed)
+        {
+            return;
+        }
+
+        try
+        {
+            state.StartScene = CurrentSession.CurrentSceneRelativePath;
+            string[] panelTitles =
+            [
+                EditorDockSpace.SceneHierarchyWindowTitle,
+                EditorDockSpace.ViewportWindowTitle,
+                EditorDockSpace.InspectorWindowTitle,
+                EditorDockSpace.AssetBrowserWindowTitle,
+                EditorDockSpace.ConsoleDiagnosticsWindowTitle,
+                EditorDockSpace.PerformanceHudWindowTitle,
+                BuildSettingsPanel.PanelTitle,
+            ];
+            int shown = 0;
+            for (int i = 0; i < panelTitles.Length; i++)
+            {
+                if (ShowPanel(panelTitles[i]))
+                {
+                    shown++;
+                }
+            }
+
+            ResetLayout();
+            CreateGameObject();
+            state.CreatedObject = CurrentSession.SceneModel.SelectedStableId.HasValue;
+            DuplicateSelectedGameObject();
+            state.DuplicatedObject = CurrentSession.SceneModel.Count >= 2;
+            RenameSelectedGameObject();
+            state.RenamedObject = CurrentSession.SceneModel.SelectedStableId is { } renamedId &&
+                CurrentSession.SceneModel.Get(renamedId).Name.EndsWith(" Renamed", StringComparison.Ordinal);
+            DeleteSelectedGameObject();
+            state.DeletedObject = CurrentSession.SceneModel.Count == 1;
+            string newScene = CurrentSession.NewSceneAuto();
+            state.NewSceneCreated = File.Exists(CurrentSession.Project.ResolveSceneFullPath(newScene));
+            CurrentSession.OpenScene(state.StartScene);
+            state.OpenedOriginalScene = string.Equals(CurrentSession.CurrentSceneRelativePath, state.StartScene, StringComparison.OrdinalIgnoreCase);
+            state.RequiredPanelsShown = shown == panelTitles.Length;
+            state.PanelCount = CurrentSession.PanelCount;
+            state.ResetRequested = true;
+            state.Completed = true;
+            state.Diagnostic = "菜单与布局探针完成。";
+        }
+        catch (Exception ex) when (!OperatingSystem.IsBrowser())
+        {
+            state.Completed = true;
+            state.Diagnostic = ex.Message;
+        }
     }
 
     private void RunScriptedBuildSettingsProbeActions(ScriptedBuildSettingsProbeState state)
@@ -650,6 +721,25 @@ internal sealed class EditorShellApp
             $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
     }
 
+    private static void WriteScriptedMenuLayoutProbeSummary(ScriptedMenuLayoutProbeState state)
+    {
+        Console.WriteLine(
+            "editor_menu_layout_probe " +
+            "schema=pixelengine.editor-menu-layout-probe/v1, " +
+            $"completed={state.Completed}, " +
+            $"required_panels_shown={state.RequiredPanelsShown}, " +
+            $"reset_requested={state.ResetRequested}, " +
+            $"created_object={state.CreatedObject}, " +
+            $"duplicated_object={state.DuplicatedObject}, " +
+            $"renamed_object={state.RenamedObject}, " +
+            $"deleted_object={state.DeletedObject}, " +
+            $"new_scene_created={state.NewSceneCreated}, " +
+            $"opened_original_scene={state.OpenedOriginalScene}, " +
+            $"panel_count={state.PanelCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"start_scene={SanitizeSummaryValue(state.StartScene)}, " +
+            $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
+    }
+
     private void RunScriptedProbeActions(
         int executedTicks,
         ref bool playEntered,
@@ -743,6 +833,7 @@ internal sealed class EditorShellApp
     public void ResetLayout()
     {
         Layout.ResetLayout();
+        CurrentSession?.ResetLayout();
     }
 
     public void EnterPlayMode()
@@ -762,7 +853,37 @@ internal sealed class EditorShellApp
 
     public void CreateGameObject()
     {
-        CurrentSession?.CreateGameObject();
+        CurrentSession?.CreateRootGameObject();
+    }
+
+    public void CreateChildGameObject()
+    {
+        CurrentSession?.CreateChildGameObject();
+    }
+
+    public void DeleteSelectedGameObject()
+    {
+        CurrentSession?.DeleteSelectedGameObject();
+    }
+
+    public void DuplicateSelectedGameObject()
+    {
+        CurrentSession?.DuplicateSelectedGameObject();
+    }
+
+    public void RenameSelectedGameObject()
+    {
+        CurrentSession?.RenameSelectedGameObject();
+    }
+
+    public void AddComponentToSelected(string typeName)
+    {
+        CurrentSession?.AddComponentToSelected(typeName);
+    }
+
+    public string[] GetBehaviourTypeNames()
+    {
+        return CurrentSession?.GetBehaviourTypeNames() ?? [];
     }
 
     public void CreatePrefabFromSelection()
@@ -778,6 +899,11 @@ internal sealed class EditorShellApp
     public void ShowBuildSettings()
     {
         _ = CurrentSession?.ShowBuildSettings();
+    }
+
+    public bool ShowPanel(string title)
+    {
+        return CurrentSession?.ShowPanel(title) == true;
     }
 
     public bool Undo()
@@ -810,6 +936,33 @@ internal sealed class EditorShellApp
 
         _ = CurrentSession.SaveSceneAsAuto();
         return true;
+    }
+
+    public bool NewScene()
+    {
+        if (CurrentSession is null)
+        {
+            return false;
+        }
+
+        _ = CurrentSession.NewSceneAuto();
+        return true;
+    }
+
+    public bool OpenScene(string sceneRelativePath)
+    {
+        if (CurrentSession is null)
+        {
+            return false;
+        }
+
+        CurrentSession.OpenScene(sceneRelativePath);
+        return true;
+    }
+
+    public void RequestExit()
+    {
+        _exitRequested = true;
     }
 
     private void ApplyPendingProject(EditorShellWindow shellWindow)
@@ -957,6 +1110,22 @@ internal sealed class ScriptedBuildSettingsProbeState
     public string Diagnostic = string.Empty;
     public ScriptedBuildSettingsProbeSnapshot Before = new();
     public ScriptedBuildSettingsProbeSnapshot After = new();
+}
+
+internal sealed class ScriptedMenuLayoutProbeState
+{
+    public bool Completed;
+    public bool RequiredPanelsShown;
+    public bool ResetRequested;
+    public bool CreatedObject;
+    public bool DuplicatedObject;
+    public bool RenamedObject;
+    public bool DeletedObject;
+    public bool NewSceneCreated;
+    public bool OpenedOriginalScene;
+    public int PanelCount;
+    public string StartScene = string.Empty;
+    public string Diagnostic = string.Empty;
 }
 
 internal sealed class ScriptedBuildFrameStats

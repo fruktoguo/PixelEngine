@@ -86,6 +86,18 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
     }
 
     /// <inheritdoc />
+    public void ResetDockLayout()
+    {
+        ThrowIfNotInitialized();
+        if (!string.IsNullOrWhiteSpace(_layoutPath))
+        {
+            File.Delete(_layoutPath);
+        }
+
+        _dockSpace.ResetLayoutState(buildDefaultLayout: true);
+    }
+
+    /// <inheritdoc />
     public void Render()
     {
         ThrowIfNotInitialized();

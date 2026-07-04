@@ -377,6 +377,24 @@ internal sealed class EditorSceneModel
         IsDirty = false;
     }
 
+    public void ReplaceWith(EditorSceneModel source, bool markDirty)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        _objects.Clear();
+        _roots.Clear();
+        _nextStableId = 1;
+        Name = source.Name;
+        foreach (EditorGameObject gameObject in source.EnumerateDepthFirst())
+        {
+            AddLoaded(gameObject.CloneShallow());
+        }
+
+        RebuildChildren();
+        SelectedStableId = source.SelectedStableId;
+        IsDirty = markDirty;
+        Version++;
+    }
+
     public IEnumerable<EditorGameObject> EnumerateDepthFirst()
     {
         for (int i = 0; i < _roots.Count; i++)
