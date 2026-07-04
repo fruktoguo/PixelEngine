@@ -100,7 +100,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] bulk fill/clear、dirty flag 扫描/popcount 向量化。[plan/03 · §12.5]
 - [x] 全部向量化 pass 具备强制 scalar fallback，运行时 light-up、不固定 ISA。[全子系统 · §12.3/§12.5]
 - [x] sand/liquid movement 内层**明确不向量化**（数据相关 gather/scatter），保留 scalar。[plan/03 · §2 挑战三/§12.5]
-- [~] RenderStyle 流动噪声/裂纹/描边着色在**渲染相位**以世界坐标 + 帧相位廉价噪声（sin/hash）计算 BGRA、不读 per-cell 速度、**绝不写回 cell（守 #7）**，已具备 SIMD 分段扫描 + palette/color-noise SIMD helper + scalar fallback；BDN 短样本 0 托管分配且反汇编可见 SIMD 指令，但整条 `BuildRowsStyledSegmented` disassembly guard 仍含外层 `RNGCHKFAIL`，待消除后勾选。[plan/08 · §12.5/不变式 #7]
+- [x] RenderStyle 流动噪声/裂纹/描边着色在**渲染相位**以世界坐标 + 帧相位廉价噪声（sin/hash）计算 BGRA、不读 per-cell 速度、**绝不写回 cell（守 #7）**，具备 SIMD 分段扫描 + palette/color-noise SIMD helper + scalar fallback；`RenderStyleSegmentScannerBenchmarks.CountSolidUnbrokenRun` BDN 短样本 86.55ns、Allocated=`-`，scanner 专用 disassembly guard 通过。[plan/08 · §12.5/不变式 #7]
 - [!] 阻塞：AVX-512 路径 gate on `Vector512.IsHardwareAccelerated` 并逐目标实测（防降频净变慢）。[plan/14 · §12.5] 当前本机 BenchmarkDotNet 诊断仅报告 AVX2（Ryzen 7 5800X），无 AVX-512/Vector512 硬件，不能实测 AVX-512 降频净损；需 AVX-512 目标机或 CI runner 证据后再判定。统一证据入口为 `tools/performance-target-evidence-preflight.ps1`，它要求 `avx512_downclock_net_loss` scope 与 SHA256 匹配，并解析报告中的 `benchmarkDotNet=true`、`vector512HardwareAccelerated=true`、`avx512Enabled=true`、`noNetDownclockLoss=true`、`targetCpuName`、`dotnetVersion`，且所有目标性能 evidence 必须声明与 manifest 顶层一致的 `benchmarkRunId/gitCommit`，不能拼接不同 run 或不同提交；证据齐全也只进入 `target_performance_evidence_attached_pending_review`。
 
 ### 4.5 bounds-check 消除验证
