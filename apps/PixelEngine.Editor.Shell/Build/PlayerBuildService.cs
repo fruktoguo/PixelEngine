@@ -237,7 +237,8 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
                 ? Math.Clamp(parsedPercent > 1 ? parsedPercent / 100 : parsedPercent, 0, 1)
                 : 0;
             string message = TryGetString(root, "message", out string parsedMessage) ? parsedMessage : string.Empty;
-            DateTimeOffset timestamp = TryGetString(root, "timestamp", out string timestampText) &&
+            DateTimeOffset timestamp = (TryGetString(root, "timestamp", out string timestampText) ||
+                TryGetString(root, "ts", out timestampText)) &&
                 DateTimeOffset.TryParse(timestampText, out DateTimeOffset parsedTimestamp)
                     ? parsedTimestamp
                     : DateTimeOffset.UtcNow;

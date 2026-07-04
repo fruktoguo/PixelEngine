@@ -396,6 +396,21 @@ internal sealed record BuildRunView
     public BuildPreflight? Preflight { get; init; }
 }
 
+internal sealed record ScriptedBuildProbeSnapshot
+{
+    public bool Started { get; init; }
+
+    public bool IsRunning { get; init; }
+
+    public BuildPhase Phase { get; init; } = BuildPhase.Unknown;
+
+    public float Percent { get; init; }
+
+    public BuildResult? Result { get; init; }
+
+    public int LogCount { get; init; }
+}
+
 internal sealed class BuildLog(int capacity = 512)
 {
     private readonly BuildProgressEvent[] _events = new BuildProgressEvent[Math.Max(8, capacity)];

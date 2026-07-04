@@ -258,6 +258,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("BuildProgressEvent", source, StringComparison.Ordinal);
         Assert.Contains("BuildLog", source, StringComparison.Ordinal);
         Assert.Contains("BuildRunView", source, StringComparison.Ordinal);
+        Assert.Contains("ScriptedBuildProbeSnapshot", source, StringComparison.Ordinal);
         Assert.Contains("BuildPreflight", source, StringComparison.Ordinal);
         Assert.Contains("BuildHostRid", source, StringComparison.Ordinal);
         Assert.Contains("SupportsAot", source, StringComparison.Ordinal);
@@ -269,6 +270,13 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("InformationalVersion", source, StringComparison.Ordinal);
         Assert.Contains("BuildSettingsPanel(_project)", source, StringComparison.Ordinal);
         Assert.Contains("ShowBuildSettings", source, StringComparison.Ordinal);
+        Assert.Contains("TryStartScriptedBuildProbe", source, StringComparison.Ordinal);
+        Assert.Contains("CaptureScriptedBuildProbe", source, StringComparison.Ordinal);
+        Assert.Contains("--scripted-build-probe", source, StringComparison.Ordinal);
+        Assert.Contains("--build-output", source, StringComparison.Ordinal);
+        Assert.Contains("editor_build_probe", source, StringComparison.Ordinal);
+        Assert.Contains("phase_timing_count", source, StringComparison.Ordinal);
+        Assert.Contains("phase_timings", source, StringComparison.Ordinal);
         Assert.Contains("class BuildToolLocator", source, StringComparison.Ordinal);
         Assert.Contains("interface IPlayerBuildService", source, StringComparison.Ordinal);
         Assert.Contains("class PlayerBuildService", source, StringComparison.Ordinal);
@@ -284,6 +292,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("ConcurrentQueue<BuildProgressEvent>", source, StringComparison.Ordinal);
         Assert.Contains("TryParseProgressLine", source, StringComparison.Ordinal);
         Assert.Contains("pixelengine.build/v1", source, StringComparison.Ordinal);
+        Assert.Contains("TryGetString(root, \"ts\"", source, StringComparison.Ordinal);
         Assert.Contains("build-result.json", source, StringComparison.Ordinal);
         Assert.Contains("Kill(entireProcessTree: true)", source, StringComparison.Ordinal);
         Assert.Contains("Process.Start(startInfo)", source, StringComparison.Ordinal);

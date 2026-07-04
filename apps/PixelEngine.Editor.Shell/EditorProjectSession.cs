@@ -179,6 +179,28 @@ internal sealed class EditorProjectSession : IDisposable
         return _editorHost.TryShowPanel(BuildSettingsPanel.PanelTitle);
     }
 
+    public bool TryStartScriptedBuildProbe(string outputDirectory, bool runAfterBuild, out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryStartScriptedBuildProbe(outputDirectory, runAfterBuild, out diagnostic);
+    }
+
+    public PixelEngine.Editor.Shell.Build.ScriptedBuildProbeSnapshot CaptureScriptedBuildProbe()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureScriptedBuildProbe();
+    }
+
+    public void CancelScriptedBuildProbe()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _editorHost.CancelScriptedBuildProbe();
+    }
+
     public bool Undo()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

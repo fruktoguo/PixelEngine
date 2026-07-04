@@ -1,10 +1,12 @@
 using System.Diagnostics;
+using PixelEngine.Editor.Shell.Build;
 using Silk.NET.OpenGL;
 
 namespace PixelEngine.Editor.Shell;
 
 internal sealed class EditorShellApp
 {
+    private static readonly TimeSpan ScriptedBuildProbeTimeout = TimeSpan.FromMinutes(10);
     private readonly EditorShellOptions _options;
     private EditorProject? _pendingProject;
     private bool _closeProjectRequested;
@@ -73,6 +75,11 @@ internal sealed class EditorShellApp
         bool scriptedSceneSaved = false;
         bool scriptedProjectClosed = false;
         bool scriptedProjectReopened = false;
+        bool scriptedBuildStarted = false;
+        bool scriptedBuildCompleted = false;
+        bool scriptedBuildTimedOut = false;
+        string scriptedBuildDiagnostic = string.Empty;
+        ScriptedBuildProbeSnapshot scriptedBuildSnapshot = new();
         while (!shellWindow.Window.IsClosing)
         {
             double now = stopwatch.Elapsed.TotalSeconds;
@@ -128,11 +135,35 @@ internal sealed class EditorShellApp
                 }
 
                 ApplyDeferredClose();
+                if (_options.ScriptedBuildProbe)
+                {
+                    RunScriptedBuildProbeActions(
+                        ref scriptedBuildStarted,
+                        ref scriptedBuildCompleted,
+                        ref scriptedBuildDiagnostic,
+                        ref scriptedBuildSnapshot);
+                }
             }
 
             UpdateTitle(shellWindow);
             executed++;
-            if (requestedTicks > 0 && executed >= requestedTicks)
+            if (_options.ScriptedBuildProbe && scriptedBuildCompleted)
+            {
+                break;
+            }
+
+            if (_options.ScriptedBuildProbe &&
+                scriptedBuildStarted &&
+                !scriptedBuildCompleted &&
+                stopwatch.Elapsed >= ScriptedBuildProbeTimeout)
+            {
+                scriptedBuildTimedOut = true;
+                CurrentSession?.CancelScriptedBuildProbe();
+                scriptedBuildSnapshot = CurrentSession?.CaptureScriptedBuildProbe() ?? scriptedBuildSnapshot;
+                break;
+            }
+
+            if (!_options.ScriptedBuildProbe && requestedTicks > 0 && executed >= requestedTicks)
             {
                 break;
             }
@@ -158,7 +189,90 @@ internal sealed class EditorShellApp
                 $"window_ticks={executed}");
         }
 
+        if (_options.ScriptedBuildProbe)
+        {
+            WriteScriptedBuildProbeSummary(
+                scriptedBuildStarted,
+                scriptedBuildCompleted,
+                scriptedBuildTimedOut,
+                scriptedBuildDiagnostic,
+                scriptedBuildSnapshot);
+        }
+
         return 0;
+    }
+
+    private void RunScriptedBuildProbeActions(
+        ref bool started,
+        ref bool completed,
+        ref string diagnostic,
+        ref ScriptedBuildProbeSnapshot snapshot)
+    {
+        if (CurrentSession is null || completed)
+        {
+            return;
+        }
+
+        if (!started)
+        {
+            string outputDirectory = ResolveScriptedBuildOutputDirectory();
+            started = CurrentSession.TryStartScriptedBuildProbe(outputDirectory, runAfterBuild: false, out diagnostic);
+            snapshot = CurrentSession.CaptureScriptedBuildProbe();
+            return;
+        }
+
+        snapshot = CurrentSession.CaptureScriptedBuildProbe();
+        completed = snapshot.Result is not null;
+    }
+
+    private string ResolveScriptedBuildOutputDirectory()
+    {
+        if (!string.IsNullOrWhiteSpace(_options.BuildOutputPath))
+        {
+            return Path.GetFullPath(_options.BuildOutputPath);
+        }
+
+        string root = string.IsNullOrWhiteSpace(_options.LogDirectory)
+            ? Path.Combine(Environment.CurrentDirectory, "artifacts", "editor-build-probe")
+            : Path.Combine(_options.LogDirectory, "editor-build-probe");
+        return Path.GetFullPath(root);
+    }
+
+    private static void WriteScriptedBuildProbeSummary(
+        bool started,
+        bool completed,
+        bool timedOut,
+        string diagnostic,
+        ScriptedBuildProbeSnapshot snapshot)
+    {
+        BuildResult? result = snapshot.Result;
+        string phaseTimings = result is null || result.PhaseTimingsMs.Count == 0
+            ? "none"
+            : string.Join(
+                "|",
+                result.PhaseTimingsMs.OrderBy(static item => item.Key)
+                    .Select(static item => $"{item.Key}:{item.Value.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)}"));
+        Console.WriteLine(
+            "editor_build_probe " +
+            "schema=pixelengine.editor-build-probe/v1, " +
+            $"started={started}, " +
+            $"completed={completed}, " +
+            $"timed_out={timedOut}, " +
+            $"running={snapshot.IsRunning}, " +
+            $"phase={snapshot.Phase}, " +
+            $"percent={snapshot.Percent.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"ok={result?.Ok.ToString() ?? "<missing>"}, " +
+            $"exit_code={result?.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "<missing>"}, " +
+            $"rid={result?.Rid ?? "<missing>"}, " +
+            $"channel={result?.Channel ?? "<missing>"}, " +
+            $"configuration={result?.Configuration ?? "<missing>"}, " +
+            $"package_archive={result?.PackageArchive ?? "<missing>"}, " +
+            $"size_bytes={result?.SizeBytes.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "<missing>"}, " +
+            $"sha256={result?.Sha256 ?? "<missing>"}, " +
+            $"phase_timing_count={result?.PhaseTimingsMs.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "0"}, " +
+            $"phase_timings={phaseTimings}, " +
+            $"log_count={snapshot.LogCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"diagnostic={diagnostic.Replace(',', ';')}");
     }
 
     private void RunScriptedProbeActions(

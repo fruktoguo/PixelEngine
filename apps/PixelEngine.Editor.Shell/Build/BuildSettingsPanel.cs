@@ -10,6 +10,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     private static readonly string[] RidOptions = ["win-x64", "win-arm64"];
     private static readonly string[] ChannelOptions = ["R2R", "NativeAOT"];
     private static readonly string[] ConfigurationOptions = ["Release", "Debug"];
+    private readonly EditorProject _project;
     private readonly BuildSettingsStore _store;
     private readonly IPlayerBuildService _buildService;
     private readonly ConcurrentQueue<BuildProgressEvent> _pendingEvents = new();
@@ -25,6 +26,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     public BuildSettingsPanel(EditorProject project, IPlayerBuildService? buildService = null)
     {
         ArgumentNullException.ThrowIfNull(project);
+        _project = project;
         _store = new BuildSettingsStore(project);
         _buildService = buildService ?? new PlayerBuildService();
         _settings = _store.Load();
@@ -35,6 +37,55 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     public string Title => PanelTitle;
 
     public bool Visible { get; set; } = true;
+
+    public bool TryStartScriptedBuildProbe(string outputDirectory, bool runAfterBuild, out string diagnostic)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
+        DrainEvents();
+        RefreshTasks();
+        if (_view.IsRunning)
+        {
+            diagnostic = "已有构建正在运行。";
+            return false;
+        }
+
+        _settings.Rid = BuildHostRid.Current;
+        _settings.Channel = BuildChannel.R2R;
+        _settings.Configuration = "Release";
+        _settings.OutputDirectory = outputDirectory;
+        _settings.ProductName = "PixelEngine Demo";
+        _settings.Version = "0.1.0";
+        _settings.InformationalVersion = "0.1.0+editor-shell-build-probe";
+        _settings.IconPath = null;
+        _settings.IncludeSymbols = false;
+        _settings.PackageWholeContent = true;
+        _settings.RunAfterBuild = runAfterBuild;
+        _settings.RefreshScenes(_project);
+        if (!_settings.TryNormalize(out diagnostic))
+        {
+            return false;
+        }
+
+        Save();
+        StartBuild(runAfterBuild);
+        diagnostic = "构建探针已启动。";
+        return true;
+    }
+
+    public ScriptedBuildProbeSnapshot CaptureScriptedBuildProbe()
+    {
+        DrainEvents();
+        RefreshTasks();
+        return new ScriptedBuildProbeSnapshot
+        {
+            Started = _view.StartedAt is not null || _view.Result is not null,
+            IsRunning = _view.IsRunning,
+            Phase = _view.Phase,
+            Percent = _view.Percent,
+            Result = _view.Result,
+            LogCount = _log.Count,
+        };
+    }
 
     public void Draw(in EditorContext context)
     {
@@ -317,6 +368,14 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             ImGui.TextUnformatted($"大小: {result.SizeBytes} bytes");
         }
 
+        if (result.PhaseTimingsMs.Count > 0)
+        {
+            foreach (KeyValuePair<BuildPhase, double> timing in result.PhaseTimingsMs.OrderBy(static item => item.Key))
+            {
+                ImGui.TextUnformatted($"{PhaseLabel(timing.Key)}: {timing.Value:F1} ms");
+            }
+        }
+
         if (!string.IsNullOrWhiteSpace(result.Error))
         {
             ImGui.TextWrapped(result.Error);
@@ -350,6 +409,11 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             StartedAt = DateTimeOffset.UtcNow,
             Result = null,
         };
+    }
+
+    public void CancelScriptedBuildProbe()
+    {
+        _buildCancellation?.Cancel();
     }
 
     private void RefreshTasks()

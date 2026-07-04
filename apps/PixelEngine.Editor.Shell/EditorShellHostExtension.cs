@@ -17,6 +17,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
     private EditorSceneModel? _sceneModel;
     private EditorUndoStack? _undoStack;
     private EditorPrefabAssetStore? _prefabs;
+    private BuildSettingsPanel? _buildSettingsPanel;
     private bool _panelsRegistered;
 
     public EditorShellHostExtension(EditorProject project, EditorShellApp app)
@@ -41,6 +42,28 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
     public bool TryShowPanel(string title)
     {
         return _editor.TryShowPanel(title);
+    }
+
+    public bool TryStartScriptedBuildProbe(string outputDirectory, bool runAfterBuild, out string diagnostic)
+    {
+        if (_buildSettingsPanel is null)
+        {
+            diagnostic = "Build Settings 面板尚未注册。";
+            return false;
+        }
+
+        _ = _editor.TryShowPanel(BuildSettingsPanel.PanelTitle);
+        return _buildSettingsPanel.TryStartScriptedBuildProbe(outputDirectory, runAfterBuild, out diagnostic);
+    }
+
+    public ScriptedBuildProbeSnapshot CaptureScriptedBuildProbe()
+    {
+        return _buildSettingsPanel?.CaptureScriptedBuildProbe() ?? new ScriptedBuildProbeSnapshot();
+    }
+
+    public void CancelScriptedBuildProbe()
+    {
+        _buildSettingsPanel?.CancelScriptedBuildProbe();
     }
 
     public void ConfigureAuthoring(EditorSceneModel sceneModel, EditorUndoStack undoStack, EditorPrefabAssetStore prefabs)
@@ -111,7 +134,8 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
             _editor.AddPanel(materialReactionPanel);
         }
 
-        _editor.AddPanel(new BuildSettingsPanel(_project));
+        _buildSettingsPanel = new BuildSettingsPanel(_project);
+        _editor.AddPanel(_buildSettingsPanel);
         _editor.AddPanel(new PerformanceHudPanel());
         _editor.AddPanel(new SimulationControlToolbar(new EditorSimulationControlAdapter(_app)));
         _editor.AddPanel(new EditorModePanel(new EditorPlaySessionAdapter(_app)));
