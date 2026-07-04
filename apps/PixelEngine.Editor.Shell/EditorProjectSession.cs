@@ -105,15 +105,41 @@ internal sealed class EditorProjectSession : IDisposable
     public void EnterPlayMode()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        RefreshEditProjectionIfNeeded(force: true);
-        _ = _playSession.EnterPlayTemporary();
+        _ = EnterPlayTemporary();
     }
 
     public void EnterEditMode()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        _ = _playSession.ExitPlay();
+        _ = ExitEditorPlay();
+    }
+
+    public PixelEngine.Hosting.EditorPlaySessionSnapshot CaptureEditorPlaySession()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _playSession.Capture();
+    }
+
+    public PixelEngine.Hosting.EditorPlaySessionResult EnterPlayCurrent()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        RefreshEditProjectionIfNeeded(force: true);
+        return _playSession.EnterPlayCurrent();
+    }
+
+    public PixelEngine.Hosting.EditorPlaySessionResult EnterPlayTemporary()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        RefreshEditProjectionIfNeeded(force: true);
+        return _playSession.EnterPlayTemporary();
+    }
+
+    public PixelEngine.Hosting.EditorPlaySessionResult ExitEditorPlay()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        PixelEngine.Hosting.EditorPlaySessionResult result = _playSession.ExitPlay();
         RefreshEditProjectionIfNeeded();
+        return result;
     }
 
     public void StepOnce()
