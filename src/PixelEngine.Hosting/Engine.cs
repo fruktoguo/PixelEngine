@@ -5,6 +5,7 @@ using PixelEngine.Audio;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
 using PixelEngine.Gui;
+using PixelEngine.UI;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Rendering.Compute;
@@ -490,6 +491,13 @@ public sealed class Engine : IDisposable
             scriptRuntime = resolvedScriptRuntime;
             hasScriptGui = true;
         }
+        bool hasGameUi = Context.Options.EnableGameUi;
+        GameUiHost? gameUi = null;
+        if (hasGameUi)
+        {
+            gameUi = ResolveGameUiHost(window);
+        }
+
         bool hasGuiBridge = Context.TryGetService(out GuiRenderBridge _);
         IReadOnlyList<IEditorHostExtension>? extensions = null;
         bool hasEditorHostExtensions = false;
@@ -501,26 +509,28 @@ public sealed class Engine : IDisposable
             hasEditorHostExtensions = true;
         }
 
-        if ((!hasScriptGui || hasGuiBridge) && !hasEditorHostExtensions)
+        if (((!hasScriptGui && !hasGameUi) || hasGuiBridge) && !hasEditorHostExtensions)
         {
             return;
         }
 
         GuiWindowInputConnector? input = null;
-        bool scriptInputOwned = false;
-        if (hasScriptGui && !hasGuiBridge)
+        bool guiInputOwned = false;
+        if ((hasScriptGui || hasGameUi) && !hasGuiBridge)
         {
             GuiApp gui = ResolveGuiApp();
             input = new GuiWindowInputConnector(window, gui.Input);
+            Action<IGuiDrawContext>? managedGui = gameUi is null ? null : gameUi.DrawGui;
             GuiRenderBridge? bridge = GuiRenderBridge.AttachIfEnabled(
                 pipeline,
                 gui,
-                scriptRuntime);
+                scriptRuntime,
+                managedGui);
             if (bridge is not null)
             {
                 Context.RegisterService(bridge);
                 _ownedRuntimeResources.Add(bridge);
-                scriptInputOwned = true;
+                guiInputOwned = true;
             }
         }
 
@@ -535,7 +545,7 @@ public sealed class Engine : IDisposable
             return;
         }
 
-        if (scriptInputOwned)
+        if (guiInputOwned)
         {
             _ownedRuntimeResources.Add(input);
         }
@@ -580,6 +590,30 @@ public sealed class Engine : IDisposable
         Context.RegisterService(created);
         _ownedRuntimeResources.Add(created);
         return created;
+    }
+
+    private GameUiHost ResolveGameUiHost(RenderWindow window)
+    {
+        if (Context.TryGetService(out GameUiHost existing))
+        {
+            return existing;
+        }
+
+        if (Context.Options.GameUiBackend != UiBackendKind.ManagedFallback)
+        {
+            throw new NotSupportedException("当前 Hosting 仅接入 ManagedFallback 游戏 UI 后端。");
+        }
+
+        GuiApp gui = ResolveGuiApp();
+        ManagedFallbackBackend backend = new(new GuiAppManagedFallbackHost(gui));
+        GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(
+            new UiViewport(0, 0, Math.Max(1, window.Width), Math.Max(1, window.Height), 1f),
+            UiBackendKind.ManagedFallback));
+        Context.RegisterService(host);
+        Context.RegisterService(backend);
+        _ownedRuntimeResources.Add(host);
+        return host;
     }
 
     private ScriptInputRoute ResolveGuiInputRoute()

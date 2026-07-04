@@ -3,6 +3,7 @@ using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Events;
 using PixelEngine.Core.Threading;
 using PixelEngine.Core.Time;
+using PixelEngine.UI;
 
 namespace PixelEngine.Hosting;
 
@@ -22,6 +23,8 @@ public sealed class EngineBuilder
     private bool _deterministicMode;
     private bool _enableGpu = true;
     private bool _enableGuiRuntime = true;
+    private bool _enableGameUi;
+    private UiBackendKind _gameUiBackend = UiBackendKind.ManagedFallback;
     private bool _vSync = true;
     private string _contentRoot = "content";
     private string? _startScene;
@@ -98,6 +101,7 @@ public sealed class EngineBuilder
             _enableEditor = false;
             _enableGpu = false;
             _enableGuiRuntime = false;
+            _enableGameUi = false;
         }
 
         return this;
@@ -132,6 +136,29 @@ public sealed class EngineBuilder
     public EngineBuilder UseGuiRuntime(bool enabled = true)
     {
         _enableGuiRuntime = enabled && !_headless;
+        if (!_enableGuiRuntime)
+        {
+            _enableGameUi = false;
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// 配置是否启用游戏大 UI；headless 或 GUI runtime 禁用时保持关闭。
+    /// </summary>
+    public EngineBuilder EnableGameUi(bool enabled = true)
+    {
+        _enableGameUi = enabled && !_headless && _enableGuiRuntime;
+        return this;
+    }
+
+    /// <summary>
+    /// 配置游戏大 UI 后端。
+    /// </summary>
+    public EngineBuilder UseUiBackend(UiBackendKind backend)
+    {
+        _gameUiBackend = backend;
         return this;
     }
 
@@ -284,6 +311,8 @@ public sealed class EngineBuilder
             _deterministicMode,
             _enableGpu,
             _enableGuiRuntime,
+            _enableGameUi,
+            _gameUiBackend,
             _vSync,
             _contentRoot,
             _startScene,

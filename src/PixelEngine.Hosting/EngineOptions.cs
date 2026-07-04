@@ -1,4 +1,5 @@
 using PixelEngine.Core;
+using PixelEngine.UI;
 
 namespace PixelEngine.Hosting;
 
@@ -22,6 +23,8 @@ public sealed class EngineOptions
         bool deterministicMode,
         bool enableGpu,
         bool enableGuiRuntime,
+        bool enableGameUi,
+        UiBackendKind gameUiBackend,
         bool vSync,
         string contentRoot,
         string? startScene,
@@ -59,6 +62,8 @@ public sealed class EngineOptions
         DeterministicMode = deterministicMode;
         EnableGpu = enableGpu;
         EnableGuiRuntime = enableGuiRuntime;
+        EnableGameUi = enableGameUi && enableGuiRuntime && !headless;
+        GameUiBackend = gameUiBackend;
         VSync = vSync;
         ContentRoot = contentRoot;
         StartScene = startScene;
@@ -149,6 +154,16 @@ public sealed class EngineOptions
     public bool EnableGuiRuntime { get; }
 
     /// <summary>
+    /// 是否启用游戏大 UI。
+    /// </summary>
+    public bool EnableGameUi { get; }
+
+    /// <summary>
+    /// 游戏大 UI 后端选择。
+    /// </summary>
+    public UiBackendKind GameUiBackend { get; }
+
+    /// <summary>
     /// 窗口模式是否启用垂直同步。
     /// </summary>
     public bool VSync { get; }
@@ -200,6 +215,8 @@ public sealed class EngineOptions
             deterministicMode: false,
             enableGpu: true,
             enableGuiRuntime: true,
+            enableGameUi: false,
+            gameUiBackend: UiBackendKind.ManagedFallback,
             vSync: true,
             contentRoot: "content",
             startScene: null,
