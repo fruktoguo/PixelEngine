@@ -275,13 +275,20 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("CaptureScriptedBuildProbe", source, StringComparison.Ordinal);
         Assert.Contains("--scripted-build-probe", source, StringComparison.Ordinal);
         Assert.Contains("--scripted-build-run-probe", source, StringComparison.Ordinal);
+        Assert.Contains("--scripted-build-cancel-probe", source, StringComparison.Ordinal);
         Assert.Contains("--build-output", source, StringComparison.Ordinal);
         Assert.Contains("editor_build_probe", source, StringComparison.Ordinal);
         Assert.Contains("editor_build_run_probe", source, StringComparison.Ordinal);
+        Assert.Contains("editor_build_cancel_probe", source, StringComparison.Ordinal);
         Assert.Contains("phase_timing_count", source, StringComparison.Ordinal);
         Assert.Contains("phase_timings", source, StringComparison.Ordinal);
         Assert.Contains("error_present", source, StringComparison.Ordinal);
         Assert.Contains("SanitizeSummaryValue", source, StringComparison.Ordinal);
+        Assert.Contains("TryReadCancelChildPid", source, StringComparison.Ordinal);
+        Assert.Contains("child_alive_after_cancel", source, StringComparison.Ordinal);
+        Assert.Contains("CancelScriptedBuildProbe", source, StringComparison.Ordinal);
+        Assert.Contains("KillProcessTree", source, StringComparison.Ordinal);
+        Assert.Contains("CancellationToken.None", source, StringComparison.Ordinal);
         Assert.Contains("window_completed", source, StringComparison.Ordinal);
         Assert.Contains("content_loaded", source, StringComparison.Ordinal);
         Assert.Contains("window_frame_probe", source, StringComparison.Ordinal);
@@ -313,6 +320,17 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("\"-Output\"", source, StringComparison.Ordinal);
         Assert.Contains("\"-Version\"", source, StringComparison.Ordinal);
         Assert.Contains("\"-InformationalVersion\"", source, StringComparison.Ordinal);
+
+        string fixture = File.ReadAllText(
+            Path.Combine(
+                root,
+                "tests",
+                "fixtures",
+                "editor-shell-build-player-cancel-probe.ps1"));
+        Assert.Contains("cancel-child.pid", fixture, StringComparison.Ordinal);
+        Assert.Contains("Start-Process -FilePath $dotnet", fixture, StringComparison.Ordinal);
+        Assert.Contains("'run', '--project'", fixture, StringComparison.Ordinal);
+        Assert.Contains("tools/build-player.ps1", fixture, StringComparison.Ordinal);
         Assert.Contains("\"-ProductName\"", source, StringComparison.Ordinal);
         Assert.Contains("\"-IconPath\"", source, StringComparison.Ordinal);
         Assert.Contains("\"-IncludeSymbols\"", source, StringComparison.Ordinal);

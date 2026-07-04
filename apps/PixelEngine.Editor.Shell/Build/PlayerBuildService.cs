@@ -137,20 +137,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
 
             using CancellationTokenRegistration registration = cancellationToken.Register(static state =>
             {
-                Process target = (Process)state!;
-                try
-                {
-                    if (!target.HasExited)
-                    {
-                        target.Kill(entireProcessTree: true);
-                    }
-                }
-                catch (InvalidOperationException)
-                {
-                }
-                catch (System.ComponentModel.Win32Exception)
-                {
-                }
+                KillProcessTree((Process)state!);
             }, process);
 
             Task stdoutTask = PumpOutputAsync(
@@ -160,7 +147,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
                 tail,
                 logWriter,
                 logLock,
-                cancellationToken);
+                CancellationToken.None);
             Task stderrTask = PumpOutputAsync(
                 process.StandardError,
                 BuildLogLevel.Error,
@@ -168,22 +155,25 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
                 tail,
                 logWriter,
                 logLock,
-                cancellationToken);
+                CancellationToken.None);
 
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            Task waitForExit = process.WaitForExitAsync(CancellationToken.None);
+            Task cancellationWait = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            Task completed = await Task.WhenAny(waitForExit, cancellationWait).ConfigureAwait(false);
+            if (completed == cancellationWait)
+            {
+                KillProcessTree(process);
+                await waitForExit.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                return CreateCanceledResult(request, progress, logWriter, logLock, tail.Items);
+            }
+
+            await waitForExit.ConfigureAwait(false);
             await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            const string message = "构建已取消，build-player 进程树已终止。";
-            BuildProgressEvent canceled = CreateEvent(BuildEventKind.Log, BuildPhase.Unknown, 0, BuildLogLevel.Warning, message);
-            progress.Report(canceled);
-            lock (logLock)
-            {
-                logWriter.WriteLine(FormatLogLine(canceled));
-            }
-
-            return CreateFailedResult(request, message, -2, tail.Items);
+            return CreateCanceledResult(request, progress, logWriter, logLock, tail.Items);
         }
 
         BuildResult result = await ReadResultAsync(outputDirectory, cancellationToken).ConfigureAwait(false)
@@ -424,6 +414,41 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
             Error = error,
             ExitCode = exitCode,
         };
+    }
+
+    private static BuildResult CreateCanceledResult(
+        BuildRequest request,
+        IProgress<BuildProgressEvent> progress,
+        StreamWriter logWriter,
+        object logLock,
+        IReadOnlyList<string> tail)
+    {
+        const string message = "构建已取消，build-player 进程树已终止。";
+        BuildProgressEvent canceled = CreateEvent(BuildEventKind.Result, BuildPhase.Unknown, 0, BuildLogLevel.Warning, message);
+        progress.Report(canceled);
+        lock (logLock)
+        {
+            logWriter.WriteLine(FormatLogLine(canceled));
+        }
+
+        return CreateFailedResult(request, message, -2, tail);
+    }
+
+    private static void KillProcessTree(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+        }
     }
 
     private static BuildProgressEvent CreateEvent(

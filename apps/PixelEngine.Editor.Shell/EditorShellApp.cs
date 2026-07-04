@@ -80,6 +80,7 @@ internal sealed class EditorShellApp
         bool scriptedBuildTimedOut = false;
         string scriptedBuildDiagnostic = string.Empty;
         ScriptedBuildProbeSnapshot scriptedBuildSnapshot = new();
+        ScriptedBuildCancelProbeState scriptedBuildCancel = new();
         ScriptedPlayerRunProbeResult scriptedPlayerRun = new();
         while (!shellWindow.Window.IsClosing)
         {
@@ -136,7 +137,16 @@ internal sealed class EditorShellApp
                 }
 
                 ApplyDeferredClose();
-                if (_options.ScriptedBuildProbe)
+                if (_options.ScriptedBuildCancelProbe)
+                {
+                    RunScriptedBuildCancelProbeActions(scriptedBuildCancel);
+                    scriptedBuildSnapshot = scriptedBuildCancel.RerunSnapshot.Result is not null
+                        ? scriptedBuildCancel.RerunSnapshot
+                        : scriptedBuildCancel.FirstSnapshot;
+                    scriptedBuildCompleted = scriptedBuildCancel.Completed;
+                    scriptedBuildDiagnostic = scriptedBuildCancel.Diagnostic;
+                }
+                else if (_options.ScriptedBuildProbe)
                 {
                     RunScriptedBuildProbeActions(
                         ref scriptedBuildStarted,
@@ -148,7 +158,12 @@ internal sealed class EditorShellApp
 
             UpdateTitle(shellWindow);
             executed++;
-            if (_options.ScriptedBuildProbe && scriptedBuildCompleted)
+            if (_options.ScriptedBuildCancelProbe && scriptedBuildCancel.Completed)
+            {
+                break;
+            }
+
+            if (!_options.ScriptedBuildCancelProbe && _options.ScriptedBuildProbe && scriptedBuildCompleted)
             {
                 break;
             }
@@ -190,7 +205,11 @@ internal sealed class EditorShellApp
                 $"window_ticks={executed}");
         }
 
-        if (_options.ScriptedBuildProbe)
+        if (_options.ScriptedBuildCancelProbe)
+        {
+            WriteScriptedBuildCancelProbeSummary(scriptedBuildCancel);
+        }
+        else if (_options.ScriptedBuildProbe)
         {
             if (_options.ScriptedBuildRunProbe)
             {
@@ -210,6 +229,80 @@ internal sealed class EditorShellApp
         }
 
         return 0;
+    }
+
+    private void RunScriptedBuildCancelProbeActions(ScriptedBuildCancelProbeState state)
+    {
+        if (CurrentSession is null || state.Completed)
+        {
+            return;
+        }
+
+        string outputDirectory = ResolveScriptedBuildOutputDirectory();
+        if (!state.FirstStarted)
+        {
+            state.FirstStarted = CurrentSession.TryStartScriptedBuildProbe(outputDirectory, runAfterBuild: false, out state.Diagnostic);
+            state.FirstSnapshot = CurrentSession.CaptureScriptedBuildProbe();
+            return;
+        }
+
+        if (!state.CancelRequested)
+        {
+            state.FirstSnapshot = CurrentSession.CaptureScriptedBuildProbe();
+            state.ChildPid = TryReadCancelChildPid(outputDirectory);
+            if (state.FirstSnapshot.IsRunning && state.ChildPid.HasValue)
+            {
+                CurrentSession.CancelScriptedBuildProbe();
+                state.CancelRequested = true;
+            }
+
+            return;
+        }
+
+        if (!state.FirstCompleted)
+        {
+            state.FirstSnapshot = CurrentSession.CaptureScriptedBuildProbe();
+            if (state.FirstSnapshot.Result is null)
+            {
+                return;
+            }
+
+            state.FirstCompleted = true;
+            state.FirstCompletedAt = DateTimeOffset.UtcNow;
+            state.FirstExitCode = state.FirstSnapshot.Result.ExitCode;
+            state.ChildPid ??= TryReadCancelChildPid(outputDirectory);
+        }
+
+        if (!state.ChildObserved)
+        {
+            state.ChildAliveAfterCancel = state.ChildPid.HasValue && IsProcessAlive(state.ChildPid.Value);
+            if (state.ChildAliveAfterCancel &&
+                DateTimeOffset.UtcNow - state.FirstCompletedAt < TimeSpan.FromSeconds(2))
+            {
+                return;
+            }
+
+            state.ChildObserved = true;
+        }
+
+        if (!state.RerunStarted)
+        {
+            state.RerunStarted = CurrentSession.TryStartScriptedBuildProbe(outputDirectory, runAfterBuild: false, out state.RerunDiagnostic);
+            state.RerunSnapshot = CurrentSession.CaptureScriptedBuildProbe();
+            if (!state.RerunStarted)
+            {
+                state.Completed = true;
+            }
+
+            return;
+        }
+
+        state.RerunSnapshot = CurrentSession.CaptureScriptedBuildProbe();
+        if (state.RerunSnapshot.Result is not null)
+        {
+            state.RerunCompleted = true;
+            state.Completed = true;
+        }
     }
 
     private void RunScriptedBuildProbeActions(
@@ -403,6 +496,59 @@ internal sealed class EditorShellApp
             .Replace('\r', ' ')
             .Replace('\n', ' ')
             .Replace(',', ';');
+    }
+
+    private static int? TryReadCancelChildPid(string outputDirectory)
+    {
+        string path = Path.Combine(outputDirectory, "cancel-child.pid");
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        string text = File.ReadAllText(path).Trim();
+        return int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int pid)
+            ? pid
+            : null;
+    }
+
+    private static bool IsProcessAlive(int processId)
+    {
+        try
+        {
+            using Process process = Process.GetProcessById(processId);
+            return !process.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    private static void WriteScriptedBuildCancelProbeSummary(ScriptedBuildCancelProbeState state)
+    {
+        BuildResult? first = state.FirstSnapshot.Result;
+        BuildResult? rerun = state.RerunSnapshot.Result;
+        Console.WriteLine(
+            "editor_build_cancel_probe " +
+            "schema=pixelengine.editor-build-cancel-probe/v1, " +
+            $"first_started={state.FirstStarted}, " +
+            $"cancel_requested={state.CancelRequested}, " +
+            $"first_completed={state.FirstCompleted}, " +
+            $"first_exit_code={first?.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "<missing>"}, " +
+            $"child_pid={state.ChildPid?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "<missing>"}, " +
+            $"child_alive_after_cancel={state.ChildAliveAfterCancel}, " +
+            $"rerun_started={state.RerunStarted}, " +
+            $"rerun_completed={state.RerunCompleted}, " +
+            $"rerun_ok={rerun?.Ok.ToString() ?? "<missing>"}, " +
+            $"rerun_exit_code={rerun?.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "<missing>"}, " +
+            $"package_archive={rerun?.PackageArchive ?? "<missing>"}, " +
+            $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}, " +
+            $"rerun_diagnostic={SanitizeSummaryValue(state.RerunDiagnostic)}");
     }
 
     private void RunScriptedProbeActions(
@@ -682,3 +828,22 @@ internal sealed record ScriptedPlayerRunProbeResult(
     string StderrPath = "",
     string CapturePath = "",
     string Diagnostic = "");
+
+internal sealed class ScriptedBuildCancelProbeState
+{
+    public bool FirstStarted;
+    public bool CancelRequested;
+    public bool FirstCompleted;
+    public DateTimeOffset FirstCompletedAt;
+    public int FirstExitCode;
+    public int? ChildPid;
+    public bool ChildObserved;
+    public bool ChildAliveAfterCancel;
+    public bool RerunStarted;
+    public bool RerunCompleted;
+    public bool Completed;
+    public string Diagnostic = string.Empty;
+    public string RerunDiagnostic = string.Empty;
+    public ScriptedBuildProbeSnapshot FirstSnapshot = new();
+    public ScriptedBuildProbeSnapshot RerunSnapshot = new();
+}
