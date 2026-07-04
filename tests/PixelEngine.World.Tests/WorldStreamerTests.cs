@@ -61,7 +61,7 @@ public sealed class WorldStreamerTests
         TemperatureField temperature = new();
         MemoryChunkStore store = new();
         ChunkCoord coord = new(-1, 0);
-        WriteStoredChunk(store, coord, savedMaterial: 1, temp: (Half)22f);
+        WriteStoredChunk(store, coord, savedMaterial: 1, temp: (Half)22f, damage: 13);
         MaterialTable currentMaterials = Materials(("empty", CellType.Empty), ("water", CellType.Liquid), ("sand", CellType.Powder));
         MaterialRemap remap = MaterialRemap.Build(new MaterialNameTable([(0, "empty"), (1, "sand")]), currentMaterials, fallbackId: 0);
         WorldStreamer streamer = new(chunks, residency, budget, temperature, store, remap)
@@ -77,6 +77,7 @@ public sealed class WorldStreamerTests
 
         Assert.True(chunks.TryGetChunk(coord, out Chunk loaded));
         Assert.Equal(2, loaded.Material[0]);
+        Assert.Equal(13, loaded.Damage[0]);
         Assert.Equal(DirtyRect.Full, loaded.CurrentDirty);
         Assert.Equal(22, temperature.GetTemperature(coord.X << 6, coord.Y << 6));
         Assert.True(residency.TryGetInfo(coord, out ChunkResidencyInfo info));
@@ -321,14 +322,15 @@ public sealed class WorldStreamerTests
         Assert.Equal(0, allocated);
     }
 
-    private static void WriteStoredChunk(MemoryChunkStore store, ChunkCoord coord, ushort savedMaterial, Half temp)
+    private static void WriteStoredChunk(MemoryChunkStore store, ChunkCoord coord, ushort savedMaterial, Half temp, byte damage = 0)
     {
         Chunk chunk = new(coord);
         chunk.Material[0] = savedMaterial;
+        chunk.Damage[0] = damage;
         Half[] temperature = new Half[TemperatureField.BlockArea];
         temperature[0] = temp;
         ArrayBufferWriter<byte> writer = new();
-        new ChunkCodec().Encode(new ChunkSnapshot(coord, chunk.Material, chunk.Flags, chunk.Lifetime, temperature), writer);
+        new ChunkCodec().Encode(new ChunkSnapshot(coord, chunk.Material, chunk.Flags, chunk.Lifetime, chunk.Damage, temperature), writer);
         store.Write(coord, writer.WrittenSpan);
     }
 

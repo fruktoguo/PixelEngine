@@ -36,6 +36,9 @@ public sealed class MaterialTableTests
         Assert.Equal(4.18f, table.Hot.HeatCapacity[1]);
         Assert.Equal(120, table.Hot.DefaultLifetime[1]);
         Assert.Equal(9, table.Hot.Durability[1]);
+        Assert.Equal(6, table.Hot.Hardness[1]);
+        Assert.Equal(14, table.Hot.MaxIntegrity[1]);
+        Assert.Equal(2, table.Hot.RubbleTarget[1]);
         Assert.True((table.Hot.PropertyFlags[1] & MaterialProperty.Corrodible) != 0);
         Assert.Equal(11, table.Hot.ReactionStart[1]);
         Assert.Equal(2, table.Hot.ReactionCount[1]);
@@ -47,6 +50,9 @@ public sealed class MaterialTableTests
         Assert.Equal(11, props.ReactionStartOf(1));
         Assert.Equal(2, props.ReactionCountOf(1));
         Assert.Equal(120, props.DefaultLifetimeOf(1));
+        Assert.Equal(6, props.HardnessOf(1));
+        Assert.Equal(14, props.MaxIntegrityOf(1));
+        Assert.Equal(2, props.RubbleTargetOf(1));
     }
 
     /// <summary>
@@ -155,6 +161,9 @@ public sealed class MaterialTableTests
                 HeatCapacity = 4.18f,
                 DefaultLifetime = 120,
                 Durability = 9,
+                Hardness = 6,
+                MaxIntegrity = 14,
+                RubbleTarget = 2,
                 TextureId = 4,
                 BaseColorBGRA = 0xFFCC6633,
                 ColorNoise = 8,

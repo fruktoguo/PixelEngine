@@ -67,6 +67,7 @@ public sealed class CellGrid(
             LifetimeAt(wx, wy) = 0;
         }
 
+        DamageAt(wx, wy) = 0;
         MarkDirty(wx, wy);
     }
 
@@ -89,6 +90,7 @@ public sealed class CellGrid(
             chunk.Lifetime[local] = 0;
         }
 
+        chunk.Damage[local] = 0;
         MarkDirty(wx, wy);
         return true;
     }
@@ -121,6 +123,15 @@ public sealed class CellGrid(
     }
 
     /// <summary>
+    /// 返回世界坐标处累计结构破坏度的可写引用。
+    /// </summary>
+    public ref byte DamageAt(int wx, int wy)
+    {
+        Chunk chunk = RequireChunk(wx, wy);
+        return ref chunk.Damage[CellAddressing.LocalIndex(wx, wy)];
+    }
+
+    /// <summary>
     /// 标记世界坐标所在 cell 为 dirty。
     /// </summary>
     public void MarkDirty(int wx, int wy)
@@ -144,6 +155,7 @@ public sealed class CellGrid(
         chunk.Material[local] = 0;
         chunk.Flags[local] = 0;
         chunk.Lifetime[local] = 0;
+        chunk.Damage[local] = 0;
         MarkRigidDirty(wx, wy);
         return true;
     }
@@ -163,6 +175,7 @@ public sealed class CellGrid(
         chunk.Material[local] = material;
         chunk.Flags[local] = CellFlags.RigidOwned;
         chunk.Lifetime[local] = 0;
+        chunk.Damage[local] = 0;
         MarkRigidDirty(wx, wy);
     }
 
@@ -187,6 +200,7 @@ public sealed class CellGrid(
         chunk.Material[local] = material;
         chunk.Flags[local] = CellFlags.RigidOwned;
         chunk.Lifetime[local] = 0;
+        chunk.Damage[local] = 0;
         return true;
     }
 

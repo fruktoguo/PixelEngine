@@ -61,6 +61,7 @@ public static class MaterialLiveGridRemapper
                 }
 
                 material[i] = fallbackId;
+                chunk.Damage[i] = 0;
                 replaced++;
                 chunkDirty = true;
             }

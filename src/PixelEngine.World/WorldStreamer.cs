@@ -333,9 +333,9 @@ public sealed class WorldStreamer
             {
                 _chunkCodec.Decode(
                     buffer.WrittenSpan,
-                    new ChunkSnapshot(coord, chunk.Material, chunk.Flags, chunk.Lifetime, temperature.AsSpan(0, TemperatureField.BlockArea)),
+                    new ChunkSnapshot(coord, chunk.Material, chunk.Flags, chunk.Lifetime, chunk.Damage, temperature.AsSpan(0, TemperatureField.BlockArea)),
                     CurrentParityBit);
-                _materialRemap.RemapInPlace(chunk.Material);
+                _materialRemap.RemapInPlace(chunk.Material, chunk.Damage);
             }
 
             chunk.SetCurrentDirty(DirtyRect.Full);
@@ -359,7 +359,7 @@ public sealed class WorldStreamer
             PooledByteBufferWriter payload = RentPayloadWriter();
             buffer.Clear();
             _chunkCodec.Encode(
-                new ChunkSnapshot(chunk.Coord, chunk.Material, chunk.Flags, chunk.Lifetime, temperature.AsSpan(0, TemperatureField.BlockArea)),
+                new ChunkSnapshot(chunk.Coord, chunk.Material, chunk.Flags, chunk.Lifetime, chunk.Damage, temperature.AsSpan(0, TemperatureField.BlockArea)),
                 buffer,
                 payload);
             ChunkCoord coord = chunk.Coord;

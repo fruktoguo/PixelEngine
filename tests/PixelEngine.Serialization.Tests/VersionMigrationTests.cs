@@ -19,12 +19,14 @@ public sealed class VersionMigrationTests
         byte[] source = V1ManifestPayload.Create();
         byte[] sourceBeforeUpgrade = [.. source];
         V1ToV2ManifestMigrator migrator = new();
-        MigrationChain chain = new(SaveFormatVersions.WorldManifest, [migrator]);
+        V2ToV3ManifestMigrator damageLaneMigrator = new();
+        MigrationChain chain = new(SaveFormatVersions.WorldManifest, [migrator, damageLaneMigrator]);
 
         byte[] upgraded = chain.Upgrade(source, fromVersion: V1ManifestPayload.FormatVersion);
 
         Assert.Equal(sourceBeforeUpgrade, source);
         Assert.Equal([V1ManifestPayload.FormatVersion], migrator.ObservedFromVersions);
+        Assert.Equal([SaveFormatVersions.WorldManifestBeforeDamageLane], damageLaneMigrator.ObservedFromVersions);
         WorldManifest decoded = new ManifestCodec().Decode(upgraded);
         AssertCurrentManifestSemantics(decoded);
     }
@@ -175,13 +177,28 @@ public sealed class VersionMigrationTests
 
         public static byte[] UpgradePayload(ReadOnlySpan<byte> payload)
         {
-            return V1ManifestPayload.UpgradeToCurrent(payload);
+            return V1ManifestPayload.UpgradeToV2(payload);
         }
 
         public void Migrate(MigrationContext context)
         {
             ObservedFromVersions.Add(context.FormatVersion);
             context.ReplacePayload(UpgradePayload(context.Payload), FromVersion + 1);
+        }
+    }
+
+    private sealed class V2ToV3ManifestMigrator : ISaveMigrator
+    {
+        public int FromVersion => SaveFormatVersions.WorldManifestBeforeDamageLane;
+
+        public List<int> ObservedFromVersions { get; } = [];
+
+        public void Migrate(MigrationContext context)
+        {
+            ObservedFromVersions.Add(context.FormatVersion);
+            byte[] upgraded = [.. context.Payload];
+            BinaryPrimitives.WriteInt32LittleEndian(upgraded.AsSpan(4, 4), SaveFormatVersions.WorldManifest);
+            context.ReplacePayload(upgraded, SaveFormatVersions.WorldManifest);
         }
     }
 
@@ -253,7 +270,7 @@ public sealed class VersionMigrationTests
             return writer.WrittenSpan.ToArray();
         }
 
-        public static byte[] UpgradeToCurrent(ReadOnlySpan<byte> source)
+        public static byte[] UpgradeToV2(ReadOnlySpan<byte> source)
         {
             if (source.Length < V1HeaderSize)
             {
@@ -270,7 +287,7 @@ public sealed class VersionMigrationTests
             ArrayBufferWriter<byte> writer = new(source.Length + sizeof(int));
             Span<byte> header = writer.GetSpan(CurrentHeaderSize);
             BinaryPrimitives.WriteUInt32LittleEndian(header[..4], Magic);
-            BinaryPrimitives.WriteInt32LittleEndian(header.Slice(4, 4), SaveFormatVersions.WorldManifest);
+            BinaryPrimitives.WriteInt32LittleEndian(header.Slice(4, 4), SaveFormatVersions.WorldManifestBeforeDamageLane);
             source[8..V1HeaderSize].CopyTo(header[8..V1HeaderSize]);
             BinaryPrimitives.WriteInt32LittleEndian(header.Slice(36, 4), 0);
             writer.Advance(CurrentHeaderSize);

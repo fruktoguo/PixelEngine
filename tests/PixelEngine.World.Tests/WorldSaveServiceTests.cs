@@ -37,6 +37,7 @@ public sealed class WorldSaveServiceTests
         int local = CellAddressing.LocalIndexFromLocal(4, 8);
         sourceChunk.Material[local] = 1;
         sourceChunk.Lifetime[local] = 9;
+        sourceChunk.Damage[local] = 4;
         sourceChunks.Add(sourceChunk);
         sourceResidency.Set(coord, new ChunkResidencyInfo(ChunkResidencyState.Active, 7, ChunkMemoryBudget.EstimatedResidentChunkBytes, DirtySinceLoad: true));
         int worldX = (coord.X << 6) + 4;
@@ -83,6 +84,7 @@ public sealed class WorldSaveServiceTests
         Assert.True(loadedChunks.TryGetChunk(coord, out Chunk loadedChunk));
         Assert.Equal(2, loadedChunk.Material[local]);
         Assert.Equal(9, loadedChunk.Lifetime[local]);
+        Assert.Equal(4, loadedChunk.Damage[local]);
         Assert.Equal(DirtyRect.Full, loadedChunk.CurrentDirty);
         Assert.Equal(37.5f, loadedTemperature.GetTemperature(worldX, worldY));
         Assert.True(loadedResidency.TryGetInfo(coord, out ChunkResidencyInfo loadedInfo));

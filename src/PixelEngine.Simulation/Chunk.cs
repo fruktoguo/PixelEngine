@@ -19,6 +19,7 @@ public sealed class Chunk
         Material = GC.AllocateArray<ushort>(EngineConstants.ChunkArea, pinned: true);
         Flags = GC.AllocateArray<byte>(EngineConstants.ChunkArea, pinned: true);
         Lifetime = GC.AllocateArray<byte>(EngineConstants.ChunkArea, pinned: true);
+        Damage = GC.AllocateArray<byte>(EngineConstants.ChunkArea, pinned: true);
         _incoming = GC.AllocateArray<PaddedDirtyRectSlot>(IncomingSlotCount, pinned: true);
         Reset(coord);
     }
@@ -42,6 +43,11 @@ public sealed class Chunk
     /// 每 cell 的 lifetime 计数器。
     /// </summary>
     public byte[] Lifetime { get; }
+
+    /// <summary>
+    /// 每 cell 的累计结构破坏度；仅允许存活 Solid cell 非零。
+    /// </summary>
+    public byte[] Damage { get; }
 
     /// <summary>
     /// 本帧迭代用 dirty rectangle。
@@ -77,6 +83,7 @@ public sealed class Chunk
         Array.Clear(Material);
         Array.Clear(Flags);
         Array.Clear(Lifetime);
+        Array.Clear(Damage);
         ClearDirty();
         Parity = 0;
         State = ChunkState.Sleeping;
@@ -104,6 +111,14 @@ public sealed class Chunk
     public ref byte GetLifetimeBase()
     {
         return ref MemoryMarshal.GetArrayDataReference(Lifetime);
+    }
+
+    /// <summary>
+    /// 获取 Damage 数组首元素引用，供热路径 ref 漫游使用。
+    /// </summary>
+    public ref byte GetDamageBase()
+    {
+        return ref MemoryMarshal.GetArrayDataReference(Damage);
     }
 
     /// <summary>

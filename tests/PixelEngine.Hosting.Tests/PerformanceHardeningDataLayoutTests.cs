@@ -107,11 +107,18 @@ public sealed class PerformanceHardeningDataLayoutTests
     }
 
     /// <summary>
-    /// 验证单常驻 chunk 预算落在架构 §12.2 要求的 18-20KB 区间。
+    /// 验证 Damage 平面后核心 sim 态为 20KB，常驻估算额外包含温度子块与 metadata slack。
     /// </summary>
     [Fact]
     public void ResidentChunkBudgetStaysWithinPlanEnvelope()
     {
-        Assert.InRange(ChunkMemoryBudget.EstimatedResidentChunkBytes, 18 * 1024, 20 * 1024);
+        const int halfBytes = 2;
+        int simBytes = EngineConstants.ChunkArea * (sizeof(ushort) + sizeof(byte) + sizeof(byte) + sizeof(byte));
+        int temperatureBytes = TemperatureField.BlockArea * halfBytes;
+        int metadataSlackBytes = 3 * 1024;
+
+        Assert.Equal(20 * 1024, simBytes);
+        Assert.Equal(ChunkMemoryBudget.EstimatedResidentChunkBytes, simBytes + temperatureBytes + metadataSlackBytes);
+        Assert.InRange(ChunkMemoryBudget.EstimatedResidentChunkBytes, 23 * 1024, 24 * 1024);
     }
 }

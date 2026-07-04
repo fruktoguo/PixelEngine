@@ -123,6 +123,21 @@ public readonly record struct MaterialDef
     public byte Durability { get; init; }
 
     /// <summary>
+    /// 结构破坏吸收强度；数值越高，同等 Damage 越难累积。
+    /// </summary>
+    public byte Hardness { get; init; }
+
+    /// <summary>
+    /// 累计结构完整度阈值；0 表示有效伤害命中后即时破坏。
+    /// </summary>
+    public ushort MaxIntegrity { get; init; }
+
+    /// <summary>
+    /// 结构破坏后的目标材质 id；0 表示破坏后清空为 Empty。
+    /// </summary>
+    public ushort RubbleTarget { get; init; }
+
+    /// <summary>
     /// 材质纹理索引；-1 表示仅使用纯色。
     /// </summary>
     public int TextureId { get; init; } = -1;

@@ -89,6 +89,21 @@ public sealed class MaterialPropsTable
     public ReadOnlySpan<ushort> DefaultLifetime => Hot.DefaultLifetime;
 
     /// <summary>
+    /// 结构破坏吸收强度列。
+    /// </summary>
+    public ReadOnlySpan<byte> Hardness => Hot.Hardness;
+
+    /// <summary>
+    /// 结构完整度阈值列。
+    /// </summary>
+    public ReadOnlySpan<ushort> MaxIntegrity => Hot.MaxIntegrity;
+
+    /// <summary>
+    /// 破坏目标材质列。
+    /// </summary>
+    public ReadOnlySpan<ushort> RubbleTarget => Hot.RubbleTarget;
+
+    /// <summary>
     /// 返回材质类型。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -140,6 +155,33 @@ public sealed class MaterialPropsTable
     public ushort DefaultLifetimeOf(ushort materialId)
     {
         return Hot.DefaultLifetimeOfUnchecked(materialId);
+    }
+
+    /// <summary>
+    /// 返回材质结构破坏吸收强度。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public byte HardnessOf(ushort materialId)
+    {
+        return Hot.HardnessOfUnchecked(materialId);
+    }
+
+    /// <summary>
+    /// 返回材质结构完整度阈值。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ushort MaxIntegrityOf(ushort materialId)
+    {
+        return Hot.MaxIntegrityOfUnchecked(materialId);
+    }
+
+    /// <summary>
+    /// 返回材质破坏后的目标材质 id。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ushort RubbleTargetOf(ushort materialId)
+    {
+        return Hot.RubbleTargetOfUnchecked(materialId);
     }
 
     /// <summary>

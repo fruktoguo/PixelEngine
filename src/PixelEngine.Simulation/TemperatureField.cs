@@ -337,6 +337,7 @@ public sealed class TemperatureField
                     chunk.Material[local] = target;
                     chunk.Lifetime[local] = DefaultLifetimeByte(hot, target);
                     chunk.Flags[local] = CellFlags.SetParity(chunk.Flags[local], parityBit);
+                    chunk.Damage[local] = 0;
                     DirtyRegionMarker.MarkCell(chunks, baseX + lx, wy, DirtyPhaseTarget.Working, includeBoundaryNeighbors: true);
                 }
             }

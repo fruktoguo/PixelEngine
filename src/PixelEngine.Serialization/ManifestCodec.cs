@@ -67,7 +67,7 @@ public sealed class ManifestCodec
         }
 
         int formatVersion = BinaryPrimitives.ReadInt32LittleEndian(source.Slice(4, 4));
-        if (formatVersion != SaveFormatVersions.WorldManifest)
+        if (formatVersion is not SaveFormatVersions.WorldManifestBeforeDamageLane and not SaveFormatVersions.WorldManifest)
         {
             throw new InvalidDataException($"不支持的 manifest 版本：{formatVersion}。");
         }
@@ -89,7 +89,7 @@ public sealed class ManifestCodec
         EnsureFullyConsumed(offset, source.Length);
 
         return new WorldManifest(
-            formatVersion,
+            SaveFormatVersions.WorldManifest,
             worldSeed,
             gameTimeTicks,
             playerState,

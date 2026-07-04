@@ -23,6 +23,7 @@ public ref struct ChunkSnapshot
         Span<ushort> material,
         Span<byte> flags,
         Span<byte> lifetime,
+        Span<byte> damage,
         Span<Half> temperature)
     {
         if (material.Length != EngineConstants.ChunkArea)
@@ -40,6 +41,11 @@ public ref struct ChunkSnapshot
             throw new ArgumentException("Lifetime span 长度必须等于 ChunkArea。", nameof(lifetime));
         }
 
+        if (damage.Length != EngineConstants.ChunkArea)
+        {
+            throw new ArgumentException("Damage span 长度必须等于 ChunkArea。", nameof(damage));
+        }
+
         if (temperature.Length != TemperatureCellCount)
         {
             throw new ArgumentException("Temperature span 长度必须等于 16x16。", nameof(temperature));
@@ -49,6 +55,7 @@ public ref struct ChunkSnapshot
         Material = material;
         Flags = flags;
         Lifetime = lifetime;
+        Damage = damage;
         Temperature = temperature;
     }
 
@@ -71,6 +78,11 @@ public ref struct ChunkSnapshot
     /// cell lifetime 视图。
     /// </summary>
     public Span<byte> Lifetime { get; }
+
+    /// <summary>
+    /// per-cell 累计结构破坏度视图。
+    /// </summary>
+    public Span<byte> Damage { get; }
 
     /// <summary>
     /// 1/4 分辨率温度子块视图，落盘固定为 Half。

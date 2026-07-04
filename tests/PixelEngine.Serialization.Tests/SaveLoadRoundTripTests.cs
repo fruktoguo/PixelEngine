@@ -82,6 +82,7 @@ public sealed class SaveLoadRoundTripTests
         Assert.True(loadedChunks.TryGetChunk(coord, out Chunk loadedChunk));
         Assert.Equal((ushort)2, loadedChunk.Material[local]);
         Assert.Equal((byte)123, loadedChunk.Lifetime[local]);
+        Assert.Equal((byte)77, loadedChunk.Damage[local]);
         Assert.Equal(CellFlags.Burning, loadedChunk.Flags[local]);
         Assert.Equal(DirtyRect.Full, loadedChunk.CurrentDirty);
         Assert.Equal(42.5f, loadedTemperature.GetTemperature(worldX, worldY));
@@ -95,6 +96,7 @@ public sealed class SaveLoadRoundTripTests
         int local = CellAddressing.LocalIndexFromLocal(5, 9);
         chunk.Material[local] = 1;
         chunk.Lifetime[local] = 123;
+        chunk.Damage[local] = 77;
         chunk.Flags[local] = CellFlags.Burning |
             CellFlags.Parity |
             CellFlags.Settled |
