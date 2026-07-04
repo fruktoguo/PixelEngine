@@ -177,6 +177,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
             Get(subPhases, FrameSubPhase.Bloom) +
             Get(subPhases, FrameSubPhase.PostProcess) +
             Get(subPhases, FrameSubPhase.Present);
+        double renderStyleMs = Get(subPhases, FrameSubPhase.RenderStyleShading);
         double uploadMs = Get(subPhases, FrameSubPhase.GpuUpload);
         double presentWaitMs = Get(subPhases, FrameSubPhase.PresentWait);
         double gpuFrameMs = Get(subPhases, FrameSubPhase.GpuFrame);
@@ -257,6 +258,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
             physicsMs,
             shapeRebuildMs,
             renderMs,
+            renderStyleMs,
             uploadMs,
             audioMs,
             cpuWorkMs,
@@ -401,7 +403,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
         ImGui.TextUnformatted($"heat: {sample.HeatMs:F2} ms");
         ImGui.TextUnformatted($"physics: {sample.PhysicsMs:F2} ms");
         ImGui.TextUnformatted($"shape rebuild: {sample.ShapeRebuildMs:F2} ms");
-        ImGui.TextUnformatted($"render/upload: {sample.RenderMs:F2} / {sample.UploadMs:F2} ms");
+        ImGui.TextUnformatted($"render/style/upload: {sample.RenderMs:F2} / {sample.RenderStyleMs:F2} / {sample.UploadMs:F2} ms");
         ImGui.TextUnformatted($"audio: {sample.AudioMs:F2} ms");
     }
 

@@ -1,3 +1,4 @@
+using PixelEngine.Core.Diagnostics;
 using PixelEngine.Simulation;
 using PixelEngine.World;
 using Xunit;
@@ -586,6 +587,45 @@ public sealed class RenderBufferBuilderTests
 
         Assert.Equal(0xFF90A0B0u, MaterialSwatchProvider.GetSwatch(materials, 1));
         Assert.Equal(0xFF405060u, MaterialSwatchProvider.GetSwatch(materials, 2));
+    }
+
+    [Fact]
+    public void BuildRecordsRenderStyleSubPhaseOnlyWhenStylePathIsActive()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        SetMaterial(chunk, 0, 0, 1);
+        chunks.Add(chunk);
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "stone", CellType.Solid, 0xFF404040u) with
+            {
+                Integrity = 100,
+                RenderStyle = MaterialRenderStyle.Destructible,
+                EdgeColorBGRA = 0xFFFFFFFFu,
+            });
+        RenderBuffer target = new(1, 1);
+        RenderAuxBuffers aux = new(1, 1);
+        RenderFrameContext context = new(
+            chunks,
+            materials,
+            new TemperatureField(),
+            CameraState.OneToOne(0, 0, 1, 1),
+            simStepped: true);
+
+        FrameProfiler fullProfiler = new();
+        fullProfiler.BeginFrame();
+        new RenderBufferBuilder().Build(context, target, aux, fullProfiler);
+        fullProfiler.EndFrame();
+
+        FrameProfiler offProfiler = new();
+        offProfiler.BeginFrame();
+        new RenderBufferBuilder(options: new RenderBufferBuilderOptions { StyleLevel = RenderBufferStyleLevel.Off })
+            .Build(context, target, aux, offProfiler);
+        offProfiler.EndFrame();
+
+        Assert.True(fullProfiler.LastSubFrame[(int)FrameSubPhase.RenderStyleShading] > 0);
+        Assert.Equal(0, offProfiler.LastSubFrame[(int)FrameSubPhase.RenderStyleShading]);
     }
 
     private static void SetMaterial(Chunk chunk, int lx, int ly, ushort material)
