@@ -221,6 +221,8 @@ public sealed class RenderingProjectDisciplineTests
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderPipeline.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderBufferBuilder.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderStyleSegmentScanner.cs")),
+            File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiPrimitiveRenderer.cs")),
+            File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiGlStateSnapshot.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "PaletteBgraConverter.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "BgraColorMixer.cs")),
             File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "ParticleCompositor.cs")),

@@ -79,6 +79,8 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("PresentUiLayers(new UiPresentContext", source, StringComparison.Ordinal);
         Assert.Contains("CompareUiLayers", source, StringComparison.Ordinal);
         Assert.Contains("PrepareUiState", source, StringComparison.Ordinal);
+        Assert.Contains("UiGlStateSnapshot.Capture", source, StringComparison.Ordinal);
+        Assert.Contains("state.Restore(_gl)", source, StringComparison.Ordinal);
         Assert.Contains("BlendingFactor.SrcAlpha", source, StringComparison.Ordinal);
         Assert.Contains("ShouldDelegateComputeLighting", source, StringComparison.Ordinal);
         Assert.Contains("ShouldUseComputeLightComposite", source, StringComparison.Ordinal);
@@ -113,11 +115,30 @@ public sealed class RenderPipelineContractTests
         string editorBridge = File.ReadAllText(ProjectPath("src", "PixelEngine.Editor", "EditorRenderBridge.cs"));
 
         Assert.Contains("public interface IUiPresentLayer", File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "IUiPresentLayer.cs")), StringComparison.Ordinal);
-        Assert.Contains("public readonly record struct UiPresentContext", File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiPresentContext.cs")), StringComparison.Ordinal);
+        string context = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiPresentContext.cs"));
+        string primitive = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiPrimitiveRenderer.cs"));
+        string state = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiGlStateSnapshot.cs"));
+
+        Assert.Contains("public readonly struct UiPresentContext", context, StringComparison.Ordinal);
+        Assert.Contains("SubmitTriangles(ReadOnlySpan<UiVertex> vertices, ReadOnlySpan<ushort> indices", context, StringComparison.Ordinal);
+        Assert.Contains("UiPrimitiveRenderer", context, StringComparison.Ordinal);
+        Assert.Contains("public readonly record struct UiVertex", File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiVertex.cs")), StringComparison.Ordinal);
+        Assert.Contains("public readonly record struct UiDrawState", File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiDrawState.cs")), StringComparison.Ordinal);
+        Assert.Contains("public readonly record struct UiScissorRect", File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiScissorRect.cs")), StringComparison.Ordinal);
         Assert.Contains("public const int Game = 100", orders, StringComparison.Ordinal);
         Assert.Contains("public const int Editor = 1000", orders, StringComparison.Ordinal);
         Assert.Contains("while (index > 0 && CompareUiLayers(entry, _uiLayers[index - 1]) < 0)", pipeline, StringComparison.Ordinal);
         Assert.Contains("UiLayerEntry(int Order, int Sequence, IUiPresentLayer Layer)", pipeline, StringComparison.Ordinal);
+        Assert.Contains("new UiPrimitiveRenderer(_gl, profile)", pipeline, StringComparison.Ordinal);
+        Assert.Contains("DrawElements", primitive, StringComparison.Ordinal);
+        Assert.Contains("BufferSubData(BufferTargetARB.ArrayBuffer", primitive, StringComparison.Ordinal);
+        Assert.Contains("BufferSubData(BufferTargetARB.ElementArrayBuffer", primitive, StringComparison.Ordinal);
+        Assert.Contains("Scissor(rect.X", primitive, StringComparison.Ordinal);
+        Assert.Contains("UniformMatrix3", primitive, StringComparison.Ordinal);
+        Assert.Contains("UiGlStateSnapshot.Capture", pipeline, StringComparison.Ordinal);
+        Assert.Contains("FramebufferBinding", state, StringComparison.Ordinal);
+        Assert.Contains("VertexArrayBinding", state, StringComparison.Ordinal);
+        Assert.Contains("BlendFuncSeparate", state, StringComparison.Ordinal);
         Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Game, this)", guiBridge, StringComparison.Ordinal);
         Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Editor, this)", editorBridge, StringComparison.Ordinal);
         Assert.Contains("IUiPresentLayer, IDisposable", guiBridge, StringComparison.Ordinal);

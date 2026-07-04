@@ -31,6 +31,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
     private readonly GammaPass _gamma;
     private readonly CrtPass _crt;
     private readonly PresentPass _present;
+    private readonly UiPrimitiveRenderer _uiPrimitives;
     private readonly WorldTexture _worldTexture;
     private readonly PboUploader _uploader;
     private readonly EmissiveBuffer _emissive;
@@ -87,6 +88,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         _gamma = new GammaPass(_gl, profile);
         _crt = new CrtPass(_gl, profile);
         _present = new PresentPass(_gl, profile);
+        _uiPrimitives = new UiPrimitiveRenderer(_gl, profile);
         _worldTexture = new WorldTexture(_gl, width, height);
         _uploader = new PboUploader(_gl, checked(width * height * sizeof(uint)));
         _emissive = new EmissiveBuffer(_gl, width, height);
@@ -458,7 +460,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         _present.Render(current, presentation, _quad);
         _overlay.Render(overlays, presentation);
         _gl.Viewport(0, 0, (uint)_window.Width, (uint)_window.Height);
-        PresentUiLayers(new UiPresentContext(_gl, _window.Width, _window.Height, presentation));
+        PresentUiLayers(new UiPresentContext(_gl, _window.Width, _window.Height, presentation, _uiPrimitives));
         BeforePresentUi?.Invoke(_gl);
         BeforeSwapBuffers?.Invoke(_gl);
         RecordSub(profiler, FrameSubPhase.Present, started);
@@ -518,6 +520,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         _emissive.Dispose();
         _uploader.Dispose();
         _worldTexture.Dispose();
+        _uiPrimitives.Dispose();
         _present.Dispose();
         _crt.Dispose();
         _gamma.Dispose();
@@ -685,8 +688,16 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
     {
         for (int i = 0; i < UiLayerCount; i++)
         {
+            UiGlStateSnapshot state = UiGlStateSnapshot.Capture(_gl);
             PrepareUiState(context);
-            _uiLayers[i].Layer.Present(in context);
+            try
+            {
+                _uiLayers[i].Layer.Present(in context);
+            }
+            finally
+            {
+                state.Restore(_gl);
+            }
         }
     }
 
