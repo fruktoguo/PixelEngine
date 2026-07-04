@@ -237,10 +237,10 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
-    /// 验证编辑器壳按 plan/19 节点 8 接入 Build Settings 设置模型与面板，但不伪造 build-player 执行。
+    /// 验证编辑器壳按 plan/19 节点 8/9 接入 Build Settings 模型、面板与 build-player 子进程编排。
     /// </summary>
     [Fact]
-    public void EditorShellDeclaresBuildSettingsModelAndPanelWithoutFakeBuildExecution()
+    public void EditorShellDeclaresBuildSettingsPanelAndPlayerBuildService()
     {
         string root = FindRepositoryRoot();
         string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
@@ -256,6 +256,10 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("BuildResult", source, StringComparison.Ordinal);
         Assert.Contains("BuildProgressEvent", source, StringComparison.Ordinal);
         Assert.Contains("BuildLog", source, StringComparison.Ordinal);
+        Assert.Contains("BuildRunView", source, StringComparison.Ordinal);
+        Assert.Contains("BuildPreflight", source, StringComparison.Ordinal);
+        Assert.Contains("BuildHostRid", source, StringComparison.Ordinal);
+        Assert.Contains("SupportsAot", source, StringComparison.Ordinal);
         Assert.Contains("PixelEngineEditorShellBuildJsonContext", source, StringComparison.Ordinal);
         Assert.Contains("BuildSettings.json", source, StringComparison.Ordinal);
         Assert.Contains("RefreshScenes", source, StringComparison.Ordinal);
@@ -264,10 +268,37 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("InformationalVersion", source, StringComparison.Ordinal);
         Assert.Contains("BuildSettingsPanel(_project)", source, StringComparison.Ordinal);
         Assert.Contains("ShowBuildSettings", source, StringComparison.Ordinal);
-        Assert.Contains("ImGui.BeginDisabled()", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("Process.Start", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("build-result.json", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("tools/build-player", source, StringComparison.Ordinal);
+        Assert.Contains("class BuildToolLocator", source, StringComparison.Ordinal);
+        Assert.Contains("interface IPlayerBuildService", source, StringComparison.Ordinal);
+        Assert.Contains("class PlayerBuildService", source, StringComparison.Ordinal);
+        Assert.Contains("PreflightAsync", source, StringComparison.Ordinal);
+        Assert.Contains("build-player.ps1", source, StringComparison.Ordinal);
+        Assert.Contains("build-player.sh", source, StringComparison.Ordinal);
+        Assert.Contains("dotnet", source, StringComparison.Ordinal);
+        Assert.Contains("pwsh", source, StringComparison.Ordinal);
+        Assert.Contains("powershell.exe", source, StringComparison.Ordinal);
+        Assert.Contains("RedirectStandardOutput = true", source, StringComparison.Ordinal);
+        Assert.Contains("RedirectStandardError = true", source, StringComparison.Ordinal);
+        Assert.Contains("UseShellExecute = false", source, StringComparison.Ordinal);
+        Assert.Contains("ConcurrentQueue<BuildProgressEvent>", source, StringComparison.Ordinal);
+        Assert.Contains("TryParseProgressLine", source, StringComparison.Ordinal);
+        Assert.Contains("pixelengine.build/v1", source, StringComparison.Ordinal);
+        Assert.Contains("build-result.json", source, StringComparison.Ordinal);
+        Assert.Contains("Kill(entireProcessTree: true)", source, StringComparison.Ordinal);
+        Assert.Contains("Process.Start(startInfo)", source, StringComparison.Ordinal);
+        Assert.Contains("build.log", source, StringComparison.Ordinal);
+        Assert.Contains("\"-Rid\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"-Channel\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"-Configuration\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"-Output\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"-Version\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"-InformationalVersion\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"-ProductName\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"-IconPath\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"-IncludeSymbols\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"-StartScene\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"-IncludeScene\"", source, StringComparison.Ordinal);
+        Assert.Contains("NativeAOT 仅支持当前宿主 RID", source, StringComparison.Ordinal);
     }
 
     /// <summary>

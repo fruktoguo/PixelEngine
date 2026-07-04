@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Runtime.InteropServices;
 using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell.Build;
@@ -26,12 +27,71 @@ internal enum BuildEventKind
 
 internal enum BuildPhase
 {
+    Unknown,
     Native,
     Publish,
     Verify,
     Package,
     Audit,
     Done,
+}
+
+internal static class BuildHostRid
+{
+    public static string Current
+    {
+        get
+        {
+            string os = OperatingSystem.IsWindows() ? "win" :
+                OperatingSystem.IsLinux() ? "linux" :
+                OperatingSystem.IsMacOS() ? "osx" :
+                string.Empty;
+            Architecture processArchitecture = RuntimeInformation.ProcessArchitecture;
+            string architecture = processArchitecture == Architecture.X64 ? "x64" :
+                processArchitecture == Architecture.Arm64 ? "arm64" :
+                processArchitecture == Architecture.X86 ? "x86" :
+                processArchitecture == Architecture.Arm ? "arm" :
+                string.Empty;
+            return string.IsNullOrEmpty(os) || string.IsNullOrEmpty(architecture)
+                ? RuntimeInformation.RuntimeIdentifier
+                : $"{os}-{architecture}";
+        }
+    }
+
+    public static bool SupportsAot(BuildRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return request.Channel != BuildChannel.Aot ||
+            string.Equals(request.Rid, Current, StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+internal sealed record BuildToolLocatorResult
+{
+    public string RepositoryRoot { get; init; } = string.Empty;
+
+    public string BuildPlayerPath { get; init; } = string.Empty;
+
+    public bool BuildPlayerExists { get; init; }
+
+    public string DotnetPath { get; init; } = "dotnet";
+
+    public string ShellPath { get; init; } = string.Empty;
+
+    public bool UsesPowerShell { get; init; }
+}
+
+internal sealed record BuildPreflight
+{
+    public bool Ok { get; init; }
+
+    public BuildToolLocatorResult Tools { get; init; } = new();
+
+    public string DotnetVersion { get; init; } = string.Empty;
+
+    public string ShellVersion { get; init; } = string.Empty;
+
+    public string Diagnostic { get; init; } = string.Empty;
 }
 
 internal sealed record SceneBuildEntry
@@ -321,6 +381,21 @@ internal sealed record BuildResult
     public int ExitCode { get; init; }
 }
 
+internal sealed record BuildRunView
+{
+    public bool IsRunning { get; init; }
+
+    public BuildPhase Phase { get; init; } = BuildPhase.Unknown;
+
+    public float Percent { get; init; }
+
+    public DateTimeOffset? StartedAt { get; init; }
+
+    public BuildResult? Result { get; init; }
+
+    public BuildPreflight? Preflight { get; init; }
+}
+
 internal sealed class BuildLog(int capacity = 512)
 {
     private readonly BuildProgressEvent[] _events = new BuildProgressEvent[Math.Max(8, capacity)];
@@ -353,6 +428,7 @@ internal sealed class BuildLog(int capacity = 512)
     WriteIndented = true)]
 [JsonSerializable(typeof(BuildTargetSettings))]
 [JsonSerializable(typeof(BuildResult))]
+[JsonSerializable(typeof(Dictionary<BuildPhase, double>))]
 internal sealed partial class PixelEngineEditorShellBuildJsonContext : JsonSerializerContext
 {
 }

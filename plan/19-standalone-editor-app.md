@@ -325,24 +325,24 @@ Edit 模式实时投影：为让 Scene View 的 gizmo/拾取显示「活的」Ga
 面板与设置模型（shell 程序集）
 - [x] `BuildTargetSettings`/`SceneBuildEntry`/`BuildRequest`/`BuildResult`/`BuildProgressEvent`/`BuildPhase`/`BuildLog` 类型与 `PixelEngineEditorShellBuildJsonContext` 源生成序列化（§5.2）
 - [x] `BuildTargetSettings.Normalize()` 校验：唯一启动场景、启动∈入包、至少一入包、路径/产物名非空（§5.2/§5.3）
-- [x] `BuildSettingsPanel : IEditorPanel`（位于 shell 程序集）五段 UI（设置/操作/进度/日志/结果），构建中禁用设置控件（§5.2/§5.3）。节点 8 阶段因 `tools/build-player` 尚未落地，Build/Build And Run 显式禁用，避免假执行。
+- [x] `BuildSettingsPanel : IEditorPanel`（位于 shell 程序集）五段 UI（设置/操作/进度/日志/结果），构建中禁用设置控件（§5.2/§5.3）。节点 9 后由 `PlayerBuildService.PreflightAsync` 决定 Build/Build And Run 可用性；当前 `tools/build-player` 尚未落地时显示真实缺失诊断并禁用，避免假执行。
 - [x] 场景清单表由「扫描 `content/scenes/` ∪ `EngineProject.Scenes`」只读映射，入包/启动交互与约束校验（§5.3/§5.6）
 - [x] 图标 `.ico` 路径设置接入；缩略图预览为可选能力，缺图标不阻断（§5.3）
 - [x] 设置持久化 `<项目根>/BuildSettings.json` 读写，面板初始化加载、变更保存（§5.2）
 - [x] 面板经 `EditorApp.AddPanel` 注册，`EditorContext` 仅只读消费 + Hosting `EngineProject` 只读，无引擎内部访问、无 `Editor→Hosting` 循环（§5.1/§5.2）
 
 子进程编排（shell 程序集）
-- [ ] `BuildToolLocator` 定位仓库根/`build-player`/`dotnet`/`pwsh`↔`powershell.exe`/`sh`（§5.4）
-- [ ] `PlayerBuildService.PreflightAsync`：dotnet SDK 与 pwsh/sh 探测，缺失给可执行诊断（§5.4）
-- [ ] `PlayerBuildService.RunAsync`：起子进程、后台读 stdout 逐行解析 NDJSON、stderr→error 级、`ConcurrentQueue` 回灌、`Draw` 每帧 drain（§5.4）
-- [ ] exit code + `build-result.json` 合成 `BuildResult`；无结果清单时回退末尾输出 + exit code（§5.4）
-- [ ] 取消 = `Process.Kill(entireProcessTree:true)`，半成品由 `plan/15` 脚本下次清理（§5.4）
-- [ ] `[Build And Run]`：成功后 detached 启动 `LauncherExe`（工作目录=`PlayerDir`）（§5.3）
-- [ ] 日志落盘 `<output>/build.log`，「复制日志」「打开日志」「打开产物目录」（§5.3）
+- [x] `BuildToolLocator` 定位仓库根/`build-player`/`dotnet`/`pwsh`↔`powershell.exe`/`sh`（§5.4）
+- [x] `PlayerBuildService.PreflightAsync`：dotnet SDK 与 pwsh/sh 探测，缺失给可执行诊断（§5.4）
+- [x] `PlayerBuildService.RunAsync`：起子进程、后台读 stdout 逐行解析 NDJSON、stderr→error 级、`ConcurrentQueue` 回灌、`Draw` 每帧 drain（§5.4）
+- [x] exit code + `build-result.json` 合成 `BuildResult`；无结果清单时回退末尾输出 + exit code（§5.4）
+- [x] 取消 = `Process.Kill(entireProcessTree:true)`，半成品由 `plan/15` 脚本下次清理（§5.4）
+- [x] `[Build And Run]`：成功后 detached 启动 `LauncherExe`（工作目录=`PlayerDir`）（§5.3）
+- [x] 日志落盘 `<output>/build.log`，「复制日志」「打开日志」「打开产物目录」（§5.3）
 
 契约消费（`plan/15`，见其 §3.11 清单）
-- [ ] `BuildRequest`→`build-player` 参数映射（Rid/Channel/Configuration/Output/Version/InformationalVersion/ProductName/Icon/IncludeSymbols/StartScene/IncludeScene）（§5.5）
-- [ ] AOT 通道仅宿主 RID 可选，跨架构灰显提示由 CI/CLI 出（§5.3/§5.5）
+- [x] `BuildRequest`→`build-player` 参数映射（Rid/Channel/Configuration/Output/Version/InformationalVersion/ProductName/Icon/IncludeSymbols/StartScene/IncludeScene）（§5.5）
+- [x] AOT 通道仅宿主 RID 可选，跨架构灰显提示由 CI/CLI 出（§5.3/§5.5）
 
 player-only 与布局
 - [!] player 发布结构上排除 Editor+编辑器专属 ImGui 闭包（`ImGuizmo`/`ImPlot`）、保留 `Hexa.NET.ImGui` 核心——阻塞：前置 §0 GUI 宿主中性化落地（§5.7）
@@ -468,7 +468,7 @@ GameObject authoring：
 - [x] 节点 6：`feat(editor-shell): Scene View 变换 gizmo 与拾取`（§4.8）
 - [x] 节点 7：`feat(editor-shell): .scene 保存往返（schema v2）+ 完整 prefab（含嵌套/传播）`（§4.9–§4.10）
 - [x] 节点 8：`feat(editor): Build 面板设置模型与 UI（平台/输出/产物名/图标/场景清单/配置/符号/内容选项）`（§5.2–§5.3，shell 程序集）
-- [ ] 节点 9：`feat(editor): PlayerBuildService 子进程编排（起 build-player、NDJSON 回灌、exit code、取消、Build-And-Run）`（§5.4–§5.6）
+- [x] 节点 9：`feat(editor): PlayerBuildService 子进程编排（起 build-player、NDJSON 回灌、exit code、取消、Build-And-Run）`（§5.4–§5.6）
 - [ ] 节点 10：`build(build): tools/build-player 编排器 + NDJSON/build-result 契约 + player-only audit 不变式`（`plan/15 §3.11`，scope=build）
 - [ ] 节点 11：`refactor(demo): 玩家包与编辑器解耦（Demo 去 Editor 使用/EnableEditor 路径，改用 Gui host）+ 证据迁移`（§0.5、§4.12）
 - [ ] 节点 12：`docs(plan): 落地 plan/19 并修订 plan/00/12/13/15/18/README 交叉引用`（§8）
