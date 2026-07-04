@@ -130,12 +130,40 @@ public readonly record struct MaterialDef
     /// <summary>
     /// 累计结构完整度阈值；0 表示有效伤害命中后即时破坏。
     /// </summary>
-    public ushort MaxIntegrity { get; init; }
+    public ushort Integrity { get; init; }
+
+    /// <summary>
+    /// <see cref="Integrity" /> 的兼容别名，供既有 Damage 热路径读取。
+    /// </summary>
+    public ushort MaxIntegrity
+    {
+        get => Integrity;
+        init => Integrity = value;
+    }
 
     /// <summary>
     /// 结构破坏后的目标材质 id；0 表示破坏后清空为 Empty。
     /// </summary>
-    public ushort RubbleTarget { get; init; }
+    public ushort DestroyedTarget { get; init; }
+
+    /// <summary>
+    /// <see cref="DestroyedTarget" /> 的兼容别名，供既有 Damage 热路径读取。
+    /// </summary>
+    public ushort RubbleTarget
+    {
+        get => DestroyedTarget;
+        init => DestroyedTarget = value;
+    }
+
+    /// <summary>
+    /// 破坏时请求抛射的碎屑数量；0 表示不抛碎屑。
+    /// </summary>
+    public byte DebrisCount { get; init; }
+
+    /// <summary>
+    /// 可采集材质被 Diggable 破坏时产生的采集计数。
+    /// </summary>
+    public byte MineYield { get; init; }
 
     /// <summary>
     /// 材质纹理索引；-1 表示仅使用纯色。
@@ -151,6 +179,41 @@ public readonly record struct MaterialDef
     /// 便宜颜色噪声幅度。
     /// </summary>
     public byte ColorNoise { get; init; }
+
+    /// <summary>
+    /// 渲染相位使用的材质着色风格；不写入 sim cell。
+    /// </summary>
+    public MaterialRenderStyle RenderStyle { get; init; }
+
+    /// <summary>
+    /// 编辑器 / HUD 图例分类。
+    /// </summary>
+    public MaterialLegendCategory LegendCategory { get; init; }
+
+    /// <summary>
+    /// 描边或裂纹叠色用 BGRA8 颜色；仅渲染相位读取。
+    /// </summary>
+    public uint EdgeColorBGRA { get; init; }
+
+    /// <summary>
+    /// 渲染相位 alpha，不写入 sim cell；255 表示不透明。
+    /// </summary>
+    public byte Opacity { get; init; } = byte.MaxValue;
+
+    /// <summary>
+    /// 高亮或 emissive 叠色用 BGRA8 颜色；仅渲染相位读取。
+    /// </summary>
+    public uint HighlightColorBGRA { get; init; }
+
+    /// <summary>
+    /// 编辑器 / HUD 展示名；为空时使用 <see cref="Name" />。
+    /// </summary>
+    public string DisplayName { get; init; } = string.Empty;
+
+    /// <summary>
+    /// 是否在图例和材质调色板中默认展示。
+    /// </summary>
+    public bool LegendVisible { get; init; } = true;
 
     /// <summary>
     /// 材质标签与运行时行为位。
@@ -250,6 +313,73 @@ public enum MaterialProperty : uint
     /// 导电材质预留位。
     /// </summary>
     Conductive = 1u << 10,
+
+    /// <summary>
+    /// 不可被结构破坏 API 破坏。
+    /// </summary>
+    Indestructible = 1u << 11,
+
+    /// <summary>
+    /// 可被挖掘 / 采集逻辑计入 MineYield。
+    /// </summary>
+    Diggable = 1u << 12,
+}
+
+/// <summary>
+/// 材质渲染相位的可辨识着色风格。颜色仍由材质定义派生，绝不写回 cell。
+/// </summary>
+public enum MaterialRenderStyle : byte
+{
+    /// <summary>地面 / 地形轮廓着色。</summary>
+    Ground,
+
+    /// <summary>粉体颗粒噪声着色。</summary>
+    Powder,
+
+    /// <summary>液体流动高光着色。</summary>
+    Liquid,
+
+    /// <summary>气体半透明着色。</summary>
+    Gas,
+
+    /// <summary>普通固体描边着色。</summary>
+    Solid,
+
+    /// <summary>可破坏固体描边与裂纹着色。</summary>
+    Destructible,
+
+    /// <summary>危险材质脉动提示着色。</summary>
+    Hazard,
+
+    /// <summary>发光 / 高亮材质着色。</summary>
+    Emissive,
+}
+
+/// <summary>
+/// 编辑器、HUD 与图例使用的材质分类。
+/// </summary>
+public enum MaterialLegendCategory : byte
+{
+    /// <summary>地形与固体。</summary>
+    Terrain,
+
+    /// <summary>液体。</summary>
+    Liquid,
+
+    /// <summary>气体。</summary>
+    Gas,
+
+    /// <summary>可破坏地形或结构。</summary>
+    Destructible,
+
+    /// <summary>火焰、熔岩、酸等危险材质。</summary>
+    Hazard,
+
+    /// <summary>资源、目标、可采集物。</summary>
+    Resource,
+
+    /// <summary>特殊或工具材质。</summary>
+    Special,
 }
 
 /// <summary>

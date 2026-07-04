@@ -196,7 +196,7 @@ public sealed class SimulationDataStructureTests
     }
 
     /// <summary>
-    /// 验证结构破坏只累加普通 solid，RigidOwned cell 转交刚体 damage sink 且 Damage 恒清零。
+    /// 验证结构破坏只累加普通 solid，RigidOwned cell 转交刚体 damage sink，Indestructible 免疫。
     /// </summary>
     [Fact]
     public void ApplyStructuralDamageDestroysSolidAndRoutesRigidOwned()
@@ -206,28 +206,36 @@ public sealed class SimulationDataStructureTests
         MaterialTable materials = new(
         [
             Material(0, "empty", CellType.Empty),
-            Material(1, "stone", CellType.Solid) with { MaxIntegrity = 5, RubbleTarget = 2 },
+            Material(1, "stone", CellType.Solid) with { Integrity = 5, DestroyedTarget = 2 },
             Material(2, "gravel", CellType.Powder),
+            Material(3, "boundary_stone", CellType.Solid) with { PropertyFlags = MaterialProperty.Indestructible },
         ]);
         CountingRigidDamageSink damageSink = new();
         SimulationKernel kernel = new(source, new MaterialPropsTable(materials.Hot), rigidDamageSink: damageSink);
         int solidLocal = CellAddressing.LocalIndexFromLocal(10, 10);
         int rigidLocal = CellAddressing.LocalIndexFromLocal(11, 10);
+        int immuneLocal = CellAddressing.LocalIndexFromLocal(12, 10);
         chunk.Material[solidLocal] = 1;
         chunk.Material[rigidLocal] = 1;
+        chunk.Material[immuneLocal] = 3;
         chunk.Flags[rigidLocal] = CellFlags.RigidOwned;
         chunk.Damage[rigidLocal] = 12;
+        chunk.Damage[immuneLocal] = 7;
 
         bool rigidDestroyed = kernel.ApplyStructuralDamage(11, 10, 9);
         bool solidDestroyed = kernel.ApplyStructuralDamage(10, 10, 9);
+        bool immuneDestroyed = kernel.ApplyStructuralDamage(12, 10, 255);
 
         Assert.False(rigidDestroyed);
         Assert.True(solidDestroyed);
+        Assert.False(immuneDestroyed);
         Assert.Equal(1, damageSink.Count);
         Assert.Equal((11, 10), damageSink.Last);
         Assert.Equal(0, chunk.Damage[rigidLocal]);
         Assert.Equal(2, chunk.Material[solidLocal]);
         Assert.Equal(0, chunk.Damage[solidLocal]);
+        Assert.Equal(3, chunk.Material[immuneLocal]);
+        Assert.Equal(0, chunk.Damage[immuneLocal]);
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using PixelEngine.Content;
 using PixelEngine.Simulation;
 using Xunit;
 
@@ -139,6 +140,59 @@ public sealed class MaterialReactionEditorPanelTests
         Assert.True(request.TextureChanged);
         Assert.True(request.AudioChanged);
         Assert.Equal(result.AssetReloads, assetSink.Requests);
+    }
+
+    /// <summary>
+    /// 验证材质编辑器文档往返保留 M14 可玩性与视觉字段，避免保存时丢 schema。
+    /// </summary>
+    [Fact]
+    public void MaterialEditorDocumentRoundTripsPlayableAndVisualFields()
+    {
+        MaterialDocumentJson materials = new()
+        {
+            Materials =
+            [
+                new MaterialJson
+                {
+                    Name = "stone",
+                    Type = "Solid",
+                    HeatCapacity = 1,
+                    Durability = 20,
+                    Integrity = 80,
+                    DestroyedTarget = "gravel",
+                    DebrisCount = 4,
+                    MineYield = 1,
+                    RenderStyle = "Destructible",
+                    LegendCategory = "Destructible",
+                    EdgeColorBGRA = 0xFF101820,
+                    Opacity = 220,
+                    HighlightColorBGRA = 0xFF8090A0,
+                    DisplayName = "Stone",
+                    LegendVisible = false,
+                    Tags = ["static", "diggable"],
+                },
+            ],
+        };
+        ReactionDocumentJson reactions = new() { Reactions = [] };
+
+        MaterialReactionEditorDocument document = MaterialReactionEditorDocument.FromContent(materials, reactions);
+        MaterialDocumentJson roundTripped = document.ToMaterialDocument();
+        MaterialJson row = Assert.Single(roundTripped.Materials!);
+
+        Assert.Equal(20, row.Durability);
+        Assert.Equal(80, row.Integrity);
+        Assert.Equal("gravel", row.DestroyedTarget);
+        Assert.Equal(4, row.DebrisCount);
+        Assert.Equal(1, row.MineYield);
+        Assert.Equal("Destructible", row.RenderStyle);
+        Assert.Equal("Destructible", row.LegendCategory);
+        Assert.Equal(0xFF101820u, row.EdgeColorBGRA);
+        Assert.Equal((byte)220, row.Opacity);
+        Assert.Equal(0xFF8090A0u, row.HighlightColorBGRA);
+        Assert.Equal("Stone", row.DisplayName);
+        Assert.False(row.LegendVisible);
+        Assert.NotNull(row.Tags);
+        Assert.Equal(["static", "diggable"], row.Tags);
     }
 
     private sealed class TestChunkSource(params Chunk[] chunks) : IChunkSource

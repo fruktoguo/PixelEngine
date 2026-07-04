@@ -121,6 +121,11 @@ public sealed class MaterialHotTable
     public ReadOnlySpan<byte> Dispersion => _dispersion;
 
     /// <summary>
+    /// <see cref="Dispersion" /> 的语义别名，供玩法与脚本侧表达 flow rate。
+    /// </summary>
+    public ReadOnlySpan<byte> FlowRate => _dispersion;
+
+    /// <summary>
     /// 不流动液体标记列。
     /// </summary>
     public ReadOnlySpan<bool> LiquidStatic => _liquidStatic;
@@ -216,9 +221,19 @@ public sealed class MaterialHotTable
     public ReadOnlySpan<ushort> MaxIntegrity => _maxIntegrity;
 
     /// <summary>
+    /// <see cref="MaxIntegrity" /> 的计划语义别名。
+    /// </summary>
+    public ReadOnlySpan<ushort> Integrity => _maxIntegrity;
+
+    /// <summary>
     /// 结构破坏后的目标材质列；0 表示 Empty。
     /// </summary>
     public ReadOnlySpan<ushort> RubbleTarget => _rubbleTarget;
+
+    /// <summary>
+    /// <see cref="RubbleTarget" /> 的计划语义别名。
+    /// </summary>
+    public ReadOnlySpan<ushort> DestroyedTarget => _rubbleTarget;
 
     /// <summary>
     /// 材质纹理 id 列；-1 表示纯色。
@@ -285,6 +300,15 @@ public sealed class MaterialHotTable
     internal byte DispersionOfUnchecked(ushort materialId)
     {
         return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_dispersion), materialId);
+    }
+
+    /// <summary>
+    /// 热路径 unchecked 读取扩散距离语义别名；调用方保证 material id 来自有效网格数据。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal byte FlowRateOfUnchecked(ushort materialId)
+    {
+        return DispersionOfUnchecked(materialId);
     }
 
     /// <summary>
@@ -412,8 +436,8 @@ public sealed class MaterialHotTable
             defaultLifetime[i] = def.DefaultLifetime;
             durability[i] = def.Durability;
             hardness[i] = def.Hardness != 0 ? def.Hardness : def.Durability;
-            maxIntegrity[i] = def.MaxIntegrity;
-            rubbleTarget[i] = def.RubbleTarget;
+            maxIntegrity[i] = def.Integrity;
+            rubbleTarget[i] = def.DestroyedTarget;
             textureId[i] = def.TextureId;
             baseColorBgra[i] = def.BaseColorBGRA;
             colorNoise[i] = def.ColorNoise;

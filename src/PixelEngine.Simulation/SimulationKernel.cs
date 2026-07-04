@@ -381,6 +381,12 @@ public sealed class SimulationKernel(
             return false;
         }
 
+        if ((MaterialProps.PropertyFlagsOf(material) & MaterialProperty.Indestructible) != 0)
+        {
+            chunk.Damage[local] = 0;
+            return false;
+        }
+
         int effectiveDamage = damage - (MaterialProps.HardnessOf(material) * EngineConstants.DamageHardnessAbsorb);
         if (effectiveDamage <= 0)
         {
