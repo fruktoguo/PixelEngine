@@ -198,6 +198,59 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
+    /// 验证外部编辑态物化的脚本 Scene 可接入当前 Hosting 场景，并被脚本运行时复用。
+    /// </summary>
+    [Fact]
+    public void AttachScriptSceneOverridesSceneFileMaterialization()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-authoring-scene-{Guid.NewGuid():N}");
+        try
+        {
+            string sceneDirectory = Path.Combine(contentRoot, "scenes");
+            _ = Directory.CreateDirectory(sceneDirectory);
+            File.WriteAllText(
+                Path.Combine(sceneDirectory, "authoring.scene"),
+                """
+                {
+                  "formatVersion": 2,
+                  "name": "authoring",
+                  "entities": []
+                }
+                """);
+            using Engine engine = new EngineBuilder()
+                .WithWorkerCount(1)
+                .WithContentRoot(contentRoot)
+                .AddScene(new SceneDescriptor("authoring", SceneSourceKind.SceneFile, "scenes/authoring.scene"))
+                .WithStartScene("authoring")
+                .Build();
+            PixelEngine.Scripting.Scene authoringScene = new();
+            PixelEngine.Scripting.Entity entity = authoringScene.CreateEntity();
+            Transform transform = entity.AddComponent<Transform>();
+            transform.SetPosition(12, 34);
+
+            engine.Context.RegisterService(Materials(("empty", CellType.Empty), ("stone", CellType.Solid)));
+            _ = engine.AttachResidentSimulationWorld(64, 64, particleCapacity: 8);
+            engine.AttachScriptScene(authoringScene);
+            ScriptSimulationContext context = engine.AttachScriptingFromServices();
+
+            Scene current = engine.Context.GetService<ISceneService>().Current!;
+            Assert.Same(authoringScene, current.ScriptScene);
+            Assert.Same(authoringScene, engine.Context.GetService<PixelEngine.Scripting.Scene>());
+            Assert.Same(authoringScene, context.Scene);
+            ScriptEntityInspection snapshot = Assert.Single(authoringScene.CaptureInspectionSnapshot());
+            Assert.Equal(12, snapshot.Transform!.X);
+            Assert.Equal(34, snapshot.Transform!.Y);
+        }
+        finally
+        {
+            if (Directory.Exists(contentRoot))
+            {
+                Directory.Delete(contentRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 Hosting 可稳定写出 .scene v2，并在读回时保持实体排序与字段排序。
     /// </summary>
     [Fact]

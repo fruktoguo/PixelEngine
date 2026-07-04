@@ -896,6 +896,25 @@ public sealed class Engine : IDisposable
         Context.RegisterService(scriptContext);
     }
 
+    /// <summary>
+    /// 将外部编辑态物化出的脚本 Scene 接到当前 Hosting 场景，并注册为后续脚本运行时的输入。
+    /// </summary>
+    /// <param name="scriptScene">已由调用方物化好的脚本 Scene。</param>
+    public void AttachScriptScene(PixelEngine.Scripting.Scene scriptScene)
+    {
+        ThrowIfShutdown();
+        ArgumentNullException.ThrowIfNull(scriptScene);
+        Scene current = Context.GetService<ISceneService>().Current ??
+            throw new InvalidOperationException("当前没有已加载场景，不能接入脚本 Scene。");
+        if (current.ScriptScene is not null)
+        {
+            throw new InvalidOperationException("当前场景已经接入脚本 Scene。");
+        }
+
+        current.AttachScriptScene(scriptScene);
+        Context.RegisterService(scriptScene);
+    }
+
     internal void EndScriptPlaySession()
     {
         ThrowIfShutdown();

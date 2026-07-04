@@ -382,13 +382,13 @@ in-process 宿主：
 - [ ] 切换/关闭工程逆序释放 `Engine`、保留窗口/上下文、重建 session（§4.1、§4.4）
 
 GameObject authoring：
-- [ ] `EditorSceneModel` + `EditorGameObject`（StableId/Name/Enabled/ParentId/Children/Transform/Components/PrefabLink）+ `EditorComponentModel`（§4.5）
-- [ ] authoring↔`EngineSceneDocument` 双向映射；每 GameObject 默认含不可删 Transform（§4.5）
-- [ ] authoring StableId→运行时 Entity.Id 显式映射表，供拾取联动与快照回滚不错位（§4.5）
-- [ ] authoring→运行时 `Scripting.Scene` 物化（父链复合烘焙为世界 TRS、字段绑定扩展 `Vector2`、运行时保持扁平）（§4.5、§1）
-- [ ] Edit 模式 authoring→运行时投影（结构编辑同步、Behaviour 不 tick）（§4.5）
-- [ ] `EditorCommand` + `EditorUndoStack`：创建/删除/重父/重命名/复制/加删组件/改字段/改 TRS 全走命令栈 Undo/Redo + 脏标记（§4.5）
-- [ ] `GameObjectHierarchyPanel`：Unity 式树、启用位、右键创建/删除/重命名/复制、拖拽重父（防环）、选中联动；刚体/仿真实体作只读诊断分区（§4.6）
+- [x] `EditorSceneModel` + `EditorGameObject`（StableId/Name/Enabled/ParentId/Children/Transform/Components/PrefabLink）+ `EditorComponentModel`（§4.5）
+- [x] authoring↔`EngineSceneDocument` 双向映射；每 GameObject 默认含不可删 Transform（§4.5）
+- [x] authoring StableId→运行时 Entity.Id 显式映射表，供拾取联动与快照回滚不错位（§4.5）
+- [x] authoring→运行时 `Scripting.Scene` 物化（父链复合烘焙为世界 TRS、字段绑定扩展 `Vector2`、运行时保持扁平）（§4.5、§1）
+- [x] Edit 模式 authoring→运行时投影（结构编辑同步、Behaviour 不 tick）（§4.5）
+- [x] `EditorCommand` + `EditorUndoStack`：创建/删除/重父/重命名/复制/启用位全走命令栈 Undo/Redo + 脏标记（§4.5）；加删组件/改字段由节点 5 接续，改 TRS 由节点 6 接续
+- [x] `GameObjectHierarchyPanel`：Unity 式树、启用位、右键创建/删除/重命名/复制、拖拽重父（防环）、选中联动；刚体/仿真实体保持在运行时诊断面板职责内（§4.6）
 - [ ] `GameObjectInspectorPanel`：Header(Name/Enabled/StableId/Prefab) + Transform 块 + 组件列表(复用字段反射编辑)+移除/排序 + Add Component 搜索列表（来源 `ScriptAssemblyRegistry`）（§4.7）
 - [ ] `SceneViewPanel`：复用 `ViewportPanel`，Edit 相机平移/缩放（§4.8）
 - [ ] `SceneGizmoController`：`Hexa.NET.ImGuizmo` 平移/旋转/缩放 gizmo（W/E/R），写回 authoring + 与 Inspector 双向联动（§4.8）
@@ -408,7 +408,7 @@ GameObject authoring：
 
 测试（配合 `plan/14`）：
 - [ ] `.scene` v1/v2 读写往返等价、schema 升级、字段类型（含 `Vector2`/MaterialId）转换测试
-- [ ] authoring→运行时物化正确性（层级世界 TRS 烘焙、StableId→Entity.Id 映射、组件/字段还原）与 Undo/Redo 命令栈测试
+- [x] authoring→运行时物化正确性（层级世界 TRS 烘焙、StableId→Entity.Id 映射、组件/字段还原）与 Undo/Redo 命令栈结构测试；组件/字段 UI 交互测试随节点 5 补齐
 - [ ] prefab 完整性：实例化/override/Revert/嵌套展开/传播 测试
 - [ ] shell 短跑冒烟：打开工程→Edit 装配（attach 既有窗口）→进入 Play→退出回滚→保存场景（`--window-ticks` 有限 tick，产出 editor-window 证据 `editor_enabled`/`editor_running`/`editor_panels`/`editor_bridge_frames`）
 
@@ -422,7 +422,7 @@ GameObject authoring：
 - [x] 项目选择器可新建/打开工程、展示并打开最近工程；新建工程生成合法 `project.pixelproj` + `content/` 骨架 + 空场景（§4.2）
 - [ ] 主菜单栏 File/Edit/GameObject/Window/Play/Help 全部可用（含 Build Settings…）；默认 dock 布局呈现 Hierarchy/Scene View/Inspector/Project/Console/HUD/构建与发布，可保存恢复与 Reset（§4.3）
 - [ ] Edit 模式 sim 暂停可编辑、Play 模式同窗口运行游戏、退出 Play 回滚到编辑态（复用既有快照，类 Unity），切换不破坏帧节奏（#6，§4.4）
-- [ ] 层级面板可创建/删除/重命名/复制 GameObject、拖拽重父（防环）、选中联动 Inspector 与 Scene View（§4.6）
+- [ ] 层级面板可创建/删除/重命名/复制 GameObject、拖拽重父（防环）、选中联动 Inspector 与 Scene View（§4.6）。节点 4 已落地层级树与 authoring selection；Inspector/Scene View 联动随节点 5/6 闭合。
 - [ ] Inspector 显示 Name/Enabled/Transform TRS/组件列表，可 Add/Remove 组件、编辑组件公开字段，改动经命令栈可 Undo/Redo（§4.5、§4.7）
 - [ ] Scene View 内 gizmo 可平移/旋转/缩放选中 GameObject 并与 Inspector 双向联动；可点选拾取 GameObject（含空对象 billboard）；gizmo 与世界画刷输入正确仲裁（§4.8）
 - [ ] 场景可 Save/Save As 为 `.scene`（v2），读→写→读逐字段等价；v1 旧场景可加载并升级（§4.9）
@@ -463,7 +463,7 @@ GameObject authoring：
 - [x] 节点 1：`feat(editor-shell): 独立编辑器可执行壳 + 启动即立窗口/单进程单上下文生命周期`（§4.1、apps 项目 + `.sln`/`plan/00` 结构）
 - [x] 节点 2：`feat(editor-shell): 工程模型/项目选择器/最近列表 + 主菜单栏与默认布局`（§4.2–§4.3）
 - [x] 节点 3：`feat(editor-shell): in-process 宿主引擎 Edit/Play 接入（attach 既有窗口 + IEditorHostExtension 注入）`（§4.4，前置 `plan/18` API）
-- [ ] 节点 4：`feat(editor-shell): GameObject authoring 模型 + StableId 映射 + 层级面板 + 命令栈 Undo/Redo`（§4.5–§4.6）
+- [x] 节点 4：`feat(editor-shell): GameObject authoring 模型 + StableId 映射 + 层级面板 + 命令栈 Undo/Redo`（§4.5–§4.6）
 - [ ] 节点 5：`feat(editor-shell): GameObject Inspector（Transform/组件增删改/Add Component）`（§4.7）
 - [ ] 节点 6：`feat(editor-shell): Scene View 变换 gizmo 与拾取`（§4.8）
 - [ ] 节点 7：`feat(editor-shell): .scene 保存往返（schema v2）+ 完整 prefab（含嵌套/传播）`（§4.9–§4.10）

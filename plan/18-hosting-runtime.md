@@ -143,8 +143,8 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 
 - [x] `.scene` schema v2:`EngineSceneEntityDocument` 增 `ParentId` + `Transform`(TRS)块 + `Vector2` 字段类型;`FormatVersion` 1→2 且保 v1 兼容(v1 档按默认根实体 + 单位 Transform 物化)。
 - [x] 新增 Hosting 公开 writer `SaveSceneDocument(EngineSceneDocument, path)`(源生成 `EngineSceneJsonContext` 扩展):稳定排序(按 StableId 升序)、往返等价(读→写→读逐字段一致,供 plan/14)。
-- [x] `EngineSceneDocument`→运行时 `Scripting.Scene` 物化公开 API(Transform 世界 TRS 烘焙、字段绑定扩展 Transform TRS/Vector2);运行时 Scene 保持扁平 DOD 不引 parent 指针;material 引用走稳定 Name(守 #8)。authoring 层级模型 ⇄ `EngineSceneDocument` 映射归编辑器壳(plan/19);Hosting 侧 writer 与物化 API 为**中性**、玩家运行时亦复用(加载 `.scene`),**不条件编译剥离**。
-- [ ] 编辑器壳侧 authoring 场景模型 ⇄ `EngineSceneDocument` 双向映射(EditorSceneModel/GameObject 层级命令栈),见 plan/19 §4.5/§4.9。
+- [x] `EngineSceneDocument`→运行时 `Scripting.Scene` 物化公开 API(Transform 世界 TRS 烘焙、字段绑定扩展 Transform TRS/Vector2);运行时 Scene 保持扁平 DOD 不引 parent 指针;material 引用走稳定 Name(守 #8)。新增 `Engine.AttachScriptScene(Scripting.Scene)` 供编辑器壳把外部 authoring 投影接到当前 Hosting 场景,且不让 Hosting 持有 StableId 映射。authoring 层级模型 ⇄ `EngineSceneDocument` 映射归编辑器壳(plan/19);Hosting 侧 writer 与物化 API 为**中性**、玩家运行时亦复用(加载 `.scene`),**不条件编译剥离**。
+- [x] 编辑器壳侧 authoring 场景模型 ⇄ `EngineSceneDocument` 双向映射(EditorSceneModel/GameObject 层级命令栈),见 plan/19 §4.5/§4.9。
 
 ### 4.4 相位[10] 子序 + 游戏内 HTML UI 装配(§3.2/§3.9,配 plan/20)
 

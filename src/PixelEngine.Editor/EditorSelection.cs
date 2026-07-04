@@ -31,6 +31,11 @@ public sealed class EditorSelection
     public string? EntityHandle { get; private set; }
 
     /// <summary>
+    /// 当前选中的编辑态 GameObject 稳定 id。
+    /// </summary>
+    public int? GameObjectStableId { get; private set; }
+
+    /// <summary>
     /// 当前选中的刚体 id。
     /// </summary>
     public int? BodyId { get; private set; }
@@ -73,6 +78,23 @@ public sealed class EditorSelection
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(entityHandle);
         EntityHandle = entityHandle;
+        GameObjectStableId = null;
+    }
+
+    /// <summary>
+    /// 设置编辑态 GameObject 选择。
+    /// </summary>
+    /// <param name="stableId">GameObject 稳定 id。</param>
+    public void SelectGameObject(int stableId)
+    {
+        if (stableId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(stableId), stableId, "GameObject stable id 必须为正数。");
+        }
+
+        GameObjectStableId = stableId;
+        EntityHandle = null;
+        BodyId = null;
     }
 
     /// <summary>
@@ -94,6 +116,7 @@ public sealed class EditorSelection
         MaterialId = null;
         AssetPath = null;
         EntityHandle = null;
+        GameObjectStableId = null;
         BodyId = null;
     }
 }

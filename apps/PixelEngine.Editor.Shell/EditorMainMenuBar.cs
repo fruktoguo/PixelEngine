@@ -14,7 +14,7 @@ internal sealed class EditorMainMenuBar
 
         DrawFileMenu(app);
         DrawEditMenu(app);
-        DrawGameObjectMenu();
+        DrawGameObjectMenu(app);
         DrawWindowMenu(app);
         DrawPlayMenu(app);
         DrawHelpMenu(app);
@@ -58,8 +58,15 @@ internal sealed class EditorMainMenuBar
             return;
         }
 
-        _ = ImGui.MenuItem("Undo", "Ctrl+Z", selected: false, enabled: false);
-        _ = ImGui.MenuItem("Redo", "Ctrl+Y", selected: false, enabled: false);
+        if (ImGui.MenuItem("Undo", "Ctrl+Z", selected: false, enabled: app.CurrentSession?.UndoStack.CanUndo == true))
+        {
+            _ = app.Undo();
+        }
+
+        if (ImGui.MenuItem("Redo", "Ctrl+Y", selected: false, enabled: app.CurrentSession?.UndoStack.CanRedo == true))
+        {
+            _ = app.Redo();
+        }
         ImGui.Separator();
         if (ImGui.MenuItem("Reset Layout"))
         {
@@ -69,14 +76,18 @@ internal sealed class EditorMainMenuBar
         ImGui.EndMenu();
     }
 
-    private static void DrawGameObjectMenu()
+    private static void DrawGameObjectMenu(EditorShellApp app)
     {
         if (!ImGui.BeginMenu("GameObject"))
         {
             return;
         }
 
-        _ = ImGui.MenuItem("Create Empty", string.Empty, selected: false, enabled: false);
+        if (ImGui.MenuItem("Create Empty", string.Empty, selected: false, enabled: app.CurrentSession is not null))
+        {
+            app.CreateGameObject();
+        }
+
         _ = ImGui.MenuItem("Create Script Object", string.Empty, selected: false, enabled: false);
         ImGui.EndMenu();
     }

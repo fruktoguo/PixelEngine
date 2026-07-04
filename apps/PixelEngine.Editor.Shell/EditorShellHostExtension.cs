@@ -13,6 +13,8 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
     private readonly EditorProject _project;
     private readonly EditorShellApp _app;
     private readonly EditorApp _editor;
+    private EditorSceneModel? _sceneModel;
+    private EditorUndoStack? _undoStack;
     private bool _panelsRegistered;
 
     public EditorShellHostExtension(EditorProject project, EditorShellApp app)
@@ -33,6 +35,17 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
     public long BridgeFrameCount => Bridge?.FrameIndex ?? 0;
 
     public EditorRenderBridge? Bridge { get; private set; }
+
+    public void ConfigureAuthoring(EditorSceneModel sceneModel, EditorUndoStack undoStack)
+    {
+        if (_panelsRegistered)
+        {
+            throw new InvalidOperationException("Authoring 服务必须在 Editor 面板注册前配置。");
+        }
+
+        _sceneModel = sceneModel ?? throw new ArgumentNullException(nameof(sceneModel));
+        _undoStack = undoStack ?? throw new ArgumentNullException(nameof(undoStack));
+    }
 
     public IDisposable? Attach(Engine engine, RenderWindow window, RenderPipeline pipeline)
     {
@@ -59,6 +72,11 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
         }
 
         _editor.AddPanel(new EditorMainMenuPanel(_app));
+        if (_sceneModel is not null && _undoStack is not null)
+        {
+            _editor.AddPanel(new GameObjectHierarchyPanel(_sceneModel, _undoStack));
+        }
+
         _editor.AddPanel(new ViewportPanel(() => pipeline.CurrentViewportTexture));
         _editor.AddPanel(new AssetBrowserPanel(new FileSystemAssetBrowserDataSource(_project.ContentRootPath)));
         _editor.AddPanel(new PerformanceHudPanel());
