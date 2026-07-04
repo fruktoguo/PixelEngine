@@ -287,6 +287,8 @@ public sealed class RenderingProjectDisciplineTests
         Assert.Contains("IsBoundaryEdge(context, materialId", builder, StringComparison.Ordinal);
         Assert.Contains("RenderStyleSegmentedBenchmarks", benchmark, StringComparison.Ordinal);
         Assert.Contains("BuildRenderBufferStyledSegmented", benchmark, StringComparison.Ordinal);
+        Assert.Contains("RenderStyleSegmentScannerBenchmarks", benchmark, StringComparison.Ordinal);
+        Assert.Contains("CountSolidUnbrokenRun", benchmark, StringComparison.Ordinal);
     }
 
     private static string ProjectPath(params string[] parts)

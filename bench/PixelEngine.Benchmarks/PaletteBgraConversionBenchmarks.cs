@@ -212,3 +212,39 @@ public class RenderStyleSegmentedBenchmarks
         }
     }
 }
+
+/// <summary>
+/// RenderStyle 分段 eligibility scanner 的 SIMD / scalar fallback 反汇编基准。
+/// </summary>
+[MemoryDiagnoser]
+public class RenderStyleSegmentScannerBenchmarks
+{
+    private const ushort Stone = 1;
+    private readonly ushort[] _materials = new ushort[1024];
+    private readonly byte[] _damage = new byte[1024];
+
+    /// <summary>
+    /// 初始化 scanner benchmark fixture。
+    /// </summary>
+    [GlobalSetup]
+    public void Setup()
+    {
+        Array.Fill(_materials, Stone);
+        Array.Clear(_damage);
+        _damage[^1] = 1;
+    }
+
+    /// <summary>
+    /// 扫描全等 material 且 Damage 全零的最长前缀。
+    /// </summary>
+    [Benchmark]
+    public int CountSolidUnbrokenRun()
+    {
+        return RenderStyleSegmentScanner.CountSolidUnbrokenRun(
+            _materials,
+            _damage,
+            0,
+            _materials.Length,
+            Stone);
+    }
+}
