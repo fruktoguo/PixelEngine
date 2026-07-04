@@ -115,6 +115,7 @@ public sealed class SimulationKernel(
             chunk.Material.AsSpan(localStart, run).Fill(material);
             chunk.Flags.AsSpan(localStart, run).Fill(flags);
             chunk.Lifetime.AsSpan(localStart, run).Fill(lifetime);
+            chunk.Damage.AsSpan(localStart, run).Clear();
             writes += run;
         });
 
@@ -138,6 +139,7 @@ public sealed class SimulationKernel(
         chunk.Material[local] = 0;
         chunk.Flags[local] = 0;
         chunk.Lifetime[local] = 0;
+        chunk.Damage[local] = 0;
         MarkDirty(wx, wy);
     }
 
@@ -158,7 +160,7 @@ public sealed class SimulationKernel(
             for (int i = 0; i < run; i++)
             {
                 int local = localStart + i;
-                rowChanged |= chunk.Material[local] != 0 || chunk.Flags[local] != 0 || chunk.Lifetime[local] != 0;
+                rowChanged |= chunk.Material[local] != 0 || chunk.Flags[local] != 0 || chunk.Lifetime[local] != 0 || chunk.Damage[local] != 0;
                 NotifyRigidDamageIfNeeded(worldX + i, worldY, chunk.Flags[local]);
             }
 
@@ -170,6 +172,7 @@ public sealed class SimulationKernel(
             chunk.Material.AsSpan(localStart, run).Clear();
             chunk.Flags.AsSpan(localStart, run).Clear();
             chunk.Lifetime.AsSpan(localStart, run).Clear();
+            chunk.Damage.AsSpan(localStart, run).Clear();
             writes += run;
         });
 
@@ -245,6 +248,7 @@ public sealed class SimulationKernel(
             chunk.Material[local] = 0;
             chunk.Flags[local] = 0;
             chunk.Lifetime[local] = 0;
+            chunk.Damage[local] = 0;
             DirtyRegionMarker.MarkCell(_chunks, wx, wy, DirtyPhaseTarget.Current, includeBoundaryNeighbors: true, Diagnostics);
         }
 
@@ -341,6 +345,169 @@ public sealed class SimulationKernel(
         return count;
     }
 
+    /// <summary>
+    /// 对单个世界坐标 cell 施加结构破坏。命中 RigidOwned cell 时只通知物理层，不在 Damage 平面累加。
+    /// </summary>
+    /// <param name="wx">世界 X 坐标。</param>
+    /// <param name="wy">世界 Y 坐标。</param>
+    /// <param name="damage">原始破坏当量。</param>
+    /// <returns>若 cell 被实际破坏并转为碎块或 Empty，则返回 true。</returns>
+    public bool ApplyStructuralDamage(int wx, int wy, ushort damage)
+    {
+        if (damage == 0 || !_chunks.TryGetChunk(CellAddressing.WorldToChunk(wx, wy), out Chunk chunk))
+        {
+            return false;
+        }
+
+        int local = CellAddressing.LocalIndex(wx, wy);
+        ushort material = chunk.Material[local];
+        if (material == 0)
+        {
+            chunk.Damage[local] = 0;
+            return false;
+        }
+
+        byte flags = chunk.Flags[local];
+        if (CellFlags.Has(flags, CellFlags.RigidOwned))
+        {
+            _rigidDamageSink.OnOwnedCellDamaged(wx, wy);
+            chunk.Damage[local] = 0;
+            return false;
+        }
+
+        if (MaterialProps.TypeOf(material) != CellType.Solid)
+        {
+            chunk.Damage[local] = 0;
+            return false;
+        }
+
+        int effectiveDamage = damage - (MaterialProps.HardnessOf(material) * EngineConstants.DamageHardnessAbsorb);
+        if (effectiveDamage <= 0)
+        {
+            return false;
+        }
+
+        ushort maxIntegrity = MaterialProps.MaxIntegrityOf(material);
+        if (maxIntegrity != 0)
+        {
+            int accumulated = Math.Min(byte.MaxValue, chunk.Damage[local] + effectiveDamage);
+            if (accumulated * EngineConstants.DamageIntegrityScale < maxIntegrity)
+            {
+                chunk.Damage[local] = (byte)accumulated;
+                MarkDamageDirty(wx, wy);
+                return false;
+            }
+        }
+
+        DestroyCell(chunk, local, wx, wy, material);
+        return true;
+    }
+
+    /// <summary>
+    /// 对圆形范围内已驻留 cell 施加结构破坏，按距离做线性衰减并跳过未驻留 chunk。
+    /// </summary>
+    /// <param name="centerX">圆心世界 X 坐标。</param>
+    /// <param name="centerY">圆心世界 Y 坐标。</param>
+    /// <param name="radius">半径，单位 cell。</param>
+    /// <param name="damage">中心破坏当量。</param>
+    /// <param name="falloff">是否按距离线性衰减。</param>
+    /// <returns>实际破坏的 cell 数量。</returns>
+    public int DamageCircle(int centerX, int centerY, int radius, ushort damage, bool falloff)
+    {
+        if (radius < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(radius), "破坏半径不能为负。");
+        }
+
+        if (damage == 0)
+        {
+            return 0;
+        }
+
+        int destroyed = 0;
+        int radiusSquared = radius * radius;
+        int minX = centerX - radius;
+        int maxX = centerX + radius;
+        int minY = centerY - radius;
+        int maxY = centerY + radius;
+        for (int wy = minY; wy <= maxY; wy++)
+        {
+            int dy = wy - centerY;
+            for (int wx = minX; wx <= maxX; wx++)
+            {
+                int dx = wx - centerX;
+                int distanceSquared = (dx * dx) + (dy * dy);
+                if (distanceSquared > radiusSquared)
+                {
+                    continue;
+                }
+
+                ushort cellDamage = damage;
+                if (falloff && radius > 0)
+                {
+                    double distance = Math.Sqrt(distanceSquared);
+                    double scale = Math.Max(0d, 1d - (distance / radius));
+                    cellDamage = (ushort)Math.Clamp((int)Math.Ceiling(damage * scale), 0, ushort.MaxValue);
+                }
+
+                if (cellDamage != 0 && ApplyStructuralDamage(wx, wy, cellDamage))
+                {
+                    destroyed++;
+                }
+            }
+        }
+
+        return destroyed;
+    }
+
+    /// <summary>
+    /// 沿归一化方向近似光束逐 cell 施加结构破坏，未驻留段安全跳过。
+    /// </summary>
+    /// <param name="startX">起点世界 X 坐标。</param>
+    /// <param name="startY">起点世界 Y 坐标。</param>
+    /// <param name="dirX">方向 X 分量。</param>
+    /// <param name="dirY">方向 Y 分量。</param>
+    /// <param name="length">长度，单位 cell。</param>
+    /// <param name="damagePerCell">每个命中 cell 的破坏当量。</param>
+    /// <returns>实际破坏的 cell 数量。</returns>
+    public int DamageBeam(int startX, int startY, float dirX, float dirY, int length, ushort damagePerCell)
+    {
+        if (length < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(length), "光束长度不能为负。");
+        }
+
+        float magnitude = MathF.Sqrt((dirX * dirX) + (dirY * dirY));
+        if (magnitude <= float.Epsilon || damagePerCell == 0)
+        {
+            return 0;
+        }
+
+        float stepX = dirX / magnitude;
+        float stepY = dirY / magnitude;
+        int destroyed = 0;
+        int lastX = int.MinValue;
+        int lastY = int.MinValue;
+        for (int i = 0; i <= length; i++)
+        {
+            int wx = (int)MathF.Round(startX + (stepX * i));
+            int wy = (int)MathF.Round(startY + (stepY * i));
+            if (wx == lastX && wy == lastY)
+            {
+                continue;
+            }
+
+            lastX = wx;
+            lastY = wy;
+            if (ApplyStructuralDamage(wx, wy, damagePerCell))
+            {
+                destroyed++;
+            }
+        }
+
+        return destroyed;
+    }
+
     internal SimulationDiagnostics Diagnostics { get; } = new();
 
     internal ChunkSnapshot SnapshotChunk(ChunkCoord coord)
@@ -370,7 +537,24 @@ public sealed class SimulationKernel(
         chunk.Material[local] = material;
         chunk.Flags[local] = CellFlags.SetParity(persistentFlags, CurrentParity);
         chunk.Lifetime[local] = DefaultLifetimeByte(material);
+        chunk.Damage[local] = 0;
         MarkDirty(wx, wy);
+    }
+
+    private void DestroyCell(Chunk chunk, int local, int wx, int wy, ushort sourceMaterial)
+    {
+        ushort rubbleTarget = MaterialProps.RubbleTargetOf(sourceMaterial);
+        chunk.Material[local] = rubbleTarget;
+        chunk.Flags[local] = rubbleTarget == 0 ? (byte)0 : CellFlags.SetParity(0, CurrentParity);
+        chunk.Lifetime[local] = DefaultLifetimeByte(rubbleTarget);
+        chunk.Damage[local] = 0;
+        MarkDamageDirty(wx, wy);
+    }
+
+    private void MarkDamageDirty(int wx, int wy)
+    {
+        _ = DirtyRegionMarker.TryMarkCell(_chunks, wx, wy, DirtyPhaseTarget.Working, includeBoundaryNeighbors: false, Diagnostics);
+        _ = DirtyRegionMarker.TryMarkCell(_chunks, wx, wy, DirtyPhaseTarget.Working, includeBoundaryNeighbors: true, Diagnostics);
     }
 
     private void ForEachChunkRowRun(int minX, int minY, int maxX, int maxY, RowRunAction action)

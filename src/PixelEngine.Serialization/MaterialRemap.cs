@@ -79,6 +79,37 @@ public sealed class MaterialRemap
     }
 
     /// <summary>
+    /// 原地重映射 material id，并在 saved material 缺失或损坏落到 fallback 时清空对应 Damage。
+    /// </summary>
+    public void RemapInPlace(Span<ushort> material, Span<byte> damage)
+    {
+        if (material.Length != damage.Length)
+        {
+            throw new ArgumentException("material 与 damage span 长度必须一致。", nameof(damage));
+        }
+
+        for (int i = 0; i < material.Length; i++)
+        {
+            ushort savedId = material[i];
+            if (savedId >= _lut.Length)
+            {
+                FallbackHitCount++;
+                material[i] = _fallbackId;
+                damage[i] = 0;
+                continue;
+            }
+
+            if (_fallbackBecauseMissing[savedId])
+            {
+                FallbackHitCount++;
+                damage[i] = 0;
+            }
+
+            material[i] = _lut[savedId];
+        }
+    }
+
+    /// <summary>
     /// 将 material 重映射 fallback 命中次数发布到 Core 计数器。
     /// </summary>
     public void PublishDiagnostics(EngineCounters counters)

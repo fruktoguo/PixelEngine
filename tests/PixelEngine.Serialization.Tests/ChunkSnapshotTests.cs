@@ -18,12 +18,14 @@ public sealed class ChunkSnapshotTests
         ushort[] material = new ushort[EngineConstants.ChunkArea];
         byte[] flags = new byte[EngineConstants.ChunkArea];
         byte[] lifetime = new byte[EngineConstants.ChunkArea];
+        byte[] damage = new byte[EngineConstants.ChunkArea];
         Half[] temperature = new Half[ChunkSnapshot.TemperatureCellCount];
 
-        ChunkSnapshot snapshot = new(new ChunkCoord(1, -2), material, flags, lifetime, temperature);
+        ChunkSnapshot snapshot = new(new ChunkCoord(1, -2), material, flags, lifetime, damage, temperature);
 
         Assert.Equal(new ChunkCoord(1, -2), snapshot.Coord);
         Assert.Equal(EngineConstants.ChunkArea, snapshot.Material.Length);
+        Assert.Equal(EngineConstants.ChunkArea, snapshot.Damage.Length);
         Assert.Equal(ChunkSnapshot.TemperatureCellCount, snapshot.Temperature.Length);
     }
 
@@ -36,12 +38,24 @@ public sealed class ChunkSnapshotTests
         ushort[] material = new ushort[EngineConstants.ChunkArea - 1];
         byte[] flags = new byte[EngineConstants.ChunkArea];
         byte[] lifetime = new byte[EngineConstants.ChunkArea];
+        byte[] damage = new byte[EngineConstants.ChunkArea];
         Half[] temperature = new Half[ChunkSnapshot.TemperatureCellCount];
 
         ArgumentException exception = Assert.Throws<ArgumentException>(() =>
-            _ = new ChunkSnapshot(new ChunkCoord(0, 0), material, flags, lifetime, temperature));
+            _ = new ChunkSnapshot(new ChunkCoord(0, 0), material, flags, lifetime, damage, temperature));
 
         Assert.Contains("Material", exception.Message, StringComparison.Ordinal);
+
+        ArgumentException damageException = Assert.Throws<ArgumentException>(() =>
+            _ = new ChunkSnapshot(
+                new ChunkCoord(0, 0),
+                new ushort[EngineConstants.ChunkArea],
+                flags,
+                lifetime,
+                new byte[EngineConstants.ChunkArea - 1],
+                temperature));
+
+        Assert.Contains("Damage", damageException.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -16,6 +16,7 @@ public class SerializationAllocationBenchmarks
     private readonly ushort[] _material = new ushort[EngineConstants.ChunkArea];
     private readonly byte[] _flags = new byte[EngineConstants.ChunkArea];
     private readonly byte[] _lifetime = new byte[EngineConstants.ChunkArea];
+    private readonly byte[] _damage = new byte[EngineConstants.ChunkArea];
     private readonly Half[] _temperature = new Half[ChunkSnapshot.TemperatureCellCount];
     private readonly ChunkCodec _codec = new();
     private readonly PooledByteBufferWriter _outputWriter = new(WriterCapacity);
@@ -32,6 +33,7 @@ public class SerializationAllocationBenchmarks
             _material[i] = (ushort)(i & 3);
             _flags[i] = (i & 7) == 0 ? CellFlags.Burning : (byte)0;
             _lifetime[i] = (byte)(i & 31);
+            _damage[i] = (byte)(i & 15);
         }
 
         for (int i = 0; i < _temperature.Length; i++)
@@ -55,6 +57,7 @@ public class SerializationAllocationBenchmarks
             _material,
             _flags,
             _lifetime,
+            _damage,
             _temperature);
         _codec.Encode(snapshot, _outputWriter, _payloadWriter);
     }

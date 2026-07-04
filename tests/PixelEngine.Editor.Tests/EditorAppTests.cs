@@ -246,6 +246,11 @@ public sealed class EditorAppTests
             Events.Add("Render");
         }
 
+        public void ResetDockLayout()
+        {
+            Events.Add("ResetDockLayout");
+        }
+
         public void AddMousePosition(float x, float y)
         {
         }

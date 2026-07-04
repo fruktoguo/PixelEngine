@@ -65,8 +65,8 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] 确认颜色不入 cell（渲染色由材质纹理采样 + 温度 glow 在渲染相位生成）。[plan/08 · §7.1/不变式 #7]
 - [x] 确认 AoS 16 字节 `Cell` 仅存在于工具/编辑路径，绝不进 sim pass。[plan/03/12 · §7.1]
 - [x] `Temperature` 确为 1/4 分辨率（CELL=4）而非全分辨率每 cell。[plan/04 · §7.1/§7.5]
-- [ ] 新增 per-cell **Damage(byte) SoA 平面**（持久破坏模型）纳入字节预算并按 §7.1 重评审：sim 热态 **4B→5B/cell（+25%）**，Damage 平面在 ~2M 全激活 cell 下约 **+2MB**，每常驻 chunk 由 **16KB（4B×4096）增至 20KB（5B×4096）**；须与 plan/03 SoA 定义、plan/07 chunk 常驻/序列化两处预算行**逐字对齐到统一 20KB 口径**（含本节现有 4B 明细 19,968B 的收敛复核）。[plan/03/07 · §7.1/§12.2]
-- [ ] Damage 平面**单缓冲原地更新**（守不变式 #1/#3，绝不双缓冲）、POH/`NativeMemory` 常驻，与其它 SoA lane 同为独立连续数组，绝不打包进 AoS 进 CA 热循环。[plan/03 · §7.1/不变式 #1/#3]
+- [x] 新增 per-cell **Damage(byte) SoA 平面**（持久破坏模型）纳入字节预算并按 §7.1 重评审：sim 热态 **4B→5B/cell（+25%）**，Damage 平面在 ~2M 全激活 cell 下约 **+2MB**，每常驻 chunk 由 **16KB（4B×4096）增至 20KB（5B×4096）**；须与 plan/03 SoA 定义、plan/07 chunk 常驻/序列化两处预算行**逐字对齐到统一 20KB 口径**（含本节现有 4B 明细 19,968B 的收敛复核）。[plan/03/07 · §7.1/§12.2]
+- [x] Damage 平面**单缓冲原地更新**（守不变式 #1/#3，绝不双缓冲）、POH/`NativeMemory` 常驻，与其它 SoA lane 同为独立连续数组，绝不打包进 AoS 进 CA 热循环。[plan/03 · §7.1/不变式 #1/#3]
 - [ ] 确认破坏视觉字段（Integrity/裂纹表现）**不入 cell**：RenderStyle 边缘/裂纹着色一律在渲染相位由 MaterialDef 视觉字段 CPU 算 BGRA，绝不写回 cell（守 #7），不占 per-cell 预算。[plan/08 · §7.1/不变式 #7]
 
 ### 4.2 稳态零托管分配
@@ -149,7 +149,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] LRU 驱逐（到相机距离 + 闲置时长），超上限提前驱逐最远 sleeping chunk 落盘。[plan/07 · §12.2]
 - [x] chunk payload RLE+LZ4 压制磁盘增长。[plan/07 · §11.3/§12.2]
 - [x] 长时间漫游压测常驻内存稳定在上限内、不无界增长。[plan/14 · §12.2]
-- [ ] Damage 平面进 ChunkSnapshot/ChunkCodec（RLE 段）后每常驻 chunk 序列化/常驻字节按 20KB 重算，确认 §4.10 硬上限（建议 ≤512MB）在 +25% per-cell 后仍守住，LRU 驱逐目标数按新 chunk 大小回校；SaveFormatVersion bump 后旧档→新档迁移（旧档 Damage=0）与 material remap 缺失 fallback 后 Damage 清 0 不产生额外常驻峰值。[plan/07 · §11.3/§12.2]
+- [x] Damage 平面进 ChunkSnapshot/ChunkCodec（RLE 段）后每常驻 chunk 序列化/常驻字节按 20KB 重算，确认 §4.10 硬上限（建议 ≤512MB）在 +25% per-cell 后仍守住，LRU 驱逐目标数按新 chunk 大小回校；SaveFormatVersion bump 后旧档→新档迁移（旧档 Damage=0）与 material remap 缺失 fallback 后 Damage 清 0 不产生额外常驻峰值。[plan/07 · §11.3/§12.2]
 
 ### 4.11 瓶颈按延迟+分支分析 + 目标硬件校准
 - [!] 阻塞：性能分析围绕 cache-miss/分支误预测计数器，**不按带宽**结论。[plan/14 · §12.7/§2 挑战三] 已接入 `HardwareCounter.CacheMisses` 与 `HardwareCounter.BranchMispredictions`，并新增 `tools/hardware-counter-preflight.ps1` 生成 `blocked_non_admin`/计数器列检查报告；`PerformanceHardeningToolingDisciplineTests.HardwareCounterPreflightWritesHostBoundaryReport` 已锁定脚本在当前宿主只产出平台/权限边界报告、默认不运行 benchmark。当前非管理员会话仍被 BenchmarkDotNet 拦截，需要 elevated ETW Kernel Session 才能采集真实硬件计数器。目标性能总证据还必须经 `tools/performance-target-evidence-preflight.ps1` 校验 `hardware_counters_cache_branch` scope/hash，并解析 `benchmarkDotNet=true`、`elevatedEtwKernelSession=true`、`cacheMissesPresent=true`、`branchMispredictionsPresent=true` 以及 `Cache Misses` / `Branch Mispredictions` 列名，不能用本机短样本替代。
@@ -172,7 +172,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 > 全部勾选方算本文档完成（AGENTS §7）。验收以**实测/反汇编**为准，不以代码存在为准。
 
 - [x] **SoA 全覆盖**：所有 sim 热数据 SoA，per-cell 字节预算按 4B/cell 对账通过，AoS 仅工具路径，颜色不入 cell。[§7.1/不变式 #7]
-- [ ] **per-cell 预算再对账（Damage 平面）**：加入 Damage(byte) 平面后 sim 热态 5B/cell（+25%）、每常驻 chunk 20KB、~2M cell +2MB 与 plan/03 SoA 定义、plan/07 chunk 常驻/序列化预算行**逐字一致**；Damage 平面单缓冲原地、POH 常驻，刚体像素经 IRigidDamageSink 路由重建、**绝不累加 Damage**（守 #1/#3/#5）复核通过。[§7.1/§12.2/不变式 #1/#3/#5]
+- [x] **per-cell 预算再对账（Damage 平面）**：加入 Damage(byte) 平面后 sim 热态 5B/cell（+25%）、每常驻 chunk 20KB、~2M cell +2MB 与 plan/03 SoA 定义、plan/07 chunk 常驻/序列化预算行**逐字一致**；Damage 平面单缓冲原地、POH 常驻，刚体像素经 IRigidDamageSink 路由重建、**绝不累加 Damage**（守 #1/#3/#5）复核通过。[§7.1/§12.2/不变式 #1/#3/#5]
 - [ ] **着色档与快速路径共存**：plan/08 RenderStyle 着色质量档接入既有二级光照降级顺序不冲突、可独立触发；开启时禁用 palette 行复制改世界空间逐像素计算、着色只在渲染相位算 BGRA 不写回 cell（守 #7）、相位9 稳态零分配。[§4.3/§4.9/不变式 #7]
 - [x] **稳态零分配**：CA/粒子/render buffer/反应/温度/序列化六条业务热路径与 JobSystem 多 worker 派发热路径 `MemoryDiagnoser` 全报 `0 B`；热路径静态核查无 LINQ/闭包/装箱/迭代器。[§12.4/AGENTS §3]
 - [x] **多线程齐全**：CA checkerboard、Box2D task 桥、render buffer、CCL/形状重建、粒子积分、温度 stencil、序列化字节准备七项均经持久线程池并行；无每帧 `Parallel.For`；活跃任务少时单线程回退生效。[§5.7/§12.7/§14.2/风险 R7]

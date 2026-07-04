@@ -7,6 +7,7 @@ internal sealed class ChunkSnapshot
         ushort[] material,
         byte[] flags,
         byte[] lifetime,
+        byte[] damage,
         DirtyRect currentDirty,
         DirtyRect workingDirty,
         ChunkState state)
@@ -15,6 +16,7 @@ internal sealed class ChunkSnapshot
         Material = material;
         Flags = flags;
         Lifetime = lifetime;
+        Damage = damage;
         CurrentDirty = currentDirty;
         WorkingDirty = workingDirty;
         State = state;
@@ -27,6 +29,8 @@ internal sealed class ChunkSnapshot
     public byte[] Flags { get; }
 
     public byte[] Lifetime { get; }
+
+    public byte[] Damage { get; }
 
     public DirtyRect CurrentDirty { get; }
 
@@ -42,6 +46,7 @@ internal sealed class ChunkSnapshot
             [.. chunk.Material],
             [.. chunk.Flags],
             [.. chunk.Lifetime],
+            [.. chunk.Damage],
             chunk.CurrentDirty,
             chunk.WorkingDirty,
             chunk.State);

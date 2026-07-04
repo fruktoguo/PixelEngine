@@ -43,7 +43,7 @@ public sealed class WorldSaveService(ChunkCodec? chunkCodec = null, ManifestCode
             world.Temperature.ExportBlock(chunk.Coord, temperature);
             chunkBuffer.Clear();
             _chunkCodec.Encode(
-                new ChunkSnapshot(chunk.Coord, chunk.Material, chunk.Flags, chunk.Lifetime, temperature),
+                new ChunkSnapshot(chunk.Coord, chunk.Material, chunk.Flags, chunk.Lifetime, chunk.Damage, temperature),
                 chunkBuffer);
             chunkStore.Write(chunk.Coord, chunkBuffer.WrittenSpan);
             MarkFlushed(world.Residency, chunk.Coord);
@@ -118,9 +118,9 @@ public sealed class WorldSaveService(ChunkCodec? chunkCodec = null, ManifestCode
             Chunk chunk = new(coord);
             _chunkCodec.Decode(
                 chunkBuffer.WrittenSpan,
-                new ChunkSnapshot(coord, chunk.Material, chunk.Flags, chunk.Lifetime, temperature),
+                new ChunkSnapshot(coord, chunk.Material, chunk.Flags, chunk.Lifetime, chunk.Damage, temperature),
                 world.CurrentParityBit);
-            remap.RemapInPlace(chunk.Material);
+            remap.RemapInPlace(chunk.Material, chunk.Damage);
             world.Temperature.ImportBlock(coord, temperature);
             chunk.SetCurrentDirty(DirtyRect.Full);
             world.Chunks.Add(chunk);

@@ -157,6 +157,36 @@ public sealed class MaterialRemapTests
     }
 
     /// <summary>
+    /// 验证 remap 联动 Damage：name 重排保留 Damage，缺失或损坏 saved id 落 fallback 时清 Damage。
+    /// </summary>
+    [Fact]
+    public void MaterialRemapWithDamageClearsOnlyFallbackCells()
+    {
+        MaterialNameTable saved = new(
+        [
+            (0, "empty"),
+            (1, "sand"),
+            (2, "acid"),
+            (4, "stone"),
+        ]);
+        MaterialTable current = new(
+        [
+            Material(0, "empty"),
+            Material(1, "stone"),
+            Material(2, "sand"),
+        ]);
+        MaterialRemap remap = MaterialRemap.Build(saved, current, fallbackId: 0);
+        ushort[] material = [1, 2, 4, 99, 0];
+        byte[] damage = [7, 8, 9, 10, 11];
+
+        remap.RemapInPlace(material, damage);
+
+        Assert.Equal([2, 0, 1, 0, 0], material);
+        Assert.Equal([7, 0, 9, 0, 11], damage);
+        Assert.Equal(2, remap.FallbackHitCount);
+    }
+
+    /// <summary>
     /// 验证 remap fallback 命中能发布到 Core 诊断计数器。
     /// </summary>
     [Fact]

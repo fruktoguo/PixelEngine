@@ -28,6 +28,9 @@ public sealed class MaterialHotTable
     private readonly float[] _heatCapacity;
     private readonly ushort[] _defaultLifetime;
     private readonly byte[] _durability;
+    private readonly byte[] _hardness;
+    private readonly ushort[] _maxIntegrity;
+    private readonly ushort[] _rubbleTarget;
     private readonly int[] _textureId;
     private readonly uint[] _baseColorBgra;
     private readonly byte[] _colorNoise;
@@ -56,6 +59,9 @@ public sealed class MaterialHotTable
         float[] heatCapacity,
         ushort[] defaultLifetime,
         byte[] durability,
+        byte[] hardness,
+        ushort[] maxIntegrity,
+        ushort[] rubbleTarget,
         int[] textureId,
         uint[] baseColorBgra,
         byte[] colorNoise,
@@ -83,6 +89,9 @@ public sealed class MaterialHotTable
         _heatCapacity = heatCapacity;
         _defaultLifetime = defaultLifetime;
         _durability = durability;
+        _hardness = hardness;
+        _maxIntegrity = maxIntegrity;
+        _rubbleTarget = rubbleTarget;
         _textureId = textureId;
         _baseColorBgra = baseColorBgra;
         _colorNoise = colorNoise;
@@ -197,6 +206,21 @@ public sealed class MaterialHotTable
     public ReadOnlySpan<byte> Durability => _durability;
 
     /// <summary>
+    /// 结构破坏吸收强度列。
+    /// </summary>
+    public ReadOnlySpan<byte> Hardness => _hardness;
+
+    /// <summary>
+    /// 结构完整度阈值列；0 表示有效伤害即时破坏。
+    /// </summary>
+    public ReadOnlySpan<ushort> MaxIntegrity => _maxIntegrity;
+
+    /// <summary>
+    /// 结构破坏后的目标材质列；0 表示 Empty。
+    /// </summary>
+    public ReadOnlySpan<ushort> RubbleTarget => _rubbleTarget;
+
+    /// <summary>
     /// 材质纹理 id 列；-1 表示纯色。
     /// </summary>
     public ReadOnlySpan<int> TextureId => _textureId;
@@ -291,6 +315,33 @@ public sealed class MaterialHotTable
     }
 
     /// <summary>
+    /// 热路径 unchecked 读取结构破坏吸收强度；调用方保证 material id 来自有效网格数据。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal byte HardnessOfUnchecked(ushort materialId)
+    {
+        return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_hardness), materialId);
+    }
+
+    /// <summary>
+    /// 热路径 unchecked 读取结构完整度阈值；调用方保证 material id 来自有效网格数据。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ushort MaxIntegrityOfUnchecked(ushort materialId)
+    {
+        return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_maxIntegrity), materialId);
+    }
+
+    /// <summary>
+    /// 热路径 unchecked 读取破坏目标材质；调用方保证 material id 来自有效网格数据。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ushort RubbleTargetOfUnchecked(ushort materialId)
+    {
+        return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_rubbleTarget), materialId);
+    }
+
+    /// <summary>
     /// 热路径 unchecked 读取材质属性位；调用方保证 material id 来自有效网格数据。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -325,6 +376,9 @@ public sealed class MaterialHotTable
         float[] heatCapacity = new float[count];
         ushort[] defaultLifetime = new ushort[count];
         byte[] durability = new byte[count];
+        byte[] hardness = new byte[count];
+        ushort[] maxIntegrity = new ushort[count];
+        ushort[] rubbleTarget = new ushort[count];
         int[] textureId = new int[count];
         uint[] baseColorBgra = new uint[count];
         byte[] colorNoise = new byte[count];
@@ -357,6 +411,9 @@ public sealed class MaterialHotTable
             heatCapacity[i] = def.HeatCapacity;
             defaultLifetime[i] = def.DefaultLifetime;
             durability[i] = def.Durability;
+            hardness[i] = def.Hardness != 0 ? def.Hardness : def.Durability;
+            maxIntegrity[i] = def.MaxIntegrity;
+            rubbleTarget[i] = def.RubbleTarget;
             textureId[i] = def.TextureId;
             baseColorBgra[i] = def.BaseColorBGRA;
             colorNoise[i] = def.ColorNoise;
@@ -388,6 +445,9 @@ public sealed class MaterialHotTable
             heatCapacity,
             defaultLifetime,
             durability,
+            hardness,
+            maxIntegrity,
+            rubbleTarget,
             textureId,
             baseColorBgra,
             colorNoise,
@@ -446,6 +506,9 @@ public sealed class MaterialHotTable
             heatCapacity,
             defaultLifetime,
             new byte[count],
+            new byte[count],
+            new ushort[count],
+            new ushort[count],
             CreateFilled(count, -1),
             new uint[count],
             new byte[count],

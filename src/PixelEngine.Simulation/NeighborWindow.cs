@@ -38,6 +38,16 @@ public ref struct NeighborWindow
     private ref byte _lifeBase7;
     private ref byte _lifeBase8;
 
+    private ref byte _damageBase0;
+    private ref byte _damageBase1;
+    private ref byte _damageBase2;
+    private ref byte _damageBase3;
+    private ref byte _damageBase4;
+    private ref byte _damageBase5;
+    private ref byte _damageBase6;
+    private ref byte _damageBase7;
+    private ref byte _damageBase8;
+
     /// <summary>
     /// 从驻留 chunk 源构造 3x3 邻域窗口。
     /// </summary>
@@ -82,6 +92,16 @@ public ref struct NeighborWindow
         _lifeBase6 = ref neighborhood.Slot6.GetLifetimeBase();
         _lifeBase7 = ref neighborhood.Slot7.GetLifetimeBase();
         _lifeBase8 = ref neighborhood.Slot8.GetLifetimeBase();
+
+        _damageBase0 = ref neighborhood.Slot0.GetDamageBase();
+        _damageBase1 = ref neighborhood.Slot1.GetDamageBase();
+        _damageBase2 = ref neighborhood.Slot2.GetDamageBase();
+        _damageBase3 = ref neighborhood.Slot3.GetDamageBase();
+        _damageBase4 = ref neighborhood.Slot4.GetDamageBase();
+        _damageBase5 = ref neighborhood.Slot5.GetDamageBase();
+        _damageBase6 = ref neighborhood.Slot6.GetDamageBase();
+        _damageBase7 = ref neighborhood.Slot7.GetDamageBase();
+        _damageBase8 = ref neighborhood.Slot8.GetDamageBase();
     }
 
     /// <summary>
@@ -121,6 +141,7 @@ public ref struct NeighborWindow
     public void SetMaterial(int wx, int wy, ushort value)
     {
         MaterialAt(wx, wy) = value;
+        DamageAt(wx, wy) = 0;
     }
 
     /// <summary>
@@ -160,6 +181,24 @@ public ref struct NeighborWindow
     }
 
     /// <summary>
+    /// 读取累计结构破坏度。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public byte GetDamage(int wx, int wy)
+    {
+        return DamageAt(wx, wy);
+    }
+
+    /// <summary>
+    /// 写入累计结构破坏度。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void SetDamage(int wx, int wy, byte value)
+    {
+        DamageAt(wx, wy) = value;
+    }
+
+    /// <summary>
     /// 返回材质 id 的可写引用。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -193,6 +232,17 @@ public ref struct NeighborWindow
     }
 
     /// <summary>
+    /// 返回累计结构破坏度的可写引用。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref byte DamageAt(int wx, int wy)
+    {
+        int slot = SlotOf(wx, wy);
+        int local = CellAddressing.LocalIndex(wx, wy);
+        return ref Unsafe.Add(ref SelectDamageBase(slot), local);
+    }
+
+    /// <summary>
     /// 交换两个 cell 的 Material、Flags 与 Lifetime，返回是否跨 chunk slot。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -214,6 +264,9 @@ public ref struct NeighborWindow
         ref byte life1 = ref Unsafe.Add(ref SelectLifetimeBase(slot1), local1);
         ref byte life2 = ref Unsafe.Add(ref SelectLifetimeBase(slot2), local2);
         (life1, life2) = (life2, life1);
+
+        Unsafe.Add(ref SelectDamageBase(slot1), local1) = 0;
+        Unsafe.Add(ref SelectDamageBase(slot2), local2) = 0;
 
         return slot1 != slot2;
     }
@@ -297,6 +350,34 @@ public ref struct NeighborWindow
                 return ref _lifeBase7;
             case 8:
                 return ref _lifeBase8;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(slot));
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private ref byte SelectDamageBase(int slot)
+    {
+        switch (slot)
+        {
+            case 0:
+                return ref _damageBase0;
+            case 1:
+                return ref _damageBase1;
+            case 2:
+                return ref _damageBase2;
+            case 3:
+                return ref _damageBase3;
+            case 4:
+                return ref _damageBase4;
+            case 5:
+                return ref _damageBase5;
+            case 6:
+                return ref _damageBase6;
+            case 7:
+                return ref _damageBase7;
+            case 8:
+                return ref _damageBase8;
             default:
                 throw new ArgumentOutOfRangeException(nameof(slot));
         }

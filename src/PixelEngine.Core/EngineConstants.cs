@@ -101,6 +101,16 @@ public static partial class EngineConstants
     public const int ParticleEjectMaxPerTick = 4096;
 
     /// <summary>
+    /// 结构破坏中每点 Hardness 吸收的原始 Damage，当量集中在 Core 常量表。
+    /// </summary>
+    public const int DamageHardnessAbsorb = 1;
+
+    /// <summary>
+    /// Damage byte 平面对 MaxIntegrity 的换算倍率。
+    /// </summary>
+    public const int DamageIntegrityScale = 1;
+
+    /// <summary>
     /// GPU compute 默认 work group X 尺寸，见 plan/09 §4.3。
     /// </summary>
     public const int GpuComputeWorkGroupSizeX = 16;

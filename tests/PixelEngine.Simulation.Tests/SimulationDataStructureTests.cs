@@ -52,6 +52,7 @@ public sealed class SimulationDataStructureTests
         chunk.Material[local] = 7;
         chunk.Flags[local] = CellFlags.RigidOwned;
         chunk.Lifetime[local] = 9;
+        chunk.Damage[local] = 5;
         chunk.MarkWorkingDirty(10, 11, EngineConstants.DirtyRectPadding);
 
         chunk.Reset(new ChunkCoord(-4, 5));
@@ -63,6 +64,7 @@ public sealed class SimulationDataStructureTests
         Assert.Equal(0, chunk.Material[local]);
         Assert.Equal(0, chunk.Flags[local]);
         Assert.Equal(0, chunk.Lifetime[local]);
+        Assert.Equal(0, chunk.Damage[local]);
         Assert.Equal(DirtyRect.Empty, chunk.CurrentDirty);
         Assert.Equal(DirtyRect.Empty, chunk.WorkingDirty);
         Assert.Equal(ChunkState.Sleeping, chunk.State);
@@ -111,6 +113,7 @@ public sealed class SimulationDataStructureTests
         ref byte flags = ref grid.FlagsAt(64, -1);
         flags = CellFlags.Set(flags, CellFlags.RigidOwned);
         grid.LifetimeAt(64, -1) = 9;
+        grid.DamageAt(64, -1) = 6;
 
         grid.SetMaterial(64, -1, 2);
 
@@ -119,6 +122,7 @@ public sealed class SimulationDataStructureTests
         Assert.Equal(CellType.Powder, grid.GetCellType(64, -1));
         Assert.Equal(0, grid.FlagsAt(64, -1));
         Assert.Equal(0, grid.LifetimeAt(64, -1));
+        Assert.Equal(0, grid.DamageAt(64, -1));
         Assert.Equal(new DirtyRect(0, 61, 2, 63), chunk.WorkingDirty);
         Assert.Equal(ChunkState.Awake, chunk.State);
         Assert.Equal(1, damageSink.Count);
@@ -165,9 +169,11 @@ public sealed class SimulationDataStructureTests
         window.SetMaterial(centerWx, centerWy, 17);
         window.SetFlags(centerWx, centerWy, CellFlags.Burning);
         window.SetLifetime(centerWx, centerWy, 3);
+        window.SetDamage(centerWx, centerWy, 9);
         window.SetMaterial(rightWx, rightWy, 29);
         window.SetFlags(rightWx, rightWy, CellFlags.FreeFalling);
         window.SetLifetime(rightWx, rightWy, 8);
+        window.SetDamage(rightWx, rightWy, 11);
 
         Assert.Equal(4, window.SlotOf(centerWx, centerWy));
         Assert.Equal(5, window.SlotOf(rightWx, rightWy));
@@ -184,7 +190,44 @@ public sealed class SimulationDataStructureTests
         Assert.Equal(17, window.GetMaterial(rightWx, rightWy));
         Assert.Equal(CellFlags.Burning, window.GetFlags(rightWx, rightWy));
         Assert.Equal(3, window.GetLifetime(rightWx, rightWy));
+        Assert.Equal(0, window.GetDamage(centerWx, centerWy));
+        Assert.Equal(0, window.GetDamage(rightWx, rightWy));
         Assert.Same(right, source.GetRequired(new ChunkCoord(center.Coord.X + 1, center.Coord.Y)));
+    }
+
+    /// <summary>
+    /// 验证结构破坏只累加普通 solid，RigidOwned cell 转交刚体 damage sink 且 Damage 恒清零。
+    /// </summary>
+    [Fact]
+    public void ApplyStructuralDamageDestroysSolidAndRoutesRigidOwned()
+    {
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        TestChunkSource source = new(chunk);
+        MaterialTable materials = new(
+        [
+            Material(0, "empty", CellType.Empty),
+            Material(1, "stone", CellType.Solid) with { MaxIntegrity = 5, RubbleTarget = 2 },
+            Material(2, "gravel", CellType.Powder),
+        ]);
+        CountingRigidDamageSink damageSink = new();
+        SimulationKernel kernel = new(source, new MaterialPropsTable(materials.Hot), rigidDamageSink: damageSink);
+        int solidLocal = CellAddressing.LocalIndexFromLocal(10, 10);
+        int rigidLocal = CellAddressing.LocalIndexFromLocal(11, 10);
+        chunk.Material[solidLocal] = 1;
+        chunk.Material[rigidLocal] = 1;
+        chunk.Flags[rigidLocal] = CellFlags.RigidOwned;
+        chunk.Damage[rigidLocal] = 12;
+
+        bool rigidDestroyed = kernel.ApplyStructuralDamage(11, 10, 9);
+        bool solidDestroyed = kernel.ApplyStructuralDamage(10, 10, 9);
+
+        Assert.False(rigidDestroyed);
+        Assert.True(solidDestroyed);
+        Assert.Equal(1, damageSink.Count);
+        Assert.Equal((11, 10), damageSink.Last);
+        Assert.Equal(0, chunk.Damage[rigidLocal]);
+        Assert.Equal(2, chunk.Material[solidLocal]);
+        Assert.Equal(0, chunk.Damage[solidLocal]);
     }
 
     /// <summary>
@@ -216,6 +259,22 @@ public sealed class SimulationDataStructureTests
             Count++;
             Last = (wx, wy);
         }
+    }
+
+    private static MaterialDef Material(ushort id, string name, CellType type)
+    {
+        return new MaterialDef
+        {
+            Id = id,
+            Name = name,
+            Type = type,
+            Density = type == CellType.Empty ? (byte)0 : (byte)200,
+            HeatCapacity = 1,
+            TextureId = -1,
+            MeltPoint = float.NaN,
+            FreezePoint = float.NaN,
+            BoilPoint = float.NaN,
+        };
     }
 
     private sealed class TestChunkSource : IChunkSource

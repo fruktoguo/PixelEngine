@@ -797,6 +797,7 @@ public sealed class PhysicsSystem : IDisposable
                 Grid.MaterialAt(wx, wy) = 0;
                 Grid.FlagsAt(wx, wy) = 0;
                 Grid.LifetimeAt(wx, wy) = 0;
+                Grid.DamageAt(wx, wy) = 0;
                 Grid.MarkDirty(wx, wy);
             }
         }

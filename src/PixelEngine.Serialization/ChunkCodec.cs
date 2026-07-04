@@ -50,14 +50,18 @@ public sealed class ChunkCodec
             RleCodec.EncodeU8(snapshot.Lifetime, payloadWriter);
             int lifetimeBytes = payloadWriter.WrittenCount - materialBytes - flagsBytes;
 
+            RleCodec.EncodeU8(snapshot.Damage, payloadWriter);
+            int damageBytes = payloadWriter.WrittenCount - materialBytes - flagsBytes - lifetimeBytes;
+
             WriteTemperature(snapshot.Temperature, payloadWriter);
-            int temperatureBytes = payloadWriter.WrittenCount - materialBytes - flagsBytes - lifetimeBytes;
+            int temperatureBytes = payloadWriter.WrittenCount - materialBytes - flagsBytes - lifetimeBytes - damageBytes;
             ChunkBlobHeader header = new(
                 SaveFormatVersions.ChunkBlob,
                 snapshot.Coord,
                 materialBytes,
                 flagsBytes,
                 lifetimeBytes,
+                damageBytes,
                 temperatureBytes,
                 payloadWriter.WrittenCount);
 
@@ -87,7 +91,7 @@ public sealed class ChunkCodec
         try
         {
             int written = Lz4BlockCodec.Decompress(
-                source[ChunkBlobHeader.Size..],
+                source[header.EncodedHeaderSize..],
                 payload.AsSpan(0, header.UncompressedPayloadBytes),
                 out _);
             if (written != header.UncompressedPayloadBytes)
@@ -119,6 +123,20 @@ public sealed class ChunkCodec
             }
 
             offset += header.LifetimeRleBytes;
+            if (header.DamageRleBytes == 0)
+            {
+                destination.Damage.Clear();
+            }
+            else
+            {
+                int damageWritten = RleCodec.DecodeU8(payloadSpan.Slice(offset, header.DamageRleBytes), destination.Damage);
+                if (damageWritten != destination.Damage.Length)
+                {
+                    throw new InvalidDataException("Damage RLE 解码长度不等于 ChunkArea。");
+                }
+            }
+
+            offset += header.DamageRleBytes;
             ReadTemperature(payloadSpan.Slice(offset, header.TemperatureBytes), destination.Temperature);
         }
         finally
