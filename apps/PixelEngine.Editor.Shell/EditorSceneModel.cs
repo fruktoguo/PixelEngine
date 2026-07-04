@@ -195,6 +195,77 @@ internal sealed class EditorSceneModel
         MarkDirty();
     }
 
+    public void SetTransform(int stableId, EditorSceneTransform transform)
+    {
+        ArgumentNullException.ThrowIfNull(transform);
+        Get(stableId).Transform = transform.Clone();
+        MarkDirty();
+    }
+
+    public void AddComponent(int stableId, EditorComponentModel component, int? insertIndex = null)
+    {
+        ArgumentNullException.ThrowIfNull(component);
+        List<EditorComponentModel> components = Get(stableId).Components;
+        int index = insertIndex.HasValue ? Math.Clamp(insertIndex.Value, 0, components.Count) : components.Count;
+        components.Insert(index, component.Clone());
+        MarkDirty();
+    }
+
+    public EditorComponentModel RemoveComponent(int stableId, int componentIndex)
+    {
+        List<EditorComponentModel> components = Get(stableId).Components;
+        if ((uint)componentIndex >= (uint)components.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(componentIndex), componentIndex, "组件索引越界。");
+        }
+
+        EditorComponentModel removed = components[componentIndex];
+        components.RemoveAt(componentIndex);
+        MarkDirty();
+        return removed;
+    }
+
+    public void MoveComponent(int stableId, int fromIndex, int toIndex)
+    {
+        List<EditorComponentModel> components = Get(stableId).Components;
+        if ((uint)fromIndex >= (uint)components.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(fromIndex), fromIndex, "组件索引越界。");
+        }
+
+        int target = Math.Clamp(toIndex, 0, components.Count - 1);
+        if (fromIndex == target)
+        {
+            return;
+        }
+
+        EditorComponentModel component = components[fromIndex];
+        components.RemoveAt(fromIndex);
+        components.Insert(target, component);
+        MarkDirty();
+    }
+
+    public void SetComponentField(int stableId, int componentIndex, string fieldName, string? value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+        List<EditorComponentModel> components = Get(stableId).Components;
+        if ((uint)componentIndex >= (uint)components.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(componentIndex), componentIndex, "组件索引越界。");
+        }
+
+        if (value is null)
+        {
+            _ = components[componentIndex].SerializedFields.Remove(fieldName);
+        }
+        else
+        {
+            components[componentIndex].SerializedFields[fieldName] = value;
+        }
+
+        MarkDirty();
+    }
+
     public void Move(int stableId, int? parentId, int? insertIndex = null)
     {
         EditorGameObject gameObject = Get(stableId);

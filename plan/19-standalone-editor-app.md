@@ -389,7 +389,7 @@ GameObject authoring：
 - [x] Edit 模式 authoring→运行时投影（结构编辑同步、Behaviour 不 tick）（§4.5）
 - [x] `EditorCommand` + `EditorUndoStack`：创建/删除/重父/重命名/复制/启用位全走命令栈 Undo/Redo + 脏标记（§4.5）；加删组件/改字段由节点 5 接续，改 TRS 由节点 6 接续
 - [x] `GameObjectHierarchyPanel`：Unity 式树、启用位、右键创建/删除/重命名/复制、拖拽重父（防环）、选中联动；刚体/仿真实体保持在运行时诊断面板职责内（§4.6）
-- [ ] `GameObjectInspectorPanel`：Header(Name/Enabled/StableId/Prefab) + Transform 块 + 组件列表(复用字段反射编辑)+移除/排序 + Add Component 搜索列表（来源 `ScriptAssemblyRegistry`）（§4.7）
+- [x] `GameObjectInspectorPanel`：Header(Name/Enabled/StableId/Prefab) + Transform 块 + 组件列表(复用字段反射编辑)+移除/排序 + Add Component 搜索列表（来源 `ScriptAssemblyRegistry`）（§4.7）
 - [ ] `SceneViewPanel`：复用 `ViewportPanel`，Edit 相机平移/缩放（§4.8）
 - [ ] `SceneGizmoController`：`Hexa.NET.ImGuizmo` 平移/旋转/缩放 gizmo（W/E/R），写回 authoring + 与 Inspector 双向联动（§4.8）
 - [ ] Scene View 点选拾取 GameObject（屏幕空间命中，空对象 gizmo 图标 billboard 作命中目标）+ 与世界画刷/gizmo 输入仲裁（`WantCaptureMouse`）（§4.8）
@@ -423,7 +423,7 @@ GameObject authoring：
 - [ ] 主菜单栏 File/Edit/GameObject/Window/Play/Help 全部可用（含 Build Settings…）；默认 dock 布局呈现 Hierarchy/Scene View/Inspector/Project/Console/HUD/构建与发布，可保存恢复与 Reset（§4.3）
 - [ ] Edit 模式 sim 暂停可编辑、Play 模式同窗口运行游戏、退出 Play 回滚到编辑态（复用既有快照，类 Unity），切换不破坏帧节奏（#6，§4.4）
 - [ ] 层级面板可创建/删除/重命名/复制 GameObject、拖拽重父（防环）、选中联动 Inspector 与 Scene View（§4.6）。节点 4 已落地层级树与 authoring selection；Inspector/Scene View 联动随节点 5/6 闭合。
-- [ ] Inspector 显示 Name/Enabled/Transform TRS/组件列表，可 Add/Remove 组件、编辑组件公开字段，改动经命令栈可 Undo/Redo（§4.5、§4.7）
+- [x] Inspector 显示 Name/Enabled/Transform TRS/组件列表，可 Add/Remove 组件、编辑组件公开字段，改动经命令栈可 Undo/Redo（§4.5、§4.7）
 - [ ] Scene View 内 gizmo 可平移/旋转/缩放选中 GameObject 并与 Inspector 双向联动；可点选拾取 GameObject（含空对象 billboard）；gizmo 与世界画刷输入正确仲裁（§4.8）
 - [ ] 场景可 Save/Save As 为 `.scene`（v2），读→写→读逐字段等价；v1 旧场景可加载并升级（§4.9）
 - [ ] prefab 完整可用：创建资产、实例化、记录/Revert override、编辑资产传播到实例、**嵌套** prefab 递归展开物化正确（§4.10）
@@ -464,7 +464,7 @@ GameObject authoring：
 - [x] 节点 2：`feat(editor-shell): 工程模型/项目选择器/最近列表 + 主菜单栏与默认布局`（§4.2–§4.3）
 - [x] 节点 3：`feat(editor-shell): in-process 宿主引擎 Edit/Play 接入（attach 既有窗口 + IEditorHostExtension 注入）`（§4.4，前置 `plan/18` API）
 - [x] 节点 4：`feat(editor-shell): GameObject authoring 模型 + StableId 映射 + 层级面板 + 命令栈 Undo/Redo`（§4.5–§4.6）
-- [ ] 节点 5：`feat(editor-shell): GameObject Inspector（Transform/组件增删改/Add Component）`（§4.7）
+- [x] 节点 5：`feat(editor-shell): GameObject Inspector（Transform/组件增删改/Add Component）`（§4.7）
 - [ ] 节点 6：`feat(editor-shell): Scene View 变换 gizmo 与拾取`（§4.8）
 - [ ] 节点 7：`feat(editor-shell): .scene 保存往返（schema v2）+ 完整 prefab（含嵌套/传播）`（§4.9–§4.10）
 - [ ] 节点 8：`feat(editor): Build 面板设置模型与 UI（平台/输出/产物名/图标/场景清单/配置/符号/内容选项）`（§5.2–§5.3，shell 程序集）

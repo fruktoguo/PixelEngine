@@ -157,6 +157,103 @@ internal sealed class SetGameObjectEnabledCommand(int stableId, bool enabled) : 
     }
 }
 
+internal sealed class SetTransformCommand(int stableId, EditorSceneTransform newTransform) : IEditorCommand
+{
+    private EditorSceneTransform? _oldTransform;
+
+    public string Name => "Set Transform";
+
+    public void Execute(EditorSceneModel scene)
+    {
+        _oldTransform ??= scene.Get(stableId).Transform.Clone();
+        scene.SetTransform(stableId, newTransform);
+    }
+
+    public void Undo(EditorSceneModel scene)
+    {
+        if (_oldTransform is not null)
+        {
+            scene.SetTransform(stableId, _oldTransform);
+        }
+    }
+}
+
+internal sealed class AddComponentCommand(int stableId, EditorComponentModel component, int? insertIndex = null) : IEditorCommand
+{
+    public string Name => "Add Component";
+
+    public void Execute(EditorSceneModel scene)
+    {
+        scene.AddComponent(stableId, component, insertIndex);
+    }
+
+    public void Undo(EditorSceneModel scene)
+    {
+        int index = insertIndex ?? (scene.Get(stableId).Components.Count - 1);
+        _ = scene.RemoveComponent(stableId, index);
+    }
+}
+
+internal sealed class RemoveComponentCommand(int stableId, int componentIndex) : IEditorCommand
+{
+    private EditorComponentModel? _removed;
+
+    public string Name => "Remove Component";
+
+    public void Execute(EditorSceneModel scene)
+    {
+        _removed = scene.RemoveComponent(stableId, componentIndex);
+    }
+
+    public void Undo(EditorSceneModel scene)
+    {
+        if (_removed is not null)
+        {
+            scene.AddComponent(stableId, _removed, componentIndex);
+        }
+    }
+}
+
+internal sealed class MoveComponentCommand(int stableId, int fromIndex, int toIndex) : IEditorCommand
+{
+    public string Name => "Move Component";
+
+    public void Execute(EditorSceneModel scene)
+    {
+        scene.MoveComponent(stableId, fromIndex, toIndex);
+    }
+
+    public void Undo(EditorSceneModel scene)
+    {
+        scene.MoveComponent(stableId, toIndex, fromIndex);
+    }
+}
+
+internal sealed class SetComponentFieldCommand(int stableId, int componentIndex, string fieldName, string? value) : IEditorCommand
+{
+    private string? _oldValue;
+    private bool _hadOldValue;
+
+    public string Name => "Set Component Field";
+
+    public void Execute(EditorSceneModel scene)
+    {
+        EditorComponentModel component = scene.Get(stableId).Components[componentIndex];
+        if (!_hadOldValue && component.SerializedFields.TryGetValue(fieldName, out string? existing))
+        {
+            _oldValue = existing;
+            _hadOldValue = true;
+        }
+
+        scene.SetComponentField(stableId, componentIndex, fieldName, value);
+    }
+
+    public void Undo(EditorSceneModel scene)
+    {
+        scene.SetComponentField(stableId, componentIndex, fieldName, _hadOldValue ? _oldValue : null);
+    }
+}
+
 internal sealed class ReparentGameObjectCommand(int stableId, int? newParentId, int? newIndex = null) : IEditorCommand
 {
     private int? _oldParentId;
