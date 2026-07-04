@@ -11,13 +11,15 @@ namespace PixelEngine.Rendering;
 /// <param name="camera">相机快照。</param>
 /// <param name="simStepped">本帧 sim 是否实际步进。</param>
 /// <param name="debugCellColors">可选逐 cell 调试着色钩子。</param>
+/// <param name="frameTimeSeconds">渲染帧时间相位；仅供视觉着色使用，不驱动 sim 追帧。</param>
 public sealed class RenderFrameContext(
     IChunkSource chunks,
     MaterialTable materials,
     TemperatureField temperature,
     CameraState camera,
     bool simStepped,
-    IDebugCellColorProvider? debugCellColors = null)
+    IDebugCellColorProvider? debugCellColors = null,
+    float frameTimeSeconds = 0f)
 {
     /// <summary>
     /// 驻留 chunk 源。
@@ -48,4 +50,9 @@ public sealed class RenderFrameContext(
     /// 可选逐 cell 调试着色钩子；用于 editor overlay，不改变权威 cell 数据。
     /// </summary>
     public IDebugCellColorProvider? DebugCellColors { get; } = debugCellColors;
+
+    /// <summary>
+    /// 渲染帧时间相位。sim 降频复用上帧世界纹理时不会重算本值对应的世界着色。
+    /// </summary>
+    public float FrameTimeSeconds { get; } = frameTimeSeconds;
 }

@@ -67,7 +67,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] `Temperature` 确为 1/4 分辨率（CELL=4）而非全分辨率每 cell。[plan/04 · §7.1/§7.5]
 - [x] 新增 per-cell **Damage(byte) SoA 平面**（持久破坏模型）纳入字节预算并按 §7.1 重评审：sim 热态 **4B→5B/cell（+25%）**，Damage 平面在 ~2M 全激活 cell 下约 **+2MB**，每常驻 chunk 由 **16KB（4B×4096）增至 20KB（5B×4096）**；须与 plan/03 SoA 定义、plan/07 chunk 常驻/序列化两处预算行**逐字对齐到统一 20KB 口径**（含本节现有 4B 明细 19,968B 的收敛复核）。[plan/03/07 · §7.1/§12.2]
 - [x] Damage 平面**单缓冲原地更新**（守不变式 #1/#3，绝不双缓冲）、POH/`NativeMemory` 常驻，与其它 SoA lane 同为独立连续数组，绝不打包进 AoS 进 CA 热循环。[plan/03 · §7.1/不变式 #1/#3]
-- [ ] 确认破坏视觉字段（Integrity/裂纹表现）**不入 cell**：RenderStyle 边缘/裂纹着色一律在渲染相位由 MaterialDef 视觉字段 CPU 算 BGRA，绝不写回 cell（守 #7），不占 per-cell 预算。[plan/08 · §7.1/不变式 #7]
+- [x] 确认破坏视觉字段（Integrity/裂纹表现）**不入 cell**：RenderStyle 边缘/裂纹着色一律在渲染相位由 MaterialDef 视觉字段 CPU 算 BGRA，绝不写回 cell（守 #7），不占 per-cell 预算。[plan/08 · §7.1/不变式 #7]
 
 ### 4.2 稳态零托管分配
 - [x] CA pass（相位 4）稳态零分配，`MemoryDiagnoser` 报 `Allocated == 0 B`。[plan/03 · §12.4]
@@ -92,7 +92,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] 持久线程池多 worker 派发对象复用，`ParallelRange` / `ParallelRangeRaw` 经单测与 `MemoryDiagnoser` 证实零分配。[plan/02/14 · §12.4/§14.2]
 - [x] 活跃任务/活跃 chunk 低于阈值时回退单线程。[plan/02/03 · §5.7/风险 R7]
 - [x] per-thread/per-chunk 元数据填充到 64 字节 cache line 防 false sharing。[plan/02 · §12.7]
-- [ ] plan/08 新 **RenderStyle 着色质量档**（描边 EdgeColor / 流动噪声 flowTint / 裂纹 / emissive glow）开启时与整数 zoom palette **行复制快速路径**的共存判定：质量档启用即**禁用行复制、改按屏幕像素世界空间逐像素计算 BGRA**（行复制会丢失 per-pixel 噪声/描边），二者互斥选择，保持相位9**零托管分配**且并行区块调度不变。[plan/08 · §3.3 相位9/§9.3]
+- [x] plan/08 新 **RenderStyle 着色质量档**（描边 EdgeColor / 流动噪声 flowTint / 裂纹 / emissive glow）开启时与整数 zoom palette **行复制快速路径**的共存判定：质量档启用即**禁用行复制、改按屏幕像素世界空间逐像素计算 BGRA**（行复制会丢失 per-pixel 噪声/描边），二者互斥选择，保持相位9**零托管分配**且并行区块调度不变。[plan/08 · §3.3 相位9/§9.3]
 
 ### 4.4 SIMD 落实点
 - [x] 温度 5-point stencil 向量化（Intrinsics + scalar fallback）。[plan/04 · §12.5]

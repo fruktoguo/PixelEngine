@@ -64,6 +64,11 @@ public sealed class MaterialVisualTable
     public ReadOnlySpan<bool> LegendVisible => _legendVisible;
 
     /// <summary>
+    /// 是否存在会改变 render buffer 输出的样式字段。
+    /// </summary>
+    public bool HasStyleEffects { get; private init; }
+
+    /// <summary>
     /// 从材质定义派生渲染相位只读视觉表。
     /// </summary>
     public static MaterialVisualTable FromDefinitions(ReadOnlySpan<MaterialDef> definitions)
@@ -75,6 +80,7 @@ public sealed class MaterialVisualTable
         byte[] opacity = new byte[count];
         uint[] highlightColorBgra = new uint[count];
         bool[] legendVisible = new bool[count];
+        bool hasStyleEffects = false;
 
         for (int i = 0; i < count; i++)
         {
@@ -85,6 +91,10 @@ public sealed class MaterialVisualTable
             opacity[i] = def.Opacity;
             highlightColorBgra[i] = def.HighlightColorBGRA;
             legendVisible[i] = def.LegendVisible;
+            hasStyleEffects |= def.RenderStyle != MaterialRenderStyle.Ground ||
+                def.EdgeColorBGRA != 0 ||
+                def.Opacity != byte.MaxValue ||
+                def.HighlightColorBGRA != 0;
         }
 
         return new MaterialVisualTable(
@@ -93,6 +103,9 @@ public sealed class MaterialVisualTable
             edgeColorBgra,
             opacity,
             highlightColorBgra,
-            legendVisible);
+            legendVisible)
+        {
+            HasStyleEffects = hasStyleEffects,
+        };
     }
 }

@@ -243,6 +243,7 @@ public sealed class RenderBufferBuilder(
             camera.OriginWorldX == MathF.Truncate(camera.OriginWorldX) &&
             camera.OriginWorldY == MathF.Truncate(camera.OriginWorldY) &&
             context.DebugCellColors is null &&
+            !ShouldUseMaterialStyles(context) &&
             !context.Temperature.HasActiveBlocks &&
             (_textures is null || !hot.HasTexturedMaterials);
     }
@@ -257,6 +258,7 @@ public sealed class RenderBufferBuilder(
             camera.OriginWorldX != MathF.Truncate(camera.OriginWorldX) ||
             camera.OriginWorldY != MathF.Truncate(camera.OriginWorldY) ||
             context.DebugCellColors is not null ||
+            ShouldUseMaterialStyles(context) ||
             context.Temperature.HasActiveBlocks ||
             (_textures is not null && hot.HasTexturedMaterials))
         {
@@ -272,6 +274,11 @@ public sealed class RenderBufferBuilder(
 
         pixelsPerCell = rounded;
         return true;
+    }
+
+    private bool ShouldUseMaterialStyles(RenderFrameContext context)
+    {
+        return _options.StyleLevel == RenderBufferStyleLevel.Full && context.Materials.Visual.HasStyleEffects;
     }
 
     private bool CanClearEmptyWorld(RenderFrameContext context)
@@ -452,27 +459,188 @@ public sealed class RenderBufferBuilder(
         int local = CellAddressing.LocalIndex(worldX, worldY);
         ushort materialId = chunk.Material[local];
         byte cellFlags = chunk.Flags[local];
-        ref readonly MaterialDef material = ref context.Materials.Get(materialId);
-        uint color = material.BaseColorBGRA;
-        if (material.TextureId >= 0 && _textures is not null &&
+        MaterialHotTable hot = context.Materials.Hot;
+        MaterialVisualTable visual = context.Materials.Visual;
+        uint color = hot.BaseColorBGRA[materialId];
+        if (hot.TextureId[materialId] >= 0 && _textures is not null &&
+            GetMaterialForTexture(context.Materials, materialId, out MaterialDef material) &&
             _textures.TrySample(in material, worldX, worldY, out uint textureColor))
         {
             color = textureColor;
         }
 
-        color = ApplyColorNoise(color, material.ColorNoise, worldX, worldY);
+        color = ApplyColorNoise(color, hot.ColorNoise[materialId], worldX, worldY);
         float temperature = context.Temperature.GetTemperature(worldX, worldY);
         color = ApplyTemperatureGlow(color, temperature);
+        bool styledEmissive = false;
+        if (ShouldUseMaterialStyles(context))
+        {
+            color = ApplyMaterialStyle(
+                context,
+                chunk,
+                local,
+                materialId,
+                hot.ColorNoise[materialId],
+                hot.Integrity[materialId],
+                visual.RenderStyle[materialId],
+                visual.EdgeColorBGRA[materialId],
+                visual.Opacity[materialId],
+                visual.HighlightColorBGRA[materialId],
+                color,
+                worldX,
+                worldY,
+                out styledEmissive);
+        }
+
         if (context.DebugCellColors?.TryGetDebugColor(worldX, worldY, materialId, cellFlags, temperature, out uint debugColor) == true)
         {
             color = debugColor;
         }
 
-        MaterialProperty flags = material.PropertyFlags;
+        MaterialProperty flags = hot.PropertyFlags[materialId];
         isEmissive = (flags & MaterialProperty.Emissive) != 0 ||
+            styledEmissive ||
             temperature > _options.TemperatureGlowThreshold;
-        isOccluder = material.Type == CellType.Solid || (flags & MaterialProperty.Static) != 0;
+        isOccluder = hot.Type[materialId] == CellType.Solid || (flags & MaterialProperty.Static) != 0;
         return color;
+    }
+
+    private static bool GetMaterialForTexture(MaterialTable materials, ushort materialId, out MaterialDef material)
+    {
+        material = materials.Get(materialId);
+        return true;
+    }
+
+    private uint ApplyMaterialStyle(
+        RenderFrameContext context,
+        Chunk chunk,
+        int local,
+        ushort materialId,
+        byte colorNoise,
+        ushort integrity,
+        MaterialRenderStyle renderStyle,
+        uint edgeColor,
+        byte opacity,
+        uint highlightColor,
+        uint color,
+        int worldX,
+        int worldY,
+        out bool styledEmissive)
+    {
+        styledEmissive = false;
+        switch (renderStyle)
+        {
+            case MaterialRenderStyle.Powder:
+                color = ApplyColorNoise(color, colorNoise == 0 ? (byte)32 : colorNoise, worldX, worldY);
+                break;
+            case MaterialRenderStyle.Liquid:
+                color = ApplyFlowHighlight(color, highlightColor, worldX, worldY, context.FrameTimeSeconds);
+                break;
+            case MaterialRenderStyle.Gas:
+                color = ApplyOpacity(color, opacity);
+                break;
+            case MaterialRenderStyle.Hazard:
+                styledEmissive = true;
+                color = ApplyPulseHighlight(color, highlightColor, context.FrameTimeSeconds);
+                color = ApplyBoundaryEdge(context, materialId, edgeColor, color, worldX, worldY);
+                break;
+            case MaterialRenderStyle.Emissive:
+                styledEmissive = true;
+                color = ApplyPulseHighlight(color, highlightColor, context.FrameTimeSeconds);
+                break;
+            case MaterialRenderStyle.Solid:
+            case MaterialRenderStyle.Destructible:
+            case MaterialRenderStyle.Ground:
+            default:
+                color = ApplyBoundaryEdge(context, materialId, edgeColor, color, worldX, worldY);
+                break;
+        }
+
+        if ((renderStyle == MaterialRenderStyle.Destructible ||
+                renderStyle == MaterialRenderStyle.Solid ||
+                renderStyle == MaterialRenderStyle.Ground) &&
+            integrity != 0)
+        {
+            color = ApplyDamageCrack(color, chunk.Damage[local], integrity);
+        }
+
+        return color;
+    }
+
+    private uint ApplyBoundaryEdge(RenderFrameContext context, ushort materialId, uint edgeColor, uint color, int worldX, int worldY)
+    {
+        return edgeColor != 0 &&
+            (IsBoundaryEdge(context, materialId, worldX - 1, worldY) ||
+                IsBoundaryEdge(context, materialId, worldX, worldY - 1))
+            ? Blend(color, edgeColor, 0.65f)
+            : color;
+    }
+
+    private bool IsBoundaryEdge(RenderFrameContext context, ushort materialId, int neighborX, int neighborY)
+    {
+        if (!context.Chunks.TryGetChunk(CellAddressing.WorldToChunk(neighborX, neighborY), out Chunk neighborChunk))
+        {
+            return true;
+        }
+
+        ushort neighborMaterial = neighborChunk.Material[CellAddressing.LocalIndex(neighborX, neighborY)];
+        if (neighborMaterial == materialId)
+        {
+            return false;
+        }
+
+        CellType neighborType = context.Materials.Hot.Type[neighborMaterial];
+        return neighborType != CellType.Solid &&
+            (context.Materials.Hot.PropertyFlags[neighborMaterial] & MaterialProperty.Static) == 0;
+    }
+
+    private static uint ApplyDamageCrack(uint color, byte damage, ushort integrity)
+    {
+        if (damage == 0)
+        {
+            return color;
+        }
+
+        float amount = Math.Clamp(damage * EngineConstants.DamageIntegrityScale / (float)integrity, 0f, 1f);
+        return Blend(color, 0xFF050505u, MathF.Min(0.75f, amount * 0.8f));
+    }
+
+    private static uint ApplyFlowHighlight(uint color, uint highlightColor, int worldX, int worldY, float frameTimeSeconds)
+    {
+        if (highlightColor == 0)
+        {
+            return color;
+        }
+
+        int phase = (int)(frameTimeSeconds * 12f);
+        uint hash = unchecked((uint)((worldX * 1103515245) ^ (worldY * 12345) ^ phase));
+        float amount = ((hash >> 28) & 0x7) == 0 ? 0.28f : 0.08f;
+        return Blend(color, highlightColor, amount);
+    }
+
+    private static uint ApplyPulseHighlight(uint color, uint highlightColor, float frameTimeSeconds)
+    {
+        if (highlightColor == 0)
+        {
+            return color;
+        }
+
+        float amount = 0.18f + ((MathF.Sin(frameTimeSeconds * 8f) + 1f) * 0.11f);
+        return Blend(color, highlightColor, amount);
+    }
+
+    private static uint ApplyOpacity(uint color, byte opacity)
+    {
+        if (opacity == byte.MaxValue)
+        {
+            return color;
+        }
+
+        float alpha = opacity / 255f;
+        byte b = (byte)((color & 0xFF) * alpha);
+        byte g = (byte)(((color >> 8) & 0xFF) * alpha);
+        byte r = (byte)(((color >> 16) & 0xFF) * alpha);
+        return PackBgra(b, g, r, opacity);
     }
 
     private uint ApplyTemperatureGlow(uint bgra, float temperature)
@@ -511,6 +679,16 @@ public sealed class RenderBufferBuilder(
     private static byte AddScaled(byte value, byte target, float amount)
     {
         return (byte)Math.Clamp(value + ((target - value) * amount), 0, 255);
+    }
+
+    private static uint Blend(uint source, uint target, float amount)
+    {
+        amount = Math.Clamp(amount, 0f, 1f);
+        byte b = AddScaled((byte)(source & 0xFF), (byte)(target & 0xFF), amount);
+        byte g = AddScaled((byte)((source >> 8) & 0xFF), (byte)((target >> 8) & 0xFF), amount);
+        byte r = AddScaled((byte)((source >> 16) & 0xFF), (byte)((target >> 16) & 0xFF), amount);
+        byte a = AddScaled((byte)((source >> 24) & 0xFF), (byte)((target >> 24) & 0xFF), amount);
+        return PackBgra(b, g, r, a);
     }
 
     private static byte Adjust(byte value, int delta)
