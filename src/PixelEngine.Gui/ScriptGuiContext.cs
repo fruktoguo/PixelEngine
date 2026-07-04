@@ -7,7 +7,7 @@ namespace PixelEngine.Gui;
 /// <summary>
 /// 将脚本公开的 <see cref="IGuiContext" /> 适配到当前 ImGui frame。
 /// </summary>
-public sealed class ScriptGuiContext(int width, int height, float deltaTime, GuiInputSnapshot capture) : IGuiContext
+public sealed class ScriptGuiContext(int width, int height, float deltaTime, GuiInputSnapshot capture) : IGuiContext, IGuiDrawContext
 {
     /// <inheritdoc />
     public int Width { get; } = Math.Max(1, width);
@@ -27,22 +27,44 @@ public sealed class ScriptGuiContext(int width, int height, float deltaTime, Gui
     /// <inheritdoc />
     public void SetNextWindow(float x, float y, float width, float height, GuiCondition condition = GuiCondition.Always)
     {
+        SetNextWindowCore(x, y, width, height, MapCondition(condition));
+    }
+
+    /// <inheritdoc />
+    public void SetNextWindow(float x, float y, float width, float height, GuiDrawCondition condition = GuiDrawCondition.Always)
+    {
+        SetNextWindowCore(x, y, width, height, MapCondition(condition));
+    }
+
+    private static void SetNextWindowCore(float x, float y, float width, float height, ImGuiCond condition)
+    {
         if (!float.IsFinite(x) || !float.IsFinite(y) || !float.IsFinite(width) || !float.IsFinite(height))
         {
             throw new ArgumentOutOfRangeException(nameof(width), "GUI 窗口坐标与尺寸必须是有限数值。");
         }
 
-        ImGui.SetNextWindowPos(new Vector2(x, y), MapCondition(condition));
-        ImGui.SetNextWindowSize(new Vector2(Math.Max(1f, width), Math.Max(1f, height)), MapCondition(condition));
+        ImGui.SetNextWindowPos(new Vector2(x, y), condition);
+        ImGui.SetNextWindowSize(new Vector2(Math.Max(1f, width), Math.Max(1f, height)), condition);
     }
 
     /// <inheritdoc />
     public bool BeginWindow(string id, string title, GuiWindowFlags flags = GuiWindowFlags.None)
     {
+        return BeginWindowCore(id, title, MapWindowFlags(flags));
+    }
+
+    /// <inheritdoc />
+    public bool BeginWindow(string id, string title, GuiDrawWindowFlags flags = GuiDrawWindowFlags.None)
+    {
+        return BeginWindowCore(id, title, MapWindowFlags(flags));
+    }
+
+    private static bool BeginWindowCore(string id, string title, ImGuiWindowFlags flags)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         ArgumentNullException.ThrowIfNull(title);
         bool visible = true;
-        return ImGui.Begin($"{title}##{id}", ref visible, MapWindowFlags(flags));
+        return ImGui.Begin($"{title}##{id}", ref visible, flags);
     }
 
     /// <inheritdoc />
@@ -114,6 +136,16 @@ public sealed class ScriptGuiContext(int width, int height, float deltaTime, Gui
         };
     }
 
+    private static ImGuiCond MapCondition(GuiDrawCondition condition)
+    {
+        return condition switch
+        {
+            GuiDrawCondition.Always => ImGuiCond.Always,
+            GuiDrawCondition.FirstUseEver => ImGuiCond.FirstUseEver,
+            _ => throw new ArgumentOutOfRangeException(nameof(condition), condition, "未知 GUI 条件。"),
+        };
+    }
+
     private static ImGuiWindowFlags MapWindowFlags(GuiWindowFlags flags)
     {
         ImGuiWindowFlags result = ImGuiWindowFlags.None;
@@ -148,6 +180,47 @@ public sealed class ScriptGuiContext(int width, int height, float deltaTime, Gui
         }
 
         if ((flags & GuiWindowFlags.NoScrollbar) != 0)
+        {
+            result |= ImGuiWindowFlags.NoScrollbar;
+        }
+
+        return result;
+    }
+
+    private static ImGuiWindowFlags MapWindowFlags(GuiDrawWindowFlags flags)
+    {
+        ImGuiWindowFlags result = ImGuiWindowFlags.None;
+        if ((flags & GuiDrawWindowFlags.NoTitleBar) != 0)
+        {
+            result |= ImGuiWindowFlags.NoTitleBar;
+        }
+
+        if ((flags & GuiDrawWindowFlags.NoResize) != 0)
+        {
+            result |= ImGuiWindowFlags.NoResize;
+        }
+
+        if ((flags & GuiDrawWindowFlags.NoMove) != 0)
+        {
+            result |= ImGuiWindowFlags.NoMove;
+        }
+
+        if ((flags & GuiDrawWindowFlags.AlwaysAutoResize) != 0)
+        {
+            result |= ImGuiWindowFlags.AlwaysAutoResize;
+        }
+
+        if ((flags & GuiDrawWindowFlags.NoSavedSettings) != 0)
+        {
+            result |= ImGuiWindowFlags.NoSavedSettings;
+        }
+
+        if ((flags & GuiDrawWindowFlags.NoBackground) != 0)
+        {
+            result |= ImGuiWindowFlags.NoBackground;
+        }
+
+        if ((flags & GuiDrawWindowFlags.NoScrollbar) != 0)
         {
             result |= ImGuiWindowFlags.NoScrollbar;
         }
