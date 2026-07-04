@@ -98,6 +98,32 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证编辑器壳按 plan/19 节点 3 通过 Shell adapter 接入 Engine，而不是让 Hosting 重新引用 Editor。
+    /// </summary>
+    [Fact]
+    public void EditorShellSessionAttachesEngineThroughHostExtension()
+    {
+        string root = FindRepositoryRoot();
+        string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
+        string source = string.Join(
+            '\n',
+            Directory.EnumerateFiles(shellDirectory, "*.cs").Select(File.ReadAllText));
+
+        Assert.Contains("EditorProjectSession.Open", source, StringComparison.Ordinal);
+        Assert.Contains(".WithProject(project.ToEngineProject())", source, StringComparison.Ordinal);
+        Assert.Contains(".UseVSync(true)", source, StringComparison.Ordinal);
+        Assert.Contains(".AddEditorHostExtension(editorHost)", source, StringComparison.Ordinal);
+        Assert.Contains("engine.AttachWindowRuntime(window)", source, StringComparison.Ordinal);
+        Assert.Contains("EditorShellHostExtension : IEditorHostExtension", source, StringComparison.Ordinal);
+        Assert.Contains("EditorRenderBridge.AttachIfEnabled", source, StringComparison.Ordinal);
+        Assert.Contains("EditorWindowInputConnector", source, StringComparison.Ordinal);
+        Assert.Contains("EngineEditorPlaySessionService", source, StringComparison.Ordinal);
+        Assert.Contains("EngineWorldSnapshotStore", source, StringComparison.Ordinal);
+        Assert.Contains("CurrentSession.RunOneTick", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("RenderWindow.Create", source.Replace("EditorHostBootstrap.Create", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Demo 源码不绕过 Hosting/Scripting 公开入口访问内容或模拟实现。
     /// </summary>
     [Fact]

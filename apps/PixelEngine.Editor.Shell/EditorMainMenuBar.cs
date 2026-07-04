@@ -108,9 +108,21 @@ internal sealed class EditorMainMenuBar
             return;
         }
 
-        _ = ImGui.MenuItem("Play", "Ctrl+P", selected: false, enabled: app.HasOpenProject);
-        _ = ImGui.MenuItem("Pause", string.Empty, selected: false, enabled: false);
-        _ = ImGui.MenuItem("Step", string.Empty, selected: false, enabled: false);
+        if (ImGui.MenuItem("Play", "Ctrl+P", selected: false, enabled: app.CurrentSession is not null))
+        {
+            app.EnterPlayMode();
+        }
+
+        if (ImGui.MenuItem("Pause", string.Empty, selected: false, enabled: app.CurrentSession is not null))
+        {
+            app.EnterEditMode();
+        }
+
+        if (ImGui.MenuItem("Step", string.Empty, selected: false, enabled: app.CurrentSession is not null))
+        {
+            app.StepOnce();
+        }
+
         ImGui.EndMenu();
     }
 
