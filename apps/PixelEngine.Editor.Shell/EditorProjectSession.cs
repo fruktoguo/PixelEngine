@@ -123,14 +123,14 @@ internal sealed class EditorProjectSession : IDisposable
     public PixelEngine.Hosting.EditorPlaySessionResult EnterPlayCurrent()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        RefreshEditProjectionIfNeeded(force: true);
+        RefreshEditProjectionIfNeeded();
         return _playSession.EnterPlayCurrent();
     }
 
     public PixelEngine.Hosting.EditorPlaySessionResult EnterPlayTemporary()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        RefreshEditProjectionIfNeeded(force: true);
+        RefreshEditProjectionIfNeeded();
         return _playSession.EnterPlayTemporary();
     }
 

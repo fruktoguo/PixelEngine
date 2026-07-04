@@ -68,6 +68,9 @@ internal sealed class EditorShellApp
         int executed = 0;
         int requestedTicks = _options.WindowTicks;
         bool configuredImGui = false;
+        bool scriptedPlayEntered = false;
+        bool scriptedPlayExited = false;
+        bool scriptedSceneSaved = false;
         while (!shellWindow.Window.IsClosing)
         {
             double now = stopwatch.Elapsed.TotalSeconds;
@@ -103,6 +106,15 @@ internal sealed class EditorShellApp
             else
             {
                 CurrentSession.RunOneTick(deltaSeconds);
+                if (_options.ScriptedProbe)
+                {
+                    RunScriptedProbeActions(
+                        executed,
+                        ref scriptedPlayEntered,
+                        ref scriptedPlayExited,
+                        ref scriptedSceneSaved);
+                }
+
                 ApplyDeferredClose();
             }
 
@@ -125,11 +137,46 @@ internal sealed class EditorShellApp
                 $"editor_panels={CurrentSession?.PanelCount ?? 0}, " +
                 $"editor_bridge_frames={CurrentSession?.EditorBridgeFrameCount ?? executed}, " +
                 $"render_camera_synced={projectOpen}, " +
+                $"scripted_play_entered={scriptedPlayEntered}, " +
+                $"scripted_play_exited={scriptedPlayExited}, " +
+                $"scripted_scene_saved={scriptedSceneSaved}, " +
                 $"project_open={projectOpen}, " +
                 $"window_ticks={executed}");
         }
 
         return 0;
+    }
+
+    private void RunScriptedProbeActions(
+        int executedTicks,
+        ref bool playEntered,
+        ref bool playExited,
+        ref bool sceneSaved)
+    {
+        if (CurrentSession is null)
+        {
+            return;
+        }
+
+        if (!playEntered && executedTicks >= 10)
+        {
+            CurrentSession.EnterPlayMode();
+            playEntered = true;
+            return;
+        }
+
+        if (playEntered && !playExited && executedTicks >= 20)
+        {
+            CurrentSession.EnterEditMode();
+            playExited = true;
+            return;
+        }
+
+        if (playExited && !sceneSaved && executedTicks >= 30)
+        {
+            CurrentSession.SaveScene();
+            sceneSaved = true;
+        }
     }
 
     public void CreateProject(string projectRoot, string name)
