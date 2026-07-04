@@ -168,6 +168,42 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证编辑器壳按 plan/19 节点 6 接入 Scene View、真实相机控制、ImGuizmo 变换与点选拾取。
+    /// </summary>
+    [Fact]
+    public void EditorShellDeclaresSceneViewGizmoCameraAndPicking()
+    {
+        string root = FindRepositoryRoot();
+        string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
+        string source = string.Join(
+            '\n',
+            Directory.EnumerateFiles(shellDirectory, "*.cs").Select(File.ReadAllText));
+        XDocument shellProject = XDocument.Load(Path.Combine(shellDirectory, "PixelEngine.Editor.Shell.csproj"));
+
+        Assert.Contains("Hexa.NET.ImGuizmo", ReadIncludes(shellProject, "PackageReference"));
+        Assert.Contains("class SceneViewPanel", source, StringComparison.Ordinal);
+        Assert.Contains("new SceneViewPanel(", source, StringComparison.Ordinal);
+        Assert.Contains("engine.Context.GetService<ScriptCameraApi>()", source, StringComparison.Ordinal);
+        Assert.Contains("ScriptCameraApi camera", source, StringComparison.Ordinal);
+        Assert.Contains("_camera.SetZoom", source, StringComparison.Ordinal);
+        Assert.Contains("_camera.SetCenter", source, StringComparison.Ordinal);
+        Assert.Contains("ViewportPanel.FitTexture", source, StringComparison.Ordinal);
+        Assert.Contains("ViewportPanel.CreateTextureRef", source, StringComparison.Ordinal);
+        Assert.Contains("MaterialBrushPalettePanel? brushPanel", source, StringComparison.Ordinal);
+        Assert.Contains("brushPanel.ApplyAt", source, StringComparison.Ordinal);
+        Assert.Contains("WantCaptureMouse", source, StringComparison.Ordinal);
+        Assert.Contains("IsGizmoCapturingMouse", source, StringComparison.Ordinal);
+        Assert.Contains("TryPick", source, StringComparison.Ordinal);
+        Assert.Contains("SelectGameObject", source, StringComparison.Ordinal);
+        Assert.Contains("ImGuizmo.Manipulate", source, StringComparison.Ordinal);
+        Assert.Contains("ImGuizmoOperation.Translate", source, StringComparison.Ordinal);
+        Assert.Contains("ImGuizmoOperation.RotateZ", source, StringComparison.Ordinal);
+        Assert.Contains("ImGuizmoOperation.Scale", source, StringComparison.Ordinal);
+        Assert.Contains("new SetTransformCommand", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new ViewportPanel(", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Demo 源码不绕过 Hosting/Scripting 公开入口访问内容或模拟实现。
     /// </summary>
     [Fact]

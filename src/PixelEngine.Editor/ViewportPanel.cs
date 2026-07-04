@@ -75,7 +75,12 @@ public sealed class ViewportPanel(Func<RenderViewportTexture> textureProvider) :
         return new Vector2(MathF.Max(1f, textureWidth * scale), MathF.Max(1f, textureHeight * scale));
     }
 
-    private static unsafe ImTextureRef CreateTextureRef(uint handle)
+    /// <summary>
+    /// 将 OpenGL 纹理句柄转换为 ImGui 可绘制的纹理引用。
+    /// </summary>
+    /// <param name="handle">OpenGL 纹理句柄。</param>
+    /// <returns>ImGui 纹理引用。</returns>
+    public static unsafe ImTextureRef CreateTextureRef(uint handle)
     {
         return new ImTextureRef(null, (ImTextureID)(ulong)handle);
     }
