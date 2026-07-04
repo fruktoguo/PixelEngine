@@ -356,7 +356,7 @@ player-only 与布局
 - [x] 「Build And Run」成功后自动启动产出的 `PixelEngine Demo.exe` 并正常进入游戏（默认起始场景 playable-world 或面板选定场景）（§5.3/§5.6）
 - [x] 产出 player 包 `app/` 内不含 `PixelEngine.Editor.dll` 与 `ImGuizmo*`/`ImPlot*`，但含玩家 HUD 所需 `Hexa.NET.ImGui` 核心，audit 校验通过（§5.7）
 - [x] 场景清单：仅入包所选场景，启动场景经 `content/startup.json` 生效，player 不加 `--scene` 直接进选定启动场景（§5.6）
-- [ ] 失败诊断：故意造 publish/audit 失败时，面板高亮失败阶段并回显脚本断言原文与 exit code；缺 SDK/pwsh 时预检给出明确可执行提示，绝不静默（§5.4）
+- [x] 失败诊断：故意造 publish/audit 失败时，面板高亮失败阶段并回显脚本断言原文与 exit code；缺 SDK/pwsh 时预检给出明确可执行提示，绝不静默（§5.4）
 - [ ] 取消运行中的构建能杀掉 dotnet/publish 子树，随后重跑构建成功（无残留污染）（§5.4）
 - [x] 「含调试符号」开发构建保留 pdb 走 dev-audit 宽松校验；Release+无符号走严格 audit，二者产物布局符合各自规则（§5.8）
 - [ ] 构建全程 UI 不卡顿（后台线程 + 每帧 drain 队列），设置持久化重启后恢复（§5.2/§5.4）
@@ -484,3 +484,4 @@ GameObject authoring：
 - [x] 节点 17：`test(editor-shell): shell scripted-probe 覆盖关闭工程与同窗口重建 session`（§4.1、§4.4、§6）
 - [x] 节点 18：`test(editor-shell): shell scripted-build-probe 覆盖编辑器内 Build 与手工 tools 出包字节一致`（§5.4、§5.5、§5.10）
 - [x] 节点 19：`test(editor-shell): shell scripted-build-run-probe 覆盖 Build And Run 启动玩家包短跑`（§5.3、§5.6、§5.10）
+- [x] 节点 20：`test(editor-shell): shell scripted-build-probe 覆盖构建失败诊断`（§5.4、§5.10）

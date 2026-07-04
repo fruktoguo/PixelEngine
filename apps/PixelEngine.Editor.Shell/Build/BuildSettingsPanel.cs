@@ -475,9 +475,12 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             _log.Add(item);
             if (item.Kind is BuildEventKind.Progress or BuildEventKind.Result)
             {
+                BuildPhase nextPhase = item.Phase == BuildPhase.Unknown && item.Level == BuildLogLevel.Error
+                    ? _view.Phase
+                    : item.Phase;
                 _view = _view with
                 {
-                    Phase = item.Phase,
+                    Phase = nextPhase,
                     Percent = item.Percent,
                 };
             }

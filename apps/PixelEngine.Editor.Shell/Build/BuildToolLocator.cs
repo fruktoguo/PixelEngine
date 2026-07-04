@@ -7,7 +7,10 @@ internal sealed class BuildToolLocator
         string repositoryRoot = FindRepositoryRoot();
         bool windows = OperatingSystem.IsWindows();
         string buildPlayerName = windows ? "build-player.ps1" : "build-player.sh";
-        string buildPlayerPath = Path.Combine(repositoryRoot, "tools", buildPlayerName);
+        string? overridePath = Environment.GetEnvironmentVariable("PIXELENGINE_BUILD_PLAYER_PATH");
+        string buildPlayerPath = string.IsNullOrWhiteSpace(overridePath)
+            ? Path.Combine(repositoryRoot, "tools", buildPlayerName)
+            : Path.GetFullPath(overridePath);
         return new BuildToolLocatorResult
         {
             RepositoryRoot = repositoryRoot,

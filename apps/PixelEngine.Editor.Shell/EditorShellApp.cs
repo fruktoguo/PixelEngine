@@ -279,10 +279,12 @@ internal sealed class EditorShellApp
             $"package_archive={result?.PackageArchive ?? "<missing>"}, " +
             $"size_bytes={result?.SizeBytes.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "<missing>"}, " +
             $"sha256={result?.Sha256 ?? "<missing>"}, " +
+            $"error_present={!string.IsNullOrWhiteSpace(result?.Error)}, " +
+            $"error={SanitizeSummaryValue(result?.Error ?? "<missing>")}, " +
             $"phase_timing_count={result?.PhaseTimingsMs.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "0"}, " +
             $"phase_timings={phaseTimings}, " +
             $"log_count={snapshot.LogCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
-            $"diagnostic={diagnostic.Replace(',', ';')}");
+            $"diagnostic={SanitizeSummaryValue(diagnostic)}");
     }
 
     private ScriptedPlayerRunProbeResult RunScriptedPlayerProbe(BuildResult? result)
@@ -392,7 +394,15 @@ internal sealed class EditorShellApp
             $"stdout={result.StdoutPath}, " +
             $"stderr={result.StderrPath}, " +
             $"capture={result.CapturePath}, " +
-            $"diagnostic={result.Diagnostic.Replace(',', ';')}");
+            $"diagnostic={SanitizeSummaryValue(result.Diagnostic)}");
+    }
+
+    private static string SanitizeSummaryValue(string value)
+    {
+        return value
+            .Replace('\r', ' ')
+            .Replace('\n', ' ')
+            .Replace(',', ';');
     }
 
     private void RunScriptedProbeActions(
