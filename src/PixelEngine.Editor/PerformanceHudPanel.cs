@@ -272,6 +272,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
             uploadMs,
             uiUpdateMs,
             uiCompositeMs,
+            counters?.UiFontMissingGlyphs ?? 0,
             audioMs,
             cpuWorkMs,
             gpuFrameMs,
@@ -417,7 +418,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
         ImGui.TextUnformatted($"physics: {sample.PhysicsMs:F2} ms");
         ImGui.TextUnformatted($"shape rebuild: {sample.ShapeRebuildMs:F2} ms");
         ImGui.TextUnformatted($"render/style/upload: {sample.RenderMs:F2} / {sample.RenderStyleMs:F2} / {sample.UploadMs:F2} ms");
-        ImGui.TextUnformatted($"ui update/composite: {sample.UiUpdateMs:F2} / {sample.UiCompositeMs:F2} ms");
+        ImGui.TextUnformatted($"ui update/composite/fontMissing: {sample.UiUpdateMs:F2} / {sample.UiCompositeMs:F2} ms / {sample.UiFontMissingGlyphs}");
         ImGui.TextUnformatted($"audio: {sample.AudioMs:F2} ms");
     }
 

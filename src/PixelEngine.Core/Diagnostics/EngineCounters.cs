@@ -21,6 +21,7 @@ public sealed class EngineCounters
     private long _rigidBodies;
     private long _residentChunks;
     private long _residentMemoryBytes;
+    private long _uiFontMissingGlyphs;
 
     /// <summary>
     /// 获取或设置活跃 chunk 数。
@@ -196,6 +197,11 @@ public sealed class EngineCounters
     /// 获取或设置最近一帧游戏 UI / GUI present 层合成耗时，单位毫秒。
     /// </summary>
     public double UiCompositeMilliseconds { get; set; }
+
+    /// <summary>
+    /// 获取累计 UI 字体缺字码点数。
+    /// </summary>
+    public long UiFontMissingGlyphs => Volatile.Read(ref _uiFontMissingGlyphs);
 
     /// <summary>
     /// 获取或设置最近一帧 SwapBuffers / vsync / present 阻塞等待耗时，单位毫秒。
@@ -477,5 +483,19 @@ public sealed class EngineCounters
     public void AddResidentMemoryBytes(long delta)
     {
         _ = Interlocked.Add(ref _residentMemoryBytes, delta);
+    }
+
+    /// <summary>
+    /// 线程安全地累加 UI 字体缺字码点数。
+    /// </summary>
+    /// <param name="delta">增量。</param>
+    public void AddUiFontMissingGlyphs(long delta)
+    {
+        if (delta <= 0)
+        {
+            return;
+        }
+
+        _ = Interlocked.Add(ref _uiFontMissingGlyphs, delta);
     }
 }

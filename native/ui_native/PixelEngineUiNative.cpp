@@ -676,6 +676,23 @@ PE_UI_NATIVE_API void peui_native_renderer_set_viewport(PeUiRenderer* renderer, 
     }
 }
 
+PE_UI_NATIVE_API int32_t peui_native_register_font_face(PeUiRenderer* renderer, const char* font_path)
+{
+    if (renderer == nullptr || font_path == nullptr || font_path[0] == '\0')
+    {
+        return 0;
+    }
+
+    renderer->lastError.clear();
+    if (Rml::LoadFontFace(Rml::String(font_path), true))
+    {
+        return 1;
+    }
+
+    renderer->lastError = std::string("Rml::LoadFontFace failed for ") + font_path;
+    return 0;
+}
+
 PE_UI_NATIVE_API Rml::ElementDocument* peui_native_load_document_memory(
     PeUiRenderer* renderer,
     const char* document,

@@ -25,7 +25,9 @@ public readonly record struct FontEngineOptions(
         return this with
         {
             UiRootDirectory = Path.GetFullPath(UiRootDirectory),
-            PreferredFontPath = string.IsNullOrWhiteSpace(PreferredFontPath) ? null : PreferredFontPath.Trim(),
+            PreferredFontPath = string.IsNullOrWhiteSpace(PreferredFontPath)
+                ? null
+                : Path.GetFullPath(PreferredFontPath.Trim()),
         };
     }
 }

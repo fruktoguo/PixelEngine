@@ -81,6 +81,15 @@ internal static unsafe partial class RmlUiNative
     internal static partial void RendererSetViewport(IntPtr renderer, int width, int height);
 
     /// <summary>
+    /// 向 RmlUi FontEngine 注册字体文件。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="fontPath">UTF-8 字体路径，需以 0 结尾。</param>
+    /// <returns>成功返回 1。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_register_font_face")]
+    internal static partial int RegisterFontFace(IntPtr renderer, byte* fontPath);
+
+    /// <summary>
     /// 从 UTF-8 内存载入 RmlUi 文档。
     /// </summary>
     /// <param name="renderer">renderer 句柄。</param>

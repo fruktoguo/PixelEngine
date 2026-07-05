@@ -622,9 +622,13 @@ public sealed class Engine : IDisposable
             _ => throw new ArgumentOutOfRangeException(nameof(Context.Options.GameUiBackend), Context.Options.GameUiBackend, "未知游戏 UI 后端。"),
         };
         GameUiHost host = new(backend);
+        FontEngine fontEngine = new(new FontEngineOptions(Path.Combine(Context.Options.ContentRoot, "ui")));
+        UiFontSelection fontSelection = fontEngine.Resolve();
+        Context.RegisterService(fontEngine);
         host.Initialize(new UiBackendInitializeInfo(
             new UiViewport(0, 0, Math.Max(1, window.Width), Math.Max(1, window.Height), 1f),
-            Context.Options.GameUiBackend));
+            Context.Options.GameUiBackend,
+            fontSelection));
         Context.RegisterService(host);
         Context.RegisterService(backend);
         UiInputRouter inputRouter = new(host, new RenderWindowUiInputSource(window));

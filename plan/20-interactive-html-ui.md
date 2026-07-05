@@ -199,8 +199,8 @@ C#↔UI 通信：
 - [~] `UiDiagnostics`：已把 `ui.update`（模型推送/后端 Update/事件 drain）与 `ui.composite`（RmlUi/ManagedFallback/脚本 GUI present 层合成）接入 `FrameSubPhase`、`EngineCounters` 与 plan/12 性能 HUD；`ui.paint/upload`、事件驱动重绘验证与 plan/18 降级联动仍待后续切片（§3.9）
 
 字体引擎（独立节点）：
-- [~] `FontEngine`：已实现 content/ui/fonts 优先、`GuiFontManager` 共享系统候选回退、DPI 字号与共享 glyph range 覆盖扫描；RmlUi/Ultralight 字形供给与诊断计数器接入待后续切片（§3.7）
-- [~] CJK 子集资产接入：`FontEngine` 已复用 `PixelEngine.Gui.GuiFontManager` 的 CJK 候选字体与 glyph range 定义，content/ui/fonts 候选优先生效；实际子集字体资产落盘与三后端注册待后续切片（§3.7，呼应 plan/12 §3.3）
+- [~] `FontEngine`：已实现 content/ui/fonts 优先、`GuiFontManager` 共享系统候选回退、DPI 字号与共享 glyph range 覆盖扫描；已通过 `UiBackendInitializeInfo.FontSelection` 向后端供给字体选择，RmlUi 后端真实调用 native `Rml::LoadFontFace` 注册字体，并把缺字数累计到 `EngineCounters.UiFontMissingGlyphs` / plan/12 性能 HUD；Ultralight 字形供给与事件驱动缺字采样仍待可选 profile 激活后续切片（§3.7）
+- [~] CJK 子集资产接入：`FontEngine` 已复用 `PixelEngine.Gui.GuiFontManager` 的 CJK 候选字体与 glyph range 定义，content/ui/fonts 候选优先生效，RmlUi 可消费该选择；实际子集字体资产落盘与 Ultralight 注册待后续切片（§3.7，呼应 plan/12 §3.3）
 
 内容与资产：
 - [~] `content/ui/` 结构 + `ui-manifest.json` 加载器：已实现纯 I/O + STJ 源生成 manifest 解析、screen id→资产路径映射、preload 标记、重复 id/路径逃逸/缺失文件校验，并接入 `GameUiServiceBridge` 优先按清单解析屏幕；fonts/images 目录契约待后续切片（§3.8）

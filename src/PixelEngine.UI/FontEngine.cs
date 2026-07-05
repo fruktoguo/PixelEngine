@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Text;
+using PixelEngine.Core.Diagnostics;
 using PixelEngine.Gui;
 
 namespace PixelEngine.UI;
@@ -68,6 +69,17 @@ public sealed class FontEngine
     /// <returns>覆盖扫描结果。</returns>
     public static UiFontCoverageResult ScanCoverage(ReadOnlySpan<char> text)
     {
+        return ScanCoverage(text, counters: null);
+    }
+
+    /// <summary>
+    /// 扫描文本是否存在不在共享 glyph range 中的码点，并把缺字数发布到诊断计数器。
+    /// </summary>
+    /// <param name="text">待扫描文本。</param>
+    /// <param name="counters">可选引擎计数器；为空时只返回扫描结果。</param>
+    /// <returns>覆盖扫描结果。</returns>
+    public static UiFontCoverageResult ScanCoverage(ReadOnlySpan<char> text, EngineCounters? counters)
+    {
         int scanned = 0;
         int missing = 0;
         while (!text.IsEmpty)
@@ -87,6 +99,11 @@ public sealed class FontEngine
             }
 
             text = text[consumed..];
+        }
+
+        if (missing > 0)
+        {
+            counters?.AddUiFontMissingGlyphs(missing);
         }
 
         return new UiFontCoverageResult(scanned, missing);

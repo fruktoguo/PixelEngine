@@ -59,6 +59,7 @@ public sealed class PerformanceHudPanelTests
             EffectiveFramesPerSecond = 103.09,
             VSyncEnabled = true,
         };
+        counters.AddUiFontMissingGlyphs(2);
         EditorRuntimeDiagnostics runtime = new(0.5, 4, "Sim30Hz", 7);
 
         PerformanceHudSample sample = PerformanceHudPanel.BuildSample(
@@ -78,6 +79,7 @@ public sealed class PerformanceHudPanelTests
         Assert.Equal(0.9, sample.UploadMs, 3);
         Assert.Equal(0.35, sample.UiUpdateMs, 3);
         Assert.Equal(0.15, sample.UiCompositeMs, 3);
+        Assert.Equal(2, sample.UiFontMissingGlyphs);
         Assert.Equal(0.25, sample.AudioMs, 3);
         Assert.Equal(9.7, sample.CpuWorkMs, 3);
         Assert.Equal(2.5, sample.GpuWorkMs, 3);
