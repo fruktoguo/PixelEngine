@@ -6,12 +6,18 @@ namespace PixelEngine.UI;
 public sealed class UiManifest
 {
     private readonly UiManifestScreen[] _screens;
+    private readonly UiManifestImage[] _images;
 
-    internal UiManifest(string rootDirectory, UiAssetDirectories assetDirectories, UiManifestScreen[] screens)
+    internal UiManifest(
+        string rootDirectory,
+        UiAssetDirectories assetDirectories,
+        UiManifestScreen[] screens,
+        UiManifestImage[] images)
     {
         RootDirectory = rootDirectory;
         AssetDirectories = assetDirectories;
         _screens = screens;
+        _images = images;
     }
 
     /// <summary>
@@ -45,6 +51,16 @@ public sealed class UiManifest
     public ReadOnlySpan<UiManifestScreen> Screens => _screens;
 
     /// <summary>
+    /// 图片资产条目数量。
+    /// </summary>
+    public int ImageCount => _images.Length;
+
+    /// <summary>
+    /// 图片资产条目序列。
+    /// </summary>
+    public ReadOnlySpan<UiManifestImage> Images => _images;
+
+    /// <summary>
     /// 查找屏幕条目。
     /// </summary>
     /// <param name="screenId">屏幕稳定字符串 id。</param>
@@ -76,6 +92,40 @@ public sealed class UiManifest
         return TryGetScreen(screenId, out UiManifestScreen screen)
             ? screen
             : throw new KeyNotFoundException($"UI 清单中不存在屏幕 '{screenId}'。");
+    }
+
+    /// <summary>
+    /// 查找图片资产条目。
+    /// </summary>
+    /// <param name="imageId">图片稳定字符串 id。</param>
+    /// <param name="image">查找到的图片条目。</param>
+    /// <returns>找到则返回 true。</returns>
+    public bool TryGetImage(string imageId, out UiManifestImage image)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imageId);
+        for (int i = 0; i < _images.Length; i++)
+        {
+            if (string.Equals(_images[i].Id, imageId, StringComparison.Ordinal))
+            {
+                image = _images[i];
+                return true;
+            }
+        }
+
+        image = default;
+        return false;
+    }
+
+    /// <summary>
+    /// 获取图片资产条目；不存在时抛出明确异常。
+    /// </summary>
+    /// <param name="imageId">图片稳定字符串 id。</param>
+    /// <returns>图片资产条目。</returns>
+    public UiManifestImage GetRequiredImage(string imageId)
+    {
+        return TryGetImage(imageId, out UiManifestImage image)
+            ? image
+            : throw new KeyNotFoundException($"UI 清单中不存在图片 '{imageId}'。");
     }
 
     /// <summary>

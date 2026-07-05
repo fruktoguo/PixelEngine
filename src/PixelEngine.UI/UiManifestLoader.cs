@@ -74,6 +74,7 @@ public static class UiManifestLoader
         ArgumentNullException.ThrowIfNull(document);
         ArgumentException.ThrowIfNullOrWhiteSpace(uiRootDirectory);
         string root = Path.GetFullPath(uiRootDirectory);
+        UiAssetDirectories assetDirectories = UiAssetDirectories.FromRoot(root);
         UiManifestScreenJson[] screenJson = document.Screens is { Length: > 0 }
             ? document.Screens
             : throw new InvalidDataException("UI manifest 至少需要一个 screens 条目。");
@@ -101,7 +102,45 @@ public static class UiManifestLoader
             screens[i] = new UiManifestScreen(id, relativePath, fullPath, item.Preload, screenId);
         }
 
-        return new UiManifest(NormalizeRoot(root), UiAssetDirectories.FromRoot(root), screens);
+        UiManifestImage[] images = BuildImages(document.Images, root, assetDirectories.ImagesDirectory);
+        return new UiManifest(NormalizeRoot(root), assetDirectories, screens, images);
+    }
+
+    private static UiManifestImage[] BuildImages(UiManifestImageJson[]? imageJson, string root, string imagesDirectory)
+    {
+        if (imageJson is not { Length: > 0 })
+        {
+            return [];
+        }
+
+        UiManifestImage[] images = new UiManifestImage[imageJson.Length];
+        HashSet<string> ids = new(StringComparer.Ordinal);
+        for (int i = 0; i < imageJson.Length; i++)
+        {
+            UiManifestImageJson item = imageJson[i] ??
+                throw new InvalidDataException($"UI manifest images[{i}] 为空。");
+            string id = RequireToken(item.Id, $"images[{i}].id");
+            if (!ids.Add(id))
+            {
+                throw new InvalidDataException($"UI manifest 存在重复图片 id：{id}");
+            }
+
+            string relativePath = NormalizeRelativePath(RequireToken(item.Path, $"images[{i}].path"));
+            string fullPath = ResolveAssetPath(root, relativePath, $"images[{i}].path");
+            if (!IsUnderRoot(imagesDirectory, fullPath))
+            {
+                throw new InvalidDataException($"UI manifest 字段 images[{i}].path 必须位于 content/ui/images 目录：{relativePath}");
+            }
+
+            if (!File.Exists(fullPath))
+            {
+                throw new FileNotFoundException($"UI 图片 '{id}' 指向的资产不存在。", fullPath);
+            }
+
+            images[i] = new UiManifestImage(id, relativePath, fullPath, item.Preload, UiStableId.Hash(id));
+        }
+
+        return images;
     }
 
     private static string RequireToken(string? value, string fieldName)
@@ -152,6 +191,11 @@ public sealed class UiManifestJson
     /// 屏幕定义数组。
     /// </summary>
     public UiManifestScreenJson[]? Screens { get; init; }
+
+    /// <summary>
+    /// 图片资产定义数组。
+    /// </summary>
+    public UiManifestImageJson[]? Images { get; init; }
 }
 
 /// <summary>
@@ -176,6 +220,27 @@ public sealed class UiManifestScreenJson
 }
 
 /// <summary>
+/// ui-manifest.json 图片资产 DTO。
+/// </summary>
+public sealed class UiManifestImageJson
+{
+    /// <summary>
+    /// 图片稳定字符串 id。
+    /// </summary>
+    public string? Id { get; init; }
+
+    /// <summary>
+    /// 相对 content/ui 根目录的图片路径，必须位于 images/ 下。
+    /// </summary>
+    public string? Path { get; init; }
+
+    /// <summary>
+    /// 是否预载。
+    /// </summary>
+    public bool Preload { get; init; }
+}
+
+/// <summary>
 /// System.Text.Json source-generation 上下文。
 /// </summary>
 [JsonSourceGenerationOptions(
@@ -184,6 +249,7 @@ public sealed class UiManifestScreenJson
     AllowTrailingCommas = true)]
 [JsonSerializable(typeof(UiManifestJson))]
 [JsonSerializable(typeof(UiManifestScreenJson[]))]
+[JsonSerializable(typeof(UiManifestImageJson[]))]
 public sealed partial class UiManifestJsonContext : JsonSerializerContext
 {
 }
