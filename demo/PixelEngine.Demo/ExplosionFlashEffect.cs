@@ -67,7 +67,6 @@ public struct ExplosionFlashEffect
         float scale = MathF.Max(1f, context.Camera.Zoom);
         DrawFlash(context, center.X, center.Y, inner * scale, outer * scale, FadeAlpha(_colorBgra, alpha));
         context.Lighting.AddPointLight(_x, _y, _radius * (2.6f - (0.8f * t)), _colorBgra, 1.35f * alpha);
-        context.Lighting.RevealAround(_x, _y, _radius * 2.5f, (byte)Math.Clamp(96 + (int)(120 * alpha), 0, byte.MaxValue));
         return true;
     }
 

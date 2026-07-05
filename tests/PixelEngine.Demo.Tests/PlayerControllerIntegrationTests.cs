@@ -784,10 +784,12 @@ public sealed class PlayerControllerIntegrationTests
         Assert.True(probe.LastOverlayCommandsSubmitted > 0);
         ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
         Assert.Equal(1, lighting.PointLights.Length);
+        Assert.Equal(0, lighting.FogOfWar.RevealAlpha(18, 14));
 
         engine.RunHeadlessTicks(8);
 
         Assert.Equal(0, lighting.PointLights.Length);
+        Assert.Equal(0, lighting.FogOfWar.RevealAlpha(18, 14));
         Assert.False(probe.Active);
     }
 

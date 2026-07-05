@@ -274,6 +274,11 @@ public sealed class RenderWindowIntegrationTests
         return [pixels[offset], pixels[offset + 1], pixels[offset + 2], pixels[offset + 3]];
     }
 
+    private static int MaxRgb(byte[] rgba)
+    {
+        return Math.Max(rgba[0], Math.Max(rgba[1], rgba[2]));
+    }
+
     [Fact]
     public void CanRenderFrameThroughRenderPipelineWhenExplicitlyEnabled()
     {
@@ -382,6 +387,45 @@ public sealed class RenderWindowIntegrationTests
 
         Assert.True(bottom[0] > 180 && bottom[1] > 60, $"底部 emissive 应保持在底部，actual bottom rgba=({bottom[0]},{bottom[1]},{bottom[2]},{bottom[3]})");
         Assert.True(top[0] < 32 && top[1] < 32 && top[2] < 32, $"底部 emissive 不应翻到顶部，actual top rgba=({top[0]},{top[1]},{top[2]},{top[3]})");
+    }
+
+    [Fact]
+    public void BloomDoesNotRetainExpiredEmissiveInputAcrossFramesWhenExplicitlyEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = CreateSmokeWindow("PixelEngine bloom decay smoke", RenderBackendPreference.Auto);
+        using RenderPipeline pipeline = new(window, 32, 32);
+        RenderBuffer buffer = new(32, 32);
+        RenderAuxBuffers aux = new(32, 32);
+        CameraState camera = CameraState.OneToOne(0, 0, buffer.Width, buffer.Height);
+        buffer.Pixels.Fill(0xFF000000u);
+        aux.Emissive[(16 * aux.Width) + 16] = 0xFFFFFFFFu;
+        pipeline.Settings.EnableDither = false;
+        pipeline.Settings.Gamma = 1f;
+
+        pipeline.RenderFrame(buffer, aux, camera, [], []);
+        RenderViewportTexture viewport = pipeline.CurrentViewportTexture;
+        byte[] litPixels = ReadTextureRgba(window.Gl, viewport.Handle, viewport.Width, viewport.Height);
+        byte[] litCenter = PixelAtTopLeftOrigin(litPixels, viewport.Width, x: 16, y: 16);
+        int litBrightness = MaxRgb(litCenter);
+
+        aux.Clear();
+        for (int i = 0; i < 4; i++)
+        {
+            pipeline.RenderFrame(buffer, aux, camera, [], []);
+        }
+
+        viewport = pipeline.CurrentViewportTexture;
+        byte[] decayedPixels = ReadTextureRgba(window.Gl, viewport.Handle, viewport.Width, viewport.Height);
+        byte[] decayedCenter = PixelAtTopLeftOrigin(decayedPixels, viewport.Width, x: 16, y: 16);
+        int decayedBrightness = MaxRgb(decayedCenter);
+
+        Assert.True(litBrightness > 64, $"首帧 emissive 应触发 bloom，actual rgba=({litCenter[0]},{litCenter[1]},{litCenter[2]},{litCenter[3]})");
+        Assert.True(decayedBrightness <= 8, $"emissive 清空后 bloom 不应残留，actual rgba=({decayedCenter[0]},{decayedCenter[1]},{decayedCenter[2]},{decayedCenter[3]})");
     }
 
     [Fact]
