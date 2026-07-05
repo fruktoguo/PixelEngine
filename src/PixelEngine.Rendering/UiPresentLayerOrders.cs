@@ -13,5 +13,5 @@ public static class UiPresentLayerOrders
     /// <summary>
     /// 编辑器 UI 层，仅编辑器/开发构建注册，覆盖在游戏 UI 之上。
     /// </summary>
-    public const int Editor = 1000;
+    public const int Editor = 200;
 }

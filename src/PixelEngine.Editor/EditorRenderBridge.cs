@@ -6,7 +6,7 @@ using PixelEngine.Scripting;
 namespace PixelEngine.Editor;
 
 /// <summary>
-/// 将 Editor 挂到 Rendering 的 present 前 UI hook，确保 ImGui 复用同一个 OpenGL context。
+/// 将 Editor 挂到 Rendering 的显式 present UI 层，确保 ImGui 复用同一个 OpenGL context。
 /// </summary>
 public sealed class EditorRenderBridge : IUiPresentLayer, IDisposable
 {

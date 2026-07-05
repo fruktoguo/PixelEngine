@@ -9,7 +9,7 @@ namespace PixelEngine.Hosting;
 public interface IEditorHostExtension
 {
     /// <summary>
-    /// 在渲染管线创建后绑定扩展。实现通常订阅 <see cref="RenderPipeline.BeforePresentUi" />。
+    /// 在渲染管线创建后绑定扩展。实现应通过 <see cref="RenderPipeline.RegisterUiLayer(int, IUiPresentLayer)" /> 注册确定性 UI 层。
     /// </summary>
     /// <param name="engine">当前引擎门面。</param>
     /// <param name="window">已存在的渲染窗口；所有权仍归创建方。</param>

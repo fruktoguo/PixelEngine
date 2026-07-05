@@ -104,8 +104,9 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
     }
 
     /// <summary>
-    /// Present 前 UI 绘制 hook。回调收到共享 OpenGL 上下文，调用者可绑定默认 framebuffer 绘制 UI。
+    /// Present 前兼容 UI 绘制 hook。新 UI/Editor 叠层必须使用 <see cref="RegisterUiLayer(int, IUiPresentLayer)" /> 注册确定性 order。
     /// </summary>
+    [Obsolete("请使用 RegisterUiLayer(order, layer) 注册确定性 UI present 层；该事件仅保留兼容。")]
     public event Action<GL>? BeforePresentUi;
 
     /// <summary>

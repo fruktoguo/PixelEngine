@@ -127,7 +127,7 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("public readonly record struct UiDrawState", File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiDrawState.cs")), StringComparison.Ordinal);
         Assert.Contains("public readonly record struct UiScissorRect", File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiScissorRect.cs")), StringComparison.Ordinal);
         Assert.Contains("public const int Game = 100", orders, StringComparison.Ordinal);
-        Assert.Contains("public const int Editor = 1000", orders, StringComparison.Ordinal);
+        Assert.Contains("public const int Editor = 200", orders, StringComparison.Ordinal);
         Assert.Contains("while (index > 0 && CompareUiLayers(entry, _uiLayers[index - 1]) < 0)", pipeline, StringComparison.Ordinal);
         Assert.Contains("UiLayerEntry(int Order, int Sequence, IUiPresentLayer Layer)", pipeline, StringComparison.Ordinal);
         Assert.Contains("new UiPrimitiveRenderer(_gl, profile)", pipeline, StringComparison.Ordinal);

@@ -6,7 +6,7 @@ using PixelEngine.Scripting;
 namespace PixelEngine.Gui;
 
 /// <summary>
-/// 将中性 GUI 宿主挂到 Rendering 的 present 前 UI hook。
+/// 将中性 GUI 宿主挂到 Rendering 的显式 present UI 层。
 /// </summary>
 public sealed class GuiRenderBridge : IUiPresentLayer, IDisposable
 {
