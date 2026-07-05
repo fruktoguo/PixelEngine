@@ -143,6 +143,38 @@ public sealed class DemoStartupOptionsTests
     }
 
     /// <summary>
+    /// 验证 Demo 内容包通过引擎公开加载路径提供 crystal 采集目标材质与可玩性 / 视觉字段。
+    /// </summary>
+    [Fact]
+    public void DemoContentMaterialsExposeCrystalGameplayAndLegendFields()
+    {
+        string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
+        DemoStartupOptions options = DemoStartupOptions.Parse([
+            "--headless",
+            "--no-hot-reload",
+            "--content",
+            contentRoot,
+        ]);
+        PixelEngine.Hosting.EngineProject project = DemoProgram.BuildProject(options);
+        using PixelEngine.Hosting.Engine engine = DemoProgram.BuildEngine(options, project);
+
+        _ = engine.LoadContentPackage();
+
+        MaterialTable materials = engine.Context.GetService<MaterialTable>();
+        Assert.True(materials.TryGetId("crystal", out ushort crystalId));
+        ref readonly MaterialDef crystal = ref materials.Get(crystalId);
+        Assert.Equal(CellType.Solid, crystal.Type);
+        Assert.Equal(1, crystal.MineYield);
+        Assert.Equal(MaterialRenderStyle.Destructible, crystal.RenderStyle);
+        Assert.Equal(MaterialLegendCategory.Resource, crystal.LegendCategory);
+        Assert.Equal("Crystal", crystal.DisplayName);
+        Assert.True(crystal.LegendVisible);
+        Assert.True(crystal.Integrity > 0);
+        Assert.Equal(materials.GetIdOrFallback("gravel", 0), crystal.DestroyedTarget);
+        Assert.True(crystal.DebrisCount > 0);
+    }
+
+    /// <summary>
     /// 验证武器目录经 Engine Content/Config API 加载，Demo 不直接解析 JSON。
     /// </summary>
     [Fact]

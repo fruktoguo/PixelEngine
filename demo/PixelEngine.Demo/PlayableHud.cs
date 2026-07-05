@@ -20,6 +20,7 @@ public sealed class PlayableHud : Behaviour
         "ice",
         "metal",
         "gravel",
+        "crystal",
     ];
 
     private readonly float[] _frameGraphSamples = new float[GraphSampleCapacity];

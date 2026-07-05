@@ -111,6 +111,7 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Contains("text:材质", gui.Drawn);
         Assert.Contains("text:sand / Terrain", gui.Drawn);
         Assert.Contains("text:stone / Terrain", gui.Drawn);
+        Assert.Contains("text:Crystal / Resource", gui.Drawn);
         Assert.Contains(gui.Drawn, line => line.StartsWith("progress:", StringComparison.Ordinal));
     }
 
@@ -1870,6 +1871,12 @@ public sealed class PlayerControllerIntegrationTests
                 BoilPoint = float.NaN,
                 Integrity = destructibleSolids && definitions[i].Type == CellType.Solid ? (ushort)40 : (ushort)0,
                 DestroyedTarget = destructibleSolids && definitions[i].Type == CellType.Solid ? (ushort)1 : (ushort)0,
+                MineYield = definitions[i].Name == "crystal" ? (byte)1 : (byte)0,
+                RenderStyle = definitions[i].Name == "crystal" ? MaterialRenderStyle.Destructible : default,
+                LegendCategory = definitions[i].Name == "crystal" ? MaterialLegendCategory.Resource : default,
+                DisplayName = definitions[i].Name == "crystal" ? "Crystal" : string.Empty,
+                LegendVisible = true,
+                BaseColorBGRA = definitions[i].Name == "crystal" ? 0xFF_FF_FF_A0 : 0,
             };
         }
 
@@ -1891,7 +1898,8 @@ public sealed class PlayerControllerIntegrationTests
             ("acid", CellType.Liquid),
             ("ice", CellType.Solid),
             ("metal", CellType.Solid),
-            ("ash", CellType.Powder));
+            ("ash", CellType.Powder),
+            ("crystal", CellType.Solid));
     }
 
     private static MaterialTable MissionMaterials()
