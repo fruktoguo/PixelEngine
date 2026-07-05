@@ -294,7 +294,7 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
 
   $launcher = if ($rid.StartsWith('win-')) { "$launcherBaseName.exe" } else { "$launcherBaseName.sh" }
   $requiredEntries = [System.Collections.Generic.List[string]]::new()
-  foreach ($required in @('README.txt', 'SHA256SUMS', $launcher, 'content/materials.json', 'content/reactions.json', "content/$requiredScenePath")) {
+  foreach ($required in @('README.txt', 'SHA256SUMS', $launcher, 'content/materials.json', 'content/reactions.json', 'content/weapons.json', 'content/textures/17_gravel.png', 'content/textures/18_boundary_stone.png', "content/$requiredScenePath")) {
     $requiredEntries.Add($required)
   }
 
@@ -403,7 +403,7 @@ function Assert-FriendlyExpandedPackageLayout([System.IO.DirectoryInfo]$packageD
 
   $launcher = if ($rid.StartsWith('win-')) { "$launcherBaseName.exe" } else { "$launcherBaseName.sh" }
   $requiredEntries = [System.Collections.Generic.List[string]]::new()
-  foreach ($required in @('README.txt', 'SHA256SUMS', $launcher, 'content/materials.json', 'content/reactions.json', "content/$requiredScenePath")) {
+  foreach ($required in @('README.txt', 'SHA256SUMS', $launcher, 'content/materials.json', 'content/reactions.json', 'content/weapons.json', 'content/textures/17_gravel.png', 'content/textures/18_boundary_stone.png', "content/$requiredScenePath")) {
     $requiredEntries.Add($required)
   }
 
@@ -498,6 +498,9 @@ function Test-PublishDirectory([string]$rid, [string]$channel) {
   Assert-FileExists $entry '缺少发布入口'
   Assert-FileExists (Join-Path $directory 'content/materials.json') '缺少 content/materials.json'
   Assert-FileExists (Join-Path $directory 'content/reactions.json') '缺少 content/reactions.json'
+  Assert-FileExists (Join-Path $directory 'content/weapons.json') '缺少 content/weapons.json'
+  Assert-FileExists (Join-Path $directory 'content/textures/17_gravel.png') '缺少 content/textures/17_gravel.png'
+  Assert-FileExists (Join-Path $directory 'content/textures/18_boundary_stone.png') '缺少 content/textures/18_boundary_stone.png'
   Assert-FileExists (Join-Path $directory "content/$requiredScenePath") "缺少必需场景 $requiredScenePath"
 
   $box2D = Join-Path $directory "runtimes/$rid/native/$(Get-Box2DName $rid)"

@@ -686,6 +686,49 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证 Demo gameplay 内容资产与材质纹理引用在源 content 中闭合，打包脚本可原样拷贝。
+    /// </summary>
+    [Fact]
+    public void DemoContentDeclaresWeaponsAndResolvableMaterialTextures()
+    {
+        string root = FindRepositoryRoot();
+        string contentRoot = Path.Combine(root, "demo", "PixelEngine.Demo", "content");
+        string weaponsPath = Path.Combine(contentRoot, "weapons.json");
+        string materialsPath = Path.Combine(contentRoot, "materials.json");
+        string reactionsPath = Path.Combine(contentRoot, "reactions.json");
+
+        Assert.True(File.Exists(weaponsPath), "Demo content 必须包含 weapons.json。");
+        Assert.True(File.Exists(materialsPath), "Demo content 必须包含 materials.json。");
+        Assert.True(File.Exists(reactionsPath), "Demo content 必须包含 reactions.json。");
+
+        JsonObject weapons = JsonNode.Parse(File.ReadAllText(weaponsPath))!.AsObject();
+        JsonArray weaponItems = weapons["weapons"]!.AsArray();
+        Assert.Equal(6, weaponItems.Count);
+        Assert.Equal(
+            ["singleShot", "bomb", "grenade", "laser", "excavator", "builder"],
+            [.. weaponItems.Select(node => node!.AsObject()["kind"]!.GetValue<string>())]);
+        Assert.Contains(
+            weaponItems.Select(node => node!.AsObject()),
+            weapon => weapon["id"]!.GetValue<string>() == "builder" &&
+                weapon["spawnMaterial"]!.GetValue<string>() == "stone");
+
+        JsonObject materials = JsonNode.Parse(File.ReadAllText(materialsPath))!.AsObject();
+        foreach (JsonObject material in materials["materials"]!.AsArray().Select(node => node!.AsObject()))
+        {
+            if (!material.TryGetPropertyValue("textureId", out JsonNode? textureNode) || textureNode is null)
+            {
+                continue;
+            }
+
+            int textureId = textureNode.GetValue<int>();
+            string texturePrefix = textureId.ToString("00", System.Globalization.CultureInfo.InvariantCulture) + "_";
+            Assert.Contains(
+                Directory.EnumerateFiles(Path.Combine(contentRoot, "textures"), texturePrefix + "*.png").Select(Path.GetFileName),
+                fileName => fileName is not null && fileName.StartsWith(texturePrefix, StringComparison.Ordinal));
+        }
+    }
+
+    /// <summary>
     /// 验证 Demo 源码不绕过 Hosting/Scripting 公开入口访问内容或模拟实现。
     /// </summary>
     [Fact]

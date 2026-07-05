@@ -3631,6 +3631,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("展开 package 不应包含玩家无关的调试、文档、诊断辅助或本地化卫星资源文件", auditPs1, StringComparison.Ordinal);
         Assert.Contains("package 内 SHA256SUMS 未覆盖文件", auditPs1, StringComparison.Ordinal);
         Assert.Contains("content/materials.json", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("content/weapons.json", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("content/textures/17_gravel.png", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("content/textures/18_boundary_stone.png", auditPs1, StringComparison.Ordinal);
         Assert.Contains("assert_friendly_package_layout", auditSh, StringComparison.Ordinal);
         Assert.Contains("assert_friendly_expanded_package_layout", auditSh, StringComparison.Ordinal);
         Assert.Contains("assert_no_duplicate_content_under_app", auditSh, StringComparison.Ordinal);
@@ -3648,6 +3651,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("展开 package 不应包含玩家无关的调试、文档、诊断辅助或本地化卫星资源文件", auditSh, StringComparison.Ordinal);
         Assert.Contains("package 内 SHA256SUMS 未覆盖文件", auditSh, StringComparison.Ordinal);
         Assert.Contains("content/materials.json", auditSh, StringComparison.Ordinal);
+        Assert.Contains("content/weapons.json", auditSh, StringComparison.Ordinal);
+        Assert.Contains("content/textures/17_gravel.png", auditSh, StringComparison.Ordinal);
+        Assert.Contains("content/textures/18_boundary_stone.png", auditSh, StringComparison.Ordinal);
 
         Assert.Contains("PixelEngine.Tools.DeterministicPackage", packagePs1, StringComparison.Ordinal);
         Assert.Contains("PixelEngine.Tools.DeterministicPackage", packageSh, StringComparison.Ordinal);
@@ -3859,6 +3865,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             _ = Directory.CreateDirectory(Path.Combine(publish, "runtimes", "win-x64", "native"));
             _ = Directory.CreateDirectory(Path.Combine(publish, "zh-Hans"));
             _ = Directory.CreateDirectory(Path.Combine(content, "scenes"));
+            _ = Directory.CreateDirectory(Path.Combine(content, "textures"));
             _ = Directory.CreateDirectory(playerOutput);
             _ = Directory.CreateDirectory(Path.Combine(packageRoot, "PixelEngine-Demo-8.8.8-win-x64-r2r"));
             _ = Directory.CreateDirectory(Path.Combine(packageRoot, "PixelEngine-Demo-8.8.8-win-x64-aot"));
@@ -3880,6 +3887,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             _ = WriteTextEvidence(Path.Combine(publish, "runtimes", "win-x64", "native", "box2d.dll"), "native");
             _ = WriteTextEvidence(Path.Combine(content, "materials.json"), "{}");
             _ = WriteTextEvidence(Path.Combine(content, "reactions.json"), "{}");
+            _ = WriteTextEvidence(Path.Combine(content, "weapons.json"), "{}");
+            _ = WriteTextEvidence(Path.Combine(content, "textures", "17_gravel.png"), "gravel");
+            _ = WriteTextEvidence(Path.Combine(content, "textures", "18_boundary_stone.png"), "boundary");
             _ = WriteTextEvidence(Path.Combine(content, "scenes", "lava-mine.scene"), "scene");
 
             ScriptResult package = RunPowerShellScript(
@@ -3912,6 +3922,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.True(File.Exists(Path.Combine(expandedPackageDir, "PixelEngine Demo.exe")));
             Assert.True(File.Exists(Path.Combine(expandedPackageDir, "app", "PixelEngine.Demo.dll")));
             Assert.True(File.Exists(Path.Combine(expandedPackageDir, "content", "materials.json")));
+            Assert.True(File.Exists(Path.Combine(expandedPackageDir, "content", "weapons.json")));
+            Assert.True(File.Exists(Path.Combine(expandedPackageDir, "content", "textures", "17_gravel.png")));
+            Assert.True(File.Exists(Path.Combine(expandedPackageDir, "content", "textures", "18_boundary_stone.png")));
             Assert.False(File.Exists(Path.Combine(expandedPackageDir, "PixelEngine.Demo.dll")));
             Assert.False(File.Exists(Path.Combine(expandedPackageDir, "PixelEngine.Demo.pdb")));
             Assert.False(File.Exists(Path.Combine(expandedPackageDir, "PixelEngine.Demo.xml")));
@@ -3926,6 +3939,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.True(File.Exists(Path.Combine(playerOutput, "PixelEngine Demo.exe")));
             Assert.True(File.Exists(Path.Combine(playerOutput, "app", "PixelEngine.Demo.dll")));
             Assert.True(File.Exists(Path.Combine(playerOutput, "content", "materials.json")));
+            Assert.True(File.Exists(Path.Combine(playerOutput, "content", "weapons.json")));
             Assert.False(File.Exists(Path.Combine(playerOutput, "stale.dll")));
             Assert.False(File.Exists(Path.Combine(playerOutput, "PixelEngine.Demo.dll")));
             Assert.False(File.Exists(Path.Combine(playerOutput, "app", "PixelEngine.Demo.pdb")));
@@ -3948,6 +3962,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.True(File.Exists(Path.Combine(packageDir, "app", "PixelEngine.Demo.runtimeconfig.json")));
             Assert.True(File.Exists(Path.Combine(packageDir, "content", "materials.json")));
             Assert.True(File.Exists(Path.Combine(packageDir, "content", "reactions.json")));
+            Assert.True(File.Exists(Path.Combine(packageDir, "content", "weapons.json")));
+            Assert.True(File.Exists(Path.Combine(packageDir, "content", "textures", "17_gravel.png")));
+            Assert.True(File.Exists(Path.Combine(packageDir, "content", "textures", "18_boundary_stone.png")));
             Assert.True(File.Exists(Path.Combine(packageDir, "content", "scenes", "lava-mine.scene")));
             Assert.False(Directory.Exists(Path.Combine(packageDir, "app", "content")));
             Assert.False(File.Exists(Path.Combine(packageDir, "PixelEngine.Demo.dll")));
@@ -3966,6 +3983,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.DoesNotContain("createdump.exe", packageChecksumsText, StringComparison.Ordinal);
             Assert.DoesNotContain("_PUBLISH_INTERMEDIATE_README.txt", packageChecksumsText, StringComparison.Ordinal);
             Assert.Contains("content/materials.json", packageChecksumsText, StringComparison.Ordinal);
+            Assert.Contains("content/weapons.json", packageChecksumsText, StringComparison.Ordinal);
+            Assert.Contains("content/textures/17_gravel.png", packageChecksumsText, StringComparison.Ordinal);
+            Assert.Contains("content/textures/18_boundary_stone.png", packageChecksumsText, StringComparison.Ordinal);
 
             ScriptResult staleExpandedAudit = RunPowerShellScript(
                 root,
