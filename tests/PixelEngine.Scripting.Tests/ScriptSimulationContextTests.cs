@@ -330,11 +330,14 @@ public sealed class ScriptSimulationContextTests
         Assert.Equal(1, time.FrameCount);
         Assert.Equal((float)clock.Dt, time.FixedStep);
         Assert.Equal((float)clock.Dt, time.DeltaTime);
+        Assert.Equal((float)clock.Dt, time.RealDeltaTime);
         Assert.True(time.SimSteppedThisFrame);
 
         _ = clock.BeginFrame(clock.Dt * 2);
+        time.SetRealDeltaTime(clock.Dt * 2);
 
         Assert.Equal(2, time.FrameCount);
+        Assert.Equal((float)(clock.Dt * 2), time.RealDeltaTime);
         Assert.False(time.SimSteppedThisFrame);
         Assert.True(time.TimeScale < 1f);
     }

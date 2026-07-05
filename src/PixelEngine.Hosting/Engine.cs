@@ -2057,6 +2057,7 @@ public sealed class Engine : IDisposable
                 ApplyOverloadPolicy(realDeltaSeconds);
                 PublishRenderFrameRate(realDeltaSeconds);
                 timing = BeginRuntimeFrame(realDeltaSeconds);
+                PublishScriptFrameTime(timing);
             }
 
             Phases.Execute(this, timing);
@@ -2247,6 +2248,14 @@ public sealed class Engine : IDisposable
         Context.Counters.RenderFrameLow1PercentFps = p99Ms > 0 ? 1000.0 / p99Ms : 0;
         Context.Counters.RenderFrameJitterMilliseconds = Math.Sqrt(varianceSum / _renderFrameSampleCount);
         Context.Counters.RenderFrameSampleCount = _renderFrameSampleCount;
+    }
+
+    private void PublishScriptFrameTime(FrameTiming timing)
+    {
+        if (Context.TryGetService(out ScriptFrameTime time))
+        {
+            time.SetRealDeltaTime(timing.RealDeltaSeconds);
+        }
     }
 
     private void PublishFrameBreakdown(FrameProfiler profiler)

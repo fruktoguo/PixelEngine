@@ -857,6 +857,11 @@ public interface IGameTime
     float DeltaTime { get; }
 
     /// <summary>
+    /// 当前渲染帧真实墙钟 delta time，单位秒；无墙钟样本时回退到 <see cref="DeltaTime" />。
+    /// </summary>
+    float RealDeltaTime => DeltaTime;
+
+    /// <summary>
     /// 当前固定逻辑步长，单位秒。
     /// </summary>
     float FixedStep { get; }

@@ -14,6 +14,11 @@ public sealed class ScriptFrameTime(FrameClock clock) : IGameTime
     public float DeltaTime => (float)(_clock.Dt * _clock.TimeScale);
 
     /// <inheritdoc />
+    public float RealDeltaTime => PublishedRealDeltaTime > 0f ? PublishedRealDeltaTime : DeltaTime;
+
+    private float PublishedRealDeltaTime { get; set; }
+
+    /// <inheritdoc />
     public float FixedStep => (float)_clock.Dt;
 
     /// <inheritdoc />
@@ -24,4 +29,15 @@ public sealed class ScriptFrameTime(FrameClock clock) : IGameTime
 
     /// <inheritdoc />
     public bool SimSteppedThisFrame => _clock.RunSimThisFrame;
+
+    /// <summary>
+    /// 发布 Hosting 采样到的真实渲染帧间隔；用于纯视觉脚本效果按墙钟衰减。
+    /// </summary>
+    /// <param name="realDeltaSeconds">真实渲染帧间隔，单位秒。</param>
+    public void SetRealDeltaTime(double realDeltaSeconds)
+    {
+        PublishedRealDeltaTime = double.IsFinite(realDeltaSeconds) && realDeltaSeconds > 0
+            ? (float)Math.Min(realDeltaSeconds, 1.0)
+            : 0f;
+    }
 }

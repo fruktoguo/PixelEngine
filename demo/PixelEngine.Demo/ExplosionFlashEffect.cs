@@ -51,7 +51,7 @@ public struct ExplosionFlashEffect
             return false;
         }
 
-        _elapsed += MathF.Max(0f, dt);
+        _elapsed += ResolveVisualDeltaSeconds(context, dt);
         if (_elapsed >= _duration)
         {
             IsActive = false;
@@ -96,5 +96,13 @@ public struct ExplosionFlashEffect
         byte original = (byte)(bgra >> 24);
         byte faded = (byte)Math.Clamp((int)MathF.Round(original * Math.Clamp(alpha, 0f, 1f)), 0, byte.MaxValue);
         return (bgra & 0x00_FF_FF_FFu) | ((uint)faded << 24);
+    }
+
+    private static float ResolveVisualDeltaSeconds(IScriptContext context, float fallbackDt)
+    {
+        float realDt = context.Time.RealDeltaTime;
+        return float.IsFinite(realDt) && realDt > 0f
+            ? realDt
+            : MathF.Max(0f, fallbackDt);
     }
 }

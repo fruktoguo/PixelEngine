@@ -794,6 +794,29 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证爆炸闪光按真实渲染帧 delta 衰减，低 FPS 下不会被固定步长拖成长时间残留。
+    /// </summary>
+    [Fact]
+    public void ExplosionFlashEffectUsesRealDeltaForVisualLifetime()
+    {
+        using Engine engine = CreateManualScriptEngine(out _, out _, out _, out ScriptScene scene, DemoMaterials());
+        ExplosionFlashProbe probe = scene.CreateEntity().AddComponent<ExplosionFlashProbe>();
+        probe.Trigger(18f, 14f, 8f, durationSeconds: 0.10f);
+
+        engine.RunHeadlessTicks(1, realDeltaSeconds: 1.0 / 15.0);
+
+        Assert.True(probe.Active);
+        Assert.True(probe.LastOverlayCommandsSubmitted > 0);
+
+        engine.RunHeadlessTicks(1, realDeltaSeconds: 1.0 / 15.0);
+
+        Assert.False(probe.Active);
+        Assert.Equal(0, probe.LastOverlayCommandsSubmitted);
+        ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
+        Assert.Equal(0, lighting.PointLights.Length);
+    }
+
+    /// <summary>
     /// 验证手雷爆炸生成的视觉反馈会随生命周期结束，不会把爆炸点光源永久留在渲染输入里。
     /// </summary>
     [Fact]
