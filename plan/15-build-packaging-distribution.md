@@ -347,7 +347,7 @@ RID 激活门控（win-first，§2.1）
 - [x] 新增 `tools/release-rids.json`：6 RID 元数据（`rid`/`active`/`runner`/`shell`/`smoke`/`codesign`）+ `channels`，`win-x64`/`win-arm64` `active:true`、linux/osx 四个 `active:false`（§2.1）。
 - [x] 新增 `tools/release-matrix.ps1`：解析 `release-rids.json` + `include_win_arm64`，输出 `native-matrix`/`build-matrix`/`expected` 三份压缩 JSON 到 `$GITHUB_OUTPUT`（§2.1）。
 - [ ] `release.yml` 增 `setup` job（阶段 0）+ `workflow_dispatch` 输入 `include_win_arm64`（默认 true）；native/publish/verify/sign-package 四 job 改 `fromJSON` 消费激活矩阵、`runs-on`/`shell` 取自矩阵条目；release job 期望数量改由 `expected` 派生；删除四处静态 6-RID 列表（等价逻辑迁入 json）（§2.1、§3.10）。
-- [ ] `tools/audit-release-artifacts.ps1|.sh` 增 `-ActiveRids`/`--active-rids`（默认读 json），`--require-all` 语义改为「激活集 require-all」，包数期望 `activeRids×channels`，逐 RID 断言只遍历激活集、dormant RID 缺失不报错；发行包命名正则保持宽松（仅改 `$rids` 枚举与 count/expected 派生）（§2.1）。
+- [x] `tools/audit-release-artifacts.ps1|.sh` 增 `-ActiveRids`/`--active-rids`（默认读 json），`--require-all` 语义改为「激活集 require-all」，包数期望 `activeRids×channels`，逐 RID 断言只遍历激活集、dormant RID 缺失不报错；发行包命名正则保持宽松（仅改 `$rids` 枚举与 count/expected 派生）（§2.1）。
 - [ ] `tools/release-evidence-preflight.ps1|.sh` 的 `$rids`/`package_count`/`expanded_package_count`/`required_rids`/`uploaded_asset_count`/deterministic 行集/SHA256SUMS 覆盖集改由 `-ActiveRids`/`-ExpectedPackageCount` 派生（默认读同一 json）；tag/identity/`simdProbeKind` 锁定逻辑不动（§2.1）。
 - [ ] 显式边界回归：`ci.yml`/`plan/16` 的 6-RID 构建/测试矩阵与 `tools/ci-matrix-evidence-preflight.ps1` 保持 6 RID（cross 用 build-only）不随发行门控收敛，作为 dormant RID 编译保证后盾（§2.1）。
 - [ ] dry-run 回归：把任一 dormant RID 翻 `active:true` 后（`workflow_dispatch` 演练），无需改任何 YAML/脚本逻辑即自动进全链路、审计/预检期望数量自动 +1 组（§2.1）。

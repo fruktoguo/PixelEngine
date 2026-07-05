@@ -531,6 +531,8 @@ public sealed class HostingProjectDisciplineTests
             string lower = script.ToLowerInvariant();
             Assert.Contains("product", lower, StringComparison.Ordinal);
             Assert.Contains("required", lower, StringComparison.Ordinal);
+            Assert.Contains("active", lower, StringComparison.Ordinal);
+            Assert.Contains("release-rids.json", script, StringComparison.Ordinal);
             Assert.Contains("dev", lower, StringComparison.Ordinal);
             Assert.Contains("PixelEngine.Editor.dll", script, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("ImGuizmo", script, StringComparison.Ordinal);
@@ -573,7 +575,9 @@ public sealed class HostingProjectDisciplineTests
         Assert.True(byRid["osx-arm64"]["codesign"]!.GetValue<bool>());
 
         Assert.Contains("native-matrix", matrixScript, StringComparison.Ordinal);
+        Assert.Contains("native_matrix", matrixScript, StringComparison.Ordinal);
         Assert.Contains("build-matrix", matrixScript, StringComparison.Ordinal);
+        Assert.Contains("build_matrix", matrixScript, StringComparison.Ordinal);
         Assert.Contains("expected", matrixScript, StringComparison.Ordinal);
         Assert.Contains("packageCount", matrixScript, StringComparison.Ordinal);
         Assert.Contains("assetCount", matrixScript, StringComparison.Ordinal);

@@ -100,7 +100,9 @@ $expectedJson = $result.expected | ConvertTo-Json -Depth 8 -Compress
 
 if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_OUTPUT)) {
     Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "native-matrix=$nativeJson"
+    Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "native_matrix=$nativeJson"
     Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "build-matrix=$buildJson"
+    Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "build_matrix=$buildJson"
     Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "expected=$expectedJson"
 }
 
