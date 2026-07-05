@@ -139,7 +139,30 @@ public sealed class PlayableHud : Behaviour
         _health = Entity.TryGetComponent(out PlayerHealth health) ? health : null;
         _projectile = Entity.TryGetComponent(out PlayableProjectileTool projectile) ? projectile : null;
         _weapons = Entity.TryGetComponent(out WeaponController weapons) ? weapons : null;
-        _mission = Entity.TryGetComponent(out MissionDirector mission) ? mission : null;
+        if (Entity.TryGetComponent(out MissionDirector mission))
+        {
+            _mission = mission;
+            return;
+        }
+
+        if (_mission is not null)
+        {
+            return;
+        }
+
+        ScriptEntityInspection[] entities = Context.Scene.CaptureInspectionSnapshot();
+        for (int i = 0; i < entities.Length; i++)
+        {
+            ScriptComponentInspection[] components = entities[i].Components;
+            for (int j = 0; j < components.Length; j++)
+            {
+                if (components[j].Behaviour is MissionDirector sceneMission)
+                {
+                    _mission = sceneMission;
+                    return;
+                }
+            }
+        }
     }
 
     private void DrawHealth(IGuiContext gui)

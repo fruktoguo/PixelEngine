@@ -69,6 +69,11 @@ public sealed class LevelDirector : Behaviour
     public bool BuildAmbientMaterialEmitters { get; set; }
 
     /// <summary>
+    /// 是否创建旧版无任务条件的 GoalTrigger。熔岩矿洞逃生场景会关闭它并改用 ExtractionTrigger。
+    /// </summary>
+    public bool BuildGoalTrigger { get; set; } = true;
+
+    /// <summary>
     /// 是否在玩家出生 AABB 内铺设熔岩；仅用于窗口健康链路探针。
     /// </summary>
     public bool BuildSpawnHazardProbe { get; set; }
@@ -222,12 +227,18 @@ public sealed class LevelDirector : Behaviour
         projectile.MaxCollapsePixels = 512;
         projectile.MaxCollapsedIslandsPerShot = 1;
         projectile.PlayerSupportProtectionRadius = 72;
+        projectile.InputEnabled = false;
 
-        GoalTrigger goal = playerEntity.AddComponent<GoalTrigger>();
-        goal.X = GoalX;
-        goal.Y = GoalY;
-        goal.Width = 34f;
-        goal.Height = 54f;
+        _ = playerEntity.AddComponent<WeaponController>();
+
+        if (BuildGoalTrigger)
+        {
+            GoalTrigger goal = playerEntity.AddComponent<GoalTrigger>();
+            goal.X = GoalX;
+            goal.Y = GoalY;
+            goal.Width = 34f;
+            goal.Height = 54f;
+        }
 
         _ = playerEntity.AddComponent<PlayerVisual>();
         PlayableHud playableHud = playerEntity.AddComponent<PlayableHud>();

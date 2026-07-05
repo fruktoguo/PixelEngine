@@ -10,7 +10,13 @@ public sealed class EngineScriptConfigApi(string contentRoot) : IConfigApi
 {
     private readonly string _contentRoot = Path.GetFullPath(contentRoot);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 从 ContentRoot 下按相对路径加载脚本配置文件。
+    /// </summary>
+    /// <typeparam name="TConfig">配置对象类型。</typeparam>
+    /// <param name="relativePath">相对 ContentRoot 的配置路径。</param>
+    /// <param name="typeInfo">source-generated JSON 类型信息。</param>
+    /// <returns>反序列化后的配置对象。</returns>
     public TConfig Load<TConfig>(string relativePath, JsonTypeInfo<TConfig> typeInfo)
         where TConfig : class
     {
