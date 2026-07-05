@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -554,6 +555,8 @@ public sealed class HostingProjectDisciplineTests
         string ridConfigPath = Path.Combine(root, "tools", "release-rids.json");
         string matrixScript = File.ReadAllText(Path.Combine(root, "tools", "release-matrix.ps1"));
         string releaseWorkflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "release.yml"));
+        string ciWorkflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "ci.yml"));
+        string ciMatrixPreflight = File.ReadAllText(Path.Combine(root, "tools", "ci-matrix-evidence-preflight.ps1"));
         JsonObject config = JsonNode.Parse(File.ReadAllText(ridConfigPath))!.AsObject();
         JsonArray channels = config["channels"]!.AsArray();
         JsonArray rids = config["rids"]!.AsArray();
@@ -591,6 +594,95 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("fromJSON(needs.setup.outputs.build_matrix)", releaseWorkflow, StringComparison.Ordinal);
         Assert.Contains("RELEASE_EXPECTED", releaseWorkflow, StringComparison.Ordinal);
         Assert.Contains("-ActiveRids $activeRids", releaseWorkflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("rid: [win-x64, win-arm64, linux-x64, linux-arm64, osx-x64, osx-arm64]", releaseWorkflow, StringComparison.Ordinal);
+
+        foreach (string rid in byRid.Keys)
+        {
+            Assert.Contains($"rid: {rid}", ciWorkflow, StringComparison.Ordinal);
+            Assert.Contains($"\"{rid}\"", ciMatrixPreflight, StringComparison.Ordinal);
+        }
+
+        Assert.DoesNotContain("release-rids.json", ciWorkflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("release-matrix.ps1", ciWorkflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("release-rids.json", ciMatrixPreflight, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 dormant RID 只需翻 active 标志即可进入发行矩阵，不需要改 YAML 或审计脚本逻辑。
+    /// </summary>
+    [Fact]
+    public void ReleaseRidGateDryRunActivatesDormantRidFromConfigOnly()
+    {
+        string root = FindRepositoryRoot();
+        string tempDirectory = Path.Combine(Path.GetTempPath(), "PixelEngine.ReleaseRidGate." + Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(tempDirectory);
+
+        try
+        {
+            string tempConfigPath = Path.Combine(tempDirectory, "release-rids.json");
+            JsonObject config = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "tools", "release-rids.json")))!.AsObject();
+            JsonObject linuxX64 = config["rids"]!
+                .AsArray()
+                .Select(node => node!.AsObject())
+                .Single(node => node["rid"]!.GetValue<string>() == "linux-x64");
+            linuxX64["active"] = true;
+            File.WriteAllText(tempConfigPath, config.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+            JsonObject matrix = JsonNode.Parse(RunPowerShellScript(root, Path.Combine(root, "tools", "release-matrix.ps1"), "-RidConfigPath", tempConfigPath, "-Print"))!.AsObject();
+            JsonObject expected = matrix["expected"]!.AsObject();
+            JsonArray activeRids = expected["activeRids"]!.AsArray();
+            JsonArray buildEntries = matrix["build-matrix"]!["include"]!.AsArray();
+
+            Assert.Equal(["win-x64", "win-arm64", "linux-x64"], [.. activeRids.Select(node => node!.GetValue<string>())]);
+            Assert.Equal(6, expected["packageCount"]!.GetValue<int>());
+            Assert.Equal(7, expected["assetCount"]!.GetValue<int>());
+            Assert.Contains(buildEntries, node =>
+            {
+                JsonObject entry = node!.AsObject();
+                return entry["rid"]!.GetValue<string>() == "linux-x64" &&
+                    entry["channel"]!.GetValue<string>() == "r2r" &&
+                    entry["runner"]!.GetValue<string>() == "ubuntu-latest" &&
+                    entry["shell"]!.GetValue<string>() == "bash";
+            });
+            Assert.Contains(buildEntries, node =>
+                node!.AsObject()["rid"]!.GetValue<string>() == "linux-x64" &&
+                node.AsObject()["channel"]!.GetValue<string>() == "aot");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 plan/15 §3.7.1 的发行布局选型被工程文件与脚本共同锁定。
+    /// </summary>
+    [Fact]
+    public void ReleaseLayoutLocksPublishIntermediateAndSingleFileDecision()
+    {
+        string root = FindRepositoryRoot();
+        string props = File.ReadAllText(Path.Combine(root, "Directory.Build.props"));
+        string publishR2rPs1 = File.ReadAllText(Path.Combine(root, "tools", "publish-r2r.ps1"));
+        string publishAotPs1 = File.ReadAllText(Path.Combine(root, "tools", "publish-aot.ps1"));
+        string packagePs1 = File.ReadAllText(Path.Combine(root, "tools", "package.ps1"));
+        string packageSh = File.ReadAllText(Path.Combine(root, "tools", "package.sh"));
+        string plan = File.ReadAllText(Path.Combine(root, "plan", "15-build-packaging-distribution.md"));
+
+        Assert.Contains("plan/15 §3.7.1", props, StringComparison.Ordinal);
+        Assert.Contains("<PublishSingleFile>false</PublishSingleFile>", props, StringComparison.Ordinal);
+        Assert.Contains("_PUBLISH_INTERMEDIATE_README.txt", publishR2rPs1, StringComparison.Ordinal);
+        Assert.Contains("_PUBLISH_INTERMEDIATE_README.txt", publishAotPs1, StringComparison.Ordinal);
+        Assert.Contains("not the player-facing package", publishR2rPs1, StringComparison.Ordinal);
+        Assert.Contains("not the player-facing package", publishAotPs1, StringComparison.Ordinal);
+        Assert.Contains("PlayerOutputDir", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("artifacts/PixelEngine Demo", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("player_output_dir", packageSh, StringComparison.Ordinal);
+        Assert.Contains("artifacts/PixelEngine Demo", packageSh, StringComparison.Ordinal);
+        Assert.Contains("方案 (b) 单文件", plan, StringComparison.Ordinal);
+        Assert.Contains("否决 (b)", plan, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -861,5 +953,33 @@ public sealed class HostingProjectDisciplineTests
         }
 
         throw new InvalidOperationException("无法从测试输出目录定位 PixelEngine.sln。");
+    }
+
+    private static string RunPowerShellScript(string workingDirectory, string scriptPath, params string[] arguments)
+    {
+        using System.Diagnostics.Process process = new();
+        process.StartInfo.FileName = "pwsh";
+        process.StartInfo.WorkingDirectory = workingDirectory;
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.UseShellExecute = false;
+        process.StartInfo.ArgumentList.Add("-NoLogo");
+        process.StartInfo.ArgumentList.Add("-NoProfile");
+        process.StartInfo.ArgumentList.Add("-ExecutionPolicy");
+        process.StartInfo.ArgumentList.Add("Bypass");
+        process.StartInfo.ArgumentList.Add("-File");
+        process.StartInfo.ArgumentList.Add(scriptPath);
+        foreach (string argument in arguments)
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
+
+        _ = process.Start();
+        string stdout = process.StandardOutput.ReadToEnd();
+        string stderr = process.StandardError.ReadToEnd();
+        Assert.True(process.WaitForExit(30_000), $"脚本超时: {scriptPath}");
+        Assert.Equal(0, process.ExitCode);
+        Assert.True(string.IsNullOrWhiteSpace(stderr), stderr);
+        return stdout;
     }
 }

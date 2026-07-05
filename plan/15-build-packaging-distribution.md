@@ -349,15 +349,15 @@ RID 激活门控（win-first，§2.1）
 - [x] `release.yml` 增 `setup` job（阶段 0）+ `workflow_dispatch` 输入 `include_win_arm64`（默认 true）；native/publish/verify/sign-package 四 job 改 `fromJSON` 消费激活矩阵、`runs-on`/`shell` 取自矩阵条目；release job 期望数量改由 `expected` 派生；删除四处静态 6-RID 列表（等价逻辑迁入 json）（§2.1、§3.10）。
 - [x] `tools/audit-release-artifacts.ps1|.sh` 增 `-ActiveRids`/`--active-rids`（默认读 json），`--require-all` 语义改为「激活集 require-all」，包数期望 `activeRids×channels`，逐 RID 断言只遍历激活集、dormant RID 缺失不报错；发行包命名正则保持宽松（仅改 `$rids` 枚举与 count/expected 派生）（§2.1）。
 - [~] `tools/release-evidence-preflight.ps1|.sh` 的 `$rids`/`package_count`/`expanded_package_count`/`required_rids`/`uploaded_asset_count`/deterministic 行集/SHA256SUMS 覆盖集改由 `-ActiveRids`/`-ExpectedPackageCount` 派生（默认读同一 json）；PowerShell 版已完成并接入 `release.yml`，仓库尚无 Bash 版预检入口，tag/identity/`simdProbeKind` 锁定逻辑不动（§2.1）。
-- [ ] 显式边界回归：`ci.yml`/`plan/16` 的 6-RID 构建/测试矩阵与 `tools/ci-matrix-evidence-preflight.ps1` 保持 6 RID（cross 用 build-only）不随发行门控收敛，作为 dormant RID 编译保证后盾（§2.1）。
-- [ ] dry-run 回归：把任一 dormant RID 翻 `active:true` 后（`workflow_dispatch` 演练），无需改任何 YAML/脚本逻辑即自动进全链路、审计/预检期望数量自动 +1 组（§2.1）。
+- [x] 显式边界回归：`ci.yml`/`plan/16` 的 6-RID 构建/测试矩阵与 `tools/ci-matrix-evidence-preflight.ps1` 保持 6 RID（cross 用 build-only）不随发行门控收敛，作为 dormant RID 编译保证后盾；`HostingProjectDisciplineTests.ReleaseRidGateDeclaresWindowsActiveSetAndMatrixOutputs` 已锁定 CI/preflight 不读取 `release-rids.json`（§2.1）。
+- [x] dry-run 回归：把任一 dormant RID 翻 `active:true` 后（`workflow_dispatch` 演练），无需改任何 YAML/脚本逻辑即自动进全链路、审计/预检期望数量自动 +1 组；`HostingProjectDisciplineTests.ReleaseRidGateDryRunActivatesDormantRidFromConfigOnly` 用临时配置翻开 `linux-x64` 并验证矩阵扩展到 3 RID / 6 package（§2.1）。
 
 发行布局选型（需求 4）
 
-- [ ] §3.7 增「中间产物 ≠ 玩家包」明确段落；§3.7.1 落地 (a)/(b) 权衡与 (a) 选型锁定正文（§3.7.1）。
+- [x] §3.7 增「中间产物 ≠ 玩家包」明确段落；§3.7.1 落地 (a)/(b) 权衡与 (a) 选型锁定正文（§3.7.1）。
 - [x] （已实现）`tools/package.*` 输出 Unity 式 `app/` 布局、apphost 相对路径改写、noise 剔除、固定玩家入口目录。
 - [x] （已实现）`tools/audit-release-artifacts.*` 强制 `app/` 布局、拒绝根目录运行时依赖 / `app/content` 重复 / `app/` 下第二启动 exe。
-- [ ] 确认 `Directory.Build.props` R2R 属性组 `PublishSingleFile=false` 作为 (a) 选型的锁定项，注释指向 §3.7.1（§3.7.1）。
+- [x] 确认 `Directory.Build.props` R2R 属性组 `PublishSingleFile=false` 作为 (a) 选型的锁定项，注释指向 §3.7.1；`HostingProjectDisciplineTests.ReleaseLayoutLocksPublishIntermediateAndSingleFileDecision` 已覆盖（§3.7.1）。
 
 编辑器触发的 build-player 入口（§3.11）
 
@@ -402,10 +402,10 @@ HTML UI native 与 demo-playability 内容打包
 win-first 激活门控与布局选型（本轮新增）
 
 - [ ] 激活集全绿：`win-x64` r2r/aot 本机全链路（publish + smoke + package + audit）通过；`win-arm64` r2r/aot 构建必过、load-only 校验通过、release notes 标人工硬件门禁（架构 R5、§15、§2.1）。
-- [ ] 保留集 dormant 且可一键激活：linux/osx 四 RID 在 `release-rids.json` 为 `active:false`，其 toolchain/脚本/ISA 组/codesign step 保留可编译；把任一 RID 翻 `active:true` 后无需改任何 YAML/脚本逻辑即自动进 native→publish→verify→sign-package→release 全链路、审计/预检期望数量自动 +1 组（用 dry-run/`workflow_dispatch` 验证矩阵扩展生效）（§2.1）。
+- [x] 保留集 dormant 且可一键激活：linux/osx 四 RID 在 `release-rids.json` 为 `active:false`，其 toolchain/脚本/ISA 组/codesign step 保留可编译；把任一 RID 翻 `active:true` 后无需改任何 YAML/脚本逻辑即自动进 native→publish→verify→sign-package→release 全链路、审计/预检期望数量自动 +1 组；本地 dry-run 已验证 `linux-x64` 翻 active 后矩阵扩展生效（§2.1）。
 - [x] 数量与激活集挂钩：`SHA256SUMS` 覆盖激活集全部产物（当前 4）；`uploaded_asset_count = packageCount + 1`（当前 5）；audit `--require-all` 与 preflight 期望包数 = `activeRids × channels`，dormant RID 缺失不误判为失败（§2.1、§3.8）。
-- [ ] 边界不误伤：`ci.yml`/`plan/16` 的 6-RID 构建/测试矩阵与 `ci-matrix-evidence-preflight.ps1` 未随发行门控收敛，dormant RID 仍有编译保证（§2.1）。
-- [ ] 布局选型锁定：`PublishSingleFile=false` 保持；§3.7.1 记录 (a)/(b) 权衡与否决 (b) 的理由；`artifacts/publish/<rid>-<channel>/` 中间产物不被当作发行物（有 `_PUBLISH_INTERMEDIATE_README.txt` + 固定玩家入口目录）（§3.7.1）。
+- [x] 边界不误伤：`ci.yml`/`plan/16` 的 6-RID 构建/测试矩阵与 `ci-matrix-evidence-preflight.ps1` 未随发行门控收敛，dormant RID 仍有编译保证（§2.1）。
+- [x] 布局选型锁定：`PublishSingleFile=false` 保持；§3.7.1 记录 (a)/(b) 权衡与否决 (b) 的理由；`artifacts/publish/<rid>-<channel>/` 中间产物不被当作发行物（有 `_PUBLISH_INTERMEDIATE_README.txt` + 固定玩家入口目录）（§3.7.1）。
 
 build-player 入口与玩家包解耦（本轮新增）
 
@@ -452,8 +452,8 @@ build-player 入口与玩家包解耦（本轮新增）
 - [x] `build(build): 版本号、产物命名与内容资产打包脚本` — 对应 §3.8、§3.9、版本/内容项。
 - [x] `build(build): macOS codesign + notarization 脚本` — 对应 codesign 项、架构 §15。
 - [x] `build(build): 发布 CI release.yml（native→publish→verify→sign→release 五阶段，双路径冒烟）` — 对应 §3.10、CI 项，闭合架构 R5 防线。
-- [ ] `build(build): RID 激活门控（release-rids.json 单一真相源 + 动态矩阵 + 审计/预检参数化，Windows 优先、跨平台保留非激活）` — 对应 §2.1、§3.10、实现清单「RID 激活门控」项。
-- [ ] `build(build): 锁定 Unity 式 app/ 发行布局选型（§3.7.1 方案权衡，否决单文件）` — 对应 §3.7.1、实现清单「发行布局选型」项。
+- [x] `build(build): RID 激活门控（release-rids.json 单一真相源 + 动态矩阵 + 审计/预检参数化，Windows 优先、跨平台保留非激活）` — 对应 §2.1、§3.10、实现清单「RID 激活门控」项。
+- [x] `build(build): 锁定 Unity 式 app/ 发行布局选型（§3.7.1 方案权衡，否决单文件）` — 对应 §3.7.1、实现清单「发行布局选型」项。
 - [x] `build(build): tools/build-player 编排器 + NDJSON(pixelengine.build/v1)/build-result.json 契约 + dev-audit 分流` — 对应 §3.11、实现清单「build-player 入口」项，供 plan/19 BuildSettings 面板消费。
 - [x] `build(build): 玩家包 player-only 审计（拒 PixelEngine.Editor.dll 与 ImGuizmo/ImPlot、允许玩家 HUD 的 Hexa.NET.ImGui）+ 编辑器工具包分流` — 对应 §3.7、实现清单「玩家包/编辑器工具包分流」项。
 - [ ] `build(build): HTML UI native dynamic-only 打包与 demo-playability 内容核对（weapons.json/新材质纹理，不进 Box2D dual-build）` — 对应 §3.5、§3.9、实现清单「HTML UI native 与 demo-playability 内容」项。
