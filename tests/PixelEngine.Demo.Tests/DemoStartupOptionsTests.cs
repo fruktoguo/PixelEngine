@@ -142,6 +142,33 @@ public sealed class DemoStartupOptionsTests
         Assert.Equal(wood, grid.MaterialAt(72, 188));
     }
 
+    /// <summary>
+    /// 验证武器目录经 Engine Content/Config API 加载，Demo 不直接解析 JSON。
+    /// </summary>
+    [Fact]
+    public void WeaponCatalogLoadsThroughEngineConfigApi()
+    {
+        string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
+        using PixelEngine.Hosting.Engine engine = new PixelEngine.Hosting.EngineBuilder()
+            .UseHeadless()
+            .WithContentRoot(contentRoot)
+            .Build();
+
+        WeaponCatalog catalog = engine.LoadConfig("weapons.json", DemoConfigJsonContext.Default.WeaponCatalog);
+
+        Assert.Equal(6, catalog.Weapons.Length);
+        Assert.Equal(
+            [WeaponKind.SingleShot, WeaponKind.Bomb, WeaponKind.Grenade, WeaponKind.Laser, WeaponKind.Excavator, WeaponKind.Builder],
+            catalog.Weapons.Select(weapon => weapon.Kind).ToArray());
+        WeaponDefinition laser = Assert.Single(catalog.Weapons, weapon => weapon.Kind == WeaponKind.Laser);
+        Assert.Equal(WeaponFalloff.None, laser.Falloff);
+        Assert.True(laser.BeamDps > 0f);
+        Assert.True(laser.HeatPerCell > 0f);
+        WeaponDefinition builder = Assert.Single(catalog.Weapons, weapon => weapon.Kind == WeaponKind.Builder);
+        Assert.Equal("stone", builder.SpawnMaterial);
+        Assert.StartsWith("#FF", builder.HudColor, StringComparison.Ordinal);
+    }
+
     private static string FindRepositoryRoot()
     {
         DirectoryInfo? directory = new(AppContext.BaseDirectory);

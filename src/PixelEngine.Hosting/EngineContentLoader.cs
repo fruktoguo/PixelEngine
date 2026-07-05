@@ -1,4 +1,6 @@
 using PixelEngine.Content;
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 
 namespace PixelEngine.Hosting;
 
@@ -55,5 +57,37 @@ public static class EngineContentLoader
         string reactionsJson = File.ReadAllText(reactionsPath);
         MaterialContentLoadResult result = MaterialContentLoader.Load(materialsJson, reactionsJson);
         return new EngineContentPackage(root, result.Materials, result.Reactions);
+    }
+
+    /// <summary>
+    /// 经 Hosting 公开门面从内容根目录加载一个 JSON 配置文件，供 Demo/玩法层避免直接依赖 JSON 解析细节。
+    /// </summary>
+    /// <typeparam name="TConfig">配置文档类型。</typeparam>
+    /// <param name="contentRoot">内容根目录。</param>
+    /// <param name="relativePath">相对内容根目录的配置路径。</param>
+    /// <param name="typeInfo">由调用方提供的 source-generated JSON 类型元数据。</param>
+    /// <returns>解析后的配置文档。</returns>
+    public static TConfig LoadConfig<TConfig>(string contentRoot, string relativePath, JsonTypeInfo<TConfig> typeInfo)
+        where TConfig : class
+    {
+        ArgumentNullException.ThrowIfNull(typeInfo);
+        string path = ResolveContentFile(contentRoot, relativePath);
+        string json = File.ReadAllText(path);
+        return JsonSerializer.Deserialize(json, typeInfo) ??
+            throw new InvalidDataException($"配置文件为空或无法解析：{path}");
+    }
+
+    private static string ResolveContentFile(string contentRoot, string relativePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(contentRoot);
+        ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
+        string root = Path.GetFullPath(contentRoot);
+        string path = Path.GetFullPath(Path.Combine(root, relativePath));
+        string rootWithSeparator = Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar;
+        _ = path.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase)
+            ? path
+            : throw new ArgumentException("配置路径必须位于内容根目录内。", nameof(relativePath));
+
+        return File.Exists(path) ? path : throw new FileNotFoundException("缺少配置文件。", path);
     }
 }

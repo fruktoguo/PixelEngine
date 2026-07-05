@@ -250,6 +250,20 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>
+    /// 从当前 ContentRoot 加载一个玩法配置 JSON；调用方只提供目标类型，不直接依赖底层 JSON 解析器。
+    /// </summary>
+    /// <typeparam name="TConfig">配置文档类型。</typeparam>
+    /// <param name="relativePath">相对 ContentRoot 的配置路径。</param>
+    /// <param name="typeInfo">由调用方提供的 source-generated JSON 类型元数据。</param>
+    /// <returns>解析后的配置文档。</returns>
+    public TConfig LoadConfig<TConfig>(string relativePath, System.Text.Json.Serialization.Metadata.JsonTypeInfo<TConfig> typeInfo)
+        where TConfig : class
+    {
+        ThrowIfShutdown();
+        return EngineContentLoader.LoadConfig(Context.Options.ContentRoot, relativePath, typeInfo);
+    }
+
+    /// <summary>
     /// 初始化音频系统并加载 ContentRoot/audio 下的 WAV clip，供脚本音频 API 使用。
     /// </summary>
     /// <param name="backend">可选音频后端；为 null 时优先 OpenAL，失败自动降级无声后端。</param>
