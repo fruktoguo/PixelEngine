@@ -742,6 +742,49 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(0, offProfiler.LastSubFrame[(int)FrameSubPhase.RenderStyleShading]);
     }
 
+    [Fact]
+    public void RenderStyleQualityControllerTogglesStylePathAtRuntime()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        SetMaterial(chunk, 0, 0, 1);
+        chunk.Damage[0] = 200;
+        chunks.Add(chunk);
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "stone", CellType.Solid, 0xFF404040u) with
+            {
+                Integrity = 100,
+                RenderStyle = MaterialRenderStyle.Destructible,
+                EdgeColorBGRA = 0xFFFFFFFFu,
+            });
+        RenderBuffer target = new(1, 1);
+        RenderAuxBuffers aux = new(1, 1);
+        RenderFrameContext context = new(
+            chunks,
+            materials,
+            new TemperatureField(),
+            CameraState.OneToOne(0, 0, 1, 1),
+            simStepped: true);
+        RenderBufferBuilder builder = new();
+
+        FrameProfiler offProfiler = new();
+        offProfiler.BeginFrame();
+        builder.SetRenderStyleLevel(RenderBufferStyleLevel.Off);
+        builder.Build(context, target, aux, offProfiler);
+        offProfiler.EndFrame();
+
+        FrameProfiler fullProfiler = new();
+        fullProfiler.BeginFrame();
+        builder.SetRenderStyleLevel(RenderBufferStyleLevel.Full);
+        builder.Build(context, target, aux, fullProfiler);
+        fullProfiler.EndFrame();
+
+        Assert.Equal(RenderBufferStyleLevel.Full, builder.RenderStyleLevel);
+        Assert.Equal(0, offProfiler.LastSubFrame[(int)FrameSubPhase.RenderStyleShading]);
+        Assert.True(fullProfiler.LastSubFrame[(int)FrameSubPhase.RenderStyleShading] > 0);
+    }
+
     private static void SetMaterial(Chunk chunk, int lx, int ly, ushort material)
     {
         chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;

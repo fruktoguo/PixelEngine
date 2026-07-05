@@ -2,6 +2,7 @@ using PixelEngine.Core;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
 using PixelEngine.Gui;
+using PixelEngine.Rendering;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
@@ -116,6 +117,35 @@ public sealed class EngineOverloadControllerTests
         Assert.Equal(EngineQualityTier.Full, engine.Context.QualityTier);
         Assert.Equal(1, temperature.StepInterval);
         Assert.True(temperature.ShouldRun(1));
+    }
+
+    /// <summary>
+    /// 验证一级过载降级会独立关闭 RenderStyle CPU 样式着色，并在恢复全质量时复位，不依赖光照/GPU compute 降级。
+    /// </summary>
+    [Fact]
+    public void EngineAppliesRenderStyleQualityTierIndependentlyFromLighting()
+    {
+        RecordingRenderStyleQualityController renderStyle = new();
+        RecordingGpuComputeQualityDegrader gpu = new();
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithOverloadPolicy(frameBudgetMs: 10, sustainWindow: 1)
+            .Build();
+        engine.Context.RegisterService<IRenderStyleQualityController>(renderStyle);
+        engine.Context.RegisterService<IGpuComputeQualityDegrader>(gpu);
+
+        _ = engine.RunOneTick(realDeltaSeconds: 0.011);
+
+        Assert.Equal(EngineQualityTier.ReducedThermal, engine.Context.QualityTier);
+        Assert.Equal(RenderBufferStyleLevel.Off, renderStyle.RenderStyleLevel);
+        Assert.Equal(0, gpu.CallCount);
+
+        engine.Context.GetService<EngineOverloadController>().ResetToFullQuality();
+        _ = engine.RunOneTick(realDeltaSeconds: 0);
+
+        Assert.Equal(EngineQualityTier.Full, engine.Context.QualityTier);
+        Assert.Equal(RenderBufferStyleLevel.Full, renderStyle.RenderStyleLevel);
+        Assert.Equal(0, gpu.CallCount);
     }
 
     /// <summary>
@@ -478,6 +508,16 @@ public sealed class EngineOverloadControllerTests
         {
             CallCount++;
             return true;
+        }
+    }
+
+    private sealed class RecordingRenderStyleQualityController : IRenderStyleQualityController
+    {
+        public RenderBufferStyleLevel RenderStyleLevel { get; private set; } = RenderBufferStyleLevel.Full;
+
+        public void SetRenderStyleLevel(RenderBufferStyleLevel level)
+        {
+            RenderStyleLevel = level;
         }
     }
 }

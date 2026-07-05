@@ -141,7 +141,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] 五级兜底：接受 <60fps 真实减速，**绝不 accumulator 追帧**。[plan/02 · §4.1/不变式 #6]
 - [x] 降级由 Core 诊断计时器驱动（连续超预算帧触发）。[plan/02 · §4.3/§17.1]
 - [x] 每帧成本上限节流落实（形状重建每刚体每帧≤1次、合并像素移除、CCL off-thread）。[plan/06 · §4.3/§8.4/风险 R4]
-- [ ] plan/08 **RenderStyle 着色质量档**接入既有过载降级顺序：作为可独立触发的着色降项，过载时关流动噪声/裂纹/描边、回退纯 palette；与二级光照降级（关 RC/bloom、回退 fog-of-war+emissive）**不冲突、各自可独立触发**，回复（升档）由诊断计时器判定余量后进行。[plan/08 · §4.3]
+- [x] plan/08 **RenderStyle 着色质量档**接入既有过载降级顺序：`IRenderStyleQualityController` 由 `RenderBufferBuilder` 承接并在 `Engine.AttachRendering` 注册，一级过载即关流动噪声/裂纹/描边、回退纯 palette；恢复 Full 时复位。`EngineAppliesRenderStyleQualityTierIndependentlyFromLighting` 验证其与二级光照/GPU compute 降级**不冲突、各自可独立触发**，`RenderStyleQualityControllerTogglesStylePathAtRuntime` 验证运行时切换真实影响相位 9 样式路径。[plan/08 · §4.3]
 - [~] plan/20 **HTML UI（PixelEngine.UI）光栅化/合成落相位10、仅在 UI 脏或有动画时执行**；`GameUiHost` 已用真实 dirty/animation 门控后端 Composite/DrawGui，静态屏 `ui.paint=0`，静态 UI phase/clean composite/draw skip/空闲输入泵已由 `GameUiAllocationBenchmarks` 以 `MemoryDiagnoser` 证实稳态零托管分配；过载时 UI present cadence 会按质量档位降到 2/3/4 帧间隔，且 UI update/event drain 仍逐渲染帧执行，UI 尖刺只丢渲染帧、绝不拖慢 sim 或触发 accumulator 追帧（守 #6）；sim 频率降级仍由 §4.9 一至五级独立驱动，native/Ultralight 脏矩形上传仍待闭合。[plan/20 · §4.3/不变式 #6]
 
 ### 4.10 大世界内存上限
@@ -173,7 +173,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 
 - [x] **SoA 全覆盖**：所有 sim 热数据 SoA，per-cell 字节预算按 4B/cell 对账通过，AoS 仅工具路径，颜色不入 cell。[§7.1/不变式 #7]
 - [x] **per-cell 预算再对账（Damage 平面）**：加入 Damage(byte) 平面后 sim 热态 5B/cell（+25%）、每常驻 chunk 20KB、~2M cell +2MB 与 plan/03 SoA 定义、plan/07 chunk 常驻/序列化预算行**逐字一致**；Damage 平面单缓冲原地、POH 常驻，刚体像素经 IRigidDamageSink 路由重建、**绝不累加 Damage**（守 #1/#3/#5）复核通过。[§7.1/§12.2/不变式 #1/#3/#5]
-- [ ] **着色档与快速路径共存**：plan/08 RenderStyle 着色质量档接入既有二级光照降级顺序不冲突、可独立触发；开启时禁用 palette 行复制改世界空间逐像素计算、着色只在渲染相位算 BGRA 不写回 cell（守 #7）、相位9 稳态零分配。[§4.3/§4.9/不变式 #7]
+- [x] **着色档与快速路径共存**：plan/08 RenderStyle 着色质量档已接入既有过载降级顺序且不与二级光照降级冲突、可独立触发；开启时禁用 palette 行复制改世界空间逐像素计算，关闭时恢复 zoom palette 快路径；着色只在渲染相位算 BGRA 不写回 cell（守 #7），相位9 稳态零分配由既有 render buffer BDN 与 `RenderStyleQualityControllerTogglesStylePathAtRuntime` / `RenderStyleQualityGateControlsPaletteZoomFastPath` 覆盖。[§4.3/§4.9/不变式 #7]
 - [x] **稳态零分配**：CA/粒子/render buffer/反应/温度/序列化六条业务热路径与 JobSystem 多 worker 派发热路径 `MemoryDiagnoser` 全报 `0 B`；热路径静态核查无 LINQ/闭包/装箱/迭代器。[§12.4/AGENTS §3]
 - [x] **多线程齐全**：CA checkerboard、Box2D task 桥、render buffer、CCL/形状重建、粒子积分、温度 stencil、序列化字节准备七项均经持久线程池并行；无每帧 `Parallel.For`；活跃任务少时单线程回退生效。[§5.7/§12.7/§14.2/风险 R7]
 - [!] **SIMD 到位**：温度 stencil/色混合/bulk fill 等向量化且有 scalar fallback、运行时 light-up；sand movement 确认未向量化；AVX-512 gate 实测无降频净损。[§12.5/§2 挑战三] 阻塞于 §4.4 AVX-512 目标硬件实测；当前机器仅 AVX2，无法验证 Vector512 降频净损。`tools/performance-target-evidence-preflight.ps1` 索引 `avx512_downclock_net_loss` 证据并强制 `noNetDownclockLoss=true` 等机器可读字段，但只进入 pending review，不自动勾选。

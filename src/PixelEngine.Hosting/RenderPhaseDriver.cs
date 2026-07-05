@@ -57,6 +57,11 @@ public sealed class RenderPhaseDriver(
     public int LastOverlayCount { get; private set; }
 
     /// <summary>
+    /// RenderStyle 着色质量控制器，供 Hosting 过载策略独立降级 CPU 样式着色。
+    /// </summary>
+    public IRenderStyleQualityController RenderStyleQuality => _builder;
+
+    /// <summary>
     /// 注册相位 9 render buffer 构建与相位 10 GPU 上传/窗口 present。
     /// </summary>
     public void RegisterPhases(EnginePhasePipeline phases)

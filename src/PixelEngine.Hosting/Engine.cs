@@ -487,6 +487,7 @@ public sealed class Engine : IDisposable
         Context.RegisterService(pipeline);
         Context.RegisterService<IGpuComputeQualityDegrader>(pipeline);
         Context.RegisterService<IRenderPresentationControl>(pipeline);
+        Context.RegisterService<IRenderStyleQualityController>(driver.RenderStyleQuality);
         Context.RegisterService<IRenderFrameSink>(sink);
         Context.RegisterService(sink);
         Context.RegisterService(driver.GetType(), driver);
@@ -2175,6 +2176,7 @@ public sealed class Engine : IDisposable
         EngineQualityTier tier = overload.SubmitFrame(frameMs);
         Context.SetQualityTier(tier);
         ApplyThermalDegradation(tier);
+        ApplyRenderStyleDegradation(tier);
         ApplyGameUiDegradation(tier);
         if (tier != previousTier && tier >= EngineQualityTier.ReducedLighting)
         {
@@ -2338,6 +2340,18 @@ public sealed class Engine : IDisposable
         temperature.SetStepInterval(tier >= EngineQualityTier.ReducedThermal
             ? ReducedThermalStepInterval
             : FullThermalStepInterval);
+    }
+
+    private void ApplyRenderStyleDegradation(EngineQualityTier tier)
+    {
+        if (!Context.TryGetService(out IRenderStyleQualityController renderStyle))
+        {
+            return;
+        }
+
+        renderStyle.SetRenderStyleLevel(tier >= EngineQualityTier.ReducedThermal
+            ? RenderBufferStyleLevel.Off
+            : RenderBufferStyleLevel.Full);
     }
 
     private void ApplyGpuComputeDegradation()

@@ -16,6 +16,7 @@ public sealed class RenderBufferBuilder(
     JobSystem? jobs = null,
     IMaterialTextureProvider? textures = null,
     RenderBufferBuilderOptions? options = null)
+    : IRenderStyleQualityController
 {
     private readonly JobSystem? _jobs = jobs;
     private readonly IMaterialTextureProvider? _textures = textures;
@@ -25,6 +26,20 @@ public sealed class RenderBufferBuilder(
     private int _emptyWorldChunkCount;
     private IChunkSource? _emptyWorldSource;
     private MaterialTable? _emptyWorldMaterials;
+
+    /// <inheritdoc />
+    public RenderBufferStyleLevel RenderStyleLevel { get; private set; } = (options ?? new RenderBufferBuilderOptions()).StyleLevel;
+
+    /// <inheritdoc />
+    public void SetRenderStyleLevel(RenderBufferStyleLevel level)
+    {
+        if (!Enum.IsDefined(level))
+        {
+            throw new ArgumentOutOfRangeException(nameof(level), level, "未知 RenderStyle 着色质量档。");
+        }
+
+        RenderStyleLevel = level;
+    }
 
     /// <summary>
     /// 构建 BGRA8 render buffer 及 emissive/occluder 副输出。
@@ -344,7 +359,7 @@ public sealed class RenderBufferBuilder(
 
     private bool ShouldUseMaterialStyles(RenderFrameContext context)
     {
-        return _options.StyleLevel == RenderBufferStyleLevel.Full && context.Materials.Visual.HasStyleEffects;
+        return RenderStyleLevel == RenderBufferStyleLevel.Full && context.Materials.Visual.HasStyleEffects;
     }
 
     private int GetStyledPaletteRunLength(RenderFrameContext context, Chunk chunk, int localStart, int remaining, int worldX, int worldY)
