@@ -37,6 +37,7 @@ public static class DemoProgram
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(DemoHud))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(ExplosiveTool))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(GoalTrigger))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(GrenadeProjectile))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(LevelDirector))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(MaterialBrush))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(MaterialEmitter))]

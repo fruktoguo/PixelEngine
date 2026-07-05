@@ -140,6 +140,24 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
+    /// 验证脚本热量命令延迟到 cell 安全相位落地，并标记对应区域 dirty。
+    /// </summary>
+    [Fact]
+    public void WorldAddHeatFlushesIntoTemperatureField()
+    {
+        Fixture fixture = Fixture.Create();
+
+        fixture.Context.World.AddHeat(10f, 10f, radius: 1, deltaCelsius: 80f);
+        Assert.Equal(0f, fixture.Temperature.GetTemperature(10, 10));
+
+        int flushed = fixture.Context.FlushCellCommands();
+
+        Assert.Equal(1, flushed);
+        Assert.True(fixture.Temperature.GetTemperature(10, 10) > 0f);
+        Assert.False(fixture.Chunk.CurrentDirty.IsEmpty);
+    }
+
+    /// <summary>
     /// 验证脚本世界爆炸 API 会先按材质抗性破坏 solid，再抛射碎屑/非固体，并对半径内刚体施加径向冲量。
     /// </summary>
     [Fact]
@@ -352,6 +370,7 @@ public sealed class ScriptSimulationContextTests
             Chunk chunk,
             CellGrid grid,
             SimulationKernel kernel,
+            TemperatureField temperature,
             ParticleSystem particles,
             ScriptSimulationContext context,
             PhysicsSystem? physics,
@@ -360,6 +379,7 @@ public sealed class ScriptSimulationContextTests
             Chunk = chunk;
             Grid = grid;
             Kernel = kernel;
+            Temperature = temperature;
             Particles = particles;
             Context = context;
             Physics = physics;
@@ -371,6 +391,8 @@ public sealed class ScriptSimulationContextTests
         public CellGrid Grid { get; }
 
         public SimulationKernel Kernel { get; }
+
+        public TemperatureField Temperature { get; }
 
         public ParticleSystem Particles { get; }
 
@@ -396,6 +418,7 @@ public sealed class ScriptSimulationContextTests
             MaterialPropsTable props = new(materials.Hot);
             CellGrid grid = new(chunks, props);
             SimulationKernel kernel = new(chunks, props);
+            TemperatureField temperature = new();
             ParticleSystem particles = new(capacity: 16);
             JobSystem? jobs = null;
             PhysicsSystem? physics = null;
@@ -407,8 +430,8 @@ public sealed class ScriptSimulationContextTests
                 physics = PhysicsSystem.Initialize(grid, jobs, worldDef: worldDef);
             }
 
-            ScriptSimulationContext context = new(new ScriptScene(), grid, kernel, particles, materials, physics: physics, camera: camera, input: input, lighting: lighting, overlay: overlay);
-            return new Fixture(chunk, grid, kernel, particles, context, physics, jobs);
+            ScriptSimulationContext context = new(new ScriptScene(), grid, kernel, particles, materials, temperature, physics: physics, camera: camera, input: input, lighting: lighting, overlay: overlay);
+            return new Fixture(chunk, grid, kernel, temperature, particles, context, physics, jobs);
         }
 
         public void Dispose()

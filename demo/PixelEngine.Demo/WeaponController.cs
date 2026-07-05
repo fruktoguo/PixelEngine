@@ -13,6 +13,8 @@ public sealed class WeaponController : Behaviour
     private const float OverheatRecoveryLimit = 35f;
     private PlayerController? _player;
     private PlayableProjectileTool? _projectile;
+    private GrenadeSpawnRequest _pendingGrenade;
+    private bool _grenadeSpawnSystemRegistered;
 
     /// <summary>
     /// 武器配置路径，相对 ContentRoot。
@@ -92,6 +94,7 @@ public sealed class WeaponController : Behaviour
     protected override void OnStart()
     {
         ResolveComponents();
+        RegisterGrenadeSpawnSystem();
         LoadCatalog();
     }
 
@@ -100,6 +103,7 @@ public sealed class WeaponController : Behaviour
     {
         float safeDt = MathF.Max(0f, dt);
         LoadCatalog();
+        RegisterGrenadeSpawnSystem();
         CoolDown(safeDt);
         HandleSelection();
         HandleReload(safeDt);
@@ -288,22 +292,31 @@ public sealed class WeaponController : Behaviour
         {
             case WeaponKind.SingleShot:
                 Context.World.DamageCircle(hitX, hitY, Math.Max(1, weapon.Radius), weapon.Damage, weapon.Falloff != WeaponFalloff.None);
+                EmitImpactFeedback(weapon, hitX, hitY, count: 3);
                 break;
             case WeaponKind.Bomb:
+                Context.World.Explode(hitX, hitY, Math.Max(1, weapon.Radius), Math.Max(1f, weapon.Impulse));
+                EmitImpactFeedback(weapon, hitX, hitY, count: 10);
+                break;
             case WeaponKind.Grenade:
-                Context.World.DamageCircle(hitX, hitY, Math.Max(1, weapon.Radius), weapon.Damage, weapon.Falloff != WeaponFalloff.None);
+                SpawnGrenade(weapon, origin.X, origin.Y, dx, dy, secondary);
                 break;
             case WeaponKind.Laser:
                 Context.World.DamageBeam(origin.X, origin.Y, dx, dy, Math.Max(1, (int)MathF.Ceiling(length)), MathF.Max(1f, weapon.BeamDps * MathF.Max(dt, 1f / 60f)));
+                Context.World.AddHeat(hitX, hitY, Math.Max(1, weapon.Radius), Math.Max(1f, weapon.HeatPerCell));
+                DrawBeamOverlay(origin.X, origin.Y, hitX, hitY, 0xFF_58_E6_FF);
+                EmitImpactFeedback(weapon, hitX, hitY, count: 2);
                 break;
             case WeaponKind.Excavator:
                 Context.Cells.Paint((int)MathF.Round(hitX), (int)MathF.Round(hitY), Math.Max(1, weapon.Radius), new MaterialId(0));
+                EmitImpactFeedback(weapon, hitX, hitY, count: 4);
                 break;
             case WeaponKind.Builder:
                 MaterialId material = Context.Materials.Resolve(weapon.SpawnMaterial);
                 if (material != MaterialId.Invalid)
                 {
                     Context.Cells.Paint((int)MathF.Round(hitX), (int)MathF.Round(hitY), Math.Max(1, weapon.Radius), material);
+                    Context.Particles.Burst(hitX, hitY, material, Math.Clamp(weapon.Radius, 2, 8), speed: 1.5f);
                 }
 
                 break;
@@ -315,6 +328,80 @@ public sealed class WeaponController : Behaviour
         {
             Context.Audio.PlayAt(ToCuePath(weapon.ImpactCue), hitX, hitY, 0.7f);
         }
+    }
+
+    private void SpawnGrenade(WeaponDefinition weapon, float originX, float originY, float dirX, float dirY, bool charged)
+    {
+        float chargeScale = charged ? 1.35f : 1f;
+        _pendingGrenade = new GrenadeSpawnRequest(
+            true,
+            originX,
+            originY,
+            dirX * Math.Max(1f, weapon.ThrowSpeed) * 24f * chargeScale,
+            dirY * Math.Max(1f, weapon.ThrowSpeed) * 24f * chargeScale,
+            Math.Max(0.05f, weapon.FuseSeconds),
+            Math.Max(1, weapon.Radius),
+            Math.Max(1f, weapon.Damage),
+            Math.Max(1f, weapon.Impulse),
+            Math.Max(0f, weapon.Gravity) * 48f,
+            Math.Clamp(weapon.Bounce, 0f, 0.9f),
+            ToCuePath(weapon.ImpactCue));
+    }
+
+    private void RegisterGrenadeSpawnSystem()
+    {
+        if (_grenadeSpawnSystemRegistered)
+        {
+            return;
+        }
+
+        Context.Scene.RegisterSystem(new GrenadeSpawnSystem(this));
+        _grenadeSpawnSystemRegistered = true;
+    }
+
+    private void FlushPendingGrenade()
+    {
+        if (!_pendingGrenade.HasValue)
+        {
+            return;
+        }
+
+        GrenadeSpawnRequest request = _pendingGrenade;
+        _pendingGrenade = default;
+        Entity grenadeEntity = Context.Scene.CreateEntity();
+        Transform transform = grenadeEntity.AddComponent<Transform>();
+        transform.SetPosition(request.X, request.Y);
+        GrenadeProjectile grenade = grenadeEntity.AddComponent<GrenadeProjectile>();
+        grenade.Initialize(
+            request.X,
+            request.Y,
+            request.Vx,
+            request.Vy,
+            request.FuseSeconds,
+            request.Radius,
+            request.Damage,
+            request.Impulse,
+            request.Gravity,
+            request.Bounce,
+            request.ImpactCue);
+    }
+
+    private void EmitImpactFeedback(WeaponDefinition weapon, float x, float y, int count)
+    {
+        MaterialId material = Context.Materials.Resolve(string.IsNullOrWhiteSpace(weapon.SpawnMaterial) ? "sand" : weapon.SpawnMaterial);
+        if (material != MaterialId.Invalid)
+        {
+            Context.Particles.Burst(x, y, material, Math.Clamp(count, 1, 32), speed: Math.Max(1f, weapon.Impulse * 0.15f));
+        }
+
+        Context.Lighting.RevealAround(x, y, Math.Max(16f, weapon.Radius * 3f));
+    }
+
+    private void DrawBeamOverlay(float startX, float startY, float endX, float endY, uint color)
+    {
+        Point2F start = Context.Camera.WorldToScreen(startX, startY);
+        Point2F end = Context.Camera.WorldToScreen(endX, endY);
+        Context.Overlay.Line(start.X, start.Y, end.X, end.Y, 3f, color);
     }
 
     private bool TryDispatchViaProjectileBackend(WeaponDefinition weapon, bool secondary)
@@ -367,5 +454,34 @@ public sealed class WeaponController : Behaviour
     private static string ToCuePath(string cue)
     {
         return cue.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) ? cue : cue + ".wav";
+    }
+
+    private readonly record struct GrenadeSpawnRequest(
+        bool HasValue,
+        float X,
+        float Y,
+        float Vx,
+        float Vy,
+        float FuseSeconds,
+        int Radius,
+        float Damage,
+        float Impulse,
+        float Gravity,
+        float Bounce,
+        string ImpactCue);
+
+    private sealed class GrenadeSpawnSystem(WeaponController owner) : ISystem
+    {
+        public void OnSimTick(IScriptContext context)
+        {
+            _ = context;
+        }
+
+        public void OnFrame(IScriptContext context, float dt)
+        {
+            _ = context;
+            _ = dt;
+            owner.FlushPendingGrenade();
+        }
     }
 }

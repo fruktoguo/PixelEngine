@@ -1104,6 +1104,7 @@ public sealed class Engine : IDisposable
             : null;
         CellGrid grid = ResolveCellGrid(simulationDriver);
         SimulationKernel kernel = ResolveSimulationKernel(simulationDriver);
+        TemperatureField? temperature = ResolveTemperatureFieldOrNull(simulationDriver);
         ParticleSystem particles = ResolveParticleSystem(simulationDriver);
         MaterialTable materials = ResolveMaterialTable(simulationDriver);
         ScriptEventBus events = ResolveScriptEventBus();
@@ -1128,6 +1129,7 @@ public sealed class Engine : IDisposable
             kernel,
             particles,
             materials,
+            temperature,
             events,
             time,
             audio,
@@ -1262,6 +1264,22 @@ public sealed class Engine : IDisposable
         }
 
         throw new InvalidOperationException("无法自动接入脚本：缺少 SimulationKernel 或 SimulationPhaseDriver。");
+    }
+
+    private TemperatureField? ResolveTemperatureFieldOrNull(SimulationPhaseDriver? simulationDriver)
+    {
+        if (Context.TryGetService(out TemperatureField temperature))
+        {
+            return temperature;
+        }
+
+        if (simulationDriver is not null)
+        {
+            Context.RegisterService(simulationDriver.Temperature);
+            return simulationDriver.Temperature;
+        }
+
+        return null;
     }
 
     private ParticleSystem ResolveParticleSystem(SimulationPhaseDriver? simulationDriver)

@@ -15,6 +15,7 @@ internal enum ScriptCommandKind
     Paint,
     DamageCircle,
     DamageBeam,
+    AddHeat,
     Explode,
     SpawnParticle,
     BurstParticles,
@@ -61,6 +62,11 @@ internal readonly record struct ScriptCommand(
     public static ScriptCommand DamageBeam(int x, int y, float dirX, float dirY, int length, ushort damagePerCell)
     {
         return new ScriptCommand(ScriptCommandKind.DamageBeam, x, y, length, damagePerCell, default, default, default, default, dirX, dirY);
+    }
+
+    public static ScriptCommand AddHeat(int x, int y, int radius, float deltaCelsius)
+    {
+        return new ScriptCommand(ScriptCommandKind.AddHeat, x, y, radius, 0, default, default, default, default, deltaCelsius, 0);
     }
 
     public static ScriptCommand SpawnParticle(in ParticleSpawnDesc particle)
