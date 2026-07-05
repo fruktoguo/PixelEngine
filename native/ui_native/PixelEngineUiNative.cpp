@@ -82,6 +82,8 @@ struct PeUiEventBinding
     Rml::ElementDocument* document;
     Rml::Element* element;
     Rml::EventId eventId;
+    int32_t documentHandle;
+    int32_t actionHash;
     std::unique_ptr<PeUiEventListener> listener;
 };
 
@@ -585,7 +587,7 @@ void AddEventBinding(
 
     auto listener = std::make_unique<PeUiEventListener>(renderer, documentHandle, elementHash, actionHash);
     element->AddEventListener(eventId, listener.get());
-    renderer->eventBindings.push_back(PeUiEventBinding{document, element, eventId, std::move(listener)});
+    renderer->eventBindings.push_back(PeUiEventBinding{document, element, eventId, documentHandle, actionHash, std::move(listener)});
 }
 
 bool BindElementTree(PeUiRenderer* renderer, Rml::ElementDocument* document, int32_t documentHandle, Rml::Element* element)
@@ -1057,6 +1059,42 @@ PE_UI_NATIVE_API int32_t peui_native_copy_model_paths(
     }
 
     return written;
+}
+
+PE_UI_NATIVE_API int32_t peui_native_invoke_action(
+    PeUiRenderer* renderer,
+    int32_t document_handle,
+    int32_t action_hash,
+    const PeUiNativeValue* value)
+{
+    if (renderer == nullptr || document_handle <= 0 || action_hash <= 0 || value == nullptr)
+    {
+        return -1;
+    }
+
+    if (value->kind < 0 || value->kind > 3)
+    {
+        renderer->lastError = "RmlUi DOM action bridge supports Empty/Boolean/Int64/Double values only.";
+        return -2;
+    }
+
+    bool invoked = false;
+    for (PeUiEventBinding& binding : renderer->eventBindings)
+    {
+        if (binding.documentHandle != document_handle || binding.actionHash != action_hash || binding.element == nullptr)
+        {
+            continue;
+        }
+
+        if (PeUiModelBinding* model = FindModelBindingForElement(renderer, document_handle, binding.element))
+        {
+            model->value = *value;
+        }
+
+        invoked = ApplyValueToElement(binding.element, *value) || invoked;
+    }
+
+    return invoked ? 1 : 0;
 }
 
 PE_UI_NATIVE_API int32_t peui_native_drain_events(PeUiRenderer* renderer, PeUiNativeEvent* events, int32_t capacity)

@@ -284,6 +284,14 @@ public sealed class UiInputRouterTests
             return 0;
         }
 
+        public bool InvokeAction(UiDocumentHandle document, UiActionId action, in UiValue payload)
+        {
+            _ = document;
+            _ = action;
+            _ = payload;
+            return false;
+        }
+
         public int DrainEvents(Span<UiEvent> destination)
         {
             _ = destination;

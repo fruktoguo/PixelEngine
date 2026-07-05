@@ -40,6 +40,8 @@ public sealed class GameUiServiceBridgeTests
             ScriptUi.UiScreenHandle screen = bridge.ShowScreen("main");
             bridge.SetValue(screen, new ScriptUi.UiPathId(7), new ScriptUi.UiValue(42L));
             bool found = bridge.TryGetValue(screen, new ScriptUi.UiPathId(7), out ScriptUi.UiValue value);
+            bridge.Invoke(screen, new ScriptUi.UiActionId(5), new ScriptUi.UiValue(77L));
+            bool invokedValueFound = bridge.TryGetValue(screen, new ScriptUi.UiPathId(7), out ScriptUi.UiValue invokedValue);
             bridge.OnGameUiEvents([
                 new RuntimeUi.UiEvent(
                     backend.LastDocument,
@@ -50,6 +52,8 @@ public sealed class GameUiServiceBridgeTests
 
             Assert.True(found);
             Assert.Equal(42L, value.AsInt64());
+            Assert.True(invokedValueFound);
+            Assert.Equal(77L, invokedValue.AsInt64());
             Assert.Equal(Path.Combine(uiRoot, "main.xhtml"), backend.LastSource.Path);
             Assert.Equal(1, eventCount);
             Assert.Equal(screen, received.Screen);
@@ -357,6 +361,14 @@ public sealed class GameUiServiceBridgeTests
 
             destination[0] = new RuntimeUi.UiPathId(7);
             return 1;
+        }
+
+        public bool InvokeAction(RuntimeUi.UiDocumentHandle document, RuntimeUi.UiActionId action, in RuntimeUi.UiValue payload)
+        {
+            Assert.Equal(LastDocument, document);
+            Assert.Equal(new RuntimeUi.UiActionId(5), action);
+            _value = payload;
+            return true;
         }
 
         public int DrainEvents(Span<RuntimeUi.UiEvent> destination)

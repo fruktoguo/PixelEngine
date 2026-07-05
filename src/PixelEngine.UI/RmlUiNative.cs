@@ -252,6 +252,17 @@ internal static unsafe partial class RmlUiNative
     internal static partial int CopyModelPaths(IntPtr renderer, int documentHandle, int* paths, int capacity);
 
     /// <summary>
+    /// 调用已绑定 DOM action，并把载荷应用到对应 DOM 元素。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="documentHandle">托管 UI 文档句柄值。</param>
+    /// <param name="actionHash">动作稳定 hash。</param>
+    /// <param name="value">blittable UI 值。</param>
+    /// <returns>1=成功，0=未找到，负数=错误。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_invoke_action")]
+    internal static partial int InvokeAction(IntPtr renderer, int documentHandle, int actionHash, NativeUiValue* value);
+
+    /// <summary>
     /// 拉取 RmlUi 事件队列。
     /// </summary>
     /// <param name="renderer">renderer 句柄。</param>

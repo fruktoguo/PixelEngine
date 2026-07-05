@@ -212,6 +212,33 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     }
 
     /// <inheritdoc />
+    public bool InvokeAction(UiDocumentHandle document, UiActionId action, in UiValue payload)
+    {
+        ThrowIfDisposed();
+        ManagedUiDocument? uiDocument = FindDocument(document);
+        if (uiDocument is null || action.Value <= 0)
+        {
+            return false;
+        }
+
+        bool invoked = false;
+        for (int i = 0; i < uiDocument.Controls.Length; i++)
+        {
+            ManagedUiControl control = uiDocument.Controls[i];
+            if (control.Action != action)
+            {
+                continue;
+            }
+
+            control.Value = payload;
+            invoked = true;
+        }
+
+        Dirty |= invoked;
+        return invoked;
+    }
+
+    /// <inheritdoc />
     public int DrainEvents(Span<UiEvent> destination)
     {
         ThrowIfDisposed();

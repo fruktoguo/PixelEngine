@@ -68,6 +68,30 @@ public sealed class ManagedFallbackBackendTests
     }
 
     [Fact]
+    public void ManagedFallbackInvokeActionUpdatesMatchingControlValue()
+    {
+        string path = WriteUi("""
+            <ui title="Settings">
+              <checkbox id="music" data-event-change="toggle_music" path="settings.music" text="Music" checked="false" />
+            </ui>
+            """);
+        FakeGuiHost gui = new();
+        using ManagedFallbackBackend backend = new(gui);
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+
+        UiDocumentSource source = UiDocumentSource.Asset(path, 5);
+        UiScreenHandle screen = host.ShowScreen(new UiScreenId(5), in source);
+        UiActionId action = new(UiStableId.Hash("toggle_music"));
+        UiPathId pathId = new(UiStableId.Hash("settings.music"));
+
+        Assert.True(host.InvokeAction(screen, action, UiValue.FromBoolean(true)));
+        Assert.True(host.TryGetModelValue(screen, pathId, out UiValue value));
+        Assert.True(value.AsBoolean());
+        Assert.True(host.NeedsComposite);
+    }
+
+    [Fact]
     public void ManagedFallbackAppliesRootBoxModelBeforeDrawingWindow()
     {
         string path = WriteUi("""

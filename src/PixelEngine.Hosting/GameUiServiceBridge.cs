@@ -192,10 +192,15 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     /// <param name="payload">动作载荷。</param>
     public void Invoke(ScriptUi.UiScreenHandle screen, ScriptUi.UiActionId action, in ScriptUi.UiValue payload)
     {
-        _ = screen;
-        _ = action;
-        _ = payload;
-        throw new NotSupportedException("当前 GameUiService 桥接尚未接入 UI Invoke 通道。");
+        RuntimeUi.UiValue runtimePayload = ToRuntimeValue(in payload);
+        bool invoked = _host.InvokeAction(
+            new RuntimeUi.UiScreenHandle(screen.Value),
+            new RuntimeUi.UiActionId(action.Value),
+            in runtimePayload);
+        if (!invoked)
+        {
+            throw new KeyNotFoundException($"Game UI 屏幕 {screen.Value} 未绑定 action: {action.Value}");
+        }
     }
 
     /// <summary>

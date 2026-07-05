@@ -128,6 +128,15 @@ public interface IGameUiBackend : IDisposable
     int CopyModelPaths(UiDocumentHandle document, Span<UiPathId> destination);
 
     /// <summary>
+    /// 调用目标文档上的 UI action；支持后端应把载荷应用到与 action 绑定的 UI 状态。
+    /// </summary>
+    /// <param name="document">目标文档。</param>
+    /// <param name="action">动作句柄。</param>
+    /// <param name="payload">动作载荷。</param>
+    /// <returns>找到并执行 action 则返回 true。</returns>
+    bool InvokeAction(UiDocumentHandle document, UiActionId action, in UiValue payload);
+
+    /// <summary>
     /// 抽取 UI 到游戏的事件。
     /// </summary>
     /// <param name="destination">事件写入缓冲。</param>

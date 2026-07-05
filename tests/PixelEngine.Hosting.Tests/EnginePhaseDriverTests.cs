@@ -1048,6 +1048,14 @@ public sealed class EnginePhaseDriverTests
             return 0;
         }
 
+        public bool InvokeAction(GameUi.UiDocumentHandle document, GameUi.UiActionId action, in GameUi.UiValue payload)
+        {
+            _ = document;
+            _ = action;
+            _ = payload;
+            return false;
+        }
+
         public int DrainEvents(Span<GameUi.UiEvent> destination)
         {
             if (destination.IsEmpty)

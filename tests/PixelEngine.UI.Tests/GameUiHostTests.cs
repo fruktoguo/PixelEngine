@@ -71,6 +71,24 @@ public sealed class GameUiHostTests
         Assert.Equal(selection, backend.InitialFontSelection);
     }
 
+    [Fact]
+    public void InvokeActionForVisibleScreenRoutesToBackendDocument()
+    {
+        FakeBackend backend = new();
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        UiDocumentSource source = UiDocumentSource.Asset("content/ui/main.html", 4);
+        UiScreenHandle screen = host.ShowScreen(new UiScreenId(4), in source);
+        UiActionId action = new(17);
+        UiValue payload = new(42L);
+
+        Assert.True(host.InvokeAction(screen, action, in payload));
+        Assert.Equal(new UiDocumentHandle(1), backend.LastInvokedDocument);
+        Assert.Equal(action, backend.LastInvokedAction);
+        Assert.Equal(payload, backend.LastInvokedPayload);
+        Assert.False(host.InvokeAction(new UiScreenHandle(999), action, in payload));
+    }
+
     private sealed class FakeBackend : IGameUiBackend
     {
         private int _nextDocument = 1;
@@ -88,6 +106,12 @@ public sealed class GameUiHostTests
         public int LoadCount { get; private set; }
 
         public int LastScreenStackCount { get; private set; }
+
+        public UiDocumentHandle LastInvokedDocument { get; private set; }
+
+        public UiActionId LastInvokedAction { get; private set; }
+
+        public UiValue LastInvokedPayload { get; private set; }
 
         public void Initialize(in UiBackendInitializeInfo info)
         {
@@ -161,6 +185,14 @@ public sealed class GameUiHostTests
             _ = document;
             _ = destination;
             return 0;
+        }
+
+        public bool InvokeAction(UiDocumentHandle document, UiActionId action, in UiValue payload)
+        {
+            LastInvokedDocument = document;
+            LastInvokedAction = action;
+            LastInvokedPayload = payload;
+            return true;
         }
 
         public int DrainEvents(Span<UiEvent> destination)

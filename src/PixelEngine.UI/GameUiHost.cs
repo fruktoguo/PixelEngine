@@ -273,6 +273,22 @@ public sealed class GameUiHost : IDisposable
     }
 
     /// <summary>
+    /// 调用指定屏幕上的 UI action。
+    /// </summary>
+    /// <param name="screen">可见屏幕句柄。</param>
+    /// <param name="action">动作句柄。</param>
+    /// <param name="payload">动作载荷。</param>
+    /// <returns>找到并执行 action 则返回 true。</returns>
+    public bool InvokeAction(UiScreenHandle screen, UiActionId action, in UiValue payload)
+    {
+        ThrowIfDisposed();
+        return Options.Enabled &&
+            _initialized &&
+            Documents.TryGetDocument(screen, out UiDocumentHandle document) &&
+            _backend.InvokeAction(document, action, in payload);
+    }
+
+    /// <summary>
     /// 注入指针移动。
     /// </summary>
     /// <param name="x">UI 坐标 x。</param>

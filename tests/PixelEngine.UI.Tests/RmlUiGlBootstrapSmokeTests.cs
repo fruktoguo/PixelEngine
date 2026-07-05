@@ -79,6 +79,10 @@ public sealed class RmlUiGlBootstrapSmokeTests
             backend.SetModelValue(document, scorePath, new UiValue(42L));
             Assert.True(backend.TryGetModelValue(document, scorePath, out UiValue score));
             Assert.Equal(42L, score.AsInt64());
+            Assert.True(backend.InvokeAction(
+                document,
+                new UiActionId(UiStableId.Hash("start_game")),
+                UiValue.FromBoolean(true)));
 
             backend.FeedPointerMove(20, 24);
             Assert.True(backend.HitTest(20, 24).WantsMouse);

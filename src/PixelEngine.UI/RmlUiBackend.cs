@@ -410,6 +410,34 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
     }
 
     /// <inheritdoc />
+    public bool InvokeAction(UiDocumentHandle document, UiActionId action, in UiValue payload)
+    {
+        ThrowIfDisposed();
+        EnsureInitialized();
+        document.Validate();
+        ValidateAction(action);
+        if (!TryFindDocument(document, out _))
+        {
+            return false;
+        }
+
+        RmlUiNative.NativeUiValue nativeValue = ToNativeValue(in payload);
+        int result = RmlUiNative.InvokeAction(_renderer, document.Value, action.Value, &nativeValue);
+        if (result == 0)
+        {
+            return false;
+        }
+
+        if (result < 0)
+        {
+            ThrowNativeBridgeError("调用 RmlUi UI action 失败。");
+        }
+
+        Dirty = true;
+        return true;
+    }
+
+    /// <inheritdoc />
     public int DrainEvents(Span<UiEvent> destination)
     {
         ThrowIfDisposed();
@@ -536,6 +564,14 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         if (path.Value <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(path), "UI 模型路径 id 必须为正数。");
+        }
+    }
+
+    private static void ValidateAction(UiActionId action)
+    {
+        if (action.Value <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(action), "UI action id 必须为正数。");
         }
     }
 
