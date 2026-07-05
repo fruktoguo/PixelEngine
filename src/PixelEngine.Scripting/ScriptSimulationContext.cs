@@ -204,6 +204,12 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 case ScriptCommandKind.Paint:
                     Paint(command.X, command.Y, command.Width, command.Material.Value);
                     break;
+                case ScriptCommandKind.DamageCircle:
+                    _ = Kernel.DamageCircle(command.X, command.Y, command.Width, checked((ushort)command.Height), command.A > 0f);
+                    break;
+                case ScriptCommandKind.DamageBeam:
+                    _ = Kernel.DamageBeam(command.X, command.Y, command.A, command.B, command.Width, checked((ushort)command.Height));
+                    break;
                 case ScriptCommandKind.Explode:
                 case ScriptCommandKind.SpawnParticle:
                 case ScriptCommandKind.BurstParticles:
@@ -246,6 +252,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                     break;
                 case ScriptCommandKind.SetCell:
                 case ScriptCommandKind.Paint:
+                case ScriptCommandKind.DamageCircle:
+                case ScriptCommandKind.DamageBeam:
                 case ScriptCommandKind.CreateBodyFromRegion:
                 case ScriptCommandKind.ApplyImpulse:
                 case ScriptCommandKind.ApplyRadialImpulse:
@@ -295,6 +303,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                     break;
                 case ScriptCommandKind.SetCell:
                 case ScriptCommandKind.Paint:
+                case ScriptCommandKind.DamageCircle:
+                case ScriptCommandKind.DamageBeam:
                 case ScriptCommandKind.Explode:
                 case ScriptCommandKind.SpawnParticle:
                 case ScriptCommandKind.BurstParticles:
@@ -401,7 +411,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             command.Width,
             command.A,
             command.B,
-            EjectMask.Powder | EjectMask.Liquid | EjectMask.Gas | EjectMask.Fire | EjectMask.Solid);
+            EjectMask.Powder | EjectMask.Liquid | EjectMask.Gas | EjectMask.Fire);
         _ = ParticleSystem.RequestEjection(in request);
     }
 
@@ -467,6 +477,41 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 
     private sealed class WorldEffectsFacade(ScriptCommandQueue commands, bool hasPhysics) : IWorldEffects
     {
+        private const float ExplosionDamageScale = 16f;
+
+        public void DamageCircle(float x, float y, int radius, float damage, bool falloff = true, DamageKind kind = DamageKind.Impact)
+        {
+            ValidateFinite(x, nameof(x));
+            ValidateFinite(y, nameof(y));
+            ValidateFinite(damage, nameof(damage));
+            ValidateDamageKind(kind, nameof(kind));
+            ArgumentOutOfRangeException.ThrowIfNegative(radius);
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(damage);
+            int centerX = (int)MathF.Floor(x);
+            int centerY = (int)MathF.Floor(y);
+            commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.DamageCircle(centerX, centerY, radius, ToDamageUShort(damage), falloff));
+        }
+
+        public void DamageBeam(float x, float y, float dx, float dy, int length, float damagePerCell, DamageKind kind = DamageKind.Beam)
+        {
+            ValidateFinite(x, nameof(x));
+            ValidateFinite(y, nameof(y));
+            ValidateFinite(dx, nameof(dx));
+            ValidateFinite(dy, nameof(dy));
+            ValidateFinite(damagePerCell, nameof(damagePerCell));
+            ValidateDamageKind(kind, nameof(kind));
+            ArgumentOutOfRangeException.ThrowIfNegative(length);
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(damagePerCell);
+            if ((dx * dx) + (dy * dy) <= float.Epsilon)
+            {
+                throw new ArgumentOutOfRangeException(nameof(dx), "DamageBeam 方向不能为零向量。");
+            }
+
+            int startX = (int)MathF.Floor(x);
+            int startY = (int)MathF.Floor(y);
+            commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.DamageBeam(startX, startY, dx, dy, length, ToDamageUShort(damagePerCell)));
+        }
+
         public void Explode(float x, float y, int radius, float force)
         {
             ValidateFinite(x, nameof(x));
@@ -476,6 +521,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(force);
             int centerX = (int)MathF.Floor(x);
             int centerY = (int)MathF.Floor(y);
+            commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.DamageCircle(centerX, centerY, radius, ToDamageUShort(force * ExplosionDamageScale), falloff: true));
             float jitter = MathF.Max(1f, force * 0.25f);
             commands.Enqueue(ScriptCommandTarget.Particle, ScriptCommand.Explode(centerX, centerY, radius, force, jitter));
             if (hasPhysics)
@@ -489,6 +535,19 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             if (!float.IsFinite(value))
             {
                 throw new ArgumentOutOfRangeException(name, value, "参数必须是有限数值。");
+            }
+        }
+
+        private static ushort ToDamageUShort(float value)
+        {
+            return (ushort)Math.Clamp((int)MathF.Ceiling(value), 1, ushort.MaxValue);
+        }
+
+        private static void ValidateDamageKind(DamageKind kind, string name)
+        {
+            if (!Enum.IsDefined(kind))
+            {
+                throw new ArgumentOutOfRangeException(name, kind, "未知破坏类型。");
             }
         }
     }

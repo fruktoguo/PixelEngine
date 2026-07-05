@@ -3,7 +3,7 @@ using PixelEngine.Scripting;
 namespace PixelEngine.Demo;
 
 /// <summary>
-/// Demo 爆破工具脚本，使用公开世界复合效果 API 触发 cell 抛射与刚体冲量。
+/// Demo 爆破工具脚本，使用公开世界复合效果 API 触发抗性感知破坏、碎屑抛射与刚体冲量。
 /// </summary>
 public sealed class ExplosiveTool : Behaviour
 {
