@@ -179,6 +179,88 @@ public sealed class GameUiHost : IDisposable
     }
 
     /// <summary>
+    /// 注入指针移动。
+    /// </summary>
+    /// <param name="x">UI 坐标 x。</param>
+    /// <param name="y">UI 坐标 y。</param>
+    public void FeedPointerMove(float x, float y)
+    {
+        ThrowIfDisposed();
+        if (Options.Enabled && _initialized)
+        {
+            _backend.FeedPointerMove(x, y);
+        }
+    }
+
+    /// <summary>
+    /// 注入指针按钮。
+    /// </summary>
+    /// <param name="button">按钮。</param>
+    /// <param name="isDown">是否按下。</param>
+    public void FeedPointerButton(UiPointerButton button, bool isDown)
+    {
+        ThrowIfDisposed();
+        if (Options.Enabled && _initialized)
+        {
+            _backend.FeedPointerButton(button, isDown);
+        }
+    }
+
+    /// <summary>
+    /// 注入滚轮。
+    /// </summary>
+    /// <param name="deltaX">水平滚动量。</param>
+    /// <param name="deltaY">垂直滚动量。</param>
+    public void FeedScroll(float deltaX, float deltaY)
+    {
+        ThrowIfDisposed();
+        if (Options.Enabled && _initialized)
+        {
+            _backend.FeedScroll(deltaX, deltaY);
+        }
+    }
+
+    /// <summary>
+    /// 注入键盘按键。
+    /// </summary>
+    /// <param name="key">按键。</param>
+    /// <param name="isDown">是否按下。</param>
+    /// <param name="modifiers">修饰键。</param>
+    public void FeedKey(UiKey key, bool isDown, UiKeyModifiers modifiers)
+    {
+        ThrowIfDisposed();
+        if (Options.Enabled && _initialized)
+        {
+            _backend.FeedKey(key, isDown, modifiers);
+        }
+    }
+
+    /// <summary>
+    /// 注入文本输入。
+    /// </summary>
+    /// <param name="text">本帧输入文本。</param>
+    public void FeedText(ReadOnlySpan<char> text)
+    {
+        ThrowIfDisposed();
+        if (Options.Enabled && _initialized)
+        {
+            _backend.FeedText(text);
+        }
+    }
+
+    /// <summary>
+    /// 执行 UI 命中测试并返回输入捕获意图。
+    /// </summary>
+    /// <param name="x">UI 坐标 x。</param>
+    /// <param name="y">UI 坐标 y。</param>
+    /// <returns>UI 命中结果。</returns>
+    public UiHitResult HitTest(float x, float y)
+    {
+        ThrowIfDisposed();
+        return Options.Enabled && _initialized ? _backend.HitTest(x, y) : UiHitResult.None;
+    }
+
+    /// <summary>
     /// 合成 UI 到当前渲染管线的 present 层。
     /// </summary>
     /// <param name="context">渲染管线提供的 UI present 上下文。</param>

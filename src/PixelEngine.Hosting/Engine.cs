@@ -612,6 +612,8 @@ public sealed class Engine : IDisposable
             UiBackendKind.ManagedFallback));
         Context.RegisterService(host);
         Context.RegisterService(backend);
+        UiInputRouter inputRouter = new(host, new RenderWindowUiInputSource(window));
+        Context.RegisterService(inputRouter);
         GameUiPhaseDriver driver = new(host);
         Context.RegisterService(driver.GetType(), driver);
         driver.RegisterPhases(Phases);
@@ -621,13 +623,31 @@ public sealed class Engine : IDisposable
 
     private ScriptInputRoute ResolveGuiInputRoute()
     {
+        bool allowKeyboard = true;
+        bool allowMouse = true;
         if (!Context.TryGetService(out GuiApp gui))
         {
-            return ScriptInputRoute.Allowed;
+            if (Context.TryGetService(out UiInputRouter uiOnlyRouter))
+            {
+                UiInputCapture uiOnlyCapture = uiOnlyRouter.Pump();
+                allowKeyboard &= uiOnlyCapture.AllowWorldKeyboard;
+                allowMouse &= uiOnlyCapture.AllowWorldMouse;
+            }
+
+            return new ScriptInputRoute(allowKeyboard, allowMouse);
         }
 
         GuiInputSnapshot capture = gui.Input.Capture;
-        return new ScriptInputRoute(capture.AllowWorldKeyboard, capture.AllowWorldMouse);
+        allowKeyboard &= capture.AllowWorldKeyboard;
+        allowMouse &= capture.AllowWorldMouse;
+        if (Context.TryGetService(out UiInputRouter router))
+        {
+            UiInputCapture uiCapture = router.Pump();
+            allowKeyboard &= uiCapture.AllowWorldKeyboard;
+            allowMouse &= uiCapture.AllowWorldMouse;
+        }
+
+        return new ScriptInputRoute(allowKeyboard, allowMouse);
     }
 
     /// <summary>
