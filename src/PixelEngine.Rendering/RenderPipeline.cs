@@ -460,7 +460,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         _present.Render(current, presentation, _quad);
         _overlay.Render(overlays, presentation);
         _gl.Viewport(0, 0, (uint)_window.Width, (uint)_window.Height);
-        PresentUiLayers(new UiPresentContext(_gl, _window.Width, _window.Height, presentation, _uiPrimitives));
+        PresentUiLayers(new UiPresentContext(_gl, _window.Width, _window.Height, presentation, _uiPrimitives, profiler));
         BeforePresentUi?.Invoke(_gl);
         BeforeSwapBuffers?.Invoke(_gl);
         RecordSub(profiler, FrameSubPhase.Present, started);

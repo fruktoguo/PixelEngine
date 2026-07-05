@@ -13,5 +13,5 @@ public static class FrameStats
     /// <summary>
     /// 细分相位数量。
     /// </summary>
-    public const int SubPhaseCount = 27;
+    public const int SubPhaseCount = 29;
 }

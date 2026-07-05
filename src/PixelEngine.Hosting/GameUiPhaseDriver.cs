@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using PixelEngine.Core.Diagnostics;
 using PixelEngine.UI;
 
 namespace PixelEngine.Hosting;
@@ -61,14 +63,22 @@ public sealed class GameUiPhaseDriver : IEnginePhaseDriver
     {
         float deltaSeconds = ResolveRenderDeltaSeconds(context);
         LastDeltaSeconds = deltaSeconds;
+        long started = Stopwatch.GetTimestamp();
         _modelPusher?.PushGameUiModels();
         _host.Update(deltaSeconds);
         LastDrainedEventCount = _host.DrainEvents(_eventBuffer);
         TotalDrainedEventCount += LastDrainedEventCount;
+        RecordSub(context.Context.Profiler, started);
         if (LastDrainedEventCount > 0)
         {
             _eventSink?.OnGameUiEvents(_eventBuffer.AsSpan(0, LastDrainedEventCount));
         }
+    }
+
+    private static void RecordSub(FrameProfiler profiler, long started)
+    {
+        long elapsed = Stopwatch.GetTimestamp() - started;
+        profiler.RecordSub(FrameSubPhase.UiUpdate, elapsed * 1000.0 / Stopwatch.Frequency);
     }
 
     private static float ResolveRenderDeltaSeconds(EngineTickContext context)
