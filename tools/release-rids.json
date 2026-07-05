@@ -1,0 +1,56 @@
+{
+  "channels": [
+    "r2r",
+    "aot"
+  ],
+  "rids": [
+    {
+      "rid": "win-x64",
+      "active": true,
+      "runner": "windows-latest",
+      "shell": "pwsh",
+      "smoke": "native",
+      "codesign": false
+    },
+    {
+      "rid": "win-arm64",
+      "active": true,
+      "runner": "windows-latest",
+      "shell": "pwsh",
+      "smoke": "load-only",
+      "codesign": false
+    },
+    {
+      "rid": "linux-x64",
+      "active": false,
+      "runner": "ubuntu-latest",
+      "shell": "bash",
+      "smoke": "native",
+      "codesign": false
+    },
+    {
+      "rid": "linux-arm64",
+      "active": false,
+      "runner": "ubuntu-latest",
+      "shell": "bash",
+      "smoke": "qemu",
+      "codesign": false
+    },
+    {
+      "rid": "osx-x64",
+      "active": false,
+      "runner": "macos-15-intel",
+      "shell": "bash",
+      "smoke": "native",
+      "codesign": true
+    },
+    {
+      "rid": "osx-arm64",
+      "active": false,
+      "runner": "macos-14",
+      "shell": "bash",
+      "smoke": "native",
+      "codesign": true
+    }
+  ]
+}

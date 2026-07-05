@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Xunit;
@@ -539,6 +540,45 @@ public sealed class HostingProjectDisciplineTests
 
         Assert.Contains("ResolveStartupScene", startupOptions, StringComparison.Ordinal);
         Assert.Contains("startup.json", startupOptions, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 plan/15 §2.1 的发行 RID 激活真相源与矩阵生成器契约落地。
+    /// </summary>
+    [Fact]
+    public void ReleaseRidGateDeclaresWindowsActiveSetAndMatrixOutputs()
+    {
+        string root = FindRepositoryRoot();
+        string ridConfigPath = Path.Combine(root, "tools", "release-rids.json");
+        string matrixScript = File.ReadAllText(Path.Combine(root, "tools", "release-matrix.ps1"));
+        JsonObject config = JsonNode.Parse(File.ReadAllText(ridConfigPath))!.AsObject();
+        JsonArray channels = config["channels"]!.AsArray();
+        JsonArray rids = config["rids"]!.AsArray();
+
+        Assert.Equal(["r2r", "aot"], [.. channels.Select(node => node!.GetValue<string>())]);
+        Assert.Equal(6, rids.Count);
+
+        Dictionary<string, JsonObject> byRid = rids
+            .Select(node => node!.AsObject())
+            .ToDictionary(node => node["rid"]!.GetValue<string>(), StringComparer.Ordinal);
+
+        Assert.True(byRid["win-x64"]["active"]!.GetValue<bool>());
+        Assert.True(byRid["win-arm64"]["active"]!.GetValue<bool>());
+        Assert.Equal("load-only", byRid["win-arm64"]["smoke"]!.GetValue<string>());
+        Assert.False(byRid["linux-x64"]["active"]!.GetValue<bool>());
+        Assert.False(byRid["linux-arm64"]["active"]!.GetValue<bool>());
+        Assert.False(byRid["osx-x64"]["active"]!.GetValue<bool>());
+        Assert.False(byRid["osx-arm64"]["active"]!.GetValue<bool>());
+        Assert.True(byRid["osx-x64"]["codesign"]!.GetValue<bool>());
+        Assert.True(byRid["osx-arm64"]["codesign"]!.GetValue<bool>());
+
+        Assert.Contains("native-matrix", matrixScript, StringComparison.Ordinal);
+        Assert.Contains("build-matrix", matrixScript, StringComparison.Ordinal);
+        Assert.Contains("expected", matrixScript, StringComparison.Ordinal);
+        Assert.Contains("packageCount", matrixScript, StringComparison.Ordinal);
+        Assert.Contains("assetCount", matrixScript, StringComparison.Ordinal);
+        Assert.Contains("GITHUB_OUTPUT", matrixScript, StringComparison.Ordinal);
+        Assert.Contains("ExcludeWinArm64", matrixScript, StringComparison.Ordinal);
     }
 
     /// <summary>
