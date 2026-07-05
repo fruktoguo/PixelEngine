@@ -47,13 +47,13 @@
 [7]  Cell→Particle         Particles.Emit()(plan/05)
 [8]  Physics sync          Physics.Step()(erase→b2Step(task桥)→read→inverse-stamp,plan/06)
 [9]  Build Render Buffer    Rendering.BuildFrame()(并行,material→BGRA + 粒子 stamp,plan/08)
-[10] GPU Upload & Render    Rendering 世界渲染/GPU(plan/08/09) → UiCompositor 合成(游戏 HTML UI,plan/20,若启用) → 注入式 GUI 钩子 Render(Editor 叠层,plan/12/19,仅开发构建) → SwapBuffers
+[10] GPU Upload & Render    Rendering 世界渲染/GPU(plan/08/09) → `UiLayerCompositor`/`GuiRenderBridge` 游戏 UI 层(order=100,plan/20,若启用) → 注入式 Editor UI 层(order=200,plan/12/19,仅开发构建) → SwapBuffers
 [11] World streaming        World.KickStreaming()(后台 I/O,只备字节,plan/07)
 ```
 
 Hosting 不实现相位内逻辑,只保证**顺序、barrier、dt 一致、sim 降频时 render 仍出帧**(复用上帧世界纹理,架构 §4.2)。
 
-**相位 [10] 子序(定稿)**:世界渲染/present(plan/08) → `UiCompositor.Composite`(游戏 HTML UI,plan/20,经 plan/08 显式 UI 层挂点 `RenderPipeline.BeforePresentUi`,仅启用 HTML UI 且脏时光栅化) → **注入式 GUI 相位[10]钩子**(编辑器 ImGui 叠层,由编辑器壳在开发构建注入,plan/12/19) → `SwapBuffers`。叠放次序固定为 世界 → 游戏 UI → 编辑器叠层(编辑器为开发者工具,盖住游戏 UI);发行玩家包禁用编辑器后,游戏 HTML UI 即最顶层 UI,玩家 HUD 走 `PixelEngine.Gui` 中性 ImGui host。**Hosting 不静态引用 `PixelEngine.Editor`**:相位[10] 的 Editor.Render 经抽象 GUI 钩子接口驱动,Editor 具体实现由壳注入(§3.7);玩家运行时该钩子为空,只保留游戏 UI 合成。
+**相位 [10] 子序(定稿)**:世界渲染/present(plan/08) → 游戏 UI 层(order=100,plan/20,经 plan/08 显式 UI 层接口 `RenderPipeline.RegisterUiLayer(order, IUiPresentLayer)` 注册;`UiLayerCompositor` 用于 RmlUi/Ultralight 等直接后端,`GuiRenderBridge` 用于 ManagedFallback/玩家 HUD) → **注入式 Editor UI 层**(order=200,编辑器 ImGui 叠层,由编辑器壳在开发构建注入,plan/12/19) → `SwapBuffers`。叠放次序固定为 世界 → 游戏 UI → 编辑器叠层(编辑器为开发者工具,盖住游戏 UI);发行玩家包禁用编辑器后,游戏 UI 即最顶层 UI,玩家 HUD 走 `PixelEngine.Gui` 中性 ImGui host。旧 `BeforePresentUi` 仅保留为兼容 hook,不再作为游戏/编辑器 UI 叠放机制。**Hosting 不静态引用 `PixelEngine.Editor`**:相位[10] 的 Editor.Render 经抽象 GUI 钩子接口驱动,Editor 具体实现由壳注入(§3.7);玩家运行时该钩子为空,只保留游戏 UI 合成。
 
 ### 3.3 过载降级编排(架构 §4.3 决策者)
 
@@ -100,9 +100,9 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 
 ### 3.9 游戏内 HTML UI 装配(PixelEngine.UI,plan/20)
 
-`EngineBuilder` 增 `EnableHtmlUi(bool)` 与后端选择 `UseUiBackend(UiBackendKind)`(RmlUi 子集为主 / Ultralight 可选 / `ManagedFallbackBackend` 纯托管基线,不变式 #10);**禁用时零开销**(不订阅、不装配)。启用时 Hosting:
-- 装配 `GameUiHost`(顶层门面:`IGameUiBackend`/`UiDocumentManager`/`UiInputRouter`/`UiModelBridge`/`UiCompositor`/`UiDiagnostics`)。
-- `UiCompositor` 经 plan/08 **显式 UI 层注册接口**(`RenderPipeline.BeforePresentUi`)订阅合成;Hosting 装配次序**先订阅 `UiCompositor`、后订阅 `EditorRenderBridge`/注入式 GUI 钩子**,保证相位[10]叠放为 世界 → 游戏 UI → 编辑器叠层(§3.2)。
+`EngineBuilder` 增 `EnableGameUi(bool)` 与后端选择 `UseUiBackend(UiBackendKind)`(RmlUi 子集为主 / Ultralight 可选 / `ManagedFallbackBackend` 纯托管基线,不变式 #10);**禁用时零开销**(不注册 UI 层、不装配 host/driver/router/service)。启用时 Hosting:
+- 装配 `GameUiHost`(顶层门面:`IGameUiBackend`/`UiDocumentManager`/`UiInputRouter`/`UiModelBridge`/`UiLayerCompositor`/`UiDiagnostics`)。
+- `UiLayerCompositor`/`GuiRenderBridge` 经 plan/08 **显式 UI 层注册接口**(`RenderPipeline.RegisterUiLayer(order, IUiPresentLayer)`)注册合成;游戏 UI 使用 `UiPresentLayerOrders.Game`(100),`EditorRenderBridge`/注入式 Editor UI 使用 `UiPresentLayerOrders.Editor`(200),叠放由 order 决定而非订阅顺序,保证相位[10]叠放为 世界 → 游戏 UI → 编辑器叠层(§3.2)。
 - 挂 `GameUiPhaseDriver` 到相位 [0]/[1](输入泵入 → 游戏态→UI 模型 → UI 事件在相位 1 派发 → `Update(dt)`);UI→游戏世界写入**复用 §3.4 延迟命令队列**落正确相位(守相位安全);游戏→UI 只读 `EngineContext` 只读快照。
 - `EngineContext` 聚合 `IGameUiService`(`ShowScreen`/`HideScreen`/`PushModal`/`BindModel`/`SetValue`/`TryGetValue`/`UiEventRaised`/`Invoke`),暴露给脚本/Demo。
 - `PixelEngine.UI` 复用 `PixelEngine.Gui` 字体栈(含 CJK)与回退,依赖方向 `UI → {Gui, Rendering, Core}`、`Hosting → UI`,与 Editor 同级消费者互不依赖。`ui.update/paint/upload/composite` 分项计时注册 plan/02 诊断,纳入 §3.3 过载降级第二级候选。
@@ -148,11 +148,11 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 
 ### 4.4 相位[10] 子序 + 游戏内 HTML UI 装配(§3.2/§3.9,配 plan/20)
 
-- [ ] 相位[10] 子序细化为 世界渲染/present → `UiCompositor.Composite`(游戏 UI,脏时光栅化) → 注入式 GUI 相位[10]钩子(Editor 叠层,开发构建) → `SwapBuffers`;叠放次序 世界 → 游戏 UI → 编辑器叠层。
-- [ ] `EngineBuilder` 增 `EnableHtmlUi(bool)` + `UseUiBackend(UiBackendKind)`(RmlUi 主/Ultralight 可选/ManagedFallback 基线);禁用零开销。
-- [ ] 启用时装配 `GameUiHost`;`UiCompositor` 经 plan/08 显式 UI 层挂点 `BeforePresentUi` 订阅,装配次序**先 UiCompositor、后 EditorRenderBridge/注入钩子**。
-- [ ] 挂 `GameUiPhaseDriver` 到相位 [0]/[1](输入泵入/游戏态→UI/UI 事件相位1派发/`Update(dt)`);UI→游戏世界写入复用 §3.4 延迟命令队列落正确相位。
-- [ ] `EngineContext` 聚合 `IGameUiService`(ShowScreen/HideScreen/PushModal/BindModel/SetValue/TryGetValue/UiEventRaised/Invoke),暴露脚本/Demo;`ui.*` 分项计时注册 plan/02 诊断,纳入 §3.3 降级第二级候选。
+- [x] 相位[10] 子序细化为 世界渲染/present → 游戏 UI 层(`UiLayerCompositor` 或 `GuiRenderBridge`,order=100,若启用) → 注入式 Editor UI 层(`EditorRenderBridge`,order=200,仅开发构建) → `SwapBuffers`;叠放次序 世界 → 游戏 UI → 编辑器叠层。
+- [x] `EngineBuilder` 增 `EnableGameUi(bool)` + `UseUiBackend(UiBackendKind)`(RmlUi 主/Ultralight 可选/ManagedFallback 基线);headless/GUI runtime 禁用时保持零装配。
+- [x] 启用时装配 `GameUiHost`;直接后端经 `UiLayerCompositor.Attach` 注册 plan/08 显式 UI 层,ManagedFallback 复用 `GuiRenderBridge`,Editor 叠层以更高 order 注入,叠放由 `RegisterUiLayer` order 保证。
+- [x] 挂 `GameUiPhaseDriver` 到相位 [1] 更新/事件 drain,输入从 Silk.NET 窗口事件进入 `UiInputRouter`,并在 `ResolveGuiInputRoute` 中先做 Editor capture 再按 Game UI capture 仲裁。
+- [x] `EngineContext` 聚合 `IGameUiService`(ShowScreen/HideScreen/PushModal/BindModel/SetValue/TryGetValue/UiEventRaised/Invoke),暴露脚本/Demo;`ui.*` 分项计时注册 plan/02 诊断,纳入 §3.3 降级第二级候选。
 
 ### 4.5 player 启动分派(§3.5)
 
@@ -182,9 +182,9 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - 前置:plan/01(项目)、plan/02(时间/JobSystem/事件总线/诊断)、plan/03–10(被编排的子系统)。
 - 紧耦合:plan/11(脚本服务后端在此聚合;Behaviour 生命周期由此驱动)、plan/12(Play/Edit 模式、相位10 Editor.Render 钩子)。
 - 后置:plan/13(Demo 经 Hosting 启动)、plan/14(headless 驱动测试/基准)。
-- 后置(M13/M14 新增):plan/19(`apps/PixelEngine.Editor.Shell` 消费 §3.8 窗口所有权解耦 + 编辑态 bootstrap + §3.5 `SaveSceneDocument`/authoring 物化 API + §5 editor-window 证据入口迁移)、plan/20(`PixelEngine.UI` 消费 §3.9 `EnableHtmlUi`/`UseUiBackend`/`GameUiHost`/`GameUiPhaseDriver`/`IGameUiService` 相位挂载与聚合)、plan/15(player-only audit 以 §3.7 GUI 中性化落地为前置)。
+- 后置(M13/M14 新增):plan/19(`apps/PixelEngine.Editor.Shell` 消费 §3.8 窗口所有权解耦 + 编辑态 bootstrap + §3.5 `SaveSceneDocument`/authoring 物化 API + §5 editor-window 证据入口迁移)、plan/20(`PixelEngine.UI` 消费 §3.9 `EnableGameUi`/`UseUiBackend`/`GameUiHost`/`GameUiPhaseDriver`/`IGameUiService` 相位挂载与聚合)、plan/15(player-only audit 以 §3.7 GUI 中性化落地为前置)。
 - 强前置(M13 入口门):§3.7 GUI 宿主中性化重构(新增 `PixelEngine.Gui`、Hosting 删 Editor 引用、暴露注入式 GUI 钩子)是 plan/19 壳注入、plan/15 player-only 审计、plan/20 UI 字体/回退复用三者的共同前置。
-- 协调点:plan/10 的 `AudioEvent` 类型经 plan/02 事件总线流转(Hosting 不重定义);plan/04 的 `IMaterialRegistry` 后端;plan/08 的 `RenderPipeline.BeforePresentUi` 显式 UI 层挂点(游戏 UI 合成与编辑器叠层共用,§3.2/§3.9)。
+- 协调点:plan/10 的 `AudioEvent` 类型经 plan/02 事件总线流转(Hosting 不重定义);plan/04 的 `IMaterialRegistry` 后端;plan/08 的 `RenderPipeline.RegisterUiLayer(order, IUiPresentLayer)` 显式 UI 层挂点(游戏 UI 合成与编辑器叠层共用,§3.2/§3.9)。
 
 ## 7. 提交节点
 
@@ -195,5 +195,5 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [x] `refactor(host): 新增 PixelEngine.Gui 中性 ImGui host + Hosting 删 Editor 引用 + 注入式相位[10] GUI 钩子`(M13 入口门,§3.7)。
 - [x] `feat(host): 窗口/GL 所有权解耦 + 公开编辑态 bootstrap(供 EditorShell)`(§3.8)。
 - [x] `feat(host): SaveSceneDocument 往返 writer + .scene v2 schema + EngineSceneDocument→运行时物化公开 API`(§3.5)。
-- [ ] `feat(host): EngineBuilder EnableHtmlUi/UseUiBackend + GameUiHost 装配 + 相位[10]子序 + IGameUiService 聚合`(§3.2/§3.9)。
+- [x] `feat(host): EngineBuilder EnableGameUi/UseUiBackend + GameUiHost 装配 + 相位[10]子序 + IGameUiService 聚合`(§3.2/§3.9)。
 - [x] `refactor(host): editor-window 证据入口从 Demo --editor 迁移到 EditorShell`(§5)。
