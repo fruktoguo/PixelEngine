@@ -657,6 +657,153 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证数据驱动武器控制器加载真实 weapons.json、支持键盘/滚轮切换，并通过旧破坏弹后端保持坍塌扫描能力。
+    /// </summary>
+    [Fact]
+    public void WeaponControllerSwitchesAndRoutesHitscanThroughProjectileBackend()
+    {
+        RecordingAudioApi audio = new();
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(
+            out ScriptInputApi input,
+            out CellGrid grid,
+            out _,
+            out ScriptScene scene,
+            materials,
+            audio,
+            contentRoot: DemoContentRoot());
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        FillWall(grid, stone, x: 34, y0: 24, y1: 46);
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 14f;
+        player.SpawnY = 30f;
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.InputEnabled = false;
+        WeaponController weapons = entity.AddComponent<WeaponController>();
+
+        engine.RunHeadlessTicks(2);
+        Assert.Equal("pistol", weapons.SelectedWeaponId);
+        Assert.Equal(120, weapons.CurrentAmmo);
+
+        input.Update([Key.Digit4], [], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        Assert.Equal("laser", weapons.SelectedWeaponId);
+
+        input.Update([], [], mouseX: 36f, mouseY: 34f, wheelY: -1f);
+        engine.RunHeadlessTicks(1);
+        Assert.Equal("excavator", weapons.SelectedWeaponId);
+
+        input.Update([Key.Digit1], [], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(1, weapons.PrimaryFireCount);
+        Assert.Equal(1, projectile.ShotsFired);
+        Assert.Equal(WeaponKind.SingleShot, weapons.LastDispatchedKind);
+        Assert.Equal(119, weapons.CurrentAmmo);
+        Assert.Equal("explosion.wav", audio.LastCue);
+        Assert.True(projectile.TracerRemainingSeconds > 0f);
+        Assert.False(string.IsNullOrWhiteSpace(projectile.CollapseStatus));
+
+        input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        Assert.Equal(1, weapons.PrimaryFireCount);
+        Assert.Equal(1, projectile.ShotsFired);
+        Assert.True(weapons.CooldownRemaining > 0f);
+    }
+
+    /// <summary>
+    /// 验证 R 换弹和过热锁定由 weapons.json 数据驱动，不依赖真实内容目录的默认零换弹配置。
+    /// </summary>
+    [Fact]
+    public void WeaponControllerReloadsAndLocksOutOverheatedWeapon()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                {
+                  "id": "test-pistol",
+                  "displayName": "Test Pistol",
+                  "kind": "singleShot",
+                  "damage": 12,
+                  "radius": 1,
+                  "falloff": "none",
+                  "cooldownSeconds": 0,
+                  "ammoMax": 1,
+                  "reloadSeconds": 0.05,
+                  "impactCue": "explosion"
+                },
+                {
+                  "id": "test-laser",
+                  "displayName": "Test Laser",
+                  "kind": "laser",
+                  "damage": 12,
+                  "radius": 1,
+                  "falloff": "none",
+                  "cooldownSeconds": 0,
+                  "ammoMax": 4,
+                  "reloadSeconds": 0,
+                  "heatPerCell": 120,
+                  "beamDps": 60,
+                  "impactCue": "sizzle_lava_water"
+                }
+              ]
+            }
+            """);
+        try
+        {
+            using Engine engine = CreateManualScriptEngine(
+                out ScriptInputApi input,
+                out CellGrid grid,
+                out _,
+                out ScriptScene scene,
+                DemoMaterials(),
+                contentRoot: contentRoot);
+            Entity entity = scene.CreateEntity();
+            _ = entity.AddComponent<Transform>();
+            PlayerController player = entity.AddComponent<PlayerController>();
+            player.SpawnX = 14f;
+            player.SpawnY = 30f;
+            WeaponController weapons = entity.AddComponent<WeaponController>();
+
+            engine.RunHeadlessTicks(2);
+            input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+            Assert.Equal(0, weapons.CurrentAmmo);
+
+            input.Update([Key.R], [], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+            Assert.True(weapons.IsReloading);
+            engine.RunHeadlessTicks(6);
+            Assert.False(weapons.IsReloading);
+            Assert.Equal(1, weapons.CurrentAmmo);
+
+            input.Update([Key.Digit2], [], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+            Assert.Equal("test-laser", weapons.SelectedWeaponId);
+            int fireCountBeforeLaser = weapons.PrimaryFireCount;
+            input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+            Assert.True(weapons.IsOverheated);
+            Assert.Equal(fireCountBeforeLaser + 1, weapons.PrimaryFireCount);
+            int ammoAfterOverheatShot = weapons.CurrentAmmo;
+
+            input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+            Assert.Equal(fireCountBeforeLaser + 1, weapons.PrimaryFireCount);
+            Assert.Equal(ammoAfterOverheatShot, weapons.CurrentAmmo);
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// 验证可玩 Demo 的破坏弹会在爆破后把局部脱离主地形的小型固体岛转换成刚体，避免石块长时间静态浮空。
     /// </summary>
     [Fact]
@@ -1093,9 +1240,10 @@ public sealed class PlayerControllerIntegrationTests
         out ScriptCameraApi camera,
         out ScriptScene scene,
         MaterialTable? materials = null,
-        IAudioApi? audio = null)
+        IAudioApi? audio = null,
+        string? contentRoot = null)
     {
-        Engine engine = CreateBaseEngine(out input, out grid, out camera, materials: materials, audio: audio);
+        Engine engine = CreateBaseEngine(out input, out grid, out camera, materials: materials, audio: audio, contentRoot: contentRoot);
         scene = new ScriptScene();
         engine.Context.RegisterService(scene);
         _ = engine.AttachScriptingFromServices();
@@ -1119,12 +1267,18 @@ public sealed class PlayerControllerIntegrationTests
         out ScriptCameraApi camera,
         Type? entryType = null,
         MaterialTable? materials = null,
-        IAudioApi? audio = null)
+        IAudioApi? audio = null,
+        string? contentRoot = null)
     {
         materials ??= Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
         EngineBuilder builder = new EngineBuilder()
             .UseHeadless()
             .UseDeterministicMode();
+        if (!string.IsNullOrWhiteSpace(contentRoot))
+        {
+            _ = builder.WithContentRoot(contentRoot);
+        }
+
         if (entryType is not null)
         {
             _ = builder
@@ -1145,6 +1299,35 @@ public sealed class PlayerControllerIntegrationTests
         engine.Context.RegisterService<IAudioApi>(EngineServiceRole.AudioService, audio ?? NoOpAudioApi.Instance);
         grid = engine.Context.GetService<CellGrid>();
         return engine;
+    }
+
+    private static string DemoContentRoot()
+    {
+        return Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
+    }
+
+    private static string CreateTemporaryWeaponContent(string weaponsJson)
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "pixelengine-weapon-tests-" + Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "weapons.json"), weaponsJson);
+        return directory;
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? current = new(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "PixelEngine.sln")))
+            {
+                return current.FullName;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new InvalidOperationException("未找到仓库根目录。");
     }
 
     private static PlayerController FindPlayer(Engine engine)

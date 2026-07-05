@@ -42,6 +42,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     /// <param name="diagnostics">诊断 facade；未提供时访问 <see cref="Diagnostics" /> 会抛出明确异常。</param>
     /// <param name="runtime">运行时控制 facade；未提供时访问 <see cref="Runtime" /> 会抛出明确异常。</param>
     /// <param name="gameUi">游戏大 UI facade；未提供时访问 <see cref="GameUi" /> 会抛出明确异常。</param>
+    /// <param name="config">配置加载 facade；未提供时访问 <see cref="Config" /> 会抛出明确异常。</param>
     public ScriptSimulationContext(
         Scene scene,
         CellGrid grid,
@@ -58,7 +59,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         IOverlayApi? overlay = null,
         IDiagnosticsApi? diagnostics = null,
         IRuntimeControlApi? runtime = null,
-        IGameUiService? gameUi = null)
+        IGameUiService? gameUi = null,
+        IConfigApi? config = null)
     {
         Scene = scene ?? throw new ArgumentNullException(nameof(scene));
         ArgumentNullException.ThrowIfNull(grid);
@@ -86,6 +88,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         DiagnosticsBackend = diagnostics;
         RuntimeBackend = runtime;
         GameUiBackend = gameUi;
+        ConfigBackend = config;
     }
 
     private IEventBus? EventBackend { get; }
@@ -107,6 +110,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     private IRuntimeControlApi? RuntimeBackend { get; }
 
     private IGameUiService? GameUiBackend { get; }
+
+    private IConfigApi? ConfigBackend { get; }
 
     /// <summary>
     /// CA 内核，供 Hosting 相位驱动在 dirty swap 前落地脚本 cell 命令。
@@ -170,6 +175,9 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 
     /// <inheritdoc />
     public IGameUiService GameUi => GameUiBackend ?? throw Unsupported(nameof(GameUi));
+
+    /// <inheritdoc />
+    public IConfigApi Config => ConfigBackend ?? throw Unsupported(nameof(Config));
 
     /// <inheritdoc />
     public IGameTime Time => TimeBackend ?? throw Unsupported(nameof(Time));

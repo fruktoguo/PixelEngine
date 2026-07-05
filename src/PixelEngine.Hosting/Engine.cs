@@ -1116,6 +1116,7 @@ public sealed class Engine : IDisposable
         IRuntimeControlApi runtimeControl = ResolveRuntimeControlApi();
         IAudioApi? audio = ResolveAudioApiOrNull();
         IGameUiService? gameUi = ResolveGameUiServiceOrNull();
+        IConfigApi config = ResolveConfigApi();
         PhysicsSystem? physics = Context.TryGetService(out PhysicsSystem registeredPhysics)
             ? registeredPhysics
             : null;
@@ -1137,7 +1138,8 @@ public sealed class Engine : IDisposable
             overlay,
             diagnostics,
             runtimeControl,
-            gameUi);
+            gameUi,
+            config);
         Context.RegisterService(scriptContext);
         simulationDriver?.AttachScriptContext(scriptContext);
         runtime ??= CreateScriptRuntime(scriptScene, scriptContext, hotReload);
@@ -1444,6 +1446,19 @@ public sealed class Engine : IDisposable
 
         ScriptInputApi created = new();
         Context.RegisterService<IInputApi>(EngineServiceRole.Input, created);
+        Context.RegisterService(created);
+        return created;
+    }
+
+    private IConfigApi ResolveConfigApi()
+    {
+        if (Context.TryGetService(out IConfigApi existing))
+        {
+            return existing;
+        }
+
+        EngineScriptConfigApi created = new(Context.Options.ContentRoot);
+        Context.RegisterService<IConfigApi>(created);
         Context.RegisterService(created);
         return created;
     }
