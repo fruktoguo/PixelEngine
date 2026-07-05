@@ -74,6 +74,9 @@ public sealed class CompositePass : IDisposable
 
     private void Begin(EmissiveBuffer emissive, LightMaskTexture visibility)
     {
+        _gl.Disable(EnableCap.Blend);
+        _gl.Disable(EnableCap.DepthTest);
+        _gl.Disable(EnableCap.ScissorTest);
         _program.Use();
         emissive.BindTexture(1);
         visibility.Bind(2);

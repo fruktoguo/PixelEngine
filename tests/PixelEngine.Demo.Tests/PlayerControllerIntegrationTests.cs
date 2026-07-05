@@ -106,7 +106,7 @@ public sealed class PlayerControllerIntegrationTests
 
         Assert.Contains("begin:playable-hud:Playable HUD:NoTitleBar, NoResize, NoMove, NoSavedSettings, NoScrollbar", gui.Drawn);
         Assert.Contains("swatch:weapon-current:FFE8D06A:14", gui.Drawn);
-        Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:Pistol  120/120:", StringComparison.Ordinal));
+        Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:Pistol  180/180:", StringComparison.Ordinal));
         Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:目标 水晶 0/3", StringComparison.Ordinal));
         Assert.Contains("text:材质", gui.Drawn);
         Assert.Contains("text:sand / Terrain", gui.Drawn);
@@ -935,15 +935,15 @@ public sealed class PlayerControllerIntegrationTests
 
         engine.RunHeadlessTicks(2);
         Assert.Equal("pistol", weapons.SelectedWeaponId);
-        Assert.Equal(120, weapons.CurrentAmmo);
+        Assert.Equal(180, weapons.CurrentAmmo);
 
-        input.Update([Key.Digit4], [], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+        input.Update([Key.Digit2], [], mouseX: 36f, mouseY: 34f, wheelY: 0f);
         engine.RunHeadlessTicks(1);
         Assert.Equal("laser", weapons.SelectedWeaponId);
 
         input.Update([], [], mouseX: 36f, mouseY: 34f, wheelY: -1f);
         engine.RunHeadlessTicks(1);
-        Assert.Equal("excavator", weapons.SelectedWeaponId);
+        Assert.Equal("grenade", weapons.SelectedWeaponId);
 
         input.Update([Key.Digit1], [], mouseX: 36f, mouseY: 34f, wheelY: 0f);
         engine.RunHeadlessTicks(1);
@@ -953,8 +953,8 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal(1, weapons.PrimaryFireCount);
         Assert.Equal(1, projectile.ShotsFired);
         Assert.Equal(WeaponKind.SingleShot, weapons.LastDispatchedKind);
-        Assert.Equal(119, weapons.CurrentAmmo);
-        Assert.Equal("explosion.wav", audio.LastCue);
+        Assert.Equal(179, weapons.CurrentAmmo);
+        Assert.Equal("impact_stone.wav", audio.LastCue);
         Assert.True(projectile.TracerRemainingSeconds > 0f);
         Assert.False(string.IsNullOrWhiteSpace(projectile.CollapseStatus));
 
@@ -1578,6 +1578,8 @@ public sealed class PlayerControllerIntegrationTests
         PlayableProjectileTool projectile = FindBehaviour<PlayableProjectileTool>(engine);
         Assert.Equal(3, projectile.ImpactRadius);
         Assert.Equal(9f, projectile.ImpactForce);
+        Assert.Equal(36f, projectile.ImpactDamage);
+        Assert.False(projectile.UseExplosionDamage);
         Assert.Equal(36, projectile.CollapseScanRadius);
         Assert.Equal(2, projectile.CollapseScanRetryFrames);
         Assert.Equal(18, projectile.FallbackOverhangRadius);
@@ -1587,6 +1589,41 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal(72, projectile.PlayerSupportProtectionRadius);
         Assert.False(projectile.AllowOverhangFallbackCollapse);
         Assert.False(projectile.AllowImpactFallbackCollapse);
+    }
+
+    /// <summary>
+    /// 验证可玩 Demo 的前三个数字键固定对应小枪、激光炮与手雷，且小枪使用材质耐久伤害而非爆炸破坏。
+    /// </summary>
+    [Fact]
+    public void PlayableWeaponCatalogMapsDigitsToPistolLaserAndGrenade()
+    {
+        using Engine engine = CreateManualScriptEngine(
+            out ScriptInputApi input,
+            out _,
+            out _,
+            out ScriptScene scene,
+            DemoMaterials(),
+            contentRoot: DemoContentRoot());
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<PlayerController>();
+        _ = entity.AddComponent<PlayableProjectileTool>();
+        WeaponController weapons = entity.AddComponent<WeaponController>();
+
+        engine.RunHeadlessTicks(2);
+
+        Assert.NotNull(weapons.Catalog);
+        Assert.True(weapons.Catalog.Weapons.Length >= 3);
+        Assert.Equal("pistol", weapons.Catalog.Weapons[0].Id);
+        Assert.Equal("laser", weapons.Catalog.Weapons[1].Id);
+        Assert.Equal("grenade", weapons.Catalog.Weapons[2].Id);
+
+        input.Update([Key.Digit2], [], mouseX: 0, mouseY: 0, wheelY: 0);
+        engine.RunHeadlessTicks(1);
+        Assert.Equal("laser", weapons.SelectedWeaponId);
+
+        input.Update([Key.Digit3], [], mouseX: 0, mouseY: 0, wheelY: 0);
+        engine.RunHeadlessTicks(1);
+        Assert.Equal("grenade", weapons.SelectedWeaponId);
     }
 
     /// <summary>

@@ -743,7 +743,7 @@ public sealed class HostingProjectDisciplineTests
         JsonArray weaponItems = weapons["weapons"]!.AsArray();
         Assert.Equal(6, weaponItems.Count);
         Assert.Equal(
-            ["singleShot", "bomb", "grenade", "laser", "excavator", "builder"],
+            ["singleShot", "laser", "grenade", "bomb", "excavator", "builder"],
             [.. weaponItems.Select(node => node!.AsObject()["kind"]!.GetValue<string>())]);
         Assert.Contains(
             weaponItems.Select(node => node!.AsObject()),

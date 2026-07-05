@@ -190,7 +190,7 @@ public sealed class DemoStartupOptionsTests
 
         Assert.Equal(6, catalog.Weapons.Length);
         Assert.Equal(
-            [WeaponKind.SingleShot, WeaponKind.Bomb, WeaponKind.Grenade, WeaponKind.Laser, WeaponKind.Excavator, WeaponKind.Builder],
+            [WeaponKind.SingleShot, WeaponKind.Laser, WeaponKind.Grenade, WeaponKind.Bomb, WeaponKind.Excavator, WeaponKind.Builder],
             catalog.Weapons.Select(weapon => weapon.Kind).ToArray());
         WeaponDefinition laser = Assert.Single(catalog.Weapons, weapon => weapon.Kind == WeaponKind.Laser);
         Assert.Equal(WeaponFalloff.None, laser.Falloff);

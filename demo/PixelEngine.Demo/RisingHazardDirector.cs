@@ -138,7 +138,7 @@ public sealed class RisingHazardDirector : Behaviour
             emitter.ParticleCount = 2;
             emitter.ParticleSpeed = 24f;
             emitter.DirectionX = 0f;
-            emitter.DirectionY = -1f;
+            emitter.DirectionY = 1f;
             emitter.AddLight = true;
             emitter.LightRadius = 44f;
             emitter.LightColorBgra = 0xFF_30_70_FF;

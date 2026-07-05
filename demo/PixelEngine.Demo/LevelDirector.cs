@@ -220,6 +220,8 @@ public sealed class LevelDirector : Behaviour
         PlayableProjectileTool projectile = playerEntity.AddComponent<PlayableProjectileTool>();
         projectile.ImpactRadius = 3;
         projectile.ImpactForce = 9f;
+        projectile.ImpactDamage = 36f;
+        projectile.UseExplosionDamage = false;
         projectile.CollapseScanRadius = 36;
         projectile.CollapseScanRetryFrames = 2;
         projectile.FallbackOverhangRadius = 18;
@@ -330,7 +332,7 @@ public sealed class LevelDirector : Behaviour
         FillRect(98, floorY - 86, 64, 8, _metal);
         FillRect(224, floorY - 122, 58, 8, _wood);
         FillRect(372, floorY - 118, 72, 8, _metal);
-        FillRect(138, 108, 34, floorY - 108, _stone);
+        FillRect(138, 108, 12, 96, _stone);
         FillRect(488, 120, 28, floorY - 52, _stone);
         FillSlope(32, floorY - 1, 88, 24, _sand);
         FillSlope(386, floorY - 1, 74, 22, _sand);

@@ -5,6 +5,7 @@ using PixelEngine.Audio;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
 using PixelEngine.Gui;
+using PixelEngine.Interop.Box2D;
 using PixelEngine.UI;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
@@ -820,13 +821,16 @@ public sealed class Engine : IDisposable
             ? registeredParticles
             : null;
         RigidBodyDestruction destruction = new(fragmentPixelThreshold: 4, particles);
+        B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
+        worldDef.Gravity = new B2Vec2 { X = 0f, Y = 10f };
         PhysicsSystem physics = PhysicsSystem.Initialize(
             grid,
             Context.Jobs,
             damageQueue: damageQueue,
             destruction: destruction,
             profiler: Context.Profiler,
-            eventBus: Context.Events);
+            eventBus: Context.Events,
+            worldDef: worldDef);
         PhysicsPhaseDriver driver = new(physics, chunks);
         Context.RegisterService(damageQueue);
         Context.RegisterService(physics);

@@ -43,6 +43,7 @@ public sealed class LavaMineSceneTests
         Assert.Equal(0, CountBehaviours<SparkEmitter>(engine.Context.GetService<ScriptScene>()));
         Assert.Equal(0, CountBehaviours<GoalTrigger>(engine.Context.GetService<ScriptScene>()));
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        Assert.True(physics.Gravity.Y > 0f, $"Demo 刚体重力应沿像素坐标正 Y 向下，actual={physics.Gravity}。");
         Assert.True(physics.PhysicsWorld.ActiveBodyCount >= director.RigidStructureCount);
         Assert.True(physics.LastStampedCellCount > 0);
 
@@ -71,6 +72,10 @@ public sealed class LavaMineSceneTests
                 (Vector2.Distance(before.Transform.Position, moved.Transform.Position) > 0.01f ||
                     MathF.Abs(before.Transform.Sin - moved.Transform.Sin) > 0.0001f ||
                     MathF.Abs(before.Transform.Cos - moved.Transform.Cos) > 0.0001f));
+        Assert.Contains(
+            movedSnapshots,
+            moved => TryFindSnapshot(splitSnapshots, moved.BodyKey, out RigidBodySnapshot before) &&
+                moved.Transform.Position.Y > before.Transform.Position.Y + 0.01f);
     }
 
     /// <summary>

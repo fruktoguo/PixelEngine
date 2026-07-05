@@ -72,7 +72,7 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
 
         if (frame == 2)
         {
-            _keys[keyCount++] = Key.Digit6;
+            _keys[keyCount++] = Key.Digit1;
         }
         else if (frame is >= 7 and <= 118)
         {
@@ -84,13 +84,36 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
         }
         else if (frame is >= 124 and <= 146)
         {
+            if (frame == 124)
+            {
+                _keys[keyCount++] = Key.Digit1;
+            }
+
             target = PlayableCollapseTargetWorld;
             _buttons[buttonCount++] = MouseButton.Left;
         }
         else if (frame is >= 150 and <= 165)
         {
+            if (frame == 150)
+            {
+                _keys[keyCount++] = Key.Digit2;
+            }
+
             target = new Point2F(PlayableCollapseTargetWorld.X + ((frame - 150) % 4 * 4f), PlayableCollapseTargetWorld.Y + ((frame - 150) / 4 * 4f));
-            _buttons[buttonCount++] = MouseButton.Right;
+            _buttons[buttonCount++] = MouseButton.Left;
+        }
+        else if (frame is >= 166 and <= 176)
+        {
+            if (frame == 166)
+            {
+                _keys[keyCount++] = Key.Digit3;
+            }
+
+            target = new Point2F(PlayableCollapseTargetWorld.X + 18f, PlayableCollapseTargetWorld.Y - 12f);
+            if (frame == 170)
+            {
+                _buttons[buttonCount++] = MouseButton.Left;
+            }
         }
         else if (frame is >= 168 and <= 196)
         {
@@ -118,7 +141,7 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
 
         if (frame == 2)
         {
-            _keys[keyCount++] = Key.Digit6;
+            _keys[keyCount++] = Key.Digit2;
         }
         else if (frame is >= 12 and <= 83)
         {
@@ -126,7 +149,7 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
             float sweepX = 136f + (sweep % 8 * 6f);
             float sweepY = 232f + (sweep / 8 * 6f);
             target = new Point2F(sweepX, sweepY);
-            _buttons[buttonCount++] = MouseButton.Right;
+            _buttons[buttonCount++] = MouseButton.Left;
         }
         else if (frame is >= 84 and <= 147)
         {
@@ -134,7 +157,7 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
             float sweepX = 250f + (sweep % 8 * 12f);
             float sweepY = 276f + (sweep / 8 * 4f);
             target = new Point2F(sweepX, sweepY);
-            _buttons[buttonCount++] = MouseButton.Right;
+            _buttons[buttonCount++] = MouseButton.Left;
         }
         else if (frame is >= 148 and <= 211)
         {
@@ -142,7 +165,7 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
             float sweepX = 410f + (sweep % 8 * 10f);
             float sweepY = 224f + (sweep / 8 * 6f);
             target = new Point2F(sweepX, sweepY);
-            _buttons[buttonCount++] = MouseButton.Right;
+            _buttons[buttonCount++] = MouseButton.Left;
         }
         else if (frame is >= 212 and <= 267)
         {
@@ -150,7 +173,7 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
             float sweepX = 486f + (sweep % 7 * 7f);
             float sweepY = 198f + (sweep / 7 * 8f);
             target = new Point2F(sweepX, sweepY);
-            _buttons[buttonCount++] = MouseButton.Right;
+            _buttons[buttonCount++] = MouseButton.Left;
         }
         else if (frame is >= 268 and <= 331)
         {
@@ -158,7 +181,7 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
             float sweepX = 336f + (sweep % 8 * 9f);
             float sweepY = 258f + (sweep / 8 * 5f);
             target = new Point2F(sweepX, sweepY);
-            _buttons[buttonCount++] = MouseButton.Right;
+            _buttons[buttonCount++] = MouseButton.Left;
         }
         else if (frame >= 356)
         {
@@ -183,6 +206,18 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
         {
             target = new Point2F(190f + (frame - 44), 272f);
             _buttons[buttonCount++] = MouseButton.Left;
+        }
+
+        if (frame is 180 or 236)
+        {
+            _keys[keyCount++] = Key.Digit3;
+            target = frame == 180 ? new Point2F(392f, 176f) : new Point2F(506f, 234f);
+            _buttons[buttonCount++] = MouseButton.Left;
+        }
+
+        if (frame is 188 or 244)
+        {
+            _keys[keyCount++] = Key.Digit2;
         }
 
         Point2F screen = _camera.WorldToScreen(target.X, target.Y);

@@ -319,8 +319,8 @@ public sealed class WeaponController : Behaviour
                 SpawnGrenade(weapon, origin.X, origin.Y, dx, dy, secondary);
                 break;
             case WeaponKind.Laser:
-                Context.World.DamageBeam(origin.X, origin.Y, dx, dy, Math.Max(1, (int)MathF.Ceiling(length)), MathF.Max(1f, weapon.BeamDps * MathF.Max(dt, 1f / 60f)));
-                Context.World.AddHeat(hitX, hitY, Math.Max(1, weapon.Radius), Math.Max(1f, weapon.HeatPerCell));
+                float hitDistance = MathF.Sqrt(((hitX - origin.X) * (hitX - origin.X)) + ((hitY - origin.Y) * (hitY - origin.Y)));
+                DispatchLaser(weapon, origin.X, origin.Y, dx, dy, Math.Min(RangeOrHitLength(hitDistance), 260), hitX, hitY, dt);
                 DrawBeamOverlay(origin.X, origin.Y, hitX, hitY, 0xFF_58_E6_FF);
                 EmitImpactFeedback(weapon, hitX, hitY, count: 2);
                 break;
@@ -347,6 +347,42 @@ public sealed class WeaponController : Behaviour
         {
             Context.Audio.PlayAt(ToCuePath(weapon.ImpactCue), hitX, hitY, 0.7f);
         }
+    }
+
+    private void DispatchLaser(
+        WeaponDefinition weapon,
+        float originX,
+        float originY,
+        float dirX,
+        float dirY,
+        int length,
+        float hitX,
+        float hitY,
+        float dt)
+    {
+        int radius = Math.Max(1, weapon.Radius);
+        float damage = MathF.Max(1f, weapon.BeamDps * MathF.Max(dt, 1f / 60f));
+        float normalX = -dirY;
+        float normalY = dirX;
+        for (int offset = -radius; offset <= radius; offset++)
+        {
+            float weight = 1f - (MathF.Abs(offset) / (radius + 1f));
+            Context.World.DamageBeam(
+                originX + (normalX * offset),
+                originY + (normalY * offset),
+                dirX,
+                dirY,
+                length,
+                damage * weight,
+                DamageKind.Beam);
+        }
+
+        Context.World.AddHeat(hitX, hitY, radius + 1, Math.Max(1f, weapon.HeatPerCell));
+    }
+
+    private static int RangeOrHitLength(float length)
+    {
+        return Math.Max(1, (int)MathF.Ceiling(length));
     }
 
     private void SpawnGrenade(WeaponDefinition weapon, float originX, float originY, float dirX, float dirY, bool charged)
@@ -490,6 +526,8 @@ public sealed class WeaponController : Behaviour
 
         _projectile.ImpactRadius = Math.Max(1, weapon.Radius);
         _projectile.ImpactForce = Math.Max(1f, weapon.Impulse);
+        _projectile.ImpactDamage = Math.Max(1f, weapon.Damage);
+        _projectile.UseExplosionDamage = false;
         _projectile.CooldownSeconds = Math.Max(0f, weapon.CooldownSeconds);
         _projectile.TracerDurationSeconds = Math.Clamp(weapon.TracerDuration, 0f, 0.25f);
         return _projectile.FireOnceFromCurrentInput();

@@ -130,6 +130,7 @@ public sealed class BloomPass : IDisposable
         }
 
         _gl.Enable(EnableCap.Blend);
+        _gl.BlendEquation(BlendEquationModeEXT.FuncAdd);
         _gl.BlendFunc(BlendingFactor.One, BlendingFactor.One);
         for (int i = _mips.Length - 2; i >= 0; i--)
         {
@@ -174,6 +175,9 @@ public sealed class BloomPass : IDisposable
     {
         destination.BindFramebuffer();
         _gl.Viewport(0, 0, (uint)destination.Width, (uint)destination.Height);
+        _gl.Disable(EnableCap.Blend);
+        _gl.Disable(EnableCap.DepthTest);
+        _gl.Disable(EnableCap.ScissorTest);
         _compositeProgram.Use();
         scene.BindTexture(0);
         bloom.BindTexture(1);

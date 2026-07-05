@@ -45,6 +45,9 @@ public sealed class WorldBlitPass : IDisposable
 
         destination.BindFramebuffer();
         _gl.Viewport(0, 0, (uint)destination.Width, (uint)destination.Height);
+        _gl.Disable(EnableCap.Blend);
+        _gl.Disable(EnableCap.DepthTest);
+        _gl.Disable(EnableCap.ScissorTest);
         _program.Use();
         world.Bind(0);
         _gl.Uniform1(_worldLocation, 0);

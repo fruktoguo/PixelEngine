@@ -32,6 +32,9 @@ internal sealed class FullscreenTexturePass : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         destination.BindFramebuffer();
         _gl.Viewport(0, 0, (uint)destination.Width, (uint)destination.Height);
+        _gl.Disable(EnableCap.Blend);
+        _gl.Disable(EnableCap.DepthTest);
+        _gl.Disable(EnableCap.ScissorTest);
         _program.Use();
         source.BindTexture(0);
         _gl.Uniform1(_sourceLocation, 0);

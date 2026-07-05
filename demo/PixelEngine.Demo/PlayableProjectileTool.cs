@@ -31,6 +31,16 @@ public sealed class PlayableProjectileTool : Behaviour
     public float ImpactForce { get; set; } = 24f;
 
     /// <summary>
+    /// 命中结构伤害当量；为 0 时回退到 <see cref="ImpactForce"/>。
+    /// </summary>
+    public float ImpactDamage { get; set; }
+
+    /// <summary>
+    /// 是否用爆炸效果造成伤害。小枪关闭该项后仍会触发坍塌扫描，但破坏量会受材质耐久约束。
+    /// </summary>
+    public bool UseExplosionDamage { get; set; } = true;
+
+    /// <summary>
     /// 射击冷却时间，单位秒。
     /// </summary>
     public float CooldownSeconds { get; set; } = 0.16f;
@@ -215,10 +225,20 @@ public sealed class PlayableProjectileTool : Behaviour
             hitY = hit.Y;
         }
 
-        Context.World.Explode(hitX, hitY, Math.Max(1, ImpactRadius), MathF.Max(1f, ImpactForce));
+        if (UseExplosionDamage)
+        {
+            Context.World.Explode(hitX, hitY, Math.Max(1, ImpactRadius), MathF.Max(1f, ImpactForce));
+        }
+        else
+        {
+            float damage = ImpactDamage > 0f ? ImpactDamage : ImpactForce;
+            Context.World.DamageCircle(hitX, hitY, Math.Max(1, ImpactRadius), MathF.Max(1f, damage), falloff: true, DamageKind.Impact);
+            EmitSmallImpactParticles(hitX, hitY);
+        }
+
         Context.Lighting.RevealAround(hitX, hitY, ImpactRadius * 2.5f);
         Context.Lighting.AddPointLight(hitX, hitY, ImpactRadius * 3f, 0xFF_60_D8_FF, 0.35f);
-        Context.Audio.PlayAt("explosion.wav", hitX, hitY, 0.85f);
+        Context.Audio.PlayAt(UseExplosionDamage ? "explosion.wav" : "impact_stone.wav", hitX, hitY, UseExplosionDamage ? 0.85f : 0.55f);
         LastShotStartX = startX;
         LastShotStartY = startY;
         LastHitX = hitX;
@@ -228,6 +248,20 @@ public sealed class PlayableProjectileTool : Behaviour
         QueueCollapseScan(hitX, hitY);
         _cooldownRemaining = MathF.Max(0f, CooldownSeconds);
         return true;
+    }
+
+    private void EmitSmallImpactParticles(float hitX, float hitY)
+    {
+        MaterialId material = Context.Materials.Resolve("gravel");
+        if (material == MaterialId.Invalid)
+        {
+            material = Context.Materials.Resolve("sand");
+        }
+
+        if (material != MaterialId.Invalid)
+        {
+            Context.Particles.Burst(hitX, hitY, material, Math.Clamp(ImpactRadius + 2, 3, 12), speed: Math.Max(1f, ImpactForce * 0.2f));
+        }
     }
 
     private void ProcessPendingCollapseScanSafely()

@@ -264,7 +264,7 @@ API 缺口登记
 - [x] 六类武器均可用真实窗口 / headless 触发并产生差异化效果：headless 已覆盖炸弹破石/粒子、激光 `DamageBeam` + `AddHeat` 注热、手榴弹延时爆、单点射击小当量命中并复用坍塌扫描、挖掘清 cell、建造放材质；破坏差异来自 `materials.json` 抗性 + `weapons.json` 参数（改数值即改表现，无写死）。〔§3.14〕
 - [x] 武器切换 / 弹药 / 冷却 / 过热 / reload 正确；所有写操作合规（单线程输入相位 + dirty + KeepAlive），不驱动额外 sim step。〔§3.14〕
 - [x] `WeaponHud` 显示武器 / 弹药 / 冷却 / 过热 / 准星，`MaterialLegendHud` 显示当前关卡 `LegendVisible=true` 材质的 swatch + `DisplayName` + 分组；均经 `IGuiContext`（`PixelEngine.Gui`）而非直接 ImGui。〔§3.14〕
-- [!] 熔岩矿洞逃生循环：从出生点用至少两种解法（引水成石桥 / 炸塌木桥垫脚 / 激光开金属道）采集 3 晶抵达充能出口通关，全程贯穿材质 / 反应 / 刚体 / 粒子 / 光照 / 音频 + 武器；熔岩上涨 / 玩家死亡 / 通路淹没触发失败并可重开；采集进度、时限压力、武器权衡与计分正确。自动化已覆盖 `MissionDirector` 计分胜负、`ObjectiveCrystal` 采集事件、`RisingHazardDirector` 失败、`ExtractionTrigger` 条件通关、正式 `lava-mine.scene` 物化任务循环和 Demo 内容包 crystal 字段；阻塞：缺真实窗口两种路线完整通关视频 / 截图证据、玩家实际操作手感、全程视觉/音频质量与重开点击链路人工验收，不能用 headless 分段测试冒充完成。〔§3.15〕
+- [!] 熔岩矿洞逃生循环：从出生点用至少两种解法（引水成石桥 / 炸塌木桥垫脚 / 激光开金属道）采集 3 晶抵达充能出口通关，全程贯穿材质 / 反应 / 刚体 / 粒子 / 光照 / 音频 + 武器；熔岩上涨 / 玩家死亡 / 通路淹没触发失败并可重开；采集进度、时限压力、武器权衡与计分正确。自动化已覆盖 `MissionDirector` 计分胜负、`ObjectiveCrystal` 采集事件、`RisingHazardDirector` 失败、`ExtractionTrigger` 条件通关、正式 `lava-mine.scene` 物化任务循环和 Demo 内容包 crystal 字段；2026-07-06 补充真实窗口 `--scripted-window-route` 1500 帧证据，输出 `goal_reached=True`、`weapon_primary=64`、`max_physics_destroyed=3`、`max_physics_created=3`、`camera_followed=True`，截图见 `artifacts/demo-fix-20260706/scripted-route-4.bmp`。阻塞：缺真实窗口两种路线完整通关视频、玩家实际操作手感、全程视觉/音频质量与重开点击链路人工验收，不能用 scripted probe 冒充人工完成。〔§3.15〕
 
 ---
 

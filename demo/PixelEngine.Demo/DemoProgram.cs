@@ -508,12 +508,14 @@ public static class DemoProgram
         DemoHud? hud = FindBehaviour<DemoHud>(scene);
         PauseMenu? pause = FindBehaviour<PauseMenu>(scene);
         GoalTrigger? goal = FindBehaviour<GoalTrigger>(scene);
+        ExtractionTrigger? extraction = FindBehaviour<ExtractionTrigger>(scene);
         MaterialBrush? brush = FindBehaviour<MaterialBrush>(scene);
         ExplosiveTool? explosive = FindBehaviour<ExplosiveTool>(scene);
         PlayerHealth? health = FindBehaviour<PlayerHealth>(scene);
         PlayerController? player = FindBehaviour<PlayerController>(scene);
         PlayerVisual? playerVisual = FindBehaviour<PlayerVisual>(scene);
         PlayableProjectileTool? projectile = FindBehaviour<PlayableProjectileTool>(scene);
+        WeaponController? weapons = FindBehaviour<WeaponController>(scene);
         LevelDirector? director = FindBehaviour<LevelDirector>(scene);
         EngineProbeApi probe = engine.Context.GetService<EngineProbeApi>();
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
@@ -530,7 +532,7 @@ public static class DemoProgram
         string brushMaterial = brush?.SelectedMaterialName ?? "<missing>";
         string hudBlocked = string.IsNullOrEmpty(hud?.BlockedReason) ? "none" : hud.BlockedReason;
         string pauseOpen = pause?.IsOpen.ToString() ?? "<missing>";
-        string goalReached = goal?.Reached.ToString() ?? "<missing>";
+        string goalReached = goal?.Reached.ToString() ?? extraction?.Reached.ToString() ?? "<missing>";
         CharacterState playerState = player?.State ?? default;
         int playerCenterX = (int)MathF.Round(player?.CenterX ?? 0f);
         int playerCenterY = (int)MathF.Round(player?.CenterY ?? 0f);
@@ -545,6 +547,11 @@ public static class DemoProgram
             $"explosions={explosive?.ExplosionCount ?? 0}, " +
             $"last_explosion=({explosive?.LastExplosionX ?? 0:0.00},{explosive?.LastExplosionY ?? 0:0.00}), " +
             $"playable_shots={projectile?.ShotsFired ?? 0}, " +
+            $"weapon_id={weapons?.SelectedWeaponId ?? "<missing>"}, " +
+            $"weapon_primary={weapons?.PrimaryFireCount ?? 0}, " +
+            $"weapon_secondary={weapons?.SecondaryFireCount ?? 0}, " +
+            $"weapon_last_kind={weapons?.LastDispatchedKind.ToString() ?? "<missing>"}, " +
+            $"weapon_ammo={weapons?.CurrentAmmo ?? 0}, " +
             $"playable_last_hit=({projectile?.LastHitX ?? 0:0.00},{projectile?.LastHitY ?? 0:0.00}), " +
             $"playable_collapsed_islands={projectile?.CollapsedFloatingIslands ?? 0}, " +
             $"playable_last_collapse=({projectile?.LastCollapsedRegion.X ?? 0},{projectile?.LastCollapsedRegion.Y ?? 0},{projectile?.LastCollapsedRegion.Width ?? 0},{projectile?.LastCollapsedRegion.Height ?? 0}), " +

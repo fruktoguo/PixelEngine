@@ -81,6 +81,8 @@ public sealed class PlayableWorldDirector : Behaviour
         PlayableProjectileTool projectile = playerEntity.AddComponent<PlayableProjectileTool>();
         projectile.ImpactRadius = 3;
         projectile.ImpactForce = 9f;
+        projectile.ImpactDamage = 36f;
+        projectile.UseExplosionDamage = false;
         projectile.CollapseScanRadius = 36;
         projectile.CollapseScanRetryFrames = 2;
         projectile.FallbackOverhangRadius = 18;
