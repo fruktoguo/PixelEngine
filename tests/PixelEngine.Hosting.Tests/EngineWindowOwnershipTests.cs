@@ -63,6 +63,21 @@ public sealed class EngineWindowOwnershipTests
     }
 
     /// <summary>
+    /// 验证窗口 UI 输入源通过固定缓冲接入 Silk.NET 文本事件，而不是返回空文本。
+    /// </summary>
+    [Fact]
+    public void RenderWindowUiInputSourceQueuesKeyboardTextBySourceContract()
+    {
+        string source = ReadRepositoryFile("src", "PixelEngine.Hosting", "RenderWindowUiInputSource.cs");
+
+        Assert.Contains("private const int TextBufferCapacity", source, StringComparison.Ordinal);
+        Assert.Contains("KeyChar += OnKeyChar", source, StringComparison.Ordinal);
+        Assert.Contains("public int CaptureText(Span<char> destination)", source, StringComparison.Ordinal);
+        Assert.Contains("destination[i] = _textBuffer[_textRead];", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("return 0;", ExtractCaptureTextBody(source), StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证编辑态 bootstrap 只依赖中性 Gui/Rendering，不引用 Editor 程序集。
     /// </summary>
     [Fact]
@@ -94,6 +109,16 @@ public sealed class EngineWindowOwnershipTests
         Assert.True(start >= 0, "未找到 AttachGuiRuntime 方法。");
         int end = source.IndexOf("private void AttachEditorHostExtensions", start, StringComparison.Ordinal);
         Assert.True(end > start, "未找到 AttachGuiRuntime 方法结束边界。");
+        return source[start..end];
+    }
+
+    private static string ExtractCaptureTextBody(string source)
+    {
+        const string marker = "public int CaptureText(Span<char> destination)";
+        int start = source.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(start >= 0, "未找到 CaptureText 方法。");
+        int end = source.IndexOf("private void OnKeyChar", start, StringComparison.Ordinal);
+        Assert.True(end > start, "未找到 CaptureText 方法结束边界。");
         return source[start..end];
     }
 

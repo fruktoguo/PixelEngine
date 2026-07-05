@@ -6,11 +6,25 @@ using SilkMouseButton = Silk.NET.Input.MouseButton;
 
 namespace PixelEngine.Hosting;
 
-internal sealed class RenderWindowUiInputSource(RenderWindow window) : IUiInputSource
+internal sealed class RenderWindowUiInputSource : IUiInputSource
 {
-    private readonly RenderWindow _window = window ?? throw new ArgumentNullException(nameof(window));
+    private const int TextBufferCapacity = 256;
+
+    private readonly RenderWindow _window;
+    private readonly char[] _textBuffer = new char[TextBufferCapacity];
+    private int _textRead;
+    private int _textCount;
     private float _lastWheelX;
     private float _lastWheelY;
+
+    internal RenderWindowUiInputSource(RenderWindow window)
+    {
+        _window = window ?? throw new ArgumentNullException(nameof(window));
+        for (int i = 0; i < _window.Input.Keyboards.Count; i++)
+        {
+            _window.Input.Keyboards[i].KeyChar += OnKeyChar;
+        }
+    }
 
     /// <summary>
     /// 从窗口鼠标设备读取当前指针状态。
@@ -109,14 +123,40 @@ internal sealed class RenderWindowUiInputSource(RenderWindow window) : IUiInputS
     }
 
     /// <summary>
-    /// 读取本帧文本输入；当前窗口适配器尚未接入文本事件队列。
+    /// 读取本帧文本输入。
     /// </summary>
     /// <param name="destination">文本写入缓冲。</param>
     /// <returns>写入字符数量。</returns>
     public int CaptureText(Span<char> destination)
     {
-        _ = destination;
-        return 0;
+        int written = Math.Min(destination.Length, _textCount);
+        for (int i = 0; i < written; i++)
+        {
+            destination[i] = _textBuffer[_textRead];
+            _textRead = (_textRead + 1) % _textBuffer.Length;
+        }
+
+        _textCount -= written;
+        return written;
+    }
+
+    private void OnKeyChar(IKeyboard keyboard, char character)
+    {
+        _ = keyboard;
+        if (character == '\0')
+        {
+            return;
+        }
+
+        if (_textCount == _textBuffer.Length)
+        {
+            _textRead = (_textRead + 1) % _textBuffer.Length;
+            _textCount--;
+        }
+
+        int write = (_textRead + _textCount) % _textBuffer.Length;
+        _textBuffer[write] = character;
+        _textCount++;
     }
 
     private static UiKeyModifiers CaptureModifiers(IKeyboard keyboard)
