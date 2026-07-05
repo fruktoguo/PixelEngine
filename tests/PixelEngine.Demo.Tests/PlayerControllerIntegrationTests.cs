@@ -770,6 +770,62 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证爆炸闪光是短寿命脚本效果，会自动销毁并停止提交瞬时点光源。
+    /// </summary>
+    [Fact]
+    public void ExplosionFlashEffectExpiresAndStopsLighting()
+    {
+        using Engine engine = CreateManualScriptEngine(out _, out _, out _, out ScriptScene scene, DemoMaterials());
+        ExplosionFlashProbe probe = scene.CreateEntity().AddComponent<ExplosionFlashProbe>();
+        probe.Trigger(18f, 14f, 8f, durationSeconds: 0.05f);
+
+        engine.RunHeadlessTicks(1);
+
+        Assert.True(probe.LastOverlayCommandsSubmitted > 0);
+        ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
+        Assert.Equal(1, lighting.PointLights.Length);
+
+        engine.RunHeadlessTicks(8);
+
+        Assert.Equal(0, lighting.PointLights.Length);
+        Assert.False(probe.Active);
+    }
+
+    /// <summary>
+    /// 验证手雷爆炸生成的视觉反馈会随生命周期结束，不会把爆炸点光源永久留在渲染输入里。
+    /// </summary>
+    [Fact]
+    public void GrenadeExplosionFlashDoesNotPersistAfterDetonation()
+    {
+        using Engine engine = CreateManualScriptEngine(out _, out _, out _, out ScriptScene scene, DemoMaterials());
+        Entity entity = scene.CreateEntity();
+        GrenadeProjectile grenade = entity.AddComponent<GrenadeProjectile>();
+        grenade.Initialize(
+            x: 18f,
+            y: 14f,
+            vx: 0f,
+            vy: 0f,
+            fuseSeconds: 0.02f,
+            radius: 6,
+            damage: 12f,
+            impulse: 8f,
+            gravity: 0f,
+            bounce: 0f,
+            impactCue: "explosion.wav");
+
+        engine.RunHeadlessTicks(2);
+
+        Assert.True(grenade.Exploded);
+        Assert.Equal(1, CountBehaviours<GrenadeProjectile>(scene));
+
+        engine.RunHeadlessTicks(24);
+
+        ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
+        Assert.Equal(0, lighting.PointLights.Length);
+        Assert.Equal(0, CountBehaviours<GrenadeProjectile>(scene));
+    }
+
+    /// <summary>
     /// 验证玩家可在普通 settled cell 地面上接地、水平跑动并响应跳跃输入。
     /// </summary>
     [Fact]
@@ -1856,6 +1912,43 @@ public sealed class PlayerControllerIntegrationTests
         }
 
         throw new InvalidOperationException($"未找到 {typeof(TBehaviour).Name}。");
+    }
+
+    private static int CountBehaviours<TBehaviour>(ScriptScene scene)
+        where TBehaviour : Behaviour
+    {
+        int count = 0;
+        foreach (ScriptEntityInspection entity in scene.CaptureInspectionSnapshot())
+        {
+            foreach (ScriptComponentInspection component in entity.Components)
+            {
+                if (component.Behaviour is TBehaviour)
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private sealed class ExplosionFlashProbe : Behaviour
+    {
+        private ExplosionFlashEffect _effect;
+
+        public bool Active => _effect.IsActive;
+
+        public int LastOverlayCommandsSubmitted => _effect.LastOverlayCommandsSubmitted;
+
+        public void Trigger(float x, float y, float radius, float durationSeconds)
+        {
+            _effect.Start(x, y, radius, durationSeconds: durationSeconds);
+        }
+
+        protected override void OnUpdate(float dt)
+        {
+            _ = _effect.Update(Context, dt);
+        }
     }
 
     private static string Describe(CharacterState state)

@@ -35,6 +35,7 @@ public static class DemoProgram
     /// <returns>进程退出码。</returns>
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(CameraFollow))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(DemoHud))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(ExplosionFlashEffect))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(ExplosiveTool))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(ExtractionTrigger))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(GoalTrigger))]

@@ -8,6 +8,7 @@ namespace PixelEngine.Demo;
 public sealed class ExplosiveTool : Behaviour
 {
     private float _cooldownRemaining;
+    private ExplosionFlashEffect _flash;
 
     /// <summary>
     /// 爆炸半径，单位 cell。
@@ -42,7 +43,9 @@ public sealed class ExplosiveTool : Behaviour
     /// <inheritdoc />
     protected override void OnUpdate(float dt)
     {
-        _cooldownRemaining = MathF.Max(0f, _cooldownRemaining - MathF.Max(0f, dt));
+        float safeDt = MathF.Max(0f, dt);
+        _ = _flash.Update(Context, safeDt);
+        _cooldownRemaining = MathF.Max(0f, _cooldownRemaining - safeDt);
         if (_cooldownRemaining > 0f || !Context.Input.WasMousePressed(MouseButton.Middle))
         {
             return;
@@ -55,6 +58,7 @@ public sealed class ExplosiveTool : Behaviour
         Context.World.Explode(world.X, world.Y, radius, force);
         Context.Lighting.RevealAround(world.X, world.Y, radius * 1.5f);
         Context.Lighting.AddPointLight(world.X, world.Y, radius * 2f, 0xFF_30_80_FF, 1.4f);
+        _flash.Start(world.X, world.Y, radius, 0xFF_30_80_FF);
         LastExplosionX = world.X;
         LastExplosionY = world.Y;
         ExplosionCount++;

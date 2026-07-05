@@ -14,6 +14,7 @@ public sealed class WeaponController : Behaviour
     private PlayerController? _player;
     private PlayableProjectileTool? _projectile;
     private GrenadeSpawnRequest _pendingGrenade;
+    private ExplosionFlashEffect _impactFlash;
     private bool _grenadeSpawnSystemRegistered;
 
     /// <summary>
@@ -121,6 +122,7 @@ public sealed class WeaponController : Behaviour
         float safeDt = MathF.Max(0f, dt);
         LoadCatalog();
         RegisterGrenadeSpawnSystem();
+        _ = _impactFlash.Update(Context, safeDt);
         CoolDown(safeDt);
         HandleSelection();
         HandleReload(safeDt);
@@ -313,6 +315,7 @@ public sealed class WeaponController : Behaviour
                 break;
             case WeaponKind.Bomb:
                 Context.World.Explode(hitX, hitY, Math.Max(1, weapon.Radius), Math.Max(1f, weapon.Impulse));
+                _impactFlash.Start(hitX, hitY, Math.Max(1, weapon.Radius), 0xFF_30_80_FF);
                 EmitImpactFeedback(weapon, hitX, hitY, count: 10);
                 break;
             case WeaponKind.Grenade:

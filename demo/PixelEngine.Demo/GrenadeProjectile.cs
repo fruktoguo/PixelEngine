@@ -16,6 +16,7 @@ public sealed class GrenadeProjectile : Behaviour
     private float _impulse;
     private int _radius;
     private string _impactCue = "explosion.wav";
+    private ExplosionFlashEffect _flash;
 
     /// <summary>
     /// 是否已经爆炸。
@@ -66,6 +67,11 @@ public sealed class GrenadeProjectile : Behaviour
     {
         if (Exploded)
         {
+            if (!_flash.Update(Context, dt))
+            {
+                Entity.Destroy();
+            }
+
             return;
         }
 
@@ -108,13 +114,12 @@ public sealed class GrenadeProjectile : Behaviour
         Context.World.DamageCircle(X, Y, _radius, _damage, falloff: true, DamageKind.Impact);
         Context.World.Explode(X, Y, _radius, _impulse);
         Context.Lighting.RevealAround(X, Y, _radius * 3f);
+        _flash.Start(X, Y, _radius, 0xFF_30_80_FF);
         Context.Audio.PlayAt(_impactCue, X, Y, 0.8f);
         MaterialId sand = Context.Materials.Resolve("sand");
         if (sand != MaterialId.Invalid)
         {
             Context.Particles.Burst(X, Y, sand, Math.Clamp(_radius, 4, 24), speed: Math.Max(2f, _impulse * 0.2f));
         }
-
-        Entity.Destroy();
     }
 }
