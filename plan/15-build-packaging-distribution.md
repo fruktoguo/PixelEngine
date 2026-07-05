@@ -375,7 +375,7 @@ RID 激活门控（win-first，§2.1）
 HTML UI native 与 demo-playability 内容打包
 
 - [ ] `plan/20` 的 UI native（RmlUi 主 / Ultralight 可选）作 dynamic-only 落 `runtimes/<rid>/native/`、纳入 `SHA256SUMS` 与包内许可声明、AOT 通道门控排除或动态加载、**不进 Box2D dual-build**；当前 Windows-first 仅 `win-x64` + 纯托管 `ManagedFallbackBackend` 基线变体出包（§3.5、§3.11）。
-- [ ] `content/weapons.json` 与 `gravel`/`crystal` 等新材质纹理纳入内容包核对，`materials.json`/`reactions.json` 恒含（守 #8）（§3.9）。
+- [x] `content/weapons.json` 与 `gravel`/`crystal` 等新材质纹理纳入内容包核对，`materials.json`/`reactions.json` 恒含；当前 `weapons.json`、`textureId` 17/18 对应纹理已落盘，`audit-release-artifacts.ps1|.sh` 与 `HostingProjectDisciplineTests.DemoContentDeclaresWeaponsAndResolvableMaterialTextures` 已锁定（守 #8）（§3.9）。
 - [x] `build-player` 场景过滤模式（可选）：staging `content/` 生成 `startup.json` + 按 `-IncludeScene` 只拷 `content/scenes/` 被选场景，audit「必含场景」放宽为「必含被声明启动场景文件」；默认整包 content 原样打包不变（§3.9）。
 
 ---

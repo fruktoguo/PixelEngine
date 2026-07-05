@@ -374,6 +374,9 @@ assert_friendly_package_layout() {
   local has_entry=0
   local has_materials=0
   local has_reactions=0
+  local has_weapons=0
+  local has_gravel_texture=0
+  local has_boundary_texture=0
   local has_scene=0
   local app_files=()
   local archive_entry
@@ -402,6 +405,9 @@ assert_friendly_package_layout() {
       "$entry") has_entry=1 ;;
       content/materials.json) has_materials=1 ;;
       content/reactions.json) has_reactions=1 ;;
+      content/weapons.json) has_weapons=1 ;;
+      content/textures/17_gravel.png) has_gravel_texture=1 ;;
+      content/textures/18_boundary_stone.png) has_boundary_texture=1 ;;
       "content/$required_scene") has_scene=1 ;;
     esac
 
@@ -431,6 +437,9 @@ assert_friendly_package_layout() {
   [[ -z "$entry" || "$has_entry" -eq 1 ]] || fail_audit "package 缺少 app 依赖入口: $name -> $entry"
   (( has_materials )) || fail_audit "package 缺少 content/materials.json: $name"
   (( has_reactions )) || fail_audit "package 缺少 content/reactions.json: $name"
+  (( has_weapons )) || fail_audit "package 缺少 content/weapons.json: $name"
+  (( has_gravel_texture )) || fail_audit "package 缺少 content/textures/17_gravel.png: $name"
+  (( has_boundary_texture )) || fail_audit "package 缺少 content/textures/18_boundary_stone.png: $name"
   (( has_scene )) || fail_audit "package 缺少 content/$required_scene: $name"
 
   declare -A declared_app_files=()
@@ -489,6 +498,9 @@ assert_friendly_expanded_package_layout() {
   local has_entry=0
   local has_materials=0
   local has_reactions=0
+  local has_weapons=0
+  local has_gravel_texture=0
+  local has_boundary_texture=0
   local has_scene=0
   local expanded_files=()
   local expanded_entries=()
@@ -507,6 +519,9 @@ assert_friendly_expanded_package_layout() {
       "$entry") has_entry=1 ;;
       content/materials.json) has_materials=1 ;;
       content/reactions.json) has_reactions=1 ;;
+      content/weapons.json) has_weapons=1 ;;
+      content/textures/17_gravel.png) has_gravel_texture=1 ;;
+      content/textures/18_boundary_stone.png) has_boundary_texture=1 ;;
       "content/$required_scene") has_scene=1 ;;
     esac
 
@@ -536,6 +551,9 @@ assert_friendly_expanded_package_layout() {
   [[ -z "$entry" || "$has_entry" -eq 1 ]] || fail_audit "展开 package 缺少 app 依赖入口: $name -> $entry"
   (( has_materials )) || fail_audit "展开 package 缺少 content/materials.json: $name"
   (( has_reactions )) || fail_audit "展开 package 缺少 content/reactions.json: $name"
+  (( has_weapons )) || fail_audit "展开 package 缺少 content/weapons.json: $name"
+  (( has_gravel_texture )) || fail_audit "展开 package 缺少 content/textures/17_gravel.png: $name"
+  (( has_boundary_texture )) || fail_audit "展开 package 缺少 content/textures/18_boundary_stone.png: $name"
   (( has_scene )) || fail_audit "展开 package 缺少 content/$required_scene: $name"
 
   local checksum_path="$directory/SHA256SUMS"
@@ -580,6 +598,9 @@ audit_publish_directory() {
   assert_file_exists "$entry" "缺少发布入口"
   assert_file_exists "$directory/content/materials.json" "缺少 content/materials.json"
   assert_file_exists "$directory/content/reactions.json" "缺少 content/reactions.json"
+  assert_file_exists "$directory/content/weapons.json" "缺少 content/weapons.json"
+  assert_file_exists "$directory/content/textures/17_gravel.png" "缺少 content/textures/17_gravel.png"
+  assert_file_exists "$directory/content/textures/18_boundary_stone.png" "缺少 content/textures/18_boundary_stone.png"
   assert_file_exists "$directory/content/$required_scene" "缺少 content/$required_scene"
 
   local box2d_path="$directory/runtimes/$rid/native/$(box2d_dynamic_name_for_rid "$rid")"
