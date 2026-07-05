@@ -107,4 +107,58 @@ internal static unsafe partial class RmlUiNative
     /// <param name="renderer">renderer 句柄。</param>
     [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_render")]
     internal static partial void Render(IntPtr renderer);
+
+    /// <summary>
+    /// 注入鼠标移动。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="x">UI x 坐标。</param>
+    /// <param name="y">UI y 坐标。</param>
+    /// <param name="modifiers">RmlUi 修饰键位。</param>
+    /// <returns>被 UI 消费返回 1。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_process_mouse_move")]
+    internal static partial int ProcessMouseMove(IntPtr renderer, int x, int y, int modifiers);
+
+    /// <summary>
+    /// 注入鼠标按钮边沿。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="button">按钮索引。</param>
+    /// <param name="isDown">按下为 1，释放为 0。</param>
+    /// <param name="modifiers">RmlUi 修饰键位。</param>
+    /// <returns>被 UI 消费返回 1。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_process_mouse_button")]
+    internal static partial int ProcessMouseButton(IntPtr renderer, int button, int isDown, int modifiers);
+
+    /// <summary>
+    /// 注入鼠标滚轮。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="deltaX">水平滚动量。</param>
+    /// <param name="deltaY">垂直滚动量。</param>
+    /// <param name="modifiers">RmlUi 修饰键位。</param>
+    /// <returns>被 UI 消费返回 1。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_process_mouse_wheel")]
+    internal static partial int ProcessMouseWheel(IntPtr renderer, float deltaX, float deltaY, int modifiers);
+
+    /// <summary>
+    /// 注入键盘按键边沿。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="key">RmlUi KeyIdentifier。</param>
+    /// <param name="isDown">按下为 1，释放为 0。</param>
+    /// <param name="modifiers">RmlUi 修饰键位。</param>
+    /// <returns>被 UI 消费返回 1。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_process_key")]
+    internal static partial int ProcessKey(IntPtr renderer, int key, int isDown, int modifiers);
+
+    /// <summary>
+    /// 注入 UTF-8 文本输入。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="text">UTF-8 文本。</param>
+    /// <param name="textLength">字节数。</param>
+    /// <returns>被 UI 消费返回 1。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_process_text_utf8")]
+    internal static partial int ProcessTextUtf8(IntPtr renderer, byte* text, int textLength);
 }
