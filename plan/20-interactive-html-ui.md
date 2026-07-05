@@ -203,7 +203,7 @@ C#↔UI 通信：
 - [ ] CJK 子集资产接入：与 plan/19 `GuiFontManager` 共享同一份 CJK 字体资产与 glyph range 定义（§3.7，呼应 plan/12 §3.3）
 
 内容与资产：
-- [~] `content/ui/` 结构 + `ui-manifest.json` 加载器：已实现纯 I/O + STJ 源生成 manifest 解析、screen id→资产路径映射、preload 标记、重复 id/路径逃逸/缺失文件校验；fonts/images 目录契约与运行时桥接待后续切片（§3.8）
+- [~] `content/ui/` 结构 + `ui-manifest.json` 加载器：已实现纯 I/O + STJ 源生成 manifest 解析、screen id→资产路径映射、preload 标记、重复 id/路径逃逸/缺失文件校验，并接入 `GameUiServiceBridge` 优先按清单解析屏幕；fonts/images 目录契约待后续切片（§3.8）
 - [ ] `ManagedUiLayout`：HTML→抽象控件树解析（盒模型/文本/图像/按钮/`data-*` 契约），供 ManagedFallback（§3.8、§3.1）
 
 可选后端（Ultralight profile，gated）：

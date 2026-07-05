@@ -65,6 +65,48 @@ public sealed class GameUiServiceBridgeTests
         }
     }
 
+    /// <summary>
+    /// 验证存在 ui-manifest.json 时服务桥按清单解析 screen id，而不是继续猜 content/ui/&lt;id&gt;.xhtml。
+    /// </summary>
+    [Fact]
+    public void BridgeResolvesScreensThroughManifestWhenPresent()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-manifest-{Guid.NewGuid():N}");
+        string uiRoot = Path.Combine(root, "ui");
+        _ = Directory.CreateDirectory(Path.Combine(uiRoot, "screens"));
+        string expected = Path.Combine(uiRoot, "screens", "main.xhtml");
+        File.WriteAllText(expected, "<ui><text>Main</text></ui>");
+        File.WriteAllText(Path.Combine(uiRoot, RuntimeUi.UiManifestLoader.ManifestFileName), """
+            {
+              "screens": [
+                { "id": "main", "path": "screens/main.xhtml", "preload": true }
+              ]
+            }
+            """);
+
+        try
+        {
+            RecordingBackend backend = new();
+            using RuntimeUi.GameUiHost host = new(backend);
+            host.Initialize(new RuntimeUi.UiBackendInitializeInfo(
+                new RuntimeUi.UiViewport(0, 0, 320, 240, 1f),
+                RuntimeUi.UiBackendKind.ManagedFallback));
+            GameUiServiceBridge bridge = new(host, root);
+
+            _ = bridge.ShowScreen("main");
+
+            Assert.Equal(Path.GetFullPath(expected), backend.LastSource.Path);
+            Assert.Equal(RuntimeUi.UiStableId.Hash("main"), backend.LastSource.StableId);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     private sealed class RecordingBackend : RuntimeUi.IGameUiBackend
     {
         private RuntimeUi.UiValue _value;

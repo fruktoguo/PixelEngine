@@ -10,17 +10,20 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
 {
     private readonly RuntimeUi.GameUiHost _host;
     private readonly string _uiRoot;
+    private readonly RuntimeUi.UiManifest? _manifest;
 
     /// <summary>
     /// 创建 Game UI 脚本服务桥。
     /// </summary>
     /// <param name="host">运行时 UI 宿主。</param>
     /// <param name="contentRoot">内容根目录。</param>
-    public GameUiServiceBridge(RuntimeUi.GameUiHost host, string contentRoot)
+    /// <param name="manifest">可选的已加载 UI 清单；为 null 时若 content/ui/ui-manifest.json 存在则自动加载。</param>
+    public GameUiServiceBridge(RuntimeUi.GameUiHost host, string contentRoot, RuntimeUi.UiManifest? manifest = null)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
         ArgumentException.ThrowIfNullOrWhiteSpace(contentRoot);
         _uiRoot = Path.Combine(Path.GetFullPath(contentRoot), "ui");
+        _manifest = manifest ?? LoadManifestIfPresent(_uiRoot);
     }
 
     /// <summary>
@@ -35,8 +38,7 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     /// <returns>可见屏幕实例句柄。</returns>
     public ScriptUi.UiScreenHandle ShowScreen(string screenId)
     {
-        RuntimeUi.UiScreenId runtimeScreen = ToRuntimeScreenId(screenId);
-        RuntimeUi.UiDocumentSource source = ResolveSource(screenId, runtimeScreen);
+        ResolveScreen(screenId, out RuntimeUi.UiScreenId runtimeScreen, out RuntimeUi.UiDocumentSource source);
         RuntimeUi.UiScreenHandle screen = _host.ShowScreen(runtimeScreen, in source);
         return new ScriptUi.UiScreenHandle(screen.Value);
     }
@@ -57,8 +59,7 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     /// <returns>可见屏幕实例句柄。</returns>
     public ScriptUi.UiScreenHandle PushModal(string screenId)
     {
-        RuntimeUi.UiScreenId runtimeScreen = ToRuntimeScreenId(screenId);
-        RuntimeUi.UiDocumentSource source = ResolveSource(screenId, runtimeScreen);
+        ResolveScreen(screenId, out RuntimeUi.UiScreenId runtimeScreen, out RuntimeUi.UiDocumentSource source);
         RuntimeUi.UiScreenHandle screen = _host.PushModal(runtimeScreen, in source);
         return new ScriptUi.UiScreenHandle(screen.Value);
     }
@@ -152,7 +153,26 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
         }
     }
 
-    private RuntimeUi.UiDocumentSource ResolveSource(string screenId, RuntimeUi.UiScreenId runtimeScreen)
+    private void ResolveScreen(
+        string screenId,
+        out RuntimeUi.UiScreenId runtimeScreen,
+        out RuntimeUi.UiDocumentSource source)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(screenId);
+        if (!Path.IsPathRooted(screenId) &&
+            _manifest is not null &&
+            _manifest.TryGetScreen(screenId, out RuntimeUi.UiManifestScreen manifestScreen))
+        {
+            runtimeScreen = manifestScreen.ScreenId;
+            source = manifestScreen.ToDocumentSource();
+            return;
+        }
+
+        runtimeScreen = ToRuntimeScreenId(screenId);
+        source = ResolveSourceByConvention(screenId, runtimeScreen);
+    }
+
+    private RuntimeUi.UiDocumentSource ResolveSourceByConvention(string screenId, RuntimeUi.UiScreenId runtimeScreen)
     {
         string path = Path.IsPathRooted(screenId) ? screenId : Path.Combine(_uiRoot, screenId);
         if (File.Exists(path))
@@ -170,6 +190,12 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
         return File.Exists(html)
             ? RuntimeUi.UiDocumentSource.Asset(html, runtimeScreen.Value)
             : throw new FileNotFoundException($"找不到 Game UI 屏幕资产：{screenId}。", path);
+    }
+
+    private static RuntimeUi.UiManifest? LoadManifestIfPresent(string uiRoot)
+    {
+        string manifestPath = Path.Combine(uiRoot, RuntimeUi.UiManifestLoader.ManifestFileName);
+        return File.Exists(manifestPath) ? RuntimeUi.UiManifestLoader.Load(manifestPath) : null;
     }
 
     private static RuntimeUi.UiScreenId ToRuntimeScreenId(string screenId)
