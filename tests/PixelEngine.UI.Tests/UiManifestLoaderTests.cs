@@ -22,6 +22,10 @@ public sealed class UiManifestLoaderTests
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(root);
 
         Assert.Equal(NormalizedRoot(root), manifest.RootDirectory);
+        Assert.Equal(NormalizedRoot(Path.Combine(root, "fonts")), manifest.FontsDirectory);
+        Assert.Equal(NormalizedRoot(Path.Combine(root, "images")), manifest.ImagesDirectory);
+        Assert.Equal(manifest.FontsDirectory, manifest.AssetDirectories.FontsDirectory);
+        Assert.Equal(manifest.ImagesDirectory, manifest.AssetDirectories.ImagesDirectory);
         Assert.Equal(2, manifest.ScreenCount);
         Assert.True(manifest.TryGetScreen("main", out UiManifestScreen screen));
         Assert.True(screen.Preload);
@@ -82,6 +86,26 @@ public sealed class UiManifestLoaderTests
             """);
 
         _ = Assert.Throws<FileNotFoundException>(() => UiManifestLoader.LoadFromDirectory(root));
+    }
+
+    [Fact]
+    public void AssetDirectoriesReportOptionalFolderPresence()
+    {
+        string root = CreateUiRoot();
+        _ = Directory.CreateDirectory(Path.Combine(root, "fonts"));
+        _ = WriteAsset(root, "main.xhtml", "<ui />");
+        WriteManifest(root, """
+            {
+              "screens": [
+                { "id": "main", "path": "main.xhtml" }
+              ]
+            }
+            """);
+
+        UiManifest manifest = UiManifestLoader.LoadFromDirectory(root);
+
+        Assert.True(manifest.AssetDirectories.HasFontsDirectory);
+        Assert.False(manifest.AssetDirectories.HasImagesDirectory);
     }
 
     private static string CreateUiRoot()

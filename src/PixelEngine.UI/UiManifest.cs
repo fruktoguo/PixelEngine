@@ -7,9 +7,10 @@ public sealed class UiManifest
 {
     private readonly UiManifestScreen[] _screens;
 
-    internal UiManifest(string rootDirectory, UiManifestScreen[] screens)
+    internal UiManifest(string rootDirectory, UiAssetDirectories assetDirectories, UiManifestScreen[] screens)
     {
         RootDirectory = rootDirectory;
+        AssetDirectories = assetDirectories;
         _screens = screens;
     }
 
@@ -17,6 +18,21 @@ public sealed class UiManifest
     /// content/ui 根目录绝对路径。
     /// </summary>
     public string RootDirectory { get; }
+
+    /// <summary>
+    /// content/ui 下标准资产目录。
+    /// </summary>
+    public UiAssetDirectories AssetDirectories { get; }
+
+    /// <summary>
+    /// content/ui/fonts 目录。
+    /// </summary>
+    public string FontsDirectory => AssetDirectories.FontsDirectory;
+
+    /// <summary>
+    /// content/ui/images 目录。
+    /// </summary>
+    public string ImagesDirectory => AssetDirectories.ImagesDirectory;
 
     /// <summary>
     /// 屏幕条目数量。
