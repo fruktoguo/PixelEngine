@@ -1,4 +1,5 @@
 using Silk.NET.OpenGL;
+using PixelEngine.Core.Diagnostics;
 
 namespace PixelEngine.Rendering;
 
@@ -14,13 +15,15 @@ public readonly struct UiPresentContext
         int framebufferWidth,
         int framebufferHeight,
         PresentationViewport worldViewport,
-        UiPrimitiveRenderer primitives)
+        UiPrimitiveRenderer primitives,
+        FrameProfiler? profiler)
     {
         Gl = gl;
         FramebufferWidth = framebufferWidth;
         FramebufferHeight = framebufferHeight;
         WorldViewport = worldViewport;
         _primitives = primitives;
+        Profiler = profiler;
     }
 
     /// <summary>
@@ -42,6 +45,11 @@ public readonly struct UiPresentContext
     /// 世界画面在默认 framebuffer 中的呈现区域。
     /// </summary>
     public PresentationViewport WorldViewport { get; }
+
+    /// <summary>
+    /// 当前帧 profiler；UI 层可用它记录自身细分相位耗时。
+    /// </summary>
+    public FrameProfiler? Profiler { get; }
 
     /// <summary>
     /// 提交一批 2D UI 三角形。坐标以默认 framebuffer 左上角为原点，单位为像素。

@@ -2126,6 +2126,8 @@ public sealed class Engine : IDisposable
         double wallMs = profiler.LastWallMilliseconds;
         double presentSubmitMs = GetSubPhase(subPhases, FrameSubPhase.Present);
         double presentWaitMs = GetSubPhase(subPhases, FrameSubPhase.PresentWait);
+        double uiUpdateMs = GetSubPhase(subPhases, FrameSubPhase.UiUpdate);
+        double uiCompositeMs = GetSubPhase(subPhases, FrameSubPhase.UiComposite);
         double waitMs = presentWaitMs;
         double profileTotalMs = Sum(phases);
         double cpuWorkMs = Math.Max(0.0, profileTotalMs - waitMs);
@@ -2135,6 +2137,8 @@ public sealed class Engine : IDisposable
         Context.Counters.FrameCpuWorkMilliseconds = cpuWorkMs;
         Context.Counters.FrameGpuWorkMilliseconds = gpuWorkMs;
         Context.Counters.FramePresentSubmitMilliseconds = presentSubmitMs;
+        Context.Counters.UiUpdateMilliseconds = uiUpdateMs;
+        Context.Counters.UiCompositeMilliseconds = uiCompositeMs;
         Context.Counters.FramePresentWaitMilliseconds = presentWaitMs;
         Context.Counters.FrameWaitMilliseconds = waitMs;
         Context.Counters.EffectiveFrameMilliseconds = effectiveMs;

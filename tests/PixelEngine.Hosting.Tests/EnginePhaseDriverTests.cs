@@ -1,6 +1,7 @@
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.Gui;
+using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
@@ -651,6 +652,7 @@ public sealed class EnginePhaseDriverTests
         Assert.Equal(2, driver.TotalDrainedEventCount);
         Assert.Equal(2, sink.TotalEventCount);
         Assert.Equal(new GameUi.UiActionId(9), sink.LastAction);
+        Assert.True(engine.Context.Profiler.LastSubFrame[(int)FrameSubPhase.UiUpdate] > 0);
         Assert.Equal(1, engine.Phases.Count(EnginePhase.GameLogicAndScripts));
     }
 

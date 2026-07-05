@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using PixelEngine.Core.Diagnostics;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
 
@@ -78,6 +79,7 @@ public sealed class GuiRenderBridge : IUiPresentLayer, IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(context.Gl);
+        long started = Stopwatch.GetTimestamp();
         if (!_gui.IsRunning)
         {
             _gui.Initialize();
@@ -92,6 +94,18 @@ public sealed class GuiRenderBridge : IUiPresentLayer, IDisposable
             _pipeline.Height,
             _managedGui,
             _scriptRuntime is null ? null : _scriptRuntime.DrawGui);
+        RecordSub(context.Profiler, started);
         FrameIndex++;
+    }
+
+    private static void RecordSub(FrameProfiler? profiler, long started)
+    {
+        if (profiler is null)
+        {
+            return;
+        }
+
+        long elapsed = Stopwatch.GetTimestamp() - started;
+        profiler.RecordSub(FrameSubPhase.UiComposite, elapsed * 1000.0 / Stopwatch.Frequency);
     }
 }

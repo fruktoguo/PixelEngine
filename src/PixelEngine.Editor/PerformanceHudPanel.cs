@@ -13,7 +13,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
     private const int HistoryLength = 512;
     private const int WarmupFrames = 60;
     private const int SteadyMinimumFrames = 120;
-    private const int PhaseBarCount = 11;
+    private const int PhaseBarCount = 12;
     private static readonly string[] PhaseBarLabels =
     [
         "particle",
@@ -26,6 +26,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
         "shape",
         "render",
         "upload",
+        "UI",
         "audio",
     ];
 
@@ -179,6 +180,14 @@ public sealed class PerformanceHudPanel : IEditorPanel
             Get(subPhases, FrameSubPhase.Present);
         double renderStyleMs = Get(subPhases, FrameSubPhase.RenderStyleShading);
         double uploadMs = Get(subPhases, FrameSubPhase.GpuUpload);
+        double uiUpdateMs = Get(subPhases, FrameSubPhase.UiUpdate);
+        double uiCompositeMs = Get(subPhases, FrameSubPhase.UiComposite);
+        if (counters is not null)
+        {
+            uiUpdateMs = uiUpdateMs > 0 ? uiUpdateMs : counters.UiUpdateMilliseconds;
+            uiCompositeMs = uiCompositeMs > 0 ? uiCompositeMs : counters.UiCompositeMilliseconds;
+        }
+
         double presentWaitMs = Get(subPhases, FrameSubPhase.PresentWait);
         double gpuFrameMs = Get(subPhases, FrameSubPhase.GpuFrame);
         if (gpuFrameMs <= 0 && counters is not null)
@@ -244,6 +253,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
             physicsMs +
             shapeRebuildMs +
             uploadMs +
+            uiUpdateMs +
             renderBufferMs;
         double fixedOverheadMs = Math.Max(0.0, cpuWorkMs - variableWorkMs - Get(subPhases, FrameSubPhase.Present));
 
@@ -260,6 +270,8 @@ public sealed class PerformanceHudPanel : IEditorPanel
             renderMs,
             renderStyleMs,
             uploadMs,
+            uiUpdateMs,
+            uiCompositeMs,
             audioMs,
             cpuWorkMs,
             gpuFrameMs,
@@ -357,7 +369,8 @@ public sealed class PerformanceHudPanel : IEditorPanel
         _phaseBars[7] = (float)sample.ShapeRebuildMs;
         _phaseBars[8] = (float)sample.RenderMs;
         _phaseBars[9] = (float)sample.UploadMs;
-        _phaseBars[10] = (float)sample.AudioMs;
+        _phaseBars[10] = (float)(sample.UiUpdateMs + sample.UiCompositeMs);
+        _phaseBars[11] = (float)sample.AudioMs;
         UpdateStatistics(sample);
     }
 
@@ -404,6 +417,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
         ImGui.TextUnformatted($"physics: {sample.PhysicsMs:F2} ms");
         ImGui.TextUnformatted($"shape rebuild: {sample.ShapeRebuildMs:F2} ms");
         ImGui.TextUnformatted($"render/style/upload: {sample.RenderMs:F2} / {sample.RenderStyleMs:F2} / {sample.UploadMs:F2} ms");
+        ImGui.TextUnformatted($"ui update/composite: {sample.UiUpdateMs:F2} / {sample.UiCompositeMs:F2} ms");
         ImGui.TextUnformatted($"audio: {sample.AudioMs:F2} ms");
     }
 

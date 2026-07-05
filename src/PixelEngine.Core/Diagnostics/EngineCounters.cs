@@ -188,6 +188,16 @@ public sealed class EngineCounters
     public double FramePresentSubmitMilliseconds { get; set; }
 
     /// <summary>
+    /// 获取或设置最近一帧游戏 UI 模型推送、Update 与事件 drain 耗时，单位毫秒。
+    /// </summary>
+    public double UiUpdateMilliseconds { get; set; }
+
+    /// <summary>
+    /// 获取或设置最近一帧游戏 UI / GUI present 层合成耗时，单位毫秒。
+    /// </summary>
+    public double UiCompositeMilliseconds { get; set; }
+
+    /// <summary>
     /// 获取或设置最近一帧 SwapBuffers / vsync / present 阻塞等待耗时，单位毫秒。
     /// </summary>
     public double FramePresentWaitMilliseconds { get; set; }

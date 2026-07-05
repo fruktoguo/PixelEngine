@@ -121,6 +121,16 @@ public enum FrameSubPhase
     PostProcess,
 
     /// <summary>
+    /// 游戏 UI 模型推送、后端 Update 与事件 drain。
+    /// </summary>
+    UiUpdate,
+
+    /// <summary>
+    /// 游戏 UI / GUI present 层合成。
+    /// </summary>
+    UiComposite,
+
+    /// <summary>
     /// Present 提交、UI 绘制与交换前 hook 的 CPU 工作；不包含 SwapBuffers 阻塞等待。
     /// </summary>
     Present,
