@@ -1091,10 +1091,14 @@ public sealed class PlayerControllerIntegrationTests
                   "damage": 12,
                   "radius": 1,
                   "falloff": "none",
+                  "impulse": 1,
                   "cooldownSeconds": 0,
                   "ammoMax": 1,
                   "reloadSeconds": 0.05,
-                  "impactCue": "explosion"
+                  "tracerDuration": 0.01,
+                  "muzzleCue": "ui_click",
+                  "impactCue": "explosion",
+                  "hudColor": "#FFFFFFFF"
                 },
                 {
                   "id": "test-laser",
@@ -1108,7 +1112,9 @@ public sealed class PlayerControllerIntegrationTests
                   "reloadSeconds": 0,
                   "heatPerCell": 120,
                   "beamDps": 60,
-                  "impactCue": "sizzle_lava_water"
+                  "muzzleCue": "ui_click",
+                  "impactCue": "sizzle_lava_water",
+                  "hudColor": "#FFFFFFFF"
                 }
               ]
             }
@@ -1181,7 +1187,9 @@ public sealed class PlayerControllerIntegrationTests
                   "falloff": "none",
                   "cooldownSeconds": 0,
                   "ammoMax": 3,
-                  "impactCue": "impact_stone"
+                  "muzzleCue": "ui_click",
+                  "impactCue": "impact_stone",
+                  "hudColor": "#FFFFFFFF"
                 }
               ]
             }
@@ -1236,12 +1244,12 @@ public sealed class PlayerControllerIntegrationTests
             """
             {
               "weapons": [
-                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 40, "radius": 2, "falloff": "none", "impulse": 8, "cooldownSeconds": 0, "ammoMax": 10, "tracerDuration": 0.03, "impactCue": "explosion" },
-                { "id": "bomb", "displayName": "Bomb", "kind": "bomb", "damage": 120, "radius": 5, "falloff": "quadratic", "impulse": 12, "cooldownSeconds": 0, "ammoMax": 10, "impactCue": "explosion" },
-                { "id": "grenade", "displayName": "Grenade", "kind": "grenade", "damage": 90, "radius": 4, "falloff": "linear", "impulse": 10, "fuseSeconds": 0.04, "throwSpeed": 3, "gravity": 0, "bounce": 0, "cooldownSeconds": 0, "ammoMax": 10, "impactCue": "explosion" },
-                { "id": "laser", "displayName": "Laser", "kind": "laser", "damage": 10, "radius": 2, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 10, "heatPerCell": 45, "beamDps": 600, "impactCue": "sizzle_lava_water" },
-                { "id": "excavator", "displayName": "Excavator", "kind": "excavator", "damage": 0, "radius": 2, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 10, "impactCue": "impact_stone" },
-                { "id": "builder", "displayName": "Builder", "kind": "builder", "damage": 0, "radius": 2, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 10, "spawnMaterial": "stone", "impactCue": "impact_stone" }
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 40, "radius": 2, "falloff": "none", "impulse": 8, "cooldownSeconds": 0, "ammoMax": 10, "tracerDuration": 0.03, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" },
+                { "id": "bomb", "displayName": "Bomb", "kind": "bomb", "damage": 120, "radius": 5, "falloff": "quadratic", "impulse": 12, "cooldownSeconds": 0, "ammoMax": 10, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" },
+                { "id": "grenade", "displayName": "Grenade", "kind": "grenade", "damage": 90, "radius": 4, "falloff": "linear", "impulse": 10, "fuseSeconds": 0.04, "throwSpeed": 3, "gravity": 1, "bounce": 0, "cooldownSeconds": 0, "ammoMax": 10, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" },
+                { "id": "laser", "displayName": "Laser", "kind": "laser", "damage": 10, "radius": 2, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 10, "heatPerCell": 45, "beamDps": 600, "muzzleCue": "ui_click", "impactCue": "sizzle_lava_water", "hudColor": "#FFFFFFFF" },
+                { "id": "excavator", "displayName": "Excavator", "kind": "excavator", "damage": 0, "radius": 2, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 10, "muzzleCue": "ui_click", "impactCue": "impact_stone", "hudColor": "#FFFFFFFF" },
+                { "id": "builder", "displayName": "Builder", "kind": "builder", "damage": 0, "radius": 2, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 10, "spawnMaterial": "stone", "muzzleCue": "ui_click", "impactCue": "impact_stone", "hudColor": "#FFFFFFFF" }
               ]
             }
             """);

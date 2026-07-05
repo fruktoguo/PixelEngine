@@ -278,12 +278,26 @@ public sealed class DemoStartupOptionsTests
             .WithContentRoot(contentRoot)
             .Build();
 
+        _ = engine.LoadContentPackage();
+        MaterialTable materials = engine.Context.GetService<MaterialTable>();
         WeaponCatalog catalog = engine.LoadConfig("weapons.json", DemoConfigJsonContext.Default.WeaponCatalog);
+        catalog.Validate();
 
-        Assert.Equal(3, catalog.Weapons.Length);
+        Assert.Equal(6, catalog.Weapons.Length);
         Assert.Equal(
-            [WeaponKind.SingleShot, WeaponKind.Laser, WeaponKind.Grenade],
+            [WeaponKind.SingleShot, WeaponKind.Laser, WeaponKind.Grenade, WeaponKind.Bomb, WeaponKind.Excavator, WeaponKind.Builder],
             catalog.Weapons.Select(weapon => weapon.Kind).ToArray());
+        Assert.All(catalog.Weapons, weapon =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(weapon.Id));
+            Assert.False(string.IsNullOrWhiteSpace(weapon.DisplayName));
+            Assert.StartsWith("#FF", weapon.HudColor, StringComparison.Ordinal);
+            Assert.False(string.IsNullOrWhiteSpace(weapon.MuzzleCue));
+            Assert.False(string.IsNullOrWhiteSpace(weapon.ImpactCue));
+            Assert.True(weapon.Radius >= 0);
+            Assert.True(weapon.CooldownSeconds >= 0f);
+            Assert.True(weapon.AmmoMax > 0);
+        });
         WeaponDefinition laser = Assert.Single(catalog.Weapons, weapon => weapon.Kind == WeaponKind.Laser);
         Assert.Equal(WeaponFalloff.None, laser.Falloff);
         Assert.True(laser.BeamDps > 0f);
@@ -291,7 +305,55 @@ public sealed class DemoStartupOptionsTests
         WeaponDefinition grenade = Assert.Single(catalog.Weapons, weapon => weapon.Kind == WeaponKind.Grenade);
         Assert.True(grenade.FuseSeconds > 0f);
         Assert.True(grenade.Impulse > 0f);
-        Assert.StartsWith("#FF", grenade.HudColor, StringComparison.Ordinal);
+        WeaponDefinition bomb = Assert.Single(catalog.Weapons, weapon => weapon.Kind == WeaponKind.Bomb);
+        Assert.Equal(WeaponFalloff.Quadratic, bomb.Falloff);
+        Assert.True(bomb.Impulse > 0f);
+        WeaponDefinition excavator = Assert.Single(catalog.Weapons, weapon => weapon.Kind == WeaponKind.Excavator);
+        Assert.Equal(WeaponFalloff.None, excavator.Falloff);
+        Assert.True(excavator.Radius > 0);
+        WeaponDefinition builder = Assert.Single(catalog.Weapons, weapon => weapon.Kind == WeaponKind.Builder);
+        Assert.Equal("stone", builder.SpawnMaterial);
+        Assert.True(materials.TryGetId(builder.SpawnMaterial, out _));
+    }
+
+    /// <summary>
+    /// 验证武器目录缺失或 JSON 非法时由 Engine Config API 给出明确诊断，而不是静默使用空目录。
+    /// </summary>
+    [Fact]
+    public void WeaponCatalogConfigApiReportsMissingAndInvalidFiles()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), "PixelEngine.WeaponCatalogLoadTests", Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(contentRoot);
+        try
+        {
+            using PixelEngine.Hosting.Engine engine = new PixelEngine.Hosting.EngineBuilder()
+                .UseHeadless()
+                .WithContentRoot(contentRoot)
+                .Build();
+
+            FileNotFoundException missing = Assert.Throws<FileNotFoundException>(
+                () => engine.LoadConfig("weapons.json", DemoConfigJsonContext.Default.WeaponCatalog));
+            Assert.Contains("weapons.json", missing.FileName, StringComparison.OrdinalIgnoreCase);
+
+            File.WriteAllText(Path.Combine(contentRoot, "weapons.json"), "{ \"weapons\": [");
+            System.Text.Json.JsonException invalid = Assert.Throws<System.Text.Json.JsonException>(
+                () => engine.LoadConfig("weapons.json", DemoConfigJsonContext.Default.WeaponCatalog));
+            Assert.False(string.IsNullOrWhiteSpace(invalid.Message));
+
+            File.WriteAllText(Path.Combine(contentRoot, "weapons.json"), "{ \"weapons\": [{ \"id\": \"bad\", \"displayName\": \"Bad\", \"kind\": \"wrongKind\" }] }");
+            System.Text.Json.JsonException invalidKind = Assert.Throws<System.Text.Json.JsonException>(
+                () => engine.LoadConfig("weapons.json", DemoConfigJsonContext.Default.WeaponCatalog));
+            Assert.False(string.IsNullOrWhiteSpace(invalidKind.Message));
+
+            File.WriteAllText(Path.Combine(contentRoot, "weapons.json"), "{ \"weapons\": [{ \"displayName\": \"Broken\", \"kind\": \"builder\", \"ammoMax\": 1 }] }");
+            InvalidDataException missingField = Assert.Throws<InvalidDataException>(
+                () => engine.LoadConfig("weapons.json", DemoConfigJsonContext.Default.WeaponCatalog).Validate());
+            Assert.Contains("id", missingField.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
     }
 
     private static string FindRepositoryRoot()

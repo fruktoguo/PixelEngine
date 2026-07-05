@@ -156,10 +156,7 @@ public sealed class WeaponController : Behaviour
         }
 
         Catalog = Context.Config.Load(CatalogPath, DemoConfigJsonContext.Default.WeaponCatalog);
-        if (Catalog.Weapons.Length == 0)
-        {
-            throw new InvalidOperationException("武器目录不能为空。");
-        }
+        Catalog.Validate();
 
         Ammo = new int[Catalog.Weapons.Length];
         for (int i = 0; i < Ammo.Length; i++)

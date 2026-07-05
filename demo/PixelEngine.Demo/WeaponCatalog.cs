@@ -18,6 +18,118 @@ public sealed class WeaponCatalog
     /// 可装备武器定义，顺序即 HUD 与数字键默认顺序。
     /// </summary>
     public WeaponDefinition[] Weapons { get; init; } = [];
+
+    /// <summary>
+    /// 校验武器目录语义，避免坏内容包在运行时退化为空武器或默认值武器。
+    /// </summary>
+    public void Validate()
+    {
+        if (Weapons.Length == 0)
+        {
+            throw new InvalidDataException("武器目录不能为空。");
+        }
+
+        HashSet<string> ids = new(StringComparer.Ordinal);
+        for (int i = 0; i < Weapons.Length; i++)
+        {
+            WeaponDefinition weapon = Weapons[i] ??
+                throw new InvalidDataException($"武器目录第 {i} 项为空。");
+            string label = string.IsNullOrWhiteSpace(weapon.Id) ? $"#{i}" : weapon.Id;
+            Require(!string.IsNullOrWhiteSpace(weapon.Id), label, "id 不能为空。");
+            Require(ids.Add(weapon.Id), label, "id 重复。");
+            Require(!string.IsNullOrWhiteSpace(weapon.DisplayName), label, "displayName 不能为空。");
+            Require(Enum.IsDefined(weapon.Kind), label, "kind 无效。");
+            Require(Enum.IsDefined(weapon.Falloff), label, "falloff 无效。");
+            Require(weapon.Damage >= 0f, label, "damage 不能为负。");
+            Require(weapon.Radius >= 0, label, "radius 不能为负。");
+            Require(weapon.Impulse >= 0f, label, "impulse 不能为负。");
+            Require(weapon.FuseSeconds >= 0f, label, "fuseSeconds 不能为负。");
+            Require(weapon.ThrowSpeed >= 0f, label, "throwSpeed 不能为负。");
+            Require(weapon.Gravity >= 0f, label, "gravity 不能为负。");
+            Require(weapon.Bounce is >= 0f and <= 1f, label, "bounce 必须位于 [0,1]。");
+            Require(weapon.CooldownSeconds >= 0f, label, "cooldownSeconds 不能为负。");
+            Require(weapon.AmmoMax > 0, label, "ammoMax 必须为正。");
+            Require(weapon.ReloadSeconds >= 0f, label, "reloadSeconds 不能为负。");
+            Require(weapon.HeatPerCell >= 0f, label, "heatPerCell 不能为负。");
+            Require(weapon.BeamDps >= 0f, label, "beamDps 不能为负。");
+            Require(weapon.Spread >= 0f, label, "spread 不能为负。");
+            Require(weapon.Recoil >= 0f, label, "recoil 不能为负。");
+            Require(weapon.ScreenShake >= 0f, label, "screenShake 不能为负。");
+            Require(weapon.TracerDuration >= 0f, label, "tracerDuration 不能为负。");
+            Require(!string.IsNullOrWhiteSpace(weapon.MuzzleCue), label, "muzzleCue 不能为空。");
+            Require(!string.IsNullOrWhiteSpace(weapon.ImpactCue), label, "impactCue 不能为空。");
+            Require(IsBgraHex(weapon.HudColor), label, "hudColor 必须是 #AARRGGBB。");
+            ValidateKindSpecific(weapon, label);
+        }
+    }
+
+    private static void ValidateKindSpecific(WeaponDefinition weapon, string label)
+    {
+        switch (weapon.Kind)
+        {
+            case WeaponKind.SingleShot:
+                Require(weapon.Damage > 0f, label, "singleShot.damage 必须为正。");
+                Require(weapon.Radius > 0, label, "singleShot.radius 必须为正。");
+                Require(weapon.Impulse > 0f, label, "singleShot.impulse 必须为正。");
+                Require(weapon.TracerDuration > 0f, label, "singleShot.tracerDuration 必须为正。");
+                break;
+            case WeaponKind.Bomb:
+                Require(weapon.Damage > 0f, label, "bomb.damage 必须为正。");
+                Require(weapon.Radius > 0, label, "bomb.radius 必须为正。");
+                Require(weapon.Impulse > 0f, label, "bomb.impulse 必须为正。");
+                break;
+            case WeaponKind.Grenade:
+                Require(weapon.Damage > 0f, label, "grenade.damage 必须为正。");
+                Require(weapon.Radius > 0, label, "grenade.radius 必须为正。");
+                Require(weapon.Impulse > 0f, label, "grenade.impulse 必须为正。");
+                Require(weapon.FuseSeconds > 0f, label, "grenade.fuseSeconds 必须为正。");
+                Require(weapon.ThrowSpeed > 0f, label, "grenade.throwSpeed 必须为正。");
+                Require(weapon.Gravity > 0f, label, "grenade.gravity 必须为正。");
+                break;
+            case WeaponKind.Laser:
+                Require(weapon.Radius > 0, label, "laser.radius 必须为正。");
+                Require(weapon.HeatPerCell > 0f, label, "laser.heatPerCell 必须为正。");
+                Require(weapon.BeamDps > 0f, label, "laser.beamDps 必须为正。");
+                break;
+            case WeaponKind.Excavator:
+                Require(weapon.Radius > 0, label, "excavator.radius 必须为正。");
+                break;
+            case WeaponKind.Builder:
+                Require(weapon.Radius > 0, label, "builder.radius 必须为正。");
+                Require(!string.IsNullOrWhiteSpace(weapon.SpawnMaterial), label, "builder.spawnMaterial 不能为空。");
+                break;
+            default:
+                throw new InvalidDataException($"武器 {label} kind 无效：{weapon.Kind}。");
+        }
+    }
+
+    private static bool IsBgraHex(string value)
+    {
+        if (value.Length != 9 || value[0] != '#')
+        {
+            return false;
+        }
+
+        for (int i = 1; i < value.Length; i++)
+        {
+            char c = value[i];
+            bool hex = c is (>= '0' and <= '9') or (>= 'a' and <= 'f') or (>= 'A' and <= 'F');
+            if (!hex)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void Require(bool condition, string weaponId, string message)
+    {
+        if (!condition)
+        {
+            throw new InvalidDataException($"武器 {weaponId} 配置无效：{message}");
+        }
+    }
 }
 
 /// <summary>

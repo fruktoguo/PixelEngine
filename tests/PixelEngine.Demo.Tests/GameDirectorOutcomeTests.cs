@@ -21,8 +21,8 @@ public sealed class GameDirectorOutcomeTests
             """
             {
               "weapons": [
-                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "cooldownSeconds": 0, "ammoMax": 5 },
-                { "id": "laser", "displayName": "Laser", "kind": "laser", "cooldownSeconds": 0, "ammoMax": 7 }
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" },
+                { "id": "laser", "displayName": "Laser", "kind": "laser", "radius": 1, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 7, "heatPerCell": 1, "beamDps": 1, "muzzleCue": "ui_click", "impactCue": "sizzle_lava_water", "hudColor": "#FFFFFFFF" }
               ]
             }
             """);
