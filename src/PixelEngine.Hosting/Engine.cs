@@ -599,17 +599,17 @@ public sealed class Engine : IDisposable
             return existing;
         }
 
-        if (Context.Options.GameUiBackend != UiBackendKind.ManagedFallback)
+        IGameUiBackend backend = Context.Options.GameUiBackend switch
         {
-            throw new NotSupportedException("当前 Hosting 仅接入 ManagedFallback 游戏 UI 后端。");
-        }
-
-        GuiApp gui = ResolveGuiApp();
-        ManagedFallbackBackend backend = new(new GuiAppManagedFallbackHost(gui));
+            UiBackendKind.ManagedFallback => new ManagedFallbackBackend(new GuiAppManagedFallbackHost(ResolveGuiApp())),
+            UiBackendKind.RmlUi => new RmlUiBackend(window),
+            UiBackendKind.Ultralight => throw new NotSupportedException("Ultralight 游戏 UI 后端仍处于 plan/20 可选 profile，尚未激活。"),
+            _ => throw new ArgumentOutOfRangeException(nameof(Context.Options.GameUiBackend), Context.Options.GameUiBackend, "未知游戏 UI 后端。"),
+        };
         GameUiHost host = new(backend);
         host.Initialize(new UiBackendInitializeInfo(
             new UiViewport(0, 0, Math.Max(1, window.Width), Math.Max(1, window.Height), 1f),
-            UiBackendKind.ManagedFallback));
+            Context.Options.GameUiBackend));
         Context.RegisterService(host);
         Context.RegisterService(backend);
         UiInputRouter inputRouter = new(host, new RenderWindowUiInputSource(window));

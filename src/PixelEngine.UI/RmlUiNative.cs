@@ -60,4 +60,51 @@ internal static unsafe partial class RmlUiNative
     /// <param name="height">默认 framebuffer 高度。</param>
     [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_renderer_set_viewport")]
     internal static partial void RendererSetViewport(IntPtr renderer, int width, int height);
+
+    /// <summary>
+    /// 从 UTF-8 内存载入 RmlUi 文档。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="document">UTF-8 文档内容。</param>
+    /// <param name="documentLength">文档字节数。</param>
+    /// <param name="sourceUrl">UTF-8 source URL，需以 0 结尾。</param>
+    /// <returns>RmlUi 文档句柄。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_load_document_memory")]
+    internal static partial IntPtr LoadDocumentMemory(IntPtr renderer, byte* document, int documentLength, byte* sourceUrl);
+
+    /// <summary>
+    /// 显示 RmlUi 文档。
+    /// </summary>
+    /// <param name="document">RmlUi 文档句柄。</param>
+    /// <param name="modal">是否模态。</param>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_document_show")]
+    internal static partial void DocumentShow(IntPtr document, int modal);
+
+    /// <summary>
+    /// 隐藏 RmlUi 文档。
+    /// </summary>
+    /// <param name="document">RmlUi 文档句柄。</param>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_document_hide")]
+    internal static partial void DocumentHide(IntPtr document);
+
+    /// <summary>
+    /// 关闭 RmlUi 文档。
+    /// </summary>
+    /// <param name="document">RmlUi 文档句柄。</param>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_document_close")]
+    internal static partial void DocumentClose(IntPtr document);
+
+    /// <summary>
+    /// 推进 RmlUi context。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_update")]
+    internal static partial void Update(IntPtr renderer);
+
+    /// <summary>
+    /// 渲染 RmlUi context。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_render")]
+    internal static partial void Render(IntPtr renderer);
 }
