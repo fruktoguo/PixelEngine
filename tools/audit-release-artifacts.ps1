@@ -294,7 +294,7 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
 
   $launcher = if ($rid.StartsWith('win-')) { "$launcherBaseName.exe" } else { "$launcherBaseName.sh" }
   $requiredEntries = [System.Collections.Generic.List[string]]::new()
-  foreach ($required in @('README.txt', 'SHA256SUMS', $launcher, 'content/materials.json', 'content/reactions.json', 'content/weapons.json', 'content/textures/17_gravel.png', 'content/textures/18_boundary_stone.png', "content/$requiredScenePath")) {
+  foreach ($required in @('README.txt', 'NOTICE.txt', 'SHA256SUMS', $launcher, 'content/materials.json', 'content/reactions.json', 'content/weapons.json', 'content/textures/17_gravel.png', 'content/textures/18_boundary_stone.png', "content/$requiredScenePath")) {
     $requiredEntries.Add($required)
   }
 
@@ -403,7 +403,7 @@ function Assert-FriendlyExpandedPackageLayout([System.IO.DirectoryInfo]$packageD
 
   $launcher = if ($rid.StartsWith('win-')) { "$launcherBaseName.exe" } else { "$launcherBaseName.sh" }
   $requiredEntries = [System.Collections.Generic.List[string]]::new()
-  foreach ($required in @('README.txt', 'SHA256SUMS', $launcher, 'content/materials.json', 'content/reactions.json', 'content/weapons.json', 'content/textures/17_gravel.png', 'content/textures/18_boundary_stone.png', "content/$requiredScenePath")) {
+  foreach ($required in @('README.txt', 'NOTICE.txt', 'SHA256SUMS', $launcher, 'content/materials.json', 'content/reactions.json', 'content/weapons.json', 'content/textures/17_gravel.png', 'content/textures/18_boundary_stone.png', "content/$requiredScenePath")) {
     $requiredEntries.Add($required)
   }
 

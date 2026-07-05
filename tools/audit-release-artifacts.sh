@@ -370,6 +370,7 @@ assert_friendly_package_layout() {
   fi
 
   local has_readme=0
+  local has_notice=0
   local has_launcher=0
   local has_entry=0
   local has_materials=0
@@ -400,6 +401,7 @@ assert_friendly_package_layout() {
 
     case "$relative" in
       README.txt) has_readme=1 ;;
+      NOTICE.txt) has_notice=1 ;;
       SHA256SUMS) ;;
       "$launcher") has_launcher=1 ;;
       "$entry") has_entry=1 ;;
@@ -433,6 +435,7 @@ assert_friendly_package_layout() {
   done < <(list_package_entries "$package")
 
   (( has_readme )) || fail_audit "package 缺少 README.txt: $name"
+  (( has_notice )) || fail_audit "package 缺少 NOTICE.txt: $name"
   (( has_launcher )) || fail_audit "package 缺少 launcher: $name -> $launcher"
   [[ -z "$entry" || "$has_entry" -eq 1 ]] || fail_audit "package 缺少 app 依赖入口: $name -> $entry"
   (( has_materials )) || fail_audit "package 缺少 content/materials.json: $name"
@@ -494,6 +497,7 @@ assert_friendly_expanded_package_layout() {
   fi
 
   local has_readme=0
+  local has_notice=0
   local has_launcher=0
   local has_entry=0
   local has_materials=0
@@ -514,6 +518,7 @@ assert_friendly_expanded_package_layout() {
 
     case "$relative" in
       README.txt) has_readme=1 ;;
+      NOTICE.txt) has_notice=1 ;;
       SHA256SUMS) ;;
       "$launcher") has_launcher=1 ;;
       "$entry") has_entry=1 ;;
@@ -547,6 +552,7 @@ assert_friendly_expanded_package_layout() {
   done < <(find "$directory" -mindepth 1 -print0 | sort -z)
 
   (( has_readme )) || fail_audit "展开 package 缺少 README.txt: $name"
+  (( has_notice )) || fail_audit "展开 package 缺少 NOTICE.txt: $name"
   (( has_launcher )) || fail_audit "展开 package 缺少 launcher: $name -> $launcher"
   [[ -z "$entry" || "$has_entry" -eq 1 ]] || fail_audit "展开 package 缺少 app 依赖入口: $name -> $entry"
   (( has_materials )) || fail_audit "展开 package 缺少 content/materials.json: $name"
