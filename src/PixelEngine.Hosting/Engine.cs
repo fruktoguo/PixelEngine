@@ -628,21 +628,26 @@ public sealed class Engine : IDisposable
             return existing;
         }
 
-        IGameUiBackend backend = Context.Options.GameUiBackend switch
-        {
-            UiBackendKind.ManagedFallback => new ManagedFallbackBackend(new GuiAppManagedFallbackHost(ResolveGuiApp())),
-            UiBackendKind.RmlUi => new RmlUiBackend(window),
-            UiBackendKind.Ultralight => throw new NotSupportedException("Ultralight 游戏 UI 后端仍处于 plan/20 可选 profile，尚未激活。"),
-            _ => throw new ArgumentOutOfRangeException(nameof(Context.Options.GameUiBackend), Context.Options.GameUiBackend, "未知游戏 UI 后端。"),
-        };
-        GameUiHost host = new(backend);
         FontEngine fontEngine = new(new FontEngineOptions(Path.Combine(Context.Options.ContentRoot, "ui")));
         UiFontSelection fontSelection = fontEngine.Resolve();
+        UiBackendKind requestedBackend = Context.Options.GameUiBackend;
+        IGameUiBackend backend = CreateGameUiBackend(window, requestedBackend, out string? fallbackReason);
+        GameUiHost host = new(backend);
+        try
+        {
+            InitializeGameUiHost(host, backend, window, fontSelection);
+        }
+        catch (Exception ex) when (backend.Kind == UiBackendKind.RmlUi && IsRmlUiFallbackException(ex))
+        {
+            fallbackReason = $"RmlUi 初始化失败，回退 ManagedFallback：{ex.GetType().Name}: {ex.Message}";
+            host.Dispose();
+            backend = CreateManagedFallbackGameUiBackend();
+            host = new GameUiHost(backend);
+            InitializeGameUiHost(host, backend, window, fontSelection);
+        }
+
         Context.RegisterService(fontEngine);
-        host.Initialize(new UiBackendInitializeInfo(
-            new UiViewport(0, 0, Math.Max(1, window.Width), Math.Max(1, window.Height), 1f),
-            Context.Options.GameUiBackend,
-            fontSelection));
+        Context.RegisterService(new GameUiBackendSelection(requestedBackend, backend.Kind, fallbackReason));
         Context.RegisterService(host);
         Context.RegisterService(backend);
         UiInputRouter inputRouter = new(host, new RenderWindowUiInputSource(window));
@@ -655,6 +660,52 @@ public sealed class Engine : IDisposable
         driver.RegisterPhases(Phases);
         _ownedRuntimeResources.Add(host);
         return host;
+    }
+
+    private IGameUiBackend CreateGameUiBackend(RenderWindow window, UiBackendKind requestedBackend, out string? fallbackReason)
+    {
+        fallbackReason = null;
+        return requestedBackend switch
+        {
+            UiBackendKind.ManagedFallback => CreateManagedFallbackGameUiBackend(),
+            UiBackendKind.RmlUi when window.Capabilities.IsGles => CreateManagedFallbackGameUiBackend(
+                out fallbackReason,
+                $"RmlUi 当前 native shim 绑定桌面 GL3 loader，当前上下文是 GLES/ANGLE：{window.Capabilities.Version}。"),
+            UiBackendKind.RmlUi when !RmlUiNativeInfo.TryQuery(out RmlUiNativeProbe probe) => CreateManagedFallbackGameUiBackend(
+                out fallbackReason,
+                $"RmlUi native 不可用：{probe.Error ?? "unknown"}。"),
+            UiBackendKind.RmlUi => new RmlUiBackend(window),
+            UiBackendKind.Ultralight => throw new NotSupportedException("Ultralight 游戏 UI 后端仍处于 plan/20 可选 profile，尚未激活。"),
+            _ => throw new ArgumentOutOfRangeException(nameof(requestedBackend), requestedBackend, "未知游戏 UI 后端。"),
+        };
+    }
+
+    private ManagedFallbackBackend CreateManagedFallbackGameUiBackend()
+    {
+        return new ManagedFallbackBackend(new GuiAppManagedFallbackHost(ResolveGuiApp()));
+    }
+
+    private ManagedFallbackBackend CreateManagedFallbackGameUiBackend(out string? fallbackReason, string reason)
+    {
+        fallbackReason = reason;
+        return CreateManagedFallbackGameUiBackend();
+    }
+
+    private static void InitializeGameUiHost(
+        GameUiHost host,
+        IGameUiBackend backend,
+        RenderWindow window,
+        UiFontSelection fontSelection)
+    {
+        host.Initialize(new UiBackendInitializeInfo(
+            new UiViewport(0, 0, Math.Max(1, window.Width), Math.Max(1, window.Height), 1f),
+            backend.Kind,
+            fontSelection));
+    }
+
+    private static bool IsRmlUiFallbackException(Exception ex)
+    {
+        return ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or InvalidOperationException;
     }
 
     private ScriptInputRoute ResolveGuiInputRoute()

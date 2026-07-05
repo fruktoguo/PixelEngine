@@ -106,6 +106,51 @@ public sealed class EngineBuilderTests
     }
 
     /// <summary>
+    /// 验证窗口运行时会记录请求/实际 Game UI 后端，并在 RmlUi 不可用时显式降级。
+    /// </summary>
+    [Fact]
+    public void GameUiBackendSelectionIsRecordedWhenGlSmokeIsEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine Game UI backend selection smoke",
+            Width = 64,
+            Height = 64,
+            BackendPreference = RenderBackendPreference.Auto,
+        });
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithContentRoot(Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content"))
+            .EnableGameUi()
+            .UseUiBackend(UiBackendKind.RmlUi)
+            .Build();
+
+        _ = engine.LoadContentPackage();
+        _ = engine.AttachResidentSimulationWorld(64, 64, particleCapacity: 8);
+        _ = engine.AttachWindowRuntime(window);
+
+        GameUiBackendSelection selection = engine.Context.GetService<GameUiBackendSelection>();
+        Assert.Equal(UiBackendKind.RmlUi, selection.RequestedBackend);
+        if (window.Capabilities.IsGles || !RmlUiNativeInfo.TryQuery(out _))
+        {
+            Assert.Equal(UiBackendKind.ManagedFallback, selection.ActiveBackend);
+            Assert.True(selection.UsedFallback);
+            Assert.False(string.IsNullOrWhiteSpace(selection.FallbackReason));
+        }
+        else
+        {
+            Assert.Equal(UiBackendKind.RmlUi, selection.ActiveBackend);
+            Assert.False(selection.UsedFallback);
+            Assert.Null(selection.FallbackReason);
+        }
+    }
+
+    /// <summary>
     /// 验证默认构建会把托管 GC 延迟模式写入 SustainedLowLatency。
     /// </summary>
     [Fact]
@@ -350,6 +395,22 @@ public sealed class EngineBuilderTests
 
     private sealed class FakeWorldAccess
     {
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        string? directory = AppContext.BaseDirectory;
+        while (!string.IsNullOrWhiteSpace(directory))
+        {
+            if (File.Exists(Path.Combine(directory, "PixelEngine.sln")))
+            {
+                return directory;
+            }
+
+            directory = Directory.GetParent(directory)?.FullName;
+        }
+
+        throw new DirectoryNotFoundException("找不到 PixelEngine 仓库根目录。");
     }
 
     private sealed class RecordingEditorHostExtension : IEditorHostExtension
