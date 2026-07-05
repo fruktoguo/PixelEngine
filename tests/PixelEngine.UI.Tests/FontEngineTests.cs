@@ -23,6 +23,27 @@ public sealed class FontEngineTests
     }
 
     [Fact]
+    public void FontEngineResolvesDemoBundledCjkSubsetFont()
+    {
+        string root = FindRepositoryRoot();
+        string uiRoot = Path.Combine(root, "demo", "PixelEngine.Demo", "content", "ui");
+        string fontPath = Path.Combine(uiRoot, "fonts", "NotoSansSC-VF.ttf");
+        string licensePath = Path.Combine(uiRoot, "fonts", "OFL.txt");
+        string sourcePath = Path.Combine(uiRoot, "fonts", "SOURCE.txt");
+
+        Assert.True(File.Exists(fontPath), "Demo content/ui/fonts 必须包含可发行的 Noto Sans SC CJK 子集字体。");
+        Assert.True(new FileInfo(fontPath).Length > 1_000_000, "NotoSansSC-VF.ttf 不应是占位文件。");
+        Assert.Contains("SIL OPEN FONT LICENSE", File.ReadAllText(licensePath), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("NotoSansSC-VF.ttf", File.ReadAllText(sourcePath), StringComparison.Ordinal);
+
+        FontEngine engine = new(new FontEngineOptions(uiRoot));
+        UiFontSelection selection = engine.Resolve();
+
+        Assert.Equal(Path.GetFullPath(fontPath), selection.FontPath);
+        Assert.Equal(UiFontSource.ContentFonts, selection.Source);
+    }
+
+    [Fact]
     public void FontEngineSharesGlyphCoverageWithGuiFontManager()
     {
         Assert.True(FontEngine.IsCodePointCovered('A'));
@@ -74,5 +95,21 @@ public sealed class FontEngineTests
         {
             Environment.CurrentDirectory = originalDirectory;
         }
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        string? directory = AppContext.BaseDirectory;
+        while (!string.IsNullOrWhiteSpace(directory))
+        {
+            if (File.Exists(Path.Combine(directory, "PixelEngine.sln")))
+            {
+                return directory;
+            }
+
+            directory = Directory.GetParent(directory)?.FullName;
+        }
+
+        throw new DirectoryNotFoundException("找不到 PixelEngine 仓库根目录。");
     }
 }

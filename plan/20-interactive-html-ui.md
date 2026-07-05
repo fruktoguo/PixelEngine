@@ -199,8 +199,8 @@ C#↔UI 通信：
 - [~] `UiDiagnostics`：已把 `ui.update`（模型推送/后端 Update/事件 drain）与 `ui.composite`（RmlUi/ManagedFallback/脚本 GUI present 层合成）接入 `FrameSubPhase`、`EngineCounters` 与 plan/12 性能 HUD；`ui.paint/upload`、事件驱动重绘验证与 plan/18 降级联动仍待后续切片（§3.9）
 
 字体引擎（独立节点）：
-- [~] `FontEngine`：已实现 content/ui/fonts 优先、`GuiFontManager` 共享系统候选回退、DPI 字号与共享 glyph range 覆盖扫描；已通过 `UiBackendInitializeInfo.FontSelection` 向后端供给字体选择，RmlUi 后端真实调用 native `Rml::LoadFontFace` 注册字体，并把缺字数累计到 `EngineCounters.UiFontMissingGlyphs` / plan/12 性能 HUD；Ultralight 字形供给与事件驱动缺字采样仍待可选 profile 激活后续切片（§3.7）
-- [~] CJK 子集资产接入：`FontEngine` 已复用 `PixelEngine.Gui.GuiFontManager` 的 CJK 候选字体与 glyph range 定义，content/ui/fonts 候选优先生效，RmlUi 可消费该选择；实际子集字体资产落盘与 Ultralight 注册待后续切片（§3.7，呼应 plan/12 §3.3）
+- [x] `FontEngine`：已实现 content/ui/fonts 优先、`GuiFontManager` 共享系统候选回退、DPI 字号与共享 glyph range 覆盖扫描；已通过 `UiBackendInitializeInfo.FontSelection` 向后端供给字体选择，RmlUi 后端真实调用 native `Rml::LoadFontFace` 注册字体，ManagedFallback 复用同一 GuiFontManager glyph range，并把缺字数累计到 `EngineCounters.UiFontMissingGlyphs` / plan/12 性能 HUD；Ultralight 作为可选 profile 的实际注册归节点 10（§3.7）
+- [x] CJK 子集资产接入：`FontEngine` 已复用 `PixelEngine.Gui.GuiFontManager` 的 CJK 候选字体与 glyph range 定义，Demo content/ui/fonts 已落 Noto Sans SC 简中变量子集字体 `NotoSansSC-VF.ttf`、OFL 许可与 SOURCE 记录，content/ui/fonts 候选优先生效且 RmlUi/ManagedFallback 可消费该选择；Ultralight 注册待可选 profile 激活后续切片（§3.7，呼应 plan/12 §3.3）
 
 内容与资产：
 - [~] `content/ui/` 结构 + `ui-manifest.json` 加载器：已实现纯 I/O + STJ 源生成 manifest 解析、screen id→资产路径映射、preload 标记、重复 id/路径逃逸/缺失文件校验，并接入 `GameUiServiceBridge` 优先按清单解析屏幕；已通过 `UiAssetDirectories` 暴露规范化 `fonts/`、`images/` 目录契约，并支持 `images[]` 图片资产清单的重复 id、路径逃逸、缺失文件校验与 preload 标记；图像解码/后端消费仍待后续切片（§3.8）
@@ -244,7 +244,7 @@ C#↔UI 通信：
 - [~] C#↔UI 双向：游戏态变化经 `SetValue`/`BindModel`/data-model 反映到 UI，UI 交互（如"开始游戏"）产生 `UiEvent` 并在相位 1 派发；`Invoke` 与 UI 事件触发世界写入经延迟队列落正确相位仍待后续切片（§3.4、#6）
 - [ ] 事件驱动重绘生效：静态屏稳态无光栅化开销（诊断 `ui.paint`≈0）；HUD 仅在数值变化时局部重绘/脏矩形上传（§3.2、§3.9）
 - [x] UI cadence 与 sim 频率解耦：sim 降到 30Hz 时 UI 动画仍按渲染 cadence 平滑推进、不加倍不卡顿；UI 尖刺只掉渲染帧、sim 固定步长不受累（§3.3、#6）。已用 `GameUiPhaseDriverUpdatesEveryRenderFrameAndDrainsEvents` 覆盖 sim 跳帧与 TimeScale<1 时 UI 仍消费未缩放 render dt。
-- [ ] `FontEngine` 为三后端 CJK 单一事实源：切后端时可显示字符集不变，缺字上报 `ui.font.missingGlyph`（§3.7）
+- [~] `FontEngine` 为三后端 CJK 单一事实源：已覆盖 ManagedFallback 与 RmlUi 的同源字体选择、共享 glyph range、真实 CJK 子集资产与 `ui.font.missingGlyph` 诊断；Ultralight 可选 profile 尚未激活，实际注册与后端一致性验收归节点 10（§3.7）
 - [ ] native 核 dynamic-only、未静态链、未进 Box2D dual-build；首期 `win-x64`(+可选 `win-arm64`) 的 `runtimes/<rid>/native/` 含 UI native，其余 RID dormant；AOT 通道与未激活 RID 回退 `ManagedFallbackBackend` 且大 UI 仍可用（§3.10、§7，配合 plan/15）
 - [ ] 禁用大 UI 开关后主循环无 UI 开销；降级路线可切到"全 ManagedFallback"或"静态屏 RmlUi + ManagedFallback HUD"，均不改 Demo 逻辑（§3.12）
 - [ ] 既有玩家 GUI facade 未被平行 API 取代：`DemoHud`/`PauseMenu`/`PlayableHud`/`Behaviour.OnGui` 与 `ManagedFallbackBackend` 共享同一 Gui host、同一字体、同一输入门（§3.11）
@@ -287,7 +287,7 @@ C#↔UI 通信：
 按 AGENTS §6，每节点完成即中文 git 提交（scope=`ui`）：
 - [x] 节点 1：`feat(ui): PixelEngine.UI 骨架 + IGameUiBackend 抽象 + 文档/屏管理`（§3.1、§3.8）
 - [x] 节点 2：`feat(ui): ManagedFallbackBackend 纯托管基线(复用 PixelEngine.Gui host，统一现有 IGuiContext 玩家 HUD)`（§3.1、§3.11）
-- [ ] 节点 3：`feat(ui): FontEngine 独立节点 + CJK 子集(与 GuiFontManager 共享资产)`（§3.7）
+- [x] 节点 3：`feat(ui): FontEngine 独立节点 + CJK 子集(与 GuiFontManager 共享资产)`（§3.7）
 - [ ] 节点 4：`feat(ui): RmlUi native 核(vendored + FreeType 静态链 + [LibraryImport] 绑定 + GL 函数注入/双 profile)`（§3.1、§3.2、§7）
 - [ ] 节点 5：`feat(render): plan08 RegisterUiLayer 带序号 UI 层注册 + UiLayerCompositor 合成 + 相位0/1 UI 逻辑`（§3.2、§3.3）
 - [ ] 节点 6：`feat(ui): 输入三级仲裁(编辑器>大UI>游戏) + WantCapture 门 + 三后端 HitTest 一致`（§3.5、§3.6）
