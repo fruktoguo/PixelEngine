@@ -15,6 +15,7 @@ public sealed class UiInputRouter
     private bool _leftDown;
     private bool _rightDown;
     private bool _middleDown;
+    private bool _hasKeyboardFocus;
 
     /// <summary>
     /// 创建 UI 输入路由器。
@@ -52,7 +53,8 @@ public sealed class UiInputRouter
         }
 
         UiHitResult hit = _host.HitTest(pointer.X, pointer.Y);
-        Capture = new UiInputCapture(hit.HitsUi, hit.Opaque, hit.WantsMouse, hit.WantsKeyboard);
+        UpdateKeyboardFocus(hit, pointer);
+        Capture = new UiInputCapture(hit.HitsUi, hit.Opaque, hit.WantsMouse, hit.WantsKeyboard || _hasKeyboardFocus);
         return Capture;
     }
 
@@ -81,21 +83,33 @@ public sealed class UiInputRouter
             FeedButton(UiPointerButton.Middle, isDown: false, ref _middleDown);
         }
 
-        _downKeyCount = Math.Clamp(_source.CaptureDownKeys(_downKeys, out UiKeyModifiers modifiers), 0, _downKeys.Length);
-        FeedKeyEdges(_downKeys.AsSpan(0, _downKeyCount), _previousKeys.AsSpan(0, _previousKeyCount), modifiers);
-        _downKeys.AsSpan(0, _downKeyCount).CopyTo(_previousKeys);
-        _previousKeyCount = _downKeyCount;
+        _ = RefreshCapture();
 
-        if (_textBuffer.Length > 0)
+        if (Capture.WantCaptureKeyboard)
         {
-            int textCount = Math.Clamp(_source.CaptureText(_textBuffer), 0, _textBuffer.Length);
-            if (textCount > 0)
+            _downKeyCount = Math.Clamp(_source.CaptureDownKeys(_downKeys, out UiKeyModifiers modifiers), 0, _downKeys.Length);
+            FeedKeyEdges(_downKeys.AsSpan(0, _downKeyCount), _previousKeys.AsSpan(0, _previousKeyCount), modifiers);
+            _downKeys.AsSpan(0, _downKeyCount).CopyTo(_previousKeys);
+            _previousKeyCount = _downKeyCount;
+
+            if (_textBuffer.Length > 0)
             {
-                _host.FeedText(_textBuffer.AsSpan(0, textCount));
+                int textCount = Math.Clamp(_source.CaptureText(_textBuffer), 0, _textBuffer.Length);
+                if (textCount > 0)
+                {
+                    _host.FeedText(_textBuffer.AsSpan(0, textCount));
+                }
+            }
+        }
+        else
+        {
+            _previousKeyCount = 0;
+            if (_textBuffer.Length > 0)
+            {
+                _ = _source.CaptureText(_textBuffer);
             }
         }
 
-        _ = RefreshCapture();
         return Capture;
     }
 
@@ -124,6 +138,20 @@ public sealed class UiInputRouter
             {
                 _host.FeedKey(previous[i], isDown: false, modifiers);
             }
+        }
+    }
+
+    private void UpdateKeyboardFocus(UiHitResult hit, in UiPointerState pointer)
+    {
+        if (hit.WantsKeyboard)
+        {
+            _hasKeyboardFocus = true;
+            return;
+        }
+
+        if (pointer.LeftDown || pointer.RightDown || pointer.MiddleDown)
+        {
+            _hasKeyboardFocus = false;
         }
     }
 

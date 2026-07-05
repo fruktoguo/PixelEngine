@@ -64,8 +64,48 @@ public sealed class UiInputRouterTests
         Assert.Equal(
             [(UiPointerButton.Left, true), (UiPointerButton.Left, false)],
             backend.PointerButtons);
+        Assert.Empty(backend.Keys);
+    }
+
+    [Fact]
+    public void KeyboardFocusPersistsAfterPointerLeavesAndClearsOnOutsideClick()
+    {
+        RecordingBackend backend = new()
+        {
+            HitResult = new UiHitResult(HitsUi: true, Opaque: true, WantsMouse: true, WantsKeyboard: true),
+        };
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        FakeInputSource input = new()
+        {
+            HasPointer = true,
+            Pointer = new UiPointerState(12, 34, 0, 0, LeftDown: false, RightDown: false, MiddleDown: false),
+            DownKeys = [new UiKey(65)],
+            Text = "a",
+        };
+        UiInputRouter router = new(host, input);
+
+        UiInputCapture focused = router.Pump();
+        backend.HitResult = UiHitResult.None;
+        input.Pointer = new UiPointerState(200, 220, 0, 0, LeftDown: false, RightDown: false, MiddleDown: false);
+        input.DownKeys = [new UiKey(66)];
+        input.Text = "b";
+        UiInputCapture movedOutside = router.Pump();
+        input.Pointer = new UiPointerState(200, 220, 0, 0, LeftDown: true, RightDown: false, MiddleDown: false);
+        input.DownKeys = [new UiKey(67)];
+        input.Text = "c";
+        UiInputCapture clickedOutside = router.Pump();
+
+        Assert.False(focused.AllowWorldKeyboard);
+        Assert.False(movedOutside.AllowWorldKeyboard);
+        Assert.True(clickedOutside.AllowWorldKeyboard);
+        Assert.Equal("ab", backend.Text);
         Assert.Equal(
-            [(new UiKey(65), true, UiKeyModifiers.None), (new UiKey(65), false, UiKeyModifiers.None)],
+            [
+                (new UiKey(65), true, UiKeyModifiers.None),
+                (new UiKey(66), true, UiKeyModifiers.None),
+                (new UiKey(65), false, UiKeyModifiers.None),
+            ],
             backend.Keys);
     }
 
@@ -106,7 +146,7 @@ public sealed class UiInputRouterTests
 
     private sealed class RecordingBackend : IGameUiBackend
     {
-        public UiHitResult HitResult { get; init; }
+        public UiHitResult HitResult { get; set; }
 
         public (float X, float Y) LastPointer { get; private set; }
 
