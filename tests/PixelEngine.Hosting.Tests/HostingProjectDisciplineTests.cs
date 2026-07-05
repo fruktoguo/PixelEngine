@@ -553,6 +553,7 @@ public sealed class HostingProjectDisciplineTests
         string root = FindRepositoryRoot();
         string ridConfigPath = Path.Combine(root, "tools", "release-rids.json");
         string matrixScript = File.ReadAllText(Path.Combine(root, "tools", "release-matrix.ps1"));
+        string releaseWorkflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "release.yml"));
         JsonObject config = JsonNode.Parse(File.ReadAllText(ridConfigPath))!.AsObject();
         JsonArray channels = config["channels"]!.AsArray();
         JsonArray rids = config["rids"]!.AsArray();
@@ -583,6 +584,13 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("assetCount", matrixScript, StringComparison.Ordinal);
         Assert.Contains("GITHUB_OUTPUT", matrixScript, StringComparison.Ordinal);
         Assert.Contains("ExcludeWinArm64", matrixScript, StringComparison.Ordinal);
+
+        Assert.Contains("include_win_arm64", releaseWorkflow, StringComparison.Ordinal);
+        Assert.Contains("tools/release-matrix.ps1", releaseWorkflow, StringComparison.Ordinal);
+        Assert.Contains("fromJSON(needs.setup.outputs.native_matrix)", releaseWorkflow, StringComparison.Ordinal);
+        Assert.Contains("fromJSON(needs.setup.outputs.build_matrix)", releaseWorkflow, StringComparison.Ordinal);
+        Assert.Contains("RELEASE_EXPECTED", releaseWorkflow, StringComparison.Ordinal);
+        Assert.Contains("-ActiveRids $activeRids", releaseWorkflow, StringComparison.Ordinal);
     }
 
     /// <summary>

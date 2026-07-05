@@ -1,6 +1,8 @@
 param(
     [string]$EvidenceManifestPath = "",
     [string]$Artifacts = "artifacts/release-evidence-preflight",
+    [string]$ActiveRids = "",
+    [int]$ExpectedPackageCount = 0,
     [switch]$AllowBlocked
 )
 
@@ -592,14 +594,61 @@ function Get-JsonPropertyNames {
     return @($Node.PSObject.Properties | Select-Object -ExpandProperty Name)
 }
 
+function Resolve-ActiveRids {
+    param(
+        [string]$Root,
+        [string]$Value
+    )
+
+    $validRids = @("win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64")
+    if (-not [string]::IsNullOrWhiteSpace($Value)) {
+        $requested = @($Value -split "[,\s]+" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim() })
+        if ($requested.Count -eq 0) {
+            throw "-ActiveRids 不能为空。"
+        }
+
+        foreach ($rid in $requested) {
+            if ($rid -notin $validRids) {
+                throw "未知 active RID: $rid"
+            }
+        }
+
+        return $requested
+    }
+
+    $configPath = Join-Path $Root "tools/release-rids.json"
+    if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+        return $validRids
+    }
+
+    $config = Get-Content -Raw -LiteralPath $configPath | ConvertFrom-Json
+    $active = @($config.rids | Where-Object { [bool]$_.active } | ForEach-Object { [string]$_.rid })
+    if ($active.Count -eq 0) {
+        throw "release-rids.json active RID 集为空。"
+    }
+
+    foreach ($rid in $active) {
+        if ($rid -notin $validRids) {
+            throw "release-rids.json 包含未知 active RID: $rid"
+        }
+    }
+
+    return $active
+}
+
 function Write-ReleaseEvidenceReport {
     param(
         [string]$Path,
         [string]$Status,
         [array]$Evidence,
         [array]$Missing,
+        [array]$RequiredRids,
+        [array]$RequiredChannels,
         [string]$Detail
     )
+
+    $ridText = if ($RequiredRids.Count -gt 0) { $RequiredRids -join "; " } else { "n/a" }
+    $channelText = if ($RequiredChannels.Count -gt 0) { $RequiredChannels -join "; " } else { "n/a" }
 
     $directory = Split-Path -Parent $Path
     if (-not [string]::IsNullOrWhiteSpace($directory)) {
@@ -612,8 +661,8 @@ function Write-ReleaseEvidenceReport {
         "| Key | Value |",
         "|---|---|",
         "| status | $Status |",
-        "| required_rids | win-x64; win-arm64; linux-x64; linux-arm64; osx-x64; osx-arm64 |",
-        "| required_channels | r2r; aot |",
+        "| required_rids | $ridText |",
+        "| required_channels | $channelText |",
         "",
         "## Evidence",
         "",
@@ -662,10 +711,13 @@ $artifactRoot = if ([IO.Path]::IsPathRooted($Artifacts)) { $Artifacts } else { J
 $reportPath = Join-Path $artifactRoot "release-evidence-preflight.md"
 $evidence = [System.Collections.Generic.List[object]]::new()
 $missing = [System.Collections.Generic.List[string]]::new()
+$channels = @("r2r", "aot")
+$rids = Resolve-ActiveRids -Root $root -Value $ActiveRids
+$expectedPackageCount = if ($ExpectedPackageCount -gt 0) { $ExpectedPackageCount } else { $rids.Count * $channels.Count }
 
 if ([string]::IsNullOrWhiteSpace($EvidenceManifestPath) -or -not (Test-Path -LiteralPath $EvidenceManifestPath -PathType Leaf)) {
-    $detail = "Release evidence preflight failed: 缺少 release evidence manifest。本脚本不生成发布证据，只校验 6 RID × 2 channel、AOT SIMD、R2R light-up、macOS signing/notarization 与 GitHub Release 上传证据是否齐全。"
-    Write-ReleaseEvidenceReport -Path $reportPath -Status "blocked_missing_release_manifest" -Evidence $evidence -Missing @("release evidence manifest 不存在") -Detail $detail
+    $detail = "Release evidence preflight failed: 缺少 release evidence manifest。本脚本不生成发布证据，只校验 active RID × channel、AOT SIMD、R2R light-up、macOS signing/notarization 与 GitHub Release 上传证据是否齐全。"
+    Write-ReleaseEvidenceReport -Path $reportPath -Status "blocked_missing_release_manifest" -Evidence $evidence -Missing @("release evidence manifest 不存在") -RequiredRids $rids -RequiredChannels $channels -Detail $detail
     Write-Host "Release evidence preflight blocked_missing_release_manifest. Report: $reportPath"
 
     if ($AllowBlocked) {
@@ -685,7 +737,7 @@ try {
 catch {
     $reason = "release evidence manifest 无效：$($_.Exception.Message)"
     $detail = "Release evidence preflight failed: manifest JSON 无法解析或 schemaVersion 不受支持。不得据此勾选 plan/15 阻塞项。"
-    Write-ReleaseEvidenceReport -Path $reportPath -Status "blocked_invalid_release_evidence" -Evidence $evidence -Missing @($reason) -Detail $detail
+    Write-ReleaseEvidenceReport -Path $reportPath -Status "blocked_invalid_release_evidence" -Evidence $evidence -Missing @($reason) -RequiredRids $rids -RequiredChannels $channels -Detail $detail
     Write-Host "Release evidence preflight blocked_invalid_release_evidence. Report: $reportPath"
 
     if ($AllowBlocked) {
@@ -695,8 +747,6 @@ catch {
     exit 5
 }
 
-$rids = @("win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64")
-$channels = @("r2r", "aot")
 $expectedChecksumPackages = @{}
 $checksumPaths = @{}
 $checksumSha256ByPath = @{}
@@ -729,10 +779,10 @@ Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "artif
 Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "artifact_audit" -Path $artifactAuditReport -ExpectedValues @{
     conclusion = "success"
     require_all = "true"
-    package_count = "12"
-    expanded_package_count = "12"
-    rids = "win-x64,win-arm64,linux-x64,linux-arm64,osx-x64,osx-arm64"
-    channels = "r2r,aot"
+    package_count = $expectedPackageCount.ToString([Globalization.CultureInfo]::InvariantCulture)
+    expanded_package_count = $expectedPackageCount.ToString([Globalization.CultureInfo]::InvariantCulture)
+    rids = ($rids -join ",")
+    channels = ($channels -join ",")
     aot_dynamic_box2d_rejected = "true"
     package_layout_checked = "true"
     checksum_checked = "true"
@@ -823,7 +873,7 @@ Test-PackageVersionsMatchReleaseTag -Missing $missing -ReleaseVersion $releaseVe
 
 if ($missing.Count -gt 0) {
     $detail = "Release evidence preflight failed: release manifest 存在，但外部证据不完整。缺失项必须由 release workflow、目标 runner、macOS signing/notary 或 GitHub Release 上传结果补齐；不得据此勾选 plan/15 阻塞项。"
-    Write-ReleaseEvidenceReport -Path $reportPath -Status "blocked_missing_release_scope_evidence" -Evidence $evidence -Missing $missing -Detail $detail
+    Write-ReleaseEvidenceReport -Path $reportPath -Status "blocked_missing_release_scope_evidence" -Evidence $evidence -Missing $missing -RequiredRids $rids -RequiredChannels $channels -Detail $detail
     Write-Host "Release evidence preflight blocked_missing_release_scope_evidence. Report: $reportPath"
 
     if ($AllowBlocked) {
@@ -833,8 +883,8 @@ if ($missing.Count -gt 0) {
     exit 5
 }
 
-$detail = "Release evidence manifest is complete, declared SHA256 hashes matched, and markdown evidence fields reported success for required jobs. Human review still must confirm the reports prove 6 RID R2R/AOT outputs, AOT SIMD probes, R2R runtime light-up, macOS codesign/notarization, deterministic hashes and GitHub Release upload before plan/15 can be unblocked."
-Write-ReleaseEvidenceReport -Path $reportPath -Status "release_evidence_attached_pending_review" -Evidence $evidence -Missing $missing -Detail $detail
+$detail = "Release evidence manifest is complete, declared SHA256 hashes matched, and markdown evidence fields reported success for required jobs. Human review still must confirm the reports prove active RID R2R/AOT outputs, AOT SIMD probes, R2R runtime light-up, macOS codesign/notarization where applicable, deterministic hashes and GitHub Release upload before plan/15 can be unblocked."
+Write-ReleaseEvidenceReport -Path $reportPath -Status "release_evidence_attached_pending_review" -Evidence $evidence -Missing $missing -RequiredRids $rids -RequiredChannels $channels -Detail $detail
 Write-Host "Release evidence preflight release_evidence_attached_pending_review. Report: $reportPath"
 
 if (-not $AllowBlocked) {
