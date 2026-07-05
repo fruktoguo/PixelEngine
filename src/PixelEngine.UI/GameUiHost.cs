@@ -139,6 +139,42 @@ public sealed class GameUiHost : IDisposable
     }
 
     /// <summary>
+    /// 查找可见屏幕对应的后端文档。
+    /// </summary>
+    /// <param name="screen">可见屏幕句柄。</param>
+    /// <param name="document">后端文档句柄。</param>
+    /// <returns>找到则返回 true。</returns>
+    public bool TryGetDocument(UiScreenHandle screen, out UiDocumentHandle document)
+    {
+        ThrowIfDisposed();
+        if (Options.Enabled && Documents.TryGetDocument(screen, out document))
+        {
+            return true;
+        }
+
+        document = default;
+        return false;
+    }
+
+    /// <summary>
+    /// 查找文档当前对应的最上层可见屏幕。
+    /// </summary>
+    /// <param name="document">后端文档句柄。</param>
+    /// <param name="screen">可见屏幕句柄。</param>
+    /// <returns>找到则返回 true。</returns>
+    public bool TryGetVisibleScreen(UiDocumentHandle document, out UiScreenHandle screen)
+    {
+        ThrowIfDisposed();
+        if (Options.Enabled && Documents.TryGetVisibleScreen(document, out screen))
+        {
+            return true;
+        }
+
+        screen = default;
+        return false;
+    }
+
+    /// <summary>
     /// 弹出栈顶模态屏幕。
     /// </summary>
     /// <returns>弹出成功则返回 true。</returns>
@@ -176,6 +212,43 @@ public sealed class GameUiHost : IDisposable
     {
         ThrowIfDisposed();
         return Options.Enabled && _initialized ? _backend.DrainEvents(destination) : 0;
+    }
+
+    /// <summary>
+    /// 写入指定屏幕文档的模型值。
+    /// </summary>
+    /// <param name="screen">可见屏幕句柄。</param>
+    /// <param name="path">模型路径。</param>
+    /// <param name="value">写入值。</param>
+    public void SetModelValue(UiScreenHandle screen, UiPathId path, in UiValue value)
+    {
+        ThrowIfDisposed();
+        if (Options.Enabled && _initialized && Documents.TryGetDocument(screen, out UiDocumentHandle document))
+        {
+            _backend.SetModelValue(document, path, in value);
+        }
+    }
+
+    /// <summary>
+    /// 读取指定屏幕文档的模型值。
+    /// </summary>
+    /// <param name="screen">可见屏幕句柄。</param>
+    /// <param name="path">模型路径。</param>
+    /// <param name="value">读出值。</param>
+    /// <returns>读取成功则返回 true。</returns>
+    public bool TryGetModelValue(UiScreenHandle screen, UiPathId path, out UiValue value)
+    {
+        ThrowIfDisposed();
+        if (Options.Enabled &&
+            _initialized &&
+            Documents.TryGetDocument(screen, out UiDocumentHandle document) &&
+            _backend.TryGetModelValue(document, path, out value))
+        {
+            return true;
+        }
+
+        value = default;
+        return false;
     }
 
     /// <summary>

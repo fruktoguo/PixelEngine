@@ -614,7 +614,10 @@ public sealed class Engine : IDisposable
         Context.RegisterService(backend);
         UiInputRouter inputRouter = new(host, new RenderWindowUiInputSource(window));
         Context.RegisterService(inputRouter);
-        GameUiPhaseDriver driver = new(host);
+        GameUiServiceBridge service = new(host, Context.Options.ContentRoot);
+        Context.RegisterService<GameUiServiceBridge>(service);
+        Context.RegisterService<IGameUiService>(service);
+        GameUiPhaseDriver driver = new(host, eventSink: service);
         Context.RegisterService(driver.GetType(), driver);
         driver.RegisterPhases(Phases);
         _ownedRuntimeResources.Add(host);
@@ -1068,6 +1071,7 @@ public sealed class Engine : IDisposable
         IDiagnosticsApi diagnostics = ResolveDiagnosticsApi();
         IRuntimeControlApi runtimeControl = ResolveRuntimeControlApi();
         IAudioApi? audio = ResolveAudioApiOrNull();
+        IGameUiService? gameUi = ResolveGameUiServiceOrNull();
         PhysicsSystem? physics = Context.TryGetService(out PhysicsSystem registeredPhysics)
             ? registeredPhysics
             : null;
@@ -1088,7 +1092,8 @@ public sealed class Engine : IDisposable
             lighting,
             overlay,
             diagnostics,
-            runtimeControl);
+            runtimeControl,
+            gameUi);
         Context.RegisterService(scriptContext);
         simulationDriver?.AttachScriptContext(scriptContext);
         runtime ??= CreateScriptRuntime(scriptScene, scriptContext, hotReload);
@@ -1269,6 +1274,11 @@ public sealed class Engine : IDisposable
         Context.RegisterService(created);
         Context.RegisterService<IGameTime>(created);
         return created;
+    }
+
+    private IGameUiService? ResolveGameUiServiceOrNull()
+    {
+        return Context.TryGetService(out IGameUiService gameUi) ? gameUi : null;
     }
 
     private ICameraApi ResolveCameraApi()
