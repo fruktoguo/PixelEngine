@@ -57,6 +57,7 @@ public sealed class MissionDirector : Behaviour
     private PlayerHealth? _health;
     private WeaponController? _weapon;
     private bool _componentsResolved;
+    private bool _externalLavaSurface;
     private int _baselineRespawns;
 
     /// <summary>
@@ -153,7 +154,11 @@ public sealed class MissionDirector : Behaviour
 
         ResolveComponents();
         ElapsedSeconds += dt;
-        LavaSurfaceY = InitialLavaSurfaceY - (MathF.Max(0f, LavaRiseCellsPerSecond) * ElapsedSeconds);
+        if (!_externalLavaSurface)
+        {
+            LavaSurfaceY = InitialLavaSurfaceY - (MathF.Max(0f, LavaRiseCellsPerSecond) * ElapsedSeconds);
+        }
+
         Score = CalculateScore();
 
         if (ElapsedSeconds >= TimeLimitSeconds)
@@ -193,6 +198,21 @@ public sealed class MissionDirector : Behaviour
         State = MissionState.Won;
         Score = CalculateScore();
         ResultReason = "extraction_reached";
+    }
+
+    /// <summary>
+    /// 由环境危险导演写入当前熔岩表面高度。
+    /// </summary>
+    /// <param name="surfaceY">当前熔岩表面 Y 坐标。</param>
+    public void SetLavaSurface(float surfaceY)
+    {
+        if (!float.IsFinite(surfaceY))
+        {
+            throw new ArgumentOutOfRangeException(nameof(surfaceY), surfaceY, "熔岩表面坐标必须是有限值。");
+        }
+
+        LavaSurfaceY = surfaceY;
+        _externalLavaSurface = true;
     }
 
     /// <summary>
