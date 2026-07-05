@@ -97,6 +97,8 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
             throw new InvalidOperationException("RmlUi native renderer 创建失败。");
         }
 
+        RegisterFontFace(info.FontSelection);
+
         Dirty = true;
     }
 
@@ -584,6 +586,30 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
     {
         IntPtr pointer = RmlUiNative.GetLastErrorUtf8(_renderer);
         return pointer == IntPtr.Zero ? string.Empty : (Marshal.PtrToStringUTF8(pointer) ?? string.Empty);
+    }
+
+    private void RegisterFontFace(UiFontSelection selection)
+    {
+        if (string.IsNullOrWhiteSpace(selection.FontPath))
+        {
+            return;
+        }
+
+        byte[] pathBytes = Encoding.UTF8.GetBytes(selection.FontPath + '\0');
+        int result;
+        fixed (byte* fontPath = pathBytes)
+        {
+            result = RmlUiNative.RegisterFontFace(_renderer, fontPath);
+        }
+
+        if (result <= 0)
+        {
+            string error = ReadNativeError();
+            throw new InvalidOperationException(
+                string.IsNullOrWhiteSpace(error)
+                    ? $"RmlUi 字体注册失败: {selection.FontPath}"
+                    : $"RmlUi 字体注册失败: {selection.FontPath}: {error}");
+        }
     }
 
     private void ThrowNativeBridgeError(string fallback)

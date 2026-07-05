@@ -18,6 +18,7 @@ public readonly record struct PerformanceHudSample(
     double UploadMs,
     double UiUpdateMs,
     double UiCompositeMs,
+    long UiFontMissingGlyphs,
     double AudioMs,
     double CpuWorkMs,
     double GpuWorkMs,

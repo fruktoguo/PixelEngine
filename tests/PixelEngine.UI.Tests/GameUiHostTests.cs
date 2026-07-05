@@ -56,6 +56,21 @@ public sealed class GameUiHostTests
         Assert.False(backend.Initialized);
     }
 
+    [Fact]
+    public void InitializePassesFontSelectionToBackend()
+    {
+        FakeBackend backend = new();
+        using GameUiHost host = new(backend);
+        UiFontSelection selection = new("content/ui/fonts/msyh.ttc", 24f, UiFontSource.ContentFonts);
+
+        host.Initialize(new UiBackendInitializeInfo(
+            new UiViewport(0, 0, 320, 240, 1f),
+            UiBackendKind.ManagedFallback,
+            selection));
+
+        Assert.Equal(selection, backend.InitialFontSelection);
+    }
+
     private sealed class FakeBackend : IGameUiBackend
     {
         private int _nextDocument = 1;
@@ -68,6 +83,8 @@ public sealed class GameUiHostTests
 
         public bool Initialized { get; private set; }
 
+        public UiFontSelection InitialFontSelection { get; private set; }
+
         public int LoadCount { get; private set; }
 
         public int LastScreenStackCount { get; private set; }
@@ -75,6 +92,7 @@ public sealed class GameUiHostTests
         public void Initialize(in UiBackendInitializeInfo info)
         {
             info.Viewport.Validate();
+            InitialFontSelection = info.FontSelection;
             Initialized = true;
         }
 
