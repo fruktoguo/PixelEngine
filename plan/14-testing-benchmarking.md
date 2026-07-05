@@ -235,7 +235,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [ ] `WeaponCatalogLoadTests`（Demo.Tests）：`content/weapons.json` 经引擎 Content/Config API 加载、六 kind 全字段、非法 / 缺字段诊断、hudColor / 材质 name 解析（非直接 `JsonSerializer`）。
 - [x] `GameDirectorOutcomeTests`（Demo.Tests）：集齐 K=6 crystal + 抵达出口 → Won、死亡 / 熔岩淹没 → Lost、分数计算、`RisingLavaHazard` 上涨速率数据驱动（plan/13 §3.17 熔岩矿洞逃生）。`GameDirectorOutcomeTests` 覆盖 6 水晶撤离胜利、确定性分数、玩家死亡失败与上涨速率/水位同步；`RisingHazardDirectorDrivesEmittersAndMissionLoss` 覆盖熔岩淹没判负。
 - [ ] `ExplodeSemanticsMigrationTests`（Demo.Tests / Simulation.Tests）：`ExplosiveTool`/`PlayableProjectile` 断言从「无条件抛射」迁移到「破坏驱动 + 碎屑抗性生效」新语义，旧断言改写不留失效项（plan/05 联动）。
-- [ ] `SaveLoadRoundTripTests` 扩展（Serialization.Tests）：Damage byte 平面存档往返逐 cell 等价（持久 lane，按 plan/07 契约）、`SaveFormatVersion` bump 后旧档 Damage=0 迁移、material remap 缺失 fallback 后 Damage 清 0、进 `ChunkSnapshot`/`ChunkCodec` RLE 段一致。
+- [x] `SaveLoadRoundTripTests` 扩展（Serialization.Tests）：Damage byte 平面存档往返逐 cell 等价（持久 lane，按 plan/07 契约）、`SaveFormatVersion` bump 后旧档 Damage=0 迁移、material remap 缺失 fallback 后 Damage 清 0、进 `ChunkSnapshot`/`ChunkCodec` RLE 段一致。证据：`SaveLoadRoundTripTests.SaveLoadRoundTripPreservesPersistentWorldStateAndResetsTransientFlags` / `SaveLoadRoundTripClearsDamageOnlyForMaterialFallbackCells` / `LoadAllFromPreDamageLaneChunkBlobInitializesDamageToZero` 覆盖整世界路径；`ChunkCodecTests.ChunkCodecRoundTripsSegmentsAndResetsTransientFlags` / `DecodeLegacyV1ChunkBlobFillsDamageWithZero` 覆盖 RLE 段；`MaterialRemapTests.MaterialRemapWithDamageClearsOnlyFallbackCells` 覆盖 remap 局部语义。
 
 ### 4.9 standalone-editor — .scene v1/v2 往返 / 物化 / prefab（plan/19，配合 plan/18）
 
