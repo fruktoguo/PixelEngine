@@ -47,6 +47,22 @@ public sealed class EngineWindowOwnershipTests
     }
 
     /// <summary>
+    /// 验证 RmlUi 游戏 UI 走独立 present 层，ManagedFallback 仍复用中性 Gui bridge。
+    /// </summary>
+    [Fact]
+    public void GameUiRuntimeRoutesDirectBackendsThroughUiLayerCompositorBySourceContract()
+    {
+        string source = ReadRepositoryFile("src", "PixelEngine.Hosting", "Engine.cs");
+        string body = ExtractAttachGuiRuntimeBody(source);
+
+        Assert.Contains("gameUi.BackendKind != UiBackendKind.ManagedFallback", body, StringComparison.Ordinal);
+        Assert.Contains("UiLayerCompositor.Attach(pipeline, gameUi!)", body, StringComparison.Ordinal);
+        Assert.Contains("gameUi.BackendKind == UiBackendKind.ManagedFallback", body, StringComparison.Ordinal);
+        Assert.Contains("GuiRenderBridge.AttachIfEnabled", body, StringComparison.Ordinal);
+        Assert.Contains("Action<IGuiDrawContext>? managedGui = gameUiNeedsGuiBridge ? gameUi!.DrawGui : null;", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证编辑态 bootstrap 只依赖中性 Gui/Rendering，不引用 Editor 程序集。
     /// </summary>
     [Fact]
@@ -68,6 +84,16 @@ public sealed class EngineWindowOwnershipTests
         Assert.True(start >= 0, "未找到 AttachRendering 方法。");
         int end = source.IndexOf("private void AttachGuiRuntime", start, StringComparison.Ordinal);
         Assert.True(end > start, "未找到 AttachRendering 方法结束边界。");
+        return source[start..end];
+    }
+
+    private static string ExtractAttachGuiRuntimeBody(string source)
+    {
+        const string marker = "private void AttachGuiRuntime(RenderWindow window, RenderPipeline pipeline)";
+        int start = source.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(start >= 0, "未找到 AttachGuiRuntime 方法。");
+        int end = source.IndexOf("private void AttachEditorHostExtensions", start, StringComparison.Ordinal);
+        Assert.True(end > start, "未找到 AttachGuiRuntime 方法结束边界。");
         return source[start..end];
     }
 

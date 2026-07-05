@@ -112,6 +112,7 @@ public sealed class RenderPipelineContractTests
         string pipeline = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderPipeline.cs"));
         string orders = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiPresentLayerOrders.cs"));
         string guiBridge = File.ReadAllText(ProjectPath("src", "PixelEngine.Gui", "GuiRenderBridge.cs"));
+        string uiCompositor = File.ReadAllText(ProjectPath("src", "PixelEngine.UI", "UiLayerCompositor.cs"));
         string editorBridge = File.ReadAllText(ProjectPath("src", "PixelEngine.Editor", "EditorRenderBridge.cs"));
 
         Assert.Contains("public interface IUiPresentLayer", File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "IUiPresentLayer.cs")), StringComparison.Ordinal);
@@ -140,8 +141,10 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("VertexArrayBinding", state, StringComparison.Ordinal);
         Assert.Contains("BlendFuncSeparate", state, StringComparison.Ordinal);
         Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Game, this)", guiBridge, StringComparison.Ordinal);
+        Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Game, this)", uiCompositor, StringComparison.Ordinal);
         Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Editor, this)", editorBridge, StringComparison.Ordinal);
         Assert.Contains("IUiPresentLayer, IDisposable", guiBridge, StringComparison.Ordinal);
+        Assert.Contains("IUiPresentLayer, IDisposable", uiCompositor, StringComparison.Ordinal);
         Assert.Contains("IUiPresentLayer, IDisposable", editorBridge, StringComparison.Ordinal);
     }
 
