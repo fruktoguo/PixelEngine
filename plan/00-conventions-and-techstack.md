@@ -31,7 +31,7 @@
 |---|---|---|---|
 | 窗口/输入/GL/AL | **Silk.NET 2.x** | `Silk.NET.Windowing`、`Silk.NET.Input`、`Silk.NET.OpenGL`、`Silk.NET.OpenAL` | MIT、.NET Foundation；OpenGL 3.3 Core 基线 |
 | 数学/SIMD | **System.Numerics + System.Runtime.Intrinsics** | BCL | `Vector<T>` + `Avx2/Avx512/Avx10v2` + scalar fallback；`Silk.NET.Maths` 仅在与 GL 交互便利处可选 |
-| 物理 | **Box2D v3.1.1（vendored C 源，自建绑定）** | `native/box2d/`（git submodule 或 vendored）+ `PixelEngine.Interop` 内 `[LibraryImport]` 薄绑定 | 唯一 native 依赖；自建 task-callback 桥（架构 §14.2）；dual-build 静/动 × 6 RID |
+| 物理 | **Box2D v3.1.1（vendored C 源，自建绑定）** | `native/box2d/`（git submodule 或 vendored）+ `PixelEngine.Interop` 内 `[LibraryImport]` 薄绑定 | 唯一 sim-native / dual-build 静态承载依赖；自建 task-callback 桥（架构 §14.2）；dual-build 静/动 × 6 RID |
 | 编辑器 UI | **Dear ImGui via Hexa.NET.ImGui** | `Hexa.NET.ImGui`、`Hexa.NET.ImGui.Backends`（GL/GLFW 后端）；含 ImGuizmo/ImPlot/ImNodes | 即时模式、AOT 友好、活跃维护；停靠式面板 |
 | 脚本编译 | **Roslyn** | `Microsoft.CodeAnalysis.CSharp` | 热重载编译用户脚本 |
 | 脚本隔离 | **可回收 AssemblyLoadContext** | BCL `System.Runtime.Loader` | unload/reload 实现 Unity 式迭代 |

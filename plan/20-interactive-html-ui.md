@@ -250,7 +250,7 @@ C#↔UI 通信：
 - [x] 禁用大 UI 开关后主循环无 UI 开销；降级路线可切到"全 ManagedFallback"或"静态屏 RmlUi + ManagedFallback HUD"，均不改 Demo 逻辑。`DisabledGameUiDoesNotRegisterRuntimeServicesWhenWindowIsAttached` 已用真实窗口证明禁用时不注册 `GameUiHost`/`GameUiPhaseDriver`/`IGameUiService`/`GameUiBackendSelection`，且 `ui.update`/`ui.composite` 计数保持 0；`GameUiBackendSelectionIsRecordedWhenGlSmokeIsEnabled` 覆盖 RmlUi 不可用/GLES 时显式回退 ManagedFallback；`DemoGameUiControllerIsSafeWhenGameUiServiceIsNoop` 验证 Demo 控制器落到 Noop 服务不改玩法逻辑（§3.12）
 - [x] 既有玩家 GUI facade 未被平行 API 取代：`DemoHud`/`PauseMenu`/`PlayableHud`/`Behaviour.OnGui` 与 `ManagedFallbackBackend` 共享同一 Gui host、同一字体、同一输入门。`GuiAppManagedFallbackHost` 直接适配同一个 `GuiApp.DrawManagedFrame`，Hosting 在 ManagedFallback 路径通过 `GuiRenderBridge.AttachIfEnabled(..., managedGui: gameUi.DrawGui)` 合并 Managed UI 与脚本 `DrawGui`；`GameUiRuntimeRoutesDirectBackendsThroughUiLayerCompositorBySourceContract`、`ManagedFallbackDrawsXhtmlControlsAndDrainsButtonEvent`、`GuiAppCombinedFrame*`、`DemoHudAndPauseMenuDrawExpectedGuiThroughScriptContext`、`PlayableHudDrawsWeaponStateAndMaterialLegend` 与 `DemoUiScreensRenderAndInteractThroughManagedFallback` 已覆盖（§3.11）
 - [~] 公开 API 全带中文 XML 文档注释仍待最终全量审计；UI 逻辑相位稳态零托管堆分配已由 `GameUiAllocationBenchmarks` 覆盖，BenchmarkDotNet ShortRun `MemoryDiagnoser` 在静态 UI phase、clean composite/draw skip 与空闲输入泵 4 项均报告 `Allocated == 0 B`（§3.9）
-- [ ] 本文档技术栈不与 plan/00 §4 冲突；native 核已登记 §4.1 门控依赖；不变式 #10 修订（门控类）已在 AGENTS §1/plan/00 §4/plan/15 同步（§7）
+- [x] 本文档技术栈不与 plan/00 §4 冲突；native 核已登记 §4.1 门控依赖；不变式 #10 修订（门控类）已在 AGENTS §1/plan/00 §4/plan/15 同步，README/17 索引与 Windows 优先打包口径已对齐（§7）
 
 ---
 
@@ -294,5 +294,5 @@ C#↔UI 通信：
 - [!] 节点 6：`feat(ui): 输入三级仲裁(编辑器>大UI>游戏) + WantCapture 门 + 三后端 HitTest 一致`（§3.5、§3.6）。阻塞：已修复上游 capture 门与 UI key/text 状态清理；完整 IME composition 与 UltralightBackend HitTest 尚无真实实现入口。
 - [x] 节点 7：`feat(ui): IGameUiService(契约在 Scripting)C#↔UI 双向数据/事件桥 + 相位安全写入`（§3.4）
 - [~] 节点 8：`feat(ui): 诊断计时 + 事件驱动重绘 + UI cadence 解耦 + 零分配加固 + 降级接入`（§3.3、§3.9、§3.12）。已完成 `ui.update`/`ui.paint`/`ui.composite` 计时、UI cadence 解耦、静态屏 dirty 门控、禁用/降级基线、UI 零分配 BDN 与过载 UI present cadence 降级；native/Ultralight 脏矩形上传与独立 `ui.upload` 口径仍待闭合。
-- [ ] 节点 9：`docs(plan): 登记 plan/00 §4.1 门控依赖 + #10 门控修订同步 + plan/15 Windows 优先打包 + README/17 索引`（§7、§8）
+- [x] 节点 9：`docs(plan): 登记 plan/00 §4.1 门控依赖 + #10 门控修订同步 + plan/15 Windows 优先打包 + README/17 索引`（§7、§8）
 - [ ] 节点 10（可选）：`feat(ui): Ultralight 高保真后端(离屏 bitmap→纹理，门控，AOT 不达标回退 ManagedFallback)`（§3.1、§5）

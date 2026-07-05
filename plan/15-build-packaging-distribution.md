@@ -18,7 +18,7 @@
 
 本文件**拥有**发行/打包/分发这一层——即 `dotnet publish` 的发行配置、产物布局、native 资产落位、trim 配置、版本与命名、发布 CI 工作流（`release.yml`）、codesign/notarization、以及发行级的「Box2D dual-build × 6 RID 构建矩阵」编排与产物消费。本文件**不拥有**：解决方案/项目骨架与持续集成基线（`build`/`test` 工作流）由 `01-project-setup.md` 落实，本文件的 `release.yml` 复用其 `ci.yml` 的 action 片段；Box2D 的 `[LibraryImport]` 绑定、`[UnmanagedCallersOnly]` task 桥、CMake 源码编译脚本本身由 `01`/`06-physics-collision-rigidbody.md` 落实，本文件只定义跨 6 RID 的「构建矩阵编排 + 静/动产物落位 + RID-gated 链接」这一发行契约；smoke/性质/基准测试本体由 `14-testing-benchmarking.md` 落实，本文件只定义把 smoke 接入 publish 双路径验证（架构 R5）。
 
-不变式遵守（`AGENTS.md §1`）：本管线把 native 面收敛到 **Box2D 单一依赖**（不变式 #10），仅 Box2D 需要 dual-build（静/动），OpenAL/ANGLE 始终走动态（系统/捆绑）分发以压制 dual-build fan-out（架构 §14.4、§15）。本层不触碰 sim/physics 任何运行时行为，仅决定编译/链接/打包形态，不与四大基石、checkerboard、单缓冲、32px 上限等任何不变式相关。
+不变式遵守（`AGENTS.md §1`）：本管线把**权威 sim 热路径的静态 vendored native / dual-build 静态链**收敛到 Box2D 一项（不变式 #10 修订口径），仅 Box2D 需要 dual-build（静/动）。OpenAL/ANGLE 与 `plan/20` 的 RmlUi/Ultralight UI native 均归门控类可选 native：dynamic-only 或系统分发、可禁用并回退纯托管/系统基线，绝不进入 Box2D 的 static+dynamic dual-build fan-out（架构 §14.4、§15）。本层不触碰 sim/physics 任何运行时行为，仅决定编译/链接/打包形态，不与四大基石、checkerboard、单缓冲、32px 上限等任何不变式相关。
 
 ---
 
@@ -30,7 +30,7 @@
 - 主发行编译模式：**CoreCLR 自包含 + ReadyToRun（R2R composite）**——`PublishReadyToRun=true` + `PublishReadyToRunComposite=true` + `SelfContained=true`，保留 Tiered Compilation/Tier-1 重 JIT/Dynamic PGO（架构 §12.3、§13）。
 - 次发行编译模式：**NativeAOT**，每 RID 单独产物，`PublishAot=true` + 显式 `IlcInstructionSet`（架构 §12.3、R3）。
 - 开发态：纯 JIT（不在本文件范围，仅作对照）。
-- native 依赖：**Box2D v3.1（vendored C 源）**，唯一 native 依赖（不变式 #10）；动态 `.dll/.so/.dylib` 供 CoreCLR/R2R、静态 `.lib/.a` 供 NativeAOT；其余 native（OpenAL Soft、可选 ANGLE）始终动态。
+- native 依赖：**Box2D v3.1（vendored C 源）**，唯一 sim-native / dual-build 静态承载依赖（不变式 #10）；动态 `.dll/.so/.dylib` 供 CoreCLR/R2R、静态 `.lib/.a` 供 NativeAOT；其余 native（OpenAL Soft、可选 ANGLE、`PixelEngine.UI` 的 RmlUi/Ultralight）始终 dynamic-only 或系统分发并可门控回退。
 - native 构建工具：**CMake**（≥3.21，支持 toolchain-file 交叉编译与 multi-config），编译器 MSVC（win）、clang（linux/mac，mac 用 Apple clang）。
 - 托管侧打包友好库（均 reflection-free / 源生成 / AOT-trim 友好，架构 §9.1、§13）：`Silk.NET.*`、`Hexa.NET.ImGui`（+ Backends）、`System.Text.Json` 源生成、`K4os.Compression.LZ4`、`Microsoft.CodeAnalysis.CSharp`（脚本编译器，发行时随产物分发但本身不参与 trim 根，见 §3.6）。
 - CI：GitHub Actions（与 `01` 的 `ci.yml` 同栈），新增 `release.yml`；runner：`windows-latest`、`ubuntu-latest`、`macos-latest`（含 Apple silicon）。
@@ -437,7 +437,7 @@ build-player 入口与玩家包解耦（本轮新增）
 
 前置顺序约束（写入本文件与 `plan/17`）：需求 1 的 **GUI 宿主中性化重构**（新增中性程序集 `PixelEngine.Gui`、`Hosting` 删除对 `PixelEngine.Editor` 的硬 `ProjectReference`、`DemoProgram.cs` 改用 `PixelEngine.Gui` 中性 host）必须**先于**本文件 §3.7 玩家包审计新规则（拒绝 `app/` 含 `PixelEngine.Editor.dll` 与 `ImGuizmo*`/`ImPlot*`，允许 `Hexa.NET.ImGui` 核心）；当前前置已落地，player-only 断言已转绿。
 
-不变式校验（`AGENTS.md §1`）：本文件仅触及编译/链接/打包形态，遵守不变式 #10（native 收敛 Box2D），不与基石/调度/单缓冲/耦合/帧节奏等任何不变式冲突。技术栈与 `00` 完全一致，无冲突上报。
+不变式校验（`AGENTS.md §1`）：本文件仅触及编译/链接/打包形态，遵守不变式 #10 修订口径（Box2D 是唯一 sim-native / dual-build 静态承载依赖；UI/音频/渲染 native 为 dynamic-only 门控依赖），不与基石/调度/单缓冲/耦合/帧节奏等任何不变式冲突。技术栈与 `00` 完全一致，无冲突上报。
 
 ---
 
