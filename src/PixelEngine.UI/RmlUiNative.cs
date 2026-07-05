@@ -232,6 +232,17 @@ internal static unsafe partial class RmlUiNative
     internal static partial int TryGetModelValue(IntPtr renderer, int documentHandle, int pathHash, NativeUiValue* value);
 
     /// <summary>
+    /// 复制指定文档已绑定的模型路径 hash。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="documentHandle">托管 UI 文档句柄值。</param>
+    /// <param name="paths">输出路径缓冲。</param>
+    /// <param name="capacity">缓冲容量。</param>
+    /// <returns>写入路径数量。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_copy_model_paths")]
+    internal static partial int CopyModelPaths(IntPtr renderer, int documentHandle, int* paths, int capacity);
+
+    /// <summary>
     /// 拉取 RmlUi 事件队列。
     /// </summary>
     /// <param name="renderer">renderer 句柄。</param>

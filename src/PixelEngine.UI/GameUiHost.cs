@@ -257,6 +257,22 @@ public sealed class GameUiHost : IDisposable
     }
 
     /// <summary>
+    /// 复制指定可见屏幕文档声明的模型路径。
+    /// </summary>
+    /// <param name="screen">可见屏幕句柄。</param>
+    /// <param name="destination">路径写入缓冲。</param>
+    /// <returns>写入路径数量。</returns>
+    public int CopyModelPaths(UiScreenHandle screen, Span<UiPathId> destination)
+    {
+        ThrowIfDisposed();
+        return Options.Enabled &&
+            _initialized &&
+            Documents.TryGetDocument(screen, out UiDocumentHandle document)
+            ? _backend.CopyModelPaths(document, destination)
+            : 0;
+    }
+
+    /// <summary>
     /// 注入指针移动。
     /// </summary>
     /// <param name="x">UI 坐标 x。</param>

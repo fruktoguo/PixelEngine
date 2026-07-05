@@ -107,6 +107,43 @@ public sealed class GameUiServiceBridgeTests
         }
     }
 
+    /// <summary>
+    /// 验证 BindModel 会按 UI 文档声明的 path 从脚本模型读取值，并在 UI Update 前推送到后端。
+    /// </summary>
+    [Fact]
+    public void BridgePushesBoundModelValuesToUiPaths()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-model-{Guid.NewGuid():N}");
+        string uiRoot = Path.Combine(root, "ui");
+        _ = Directory.CreateDirectory(uiRoot);
+        File.WriteAllText(Path.Combine(uiRoot, "main.xhtml"), "<ui><text>Main</text></ui>");
+        try
+        {
+            RecordingBackend backend = new();
+            using RuntimeUi.GameUiHost host = new(backend);
+            host.Initialize(new RuntimeUi.UiBackendInitializeInfo(
+                new RuntimeUi.UiViewport(0, 0, 320, 240, 1f),
+                RuntimeUi.UiBackendKind.ManagedFallback));
+            GameUiServiceBridge bridge = new(host, root);
+
+            ScriptUi.UiScreenHandle screen = bridge.ShowScreen("main");
+            RecordingModel model = new(new ScriptUi.UiPathId(7), new ScriptUi.UiValue(99L));
+            bridge.BindModel(screen, new ScriptUi.UiModelName(1), model);
+            bridge.PushGameUiModels();
+
+            Assert.Equal(new ScriptUi.UiPathId(7), model.LastPath);
+            Assert.True(bridge.TryGetValue(screen, new ScriptUi.UiPathId(7), out ScriptUi.UiValue value));
+            Assert.Equal(99L, value.AsInt64());
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     private sealed class RecordingBackend : RuntimeUi.IGameUiBackend
     {
         private RuntimeUi.UiValue _value;
@@ -204,6 +241,18 @@ public sealed class GameUiServiceBridgeTests
             return true;
         }
 
+        public int CopyModelPaths(RuntimeUi.UiDocumentHandle document, Span<RuntimeUi.UiPathId> destination)
+        {
+            Assert.Equal(LastDocument, document);
+            if (destination.IsEmpty)
+            {
+                return 0;
+            }
+
+            destination[0] = new RuntimeUi.UiPathId(7);
+            return 1;
+        }
+
         public int DrainEvents(Span<RuntimeUi.UiEvent> destination)
         {
             _ = destination;
@@ -217,6 +266,24 @@ public sealed class GameUiServiceBridgeTests
 
         public void Dispose()
         {
+        }
+    }
+
+    private sealed class RecordingModel(ScriptUi.UiPathId expectedPath, ScriptUi.UiValue value) : ScriptUi.IUiModel
+    {
+        public ScriptUi.UiPathId LastPath { get; private set; }
+
+        public bool TryGetValue(ScriptUi.UiPathId path, out ScriptUi.UiValue result)
+        {
+            LastPath = path;
+            if (path == expectedPath)
+            {
+                result = value;
+                return true;
+            }
+
+            result = default;
+            return false;
         }
     }
 }

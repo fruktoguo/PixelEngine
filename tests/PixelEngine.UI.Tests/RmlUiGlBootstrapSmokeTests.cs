@@ -72,6 +72,9 @@ public sealed class RmlUiGlBootstrapSmokeTests
             backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(1), new UiScreenId(1), document, Modal: false)]);
             backend.Update(1f / 60f);
             UiPathId scorePath = new(UiStableId.Hash("score"));
+            UiPathId[] paths = new UiPathId[4];
+            Assert.Equal(1, backend.CopyModelPaths(document, paths));
+            Assert.Equal(scorePath, paths[0]);
             backend.SetModelValue(document, scorePath, new UiValue(42L));
             Assert.True(backend.TryGetModelValue(document, scorePath, out UiValue score));
             Assert.Equal(42L, score.AsInt64());

@@ -6,9 +6,10 @@ namespace PixelEngine.Hosting;
 /// <summary>
 /// 把脚本侧 IGameUiService 契约桥接到运行时 GameUiHost。
 /// </summary>
-public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventSink
+public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventSink, IGameUiModelPusher
 {
     private readonly RuntimeUi.GameUiHost _host;
+    private readonly GameUiModelBridge _modelBridge;
     private readonly string _uiRoot;
     private readonly RuntimeUi.UiManifest? _manifest;
 
@@ -21,6 +22,7 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     public GameUiServiceBridge(RuntimeUi.GameUiHost host, string contentRoot, RuntimeUi.UiManifest? manifest = null)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
+        _modelBridge = new GameUiModelBridge(_host);
         ArgumentException.ThrowIfNullOrWhiteSpace(contentRoot);
         _uiRoot = Path.Combine(Path.GetFullPath(contentRoot), "ui");
         _manifest = manifest ?? LoadManifestIfPresent(_uiRoot);
@@ -72,10 +74,7 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     /// <param name="model">脚本模型。</param>
     public void BindModel(ScriptUi.UiScreenHandle screen, ScriptUi.UiModelName modelName, ScriptUi.IUiModel model)
     {
-        _ = screen;
-        _ = modelName;
-        _ = model;
-        throw new NotSupportedException("当前 GameUiService 桥接尚未接入可枚举 UiModelBridge。");
+        _modelBridge.BindModel(screen, modelName, model);
     }
 
     /// <summary>
@@ -151,6 +150,14 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
                 new ScriptUi.UiActionId(runtimeEvent.Action.Value),
                 ToScriptValue(in payload)));
         }
+    }
+
+    /// <summary>
+    /// 将已绑定的脚本 UI 模型推送到运行时 UI 后端。
+    /// </summary>
+    public void PushGameUiModels()
+    {
+        _modelBridge.PushGameUiModels();
     }
 
     private void ResolveScreen(
