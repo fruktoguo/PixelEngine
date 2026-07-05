@@ -32,6 +32,12 @@ add_subdirectory("${PIXELENGINE_RMLUI_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/rmlui")
 
 add_library(pixelengine_ui_native SHARED
   PixelEngineUiNative.cpp
+  "${PIXELENGINE_RMLUI_SOURCE_DIR}/Backends/RmlUi_Renderer_GL3.cpp"
+)
+
+target_include_directories(pixelengine_ui_native
+  PRIVATE
+    "${PIXELENGINE_RMLUI_SOURCE_DIR}/Backends"
 )
 
 target_link_libraries(pixelengine_ui_native
