@@ -213,6 +213,15 @@ public interface IWorldEffects
     void DamageBeam(float x, float y, float dx, float dy, int length, float damagePerCell, DamageKind kind = DamageKind.Beam);
 
     /// <summary>
+    /// 延迟向圆形区域注入热量；实际写入在 cell 安全相位落地，并标记 dirty/KeepAlive。
+    /// </summary>
+    /// <param name="x">圆心 X 坐标。</param>
+    /// <param name="y">圆心 Y 坐标。</param>
+    /// <param name="radius">注热半径，单位 cell。</param>
+    /// <param name="deltaCelsius">温度增量，单位摄氏度。</param>
+    void AddHeat(float x, float y, int radius, float deltaCelsius);
+
+    /// <summary>
     /// 延迟触发一次爆炸：先施加抗性感知结构破坏，再把可抛射碎屑 / 粉液气火转为自由粒子，并对邻近刚体施加径向冲量。
     /// </summary>
     /// <param name="x">爆炸中心 X 坐标。</param>

@@ -804,6 +804,94 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证六类武器均可经公开脚本输入触发，并在真实后端产生差异化效果。
+    /// </summary>
+    [Fact]
+    public void WeaponControllerDispatchesSixWeaponKindsIntoDistinctEffects()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 40, "radius": 2, "falloff": "none", "impulse": 8, "cooldownSeconds": 0, "ammoMax": 10, "tracerDuration": 0.03, "impactCue": "explosion" },
+                { "id": "bomb", "displayName": "Bomb", "kind": "bomb", "damage": 120, "radius": 5, "falloff": "quadratic", "impulse": 12, "cooldownSeconds": 0, "ammoMax": 10, "impactCue": "explosion" },
+                { "id": "grenade", "displayName": "Grenade", "kind": "grenade", "damage": 90, "radius": 4, "falloff": "linear", "impulse": 10, "fuseSeconds": 0.04, "throwSpeed": 3, "gravity": 0, "bounce": 0, "cooldownSeconds": 0, "ammoMax": 10, "impactCue": "explosion" },
+                { "id": "laser", "displayName": "Laser", "kind": "laser", "damage": 10, "radius": 2, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 10, "heatPerCell": 45, "beamDps": 600, "impactCue": "sizzle_lava_water" },
+                { "id": "excavator", "displayName": "Excavator", "kind": "excavator", "damage": 0, "radius": 2, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 10, "impactCue": "impact_stone" },
+                { "id": "builder", "displayName": "Builder", "kind": "builder", "damage": 0, "radius": 2, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 10, "spawnMaterial": "stone", "impactCue": "impact_stone" }
+              ]
+            }
+            """);
+        try
+        {
+            RecordingAudioApi audio = new();
+            MaterialTable materials = DemoMaterials();
+            using Engine engine = CreateManualScriptEngine(
+                out ScriptInputApi input,
+                out CellGrid grid,
+                out _,
+                out ScriptScene scene,
+                materials,
+                audio,
+                contentRoot: contentRoot);
+            Assert.True(materials.TryGetId("stone", out ushort stone));
+            FillRect(grid, stone, minX: 32, minY: 24, maxX: 38, maxY: 40);
+            Entity entity = scene.CreateEntity();
+            _ = entity.AddComponent<Transform>();
+            PlayerController player = entity.AddComponent<PlayerController>();
+            player.SpawnX = 14f;
+            player.SpawnY = 30f;
+            PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+            projectile.InputEnabled = false;
+            WeaponController weapons = entity.AddComponent<WeaponController>();
+            TemperatureField temperature = engine.Context.GetService<TemperatureField>();
+            ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
+
+            engine.RunHeadlessTicks(2);
+            input.Update([Key.Digit1], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+            Assert.Equal(WeaponKind.SingleShot, weapons.LastDispatchedKind);
+            Assert.Equal(1, projectile.ShotsFired);
+
+            int particlesAfterShot = particles.ActiveCount;
+            input.Update([Key.Digit2], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+            Assert.Equal(WeaponKind.Bomb, weapons.LastDispatchedKind);
+            Assert.True(particles.ActiveCount > particlesAfterShot);
+
+            int entitiesBeforeGrenade = scene.EntityCount;
+            input.Update([Key.Digit3], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+            Assert.True(scene.EntityCount > entitiesBeforeGrenade);
+            engine.RunHeadlessTicks(20);
+            Assert.Equal(WeaponKind.Grenade, weapons.LastDispatchedKind);
+            Assert.True(scene.EntityCount <= entitiesBeforeGrenade);
+
+            float temperatureBeforeLaser = MaxTemperature(temperature, minX: 16, minY: 16, maxX: 48, maxY: 48);
+            input.Update([Key.Digit4], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+            Assert.Equal(WeaponKind.Laser, weapons.LastDispatchedKind);
+            Assert.True(MaxTemperature(temperature, minX: 16, minY: 16, maxX: 48, maxY: 48) > temperatureBeforeLaser);
+
+            FillRect(grid, stone, minX: 34, minY: 32, maxX: 36, maxY: 36);
+            input.Update([Key.Digit5], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+            Assert.Equal(WeaponKind.Excavator, weapons.LastDispatchedKind);
+            Assert.Equal(0, grid.GetMaterial(35, 34));
+
+            int stoneBeforeBuilder = CountMaterial(grid, stone, minX: 0, minY: 0, maxX: 95, maxY: 63);
+            input.Update([Key.Digit6], [MouseButton.Left], mouseX: 70f, mouseY: 50f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+            Assert.Equal(WeaponKind.Builder, weapons.LastDispatchedKind);
+            Assert.True(CountMaterial(grid, stone, minX: 0, minY: 0, maxX: 95, maxY: 63) > stoneBeforeBuilder);
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// 验证可玩 Demo 的破坏弹会在爆破后把局部脱离主地形的小型固体岛转换成刚体，避免石块长时间静态浮空。
     /// </summary>
     [Fact]
@@ -1304,6 +1392,37 @@ public sealed class PlayerControllerIntegrationTests
     private static string DemoContentRoot()
     {
         return Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
+    }
+
+    private static float MaxTemperature(TemperatureField temperature, int minX, int minY, int maxX, int maxY)
+    {
+        float max = 0f;
+        for (int y = minY; y <= maxY; y++)
+        {
+            for (int x = minX; x <= maxX; x++)
+            {
+                max = MathF.Max(max, temperature.GetTemperature(x, y));
+            }
+        }
+
+        return max;
+    }
+
+    private static int CountMaterial(CellGrid grid, ushort material, int minX, int minY, int maxX, int maxY)
+    {
+        int count = 0;
+        for (int y = minY; y <= maxY; y++)
+        {
+            for (int x = minX; x <= maxX; x++)
+            {
+                if (grid.GetMaterial(x, y) == material)
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
     }
 
     private static string CreateTemporaryWeaponContent(string weaponsJson)

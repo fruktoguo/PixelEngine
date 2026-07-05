@@ -31,6 +31,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     /// <param name="kernel">CA 内核，用于需要 current dirty 的安全写入。</param>
     /// <param name="particleSystem">自由粒子系统。</param>
     /// <param name="materials">材质注册表。</param>
+    /// <param name="temperature">温度场；未提供时访问热量写入 API 会抛出明确异常。</param>
     /// <param name="events">脚本事件总线；未提供时访问 <see cref="Events" /> 会抛出明确异常。</param>
     /// <param name="time">时间 facade；未提供时访问 <see cref="Time" /> 会抛出明确异常。</param>
     /// <param name="audio">音频 facade；未提供时访问 <see cref="Audio" /> 会抛出明确异常。</param>
@@ -49,6 +50,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         SimulationKernel kernel,
         ParticleSystem particleSystem,
         MaterialTable materials,
+        TemperatureField? temperature = null,
         IEventBus? events = null,
         IGameTime? time = null,
         IAudioApi? audio = null,
@@ -77,6 +79,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         _character = new CharacterFacade(_commands, grid, physics, time);
         Grid = grid;
         Kernel = kernel;
+        Temperature = temperature;
         ParticleSystem = particleSystem;
         EventBackend = events;
         TimeBackend = time;
@@ -117,6 +120,11 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     /// CA 内核，供 Hosting 相位驱动在 dirty swap 前落地脚本 cell 命令。
     /// </summary>
     public SimulationKernel Kernel { get; }
+
+    /// <summary>
+    /// 温度场；供脚本热量命令在 cell 安全相位落地。
+    /// </summary>
+    public TemperatureField? Temperature { get; }
 
     /// <summary>
     /// 世界 cell 访问门面，供脚本命令落地时写入 working dirty。
@@ -218,6 +226,9 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 case ScriptCommandKind.DamageBeam:
                     _ = Kernel.DamageBeam(command.X, command.Y, command.A, command.B, command.Width, checked((ushort)command.Height));
                     break;
+                case ScriptCommandKind.AddHeat:
+                    AddHeat(command.X, command.Y, command.Width, command.A);
+                    break;
                 case ScriptCommandKind.Explode:
                 case ScriptCommandKind.SpawnParticle:
                 case ScriptCommandKind.BurstParticles:
@@ -262,6 +273,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 case ScriptCommandKind.Paint:
                 case ScriptCommandKind.DamageCircle:
                 case ScriptCommandKind.DamageBeam:
+                case ScriptCommandKind.AddHeat:
                 case ScriptCommandKind.CreateBodyFromRegion:
                 case ScriptCommandKind.ApplyImpulse:
                 case ScriptCommandKind.ApplyRadialImpulse:
@@ -313,6 +325,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 case ScriptCommandKind.Paint:
                 case ScriptCommandKind.DamageCircle:
                 case ScriptCommandKind.DamageBeam:
+                case ScriptCommandKind.AddHeat:
                 case ScriptCommandKind.Explode:
                 case ScriptCommandKind.SpawnParticle:
                 case ScriptCommandKind.BurstParticles:
@@ -381,6 +394,28 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                         Kernel.EditCellAtInputPhase(x, y, material, persistentFlags: 0);
                     }
                 }
+            }
+        }
+    }
+
+    private void AddHeat(int centerX, int centerY, int radius, float deltaCelsius)
+    {
+        TemperatureField field = Temperature ?? throw Unsupported(nameof(Temperature));
+        ArgumentOutOfRangeException.ThrowIfNegative(radius);
+        float radiusSquared = radius * radius;
+        for (int y = centerY - radius; y <= centerY + radius; y++)
+        {
+            int dy = y - centerY;
+            for (int x = centerX - radius; x <= centerX + radius; x++)
+            {
+                int dx = x - centerX;
+                if ((dx * dx) + (dy * dy) > radiusSquared)
+                {
+                    continue;
+                }
+
+                field.AddHeat(x, y, deltaCelsius);
+                Kernel.MarkDirty(x, y);
             }
         }
     }
@@ -518,6 +553,17 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             int startX = (int)MathF.Floor(x);
             int startY = (int)MathF.Floor(y);
             commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.DamageBeam(startX, startY, dx, dy, length, ToDamageUShort(damagePerCell)));
+        }
+
+        public void AddHeat(float x, float y, int radius, float deltaCelsius)
+        {
+            ValidateFinite(x, nameof(x));
+            ValidateFinite(y, nameof(y));
+            ValidateFinite(deltaCelsius, nameof(deltaCelsius));
+            ArgumentOutOfRangeException.ThrowIfNegative(radius);
+            int centerX = (int)MathF.Floor(x);
+            int centerY = (int)MathF.Floor(y);
+            commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.AddHeat(centerX, centerY, radius, deltaCelsius));
         }
 
         public void Explode(float x, float y, int radius, float force)
