@@ -265,6 +265,127 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证 ObjectiveCrystal 铺设目标矿簇，并在 cell 被破坏后经事件总线计入 MissionDirector。
+    /// </summary>
+    [Fact]
+    public void ObjectiveCrystalPublishesMineYieldWhenCellsAreDestroyed()
+    {
+        MaterialTable materials = MissionMaterials();
+        Assert.True(materials.TryGetId("crystal", out ushort crystalMaterial));
+        using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials);
+        Entity playerEntity = scene.CreateEntity();
+        _ = playerEntity.AddComponent<Transform>();
+        PlayerController player = playerEntity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 12f;
+        _ = playerEntity.AddComponent<PlayerHealth>();
+        MissionDirector mission = playerEntity.AddComponent<MissionDirector>();
+        mission.RequiredCrystals = 3;
+        mission.InitialLavaSurfaceY = 60f;
+        mission.LavaRiseCellsPerSecond = 0f;
+
+        ObjectiveCrystal crystal = scene.CreateEntity().AddComponent<ObjectiveCrystal>();
+        crystal.X = 24;
+        crystal.Y = 24;
+        crystal.Radius = 1;
+
+        engine.RunHeadlessTicks(2);
+        Assert.Equal(crystalMaterial, grid.MaterialAt(24, 24));
+
+        grid.MaterialAt(24, 24) = 0;
+        engine.RunHeadlessTicks(2);
+
+        Assert.True(crystal.CollectedCells > 0);
+        Assert.True(mission.CrystalsCollected > 0);
+    }
+
+    /// <summary>
+    /// 验证 ExtractionTrigger 未集齐目标时阻塞，集齐后驱动 MissionDirector 通关并播放反馈。
+    /// </summary>
+    [Fact]
+    public void ExtractionTriggerRequiresCrystalsBeforeWinningMission()
+    {
+        RecordingAudioApi audio = new();
+        using Engine engine = CreateManualScriptEngine(
+            out _,
+            out _,
+            out _,
+            out ScriptScene scene,
+            MissionMaterials(),
+            audio,
+            contentRoot: DemoContentRoot());
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 12f;
+        _ = entity.AddComponent<PlayerHealth>();
+        _ = entity.AddComponent<WeaponController>();
+        MissionDirector mission = entity.AddComponent<MissionDirector>();
+        mission.RequiredCrystals = 1;
+        mission.InitialLavaSurfaceY = 60f;
+        mission.LavaRiseCellsPerSecond = 0f;
+        ExtractionTrigger extraction = entity.AddComponent<ExtractionTrigger>();
+        extraction.X = 10f;
+        extraction.Y = 10f;
+        extraction.Width = 12f;
+        extraction.Height = 20f;
+        extraction.CelebrationMaterialName = "crystal";
+
+        engine.RunHeadlessTicks(1);
+
+        Assert.False(extraction.Reached);
+        Assert.Equal(MissionState.Playing, mission.State);
+        Assert.Equal("目标水晶未集齐或任务已结束。", extraction.BlockedReason);
+
+        Assert.True(engine.Context.Events.Channel<MineYieldEvent>().TryEnqueue(new MineYieldEvent(20, 20, 1, 1)));
+        engine.RunHeadlessTicks(1);
+
+        Assert.True(extraction.Reached);
+        Assert.Equal(MissionState.Won, mission.State);
+        Assert.Equal("goal_reached.wav", audio.LastCue);
+    }
+
+    /// <summary>
+    /// 验证 RisingHazardDirector 通过 MaterialEmitter 注入熔岩、同步水位，并在淹没阈值触发任务失败。
+    /// </summary>
+    [Fact]
+    public void RisingHazardDirectorDrivesEmittersAndMissionLoss()
+    {
+        MaterialTable materials = MissionMaterials();
+        Assert.True(materials.TryGetId("lava", out ushort lava));
+        using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials);
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 12f;
+        _ = entity.AddComponent<PlayerHealth>();
+        MissionDirector mission = entity.AddComponent<MissionDirector>();
+        mission.InitialLavaSurfaceY = 50f;
+        mission.LavaRiseCellsPerSecond = 0f;
+        RisingHazardDirector hazard = entity.AddComponent<RisingHazardDirector>();
+        hazard.MinX = 20f;
+        hazard.Width = 20f;
+        hazard.StartSurfaceY = 50f;
+        hazard.TargetSurfaceY = 30f;
+        hazard.RiseSeconds = 0.05f;
+        hazard.LossSurfaceY = 45f;
+        hazard.EmitterCount = 3;
+        hazard.EmitterRadius = 2;
+        hazard.EmitterIntervalSeconds = 0.001f;
+
+        engine.RunHeadlessTicks(8);
+
+        Assert.Equal(3, hazard.ActiveEmitterCount);
+        Assert.True(hazard.CurrentSurfaceY < 45f);
+        Assert.Equal(hazard.CurrentSurfaceY, mission.LavaSurfaceY, precision: 3);
+        Assert.Equal(MissionState.Lost, mission.State);
+        Assert.Equal("lava_flooded_route", mission.ResultReason);
+        Assert.True(CountMaterial(grid, lava, minX: 18, minY: 28, maxX: 43, maxY: 53) > 0);
+    }
+
+    /// <summary>
     /// 验证 PlayerHealth 会按玩家 AABB 采样危险材质，造成伤害、喷粒子、播放受击音效并在死亡后重生。
     /// </summary>
     [Fact]
