@@ -233,7 +233,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [ ] `DamageBeamBurnThroughTests` / `ExcavatorRateTests`（Simulation.Tests）：激光沿束按 Hardness 烧穿速率（木/冰快、metal 慢 + 熔点相变）、挖掘圆形擦除半径 / 速率（plan/13 §C）。
 - [ ] `RigidOwnedDamageRoutingTests`（Physics.Tests / Simulation.Tests）：`CellFlags.RigidOwned` 像素破坏经 `IRigidDamageSink.OnOwnedCellDamaged` 路由触发形状重建、绝不在刚体像素累加 Damage（守 #5，联动 §4.3 拆分守恒）。
 - [ ] `WeaponCatalogLoadTests`（Demo.Tests）：`content/weapons.json` 经引擎 Content/Config API 加载、六 kind 全字段、非法 / 缺字段诊断、hudColor / 材质 name 解析（非直接 `JsonSerializer`）。
-- [ ] `GameDirectorOutcomeTests`（Demo.Tests）：集齐 K=6 crystal + 抵达出口 → Won、死亡 / 熔岩淹没 → Lost、分数计算、`RisingLavaHazard` 上涨速率数据驱动（plan/13 §3.17 熔岩矿洞逃生）。
+- [x] `GameDirectorOutcomeTests`（Demo.Tests）：集齐 K=6 crystal + 抵达出口 → Won、死亡 / 熔岩淹没 → Lost、分数计算、`RisingLavaHazard` 上涨速率数据驱动（plan/13 §3.17 熔岩矿洞逃生）。`GameDirectorOutcomeTests` 覆盖 6 水晶撤离胜利、确定性分数、玩家死亡失败与上涨速率/水位同步；`RisingHazardDirectorDrivesEmittersAndMissionLoss` 覆盖熔岩淹没判负。
 - [ ] `ExplodeSemanticsMigrationTests`（Demo.Tests / Simulation.Tests）：`ExplosiveTool`/`PlayableProjectile` 断言从「无条件抛射」迁移到「破坏驱动 + 碎屑抗性生效」新语义，旧断言改写不留失效项（plan/05 联动）。
 - [ ] `SaveLoadRoundTripTests` 扩展（Serialization.Tests）：Damage byte 平面存档往返逐 cell 等价（持久 lane，按 plan/07 契约）、`SaveFormatVersion` bump 后旧档 Damage=0 迁移、material remap 缺失 fallback 后 Damage 清 0、进 `ChunkSnapshot`/`ChunkCodec` RLE 段一致。
 
