@@ -45,7 +45,7 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     public UiBackendKind Kind => UiBackendKind.ManagedFallback;
 
     /// <inheritdoc />
-    public bool IsDirty => Dirty || _visibleScreenCount > 0;
+    public bool IsDirty => Dirty;
 
     /// <inheritdoc />
     public bool IsAnimating => false;
@@ -268,6 +268,7 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         }
 
         _gui.DrawFrame(_deltaSeconds, context.FramebufferWidth, context.FramebufferHeight, _drawCallback);
+        Dirty = false;
     }
 
     /// <inheritdoc />

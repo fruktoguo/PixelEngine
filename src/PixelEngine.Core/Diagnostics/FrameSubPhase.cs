@@ -131,6 +131,11 @@ public enum FrameSubPhase
     UiComposite,
 
     /// <summary>
+    /// 游戏 UI 后端实际光栅化、绘制或纹理上传工作；静态无脏内容帧应保持 0。
+    /// </summary>
+    UiPaint,
+
+    /// <summary>
     /// Present 提交、UI 绘制与交换前 hook 的 CPU 工作；不包含 SwapBuffers 阻塞等待。
     /// </summary>
     Present,

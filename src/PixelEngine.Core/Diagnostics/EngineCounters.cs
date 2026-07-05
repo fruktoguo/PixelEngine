@@ -199,6 +199,11 @@ public sealed class EngineCounters
     public double UiCompositeMilliseconds { get; set; }
 
     /// <summary>
+    /// 获取或设置最近一帧游戏 UI 后端实际光栅化、绘制或纹理上传耗时，单位毫秒；静态无脏帧为 0。
+    /// </summary>
+    public double UiPaintMilliseconds { get; set; }
+
+    /// <summary>
     /// 获取累计 UI 字体缺字码点数。
     /// </summary>
     public long UiFontMissingGlyphs => Volatile.Read(ref _uiFontMissingGlyphs);

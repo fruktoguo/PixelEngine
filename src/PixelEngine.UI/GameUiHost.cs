@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using PixelEngine.Core.Diagnostics;
 using PixelEngine.Gui;
 
 namespace PixelEngine.UI;
@@ -43,6 +45,11 @@ public sealed class GameUiHost : IDisposable
     /// 当前后端是否需要光栅化或合成更新。
     /// </summary>
     public bool NeedsComposite => Options.Enabled && (_backend.IsDirty || _backend.IsAnimating);
+
+    /// <summary>
+    /// 最近一次实际执行 UI 后端绘制/光栅化的耗时，单位毫秒；静态无脏帧为 0。
+    /// </summary>
+    public double LastPaintMilliseconds { get; private set; }
 
     private bool Disposed { get; set; }
 
@@ -379,8 +386,14 @@ public sealed class GameUiHost : IDisposable
         ThrowIfDisposed();
         if (Options.Enabled && _initialized && NeedsComposite)
         {
+            long started = Stopwatch.GetTimestamp();
             _backend.Composite(in context);
+            LastPaintMilliseconds = ElapsedMilliseconds(started);
+            context.Profiler?.RecordSub(FrameSubPhase.UiPaint, LastPaintMilliseconds);
+            return;
         }
+
+        LastPaintMilliseconds = 0;
     }
 
     /// <summary>
@@ -390,10 +403,15 @@ public sealed class GameUiHost : IDisposable
     public void DrawGui(IGuiDrawContext gui)
     {
         ThrowIfDisposed();
-        if (Options.Enabled && _initialized && _backend is IManagedGuiDrawable drawable)
+        if (Options.Enabled && _initialized && NeedsComposite && _backend is IManagedGuiDrawable drawable)
         {
+            long started = Stopwatch.GetTimestamp();
             drawable.DrawGui(gui);
+            LastPaintMilliseconds = ElapsedMilliseconds(started);
+            return;
         }
+
+        LastPaintMilliseconds = 0;
     }
 
     /// <inheritdoc />
@@ -425,5 +443,11 @@ public sealed class GameUiHost : IDisposable
     private void ThrowIfDisposed()
     {
         ObjectDisposedException.ThrowIf(Disposed, this);
+    }
+
+    private static double ElapsedMilliseconds(long started)
+    {
+        long elapsed = Stopwatch.GetTimestamp() - started;
+        return elapsed * 1000.0 / Stopwatch.Frequency;
     }
 }

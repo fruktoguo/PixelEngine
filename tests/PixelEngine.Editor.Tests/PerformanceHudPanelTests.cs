@@ -33,6 +33,7 @@ public sealed class PerformanceHudPanelTests
         profiler.RecordSub(FrameSubPhase.GpuLightComposite, 8.0);
         profiler.RecordSub(FrameSubPhase.UiUpdate, 0.35);
         profiler.RecordSub(FrameSubPhase.UiComposite, 0.15);
+        profiler.RecordSub(FrameSubPhase.UiPaint, 0.05);
         profiler.RecordSub(FrameSubPhase.Present, 0.3);
         profiler.RecordSub(FrameSubPhase.PresentWait, 16.0);
         profiler.RecordSub(FrameSubPhase.GpuFrame, 2.5);
@@ -53,6 +54,7 @@ public sealed class PerformanceHudPanelTests
             FramePresentSubmitMilliseconds = 0.3,
             UiUpdateMilliseconds = 0.35,
             UiCompositeMilliseconds = 0.15,
+            UiPaintMilliseconds = 0.05,
             FramePresentWaitMilliseconds = 16.0,
             FrameWaitMilliseconds = 16.0,
             EffectiveFrameMilliseconds = 9.7,
@@ -79,6 +81,7 @@ public sealed class PerformanceHudPanelTests
         Assert.Equal(0.9, sample.UploadMs, 3);
         Assert.Equal(0.35, sample.UiUpdateMs, 3);
         Assert.Equal(0.15, sample.UiCompositeMs, 3);
+        Assert.Equal(0.05, sample.UiPaintMs, 3);
         Assert.Equal(2, sample.UiFontMissingGlyphs);
         Assert.Equal(0.25, sample.AudioMs, 3);
         Assert.Equal(9.7, sample.CpuWorkMs, 3);
@@ -97,8 +100,8 @@ public sealed class PerformanceHudPanelTests
         Assert.Equal(4, sample.RigidBodies);
         Assert.Equal(55, sample.ResidentChunks);
         Assert.Equal(6_291_456, sample.ResidentMemoryBytes);
-        Assert.Equal(8.25, sample.VariableWorkMs, 3);
-        Assert.Equal(1.15, sample.FixedOverheadMs, 3);
+        Assert.Equal(8.3, sample.VariableWorkMs, 3);
+        Assert.Equal(1.1, sample.FixedOverheadMs, 3);
         Assert.Equal(30, sample.SimHz);
         Assert.True(sample.IsTimeDilated);
         Assert.Equal(4, sample.DegradationLevel);

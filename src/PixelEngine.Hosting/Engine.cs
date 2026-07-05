@@ -2239,6 +2239,12 @@ public sealed class Engine : IDisposable
         double presentWaitMs = GetSubPhase(subPhases, FrameSubPhase.PresentWait);
         double uiUpdateMs = GetSubPhase(subPhases, FrameSubPhase.UiUpdate);
         double uiCompositeMs = GetSubPhase(subPhases, FrameSubPhase.UiComposite);
+        double uiPaintMs = GetSubPhase(subPhases, FrameSubPhase.UiPaint);
+        if (uiPaintMs <= 0.0 && Context.TryGetService(out GameUiHost gameUiHost))
+        {
+            uiPaintMs = gameUiHost.LastPaintMilliseconds;
+        }
+
         double waitMs = presentWaitMs;
         double profileTotalMs = Sum(phases);
         double cpuWorkMs = Math.Max(0.0, profileTotalMs - waitMs);
@@ -2250,6 +2256,7 @@ public sealed class Engine : IDisposable
         Context.Counters.FramePresentSubmitMilliseconds = presentSubmitMs;
         Context.Counters.UiUpdateMilliseconds = uiUpdateMs;
         Context.Counters.UiCompositeMilliseconds = uiCompositeMs;
+        Context.Counters.UiPaintMilliseconds = uiPaintMs;
         Context.Counters.FramePresentWaitMilliseconds = presentWaitMs;
         Context.Counters.FrameWaitMilliseconds = waitMs;
         Context.Counters.EffectiveFrameMilliseconds = effectiveMs;

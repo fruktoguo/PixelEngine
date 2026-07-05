@@ -74,7 +74,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
     public UiBackendKind Kind => UiBackendKind.RmlUi;
 
     /// <inheritdoc />
-    public bool IsDirty => Dirty || _visibleScreenCount > 0;
+    public bool IsDirty => Dirty;
 
     /// <inheritdoc />
     public bool IsAnimating => false;

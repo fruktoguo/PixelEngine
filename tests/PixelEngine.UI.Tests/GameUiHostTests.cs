@@ -89,6 +89,35 @@ public sealed class GameUiHostTests
         Assert.False(host.InvokeAction(new UiScreenHandle(999), action, in payload));
     }
 
+    [Fact]
+    public void CompositeRunsOnlyWhenBackendIsDirtyOrAnimating()
+    {
+        FakeBackend backend = new();
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        UiDocumentSource source = UiDocumentSource.Asset("content/ui/main.html", 6);
+        _ = host.ShowScreen(new UiScreenId(6), in source);
+
+        Assert.True(host.NeedsComposite);
+        host.Composite(default);
+
+        Assert.Equal(1, backend.CompositeCount);
+        Assert.Equal(1, backend.ClearDirtyCount);
+        Assert.False(host.NeedsComposite);
+        Assert.True(host.LastPaintMilliseconds >= 0);
+
+        host.Composite(default);
+
+        Assert.Equal(1, backend.CompositeCount);
+        Assert.Equal(0, host.LastPaintMilliseconds);
+
+        backend.IsAnimatingOverride = true;
+        host.Composite(default);
+
+        Assert.Equal(2, backend.CompositeCount);
+        Assert.True(host.NeedsComposite);
+    }
+
     private sealed class FakeBackend : IGameUiBackend
     {
         private int _nextDocument = 1;
@@ -97,7 +126,9 @@ public sealed class GameUiHostTests
 
         public bool IsDirty { get; private set; }
 
-        public bool IsAnimating => false;
+        public bool IsAnimating => IsAnimatingOverride;
+
+        public bool IsAnimatingOverride { get; set; }
 
         public bool Initialized { get; private set; }
 
@@ -112,6 +143,10 @@ public sealed class GameUiHostTests
         public UiActionId LastInvokedAction { get; private set; }
 
         public UiValue LastInvokedPayload { get; private set; }
+
+        public int CompositeCount { get; private set; }
+
+        public int ClearDirtyCount { get; private set; }
 
         public void Initialize(in UiBackendInitializeInfo info)
         {
@@ -202,6 +237,13 @@ public sealed class GameUiHostTests
 
         public void Composite(in PixelEngine.Rendering.UiPresentContext context)
         {
+            CompositeCount++;
+            if (IsDirty)
+            {
+                ClearDirtyCount++;
+            }
+
+            IsDirty = false;
         }
 
         public void Dispose()

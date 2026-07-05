@@ -36,6 +36,67 @@ public sealed class ManagedFallbackBackendTests
     }
 
     [Fact]
+    public void ManagedFallbackSkipsStaticScreenUntilModelChanges()
+    {
+        string path = WriteUi("""
+            <ui title="Hud">
+              <progress id="health" path="hud.health" text="HP" value="0.5" />
+            </ui>
+            """);
+        FakeGuiHost gui = new();
+        using ManagedFallbackBackend backend = new(gui);
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+
+        UiDocumentSource source = UiDocumentSource.Asset(path, 6);
+        UiScreenHandle screen = host.ShowScreen(new UiScreenId(6), in source);
+        host.Composite(default);
+        host.Composite(default);
+
+        Assert.Equal(1, gui.DrawCount);
+        Assert.False(host.NeedsComposite);
+        Assert.Equal(0, host.LastPaintMilliseconds);
+
+        UiPathId health = new(UiStableId.Hash("hud.health"));
+        host.SetModelValue(screen, health, new UiValue(0.75));
+        host.Composite(default);
+
+        Assert.Equal(2, gui.DrawCount);
+        Assert.False(host.NeedsComposite);
+    }
+
+    [Fact]
+    public void ManagedFallbackDrawGuiSkipsStaticScreenUntilModelChanges()
+    {
+        string path = WriteUi("""
+            <ui title="Hud">
+              <button id="refresh" data-event-click="refresh">Refresh</button>
+            </ui>
+            """);
+        FakeGuiHost gui = new();
+        using ManagedFallbackBackend backend = new(gui);
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+
+        UiDocumentSource source = UiDocumentSource.Asset(path, 7);
+        UiScreenHandle screen = host.ShowScreen(new UiScreenId(7), in source);
+        host.DrawGui(gui.Context);
+        host.DrawGui(gui.Context);
+
+        string button = Assert.Single(gui.Context.Buttons);
+        Assert.Equal("Refresh", button);
+        Assert.False(host.NeedsComposite);
+        Assert.Equal(0, host.LastPaintMilliseconds);
+
+        Assert.True(host.InvokeAction(screen, new UiActionId(UiStableId.Hash("refresh")), new UiValue(1L)));
+        host.DrawGui(gui.Context);
+
+        Assert.Equal(2, gui.Context.Buttons.Count);
+        Assert.False(host.NeedsComposite);
+    }
+
+
+    [Fact]
     public void ManagedFallbackCheckboxUpdatesModelValueAndRaisesEvent()
     {
         string path = WriteUi("""
