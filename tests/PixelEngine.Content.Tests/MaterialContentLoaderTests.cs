@@ -72,6 +72,26 @@ public sealed class MaterialContentLoaderTests
     }
 
     /// <summary>
+    /// 验证破坏后的碎块目标缺失时降级到 fallback，避免编辑器热重载因旧 rubbleTarget 卡死。
+    /// </summary>
+    [Fact]
+    public void LoadFallsBackMissingDestroyedTargetToEmpty()
+    {
+        const string materialsJson = """
+        { "materials": [
+          { "name": "empty", "type": "Empty", "heatCapacity": 1 },
+          { "name": "stone", "type": "Solid", "heatCapacity": 1, "integrity": 40, "destroyedTarget": "missing_gravel" }
+        ] }
+        """;
+
+        MaterialContentLoadResult result = MaterialContentLoader.Load(materialsJson, EmptyReactionsJson);
+        ref readonly MaterialDef stone = ref result.Materials.Get(1);
+
+        Assert.Equal(0, stone.DestroyedTarget);
+        Assert.Equal(0, result.Materials.Hot.RubbleTarget[1]);
+    }
+
+    /// <summary>
     /// 验证 reaction JSON 的 tag 输入展开、representative 输出、rate 和 flags 映射。
     /// </summary>
     [Fact]

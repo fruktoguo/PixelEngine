@@ -144,6 +144,13 @@ public sealed class MaterialEditorRow
     /// <summary>粉体/液体横向扩散范围。</summary>
     public int Dispersion { get; set; }
 
+    /// <summary>材质流动速率；编辑器语义别名，写回时仍落到 Dispersion 并由加载期 clamp 到 MoveCap。</summary>
+    public int FlowRate
+    {
+        get => Dispersion;
+        set => Dispersion = value;
+    }
+
     /// <summary>液体静止后是否允许转入 static 态。</summary>
     public bool LiquidStatic { get; set; }
 
@@ -198,8 +205,22 @@ public sealed class MaterialEditorRow
     /// <summary>结构完整度阈值；0 表示有效伤害即时破坏。</summary>
     public int Integrity { get; set; }
 
+    /// <summary>结构完整度阈值；编辑器语义别名。</summary>
+    public int MaxIntegrity
+    {
+        get => Integrity;
+        set => Integrity = value;
+    }
+
     /// <summary>破坏后的目标材质 name。</summary>
     public string DestroyedTarget { get; set; } = string.Empty;
+
+    /// <summary>破坏后的碎块材质 name；编辑器语义别名，写入稳定材质 name。</summary>
+    public string RubbleTarget
+    {
+        get => DestroyedTarget;
+        set => DestroyedTarget = value;
+    }
 
     /// <summary>破坏时请求抛射的碎屑数量。</summary>
     public int DebrisCount { get; set; }
@@ -225,11 +246,32 @@ public sealed class MaterialEditorRow
     /// <summary>描边或裂纹叠色 BGRA8。</summary>
     public uint EdgeColorBGRA { get; set; }
 
+    /// <summary>描边色；编辑器语义别名。</summary>
+    public uint OutlineColorBGRA
+    {
+        get => EdgeColorBGRA;
+        set => EdgeColorBGRA = value;
+    }
+
     /// <summary>渲染 alpha。</summary>
     public int Opacity { get; set; } = byte.MaxValue;
 
+    /// <summary>渲染 alpha；编辑器语义别名。</summary>
+    public int Alpha
+    {
+        get => Opacity;
+        set => Opacity = value;
+    }
+
     /// <summary>高亮或 emissive 叠色 BGRA8。</summary>
     public uint HighlightColorBGRA { get; set; }
+
+    /// <summary>流动/高亮提示色；编辑器语义别名。</summary>
+    public uint FlowTintBGRA
+    {
+        get => HighlightColorBGRA;
+        set => HighlightColorBGRA = value;
+    }
 
     /// <summary>编辑器 / HUD 展示名。</summary>
     public string DisplayName { get; set; } = string.Empty;
@@ -322,7 +364,7 @@ public sealed class MaterialEditorRow
             Name = MaterialReactionEditorDocument.NullIfWhiteSpace(Name),
             Type = MaterialReactionEditorDocument.NullIfWhiteSpace(Type),
             Density = ClampByte(Density),
-            Dispersion = ClampByte(Dispersion),
+            Dispersion = ClampFlowRate(FlowRate),
             LiquidStatic = LiquidStatic,
             LiquidSand = LiquidSand,
             Flammability = ClampByte(Flammability),
@@ -340,8 +382,8 @@ public sealed class MaterialEditorRow
             HeatCapacity = HeatCapacity,
             DefaultLifetime = ClampUshort(DefaultLifetime),
             Durability = ClampByte(Durability),
-            Integrity = ClampUshort(Integrity),
-            DestroyedTarget = MaterialReactionEditorDocument.NullIfWhiteSpace(DestroyedTarget),
+            Integrity = ClampUshort(MaxIntegrity),
+            DestroyedTarget = MaterialReactionEditorDocument.NullIfWhiteSpace(RubbleTarget),
             DebrisCount = ClampByte(DebrisCount),
             MineYield = ClampByte(MineYield),
             TextureId = TextureId < 0 ? null : TextureId,
@@ -349,9 +391,9 @@ public sealed class MaterialEditorRow
             ColorNoise = ClampByte(ColorNoise),
             RenderStyle = MaterialReactionEditorDocument.NullIfWhiteSpace(RenderStyle),
             LegendCategory = MaterialReactionEditorDocument.NullIfWhiteSpace(LegendCategory),
-            EdgeColorBGRA = EdgeColorBGRA,
-            Opacity = ClampByte(Opacity),
-            HighlightColorBGRA = HighlightColorBGRA,
+            EdgeColorBGRA = OutlineColorBGRA,
+            Opacity = ClampByte(Alpha),
+            HighlightColorBGRA = FlowTintBGRA,
             DisplayName = MaterialReactionEditorDocument.NullIfWhiteSpace(DisplayName),
             LegendVisible = LegendVisible,
             Tags = MaterialReactionEditorDocument.SplitCsv(Tags),
@@ -370,6 +412,11 @@ public sealed class MaterialEditorRow
     private static byte ClampByte(int value)
     {
         return (byte)Math.Clamp(value, byte.MinValue, byte.MaxValue);
+    }
+
+    private static byte ClampFlowRate(int value)
+    {
+        return (byte)Math.Clamp(value, byte.MinValue, PixelEngine.Core.EngineConstants.MoveCap);
     }
 
     private static ushort ClampUshort(int value)

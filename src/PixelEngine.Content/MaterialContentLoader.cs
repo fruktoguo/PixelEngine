@@ -207,7 +207,7 @@ public static class MaterialContentLoader
                 DefaultLifetime = source.DefaultLifetime,
                 Durability = source.Durability,
                 Integrity = source.Integrity,
-                DestroyedTarget = ResolveOptionalMaterial(source.DestroyedTarget, nameToId),
+                DestroyedTarget = ResolveOptionalMaterialOrFallback(source.DestroyedTarget, nameToId),
                 DebrisCount = source.DebrisCount,
                 MineYield = source.MineYield,
                 TextureId = source.TextureId ?? -1,
@@ -574,6 +574,17 @@ public static class MaterialContentLoader
     private static ushort ResolveOptionalMaterial(string? name, Dictionary<string, ushort> nameToId)
     {
         return string.IsNullOrWhiteSpace(name) ? (ushort)0 : ResolveRequiredMaterial(name, nameToId, name);
+    }
+
+    private static ushort ResolveOptionalMaterialOrFallback(string? name, Dictionary<string, ushort> nameToId)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return 0;
+        }
+
+        string materialName = name.Trim();
+        return nameToId.TryGetValue(materialName, out ushort id) ? id : (ushort)0;
     }
 
     private static ushort ResolveRequiredMaterial(string? name, Dictionary<string, ushort> nameToId, string path)

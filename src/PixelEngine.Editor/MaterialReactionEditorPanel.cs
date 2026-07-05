@@ -10,6 +10,7 @@ namespace PixelEngine.Editor;
 public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService content) : IEditorPanel
 {
     private readonly IMaterialReactionContentService _content = content ?? throw new ArgumentNullException(nameof(content));
+    private readonly MaterialLegendPreview _legendPreview = new();
     private int _selectedMaterial;
     private int _selectedReaction;
 
@@ -28,6 +29,11 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
     /// 当前编辑文档。
     /// </summary>
     public MaterialReactionEditorDocument Document { get; private set; } = new();
+
+    /// <summary>
+    /// 材质图例只读预览。
+    /// </summary>
+    public MaterialLegendPreview LegendPreview => _legendPreview;
 
     /// <summary>
     /// 重新加载文件文档。
@@ -117,12 +123,17 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
             return;
         }
 
-        if (ImGui.BeginTable("material_rows", 5, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders | ImGuiTableFlags.Resizable))
+        if (ImGui.BeginTable("material_rows", 10, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders | ImGuiTableFlags.Resizable))
         {
             ImGui.TableSetupColumn("runtime id");
             ImGui.TableSetupColumn("name");
             ImGui.TableSetupColumn("type");
             ImGui.TableSetupColumn("density");
+            ImGui.TableSetupColumn("flow rate");
+            ImGui.TableSetupColumn("max integrity");
+            ImGui.TableSetupColumn("rubble target");
+            ImGui.TableSetupColumn("render style");
+            ImGui.TableSetupColumn("legend category");
             ImGui.TableSetupColumn("tags");
             ImGui.TableHeadersRow();
             for (int i = 0; i < Document.Materials.Count; i++)
@@ -142,6 +153,16 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
                 _ = ImGui.TableNextColumn();
                 _ = InputInt($"##mat_density_{i}", row.Density, value => row.Density = value);
                 _ = ImGui.TableNextColumn();
+                _ = InputInt($"##mat_flow_{i}", row.FlowRate, value => row.FlowRate = value);
+                _ = ImGui.TableNextColumn();
+                _ = InputInt($"##mat_integrity_{i}", row.MaxIntegrity, value => row.MaxIntegrity = value);
+                _ = ImGui.TableNextColumn();
+                _ = InputText($"##mat_rubble_{i}", row.RubbleTarget, value => row.RubbleTarget = value, 96);
+                _ = ImGui.TableNextColumn();
+                _ = InputText($"##mat_style_{i}", row.RenderStyle, value => row.RenderStyle = value, 64);
+                _ = ImGui.TableNextColumn();
+                _ = InputText($"##mat_legend_{i}", row.LegendCategory, value => row.LegendCategory = value, 64);
+                _ = ImGui.TableNextColumn();
                 _ = InputText($"##mat_tags_{i}", row.Tags, value => row.Tags = value, 192);
             }
 
@@ -149,12 +170,14 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
         }
 
         DrawSelectedMaterial(Document.Materials[Math.Clamp(_selectedMaterial, 0, Document.Materials.Count - 1)]);
+        _legendPreview.Rebuild(Document);
+        _legendPreview.Draw();
     }
 
     private static void DrawSelectedMaterial(MaterialEditorRow row)
     {
         ImGui.TextUnformatted($"编辑材质：{row.Name}  id={(row.RuntimeId.HasValue ? row.RuntimeId.Value.ToString() : "new")}");
-        _ = InputInt("dispersion", row.Dispersion, value => row.Dispersion = value);
+        _ = InputInt("flow rate", row.FlowRate, value => row.FlowRate = value);
         _ = Checkbox("liquid static", row.LiquidStatic, value => row.LiquidStatic = value);
         _ = Checkbox("liquid sand", row.LiquidSand, value => row.LiquidSand = value);
         _ = InputInt("flammability", row.Flammability, value => row.Flammability = value);
@@ -172,8 +195,8 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
         _ = InputFloat("heat capacity", row.HeatCapacity, value => row.HeatCapacity = value);
         _ = InputInt("default lifetime", row.DefaultLifetime, value => row.DefaultLifetime = value);
         _ = InputInt("durability", row.Durability, value => row.Durability = value);
-        _ = InputInt("integrity", row.Integrity, value => row.Integrity = value);
-        _ = InputText("destroyed target", row.DestroyedTarget, value => row.DestroyedTarget = value, 96);
+        _ = InputInt("max integrity", row.MaxIntegrity, value => row.MaxIntegrity = value);
+        _ = InputText("rubble target", row.RubbleTarget, value => row.RubbleTarget = value, 96);
         _ = InputInt("debris count", row.DebrisCount, value => row.DebrisCount = value);
         _ = InputInt("mine yield", row.MineYield, value => row.MineYield = value);
         _ = InputInt("texture id", row.TextureId, value => row.TextureId = value);
@@ -186,17 +209,17 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
         _ = InputInt("color noise", row.ColorNoise, value => row.ColorNoise = value);
         _ = InputText("render style", row.RenderStyle, value => row.RenderStyle = value, 64);
         _ = InputText("legend category", row.LegendCategory, value => row.LegendCategory = value, 64);
-        int edgeColor = unchecked((int)row.EdgeColorBGRA);
-        if (ImGui.InputInt("edge color BGRA", ref edgeColor))
+        int outlineColor = unchecked((int)row.OutlineColorBGRA);
+        if (ImGui.InputInt("outline color BGRA", ref outlineColor))
         {
-            row.EdgeColorBGRA = unchecked((uint)edgeColor);
+            row.OutlineColorBGRA = unchecked((uint)outlineColor);
         }
 
-        _ = InputInt("opacity", row.Opacity, value => row.Opacity = value);
-        int highlightColor = unchecked((int)row.HighlightColorBGRA);
-        if (ImGui.InputInt("highlight color BGRA", ref highlightColor))
+        _ = InputInt("alpha", row.Alpha, value => row.Alpha = value);
+        int flowTint = unchecked((int)row.FlowTintBGRA);
+        if (ImGui.InputInt("flow tint BGRA", ref flowTint))
         {
-            row.HighlightColorBGRA = unchecked((uint)highlightColor);
+            row.FlowTintBGRA = unchecked((uint)flowTint);
         }
 
         _ = InputText("display name", row.DisplayName, value => row.DisplayName = value, 96);

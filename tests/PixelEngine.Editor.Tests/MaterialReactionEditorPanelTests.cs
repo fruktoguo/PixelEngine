@@ -143,6 +143,48 @@ public sealed class MaterialReactionEditorPanelTests
     }
 
     /// <summary>
+    /// 验证编辑器热重载遇到缺失 RubbleTarget 时走 fallback，并保持材质 runtime id 稳定。
+    /// </summary>
+    [Fact]
+    public void ApplyFallsBackMissingRubbleTargetWithoutReorderingRuntimeIds()
+    {
+        using TempContent temp = TempContent.Create();
+        MaterialTable materials = new(
+        [
+            new MaterialDef { Id = 0, Name = "empty", Type = CellType.Empty, HeatCapacity = 1 },
+            new MaterialDef { Id = 1, Name = "stone", Type = CellType.Solid, HeatCapacity = 1, Integrity = 20 },
+        ]);
+        FileMaterialReactionContentService service = new(
+            temp.MaterialsPath,
+            temp.ReactionsPath,
+            materials,
+            new TestChunkSource(),
+            fallbackMaterialId: 0,
+            applyReactions: static _ => { });
+        MaterialReactionEditorDocument document = new();
+        document.Materials.Add(new MaterialEditorRow { Name = "empty", Type = "Empty", HeatCapacity = 1, TextureId = -1 });
+        document.Materials.Add(new MaterialEditorRow
+        {
+            Name = "stone",
+            Type = "Solid",
+            HeatCapacity = 1,
+            TextureId = -1,
+            MaxIntegrity = 40,
+            RubbleTarget = "missing_gravel",
+        });
+
+        MaterialReactionApplyResult result = service.Apply(document);
+
+        Assert.Empty(result.MaterialReload.TombstoneIds);
+        Assert.True(materials.TryGetId("stone", out ushort stoneId));
+        Assert.Equal(1, stoneId);
+        ref readonly MaterialDef stone = ref materials.Get(stoneId);
+        Assert.Equal(40, stone.MaxIntegrity);
+        Assert.Equal(0, stone.RubbleTarget);
+        Assert.Equal(0, materials.Hot.RubbleTarget[stoneId]);
+    }
+
+    /// <summary>
     /// 验证材质编辑器文档往返保留 M14 可玩性与视觉字段，避免保存时丢 schema。
     /// </summary>
     [Fact]
@@ -193,6 +235,148 @@ public sealed class MaterialReactionEditorPanelTests
         Assert.False(row.LegendVisible);
         Assert.NotNull(row.Tags);
         Assert.Equal(["static", "diggable"], row.Tags);
+    }
+
+    /// <summary>
+    /// 验证编辑器作者语义别名写回现有 Content schema，并在编辑器侧先 clamp FlowRate 到 MoveCap。
+    /// </summary>
+    [Fact]
+    public void MaterialEditorRowAliasesGameplayAndVisualFieldNames()
+    {
+        MaterialEditorRow row = new()
+        {
+            Name = "stone",
+            Type = "Solid",
+            HeatCapacity = 1,
+            FlowRate = 255,
+            Durability = 12,
+            MaxIntegrity = 300,
+            RubbleTarget = "gravel",
+            DebrisCount = 4,
+            MineYield = 2,
+            RenderStyle = "Destructible",
+            LegendCategory = "Terrain",
+            OutlineColorBGRA = 0xFF010203,
+            Alpha = 180,
+            FlowTintBGRA = 0xFF102030,
+            DisplayName = "Stone",
+            LegendVisible = true,
+        };
+
+        MaterialJson json = row.ToContent();
+
+        Assert.Equal(32, json.Dispersion);
+        Assert.Equal(12, json.Durability);
+        Assert.Equal(300, json.Integrity);
+        Assert.Equal("gravel", json.DestroyedTarget);
+        Assert.Equal(4, json.DebrisCount);
+        Assert.Equal(2, json.MineYield);
+        Assert.Equal("Destructible", json.RenderStyle);
+        Assert.Equal("Terrain", json.LegendCategory);
+        Assert.Equal(0xFF010203u, json.EdgeColorBGRA);
+        Assert.Equal((byte)180, json.Opacity);
+        Assert.Equal(0xFF102030u, json.HighlightColorBGRA);
+        Assert.Equal("Stone", json.DisplayName);
+        Assert.True(json.LegendVisible);
+    }
+
+    /// <summary>
+    /// 验证 MaterialLegendPreview 按分类给出全材质只读 swatch 与关键玩法数值。
+    /// </summary>
+    [Fact]
+    public void MaterialLegendPreviewGroupsAllMaterialsWithSwatchAndGameplayValues()
+    {
+        MaterialReactionEditorDocument document = new();
+        document.Materials.Add(new MaterialEditorRow
+        {
+            Name = "lava",
+            Type = "Liquid",
+            FlowRate = 8,
+            BaseColor = 0xFF223344,
+            MaxIntegrity = 0,
+            RenderStyle = "Hazard",
+            LegendCategory = "Hazard",
+            OutlineColorBGRA = 0xFF010101,
+            Alpha = 200,
+            FlowTintBGRA = 0xFF998877,
+            DisplayName = "Lava",
+            LegendVisible = true,
+        });
+        document.Materials.Add(new MaterialEditorRow
+        {
+            Name = "hidden_stone",
+            Type = "Solid",
+            FlowRate = 99,
+            BaseColor = 0xFF556677,
+            MaxIntegrity = 120,
+            DebrisCount = 3,
+            MineYield = 1,
+            RenderStyle = "Destructible",
+            LegendCategory = "Terrain",
+            OutlineColorBGRA = 0xFF111213,
+            Alpha = 255,
+            FlowTintBGRA = 0xFF445566,
+            DisplayName = "Hidden Stone",
+            LegendVisible = false,
+        });
+
+        MaterialLegendPreview preview = new();
+        preview.Rebuild(document);
+        MaterialLegendPreviewEntry[] entries = preview.Entries.ToArray();
+
+        Assert.Equal(2, entries.Length);
+        Assert.Equal(MaterialLegendCategory.Terrain, entries[0].LegendCategory);
+        Assert.Equal("hidden_stone", entries[0].Name);
+        Assert.Equal("Hidden Stone", entries[0].DisplayName);
+        Assert.Equal(MaterialRenderStyle.Destructible, entries[0].RenderStyle);
+        Assert.Equal(0xFF556677u, entries[0].BaseColorBGRA);
+        Assert.Equal(0xFF111213u, entries[0].OutlineColorBGRA);
+        Assert.Equal((byte)255, entries[0].Alpha);
+        Assert.Equal(0xFF445566u, entries[0].FlowTintBGRA);
+        Assert.Equal(120, entries[0].MaxIntegrity);
+        Assert.Equal(32, entries[0].FlowRate);
+        Assert.Equal(3, entries[0].DebrisCount);
+        Assert.Equal(1, entries[0].MineYield);
+        Assert.False(entries[0].LegendVisible);
+        Assert.Equal(MaterialLegendCategory.Hazard, entries[1].LegendCategory);
+        Assert.Equal("lava", entries[1].Name);
+    }
+
+    /// <summary>
+    /// 验证编辑器预览与玩家 HUD 为独立 UI，不通过 Demo PlayableHud 复用实现。
+    /// </summary>
+    [Fact]
+    public void MaterialLegendPreviewIsEditorOnlyAndDoesNotReusePlayableHud()
+    {
+        string root = FindRepositoryRoot();
+        string panelSource = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "MaterialReactionEditorPanel.cs"));
+        string editorSource = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "MaterialLegendPreview.cs"));
+        string demoHudSource = File.ReadAllText(Path.Combine(root, "demo", "PixelEngine.Demo", "PlayableHud.cs"));
+
+        Assert.Contains("flow rate", panelSource, StringComparison.Ordinal);
+        Assert.Contains("max integrity", panelSource, StringComparison.Ordinal);
+        Assert.Contains("rubble target", panelSource, StringComparison.Ordinal);
+        Assert.Contains("render style", panelSource, StringComparison.Ordinal);
+        Assert.Contains("legend category", panelSource, StringComparison.Ordinal);
+        Assert.Contains("MaterialLegendPreview", editorSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("PlayableHud", editorSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaterialLegendPreview", demoHudSource, StringComparison.Ordinal);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "PixelEngine.sln")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("无法定位 PixelEngine.sln。");
     }
 
     private sealed class TestChunkSource(params Chunk[] chunks) : IChunkSource
