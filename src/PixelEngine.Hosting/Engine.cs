@@ -612,6 +612,9 @@ public sealed class Engine : IDisposable
             UiBackendKind.ManagedFallback));
         Context.RegisterService(host);
         Context.RegisterService(backend);
+        GameUiPhaseDriver driver = new(host);
+        Context.RegisterService(driver.GetType(), driver);
+        driver.RegisterPhases(Phases);
         _ownedRuntimeResources.Add(host);
         return host;
     }

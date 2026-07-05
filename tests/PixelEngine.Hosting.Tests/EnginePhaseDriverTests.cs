@@ -7,6 +7,7 @@ using PixelEngine.Rendering;
 using PixelEngine.Scripting;
 using PixelEngine.World;
 using Xunit;
+using GameUi = PixelEngine.UI;
 using ScriptScene = PixelEngine.Scripting.Scene;
 
 namespace PixelEngine.Hosting.Tests;
@@ -623,6 +624,37 @@ public sealed class EnginePhaseDriverTests
     }
 
     /// <summary>
+    /// 验证 Game UI 相位使用渲染帧 dt 逐帧推进，并在 sim 降频帧仍 drain UI 事件。
+    /// </summary>
+    [Fact]
+    public void GameUiPhaseDriverUpdatesEveryRenderFrameAndDrainsEvents()
+    {
+        RecordingGameUiBackend backend = new();
+        using GameUi.GameUiHost host = new(backend);
+        host.Initialize(new GameUi.UiBackendInitializeInfo(new GameUi.UiViewport(0, 0, 320, 180, 1f), GameUi.UiBackendKind.ManagedFallback));
+        RecordingGameUiEventSink sink = new();
+        GameUiPhaseDriver driver = new(host, eventCapacity: 4, sink);
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithSimHz(PixelEngine.Core.EngineConstants.SimHzDownscaled)
+            .AddPhaseDriver(driver)
+            .Build();
+
+        FrameTiming first = engine.RunOneTick(realDeltaSeconds: 1.0 / 120.0);
+        FrameTiming second = engine.RunOneTick(realDeltaSeconds: 1.0 / 30.0);
+
+        Assert.True(first.RunSim);
+        Assert.False(second.RunSim);
+        Assert.Equal(2, backend.UpdateCount);
+        Assert.Equal(1.0f / 30.0f, backend.LastDeltaSeconds, precision: 4);
+        Assert.Equal(1.0f / 30.0f, driver.LastDeltaSeconds, precision: 4);
+        Assert.Equal(2, driver.TotalDrainedEventCount);
+        Assert.Equal(2, sink.TotalEventCount);
+        Assert.Equal(new GameUi.UiActionId(9), sink.LastAction);
+        Assert.Equal(1, engine.Phases.Count(EnginePhase.GameLogicAndScripts));
+    }
+
+    /// <summary>
     /// 验证退出 Editor Play Session 会销毁已启动 Behaviour，并允许再次进入 Play 时重新启动。
     /// </summary>
     [Fact]
@@ -903,6 +935,141 @@ public sealed class EnginePhaseDriverTests
         public void Shutdown()
         {
             ShutdownCount++;
+        }
+    }
+
+    private sealed class RecordingGameUiBackend : GameUi.IGameUiBackend
+    {
+        private int _nextDocumentHandle = 1;
+
+        public GameUi.UiBackendKind Kind => GameUi.UiBackendKind.ManagedFallback;
+
+        public bool IsDirty => false;
+
+        public bool IsAnimating => false;
+
+        public int UpdateCount { get; private set; }
+
+        public float LastDeltaSeconds { get; private set; }
+
+        public void Initialize(in GameUi.UiBackendInitializeInfo info)
+        {
+            info.Viewport.Validate();
+        }
+
+        public void Resize(in GameUi.UiViewport viewport)
+        {
+            viewport.Validate();
+        }
+
+        public GameUi.UiDocumentHandle LoadDocument(in GameUi.UiDocumentSource source)
+        {
+            _ = source;
+            return new GameUi.UiDocumentHandle(_nextDocumentHandle++);
+        }
+
+        public void UnloadDocument(GameUi.UiDocumentHandle document)
+        {
+            document.Validate();
+        }
+
+        public void SetScreenStack(ReadOnlySpan<GameUi.UiScreenStackEntry> stack)
+        {
+            _ = stack;
+        }
+
+        public void Update(float deltaSeconds)
+        {
+            UpdateCount++;
+            LastDeltaSeconds = deltaSeconds;
+        }
+
+        public void FeedPointerMove(float x, float y)
+        {
+            _ = x;
+            _ = y;
+        }
+
+        public void FeedPointerButton(GameUi.UiPointerButton button, bool isDown)
+        {
+            _ = button;
+            _ = isDown;
+        }
+
+        public void FeedScroll(float deltaX, float deltaY)
+        {
+            _ = deltaX;
+            _ = deltaY;
+        }
+
+        public void FeedKey(GameUi.UiKey key, bool isDown, GameUi.UiKeyModifiers modifiers)
+        {
+            _ = key;
+            _ = isDown;
+            _ = modifiers;
+        }
+
+        public void FeedText(ReadOnlySpan<char> text)
+        {
+            _ = text;
+        }
+
+        public GameUi.UiHitResult HitTest(float x, float y)
+        {
+            _ = x;
+            _ = y;
+            return GameUi.UiHitResult.None;
+        }
+
+        public void SetModelValue(GameUi.UiDocumentHandle document, GameUi.UiPathId path, in GameUi.UiValue value)
+        {
+            _ = document;
+            _ = path;
+            _ = value;
+        }
+
+        public bool TryGetModelValue(GameUi.UiDocumentHandle document, GameUi.UiPathId path, out GameUi.UiValue value)
+        {
+            _ = document;
+            _ = path;
+            value = default;
+            return false;
+        }
+
+        public int DrainEvents(Span<GameUi.UiEvent> destination)
+        {
+            if (destination.IsEmpty)
+            {
+                return 0;
+            }
+
+            destination[0] = new GameUi.UiEvent(new GameUi.UiDocumentHandle(1), new GameUi.UiElementId(7), new GameUi.UiActionId(9), new GameUi.UiValue(UpdateCount));
+            return 1;
+        }
+
+        public void Composite(in UiPresentContext context)
+        {
+            _ = context;
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class RecordingGameUiEventSink : IGameUiEventSink
+    {
+        public int TotalEventCount { get; private set; }
+
+        public GameUi.UiActionId LastAction { get; private set; }
+
+        public void OnGameUiEvents(ReadOnlySpan<GameUi.UiEvent> events)
+        {
+            TotalEventCount += events.Length;
+            if (!events.IsEmpty)
+            {
+                LastAction = events[^1].Action;
+            }
         }
     }
 
