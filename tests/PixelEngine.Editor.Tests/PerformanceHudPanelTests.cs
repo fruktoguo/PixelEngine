@@ -55,6 +55,8 @@ public sealed class PerformanceHudPanelTests
             UiUpdateMilliseconds = 0.35,
             UiCompositeMilliseconds = 0.15,
             UiPaintMilliseconds = 0.05,
+            UiPresentationIntervalFrames = 3,
+            UiSkippedPresentationFrames = 12,
             FramePresentWaitMilliseconds = 16.0,
             FrameWaitMilliseconds = 16.0,
             EffectiveFrameMilliseconds = 9.7,
@@ -83,6 +85,8 @@ public sealed class PerformanceHudPanelTests
         Assert.Equal(0.15, sample.UiCompositeMs, 3);
         Assert.Equal(0.05, sample.UiPaintMs, 3);
         Assert.Equal(2, sample.UiFontMissingGlyphs);
+        Assert.Equal(3, sample.UiPresentationIntervalFrames);
+        Assert.Equal(12, sample.UiSkippedPresentationFrames);
         Assert.Equal(0.25, sample.AudioMs, 3);
         Assert.Equal(9.7, sample.CpuWorkMs, 3);
         Assert.Equal(2.5, sample.GpuWorkMs, 3);

@@ -660,6 +660,52 @@ public sealed class EnginePhaseDriverTests
     }
 
     /// <summary>
+    /// 验证过载降级只降低 Game UI present cadence，不跳过 UI update / event drain。
+    /// </summary>
+    [Fact]
+    public void OverloadThrottlesGameUiPresentWithoutSkippingUiUpdate()
+    {
+        RecordingGameUiBackend backend = new()
+        {
+            IsAnimatingOverride = true,
+        };
+        using GameUi.GameUiHost host = new(backend);
+        host.Initialize(new GameUi.UiBackendInitializeInfo(new GameUi.UiViewport(0, 0, 320, 180, 1f), GameUi.UiBackendKind.ManagedFallback));
+        RecordingGameUiEventSink sink = new();
+        GameUiPhaseDriver driver = new(host, eventCapacity: 4, sink);
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithOverloadPolicy(frameBudgetMs: 10, sustainWindow: 1)
+            .AddPhaseDriver(driver)
+            .Build();
+        engine.Context.RegisterService(host);
+
+        _ = engine.RunOneTick(realDeltaSeconds: 0.011);
+        _ = engine.RunOneTick(realDeltaSeconds: 0.011);
+        _ = engine.RunOneTick(realDeltaSeconds: 0.011);
+
+        Assert.Equal(EngineQualityTier.DistantChunkThrottle, engine.Context.QualityTier);
+        Assert.Equal(3, host.PresentationIntervalFrames);
+        Assert.Equal(3, backend.UpdateCount);
+        Assert.Equal(3, sink.TotalEventCount);
+
+        host.Composite(default);
+        host.Composite(default);
+        host.Composite(default);
+        host.Composite(default);
+
+        Assert.Equal(2, backend.CompositeCount);
+        Assert.Equal(2, host.SkippedPresentationFrames);
+
+        _ = engine.RunOneTick(realDeltaSeconds: 0);
+
+        Assert.Equal(4, backend.UpdateCount);
+        Assert.Equal(4, sink.TotalEventCount);
+        Assert.Equal(3, engine.Context.Counters.UiPresentationIntervalFrames);
+        Assert.Equal(2, engine.Context.Counters.UiSkippedPresentationFrames);
+    }
+
+    /// <summary>
     /// 验证退出 Editor Play Session 会销毁已启动 Behaviour，并允许再次进入 Play 时重新启动。
     /// </summary>
     [Fact]
@@ -951,9 +997,13 @@ public sealed class EnginePhaseDriverTests
 
         public bool IsDirty => false;
 
-        public bool IsAnimating => false;
+        public bool IsAnimating => IsAnimatingOverride;
+
+        public bool IsAnimatingOverride { get; set; }
 
         public int UpdateCount { get; private set; }
+
+        public int CompositeCount { get; private set; }
 
         public float LastDeltaSeconds { get; private set; }
 
@@ -1070,6 +1120,7 @@ public sealed class EnginePhaseDriverTests
         public void Composite(in UiPresentContext context)
         {
             _ = context;
+            CompositeCount++;
         }
 
         public void Dispose()

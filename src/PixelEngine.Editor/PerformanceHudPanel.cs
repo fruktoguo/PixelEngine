@@ -277,6 +277,8 @@ public sealed class PerformanceHudPanel : IEditorPanel
             uiCompositeMs,
             uiPaintMs,
             counters?.UiFontMissingGlyphs ?? 0,
+            counters?.UiPresentationIntervalFrames ?? 0,
+            counters?.UiSkippedPresentationFrames ?? 0,
             audioMs,
             cpuWorkMs,
             gpuFrameMs,
@@ -422,7 +424,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
         ImGui.TextUnformatted($"physics: {sample.PhysicsMs:F2} ms");
         ImGui.TextUnformatted($"shape rebuild: {sample.ShapeRebuildMs:F2} ms");
         ImGui.TextUnformatted($"render/style/upload: {sample.RenderMs:F2} / {sample.RenderStyleMs:F2} / {sample.UploadMs:F2} ms");
-        ImGui.TextUnformatted($"ui update/paint/composite/fontMissing: {sample.UiUpdateMs:F2} / {sample.UiPaintMs:F2} / {sample.UiCompositeMs:F2} ms / {sample.UiFontMissingGlyphs}");
+        ImGui.TextUnformatted($"ui update/paint/composite/fontMissing/cadence/skipped: {sample.UiUpdateMs:F2} / {sample.UiPaintMs:F2} / {sample.UiCompositeMs:F2} ms / {sample.UiFontMissingGlyphs} / {sample.UiPresentationIntervalFrames} / {sample.UiSkippedPresentationFrames}");
         ImGui.TextUnformatted($"audio: {sample.AudioMs:F2} ms");
     }
 

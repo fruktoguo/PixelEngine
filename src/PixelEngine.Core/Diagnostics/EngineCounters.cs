@@ -204,6 +204,16 @@ public sealed class EngineCounters
     public double UiPaintMilliseconds { get; set; }
 
     /// <summary>
+    /// 获取或设置当前 UI present 降频间隔；1 表示每渲染帧都允许 paint/composite。
+    /// </summary>
+    public long UiPresentationIntervalFrames { get; set; }
+
+    /// <summary>
+    /// 获取或设置因 UI present 降频而累计跳过的 paint/composite 帧数。
+    /// </summary>
+    public long UiSkippedPresentationFrames { get; set; }
+
+    /// <summary>
     /// 获取累计 UI 字体缺字码点数。
     /// </summary>
     public long UiFontMissingGlyphs => Volatile.Read(ref _uiFontMissingGlyphs);

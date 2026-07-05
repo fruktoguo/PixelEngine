@@ -2174,6 +2174,7 @@ public sealed class Engine : IDisposable
         EngineQualityTier tier = overload.SubmitFrame(frameMs);
         Context.SetQualityTier(tier);
         ApplyThermalDegradation(tier);
+        ApplyGameUiDegradation(tier);
         if (tier != previousTier && tier >= EngineQualityTier.ReducedLighting)
         {
             ApplyGpuComputeDegradation();
@@ -2182,6 +2183,24 @@ public sealed class Engine : IDisposable
         Context.Clock.SimHz = tier >= EngineQualityTier.Sim30Hz
             ? PixelEngine.Core.EngineConstants.SimHzDownscaled
             : RequestedSimHz;
+    }
+
+    private void ApplyGameUiDegradation(EngineQualityTier tier)
+    {
+        if (!Context.TryGetService(out GameUiHost gameUiHost))
+        {
+            return;
+        }
+
+        int intervalFrames = tier switch
+        {
+            EngineQualityTier.Full => 1,
+            EngineQualityTier.ReducedThermal or EngineQualityTier.ReducedLighting => 2,
+            EngineQualityTier.DistantChunkThrottle or EngineQualityTier.Sim30Hz => 3,
+            EngineQualityTier.SlowMotion => 4,
+            _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, "未知引擎质量档位。"),
+        };
+        gameUiHost.SetPresentationFrameInterval(intervalFrames);
     }
 
     private void PublishRenderFrameRate(double realDeltaSeconds)
@@ -2240,9 +2259,20 @@ public sealed class Engine : IDisposable
         double uiUpdateMs = GetSubPhase(subPhases, FrameSubPhase.UiUpdate);
         double uiCompositeMs = GetSubPhase(subPhases, FrameSubPhase.UiComposite);
         double uiPaintMs = GetSubPhase(subPhases, FrameSubPhase.UiPaint);
-        if (uiPaintMs <= 0.0 && Context.TryGetService(out GameUiHost gameUiHost))
+        if (Context.TryGetService(out GameUiHost gameUiHost))
         {
-            uiPaintMs = gameUiHost.LastPaintMilliseconds;
+            if (uiPaintMs <= 0.0)
+            {
+                uiPaintMs = gameUiHost.LastPaintMilliseconds;
+            }
+
+            Context.Counters.UiPresentationIntervalFrames = gameUiHost.PresentationIntervalFrames;
+            Context.Counters.UiSkippedPresentationFrames = gameUiHost.SkippedPresentationFrames;
+        }
+        else
+        {
+            Context.Counters.UiPresentationIntervalFrames = 0;
+            Context.Counters.UiSkippedPresentationFrames = 0;
         }
 
         double waitMs = presentWaitMs;

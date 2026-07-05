@@ -11,6 +11,7 @@ public sealed class GameUiHost : IDisposable
 {
     private readonly IGameUiBackend _backend;
     private readonly UiScreenStackEntry[] _screenStackBuffer;
+    private int _presentationFrameCountdown;
     private bool _initialized;
 
     /// <summary>
@@ -45,6 +46,16 @@ public sealed class GameUiHost : IDisposable
     /// 当前后端是否需要光栅化或合成更新。
     /// </summary>
     public bool NeedsComposite => Options.Enabled && (_backend.IsDirty || _backend.IsAnimating);
+
+    /// <summary>
+    /// 当前 UI present 降频间隔；1 表示每个渲染帧都允许 paint/composite。
+    /// </summary>
+    public int PresentationIntervalFrames { get; private set; } = 1;
+
+    /// <summary>
+    /// 因 UI present 降频而跳过的 paint/composite 帧数。
+    /// </summary>
+    public long SkippedPresentationFrames { get; private set; }
 
     /// <summary>
     /// 最近一次实际执行 UI 后端绘制/光栅化的耗时，单位毫秒；静态无脏帧为 0。
@@ -216,6 +227,23 @@ public sealed class GameUiHost : IDisposable
     }
 
     /// <summary>
+    /// 设置 UI present 降频间隔。仅影响 paint/composite，不影响 UI update、输入泵或事件 drain。
+    /// </summary>
+    /// <param name="intervalFrames">间隔帧数；1 表示不降频。</param>
+    public void SetPresentationFrameInterval(int intervalFrames)
+    {
+        ThrowIfDisposed();
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(intervalFrames);
+        if (PresentationIntervalFrames == intervalFrames)
+        {
+            return;
+        }
+
+        PresentationIntervalFrames = intervalFrames;
+        _presentationFrameCountdown = 0;
+    }
+
+    /// <summary>
     /// 抽取 UI 到游戏的事件。
     /// </summary>
     /// <param name="destination">事件写入缓冲。</param>
@@ -384,7 +412,7 @@ public sealed class GameUiHost : IDisposable
     public void Composite(in PixelEngine.Rendering.UiPresentContext context)
     {
         ThrowIfDisposed();
-        if (Options.Enabled && _initialized && NeedsComposite)
+        if (Options.Enabled && _initialized && NeedsComposite && ShouldPresentThisFrame())
         {
             long started = Stopwatch.GetTimestamp();
             _backend.Composite(in context);
@@ -403,7 +431,7 @@ public sealed class GameUiHost : IDisposable
     public void DrawGui(IGuiDrawContext gui)
     {
         ThrowIfDisposed();
-        if (Options.Enabled && _initialized && NeedsComposite && _backend is IManagedGuiDrawable drawable)
+        if (Options.Enabled && _initialized && NeedsComposite && _backend is IManagedGuiDrawable drawable && ShouldPresentThisFrame())
         {
             long started = Stopwatch.GetTimestamp();
             drawable.DrawGui(gui);
@@ -438,6 +466,24 @@ public sealed class GameUiHost : IDisposable
     {
         int count = Documents.CopyStack(_screenStackBuffer);
         _backend.SetScreenStack(_screenStackBuffer.AsSpan(0, count));
+    }
+
+    private bool ShouldPresentThisFrame()
+    {
+        if (PresentationIntervalFrames <= 1)
+        {
+            return true;
+        }
+
+        if (_presentationFrameCountdown > 0)
+        {
+            _presentationFrameCountdown--;
+            SkippedPresentationFrames++;
+            return false;
+        }
+
+        _presentationFrameCountdown = PresentationIntervalFrames - 1;
+        return true;
     }
 
     private void ThrowIfDisposed()

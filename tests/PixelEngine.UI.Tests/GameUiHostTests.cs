@@ -118,6 +118,28 @@ public sealed class GameUiHostTests
         Assert.True(host.NeedsComposite);
     }
 
+    [Fact]
+    public void PresentationFrameIntervalSkipsPaintButKeepsDirtyState()
+    {
+        FakeBackend backend = new()
+        {
+            IsAnimatingOverride = true,
+        };
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        host.SetPresentationFrameInterval(2);
+
+        host.Composite(default);
+        host.Composite(default);
+        host.Composite(default);
+
+        Assert.Equal(2, backend.CompositeCount);
+        Assert.Equal(1, host.SkippedPresentationFrames);
+        Assert.Equal(2, host.PresentationIntervalFrames);
+        Assert.True(host.NeedsComposite);
+        Assert.True(host.LastPaintMilliseconds >= 0);
+    }
+
     private sealed class FakeBackend : IGameUiBackend
     {
         private int _nextDocument = 1;
