@@ -848,7 +848,6 @@ public sealed class PlayerControllerIntegrationTests
     public void GrenadeExplosionFlashDoesNotPersistAfterDetonation()
     {
         MaterialTable materials = DemoMaterials();
-        Assert.True(materials.TryGetId("smoke", out ushort smoke));
         using Engine engine = CreateManualScriptEngine(out _, out _, out _, out ScriptScene scene, materials);
         Entity entity = scene.CreateEntity();
         GrenadeProjectile grenade = entity.AddComponent<GrenadeProjectile>();
@@ -871,15 +870,18 @@ public sealed class PlayerControllerIntegrationTests
 
         Assert.True(grenade.Exploded);
         Assert.Equal(1, CountBehaviours<GrenadeProjectile>(scene));
-        AssertContainsParticleMaterialFrom(particles, particlesBeforeDetonation, smoke);
+        Assert.Equal(particlesBeforeDetonation, particles.ActiveCount);
+        Assert.Equal(1, TransientParticleBurst.ActiveCount(scene));
         ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
         Assert.Equal(0, lighting.FogOfWar.RevealAlpha(18, 14));
 
-        engine.RunHeadlessTicks(24);
+        engine.RunHeadlessTicks(90);
 
         Assert.Equal(0, lighting.PointLights.Length);
         Assert.Equal(0, lighting.FogOfWar.RevealAlpha(18, 14));
         Assert.Equal(0, CountBehaviours<GrenadeProjectile>(scene));
+        Assert.Equal(0, TransientParticleBurst.ActiveCount(scene));
+        Assert.Equal(particlesBeforeDetonation, particles.ActiveCount);
     }
 
     /// <summary>
@@ -1281,24 +1283,20 @@ public sealed class PlayerControllerIntegrationTests
             projectile.InputEnabled = false;
             WeaponController weapons = entity.AddComponent<WeaponController>();
             TemperatureField temperature = engine.Context.GetService<TemperatureField>();
-            ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
-            Assert.True(materials.TryGetId("smoke", out ushort smoke));
 
             engine.RunHeadlessTicks(2);
-            int particlesBeforeShot = particles.ActiveCount;
+            int effectsBeforeShot = TransientParticleBurst.ActiveCount(scene);
             input.Update([Key.Digit1], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
             engine.RunHeadlessTicks(1);
             Assert.Equal(WeaponKind.SingleShot, weapons.LastDispatchedKind);
             Assert.Equal(1, projectile.ShotsFired);
-            Assert.True(particles.ActiveCount > particlesBeforeShot);
-            AssertParticleMaterialFrom(particles, particlesBeforeShot, smoke);
+            Assert.True(TransientParticleBurst.ActiveCount(scene) > effectsBeforeShot);
 
-            int particlesAfterShot = particles.ActiveCount;
+            int effectsAfterShot = TransientParticleBurst.ActiveCount(scene);
             input.Update([Key.Digit2], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
             engine.RunHeadlessTicks(1);
             Assert.Equal(WeaponKind.Bomb, weapons.LastDispatchedKind);
-            Assert.True(particles.ActiveCount > particlesAfterShot);
-            AssertContainsParticleMaterialFrom(particles, particlesAfterShot, smoke);
+            Assert.True(TransientParticleBurst.ActiveCount(scene) > effectsAfterShot);
 
             int entitiesBeforeGrenade = scene.EntityCount;
             input.Update([Key.Digit3], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
@@ -2137,31 +2135,6 @@ public sealed class PlayerControllerIntegrationTests
             ("ash", CellType.Powder),
             ("crystal", CellType.Solid),
             ("smoke", CellType.Gas));
-    }
-
-    private static void AssertParticleMaterialFrom(ParticleSystem particles, int start, ushort material)
-    {
-        ReadOnlySpan<Particle> active = particles.ActiveReadOnly;
-        Assert.True(active.Length > start);
-        for (int i = start; i < active.Length; i++)
-        {
-            Assert.Equal(material, active[i].Material);
-        }
-    }
-
-    private static void AssertContainsParticleMaterialFrom(ParticleSystem particles, int start, ushort material)
-    {
-        ReadOnlySpan<Particle> active = particles.ActiveReadOnly;
-        Assert.True(active.Length > start);
-        for (int i = start; i < active.Length; i++)
-        {
-            if (active[i].Material == material)
-            {
-                return;
-            }
-        }
-
-        Assert.Fail($"新增粒子中没有找到材质 {material}。");
     }
 
     private static MaterialTable MissionMaterials()
