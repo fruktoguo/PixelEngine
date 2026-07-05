@@ -8,11 +8,25 @@ namespace PixelEngine.Demo;
 public sealed class PlayableHud : Behaviour
 {
     private const int GraphSampleCapacity = 48;
+    private static readonly string[] LegendMaterialNames =
+    [
+        "sand",
+        "water",
+        "oil",
+        "acid",
+        "lava",
+        "stone",
+        "wood",
+        "ice",
+        "metal",
+        "gravel",
+    ];
 
     private readonly float[] _frameGraphSamples = new float[GraphSampleCapacity];
     private readonly char[] _frameGraphText = new char[GraphSampleCapacity];
     private PlayerHealth? _health;
     private PlayableProjectileTool? _projectile;
+    private WeaponController? _weapons;
     private int _frameGraphIndex;
     private int _frameGraphCount;
 
@@ -36,7 +50,7 @@ public sealed class PlayableHud : Behaviour
     protected override void OnGui(IGuiContext gui)
     {
         ResolveComponents();
-        gui.SetNextWindow(X, Y, 470f, 224f, GuiCondition.FirstUseEver);
+        gui.SetNextWindow(X, Y, 520f, 336f, GuiCondition.FirstUseEver);
         GuiWindowFlags flags = GuiWindowFlags.NoResize |
             GuiWindowFlags.NoMove |
             GuiWindowFlags.NoSavedSettings |
@@ -49,6 +63,7 @@ public sealed class PlayableHud : Behaviour
         }
 
         DrawHealth(gui);
+        DrawWeapon(gui);
         gui.Text($"射击 {_projectile?.ShotsFired ?? 0}");
         EngineDiagnosticsSnapshot diagnostics = Context.Diagnostics.Capture();
         PushFrameGraphSample(diagnostics);
@@ -65,6 +80,7 @@ public sealed class PlayableHud : Behaviour
                 $"scan {_projectile.LastCollapseSolidCandidates}");
         }
 
+        DrawMaterialLegend(gui);
         gui.EndWindow();
     }
 
@@ -119,6 +135,7 @@ public sealed class PlayableHud : Behaviour
     {
         _health = Entity.TryGetComponent(out PlayerHealth health) ? health : null;
         _projectile = Entity.TryGetComponent(out PlayableProjectileTool projectile) ? projectile : null;
+        _weapons = Entity.TryGetComponent(out WeaponController weapons) ? weapons : null;
     }
 
     private void DrawHealth(IGuiContext gui)
@@ -133,5 +150,63 @@ public sealed class PlayableHud : Behaviour
         float value = Math.Clamp(_health.Health / max, 0f, 1f);
         gui.Text($"生命 {_health.Health:0}/{max:0}");
         gui.ProgressBar(value, $"{value:P0}");
+    }
+
+    private void DrawWeapon(IGuiContext gui)
+    {
+        if (_weapons?.Catalog is not { Weapons.Length: > 0 } catalog)
+        {
+            gui.Text("武器 --");
+            return;
+        }
+
+        WeaponDefinition weapon = catalog.Weapons[_weapons.SelectedIndex];
+        uint color = ParseBgraColor(weapon.HudColor, fallback: 0xFF_E8_D0_6A);
+        gui.ColorSwatch("weapon-current", color, 14f);
+        gui.SameLine();
+        gui.TextColored($"{weapon.DisplayName}  {_weapons.CurrentAmmo}/{Math.Max(0, weapon.AmmoMax)}", color);
+        float cooldown = weapon.CooldownSeconds <= 0f ? 0f : Math.Clamp(_weapons.CooldownRemaining / weapon.CooldownSeconds, 0f, 1f);
+        gui.ProgressBar(1f - cooldown, "冷却");
+        gui.ProgressBar(Math.Clamp(_weapons.Heat / 100f, 0f, 1f), _weapons.IsOverheated ? "过热" : "热量");
+    }
+
+    private void DrawMaterialLegend(IGuiContext gui)
+    {
+        gui.Separator();
+        gui.Text("材质");
+        for (int i = 0; i < LegendMaterialNames.Length; i++)
+        {
+            MaterialId id = Context.Materials.Resolve(LegendMaterialNames[i]);
+            if (id == MaterialId.Invalid)
+            {
+                continue;
+            }
+
+            MaterialInfo info = Context.Materials.GetInfo(id);
+            if (!info.LegendVisible)
+            {
+                continue;
+            }
+
+            gui.ColorSwatch("legend-" + info.Name, info.BaseColorBgra, 12f);
+            gui.SameLine();
+            string name = string.IsNullOrWhiteSpace(info.DisplayName) ? info.Name : info.DisplayName;
+            gui.Text($"{name} / {info.LegendCategory}");
+        }
+    }
+
+    private static uint ParseBgraColor(string value, uint fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return fallback;
+        }
+
+        ReadOnlySpan<char> span = value.AsSpan().Trim();
+        return span.Length == 9 &&
+            span[0] == '#' &&
+            uint.TryParse(span[1..], System.Globalization.NumberStyles.HexNumber, null, out uint parsed)
+            ? parsed
+            : fallback;
     }
 }
