@@ -119,6 +119,23 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
+    /// 验证禁用游戏大 UI 时，Demo 控制器落到脚本 Noop 服务且不需要改 Demo 逻辑。
+    /// </summary>
+    [Fact]
+    public void DemoGameUiControllerIsSafeWhenGameUiServiceIsNoop()
+    {
+        GameUiDemoController controller = new();
+
+        controller.StartForService(PixelEngine.Scripting.NoopGameUiService.Instance);
+        controller.HandleUiEvent(new ScriptUiEvent(default, default, GameUiDemoController.Action("open_settings"), default));
+
+        Assert.Equal(default, controller.MainScreen);
+        Assert.Equal(default, controller.HudScreenHandle);
+        Assert.Equal(default, controller.ModalScreen);
+        Assert.Equal(GameUiDemoController.Action("open_settings"), controller.LastAction);
+    }
+
+    /// <summary>
     /// 验证 GL smoke 开启时，同一批 Demo UI 屏幕能被 RmlUi 后端载入、绑定模型并合成。
     /// </summary>
     [Fact]

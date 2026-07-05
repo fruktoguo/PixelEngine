@@ -151,6 +151,45 @@ public sealed class EngineBuilderTests
     }
 
     /// <summary>
+    /// 验证禁用游戏大 UI 时，真实窗口运行时不会注册 GameUi 服务、相位 driver 或 UI 计时开销。
+    /// </summary>
+    [Fact]
+    public void DisabledGameUiDoesNotRegisterRuntimeServicesWhenWindowIsAttached()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine disabled Game UI smoke",
+            Width = 64,
+            Height = 64,
+            BackendPreference = RenderBackendPreference.Auto,
+        });
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithContentRoot(Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content"))
+            .EnableGameUi(false)
+            .Build();
+
+        _ = engine.LoadContentPackage();
+        _ = engine.AttachResidentSimulationWorld(64, 64, particleCapacity: 8);
+        _ = engine.AttachWindowRuntime(window);
+        _ = engine.RunOneTick(realDeltaSeconds: 1.0 / 60.0);
+
+        Assert.False(engine.Context.Options.EnableGameUi);
+        Assert.False(engine.Context.TryGetService(out GameUiHost _));
+        Assert.False(engine.Context.TryGetService(out GameUiPhaseDriver _));
+        Assert.False(engine.Context.TryGetService(out GameUiServiceBridge _));
+        Assert.False(engine.Context.TryGetService(out GameUiBackendSelection _));
+        Assert.False(engine.Context.TryGetService(out PixelEngine.Scripting.IGameUiService _));
+        Assert.Equal(0.0, engine.Context.Counters.UiUpdateMilliseconds);
+        Assert.Equal(0.0, engine.Context.Counters.UiCompositeMilliseconds);
+    }
+
+    /// <summary>
     /// 验证默认构建会把托管 GC 延迟模式写入 SustainedLowLatency。
     /// </summary>
     [Fact]
