@@ -1,0 +1,31 @@
+<Project>
+  <PropertyGroup>
+    <PixelEngineUiNativeRid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</PixelEngineUiNativeRid>
+    <PixelEngineUiNativeRid Condition="'$(PixelEngineUiNativeRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</PixelEngineUiNativeRid>
+    <PixelEngineUiNativeRoot>$(MSBuildThisFileDirectory)..\</PixelEngineUiNativeRoot>
+    <PixelEngineUiNativeRuntimeDir>$(PixelEngineUiNativeRoot)runtimes\$(PixelEngineUiNativeRid)\native\</PixelEngineUiNativeRuntimeDir>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PixelEngineUiNativeRid)' == 'win-x64' or '$(PixelEngineUiNativeRid)' == 'win-arm64'">
+    <PixelEngineUiNativeLibraryName>PixelEngine.UI.Native.dll</PixelEngineUiNativeLibraryName>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PixelEngineUiNativeRid)' == 'linux-x64' or '$(PixelEngineUiNativeRid)' == 'linux-arm64'">
+    <PixelEngineUiNativeLibraryName>libPixelEngine.UI.Native.so</PixelEngineUiNativeLibraryName>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PixelEngineUiNativeRid)' == 'osx-x64' or '$(PixelEngineUiNativeRid)' == 'osx-arm64'">
+    <PixelEngineUiNativeLibraryName>libPixelEngine.UI.Native.dylib</PixelEngineUiNativeLibraryName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PixelEngineUiNativeLibraryPath>$(PixelEngineUiNativeRuntimeDir)$(PixelEngineUiNativeLibraryName)</PixelEngineUiNativeLibraryPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(PixelEngineUiNativeRid)' != '' and '$(PixelEngineUiNativeLibraryName)' != '' and Exists('$(PixelEngineUiNativeLibraryPath)')">
+    <None Include="$(PixelEngineUiNativeLibraryPath)"
+          Link="runtimes\$(PixelEngineUiNativeRid)\native\$(PixelEngineUiNativeLibraryName)"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

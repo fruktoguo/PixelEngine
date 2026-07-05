@@ -130,7 +130,7 @@ if ($Clean -and (Test-Path $buildDir)) {
 }
 
 Invoke-Native $cmake @('--preset', $Rid, '-S', $nativeRoot)
-Invoke-Native $cmake @('--build', $buildDir, '--target', 'box2d_shared', 'box2d_static', '--config', $Configuration)
+Invoke-Native $cmake @('--build', $buildDir, '--target', 'box2d_shared', 'box2d_static', 'pixelengine_ui_native', '--config', $Configuration)
 
 $sharedDir = Join-Path $nativeRoot "out/$Rid/shared"
 $runtimeDir = Join-Path $repoRoot "runtimes/$Rid/native"
@@ -144,8 +144,8 @@ $sharedSearchRoots = @(
 
 $sharedDirPath = (Resolve-Path $sharedDir).Path
 $sharedLibraries = $sharedSearchRoots |
-  ForEach-Object { Get-ChildItem $_ -File -Include *.dll,*.so,*.dylib -Recurse } |
-  Where-Object { $_.DirectoryName -ne $sharedDirPath }
+  ForEach-Object { Get-ChildItem $_ -File -Recurse } |
+  Where-Object { $_.Extension -in '.dll', '.so', '.dylib' }
 
 if (-not $sharedLibraries) {
   throw "未在共享输出目录找到动态库产物。"
@@ -163,7 +163,10 @@ if (-not $staticLibraries) {
 }
 
 foreach ($library in $sharedLibraries) {
-  Copy-Item -LiteralPath $library.FullName -Destination $sharedDir -Force
+  if ($library.DirectoryName -ne $sharedDirPath) {
+    Copy-Item -LiteralPath $library.FullName -Destination $sharedDir -Force
+  }
+
   Copy-Item -LiteralPath $library.FullName -Destination $runtimeDir -Force
 }
 

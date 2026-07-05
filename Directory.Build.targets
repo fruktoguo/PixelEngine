@@ -1,6 +1,8 @@
 <Project>
   <Import Project="$(MSBuildThisFileDirectory)native\PixelEngine.Box2D.targets"
           Condition="('$(MSBuildProjectName)' == 'PixelEngine.Interop' or '$(MSBuildProjectName)' == 'PixelEngine.Demo') and Exists('$(MSBuildThisFileDirectory)native\PixelEngine.Box2D.targets')" />
+  <Import Project="$(MSBuildThisFileDirectory)native\PixelEngine.UiNative.targets"
+          Condition="('$(MSBuildProjectName)' == 'PixelEngine.UI' or '$(MSBuildProjectName)' == 'PixelEngine.Demo') and Exists('$(MSBuildThisFileDirectory)native\PixelEngine.UiNative.targets')" />
 
   <PropertyGroup Condition="'$(IsHotPath)' == 'true'">
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
