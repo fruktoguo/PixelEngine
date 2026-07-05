@@ -15,6 +15,9 @@
     <ProjectReference Include="../../src/PixelEngine.Rendering/PixelEngine.Rendering.csproj" />
     <ProjectReference Include="../../src/PixelEngine.Serialization/PixelEngine.Serialization.csproj" />
     <ProjectReference Include="../../src/PixelEngine.Audio/PixelEngine.Audio.csproj" />
+    <ProjectReference Include="../../src/PixelEngine.Gui/PixelEngine.Gui.csproj" />
+    <ProjectReference Include="../../src/PixelEngine.UI/PixelEngine.UI.csproj" />
+    <ProjectReference Include="../../src/PixelEngine.Hosting/PixelEngine.Hosting.csproj" />
   </ItemGroup>
 
   <ItemGroup>

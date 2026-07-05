@@ -86,6 +86,21 @@ public sealed class PerformanceHardeningMemoryDisciplineTests
     }
 
     /// <summary>
+    /// 验证 plan/20 游戏大 UI 具备 MemoryDiagnoser 零分配基准入口。
+    /// </summary>
+    [Fact]
+    public void GameUiAllocationBenchmarkCoversStaticCleanFramePaths()
+    {
+        string benchmark = ReadProductionSource("bench", "PixelEngine.Benchmarks", "GameUiAllocationBenchmarks.cs");
+        Assert.Contains("[MemoryDiagnoser]", benchmark, StringComparison.Ordinal);
+        Assert.Contains("public class GameUiAllocationBenchmarks", benchmark, StringComparison.Ordinal);
+        Assert.Contains("RunStaticUiPhaseFrame", benchmark, StringComparison.Ordinal);
+        Assert.Contains("CompositeCleanFrameSkip", benchmark, StringComparison.Ordinal);
+        Assert.Contains("DrawGuiCleanFrameSkip", benchmark, StringComparison.Ordinal);
+        Assert.Contains("PumpIdleInput", benchmark, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Hosting 通过统一协调器操作进程级 GC 状态，避免并发 Engine 构建与 NoGCRegion 临界帧互相踩踏。
     /// </summary>
     [Fact]
