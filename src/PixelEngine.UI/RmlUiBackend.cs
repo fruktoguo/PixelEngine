@@ -1,4 +1,5 @@
 using System.Text;
+using System.Runtime.InteropServices;
 using PixelEngine.Rendering;
 
 namespace PixelEngine.UI;
@@ -9,6 +10,7 @@ namespace PixelEngine.UI;
 public sealed unsafe class RmlUiBackend : IGameUiBackend
 {
     private const int MaxStackTextBytes = 4096;
+    private const int MaxDrainEvents = 256;
     private const int RmlKeyUnknown = 0;
     private const int RmlKeySpace = 1;
     private const int RmlKey0 = 2;
@@ -138,6 +140,17 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         }
 
         UiDocumentHandle handle = new(_nextDocumentHandle++);
+        int bindResult = RmlUiNative.DocumentBind(_renderer, nativeDocument, handle.Value);
+        if (bindResult <= 0)
+        {
+            string error = ReadNativeError();
+            RmlUiNative.DocumentCloseBound(_renderer, nativeDocument);
+            throw new InvalidDataException(
+                string.IsNullOrWhiteSpace(error)
+                    ? $"RmlUi 文档 DOM 绑定失败: {source.Path}"
+                    : $"RmlUi 文档 DOM 绑定失败: {source.Path}: {error}");
+        }
+
         _documents[_documentCount++] = new NativeDocument(handle, nativeDocument);
         Dirty = true;
         return handle;
@@ -154,7 +167,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
                 continue;
             }
 
-            RmlUiNative.DocumentClose(_documents[i].Native);
+            RmlUiNative.DocumentCloseBound(_renderer, _documents[i].Native);
             _documents[i] = _documents[_documentCount - 1];
             _documents[--_documentCount] = default;
             Dirty = true;
@@ -315,12 +328,55 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
     public void SetModelValue(UiDocumentHandle document, UiPathId path, in UiValue value)
     {
         ThrowIfDisposed();
+        EnsureInitialized();
+        document.Validate();
+        ValidatePath(path);
+        if (!TryFindDocument(document, out _))
+        {
+            throw new KeyNotFoundException($"RmlUi 文档不存在: {document.Value}");
+        }
+
+        RmlUiNative.NativeUiValue nativeValue = ToNativeValue(in value);
+        int result = RmlUiNative.SetModelValue(_renderer, document.Value, path.Value, &nativeValue);
+        if (result == 0)
+        {
+            throw new KeyNotFoundException($"RmlUi 文档 {document.Value} 未绑定 UI 模型路径: {path.Value}");
+        }
+
+        if (result < 0)
+        {
+            ThrowNativeBridgeError("设置 RmlUi UI 模型值失败。");
+        }
+
+        Dirty = true;
     }
 
     /// <inheritdoc />
     public bool TryGetModelValue(UiDocumentHandle document, UiPathId path, out UiValue value)
     {
         ThrowIfDisposed();
+        EnsureInitialized();
+        document.Validate();
+        ValidatePath(path);
+        if (!TryFindDocument(document, out _))
+        {
+            value = default;
+            return false;
+        }
+
+        RmlUiNative.NativeUiValue nativeValue = default;
+        int result = RmlUiNative.TryGetModelValue(_renderer, document.Value, path.Value, &nativeValue);
+        if (result < 0)
+        {
+            ThrowNativeBridgeError("读取 RmlUi UI 模型值失败。");
+        }
+
+        if (result == 1)
+        {
+            value = ToUiValue(in nativeValue);
+            return true;
+        }
+
         value = default;
         return false;
     }
@@ -329,7 +385,31 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
     public int DrainEvents(Span<UiEvent> destination)
     {
         ThrowIfDisposed();
-        return 0;
+        EnsureInitialized();
+        if (destination.IsEmpty)
+        {
+            return 0;
+        }
+
+        int capacity = Math.Min(destination.Length, MaxDrainEvents);
+        Span<RmlUiNative.NativeUiEvent> nativeEvents = stackalloc RmlUiNative.NativeUiEvent[capacity];
+        int count;
+        fixed (RmlUiNative.NativeUiEvent* events = nativeEvents)
+        {
+            count = RmlUiNative.DrainEvents(_renderer, events, capacity);
+        }
+
+        for (int i = 0; i < count; i++)
+        {
+            ref readonly RmlUiNative.NativeUiEvent nativeEvent = ref nativeEvents[i];
+            destination[i] = new UiEvent(
+                new UiDocumentHandle(nativeEvent.Document),
+                new UiElementId(nativeEvent.Element),
+                new UiActionId(nativeEvent.Action),
+                ToUiValue(nativeEvent.ValueKind, nativeEvent.Integer, nativeEvent.Number));
+        }
+
+        return count;
     }
 
     /// <inheritdoc />
@@ -356,7 +436,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
 
         for (int i = 0; i < _documentCount; i++)
         {
-            RmlUiNative.DocumentClose(_documents[i].Native);
+            RmlUiNative.DocumentCloseBound(_renderer, _documents[i].Native);
         }
 
         _documentCount = 0;
@@ -421,6 +501,69 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         }
 
         return result;
+    }
+
+    private static void ValidatePath(UiPathId path)
+    {
+        if (path.Value <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(path), "UI 模型路径 id 必须为正数。");
+        }
+    }
+
+    private static RmlUiNative.NativeUiValue ToNativeValue(in UiValue value)
+    {
+        return value.Kind switch
+        {
+            UiValueKind.Empty => default,
+            UiValueKind.Boolean => new RmlUiNative.NativeUiValue
+            {
+                Kind = (int)UiValueKind.Boolean,
+                Integer = value.AsBoolean() ? 1 : 0,
+            },
+            UiValueKind.Int64 => new RmlUiNative.NativeUiValue
+            {
+                Kind = (int)UiValueKind.Int64,
+                Integer = value.AsInt64(),
+            },
+            UiValueKind.Double => new RmlUiNative.NativeUiValue
+            {
+                Kind = (int)UiValueKind.Double,
+                Integer = BitConverter.DoubleToInt64Bits(value.AsDouble()),
+            },
+            UiValueKind.StringHandle => throw new NotSupportedException("RmlUi DOM 数据桥尚未接入真实字符串池，不能设置 StringHandle。"),
+            _ => throw new ArgumentOutOfRangeException(nameof(value), "未知 UI 值类型。"),
+        };
+    }
+
+    private static UiValue ToUiValue(in RmlUiNative.NativeUiValue value)
+    {
+        return ToUiValue(value.Kind, value.Integer, BitConverter.Int64BitsToDouble(value.Integer));
+    }
+
+    private static UiValue ToUiValue(int kind, long integer, double number)
+    {
+        return (UiValueKind)kind switch
+        {
+            UiValueKind.Empty => default,
+            UiValueKind.Boolean => UiValue.FromBoolean(integer != 0),
+            UiValueKind.Int64 => new UiValue(integer),
+            UiValueKind.Double => new UiValue(number),
+            UiValueKind.StringHandle => UiValue.FromStringHandle(new UiStringHandle(checked((int)integer))),
+            _ => default,
+        };
+    }
+
+    private string ReadNativeError()
+    {
+        IntPtr pointer = RmlUiNative.GetLastErrorUtf8(_renderer);
+        return pointer == IntPtr.Zero ? string.Empty : (Marshal.PtrToStringUTF8(pointer) ?? string.Empty);
+    }
+
+    private void ThrowNativeBridgeError(string fallback)
+    {
+        string error = ReadNativeError();
+        throw new InvalidOperationException(string.IsNullOrWhiteSpace(error) ? fallback : $"{fallback} {error}");
     }
 
     private static int ToRmlKey(UiKey key)
