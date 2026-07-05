@@ -226,9 +226,9 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 ### 4.8 demo-playability — 破坏 / 武器 / 可玩循环（plan/03/04/05/06/13）
 
-- [ ] `CellDamageResistanceTests`（Simulation.Tests）：同 `DamageCircle` 下 sand/dirt 即碎、stone 需累计 / 大当量、metal 小当量近免疫；Damage 累加与 `MaxIntegrity` 触发、`MaxIntegrity==0` 即时破坏三路径（plan/04 §A.3）。
+- [x] `CellDamageResistanceTests`（Simulation.Tests）：同 `DamageCircle` 下 sand/dirt 即碎、stone 需累计 / 大当量、metal 小当量近免疫；Damage 累加与 `MaxIntegrity` 触发、`MaxIntegrity==0` 即时破坏三路径（plan/04 §A.3）。证据：`CellDamageResistanceTests.DamageCircleDifferentiatesMaterialResistanceFromData` / `MaxIntegrityZeroDestroysImmediatelyAfterHardness`；`SimulationKernel.ApplyStructuralDamage` 已允许 Solid/Powder 进入抗性破坏路径，仍跳过液体/气体/火焰。
 - [ ] `CellDamageRubbleHandshakeTests`（Simulation.Tests）：破坏转 `RubbleTarget`/Empty + Damage 清 0 + parity + dirty + 跨界 KeepAlive + `DebrisCount` 碎屑请求 + `MineYield` 采集事件；写 cell 前查 `CellFlags.RigidOwned`；写新 cell 时 Damage 归 0（plan/03/05）。
-- [ ] `DispersionMoveCapTests`（Simulation.Tests）：`Dispersion` 加载期 clamp 到 `[0,MoveCap]`，液体单步水平位移 ≤ 32px（不变式 #4）。
+- [x] `DispersionMoveCapTests`（Simulation.Tests）：`Dispersion` 加载期 clamp 到 `[0,MoveCap]`，液体单步水平位移 ≤ 32px（不变式 #4）。证据：`DispersionMoveCapTests.LiquidSingleStepHorizontalDispersionNeverExceedsMoveCap` / `FlowRateAliasReadsDispersionValueFromMaterialProps`，以及 Content 层 `MaterialContentLoaderTests.LoadClampsDispersionToMoveCap`。
 - [ ] `WorldEffectBoundaryConservationTests`（Simulation.Tests）：`DamageCircle`/`DamageBeam` 跨 chunk 边界与四角交汇质量守恒（Empty+RubbleTarget+碎屑总量守恒，不翻倍 / 吞侧 / 凭空产出）（plan/05）。
 - [ ] `DamageBeamBurnThroughTests` / `ExcavatorRateTests`（Simulation.Tests）：激光沿束按 Hardness 烧穿速率（木/冰快、metal 慢 + 熔点相变）、挖掘圆形擦除半径 / 速率（plan/13 §C）。
 - [ ] `RigidOwnedDamageRoutingTests`（Physics.Tests / Simulation.Tests）：`CellFlags.RigidOwned` 像素破坏经 `IRigidDamageSink.OnOwnedCellDamaged` 路由触发形状重建、绝不在刚体像素累加 Damage（守 #5，联动 §4.3 拆分守恒）。

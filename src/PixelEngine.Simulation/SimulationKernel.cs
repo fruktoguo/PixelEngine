@@ -375,7 +375,7 @@ public sealed class SimulationKernel(
             return false;
         }
 
-        if (MaterialProps.TypeOf(material) != CellType.Solid)
+        if (MaterialProps.TypeOf(material) is not (CellType.Solid or CellType.Powder))
         {
             chunk.Damage[local] = 0;
             return false;
