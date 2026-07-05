@@ -35,6 +35,11 @@ public sealed class GameUiHost : IDisposable
     public UiDocumentManager Documents { get; }
 
     /// <summary>
+    /// 当前宿主使用的 UI 后端类型。
+    /// </summary>
+    public UiBackendKind BackendKind => _backend.Kind;
+
+    /// <summary>
     /// 当前后端是否需要光栅化或合成更新。
     /// </summary>
     public bool NeedsComposite => Options.Enabled && (_backend.IsDirty || _backend.IsAnimating);

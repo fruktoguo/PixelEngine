@@ -499,6 +499,7 @@ public sealed class Engine : IDisposable
         }
 
         bool hasGuiBridge = Context.TryGetService(out GuiRenderBridge _);
+        bool hasUiLayerCompositor = Context.TryGetService(out UiLayerCompositor _);
         IReadOnlyList<IEditorHostExtension>? extensions = null;
         bool hasEditorHostExtensions = false;
         if (!_editorHostExtensionsAttached &&
@@ -509,18 +510,32 @@ public sealed class Engine : IDisposable
             hasEditorHostExtensions = true;
         }
 
-        if (((!hasScriptGui && !hasGameUi) || hasGuiBridge) && !hasEditorHostExtensions)
+        bool gameUiNeedsDirectLayer = gameUi is not null && gameUi.BackendKind != UiBackendKind.ManagedFallback;
+        bool gameUiNeedsGuiBridge = gameUi is not null && gameUi.BackendKind == UiBackendKind.ManagedFallback;
+        bool needsGuiBridge = hasScriptGui || gameUiNeedsGuiBridge;
+        bool needsUiLayerCompositor = gameUiNeedsDirectLayer;
+
+        if ((!needsGuiBridge || hasGuiBridge) &&
+            (!needsUiLayerCompositor || hasUiLayerCompositor) &&
+            !hasEditorHostExtensions)
         {
             return;
         }
 
+        if (needsUiLayerCompositor && !hasUiLayerCompositor)
+        {
+            UiLayerCompositor compositor = UiLayerCompositor.Attach(pipeline, gameUi!);
+            Context.RegisterService(compositor);
+            _ownedRuntimeResources.Add(compositor);
+        }
+
         GuiWindowInputConnector? input = null;
         bool guiInputOwned = false;
-        if ((hasScriptGui || hasGameUi) && !hasGuiBridge)
+        if (needsGuiBridge && !hasGuiBridge)
         {
             GuiApp gui = ResolveGuiApp();
             input = new GuiWindowInputConnector(window, gui.Input);
-            Action<IGuiDrawContext>? managedGui = gameUi is null ? null : gameUi.DrawGui;
+            Action<IGuiDrawContext>? managedGui = gameUiNeedsGuiBridge ? gameUi!.DrawGui : null;
             GuiRenderBridge? bridge = GuiRenderBridge.AttachIfEnabled(
                 pipeline,
                 gui,
