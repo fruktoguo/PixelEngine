@@ -47,6 +47,23 @@ public sealed class WeaponController : Behaviour
     public int CurrentAmmo => Ammo.Length == 0 ? 0 : Ammo[SelectedIndex];
 
     /// <summary>
+    /// 所有武器剩余弹药总数。
+    /// </summary>
+    public int TotalRemainingAmmo
+    {
+        get
+        {
+            int total = 0;
+            for (int i = 0; i < Ammo.Length; i++)
+            {
+                total += Math.Max(0, Ammo[i]);
+            }
+
+            return total;
+        }
+    }
+
+    /// <summary>
     /// 当前武器热量。
     /// </summary>
     public float Heat { get; private set; }
@@ -308,7 +325,9 @@ public sealed class WeaponController : Behaviour
                 EmitImpactFeedback(weapon, hitX, hitY, count: 2);
                 break;
             case WeaponKind.Excavator:
-                Context.Cells.Paint((int)MathF.Round(hitX), (int)MathF.Round(hitY), Math.Max(1, weapon.Radius), new MaterialId(0));
+                int excavatorRadius = Math.Max(1, weapon.Radius);
+                PublishMineYieldForCircle(hitX, hitY, excavatorRadius);
+                Context.Cells.Paint((int)MathF.Round(hitX), (int)MathF.Round(hitY), excavatorRadius, new MaterialId(0));
                 EmitImpactFeedback(weapon, hitX, hitY, count: 4);
                 break;
             case WeaponKind.Builder:
@@ -395,6 +414,58 @@ public sealed class WeaponController : Behaviour
         }
 
         Context.Lighting.RevealAround(x, y, Math.Max(16f, weapon.Radius * 3f));
+    }
+
+    private void PublishMineYieldForCircle(float x, float y, int radius)
+    {
+        int centerX = (int)MathF.Round(x);
+        int centerY = (int)MathF.Round(y);
+        int radiusSquared = radius * radius;
+        int amount = 0;
+        ushort materialId = 0;
+        for (int yy = centerY - radius; yy <= centerY + radius; yy++)
+        {
+            int dy = yy - centerY;
+            for (int xx = centerX - radius; xx <= centerX + radius; xx++)
+            {
+                int dx = xx - centerX;
+                if ((dx * dx) + (dy * dy) > radiusSquared)
+                {
+                    continue;
+                }
+
+                MaterialId material = Context.Cells.GetMaterial(xx, yy);
+                if (!material.IsValid || material.Value == 0)
+                {
+                    continue;
+                }
+
+                MaterialInfo info = Context.Materials.GetInfo(material);
+                if (info.MineYield == 0)
+                {
+                    continue;
+                }
+
+                materialId = material.Value;
+                amount += info.MineYield;
+                if (amount >= ushort.MaxValue)
+                {
+                    amount = ushort.MaxValue;
+                    break;
+                }
+            }
+
+            if (amount >= ushort.MaxValue)
+            {
+                break;
+            }
+        }
+
+        if (amount > 0)
+        {
+            MineYieldEvent item = new(centerX, centerY, materialId, (ushort)amount);
+            _ = Context.Events.TryPublish(in item);
+        }
     }
 
     private void DrawBeamOverlay(float startX, float startY, float endX, float endY, uint color)

@@ -1,0 +1,267 @@
+using PixelEngine.Scripting;
+
+namespace PixelEngine.Demo;
+
+/// <summary>
+/// 熔岩矿洞逃生任务状态。
+/// </summary>
+public enum MissionState
+{
+    /// <summary>
+    /// 任务进行中。
+    /// </summary>
+    Playing,
+
+    /// <summary>
+    /// 任务胜利。
+    /// </summary>
+    Won,
+
+    /// <summary>
+    /// 任务失败。
+    /// </summary>
+    Lost,
+}
+
+/// <summary>
+/// 可被脚本事件总线传递的采矿收益事件。
+/// </summary>
+public readonly struct MineYieldEvent(int cellX, int cellY, ushort materialId, ushort amount)
+{
+    /// <summary>
+    /// 采集发生的 cell X 坐标。
+    /// </summary>
+    public int CellX { get; } = cellX;
+
+    /// <summary>
+    /// 采集发生的 cell Y 坐标。
+    /// </summary>
+    public int CellY { get; } = cellY;
+
+    /// <summary>
+    /// 被采集材质的运行时 id。
+    /// </summary>
+    public ushort MaterialId { get; } = materialId;
+
+    /// <summary>
+    /// 本次事件贡献的采集数量。
+    /// </summary>
+    public ushort Amount { get; } = amount;
+}
+
+/// <summary>
+/// 熔岩矿洞逃生任务导演，负责水晶进度、时限、水位、胜负和计分。
+/// </summary>
+public sealed class MissionDirector : Behaviour
+{
+    private PlayerHealth? _health;
+    private WeaponController? _weapon;
+    private bool _componentsResolved;
+    private int _baselineRespawns;
+
+    /// <summary>
+    /// 需要收集的目标水晶数量。
+    /// </summary>
+    public int RequiredCrystals { get; set; } = 3;
+
+    /// <summary>
+    /// 任务时限，单位秒。
+    /// </summary>
+    public float TimeLimitSeconds { get; set; } = 240f;
+
+    /// <summary>
+    /// 熔岩初始表面 Y 坐标；坐标越小表示水位越高。
+    /// </summary>
+    public float InitialLavaSurfaceY { get; set; } = 336f;
+
+    /// <summary>
+    /// 熔岩上升速度，单位 cell/秒。
+    /// </summary>
+    public float LavaRiseCellsPerSecond { get; set; } = 0.45f;
+
+    /// <summary>
+    /// 每秒剩余时间的分数权重。
+    /// </summary>
+    public int TimeScorePerSecond { get; set; } = 10;
+
+    /// <summary>
+    /// 每发剩余弹药的分数权重。
+    /// </summary>
+    public int AmmoScorePerRound { get; set; } = 5;
+
+    /// <summary>
+    /// 未受伤通关奖励。
+    /// </summary>
+    public int UndamagedBonus { get; set; } = 500;
+
+    /// <summary>
+    /// 当前任务状态。
+    /// </summary>
+    public MissionState State { get; private set; } = MissionState.Playing;
+
+    /// <summary>
+    /// 已收集水晶数量。
+    /// </summary>
+    public int CrystalsCollected { get; private set; }
+
+    /// <summary>
+    /// 任务已运行时间，单位秒。
+    /// </summary>
+    public float ElapsedSeconds { get; private set; }
+
+    /// <summary>
+    /// 剩余任务时间，单位秒。
+    /// </summary>
+    public float RemainingSeconds => MathF.Max(0f, TimeLimitSeconds - ElapsedSeconds);
+
+    /// <summary>
+    /// 当前熔岩表面 Y 坐标。
+    /// </summary>
+    public float LavaSurfaceY { get; private set; }
+
+    /// <summary>
+    /// 当前结算分数。
+    /// </summary>
+    public int Score { get; private set; }
+
+    /// <summary>
+    /// 最近一次胜负原因。
+    /// </summary>
+    public string ResultReason { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// 最近一次阻塞原因；为空表示任务导演已就绪。
+    /// </summary>
+    public string BlockedReason { get; private set; } = string.Empty;
+
+    /// <inheritdoc />
+    protected override void OnStart()
+    {
+        LavaSurfaceY = InitialLavaSurfaceY;
+        ResolveComponents();
+        _baselineRespawns = _health?.RespawnCount ?? 0;
+        _ = Context.Events.Subscribe<MineYieldEvent>(OnMineYield);
+    }
+
+    /// <inheritdoc />
+    protected override void OnUpdate(float dt)
+    {
+        if (!float.IsFinite(dt) || dt < 0f || State != MissionState.Playing)
+        {
+            return;
+        }
+
+        ResolveComponents();
+        ElapsedSeconds += dt;
+        LavaSurfaceY = InitialLavaSurfaceY - (MathF.Max(0f, LavaRiseCellsPerSecond) * ElapsedSeconds);
+        Score = CalculateScore();
+
+        if (ElapsedSeconds >= TimeLimitSeconds)
+        {
+            MarkLost("time_limit");
+            return;
+        }
+
+        if (_health is not null && _health.RespawnCount > _baselineRespawns)
+        {
+            MarkLost("player_death");
+            return;
+        }
+
+        if (_health is not null && Entity.TryGetComponent(out PlayerController localPlayer) && localPlayer.State.Y + localPlayer.State.Height >= LavaSurfaceY)
+        {
+            MarkLost("lava_reached_player");
+        }
+    }
+
+    /// <summary>
+    /// 由出口触发器在满足进入条件时调用。
+    /// </summary>
+    public void MarkExtractionReached()
+    {
+        if (State != MissionState.Playing)
+        {
+            return;
+        }
+
+        if (CrystalsCollected < Math.Max(1, RequiredCrystals))
+        {
+            ResultReason = "missing_crystals";
+            return;
+        }
+
+        State = MissionState.Won;
+        Score = CalculateScore();
+        ResultReason = "extraction_reached";
+    }
+
+    /// <summary>
+    /// 强制判负，供后续环境危险导演或测试触发。
+    /// </summary>
+    /// <param name="reason">失败原因。</param>
+    public void MarkLost(string reason)
+    {
+        if (State != MissionState.Playing)
+        {
+            return;
+        }
+
+        State = MissionState.Lost;
+        Score = CalculateScore();
+        ResultReason = string.IsNullOrWhiteSpace(reason) ? "lost" : reason;
+    }
+
+    private void OnMineYield(MineYieldEvent item)
+    {
+        if (State != MissionState.Playing || item.Amount == 0)
+        {
+            return;
+        }
+
+        int required = Math.Max(1, RequiredCrystals);
+        CrystalsCollected = Math.Min(required, CrystalsCollected + item.Amount);
+        Score = CalculateScore();
+    }
+
+    private void ResolveComponents()
+    {
+        if (_componentsResolved)
+        {
+            return;
+        }
+
+        if (_health is null)
+        {
+            if (Entity.TryGetComponent(out PlayerHealth health))
+            {
+                _health = health;
+            }
+        }
+
+        if (_weapon is null)
+        {
+            if (Entity.TryGetComponent(out WeaponController weapon))
+            {
+                _weapon = weapon;
+            }
+        }
+
+        if (_health is not null && _weapon is not null)
+        {
+            _componentsResolved = true;
+            BlockedReason = string.Empty;
+        }
+        else
+        {
+            BlockedReason = "MissionDirector 未找到 PlayerHealth 或 WeaponController；计分会降级为时间与无伤状态。";
+        }
+    }
+
+    private int CalculateScore()
+    {
+        int remainingTimeScore = Math.Max(0, (int)MathF.Floor(RemainingSeconds) * Math.Max(0, TimeScorePerSecond));
+        int ammoScore = Math.Max(0, _weapon?.TotalRemainingAmmo ?? 0) * Math.Max(0, AmmoScorePerRound);
+        int undamagedScore = _health is not null && _health.DamageEventCount == 0 ? Math.Max(0, UndamagedBonus) : 0;
+        return remainingTimeScore + ammoScore + undamagedScore;
+    }
+}

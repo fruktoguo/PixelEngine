@@ -34,6 +34,14 @@ public sealed class ScriptEventBus(CoreEventBus coreEvents) : IEventBus, IScript
         return channel.Subscribe(handler);
     }
 
+    /// <inheritdoc />
+    public bool TryPublish<TEvent>(in TEvent item)
+        where TEvent : unmanaged
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _coreEvents.Channel<TEvent>().TryEnqueue(in item);
+    }
+
     /// <summary>
     /// 排空所有已订阅事件通道；由脚本运行时在相位 1 调用。
     /// </summary>

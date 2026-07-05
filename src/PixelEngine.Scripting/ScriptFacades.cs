@@ -809,6 +809,19 @@ public interface IEventBus
     /// <returns>用于取消订阅的释放句柄。</returns>
     IDisposable Subscribe<TEvent>(Action<TEvent> handler)
         where TEvent : unmanaged;
+
+    /// <summary>
+    /// 向指定事件类型通道发布事件；容量满时返回 false，由调用方决定降级或丢弃。
+    /// </summary>
+    /// <typeparam name="TEvent">要发布的事件类型。</typeparam>
+    /// <param name="item">事件载荷。</param>
+    /// <returns>事件是否已成功写入通道。</returns>
+    bool TryPublish<TEvent>(in TEvent item)
+        where TEvent : unmanaged
+    {
+        _ = item;
+        throw new NotSupportedException("当前脚本上下文未提供事件发布后端。");
+    }
 }
 
 /// <summary>
