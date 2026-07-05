@@ -236,7 +236,6 @@ public sealed class PlayableProjectileTool : Behaviour
             EmitSmallImpactParticles(hitX, hitY);
         }
 
-        Context.Lighting.RevealAround(hitX, hitY, ImpactRadius * 2.5f);
         Context.Lighting.AddPointLight(hitX, hitY, ImpactRadius * 3f, 0xFF_60_D8_FF, 0.35f);
         Context.Audio.PlayAt(UseExplosionDamage ? "explosion.wav" : "impact_stone.wav", hitX, hitY, UseExplosionDamage ? 0.85f : 0.55f);
         LastShotStartX = startX;

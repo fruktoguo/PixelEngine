@@ -452,7 +452,6 @@ public sealed class WeaponController : Behaviour
             Context.Particles.Burst(x, y, material, Math.Clamp(count, 1, 32), speed: Math.Max(1f, weapon.Impulse * 0.15f));
         }
 
-        Context.Lighting.RevealAround(x, y, Math.Max(16f, weapon.Radius * 3f));
     }
 
     private void PublishMineYieldForCircle(float x, float y, int radius)

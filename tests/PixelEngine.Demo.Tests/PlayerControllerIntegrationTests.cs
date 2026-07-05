@@ -457,7 +457,7 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
-    /// 验证 Demo 爆破工具会从鼠标世界坐标触发抗性感知破坏、碎屑粒子与光照反馈。
+    /// 验证 Demo 爆破工具会从鼠标世界坐标触发抗性感知破坏、碎屑粒子与瞬时光照反馈。
     /// </summary>
     [Fact]
     public void ExplosiveToolMiddleClickDamagesCellsAndQueuesLighting()
@@ -484,7 +484,7 @@ public sealed class PlayerControllerIntegrationTests
 
         ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
         Assert.Equal(1, lighting.PointLights.Length);
-        Assert.True(lighting.FogOfWar.RevealAlpha(12, 13) > 0);
+        Assert.Equal(0, lighting.FogOfWar.RevealAlpha(12, 13));
     }
 
     /// <summary>
@@ -819,11 +819,13 @@ public sealed class PlayerControllerIntegrationTests
 
         Assert.True(grenade.Exploded);
         Assert.Equal(1, CountBehaviours<GrenadeProjectile>(scene));
+        ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
+        Assert.Equal(0, lighting.FogOfWar.RevealAlpha(18, 14));
 
         engine.RunHeadlessTicks(24);
 
-        ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
         Assert.Equal(0, lighting.PointLights.Length);
+        Assert.Equal(0, lighting.FogOfWar.RevealAlpha(18, 14));
         Assert.Equal(0, CountBehaviours<GrenadeProjectile>(scene));
     }
 
@@ -1236,6 +1238,7 @@ public sealed class PlayerControllerIntegrationTests
             input.Update([Key.Digit3], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
             engine.RunHeadlessTicks(1);
             Assert.True(scene.EntityCount > entitiesBeforeGrenade);
+            input.Update([], [], mouseX: 36f, mouseY: 34f, wheelY: 0f);
             engine.RunHeadlessTicks(20);
             Assert.Equal(WeaponKind.Grenade, weapons.LastDispatchedKind);
             Assert.True(scene.EntityCount <= entitiesBeforeGrenade);

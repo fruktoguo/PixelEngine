@@ -113,7 +113,6 @@ public sealed class GrenadeProjectile : Behaviour
         Exploded = true;
         Context.World.DamageCircle(X, Y, _radius, _damage, falloff: true, DamageKind.Impact);
         Context.World.Explode(X, Y, _radius, _impulse);
-        Context.Lighting.RevealAround(X, Y, _radius * 3f);
         _flash.Start(X, Y, _radius, 0xFF_30_80_FF);
         Context.Audio.PlayAt(_impactCue, X, Y, 0.8f);
         MaterialId sand = Context.Materials.Resolve("sand");

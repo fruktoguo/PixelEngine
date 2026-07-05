@@ -56,7 +56,6 @@ public sealed class ExplosiveTool : Behaviour
         int radius = Math.Max(1, Radius);
         float force = MathF.Max(1f, Force);
         Context.World.Explode(world.X, world.Y, radius, force);
-        Context.Lighting.RevealAround(world.X, world.Y, radius * 1.5f);
         Context.Lighting.AddPointLight(world.X, world.Y, radius * 2f, 0xFF_30_80_FF, 1.4f);
         _flash.Start(world.X, world.Y, radius, 0xFF_30_80_FF);
         LastExplosionX = world.X;
