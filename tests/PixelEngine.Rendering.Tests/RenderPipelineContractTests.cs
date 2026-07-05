@@ -140,6 +140,10 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("FramebufferBinding", state, StringComparison.Ordinal);
         Assert.Contains("VertexArrayBinding", state, StringComparison.Ordinal);
         Assert.Contains("BlendFuncSeparate", state, StringComparison.Ordinal);
+        Assert.Contains("BlendEquationRgb", state, StringComparison.Ordinal);
+        Assert.Contains("BlendEquationSeparate", state, StringComparison.Ordinal);
+        Assert.Contains("UnpackAlignment", state, StringComparison.Ordinal);
+        Assert.Contains("PixelStore(PixelStoreParameter.UnpackAlignment", state, StringComparison.Ordinal);
         Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Game, this)", guiBridge, StringComparison.Ordinal);
         Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Game, this)", uiCompositor, StringComparison.Ordinal);
         Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Editor, this)", editorBridge, StringComparison.Ordinal);

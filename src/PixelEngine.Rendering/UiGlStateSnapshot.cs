@@ -18,6 +18,9 @@ internal readonly struct UiGlStateSnapshot
     private readonly int _blendDstRgb;
     private readonly int _blendSrcAlpha;
     private readonly int _blendDstAlpha;
+    private readonly int _blendEquationRgb;
+    private readonly int _blendEquationAlpha;
+    private readonly int _unpackAlignment;
     private readonly bool _blend;
     private readonly bool _depth;
     private readonly bool _cull;
@@ -43,6 +46,9 @@ internal readonly struct UiGlStateSnapshot
         int blendDstRgb,
         int blendSrcAlpha,
         int blendDstAlpha,
+        int blendEquationRgb,
+        int blendEquationAlpha,
+        int unpackAlignment,
         bool blend,
         bool depth,
         bool cull,
@@ -61,6 +67,9 @@ internal readonly struct UiGlStateSnapshot
         _blendDstRgb = blendDstRgb;
         _blendSrcAlpha = blendSrcAlpha;
         _blendDstAlpha = blendDstAlpha;
+        _blendEquationRgb = blendEquationRgb;
+        _blendEquationAlpha = blendEquationAlpha;
+        _unpackAlignment = unpackAlignment;
         _blend = blend;
         _depth = depth;
         _cull = cull;
@@ -92,6 +101,9 @@ internal readonly struct UiGlStateSnapshot
         gl.GetInteger(GLEnum.BlendDstRgb, out int blendDstRgb);
         gl.GetInteger(GLEnum.BlendSrcAlpha, out int blendSrcAlpha);
         gl.GetInteger(GLEnum.BlendDstAlpha, out int blendDstAlpha);
+        gl.GetInteger(GLEnum.BlendEquationRgb, out int blendEquationRgb);
+        gl.GetInteger(GLEnum.BlendEquationAlpha, out int blendEquationAlpha);
+        gl.GetInteger(GLEnum.UnpackAlignment, out int unpackAlignment);
         return new UiGlStateSnapshot(
             framebuffer,
             program,
@@ -104,6 +116,9 @@ internal readonly struct UiGlStateSnapshot
             blendDstRgb,
             blendSrcAlpha,
             blendDstAlpha,
+            blendEquationRgb,
+            blendEquationAlpha,
+            unpackAlignment,
             gl.IsEnabled(EnableCap.Blend),
             gl.IsEnabled(EnableCap.DepthTest),
             gl.IsEnabled(EnableCap.CullFace),
@@ -126,6 +141,8 @@ internal readonly struct UiGlStateSnapshot
             (BlendingFactor)_blendDstRgb,
             (BlendingFactor)_blendSrcAlpha,
             (BlendingFactor)_blendDstAlpha);
+        gl.BlendEquationSeparate((BlendEquationModeEXT)_blendEquationRgb, (BlendEquationModeEXT)_blendEquationAlpha);
+        gl.PixelStore(PixelStoreParameter.UnpackAlignment, _unpackAlignment);
         gl.UseProgram((uint)_program);
         gl.BindVertexArray((uint)_vertexArray);
         gl.BindBuffer(BufferTargetARB.ArrayBuffer, (uint)_arrayBuffer);
