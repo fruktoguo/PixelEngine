@@ -5740,6 +5740,18 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
     private static ScriptResult RunPowerShellScript(string workingDirectory, string scriptPath, params string[] arguments)
     {
+        string[] effectiveArguments = arguments;
+        if (Path.GetFileName(scriptPath).Equals("release-evidence-preflight.ps1", StringComparison.OrdinalIgnoreCase) &&
+            !arguments.Contains("-ActiveRids", StringComparer.OrdinalIgnoreCase))
+        {
+            effectiveArguments =
+            [
+                .. arguments,
+                "-ActiveRids",
+                "win-x64,win-arm64,linux-x64,linux-arm64,osx-x64,osx-arm64",
+            ];
+        }
+
         using System.Diagnostics.Process process = new();
         process.StartInfo.FileName = "pwsh";
         process.StartInfo.WorkingDirectory = workingDirectory;
@@ -5752,7 +5764,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         process.StartInfo.ArgumentList.Add("Bypass");
         process.StartInfo.ArgumentList.Add("-File");
         process.StartInfo.ArgumentList.Add(scriptPath);
-        foreach (string argument in arguments)
+        foreach (string argument in effectiveArguments)
         {
             process.StartInfo.ArgumentList.Add(argument);
         }

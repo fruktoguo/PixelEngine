@@ -60,7 +60,7 @@ function Assert-FileExists([string]$path, [string]$message) {
 function Resolve-ActiveRids([string]$value) {
   $validRids = @('win-x64', 'win-arm64', 'linux-x64', 'linux-arm64', 'osx-x64', 'osx-arm64')
   if (-not [string]::IsNullOrWhiteSpace($value)) {
-    $requested = @($value.Split(',', [StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.Trim() })
+    $requested = @($value -split '[,\s]+' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim() })
     if ($requested.Count -eq 0) {
       throw '-ActiveRids 不能为空。'
     }

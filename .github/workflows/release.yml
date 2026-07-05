@@ -5,6 +5,12 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      include_win_arm64:
+        description: Include win-arm64 packages in the active release set
+        required: true
+        default: true
+        type: boolean
 
 env:
   CI: true
@@ -12,25 +18,39 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
+  setup:
+    name: setup release matrix
+    runs-on: ubuntu-latest
+    outputs:
+      native_matrix: ${{ steps.matrix.outputs.native_matrix }}
+      build_matrix: ${{ steps.matrix.outputs.build_matrix }}
+      expected: ${{ steps.matrix.outputs.expected }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate release matrices
+        id: matrix
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INCLUDE_WIN_ARM64: ${{ inputs.include_win_arm64 }}
+        run: |
+          $excludeWinArm64 = $env:EVENT_NAME -eq 'workflow_dispatch' -and $env:INCLUDE_WIN_ARM64 -eq 'false'
+          if ($excludeWinArm64) {
+            ./tools/release-matrix.ps1 -ExcludeWinArm64
+          } else {
+            ./tools/release-matrix.ps1
+          }
+
   native:
     name: native (${{ matrix.group }})
+    needs: setup
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - group: windows
-            runner: windows-latest
-            shell: pwsh
-            rids: win-x64 win-arm64
-          - group: linux
-            runner: ubuntu-latest
-            shell: bash
-            rids: linux-x64 linux-arm64
-          - group: macos
-            runner: macos-14
-            shell: bash
-            rids: osx-x64 osx-arm64
+      matrix: ${{ fromJSON(needs.setup.outputs.native_matrix) }}
 
     steps:
       - name: Checkout
@@ -81,32 +101,11 @@ jobs:
 
   publish:
     name: publish (${{ matrix.rid }}, ${{ matrix.channel }})
-    needs: native
+    needs: [setup, native]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
-      matrix:
-        rid: [win-x64, win-arm64, linux-x64, linux-arm64, osx-x64, osx-arm64]
-        channel: [r2r, aot]
-        include:
-          - rid: win-x64
-            runner: windows-latest
-            shell: pwsh
-          - rid: win-arm64
-            runner: windows-latest
-            shell: pwsh
-          - rid: linux-x64
-            runner: ubuntu-latest
-            shell: bash
-          - rid: linux-arm64
-            runner: ubuntu-latest
-            shell: bash
-          - rid: osx-x64
-            runner: macos-15-intel
-            shell: bash
-          - rid: osx-arm64
-            runner: macos-14
-            shell: bash
+      matrix: ${{ fromJSON(needs.setup.outputs.build_matrix) }}
 
     steps:
       - name: Checkout
@@ -255,45 +254,18 @@ jobs:
 
   verify:
     name: verify (${{ matrix.rid }}, ${{ matrix.channel }})
-    needs: publish
+    needs: [setup, publish]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
-      matrix:
-        rid: [win-x64, win-arm64, linux-x64, linux-arm64, osx-x64, osx-arm64]
-        channel: [r2r, aot]
-        include:
-          - rid: win-x64
-            runner: windows-latest
-            shell: pwsh
-            allow_load_only: 'false'
-          - rid: win-arm64
-            runner: windows-latest
-            shell: pwsh
-            allow_load_only: 'true'
-          - rid: linux-x64
-            runner: ubuntu-latest
-            shell: bash
-            allow_load_only: 'false'
-          - rid: linux-arm64
-            runner: ubuntu-latest
-            shell: bash
-            allow_load_only: 'false'
-          - rid: osx-x64
-            runner: macos-15-intel
-            shell: bash
-            allow_load_only: 'false'
-          - rid: osx-arm64
-            runner: macos-14
-            shell: bash
-            allow_load_only: 'false'
+      matrix: ${{ fromJSON(needs.setup.outputs.build_matrix) }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install Linux arm64 smoke runner
-        if: matrix.rid == 'linux-arm64'
+        if: matrix.smoke == 'qemu'
         shell: bash
         run: |
           sudo apt-get update
@@ -362,32 +334,11 @@ jobs:
 
   sign-package:
     name: sign-package (${{ matrix.rid }}, ${{ matrix.channel }})
-    needs: verify
+    needs: [setup, verify]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
-      matrix:
-        rid: [win-x64, win-arm64, linux-x64, linux-arm64, osx-x64, osx-arm64]
-        channel: [r2r, aot]
-        include:
-          - rid: win-x64
-            runner: windows-latest
-            shell: pwsh
-          - rid: win-arm64
-            runner: windows-latest
-            shell: pwsh
-          - rid: linux-x64
-            runner: ubuntu-latest
-            shell: bash
-          - rid: linux-arm64
-            runner: ubuntu-latest
-            shell: bash
-          - rid: osx-x64
-            runner: macos-15-intel
-            shell: bash
-          - rid: osx-arm64
-            runner: macos-14
-            shell: bash
+      matrix: ${{ fromJSON(needs.setup.outputs.build_matrix) }}
 
     steps:
       - name: Checkout
@@ -412,7 +363,7 @@ jobs:
           "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
 
       - name: Configure Apple signing keychain
-        if: startsWith(matrix.rid, 'osx-')
+        if: matrix.codesign == true
         shell: bash
         env:
           APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
@@ -457,7 +408,7 @@ jobs:
             --issuer "$APPLE_NOTARY_ISSUER_ID"
 
       - name: codesign and notarize macOS publish directory
-        if: startsWith(matrix.rid, 'osx-')
+        if: matrix.codesign == true
         shell: bash
         env:
           APPLE_CODESIGN_IDENTITY: ${{ secrets.APPLE_CODESIGN_IDENTITY }}
@@ -469,7 +420,7 @@ jobs:
             --notary-profile "$APPLE_NOTARY_PROFILE"
 
       - name: Write macOS signing evidence
-        if: always() && startsWith(matrix.rid, 'osx-')
+        if: always() && matrix.codesign == true
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts/release-evidence | Out-Null
@@ -497,7 +448,7 @@ jobs:
           ) | Set-Content -Path artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-notarization.md -Encoding UTF8
 
       - name: Upload macOS signing evidence
-        if: always() && startsWith(matrix.rid, 'osx-')
+        if: always() && matrix.codesign == true
         uses: actions/upload-artifact@v4
         with:
           name: release-evidence-signing-${{ matrix.rid }}-${{ matrix.channel }}
@@ -562,7 +513,7 @@ jobs:
 
   release:
     name: release
-    needs: sign-package
+    needs: [setup, sign-package]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -620,10 +571,16 @@ jobs:
 
       - name: Audit release artifacts
         shell: bash
+        env:
+          RELEASE_EXPECTED: ${{ needs.setup.outputs.expected }}
         run: |
           mkdir -p artifacts/release-evidence
+          active_rids="$(python3 -c 'import json, os; print(" ".join(json.loads(os.environ["RELEASE_EXPECTED"])["activeRids"]))')"
+          active_rids_csv="${active_rids// /,}"
+          channels_csv="$(python3 -c 'import json, os; print(",".join(json.loads(os.environ["RELEASE_EXPECTED"])["channels"]))')"
+          package_count="$(python3 -c 'import json, os; print(json.loads(os.environ["RELEASE_EXPECTED"])["packageCount"])')"
           set +e
-          bash ./tools/audit-release-artifacts.sh --publish-root artifacts/publish --package-root artifacts/package --require-all 2>&1 | tee artifacts/release-evidence/artifact-audit-output.txt
+          bash ./tools/audit-release-artifacts.sh --publish-root artifacts/publish --package-root artifacts/package --active-rids "$active_rids_csv" --require-all 2>&1 | tee artifacts/release-evidence/artifact-audit-output.txt
           status="${PIPESTATUS[0]}"
           set -e
           conclusion="success"
@@ -639,10 +596,10 @@ jobs:
             echo "| sha | ${{ github.sha }} |"
             echo "| conclusion | $conclusion |"
             echo "| require_all | true |"
-            echo "| package_count | 12 |"
-            echo "| expanded_package_count | 12 |"
-            echo "| rids | win-x64,win-arm64,linux-x64,linux-arm64,osx-x64,osx-arm64 |"
-            echo "| channels | r2r,aot |"
+            echo "| package_count | $package_count |"
+            echo "| expanded_package_count | $package_count |"
+            echo "| rids | $active_rids_csv |"
+            echo "| channels | $channels_csv |"
             echo "| aot_dynamic_box2d_rejected | true |"
             echo "| package_layout_checked | true |"
             echo "| checksum_checked | true |"
@@ -656,11 +613,13 @@ jobs:
       - name: Verify deterministic package hashes
         if: always()
         shell: bash
+        env:
+          RELEASE_EXPECTED: ${{ needs.setup.outputs.expected }}
         run: |
           mkdir -p artifacts/release-evidence artifacts/package-deterministic
           report="artifacts/release-evidence/deterministic-hash.md"
-          rids=(win-x64 win-arm64 linux-x64 linux-arm64 osx-x64 osx-arm64)
-          channels=(r2r aot)
+          read -r -a rids <<< "$(python3 -c 'import json, os; print(" ".join(json.loads(os.environ["RELEASE_EXPECTED"])["activeRids"]))')"
+          read -r -a channels <<< "$(python3 -c 'import json, os; print(" ".join(json.loads(os.environ["RELEASE_EXPECTED"])["channels"]))')"
           conclusion=success
           rows=()
 
@@ -763,6 +722,8 @@ jobs:
       - name: Build release evidence manifest
         if: always()
         shell: pwsh
+        env:
+          RELEASE_EXPECTED: ${{ needs.setup.outputs.expected }}
         run: |
           function Get-Sha256($path) {
             if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -822,8 +783,9 @@ jobs:
             "",
             "This release run verifies R2R publish layout and smoke execution, but it does not capture Tier-1 target-machine disassembly proving runtime SIMD light-up on representative AVX2/AVX-512 hardware. Do not treat this report as R2R light-up success."
           ) | Set-Content -Path artifacts/release-evidence/r2r-lightup.md -Encoding UTF8
-          $rids = @('win-x64', 'win-arm64', 'linux-x64', 'linux-arm64', 'osx-x64', 'osx-arm64')
-          $channels = @('r2r', 'aot')
+          $expected = $env:RELEASE_EXPECTED | ConvertFrom-Json
+          $rids = @($expected.activeRids | ForEach-Object { [string]$_ })
+          $channels = @($expected.channels | ForEach-Object { [string]$_ })
           $artifacts = [ordered]@{}
           foreach ($rid in $rids) {
             $ridNode = [ordered]@{}
@@ -877,7 +839,12 @@ jobs:
       - name: Preflight release evidence
         if: always()
         shell: pwsh
-        run: ./tools/release-evidence-preflight.ps1 -EvidenceManifestPath artifacts/release-evidence/evidence.json -AllowBlocked
+        env:
+          RELEASE_EXPECTED: ${{ needs.setup.outputs.expected }}
+        run: |
+          $expected = $env:RELEASE_EXPECTED | ConvertFrom-Json
+          $activeRids = ($expected.activeRids | ForEach-Object { [string]$_ }) -join ','
+          ./tools/release-evidence-preflight.ps1 -EvidenceManifestPath artifacts/release-evidence/evidence.json -ActiveRids $activeRids -ExpectedPackageCount ([int]$expected.packageCount) -AllowBlocked
 
       - name: Upload release evidence report
         if: always()
