@@ -893,6 +893,50 @@ PE_UI_NATIVE_API int32_t peui_native_try_get_model_value(
     return 1;
 }
 
+PE_UI_NATIVE_API int32_t peui_native_copy_model_paths(
+    PeUiRenderer* renderer,
+    int32_t document_handle,
+    int32_t* paths,
+    int32_t capacity)
+{
+    if (renderer == nullptr || document_handle <= 0 || paths == nullptr || capacity <= 0)
+    {
+        return 0;
+    }
+
+    int32_t written = 0;
+    for (const PeUiModelBinding& binding : renderer->modelBindings)
+    {
+        if (binding.documentHandle != document_handle)
+        {
+            continue;
+        }
+
+        bool duplicate = false;
+        for (int32_t i = 0; i < written; i++)
+        {
+            if (paths[i] == binding.pathHash)
+            {
+                duplicate = true;
+                break;
+            }
+        }
+
+        if (duplicate)
+        {
+            continue;
+        }
+
+        paths[written++] = binding.pathHash;
+        if (written == capacity)
+        {
+            break;
+        }
+    }
+
+    return written;
+}
+
 PE_UI_NATIVE_API int32_t peui_native_drain_events(PeUiRenderer* renderer, PeUiNativeEvent* events, int32_t capacity)
 {
     if (renderer == nullptr || events == nullptr || capacity <= 0)

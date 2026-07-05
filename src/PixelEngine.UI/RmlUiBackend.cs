@@ -382,6 +382,32 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
     }
 
     /// <inheritdoc />
+    public int CopyModelPaths(UiDocumentHandle document, Span<UiPathId> destination)
+    {
+        ThrowIfDisposed();
+        EnsureInitialized();
+        document.Validate();
+        if (destination.IsEmpty || !TryFindDocument(document, out _))
+        {
+            return 0;
+        }
+
+        Span<int> paths = stackalloc int[Math.Min(destination.Length, MaxDrainEvents)];
+        int count;
+        fixed (int* pointer = paths)
+        {
+            count = RmlUiNative.CopyModelPaths(_renderer, document.Value, pointer, paths.Length);
+        }
+
+        for (int i = 0; i < count; i++)
+        {
+            destination[i] = new UiPathId(paths[i]);
+        }
+
+        return count;
+    }
+
+    /// <inheritdoc />
     public int DrainEvents(Span<UiEvent> destination)
     {
         ThrowIfDisposed();

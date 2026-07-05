@@ -1036,6 +1036,13 @@ public sealed class EnginePhaseDriverTests
             return false;
         }
 
+        public int CopyModelPaths(GameUi.UiDocumentHandle document, Span<GameUi.UiPathId> destination)
+        {
+            _ = document;
+            _ = destination;
+            return 0;
+        }
+
         public int DrainEvents(Span<GameUi.UiEvent> destination)
         {
             if (destination.IsEmpty)

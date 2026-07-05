@@ -120,6 +120,14 @@ public interface IGameUiBackend : IDisposable
     bool TryGetModelValue(UiDocumentHandle document, UiPathId path, out UiValue value);
 
     /// <summary>
+    /// 复制目标文档当前声明的模型路径。
+    /// </summary>
+    /// <param name="document">目标文档。</param>
+    /// <param name="destination">路径写入缓冲。</param>
+    /// <returns>写入路径数量；缓冲不足时只写入前 N 项。</returns>
+    int CopyModelPaths(UiDocumentHandle document, Span<UiPathId> destination);
+
+    /// <summary>
     /// 抽取 UI 到游戏的事件。
     /// </summary>
     /// <param name="destination">事件写入缓冲。</param>

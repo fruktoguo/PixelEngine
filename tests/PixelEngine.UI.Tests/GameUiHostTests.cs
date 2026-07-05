@@ -138,6 +138,13 @@ public sealed class GameUiHostTests
             return false;
         }
 
+        public int CopyModelPaths(UiDocumentHandle document, Span<UiPathId> destination)
+        {
+            _ = document;
+            _ = destination;
+            return 0;
+        }
+
         public int DrainEvents(Span<UiEvent> destination)
         {
             return 0;

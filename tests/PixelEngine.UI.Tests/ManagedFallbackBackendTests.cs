@@ -55,9 +55,12 @@ public sealed class ManagedFallbackBackendTests
 
         host.Composite(default);
         UiPathId pathId = new(UiStableId.Hash("settings.music"));
+        UiPathId[] paths = new UiPathId[4];
 
         Assert.True(backend.TryGetModelValue(document, pathId, out UiValue value));
         Assert.True(value.AsBoolean());
+        Assert.Equal(1, backend.CopyModelPaths(document, paths));
+        Assert.Equal(pathId, paths[0]);
         UiEvent[] events = new UiEvent[4];
         Assert.Equal(1, backend.DrainEvents(events));
         Assert.True(events[0].Payload.AsBoolean());

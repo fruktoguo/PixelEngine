@@ -632,7 +632,7 @@ public sealed class Engine : IDisposable
         GameUiServiceBridge service = new(host, Context.Options.ContentRoot);
         Context.RegisterService<GameUiServiceBridge>(service);
         Context.RegisterService<IGameUiService>(service);
-        GameUiPhaseDriver driver = new(host, eventSink: service);
+        GameUiPhaseDriver driver = new(host, eventSink: service, modelPusher: service);
         Context.RegisterService(driver.GetType(), driver);
         driver.RegisterPhases(Phases);
         _ownedRuntimeResources.Add(host);

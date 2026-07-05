@@ -187,6 +187,31 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     }
 
     /// <inheritdoc />
+    public int CopyModelPaths(UiDocumentHandle document, Span<UiPathId> destination)
+    {
+        ThrowIfDisposed();
+        ManagedUiDocument? uiDocument = FindDocument(document);
+        if (uiDocument is null || destination.IsEmpty)
+        {
+            return 0;
+        }
+
+        int written = 0;
+        for (int i = 0; i < uiDocument.Controls.Length && written < destination.Length; i++)
+        {
+            UiPathId path = uiDocument.Controls[i].Path;
+            if (path.Value <= 0 || ContainsPath(destination[..written], path))
+            {
+                continue;
+            }
+
+            destination[written++] = path;
+        }
+
+        return written;
+    }
+
+    /// <inheritdoc />
     public int DrainEvents(Span<UiEvent> destination)
     {
         ThrowIfDisposed();
@@ -349,6 +374,19 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         int write = (_eventRead + _eventCount) % _events.Length;
         _events[write] = uiEvent;
         _eventCount++;
+    }
+
+    private static bool ContainsPath(ReadOnlySpan<UiPathId> paths, UiPathId path)
+    {
+        for (int i = 0; i < paths.Length; i++)
+        {
+            if (paths[i] == path)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void ThrowIfDisposed()

@@ -9,6 +9,7 @@ public sealed class GameUiPhaseDriver : IEnginePhaseDriver
 {
     private readonly GameUiHost _host;
     private readonly IGameUiEventSink? _eventSink;
+    private readonly IGameUiModelPusher? _modelPusher;
     private readonly UiEvent[] _eventBuffer;
 
     /// <summary>
@@ -17,11 +18,17 @@ public sealed class GameUiPhaseDriver : IEnginePhaseDriver
     /// <param name="host">游戏 UI 宿主。</param>
     /// <param name="eventCapacity">单帧事件 drain 缓冲容量。</param>
     /// <param name="eventSink">可选事件接收器。</param>
-    public GameUiPhaseDriver(GameUiHost host, int eventCapacity = 128, IGameUiEventSink? eventSink = null)
+    /// <param name="modelPusher">可选模型推送器。</param>
+    public GameUiPhaseDriver(
+        GameUiHost host,
+        int eventCapacity = 128,
+        IGameUiEventSink? eventSink = null,
+        IGameUiModelPusher? modelPusher = null)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(eventCapacity);
         _eventSink = eventSink;
+        _modelPusher = modelPusher;
         _eventBuffer = new UiEvent[eventCapacity];
     }
 
@@ -54,6 +61,7 @@ public sealed class GameUiPhaseDriver : IEnginePhaseDriver
     {
         float deltaSeconds = ResolveRenderDeltaSeconds(context);
         LastDeltaSeconds = deltaSeconds;
+        _modelPusher?.PushGameUiModels();
         _host.Update(deltaSeconds);
         LastDrainedEventCount = _host.DrainEvents(_eventBuffer);
         TotalDrainedEventCount += LastDrainedEventCount;
