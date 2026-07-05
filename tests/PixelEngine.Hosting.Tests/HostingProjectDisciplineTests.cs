@@ -686,6 +686,44 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证 HTML UI native 作为 dynamic-only 依赖随 UI/Demo publish 落入 runtimes/native，不进入 Box2D dual-build 静态链。
+    /// </summary>
+    [Fact]
+    public void HtmlUiNativePackagingUsesDynamicOnlyRuntimeLayout()
+    {
+        string root = FindRepositoryRoot();
+        string directoryTargets = File.ReadAllText(Path.Combine(root, "Directory.Build.targets"));
+        string uiNativeTargets = File.ReadAllText(Path.Combine(root, "native", "PixelEngine.UiNative.targets"));
+        string uiNativeCMake = File.ReadAllText(Path.Combine(root, "native", "ui_native", "CMakeLists.txt"));
+        string buildNativePs1 = File.ReadAllText(Path.Combine(root, "tools", "build-native.ps1"));
+        string buildNativeSh = File.ReadAllText(Path.Combine(root, "tools", "build-native.sh"));
+        string packagePs1 = File.ReadAllText(Path.Combine(root, "tools", "package.ps1"));
+        string packageSh = File.ReadAllText(Path.Combine(root, "tools", "package.sh"));
+        string auditPs1 = File.ReadAllText(Path.Combine(root, "tools", "audit-release-artifacts.ps1"));
+        string auditSh = File.ReadAllText(Path.Combine(root, "tools", "audit-release-artifacts.sh"));
+
+        Assert.Contains("PixelEngine.UiNative.targets", directoryTargets, StringComparison.Ordinal);
+        Assert.Contains("'$(MSBuildProjectName)' == 'PixelEngine.UI' or '$(MSBuildProjectName)' == 'PixelEngine.Demo'", directoryTargets, StringComparison.Ordinal);
+        Assert.Contains(@"out\$(PixelEngineUiNativeRid)\shared\", uiNativeTargets, StringComparison.Ordinal);
+        Assert.Contains(@"runtimes\$(PixelEngineUiNativeRid)\native\$(PixelEngineUiNativeLibraryName)", uiNativeTargets, StringComparison.Ordinal);
+        Assert.Contains("CopyToPublishDirectory=\"PreserveNewest\"", uiNativeTargets, StringComparison.Ordinal);
+        Assert.DoesNotContain("<NativeLibrary", uiNativeTargets, StringComparison.Ordinal);
+        Assert.Contains("add_library(pixelengine_ui_native SHARED", uiNativeCMake, StringComparison.Ordinal);
+        Assert.Contains("OUTPUT_NAME \"PixelEngine.UI.Native\"", uiNativeCMake, StringComparison.Ordinal);
+        Assert.Contains("RUNTIME_OUTPUT_DIRECTORY \"${PIXELENGINE_NATIVE_OUT_DIR}/shared\"", uiNativeCMake, StringComparison.Ordinal);
+        Assert.Contains("pixelengine_ui_native", buildNativePs1, StringComparison.Ordinal);
+        Assert.Contains("pixelengine_ui_native", buildNativeSh, StringComparison.Ordinal);
+        Assert.Contains("NOTICE.txt", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("RmlUi: MIT license", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("Ultralight: optional commercial-license backend", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("NOTICE.txt", packageSh, StringComparison.Ordinal);
+        Assert.Contains("RmlUi: MIT license", packageSh, StringComparison.Ordinal);
+        Assert.Contains("Ultralight: optional commercial-license backend", packageSh, StringComparison.Ordinal);
+        Assert.Contains("NOTICE.txt", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("NOTICE.txt", auditSh, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Demo gameplay 内容资产与材质纹理引用在源 content 中闭合，打包脚本可原样拷贝。
     /// </summary>
     [Fact]

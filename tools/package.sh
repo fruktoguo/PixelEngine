@@ -340,6 +340,20 @@ Runtime dependencies are under app/. Game content is under content/.
 ${symbol_line}
 EOF
 
+cat > "$staging_dir/NOTICE.txt" <<'EOF'
+Third-party notices
+===================
+
+PixelEngine ships dynamic/runtime dependencies in app/ and game content in content/.
+
+- Box2D: MIT license. Used for pixel rigid body physics.
+- RmlUi: MIT license. PixelEngine.UI.Native links the RmlUi core into the dynamic UI backend when the native UI library is present.
+- FreeType: FreeType Project License. Used by the RmlUi native UI backend for font rasterization.
+- Ultralight: optional commercial-license backend. It is not included in this package unless an activated UI profile explicitly ships its native binaries.
+
+Full upstream license texts are kept with the vendored sources under native/.
+EOF
+
 if [[ "$rid" != win-* ]]; then
   cat > "$staging_dir/$unix_launcher" <<EOF
 #!/usr/bin/env sh

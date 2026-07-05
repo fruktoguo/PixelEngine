@@ -374,7 +374,7 @@ RID 激活门控（win-first，§2.1）
 
 HTML UI native 与 demo-playability 内容打包
 
-- [ ] `plan/20` 的 UI native（RmlUi 主 / Ultralight 可选）作 dynamic-only 落 `runtimes/<rid>/native/`、纳入 `SHA256SUMS` 与包内许可声明、AOT 通道门控排除或动态加载、**不进 Box2D dual-build**；当前 Windows-first 仅 `win-x64` + 纯托管 `ManagedFallbackBackend` 基线变体出包（§3.5、§3.11）。
+- [x] `plan/20` 的 UI native（RmlUi 主 / Ultralight 可选）作 dynamic-only 落 `runtimes/<rid>/native/`、纳入 `SHA256SUMS` 与包内许可声明、AOT 通道门控排除或动态加载、**不进 Box2D dual-build**；当前 Windows-first 仅 `win-x64` + 纯托管 `ManagedFallbackBackend` 基线变体出包（§3.5、§3.11）。
 - [x] `content/weapons.json` 与 `gravel`/`crystal` 等新材质纹理纳入内容包核对，`materials.json`/`reactions.json` 恒含；当前 `weapons.json`、`textureId` 17/18 对应纹理已落盘，`audit-release-artifacts.ps1|.sh` 与 `HostingProjectDisciplineTests.DemoContentDeclaresWeaponsAndResolvableMaterialTextures` 已锁定（守 #8）（§3.9）。
 - [x] `build-player` 场景过滤模式（可选）：staging `content/` 生成 `startup.json` + 按 `-IncludeScene` 只拷 `content/scenes/` 被选场景，audit「必含场景」放宽为「必含被声明启动场景文件」；默认整包 content 原样打包不变（§3.9）。
 
@@ -412,7 +412,7 @@ build-player 入口与玩家包解耦（本轮新增）
 - [x] `tools/build-player.*` 单 RID 一键出包：在 Windows 本机对 `win-x64/r2r/Release` 跑通 native→publish→verify→package→audit，逐行 NDJSON（`schema=pixelengine.build/v1`）+ `build-result.json` 产出正确，产物与 `tools/*` 手工出包**同等参数下字节级一致**（§3.11）。
 - [x] `-DevLayout` 开发（含符号）构建走宽松 dev-audit（保 pdb、结构存在性 + player-only 断言）；`Release`+无符号走完整 `audit-release-artifacts`，二者布局符合各自规则（§3.11、§3.7）。
 - [x] player-only 审计：玩家包 `app/` 内不含 `PixelEngine.Editor.dll` 与任意 `ImGuizmo*/ImPlot*`，审计通过；`Hexa.NET.ImGui` 玩家 HUD 依赖被允许（§3.7）。
-- [ ] HTML UI native（`plan/20`）dynamic-only 落 `runtimes/<rid>/native/`、纳入 `SHA256SUMS` 与许可声明、不进 Box2D dual-build；当前 Windows-first 仅 `win-x64` + 纯托管基线变体出包（§3.5、§3.11）。
+- [x] HTML UI native（`plan/20`）dynamic-only 落 `runtimes/<rid>/native/`、纳入 `SHA256SUMS` 与许可声明、不进 Box2D dual-build；当前 Windows-first 仅 `win-x64` + 纯托管基线变体出包（§3.5、§3.11）。
 
 ---
 
@@ -456,4 +456,4 @@ build-player 入口与玩家包解耦（本轮新增）
 - [x] `build(build): 锁定 Unity 式 app/ 发行布局选型（§3.7.1 方案权衡，否决单文件）` — 对应 §3.7.1、实现清单「发行布局选型」项。
 - [x] `build(build): tools/build-player 编排器 + NDJSON(pixelengine.build/v1)/build-result.json 契约 + dev-audit 分流` — 对应 §3.11、实现清单「build-player 入口」项，供 plan/19 BuildSettings 面板消费。
 - [x] `build(build): 玩家包 player-only 审计（拒 PixelEngine.Editor.dll 与 ImGuizmo/ImPlot、允许玩家 HUD 的 Hexa.NET.ImGui）+ 编辑器工具包分流` — 对应 §3.7、实现清单「玩家包/编辑器工具包分流」项。
-- [ ] `build(build): HTML UI native dynamic-only 打包与 demo-playability 内容核对（weapons.json/新材质纹理，不进 Box2D dual-build）` — 对应 §3.5、§3.9、实现清单「HTML UI native 与 demo-playability 内容」项。
+- [x] `build(build): HTML UI native dynamic-only 打包与 demo-playability 内容核对（weapons.json/新材质纹理，不进 Box2D dual-build）` — 对应 §3.5、§3.9、实现清单「HTML UI native 与 demo-playability 内容」项。

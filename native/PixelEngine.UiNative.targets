@@ -2,8 +2,7 @@
   <PropertyGroup>
     <PixelEngineUiNativeRid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</PixelEngineUiNativeRid>
     <PixelEngineUiNativeRid Condition="'$(PixelEngineUiNativeRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</PixelEngineUiNativeRid>
-    <PixelEngineUiNativeRoot>$(MSBuildThisFileDirectory)..\</PixelEngineUiNativeRoot>
-    <PixelEngineUiNativeRuntimeDir>$(PixelEngineUiNativeRoot)runtimes\$(PixelEngineUiNativeRid)\native\</PixelEngineUiNativeRuntimeDir>
+    <PixelEngineUiNativeSharedDir>$(MSBuildThisFileDirectory)out\$(PixelEngineUiNativeRid)\shared\</PixelEngineUiNativeSharedDir>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(PixelEngineUiNativeRid)' == 'win-x64' or '$(PixelEngineUiNativeRid)' == 'win-arm64'">
@@ -19,7 +18,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <PixelEngineUiNativeLibraryPath>$(PixelEngineUiNativeRuntimeDir)$(PixelEngineUiNativeLibraryName)</PixelEngineUiNativeLibraryPath>
+    <PixelEngineUiNativeLibraryPath>$(PixelEngineUiNativeSharedDir)$(PixelEngineUiNativeLibraryName)</PixelEngineUiNativeLibraryPath>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(PixelEngineUiNativeRid)' != '' and '$(PixelEngineUiNativeLibraryName)' != '' and Exists('$(PixelEngineUiNativeLibraryPath)')">
