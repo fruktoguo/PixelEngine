@@ -314,3 +314,30 @@ PE_UI_NATIVE_API int32_t peui_native_process_text_utf8(PeUiRenderer* renderer, c
     Rml::String input(text, static_cast<size_t>(text_length));
     return renderer->context->ProcessTextInput(input) ? 1 : 0;
 }
+
+PE_UI_NATIVE_API int32_t peui_native_hit_test(PeUiRenderer* renderer, float x, float y)
+{
+    if (renderer == nullptr || renderer->context == nullptr)
+    {
+        return 0;
+    }
+
+    int32_t flags = 0;
+    Rml::Element* element = renderer->context->GetElementAtPoint(Rml::Vector2f{x, y});
+    if (element != nullptr && element != renderer->context->GetRootElement())
+    {
+        flags |= 1;
+    }
+
+    if (renderer->context->IsMouseInteracting())
+    {
+        flags |= 2;
+    }
+
+    if (renderer->context->GetFocusElement() != nullptr)
+    {
+        flags |= 4;
+    }
+
+    return flags;
+}

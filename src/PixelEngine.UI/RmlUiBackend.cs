@@ -31,6 +31,9 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
     private const int RmlModifierShift = 1 << 1;
     private const int RmlModifierAlt = 1 << 2;
     private const int RmlModifierMeta = 1 << 3;
+    private const int HitTestElement = 1;
+    private const int HitTestMouseInteracting = 1 << 1;
+    private const int HitTestKeyboardFocus = 1 << 2;
 
     private readonly RenderWindow _window;
     private readonly NativeDocument[] _documents;
@@ -290,8 +293,22 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
             return UiHitResult.None;
         }
 
+        EnsureInitialized();
+        if (!float.IsFinite(x) || !float.IsFinite(y))
+        {
+            return UiHitResult.None;
+        }
+
+        int flags = RmlUiNative.HitTest(_renderer, x, y);
+        bool hitsElement = (flags & HitTestElement) != 0;
+        bool wantsMouse = hitsElement || (flags & HitTestMouseInteracting) != 0;
+        bool wantsKeyboard = (flags & HitTestKeyboardFocus) != 0;
         bool modal = _visibleScreens[_visibleScreenCount - 1].Modal;
-        return new UiHitResult(HitsUi: true, Opaque: modal, WantsMouse: modal, WantsKeyboard: modal);
+        return new UiHitResult(
+            HitsUi: hitsElement || modal,
+            Opaque: modal,
+            WantsMouse: wantsMouse || modal,
+            WantsKeyboard: wantsKeyboard || modal);
     }
 
     /// <inheritdoc />
