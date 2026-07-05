@@ -643,14 +643,17 @@ public sealed class EnginePhaseDriverTests
 
         FrameTiming first = engine.RunOneTick(realDeltaSeconds: 1.0 / 120.0);
         FrameTiming second = engine.RunOneTick(realDeltaSeconds: 1.0 / 30.0);
+        FrameTiming overloaded = engine.RunOneTick(realDeltaSeconds: 1.0 / 10.0);
 
         Assert.True(first.RunSim);
         Assert.False(second.RunSim);
-        Assert.Equal(2, backend.UpdateCount);
-        Assert.Equal(1.0f / 30.0f, backend.LastDeltaSeconds, precision: 4);
-        Assert.Equal(1.0f / 30.0f, driver.LastDeltaSeconds, precision: 4);
-        Assert.Equal(2, driver.TotalDrainedEventCount);
-        Assert.Equal(2, sink.TotalEventCount);
+        Assert.True(overloaded.RunSim);
+        Assert.True(engine.Context.Clock.TimeScale < 1.0);
+        Assert.Equal(3, backend.UpdateCount);
+        Assert.Equal(1.0f / 10.0f, backend.LastDeltaSeconds, precision: 4);
+        Assert.Equal(1.0f / 10.0f, driver.LastDeltaSeconds, precision: 4);
+        Assert.Equal(3, driver.TotalDrainedEventCount);
+        Assert.Equal(3, sink.TotalEventCount);
         Assert.Equal(new GameUi.UiActionId(9), sink.LastAction);
         Assert.True(engine.Context.Profiler.LastSubFrame[(int)FrameSubPhase.UiUpdate] > 0);
         Assert.Equal(1, engine.Phases.Count(EnginePhase.GameLogicAndScripts));

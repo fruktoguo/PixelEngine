@@ -243,7 +243,7 @@ C#↔UI 通信：
 - [ ] 输入三级仲裁正确：编辑器(Edit) > 大 UI(命中) > 游戏；UI 命中不透明元素时游戏不消费该输入，反之透传；文本/IME 焦点路由正确；切后端仲裁行为不变（§3.5）
 - [~] C#↔UI 双向：游戏态变化经 `SetValue`/`BindModel`/data-model 反映到 UI，UI 交互（如"开始游戏"）产生 `UiEvent` 并在相位 1 派发；`Invoke` 与 UI 事件触发世界写入经延迟队列落正确相位仍待后续切片（§3.4、#6）
 - [ ] 事件驱动重绘生效：静态屏稳态无光栅化开销（诊断 `ui.paint`≈0）；HUD 仅在数值变化时局部重绘/脏矩形上传（§3.2、§3.9）
-- [ ] UI cadence 与 sim 频率解耦：sim 降到 30Hz 时 UI 动画仍按渲染 cadence 平滑推进、不加倍不卡顿；UI 尖刺只掉渲染帧、sim 固定步长不受累（§3.3、#6）
+- [x] UI cadence 与 sim 频率解耦：sim 降到 30Hz 时 UI 动画仍按渲染 cadence 平滑推进、不加倍不卡顿；UI 尖刺只掉渲染帧、sim 固定步长不受累（§3.3、#6）。已用 `GameUiPhaseDriverUpdatesEveryRenderFrameAndDrainsEvents` 覆盖 sim 跳帧与 TimeScale<1 时 UI 仍消费未缩放 render dt。
 - [ ] `FontEngine` 为三后端 CJK 单一事实源：切后端时可显示字符集不变，缺字上报 `ui.font.missingGlyph`（§3.7）
 - [ ] native 核 dynamic-only、未静态链、未进 Box2D dual-build；首期 `win-x64`(+可选 `win-arm64`) 的 `runtimes/<rid>/native/` 含 UI native，其余 RID dormant；AOT 通道与未激活 RID 回退 `ManagedFallbackBackend` 且大 UI 仍可用（§3.10、§7，配合 plan/15）
 - [ ] 禁用大 UI 开关后主循环无 UI 开销；降级路线可切到"全 ManagedFallback"或"静态屏 RmlUi + ManagedFallback HUD"，均不改 Demo 逻辑（§3.12）
