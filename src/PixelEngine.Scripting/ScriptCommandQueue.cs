@@ -1,4 +1,5 @@
 using System.Buffers;
+using PixelEngine.Core;
 
 namespace PixelEngine.Scripting;
 
@@ -83,7 +84,7 @@ internal readonly record struct ScriptCommand(
             count,
             0,
             default,
-            new ParticleSpawnDesc(x, y, 0, 0, material, 0),
+            new ParticleSpawnDesc(x, y, 0, 0, material, EngineConstants.ParticleMaxLifetimeTicks),
             default,
             default,
             speed,

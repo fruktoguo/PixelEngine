@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using PixelEngine.Core;
 using PixelEngine.Core.Events;
 using PixelEngine.Core.Threading;
 using PixelEngine.Interop.Box2D;
@@ -161,6 +162,35 @@ public sealed class ScriptSimulationContextTests
         Assert.Equal(4f / 60f, first.Vy, precision: 5);
         Assert.Equal(sand.Value, first.Material);
         Assert.Equal(5, first.Life);
+        for (int i = 1; i < fixture.Particles.ActiveCount; i++)
+        {
+            Assert.Equal(EngineConstants.ParticleMaxLifetimeTicks, fixture.Particles.ActiveReadOnly[i].Life);
+        }
+    }
+
+    /// <summary>
+    /// 验证 burst 视觉粒子使用有限默认寿命，既不会下一帧立即死亡，也不会无限残留。
+    /// </summary>
+    [Fact]
+    public void BurstParticlesUseFiniteDefaultLifetimeAndExpire()
+    {
+        Fixture fixture = Fixture.Create();
+        MaterialId sand = fixture.Context.Materials.Resolve("sand");
+
+        fixture.Context.Particles.Burst(8, 9, sand, count: 2, speed: 6);
+
+        Assert.Equal(1, fixture.Context.FlushParticleCommands());
+        Assert.Equal(2, fixture.Particles.ActiveCount);
+        Assert.Equal(EngineConstants.ParticleMaxLifetimeTicks, fixture.Particles.ActiveReadOnly[0].Life);
+        Assert.Equal(EngineConstants.ParticleMaxLifetimeTicks, fixture.Particles.ActiveReadOnly[1].Life);
+
+        for (int i = 0; i < EngineConstants.ParticleMaxLifetimeTicks; i++)
+        {
+            fixture.Particles.IntegrateAndAdvance(fixture.Grid);
+            fixture.Particles.ResolveDeposits(fixture.Kernel, fixture.Grid);
+        }
+
+        Assert.Equal(0, fixture.Particles.ActiveCount);
     }
 
     /// <summary>
