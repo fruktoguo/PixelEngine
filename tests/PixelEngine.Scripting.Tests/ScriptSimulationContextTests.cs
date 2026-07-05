@@ -204,6 +204,33 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
+    /// 验证 Demo 破坏 API 的脚本命令入队与安全相位 flush 稳态不产生托管堆分配。
+    /// </summary>
+    [Fact]
+    public void WorldDamageAndHeatCommandsDoNotAllocateAfterWarmup()
+    {
+        using Fixture fixture = Fixture.Create();
+        MaterialId stone = fixture.Context.Materials.Resolve("stone");
+        const int Iterations = 128;
+
+        QueueDamageAndHeat(fixture);
+        Assert.Equal(3, fixture.Context.FlushCellCommands());
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        int flushed = 0;
+        for (int i = 0; i < Iterations; i++)
+        {
+            FillRect(fixture.Chunk, minX: 20, minY: 20, maxX: 30, maxY: 30, material: stone.Value);
+            QueueDamageAndHeat(fixture);
+            flushed += fixture.Context.FlushCellCommands();
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(Iterations * 3, flushed);
+        Assert.Equal(0, allocated);
+    }
+
+    /// <summary>
     /// 验证脚本世界爆炸 API 会先按材质抗性破坏 solid，再抛射碎屑/非固体，并对半径内刚体施加径向冲量。
     /// </summary>
     [Fact]
@@ -570,6 +597,13 @@ public sealed class ScriptSimulationContextTests
         }
 
         return false;
+    }
+
+    private static void QueueDamageAndHeat(Fixture fixture)
+    {
+        fixture.Context.World.DamageCircle(24f, 24f, radius: 4, damage: 80f, falloff: true);
+        fixture.Context.World.DamageBeam(20f, 24f, 1f, 0f, length: 8, damagePerCell: 80f);
+        fixture.Context.World.AddHeat(24f, 24f, radius: 2, deltaCelsius: 16f);
     }
 
     private static void WriteAscii(byte[] destination, int offset, string text)

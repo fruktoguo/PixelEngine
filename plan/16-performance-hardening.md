@@ -78,7 +78,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] 序列化字节准备（相位 11）用 POH/ArrayPool 缓冲，稳态零分配。[plan/07 · §11.5]
 - [x] JobSystem `ParallelRange` / `ParallelRangeRaw` 多 worker fork-join 派发本身稳态零分配，避免调度器在每帧热路径制造 Gen0 压力。[plan/02/14 · §12.4/§12.7/§14.2]
 - [x] 全热路径静态核查无 LINQ/捕获闭包/装箱/`params`/迭代器/字符串拼接（分析器提升为 error）。[全子系统 · AGENTS §3]
-- [ ] Demo 破坏 API（`DamageCircle`/`DamageBeam`/`AddHeat`）经既有延迟命令队列落单线程输入/安全相位、写 Damage 平面 + 标 dirty + KeepAlive，稳态零托管分配；碎屑/采集事件复用粒子池与既有事件缓冲，无 per-hit 分配。破坏是安全相位的离散编辑、不受 32px halo 约束（不误引 #4 约束破坏半径）。[plan/03/11 · §12.4/不变式 #1/#6]
+- [x] Demo 破坏 API（`DamageCircle`/`DamageBeam`/`AddHeat`）经既有延迟命令队列落单线程输入/安全相位、写 Damage 平面 + 标 dirty + KeepAlive，稳态零托管分配；碎屑/采集事件复用粒子池与既有事件缓冲，无 per-hit 分配。`WorldDamageAndHeatCommandsDoNotAllocateAfterWarmup` 覆盖脚本破坏/加热 enqueue+flush 稳态 0B 分配，`WorldDamageCommandsFlushIntoStructuralDamage`/`WorldAddHeatFlushesIntoTemperatureField`/`WorldExplodeFlushesStructuralDamageDebrisAndRigidImpulse` 覆盖真实落地链路。破坏是安全相位的离散编辑、不受 32px halo 约束（不误引 #4 约束破坏半径）。[plan/03/11 · §12.4/不变式 #1/#6]
 
 ### 4.3 多线程覆盖面
 - [x] CA 4-pass checkerboard 经 plan/02 持久线程池 per-chunk task 派发、遍间 barrier、无锁。[plan/03 · §5.7/不变式 #2]

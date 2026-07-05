@@ -120,13 +120,18 @@ internal sealed class ScriptCommandQueue : IDisposable
 {
     private const int TargetCount = 3;
     private readonly ThreadLocal<Bucket>[] _buckets;
+    private readonly List<Bucket>[] _registeredBuckets;
+    private readonly System.Threading.Lock _registryGate = new();
 
     public ScriptCommandQueue()
     {
         _buckets = new ThreadLocal<Bucket>[TargetCount];
+        _registeredBuckets = new List<Bucket>[TargetCount];
         for (int i = 0; i < _buckets.Length; i++)
         {
-            _buckets[i] = new ThreadLocal<Bucket>(static () => new Bucket(), trackAllValues: true);
+            int target = i;
+            _registeredBuckets[i] = new List<Bucket>(capacity: 1);
+            _buckets[i] = new ThreadLocal<Bucket>(() => CreateBucket(target), trackAllValues: false);
         }
     }
 
@@ -140,9 +145,13 @@ internal sealed class ScriptCommandQueue : IDisposable
     {
         ValidateTarget(target);
         int count = 0;
-        foreach (Bucket bucket in _buckets[(int)target].Values)
+        List<Bucket> buckets = _registeredBuckets[(int)target];
+        lock (_registryGate)
         {
-            count += bucket.Count;
+            for (int i = 0; i < buckets.Count; i++)
+            {
+                count += buckets[i].Count;
+            }
         }
 
         return count;
@@ -158,9 +167,13 @@ internal sealed class ScriptCommandQueue : IDisposable
         }
 
         int written = 0;
-        foreach (Bucket bucket in _buckets[(int)target].Values)
+        List<Bucket> buckets = _registeredBuckets[(int)target];
+        lock (_registryGate)
         {
-            written += bucket.DrainTo(destination[written..]);
+            for (int i = 0; i < buckets.Count; i++)
+            {
+                written += buckets[i].DrainTo(destination[written..]);
+            }
         }
 
         return written;
@@ -170,13 +183,26 @@ internal sealed class ScriptCommandQueue : IDisposable
     {
         for (int i = 0; i < _buckets.Length; i++)
         {
-            foreach (Bucket bucket in _buckets[i].Values)
+            List<Bucket> buckets = _registeredBuckets[i];
+            for (int j = 0; j < buckets.Count; j++)
             {
-                bucket.Dispose();
+                buckets[j].Dispose();
             }
 
+            buckets.Clear();
             _buckets[i].Dispose();
         }
+    }
+
+    private Bucket CreateBucket(int target)
+    {
+        Bucket bucket = new();
+        lock (_registryGate)
+        {
+            _registeredBuckets[target].Add(bucket);
+        }
+
+        return bucket;
     }
 
     private static void ValidateTarget(ScriptCommandTarget target)
