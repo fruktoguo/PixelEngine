@@ -161,4 +161,14 @@ internal static unsafe partial class RmlUiNative
     /// <returns>被 UI 消费返回 1。</returns>
     [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_process_text_utf8")]
     internal static partial int ProcessTextUtf8(IntPtr renderer, byte* text, int textLength);
+
+    /// <summary>
+    /// 对当前 RmlUi context 执行 DOM 命中测试。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="x">UI x 坐标。</param>
+    /// <param name="y">UI y 坐标。</param>
+    /// <returns>bit0=命中元素，bit1=鼠标正在交互，bit2=存在键盘焦点。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_hit_test")]
+    internal static partial int HitTest(IntPtr renderer, float x, float y);
 }

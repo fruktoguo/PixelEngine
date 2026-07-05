@@ -56,8 +56,8 @@ public sealed class RmlUiGlBootstrapSmokeTests
                 <rml>
                   <head>
                     <style>
-                      body { background-color: transparent; }
-                      #panel { position: absolute; left: 4px; top: 4px; width: 24px; height: 24px; background-color: #ff4040; }
+                      body { background-color: transparent; pointer-events: none; }
+                      #panel { position: absolute; left: 4px; top: 4px; width: 24px; height: 24px; background-color: #ff4040; pointer-events: auto; }
                     </style>
                   </head>
                   <body>
@@ -68,6 +68,11 @@ public sealed class RmlUiGlBootstrapSmokeTests
 
             UiDocumentHandle document = backend.LoadDocument(UiDocumentSource.Asset(documentPath, 1));
             backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(1), new UiScreenId(1), document, Modal: false)]);
+            backend.Update(1f / 60f);
+            backend.FeedPointerMove(20, 24);
+            Assert.True(backend.HitTest(20, 24).WantsMouse);
+            backend.FeedPointerMove(60, 60);
+            Assert.False(backend.HitTest(60, 60).WantsMouse);
             backend.FeedPointerMove(20, 24);
             backend.FeedPointerButton(UiPointerButton.Left, isDown: true);
             backend.FeedPointerButton(UiPointerButton.Left, isDown: false);
