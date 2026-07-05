@@ -7,6 +7,25 @@ namespace PixelEngine.UI;
 /// </summary>
 internal static unsafe partial class RmlUiNative
 {
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct NativeUiValue
+    {
+        internal int Kind;
+        internal int Reserved;
+        internal long Integer;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct NativeUiEvent
+    {
+        internal int Document;
+        internal int Element;
+        internal int Action;
+        internal int ValueKind;
+        internal long Integer;
+        internal double Number;
+    }
+
     /// <summary>
     /// 查询 native C ABI 版本。
     /// </summary>
@@ -73,6 +92,16 @@ internal static unsafe partial class RmlUiNative
     internal static partial IntPtr LoadDocumentMemory(IntPtr renderer, byte* document, int documentLength, byte* sourceUrl);
 
     /// <summary>
+    /// 扫描文档 DOM 并建立 PixelEngine data-model / data-event 绑定。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="document">RmlUi 文档句柄。</param>
+    /// <param name="documentHandle">托管 UI 文档句柄值。</param>
+    /// <returns>成功返回 1；负数表示绑定错误。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_document_bind")]
+    internal static partial int DocumentBind(IntPtr renderer, IntPtr document, int documentHandle);
+
+    /// <summary>
     /// 显示 RmlUi 文档。
     /// </summary>
     /// <param name="document">RmlUi 文档句柄。</param>
@@ -93,6 +122,14 @@ internal static unsafe partial class RmlUiNative
     /// <param name="document">RmlUi 文档句柄。</param>
     [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_document_close")]
     internal static partial void DocumentClose(IntPtr document);
+
+    /// <summary>
+    /// 清理文档绑定并关闭 RmlUi 文档。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="document">RmlUi 文档句柄。</param>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_document_close_bound")]
+    internal static partial void DocumentCloseBound(IntPtr renderer, IntPtr document);
 
     /// <summary>
     /// 推进 RmlUi context。
@@ -171,4 +208,44 @@ internal static unsafe partial class RmlUiNative
     /// <returns>bit0=命中元素，bit1=鼠标正在交互，bit2=存在键盘焦点。</returns>
     [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_hit_test")]
     internal static partial int HitTest(IntPtr renderer, float x, float y);
+
+    /// <summary>
+    /// 设置已绑定 DOM 元素的模型值。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="documentHandle">托管 UI 文档句柄值。</param>
+    /// <param name="pathHash">模型路径稳定 hash。</param>
+    /// <param name="value">blittable UI 值。</param>
+    /// <returns>1=成功，0=未找到，负数=错误。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_set_model_value")]
+    internal static partial int SetModelValue(IntPtr renderer, int documentHandle, int pathHash, NativeUiValue* value);
+
+    /// <summary>
+    /// 读取已绑定 DOM 元素的模型值。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="documentHandle">托管 UI 文档句柄值。</param>
+    /// <param name="pathHash">模型路径稳定 hash。</param>
+    /// <param name="value">输出 blittable UI 值。</param>
+    /// <returns>1=成功，0=未找到，负数=错误。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_try_get_model_value")]
+    internal static partial int TryGetModelValue(IntPtr renderer, int documentHandle, int pathHash, NativeUiValue* value);
+
+    /// <summary>
+    /// 拉取 RmlUi 事件队列。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="events">输出事件缓冲。</param>
+    /// <param name="capacity">缓冲容量。</param>
+    /// <returns>写入事件数。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_drain_events")]
+    internal static partial int DrainEvents(IntPtr renderer, NativeUiEvent* events, int capacity);
+
+    /// <summary>
+    /// 获取 native 最近错误文本 UTF-8 指针。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <returns>UTF-8 字符串指针，native 持有。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_get_last_error")]
+    internal static partial IntPtr GetLastErrorUtf8(IntPtr renderer);
 }
