@@ -93,6 +93,48 @@ public sealed class UiDocumentManager
     }
 
     /// <summary>
+    /// 查找可见屏幕对应的文档。
+    /// </summary>
+    /// <param name="screen">可见屏幕句柄。</param>
+    /// <param name="document">后端文档句柄。</param>
+    /// <returns>找到则返回 true。</returns>
+    public bool TryGetDocument(UiScreenHandle screen, out UiDocumentHandle document)
+    {
+        for (int i = 0; i < _stackCount; i++)
+        {
+            if (_stack[i].Handle == screen)
+            {
+                document = _stack[i].Document;
+                return true;
+            }
+        }
+
+        document = default;
+        return false;
+    }
+
+    /// <summary>
+    /// 查找文档当前对应的最上层可见屏幕。
+    /// </summary>
+    /// <param name="document">后端文档句柄。</param>
+    /// <param name="screen">可见屏幕句柄。</param>
+    /// <returns>找到则返回 true。</returns>
+    public bool TryGetVisibleScreen(UiDocumentHandle document, out UiScreenHandle screen)
+    {
+        for (int i = _stackCount - 1; i >= 0; i--)
+        {
+            if (_stack[i].Document == document)
+            {
+                screen = _stack[i].Handle;
+                return true;
+            }
+        }
+
+        screen = default;
+        return false;
+    }
+
+    /// <summary>
     /// 显示一个屏幕。
     /// </summary>
     /// <param name="screenId">稳定屏幕 id。</param>
