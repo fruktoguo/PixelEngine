@@ -366,7 +366,7 @@ plan/19 独立编辑器引入 GameObject 层级/父子/Transform TRS 的 **autho
 - [ ] `IParticleSpawner` 增 `Emit(origin,dir,coneRadians,minSpeed,maxSpeed,count,material,life)`：富速度锥分布，延迟到相位 7 落地（§3.9，plan/05）
 - [ ] 新增命令 kind（`DamageCircle`/`DamageBeam`/`AddHeat`/`Emit`）编码为 blittable `ScriptCommand` 并在 `ScriptSimulationContext` flush（与现 `Explode`/`SetCell`/`Spawn` 同构，零分配，§3.9）
 - [ ] `IScriptContext` 增 `IGameUiService Ui { get; }`：`ShowScreen`/`HideScreen`/`PushModal`/`BindModel`/`SetValue`/`TryGetValue`/`Invoke`/`UiEventRaised`/`DrainEvents`；UI 事件回收为 blittable `UiEvent`，相位 1 排空派发到 `Behaviour` 处理器（§3.10，plan/20）
-- [ ] UI→世界写入经 §3.3 延迟命令队列落正确相位（不在 UI 事件回调直接改世界，§3.10，守 #6）
+- [x] UI→世界写入经 §3.3 延迟命令队列落正确相位（不在 UI 事件回调直接改世界，§3.10，守 #6）
 - [x] `IGameUiService`/`UiEvent`/`UiValue` 契约置于中性契约层（同 `IAudioApi` 策略），`PixelEngine.Scripting` **不** `ProjectReference` `PixelEngine.UI`；禁用 HTML UI 时 `Ui` 注入 no-op 空对象（§3.10，plan/00 §5 依赖方向）
 - [ ] `Scripting.Transform` 字段与 plan/18 `.scene` v2 Transform 块逐字段对齐，`Scripting.Scene`/`Entity`/`Behaviour` 保持扁平 DOD、**不**引 `ParentId`/父子层级；组件字段绑定支持 `Vector2`（§3.11，物化由 Hosting 烘焙世界 TRS）
 
@@ -394,7 +394,7 @@ plan/19 独立编辑器引入 GameObject 层级/父子/Transform TRS 的 **autho
 - [ ] 同一 `DamageCircle(damage=X)` 对不同材质差异化生效：sand/dirt 立即抛碎、stone 需累计或大当量、metal 小爆破近免疫（差异全来自 `Hardness`/`MaxIntegrity`）；破坏归零转 `RubbleTarget` 并抛碎屑、发 `MineYield` 采集事件；命中刚体像素经 `IRigidDamageSink` 路由而非累加 `Damage`（§3.9，守 #5）
 - [ ] `DamageBeam` 沿束逐 cell 按 `Hardness` 烧穿（木/冰快、metal 慢）并 `AddHeat` 触发相变；`CellView.Integrity` 反映剩余耐久（§3.9）
 - [ ] `Explode`/`DamageCircle`/`DamageBeam`/`AddHeat`/`Emit` 写入类调用经命令队列在安全相位落地（cell 破坏标 dirty + KeepAlive、particle 落相位 7），破坏为离散编辑不受 32px halo 约束、无跨相位竞争、稳态帧派发零托管分配（§3.9，守 #1/#4/#6，AGENTS §3）
-- [ ] 脚本经 `IGameUiService` 显示/切换 UI 屏、`SetValue`/`BindModel` 推游戏态到 UI、`DrainEvents` 在相位 1 派发 `UiEvent` 到 `Behaviour` 处理器；UI 触发的世界写入经延迟队列落正确相位、不破坏帧节奏；禁用 HTML UI 时 `Ui` 为 no-op 且调用安全（§3.10，plan/20，守 #6）
+- [x] 脚本经 `IGameUiService` 显示/切换 UI 屏、`SetValue`/`BindModel` 推游戏态到 UI、`UiEventRaised` 经脚本事件总线在相位 1 派发 `UiEvent` 到 `Behaviour` 处理器；UI 触发的世界写入经延迟队列落正确相位、不破坏帧节奏；禁用 HTML UI 时 `Ui` 为 no-op 且调用安全（§3.10，plan/20，守 #6）
 - [x] `PixelEngine.Scripting` 不引用 `PixelEngine.UI`（`IGameUiService` 契约在中性层，后端由 Hosting 注入），依赖方向合规（§3.10，plan/00 §5）
 - [ ] authoring（plan/19）→运行时物化后 `Scripting.Scene`/`Entity`/`Behaviour` 保持扁平、无 `ParentId`/父子层级；`Scripting.Transform` 承接 plan/18 `.scene` v2 世界 TRS 烘焙值、`Vector2` 字段绑定正确还原（§3.11，物化/往返测试归 plan/14/18/19）
 

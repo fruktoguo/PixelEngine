@@ -12,6 +12,9 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     private readonly GameUiModelBridge _modelBridge;
     private readonly string _uiRoot;
     private readonly RuntimeUi.UiManifest? _manifest;
+    private readonly List<EventSubscription> _scriptEventSubscriptions = [];
+    private Action<ScriptUi.UiEvent>? _directHandlers;
+    private ScriptUi.IEventBus? _scriptEvents;
 
     /// <summary>
     /// 创建 Game UI 脚本服务桥。
@@ -31,7 +34,77 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     /// <summary>
     /// UI 事件通知；事件由 GameUiPhaseDriver 在相位 1 drain 后派发。
     /// </summary>
-    public event Action<ScriptUi.UiEvent>? UiEventRaised;
+    public event Action<ScriptUi.UiEvent>? UiEventRaised
+    {
+        add
+        {
+            if (value is null)
+            {
+                return;
+            }
+
+            if (_scriptEvents is not null)
+            {
+                PruneReleasedSubscriptions();
+                _scriptEventSubscriptions.Add(new EventSubscription(new WeakReference<Action<ScriptUi.UiEvent>>(value), _scriptEvents.Subscribe(value)));
+                return;
+            }
+
+            _directHandlers += value;
+        }
+
+        remove
+        {
+            if (value is null)
+            {
+                return;
+            }
+
+            for (int i = _scriptEventSubscriptions.Count - 1; i >= 0; i--)
+            {
+                if (!_scriptEventSubscriptions[i].Handler.TryGetTarget(out Action<ScriptUi.UiEvent>? handler))
+                {
+                    _scriptEventSubscriptions.RemoveAt(i);
+                    continue;
+                }
+
+                if (handler != value)
+                {
+                    continue;
+                }
+
+                _scriptEventSubscriptions[i].Subscription.Dispose();
+                _scriptEventSubscriptions.RemoveAt(i);
+                return;
+            }
+
+            _directHandlers -= value;
+        }
+    }
+
+    /// <summary>
+    /// 接入脚本事件总线，使 UI 事件在脚本相位 drain 时派发并复用 Behaviour 异常隔离。
+    /// </summary>
+    /// <param name="events">脚本事件总线。</param>
+    public void AttachScriptEventBus(ScriptUi.IEventBus events)
+    {
+        _scriptEvents = events ?? throw new ArgumentNullException(nameof(events));
+        Action<ScriptUi.UiEvent>? handlers = _directHandlers;
+        if (handlers is null)
+        {
+            return;
+        }
+
+        foreach (Delegate invocation in handlers.GetInvocationList())
+        {
+            if (invocation is Action<ScriptUi.UiEvent> handler)
+            {
+                _scriptEventSubscriptions.Add(new EventSubscription(new WeakReference<Action<ScriptUi.UiEvent>>(handler), _scriptEvents.Subscribe(handler)));
+            }
+        }
+
+        _directHandlers = null;
+    }
 
     /// <summary>
     /// 显示一个普通 UI 屏幕。
@@ -131,8 +204,9 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     /// <param name="events">运行时 UI 事件。</param>
     public void OnGameUiEvents(ReadOnlySpan<RuntimeUi.UiEvent> events)
     {
-        Action<ScriptUi.UiEvent>? handlers = UiEventRaised;
-        if (handlers is null)
+        ScriptUi.IEventBus? scriptEvents = _scriptEvents;
+        Action<ScriptUi.UiEvent>? directHandlers = _directHandlers;
+        if (scriptEvents is null && directHandlers is null)
         {
             return;
         }
@@ -144,11 +218,18 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
                 ? visible
                 : new RuntimeUi.UiScreenHandle(runtimeEvent.Document.Value);
             RuntimeUi.UiValue payload = runtimeEvent.Payload;
-            handlers(new ScriptUi.UiEvent(
+            ScriptUi.UiEvent scriptEvent = new(
                 new ScriptUi.UiScreenHandle(runtimeScreen.Value),
                 new ScriptUi.UiElementId(runtimeEvent.Element.Value),
                 new ScriptUi.UiActionId(runtimeEvent.Action.Value),
-                ToScriptValue(in payload)));
+                ToScriptValue(in payload));
+            if (scriptEvents is not null)
+            {
+                _ = scriptEvents.TryPublish(in scriptEvent);
+                continue;
+            }
+
+            directHandlers!(scriptEvent);
         }
     }
 
@@ -236,4 +317,19 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
             _ => throw new ArgumentOutOfRangeException(nameof(value), value.Kind, "未知运行时 UI 值类型。"),
         };
     }
+
+    private void PruneReleasedSubscriptions()
+    {
+        for (int i = _scriptEventSubscriptions.Count - 1; i >= 0; i--)
+        {
+            if (!_scriptEventSubscriptions[i].Handler.TryGetTarget(out _))
+            {
+                _scriptEventSubscriptions.RemoveAt(i);
+            }
+        }
+    }
+
+    private readonly record struct EventSubscription(
+        WeakReference<Action<ScriptUi.UiEvent>> Handler,
+        IDisposable Subscription);
 }

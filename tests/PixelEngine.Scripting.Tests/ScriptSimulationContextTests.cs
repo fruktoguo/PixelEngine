@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using PixelEngine.Core.Events;
 using PixelEngine.Core.Threading;
 using PixelEngine.Interop.Box2D;
 using PixelEngine.Physics;
@@ -33,6 +34,32 @@ public sealed class ScriptSimulationContextTests
         Assert.Equal(default, screen);
         Assert.False(gameUi.TryGetValue(screen, new UiPathId(7), out UiValue value));
         Assert.Equal(default, value);
+    }
+
+    /// <summary>
+    /// 验证 UI 事件处理器中的世界写入只进入延迟命令队列，在 cell 安全窗口 flush 前不改网格。
+    /// </summary>
+    [Fact]
+    public void UiEventHandlersQueueWorldWritesUntilCellCommandFlush()
+    {
+        using Fixture fixture = Fixture.Create();
+        MaterialId stone = fixture.Context.Materials.Resolve("stone");
+        _ = fixture.Context.Events.Subscribe<UiEvent>(_ => fixture.Context.Cells.SetCell(5, 5, stone));
+        UiEvent uiEvent = new(
+            new UiScreenHandle(1),
+            new UiElementId(2),
+            new UiActionId(3),
+            default);
+
+        Assert.True(fixture.Context.Events.TryPublish(in uiEvent));
+        fixture.ScriptEvents.DrainEvents();
+
+        Assert.Equal((ushort)0, fixture.Grid.GetMaterial(5, 5));
+
+        int flushed = fixture.Context.FlushCellCommands();
+
+        Assert.Equal(1, flushed);
+        Assert.Equal(stone.Value, fixture.Grid.GetMaterial(5, 5));
     }
 
     /// <summary>
@@ -391,6 +418,7 @@ public sealed class ScriptSimulationContextTests
             SimulationKernel kernel,
             TemperatureField temperature,
             ParticleSystem particles,
+            ScriptEventBus scriptEvents,
             ScriptSimulationContext context,
             PhysicsSystem? physics,
             JobSystem? jobs)
@@ -400,6 +428,7 @@ public sealed class ScriptSimulationContextTests
             Kernel = kernel;
             Temperature = temperature;
             Particles = particles;
+            ScriptEvents = scriptEvents;
             Context = context;
             Physics = physics;
             Jobs = jobs;
@@ -414,6 +443,8 @@ public sealed class ScriptSimulationContextTests
         public TemperatureField Temperature { get; }
 
         public ParticleSystem Particles { get; }
+
+        public ScriptEventBus ScriptEvents { get; }
 
         public ScriptSimulationContext Context { get; }
 
@@ -439,6 +470,8 @@ public sealed class ScriptSimulationContextTests
             SimulationKernel kernel = new(chunks, props);
             TemperatureField temperature = new();
             ParticleSystem particles = new(capacity: 16);
+            EventBus coreEvents = new(capacityPerChannel: 8);
+            ScriptEventBus scriptEvents = new(coreEvents);
             JobSystem? jobs = null;
             PhysicsSystem? physics = null;
             if (withPhysics)
@@ -449,13 +482,14 @@ public sealed class ScriptSimulationContextTests
                 physics = PhysicsSystem.Initialize(grid, jobs, worldDef: worldDef);
             }
 
-            ScriptSimulationContext context = new(new ScriptScene(), grid, kernel, particles, materials, temperature, physics: physics, camera: camera, input: input, lighting: lighting, overlay: overlay);
-            return new Fixture(chunk, grid, kernel, temperature, particles, context, physics, jobs);
+            ScriptSimulationContext context = new(new ScriptScene(), grid, kernel, particles, materials, temperature, scriptEvents, physics: physics, camera: camera, input: input, lighting: lighting, overlay: overlay);
+            return new Fixture(chunk, grid, kernel, temperature, particles, scriptEvents, context, physics, jobs);
         }
 
         public void Dispose()
         {
             Context.Dispose();
+            ScriptEvents.Dispose();
             Physics?.Dispose();
             Jobs?.Dispose();
         }

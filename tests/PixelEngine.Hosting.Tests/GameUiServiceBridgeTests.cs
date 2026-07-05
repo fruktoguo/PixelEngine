@@ -1,3 +1,4 @@
+using PixelEngine.Core.Events;
 using PixelEngine.Rendering;
 using Xunit;
 using RuntimeUi = PixelEngine.UI;
@@ -55,6 +56,111 @@ public sealed class GameUiServiceBridgeTests
             Assert.Equal(new ScriptUi.UiElementId(3), received.Element);
             Assert.Equal(new ScriptUi.UiActionId(5), received.Action);
             Assert.True(received.Payload.AsBoolean());
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证接入脚本事件总线后，UI 事件不会同步调用脚本处理器，而是等待脚本相位 drain。
+    /// </summary>
+    [Fact]
+    public void BridgePublishesUiEventsThroughScriptEventBusWhenAttached()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-script-events-{Guid.NewGuid():N}");
+        string uiRoot = Path.Combine(root, "ui");
+        _ = Directory.CreateDirectory(uiRoot);
+        File.WriteAllText(Path.Combine(uiRoot, "main.xhtml"), "<ui><text>Main</text></ui>");
+        try
+        {
+            RecordingBackend backend = new();
+            using RuntimeUi.GameUiHost host = new(backend);
+            host.Initialize(new RuntimeUi.UiBackendInitializeInfo(
+                new RuntimeUi.UiViewport(0, 0, 320, 240, 1f),
+                RuntimeUi.UiBackendKind.ManagedFallback));
+            EventBus coreEvents = new(capacityPerChannel: 8);
+            using ScriptUi.ScriptEventBus scriptEvents = new(coreEvents);
+            GameUiServiceBridge bridge = new(host, root);
+            bridge.AttachScriptEventBus(scriptEvents);
+            ScriptUi.UiEvent received = default;
+            int eventCount = 0;
+            bridge.UiEventRaised += e =>
+            {
+                received = e;
+                eventCount++;
+            };
+
+            ScriptUi.UiScreenHandle screen = bridge.ShowScreen("main");
+            bridge.OnGameUiEvents([
+                new RuntimeUi.UiEvent(
+                    backend.LastDocument,
+                    new RuntimeUi.UiElementId(3),
+                    new RuntimeUi.UiActionId(5),
+                    RuntimeUi.UiValue.FromBoolean(true)),
+            ]);
+
+            Assert.Equal(0, eventCount);
+
+            scriptEvents.DrainEvents();
+
+            Assert.Equal(1, eventCount);
+            Assert.Equal(screen, received.Screen);
+            Assert.Equal(new ScriptUi.UiElementId(3), received.Element);
+            Assert.Equal(new ScriptUi.UiActionId(5), received.Action);
+            Assert.True(received.Payload.AsBoolean());
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证先注册的直接 UI 事件处理器在接入脚本事件总线时会迁移为相位 drain 派发。
+    /// </summary>
+    [Fact]
+    public void BridgeMigratesExistingUiEventHandlersWhenScriptEventBusAttaches()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-event-migrate-{Guid.NewGuid():N}");
+        string uiRoot = Path.Combine(root, "ui");
+        _ = Directory.CreateDirectory(uiRoot);
+        File.WriteAllText(Path.Combine(uiRoot, "main.xhtml"), "<ui><text>Main</text></ui>");
+        try
+        {
+            RecordingBackend backend = new();
+            using RuntimeUi.GameUiHost host = new(backend);
+            host.Initialize(new RuntimeUi.UiBackendInitializeInfo(
+                new RuntimeUi.UiViewport(0, 0, 320, 240, 1f),
+                RuntimeUi.UiBackendKind.ManagedFallback));
+            EventBus coreEvents = new(capacityPerChannel: 8);
+            using ScriptUi.ScriptEventBus scriptEvents = new(coreEvents);
+            GameUiServiceBridge bridge = new(host, root);
+            int eventCount = 0;
+            bridge.UiEventRaised += _ => eventCount++;
+
+            _ = bridge.ShowScreen("main");
+            bridge.AttachScriptEventBus(scriptEvents);
+            bridge.OnGameUiEvents([
+                new RuntimeUi.UiEvent(
+                    backend.LastDocument,
+                    new RuntimeUi.UiElementId(3),
+                    new RuntimeUi.UiActionId(5),
+                    default),
+            ]);
+
+            Assert.Equal(0, eventCount);
+
+            scriptEvents.DrainEvents();
+
+            Assert.Equal(1, eventCount);
         }
         finally
         {

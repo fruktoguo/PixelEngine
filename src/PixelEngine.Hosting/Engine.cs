@@ -1168,6 +1168,11 @@ public sealed class Engine : IDisposable
         IRuntimeControlApi runtimeControl = ResolveRuntimeControlApi();
         IAudioApi? audio = ResolveAudioApiOrNull();
         IGameUiService? gameUi = ResolveGameUiServiceOrNull();
+        if (gameUi is GameUiServiceBridge gameUiBridge)
+        {
+            gameUiBridge.AttachScriptEventBus(events);
+        }
+
         IConfigApi config = ResolveConfigApi();
         PhysicsSystem? physics = Context.TryGetService(out PhysicsSystem registeredPhysics)
             ? registeredPhysics
