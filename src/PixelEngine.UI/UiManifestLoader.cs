@@ -101,7 +101,7 @@ public static class UiManifestLoader
             screens[i] = new UiManifestScreen(id, relativePath, fullPath, item.Preload, screenId);
         }
 
-        return new UiManifest(NormalizeRoot(root), screens);
+        return new UiManifest(NormalizeRoot(root), UiAssetDirectories.FromRoot(root), screens);
     }
 
     private static string RequireToken(string? value, string fieldName)
