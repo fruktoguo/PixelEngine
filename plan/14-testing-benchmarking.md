@@ -254,8 +254,8 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 ### 4.11 win-first RID 门控参数化与项目纪律更新（plan/15 §2.1/§3.10）
 
-- [ ] `PerformanceHardeningToolingDisciplineTests` 参数化：`package_count`/`rids`/`uploaded_asset_count` 随 `tools/release-rids.json` 激活集派生（Windows-only 4 包 + 5 资产、含 / 不含 win-arm64 两分支），与 plan/15 门控实现同提交；dormant RID 保留位 + 翻 `active` dry-run 回归；6-RID build/test 矩阵刻意保留不收敛（§4.7 既有 6-RID 断言不缩减）。
-- [ ] `HostingProjectDisciplineTests` 更新：Demo 去 `using PixelEngine.Editor` 与 `--editor`、Demo 对 Editor 无直接 / 传递闭包引用、`DemoProgram` 改用 `PixelEngine.Gui` 中性 host、Hosting 删 Editor 硬 `ProjectReference` 改条件 / 抽象注入；维持 Demo 不直接 `System.Text.Json`（weapons/材质经引擎 Content/Config API）。
+- [x] `PerformanceHardeningToolingDisciplineTests` / `HostingProjectDisciplineTests` 参数化：`package_count`/`rids`/`uploaded_asset_count` 随 `tools/release-rids.json` 激活集派生（当前 win-x64+win-arm64 → 4 包 + 5 资产，`-ExcludeWinArm64` → 2 包 + 3 资产），与 plan/15 门控实现闭合；dormant RID 保留位 + 翻 `active` dry-run 回归；6-RID build/test 矩阵刻意保留不收敛（§4.7 既有 6-RID 断言不缩减）。
+- [x] `HostingProjectDisciplineTests` 更新：Demo 去 `using PixelEngine.Editor` 与 `--editor`、Demo 对 Editor 无直接 / 传递闭包引用、`DemoProgram` 改用 `PixelEngine.Gui` 中性 host、Hosting 删 Editor 硬 `ProjectReference` 改条件 / 抽象注入；维持 Demo 不直接 `System.Text.Json`（weapons/材质经引擎 Content/Config API）。
 
 ### 4.12 html-ui — PixelEngine.UI headless（plan/20）
 
@@ -291,7 +291,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [ ] demo-playability 测试全绿：抗性差异化破坏分档、Damage 归零转碎块 handshake、Dispersion ≤ 32px、`DamageCircle`/`DamageBeam` 边界质量守恒、RigidOwned 经 `IRigidDamageSink` 路由不累加 Damage、weapons.json 经 Content API 加载、可玩循环胜负 / 分数、Damage 平面存档往返逐 cell 等价、Explode 语义迁移断言更新（plan/03/04/05/06/07/13）。
 - [ ] standalone-editor 测试全绿：`.scene` v2（ParentId/Transform/Vector2）往返逐字段等价、v1 兼容升级、authoring→运行时物化（世界 TRS 烘焙 + 扁平 DOD）、prefab 嵌套 / override 传播、shell `--window-ticks` 证据等价迁移（plan/19/18）。
 - [ ] in-editor-build 测试全绿：`PlayerBuildService` NDJSON 解析 / `build-result` 合成 / 取消杀子树无残留、`BuildTargetSettings` 校验、`Preflight` 诊断；audit「player 包 `app/` 无 `PixelEngine.Editor.dll` 与编辑器专属 ImGuizmo/ImPlot」断言（允许玩家 HUD 的 `Hexa.NET.ImGui`；标 blocked-on-req1，解耦落地后转绿）。
-- [!] win-first 参数化生效：`PerformanceHardeningToolingDisciplineTests` 随激活集断言包 / 资产数（含 / 不含 win-arm64），与 plan/15 门控同提交且激活集全绿不被自身单测判红；6-RID build/test 矩阵保留 dormant 编译保证不收敛；`HostingProjectDisciplineTests` 锁定 Demo 去 Editor / 用 Gui 中性 host / Hosting 去 Editor 硬引用 / Demo 不直接 STJ。阻塞：待 plan/15 §2.1/§3.10 门控与 req1 解耦落地后同提交转绿。
+- [x] win-first 参数化生效：`PerformanceHardeningToolingDisciplineTests` / `HostingProjectDisciplineTests` 随激活集断言包 / 资产数（含 / 不含 win-arm64），与 plan/15 门控闭合且激活集计数不被自身单测判红；6-RID build/test 矩阵保留 dormant 编译保证不收敛；`HostingProjectDisciplineTests` 锁定 Demo 去 Editor / 用 Gui 中性 host / Hosting 去 Editor 硬引用 / Demo 不直接 STJ。外部 release workflow / 产物 / GitHub Release 证据仍归 plan/15 与 plan/17 对应阻塞项，不在本自动化参数化验收内。
 - [ ] html-ui 测试全绿（headless 部分）：布局 / data-model 绑定 / 三级输入仲裁 / 脏矩形合并正确、UI 逻辑相位零分配基准；GL 上传 / 光栅化不在自动化断言内，后端 / #10 处置拍板前专属路径标 [!] blocked（plan/20）。
 
 ---
