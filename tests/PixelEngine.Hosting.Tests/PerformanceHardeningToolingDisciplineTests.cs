@@ -3595,6 +3595,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string publishR2rSh = ReadRepositoryFile("tools", "publish-r2r.sh");
         string publishAotSh = ReadRepositoryFile("tools", "publish-aot.sh");
         string evidence = ReadRepositoryFile("tools", "release-evidence-preflight.ps1");
+        string evidenceSh = ReadRepositoryFile("tools", "release-evidence-preflight.sh");
         string release = ReadRepositoryFile(".github", "workflows", "release.yml");
         string example = ReadRepositoryFile("docs", "release-reports", "release-evidence-manifest.example.json");
         string releaseReport = ReadRepositoryFile("docs", "release-reports", "2026-07-02-win-x64-publish.md");
@@ -3745,6 +3746,13 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("exit 2", evidence, StringComparison.Ordinal);
         Assert.Contains("win-x64", evidence, StringComparison.Ordinal);
         Assert.Contains("osx-arm64", evidence, StringComparison.Ordinal);
+        Assert.Contains("release-evidence-preflight.ps1", evidenceSh, StringComparison.Ordinal);
+        Assert.Contains("--active-rids", evidenceSh, StringComparison.Ordinal);
+        Assert.Contains("-ActiveRids", evidenceSh, StringComparison.Ordinal);
+        Assert.Contains("--expected-package-count", evidenceSh, StringComparison.Ordinal);
+        Assert.Contains("-ExpectedPackageCount", evidenceSh, StringComparison.Ordinal);
+        Assert.Contains("--allow-blocked", evidenceSh, StringComparison.Ordinal);
+        Assert.Contains("-AllowBlocked", evidenceSh, StringComparison.Ordinal);
         Assert.Contains("simdProbe", evidence, StringComparison.Ordinal);
         Assert.Contains("simdProbeKind", evidence, StringComparison.Ordinal);
         Assert.Contains("x64_ymm_zmm", evidence, StringComparison.Ordinal);
@@ -3774,6 +3782,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("pending review 误当成验收通过", releaseReport, StringComparison.Ordinal);
         Assert.Contains("release-evidence-manifest.example.json", releaseReport, StringComparison.Ordinal);
         Assert.Contains("tools/release-evidence-preflight.ps1", plan, StringComparison.Ordinal);
+        Assert.Contains("tools/release-evidence-preflight.ps1|.sh", plan, StringComparison.Ordinal);
 
         Assert.Contains("tools/release-evidence-preflight.ps1", conventions, StringComparison.Ordinal);
         Assert.Contains("发行与 Box2D dual-build 工具链已在 `plan/15`", conventions, StringComparison.Ordinal);
@@ -3843,6 +3852,46 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.True(ridNode.TryGetProperty("r2r", out _), $"示例 manifest 缺少 {rid}/r2r");
             Assert.True(ridNode.TryGetProperty("aot", out System.Text.Json.JsonElement aotNode), $"示例 manifest 缺少 {rid}/aot");
             Assert.True(aotNode.TryGetProperty("simdProbeKind", out _), $"示例 manifest 缺少 {rid}/aot simdProbeKind");
+        }
+    }
+
+    /// <summary>
+    /// 验证 Bash 发行证据预检入口复用 PowerShell 实现，并传递 active RID / package count 口径。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightBashEntryDelegatesActiveRidArguments()
+    {
+        string root = FindRepositoryRoot();
+        string artifacts = "artifacts/test-release-evidence-preflight-bash-" + Guid.NewGuid().ToString("N");
+        string artifactPath = Path.Combine(root, artifacts);
+
+        try
+        {
+            ScriptResult result = RunBashScript(
+                root,
+                "tools/release-evidence-preflight.sh",
+                "--evidence-manifest-path",
+                "artifacts/missing-release-evidence.json",
+                "--artifacts",
+                artifacts,
+                "--active-rids",
+                "win-x64",
+                "--expected-package-count",
+                "2",
+                "--allow-blocked");
+
+            Assert.Equal(0, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifactPath, "release-evidence-preflight.md"));
+            Assert.Contains("| status | blocked_missing_release_manifest |", report, StringComparison.Ordinal);
+            Assert.Contains("| required_rids | win-x64 |", report, StringComparison.Ordinal);
+            Assert.Contains("| required_channels | r2r; aot |", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(artifactPath))
+            {
+                Directory.Delete(artifactPath, recursive: true);
+            }
         }
     }
 
@@ -5785,6 +5834,27 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         process.StartInfo.ArgumentList.Add("-File");
         process.StartInfo.ArgumentList.Add(scriptPath);
         foreach (string argument in effectiveArguments)
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
+
+        _ = process.Start();
+        string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        return new ScriptResult(process.ExitCode, output);
+    }
+
+    private static ScriptResult RunBashScript(string workingDirectory, string scriptPath, params string[] arguments)
+    {
+        using System.Diagnostics.Process process = new();
+        process.StartInfo.FileName = "bash";
+        process.StartInfo.WorkingDirectory = workingDirectory;
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.UseShellExecute = false;
+        process.StartInfo.CreateNoWindow = true;
+        process.StartInfo.ArgumentList.Add(scriptPath);
+        foreach (string argument in arguments)
         {
             process.StartInfo.ArgumentList.Add(argument);
         }
