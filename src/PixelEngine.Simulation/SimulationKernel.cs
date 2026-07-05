@@ -18,10 +18,12 @@ public sealed class SimulationKernel(
     IReactionExecutor? reactionExecutor = null,
     ILifetimeSink? lifetimeSink = null,
     IMaterialCustomUpdateExecutor? customUpdateExecutor = null,
-    FrameProfiler? profiler = null)
+    FrameProfiler? profiler = null,
+    ICellDestructionSink? cellDestructionSink = null)
 {
     private readonly IChunkSource _chunks = chunks ?? throw new ArgumentNullException(nameof(chunks));
     private readonly IRigidDamageSink _rigidDamageSink = rigidDamageSink ?? IRigidDamageSink.Null;
+    private readonly ICellDestructionSink _cellDestructionSink = cellDestructionSink ?? ICellDestructionSink.Null;
     private readonly IReactionExecutor _reactionExecutor = reactionExecutor ?? IReactionExecutor.Null;
     private readonly ILifetimeSink _lifetimeSink = lifetimeSink ?? ILifetimeSink.Null;
     private readonly IMaterialCustomUpdateExecutor _customUpdateExecutor = customUpdateExecutor ?? IMaterialCustomUpdateExecutor.Null;
@@ -555,6 +557,24 @@ public sealed class SimulationKernel(
         chunk.Lifetime[local] = DefaultLifetimeByte(rubbleTarget);
         chunk.Damage[local] = 0;
         MarkDamageDirty(wx, wy);
+        NotifyCellDestroyed(wx, wy, sourceMaterial, rubbleTarget);
+    }
+
+    private void NotifyCellDestroyed(int wx, int wy, ushort sourceMaterial, ushort targetMaterial)
+    {
+        MaterialProperty flags = MaterialProps.PropertyFlagsOf(sourceMaterial);
+        byte mineYield = (flags & MaterialProperty.Diggable) != 0
+            ? MaterialProps.MineYieldOf(sourceMaterial)
+            : (byte)0;
+        CellDestructionEvent item = new(
+            wx,
+            wy,
+            sourceMaterial,
+            targetMaterial,
+            targetMaterial == 0 ? sourceMaterial : targetMaterial,
+            MaterialProps.DebrisCountOf(sourceMaterial),
+            mineYield);
+        _cellDestructionSink.OnCellDestroyed(in item);
     }
 
     private void MarkDamageDirty(int wx, int wy)

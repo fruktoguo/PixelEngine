@@ -41,6 +41,8 @@ public sealed class MaterialTableTests
         Assert.Equal(14, table.Hot.Integrity[1]);
         Assert.Equal(2, table.Hot.RubbleTarget[1]);
         Assert.Equal(2, table.Hot.DestroyedTarget[1]);
+        Assert.Equal(3, table.Hot.DebrisCount[1]);
+        Assert.Equal(1, table.Hot.MineYield[1]);
         Assert.True((table.Hot.PropertyFlags[1] & MaterialProperty.Corrodible) != 0);
         Assert.True((table.Hot.PropertyFlags[1] & MaterialProperty.Diggable) != 0);
         Assert.Equal(11, table.Hot.ReactionStart[1]);
@@ -65,6 +67,8 @@ public sealed class MaterialTableTests
         Assert.Equal(14, props.IntegrityOf(1));
         Assert.Equal(2, props.RubbleTargetOf(1));
         Assert.Equal(2, props.DestroyedTargetOf(1));
+        Assert.Equal(3, props.DebrisCountOf(1));
+        Assert.Equal(1, props.MineYieldOf(1));
     }
 
     /// <summary>

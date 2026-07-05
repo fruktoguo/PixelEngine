@@ -119,6 +119,16 @@ public sealed class MaterialPropsTable
     public ReadOnlySpan<ushort> DestroyedTarget => Hot.DestroyedTarget;
 
     /// <summary>
+    /// 结构破坏时请求抛射的碎屑数量列。
+    /// </summary>
+    public ReadOnlySpan<byte> DebrisCount => Hot.DebrisCount;
+
+    /// <summary>
+    /// 可采集材质破坏时产生的采集计数列。
+    /// </summary>
+    public ReadOnlySpan<byte> MineYield => Hot.MineYield;
+
+    /// <summary>
     /// 返回材质类型。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -224,6 +234,24 @@ public sealed class MaterialPropsTable
     public ushort DestroyedTargetOf(ushort materialId)
     {
         return RubbleTargetOf(materialId);
+    }
+
+    /// <summary>
+    /// 返回材质破坏时请求抛射的碎屑数量。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public byte DebrisCountOf(ushort materialId)
+    {
+        return Hot.DebrisCountOfUnchecked(materialId);
+    }
+
+    /// <summary>
+    /// 返回材质可采集产量。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public byte MineYieldOf(ushort materialId)
+    {
+        return Hot.MineYieldOfUnchecked(materialId);
     }
 
     /// <summary>

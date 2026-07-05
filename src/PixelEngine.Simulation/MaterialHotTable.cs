@@ -31,6 +31,8 @@ public sealed class MaterialHotTable
     private readonly byte[] _hardness;
     private readonly ushort[] _maxIntegrity;
     private readonly ushort[] _rubbleTarget;
+    private readonly byte[] _debrisCount;
+    private readonly byte[] _mineYield;
     private readonly int[] _textureId;
     private readonly uint[] _baseColorBgra;
     private readonly byte[] _colorNoise;
@@ -62,6 +64,8 @@ public sealed class MaterialHotTable
         byte[] hardness,
         ushort[] maxIntegrity,
         ushort[] rubbleTarget,
+        byte[] debrisCount,
+        byte[] mineYield,
         int[] textureId,
         uint[] baseColorBgra,
         byte[] colorNoise,
@@ -92,6 +96,8 @@ public sealed class MaterialHotTable
         _hardness = hardness;
         _maxIntegrity = maxIntegrity;
         _rubbleTarget = rubbleTarget;
+        _debrisCount = debrisCount;
+        _mineYield = mineYield;
         _textureId = textureId;
         _baseColorBgra = baseColorBgra;
         _colorNoise = colorNoise;
@@ -236,6 +242,16 @@ public sealed class MaterialHotTable
     public ReadOnlySpan<ushort> DestroyedTarget => _rubbleTarget;
 
     /// <summary>
+    /// 结构破坏时请求抛射的碎屑数量列。
+    /// </summary>
+    public ReadOnlySpan<byte> DebrisCount => _debrisCount;
+
+    /// <summary>
+    /// 可采集材质破坏时产生的采集计数列。
+    /// </summary>
+    public ReadOnlySpan<byte> MineYield => _mineYield;
+
+    /// <summary>
     /// 材质纹理 id 列；-1 表示纯色。
     /// </summary>
     public ReadOnlySpan<int> TextureId => _textureId;
@@ -366,6 +382,24 @@ public sealed class MaterialHotTable
     }
 
     /// <summary>
+    /// 热路径 unchecked 读取破坏碎屑数量；调用方保证 material id 来自有效网格数据。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal byte DebrisCountOfUnchecked(ushort materialId)
+    {
+        return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_debrisCount), materialId);
+    }
+
+    /// <summary>
+    /// 热路径 unchecked 读取采集计数；调用方保证 material id 来自有效网格数据。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal byte MineYieldOfUnchecked(ushort materialId)
+    {
+        return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_mineYield), materialId);
+    }
+
+    /// <summary>
     /// 热路径 unchecked 读取材质属性位；调用方保证 material id 来自有效网格数据。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -403,6 +437,8 @@ public sealed class MaterialHotTable
         byte[] hardness = new byte[count];
         ushort[] maxIntegrity = new ushort[count];
         ushort[] rubbleTarget = new ushort[count];
+        byte[] debrisCount = new byte[count];
+        byte[] mineYield = new byte[count];
         int[] textureId = new int[count];
         uint[] baseColorBgra = new uint[count];
         byte[] colorNoise = new byte[count];
@@ -438,6 +474,8 @@ public sealed class MaterialHotTable
             hardness[i] = def.Hardness != 0 ? def.Hardness : def.Durability;
             maxIntegrity[i] = def.Integrity;
             rubbleTarget[i] = def.DestroyedTarget;
+            debrisCount[i] = def.DebrisCount;
+            mineYield[i] = def.MineYield;
             textureId[i] = def.TextureId;
             baseColorBgra[i] = def.BaseColorBGRA;
             colorNoise[i] = def.ColorNoise;
@@ -472,6 +510,8 @@ public sealed class MaterialHotTable
             hardness,
             maxIntegrity,
             rubbleTarget,
+            debrisCount,
+            mineYield,
             textureId,
             baseColorBgra,
             colorNoise,
@@ -533,6 +573,8 @@ public sealed class MaterialHotTable
             new byte[count],
             new ushort[count],
             new ushort[count],
+            new byte[count],
+            new byte[count],
             CreateFilled(count, -1),
             new uint[count],
             new byte[count],
