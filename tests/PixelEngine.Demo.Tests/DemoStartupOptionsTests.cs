@@ -1,5 +1,8 @@
+using PixelEngine.Hosting;
 using PixelEngine.Rendering;
+using PixelEngine.Serialization;
 using PixelEngine.Simulation;
+using PixelEngine.World;
 using Xunit;
 
 namespace PixelEngine.Demo.Tests;
@@ -78,6 +81,74 @@ public sealed class DemoStartupOptionsTests
     }
 
     /// <summary>
+    /// 验证玩家包 startup.json 指向存档目录时，Demo 项目模型会走 SaveDirectory 来源并由 Hosting 恢复世界。
+    /// </summary>
+    [Fact]
+    public void StartupJsonSaveDirectoryRestoresWorldThroughPlayerProject()
+    {
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-startup-save-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            string savePath = Path.Combine(temp, "saves", "mine");
+            _ = Directory.CreateDirectory(temp);
+            File.WriteAllText(
+                Path.Combine(temp, "startup.json"),
+                """
+                {
+                  "startScene": "saves/mine"
+                }
+                """);
+
+            MaterialTable materials = new(
+                [
+                    new MaterialDef { Id = 0, Name = "empty", Type = CellType.Empty },
+                    new MaterialDef { Id = 1, Name = "sand", Type = CellType.Powder },
+                ]);
+            ResidentChunkMap chunks = new();
+            Chunk chunk = new(new ChunkCoord(0, 0));
+            chunk.Material[0] = 1;
+            chunks.Add(chunk);
+            new WorldSaveService().SaveAll(
+                new WorldSaveContext(
+                    chunks,
+                    new ResidencyTable(),
+                    new TemperatureField(),
+                    materials,
+                    worldSeed: 1234,
+                    gameTimeTicks: 56,
+                    playerStateBlob: ReadOnlyMemory<byte>.Empty,
+                    isFrameBoundary: true),
+                EmptyWorldStateSnapshotSource.Instance,
+                savePath);
+
+            DemoStartupOptions options = DemoStartupOptions.Parse(["--content", temp]);
+            EngineProject project = DemoProgram.BuildProject(options);
+            Assert.Equal(1, project.Scenes.Length);
+            SceneDescriptor scene = project.Scenes[0];
+            Assert.Equal("mine", project.StartScene);
+            Assert.Equal(SceneSourceKind.SaveDirectory, scene.SourceKind);
+            Assert.Equal(Path.GetFullPath(savePath), Path.GetFullPath(scene.Source!));
+
+            using Engine engine = DemoProgram.BuildEngine(options, project);
+            engine.Context.RegisterService(materials);
+            WorldLoadResult? result = engine.AttachCurrentSceneWorld(particleCapacity: 4);
+
+            Assert.True(result.HasValue);
+            Assert.Equal(1234UL, result.Value.WorldSeed);
+            Assert.Equal(56L, result.Value.GameTimeTicks);
+            Assert.Equal(1, engine.Context.GetService<CellGrid>().GetMaterial(0, 0));
+            Assert.Equal(56L, engine.Context.Clock.FrameIndex);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 Demo 已下线内嵌编辑器入口，编辑器只能通过独立 Shell 进程启动。
     /// </summary>
     [Fact]
@@ -86,6 +157,23 @@ public sealed class DemoStartupOptionsTests
         ArgumentException exception = Assert.Throws<ArgumentException>(() => DemoStartupOptions.Parse(["--editor"]));
 
         Assert.Contains("未知 Demo 参数：--editor", exception.Message, StringComparison.Ordinal);
+    }
+
+    private sealed class EmptyWorldStateSnapshotSource : IWorldStateSnapshotSource
+    {
+        public static readonly EmptyWorldStateSnapshotSource Instance = new();
+
+        public int FreeParticleCount => 0;
+
+        public int RigidBodyCount => 0;
+
+        public void CopyFreeParticles(Span<FreeParticleSnapshot> destination)
+        {
+        }
+
+        public void CopyRigidBodies(Span<RigidBodySnapshot> destination)
+        {
+        }
     }
 
     /// <summary>

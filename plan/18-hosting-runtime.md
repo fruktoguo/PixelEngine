@@ -67,7 +67,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 
 `Scene` = 起始世界(地形/材质布局,可来自存档 plan/07 或程序化生成)+ 实体与脚本组件(plan/11 轻量组件数组)+ 相机/光照配置。`ISceneService` 负责加载/卸载/切换场景。项目模型:内容根(content/)、materials/reactions、资产、起始场景引用。Demo 的 `Program.cs` 经 `EngineBuilder` 指定项目与起始场景。
 
-**player 启动分派**:玩家运行时读 `content/startup.json`,按 `SceneSourceKind` 分派——`FromSave` 从 `SaveDirectory`(或 `.scene InitialSaveDirectory`)装配 live World/Simulation/粒子/Physics 后端并恢复 world seed/game time/刚体快照;`Procedural` **记录生成器键**,经注册式 `IProceduralWorldGenerator` 构建 resident world 并填充初始内容。默认启动场景是 `playable-world.scene`(生成器键 `PlayableWorldDirector`),**不是**熔岩矿洞逃生(后者是 plan/13/plan/20 M14 新增内容)。`EngineProject.Scenes` 现仅含单场景;编辑器内打包(plan/19 §5)的场景清单数据源 = 扫描 `content/scenes/`,而非 `EngineProject.Scenes`。
+**player 启动分派**:玩家运行时优先读 `content/startup.json`,按 `SceneSourceKind` 分派——`SaveDirectory` 从存档目录(或 `.scene InitialSaveDirectory`)装配 live World/Simulation/粒子/Physics 后端并恢复 world seed/game time/刚体快照;`SceneFile` 读取 `.scene`;`Procedural` **记录生成器键**,经注册式 `IProceduralWorldGenerator` 构建 resident world 并填充初始内容。当前玩家包 `content/startup.json` 选择 `scenes/lava-mine.scene`;无 startup 或缺省回落时使用 `playable-world` 程序化 fallback(生成器键 `PlayableWorldDirector`)。`EngineProject.Scenes` 现仅含单场景;编辑器内打包(plan/19 §5)的场景清单数据源 = 扫描 `content/scenes/`,而非 `EngineProject.Scenes`。
 
 **`.scene` schema v2 与保存往返 API(供 plan/19 编辑器壳)**:`EngineSceneDocument`/`EngineSceneDocumentLoader` 现**仅有读**(`Load`/`Build`)。补齐往返:
 - schema v2:`EngineSceneEntityDocument` 增 `ParentId` 与 `Transform`(TRS)块,新增 `Vector2` 字段类型支持;`FormatVersion` 1→2 且**保 v1 兼容**(v1 档无 ParentId/Transform 时按默认根实体 + 单位 Transform 物化)。
@@ -156,7 +156,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 
 ### 4.5 player 启动分派(§3.5)
 
-- [ ] player 读 `content/startup.json` 按 `SceneSourceKind` 分派:`FromSave` 从 SaveDirectory 装配、`Procedural` 记生成器键经 `IProceduralWorldGenerator` 构建(默认 `playable-world.scene` / `PlayableWorldDirector`);编辑器内打包场景清单数据源 = 扫描 `content/scenes/`。
+- [x] player 读 `content/startup.json` 按 `SceneSourceKind` 分派:`SaveDirectory` 从存档目录装配、`SceneFile` 读 `.scene`、`Procedural` 记生成器键经 `IProceduralWorldGenerator` 构建(无 startup 时回落 `playable-world` / `PlayableWorldDirector`);编辑器内打包场景清单数据源 = 扫描 `content/scenes/`。验证:`DemoStartupOptionsTests.StartupJsonSelectsPackagedStartSceneUnlessSceneIsExplicit`、`DemoStartupOptionsTests.StartupJsonSaveDirectoryRestoresWorldThroughPlayerProject`、`SceneAndHeadlessTests.AttachCurrentSceneWorldBuildsRegisteredProceduralWorld`、`SceneAndHeadlessTests.AttachWorldFromSaveDirectoryLoadsWorldAndRegistersRuntimeServices`、`SceneAndHeadlessTests.AttachCurrentSceneWorldLoadsSceneFileInitialSaveDirectory`。
 
 ## 5. 验收标准
 
@@ -174,7 +174,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 - [ ] 编辑器壳可 attach Hosting 外部窗口装配 Engine、关闭工程时 `Engine.Dispose()` 逆序释放而**窗口保留**、重建 session 再装配成功;Shell 侧 `IEditorHostExtension` 可创建 `EditorApp` 并注册默认面板与 GameObject 面板。[§3.8]
 - [x] `SaveSceneDocument` 往返等价:`.scene` v2(ParentId/Transform/Vector2)读→写→读逐字段一致、稳定排序;v1 档可被 v2 loader 兼容读取;`EngineSceneDocument`→运行时物化后运行时 Scene 为扁平 DOD、层级已烘焙为世界 TRS(配 plan/14 性质测试)。[§3.5]
 - [ ] 启用 HTML UI 时相位[10]合成次序为 世界 → 游戏 UI → 编辑器叠层,合成后 GL 状态正确恢复;`IGameUiService` 事件在相位 1 派发、世界写入经延迟队列落正确相位不破坏帧节奏;禁用 HTML UI 零开销。[§3.2/§3.9,#6]
-- [ ] player `content/startup.json` 分派正确:`Procedural` 键 `PlayableWorldDirector` 构建 `playable-world.scene`、`FromSave` 从存档装配;两路径均无窗口/后门依赖。[§3.5]
+- [x] player `content/startup.json` 分派正确:`SceneFile` 可选择当前包内 `lava-mine.scene`,无 startup 时 `Procedural` 键 `PlayableWorldDirector` 构建 `playable-world` fallback,`SaveDirectory` 可从存档装配;三路径均无窗口/后门依赖。[§3.5]
 - [x] **editor-window 证据入口迁移**:plan/18 §5 的 editor-window 人工验收/preflight/scripted-probe 证据入口从 Demo `--editor` **迁移到** `apps/PixelEngine.Editor.Shell`(壳提供等价 `--window-ticks`/scripted-probe/截图入口);`tools/demo-manual-acceptance-preflight.ps1` 的 editor-window probe 改由壳进程启动并输出 `editor_enabled=True`/`editor_running=True`/`editor_panels>=1`/`editor_bridge_frames>=1`/`render_camera_synced=True`,原 Demo `--editor` 入口下线。(上方 `- [!]` Editor 真实窗口观测阻塞项在迁移后继续由壳入口闭合,证据链契约不变。)[§3.8,plan/19 §5]
 
 ## 6. 依赖关系
