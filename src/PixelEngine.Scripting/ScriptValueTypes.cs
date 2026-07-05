@@ -32,7 +32,19 @@ public readonly record struct CellView(MaterialId Material, byte Flags, byte Lif
 /// <param name="Name">稳定材质名。</param>
 /// <param name="Density">材质密度。</param>
 /// <param name="IsSolid">是否按固体处理。</param>
-public readonly record struct MaterialInfo(MaterialId Id, string Name, byte Density, bool IsSolid);
+/// <param name="DisplayName">面向玩家显示的材质名。</param>
+/// <param name="LegendCategory">材质图例分组。</param>
+/// <param name="LegendVisible">是否应在玩家图例中显示。</param>
+/// <param name="BaseColorBgra">材质代表色，BGRA8。</param>
+public readonly record struct MaterialInfo(
+    MaterialId Id,
+    string Name,
+    byte Density,
+    bool IsSolid,
+    string DisplayName = "",
+    string LegendCategory = "",
+    bool LegendVisible = true,
+    uint BaseColorBgra = 0);
 
 /// <summary>
 /// 像素 raycast 的命中结果。

@@ -628,7 +628,15 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         public MaterialInfo GetInfo(MaterialId id)
         {
             ref readonly MaterialDef material = ref materials.Get(id.Value);
-            return new MaterialInfo(id, material.Name, material.Density, material.Type == CellType.Solid);
+            return new MaterialInfo(
+                id,
+                material.Name,
+                material.Density,
+                material.Type == CellType.Solid,
+                string.IsNullOrWhiteSpace(material.DisplayName) ? material.Name : material.DisplayName,
+                material.LegendCategory.ToString(),
+                material.LegendVisible,
+                material.BaseColorBGRA);
         }
     }
 

@@ -78,6 +78,40 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证可玩 HUD 经 IGuiContext 绘制武器状态、冷却/热量条和材质图例。
+    /// </summary>
+    [Fact]
+    public void PlayableHudDrawsWeaponStateAndMaterialLegend()
+    {
+        using Engine engine = CreateManualScriptEngine(
+            out _,
+            out _,
+            out _,
+            out ScriptScene scene,
+            DemoMaterials(),
+            contentRoot: DemoContentRoot());
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<PlayerHealth>();
+        _ = entity.AddComponent<PlayableProjectileTool>();
+        _ = entity.AddComponent<WeaponController>();
+        _ = entity.AddComponent<PlayableHud>();
+
+        engine.RunHeadlessTicks(2);
+
+        IScriptRuntime runtime = engine.Context.GetService<IScriptRuntime>();
+        RecordingGuiContext gui = new();
+        runtime.DrawGui(gui);
+
+        Assert.Contains("begin:playable-hud:Playable HUD:NoTitleBar, NoResize, NoMove, NoSavedSettings, NoScrollbar", gui.Drawn);
+        Assert.Contains("swatch:weapon-current:FFE8D06A:14", gui.Drawn);
+        Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:Pistol  120/120:", StringComparison.Ordinal));
+        Assert.Contains("text:材质", gui.Drawn);
+        Assert.Contains("text:sand / Terrain", gui.Drawn);
+        Assert.Contains("text:stone / Terrain", gui.Drawn);
+        Assert.Contains(gui.Drawn, line => line.StartsWith("progress:", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// 验证暂停菜单按钮会经公开 Runtime/Diagnostics API 触发重开与调试叠层控制。
     /// </summary>
     [Fact]
