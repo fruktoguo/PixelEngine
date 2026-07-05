@@ -151,14 +151,11 @@ internal static class ManagedUiLayout
 
     private static float? ReadFloat(XElement element, string? style, string attributeName, string cssName)
     {
-        if (TryReadFloat(ReadAttribute(element, attributeName), out float value) ||
+        return TryReadFloat(ReadAttribute(element, attributeName), out float value) ||
             TryReadFloat(ReadAttribute(element, "data-" + attributeName), out value) ||
-            TryReadFloat(ReadStyleProperty(style, cssName), out value))
-        {
-            return value;
-        }
-
-        return null;
+            TryReadFloat(ReadStyleProperty(style, cssName), out value)
+            ? value
+            : null;
     }
 
     private static string? ReadStyleProperty(string? style, string name)
