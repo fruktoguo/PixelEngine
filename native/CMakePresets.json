@@ -65,7 +65,8 @@
       "configurePreset": "win-x64",
       "targets": [
         "box2d_shared",
-        "box2d_static"
+        "box2d_static",
+        "pixelengine_ui_native"
       ]
     },
     {
@@ -73,7 +74,8 @@
       "configurePreset": "win-arm64",
       "targets": [
         "box2d_shared",
-        "box2d_static"
+        "box2d_static",
+        "pixelengine_ui_native"
       ]
     },
     {
@@ -81,7 +83,8 @@
       "configurePreset": "linux-x64",
       "targets": [
         "box2d_shared",
-        "box2d_static"
+        "box2d_static",
+        "pixelengine_ui_native"
       ]
     },
     {
@@ -89,7 +92,8 @@
       "configurePreset": "linux-arm64",
       "targets": [
         "box2d_shared",
-        "box2d_static"
+        "box2d_static",
+        "pixelengine_ui_native"
       ]
     },
     {
@@ -97,7 +101,8 @@
       "configurePreset": "osx-x64",
       "targets": [
         "box2d_shared",
-        "box2d_static"
+        "box2d_static",
+        "pixelengine_ui_native"
       ]
     },
     {
@@ -105,7 +110,8 @@
       "configurePreset": "osx-arm64",
       "targets": [
         "box2d_shared",
-        "box2d_static"
+        "box2d_static",
+        "pixelengine_ui_native"
       ]
     }
   ]

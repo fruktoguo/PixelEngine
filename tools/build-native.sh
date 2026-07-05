@@ -98,7 +98,7 @@ if [[ "$clean" == "1" ]]; then
 fi
 
 cmake --preset "$rid" -S "$native_root"
-cmake --build "$native_root/out/build/$rid" --target box2d_shared box2d_static --config "$configuration"
+cmake --build "$native_root/out/build/$rid" --target box2d_shared box2d_static pixelengine_ui_native --config "$configuration"
 
 shared_dir="$native_root/out/$rid/shared"
 static_dir="$native_root/out/$rid/static"

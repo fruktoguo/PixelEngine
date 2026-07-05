@@ -1,4 +1,6 @@
 <Project>
   <Import Project="$(MSBuildThisFileDirectory)PixelEngine.Box2D.targets"
           Condition="Exists('$(MSBuildThisFileDirectory)PixelEngine.Box2D.targets')" />
+  <Import Project="$(MSBuildThisFileDirectory)PixelEngine.UiNative.targets"
+          Condition="Exists('$(MSBuildThisFileDirectory)PixelEngine.UiNative.targets')" />
 </Project>
