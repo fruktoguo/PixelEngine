@@ -52,7 +52,7 @@ public sealed class PlayableHud : Behaviour
     protected override void OnGui(IGuiContext gui)
     {
         ResolveComponents();
-        gui.SetNextWindow(X, Y, 520f, 366f, GuiCondition.FirstUseEver);
+        gui.SetNextWindow(X, Y, 380f, 248f, GuiCondition.FirstUseEver);
         GuiWindowFlags flags = GuiWindowFlags.NoResize |
             GuiWindowFlags.NoMove |
             GuiWindowFlags.NoSavedSettings |
@@ -71,9 +71,8 @@ public sealed class PlayableHud : Behaviour
         EngineDiagnosticsSnapshot diagnostics = Context.Diagnostics.Capture();
         PushFrameGraphSample(diagnostics);
         gui.Separator();
-        gui.Text($"Render FPS {diagnostics.FramesPerSecond:0.0} avg   {diagnostics.FrameMilliseconds:0.0} ms");
-        gui.Text($"1% low {diagnostics.FrameLow1PercentFps:0.0}   p99 {diagnostics.FrameP99Milliseconds:0.0} ms   jitter {diagnostics.FrameJitterMilliseconds:0.0}");
-        gui.Text($"Frame graph {BuildFrameGraphText()}");
+        gui.Text($"FPS {diagnostics.FramesPerSecond:0.0}   {diagnostics.FrameMilliseconds:0.0} ms   p99 {diagnostics.FrameP99Milliseconds:0.0}");
+        gui.Text($"1% {diagnostics.FrameLow1PercentFps:0.0}   jitter {diagnostics.FrameJitterMilliseconds:0.0}   {BuildFrameGraphText()}");
         gui.Text($"Sim {diagnostics.SimHz:0}Hz   Frame {diagnostics.FrameCount}   Bodies {diagnostics.RigidBodies}");
         gui.Text($"Chunks {diagnostics.ActiveChunks}/{diagnostics.ResidentChunks}   Particles {diagnostics.FreeParticles}");
         if (_projectile is not null)
@@ -221,6 +220,7 @@ public sealed class PlayableHud : Behaviour
     {
         gui.Separator();
         gui.Text("材质");
+        int shown = 0;
         for (int i = 0; i < LegendMaterialNames.Length; i++)
         {
             MaterialId id = Context.Materials.Resolve(LegendMaterialNames[i]);
@@ -239,6 +239,11 @@ public sealed class PlayableHud : Behaviour
             gui.SameLine();
             string name = string.IsNullOrWhiteSpace(info.DisplayName) ? info.Name : info.DisplayName;
             gui.Text($"{name} / {info.LegendCategory}");
+            shown++;
+            if (shown >= 4)
+            {
+                return;
+            }
         }
     }
 

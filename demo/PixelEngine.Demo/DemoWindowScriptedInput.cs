@@ -141,11 +141,20 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
 
         if (frame == 2)
         {
+            _keys[keyCount++] = Key.Digit1;
+        }
+        else if (frame is >= 8 and <= 23)
+        {
+            target = new Point2F(118f + ((frame - 8) * 2f), 262f);
+            _buttons[buttonCount++] = MouseButton.Left;
+        }
+        else if (frame == 24)
+        {
             _keys[keyCount++] = Key.Digit2;
         }
-        else if (frame is >= 12 and <= 83)
+        else if (frame is >= 28 and <= 83)
         {
-            int sweep = frame - 12;
+            int sweep = frame - 28;
             float sweepX = 136f + (sweep % 8 * 6f);
             float sweepY = 232f + (sweep / 8 * 6f);
             target = new Point2F(sweepX, sweepY);

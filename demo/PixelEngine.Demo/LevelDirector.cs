@@ -288,6 +288,14 @@ public sealed class LevelDirector : Behaviour
         emitter.AudioCue = audioCue;
         emitter.AddLight = addLight;
         emitter.LightColorBgra = materialName == "lava" ? 0xFF_20_70_FF : 0xFF_40_80_FF;
+        if (materialName == "lava")
+        {
+            emitter.ParticleCount = 1;
+            emitter.ParticleSpeed = 18f;
+            emitter.ParticleLifetime = 42;
+            emitter.LightRadius = 26f;
+            emitter.LightIntensity = 0.35f;
+        }
     }
 
     private void CreateSparkEmitter(float x, float y, int count, float intervalSeconds)

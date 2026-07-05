@@ -107,6 +107,19 @@ public sealed class RenderPipelineContractTests
     }
 
     [Fact]
+    public void CompositeShadersSampleCpuUploadedEffectMasksWithTopLeftOrigin()
+    {
+        string fragmentComposite = LightingShaderSources.CompositeFragment(GlslProfile.DesktopGl330);
+
+        Assert.Contains("vec2 cpuUv = vec2(vUv.x, 1.0 - vUv.y);", fragmentComposite, StringComparison.Ordinal);
+        Assert.Contains("texture(uEmissiveTexture, cpuUv)", fragmentComposite, StringComparison.Ordinal);
+        Assert.Contains("texture(uVisibilityTexture, cpuUv)", fragmentComposite, StringComparison.Ordinal);
+        Assert.Contains("vec2 cpuUv = vec2(uv.x, 1.0 - uv.y);", GpuComputeShaderSources.LightComposite, StringComparison.Ordinal);
+        Assert.Contains("texture(uEmissiveTexture, cpuUv)", GpuComputeShaderSources.LightComposite, StringComparison.Ordinal);
+        Assert.Contains("texture(uVisibilityTexture, cpuUv)", GpuComputeShaderSources.LightComposite, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void UiPresentLayersUseStableOrdersForGameAndEditor()
     {
         string pipeline = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderPipeline.cs"));

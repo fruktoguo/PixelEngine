@@ -1,4 +1,5 @@
 using PixelEngine.Core.Diagnostics;
+using PixelEngine.Core.Threading;
 using PixelEngine.Simulation;
 using PixelEngine.World;
 using Xunit;
@@ -153,7 +154,7 @@ public sealed class RenderBufferBuilderTests
     }
 
     [Fact]
-    public void BuildPaletteZoomFastPathCopiesRepeatedScreenRows()
+    public void BuildPaletteZoomFastPathSamplesRepeatedRowsWithoutCrossJobCopies()
     {
         ResidentChunkMap chunks = new();
         Chunk chunk = new(new ChunkCoord(0, 0));
@@ -178,8 +179,12 @@ public sealed class RenderBufferBuilderTests
             new TemperatureField(),
             new CameraState(0, 0, 0.5f, 6, 4),
             simStepped: true);
+        using JobSystem jobs = new(workerCount: 2);
 
-        new RenderBufferBuilder().Build(context, target, aux);
+        new RenderBufferBuilder(jobs: jobs, options: new RenderBufferBuilderOptions
+        {
+            MinRowsPerJob = 1,
+        }).Build(context, target, aux);
 
         Assert.Equal(
             [
@@ -190,8 +195,8 @@ public sealed class RenderBufferBuilderTests
             ],
             target.Pixels.ToArray());
         Assert.True(
-            counting.TryGetChunkCalls <= 6,
-            $"2x zoom 应只采样两个 world row 的三段水平 run，actual calls={counting.TryGetChunkCalls}。");
+            counting.TryGetChunkCalls <= 12,
+            $"2x zoom 并行路径应按屏幕行独立采样，避免跨任务复制旧行，actual calls={counting.TryGetChunkCalls}。");
     }
 
     [Fact]
@@ -567,7 +572,7 @@ public sealed class RenderBufferBuilderTests
         counting.Reset();
         new RenderBufferBuilder().Build(context, target, aux);
 
-        Assert.True(offCalls <= 4, $"StyleLevel.Off 应继续命中 zoom 行复制快路径，actual calls={offCalls}。");
+        Assert.True(offCalls <= 8, $"StyleLevel.Off 应继续命中 zoom palette 快路径，actual calls={offCalls}。");
         Assert.True(
             counting.TryGetChunkCalls > offCalls,
             $"StyleLevel.Full 且存在样式效果时应禁用 zoom 行复制快路径，off={offCalls}, full={counting.TryGetChunkCalls}。");

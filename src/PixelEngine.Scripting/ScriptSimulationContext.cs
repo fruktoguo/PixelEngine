@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using PixelEngine.Core;
 using PixelEngine.Physics;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
@@ -431,14 +432,15 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 
         ParticleSpawnDesc desc = command.Particle;
         float angleStep = MathF.Tau / count;
+        float velocityScale = ParticleVelocityScale();
         for (int i = 0; i < count; i++)
         {
             float angle = angleStep * i;
             ParticleSpawn spawn = new(
                 desc.X,
                 desc.Y,
-                MathF.Cos(angle) * command.A,
-                MathF.Sin(angle) * command.A,
+                MathF.Cos(angle) * command.A * velocityScale,
+                MathF.Sin(angle) * command.A * velocityScale,
                 desc.Material.Value,
                 ColorVariant: 0,
                 ClampLifetime(desc.Lifetime));
@@ -458,16 +460,25 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         _ = ParticleSystem.RequestEjection(in request);
     }
 
-    private static ParticleSpawn ToParticleSpawn(ParticleSpawnDesc desc)
+    private ParticleSpawn ToParticleSpawn(ParticleSpawnDesc desc)
     {
+        float velocityScale = ParticleVelocityScale();
         return new ParticleSpawn(
             desc.X,
             desc.Y,
-            desc.VelocityX,
-            desc.VelocityY,
+            desc.VelocityX * velocityScale,
+            desc.VelocityY * velocityScale,
             desc.Material.Value,
             ColorVariant: 0,
             ClampLifetime(desc.Lifetime));
+    }
+
+    private float ParticleVelocityScale()
+    {
+        float fixedStep = TimeBackend?.FixedStep ?? (float)(1.0 / EngineConstants.DefaultSimHz);
+        return float.IsFinite(fixedStep) && fixedStep > 0f
+            ? fixedStep
+            : (float)(1.0 / EngineConstants.DefaultSimHz);
     }
 
     private static byte ClampLifetime(ushort lifetime)

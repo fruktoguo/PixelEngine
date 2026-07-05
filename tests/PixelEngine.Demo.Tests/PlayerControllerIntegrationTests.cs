@@ -110,8 +110,9 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:目标 水晶 0/3", StringComparison.Ordinal));
         Assert.Contains("text:材质", gui.Drawn);
         Assert.Contains("text:sand / Terrain", gui.Drawn);
-        Assert.Contains("text:stone / Terrain", gui.Drawn);
-        Assert.Contains("text:Crystal / Resource", gui.Drawn);
+        Assert.Contains("text:water / Terrain", gui.Drawn);
+        Assert.Contains("text:oil / Terrain", gui.Drawn);
+        Assert.Contains("text:acid / Terrain", gui.Drawn);
         Assert.Contains(gui.Drawn, line => line.StartsWith("progress:", StringComparison.Ordinal));
     }
 

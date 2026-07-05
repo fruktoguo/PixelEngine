@@ -265,19 +265,19 @@ public interface IMaterialQuery
 public interface IParticleSpawner
 {
     /// <summary>
-    /// 延迟生成一个自由粒子；脚本可在相位 1 调用，实际生成在粒子安全相位落地。
+    /// 延迟生成一个自由粒子；脚本层速度以 cell/秒 表示，实际生成时会按固定 tick 步长换算为每 tick 位移。
     /// </summary>
     /// <param name="desc">粒子生成描述。</param>
     void Spawn(in ParticleSpawnDesc desc);
 
     /// <summary>
-    /// 延迟生成一组爆发式自由粒子；脚本可在相位 1 调用，实际生成在粒子安全相位落地。
+    /// 延迟生成一组爆发式自由粒子；脚本层速度以 cell/秒 表示，实际生成时会按固定 tick 步长换算为每 tick 位移。
     /// </summary>
     /// <param name="x">爆发中心 X 坐标。</param>
     /// <param name="y">爆发中心 Y 坐标。</param>
     /// <param name="material">粒子材质句柄。</param>
     /// <param name="count">要生成的粒子数量。</param>
-    /// <param name="speed">初始速度标量。</param>
+    /// <param name="speed">初始速度标量，单位 cell/秒。</param>
     void Burst(float x, float y, MaterialId material, int count, float speed);
 }
 

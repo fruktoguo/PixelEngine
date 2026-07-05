@@ -9,8 +9,10 @@ public sealed class RisingHazardDirector : Behaviour
 {
     private MissionDirector? _mission;
     private MaterialEmitter[] _emitters = [];
+    private MaterialId _material = MaterialId.Invalid;
     private bool _emitterBuildSystemRegistered;
     private float _elapsedSeconds;
+    private float _fillTimer;
 
     /// <summary>
     /// 熔岩材质名。
@@ -58,6 +60,21 @@ public sealed class RisingHazardDirector : Behaviour
     public float EmitterIntervalSeconds { get; set; } = 0.08f;
 
     /// <summary>
+    /// 水位以下补充熔岩的水平采样间距，单位 cell；越小越密，默认保持低开销。
+    /// </summary>
+    public int FillStepCells { get; set; } = 12;
+
+    /// <summary>
+    /// 水位以下补充熔岩的垂直采样间距，单位 cell。
+    /// </summary>
+    public int FillVerticalStepCells { get; set; } = 8;
+
+    /// <summary>
+    /// 补充熔岩的最小时间间隔，单位秒。
+    /// </summary>
+    public float FillIntervalSeconds { get; set; } = 0.12f;
+
+    /// <summary>
     /// 若熔岩表面升到该 Y 坐标及以上，则判定通路被淹没。
     /// </summary>
     public float LossSurfaceY { get; set; } = 210f;
@@ -81,6 +98,7 @@ public sealed class RisingHazardDirector : Behaviour
     protected override void OnStart()
     {
         CurrentSurfaceY = StartSurfaceY;
+        ResolveMaterial();
         ResolveMission();
         RegisterEmitterBuildSystem();
     }
@@ -94,6 +112,7 @@ public sealed class RisingHazardDirector : Behaviour
         }
 
         ResolveMission();
+        ResolveMaterial();
         RegisterEmitterBuildSystem();
         _elapsedSeconds += dt;
         float duration = Math.Max(0.001f, RiseSeconds);
@@ -101,10 +120,25 @@ public sealed class RisingHazardDirector : Behaviour
         CurrentSurfaceY = StartSurfaceY + ((TargetSurfaceY - StartSurfaceY) * t);
         _mission?.SetLavaSurface(CurrentSurfaceY);
         UpdateEmitters();
+        FillLavaVolume(dt);
 
         if (_mission is not null && _mission.State == MissionState.Playing && CurrentSurfaceY <= LossSurfaceY)
         {
             _mission.MarkLost("lava_flooded_route");
+        }
+    }
+
+    private void ResolveMaterial()
+    {
+        if (_material.IsValid)
+        {
+            return;
+        }
+
+        _material = Context.Materials.Resolve(MaterialName);
+        if (!_material.IsValid)
+        {
+            BlockedReason = $"材质未解析：{MaterialName}";
         }
     }
 
@@ -135,18 +169,53 @@ public sealed class RisingHazardDirector : Behaviour
             emitter.MaterialName = MaterialName;
             emitter.Radius = Math.Max(1, EmitterRadius);
             emitter.IntervalSeconds = Math.Max(0.001f, EmitterIntervalSeconds);
-            emitter.ParticleCount = 2;
-            emitter.ParticleSpeed = 24f;
+            emitter.ParticleCount = 1;
+            emitter.ParticleSpeed = 14f;
+            emitter.ParticleLifetime = 34;
             emitter.DirectionX = 0f;
             emitter.DirectionY = 1f;
             emitter.AddLight = true;
-            emitter.LightRadius = 44f;
+            emitter.LightRadius = 22f;
             emitter.LightColorBgra = 0xFF_30_70_FF;
-            emitter.LightIntensity = 0.75f;
+            emitter.LightIntensity = 0.28f;
             _emitters[i] = emitter;
         }
 
         UpdateEmitters();
+    }
+
+    private void FillLavaVolume(float dt)
+    {
+        if (!_material.IsValid)
+        {
+            return;
+        }
+
+        _fillTimer -= dt;
+        if (_fillTimer > 0f)
+        {
+            return;
+        }
+
+        _fillTimer += Math.Max(0.01f, FillIntervalSeconds);
+        int stepX = Math.Clamp(FillStepCells, 4, 64);
+        int stepY = Math.Clamp(FillVerticalStepCells, 4, 64);
+        int minX = (int)MathF.Round(MinX);
+        int maxX = (int)MathF.Round(MinX + Width);
+        int startY = (int)MathF.Round(CurrentSurfaceY);
+        int maxY = (int)MathF.Ceiling(Math.Max(StartSurfaceY, CurrentSurfaceY) + 34f);
+        for (int y = startY; y <= maxY; y += stepY)
+        {
+            for (int x = minX; x <= maxX; x += stepX)
+            {
+                if (Context.Cells.IsSolid(x, y))
+                {
+                    continue;
+                }
+
+                Context.Cells.SetCell(x, y, _material);
+            }
+        }
     }
 
     private void UpdateEmitters()

@@ -10,7 +10,7 @@ namespace PixelEngine.Demo.Tests;
 public sealed class DemoStartupOptionsTests
 {
     /// <summary>
-    /// 验证默认启动进入窗口模式，保留裸 dotnet run 的可玩入口语义。
+    /// 验证默认启动进入窗口模式，并默认进入玩家包声明的真实可玩关卡。
     /// </summary>
     [Fact]
     public void DefaultOptionsSelectWindowedRuntime()
@@ -19,24 +19,26 @@ public sealed class DemoStartupOptionsTests
 
         Assert.False(options.Headless);
         Assert.True(options.HotReloadEnabled);
-        Assert.Contains(DemoStartupOptions.DefaultSceneName, options.Scene);
+        Assert.Equal("scenes/lava-mine.scene", options.Scene);
         Assert.Equal("playable-world", DemoStartupOptions.DefaultSceneName);
     }
 
     /// <summary>
-    /// 验证默认项目模型进入可玩程序化场景，而不是 lava-mine 验收场景。
+    /// 验证默认项目模型进入玩家包声明的 lava-mine 场景文件。
     /// </summary>
     [Fact]
-    public void DefaultProjectUsesPlayableProceduralScene()
+    public void DefaultProjectUsesPackagedLavaMineScene()
     {
         DemoStartupOptions options = DemoStartupOptions.Parse([]);
 
         PixelEngine.Hosting.EngineProject project = DemoProgram.BuildProject(options);
         PixelEngine.Hosting.SceneDescriptor scene = project.Scenes[0];
 
-        Assert.Equal("playable-world", project.StartScene);
-        Assert.Equal(PixelEngine.Hosting.SceneSourceKind.Procedural, scene.SourceKind);
-        Assert.Equal(DemoStartupOptions.DefaultProceduralSceneKey, scene.Source);
+        Assert.Equal("lava-mine", project.StartScene);
+        Assert.Equal(PixelEngine.Hosting.SceneSourceKind.SceneFile, scene.SourceKind);
+        Assert.False(string.IsNullOrEmpty(scene.Source));
+        string source = scene.Source!;
+        Assert.EndsWith("content/scenes/lava-mine.scene", source.Replace('\\', '/'), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -98,6 +100,8 @@ public sealed class DemoStartupOptionsTests
             "--no-hot-reload",
             "--content",
             contentRoot,
+            "--scene",
+            DemoStartupOptions.DefaultSceneName,
         ]);
         PixelEngine.Hosting.EngineProject project = DemoProgram.BuildProject(options);
         using PixelEngine.Hosting.Engine engine = DemoProgram.BuildEngine(options, project);
@@ -188,17 +192,18 @@ public sealed class DemoStartupOptionsTests
 
         WeaponCatalog catalog = engine.LoadConfig("weapons.json", DemoConfigJsonContext.Default.WeaponCatalog);
 
-        Assert.Equal(6, catalog.Weapons.Length);
+        Assert.Equal(3, catalog.Weapons.Length);
         Assert.Equal(
-            [WeaponKind.SingleShot, WeaponKind.Laser, WeaponKind.Grenade, WeaponKind.Bomb, WeaponKind.Excavator, WeaponKind.Builder],
+            [WeaponKind.SingleShot, WeaponKind.Laser, WeaponKind.Grenade],
             catalog.Weapons.Select(weapon => weapon.Kind).ToArray());
         WeaponDefinition laser = Assert.Single(catalog.Weapons, weapon => weapon.Kind == WeaponKind.Laser);
         Assert.Equal(WeaponFalloff.None, laser.Falloff);
         Assert.True(laser.BeamDps > 0f);
         Assert.True(laser.HeatPerCell > 0f);
-        WeaponDefinition builder = Assert.Single(catalog.Weapons, weapon => weapon.Kind == WeaponKind.Builder);
-        Assert.Equal("stone", builder.SpawnMaterial);
-        Assert.StartsWith("#FF", builder.HudColor, StringComparison.Ordinal);
+        WeaponDefinition grenade = Assert.Single(catalog.Weapons, weapon => weapon.Kind == WeaponKind.Grenade);
+        Assert.True(grenade.FuseSeconds > 0f);
+        Assert.True(grenade.Impulse > 0f);
+        Assert.StartsWith("#FF", grenade.HudColor, StringComparison.Ordinal);
     }
 
     private static string FindRepositoryRoot()

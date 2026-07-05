@@ -42,8 +42,9 @@ uniform sampler2D uVisibilityTexture;
 void main()
 {
     vec4 worldColor = texture(uWorldTexture, vUv);
-    vec3 emissive = texture(uEmissiveTexture, vUv).rgb;
-    float visibility = texture(uVisibilityTexture, vUv).r;
+    vec2 cpuUv = vec2(vUv.x, 1.0 - vUv.y);
+    vec3 emissive = texture(uEmissiveTexture, cpuUv).rgb;
+    float visibility = texture(uVisibilityTexture, cpuUv).r;
     vec3 color = (worldColor.rgb * visibility) + emissive;
     fragColor = vec4(clamp(color, 0.0, 1.0), worldColor.a);
 }

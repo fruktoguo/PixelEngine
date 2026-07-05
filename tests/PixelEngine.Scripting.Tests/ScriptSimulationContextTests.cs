@@ -157,8 +157,8 @@ public sealed class ScriptSimulationContextTests
         Particle first = fixture.Particles.ActiveReadOnly[0];
         Assert.Equal(1, first.X);
         Assert.Equal(2, first.Y);
-        Assert.Equal(3, first.Vx);
-        Assert.Equal(4, first.Vy);
+        Assert.Equal(3f / 60f, first.Vx, precision: 5);
+        Assert.Equal(4f / 60f, first.Vy, precision: 5);
         Assert.Equal(sand.Value, first.Material);
         Assert.Equal(5, first.Life);
     }

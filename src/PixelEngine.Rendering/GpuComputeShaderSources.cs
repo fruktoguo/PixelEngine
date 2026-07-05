@@ -288,9 +288,10 @@ void main()
     }
 
     vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(uOutputSize);
+    vec2 cpuUv = vec2(uv.x, 1.0 - uv.y);
     vec4 world = texture(uWorldTexture, uv);
-    float visibility = texture(uVisibilityTexture, uv).r;
-    vec3 emissive = texture(uEmissiveTexture, uv).rgb;
+    float visibility = texture(uVisibilityTexture, cpuUv).r;
+    vec3 emissive = texture(uEmissiveTexture, cpuUv).rgb;
     vec3 color = (world.rgb * visibility * uExposure) + emissive;
     imageStore(uOutputImage, pixel, vec4(clamp(color, 0.0, 1.0), world.a));
 }

@@ -22,26 +22,30 @@ public sealed class LavaMineSceneTests
         using Engine engine = await CreateLavaMineEngineAsync();
         engine.RunHeadlessTicks(2);
 
-        LevelDirector director = FindBehaviour<LevelDirector>(engine.Context.GetService<ScriptScene>());
+        ScriptScene scene = engine.Context.GetService<ScriptScene>();
+        LevelDirector director = FindBehaviour<LevelDirector>(scene);
         Assert.True(director.RigidStructuresQueued);
         Assert.Equal(6, director.RigidStructureCount);
-        MaterialBrush brush = FindBehaviour<MaterialBrush>(engine.Context.GetService<ScriptScene>());
+        MaterialBrush brush = FindBehaviour<MaterialBrush>(scene);
         Assert.False(brush.InputEnabled);
-        _ = FindBehaviour<PlayableHud>(engine.Context.GetService<ScriptScene>());
-        _ = FindBehaviour<PlayerVisual>(engine.Context.GetService<ScriptScene>());
-        _ = FindBehaviour<PlayableProjectileTool>(engine.Context.GetService<ScriptScene>());
-        _ = FindBehaviour<WeaponController>(engine.Context.GetService<ScriptScene>());
-        _ = FindBehaviour<PauseMenu>(engine.Context.GetService<ScriptScene>());
-        MissionDirector mission = FindBehaviour<MissionDirector>(engine.Context.GetService<ScriptScene>());
-        RisingHazardDirector hazard = FindBehaviour<RisingHazardDirector>(engine.Context.GetService<ScriptScene>());
-        _ = FindBehaviour<ExtractionTrigger>(engine.Context.GetService<ScriptScene>());
-        Assert.Equal(3, CountBehaviours<ObjectiveCrystal>(engine.Context.GetService<ScriptScene>()));
+        _ = FindBehaviour<PlayableHud>(scene);
+        _ = FindBehaviour<PlayerVisual>(scene);
+        _ = FindBehaviour<PlayableProjectileTool>(scene);
+        _ = FindBehaviour<WeaponController>(scene);
+        _ = FindBehaviour<PauseMenu>(scene);
+        MissionDirector mission = FindBehaviour<MissionDirector>(scene);
+        RisingHazardDirector hazard = FindBehaviour<RisingHazardDirector>(scene);
+        ExtractionTrigger extraction = FindBehaviour<ExtractionTrigger>(scene);
+        Assert.Equal(3, CountBehaviours<ObjectiveCrystal>(scene));
         Assert.Equal(3, mission.RequiredCrystals);
         Assert.Equal(12, hazard.ActiveEmitterCount);
-        Assert.Equal(0, CountBehaviours<DemoHud>(engine.Context.GetService<ScriptScene>()));
-        Assert.Equal(hazard.ActiveEmitterCount, CountBehaviours<MaterialEmitter>(engine.Context.GetService<ScriptScene>()));
-        Assert.Equal(0, CountBehaviours<SparkEmitter>(engine.Context.GetService<ScriptScene>()));
-        Assert.Equal(0, CountBehaviours<GoalTrigger>(engine.Context.GetService<ScriptScene>()));
+        Assert.Equal(0, CountBehaviours<DemoHud>(scene));
+        Assert.Equal(hazard.ActiveEmitterCount, CountBehaviours<MaterialEmitter>(scene));
+        Assert.Equal(0, CountBehaviours<SparkEmitter>(scene));
+        Assert.Equal(0, CountBehaviours<GoalTrigger>(scene));
+        AssertLavaHazardEmittersAreAmbient(scene, hazard.ActiveEmitterCount);
+        Assert.True(extraction.Width >= 80f);
+        Assert.True(extraction.Height >= 260f);
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
         Assert.True(physics.Gravity.Y > 0f, $"Demo 刚体重力应沿像素坐标正 Y 向下，actual={physics.Gravity}。");
         Assert.True(physics.PhysicsWorld.ActiveBodyCount >= director.RigidStructureCount);
@@ -284,6 +288,30 @@ public sealed class LavaMineSceneTests
         }
 
         return count;
+    }
+
+    private static void AssertLavaHazardEmittersAreAmbient(ScriptScene scene, int expectedCount)
+    {
+        int count = 0;
+        foreach (ScriptEntityInspection entity in scene.CaptureInspectionSnapshot())
+        {
+            foreach (ScriptComponentInspection component in entity.Components)
+            {
+                if (component.Behaviour is not MaterialEmitter emitter)
+                {
+                    continue;
+                }
+
+                count++;
+                Assert.Equal("lava", emitter.MaterialName);
+                Assert.Equal(1, emitter.ParticleCount);
+                Assert.True(emitter.ParticleLifetime <= 34, $"熔岩喷口粒子寿命不应像爆炸残留一样长，actual={emitter.ParticleLifetime}。");
+                Assert.True(emitter.LightRadius <= 22f, $"熔岩喷口持续光半径应保持环境级，actual={emitter.LightRadius}。");
+                Assert.True(emitter.LightIntensity <= 0.28f, $"熔岩喷口持续光强度应保持环境级，actual={emitter.LightIntensity}。");
+            }
+        }
+
+        Assert.Equal(expectedCount, count);
     }
 
     private static void QueueVerticalCut(CellGrid grid, RigidDamageQueue damageQueue, int x, int minY, int maxY)

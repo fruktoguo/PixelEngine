@@ -352,6 +352,39 @@ public sealed class RenderWindowIntegrationTests
     }
 
     [Fact]
+    public void RenderPipelineKeepsCpuUploadedEmissiveAtBottomEdgeWhenBloomRuns()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = CreateSmokeWindow("PixelEngine emissive edge orientation smoke", RenderBackendPreference.Auto);
+        using RenderPipeline pipeline = new(window, 32, 32);
+        RenderBuffer buffer = new(32, 32);
+        RenderAuxBuffers aux = new(32, 32);
+        int x = 16;
+        for (int y = 28; y < 32; y++)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                aux.Emissive[(y * aux.Width) + x + dx] = 0xFFFF7000u;
+            }
+        }
+
+        pipeline.Settings.EnableDither = false;
+        pipeline.Settings.Gamma = 1f;
+        pipeline.RenderFrame(buffer, aux, CameraState.OneToOne(0, 0, buffer.Width, buffer.Height), [], []);
+        RenderViewportTexture viewport = pipeline.CurrentViewportTexture;
+        byte[] pixels = ReadTextureRgba(window.Gl, viewport.Handle, viewport.Width, viewport.Height);
+        byte[] top = PixelAtTopLeftOrigin(pixels, viewport.Width, x, y: 2);
+        byte[] bottom = PixelAtTopLeftOrigin(pixels, viewport.Width, x, y: 29);
+
+        Assert.True(bottom[0] > 180 && bottom[1] > 60, $"底部 emissive 应保持在底部，actual bottom rgba=({bottom[0]},{bottom[1]},{bottom[2]},{bottom[3]})");
+        Assert.True(top[0] < 32 && top[1] < 32 && top[2] < 32, $"底部 emissive 不应翻到顶部，actual top rgba=({top[0]},{top[1]},{top[2]},{top[3]})");
+    }
+
+    [Fact]
     public void CanRenderFrameThroughComputeBloomWhenExplicitlyEnabled()
     {
         if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))

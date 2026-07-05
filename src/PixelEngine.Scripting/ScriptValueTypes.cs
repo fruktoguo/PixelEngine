@@ -128,8 +128,8 @@ public readonly record struct CharacterState(
 /// </summary>
 /// <param name="X">起始 X 坐标。</param>
 /// <param name="Y">起始 Y 坐标。</param>
-/// <param name="VelocityX">初始 X 速度。</param>
-/// <param name="VelocityY">初始 Y 速度。</param>
+/// <param name="VelocityX">脚本层初始 X 速度，单位 cell/秒。</param>
+/// <param name="VelocityY">脚本层初始 Y 速度，单位 cell/秒。</param>
 /// <param name="Material">粒子材质。</param>
 /// <param name="Lifetime">粒子 lifetime。</param>
 public readonly record struct ParticleSpawnDesc(float X, float Y, float VelocityX, float VelocityY, MaterialId Material, ushort Lifetime);
