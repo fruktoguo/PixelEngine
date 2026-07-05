@@ -219,13 +219,51 @@ function Get-HostRid {
   return $null
 }
 
+function Get-RidOperatingSystem([string]$TargetRid) {
+  if ($TargetRid.StartsWith('win-')) {
+    return 'win'
+  }
+
+  if ($TargetRid.StartsWith('linux-')) {
+    return 'linux'
+  }
+
+  if ($TargetRid.StartsWith('osx-')) {
+    return 'osx'
+  }
+
+  throw "不支持的 RID: $TargetRid"
+}
+
+function Resolve-RidSmokeMode([string]$TargetRid) {
+  $configPath = Join-Path $PSScriptRoot 'release-rids.json'
+  if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+    return ''
+  }
+
+  $config = Get-Content -Raw -LiteralPath $configPath | ConvertFrom-Json
+  foreach ($entry in @($config.rids)) {
+    if ([string]$entry.rid -eq $TargetRid) {
+      return [string]$entry.smoke
+    }
+  }
+
+  return ''
+}
+
 try {
   $resolvedVersion = Resolve-Version
   $resolvedInformationalVersion = Resolve-InformationalVersion $resolvedVersion
 
   $hostRid = Get-HostRid
-  if ($Channel -eq 'aot' -and $hostRid -and $hostRid -ne $Rid) {
-    throw "NativeAOT 仅支持当前宿主 RID：$hostRid，当前选择为 $Rid。"
+  $smokeMode = Resolve-RidSmokeMode $Rid
+  $allowLoadOnly = $hostRid -and $hostRid -ne $Rid -and $smokeMode -eq 'load-only'
+  if ($Channel -eq 'aot' -and $hostRid -and (Get-RidOperatingSystem $hostRid) -ne (Get-RidOperatingSystem $Rid)) {
+    throw "NativeAOT 仅支持当前宿主 OS：$hostRid，当前选择为 $Rid。"
+  }
+
+  if ($allowLoadOnly) {
+    $warnings.Add("目标 RID $Rid 按 release-rids.json 使用 load-only 校验；不会伪造目标硬件 smoke。") | Out-Null
   }
 
   $nativeArgs = @{
@@ -260,6 +298,9 @@ try {
     ProductName = $ProductName
     SkipNativeBuild = $true
     SkipPublish = $true
+  }
+  if ($allowLoadOnly) {
+    $verifyArgs.AllowLoadOnly = $true
   }
   Invoke-BuildPhase 'verify' 45 60 (Join-Path $PSScriptRoot 'verify-publish.ps1') $verifyArgs
 

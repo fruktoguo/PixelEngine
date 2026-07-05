@@ -98,6 +98,44 @@ host_rid() {
   esac
 }
 
+rid_os() {
+  case "$1" in
+    win-*) echo "win" ;;
+    linux-*) echo "linux" ;;
+    osx-*) echo "osx" ;;
+    *) echo "" ;;
+  esac
+}
+
+rid_smoke_mode() {
+  local target_rid="$1"
+  local config="$repo_root/tools/release-rids.json"
+  [[ -f "$config" ]] || return 0
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$config" "$target_rid" <<'PY'
+import json
+import sys
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    data = json.load(handle)
+for item in data.get("rids", []):
+    if item.get("rid") == sys.argv[2]:
+        print(item.get("smoke", ""))
+        break
+PY
+    return
+  fi
+
+  awk -v rid="$target_rid" '
+    $0 ~ "\"rid\"[[:space:]]*:[[:space:]]*\"" rid "\"" { found=1 }
+    found && $0 ~ "\"smoke\"" {
+      gsub(/^.*"smoke"[[:space:]]*:[[:space:]]*"/, "")
+      gsub(/".*$/, "")
+      print
+      exit
+    }
+  ' "$config"
+}
+
 phase_key() {
   case "$1" in
     native) echo "Native" ;;
@@ -148,6 +186,7 @@ include_symbols=0
 start_scene="scenes/playable-world.scene"
 include_scenes=()
 dev_layout=0
+warnings=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -224,13 +263,20 @@ done
 [[ -n "$output" ]] || fail_usage "Missing required argument: --output."
 case "$channel" in r2r|aot) ;; *) fail_usage "Unsupported channel: $channel" ;; esac
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 current_host_rid="$(host_rid)"
-if [[ "$channel" == "aot" && -n "$current_host_rid" && "$current_host_rid" != "$rid" ]]; then
-  emit_event "Log" "native" 0 "Error" "NativeAOT 仅支持当前宿主 RID：$current_host_rid，当前选择为 $rid。"
+smoke_mode="$(rid_smoke_mode "$rid")"
+allow_load_only=0
+if [[ -n "$current_host_rid" && "$current_host_rid" != "$rid" && "$smoke_mode" == "load-only" ]]; then
+  allow_load_only=1
+  warnings+=("目标 RID $rid 按 release-rids.json 使用 load-only 校验；不会伪造目标硬件 smoke。")
+fi
+
+if [[ "$channel" == "aot" && -n "$current_host_rid" && "$(rid_os "$current_host_rid")" != "$(rid_os "$rid")" ]]; then
+  emit_event "Log" "native" 0 "Error" "NativeAOT 仅支持当前宿主 OS：$current_host_rid，当前选择为 $rid。"
   exit 1
 fi
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 output_root="$(normalize_path "$output")"
 publish_root="$output_root/publish"
 publish_dir="$publish_root/$rid-$channel"
@@ -304,7 +350,15 @@ write_result() {
       fi
     done
     printf '},\n'
-    printf '  "warnings": [],\n'
+    printf '  "warnings": ['
+    local warning_first=1
+    local warning
+    for warning in "${warnings[@]}"; do
+      (( warning_first )) || printf ', '
+      warning_first=0
+      printf '"%s"' "$(json_escape "$warning")"
+    done
+    printf '],\n'
     printf '  "error": %s,\n' "$(if [[ -n "$error_message" ]]; then printf '"%s"' "$(json_escape "$error_message")"; else printf 'null'; fi)"
     printf '  "exitCode": %s\n' "$exit_code"
     printf '}\n'
@@ -322,7 +376,9 @@ if [[ -z "$error_message" ]]; then
   run_phase "publish" 20 45 bash "$repo_root/tools/publish-$channel.sh" "${publish_args[@]}" || error_message="publish phase failed"
 fi
 if [[ -z "$error_message" ]]; then
-  run_phase "verify" 45 60 bash "$repo_root/tools/verify-publish.sh" --rid "$rid" --channel "$channel" --configuration "$configuration" --publish-dir "$publish_dir" --product-name "$product_name" || error_message="verify phase failed"
+  verify_args=(--rid "$rid" --channel "$channel" --configuration "$configuration" --publish-dir "$publish_dir" --product-name "$product_name")
+  if (( allow_load_only )); then verify_args+=(--allow-load-only); fi
+  run_phase "verify" 45 60 bash "$repo_root/tools/verify-publish.sh" "${verify_args[@]}" || error_message="verify phase failed"
 fi
 if [[ -z "$error_message" ]]; then
   package_args=(--rid "$rid" --channel "$channel" --version "$version" --publish-dir "$publish_dir" --output-root "$package_root" --player-output-dir "$player_dir" --product-name "$product_name" --start-scene "$start_scene")

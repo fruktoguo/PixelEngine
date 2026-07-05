@@ -515,7 +515,15 @@ public sealed class HostingProjectDisciplineTests
             Assert.Contains("audit-release-artifacts", script, StringComparison.Ordinal);
             Assert.Contains("phaseTimingsMs", script, StringComparison.Ordinal);
             Assert.Contains("launcherExe", script, StringComparison.Ordinal);
+            Assert.Contains("release-rids.json", script, StringComparison.Ordinal);
+            Assert.Contains("load-only", script, StringComparison.Ordinal);
+            Assert.DoesNotContain("NativeAOT 仅支持当前宿主 RID", script, StringComparison.Ordinal);
         }
+
+        Assert.Contains("AllowLoadOnly", buildPlayerPs1, StringComparison.Ordinal);
+        Assert.Contains("--allow-load-only", buildPlayerSh, StringComparison.Ordinal);
+        Assert.Contains("NativeAOT 仅支持当前宿主 OS", buildPlayerPs1, StringComparison.Ordinal);
+        Assert.Contains("NativeAOT 仅支持当前宿主 OS", buildPlayerSh, StringComparison.Ordinal);
 
         foreach (string script in new[] { packagePs1, packageSh })
         {

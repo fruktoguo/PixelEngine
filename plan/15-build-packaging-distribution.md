@@ -401,7 +401,7 @@ HTML UI native 与 demo-playability 内容打包
 
 win-first 激活门控与布局选型（本轮新增）
 
-- [ ] 激活集全绿：`win-x64` r2r/aot 本机全链路（publish + smoke + package + audit）通过；`win-arm64` r2r/aot 构建必过、load-only 校验通过、release notes 标人工硬件门禁（架构 R5、§15、§2.1）。
+- [~] 激活集全绿：`win-x64` r2r/aot 本机全链路（publish + smoke + package + audit）通过；`win-arm64` r2r/aot 构建必过、load-only 校验通过、release notes 标人工硬件门禁（架构 R5、§15、§2.1）。`tools/build-player.*` 已按 `release-rids.json` 的 `smoke=load-only` 将跨架构 verify 显式降级为 load-only，AOT 仅禁止跨 OS 不再误拦同 OS 跨架构；本机 `pwsh tools/build-player.ps1 -Rid win-arm64 -Channel aot ...` 已确认进入真实 native 阶段并因缺 MSVC v143 C++ 工具链失败，需安装工具链/runner 后继续闭合真实产物证据。
 - [x] 保留集 dormant 且可一键激活：linux/osx 四 RID 在 `release-rids.json` 为 `active:false`，其 toolchain/脚本/ISA 组/codesign step 保留可编译；把任一 RID 翻 `active:true` 后无需改任何 YAML/脚本逻辑即自动进 native→publish→verify→sign-package→release 全链路、审计/预检期望数量自动 +1 组；本地 dry-run 已验证 `linux-x64` 翻 active 后矩阵扩展生效（§2.1）。
 - [x] 数量与激活集挂钩：`SHA256SUMS` 覆盖激活集全部产物（当前 4）；`uploaded_asset_count = packageCount + 1`（当前 5）；audit `--require-all` 与 preflight 期望包数 = `activeRids × channels`，dormant RID 缺失不误判为失败（§2.1、§3.8）。
 - [x] 边界不误伤：`ci.yml`/`plan/16` 的 6-RID 构建/测试矩阵与 `ci-matrix-evidence-preflight.ps1` 未随发行门控收敛，dormant RID 仍有编译保证（§2.1）。
