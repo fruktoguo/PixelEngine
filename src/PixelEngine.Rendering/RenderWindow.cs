@@ -1,4 +1,5 @@
 using Silk.NET.Input;
+using Silk.NET.Core.Contexts;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
@@ -11,6 +12,7 @@ namespace PixelEngine.Rendering;
 public sealed class RenderWindow : IDisposable
 {
     private readonly IWindow _window;
+    private readonly INativeContext _nativeContext;
     private readonly GlDebugMessenger? _debugMessenger;
     private bool _disposed;
 
@@ -18,6 +20,7 @@ public sealed class RenderWindow : IDisposable
         IWindow window,
         IInputContext input,
         GL gl,
+        INativeContext nativeContext,
         RenderBackend backend,
         GlCapabilities capabilities,
         GlDebugMessenger? debugMessenger)
@@ -25,6 +28,7 @@ public sealed class RenderWindow : IDisposable
         _window = window;
         Input = input;
         Gl = gl;
+        _nativeContext = nativeContext;
         Backend = backend;
         Capabilities = capabilities;
         _debugMessenger = debugMessenger;
@@ -161,6 +165,19 @@ public sealed class RenderWindow : IDisposable
     }
 
     /// <summary>
+    /// 从当前窗口 OpenGL context 查询函数入口。用于 native UI shim 复用同一 loader，不自行打开系统 GL。
+    /// </summary>
+    /// <param name="name">OpenGL 函数名。</param>
+    /// <param name="address">函数入口地址。</param>
+    /// <returns>若当前 context 可解析该函数返回 true。</returns>
+    public bool TryGetProcAddress(string name, out IntPtr address)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return _nativeContext.TryGetProcAddress(name, out address);
+    }
+
+    /// <summary>
     /// 调整窗口尺寸。调用者应随后调用 <see cref="RenderPipeline.Resize"/> 重建渲染目标链。
     /// </summary>
     /// <param name="width">新宽度。</param>
@@ -215,12 +232,13 @@ public sealed class RenderWindow : IDisposable
             window.Initialize();
             input = window.CreateInput();
             gl = GL.GetApi(window);
+            INativeContext nativeContext = gl.Context;
             GlCapabilities capabilities = GlCapabilities.Query(gl);
             ValidateCapabilitiesForBackend(backend, capabilities);
             debugMessenger = options.EnableDebugContext && diagnostics is not null
                 ? GlDebugMessenger.TryCreate(gl, capabilities, diagnostics)
                 : null;
-            return new RenderWindow(window, input, gl, backend, capabilities, debugMessenger);
+            return new RenderWindow(window, input, gl, nativeContext, backend, capabilities, debugMessenger);
         }
         catch
         {
