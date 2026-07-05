@@ -37,6 +37,65 @@ public sealed class GuiFontManager : IDisposable
     /// </summary>
     public string? ResolveCjkFontPath(string? preferredPath = null)
     {
+        return ResolveCjkFontFile(preferredPath);
+    }
+
+    /// <summary>
+    /// 共享 CJK glyph range，供 Editor、玩家 HUD 与 Game UI 使用同一份码点范围。
+    /// </summary>
+    /// <returns>ImGui/FreeType 风格的 start/end 成对范围，以 0 结尾。</returns>
+    public static ReadOnlySpan<uint> GetCjkGlyphRanges()
+    {
+        return CjkGlyphRanges;
+    }
+
+    /// <summary>
+    /// 共享 CJK 候选字体文件名，按优先级排序。
+    /// </summary>
+    /// <returns>候选字体文件名。</returns>
+    public static ReadOnlySpan<string> GetCjkCandidateFontNames()
+    {
+        return CandidateFontNames;
+    }
+
+    /// <summary>
+    /// 判断码点是否落在共享 CJK/拉丁/标点 glyph range 中。
+    /// </summary>
+    /// <param name="codePoint">Unicode 码点。</param>
+    /// <returns>落在共享范围内则返回 true。</returns>
+    public static bool IsGlyphCovered(int codePoint)
+    {
+        if (codePoint < 0)
+        {
+            return false;
+        }
+
+        uint value = (uint)codePoint;
+        for (int i = 0; i < CjkGlyphRanges.Length - 1; i += 2)
+        {
+            uint start = CjkGlyphRanges[i];
+            if (start == 0)
+            {
+                return false;
+            }
+
+            uint end = CjkGlyphRanges[i + 1];
+            if (value >= start && value <= end)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 解析共享 CJK 字体路径。
+    /// </summary>
+    /// <param name="preferredPath">显式指定的字体路径。</param>
+    /// <returns>存在的字体路径；找不到时返回 null。</returns>
+    public static string? ResolveCjkFontFile(string? preferredPath = null)
+    {
         if (!string.IsNullOrWhiteSpace(preferredPath))
         {
             return File.Exists(preferredPath) ? preferredPath : null;
