@@ -643,6 +643,7 @@ public sealed class Engine : IDisposable
     {
         bool allowKeyboard = true;
         bool allowMouse = true;
+        ApplyEditorInputCapture(ref allowKeyboard, ref allowMouse);
         if (!Context.TryGetService(out GuiApp gui))
         {
             if (Context.TryGetService(out UiInputRouter uiOnlyRouter))
@@ -666,6 +667,16 @@ public sealed class Engine : IDisposable
         }
 
         return new ScriptInputRoute(allowKeyboard, allowMouse);
+    }
+
+    private void ApplyEditorInputCapture(ref bool allowKeyboard, ref bool allowMouse)
+    {
+        if (Context.TryGetService(out IEditorInputCaptureSource editorInput) &&
+            editorInput.TryGetInputCapture(out EditorHostInputCapture editorCapture))
+        {
+            allowKeyboard &= editorCapture.AllowGameKeyboard;
+            allowMouse &= editorCapture.AllowGameMouse;
+        }
     }
 
     /// <summary>

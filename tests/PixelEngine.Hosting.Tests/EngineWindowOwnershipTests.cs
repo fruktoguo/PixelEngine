@@ -63,6 +63,21 @@ public sealed class EngineWindowOwnershipTests
     }
 
     /// <summary>
+    /// 验证 Hosting 通过中性 Editor capture source 先应用 Editor 输入优先级。
+    /// </summary>
+    [Fact]
+    public void ResolveGuiInputRouteAppliesNeutralEditorCaptureBeforeGameUiBySourceContract()
+    {
+        string engine = ReadRepositoryFile("src", "PixelEngine.Hosting", "Engine.cs");
+        string extension = ReadRepositoryFile("apps", "PixelEngine.Editor.Shell", "EditorShellHostExtension.cs");
+
+        Assert.Contains("ApplyEditorInputCapture(ref allowKeyboard, ref allowMouse);", ExtractResolveGuiInputRouteBody(engine), StringComparison.Ordinal);
+        Assert.Contains("IEditorInputCaptureSource", ReadRepositoryFile("src", "PixelEngine.Hosting", "IEditorInputCaptureSource.cs"), StringComparison.Ordinal);
+        Assert.Contains("EditorShellHostExtension : IEditorHostExtension, IEditorInputCaptureSource", extension, StringComparison.Ordinal);
+        Assert.Contains("RegisterService<IEditorInputCaptureSource>(this)", extension, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证窗口 UI 输入源通过固定缓冲接入 Silk.NET 文本事件，而不是返回空文本。
     /// </summary>
     [Fact]
@@ -119,6 +134,16 @@ public sealed class EngineWindowOwnershipTests
         Assert.True(start >= 0, "未找到 CaptureText 方法。");
         int end = source.IndexOf("private void OnKeyChar", start, StringComparison.Ordinal);
         Assert.True(end > start, "未找到 CaptureText 方法结束边界。");
+        return source[start..end];
+    }
+
+    private static string ExtractResolveGuiInputRouteBody(string source)
+    {
+        const string marker = "private ScriptInputRoute ResolveGuiInputRoute()";
+        int start = source.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(start >= 0, "未找到 ResolveGuiInputRoute 方法。");
+        int end = source.IndexOf("private void ApplyEditorInputCapture", start, StringComparison.Ordinal);
+        Assert.True(end > start, "未找到 ResolveGuiInputRoute 方法结束边界。");
         return source[start..end];
     }
 
