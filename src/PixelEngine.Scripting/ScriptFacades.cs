@@ -83,9 +83,9 @@ public interface IScriptContext
     IAudioApi Audio { get; }
 
     /// <summary>
-    /// 游戏大 UI 控制能力；未启用 PixelEngine.UI 时访问会抛出明确异常。
+    /// 游戏大 UI 控制能力；未启用 PixelEngine.UI 时返回空服务。
     /// </summary>
-    IGameUiService GameUi => throw new NotSupportedException("当前脚本上下文未注入 Game UI 后端。");
+    IGameUiService GameUi => NoopGameUiService.Instance;
 
     /// <summary>
     /// 内容配置加载能力；脚本只提供类型元数据，实际文件读取和 JSON 解析由 Hosting 门面执行。

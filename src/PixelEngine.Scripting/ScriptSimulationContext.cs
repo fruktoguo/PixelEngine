@@ -42,7 +42,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     /// <param name="overlay">overlay facade；未提供时访问 <see cref="Overlay" /> 会抛出明确异常。</param>
     /// <param name="diagnostics">诊断 facade；未提供时访问 <see cref="Diagnostics" /> 会抛出明确异常。</param>
     /// <param name="runtime">运行时控制 facade；未提供时访问 <see cref="Runtime" /> 会抛出明确异常。</param>
-    /// <param name="gameUi">游戏大 UI facade；未提供时访问 <see cref="GameUi" /> 会抛出明确异常。</param>
+    /// <param name="gameUi">游戏大 UI facade；未提供时注入空服务。</param>
     /// <param name="config">配置加载 facade；未提供时访问 <see cref="Config" /> 会抛出明确异常。</param>
     public ScriptSimulationContext(
         Scene scene,
@@ -90,7 +90,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         OverlayBackend = overlay;
         DiagnosticsBackend = diagnostics;
         RuntimeBackend = runtime;
-        GameUiBackend = gameUi;
+        GameUiBackend = gameUi ?? NoopGameUiService.Instance;
         ConfigBackend = config;
     }
 
@@ -112,7 +112,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 
     private IRuntimeControlApi? RuntimeBackend { get; }
 
-    private IGameUiService? GameUiBackend { get; }
+    private IGameUiService GameUiBackend { get; }
 
     private IConfigApi? ConfigBackend { get; }
 
@@ -182,7 +182,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     public IAudioApi Audio => AudioBackend ?? throw Unsupported(nameof(Audio));
 
     /// <inheritdoc />
-    public IGameUiService GameUi => GameUiBackend ?? throw Unsupported(nameof(GameUi));
+    public IGameUiService GameUi => GameUiBackend;
 
     /// <inheritdoc />
     public IConfigApi Config => ConfigBackend ?? throw Unsupported(nameof(Config));

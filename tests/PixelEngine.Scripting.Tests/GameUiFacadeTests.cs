@@ -38,16 +38,24 @@ public sealed class GameUiFacadeTests
     }
 
     /// <summary>
-    /// 验证未注入 UI 后端时默认属性给出明确失败。
+    /// 验证未注入 UI 后端时默认属性返回安全空服务。
     /// </summary>
     [Fact]
-    public void DefaultScriptContextGameUiFailsClearlyWhenNotInjected()
+    public void DefaultScriptContextGameUiIsNoopWhenNotInjected()
     {
         EmptyContext context = new();
 
-        NotSupportedException ex = Assert.Throws<NotSupportedException>(() => ((IScriptContext)context).GameUi);
+        IGameUiService gameUi = ((IScriptContext)context).GameUi;
+        UiScreenHandle screen = gameUi.ShowScreen("main");
+        gameUi.HideScreen(screen);
+        gameUi.BindModel(screen, new UiModelName(1), new MissingModel());
+        gameUi.SetValue(screen, new UiPathId(7), new UiValue(42L));
+        gameUi.Invoke(screen, new UiActionId(3), UiValue.FromBoolean(true));
 
-        Assert.Contains("Game UI", ex.Message, StringComparison.Ordinal);
+        Assert.Same(NoopGameUiService.Instance, gameUi);
+        Assert.Equal(default, screen);
+        Assert.False(gameUi.TryGetValue(screen, new UiPathId(7), out UiValue value));
+        Assert.Equal(default, value);
     }
 
     /// <summary>
@@ -99,5 +107,15 @@ public sealed class GameUiFacadeTests
         public IGameTime Time => throw new NotSupportedException();
 
         public Scene Scene => throw new NotSupportedException();
+    }
+
+    private sealed class MissingModel : IUiModel
+    {
+        public bool TryGetValue(UiPathId path, out UiValue value)
+        {
+            _ = path;
+            value = default;
+            return false;
+        }
     }
 }

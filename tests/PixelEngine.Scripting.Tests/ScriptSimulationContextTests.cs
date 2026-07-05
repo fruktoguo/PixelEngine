@@ -17,6 +17,25 @@ namespace PixelEngine.Scripting.Tests;
 public sealed class ScriptSimulationContextTests
 {
     /// <summary>
+    /// 验证未注入 Game UI 后端时真实脚本上下文返回空服务，而不是抛异常。
+    /// </summary>
+    [Fact]
+    public void GameUiDefaultsToNoopServiceWhenBackendIsNotInjected()
+    {
+        using Fixture fixture = Fixture.Create();
+
+        IGameUiService gameUi = fixture.Context.GameUi;
+        UiScreenHandle screen = gameUi.ShowScreen("main");
+        gameUi.SetValue(screen, new UiPathId(7), new UiValue(12L));
+        gameUi.Invoke(screen, new UiActionId(3), default);
+
+        Assert.Same(NoopGameUiService.Instance, gameUi);
+        Assert.Equal(default, screen);
+        Assert.False(gameUi.TryGetValue(screen, new UiPathId(7), out UiValue value));
+        Assert.Equal(default, value);
+    }
+
+    /// <summary>
     /// 验证材质、cell 与固体采样 facade 直接读取真实 Simulation 后端。
     /// </summary>
     [Fact]

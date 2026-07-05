@@ -67,6 +67,81 @@ public interface IGameUiService
 }
 
 /// <summary>
+/// 禁用游戏大 UI 时注入脚本上下文的空服务；所有写入静默丢弃，所有读取返回失败。
+/// </summary>
+public sealed class NoopGameUiService : IGameUiService
+{
+    /// <summary>
+    /// 全局空服务实例。
+    /// </summary>
+    public static NoopGameUiService Instance { get; } = new();
+
+    private NoopGameUiService()
+    {
+    }
+
+    /// <inheritdoc />
+    public event Action<UiEvent>? UiEventRaised
+    {
+        add => _ = value;
+        remove => _ = value;
+    }
+
+    /// <inheritdoc />
+    public UiScreenHandle ShowScreen(string screenId)
+    {
+        _ = screenId;
+        return default;
+    }
+
+    /// <inheritdoc />
+    public void HideScreen(UiScreenHandle screen)
+    {
+        _ = screen;
+    }
+
+    /// <inheritdoc />
+    public UiScreenHandle PushModal(string screenId)
+    {
+        _ = screenId;
+        return default;
+    }
+
+    /// <inheritdoc />
+    public void BindModel(UiScreenHandle screen, UiModelName modelName, IUiModel model)
+    {
+        _ = screen;
+        _ = modelName;
+        _ = model;
+    }
+
+    /// <inheritdoc />
+    public void SetValue(UiScreenHandle screen, UiPathId path, in UiValue value)
+    {
+        _ = screen;
+        _ = path;
+        _ = value;
+    }
+
+    /// <inheritdoc />
+    public bool TryGetValue(UiScreenHandle screen, UiPathId path, out UiValue value)
+    {
+        _ = screen;
+        _ = path;
+        value = default;
+        return false;
+    }
+
+    /// <inheritdoc />
+    public void Invoke(UiScreenHandle screen, UiActionId action, in UiValue payload)
+    {
+        _ = screen;
+        _ = action;
+        _ = payload;
+    }
+}
+
+/// <summary>
 /// 脚本可绑定给 UI 的只读模型。
 /// </summary>
 public interface IUiModel
