@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: tools/audit-release-artifacts.sh [--publish-root <dir>] [--package-root <dir>] [--product-name <name>] [--required-scene <scene>] [--dev-layout] [--require-all]
+Usage: tools/audit-release-artifacts.sh [--publish-root <dir>] [--package-root <dir>] [--product-name <name>] [--required-scene <scene>] [--active-rids <csv>] [--dev-layout] [--require-all]
 
 Defaults:
   --publish-root artifacts/publish
@@ -91,6 +91,70 @@ sha256_file() {
   fi
 
   fail_audit "找不到 SHA256 工具：需要 sha256sum、shasum 或 openssl。"
+}
+
+read_active_rids_from_json() {
+  local config="$1"
+  if [[ ! -f "$config" ]]; then
+    printf '%s\n' "win-x64 win-arm64 linux-x64 linux-arm64 osx-x64 osx-arm64"
+    return
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$config" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    data = json.load(handle)
+rids = [item["rid"] for item in data.get("rids", []) if item.get("active")]
+if not rids:
+    raise SystemExit("release-rids.json active RID set is empty")
+print(" ".join(rids))
+PY
+    return
+  fi
+
+  fail_audit "读取 release-rids.json 需要 python3，或通过 --active-rids 显式传入激活 RID。"
+}
+
+resolve_active_rids() {
+  local value="$1"
+  local valid=" win-x64 win-arm64 linux-x64 linux-arm64 osx-x64 osx-arm64 "
+  local resolved=()
+
+  if [[ -n "$value" ]]; then
+    local item
+    IFS=',' read -r -a resolved <<< "$value"
+    for item in "${resolved[@]}"; do
+      item="${item//[[:space:]]/}"
+      if [[ -z "$item" ]]; then
+        fail_usage "--active-rids 不能为空。"
+      fi
+
+      if [[ "$valid" != *" $item "* ]]; then
+        fail_usage "Unknown active RID: $item"
+      fi
+    done
+    printf '%s\n' "${resolved[@]}"
+    return
+  fi
+
+  local rid_text
+  rid_text="$(read_active_rids_from_json "$repo_root/tools/release-rids.json")"
+  local rid
+  for rid in $rid_text; do
+    if [[ "$valid" != *" $rid "* ]]; then
+      fail_usage "release-rids.json contains unknown active RID: $rid"
+    fi
+    resolved+=("$rid")
+  done
+
+  if (( ${#resolved[@]} == 0 )); then
+    fail_usage "active RID set is empty."
+  fi
+
+  printf '%s\n' "${resolved[@]}"
 }
 
 assert_no_static_openal_or_angle() {
@@ -609,8 +673,9 @@ assert_expected_packages() {
     fi
   done
 
-  if (( require_all && ${#packages[@]} != 12 )); then
-    fail_audit "package 数量不完整：期望 12，实际 ${#packages[@]}。"
+  local expected_package_count=$((${#rids[@]} * ${#channels[@]}))
+  if (( require_all && ${#packages[@]} != expected_package_count )); then
+    fail_audit "package 数量不完整：期望 $expected_package_count，实际 ${#packages[@]}。"
   fi
 
   for rid in "${rids[@]}"; do
@@ -719,6 +784,7 @@ package_root=""
 product_name=""
 assembly_name=""
 required_scene="scenes/lava-mine.scene"
+active_rids_arg=""
 dev_layout=0
 require_all=0
 
@@ -752,6 +818,11 @@ while [[ $# -gt 0 ]]; do
       [[ "$required_scene" == *.scene ]] || required_scene="$required_scene.scene"
       shift 2
       ;;
+    --active-rids)
+      require_value "$1" "${2:-}"
+      active_rids_arg="$2"
+      shift 2
+      ;;
     --dev-layout)
       dev_layout=1
       shift
@@ -770,7 +841,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-rids=(win-x64 win-arm64 linux-x64 linux-arm64 osx-x64 osx-arm64)
 channels=(r2r aot)
 packages=()
 package_dirs=()
@@ -783,6 +853,10 @@ else
 fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+rids=()
+while IFS= read -r rid; do
+  [[ -n "$rid" ]] && rids+=("$rid")
+done < <(resolve_active_rids "$active_rids_arg")
 
 if [[ -z "$publish_root" ]]; then
   publish_root="$repo_root/artifacts/publish"

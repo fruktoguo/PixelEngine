@@ -4,6 +4,7 @@ param(
   [string]$ProductName,
   [string]$AssemblyName,
   [string]$RequiredScene = 'scenes/lava-mine.scene',
+  [string]$ActiveRids,
   [switch]$DevLayout,
   [switch]$RequireAll
 )
@@ -19,8 +20,6 @@ if (-not $PackageRoot) {
   $PackageRoot = Join-Path $repoRoot 'artifacts/package'
 }
 
-$rids = @('win-x64', 'win-arm64', 'linux-x64', 'linux-arm64', 'osx-x64', 'osx-arm64')
-$channels = @('r2r', 'aot')
 $launcherBaseName = if ($ProductName) { $ProductName } else { 'PixelEngine Demo' }
 $assemblyBaseName = if ($AssemblyName) { $AssemblyName } else { 'PixelEngine.Demo' }
 $requiredScenePath = $RequiredScene.Replace('\', '/').TrimStart('/')
@@ -56,6 +55,43 @@ function Assert-FileExists([string]$path, [string]$message) {
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
     throw "${message}: $path"
   }
+}
+
+function Resolve-ActiveRids([string]$value) {
+  $validRids = @('win-x64', 'win-arm64', 'linux-x64', 'linux-arm64', 'osx-x64', 'osx-arm64')
+  if (-not [string]::IsNullOrWhiteSpace($value)) {
+    $requested = @($value.Split(',', [StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.Trim() })
+    if ($requested.Count -eq 0) {
+      throw '-ActiveRids 不能为空。'
+    }
+
+    foreach ($rid in $requested) {
+      if ($rid -notin $validRids) {
+        throw "未知 active RID: $rid"
+      }
+    }
+
+    return $requested
+  }
+
+  $configPath = Join-Path $repoRoot 'tools/release-rids.json'
+  if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+    return $validRids
+  }
+
+  $config = Get-Content -Raw -LiteralPath $configPath | ConvertFrom-Json
+  $active = @($config.rids | Where-Object { [bool]$_.active } | ForEach-Object { [string]$_.rid })
+  if ($active.Count -eq 0) {
+    throw 'release-rids.json active RID 集为空。'
+  }
+
+  foreach ($rid in $active) {
+    if ($rid -notin $validRids) {
+      throw "release-rids.json 包含未知 active RID: $rid"
+    }
+  }
+
+  return $active
 }
 
 function Assert-NoStaticOpenAlOrAngle([string]$directory) {
@@ -537,8 +573,9 @@ function Assert-PackagesAndChecksums {
     }
   }
 
-  if ($RequireAll -and $packages.Count -ne 12) {
-    throw "package 数量不完整：期望 12，实际 $($packages.Count)。"
+  $expectedPackageCount = $rids.Count * $channels.Count
+  if ($RequireAll -and $packages.Count -ne $expectedPackageCount) {
+    throw "package 数量不完整：期望 $expectedPackageCount，实际 $($packages.Count)。"
   }
 
   if ($packages.Count -eq 0) {
@@ -611,6 +648,9 @@ function Assert-PackagesAndChecksums {
 
   Write-Host "Package audit passed. Packages: $($packages.Count). Expanded: $($packageDirectories.Count)."
 }
+
+$channels = @('r2r', 'aot')
+$rids = Resolve-ActiveRids $ActiveRids
 
 foreach ($rid in $rids) {
   foreach ($channel in $channels) {
