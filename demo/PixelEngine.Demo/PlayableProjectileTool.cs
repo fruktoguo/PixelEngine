@@ -251,16 +251,13 @@ public sealed class PlayableProjectileTool : Behaviour
 
     private void EmitSmallImpactParticles(float hitX, float hitY)
     {
-        MaterialId material = Context.Materials.Resolve("gravel");
-        if (material == MaterialId.Invalid)
-        {
-            material = Context.Materials.Resolve("sand");
-        }
-
-        if (material != MaterialId.Invalid)
-        {
-            Context.Particles.Burst(hitX, hitY, material, Math.Clamp(ImpactRadius + 2, 3, 12), speed: Math.Max(1f, ImpactForce * 0.2f));
-        }
+        TransientParticleBurst.Emit(
+            Context,
+            hitX,
+            hitY,
+            Math.Clamp(ImpactRadius + 2, 3, 12),
+            Math.Max(1f, ImpactForce * 0.2f),
+            lifetime: 45);
     }
 
     private void ProcessPendingCollapseScanSafely()

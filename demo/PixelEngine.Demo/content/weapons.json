@@ -95,7 +95,7 @@
       "reloadSeconds": 0.0,
       "heatPerCell": 0,
       "beamDps": 0,
-      "spawnMaterial": "sand",
+      "spawnMaterial": "smoke",
       "spread": 0.0,
       "recoil": 0.35,
       "screenShake": 0.70,

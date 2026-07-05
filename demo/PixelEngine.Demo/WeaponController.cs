@@ -443,12 +443,13 @@ public sealed class WeaponController : Behaviour
 
     private void EmitImpactFeedback(WeaponDefinition weapon, float x, float y, int count)
     {
-        MaterialId material = Context.Materials.Resolve(string.IsNullOrWhiteSpace(weapon.SpawnMaterial) ? "sand" : weapon.SpawnMaterial);
-        if (material != MaterialId.Invalid)
-        {
-            Context.Particles.Burst(x, y, material, Math.Clamp(count, 1, 32), speed: Math.Max(1f, weapon.Impulse * 0.15f));
-        }
-
+        TransientParticleBurst.Emit(
+            Context,
+            x,
+            y,
+            Math.Clamp(count, 1, 32),
+            Math.Max(1f, weapon.Impulse * 0.15f),
+            lifetime: weapon.Kind == WeaponKind.Bomb ? (ushort)75 : (ushort)45);
     }
 
     private void PublishMineYieldForCircle(float x, float y, int radius)

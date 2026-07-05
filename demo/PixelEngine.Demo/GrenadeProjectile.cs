@@ -115,10 +115,12 @@ public sealed class GrenadeProjectile : Behaviour
         Context.World.Explode(X, Y, _radius, _impulse);
         _flash.Start(X, Y, _radius, 0xFF_30_80_FF);
         Context.Audio.PlayAt(_impactCue, X, Y, 0.8f);
-        MaterialId sand = Context.Materials.Resolve("sand");
-        if (sand != MaterialId.Invalid)
-        {
-            Context.Particles.Burst(X, Y, sand, Math.Clamp(_radius, 4, 24), speed: Math.Max(2f, _impulse * 0.2f));
-        }
+        TransientParticleBurst.Emit(
+            Context,
+            X,
+            Y,
+            Math.Clamp(_radius, 4, 24),
+            Math.Max(2f, _impulse * 0.2f),
+            lifetime: 75);
     }
 }
