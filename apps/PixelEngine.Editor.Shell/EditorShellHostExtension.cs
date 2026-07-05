@@ -9,7 +9,7 @@ using PixelEngine.Simulation.Particles;
 
 namespace PixelEngine.Editor.Shell;
 
-internal sealed class EditorShellHostExtension : IEditorHostExtension
+internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorInputCaptureSource
 {
     private readonly EditorProject _project;
     private readonly EditorShellApp _app;
@@ -105,6 +105,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
         ArgumentNullException.ThrowIfNull(engine);
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(pipeline);
+        engine.Context.RegisterService<IEditorInputCaptureSource>(this);
         RegisterPanels(engine, pipeline);
         EditorWindowInputConnector input = new(window, _editor.Input);
         Bridge = EditorRenderBridge.AttachIfEnabled(
@@ -115,6 +116,13 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension
             () => BuildRuntimeDiagnostics(engine),
             engine.Context.TryGetService(out IScriptRuntime scriptRuntime) ? scriptRuntime : null);
         return new CompositeDisposable(input, Bridge, _editor);
+    }
+
+    public bool TryGetInputCapture(out EditorHostInputCapture capture)
+    {
+        PixelEngine.Editor.EditorInputSnapshot editorCapture = _editor.Input.Capture;
+        capture = new EditorHostInputCapture(editorCapture.WantCaptureMouse, editorCapture.WantCaptureKeyboard);
+        return true;
     }
 
     private void RegisterPanels(Engine engine, RenderPipeline pipeline)
