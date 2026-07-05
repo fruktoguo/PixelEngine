@@ -203,7 +203,7 @@ C#↔UI 通信：
 - [~] CJK 子集资产接入：`FontEngine` 已复用 `PixelEngine.Gui.GuiFontManager` 的 CJK 候选字体与 glyph range 定义，content/ui/fonts 候选优先生效，RmlUi 可消费该选择；实际子集字体资产落盘与 Ultralight 注册待后续切片（§3.7，呼应 plan/12 §3.3）
 
 内容与资产：
-- [~] `content/ui/` 结构 + `ui-manifest.json` 加载器：已实现纯 I/O + STJ 源生成 manifest 解析、screen id→资产路径映射、preload 标记、重复 id/路径逃逸/缺失文件校验，并接入 `GameUiServiceBridge` 优先按清单解析屏幕；已通过 `UiAssetDirectories` 暴露规范化 `fonts/`、`images/` 目录契约，图片加载/预载清单仍待后续切片（§3.8）
+- [~] `content/ui/` 结构 + `ui-manifest.json` 加载器：已实现纯 I/O + STJ 源生成 manifest 解析、screen id→资产路径映射、preload 标记、重复 id/路径逃逸/缺失文件校验，并接入 `GameUiServiceBridge` 优先按清单解析屏幕；已通过 `UiAssetDirectories` 暴露规范化 `fonts/`、`images/` 目录契约，并支持 `images[]` 图片资产清单的重复 id、路径逃逸、缺失文件校验与 preload 标记；图像解码/后端消费仍待后续切片（§3.8）
 - [ ] `ManagedUiLayout`：HTML→抽象控件树解析（盒模型/文本/图像/按钮/`data-*` 契约），供 ManagedFallback（§3.8、§3.1）
 
 可选后端（Ultralight profile，gated）：

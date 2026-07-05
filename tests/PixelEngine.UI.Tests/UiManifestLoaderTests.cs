@@ -10,11 +10,15 @@ public sealed class UiManifestLoaderTests
         string root = CreateUiRoot();
         string main = WriteAsset(root, "main.xhtml", "<ui />");
         _ = WriteAsset(root, "settings/settings.xhtml", "<ui />");
+        string logo = WriteAsset(root, "images/logo.png", "png");
         WriteManifest(root, """
             {
               "screens": [
                 { "id": "main", "path": "main.xhtml", "preload": true },
                 { "id": "settings", "path": "settings/settings.xhtml" }
+              ],
+              "images": [
+                { "id": "logo", "path": "images/logo.png", "preload": true }
               ]
             }
             """);
@@ -37,6 +41,14 @@ public sealed class UiManifestLoaderTests
         Assert.Equal(UiDocumentSourceKind.Asset, source.Kind);
         Assert.Equal(Path.GetFullPath(main), source.Path);
         Assert.Equal(screen.ScreenId.Value, source.StableId);
+
+        Assert.Equal(1, manifest.ImageCount);
+        Assert.True(manifest.TryGetImage("logo", out UiManifestImage image));
+        Assert.True(image.Preload);
+        Assert.Equal("images/logo.png", image.RelativePath);
+        Assert.Equal(Path.GetFullPath(logo), image.FullPath);
+        Assert.Equal(UiStableId.Hash("logo"), image.StableId);
+        Assert.Equal(image, manifest.GetRequiredImage("logo"));
     }
 
     [Fact]
@@ -81,6 +93,66 @@ public sealed class UiManifestLoaderTests
             {
               "screens": [
                 { "id": "main", "path": "missing.xhtml" }
+              ]
+            }
+            """);
+
+        _ = Assert.Throws<FileNotFoundException>(() => UiManifestLoader.LoadFromDirectory(root));
+    }
+
+    [Fact]
+    public void LoadRejectsImageOutsideImagesDirectory()
+    {
+        string root = CreateUiRoot();
+        _ = WriteAsset(root, "main.xhtml", "<ui />");
+        _ = WriteAsset(root, "logo.png", "png");
+        WriteManifest(root, """
+            {
+              "screens": [
+                { "id": "main", "path": "main.xhtml" }
+              ],
+              "images": [
+                { "id": "logo", "path": "logo.png" }
+              ]
+            }
+            """);
+
+        _ = Assert.Throws<InvalidDataException>(() => UiManifestLoader.LoadFromDirectory(root));
+    }
+
+    [Fact]
+    public void LoadRejectsDuplicateImageIds()
+    {
+        string root = CreateUiRoot();
+        _ = WriteAsset(root, "main.xhtml", "<ui />");
+        _ = WriteAsset(root, "images/logo.png", "png");
+        WriteManifest(root, """
+            {
+              "screens": [
+                { "id": "main", "path": "main.xhtml" }
+              ],
+              "images": [
+                { "id": "logo", "path": "images/logo.png" },
+                { "id": "logo", "path": "images/logo.png" }
+              ]
+            }
+            """);
+
+        _ = Assert.Throws<InvalidDataException>(() => UiManifestLoader.LoadFromDirectory(root));
+    }
+
+    [Fact]
+    public void LoadRejectsMissingImageAsset()
+    {
+        string root = CreateUiRoot();
+        _ = WriteAsset(root, "main.xhtml", "<ui />");
+        WriteManifest(root, """
+            {
+              "screens": [
+                { "id": "main", "path": "main.xhtml" }
+              ],
+              "images": [
+                { "id": "missing", "path": "images/missing.png" }
               ]
             }
             """);
