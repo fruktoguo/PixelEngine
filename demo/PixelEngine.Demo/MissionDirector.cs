@@ -59,6 +59,7 @@ public sealed class MissionDirector : Behaviour
     private bool _componentsResolved;
     private bool _externalLavaSurface;
     private int _baselineRespawns;
+    private string _menuStatus = string.Empty;
 
     /// <summary>
     /// 需要收集的目标水晶数量。
@@ -94,6 +95,16 @@ public sealed class MissionDirector : Behaviour
     /// 未受伤通关奖励。
     /// </summary>
     public int UndamagedBonus { get; set; } = 500;
+
+    /// <summary>
+    /// 胜负菜单宽度，单位像素。
+    /// </summary>
+    public float ResultMenuWidth { get; set; } = 380f;
+
+    /// <summary>
+    /// 胜负菜单高度，单位像素。
+    /// </summary>
+    public float ResultMenuHeight { get; set; } = 174f;
 
     /// <summary>
     /// 当前任务状态。
@@ -177,6 +188,62 @@ public sealed class MissionDirector : Behaviour
         {
             MarkLost("lava_reached_player");
         }
+    }
+
+    /// <inheritdoc />
+    protected override void OnGui(IGuiContext gui)
+    {
+        if (State == MissionState.Playing)
+        {
+            return;
+        }
+
+        float x = MathF.Max(12f, (gui.Width - ResultMenuWidth) * 0.5f);
+        float y = MathF.Max(12f, (gui.Height - ResultMenuHeight) * 0.5f);
+        gui.SetNextWindow(x, y, ResultMenuWidth, ResultMenuHeight, GuiCondition.FirstUseEver);
+        string title = State == MissionState.Won ? "撤离成功" : "任务失败";
+        if (!gui.BeginWindow("mission-result-menu", title, GuiWindowFlags.NoResize | GuiWindowFlags.NoSavedSettings))
+        {
+            gui.EndWindow();
+            return;
+        }
+
+        if (State == MissionState.Won)
+        {
+            gui.TextColored("矿洞撤离成功", 0xFF_80_F0_80);
+        }
+        else
+        {
+            gui.TextColored("任务失败", 0xFF_60_60_F0);
+        }
+
+        gui.Text($"水晶 {CrystalsCollected}/{Math.Max(1, RequiredCrystals)}   分数 {Score}");
+        gui.Text($"剩余时间 {RemainingSeconds:0}s   熔岩水位 {LavaSurfaceY:0}");
+        if (!string.IsNullOrWhiteSpace(ResultReason))
+        {
+            gui.Text($"原因 {ResultReason}");
+        }
+
+        if (gui.Button("重开"))
+        {
+            RuntimeControlResult result = Context.Runtime.RequestRestartCurrentScene();
+            _menuStatus = result.Message;
+        }
+
+        gui.SameLine();
+        if (gui.Button("退出"))
+        {
+            RuntimeControlResult result = Context.Runtime.RequestShutdown();
+            _menuStatus = result.Message;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_menuStatus))
+        {
+            gui.Separator();
+            gui.Text(_menuStatus);
+        }
+
+        gui.EndWindow();
     }
 
     /// <summary>

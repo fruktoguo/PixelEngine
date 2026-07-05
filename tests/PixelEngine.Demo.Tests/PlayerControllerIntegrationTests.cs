@@ -94,6 +94,8 @@ public sealed class PlayerControllerIntegrationTests
         _ = entity.AddComponent<PlayerHealth>();
         _ = entity.AddComponent<PlayableProjectileTool>();
         _ = entity.AddComponent<WeaponController>();
+        MissionDirector mission = entity.AddComponent<MissionDirector>();
+        mission.RequiredCrystals = 3;
         _ = entity.AddComponent<PlayableHud>();
 
         engine.RunHeadlessTicks(2);
@@ -105,6 +107,7 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Contains("begin:playable-hud:Playable HUD:NoTitleBar, NoResize, NoMove, NoSavedSettings, NoScrollbar", gui.Drawn);
         Assert.Contains("swatch:weapon-current:FFE8D06A:14", gui.Drawn);
         Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:Pistol  120/120:", StringComparison.Ordinal));
+        Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:目标 水晶 0/3", StringComparison.Ordinal));
         Assert.Contains("text:材质", gui.Drawn);
         Assert.Contains("text:sand / Terrain", gui.Drawn);
         Assert.Contains("text:stone / Terrain", gui.Drawn);
@@ -238,6 +241,21 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal("extraction_reached", mission.ResultReason);
         Assert.True(mission.Score > 0);
         Assert.True(mission.RemainingSeconds > 0f);
+
+        IScriptRuntime runtime = engine.Context.GetService<IScriptRuntime>();
+        RecordingGuiContext victoryGui = new();
+        runtime.DrawGui(victoryGui);
+
+        Assert.Contains("begin:mission-result-menu:撤离成功:NoResize, NoSavedSettings", victoryGui.Drawn);
+        Assert.Contains("text-colored:矿洞撤离成功:FF80F080", victoryGui.Drawn);
+        Assert.Contains(victoryGui.Drawn, line => line.StartsWith("text:水晶 3/3", StringComparison.Ordinal));
+        Assert.Contains("button:重开", victoryGui.Drawn);
+        Assert.Contains("button:退出", victoryGui.Drawn);
+
+        RecordingGuiContext exitGui = new(clickedButtons: ["退出"]);
+        runtime.DrawGui(exitGui);
+        Assert.True(engine.IsShutdownRequested);
+        Assert.Contains("text:已请求关闭。", exitGui.Drawn);
     }
 
     /// <summary>
@@ -262,6 +280,15 @@ public sealed class PlayerControllerIntegrationTests
 
         Assert.Equal(MissionState.Lost, mission.State);
         Assert.Equal("time_limit", mission.ResultReason);
+
+        IScriptRuntime runtime = engine.Context.GetService<IScriptRuntime>();
+        RecordingGuiContext failGui = new(clickedButtons: ["退出"]);
+        runtime.DrawGui(failGui);
+
+        Assert.Contains("begin:mission-result-menu:任务失败:NoResize, NoSavedSettings", failGui.Drawn);
+        Assert.Contains("text-colored:任务失败:FF6060F0", failGui.Drawn);
+        Assert.True(engine.IsShutdownRequested);
+        Assert.Contains("text:已请求关闭。", failGui.Drawn);
     }
 
     /// <summary>

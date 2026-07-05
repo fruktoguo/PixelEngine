@@ -27,6 +27,7 @@ public sealed class PlayableHud : Behaviour
     private PlayerHealth? _health;
     private PlayableProjectileTool? _projectile;
     private WeaponController? _weapons;
+    private MissionDirector? _mission;
     private int _frameGraphIndex;
     private int _frameGraphCount;
 
@@ -50,7 +51,7 @@ public sealed class PlayableHud : Behaviour
     protected override void OnGui(IGuiContext gui)
     {
         ResolveComponents();
-        gui.SetNextWindow(X, Y, 520f, 336f, GuiCondition.FirstUseEver);
+        gui.SetNextWindow(X, Y, 520f, 366f, GuiCondition.FirstUseEver);
         GuiWindowFlags flags = GuiWindowFlags.NoResize |
             GuiWindowFlags.NoMove |
             GuiWindowFlags.NoSavedSettings |
@@ -63,6 +64,7 @@ public sealed class PlayableHud : Behaviour
         }
 
         DrawHealth(gui);
+        DrawMission(gui);
         DrawWeapon(gui);
         gui.Text($"射击 {_projectile?.ShotsFired ?? 0}");
         EngineDiagnosticsSnapshot diagnostics = Context.Diagnostics.Capture();
@@ -136,6 +138,7 @@ public sealed class PlayableHud : Behaviour
         _health = Entity.TryGetComponent(out PlayerHealth health) ? health : null;
         _projectile = Entity.TryGetComponent(out PlayableProjectileTool projectile) ? projectile : null;
         _weapons = Entity.TryGetComponent(out WeaponController weapons) ? weapons : null;
+        _mission = Entity.TryGetComponent(out MissionDirector mission) ? mission : null;
     }
 
     private void DrawHealth(IGuiContext gui)
@@ -168,6 +171,26 @@ public sealed class PlayableHud : Behaviour
         float cooldown = weapon.CooldownSeconds <= 0f ? 0f : Math.Clamp(_weapons.CooldownRemaining / weapon.CooldownSeconds, 0f, 1f);
         gui.ProgressBar(1f - cooldown, "冷却");
         gui.ProgressBar(Math.Clamp(_weapons.Heat / 100f, 0f, 1f), _weapons.IsOverheated ? "过热" : "热量");
+    }
+
+    private void DrawMission(IGuiContext gui)
+    {
+        if (_mission is null)
+        {
+            return;
+        }
+
+        uint stateColor = _mission.State switch
+        {
+            MissionState.Won => 0xFF_80_F0_80,
+            MissionState.Lost => 0xFF_60_60_F0,
+            MissionState.Playing => 0xFF_E8_D0_6A,
+            _ => 0xFF_E8_D0_6A,
+        };
+        gui.TextColored(
+            $"目标 水晶 {_mission.CrystalsCollected}/{Math.Max(1, _mission.RequiredCrystals)}  " +
+            $"时间 {_mission.RemainingSeconds:0}s  水位 {_mission.LavaSurfaceY:0}  分数 {_mission.Score}",
+            stateColor);
     }
 
     private void DrawMaterialLegend(IGuiContext gui)
