@@ -152,12 +152,61 @@ public interface IWorldCellAccess
 }
 
 /// <summary>
+/// 脚本化结构破坏类型；当前用于 API 语义与后续材质差异化扩展，CPU sim 仍以材质抗性为权威。
+/// </summary>
+public enum DamageKind : byte
+{
+    /// <summary>
+    /// 冲击 / 爆破类破坏。
+    /// </summary>
+    Impact,
+
+    /// <summary>
+    /// 光束类持续破坏。
+    /// </summary>
+    Beam,
+
+    /// <summary>
+    /// 腐蚀类破坏。
+    /// </summary>
+    Corrosion,
+
+    /// <summary>
+    /// 热破坏。
+    /// </summary>
+    Heat,
+}
+
+/// <summary>
 /// 提供脚本可用的世界级复合效果 API。
 /// </summary>
 public interface IWorldEffects
 {
     /// <summary>
-    /// 延迟触发一次爆炸：把半径内可抛射 cell 转为自由粒子，并对邻近刚体施加径向冲量。
+    /// 延迟对圆形区域施加抗性感知结构破坏；命中 RigidOwned cell 时只通知物理层重建，不累加 cell Damage。
+    /// </summary>
+    /// <param name="x">圆心 X 坐标。</param>
+    /// <param name="y">圆心 Y 坐标。</param>
+    /// <param name="radius">破坏半径，单位 cell。</param>
+    /// <param name="damage">中心破坏当量。</param>
+    /// <param name="falloff">是否按距离线性衰减。</param>
+    /// <param name="kind">破坏类型。</param>
+    void DamageCircle(float x, float y, int radius, float damage, bool falloff = true, DamageKind kind = DamageKind.Impact);
+
+    /// <summary>
+    /// 延迟沿光束路径施加抗性感知结构破坏；命中 RigidOwned cell 时只通知物理层重建，不累加 cell Damage。
+    /// </summary>
+    /// <param name="x">起点 X 坐标。</param>
+    /// <param name="y">起点 Y 坐标。</param>
+    /// <param name="dx">方向 X 分量。</param>
+    /// <param name="dy">方向 Y 分量。</param>
+    /// <param name="length">光束长度，单位 cell。</param>
+    /// <param name="damagePerCell">每个命中 cell 的破坏当量。</param>
+    /// <param name="kind">破坏类型。</param>
+    void DamageBeam(float x, float y, float dx, float dy, int length, float damagePerCell, DamageKind kind = DamageKind.Beam);
+
+    /// <summary>
+    /// 延迟触发一次爆炸：先施加抗性感知结构破坏，再把可抛射碎屑 / 粉液气火转为自由粒子，并对邻近刚体施加径向冲量。
     /// </summary>
     /// <param name="x">爆炸中心 X 坐标。</param>
     /// <param name="y">爆炸中心 Y 坐标。</param>

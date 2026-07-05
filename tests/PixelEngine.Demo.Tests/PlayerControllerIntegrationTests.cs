@@ -206,10 +206,10 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
-    /// 验证 Demo 爆破工具会从鼠标世界坐标触发 cell 抛射、刚体冲量请求与光照反馈。
+    /// 验证 Demo 爆破工具会从鼠标世界坐标触发抗性感知破坏、碎屑粒子与光照反馈。
     /// </summary>
     [Fact]
-    public void ExplosiveToolMiddleClickEjectsCellsAndQueuesLighting()
+    public void ExplosiveToolMiddleClickDamagesCellsAndQueuesLighting()
     {
         MaterialTable materials = DemoMaterials();
         Assert.True(materials.TryGetId("stone", out ushort stone));
@@ -226,7 +226,7 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal(1, tool.ExplosionCount);
         Assert.Equal(12.25f, tool.LastExplosionX, precision: 3);
         Assert.Equal(12.75f, tool.LastExplosionY, precision: 3);
-        Assert.Equal((ushort)0, grid.MaterialAt(12, 12));
+        Assert.NotEqual(stone, grid.MaterialAt(12, 12));
 
         ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
         Assert.True(particles.ActiveCount > 0);
@@ -242,31 +242,30 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void ExplosiveToolMiddleClickPushesNearbyRigidBody()
     {
-        MaterialTable materials = DemoMaterials();
+        MaterialTable materials = DemoMaterials(destructibleSolids: false);
         Assert.True(materials.TryGetId("stone", out ushort stone));
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
-        FillRect(grid, stone, minX: 48, minY: 24, maxX: 60, maxY: 36);
+        FillRect(grid, stone, minX: 48, minY: 24, maxX: 72, maxY: 36);
 
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
-        int bodyKey = physics.CreateBodyFromRegion(48, 24, 12, 12);
-        RigidBodySnapshot before = SnapshotBody(physics, bodyKey);
-        Assert.Equal(0f, before.LinearVelocityPixelsPerSecond.X, precision: 3);
+        _ = physics.CreateBodyFromRegion(48, 24, 24, 12);
+        Assert.True(physics.PhysicsWorld.ActiveBodyCount > 0);
+        Assert.Equal(0f, MaxBodyVelocityX(physics), precision: 3);
 
         ExplosiveTool tool = scene.CreateEntity().AddComponent<ExplosiveTool>();
-        tool.Radius = 40;
-        tool.Force = 220f;
+        tool.Radius = 22;
+        tool.Force = 1_000f;
         tool.CooldownSeconds = 0f;
 
-        input.Update([], [MouseButton.Middle], mouseX: 32f, mouseY: 30f, wheelY: 0f);
+        input.Update([], [MouseButton.Middle], mouseX: 40f, mouseY: 30f, wheelY: 0f);
         engine.RunHeadlessTicks(1);
-        input.Update([], [], mouseX: 32f, mouseY: 30f, wheelY: 0f);
+        input.Update([], [], mouseX: 40f, mouseY: 30f, wheelY: 0f);
         engine.RunHeadlessTicks(1);
 
-        RigidBodySnapshot after = SnapshotBody(physics, bodyKey);
         Assert.Equal(1, tool.ExplosionCount);
         Assert.True(
-            after.LinearVelocityPixelsPerSecond.X > before.LinearVelocityPixelsPerSecond.X + 0.1f,
-            $"爆炸应把左侧邻近刚体向右推出，before={before.LinearVelocityPixelsPerSecond}, after={after.LinearVelocityPixelsPerSecond}");
+            MaxBodyVelocityX(physics) > 0.1f,
+            $"爆炸应把左侧邻近刚体向右推出或推动重建后的子刚体，active={physics.PhysicsWorld.ActiveBodyCount}");
     }
 
     /// <summary>
@@ -1176,19 +1175,17 @@ public sealed class PlayerControllerIntegrationTests
         return $"x={state.X}, y={state.Y}, ground={state.OnGround}, wallL={state.OnWallLeft}, wallR={state.OnWallRight}, req=({state.RequestedDeltaX},{state.RequestedDeltaY}), applied=({state.AppliedDeltaX},{state.AppliedDeltaY})";
     }
 
-    private static RigidBodySnapshot SnapshotBody(PhysicsSystem physics, int bodyKey)
+    private static float MaxBodyVelocityX(PhysicsSystem physics)
     {
         RigidBodySnapshot[] snapshots = new RigidBodySnapshot[Math.Max(1, physics.PhysicsWorld.ActiveBodyCount)];
         int count = physics.CopyBodySnapshots(snapshots);
+        float max = 0f;
         for (int i = 0; i < count; i++)
         {
-            if (snapshots[i].BodyKey == bodyKey)
-            {
-                return snapshots[i];
-            }
+            max = MathF.Max(max, snapshots[i].LinearVelocityPixelsPerSecond.X);
         }
 
-        throw new InvalidOperationException($"未找到刚体快照：bodyKey={bodyKey}。");
+        return max;
     }
 
     private static void FillFloor(CellGrid grid, ushort material, int y, int x0, int x1, bool rigidOwned)
@@ -1236,6 +1233,11 @@ public sealed class PlayerControllerIntegrationTests
 
     private static MaterialTable Materials(params (string Name, CellType Type)[] definitions)
     {
+        return Materials(destructibleSolids: true, definitions);
+    }
+
+    private static MaterialTable Materials(bool destructibleSolids, params (string Name, CellType Type)[] definitions)
+    {
         MaterialDef[] materials = new MaterialDef[definitions.Length];
         for (int i = 0; i < materials.Length; i++)
         {
@@ -1251,15 +1253,18 @@ public sealed class PlayerControllerIntegrationTests
                 MeltPoint = float.NaN,
                 FreezePoint = float.NaN,
                 BoilPoint = float.NaN,
+                Integrity = destructibleSolids && definitions[i].Type == CellType.Solid ? (ushort)40 : (ushort)0,
+                DestroyedTarget = destructibleSolids && definitions[i].Type == CellType.Solid ? (ushort)1 : (ushort)0,
             };
         }
 
         return new MaterialTable(materials);
     }
 
-    private static MaterialTable DemoMaterials()
+    private static MaterialTable DemoMaterials(bool destructibleSolids = true)
     {
         return Materials(
+            destructibleSolids,
             ("empty", CellType.Empty),
             ("sand", CellType.Powder),
             ("water", CellType.Liquid),

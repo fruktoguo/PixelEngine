@@ -118,21 +118,46 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
-    /// 验证脚本世界爆炸 API 会在安全相位触发 cell 抛射，并对半径内刚体施加径向冲量。
+    /// 验证脚本世界破坏 API 会在 cell 安全相位落地抗性感知区域伤害。
     /// </summary>
     [Fact]
-    public void WorldExplodeFlushesCellEjectionAndRigidImpulse()
+    public void WorldDamageCommandsFlushIntoStructuralDamage()
+    {
+        Fixture fixture = Fixture.Create();
+        MaterialId stone = fixture.Context.Materials.Resolve("stone");
+        MaterialId sand = fixture.Context.Materials.Resolve("sand");
+        FillRect(fixture.Chunk, minX: 12, minY: 12, maxX: 18, maxY: 18, material: stone.Value);
+
+        fixture.Context.World.DamageCircle(15f, 15f, radius: 3, damage: 80f, falloff: false);
+        fixture.Context.World.DamageBeam(12f, 12f, 1f, 0f, length: 5, damagePerCell: 80f);
+
+        Assert.Equal(stone.Value, fixture.Grid.GetMaterial(15, 15));
+        Assert.Equal(2, fixture.Context.FlushCellCommands());
+
+        Assert.Equal(sand.Value, fixture.Grid.GetMaterial(15, 15));
+        Assert.Equal(sand.Value, fixture.Grid.GetMaterial(12, 12));
+        Assert.False(fixture.Chunk.WorkingDirty.IsEmpty);
+    }
+
+    /// <summary>
+    /// 验证脚本世界爆炸 API 会先按材质抗性破坏 solid，再抛射碎屑/非固体，并对半径内刚体施加径向冲量。
+    /// </summary>
+    [Fact]
+    public void WorldExplodeFlushesStructuralDamageDebrisAndRigidImpulse()
     {
         using Fixture fixture = Fixture.Create(withPhysics: true);
         MaterialId sand = fixture.Context.Materials.Resolve("sand");
+        MaterialId stone = fixture.Context.Materials.Resolve("stone");
         FillRect(fixture.Chunk, minX: 48, minY: 48, maxX: 60, maxY: 60, material: 2);
         BodyHandle handle = fixture.Context.Bodies.CreateFromRegion(48, 48, 12, 12);
         Assert.Equal(1, fixture.Context.FlushPhysicsCommands());
         Assert.True(fixture.Context.Bodies.TryGetTransform(handle, out _));
-        FillRect(fixture.Chunk, minX: 32, minY: 32, maxX: 36, maxY: 36, material: sand.Value);
+        FillRect(fixture.Chunk, minX: 32, minY: 32, maxX: 36, maxY: 36, material: stone.Value);
 
         fixture.Context.World.Explode(34f, 34f, radius: 32, force: 80f);
 
+        Assert.Equal(1, fixture.Context.FlushCellCommands());
+        Assert.Equal(sand.Value, fixture.Grid.GetMaterial(34, 34));
         Assert.Equal(1, fixture.Context.FlushParticleCommands());
         fixture.Particles.RunEjectionPass(fixture.Kernel, fixture.Grid);
         Assert.True(fixture.Particles.ActiveCount > 0);
@@ -411,6 +436,8 @@ public sealed class ScriptSimulationContextTests
                 MeltPoint = float.NaN,
                 FreezePoint = float.NaN,
                 BoilPoint = float.NaN,
+                Integrity = definitions[i].Type == CellType.Solid ? (ushort)40 : (ushort)0,
+                DestroyedTarget = definitions[i].Type == CellType.Solid ? (ushort)1 : (ushort)0,
             };
         }
 
