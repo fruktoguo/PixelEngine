@@ -717,7 +717,7 @@ public sealed class Engine : IDisposable
         {
             if (Context.TryGetService(out UiInputRouter uiOnlyRouter))
             {
-                UiInputCapture uiOnlyCapture = uiOnlyRouter.Pump();
+                UiInputCapture uiOnlyCapture = uiOnlyRouter.Pump(allowPointer: allowMouse, allowKeyboard: allowKeyboard);
                 allowKeyboard &= uiOnlyCapture.AllowWorldKeyboard;
                 allowMouse &= uiOnlyCapture.AllowWorldMouse;
             }
@@ -730,7 +730,7 @@ public sealed class Engine : IDisposable
         allowMouse &= capture.AllowWorldMouse;
         if (Context.TryGetService(out UiInputRouter router))
         {
-            UiInputCapture uiCapture = router.Pump();
+            UiInputCapture uiCapture = router.Pump(allowPointer: allowMouse, allowKeyboard: allowKeyboard);
             allowKeyboard &= uiCapture.AllowWorldKeyboard;
             allowMouse &= uiCapture.AllowWorldMouse;
         }

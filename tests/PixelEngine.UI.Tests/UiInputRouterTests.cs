@@ -105,8 +105,39 @@ public sealed class UiInputRouterTests
                 (new UiKey(65), true, UiKeyModifiers.None),
                 (new UiKey(66), true, UiKeyModifiers.None),
                 (new UiKey(65), false, UiKeyModifiers.None),
+                (new UiKey(66), false, UiKeyModifiers.None),
             ],
             backend.Keys);
+    }
+
+    [Fact]
+    public void PumpRespectsUpstreamCaptureAndDrainsTextWithoutFeedingUi()
+    {
+        RecordingBackend backend = new()
+        {
+            HitResult = new UiHitResult(HitsUi: true, Opaque: true, WantsMouse: true, WantsKeyboard: true),
+        };
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        FakeInputSource input = new()
+        {
+            HasPointer = true,
+            Pointer = new UiPointerState(12, 34, 1, -2, LeftDown: true, RightDown: false, MiddleDown: false),
+            DownKeys = [new UiKey(65)],
+            Text = "stale",
+        };
+        UiInputRouter router = new(host, input);
+
+        UiInputCapture capture = router.Pump(allowPointer: false, allowKeyboard: false);
+
+        Assert.True(capture.AllowWorldMouse);
+        Assert.True(capture.AllowWorldKeyboard);
+        Assert.Equal((0f, 0f), backend.LastPointer);
+        Assert.Equal((0f, 0f), backend.LastScroll);
+        Assert.Empty(backend.PointerButtons);
+        Assert.Empty(backend.Keys);
+        Assert.Equal(string.Empty, backend.Text);
+        Assert.Equal(string.Empty, input.Text);
     }
 
     private sealed class FakeInputSource : IUiInputSource

@@ -64,7 +64,18 @@ public sealed class UiInputRouter
     /// <returns>当前 UI 输入捕获快照。</returns>
     public UiInputCapture Pump()
     {
-        if (_source.TryGetPointer(out UiPointerState pointer))
+        return Pump(allowPointer: true, allowKeyboard: true);
+    }
+
+    /// <summary>
+    /// 在上游输入门允许的前提下把本帧输入状态注入 UI 后端。
+    /// </summary>
+    /// <param name="allowPointer">上游是否允许 UI 消费指针输入。</param>
+    /// <param name="allowKeyboard">上游是否允许 UI 消费键盘/文本输入。</param>
+    /// <returns>当前 UI 输入捕获快照。</returns>
+    public UiInputCapture Pump(bool allowPointer, bool allowKeyboard)
+    {
+        if (allowPointer && _source.TryGetPointer(out UiPointerState pointer))
         {
             _host.FeedPointerMove(pointer.X, pointer.Y);
             if (pointer.WheelDeltaX != 0f || pointer.WheelDeltaY != 0f)
@@ -83,9 +94,17 @@ public sealed class UiInputRouter
             FeedButton(UiPointerButton.Middle, isDown: false, ref _middleDown);
         }
 
-        _ = RefreshCapture();
+        if (allowPointer)
+        {
+            _ = RefreshCapture();
+        }
+        else
+        {
+            _hasKeyboardFocus = false;
+            Capture = UiInputCapture.None;
+        }
 
-        if (Capture.WantCaptureKeyboard)
+        if (allowKeyboard && Capture.WantCaptureKeyboard)
         {
             _downKeyCount = Math.Clamp(_source.CaptureDownKeys(_downKeys, out UiKeyModifiers modifiers), 0, _downKeys.Length);
             FeedKeyEdges(_downKeys.AsSpan(0, _downKeyCount), _previousKeys.AsSpan(0, _previousKeyCount), modifiers);
@@ -103,7 +122,7 @@ public sealed class UiInputRouter
         }
         else
         {
-            _previousKeyCount = 0;
+            ReleasePreviousKeys();
             if (_textBuffer.Length > 0)
             {
                 _ = _source.CaptureText(_textBuffer);
@@ -111,6 +130,16 @@ public sealed class UiInputRouter
         }
 
         return Capture;
+    }
+
+    private void ReleasePreviousKeys()
+    {
+        for (int i = 0; i < _previousKeyCount; i++)
+        {
+            _host.FeedKey(_previousKeys[i], isDown: false, UiKeyModifiers.None);
+        }
+
+        _previousKeyCount = 0;
     }
 
     private void FeedButton(UiPointerButton button, bool isDown, ref bool previous)

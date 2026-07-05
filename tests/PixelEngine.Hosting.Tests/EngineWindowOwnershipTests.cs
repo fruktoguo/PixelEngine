@@ -72,6 +72,7 @@ public sealed class EngineWindowOwnershipTests
         string extension = ReadRepositoryFile("apps", "PixelEngine.Editor.Shell", "EditorShellHostExtension.cs");
 
         Assert.Contains("ApplyEditorInputCapture(ref allowKeyboard, ref allowMouse);", ExtractResolveGuiInputRouteBody(engine), StringComparison.Ordinal);
+        Assert.Contains("Pump(allowPointer: allowMouse, allowKeyboard: allowKeyboard)", ExtractResolveGuiInputRouteBody(engine), StringComparison.Ordinal);
         Assert.Contains("IEditorInputCaptureSource", ReadRepositoryFile("src", "PixelEngine.Hosting", "IEditorInputCaptureSource.cs"), StringComparison.Ordinal);
         Assert.Contains("EditorShellHostExtension : IEditorHostExtension, IEditorInputCaptureSource", extension, StringComparison.Ordinal);
         Assert.Contains("RegisterService<IEditorInputCaptureSource>(this)", extension, StringComparison.Ordinal);
