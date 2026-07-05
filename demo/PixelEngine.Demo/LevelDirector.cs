@@ -247,6 +247,7 @@ public sealed class LevelDirector : Behaviour
         playableHud.X = 14f;
         playableHud.Y = 14f;
         _ = playerEntity.AddComponent<PauseMenu>();
+        _ = playerEntity.AddComponent<GameUiDemoController>();
 
         if (BuildAmbientMaterialEmitters)
         {

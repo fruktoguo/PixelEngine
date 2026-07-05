@@ -1,0 +1,16 @@
+<rml title="HUD" style="left: 14px; top: 14px; width: 300px; height: 128px">
+  <head>
+    <style>
+      body { font-family: "Noto Sans SC"; color: #e8edf2; background-color: rgba(4, 6, 9, 168); }
+      progress { width: 220px; height: 16px; margin-top: 4px; }
+      p { margin: 3px 0px; }
+    </style>
+  </head>
+  <body>
+    <p id="hud_title">HUD</p>
+    <progress id="hud_health" path="hud.health" value="1.0" text="生命" />
+    <progress id="hud_heat" path="hud.heat" value="0.0" text="热量" />
+    <p id="hud_weapon" data-model="hud.weapon">武器：手枪</p>
+    <button id="hud_pause" data-event-click="open_settings">暂停</button>
+  </body>
+</rml>

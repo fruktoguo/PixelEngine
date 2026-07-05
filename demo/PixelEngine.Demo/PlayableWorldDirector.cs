@@ -97,6 +97,7 @@ public sealed class PlayableWorldDirector : Behaviour
         _ = playerEntity.AddComponent<PlayerVisual>();
         _ = playerEntity.AddComponent<PlayableHud>();
         _ = playerEntity.AddComponent<PauseMenu>();
+        _ = playerEntity.AddComponent<GameUiDemoController>();
         _entitiesBuilt = true;
     }
 

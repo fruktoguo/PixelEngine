@@ -240,7 +240,7 @@ C#↔UI 通信：
 ## 6. 验收标准
 
 - [x] 大 UI 在 plan/08 同一 GL 上下文、世界渲染之后经 `RegisterUiLayer(100,…)` 合成、编辑器 ImGui(200) 在其上；合成后 GL 状态被正确恢复（含 shim 侧 save/restore），世界画面无被 UI 污染（§3.2）
-- [ ] 主菜单/设置/背包/对话/HUD 至少各一屏用 HTML/CSS 编写并正常显示（含中文无缺字）、可导航/返回/模态叠放；同内容在 `RmlUi` 与 `ManagedFallback` 两后端均可显示与交互（§3.8、§3.11）
+- [x] 主菜单/设置/背包/对话/HUD 至少各一屏用 HTML/CSS 编写并正常显示（含中文无缺字）、可导航/返回/模态叠放；同内容在 `RmlUi` 与 `ManagedFallback` 两后端均可显示与交互。已落地 `content/ui/ui-manifest.json` 与五个 `screens/*.xhtml`，`GameUiDemoController` 经 `IGameUiService` 驱动主菜单/HUD/设置/背包/对话模态；`DemoUiContentTests` 覆盖 manifest、中文正文 glyph range、ManagedFallback 绘制/按钮/复选框事件、脚本屏栈导航，并用 `PIXELENGINE_RENDERING_GL_SMOKE=1` 真实窗口验证 RmlUi 载入同源页面、鼠标点击主菜单按钮、模型写入与合成（§3.8、§3.11）
 - [!] 输入三级仲裁正确：编辑器(Edit) > 大 UI(命中) > 游戏；UI 命中不透明元素时游戏不消费该输入，反之透传；文本/IME 焦点路由正确；切后端仲裁行为不变（§3.5）。阻塞：Editor→大 UI→Game 的上游捕获门、KeyChar committed text、RmlUi/ManagedFallback HitTest 已接入并测试；完整 IME composition 需要平台 composition 事件/抽象，当前 Silk KeyChar 只覆盖提交文本；三后端一致性还受 UltralightBackend 未激活阻塞，不能伪装为完成。
 - [x] C#↔UI 双向：游戏态变化经 `SetValue`/`BindModel`/data-model 反映到 UI，UI 交互（如"开始游戏"）产生 `UiEvent` 并经脚本事件总线在相位 1 派发，事件触发的世界写入经延迟队列落正确相位；禁用 HTML UI 时 `GameUi` 为 no-op 且调用安全；`Invoke` 已接入 ManagedFallback 与 RmlUi native action 通道并通过托管单测 + 真实窗口 RmlUi smoke 验证（§3.4、#6）
 - [ ] 事件驱动重绘生效：静态屏稳态无光栅化开销（诊断 `ui.paint`≈0）；HUD 仅在数值变化时局部重绘/脏矩形上传（§3.2、§3.9）
