@@ -68,6 +68,29 @@ public sealed class ManagedFallbackBackendTests
     }
 
     [Fact]
+    public void ManagedFallbackAppliesRootBoxModelBeforeDrawingWindow()
+    {
+        string path = WriteUi("""
+            <ui title="Panel" style="left: 12px; top: 20px; width: 240px; height: 96px">
+              <p>Boxed</p>
+            </ui>
+            """);
+        FakeGuiHost gui = new();
+        using ManagedFallbackBackend backend = new(gui);
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+
+        UiDocumentSource source = UiDocumentSource.Asset(path, 4);
+        _ = host.ShowScreen(new UiScreenId(4), in source);
+        host.Composite(default);
+
+        Assert.Equal((12f, 20f, 240f, 96f), gui.Context.LastWindow);
+        Assert.Contains("Boxed", gui.Context.Texts);
+        Assert.True((gui.Context.LastWindowFlags & GuiDrawWindowFlags.NoResize) != 0);
+        Assert.True((gui.Context.LastWindowFlags & GuiDrawWindowFlags.NoMove) != 0);
+    }
+
+    [Fact]
     public void ManagedFallbackThrowsForMissingDocumentInsteadOfInventingPlaceholder()
     {
         FakeGuiHost gui = new();
@@ -118,6 +141,10 @@ public sealed class ManagedFallbackBackendTests
 
         public HashSet<string> ToggledCheckboxes { get; } = [];
 
+        public (float X, float Y, float Width, float Height) LastWindow { get; private set; }
+
+        public GuiDrawWindowFlags LastWindowFlags { get; private set; }
+
         public int Width => 320;
 
         public int Height => 240;
@@ -130,10 +157,13 @@ public sealed class ManagedFallbackBackendTests
 
         public void SetNextWindow(float x, float y, float width, float height, GuiDrawCondition condition = GuiDrawCondition.Always)
         {
+            LastWindow = (x, y, width, height);
+            _ = condition;
         }
 
         public bool BeginWindow(string id, string title, GuiDrawWindowFlags flags = GuiDrawWindowFlags.None)
         {
+            LastWindowFlags = flags;
             return true;
         }
 

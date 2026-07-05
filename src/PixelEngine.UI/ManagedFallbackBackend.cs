@@ -279,6 +279,17 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     private void DrawDocument(IGuiDrawContext gui, UiScreenStackEntry screen, ManagedUiDocument document)
     {
         GuiDrawWindowFlags flags = GuiDrawWindowFlags.NoSavedSettings;
+        if (document.RootBox.HasPositionAndSize)
+        {
+            gui.SetNextWindow(
+                document.RootBox.X!.Value,
+                document.RootBox.Y!.Value,
+                document.RootBox.Width!.Value,
+                document.RootBox.Height!.Value,
+                GuiDrawCondition.Always);
+            flags |= GuiDrawWindowFlags.NoResize | GuiDrawWindowFlags.NoMove;
+        }
+
         if (screen.Modal)
         {
             flags |= GuiDrawWindowFlags.AlwaysAutoResize;
