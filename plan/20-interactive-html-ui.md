@@ -199,8 +199,8 @@ C#↔UI 通信：
 - [ ] `UiDiagnostics`：注册 `ui.update/paint/upload/composite` 到 plan/02 诊断，纳入 plan/12 HUD 与 plan/18 降级（§3.9）
 
 字体引擎（独立节点）：
-- [ ] `FontEngine`：字体清单/fallback 链/DPI hinting/缺字诊断；三后端字形供给统一入口（§3.7）
-- [ ] CJK 子集资产接入：与 plan/19 `GuiFontManager` 共享同一份 CJK 字体资产与 glyph range 定义（§3.7，呼应 plan/12 §3.3）
+- [~] `FontEngine`：已实现 content/ui/fonts 优先、`GuiFontManager` 共享系统候选回退、DPI 字号与共享 glyph range 覆盖扫描；RmlUi/Ultralight 字形供给与诊断计数器接入待后续切片（§3.7）
+- [~] CJK 子集资产接入：`FontEngine` 已复用 `PixelEngine.Gui.GuiFontManager` 的 CJK 候选字体与 glyph range 定义，content/ui/fonts 候选优先生效；实际子集字体资产落盘与三后端注册待后续切片（§3.7，呼应 plan/12 §3.3）
 
 内容与资产：
 - [~] `content/ui/` 结构 + `ui-manifest.json` 加载器：已实现纯 I/O + STJ 源生成 manifest 解析、screen id→资产路径映射、preload 标记、重复 id/路径逃逸/缺失文件校验，并接入 `GameUiServiceBridge` 优先按清单解析屏幕；fonts/images 目录契约待后续切片（§3.8）
