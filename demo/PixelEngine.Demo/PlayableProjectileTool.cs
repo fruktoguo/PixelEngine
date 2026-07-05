@@ -88,7 +88,7 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <summary>
     /// 可自动转换的最大固体像素数，避免把玩家脚下主地形整体提升成刚体导致碰撞丢失。
     /// </summary>
-    public int MaxCollapsePixels { get; set; } = 384;
+    public int MaxCollapsePixels { get; set; } = 2_048;
 
     /// <summary>
     /// 可自动转换的最小固体像素数。

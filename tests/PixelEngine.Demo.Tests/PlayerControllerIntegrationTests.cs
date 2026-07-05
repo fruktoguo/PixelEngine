@@ -1356,6 +1356,40 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证默认破坏弹会转换真实游玩里常见的中等悬空石块，而不是被过低像素上限静态跳过。
+    /// </summary>
+    [Fact]
+    public void PlayableProjectileConvertsDefaultMediumDetachedIslandIntoRigidBody()
+    {
+        RecordingAudioApi audio = new();
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        FillRect(grid, stone, minX: 40, minY: 18, maxX: 70, maxY: 42);
+
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 28f;
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.CooldownSeconds = 0f;
+        projectile.Range = 96f;
+        projectile.ImpactRadius = 2;
+
+        engine.RunHeadlessTicks(2);
+        input.Update([], [MouseButton.Left], mouseX: 52f, mouseY: 28f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        input.Update([], [], mouseX: 52f, mouseY: 28f, wheelY: 0f);
+        engine.RunHeadlessTicks(10);
+
+        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        Assert.Equal(1, projectile.ShotsFired);
+        Assert.True(projectile.CollapsedFloatingIslands >= 1, $"默认枪应转换中等悬空石块，status={projectile.CollapseStatus}, region={projectile.LastCollapsedRegion}, candidates={projectile.LastCollapseSolidCandidates}");
+        Assert.True(physics.Stats.ActiveBodyCount >= 1);
+    }
+
+    /// <summary>
     /// 验证默认破坏弹不会把仍连接主地形的受支撑大块误转成刚体，避免玩家脚下碰撞被整体清空。
     /// </summary>
     [Fact]
