@@ -1,4 +1,5 @@
 using PixelEngine.Rendering;
+using Silk.NET.OpenGL;
 using Xunit;
 
 namespace PixelEngine.UI.Tests;
@@ -107,6 +108,154 @@ public sealed class RmlUiGlBootstrapSmokeTests
         finally
         {
             File.Delete(documentPath);
+        }
+    }
+
+    [Fact]
+    public void RmlUiCompositeRestoresGlStateWhenGlSmokeIsEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine RmlUi GL state smoke",
+            Width = 64,
+            Height = 64,
+            BackendPreference = RenderBackendPreference.Auto,
+            EnableDebugContext = true,
+        });
+        GL gl = window.Gl;
+        using RmlUiBackend backend = new(window);
+        backend.Initialize(new UiBackendInitializeInfo(
+            new UiViewport(0, 0, window.Width, window.Height, 1f),
+            UiBackendKind.RmlUi));
+
+        string documentPath = Path.Combine(Path.GetTempPath(), $"pixelengine-rmlui-state-{Guid.NewGuid():N}.rml");
+        uint texture = gl.GenTexture();
+        try
+        {
+            File.WriteAllText(
+                documentPath,
+                """
+                <rml>
+                  <head>
+                    <style>
+                      body { background-color: transparent; }
+                      #panel { position: absolute; left: 0px; top: 0px; width: 32px; height: 32px; background-color: #40ff40; }
+                    </style>
+                  </head>
+                  <body><div id="panel"></div></body>
+                </rml>
+                """);
+
+            UiDocumentHandle document = backend.LoadDocument(UiDocumentSource.Asset(documentPath, 1));
+            backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(1), new UiScreenId(1), document, Modal: false)]);
+            backend.Update(1f / 60f);
+
+            gl.Enable(EnableCap.DepthTest);
+            gl.Disable(EnableCap.Blend);
+            gl.Enable(EnableCap.ScissorTest);
+            gl.Scissor(1, 2, 9, 10);
+            gl.Viewport(3, 4, 33, 34);
+            gl.PixelStore(PixelStoreParameter.UnpackAlignment, 8);
+            gl.ActiveTexture(TextureUnit.Texture1);
+            gl.BindTexture(TextureTarget.Texture2D, texture);
+
+            GlStateSample before = GlStateSample.Capture(gl);
+            UiPresentContext context = default;
+            backend.Composite(in context);
+            GlStateSample after = GlStateSample.Capture(gl);
+
+            Assert.Equal(before, after);
+        }
+        finally
+        {
+            gl.DeleteTexture(texture);
+            File.Delete(documentPath);
+        }
+    }
+
+    private readonly record struct GlStateSample(
+        int CurrentProgram,
+        int VertexArray,
+        int ArrayBuffer,
+        int ElementArrayBuffer,
+        int DrawFramebuffer,
+        int ReadFramebuffer,
+        int ActiveTexture,
+        int TextureBinding2D,
+        int BlendSrcRgb,
+        int BlendDstRgb,
+        int BlendSrcAlpha,
+        int BlendDstAlpha,
+        int BlendEquationRgb,
+        int BlendEquationAlpha,
+        int UnpackAlignment,
+        bool Blend,
+        bool Depth,
+        bool Cull,
+        bool Scissor,
+        int ViewportX,
+        int ViewportY,
+        int ViewportWidth,
+        int ViewportHeight,
+        int ScissorX,
+        int ScissorY,
+        int ScissorWidth,
+        int ScissorHeight)
+    {
+        public static GlStateSample Capture(GL gl)
+        {
+            Span<int> viewport = stackalloc int[4];
+            Span<int> scissor = stackalloc int[4];
+            gl.GetInteger(GLEnum.Viewport, viewport);
+            gl.GetInteger(GLEnum.ScissorBox, scissor);
+            gl.GetInteger(GLEnum.CurrentProgram, out int currentProgram);
+            gl.GetInteger(GLEnum.VertexArrayBinding, out int vertexArray);
+            gl.GetInteger(GLEnum.ArrayBufferBinding, out int arrayBuffer);
+            gl.GetInteger(GLEnum.ElementArrayBufferBinding, out int elementArrayBuffer);
+            gl.GetInteger(GLEnum.DrawFramebufferBinding, out int drawFramebuffer);
+            gl.GetInteger(GLEnum.ReadFramebufferBinding, out int readFramebuffer);
+            gl.GetInteger(GLEnum.ActiveTexture, out int activeTexture);
+            gl.GetInteger(GLEnum.TextureBinding2D, out int textureBinding2D);
+            gl.GetInteger(GLEnum.BlendSrcRgb, out int blendSrcRgb);
+            gl.GetInteger(GLEnum.BlendDstRgb, out int blendDstRgb);
+            gl.GetInteger(GLEnum.BlendSrcAlpha, out int blendSrcAlpha);
+            gl.GetInteger(GLEnum.BlendDstAlpha, out int blendDstAlpha);
+            gl.GetInteger(GLEnum.BlendEquationRgb, out int blendEquationRgb);
+            gl.GetInteger(GLEnum.BlendEquationAlpha, out int blendEquationAlpha);
+            gl.GetInteger(GLEnum.UnpackAlignment, out int unpackAlignment);
+            return new GlStateSample(
+                currentProgram,
+                vertexArray,
+                arrayBuffer,
+                elementArrayBuffer,
+                drawFramebuffer,
+                readFramebuffer,
+                activeTexture,
+                textureBinding2D,
+                blendSrcRgb,
+                blendDstRgb,
+                blendSrcAlpha,
+                blendDstAlpha,
+                blendEquationRgb,
+                blendEquationAlpha,
+                unpackAlignment,
+                gl.IsEnabled(EnableCap.Blend),
+                gl.IsEnabled(EnableCap.DepthTest),
+                gl.IsEnabled(EnableCap.CullFace),
+                gl.IsEnabled(EnableCap.ScissorTest),
+                viewport[0],
+                viewport[1],
+                viewport[2],
+                viewport[3],
+                scissor[0],
+                scissor[1],
+                scissor[2],
+                scissor[3]);
         }
     }
 }

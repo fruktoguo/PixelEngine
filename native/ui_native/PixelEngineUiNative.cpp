@@ -23,6 +23,7 @@ namespace
 {
 constexpr int32_t ApiVersion = 1;
 constexpr int32_t EventCapacity = 256;
+constexpr int32_t MaxTrackedTextureUnits = 32;
 
 using PeUiGetProcAddress = void* (*)(void* user, const char* name);
 
@@ -101,6 +102,109 @@ struct PeUiGlResolver
 {
     PeUiGetProcAddress resolver;
     void* user;
+};
+
+class PeUiGlStateGuard final
+{
+public:
+    PeUiGlStateGuard()
+    {
+        glGetIntegerv(GL_CURRENT_PROGRAM, &program);
+        glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
+        glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &arrayBuffer);
+        glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &elementArrayBuffer);
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &drawFramebuffer);
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &readFramebuffer);
+        glGetIntegerv(GL_ACTIVE_TEXTURE, &activeTexture);
+        glGetIntegerv(GL_BLEND_SRC_RGB, &blendSrcRgb);
+        glGetIntegerv(GL_BLEND_DST_RGB, &blendDstRgb);
+        glGetIntegerv(GL_BLEND_SRC_ALPHA, &blendSrcAlpha);
+        glGetIntegerv(GL_BLEND_DST_ALPHA, &blendDstAlpha);
+        glGetIntegerv(GL_BLEND_EQUATION_RGB, &blendEquationRgb);
+        glGetIntegerv(GL_BLEND_EQUATION_ALPHA, &blendEquationAlpha);
+        glGetIntegerv(GL_UNPACK_ALIGNMENT, &unpackAlignment);
+        glGetIntegerv(GL_VIEWPORT, viewport);
+        glGetIntegerv(GL_SCISSOR_BOX, scissorBox);
+        glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &textureUnitCount);
+        textureUnitCount = std::max<GLint>(0, std::min<GLint>(textureUnitCount, MaxTrackedTextureUnits));
+
+        blendEnabled = glIsEnabled(GL_BLEND);
+        scissorEnabled = glIsEnabled(GL_SCISSOR_TEST);
+        depthEnabled = glIsEnabled(GL_DEPTH_TEST);
+        cullEnabled = glIsEnabled(GL_CULL_FACE);
+
+        for (GLint i = 0; i < textureUnitCount; i++)
+        {
+            glActiveTexture(static_cast<GLenum>(GL_TEXTURE0 + i));
+            glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture2D[i]);
+        }
+    }
+
+    PeUiGlStateGuard(const PeUiGlStateGuard&) = delete;
+    PeUiGlStateGuard& operator=(const PeUiGlStateGuard&) = delete;
+
+    ~PeUiGlStateGuard()
+    {
+        RestoreEnable(GL_BLEND, blendEnabled);
+        RestoreEnable(GL_SCISSOR_TEST, scissorEnabled);
+        RestoreEnable(GL_DEPTH_TEST, depthEnabled);
+        RestoreEnable(GL_CULL_FACE, cullEnabled);
+        glBlendFuncSeparate(blendSrcRgb, blendDstRgb, blendSrcAlpha, blendDstAlpha);
+        glBlendEquationSeparate(blendEquationRgb, blendEquationAlpha);
+        glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+        glScissor(scissorBox[0], scissorBox[1], scissorBox[2], scissorBox[3]);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, unpackAlignment);
+
+        for (GLint i = 0; i < textureUnitCount; i++)
+        {
+            glActiveTexture(static_cast<GLenum>(GL_TEXTURE0 + i));
+            glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(texture2D[i]));
+        }
+
+        glActiveTexture(static_cast<GLenum>(activeTexture));
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(drawFramebuffer));
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(readFramebuffer));
+        glBindBuffer(GL_ARRAY_BUFFER, static_cast<GLuint>(arrayBuffer));
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLuint>(elementArrayBuffer));
+        glBindVertexArray(static_cast<GLuint>(vertexArray));
+        glUseProgram(static_cast<GLuint>(program));
+    }
+
+private:
+    static void RestoreEnable(GLenum capability, GLboolean enabled)
+    {
+        if (enabled == GL_TRUE)
+        {
+            glEnable(capability);
+        }
+        else
+        {
+            glDisable(capability);
+        }
+    }
+
+    GLint program = 0;
+    GLint vertexArray = 0;
+    GLint arrayBuffer = 0;
+    GLint elementArrayBuffer = 0;
+    GLint drawFramebuffer = 0;
+    GLint readFramebuffer = 0;
+    GLint activeTexture = GL_TEXTURE0;
+    GLint blendSrcRgb = GL_ONE;
+    GLint blendDstRgb = GL_ZERO;
+    GLint blendSrcAlpha = GL_ONE;
+    GLint blendDstAlpha = GL_ZERO;
+    GLint blendEquationRgb = GL_FUNC_ADD;
+    GLint blendEquationAlpha = GL_FUNC_ADD;
+    GLint unpackAlignment = 4;
+    GLint viewport[4] = {};
+    GLint scissorBox[4] = {};
+    GLint textureUnitCount = 0;
+    GLint texture2D[MaxTrackedTextureUnits] = {};
+    GLboolean blendEnabled = GL_FALSE;
+    GLboolean scissorEnabled = GL_FALSE;
+    GLboolean depthEnabled = GL_FALSE;
+    GLboolean cullEnabled = GL_FALSE;
 };
 
 GLADapiproc LoadGlFromHost(void* user, const char* name)
@@ -771,6 +875,7 @@ PE_UI_NATIVE_API void peui_native_render(PeUiRenderer* renderer)
         return;
     }
 
+    PeUiGlStateGuard state;
     renderer->renderer->BeginFrame();
     renderer->context->Render();
     renderer->renderer->EndFrame();
