@@ -26,9 +26,10 @@ internal static class ManagedUiLayout
         XDocument document = XDocument.Load(source.Path, LoadOptions.None);
         XElement root = document.Root ?? throw new InvalidDataException("UI 文档缺少根节点。");
         string title = ReadAttribute(root, "title") ?? Path.GetFileNameWithoutExtension(source.Path);
+        ManagedUiBox rootBox = ReadBox(root);
         List<ManagedUiControl> controls = new(Math.Min(maxControls, 16));
         CollectControls(root, controls, maxControls);
-        return new ManagedUiDocument(handle, source, title, [.. controls]);
+        return new ManagedUiDocument(handle, source, title, rootBox, [.. controls]);
     }
 
     private static void CollectControls(XElement element, List<ManagedUiControl> controls, int maxControls)
@@ -138,6 +139,62 @@ internal static class ManagedUiLayout
             element.Value.Trim();
     }
 
+    private static ManagedUiBox ReadBox(XElement element)
+    {
+        string? style = ReadAttribute(element, "style");
+        return new ManagedUiBox(
+            ReadFloat(element, style, "x", "left"),
+            ReadFloat(element, style, "y", "top"),
+            ReadFloat(element, style, "width", "width"),
+            ReadFloat(element, style, "height", "height"));
+    }
+
+    private static float? ReadFloat(XElement element, string? style, string attributeName, string cssName)
+    {
+        if (TryReadFloat(ReadAttribute(element, attributeName), out float value) ||
+            TryReadFloat(ReadAttribute(element, "data-" + attributeName), out value) ||
+            TryReadFloat(ReadStyleProperty(style, cssName), out value))
+        {
+            return value;
+        }
+
+        return null;
+    }
+
+    private static string? ReadStyleProperty(string? style, string name)
+    {
+        if (string.IsNullOrWhiteSpace(style))
+        {
+            return null;
+        }
+
+        ReadOnlySpan<char> remaining = style.AsSpan();
+        while (!remaining.IsEmpty)
+        {
+            int separator = remaining.IndexOf(';');
+            ReadOnlySpan<char> item = separator >= 0 ? remaining[..separator] : remaining;
+            int colon = item.IndexOf(':');
+            if (colon > 0)
+            {
+                ReadOnlySpan<char> key = item[..colon].Trim();
+                ReadOnlySpan<char> value = item[(colon + 1)..].Trim();
+                if (key.Equals(name.AsSpan(), StringComparison.OrdinalIgnoreCase))
+                {
+                    return value.ToString();
+                }
+            }
+
+            if (separator < 0)
+            {
+                break;
+            }
+
+            remaining = remaining[(separator + 1)..];
+        }
+
+        return null;
+    }
+
     private static string? ReadAttribute(XElement element, string name)
     {
         XAttribute? attribute = element.Attribute(name);
@@ -164,6 +221,24 @@ internal static class ManagedUiLayout
     private static bool TryReadDouble(string? value, out double result)
     {
         return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out result);
+    }
+
+    private static bool TryReadFloat(string? value, out float result)
+    {
+        result = 0f;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        string trimmed = value.Trim();
+        if (trimmed.EndsWith("px", StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed[..^2].Trim();
+        }
+
+        return float.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out result) &&
+            float.IsFinite(result);
     }
 
     private static bool StringEquals(string? left, string? right)
