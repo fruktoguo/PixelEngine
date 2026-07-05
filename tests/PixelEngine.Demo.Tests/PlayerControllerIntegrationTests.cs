@@ -198,6 +198,73 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证 MissionDirector 通过 Core 事件总线订阅 MineYield，维护水晶进度、胜利状态与计分。
+    /// </summary>
+    [Fact]
+    public void MissionDirectorCollectsMineYieldAndScoresExtraction()
+    {
+        using Engine engine = CreateManualScriptEngine(
+            out _,
+            out _,
+            out _,
+            out ScriptScene scene,
+            DemoMaterials(),
+            contentRoot: DemoContentRoot());
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 12f;
+        _ = entity.AddComponent<PlayerHealth>();
+        _ = entity.AddComponent<WeaponController>();
+        MissionDirector mission = entity.AddComponent<MissionDirector>();
+        mission.RequiredCrystals = 3;
+        mission.TimeLimitSeconds = 60f;
+        mission.InitialLavaSurfaceY = 60f;
+        mission.LavaRiseCellsPerSecond = 0f;
+
+        engine.RunHeadlessTicks(1);
+
+        Assert.True(engine.Context.Events.Channel<MineYieldEvent>().TryEnqueue(new MineYieldEvent(20, 20, 1, 2)));
+        Assert.True(engine.Context.Events.Channel<MineYieldEvent>().TryEnqueue(new MineYieldEvent(21, 20, 1, 2)));
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(3, mission.CrystalsCollected);
+        Assert.Equal(MissionState.Playing, mission.State);
+
+        mission.MarkExtractionReached();
+
+        Assert.Equal(MissionState.Won, mission.State);
+        Assert.Equal("extraction_reached", mission.ResultReason);
+        Assert.True(mission.Score > 0);
+        Assert.True(mission.RemainingSeconds > 0f);
+    }
+
+    /// <summary>
+    /// 验证 MissionDirector 会按时限判负，并记录明确失败原因。
+    /// </summary>
+    [Fact]
+    public void MissionDirectorLosesWhenTimeLimitExpires()
+    {
+        using Engine engine = CreateManualScriptEngine(out _, out _, out _, out ScriptScene scene, DemoMaterials());
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 12f;
+        _ = entity.AddComponent<PlayerHealth>();
+        MissionDirector mission = entity.AddComponent<MissionDirector>();
+        mission.TimeLimitSeconds = 0.01f;
+        mission.InitialLavaSurfaceY = 60f;
+        mission.LavaRiseCellsPerSecond = 0f;
+
+        engine.RunHeadlessTicks(2);
+
+        Assert.Equal(MissionState.Lost, mission.State);
+        Assert.Equal("time_limit", mission.ResultReason);
+    }
+
+    /// <summary>
     /// 验证 PlayerHealth 会按玩家 AABB 采样危险材质，造成伤害、喷粒子、播放受击音效并在死亡后重生。
     /// </summary>
     [Fact]
@@ -830,6 +897,70 @@ public sealed class PlayerControllerIntegrationTests
             engine.RunHeadlessTicks(1);
             Assert.Equal(fireCountBeforeLaser + 1, weapons.PrimaryFireCount);
             Assert.Equal(ammoAfterOverheatShot, weapons.CurrentAmmo);
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// 验证 Excavator 清除带 MineYield 的材质时会发布采矿事件，并由 MissionDirector 计入目标进度。
+    /// </summary>
+    [Fact]
+    public void WeaponControllerExcavatorPublishesMineYieldEvent()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                {
+                  "id": "test-excavator",
+                  "displayName": "Test Excavator",
+                  "kind": "excavator",
+                  "damage": 0,
+                  "radius": 2,
+                  "falloff": "none",
+                  "cooldownSeconds": 0,
+                  "ammoMax": 3,
+                  "impactCue": "impact_stone"
+                }
+              ]
+            }
+            """);
+        try
+        {
+            MaterialTable materials = MissionMaterials();
+            Assert.True(materials.TryGetId("crystal", out ushort crystal));
+            using Engine engine = CreateManualScriptEngine(
+                out ScriptInputApi input,
+                out CellGrid grid,
+                out _,
+                out ScriptScene scene,
+                materials,
+                contentRoot: contentRoot);
+            FillRect(grid, crystal, minX: 34, minY: 30, maxX: 39, maxY: 37);
+            Entity entity = scene.CreateEntity();
+            _ = entity.AddComponent<Transform>();
+            PlayerController player = entity.AddComponent<PlayerController>();
+            player.SpawnX = 14f;
+            player.SpawnY = 30f;
+            _ = entity.AddComponent<PlayerHealth>();
+            WeaponController weapons = entity.AddComponent<WeaponController>();
+            MissionDirector mission = entity.AddComponent<MissionDirector>();
+            mission.RequiredCrystals = 3;
+            mission.InitialLavaSurfaceY = 60f;
+            mission.LavaRiseCellsPerSecond = 0f;
+
+            engine.RunHeadlessTicks(2);
+            input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+            input.Update([], [], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+
+            Assert.Equal(WeaponKind.Excavator, weapons.LastDispatchedKind);
+            Assert.True(mission.CrystalsCollected > 0);
+            Assert.Equal((ushort)0, grid.MaterialAt(36, 34));
         }
         finally
         {
@@ -1613,6 +1744,66 @@ public sealed class PlayerControllerIntegrationTests
             ("ice", CellType.Solid),
             ("metal", CellType.Solid),
             ("ash", CellType.Powder));
+    }
+
+    private static MaterialTable MissionMaterials()
+    {
+        MaterialDef[] materials =
+        [
+            new()
+            {
+                Id = 0,
+                Name = "empty",
+                Type = CellType.Empty,
+                HeatCapacity = 1,
+                HeatConduct = byte.MaxValue,
+                TextureId = -1,
+            },
+            new()
+            {
+                Id = 1,
+                Name = "crystal",
+                Type = CellType.Solid,
+                Density = 160,
+                HeatCapacity = 1,
+                HeatConduct = byte.MaxValue,
+                TextureId = -1,
+                Integrity = 20,
+                MineYield = 1,
+                BaseColorBGRA = 0xFF_A0_FF_FF,
+            },
+            new()
+            {
+                Id = 2,
+                Name = "lava",
+                Type = CellType.Liquid,
+                Density = 170,
+                HeatCapacity = 1,
+                HeatConduct = byte.MaxValue,
+                TextureId = -1,
+            },
+            new()
+            {
+                Id = 3,
+                Name = "fire",
+                Type = CellType.Fire,
+                Density = 1,
+                HeatCapacity = 1,
+                HeatConduct = byte.MaxValue,
+                TextureId = -1,
+            },
+            new()
+            {
+                Id = 4,
+                Name = "acid",
+                Type = CellType.Liquid,
+                Density = 95,
+                HeatCapacity = 1,
+                HeatConduct = byte.MaxValue,
+                TextureId = -1,
+            },
+        ];
+        return new MaterialTable(materials);
     }
 
     private sealed class NoOpAudioApi : IAudioApi

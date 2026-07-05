@@ -36,6 +36,7 @@ public readonly record struct CellView(MaterialId Material, byte Flags, byte Lif
 /// <param name="LegendCategory">材质图例分组。</param>
 /// <param name="LegendVisible">是否应在玩家图例中显示。</param>
 /// <param name="BaseColorBgra">材质代表色，BGRA8。</param>
+/// <param name="MineYield">采矿 / 目标收集时每个 cell 贡献的收益。</param>
 public readonly record struct MaterialInfo(
     MaterialId Id,
     string Name,
@@ -44,7 +45,8 @@ public readonly record struct MaterialInfo(
     string DisplayName = "",
     string LegendCategory = "",
     bool LegendVisible = true,
-    uint BaseColorBgra = 0);
+    uint BaseColorBgra = 0,
+    byte MineYield = 0);
 
 /// <summary>
 /// 像素 raycast 的命中结果。

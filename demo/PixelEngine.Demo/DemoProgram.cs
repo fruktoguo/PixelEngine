@@ -41,6 +41,7 @@ public static class DemoProgram
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(LevelDirector))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(MaterialBrush))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(MaterialEmitter))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(MissionDirector))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PauseMenu))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayableHud))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayableProjectileTool))]

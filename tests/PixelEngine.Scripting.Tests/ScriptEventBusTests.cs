@@ -29,6 +29,24 @@ public sealed class ScriptEventBusTests
     }
 
     /// <summary>
+    /// 验证脚本事件发布写入同一 Core 事件通道，并在后续 drain 时分发给订阅者。
+    /// </summary>
+    [Fact]
+    public void ScriptEventBusPublishesToCoreChannel()
+    {
+        EventBus coreEvents = new(capacityPerChannel: 8);
+        using ScriptEventBus scriptEvents = new(coreEvents);
+        List<int> values = [];
+        _ = scriptEvents.Subscribe<TestEvent>(item => values.Add(item.Value));
+        TestEvent item = new(19);
+
+        Assert.True(scriptEvents.TryPublish(in item));
+        scriptEvents.DrainEvents();
+
+        Assert.Equal([19], values);
+    }
+
+    /// <summary>
     /// 验证 ScriptRuntime.Update 会在 Behaviour OnUpdate 前排空脚本事件。
     /// </summary>
     [Fact]

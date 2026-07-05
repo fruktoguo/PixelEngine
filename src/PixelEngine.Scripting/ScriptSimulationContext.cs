@@ -636,7 +636,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 string.IsNullOrWhiteSpace(material.DisplayName) ? material.Name : material.DisplayName,
                 material.LegendCategory.ToString(),
                 material.LegendVisible,
-                material.BaseColorBGRA);
+                material.BaseColorBGRA,
+                material.MineYield);
         }
     }
 
