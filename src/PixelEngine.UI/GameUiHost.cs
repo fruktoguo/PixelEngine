@@ -168,6 +168,17 @@ public sealed class GameUiHost : IDisposable
     }
 
     /// <summary>
+    /// 抽取 UI 到游戏的事件。
+    /// </summary>
+    /// <param name="destination">事件写入缓冲。</param>
+    /// <returns>写入事件数量。</returns>
+    public int DrainEvents(Span<UiEvent> destination)
+    {
+        ThrowIfDisposed();
+        return Options.Enabled && _initialized ? _backend.DrainEvents(destination) : 0;
+    }
+
+    /// <summary>
     /// 合成 UI 到当前渲染管线的 present 层。
     /// </summary>
     /// <param name="context">渲染管线提供的 UI present 上下文。</param>
