@@ -488,6 +488,31 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证爆破工具的直接点光源与闪光光源都只存在于有限生命周期内，不会作为爆炸特效残留。
+    /// </summary>
+    [Fact]
+    public void ExplosiveToolExplosionLightDoesNotPersist()
+    {
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out _, out _, out ScriptScene scene, DemoMaterials());
+        ExplosiveTool tool = scene.CreateEntity().AddComponent<ExplosiveTool>();
+        tool.Radius = 5;
+        tool.Force = 20f;
+        tool.CooldownSeconds = 0f;
+
+        input.Update([], [MouseButton.Middle], mouseX: 12.25f, mouseY: 12.75f, wheelY: 0f);
+        engine.RunHeadlessTicks(1, realDeltaSeconds: 1.0 / 60.0);
+
+        ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
+        Assert.True(lighting.PointLights.Length >= 1);
+
+        input.Update([], [], mouseX: 12.25f, mouseY: 12.75f, wheelY: 0f);
+        engine.RunHeadlessTicks(6, realDeltaSeconds: 1.0 / 15.0);
+
+        Assert.Equal(0, lighting.PointLights.Length);
+        Assert.Equal(1, tool.ExplosionCount);
+    }
+
+    /// <summary>
     /// 验证 Demo 爆破工具会通过公开 World.Explode 链路对邻近刚体施加径向冲量。
     /// </summary>
     [Fact]
