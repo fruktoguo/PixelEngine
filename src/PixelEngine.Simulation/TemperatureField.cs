@@ -47,8 +47,12 @@ public sealed class TemperatureField
 
     private const int MinConductRowsPerJob = BlockSize;
     private const int MinParallelConductRows = EngineConstants.SingleThreadChunkThreshold * BlockSize;
+    private const float AmbientTemperatureCelsius = 0f;
+    private const float AmbientCoolingPerStep = 3f;
+    private const float AmbientTemperatureEpsilon = 0.01f;
 
     private readonly Dictionary<ChunkCoord, TemperatureBlock> _blocks = [];
+    private readonly ChunkCoord[] _inactiveBlockBuffer = GC.AllocateArray<ChunkCoord>(128, pinned: true);
     private Chunk[] _conductChunks = [];
     private TemperatureBlock[] _conductBlocks = [];
     private int[] _conductWorkerHits = [];
@@ -295,6 +299,52 @@ public sealed class TemperatureField
         foreach (TemperatureBlock block in _blocks.Values)
         {
             block.Swap();
+        }
+
+        CoolTowardAmbientAndPrune();
+    }
+
+    private void CoolTowardAmbientAndPrune()
+    {
+        foreach (TemperatureBlock block in _blocks.Values)
+        {
+            block.CoolTowardAmbient(AmbientTemperatureCelsius, AmbientCoolingPerStep, AmbientTemperatureEpsilon);
+        }
+
+        PruneAmbientBlocks();
+    }
+
+    private void PruneAmbientBlocks()
+    {
+        while (true)
+        {
+            int count = 0;
+            foreach (KeyValuePair<ChunkCoord, TemperatureBlock> item in _blocks)
+            {
+                if (item.Value.IsAmbient(AmbientTemperatureCelsius, AmbientTemperatureEpsilon))
+                {
+                    _inactiveBlockBuffer[count++] = item.Key;
+                    if (count == _inactiveBlockBuffer.Length)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            if (count == 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < count; i++)
+            {
+                _ = _blocks.Remove(_inactiveBlockBuffer[i]);
+            }
+
+            if (count < _inactiveBlockBuffer.Length)
+            {
+                return;
+            }
         }
     }
 
@@ -774,6 +824,62 @@ public sealed class TemperatureField
             }
 
             (_currentHalf, _scratchHalf) = (_scratchHalf, _currentHalf);
+        }
+
+        public void CoolTowardAmbient(float ambient, float coolingPerStep, float epsilon)
+        {
+            if (StorageKind == TemperatureStorageKind.Float32)
+            {
+                Span<float> current = _currentFloat;
+                for (int i = 0; i < current.Length; i++)
+                {
+                    current[i] = CoolValue(current[i], ambient, coolingPerStep, epsilon);
+                }
+
+                return;
+            }
+
+            Span<Half> currentHalf = _currentHalf;
+            for (int i = 0; i < currentHalf.Length; i++)
+            {
+                currentHalf[i] = (Half)CoolValue((float)currentHalf[i], ambient, coolingPerStep, epsilon);
+            }
+        }
+
+        public bool IsAmbient(float ambient, float epsilon)
+        {
+            if (StorageKind == TemperatureStorageKind.Float32)
+            {
+                ReadOnlySpan<float> current = _currentFloat;
+                for (int i = 0; i < current.Length; i++)
+                {
+                    if (MathF.Abs(current[i] - ambient) > epsilon)
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            ReadOnlySpan<Half> currentHalf = _currentHalf;
+            for (int i = 0; i < currentHalf.Length; i++)
+            {
+                if (MathF.Abs((float)currentHalf[i] - ambient) > epsilon)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static float CoolValue(float value, float ambient, float coolingPerStep, float epsilon)
+        {
+            float delta = value - ambient;
+            return MathF.Abs(delta) <= MathF.Max(epsilon, coolingPerStep)
+                ? ambient
+                : value - (MathF.Sign(delta) * coolingPerStep);
         }
     }
 }

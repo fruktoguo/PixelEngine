@@ -167,10 +167,10 @@ public sealed class TemperatureFieldTests
     }
 
     /// <summary>
-    /// 验证 HeatConduct=0 时概率 gate 阻止热传导。
+    /// 验证 HeatConduct=0 时概率 gate 阻止热传导，但环境冷却仍会让临时热量衰减。
     /// </summary>
     [Fact]
-    public void ConductStepHonorsZeroHeatConductProbability()
+    public void ConductStepHonorsZeroHeatConductProbabilityAndAmbientCooling()
     {
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Fill(center, Water);
@@ -180,8 +180,31 @@ public sealed class TemperatureFieldTests
 
         field.ConductStep(source, materials.Hot, frameIndex: 7, worldSeed: 11);
 
-        Assert.Equal(100, field.GetTemperature(32, 32));
+        Assert.Equal(97, field.GetTemperature(32, 32));
         Assert.Equal(0, field.GetTemperature(28, 32));
+    }
+
+    /// <summary>
+    /// 验证短时武器/爆炸注热会随温度 pass 回落到环境温度，并移除活动温度块。
+    /// </summary>
+    [Fact]
+    public void AmbientCoolingPrunesExpiredTemperatureGlowBlocks()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Fill(center, Water);
+        MaterialTable materials = CreateMaterials(waterHeatConduct: 0);
+        TemperatureField field = new(storageKind: TemperatureStorageKind.Float32);
+        field.AddHeat(32, 32, 90);
+
+        Assert.True(field.HasActiveBlocks);
+
+        for (int i = 0; i < 30; i++)
+        {
+            field.ConductStep(source, materials.Hot, frameIndex: (uint)i, worldSeed: 17);
+        }
+
+        Assert.False(field.HasActiveBlocks);
+        Assert.Equal(0, field.GetTemperature(32, 32));
     }
 
     /// <summary>
