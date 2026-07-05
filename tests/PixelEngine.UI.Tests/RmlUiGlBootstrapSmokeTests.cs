@@ -68,6 +68,13 @@ public sealed class RmlUiGlBootstrapSmokeTests
 
             UiDocumentHandle document = backend.LoadDocument(UiDocumentSource.Asset(documentPath, 1));
             backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(1), new UiScreenId(1), document, Modal: false)]);
+            backend.FeedPointerMove(20, 24);
+            backend.FeedPointerButton(UiPointerButton.Left, isDown: true);
+            backend.FeedPointerButton(UiPointerButton.Left, isDown: false);
+            backend.FeedScroll(0, 1);
+            backend.FeedKey(new UiKey(65), isDown: true, UiKeyModifiers.Control);
+            backend.FeedKey(new UiKey(65), isDown: false, UiKeyModifiers.Control);
+            backend.FeedText("a");
             backend.Update(1f / 60f);
 
             UiPresentContext context = default;

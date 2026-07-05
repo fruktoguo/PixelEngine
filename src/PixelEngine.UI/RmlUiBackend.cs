@@ -8,9 +8,34 @@ namespace PixelEngine.UI;
 /// </summary>
 public sealed unsafe class RmlUiBackend : IGameUiBackend
 {
+    private const int MaxStackTextBytes = 4096;
+    private const int RmlKeyUnknown = 0;
+    private const int RmlKeySpace = 1;
+    private const int RmlKey0 = 2;
+    private const int RmlKeyA = 12;
+    private const int RmlKeyBackspace = 69;
+    private const int RmlKeyTab = 70;
+    private const int RmlKeyReturn = 72;
+    private const int RmlKeyEscape = 81;
+    private const int RmlKeyPageUp = 86;
+    private const int RmlKeyPageDown = 87;
+    private const int RmlKeyEnd = 88;
+    private const int RmlKeyHome = 89;
+    private const int RmlKeyLeft = 90;
+    private const int RmlKeyUp = 91;
+    private const int RmlKeyRight = 92;
+    private const int RmlKeyDown = 93;
+    private const int RmlKeyInsert = 98;
+    private const int RmlKeyDelete = 99;
+    private const int RmlModifierControl = 1 << 0;
+    private const int RmlModifierShift = 1 << 1;
+    private const int RmlModifierAlt = 1 << 2;
+    private const int RmlModifierMeta = 1 << 3;
+
     private readonly RenderWindow _window;
     private readonly NativeDocument[] _documents;
     private readonly UiScreenStackEntry[] _visibleScreens;
+    private UiKeyModifiers _lastModifiers;
     private IntPtr _renderer;
     private int _documentCount;
     private int _visibleScreenCount;
@@ -176,26 +201,84 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
     /// <inheritdoc />
     public void FeedPointerMove(float x, float y)
     {
+        ThrowIfDisposed();
+        EnsureInitialized();
+        if (!float.IsFinite(x) || !float.IsFinite(y))
+        {
+            return;
+        }
+
+        _ = RmlUiNative.ProcessMouseMove(
+            _renderer,
+            (int)MathF.Round(x),
+            (int)MathF.Round(y),
+            ToRmlModifiers(_lastModifiers));
+        Dirty = true;
     }
 
     /// <inheritdoc />
     public void FeedPointerButton(UiPointerButton button, bool isDown)
     {
+        ThrowIfDisposed();
+        EnsureInitialized();
+        _ = RmlUiNative.ProcessMouseButton(_renderer, (int)button, isDown ? 1 : 0, ToRmlModifiers(_lastModifiers));
+        Dirty = true;
     }
 
     /// <inheritdoc />
     public void FeedScroll(float deltaX, float deltaY)
     {
+        ThrowIfDisposed();
+        EnsureInitialized();
+        if (!float.IsFinite(deltaX) || !float.IsFinite(deltaY))
+        {
+            return;
+        }
+
+        _ = RmlUiNative.ProcessMouseWheel(_renderer, deltaX, deltaY, ToRmlModifiers(_lastModifiers));
+        Dirty = true;
     }
 
     /// <inheritdoc />
     public void FeedKey(UiKey key, bool isDown, UiKeyModifiers modifiers)
     {
+        ThrowIfDisposed();
+        EnsureInitialized();
+        _lastModifiers = modifiers;
+        int rmlKey = ToRmlKey(key);
+        if (rmlKey == RmlKeyUnknown)
+        {
+            return;
+        }
+
+        _ = RmlUiNative.ProcessKey(_renderer, rmlKey, isDown ? 1 : 0, ToRmlModifiers(modifiers));
+        Dirty = true;
     }
 
     /// <inheritdoc />
     public void FeedText(ReadOnlySpan<char> text)
     {
+        ThrowIfDisposed();
+        EnsureInitialized();
+        if (text.IsEmpty)
+        {
+            return;
+        }
+
+        int byteCount = Encoding.UTF8.GetByteCount(text);
+        if (byteCount > MaxStackTextBytes)
+        {
+            throw new ArgumentOutOfRangeException(nameof(text), "单帧 UI 文本输入超过 RmlUi 栈缓冲上限。");
+        }
+
+        Span<byte> utf8 = stackalloc byte[byteCount];
+        int written = Encoding.UTF8.GetBytes(text, utf8);
+        fixed (byte* pointer = utf8)
+        {
+            _ = RmlUiNative.ProcessTextUtf8(_renderer, pointer, written);
+        }
+
+        Dirty = true;
     }
 
     /// <inheritdoc />
@@ -295,6 +378,58 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         }
 
         return false;
+    }
+
+    private static int ToRmlModifiers(UiKeyModifiers modifiers)
+    {
+        int result = 0;
+        if ((modifiers & UiKeyModifiers.Control) != 0)
+        {
+            result |= RmlModifierControl;
+        }
+
+        if ((modifiers & UiKeyModifiers.Shift) != 0)
+        {
+            result |= RmlModifierShift;
+        }
+
+        if ((modifiers & UiKeyModifiers.Alt) != 0)
+        {
+            result |= RmlModifierAlt;
+        }
+
+        if ((modifiers & UiKeyModifiers.Super) != 0)
+        {
+            result |= RmlModifierMeta;
+        }
+
+        return result;
+    }
+
+    private static int ToRmlKey(UiKey key)
+    {
+        int value = key.Value;
+        return value switch
+        {
+            >= 48 and <= 57 => RmlKey0 + value - 48,
+            >= 65 and <= 90 => RmlKeyA + value - 65,
+            32 => RmlKeySpace,
+            256 => RmlKeyEscape,
+            257 => RmlKeyReturn,
+            258 => RmlKeyTab,
+            259 => RmlKeyBackspace,
+            260 => RmlKeyInsert,
+            261 => RmlKeyDelete,
+            262 => RmlKeyRight,
+            263 => RmlKeyLeft,
+            264 => RmlKeyDown,
+            265 => RmlKeyUp,
+            266 => RmlKeyPageUp,
+            267 => RmlKeyPageDown,
+            268 => RmlKeyHome,
+            269 => RmlKeyEnd,
+            _ => RmlKeyUnknown,
+        };
     }
 
     private void EnsureInitialized()

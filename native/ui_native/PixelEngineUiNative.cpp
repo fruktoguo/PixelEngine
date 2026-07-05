@@ -256,3 +256,61 @@ PE_UI_NATIVE_API void peui_native_render(PeUiRenderer* renderer)
     renderer->context->Render();
     renderer->renderer->EndFrame();
 }
+
+PE_UI_NATIVE_API int32_t peui_native_process_mouse_move(PeUiRenderer* renderer, int32_t x, int32_t y, int32_t modifiers)
+{
+    if (renderer == nullptr || renderer->context == nullptr)
+    {
+        return 0;
+    }
+
+    return renderer->context->ProcessMouseMove(x, y, modifiers) ? 1 : 0;
+}
+
+PE_UI_NATIVE_API int32_t peui_native_process_mouse_button(PeUiRenderer* renderer, int32_t button, int32_t is_down, int32_t modifiers)
+{
+    if (renderer == nullptr || renderer->context == nullptr || button < 0)
+    {
+        return 0;
+    }
+
+    const bool handled = is_down != 0
+        ? renderer->context->ProcessMouseButtonDown(button, modifiers)
+        : renderer->context->ProcessMouseButtonUp(button, modifiers);
+    return handled ? 1 : 0;
+}
+
+PE_UI_NATIVE_API int32_t peui_native_process_mouse_wheel(PeUiRenderer* renderer, float delta_x, float delta_y, int32_t modifiers)
+{
+    if (renderer == nullptr || renderer->context == nullptr)
+    {
+        return 0;
+    }
+
+    return renderer->context->ProcessMouseWheel(Rml::Vector2f{delta_x, delta_y}, modifiers) ? 1 : 0;
+}
+
+PE_UI_NATIVE_API int32_t peui_native_process_key(PeUiRenderer* renderer, int32_t key, int32_t is_down, int32_t modifiers)
+{
+    if (renderer == nullptr || renderer->context == nullptr || key <= Rml::Input::KI_UNKNOWN)
+    {
+        return 0;
+    }
+
+    const auto key_identifier = static_cast<Rml::Input::KeyIdentifier>(key);
+    const bool handled = is_down != 0
+        ? renderer->context->ProcessKeyDown(key_identifier, modifiers)
+        : renderer->context->ProcessKeyUp(key_identifier, modifiers);
+    return handled ? 1 : 0;
+}
+
+PE_UI_NATIVE_API int32_t peui_native_process_text_utf8(PeUiRenderer* renderer, const char* text, int32_t text_length)
+{
+    if (renderer == nullptr || renderer->context == nullptr || text == nullptr || text_length <= 0)
+    {
+        return 0;
+    }
+
+    Rml::String input(text, static_cast<size_t>(text_length));
+    return renderer->context->ProcessTextInput(input) ? 1 : 0;
+}
