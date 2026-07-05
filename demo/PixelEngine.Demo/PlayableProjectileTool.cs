@@ -166,19 +166,28 @@ public sealed class PlayableProjectileTool : Behaviour
         TracerRemainingSeconds = MathF.Max(0f, TracerRemainingSeconds - safeDt);
         if (InputEnabled && _cooldownRemaining <= 0f && Context.Input.IsMouseDown(MouseButton.Left))
         {
-            TryFire();
+            _ = TryFire();
         }
 
         ProcessPendingCollapseScanSafely();
     }
 
-    private void TryFire()
+    /// <summary>
+    /// 按当前鼠标目标立即发射一次破坏弹；供数据驱动武器控制器复用已验证的弹道与坍塌扫描后端。
+    /// </summary>
+    /// <returns>若成功发射则为 true。</returns>
+    public bool FireOnceFromCurrentInput()
+    {
+        return TryFire();
+    }
+
+    private bool TryFire()
     {
         if (_player is null)
         {
             if (!Entity.TryGetComponent<PlayerController>(out PlayerController player))
             {
-                return;
+                return false;
             }
 
             _player = player;
@@ -193,7 +202,7 @@ public sealed class PlayableProjectileTool : Behaviour
         float length = MathF.Sqrt((dx * dx) + (dy * dy));
         if (length <= 0.001f)
         {
-            return;
+            return false;
         }
 
         dx /= length;
@@ -218,6 +227,7 @@ public sealed class PlayableProjectileTool : Behaviour
         ShotsFired++;
         QueueCollapseScan(hitX, hitY);
         _cooldownRemaining = MathF.Max(0f, CooldownSeconds);
+        return true;
     }
 
     private void ProcessPendingCollapseScanSafely()

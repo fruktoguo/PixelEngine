@@ -1,0 +1,371 @@
+using PixelEngine.Scripting;
+
+namespace PixelEngine.Demo;
+
+/// <summary>
+/// 数据驱动武器控制器；负责切换、弹药、冷却、过热与左右键分派。
+/// </summary>
+public sealed class WeaponController : Behaviour
+{
+    private const float HeatCooldownPerSecond = 45f;
+    private const float LaserHeatPerSecond = 38f;
+    private const float OverheatLimit = 100f;
+    private const float OverheatRecoveryLimit = 35f;
+    private PlayerController? _player;
+    private PlayableProjectileTool? _projectile;
+
+    /// <summary>
+    /// 武器配置路径，相对 ContentRoot。
+    /// </summary>
+    public string CatalogPath { get; set; } = "weapons.json";
+
+    /// <summary>
+    /// 当前武器索引。
+    /// </summary>
+    public int SelectedIndex { get; private set; }
+
+    /// <summary>
+    /// 当前加载的武器目录。
+    /// </summary>
+    public WeaponCatalog? Catalog { get; private set; }
+
+    /// <summary>
+    /// 每个武器的剩余弹药。
+    /// </summary>
+    public int[] Ammo { get; private set; } = [];
+
+    /// <summary>
+    /// 当前武器 id。
+    /// </summary>
+    public string SelectedWeaponId => CurrentWeapon?.Id ?? string.Empty;
+
+    /// <summary>
+    /// 当前武器剩余弹药。
+    /// </summary>
+    public int CurrentAmmo => Ammo.Length == 0 ? 0 : Ammo[SelectedIndex];
+
+    /// <summary>
+    /// 当前武器热量。
+    /// </summary>
+    public float Heat { get; private set; }
+
+    /// <summary>
+    /// 当前武器剩余冷却时间。
+    /// </summary>
+    public float CooldownRemaining { get; private set; }
+
+    /// <summary>
+    /// 当前武器剩余换弹时间。
+    /// </summary>
+    public float ReloadRemaining { get; private set; }
+
+    /// <summary>
+    /// 是否正在换弹。
+    /// </summary>
+    public bool IsReloading => ReloadRemaining > 0f;
+
+    /// <summary>
+    /// 是否过热。
+    /// </summary>
+    public bool IsOverheated { get; private set; }
+
+    /// <summary>
+    /// 左键成功分派次数。
+    /// </summary>
+    public int PrimaryFireCount { get; private set; }
+
+    /// <summary>
+    /// 右键成功分派次数。
+    /// </summary>
+    public int SecondaryFireCount { get; private set; }
+
+    /// <summary>
+    /// 最近一次分派的武器类型。
+    /// </summary>
+    public WeaponKind LastDispatchedKind { get; private set; }
+
+    private WeaponDefinition? CurrentWeapon => Catalog is { Weapons.Length: > 0 } catalog
+        ? catalog.Weapons[SelectedIndex]
+        : null;
+
+    /// <inheritdoc />
+    protected override void OnStart()
+    {
+        ResolveComponents();
+        LoadCatalog();
+    }
+
+    /// <inheritdoc />
+    protected override void OnUpdate(float dt)
+    {
+        float safeDt = MathF.Max(0f, dt);
+        LoadCatalog();
+        CoolDown(safeDt);
+        HandleSelection();
+        HandleReload(safeDt);
+        if (CurrentWeapon is null || IsReloading)
+        {
+            return;
+        }
+
+        if (Context.Input.WasPressed(Key.R))
+        {
+            BeginReload(CurrentWeapon);
+            return;
+        }
+
+        if (Context.Input.IsMouseDown(MouseButton.Left))
+        {
+            TryDispatch(CurrentWeapon, secondary: false, safeDt);
+        }
+
+        if (Context.Input.WasMousePressed(MouseButton.Right))
+        {
+            TryDispatch(CurrentWeapon, secondary: true, safeDt);
+        }
+    }
+
+    private void LoadCatalog()
+    {
+        if (Catalog is not null)
+        {
+            return;
+        }
+
+        Catalog = Context.Config.Load(CatalogPath, DemoConfigJsonContext.Default.WeaponCatalog);
+        if (Catalog.Weapons.Length == 0)
+        {
+            throw new InvalidOperationException("武器目录不能为空。");
+        }
+
+        Ammo = new int[Catalog.Weapons.Length];
+        for (int i = 0; i < Ammo.Length; i++)
+        {
+            Ammo[i] = Math.Max(0, Catalog.Weapons[i].AmmoMax);
+        }
+    }
+
+    private void CoolDown(float dt)
+    {
+        CooldownRemaining = MathF.Max(0f, CooldownRemaining - dt);
+        Heat = MathF.Max(0f, Heat - (HeatCooldownPerSecond * dt));
+        if (IsOverheated && Heat <= OverheatRecoveryLimit)
+        {
+            IsOverheated = false;
+        }
+    }
+
+    private void HandleSelection()
+    {
+        if (Catalog is null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < Math.Min(6, Catalog.Weapons.Length); i++)
+        {
+            if (Context.Input.WasPressed((Key)((int)Key.Digit1 + i)))
+            {
+                Select(i);
+                return;
+            }
+        }
+
+        float wheel = Context.Input.MouseWheelY;
+        if (wheel > 0f)
+        {
+            Select((SelectedIndex + Catalog.Weapons.Length - 1) % Catalog.Weapons.Length);
+        }
+        else if (wheel < 0f)
+        {
+            Select((SelectedIndex + 1) % Catalog.Weapons.Length);
+        }
+    }
+
+    private void Select(int index)
+    {
+        if (Catalog is null || (uint)index >= (uint)Catalog.Weapons.Length)
+        {
+            return;
+        }
+
+        SelectedIndex = index;
+        ReloadRemaining = 0f;
+        CooldownRemaining = 0f;
+    }
+
+    private void HandleReload(float dt)
+    {
+        if (ReloadRemaining <= 0f || CurrentWeapon is null)
+        {
+            return;
+        }
+
+        ReloadRemaining = MathF.Max(0f, ReloadRemaining - dt);
+        if (ReloadRemaining == 0f)
+        {
+            Ammo[SelectedIndex] = Math.Max(0, CurrentWeapon.AmmoMax);
+        }
+    }
+
+    private void BeginReload(WeaponDefinition weapon)
+    {
+        if (weapon.ReloadSeconds <= 0f || CurrentAmmo >= weapon.AmmoMax)
+        {
+            return;
+        }
+
+        ReloadRemaining = weapon.ReloadSeconds;
+    }
+
+    private void TryDispatch(WeaponDefinition weapon, bool secondary, float dt)
+    {
+        if (CooldownRemaining > 0f || IsOverheated || CurrentAmmo <= 0)
+        {
+            return;
+        }
+
+        bool dispatched = TryDispatchViaProjectileBackend(weapon, secondary);
+        if (!dispatched)
+        {
+            Dispatch(weapon, secondary, dt);
+            dispatched = true;
+        }
+
+        if (!dispatched)
+        {
+            return;
+        }
+
+        Ammo[SelectedIndex] = Math.Max(0, Ammo[SelectedIndex] - 1);
+        CooldownRemaining = MathF.Max(0f, weapon.CooldownSeconds);
+        if (weapon.Kind == WeaponKind.Laser)
+        {
+            Heat = MathF.Min(OverheatLimit, Heat + MathF.Max(weapon.HeatPerCell, LaserHeatPerSecond * dt));
+            if (Heat >= OverheatLimit)
+            {
+                IsOverheated = true;
+            }
+        }
+
+        LastDispatchedKind = weapon.Kind;
+        if (secondary)
+        {
+            SecondaryFireCount++;
+        }
+        else
+        {
+            PrimaryFireCount++;
+        }
+    }
+
+    private void Dispatch(WeaponDefinition weapon, bool secondary, float dt)
+    {
+        _ = secondary;
+        Point2F target = Context.Camera.ScreenToWorld(Context.Input.MousePixel.X, Context.Input.MousePixel.Y);
+        Point2F origin = ResolveMuzzle();
+        float dx = target.X - origin.X;
+        float dy = target.Y - origin.Y;
+        float length = MathF.Sqrt((dx * dx) + (dy * dy));
+        if (length <= 0.001f)
+        {
+            dx = 1f;
+            dy = 0f;
+            length = 1f;
+        }
+
+        dx /= length;
+        dy /= length;
+        float hitX = target.X;
+        float hitY = target.Y;
+        if (Context.Solids.Raycast(origin.X, origin.Y, dx, dy, 220f, out RaycastHit hit))
+        {
+            hitX = hit.X;
+            hitY = hit.Y;
+        }
+
+        switch (weapon.Kind)
+        {
+            case WeaponKind.SingleShot:
+                Context.World.DamageCircle(hitX, hitY, Math.Max(1, weapon.Radius), weapon.Damage, weapon.Falloff != WeaponFalloff.None);
+                break;
+            case WeaponKind.Bomb:
+            case WeaponKind.Grenade:
+                Context.World.DamageCircle(hitX, hitY, Math.Max(1, weapon.Radius), weapon.Damage, weapon.Falloff != WeaponFalloff.None);
+                break;
+            case WeaponKind.Laser:
+                Context.World.DamageBeam(origin.X, origin.Y, dx, dy, Math.Max(1, (int)MathF.Ceiling(length)), MathF.Max(1f, weapon.BeamDps * MathF.Max(dt, 1f / 60f)));
+                break;
+            case WeaponKind.Excavator:
+                Context.Cells.Paint((int)MathF.Round(hitX), (int)MathF.Round(hitY), Math.Max(1, weapon.Radius), new MaterialId(0));
+                break;
+            case WeaponKind.Builder:
+                MaterialId material = Context.Materials.Resolve(weapon.SpawnMaterial);
+                if (material != MaterialId.Invalid)
+                {
+                    Context.Cells.Paint((int)MathF.Round(hitX), (int)MathF.Round(hitY), Math.Max(1, weapon.Radius), material);
+                }
+
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(weapon), weapon.Kind, "未知武器类型。");
+        }
+
+        if (!secondary && !string.IsNullOrWhiteSpace(weapon.ImpactCue))
+        {
+            Context.Audio.PlayAt(ToCuePath(weapon.ImpactCue), hitX, hitY, 0.7f);
+        }
+    }
+
+    private bool TryDispatchViaProjectileBackend(WeaponDefinition weapon, bool secondary)
+    {
+        if (secondary || weapon.Kind != WeaponKind.SingleShot)
+        {
+            return false;
+        }
+
+        ResolveComponents();
+        if (_projectile is null)
+        {
+            return false;
+        }
+
+        _projectile.ImpactRadius = Math.Max(1, weapon.Radius);
+        _projectile.ImpactForce = Math.Max(1f, weapon.Impulse);
+        _projectile.CooldownSeconds = Math.Max(0f, weapon.CooldownSeconds);
+        _projectile.TracerDurationSeconds = Math.Clamp(weapon.TracerDuration, 0f, 0.25f);
+        return _projectile.FireOnceFromCurrentInput();
+    }
+
+    private Point2F ResolveMuzzle()
+    {
+        ResolveComponents();
+        return _player is null
+            ? Context.Camera.ScreenToWorld(Context.Input.MousePixel.X, Context.Input.MousePixel.Y)
+            : new Point2F(_player.CenterX, _player.CenterY - 2f);
+    }
+
+    private void ResolveComponents()
+    {
+        if (_player is null)
+        {
+            if (Entity.TryGetComponent(out PlayerController player))
+            {
+                _player = player;
+            }
+        }
+
+        if (_projectile is null)
+        {
+            if (Entity.TryGetComponent(out PlayableProjectileTool projectile))
+            {
+                _projectile = projectile;
+            }
+        }
+    }
+
+    private static string ToCuePath(string cue)
+    {
+        return cue.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) ? cue : cue + ".wav";
+    }
+}

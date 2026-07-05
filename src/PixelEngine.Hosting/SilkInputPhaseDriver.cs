@@ -67,6 +67,7 @@ public sealed class SilkInputPhaseDriver(
         AddIfDown(keyboard, SilkKey.D, ScriptKey.D, destination, ref count);
         AddIfDown(keyboard, SilkKey.W, ScriptKey.W, destination, ref count);
         AddIfDown(keyboard, SilkKey.S, ScriptKey.S, destination, ref count);
+        AddIfDown(keyboard, SilkKey.R, ScriptKey.R, destination, ref count);
         AddIfDown(keyboard, SilkKey.Left, ScriptKey.Left, destination, ref count);
         AddIfDown(keyboard, SilkKey.Right, ScriptKey.Right, destination, ref count);
         AddIfDown(keyboard, SilkKey.Up, ScriptKey.Up, destination, ref count);

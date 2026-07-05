@@ -48,6 +48,7 @@ public static class DemoProgram
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayerHealth))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayerVisual))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(SparkEmitter))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(WeaponController))]
     [UnconditionalSuppressMessage(
         "AOT",
         "IL3050",

@@ -88,6 +88,9 @@ public sealed class PlayableWorldDirector : Behaviour
         projectile.MaxCollapsePixels = 512;
         projectile.MaxCollapsedIslandsPerShot = 1;
         projectile.PlayerSupportProtectionRadius = 72;
+        projectile.InputEnabled = false;
+
+        _ = playerEntity.AddComponent<WeaponController>();
 
         _ = playerEntity.AddComponent<PlayerVisual>();
         _ = playerEntity.AddComponent<PlayableHud>();

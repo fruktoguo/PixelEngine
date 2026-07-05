@@ -330,6 +330,11 @@ public enum Key
     S,
 
     /// <summary>
+    /// R 键。
+    /// </summary>
+    R,
+
+    /// <summary>
     /// 左方向键。
     /// </summary>
     Left,

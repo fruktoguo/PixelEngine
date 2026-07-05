@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization.Metadata;
+
 namespace PixelEngine.Scripting;
 
 /// <summary>
@@ -84,6 +86,11 @@ public interface IScriptContext
     /// 游戏大 UI 控制能力；未启用 PixelEngine.UI 时访问会抛出明确异常。
     /// </summary>
     IGameUiService GameUi => throw new NotSupportedException("当前脚本上下文未注入 Game UI 后端。");
+
+    /// <summary>
+    /// 内容配置加载能力；脚本只提供类型元数据，实际文件读取和 JSON 解析由 Hosting 门面执行。
+    /// </summary>
+    IConfigApi Config => throw new NotSupportedException("当前脚本上下文未注入 Config 后端。");
 
     /// <summary>
     /// 当前运行时间信息。
@@ -846,4 +853,20 @@ public interface IGameTime
     /// 当前帧是否执行了 sim step。
     /// </summary>
     bool SimSteppedThisFrame { get; }
+}
+
+/// <summary>
+/// 提供脚本可用的内容配置加载 API。
+/// </summary>
+public interface IConfigApi
+{
+    /// <summary>
+    /// 从当前 ContentRoot 加载一个配置文档。
+    /// </summary>
+    /// <typeparam name="TConfig">配置文档类型。</typeparam>
+    /// <param name="relativePath">相对 ContentRoot 的配置路径。</param>
+    /// <param name="typeInfo">source-generated JSON 类型元数据。</param>
+    /// <returns>解析后的配置文档。</returns>
+    TConfig Load<TConfig>(string relativePath, JsonTypeInfo<TConfig> typeInfo)
+        where TConfig : class;
 }
