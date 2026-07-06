@@ -205,6 +205,18 @@ internal sealed record BuildTargetSettings
             return false;
         }
 
+        if (OutputDirectory.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+        {
+            error = "输出目录包含非法路径字符。";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(IconPath) && IconPath.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+        {
+            error = "图标路径包含非法路径字符。";
+            return false;
+        }
+
         int included = 0;
         int startup = 0;
         for (int i = 0; i < Scenes.Count; i++)
@@ -241,9 +253,16 @@ internal sealed record BuildTargetSettings
         return true;
     }
 
+    public BuildTargetSettings Normalize()
+    {
+        return TryNormalize(out string error)
+            ? this
+            : throw new InvalidOperationException(error);
+    }
+
     public BuildRequest ToRequest()
     {
-        _ = TryNormalize(out string error) ? true : throw new InvalidOperationException(error);
+        _ = Normalize();
         SceneBuildEntry startup = Scenes.Single(static scene => scene.IsStartup);
         return new BuildRequest
         {

@@ -123,6 +123,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         {
             AutoFlush = true,
         };
+        BuildOutputState outputState = new();
 
         using Process process = CreateBuildProcess(preflight.Tools, request, outputDirectory);
         try
@@ -147,6 +148,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
                 tail,
                 logWriter,
                 logLock,
+                outputState,
                 CancellationToken.None);
             Task stderrTask = PumpOutputAsync(
                 process.StandardError,
@@ -155,6 +157,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
                 tail,
                 logWriter,
                 logLock,
+                outputState,
                 CancellationToken.None);
 
             Task waitForExit = process.WaitForExitAsync(CancellationToken.None);
@@ -184,6 +187,15 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
                     : $"build-player 失败，exit code={process.ExitCode}。{Environment.NewLine}{string.Join(Environment.NewLine, tail.Items)}",
                 process.ExitCode,
                 tail.Items);
+
+        if (process.ExitCode != 0 && result.Ok)
+        {
+            result = result with
+            {
+                Ok = false,
+                Error = $"build-player 失败，exit code={process.ExitCode}。",
+            };
+        }
 
         result = result with { ExitCode = process.ExitCode };
         BuildLogLevel resultLevel = result.Ok && process.ExitCode == 0 ? BuildLogLevel.Info : BuildLogLevel.Error;
@@ -313,6 +325,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         FixedTail tail,
         StreamWriter logWriter,
         object logLock,
+        BuildOutputState outputState,
         CancellationToken cancellationToken)
     {
         while (true)
@@ -325,7 +338,12 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
 
             BuildProgressEvent buildEvent = TryParseProgressLine(line, out BuildProgressEvent parsed)
                 ? parsed
-                : CreateEvent(BuildEventKind.Log, BuildPhase.Unknown, 0, fallbackLevel, line);
+                : CreateEvent(BuildEventKind.Log, outputState.CurrentPhase, 0, fallbackLevel, line);
+            if (buildEvent.Phase != BuildPhase.Unknown)
+            {
+                outputState.CurrentPhase = buildEvent.Phase;
+            }
+
             tail.Add(line);
             lock (logLock)
             {
@@ -333,6 +351,17 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
             }
 
             progress.Report(buildEvent);
+        }
+    }
+
+    private sealed class BuildOutputState
+    {
+        private int _currentPhase = (int)BuildPhase.Unknown;
+
+        public BuildPhase CurrentPhase
+        {
+            get => (BuildPhase)Volatile.Read(ref _currentPhase);
+            set => Volatile.Write(ref _currentPhase, (int)value);
         }
     }
 

@@ -234,7 +234,9 @@ function Test-DisallowedPlayerOnlyFile([string]$relativePath) {
   $name = [IO.Path]::GetFileName($relativePath)
   return $name.Equals('PixelEngine.Editor.dll', [StringComparison]::OrdinalIgnoreCase) -or
     $name.StartsWith('ImGuizmo', [StringComparison]::OrdinalIgnoreCase) -or
-    $name.StartsWith('ImPlot', [StringComparison]::OrdinalIgnoreCase)
+    $name.StartsWith('Hexa.NET.ImGuizmo', [StringComparison]::OrdinalIgnoreCase) -or
+    $name.StartsWith('ImPlot', [StringComparison]::OrdinalIgnoreCase) -or
+    $name.StartsWith('Hexa.NET.ImPlot', [StringComparison]::OrdinalIgnoreCase)
 }
 
 function Assert-NoDuplicateContentUnderApp([string]$relativePath, [string]$packageName, [string]$prefix) {

@@ -152,7 +152,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 **BuildTargetSettings 校验**：`Normalize()` 断言唯一启动场景、启动∈入包、至少一入包、路径 / 产物名非空、非法组合被拒并给红字提示；`PreflightAsync` 缺 .NET SDK / pwsh 时给明确可执行诊断（绝不静默）。
 
-**audit「player 包无 Editor/ImGui」断言**：在 fixture player 产物上跑 `audit-release-artifacts`，断言 `app/` 内出现 `PixelEngine.Editor.dll` 或编辑器专属面板闭包即 fail、干净 player 包通过；**允许玩家 HUD 所需的 `Hexa.NET.ImGui`**——拒绝的是编辑器专属 `Hexa.NET.ImGuizmo*`/`ImPlot*` 与 `PixelEngine.Editor.dll`（撤销早期「拒绝 ImGui」的不可满足表述）。dev-audit（保 pdb、结构存在性 + player-only）与严格 audit-release-artifacts 分流。该断言标 **blocked-on-req1**：以 GUI 宿主中性化重构（新增 `PixelEngine.Gui` 中性 host + Hosting 删 Editor 硬引用 + `PixelEnginePlayerBuild` 剥离）落地为前置，未落地前无法转绿。
+**audit「player 包无 Editor/ImGui」断言**：在 fixture player 产物上跑 `audit-release-artifacts`，断言 `app/` 内出现 `PixelEngine.Editor.dll` 或编辑器专属面板闭包即 fail、干净 player 包通过；**允许玩家 HUD 所需的 `Hexa.NET.ImGui`**——拒绝的是编辑器专属 `Hexa.NET.ImGuizmo*`/`ImPlot*` 与 `PixelEngine.Editor.dll`（撤销早期「拒绝 ImGui」的不可满足表述）。dev-audit（保 pdb、结构存在性 + player-only）与严格 audit-release-artifacts 分流；`EditorShellBuildTests.PlayerPackageAuditRejectsEditorClosureAllowsImGuiAndSupportsDevLayout` 已用真实脚本 fixture 锁定严格/dev 分流、`Hexa.NET.ImGui` 允许及 `Hexa.NET.ImGuizmo*`/`ImPlot*` 拒绝。
 
 ### 3.15 win-first RID 门控参数化与项目纪律测试更新（plan/15 §2.1/§3.10）
 
@@ -247,10 +247,10 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 ### 4.10 in-editor-build — PlayerBuildService（plan/19 §D，消费 plan/15 §3.11）
 
-- [ ] `PlayerBuildNdjsonParseTests`（壳构建测试）：schema=`pixelengine.build/v1` 逐行解析为 `BuildProgressEvent`、五阶段映射、半行 / 乱序 / 非 NDJSON 归当前阶段、stderr→error、`build-result.json`+exit code 合成 `BuildResult` 及无结果回退。
-- [ ] `PlayerBuildCancellationTests`（壳构建测试）：`CancellationToken`→`Process.Kill(entireProcessTree:true)` 杀子树、无残留、重跑成功。
-- [ ] `BuildTargetSettingsValidationTests`（壳构建测试）：`Normalize()` 唯一启动场景 / 启动∈入包 / 至少一入包 / 路径 / 产物名非空 / 非法组合被拒；`PreflightAsync` 缺 SDK/pwsh 诊断。
-- [ ] `PlayerPackageAuditTests`（build/packaging 纪律）：fixture player 产物 `app/` 含 `PixelEngine.Editor.dll` 或编辑器专属 `Hexa.NET.ImGuizmo*`/`ImPlot*` 即 fail、允许玩家 HUD 的 `Hexa.NET.ImGui`、干净包通过；dev-audit vs 严格 audit 分流。标 [!] blocked-on-req1（GUI 中性化 + Hosting 去 Editor 硬引用 + `PixelEnginePlayerBuild` 剥离前置）。
+- [x] `PlayerBuildNdjsonParseTests`（壳构建测试）：schema=`pixelengine.build/v1` 逐行解析为 `BuildProgressEvent`、五阶段映射、半行 / 乱序 / 非 NDJSON 归当前阶段、stderr→error、`build-result.json`+exit code 合成 `BuildResult` 及无结果回退。证据：`EditorShellBuildTests.PlayerBuildServiceParsesNdjsonFallbackStderrAndBuildResult`、`PlayerBuildServiceCombinesNonZeroExitAndMissingResultFailures`。
+- [x] `PlayerBuildCancellationTests`（壳构建测试）：`CancellationToken`→`Process.Kill(entireProcessTree:true)` 杀子树、无残留、重跑成功。证据：`EditorShellBuildTests.PlayerBuildServiceCancellationKillsProcessTreeAndAllowsRerun`。
+- [x] `BuildTargetSettingsValidationTests`（壳构建测试）：`Normalize()` 唯一启动场景 / 启动∈入包 / 至少一入包 / 路径 / 产物名非空 / 非法组合被拒；`PreflightAsync` 缺 SDK/pwsh 诊断。证据：`EditorShellBuildTests.BuildTargetSettingsValidationAndPreflightReportActionableErrors`。
+- [x] `PlayerPackageAuditTests`（build/packaging 纪律）：fixture player 产物 `app/` 含 `PixelEngine.Editor.dll` 或编辑器专属 `Hexa.NET.ImGuizmo*`/`ImPlot*` 即 fail、允许玩家 HUD 的 `Hexa.NET.ImGui`、干净包通过；dev-audit vs 严格 audit 分流。证据：`EditorShellBuildTests.PlayerPackageAuditRejectsEditorClosureAllowsImGuiAndSupportsDevLayout` 直接调用 `tools/audit-release-artifacts.ps1` 的展开包与 zip fixture。
 
 ### 4.11 win-first RID 门控参数化与项目纪律更新（plan/15 §2.1/§3.10）
 
@@ -290,7 +290,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] §6 的「测试条目↔各 plan 验收」映射完整：各 plan 文档「验收标准」中需自动化的条目都有本文件对应测试 / 基准支撑（`AGENTS.md §7`）；`PerformanceHardeningToolingDisciplineTests.PlanReadmeIndexesAllEvidencePreflightStatusesAsNonPassing` 已锁定 `plan/README.md` 的证据 / 预检状态索引，覆盖硬件计数器本地预检与各外部 evidence manifest 入口，确保 blocked / pending / probe-only / 本地检查状态不会被误当作验收通过。
 - [x] demo-playability 测试全绿：抗性差异化破坏分档、Damage 归零转碎块 handshake、Dispersion ≤ 32px、`DamageCircle`/`DamageBeam` 边界质量守恒、RigidOwned 经 `IRigidDamageSink` 路由不累加 Damage、weapons.json 经 Content API 加载、可玩循环胜负 / 分数、Damage 平面存档往返逐 cell 等价、Explode 语义迁移断言更新（plan/03/04/05/06/07/13）。证据：2026-07-06 本地 Release 验证 `PixelEngine.Simulation.Tests` 178/178、`PixelEngine.Serialization.Tests` 55/55、`PixelEngine.Physics.Tests` 73/73、`PixelEngine.Demo.Tests` 86/86 全绿；Demo/Physics 因并行 build 抢同一 obj 文件曾出现 CS2012，改用已完成 Release build 后 `--no-build` 顺序重跑全绿。
 - [x] standalone-editor 测试全绿：`.scene` v2（ParentId/Transform/Vector2）往返逐字段等价、v1 兼容升级、authoring→运行时物化（世界 TRS 烘焙 + 扁平 DOD）、prefab 嵌套 / override 传播、shell `--window-ticks` 证据等价迁移（plan/19/18）。证据：2026-07-06 本地 Release 验证 `PixelEngine.Hosting.Tests` 全项目通过（含 scene document、EditorShellSceneMaterialization、prefab 与 shell evidence preflight 相关测试）。
-- [ ] in-editor-build 测试全绿：`PlayerBuildService` NDJSON 解析 / `build-result` 合成 / 取消杀子树无残留、`BuildTargetSettings` 校验、`Preflight` 诊断；audit「player 包 `app/` 无 `PixelEngine.Editor.dll` 与编辑器专属 ImGuizmo/ImPlot」断言（允许玩家 HUD 的 `Hexa.NET.ImGui`；标 blocked-on-req1，解耦落地后转绿）。
+- [x] in-editor-build 测试全绿：`PlayerBuildService` NDJSON 解析 / `build-result` 合成 / 取消杀子树无残留、`BuildTargetSettings` 校验、`Preflight` 诊断；audit「player 包 `app/` 无 `PixelEngine.Editor.dll` 与编辑器专属 ImGuizmo/ImPlot」断言（允许玩家 HUD 的 `Hexa.NET.ImGui`）。证据：`dotnet test tests\PixelEngine.Hosting.Tests\PixelEngine.Hosting.Tests.csproj -c Release --filter "FullyQualifiedName~EditorShellBuildTests"` 通过 5/5。
 - [x] win-first 参数化生效：`PerformanceHardeningToolingDisciplineTests` / `HostingProjectDisciplineTests` 随激活集断言包 / 资产数（含 / 不含 win-arm64），与 plan/15 门控闭合且激活集计数不被自身单测判红；6-RID build/test 矩阵保留 dormant 编译保证不收敛；`HostingProjectDisciplineTests` 锁定 Demo 去 Editor / 用 Gui 中性 host / Hosting 去 Editor 硬引用 / Demo 不直接 STJ。外部 release workflow / 产物 / GitHub Release 证据仍归 plan/15 与 plan/17 对应阻塞项，不在本自动化参数化验收内。
 - [ ] html-ui 测试全绿（headless 部分）：布局 / data-model 绑定 / 三级输入仲裁 / 脏矩形合并正确、UI 逻辑相位零分配基准；GL 上传 / 光栅化不在自动化断言内，后端 / #10 处置拍板前专属路径标 [!] blocked（plan/20）。
 
@@ -345,6 +345,6 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] `build(ci): 反汇编守门+性能回归门禁+6-RID build-test`（对应 §4.7）。
 - [x] `test(sim): 破坏模型(Damage lane/抗性差异/边界守恒/RigidOwned 路由/Dispersion clamp)与武器/可玩循环测试`（对应 §4.8）。
 - [x] `test(serialization): .scene v1/v2 往返与 Damage 平面存档往返逐 cell 等价测试`（对应 §4.8/§4.9）。
-- [ ] `test(editor): PlayerBuildService NDJSON/取消/BuildTargetSettings 校验与 player-only audit 断言`（对应 §4.9/§4.10）。
+- [x] `test(editor): PlayerBuildService NDJSON/取消/BuildTargetSettings 校验与 player-only audit 断言`（对应 §4.9/§4.10）。
 - [ ] `test(build): RID 门控发行计数参数化 + HostingProjectDisciplineTests 解耦纪律更新`（对应 §4.11）。
 - [ ] `test(ui): PixelEngine.UI headless 布局/绑定/输入仲裁/脏矩形与 UI 逻辑相位零分配基准`（对应 §4.12）。

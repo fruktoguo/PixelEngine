@@ -1,8 +1,8 @@
 namespace PixelEngine.Editor.Shell.Build;
 
-internal sealed class BuildToolLocator
+internal class BuildToolLocator
 {
-    public BuildToolLocatorResult Locate()
+    public virtual BuildToolLocatorResult Locate()
     {
         string repositoryRoot = FindRepositoryRoot();
         bool windows = OperatingSystem.IsWindows();
