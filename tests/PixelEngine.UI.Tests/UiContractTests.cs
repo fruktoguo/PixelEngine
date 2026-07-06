@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Xunit;
 
 namespace PixelEngine.UI.Tests;
@@ -39,6 +40,21 @@ public sealed class UiContractTests
 
         Assert.DoesNotContain("PixelEngine.Editor", references);
         Assert.DoesNotContain("PixelEngine.Scripting", references);
+    }
+
+    [Fact]
+    public void UiProjectReferencesOnlyCoreGuiAndRendering()
+    {
+        string root = FindRepositoryRoot();
+        XDocument project = XDocument.Load(Path.Combine(root, "src", "PixelEngine.UI", "PixelEngine.UI.csproj"));
+
+        Assert.Equal(
+            ["PixelEngine.Core", "PixelEngine.Gui", "PixelEngine.Rendering"],
+            [
+                .. ReadIncludes(project, "ProjectReference")
+                    .Select(static include => Path.GetFileNameWithoutExtension(include)!),
+            ]);
+        Assert.Empty(ReadIncludes(project, "PackageReference"));
     }
 
     [Fact]
@@ -147,6 +163,17 @@ public sealed class UiContractTests
         }
 
         return -1;
+    }
+
+    private static string[] ReadIncludes(XDocument project, string elementName)
+    {
+        return
+        [
+            .. project.Descendants(elementName)
+                .Select(static element => element.Attribute("Include")?.Value)
+                .Where(static include => !string.IsNullOrWhiteSpace(include))
+                .Select(static include => include!),
+        ];
     }
 
     private static string FindRepositoryRoot()
