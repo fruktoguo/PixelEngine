@@ -204,8 +204,8 @@ C#↔UI 通信：
 - [x] CJK 子集资产接入：`FontEngine` 已复用 `PixelEngine.Gui.GuiFontManager` 的 CJK 候选字体与 glyph range 定义，Demo content/ui/fonts 已落 Noto Sans SC 简中变量子集字体 `NotoSansSC-VF.ttf`、OFL 许可与 SOURCE 记录，content/ui/fonts 候选优先生效且 RmlUi/ManagedFallback 可消费该选择；Ultralight 注册待可选 profile 激活后续切片（§3.7，呼应 plan/12 §3.3）
 
 内容与资产：
-- [~] `content/ui/` 结构 + `ui-manifest.json` 加载器：已实现纯 I/O + STJ 源生成 manifest 解析、screen id→资产路径映射、preload 标记、重复 id/路径逃逸/缺失文件校验，并接入 `GameUiServiceBridge` 优先按清单解析屏幕；已通过 `UiAssetDirectories` 暴露规范化 `fonts/`、`images/` 目录契约，并支持 `images[]` 图片资产清单的重复 id、路径逃逸、缺失文件校验与 preload 标记；图像解码/后端消费仍待后续切片（§3.8）
-- [~] `ManagedUiLayout`：已实现 XHTML 子集 text/button/checkbox/progress、`data-event-*`/模型路径契约与根窗口盒模型（`x/y/width/height`、`data-*`、`style left/top/width/height` → `Gui.SetNextWindow`）；图像控件、完整 CSS 盒模型与后端图片消费仍待后续切片（§3.8、§3.1）
+- [~] `content/ui/` 结构 + `ui-manifest.json` 加载器：已实现纯 I/O + STJ 源生成 manifest 解析、screen id→资产路径映射、preload 标记、重复 id/路径逃逸/缺失文件校验，并接入 `GameUiServiceBridge` 优先按清单解析屏幕；已通过 `UiAssetDirectories` 暴露规范化 `fonts/`、`images/` 目录契约，并支持 `images[]` 图片资产清单的重复 id、路径逃逸、缺失文件校验与 preload 标记；ManagedFallback 已可从 `content/ui/images/` 解码 8-bit PNG、读取真实尺寸并经当前 `RenderWindow.Gl` 上传 Texture2D 后绘制，`ManagedFallbackDrawsImageControlFromImagesDirectory` 覆盖 `data-image` → PNG → GUI image 调用。RmlUi/Ultralight 图片资源加载、预载与脏矩形上传仍待后续切片（§3.8）
+- [~] `ManagedUiLayout`：已实现 XHTML 子集 text/button/checkbox/progress/image、`data-event-*`/模型路径契约与根窗口盒模型（`x/y/width/height`、`data-*`、`style left/top/width/height` → `Gui.SetNextWindow`）；`<img>`/`<image>` 支持 `src` 或 `data-image`，并强制解析到 `content/ui/images/`，完整 CSS 盒模型与 RmlUi/Ultralight 后端图片消费仍待后续切片（§3.8、§3.1）
 
 可选后端（Ultralight profile，gated）：
 - [ ] `UltralightBackend : IGameUiBackend`：CPU 离屏 BGRA8 → 脏矩形 `glTexSubImage2D` 上传 → 全屏 alpha quad；JS 全局对象桥（§3.1、§3.4）

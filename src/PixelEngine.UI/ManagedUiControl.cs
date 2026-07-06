@@ -20,4 +20,14 @@ internal sealed class ManagedUiControl
     internal string ModelVariableName { get; init; } = string.Empty;
 
     internal UiValue Value { get; set; }
+
+    internal string ImagePath { get; init; } = string.Empty;
+
+    internal int ImageWidth { get; init; }
+
+    internal int ImageHeight { get; init; }
+
+    internal float DisplayWidth { get; init; }
+
+    internal float DisplayHeight { get; init; }
 }

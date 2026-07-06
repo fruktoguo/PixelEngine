@@ -106,6 +106,18 @@ public interface IGuiDrawContext
     /// <param name="colorBgra">BGRA 颜色。</param>
     /// <param name="size">边长，单位像素。</param>
     void ColorSwatch(string id, uint colorBgra, float size = 16f);
+
+    /// <summary>
+    /// 绘制一张已上传到当前 GL 上下文的 2D 图片纹理。
+    /// </summary>
+    /// <param name="id">稳定控件 id。</param>
+    /// <param name="textureHandle">OpenGL Texture2D 句柄。</param>
+    /// <param name="textureWidth">纹理原始宽度。</param>
+    /// <param name="textureHeight">纹理原始高度。</param>
+    /// <param name="width">显示宽度，单位像素。</param>
+    /// <param name="height">显示高度，单位像素。</param>
+    /// <param name="tintBgra">BGRA 颜色乘色。</param>
+    void Image(string id, uint textureHandle, int textureWidth, int textureHeight, float width, float height, uint tintBgra = 0xFF_FF_FF_FF);
 }
 
 /// <summary>

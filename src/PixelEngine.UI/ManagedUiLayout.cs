@@ -28,18 +28,18 @@ internal static class ManagedUiLayout
         string title = ReadAttribute(root, "title") ?? Path.GetFileNameWithoutExtension(source.Path);
         ManagedUiBox rootBox = ReadBox(root);
         List<ManagedUiControl> controls = new(Math.Min(maxControls, 16));
-        CollectControls(root, controls, maxControls);
+        CollectControls(root, source.Path, controls, maxControls);
         return new ManagedUiDocument(handle, source, title, rootBox, [.. controls]);
     }
 
-    private static void CollectControls(XElement element, List<ManagedUiControl> controls, int maxControls)
+    private static void CollectControls(XElement element, string documentPath, List<ManagedUiControl> controls, int maxControls)
     {
         if (controls.Count >= maxControls)
         {
             throw new InvalidDataException("UI 文档控件数量超过 ManagedFallbackBackend 容量。");
         }
 
-        ManagedUiControl? control = TryCreateControl(element);
+        ManagedUiControl? control = TryCreateControl(element, documentPath);
         if (control is not null)
         {
             controls.Add(control);
@@ -47,11 +47,11 @@ internal static class ManagedUiLayout
 
         foreach (XElement child in element.Elements())
         {
-            CollectControls(child, controls, maxControls);
+            CollectControls(child, documentPath, controls, maxControls);
         }
     }
 
-    private static ManagedUiControl? TryCreateControl(XElement element)
+    private static ManagedUiControl? TryCreateControl(XElement element, string documentPath)
     {
         string name = element.Name.LocalName;
         if (StringEquals(name, "text") || StringEquals(name, "p") || StringEquals(name, "span"))
@@ -120,7 +120,76 @@ internal static class ManagedUiLayout
             };
         }
 
+        if (StringEquals(name, "img") || StringEquals(name, "image"))
+        {
+            string id = ReadId(element, ReadAttribute(element, "data-image") ?? ReadAttribute(element, "src") ?? "image");
+            string imagePath = ResolveImagePath(documentPath, element);
+            UiImageBitmap bitmap = UiPngImageLoader.Load(imagePath);
+            string? style = ReadAttribute(element, "style");
+            float width = ReadFloat(element, style, "width", "width") ?? bitmap.Width;
+            float height = ReadFloat(element, style, "height", "height") ?? bitmap.Height;
+            return new ManagedUiControl
+            {
+                Kind = ManagedUiControlKind.Image,
+                Id = id,
+                Text = ReadAttribute(element, "alt") ?? id,
+                Element = new UiElementId(UiStableId.Hash(id)),
+                ImagePath = imagePath,
+                ImageWidth = bitmap.Width,
+                ImageHeight = bitmap.Height,
+                DisplayWidth = width,
+                DisplayHeight = height,
+            };
+        }
+
         return null;
+    }
+
+    private static string ResolveImagePath(string documentPath, XElement element)
+    {
+        string? imageId = ReadAttribute(element, "data-image");
+        string? source = ReadAttribute(element, "src");
+        if (string.IsNullOrWhiteSpace(imageId) && string.IsNullOrWhiteSpace(source))
+        {
+            throw new InvalidDataException("<img> 必须声明 src 或 data-image。");
+        }
+
+        string documentFullPath = Path.GetFullPath(documentPath);
+        string documentDirectory = Path.GetDirectoryName(documentFullPath) ??
+            throw new InvalidDataException("UI 文档路径缺少目录。");
+        string uiRoot = string.Equals(Path.GetFileName(documentDirectory), "screens", StringComparison.OrdinalIgnoreCase) &&
+            Directory.GetParent(documentDirectory) is DirectoryInfo parent
+                ? parent.FullName
+                : documentDirectory;
+        string imagesDirectory = EnsureTrailingSeparator(Path.GetFullPath(Path.Combine(uiRoot, "images")));
+        string candidate = !string.IsNullOrWhiteSpace(source)
+            ? ResolveImageSource(uiRoot, documentDirectory, source!)
+            : Path.Combine(imagesDirectory, imageId! + ".png");
+        string fullPath = Path.GetFullPath(candidate);
+        if (!IsUnderDirectory(imagesDirectory, fullPath))
+        {
+            throw new InvalidDataException($"UI 图片必须位于 content/ui/images 目录：{fullPath}");
+        }
+
+        if (!File.Exists(fullPath))
+        {
+            throw new FileNotFoundException("找不到 UI 图片资产。", fullPath);
+        }
+
+        return fullPath;
+    }
+
+    private static string ResolveImageSource(string uiRoot, string documentDirectory, string source)
+    {
+        string normalized = source.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+        if (Path.IsPathRooted(normalized))
+        {
+            return normalized;
+        }
+
+        return normalized.StartsWith("images" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            ? Path.Combine(uiRoot, normalized)
+            : Path.Combine(documentDirectory, normalized);
     }
 
     private static bool IsCheckboxInput(XElement element)
@@ -245,5 +314,18 @@ internal static class ManagedUiLayout
     private static bool StringEquals(string? left, string? right)
     {
         return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string EnsureTrailingSeparator(string path)
+    {
+        return path.EndsWith(Path.DirectorySeparatorChar)
+            ? path
+            : path + Path.DirectorySeparatorChar;
+    }
+
+    private static bool IsUnderDirectory(string directory, string path)
+    {
+        string normalized = Path.GetFullPath(path);
+        return normalized.StartsWith(directory, StringComparison.OrdinalIgnoreCase);
     }
 }

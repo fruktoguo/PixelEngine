@@ -24,4 +24,9 @@ public enum ManagedUiControlKind : byte
     /// 进度条。
     /// </summary>
     Progress = 3,
+
+    /// <summary>
+    /// 图片。
+    /// </summary>
+    Image = 4,
 }

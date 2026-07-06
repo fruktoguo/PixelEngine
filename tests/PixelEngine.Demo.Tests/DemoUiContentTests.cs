@@ -334,6 +334,12 @@ public sealed class DemoUiContentTests
             _ = height;
             drawGui(Context);
         }
+
+        public ManagedFallbackImage LoadImage(string path)
+        {
+            Assert.True(File.Exists(path), path);
+            return new ManagedFallbackImage(321, 1, 1);
+        }
     }
 
     private sealed class FakeGuiDrawContext : IGuiDrawContext
@@ -423,6 +429,17 @@ public sealed class DemoUiContentTests
             _ = id;
             _ = colorBgra;
             _ = size;
+        }
+
+        public void Image(string id, uint textureHandle, int textureWidth, int textureHeight, float width, float height, uint tintBgra = 0xFF_FF_FF_FF)
+        {
+            _ = id;
+            _ = textureHandle;
+            _ = textureWidth;
+            _ = textureHeight;
+            _ = width;
+            _ = height;
+            _ = tintBgra;
         }
     }
 }

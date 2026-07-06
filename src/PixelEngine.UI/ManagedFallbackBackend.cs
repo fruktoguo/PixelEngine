@@ -355,6 +355,11 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     /// </summary>
     public void Dispose()
     {
+        if (_gui is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
+
         _disposed = true;
     }
 
@@ -447,6 +452,17 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
             case ManagedUiControlKind.Progress:
                 double progress = control.Value.Kind == UiValueKind.Double ? control.Value.AsDouble() : 0.0;
                 gui.ProgressBar((float)Math.Clamp(progress, 0.0, 1.0), string.IsNullOrEmpty(control.Text) ? null : control.Text);
+                break;
+            case ManagedUiControlKind.Image:
+                ManagedFallbackImage image = _gui.LoadImage(control.ImagePath);
+                image.Validate();
+                gui.Image(
+                    control.Id,
+                    image.TextureHandle,
+                    image.Width,
+                    image.Height,
+                    control.DisplayWidth > 0f ? control.DisplayWidth : image.Width,
+                    control.DisplayHeight > 0f ? control.DisplayHeight : image.Height);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(control), control.Kind, "未知 Managed UI 控件类型。");

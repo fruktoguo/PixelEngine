@@ -25,4 +25,11 @@ public interface IManagedFallbackGuiHost
     /// <param name="height">framebuffer 高度。</param>
     /// <param name="drawGui">绘制回调。</param>
     void DrawFrame(float deltaSeconds, int width, int height, Action<IGuiDrawContext> drawGui);
+
+    /// <summary>
+    /// 载入或复用一张 UI 图片资产。
+    /// </summary>
+    /// <param name="path">图片绝对路径。</param>
+    /// <returns>可绘制的图片资产。</returns>
+    ManagedFallbackImage LoadImage(string path);
 }

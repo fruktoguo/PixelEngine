@@ -1,4 +1,6 @@
 using PixelEngine.Gui;
+using System.Buffers.Binary;
+using System.IO.Compression;
 using Xunit;
 
 namespace PixelEngine.UI.Tests;
@@ -176,6 +178,42 @@ public sealed class ManagedFallbackBackendTests
     }
 
     [Fact]
+    public void ManagedFallbackDrawsImageControlFromImagesDirectory()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"pixelengine-ui-image-{Guid.NewGuid():N}");
+        string screens = Path.Combine(root, "screens");
+        string images = Path.Combine(root, "images");
+        _ = Directory.CreateDirectory(screens);
+        _ = Directory.CreateDirectory(images);
+        string imagePath = Path.Combine(images, "logo.png");
+        WritePng(imagePath, 3, 2);
+        string documentPath = Path.Combine(screens, "main.xhtml");
+        File.WriteAllText(
+            documentPath,
+            """
+            <ui title="Image">
+              <img id="logo" data-image="logo" width="24" height="16" alt="Logo" />
+            </ui>
+            """);
+
+        FakeGuiHost gui = new();
+        using ManagedFallbackBackend backend = new(gui);
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+
+        _ = host.ShowScreen(new UiScreenId(8), UiDocumentSource.Asset(documentPath, 8));
+        host.Composite(default);
+
+        Assert.Equal(Path.GetFullPath(imagePath), Assert.Single(gui.LoadedImages));
+        FakeGuiDrawContext.ImageCall image = Assert.Single(gui.Context.Images);
+        Assert.Equal("logo", image.Id);
+        Assert.Equal(3, image.TextureWidth);
+        Assert.Equal(2, image.TextureHeight);
+        Assert.Equal(24f, image.Width);
+        Assert.Equal(16f, image.Height);
+    }
+
+    [Fact]
     public void ManagedFallbackThrowsForMissingDocumentInsteadOfInventingPlaceholder()
     {
         FakeGuiHost gui = new();
@@ -203,6 +241,8 @@ public sealed class ManagedFallbackBackendTests
 
         public int DrawCount { get; private set; }
 
+        public List<string> LoadedImages { get; } = [];
+
         public void Initialize()
         {
             Initialized = true;
@@ -214,6 +254,14 @@ public sealed class ManagedFallbackBackendTests
             DrawCount++;
             drawGui(Context);
         }
+
+        public ManagedFallbackImage LoadImage(string path)
+        {
+            string fullPath = Path.GetFullPath(path);
+            LoadedImages.Add(fullPath);
+            Assert.True(File.Exists(fullPath), fullPath);
+            return new ManagedFallbackImage(123, 3, 2);
+        }
     }
 
     private sealed class FakeGuiDrawContext : IGuiDrawContext
@@ -221,6 +269,8 @@ public sealed class ManagedFallbackBackendTests
         public List<string> Texts { get; } = [];
 
         public List<string> Buttons { get; } = [];
+
+        public List<ImageCall> Images { get; } = [];
 
         public HashSet<string> ClickedButtons { get; } = [];
 
@@ -298,5 +348,52 @@ public sealed class ManagedFallbackBackendTests
         public void ColorSwatch(string id, uint colorBgra, float size = 16f)
         {
         }
+
+        public void Image(string id, uint textureHandle, int textureWidth, int textureHeight, float width, float height, uint tintBgra = 0xFF_FF_FF_FF)
+        {
+            Images.Add(new ImageCall(id, textureHandle, textureWidth, textureHeight, width, height, tintBgra));
+        }
+
+        public readonly record struct ImageCall(string Id, uint TextureHandle, int TextureWidth, int TextureHeight, float Width, float Height, uint TintBgra);
+    }
+
+    private static void WritePng(string path, int width, int height)
+    {
+        using MemoryStream idat = new();
+        using (ZLibStream zlib = new(idat, CompressionLevel.SmallestSize, leaveOpen: true))
+        {
+            for (int y = 0; y < height; y++)
+            {
+                zlib.WriteByte(0);
+                for (int x = 0; x < width; x++)
+                {
+                    zlib.WriteByte((byte)(x * 40));
+                    zlib.WriteByte((byte)(y * 80));
+                    zlib.WriteByte(160);
+                    zlib.WriteByte(255);
+                }
+            }
+        }
+
+        using FileStream file = File.Create(path);
+        file.Write([137, 80, 78, 71, 13, 10, 26, 10]);
+        Span<byte> ihdr = stackalloc byte[13];
+        BinaryPrimitives.WriteInt32BigEndian(ihdr[..4], width);
+        BinaryPrimitives.WriteInt32BigEndian(ihdr.Slice(4, 4), height);
+        ihdr[8] = 8;
+        ihdr[9] = 6;
+        WriteChunk(file, "IHDR"u8, ihdr);
+        WriteChunk(file, "IDAT"u8, idat.ToArray());
+        WriteChunk(file, "IEND"u8, []);
+    }
+
+    private static void WriteChunk(Stream stream, ReadOnlySpan<byte> type, ReadOnlySpan<byte> data)
+    {
+        Span<byte> length = stackalloc byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(length, data.Length);
+        stream.Write(length);
+        stream.Write(type);
+        stream.Write(data);
+        stream.Write(stackalloc byte[4]);
     }
 }

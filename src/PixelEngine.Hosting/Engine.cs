@@ -643,7 +643,7 @@ public sealed class Engine : IDisposable
         {
             fallbackReason = $"RmlUi 初始化失败，回退 ManagedFallback：{ex.GetType().Name}: {ex.Message}";
             host.Dispose();
-            backend = CreateManagedFallbackGameUiBackend();
+            backend = CreateManagedFallbackGameUiBackend(window);
             host = new GameUiHost(backend);
             InitializeGameUiHost(host, backend, window, fontSelection);
         }
@@ -669,11 +669,13 @@ public sealed class Engine : IDisposable
         fallbackReason = null;
         return requestedBackend switch
         {
-            UiBackendKind.ManagedFallback => CreateManagedFallbackGameUiBackend(),
+            UiBackendKind.ManagedFallback => CreateManagedFallbackGameUiBackend(window),
             UiBackendKind.RmlUi when window.Capabilities.IsGles => CreateManagedFallbackGameUiBackend(
+                window,
                 out fallbackReason,
                 $"RmlUi 当前 native shim 绑定桌面 GL3 loader，当前上下文是 GLES/ANGLE：{window.Capabilities.Version}。"),
             UiBackendKind.RmlUi when !RmlUiNativeInfo.TryQuery(out RmlUiNativeProbe probe) => CreateManagedFallbackGameUiBackend(
+                window,
                 out fallbackReason,
                 $"RmlUi native 不可用：{probe.Error ?? "unknown"}。"),
             UiBackendKind.RmlUi => new RmlUiBackend(window),
@@ -682,15 +684,15 @@ public sealed class Engine : IDisposable
         };
     }
 
-    private ManagedFallbackBackend CreateManagedFallbackGameUiBackend()
+    private ManagedFallbackBackend CreateManagedFallbackGameUiBackend(RenderWindow window)
     {
-        return new ManagedFallbackBackend(new GuiAppManagedFallbackHost(ResolveGuiApp()));
+        return new ManagedFallbackBackend(new GuiAppManagedFallbackHost(ResolveGuiApp(), window));
     }
 
-    private ManagedFallbackBackend CreateManagedFallbackGameUiBackend(out string? fallbackReason, string reason)
+    private ManagedFallbackBackend CreateManagedFallbackGameUiBackend(RenderWindow window, out string? fallbackReason, string reason)
     {
         fallbackReason = reason;
-        return CreateManagedFallbackGameUiBackend();
+        return CreateManagedFallbackGameUiBackend(window);
     }
 
     private static void InitializeGameUiHost(

@@ -126,6 +126,27 @@ public sealed class ScriptGuiContext(int width, int height, float deltaTime, Gui
         _ = ImGui.ColorButton($"##{id}", BgraToVector4(colorBgra), ImGuiColorEditFlags.NoTooltip, new Vector2(side, side));
     }
 
+    /// <inheritdoc />
+    public unsafe void Image(string id, uint textureHandle, int textureWidth, int textureHeight, float width, float height, uint tintBgra = 0xFF_FF_FF_FF)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        if (textureHandle == 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(textureHandle), "GUI 图片纹理句柄必须非 0。");
+        }
+
+        if (textureWidth <= 0 || textureHeight <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(textureWidth), "GUI 图片纹理尺寸必须为正数。");
+        }
+
+        float drawWidth = float.IsFinite(width) && width > 0f ? width : textureWidth;
+        float drawHeight = float.IsFinite(height) && height > 0f ? height : textureHeight;
+        ImGui.Image(new ImTextureRef(null, (ImTextureID)(ulong)textureHandle), new Vector2(drawWidth, drawHeight));
+        _ = id;
+        _ = tintBgra;
+    }
+
     private static ImGuiCond MapCondition(GuiCondition condition)
     {
         return condition switch
