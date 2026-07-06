@@ -9,10 +9,12 @@ namespace PixelEngine.Benchmarks;
 [MemoryDiagnoser]
 public class SimulationAllocationBenchmarks
 {
+    private const ushort Stone = 1;
     private const ushort Sand = 2;
     private readonly Chunk[] _chunks = new Chunk[9];
     private readonly TestChunkSource _source;
     private readonly SimulationKernel _kernel;
+    private readonly Chunk _center;
 
     /// <summary>
     /// 创建 Simulation allocation benchmark fixture。
@@ -20,16 +22,42 @@ public class SimulationAllocationBenchmarks
     public SimulationAllocationBenchmarks()
     {
         int index = 0;
+        _center = null!;
         for (int dy = -1; dy <= 1; dy++)
         {
             for (int dx = -1; dx <= 1; dx++)
             {
-                _chunks[index++] = new Chunk(new ChunkCoord(dx, dy));
+                Chunk chunk = new(new ChunkCoord(dx, dy));
+                _chunks[index++] = chunk;
+                if (dx == 0 && dy == 0)
+                {
+                    _center = chunk;
+                }
             }
         }
 
         _source = new TestChunkSource(_chunks);
         _kernel = new SimulationKernel(_source, CreateMaterials());
+    }
+
+    /// <summary>
+    /// 准备单 cell 结构伤害累计场景。
+    /// </summary>
+    [IterationSetup(Target = nameof(ApplyStructuralDamageAccumulates))]
+    public void SetupApplyStructuralDamage()
+    {
+        ResetWorld();
+        Set(_center, 18, 18, Stone);
+    }
+
+    /// <summary>
+    /// 准备圆形范围结构伤害累计场景。
+    /// </summary>
+    [IterationSetup(Target = nameof(DamageCircleAccumulates))]
+    public void SetupDamageCircle()
+    {
+        ResetWorld();
+        FillRect(_center, Stone, 12, 12, 25, 25);
     }
 
     /// <summary>
@@ -47,6 +75,24 @@ public class SimulationAllocationBenchmarks
         _kernel.SwapDirtyRects();
     }
 
+    /// <summary>
+    /// 单 cell 结构伤害累计的稳态分配基准。
+    /// </summary>
+    [Benchmark]
+    public bool ApplyStructuralDamageAccumulates()
+    {
+        return _kernel.ApplyStructuralDamage(18, 18, damage: 16);
+    }
+
+    /// <summary>
+    /// 圆形结构伤害累计的稳态分配基准。
+    /// </summary>
+    [Benchmark]
+    public int DamageCircleAccumulates()
+    {
+        return _kernel.DamageCircle(18, 18, radius: 5, damage: 16, falloff: true);
+    }
+
     private void ResetWorld()
     {
         for (int i = 0; i < _chunks.Length; i++)
@@ -58,13 +104,54 @@ public class SimulationAllocationBenchmarks
 
     private static MaterialPropsTable CreateMaterials()
     {
-        return new MaterialPropsTable(
-            [CellType.Empty, CellType.Solid, CellType.Powder],
-            [0, 255, 120],
-            [0, 0, 0],
-            [0, 0, 0],
-            [0, 0, 0],
-            [0, 0, 0]);
+        MaterialDef[] materials =
+        [
+            new()
+            {
+                Id = 0,
+                Name = "empty",
+                Type = CellType.Empty,
+                TextureId = -1,
+                HeatCapacity = 1,
+            },
+            new()
+            {
+                Id = Stone,
+                Name = "stone",
+                Type = CellType.Solid,
+                Density = 255,
+                TextureId = -1,
+                HeatCapacity = 1,
+                Integrity = 200,
+                DestroyedTarget = Sand,
+            },
+            new()
+            {
+                Id = Sand,
+                Name = "sand",
+                Type = CellType.Powder,
+                Density = 120,
+                TextureId = -1,
+                HeatCapacity = 1,
+            },
+        ];
+        return new MaterialPropsTable(MaterialHotTable.FromDefinitions(materials));
+    }
+
+    private static void Set(Chunk chunk, int lx, int ly, ushort material)
+    {
+        chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
+    }
+
+    private static void FillRect(Chunk chunk, ushort material, int minX, int minY, int maxX, int maxY)
+    {
+        for (int y = minY; y <= maxY; y++)
+        {
+            for (int x = minX; x <= maxX; x++)
+            {
+                Set(chunk, x, y, material);
+            }
+        }
     }
 
     private sealed class TestChunkSource : IChunkSource
