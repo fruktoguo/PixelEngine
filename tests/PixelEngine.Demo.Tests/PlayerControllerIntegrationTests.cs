@@ -1283,6 +1283,8 @@ public sealed class PlayerControllerIntegrationTests
             projectile.InputEnabled = false;
             WeaponController weapons = entity.AddComponent<WeaponController>();
             TemperatureField temperature = engine.Context.GetService<TemperatureField>();
+            ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
+            Assert.True(materials.TryGetId("fire", out ushort fire));
 
             engine.RunHeadlessTicks(2);
             int effectsBeforeShot = TransientParticleBurst.ActiveCount(scene);
@@ -1308,10 +1310,13 @@ public sealed class PlayerControllerIntegrationTests
             Assert.True(scene.EntityCount <= entitiesBeforeGrenade);
 
             float temperatureBeforeLaser = MaxTemperature(temperature, minX: 16, minY: 16, maxX: 48, maxY: 48);
+            particles.Clear();
             input.Update([Key.Digit4], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
             engine.RunHeadlessTicks(1);
             Assert.Equal(WeaponKind.Laser, weapons.LastDispatchedKind);
             Assert.True(MaxTemperature(temperature, minX: 16, minY: 16, maxX: 48, maxY: 48) > temperatureBeforeLaser);
+            Assert.True(particles.ActiveCount > 0);
+            Assert.Equal(fire, particles.ActiveReadOnly[0].Material);
 
             FillRect(grid, stone, minX: 34, minY: 32, maxX: 36, maxY: 36);
             input.Update([Key.Digit5], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);

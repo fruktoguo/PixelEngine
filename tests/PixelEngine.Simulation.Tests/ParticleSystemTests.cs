@@ -236,7 +236,7 @@ public sealed class ParticleSystemTests
     public void EmitSpawnsParticlesInsideVelocityConeWithFiniteLifetime()
     {
         ParticleSystem particles = new(capacity: 8);
-        ParticleEmit emit = new(
+        ParticleEmissionRequest emit = new(
             X: 10.25f,
             Y: 12.75f,
             Material: 7,
@@ -275,7 +275,7 @@ public sealed class ParticleSystemTests
         ParticleSystem limited = new(
             capacity: 4,
             settings: new ParticleSystemSettings(4, 0.2f, 40, 0.05f, 1f, MaxEjectionPerTick: 2));
-        ParticleEmit emit = new(0, 0, 9, Count: 5, DirAngleRad: 0f, DirSpreadRad: MathF.PI, BaseSpeed: 1f, SpeedJitter: 0f, LifeTicks: 0);
+        ParticleEmissionRequest emit = new(0, 0, 9, Count: 5, DirAngleRad: 0f, DirSpreadRad: MathF.PI, BaseSpeed: 1f, SpeedJitter: 0f, LifeTicks: 0);
 
         int spawned = limited.Emit(in emit);
 
@@ -303,7 +303,7 @@ public sealed class ParticleSystemTests
     [Fact]
     public void EmitIsDeterministicForSameSeedInputs()
     {
-        ParticleEmit emit = new(3.5f, 4.5f, 11, Count: 4, DirAngleRad: 1.2f, DirSpreadRad: 0.4f, BaseSpeed: 2f, SpeedJitter: 1f, LifeTicks: 9);
+        ParticleEmissionRequest emit = new(3.5f, 4.5f, 11, Count: 4, DirAngleRad: 1.2f, DirSpreadRad: 0.4f, BaseSpeed: 2f, SpeedJitter: 1f, LifeTicks: 9);
         ParticleSystem first = new(capacity: 8, determinismMode: DeterminismMode.Deterministic);
         ParticleSystem second = new(capacity: 8, determinismMode: DeterminismMode.Deterministic);
 

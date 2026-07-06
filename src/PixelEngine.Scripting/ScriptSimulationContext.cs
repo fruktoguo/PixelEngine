@@ -468,12 +468,17 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     private void EmitParticles(in ParticleEmit emit)
     {
         float velocityScale = ParticleVelocityScale();
-        ParticleEmit scaled = emit with
-        {
-            BaseSpeed = emit.BaseSpeed * velocityScale,
-            SpeedJitter = emit.SpeedJitter * velocityScale,
-        };
-        _ = ParticleSystem.Emit(in scaled);
+        ParticleEmissionRequest request = new(
+            emit.X,
+            emit.Y,
+            emit.Material.Value,
+            emit.Count,
+            emit.DirAngleRad,
+            emit.DirSpreadRad,
+            emit.BaseSpeed * velocityScale,
+            emit.SpeedJitter * velocityScale,
+            emit.LifeTicks);
+        _ = ParticleSystem.Emit(in request);
     }
 
     private ParticleSpawn ToParticleSpawn(ParticleSpawnDesc desc)

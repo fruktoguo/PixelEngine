@@ -1,6 +1,5 @@
 using System.Buffers;
 using PixelEngine.Core;
-using PixelEngine.Simulation.Particles;
 
 namespace PixelEngine.Scripting;
 

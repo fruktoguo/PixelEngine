@@ -262,7 +262,7 @@ public readonly struct ParticleEmit
 - [x] 在 `PixelEngine.Benchmarks` 加粒子积分/沉积基准（BenchmarkDotNet + `[DisassemblyDiagnoser]`，AGENTS §3/§7）。
 - [x] 定义 `DebrisEjectionRequest` struct 与 `void RequestDebris(in DebrisEjectionRequest)`（§3.12）：破坏侧（plan/03 `ApplyDamage` / plan/04 §3.11 破坏契约）在**单线程输入/安全相位**内同步经 `TrySpawn` 抽干；材质取 `RubbleTarget` 否则本材质，`Count = MaterialDef.DebrisCount`（0 不投），速度 = 径向 `Impulse` + `ImpulseJitter` RNG 抖动（走 §3.7 确定性 seam）；容量满 `TrySpawn` 返回 `false` 且 `DroppedThisTick++`，**不扩容**；**不二次经 `ReadAndClearCell` 清 cell**（cell 已由破坏动作 Empty/RubbleTarget 化）。证据：`ParticleSystemTests.RequestDebris*` 与 `CellDamageRubbleHandshakeTests` 覆盖容量/上限、有限 lifetime、破坏后 rubble 不被二次清空、DebrisCount=0 不抛。
 - [x] 定义 `IParticleSpawner.Emit(in ParticleEmit)` 与 `ParticleEmit` struct（§3.12，plan/11 facade 透传）：按速度锥（`DirAngle±DirSpreadRad`、`BaseSpeed±SpeedJitter`）走 §3.7 确定性 RNG seam 采样发射一批粒子；后端 `ParticleSystem.Emit` 返回实际发射数，脚本 facade 因延迟到相位 7 只入队、不伪造实际数；**只在单线程输入/安全相位调用**，复用 `ParticleEjectMaxPerTick` 与容量满截断，稳态零分配。证据：`ParticleSystemTests.EmitSpawnsParticlesInsideVelocityConeWithFiniteLifetime` / `EmitHonorsEjectionLimitAndCapacity` / `EmitIsDeterministicForSameSeedInputs` 与 `ScriptSimulationContextTests.ParticleCommandsFlushIntoParticleSystem` / `ParticleEmitCommandsDoNotAllocateAfterWarmup`。
-- [ ] `DamageBeam`/`DamageBeam` 命中点火花（§3.12）：经 `Emit` 发射短 `LifeTicks`、小 `Count`、方向锥沿束的 emissive 碎火花（伤害/注热在 plan/03/04），火花走既有 §3.3/§3.5/§3.6 生命周期，**不新增泄漏路径**（R13 兜底）。
+- [x] `DamageBeam`/`DamageBeam` 命中点火花（§3.12）：经 `Emit` 发射短 `LifeTicks`、小 `Count`、方向锥沿束的 emissive 碎火花（伤害/注热在 plan/03/04），火花走既有 §3.3/§3.5/§3.6 生命周期，**不新增泄漏路径**（R13 兜底）。证据：`WeaponController.DispatchLaser` 通过 `Context.Particles.Emit` 发射短寿命 `fire` 火花，`WeaponControllerDispatchesSixWeaponKindsIntoDistinctEffects` 在激光路径断言真实 `ParticleSystem` 生成 `fire` 粒子。
 - [ ] **语义迁移登记**（§3.12，与 plan/13/14 联动）：`§3.4` `EjectionRequest`/`RunEjectionPass` 保留为非破坏冲击溅射通路、既有 `- [x]` 不动；Demo 爆炸/激光/挖掘改走破坏驱动碎屑路径；`plan/13` 旧 `ExplosiveTool`/`PlayableProjectileTool` 的「无条件抛射半径内全部 cell」相关抛射断言测试须随新语义迁移（具体测试变更在 plan/14 登记，本文只标注语义变更点）。
 
 ## 5. 验收标准
@@ -303,5 +303,5 @@ public readonly struct ParticleEmit
 - [x] 节点 3：`feat(sim): 实现粒子生命周期与 R13 无泄漏回退(max-lifetime+无处沉积则杀死)` —— 完成 §3.6 与 R13 无泄漏验收项（强制项）。
 - [x] 节点 4：`feat(sim): 暴露粒子渲染/编辑器/音频/序列化接口(IParticleReadback,Stats)` —— 完成 §3.8–§3.10 与接口可用、诊断验收项。
 - [x] 节点 5：`feat(sim): 接入结构破坏碎屑 RequestDebris 消费` —— 完成 §3.12 的 `DebrisEjectionRequest` / `RequestDebris` 与破坏驱动碎屑验收项；`Emit` 速度锥与 DamageBeam 火花仍按 §4.12 后续节点单独推进。
-- [x] 节点 6：`feat(sim): 接入富速度锥粒子 Emit` —— 完成 §3.12 的 `ParticleEmit` / `IParticleSpawner.Emit` 与 `Emit` 速度锥验收项；`DamageBeam` 火花、火花 R13 与 MemoryDiagnoser 级碎屑/火花基准仍按 §4.12 后续节点推进。
+- [x] 节点 6：`feat(sim): 接入富速度锥粒子 Emit` —— 完成 §3.12 的 `ParticleEmit` / `IParticleSpawner.Emit`、`Emit` 速度锥验收项与 `DamageBeam` 命中火花接入；火花 R13 与 MemoryDiagnoser 级碎屑/火花基准仍按 §4.12 后续节点推进。
 - 每节点完成即按 `AGENTS.md §6` 用中文 git 提交，提交正文标注对应 plan 条目与架构 §。

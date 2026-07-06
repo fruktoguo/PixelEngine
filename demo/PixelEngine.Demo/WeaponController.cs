@@ -15,6 +15,7 @@ public sealed class WeaponController : Behaviour
     private PlayableProjectileTool? _projectile;
     private GrenadeSpawnRequest _pendingGrenade;
     private ExplosionFlashEffect _impactFlash;
+    private MaterialId _laserSparkMaterial = MaterialId.Invalid;
     private bool _grenadeSpawnSystemRegistered;
 
     /// <summary>
@@ -157,6 +158,7 @@ public sealed class WeaponController : Behaviour
 
         Catalog = Context.Config.Load(CatalogPath, DemoConfigJsonContext.Default.WeaponCatalog);
         Catalog.Validate();
+        _laserSparkMaterial = Context.Materials.Resolve("fire");
 
         Ammo = new int[Catalog.Weapons.Length];
         for (int i = 0; i < Ammo.Length; i++)
@@ -378,6 +380,28 @@ public sealed class WeaponController : Behaviour
         }
 
         Context.World.AddHeat(hitX, hitY, radius + 1, Math.Max(1f, weapon.HeatPerCell));
+        EmitLaserSparks(weapon, hitX, hitY, dirX, dirY, radius);
+    }
+
+    private void EmitLaserSparks(WeaponDefinition weapon, float hitX, float hitY, float dirX, float dirY, int radius)
+    {
+        if (!_laserSparkMaterial.IsValid)
+        {
+            return;
+        }
+
+        int count = Math.Clamp(radius + 3, 3, 12);
+        float angle = MathF.Atan2(-dirY, -dirX);
+        Context.Particles.Emit(new ParticleEmit(
+            hitX,
+            hitY,
+            _laserSparkMaterial,
+            count,
+            angle,
+            DirSpreadRad: 0.65f,
+            BaseSpeed: MathF.Max(24f, weapon.BeamDps * 0.015f),
+            SpeedJitter: 18f,
+            LifeTicks: 18));
     }
 
     private static int RangeOrHitLength(float length)

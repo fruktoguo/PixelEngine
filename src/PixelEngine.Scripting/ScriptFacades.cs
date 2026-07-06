@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization.Metadata;
-using PixelEngine.Simulation.Particles;
 
 namespace PixelEngine.Scripting;
 

@@ -152,7 +152,7 @@ public sealed class ScriptSimulationContextTests
         fixture.Context.Particles.Emit(new ParticleEmit(
             X: 4,
             Y: 5,
-            Material: sand.Value,
+            Material: sand,
             Count: 2,
             DirAngleRad: 0f,
             DirSpreadRad: 0f,
@@ -196,7 +196,7 @@ public sealed class ScriptSimulationContextTests
     {
         using Fixture fixture = Fixture.Create();
         MaterialId sand = fixture.Context.Materials.Resolve("sand");
-        ParticleEmit emit = new(4, 5, sand.Value, Count: 1, DirAngleRad: 0f, DirSpreadRad: 0.1f, BaseSpeed: 60f, SpeedJitter: 3f, LifeTicks: 7);
+        ParticleEmit emit = new(4, 5, sand, Count: 1, DirAngleRad: 0f, DirSpreadRad: 0.1f, BaseSpeed: 60f, SpeedJitter: 3f, LifeTicks: 7);
         const int Iterations = 128;
 
         fixture.Context.Particles.Emit(in emit);

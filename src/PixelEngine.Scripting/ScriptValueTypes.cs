@@ -135,6 +135,29 @@ public readonly record struct CharacterState(
 public readonly record struct ParticleSpawnDesc(float X, float Y, float VelocityX, float VelocityY, MaterialId Material, ushort Lifetime);
 
 /// <summary>
+/// 脚本请求按速度锥发射自由粒子的描述。
+/// </summary>
+/// <param name="X">发射原点 X 坐标。</param>
+/// <param name="Y">发射原点 Y 坐标。</param>
+/// <param name="Material">粒子材质句柄。</param>
+/// <param name="Count">请求发射的粒子数量。</param>
+/// <param name="DirAngleRad">中心方向角，单位弧度。</param>
+/// <param name="DirSpreadRad">方向半角扩散，单位弧度。</param>
+/// <param name="BaseSpeed">基础速度，单位 cell/秒。</param>
+/// <param name="SpeedJitter">速度抖动半径；实际速度落在 <c>BaseSpeed±SpeedJitter</c> 后钳到非负，单位 cell/秒。</param>
+/// <param name="LifeTicks">粒子 lifetime；0 表示使用粒子系统默认最大 lifetime。</param>
+public readonly record struct ParticleEmit(
+    float X,
+    float Y,
+    MaterialId Material,
+    int Count,
+    float DirAngleRad,
+    float DirSpreadRad,
+    float BaseSpeed,
+    float SpeedJitter,
+    ushort LifeTicks);
+
+/// <summary>
 /// 矩形区域，单位由调用接口约定。
 /// </summary>
 /// <param name="X">左上角 X。</param>

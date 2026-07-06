@@ -208,7 +208,7 @@ public sealed class ParticleSystem : IParticleReadback, ICellDestructionSink
     /// </summary>
     /// <param name="emit">发射请求。</param>
     /// <returns>实际成功进入粒子池的粒子数量。</returns>
-    public int Emit(in ParticleEmit emit)
+    public int Emit(in ParticleEmissionRequest emit)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(emit.Count);
         if (emit.Material == 0 || emit.Count == 0)
