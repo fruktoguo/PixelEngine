@@ -78,6 +78,17 @@ public readonly record struct AssetBrowserItem(
 }
 
 /// <summary>
+/// Project Window 可传递给 Shell 的 typed drag payload。
+/// </summary>
+/// <param name="AssetId">工程级 stable asset id。</param>
+/// <param name="Path">相对 content 根目录的 logical path。</param>
+/// <param name="Kind">资产类型。</param>
+public readonly record struct AssetBrowserDragPayload(
+    string AssetId,
+    string Path,
+    AssetBrowserItemKind Kind);
+
+/// <summary>
 /// 资源浏览器只读数据源。
 /// </summary>
 public interface IAssetBrowserDataSource

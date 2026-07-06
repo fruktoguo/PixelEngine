@@ -356,7 +356,11 @@ internal sealed class CreatePrefabAssetCommand(EditorPrefabAssetStore prefabs, i
     }
 }
 
-internal sealed class InstantiatePrefabCommand(EditorPrefabAssetStore prefabs, string assetPath, int? parentId) : IEditorCommand
+internal sealed class InstantiatePrefabCommand(
+    EditorPrefabAssetStore prefabs,
+    string assetPath,
+    int? parentId,
+    EditorSceneTransform? initialTransform = null) : IEditorCommand
 {
     private EditorSceneObjectSnapshot? _created;
 
@@ -367,6 +371,12 @@ internal sealed class InstantiatePrefabCommand(EditorPrefabAssetStore prefabs, s
         if (_created is null)
         {
             EditorGameObject created = prefabs.InstantiatePrefab(scene, assetPath, parentId);
+            if (initialTransform is not null)
+            {
+                scene.SetTransform(created.StableId, initialTransform);
+                RecordTransformOverrides(scene, created.StableId, initialTransform);
+            }
+
             _created = scene.CaptureSubtree(created.StableId);
             return;
         }
@@ -380,6 +390,15 @@ internal sealed class InstantiatePrefabCommand(EditorPrefabAssetStore prefabs, s
         {
             _created = scene.DeleteSubtree(_created.Objects[0].StableId);
         }
+    }
+
+    private static void RecordTransformOverrides(EditorSceneModel scene, int stableId, EditorSceneTransform transform)
+    {
+        scene.RecordPrefabOverride(stableId, "Transform.X", transform.X.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        scene.RecordPrefabOverride(stableId, "Transform.Y", transform.Y.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        scene.RecordPrefabOverride(stableId, "Transform.RotationRadians", transform.RotationRadians.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        scene.RecordPrefabOverride(stableId, "Transform.ScaleX", transform.ScaleX.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        scene.RecordPrefabOverride(stableId, "Transform.ScaleY", transform.ScaleY.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 }
 

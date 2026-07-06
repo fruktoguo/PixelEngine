@@ -179,8 +179,8 @@ internal sealed class EditorAssetManifestStore
         File.Move(sourceFullPath, targetFullPath);
         SaveDocument(ReplaceRecordLogicalPath(LoadDocument(), source.Id, next));
 
-        bool updatedActiveScene = activeScene is not null && RewritePrefabLinks(activeScene, current, next, source.Id);
-        int updatedDocuments = RewritePrefabLinksInReferenceDocuments(current, next, source.Id);
+        bool updatedActiveScene = activeScene is not null && RewriteReferences(activeScene, current, next, source.Id, source.AssetType);
+        int updatedDocuments = RewriteReferencesInReferenceDocuments(current, next, source.Id, source.AssetType);
         EditorAssetRecord moved = EnsureAsset(next);
         return new EditorAssetMoveResult(moved, updatedDocuments, updatedActiveScene);
     }
@@ -376,7 +376,7 @@ internal sealed class EditorAssetManifestStore
         return new EditorAssetManifestDocument { FormatVersion = CurrentFormatVersion, Assets = records };
     }
 
-    private int RewritePrefabLinksInReferenceDocuments(string oldPath, string newPath, string assetId)
+    private int RewriteReferencesInReferenceDocuments(string oldPath, string newPath, string assetId, EditorAssetType assetType)
     {
         if (!Directory.Exists(_contentRoot))
         {
@@ -394,7 +394,7 @@ internal sealed class EditorAssetManifestStore
         {
             EngineSceneDocument document = EngineSceneDocumentLoader.LoadDocument(files[i]);
             EditorSceneModel model = EditorSceneModel.FromDocument(document);
-            if (!RewritePrefabLinks(model, oldPath, newPath, assetId))
+            if (!RewriteReferences(model, oldPath, newPath, assetId, assetType))
             {
                 continue;
             }
@@ -406,26 +406,52 @@ internal sealed class EditorAssetManifestStore
         return updated;
     }
 
-    private static bool RewritePrefabLinks(EditorSceneModel scene, string oldPath, string newPath, string assetId)
+    private static bool RewriteReferences(EditorSceneModel scene, string oldPath, string newPath, string assetId, EditorAssetType assetType)
     {
         bool changed = false;
         EditorGameObject[] objects = [.. scene.EnumerateDepthFirst()];
         for (int i = 0; i < objects.Length; i++)
         {
-            EditorPrefabLink? link = objects[i].PrefabLink;
-            if (link is null || !MatchesPrefabReference(link, oldPath, assetId))
+            if (assetType == EditorAssetType.Prefab && RewritePrefabLink(scene, objects[i], oldPath, newPath, assetId))
             {
-                continue;
+                changed = true;
             }
 
-            EditorPrefabLink updated = link.Clone();
-            updated.AssetId = assetId;
-            updated.AssetPath = newPath;
-            scene.SetPrefabLink(objects[i].StableId, updated);
-            changed = true;
+            for (int componentIndex = 0; componentIndex < objects[i].Components.Count; componentIndex++)
+            {
+                EditorComponentModel component = objects[i].Components[componentIndex];
+                string[] fieldNames = [.. component.SerializedFields.Keys];
+                for (int fieldIndex = 0; fieldIndex < fieldNames.Length; fieldIndex++)
+                {
+                    string fieldName = fieldNames[fieldIndex];
+                    string value = component.SerializedFields[fieldName];
+                    if (!EditorAssetReferenceCodec.TryRewrite(value, oldPath, newPath, assetId, assetType, out string rewritten))
+                    {
+                        continue;
+                    }
+
+                    scene.SetComponentField(objects[i].StableId, componentIndex, fieldName, rewritten);
+                    changed = true;
+                }
+            }
         }
 
         return changed;
+    }
+
+    private static bool RewritePrefabLink(EditorSceneModel scene, EditorGameObject gameObject, string oldPath, string newPath, string assetId)
+    {
+        EditorPrefabLink? link = gameObject.PrefabLink;
+        if (link is null || !MatchesPrefabReference(link, oldPath, assetId))
+        {
+            return false;
+        }
+
+        EditorPrefabLink updated = link.Clone();
+        updated.AssetId = assetId;
+        updated.AssetPath = newPath;
+        scene.SetPrefabLink(gameObject.StableId, updated);
+        return true;
     }
 
     private static bool MatchesPrefabReference(EditorPrefabLink link, string oldPath, string assetId)
