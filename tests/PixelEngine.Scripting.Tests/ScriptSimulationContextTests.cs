@@ -423,6 +423,37 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
+    /// 验证脚本爆炸只把物理碎屑材质抛射为自由粒子，不把 smoke/fire 这种视觉性材质变成爆炸残留。
+    /// </summary>
+    [Fact]
+    public void WorldExplodeDoesNotEjectGasOrFireAsPersistentVisualDebris()
+    {
+        using Fixture fixture = Fixture.Create();
+        MaterialId sand = fixture.Context.Materials.Resolve("sand");
+        MaterialId water = fixture.Context.Materials.Resolve("water");
+        MaterialId smoke = fixture.Context.Materials.Resolve("smoke");
+        MaterialId fire = fixture.Context.Materials.Resolve("fire");
+        fixture.Grid.SetMaterial(10, 10, sand.Value);
+        fixture.Grid.SetMaterial(11, 10, water.Value);
+        fixture.Grid.SetMaterial(12, 10, smoke.Value);
+        fixture.Grid.SetMaterial(13, 10, fire.Value);
+
+        fixture.Context.World.Explode(11f, 10f, radius: 4, force: 12f);
+
+        Assert.Equal(1, fixture.Context.FlushParticleCommands());
+        fixture.Particles.RunEjectionPass(fixture.Kernel, fixture.Grid);
+
+        Assert.Equal(2, fixture.Particles.ActiveCount);
+        Assert.Contains(fixture.Particles.ActiveReadOnly.ToArray(), particle => particle.Material == sand.Value);
+        Assert.Contains(fixture.Particles.ActiveReadOnly.ToArray(), particle => particle.Material == water.Value);
+        Assert.DoesNotContain(fixture.Particles.ActiveReadOnly.ToArray(), particle => particle.Material == smoke.Value || particle.Material == fire.Value);
+        Assert.Equal((ushort)0, fixture.Grid.GetMaterial(10, 10));
+        Assert.Equal((ushort)0, fixture.Grid.GetMaterial(11, 10));
+        Assert.Equal(smoke.Value, fixture.Grid.GetMaterial(12, 10));
+        Assert.Equal(fire.Value, fixture.Grid.GetMaterial(13, 10));
+    }
+
+    /// <summary>
     /// 验证脚本角色控制器 facade 延迟到 Physics flush 后使用真实像素碰撞后端更新状态。
     /// </summary>
     [Fact]
@@ -658,7 +689,10 @@ public sealed class ScriptSimulationContextTests
             MaterialTable materials = Materials(
                 ("empty", CellType.Empty),
                 ("sand", CellType.Powder),
-                ("stone", CellType.Solid));
+                ("stone", CellType.Solid),
+                ("water", CellType.Liquid),
+                ("smoke", CellType.Gas),
+                ("fire", CellType.Fire));
             Chunk chunk = new(new ChunkCoord(0, 0));
             TestChunkSource chunks = new(chunk);
             MaterialPropsTable props = new(materials.Hot);

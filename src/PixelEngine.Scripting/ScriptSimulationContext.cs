@@ -470,7 +470,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             command.Width,
             command.A,
             command.B,
-            EjectMask.Powder | EjectMask.Liquid | EjectMask.Gas | EjectMask.Fire);
+            EjectMask.Powder | EjectMask.Liquid);
         _ = ParticleSystem.RequestEjection(in request);
     }
 
