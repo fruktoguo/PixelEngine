@@ -4171,7 +4171,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string packageRoot = Path.Combine(temp, "package");
             string packageName = "PixelEngine-Demo-9.9.9-win-x64-r2r";
             string expandedPackage = Path.Combine(packageRoot, packageName);
-            CreateFriendlyExpandedPackage(expandedPackage, includeUiNative: true);
+            CreateFriendlyExpandedPackage(expandedPackage, channel: "r2r", includeUiNative: true);
             string archive = Path.Combine(packageRoot, packageName + ".zip");
             CreateZipWithRoot(expandedPackage, archive, packageName);
             _ = WriteTextEvidence(Path.Combine(packageRoot, "SHA256SUMS"), $"{GetSha256(archive)}  {Path.GetFileName(archive)}{Environment.NewLine}");
@@ -4202,6 +4202,61 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
             Assert.NotEqual(0, missingUiNative.ExitCode);
             Assert.Contains("app/runtimes/win-x64/native/PixelEngine.UI.Native.dll", missingUiNative.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 Bash 发行审计真实执行时拒绝 AOT package 携带动态 UI native。
+    /// </summary>
+    [Fact]
+    public void BashReleaseArtifactAuditRejectsUiNativeInAotPackage()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-bash-ui-native-aot-audit-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string packageRoot = Path.Combine(temp, "package");
+            string packageName = "PixelEngine-Demo-9.9.9-win-x64-aot";
+            string expandedPackage = Path.Combine(packageRoot, packageName);
+            CreateFriendlyExpandedPackage(expandedPackage, channel: "aot", includeUiNative: false);
+            string archive = Path.Combine(packageRoot, packageName + ".zip");
+            CreateZipWithRoot(expandedPackage, archive, packageName);
+            _ = WriteTextEvidence(Path.Combine(packageRoot, "SHA256SUMS"), $"{GetSha256(archive)}  {Path.GetFileName(archive)}{Environment.NewLine}");
+
+            ScriptResult audit = RunBashScript(
+                root,
+                "tools/audit-release-artifacts.sh",
+                "--publish-root",
+                ToBashPath(Path.Combine(temp, "missing-publish")),
+                "--package-root",
+                ToBashPath(packageRoot),
+                "--active-rids",
+                "win-x64");
+
+            Assert.Equal(0, audit.ExitCode);
+            Assert.Contains("Package OK: 1 expanded=1", audit.Output, StringComparison.Ordinal);
+
+            _ = WriteTextEvidence(Path.Combine(expandedPackage, "app", "runtimes", "win-x64", "native", "PixelEngine.UI.Native.dll"), "ui native");
+            ScriptResult forbiddenUiNative = RunBashScript(
+                root,
+                "tools/audit-release-artifacts.sh",
+                "--publish-root",
+                ToBashPath(Path.Combine(temp, "missing-publish")),
+                "--package-root",
+                ToBashPath(packageRoot),
+                "--active-rids",
+                "win-x64");
+
+            Assert.NotEqual(0, forbiddenUiNative.ExitCode);
+            Assert.Contains("app/runtimes/win-x64/native/PixelEngine.UI.Native.dll", forbiddenUiNative.Output, StringComparison.Ordinal);
         }
         finally
         {
@@ -5970,13 +6025,17 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         return new ScriptResult(process.ExitCode, output);
     }
 
-    private static void CreateFriendlyExpandedPackage(string root, bool includeUiNative)
+    private static void CreateFriendlyExpandedPackage(string root, string channel, bool includeUiNative)
     {
         _ = WriteTextEvidence(Path.Combine(root, "README.txt"), "readme");
         _ = WriteTextEvidence(Path.Combine(root, "NOTICE.txt"), "notice");
         _ = WriteTextEvidence(Path.Combine(root, "PixelEngine Demo.exe"), "launcher");
-        _ = WriteTextEvidence(Path.Combine(root, "app", "PixelEngine.Demo.dll"), "app");
-        _ = WriteTextEvidence(Path.Combine(root, "app", "runtimes", "win-x64", "native", "box2d.dll"), "box2d");
+        if (string.Equals(channel, "r2r", StringComparison.Ordinal))
+        {
+            _ = WriteTextEvidence(Path.Combine(root, "app", "PixelEngine.Demo.dll"), "app");
+            _ = WriteTextEvidence(Path.Combine(root, "app", "runtimes", "win-x64", "native", "box2d.dll"), "box2d");
+        }
+
         if (includeUiNative)
         {
             _ = WriteTextEvidence(Path.Combine(root, "app", "runtimes", "win-x64", "native", "PixelEngine.UI.Native.dll"), "ui native");

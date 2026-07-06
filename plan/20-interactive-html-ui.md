@@ -212,7 +212,7 @@ C#↔UI 通信：
 - [ ] Ultralight native + UltralightNet 绑定登记 plan/00 §4.1 门控、dynamic-only；AOT 不友好时门控排除并回退 `ManagedFallbackBackend`（§5、§7）
 
 打包与发行（配合 plan/15）：
-- [~] `PixelEngine.UI.Native` 及可选 Ultralight native 落 `runtimes/<rid>/native/`，dynamic-only，不进 Box2D dual-build；首期仅 `win-x64`(+可选 `win-arm64`) 激活，其余 dormant。RmlUi 主后端已通过 `PixelEngine.UiNative.targets`/CMake `SHARED`/`build-native` 复制到 `runtimes/<rid>/native/`，`release-rids.json` 已锁定 win-x64/win-arm64 active、其余 dormant；`audit-release-artifacts.ps1/.sh` 已强制 R2R 包含 UI native、AOT 不携带动态 UI native 并回退 ManagedFallback，`HtmlUiNativePackagingUsesDynamicOnlyRuntimeLayout`、`PackageScriptPlacesRuntimeFilesUnderAppAndAuditRejectsRootClutter` 与 `BashReleaseArtifactAuditRequiresUiNativeInR2RPackage` 覆盖 PowerShell/Bash 行为。Ultralight native 与真实 release artifact 证据仍待后续切片（§3.10、§7）
+- [~] `PixelEngine.UI.Native` 及可选 Ultralight native 落 `runtimes/<rid>/native/`，dynamic-only，不进 Box2D dual-build；首期仅 `win-x64`(+可选 `win-arm64`) 激活，其余 dormant。RmlUi 主后端已通过 `PixelEngine.UiNative.targets`/CMake `SHARED`/`build-native` 复制到 `runtimes/<rid>/native/`，`release-rids.json` 已锁定 win-x64/win-arm64 active、其余 dormant；`audit-release-artifacts.ps1/.sh` 已强制 R2R 包含 UI native、AOT 不携带动态 UI native 并回退 ManagedFallback，`HtmlUiNativePackagingUsesDynamicOnlyRuntimeLayout`、`PackageScriptPlacesRuntimeFilesUnderAppAndAuditRejectsRootClutter`、`BashReleaseArtifactAuditRequiresUiNativeInR2RPackage` 与 `BashReleaseArtifactAuditRejectsUiNativeInAotPackage` 覆盖 PowerShell/Bash 行为。Ultralight native 与真实 release artifact 证据仍待后续切片（§3.10、§7）
 - [ ] macOS 对 UI native 库 codesign + notarize（RID 激活后）；纳入 `SHA256SUMS`；README/许可声明（Ultralight 需转授权条款、RmlUi MIT + FreeType FTL）
 
 ---
