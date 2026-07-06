@@ -1332,6 +1332,79 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证 Excavator 使用真实输入时按圆形半径清除，并受武器 cooldown 控制挖掘速率。
+    /// </summary>
+    [Fact]
+    public void WeaponControllerExcavatorClearsCircleAndRespectsCooldownRate()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                {
+                  "id": "rate-excavator",
+                  "displayName": "Rate Excavator",
+                  "kind": "excavator",
+                  "damage": 0,
+                  "radius": 3,
+                  "falloff": "none",
+                  "cooldownSeconds": 0.05,
+                  "ammoMax": 8,
+                  "muzzleCue": "ui_click",
+                  "impactCue": "impact_stone",
+                  "hudColor": "#FFFFFFFF"
+                }
+              ]
+            }
+            """);
+        try
+        {
+            MaterialTable materials = DemoMaterials();
+            Assert.True(materials.TryGetId("stone", out ushort stone));
+            using Engine engine = CreateManualScriptEngine(
+                out ScriptInputApi input,
+                out CellGrid grid,
+                out _,
+                out ScriptScene scene,
+                materials,
+                contentRoot: contentRoot);
+            FillRect(grid, stone, minX: 33, minY: 30, maxX: 38, maxY: 39);
+            Entity entity = scene.CreateEntity();
+            _ = entity.AddComponent<Transform>();
+            PlayerController player = entity.AddComponent<PlayerController>();
+            player.SpawnX = 14f;
+            player.SpawnY = 30f;
+            _ = entity.AddComponent<PlayerHealth>();
+            WeaponController weapons = entity.AddComponent<WeaponController>();
+
+            engine.RunHeadlessTicks(2);
+            input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+
+            Assert.Equal(WeaponKind.Excavator, weapons.LastDispatchedKind);
+            Assert.Equal(1, weapons.PrimaryFireCount);
+            Assert.Equal((ushort)0, grid.MaterialAt(33, 34));
+            Assert.Equal((ushort)0, grid.MaterialAt(36, 34));
+            Assert.Equal((ushort)0, grid.MaterialAt(33, 31));
+            Assert.Equal((ushort)0, grid.MaterialAt(33, 37));
+            Assert.Equal(stone, grid.MaterialAt(37, 34));
+            Assert.Equal(stone, grid.MaterialAt(33, 38));
+
+            input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+            Assert.Equal(1, weapons.PrimaryFireCount);
+            Assert.True(weapons.CooldownRemaining > 0f);
+
+            engine.RunHeadlessTicks(5);
+            Assert.True(weapons.PrimaryFireCount > 1);
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// 验证六类武器均可经公开脚本输入触发，并在真实后端产生差异化效果。
     /// </summary>
     [Fact]
