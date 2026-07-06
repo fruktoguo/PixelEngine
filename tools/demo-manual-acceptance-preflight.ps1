@@ -825,6 +825,8 @@ function Assert-ScriptedProbeSummarySemantics {
         "playable-world" {
             Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "playable_shots" -Minimum 1
             Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "max_particles" -Minimum 1
+            Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "max_transient_bursts" -Minimum 1
+            Assert-ScriptedProbeNumberBelow -Values $Values -ProbeName $Name -Key "transient_bursts" -MaximumExclusive 1
             Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "frame_samples" -Minimum 120
             Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "camera_samples" -Minimum 1
             Assert-ScriptedProbeNumberAtLeast -Values $Values -ProbeName $Name -Key "player_ground_samples" -Minimum 1

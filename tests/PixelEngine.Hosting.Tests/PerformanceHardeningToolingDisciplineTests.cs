@@ -1917,17 +1917,25 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string harness = string.Concat(
                 "$ErrorActionPreference='Stop'\n",
                 source[start..end],
-                "\n$good = '脚本化窗口输入摘要：frames=240, playable_shots=2, max_particles=316, frame_samples=240, camera_samples=239, player_ground_samples=105, player_air_samples=134, player_left_ground=True, player_air_control=True, camera_followed=True, render_camera_synced=True。'\n",
+                "\n$good = '脚本化窗口输入摘要：frames=240, playable_shots=2, max_particles=316, transient_bursts=0, max_transient_bursts=4, frame_samples=240, camera_samples=239, player_ground_samples=105, player_air_samples=134, player_left_ground=True, player_air_control=True, camera_followed=True, render_camera_synced=True。'\n",
                 "$values = ConvertFrom-ScriptedProbeSummary -Summary $good\n",
                 "Assert-ScriptedProbeSummarySemantics -Name 'playable-world' -Values $values\n",
                 "$goodEditor = '脚本化窗口输入摘要：frames=180, frame_samples=120, editor_enabled=True, editor_running=True, editor_panels=12, editor_bridge_frames=120, render_camera_synced=True, scripted_play_entered=True, scripted_play_exited=True, scripted_scene_saved=True, scripted_project_closed=True, scripted_project_reopened=True。'\n",
                 "Assert-ScriptedProbeSummarySemantics -Name 'editor-window' -Values (ConvertFrom-ScriptedProbeSummary -Summary $goodEditor)\n",
-                "$bad = '脚本化窗口输入摘要：frames=240, playable_shots=0, max_particles=316, frame_samples=240, camera_samples=239, player_ground_samples=105, player_air_samples=134, player_left_ground=True, player_air_control=True, camera_followed=True, render_camera_synced=True。'\n",
+                "$bad = '脚本化窗口输入摘要：frames=240, playable_shots=0, max_particles=316, transient_bursts=0, max_transient_bursts=4, frame_samples=240, camera_samples=239, player_ground_samples=105, player_air_samples=134, player_left_ground=True, player_air_control=True, camera_followed=True, render_camera_synced=True。'\n",
                 "try {\n",
                 "  Assert-ScriptedProbeSummarySemantics -Name 'playable-world' -Values (ConvertFrom-ScriptedProbeSummary -Summary $bad)\n",
                 "  throw 'expected semantic failure missing'\n",
                 "} catch {\n",
                 "  if ($_.Exception.Message -notlike '*playable_shots*') { throw }\n",
+                "  Write-Output $_.Exception.Message\n",
+                "}\n",
+                "$badTransient = '脚本化窗口输入摘要：frames=240, playable_shots=2, max_particles=316, transient_bursts=2, max_transient_bursts=4, frame_samples=240, camera_samples=239, player_ground_samples=105, player_air_samples=134, player_left_ground=True, player_air_control=True, camera_followed=True, render_camera_synced=True。'\n",
+                "try {\n",
+                "  Assert-ScriptedProbeSummarySemantics -Name 'playable-world' -Values (ConvertFrom-ScriptedProbeSummary -Summary $badTransient)\n",
+                "  throw 'expected transient burst failure missing'\n",
+                "} catch {\n",
+                "  if ($_.Exception.Message -notlike '*transient_bursts*') { throw }\n",
                 "  Write-Output $_.Exception.Message\n",
                 "}\n",
                 "$badEditor = '脚本化窗口输入摘要：frames=180, frame_samples=120, editor_enabled=True, editor_running=False, editor_panels=12, editor_bridge_frames=120, render_camera_synced=True, scripted_play_entered=True, scripted_play_exited=True, scripted_scene_saved=True, scripted_project_closed=True, scripted_project_reopened=True。'\n",
@@ -1945,8 +1953,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
             Assert.Equal(0, result.ExitCode);
             Assert.Contains("playable_shots", result.Output, StringComparison.Ordinal);
+            Assert.Contains("transient_bursts", result.Output, StringComparison.Ordinal);
             Assert.Contains("editor_running", result.Output, StringComparison.Ordinal);
             Assert.Contains("必须 >=", result.Output, StringComparison.Ordinal);
+            Assert.Contains("必须 <", result.Output, StringComparison.Ordinal);
         }
         finally
         {
