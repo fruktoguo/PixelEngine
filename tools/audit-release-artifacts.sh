@@ -75,6 +75,32 @@ ui_native_name_for_rid() {
   esac
 }
 
+is_ultralight_native_file_name() {
+  local name="${1,,}"
+  case "$name" in
+    ultralight*.dll|libultralight*.so|libultralight*.dylib|webcore*.dll|libwebcore*.so|libwebcore*.dylib|appcore*.dll|libappcore*.so|libappcore*.dylib)
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+assert_no_inactive_ultralight_native() {
+  local directory="$1"
+  local found=()
+  local file
+  while IFS= read -r -d '' file; do
+    if is_ultralight_native_file_name "$(basename "$file")"; then
+      found+=("$file")
+    fi
+  done < <(find "$directory" -type f -print0)
+
+  if (( ${#found[@]} > 0 )); then
+    fail_audit "Ultralight optional profile inactive: disallowed Ultralight native; missing SDK provenance, commercial redistribution license, SHA256/NOTICE, codesign/notarize, and release artifact evidence: ${found[*]}"
+  fi
+}
+
 assert_file_exists() {
   local path="$1"
   local message="$2"
@@ -459,6 +485,10 @@ assert_friendly_package_layout() {
         fail_audit "package 不应包含编辑器专属闭包: $name -> $relative"
       fi
 
+      if is_ultralight_native_file_name "${relative##*/}"; then
+        fail_audit "package contains inactive Ultralight native; missing SDK provenance, commercial redistribution license, SHA256/NOTICE, and release artifact evidence: $name -> $relative"
+      fi
+
       if [[ "$channel" != "r2r" ]]; then
         case "${relative##*/}" in
           PixelEngine.UI.Native.dll|libPixelEngine.UI.Native.so|libPixelEngine.UI.Native.dylib)
@@ -587,6 +617,10 @@ assert_friendly_expanded_package_layout() {
         fail_audit "展开 package 不应包含编辑器专属闭包: $name -> $relative"
       fi
 
+      if is_ultralight_native_file_name "${relative##*/}"; then
+        fail_audit "expanded package contains inactive Ultralight native; missing SDK provenance, commercial redistribution license, SHA256/NOTICE, and release artifact evidence: $name -> $relative"
+      fi
+
       if [[ "$channel" != "r2r" ]]; then
         case "${relative##*/}" in
           PixelEngine.UI.Native.dll|libPixelEngine.UI.Native.so|libPixelEngine.UI.Native.dylib)
@@ -669,6 +703,7 @@ audit_publish_directory() {
   fi
 
   assert_no_static_openal_or_angle "$directory"
+  assert_no_inactive_ultralight_native "$directory"
   assert_linux_dynamic_link "$entry" "$rid"
   echo "Publish OK: $rid/$channel"
 }

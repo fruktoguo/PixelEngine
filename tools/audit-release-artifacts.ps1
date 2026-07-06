@@ -63,6 +63,23 @@ function Get-UiNativeName([string]$rid) {
   return 'libPixelEngine.UI.Native.dylib'
 }
 
+function Test-UltralightNativeBinaryName([string]$name) {
+  $lower = $name.ToLowerInvariant()
+  return $lower -match '^(lib)?ultralight.*\.(dll|so|dylib)$' -or
+    $lower -match '^(lib)?webcore.*\.(dll|so|dylib)$' -or
+    $lower -match '^(lib)?appcore.*\.(dll|so|dylib)$'
+}
+
+function Assert-NoInactiveUltralightNative([string]$directory) {
+  $ultralightLibraries = Get-ChildItem -LiteralPath $directory -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object { Test-UltralightNativeBinaryName $_.Name }
+
+  if ($ultralightLibraries) {
+    $paths = ($ultralightLibraries | Select-Object -ExpandProperty FullName) -join [Environment]::NewLine
+    throw "Ultralight optional profile inactive：发行产物不得包含 Ultralight native；缺少 SDK provenance、commercial redistribution license、SHA256/NOTICE、codesign/notarize 与 release artifact evidence：$paths"
+  }
+}
+
 function Assert-FileExists([string]$path, [string]$message) {
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
     throw "${message}: $path"
@@ -338,6 +355,10 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
   }
 
   foreach ($relative in $relativeFileEntries) {
+    if (Test-UltralightNativeBinaryName ([IO.Path]::GetFileName($relative))) {
+      throw "package 包含未激活 Ultralight native；缺少 SDK provenance、commercial redistribution license、SHA256/NOTICE 与 release artifact evidence: $($package.Name) -> $relative"
+    }
+
     if ($channel -ne 'r2r' -and [IO.Path]::GetFileName($relative) -in @('PixelEngine.UI.Native.dll', 'libPixelEngine.UI.Native.so', 'libPixelEngine.UI.Native.dylib')) {
       throw "package AOT 通道不应携带动态 UI native，应回退 ManagedFallback: $($package.Name) -> $relative"
     }
@@ -452,6 +473,10 @@ function Assert-FriendlyExpandedPackageLayout([System.IO.DirectoryInfo]$packageD
   }
 
   foreach ($relative in $relativeFileEntries) {
+    if (Test-UltralightNativeBinaryName ([IO.Path]::GetFileName($relative))) {
+      throw "展开 package 包含未激活 Ultralight native；缺少 SDK provenance、commercial redistribution license、SHA256/NOTICE 与 release artifact evidence: $($packageDirectory.Name) -> $relative"
+    }
+
     if ($channel -ne 'r2r' -and [IO.Path]::GetFileName($relative) -in @('PixelEngine.UI.Native.dll', 'libPixelEngine.UI.Native.so', 'libPixelEngine.UI.Native.dylib')) {
       throw "展开 package AOT 通道不应携带动态 UI native，应回退 ManagedFallback: $($packageDirectory.Name) -> $relative"
     }
@@ -550,6 +575,7 @@ function Test-PublishDirectory([string]$rid, [string]$channel) {
   }
 
   Assert-NoStaticOpenAlOrAngle $directory
+  Assert-NoInactiveUltralightNative $directory
   Assert-LinuxDynamicLink $entry $rid
   Write-Host "Publish artifact audit passed: $rid/$channel"
 }

@@ -405,7 +405,7 @@ PixelEngine ships dynamic/runtime dependencies in app/ and game content in conte
 - Box2D: MIT license. Used for pixel rigid body physics.
 - RmlUi: MIT license. PixelEngine.UI.Native links the RmlUi core into the dynamic UI backend when the native UI library is present.
 - FreeType: FreeType Project License. Used by the RmlUi native UI backend for font rasterization.
-- Ultralight: optional commercial-license backend. It is not included in this package unless an activated UI profile explicitly ships its native binaries.
+- Ultralight: inactive optional commercial-license profile. This package must not include Ultralight native binaries until SDK provenance, redistribution license, SHA256/NOTICE, codesign/notarize, and release artifact evidence are present. Requests fall back to ManagedFallback.
 
 Full upstream license texts are kept with the vendored sources under native/.
 EOF

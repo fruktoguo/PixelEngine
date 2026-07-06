@@ -749,16 +749,50 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("pixelengine_ui_native", buildNativeSh, StringComparison.Ordinal);
         Assert.Contains("NOTICE.txt", packagePs1, StringComparison.Ordinal);
         Assert.Contains("RmlUi: MIT license", packagePs1, StringComparison.Ordinal);
-        Assert.Contains("Ultralight: optional commercial-license backend", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("Ultralight: inactive optional commercial-license profile", packagePs1, StringComparison.Ordinal);
+        Assert.Contains("Requests fall back to ManagedFallback", packagePs1, StringComparison.Ordinal);
         Assert.Contains("NOTICE.txt", packageSh, StringComparison.Ordinal);
         Assert.Contains("RmlUi: MIT license", packageSh, StringComparison.Ordinal);
-        Assert.Contains("Ultralight: optional commercial-license backend", packageSh, StringComparison.Ordinal);
+        Assert.Contains("Ultralight: inactive optional commercial-license profile", packageSh, StringComparison.Ordinal);
+        Assert.Contains("Requests fall back to ManagedFallback", packageSh, StringComparison.Ordinal);
         Assert.Contains("NOTICE.txt", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("Ultralight optional profile inactive", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("Assert-NoInactiveUltralightNative", auditPs1, StringComparison.Ordinal);
         Assert.Contains("NOTICE.txt", auditSh, StringComparison.Ordinal);
+        Assert.Contains("Ultralight optional profile inactive", auditSh, StringComparison.Ordinal);
+        Assert.Contains("assert_no_inactive_ultralight_native", auditSh, StringComparison.Ordinal);
         Assert.Contains("R2R 产物缺少动态 UI native", auditPs1, StringComparison.Ordinal);
         Assert.Contains("R2R 产物缺少动态 UI native", auditSh, StringComparison.Ordinal);
         Assert.Contains("AOT 产物不应携带动态 UI native", auditPs1, StringComparison.Ordinal);
         Assert.Contains("AOT 产物不应携带动态 UI native", auditSh, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 Ultralight 设置入口和计划口径都明确写成未激活 optional profile，避免误导为真后端完成。
+    /// </summary>
+    [Fact]
+    public void UltralightOptionalProfileIsVisibleInactiveGateNotCompletedBackend()
+    {
+        string root = FindRepositoryRoot();
+        string playerSettingsPanel = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "Settings", "PlayerSettingsPanel.cs"));
+        string uiBackendKind = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.UI", "UiBackendKind.cs"));
+        string gate = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.UI", "UltralightOptionalProfileGate.cs"));
+        string plan20 = File.ReadAllText(Path.Combine(root, "plan", "20-interactive-html-ui.md"));
+        string plan14 = File.ReadAllText(Path.Combine(root, "plan", "14-testing-benchmarking.md"));
+        string plan15 = File.ReadAllText(Path.Combine(root, "plan", "15-build-packaging-distribution.md"));
+
+        Assert.Contains("Ultralight (inactive optional profile → ManagedFallback)", playerSettingsPanel, StringComparison.Ordinal);
+        Assert.Contains("UltralightOptionalProfileGate.InactiveReason", playerSettingsPanel, StringComparison.Ordinal);
+        Assert.Contains("未满足 native SDK / commercial license / release gate 前保持未激活", uiBackendKind, StringComparison.Ordinal);
+        Assert.Contains("public const bool IsActive = false", gate, StringComparison.Ordinal);
+        Assert.Contains("commercial redistribution license", gate, StringComparison.Ordinal);
+        Assert.Contains("release artifact evidence", gate, StringComparison.Ordinal);
+        Assert.Contains("未激活 optional profile", plan20, StringComparison.Ordinal);
+        Assert.Contains("release audit 不允许 Ultralight native 混入", plan20, StringComparison.Ordinal);
+        Assert.Contains("optional profile 默认 inactive", plan14, StringComparison.Ordinal);
+        Assert.Contains("plan 状态不误勾 M15", plan14, StringComparison.Ordinal);
+        Assert.Contains("Ultralight optional profile inactive", plan15, StringComparison.Ordinal);
+        Assert.Contains("不得把 Ultralight native 混入包当成发行闭合", plan15, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -20,7 +20,7 @@
 - [x] RmlUi desktop GL3 主路径已落地：vendored RmlUi/FreeType、dynamic-only `PixelEngine.UI.Native`、GL 函数注入、RmlUi GL3 renderer、DOM data-model/action、HitTest、图片 PNG→TGA 缓存、真实窗口 smoke 与 GL state restore 均有证据。
 - [x] same-window/same-GL 合成底座已落地：`RenderPipeline.RegisterUiLayer`、`UiLayerCompositor order=100`、Editor overlay order=200、`GameUiPhaseDriver` 与 render cadence 解耦已实现。
 - [x] FontEngine、CJK 子集资产、content/ui manifest、screens/images、ManagedFallback/RmlUi 图片消费与 UI 诊断计时已落地。
-- [ ] `UltralightBackend` 真实后端未完成：仓库仍无 Ultralight native 依赖、surface API、JS bridge、字体注册、许可/发行 gate；当前只存在可复用 offscreen presenter 底座与显式回退。
+- [ ] `UltralightBackend` 真实后端未完成：仓库仍无 Ultralight native 依赖、surface API、JS bridge、字体注册、许可/发行 gate；当前只存在可复用 offscreen presenter 底座与显式回退。本轮已正式保留为未激活 optional profile，并补 release audit 不允许 Ultralight native 混入包的自动化门禁。
 - [!] M14 透明 UI 产品验收未闭合：自动化合成/HitTest/GL restore 不能替代真实窗口 Demo 产品面视频与人工体验确认。
 - [!] M15 RmlUi ANGLE/GLES native profile 未闭合：当前 native shim 是 desktop GL3 official renderer，不是 GLES3/ANGLE 双 profile。
 - [!] M15 真实平台 IME composition 未闭合：committed text 与 `UiTextComposition` 抽象已分离，但真实平台 composition 事件、候选/预编辑可视化和后端一致性仍缺。
@@ -33,7 +33,7 @@
 | `ManagedFallbackBackend` | - [x] 纯托管基线，永远可用 | - [x] XHTML 子集、text/button/checkbox/progress/image、模型值、事件环形缓冲、Gui host 合帧、CJK 字体、HitTest、HUD 共栈与零 native | - [ ] 完整 CSS 盒模型不是基线目标，只需保持产品屏幕等价可用 | - [x] 默认 fallback；native 缺失、unsupported RID、AOT、Ultralight 未激活时使用 |
 | `RmlUiBackend` desktop GL3 | - [x] 默认 HTML/CSS 子集主路径 | - [x] RmlUi 6.2 + FreeType 2.14.3、`PixelEngine.UI.Native` dynamic-only、GL3 renderer、字体注册、DOM model/action、真实窗口 smoke、GL state restore | - [!] ANGLE/GLES native profile 未完成；RmlUi 是 HTML/CSS 子集，不承诺标准 HTML5/JS 完整保真 | - [x] RmlUi native 不可用、GLES/ANGLE 未支持或加载失败时显式回退 ManagedFallback 并记录 `GameUiBackendSelection` |
 | `RmlUiBackend` ANGLE/GLES | - [!] 阻塞 | - [x] 当前已能识别 GLES/ANGLE 并安全回退，避免误用 GL3 renderer | - [!] 需要 GLES3 renderer/loader、shader `#version 300 es`、同 context 函数表验证、状态恢复 smoke | - [x] 保持 ManagedFallback |
-| `UltralightBackend` | - [ ] 未实现真实后端 | - [x] `UiOffscreenSurfacePresenter` 已验证 BGRA8 dirty upload + textured quad 合成底座；Hosting 对 `UiBackendKind.Ultralight` 明确回退 | - [ ] 需要 native 依赖、surface API、JS bridge、字体注册、`content/ui` resource loader、许可/发行 gate；M15 还需 artifact / notarize / license 证据 | - [x] 未激活或不合规时回退 ManagedFallback，不伪造后端完成 |
+| `UltralightBackend` | - [ ] 未实现真实后端；- [x] 未激活 optional profile 已门控 | - [x] `UiOffscreenSurfacePresenter` 已验证 BGRA8 dirty upload + textured quad 合成底座；Hosting 对 `UiBackendKind.Ultralight` 明确回退；Editor label / runtime diagnostic / release audit 均标注 inactive | - [ ] 需要 native 依赖、surface API、JS bridge、字体注册、`content/ui` resource loader、许可/发行 gate；M15 还需 artifact / notarize / license 证据 | - [x] 未激活或不合规时回退 ManagedFallback，不伪造后端完成；release audit 不允许 Ultralight native 混入 |
 
 ## 4. 已实现证据 checklist
 
@@ -70,8 +70,9 @@
 
 - [!] **RmlUi ANGLE/GLES profile**：需要真实 GLES3 renderer/loader、shader profile、同一 GL/ANGLE context 函数表注入、状态恢复与真实窗口 smoke；当前 GL3 renderer 不得标为双 profile 完成。
 - [!] **真实平台 IME composition**：需要 Windows/macOS/Linux 目标输入后端提供 composition start/update/commit/cancel、候选/预编辑可视化、focus/capture 清理与 RmlUi/ManagedFallback/Ultralight 一致性；KeyChar/committed text 只能算提交文本。
+- [x] **Ultralight optional profile inactive gate**：`UltralightOptionalProfileGate` 集中声明默认未激活、回退 `ManagedFallback` 与缺失 native SDK/provenance、commercial redistribution license、runtime surface/JS bridge、RID native binaries、SHA256/NOTICE、codesign/notarize、release artifact evidence 的可见诊断；Editor Settings、Hosting fallback、package NOTICE 与 release audit 已同源表达。
 - [ ] **UltralightBackend 本体**：实现 native loading、surface creation、dirty rect pull、BGRA8 upload、JS global bridge、DOM HitTest、font/resource loader、lifetime dispose 与 no-op/fallback gate。
-- [!] **Ultralight 许可与发行**：需要许可条款、商业阈值、redistribution 说明、native DLL/so/dylib provenance、SHA256、release artifact、codesign/notarize（macOS 激活后）证据。
+- [!] **Ultralight 许可与发行**：需要许可条款、商业阈值、redistribution 说明、native DLL/so/dylib provenance、SHA256、release artifact、codesign/notarize（macOS 激活后）证据；未满足前发行审计必须拒绝 Ultralight native 混入，不能把 native 文件出现当作 M15 闭合。
 - [!] **UI native release artifact**：需要 win-x64/win-arm64 active R2R release artifact 证据、AOT fallback artifact 证据、`SHA256SUMS`、license README、GitHub release / workflow 同源报告；`workflow_dispatch`、`load-only`、`pending_review` 不能作为完成。
 - [!] **真实窗口产品体验**：需要 Demo UI 产品面视频、人工体验 checklist 与复核结论；`scripted_probe_only`、短跑截图或 GL smoke 只能作为辅助证据。
 
@@ -82,14 +83,15 @@
 - [x] `dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --filter FullyQualifiedName~GameUi|FullyQualifiedName~InputArbitrator|FullyQualifiedName~DisabledGameUi` 覆盖 Hosting 装配、输入仲裁与禁用零开销。
 - [x] `dotnet test tests/PixelEngine.Demo.Tests/PixelEngine.Demo.Tests.csproj -c Release --filter FullyQualifiedName~DemoUiContentTests|FullyQualifiedName~GameUiDemoController` 覆盖 Demo content/ui 与公开 API dogfood。
 - [x] `dotnet run -c Release --project bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -- --filter *GameUiAllocationBenchmarks*` 是 UI 稳态零分配基准入口。
-- [x] `tools/audit-release-artifacts.ps1` / `.sh` 包含 UI native dynamic-only 与 R2R/AOT fallback 审计断言。
+- [x] `tools/audit-release-artifacts.ps1` / `.sh` 包含 UI native dynamic-only 与 R2R/AOT fallback 审计断言，并在 Ultralight optional profile inactive 时拒绝 `Ultralight` / `WebCore` / `AppCore` native 混入 package 或 publish 产物。
 - [!] `tools/demo-manual-acceptance-preflight.ps1`、release evidence preflight 与 native leak / codesign 相关工具只提供证据入口；未有合格 manifest、真实平台材料和人工/外部复核前保持阻塞。
 
 ## 8. 依赖与下一闭合节点 checklist
 
 - [x] 上游依赖：plan/00 技术栈与 native gate、plan/08 `RegisterUiLayer` / GL context / offscreen upload、plan/18 Hosting phase driver / `IGameUiService` bridge、plan/19 `PixelEngine.Gui` / `GuiFontManager`、plan/11 脚本契约均已作为 UI runtime 边界登记。
 - [x] 下游消费：plan/13 使用 `content/ui` 与 `IGameUiService` 做 Showcase Demo UI；plan/19 EditorShell 通过 order=200 盖在 game UI 上；plan/15 打包 UI native 与 fallback；plan/14 维护后端一致性、smoke、benchmark；plan/17 只登记 M14/M15 exit gate。
-- [ ] 下一闭合节点：实现 `UltralightBackend` 真后端或正式保留为未激活 optional profile，并补 license/release gate 说明。
+- [x] 闭合节点：正式保留 `UltralightBackend` 为未激活 optional profile，并补 runtime fallback、可见诊断、license/release gate 说明与 release audit 不允许 Ultralight native 混入的自动化测试。
+- [ ] 下一闭合节点：若要激活 Ultralight，必须先实现真 `UltralightBackend`、native SDK/provenance、commercial redistribution license、surface/JS bridge、RID binaries、SHA256/NOTICE、codesign/notarize 与 release artifact evidence。
 - [!] 下一闭合节点：补 RmlUi ANGLE/GLES native profile 设计与真实窗口 smoke，未完成前必须继续由 ManagedFallback 回退承接。
 - [!] 下一闭合节点：接入真实平台 IME composition 事件与预编辑 UI，完成三后端一致性验证；不得用 KeyChar/committed text 替代。
 - [!] 下一闭合节点：补透明 UI Demo 产品面真实窗口视频、人工体验 checklist、release/native 证据后，再同步 README/plan17 dashboard。

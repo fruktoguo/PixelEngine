@@ -16,7 +16,7 @@ public enum UiBackendKind : byte
     RmlUi = 1,
 
     /// <summary>
-    /// Ultralight 标准 HTML 可选后端。
+    /// Ultralight 标准 HTML 可选高保真 profile；未满足 native SDK / commercial license / release gate 前保持未激活并回退 ManagedFallback。
     /// </summary>
     Ultralight = 2,
 }
