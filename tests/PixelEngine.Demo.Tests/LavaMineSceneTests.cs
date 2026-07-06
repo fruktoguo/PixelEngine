@@ -231,6 +231,74 @@ public sealed class LavaMineSceneTests
             $"acid 腐蚀后物理系统不应丢失所有结构，destroyed={maxDestroyed}, created={maxCreated}, active={physics.PhysicsWorld.ActiveBodyCount}, before={beforeBodies}。");
     }
 
+    /// <summary>
+    /// 验证 metal 梁近 lava 熔化后，RigidOwned 支撑退出刚体 mask，并让上方 wood 结构重建为下落的动态刚体。
+    /// </summary>
+    [Fact]
+    public async Task MetalLavaMeltsSupportAndDropsUpperWoodStructure()
+    {
+        using Engine engine = await CreateLavaMineEngineAsync();
+        engine.RunHeadlessTicks(2);
+
+        CellGrid grid = engine.Context.GetService<CellGrid>();
+        ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
+        MaterialTable materials = engine.Context.GetService<MaterialTable>();
+        TemperatureField temperature = engine.Context.GetService<TemperatureField>();
+        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        Assert.True(materials.TryGetId("wood", out ushort wood));
+        Assert.True(materials.TryGetId("metal", out ushort metal));
+        Assert.True(materials.TryGetId("molten_metal", out ushort moltenMetal));
+        Assert.True(materials.TryGetId("lava", out ushort lava));
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+
+        ClearRect(edit, 300, 64, 384, 132);
+        FillRect(edit, wood, minX: 330, minY: 76, maxX: 350, maxY: 96);
+        FillRect(edit, metal, minX: 326, minY: 96, maxX: 354, maxY: 104);
+        FillRect(edit, lava, minX: 328, minY: 104, maxX: 352, maxY: 108);
+        FillRect(edit, stone, minX: 318, minY: 108, maxX: 362, maxY: 114);
+        engine.RunHeadlessTicks(1);
+
+        int parentBodyKey = physics.CreateBodyFromRegion(326, 76, 28, 28);
+        int ownedMetalBefore = CountRigidOwnedMaterial(grid, metal, minX: 326, minY: 96, maxX: 354, maxY: 104);
+        Assert.True(parentBodyKey >= 0);
+        Assert.True(ownedMetalBefore > 0, $"测试结构的 metal 梁应先由刚体 stamp 占用，actual={ownedMetalBefore}。");
+        engine.RunHeadlessTicks(1);
+        ownedMetalBefore = CountRigidOwnedMaterial(grid, metal, minX: 326, minY: 96, maxX: 354, maxY: 104);
+        Assert.True(ownedMetalBefore > 0, $"刚体 stamp 进入下一帧 dirty rect 后仍应保留 metal 梁，actual={ownedMetalBefore}。");
+
+        for (int y = 96; y < 104; y++)
+        {
+            for (int x = 326; x < 354; x++)
+            {
+                temperature.AddHeat(x, y, 1_200f);
+            }
+        }
+
+        engine.RunHeadlessTicks(1);
+
+        Assert.True(CountMaterial(grid, moltenMetal, minX: 326, minY: 96, maxX: 354, maxY: 108) > 0);
+        Assert.Equal(0, CountRigidOwnedMaterial(grid, metal, minX: 326, minY: 96, maxX: 354, maxY: 104));
+        Assert.True(physics.LastDestructionResult.DestroyedBodies >= 1, $"metal 梁相变应破坏父刚体，actual={physics.LastDestructionResult}。");
+        Assert.True(physics.LastDestructionResult.CreatedBodies >= 1, $"metal 梁相变后上方 wood 连通块应重建为子刚体，actual={physics.LastDestructionResult}。");
+
+        RigidBodySnapshot[] splitSnapshots = CopySnapshots(physics);
+        RigidBodySnapshot woodSnapshot = splitSnapshots.Single(snapshot =>
+            snapshot.Transform.Position.X >= 320f &&
+            snapshot.Transform.Position.X <= 360f &&
+            snapshot.Transform.Position.Y >= 70f &&
+            snapshot.Transform.Position.Y <= 110f &&
+            CountMaskMaterial(snapshot.Mask, wood) == snapshot.Mask.SolidPixelCount &&
+            CountMaskMaterial(snapshot.Mask, metal) == 0);
+
+        engine.RunHeadlessTicks(12);
+
+        RigidBodySnapshot[] movedSnapshots = CopySnapshots(physics);
+        Assert.True(TryFindSnapshot(movedSnapshots, woodSnapshot.BodyKey, out RigidBodySnapshot movedWood));
+        Assert.True(
+            movedWood.Transform.Position.Y > woodSnapshot.Transform.Position.Y + 0.01f,
+            $"上方 wood 子刚体应沿 Demo 重力方向下落，beforeY={woodSnapshot.Transform.Position.Y:F4}, afterY={movedWood.Transform.Position.Y:F4}。");
+    }
+
     private static async Task<Engine> CreateLavaMineEngineAsync()
     {
         string root = FindRepositoryRoot();
@@ -380,6 +448,40 @@ public sealed class LavaMineSceneTests
             for (int x = minX; x < maxX; x++)
             {
                 if (CellFlags.Has(grid.FlagsAt(x, y), CellFlags.RigidOwned))
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private static int CountRigidOwnedMaterial(CellGrid grid, ushort material, int minX, int minY, int maxX, int maxY)
+    {
+        int count = 0;
+        for (int y = minY; y < maxY; y++)
+        {
+            for (int x = minX; x < maxX; x++)
+            {
+                if (grid.MaterialAt(x, y) == material && CellFlags.Has(grid.FlagsAt(x, y), CellFlags.RigidOwned))
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private static int CountMaskMaterial(BodyLocalMask mask, ushort material)
+    {
+        int count = 0;
+        for (int y = 0; y < mask.Height; y++)
+        {
+            for (int x = 0; x < mask.Width; x++)
+            {
+                if (mask.IsSolid(x, y) && mask.MaterialAt(x, y) == material)
                 {
                     count++;
                 }

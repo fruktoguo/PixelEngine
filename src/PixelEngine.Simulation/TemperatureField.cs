@@ -351,7 +351,15 @@ public sealed class TemperatureField
     /// <summary>
     /// 对活跃 chunk 应用 melt/freeze/boil 阈值相变。
     /// </summary>
-    public void ApplyPhaseTransitions(IChunkSource chunks, MaterialTable materials, byte parityBit)
+    /// <param name="chunks">驻留 chunk 源。</param>
+    /// <param name="materials">材质注册表。</param>
+    /// <param name="parityBit">当前 CA parity 位。</param>
+    /// <param name="rigidDamageSink">刚体占用 cell 相变时接收 damage 事件的可选 sink。</param>
+    public void ApplyPhaseTransitions(
+        IChunkSource chunks,
+        MaterialTable materials,
+        byte parityBit,
+        IRigidDamageSink? rigidDamageSink = null)
     {
         ArgumentNullException.ThrowIfNull(chunks);
         ArgumentNullException.ThrowIfNull(materials);
@@ -365,7 +373,9 @@ public sealed class TemperatureField
         {
             int baseX = chunk.Coord.X << EngineConstants.ChunkSizeLog2;
             int baseY = chunk.Coord.Y << EngineConstants.ChunkSizeLog2;
-            DirtyRect rect = chunk.CurrentDirty.IsEmpty ? DirtyRect.Full : chunk.CurrentDirty;
+            DirtyRect rect = chunk.CurrentDirty.IsEmpty || _blocks.ContainsKey(chunk.Coord)
+                ? DirtyRect.Full
+                : chunk.CurrentDirty;
             for (int ly = rect.MinY; ly <= rect.MaxY; ly++)
             {
                 int wy = baseY + ly;
@@ -373,7 +383,9 @@ public sealed class TemperatureField
                 {
                     int local = CellAddressing.LocalIndexFromLocal(lx, ly);
                     ushort material = chunk.Material[local];
-                    if (material == 0 || CellFlags.MatchesFrame(chunk.Flags[local], parityBit))
+                    byte flags = chunk.Flags[local];
+                    if (material == 0 ||
+                        (!CellFlags.Has(flags, CellFlags.RigidOwned) && CellFlags.MatchesFrame(flags, parityBit)))
                     {
                         continue;
                     }
@@ -384,9 +396,15 @@ public sealed class TemperatureField
                         continue;
                     }
 
+                    if (CellFlags.Has(flags, CellFlags.RigidOwned))
+                    {
+                        rigidDamageSink?.OnOwnedCellDamaged(baseX + lx, wy, material);
+                        flags = CellFlags.Clear(flags, CellFlags.RigidOwned);
+                    }
+
                     chunk.Material[local] = target;
                     chunk.Lifetime[local] = DefaultLifetimeByte(hot, target);
-                    chunk.Flags[local] = CellFlags.SetParity(chunk.Flags[local], parityBit);
+                    chunk.Flags[local] = CellFlags.SetParity(flags, parityBit);
                     chunk.Damage[local] = 0;
                     DirtyRegionMarker.MarkCell(chunks, baseX + lx, wy, DirtyPhaseTarget.Working, includeBoundaryNeighbors: true);
                 }
