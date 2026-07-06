@@ -338,6 +338,173 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
+    /// 验证 .scene v2 保存、读取、再保存后保持 ParentId、Transform、Vector2 字段与稳定排序一致。
+    /// </summary>
+    [Fact]
+    public void SceneDocumentV2RoundTripsParentTransformVector2AndStableOrder()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-scene-roundtrip-{Guid.NewGuid():N}");
+        try
+        {
+            string firstPath = Path.Combine(contentRoot, "scenes", "first.scene");
+            string secondPath = Path.Combine(contentRoot, "scenes", "second.scene");
+            using Engine engine = new EngineBuilder()
+                .UseHeadless()
+                .UseDeterministicMode()
+                .WithContentRoot(contentRoot)
+                .Build();
+            EngineSceneDocument source = new()
+            {
+                FormatVersion = 2,
+                Name = "roundtrip",
+                InitialSaveDirectory = "../saves/checkpoint",
+                Entities =
+                [
+                    new EngineSceneEntityDocument
+                    {
+                        StableId = 30,
+                        Name = "child",
+                        ParentId = 20,
+                        Transform = new EngineSceneTransformDocument { X = 3, Y = 4, RotationRadians = 0.25f, ScaleX = 0.5f, ScaleY = 0.75f },
+                        Prefab = new EngineScenePrefabDocument
+                        {
+                            AssetPath = "prefabs/actor.prefab",
+                            SourceStableId = "root/child",
+                            Overrides =
+                            [
+                                new EngineScenePrefabOverrideDocument { SourceStableId = "root/child", PropertyPath = "Transform.Y", Value = "4" },
+                                new EngineScenePrefabOverrideDocument { SourceStableId = "root/child", PropertyPath = "Component:SceneFileTestBehaviour:Position", Value = "3.5,4.25" },
+                            ],
+                        },
+                        Behaviours =
+                        [
+                            new EngineSceneBehaviourDocument
+                            {
+                                TypeName = typeof(SceneFileTestBehaviour).FullName!,
+                                SerializedFields = new Dictionary<string, string>
+                                {
+                                    ["Position"] = "3.5,4.25",
+                                    ["Health"] = "77",
+                                    ["Label"] = "child",
+                                },
+                            },
+                        ],
+                    },
+                    new EngineSceneEntityDocument
+                    {
+                        StableId = 10,
+                        Name = "root",
+                        Transform = new EngineSceneTransformDocument { X = 10, Y = 20, RotationRadians = 0.5f, ScaleX = 2, ScaleY = 2 },
+                    },
+                    new EngineSceneEntityDocument
+                    {
+                        StableId = 20,
+                        Name = "middle",
+                        ParentId = 10,
+                        Transform = new EngineSceneTransformDocument { X = 1, Y = 2, RotationRadians = 0.125f, ScaleX = 1.5f, ScaleY = 1.25f },
+                    },
+                ],
+            };
+
+            engine.SaveSceneDocument(source, firstPath);
+            string firstJson = File.ReadAllText(firstPath);
+            EngineSceneDocument loaded = EngineSceneDocumentLoader.LoadDocument(firstPath);
+            engine.SaveSceneDocument(loaded, secondPath);
+            string secondJson = File.ReadAllText(secondPath);
+            EngineSceneDocument loadedAgain = EngineSceneDocumentLoader.LoadDocument(secondPath);
+
+            Assert.Equal(firstJson, secondJson);
+            Assert.Equal(EngineSceneDocumentLoader.CurrentFormatVersion, loadedAgain.FormatVersion);
+            Assert.Equal("roundtrip", loadedAgain.Name);
+            Assert.Equal("../saves/checkpoint", loadedAgain.InitialSaveDirectory);
+            Assert.Equal([10, 20, 30], [.. loadedAgain.Entities!.Select(static entity => entity.StableId)]);
+            EngineSceneEntityDocument child = EntityByStableId(loadedAgain, 30);
+            Assert.Equal(20, child.ParentId);
+            AssertTransform(child.Transform!, x: 3, y: 4, rotation: 0.25f, scaleX: 0.5f, scaleY: 0.75f);
+            Assert.Equal(["Health", "Label", "Position"], [.. child.Behaviours![0].SerializedFields!.Keys]);
+            Assert.Equal("3.5,4.25", child.Behaviours[0].SerializedFields!["Position"]);
+            EngineScenePrefabOverrideDocument[] overrides = child.Prefab!.Overrides!;
+            Assert.Equal("Component:SceneFileTestBehaviour:Position", overrides[0].PropertyPath);
+            Assert.Equal("Transform.Y", overrides[1].PropertyPath);
+
+            ScriptAssemblyRegistry scripts = new();
+            scripts.Register(typeof(SceneFileTestBehaviour).Assembly);
+            PixelEngine.Scripting.Scene runtimeScene = EngineSceneDocumentLoader.Build(loadedAgain, scripts);
+            SceneFileTestBehaviour behaviour = Assert.IsType<SceneFileTestBehaviour>(Assert.Single(runtimeScene.CaptureInspectionSnapshot()[2].Components).Behaviour);
+            Assert.Equal(new Vector2(3.5f, 4.25f), behaviour.Position);
+        }
+        finally
+        {
+            if (Directory.Exists(contentRoot))
+            {
+                Directory.Delete(contentRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 v1 旧 .scene 缺失 ParentId/Transform 时可按根实体和单位 TRS 读取，并在另存时升级为 v2。
+    /// </summary>
+    [Fact]
+    public void SceneDocumentV1LoadsRootDefaultsAndSavesAsV2()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-scene-v1-upgrade-{Guid.NewGuid():N}");
+        try
+        {
+            string scenePath = Path.Combine(contentRoot, "scenes", "legacy.scene");
+            string upgradedPath = Path.Combine(contentRoot, "scenes", "upgraded.scene");
+            _ = Directory.CreateDirectory(Path.GetDirectoryName(scenePath)!);
+            File.WriteAllText(
+                scenePath,
+                """
+                {
+                  "formatVersion": 1,
+                  "name": "legacy",
+                  "entities": [
+                    {
+                      "stableId": 7,
+                      "name": "legacy-root"
+                    }
+                  ]
+                }
+                """);
+            using Engine engine = new EngineBuilder()
+                .UseHeadless()
+                .UseDeterministicMode()
+                .WithContentRoot(contentRoot)
+                .Build();
+
+            EngineSceneDocument loaded = EngineSceneDocumentLoader.LoadDocument(scenePath);
+            ScriptAssemblyRegistry scripts = new();
+            PixelEngine.Scripting.Scene runtimeScene = EngineSceneDocumentLoader.Build(loaded, scripts);
+            engine.SaveSceneDocument(loaded, upgradedPath);
+            EngineSceneDocument upgraded = EngineSceneDocumentLoader.LoadDocument(upgradedPath);
+
+            EngineSceneEntityDocument loadedEntity = Assert.Single(loaded.Entities!);
+            Assert.Equal(1, loaded.FormatVersion);
+            Assert.Null(loadedEntity.ParentId);
+            Assert.Null(loadedEntity.Transform);
+            Transform runtimeTransform = Assert.Single(runtimeScene.CaptureInspectionSnapshot()).Transform!;
+            Assert.Equal(0, runtimeTransform.X);
+            Assert.Equal(0, runtimeTransform.Y);
+            Assert.Equal(0, runtimeTransform.RotationRadians);
+            Assert.Equal(1, runtimeTransform.ScaleX);
+            Assert.Equal(1, runtimeTransform.ScaleY);
+            EngineSceneEntityDocument upgradedEntity = Assert.Single(upgraded.Entities!);
+            Assert.Equal(EngineSceneDocumentLoader.CurrentFormatVersion, upgraded.FormatVersion);
+            Assert.Null(upgradedEntity.ParentId);
+            AssertTransform(upgradedEntity.Transform!, x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1);
+        }
+        finally
+        {
+            if (Directory.Exists(contentRoot))
+            {
+                Directory.Delete(contentRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 .scene v2 会物化 Transform、烘焙父子层级，并支持 Vector2 字段绑定。
     /// </summary>
     [Fact]
@@ -965,6 +1132,26 @@ public sealed class SceneAndHeadlessTests
             .WithWorkerCount(1)
             .Build();
         _ = Assert.Throws<InvalidOperationException>(() => windowed.RunHeadlessTicks(1));
+    }
+
+    private static EngineSceneEntityDocument EntityByStableId(EngineSceneDocument document, int stableId)
+    {
+        return Assert.Single(document.Entities!, entity => entity.StableId == stableId);
+    }
+
+    private static void AssertTransform(
+        EngineSceneTransformDocument transform,
+        float x,
+        float y,
+        float rotation,
+        float scaleX,
+        float scaleY)
+    {
+        Assert.Equal(x, transform.X);
+        Assert.Equal(y, transform.Y);
+        Assert.Equal(rotation, transform.RotationRadians);
+        Assert.Equal(scaleX, transform.ScaleX);
+        Assert.Equal(scaleY, transform.ScaleY);
     }
 
     /// <summary>
