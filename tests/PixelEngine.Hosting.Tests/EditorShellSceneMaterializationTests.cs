@@ -113,6 +113,109 @@ public sealed class EditorShellSceneMaterializationTests
         AssertAuthoringAfterRedo(model, rootId, childId);
     }
 
+    /// <summary>
+    /// 验证 prefab 实例化、override、Revert 与资产 baseline 更新传播。
+    /// </summary>
+    [Fact]
+    public void PrefabInstancesApplyOverridesRevertAndRefreshFromAsset()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-prefab-{Guid.NewGuid():N}");
+        try
+        {
+            EditorPrefabAssetStore prefabs = new(contentRoot);
+            EditorSceneModel scene = EditorSceneModel.Empty("prefab");
+            EditorGameObject source = scene.Create("Rock");
+            source.Transform = new EditorSceneTransform { X = 1, Y = 2, ScaleX = 1, ScaleY = 1 };
+            EditorComponentModel component = new(typeof(EditorShellProjectionProbe).FullName!);
+            component.SerializedFields["Label"] = "baseline";
+            source.Components.Add(component);
+            const string AssetPath = "prefabs/rock.prefab";
+            prefabs.CreatePrefabFromSubtree(scene, source.StableId, AssetPath);
+
+            EditorGameObject instance = prefabs.InstantiatePrefab(scene, AssetPath, parentId: null);
+            EditorUndoStack undo = new();
+            undo.Execute(scene, new SetTransformCommand(instance.StableId, new EditorSceneTransform { X = 9, Y = 8, RotationRadians = 0.25f, ScaleX = 2, ScaleY = 2 }));
+            undo.Execute(scene, new SetComponentFieldCommand(instance.StableId, componentIndex: 0, fieldName: "Label", value: "override"));
+            prefabs.RefreshPrefabInstances(scene);
+
+            Assert.Equal(9, instance.Transform.X);
+            Assert.Equal("override", instance.Components[0].SerializedFields["Label"]);
+            undo.Execute(scene, new RevertPrefabOverridesCommand(instance.StableId));
+            prefabs.RefreshPrefabInstances(scene);
+            Assert.Equal(1, instance.Transform.X);
+            Assert.Equal("baseline", instance.Components[0].SerializedFields["Label"]);
+
+            SavePrefabDocument(
+                contentRoot,
+                AssetPath,
+                name: "Rock",
+                label: "propagated",
+                transform: new EngineSceneTransformDocument { X = 4, Y = 5, ScaleX = 1, ScaleY = 1 });
+            prefabs.RefreshPrefabInstances(scene);
+
+            Assert.Equal(4, instance.Transform.X);
+            Assert.Equal(5, instance.Transform.Y);
+            Assert.Equal("propagated", instance.Components[0].SerializedFields["Label"]);
+        }
+        finally
+        {
+            if (Directory.Exists(contentRoot))
+            {
+                Directory.Delete(contentRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证嵌套 prefab 会展开并接收底层 prefab 资产更新。
+    /// </summary>
+    [Fact]
+    public void NestedPrefabInstancesExpandAndPropagateNestedAssetUpdates()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-nested-prefab-{Guid.NewGuid():N}");
+        try
+        {
+            EditorPrefabAssetStore prefabs = new(contentRoot);
+            const string LeafPath = "prefabs/leaf.prefab";
+            const string ParentPath = "prefabs/parent.prefab";
+            SavePrefabDocument(
+                contentRoot,
+                LeafPath,
+                name: "Leaf",
+                label: "leaf-a",
+                transform: new EngineSceneTransformDocument { X = 2, Y = 3, ScaleX = 1, ScaleY = 1 });
+            EditorSceneModel authoring = EditorSceneModel.Empty("authoring");
+            EditorGameObject parent = authoring.Create("Parent");
+            EditorGameObject nestedLeaf = prefabs.InstantiatePrefab(authoring, LeafPath, parent.StableId);
+            prefabs.CreatePrefabFromSubtree(authoring, parent.StableId, ParentPath);
+            EditorSceneModel scene = EditorSceneModel.Empty("scene");
+
+            EditorGameObject parentInstance = prefabs.InstantiatePrefab(scene, ParentPath, parentId: null);
+            EditorGameObject childInstance = scene.Get(parentInstance.Children[0]);
+            Assert.Equal(nestedLeaf.Name, childInstance.Name);
+            Assert.Equal("leaf-a", childInstance.Components[0].SerializedFields["Label"]);
+
+            SavePrefabDocument(
+                contentRoot,
+                LeafPath,
+                name: "Leaf",
+                label: "leaf-b",
+                transform: new EngineSceneTransformDocument { X = 6, Y = 7, ScaleX = 1, ScaleY = 1 });
+            prefabs.RefreshPrefabInstances(scene);
+
+            Assert.Equal("leaf-b", childInstance.Components[0].SerializedFields["Label"]);
+            Assert.Equal(6, childInstance.Transform.X);
+            Assert.Equal(7, childInstance.Transform.Y);
+        }
+        finally
+        {
+            if (Directory.Exists(contentRoot))
+            {
+                Directory.Delete(contentRoot, recursive: true);
+            }
+        }
+    }
+
     private static void AssertAuthoringAfterRedo(EditorSceneModel model, int rootId, int childId)
     {
         Assert.Equal(2, model.Count);
@@ -127,6 +230,44 @@ public sealed class EditorShellSceneMaterializationTests
         Assert.Equal(2, child.Transform.ScaleY);
         EditorComponentModel component = Assert.Single(child.Components);
         Assert.Equal("edited", component.SerializedFields["Label"]);
+    }
+
+    private static void SavePrefabDocument(string contentRoot, string assetPath, string name, string label, EngineSceneTransformDocument transform)
+    {
+        string fullPath = Path.Combine(contentRoot, assetPath.Replace('/', Path.DirectorySeparatorChar));
+        string? directory = Path.GetDirectoryName(fullPath);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            _ = Directory.CreateDirectory(directory);
+        }
+
+        EngineSceneDocumentLoader.SaveDocument(
+            new EngineSceneDocument
+            {
+                FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+                Name = name,
+                Entities =
+                [
+                    new EngineSceneEntityDocument
+                    {
+                        StableId = 1,
+                        Name = name,
+                        Transform = transform,
+                        Behaviours =
+                        [
+                            new EngineSceneBehaviourDocument
+                            {
+                                TypeName = typeof(EditorShellProjectionProbe).FullName!,
+                                SerializedFields = new Dictionary<string, string>
+                                {
+                                    ["Label"] = label,
+                                },
+                            },
+                        ],
+                    },
+                ],
+            },
+            fullPath);
     }
 
     /// <summary>
