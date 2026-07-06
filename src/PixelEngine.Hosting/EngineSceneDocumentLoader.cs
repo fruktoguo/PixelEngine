@@ -195,6 +195,7 @@ public static class EngineSceneDocumentLoader
         EngineScenePrefabOverrideDocument[] overrides = prefab.Overrides ?? [];
         return new EngineScenePrefabDocument
         {
+            AssetId = prefab.AssetId,
             AssetPath = prefab.AssetPath,
             SourceStableId = prefab.SourceStableId,
             Overrides =

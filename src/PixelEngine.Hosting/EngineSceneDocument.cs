@@ -102,7 +102,12 @@ public sealed class EngineSceneTransformDocument
 public sealed class EngineScenePrefabDocument
 {
     /// <summary>
-    /// 相对 content 根目录的 prefab 资产路径。
+    /// 工程级 stable asset id；编辑器使用该字段在移动 / 重命名后解析 prefab。
+    /// </summary>
+    public string? AssetId { get; init; }
+
+    /// <summary>
+    /// 相对 content 根目录的 prefab 资产路径；作为人可读 logical path 与旧文档 fallback。
     /// </summary>
     public string? AssetPath { get; init; }
 

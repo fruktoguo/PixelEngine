@@ -2,6 +2,8 @@ namespace PixelEngine.Editor.Shell;
 
 internal sealed class EditorPrefabLink
 {
+    public string? AssetId { get; set; }
+
     public string? AssetPath { get; set; }
 
     public string? SourceStableId { get; set; }
@@ -12,6 +14,7 @@ internal sealed class EditorPrefabLink
     {
         EditorPrefabLink clone = new()
         {
+            AssetId = AssetId,
             AssetPath = AssetPath,
             SourceStableId = SourceStableId,
         };

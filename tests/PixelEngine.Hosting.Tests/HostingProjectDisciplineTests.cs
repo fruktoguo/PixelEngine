@@ -176,7 +176,7 @@ public sealed class HostingProjectDisciplineTests
 
         Assert.Contains("EditorProjectSession.Open", source, StringComparison.Ordinal);
         Assert.Contains(".WithProject(project.ToEngineProject(sceneRelativePath))", source, StringComparison.Ordinal);
-        Assert.Contains(".UseVSync(true)", source, StringComparison.Ordinal);
+        Assert.Contains(".ApplyRuntimeDefaults(playerSettings, applyStartupScene: false)", source, StringComparison.Ordinal);
         Assert.Contains(".UseGuiRuntime(false)", source, StringComparison.Ordinal);
         Assert.Contains(".AddEditorHostExtension(editorHost)", source, StringComparison.Ordinal);
         Assert.Contains("engine.AttachWindowRuntime(window)", source, StringComparison.Ordinal);
@@ -549,7 +549,7 @@ public sealed class HostingProjectDisciplineTests
             Assert.DoesNotContain("Hexa.NET.ImGui*", script, StringComparison.Ordinal);
         }
 
-        Assert.Contains("ResolveStartupScene", startupOptions, StringComparison.Ordinal);
+        Assert.Contains("ResolveStartupSettings", startupOptions, StringComparison.Ordinal);
         Assert.Contains("startup.json", startupOptions, StringComparison.Ordinal);
     }
 

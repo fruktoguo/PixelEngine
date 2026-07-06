@@ -632,6 +632,7 @@ internal sealed class EditorSceneModel
 
         EditorPrefabLink link = new()
         {
+            AssetId = prefab.AssetId,
             AssetPath = prefab.AssetPath,
             SourceStableId = prefab.SourceStableId,
         };
@@ -669,6 +670,7 @@ internal sealed class EditorSceneModel
 
         return new EngineScenePrefabDocument
         {
+            AssetId = prefab.AssetId,
             AssetPath = prefab.AssetPath,
             SourceStableId = prefab.SourceStableId,
             Overrides = overrides,
