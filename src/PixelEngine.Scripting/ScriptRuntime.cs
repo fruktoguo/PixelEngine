@@ -9,7 +9,9 @@ public sealed class ScriptRuntime : IScriptRuntime
     private readonly HotReloadService? _hotReload;
 #endif
     private readonly ScriptHotReloadController? _hotReloadController;
+    private readonly IScriptHotReloadDiagnosticSink? _hotReloadDiagnosticSink;
     private IScriptContext? _context;
+    private Exception? _lastReportedWatcherException;
     private bool _shutdown;
 
     /// <summary>
@@ -24,8 +26,19 @@ public sealed class ScriptRuntime : IScriptRuntime
     /// </summary>
     /// <param name="hotReloadController">热重载控制器。</param>
     public ScriptRuntime(ScriptHotReloadController hotReloadController)
+        : this(hotReloadController, hotReloadDiagnosticSink: null)
+    {
+    }
+
+    /// <summary>
+    /// 创建带热重载控制器与诊断 sink 的脚本运行时；控制器会在运行时关闭时释放。
+    /// </summary>
+    /// <param name="hotReloadController">热重载控制器。</param>
+    /// <param name="hotReloadDiagnosticSink">可选热重载诊断 sink。</param>
+    public ScriptRuntime(ScriptHotReloadController hotReloadController, IScriptHotReloadDiagnosticSink? hotReloadDiagnosticSink)
     {
         _hotReloadController = hotReloadController ?? throw new ArgumentNullException(nameof(hotReloadController));
+        _hotReloadDiagnosticSink = hotReloadDiagnosticSink;
     }
 
 #if !PIXELENGINE_NATIVEAOT
@@ -56,7 +69,12 @@ public sealed class ScriptRuntime : IScriptRuntime
 #if !PIXELENGINE_NATIVEAOT
         _ = _hotReload?.ApplyPendingReload();
 #endif
-        _ = _hotReloadController?.ApplyPendingReload();
+        ReportWatcherException();
+        if (_hotReloadController is not null)
+        {
+            ReportHotReloadResult(_hotReloadController.ApplyPendingReload());
+        }
+
         context.Scene.DispatchStart(context);
     }
 
@@ -151,6 +169,50 @@ public sealed class ScriptRuntime : IScriptRuntime
         _hotReloadController?.Dispose();
         _shutdown = true;
         _context = null;
+    }
+
+    private void ReportWatcherException()
+    {
+        if (_hotReloadController?.LastWatcherException is not { } watcherException ||
+            ReferenceEquals(watcherException, _lastReportedWatcherException))
+        {
+            return;
+        }
+
+        _lastReportedWatcherException = watcherException;
+        _hotReloadDiagnosticSink?.Report(new ScriptHotReloadDiagnostic(
+            DateTimeOffset.UtcNow,
+            ScriptHotReloadDiagnosticKind.WatcherException,
+            ScriptHotReloadStatus.NoPendingReload,
+            $"脚本热重载监听异常：{watcherException.Message}",
+            [watcherException.ToString()]));
+    }
+
+    private void ReportHotReloadResult(ScriptHotReloadApplyResult result)
+    {
+        if (result.Status == ScriptHotReloadStatus.NoPendingReload)
+        {
+            return;
+        }
+
+        _hotReloadDiagnosticSink?.Report(new ScriptHotReloadDiagnostic(
+            DateTimeOffset.UtcNow,
+            ScriptHotReloadDiagnosticKind.ReloadResult,
+            result.Status,
+            FormatHotReloadMessage(result),
+            result.Diagnostics));
+    }
+
+    private static string FormatHotReloadMessage(ScriptHotReloadApplyResult result)
+    {
+        return result.Status switch
+        {
+            ScriptHotReloadStatus.CompileFailed => "脚本编译失败",
+            ScriptHotReloadStatus.ApplyFailed => "脚本热重载应用失败，旧脚本保持运行",
+            ScriptHotReloadStatus.Reloaded => result.OldContextUnloaded ? "脚本热重载完成" : "脚本热重载完成，旧 ALC 尚未卸载",
+            ScriptHotReloadStatus.NoPendingReload => "没有待处理脚本热重载",
+            _ => throw new ArgumentOutOfRangeException(nameof(result), result.Status, "未知热重载状态。"),
+        };
     }
 
     private IScriptContext RequireContext()

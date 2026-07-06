@@ -1251,16 +1251,39 @@ public sealed class Engine : IDisposable
             return new ScriptRuntime();
         }
 
+        IScriptHotReloadDiagnosticSink? diagnosticSink = Context.TryGetService(out IScriptHotReloadDiagnosticSink registeredDiagnosticSink)
+            ? registeredDiagnosticSink
+            : null;
         ScriptHotReloadController controller = new(scriptScene, scriptContext);
-        controller.StartWatching(
-            hotReload.AssemblyName,
-            hotReload.SourceDirectory,
-            hotReload.PreserveState,
-            hotReload.SearchPattern,
-            hotReload.IncludeSubdirectories,
-            hotReload.DebounceInterval);
+        try
+        {
+            controller.StartWatching(
+                hotReload.AssemblyName,
+                hotReload.SourceDirectory,
+                hotReload.PreserveState,
+                hotReload.SearchPattern,
+                hotReload.IncludeSubdirectories,
+                hotReload.DebounceInterval);
+            diagnosticSink?.Report(new ScriptHotReloadDiagnostic(
+                DateTimeOffset.UtcNow,
+                ScriptHotReloadDiagnosticKind.WatcherStarted,
+                ScriptHotReloadStatus.NoPendingReload,
+                $"脚本热重载监听已启动：{hotReload.SourceDirectory}",
+                []));
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException && !OperatingSystem.IsBrowser())
+        {
+            diagnosticSink?.Report(new ScriptHotReloadDiagnostic(
+                DateTimeOffset.UtcNow,
+                ScriptHotReloadDiagnosticKind.WatcherStartFailed,
+                ScriptHotReloadStatus.NoPendingReload,
+                $"脚本热重载监听启动失败：{ex.Message}",
+                [ex.ToString()]));
+            throw;
+        }
+
         Context.RegisterService(controller);
-        return new ScriptRuntime(controller);
+        return new ScriptRuntime(controller, diagnosticSink);
     }
 
     private void MaterializeCurrentSceneScriptsIfPossible()

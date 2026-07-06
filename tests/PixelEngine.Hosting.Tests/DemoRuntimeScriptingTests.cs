@@ -143,10 +143,10 @@ public sealed class DemoRuntimeScriptingTests
     }
 
     /// <summary>
-    /// 验证 EditorShell Console 脚本运行时不会静默吞掉 watcher 热重载编译诊断。
+    /// 验证 Hosting-owned 脚本运行时会把 watcher 热重载编译诊断汇入 Editor Console sink。
     /// </summary>
     [Fact]
-    public void EditorConsoleScriptRuntimeReportsWatchedHotReloadCompileDiagnostics()
+    public void AttachScriptingFromServicesReportsWatchedHotReloadCompileDiagnosticsToConsoleSink()
     {
         string scriptDirectory = Path.Combine(Path.GetTempPath(), "PixelEngineConsoleHotReload", Guid.NewGuid().ToString("N"));
         _ = Directory.CreateDirectory(scriptDirectory);
@@ -163,12 +163,17 @@ public sealed class DemoRuntimeScriptingTests
             _ = engine.AttachResidentSimulationWorld(worldWidthCells: 64, worldHeightCells: 64, particleCapacity: 16);
             engine.RegisterScriptAssembly(typeof(HostingHotReloadProbeBehaviour).Assembly);
             EditorConsoleStore console = new();
-            _ = engine.AttachScriptingFromServices(new EditorConsoleScriptRuntime(
-                console,
-                new ScriptHotReloadRuntimeOptions(
+            engine.Context.RegisterService<IScriptHotReloadDiagnosticSink>(new EditorConsoleScriptHotReloadDiagnosticSink(console));
+            _ = engine.AttachScriptingFromServices(
+                hotReload: new ScriptHotReloadRuntimeOptions(
                     $"PixelEngine.Hosting.Tests.ConsoleHotReload.{Guid.NewGuid():N}",
                     scriptDirectory,
-                    DebounceInterval: TimeSpan.FromMilliseconds(30))));
+                    DebounceInterval: TimeSpan.FromMilliseconds(30)));
+            Assert.True(engine.Context.TryGetService(out ScriptHotReloadController _));
+            Assert.Contains(console.Snapshot(), entry =>
+                entry.Category == EditorConsoleCategory.Script &&
+                entry.Severity == EditorConsoleSeverity.Info &&
+                entry.Text.Contains("脚本热重载监听已启动", StringComparison.Ordinal));
 
             engine.RunHeadlessTicks(1);
             File.WriteAllText(Path.Combine(scriptDirectory, "BrokenBehaviour.cs"), "public sealed class BrokenBehaviour {");

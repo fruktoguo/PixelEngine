@@ -190,6 +190,32 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证 EditorShell 只接入 Hosting-owned 脚本 runtime 与 Console 诊断 sink，不自行装配脚本运行时。
+    /// </summary>
+    [Fact]
+    public void EditorShellConsumesHostingOwnedScriptingRuntimeAndConsoleDiagnostics()
+    {
+        string root = FindRepositoryRoot();
+        string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
+        string shellSource = string.Join(
+            '\n',
+            Directory.EnumerateFiles(shellDirectory, "*.cs", SearchOption.AllDirectories).Select(File.ReadAllText));
+        string hostingEngine = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Hosting", "Engine.cs"));
+        string scriptingRuntime = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Scripting", "ScriptRuntime.cs"));
+
+        Assert.DoesNotContain("EditorConsoleScriptRuntime", shellSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("new ScriptRuntime(", shellSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("new ScriptHotReloadController(", shellSource, StringComparison.Ordinal);
+        Assert.Contains("RegisterService<IScriptHotReloadDiagnosticSink>", shellSource, StringComparison.Ordinal);
+        Assert.Contains("new EditorConsoleScriptHotReloadDiagnosticSink", shellSource, StringComparison.Ordinal);
+        Assert.Contains("hotReload: new ScriptHotReloadRuntimeOptions", shellSource, StringComparison.Ordinal);
+        Assert.Contains("CreateScriptRuntime(scriptScene, scriptContext, hotReload)", hostingEngine, StringComparison.Ordinal);
+        Assert.Contains("Context.RegisterService(controller)", hostingEngine, StringComparison.Ordinal);
+        Assert.Contains("new ScriptRuntime(controller, diagnosticSink)", hostingEngine, StringComparison.Ordinal);
+        Assert.Contains("IScriptHotReloadDiagnosticSink", scriptingRuntime, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证编辑器壳按 plan/19 节点 4 拥有独立 authoring 模型、StableId 映射、层级面板与命令栈。
     /// </summary>
     [Fact]

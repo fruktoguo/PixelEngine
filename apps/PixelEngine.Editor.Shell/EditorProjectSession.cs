@@ -92,9 +92,9 @@ internal sealed class EditorProjectSession : IDisposable
             EditorScriptAssetOpenService scriptAssetOpenService = new(assets);
             EditorSceneRuntimeProjection projection = ProjectAuthoringScene(engine, sceneModel);
             editorHost.ConfigureAuthoring(sceneModel, undoStack, prefabs);
-            _ = engine.AttachScriptingFromServices(new EditorConsoleScriptRuntime(
-                app.ConsoleStore,
-                new ScriptHotReloadRuntimeOptions($"{project.Name}.EditorScripts", project.ScriptSourcePath)));
+            engine.Context.RegisterService<IScriptHotReloadDiagnosticSink>(new EditorConsoleScriptHotReloadDiagnosticSink(app.ConsoleStore));
+            _ = engine.AttachScriptingFromServices(
+                hotReload: new ScriptHotReloadRuntimeOptions($"{project.Name}.EditorScripts", project.ScriptSourcePath));
             engine.EnterEditMode();
             _ = engine.AttachWindowRuntime(window);
             if (engine.Context.TryGetService(out GameUiBackendSelection uiBackendSelection))
