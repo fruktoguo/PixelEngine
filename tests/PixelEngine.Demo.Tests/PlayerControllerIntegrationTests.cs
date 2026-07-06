@@ -329,6 +329,44 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证普通武器破坏路径经公开 World.DamageCircle 打碎目标水晶后，ObjectiveCrystal 会把收益桥接到 MissionDirector。
+    /// </summary>
+    [Fact]
+    public void DamageCircleDestroysObjectiveCrystalAndMissionDirectorCollectsMineYield()
+    {
+        MaterialTable materials = MissionMaterials();
+        Assert.True(materials.TryGetId("crystal", out ushort crystalMaterial));
+        using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials);
+        Entity playerEntity = scene.CreateEntity();
+        _ = playerEntity.AddComponent<Transform>();
+        PlayerController player = playerEntity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 12f;
+        _ = playerEntity.AddComponent<PlayerHealth>();
+        MissionDirector mission = playerEntity.AddComponent<MissionDirector>();
+        mission.RequiredCrystals = 3;
+        mission.InitialLavaSurfaceY = 60f;
+        mission.LavaRiseCellsPerSecond = 0f;
+
+        ObjectiveCrystal crystal = scene.CreateEntity().AddComponent<ObjectiveCrystal>();
+        crystal.X = 24;
+        crystal.Y = 24;
+        crystal.Radius = 1;
+        DamageCircleProbe damage = scene.CreateEntity().AddComponent<DamageCircleProbe>();
+        damage.X = 24f;
+        damage.Y = 24f;
+        damage.Radius = 1;
+        damage.Damage = 32f;
+
+        engine.RunHeadlessTicks(5);
+
+        Assert.Equal(1, damage.DispatchCount);
+        Assert.NotEqual(crystalMaterial, grid.MaterialAt(24, 24));
+        Assert.True(crystal.CollectedCells > 0);
+        Assert.True(mission.CrystalsCollected > 0);
+    }
+
+    /// <summary>
     /// 验证 ExtractionTrigger 未集齐目标时阻塞，集齐后驱动 MissionDirector 通关并播放反馈。
     /// </summary>
     [Fact]
@@ -2372,6 +2410,31 @@ public sealed class PlayerControllerIntegrationTests
         protected override void OnUpdate(float dt)
         {
             _ = _effect.Update(Context, dt);
+        }
+    }
+
+    private sealed class DamageCircleProbe : Behaviour
+    {
+        public float X { get; set; }
+
+        public float Y { get; set; }
+
+        public int Radius { get; set; } = 1;
+
+        public float Damage { get; set; } = 1f;
+
+        public int DispatchCount { get; private set; }
+
+        protected override void OnUpdate(float dt)
+        {
+            _ = dt;
+            if (DispatchCount > 0)
+            {
+                return;
+            }
+
+            Context.World.DamageCircle(X, Y, Radius, Damage, falloff: true, DamageKind.Impact);
+            DispatchCount++;
         }
     }
 
