@@ -231,6 +231,7 @@ public sealed class SimulationDataStructureTests
         Assert.False(immuneDestroyed);
         Assert.Equal(1, damageSink.Count);
         Assert.Equal((11, 10), damageSink.Last);
+        Assert.Equal(1, damageSink.LastMaterial);
         Assert.Equal(0, chunk.Damage[rigidLocal]);
         Assert.Equal(2, chunk.Material[solidLocal]);
         Assert.Equal(0, chunk.Damage[solidLocal]);
@@ -262,10 +263,18 @@ public sealed class SimulationDataStructureTests
 
         public (int X, int Y) Last { get; private set; }
 
+        public ushort LastMaterial { get; private set; }
+
         public void OnOwnedCellDamaged(int wx, int wy)
+        {
+            OnOwnedCellDamaged(wx, wy, consumedMaterial: 0);
+        }
+
+        public void OnOwnedCellDamaged(int wx, int wy, ushort consumedMaterial)
         {
             Count++;
             Last = (wx, wy);
+            LastMaterial = consumedMaterial;
         }
     }
 

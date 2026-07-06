@@ -77,7 +77,7 @@ public sealed class PhysicsCouplingAcceptanceTests
         Assert.False(CellFlags.Has(GetFlags(center, targetX, targetY), CellFlags.RigidOwned));
         Span<RigidDamageEvent> drained = stackalloc RigidDamageEvent[2];
         Assert.Equal(1, damageQueue.DrainTo(drained));
-        Assert.Equal(new RigidDamageEvent(targetX, targetY), drained[0]);
+        Assert.Equal(new RigidDamageEvent(targetX, targetY, RigidStone), drained[0]);
     }
 
     /// <summary>

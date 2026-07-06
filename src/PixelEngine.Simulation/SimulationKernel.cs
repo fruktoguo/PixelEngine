@@ -111,7 +111,7 @@ public sealed class SimulationKernel(
         {
             for (int i = 0; i < run; i++)
             {
-                NotifyRigidDamageIfNeeded(worldX + i, worldY, chunk.Flags[localStart + i]);
+                NotifyRigidDamageIfNeeded(worldX + i, worldY, chunk.Flags[localStart + i], chunk.Material[localStart + i]);
             }
 
             chunk.Material.AsSpan(localStart, run).Fill(material);
@@ -137,7 +137,7 @@ public sealed class SimulationKernel(
             return;
         }
 
-        NotifyRigidDamageIfNeeded(wx, wy, chunk.Flags[local]);
+        NotifyRigidDamageIfNeeded(wx, wy, chunk.Flags[local], chunk.Material[local]);
         chunk.Material[local] = 0;
         chunk.Flags[local] = 0;
         chunk.Lifetime[local] = 0;
@@ -163,7 +163,7 @@ public sealed class SimulationKernel(
             {
                 int local = localStart + i;
                 rowChanged |= chunk.Material[local] != 0 || chunk.Flags[local] != 0 || chunk.Lifetime[local] != 0 || chunk.Damage[local] != 0;
-                NotifyRigidDamageIfNeeded(worldX + i, worldY, chunk.Flags[local]);
+                NotifyRigidDamageIfNeeded(worldX + i, worldY, chunk.Flags[local], chunk.Material[local]);
             }
 
             if (!rowChanged)
@@ -246,7 +246,7 @@ public sealed class SimulationKernel(
         lifetime = chunk.Lifetime[local];
         if (material != 0 || flags != 0 || lifetime != 0)
         {
-            NotifyRigidDamageIfNeeded(wx, wy, flags);
+            NotifyRigidDamageIfNeeded(wx, wy, flags, material);
             chunk.Material[local] = 0;
             chunk.Flags[local] = 0;
             chunk.Lifetime[local] = 0;
@@ -372,7 +372,7 @@ public sealed class SimulationKernel(
         byte flags = chunk.Flags[local];
         if (CellFlags.Has(flags, CellFlags.RigidOwned))
         {
-            _rigidDamageSink.OnOwnedCellDamaged(wx, wy);
+            _rigidDamageSink.OnOwnedCellDamaged(wx, wy, material);
             chunk.Damage[local] = 0;
             return false;
         }
@@ -541,7 +541,7 @@ public sealed class SimulationKernel(
     {
         Chunk chunk = RequireChunk(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
-        NotifyRigidDamageIfNeeded(wx, wy, chunk.Flags[local]);
+        NotifyRigidDamageIfNeeded(wx, wy, chunk.Flags[local], chunk.Material[local]);
         chunk.Material[local] = material;
         chunk.Flags[local] = CellFlags.SetParity(persistentFlags, CurrentParity);
         chunk.Lifetime[local] = DefaultLifetimeByte(material);
@@ -627,11 +627,11 @@ public sealed class SimulationKernel(
             : (byte)lifetime;
     }
 
-    private void NotifyRigidDamageIfNeeded(int wx, int wy, byte flags)
+    private void NotifyRigidDamageIfNeeded(int wx, int wy, byte flags, ushort material)
     {
         if (CellFlags.Has(flags, CellFlags.RigidOwned))
         {
-            _rigidDamageSink.OnOwnedCellDamaged(wx, wy);
+            _rigidDamageSink.OnOwnedCellDamaged(wx, wy, material);
         }
     }
 }

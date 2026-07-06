@@ -13,7 +13,20 @@ public interface IRigidDamageSink
     /// <summary>
     /// 通知一个刚体占用 cell 被 CA 覆盖或消耗。
     /// </summary>
+    /// <param name="wx">世界 X 坐标。</param>
+    /// <param name="wy">世界 Y 坐标。</param>
     void OnOwnedCellDamaged(int wx, int wy);
+
+    /// <summary>
+    /// 记录一个 RigidOwned cell 被消费 / 覆盖时的材质来源。
+    /// </summary>
+    /// <param name="wx">世界 X 坐标。</param>
+    /// <param name="wy">世界 Y 坐标。</param>
+    /// <param name="consumedMaterial">被消费 / 覆盖前的材质 id；未知时为 0。</param>
+    void OnOwnedCellDamaged(int wx, int wy, ushort consumedMaterial)
+    {
+        OnOwnedCellDamaged(wx, wy);
+    }
 
     private sealed class NullRigidDamageSink : IRigidDamageSink
     {

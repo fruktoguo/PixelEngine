@@ -17,7 +17,13 @@ public sealed class RigidDamageQueue(int capacityPow2 = 4096) : IRigidDamageSink
     /// <inheritdoc />
     public void OnOwnedCellDamaged(int wx, int wy)
     {
-        RigidDamageEvent damage = new(wx, wy);
+        OnOwnedCellDamaged(wx, wy, consumedMaterial: 0);
+    }
+
+    /// <inheritdoc />
+    public void OnOwnedCellDamaged(int wx, int wy, ushort consumedMaterial)
+    {
+        RigidDamageEvent damage = new(wx, wy, consumedMaterial);
         if (!_events.TryEnqueue(in damage))
         {
             _ = Interlocked.Increment(ref _dropped);
@@ -38,4 +44,5 @@ public sealed class RigidDamageQueue(int capacityPow2 = 4096) : IRigidDamageSink
 /// </summary>
 /// <param name="WorldX">world X。</param>
 /// <param name="WorldY">world Y。</param>
-public readonly record struct RigidDamageEvent(int WorldX, int WorldY);
+/// <param name="Material">被消费 / 覆盖前的材质 id；旧路径未知时为 0。</param>
+public readonly record struct RigidDamageEvent(int WorldX, int WorldY, ushort Material = 0);

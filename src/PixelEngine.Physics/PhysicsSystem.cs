@@ -724,14 +724,20 @@ public sealed class PhysicsSystem : IDisposable
 
         int cellX = 0;
         int cellY = 0;
+        ushort material = 0;
         if (_pendingDamage.Count > 0)
         {
             long sumX = 0;
             long sumY = 0;
             for (int i = 0; i < _pendingDamage.Count; i++)
             {
-                sumX += _pendingDamage[i].WorldX;
-                sumY += _pendingDamage[i].WorldY;
+                RigidDamageEvent damage = _pendingDamage[i];
+                sumX += damage.WorldX;
+                sumY += damage.WorldY;
+                if (material == 0)
+                {
+                    material = damage.Material;
+                }
             }
 
             cellX = (int)(sumX / _pendingDamage.Count);
@@ -742,7 +748,7 @@ public sealed class PhysicsSystem : IDisposable
             AudioEventType.RigidbodyShatter,
             cellX,
             cellY,
-            materialId: 0,
+            material,
             magnitude: result.CreatedBodies + result.FragmentPixels,
             count: (ushort)Math.Min(ushort.MaxValue, Math.Max(1, result.DamagedBodies)));
         _ = _eventBus.Channel<AudioEvent>().TryEnqueue(in audioEvent);

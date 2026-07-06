@@ -241,7 +241,7 @@ public sealed class PhysicsSystemFacadeTests
             Assert.Equal(AudioEventType.RigidbodyShatter, drained[0].Type);
             Assert.Equal(32, drained[0].CellX);
             Assert.Equal(15, drained[0].CellY);
-            Assert.Equal(0, drained[0].MaterialId);
+            Assert.Equal(2, drained[0].MaterialId);
             Assert.Equal(2f, drained[0].Magnitude);
             Assert.Equal((ushort)1, drained[0].Count);
         }
@@ -316,9 +316,10 @@ public sealed class PhysicsSystemFacadeTests
     {
         for (int y = minY; y < maxY; y++)
         {
+            ushort material = grid.MaterialAt(x, y);
             grid.FlagsAt(x, y) = 0;
             grid.MaterialAt(x, y) = 0;
-            damageQueue.OnOwnedCellDamaged(x, y);
+            damageQueue.OnOwnedCellDamaged(x, y, material);
         }
     }
 

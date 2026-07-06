@@ -246,10 +246,10 @@
 - [x] 只读快照 API（不可变 mask + transform + 线/角速度）供 `plan/07` 存档。
 
 ### 4.11 PixelEngine.Physics — Demo 破坏原语接入既有刚体路径（§3.11，守 #5/#10，零新 native）
-- [ ] `IRigidDamageSink` 接口（`OnOwnedCellDamaged(int cellIndex, ushort consumedMaterial)`）正式化 §3.6 damage 钩子并由 `PhysicsSystem` 实现；`plan/03` `ApplyStructuralDamage` 命中 `RigidOwned` cell 时改调它入 `RigidDamageQueue`，**绝不在刚体像素的 `Damage` 平面累加**（守 #5，协调点见 §6）。
-- [ ] `OnOwnedCellDamaged`→`RigidStampRegistry` 映射→`BodyLocalMask` 清位→标 dirty→相位 8a `RebuildDirty` **复用** §4.7 既有 `CCL→MS→DP→PolyPartition→父子速度转移` 路径（不新增重建代码，只接线）。
-- [ ] `Explode` 重构（`plan/13` 炸弹/手榴弹 `DamageCircle`）对邻近动态刚体径向冲量**复用** `b2Body_ApplyLinearImpulse`（沿爆心→质心、距离衰减），相位 8 内经 Hosting `IRigidBodyApi.ApplyImpulse` 面施加；不新增 native（守 #10）。
-- [ ] 手榴弹默认脚本积分实现**不驱动额外 `b2World_Step`**（架构 §4.4）；「手榴弹作 Box2D 动态体」列为 open question，若采纳复用 §3.4/§3.6 既有路径、仍不新增 native。
+- [x] `IRigidDamageSink` 接口（`OnOwnedCellDamaged(int wx, int wy, ushort consumedMaterial)`）正式化 §3.6 damage 钩子并由 `RigidDamageQueue`/`PhysicsSystem` 链路消费；`plan/03` `ApplyStructuralDamage` 命中 `RigidOwned` cell 时改调它入 `RigidDamageQueue`，**绝不在刚体像素的 `Damage` 平面累加**（守 #5，协调点见 §6）。证据：`RigidOwnedDamageRoutingTests`、`SimulationDataStructureTests.ApplyStructuralDamageDestroysSolidAndRoutesRigidOwned`、`PhysicsCouplingAcceptanceTests.ReactionsDamageRigidOwnedCells`。
+- [x] `OnOwnedCellDamaged`→`RigidStampRegistry` 映射→`BodyLocalMask` 清位→标 dirty→相位 8a `RebuildDirty` **复用** §4.7 既有 `CCL→MS→DP→PolyPartition→父子速度转移` 路径（不新增重建代码，只接线）。证据：`RigidBodyDestructionTests.RebuildDirtySplitsDamagedBodyIntoChildBodies`、`PhysicsSystemFacadeTests.SyncStepPublishesRigidbodyShatterAudioEventWhenBodySplits`、`LavaMineSceneTests.LavaMineSceneRegistersDestructibleWoodAndMetalStructures`。
+- [x] `Explode` 重构（`plan/13` 炸弹/手榴弹 `DamageCircle`）对邻近动态刚体径向冲量**复用** `b2Body_ApplyLinearImpulse`（沿爆心→质心、距离衰减），相位 8 内经 Hosting `IRigidBodyApi.ApplyImpulse` 面施加；不新增 native（守 #10）。证据：`PhysicsSystem.ApplyRadialImpulse`、`ScriptSimulationContext.WorldEffectsFacade.Explode`、`PlayerControllerIntegrationTests.ExplosiveToolMiddleClickPushesNearbyRigidBody`、`WeaponControllerBombExplosionEffectsExpire`、`GrenadeDetonationAppliesSingleExplosionDamagePass`。
+- [x] 手榴弹默认脚本积分实现**不驱动额外 `b2World_Step`**（架构 §4.4）；「手榴弹作 Box2D 动态体」列为 open question，若采纳复用 §3.4/§3.6 既有路径、仍不新增 native。证据：`demo/PixelEngine.Demo/GrenadeProjectile.cs` 在 `OnUpdate(dt)` 中脚本积分并只经 `Context.Solids.Raycast`/`Context.World.Explode` 交互，`GrenadeDetonationAppliesSingleExplosionDamagePass` 覆盖手雷爆炸链路。
 - [ ] `metal` 梁近 `lava` 相变失去 `RigidOwned` 固体性后，上方脱落连通块由 §4.7 (8a) 既有「新脱落块→建新刚体」逻辑自动坍塌成动态刚体（无 Demo 特判、无新 native）。
 
 ---
@@ -296,11 +296,11 @@
 - [x] 与第 1 章不变式（#5/#9/#10）及 `plan/00` 技术栈无冲突（自审）。
 
 ### 5.7 Demo 破坏原语接入既有刚体路径（§3.11，守 #5/#10）
-- [ ] 武器/酸蚀破坏命中 `RigidOwned` cell 时经 `IRigidDamageSink.OnOwnedCellDamaged` 路由；`Damage` 平面对刚体像素**恒为 0**（headless 断言，守 #5）。
-- [ ] 挖/炸/烧穿刚体后经 8a `RebuildDirty` 拆分为子刚体，`BodyLocalMask` 固体像素数只随显式破坏减少、无往返侵蚀（复用 §5.3「无亚像素侵蚀」性质，破坏场景下再验）。
-- [ ] 炸弹/手榴弹爆破对邻近动态刚体产生可观测径向位移/自旋（`b2Body_ApplyLinearImpulse` 复用，headless tick 断言）。
+- [x] 武器/酸蚀破坏命中 `RigidOwned` cell 时经 `IRigidDamageSink.OnOwnedCellDamaged` 路由；`Damage` 平面对刚体像素**恒为 0**（headless 断言，守 #5）。证据：`RigidOwnedDamageRoutingTests`、`SimulationDataStructureTests.ApplyStructuralDamageDestroysSolidAndRoutesRigidOwned`、`LavaMineSceneTests.AcidCorrosionDamagesRigidWoodAndRebuildsBody`。
+- [x] 挖/炸/烧穿刚体后经 8a `RebuildDirty` 拆分为子刚体，`BodyLocalMask` 固体像素数只随显式破坏减少、无往返侵蚀（复用 §5.3「无亚像素侵蚀」性质，破坏场景下再验）。证据：`RigidBodyDestructionTests.RebuildDirtySplitsDamagedBodyIntoChildBodies`、`PhysicsSystemFacadeTests.SyncStepPublishesRigidbodyShatterAudioEventWhenBodySplits`、`LavaMineSceneTests.MaterialBrushCanDigRigidBridgeThroughPublicInput`。
+- [x] 炸弹/手榴弹爆破对邻近动态刚体产生可观测径向位移/自旋（`b2Body_ApplyLinearImpulse` 复用，headless tick 断言）。证据：`PlayerControllerIntegrationTests.ExplosiveToolMiddleClickPushesNearbyRigidBody`、`WeaponControllerBombExplosionEffectsExpire`、`GrenadeDetonationAppliesSingleExplosionDamagePass`。
 - [ ] `metal` 梁近 `lava` 熔化后其上木结构脱落成动态刚体并下落（既有 8a 脱落链路，headless tick 断言）。
-- [ ] 本轮 Demo 破坏接入**零新增 Box2D native 函数 / 零新 `[LibraryImport]`/`DllImport`**（代码审查，守 #10）。
+- [x] 本轮 Demo 破坏接入**零新增 Box2D native 函数 / 零新 `[LibraryImport]`/`DllImport`**（代码审查，守 #10）。证据：`Box2DFunctionsDeclareLibraryImportWithoutSuppressGcTransition` 通过，爆破冲量复用既有 `b2Body_ApplyLinearImpulse` 绑定。
 
 ---
 

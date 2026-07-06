@@ -263,10 +263,11 @@ internal static class ChunkUpdater
         }
 
         int targetSlot = window.SlotOf(targetX, targetY);
+        ushort targetMaterial = window.GetMaterial(targetX, targetY);
         byte targetFlags = window.GetFlags(targetX, targetY);
         if (CellFlags.Has(targetFlags, CellFlags.RigidOwned))
         {
-            rigidDamageSink.OnOwnedCellDamaged(targetX, targetY);
+            rigidDamageSink.OnOwnedCellDamaged(targetX, targetY, targetMaterial);
             window.SetFlags(targetX, targetY, CellFlags.Clear(targetFlags, CellFlags.RigidOwned));
         }
 
@@ -375,8 +376,8 @@ internal static class ChunkUpdater
         bool reacted = reactionExecutor.TryReact(ref window, wx, wy, material, neighborX, neighborY, neighborMaterial, parityBit, randomByte);
         if (reacted)
         {
-            NotifyRigidReactionDamage(ref window, rigidDamageSink, wx, wy, sourceFlagsBefore);
-            NotifyRigidReactionDamage(ref window, rigidDamageSink, neighborX, neighborY, neighborFlagsBefore);
+            NotifyRigidReactionDamage(ref window, rigidDamageSink, wx, wy, sourceFlagsBefore, material);
+            NotifyRigidReactionDamage(ref window, rigidDamageSink, neighborX, neighborY, neighborFlagsBefore, neighborMaterial);
             MarkReactionTouchedCell(ref window, chunks, wx, wy, diagnostics);
             MarkReactionTouchedCell(ref window, chunks, neighborX, neighborY, diagnostics);
             diagnostics.RecordReactionSuccess(wx, wy, material, neighborX, neighborY, neighborMaterial);
@@ -390,14 +391,15 @@ internal static class ChunkUpdater
         IRigidDamageSink rigidDamageSink,
         int wx,
         int wy,
-        byte flagsBefore)
+        byte flagsBefore,
+        ushort materialBefore)
     {
         if (!CellFlags.Has(flagsBefore, CellFlags.RigidOwned))
         {
             return;
         }
 
-        rigidDamageSink.OnOwnedCellDamaged(wx, wy);
+        rigidDamageSink.OnOwnedCellDamaged(wx, wy, materialBefore);
         window.SetFlags(wx, wy, CellFlags.Clear(window.GetFlags(wx, wy), CellFlags.RigidOwned));
     }
 

@@ -33,7 +33,7 @@ public sealed class RigidOwnedDamageRoutingTests
         Assert.Equal(0, center.Damage[local]);
         Span<RigidDamageEvent> drained = stackalloc RigidDamageEvent[1];
         Assert.Equal(1, damageQueue.DrainTo(drained));
-        Assert.Equal(new RigidDamageEvent(10, 10), drained[0]);
+        Assert.Equal(new RigidDamageEvent(10, 10, Stone), drained[0]);
     }
 
     /// <summary>
@@ -60,7 +60,7 @@ public sealed class RigidOwnedDamageRoutingTests
         Assert.Equal(0, center.Damage[rigidLocal]);
         Span<RigidDamageEvent> drained = stackalloc RigidDamageEvent[1];
         Assert.Equal(1, damageQueue.DrainTo(drained));
-        Assert.Equal(new RigidDamageEvent(9, 10), drained[0]);
+        Assert.Equal(new RigidDamageEvent(9, 10, Stone), drained[0]);
     }
 
     private static MaterialPropsTable CreateMaterials()
