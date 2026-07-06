@@ -749,15 +749,24 @@ public sealed class HostingProjectDisciplineTests
 
         JsonObject weapons = JsonNode.Parse(File.ReadAllText(weaponsPath))!.AsObject();
         JsonArray weaponItems = weapons["weapons"]!.AsArray();
-        Assert.Equal(3, weaponItems.Count);
+        Assert.Equal(6, weaponItems.Count);
         Assert.Equal(
-            ["singleShot", "laser", "grenade"],
+            ["singleShot", "laser", "grenade", "bomb", "excavator", "builder"],
             [.. weaponItems.Select(node => node!.AsObject()["kind"]!.GetValue<string>())]);
         Assert.Contains(
             weaponItems.Select(node => node!.AsObject()),
             weapon => weapon["id"]!.GetValue<string>() == "grenade" &&
                 weapon["fuseSeconds"]!.GetValue<double>() > 0 &&
                 weapon["impulse"]!.GetValue<double>() > 0);
+        Assert.Contains(
+            weaponItems.Select(node => node!.AsObject()),
+            weapon => weapon["id"]!.GetValue<string>() == "excavator" &&
+                weapon["radius"]!.GetValue<int>() > 0 &&
+                weapon["cooldownSeconds"]!.GetValue<double>() > 0);
+        Assert.Contains(
+            weaponItems.Select(node => node!.AsObject()),
+            weapon => weapon["id"]!.GetValue<string>() == "builder" &&
+                weapon["spawnMaterial"]!.GetValue<string>() == "stone");
 
         JsonObject materials = JsonNode.Parse(File.ReadAllText(materialsPath))!.AsObject();
         foreach (JsonObject material in materials["materials"]!.AsArray().Select(node => node!.AsObject()))
