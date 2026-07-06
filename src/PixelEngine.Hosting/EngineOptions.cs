@@ -14,6 +14,7 @@ public sealed class EngineOptions
     public EngineOptions(
         int windowWidth,
         int windowHeight,
+        string windowTitle,
         int internalWidth,
         int internalHeight,
         int workerCount,
@@ -35,6 +36,7 @@ public sealed class EngineOptions
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(windowWidth);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(windowHeight);
+        ArgumentException.ThrowIfNullOrWhiteSpace(windowTitle);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(internalWidth);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(internalHeight);
         ArgumentOutOfRangeException.ThrowIfNegative(workerCount);
@@ -53,6 +55,7 @@ public sealed class EngineOptions
         ArgumentNullException.ThrowIfNull(overload);
         WindowWidth = windowWidth;
         WindowHeight = windowHeight;
+        WindowTitle = windowTitle.Trim();
         InternalWidth = internalWidth;
         InternalHeight = internalHeight;
         WorkerCount = workerCount;
@@ -84,6 +87,11 @@ public sealed class EngineOptions
     public const int DefaultWindowHeight = 720;
 
     /// <summary>
+    /// 默认窗口标题。
+    /// </summary>
+    public const string DefaultWindowTitle = "PixelEngine Demo";
+
+    /// <summary>
     /// 默认内部 sim 宽度。
     /// </summary>
     public const int DefaultInternalWidth = 640;
@@ -107,6 +115,11 @@ public sealed class EngineOptions
     /// 窗口高度。
     /// </summary>
     public int WindowHeight { get; }
+
+    /// <summary>
+    /// 窗口标题。
+    /// </summary>
+    public string WindowTitle { get; }
 
     /// <summary>
     /// 内部 sim 宽度。
@@ -206,6 +219,7 @@ public sealed class EngineOptions
         return new EngineOptions(
             DefaultWindowWidth,
             DefaultWindowHeight,
+            DefaultWindowTitle,
             DefaultInternalWidth,
             DefaultInternalHeight,
             workerCount: 0,

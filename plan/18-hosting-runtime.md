@@ -18,7 +18,7 @@
 - [x] M10/M13 Hosting 底座已闭合：`EngineBuilder`、`Engine`、`EngineContext`、12 相位、headless、Play/Edit/Step、GUI 宿主中性化、窗口/GL 所有权解耦与 EditorShell attach 证据已记录。
 - [x] M14 Web-first UI runtime 装配底座已闭合：`EnableGameUi`、`UseUiBackend`、`GameUiHost`、`GameUiPhaseDriver`、`IGameUiService`、相位 [10] order 合成与禁用零装配已落地。
 - [x] M14 player 启动分派已闭合：`content/startup.json` 可分派 `SceneFile`、`SaveDirectory`、`Procedural`，缺省回落 `playable-world`。
-- [x] M14 中性配置 DTO 底座已落地：`ProjectSettingsDto`、`PlayerSettingsDto`、`BuildProfileDto` 与 `EngineProjectSettingsStore` 读写/校验入口已实现，Build Settings 已供 EditorShell 与 build-player 参数投影共用；Project / Player Settings 面板消费仍作为未完成 UX 项保留。
+- [x] M14 中性配置 DTO 底座已落地并被 Shell 消费：`ProjectSettingsDto`、`PlayerSettingsDto`、`BuildProfileDto` 与 `EngineProjectSettingsStore` 读写/校验入口已实现；Project / Player / Build Settings 均通过 Hosting DTO/store 持久化，Player Settings 已投影到 headless runtime options、build-player 参数与 packaged `startup.json`。
 - [!] M15 Editor 真实窗口人工验收仍阻塞：scripted probe、截图、`manual_evidence_attached_pending_review` 只能作为证据入口，不能替代人工 UX / 真实窗口验收完成。
 - [!] M15 native leak 证据仍阻塞：managed detector 与 process smoke 不能替代跨平台 runner、GL driver 级 detector、OpenAL/Box2D/ALC/GL 外部工具级报告。
 
@@ -40,9 +40,9 @@
 ## 4. M14 配置 DTO checklist
 
 - [x] `ProjectSettingsDto`：已定义工程名、content root、script source dir、默认 scene、资源规则、编辑器偏好、默认 UI backend，并提供默认值、schema version、JSON 读写、校验与路径逃逸拒绝测试。
-- [ ] `ProjectSettingsDto` EditorShell 消费：Project Settings 面板仍需绑定该 DTO 的读写、迁移与错误提示，不能只停留在 Hosting store。
+- [x] `ProjectSettingsDto` EditorShell 消费：Project Settings 面板已通过 `ProjectSettingsStore` 直接代理 Hosting `EngineProjectSettingsStore` 的 `ProjectSettings.json`，覆盖读写、规范化、错误提示与 scripted apply/capture probe，不在 Shell 内定义第二套 schema。
 - [x] `PlayerSettingsDto`：已定义窗口标题、分辨率、VSync、图标、版本号、启动场景、输入默认、运行时 UI backend、发行通道，并提供默认值、JSON 读写、校验与路径逃逸拒绝测试。
-- [ ] `PlayerSettingsDto` EditorShell / runtime 消费：Player Settings 面板、运行时窗口设置与 build-player 参数投影仍需逐项绑定该 DTO。
+- [x] `PlayerSettingsDto` EditorShell / runtime 消费：Player Settings 面板已通过 `PlayerSettingsStore` 读写 Hosting `PlayerSettings.json`，并经 `PlayerSettingsEditorAdapter` 投影到 `EngineBuilder` headless/runtime options、BuildRequest、build-player 参数与 packaged `startup.json`；Demo startup 读取同源 title/size/vsync/ui backend。
 - [x] `BuildProfileDto`：已定义目标 RID/channel/configuration、R2R/AOT、Debug/Release、入包场景、启动场景、输出目录、符号、Build/Build And Run 参数；EditorShell Build Settings 已通过 `BuildProfileEditorAdapter` / `BuildSettingsStore` 回读并投影到 build-player 请求。
 - [x] `EngineProjectSettingsStore` 读写/校验入口：已提供 `ProjectSettings.json`、`PlayerSettings.json`、`BuildSettings.json` 的 Hosting 中性 JSON 读写入口、默认值与 schema version。
 - [ ] `EngineProject` 统一入口：仍需将上述 DTO 与现有 content/scenes 扫描、`startup.json`、`.scene` loader 统一成更完整的中性工程 schema，禁止引入 EditorShell authoring UI 类型。
@@ -50,8 +50,8 @@
 ## 5. 未完成目标 checklist
 
 - [x] 将 Project Settings / Player Settings / Build Settings 的默认值、读写、校验与路径逃逸拒绝纳入 Hosting 测试，避免 EditorShell 在壳内形成第二套 settings schema 底座。
-- [ ] 在 plan/19 中把 Project / Player Settings 面板逐项绑定到本文件 DTO，保证 Unity-like Editor 的工程与玩家设置不形成 shell-local schema。
-- [x] Build Settings 已消费 `BuildProfileDto` 同源投影：EditorShell 以 Hosting DTO 持久化 `BuildSettings.json`，并投影为 build-player 子进程参数。
+- [x] 在 plan/19 中把 Project / Player Settings 面板逐项绑定到本文件 DTO，保证 Unity-like Editor 的工程与玩家设置不形成 shell-local schema；自动化证据覆盖 store roundtrip、scripted apply/capture、错误输入不保存与 PlayerSettings → build/runtime 投影。
+- [x] Build Settings 已消费 `BuildProfileDto` 同源投影：EditorShell 以 Hosting DTO 持久化 `BuildSettings.json`，并在启动 build-player 前叠加同源 `PlayerSettingsDto` 的标题、版本、图标、启动场景、窗口、VSync、runtime UI backend 与发行通道。
 
 ## 6. 证据债 / 阻塞 checklist
 
@@ -63,8 +63,8 @@
 
 - [x] `dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --filter FullyQualifiedName~HostingProjectDisciplineTests|FullyQualifiedName~EngineWindowOwnershipTests|FullyQualifiedName~EnginePhasePipelineTests` 覆盖依赖方向、窗口所有权、相位与降频。
 - [x] `dotnet test tests/PixelEngine.UI.Tests/PixelEngine.UI.Tests.csproj -c Release --filter FullyQualifiedName~GameUiHostTests|FullyQualifiedName~UiInputRouterTests|FullyQualifiedName~GameUiServiceBridgeTests` 覆盖 Web-first UI 装配、输入仲裁、服务桥和禁用门控。
-- [x] `dotnet test tests/PixelEngine.Demo.Tests/PixelEngine.Demo.Tests.csproj -c Release --filter FullyQualifiedName~DemoStartupOptionsTests` 覆盖 player startup 分派。
-- [x] `dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --filter "FullyQualifiedName~EditorShellBuildTests|FullyQualifiedName~HostingProjectDisciplineTests"` 覆盖 Hosting settings DTO 读写/校验、Build Settings 同源投影、player build 编排与项目纪律，当前通过 32/32。
+- [x] `dotnet test tests/PixelEngine.Demo.Tests/PixelEngine.Demo.Tests.csproj -c Release --filter FullyQualifiedName~DemoStartupOptionsTests` 覆盖 player startup 分派与 packaged `startup.json` 中 title/window/vsync/runtime UI backend 消费，当前通过 22/22。
+- [x] `dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --filter "FullyQualifiedName~EditorShellBuildTests|FullyQualifiedName~EngineBuilderTests"` 覆盖 Project/Player Settings store 与面板 scripted probe、错误输入不保存、PlayerSettings → BuildRequest/runtime options/build-player 参数投影、EngineBuilder 窗口标题与 player build 编排，当前通过 27/27。
 - [x] `docs/runtime-reports/2026-07-02-demo-window-smoke.md`、`docs/runtime-reports/2026-07-02-demo-window-longrun.md`、`docs/runtime-reports/2026-07-06-editor-shell-attach-probe.md` 是现有 runtime / window / attach 证据路径。
 - [!] `tools/demo-manual-acceptance-preflight.ps1` 与 `tools/native-leak-preflight.ps1` 只提供证据入口；未有合格 manifest 和人工/外部复核前保持阻塞。
 
@@ -72,5 +72,5 @@
 
 - [x] 上游依赖：plan/01、plan/02、plan/03–10、plan/11、plan/12、plan/15、plan/19、plan/20 的公开契约已经在 Hosting 中作为装配边界登记。
 - [x] 下游消费：plan/19 使用窗口所有权、Edit/Play、`.scene` writer 与 Settings DTO；plan/20 使用 UI 装配和 `IGameUiService`；plan/13 使用 startup 分派和公开 runtime services；plan/15 使用 build profile / player-only 审计边界。
-- [ ] 下一闭合节点：将 `ProjectSettingsDto` / `PlayerSettingsDto` 绑定到 plan/19 Project Settings / Player Settings 面板与运行时消费路径，补真实 Settings UX 保存/重启恢复/错误提示证据。
+- [x] 本轮闭合节点：`ProjectSettingsDto` / `PlayerSettingsDto` 已绑定到 plan/19 Project Settings / Player Settings 面板与 headless/runtime/build-player 消费路径；真实 Settings UX 保存、重启恢复、人工填写与截图证据仍归 M15 `[!]`。
 - [!] M15 后续节点：补 Editor UX 人工证据与 native leak 外部 detector 证据，完成后再更新 README/plan17 dashboard。

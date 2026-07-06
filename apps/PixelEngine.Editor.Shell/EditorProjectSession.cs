@@ -1,5 +1,6 @@
 using PixelEngine.Hosting;
 using PixelEngine.Editor.Shell.Build;
+using PixelEngine.Editor.Shell.Settings;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
@@ -69,9 +70,10 @@ internal sealed class EditorProjectSession : IDisposable
         ArgumentNullException.ThrowIfNull(app);
         EditorShellHostExtension editorHost = new(project, app);
         string sceneRelativePath = project.ResolveSceneRelativePath(app.SceneOverridePath);
+        PlayerSettingsDto playerSettings = new PlayerSettingsStore(project).Load();
         Engine engine = new EngineBuilder()
             .WithProject(project.ToEngineProject(sceneRelativePath))
-            .UseVSync(true)
+            .ApplyRuntimeDefaults(playerSettings)
             .UseGuiRuntime(false)
             .AddEditorHostExtension(editorHost)
             .Build();
@@ -245,6 +247,18 @@ internal sealed class EditorProjectSession : IDisposable
         UndoStack.Execute(SceneModel, new InstantiatePrefabCommand(Prefabs, assetPath, SceneModel.SelectedStableId));
     }
 
+    public bool ShowProjectSettings()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryShowPanel(ProjectSettingsPanel.PanelTitle);
+    }
+
+    public bool ShowPlayerSettings()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryShowPanel(PlayerSettingsPanel.PanelTitle);
+    }
+
     public bool ShowBuildSettings()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -295,6 +309,30 @@ internal sealed class EditorProjectSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _editorHost.CaptureScriptedBuildSettingsProbe();
+    }
+
+    public ScriptedProjectSettingsProbeSnapshot ApplyScriptedProjectSettingsProbe()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.ApplyScriptedProjectSettingsProbe();
+    }
+
+    public ScriptedProjectSettingsProbeSnapshot CaptureScriptedProjectSettingsProbe()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureScriptedProjectSettingsProbe();
+    }
+
+    public ScriptedPlayerSettingsProbeSnapshot ApplyScriptedPlayerSettingsProbe()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.ApplyScriptedPlayerSettingsProbe();
+    }
+
+    public ScriptedPlayerSettingsProbeSnapshot CaptureScriptedPlayerSettingsProbe()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureScriptedPlayerSettingsProbe();
     }
 
     public bool Undo()

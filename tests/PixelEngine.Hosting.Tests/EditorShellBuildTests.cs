@@ -3,8 +3,11 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using PixelEngine.Editor.Shell;
 using PixelEngine.Editor.Shell.Build;
+using PixelEngine.Editor.Shell.Settings;
 using PixelEngine.Hosting;
+using PixelEngine.UI;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -322,6 +325,177 @@ public sealed class EditorShellBuildTests
     }
 
     /// <summary>
+    /// 验证 EditorShell Project/Player Settings 面板直接读写 Hosting DTO，非法输入不落盘。
+    /// </summary>
+    [Fact]
+    public void EditorShellSettingsStoresAndPanelsRoundTripHostingDtos()
+    {
+        using TempDir temp = new();
+        string projectRoot = Path.Combine(temp.Path, "SettingsProject");
+        EditorProject project = EditorProject.CreateNew(projectRoot, " Settings Project ");
+
+        ProjectSettingsStore projectStore = new(project);
+        ProjectSettingsDto fallbackProject = projectStore.Load();
+        Assert.Equal("Settings Project", fallbackProject.Name);
+        Assert.Equal(project.ContentRoot, fallbackProject.ContentRoot);
+        Assert.Equal(project.ScriptSourceDir, fallbackProject.ScriptSourceDir);
+        Assert.Equal(project.StartScene, fallbackProject.StartScene);
+
+        ProjectSettingsPanel projectPanel = new(project);
+        ScriptedProjectSettingsProbeSnapshot projectSnapshot = projectPanel.ApplyScriptedProjectSettingsProbe();
+        ProjectSettingsDto reloadedProject = projectStore.Load();
+        Assert.Equal(projectSnapshot.Name, reloadedProject.Name);
+        Assert.Equal("scripts/probe", reloadedProject.ScriptSourceDir);
+        Assert.Equal("scenes/settings-probe.scene", reloadedProject.StartScene);
+        Assert.Equal(UiBackendKind.ManagedFallback, reloadedProject.DefaultUiBackend);
+        Assert.True(projectSnapshot.RequireStableMaterialNames);
+        Assert.False(projectSnapshot.SaveLayoutOnExit);
+
+        Assert.False(projectPanel.TryApplyProjectSettings(reloadedProject with { ContentRoot = "../outside" }, out string projectDiagnostic));
+        Assert.Contains("ContentRoot", projectDiagnostic, StringComparison.Ordinal);
+        Assert.Equal("content", projectStore.Load().ContentRoot);
+
+        PlayerSettingsStore playerStore = new(project);
+        PlayerSettingsDto fallbackPlayer = playerStore.Load();
+        Assert.Equal("Settings Project", fallbackPlayer.WindowTitle);
+        Assert.Equal(project.StartScene, fallbackPlayer.StartupScene);
+
+        PlayerSettingsPanel playerPanel = new(project);
+        ScriptedPlayerSettingsProbeSnapshot playerSnapshot = playerPanel.ApplyScriptedPlayerSettingsProbe();
+        PlayerSettingsDto reloadedPlayer = playerStore.Load();
+        Assert.Equal(playerSnapshot.WindowTitle, reloadedPlayer.WindowTitle);
+        Assert.Equal(1600, reloadedPlayer.WindowWidth);
+        Assert.Equal(900, reloadedPlayer.WindowHeight);
+        Assert.False(reloadedPlayer.VSync);
+        Assert.Equal("icons/player-probe.ico", reloadedPlayer.IconPath);
+        Assert.Equal("4.5.6", reloadedPlayer.Version);
+        Assert.Equal("scenes/player-settings-probe.scene", reloadedPlayer.StartupScene);
+        Assert.Equal(PlayerReleaseChannel.Production, reloadedPlayer.ReleaseChannel);
+
+        Assert.False(playerPanel.TryApplyPlayerSettings(reloadedPlayer with { WindowWidth = 0 }, out string playerDiagnostic));
+        Assert.Contains("窗口尺寸", playerDiagnostic, StringComparison.Ordinal);
+        Assert.Equal(1600, playerStore.Load().WindowWidth);
+    }
+
+    /// <summary>
+    /// 验证 PlayerSettingsDto 同源投影到 build-player 请求与 headless EngineOptions。
+    /// </summary>
+    [Fact]
+    public void PlayerSettingsProjectionFeedsBuildRequestAndRuntimeOptions()
+    {
+        BuildRequest request = CreateRequest("artifacts/player") with
+        {
+            ProductName = "Build Profile Name",
+            Version = "0.0.1",
+            IconPath = "icons/build.ico",
+            IncludedScenes = ["scenes/extra.scene"],
+        };
+        PlayerSettingsDto settings = new()
+        {
+            WindowTitle = "Player Projection",
+            WindowWidth = 1440,
+            WindowHeight = 810,
+            VSync = false,
+            IconPath = "icons/player.ico",
+            Version = "2.3.4",
+            StartupScene = "scenes/player.scene",
+            RuntimeUiBackend = UiBackendKind.Ultralight,
+            ReleaseChannel = PlayerReleaseChannel.Production,
+        };
+
+        BuildRequest projected = PlayerSettingsEditorAdapter.ApplyToBuildRequest(request, settings);
+
+        Assert.Equal("Player Projection", projected.ProductName);
+        Assert.Equal("2.3.4", projected.Version);
+        Assert.Equal("icons/player.ico", projected.IconPath);
+        Assert.Equal("scenes/player.scene", projected.StartScene);
+        Assert.Equal(["scenes/extra.scene", "scenes/player.scene"], projected.IncludedScenes);
+        Assert.Equal(1440, projected.PlayerWindowWidth);
+        Assert.Equal(810, projected.PlayerWindowHeight);
+        Assert.False(projected.PlayerVSync);
+        Assert.Equal(UiBackendKind.Ultralight, projected.RuntimeUiBackend);
+        Assert.Equal(PlayerReleaseChannel.Production, projected.ReleaseChannel);
+
+        PlayerSettingsRuntimeProjectionSnapshot snapshot = PlayerSettingsEditorAdapter.CaptureRuntimeProjection(settings);
+        Assert.Equal("Player Projection", snapshot.WindowTitle);
+        Assert.Equal(UiBackendKind.Ultralight, snapshot.RuntimeUiBackend);
+
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .ApplyRuntimeDefaults(settings)
+            .Build();
+        Assert.Equal("Player Projection", engine.Context.Options.WindowTitle);
+        Assert.Equal(1440, engine.Context.Options.WindowWidth);
+        Assert.Equal(810, engine.Context.Options.WindowHeight);
+        Assert.False(engine.Context.Options.VSync);
+        Assert.Equal(UiBackendKind.Ultralight, engine.Context.Options.GameUiBackend);
+    }
+
+    /// <summary>
+    /// 验证 PlayerBuildService 会把 PlayerSettings 派生的 runtime 参数传给 build-player。
+    /// </summary>
+    [Fact]
+    public async Task PlayerBuildServicePassesPlayerSettingsRuntimeArgumentsToBuildPlayer()
+    {
+        using TempDir temp = new();
+        string script = WriteBuildPlayerScript(
+            temp.Path,
+            """
+            $received = @{
+              startScene = $StartScene
+              windowWidth = $WindowWidth
+              windowHeight = $WindowHeight
+              vSync = $VSync
+              runtimeUiBackend = $RuntimeUiBackend
+              includeSceneCount = $IncludeScene.Count
+            }
+            $received | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $Output 'received-args.json') -Encoding UTF8
+            $result = @{
+              ok = $true
+              rid = $Rid
+              channel = $Channel
+              configuration = $Configuration
+              version = $Version
+              informationalVersion = ''
+              packageArchive = 'pkg.zip'
+              packageDir = 'pkg'
+              playerDir = 'player'
+              launcherExe = 'Player Projection.exe'
+              sha256 = 'abc'
+              sizeBytes = 1
+              phaseTimingsMs = @{}
+              warnings = @()
+              error = $null
+              exitCode = 0
+            }
+            $result | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $Output 'build-result.json') -Encoding UTF8
+            exit 0
+            """);
+        PlayerBuildService service = new(new FakeLocator(temp.Path, script));
+        string output = Path.Combine(temp.Path, "out");
+        BuildRequest request = CreateRequest(output) with
+        {
+            StartScene = "scenes/player.scene",
+            IncludedScenes = ["scenes/player.scene", "scenes/extra.scene"],
+            PlayerWindowWidth = 1440,
+            PlayerWindowHeight = 810,
+            PlayerVSync = false,
+            RuntimeUiBackend = UiBackendKind.Ultralight,
+        };
+
+        BuildResult result = await service.RunAsync(request, new RecordingProgress(), CancellationToken.None);
+
+        Assert.True(result.Ok, result.Error);
+        string received = File.ReadAllText(Path.Combine(output, "received-args.json"));
+        Assert.Contains("\"startScene\": \"scenes/player.scene\"", received, StringComparison.Ordinal);
+        Assert.Contains("\"windowWidth\": 1440", received, StringComparison.Ordinal);
+        Assert.Contains("\"windowHeight\": 810", received, StringComparison.Ordinal);
+        Assert.Contains("\"vSync\": \"false\"", received, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"runtimeUiBackend\": \"Ultralight\"", received, StringComparison.Ordinal);
+        Assert.Contains("\"includeSceneCount\": 2", received, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证真实 release audit 脚本拒绝编辑器闭包、允许玩家 HUD 所需 ImGui，并区分 dev/strict 布局。
     /// </summary>
     [Fact]
@@ -390,6 +564,10 @@ public sealed class EditorShellBuildTests
           [string]$IconPath,
           [switch]$IncludeSymbols,
           [string]$StartScene,
+          [int]$WindowWidth,
+          [int]$WindowHeight,
+          [string]$VSync,
+          [string]$RuntimeUiBackend,
           [string[]]$IncludeScene
         )
         $ErrorActionPreference = 'Stop'

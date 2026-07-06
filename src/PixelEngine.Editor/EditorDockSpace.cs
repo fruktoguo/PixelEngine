@@ -26,6 +26,8 @@ public sealed class EditorDockSpace
         EditorModeWindowTitle,
         PerformanceHudWindowTitle,
         ConsoleDiagnosticsWindowTitle,
+        ProjectSettingsWindowTitle,
+        PlayerSettingsWindowTitle,
         BuildSettingsWindowTitle,
     ];
 
@@ -108,6 +110,16 @@ public sealed class EditorDockSpace
     /// 控制台与诊断窗口标题。
     /// </summary>
     public const string ConsoleDiagnosticsWindowTitle = "控制台/诊断";
+
+    /// <summary>
+    /// Project Settings 窗口标题。
+    /// </summary>
+    public const string ProjectSettingsWindowTitle = "Project Settings";
+
+    /// <summary>
+    /// Player Settings 窗口标题。
+    /// </summary>
+    public const string PlayerSettingsWindowTitle = "Player Settings";
 
     /// <summary>
     /// 构建与发布窗口标题。
@@ -201,6 +213,8 @@ public sealed class EditorDockSpace
         ImGuiP.DockBuilderDockWindow(EditorModeWindowTitle, bottomNode);
         ImGuiP.DockBuilderDockWindow(PerformanceHudWindowTitle, bottomNode);
         ImGuiP.DockBuilderDockWindow(ConsoleDiagnosticsWindowTitle, bottomNode);
+        ImGuiP.DockBuilderDockWindow(ProjectSettingsWindowTitle, bottomNode);
+        ImGuiP.DockBuilderDockWindow(PlayerSettingsWindowTitle, bottomNode);
         ImGuiP.DockBuilderDockWindow(BuildSettingsWindowTitle, bottomNode);
         ImGuiP.DockBuilderFinish(dockspaceId);
     }

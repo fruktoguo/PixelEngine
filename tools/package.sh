@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: tools/package.sh --rid <RID> --channel <r2r|aot> [--version <semver>] [--publish-dir <dir>] [--output-root <dir>] [--player-output-dir <dir>] [--content-root <dir>] [--product-name <name>] [--start-scene <scene>] [--include-scene <scene>] [--include-symbols]
+Usage: tools/package.sh --rid <RID> --channel <r2r|aot> [--version <semver>] [--publish-dir <dir>] [--output-root <dir>] [--player-output-dir <dir>] [--content-root <dir>] [--product-name <name>] [--start-scene <scene>] [--window-width <pixels>] [--window-height <pixels>] [--vsync <true|false>] [--runtime-ui-backend <backend>] [--include-scene <scene>] [--include-symbols]
 EOF
 }
 
@@ -19,6 +19,15 @@ require_value() {
   if [[ -z "$value" || "$value" == --* ]]; then
     fail_usage "Missing value for $name."
   fi
+}
+
+json_escape() {
+  local text="$1"
+  text="${text//\\/\\\\}"
+  text="${text//\"/\\\"}"
+  text="${text//$'\r'/}"
+  text="${text//$'\n'/\\n}"
+  printf '%s' "$text"
 }
 
 sha256_file() {
@@ -51,6 +60,10 @@ player_output_dir=""
 content_root=""
 product_name=""
 start_scene=""
+window_width="1280"
+window_height="720"
+vsync="true"
+runtime_ui_backend="ManagedFallback"
 include_symbols=0
 include_scenes=()
 
@@ -99,6 +112,26 @@ while [[ $# -gt 0 ]]; do
     --start-scene)
       require_value "$1" "${2:-}"
       start_scene="$2"
+      shift 2
+      ;;
+    --window-width)
+      require_value "$1" "${2:-}"
+      window_width="$2"
+      shift 2
+      ;;
+    --window-height)
+      require_value "$1" "${2:-}"
+      window_height="$2"
+      shift 2
+      ;;
+    --vsync)
+      require_value "$1" "${2:-}"
+      vsync="$2"
+      shift 2
+      ;;
+    --runtime-ui-backend)
+      require_value "$1" "${2:-}"
+      runtime_ui_backend="$2"
       shift 2
       ;;
     --include-scene)
@@ -166,6 +199,9 @@ fi
 if [[ -z "$content_root" ]]; then
   content_root="$repo_root/demo/PixelEngine.Demo/content"
 fi
+
+vsync_json="$(printf '%s' "$vsync" | tr '[:upper:]' '[:lower:]')"
+case "$vsync_json" in true|false) ;; *) fail_usage "--vsync must be true or false." ;; esac
 
 launcher_base="${product_name:-PixelEngine Demo}"
 if [[ -n "$product_name" ]]; then
@@ -274,7 +310,12 @@ copy_filtered_content() {
     startup="$(normalize_scene_path "$start_scene")"
     cat > "$content_dir/startup.json" <<EOF
 {
-  "startScene": "$startup"
+  "startScene": "$(json_escape "$startup")",
+  "windowTitle": "$(json_escape "$launcher_base")",
+  "windowWidth": $window_width,
+  "windowHeight": $window_height,
+  "vSync": $vsync_json,
+  "runtimeUiBackend": "$(json_escape "$runtime_ui_backend")"
 }
 EOF
     local found=0

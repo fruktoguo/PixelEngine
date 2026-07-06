@@ -1,6 +1,7 @@
 using PixelEngine.Gui;
 using PixelEngine.Hosting;
 using PixelEngine.Editor.Shell.Build;
+using PixelEngine.Editor.Shell.Settings;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
@@ -17,6 +18,8 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
     private EditorSceneModel? _sceneModel;
     private EditorUndoStack? _undoStack;
     private EditorPrefabAssetStore? _prefabs;
+    private ProjectSettingsPanel? _projectSettingsPanel;
+    private PlayerSettingsPanel? _playerSettingsPanel;
     private BuildSettingsPanel? _buildSettingsPanel;
     private bool _panelsRegistered;
 
@@ -86,6 +89,40 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
     {
         return _buildSettingsPanel?.CaptureScriptedBuildSettingsProbe() ??
             throw new InvalidOperationException("Build Settings 面板尚未注册。");
+    }
+
+    public ScriptedProjectSettingsProbeSnapshot ApplyScriptedProjectSettingsProbe()
+    {
+        if (_projectSettingsPanel is null)
+        {
+            throw new InvalidOperationException("Project Settings 面板尚未注册。");
+        }
+
+        _ = _editor.TryShowPanel(ProjectSettingsPanel.PanelTitle);
+        return _projectSettingsPanel.ApplyScriptedProjectSettingsProbe();
+    }
+
+    public ScriptedProjectSettingsProbeSnapshot CaptureScriptedProjectSettingsProbe()
+    {
+        return _projectSettingsPanel?.CaptureScriptedProjectSettingsProbe() ??
+            throw new InvalidOperationException("Project Settings 面板尚未注册。");
+    }
+
+    public ScriptedPlayerSettingsProbeSnapshot ApplyScriptedPlayerSettingsProbe()
+    {
+        if (_playerSettingsPanel is null)
+        {
+            throw new InvalidOperationException("Player Settings 面板尚未注册。");
+        }
+
+        _ = _editor.TryShowPanel(PlayerSettingsPanel.PanelTitle);
+        return _playerSettingsPanel.ApplyScriptedPlayerSettingsProbe();
+    }
+
+    public ScriptedPlayerSettingsProbeSnapshot CaptureScriptedPlayerSettingsProbe()
+    {
+        return _playerSettingsPanel?.CaptureScriptedPlayerSettingsProbe() ??
+            throw new InvalidOperationException("Player Settings 面板尚未注册。");
     }
 
     public void ConfigureAuthoring(EditorSceneModel sceneModel, EditorUndoStack undoStack, EditorPrefabAssetStore prefabs)
@@ -164,7 +201,11 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             _editor.AddPanel(materialReactionPanel);
         }
 
+        _projectSettingsPanel = new ProjectSettingsPanel(_project);
+        _playerSettingsPanel = new PlayerSettingsPanel(_project);
         _buildSettingsPanel = new BuildSettingsPanel(_project);
+        _editor.AddPanel(_projectSettingsPanel);
+        _editor.AddPanel(_playerSettingsPanel);
         _editor.AddPanel(_buildSettingsPanel);
         _editor.AddPanel(new EditorConsolePanel(_app));
         _editor.AddPanel(new PerformanceHudPanel());
