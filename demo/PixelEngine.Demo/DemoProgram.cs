@@ -659,6 +659,7 @@ public static class DemoProgram
             $"particle_light_probe_max_active={probe.MaxActive}, " +
             $"particle_light_probe_tail_max={probe.TailMaxActive}, " +
             $"particle_light_probe_last_active={probe.LastActive}, " +
+            $"particle_light_probe_tail_clear_frames={probe.TailClearFrames}, " +
             $"particle_light_probe_lifetime_kill={probe.LifetimeKillObserved}, " +
             $"particle_light_probe_depleted={probe.Depleted}, " +
             $"particle_light_probe_light_observed={probe.LightObserved}, " +

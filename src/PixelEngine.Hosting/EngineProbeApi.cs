@@ -34,6 +34,28 @@ public sealed class EngineProbeApi
     public int ActiveParticles => _particles.ActiveCount;
 
     /// <summary>
+    /// 按材质与颜色变体统计当前活跃自由粒子数量；只读扫描活跃前缀，不分配。
+    /// </summary>
+    /// <param name="material">运行时材质 id。</param>
+    /// <param name="colorVariant">粒子颜色变体。</param>
+    /// <returns>匹配条件的活跃自由粒子数量。</returns>
+    public int CountActiveParticles(ushort material, byte colorVariant)
+    {
+        ReadOnlySpan<Particle> active = _particles.ActiveReadOnly;
+        int count = 0;
+        for (int i = 0; i < active.Length; i++)
+        {
+            Particle particle = active[i];
+            if (particle.Material == material && particle.ColorVariant == colorVariant)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>
     /// 按稳定材质名解析运行时材质 id。
     /// </summary>
     /// <param name="name">材质稳定名称。</param>

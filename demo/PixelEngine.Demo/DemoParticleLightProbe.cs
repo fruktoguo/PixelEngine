@@ -15,6 +15,8 @@ internal sealed class DemoParticleLightProbe(
 {
     private const int BurstCount = 96;
     private const int TailStartFrame = 80;
+    private const int TailClearRequiredFrames = 12;
+    private const byte ProbeColorVariant = 251;
     private const float CenterX = 320f;
     private const float CenterY = 180f;
 
@@ -51,6 +53,11 @@ internal sealed class DemoParticleLightProbe(
     public int LastActive { get; private set; }
 
     /// <summary>
+    /// 尾段末尾连续观测到探针粒子为 0 的帧数。
+    /// </summary>
+    public int TailClearFrames { get; private set; }
+
+    /// <summary>
     /// 是否观测到粒子因 lifetime 到期被释放。
     /// </summary>
     public bool LifetimeKillObserved { get; private set; }
@@ -70,8 +77,8 @@ internal sealed class DemoParticleLightProbe(
     /// </summary>
     public bool Depleted => Spawned == BurstCount &&
         MaxActive > 0 &&
-        TailMaxActive == 0 &&
         LastActive == 0 &&
+        TailClearFrames >= TailClearRequiredFrames &&
         LifetimeKillObserved;
 
     /// <summary>
@@ -110,7 +117,7 @@ internal sealed class DemoParticleLightProbe(
                 MathF.Cos(angle) * speed,
                 MathF.Sin(angle) * speed,
                 _fire,
-                colorVariant: 0,
+                ProbeColorVariant,
                 life: 24))
             {
                 Spawned++;
@@ -123,12 +130,13 @@ internal sealed class DemoParticleLightProbe(
 
     private void Capture(EngineTickContext context)
     {
-        int active = _probe.ActiveParticles;
+        int active = Initialized ? _probe.CountActiveParticles(_fire, ProbeColorVariant) : 0;
         MaxActive = Math.Max(MaxActive, active);
         LastActive = active;
         if (_frames >= TailStartFrame)
         {
             TailMaxActive = Math.Max(TailMaxActive, active);
+            TailClearFrames = active == 0 ? TailClearFrames + 1 : 0;
         }
 
         LifetimeKillObserved |= context.Context.Counters.FreeParticlesKilledThisTick > 0;

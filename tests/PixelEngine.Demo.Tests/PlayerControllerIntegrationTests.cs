@@ -542,6 +542,37 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证窗口粒子光照探针可按材质与 color variant 隔离自己的短寿命粒子，不被其他粒子流量误报为残留。
+    /// </summary>
+    [Fact]
+    public void EngineProbeCountsActiveParticlesByMaterialAndVariant()
+    {
+        MaterialTable materials = DemoMaterials();
+        Assert.True(materials.TryGetId("fire", out ushort fire));
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        using Engine engine = CreateManualScriptEngine(out _, out _, out _, out _, materials);
+        EngineProbeApi probe = engine.Context.GetService<EngineProbeApi>();
+        const byte ProbeVariant = 251;
+
+        Assert.True(probe.TrySpawnParticle(4, 4, 0, 0, fire, ProbeVariant, life: 4));
+        Assert.True(probe.TrySpawnParticle(5, 4, 0, 0, fire, ProbeVariant, life: 4));
+        Assert.True(probe.TrySpawnParticle(6, 4, 0, 0, fire, colorVariant: 0, life: 16));
+        Assert.True(probe.TrySpawnParticle(7, 4, 0, 0, stone, ProbeVariant, life: 16));
+
+        Assert.Equal(4, probe.ActiveParticles);
+        Assert.Equal(2, probe.CountActiveParticles(fire, ProbeVariant));
+        Assert.Equal(1, probe.CountActiveParticles(fire, colorVariant: 0));
+        Assert.Equal(1, probe.CountActiveParticles(stone, ProbeVariant));
+
+        engine.RunHeadlessTicks(6);
+        Assert.True(probe.TrySpawnParticle(6, 4, 0, 0, fire, colorVariant: 0, life: 16));
+        Assert.True(probe.TrySpawnParticle(7, 4, 0, 0, stone, ProbeVariant, life: 16));
+
+        Assert.Equal(0, probe.CountActiveParticles(fire, ProbeVariant));
+        Assert.True(probe.ActiveParticles > 0);
+    }
+
+    /// <summary>
     /// 验证 ExplosiveTool 的 Explode 语义已迁移为破坏驱动：小当量只累积 Damage，不会无条件清空高抗性 solid。
     /// </summary>
     [Fact]
