@@ -18,6 +18,12 @@ public static unsafe class RmlUiGlBootstrap
     public static bool TryLoad(RenderWindow window, out RmlUiGlVersion version)
     {
         ArgumentNullException.ThrowIfNull(window);
+        if (!RmlUiNativeProfileGate.CanUseDesktopGl3(window.Backend, window.Capabilities, out _))
+        {
+            version = default;
+            return false;
+        }
+
         GCHandle handle = GCHandle.Alloc(window);
         try
         {

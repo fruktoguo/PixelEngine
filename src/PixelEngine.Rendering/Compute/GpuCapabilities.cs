@@ -137,15 +137,12 @@ public readonly record struct GpuCapabilities
         bool hasComputeExtension = capabilities.Extensions.Contains("GL_ARB_compute_shader", StringComparer.Ordinal);
         bool hasSsboExtension = capabilities.Extensions.Contains("GL_ARB_shader_storage_buffer_object", StringComparer.Ordinal);
         bool hasImageExtension = capabilities.Extensions.Contains("GL_ARB_shader_image_load_store", StringComparer.Ordinal);
-        bool isAngle = capabilities.Renderer.Contains("ANGLE", StringComparison.OrdinalIgnoreCase) ||
-            capabilities.Vendor.Contains("ANGLE", StringComparison.OrdinalIgnoreCase);
-
         bool hasCompute = hasSufficientGl || hasComputeExtension || capabilities.HasComputeShader;
         return new GpuCapabilities(
             capabilities.MajorVersion,
             capabilities.MinorVersion,
             capabilities.IsGles,
-            isAngle,
+            capabilities.IsAngle,
             hasCompute,
             hasSufficientGl || hasSsboExtension,
             hasSufficientGl || hasImageExtension,

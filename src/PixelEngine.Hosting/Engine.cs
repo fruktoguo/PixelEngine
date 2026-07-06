@@ -667,24 +667,38 @@ public sealed class Engine : IDisposable
     private IGameUiBackend CreateGameUiBackend(RenderWindow window, UiBackendKind requestedBackend, out string? fallbackReason)
     {
         fallbackReason = null;
-        return requestedBackend switch
+        if (requestedBackend == UiBackendKind.ManagedFallback)
         {
-            UiBackendKind.ManagedFallback => CreateManagedFallbackGameUiBackend(window),
-            UiBackendKind.RmlUi when window.Capabilities.IsGles => CreateManagedFallbackGameUiBackend(
+            return CreateManagedFallbackGameUiBackend(window);
+        }
+
+        if (requestedBackend == UiBackendKind.RmlUi)
+        {
+            if (!RmlUiNativeProfileGate.CanUseDesktopGl3(window.Backend, window.Capabilities, out string? profileFallbackReason))
+            {
+                return CreateManagedFallbackGameUiBackend(window, out fallbackReason, profileFallbackReason);
+            }
+
+            if (!RmlUiNativeInfo.TryQuery(out RmlUiNativeProbe probe))
+            {
+                return CreateManagedFallbackGameUiBackend(
+                    window,
+                    out fallbackReason,
+                    $"RmlUi native 不可用：{probe.Error ?? "unknown"}。");
+            }
+
+            return new RmlUiBackend(window);
+        }
+
+        if (requestedBackend == UiBackendKind.Ultralight)
+        {
+            return CreateManagedFallbackGameUiBackend(
                 window,
                 out fallbackReason,
-                $"RmlUi 当前 native shim 绑定桌面 GL3 loader，当前上下文是 GLES/ANGLE：{window.Capabilities.Version}。"),
-            UiBackendKind.RmlUi when !RmlUiNativeInfo.TryQuery(out RmlUiNativeProbe probe) => CreateManagedFallbackGameUiBackend(
-                window,
-                out fallbackReason,
-                $"RmlUi native 不可用：{probe.Error ?? "unknown"}。"),
-            UiBackendKind.RmlUi => new RmlUiBackend(window),
-            UiBackendKind.Ultralight => CreateManagedFallbackGameUiBackend(
-                window,
-                out fallbackReason,
-                UltralightOptionalProfileGate.InactiveReason),
-            _ => throw new ArgumentOutOfRangeException(nameof(requestedBackend), requestedBackend, "未知游戏 UI 后端。"),
-        };
+                UltralightOptionalProfileGate.InactiveReason);
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(requestedBackend), requestedBackend, "未知游戏 UI 后端。");
     }
 
     private ManagedFallbackBackend CreateManagedFallbackGameUiBackend(RenderWindow window)

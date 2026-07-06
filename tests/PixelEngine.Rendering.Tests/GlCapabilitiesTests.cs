@@ -14,6 +14,7 @@ public sealed class GlCapabilitiesTests
             []);
 
         Assert.False(capabilities.IsGles);
+        Assert.False(capabilities.IsAngle);
         Assert.Equal(4, capabilities.MajorVersion);
         Assert.Equal(4, capabilities.MinorVersion);
         Assert.True(capabilities.HasComputeShader);
@@ -43,9 +44,25 @@ public sealed class GlCapabilitiesTests
             []);
 
         Assert.True(capabilities.IsGles);
+        Assert.True(capabilities.IsAngle);
         Assert.Equal(3, capabilities.MajorVersion);
         Assert.Equal(0, capabilities.MinorVersion);
         Assert.False(capabilities.HasComputeShader);
         Assert.False(capabilities.HasBufferStorage);
+    }
+
+    [Fact]
+    public void AngleRendererReportsAngleEvenWhenVersionLooksDesktopGl()
+    {
+        GlCapabilities capabilities = GlCapabilities.FromRaw(
+            "4.1.0",
+            "ANGLE (NVIDIA, Vulkan 1.3)",
+            "Google Inc.",
+            []);
+
+        Assert.False(capabilities.IsGles);
+        Assert.True(capabilities.IsAngle);
+        Assert.Equal(4, capabilities.MajorVersion);
+        Assert.Equal(1, capabilities.MinorVersion);
     }
 }
