@@ -17,5 +17,7 @@ internal sealed class ManagedUiControl
 
     internal UiPathId Path { get; init; }
 
+    internal string ModelVariableName { get; init; } = string.Empty;
+
     internal UiValue Value { get; set; }
 }

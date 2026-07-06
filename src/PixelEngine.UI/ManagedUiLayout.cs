@@ -87,6 +87,7 @@ internal static class ManagedUiLayout
         {
             string id = ReadId(element, ReadText(element));
             string path = ReadAttribute(element, "data-model") ?? ReadAttribute(element, "path") ?? id;
+            UiPathId pathId = UiModelPathName.ToPathId(path);
             bool initial = TryReadBoolean(ReadAttribute(element, "checked"), out bool parsed) && parsed;
             return new ManagedUiControl
             {
@@ -95,7 +96,8 @@ internal static class ManagedUiLayout
                 Text = ReadText(element),
                 Element = new UiElementId(UiStableId.Hash(id)),
                 Action = new UiActionId(UiStableId.Hash(ReadAttribute(element, "data-event-change") ?? id)),
-                Path = new UiPathId(UiStableId.Hash(path)),
+                Path = pathId,
+                ModelVariableName = UiModelPathName.ToVariableName(path),
                 Value = UiValue.FromBoolean(initial),
             };
         }
@@ -104,6 +106,7 @@ internal static class ManagedUiLayout
         {
             string id = ReadId(element, ReadText(element));
             string path = ReadAttribute(element, "data-model") ?? ReadAttribute(element, "path") ?? id;
+            UiPathId pathId = UiModelPathName.ToPathId(path);
             double value = TryReadDouble(ReadAttribute(element, "value"), out double parsed) ? parsed : 0.0;
             return new ManagedUiControl
             {
@@ -111,7 +114,8 @@ internal static class ManagedUiLayout
                 Id = id,
                 Text = ReadText(element),
                 Element = new UiElementId(UiStableId.Hash(id)),
-                Path = new UiPathId(UiStableId.Hash(path)),
+                Path = pathId,
+                ModelVariableName = UiModelPathName.ToVariableName(path),
                 Value = new UiValue(value),
             };
         }

@@ -79,6 +79,28 @@ public sealed class UiContractTests
         _ = Assert.Throws<InvalidOperationException>(() => scalar.AsInt64());
     }
 
+    [Fact]
+    public void UiModelPathNameMapsDottedPathsToLegalCollisionResistantVariables()
+    {
+        string dotted = UiModelPathName.ToVariableName("hud.health.current");
+        string underscored = UiModelPathName.ToVariableName("hud_health_current");
+        string nonAscii = UiModelPathName.ToVariableName("玩家.生命");
+        string digit = UiModelPathName.ToVariableName("9 lives");
+
+        Assert.True(UiModelPathName.IsLegalVariableName(dotted));
+        Assert.True(UiModelPathName.IsLegalVariableName(underscored));
+        Assert.True(UiModelPathName.IsLegalVariableName(nonAscii));
+        Assert.True(UiModelPathName.IsLegalVariableName(digit));
+        Assert.StartsWith("hud_health_current__", dotted, StringComparison.Ordinal);
+        Assert.NotEqual(dotted, underscored);
+        Assert.Contains("_u73A9_", nonAscii, StringComparison.Ordinal);
+        Assert.StartsWith("_9_lives__", digit, StringComparison.Ordinal);
+        Assert.Equal(new UiPathId(UiStableId.Hash("hud.health.current")), UiModelPathName.ToPathId(" hud.health.current "));
+        _ = Assert.Throws<ArgumentException>(() => UiModelPathName.ToVariableName(" "));
+        Assert.False(UiModelPathName.IsLegalVariableName("9bad"));
+        Assert.False(UiModelPathName.IsLegalVariableName("bad-name"));
+    }
+
     private static bool IsPublicApiDeclaration(string line)
     {
         string trimmed = line.TrimStart();
