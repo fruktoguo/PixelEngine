@@ -140,6 +140,19 @@ internal sealed class RenderWindowUiInputSource : IUiInputSource
         return written;
     }
 
+    /// <summary>
+    /// 读取当前平台 IME composition 预编辑文本。Silk.NET 当前窗口输入只暴露 KeyChar committed text，未暴露真实 composition 事件，因此这里显式返回非活动状态，避免把 KeyChar 冒充预编辑文本。
+    /// </summary>
+    /// <param name="destination">预编辑文本写入缓冲。</param>
+    /// <param name="composition">当前预编辑状态。</param>
+    /// <returns>写入字符数量。</returns>
+    public int CaptureTextComposition(Span<char> destination, out UiTextComposition composition)
+    {
+        _ = destination;
+        composition = UiTextComposition.Inactive;
+        return 0;
+    }
+
     private void OnKeyChar(IKeyboard keyboard, char character)
     {
         _ = keyboard;

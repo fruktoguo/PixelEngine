@@ -400,15 +400,29 @@ public sealed class GameUiHost : IDisposable
     }
 
     /// <summary>
-    /// 注入文本输入。
+    /// 注入已提交文本输入。
     /// </summary>
-    /// <param name="text">本帧输入文本。</param>
+    /// <param name="text">本帧已提交文本。</param>
     public void FeedText(ReadOnlySpan<char> text)
     {
         ThrowIfDisposed();
         if (Options.Enabled && _initialized)
         {
             _backend.FeedText(text);
+        }
+    }
+
+    /// <summary>
+    /// 注入平台 IME composition 预编辑状态；已提交文本不走此通道。
+    /// </summary>
+    /// <param name="text">当前预编辑文本；清除 composition 时为空。</param>
+    /// <param name="composition">当前预编辑状态。</param>
+    public void FeedTextComposition(ReadOnlySpan<char> text, in UiTextComposition composition)
+    {
+        ThrowIfDisposed();
+        if (Options.Enabled && _initialized)
+        {
+            _backend.FeedTextComposition(text, in composition);
         }
     }
 

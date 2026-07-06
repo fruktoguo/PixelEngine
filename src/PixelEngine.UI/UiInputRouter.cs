@@ -16,6 +16,7 @@ public sealed class UiInputRouter
     private bool _rightDown;
     private bool _middleDown;
     private bool _hasKeyboardFocus;
+    private bool _hasActiveComposition;
 
     /// <summary>
     /// 创建 UI 输入路由器。
@@ -118,14 +119,27 @@ public sealed class UiInputRouter
                 {
                     _host.FeedText(_textBuffer.AsSpan(0, textCount));
                 }
+
+                int compositionTextCount = CaptureCompositionText(_textBuffer, out UiTextComposition composition);
+                if (composition.IsActive)
+                {
+                    _host.FeedTextComposition(_textBuffer.AsSpan(0, compositionTextCount), in composition);
+                    _hasActiveComposition = true;
+                }
+                else
+                {
+                    ClearActiveComposition();
+                }
             }
         }
         else
         {
             ReleasePreviousKeys();
+            ClearActiveComposition();
             if (_textBuffer.Length > 0)
             {
                 _ = _source.CaptureText(_textBuffer);
+                _ = _source.CaptureTextComposition(_textBuffer, out _);
             }
         }
 
@@ -135,6 +149,19 @@ public sealed class UiInputRouter
     private int CaptureCommittedText(Span<char> destination)
     {
         int textCount = Math.Clamp(_source.CaptureText(destination), 0, destination.Length);
+        return CompactText(destination, textCount);
+    }
+
+    private int CaptureCompositionText(Span<char> destination, out UiTextComposition composition)
+    {
+        int textCount = Math.Clamp(_source.CaptureTextComposition(destination, out composition), 0, destination.Length);
+        int write = CompactText(destination, textCount);
+        composition = composition.ClampToTextLength(write);
+        return write;
+    }
+
+    private static int CompactText(Span<char> destination, int textCount)
+    {
         int write = 0;
         for (int i = 0; i < textCount; i++)
         {
@@ -147,8 +174,19 @@ public sealed class UiInputRouter
             destination[write++] = character;
         }
 
-        destination.Slice(write, textCount - write).Clear();
+        destination[write..textCount].Clear();
         return write;
+    }
+
+    private void ClearActiveComposition()
+    {
+        if (!_hasActiveComposition)
+        {
+            return;
+        }
+
+        _host.FeedTextComposition([], UiTextComposition.Inactive);
+        _hasActiveComposition = false;
     }
 
     private void ReleasePreviousKeys()

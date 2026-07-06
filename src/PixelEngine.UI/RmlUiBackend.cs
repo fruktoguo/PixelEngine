@@ -353,6 +353,19 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
     }
 
     /// <summary>
+    /// 接收 IME composition 预编辑状态；当前 RmlUi native shim 尚未暴露 composition API，安全忽略但不把 committed text 冒充 composition。
+    /// </summary>
+    /// <param name="text">当前预编辑文本。</param>
+    /// <param name="composition">当前预编辑状态。</param>
+    public void FeedTextComposition(ReadOnlySpan<char> text, in UiTextComposition composition)
+    {
+        ThrowIfDisposed();
+        EnsureInitialized();
+        _ = text;
+        _ = composition;
+    }
+
+    /// <summary>
     /// 通过 native DOM 命中测试返回输入捕获意图。
     /// </summary>
     /// <param name="x">UI 坐标 x。</param>
