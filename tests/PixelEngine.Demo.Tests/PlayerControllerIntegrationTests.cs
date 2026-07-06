@@ -542,6 +542,30 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证 ExplosiveTool 的 Explode 语义已迁移为破坏驱动：小当量只累积 Damage，不会无条件清空高抗性 solid。
+    /// </summary>
+    [Fact]
+    public void ExplodeSemanticsMigration_ExplosiveToolLowForceAccumulatesDamageWithoutClearingStone()
+    {
+        MaterialTable materials = DemoMaterials();
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
+        ExplosiveTool tool = scene.CreateEntity().AddComponent<ExplosiveTool>();
+        tool.Radius = 3;
+        tool.Force = 1f;
+        tool.CooldownSeconds = 0f;
+        FillRect(grid, material: stone, minX: 10, minY: 10, maxX: 15, maxY: 15);
+
+        input.Update([], [MouseButton.Middle], mouseX: 12.25f, mouseY: 12.75f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(1, tool.ExplosionCount);
+        Assert.Equal(stone, grid.MaterialAt(12, 12));
+        Assert.True(grid.DamageAt(12, 12) > 0);
+        Assert.Equal(0, engine.Context.GetService<ParticleSystem>().ActiveCount);
+    }
+
+    /// <summary>
     /// 验证 Demo 爆破工具会通过公开 World.Explode 链路对邻近刚体施加径向冲量。
     /// </summary>
     [Fact]
@@ -1019,6 +1043,43 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal("explosion.wav", audio.LastCue);
         Assert.True(engine.Context.GetService<ParticleSystem>().ActiveCount > 0);
         Assert.NotEqual(stone, grid.MaterialAt((int)MathF.Round(projectile.LastHitX), (int)MathF.Round(projectile.LastHitY)));
+    }
+
+    /// <summary>
+    /// 验证 PlayableProjectileTool 小当量命中走 DamageCircle 累积耐久，不再按旧语义无条件抛射/清空 solid。
+    /// </summary>
+    [Fact]
+    public void ExplodeSemanticsMigration_PlayableProjectileLowDamageAccumulatesDamageWithoutClearingStone()
+    {
+        RecordingAudioApi audio = new();
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        FillFloor(grid, stone, y: 46, x0: 0, x1: 96, rigidOwned: false);
+        FillWall(grid, stone, x: 34, y0: 24, y1: 46);
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 14f;
+        player.SpawnY = 30f;
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.CooldownSeconds = 0f;
+        projectile.Range = 80f;
+        projectile.ImpactRadius = 1;
+        projectile.ImpactDamage = 10f;
+        projectile.UseExplosionDamage = false;
+
+        engine.RunHeadlessTicks(20);
+        input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+
+        int hitX = (int)MathF.Round(projectile.LastHitX);
+        int hitY = (int)MathF.Round(projectile.LastHitY);
+        Assert.Equal(1, projectile.ShotsFired);
+        Assert.Equal("impact_stone.wav", audio.LastCue);
+        Assert.Equal(stone, grid.MaterialAt(hitX, hitY));
+        Assert.True(grid.DamageAt(hitX, hitY) > 0);
+        Assert.Equal(0, engine.Context.GetService<ParticleSystem>().ActiveCount);
     }
 
     /// <summary>
