@@ -175,6 +175,60 @@ public sealed class ParticleSystemTests
         Assert.Equal(1, counters.FreeParticlesDroppedThisTick);
     }
 
+    /// <summary>
+    /// 验证结构破坏碎屑请求直接生成粒子，且不需要读取或清空源 cell。
+    /// </summary>
+    [Fact]
+    public void RequestDebrisSpawnsRequestedParticlesWithFiniteLifetime()
+    {
+        ParticleSystem particles = new(capacity: 8);
+        DebrisEjectionRequest request = new(12, 18, 7, Count: 3, BaseSpeed: 2f, SpeedJitter: 1f, LifeTicks: 25);
+
+        particles.RequestDebris(in request);
+
+        Assert.Equal(3, particles.ActiveCount);
+        Assert.Equal(3, particles.Stats.SpawnedThisTick);
+        for (int i = 0; i < particles.ActiveCount; i++)
+        {
+            Particle particle = particles.ActiveReadOnly[i];
+            Assert.Equal((ushort)7, particle.Material);
+            Assert.Equal(12.5f, particle.X);
+            Assert.Equal(18.5f, particle.Y);
+            Assert.Equal(25, particle.Life);
+            Assert.True(float.IsFinite(particle.Vx));
+            Assert.True(float.IsFinite(particle.Vy));
+        }
+    }
+
+    /// <summary>
+    /// 验证碎屑请求遵守单 tick 抛射上限与固定池容量，超出部分只计 dropped。
+    /// </summary>
+    [Fact]
+    public void RequestDebrisHonorsEjectionLimitAndCapacity()
+    {
+        ParticleSystem limited = new(
+            capacity: 4,
+            settings: new ParticleSystemSettings(4, 0.2f, 40, 0.05f, 1f, MaxEjectionPerTick: 2));
+        DebrisEjectionRequest request = new(0, 0, 9, Count: 4, BaseSpeed: 1f, SpeedJitter: 0f, LifeTicks: 0);
+
+        limited.RequestDebris(in request);
+
+        Assert.Equal(2, limited.ActiveCount);
+        Assert.Equal(2, limited.Stats.SpawnedThisTick);
+        Assert.Equal(2, limited.Stats.DroppedThisTick);
+        Assert.All(limited.ActiveReadOnly.ToArray(), particle => Assert.Equal(40, particle.Life));
+
+        ParticleSystem full = new(capacity: 1);
+        _ = full.TrySpawn(new ParticleSpawn(0, 0, 0, 0, 1, 0, 10));
+        full.ResetTickStats();
+
+        full.RequestDebris(in request);
+
+        Assert.Equal(1, full.ActiveCount);
+        Assert.Equal(0, full.Stats.SpawnedThisTick);
+        Assert.Equal(4, full.Stats.DroppedThisTick);
+    }
+
     private static (float X, float Y, float Vx, float Vy, ushort Material, byte ColorVariant, byte Life) Project(Particle particle)
     {
         return (particle.X, particle.Y, particle.Vx, particle.Vy, particle.Material, particle.ColorVariant, particle.Life);

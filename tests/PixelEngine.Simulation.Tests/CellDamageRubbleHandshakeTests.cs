@@ -1,3 +1,4 @@
+using PixelEngine.Simulation.Particles;
 using Xunit;
 
 namespace PixelEngine.Simulation.Tests;
@@ -42,6 +43,63 @@ public sealed class CellDamageRubbleHandshakeTests
         int wakeCount = kernel.CopyBoundaryWakeSnapshots(wake);
         Assert.True(wakeCount > 0);
         Assert.Contains(wake.AsSpan(0, wakeCount).ToArray(), item => item.TargetCoord == new ChunkCoord(1, 0));
+    }
+
+    /// <summary>
+    /// 验证结构破坏事件接入粒子系统后，会生成真实碎屑粒子且不二次清空 rubble cell。
+    /// </summary>
+    [Fact]
+    public void StructuralDamageDestroyedCellSpawnsDebrisParticlesThroughParticleSystem()
+    {
+        DeterministicSimFixture.TestChunkSource source = DeterministicSimFixture.TestChunkSource.CreateDense(0, 0, 0, 0);
+        Chunk chunk = source.GetRequired(new ChunkCoord(0, 0));
+        MaterialTable materials = new(CreateMaterials());
+        ParticleSystem particles = new(capacity: 8);
+        SimulationKernel kernel = new(source, new MaterialPropsTable(materials.Hot), cellDestructionSink: particles);
+        int local = CellAddressing.LocalIndexFromLocal(20, 20);
+        chunk.Material[local] = Crystal;
+
+        bool destroyed = kernel.ApplyStructuralDamage(20, 20, damage: 20);
+
+        Assert.True(destroyed);
+        Assert.Equal(Gravel, chunk.Material[local]);
+        Assert.Equal(4, particles.ActiveCount);
+        Assert.Equal(4, particles.Stats.SpawnedThisTick);
+        for (int i = 0; i < particles.ActiveCount; i++)
+        {
+            Particle particle = particles.ActiveReadOnly[i];
+            Assert.Equal(Gravel, particle.Material);
+            Assert.Equal(20.5f, particle.X);
+            Assert.Equal(20.5f, particle.Y);
+            Assert.True(particle.Life > 0);
+        }
+    }
+
+    /// <summary>
+    /// 验证未达到破坏阈值或 DebrisCount=0 时不会生成碎屑粒子。
+    /// </summary>
+    [Fact]
+    public void StructuralDamageSpawnsDebrisOnlyForDestroyedCellsWithPositiveDebrisCount()
+    {
+        const ushort NoDebrisStone = 5;
+        DeterministicSimFixture.TestChunkSource source = DeterministicSimFixture.TestChunkSource.CreateDense(0, 0, 0, 0);
+        Chunk chunk = source.GetRequired(new ChunkCoord(0, 0));
+        MaterialTable materials = new(
+        [
+            .. CreateMaterials(),
+            Material(NoDebrisStone, "no_debris_stone", CellType.Solid) with { Integrity = 1 },
+        ]);
+        ParticleSystem particles = new(capacity: 8);
+        SimulationKernel kernel = new(source, new MaterialPropsTable(materials.Hot), cellDestructionSink: particles);
+        Set(chunk, 22, 20, Stone);
+        Set(chunk, 24, 20, NoDebrisStone);
+
+        Assert.False(kernel.ApplyStructuralDamage(22, 20, damage: 3));
+        Assert.Equal(0, particles.ActiveCount);
+
+        Assert.True(kernel.ApplyStructuralDamage(24, 20, damage: 10));
+        Assert.Equal(0, particles.ActiveCount);
+        Assert.Equal(0, particles.Stats.SpawnedThisTick);
     }
 
     /// <summary>

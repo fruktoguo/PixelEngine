@@ -79,8 +79,8 @@ public sealed class SimulationPhaseDriver(
 
     private void RunParticleToCell(EngineTickContext context)
     {
-        _ = _scriptContext?.FlushCellCommands();
         Particles.ResetTickStats();
+        _ = _scriptContext?.FlushCellCommands();
         Particles.IntegrateAndAdvance(context.Context.Jobs, Grid);
         Particles.ResolveDeposits(Kernel, Grid);
         Particles.PublishDiagnostics(context.Context.Counters);

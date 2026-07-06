@@ -1758,7 +1758,8 @@ public sealed class Engine : IDisposable
             reactionExecutor: reactionExecutor,
             lifetimeSink: lifetimeSink,
             customUpdateExecutor: materials,
-            profiler: Context.Profiler);
+            profiler: Context.Profiler,
+            cellDestructionSink: particles);
         if (frameIndex != 0)
         {
             kernel.RestoreFrameState(frameIndex, CurrentParityFromGameTime(frameIndex));

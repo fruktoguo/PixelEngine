@@ -10,8 +10,11 @@ namespace PixelEngine.Simulation.Particles;
 /// <summary>
 /// 自由粒子的连续缓冲池。活跃粒子始终位于数组前缀，释放使用 swap-remove，稳态不扩容。
 /// </summary>
-public sealed class ParticleSystem : IParticleReadback
+public sealed class ParticleSystem : IParticleReadback, ICellDestructionSink
 {
+    private const float DefaultDebrisBaseSpeed = 1.6f;
+    private const float DefaultDebrisSpeedJitter = 1.4f;
+
     private static readonly RangeJob IntegrateRangeJob = static (start, end, workerIndex, context) =>
     {
         ParticleSystem system = (ParticleSystem)context!;
@@ -28,6 +31,7 @@ public sealed class ParticleSystem : IParticleReadback
     private int _droppedThisTick;
     private int _droppedAudioEventsThisTick;
     private int _ejectionRequestCount;
+    private int _debrisEjectedThisTick;
     private CellGrid? _activeGrid;
 
     /// <summary>
@@ -117,6 +121,7 @@ public sealed class ParticleSystem : IParticleReadback
         _killedByLifetimeThisTick = 0;
         _droppedThisTick = 0;
         _droppedAudioEventsThisTick = 0;
+        _debrisEjectedThisTick = 0;
     }
 
     /// <summary>
@@ -151,6 +156,64 @@ public sealed class ParticleSystem : IParticleReadback
 
         _ejectionRequests[_ejectionRequestCount++] = request;
         return true;
+    }
+
+    /// <summary>
+    /// 结构破坏动作已完成后同步抛射碎屑粒子；不读取或清空 cell 网格。
+    /// </summary>
+    /// <param name="request">碎屑抛射请求。</param>
+    public void RequestDebris(in DebrisEjectionRequest request)
+    {
+        if (request.Material == 0 || request.Count == 0)
+        {
+            return;
+        }
+
+        int remainingBudget = Math.Max(0, Settings.MaxEjectionPerTick - _debrisEjectedThisTick);
+        int count = Math.Min(request.Count, remainingBudget);
+        if (count < request.Count)
+        {
+            _droppedThisTick += request.Count - count;
+        }
+
+        float baseSpeed = float.IsFinite(request.BaseSpeed) ? Math.Max(0f, request.BaseSpeed) : 0f;
+        float speedJitter = float.IsFinite(request.SpeedJitter) ? Math.Max(0f, request.SpeedJitter) : 0f;
+        byte life = request.LifeTicks == 0
+            ? (byte)Math.Clamp(Settings.MaxLifetimeTicks, 1, byte.MaxValue)
+            : request.LifeTicks;
+
+        for (int i = 0; i < count; i++)
+        {
+            byte jitterByte = JitterByte(DeterminismMode, request.CenterX + i, request.CenterY - i, request.Material);
+            float angle = (MathF.Tau * i / count) + (((jitterByte / 255f) - 0.5f) * 0.35f);
+            float speed = (baseSpeed + (jitterByte / 255f * speedJitter)) * Settings.EjectionImpulseScale;
+            ParticleSpawn spawn = new(
+                request.CenterX + 0.5f,
+                request.CenterY + 0.5f,
+                MathF.Cos(angle) * speed,
+                MathF.Sin(angle) * speed,
+                request.Material,
+                jitterByte,
+                life);
+            if (TrySpawn(in spawn))
+            {
+                _debrisEjectedThisTick++;
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public void OnCellDestroyed(in CellDestructionEvent item)
+    {
+        DebrisEjectionRequest request = new(
+            item.WorldX,
+            item.WorldY,
+            item.DebrisMaterial,
+            item.DebrisCount,
+            DefaultDebrisBaseSpeed,
+            DefaultDebrisSpeedJitter,
+            LifeTicks: 0);
+        RequestDebris(in request);
     }
 
     /// <summary>
@@ -359,6 +422,7 @@ public sealed class ParticleSystem : IParticleReadback
         ActiveCount = 0;
         Array.Clear(_ejectionRequests, 0, _ejectionRequestCount);
         _ejectionRequestCount = 0;
+        _debrisEjectedThisTick = 0;
         ResetTickStats();
     }
 
@@ -384,6 +448,7 @@ public sealed class ParticleSystem : IParticleReadback
         ActiveCount = saved.Length;
         Array.Clear(_ejectionRequests, 0, _ejectionRequestCount);
         _ejectionRequestCount = 0;
+        _debrisEjectedThisTick = 0;
         ResetTickStats();
     }
 
