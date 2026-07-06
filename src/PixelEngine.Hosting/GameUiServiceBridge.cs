@@ -29,6 +29,7 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
         ArgumentException.ThrowIfNullOrWhiteSpace(contentRoot);
         _uiRoot = Path.Combine(Path.GetFullPath(contentRoot), "ui");
         _manifest = manifest ?? LoadManifestIfPresent(_uiRoot);
+        PreloadManifestScreens();
     }
 
     /// <summary>
@@ -283,6 +284,25 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
         return File.Exists(html)
             ? RuntimeUi.UiDocumentSource.Asset(html, runtimeScreen.Value)
             : throw new FileNotFoundException($"找不到 Game UI 屏幕资产：{screenId}。", path);
+    }
+
+    private void PreloadManifestScreens()
+    {
+        if (_manifest is null)
+        {
+            return;
+        }
+
+        foreach (RuntimeUi.UiManifestScreen screen in _manifest.Screens)
+        {
+            if (!screen.Preload || _host.Documents.TryGetDocument(screen.ScreenId, out _))
+            {
+                continue;
+            }
+
+            RuntimeUi.UiDocumentSource source = screen.ToDocumentSource();
+            _ = _host.LoadDocument(screen.ScreenId, in source);
+        }
     }
 
     private static RuntimeUi.UiManifest? LoadManifestIfPresent(string uiRoot)

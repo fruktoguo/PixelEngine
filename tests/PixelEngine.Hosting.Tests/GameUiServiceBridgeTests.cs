@@ -218,6 +218,62 @@ public sealed class GameUiServiceBridgeTests
     }
 
     /// <summary>
+    /// 验证 manifest preload 屏幕会在服务桥创建时载入，后续显示同屏不重复载入。
+    /// </summary>
+    [Fact]
+    public void BridgePreloadsManifestScreensWithoutShowingThem()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-preload-{Guid.NewGuid():N}");
+        string uiRoot = Path.Combine(root, "ui");
+        _ = Directory.CreateDirectory(Path.Combine(uiRoot, "screens"));
+        string main = Path.Combine(uiRoot, "screens", "main.xhtml");
+        string settings = Path.Combine(uiRoot, "screens", "settings.xhtml");
+        File.WriteAllText(main, "<ui><text>Main</text></ui>");
+        File.WriteAllText(settings, "<ui><text>Settings</text></ui>");
+        File.WriteAllText(Path.Combine(uiRoot, RuntimeUi.UiManifestLoader.ManifestFileName), """
+            {
+              "screens": [
+                { "id": "main", "path": "screens/main.xhtml", "preload": true },
+                { "id": "settings", "path": "screens/settings.xhtml", "preload": false }
+              ]
+            }
+            """);
+
+        try
+        {
+            RecordingBackend backend = new();
+            using RuntimeUi.GameUiHost host = new(backend);
+            host.Initialize(new RuntimeUi.UiBackendInitializeInfo(
+                new RuntimeUi.UiViewport(0, 0, 320, 240, 1f),
+                RuntimeUi.UiBackendKind.ManagedFallback));
+
+            GameUiServiceBridge bridge = new(host, root);
+
+            Assert.Equal(1, backend.LoadDocumentCount);
+            Assert.Equal(1, host.Documents.DocumentCount);
+            Assert.Equal(0, host.Documents.StackCount);
+            Assert.Equal(Path.GetFullPath(main), backend.LastSource.Path);
+
+            _ = bridge.ShowScreen("main");
+
+            Assert.Equal(1, backend.LoadDocumentCount);
+            Assert.Equal(1, host.Documents.StackCount);
+
+            _ = bridge.ShowScreen("settings");
+
+            Assert.Equal(2, backend.LoadDocumentCount);
+            Assert.Equal(Path.GetFullPath(settings), backend.LastSource.Path);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 BindModel 会按 UI 文档声明的 path 从脚本模型读取值，并在 UI Update 前推送到后端。
     /// </summary>
     [Fact]
@@ -262,6 +318,8 @@ public sealed class GameUiServiceBridgeTests
 
         public RuntimeUi.UiDocumentSource LastSource { get; private set; }
 
+        public int LoadDocumentCount { get; private set; }
+
         public RuntimeUi.UiBackendKind Kind => RuntimeUi.UiBackendKind.ManagedFallback;
 
         public bool IsDirty => false;
@@ -280,6 +338,8 @@ public sealed class GameUiServiceBridgeTests
 
         public RuntimeUi.UiDocumentHandle LoadDocument(in RuntimeUi.UiDocumentSource source)
         {
+            LoadDocumentCount++;
+            LastDocument = new RuntimeUi.UiDocumentHandle(10 + LoadDocumentCount);
             LastSource = source;
             return LastDocument;
         }
