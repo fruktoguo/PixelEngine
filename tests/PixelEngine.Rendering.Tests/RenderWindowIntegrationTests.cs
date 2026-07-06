@@ -94,6 +94,65 @@ public sealed class RenderWindowIntegrationTests
     }
 
     [Fact]
+    public void UiOverlayTextureUploadsDirtyRectWhenExplicitlyEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine UI overlay upload smoke",
+            Width = 64,
+            Height = 64,
+            BackendPreference = RenderBackendPreference.Auto,
+            EnableDebugContext = true,
+        });
+        using UiOverlayTexture texture = new(window.Gl, 4, 4);
+        uint[] pixels = new uint[16];
+
+        texture.Upload(pixels);
+        uint pbo = window.Gl.GenBuffer();
+        window.Gl.BindBuffer(BufferTargetARB.PixelUnpackBuffer, pbo);
+        window.Gl.PixelStore(GLEnum.UnpackRowLength, 9);
+        window.Gl.PixelStore(GLEnum.UnpackSkipPixels, 3);
+        window.Gl.PixelStore(GLEnum.UnpackSkipRows, 2);
+        window.Gl.ActiveTexture(TextureUnit.Texture1);
+        for (int y = 1; y <= 2; y++)
+        {
+            for (int x = 1; x <= 2; x++)
+            {
+                pixels[(y * 4) + x] = 0xFFFFFFFFu;
+            }
+        }
+
+        texture.UploadDirtyRects(pixels, 4, 4, [new PixelUploadRect(1, 1, 2, 2)]);
+        window.Gl.GetInteger(GLEnum.PixelUnpackBufferBinding, out int restoredPbo);
+        window.Gl.GetInteger(GLEnum.UnpackRowLength, out int restoredRowLength);
+        window.Gl.GetInteger(GLEnum.UnpackSkipPixels, out int restoredSkipPixels);
+        window.Gl.GetInteger(GLEnum.UnpackSkipRows, out int restoredSkipRows);
+        window.Gl.GetInteger(GLEnum.ActiveTexture, out int restoredActiveTexture);
+        window.Gl.BindBuffer(BufferTargetARB.PixelUnpackBuffer, 0);
+        window.Gl.DeleteBuffer(pbo);
+        byte[] uploaded = ReadTextureRgba(window.Gl, texture.Handle, texture.Width, texture.Height);
+        byte[] outsideA = RawTexturePixel(uploaded, texture.Width, x: 0, y: 0);
+        byte[] insideA = RawTexturePixel(uploaded, texture.Width, x: 1, y: 1);
+        byte[] insideB = RawTexturePixel(uploaded, texture.Width, x: 2, y: 2);
+        byte[] outsideB = RawTexturePixel(uploaded, texture.Width, x: 3, y: 3);
+
+        Assert.Equal((int)pbo, restoredPbo);
+        Assert.Equal(9, restoredRowLength);
+        Assert.Equal(3, restoredSkipPixels);
+        Assert.Equal(2, restoredSkipRows);
+        Assert.Equal((int)TextureUnit.Texture1, restoredActiveTexture);
+        Assert.Equal([0, 0, 0, 0], outsideA);
+        Assert.Equal([255, 255, 255, 255], insideA);
+        Assert.Equal([255, 255, 255, 255], insideB);
+        Assert.Equal([0, 0, 0, 0], outsideB);
+    }
+
+    [Fact]
     public void CanCreateLightingResourcesAndRunCompositeWhenExplicitlyEnabled()
     {
         if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
@@ -271,6 +330,12 @@ public sealed class RenderWindowIntegrationTests
         int height = pixels.Length / (width * 4);
         int glY = height - 1 - y;
         int offset = ((glY * width) + x) * 4;
+        return [pixels[offset], pixels[offset + 1], pixels[offset + 2], pixels[offset + 3]];
+    }
+
+    private static byte[] RawTexturePixel(byte[] pixels, int width, int x, int y)
+    {
+        int offset = ((y * width) + x) * 4;
         return [pixels[offset], pixels[offset + 1], pixels[offset + 2], pixels[offset + 3]];
     }
 

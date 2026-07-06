@@ -1,5 +1,6 @@
-using Silk.NET.OpenGL;
+using System.Diagnostics;
 using PixelEngine.Core.Diagnostics;
+using Silk.NET.OpenGL;
 
 namespace PixelEngine.Rendering;
 
@@ -60,5 +61,39 @@ public readonly struct UiPresentContext
     public void SubmitTriangles(ReadOnlySpan<UiVertex> vertices, ReadOnlySpan<ushort> indices, in UiDrawState draw)
     {
         _primitives.SubmitTriangles(vertices, indices, in draw, FramebufferWidth, FramebufferHeight);
+    }
+
+    /// <summary>
+    /// 上传 UI overlay 纹理脏矩形，并将实际上传耗时记录到 <see cref="FrameSubPhase.UiUpload" />。
+    /// </summary>
+    /// <param name="texture">目标 UI overlay 纹理。</param>
+    /// <param name="pixelsBgra">按行连续的 BGRA8 源像素。</param>
+    /// <param name="sourceWidth">源位图宽度。</param>
+    /// <param name="sourceHeight">源位图高度。</param>
+    /// <param name="dirtyRects">待上传脏矩形。</param>
+    public void UploadOverlayTexture(
+        UiOverlayTexture texture,
+        ReadOnlySpan<uint> pixelsBgra,
+        int sourceWidth,
+        int sourceHeight,
+        ReadOnlySpan<PixelUploadRect> dirtyRects)
+    {
+        ArgumentNullException.ThrowIfNull(texture);
+        long start = Stopwatch.GetTimestamp();
+        texture.UploadDirtyRects(pixelsBgra, sourceWidth, sourceHeight, dirtyRects);
+        Profiler?.RecordSub(FrameSubPhase.UiUpload, (Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency);
+    }
+
+    /// <summary>
+    /// 上传整张 UI overlay 纹理，并将实际上传耗时记录到 <see cref="FrameSubPhase.UiUpload" />。
+    /// </summary>
+    /// <param name="texture">目标 UI overlay 纹理。</param>
+    /// <param name="pixelsBgra">按行连续的 BGRA8 源像素，长度必须等于纹理宽高乘积。</param>
+    public void UploadOverlayTexture(UiOverlayTexture texture, ReadOnlySpan<uint> pixelsBgra)
+    {
+        ArgumentNullException.ThrowIfNull(texture);
+        long start = Stopwatch.GetTimestamp();
+        texture.Upload(pixelsBgra);
+        Profiler?.RecordSub(FrameSubPhase.UiUpload, (Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency);
     }
 }

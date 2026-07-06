@@ -14,13 +14,18 @@ internal readonly struct UiGlStateSnapshot
     private readonly int _elementArrayBuffer;
     private readonly int _activeTexture;
     private readonly int _texture2D;
+    private readonly int _texture0;
     private readonly int _blendSrcRgb;
     private readonly int _blendDstRgb;
     private readonly int _blendSrcAlpha;
     private readonly int _blendDstAlpha;
     private readonly int _blendEquationRgb;
     private readonly int _blendEquationAlpha;
+    private readonly int _pixelUnpackBuffer;
     private readonly int _unpackAlignment;
+    private readonly int _unpackRowLength;
+    private readonly int _unpackSkipPixels;
+    private readonly int _unpackSkipRows;
     private readonly bool _blend;
     private readonly bool _depth;
     private readonly bool _cull;
@@ -42,13 +47,18 @@ internal readonly struct UiGlStateSnapshot
         int elementArrayBuffer,
         int activeTexture,
         int texture2D,
+        int texture0,
         int blendSrcRgb,
         int blendDstRgb,
         int blendSrcAlpha,
         int blendDstAlpha,
         int blendEquationRgb,
         int blendEquationAlpha,
+        int pixelUnpackBuffer,
         int unpackAlignment,
+        int unpackRowLength,
+        int unpackSkipPixels,
+        int unpackSkipRows,
         bool blend,
         bool depth,
         bool cull,
@@ -63,13 +73,18 @@ internal readonly struct UiGlStateSnapshot
         _elementArrayBuffer = elementArrayBuffer;
         _activeTexture = activeTexture;
         _texture2D = texture2D;
+        _texture0 = texture0;
         _blendSrcRgb = blendSrcRgb;
         _blendDstRgb = blendDstRgb;
         _blendSrcAlpha = blendSrcAlpha;
         _blendDstAlpha = blendDstAlpha;
         _blendEquationRgb = blendEquationRgb;
         _blendEquationAlpha = blendEquationAlpha;
+        _pixelUnpackBuffer = pixelUnpackBuffer;
         _unpackAlignment = unpackAlignment;
+        _unpackRowLength = unpackRowLength;
+        _unpackSkipPixels = unpackSkipPixels;
+        _unpackSkipRows = unpackSkipRows;
         _blend = blend;
         _depth = depth;
         _cull = cull;
@@ -97,13 +112,20 @@ internal readonly struct UiGlStateSnapshot
         gl.GetInteger(GLEnum.ElementArrayBufferBinding, out int elementArrayBuffer);
         gl.GetInteger(GLEnum.ActiveTexture, out int activeTexture);
         gl.GetInteger(GLEnum.TextureBinding2D, out int texture2D);
+        gl.ActiveTexture(TextureUnit.Texture0);
+        gl.GetInteger(GLEnum.TextureBinding2D, out int texture0);
+        gl.ActiveTexture((TextureUnit)activeTexture);
         gl.GetInteger(GLEnum.BlendSrcRgb, out int blendSrcRgb);
         gl.GetInteger(GLEnum.BlendDstRgb, out int blendDstRgb);
         gl.GetInteger(GLEnum.BlendSrcAlpha, out int blendSrcAlpha);
         gl.GetInteger(GLEnum.BlendDstAlpha, out int blendDstAlpha);
         gl.GetInteger(GLEnum.BlendEquationRgb, out int blendEquationRgb);
         gl.GetInteger(GLEnum.BlendEquationAlpha, out int blendEquationAlpha);
+        gl.GetInteger(GLEnum.PixelUnpackBufferBinding, out int pixelUnpackBuffer);
         gl.GetInteger(GLEnum.UnpackAlignment, out int unpackAlignment);
+        gl.GetInteger(GLEnum.UnpackRowLength, out int unpackRowLength);
+        gl.GetInteger(GLEnum.UnpackSkipPixels, out int unpackSkipPixels);
+        gl.GetInteger(GLEnum.UnpackSkipRows, out int unpackSkipRows);
         return new UiGlStateSnapshot(
             framebuffer,
             program,
@@ -112,13 +134,18 @@ internal readonly struct UiGlStateSnapshot
             elementArrayBuffer,
             activeTexture,
             texture2D,
+            texture0,
             blendSrcRgb,
             blendDstRgb,
             blendSrcAlpha,
             blendDstAlpha,
             blendEquationRgb,
             blendEquationAlpha,
+            pixelUnpackBuffer,
             unpackAlignment,
+            unpackRowLength,
+            unpackSkipPixels,
+            unpackSkipRows,
             gl.IsEnabled(EnableCap.Blend),
             gl.IsEnabled(EnableCap.DepthTest),
             gl.IsEnabled(EnableCap.CullFace),
@@ -142,11 +169,17 @@ internal readonly struct UiGlStateSnapshot
             (BlendingFactor)_blendSrcAlpha,
             (BlendingFactor)_blendDstAlpha);
         gl.BlendEquationSeparate((BlendEquationModeEXT)_blendEquationRgb, (BlendEquationModeEXT)_blendEquationAlpha);
+        gl.BindBuffer(BufferTargetARB.PixelUnpackBuffer, (uint)_pixelUnpackBuffer);
         gl.PixelStore(PixelStoreParameter.UnpackAlignment, _unpackAlignment);
+        gl.PixelStore(GLEnum.UnpackRowLength, _unpackRowLength);
+        gl.PixelStore(GLEnum.UnpackSkipPixels, _unpackSkipPixels);
+        gl.PixelStore(GLEnum.UnpackSkipRows, _unpackSkipRows);
         gl.UseProgram((uint)_program);
         gl.BindVertexArray((uint)_vertexArray);
         gl.BindBuffer(BufferTargetARB.ArrayBuffer, (uint)_arrayBuffer);
         gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, (uint)_elementArrayBuffer);
+        gl.ActiveTexture(TextureUnit.Texture0);
+        gl.BindTexture(TextureTarget.Texture2D, (uint)_texture0);
         gl.ActiveTexture((TextureUnit)_activeTexture);
         gl.BindTexture(TextureTarget.Texture2D, (uint)_texture2D);
     }
