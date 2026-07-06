@@ -1271,19 +1271,23 @@ public sealed class Engine : IDisposable
                 $"脚本热重载监听已启动：{hotReload.SourceDirectory}",
                 []));
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException && !OperatingSystem.IsBrowser())
+        catch (Exception ex) when (IsNonFatalWatcherStartFailure(ex))
         {
             diagnosticSink?.Report(new ScriptHotReloadDiagnostic(
                 DateTimeOffset.UtcNow,
                 ScriptHotReloadDiagnosticKind.WatcherStartFailed,
                 ScriptHotReloadStatus.NoPendingReload,
-                $"脚本热重载监听启动失败：{ex.Message}",
+                $"脚本热重载监听启动失败（WatcherStartFailed），将继续运行无 watcher 的脚本运行时：{ex.Message}",
                 [ex.ToString()]));
-            throw;
         }
 
         Context.RegisterService(controller);
         return new ScriptRuntime(controller, diagnosticSink);
+    }
+
+    private static bool IsNonFatalWatcherStartFailure(Exception exception)
+    {
+        return exception is DirectoryNotFoundException or IOException or UnauthorizedAccessException or NotSupportedException;
     }
 
     private void MaterializeCurrentSceneScriptsIfPossible()
