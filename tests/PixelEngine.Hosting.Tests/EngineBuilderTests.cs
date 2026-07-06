@@ -184,9 +184,34 @@ public sealed class EngineBuilderTests
         Assert.Equal(UiBackendKind.ManagedFallback, selection.ActiveBackend);
         Assert.True(selection.UsedFallback);
         Assert.Contains("Ultralight", selection.FallbackReason, StringComparison.Ordinal);
+        Assert.Contains("optional profile inactive", selection.FallbackReason, StringComparison.Ordinal);
+        Assert.Contains("commercial redistribution license", selection.FallbackReason, StringComparison.Ordinal);
         Assert.Contains("ManagedFallback", selection.FallbackReason, StringComparison.Ordinal);
         Assert.True(engine.Context.TryGetService(out GameUiHost _));
         Assert.True(engine.Context.TryGetService(out GameUiPhaseDriver _));
+    }
+
+    /// <summary>
+    /// 验证 Ultralight 当前只作为未激活 optional profile 暴露，默认回退保持托管基线。
+    /// </summary>
+    [Fact]
+    public void UltralightOptionalProfileGateDefaultsToInactiveManagedFallback()
+    {
+        Assert.False(UltralightOptionalProfileGate.IsActive);
+        Assert.Equal(UiBackendKind.ManagedFallback, UltralightOptionalProfileGate.FallbackBackend);
+        Assert.Contains("Ultralight optional profile inactive", UltralightOptionalProfileGate.InactiveReason, StringComparison.Ordinal);
+        Assert.Contains("commercial redistribution license", UltralightOptionalProfileGate.InactiveReason, StringComparison.Ordinal);
+        Assert.Contains("runtime surface/JS bridge", UltralightOptionalProfileGate.InactiveReason, StringComparison.Ordinal);
+        Assert.Contains("release artifact evidence", UltralightOptionalProfileGate.InactiveReason, StringComparison.Ordinal);
+        Assert.Contains("ManagedFallback", UltralightOptionalProfileGate.InactiveReason, StringComparison.Ordinal);
+
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .EnableGameUi()
+            .UseUiBackend(UiBackendKind.Ultralight)
+            .Build();
+
+        Assert.Equal(UiBackendKind.Ultralight, engine.Context.Options.GameUiBackend);
     }
 
     /// <summary>

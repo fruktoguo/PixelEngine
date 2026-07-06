@@ -51,7 +51,7 @@
 - [x] build-player 产品名契约已落地：`-ProductName` 只影响玩家可见启动器和包名，内部 `AssemblyName` 默认保持 `PixelEngine.Demo`，避免带空格 assembly 破坏 restore 或 apphost 载荷。
 - [x] build-player dev-audit 分流已落地：`-DevLayout` 允许保留 pdb/xml，但仍检查结构存在性和 player-only 断言；Release 无符号构建走完整发行审计。
 - [x] 内容资产打包已落地：`content/` 是单一真相源，`materials.json`、`reactions.json`、`weapons.json`、场景、纹理、音频进入包根 `content/`，不复制到 `app/content/`。
-- [x] UI native 打包边界已登记：Web-first UI Runtime 的 RmlUi 与 Ultralight 若启用，只能 dynamic-only 落 `runtimes/<rid>/native/`，纳入许可和 SHA256SUMS，不进入 Box2D dual-build。
+- [x] UI native 打包边界已登记：Web-first UI Runtime 的 RmlUi 与 Ultralight 若启用，只能 dynamic-only 落 `runtimes/<rid>/native/`，纳入许可和 SHA256SUMS，不进入 Box2D dual-build；当前 Ultralight optional profile inactive，发行审计拒绝未激活的 `Ultralight` / `WebCore` / `AppCore` native 混入。
 - [x] 纪律测试已记录：`HostingProjectDisciplineTests.ReleaseRidGateDeclaresWindowsActiveSetAndMatrixOutputs`、`ReleaseRidGateDryRunActivatesDormantRidFromConfigOnly`、`EditorShellBuildTests.PlayerPackageAuditRejectsEditorClosureAllowsImGuiAndSupportsDevLayout`、`PerformanceHardeningToolingDisciplineTests.ReleaseEvidencePreflightRejectsNonTagUploadReportAsReleaseSuccess` 等锁定关键边界。
 
 ---
@@ -65,7 +65,7 @@
 - [ ] 为 macOS dormant RID 在重新激活时提供 codesign、notarization、staple、`codesign --verify`、`spctl` 与 GitHub Release 产物证据。
 - [ ] 为 6-RID 长期目标提供 Box2D dynamic/static 全矩阵证据，证明 R2R 含动态 Box2D、AOT 不携带动态 Box2D。
 - [ ] 为所有 active 产物提供 AOT SIMD 探针和 R2R runtime light-up 证据，证明 AOT 未退化、R2R 热方法仍能 Tier-1 重 JIT。
-- [ ] 为 Web-first UI Runtime native 后端补许可、体积、AOT 绑定、fallback 和发行 gate 证据，尤其 Ultralight 可选高保真后端。
+- [ ] 为 Web-first UI Runtime native 后端补许可、体积、AOT 绑定、fallback 和发行 gate 证据，尤其 Ultralight 可选高保真后端；Ultralight optional profile inactive 时必须自动回退 ManagedFallback，且不得把 Ultralight native 混入包当成发行闭合。
 - [ ] 如果产品决定将 linux 或 macOS 从 dormant 恢复为 active，需要只改 `tools/release-rids.json`，并跑通全链路而非新写分支脚本。
 
 ---
@@ -82,6 +82,7 @@
 - [!] 阻塞：SHA256SUMS 必须覆盖全部 active package 且与 GitHub Release 上传 asset hash 一致，局部 checksum 文件不能替代。
 - [!] 阻塞：deterministic hash report 必须逐 active RID × channel 给出 match 行，只写 `conclusion=success` 不能通过。
 - [!] 阻塞：发行证据 manifest、workflow run 报告、artifact audit、SIMD 探针、signing 报告和 GitHub upload 报告必须同 run_id、sha、workflow、attempt，不允许拼接不同运行。
+- [!] 阻塞：Ultralight optional profile inactive 前不得携带 `Ultralight` / `WebCore` / `AppCore` native，也不得把 native 文件、NOTICE 文案或 startup 请求冒充 SDK provenance、commercial redistribution license、codesign/notarize 或 release artifact evidence。
 
 ---
 

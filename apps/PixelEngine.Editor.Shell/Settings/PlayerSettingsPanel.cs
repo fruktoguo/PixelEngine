@@ -8,7 +8,7 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
 {
     public const string PanelTitle = EditorDockSpace.PlayerSettingsWindowTitle;
     private static readonly UiBackendKind[] UiBackendOptions = [UiBackendKind.ManagedFallback, UiBackendKind.RmlUi, UiBackendKind.Ultralight];
-    private static readonly string[] UiBackendLabels = ["ManagedFallback", "RmlUi", "Ultralight"];
+    private static readonly string[] UiBackendLabels = ["ManagedFallback", "RmlUi", "Ultralight (inactive optional profile → ManagedFallback)"];
     private static readonly PlayerReleaseChannel[] ReleaseOptions = [PlayerReleaseChannel.Development, PlayerReleaseChannel.Production];
     private static readonly string[] ReleaseLabels = ["Development", "Production"];
     private readonly PlayerSettingsStore _store;
@@ -167,6 +167,11 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         {
             next = next with { RuntimeUiBackend = UiBackendOptions[backend] };
             changed = true;
+        }
+
+        if (next.RuntimeUiBackend == UiBackendKind.Ultralight)
+        {
+            ImGui.TextWrapped(UltralightOptionalProfileGate.InactiveReason);
         }
 
         int release = IndexOf(ReleaseOptions, _settings.ReleaseChannel);

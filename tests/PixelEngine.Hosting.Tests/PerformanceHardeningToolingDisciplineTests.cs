@@ -4225,6 +4225,66 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 PowerShell 发行审计拒绝未激活 Ultralight optional profile 的 native 混入玩家包。
+    /// </summary>
+    [Fact]
+    public void PowerShellReleaseArtifactAuditRejectsInactiveUltralightNativeInPackage()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-pwsh-ultralight-native-audit-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string packageRoot = Path.Combine(temp, "package");
+            string packageName = "PixelEngine-Demo-9.9.9-win-x64-r2r";
+            string expandedPackage = Path.Combine(packageRoot, packageName);
+            CreateFriendlyExpandedPackage(expandedPackage, channel: "r2r", includeUiNative: true);
+            string archive = Path.Combine(packageRoot, packageName + ".zip");
+            CreateZipWithRoot(expandedPackage, archive, packageName);
+            _ = WriteTextEvidence(Path.Combine(packageRoot, "SHA256SUMS"), $"{GetSha256(archive)}  {Path.GetFileName(archive)}{Environment.NewLine}");
+
+            ScriptResult clean = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "audit-release-artifacts.ps1"),
+                "-PublishRoot",
+                Path.Combine(temp, "missing-publish"),
+                "-PackageRoot",
+                packageRoot,
+                "-ActiveRids",
+                "win-x64");
+            Assert.Equal(0, clean.ExitCode);
+
+            string ultralightNative = Path.Combine(expandedPackage, "app", "runtimes", "win-x64", "native", "Ultralight.dll");
+            _ = WriteTextEvidence(ultralightNative, "inactive ultralight native");
+            RewriteFriendlyExpandedPackageChecksum(expandedPackage);
+            CreateZipWithRoot(expandedPackage, archive, packageName);
+            _ = WriteTextEvidence(Path.Combine(packageRoot, "SHA256SUMS"), $"{GetSha256(archive)}  {Path.GetFileName(archive)}{Environment.NewLine}");
+
+            ScriptResult forbidden = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "audit-release-artifacts.ps1"),
+                "-PublishRoot",
+                Path.Combine(temp, "missing-publish"),
+                "-PackageRoot",
+                packageRoot,
+                "-ActiveRids",
+                "win-x64");
+
+            Assert.NotEqual(0, forbidden.ExitCode);
+            Assert.Contains("Ultralight native", forbidden.Output, StringComparison.Ordinal);
+            Assert.Contains("commercial redistribution license", forbidden.Output, StringComparison.Ordinal);
+            Assert.Contains("app/runtimes/win-x64/native/Ultralight.dll", forbidden.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 Bash 发行审计真实执行时也强制 R2R package 携带 UI native。
     /// </summary>
     [Fact]
@@ -4324,6 +4384,65 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
             Assert.NotEqual(0, forbiddenUiNative.ExitCode);
             Assert.Contains("app/runtimes/win-x64/native/PixelEngine.UI.Native.dll", forbiddenUiNative.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 Bash 发行审计拒绝未激活 Ultralight optional profile 的 native 混入玩家包。
+    /// </summary>
+    [Fact]
+    public void BashReleaseArtifactAuditRejectsInactiveUltralightNativeInPackage()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-bash-ultralight-native-audit-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string packageRoot = Path.Combine(temp, "package");
+            string packageName = "PixelEngine-Demo-9.9.9-win-x64-r2r";
+            string expandedPackage = Path.Combine(packageRoot, packageName);
+            CreateFriendlyExpandedPackage(expandedPackage, channel: "r2r", includeUiNative: true);
+            string archive = Path.Combine(packageRoot, packageName + ".zip");
+            CreateZipWithRoot(expandedPackage, archive, packageName);
+            _ = WriteTextEvidence(Path.Combine(packageRoot, "SHA256SUMS"), $"{GetSha256(archive)}  {Path.GetFileName(archive)}{Environment.NewLine}");
+
+            ScriptResult clean = RunBashScript(
+                root,
+                "tools/audit-release-artifacts.sh",
+                "--publish-root",
+                ToBashPath(Path.Combine(temp, "missing-publish")),
+                "--package-root",
+                ToBashPath(packageRoot),
+                "--active-rids",
+                "win-x64");
+            Assert.Equal(0, clean.ExitCode);
+
+            _ = WriteTextEvidence(Path.Combine(expandedPackage, "app", "runtimes", "win-x64", "native", "WebCore.dll"), "inactive ultralight native");
+            RewriteFriendlyExpandedPackageChecksum(expandedPackage);
+            CreateZipWithRoot(expandedPackage, archive, packageName);
+            _ = WriteTextEvidence(Path.Combine(packageRoot, "SHA256SUMS"), $"{GetSha256(archive)}  {Path.GetFileName(archive)}{Environment.NewLine}");
+
+            ScriptResult forbidden = RunBashScript(
+                root,
+                "tools/audit-release-artifacts.sh",
+                "--publish-root",
+                ToBashPath(Path.Combine(temp, "missing-publish")),
+                "--package-root",
+                ToBashPath(packageRoot),
+                "--active-rids",
+                "win-x64");
+
+            Assert.NotEqual(0, forbidden.ExitCode);
+            Assert.Contains("Ultralight native", forbidden.Output, StringComparison.Ordinal);
+            Assert.Contains("commercial redistribution license", forbidden.Output, StringComparison.Ordinal);
+            Assert.Contains("app/runtimes/win-x64/native/WebCore.dll", forbidden.Output, StringComparison.Ordinal);
         }
         finally
         {
