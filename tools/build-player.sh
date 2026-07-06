@@ -17,6 +17,7 @@ Options:
   --window-height <pixels>
   --vsync <true|false>
   --runtime-ui-backend <backend>
+  --release-channel <Development|Production>
   --include-scene <scene>   repeatable
   --dev-layout
 EOF
@@ -192,6 +193,7 @@ window_width="1280"
 window_height="720"
 vsync="true"
 runtime_ui_backend="ManagedFallback"
+release_channel="Development"
 include_scenes=()
 dev_layout=0
 warnings=()
@@ -267,6 +269,11 @@ while [[ $# -gt 0 ]]; do
       runtime_ui_backend="$2"
       shift 2
       ;;
+    --release-channel|-ReleaseChannel)
+      require_value "$1" "${2:-}"
+      release_channel="$2"
+      shift 2
+      ;;
     --include-scene|-IncludeScene)
       require_value "$1" "${2:-}"
       include_scenes+=("$2")
@@ -290,6 +297,7 @@ done
 [[ -n "$channel" ]] || fail_usage "Missing required argument: --channel."
 [[ -n "$output" ]] || fail_usage "Missing required argument: --output."
 case "$channel" in r2r|aot) ;; *) fail_usage "Unsupported channel: $channel" ;; esac
+case "$release_channel" in Development|Production) ;; *) fail_usage "Unsupported release channel: $release_channel" ;; esac
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 current_host_rid="$(host_rid)"
@@ -358,6 +366,7 @@ write_result() {
     printf '  "ok": %s,\n' "$ok"
     printf '  "rid": "%s",\n' "$(json_escape "$rid")"
     printf '  "channel": "%s",\n' "$(json_escape "$channel")"
+    printf '  "releaseChannel": "%s",\n' "$(json_escape "$release_channel")"
     printf '  "configuration": "%s",\n' "$(json_escape "$configuration")"
     printf '  "version": "%s",\n' "$(json_escape "$version")"
     printf '  "informationalVersion": "%s",\n' "$(json_escape "$informational_version")"
@@ -409,7 +418,7 @@ if [[ -z "$error_message" ]]; then
   run_phase "verify" 45 60 bash "$repo_root/tools/verify-publish.sh" "${verify_args[@]}" || error_message="verify phase failed"
 fi
 if [[ -z "$error_message" ]]; then
-  package_args=(--rid "$rid" --channel "$channel" --version "$version" --publish-dir "$publish_dir" --output-root "$package_root" --player-output-dir "$player_dir" --product-name "$product_name" --start-scene "$start_scene" --window-width "$window_width" --window-height "$window_height" --vsync "$vsync" --runtime-ui-backend "$runtime_ui_backend")
+  package_args=(--rid "$rid" --channel "$channel" --version "$version" --publish-dir "$publish_dir" --output-root "$package_root" --player-output-dir "$player_dir" --product-name "$product_name" --start-scene "$start_scene" --window-width "$window_width" --window-height "$window_height" --vsync "$vsync" --runtime-ui-backend "$runtime_ui_backend" --release-channel "$release_channel")
   for scene in "${include_scenes[@]}"; do package_args+=(--include-scene "$scene"); done
   if (( include_symbols || dev_layout )); then package_args+=(--include-symbols); fi
   run_phase "package" 60 82 bash "$repo_root/tools/package.sh" "${package_args[@]}" || error_message="package phase failed"

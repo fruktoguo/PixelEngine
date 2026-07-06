@@ -109,7 +109,8 @@ internal sealed class EditorProject
                 EditorShellJsonContext.Default.EditorProjectDocument) ??
             throw new JsonException("工程文件为空或格式无效。");
         Validate(document, projectFile);
-        EditorProjectDocument normalized = Normalize(document);
+        string projectRoot = Path.GetDirectoryName(projectFile)!;
+        EditorProjectDocument normalized = ApplyStoredProjectSettings(projectRoot, Normalize(document));
         EditorProjectSceneEntry[] scenes = normalized.Scenes is { Length: > 0 }
             ? normalized.Scenes
             :
@@ -121,12 +122,20 @@ internal sealed class EditorProject
                 },
             ];
 
-        return new EditorProject(Path.GetDirectoryName(projectFile)!, projectFile, normalized, scenes);
+        return new EditorProject(projectRoot, projectFile, normalized, scenes);
     }
 
     public void Save()
     {
         SaveDocument(ProjectFilePath, Document);
+    }
+
+    public void ApplyProjectSettings(ProjectSettingsDto settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        Document = ApplyProjectSettings(Document, settings);
+        Scenes = Document.Scenes ?? [];
+        Save();
     }
 
     public EngineProject ToEngineProject(string? sceneOverridePath = null)
@@ -220,6 +229,31 @@ internal sealed class EditorProject
                 Path = relativePath,
             },
         ];
+    }
+
+    private static EditorProjectDocument ApplyStoredProjectSettings(string projectRoot, EditorProjectDocument document)
+    {
+        string settingsPath = Path.Combine(projectRoot, EngineProjectSettingsStore.ProjectSettingsFileName);
+        return File.Exists(settingsPath)
+            ? ApplyProjectSettings(document, EngineProjectSettingsStore.LoadProjectSettings(projectRoot))
+            : document;
+    }
+
+    private static EditorProjectDocument ApplyProjectSettings(EditorProjectDocument document, ProjectSettingsDto settings)
+    {
+        ProjectSettingsDto normalizedSettings = settings.Normalize();
+        EditorProjectSceneEntry[] scenes = EnsureSceneEntry(
+            NormalizeScenes(document.Scenes, normalizedSettings.StartScene),
+            normalizedSettings.StartScene);
+        return Normalize(new EditorProjectDocument
+        {
+            FormatVersion = CurrentFormatVersion,
+            Name = normalizedSettings.Name,
+            ContentRoot = normalizedSettings.ContentRoot,
+            ScriptSourceDir = normalizedSettings.ScriptSourceDir,
+            StartScene = normalizedSettings.StartScene,
+            Scenes = scenes,
+        });
     }
 
     private static void SaveDocument(string projectFile, EditorProjectDocument document)

@@ -29,6 +29,7 @@ internal sealed class ProjectSettingsStore(EditorProject project)
     {
         ArgumentNullException.ThrowIfNull(settings);
         EngineProjectSettingsStore.SaveProjectSettings(_project.ProjectRoot, settings);
+        _project.ApplyProjectSettings(settings);
     }
 }
 
@@ -60,7 +61,7 @@ internal sealed class PlayerSettingsStore(EditorProject project)
 
 internal static class PlayerSettingsEditorAdapter
 {
-    public static EngineBuilder ApplyRuntimeDefaults(this EngineBuilder builder, PlayerSettingsDto settings)
+    public static EngineBuilder ApplyRuntimeDefaults(this EngineBuilder builder, PlayerSettingsDto settings, bool applyStartupScene = true)
     {
         ArgumentNullException.ThrowIfNull(builder);
         PlayerSettingsDto normalized = Normalize(settings);
@@ -69,6 +70,11 @@ internal static class PlayerSettingsEditorAdapter
             .WithWindowTitle(normalized.WindowTitle)
             .UseVSync(normalized.VSync)
             .UseUiBackend(normalized.RuntimeUiBackend);
+        if (applyStartupScene)
+        {
+            _ = builder.WithStartScene(normalized.StartupScene);
+        }
+
         return builder;
     }
 

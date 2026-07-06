@@ -100,7 +100,8 @@ public sealed class DemoStartupOptionsTests
                   "windowWidth": 1440,
                   "windowHeight": 810,
                   "vSync": false,
-                  "runtimeUiBackend": "Ultralight"
+                  "runtimeUiBackend": "Ultralight",
+                  "releaseChannel": "Production"
                 }
                 """);
 
@@ -114,6 +115,7 @@ public sealed class DemoStartupOptionsTests
             Assert.Equal(810, options.WindowHeight);
             Assert.False(options.VSync);
             Assert.Equal(UiBackendKind.Ultralight, options.RuntimeUiBackend);
+            Assert.Equal(PlayerReleaseChannel.Production, options.ReleaseChannel);
             Assert.Equal("Player Settings Runtime", engine.Context.Options.WindowTitle);
             Assert.Equal(1440, engine.Context.Options.WindowWidth);
             Assert.Equal(810, engine.Context.Options.WindowHeight);

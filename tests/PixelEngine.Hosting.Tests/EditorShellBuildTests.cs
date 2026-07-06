@@ -35,6 +35,7 @@ public sealed class EditorShellBuildTests
               ok = $true
               rid = $Rid
               channel = $Channel
+              releaseChannel = 'Production'
               configuration = $Configuration
               version = $Version
               informationalVersion = 'test-info'
@@ -60,6 +61,7 @@ public sealed class EditorShellBuildTests
         Assert.True(result.Ok, result.Error);
         Assert.Equal(0, result.ExitCode);
         Assert.Equal("win-x64", result.Rid);
+        Assert.Equal("Production", result.ReleaseChannel);
         Assert.Equal("PixelEngine-Demo-test-win-x64-r2r.zip", result.PackageArchive);
         Assert.Contains(progress.Events, e => e.Kind == BuildEventKind.Progress && e.Phase == BuildPhase.Native && Math.Abs(e.Percent - 0.1f) < 0.001f);
         Assert.Contains(progress.Events, e => e.Kind == BuildEventKind.Log && e.Phase == BuildPhase.Native && e.Message == "plain current phase log");
@@ -345,9 +347,16 @@ public sealed class EditorShellBuildTests
         ScriptedProjectSettingsProbeSnapshot projectSnapshot = projectPanel.ApplyScriptedProjectSettingsProbe();
         ProjectSettingsDto reloadedProject = projectStore.Load();
         Assert.Equal(projectSnapshot.Name, reloadedProject.Name);
+        Assert.Equal(projectSnapshot.Name, project.Name);
         Assert.Equal("scripts/probe", reloadedProject.ScriptSourceDir);
+        Assert.Equal("scripts/probe", project.ScriptSourceDir);
         Assert.Equal("scenes/settings-probe.scene", reloadedProject.StartScene);
+        Assert.Equal("scenes/settings-probe.scene", project.StartScene);
         Assert.Equal(UiBackendKind.ManagedFallback, reloadedProject.DefaultUiBackend);
+        EditorProject reopenedProject = EditorProject.Load(projectRoot);
+        Assert.Equal(projectSnapshot.Name, reopenedProject.Name);
+        Assert.Equal("scripts/probe", reopenedProject.ScriptSourceDir);
+        Assert.Equal("scenes/settings-probe.scene", reopenedProject.StartScene);
         Assert.True(projectSnapshot.RequireStableMaterialNames);
         Assert.False(projectSnapshot.SaveLayoutOnExit);
 
@@ -357,7 +366,7 @@ public sealed class EditorShellBuildTests
 
         PlayerSettingsStore playerStore = new(project);
         PlayerSettingsDto fallbackPlayer = playerStore.Load();
-        Assert.Equal("Settings Project", fallbackPlayer.WindowTitle);
+        Assert.Equal(project.Name, fallbackPlayer.WindowTitle);
         Assert.Equal(project.StartScene, fallbackPlayer.StartupScene);
 
         PlayerSettingsPanel playerPanel = new(project);
@@ -428,6 +437,7 @@ public sealed class EditorShellBuildTests
         Assert.Equal(1440, engine.Context.Options.WindowWidth);
         Assert.Equal(810, engine.Context.Options.WindowHeight);
         Assert.False(engine.Context.Options.VSync);
+        Assert.Equal("scenes/player.scene", engine.Context.Options.StartScene);
         Assert.Equal(UiBackendKind.Ultralight, engine.Context.Options.GameUiBackend);
     }
 
@@ -447,6 +457,7 @@ public sealed class EditorShellBuildTests
               windowHeight = $WindowHeight
               vSync = $VSync
               runtimeUiBackend = $RuntimeUiBackend
+              releaseChannel = $ReleaseChannel
               includeSceneCount = $IncludeScene.Count
             }
             $received | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $Output 'received-args.json') -Encoding UTF8
@@ -481,6 +492,7 @@ public sealed class EditorShellBuildTests
             PlayerWindowHeight = 810,
             PlayerVSync = false,
             RuntimeUiBackend = UiBackendKind.Ultralight,
+            ReleaseChannel = PlayerReleaseChannel.Production,
         };
 
         BuildResult result = await service.RunAsync(request, new RecordingProgress(), CancellationToken.None);
@@ -492,6 +504,7 @@ public sealed class EditorShellBuildTests
         Assert.Contains("\"windowHeight\": 810", received, StringComparison.Ordinal);
         Assert.Contains("\"vSync\": \"false\"", received, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("\"runtimeUiBackend\": \"Ultralight\"", received, StringComparison.Ordinal);
+        Assert.Contains("\"releaseChannel\": \"Production\"", received, StringComparison.Ordinal);
         Assert.Contains("\"includeSceneCount\": 2", received, StringComparison.Ordinal);
     }
 
@@ -568,6 +581,7 @@ public sealed class EditorShellBuildTests
           [int]$WindowHeight,
           [string]$VSync,
           [string]$RuntimeUiBackend,
+          [string]$ReleaseChannel,
           [string[]]$IncludeScene
         )
         $ErrorActionPreference = 'Stop'

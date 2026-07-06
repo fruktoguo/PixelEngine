@@ -18,6 +18,8 @@ param(
   [int]$WindowHeight = 720,
   [string]$VSync = 'true',
   [string]$RuntimeUiBackend = 'ManagedFallback',
+  [ValidateSet('Development', 'Production')]
+  [string]$ReleaseChannel = 'Development',
   [string[]]$IncludeScene = @(),
   [switch]$IncludeSymbols
 )
@@ -163,7 +165,8 @@ function Copy-FilteredContent(
   [int]$StartupWindowWidth,
   [int]$StartupWindowHeight,
   [string]$StartupVSync,
-  [string]$StartupRuntimeUiBackend) {
+  [string]$StartupRuntimeUiBackend,
+  [string]$StartupReleaseChannel) {
   Remove-Item -LiteralPath $DestinationRoot -Recurse -Force -ErrorAction SilentlyContinue
   Copy-Item -LiteralPath $SourceRoot -Destination $DestinationRoot -Recurse -Force
   $scenesToCopy = [System.Collections.Generic.List[string]]::new()
@@ -182,6 +185,7 @@ function Copy-FilteredContent(
       windowHeight = $StartupWindowHeight
       vSync = Resolve-JsonBool $StartupVSync 'VSync'
       runtimeUiBackend = $StartupRuntimeUiBackend
+      releaseChannel = $StartupReleaseChannel
     }
     $startupJson = $startupConfig | ConvertTo-Json -Depth 4
     Set-Content -LiteralPath (Join-Path $DestinationRoot 'startup.json') -Value $startupJson -Encoding UTF8
@@ -230,7 +234,7 @@ Get-ChildItem -LiteralPath $PublishDir -Force | ForEach-Object {
 }
 Remove-PlayerPackageNoise $appDir $IncludeSymbols.IsPresent
 Remove-Item -LiteralPath $stagedContent -Recurse -Force -ErrorAction SilentlyContinue
-Copy-FilteredContent $ContentRoot $stagedContent $IncludeScene $StartScene $ProductName $WindowWidth $WindowHeight $VSync $RuntimeUiBackend
+Copy-FilteredContent $ContentRoot $stagedContent $IncludeScene $StartScene $ProductName $WindowWidth $WindowHeight $VSync $RuntimeUiBackend $ReleaseChannel
 
 if ($Rid.StartsWith('win-')) {
   $rootEntry = Join-Path $stagingDir $windowsLauncherName

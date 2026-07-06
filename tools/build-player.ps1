@@ -24,6 +24,8 @@ param(
   [int]$WindowHeight = 720,
   [string]$VSync = 'true',
   [string]$RuntimeUiBackend = 'ManagedFallback',
+  [ValidateSet('Development', 'Production')]
+  [string]$ReleaseChannel = 'Development',
   [string[]]$IncludeScene = @(),
   [switch]$DevLayout
 )
@@ -169,6 +171,7 @@ function Write-BuildResult([bool]$Ok, [int]$ExitCode, [string]$ErrorMessage) {
     ok = $Ok
     rid = $Rid
     channel = $Channel
+    releaseChannel = $ReleaseChannel
     configuration = $Configuration
     version = $resolvedVersion
     informationalVersion = $resolvedInformationalVersion
@@ -321,6 +324,7 @@ try {
     WindowHeight = $WindowHeight
     VSync = $VSync
     RuntimeUiBackend = $RuntimeUiBackend
+    ReleaseChannel = $ReleaseChannel
   }
   if ($IncludeScene.Count -gt 0) {
     $packageArgs.IncludeScene = $IncludeScene

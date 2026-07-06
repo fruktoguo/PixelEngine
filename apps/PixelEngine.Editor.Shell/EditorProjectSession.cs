@@ -73,7 +73,7 @@ internal sealed class EditorProjectSession : IDisposable
         PlayerSettingsDto playerSettings = new PlayerSettingsStore(project).Load();
         Engine engine = new EngineBuilder()
             .WithProject(project.ToEngineProject(sceneRelativePath))
-            .ApplyRuntimeDefaults(playerSettings)
+            .ApplyRuntimeDefaults(playerSettings, applyStartupScene: false)
             .UseGuiRuntime(false)
             .AddEditorHostExtension(editorHost)
             .Build();
