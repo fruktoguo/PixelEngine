@@ -22,6 +22,24 @@ internal sealed class EditorShellApp
         RecentProjects = RecentProjectsStore.LoadDefault();
     }
 
+    internal static EditorShellApp CreateForTests()
+    {
+        return new EditorShellApp(new EditorShellOptions(
+            ProjectPath: null,
+            ScenePath: null,
+            WindowTicks: 0,
+            ScriptedProbe: false,
+            ScriptedBuildProbe: false,
+            ScriptedBuildRunProbe: false,
+            ScriptedBuildCancelProbe: false,
+            ScriptedBuildSettingsProbe: false,
+            ScriptedMenuLayoutProbe: false,
+            ScriptedHierarchyProbe: false,
+            BuildOutputPath: null,
+            CaptureFramePath: null,
+            LogDirectory: null));
+    }
+
     public EditorConsoleStore ConsoleStore { get; } = new();
 
     public EditorProject? CurrentProject { get; private set; }

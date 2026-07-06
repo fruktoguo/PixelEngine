@@ -1,5 +1,7 @@
 using System.Text.Json;
 using PixelEngine.Editor.Shell;
+using PixelEngine.Rendering;
+using PixelEngine.Scripting;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -36,6 +38,41 @@ public sealed class EditorShellProjectTests
         Assert.Equal("main", scene.Name);
         Assert.Equal("scenes/main.scene", scene.Path);
         Assert.Equal("main", reloaded.ToEngineProject().StartScene);
+    }
+
+    /// <summary>
+    /// 验证 EditorProjectSession.Open 遇到合法但不存在的脚本源目录时仍能打开工程，并把 watcher 失败写入 Console。
+    /// </summary>
+    [Fact]
+    public void OpenAllowsMissingScriptSourceDirectoryAndReportsWatcherStartFailedToConsole()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using TempDirectory temp = new();
+        EditorProject project = EditorProject.CreateNew(Path.Combine(temp.Path, "MissingScriptsProject"), "Missing Scripts");
+        Directory.Delete(project.ScriptSourcePath, recursive: true);
+        EditorShellApp app = EditorShellApp.CreateForTests();
+        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine missing script watcher smoke",
+            Width = 64,
+            Height = 64,
+            BackendPreference = RenderBackendPreference.Auto,
+        });
+
+        using EditorProjectSession session = EditorProjectSession.Open(project, window, app);
+
+        Assert.True(session.Engine.Context.TryGetService(out ScriptHotReloadController _));
+        Assert.True(session.Engine.Context.TryGetService(out IScriptContext _));
+        Assert.Contains(app.ConsoleStore.Snapshot(), entry =>
+            entry.Category == EditorConsoleCategory.Script &&
+            entry.Severity == EditorConsoleSeverity.Error &&
+            entry.Source == "script-hot-reload" &&
+            entry.Text.Contains("WatcherStartFailed", StringComparison.Ordinal) &&
+            entry.Text.Contains("无 watcher", StringComparison.Ordinal));
     }
 
     /// <summary>

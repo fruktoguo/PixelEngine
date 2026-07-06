@@ -202,6 +202,88 @@ public sealed class DemoRuntimeScriptingTests
         }
     }
 
+    /// <summary>
+    /// 验证合法但不存在的脚本源目录只降级 watcher，不阻止 Hosting 装配脚本 runtime。
+    /// </summary>
+    [Fact]
+    public void AttachScriptingFromServicesReportsMissingWatcherSourceAndKeepsRuntimeRunning()
+    {
+        string scriptDirectory = Path.Combine(Path.GetTempPath(), "PixelEngineMissingHotReload", Guid.NewGuid().ToString("N"), "scripts");
+        Assert.False(Directory.Exists(scriptDirectory));
+
+        MaterialTable materials = Materials(("empty", CellType.Empty));
+        using Engine engine = new EngineBuilder()
+            .UseHeadless()
+            .UseDeterministicMode()
+            .AddScene(new SceneDescriptor("reload", SceneSourceKind.Procedural, typeof(HostingHotReloadProbeBehaviour).FullName!))
+            .WithStartScene("reload")
+            .Build();
+        engine.Context.RegisterService(materials);
+        _ = engine.AttachResidentSimulationWorld(worldWidthCells: 64, worldHeightCells: 64, particleCapacity: 16);
+        engine.RegisterScriptAssembly(typeof(HostingHotReloadProbeBehaviour).Assembly);
+        EditorConsoleStore console = new();
+        engine.Context.RegisterService<IScriptHotReloadDiagnosticSink>(new EditorConsoleScriptHotReloadDiagnosticSink(console));
+
+        ScriptSimulationContext context = engine.AttachScriptingFromServices(
+            hotReload: new ScriptHotReloadRuntimeOptions(
+                $"PixelEngine.Hosting.Tests.MissingHotReload.{Guid.NewGuid():N}",
+                scriptDirectory,
+                DebounceInterval: TimeSpan.FromMilliseconds(30)));
+
+        Assert.True(engine.Context.TryGetService(out ScriptHotReloadController controller));
+        Assert.False(controller.HasPendingReload);
+        Assert.Null(controller.LastWatcherException);
+        Assert.Same(context, engine.Context.GetService<IScriptContext>());
+        engine.RunHeadlessTicks(1);
+        Behaviour initial = GetSingleBehaviour<HostingHotReloadProbeBehaviour>(context.Scene);
+        Assert.Equal("v1", ReadProperty<string>(initial, "Version"));
+        Assert.Equal(2, ReadField<int>(initial, "Counter"));
+        EditorConsoleEntry[] entries = console.Snapshot();
+        Assert.Contains(entries, entry =>
+            entry.Category == EditorConsoleCategory.Script &&
+            entry.Severity == EditorConsoleSeverity.Error &&
+            entry.Source == "script-hot-reload" &&
+            entry.Text.Contains("WatcherStartFailed", StringComparison.Ordinal) &&
+            entry.Text.Contains("无 watcher", StringComparison.Ordinal));
+        Assert.DoesNotContain(entries, entry => entry.Text.Contains("脚本热重载监听已启动", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// 验证真正的热重载配置错误仍按致命装配错误抛出，不被 watcher 降级逻辑吞掉。
+    /// </summary>
+    [Fact]
+    public void AttachScriptingFromServicesDoesNotSwallowFatalHotReloadConfigurationErrors()
+    {
+        string scriptDirectory = Path.Combine(Path.GetTempPath(), "PixelEngineFatalHotReload", Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(scriptDirectory);
+        try
+        {
+            MaterialTable materials = Materials(("empty", CellType.Empty));
+            using Engine engine = new EngineBuilder()
+                .UseHeadless()
+                .UseDeterministicMode()
+                .AddScene(new SceneDescriptor("reload", SceneSourceKind.Procedural, typeof(HostingHotReloadProbeBehaviour).FullName!))
+                .WithStartScene("reload")
+                .Build();
+            engine.Context.RegisterService(materials);
+            _ = engine.AttachResidentSimulationWorld(worldWidthCells: 64, worldHeightCells: 64, particleCapacity: 16);
+            engine.RegisterScriptAssembly(typeof(HostingHotReloadProbeBehaviour).Assembly);
+            EditorConsoleStore console = new();
+            engine.Context.RegisterService<IScriptHotReloadDiagnosticSink>(new EditorConsoleScriptHotReloadDiagnosticSink(console));
+
+            _ = Assert.ThrowsAny<ArgumentException>(() => engine.AttachScriptingFromServices(
+                hotReload: new ScriptHotReloadRuntimeOptions(
+                    $"PixelEngine.Hosting.Tests.FatalHotReload.{Guid.NewGuid():N}",
+                    scriptDirectory,
+                    SearchPattern: null!)));
+            Assert.Empty(console.Snapshot());
+        }
+        finally
+        {
+            Directory.Delete(scriptDirectory, recursive: true);
+        }
+    }
+
     private static MaterialTable Materials(params (string Name, CellType Type)[] definitions)
     {
         MaterialDef[] materials = new MaterialDef[definitions.Length];
