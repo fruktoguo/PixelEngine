@@ -32,6 +32,8 @@ internal sealed class EditorShellApp
 
     public string? LastProjectError { get; private set; }
 
+    public string? LastAssetOpenDiagnostic { get; private set; }
+
     public EditorProjectSession? CurrentSession { get; private set; }
 
     private ProjectPickerWindow ProjectPicker { get; }
@@ -982,6 +984,20 @@ internal sealed class EditorShellApp
     public void InstantiatePrefab(string assetPath)
     {
         CurrentSession?.InstantiatePrefab(assetPath);
+    }
+
+    public bool OpenScriptAsset(string assetPath, out string diagnostic)
+    {
+        if (CurrentSession is null)
+        {
+            diagnostic = "当前没有打开的工程，无法打开脚本资产。";
+            LastAssetOpenDiagnostic = diagnostic;
+            return false;
+        }
+
+        bool opened = CurrentSession.OpenScriptAsset(assetPath, out diagnostic);
+        LastAssetOpenDiagnostic = diagnostic;
+        return opened;
     }
 
     public void ShowProjectSettings()

@@ -99,6 +99,51 @@ public sealed class AssetBrowserPanelTests
         Assert.Contains("stable asset id", panel.Status, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证 Project Window 只会把 script 资产交给外部编辑器回调，并把失败诊断写回状态。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelOpensOnlyScriptAssetsThroughCallbackAndStoresDiagnostics()
+    {
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("scripts/PlayerController.cs", AssetBrowserItemKind.Script, 10, DateTimeOffset.UnixEpoch, null, "asset_script"),
+            new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_texture"),
+        ]);
+        List<string> opened = [];
+        AssetBrowserPanel panel = new(
+            source,
+            openScriptAsset: (string path, out string diagnostic) =>
+            {
+                opened.Add(path);
+                diagnostic = $"opened {path}";
+                return true;
+            });
+
+        _ = panel.Refresh();
+        bool openedScript = panel.TryOpenScriptAsset("scripts/PlayerController.cs");
+        bool openedTexture = panel.TryOpenScriptAsset("textures/sand.png");
+
+        Assert.True(openedScript);
+        Assert.False(openedTexture);
+        Assert.Equal(["scripts/PlayerController.cs"], opened);
+        Assert.Contains("仅 script", panel.Status, StringComparison.Ordinal);
+
+        AssetBrowserPanel failingPanel = new(
+            source,
+            openScriptAsset: (string path, out string diagnostic) =>
+            {
+                diagnostic = $"failed {path}";
+                return false;
+            });
+        _ = failingPanel.Refresh();
+
+        bool failed = failingPanel.TryOpenScriptAsset("scripts/PlayerController.cs");
+
+        Assert.False(failed);
+        Assert.Equal("failed scripts/PlayerController.cs", failingPanel.Status);
+    }
+
     private sealed class RecordingThumbnailProvider : ITextureThumbnailProvider
     {
         public bool TryGetThumbnail(string assetPath, out AssetThumbnail thumbnail)

@@ -41,6 +41,12 @@ internal sealed class EditorConsolePanel(EditorShellApp app) : IEditorPanel
             ImGui.TextWrapped(_app.LastProjectError);
         }
 
+        if (!string.IsNullOrWhiteSpace(_app.LastAssetOpenDiagnostic))
+        {
+            ImGui.Separator();
+            ImGui.TextWrapped($"Asset opener: {_app.LastAssetOpenDiagnostic}");
+        }
+
         ImGui.End();
     }
 }
