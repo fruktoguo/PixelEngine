@@ -679,7 +679,10 @@ public sealed class Engine : IDisposable
                 out fallbackReason,
                 $"RmlUi native 不可用：{probe.Error ?? "unknown"}。"),
             UiBackendKind.RmlUi => new RmlUiBackend(window),
-            UiBackendKind.Ultralight => throw new NotSupportedException("Ultralight 游戏 UI 后端仍处于 plan/20 可选 profile，尚未激活。"),
+            UiBackendKind.Ultralight => CreateManagedFallbackGameUiBackend(
+                window,
+                out fallbackReason,
+                "Ultralight 游戏 UI 后端仍处于 plan/20 可选 profile，当前构建未包含真实 native 依赖/绑定，回退 ManagedFallback。"),
             _ => throw new ArgumentOutOfRangeException(nameof(requestedBackend), requestedBackend, "未知游戏 UI 后端。"),
         };
     }

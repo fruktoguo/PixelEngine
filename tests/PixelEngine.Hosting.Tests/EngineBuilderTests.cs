@@ -151,6 +151,45 @@ public sealed class EngineBuilderTests
     }
 
     /// <summary>
+    /// 验证未激活的 Ultralight 可选后端不会伪造实现或崩溃，而是记录原因后回退托管基线。
+    /// </summary>
+    [Fact]
+    public void UltralightGameUiBackendFallsBackToManagedWhenGlSmokeIsEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine Ultralight fallback smoke",
+            Width = 64,
+            Height = 64,
+            BackendPreference = RenderBackendPreference.Auto,
+        });
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithContentRoot(Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content"))
+            .EnableGameUi()
+            .UseUiBackend(UiBackendKind.Ultralight)
+            .Build();
+
+        _ = engine.LoadContentPackage();
+        _ = engine.AttachResidentSimulationWorld(64, 64, particleCapacity: 8);
+        _ = engine.AttachWindowRuntime(window);
+
+        GameUiBackendSelection selection = engine.Context.GetService<GameUiBackendSelection>();
+        Assert.Equal(UiBackendKind.Ultralight, selection.RequestedBackend);
+        Assert.Equal(UiBackendKind.ManagedFallback, selection.ActiveBackend);
+        Assert.True(selection.UsedFallback);
+        Assert.Contains("Ultralight", selection.FallbackReason, StringComparison.Ordinal);
+        Assert.Contains("ManagedFallback", selection.FallbackReason, StringComparison.Ordinal);
+        Assert.True(engine.Context.TryGetService(out GameUiHost _));
+        Assert.True(engine.Context.TryGetService(out GameUiPhaseDriver _));
+    }
+
+    /// <summary>
     /// 验证禁用游戏大 UI 时，真实窗口运行时不会注册 GameUi 服务、相位 driver 或 UI 计时开销。
     /// </summary>
     [Fact]
