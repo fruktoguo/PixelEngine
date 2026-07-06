@@ -325,7 +325,7 @@ public sealed class EngineOverloadControllerTests
         engine.Context.Counters.SimHz = 60;
         _ = engine.RunOneTick(realDeltaSeconds: 0.02);
 
-        EngineScriptDiagnosticsApi api = new(engine.Context.Counters, engine.Context.Clock, new DebugOverlaySettings());
+        EngineScriptDiagnosticsApi api = new(engine.Context.Counters, engine.Context.Clock, new DebugOverlaySettings(), () => 4);
         EngineDiagnosticsSnapshot snapshot = api.Capture();
 
         Assert.Equal(engine.Context.Clock.FrameIndex, snapshot.FrameCount);
@@ -339,6 +339,7 @@ public sealed class EngineOverloadControllerTests
         Assert.Equal(5, snapshot.ResidentChunks);
         Assert.Equal(7, snapshot.FreeParticles);
         Assert.Equal(2, snapshot.RigidBodies);
+        Assert.Equal(4, snapshot.PointLights);
         Assert.False(api.IsOverlayEnabled(DebugOverlayKind.DirtyRects));
         Assert.True(api.ToggleOverlay(DebugOverlayKind.DirtyRects));
         Assert.True(api.IsOverlayEnabled(DebugOverlayKind.DirtyRects));

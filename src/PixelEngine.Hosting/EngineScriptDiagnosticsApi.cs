@@ -11,14 +11,17 @@ namespace PixelEngine.Hosting;
 /// <param name="counters">引擎计数器。</param>
 /// <param name="clock">帧时钟。</param>
 /// <param name="overlays">共享调试叠层设置。</param>
+/// <param name="pointLightCount">当前渲染可消费点光源数量读取器。</param>
 public sealed class EngineScriptDiagnosticsApi(
     EngineCounters counters,
     FrameClock clock,
-    DebugOverlaySettings overlays) : IDiagnosticsApi
+    DebugOverlaySettings overlays,
+    Func<int>? pointLightCount = null) : IDiagnosticsApi
 {
     private readonly EngineCounters _counters = counters ?? throw new ArgumentNullException(nameof(counters));
     private readonly FrameClock _clock = clock ?? throw new ArgumentNullException(nameof(clock));
     private readonly DebugOverlaySettings _overlays = overlays ?? throw new ArgumentNullException(nameof(overlays));
+    private readonly Func<int>? _pointLightCount = pointLightCount;
 
     /// <summary>
     /// 捕获当前帧号、FPS、sim 频率与核心运行计数器快照。
@@ -65,7 +68,8 @@ public sealed class EngineScriptDiagnosticsApi(
             _counters.ActiveChunks,
             _counters.ResidentChunks,
             _counters.FreeParticles,
-            _counters.RigidBodies);
+            _counters.RigidBodies,
+            Math.Max(0, _pointLightCount?.Invoke() ?? 0));
     }
 
     /// <summary>

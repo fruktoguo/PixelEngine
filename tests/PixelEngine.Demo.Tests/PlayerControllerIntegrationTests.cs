@@ -44,7 +44,7 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Contains("text-colored:目标: 未抵达:FFE0E0E0", hudGui.Drawn);
         Assert.Contains("text:爆破 0", hudGui.Drawn);
         Assert.Contains(hudGui.Drawn, line => line.StartsWith("text:FPS ", StringComparison.Ordinal));
-        Assert.Contains(hudGui.Drawn, line => line.StartsWith("text:FX ", StringComparison.Ordinal) && line.Contains(" World particles ", StringComparison.Ordinal));
+        Assert.Contains(hudGui.Drawn, line => line.StartsWith("text:FX ", StringComparison.Ordinal) && line.Contains(" Lights ", StringComparison.Ordinal) && line.Contains(" World particles ", StringComparison.Ordinal));
         Assert.DoesNotContain("text-colored:HUD 等待玩家脚本组件。:FF4080FF", hudGui.Drawn);
 
         input.Update([Key.Escape], [], mouseX: 0, mouseY: 0, wheelY: 0);
@@ -108,7 +108,7 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Contains("swatch:weapon-current:FFE8D06A:14", gui.Drawn);
         Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:Pistol  180/180:", StringComparison.Ordinal));
         Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:目标 水晶 0/3", StringComparison.Ordinal));
-        Assert.Contains(gui.Drawn, line => line.StartsWith("text:FX ", StringComparison.Ordinal) && line.Contains(" World particles ", StringComparison.Ordinal));
+        Assert.Contains(gui.Drawn, line => line.StartsWith("text:FX ", StringComparison.Ordinal) && line.Contains(" Lights ", StringComparison.Ordinal) && line.Contains(" World particles ", StringComparison.Ordinal));
         Assert.Contains("text:材质", gui.Drawn);
         Assert.Contains("text:sand / Terrain", gui.Drawn);
         Assert.Contains("text:water / Terrain", gui.Drawn);

@@ -688,6 +688,7 @@ public interface IDiagnosticsApi
 /// <param name="ResidentChunks">常驻 chunk 数。</param>
 /// <param name="FreeParticles">自由粒子数。</param>
 /// <param name="RigidBodies">活跃刚体数。</param>
+/// <param name="PointLights">当前脚本光照同步后可供渲染消费的点光源数量。</param>
 public readonly record struct EngineDiagnosticsSnapshot(
     long FrameCount,
     float FramesPerSecond,
@@ -701,7 +702,8 @@ public readonly record struct EngineDiagnosticsSnapshot(
     long ActiveChunks,
     long ResidentChunks,
     long FreeParticles,
-    long RigidBodies);
+    long RigidBodies,
+    long PointLights);
 
 /// <summary>
 /// 脚本可切换的调试叠层类型。

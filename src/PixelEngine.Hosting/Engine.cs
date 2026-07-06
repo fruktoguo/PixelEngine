@@ -1474,7 +1474,11 @@ public sealed class Engine : IDisposable
             return diagnostics;
         }
 
-        EngineScriptDiagnosticsApi created = new(Context.Counters, Context.Clock, ResolveDebugOverlaySettings());
+        EngineScriptDiagnosticsApi created = new(
+            Context.Counters,
+            Context.Clock,
+            ResolveDebugOverlaySettings(),
+            () => Context.TryGetService(out ScriptLightingSynchronizer lighting) ? lighting.PointLights.Length : 0);
         Context.RegisterService<IDiagnosticsApi>(created);
         Context.RegisterService(created);
         return created;
