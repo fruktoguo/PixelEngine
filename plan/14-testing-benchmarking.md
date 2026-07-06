@@ -346,5 +346,5 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] `test(sim): 破坏模型(Damage lane/抗性差异/边界守恒/RigidOwned 路由/Dispersion clamp)与武器/可玩循环测试`（对应 §4.8）。
 - [x] `test(serialization): .scene v1/v2 往返与 Damage 平面存档往返逐 cell 等价测试`（对应 §4.8/§4.9）。
 - [x] `test(editor): PlayerBuildService NDJSON/取消/BuildTargetSettings 校验与 player-only audit 断言`（对应 §4.9/§4.10）。
-- [ ] `test(build): RID 门控发行计数参数化 + HostingProjectDisciplineTests 解耦纪律更新`（对应 §4.11）。
+- [x] `test(build): RID 门控发行计数参数化 + HostingProjectDisciplineTests 解耦纪律更新`（对应 §4.11）。
 - [ ] `test(ui): PixelEngine.UI headless 布局/绑定/输入仲裁/脏矩形与 UI 逻辑相位零分配基准`（对应 §4.12）。
