@@ -61,6 +61,52 @@ public sealed class TemperatureFieldTests
     }
 
     /// <summary>
+    /// 验证存在活动温度块时，即使 cell 不在当前 dirty rect 内也会参与阈值相变。
+    /// </summary>
+    [Fact]
+    public void ApplyPhaseTransitionsScansActiveTemperatureBlocksOutsideDirtyRect()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Set(center, 30, 30, Ice);
+        center.SetCurrentDirty(new DirtyRect(1, 1, 2, 2));
+        MaterialTable materials = CreateMaterials();
+        TemperatureField field = new();
+        field.AddHeat(30, 30, 20);
+
+        field.ApplyPhaseTransitions(source, materials, CellFlags.Parity);
+
+        Assert.Equal(Water, Get(center, 30, 30));
+        Assert.True(CellFlags.MatchesFrame(GetFlags(center, 30, 30), CellFlags.Parity));
+    }
+
+    /// <summary>
+    /// 验证 RigidOwned cell 发生阈值相变时会退出刚体占用并通知物理 damage sink。
+    /// </summary>
+    [Fact]
+    public void ApplyPhaseTransitionsRoutesRigidOwnedMeltToDamageSink()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Set(center, 8, 10, Ice);
+        center.Flags[CellAddressing.LocalIndexFromLocal(8, 10)] = CellFlags.RigidOwned;
+        center.SetCurrentDirty(new DirtyRect(8, 10, 8, 10));
+        MaterialTable materials = CreateMaterials();
+        TemperatureField field = new();
+        field.AddHeat(8, 10, 20);
+        RecordingRigidDamageSink sink = new();
+
+        const byte parityBit = 0;
+
+        field.ApplyPhaseTransitions(source, materials, parityBit, sink);
+
+        byte flags = GetFlags(center, 8, 10);
+        Assert.Equal(Water, Get(center, 8, 10));
+        Assert.False(CellFlags.Has(flags, CellFlags.RigidOwned));
+        Assert.True(CellFlags.MatchesFrame(flags, parityBit));
+        (int x, int y, ushort material) = Assert.Single(sink.Events);
+        Assert.Equal((8, 10, Ice), (x, y, material));
+    }
+
+    /// <summary>
     /// 验证热源可按材质热容缩放注热。
     /// </summary>
     [Fact]
@@ -358,6 +404,21 @@ public sealed class TemperatureFieldTests
     private static byte GetFlags(Chunk chunk, int lx, int ly)
     {
         return chunk.Flags[CellAddressing.LocalIndexFromLocal(lx, ly)];
+    }
+
+    private sealed class RecordingRigidDamageSink : IRigidDamageSink
+    {
+        public List<(int X, int Y, ushort Material)> Events { get; } = [];
+
+        public void OnOwnedCellDamaged(int wx, int wy)
+        {
+            Events.Add((wx, wy, 0));
+        }
+
+        public void OnOwnedCellDamaged(int wx, int wy, ushort consumedMaterial)
+        {
+            Events.Add((wx, wy, consumedMaterial));
+        }
     }
 
     private sealed class TestChunkSource : IChunkSource

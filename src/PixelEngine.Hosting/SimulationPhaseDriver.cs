@@ -1,3 +1,4 @@
+using PixelEngine.Physics;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.Scripting;
@@ -99,7 +100,8 @@ public sealed class SimulationPhaseDriver(
         }
 
         Temperature.ConductStep(_chunks, Materials.Hot, context.Context.Jobs, Kernel.FrameIndex, unchecked((uint)Kernel.WorldSeed));
-        Temperature.ApplyPhaseTransitions(_chunks, Materials, Kernel.CurrentParity);
+        IRigidDamageSink? rigidDamageSink = context.Context.TryGetService(out RigidDamageQueue queue) ? queue : null;
+        Temperature.ApplyPhaseTransitions(_chunks, Materials, Kernel.CurrentParity, rigidDamageSink);
     }
 
     private void RunDirtyRectSwap(EngineTickContext context)
