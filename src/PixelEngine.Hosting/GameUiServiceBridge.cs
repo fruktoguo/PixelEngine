@@ -30,6 +30,7 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
         _uiRoot = Path.Combine(Path.GetFullPath(contentRoot), "ui");
         _manifest = manifest ?? LoadManifestIfPresent(_uiRoot);
         PreloadManifestScreens();
+        PreloadManifestImages();
     }
 
     /// <summary>
@@ -302,6 +303,22 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
 
             RuntimeUi.UiDocumentSource source = screen.ToDocumentSource();
             _ = _host.LoadDocument(screen.ScreenId, in source);
+        }
+    }
+
+    private void PreloadManifestImages()
+    {
+        if (_manifest is null)
+        {
+            return;
+        }
+
+        foreach (RuntimeUi.UiManifestImage image in _manifest.Images)
+        {
+            if (image.Preload)
+            {
+                _ = _host.PreloadImage(image.FullPath);
+            }
         }
     }
 

@@ -1,4 +1,5 @@
 using PixelEngine.Core.Events;
+using PixelEngine.Gui;
 using PixelEngine.Rendering;
 using Xunit;
 using RuntimeUi = PixelEngine.UI;
@@ -274,6 +275,54 @@ public sealed class GameUiServiceBridgeTests
     }
 
     /// <summary>
+    /// 验证 manifest images preload 会通过 ManagedFallbackBackend 真实消费图片路径。
+    /// </summary>
+    [Fact]
+    public void BridgePreloadsManifestImagesThroughManagedFallbackBackend()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-image-preload-{Guid.NewGuid():N}");
+        string uiRoot = Path.Combine(root, "ui");
+        string images = Path.Combine(uiRoot, "images");
+        _ = Directory.CreateDirectory(images);
+        string logo = Path.Combine(images, "logo.png");
+        File.WriteAllBytes(logo, [1, 2, 3, 4]);
+        File.WriteAllText(Path.Combine(uiRoot, RuntimeUi.UiManifestLoader.ManifestFileName), """
+            {
+              "screens": [
+                { "id": "main", "path": "main.xhtml", "preload": false }
+              ],
+              "images": [
+                { "id": "logo", "path": "images/logo.png", "preload": true }
+              ]
+            }
+            """);
+        File.WriteAllText(Path.Combine(uiRoot, "main.xhtml"), "<ui><text>Main</text></ui>");
+
+        try
+        {
+            RecordingGuiHost gui = new();
+            using RuntimeUi.ManagedFallbackBackend backend = new(gui);
+            using RuntimeUi.GameUiHost host = new(backend);
+            host.Initialize(new RuntimeUi.UiBackendInitializeInfo(
+                new RuntimeUi.UiViewport(0, 0, 320, 240, 1f),
+                RuntimeUi.UiBackendKind.ManagedFallback));
+
+            _ = new GameUiServiceBridge(host, root);
+
+            Assert.Equal(Path.GetFullPath(logo), Assert.Single(gui.LoadedImages));
+            Assert.Equal(0, host.Documents.DocumentCount);
+            Assert.Equal(0, host.Documents.StackCount);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 BindModel 会按 UI 文档声明的 path 从脚本模型读取值，并在 UI Update 前推送到后端。
     /// </summary>
     [Fact]
@@ -443,6 +492,98 @@ public sealed class GameUiServiceBridgeTests
         }
 
         public void Dispose()
+        {
+        }
+    }
+
+    private sealed class RecordingGuiHost : RuntimeUi.IManagedFallbackGuiHost
+    {
+        public List<string> LoadedImages { get; } = [];
+
+        public bool IsRunning { get; private set; }
+
+        public void Initialize()
+        {
+            IsRunning = true;
+        }
+
+        public void DrawFrame(float deltaSeconds, int width, int height, Action<IGuiDrawContext> drawGui)
+        {
+            _ = deltaSeconds;
+            _ = width;
+            _ = height;
+            drawGui(new RecordingGuiDrawContext());
+        }
+
+        public RuntimeUi.ManagedFallbackImage LoadImage(string path)
+        {
+            string fullPath = Path.GetFullPath(path);
+            Assert.True(File.Exists(fullPath), fullPath);
+            LoadedImages.Add(fullPath);
+            return new RuntimeUi.ManagedFallbackImage(1, 1, 1);
+        }
+    }
+
+    private sealed class RecordingGuiDrawContext : IGuiDrawContext
+    {
+        public int Width => 320;
+
+        public int Height => 240;
+
+        public float DeltaTime => 1f / 60f;
+
+        public bool WantsMouse => false;
+
+        public bool WantsKeyboard => false;
+
+        public void SetNextWindow(float x, float y, float width, float height, GuiDrawCondition condition = GuiDrawCondition.Always)
+        {
+        }
+
+        public bool BeginWindow(string id, string title, GuiDrawWindowFlags flags = GuiDrawWindowFlags.None)
+        {
+            return true;
+        }
+
+        public void EndWindow()
+        {
+        }
+
+        public void Text(string text)
+        {
+        }
+
+        public void TextColored(string text, uint colorBgra)
+        {
+        }
+
+        public void SameLine()
+        {
+        }
+
+        public void Separator()
+        {
+        }
+
+        public bool Button(string label)
+        {
+            return false;
+        }
+
+        public bool Checkbox(string label, ref bool value)
+        {
+            return false;
+        }
+
+        public void ProgressBar(float value01, string? label = null)
+        {
+        }
+
+        public void ColorSwatch(string id, uint colorBgra, float size = 16)
+        {
+        }
+
+        public void Image(string id, uint textureHandle, int textureWidth, int textureHeight, float width, float height, uint tintBgra = 4294967295)
         {
         }
     }

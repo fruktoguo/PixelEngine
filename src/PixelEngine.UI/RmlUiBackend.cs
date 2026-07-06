@@ -7,7 +7,7 @@ namespace PixelEngine.UI;
 /// <summary>
 /// 基于 RmlUi native 核的游戏大 UI 后端。
 /// </summary>
-public sealed unsafe class RmlUiBackend : IGameUiBackend
+public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
 {
     private const int MaxStackTextBytes = 4096;
     private const int MaxDrainEvents = 256;
@@ -174,6 +174,12 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         _documents[_documentCount++] = new NativeDocument(handle, nativeDocument);
         Dirty = true;
         return handle;
+    }
+
+    void IGameUiImagePreloader.PreloadImage(string path)
+    {
+        ThrowIfDisposed();
+        _ = _imageCache.ConvertPngToTga(path);
     }
 
     /// <summary>

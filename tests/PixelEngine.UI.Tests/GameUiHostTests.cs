@@ -72,6 +72,22 @@ public sealed class GameUiHostTests
     }
 
     [Fact]
+    public void PreloadImageRoutesToSupportingBackend()
+    {
+        FakeBackend backend = new();
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+
+        Assert.True(host.PreloadImage("content/ui/images/logo.png"));
+
+        Assert.Equal(1, backend.PreloadImageCount);
+        Assert.Equal(Path.GetFullPath("content/ui/images/logo.png"), backend.LastPreloadedImage);
+        Assert.Equal(0, host.Documents.DocumentCount);
+        Assert.Equal(0, host.Documents.StackCount);
+    }
+
+
+    [Fact]
     public void InvokeActionForVisibleScreenRoutesToBackendDocument()
     {
         FakeBackend backend = new();
@@ -140,7 +156,7 @@ public sealed class GameUiHostTests
         Assert.True(host.LastPaintMilliseconds >= 0);
     }
 
-    private sealed class FakeBackend : IGameUiBackend
+    private sealed class FakeBackend : IGameUiBackend, IGameUiImagePreloader
     {
         private int _nextDocument = 1;
 
@@ -169,6 +185,16 @@ public sealed class GameUiHostTests
         public int CompositeCount { get; private set; }
 
         public int ClearDirtyCount { get; private set; }
+
+        public int PreloadImageCount { get; private set; }
+
+        public string LastPreloadedImage { get; private set; } = string.Empty;
+
+        public void PreloadImage(string path)
+        {
+            PreloadImageCount++;
+            LastPreloadedImage = Path.GetFullPath(path);
+        }
 
         public void Initialize(in UiBackendInitializeInfo info)
         {

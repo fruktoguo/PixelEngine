@@ -56,7 +56,8 @@ public sealed class RmlUiGlBootstrapSmokeTests
         _ = Directory.CreateDirectory(screens);
         _ = Directory.CreateDirectory(images);
         string documentPath = Path.Combine(screens, "main.rml");
-        WritePng(Path.Combine(images, "logo.png"), 4, 4);
+        string imagePath = Path.Combine(images, "logo.png");
+        WritePng(imagePath, 4, 4);
         try
         {
             File.WriteAllText(
@@ -83,6 +84,7 @@ public sealed class RmlUiGlBootstrapSmokeTests
                 </rml>
                 """);
 
+            ((IGameUiImagePreloader)backend).PreloadImage(imagePath);
             UiDocumentHandle document = backend.LoadDocument(UiDocumentSource.Asset(documentPath, 1));
             backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(1), new UiScreenId(1), document, Modal: false)]);
             backend.Update(1f / 60f);

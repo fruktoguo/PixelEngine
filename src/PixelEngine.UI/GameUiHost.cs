@@ -109,6 +109,25 @@ public sealed class GameUiHost : IDisposable
     }
 
     /// <summary>
+    /// 预载一张 UI 图片资产；支持的后端会立即解码、上传或转换到自身缓存，不支持则返回 false。
+    /// </summary>
+    /// <param name="path">图片资产绝对路径。</param>
+    /// <returns>后端实际消费预载请求则返回 true。</returns>
+    public bool PreloadImage(string path)
+    {
+        ThrowIfDisposed();
+        EnsureEnabled();
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        if (_backend is not IGameUiImagePreloader preloader)
+        {
+            return false;
+        }
+
+        preloader.PreloadImage(path);
+        return true;
+    }
+
+    /// <summary>
     /// 显示一个普通屏幕；若文档尚未载入，会先载入。
     /// </summary>
     /// <param name="screenId">稳定屏幕 id。</param>

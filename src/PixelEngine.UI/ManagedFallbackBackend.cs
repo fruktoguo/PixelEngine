@@ -6,7 +6,7 @@ namespace PixelEngine.UI;
 /// <summary>
 /// 纯托管游戏 UI 后端，复用同一个 PixelEngine.Gui host 绘制 XHTML 子集控件。
 /// </summary>
-public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
+public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable, IGameUiImagePreloader
 {
     private readonly IManagedFallbackGuiHost _gui;
     private readonly ManagedUiDocument?[] _documents;
@@ -96,6 +96,12 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         _documents[_documentCount++] = document;
         Dirty = true;
         return handle;
+    }
+
+    void IGameUiImagePreloader.PreloadImage(string path)
+    {
+        ThrowIfDisposed();
+        _ = _gui.LoadImage(Path.GetFullPath(path));
     }
 
     /// <summary>
