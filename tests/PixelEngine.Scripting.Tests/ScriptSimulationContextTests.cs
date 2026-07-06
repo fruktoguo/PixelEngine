@@ -149,12 +149,22 @@ public sealed class ScriptSimulationContextTests
 
         fixture.Context.Particles.Spawn(new ParticleSpawnDesc(1, 2, 3, 4, sand, 5));
         fixture.Context.Particles.Burst(8, 9, sand, count: 3, speed: 6);
+        fixture.Context.Particles.Emit(new ParticleEmit(
+            X: 4,
+            Y: 5,
+            Material: sand.Value,
+            Count: 2,
+            DirAngleRad: 0f,
+            DirSpreadRad: 0f,
+            BaseSpeed: 60f,
+            SpeedJitter: 0f,
+            LifeTicks: 7));
         Assert.Equal(0, fixture.Particles.ActiveCount);
 
         int flushed = fixture.Context.FlushParticleCommands();
 
-        Assert.Equal(2, flushed);
-        Assert.Equal(4, fixture.Particles.ActiveCount);
+        Assert.Equal(3, flushed);
+        Assert.Equal(6, fixture.Particles.ActiveCount);
         Particle first = fixture.Particles.ActiveReadOnly[0];
         Assert.Equal(1, first.X);
         Assert.Equal(2, first.Y);
@@ -164,8 +174,47 @@ public sealed class ScriptSimulationContextTests
         Assert.Equal(5, first.Life);
         for (int i = 1; i < fixture.Particles.ActiveCount; i++)
         {
-            Assert.Equal(EngineConstants.ParticleMaxLifetimeTicks, fixture.Particles.ActiveReadOnly[i].Life);
+            if (i < 4)
+            {
+                Assert.Equal(EngineConstants.ParticleMaxLifetimeTicks, fixture.Particles.ActiveReadOnly[i].Life);
+                continue;
+            }
+
+            Assert.Equal(4f, fixture.Particles.ActiveReadOnly[i].X);
+            Assert.Equal(5f, fixture.Particles.ActiveReadOnly[i].Y);
+            Assert.Equal(1f, fixture.Particles.ActiveReadOnly[i].Vx, precision: 5);
+            Assert.Equal(0f, fixture.Particles.ActiveReadOnly[i].Vy, precision: 5);
+            Assert.Equal(7, fixture.Particles.ActiveReadOnly[i].Life);
         }
+    }
+
+    /// <summary>
+    /// 验证脚本 Emit 命令入队与 flush 在预热后不产生托管堆分配。
+    /// </summary>
+    [Fact]
+    public void ParticleEmitCommandsDoNotAllocateAfterWarmup()
+    {
+        using Fixture fixture = Fixture.Create();
+        MaterialId sand = fixture.Context.Materials.Resolve("sand");
+        ParticleEmit emit = new(4, 5, sand.Value, Count: 1, DirAngleRad: 0f, DirSpreadRad: 0.1f, BaseSpeed: 60f, SpeedJitter: 3f, LifeTicks: 7);
+        const int Iterations = 128;
+
+        fixture.Context.Particles.Emit(in emit);
+        Assert.Equal(1, fixture.Context.FlushParticleCommands());
+        fixture.Particles.Clear();
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        int flushed = 0;
+        for (int i = 0; i < Iterations; i++)
+        {
+            fixture.Context.Particles.Emit(in emit);
+            flushed += fixture.Context.FlushParticleCommands();
+            fixture.Particles.Clear();
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(Iterations, flushed);
+        Assert.Equal(0, allocated);
     }
 
     /// <summary>

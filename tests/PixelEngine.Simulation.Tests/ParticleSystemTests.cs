@@ -229,8 +229,110 @@ public sealed class ParticleSystemTests
         Assert.Equal(4, full.Stats.DroppedThisTick);
     }
 
+    /// <summary>
+    /// 验证直接 Emit 按方向锥与速度抖动发射粒子，并返回实际成功进入池的数量。
+    /// </summary>
+    [Fact]
+    public void EmitSpawnsParticlesInsideVelocityConeWithFiniteLifetime()
+    {
+        ParticleSystem particles = new(capacity: 8);
+        ParticleEmit emit = new(
+            X: 10.25f,
+            Y: 12.75f,
+            Material: 7,
+            Count: 6,
+            DirAngleRad: 0.5f,
+            DirSpreadRad: 0.25f,
+            BaseSpeed: 2f,
+            SpeedJitter: 0.5f,
+            LifeTicks: 12);
+
+        int spawned = particles.Emit(in emit);
+
+        Assert.Equal(6, spawned);
+        Assert.Equal(6, particles.ActiveCount);
+        Assert.Equal(6, particles.Stats.SpawnedThisTick);
+        for (int i = 0; i < particles.ActiveCount; i++)
+        {
+            Particle particle = particles.ActiveReadOnly[i];
+            float speed = MathF.Sqrt((particle.Vx * particle.Vx) + (particle.Vy * particle.Vy));
+            float angle = MathF.Atan2(particle.Vy, particle.Vx);
+            Assert.Equal((ushort)7, particle.Material);
+            Assert.Equal(10.25f, particle.X);
+            Assert.Equal(12.75f, particle.Y);
+            Assert.Equal(12, particle.Life);
+            Assert.InRange(MathF.Abs(AngleDelta(angle, emit.DirAngleRad)), 0f, emit.DirSpreadRad + 0.0001f);
+            Assert.InRange(speed, emit.BaseSpeed - emit.SpeedJitter - 0.0001f, emit.BaseSpeed + emit.SpeedJitter + 0.0001f);
+        }
+    }
+
+    /// <summary>
+    /// 验证 Emit 复用每 tick 发射上限和固定容量，超出部分只进入 dropped 诊断。
+    /// </summary>
+    [Fact]
+    public void EmitHonorsEjectionLimitAndCapacity()
+    {
+        ParticleSystem limited = new(
+            capacity: 4,
+            settings: new ParticleSystemSettings(4, 0.2f, 40, 0.05f, 1f, MaxEjectionPerTick: 2));
+        ParticleEmit emit = new(0, 0, 9, Count: 5, DirAngleRad: 0f, DirSpreadRad: MathF.PI, BaseSpeed: 1f, SpeedJitter: 0f, LifeTicks: 0);
+
+        int spawned = limited.Emit(in emit);
+
+        Assert.Equal(2, spawned);
+        Assert.Equal(2, limited.ActiveCount);
+        Assert.Equal(2, limited.Stats.SpawnedThisTick);
+        Assert.Equal(3, limited.Stats.DroppedThisTick);
+        Assert.Equal(40, limited.ActiveReadOnly[0].Life);
+
+        ParticleSystem full = new(capacity: 1);
+        _ = full.TrySpawn(new ParticleSpawn(0, 0, 0, 0, 1, 0, 10));
+        full.ResetTickStats();
+
+        spawned = full.Emit(in emit);
+
+        Assert.Equal(0, spawned);
+        Assert.Equal(1, full.ActiveCount);
+        Assert.Equal(0, full.Stats.SpawnedThisTick);
+        Assert.Equal(5, full.Stats.DroppedThisTick);
+    }
+
+    /// <summary>
+    /// 验证确定性模式下相同 Emit 输入逐粒子复现。
+    /// </summary>
+    [Fact]
+    public void EmitIsDeterministicForSameSeedInputs()
+    {
+        ParticleEmit emit = new(3.5f, 4.5f, 11, Count: 4, DirAngleRad: 1.2f, DirSpreadRad: 0.4f, BaseSpeed: 2f, SpeedJitter: 1f, LifeTicks: 9);
+        ParticleSystem first = new(capacity: 8, determinismMode: DeterminismMode.Deterministic);
+        ParticleSystem second = new(capacity: 8, determinismMode: DeterminismMode.Deterministic);
+
+        Assert.Equal(first.Emit(in emit), second.Emit(in emit));
+
+        for (int i = 0; i < first.ActiveCount; i++)
+        {
+            Assert.Equal(Project(first.ActiveReadOnly[i]), Project(second.ActiveReadOnly[i]));
+        }
+    }
+
     private static (float X, float Y, float Vx, float Vy, ushort Material, byte ColorVariant, byte Life) Project(Particle particle)
     {
         return (particle.X, particle.Y, particle.Vx, particle.Vy, particle.Material, particle.ColorVariant, particle.Life);
+    }
+
+    private static float AngleDelta(float angle, float center)
+    {
+        float delta = angle - center;
+        while (delta > MathF.PI)
+        {
+            delta -= MathF.Tau;
+        }
+
+        while (delta < -MathF.PI)
+        {
+            delta += MathF.Tau;
+        }
+
+        return delta;
     }
 }

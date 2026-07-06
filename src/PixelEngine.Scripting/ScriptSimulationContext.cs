@@ -233,6 +233,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 case ScriptCommandKind.Explode:
                 case ScriptCommandKind.SpawnParticle:
                 case ScriptCommandKind.BurstParticles:
+                case ScriptCommandKind.EmitParticles:
                 case ScriptCommandKind.CreateBodyFromRegion:
                 case ScriptCommandKind.ApplyImpulse:
                 case ScriptCommandKind.ApplyRadialImpulse:
@@ -266,6 +267,9 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                     break;
                 case ScriptCommandKind.BurstParticles:
                     SpawnBurst(command);
+                    break;
+                case ScriptCommandKind.EmitParticles:
+                    EmitParticles(command.Emit);
                     break;
                 case ScriptCommandKind.Explode:
                     QueueExplosion(command);
@@ -330,6 +334,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 case ScriptCommandKind.Explode:
                 case ScriptCommandKind.SpawnParticle:
                 case ScriptCommandKind.BurstParticles:
+                case ScriptCommandKind.EmitParticles:
                     throw new InvalidOperationException($"脚本 physics 命令目标收到不匹配命令：{command.Kind}。");
                 default:
                     throw new InvalidOperationException($"未知脚本命令：{command.Kind}。");
@@ -458,6 +463,17 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             command.B,
             EjectMask.Powder | EjectMask.Liquid | EjectMask.Gas | EjectMask.Fire);
         _ = ParticleSystem.RequestEjection(in request);
+    }
+
+    private void EmitParticles(in ParticleEmit emit)
+    {
+        float velocityScale = ParticleVelocityScale();
+        ParticleEmit scaled = emit with
+        {
+            BaseSpeed = emit.BaseSpeed * velocityScale,
+            SpeedJitter = emit.SpeedJitter * velocityScale,
+        };
+        _ = ParticleSystem.Emit(in scaled);
     }
 
     private ParticleSpawn ToParticleSpawn(ParticleSpawnDesc desc)
@@ -662,6 +678,26 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         public void Burst(float x, float y, MaterialId material, int count, float speed)
         {
             commands.Enqueue(ScriptCommandTarget.Particle, ScriptCommand.BurstParticles(x, y, material, count, speed));
+        }
+
+        public void Emit(in ParticleEmit emit)
+        {
+            ValidateFinite(emit.X, nameof(emit.X));
+            ValidateFinite(emit.Y, nameof(emit.Y));
+            ValidateFinite(emit.DirAngleRad, nameof(emit.DirAngleRad));
+            ValidateFinite(emit.DirSpreadRad, nameof(emit.DirSpreadRad));
+            ValidateFinite(emit.BaseSpeed, nameof(emit.BaseSpeed));
+            ValidateFinite(emit.SpeedJitter, nameof(emit.SpeedJitter));
+            ArgumentOutOfRangeException.ThrowIfNegative(emit.Count);
+            commands.Enqueue(ScriptCommandTarget.Particle, ScriptCommand.EmitParticles(in emit));
+        }
+
+        private static void ValidateFinite(float value, string name)
+        {
+            if (!float.IsFinite(value))
+            {
+                throw new ArgumentOutOfRangeException(name, value, "粒子发射参数必须为有限数值。");
+            }
         }
     }
 

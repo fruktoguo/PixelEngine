@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization.Metadata;
+using PixelEngine.Simulation.Particles;
 
 namespace PixelEngine.Scripting;
 
@@ -279,6 +280,12 @@ public interface IParticleSpawner
     /// <param name="count">要生成的粒子数量。</param>
     /// <param name="speed">初始速度标量，单位 cell/秒。</param>
     void Burst(float x, float y, MaterialId material, int count, float speed);
+
+    /// <summary>
+    /// 延迟按方向锥发射一组自由粒子；脚本层速度以 cell/秒 表示，实际生成时会按固定 tick 步长换算为每 tick 位移。
+    /// </summary>
+    /// <param name="emit">粒子速度锥发射描述。</param>
+    void Emit(in ParticleEmit emit);
 }
 
 /// <summary>

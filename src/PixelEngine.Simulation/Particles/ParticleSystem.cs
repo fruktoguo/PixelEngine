@@ -164,6 +164,7 @@ public sealed class ParticleSystem : IParticleReadback, ICellDestructionSink
     /// <param name="request">碎屑抛射请求。</param>
     public void RequestDebris(in DebrisEjectionRequest request)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(request.Count);
         if (request.Material == 0 || request.Count == 0)
         {
             return;
@@ -200,6 +201,68 @@ public sealed class ParticleSystem : IParticleReadback, ICellDestructionSink
                 _debrisEjectedThisTick++;
             }
         }
+    }
+
+    /// <summary>
+    /// 直接按速度锥发射一批自由粒子；不读取、不修改 cell 网格。
+    /// </summary>
+    /// <param name="emit">发射请求。</param>
+    /// <returns>实际成功进入粒子池的粒子数量。</returns>
+    public int Emit(in ParticleEmit emit)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(emit.Count);
+        if (emit.Material == 0 || emit.Count == 0)
+        {
+            return 0;
+        }
+
+        ValidateFinite(emit.X, nameof(emit.X));
+        ValidateFinite(emit.Y, nameof(emit.Y));
+        ValidateFinite(emit.DirAngleRad, nameof(emit.DirAngleRad));
+        ValidateFinite(emit.DirSpreadRad, nameof(emit.DirSpreadRad));
+        ValidateFinite(emit.BaseSpeed, nameof(emit.BaseSpeed));
+        ValidateFinite(emit.SpeedJitter, nameof(emit.SpeedJitter));
+        int remainingBudget = Math.Max(0, Settings.MaxEjectionPerTick - _debrisEjectedThisTick);
+        int count = Math.Min(emit.Count, remainingBudget);
+        if (count < emit.Count)
+        {
+            _droppedThisTick += emit.Count - count;
+        }
+
+        float spread = Math.Max(0f, emit.DirSpreadRad);
+        float baseSpeed = Math.Max(0f, emit.BaseSpeed);
+        float speedJitter = Math.Max(0f, emit.SpeedJitter);
+        byte life = emit.LifeTicks == 0
+            ? (byte)Math.Clamp(Settings.MaxLifetimeTicks, 1, byte.MaxValue)
+            : (byte)Math.Min(emit.LifeTicks, byte.MaxValue);
+        int originX = FloorToCell(emit.X);
+        int originY = FloorToCell(emit.Y);
+        int spawned = 0;
+
+        for (int i = 0; i < count; i++)
+        {
+            byte angleByte = JitterByte(DeterminismMode, originX + i, originY - i, emit.Material);
+            byte speedByte = JitterByte(DeterminismMode, originX - i, originY + i, (ushort)(emit.Material ^ 0x9E37));
+            float angleUnit = (angleByte / 255f * 2f) - 1f;
+            float speedUnit = (speedByte / 255f * 2f) - 1f;
+            float angle = emit.DirAngleRad + (angleUnit * spread);
+            float speed = Math.Max(0f, baseSpeed + (speedUnit * speedJitter)) * Settings.EjectionImpulseScale;
+            ParticleSpawn spawn = new(
+                emit.X,
+                emit.Y,
+                MathF.Cos(angle) * speed,
+                MathF.Sin(angle) * speed,
+                emit.Material,
+                angleByte,
+                life);
+            if (TrySpawn(in spawn))
+            {
+                spawned++;
+                _debrisEjectedThisTick++;
+            }
+        }
+
+        return spawned;
     }
 
     /// <inheritdoc />
@@ -652,5 +715,13 @@ public sealed class ParticleSystem : IParticleReadback, ICellDestructionSink
     private static int FloorToCell(float value)
     {
         return (int)MathF.Floor(value);
+    }
+
+    private static void ValidateFinite(float value, string name)
+    {
+        if (!float.IsFinite(value))
+        {
+            throw new ArgumentOutOfRangeException(name, value, "粒子发射参数必须为有限数值。");
+        }
     }
 }

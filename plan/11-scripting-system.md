@@ -363,8 +363,8 @@ plan/19 独立编辑器引入 GameObject 层级/父子/Transform TRS 的 **autho
 - [ ] `IWorldEffects` 增 `AddHeat(x,y,radius,deltaC)`：映射 plan/04 §3.9 `TemperatureField.AddHeat`，圆形注热延迟入队落温度场安全窗口（§3.9）
 - [ ] `IWorldEffects.Explode` 内部改组合实现：`DamageCircle` 破坏 + 邻近刚体径向 `ApplyImpulse`（保留签名，取代无条件抛射，使抗性生效，§3.9）
 - [ ] 命中刚体像素不累加 `Damage`：破坏 flush 前查 `CellFlags.RigidOwned`，命中经 `IRigidDamageSink.OnOwnedCellDamaged` 路由（本门面只发意图，实现归 plan/05/06，守 #5）
-- [ ] `IParticleSpawner` 增 `Emit(origin,dir,coneRadians,minSpeed,maxSpeed,count,material,life)`：富速度锥分布，延迟到相位 7 落地（§3.9，plan/05）
-- [ ] 新增命令 kind（`DamageCircle`/`DamageBeam`/`AddHeat`/`Emit`）编码为 blittable `ScriptCommand` 并在 `ScriptSimulationContext` flush（与现 `Explode`/`SetCell`/`Spawn` 同构，零分配，§3.9）
+- [x] `IParticleSpawner` 增 `Emit(origin,dir,coneRadians,minSpeed,maxSpeed,count,material,life)`：富速度锥分布，延迟到相位 7 落地（§3.9，plan/05）；脚本调用点不返回实际发射数，避免把后端容量/上限结果伪造成同步结果。证据：`IParticleSpawner.Emit(in ParticleEmit)` 经 `ScriptCommandKind.EmitParticles` 入队，`ScriptSimulationContextTests.ParticleCommandsFlushIntoParticleSystem` 验证相位 7 flush 后进入真实 `ParticleSystem` 并按 fixed step 缩放速度。
+- [x] 新增命令 kind（`DamageCircle`/`DamageBeam`/`AddHeat`/`Emit`）编码为 blittable `ScriptCommand` 并在 `ScriptSimulationContext` flush（与现 `Explode`/`SetCell`/`Spawn` 同构，零分配，§3.9）。证据：`WorldDamageAndHeatCommandsDoNotAllocateAfterWarmup` 覆盖 Damage/Heat 命令，`ParticleEmitCommandsDoNotAllocateAfterWarmup` 覆盖 Emit 命令。
 - [ ] `IScriptContext` 增 `IGameUiService Ui { get; }`：`ShowScreen`/`HideScreen`/`PushModal`/`BindModel`/`SetValue`/`TryGetValue`/`Invoke`/`UiEventRaised`/`DrainEvents`；UI 事件回收为 blittable `UiEvent`，相位 1 排空派发到 `Behaviour` 处理器（§3.10，plan/20）
 - [x] UI→世界写入经 §3.3 延迟命令队列落正确相位（不在 UI 事件回调直接改世界，§3.10，守 #6）
 - [x] `IGameUiService`/`UiEvent`/`UiValue` 契约置于中性契约层（同 `IAudioApi` 策略），`PixelEngine.Scripting` **不** `ProjectReference` `PixelEngine.UI`；禁用 HTML UI 时 `Ui` 注入 no-op 空对象（§3.10，plan/00 §5 依赖方向）
