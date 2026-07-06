@@ -327,7 +327,7 @@ Edit 模式实时投影：为让 Scene View 的 gizmo/拾取显示「活的」Ga
 面板与设置模型（shell 程序集）
 - [x] `BuildTargetSettings`/`SceneBuildEntry`/`BuildRequest`/`BuildResult`/`BuildProgressEvent`/`BuildPhase`/`BuildLog` 类型与 `PixelEngineEditorShellBuildJsonContext` 源生成序列化（§5.2）
 - [x] `BuildTargetSettings.Normalize()` 校验：唯一启动场景、启动∈入包、至少一入包、路径/产物名非空（§5.2/§5.3）
-- [x] `BuildSettingsPanel : IEditorPanel`（位于 shell 程序集）五段 UI（设置/操作/进度/日志/结果），构建中禁用设置控件（§5.2/§5.3）。节点 9 后由 `PlayerBuildService.PreflightAsync` 决定 Build/Build And Run 可用性；当前 `tools/build-player` 尚未落地时显示真实缺失诊断并禁用，避免假执行。
+- [x] `BuildSettingsPanel : IEditorPanel`（位于 shell 程序集）五段 UI（设置/操作/进度/日志/结果），构建中禁用设置控件（§5.2/§5.3）。`PlayerBuildService.PreflightAsync` 根据已落地的 `tools/build-player`、dotnet SDK 与 pwsh/sh 探测结果决定 Build/Build And Run 可用性；缺依赖或脚本不可用时显示真实缺失诊断并禁用，避免假执行。
 - [x] 场景清单表由「扫描 `content/scenes/` ∪ `EngineProject.Scenes`」只读映射，入包/启动交互与约束校验（§5.3/§5.6）
 - [x] 图标 `.ico` 路径设置接入；缩略图预览为可选能力，缺图标不阻断（§5.3）
 - [x] 设置持久化 `<项目根>/BuildSettings.json` 读写，面板初始化加载、变更保存（§5.2）
