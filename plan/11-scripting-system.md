@@ -1,7 +1,7 @@
 # Plan 11 — C# 脚本系统（PixelEngine.Scripting）
 
 > 本文件定义开发者用 C# 编写 PixelEngine 游戏逻辑的完整机制。技术栈以 `00-conventions-and-techstack.md` 为准，架构依据 `../docs/PixelEngine-架构与需求设计.md`（下称「架构文档」），开发宪法 `../AGENTS.md`。
-> 状态约定：`- [ ]` 未开始 / `- [x]` 完成并自测通过 / `- [~]` 进行中 / `- [!]` 阻塞（后跟原因）。
+> 状态约定：`- [x]` 已有源码、测试、工具、报告或 plan 证据；`- [ ]` 未完成目标；`- [!]` 阻塞、证据债、人工验收或外部环境限制。
 > 范围边界：本文件**只**覆盖 `PixelEngine.Scripting` 程序集与其对外的脚本 API 契约。编辑器 UI（Inspector 面板、热重载按钮的具体绘制）属 `plan/12`，本文件只定义供其调用的协作接口；各「世界能力」接口（事件总线、材质查询、粒子、物理、音频等）的**实现**分别属 plan/02、04、05、06、10，本文件只**聚合并暴露**它们的公开契约。
 
 ---
@@ -234,9 +234,9 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 
 脚本生命周期由 `PixelEngine.Hosting` 主循环驱动（plan/00 §5）。`public interface IScriptRuntime`：`Initialize(IScriptContext)`、`BeginFrame()`（相位 1 开始：apply 待处理热重载 → 分发 OnStart）、`Update(float dt)`（相位 1：分发 OnUpdate + ISystem.OnFrame + 事件排空）、`FixedSimTick()`（相位 1 且 SimSteppedThisFrame：分发 OnFixedSimTick + ISystem.OnSimTick）、`EndFrame()`（flush 销毁队列）、`Shutdown()`。Hosting 在装配期构造 `IScriptContext` 并把各子系统公开 API 注入其字段。生产运行时可由 Hosting 传入 `ScriptHotReloadRuntimeOptions` 构造并注册 `ScriptHotReloadController`，由 `ScriptRuntime.BeginFrame()` 在相位 1 应用文件监听排队的热重载。
 
-### 3.9 玩法门面扩展（plan/13 demo-playability 反推 + plan/05/04 后端）
+### 3.9 玩法门面扩展（plan/13 showcase Demo 可玩闭环 反推 + plan/05/04 后端）
 
-「熔岩矿洞逃生」可玩化与武器库（plan/13 §3.14、design demo-playability §A/§C）要求脚本能读材质可玩性、做按抗性的差异化破坏、发富速度分布粒子。这些能力全部作为 §3.3 facade 的**只读扩展或延迟写入扩展**加入，契约在此聚合、实现归 plan/05（破坏/粒子）与 plan/04（材质/热场），**绝不**改变 §3.3 的读即时/写延迟纪律，也**绝不**破坏不变式。
+「熔岩矿洞逃生」可玩化与武器库（plan/13 §3.14、design showcase Demo 可玩闭环 §A/§C）要求脚本能读材质可玩性、做按抗性的差异化破坏、发富速度分布粒子。这些能力全部作为 §3.3 facade 的**只读扩展或延迟写入扩展**加入，契约在此聚合、实现归 plan/05（破坏/粒子）与 plan/04（材质/热场），**绝不**改变 §3.3 的读即时/写延迟纪律，也**绝不**破坏不变式。
 
 **`MaterialInfo` 门面扩展（只读镜像 `MaterialDef`，plan/04）**：现 `readonly record struct MaterialInfo(Id, Name, Density, IsSolid)` 增补供武器伤害计算、材质图例（`MaterialLegendHud`）、危险采样读取的可玩性/视觉字段——`DisplayName`（本地化显示名）、`BaseColorBgra`（`uint`，图例/准星取色）、`CellType`（固/液/气/粉末枚举）、`Category`（材质类目枚举，如 stone/metal/organic/hazard）、`Emissive`（是否自发光，激光/熔岩束高亮判定）、`Hardness`（抗性系数，破坏消费）、`MaxIntegrity`（满耐久基准，`byte`）、`IsDestructible`（是否可破坏，`Indestructible` 位取反）、`FlowRate`（液体单步水平位移上限，= `Dispersion` 语义别名，加载期已 clamp 到 `[0, EngineConstants.MoveCap]`，守 #4）。**铁律（守 #7）**：所有视觉/颜色字段只从 `MaterialDef` 只读投影，`MaterialInfo` 是内存镜像，脚本**绝不**据此把颜色写回 cell；渲染 BGRA 由渲染相位 CPU 计算（plan/07），与本门面无关。字段值随材质热重载刷新，`GetInfo` 保持即时只读。
 
@@ -284,7 +284,7 @@ public interface IParticleSpawner
 
 ### 3.10 交互 UI 门面（plan/20 PixelEngine.UI 协同，契约-后端范式）
 
-游戏内大 UI（主菜单/设置/背包/对话/HUD/结算）由 plan/20 `PixelEngine.UI` 以 HTML/CSS 子集渲染。脚本经 `IScriptContext` 新增的 `IGameUiService Ui { get; }` 门面**驱动 UI 并接收 UI 事件**，能力面（对齐 plan/20 §3.4）：`ShowScreen`/`HideScreen`/`PushModal`（屏栈显隐/模态）、`BindModel`/`SetValue`/`TryGetValue`（C#→UI 单向数据推送）、`Invoke`（调用 UI 侧命名动作）、以及 `UiEventRaised`/`DrainEvents`（UI→C# 事件回收）。UI 侧 DOM 事件（`data-event-click="start_game"` 等）经桥回收为 blittable `UiEvent { Doc; ElementIdHash; Action; Payload }`，脚本可把处理器绑定到某 `Behaviour` 方法（如"开始游戏"→关卡加载脚本）；UI 数据模型由 `EngineContext` 注入的游戏态**只读快照**驱动（游戏→UI 只读，无竞争）。
+Web-first 透明游戏 UI（主菜单/设置/背包/对话/HUD/结算）由 plan/20 `PixelEngine.UI` 以 HTML/CSS 子集渲染。脚本经 `IScriptContext` 新增的 `IGameUiService Ui { get; }` 门面**驱动 UI 并接收 UI 事件**，能力面（对齐 plan/20 §3.4）：`ShowScreen`/`HideScreen`/`PushModal`（屏栈显隐/模态）、`BindModel`/`SetValue`/`TryGetValue`（C#→UI 单向数据推送）、`Invoke`（调用 UI 侧命名动作）、以及 `UiEventRaised`/`DrainEvents`（UI→C# 事件回收）。UI 侧 DOM 事件（`data-event-click="start_game"` 等）经桥回收为 blittable `UiEvent { Doc; ElementIdHash; Action; Payload }`，脚本可把处理器绑定到某 `Behaviour` 方法（如"开始游戏"→关卡加载脚本）；UI 数据模型由 `EngineContext` 注入的游戏态**只读快照**驱动（游戏→UI 只读，无竞争）。
 
 **相位安全**：所有由 UI 事件触发的世界写入（加载存档、生成关卡、切场景等）**不在事件回调里直接改世界**，而是入 §3.3 的延迟命令队列，在正确相位 flush（复用 plan/18 已建机制）；`DrainEvents` 本身在相位 1 排空，与事件总线同源，回调统一落相位 1。
 
@@ -406,9 +406,9 @@ plan/19 独立编辑器引入 GameObject 层级/父子/Transform TRS 的 **autho
 
 facade 聚合的能力实现来自：`plan/03`（cell 读写、per-cell `Damage`/`Integrity` lane，§3.9）、`plan/04`（材质查询与 `MaterialInfo` 扩展字段、`TemperatureField.AddHeat`，§3.9）、`plan/05`（粒子 spawn、`DamageCircle`/`DamageBeam` 破坏与碎屑、`Emit`，§3.9）、`plan/06`（刚体/角色控制器/raycast/固体采样、`IRigidDamageSink` 破坏路由，§3.9）、`plan/08`（相机/输入）、`plan/10`（音效）、`plan/20`（`PixelEngine.UI`：`IGameUiService` 后端实现与 `UiEvent` 桥，§3.10，M14）。本系统可先用各子系统的**公开接口契约**对接，接口未就绪的能力以 `- [!] 阻塞：依赖 plan/0x 接口` 标记，不写假实现（AGENTS §2）。
 
-M13/M14 协同（本轮扩展，§3.9–§3.11）：`plan/13` demo-playability 反推 §3.9 玩法门面（武器库/差异化破坏/富粒子）；`plan/20` 提供 §3.10 交互 UI 后端（脚本经 `IGameUiService` 驱动、相位安全写入）；`plan/18`（Hosting）承载 `.scene` schema v2（`ParentId`/Transform 块/`ConvertValue` Vector2/往返）与 authoring→扁平运行时物化，`plan/19`（编辑器壳）持 GameObject 层级 authoring 模型——本文件仅保证 `Scripting.Scene`/`Transform` 扁平物化目标与字段对齐（§3.11），**不**承接层级与 schema 演进。
+M13/M14 协同（本轮扩展，§3.9–§3.11）：`plan/13` showcase Demo 可玩闭环 反推 §3.9 玩法门面（武器库/差异化破坏/富粒子）；`plan/20` 提供 §3.10 交互 UI 后端（脚本经 `IGameUiService` 驱动、相位安全写入）；`plan/18`（Hosting）承载 `.scene` schema v2（`ParentId`/Transform 块/`ConvertValue` Vector2/往返）与 authoring→扁平运行时物化，`plan/19`（编辑器壳）持 GameObject 层级 authoring 模型——本文件仅保证 `Scripting.Scene`/`Transform` 扁平物化目标与字段对齐（§3.11），**不**承接层级与 schema 演进。
 
-下游消费者：`plan/12`（编辑器 Inspector 反射、热重载按钮入口）、`plan/13`（Demo 落沙游戏 + 可操作角色，仅依赖本系统暴露的公开 API——是公开 API 的 dogfood 验证，架构 §3.1/§1.2）。
+下游消费者：`plan/12`（编辑器 Inspector 反射、热重载按钮入口）、`plan/13`（Showcase Demo Game + 可操作角色，仅依赖本系统暴露的公开 API——是公开 API 的 dogfood 验证，架构 §3.1/§1.2）。
 
 执行顺序（plan/README、plan/17）：位于「可编程与可编辑：11 → 12」，刻意置于 sim/物理稳定（03–07）之后、编辑器（12）与 Demo（13）之前。
 

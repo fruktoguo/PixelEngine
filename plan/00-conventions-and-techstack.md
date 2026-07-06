@@ -1,9 +1,55 @@
 # Plan 00 — 技术栈定稿与全局约定（锚文档）
 
 > 本文件锁定整个 PixelEngine 的技术选型、解决方案结构、目标框架与跨切面约定。所有其它 plan 文档以此为准、不得另立选型。权威设计依据：`docs/PixelEngine-架构与需求设计.md`（下称「架构文档」），开发宪法：`AGENTS.md`。
-> 状态：`- [ ]` 未开始 / `- [x]` 完成 / `- [~]` 进行中 / `- [!]` 阻塞。
+> 状态：`- [ ]` 未开始 / `- [x]` 完成并有可追溯证据 / `- [!]` 外部证据、人工验收、硬件、发行或 native 阻塞；进行中事项必须拆成已完成子项与未完成/阻塞子项。
 
 ---
+
+## 0. 状态账本（2026-07-06）
+
+### 0.1 当前产品职责
+
+- [x] 本文件作为锚文档锁定 **Engine Core**、**Unity-like Editor**、**Editor ImGui 面板层**、**Web-first UI Runtime / Web-first 透明 HTML UI** 与 **Showcase Demo Game / 功能完整但聚焦的 showcase Demo** 的技术栈、解决方案结构、依赖方向与跨切面不变式。
+- [x] 技术栈职责是收敛选型：.NET 10 / C# 14、Silk.NET、System.Numerics + Intrinsics、Box2D v3.1.1 自建绑定、Hexa.NET.ImGui、Roslyn + ALC、System.Text.Json、LZ4、xUnit、BenchmarkDotNet。
+- [x] native 职责边界已锁定：Box2D 是唯一 sim-native / dual-build 静态承载依赖；RmlUi、Ultralight、OpenAL、ANGLE 等只允许 dynamic-only、可门控、可回退。
+
+### 0.2 状态总览 checklist
+
+- [x] 运行时、语言、CPM、项目级公共属性与热路径 unsafe / optimize 约定已登记。
+- [x] 当前解决方案结构已登记为 `src/PixelEngine.Gui`、`src/PixelEngine.UI`、`apps/PixelEngine.Editor.Shell`、`demo/PixelEngine.Demo` 与引擎子系统分层并存的产品结构。
+- [x] 依赖方向已登记为 `{Demo, Editor.Shell} → Hosting → {子系统, UI, Gui} → Interop → Core`，并明确 Hosting 不再引用 Editor、Demo 不含 Editor。
+- [x] 每-cell `Damage` lane 字节预算已登记为 4B→5B/cell、16KB→20KB/chunk，并要求与 plan/03、plan/07、plan/16 保持一致。
+- [!] 发行矩阵、目标硬件、完整 6 RID release artifact、macOS 签名公证、GitHub Release 产物与 deterministic hash 证据仍是 M15 外部证据债。
+
+### 0.3 已实现证据 checklist
+
+- [x] `Directory.Build.props`、`Directory.Packages.props` 与热路径公共属性已作为工程真相源登记。
+- [x] `apps/PixelEngine.Editor.Shell` 与 `src/PixelEngine.UI` 对引擎无反向依赖的测试证据已登记：`HostingProjectDisciplineTests.EditorShellProjectReferencesOnlyShellEntryProjects`、`UiContractTests.UiProjectReferencesOnlyCoreGuiAndRendering`、`UiContractTests.UiAssemblyDoesNotReferenceEditorOrScripting`。
+- [x] `PixelEngine.Hosting.csproj` 不再 ProjectReference `PixelEngine.Editor` 的解耦证据已登记，玩家包允许 `Hexa.NET.ImGui` 但不得含 `PixelEngine.Editor.dll` 与编辑器专属闭包。
+- [x] `PixelEngine.Gui` 作为中性 ImGui host / fallback 基础设施的职责已登记，服务 ManagedFallback / 诊断与编辑器复用，不是玩家侧 Web-first UI 主路径。
+
+### 0.4 未完成目标 checklist
+
+- [ ] 若未来激活 dormant RID，必须只通过 `tools/release-rids.json` 与 plan/15 发行门控恢复，不得收缩长期 6-RID 一等支持全集。
+- [ ] 若未来新增第三方依赖，必须先在本文件登记选型、许可、RID 打包、回退策略与不变式影响，再进入 leaf plan。
+
+### 0.5 证据债 / 阻塞 checklist
+
+- [!] `tools/release-evidence-preflight.ps1` 的 `release_evidence_attached_pending_review` 仅表示证据待人工复核，不是发行验收完成。
+- [!] `pending_review`、`local_probe_only`、`scripted_probe_only`、`process_smoke_only`、`ready`、`counters_present`、`load-only`、`workflow_dispatch` 均不得在本文件或 leaf plan 中写成最终验收通过。
+- [!] 完整发行闭合仍依赖 runner、目标硬件、签名凭据、GitHub Release 上传产物、hash 报告与人工复核。
+
+### 0.6 验证命令与证据路径 checklist
+
+- [x] 结构/依赖证据：`HostingProjectDisciplineTests.*`、`UiContractTests.*`。
+- [x] 发行预检入口：`tools/release-evidence-preflight.ps1`、`tools/audit-release-artifacts.*`、`release.yml`。
+- [!] M15 证据路径：完整 6 RID × R2R/NativeAOT deterministic hash 报告、release manifest、GitHub Actions `workflow_run` 同源报告、macOS signing/notarization 证据。
+
+### 0.7 依赖与下一闭合节点 checklist
+
+- [x] 本文件是 plan/01–20 的技术栈和边界锚点；leaf plan 不得另立选型。
+- [x] 当前闭合节点依赖 plan/01 工程骨架、plan/19 Editor Shell、plan/20 Web-first UI Runtime 与 plan/15 发行审计共同保持一致。
+- [!] 下一闭合节点仍在 M15：发行、目标硬件、native、真实窗口、IME 与人工验收外部证据收口。
 
 ## 1. 运行时与语言
 
@@ -51,11 +97,11 @@
 |---|---|---|---|---|
 | GPU 计算(增项) | **ComputeSharp** | `ComputeSharp`(DX12,Windows-only) | 默认走 Silk.NET GL compute(跨平台);仅 Windows 高性能路径门控启用 | 架构 §9.5 列为可选;plan/09 G1–G4 门控 |
 | Ogg Vorbis 解码 | **NVorbis** | `NVorbis`(纯托管) | 默认仅内建 WAV/PCM;需 Ogg 时启用 | 纯托管,符合不变式 #10(不新增 native);plan/10 |
-| 交互界面/游戏 UI(HTML) 主后端 | **RmlUi(HTML/CSS 子集,无 JS)** | `native/rmlui/`(vendored C++ 源+静态链 FreeType)+ `PixelEngine.UI` 内 `[LibraryImport]` 薄绑定 | `PixelEngine.UI` 默认 HTML UI 核后端;dynamic-only 落 `runtimes/<rid>/native`,**不进 Box2D dual-build** | RML/RCSS 子集渲染、MIT;符合不变式 #10 处置(仅 Box2D dual-build,其余 native 一律 dynamic-only,见 plan/20 §7);无法忠实渲染 AI 生成的标准 HTML5,故 Demo 大 UI 保留 ImGui 平价实现 |
-| 交互界面/游戏 UI(HTML) 可选高保真后端 | **Ultralight** | `native/ultralight/`(WebKit-fork 原生 DLL)+ `PixelEngine.UI` 薄绑定 | 可选、门控启用;dynamic-only 落 `runtimes/<rid>/native`,不进 Box2D dual-build | 标准 HTML5/CSS3/JS 高保真;**商业许可(<$100K 免费档)**、原生 DLL 体积大、AOT 绑定不确定;符合不变式 #10 处置(dynamic-only,见 plan/20 §7) |
-| 交互界面/游戏 UI 纯托管基线 | **ManagedFallbackBackend** | `PixelEngine.UI`(纯托管) | 恒在、作无 native 基线回退 | 纯托管盒模型/文本布局子集,零 native 依赖,天然符合不变式 #10;plan/20 |
+| 交互界面/游戏 UI(HTML) 默认产品后端 | **RmlUi(HTML/CSS 子集,无 JS)** | `native/rmlui/`(vendored C++ 源+静态链 FreeType)+ `PixelEngine.UI` 内 `[LibraryImport]` 薄绑定 | `PixelEngine.UI` 默认 Web-first 透明 HTML UI 路径;dynamic-only 落 `runtimes/<rid>/native`,**不进 Box2D dual-build** | RML/RCSS 子集渲染、MIT;适合 HUD/menu/settings 等可控 HTML/CSS 子集,透明 alpha 与 same-GL 合成由 plan/20 约束;不得把它描述成完整 HTML5/CSS3/JS 浏览器 |
+| 交互界面/游戏 UI(HTML) 可选高保真后端 | **Ultralight** | `native/ultralight/`(WebKit-fork 原生 DLL)+ `PixelEngine.UI` 薄绑定 | 可选、门控启用;dynamic-only 落 `runtimes/<rid>/native`,不进 Box2D dual-build | 标准 HTML5/CSS3/JS 高保真路径,服务 AI 生成标准 Web UI 与复杂页面;许可、体积、AOT 绑定、发行证据与平台 native gate 归 plan/20/M15 闭合 |
+| 交互界面/游戏 UI 纯托管基线 | **ManagedFallbackBackend** | `PixelEngine.UI`(纯托管) | 恒在、CI/headless/诊断/unsupported-RID 回退 | 纯托管盒模型/文本布局子集,零 native 依赖,天然符合不变式 #10;必须永远可用,但不是玩家侧产品主路径 |
 
-> 前两项(ComputeSharp/NVorbis)均为「可选增强,有默认回退」,不破坏「广兼容」基线;未启用时不进构建。RmlUi/Ultralight 为 `PixelEngine.UI` 的 HTML UI 后端门控依赖(主/可选),`ManagedFallbackBackend` 为恒在纯托管基线;三者均符合不变式 #10 处置(#10 原文保持,UI native 与 OpenAL/ANGLE 同级 dynamic-only,不进 Box2D dual-build),后端选型与 #10 冲突处理详见 plan/20 §7。其余一律以 §4 主表为准。
+> 前两项(ComputeSharp/NVorbis)均为「可选增强,有默认回退」,不破坏「广兼容」基线;未启用时不进构建。RmlUi/Ultralight 为 `PixelEngine.UI` 的 Web-first 游戏 UI 后端门控依赖(默认子集/可选高保真),`ManagedFallbackBackend` 为恒在纯托管基线与安全回退;三者均符合不变式 #10 处置(#10 原文保持,UI native 与 OpenAL/ANGLE 同级 dynamic-only,不进 Box2D dual-build),后端选型、透明 alpha、输入 pass-through 与 #10 冲突处理详见 plan/20 §7。Demo 的发行级 HUD/menu/settings 目标主路径是 `PixelEngine.UI` + `content/ui`,既有 ImGui/`IGuiContext` HUD 仅作 ManagedFallback/诊断基线。其余一律以 §4 主表为准。
 
 ## 5. 解决方案结构（定稿）
 
@@ -72,14 +118,14 @@ PixelEngine.sln
 │  ├─ PixelEngine.Rendering/     Silk.NET 封装/窗口/纹理流式(PBO)/粒子合成/光照/bloom/post/GPU compute
 │  ├─ PixelEngine.Audio/         OpenAL 封装/positional source 池/事件驱动材质音效
 │  ├─ PixelEngine.Scripting/     Roslyn 编译/ALC 热重载/Behaviour&Component API/世界脚本接口/IDE 启动
-│  ├─ PixelEngine.Gui/           中性玩家 HUD ImGui host:HexaImGuiBackend/IGuiContext 运行时适配/GuiRenderBridge/GuiFontManager(含 CJK 字体栈);编辑器可复用中性类型但保留面板专用 backend/bridge
-│  ├─ PixelEngine.UI/            游戏内交互大 UI(HTML):IGameUiBackend/RmlUi 主后端/Ultralight 可选/ManagedFallbackBackend 基线/C#↔UI 桥/输入仲裁(依赖 Gui,Rendering,Core)
-│  ├─ PixelEngine.Editor/        ImGui 管理UI:面板框架/材质编辑器/世界编辑/调试叠层/检视器/资源浏览/sim 控制(依赖 Gui 与各子系统;由编辑器壳注入,Hosting 不再引用)
-│  └─ PixelEngine.Hosting/       引擎宿主:Engine 门面/主循环(帧相位)/子系统装配/EngineContext/项目装载/窗口所有权解耦/抽象 GUI+相位[10]钩子接口(编辑器实现由壳注入)
+│  ├─ PixelEngine.Gui/           中性 ImGui host/fallback 基础设施:HexaImGuiBackend/IGuiContext 运行时适配/GuiRenderBridge/GuiFontManager(含 CJK 字体栈);服务 ManagedFallback/诊断与编辑器复用,不是玩家侧 Web UI 主路径
+│  ├─ PixelEngine.UI/            Web-first UI Runtime：透明 HTML UI runtime:IGameUiBackend/RmlUi 默认子集后端/Ultralight 可选高保真后端/ManagedFallbackBackend 基线/C#↔UI 桥/输入三级仲裁/透明 alpha 合成(依赖 Gui,Rendering,Core)
+│  ├─ PixelEngine.Editor/        Editor ImGui 面板层:材质编辑器/世界编辑/调试叠层/检视器/资源浏览底座/sim 控制(依赖 Gui 与各子系统;由编辑器壳注入,Hosting 不再引用)
+│  └─ PixelEngine.Hosting/       引擎宿主:Engine 门面/主循环(帧相位)/子系统装配/EngineContext/项目装载/窗口所有权解耦/中性场景/项目/构建 DTO 与抽象 GUI+相位[10]钩子接口(编辑器实现由壳注入)
 ├─ apps/
-│  └─ PixelEngine.Editor.Shell/  独立编辑器应用:顶层 EXE/独立窗口/单独进程/in-process 宿主 Edit&Play/GameObject authoring UX/gizmo/prefab/.scene/BuildSettings 编辑器内打包(依赖 Hosting,Editor,Gui;见 plan/19)
+│  └─ PixelEngine.Editor.Shell/  Unity-like 独立编辑器应用:顶层 EXE/单窗口单 GL/in-process 宿主 Edit&Play/Project Window/Hierarchy/Inspector/Scene View/Game View/Console/Project Settings/Player Settings/Build Settings/GameObject authoring/gizmo/prefab/.scene/脚本双击外部编辑器(依赖 Hosting,Editor,Gui;见 plan/19)
 ├─ demo/
-│  └─ PixelEngine.Demo/          落沙游戏(玩家运行时):玩家控制器脚本/输入/相机/UI/关卡内容(仅依赖引擎公开 API;依赖 Hosting+可选 UI,不含 Editor)
+│  └─ PixelEngine.Demo/          Showcase Demo Game / 功能完整但聚焦的 showcase Demo(玩家运行时):完整开始/游玩/目标/胜负/暂停/设置/重开闭环、玩家控制器脚本/输入/相机/射击爆炸地形破坏/切割刚体物理/透明 HTML UI/性能与手感展示(仅依赖引擎公开 API;依赖 Hosting+可选 UI,不含 Editor)
 ├─ tests/
 │  ├─ PixelEngine.Simulation.Tests/
 │  ├─ PixelEngine.Physics.Tests/
@@ -115,7 +161,7 @@ PixelEngine.sln
 - **相位顺序**：所有子系统按架构 §3.3 的 12 相位帧循环协作，靠相位顺序而非锁避免竞争。任何新子系统必须明确自己在哪个相位、读写哪些权威数据。
 - **坐标系**：世界以 cell 整数坐标为权威；y 轴向下（屏幕坐标），CA bottom-up 扫描指世界 y 递减方向。物理用「1 物理单位 = 16 px」缩放（架构 §8.1，建库即定，可调常量）。
 - **常量集中**：`ChunkSize=64`、`MoveCap=32`、`PhysicsPixelsPerMeter=16`、`TempFieldDownscale=4` 等编译期常量集中在 `PixelEngine.Core` 的 `EngineConstants`，便于 JIT 优化与统一调参。
-- **每-cell 字节预算（承重墙，架构 §7.1/§12.2）**：cell SoA 每-cell 字节数与常驻 chunk 内存是架构承重墙；任何新增 per-cell lane 必须经显式预算评审记录，不得静默突破。本轮新增 per-cell **Damage(byte) 累计伤害 lane**（demo-playability 持久破坏模型，见 `plan/03`）使 cell **4B→5B/cell（+25%）、每常驻 chunk 16KB→20KB**，为单缓冲原地写（守 #1，不双缓冲），进 `ChunkSnapshot`/`ChunkCodec` 并 bump `SaveFormatVersion`（存档契约见 `plan/07`，旧档 Damage=0 迁移）。plan/03/07/16 三处预算数字须与此一致。
+- **每-cell 字节预算（承重墙，架构 §7.1/§12.2）**：cell SoA 每-cell 字节数与常驻 chunk 内存是架构承重墙；任何新增 per-cell lane 必须经显式预算评审记录，不得静默突破。本轮新增 per-cell **Damage(byte) 累计伤害 lane**（Engine Core 通用结构破坏能力 / M14 showcase 支撑能力，见 `plan/03`）使 cell **4B→5B/cell（+25%）、每常驻 chunk 16KB→20KB**，为单缓冲原地写（守 #1，不双缓冲），进 `ChunkSnapshot`/`ChunkCodec` 并 bump `SaveFormatVersion`（存档契约见 `plan/07`，旧档 Damage=0 迁移）。plan/03/07/16 三处预算数字须与此一致。
 - **诊断**：所有子系统向 `Core` 的诊断/计时器注册分项耗时，供编辑器性能 HUD 与过载降级（架构 §4.3）使用。
 - **文档注释**：公开 API 全部带中文 XML 注释（脚本 IntelliSense 依赖）。
 

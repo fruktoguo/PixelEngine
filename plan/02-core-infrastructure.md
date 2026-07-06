@@ -2,9 +2,57 @@
 
 > 本文档定义 `src/PixelEngine.Core/` 的完整实现计划。Core 是整个解决方案的依赖底座（依赖方向见 plan/00 §5：`… → Interop → Core`，Core 不反向依赖任何项目），是**无「像素」语义的可复用基础设施**：数学、内存、持久线程池、确定性 RNG、无锁事件总线、帧时钟、诊断/计时、编译期常量。
 > 权威依据：`docs/PixelEngine-架构与需求设计.md`（下称「架构」）、`AGENTS.md`、`plan/00-conventions-and-techstack.md`。
-> 状态约定：`- [ ]` 未开始 / `- [x]` 完成 / `- [~]` 进行中 / `- [!]` 阻塞。
+> 状态约定：`- [ ]` 未开始 / `- [x]` 完成并有可追溯证据 / `- [!]` 外部证据、人工验收、硬件、发行或 native 阻塞；进行中事项必须拆成已完成子项与未完成/阻塞子项。
 
 ---
+
+## 0. 状态账本（2026-07-06）
+
+### 0.1 当前产品职责
+
+- [x] 本文件承载 **Engine Core** 的无像素语义底座：数学、内存、持久线程池、确定性 RNG、事件总线、帧时钟、诊断与编译期常量。
+- [x] Core 的边界已明确：只提供机制与数据结构，不解释 cell / material / chunk 等像素语义；Simulation、Physics、Rendering、Hosting、Editor、Demo 只消费其通用能力。
+- [x] Core 支撑当前产品四面：Engine Core 热路径、Unity-like Editor 性能 HUD / 诊断、Web-first UI Runtime 的宿主计时与输入协作、Showcase Demo Game 的稳定帧节奏与可观测性。
+
+### 0.2 状态总览 checklist
+
+- [x] Core 项目骨架、仅 BCL 依赖、无 ProjectReference / PackageReference 的依赖底座约束已完成。
+- [x] 数学、内存、JobSystem、RNG、事件总线、FrameClock、FrameProfiler、EngineCounters、BudgetMonitor 与 EngineConstants 已完成。
+- [x] `FrameClock` 固定步长 + 时间膨胀、不追帧约束已落地。
+- [x] `JobSystem` 持久 worker + barrier + raw function pointer path 已落地，服务 CA checkerboard 与 Box2D task bridge。
+- [!] 目标硬件长跑、硬件计数器、GC 模式最终定档与 AVX / SIMD 证据不在本文闭合，仍归 plan/16 / M15。
+
+### 0.3 已实现证据 checklist
+
+- [x] `dotnet build src/PixelEngine.Core -c Release` 零警告通过已作为 Core 编译证据登记。
+- [x] Core `.csproj` 无任何 `ProjectReference`、无任何 `PackageReference` 的依赖检查已登记。
+- [x] Core 数学、内存、并发、RNG、事件、时钟、诊断与常量单测 / 性质测试已登记。
+- [x] `docs/benchmark-reports/2026-07-03-jobsystem-parallelrange-zero-allocation.md` 已作为 `ParallelRange` / raw path 零分配证据登记。
+- [x] BenchmarkDotNet / MemoryDiagnoser / 反汇编证据已登记在各对应验收项中，用于证明零分配、稳定 workerIndex、无虚调用 / 无 bounds-check 等目标。
+
+### 0.4 未完成目标 checklist
+
+- [ ] 若后续新增跨子系统通用常量，必须先评审其是否仍属 Core 编译期常量；不能把像素业务语义下沉到 Core 实现。
+- [ ] 若后续确定性模式进入产品化，需要由 plan/11 / plan/13 / plan/14 / plan/16 补全跨平台回放、输入流、浮点/定点策略与长跑证据；本文只保留 seam 与底座。
+
+### 0.5 证据债 / 阻塞 checklist
+
+- [!] `ServerGarbageCollection` / `ConcurrentGarbageCollection` 最终组合仍需目标硬件实测定档，不能只凭默认值标完成。
+- [!] 硬件计数器、AVX-512 / AVX10、cache miss、branch miss 与目标帧预算证据仍归 plan/16 / M15。
+- [!] 本地短跑 benchmark 与反汇编检查不能替代目标硬件长跑和发行级性能验收。
+
+### 0.6 验证命令与证据路径 checklist
+
+- [x] 编译：`dotnet build src/PixelEngine.Core -c Release`。
+- [x] 全局回归入口：`dotnet test PixelEngine.sln -c Release`。
+- [x] 零分配 / 并发 / 反汇编证据：BenchmarkDotNet filters、`docs/benchmark-reports/2026-07-03-jobsystem-parallelrange-zero-allocation.md`、`DOTNET_JitDisasm` / Disasmo 检查。
+- [!] 目标硬件证据：plan/16 的 performance target manifest、hardware counter preflight 与长跑报告。
+
+### 0.7 依赖与下一闭合节点 checklist
+
+- [x] 上游依赖：plan/00 技术栈与 plan/01 工程骨架。
+- [x] 下游依赖：plan/03 Simulation、plan/06 Physics / Interop、plan/08 Rendering、plan/10 Audio、plan/18 Hosting、plan/19 Editor Shell、plan/20 Web-first UI Runtime。
+- [!] 下一闭合节点不是继续扩 Core API，而是 plan/16/M15 的目标硬件、GC、计数器与性能证据收口。
 
 ## 1. 目标与范围
 
