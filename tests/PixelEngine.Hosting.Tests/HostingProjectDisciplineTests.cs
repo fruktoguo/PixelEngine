@@ -145,7 +145,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("File.Delete(LayoutPath)", layout, StringComparison.Ordinal);
         Assert.Contains("ResetLayoutState(buildDefaultLayout: true)", layout, StringComparison.Ordinal);
         Assert.Contains("new EditorConsolePanel(_app)", host, StringComparison.Ordinal);
-        Assert.Contains("new BuildSettingsPanel(_project)", host, StringComparison.Ordinal);
+        Assert.Contains("new BuildSettingsPanel(_project, console: _app.ConsoleStore)", host, StringComparison.Ordinal);
         string shellApp = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellApp.cs"));
         Assert.Contains("--scripted-menu-layout-probe", File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellOptions.cs")), StringComparison.Ordinal);
         Assert.Contains("editor_menu_layout_probe", shellApp, StringComparison.Ordinal);
@@ -339,7 +339,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("PackageWholeContent ? []", source, StringComparison.Ordinal);
         Assert.Contains("Version", source, StringComparison.Ordinal);
         Assert.Contains("InformationalVersion", source, StringComparison.Ordinal);
-        Assert.Contains("BuildSettingsPanel(_project)", source, StringComparison.Ordinal);
+        Assert.Contains("BuildSettingsPanel(_project, console: _app.ConsoleStore)", source, StringComparison.Ordinal);
         Assert.Contains("ShowBuildSettings", source, StringComparison.Ordinal);
         Assert.Contains("TryStartScriptedBuildProbe", source, StringComparison.Ordinal);
         Assert.Contains("CaptureScriptedBuildProbe", source, StringComparison.Ordinal);

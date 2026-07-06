@@ -1,3 +1,4 @@
+using PixelEngine.Editor.Shell;
 using PixelEngine.Simulation;
 using PixelEngine.Scripting;
 using Xunit;
@@ -134,6 +135,61 @@ public sealed class DemoRuntimeScriptingTests
 
             Assert.Equal("v2", ReadProperty<string>(reloaded, "Version"));
             Assert.Equal(12, ReadField<int>(reloaded, "Counter"));
+        }
+        finally
+        {
+            Directory.Delete(scriptDirectory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// 验证 EditorShell Console 脚本运行时不会静默吞掉 watcher 热重载编译诊断。
+    /// </summary>
+    [Fact]
+    public void EditorConsoleScriptRuntimeReportsWatchedHotReloadCompileDiagnostics()
+    {
+        string scriptDirectory = Path.Combine(Path.GetTempPath(), "PixelEngineConsoleHotReload", Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(scriptDirectory);
+        try
+        {
+            MaterialTable materials = Materials(("empty", CellType.Empty));
+            using Engine engine = new EngineBuilder()
+                .UseHeadless()
+                .UseDeterministicMode()
+                .AddScene(new SceneDescriptor("reload", SceneSourceKind.Procedural, typeof(HostingHotReloadProbeBehaviour).FullName!))
+                .WithStartScene("reload")
+                .Build();
+            engine.Context.RegisterService(materials);
+            _ = engine.AttachResidentSimulationWorld(worldWidthCells: 64, worldHeightCells: 64, particleCapacity: 16);
+            engine.RegisterScriptAssembly(typeof(HostingHotReloadProbeBehaviour).Assembly);
+            EditorConsoleStore console = new();
+            _ = engine.AttachScriptingFromServices(new EditorConsoleScriptRuntime(
+                console,
+                new ScriptHotReloadRuntimeOptions(
+                    $"PixelEngine.Hosting.Tests.ConsoleHotReload.{Guid.NewGuid():N}",
+                    scriptDirectory,
+                    DebounceInterval: TimeSpan.FromMilliseconds(30))));
+
+            engine.RunHeadlessTicks(1);
+            File.WriteAllText(Path.Combine(scriptDirectory, "BrokenBehaviour.cs"), "public sealed class BrokenBehaviour {");
+
+            Assert.True(
+                SpinWait.SpinUntil(
+                    () =>
+                    {
+                        engine.RunHeadlessTicks(1);
+                        EditorConsoleEntry[] entries = console.Snapshot();
+                        return entries.Any(entry =>
+                            entry.Category == EditorConsoleCategory.Script &&
+                            entry.Severity == EditorConsoleSeverity.Error &&
+                            entry.Text.Contains("脚本编译失败", StringComparison.Ordinal));
+                    },
+                    TimeSpan.FromSeconds(5)),
+                string.Join(Environment.NewLine, console.Snapshot().Select(static entry => $"[{entry.Severity}] {entry.Text}")));
+            Assert.Contains(console.Snapshot(), entry =>
+                entry.Category == EditorConsoleCategory.Script &&
+                entry.Severity == EditorConsoleSeverity.Error &&
+                entry.Text.Contains("error", StringComparison.OrdinalIgnoreCase));
         }
         finally
         {
