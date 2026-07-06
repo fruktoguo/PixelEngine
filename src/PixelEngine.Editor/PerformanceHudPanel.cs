@@ -45,6 +45,9 @@ public sealed class PerformanceHudPanel : IEditorPanel
     private readonly float[] _activeCellsKHistory = new float[HistoryLength];
     private readonly float[] _freeParticlesHistory = new float[HistoryLength];
     private readonly float[] _rigidBodiesHistory = new float[HistoryLength];
+    private readonly float[] _destructionEventsHistory = new float[HistoryLength];
+    private readonly float[] _lavaAreaKHistory = new float[HistoryLength];
+    private readonly float[] _simHzHistory = new float[HistoryLength];
     private readonly float[] _phaseBars = new float[PhaseBarCount];
     private readonly float[] _statsScratch = new float[HistoryLength];
     private PixelEngine.Rendering.IRenderPresentationControl? _presentationControl;
@@ -298,6 +301,10 @@ public sealed class PerformanceHudPanel : IEditorPanel
             counters?.ActiveCells ?? 0,
             counters?.FreeParticles ?? 0,
             counters?.RigidBodies ?? 0,
+            counters?.CellDestructionEventsThisTick ?? 0,
+            counters?.RigidBodiesDestroyedThisTick ?? 0,
+            counters?.RigidBodiesCreatedThisTick ?? 0,
+            counters?.LavaActiveAreaCells ?? 0,
             counters?.ResidentChunks ?? 0,
             counters?.ResidentMemoryBytes ?? 0,
             variableWorkMs,
@@ -367,6 +374,9 @@ public sealed class PerformanceHudPanel : IEditorPanel
         _activeCellsKHistory[index] = sample.ActiveCells / 1000.0f;
         _freeParticlesHistory[index] = sample.FreeParticles;
         _rigidBodiesHistory[index] = sample.RigidBodies;
+        _destructionEventsHistory[index] = sample.CellDestructionEvents + sample.RigidBodiesDestroyed + sample.RigidBodiesCreated;
+        _lavaAreaKHistory[index] = sample.LavaActiveAreaCells / 1000.0f;
+        _simHzHistory[index] = (float)sample.SimHz;
         _historyOffset = (_historyOffset + 1) % HistoryLength;
         _historyCount = Math.Min(_historyCount + 1, HistoryLength);
         _capturedSampleCount++;
@@ -416,6 +426,8 @@ public sealed class PerformanceHudPanel : IEditorPanel
         ImGui.TextUnformatted($"Cells active: {sample.ActiveCells}");
         ImGui.TextUnformatted($"Free particles: {sample.FreeParticles}");
         ImGui.TextUnformatted($"Rigid bodies: {sample.RigidBodies}");
+        ImGui.TextUnformatted($"Destruction events cell/rigid -/+ : {sample.CellDestructionEvents} / {sample.RigidBodiesDestroyed} / {sample.RigidBodiesCreated}");
+        ImGui.TextUnformatted($"Lava active area: {sample.LavaActiveAreaCells} cells");
         ImGui.TextUnformatted($"Estimated resident memory: {FormatBytes(sample.ResidentMemoryBytes)}");
         ImGui.TextUnformatted($"Workload variable/fixed/wait: {sample.VariableWorkMs:F2} / {sample.FixedOverheadMs:F2} / {sample.WaitMs:F2} ms");
     }
@@ -471,11 +483,17 @@ public sealed class PerformanceHudPanel : IEditorPanel
             fixed (float* cellsK = _activeCellsKHistory)
             fixed (float* particles = _freeParticlesHistory)
             fixed (float* bodies = _rigidBodiesHistory)
+            fixed (float* destruction = _destructionEventsHistory)
+            fixed (float* lavaK = _lavaAreaKHistory)
+            fixed (float* simHz = _simHzHistory)
             {
                 ImPlot.PlotLine("active chunks", chunks, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
                 ImPlot.PlotLine("active cells K", cellsK, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
                 ImPlot.PlotLine("particles", particles, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
                 ImPlot.PlotLine("rigid bodies", bodies, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
+                ImPlot.PlotLine("destruction events", destruction, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
+                ImPlot.PlotLine("lava area K", lavaK, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
+                ImPlot.PlotLine("sim Hz", simHz, _historyCount, 1.0, 0.0, ImPlotLineFlags.None, _historyOffset);
             }
 
             ImPlot.EndPlot();

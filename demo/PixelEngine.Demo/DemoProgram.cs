@@ -161,6 +161,7 @@ public static class DemoProgram
             }
 
             Console.WriteLine("脚本运行时已接入 Hosting/Simulation 后端。");
+            new DemoLoadCountersPhaseDriver(engine.Context.GetService<ScriptScene>()).RegisterPhases(engine.Phases);
         }
 
         if (options.Headless)
@@ -560,6 +561,8 @@ public static class DemoProgram
             $"playable_collapse_status={projectile?.CollapseStatus ?? "<missing>"}, " +
             $"playable_collapse_skip={projectile?.LastCollapseSkipReason ?? "<missing>"}, " +
             $"playable_collapse_candidates={projectile?.LastCollapseSolidCandidates ?? 0}, " +
+            $"destruction_events={engine.Context.Counters.CellDestructionEventsThisTick + engine.Context.Counters.RigidBodiesDestroyedThisTick + engine.Context.Counters.RigidBodiesCreatedThisTick}, " +
+            $"lava_active_area={engine.Context.Counters.LavaActiveAreaCells}, " +
             $"particles={probe.ActiveParticles}, " +
             $"max_particles={scriptedProbe?.MaxParticles ?? probe.ActiveParticles}, " +
             $"lights={lighting.PointLights.Length}, " +

@@ -46,6 +46,10 @@ public sealed class PerformanceHudPanelTests
             ActiveCells = 222,
             FreeParticles = 33,
             RigidBodies = 4,
+            CellDestructionEventsThisTick = 5,
+            RigidBodiesDestroyedThisTick = 2,
+            RigidBodiesCreatedThisTick = 3,
+            LavaActiveAreaCells = 12_345,
             ResidentChunks = 55,
             ResidentMemoryBytes = 6_291_456,
             SimHz = 30,
@@ -105,6 +109,10 @@ public sealed class PerformanceHudPanelTests
         Assert.Equal(222, sample.ActiveCells);
         Assert.Equal(33, sample.FreeParticles);
         Assert.Equal(4, sample.RigidBodies);
+        Assert.Equal(5, sample.CellDestructionEvents);
+        Assert.Equal(2, sample.RigidBodiesDestroyed);
+        Assert.Equal(3, sample.RigidBodiesCreated);
+        Assert.Equal(12_345, sample.LavaActiveAreaCells);
         Assert.Equal(55, sample.ResidentChunks);
         Assert.Equal(6_291_456, sample.ResidentMemoryBytes);
         Assert.Equal(8.37, sample.VariableWorkMs, 3);

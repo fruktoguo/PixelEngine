@@ -30,6 +30,7 @@ public sealed class ParticleSystem : IParticleReadback, ICellDestructionSink
     private int _killedByLifetimeThisTick;
     private int _droppedThisTick;
     private int _droppedAudioEventsThisTick;
+    private int _cellDestructionEventsThisTick;
     private int _ejectionRequestCount;
     private int _debrisEjectedThisTick;
     private CellGrid? _activeGrid;
@@ -95,7 +96,8 @@ public sealed class ParticleSystem : IParticleReadback, ICellDestructionSink
         _depositedThisTick,
         _killedByLifetimeThisTick,
         _droppedThisTick,
-        _droppedAudioEventsThisTick);
+        _droppedAudioEventsThisTick,
+        _cellDestructionEventsThisTick);
 
     /// <summary>
     /// 在帧边界应用新的粒子调参。若新的活跃上限低于当前数量，尾部粒子按容量丢弃计数释放。
@@ -121,6 +123,7 @@ public sealed class ParticleSystem : IParticleReadback, ICellDestructionSink
         _killedByLifetimeThisTick = 0;
         _droppedThisTick = 0;
         _droppedAudioEventsThisTick = 0;
+        _cellDestructionEventsThisTick = 0;
         _debrisEjectedThisTick = 0;
     }
 
@@ -136,6 +139,7 @@ public sealed class ParticleSystem : IParticleReadback, ICellDestructionSink
         counters.FreeParticlesDepositedThisTick = stats.DepositedThisTick;
         counters.FreeParticlesKilledThisTick = stats.KilledByLifetimeThisTick;
         counters.FreeParticlesDroppedThisTick = stats.DroppedThisTick + stats.AudioEventsDroppedThisTick;
+        counters.CellDestructionEventsThisTick = stats.CellDestructionEventsThisTick;
     }
 
     /// <summary>
@@ -268,6 +272,7 @@ public sealed class ParticleSystem : IParticleReadback, ICellDestructionSink
     /// <inheritdoc />
     public void OnCellDestroyed(in CellDestructionEvent item)
     {
+        _cellDestructionEventsThisTick++;
         DebrisEjectionRequest request = new(
             item.WorldX,
             item.WorldY,

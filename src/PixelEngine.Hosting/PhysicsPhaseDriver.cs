@@ -42,6 +42,9 @@ public sealed class PhysicsPhaseDriver(PhysicsSystem physics, IChunkSource? chun
         }
 
         _physics.SyncStep((float)context.Timing.Dt);
+        RigidDestructionResult destruction = _physics.LastDestructionResult;
         context.Context.Counters.RigidBodies = _physics.PhysicsWorld.ActiveBodyCount;
+        context.Context.Counters.RigidBodiesDestroyedThisTick = destruction.DestroyedBodies;
+        context.Context.Counters.RigidBodiesCreatedThisTick = destruction.CreatedBodies;
     }
 }

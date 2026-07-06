@@ -28,6 +28,9 @@ internal sealed class DemoWindowFrameTimeProbe(int warmupFrames, string scenario
     private readonly List<double> _activeChunks = [];
     private readonly List<double> _freeParticles = [];
     private readonly List<double> _rigidBodies = [];
+    private readonly List<double> _destructionEvents = [];
+    private readonly List<double> _lavaActiveArea = [];
+    private readonly List<double> _simHz = [];
     private int _framesSeen;
 
     public int MeasuredFrames => _wallMs.Count;
@@ -67,6 +70,9 @@ internal sealed class DemoWindowFrameTimeProbe(int warmupFrames, string scenario
         _activeChunks.Add(counters.ActiveChunks);
         _freeParticles.Add(counters.FreeParticles);
         _rigidBodies.Add(counters.RigidBodies);
+        _destructionEvents.Add(counters.CellDestructionEventsThisTick + counters.RigidBodiesDestroyedThisTick + counters.RigidBodiesCreatedThisTick);
+        _lavaActiveArea.Add(counters.LavaActiveAreaCells);
+        _simHz.Add(counters.SimHz);
     }
 
     public string BuildSummary(bool gpuTimerAvailable, bool vSyncEnabled)
@@ -75,10 +81,13 @@ internal sealed class DemoWindowFrameTimeProbe(int warmupFrames, string scenario
             $"window_frame_probe source=PixelEngineWindowFrameProbe, scenario={_scenario}, " +
             $"gpu_timer_available={gpuTimerAvailable}, vsync={vSyncEnabled}, " +
             $"warmup_frames={warmupFrames}, measured_frames={MeasuredFrames}, sample_seconds={SampleSeconds():0.###}, " +
-            Average("active_cells", _activeCells) + ", " +
-            Average("active_chunks", _activeChunks) + ", " +
-            Average("free_particles", _freeParticles) + ", " +
-            Average("rigid_bodies", _rigidBodies) + ", " +
+            LoadStats("active_cells", _activeCells) + ", " +
+            LoadStats("active_chunks", _activeChunks) + ", " +
+            LoadStats("free_particles", _freeParticles) + ", " +
+            LoadStats("rigid_bodies", _rigidBodies) + ", " +
+            LoadStats("destruction_events", _destructionEvents) + ", " +
+            LoadStats("lava_active_area", _lavaActiveArea) + ", " +
+            LoadStats("sim_hz", _simHz) + ", " +
             Stats("wall", _wallMs) + ", " +
             Stats("cpu_work", _cpuWorkMs) + ", " +
             Stats("gpu_frame", gpuTimerAvailable ? _gpuFrameMs : NoSamples) + ", " +
@@ -111,20 +120,27 @@ internal sealed class DemoWindowFrameTimeProbe(int warmupFrames, string scenario
         return (uint)index < (uint)values.Length ? values[index] : 0.0;
     }
 
-    private static string Average(string name, List<double> samples)
+    private static string LoadStats(string name, List<double> samples)
     {
         if (samples.Count == 0)
         {
-            return $"{name}_avg=0.000";
+            return $"{name}_avg=0.000, {name}_p50=0.000, {name}_p95=0.000, {name}_p99=0.000, {name}_max=0.000";
         }
 
+        double[] sorted = [.. samples];
+        Array.Sort(sorted);
         double sum = 0;
-        for (int i = 0; i < samples.Count; i++)
+        for (int i = 0; i < sorted.Length; i++)
         {
-            sum += samples[i];
+            sum += sorted[i];
         }
 
-        return $"{name}_avg={sum / samples.Count:0.000}";
+        return
+            $"{name}_avg={sum / sorted.Length:0.000}, " +
+            $"{name}_p50={Percentile(sorted, 0.50):0.000}, " +
+            $"{name}_p95={Percentile(sorted, 0.95):0.000}, " +
+            $"{name}_p99={Percentile(sorted, 0.99):0.000}, " +
+            $"{name}_max={sorted[^1]:0.000}";
     }
 
     private static string Stats(string name, List<double> samples)

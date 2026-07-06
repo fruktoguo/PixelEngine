@@ -116,7 +116,7 @@ public sealed class TuningPanelTests
             0.05f,
             1f,
             8,
-            new ParticleSystemStats(0, 64, 0, 0, 0, 0, 0));
+            new ParticleSystemStats(0, 64, 0, 0, 0, 0, 0, 0));
 
         public ParticleTuningState Applied { get; private set; } = null!;
 

@@ -85,6 +85,11 @@ public sealed class RisingHazardDirector : Behaviour
     public float CurrentSurfaceY { get; private set; }
 
     /// <summary>
+    /// 当前上涨熔岩覆盖的活跃面积估算，单位 cell。
+    /// </summary>
+    public int ActiveAreaCells { get; private set; }
+
+    /// <summary>
     /// 已创建的 MaterialEmitter 数量。
     /// </summary>
     public int ActiveEmitterCount => _emitters.Length;
@@ -98,6 +103,7 @@ public sealed class RisingHazardDirector : Behaviour
     protected override void OnStart()
     {
         CurrentSurfaceY = StartSurfaceY;
+        ActiveAreaCells = EstimateActiveAreaCells();
         ResolveMaterial();
         ResolveMission();
         RegisterEmitterBuildSystem();
@@ -118,6 +124,7 @@ public sealed class RisingHazardDirector : Behaviour
         float duration = Math.Max(0.001f, RiseSeconds);
         float t = Math.Clamp(_elapsedSeconds / duration, 0f, 1f);
         CurrentSurfaceY = StartSurfaceY + ((TargetSurfaceY - StartSurfaceY) * t);
+        ActiveAreaCells = EstimateActiveAreaCells();
         _mission?.SetLavaSurface(CurrentSurfaceY);
         UpdateEmitters();
         FillLavaVolume(dt);
@@ -216,6 +223,13 @@ public sealed class RisingHazardDirector : Behaviour
                 Context.Cells.SetCell(x, y, _material);
             }
         }
+    }
+
+    private int EstimateActiveAreaCells()
+    {
+        float maxY = MathF.Max(StartSurfaceY, CurrentSurfaceY) + 34f;
+        float height = MathF.Max(0f, maxY - CurrentSurfaceY);
+        return (int)MathF.Ceiling(MathF.Max(0f, Width) * height);
     }
 
     private void UpdateEmitters()

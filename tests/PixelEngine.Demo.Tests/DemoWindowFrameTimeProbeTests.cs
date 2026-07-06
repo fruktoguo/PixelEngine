@@ -36,6 +36,11 @@ public sealed class DemoWindowFrameTimeProbeTests
                 ActiveChunks = i,
                 FreeParticles = i * 2,
                 RigidBodies = i % 2,
+                CellDestructionEventsThisTick = i,
+                RigidBodiesDestroyedThisTick = i % 3,
+                RigidBodiesCreatedThisTick = i % 4,
+                LavaActiveAreaCells = i * 10000,
+                SimHz = 60 - i,
             };
             probe.RecordFrame(i, sub, counters);
         }
@@ -54,8 +59,27 @@ public sealed class DemoWindowFrameTimeProbeTests
         Assert.Contains("gpu_frame_avg_ms=2.250", summary);
         Assert.Contains("present_wait_avg_ms=1.125", summary);
         Assert.Contains("active_cells_avg=4500.000", summary);
+        Assert.Contains("active_cells_p50=4000.000", summary);
+        Assert.Contains("active_cells_p95=6000.000", summary);
+        Assert.Contains("active_cells_p99=6000.000", summary);
+        Assert.Contains("active_cells_max=6000.000", summary);
         Assert.Contains("active_chunks_avg=4.500", summary);
         Assert.Contains("free_particles_avg=9.000", summary);
+        Assert.Contains("destruction_events_avg=6.750", summary);
+        Assert.Contains("destruction_events_p50=6.000", summary);
+        Assert.Contains("destruction_events_p95=8.000", summary);
+        Assert.Contains("destruction_events_p99=8.000", summary);
+        Assert.Contains("destruction_events_max=8.000", summary);
+        Assert.Contains("lava_active_area_avg=45000.000", summary);
+        Assert.Contains("lava_active_area_p50=40000.000", summary);
+        Assert.Contains("lava_active_area_p95=60000.000", summary);
+        Assert.Contains("lava_active_area_p99=60000.000", summary);
+        Assert.Contains("lava_active_area_max=60000.000", summary);
+        Assert.Contains("sim_hz_avg=55.500", summary);
+        Assert.Contains("sim_hz_p50=55.000", summary);
+        Assert.Contains("sim_hz_p95=57.000", summary);
+        Assert.Contains("sim_hz_p99=57.000", summary);
+        Assert.Contains("sim_hz_max=57.000", summary);
     }
 
     /// <summary>

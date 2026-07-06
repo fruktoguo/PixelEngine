@@ -12,6 +12,10 @@ public sealed class EngineCounters
     private long _freeParticlesDroppedThisTick;
     private long _freeParticlesKilledThisTick;
     private long _freeParticlesSpawnedThisTick;
+    private long _cellDestructionEventsThisTick;
+    private long _rigidBodiesCreatedThisTick;
+    private long _rigidBodiesDestroyedThisTick;
+    private long _lavaActiveAreaCells;
     private long _materialRemapFallbackHits;
     private long _noGcRegionEndFailures;
     private long _noGcRegionStartedLastFrame;
@@ -57,6 +61,26 @@ public sealed class EngineCounters
     /// 获取或设置本 tick 丢弃的自由粒子或粒子事件数量。
     /// </summary>
     public long FreeParticlesDroppedThisTick { get => Volatile.Read(ref _freeParticlesDroppedThisTick); set => Volatile.Write(ref _freeParticlesDroppedThisTick, value); }
+
+    /// <summary>
+    /// 获取或设置本 tick 结构破坏产生的 cell destruction 事件数量。
+    /// </summary>
+    public long CellDestructionEventsThisTick { get => Volatile.Read(ref _cellDestructionEventsThisTick); set => Volatile.Write(ref _cellDestructionEventsThisTick, value); }
+
+    /// <summary>
+    /// 获取或设置本物理 tick 刚体重建创建的新刚体数量。
+    /// </summary>
+    public long RigidBodiesCreatedThisTick { get => Volatile.Read(ref _rigidBodiesCreatedThisTick); set => Volatile.Write(ref _rigidBodiesCreatedThisTick, value); }
+
+    /// <summary>
+    /// 获取或设置本物理 tick 刚体重建销毁的旧刚体数量。
+    /// </summary>
+    public long RigidBodiesDestroyedThisTick { get => Volatile.Read(ref _rigidBodiesDestroyedThisTick); set => Volatile.Write(ref _rigidBodiesDestroyedThisTick, value); }
+
+    /// <summary>
+    /// 获取或设置 Demo 上涨熔岩当前覆盖的活跃面积估算，单位 cell。
+    /// </summary>
+    public long LavaActiveAreaCells { get => Volatile.Read(ref _lavaActiveAreaCells); set => Volatile.Write(ref _lavaActiveAreaCells, value); }
 
     /// <summary>
     /// 获取或设置 material 重映射 fallback 命中次数。
@@ -467,6 +491,15 @@ public sealed class EngineCounters
     public void AddFreeParticlesDroppedThisTick(long delta)
     {
         _ = Interlocked.Add(ref _freeParticlesDroppedThisTick, delta);
+    }
+
+    /// <summary>
+    /// 线程安全地累加本 tick cell destruction 事件数。
+    /// </summary>
+    /// <param name="delta">增量。</param>
+    public void AddCellDestructionEventsThisTick(long delta)
+    {
+        _ = Interlocked.Add(ref _cellDestructionEventsThisTick, delta);
     }
 
     /// <summary>
