@@ -57,7 +57,16 @@ struct PeUiModelBinding
     int32_t documentHandle;
     int32_t pathHash;
     std::string path;
+    std::string variableName;
     PeUiNativeValue value;
+};
+
+struct PeUiDocumentModel
+{
+    Rml::ElementDocument* document;
+    int32_t documentHandle;
+    std::string modelName;
+    Rml::DataModelHandle modelHandle;
 };
 
 class PeUiEventListener final : public Rml::EventListener
@@ -92,6 +101,7 @@ struct PeUiRenderer
     std::unique_ptr<RenderInterface_GL3> renderer;
     Rml::Context* context = nullptr;
     std::string contextName;
+    std::vector<PeUiDocumentModel> documentModels;
     std::vector<PeUiModelBinding> modelBindings;
     std::vector<PeUiEventBinding> eventBindings;
     std::vector<PeUiNativeEvent> events;
@@ -289,6 +299,50 @@ bool TryHashStableId(PeUiRenderer* renderer, const std::string& value, const cha
     return true;
 }
 
+bool IsAsciiLetter(unsigned char ch)
+{
+    return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z');
+}
+
+bool IsAsciiDigit(unsigned char ch)
+{
+    return ch >= '0' && ch <= '9';
+}
+
+std::string BuildModelVariableName(const std::string& path)
+{
+    std::string name;
+    name.reserve(path.size() + 12);
+    for (unsigned char ch : path)
+    {
+        if (IsAsciiLetter(ch) || IsAsciiDigit(ch) || ch == '_')
+        {
+            name.push_back(static_cast<char>(ch));
+            continue;
+        }
+
+        if (ch == '.' || ch == '-' || ch == '/' || ch == ':' || ch == ' ')
+        {
+            name.push_back('_');
+            continue;
+        }
+
+        char escaped[8];
+        std::snprintf(escaped, sizeof(escaped), "_u%04X_", static_cast<unsigned int>(ch));
+        name.append(escaped);
+    }
+
+    if (name.empty() || IsAsciiDigit(static_cast<unsigned char>(name[0])))
+    {
+        name.insert(name.begin(), '_');
+    }
+
+    char suffix[12];
+    std::snprintf(suffix, sizeof(suffix), "__%08X", static_cast<uint32_t>(StableHashAscii(path)));
+    name.append(suffix);
+    return name;
+}
+
 bool TryGetAttribute(Rml::Element* element, const char* name, std::string& value)
 {
     if (element == nullptr)
@@ -387,6 +441,55 @@ std::string ValueToText(const PeUiNativeValue& value)
     }
 }
 
+void SetVariantFromValue(Rml::Variant& variant, const PeUiNativeValue& value)
+{
+    switch (value.kind)
+    {
+    case 1:
+        variant = value.integer != 0;
+        break;
+    case 2:
+        variant = value.integer;
+        break;
+    case 3:
+        variant = value.number;
+        break;
+    default:
+        variant.Clear();
+        break;
+    }
+}
+
+PeUiNativeValue ValueFromVariant(const Rml::Variant& variant, const PeUiNativeValue& fallback)
+{
+    PeUiNativeValue value{};
+    switch (variant.GetType())
+    {
+    case Rml::Variant::BOOL:
+        value.kind = 1;
+        value.integer = variant.Get<bool>() ? 1 : 0;
+        return value;
+    case Rml::Variant::BYTE:
+    case Rml::Variant::CHAR:
+    case Rml::Variant::INT:
+    case Rml::Variant::UINT:
+    case Rml::Variant::INT64:
+    case Rml::Variant::UINT64:
+        value.kind = 2;
+        value.integer = variant.Get<int64_t>();
+        return value;
+    case Rml::Variant::FLOAT:
+    case Rml::Variant::DOUBLE:
+        value.kind = 3;
+        value.number = variant.Get<double>();
+        return value;
+    case Rml::Variant::NONE:
+        return EmptyValue();
+    default:
+        return fallback;
+    }
+}
+
 bool ApplyValueToElement(Rml::Element* element, const PeUiNativeValue& value)
 {
     if (element == nullptr)
@@ -408,6 +511,40 @@ bool ApplyValueToElement(Rml::Element* element, const PeUiNativeValue& value)
     }
 
     return true;
+}
+
+void ApplyDataBindingAttributes(Rml::Element* element, const std::string& modelName, const std::string& variableName)
+{
+    if (element == nullptr)
+    {
+        return;
+    }
+
+    const Rml::String tag = element->GetTagName();
+    element->SetAttribute("data-model", modelName);
+
+    std::string type;
+    const bool isCheckbox = tag == "checkbox" ||
+        (tag == "input" && TryGetAttribute(element, "type", type) && type == "checkbox");
+    if (isCheckbox)
+    {
+        element->SetAttribute("data-checked", variableName);
+        return;
+    }
+
+    if (tag == "input")
+    {
+        element->SetAttribute("data-value", variableName);
+        return;
+    }
+
+    if (tag == "progress")
+    {
+        element->SetAttribute("data-attr-value", variableName);
+        return;
+    }
+
+    element->SetAttribute("data-rml", variableName);
 }
 
 PeUiModelBinding* FindModelBinding(PeUiRenderer* renderer, int32_t documentHandle, int32_t pathHash)
@@ -444,6 +581,97 @@ PeUiModelBinding* FindModelBindingForElement(PeUiRenderer* renderer, int32_t doc
     }
 
     return nullptr;
+}
+
+PeUiDocumentModel* FindDocumentModel(PeUiRenderer* renderer, Rml::ElementDocument* document)
+{
+    if (renderer == nullptr || document == nullptr)
+    {
+        return nullptr;
+    }
+
+    for (PeUiDocumentModel& model : renderer->documentModels)
+    {
+        if (model.document == document)
+        {
+            return &model;
+        }
+    }
+
+    return nullptr;
+}
+
+bool IsFirstModelBindingForPath(PeUiRenderer* renderer, int32_t documentHandle, int32_t pathHash)
+{
+    if (renderer == nullptr)
+    {
+        return true;
+    }
+
+    for (const PeUiModelBinding& binding : renderer->modelBindings)
+    {
+        if (binding.documentHandle == documentHandle && binding.pathHash == pathHash)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool BindModelVariable(
+    PeUiRenderer* renderer,
+    PeUiDocumentModel* documentModel,
+    int32_t pathHash,
+    const std::string& variableName)
+{
+    if (renderer == nullptr || documentModel == nullptr || renderer->context == nullptr)
+    {
+        return false;
+    }
+
+    Rml::DataModelConstructor constructor = renderer->context->GetDataModel(documentModel->modelName);
+    if (!constructor)
+    {
+        renderer->lastError = "RmlUi data model not found: " + documentModel->modelName;
+        return false;
+    }
+
+    const int32_t documentHandle = documentModel->documentHandle;
+    if (!constructor.BindFunc(
+            variableName,
+            [renderer, documentHandle, pathHash](Rml::Variant& variant) {
+                if (PeUiModelBinding* binding = FindModelBinding(renderer, documentHandle, pathHash))
+                {
+                    SetVariantFromValue(variant, binding->value);
+                    return;
+                }
+
+                variant.Clear();
+            },
+            [renderer, documentHandle, pathHash](const Rml::Variant& variant) {
+                PeUiModelBinding* first = FindModelBinding(renderer, documentHandle, pathHash);
+                if (first == nullptr)
+                {
+                    return;
+                }
+
+                PeUiNativeValue value = ValueFromVariant(variant, first->value);
+                for (PeUiModelBinding& binding : renderer->modelBindings)
+                {
+                    if (binding.documentHandle == documentHandle && binding.pathHash == pathHash)
+                    {
+                        binding.value = value;
+                        ApplyValueToElement(binding.element, binding.value);
+                    }
+                }
+            }))
+    {
+        renderer->lastError = "RmlUi DataModelConstructor BindFunc failed for variable: " + variableName;
+        return false;
+    }
+
+    return true;
 }
 
 void EnqueueEvent(PeUiRenderer* renderer, const PeUiNativeEvent& uiEvent)
@@ -515,6 +743,23 @@ void ClearDocumentBindings(PeUiRenderer* renderer, Rml::ElementDocument* documen
             renderer->modelBindings.end(),
             [document](const PeUiModelBinding& binding) { return binding.document == document; }),
         renderer->modelBindings.end());
+
+    for (auto it = renderer->documentModels.begin(); it != renderer->documentModels.end();)
+    {
+        if (it->document == document)
+        {
+            if (renderer->context != nullptr)
+            {
+                renderer->context->RemoveDataModel(it->modelName);
+            }
+
+            it = renderer->documentModels.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
 }
 
 void ClearAllBindings(PeUiRenderer* renderer)
@@ -534,13 +779,28 @@ void ClearAllBindings(PeUiRenderer* renderer)
 
     renderer->eventBindings.clear();
     renderer->modelBindings.clear();
+    if (renderer->context != nullptr)
+    {
+        for (const PeUiDocumentModel& model : renderer->documentModels)
+        {
+            renderer->context->RemoveDataModel(model.modelName);
+        }
+    }
+
+    renderer->documentModels.clear();
     renderer->eventRead = 0;
     renderer->eventCount = 0;
 }
 
-bool TryAddModelBinding(PeUiRenderer* renderer, Rml::ElementDocument* document, int32_t documentHandle, Rml::Element* element, const std::string& path)
+bool TryAddModelBinding(
+    PeUiRenderer* renderer,
+    PeUiDocumentModel* documentModel,
+    Rml::ElementDocument* document,
+    int32_t documentHandle,
+    Rml::Element* element,
+    const std::string& path)
 {
-    if (renderer == nullptr || document == nullptr || element == nullptr || path.empty())
+    if (renderer == nullptr || documentModel == nullptr || document == nullptr || element == nullptr || path.empty())
     {
         return true;
     }
@@ -560,12 +820,21 @@ bool TryAddModelBinding(PeUiRenderer* renderer, Rml::ElementDocument* document, 
         }
     }
 
+    const std::string variableName = BuildModelVariableName(path);
+    const bool firstForPath = IsFirstModelBindingForPath(renderer, documentHandle, pathHash);
+    if (firstForPath && !BindModelVariable(renderer, documentModel, pathHash, variableName))
+    {
+        return false;
+    }
+
+    ApplyDataBindingAttributes(element, documentModel->modelName, variableName);
     renderer->modelBindings.push_back(PeUiModelBinding{
         document,
         element,
         documentHandle,
         pathHash,
         path,
+        variableName,
         InitialValueForElement(element),
     });
     return true;
@@ -590,7 +859,12 @@ void AddEventBinding(
     renderer->eventBindings.push_back(PeUiEventBinding{document, element, eventId, documentHandle, actionHash, std::move(listener)});
 }
 
-bool BindElementTree(PeUiRenderer* renderer, Rml::ElementDocument* document, int32_t documentHandle, Rml::Element* element)
+bool BindElementTree(
+    PeUiRenderer* renderer,
+    PeUiDocumentModel* documentModel,
+    Rml::ElementDocument* document,
+    int32_t documentHandle,
+    Rml::Element* element)
 {
     if (element == nullptr)
     {
@@ -605,7 +879,7 @@ bool BindElementTree(PeUiRenderer* renderer, Rml::ElementDocument* document, int
     TryGetAttribute(element, "id", id);
     if (TryGetAttribute(element, "data-model", path) || TryGetAttribute(element, "path", path))
     {
-        if (!TryAddModelBinding(renderer, document, documentHandle, element, path))
+        if (!TryAddModelBinding(renderer, documentModel, document, documentHandle, element, path))
         {
             return false;
         }
@@ -645,13 +919,37 @@ bool BindElementTree(PeUiRenderer* renderer, Rml::ElementDocument* document, int
     const int childCount = element->GetNumChildren();
     for (int i = 0; i < childCount; i++)
     {
-        if (!BindElementTree(renderer, document, documentHandle, element->GetChild(i)))
+        if (!BindElementTree(renderer, documentModel, document, documentHandle, element->GetChild(i)))
         {
             return false;
         }
     }
 
     return true;
+}
+
+PeUiDocumentModel* CreateDocumentModel(PeUiRenderer* renderer, Rml::ElementDocument* document, int32_t documentHandle)
+{
+    if (renderer == nullptr || renderer->context == nullptr || document == nullptr || documentHandle <= 0)
+    {
+        return nullptr;
+    }
+
+    const std::string modelName = "pixelengine_doc_" + std::to_string(documentHandle);
+    Rml::DataModelConstructor constructor = renderer->context->CreateDataModel(modelName);
+    if (!constructor)
+    {
+        renderer->lastError = "RmlUi DataModelConstructor creation failed: " + modelName;
+        return nullptr;
+    }
+
+    renderer->documentModels.push_back(PeUiDocumentModel{
+        document,
+        documentHandle,
+        modelName,
+        constructor.GetModelHandle(),
+    });
+    return &renderer->documentModels.back();
 }
 }
 
@@ -824,7 +1122,13 @@ PE_UI_NATIVE_API int32_t peui_native_document_bind(PeUiRenderer* renderer, Rml::
 
     renderer->lastError.clear();
     ClearDocumentBindings(renderer, document);
-    return BindElementTree(renderer, document, document_handle, document) ? 1 : -2;
+    PeUiDocumentModel* documentModel = CreateDocumentModel(renderer, document, document_handle);
+    if (documentModel == nullptr)
+    {
+        return -2;
+    }
+
+    return BindElementTree(renderer, documentModel, document, document_handle, document) ? 1 : -2;
 }
 
 PE_UI_NATIVE_API void peui_native_document_show(Rml::ElementDocument* document, int32_t modal)
@@ -985,14 +1289,26 @@ PE_UI_NATIVE_API int32_t peui_native_set_model_value(
         return -2;
     }
 
-    PeUiModelBinding* binding = FindModelBinding(renderer, document_handle, path_hash);
-    if (binding == nullptr)
+    PeUiModelBinding* first = FindModelBinding(renderer, document_handle, path_hash);
+    if (first == nullptr)
     {
         return 0;
     }
 
-    binding->value = *value;
-    ApplyValueToElement(binding->element, binding->value);
+    for (PeUiModelBinding& binding : renderer->modelBindings)
+    {
+        if (binding.documentHandle == document_handle && binding.pathHash == path_hash)
+        {
+            binding.value = *value;
+            ApplyValueToElement(binding.element, binding.value);
+        }
+    }
+
+    if (PeUiDocumentModel* documentModel = FindDocumentModel(renderer, first->document))
+    {
+        documentModel->modelHandle.DirtyVariable(first->variableName);
+    }
+
     return 1;
 }
 

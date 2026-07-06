@@ -60,11 +60,15 @@ public sealed class RmlUiGlBootstrapSmokeTests
                       body { background-color: transparent; pointer-events: none; }
                       #panel { position: absolute; left: 4px; top: 4px; width: 24px; height: 24px; background-color: #ff4040; pointer-events: auto; }
                       #score { position: absolute; left: 32px; top: 4px; width: 28px; height: 24px; color: #ffffff; pointer-events: none; }
+                      .armed_probe { position: absolute; left: 4px; top: 36px; width: 12px; height: 12px; }
                     </style>
                   </head>
                   <body>
                     <div id="panel" data-event-click="start_game"></div>
                     <div id="score" data-model="score">0</div>
+                    <div id="score_mirror" path="score">0</div>
+                    <div id="health" path="hud.health.current">0</div>
+                    <input class="armed_probe" type="checkbox" path="weapon.armed" />
                   </body>
                 </rml>
                 """);
@@ -73,16 +77,30 @@ public sealed class RmlUiGlBootstrapSmokeTests
             backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(1), new UiScreenId(1), document, Modal: false)]);
             backend.Update(1f / 60f);
             UiPathId scorePath = new(UiStableId.Hash("score"));
+            UiPathId healthPath = UiModelPathName.ToPathId("hud.health.current");
+            UiPathId armedPath = UiModelPathName.ToPathId("weapon.armed");
             UiPathId[] paths = new UiPathId[4];
-            Assert.Equal(1, backend.CopyModelPaths(document, paths));
-            Assert.Equal(scorePath, paths[0]);
+            int pathCount = backend.CopyModelPaths(document, paths);
+            Assert.Equal(3, pathCount);
+            Assert.Contains(scorePath, paths[..pathCount]);
+            Assert.Contains(healthPath, paths[..pathCount]);
+            Assert.Contains(armedPath, paths[..pathCount]);
             backend.SetModelValue(document, scorePath, new UiValue(42L));
+            backend.SetModelValue(document, healthPath, new UiValue(0.75));
+            backend.SetModelValue(document, armedPath, UiValue.FromBoolean(true));
+            backend.Update(1f / 60f);
             Assert.True(backend.TryGetModelValue(document, scorePath, out UiValue score));
+            Assert.True(backend.TryGetModelValue(document, healthPath, out UiValue health));
+            Assert.True(backend.TryGetModelValue(document, armedPath, out UiValue armed));
             Assert.Equal(42L, score.AsInt64());
+            Assert.Equal(0.75, health.AsDouble());
+            Assert.True(armed.AsBoolean());
             Assert.True(backend.InvokeAction(
                 document,
                 new UiActionId(UiStableId.Hash("start_game")),
                 UiValue.FromBoolean(true)));
+            UiEvent[] events = new UiEvent[4];
+            Assert.Equal(0, backend.DrainEvents(events));
 
             backend.FeedPointerMove(20, 24);
             Assert.True(backend.HitTest(20, 24).WantsMouse);
@@ -92,7 +110,6 @@ public sealed class RmlUiGlBootstrapSmokeTests
             backend.FeedPointerButton(UiPointerButton.Left, isDown: true);
             backend.FeedPointerButton(UiPointerButton.Left, isDown: false);
             backend.Update(1f / 60f);
-            UiEvent[] events = new UiEvent[4];
             int eventCount = backend.DrainEvents(events);
             Assert.Equal(1, eventCount);
             Assert.Equal(document, events[0].Document);
