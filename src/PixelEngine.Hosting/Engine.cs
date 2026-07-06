@@ -676,7 +676,10 @@ public sealed class Engine : IDisposable
         {
             if (!RmlUiNativeProfileGate.CanUseDesktopGl3(window.Backend, window.Capabilities, out string? profileFallbackReason))
             {
-                return CreateManagedFallbackGameUiBackend(window, out fallbackReason, profileFallbackReason);
+                return CreateManagedFallbackGameUiBackend(
+                    window,
+                    out fallbackReason,
+                    profileFallbackReason ?? "RmlUi native profile gate 拒绝当前上下文，回退 ManagedFallback。");
             }
 
             if (!RmlUiNativeInfo.TryQuery(out RmlUiNativeProbe probe))
