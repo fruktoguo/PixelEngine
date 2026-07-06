@@ -47,7 +47,7 @@
 - [ ] **脚本外部编辑器**：脚本资产双击应调用外部编辑器或系统默认 opener，并记录失败诊断；不得只在 Project Window 中选中脚本而无打开行为。
 - [ ] **Project Settings**：通过 plan/18 `ProjectSettingsDto` 绑定工程名、content root、script source dir、默认 scene、资源规则、编辑器偏好、默认 UI backend；支持读写、校验、迁移和错误提示。
 - [ ] **Player Settings**：通过 plan/18 `PlayerSettingsDto` 绑定窗口标题、分辨率、VSync、图标、版本、启动场景、输入默认、运行时 UI backend、发行通道；保证运行时与 build-player 参数一致。
-- [ ] **Build Settings**：通过 plan/18 `BuildProfileDto` 或同源投影绑定 RID/channel/configuration、R2R/AOT、入包场景、启动场景、输出目录、符号、Build/Build And Run；消除 shell 内独立 `BuildTargetSettings` 与 Hosting schema 的漂移风险。
+- [x] **Build Settings**：已通过 plan/18 `BuildProfileDto` 同源投影绑定 RID/channel/configuration、R2R/AOT、入包场景、启动场景、输出目录、符号、Build/Build And Run；`BuildSettingsStore` 读写 Hosting `BuildSettings.json`，消除 shell 内独立构建设置 schema 与 Hosting schema 的漂移风险。
 - [ ] **Console 产品面**：将构建日志、脚本编译错误、UI/native/backend 降级、资源加载错误统一进入 Console 可筛选视图；保留 build 面板局部日志，但错误入口不应分散。
 - [ ] **Game View 产品面**：明确 Scene View 与 Game View 的相机、输入、Play 状态、UI overlay 与编辑器 overlay 关系；Game View 在 Play 模式应展示玩家视角与 Web-first UI，而 Scene View 保持 authoring 工具视角。
 - [ ] **默认工作台体验**：首次启动、新建工程、创建 GameObject、添加脚本、保存场景、进入 Play、退出 Play、构建玩家包应形成连续可演示路线。
@@ -74,6 +74,6 @@
 
 - [x] 上游依赖：plan/00 依赖方向与技术栈、plan/12 Editor ImGui 面板层、plan/18 Hosting attach/Edit/Play/scene writer、plan/11 脚本与 Scene 模型、plan/08 RenderWindow/GL/UI 层、plan/15 build-player 与 player-only audit 已登记为 Shell 的公开 API 边界。
 - [x] 下游消费：plan/13 Demo 使用 player-only 解耦后的公开 runtime；plan/20 复用 `PixelEngine.Gui` 字体与 ManagedFallback；plan/14 负责 shell scripted probe、scene/prefab/build tests；plan/17 只登记 M13/M14/M15 DAG 与退出标准。
-- [ ] 下一闭合节点：实现并绑定 plan/18 `ProjectSettingsDto` / `PlayerSettingsDto` / `BuildProfileDto`，把 Settings 面板从 shell-local schema 收敛到 Hosting 中性 schema。
+- [ ] 下一闭合节点：将 plan/18 `ProjectSettingsDto` / `PlayerSettingsDto` 绑定到 Project Settings / Player Settings 面板与运行时消费路径，补 Settings UX 保存、重启恢复、错误输入校验和 build-player 参数投影证据。
 - [ ] 下一闭合节点：补 Project Window stable asset id/manifest 与拖拽/移动/重命名引用保持路线，并把证据写入本文件 M14 UX Contract。
 - [!] M15 后续节点：补真实窗口人工 UX 材料，完成后再同步 README/plan17 dashboard；不得用 scripted probe 替代人工 UX 完成态。

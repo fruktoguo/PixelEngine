@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Hexa.NET.ImGui;
+using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell.Build;
 
@@ -15,7 +16,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     private readonly IPlayerBuildService _buildService;
     private readonly ConcurrentQueue<BuildProgressEvent> _pendingEvents = new();
     private readonly BuildLog _log = new();
-    private readonly BuildTargetSettings _settings;
+    private readonly BuildProfileDto _settings;
     private BuildRunView _view = new();
     private CancellationTokenSource? _buildCancellation;
     private Task<BuildPreflight>? _preflightTask;
@@ -50,7 +51,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         }
 
         _settings.Rid = BuildHostRid.Current;
-        _settings.Channel = BuildChannel.R2R;
+        _settings.Channel = BuildProfileChannel.R2R;
         _settings.Configuration = "Release";
         _settings.OutputDirectory = outputDirectory;
         _settings.ProductName = "PixelEngine Demo";
@@ -98,7 +99,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         }
 
         _settings.Rid = BuildHostRid.Current;
-        _settings.Channel = BuildChannel.R2R;
+        _settings.Channel = BuildProfileChannel.R2R;
         _settings.Configuration = "Debug";
         _settings.OutputDirectory = outputDirectory;
         _settings.ProductName = "PixelEngine Settings Probe";
@@ -127,7 +128,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     {
         DrainEvents();
         RefreshTasks();
-        SceneBuildEntry? startup = _settings.Scenes.FirstOrDefault(static scene => scene.IsStartup);
+        BuildProfileSceneDto? startup = _settings.Scenes.FirstOrDefault(static scene => scene.IsStartup);
         return new ScriptedBuildSettingsProbeSnapshot
         {
             Rid = _settings.Rid,
@@ -185,10 +186,10 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             changed = true;
         }
 
-        int channel = _settings.Channel == BuildChannel.Aot ? 1 : 0;
+        int channel = _settings.Channel == BuildProfileChannel.Aot ? 1 : 0;
         if (ImGui.Combo("通道", ref channel, ChannelOptions, ChannelOptions.Length))
         {
-            _settings.Channel = channel == 1 ? BuildChannel.Aot : BuildChannel.R2R;
+            _settings.Channel = channel == 1 ? BuildProfileChannel.Aot : BuildProfileChannel.R2R;
             changed = true;
         }
 
@@ -248,7 +249,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             ImGui.TableHeadersRow();
             for (int i = 0; i < _settings.Scenes.Count; i++)
             {
-                SceneBuildEntry scene = _settings.Scenes[i];
+                BuildProfileSceneDto scene = _settings.Scenes[i];
                 ImGui.TableNextRow();
                 _ = ImGui.TableNextColumn();
                 ImGui.TextUnformatted(scene.SceneName);
@@ -290,7 +291,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     {
         bool valid = _settings.TryNormalize(out _validationMessage);
         BuildPreflight? preflight = _view.Preflight;
-        bool aotRidSupported = _settings.Channel != BuildChannel.Aot ||
+        bool aotRidSupported = _settings.Channel != BuildProfileChannel.Aot ||
             string.Equals(_settings.Rid, BuildHostRid.Current, StringComparison.OrdinalIgnoreCase);
         if (!valid)
         {
