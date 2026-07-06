@@ -71,6 +71,37 @@ public sealed class ScriptEventBusTests
     }
 
     /// <summary>
+    /// 验证 ScriptRuntime 在帧开始清理上一帧未消费的瞬时 overlay，但保留本帧 Update 新提交的命令给渲染阶段。
+    /// </summary>
+    [Fact]
+    public void ScriptRuntimeClearsTransientOverlayAtFrameStart()
+    {
+        EventBus coreEvents = new(capacityPerChannel: 8);
+        using ScriptEventBus scriptEvents = new(coreEvents);
+        Scene scene = new();
+        ScriptOverlayApi overlay = new();
+        FakeScriptContext context = new(scene, scriptEvents, overlay);
+        _ = scene.CreateEntity().AddComponent<OverlayDrawingBehaviour>();
+        ScriptRuntime runtime = new();
+        runtime.Initialize(context);
+
+        overlay.SolidRectangle(1, 2, 3, 4, 0xFF_10_20_30);
+        Assert.Equal(1, overlay.CommandCount);
+
+        runtime.BeginFrame();
+        Assert.Equal(0, overlay.CommandCount);
+
+        runtime.Update(0.016f);
+        Assert.Equal(1, overlay.CommandCount);
+        Assert.Equal(1, context.TransientClearCount);
+
+        runtime.EndFrame();
+        runtime.BeginFrame();
+        Assert.Equal(0, overlay.CommandCount);
+        Assert.Equal(2, context.TransientClearCount);
+    }
+
+    /// <summary>
     /// 验证 Behaviour 生命周期内创建的事件订阅会在销毁时自动退订。
     /// </summary>
     [Fact]
@@ -160,7 +191,15 @@ public sealed class ScriptEventBusTests
         }
     }
 
-    private sealed class FakeScriptContext(Scene scene, IEventBus events) : IScriptContext
+    private sealed class OverlayDrawingBehaviour : Behaviour
+    {
+        protected override void OnUpdate(float dt)
+        {
+            Context.Overlay.SolidRectangle(4, 5, 6, 7, 0xFF_40_50_60);
+        }
+    }
+
+    private sealed class FakeScriptContext(Scene scene, IEventBus events, ScriptOverlayApi? overlay = null) : IScriptContext
     {
         public IWorldCellAccess Cells => throw new NotSupportedException();
 
@@ -182,6 +221,8 @@ public sealed class ScriptEventBusTests
 
         public ILightingApi Lighting => throw new NotSupportedException();
 
+        public IOverlayApi Overlay => overlay ?? throw new NotSupportedException();
+
         public IDiagnosticsApi Diagnostics => throw new NotSupportedException();
 
         public IEventBus Events { get; } = events;
@@ -191,5 +232,13 @@ public sealed class ScriptEventBusTests
         public IGameTime Time => throw new NotSupportedException();
 
         public Scene Scene { get; } = scene;
+
+        public int TransientClearCount { get; private set; }
+
+        public void ClearFrameTransientRequests()
+        {
+            overlay?.Clear();
+            TransientClearCount++;
+        }
     }
 }

@@ -52,6 +52,7 @@ public sealed class ScriptRuntime : IScriptRuntime
     public void BeginFrame()
     {
         IScriptContext context = RequireContext();
+        context.ClearFrameTransientRequests();
 #if !PIXELENGINE_NATIVEAOT
         _ = _hotReload?.ApplyPendingReload();
 #endif

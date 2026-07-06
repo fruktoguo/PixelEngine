@@ -194,6 +194,15 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     /// <inheritdoc />
     public Scene Scene { get; }
 
+    /// <inheritdoc />
+    public void ClearFrameTransientRequests()
+    {
+        if (OverlayBackend is ScriptOverlayApi overlay)
+        {
+            overlay.Clear();
+        }
+    }
+
     /// <summary>
     /// 在 dirty rectangle swap 前落地脚本 cell 写命令，使下一次 CA 可见。
     /// </summary>

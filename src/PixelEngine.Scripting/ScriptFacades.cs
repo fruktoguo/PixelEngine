@@ -8,6 +8,13 @@ namespace PixelEngine.Scripting;
 public interface IScriptContext
 {
     /// <summary>
+    /// 清理只允许存在于单个脚本帧内的瞬时请求。默认上下文无瞬时后端时不执行任何操作。
+    /// </summary>
+    void ClearFrameTransientRequests()
+    {
+    }
+
+    /// <summary>
     /// cell 读写能力；写操作延迟到相位安全窗口落地。
     /// </summary>
     IWorldCellAccess Cells { get; }
