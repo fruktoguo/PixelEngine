@@ -14,6 +14,10 @@ param(
   [string]$ContentRoot,
   [string]$ProductName,
   [string]$StartScene,
+  [int]$WindowWidth = 1280,
+  [int]$WindowHeight = 720,
+  [string]$VSync = 'true',
+  [string]$RuntimeUiBackend = 'ManagedFallback',
   [string[]]$IncludeScene = @(),
   [switch]$IncludeSymbols
 )
@@ -141,7 +145,25 @@ function Normalize-ScenePath([string]$Scene) {
   return $normalized
 }
 
-function Copy-FilteredContent([string]$SourceRoot, [string]$DestinationRoot, [string[]]$Scenes, [string]$StartupScene) {
+function Resolve-JsonBool([string]$Value, [string]$Name) {
+  $normalized = if ($Value) { $Value.Trim().ToLowerInvariant() } else { 'false' }
+  return switch ($normalized) {
+    'true' { $true }
+    'false' { $false }
+    default { throw "$Name 必须是 true 或 false：$Value" }
+  }
+}
+
+function Copy-FilteredContent(
+  [string]$SourceRoot,
+  [string]$DestinationRoot,
+  [string[]]$Scenes,
+  [string]$StartupScene,
+  [string]$StartupWindowTitle,
+  [int]$StartupWindowWidth,
+  [int]$StartupWindowHeight,
+  [string]$StartupVSync,
+  [string]$StartupRuntimeUiBackend) {
   Remove-Item -LiteralPath $DestinationRoot -Recurse -Force -ErrorAction SilentlyContinue
   Copy-Item -LiteralPath $SourceRoot -Destination $DestinationRoot -Recurse -Force
   $scenesToCopy = [System.Collections.Generic.List[string]]::new()
@@ -153,11 +175,15 @@ function Copy-FilteredContent([string]$SourceRoot, [string]$DestinationRoot, [st
 
   if (-not [string]::IsNullOrWhiteSpace($StartupScene)) {
     $startup = Normalize-ScenePath $StartupScene
-    $startupJson = @"
-{
-  "startScene": "$startup"
-}
-"@
+    $startupConfig = [ordered]@{
+      startScene = $startup
+      windowTitle = $StartupWindowTitle
+      windowWidth = $StartupWindowWidth
+      windowHeight = $StartupWindowHeight
+      vSync = Resolve-JsonBool $StartupVSync 'VSync'
+      runtimeUiBackend = $StartupRuntimeUiBackend
+    }
+    $startupJson = $startupConfig | ConvertTo-Json -Depth 4
     Set-Content -LiteralPath (Join-Path $DestinationRoot 'startup.json') -Value $startupJson -Encoding UTF8
     if (-not $scenesToCopy.Contains($startup)) {
       $scenesToCopy.Add($startup)
@@ -204,7 +230,7 @@ Get-ChildItem -LiteralPath $PublishDir -Force | ForEach-Object {
 }
 Remove-PlayerPackageNoise $appDir $IncludeSymbols.IsPresent
 Remove-Item -LiteralPath $stagedContent -Recurse -Force -ErrorAction SilentlyContinue
-Copy-FilteredContent $ContentRoot $stagedContent $IncludeScene $StartScene
+Copy-FilteredContent $ContentRoot $stagedContent $IncludeScene $StartScene $ProductName $WindowWidth $WindowHeight $VSync $RuntimeUiBackend
 
 if ($Rid.StartsWith('win-')) {
   $rootEntry = Join-Path $stagingDir $windowsLauncherName

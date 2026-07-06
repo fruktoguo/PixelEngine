@@ -20,6 +20,10 @@ param(
   [string]$ApplicationIcon,
   [switch]$IncludeSymbols,
   [string]$StartScene = 'scenes/playable-world.scene',
+  [int]$WindowWidth = 1280,
+  [int]$WindowHeight = 720,
+  [string]$VSync = 'true',
+  [string]$RuntimeUiBackend = 'ManagedFallback',
   [string[]]$IncludeScene = @(),
   [switch]$DevLayout
 )
@@ -313,6 +317,10 @@ try {
     PlayerOutputDir = $playerDir
     ProductName = $ProductName
     StartScene = $StartScene
+    WindowWidth = $WindowWidth
+    WindowHeight = $WindowHeight
+    VSync = $VSync
+    RuntimeUiBackend = $RuntimeUiBackend
   }
   if ($IncludeScene.Count -gt 0) {
     $packageArgs.IncludeScene = $IncludeScene

@@ -23,8 +23,6 @@ public static class DemoProgram
     private const int DemoParticleCapacityDefault = 32_768;
     private const int PlayableInternalWidth = 720;
     private const int PlayableInternalHeight = 480;
-    private const int PlayableWindowWidth = 1080;
-    private const int PlayableWindowHeight = 720;
     private const double PlayableOverloadFrameBudgetMs = 1000.0 / 30.0;
     private const int PlayableOverloadSustainWindow = 120;
 
@@ -772,10 +770,12 @@ public static class DemoProgram
         ArgumentNullException.ThrowIfNull(project);
         EngineBuilder builder = new EngineBuilder()
             .WithProject(project)
-            .WithWindow(PlayableWindowWidth, PlayableWindowHeight)
+            .WithWindow(options.WindowWidth, options.WindowHeight)
+            .WithWindowTitle(options.WindowTitle)
             .WithInternalResolution(PlayableInternalWidth, PlayableInternalHeight)
             .WithOverloadPolicy(PlayableOverloadFrameBudgetMs, PlayableOverloadSustainWindow)
             .UseVSync(options.VSync)
+            .UseUiBackend(options.RuntimeUiBackend)
             .UseDeterministicMode();
         if (options.Headless)
         {

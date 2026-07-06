@@ -2,6 +2,7 @@ using PixelEngine.Hosting;
 using PixelEngine.Rendering;
 using PixelEngine.Serialization;
 using PixelEngine.Simulation;
+using PixelEngine.UI;
 using PixelEngine.World;
 using Xunit;
 
@@ -70,6 +71,54 @@ public sealed class DemoStartupOptionsTests
                 "--scene", "scenes/other.scene",
             ]);
             Assert.Equal("scenes/other.scene", explicitScene.Scene);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证玩家包 startup.json 会把 Player Settings 窗口与 UI 后端字段投影到 Demo runtime。
+    /// </summary>
+    [Fact]
+    public void StartupJsonFeedsPlayerWindowAndRuntimeSettings()
+    {
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-startup-player-settings-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            _ = Directory.CreateDirectory(temp);
+            File.WriteAllText(
+                Path.Combine(temp, "startup.json"),
+                """
+                {
+                  "startScene": "scenes/player-settings.scene",
+                  "windowTitle": "Player Settings Runtime",
+                  "windowWidth": 1440,
+                  "windowHeight": 810,
+                  "vSync": false,
+                  "runtimeUiBackend": "Ultralight"
+                }
+                """);
+
+            DemoStartupOptions options = DemoStartupOptions.Parse(["--content", temp]);
+            EngineProject project = DemoProgram.BuildProject(options);
+            using Engine engine = DemoProgram.BuildEngine(options, project);
+
+            Assert.Equal("scenes/player-settings.scene", options.Scene);
+            Assert.Equal("Player Settings Runtime", options.WindowTitle);
+            Assert.Equal(1440, options.WindowWidth);
+            Assert.Equal(810, options.WindowHeight);
+            Assert.False(options.VSync);
+            Assert.Equal(UiBackendKind.Ultralight, options.RuntimeUiBackend);
+            Assert.Equal("Player Settings Runtime", engine.Context.Options.WindowTitle);
+            Assert.Equal(1440, engine.Context.Options.WindowWidth);
+            Assert.Equal(810, engine.Context.Options.WindowHeight);
+            Assert.False(engine.Context.Options.VSync);
+            Assert.Equal(UiBackendKind.Ultralight, engine.Context.Options.GameUiBackend);
         }
         finally
         {

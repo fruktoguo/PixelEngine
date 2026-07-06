@@ -14,6 +14,7 @@ public sealed class EngineBuilder
 {
     private int _windowWidth = EngineOptions.DefaultWindowWidth;
     private int _windowHeight = EngineOptions.DefaultWindowHeight;
+    private string _windowTitle = EngineOptions.DefaultWindowTitle;
     private int _internalWidth = EngineOptions.DefaultInternalWidth;
     private int _internalHeight = EngineOptions.DefaultInternalHeight;
     private int _workerCount;
@@ -47,6 +48,16 @@ public sealed class EngineBuilder
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
         _windowWidth = width;
         _windowHeight = height;
+        return this;
+    }
+
+    /// <summary>
+    /// 配置窗口标题。
+    /// </summary>
+    public EngineBuilder WithWindowTitle(string title)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        _windowTitle = title.Trim();
         return this;
     }
 
@@ -302,6 +313,7 @@ public sealed class EngineBuilder
         EngineOptions options = new(
             _windowWidth,
             _windowHeight,
+            _windowTitle,
             _internalWidth,
             _internalHeight,
             _workerCount,

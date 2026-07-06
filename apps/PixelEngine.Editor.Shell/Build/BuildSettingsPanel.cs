@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Hexa.NET.ImGui;
+using PixelEngine.Editor.Shell.Settings;
 using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell.Build;
@@ -459,7 +460,10 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         _buildCancellation?.Dispose();
         _buildCancellation = new CancellationTokenSource();
         IProgress<BuildProgressEvent> progress = new Progress<BuildProgressEvent>(_pendingEvents.Enqueue);
-        _buildTask = _buildService.RunAsync(_settings.ToRequest(), progress, _buildCancellation.Token);
+        BuildRequest request = PlayerSettingsEditorAdapter.ApplyToBuildRequest(
+            _settings.ToRequest(),
+            new PlayerSettingsStore(_project).Load());
+        _buildTask = _buildService.RunAsync(request, progress, _buildCancellation.Token);
         _view = _view with
         {
             IsRunning = true,

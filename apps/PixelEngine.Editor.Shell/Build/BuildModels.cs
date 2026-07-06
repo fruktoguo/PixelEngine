@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using PixelEngine.Hosting;
+using PixelEngine.UI;
 
 namespace PixelEngine.Editor.Shell.Build;
 
@@ -227,6 +228,16 @@ internal sealed record BuildRequest
     public string[] IncludedScenes { get; init; } = [];
 
     public bool RunAfterBuild { get; init; }
+
+    public int PlayerWindowWidth { get; init; } = EngineOptions.DefaultWindowWidth;
+
+    public int PlayerWindowHeight { get; init; } = EngineOptions.DefaultWindowHeight;
+
+    public bool PlayerVSync { get; init; } = true;
+
+    public UiBackendKind RuntimeUiBackend { get; init; } = UiBackendKind.ManagedFallback;
+
+    public PlayerReleaseChannel ReleaseChannel { get; init; } = PlayerReleaseChannel.Development;
 }
 
 internal sealed record BuildProgressEvent(

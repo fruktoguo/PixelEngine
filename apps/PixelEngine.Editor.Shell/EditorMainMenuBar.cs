@@ -1,5 +1,6 @@
 using Hexa.NET.ImGui;
 using PixelEngine.Editor.Shell.Build;
+using PixelEngine.Editor.Shell.Settings;
 
 namespace PixelEngine.Editor.Shell;
 
@@ -82,6 +83,16 @@ internal sealed class EditorMainMenuBar
             _ = app.SaveSceneAs();
         }
         ImGui.Separator();
+        if (ImGui.MenuItem("Project Settings...", string.Empty, selected: false, enabled: app.HasOpenProject))
+        {
+            app.ShowProjectSettings();
+        }
+
+        if (ImGui.MenuItem("Player Settings...", string.Empty, selected: false, enabled: app.HasOpenProject))
+        {
+            app.ShowPlayerSettings();
+        }
+
         if (ImGui.MenuItem("Build Settings...", string.Empty, selected: false, enabled: app.HasOpenProject))
         {
             app.ShowBuildSettings();
@@ -201,6 +212,8 @@ internal sealed class EditorMainMenuBar
         DrawPanelMenuItem(app, "Project", EditorDockSpace.AssetBrowserWindowTitle);
         DrawPanelMenuItem(app, "Console", EditorDockSpace.ConsoleDiagnosticsWindowTitle);
         DrawPanelMenuItem(app, "Performance HUD", EditorDockSpace.PerformanceHudWindowTitle);
+        DrawPanelMenuItem(app, "Project Settings...", ProjectSettingsPanel.PanelTitle);
+        DrawPanelMenuItem(app, "Player Settings...", PlayerSettingsPanel.PanelTitle);
         DrawPanelMenuItem(app, "Build Settings...", BuildSettingsPanel.PanelTitle);
         ImGui.Separator();
         if (ImGui.MenuItem("Reset Layout"))

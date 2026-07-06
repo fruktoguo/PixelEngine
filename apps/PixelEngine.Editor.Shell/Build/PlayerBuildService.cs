@@ -271,16 +271,76 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
             startInfo.ArgumentList.Add("-NoProfile");
             startInfo.ArgumentList.Add("-ExecutionPolicy");
             startInfo.ArgumentList.Add("Bypass");
-            startInfo.ArgumentList.Add("-File");
-            startInfo.ArgumentList.Add(tools.BuildPlayerPath);
+            startInfo.ArgumentList.Add("-Command");
+            startInfo.ArgumentList.Add(BuildPowerShellBuildPlayerCommand(tools.BuildPlayerPath, request, outputDirectory));
         }
         else
         {
             startInfo.ArgumentList.Add(tools.BuildPlayerPath);
+            AddBuildPlayerArguments(startInfo, request, outputDirectory);
         }
 
-        AddBuildPlayerArguments(startInfo, request, outputDirectory);
         return new Process { StartInfo = startInfo };
+    }
+
+    private static string BuildPowerShellBuildPlayerCommand(string buildPlayerPath, BuildRequest request, string outputDirectory)
+    {
+        StringBuilder command = new();
+        command.Append("& ").Append(ToPowerShellLiteral(buildPlayerPath));
+        AppendPowerShellArgument(command, "-Rid", request.Rid);
+        AppendPowerShellArgument(command, "-Channel", request.Channel == BuildProfileChannel.Aot ? "aot" : "r2r");
+        AppendPowerShellArgument(command, "-Configuration", request.Configuration);
+        AppendPowerShellArgument(command, "-Output", outputDirectory);
+        AppendPowerShellArgument(command, "-Version", request.Version);
+        if (!string.IsNullOrWhiteSpace(request.InformationalVersion))
+        {
+            AppendPowerShellArgument(command, "-InformationalVersion", request.InformationalVersion);
+        }
+
+        AppendPowerShellArgument(command, "-ProductName", request.ProductName);
+        if (!string.IsNullOrWhiteSpace(request.IconPath))
+        {
+            AppendPowerShellArgument(command, "-IconPath", request.IconPath);
+        }
+
+        if (request.IncludeSymbols)
+        {
+            command.Append(" -IncludeSymbols");
+        }
+
+        AppendPowerShellArgument(command, "-StartScene", request.StartScene);
+        AppendPowerShellArgument(command, "-WindowWidth", request.PlayerWindowWidth.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        AppendPowerShellArgument(command, "-WindowHeight", request.PlayerWindowHeight.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        AppendPowerShellArgument(command, "-VSync", request.PlayerVSync ? "true" : "false");
+        AppendPowerShellArgument(command, "-RuntimeUiBackend", request.RuntimeUiBackend.ToString());
+        if (request.IncludedScenes.Length > 0)
+        {
+            command.Append(" -IncludeScene @(");
+            for (int i = 0; i < request.IncludedScenes.Length; i++)
+            {
+                if (i > 0)
+                {
+                    command.Append(',');
+                }
+
+                command.Append(ToPowerShellLiteral(request.IncludedScenes[i]));
+            }
+
+            command.Append(')');
+        }
+
+        command.Append("; exit $LASTEXITCODE");
+        return command.ToString();
+    }
+
+    private static void AppendPowerShellArgument(StringBuilder command, string name, string value)
+    {
+        command.Append(' ').Append(name).Append(' ').Append(ToPowerShellLiteral(value));
+    }
+
+    private static string ToPowerShellLiteral(string value)
+    {
+        return "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
     }
 
     private static void AddBuildPlayerArguments(ProcessStartInfo startInfo, BuildRequest request, string outputDirectory)
@@ -307,6 +367,10 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         }
 
         AddArgument(startInfo, "-StartScene", request.StartScene);
+        AddArgument(startInfo, "-WindowWidth", request.PlayerWindowWidth.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        AddArgument(startInfo, "-WindowHeight", request.PlayerWindowHeight.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        AddArgument(startInfo, "-VSync", request.PlayerVSync ? "true" : "false");
+        AddArgument(startInfo, "-RuntimeUiBackend", request.RuntimeUiBackend.ToString());
         for (int i = 0; i < request.IncludedScenes.Length; i++)
         {
             AddArgument(startInfo, "-IncludeScene", request.IncludedScenes[i]);

@@ -346,7 +346,7 @@ public sealed class Engine : IDisposable
 
         RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
-            Title = "PixelEngine Demo",
+            Title = Context.Options.WindowTitle,
             Width = Context.Options.WindowWidth,
             Height = Context.Options.WindowHeight,
             VSync = Context.Options.VSync,

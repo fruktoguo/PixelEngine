@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using PixelEngine.Editor.Shell.Build;
+using PixelEngine.Editor.Shell.Settings;
 using Silk.NET.OpenGL;
 
 namespace PixelEngine.Editor.Shell;
@@ -308,6 +309,8 @@ internal sealed class EditorShellApp
                 EditorDockSpace.AssetBrowserWindowTitle,
                 EditorDockSpace.ConsoleDiagnosticsWindowTitle,
                 EditorDockSpace.PerformanceHudWindowTitle,
+                ProjectSettingsPanel.PanelTitle,
+                PlayerSettingsPanel.PanelTitle,
                 BuildSettingsPanel.PanelTitle,
             ];
             int shown = 0;
@@ -979,6 +982,16 @@ internal sealed class EditorShellApp
     public void InstantiatePrefab(string assetPath)
     {
         CurrentSession?.InstantiatePrefab(assetPath);
+    }
+
+    public void ShowProjectSettings()
+    {
+        _ = CurrentSession?.ShowProjectSettings();
+    }
+
+    public void ShowPlayerSettings()
+    {
+        _ = CurrentSession?.ShowPlayerSettings();
     }
 
     public void ShowBuildSettings()

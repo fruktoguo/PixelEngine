@@ -13,6 +13,10 @@ Options:
   --icon-path|--application-icon <ico>
   --include-symbols
   --start-scene <scene>
+  --window-width <pixels>
+  --window-height <pixels>
+  --vsync <true|false>
+  --runtime-ui-backend <backend>
   --include-scene <scene>   repeatable
   --dev-layout
 EOF
@@ -184,6 +188,10 @@ product_name="PixelEngine Demo"
 icon_path=""
 include_symbols=0
 start_scene="scenes/playable-world.scene"
+window_width="1280"
+window_height="720"
+vsync="true"
+runtime_ui_backend="ManagedFallback"
 include_scenes=()
 dev_layout=0
 warnings=()
@@ -237,6 +245,26 @@ while [[ $# -gt 0 ]]; do
     --start-scene|-StartScene)
       require_value "$1" "${2:-}"
       start_scene="$2"
+      shift 2
+      ;;
+    --window-width|-WindowWidth)
+      require_value "$1" "${2:-}"
+      window_width="$2"
+      shift 2
+      ;;
+    --window-height|-WindowHeight)
+      require_value "$1" "${2:-}"
+      window_height="$2"
+      shift 2
+      ;;
+    --vsync|-VSync)
+      require_value "$1" "${2:-}"
+      vsync="$2"
+      shift 2
+      ;;
+    --runtime-ui-backend|-RuntimeUiBackend)
+      require_value "$1" "${2:-}"
+      runtime_ui_backend="$2"
       shift 2
       ;;
     --include-scene|-IncludeScene)
@@ -381,7 +409,7 @@ if [[ -z "$error_message" ]]; then
   run_phase "verify" 45 60 bash "$repo_root/tools/verify-publish.sh" "${verify_args[@]}" || error_message="verify phase failed"
 fi
 if [[ -z "$error_message" ]]; then
-  package_args=(--rid "$rid" --channel "$channel" --version "$version" --publish-dir "$publish_dir" --output-root "$package_root" --player-output-dir "$player_dir" --product-name "$product_name" --start-scene "$start_scene")
+  package_args=(--rid "$rid" --channel "$channel" --version "$version" --publish-dir "$publish_dir" --output-root "$package_root" --player-output-dir "$player_dir" --product-name "$product_name" --start-scene "$start_scene" --window-width "$window_width" --window-height "$window_height" --vsync "$vsync" --runtime-ui-backend "$runtime_ui_backend")
   for scene in "${include_scenes[@]}"; do package_args+=(--include-scene "$scene"); done
   if (( include_symbols || dev_layout )); then package_args+=(--include-symbols); fi
   run_phase "package" 60 82 bash "$repo_root/tools/package.sh" "${package_args[@]}" || error_message="package phase failed"

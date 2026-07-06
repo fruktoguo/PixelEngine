@@ -1,5 +1,7 @@
-using PixelEngine.Rendering;
 using PixelEngine.Core;
+using PixelEngine.Hosting;
+using PixelEngine.Rendering;
+using PixelEngine.UI;
 using System.Text.Json;
 
 namespace PixelEngine.Demo;
@@ -20,6 +22,16 @@ public sealed class DemoStartupOptions
     public const string DefaultProceduralSceneKey = "PixelEngine.Demo.PlayableWorldDirector";
 
     /// <summary>
+    /// 默认玩家窗口宽度。
+    /// </summary>
+    public const int DefaultWindowWidth = 1080;
+
+    /// <summary>
+    /// 默认玩家窗口高度。
+    /// </summary>
+    public const int DefaultWindowHeight = 720;
+
+    /// <summary>
     /// 是否启用脚本热重载。
     /// </summary>
     public bool HotReloadEnabled { get; init; } = true;
@@ -28,6 +40,26 @@ public sealed class DemoStartupOptions
     /// 窗口模式是否启用垂直同步。
     /// </summary>
     public bool VSync { get; init; } = true;
+
+    /// <summary>
+    /// 窗口标题。
+    /// </summary>
+    public string WindowTitle { get; init; } = EngineOptions.DefaultWindowTitle;
+
+    /// <summary>
+    /// 窗口宽度。
+    /// </summary>
+    public int WindowWidth { get; init; } = DefaultWindowWidth;
+
+    /// <summary>
+    /// 窗口高度。
+    /// </summary>
+    public int WindowHeight { get; init; } = DefaultWindowHeight;
+
+    /// <summary>
+    /// 游戏 UI 后端。
+    /// </summary>
+    public UiBackendKind RuntimeUiBackend { get; init; } = UiBackendKind.ManagedFallback;
 
     /// <summary>
     /// 是否以 headless 冒烟模式运行。
@@ -108,7 +140,14 @@ public sealed class DemoStartupOptions
     {
         ArgumentNullException.ThrowIfNull(args);
         bool hotReload = true;
-        bool vSync = true;
+        string contentRoot = ResolveDefaultContentRoot(AppContext.BaseDirectory);
+        DemoStartupSettings startupSettings = ResolveStartupSettings(contentRoot);
+        bool vSync = startupSettings.VSync;
+        bool vSyncExplicitlySet = false;
+        string windowTitle = startupSettings.WindowTitle;
+        int windowWidth = startupSettings.WindowWidth;
+        int windowHeight = startupSettings.WindowHeight;
+        UiBackendKind runtimeUiBackend = startupSettings.RuntimeUiBackend;
         bool headless = false;
         int ticks = 1;
         int windowTicks = 0;
@@ -119,8 +158,7 @@ public sealed class DemoStartupOptions
         int particleProbeCount = 100_000;
         int particleProbeWarmupFrames = 5;
         string particleProbeRunId = "local";
-        string contentRoot = ResolveDefaultContentRoot(AppContext.BaseDirectory);
-        string scene = ResolveStartupScene(contentRoot);
+        string scene = startupSettings.StartScene;
         bool sceneExplicitlySet = false;
         string logDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
         string captureFramePath = string.Empty;
@@ -142,9 +180,11 @@ public sealed class DemoStartupOptions
                     break;
                 case "--vsync":
                     vSync = true;
+                    vSyncExplicitlySet = true;
                     break;
                 case "--no-vsync":
                     vSync = false;
+                    vSyncExplicitlySet = true;
                     break;
                 case "--scene":
                     scene = ReadValue(args, ref i, "--scene");
@@ -152,9 +192,19 @@ public sealed class DemoStartupOptions
                     break;
                 case "--content":
                     contentRoot = ReadValue(args, ref i, "--content");
+                    startupSettings = ResolveStartupSettings(contentRoot);
+                    windowTitle = startupSettings.WindowTitle;
+                    windowWidth = startupSettings.WindowWidth;
+                    windowHeight = startupSettings.WindowHeight;
+                    runtimeUiBackend = startupSettings.RuntimeUiBackend;
+                    if (!vSyncExplicitlySet)
+                    {
+                        vSync = startupSettings.VSync;
+                    }
+
                     if (!sceneExplicitlySet)
                     {
-                        scene = ResolveStartupScene(contentRoot);
+                        scene = startupSettings.StartScene;
                     }
 
                     break;
@@ -233,6 +283,10 @@ public sealed class DemoStartupOptions
         {
             HotReloadEnabled = hotReload,
             VSync = vSync,
+            WindowTitle = windowTitle,
+            WindowWidth = windowWidth,
+            WindowHeight = windowHeight,
+            RuntimeUiBackend = runtimeUiBackend,
             Headless = headless,
             HeadlessTicks = ticks,
             WindowTicks = windowTicks,
@@ -250,27 +304,56 @@ public sealed class DemoStartupOptions
         };
     }
 
-    private static string ResolveStartupScene(string contentRoot)
+    private static DemoStartupSettings ResolveStartupSettings(string contentRoot)
     {
+        DemoStartupSettings defaults = DemoStartupSettings.CreateDefault();
         string startupPath = Path.Combine(contentRoot, "startup.json");
         if (!File.Exists(startupPath))
         {
-            return Path.Combine("scenes", DefaultSceneName + ".scene");
+            return defaults;
         }
 
         try
         {
             using FileStream stream = File.OpenRead(startupPath);
             using JsonDocument document = JsonDocument.Parse(stream);
-            if (document.RootElement.TryGetProperty("startScene", out JsonElement startSceneElement) &&
+            JsonElement root = document.RootElement;
+            string startScene = defaults.StartScene;
+            if (root.TryGetProperty("startScene", out JsonElement startSceneElement) &&
                 startSceneElement.ValueKind == JsonValueKind.String)
             {
-                string? startScene = startSceneElement.GetString();
-                if (!string.IsNullOrWhiteSpace(startScene))
+                string? value = startSceneElement.GetString();
+                if (!string.IsNullOrWhiteSpace(value))
                 {
-                    return startScene.Replace('\\', Path.DirectorySeparatorChar);
+                    startScene = value.Replace('\\', Path.DirectorySeparatorChar);
                 }
             }
+
+            string windowTitle = defaults.WindowTitle;
+            if (root.TryGetProperty("windowTitle", out JsonElement windowTitleElement) &&
+                windowTitleElement.ValueKind == JsonValueKind.String)
+            {
+                string? value = windowTitleElement.GetString();
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    windowTitle = value.Trim();
+                }
+            }
+
+            int windowWidth = ReadPositiveInt(root, "windowWidth", defaults.WindowWidth);
+            int windowHeight = ReadPositiveInt(root, "windowHeight", defaults.WindowHeight);
+            bool vSync = root.TryGetProperty("vSync", out JsonElement vSyncElement) && vSyncElement.ValueKind == JsonValueKind.False
+                ? false
+                : defaults.VSync;
+            UiBackendKind runtimeUiBackend = defaults.RuntimeUiBackend;
+            if (root.TryGetProperty("runtimeUiBackend", out JsonElement backendElement) &&
+                backendElement.ValueKind == JsonValueKind.String &&
+                Enum.TryParse(backendElement.GetString(), ignoreCase: true, out UiBackendKind parsedBackend))
+            {
+                runtimeUiBackend = parsedBackend;
+            }
+
+            return new DemoStartupSettings(startScene, windowTitle, windowWidth, windowHeight, vSync, runtimeUiBackend);
         }
         catch (JsonException)
         {
@@ -279,7 +362,37 @@ public sealed class DemoStartupOptions
         {
         }
 
-        return Path.Combine("scenes", DefaultSceneName + ".scene");
+        return defaults;
+    }
+
+    private static int ReadPositiveInt(JsonElement root, string propertyName, int fallback)
+    {
+        return root.TryGetProperty(propertyName, out JsonElement element) &&
+            element.ValueKind == JsonValueKind.Number &&
+            element.TryGetInt32(out int value) &&
+            value > 0
+                ? value
+                : fallback;
+    }
+
+    private sealed record DemoStartupSettings(
+        string StartScene,
+        string WindowTitle,
+        int WindowWidth,
+        int WindowHeight,
+        bool VSync,
+        UiBackendKind RuntimeUiBackend)
+    {
+        public static DemoStartupSettings CreateDefault()
+        {
+            return new DemoStartupSettings(
+                Path.Combine("scenes", DefaultSceneName + ".scene"),
+                EngineOptions.DefaultWindowTitle,
+                DefaultWindowWidth,
+                DefaultWindowHeight,
+                true,
+                UiBackendKind.ManagedFallback);
+        }
     }
 
     private static void ValidateWindowTicks(bool headless, int windowTicks)
