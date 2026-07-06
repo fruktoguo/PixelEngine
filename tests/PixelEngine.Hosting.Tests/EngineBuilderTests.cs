@@ -188,6 +188,7 @@ public sealed class EngineBuilderTests
         Assert.Equal(0.0, engine.Context.Counters.UiUpdateMilliseconds);
         Assert.Equal(0.0, engine.Context.Counters.UiCompositeMilliseconds);
         Assert.Equal(0.0, engine.Context.Counters.UiPaintMilliseconds);
+        Assert.Equal(0.0, engine.Context.Counters.UiUploadMilliseconds);
     }
 
     /// <summary>

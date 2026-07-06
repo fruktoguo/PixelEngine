@@ -2268,6 +2268,7 @@ public sealed class Engine : IDisposable
         double uiUpdateMs = GetSubPhase(subPhases, FrameSubPhase.UiUpdate);
         double uiCompositeMs = GetSubPhase(subPhases, FrameSubPhase.UiComposite);
         double uiPaintMs = GetSubPhase(subPhases, FrameSubPhase.UiPaint);
+        double uiUploadMs = GetSubPhase(subPhases, FrameSubPhase.UiUpload);
         if (Context.TryGetService(out GameUiHost gameUiHost))
         {
             if (uiPaintMs <= 0.0)
@@ -2296,6 +2297,7 @@ public sealed class Engine : IDisposable
         Context.Counters.UiUpdateMilliseconds = uiUpdateMs;
         Context.Counters.UiCompositeMilliseconds = uiCompositeMs;
         Context.Counters.UiPaintMilliseconds = uiPaintMs;
+        Context.Counters.UiUploadMilliseconds = uiUploadMs;
         Context.Counters.FramePresentWaitMilliseconds = presentWaitMs;
         Context.Counters.FrameWaitMilliseconds = waitMs;
         Context.Counters.EffectiveFrameMilliseconds = effectiveMs;

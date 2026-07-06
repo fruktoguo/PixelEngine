@@ -199,9 +199,14 @@ public sealed class EngineCounters
     public double UiCompositeMilliseconds { get; set; }
 
     /// <summary>
-    /// 获取或设置最近一帧游戏 UI 后端实际光栅化、绘制或纹理上传耗时，单位毫秒；静态无脏帧为 0。
+    /// 获取或设置最近一帧游戏 UI 后端实际光栅化或绘制耗时，单位毫秒；静态无脏帧为 0。
     /// </summary>
     public double UiPaintMilliseconds { get; set; }
+
+    /// <summary>
+    /// 获取或设置最近一帧游戏 UI 离屏纹理或脏矩形上传耗时，单位毫秒；无上传型后端为 0。
+    /// </summary>
+    public double UiUploadMilliseconds { get; set; }
 
     /// <summary>
     /// 获取或设置当前 UI present 降频间隔；1 表示每渲染帧都允许 paint/composite。

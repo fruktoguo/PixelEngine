@@ -183,11 +183,13 @@ public sealed class PerformanceHudPanel : IEditorPanel
         double uiUpdateMs = Get(subPhases, FrameSubPhase.UiUpdate);
         double uiCompositeMs = Get(subPhases, FrameSubPhase.UiComposite);
         double uiPaintMs = Get(subPhases, FrameSubPhase.UiPaint);
+        double uiUploadMs = Get(subPhases, FrameSubPhase.UiUpload);
         if (counters is not null)
         {
             uiUpdateMs = uiUpdateMs > 0 ? uiUpdateMs : counters.UiUpdateMilliseconds;
             uiCompositeMs = uiCompositeMs > 0 ? uiCompositeMs : counters.UiCompositeMilliseconds;
             uiPaintMs = uiPaintMs > 0 ? uiPaintMs : counters.UiPaintMilliseconds;
+            uiUploadMs = uiUploadMs > 0 ? uiUploadMs : counters.UiUploadMilliseconds;
         }
 
         double presentWaitMs = Get(subPhases, FrameSubPhase.PresentWait);
@@ -257,6 +259,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
             uploadMs +
             uiUpdateMs +
             uiPaintMs +
+            uiUploadMs +
             renderBufferMs;
         double fixedOverheadMs = Math.Max(0.0, cpuWorkMs - variableWorkMs - Get(subPhases, FrameSubPhase.Present));
 
@@ -276,6 +279,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
             uiUpdateMs,
             uiCompositeMs,
             uiPaintMs,
+            uiUploadMs,
             counters?.UiFontMissingGlyphs ?? 0,
             counters?.UiPresentationIntervalFrames ?? 0,
             counters?.UiSkippedPresentationFrames ?? 0,
@@ -376,7 +380,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
         _phaseBars[7] = (float)sample.ShapeRebuildMs;
         _phaseBars[8] = (float)sample.RenderMs;
         _phaseBars[9] = (float)sample.UploadMs;
-        _phaseBars[10] = (float)(sample.UiUpdateMs + sample.UiPaintMs + sample.UiCompositeMs);
+        _phaseBars[10] = (float)(sample.UiUpdateMs + sample.UiPaintMs + sample.UiUploadMs + sample.UiCompositeMs);
         _phaseBars[11] = (float)sample.AudioMs;
         UpdateStatistics(sample);
     }
@@ -424,7 +428,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
         ImGui.TextUnformatted($"physics: {sample.PhysicsMs:F2} ms");
         ImGui.TextUnformatted($"shape rebuild: {sample.ShapeRebuildMs:F2} ms");
         ImGui.TextUnformatted($"render/style/upload: {sample.RenderMs:F2} / {sample.RenderStyleMs:F2} / {sample.UploadMs:F2} ms");
-        ImGui.TextUnformatted($"ui update/paint/composite/fontMissing/cadence/skipped: {sample.UiUpdateMs:F2} / {sample.UiPaintMs:F2} / {sample.UiCompositeMs:F2} ms / {sample.UiFontMissingGlyphs} / {sample.UiPresentationIntervalFrames} / {sample.UiSkippedPresentationFrames}");
+        ImGui.TextUnformatted($"ui update/paint/upload/composite/fontMissing/cadence/skipped: {sample.UiUpdateMs:F2} / {sample.UiPaintMs:F2} / {sample.UiUploadMs:F2} / {sample.UiCompositeMs:F2} ms / {sample.UiFontMissingGlyphs} / {sample.UiPresentationIntervalFrames} / {sample.UiSkippedPresentationFrames}");
         ImGui.TextUnformatted($"audio: {sample.AudioMs:F2} ms");
     }
 
