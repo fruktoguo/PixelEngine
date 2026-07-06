@@ -12,7 +12,7 @@ public sealed class GrenadeProjectile : Behaviour
     private float _fuseRemaining;
     private float _gravity;
     private float _bounce;
-    private float _damage;
+    private float _blastForce;
     private float _impulse;
     private int _radius;
     private string _impactCue = "explosion.wav";
@@ -55,8 +55,8 @@ public sealed class GrenadeProjectile : Behaviour
         _vy = vy;
         _fuseRemaining = Math.Max(0.01f, fuseSeconds);
         _radius = Math.Max(1, radius);
-        _damage = Math.Max(1f, damage);
         _impulse = Math.Max(1f, impulse);
+        _blastForce = Math.Max(_impulse, Math.Max(1f, damage) / 16f);
         _gravity = Math.Max(0f, gravity);
         _bounce = Math.Clamp(bounce, 0f, 0.9f);
         _impactCue = string.IsNullOrWhiteSpace(impactCue) ? "explosion.wav" : impactCue;
@@ -111,8 +111,7 @@ public sealed class GrenadeProjectile : Behaviour
     private void Detonate()
     {
         Exploded = true;
-        Context.World.DamageCircle(X, Y, _radius, _damage, falloff: true, DamageKind.Impact);
-        Context.World.Explode(X, Y, _radius, _impulse);
+        Context.World.Explode(X, Y, _radius, _blastForce);
         _flash.Start(X, Y, _radius, 0xFF_30_80_FF);
         _flash.SubmitInitial(Context);
         Context.Audio.PlayAt(_impactCue, X, Y, 0.8f);

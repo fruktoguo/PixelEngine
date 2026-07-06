@@ -969,6 +969,39 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证手雷爆炸只走一次 World.Explode 复合效果，不再额外叠加一轮 DamageCircle 造成双重爆炸反馈。
+    /// </summary>
+    [Fact]
+    public void GrenadeDetonationAppliesSingleExplosionDamagePass()
+    {
+        MaterialTable materials = DemoMaterials();
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials);
+        FillRect(grid, stone, minX: 16, minY: 12, maxX: 21, maxY: 17);
+
+        GrenadeProjectile grenade = scene.CreateEntity().AddComponent<GrenadeProjectile>();
+        grenade.Initialize(
+            x: 18f,
+            y: 14f,
+            vx: 0f,
+            vy: 0f,
+            fuseSeconds: 0.02f,
+            radius: 3,
+            damage: 16f,
+            impulse: 1f,
+            gravity: 0f,
+            bounce: 0f,
+            impactCue: "explosion.wav");
+
+        engine.RunHeadlessTicks(2);
+
+        Assert.True(grenade.Exploded);
+        Assert.Equal(stone, grid.MaterialAt(18, 14));
+        Assert.Equal(16, grid.DamageAt(18, 14));
+        Assert.Equal(0, engine.Context.GetService<ParticleSystem>().ActiveCount);
+    }
+
+    /// <summary>
     /// 验证玩家可在普通 settled cell 地面上接地、水平跑动并响应跳跃输入。
     /// </summary>
     [Fact]
