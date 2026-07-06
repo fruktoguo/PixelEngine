@@ -60,6 +60,38 @@ public sealed class WorldEffectBoundaryConservationTests
         Assert.All(particles.ActiveReadOnly.ToArray(), static particle => Assert.Equal(Gravel, particle.Material));
     }
 
+    /// <summary>
+    /// 验证结构破坏入口预热后不产生托管堆分配。
+    /// </summary>
+    [Fact]
+    public void StructuralDamageEntriesDoNotAllocateAfterWarmup()
+    {
+        DeterministicSimFixture.TestChunkSource source = DeterministicSimFixture.TestChunkSource.CreateDense(0, 0, 0, 0);
+        MaterialTable materials = CreateMaterials();
+        SimulationKernel kernel = new(source, new MaterialPropsTable(materials.Hot));
+        Chunk chunk = source.GetRequired(new ChunkCoord(0, 0));
+        const int Iterations = 128;
+
+        ResetDamageArena(chunk);
+        _ = kernel.ApplyStructuralDamage(10, 10, damage: 10);
+        _ = kernel.DamageCircle(20, 20, radius: 2, damage: 10, falloff: false);
+        _ = kernel.DamageBeam(32, 32, dirX: 1f, dirY: 0f, length: 5, damagePerCell: 10);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        int destroyed = 0;
+        for (int i = 0; i < Iterations; i++)
+        {
+            ResetDamageArena(chunk);
+            destroyed += kernel.ApplyStructuralDamage(10, 10, damage: 10) ? 1 : 0;
+            destroyed += kernel.DamageCircle(20, 20, radius: 2, damage: 10, falloff: false);
+            destroyed += kernel.DamageBeam(32, 32, dirX: 1f, dirY: 0f, length: 5, damagePerCell: 10);
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.True(destroyed > 0);
+        Assert.Equal(0, allocated);
+    }
+
     private static MaterialTable CreateMaterials()
     {
         return new MaterialTable(
@@ -169,5 +201,36 @@ public sealed class WorldEffectBoundaryConservationTests
         }
 
         return count;
+    }
+
+    private static void ResetDamageArena(Chunk chunk)
+    {
+        chunk.Material.AsSpan().Clear();
+        chunk.Flags.AsSpan().Clear();
+        chunk.Lifetime.AsSpan().Clear();
+        chunk.Damage.AsSpan().Clear();
+        chunk.Material[CellAddressing.LocalIndexFromLocal(10, 10)] = Stone;
+        FillLocalCircle(chunk, centerX: 20, centerY: 20, radius: 2, Stone);
+        for (int x = 32; x <= 37; x++)
+        {
+            chunk.Material[CellAddressing.LocalIndexFromLocal(x, 32)] = Stone;
+        }
+    }
+
+    private static void FillLocalCircle(Chunk chunk, int centerX, int centerY, int radius, ushort material)
+    {
+        int radiusSquared = radius * radius;
+        for (int y = centerY - radius; y <= centerY + radius; y++)
+        {
+            int dy = y - centerY;
+            for (int x = centerX - radius; x <= centerX + radius; x++)
+            {
+                int dx = x - centerX;
+                if ((dx * dx) + (dy * dy) <= radiusSquared)
+                {
+                    chunk.Material[CellAddressing.LocalIndexFromLocal(x, y)] = material;
+                }
+            }
+        }
     }
 }
