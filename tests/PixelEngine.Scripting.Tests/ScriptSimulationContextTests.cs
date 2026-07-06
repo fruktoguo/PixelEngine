@@ -73,14 +73,25 @@ public sealed class ScriptSimulationContextTests
         fixture.Grid.SetMaterial(4, 4, 2);
         fixture.Grid.FlagsAt(4, 4) = 7;
         fixture.Grid.LifetimeAt(4, 4) = 9;
+        fixture.Grid.DamageAt(4, 4) = 11;
 
         Assert.True(fixture.Context.Materials.TryResolve("stone", out MaterialId stone));
         Assert.Equal((ushort)2, stone.Value);
         MaterialInfo info = fixture.Context.Materials.GetInfo(stone);
         Assert.Equal("stone", info.Name);
         Assert.True(info.IsSolid);
+        Assert.Equal("Stone", info.DisplayName);
+        Assert.Equal(0xFF776655u, info.BaseColorBgra);
+        Assert.Equal(CellType.Solid, info.CellType);
+        Assert.Equal(MaterialLegendCategory.Destructible, info.Category);
+        Assert.Equal("Destructible", info.LegendCategory);
+        Assert.True(info.Emissive);
+        Assert.Equal(6, info.Hardness);
+        Assert.Equal(40, info.MaxIntegrity);
+        Assert.True(info.IsDestructible);
+        Assert.Equal(3, info.FlowRate);
         Assert.Equal(stone, fixture.Context.Cells.GetMaterial(4, 4));
-        Assert.Equal(new CellView(stone, 7, 9), fixture.Context.Cells.Sample(4, 4));
+        Assert.Equal(new CellView(stone, 7, 9, 29), fixture.Context.Cells.Sample(4, 4));
         Assert.True(fixture.Context.Cells.IsSolid(4, 4));
         Assert.False(fixture.Context.Cells.IsRigidOwned(4, 4));
         Assert.True(fixture.Context.Solids.SampleSolidAabb(3.5f, 3.5f, 2, 2));
@@ -89,6 +100,54 @@ public sealed class ScriptSimulationContextTests
         Assert.Equal(4, hit.X);
         Assert.Equal(4, hit.Y);
         Assert.Equal(stone, hit.Material);
+    }
+
+    /// <summary>
+    /// 验证材质热重载后脚本材质只读投影会读取同一 MaterialTable 的新字段。
+    /// </summary>
+    [Fact]
+    public void MaterialInfoFacadeReflectsMaterialReload()
+    {
+        Fixture fixture = Fixture.Create();
+
+        Assert.True(fixture.Materials.TryGetId("stone", out ushort stoneId));
+        MaterialInfo before = fixture.Context.Materials.GetInfo(new MaterialId(stoneId));
+        Assert.Equal(6, before.Hardness);
+        Assert.Equal(40, before.MaxIntegrity);
+
+        MaterialDef[] reloaded =
+        [
+            CreateMaterial(0, "empty", CellType.Empty),
+            CreateMaterial(0, "sand", CellType.Powder),
+            CreateMaterial(0, "stone", CellType.Solid) with
+            {
+                Density = 210,
+                Dispersion = 5,
+                Hardness = 12,
+                Integrity = 96,
+                DestroyedTarget = 1,
+                BaseColorBGRA = 0xFF102030u,
+                DisplayName = "Reloaded Stone",
+                LegendCategory = MaterialLegendCategory.Resource,
+                RenderStyle = MaterialRenderStyle.Solid,
+                PropertyFlags = MaterialProperty.Diggable,
+                MineYield = 2,
+            },
+        ];
+
+        MaterialReloadResult reload = fixture.Materials.ReloadStable(reloaded, fallbackId: 0);
+        MaterialInfo after = fixture.Context.Materials.GetInfo(new MaterialId(stoneId));
+
+        Assert.Equal(3, reload.PreservedCount);
+        Assert.Equal("Reloaded Stone", after.DisplayName);
+        Assert.Equal(0xFF102030u, after.BaseColorBgra);
+        Assert.Equal(MaterialLegendCategory.Resource, after.Category);
+        Assert.Equal("Resource", after.LegendCategory);
+        Assert.False(after.Emissive);
+        Assert.Equal(12, after.Hardness);
+        Assert.Equal(96, after.MaxIntegrity);
+        Assert.Equal(5, after.FlowRate);
+        Assert.Equal(2, after.MineYield);
     }
 
     /// <summary>
@@ -553,6 +612,7 @@ public sealed class ScriptSimulationContextTests
             ParticleSystem particles,
             ScriptEventBus scriptEvents,
             ScriptSimulationContext context,
+            MaterialTable materials,
             PhysicsSystem? physics,
             JobSystem? jobs)
         {
@@ -563,6 +623,7 @@ public sealed class ScriptSimulationContextTests
             Particles = particles;
             ScriptEvents = scriptEvents;
             Context = context;
+            Materials = materials;
             Physics = physics;
             Jobs = jobs;
         }
@@ -580,6 +641,8 @@ public sealed class ScriptSimulationContextTests
         public ScriptEventBus ScriptEvents { get; }
 
         public ScriptSimulationContext Context { get; }
+
+        public MaterialTable Materials { get; }
 
         public PhysicsSystem? Physics { get; }
 
@@ -616,7 +679,7 @@ public sealed class ScriptSimulationContextTests
             }
 
             ScriptSimulationContext context = new(new ScriptScene(), grid, kernel, particles, materials, temperature, scriptEvents, physics: physics, camera: camera, input: input, lighting: lighting, overlay: overlay);
-            return new Fixture(chunk, grid, kernel, temperature, particles, scriptEvents, context, physics, jobs);
+            return new Fixture(chunk, grid, kernel, temperature, particles, scriptEvents, context, materials, physics, jobs);
         }
 
         public void Dispose()
@@ -633,24 +696,39 @@ public sealed class ScriptSimulationContextTests
         MaterialDef[] materials = new MaterialDef[definitions.Length];
         for (int i = 0; i < materials.Length; i++)
         {
-            materials[i] = new MaterialDef
+            materials[i] = CreateMaterial((ushort)i, definitions[i].Name, definitions[i].Type) with
             {
-                Id = (ushort)i,
-                Name = definitions[i].Name,
-                Type = definitions[i].Type,
                 Density = i == 0 ? (byte)0 : (byte)100,
                 HeatCapacity = 1,
-                HeatConduct = 255,
-                TextureId = -1,
-                MeltPoint = float.NaN,
-                FreezePoint = float.NaN,
-                BoilPoint = float.NaN,
                 Integrity = definitions[i].Type == CellType.Solid ? (ushort)40 : (ushort)0,
                 DestroyedTarget = definitions[i].Type == CellType.Solid ? (ushort)1 : (ushort)0,
+                Hardness = definitions[i].Name == "stone" ? (byte)6 : (byte)0,
+                Dispersion = definitions[i].Name == "stone" ? (byte)3 : (byte)0,
+                BaseColorBGRA = definitions[i].Name == "stone" ? 0xFF776655u : 0,
+                DisplayName = definitions[i].Name == "stone" ? "Stone" : string.Empty,
+                LegendCategory = definitions[i].Name == "stone" ? MaterialLegendCategory.Destructible : MaterialLegendCategory.Terrain,
+                RenderStyle = definitions[i].Name == "stone" ? MaterialRenderStyle.Emissive : MaterialRenderStyle.Ground,
+                PropertyFlags = definitions[i].Name == "stone" ? MaterialProperty.Emissive | MaterialProperty.Diggable : MaterialProperty.None,
             };
         }
 
         return new MaterialTable(materials);
+    }
+
+    private static MaterialDef CreateMaterial(ushort id, string name, CellType type)
+    {
+        return new MaterialDef
+        {
+            Id = id,
+            Name = name,
+            Type = type,
+            HeatCapacity = 1f,
+            HeatConduct = 255,
+            TextureId = -1,
+            MeltPoint = float.NaN,
+            FreezePoint = float.NaN,
+            BoilPoint = float.NaN,
+        };
     }
 
     private static byte[] CreateWav(short channels, short bitsPerSample, int sampleRate, ReadOnlySpan<byte> pcm)

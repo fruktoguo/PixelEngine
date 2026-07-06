@@ -1,3 +1,5 @@
+using PixelEngine.Simulation;
+
 namespace PixelEngine.Scripting;
 
 /// <summary>
@@ -23,7 +25,8 @@ public readonly record struct MaterialId(ushort Value)
 /// <param name="Material">材质句柄。</param>
 /// <param name="Flags">cell 标志位快照。</param>
 /// <param name="Lifetime">cell lifetime 快照。</param>
-public readonly record struct CellView(MaterialId Material, byte Flags, byte Lifetime);
+/// <param name="Integrity">按材质最大完整度与当前 Damage 平面计算的剩余结构完整度，超过 byte 上限时饱和到 255。</param>
+public readonly record struct CellView(MaterialId Material, byte Flags, byte Lifetime, byte Integrity = 0);
 
 /// <summary>
 /// 脚本可见的材质属性摘要。
@@ -37,6 +40,13 @@ public readonly record struct CellView(MaterialId Material, byte Flags, byte Lif
 /// <param name="LegendVisible">是否应在玩家图例中显示。</param>
 /// <param name="BaseColorBgra">材质代表色，BGRA8。</param>
 /// <param name="MineYield">采矿 / 目标收集时每个 cell 贡献的收益。</param>
+/// <param name="CellType">CA movement 消费的基础 cell 类型。</param>
+/// <param name="Category">编辑器、HUD 与图例使用的材质分类。</param>
+/// <param name="Emissive">该材质是否会进入发光 / bloom 路径。</param>
+/// <param name="Hardness">结构破坏吸收强度。</param>
+/// <param name="MaxIntegrity">结构破坏最大完整度阈值；0 表示有效伤害命中后即时破坏。</param>
+/// <param name="IsDestructible">该材质是否会被结构破坏 API 处理。</param>
+/// <param name="FlowRate">液体或气体每步横向扩散距离。</param>
 public readonly record struct MaterialInfo(
     MaterialId Id,
     string Name,
@@ -46,7 +56,14 @@ public readonly record struct MaterialInfo(
     string LegendCategory = "",
     bool LegendVisible = true,
     uint BaseColorBgra = 0,
-    byte MineYield = 0);
+    byte MineYield = 0,
+    CellType CellType = CellType.Empty,
+    MaterialLegendCategory Category = MaterialLegendCategory.Terrain,
+    bool Emissive = false,
+    byte Hardness = 0,
+    ushort MaxIntegrity = 0,
+    bool IsDestructible = false,
+    byte FlowRate = 0);
 
 /// <summary>
 /// 像素 raycast 的命中结果。

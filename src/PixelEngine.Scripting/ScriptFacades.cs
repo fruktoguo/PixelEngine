@@ -85,6 +85,11 @@ public interface IScriptContext
     /// <summary>
     /// 游戏大 UI 控制能力；未启用 PixelEngine.UI 时返回空服务。
     /// </summary>
+    IGameUiService Ui => GameUi;
+
+    /// <summary>
+    /// 游戏大 UI 控制能力；未启用 PixelEngine.UI 时返回空服务。
+    /// </summary>
     IGameUiService GameUi => NoopGameUiService.Instance;
 
     /// <summary>

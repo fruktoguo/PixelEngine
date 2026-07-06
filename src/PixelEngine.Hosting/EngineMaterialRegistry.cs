@@ -56,15 +56,42 @@ public sealed class EngineMaterialRegistry : IMaterialQuery
     public MaterialInfo GetInfo(MaterialId id)
     {
         ref readonly MaterialDef material = ref _materials.Get(id.Value);
+        MaterialProperty flags = material.PropertyFlags;
+        bool emissive = (flags & MaterialProperty.Emissive) != 0 || material.RenderStyle == MaterialRenderStyle.Emissive;
+        bool destructible = id.Value != 0 &&
+            material.Type is CellType.Solid or CellType.Powder &&
+            (flags & MaterialProperty.Indestructible) == 0;
         return new MaterialInfo(
             id,
             material.Name,
             material.Density,
             material.Type == CellType.Solid,
             string.IsNullOrWhiteSpace(material.DisplayName) ? material.Name : material.DisplayName,
-            material.LegendCategory.ToString(),
+            LegendCategoryName(material.LegendCategory),
             material.LegendVisible,
             material.BaseColorBGRA,
-            material.MineYield);
+            material.MineYield,
+            material.Type,
+            material.LegendCategory,
+            emissive,
+            material.Hardness != 0 ? material.Hardness : material.Durability,
+            material.MaxIntegrity,
+            destructible,
+            material.Dispersion);
+    }
+
+    private static string LegendCategoryName(MaterialLegendCategory category)
+    {
+        return category switch
+        {
+            MaterialLegendCategory.Terrain => "Terrain",
+            MaterialLegendCategory.Liquid => "Liquid",
+            MaterialLegendCategory.Gas => "Gas",
+            MaterialLegendCategory.Destructible => "Destructible",
+            MaterialLegendCategory.Hazard => "Hazard",
+            MaterialLegendCategory.Resource => "Resource",
+            MaterialLegendCategory.Special => "Special",
+            _ => nameof(MaterialLegendCategory.Special),
+        };
     }
 }

@@ -46,6 +46,7 @@ public sealed class GameUiFacadeTests
         EmptyContext context = new();
 
         IGameUiService gameUi = ((IScriptContext)context).GameUi;
+        IGameUiService ui = ((IScriptContext)context).Ui;
         UiScreenHandle screen = gameUi.ShowScreen("main");
         gameUi.HideScreen(screen);
         gameUi.BindModel(screen, new UiModelName(1), new MissingModel());
@@ -53,6 +54,7 @@ public sealed class GameUiFacadeTests
         gameUi.Invoke(screen, new UiActionId(3), UiValue.FromBoolean(true));
 
         Assert.Same(NoopGameUiService.Instance, gameUi);
+        Assert.Same(gameUi, ui);
         Assert.Equal(default, screen);
         Assert.False(gameUi.TryGetValue(screen, new UiPathId(7), out UiValue value));
         Assert.Equal(default, value);
