@@ -140,6 +140,76 @@ public sealed class UiInputRouterTests
         Assert.Equal(string.Empty, input.Text);
     }
 
+    [Fact]
+    public void PumpFeedsCommittedTextInOrderAndFiltersControlCharacters()
+    {
+        RecordingBackend backend = new()
+        {
+            HitResult = new UiHitResult(HitsUi: true, Opaque: true, WantsMouse: true, WantsKeyboard: true),
+        };
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        FakeInputSource input = new()
+        {
+            HasPointer = true,
+            Pointer = new UiPointerState(12, 34, 0, 0, LeftDown: false, RightDown: false, MiddleDown: false),
+            Text = "a\0中\r\nb\t",
+        };
+        UiInputRouter router = new(host, input);
+
+        _ = router.Pump();
+
+        Assert.Equal("a中b", backend.Text);
+    }
+
+    [Fact]
+    public void PumpClampsCommittedTextToRouterBufferCapacity()
+    {
+        RecordingBackend backend = new()
+        {
+            HitResult = new UiHitResult(HitsUi: true, Opaque: true, WantsMouse: true, WantsKeyboard: true),
+        };
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        FakeInputSource input = new()
+        {
+            HasPointer = true,
+            Pointer = new UiPointerState(12, 34, 0, 0, LeftDown: false, RightDown: false, MiddleDown: false),
+            Text = "abcdef",
+            ReportedTextCount = 6,
+        };
+        UiInputRouter router = new(host, input, textCapacity: 3);
+
+        _ = router.Pump();
+
+        Assert.Equal("abc", backend.Text);
+        Assert.Equal(string.Empty, input.Text);
+    }
+
+    [Fact]
+    public void PumpDrainsCommittedTextWhenKeyboardIsBlocked()
+    {
+        RecordingBackend backend = new()
+        {
+            HitResult = new UiHitResult(HitsUi: true, Opaque: true, WantsMouse: true, WantsKeyboard: true),
+        };
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        FakeInputSource input = new()
+        {
+            HasPointer = true,
+            Pointer = new UiPointerState(12, 34, 0, 0, LeftDown: false, RightDown: false, MiddleDown: false),
+            Text = "stale",
+        };
+        UiInputRouter router = new(host, input);
+
+        _ = router.Pump(allowPointer: true, allowKeyboard: false);
+        _ = router.Pump(allowPointer: true, allowKeyboard: true);
+
+        Assert.Equal(string.Empty, backend.Text);
+        Assert.Equal(string.Empty, input.Text);
+    }
+
     private sealed class FakeInputSource : IUiInputSource
     {
         public bool HasPointer { get; set; }
@@ -151,6 +221,8 @@ public sealed class UiInputRouterTests
         public UiKeyModifiers Modifiers { get; set; }
 
         public string Text { get; set; } = string.Empty;
+
+        public int? ReportedTextCount { get; set; }
 
         public bool TryGetPointer(out UiPointerState state)
         {
@@ -171,7 +243,7 @@ public sealed class UiInputRouterTests
             int count = Math.Min(destination.Length, Text.Length);
             Text.AsSpan(0, count).CopyTo(destination);
             Text = string.Empty;
-            return count;
+            return ReportedTextCount ?? count;
         }
     }
 

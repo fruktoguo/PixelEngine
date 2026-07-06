@@ -113,7 +113,7 @@ public sealed class UiInputRouter
 
             if (_textBuffer.Length > 0)
             {
-                int textCount = Math.Clamp(_source.CaptureText(_textBuffer), 0, _textBuffer.Length);
+                int textCount = CaptureCommittedText(_textBuffer);
                 if (textCount > 0)
                 {
                     _host.FeedText(_textBuffer.AsSpan(0, textCount));
@@ -130,6 +130,25 @@ public sealed class UiInputRouter
         }
 
         return Capture;
+    }
+
+    private int CaptureCommittedText(Span<char> destination)
+    {
+        int textCount = Math.Clamp(_source.CaptureText(destination), 0, destination.Length);
+        int write = 0;
+        for (int i = 0; i < textCount; i++)
+        {
+            char character = destination[i];
+            if (character == '\0' || char.IsControl(character))
+            {
+                continue;
+            }
+
+            destination[write++] = character;
+        }
+
+        destination.Slice(write, textCount - write).Clear();
+        return write;
     }
 
     private void ReleasePreviousKeys()
