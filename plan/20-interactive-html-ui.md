@@ -8,7 +8,7 @@
 ## 1. 当前产品职责
 
 - [x] **Web-first UI Runtime**：`PixelEngine.UI` 以 HTML/CSS + data-model/action 契约描述玩家 UI 屏幕，并在同一窗口、同一 GL context 内透明叠加到像素世界之上。
-- [x] **三后端统一抽象**：`IGameUiBackend` 统一 `ManagedFallbackBackend`、`RmlUiBackend`、`UltralightBackend` 三种实现形态；上层 Demo / Hosting 通过同一 `IGameUiService` 消费。
+- [x] **三后端统一抽象**：`IGameUiBackend` 统一 `ManagedFallbackBackend`、`RmlUiBackend` 与预留的 `UltralightBackend` optional profile 入口；当前 Ultralight 未激活且默认回退 `ManagedFallback`，上层 Demo / Hosting 通过同一 `IGameUiService` 消费。
 - [x] **透明合成与输入仲裁**：UI 层注册 order=100，Editor ImGui overlay order=200；透明/非交互区域 pass-through，交互区域 capture，输入链路为 Editor → Web-first UI → Game。
 - [x] **内容与字体管线**：`content/ui`、`ui-manifest.json`、screens/images/fonts、`FontEngine` 与 CJK fallback 是玩家 UI 内容的统一资产入口。
 - [x] **非职责边界**：本文件不实现 CA/sim、plan/08 世界渲染管线本体、Editor ImGui 面板层、Demo 具体 UI 文案与玩法逻辑、发行脚本内部逻辑；这些由对应 leaf plan 承担。
