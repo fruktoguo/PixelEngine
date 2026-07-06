@@ -92,9 +92,16 @@ internal sealed class EditorProjectSession : IDisposable
             EditorScriptAssetOpenService scriptAssetOpenService = new(assets);
             EditorSceneRuntimeProjection projection = ProjectAuthoringScene(engine, sceneModel);
             editorHost.ConfigureAuthoring(sceneModel, undoStack, prefabs);
-            _ = engine.AttachScriptingFromServices();
+            _ = engine.AttachScriptingFromServices(new EditorConsoleScriptRuntime(
+                app.ConsoleStore,
+                new ScriptHotReloadRuntimeOptions($"{project.Name}.EditorScripts", project.ScriptSourcePath)));
             engine.EnterEditMode();
             _ = engine.AttachWindowRuntime(window);
+            if (engine.Context.TryGetService(out GameUiBackendSelection uiBackendSelection))
+            {
+                app.ConsoleStore.AddUiBackendSelection(uiBackendSelection);
+            }
+
             return new EditorProjectSession(project, engine, editorHost, sceneModel, undoStack, projection, prefabs, scriptAssetOpenService, sceneRelativePath);
         }
         catch
@@ -253,10 +260,10 @@ internal sealed class EditorProjectSession : IDisposable
         UndoStack.Execute(SceneModel, new InstantiatePrefabCommand(Prefabs, assetPath, SceneModel.SelectedStableId));
     }
 
-    public bool OpenScriptAsset(string assetPath, out string diagnostic)
+    public EditorScriptAssetOpenResult OpenScriptAsset(string assetPath)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        return _scriptAssetOpenService.TryOpenScriptAsset(assetPath, out diagnostic);
+        return _scriptAssetOpenService.OpenScriptAsset(assetPath);
     }
 
     public bool ShowProjectSettings()

@@ -204,7 +204,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
 
         _projectSettingsPanel = new ProjectSettingsPanel(_project);
         _playerSettingsPanel = new PlayerSettingsPanel(_project);
-        _buildSettingsPanel = new BuildSettingsPanel(_project);
+        _buildSettingsPanel = new BuildSettingsPanel(_project, console: _app.ConsoleStore);
         _editor.AddPanel(_projectSettingsPanel);
         _editor.AddPanel(_playerSettingsPanel);
         _editor.AddPanel(_buildSettingsPanel);

@@ -15,6 +15,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     private readonly EditorProject _project;
     private readonly BuildSettingsStore _store;
     private readonly IPlayerBuildService _buildService;
+    private readonly IEditorConsoleSink? _console;
     private readonly ConcurrentQueue<BuildProgressEvent> _pendingEvents = new();
     private readonly BuildLog _log = new();
     private readonly BuildProfileDto _settings;
@@ -25,12 +26,13 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     private string _validationMessage = string.Empty;
     private bool _autoScroll = true;
 
-    public BuildSettingsPanel(EditorProject project, IPlayerBuildService? buildService = null)
+    public BuildSettingsPanel(EditorProject project, IPlayerBuildService? buildService = null, IEditorConsoleSink? console = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         _project = project;
         _store = new BuildSettingsStore(project);
         _buildService = buildService ?? new PlayerBuildService();
+        _console = console;
         _settings = _store.Load();
         Validate();
         StartPreflight();
@@ -492,13 +494,15 @@ internal sealed class BuildSettingsPanel : IEditorPanel
                     Diagnostic = preflightTask.Exception?.GetBaseException().Message ?? "构建工具预检失败。",
                 };
             _view = _view with { Preflight = preflight };
-            _log.Add(new BuildProgressEvent(
+            BuildProgressEvent preflightEvent = new(
                 BuildEventKind.Log,
                 BuildPhase.Unknown,
                 _view.Percent,
                 preflight.Ok ? BuildLogLevel.Info : BuildLogLevel.Error,
                 preflight.Diagnostic,
-                DateTimeOffset.UtcNow));
+                DateTimeOffset.UtcNow);
+            _log.Add(preflightEvent);
+            _console?.AddBuildPreflight(preflight);
         }
 
         if (_buildTask is { IsCompleted: true } buildTask)
@@ -519,6 +523,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
                 Percent = result.Ok ? 1 : _view.Percent,
                 Result = result,
             };
+            _console?.AddBuildResult(result);
             if (result.Ok && _settings.RunAfterBuild)
             {
                 LaunchBuildResult(result);
@@ -536,6 +541,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             }
 
             _log.Add(item);
+            _console?.AddBuildEvent(item);
             if (item.Kind is BuildEventKind.Progress or BuildEventKind.Result)
             {
                 BuildPhase nextPhase = item.Phase == BuildPhase.Unknown && item.Level == BuildLogLevel.Error
@@ -554,13 +560,15 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     {
         if (string.IsNullOrWhiteSpace(result.LauncherExe))
         {
-            _log.Add(new BuildProgressEvent(
+            BuildProgressEvent missingLauncher = new(
                 BuildEventKind.Log,
                 BuildPhase.Done,
                 1,
                 BuildLogLevel.Warning,
                 "构建结果未提供 LauncherExe，无法 Build And Run。",
-                DateTimeOffset.UtcNow));
+                DateTimeOffset.UtcNow);
+            _log.Add(missingLauncher);
+            _console?.AddBuildEvent(missingLauncher, "build-run");
             return;
         }
 
@@ -579,13 +587,15 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         }
         catch (Exception ex) when (!OperatingSystem.IsBrowser())
         {
-            _log.Add(new BuildProgressEvent(
+            BuildProgressEvent launchFailure = new(
                 BuildEventKind.Log,
                 BuildPhase.Done,
                 1,
                 BuildLogLevel.Error,
                 $"启动玩家包失败：{ex.Message}",
-                DateTimeOffset.UtcNow));
+                DateTimeOffset.UtcNow);
+            _log.Add(launchFailure);
+            _console?.AddBuildEvent(launchFailure, "build-run");
         }
     }
 
@@ -634,7 +644,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             : Path.GetFullPath(Path.Combine(root, output));
     }
 
-    private static void OpenPath(string path)
+    private void OpenPath(string path)
     {
         try
         {
@@ -645,8 +655,14 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             };
             _ = Process.Start(startInfo);
         }
-        catch (Exception) when (!OperatingSystem.IsBrowser())
+        catch (Exception ex) when (!OperatingSystem.IsBrowser())
         {
+            _console?.Add(new EditorConsoleEntry(
+                DateTimeOffset.UtcNow,
+                EditorConsoleCategory.Build,
+                EditorConsoleSeverity.Error,
+                "build-path-opener",
+                $"打开路径失败：{path}。{ex.Message}"));
         }
     }
 

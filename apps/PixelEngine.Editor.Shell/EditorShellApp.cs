@@ -22,6 +22,8 @@ internal sealed class EditorShellApp
         RecentProjects = RecentProjectsStore.LoadDefault();
     }
 
+    public EditorConsoleStore ConsoleStore { get; } = new();
+
     public EditorProject? CurrentProject { get; private set; }
 
     public bool HasOpenProject => CurrentProject is not null;
@@ -879,6 +881,7 @@ internal sealed class EditorShellApp
         catch (Exception exception)
         {
             LastProjectError = exception.Message;
+            ConsoleStore.AddProjectError("project", exception.Message);
         }
     }
 
@@ -891,6 +894,7 @@ internal sealed class EditorShellApp
         catch (Exception exception)
         {
             LastProjectError = exception.Message;
+            ConsoleStore.AddProjectError("project", exception.Message);
         }
     }
 
@@ -995,9 +999,11 @@ internal sealed class EditorShellApp
             return false;
         }
 
-        bool opened = CurrentSession.OpenScriptAsset(assetPath, out diagnostic);
+        EditorScriptAssetOpenResult result = CurrentSession.OpenScriptAsset(assetPath);
+        diagnostic = result.Diagnostic;
         LastAssetOpenDiagnostic = diagnostic;
-        return opened;
+        ConsoleStore.AddAssetOpenResult(result);
+        return result.Success;
     }
 
     public void ShowProjectSettings()
