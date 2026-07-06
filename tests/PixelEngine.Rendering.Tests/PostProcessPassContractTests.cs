@@ -44,6 +44,20 @@ public sealed class PostProcessPassContractTests
     }
 
     [Fact]
+    public void FragmentBloomEnablesAdditiveBlendAfterFullscreenPassBegin()
+    {
+        string source = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "BloomPass.cs"));
+        int upBegin = source.IndexOf("_kawaseUpPass.Begin(source, destination, quad);", StringComparison.Ordinal);
+        int additiveBlend = source.IndexOf("EnableAdditiveBloomBlend();", StringComparison.Ordinal);
+        int upDraw = source.IndexOf("_kawaseUpPass.Draw(quad);", StringComparison.Ordinal);
+
+        Assert.True(upBegin >= 0);
+        Assert.True(additiveBlend > upBegin);
+        Assert.True(upDraw > additiveBlend);
+        Assert.Contains("BlendFunc(BlendingFactor.One, BlendingFactor.One)", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void FinalPostShaderSourcesContainDitherGammaAndCrtControls()
     {
         string dither = PostProcessShaderSources.DitherFragment(GlslProfile.Gles300);
@@ -63,5 +77,16 @@ public sealed class PostProcessPassContractTests
     {
         T exception = Assert.Throws<T>(action);
         Assert.False(string.IsNullOrWhiteSpace(exception.Message));
+    }
+
+    private static string ProjectPath(params string[] parts)
+    {
+        string path = AppContext.BaseDirectory;
+        for (int i = 0; i < 6; i++)
+        {
+            path = Directory.GetParent(path)!.FullName;
+        }
+
+        return Path.Combine([path, .. parts]);
     }
 }

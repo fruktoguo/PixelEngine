@@ -129,14 +129,12 @@ public sealed class BloomPass : IDisposable
             _kawaseDownPass.Draw(quad);
         }
 
-        _gl.Enable(EnableCap.Blend);
-        _gl.BlendEquation(BlendEquationModeEXT.FuncAdd);
-        _gl.BlendFunc(BlendingFactor.One, BlendingFactor.One);
         for (int i = _mips.Length - 2; i >= 0; i--)
         {
             ColorRenderTarget source = _mips[i + 1];
             ColorRenderTarget destination = _mips[i];
             _kawaseUpPass.Begin(source, destination, quad);
+            EnableAdditiveBloomBlend();
             _kawaseUpPass.Uniform2(_upTexelSizeLocation, 1f / source.Width, 1f / source.Height);
             _kawaseUpPass.Uniform1(_upOffsetLocation, settings.KawaseOffset);
             _kawaseUpPass.Uniform1(_upIntensityLocation, 1f);
@@ -145,6 +143,13 @@ public sealed class BloomPass : IDisposable
 
         _gl.Disable(EnableCap.Blend);
         return _mips[0];
+    }
+
+    private void EnableAdditiveBloomBlend()
+    {
+        _gl.Enable(EnableCap.Blend);
+        _gl.BlendEquation(BlendEquationModeEXT.FuncAdd);
+        _gl.BlendFunc(BlendingFactor.One, BlendingFactor.One);
     }
 
     private ColorRenderTarget RenderGaussian(FullscreenQuad quad, BloomSettings settings)
