@@ -36,7 +36,10 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
     /// </summary>
     public long FrameIndex { get; private set; }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 在渲染管线 UI present 阶段合成游戏大 UI。
+    /// </summary>
+    /// <param name="context">UI present 上下文。</param>
     public void Present(in UiPresentContext context)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -58,7 +61,9 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
         profiler.RecordSub(FrameSubPhase.UiComposite, elapsed * 1000.0 / Stopwatch.Frequency);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 注销渲染管线 UI 层。
+    /// </summary>
     public void Dispose()
     {
         if (_disposed)

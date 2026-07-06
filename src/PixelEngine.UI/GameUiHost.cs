@@ -442,7 +442,9 @@ public sealed class GameUiHost : IDisposable
         LastPaintMilliseconds = 0;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 释放 UI 后端资源并阻止后续调用。
+    /// </summary>
     public void Dispose()
     {
         if (Disposed)

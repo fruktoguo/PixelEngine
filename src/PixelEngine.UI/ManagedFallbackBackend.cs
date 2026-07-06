@@ -41,16 +41,25 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
 
     private bool Dirty { get; set; }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 后端类型，固定为纯托管回退后端。
+    /// </summary>
     public UiBackendKind Kind => UiBackendKind.ManagedFallback;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 当前托管 UI 是否需要重新绘制。
+    /// </summary>
     public bool IsDirty => Dirty;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 纯托管回退后端当前不维护独立动画时间线。
+    /// </summary>
     public bool IsAnimating => false;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 初始化纯托管回退后端并校验视口。
+    /// </summary>
+    /// <param name="info">后端初始化信息。</param>
     public void Initialize(in UiBackendInitializeInfo info)
     {
         ThrowIfDisposed();
@@ -58,7 +67,10 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         _initialized = true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 响应 UI 视口变化并标记需要重绘。
+    /// </summary>
+    /// <param name="viewport">新的 UI 视口。</param>
     public void Resize(in UiViewport viewport)
     {
         ThrowIfDisposed();
@@ -66,7 +78,11 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         Dirty = true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 载入 XHTML 子集文档并返回托管文档句柄。
+    /// </summary>
+    /// <param name="source">文档来源。</param>
+    /// <returns>托管文档句柄。</returns>
     public UiDocumentHandle LoadDocument(in UiDocumentSource source)
     {
         ThrowIfDisposed();
@@ -82,7 +98,10 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         return handle;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 卸载指定托管 UI 文档。
+    /// </summary>
+    /// <param name="document">文档句柄。</param>
     public void UnloadDocument(UiDocumentHandle document)
     {
         ThrowIfDisposed();
@@ -98,7 +117,10 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 同步当前可见屏栈。
+    /// </summary>
+    /// <param name="stack">按底到顶排列的屏栈。</param>
     public void SetScreenStack(ReadOnlySpan<UiScreenStackEntry> stack)
     {
         ThrowIfDisposed();
@@ -112,39 +134,67 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         Dirty = true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 更新托管 UI 的渲染帧 dt。
+    /// </summary>
+    /// <param name="deltaSeconds">渲染帧 dt，单位秒。</param>
     public void Update(float deltaSeconds)
     {
         ThrowIfDisposed();
         _deltaSeconds = float.IsFinite(deltaSeconds) && deltaSeconds > 0f ? deltaSeconds : 1f / 60f;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 接收指针移动；当前托管回退后端通过 Gui host 处理具体控件交互。
+    /// </summary>
+    /// <param name="x">UI 坐标 x。</param>
+    /// <param name="y">UI 坐标 y。</param>
     public void FeedPointerMove(float x, float y)
     {
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 接收指针按钮；当前托管回退后端通过 Gui host 处理具体控件交互。
+    /// </summary>
+    /// <param name="button">指针按钮。</param>
+    /// <param name="isDown">是否按下。</param>
     public void FeedPointerButton(UiPointerButton button, bool isDown)
     {
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 接收滚轮输入；当前托管回退后端通过 Gui host 处理具体控件交互。
+    /// </summary>
+    /// <param name="deltaX">水平滚动量。</param>
+    /// <param name="deltaY">垂直滚动量。</param>
     public void FeedScroll(float deltaX, float deltaY)
     {
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 接收键盘按键；当前托管回退后端通过 Gui host 处理具体控件交互。
+    /// </summary>
+    /// <param name="key">按键。</param>
+    /// <param name="isDown">是否按下。</param>
+    /// <param name="modifiers">修饰键。</param>
     public void FeedKey(UiKey key, bool isDown, UiKeyModifiers modifiers)
     {
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 接收已提交文本；当前托管回退后端通过 Gui host 处理具体控件交互。
+    /// </summary>
+    /// <param name="text">本帧文本。</param>
     public void FeedText(ReadOnlySpan<char> text)
     {
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 根据当前屏栈返回托管 UI 的输入捕获意图。
+    /// </summary>
+    /// <param name="x">UI 坐标 x。</param>
+    /// <param name="y">UI 坐标 y。</param>
+    /// <returns>命中与捕获结果。</returns>
     public UiHitResult HitTest(float x, float y)
     {
         ThrowIfDisposed();
@@ -157,7 +207,12 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         return new UiHitResult(HitsUi: true, Opaque: modal, WantsMouse: modal, WantsKeyboard: modal);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 写入托管控件绑定的模型值。
+    /// </summary>
+    /// <param name="document">文档句柄。</param>
+    /// <param name="path">模型路径句柄。</param>
+    /// <param name="value">写入值。</param>
     public void SetModelValue(UiDocumentHandle document, UiPathId path, in UiValue value)
     {
         ThrowIfDisposed();
@@ -171,7 +226,13 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         Dirty = true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 读取托管控件绑定的模型值。
+    /// </summary>
+    /// <param name="document">文档句柄。</param>
+    /// <param name="path">模型路径句柄。</param>
+    /// <param name="value">读出的值。</param>
+    /// <returns>找到模型路径则返回 true。</returns>
     public bool TryGetModelValue(UiDocumentHandle document, UiPathId path, out UiValue value)
     {
         ThrowIfDisposed();
@@ -186,7 +247,12 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         return true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 复制指定托管文档声明的模型路径。
+    /// </summary>
+    /// <param name="document">文档句柄。</param>
+    /// <param name="destination">路径写入缓冲。</param>
+    /// <returns>写入路径数量。</returns>
     public int CopyModelPaths(UiDocumentHandle document, Span<UiPathId> destination)
     {
         ThrowIfDisposed();
@@ -211,7 +277,13 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         return written;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 调用托管控件 action 并把载荷应用到匹配控件。
+    /// </summary>
+    /// <param name="document">文档句柄。</param>
+    /// <param name="action">动作句柄。</param>
+    /// <param name="payload">动作载荷。</param>
+    /// <returns>找到匹配 action 则返回 true。</returns>
     public bool InvokeAction(UiDocumentHandle document, UiActionId action, in UiValue payload)
     {
         ThrowIfDisposed();
@@ -238,7 +310,11 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         return invoked;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 抽取托管 UI 产生的事件。
+    /// </summary>
+    /// <param name="destination">事件写入缓冲。</param>
+    /// <returns>写入事件数量。</returns>
     public int DrainEvents(Span<UiEvent> destination)
     {
         ThrowIfDisposed();
@@ -253,7 +329,10 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         return written;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 通过复用的 Gui host 绘制当前屏栈。
+    /// </summary>
+    /// <param name="context">UI present 上下文。</param>
     public void Composite(in UiPresentContext context)
     {
         ThrowIfDisposed();
@@ -271,13 +350,18 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         Dirty = false;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 标记后端已释放。
+    /// </summary>
     public void Dispose()
     {
         _disposed = true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 在已有 Gui frame 内绘制托管 UI 控件。
+    /// </summary>
+    /// <param name="gui">GUI 绘制上下文。</param>
     public void DrawGui(IGuiDrawContext gui)
     {
         ThrowIfDisposed();

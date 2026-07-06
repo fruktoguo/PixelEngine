@@ -10,13 +10,13 @@ internal sealed class ManagedUiDocument(
     ManagedUiBox rootBox,
     ManagedUiControl[] controls)
 {
-    public UiDocumentHandle Handle { get; } = handle;
+    internal UiDocumentHandle Handle { get; } = handle;
 
-    public UiDocumentSource Source { get; } = source;
+    internal UiDocumentSource Source { get; } = source;
 
-    public string Title { get; } = title;
+    internal string Title { get; } = title;
 
-    public ManagedUiBox RootBox { get; } = rootBox;
+    internal ManagedUiBox RootBox { get; } = rootBox;
 
-    public ManagedUiControl[] Controls { get; } = controls;
+    internal ManagedUiControl[] Controls { get; } = controls;
 }

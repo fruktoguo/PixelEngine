@@ -5,17 +5,17 @@ namespace PixelEngine.UI;
 /// </summary>
 internal sealed class ManagedUiControl
 {
-    public ManagedUiControlKind Kind { get; init; }
+    internal ManagedUiControlKind Kind { get; init; }
 
-    public required string Id { get; init; }
+    internal required string Id { get; init; }
 
-    public required string Text { get; init; }
+    internal required string Text { get; init; }
 
-    public UiElementId Element { get; init; }
+    internal UiElementId Element { get; init; }
 
-    public UiActionId Action { get; init; }
+    internal UiActionId Action { get; init; }
 
-    public UiPathId Path { get; init; }
+    internal UiPathId Path { get; init; }
 
-    public UiValue Value { get; set; }
+    internal UiValue Value { get; set; }
 }

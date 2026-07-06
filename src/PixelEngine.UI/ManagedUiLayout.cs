@@ -8,7 +8,7 @@ namespace PixelEngine.UI;
 /// </summary>
 internal static class ManagedUiLayout
 {
-    public static ManagedUiDocument Load(
+    internal static ManagedUiDocument Load(
         UiDocumentHandle handle,
         in UiDocumentSource source,
         int maxControls)

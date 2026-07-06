@@ -250,6 +250,6 @@ public sealed class UiManifestImageJson
 [JsonSerializable(typeof(UiManifestJson))]
 [JsonSerializable(typeof(UiManifestScreenJson[]))]
 [JsonSerializable(typeof(UiManifestImageJson[]))]
-public sealed partial class UiManifestJsonContext : JsonSerializerContext
+internal sealed partial class UiManifestJsonContext : JsonSerializerContext
 {
 }

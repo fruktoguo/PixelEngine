@@ -1,9 +1,10 @@
 namespace PixelEngine.UI;
 
+#pragma warning disable IDE0032
+
 /// <summary>
 /// 管理已载入 UI 文档与可见屏栈。
 /// </summary>
-#pragma warning disable IDE0032
 public sealed class UiDocumentManager
 {
     private readonly UiDocumentSlot[] _documents;

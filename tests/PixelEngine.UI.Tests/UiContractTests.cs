@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace PixelEngine.UI.Tests;
@@ -41,6 +42,29 @@ public sealed class UiContractTests
     }
 
     [Fact]
+    public void UiPublicApiMembersHaveChineseXmlDocumentation()
+    {
+        string root = FindRepositoryRoot();
+        string projectDirectory = Path.Combine(root, "src", "PixelEngine.UI");
+        foreach (string file in Directory.EnumerateFiles(projectDirectory, "*.cs", SearchOption.TopDirectoryOnly))
+        {
+            string[] lines = File.ReadAllLines(file);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (!IsPublicApiDeclaration(lines[i]))
+                {
+                    continue;
+                }
+
+                int previous = PreviousNonAttributeLine(lines, i);
+                Assert.True(
+                    previous >= 0 && IsChineseXmlDocumentationBlock(lines, previous),
+                    $"{file}:{i + 1} 公开 API 缺少中文 XML 文档注释。");
+            }
+        }
+    }
+
+    [Fact]
     public void UiValuePreservesTypedPayload()
     {
         UiValue number = new(42L);
@@ -53,5 +77,69 @@ public sealed class UiContractTests
         Assert.True(flag.AsBoolean());
         Assert.Equal(new UiStringHandle(7), text.AsStringHandle());
         _ = Assert.Throws<InvalidOperationException>(() => scalar.AsInt64());
+    }
+
+    private static bool IsPublicApiDeclaration(string line)
+    {
+        string trimmed = line.TrimStart();
+        return Regex.IsMatch(
+            trimmed,
+            @"^public\s+(sealed\s+|static\s+|readonly\s+|record\s+|ref\s+|enum\s+|interface\s+|class\s+|struct\s+|delegate\s+|[A-Z_a-z])");
+    }
+
+    private static bool IsChineseXmlDocumentationBlock(string[] lines, int lastDocumentationLine)
+    {
+        bool hasDocumentation = false;
+        bool hasChinese = false;
+        bool hasInheritdoc = false;
+        for (int i = lastDocumentationLine; i >= 0; i--)
+        {
+            string trimmed = lines[i].TrimStart();
+            if (!trimmed.StartsWith("///", StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            hasDocumentation = true;
+            hasChinese |= Regex.IsMatch(trimmed, @"\p{IsCJKUnifiedIdeographs}");
+            hasInheritdoc |= trimmed.Contains("<inheritdoc", StringComparison.Ordinal);
+        }
+
+        return hasDocumentation && hasChinese && !hasInheritdoc;
+    }
+
+    private static int PreviousNonAttributeLine(string[] lines, int index)
+    {
+        for (int i = index - 1; i >= 0; i--)
+        {
+            string trimmed = lines[i].TrimStart();
+            if (trimmed.StartsWith("[", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(trimmed))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "PixelEngine.sln")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new InvalidOperationException("找不到仓库根目录。");
     }
 }

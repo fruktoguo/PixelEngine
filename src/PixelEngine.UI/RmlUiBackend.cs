@@ -70,18 +70,27 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         _visibleScreens = new UiScreenStackEntry[maxVisibleScreens];
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 后端类型，固定为 RmlUi native 后端。
+    /// </summary>
     public UiBackendKind Kind => UiBackendKind.RmlUi;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// RmlUi 文档或输入状态是否需要重新合成。
+    /// </summary>
     public bool IsDirty => Dirty;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// RmlUi 后端当前不暴露独立动画时间线。
+    /// </summary>
     public bool IsAnimating => false;
 
     private bool Dirty { get; set; }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 初始化 RmlUi renderer、GL 函数表与字体。
+    /// </summary>
+    /// <param name="info">后端初始化信息。</param>
     public void Initialize(in UiBackendInitializeInfo info)
     {
         ThrowIfDisposed();
@@ -102,7 +111,10 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         Dirty = true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 调整 RmlUi native renderer 的视口。
+    /// </summary>
+    /// <param name="viewport">新的 UI 视口。</param>
     public void Resize(in UiViewport viewport)
     {
         ThrowIfDisposed();
@@ -112,7 +124,11 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         Dirty = true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 从资产路径载入 RmlUi 文档并绑定 DOM 桥。
+    /// </summary>
+    /// <param name="source">文档来源。</param>
+    /// <returns>文档句柄。</returns>
     public UiDocumentHandle LoadDocument(in UiDocumentSource source)
     {
         ThrowIfDisposed();
@@ -158,7 +174,10 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         return handle;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 关闭并卸载 RmlUi 文档。
+    /// </summary>
+    /// <param name="document">文档句柄。</param>
     public void UnloadDocument(UiDocumentHandle document)
     {
         ThrowIfDisposed();
@@ -177,7 +196,10 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 同步当前可见屏栈到 RmlUi 文档显示状态。
+    /// </summary>
+    /// <param name="stack">按底到顶排列的屏栈。</param>
     public void SetScreenStack(ReadOnlySpan<UiScreenStackEntry> stack)
     {
         ThrowIfDisposed();
@@ -208,7 +230,10 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         Dirty = true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 推进 RmlUi 文档更新。
+    /// </summary>
+    /// <param name="deltaSeconds">渲染帧 dt，当前 native shim 只需要相位推进。</param>
     public void Update(float deltaSeconds)
     {
         ThrowIfDisposed();
@@ -216,7 +241,11 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         RmlUiNative.Update(_renderer);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 把指针移动注入 RmlUi。
+    /// </summary>
+    /// <param name="x">UI 坐标 x。</param>
+    /// <param name="y">UI 坐标 y。</param>
     public void FeedPointerMove(float x, float y)
     {
         ThrowIfDisposed();
@@ -234,7 +263,11 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         Dirty = true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 把指针按钮状态注入 RmlUi。
+    /// </summary>
+    /// <param name="button">指针按钮。</param>
+    /// <param name="isDown">是否按下。</param>
     public void FeedPointerButton(UiPointerButton button, bool isDown)
     {
         ThrowIfDisposed();
@@ -243,7 +276,11 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         Dirty = true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 把滚轮输入注入 RmlUi。
+    /// </summary>
+    /// <param name="deltaX">水平滚动量。</param>
+    /// <param name="deltaY">垂直滚动量。</param>
     public void FeedScroll(float deltaX, float deltaY)
     {
         ThrowIfDisposed();
@@ -257,7 +294,12 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         Dirty = true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 把键盘按键注入 RmlUi。
+    /// </summary>
+    /// <param name="key">按键。</param>
+    /// <param name="isDown">是否按下。</param>
+    /// <param name="modifiers">修饰键。</param>
     public void FeedKey(UiKey key, bool isDown, UiKeyModifiers modifiers)
     {
         ThrowIfDisposed();
@@ -273,7 +315,10 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         Dirty = true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 把已提交文本按 UTF-8 注入 RmlUi。
+    /// </summary>
+    /// <param name="text">本帧文本。</param>
     public void FeedText(ReadOnlySpan<char> text)
     {
         ThrowIfDisposed();
@@ -299,7 +344,12 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         Dirty = true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 通过 native DOM 命中测试返回输入捕获意图。
+    /// </summary>
+    /// <param name="x">UI 坐标 x。</param>
+    /// <param name="y">UI 坐标 y。</param>
+    /// <returns>命中与捕获结果。</returns>
     public UiHitResult HitTest(float x, float y)
     {
         ThrowIfDisposed();
@@ -326,7 +376,12 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
             WantsKeyboard: wantsKeyboard || modal);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 写入 RmlUi DOM 数据桥模型值。
+    /// </summary>
+    /// <param name="document">文档句柄。</param>
+    /// <param name="path">模型路径句柄。</param>
+    /// <param name="value">写入值。</param>
     public void SetModelValue(UiDocumentHandle document, UiPathId path, in UiValue value)
     {
         ThrowIfDisposed();
@@ -353,7 +408,13 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         Dirty = true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 从 RmlUi DOM 数据桥读取模型值。
+    /// </summary>
+    /// <param name="document">文档句柄。</param>
+    /// <param name="path">模型路径句柄。</param>
+    /// <param name="value">读出的值。</param>
+    /// <returns>找到模型路径则返回 true。</returns>
     public bool TryGetModelValue(UiDocumentHandle document, UiPathId path, out UiValue value)
     {
         ThrowIfDisposed();
@@ -383,7 +444,12 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         return false;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 复制 RmlUi 文档声明的模型路径。
+    /// </summary>
+    /// <param name="document">文档句柄。</param>
+    /// <param name="destination">路径写入缓冲。</param>
+    /// <returns>写入路径数量。</returns>
     public int CopyModelPaths(UiDocumentHandle document, Span<UiPathId> destination)
     {
         ThrowIfDisposed();
@@ -409,7 +475,13 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         return count;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 调用 RmlUi DOM action 并应用载荷。
+    /// </summary>
+    /// <param name="document">文档句柄。</param>
+    /// <param name="action">动作句柄。</param>
+    /// <param name="payload">动作载荷。</param>
+    /// <returns>找到并执行 action 则返回 true。</returns>
     public bool InvokeAction(UiDocumentHandle document, UiActionId action, in UiValue payload)
     {
         ThrowIfDisposed();
@@ -437,7 +509,11 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         return true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 从 native 事件环形缓冲抽取 UI 事件。
+    /// </summary>
+    /// <param name="destination">事件写入缓冲。</param>
+    /// <returns>写入事件数量。</returns>
     public int DrainEvents(Span<UiEvent> destination)
     {
         ThrowIfDisposed();
@@ -468,7 +544,10 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         return count;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 在当前共享 GL context 中渲染 RmlUi 文档。
+    /// </summary>
+    /// <param name="context">UI present 上下文。</param>
     public void Composite(in UiPresentContext context)
     {
         ThrowIfDisposed();
@@ -482,7 +561,9 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
         Dirty = false;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 关闭全部 RmlUi 文档并销毁 native renderer。
+    /// </summary>
     public void Dispose()
     {
         if (_disposed)

@@ -2,10 +2,11 @@ using System.Runtime.InteropServices;
 
 namespace PixelEngine.UI;
 
+#pragma warning disable IDE0022, IDE0024, IDE0032
+
 /// <summary>
 /// UI 数据桥使用的 blittable 联合值。
 /// </summary>
-#pragma warning disable IDE0022, IDE0024, IDE0032
 [StructLayout(LayoutKind.Explicit, Size = 16)]
 public readonly struct UiValue : IEquatable<UiValue>
 {
@@ -106,13 +107,24 @@ public readonly struct UiValue : IEquatable<UiValue>
         return new UiStringHandle(checked((int)_integer));
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 比较两个 UI 值是否类型与载荷完全一致。
+    /// </summary>
+    /// <param name="other">另一个 UI 值。</param>
+    /// <returns>相等则返回 true。</returns>
     public bool Equals(UiValue other) => _kind == other._kind && _integer == other._integer;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 比较对象是否为相同载荷的 UI 值。
+    /// </summary>
+    /// <param name="obj">待比较对象。</param>
+    /// <returns>相等则返回 true。</returns>
     public override bool Equals(object? obj) => obj is UiValue other && Equals(other);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 返回 UI 值的哈希码。
+    /// </summary>
+    /// <returns>哈希码。</returns>
     public override int GetHashCode() => HashCode.Combine(_kind, _integer);
 
     /// <summary>
