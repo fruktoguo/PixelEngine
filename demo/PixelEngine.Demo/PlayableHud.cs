@@ -69,12 +69,12 @@ public sealed class PlayableHud : Behaviour
         DrawWeapon(gui);
         gui.Text($"射击 {_projectile?.ShotsFired ?? 0}");
         EngineDiagnosticsSnapshot diagnostics = Context.Diagnostics.Capture();
+        gui.Text($"FX {TransientParticleBurst.ActiveCount(Context.Scene)}   World particles {diagnostics.FreeParticles}");
         PushFrameGraphSample(diagnostics);
         gui.Separator();
         gui.Text($"FPS {diagnostics.FramesPerSecond:0.0}   {diagnostics.FrameMilliseconds:0.0} ms   p99 {diagnostics.FrameP99Milliseconds:0.0}");
         gui.Text($"1% {diagnostics.FrameLow1PercentFps:0.0}   jitter {diagnostics.FrameJitterMilliseconds:0.0}   {BuildFrameGraphText()}");
         gui.Text($"Sim {diagnostics.SimHz:0}Hz   Frame {diagnostics.FrameCount}   Bodies {diagnostics.RigidBodies}");
-        gui.Text($"Chunks {diagnostics.ActiveChunks}/{diagnostics.ResidentChunks}   Particles {diagnostics.FreeParticles}");
         if (_projectile is not null)
         {
             gui.Text(

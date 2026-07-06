@@ -125,7 +125,7 @@ public sealed class DemoHud : Behaviour
         gui.Separator();
         gui.Text($"FPS {diagnostics.FramesPerSecond:0} avg   p99 {diagnostics.FrameP99Milliseconds:0.0} ms   1% low {diagnostics.FrameLow1PercentFps:0}");
         gui.Text($"Sim {diagnostics.SimHz:0}Hz   Frame {diagnostics.FrameCount}");
-        gui.Text($"Chunks {diagnostics.ActiveChunks}/{diagnostics.ResidentChunks}   Particles {diagnostics.FreeParticles}   Bodies {diagnostics.RigidBodies}");
+        gui.Text($"FX {TransientParticleBurst.ActiveCount(Context.Scene)}   World particles {diagnostics.FreeParticles}   Bodies {diagnostics.RigidBodies}");
     }
 
     private static uint ColorForMaterial(string name)
