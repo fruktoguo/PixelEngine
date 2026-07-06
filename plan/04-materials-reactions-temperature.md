@@ -542,8 +542,8 @@ public sealed class TemperatureField
 
 - [x] 登记 cell SoA 新增 `Damage`(byte) lane 契约（归属 plan/03）：默认 0、单缓冲原地（守 #1）、非颜色（守 #7）；预算 4B→5B/cell、常驻 chunk 16KB→20KB（与 plan/03/07/16 一致，§3.11）。
 - [x] 定义 `ApplyDamage(x,y,dmg,kind)` 消费规则：`RigidOwned` 命中经 `IRigidDamageSink.OnOwnedCellDamaged` 路由（守 #5，不累加 Damage）→ `Indestructible` no-op → `effective=max(0,dmg-Durability*DamageAbsorb)` → `Integrity==0` 即时破坏 / 否则累计至 `Damage*DamageScale≥Integrity`（`DamageAbsorb`/`DamageScale` 集中常量，§3.11）。
-- [ ] 定义破坏动作：转 `DestroyedTarget`/`Empty` + 清 Damage + parity + dirty + 跨界 KeepAlive（守 #2/#3/#6）+ `DebrisCount` 碎屑请求（plan/05）+ `Diggable`&`MineYield` 采集事件（plan/13，§3.11）。
-- [ ] 定义 `DamageKind` 与三路径差异化抗性契约：爆炸 `DamageCircle`（`Explode` 内部改组合）、激光 `DamageBeam`(+AddHeat)、酸蚀反应改走 `ApplyDamage`；抗性差异全由 materials.json 表达（§3.11；API 缺口归 plan/05+plan/11）。
+- [x] 定义破坏动作：转 `DestroyedTarget`/`Empty` + 清 Damage + parity + dirty + 跨界 KeepAlive（守 #2/#3/#6）+ `DebrisCount` 碎屑请求（plan/05）+ `Diggable`&`MineYield` 采集事件（plan/13，§3.11）。证据：`SimulationKernel.DestroyCell/NotifyCellDestroyed/MarkDamageDirty` 清 Damage、写 rubble/Empty、写 parity/lifetime、标 dirty/KeepAlive 并发布 `CellDestructionEvent(DebrisCount,MineYield)`；`CellDamageRubbleHandshakeTests` 与 `WorldEffectBoundaryConservationTests` 覆盖 rubble、碎屑、MineYield、跨 chunk KeepAlive 与零分配入口。
+- [~] 定义 `DamageKind` 与三路径差异化抗性契约：爆炸 `DamageCircle`（`Explode` 内部改组合）、激光 `DamageBeam`(+AddHeat)、酸蚀反应改走 `ApplyDamage`；抗性差异全由 materials.json 表达（§3.11；API 缺口归 plan/05+plan/11）。进展：`IWorldEffects.DamageCircle/DamageBeam`、`World.Explode`→`DamageCircle`、Demo 武器 `DamageCircle`/`DamageBeam`+`AddHeat`、`DamageBeamBurnThroughTests` 与脚本 flush/零分配测试已覆盖爆炸/激光路径；缺口：`DamageKind.Corrosion` 目前仅为 API 枚举，`acid + [corrodible]` 仍走 reaction 输出式腐蚀，尚未统一到 `ApplyStructuralDamage`/Corrosion 抗性路径，不能勾选完成。
 - [x] 登记 `Damage` lane 存档契约（落地 plan/07）：入 `ChunkSnapshot`/`ChunkCodec`(RLE)、bump `SaveFormatVersion`、旧档迁移 `Damage=0`、material remap 缺失 fallback 后 `Damage` 清 0（§3.11）。
 
 ---
@@ -563,9 +563,9 @@ public sealed class TemperatureField
 - [x] custom-update：`HasCustomUpdate` 门控仅对声明材质调用委托，委托内写入遵守 parity/halo/dirty/KeepAlive（架构 §7.4）。
 - [x] 稳态帧零托管堆分配（反应 / 温度 pass 无 LINQ / 闭包 / 装箱 / 字符串；`ReactionTemperatureAllocationBenchmarks` 经 BenchmarkDotNet MemoryDiagnoser 确认 `Allocated=-`，`AGENTS.md §3`）。
 - [x] 与不变式 #3/#4/#8/#9 及技术栈 `00` 无冲突（自审通过：反应/温度仍为单缓冲 parity、32px halo/KeepAlive、name 稳定键与 CPU sim 权威）。
-- [ ] 差异化破坏：同一 `DamageCircle(damage=X)` 下 sand/dirt 立即碎抛、stone 需累计多次 / 大当量才破坏、metal 小爆破近免疫、`boundary_stone`(Indestructible) 完全不破坏——差异全来自 `materials.json` 抗性数值（改数值即改表现，无写死；`MaterialDamageTests` 覆盖）。
-- [ ] cell 破坏归零转 `DestroyedTarget`（stone→gravel）并按 `DebrisCount` 抛碎屑；`Integrity==0` 材质即时破坏；`Diggable`&`MineYield` 材质（crystal）被武器破坏发一次采集事件；`Damage` lane 稳态帧零托管分配（守 #1，MemoryDiagnoser 确认）。
-- [ ] 刚体像素受击不累加 `Damage`、经 `IRigidDamageSink.OnOwnedCellDamaged` 路由触发形状重建（守 #5，与 plan/06 联动测试）。
+- [x] 差异化破坏：同一 `DamageCircle(damage=X)` 下 sand/dirt 立即碎抛、stone 需累计多次 / 大当量才破坏、metal 小爆破近免疫、`boundary_stone`(Indestructible) 完全不破坏——差异全来自 `materials.json` 抗性数值（改数值即改表现，无写死；`CellDamageResistanceTests.DamageCircleDifferentiatesMaterialResistanceFromData`、`SimulationDataStructureTests.ApplyStructuralDamageDestroysSolidAndRoutesRigidOwned` 与 `DemoStartupOptionsTests.DemoContentMaterialsDriveStructuralDamageResistance` 覆盖）。
+- [~] cell 破坏归零转 `DestroyedTarget`（stone→gravel）并按 `DebrisCount` 抛碎屑；`Integrity==0` 材质即时破坏；`Diggable`&`MineYield` 材质（crystal）被武器破坏发一次采集事件；`Damage` lane 稳态帧零托管分配（守 #1，MemoryDiagnoser 确认）。进展：`CellDamageRubbleHandshakeTests` 覆盖 rubble/Empty、DebrisCount→真实粒子、Diggable MineYield→`CellDestructionEvent`；`CellDamageResistanceTests.MaxIntegrityZeroDestroysImmediatelyAfterHardness` 覆盖 `Integrity==0`；`WorldEffectBoundaryConservationTests.StructuralDamageEntriesDoNotAllocateAfterWarmup` 与 `ScriptSimulationContextTests.WorldDamageAndHeatCommandsDoNotAllocateAfterWarmup` 覆盖结构破坏入口与脚本命令稳态 0 分配；Demo `WeaponControllerExcavatorPublishesMineYieldEvent` 覆盖挖掘武器采集事件。缺口：普通 `DamageCircle`/爆炸破坏 crystal 后到 `MineYieldEvent`/MissionDirector 的玩法桥仍缺直接自动化证据，不能把整条验收项勾成完成。
+- [x] 刚体像素受击不累加 `Damage`、经 `IRigidDamageSink.OnOwnedCellDamaged` 路由触发形状重建（守 #5，与 plan/06 联动测试）。证据：`SimulationKernel.ApplyStructuralDamage` 命中 `RigidOwned` 时只调 `_rigidDamageSink.OnOwnedCellDamaged(wx,wy)` 并清 Damage；`RigidOwnedDamageRoutingTests.DamageCircleRoutesRigidOwnedCellToPhysicsQueueWithoutAccumulatingDamage` 与 `DamageBeamRoutesRigidOwnedCellToPhysicsQueueWithoutMutatingMaterial` 通过。
 - [x] `Dispersion` 加载期 clamp 生效、构建期断言拦截越 `MoveCap` 值；液体单步水平位移 ≤ 32px（守 #4，`MaterialDispersionClampTests`）。
 - [x] 视觉字段只落 `MaterialDef`/`MaterialVisualTable`、渲染相位 CPU 算 BGRA，sim cell 无颜色写入（守 #7，字段审计 + 与 plan/08 着色联动）。
 - [x] `Damage` lane 存档往返正确：新档写读一致、旧档迁移 `Damage=0`、material remap 缺失落 fallback 后 `Damage` 清 0（与 plan/07 往返测试联动，守 #8）。

@@ -267,6 +267,71 @@ public sealed class DemoStartupOptionsTests
     }
 
     /// <summary>
+    /// 验证真实 Demo materials.json 的抗性数值会驱动 DamageCircle 差异化破坏。
+    /// </summary>
+    [Fact]
+    public void DemoContentMaterialsDriveStructuralDamageResistance()
+    {
+        string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
+        DemoStartupOptions options = DemoStartupOptions.Parse([
+            "--headless",
+            "--no-hot-reload",
+            "--content",
+            contentRoot,
+        ]);
+        PixelEngine.Hosting.EngineProject project = DemoProgram.BuildProject(options);
+        using PixelEngine.Hosting.Engine engine = DemoProgram.BuildEngine(options, project);
+        _ = engine.LoadContentPackage();
+        MaterialTable materials = engine.Context.GetService<MaterialTable>();
+        Assert.True(materials.TryGetId("sand", out ushort sand));
+        Assert.True(materials.TryGetId("dirt", out ushort dirt));
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        Assert.True(materials.TryGetId("metal", out ushort metal));
+        Assert.True(materials.TryGetId("gravel", out ushort gravel));
+        Assert.True(materials.TryGetId("boundary_stone", out ushort boundaryStone));
+        ResidentChunkMap chunks = new();
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        chunks.Add(chunk);
+        SimulationKernel kernel = new(chunks, new MaterialPropsTable(materials.Hot));
+        SetLocal(chunk, 20, 20, sand);
+        SetLocal(chunk, 21, 20, dirt);
+        SetLocal(chunk, 22, 20, stone);
+        SetLocal(chunk, 23, 20, metal);
+        SetLocal(chunk, 24, 20, boundaryStone);
+
+        int destroyed = kernel.DamageCircle(22, 20, radius: 2, damage: 120, falloff: false);
+
+        Assert.Equal(2, destroyed);
+        Assert.Equal(0, GetLocal(chunk, 20, 20));
+        Assert.Equal(0, GetLocal(chunk, 21, 20));
+        Assert.Equal(stone, GetLocal(chunk, 22, 20));
+        Assert.Equal(0, GetDamage(chunk, 22, 20));
+        Assert.Equal(metal, GetLocal(chunk, 23, 20));
+        Assert.Equal(0, GetDamage(chunk, 23, 20));
+        Assert.Equal(boundaryStone, GetLocal(chunk, 24, 20));
+
+        Assert.Equal(0, kernel.DamageCircle(22, 20, radius: 0, damage: 300, falloff: false));
+        Assert.Equal(stone, GetLocal(chunk, 22, 20));
+        Assert.True(GetDamage(chunk, 22, 20) > 0);
+
+        Assert.Equal(1, kernel.DamageCircle(22, 20, radius: 0, damage: 300, falloff: false));
+        Assert.Equal(gravel, GetLocal(chunk, 22, 20));
+        Assert.Equal(0, GetDamage(chunk, 22, 20));
+
+        Assert.Equal(0, kernel.DamageCircle(23, 20, radius: 0, damage: 300, falloff: false));
+        Assert.Equal(metal, GetLocal(chunk, 23, 20));
+        Assert.True(GetDamage(chunk, 23, 20) > 0);
+
+        Assert.Equal(1, kernel.DamageCircle(23, 20, radius: 0, damage: 511, falloff: false));
+        Assert.Equal(gravel, GetLocal(chunk, 23, 20));
+        Assert.Equal(0, GetDamage(chunk, 23, 20));
+
+        Assert.Equal(0, kernel.DamageCircle(24, 20, radius: 0, damage: 511, falloff: false));
+        Assert.Equal(boundaryStone, GetLocal(chunk, 24, 20));
+        Assert.Equal(0, GetDamage(chunk, 24, 20));
+    }
+
+    /// <summary>
     /// 验证武器目录经 Engine Content/Config API 加载，Demo 不直接解析 JSON。
     /// </summary>
     [Fact]
@@ -370,6 +435,21 @@ public sealed class DemoStartupOptionsTests
         }
 
         throw new InvalidOperationException("无法从测试输出目录定位 PixelEngine.sln。");
+    }
+
+    private static void SetLocal(Chunk chunk, int x, int y, ushort material)
+    {
+        chunk.Material[CellAddressing.LocalIndexFromLocal(x, y)] = material;
+    }
+
+    private static ushort GetLocal(Chunk chunk, int x, int y)
+    {
+        return chunk.Material[CellAddressing.LocalIndexFromLocal(x, y)];
+    }
+
+    private static byte GetDamage(Chunk chunk, int x, int y)
+    {
+        return chunk.Damage[CellAddressing.LocalIndexFromLocal(x, y)];
     }
 
     /// <summary>
