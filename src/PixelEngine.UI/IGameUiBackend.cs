@@ -89,10 +89,21 @@ public interface IGameUiBackend : IDisposable
     void FeedKey(UiKey key, bool isDown, UiKeyModifiers modifiers);
 
     /// <summary>
-    /// 注入文本输入。
+    /// 注入已提交文本输入；该通道只表示 committed text，不表示 IME 预编辑内容。
     /// </summary>
-    /// <param name="text">本帧输入文本。</param>
+    /// <param name="text">本帧已提交文本。</param>
     void FeedText(ReadOnlySpan<char> text);
+
+    /// <summary>
+    /// 注入平台 IME composition 预编辑状态；后端不支持时必须安全忽略，不得把已提交文本冒充预编辑内容。
+    /// </summary>
+    /// <param name="text">当前预编辑文本；清除 composition 时为空。</param>
+    /// <param name="composition">当前预编辑状态；<see cref="UiTextComposition.Inactive" /> 表示清除。</param>
+    void FeedTextComposition(ReadOnlySpan<char> text, in UiTextComposition composition)
+    {
+        _ = text;
+        _ = composition;
+    }
 
     /// <summary>
     /// 命中测试并返回输入捕获意图。

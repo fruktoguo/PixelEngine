@@ -96,6 +96,8 @@ public sealed class EngineWindowOwnershipTests
         Assert.Contains("public int CaptureText(Span<char> destination)", source, StringComparison.Ordinal);
         Assert.Contains("destination[i] = _textBuffer[_textRead];", source, StringComparison.Ordinal);
         Assert.DoesNotContain("return 0;", ExtractCaptureTextBody(source), StringComparison.Ordinal);
+        Assert.Contains("public int CaptureTextComposition(Span<char> destination, out UiTextComposition composition)", source, StringComparison.Ordinal);
+        Assert.Contains("composition = UiTextComposition.Inactive;", source, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -138,7 +140,7 @@ public sealed class EngineWindowOwnershipTests
         const string marker = "public int CaptureText(Span<char> destination)";
         int start = source.IndexOf(marker, StringComparison.Ordinal);
         Assert.True(start >= 0, "未找到 CaptureText 方法。");
-        int end = source.IndexOf("private void OnKeyChar", start, StringComparison.Ordinal);
+        int end = source.IndexOf("public int CaptureTextComposition", start, StringComparison.Ordinal);
         Assert.True(end > start, "未找到 CaptureText 方法结束边界。");
         return source[start..end];
     }

@@ -21,9 +21,22 @@ public interface IUiInputSource
     int CaptureDownKeys(Span<UiKey> destination, out UiKeyModifiers modifiers);
 
     /// <summary>
-    /// 采集本帧文本输入。
+    /// 采集本帧已提交文本输入；该通道不表示 IME 预编辑内容。
     /// </summary>
     /// <param name="destination">文本写入缓冲。</param>
     /// <returns>写入字符数量。</returns>
     int CaptureText(Span<char> destination);
+
+    /// <summary>
+    /// 采集当前平台 IME composition 预编辑文本；平台没有真实 composition 事件时必须返回非活动状态。
+    /// </summary>
+    /// <param name="destination">预编辑文本写入缓冲。</param>
+    /// <param name="composition">当前预编辑状态。</param>
+    /// <returns>写入预编辑文本字符数量。</returns>
+    int CaptureTextComposition(Span<char> destination, out UiTextComposition composition)
+    {
+        _ = destination;
+        composition = UiTextComposition.Inactive;
+        return 0;
+    }
 }

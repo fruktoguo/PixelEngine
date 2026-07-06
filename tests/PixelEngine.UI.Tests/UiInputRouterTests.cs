@@ -210,6 +210,64 @@ public sealed class UiInputRouterTests
         Assert.Equal(string.Empty, input.Text);
     }
 
+    [Fact]
+    public void PumpFeedsImeCompositionSeparatelyFromCommittedTextAndClearsWhenInactive()
+    {
+        RecordingBackend backend = new()
+        {
+            HitResult = new UiHitResult(HitsUi: true, Opaque: true, WantsMouse: true, WantsKeyboard: true),
+        };
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        FakeInputSource input = new()
+        {
+            HasPointer = true,
+            Pointer = new UiPointerState(12, 34, 0, 0, LeftDown: false, RightDown: false, MiddleDown: false),
+            Text = "中",
+            CompositionText = "かな\0\n",
+            Composition = new UiTextComposition(isActive: true, cursorIndex: 99, selectionStart: 1, selectionLength: 99),
+        };
+        UiInputRouter router = new(host, input);
+
+        _ = router.Pump();
+        input.CompositionText = string.Empty;
+        input.Composition = UiTextComposition.Inactive;
+        _ = router.Pump();
+
+        Assert.Equal("中", backend.Text);
+        Assert.Equal(["かな", string.Empty], backend.CompositionTexts);
+        Assert.Equal(2, backend.Compositions.Count);
+        Assert.True(backend.Compositions[0].IsActive);
+        Assert.Equal(2, backend.Compositions[0].CursorIndex);
+        Assert.Equal(1, backend.Compositions[0].SelectionStart);
+        Assert.Equal(1, backend.Compositions[0].SelectionLength);
+        Assert.False(backend.Compositions[1].IsActive);
+    }
+
+    [Fact]
+    public void PumpDoesNotTreatCommittedTextAsImeCompositionWhenSourceHasNoComposition()
+    {
+        RecordingBackend backend = new()
+        {
+            HitResult = new UiHitResult(HitsUi: true, Opaque: true, WantsMouse: true, WantsKeyboard: true),
+        };
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        FakeInputSource input = new()
+        {
+            HasPointer = true,
+            Pointer = new UiPointerState(12, 34, 0, 0, LeftDown: false, RightDown: false, MiddleDown: false),
+            Text = "a中",
+        };
+        UiInputRouter router = new(host, input);
+
+        _ = router.Pump();
+
+        Assert.Equal("a中", backend.Text);
+        Assert.Empty(backend.Compositions);
+        Assert.Empty(backend.CompositionTexts);
+    }
+
     private sealed class FakeInputSource : IUiInputSource
     {
         public bool HasPointer { get; set; }
@@ -222,7 +280,13 @@ public sealed class UiInputRouterTests
 
         public string Text { get; set; } = string.Empty;
 
+        public string CompositionText { get; set; } = string.Empty;
+
+        public UiTextComposition Composition { get; set; }
+
         public int? ReportedTextCount { get; set; }
+
+        public int? ReportedCompositionTextCount { get; set; }
 
         public bool TryGetPointer(out UiPointerState state)
         {
@@ -245,6 +309,14 @@ public sealed class UiInputRouterTests
             Text = string.Empty;
             return ReportedTextCount ?? count;
         }
+
+        public int CaptureTextComposition(Span<char> destination, out UiTextComposition composition)
+        {
+            int count = Math.Min(destination.Length, CompositionText.Length);
+            CompositionText.AsSpan(0, count).CopyTo(destination);
+            composition = Composition;
+            return ReportedCompositionTextCount ?? count;
+        }
     }
 
     private sealed class RecordingBackend : IGameUiBackend
@@ -260,6 +332,10 @@ public sealed class UiInputRouterTests
         public List<(UiKey Key, bool IsDown, UiKeyModifiers Modifiers)> Keys { get; } = [];
 
         public string Text { get; private set; } = string.Empty;
+
+        public List<string> CompositionTexts { get; } = [];
+
+        public List<UiTextComposition> Compositions { get; } = [];
 
         public float HitX { get; private set; }
 
@@ -325,6 +401,12 @@ public sealed class UiInputRouterTests
         public void FeedText(ReadOnlySpan<char> text)
         {
             Text += text.ToString();
+        }
+
+        public void FeedTextComposition(ReadOnlySpan<char> text, in UiTextComposition composition)
+        {
+            CompositionTexts.Add(text.ToString());
+            Compositions.Add(composition);
         }
 
         public UiHitResult HitTest(float x, float y)
