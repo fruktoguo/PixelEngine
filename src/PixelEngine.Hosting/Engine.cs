@@ -712,42 +712,39 @@ public sealed class Engine : IDisposable
 
     private ScriptInputRoute ResolveGuiInputRoute()
     {
-        bool allowKeyboard = true;
-        bool allowMouse = true;
-        ApplyEditorInputCapture(ref allowKeyboard, ref allowMouse);
+        InputArbitrationState input = ApplyEditorInputCapture(InputArbitrationState.Allowed);
         if (!Context.TryGetService(out GuiApp gui))
         {
             if (Context.TryGetService(out UiInputRouter uiOnlyRouter))
             {
-                UiInputCapture uiOnlyCapture = uiOnlyRouter.Pump(allowPointer: allowMouse, allowKeyboard: allowKeyboard);
-                allowKeyboard &= uiOnlyCapture.AllowWorldKeyboard;
-                allowMouse &= uiOnlyCapture.AllowWorldMouse;
+                UiInputCapture uiOnlyCapture = uiOnlyRouter.Pump(
+                    allowPointer: input.AllowWorldMouse,
+                    allowKeyboard: input.AllowWorldKeyboard);
+                input = InputArbitrator.ApplyGameUi(input, uiOnlyCapture);
             }
 
-            return new ScriptInputRoute(allowKeyboard, allowMouse);
+            return input.ToScriptInputRoute();
         }
 
         GuiInputSnapshot capture = gui.Input.Capture;
-        allowKeyboard &= capture.AllowWorldKeyboard;
-        allowMouse &= capture.AllowWorldMouse;
+        input = InputArbitrator.ApplyGui(input, capture);
         if (Context.TryGetService(out UiInputRouter router))
         {
-            UiInputCapture uiCapture = router.Pump(allowPointer: allowMouse, allowKeyboard: allowKeyboard);
-            allowKeyboard &= uiCapture.AllowWorldKeyboard;
-            allowMouse &= uiCapture.AllowWorldMouse;
+            UiInputCapture uiCapture = router.Pump(
+                allowPointer: input.AllowWorldMouse,
+                allowKeyboard: input.AllowWorldKeyboard);
+            input = InputArbitrator.ApplyGameUi(input, uiCapture);
         }
 
-        return new ScriptInputRoute(allowKeyboard, allowMouse);
+        return input.ToScriptInputRoute();
     }
 
-    private void ApplyEditorInputCapture(ref bool allowKeyboard, ref bool allowMouse)
+    private InputArbitrationState ApplyEditorInputCapture(InputArbitrationState input)
     {
-        if (Context.TryGetService(out IEditorInputCaptureSource editorInput) &&
-            editorInput.TryGetInputCapture(out EditorHostInputCapture editorCapture))
-        {
-            allowKeyboard &= editorCapture.AllowGameKeyboard;
-            allowMouse &= editorCapture.AllowGameMouse;
-        }
+        return Context.TryGetService(out IEditorInputCaptureSource editorInput) &&
+            editorInput.TryGetInputCapture(out EditorHostInputCapture editorCapture)
+            ? InputArbitrator.ApplyEditor(input, editorCapture)
+            : input;
     }
 
     /// <summary>

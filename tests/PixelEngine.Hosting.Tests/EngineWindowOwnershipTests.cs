@@ -71,9 +71,14 @@ public sealed class EngineWindowOwnershipTests
         string engine = ReadRepositoryFile("src", "PixelEngine.Hosting", "Engine.cs");
         string extension = ReadRepositoryFile("apps", "PixelEngine.Editor.Shell", "EditorShellHostExtension.cs");
 
-        Assert.Contains("ApplyEditorInputCapture(ref allowKeyboard, ref allowMouse);", ExtractResolveGuiInputRouteBody(engine), StringComparison.Ordinal);
-        Assert.Contains("Pump(allowPointer: allowMouse, allowKeyboard: allowKeyboard)", ExtractResolveGuiInputRouteBody(engine), StringComparison.Ordinal);
+        Assert.Contains("InputArbitrationState input = ApplyEditorInputCapture(InputArbitrationState.Allowed);", ExtractResolveGuiInputRouteBody(engine), StringComparison.Ordinal);
+        Assert.Contains("InputArbitrator.ApplyGameUi(input, uiCapture)", ExtractResolveGuiInputRouteBody(engine), StringComparison.Ordinal);
+        Assert.Contains("Pump(", ExtractResolveGuiInputRouteBody(engine), StringComparison.Ordinal);
+        Assert.Contains("allowPointer: input.AllowWorldMouse", ExtractResolveGuiInputRouteBody(engine), StringComparison.Ordinal);
+        Assert.Contains("allowKeyboard: input.AllowWorldKeyboard", ExtractResolveGuiInputRouteBody(engine), StringComparison.Ordinal);
+        Assert.Contains("InputArbitrator.ApplyEditor(input, editorCapture)", ExtractApplyEditorInputCaptureBody(engine), StringComparison.Ordinal);
         Assert.Contains("IEditorInputCaptureSource", ReadRepositoryFile("src", "PixelEngine.Hosting", "IEditorInputCaptureSource.cs"), StringComparison.Ordinal);
+        Assert.Contains("public static class InputArbitrator", ReadRepositoryFile("src", "PixelEngine.Hosting", "InputArbitrator.cs"), StringComparison.Ordinal);
         Assert.Contains("EditorShellHostExtension : IEditorHostExtension, IEditorInputCaptureSource", extension, StringComparison.Ordinal);
         Assert.Contains("RegisterService<IEditorInputCaptureSource>(this)", extension, StringComparison.Ordinal);
     }
@@ -143,8 +148,18 @@ public sealed class EngineWindowOwnershipTests
         const string marker = "private ScriptInputRoute ResolveGuiInputRoute()";
         int start = source.IndexOf(marker, StringComparison.Ordinal);
         Assert.True(start >= 0, "未找到 ResolveGuiInputRoute 方法。");
-        int end = source.IndexOf("private void ApplyEditorInputCapture", start, StringComparison.Ordinal);
+        int end = source.IndexOf("private InputArbitrationState ApplyEditorInputCapture", start, StringComparison.Ordinal);
         Assert.True(end > start, "未找到 ResolveGuiInputRoute 方法结束边界。");
+        return source[start..end];
+    }
+
+    private static string ExtractApplyEditorInputCaptureBody(string source)
+    {
+        const string marker = "private InputArbitrationState ApplyEditorInputCapture";
+        int start = source.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(start >= 0, "未找到 ApplyEditorInputCapture 方法。");
+        int end = source.IndexOf("public ScriptLightingSynchronizer AttachLightingSynchronization", start, StringComparison.Ordinal);
+        Assert.True(end > start, "未找到 ApplyEditorInputCapture 方法结束边界。");
         return source[start..end];
     }
 
