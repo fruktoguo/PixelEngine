@@ -1,5 +1,6 @@
 using PixelEngine.Editor.Shell;
 using PixelEngine.Editor.Shell.Build;
+using PixelEngine.Scripting;
 using PixelEngine.UI;
 using Xunit;
 
@@ -85,7 +86,12 @@ public sealed class EditorConsoleStoreTests
         });
         store.AddAssetOpenResult(new EditorScriptAssetOpenResult(false, string.Empty, "scripts/Missing.cs", null, null, false, "脚本资产不存在"));
         store.AddUiBackendSelection(new GameUiBackendSelection(UiBackendKind.Ultralight, UiBackendKind.ManagedFallback, "Ultralight unavailable; ManagedFallback active"));
-        store.AddScriptDiagnostics("script-hot-reload", "脚本编译失败", ["warning CS0168", "error CS1002"], success: false);
+        new EditorConsoleScriptHotReloadDiagnosticSink(store).Report(new ScriptHotReloadDiagnostic(
+            DateTimeOffset.UtcNow,
+            ScriptHotReloadDiagnosticKind.ReloadResult,
+            ScriptHotReloadStatus.CompileFailed,
+            "脚本编译失败",
+            ["warning CS0168", "error CS1002"]));
 
         EditorConsoleEntry[] entries = store.Snapshot();
         Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Build && entry.Severity == EditorConsoleSeverity.Error && entry.Text.Contains("stderr audit line", StringComparison.Ordinal));
