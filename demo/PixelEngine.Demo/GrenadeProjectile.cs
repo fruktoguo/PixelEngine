@@ -120,7 +120,7 @@ public sealed class GrenadeProjectile : Behaviour
             X,
             Y,
             Math.Clamp(_radius, 4, 24),
-            Math.Max(2f, _impulse * 0.2f),
-            lifetime: 75);
+            Math.Max(10f, _impulse * 1.5f),
+            lifetime: 40);
     }
 }

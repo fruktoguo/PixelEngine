@@ -472,8 +472,8 @@ public sealed class WeaponController : Behaviour
             x,
             y,
             Math.Clamp(count, 1, 32),
-            Math.Max(1f, weapon.Impulse * 0.15f),
-            lifetime: weapon.Kind == WeaponKind.Bomb ? (ushort)75 : (ushort)45);
+            Math.Max(8f, weapon.Impulse * 1.5f),
+            lifetime: weapon.Kind == WeaponKind.Bomb ? (ushort)36 : (ushort)24);
     }
 
     private void PublishMineYieldForCircle(float x, float y, int radius)

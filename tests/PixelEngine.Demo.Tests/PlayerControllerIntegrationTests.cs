@@ -513,6 +513,35 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证爆破工具产生的真实碎屑粒子会按有限 lifetime 退场，不会让爆炸特效常驻。
+    /// </summary>
+    [Fact]
+    public void ExplosiveToolExplosionParticlesDoNotPersistAfterLifetime()
+    {
+        MaterialTable materials = DemoMaterials();
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
+        ExplosiveTool tool = scene.CreateEntity().AddComponent<ExplosiveTool>();
+        tool.Radius = 5;
+        tool.Force = 20f;
+        tool.CooldownSeconds = 0f;
+        FillRect(grid, material: stone, minX: 10, minY: 10, maxX: 15, maxY: 15);
+
+        input.Update([], [MouseButton.Middle], mouseX: 12.25f, mouseY: 12.75f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+
+        ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
+        Assert.Equal(1, tool.ExplosionCount);
+        Assert.True(particles.ActiveCount > 0);
+
+        input.Update([], [], mouseX: 12.25f, mouseY: 12.75f, wheelY: 0f);
+        engine.RunHeadlessTicks(PixelEngine.Core.EngineConstants.ParticleMaxLifetimeTicks + 4);
+
+        Assert.Equal(0, particles.ActiveCount);
+        Assert.Equal(0, TransientParticleBurst.ActiveCount(scene));
+    }
+
+    /// <summary>
     /// 验证 Demo 爆破工具会通过公开 World.Explode 链路对邻近刚体施加径向冲量。
     /// </summary>
     [Fact]
@@ -1329,6 +1358,63 @@ public sealed class PlayerControllerIntegrationTests
             engine.RunHeadlessTicks(1);
             Assert.Equal(WeaponKind.Builder, weapons.LastDispatchedKind);
             Assert.True(CountMaterial(grid, stone, minX: 0, minY: 0, maxX: 95, maxY: 63) > stoneBeforeBuilder);
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// 验证武器 bomb 的纯视觉爆炸烟尘是短寿命 overlay 特效，真实碎屑粒子也会按 lifetime 收敛。
+    /// </summary>
+    [Fact]
+    public void WeaponControllerBombExplosionEffectsExpire()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                { "id": "bomb", "displayName": "Bomb", "kind": "bomb", "damage": 60, "radius": 5, "falloff": "linear", "cooldownSeconds": 0, "ammoMax": 8, "impulse": 18, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
+              ]
+            }
+            """);
+        try
+        {
+            MaterialTable materials = DemoMaterials();
+            Assert.True(materials.TryGetId("stone", out ushort stone));
+            using Engine engine = CreateManualScriptEngine(
+                out ScriptInputApi input,
+                out CellGrid grid,
+                out _,
+                out ScriptScene scene,
+                materials,
+                contentRoot: contentRoot);
+            Entity entity = scene.CreateEntity();
+            Transform transform = entity.AddComponent<Transform>();
+            transform.SetPosition(24f, 32f);
+            PlayerController player = entity.AddComponent<PlayerController>();
+            player.SpawnX = 24f;
+            player.SpawnY = 32f;
+            PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+            projectile.InputEnabled = false;
+            WeaponController weapons = entity.AddComponent<WeaponController>();
+            FillRect(grid, material: stone, minX: 34, minY: 28, maxX: 39, maxY: 33);
+
+            engine.RunHeadlessTicks(2);
+            input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 30f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+
+            ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
+            Assert.Equal(WeaponKind.Bomb, weapons.LastDispatchedKind);
+            Assert.True(TransientParticleBurst.ActiveCount(scene) > 0);
+            Assert.True(particles.ActiveCount > 0);
+
+            input.Update([], [], mouseX: 36f, mouseY: 30f, wheelY: 0f);
+            engine.RunHeadlessTicks(PixelEngine.Core.EngineConstants.ParticleMaxLifetimeTicks + 8);
+
+            Assert.Equal(0, TransientParticleBurst.ActiveCount(scene));
+            Assert.Equal(0, particles.ActiveCount);
         }
         finally
         {

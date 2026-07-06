@@ -56,7 +56,7 @@ internal sealed class TransientParticleBurstSystem : ISystem
     /// </summary>
     public int LastOverlayCommandsSubmitted { get; private set; }
 
-    public void Add(float x, float y, int count, float speed, ushort lifetimeTicks)
+    public void Add(float x, float y, int count, float speedCellsPerSecond, ushort lifetimeTicks)
     {
         int index = ActiveCount < _bursts.Length ? ActiveCount++ : OldestBurstIndex();
         float simHz = (float)EngineConstants.DefaultSimHz;
@@ -64,7 +64,7 @@ internal sealed class TransientParticleBurstSystem : ISystem
         {
             X = x,
             Y = y,
-            Speed = MathF.Max(0f, speed) * simHz,
+            Speed = MathF.Max(0f, speedCellsPerSecond),
             Duration = Math.Clamp(lifetimeTicks / simHz, 0.05f, 2.5f),
             Count = Math.Clamp(count, 1, 48),
             Seed = Hash((int)MathF.Round(x * 16f), (int)MathF.Round(y * 16f), count),
