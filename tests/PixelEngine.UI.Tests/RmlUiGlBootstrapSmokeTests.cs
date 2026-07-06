@@ -21,7 +21,7 @@ public sealed class RmlUiGlBootstrapSmokeTests
             Title = "PixelEngine RmlUi GL smoke",
             Width = 64,
             Height = 64,
-            BackendPreference = RenderBackendPreference.Auto,
+            BackendPreference = RenderBackendPreference.DesktopGl33,
             EnableDebugContext = true,
         });
 
@@ -42,7 +42,7 @@ public sealed class RmlUiGlBootstrapSmokeTests
             Title = "PixelEngine RmlUi backend smoke",
             Width = 64,
             Height = 64,
-            BackendPreference = RenderBackendPreference.Auto,
+            BackendPreference = RenderBackendPreference.DesktopGl33,
             EnableDebugContext = true,
         });
         using RmlUiBackend backend = new(window);
@@ -157,7 +157,7 @@ public sealed class RmlUiGlBootstrapSmokeTests
             Title = "PixelEngine RmlUi GL state smoke",
             Width = 64,
             Height = 64,
-            BackendPreference = RenderBackendPreference.Auto,
+            BackendPreference = RenderBackendPreference.DesktopGl33,
             EnableDebugContext = true,
         });
         GL gl = window.Gl;

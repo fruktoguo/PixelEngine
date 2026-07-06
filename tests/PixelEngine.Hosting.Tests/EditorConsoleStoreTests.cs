@@ -86,6 +86,10 @@ public sealed class EditorConsoleStoreTests
         });
         store.AddAssetOpenResult(new EditorScriptAssetOpenResult(false, string.Empty, "scripts/Missing.cs", null, null, false, "脚本资产不存在"));
         store.AddUiBackendSelection(new GameUiBackendSelection(UiBackendKind.Ultralight, UiBackendKind.ManagedFallback, "Ultralight unavailable; ManagedFallback active"));
+        store.AddUiBackendSelection(new GameUiBackendSelection(
+            UiBackendKind.RmlUi,
+            UiBackendKind.ManagedFallback,
+            "RmlUi desktop GL3 renderer 不支持 GLES/ANGLE；回退 ManagedFallback。"));
         new EditorConsoleScriptHotReloadDiagnosticSink(store).Report(new ScriptHotReloadDiagnostic(
             DateTimeOffset.UtcNow,
             ScriptHotReloadDiagnosticKind.ReloadResult,
@@ -99,6 +103,8 @@ public sealed class EditorConsoleStoreTests
         Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Build && entry.Severity == EditorConsoleSeverity.Warning && entry.Text == "result warning");
         Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Asset && entry.Severity == EditorConsoleSeverity.Error && entry.Source == "asset-opener");
         Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Ui && entry.Severity == EditorConsoleSeverity.Warning && entry.Text.Contains("ManagedFallback", StringComparison.Ordinal));
+        Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Ui && entry.Severity == EditorConsoleSeverity.Warning && entry.Text.Contains("GLES/ANGLE", StringComparison.Ordinal));
+        Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Ui && entry.Severity == EditorConsoleSeverity.Warning && entry.Text.Contains("GL3 renderer", StringComparison.Ordinal));
         Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Script && entry.Severity == EditorConsoleSeverity.Error && entry.Text.Contains("脚本编译失败", StringComparison.Ordinal));
         Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Script && entry.Severity == EditorConsoleSeverity.Error && entry.Text.Contains("error CS1002", StringComparison.Ordinal));
     }

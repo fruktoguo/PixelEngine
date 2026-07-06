@@ -32,7 +32,7 @@
 |---|---|---|---|---|
 | `ManagedFallbackBackend` | - [x] 纯托管基线，永远可用 | - [x] XHTML 子集、text/button/checkbox/progress/image、模型值、事件环形缓冲、Gui host 合帧、CJK 字体、HitTest、HUD 共栈与零 native | - [ ] 完整 CSS 盒模型不是基线目标，只需保持产品屏幕等价可用 | - [x] 默认 fallback；native 缺失、unsupported RID、AOT、Ultralight 未激活时使用 |
 | `RmlUiBackend` desktop GL3 | - [x] 默认 HTML/CSS 子集主路径 | - [x] RmlUi 6.2 + FreeType 2.14.3、`PixelEngine.UI.Native` dynamic-only、GL3 renderer、字体注册、DOM model/action、真实窗口 smoke、GL state restore | - [!] ANGLE/GLES native profile 未完成；RmlUi 是 HTML/CSS 子集，不承诺标准 HTML5/JS 完整保真 | - [x] RmlUi native 不可用、GLES/ANGLE 未支持或加载失败时显式回退 ManagedFallback 并记录 `GameUiBackendSelection` |
-| `RmlUiBackend` ANGLE/GLES | - [!] 阻塞 | - [x] 当前已能识别 GLES/ANGLE 并安全回退，避免误用 GL3 renderer | - [!] 需要 GLES3 renderer/loader、shader `#version 300 es`、同 context 函数表验证、状态恢复 smoke | - [x] 保持 ManagedFallback |
+| `RmlUiBackend` ANGLE/GLES | - [!] 阻塞 | - [x] `RmlUiNativeProfileGate` 已识别 `RenderBackend.GlEs30Angle`、GLES context 与 ANGLE renderer/vendor/version 并安全回退，避免误用 GL3 renderer | - [!] 需要 GLES3 renderer/loader、shader `#version 300 es`、同 context 函数表验证、状态恢复 smoke | - [x] 保持 ManagedFallback，并记录 `GameUiBackendSelection` / Console 可见诊断 |
 | `UltralightBackend` | - [ ] 未实现真实后端；- [x] 未激活 optional profile 已门控 | - [x] `UiOffscreenSurfacePresenter` 已验证 BGRA8 dirty upload + textured quad 合成底座；Hosting 对 `UiBackendKind.Ultralight` 明确回退；Editor label / runtime diagnostic / release audit 均标注 inactive | - [ ] 需要 native 依赖、surface API、JS bridge、字体注册、`content/ui` resource loader、许可/发行 gate；M15 还需 artifact / notarize / license 证据 | - [x] 未激活或不合规时回退 ManagedFallback，不伪造后端完成；release audit 不允许 Ultralight native 混入 |
 
 ## 4. 已实现证据 checklist
@@ -54,6 +54,7 @@
 - [x] `FontEngine` 已选择 `content/ui/fonts` 优先、共享 `GuiFontManager` 系统候选、CJK glyph range、DPI 字号、missing glyph 诊断；RmlUi/ManagedFallback 可消费同一字体选择。
 - [x] `content/ui/ui-manifest.json` 已支持 screen id、preload、images 清单、路径逃逸拒绝、缺失文件校验、预载 screen/image；Demo 已落五类屏幕并由 `GameUiDemoController` 驱动。
 - [x] UI native packaging 已采用 dynamic-only：`PixelEngine.UiNative.targets`、CMake `SHARED`、`runtimes/<rid>/native/`、R2R 包含 UI native、AOT 不携带动态 UI native 并回退 ManagedFallback 的审计测试已落地。
+- [x] `RmlUiNativeProfileGate` 已集中收紧 RmlUi desktop GL3 profile gate：显式 ANGLE/GLES backend request、GLES context、ANGLE renderer/vendor/version 全部拒绝加载 GL3 renderer 并回退 ManagedFallback；`RmlUiNativeProfileGateTests`、`EngineBuilderTests`、`EditorConsoleStoreTests` 与 `HostingProjectDisciplineTests.RmlUiAngleGlesProfileGateFallsBackAndDoesNotMarkM15Complete` 锁定 fallback reason、Console 可见诊断与 M15 不误勾。
 
 ## 5. M14 产品验收 checklist
 
@@ -79,7 +80,7 @@
 ## 7. 验证命令与证据路径 checklist
 
 - [x] `dotnet test tests/PixelEngine.UI.Tests/PixelEngine.UI.Tests.csproj -c Release --filter FullyQualifiedName~GameUiHostTests|FullyQualifiedName~UiInputRouterTests|FullyQualifiedName~GameUiServiceBridgeTests|FullyQualifiedName~BackendConformance` 覆盖宿主、输入、服务桥与后端一致性基线。
-- [x] `dotnet test tests/PixelEngine.UI.Tests/PixelEngine.UI.Tests.csproj -c Release --filter FullyQualifiedName~RmlUiGlBootstrapSmokeTests|FullyQualifiedName~UiOffscreenSurfacePresenterSmokeTests|FullyQualifiedName~ManagedFallbackBackendTests` 覆盖 RmlUi GL3 smoke、offscreen upload 底座与 ManagedFallback。
+- [x] `dotnet test tests/PixelEngine.UI.Tests/PixelEngine.UI.Tests.csproj -c Release --filter FullyQualifiedName~RmlUiGlBootstrapSmokeTests|FullyQualifiedName~RmlUiNativeProfileGateTests|FullyQualifiedName~UiOffscreenSurfacePresenterSmokeTests|FullyQualifiedName~ManagedFallbackBackendTests` 覆盖 RmlUi GL3 smoke、ANGLE/GLES profile gate、offscreen upload 底座与 ManagedFallback。
 - [x] `dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --filter FullyQualifiedName~GameUi|FullyQualifiedName~InputArbitrator|FullyQualifiedName~DisabledGameUi` 覆盖 Hosting 装配、输入仲裁与禁用零开销。
 - [x] `dotnet test tests/PixelEngine.Demo.Tests/PixelEngine.Demo.Tests.csproj -c Release --filter FullyQualifiedName~DemoUiContentTests|FullyQualifiedName~GameUiDemoController` 覆盖 Demo content/ui 与公开 API dogfood。
 - [x] `dotnet run -c Release --project bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -- --filter *GameUiAllocationBenchmarks*` 是 UI 稳态零分配基准入口。

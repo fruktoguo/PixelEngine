@@ -796,6 +796,37 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证 RmlUi ANGLE/GLES 仍是安全回退 gate，不把 desktop GL3 native shim 误勾为 M15 native profile 完成。
+    /// </summary>
+    [Fact]
+    public void RmlUiAngleGlesProfileGateFallsBackAndDoesNotMarkM15Complete()
+    {
+        string root = FindRepositoryRoot();
+        string gate = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.UI", "RmlUiNativeProfileGate.cs"));
+        string bootstrap = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.UI", "RmlUiGlBootstrap.cs"));
+        string engine = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Hosting", "Engine.cs"));
+        string uiNativeCMake = File.ReadAllText(Path.Combine(root, "native", "ui_native", "CMakeLists.txt"));
+        string uiNativeCpp = File.ReadAllText(Path.Combine(root, "native", "ui_native", "PixelEngineUiNative.cpp"));
+        string plan20 = File.ReadAllText(Path.Combine(root, "plan", "20-interactive-html-ui.md"));
+        string plan14 = File.ReadAllText(Path.Combine(root, "plan", "14-testing-benchmarking.md"));
+        string plan15 = File.ReadAllText(Path.Combine(root, "plan", "15-build-packaging-distribution.md"));
+
+        Assert.Contains("RenderBackend.GlEs30Angle", gate, StringComparison.Ordinal);
+        Assert.Contains("capabilities.IsGles || capabilities.IsAngle", gate, StringComparison.Ordinal);
+        Assert.Contains("GLES3/ANGLE renderer", gate, StringComparison.Ordinal);
+        Assert.Contains("回退 ManagedFallback", gate, StringComparison.Ordinal);
+        Assert.Contains("RmlUiNativeProfileGate.CanUseDesktopGl3(window.Backend, window.Capabilities", bootstrap, StringComparison.Ordinal);
+        Assert.Contains("RmlUiNativeProfileGate.CanUseDesktopGl3(window.Backend, window.Capabilities", engine, StringComparison.Ordinal);
+        Assert.Contains("RmlUi_Renderer_GL3.cpp", uiNativeCMake, StringComparison.Ordinal);
+        Assert.Contains("RenderInterface_GL3", uiNativeCpp, StringComparison.Ordinal);
+        Assert.DoesNotContain("RmlUi_Renderer_GLES", uiNativeCMake, StringComparison.Ordinal);
+        Assert.Contains("M15 RmlUi ANGLE/GLES native profile 未闭合", plan20, StringComparison.Ordinal);
+        Assert.Contains("`RmlUiNativeProfileGate` 已识别 `RenderBackend.GlEs30Angle`、GLES context 与 ANGLE renderer/vendor/version 并安全回退", plan20, StringComparison.Ordinal);
+        Assert.Contains("RmlUi/Ultralight native 专属上传、真实平台 composition 与高保真浏览器语义仍按 plan/20/M15 标 blocked/pending", plan14, StringComparison.Ordinal);
+        Assert.Contains("RmlUi、Ultralight 归 dynamic-only 或系统分发并可门控回退", plan15, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Demo gameplay 内容资产与材质纹理引用在源 content 中闭合，打包脚本可原样拷贝。
     /// </summary>
     [Fact]

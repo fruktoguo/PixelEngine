@@ -15,6 +15,7 @@ public sealed class GlCapabilities
         int majorVersion,
         int minorVersion,
         bool isGles,
+        bool isAngle,
         bool hasComputeShader,
         bool hasBufferStorage,
         string[] extensions)
@@ -25,6 +26,7 @@ public sealed class GlCapabilities
         MajorVersion = majorVersion;
         MinorVersion = minorVersion;
         IsGles = isGles;
+        IsAngle = isAngle;
         HasComputeShader = hasComputeShader;
         HasBufferStorage = hasBufferStorage;
         Extensions = extensions;
@@ -59,6 +61,11 @@ public sealed class GlCapabilities
     /// 当前上下文是否为 OpenGL ES。
     /// </summary>
     public bool IsGles { get; }
+
+    /// <summary>
+    /// 当前上下文是否疑似由 ANGLE 提供。
+    /// </summary>
+    public bool IsAngle { get; }
 
     /// <summary>
     /// 是否具备 compute shader 能力。桌面 GL 4.3+ 或 ES 3.1+ 视为可用。
@@ -136,6 +143,7 @@ public sealed class GlCapabilities
             .Where(static item => !string.IsNullOrWhiteSpace(item))
             .Distinct(StringComparer.Ordinal),
         ];
+        bool isAngle = IsAngleContext(version, renderer, vendor);
         bool hasCompute = isGles
             ? IsAtLeast(major, minor, 3, 1)
             : IsAtLeast(major, minor, 4, 3);
@@ -149,9 +157,17 @@ public sealed class GlCapabilities
             major,
             minor,
             isGles,
+            isAngle,
             hasCompute,
             hasBufferStorage,
             extensionArray);
+    }
+
+    private static bool IsAngleContext(string version, string renderer, string vendor)
+    {
+        return version.Contains("ANGLE", StringComparison.OrdinalIgnoreCase) ||
+            renderer.Contains("ANGLE", StringComparison.OrdinalIgnoreCase) ||
+            vendor.Contains("ANGLE", StringComparison.OrdinalIgnoreCase);
     }
 
     private static (int Major, int Minor, bool IsGles) ParseVersion(string version)

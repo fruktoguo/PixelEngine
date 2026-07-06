@@ -136,11 +136,17 @@ public sealed class EngineBuilderTests
 
         GameUiBackendSelection selection = engine.Context.GetService<GameUiBackendSelection>();
         Assert.Equal(UiBackendKind.RmlUi, selection.RequestedBackend);
-        if (window.Capabilities.IsGles || !RmlUiNativeInfo.TryQuery(out _))
+        if (window.Backend == RenderBackend.GlEs30Angle || window.Capabilities.IsGles || window.Capabilities.IsAngle || !RmlUiNativeInfo.TryQuery(out _))
         {
             Assert.Equal(UiBackendKind.ManagedFallback, selection.ActiveBackend);
             Assert.True(selection.UsedFallback);
             Assert.False(string.IsNullOrWhiteSpace(selection.FallbackReason));
+            Assert.Contains("ManagedFallback", selection.FallbackReason, StringComparison.Ordinal);
+            if (window.Backend == RenderBackend.GlEs30Angle || window.Capabilities.IsGles || window.Capabilities.IsAngle)
+            {
+                Assert.Contains("GL3 renderer", selection.FallbackReason, StringComparison.Ordinal);
+                Assert.Contains("GLES3/ANGLE renderer", selection.FallbackReason, StringComparison.Ordinal);
+            }
         }
         else
         {
