@@ -1179,6 +1179,14 @@ public sealed class Engine : IDisposable
         PhysicsSystem? physics = Context.TryGetService(out PhysicsSystem registeredPhysics)
             ? registeredPhysics
             : null;
+        ScriptCameraSyncPhaseDriver? existingCameraSyncDriver =
+            camera is ScriptCameraApi && Context.TryGetService(out ScriptCameraSyncPhaseDriver registeredCameraSync)
+                ? registeredCameraSync
+                : null;
+        ScriptLightingSyncPhaseDriver? existingLightingSyncDriver =
+            lighting is ScriptLightingApi && Context.TryGetService(out ScriptLightingSyncPhaseDriver registeredLightingSync)
+                ? registeredLightingSync
+                : null;
 
         RegisterSimulationRolesIfMissing(grid, particles, materials, physics);
         ScriptSimulationContext scriptContext = new(
@@ -1204,6 +1212,7 @@ public sealed class Engine : IDisposable
         simulationDriver?.AttachScriptContext(scriptContext);
         runtime ??= CreateScriptRuntime(scriptScene, scriptContext, hotReload);
         AttachScripting(scriptContext, runtime);
+        RegisterLateScriptSynchronizers(existingCameraSyncDriver, existingLightingSyncDriver);
         if (camera is ScriptCameraApi)
         {
             _ = AttachCameraSynchronization();
@@ -1215,6 +1224,16 @@ public sealed class Engine : IDisposable
         }
 
         return scriptContext;
+    }
+
+    private void RegisterLateScriptSynchronizers(
+        ScriptCameraSyncPhaseDriver? cameraSyncDriver,
+        ScriptLightingSyncPhaseDriver? lightingSyncDriver)
+    {
+        // Window runtime can attach camera/lighting before scripting. Registering the same drivers
+        // once after ScriptingPhaseDriver keeps their documented "after script update" semantics.
+        cameraSyncDriver?.RegisterPhases(Phases);
+        lightingSyncDriver?.RegisterPhases(Phases);
     }
 
     private IScriptRuntime CreateScriptRuntime(

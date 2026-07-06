@@ -62,6 +62,35 @@ public sealed class DemoRuntimeScriptingTests
     }
 
     /// <summary>
+    /// 验证窗口运行时先注册相机/光照同步、随后再接脚本时，脚本当帧提交的点光源仍会在渲染前同步。
+    /// </summary>
+    [Fact]
+    public void AttachScriptingFromServicesResyncsLightingAfterScriptsWhenSynchronizerAlreadyExists()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty));
+        using Engine engine = new EngineBuilder()
+            .UseHeadless()
+            .UseDeterministicMode()
+            .AddScene(new SceneDescriptor("lighting", SceneSourceKind.Procedural, typeof(HostingLightingProbeBehaviour).FullName!))
+            .WithStartScene("lighting")
+            .Build();
+        engine.Context.RegisterService(materials);
+        _ = engine.AttachResidentSimulationWorld(worldWidthCells: 64, worldHeightCells: 64, particleCapacity: 16);
+        ScriptInputApi input = new();
+        engine.Context.RegisterService<IInputApi>(EngineServiceRole.Input, input);
+        engine.Context.RegisterService(input);
+        _ = engine.AttachCameraSynchronization();
+        ScriptLightingSynchronizer lighting = engine.AttachLightingSynchronization();
+
+        engine.RegisterScriptAssembly(typeof(HostingLightingProbeBehaviour).Assembly);
+        _ = engine.AttachScriptingFromServices();
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(1, lighting.PointLights.Length);
+        Assert.Equal(0xFF_40_80_FFu, lighting.PointLights[0].ColorBgra);
+    }
+
+    /// <summary>
     /// 验证 Hosting 生产装配会把脚本源目录 watcher 接到 ScriptRuntime，并在帧边界应用热重载。
     /// </summary>
     [Fact]
@@ -170,6 +199,15 @@ public sealed class DemoRuntimeScriptingTests
         protected override void OnUpdate(float dt)
         {
             Events.Add("update");
+        }
+    }
+
+    private sealed class HostingLightingProbeBehaviour : Behaviour
+    {
+        protected override void OnUpdate(float dt)
+        {
+            _ = dt;
+            Context.Lighting.AddPointLight(12, 14, 6, 0xFF_40_80_FF, 0.75f);
         }
     }
 
