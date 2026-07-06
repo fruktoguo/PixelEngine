@@ -40,6 +40,21 @@ public struct ExplosionFlashEffect
     }
 
     /// <summary>
+    /// 在启动当帧提交一次完整强度闪光，但不推进生命周期。
+    /// </summary>
+    public void SubmitInitial(IScriptContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        if (!IsActive)
+        {
+            LastOverlayCommandsSubmitted = 0;
+            return;
+        }
+
+        Submit(context, t: 0f, alpha: 1f);
+    }
+
+    /// <summary>
     /// 推进并提交当前帧视觉反馈；返回更新后是否仍活跃。
     /// </summary>
     public bool Update(IScriptContext context, float dt)
@@ -61,13 +76,18 @@ public struct ExplosionFlashEffect
 
         float t = _elapsed / _duration;
         float alpha = 1f - t;
+        Submit(context, t, alpha);
+        return true;
+    }
+
+    private void Submit(IScriptContext context, float t, float alpha)
+    {
         float outer = _radius * (1.1f + (0.9f * t));
         float inner = MathF.Max(2f, _radius * (0.35f + (0.45f * t)));
         Point2F center = context.Camera.WorldToScreen(_x, _y);
         float scale = MathF.Max(1f, context.Camera.Zoom);
         DrawFlash(context, center.X, center.Y, inner * scale, outer * scale, FadeAlpha(_colorBgra, alpha));
         context.Lighting.AddPointLight(_x, _y, _radius * (2.6f - (0.8f * t)), _colorBgra, 1.35f * alpha);
-        return true;
     }
 
     private void DrawFlash(IScriptContext context, float x, float y, float inner, float outer, uint color)

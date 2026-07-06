@@ -315,6 +315,7 @@ public sealed class WeaponController : Behaviour
             case WeaponKind.Bomb:
                 Context.World.Explode(hitX, hitY, Math.Max(1, weapon.Radius), Math.Max(1f, weapon.Impulse));
                 _impactFlash.Start(hitX, hitY, Math.Max(1, weapon.Radius), 0xFF_30_80_FF);
+                _impactFlash.SubmitInitial(Context);
                 EmitImpactFeedback(weapon, hitX, hitY, count: 10);
                 break;
             case WeaponKind.Grenade:

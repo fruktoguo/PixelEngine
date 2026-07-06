@@ -114,6 +114,7 @@ public sealed class GrenadeProjectile : Behaviour
         Context.World.DamageCircle(X, Y, _radius, _damage, falloff: true, DamageKind.Impact);
         Context.World.Explode(X, Y, _radius, _impulse);
         _flash.Start(X, Y, _radius, 0xFF_30_80_FF);
+        _flash.SubmitInitial(Context);
         Context.Audio.PlayAt(_impactCue, X, Y, 0.8f);
         TransientParticleBurst.Emit(
             Context,
