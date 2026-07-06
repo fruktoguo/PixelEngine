@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: tools/package.sh --rid <RID> --channel <r2r|aot> [--version <semver>] [--publish-dir <dir>] [--output-root <dir>] [--player-output-dir <dir>] [--content-root <dir>] [--product-name <name>] [--start-scene <scene>] [--window-width <pixels>] [--window-height <pixels>] [--vsync <true|false>] [--runtime-ui-backend <backend>] [--include-scene <scene>] [--include-symbols]
+Usage: tools/package.sh --rid <RID> --channel <r2r|aot> [--version <semver>] [--publish-dir <dir>] [--output-root <dir>] [--player-output-dir <dir>] [--content-root <dir>] [--product-name <name>] [--start-scene <scene>] [--window-width <pixels>] [--window-height <pixels>] [--vsync <true|false>] [--runtime-ui-backend <backend>] [--release-channel <Development|Production>] [--include-scene <scene>] [--include-symbols]
 EOF
 }
 
@@ -64,6 +64,7 @@ window_width="1280"
 window_height="720"
 vsync="true"
 runtime_ui_backend="ManagedFallback"
+release_channel="Development"
 include_symbols=0
 include_scenes=()
 
@@ -134,6 +135,11 @@ while [[ $# -gt 0 ]]; do
       runtime_ui_backend="$2"
       shift 2
       ;;
+    --release-channel)
+      require_value "$1" "${2:-}"
+      release_channel="$2"
+      shift 2
+      ;;
     --include-scene)
       require_value "$1" "${2:-}"
       include_scenes+=("$2")
@@ -170,6 +176,14 @@ case "$channel" in
     ;;
   *)
     fail_usage "Unsupported channel: $channel"
+    ;;
+esac
+
+case "$release_channel" in
+  Development|Production)
+    ;;
+  *)
+    fail_usage "Unsupported release channel: $release_channel"
     ;;
 esac
 
@@ -315,7 +329,8 @@ copy_filtered_content() {
   "windowWidth": $window_width,
   "windowHeight": $window_height,
   "vSync": $vsync_json,
-  "runtimeUiBackend": "$(json_escape "$runtime_ui_backend")"
+  "runtimeUiBackend": "$(json_escape "$runtime_ui_backend")",
+  "releaseChannel": "$(json_escape "$release_channel")"
 }
 EOF
     local found=0

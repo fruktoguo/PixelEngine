@@ -313,6 +313,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         AppendPowerShellArgument(command, "-WindowHeight", request.PlayerWindowHeight.ToString(System.Globalization.CultureInfo.InvariantCulture));
         AppendPowerShellArgument(command, "-VSync", request.PlayerVSync ? "true" : "false");
         AppendPowerShellArgument(command, "-RuntimeUiBackend", request.RuntimeUiBackend.ToString());
+        AppendPowerShellArgument(command, "-ReleaseChannel", request.ReleaseChannel.ToString());
         if (request.IncludedScenes.Length > 0)
         {
             command.Append(" -IncludeScene @(");
@@ -371,6 +372,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         AddArgument(startInfo, "-WindowHeight", request.PlayerWindowHeight.ToString(System.Globalization.CultureInfo.InvariantCulture));
         AddArgument(startInfo, "-VSync", request.PlayerVSync ? "true" : "false");
         AddArgument(startInfo, "-RuntimeUiBackend", request.RuntimeUiBackend.ToString());
+        AddArgument(startInfo, "-ReleaseChannel", request.ReleaseChannel.ToString());
         for (int i = 0; i < request.IncludedScenes.Length; i++)
         {
             AddArgument(startInfo, "-IncludeScene", request.IncludedScenes[i]);
@@ -502,6 +504,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
             Ok = false,
             Rid = request.Rid,
             Channel = request.Channel == BuildProfileChannel.Aot ? "aot" : "r2r",
+            ReleaseChannel = request.ReleaseChannel.ToString(),
             Configuration = request.Configuration,
             Version = request.Version,
             InformationalVersion = request.InformationalVersion,

@@ -62,6 +62,11 @@ public sealed class DemoStartupOptions
     public UiBackendKind RuntimeUiBackend { get; init; } = UiBackendKind.ManagedFallback;
 
     /// <summary>
+    /// 玩家发行通道。
+    /// </summary>
+    public PlayerReleaseChannel ReleaseChannel { get; init; } = PlayerReleaseChannel.Development;
+
+    /// <summary>
     /// 是否以 headless 冒烟模式运行。
     /// </summary>
     public bool Headless { get; init; }
@@ -148,6 +153,7 @@ public sealed class DemoStartupOptions
         int windowWidth = startupSettings.WindowWidth;
         int windowHeight = startupSettings.WindowHeight;
         UiBackendKind runtimeUiBackend = startupSettings.RuntimeUiBackend;
+        PlayerReleaseChannel releaseChannel = startupSettings.ReleaseChannel;
         bool headless = false;
         int ticks = 1;
         int windowTicks = 0;
@@ -197,6 +203,7 @@ public sealed class DemoStartupOptions
                     windowWidth = startupSettings.WindowWidth;
                     windowHeight = startupSettings.WindowHeight;
                     runtimeUiBackend = startupSettings.RuntimeUiBackend;
+                    releaseChannel = startupSettings.ReleaseChannel;
                     if (!vSyncExplicitlySet)
                     {
                         vSync = startupSettings.VSync;
@@ -287,6 +294,7 @@ public sealed class DemoStartupOptions
             WindowWidth = windowWidth,
             WindowHeight = windowHeight,
             RuntimeUiBackend = runtimeUiBackend,
+            ReleaseChannel = releaseChannel,
             Headless = headless,
             HeadlessTicks = ticks,
             WindowTicks = windowTicks,
@@ -342,9 +350,11 @@ public sealed class DemoStartupOptions
 
             int windowWidth = ReadPositiveInt(root, "windowWidth", defaults.WindowWidth);
             int windowHeight = ReadPositiveInt(root, "windowHeight", defaults.WindowHeight);
-            bool vSync = root.TryGetProperty("vSync", out JsonElement vSyncElement) && vSyncElement.ValueKind == JsonValueKind.False
-                ? false
-                : defaults.VSync;
+            bool vSync = defaults.VSync;
+            if (root.TryGetProperty("vSync", out JsonElement vSyncElement) && vSyncElement.ValueKind == JsonValueKind.False)
+            {
+                vSync = false;
+            }
             UiBackendKind runtimeUiBackend = defaults.RuntimeUiBackend;
             if (root.TryGetProperty("runtimeUiBackend", out JsonElement backendElement) &&
                 backendElement.ValueKind == JsonValueKind.String &&
@@ -353,7 +363,15 @@ public sealed class DemoStartupOptions
                 runtimeUiBackend = parsedBackend;
             }
 
-            return new DemoStartupSettings(startScene, windowTitle, windowWidth, windowHeight, vSync, runtimeUiBackend);
+            PlayerReleaseChannel releaseChannel = defaults.ReleaseChannel;
+            if (root.TryGetProperty("releaseChannel", out JsonElement releaseElement) &&
+                releaseElement.ValueKind == JsonValueKind.String &&
+                Enum.TryParse(releaseElement.GetString(), ignoreCase: true, out PlayerReleaseChannel parsedRelease))
+            {
+                releaseChannel = parsedRelease;
+            }
+
+            return new DemoStartupSettings(startScene, windowTitle, windowWidth, windowHeight, vSync, runtimeUiBackend, releaseChannel);
         }
         catch (JsonException)
         {
@@ -381,7 +399,8 @@ public sealed class DemoStartupOptions
         int WindowWidth,
         int WindowHeight,
         bool VSync,
-        UiBackendKind RuntimeUiBackend)
+        UiBackendKind RuntimeUiBackend,
+        PlayerReleaseChannel ReleaseChannel)
     {
         public static DemoStartupSettings CreateDefault()
         {
@@ -391,7 +410,8 @@ public sealed class DemoStartupOptions
                 DefaultWindowWidth,
                 DefaultWindowHeight,
                 true,
-                UiBackendKind.ManagedFallback);
+                UiBackendKind.ManagedFallback,
+                PlayerReleaseChannel.Development);
         }
     }
 
