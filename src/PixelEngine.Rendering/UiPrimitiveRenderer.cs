@@ -101,6 +101,14 @@ internal sealed unsafe class UiPrimitiveRenderer : IDisposable
             WriteVertex(vertices[i], i);
         }
 
+        foreach (ushort index in indices)
+        {
+            if (index >= vertices.Length)
+            {
+                throw new ArgumentOutOfRangeException(nameof(indices), "UI 索引引用了不存在的顶点。");
+            }
+        }
+
         indices.CopyTo(_indices);
         _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
         _gl.Viewport(0, 0, (uint)framebufferWidth, (uint)framebufferHeight);
@@ -110,7 +118,9 @@ internal sealed unsafe class UiPrimitiveRenderer : IDisposable
         _gl.Enable(EnableCap.Blend);
         _gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
         _program.Use();
-        _gl.Uniform2(_framebufferSizeLocation, framebufferWidth, framebufferHeight);
+        float framebufferWidthValue = framebufferWidth;
+        float framebufferHeightValue = framebufferHeight;
+        _gl.Uniform2(_framebufferSizeLocation, framebufferWidthValue, framebufferHeightValue);
         SetTransform(draw.Transform);
         _gl.Uniform1(_textureLocation, 0);
         _gl.Uniform1(_useTextureLocation, draw.TextureHandle == 0 ? 0f : 1f);
