@@ -218,6 +218,30 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
+    /// 验证 Emit 生成的短寿命视觉粒子会按 lifetime 退场，不形成粒子泄漏。
+    /// </summary>
+    [Fact]
+    public void ParticleEmitParticlesUseFiniteLifetimeAndExpire()
+    {
+        Fixture fixture = Fixture.Create();
+        MaterialId sand = fixture.Context.Materials.Resolve("sand");
+        ParticleEmit emit = new(8, 9, sand, Count: 4, DirAngleRad: 0f, DirSpreadRad: 0f, BaseSpeed: 60f, SpeedJitter: 0f, LifeTicks: 3);
+
+        fixture.Context.Particles.Emit(in emit);
+        Assert.Equal(1, fixture.Context.FlushParticleCommands());
+        Assert.Equal(4, fixture.Particles.ActiveCount);
+
+        for (int i = 0; i < 3; i++)
+        {
+            fixture.Particles.IntegrateAndAdvance(fixture.Grid);
+            fixture.Particles.ResolveDeposits(fixture.Kernel, fixture.Grid);
+        }
+
+        Assert.Equal(0, fixture.Particles.ActiveCount);
+        Assert.Equal(4, fixture.Particles.Stats.KilledByLifetimeThisTick);
+    }
+
+    /// <summary>
     /// 验证 burst 视觉粒子使用有限默认寿命，既不会下一帧立即死亡，也不会无限残留。
     /// </summary>
     [Fact]

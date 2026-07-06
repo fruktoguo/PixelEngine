@@ -284,7 +284,7 @@ public readonly struct ParticleEmit
 - [x] **破坏驱动碎屑（§3.12）**：cell 仅在 `ApplyDamage` 判定破坏时才经 `RequestDebris` 抛碎屑，`DebrisCount=0` 材质不抛；同一 `DamageCircle`（plan/13）当量下抗性差异生效（低 `Hardness` 材质立即抛碎、高 `Hardness`/`MaxIntegrity` 需累计，判定归 plan/03/04），验证「破坏才抛」而非旧「无条件全清」。证据：`CellDamageResistanceTests.DamageCircleDifferentiatesMaterialResistanceFromData`、`CellDamageRubbleHandshakeTests.StructuralDamageDestroyedCellSpawnsDebrisParticlesThroughParticleSystem`、`StructuralDamageSpawnsDebrisOnlyForDestroyedCellsWithPositiveDebrisCount`。
 - [x] **`Emit` 速度锥分布（§3.12）**：发射粒子方向落在 `[DirAngle-DirSpreadRad, DirAngle+DirSpreadRad]`、速度落在 `[BaseSpeed±SpeedJitter]`，`Count`/容量满截断返回值正确；确定性 seam 开启时同 seed 逐位可复现。证据：`ParticleSystemTests.EmitSpawnsParticlesInsideVelocityConeWithFiniteLifetime` / `EmitHonorsEjectionLimitAndCapacity` / `EmitIsDeterministicForSameSeedInputs`。
 - [ ] **碎屑/火花稳态零分配**：`RequestDebris` 与 `Emit` 批量发射在稳态帧 `MemoryDiagnoser` 测得 Gen0/Alloc = 0（复用 `TrySpawn`/swap-remove，AGENTS §3）。
-- [ ] **`DamageBeam` 火花 R13 合规**：持续激光束火花压力场景下活跃粒子有界收敛，火花或沉积或 `Life` 到期被清（`KilledByLifetimeThisTick` 反映），无泄漏。
+- [x] **`DamageBeam` 火花 R13 合规**：持续激光束火花压力场景下活跃粒子有界收敛，火花或沉积或 `Life` 到期被清（`KilledByLifetimeThisTick` 反映），无泄漏。证据：`LaserBeamSparksRemainBoundedAndExpireAfterCeaseFire` 连续触发激光后观测 fire 火花、活跃峰值有界且停火后归零；`ParticleEmitParticlesUseFiniteLifetimeAndExpire` 验证 Emit 短寿命粒子按 lifetime 退场并计入 `KilledByLifetimeThisTick`。
 - [ ] **语义迁移一致性**（与 plan/14 联动）：`plan/13` 旧 `ExplosiveTool`/`PlayableProjectileTool` 无条件抛射断言随破坏驱动语义更新；`§3.4` 非破坏冲击溅射通路的既有断言仍绿（保留通路未破坏）。
 
 ## 6. 依赖关系
@@ -303,5 +303,5 @@ public readonly struct ParticleEmit
 - [x] 节点 3：`feat(sim): 实现粒子生命周期与 R13 无泄漏回退(max-lifetime+无处沉积则杀死)` —— 完成 §3.6 与 R13 无泄漏验收项（强制项）。
 - [x] 节点 4：`feat(sim): 暴露粒子渲染/编辑器/音频/序列化接口(IParticleReadback,Stats)` —— 完成 §3.8–§3.10 与接口可用、诊断验收项。
 - [x] 节点 5：`feat(sim): 接入结构破坏碎屑 RequestDebris 消费` —— 完成 §3.12 的 `DebrisEjectionRequest` / `RequestDebris` 与破坏驱动碎屑验收项；`Emit` 速度锥与 DamageBeam 火花仍按 §4.12 后续节点单独推进。
-- [x] 节点 6：`feat(sim): 接入富速度锥粒子 Emit` —— 完成 §3.12 的 `ParticleEmit` / `IParticleSpawner.Emit`、`Emit` 速度锥验收项与 `DamageBeam` 命中火花接入；火花 R13 与 MemoryDiagnoser 级碎屑/火花基准仍按 §4.12 后续节点推进。
+- [x] 节点 6：`feat(sim): 接入富速度锥粒子 Emit` —— 完成 §3.12 的 `ParticleEmit` / `IParticleSpawner.Emit`、`Emit` 速度锥验收项、`DamageBeam` 命中火花接入与火花 R13 验收；MemoryDiagnoser 级碎屑/火花基准仍按 §4.12 后续节点推进。
 - 每节点完成即按 `AGENTS.md §6` 用中文 git 提交，提交正文标注对应 plan 条目与架构 §。

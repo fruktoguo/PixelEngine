@@ -1337,6 +1337,72 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证持续激光命中火花经 Emit 发射后活跃数量有界，停火后短寿命火花会退场。
+    /// </summary>
+    [Fact]
+    public void LaserBeamSparksRemainBoundedAndExpireAfterCeaseFire()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                { "id": "laser", "displayName": "Laser", "kind": "laser", "damage": 10, "radius": 2, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 200, "heatPerCell": 4, "beamDps": 600, "muzzleCue": "ui_click", "impactCue": "sizzle_lava_water", "hudColor": "#FFFFFFFF" }
+              ]
+            }
+            """);
+        try
+        {
+            MaterialTable materials = DemoMaterials();
+            using Engine engine = CreateManualScriptEngine(
+                out ScriptInputApi input,
+                out CellGrid grid,
+                out _,
+                out ScriptScene scene,
+                materials,
+                contentRoot: contentRoot);
+            Assert.True(materials.TryGetId("stone", out ushort stone));
+            Assert.True(materials.TryGetId("fire", out ushort fire));
+            FillRect(grid, stone, minX: 32, minY: 24, maxX: 38, maxY: 40);
+            Entity entity = scene.CreateEntity();
+            _ = entity.AddComponent<Transform>();
+            PlayerController player = entity.AddComponent<PlayerController>();
+            player.SpawnX = 14f;
+            player.SpawnY = 30f;
+            _ = entity.AddComponent<WeaponController>();
+            ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
+
+            engine.RunHeadlessTicks(2);
+            int maxActive = 0;
+            bool observedFireSpark = false;
+            for (int i = 0; i < 60; i++)
+            {
+                input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+                engine.RunHeadlessTicks(1);
+                maxActive = Math.Max(maxActive, particles.ActiveCount);
+                for (int particleIndex = 0; particleIndex < particles.ActiveCount; particleIndex++)
+                {
+                    observedFireSpark |= particles.ActiveReadOnly[particleIndex].Material == fire;
+                }
+            }
+
+            Assert.InRange(maxActive, 1, 160);
+            Assert.True(observedFireSpark);
+
+            input.Update([], [], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            for (int i = 0; i < 80; i++)
+            {
+                engine.RunHeadlessTicks(1);
+            }
+
+            Assert.Equal(0, particles.ActiveCount);
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// 验证可玩 Demo 的破坏弹会在爆破后把局部脱离主地形的小型固体岛转换成刚体，避免石块长时间静态浮空。
     /// </summary>
     [Fact]
