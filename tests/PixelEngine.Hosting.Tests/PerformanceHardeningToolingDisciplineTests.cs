@@ -4158,6 +4158,61 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 PowerShell 发行审计真实执行时拒绝 AOT package 携带动态 UI native。
+    /// </summary>
+    [Fact]
+    public void PowerShellReleaseArtifactAuditRejectsUiNativeInAotPackage()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-pwsh-ui-native-aot-audit-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string packageRoot = Path.Combine(temp, "package");
+            string packageName = "PixelEngine-Demo-9.9.9-win-x64-aot";
+            string expandedPackage = Path.Combine(packageRoot, packageName);
+            CreateFriendlyExpandedPackage(expandedPackage, channel: "aot", includeUiNative: false);
+            string archive = Path.Combine(packageRoot, packageName + ".zip");
+            CreateZipWithRoot(expandedPackage, archive, packageName);
+            _ = WriteTextEvidence(Path.Combine(packageRoot, "SHA256SUMS"), $"{GetSha256(archive)}  {Path.GetFileName(archive)}{Environment.NewLine}");
+
+            ScriptResult audit = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "audit-release-artifacts.ps1"),
+                "-PublishRoot",
+                Path.Combine(temp, "missing-publish"),
+                "-PackageRoot",
+                packageRoot,
+                "-ActiveRids",
+                "win-x64");
+
+            Assert.Equal(0, audit.ExitCode);
+            Assert.Contains("Package audit passed. Packages: 1. Expanded: 1.", audit.Output, StringComparison.Ordinal);
+
+            _ = WriteTextEvidence(Path.Combine(expandedPackage, "app", "runtimes", "win-x64", "native", "PixelEngine.UI.Native.dll"), "ui native");
+            ScriptResult forbiddenUiNative = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "audit-release-artifacts.ps1"),
+                "-PublishRoot",
+                Path.Combine(temp, "missing-publish"),
+                "-PackageRoot",
+                packageRoot,
+                "-ActiveRids",
+                "win-x64");
+
+            Assert.NotEqual(0, forbiddenUiNative.ExitCode);
+            Assert.Contains("app/runtimes/win-x64/native/PixelEngine.UI.Native.dll", forbiddenUiNative.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 Bash 发行审计真实执行时也强制 R2R package 携带 UI native。
     /// </summary>
     [Fact]
