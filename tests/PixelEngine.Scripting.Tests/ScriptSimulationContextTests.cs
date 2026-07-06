@@ -423,10 +423,10 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
-    /// 验证脚本爆炸只把物理碎屑材质抛射为自由粒子，不把 smoke/fire 这种视觉性材质变成爆炸残留。
+    /// 验证脚本爆炸只把粉末碎屑抛射为自由粒子，不把液体/smoke/fire 这种易被误读为特效的材质变成持久爆炸残留。
     /// </summary>
     [Fact]
-    public void WorldExplodeDoesNotEjectGasOrFireAsPersistentVisualDebris()
+    public void WorldExplodeDoesNotEjectLiquidGasOrFireAsPersistentVisualDebris()
     {
         using Fixture fixture = Fixture.Create();
         MaterialId sand = fixture.Context.Materials.Resolve("sand");
@@ -443,12 +443,13 @@ public sealed class ScriptSimulationContextTests
         Assert.Equal(1, fixture.Context.FlushParticleCommands());
         fixture.Particles.RunEjectionPass(fixture.Kernel, fixture.Grid);
 
-        Assert.Equal(2, fixture.Particles.ActiveCount);
+        Assert.Equal(1, fixture.Particles.ActiveCount);
         Assert.Contains(fixture.Particles.ActiveReadOnly.ToArray(), particle => particle.Material == sand.Value);
-        Assert.Contains(fixture.Particles.ActiveReadOnly.ToArray(), particle => particle.Material == water.Value);
-        Assert.DoesNotContain(fixture.Particles.ActiveReadOnly.ToArray(), particle => particle.Material == smoke.Value || particle.Material == fire.Value);
+        Assert.DoesNotContain(
+            fixture.Particles.ActiveReadOnly.ToArray(),
+            particle => particle.Material == water.Value || particle.Material == smoke.Value || particle.Material == fire.Value);
         Assert.Equal((ushort)0, fixture.Grid.GetMaterial(10, 10));
-        Assert.Equal((ushort)0, fixture.Grid.GetMaterial(11, 10));
+        Assert.Equal(water.Value, fixture.Grid.GetMaterial(11, 10));
         Assert.Equal(smoke.Value, fixture.Grid.GetMaterial(12, 10));
         Assert.Equal(fire.Value, fixture.Grid.GetMaterial(13, 10));
     }
