@@ -2112,10 +2112,10 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
-    /// 验证可玩 Demo 的前三个数字键固定对应小枪、激光炮与手雷，且小枪使用材质耐久伤害而非爆炸破坏。
+    /// 验证可玩 Demo 的六个数字键固定对应小枪、激光炮、手雷、炸弹、挖掘与建造工具，且小枪使用材质耐久伤害而非爆炸破坏。
     /// </summary>
     [Fact]
-    public void PlayableWeaponCatalogMapsDigitsToPistolLaserAndGrenade()
+    public void PlayableWeaponCatalogMapsDigitsToSixDefaultWeapons()
     {
         using Engine engine = CreateManualScriptEngine(
             out ScriptInputApi input,
@@ -2132,10 +2132,9 @@ public sealed class PlayerControllerIntegrationTests
         engine.RunHeadlessTicks(2);
 
         Assert.NotNull(weapons.Catalog);
-        Assert.True(weapons.Catalog.Weapons.Length >= 3);
-        Assert.Equal("pistol", weapons.Catalog.Weapons[0].Id);
-        Assert.Equal("laser", weapons.Catalog.Weapons[1].Id);
-        Assert.Equal("grenade", weapons.Catalog.Weapons[2].Id);
+        Assert.Equal(
+            ["pistol", "laser", "grenade", "bomb", "excavator", "builder"],
+            [.. weapons.Catalog.Weapons.Select(static weapon => weapon.Id)]);
 
         input.Update([Key.Digit2], [], mouseX: 0, mouseY: 0, wheelY: 0);
         engine.RunHeadlessTicks(1);
@@ -2144,6 +2143,18 @@ public sealed class PlayerControllerIntegrationTests
         input.Update([Key.Digit3], [], mouseX: 0, mouseY: 0, wheelY: 0);
         engine.RunHeadlessTicks(1);
         Assert.Equal("grenade", weapons.SelectedWeaponId);
+
+        input.Update([Key.Digit4], [], mouseX: 0, mouseY: 0, wheelY: 0);
+        engine.RunHeadlessTicks(1);
+        Assert.Equal("bomb", weapons.SelectedWeaponId);
+
+        input.Update([Key.Digit5], [], mouseX: 0, mouseY: 0, wheelY: 0);
+        engine.RunHeadlessTicks(1);
+        Assert.Equal("excavator", weapons.SelectedWeaponId);
+
+        input.Update([Key.Digit6], [], mouseX: 0, mouseY: 0, wheelY: 0);
+        engine.RunHeadlessTicks(1);
+        Assert.Equal("builder", weapons.SelectedWeaponId);
     }
 
     /// <summary>
