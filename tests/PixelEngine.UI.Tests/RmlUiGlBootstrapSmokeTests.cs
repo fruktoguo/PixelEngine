@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using System.IO.Compression;
 using PixelEngine.Rendering;
 using Silk.NET.OpenGL;
 using Xunit;
@@ -48,7 +50,13 @@ public sealed class RmlUiGlBootstrapSmokeTests
             new UiViewport(0, 0, window.Width, window.Height, 1f),
             UiBackendKind.RmlUi));
 
-        string documentPath = Path.Combine(Path.GetTempPath(), $"pixelengine-rmlui-{Guid.NewGuid():N}.rml");
+        string root = Path.Combine(Path.GetTempPath(), $"pixelengine-rmlui-{Guid.NewGuid():N}");
+        string screens = Path.Combine(root, "screens");
+        string images = Path.Combine(root, "images");
+        _ = Directory.CreateDirectory(screens);
+        _ = Directory.CreateDirectory(images);
+        string documentPath = Path.Combine(screens, "main.rml");
+        WritePng(Path.Combine(images, "logo.png"), 4, 4);
         try
         {
             File.WriteAllText(
@@ -61,6 +69,7 @@ public sealed class RmlUiGlBootstrapSmokeTests
                       #panel { position: absolute; left: 4px; top: 4px; width: 24px; height: 24px; background-color: #ff4040; pointer-events: auto; }
                       #score { position: absolute; left: 32px; top: 4px; width: 28px; height: 24px; color: #ffffff; pointer-events: none; }
                       .armed_probe { position: absolute; left: 4px; top: 36px; width: 12px; height: 12px; }
+                      #logo { position: absolute; left: 36px; top: 36px; width: 16px; height: 16px; pointer-events: none; }
                     </style>
                   </head>
                   <body>
@@ -69,6 +78,7 @@ public sealed class RmlUiGlBootstrapSmokeTests
                     <div id="score_mirror" path="score">0</div>
                     <div id="health" path="hud.health.current">0</div>
                     <input class="armed_probe" type="checkbox" path="weapon.armed" />
+                    <img id="logo" data-image="logo" />
                   </body>
                 </rml>
                 """);
@@ -128,7 +138,7 @@ public sealed class RmlUiGlBootstrapSmokeTests
         }
         finally
         {
-            File.Delete(documentPath);
+            Directory.Delete(root, recursive: true);
         }
     }
 
@@ -278,5 +288,45 @@ public sealed class RmlUiGlBootstrapSmokeTests
                 scissor[2],
                 scissor[3]);
         }
+    }
+
+    private static void WritePng(string path, int width, int height)
+    {
+        using MemoryStream idat = new();
+        using (ZLibStream zlib = new(idat, CompressionLevel.SmallestSize, leaveOpen: true))
+        {
+            for (int y = 0; y < height; y++)
+            {
+                zlib.WriteByte(0);
+                for (int x = 0; x < width; x++)
+                {
+                    zlib.WriteByte((byte)(x * 50));
+                    zlib.WriteByte((byte)(y * 50));
+                    zlib.WriteByte(180);
+                    zlib.WriteByte(255);
+                }
+            }
+        }
+
+        using FileStream file = File.Create(path);
+        file.Write([137, 80, 78, 71, 13, 10, 26, 10]);
+        Span<byte> ihdr = stackalloc byte[13];
+        BinaryPrimitives.WriteInt32BigEndian(ihdr[..4], width);
+        BinaryPrimitives.WriteInt32BigEndian(ihdr.Slice(4, 4), height);
+        ihdr[8] = 8;
+        ihdr[9] = 6;
+        WriteChunk(file, "IHDR"u8, ihdr);
+        WriteChunk(file, "IDAT"u8, idat.ToArray());
+        WriteChunk(file, "IEND"u8, []);
+    }
+
+    private static void WriteChunk(Stream stream, ReadOnlySpan<byte> type, ReadOnlySpan<byte> data)
+    {
+        Span<byte> length = stackalloc byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(length, data.Length);
+        stream.Write(length);
+        stream.Write(type);
+        stream.Write(data);
+        stream.Write(stackalloc byte[4]);
     }
 }

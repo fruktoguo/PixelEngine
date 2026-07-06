@@ -40,6 +40,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
     private readonly RenderWindow _window;
     private readonly NativeDocument[] _documents;
     private readonly UiScreenStackEntry[] _visibleScreens;
+    private readonly RmlUiImageAssetCache _imageCache = new();
     private UiKeyModifiers _lastModifiers;
     private IntPtr _renderer;
     private int _documentCount;
@@ -143,7 +144,8 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
             throw new InvalidOperationException("RmlUiBackend 文档容量已满。");
         }
 
-        byte[] documentBytes = Encoding.UTF8.GetBytes(File.ReadAllText(source.Path));
+        string documentText = RmlUiDocumentPreprocessor.Prepare(source.Path, _imageCache);
+        byte[] documentBytes = Encoding.UTF8.GetBytes(documentText);
         byte[] sourceBytes = Encoding.UTF8.GetBytes(source.Path + '\0');
         IntPtr nativeDocument;
         fixed (byte* document = documentBytes)
@@ -583,6 +585,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend
             _renderer = IntPtr.Zero;
         }
 
+        _imageCache.Dispose();
         _disposed = true;
     }
 
