@@ -152,7 +152,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 **BuildTargetSettings 校验**：`Normalize()` 断言唯一启动场景、启动∈入包、至少一入包、路径 / 产物名非空、非法组合被拒并给红字提示；`PreflightAsync` 缺 .NET SDK / pwsh 时给明确可执行诊断（绝不静默）。
 
-**audit「player 包无 Editor/ImGui」断言**：在 fixture player 产物上跑 `audit-release-artifacts`，断言 `app/` 内出现 `PixelEngine.Editor.dll` 或编辑器专属面板闭包即 fail、干净 player 包通过；**允许玩家 HUD 所需的 `Hexa.NET.ImGui`**——拒绝的是编辑器专属 `Hexa.NET.ImGuizmo*`/`ImPlot*` 与 `PixelEngine.Editor.dll`（撤销早期「拒绝 ImGui」的不可满足表述）。dev-audit（保 pdb、结构存在性 + player-only）与严格 audit-release-artifacts 分流；`EditorShellBuildTests.PlayerPackageAuditRejectsEditorClosureAllowsImGuiAndSupportsDevLayout` 已用真实脚本 fixture 锁定严格/dev 分流、`Hexa.NET.ImGui` 允许及 `Hexa.NET.ImGuizmo*`/`ImPlot*` 拒绝。
+**audit「player 包无 Editor/ImGui」断言**：在 fixture player 产物上跑 `audit-release-artifacts`，断言 `app/` 内出现 `PixelEngine.Editor.dll` 或编辑器专属面板闭包即 fail、干净 player 包通过；**允许玩家 HUD 所需的 `Hexa.NET.ImGui`**——拒绝的是编辑器专属 `Hexa.NET.ImGuizmo*`/`Hexa.NET.ImPlot*`/`ImGuizmo*`/`ImPlot*` 与 `PixelEngine.Editor.dll`（撤销早期「拒绝 ImGui」的不可满足表述）。dev-audit（保 pdb、结构存在性 + player-only）与严格 audit-release-artifacts 分流；`EditorShellBuildTests.PlayerPackageAuditRejectsEditorClosureAllowsImGuiAndSupportsDevLayout` 已用真实 PowerShell 脚本 fixture 锁定严格/dev 分流、`Hexa.NET.ImGui` 允许及 `Hexa.NET.ImGuizmo*`/`ImPlot*` 拒绝；`PerformanceHardeningToolingDisciplineTests.BashReleaseArtifactAuditRejectsHexaNamedEditorUiClosure` 已用真实 Bash 审计锁定 NuGet 实际文件名前缀 `Hexa.NET.ImGuizmo*` 不会漏检。
 
 ### 3.15 win-first RID 门控参数化与项目纪律测试更新（plan/15 §2.1/§3.10）
 
@@ -250,7 +250,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] `PlayerBuildNdjsonParseTests`（壳构建测试）：schema=`pixelengine.build/v1` 逐行解析为 `BuildProgressEvent`、五阶段映射、半行 / 乱序 / 非 NDJSON 归当前阶段、stderr→error、`build-result.json`+exit code 合成 `BuildResult` 及无结果回退。证据：`EditorShellBuildTests.PlayerBuildServiceParsesNdjsonFallbackStderrAndBuildResult`、`PlayerBuildServiceCombinesNonZeroExitAndMissingResultFailures`。
 - [x] `PlayerBuildCancellationTests`（壳构建测试）：`CancellationToken`→`Process.Kill(entireProcessTree:true)` 杀子树、无残留、重跑成功。证据：`EditorShellBuildTests.PlayerBuildServiceCancellationKillsProcessTreeAndAllowsRerun`。
 - [x] `BuildTargetSettingsValidationTests`（壳构建测试）：`Normalize()` 唯一启动场景 / 启动∈入包 / 至少一入包 / 路径 / 产物名非空 / 非法组合被拒；`PreflightAsync` 缺 SDK/pwsh 诊断。证据：`EditorShellBuildTests.BuildTargetSettingsValidationAndPreflightReportActionableErrors`。
-- [x] `PlayerPackageAuditTests`（build/packaging 纪律）：fixture player 产物 `app/` 含 `PixelEngine.Editor.dll` 或编辑器专属 `Hexa.NET.ImGuizmo*`/`ImPlot*` 即 fail、允许玩家 HUD 的 `Hexa.NET.ImGui`、干净包通过；dev-audit vs 严格 audit 分流。证据：`EditorShellBuildTests.PlayerPackageAuditRejectsEditorClosureAllowsImGuiAndSupportsDevLayout` 直接调用 `tools/audit-release-artifacts.ps1` 的展开包与 zip fixture。
+- [x] `PlayerPackageAuditTests`（build/packaging 纪律）：fixture player 产物 `app/` 含 `PixelEngine.Editor.dll` 或编辑器专属 `Hexa.NET.ImGuizmo*`/`Hexa.NET.ImPlot*`/`ImGuizmo*`/`ImPlot*` 即 fail、允许玩家 HUD 的 `Hexa.NET.ImGui`、干净包通过；dev-audit vs 严格 audit 分流。证据：`EditorShellBuildTests.PlayerPackageAuditRejectsEditorClosureAllowsImGuiAndSupportsDevLayout` 直接调用 `tools/audit-release-artifacts.ps1` 的展开包与 zip fixture；`PerformanceHardeningToolingDisciplineTests.BashReleaseArtifactAuditRejectsHexaNamedEditorUiClosure` 真实执行 `tools/audit-release-artifacts.sh` 并拒绝 `app/Hexa.NET.ImGuizmo.dll`。
 
 ### 4.11 win-first RID 门控参数化与项目纪律更新（plan/15 §2.1/§3.10）
 

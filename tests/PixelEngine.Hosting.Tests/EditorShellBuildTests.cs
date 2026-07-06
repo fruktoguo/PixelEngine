@@ -417,6 +417,7 @@ public sealed class EditorShellBuildTests
         yield return ("NOTICE.txt", "notice");
         yield return ("PixelEngine Demo.exe", "launcher");
         yield return ("app/PixelEngine.Demo.dll", "demo");
+        yield return ("app/runtimes/win-x64/native/PixelEngine.UI.Native.dll", "ui native");
         yield return ("content/materials.json", "{}");
         yield return ("content/reactions.json", "{}");
         yield return ("content/weapons.json", "{}");

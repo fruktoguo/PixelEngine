@@ -222,7 +222,7 @@ PixelEngine-<version>-<rid>-aot/
    └─ (angle native, 可选)            # 动态
 ```
 
-**玩家包 vs 编辑器工具包分流**：以上布局是**玩家包**（`demo/PixelEngine.Demo` 或后续 Player app，以 `-p:PixelEnginePlayerBuild=true` 发布）的最终形态。玩家包**绝不含** `PixelEngine.Editor.dll` 与编辑器专属 `ImGuizmo/ImPlot` 闭包——该剥离由需求 1 的 GUI 宿主中性化重构落地（`Hosting` 删除对 `PixelEngine.Editor` 的硬 `ProjectReference`、玩家 HUD 所需 ImGui host 下沉到中性程序集 `PixelEngine.Gui`、`DemoProgram.cs` 改用 `PixelEngine.Gui` 中性 host），玩家包审计据此新增断言：`app/` 内出现 `PixelEngine.Editor.dll` 或任意 `ImGuizmo*/ImPlot*` 即 **fail**。审计**允许**玩家 HUD 所需的 `Hexa.NET.ImGui`（撤销早期「拒绝 ImGui」的不可满足表述）——被拒的是 `PixelEngine.Editor.dll` 与编辑器专属面板闭包，不是 ImGui 本体。**编辑器工具包**（`apps/PixelEngine.Editor.Shell`，见 `plan/19`）是开发/内测分发物，含完整编辑器闭包，与玩家 6-RID 矩阵解耦、不受 §2.1 激活集约束，不走本节玩家包审计的 player-only 断言。
+**玩家包 vs 编辑器工具包分流**：以上布局是**玩家包**（`demo/PixelEngine.Demo` 或后续 Player app，以 `-p:PixelEnginePlayerBuild=true` 发布）的最终形态。玩家包**绝不含** `PixelEngine.Editor.dll` 与编辑器专属 `ImGuizmo/ImPlot` 闭包——该剥离由需求 1 的 GUI 宿主中性化重构落地（`Hosting` 删除对 `PixelEngine.Editor` 的硬 `ProjectReference`、玩家 HUD 所需 ImGui host 下沉到中性程序集 `PixelEngine.Gui`、`DemoProgram.cs` 改用 `PixelEngine.Gui` 中性 host），玩家包审计据此新增断言：`app/` 内出现 `PixelEngine.Editor.dll` 或任意 `Hexa.NET.ImGuizmo*`/`Hexa.NET.ImPlot*`/`ImGuizmo*`/`ImPlot*` 即 **fail**。审计**允许**玩家 HUD 所需的 `Hexa.NET.ImGui`（撤销早期「拒绝 ImGui」的不可满足表述）——被拒的是 `PixelEngine.Editor.dll` 与编辑器专属面板闭包，不是 ImGui 本体。**编辑器工具包**（`apps/PixelEngine.Editor.Shell`，见 `plan/19`）是开发/内测分发物，含完整编辑器闭包，与玩家 6-RID 矩阵解耦、不受 §2.1 激活集约束，不走本节玩家包审计的 player-only 断言。
 
 发行布局的两方案权衡与选型锁定见 §3.7.1；编辑器触发的一键出包入口见 §3.11。
 
@@ -284,7 +284,7 @@ CI 五阶段是「多 RID × 双通道」的批量矩阵；编辑器内的 Build
 
 **NDJSON 进度协议**：`build-player` 的 stdout 为逐行 NDJSON，`schema=pixelengine.build/v1`，每行形如 `{ "schema":"pixelengine.build/v1", "kind":"phase|progress|log|result", "phase":"native|publish|verify|package|audit|done", "percent":<0..100>, "level":"info|warn|error", "message":"...", "ts":"<ISO8601>" }`；面板逐行解析为 `BuildProgressEvent` 刷新进度/日志（`plan/19 §5.4`）。stderr 归 error 级。**结束契约**：子进程在 `-Output` 目录写 `build-result.json`（`{ ok, rid, channel, configuration, version, informationalVersion, packageArchive, packageDir, playerDir, launcherExe, sha256, sizeBytes, phaseTimingsMs{}, warnings[], error, exitCode }`），退出码 0=成功、非 0=失败；面板以 `build-result.json` + exit code 合成 `BuildResult`，非 0 且无结果清单时回退末尾 stderr/stdout + exit code 报错。取消由父进程 `Process.Kill(entireProcessTree:true)` 杀 dotnet/publish 子树；`build-player` 内各 publish 脚本每次先清理本 RID/配置的 publish 输出与 `src/**/bin·obj`，故被取消的半成品在下次运行时被清理，保证可重复性。
 
-**dev-audit 模式（`-DevLayout`）**：「含调试符号」的开发向构建落**开发布局**（保留 pdb/xml），走 `audit-release-artifacts -DevLayout` 宽松模式——只放宽符号/文档噪音，仍查结构存在性与 player-only 断言（`app/` 无 `PixelEngine.Editor.dll`/`ImGuizmo*`/`ImPlot*`，允许 `Hexa.NET.ImGui` 核心）。`Release` + 无符号构建走完整 `audit-release-artifacts`，保发行不变式不被削弱。`build-player` 依 `-DevLayout`/`-IncludeSymbols` 分流到宽松或严格 audit，面板在结果区明示当前布局类型（`plan/19 §5.8`）。
+**dev-audit 模式（`-DevLayout`）**：「含调试符号」的开发向构建落**开发布局**（保留 pdb/xml），走 `audit-release-artifacts -DevLayout` 宽松模式——只放宽符号/文档噪音，仍查结构存在性与 player-only 断言（`app/` 无 `PixelEngine.Editor.dll`/`Hexa.NET.ImGuizmo*`/`Hexa.NET.ImPlot*`/`ImGuizmo*`/`ImPlot*`，允许 `Hexa.NET.ImGui` 核心）。`Release` + 无符号构建走完整 `audit-release-artifacts`，保发行不变式不被削弱。`build-player` 依 `-DevLayout`/`-IncludeSymbols` 分流到宽松或严格 audit，面板在结果区明示当前布局类型（`plan/19 §5.8`）。
 
 **产物一致性锚点**：`build-player` 与 `tools/*` 手工出包复用同一管线与确定性打包（`tools/PixelEngine.Tools.DeterministicPackage`），故**同等参数下二者字节级一致**（同 entry 顺序/时间戳/权限/owner）。
 
@@ -369,7 +369,7 @@ RID 激活门控（win-first，§2.1）
 
 玩家包/编辑器工具包分流与 player-only 审计
 
-- [x] `tools/audit-release-artifacts.*` 新增玩家包断言：`app/` 内出现 `PixelEngine.Editor.dll` 或任意 `ImGuizmo*/ImPlot*` 即 fail；审计**允许**玩家 HUD 所需 `Hexa.NET.ImGui`，撤销早期「拒绝 ImGui」表述（§3.7）。
+- [x] `tools/audit-release-artifacts.*` 新增玩家包断言：`app/` 内出现 `PixelEngine.Editor.dll` 或任意 `Hexa.NET.ImGuizmo*`/`Hexa.NET.ImPlot*`/`ImGuizmo*`/`ImPlot*` 即 fail；审计**允许**玩家 HUD 所需 `Hexa.NET.ImGui`，撤销早期「拒绝 ImGui」表述（§3.7）。
 - [x] 编辑器工具包（`apps/PixelEngine.Editor.Shell`）不走玩家 player-only 审计、与玩家 6-RID 矩阵解耦（§3.7、`plan/19`）。
 
 HTML UI native 与 demo-playability 内容打包
@@ -411,7 +411,7 @@ build-player 入口与玩家包解耦（本轮新增）
 
 - [x] `tools/build-player.*` 单 RID 一键出包：在 Windows 本机对 `win-x64/r2r/Release` 跑通 native→publish→verify→package→audit，逐行 NDJSON（`schema=pixelengine.build/v1`）+ `build-result.json` 产出正确，产物与 `tools/*` 手工出包**同等参数下字节级一致**（§3.11）。
 - [x] `-DevLayout` 开发（含符号）构建走宽松 dev-audit（保 pdb、结构存在性 + player-only 断言）；`Release`+无符号走完整 `audit-release-artifacts`，二者布局符合各自规则（§3.11、§3.7）。
-- [x] player-only 审计：玩家包 `app/` 内不含 `PixelEngine.Editor.dll` 与任意 `ImGuizmo*/ImPlot*`，审计通过；`Hexa.NET.ImGui` 玩家 HUD 依赖被允许（§3.7）。
+- [x] player-only 审计：玩家包 `app/` 内不含 `PixelEngine.Editor.dll` 与任意 `Hexa.NET.ImGuizmo*`/`Hexa.NET.ImPlot*`/`ImGuizmo*`/`ImPlot*`，PowerShell 与 Bash 审计均通过；`Hexa.NET.ImGui` 玩家 HUD 依赖被允许。证据：`EditorShellBuildTests.PlayerPackageAuditRejectsEditorClosureAllowsImGuiAndSupportsDevLayout`、`PerformanceHardeningToolingDisciplineTests.BashReleaseArtifactAuditRejectsHexaNamedEditorUiClosure`（§3.7）。
 - [x] HTML UI native（`plan/20`）dynamic-only 落 `runtimes/<rid>/native/`、纳入 `SHA256SUMS` 与许可声明、不进 Box2D dual-build；当前 Windows-first 仅 `win-x64` + 纯托管基线变体出包（§3.5、§3.11）。
 
 ---
@@ -435,7 +435,7 @@ build-player 入口与玩家包解耦（本轮新增）
 - `19-standalone-editor-app.md`——其 BuildSettings 面板经子进程消费本文件 §3.11 的 `build-player` 编排器 + NDJSON/`build-result.json` 契约；**顺序约束**：`build-player`（§3.11）必须先于 `plan/19` BuildSettingsPanel 落地（面板只编排、不重实现打包）。
 - `20-interactive-html-ui.md`——其 `PixelEngine.UI` 后端 native 由本文件 §3.5/§3.9 作 dynamic-only 打包、纳入 SHA256SUMS 与许可声明、不进 Box2D dual-build。
 
-前置顺序约束（写入本文件与 `plan/17`）：需求 1 的 **GUI 宿主中性化重构**（新增中性程序集 `PixelEngine.Gui`、`Hosting` 删除对 `PixelEngine.Editor` 的硬 `ProjectReference`、`DemoProgram.cs` 改用 `PixelEngine.Gui` 中性 host）必须**先于**本文件 §3.7 玩家包审计新规则（拒绝 `app/` 含 `PixelEngine.Editor.dll` 与 `ImGuizmo*`/`ImPlot*`，允许 `Hexa.NET.ImGui` 核心）；当前前置已落地，player-only 断言已转绿。
+前置顺序约束（写入本文件与 `plan/17`）：需求 1 的 **GUI 宿主中性化重构**（新增中性程序集 `PixelEngine.Gui`、`Hosting` 删除对 `PixelEngine.Editor` 的硬 `ProjectReference`、`DemoProgram.cs` 改用 `PixelEngine.Gui` 中性 host）必须**先于**本文件 §3.7 玩家包审计新规则（拒绝 `app/` 含 `PixelEngine.Editor.dll` 与 `Hexa.NET.ImGuizmo*`/`Hexa.NET.ImPlot*`/`ImGuizmo*`/`ImPlot*`，允许 `Hexa.NET.ImGui` 核心）；当前前置已落地，player-only 断言已转绿。
 
 不变式校验（`AGENTS.md §1`）：本文件仅触及编译/链接/打包形态，遵守不变式 #10 修订口径（Box2D 是唯一 sim-native / dual-build 静态承载依赖；UI/音频/渲染 native 为 dynamic-only 门控依赖），不与基石/调度/单缓冲/耦合/帧节奏等任何不变式冲突。技术栈与 `00` 完全一致，无冲突上报。
 
@@ -455,5 +455,5 @@ build-player 入口与玩家包解耦（本轮新增）
 - [x] `build(build): RID 激活门控（release-rids.json 单一真相源 + 动态矩阵 + 审计/预检参数化，Windows 优先、跨平台保留非激活）` — 对应 §2.1、§3.10、实现清单「RID 激活门控」项。
 - [x] `build(build): 锁定 Unity 式 app/ 发行布局选型（§3.7.1 方案权衡，否决单文件）` — 对应 §3.7.1、实现清单「发行布局选型」项。
 - [x] `build(build): tools/build-player 编排器 + NDJSON(pixelengine.build/v1)/build-result.json 契约 + dev-audit 分流` — 对应 §3.11、实现清单「build-player 入口」项，供 plan/19 BuildSettings 面板消费。
-- [x] `build(build): 玩家包 player-only 审计（拒 PixelEngine.Editor.dll 与 ImGuizmo/ImPlot、允许玩家 HUD 的 Hexa.NET.ImGui）+ 编辑器工具包分流` — 对应 §3.7、实现清单「玩家包/编辑器工具包分流」项。
+- [x] `build(build): 玩家包 player-only 审计（拒 PixelEngine.Editor.dll 与 Hexa.NET.ImGuizmo/Hexa.NET.ImPlot/ImGuizmo/ImPlot、允许玩家 HUD 的 Hexa.NET.ImGui）+ 编辑器工具包分流` — 对应 §3.7、实现清单「玩家包/编辑器工具包分流」项。
 - [x] `build(build): HTML UI native dynamic-only 打包与 demo-playability 内容核对（weapons.json/新材质纹理，不进 Box2D dual-build）` — 对应 §3.5、§3.9、实现清单「HTML UI native 与 demo-playability 内容」项。

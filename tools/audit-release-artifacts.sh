@@ -335,7 +335,7 @@ is_disallowed_player_package_file() {
 is_disallowed_player_only_file() {
   local relative="$1"
   local name="${relative##*/}"
-  [[ "${name,,}" == "pixelengine.editor.dll" || "$name" == ImGuizmo* || "$name" == ImPlot* ]]
+  [[ "${name,,}" == "pixelengine.editor.dll" || "$name" == ImGuizmo* || "$name" == Hexa.NET.ImGuizmo* || "$name" == ImPlot* || "$name" == Hexa.NET.ImPlot* ]]
 }
 
 assert_no_duplicate_content_under_app() {

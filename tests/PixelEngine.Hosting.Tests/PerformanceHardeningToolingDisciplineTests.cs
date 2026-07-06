@@ -4323,6 +4323,64 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 Bash 发行审计按真实 NuGet 文件名前缀拒绝编辑器专属 ImGuizmo/ImPlot 闭包。
+    /// </summary>
+    [Fact]
+    public void BashReleaseArtifactAuditRejectsHexaNamedEditorUiClosure()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-bash-editor-closure-audit-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string packageRoot = Path.Combine(temp, "package");
+            string packageName = "PixelEngine-Demo-9.9.9-win-x64-r2r";
+            string expandedPackage = Path.Combine(packageRoot, packageName);
+            CreateFriendlyExpandedPackage(expandedPackage, channel: "r2r", includeUiNative: true);
+            string archive = Path.Combine(packageRoot, packageName + ".zip");
+            CreateZipWithRoot(expandedPackage, archive, packageName);
+            _ = WriteTextEvidence(Path.Combine(packageRoot, "SHA256SUMS"), $"{GetSha256(archive)}  {Path.GetFileName(archive)}{Environment.NewLine}");
+
+            ScriptResult clean = RunBashScript(
+                root,
+                "tools/audit-release-artifacts.sh",
+                "--publish-root",
+                ToBashPath(Path.Combine(temp, "missing-publish")),
+                "--package-root",
+                ToBashPath(packageRoot),
+                "--active-rids",
+                "win-x64");
+
+            Assert.Equal(0, clean.ExitCode);
+
+            _ = WriteTextEvidence(Path.Combine(expandedPackage, "app", "Hexa.NET.ImGuizmo.dll"), "guizmo");
+            RewriteFriendlyExpandedPackageChecksum(expandedPackage);
+            CreateZipWithRoot(expandedPackage, archive, packageName);
+            _ = WriteTextEvidence(Path.Combine(packageRoot, "SHA256SUMS"), $"{GetSha256(archive)}  {Path.GetFileName(archive)}{Environment.NewLine}");
+
+            ScriptResult guizmo = RunBashScript(
+                root,
+                "tools/audit-release-artifacts.sh",
+                "--publish-root",
+                ToBashPath(Path.Combine(temp, "missing-publish")),
+                "--package-root",
+                ToBashPath(packageRoot),
+                "--active-rids",
+                "win-x64");
+
+            Assert.NotEqual(0, guizmo.ExitCode);
+            Assert.Contains("app/Hexa.NET.ImGuizmo.dll", guizmo.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 deterministic package 工具固定 entry 顺序、时间戳与归档实现，相同内容不同 metadata 仍产出相同 hash。
     /// </summary>
     [Fact]
@@ -6103,11 +6161,17 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         _ = WriteTextEvidence(Path.Combine(root, "content", "textures", "18_boundary_stone.png"), "boundary");
         _ = WriteTextEvidence(Path.Combine(root, "content", "scenes", "lava-mine.scene"), "scene");
 
+        RewriteFriendlyExpandedPackageChecksum(root);
+    }
+
+    private static void RewriteFriendlyExpandedPackageChecksum(string root)
+    {
         string checksumText = string.Join(
             Environment.NewLine,
             Directory.GetFiles(root, "*", SearchOption.AllDirectories)
                 .Select(path => Path.GetRelativePath(root, path).Replace('\\', '/'))
                 .Order(StringComparer.Ordinal)
+                .Where(static relative => !string.Equals(relative, "SHA256SUMS", StringComparison.Ordinal))
                 .Select(relative => $"{new string('0', 64)}  {relative}")) + Environment.NewLine;
         _ = WriteTextEvidence(Path.Combine(root, "SHA256SUMS"), checksumText);
     }
