@@ -2,11 +2,12 @@ using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell;
 
-internal sealed class EditorPrefabAssetStore(string contentRoot)
+internal sealed class EditorPrefabAssetStore(string contentRoot, EditorAssetManifestStore? assets = null)
 {
     private readonly string _contentRoot = string.IsNullOrWhiteSpace(contentRoot)
         ? throw new ArgumentException("content 根目录不能为空。", nameof(contentRoot))
         : Path.GetFullPath(contentRoot);
+    private readonly EditorAssetManifestStore? _assets = assets;
 
     public string AllocatePrefabPath(string objectName)
     {
@@ -32,11 +33,13 @@ internal sealed class EditorPrefabAssetStore(string contentRoot)
         Dictionary<int, int> remap = BuildStableIdRemap(snapshot.Objects);
         EngineSceneDocument document = BuildPrefabDocument(snapshot.Objects, remap, Path.GetFileNameWithoutExtension(normalizedAssetPath));
         EngineSceneDocumentLoader.SaveDocument(document, ResolveFullPath(normalizedAssetPath));
+        string? assetId = TryEnsurePrefabAssetId(normalizedAssetPath);
         for (int i = 0; i < snapshot.Objects.Length; i++)
         {
             int originalId = snapshot.Objects[i].StableId;
             scene.SetPrefabLink(originalId, new EditorPrefabLink
             {
+                AssetId = assetId,
                 AssetPath = normalizedAssetPath,
                 SourceStableId = remap[originalId].ToString(System.Globalization.CultureInfo.InvariantCulture),
             });
@@ -82,12 +85,14 @@ internal sealed class EditorPrefabAssetStore(string contentRoot)
     {
         ArgumentNullException.ThrowIfNull(scene);
         string normalizedAssetPath = NormalizeAssetPath(assetPath);
+        string? assetId = TryEnsurePrefabAssetId(normalizedAssetPath);
         EditorSceneModel prefabModel = LoadPrefabModel(normalizedAssetPath);
         EditorGameObject sourceRoot = ResolvePrefabRoot(prefabModel);
         foreach (EditorGameObject gameObject in prefabModel.EnumerateDepthFirst())
         {
             gameObject.PrefabLink = new EditorPrefabLink
             {
+                AssetId = assetId,
                 AssetPath = normalizedAssetPath,
                 SourceStableId = gameObject.StableId.ToString(System.Globalization.CultureInfo.InvariantCulture),
             };
@@ -104,6 +109,36 @@ internal sealed class EditorPrefabAssetStore(string contentRoot)
     public void RefreshPrefabInstances(EditorSceneModel scene)
     {
         RefreshPrefabInstances(scene, []);
+    }
+
+    private string? TryEnsurePrefabAssetId(string assetPath)
+    {
+        return _assets?.EnsureAsset(assetPath).Id;
+    }
+
+    private bool TryResolvePrefabPath(EditorPrefabLink link, out string assetPath, out string? assetId)
+    {
+        if (!string.IsNullOrWhiteSpace(link.AssetId) &&
+            _assets is not null &&
+            _assets.TryResolveAssetId(link.AssetId, out EditorAssetRecord asset))
+        {
+            assetPath = NormalizeAssetPath(asset.LogicalPath);
+            assetId = asset.Id;
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(link.AssetPath))
+        {
+            assetPath = NormalizeAssetPath(link.AssetPath);
+            assetId = _assets is null || !_assets.TryResolveLogicalPath(assetPath, out EditorAssetRecord byPath)
+                ? link.AssetId
+                : byPath.Id;
+            return true;
+        }
+
+        assetPath = string.Empty;
+        assetId = null;
+        return false;
     }
 
     private string ResolveFullPath(string assetPath)
@@ -139,13 +174,16 @@ internal sealed class EditorPrefabAssetStore(string contentRoot)
     {
         foreach (EditorGameObject gameObject in scene.EnumerateDepthFirst())
         {
-            if (gameObject.PrefabLink?.AssetPath is not { Length: > 0 } assetPath ||
-                !int.TryParse(gameObject.PrefabLink.SourceStableId, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int sourceStableId))
+            if (gameObject.PrefabLink is not { } prefabLink ||
+                !TryResolvePrefabPath(prefabLink, out string assetPath, out string? assetId) ||
+                !int.TryParse(prefabLink.SourceStableId, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int sourceStableId))
             {
                 continue;
             }
 
-            EditorPrefabLink instanceLink = gameObject.PrefabLink.Clone();
+            EditorPrefabLink instanceLink = prefabLink.Clone();
+            instanceLink.AssetId = assetId;
+            instanceLink.AssetPath = assetPath;
             EditorSceneModel prefab = LoadPrefabModel(assetPath, resolving);
             if (!prefab.TryGet(sourceStableId, out EditorGameObject? source))
             {
@@ -330,6 +368,7 @@ internal sealed class EditorPrefabAssetStore(string contentRoot)
 
         return new EngineScenePrefabDocument
         {
+            AssetId = prefab.AssetId,
             AssetPath = prefab.AssetPath,
             SourceStableId = prefab.SourceStableId,
             Overrides = overrides,

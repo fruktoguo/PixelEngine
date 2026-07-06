@@ -42,7 +42,8 @@
 
 ## 4. M14 Unity-like UX Contract checklist
 
-- [ ] **Project Window 资产模型**：将现有 `AssetBrowserPanel` 从文件浏览底座升级为 Unity-like Project Window，补 stable asset id/manifest、logical path、asset type、预览、搜索过滤、创建资产、删除确认、重命名与移动引用保持。
+- [x] **Project Window 资产模型（自动化切片）**：已在 EditorShell 侧新增工程级 asset manifest / stable asset id / logical path / asset type 模型，`AssetBrowserPanel` 通过 Shell 数据源消费 manifest 记录；已覆盖 manifest 生成/重载、常见资产创建、prefab 移动/重命名后 stable id 不变、场景与活动 authoring 模型 prefab 引用重写。证据：`EditorProjectAssetModelTests`。
+- [ ] **Project Window 产品剩余项**：预览打磨、删除确认 UX、广义 Inspector 资产字段类型、真实窗口拖拽 / 脚本双击外部编辑器路线仍未闭合；不得把本自动化切片视为 M15 人工 UX 证据。
 - [ ] **资产拖拽语义**：定义并验证拖拽 prefab/scene/material/script/texture/audio 到 Hierarchy、Scene View、Inspector 字段时的行为；无效 drop 必须给出可见诊断，不能静默失败。
 - [ ] **脚本外部编辑器**：脚本资产双击应调用外部编辑器或系统默认 opener，并记录失败诊断；不得只在 Project Window 中选中脚本而无打开行为。
 - [x] **Project Settings**：已通过 plan/18 `ProjectSettingsDto` 绑定工程名、content root、script source dir、默认 scene、资源规则、编辑器偏好、默认 UI backend；`ProjectSettingsStore` 直接代理 Hosting `ProjectSettings.json`，保存后同步 `EditorProject` / `project.pixelproj`，重开工程时回读并驱动 `ToEngineProject()` 的 content root、script dir 与 start scene。
@@ -63,6 +64,7 @@
 
 ## 6. 验证命令与证据路径 checklist
 
+- [x] `dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --filter "FullyQualifiedName~EditorProjectAssetModelTests|FullyQualifiedName~EditorShellSceneMaterializationTests"` 覆盖 Project Window stable asset id/manifest/logical path/type、常见资产创建、Project Window 数据源消费、prefab move/rename 引用保持与既有 prefab 场景物化回归，当前通过 7/7。
 - [x] `dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --filter "FullyQualifiedName~EditorShellBuildTests|FullyQualifiedName~EngineBuilderTests"` 覆盖 Project/Player/Build Settings 同源 DTO/store、ProjectSettings → EditorProject/EngineProject、Project/Player Settings 面板 scripted probe、错误输入不保存、PlayerSettings → BuildRequest/runtime options/build-player 参数/`build-result.json` 投影与 EngineBuilder 窗口标题/启动场景，当前通过 27/27。
 - [x] `dotnet test tests/PixelEngine.Editor.Shell.Tests/PixelEngine.Editor.Shell.Tests.csproj -c Release --filter FullyQualifiedName~EditorShellProjectTests|FullyQualifiedName~EditorScene|FullyQualifiedName~Prefab|FullyQualifiedName~PlayerBuildService` 覆盖工程模型、场景往返、Prefab 与 build-player 编排。
 - [x] `dotnet test tests/PixelEngine.Demo.Tests/PixelEngine.Demo.Tests.csproj -c Release --filter FullyQualifiedName~PlayerOnly|FullyQualifiedName~DemoStartupOptionsTests` 覆盖玩家包解耦与 startup 分派边界。
@@ -75,5 +77,5 @@
 - [x] 上游依赖：plan/00 依赖方向与技术栈、plan/12 Editor ImGui 面板层、plan/18 Hosting attach/Edit/Play/scene writer、plan/11 脚本与 Scene 模型、plan/08 RenderWindow/GL/UI 层、plan/15 build-player 与 player-only audit 已登记为 Shell 的公开 API 边界。
 - [x] 下游消费：plan/13 Demo 使用 player-only 解耦后的公开 runtime；plan/20 复用 `PixelEngine.Gui` 字体与 ManagedFallback；plan/14 负责 shell scripted probe、scene/prefab/build tests；plan/17 只登记 M13/M14/M15 DAG 与退出标准。
 - [x] 本轮闭合节点：plan/18 `ProjectSettingsDto` / `PlayerSettingsDto` 已绑定到 Project Settings / Player Settings 面板、EditorProject/EngineProject 入口与 headless/runtime/build-player/package 消费路径；真实 Settings UX 保存、重启恢复、人工填写和截图证据仍归 M15 `[!]`。
-- [ ] 下一闭合节点：补 Project Window stable asset id/manifest 与拖拽/移动/重命名引用保持路线，并把证据写入本文件 M14 UX Contract。
+- [x] 本轮闭合节点：Project Window stable asset id/manifest、logical path、asset type、Project Window 数据源消费与 prefab 移动/重命名引用保持的自动化切片已落地；真实拖拽、删除确认、脚本外部编辑器与人工 UX 证据仍保留为后续节点。
 - [!] M15 后续节点：补真实窗口人工 UX 材料，完成后再同步 README/plan17 dashboard；不得用 scripted probe 替代人工 UX 完成态。

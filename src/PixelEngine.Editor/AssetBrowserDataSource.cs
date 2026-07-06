@@ -31,6 +31,11 @@ public enum AssetBrowserItemKind
     Prefab,
 
     /// <summary>
+    /// 脚本资产。
+    /// </summary>
+    Script,
+
+    /// <summary>
     /// 普通 JSON 资产。
     /// </summary>
     Json,
@@ -57,12 +62,14 @@ public readonly record struct AssetThumbnail(uint TextureHandle, int Width, int 
 /// <param name="SizeBytes">文件大小。</param>
 /// <param name="LastModifiedUtc">最后修改 UTC 时间。</param>
 /// <param name="Thumbnail">可用缩略图；没有时为 null。</param>
+/// <param name="AssetId">工程级 stable asset id；旧文件系统数据源可为空。</param>
 public readonly record struct AssetBrowserItem(
     string Path,
     AssetBrowserItemKind Kind,
     long SizeBytes,
     DateTimeOffset LastModifiedUtc,
-    AssetThumbnail? Thumbnail)
+    AssetThumbnail? Thumbnail,
+    string? AssetId = null)
 {
     /// <summary>
     /// UI 显示名。
@@ -171,6 +178,7 @@ public sealed class FileSystemAssetBrowserDataSource(string contentRoot, ITextur
                 ".wav" or ".ogg" or ".flac" or ".mp3" => AssetBrowserItemKind.Audio,
                 ".scene" or ".world" => AssetBrowserItemKind.Scene,
                 ".prefab" => AssetBrowserItemKind.Prefab,
+                ".cs" => AssetBrowserItemKind.Script,
                 ".json" => AssetBrowserItemKind.Json,
                 _ => AssetBrowserItemKind.Other,
             };

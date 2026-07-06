@@ -142,7 +142,9 @@ public sealed class AssetBrowserPanel(
             ImGui.SameLine();
         }
 
-        string label = $"{item.DisplayName} [{item.Kind}]";
+        string label = string.IsNullOrWhiteSpace(item.AssetId)
+            ? $"{item.DisplayName} [{item.Kind}]"
+            : $"{item.DisplayName} [{item.Kind}]##{item.AssetId}";
         bool selected = string.Equals(selection.AssetPath, item.Path, StringComparison.Ordinal);
         if (ImGui.Selectable(label, selected))
         {
@@ -186,7 +188,8 @@ public sealed class AssetBrowserPanel(
         [
             .. LastAssets.Where(item =>
                 item.Path.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                item.Kind.ToString().Contains(_search, StringComparison.OrdinalIgnoreCase)),
+                item.Kind.ToString().Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(item.AssetId) && item.AssetId.Contains(_search, StringComparison.OrdinalIgnoreCase))),
         ];
     }
 

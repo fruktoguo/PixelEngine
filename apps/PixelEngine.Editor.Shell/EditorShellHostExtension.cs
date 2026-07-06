@@ -193,7 +193,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             _undoStack ?? throw new InvalidOperationException("Scene View 需要先配置 authoring undo stack。"),
             brushPanel));
         _editor.AddPanel(new AssetBrowserPanel(
-            new FileSystemAssetBrowserDataSource(_project.ContentRootPath),
+            new EditorAssetBrowserDataSource(new EditorAssetManifestStore(_project)),
             instantiatePrefab: _app.InstantiatePrefab));
         MaterialReactionEditorPanel? materialReactionPanel = TryCreateMaterialReactionPanel(engine);
         if (materialReactionPanel is not null)

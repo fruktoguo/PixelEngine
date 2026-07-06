@@ -83,7 +83,9 @@ internal sealed class EditorProjectSession : IDisposable
             _ = engine.AttachPhysics();
             EditorSceneModel sceneModel = LoadSceneModel(project, sceneRelativePath);
             EditorUndoStack undoStack = new();
-            EditorPrefabAssetStore prefabs = new(project.ContentRootPath);
+            EditorAssetManifestStore assets = new(project);
+            _ = assets.Refresh();
+            EditorPrefabAssetStore prefabs = new(project.ContentRootPath, assets);
             EditorSceneRuntimeProjection projection = ProjectAuthoringScene(engine, sceneModel);
             editorHost.ConfigureAuthoring(sceneModel, undoStack, prefabs);
             _ = engine.AttachScriptingFromServices();
