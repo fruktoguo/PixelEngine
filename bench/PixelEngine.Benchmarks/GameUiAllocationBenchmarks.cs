@@ -264,5 +264,9 @@ public class GameUiAllocationBenchmarks
         public void ColorSwatch(string id, uint colorBgra, float size = 16f)
         {
         }
+
+        public void Image(string id, uint textureHandle, int textureWidth, int textureHeight, float width, float height, uint tintBgra = 0xFF_FF_FF_FF)
+        {
+        }
     }
 }
