@@ -581,7 +581,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(damage);
             int centerX = (int)MathF.Floor(x);
             int centerY = (int)MathF.Floor(y);
-            commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.DamageCircle(centerX, centerY, radius, ToDamageUShort(damage), falloff));
+            commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.DamageCircle(centerX, centerY, radius, ToDamageUShort(damage), falloff, kind));
         }
 
         public void DamageBeam(float x, float y, float dx, float dy, int length, float damagePerCell, DamageKind kind = DamageKind.Beam)
@@ -601,7 +601,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 
             int startX = (int)MathF.Floor(x);
             int startY = (int)MathF.Floor(y);
-            commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.DamageBeam(startX, startY, dx, dy, length, ToDamageUShort(damagePerCell)));
+            commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.DamageBeam(startX, startY, dx, dy, length, ToDamageUShort(damagePerCell), kind));
         }
 
         public void AddHeat(float x, float y, int radius, float deltaCelsius)
@@ -624,7 +624,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(force);
             int centerX = (int)MathF.Floor(x);
             int centerY = (int)MathF.Floor(y);
-            commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.DamageCircle(centerX, centerY, radius, ToDamageUShort(force * ExplosionDamageScale), falloff: true));
+            commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.DamageCircle(centerX, centerY, radius, ToDamageUShort(force * ExplosionDamageScale), falloff: true, DamageKind.Impact));
             float jitter = MathF.Max(1f, force * 0.25f);
             commands.Enqueue(ScriptCommandTarget.Particle, ScriptCommand.Explode(centerX, centerY, radius, force, jitter));
             if (hasPhysics)

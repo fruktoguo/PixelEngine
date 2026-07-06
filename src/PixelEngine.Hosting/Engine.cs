@@ -1832,7 +1832,7 @@ public sealed class Engine : IDisposable
         reactionExecutor = null;
         if (Context.TryGetService(out ReactionTable reactions))
         {
-            ReactionEngine engine = new(materials, reactions, sideEffects);
+            ReactionEngine engine = new(materials, reactions, sideEffects, particles);
             Context.RegisterService<IReactionExecutor>(engine);
             Context.RegisterService(engine);
             reactionExecutor = engine;

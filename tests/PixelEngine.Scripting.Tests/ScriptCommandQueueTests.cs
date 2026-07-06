@@ -68,6 +68,24 @@ public sealed class ScriptCommandQueueTests
         Assert.Equal(1, queue.Count(ScriptCommandTarget.Physics));
     }
 
+    /// <summary>
+    /// 验证结构破坏命令不会丢弃调用方传入的 DamageKind 语义。
+    /// </summary>
+    [Fact]
+    public void DamageCommandsPreserveDamageKind()
+    {
+        using ScriptCommandQueue queue = new();
+        queue.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.DamageCircle(1, 2, 3, 4, falloff: true, DamageKind.Corrosion));
+        queue.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.DamageBeam(5, 6, 1f, 0f, 7, 8, DamageKind.Beam));
+
+        Span<ScriptCommand> buffer = stackalloc ScriptCommand[2];
+        int count = queue.DrainTo(ScriptCommandTarget.CellWrite, buffer);
+
+        Assert.Equal(2, count);
+        Assert.Equal(DamageKind.Corrosion, buffer[0].DamageKind);
+        Assert.Equal(DamageKind.Beam, buffer[1].DamageKind);
+    }
+
     private static void EnqueueRange(ScriptCommandQueue queue, int start, int count)
     {
         for (int i = 0; i < count; i++)

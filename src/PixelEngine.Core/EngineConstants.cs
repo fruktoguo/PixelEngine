@@ -111,6 +111,11 @@ public static partial class EngineConstants
     public const int DamageIntegrityScale = 1;
 
     /// <summary>
+    /// 单次酸蚀接触反应的结构破坏当量，走与武器一致的 Hardness/Integrity 规则。
+    /// </summary>
+    public const ushort CorrosionReactionDamage = 255;
+
+    /// <summary>
     /// GPU compute 默认 work group X 尺寸，见 plan/09 §4.3。
     /// </summary>
     public const int GpuComputeWorkGroupSizeX = 16;

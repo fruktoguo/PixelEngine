@@ -13,6 +13,11 @@ public sealed class ReactionEngineTests
     private const ushort Wood = 2;
     private const ushort Ash = 3;
     private const ushort Smoke = 4;
+    private const ushort Acid = Fire;
+    private const ushort CorrodibleStone = Wood;
+    private const ushort CorrosionRubble = Ash;
+    private const ushort AcidGas = Smoke;
+    private const ushort CorrodibleMetal = 5;
 
     /// <summary>
     /// 验证命中反应后会写双输出、两格 parity 与产物默认 lifetime。
@@ -92,6 +97,100 @@ public sealed class ReactionEngineTests
         Assert.Equal(Fire, Get(center, 11, 10));
         Assert.True(CellFlags.Has(GetFlags(center, 11, 10), CellFlags.Burning));
         Assert.Equal(5, GetLifetime(center, 11, 10));
+    }
+
+    /// <summary>
+    /// 验证 acid 命中 corrodible 目标时走结构伤害累计，未腐蚀穿透前不会把目标直接替换成 acid。
+    /// </summary>
+    [Fact]
+    public void CorrosionReactionAccumulatesStructuralDamageAndKeepsAcidSource()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Set(center, 10, 10, Acid);
+        Set(center, 11, 10, CorrodibleStone);
+        NeighborWindow window = new(source, center.Coord);
+        RecordingCellDestructionSink destruction = new();
+        ReactionEngine engine = CreateCorrosionEngine(CreateCorrosionMaterials(stoneHardness: 220, stoneIntegrity: 160), destruction);
+
+        bool reacted = engine.TryReact(
+            ref window,
+            10,
+            10,
+            Acid,
+            11,
+            10,
+            CorrodibleStone,
+            CellFlags.Parity,
+            randomByte: 0);
+
+        Assert.True(reacted);
+        Assert.Equal(Acid, Get(center, 10, 10));
+        Assert.Equal(CorrodibleStone, Get(center, 11, 10));
+        Assert.Equal(35, GetDamage(center, 11, 10));
+        Assert.True(CellFlags.MatchesFrame(GetFlags(center, 10, 10), CellFlags.Parity));
+        Assert.True(CellFlags.MatchesFrame(GetFlags(center, 11, 10), CellFlags.Parity));
+        Assert.Equal(0, destruction.Count);
+    }
+
+    /// <summary>
+    /// 验证 acid 腐蚀穿透后按 DestroyedTarget 转碎块，并发布与武器破坏一致的 CellDestructionEvent。
+    /// </summary>
+    [Fact]
+    public void CorrosionReactionDestroysToRubbleAndPublishesCellDestruction()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Set(center, 10, 10, Acid);
+        Set(center, 11, 10, CorrodibleStone);
+        NeighborWindow window = new(source, center.Coord);
+        RecordingCellDestructionSink destruction = new();
+        ReactionEngine engine = CreateCorrosionEngine(CreateCorrosionMaterials(stoneHardness: 90, stoneIntegrity: 100), destruction);
+
+        bool reacted = engine.TryReact(
+            ref window,
+            10,
+            10,
+            Acid,
+            11,
+            10,
+            CorrodibleStone,
+            CellFlags.Parity,
+            randomByte: 0);
+
+        Assert.True(reacted);
+        Assert.Equal(AcidGas, Get(center, 10, 10));
+        Assert.Equal(CorrosionRubble, Get(center, 11, 10));
+        Assert.Equal(0, GetDamage(center, 11, 10));
+        Assert.Equal(1, destruction.Count);
+        Assert.Equal(new CellDestructionEvent(11, 10, CorrodibleStone, CorrosionRubble, CorrosionRubble, 2, 3), destruction.Last);
+    }
+
+    /// <summary>
+    /// 验证高 Hardness corrodible metal 对同一酸蚀当量免疫，不会被输出式反应绕过抗性。
+    /// </summary>
+    [Fact]
+    public void CorrosionReactionDoesNotBypassHighHardnessMetal()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Set(center, 10, 10, Acid);
+        Set(center, 11, 10, CorrodibleMetal);
+        NeighborWindow window = new(source, center.Coord);
+        ReactionEngine engine = CreateCorrosionEngine(CreateCorrosionMaterials(stoneHardness: 90, stoneIntegrity: 100));
+
+        bool reacted = engine.TryReact(
+            ref window,
+            10,
+            10,
+            Acid,
+            11,
+            10,
+            CorrodibleMetal,
+            CellFlags.Parity,
+            randomByte: 0);
+
+        Assert.False(reacted);
+        Assert.Equal(Acid, Get(center, 10, 10));
+        Assert.Equal(CorrodibleMetal, Get(center, 11, 10));
+        Assert.Equal(0, GetDamage(center, 11, 10));
     }
 
     /// <summary>
@@ -278,6 +377,50 @@ public sealed class ReactionEngineTests
         MaterialTable materials = CreateMaterials(reaction, isDirectional, smokeSideEffects);
         ReactionTable table = new(packed, GetDefinitions(materials));
         return new ReactionSetup(materials, new ReactionEngine(materials, table, sideEffects));
+    }
+
+    private static ReactionEngine CreateCorrosionEngine(MaterialTable materials, ICellDestructionSink? destructionSink = null)
+    {
+        Reaction[] packed =
+        [
+            Reaction(Acid, CorrodibleStone, AcidGas, Acid, 255),
+            Reaction(Acid, CorrodibleMetal, AcidGas, Acid, 255),
+        ];
+        ReactionTable table = new(packed, GetDefinitions(materials));
+        return new ReactionEngine(materials, table, cellDestructionSink: destructionSink);
+    }
+
+    private static MaterialTable CreateCorrosionMaterials(byte stoneHardness, ushort stoneIntegrity)
+    {
+        MaterialDef[] definitions =
+        [
+            Material(Empty, "empty", CellType.Empty, reactionStart: 0, reactionCount: 0, lifetime: 0),
+            Material(Acid, "acid", CellType.Liquid, reactionStart: 0, reactionCount: 2, lifetime: 0) with
+            {
+                PropertyFlags = MaterialProperty.Acid,
+            },
+            Material(CorrodibleStone, "stone", CellType.Solid, reactionStart: 0, reactionCount: 0, lifetime: 0) with
+            {
+                PropertyFlags = MaterialProperty.Corrodible | MaterialProperty.Diggable,
+                Hardness = stoneHardness,
+                Integrity = stoneIntegrity,
+                DestroyedTarget = CorrosionRubble,
+                DebrisCount = 2,
+                MineYield = 3,
+            },
+            Material(CorrosionRubble, "gravel", CellType.Powder, reactionStart: 0, reactionCount: 0, lifetime: 0),
+            Material(AcidGas, "acid_gas", CellType.Gas, reactionStart: 0, reactionCount: 0, lifetime: 11),
+            Material(CorrodibleMetal, "metal", CellType.Solid, reactionStart: 0, reactionCount: 0, lifetime: 0) with
+            {
+                PropertyFlags = MaterialProperty.Corrodible,
+                Hardness = byte.MaxValue,
+                Integrity = 240,
+                DestroyedTarget = CorrosionRubble,
+                DebrisCount = 1,
+            },
+        ];
+
+        return new MaterialTable(definitions);
     }
 
     private static MaterialTable CreateMaterials(Reaction reaction, bool directionalOnly, bool smokeSideEffects)
@@ -528,6 +671,24 @@ public sealed class ReactionEngineTests
     private static byte GetLifetime(Chunk chunk, int lx, int ly)
     {
         return chunk.Lifetime[CellAddressing.LocalIndexFromLocal(lx, ly)];
+    }
+
+    private static byte GetDamage(Chunk chunk, int lx, int ly)
+    {
+        return chunk.Damage[CellAddressing.LocalIndexFromLocal(lx, ly)];
+    }
+
+    private sealed class RecordingCellDestructionSink : ICellDestructionSink
+    {
+        public int Count { get; private set; }
+
+        public CellDestructionEvent Last { get; private set; }
+
+        public void OnCellDestroyed(in CellDestructionEvent item)
+        {
+            Count++;
+            Last = item;
+        }
     }
 
     private sealed class TestChunkSource : IChunkSource
