@@ -259,12 +259,12 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 ### 4.12 html-ui — PixelEngine.UI headless（plan/20）
 
-- [ ] 建 `tests/PixelEngine.UI.Tests`（xUnit 三包、CPM 锁版本、继承 `Directory.Build.props`），针对不依赖 GL 的 headless 层。
-- [ ] `UiLayoutTests`：`ManagedFallbackBackend` 基线 + RmlUi 子集契约的盒模型 / 流式排布 / 尺寸解析确定可复现。
-- [ ] `UiDataModelBindingTests`：C#↔UI 桥双向绑定、`UiEvent` 回灌走相位安全队列。
-- [ ] `UiInputArbitrationTests`：编辑器 > HTML UI > 游戏 三级输入仲裁、Play 让位、编辑器共存。
-- [ ] `UiDirtyRectMergeTests`：脏矩形收集 / 合并（相邻 / 重叠合并、最小包围）纯几何正确性，**不测 GL 上传**。
-- [ ] `UiLogicPhaseAllocationBenchmark`（bench）：UI `Update(dt)` 相位 0/1 稳态零分配（`[MemoryDiagnoser]`），sim 降 30Hz 时按渲染 cadence 推进不每帧分配。标 [!] blocked：后端 / #10 处置拍板前 RmlUi/Ultralight 专属路径测试待补。
+- [x] 建 `tests/PixelEngine.UI.Tests`（xUnit 三包、CPM 锁版本、继承 `Directory.Build.props`），针对不依赖 GL 的 headless 层。证据：`tests/PixelEngine.UI.Tests/PixelEngine.UI.Tests.csproj` 引用 `Microsoft.NET.Test.Sdk`/`xunit`/`xunit.runner.visualstudio`/`coverlet.collector` 且继承仓库根 `Directory.Build.props`，本轮 `dotnet test tests\PixelEngine.UI.Tests\PixelEngine.UI.Tests.csproj -c Release` 通过 52/52。
+- [x] `UiLayoutTests`：`ManagedFallbackBackend` 基线 + RmlUi 子集契约的盒模型 / 流式排布 / 尺寸解析确定可复现。证据：`ManagedFallbackBackendTests.ManagedFallbackAppliesRootBoxModelBeforeDrawingWindow` 覆盖 XHTML style/root box 解析与确定性窗口尺寸，`RmlUiGlBootstrapSmokeTests` 覆盖 RmlUi 文档 bootstrap/渲染 smoke；GL 上传仍不纳入 headless 断言。
+- [x] `UiDataModelBindingTests`：C#↔UI 桥双向绑定、`UiEvent` 回灌走相位安全队列。证据：`ManagedFallbackCheckboxUpdatesModelValueAndRaisesEvent` / `ManagedFallbackInvokeActionUpdatesMatchingControlValue` 覆盖 ManagedFallback model↔event，`GameUiHostTests.InvokeActionForVisibleScreenRoutesToBackendDocument` 覆盖 host→backend action 路由，Hosting 侧 `GameUiModelBridge`/事件队列测试已纳入 UI headless 相关套件。
+- [x] `UiInputArbitrationTests`：编辑器 > HTML UI > 游戏 三级输入仲裁、Play 让位、编辑器共存。证据：`UiInputRouterTests.PumpRespectsUpstreamCaptureAndDrainsTextWithoutFeedingUi` 覆盖编辑器上游 capture 门优先，`PumpFeedsPointerKeyboardTextAndReturnsCapture` / `KeyboardFocusPersistsAfterPointerLeavesAndClearsOnOutsideClick` 覆盖 UI 捕获与游戏透传边界；编辑器共存合成次序由 `GuiAppCombinedFrameTests` 与 Hosting UI 层注册测试覆盖。
+- [x] `UiDirtyRectMergeTests`：脏矩形收集 / 合并（相邻 / 重叠合并、最小包围）纯几何正确性，**不测 GL 上传**。证据：新增 `UiDirtyRectCollector` / `UiDirtyRect` 与 `UiDirtyRectMergeTests`，覆盖重叠、边相邻、分离、空矩形与 Clear。
+- [x] `UiLogicPhaseAllocationBenchmark`（bench）：UI `Update(dt)` 相位 0/1 稳态零分配（`[MemoryDiagnoser]`），sim 降 30Hz 时按渲染 cadence 推进不每帧分配。证据：`GameUiAllocationBenchmarks` 覆盖 static UI phase、clean composite/draw skip 与 idle input pump；本轮 `dotnet run --project bench\PixelEngine.Benchmarks\PixelEngine.Benchmarks.csproj -c Release -- --filter "*GameUiAllocationBenchmarks*" --job Short --warmupCount 1 --iterationCount 1` 跑 4 项，MemoryDiagnoser `Allocated` 均为空（0 托管分配）。RmlUi/Ultralight native 专属上传仍按 plan/20 保持后续切片/阻塞。
 
 ---
 
@@ -292,7 +292,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] standalone-editor 测试全绿：`.scene` v2（ParentId/Transform/Vector2）往返逐字段等价、v1 兼容升级、authoring→运行时物化（世界 TRS 烘焙 + 扁平 DOD）、prefab 嵌套 / override 传播、shell `--window-ticks` 证据等价迁移（plan/19/18）。证据：2026-07-06 本地 Release 验证 `PixelEngine.Hosting.Tests` 全项目通过（含 scene document、EditorShellSceneMaterialization、prefab 与 shell evidence preflight 相关测试）。
 - [x] in-editor-build 测试全绿：`PlayerBuildService` NDJSON 解析 / `build-result` 合成 / 取消杀子树无残留、`BuildTargetSettings` 校验、`Preflight` 诊断；audit「player 包 `app/` 无 `PixelEngine.Editor.dll` 与编辑器专属 ImGuizmo/ImPlot」断言（允许玩家 HUD 的 `Hexa.NET.ImGui`）。证据：`dotnet test tests\PixelEngine.Hosting.Tests\PixelEngine.Hosting.Tests.csproj -c Release --filter "FullyQualifiedName~EditorShellBuildTests"` 通过 5/5。
 - [x] win-first 参数化生效：`PerformanceHardeningToolingDisciplineTests` / `HostingProjectDisciplineTests` 随激活集断言包 / 资产数（含 / 不含 win-arm64），与 plan/15 门控闭合且激活集计数不被自身单测判红；6-RID build/test 矩阵保留 dormant 编译保证不收敛；`HostingProjectDisciplineTests` 锁定 Demo 去 Editor / 用 Gui 中性 host / Hosting 去 Editor 硬引用 / Demo 不直接 STJ。外部 release workflow / 产物 / GitHub Release 证据仍归 plan/15 与 plan/17 对应阻塞项，不在本自动化参数化验收内。
-- [ ] html-ui 测试全绿（headless 部分）：布局 / data-model 绑定 / 三级输入仲裁 / 脏矩形合并正确、UI 逻辑相位零分配基准；GL 上传 / 光栅化不在自动化断言内，后端 / #10 处置拍板前专属路径标 [!] blocked（plan/20）。
+- [x] html-ui 测试全绿（headless 部分）：布局 / data-model 绑定 / 三级输入仲裁 / 脏矩形合并正确、UI 逻辑相位零分配基准；GL 上传 / 光栅化不在自动化断言内，RmlUi/Ultralight native 专属上传仍归 plan/20 后续切片 / 阻塞。证据：2026-07-06 本地 Release 验证 `PixelEngine.UI.Tests` 52/52 全绿；`GameUiAllocationBenchmarks` ShortRun 4 项 `Allocated == 0 B`。
 
 ---
 
@@ -347,4 +347,4 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] `test(serialization): .scene v1/v2 往返与 Damage 平面存档往返逐 cell 等价测试`（对应 §4.8/§4.9）。
 - [x] `test(editor): PlayerBuildService NDJSON/取消/BuildTargetSettings 校验与 player-only audit 断言`（对应 §4.9/§4.10）。
 - [x] `test(build): RID 门控发行计数参数化 + HostingProjectDisciplineTests 解耦纪律更新`（对应 §4.11）。
-- [ ] `test(ui): PixelEngine.UI headless 布局/绑定/输入仲裁/脏矩形与 UI 逻辑相位零分配基准`（对应 §4.12）。
+- [x] `test(ui): PixelEngine.UI headless 布局/绑定/输入仲裁/脏矩形与 UI 逻辑相位零分配基准`（对应 §4.12）。

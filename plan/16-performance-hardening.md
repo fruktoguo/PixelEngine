@@ -142,7 +142,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] 降级由 Core 诊断计时器驱动（连续超预算帧触发）。[plan/02 · §4.3/§17.1]
 - [x] 每帧成本上限节流落实（形状重建每刚体每帧≤1次、合并像素移除、CCL off-thread）。[plan/06 · §4.3/§8.4/风险 R4]
 - [x] plan/08 **RenderStyle 着色质量档**接入既有过载降级顺序：`IRenderStyleQualityController` 由 `RenderBufferBuilder` 承接并在 `Engine.AttachRendering` 注册，一级过载即关流动噪声/裂纹/描边、回退纯 palette；恢复 Full 时复位。`EngineAppliesRenderStyleQualityTierIndependentlyFromLighting` 验证其与二级光照/GPU compute 降级**不冲突、各自可独立触发**，`RenderStyleQualityControllerTogglesStylePathAtRuntime` 验证运行时切换真实影响相位 9 样式路径。[plan/08 · §4.3]
-- [~] plan/20 **HTML UI（PixelEngine.UI）光栅化/合成落相位10、仅在 UI 脏或有动画时执行**；`GameUiHost` 已用真实 dirty/animation 门控后端 Composite/DrawGui，静态屏 `ui.paint=0`，静态 UI phase/clean composite/draw skip/空闲输入泵已由 `GameUiAllocationBenchmarks` 以 `MemoryDiagnoser` 证实稳态零托管分配；过载时 UI present cadence 会按质量档位降到 2/3/4 帧间隔，且 UI update/event drain 仍逐渲染帧执行，UI 尖刺只丢渲染帧、绝不拖慢 sim 或触发 accumulator 追帧（守 #6）；sim 频率降级仍由 §4.9 一至五级独立驱动，native/Ultralight 脏矩形上传仍待闭合。[plan/20 · §4.3/不变式 #6]
+- [~] plan/20 **HTML UI（PixelEngine.UI）光栅化/合成落相位10、仅在 UI 脏或有动画时执行**；`GameUiHost` 已用真实 dirty/animation 门控后端 Composite/DrawGui，静态屏 `ui.paint=0`，静态 UI phase/clean composite/draw skip/空闲输入泵已由 `GameUiAllocationBenchmarks` 以 `MemoryDiagnoser` 证实稳态零托管分配；`UiDirtyRectCollector` 已提供 headless 纯几何脏矩形收集/相邻重叠合并/最小包围，`UiDirtyRectMergeTests` 覆盖正确性且不触 GL 上传；过载时 UI present cadence 会按质量档位降到 2/3/4 帧间隔，且 UI update/event drain 仍逐渲染帧执行，UI 尖刺只丢渲染帧、绝不拖慢 sim 或触发 accumulator 追帧（守 #6）；sim 频率降级仍由 §4.9 一至五级独立驱动，native/Ultralight 脏矩形上传仍待闭合。[plan/20 · §4.3/不变式 #6]
 
 ### 4.10 大世界内存上限
 - [x] 常驻世界设硬上限（建议 ≤512MB，可配置）。[plan/07 · §12.2]
@@ -164,7 +164,7 @@ profiling 工具链：**BenchmarkDotNet**（含 `[DisassemblyDiagnoser]`）作 p
 - [x] 真实窗口 HUD 切片 1 已把 CPU busy、OpenGL GPU elapsed 与 present-wait 分离；VSync 可运行时切换，present/vsync wait 标注为非工作时间。[plan/12/08 · §17.1/§17.3]
 - [x] 真实窗口 HUD 已补齐预热剔除滚动窗口 avg/p50/p95/p99/max、尖刺/稳态标注、有效帧耗时、负载计数趋势与固定/随负载变化成本结构；静态 vs 高活跃场景各 720 帧、预热 120 帧、稳态 600 帧样本见 `docs/runtime-reports/2026-07-04-performance-hud-steady-window-samples.md`。[plan/12/14 · §17.1/§17.3]
 - [x] 发行编译模式审计：默认 R2R（运行时 light-up）；AOT 次级必须显式 `IlcInstructionSet` 并反汇编验证 ymm/zmm。[plan/15 · §12.3/风险 R3]
-- [~] 性能 HUD/debug overlay 增「**UI**」相位计时口径（相位10：ImGui host 派发 + plan/20 PixelEngine.UI 光栅化/合成耗时），与 CPU busy、GPU elapsed、present/vsync wait 分列；已新增 `ui.paint` 并在 HUD 显示 `ui update/paint/composite`、present cadence 与跳过帧数，静止 UI 帧 `ui.paint=0` 有单测覆盖，静态 UI phase/clean composite/draw skip/空闲输入泵已由 `GameUiAllocationBenchmarks` 以 `MemoryDiagnoser` 证实稳态零托管分配；独立 `ui.upload` 与 native/Ultralight 脏矩形上传仍待后续切片，需避免混入 sim/render 帧判读。[plan/12/20 · §17.1]
+- [~] 性能 HUD/debug overlay 增「**UI**」相位计时口径（相位10：ImGui host 派发 + plan/20 PixelEngine.UI 光栅化/合成耗时），与 CPU busy、GPU elapsed、present/vsync wait 分列；已新增 `ui.paint` 并在 HUD 显示 `ui update/paint/composite`、present cadence 与跳过帧数，静止 UI 帧 `ui.paint=0` 有单测覆盖，静态 UI phase/clean composite/draw skip/空闲输入泵已由 `GameUiAllocationBenchmarks` 以 `MemoryDiagnoser` 证实稳态零托管分配；headless `UiDirtyRectCollector` 的纯几何合并已覆盖，独立 `ui.upload` 与 native/Ultralight 脏矩形上传仍待后续切片，需避免混入 sim/render 帧判读。[plan/12/20 · §17.1]
 - [ ] 熔岩矿洞可玩循环下 debug overlay 的负载计数（活跃 chunk/cell、粒子、刚体、破坏事件/帧、上涨熔岩活跃面积、当前 sim 频率）随场景真实变化并纳入滚动窗口 avg/p50/p95/p99/max 与固定/随负载成本结构展示。[plan/12/14 · §17.1/§17.3]
 
 ## 5. 验收标准
