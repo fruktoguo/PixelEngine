@@ -152,10 +152,14 @@ internal sealed class EditorProject
     public string ResolveSceneRelativePath(string? overrideScenePath)
     {
         string scenePath = string.IsNullOrWhiteSpace(overrideScenePath) ? StartScene : overrideScenePath.Trim();
-        string relative = Path.IsPathRooted(scenePath)
-            ? Path.GetRelativePath(ContentRootPath, scenePath)
-            : scenePath;
-        return relative.Replace('\\', '/');
+        if (Path.IsPathRooted(scenePath))
+        {
+            string fullScenePath = Path.GetFullPath(scenePath);
+            EnsurePathWithin(ContentRootPath, fullScenePath, nameof(overrideScenePath));
+            return NormalizeScenePath(Path.GetRelativePath(ContentRootPath, fullScenePath), DefaultStartScene, nameof(overrideScenePath));
+        }
+
+        return NormalizeScenePath(scenePath, DefaultStartScene, nameof(overrideScenePath));
     }
 
     public string ResolveSceneFullPath(string? overrideScenePath)
@@ -166,7 +170,7 @@ internal sealed class EditorProject
     public void UpsertScene(string relativePath, bool makeStartScene)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
-        string normalizedPath = relativePath.Replace('\\', '/').TrimStart('/');
+        string normalizedPath = NormalizeScenePath(relativePath, DefaultStartScene, nameof(relativePath));
         EditorProjectSceneEntry[] entries = EnsureSceneEntry([.. Scenes], normalizedPath);
         Document = new EditorProjectDocument
         {
@@ -234,15 +238,118 @@ internal sealed class EditorProject
 
     private static EditorProjectDocument Normalize(EditorProjectDocument document)
     {
+        string contentRoot = NormalizeRelativeDirectory(document.ContentRoot, DefaultContentRoot, nameof(document.ContentRoot));
+        string scriptSourceDir = NormalizeRelativeDirectory(document.ScriptSourceDir, DefaultScriptSourceDir, nameof(document.ScriptSourceDir));
+        string startScene = NormalizeScenePath(document.StartScene, DefaultStartScene, nameof(document.StartScene));
         return new EditorProjectDocument
         {
             FormatVersion = CurrentFormatVersion,
             Name = document.Name.Trim(),
-            ContentRoot = string.IsNullOrWhiteSpace(document.ContentRoot) ? DefaultContentRoot : document.ContentRoot.Trim(),
-            ScriptSourceDir = string.IsNullOrWhiteSpace(document.ScriptSourceDir) ? DefaultScriptSourceDir : document.ScriptSourceDir.Trim(),
-            StartScene = string.IsNullOrWhiteSpace(document.StartScene) ? DefaultStartScene : document.StartScene.Trim(),
-            Scenes = document.Scenes ?? [],
+            ContentRoot = contentRoot,
+            ScriptSourceDir = scriptSourceDir,
+            StartScene = startScene,
+            Scenes = NormalizeScenes(document.Scenes, startScene),
         };
+    }
+
+    private static EditorProjectSceneEntry[] NormalizeScenes(EditorProjectSceneEntry[]? scenes, string startScene)
+    {
+        if (scenes is null || scenes.Length == 0)
+        {
+            return [];
+        }
+
+        List<EditorProjectSceneEntry> normalized = new(scenes.Length);
+        for (int i = 0; i < scenes.Length; i++)
+        {
+            string path = NormalizeScenePath(scenes[i].Path, i == 0 ? startScene : string.Empty, $"{nameof(EditorProjectDocument.Scenes)}[{i}].{nameof(EditorProjectSceneEntry.Path)}");
+            if (string.IsNullOrWhiteSpace(path) || ContainsScene(normalized, path))
+            {
+                continue;
+            }
+
+            normalized.Add(new EditorProjectSceneEntry
+            {
+                Name = string.IsNullOrWhiteSpace(scenes[i].Name)
+                    ? Path.GetFileNameWithoutExtension(path) ?? path
+                    : scenes[i].Name.Trim(),
+                Path = path,
+            });
+        }
+
+        return [.. normalized];
+    }
+
+    private static bool ContainsScene(List<EditorProjectSceneEntry> scenes, string path)
+    {
+        for (int i = 0; i < scenes.Count; i++)
+        {
+            if (string.Equals(scenes[i].Path, path, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string NormalizeRelativeDirectory(string? value, string fallback, string fieldName)
+    {
+        string normalized = NormalizeRelativePath(value, fallback, fieldName);
+        return normalized.Length == 0
+            ? throw new InvalidOperationException($"{fieldName} 不能解析为空目录。")
+            : normalized.TrimEnd('/');
+    }
+
+    private static string NormalizeScenePath(string? value, string fallback, string fieldName)
+    {
+        string normalized = NormalizeRelativePath(value, fallback, fieldName);
+        return normalized.Length == 0
+            ? throw new InvalidOperationException($"{fieldName} 不能解析为空场景路径。")
+            : normalized;
+    }
+
+    private static string NormalizeRelativePath(string? value, string fallback, string fieldName)
+    {
+        string candidate = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+        candidate = candidate.Replace('\\', '/');
+        if (Path.IsPathRooted(candidate) || candidate.StartsWith('/'))
+        {
+            throw new InvalidOperationException($"{fieldName} 必须是工程内相对路径：{candidate}");
+        }
+
+        string[] parts = candidate.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        List<string> normalized = new(parts.Length);
+        for (int i = 0; i < parts.Length; i++)
+        {
+            string part = parts[i].Trim();
+            if (part.Length == 0 || part == ".")
+            {
+                continue;
+            }
+
+            if (part == "..")
+            {
+                throw new InvalidOperationException($"{fieldName} 不能越过工程或 content 根目录：{candidate}");
+            }
+
+            normalized.Add(part);
+        }
+
+        return string.Join('/', normalized);
+    }
+
+    private static void EnsurePathWithin(string root, string candidate, string fieldName)
+    {
+        string normalizedRoot = Path.GetFullPath(root);
+        string normalizedCandidate = Path.GetFullPath(candidate);
+        string relative = Path.GetRelativePath(normalizedRoot, normalizedCandidate);
+        if (relative == "." || (!relative.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(relative)))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException($"{fieldName} 必须位于 content 根目录内：{candidate}");
     }
 
     private static void Validate(EditorProjectDocument document, string projectFile)

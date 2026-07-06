@@ -371,7 +371,7 @@ player-only 与布局
 - [x] `.sln` 增 `apps/` 顶层 solution 文件夹与 shell 项目；`plan/00 §5` 结构与依赖图更新（§3、§0.7）
 - [x] `Program.cs`/`EditorShellApp`：进程入口、命令行解析（`--project`/`--scene`/`--window-ticks`/scripted-probe）、主循环、崩溃日志、退出码（§4.1）
 - [x] `EditorShellWindow`：**启动即立起**单一 `RenderWindow`/单一 GL 上下文/`PixelEngine.Gui` 中性 ImGui host（独立于 Engine 装配），编辑器窗口标题 `PixelEngine Editor — 工程 — 场景[*]`，全程绝不创建第二窗口/上下文（§4.1、§2）
-- [x] `EditorProject` + `project.pixelproj` 读写；`EditorProject→EngineProject` 转换（§4.2）
+- [x] `EditorProject` + `project.pixelproj` 读写；`EditorProject→EngineProject` 转换；工程/内容/脚本/场景路径已拒绝绝对路径与 `..` 逃逸，content 内绝对场景路径可规范化为相对路径（§4.2）
 - [x] `RecentProjectsStore`：最近工程持久化到用户配置目录（§4.2）
 - [x] `ProjectPickerWindow`：在中性 ImGui host 上下文内绘制；新建/打开/最近工程；新建生成 `project.pixelproj` + `content/` 骨架 + 空 `content/scenes/main.scene`（§4.1、§4.2）
 - [x] `EditorMainMenuBar`：File/Edit/GameObject/Window/Play/Help 全菜单（含 Build Settings…）+ 快捷键（§4.3）
@@ -424,7 +424,7 @@ GameObject authoring：
 - [x] 独立 EXE 存在：`apps/PixelEngine.Editor.Shell` 可独立构建产出可执行文件，双击/命令行启动进入独立编辑器窗口，单独进程、独立顶层窗口（§4.1）
 - [x] 启动时序正确：启动即立起唯一 `RenderWindow`+GL+中性 ImGui host（独立于 Engine），项目选择器在该上下文内绘制；选定工程后 Engine attach 到既有窗口且不 own（`Engine.Dispose` 不销毁窗口）（§4.1）
 - [x] Shell 启动与项目选择阶段单进程、单 `RenderWindow`、单 GL 上下文；Edit/Play 同窗口宿主仍由 §4.4 后续节点闭合（守 `plan/12` 真约束，§2）
-- [x] 项目选择器可新建/打开工程、展示并打开最近工程；新建工程生成合法 `project.pixelproj` + `content/` 骨架 + 空场景（§4.2）
+- [x] 项目选择器可新建/打开工程、展示并打开最近工程；新建工程生成合法 `project.pixelproj` + `content/` 骨架 + 空场景，并由 `EditorShellProjectTests` 锁定工程骨架与路径逃逸拒绝（§4.2）
 - [x] 主菜单栏 File/Edit/GameObject/Window/Play/Help 全部可用（含 Build Settings…）；默认 dock 布局呈现 Hierarchy/Scene View/Inspector/Project/Console/HUD/构建与发布，可保存恢复与 Reset（§4.3）
 - [x] Edit 模式 sim 暂停可编辑、Play 模式同窗口运行游戏、退出 Play 回滚到编辑态（复用既有快照，类 Unity），切换不破坏帧节奏（#6，§4.4）
 - [x] 层级面板可创建/删除/重命名/复制 GameObject、拖拽重父（防环）、选中联动 Inspector 与 Scene View（§4.6）。节点 4 已落地层级树与 authoring selection；Inspector/Scene View 联动随节点 5/6 闭合。
