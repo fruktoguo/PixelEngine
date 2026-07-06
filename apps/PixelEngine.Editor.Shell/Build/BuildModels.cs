@@ -1,15 +1,9 @@
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Runtime.InteropServices;
 using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell.Build;
-
-internal enum BuildChannel
-{
-    R2R,
-    Aot,
-}
 
 internal enum BuildLogLevel
 {
@@ -61,7 +55,7 @@ internal static class BuildHostRid
     public static bool SupportsAot(BuildRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return request.Channel != BuildChannel.Aot ||
+        return request.Channel != BuildProfileChannel.Aot ||
             string.Equals(request.Rid, Current, StringComparison.OrdinalIgnoreCase);
     }
 }
@@ -94,60 +88,24 @@ internal sealed record BuildPreflight
     public string Diagnostic { get; init; } = string.Empty;
 }
 
-internal sealed record SceneBuildEntry
+internal static class BuildProfileEditorAdapter
 {
-    public string SceneName { get; set; } = string.Empty;
-
-    public bool Included { get; set; } = true;
-
-    public bool IsStartup { get; set; }
-
-    public SceneSourceKind SourceKind { get; set; } = SceneSourceKind.SceneFile;
-
-    public string? Source { get; set; }
-}
-
-internal sealed record BuildTargetSettings
-{
-    public string Rid { get; set; } = "win-x64";
-
-    public BuildChannel Channel { get; set; } = BuildChannel.R2R;
-
-    public string Configuration { get; set; } = "Release";
-
-    public string OutputDirectory { get; set; } = "artifacts/player";
-
-    public string ProductName { get; set; } = "PixelEngine Demo";
-
-    public string Version { get; set; } = "0.1.0";
-
-    public string InformationalVersion { get; set; } = string.Empty;
-
-    public string? IconPath { get; set; }
-
-    public bool IncludeSymbols { get; set; }
-
-    public bool PackageWholeContent { get; set; } = true;
-
-    public bool RunAfterBuild { get; set; }
-
-    public List<SceneBuildEntry> Scenes { get; set; } = [];
-
-    public static BuildTargetSettings CreateDefault(EditorProject project)
+    public static BuildProfileDto CreateDefault(EditorProject project)
     {
         ArgumentNullException.ThrowIfNull(project);
-        BuildTargetSettings settings = new();
+        BuildProfileDto settings = BuildProfileDto.CreateDefault(project.ResolveSceneRelativePath(null));
         settings.RefreshScenes(project);
         return settings;
     }
 
-    public void RefreshScenes(EditorProject project)
+    public static void RefreshScenes(this BuildProfileDto settings, EditorProject project)
     {
+        ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(project);
-        Dictionary<string, SceneBuildEntry> merged = new(StringComparer.OrdinalIgnoreCase);
-        for (int i = 0; i < Scenes.Count; i++)
+        Dictionary<string, BuildProfileSceneDto> merged = new(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < settings.Scenes.Count; i++)
         {
-            SceneBuildEntry entry = Scenes[i];
+            BuildProfileSceneDto entry = settings.Scenes[i];
             if (!string.IsNullOrWhiteSpace(entry.Source))
             {
                 merged[entry.Source] = entry;
@@ -169,150 +127,64 @@ internal sealed record BuildTargetSettings
             }
         }
 
-        Scenes = [.. merged.Values.OrderBy(static entry => entry.Source, StringComparer.OrdinalIgnoreCase)];
-        EnsureSingleStartup(project.ResolveSceneRelativePath(null));
+        settings.Scenes = [.. merged.Values.OrderBy(static entry => entry.Source, StringComparer.OrdinalIgnoreCase)];
+        EnsureSingleStartup(settings, project.ResolveSceneRelativePath(null));
     }
 
-    public bool TryNormalize(out string error)
+    public static BuildRequest ToRequest(this BuildProfileDto settings)
     {
-        if (string.IsNullOrWhiteSpace(Rid))
-        {
-            error = "RID 不能为空。";
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(Configuration))
-        {
-            error = "Configuration 不能为空。";
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(OutputDirectory))
-        {
-            error = "输出目录不能为空。";
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(ProductName))
-        {
-            error = "产物名不能为空。";
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(Version))
-        {
-            error = "版本号不能为空。";
-            return false;
-        }
-
-        if (OutputDirectory.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
-        {
-            error = "输出目录包含非法路径字符。";
-            return false;
-        }
-
-        if (!string.IsNullOrWhiteSpace(IconPath) && IconPath.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
-        {
-            error = "图标路径包含非法路径字符。";
-            return false;
-        }
-
-        int included = 0;
-        int startup = 0;
-        for (int i = 0; i < Scenes.Count; i++)
-        {
-            if (Scenes[i].Included)
-            {
-                included++;
-            }
-
-            if (Scenes[i].IsStartup)
-            {
-                startup++;
-                if (!Scenes[i].Included)
-                {
-                    error = "启动场景必须入包。";
-                    return false;
-                }
-            }
-        }
-
-        if (included == 0)
-        {
-            error = "至少需要一个入包场景。";
-            return false;
-        }
-
-        if (startup != 1)
-        {
-            error = "必须且只能选择一个启动场景。";
-            return false;
-        }
-
-        error = string.Empty;
-        return true;
-    }
-
-    public BuildTargetSettings Normalize()
-    {
-        return TryNormalize(out string error)
-            ? this
-            : throw new InvalidOperationException(error);
-    }
-
-    public BuildRequest ToRequest()
-    {
-        _ = Normalize();
-        SceneBuildEntry startup = Scenes.Single(static scene => scene.IsStartup);
+        ArgumentNullException.ThrowIfNull(settings);
+        _ = settings.Normalize();
+        BuildProfileSceneDto startup = settings.Scenes.Single(static scene => scene.IsStartup);
         return new BuildRequest
         {
-            Rid = Rid,
-            Channel = Channel,
-            Configuration = Configuration,
-            OutputDirectory = OutputDirectory,
-            Version = Version,
-            InformationalVersion = InformationalVersion,
-            ProductName = ProductName,
-            IconPath = IconPath,
-            IncludeSymbols = IncludeSymbols,
+            Rid = settings.Rid,
+            Channel = settings.Channel,
+            Configuration = settings.Configuration,
+            OutputDirectory = settings.OutputDirectory,
+            Version = settings.Version,
+            InformationalVersion = settings.InformationalVersion,
+            ProductName = settings.ProductName,
+            IconPath = settings.IconPath,
+            IncludeSymbols = settings.IncludeSymbols,
             StartScene = startup.Source ?? startup.SceneName,
-            IncludedScenes = PackageWholeContent ? [] : [.. Scenes.Where(static scene => scene.Included).Select(static scene => scene.Source ?? scene.SceneName)],
-            RunAfterBuild = RunAfterBuild,
+            IncludedScenes = settings.PackageWholeContent ? [] : [.. settings.Scenes.Where(static scene => scene.Included).Select(static scene => scene.Source ?? scene.SceneName)],
+            RunAfterBuild = settings.RunAfterBuild,
         };
     }
 
-    private void EnsureSingleStartup(string preferredSource)
+    private static void EnsureSingleStartup(BuildProfileDto settings, string preferredSource)
     {
         bool hasStartup = false;
-        for (int i = 0; i < Scenes.Count; i++)
+        for (int i = 0; i < settings.Scenes.Count; i++)
         {
-            if (Scenes[i].IsStartup)
+            if (settings.Scenes[i].IsStartup)
             {
                 if (!hasStartup)
                 {
-                    Scenes[i].Included = true;
+                    settings.Scenes[i].Included = true;
                     hasStartup = true;
                 }
                 else
                 {
-                    Scenes[i].IsStartup = false;
+                    settings.Scenes[i].IsStartup = false;
                 }
             }
         }
 
-        if (hasStartup || Scenes.Count == 0)
+        if (hasStartup || settings.Scenes.Count == 0)
         {
             return;
         }
 
-        SceneBuildEntry? preferred = Scenes.FirstOrDefault(scene => string.Equals(scene.Source, preferredSource, StringComparison.OrdinalIgnoreCase));
-        (preferred ?? Scenes[0]).IsStartup = true;
-        (preferred ?? Scenes[0]).Included = true;
+        BuildProfileSceneDto? preferred = settings.Scenes.FirstOrDefault(scene => string.Equals(scene.Source, preferredSource, StringComparison.OrdinalIgnoreCase));
+        (preferred ?? settings.Scenes[0]).IsStartup = true;
+        (preferred ?? settings.Scenes[0]).Included = true;
     }
 
-    private static void AddOrUpdateScene(Dictionary<string, SceneBuildEntry> merged, string name, string path, SceneSourceKind sourceKind)
+    private static void AddOrUpdateScene(Dictionary<string, BuildProfileSceneDto> merged, string name, string path, SceneSourceKind sourceKind)
     {
-        if (merged.TryGetValue(path, out SceneBuildEntry? existing))
+        if (merged.TryGetValue(path, out BuildProfileSceneDto? existing))
         {
             existing.SceneName = string.IsNullOrWhiteSpace(existing.SceneName) ? name : existing.SceneName;
             existing.SourceKind = sourceKind;
@@ -320,7 +192,7 @@ internal sealed record BuildTargetSettings
             return;
         }
 
-        merged[path] = new SceneBuildEntry
+        merged[path] = new BuildProfileSceneDto
         {
             SceneName = string.IsNullOrWhiteSpace(name) ? Path.GetFileNameWithoutExtension(path) ?? path : name,
             Included = true,
@@ -334,7 +206,7 @@ internal sealed record BuildRequest
 {
     public string Rid { get; init; } = string.Empty;
 
-    public BuildChannel Channel { get; init; }
+    public BuildProfileChannel Channel { get; init; }
 
     public string Configuration { get; init; } = string.Empty;
 
@@ -434,7 +306,7 @@ internal sealed record ScriptedBuildSettingsProbeSnapshot
 {
     public string Rid { get; init; } = string.Empty;
 
-    public BuildChannel Channel { get; init; }
+    public BuildProfileChannel Channel { get; init; }
 
     public string Configuration { get; init; } = string.Empty;
 
@@ -487,7 +359,6 @@ internal sealed class BuildLog(int capacity = 512)
     ReadCommentHandling = JsonCommentHandling.Skip,
     AllowTrailingCommas = true,
     WriteIndented = true)]
-[JsonSerializable(typeof(BuildTargetSettings))]
 [JsonSerializable(typeof(BuildResult))]
 [JsonSerializable(typeof(Dictionary<BuildPhase, double>))]
 internal sealed partial class PixelEngineEditorShellBuildJsonContext : JsonSerializerContext

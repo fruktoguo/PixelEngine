@@ -18,7 +18,7 @@
 - [x] M10/M13 Hosting 底座已闭合：`EngineBuilder`、`Engine`、`EngineContext`、12 相位、headless、Play/Edit/Step、GUI 宿主中性化、窗口/GL 所有权解耦与 EditorShell attach 证据已记录。
 - [x] M14 Web-first UI runtime 装配底座已闭合：`EnableGameUi`、`UseUiBackend`、`GameUiHost`、`GameUiPhaseDriver`、`IGameUiService`、相位 [10] order 合成与禁用零装配已落地。
 - [x] M14 player 启动分派已闭合：`content/startup.json` 可分派 `SceneFile`、`SaveDirectory`、`Procedural`，缺省回落 `playable-world`。
-- [ ] M14 中性配置 DTO 仍未闭合：`ProjectSettingsDto`、`PlayerSettingsDto`、`BuildProfileDto` 与 `EngineProject` 读写/校验入口仍需实现并供 EditorShell Settings 与 build-player 共用。
+- [x] M14 中性配置 DTO 底座已落地：`ProjectSettingsDto`、`PlayerSettingsDto`、`BuildProfileDto` 与 `EngineProjectSettingsStore` 读写/校验入口已实现，Build Settings 已供 EditorShell 与 build-player 参数投影共用；Project / Player Settings 面板消费仍作为未完成 UX 项保留。
 - [!] M15 Editor 真实窗口人工验收仍阻塞：scripted probe、截图、`manual_evidence_attached_pending_review` 只能作为证据入口，不能替代人工 UX / 真实窗口验收完成。
 - [!] M15 native leak 证据仍阻塞：managed detector 与 process smoke 不能替代跨平台 runner、GL driver 级 detector、OpenAL/Box2D/ALC/GL 外部工具级报告。
 
@@ -39,16 +39,19 @@
 
 ## 4. M14 配置 DTO checklist
 
-- [ ] `ProjectSettingsDto`：定义工程名、content root、script source dir、默认 scene、资源规则、编辑器偏好、默认 UI backend；提供默认值、schema version、读写、校验、路径逃逸拒绝与 EditorShell Project Settings 消费测试。
-- [ ] `PlayerSettingsDto`：定义窗口标题、分辨率、VSync、图标、版本号、启动场景、输入默认、运行时 UI backend、发行通道；提供运行时消费、build-player 参数投影、EditorShell Player Settings 消费测试。
-- [ ] `BuildProfileDto`：定义目标 RID/channel/configuration、R2R/AOT、Debug/Release、入包场景、启动场景、输出目录、符号、Build/Build And Run 参数；提供 build-player 同源映射与 EditorShell Build Settings 回读测试。
-- [ ] `EngineProject` 读写/校验入口：将上述 DTO 与现有 content/scenes 扫描、`startup.json`、`.scene` loader、build-player 入参统一为一个中性 schema，禁止引入 EditorShell authoring UI 类型。
+- [x] `ProjectSettingsDto`：已定义工程名、content root、script source dir、默认 scene、资源规则、编辑器偏好、默认 UI backend，并提供默认值、schema version、JSON 读写、校验与路径逃逸拒绝测试。
+- [ ] `ProjectSettingsDto` EditorShell 消费：Project Settings 面板仍需绑定该 DTO 的读写、迁移与错误提示，不能只停留在 Hosting store。
+- [x] `PlayerSettingsDto`：已定义窗口标题、分辨率、VSync、图标、版本号、启动场景、输入默认、运行时 UI backend、发行通道，并提供默认值、JSON 读写、校验与路径逃逸拒绝测试。
+- [ ] `PlayerSettingsDto` EditorShell / runtime 消费：Player Settings 面板、运行时窗口设置与 build-player 参数投影仍需逐项绑定该 DTO。
+- [x] `BuildProfileDto`：已定义目标 RID/channel/configuration、R2R/AOT、Debug/Release、入包场景、启动场景、输出目录、符号、Build/Build And Run 参数；EditorShell Build Settings 已通过 `BuildProfileEditorAdapter` / `BuildSettingsStore` 回读并投影到 build-player 请求。
+- [x] `EngineProjectSettingsStore` 读写/校验入口：已提供 `ProjectSettings.json`、`PlayerSettings.json`、`BuildSettings.json` 的 Hosting 中性 JSON 读写入口、默认值与 schema version。
+- [ ] `EngineProject` 统一入口：仍需将上述 DTO 与现有 content/scenes 扫描、`startup.json`、`.scene` loader 统一成更完整的中性工程 schema，禁止引入 EditorShell authoring UI 类型。
 
 ## 5. 未完成目标 checklist
 
-- [ ] 将 Project Settings / Player Settings / Build Settings 的默认值、读写、校验与迁移纳入 Hosting 测试，避免 EditorShell 在壳内形成第二套 settings schema。
-- [ ] 在 plan/19 中把 Settings 面板逐项绑定到本文件 DTO，保证 Unity-like Editor 的 Project / Player / Build Settings 与玩家包 build-player 同源。
-- [ ] 在 plan/15 build-player 中消费 `BuildProfileDto` 或同源投影，保证 CLI 出包与 Editor Build Settings 参数一致。
+- [x] 将 Project Settings / Player Settings / Build Settings 的默认值、读写、校验与路径逃逸拒绝纳入 Hosting 测试，避免 EditorShell 在壳内形成第二套 settings schema 底座。
+- [ ] 在 plan/19 中把 Project / Player Settings 面板逐项绑定到本文件 DTO，保证 Unity-like Editor 的工程与玩家设置不形成 shell-local schema。
+- [x] Build Settings 已消费 `BuildProfileDto` 同源投影：EditorShell 以 Hosting DTO 持久化 `BuildSettings.json`，并投影为 build-player 子进程参数。
 
 ## 6. 证据债 / 阻塞 checklist
 
@@ -61,6 +64,7 @@
 - [x] `dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --filter FullyQualifiedName~HostingProjectDisciplineTests|FullyQualifiedName~EngineWindowOwnershipTests|FullyQualifiedName~EnginePhasePipelineTests` 覆盖依赖方向、窗口所有权、相位与降频。
 - [x] `dotnet test tests/PixelEngine.UI.Tests/PixelEngine.UI.Tests.csproj -c Release --filter FullyQualifiedName~GameUiHostTests|FullyQualifiedName~UiInputRouterTests|FullyQualifiedName~GameUiServiceBridgeTests` 覆盖 Web-first UI 装配、输入仲裁、服务桥和禁用门控。
 - [x] `dotnet test tests/PixelEngine.Demo.Tests/PixelEngine.Demo.Tests.csproj -c Release --filter FullyQualifiedName~DemoStartupOptionsTests` 覆盖 player startup 分派。
+- [x] `dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --filter "FullyQualifiedName~EditorShellBuildTests|FullyQualifiedName~HostingProjectDisciplineTests"` 覆盖 Hosting settings DTO 读写/校验、Build Settings 同源投影、player build 编排与项目纪律，当前通过 32/32。
 - [x] `docs/runtime-reports/2026-07-02-demo-window-smoke.md`、`docs/runtime-reports/2026-07-02-demo-window-longrun.md`、`docs/runtime-reports/2026-07-06-editor-shell-attach-probe.md` 是现有 runtime / window / attach 证据路径。
 - [!] `tools/demo-manual-acceptance-preflight.ps1` 与 `tools/native-leak-preflight.ps1` 只提供证据入口；未有合格 manifest 和人工/外部复核前保持阻塞。
 
@@ -68,5 +72,5 @@
 
 - [x] 上游依赖：plan/01、plan/02、plan/03–10、plan/11、plan/12、plan/15、plan/19、plan/20 的公开契约已经在 Hosting 中作为装配边界登记。
 - [x] 下游消费：plan/19 使用窗口所有权、Edit/Play、`.scene` writer 与 Settings DTO；plan/20 使用 UI 装配和 `IGameUiService`；plan/13 使用 startup 分派和公开 runtime services；plan/15 使用 build profile / player-only 审计边界。
-- [ ] 下一闭合节点：实现 `ProjectSettingsDto` / `PlayerSettingsDto` / `BuildProfileDto`，补测试并同步 plan/19 Settings UX checklist 与 plan/15 build-player 参数投影。
+- [ ] 下一闭合节点：将 `ProjectSettingsDto` / `PlayerSettingsDto` 绑定到 plan/19 Project Settings / Player Settings 面板与运行时消费路径，补真实 Settings UX 保存/重启恢复/错误提示证据。
 - [!] M15 后续节点：补 Editor UX 人工证据与 native leak 外部 detector 证据，完成后再更新 README/plan17 dashboard。

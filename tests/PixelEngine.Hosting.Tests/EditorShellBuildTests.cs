@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using PixelEngine.Editor.Shell.Build;
+using PixelEngine.Hosting;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -188,12 +189,12 @@ public sealed class EditorShellBuildTests
     }
 
     /// <summary>
-    /// 验证 BuildTargetSettings 归一化规则和构建工具预检的可执行诊断。
+    /// 验证 BuildProfileDto 归一化规则和构建工具预检的可执行诊断。
     /// </summary>
     [Fact]
-    public async Task BuildTargetSettingsValidationAndPreflightReportActionableErrors()
+    public async Task BuildProfileDtoValidationAndPreflightReportActionableErrors()
     {
-        BuildTargetSettings valid = new()
+        BuildProfileDto valid = new()
         {
             OutputDirectory = "artifacts/player",
             ProductName = "PixelEngine Demo",
@@ -201,14 +202,16 @@ public sealed class EditorShellBuildTests
             PackageWholeContent = false,
             Scenes =
             [
-                new SceneBuildEntry { SceneName = "a", Source = "scenes/a.scene", Included = true, IsStartup = true },
-                new SceneBuildEntry { SceneName = "b", Source = "scenes/b.scene", Included = true },
-                new SceneBuildEntry { SceneName = "c", Source = "scenes/c.scene", Included = false },
+                new BuildProfileSceneDto { SceneName = "a", Source = "scenes/a.scene", Included = true, IsStartup = true },
+                new BuildProfileSceneDto { SceneName = "b", Source = "scenes/b.scene", Included = true },
+                new BuildProfileSceneDto { SceneName = "c", Source = "scenes/c.scene", Included = false },
             ],
         };
 
-        Assert.Same(valid, valid.Normalize());
-        BuildRequest request = valid.ToRequest();
+        BuildProfileDto normalizedValid = valid.Normalize();
+        Assert.Equal(valid.Rid, normalizedValid.Rid);
+        Assert.Equal(valid.Scenes.Count, normalizedValid.Scenes.Count);
+        BuildRequest request = normalizedValid.ToRequest();
         Assert.Equal("scenes/a.scene", request.StartScene);
         Assert.Equal(["scenes/a.scene", "scenes/b.scene"], request.IncludedScenes);
         AssertInvalid(valid with { Scenes = [valid.Scenes[0] with { IsStartup = true }, valid.Scenes[1] with { IsStartup = true }] }, "只能选择一个启动场景");
@@ -232,6 +235,90 @@ public sealed class EditorShellBuildTests
         Assert.Contains("dotnet SDK", preflight.Diagnostic, StringComparison.Ordinal);
         Assert.Contains("sh", preflight.Diagnostic, StringComparison.Ordinal);
         Assert.Contains("build-player", preflight.Diagnostic, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 Hosting settings DTO 的默认值、读写、路径校验与 JSON 往返。
+    /// </summary>
+    [Fact]
+    public void EngineProjectSettingsStoreRoundTripsHostingDtosAndRejectsPathEscape()
+    {
+        using TempDir temp = new();
+        ProjectSettingsDto project = new()
+        {
+            Name = " PixelEngine Demo ",
+            ContentRoot = "content\\",
+            ScriptSourceDir = "scripts/./game",
+            StartScene = "scenes\\main.scene",
+        };
+        EngineProjectSettingsStore.SaveProjectSettings(temp.Path, project);
+
+        ProjectSettingsDto loadedProject = EngineProjectSettingsStore.LoadProjectSettings(temp.Path);
+
+        Assert.Equal("PixelEngine Demo", loadedProject.Name);
+        Assert.Equal("content", loadedProject.ContentRoot);
+        Assert.Equal("scripts/game", loadedProject.ScriptSourceDir);
+        Assert.Equal("scenes/main.scene", loadedProject.StartScene);
+        Assert.Contains("\"formatVersion\": 1", File.ReadAllText(Path.Combine(temp.Path, EngineProjectSettingsStore.ProjectSettingsFileName)), StringComparison.Ordinal);
+
+        PlayerSettingsDto player = new()
+        {
+            WindowTitle = " Demo Player ",
+            WindowWidth = 1600,
+            WindowHeight = 900,
+            VSync = false,
+            IconPath = "icons\\game.ico",
+            Version = "1.2.3",
+            StartupScene = "scenes\\lava-mine.scene",
+        };
+        EngineProjectSettingsStore.SavePlayerSettings(temp.Path, player);
+
+        PlayerSettingsDto loadedPlayer = EngineProjectSettingsStore.LoadPlayerSettings(temp.Path);
+
+        Assert.Equal("Demo Player", loadedPlayer.WindowTitle);
+        Assert.Equal(1600, loadedPlayer.WindowWidth);
+        Assert.Equal(900, loadedPlayer.WindowHeight);
+        Assert.False(loadedPlayer.VSync);
+        Assert.Equal("icons/game.ico", loadedPlayer.IconPath);
+        Assert.Equal("scenes/lava-mine.scene", loadedPlayer.StartupScene);
+
+        BuildProfileDto profile = new()
+        {
+            Rid = " win-x64 ",
+            Channel = BuildProfileChannel.R2R,
+            Configuration = " Release ",
+            OutputDirectory = "artifacts/player",
+            ProductName = " PixelEngine Demo ",
+            Version = "0.2.0",
+            PackageWholeContent = false,
+            Scenes =
+            [
+                new BuildProfileSceneDto { SceneName = "Lava Mine", Source = "scenes\\lava-mine.scene", Included = true, IsStartup = true },
+            ],
+        };
+        EngineProjectSettingsStore.SaveBuildProfile(temp.Path, profile);
+
+        BuildProfileDto loadedProfile = EngineProjectSettingsStore.LoadBuildProfile(temp.Path);
+
+        Assert.Equal("win-x64", loadedProfile.Rid);
+        Assert.Equal("Release", loadedProfile.Configuration);
+        Assert.Equal("PixelEngine Demo", loadedProfile.ProductName);
+        Assert.False(loadedProfile.PackageWholeContent);
+        Assert.Equal("scenes/lava-mine.scene", Assert.Single(loadedProfile.Scenes).Source);
+
+        using TempDir defaultTemp = new();
+        BuildProfileDto defaultProfile = EngineProjectSettingsStore.LoadBuildProfile(defaultTemp.Path);
+        BuildProfileSceneDto defaultScene = Assert.Single(defaultProfile.Scenes);
+        Assert.True(defaultScene.Included);
+        Assert.True(defaultScene.IsStartup);
+        Assert.Equal("scenes/main.scene", defaultScene.Source);
+
+        Assert.Throws<InvalidOperationException>(() => EngineProjectSettingsStore.SaveProjectSettings(temp.Path, project with { ContentRoot = "../outside" }));
+        Assert.Throws<InvalidOperationException>(() => EngineProjectSettingsStore.SavePlayerSettings(temp.Path, player with { StartupScene = "/outside.scene" }));
+        Assert.Throws<InvalidOperationException>(() => EngineProjectSettingsStore.SaveBuildProfile(temp.Path, profile with
+        {
+            Scenes = [profile.Scenes[0] with { Source = "../outside.scene" }],
+        }));
     }
 
     /// <summary>
@@ -277,7 +364,7 @@ public sealed class EditorShellBuildTests
         return new BuildRequest
         {
             Rid = "win-x64",
-            Channel = BuildChannel.R2R,
+            Channel = BuildProfileChannel.R2R,
             Configuration = "Release",
             OutputDirectory = outputDirectory,
             Version = "0.1.0",
@@ -313,7 +400,7 @@ public sealed class EditorShellBuildTests
         return path;
     }
 
-    private static void AssertInvalid(BuildTargetSettings settings, string expected)
+    private static void AssertInvalid(BuildProfileDto settings, string expected)
     {
         Assert.False(settings.TryNormalize(out string error));
         Assert.Contains(expected, error, StringComparison.Ordinal);

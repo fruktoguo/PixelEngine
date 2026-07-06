@@ -37,7 +37,7 @@
 - [x] 发行模式已锁定：`Directory.Build.props` 定义 R2R 主通道与 NativeAOT 次通道，R2R 不固定 ISA，AOT 通过 RID 显式 `IlcInstructionSet` 避免 SSE2 静默退化。
 - [x] 发布脚本已落地：`tools/publish-r2r.ps1`、`tools/publish-r2r.sh`、`tools/publish-aot.ps1`、`tools/publish-aot.sh` 产出 `artifacts/publish/<rid>-<channel>/` 中间产物，并用 README 标明它不是玩家包。
 - [x] 玩家友好布局已落地：`tools/package.ps1` 与 `tools/package.sh` 输出包根启动入口、`content/`、`app/`、README、LICENSE、SHA256SUMS，运行时依赖收进 `app/`。
-- [x] Unity 式 `app/` 布局已锁定：R2R 保持 `PublishSingleFile=false`，Windows R2R 根启动器经 apphost 相对程序集路径指向 `app/PixelEngine.Demo.dll`，AOT 根启动器直接启动并加载 `app/` native。
+- [x] Unity 式 `app/` 布局已锁定：R2R 保持 `PublishSingleFile=false`，明确否决 (b) 单文件下载即应用根形态；Windows R2R 根启动器经 apphost 相对程序集路径指向 `app/PixelEngine.Demo.dll`，AOT 根启动器直接启动并加载 `app/` native。保留方案 (b) 单文件为已否决备选口径。
 - [x] Box2D dual-build 工具链已落地：`tools/build-native.ps1`、`tools/build-native.sh` 与 `native/toolchains/*` 支持 6 RID 的动态和静态产物路径，`native/PixelEngine.Box2D.targets` 区分 R2R 动态库与 AOT 静态链。
 - [x] native fan-out 边界已落地：Box2D 是唯一 sim-native / dual-build 静态承载依赖；OpenAL、ANGLE、RmlUi、Ultralight 归 dynamic-only 或系统分发并可门控回退。
 - [x] Trim/AOT 纪律已落地：引擎库启用 trim/AOT 分析器，脚本编译子系统对 Roslyn/ALC 做局部豁免，NativeAOT 通道显式禁用热重载实现而不是伪造 AOT 热重载。

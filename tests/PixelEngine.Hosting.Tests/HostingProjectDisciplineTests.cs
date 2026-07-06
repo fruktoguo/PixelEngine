@@ -322,8 +322,8 @@ public sealed class HostingProjectDisciplineTests
 
         Assert.Contains("namespace PixelEngine.Editor.Shell.Build", source, StringComparison.Ordinal);
         Assert.Contains("class BuildSettingsPanel", source, StringComparison.Ordinal);
-        Assert.Contains("BuildTargetSettings", source, StringComparison.Ordinal);
-        Assert.Contains("SceneBuildEntry", source, StringComparison.Ordinal);
+        Assert.Contains("BuildProfileDto", source, StringComparison.Ordinal);
+        Assert.Contains("BuildProfileSceneDto", source, StringComparison.Ordinal);
         Assert.Contains("BuildRequest", source, StringComparison.Ordinal);
         Assert.Contains("BuildResult", source, StringComparison.Ordinal);
         Assert.Contains("BuildProgressEvent", source, StringComparison.Ordinal);
@@ -334,7 +334,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("BuildHostRid", source, StringComparison.Ordinal);
         Assert.Contains("SupportsAot", source, StringComparison.Ordinal);
         Assert.Contains("PixelEngineEditorShellBuildJsonContext", source, StringComparison.Ordinal);
-        Assert.Contains("BuildSettings.json", source, StringComparison.Ordinal);
+        Assert.Contains("EngineProjectSettingsStore.BuildSettingsFileName", source, StringComparison.Ordinal);
         Assert.Contains("RefreshScenes", source, StringComparison.Ordinal);
         Assert.Contains("PackageWholeContent ? []", source, StringComparison.Ordinal);
         Assert.Contains("Version", source, StringComparison.Ordinal);

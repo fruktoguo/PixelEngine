@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell.Build;
 
@@ -285,7 +286,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
     private static void AddBuildPlayerArguments(ProcessStartInfo startInfo, BuildRequest request, string outputDirectory)
     {
         AddArgument(startInfo, "-Rid", request.Rid);
-        AddArgument(startInfo, "-Channel", request.Channel == BuildChannel.Aot ? "aot" : "r2r");
+        AddArgument(startInfo, "-Channel", request.Channel == BuildProfileChannel.Aot ? "aot" : "r2r");
         AddArgument(startInfo, "-Configuration", request.Configuration);
         AddArgument(startInfo, "-Output", outputDirectory);
         AddArgument(startInfo, "-Version", request.Version);
@@ -436,7 +437,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         {
             Ok = false,
             Rid = request.Rid,
-            Channel = request.Channel == BuildChannel.Aot ? "aot" : "r2r",
+            Channel = request.Channel == BuildProfileChannel.Aot ? "aot" : "r2r",
             Configuration = request.Configuration,
             Version = request.Version,
             InformationalVersion = request.InformationalVersion,
