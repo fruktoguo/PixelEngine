@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/PixelEngine.Hosting/PixelEngine.Hosting.csproj" />
+    <ProjectReference Include="../../apps/PixelEngine.Editor.Shell/PixelEngine.Editor.Shell.csproj" />
   </ItemGroup>
 
   <ItemGroup>
