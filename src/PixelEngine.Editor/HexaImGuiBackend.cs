@@ -1,6 +1,7 @@
 using Hexa.NET.ImGui;
 using Hexa.NET.ImGui.Backends.OpenGL3;
 using Hexa.NET.ImPlot;
+using PixelEngine.Gui;
 using System.Numerics;
 
 namespace PixelEngine.Editor;
@@ -11,7 +12,7 @@ namespace PixelEngine.Editor;
 public sealed class HexaImGuiBackend : IEditorImGuiBackend
 {
     private readonly EditorDockSpace _dockSpace = new();
-    private readonly EditorFontManager _fontManager = new();
+    private readonly GuiFontManager _fontManager = new();
     private ImGuiContextPtr _context;
     private ImPlotContextPtr _plotContext;
     private string _layoutPath = string.Empty;
@@ -186,7 +187,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
     private void AddConfiguredFont(ImGuiIOPtr io, EditorAppOptions options)
     {
         string? fontPath = _fontManager.ResolveCjkFontPath(options.PreferredFontPath);
-        float fontSize = EditorFontManager.ScaleFontSize(options.FontSizePixels, options.DpiScale);
+        float fontSize = GuiFontManager.ScaleFontSize(options.FontSizePixels, options.DpiScale);
         if (fontPath is null)
         {
             _ = ImGui.AddFontDefault(io.Fonts);

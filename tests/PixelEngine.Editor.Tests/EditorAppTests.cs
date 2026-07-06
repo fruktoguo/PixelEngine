@@ -1,5 +1,6 @@
 using Hexa.NET.ImGui;
 using PixelEngine.Core.Diagnostics;
+using PixelEngine.Gui;
 using PixelEngine.Rendering;
 using System.Numerics;
 using Xunit;
@@ -172,12 +173,12 @@ public sealed class EditorAppTests
     [Fact]
     public void FontManagerResolvesCjkFontAndScalesSize()
     {
-        EditorFontManager manager = new();
+        GuiFontManager manager = new();
         string? fontPath = manager.ResolveCjkFontPath();
 
         Assert.False(string.IsNullOrWhiteSpace(fontPath));
         Assert.True(File.Exists(fontPath));
-        Assert.Equal(27f, EditorFontManager.ScaleFontSize(18f, 1.5f));
+        Assert.Equal(27f, GuiFontManager.ScaleFontSize(18f, 1.5f));
     }
 
     /// <summary>

@@ -29,7 +29,7 @@ plan/19（独立编辑器壳）、`plan/15`（玩家包 player-only 审计）、
 - `HexaImGuiBackend`（ImGui 后端 + GL 绘制桥）——由 `src/PixelEngine.Editor/HexaImGuiBackend.cs`、`EditorRenderBridge.cs` 的中性部分迁入。
 - `IGuiContext` 运行时适配，即现 `ScriptGuiContext`（玩家 HUD / 脚本 UI 走的即时上下文）——`ScriptGuiContext.cs` 迁入，归属改为 `PixelEngine.Gui`。
 - `EditorRenderBridge` 的中性部分（相位 [10] present 前 ImGui 帧生命周期、`WantCaptureMouse` 输入桥中性壳）；编辑器专属绘制（停靠、面板遍历）留在 Editor。
-- 字体栈：`EditorFontManager → GuiFontManager`（含 CJK 字形装载），供玩家 HUD 与 `plan/20` UI 回退基线复用。
+- 字体栈：原 `EditorFontManager` 已下沉为 `GuiFontManager`（含 CJK 字形装载），供编辑器、玩家 HUD 与 `plan/20` UI 回退基线复用。
 
 留在 `PixelEngine.Editor` 的仍是**编辑器专属**：`EditorApp` / `IEditorPanel` / 停靠 / 各面板 / `ImGuizmo` / `ImPlot` 绑定。
 
@@ -60,7 +60,7 @@ plan/19（独立编辑器壳）、`plan/15`（玩家包 player-only 审计）、
 - [x] 新增 `src/PixelEngine.Gui` 中性程序集（位于 Rendering 之上、Editor 之下），加入 `.sln` 与 `plan/00 §5` 结构图（§0.3、§0.7）
 - [x] 迁移 `HexaImGuiBackend` + `EditorRenderBridge` 中性部分到 `PixelEngine.Gui`，编辑器专属绘制留 Editor（§0.3）
 - [x] 迁移 `ScriptGuiContext`（`IGuiContext` 运行时适配）到 `PixelEngine.Gui`，玩家 HUD/脚本 UI 引用改指 Gui（§0.3）
-- [x] `EditorFontManager → GuiFontManager`（含 CJK），玩家 HUD 与 `plan/20` UI 复用（§0.3）
+- [x] 原 `EditorFontManager` 已下沉为 `GuiFontManager`（含 CJK），编辑器、玩家 HUD 与 `plan/20` UI 回退复用同一中性字体栈；代码侧已移除 `PixelEngine.Editor.EditorFontManager`，Editor 后端直接消费 `PixelEngine.Gui.GuiFontManager`（§0.3）
 - [x] `PixelEngine.Hosting.csproj` 删 `PixelEngine.Editor` 引用、改引 `PixelEngine.Gui`；Hosting 内 Editor 类型消费改为面向 `IEditorHostExtension`/相位[10] 抽象（§0.4，配合 `plan/18` 修订）
 - [x] `IEditorHostExtension`：Shell 侧 adapter 封装 `EditorApp` + 默认面板注册（原 `RegisterDefaultEditorPanels`），由 shell 开发构建注入 Hosting 相位[10] 钩子（§0.4）
 - [x] `DemoProgram.cs` 去 `using PixelEngine.Editor` 与 `EnableEditor` 路径，玩家 HUD 改用 `PixelEngine.Gui` 中性 host（§0.5、`plan/13` 修订）

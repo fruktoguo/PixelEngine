@@ -52,7 +52,7 @@
 
 ### 3.2 模块与类型
 
-`EditorApp`（编辑器面板层顶层门面，由独立编辑器壳经 `IEditorHostExtension` 注入 Hosting 相位 [10]）持有：`ImGuiController`（GL 后端 + draw data 渲染）、`ImGuiInputBridge`（Silk.NET 输入 → ImGui IO）、`EditorFontManager`/`GuiFontManager` 字体栈、`EditorDockSpace`（docking 布局）、`EditorMode` 状态机（Edit/Play）、以及 `IEditorPanel` 面板集合与 `DebugOverlayController`。所有面板实现统一接口 `IEditorPanel { string Title; bool Visible; void Draw(in EditorContext ctx); }`。`EditorContext` 是传入各面板的只读句柄集合（Engine 门面、各子系统 read-only/tuning 接口、诊断快照、相机、选中态 `EditorSelection`）。
+`EditorApp`（编辑器面板层顶层门面，由独立编辑器壳经 `IEditorHostExtension` 注入 Hosting 相位 [10]）持有：`ImGuiController`（GL 后端 + draw data 渲染）、`ImGuiInputBridge`（Silk.NET 输入 → ImGui IO）、`PixelEngine.Gui.GuiFontManager` 中性字体栈、`EditorDockSpace`（docking 布局）、`EditorMode` 状态机（Edit/Play）、以及 `IEditorPanel` 面板集合与 `DebugOverlayController`。所有面板实现统一接口 `IEditorPanel { string Title; bool Visible; void Draw(in EditorContext ctx); }`。`EditorContext` 是传入各面板的只读句柄集合（Engine 门面、各子系统 read-only/tuning 接口、诊断快照、相机、选中态 `EditorSelection`）。
 
 `EditorSelection` 集中保存当前选中：cell 坐标、实体/脚本句柄、刚体 id、资产路径、材质 id，供检视器与 Inspector 共享。
 
@@ -60,7 +60,7 @@
 
 - `ImGuiController`：创建/销毁 ImGui context；上传字体 atlas 为 GL 纹理；每帧把 `ImDrawData` 翻译为 GL3 draw call（VBO/EBO/scissor）。复用 Rendering 的 `GL` 实例，渲染后恢复 GL 状态（program/blend/scissor/vao）避免污染世界渲染状态。开启 `ImGuiConfigFlags.DockingEnable`；视情况开 `ViewportsEnable`（多视口，需 Silk.NET 多窗口支持，作可选）。
 - `ImGuiInputBridge`：把 Silk.NET 的鼠标/键盘/滚轮/文本输入事件灌入 `ImGuiIO`；处理 `WantCaptureMouse/WantCaptureKeyboard`——当 ImGui 捕获时，游戏/画刷不消费该输入，反之亦然，避免 UI 与世界交互打架。**多级输入仲裁（扩展 `plan/20` HTML UI 共存后的确定性路由）**：单一 `WantCapture` 布尔不足以协调三套输入消费者，须建立显式优先级链 **编辑器 ImGui > 模态游戏 UI（`plan/20` 模态 HTML 面板，如对话/背包全屏）> 非模态 HUD（准星/图例/血条，不吞输入）> 世界（画刷/gizmo/玩家控制器）**。仲裁在每帧输入分发前求值：编辑器 ImGui 若 `WantCaptureMouse/Keyboard` 命中则独占；否则若存在 open 的模态 HTML UI 则由其消费；非模态 HUD 只绘制不拦截；剩余落世界。Play 模式下编辑器工具让位（编辑器仅保留调试叠层/HUD 显示，见 §3.15），输入优先级降为 HTML UI 之下，游戏玩家控制器接管世界层。该仲裁器为单一真相，`plan/20` 与 `plan/13` 均从此读优先级，不各自实现 capture 逻辑。
-- `EditorFontManager` / `GuiFontManager`：编辑器面板层保留 `EditorFontManager` 管理 dockspace / 面板所用字体；玩家 HUD 经 `PixelEngine.Gui.GuiFontManager` 使用同一 CJK 字体候选与 DPI 缩放策略，避免玩家包依赖 `PixelEngine.Editor`。`plan/20` 的 HTML 回退基线复用 `PixelEngine.Gui` 中性字体栈。
+- `GuiFontManager`：编辑器面板层、玩家 HUD 与 `plan/20` HTML 回退基线全部经 `PixelEngine.Gui.GuiFontManager` 使用同一 CJK 字体候选、glyph range 与 DPI 缩放策略；`PixelEngine.Editor` 不再保留独立字体管理器，避免玩家包依赖 `PixelEngine.Editor`，也避免编辑器 / 玩家 / HTML 回退三套字体覆盖漂移。
 - `EditorDockSpace`：建立全窗口 dockspace 主机窗口；提供默认停靠布局（左：层级 + 资源浏览；中：世界视口；右：Inspector + 检视器 + 调色板；下：性能 HUD + 控制台/诊断）；布局可保存/恢复（`imgui.ini` 或自管布局）。
 
 ### 3.4 材质 / 笔刷调色板面板（`MaterialBrushPalettePanel`）
@@ -162,7 +162,7 @@ ImGui 集成与框架：
 - [x] ImGui GL 后端**复用 Rendering 的同一 `GL` 实例与 GL context**，在架构相位 [10] 之后、present 之前绘制（§3.1、§3.3）
 - [x] `ImGuiInputBridge`：Silk.NET 鼠标/键盘/滚轮/文本 → ImGuiIO；按 `WantCaptureMouse/Keyboard` 仲裁 UI 与世界输入（§3.3）
 - [x] 启用 **docking**（`DockingEnable`）；`EditorDockSpace` 主机窗口 + 默认布局 + 布局保存/恢复（§3.3）
-- [x] `EditorFontManager`：加载含 **中文 CJK glyph range** 的字体 + 拉丁/标点，支持 DPI 缩放与字号切换（§3.3）
+- [x] `GuiFontManager`：加载含 **中文 CJK glyph range** 的字体 + 拉丁/标点，支持 DPI 缩放与字号切换；编辑器、玩家 HUD 与 HTML UI 回退共用同一中性字体栈（§3.3）
 - [x] 接入 **ImGuizmo / ImPlot**（ImNodes 可选）作为备用绘图/编辑控件（§2）
 - [x] `EditorApp` 门面 + `IEditorPanel` 接口 + `EditorContext` + `EditorSelection`（§3.2）
 - [x] `EditorFramePhase` 挂入 Hosting 主循环；世界经 Rendering 离屏 FBO 纹理显示于「世界视口」面板（`ViewportPanel`）（§3.1）

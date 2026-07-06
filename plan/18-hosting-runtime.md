@@ -84,7 +84,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 **耦合真相(纠正)**:Demo **并无**对 `PixelEngine.Editor` 的直接 `ProjectReference`。当前耦合是**传递闭包**——`Hosting.csproj` 硬引用 `PixelEngine.Editor`,Hosting 内约 8 个源文件直接使用 Editor 类型,玩家 HUD 走 `IGuiContext → ScriptGuiContext`(位于 Editor)`→ HexaImGuiBackend`(位于 Editor)。因此发行玩家包无法剥离 Editor,plan/15 的 player-only 审计在此前不可满足。真正的解耦动作 = GUI 宿主中性化 + Hosting 删 Editor 引用 + `DemoProgram.cs` 改用中性 host,**不是**「移除 Demo 对 Editor 的项目引用」(该引用本就不存在)。
 
 **重构(此为 M13「编辑器独立化与发行解耦」入口门,阻塞 plan/19 壳注入、plan/15 player-only 审计、plan/20 UI 字体/回退复用三者)**:
-- 新增中性程序集 `PixelEngine.Gui`(层级位于 Rendering 之上、Editor 之下),下沉玩家 HUD 所需的 ImGui host:`HexaImGuiBackend`、`IGuiContext` 运行时适配(即现 `ScriptGuiContext`)、`EditorRenderBridge` 的中性部分、字体栈(`EditorFontManager`→`GuiFontManager`,含 CJK)。
+- 新增中性程序集 `PixelEngine.Gui`(层级位于 Rendering 之上、Editor 之下),下沉玩家 HUD 所需的 ImGui host:`HexaImGuiBackend`、`IGuiContext` 运行时适配(即现 `ScriptGuiContext`)、`EditorRenderBridge` 的中性部分、字体栈(原 `EditorFontManager` 已迁入 `GuiFontManager`,含 CJK)。
 - Hosting **删除**对 `PixelEngine.Editor` 的硬 `ProjectReference`,改为暴露**抽象 GUI/相位[10] 钩子接口**(相位[10] 叠层 Render 与 Play/Edit/相位钩子);Editor 具体实现由**编辑器壳(开发构建)在装配期注入**,Hosting 不静态引用 Editor。玩家运行时该钩子为空实现。
 - Hosting 内引用 Editor 类型的源文件改指 `PixelEngine.Gui` 中性类型;`DemoProgram.cs` 玩家 HUD(`DemoHud`/`PauseMenu`/`WeaponHud`/`MaterialLegendHud`,plan/13)改用 `PixelEngine.Gui` 中性 `IGuiContext` host,与武器/材质 HUD 同一路径。
 - player-only 断言(plan/15 audit)以本重构落地为**前置**:audit **拒绝** `PixelEngine.Editor.dll` 与编辑器专属面板闭包,但**允许**玩家 HUD 所需的 `Hexa.NET.ImGui`(经 `PixelEngine.Gui`,撤销早期「拒绝 ImGui」的不可满足表述)。
@@ -128,7 +128,7 @@ Hosting 读 plan/02 诊断计时器,按架构 §4.3 五级顺序决策降级:①
 
 ### 4.1 GUI 宿主中性化与发行解耦(M13 入口门,§3.7)
 
-- [x] 新增中性程序集 `PixelEngine.Gui`(层级在 Rendering 之上、Editor 之下):下沉 `HexaImGuiBackend`、`IGuiContext` 运行时适配(现 `ScriptGuiContext`)、`EditorRenderBridge` 中性部分、字体栈(`EditorFontManager`→`GuiFontManager`,含 CJK)。[架构 §3.1,不变式 #10]
+- [x] 新增中性程序集 `PixelEngine.Gui`(层级在 Rendering 之上、Editor 之下):下沉 `HexaImGuiBackend`、`IGuiContext` 运行时适配(现 `ScriptGuiContext`)、`EditorRenderBridge` 中性部分、字体栈(原 `EditorFontManager` 已迁入 `GuiFontManager`,含 CJK)。[架构 §3.1,不变式 #10]
 - [x] Hosting `.csproj` **删除**对 `PixelEngine.Editor` 的硬 `ProjectReference`;Hosting 内引用 Editor 类型的源文件改指 `PixelEngine.Gui` 中性类型,编译期不再出现 Editor 类型。
 - [x] Hosting 暴露**抽象 GUI/相位[10] 钩子接口**(相位[10]叠层 Render + Play/Edit/相位钩子);玩家运行时为空实现,Editor 具体实现由编辑器壳在装配期注入(不静态引用 Editor)。
 - [x] `DemoProgram.cs` 玩家 HUD 改用 `PixelEngine.Gui` 中性 `IGuiContext` host(与 `DemoHud`/`PauseMenu`/`WeaponHud`/`MaterialLegendHud` 同路径);发行玩家包传递闭包不含 `PixelEngine.Editor.dll`,但允许 `Hexa.NET.ImGui`(供 plan/15 player-only audit 前置)。
