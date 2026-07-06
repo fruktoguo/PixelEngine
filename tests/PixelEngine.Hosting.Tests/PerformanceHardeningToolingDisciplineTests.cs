@@ -4124,6 +4124,20 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Contains("展开 package 不应在 app/ 下重复保留原始启动 exe", duplicateLauncherAudit.Output, StringComparison.Ordinal);
             File.Delete(Path.Combine(expandedPackageDir, "app", "PixelEngine.Demo.exe"));
 
+            string expandedUiNative = Path.Combine(expandedPackageDir, "app", "runtimes", "win-x64", "native", "PixelEngine.UI.Native.dll");
+            File.Delete(expandedUiNative);
+            ScriptResult missingUiNativeAudit = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "audit-release-artifacts.ps1"),
+                "-PublishRoot",
+                Path.Combine(temp, "missing-publish"),
+                "-PackageRoot",
+                packageRoot);
+            Assert.NotEqual(0, missingUiNativeAudit.ExitCode);
+            Assert.Contains("展开 package 缺少玩家友好布局入口、app 依赖或 content 内容", missingUiNativeAudit.Output, StringComparison.Ordinal);
+            Assert.Contains("app/runtimes/win-x64/native/PixelEngine.UI.Native.dll", missingUiNativeAudit.Output, StringComparison.Ordinal);
+            _ = WriteTextEvidence(expandedUiNative, "ui native");
+
             ScriptResult audit = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "audit-release-artifacts.ps1"),

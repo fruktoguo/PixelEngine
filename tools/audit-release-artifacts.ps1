@@ -51,6 +51,18 @@ function Get-Box2DName([string]$rid) {
   return 'libbox2d.dylib'
 }
 
+function Get-UiNativeName([string]$rid) {
+  if ($rid.StartsWith('win-')) {
+    return 'PixelEngine.UI.Native.dll'
+  }
+
+  if ($rid.StartsWith('linux-')) {
+    return 'libPixelEngine.UI.Native.so'
+  }
+
+  return 'libPixelEngine.UI.Native.dylib'
+}
+
 function Assert-FileExists([string]$path, [string]$message) {
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
     throw "${message}: $path"
@@ -117,6 +129,18 @@ function Assert-NoDynamicBox2D([string]$directory) {
   if ($dynamicLibraries) {
     $paths = ($dynamicLibraries | Select-Object -ExpandProperty FullName) -join [Environment]::NewLine
     throw "AOT 产物不应携带动态 Box2D：$paths"
+  }
+}
+
+function Assert-NoDynamicUiNative([string]$directory) {
+  $dynamicLibraries = Get-ChildItem -LiteralPath $directory -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object {
+      $_.Name -in @('PixelEngine.UI.Native.dll', 'libPixelEngine.UI.Native.so', 'libPixelEngine.UI.Native.dylib')
+    }
+
+  if ($dynamicLibraries) {
+    $paths = ($dynamicLibraries | Select-Object -ExpandProperty FullName) -join [Environment]::NewLine
+    throw "AOT 产物不应携带动态 UI native，应回退 ManagedFallback：$paths"
   }
 }
 
@@ -302,6 +326,7 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
 
   if ($channel -eq 'r2r') {
     $requiredEntries.Add($(if ($rid.StartsWith('win-')) { "app/$assemblyBaseName.dll" } else { "app/$assemblyBaseName" }))
+    $requiredEntries.Add("app/runtimes/$rid/native/$(Get-UiNativeName $rid)")
   } elseif (-not $rid.StartsWith('win-')) {
     $requiredEntries.Add("app/$assemblyBaseName")
   }
@@ -313,6 +338,10 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
   }
 
   foreach ($relative in $relativeFileEntries) {
+    if ($channel -ne 'r2r' -and [IO.Path]::GetFileName($relative) -in @('PixelEngine.UI.Native.dll', 'libPixelEngine.UI.Native.so', 'libPixelEngine.UI.Native.dylib')) {
+      throw "package AOT 通道不应携带动态 UI native，应回退 ManagedFallback: $($package.Name) -> $relative"
+    }
+
     if (Test-DisallowedPlayerPackageFile $relative) {
       throw "package 不应包含玩家无关的调试、文档、诊断辅助或本地化卫星资源文件: $($package.Name) -> $relative"
     }
@@ -411,6 +440,7 @@ function Assert-FriendlyExpandedPackageLayout([System.IO.DirectoryInfo]$packageD
 
   if ($channel -eq 'r2r') {
     $requiredEntries.Add($(if ($rid.StartsWith('win-')) { "app/$assemblyBaseName.dll" } else { "app/$assemblyBaseName" }))
+    $requiredEntries.Add("app/runtimes/$rid/native/$(Get-UiNativeName $rid)")
   } elseif (-not $rid.StartsWith('win-')) {
     $requiredEntries.Add("app/$assemblyBaseName")
   }
@@ -422,6 +452,10 @@ function Assert-FriendlyExpandedPackageLayout([System.IO.DirectoryInfo]$packageD
   }
 
   foreach ($relative in $relativeFileEntries) {
+    if ($channel -ne 'r2r' -and [IO.Path]::GetFileName($relative) -in @('PixelEngine.UI.Native.dll', 'libPixelEngine.UI.Native.so', 'libPixelEngine.UI.Native.dylib')) {
+      throw "展开 package AOT 通道不应携带动态 UI native，应回退 ManagedFallback: $($packageDirectory.Name) -> $relative"
+    }
+
     if (Test-DisallowedPlayerPackageFile $relative) {
       throw "展开 package 不应包含玩家无关的调试、文档、诊断辅助或本地化卫星资源文件: $($packageDirectory.Name) -> $relative"
     }
@@ -506,10 +540,13 @@ function Test-PublishDirectory([string]$rid, [string]$channel) {
   Assert-FileExists (Join-Path $directory "content/$requiredScenePath") "缺少必需场景 $requiredScenePath"
 
   $box2D = Join-Path $directory "runtimes/$rid/native/$(Get-Box2DName $rid)"
+  $uiNative = Join-Path $directory "runtimes/$rid/native/$(Get-UiNativeName $rid)"
   if ($channel -eq 'r2r') {
     Assert-FileExists $box2D 'R2R 产物缺少动态 Box2D'
+    Assert-FileExists $uiNative 'R2R 产物缺少动态 UI native'
   } else {
     Assert-NoDynamicBox2D $directory
+    Assert-NoDynamicUiNative $directory
   }
 
   Assert-NoStaticOpenAlOrAngle $directory

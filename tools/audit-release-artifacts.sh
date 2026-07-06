@@ -65,6 +65,16 @@ box2d_dynamic_name_for_rid() {
   esac
 }
 
+ui_native_name_for_rid() {
+  local rid="$1"
+  case "$rid" in
+    win-*) echo "PixelEngine.UI.Native.dll" ;;
+    linux-*) echo "libPixelEngine.UI.Native.so" ;;
+    osx-*) echo "libPixelEngine.UI.Native.dylib" ;;
+    *) fail_usage "Unsupported RID: $rid" ;;
+  esac
+}
+
 assert_file_exists() {
   local path="$1"
   local message="$2"
@@ -188,6 +198,23 @@ assert_no_dynamic_box2d() {
 
   if (( ${#found[@]} > 0 )); then
     fail_audit "AOT 产物不应携带动态 Box2D: ${found[*]}"
+  fi
+}
+
+assert_no_dynamic_ui_native() {
+  local directory="$1"
+  local found=()
+  local file
+  while IFS= read -r -d '' file; do
+    found+=("$file")
+  done < <(
+    find "$directory" -type f \
+      \( -iname 'PixelEngine.UI.Native.dll' -o -iname 'libPixelEngine.UI.Native.so' -o -iname 'libPixelEngine.UI.Native.dylib' \) \
+      -print0
+  )
+
+  if (( ${#found[@]} > 0 )); then
+    fail_audit "AOT 产物不应携带动态 UI native，应回退 ManagedFallback: ${found[*]}"
   fi
 }
 
@@ -379,6 +406,7 @@ assert_friendly_package_layout() {
   local has_gravel_texture=0
   local has_boundary_texture=0
   local has_scene=0
+  local has_ui_native=0
   local app_files=()
   local archive_entry
   while IFS= read -r archive_entry || [[ -n "$archive_entry" ]]; do
@@ -411,6 +439,7 @@ assert_friendly_package_layout() {
       content/textures/17_gravel.png) has_gravel_texture=1 ;;
       content/textures/18_boundary_stone.png) has_boundary_texture=1 ;;
       "content/$required_scene") has_scene=1 ;;
+      "app/runtimes/$rid/native/$(ui_native_name_for_rid "$rid")") has_ui_native=1 ;;
     esac
 
     if is_disallowed_runtime_root_file "$relative" && [[ "$relative" != app/* ]]; then
@@ -430,6 +459,14 @@ assert_friendly_package_layout() {
         fail_audit "package 不应包含编辑器专属闭包: $name -> $relative"
       fi
 
+      if [[ "$channel" != "r2r" ]]; then
+        case "${relative##*/}" in
+          PixelEngine.UI.Native.dll|libPixelEngine.UI.Native.so|libPixelEngine.UI.Native.dylib)
+            fail_audit "package AOT 通道不应携带动态 UI native，应回退 ManagedFallback: $name -> $relative"
+            ;;
+        esac
+      fi
+
       app_files+=("$relative")
     fi
   done < <(list_package_entries "$package")
@@ -444,6 +481,7 @@ assert_friendly_package_layout() {
   (( has_gravel_texture )) || fail_audit "package 缺少 content/textures/17_gravel.png: $name"
   (( has_boundary_texture )) || fail_audit "package 缺少 content/textures/18_boundary_stone.png: $name"
   (( has_scene )) || fail_audit "package 缺少 content/$required_scene: $name"
+  [[ "$channel" != "r2r" || "$has_ui_native" -eq 1 ]] || fail_audit "package 缺少动态 UI native: $name -> app/runtimes/$rid/native/$(ui_native_name_for_rid "$rid")"
 
   declare -A declared_app_files=()
   local checksum_entry="$root_name/SHA256SUMS"
@@ -506,6 +544,7 @@ assert_friendly_expanded_package_layout() {
   local has_gravel_texture=0
   local has_boundary_texture=0
   local has_scene=0
+  local has_ui_native=0
   local expanded_files=()
   local expanded_entries=()
   local path
@@ -528,6 +567,7 @@ assert_friendly_expanded_package_layout() {
       content/textures/17_gravel.png) has_gravel_texture=1 ;;
       content/textures/18_boundary_stone.png) has_boundary_texture=1 ;;
       "content/$required_scene") has_scene=1 ;;
+      "app/runtimes/$rid/native/$(ui_native_name_for_rid "$rid")") has_ui_native=1 ;;
     esac
 
     if is_disallowed_runtime_root_file "$relative" && [[ "$relative" != app/* ]]; then
@@ -547,6 +587,14 @@ assert_friendly_expanded_package_layout() {
         fail_audit "展开 package 不应包含编辑器专属闭包: $name -> $relative"
       fi
 
+      if [[ "$channel" != "r2r" ]]; then
+        case "${relative##*/}" in
+          PixelEngine.UI.Native.dll|libPixelEngine.UI.Native.so|libPixelEngine.UI.Native.dylib)
+            fail_audit "展开 package AOT 通道不应携带动态 UI native，应回退 ManagedFallback: $name -> $relative"
+            ;;
+        esac
+      fi
+
       expanded_files+=("$relative")
     fi
   done < <(find "$directory" -mindepth 1 -print0 | sort -z)
@@ -561,6 +609,7 @@ assert_friendly_expanded_package_layout() {
   (( has_gravel_texture )) || fail_audit "展开 package 缺少 content/textures/17_gravel.png: $name"
   (( has_boundary_texture )) || fail_audit "展开 package 缺少 content/textures/18_boundary_stone.png: $name"
   (( has_scene )) || fail_audit "展开 package 缺少 content/$required_scene: $name"
+  [[ "$channel" != "r2r" || "$has_ui_native" -eq 1 ]] || fail_audit "展开 package 缺少动态 UI native: $name -> app/runtimes/$rid/native/$(ui_native_name_for_rid "$rid")"
 
   local checksum_path="$directory/SHA256SUMS"
   assert_file_exists "$checksum_path" "展开 package 缺少 SHA256SUMS"
@@ -610,10 +659,13 @@ audit_publish_directory() {
   assert_file_exists "$directory/content/$required_scene" "缺少 content/$required_scene"
 
   local box2d_path="$directory/runtimes/$rid/native/$(box2d_dynamic_name_for_rid "$rid")"
+  local ui_native_path="$directory/runtimes/$rid/native/$(ui_native_name_for_rid "$rid")"
   if [[ "$channel" == "r2r" ]]; then
     assert_file_exists "$box2d_path" "R2R 产物缺少动态 Box2D"
+    assert_file_exists "$ui_native_path" "R2R 产物缺少动态 UI native"
   else
     assert_no_dynamic_box2d "$directory"
+    assert_no_dynamic_ui_native "$directory"
   fi
 
   assert_no_static_openal_or_angle "$directory"

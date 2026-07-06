@@ -729,6 +729,10 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("Ultralight: optional commercial-license backend", packageSh, StringComparison.Ordinal);
         Assert.Contains("NOTICE.txt", auditPs1, StringComparison.Ordinal);
         Assert.Contains("NOTICE.txt", auditSh, StringComparison.Ordinal);
+        Assert.Contains("R2R 产物缺少动态 UI native", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("R2R 产物缺少动态 UI native", auditSh, StringComparison.Ordinal);
+        Assert.Contains("AOT 产物不应携带动态 UI native", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("AOT 产物不应携带动态 UI native", auditSh, StringComparison.Ordinal);
     }
 
     /// <summary>
