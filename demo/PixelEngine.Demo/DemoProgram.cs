@@ -544,6 +544,8 @@ public static class DemoProgram
 
         Console.WriteLine(
             $"脚本化窗口输入摘要：frames={scriptedInput.FramesInjected}, " +
+            $"transient_bursts={TransientParticleBurst.ActiveCount(scene)}, " +
+            $"max_transient_bursts={scriptedProbe?.MaxTransientBursts ?? TransientParticleBurst.ActiveCount(scene)}, " +
             $"brush_material={brushMaterial}, " +
             $"brush_radius={brush?.Radius ?? 0}, " +
             $"painted_material={paintedMaterial}, " +

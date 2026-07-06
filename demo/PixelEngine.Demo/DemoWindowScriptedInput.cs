@@ -284,6 +284,11 @@ internal sealed class DemoWindowScriptedProbe(
     public int MaxLights { get; private set; }
 
     /// <summary>
+    /// 短跑期间观测到的最大纯视觉爆炸烟尘 burst 数量。
+    /// </summary>
+    public int MaxTransientBursts { get; private set; }
+
+    /// <summary>
     /// 短跑期间观测到的最大音频抽取事件数量。
     /// </summary>
     public long MaxAudioDrained { get; private set; }
@@ -409,6 +414,7 @@ internal sealed class DemoWindowScriptedProbe(
         MaxActiveBodies = Math.Max(MaxActiveBodies, _physics.PhysicsWorld.ActiveBodyCount);
         MaxParticles = Math.Max(MaxParticles, _probe.ActiveParticles);
         MaxLights = Math.Max(MaxLights, _lighting.PointLights.Length);
+        MaxTransientBursts = Math.Max(MaxTransientBursts, TransientParticleBurst.ActiveCount(_scene));
     }
 
     private void CaptureAudio(EngineTickContext context)

@@ -1762,6 +1762,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("playable_shots=", script, StringComparison.Ordinal);
         Assert.Contains("720x480", script, StringComparison.Ordinal);
         Assert.Contains("particles=", script, StringComparison.Ordinal);
+        Assert.Contains("transient_bursts=", script, StringComparison.Ordinal);
+        Assert.Contains("max_transient_bursts=", script, StringComparison.Ordinal);
         Assert.Contains("fps=", script, StringComparison.Ordinal);
         Assert.Contains("frame_ms=", script, StringComparison.Ordinal);
         Assert.Contains("frame_p99_ms=", script, StringComparison.Ordinal);
