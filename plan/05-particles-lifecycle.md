@@ -2,9 +2,59 @@
 
 > 范围锚点：本文件定义**离网格的自由粒子系统**与 **cell↔particle handshake**，归属 `PixelEngine.Simulation`（命名空间 `PixelEngine.Simulation.Particles`）。网格 cell 的 CA 规则在 `plan/03-simulation-kernel.md`；粒子的**渲染合成**在 `plan/08-rendering.md`（CPU stamp）与 `plan/09-gpu-compute.md`（GPU point-sprite）；材质定义（含密度、是否发光）在 `plan/04-materials-reactions-temperature.md`。
 > 权威设计依据：架构文档 `docs/PixelEngine-架构与需求设计.md` §7.6（grid cell vs free particle）、§3.3（帧相位 3/7/9）、§9.3（粒子合成）、§19 R13（粒子泄漏）。技术栈：`plan/00`。开发宪法：`AGENTS.md`。
-> 状态：`- [ ]` 未开始 / `- [x]` 完成 / `- [~]` 进行中 / `- [!]` 阻塞。
+> 状态：`- [ ]` 未开始 / `- [x]` 完成并有可追溯证据 / `- [!]` 外部证据、人工验收、硬件、发行或 native 阻塞；进行中事项必须拆成已完成子项与未完成/阻塞子项。
 
 ---
+
+## 0. 状态账本（2026-07-06）
+
+### 0.1 当前产品职责
+
+- [x] 本文件承载 **Engine Core** 的自由粒子与 cell↔particle handshake：离网格粒子池、弹道积分、相位 3 沉积、相位 7 抛射、R13 生命周期回退、渲染 / 诊断 / 音频 / 序列化只读接口。
+- [x] 本文件将早期 Demo 可玩性粒子口径抽象为 Engine Core feedback particle support：非破坏冲击溅射、结构破坏碎屑、武器 / 视觉速度锥粒子三条路径并存且语义分离。
+- [x] 本文件支撑 Showcase Demo Game 的爆炸碎屑、激光火花、枪口效果与冲击反馈，同时保持 Demo 只通过 plan/11 facade / Hosting 公开 API dogfood。
+
+### 0.2 状态总览 checklist
+
+- [x] `Particle` 20B 布局、`ParticleSystem` pinned 连续缓冲、active-count、swap-remove、零稳态分配已完成。
+- [x] `EjectionRequest` 保留为非破坏冲击溅射通路；不再作为武器爆炸无条件清 cell 的路径。
+- [x] `DebrisEjectionRequest` / `RequestDebris` 已完成，用于结构破坏后的碎屑抛射。
+- [x] `ParticleEmit` / `IParticleSpawner.Emit` 已完成，用于武器、火花、枪口与视觉速度锥粒子。
+- [x] R13 无泄漏：max-lifetime + 无处沉积则杀死 + bounded pressure tests 已完成。
+- [!] 目标硬件 20 万粒子长跑、GPU point-sprite 真实路径、发行级真实窗口粒子视觉体验仍归 plan/09 / plan/13 / plan/16 / M15。
+
+### 0.3 已实现证据 checklist
+
+- [x] `ParticleSystemTests.RequestDebris*`、`CellDamageRubbleHandshakeTests` 已作为碎屑 handshake 证据登记。
+- [x] `ParticleSystemTests.EmitSpawnsParticlesInsideVelocityConeWithFiniteLifetime`、`EmitHonorsEjectionLimitAndCapacity`、`EmitIsDeterministicForSameSeedInputs` 已作为 `Emit` 速度锥证据登记。
+- [x] `ScriptSimulationContextTests.ParticleCommandsFlushIntoParticleSystem`、`ParticleEmitCommandsDoNotAllocateAfterWarmup` 已作为脚本 facade / 零分配证据登记。
+- [x] `LaserBeamSparksRemainBoundedAndExpireAfterCeaseFire`、`ParticleEmitParticlesUseFiniteLifetimeAndExpire` 已作为 DamageBeam 火花 R13 合规证据登记。
+- [x] `ExplodeSemanticsMigration_*` 与 `ParticleHandshakeTests.RunEjectionPassClearsSourceCellAndSpawnsParticle` 已作为旧无条件抛射语义迁移与非破坏抛射保留证据登记。
+
+### 0.4 未完成目标 checklist
+
+- [ ] 若后续新增粒子发射路径，必须先归类到三条现有路径之一；确需第四路径时必须说明为何不能复用 `EjectionRequest`、`DebrisEjectionRequest` 或 `ParticleEmit`。
+- [ ] 若后续提升粒子容量或改变 `Particle` 布局，必须重新做 20B 布局 / pinned buffer / GPU vertex stream / 零分配验证。
+
+### 0.5 证据债 / 阻塞 checklist
+
+- [!] 本机 Short benchmark 不能替代目标硬件长跑；20 万粒子 60fps 余量仍需 plan/16 目标硬件证据。
+- [!] GPU point-sprite 零拷贝映射和真实窗口粒子视觉体验不在本文闭合，仍归 plan/09、plan/13、plan/16。
+- [!] scripted probe 或短跑截图不得写成发行级粒子体验验收。
+
+### 0.6 验证命令与证据路径 checklist
+
+- [x] 定向测试：`dotnet test tests/PixelEngine.Simulation.Tests/PixelEngine.Simulation.Tests.csproj -c Release`。
+- [x] Demo 语义迁移：`dotnet test tests/PixelEngine.Demo.Tests/PixelEngine.Demo.Tests.csproj -c Release --filter "ExplodeSemanticsMigration"`。
+- [x] 粒子 / 破坏重点 filters：`RequestDebris|EmitSpawnsParticles|LaserBeamSparks|RunEjectionPassClearsSourceCellAndSpawnsParticle`。
+- [x] 零分配基准：`ParticleSystemAllocationBenchmarks.RequestDebrisBatch`、`EmitVelocityConeBatch`。
+- [!] 目标硬件证据：plan/16 particle benchmark、GPU long benchmark、真实窗口 Showcase Demo Game 录制 / 人工验收。
+
+### 0.7 依赖与下一闭合节点 checklist
+
+- [x] 上游依赖：plan/02 Core、plan/03 SimulationKernel 相位入口、plan/04 材质密度 / emissive / DebrisCount / lifetime 字段。
+- [x] 下游消费：plan/08 CPU stamp、plan/09 GPU point-sprite、plan/10 音频、plan/07 在飞粒子存档、plan/11 facade、plan/13 武器 / 玩法、plan/14 测试。
+- [!] 下一闭合节点是 plan/13 的真实 Showcase Demo Game 手感 / 反馈、plan/09 GPU 粒子路径与 plan/16 目标硬件粒子长跑。
 
 ## 1. 目标与范围
 
@@ -182,9 +232,9 @@ public ParticleSystemStats Stats { get; }
 | [7] 抛射 | `RunEjectionPass`：读 cell→确认 spawn→写 Empty→设速 | 单线程 | 写 + dirty |
 | [9] 渲染合成 | plan/08 消费 `IParticleReadback`（本文不实现） | 并行 | 无 |
 
-### 3.12 破坏驱动的碎屑抛射与武器粒子发射（demo-playability 增补）
+### 3.12 破坏驱动的碎屑抛射与武器粒子发射（Engine Core feedback particle support / M14 showcase 支撑能力）
 
-demo-playability（`plan/13` 武器库 + `plan/03`/`plan/04` 破坏模型）要求把「爆炸把半径内 cell **无条件**全部抛为飞行粒子」改为**破坏驱动**：cell 是否销毁由 `plan/03` 的 `ApplyDamage` 依材质抗性（`Hardness`/`MaxIntegrity`/`Integrity` lane）判定（契约在 `plan/04 §3.11`），**只有被判定破坏的 cell 才抛出碎屑粒子**。本文负责其中「被破坏 cell → 碎屑粒子」这一段 handshake 与武器可见粒子的发射入口；抗性判定与 Integrity lane 归 `plan/03`/`plan/04`，本文不做伤害数值。
+M14 showcase 支撑能力（`plan/13` 武器库 + `plan/03`/`plan/04` 破坏模型）要求把「爆炸把半径内 cell **无条件**全部抛为飞行粒子」改为**破坏驱动**：cell 是否销毁由 `plan/03` 的 `ApplyDamage` 依材质抗性（`Hardness`/`MaxIntegrity`/`Integrity` lane）判定（契约在 `plan/04 §3.11`），**只有被判定破坏的 cell 才抛出碎屑粒子**。本文负责其中「被破坏 cell → 碎屑粒子」这一段 handshake 与武器可见粒子的发射入口；抗性判定与 Integrity lane 归 `plan/03`/`plan/04`，本文不做伤害数值。
 
 **语义变更：`Explode`/无条件 `EjectionRequest` 抛射不再供武器爆炸使用**。`§3.4` 的 `EjectionRequest`/`RunEjectionPass`（相位 7、单线程、写 Empty + 抛射）**保留**，作为**非破坏类冲击溅射**通路（如刚体高速撞击把浮沙溅飞、`plan/06` 冲击），其「读匹配 `Mask` 的 cell → 清源 → 抛射」机制不变、既有 `- [x]` 实现与验收不动。Demo 的炸弹/手榴弹/激光/挖掘一律改走下述破坏驱动路径，`plan/13` 旧 `ExplosiveTool`/`PlayableProjectileTool` 的「无条件抛射半径内全部 cell」断言随之迁移（见 `§4`/`§5` 登记项，与 `plan/14` 联动）。
 
@@ -291,7 +341,7 @@ public readonly struct ParticleEmit
 
 - **前置（必须先完成）**：plan/02（Core：pinned 缓冲/`Pool`/`JobSystem`/`EngineConstants`/RNG/诊断/事件总线）；plan/03（CellGrid：材质/cell-type 采样、SimulationKernel 相位 3/7 写网格入口、chunk 驻留与 border ring）。
 - **软依赖（接口对齐，可并行推进）**：plan/04（`MaterialDef.Density` 与 emissive 标志，按 id 只读；§3.12 碎屑材质/`DebrisCount` 与破坏契约 plan/04 §3.11）。
-- **破坏驱动新增耦合（§3.12，demo-playability）**：plan/03（`ApplyDamage` 判定破坏、`Integrity` lane，破坏侧调用 `RequestDebris`）、plan/11（`IParticleSpawner.Emit`/`IWorldEffects.DamageCircle/DamageBeam` facade 透传与 `DamageKind` 定义）、plan/13（武器库触发方与旧抛射断言迁移方）、plan/14（`ExplosiveTool`/`PlayableProjectileTool` 语义迁移测试登记方）。
+- **破坏驱动新增耦合（§3.12，Engine Core feedback particle support / M14 showcase 支撑能力）**：plan/03（`ApplyDamage` 判定破坏、`Integrity` lane，破坏侧调用 `RequestDebris`）、plan/11（`IParticleSpawner.Emit`/`IWorldEffects.DamageCircle/DamageBeam` facade 透传与 `DamageKind` 定义）、plan/13（武器库触发方与旧抛射断言迁移方）、plan/14（`ExplosiveTool`/`PlayableProjectileTool` 语义迁移测试登记方）。
 - **被依赖（消费本文接口）**：plan/08（相位 9 CPU stamp + emissive）、plan/09（GPU point-sprite，零拷贝映射 pinned 缓冲）、plan/12（粒子计数 + 轨迹叠层）、plan/10（音频事件）、plan/07（在飞粒子序列化/重映射）。
 - 执行顺序（plan/README）：03 → **05** → 04 → 07，渲染 08 可并行起步但其粒子合成需本文接口先定。
 - 阻塞处置：若 plan/03 未提供等价相位写入 / 只读采样 API，标 `- [!] 阻塞：原因` 上报，不私自绕过 SimulationKernel 相位入口直写 SoA（AGENTS §1、§5）。

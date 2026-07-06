@@ -1,9 +1,57 @@
 # Plan 04 — 材质 / 反应 / 温度（Materials / Reactions / Temperature）
 
 > 范围锚定：本文档定义**材质定义、反应表、温度场**的运行时数据模型与执行逻辑。权威依据：架构文档 §7.3 / §7.4 / §7.5（材质 / 反应 / 温度），并受 §5.3（parity）、§5.5（KeepAlive）、§5.8（32px halo）、§11.2（name↔id）、§4.3（过载降级）约束。技术栈与全局约定见 `00-conventions-and-techstack.md`，开发宪法见 `../AGENTS.md`。
-> 状态约定：`- [ ]` 未开始 / `- [x]` 完成自测 / `- [~]` 进行中 / `- [!]` 阻塞（后跟原因）。
+> 状态约定：`- [ ]` 未开始 / `- [x]` 完成并有可追溯证据 / `- [!]` 外部证据、人工验收、硬件、发行或 native 阻塞；进行中事项必须拆成已完成子项与未完成/阻塞子项。
 
 ---
+
+## 0. 状态账本（2026-07-06）
+
+### 0.1 当前产品职责
+
+- [x] 本文件承载 **Engine Core** 材质语义层：`MaterialDef`、`MaterialHotTable`、`MaterialVisualTable`、`MaterialTable`、`Reaction` / `ReactionTable`、`ReactionEngine`、`TemperatureField` 与材质侧破坏契约。
+- [x] 本文件定义 AI 友好文本资产与 schema 语义：`materials.json` / `reactions.json` 的字段、tag 展开、stable name → runtime id、视觉字段、破坏字段、音效字段与加载期校验规则。
+- [x] 本文件服务 Unity-like Editor 的材质 Inspector、Web-first UI Runtime / Showcase Demo Game 的材质图例、Engine Core 的 movement / reaction / temperature / destruction 热表，以及 Rendering 的只读视觉表。
+
+### 0.2 状态总览 checklist
+
+- [x] 材质数据模型、name↔id 映射、热表、视觉表、反应表、tag 展开契约、反应执行、火传播、custom-update、温度场与 JSON schema 语义已完成。
+- [x] 结构破坏材质字段已完成：`Durability`、`Integrity` / `MaxIntegrity` 语义、`DestroyedTarget` / `RubbleTarget`、`DebrisCount`、`MineYield`、`Indestructible`、`Diggable`。
+- [x] 视觉可辨识字段已完成：`RenderStyle`、`LegendCategory`、`EdgeColorBGRA`、`Opacity`、`HighlightColorBGRA`、`DisplayName`、`LegendVisible`，并明确颜色不入 cell。
+- [x] stable `Name` 入盘、runtime id 仅作索引、material remap / hot reload 稳定分配契约已完成。
+- [!] 目标硬件温度场 SIMD / 降频策略性能证据、真实内容规模下 cache miss 与长跑预算仍归 plan/16 / M15。
+
+### 0.3 已实现证据 checklist
+
+- [x] `MaterialContentLoaderTests` 已作为 DTO / schema / clamp / tag / name 解析与内容加载证据登记。
+- [x] `CellDamageResistanceTests`、`CellDamageRubbleHandshakeTests` 已作为破坏抗性、DestroyedTarget、DebrisCount、MineYield 与粒子 handshake 证据登记。
+- [x] `RenderBufferBuilderTests.BuildAppliesRenderStylesAndDamageWithoutMutatingCells` 已作为视觉字段只读消费、不写回 cell 的证据登记。
+- [x] 反应守恒、tag 展开、双 owner 物化、Directional / Fast / EmitHeat / SpawnParticle 行为已在 Simulation / Content / plan/14 相关测试中登记。
+
+### 0.4 未完成目标 checklist
+
+- [ ] 若新增材质字段，必须明确字段归属：热路径列、视觉只读表、冷字段、Content DTO 或 Editor-only 字段，不能直接污染 cell 或热循环。
+- [ ] 若新增 tag 或反应语法，必须同步 Content schema、代表材质规则、去重 / 双 owner 物化规则与测试。
+
+### 0.5 证据债 / 阻塞 checklist
+
+- [!] 温度场全量 SIMD / 降频策略是否满足目标硬件预算仍需 plan/16 长跑 benchmark 与硬件计数器证据。
+- [!] AI 友好文本资产 schema 完成不等于所有 Showcase Demo Game 内容人工体验完成；关卡、图例、HUD 与玩法验收仍归 plan/13 / plan/20。
+- [!] `pending_review`、`load-only` 或局部内容加载 smoke 不能替代真实内容规模与玩家可读图例验收。
+
+### 0.6 验证命令与证据路径 checklist
+
+- [x] 定向测试：`dotnet test tests/PixelEngine.Simulation.Tests/PixelEngine.Simulation.Tests.csproj -c Release` 与 Content / Demo 相关 filters。
+- [x] 材质加载重点：`MaterialContentLoaderTests`。
+- [x] 破坏语义重点：`CellDamageResistanceTests`、`CellDamageRubbleHandshakeTests`。
+- [x] 渲染只读重点：`RenderBufferBuilderTests.BuildAppliesRenderStylesAndDamageWithoutMutatingCells`。
+- [!] M15 性能证据：温度场、反应表 cache miss、目标内容规模与目标硬件长跑报告。
+
+### 0.7 依赖与下一闭合节点 checklist
+
+- [x] 上游依赖：plan/03 提供 CellType、MaterialPropsTable seam、Damage lane 与 ApplyStructuralDamage；plan/02 提供 RNG、常量、内存、诊断。
+- [x] 下游消费：plan/05 碎屑 / 生命周期、plan/07 material remap、plan/08 MaterialVisualTable、plan/10 AudioCueSet、plan/12 材质编辑器、plan/13 Demo 内容、plan/20 UI 图例。
+- [!] 下一闭合节点是 Showcase Demo Game 内容体验、Web-first UI 图例展示与 plan/16 目标硬件性能证据。
 
 ## 1. 目标与范围
 

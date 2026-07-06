@@ -1,16 +1,64 @@
 # Plan 01 — 项目骨架与构建管线
 
-> 本文档把整个解决方案、全部空项目、构建管线与本地工程化一次性立起来，**不含任何子系统业务逻辑**。权威依据：`AGENTS.md`（开发宪法）、`plan/00-conventions-and-techstack.md`（技术栈定稿，下称「plan/00」）、`docs/PixelEngine-架构与需求设计.md`（架构文档，下称「架构 §x.y」）。
-> 锁定的全局决策（不可改）：脚本系统 = 项目引用模型 + Roslyn + 可回收 ALC 热重载；编辑器 UI = 内嵌 Dear ImGui（Hexa.NET.ImGui）；Demo = 侧视落沙沙盒 + 可操作角色，仅依赖引擎公开 API；一步到位、无 MVP、无临时实现；能多线程 / 省内存 / 上 GPU 就全上。
-> 状态约定（同 AGENTS.md §5）：`- [ ]` 未开始 / `- [x]` 完成并自测 / `- [~]` 进行中 / `- [!]` 阻塞（后跟原因）。
+> 本文档记录 PixelEngine 工程骨架、构建管线、native dual-build 入口与 CI / publish 预检底座；早期“空项目 / bootstrap”内容仅作为历史 M0 工程地基证据，不再代表当前产品目标。权威依据：`AGENTS.md`（开发宪法）、`plan/00-conventions-and-techstack.md`（技术栈定稿，下称「plan/00」）、`docs/PixelEngine-架构与需求设计.md`（架构文档，下称「架构 §x.y」）。
+> 锁定的当前全局决策（不可改）：脚本系统 = 项目引用模型 + Roslyn + 可回收 ALC 热重载；Unity-like Editor = 独立 Editor Shell + Editor ImGui 面板层；Web-first UI Runtime = `PixelEngine.UI` 透明 HTML UI（ManagedFallback 恒在、RmlUi 默认、Ultralight 可选）；Showcase Demo Game = 功能完整但聚焦的 showcase Demo，仅依赖引擎公开 API；一步到位、无 MVP、无临时实现；能多线程 / 省内存 / 上 GPU 就全上。
+> 状态约定：`- [ ]` 未开始 / `- [x]` 完成并有可追溯证据 / `- [!]` 外部证据、人工验收、硬件、发行或 native 阻塞；进行中事项必须拆成已完成子项与未完成/阻塞子项。
 
 ---
 
+## 0. 状态账本（2026-07-06）
+
+### 0.1 当前产品职责
+
+- [x] 本文件承载工程骨架底座：解决方案结构、MSBuild / CPM、native Box2D dual-build 脚手架、CI 矩阵、publish 冒烟与本地验证入口。
+- [x] 本文件支撑当前产品四面：Engine Core 项目与热路径属性、Unity-like Editor 的 `apps/PixelEngine.Editor.Shell` 注入边界、Web-first UI Runtime 的 `src/PixelEngine.UI` / `src/PixelEngine.Gui` 工程位置、Showcase Demo Game 的 player-only 依赖约束。
+- [x] 早期“空项目 / 最小可运行壳 / bootstrap”只作为历史 M0 工程地基证据保留；当前产品完成度以 leaf plan、plan/17 DAG 与真实源码 / 测试 / 证据为准。
+
+### 0.2 状态总览 checklist
+
+- [x] 全局工程配置、CPM、`.editorconfig`、`.gitignore`、`.gitattributes`、`.vscode` 与 `global.json` 已完成。
+- [x] 初始解决方案、Core / Interop / Simulation / Content / Serialization / World / Physics / Rendering / Audio / Scripting / Editor / Hosting / Demo / tests / bench 骨架已完成，并作为后续演进的历史底座。
+- [x] 当前结构已由 plan/00 对齐为新增 `PixelEngine.Gui`、`PixelEngine.UI` 与 `apps/PixelEngine.Editor.Shell` 的产品结构；Hosting 不再引用 Editor，Demo 不含 Editor。
+- [x] Box2D v3.1.1 vendoring、CMake dual-build 脚手架、MSBuild native targets 与当前 RID 构建入口已完成。
+- [!] 完整 6-RID CI 运行证据、R2R/NativeAOT release artifact、目标硬件 runner 与签名公证仍归 plan/15 / M15 证据债。
+
+### 0.3 已实现证据 checklist
+
+- [x] `dotnet build PixelEngine.sln -c Release`、`dotnet test`、Demo banner / run 冒烟、BenchmarkSwitcher 启动与当前 RID native build 曾作为 M0 骨架证据登记。
+- [x] `dotnet list <proj> reference` 依赖方向核验曾作为工程骨架证据登记。
+- [x] `.github/workflows/ci.yml` 定义 6-RID build+test 与 R2R/AOT publish 冒烟入口，覆盖早期 R5 风险的工程预防。
+- [x] 后续新增的 player-only 审计、Hosting 解耦与 UI / Gui 依赖纪律证据已转由 plan/00、plan/15、plan/19、plan/20 承载。
+
+### 0.4 未完成目标 checklist
+
+- [ ] 将本文早期 `18` 项目历史表彻底改写为当前 `Gui` / `UI` / `Editor.Shell` 后的完整工程列表，可在后续专门文档清理批次执行；本轮先通过本账本明确其历史性质，避免误读为当前产品目标。
+- [ ] 若新增测试项目或 UI / Editor / Demo 专项测试项目，应在 plan/00 与对应 leaf plan 同步登记，不在本文单独另立结构。
+
+### 0.5 证据债 / 阻塞 checklist
+
+- [!] 6-RID CI 矩阵存在不等于 6-RID 发行验收完成；交叉 build-only、workflow_dispatch、短跑或本地 probe 不得写成最终验收。
+- [!] Box2D dual-build 脚手架存在不等于完整 native 发行证据；codesign、notarization、artifact hash 与 release upload 仍归 plan/15 / M15。
+- [!] Editor Shell、Web-first UI Runtime 与 Showcase Demo Game 的真实窗口 / 人工体验验收不归本文完成，仍由 plan/13、plan/19、plan/20、plan/17 闭合。
+
+### 0.6 验证命令与证据路径 checklist
+
+- [x] 基础构建：`dotnet build PixelEngine.sln -c Release`。
+- [x] 基础测试：`dotnet test PixelEngine.sln -c Release` 或按项目定向测试。
+- [x] native 当前 RID：`tools/build-native.ps1` / `tools/build-native.sh`。
+- [x] publish 冒烟入口：`tools/verify-publish.ps1`。
+- [!] 外部发行证据：GitHub Actions workflow run、release manifest、artifact hash、签名公证、目标硬件报告。
+
+### 0.7 依赖与下一闭合节点 checklist
+
+- [x] 上游只依赖 plan/00 技术栈锚文档与架构文档。
+- [x] 下游由 plan/02–20 消费工程骨架；当前产品结构新增项由 plan/00、plan/19、plan/20 保持权威。
+- [!] 下一闭合节点不是继续扩展历史 bootstrap，而是 plan/13 / plan/20 / plan/15 / plan/16 / plan/17 的产品与证据债收口。
+
 ## 1. 目标与范围
 
-本文档对应路线图里程碑 M0 的「骨架」半边（架构 §18），目标是产出一个能 `dotnet build` / `dotnet test` / `dotnet run` 通过的**空壳解决方案**与完整的本地 + CI 构建管线，为后续每个子系统计划提供可直接落地的工程地基。完成后，任何子系统计划都可以在既定的项目、依赖方向、编译属性、包版本、native 构建入口与 CI 矩阵之上直接写实现代码，而不必再触碰工程脚手架。
+本文档对应路线图里程碑 M0 的「骨架」半边（架构 §18）。历史目标是产出一个能 `dotnet build` / `dotnet test` / `dotnet run` 通过的工程底座与完整的本地 + CI 构建管线；该 bootstrap 口径只保留为已完成工程地基证据，不再代表当前产品完成目标。当前职责是确保后续每个子系统计划都建立在既定项目、依赖方向、编译属性、包版本、native 构建入口与 CI 矩阵之上，并与 plan/00 当前产品结构保持一致。
 
-范围之内：创建 `PixelEngine.sln` 与 plan/00 §5 列出的全部 18 个项目（`src/` 下 12 个、`demo/` 1 个、`tests/` 4 个、`bench/` 1 个）的 `.csproj` 骨架，并用 `ProjectReference` 强制 plan/00 §5 的依赖方向（无任何反向依赖）；建立 `Directory.Build.props`（统一目标框架、语言、Nullable、ImplicitUsings、Deterministic、分析器、热路径 `AllowUnsafeBlocks`）与 `Directory.Packages.props`（中央包版本管理 CPM，锁定 plan/00 §4 全部 NuGet 包版本）；在 `native/box2d/` 下 vendoring Box2D v3.1.1 C 源并搭起 CMake **dual-build（静态 + 动态）× 6 RID** 的脚本骨架与 MSBuild 集成入口（详细打包在 plan/15 落实，本文档只建脚手架）；补齐 `.vscode/`、`tools/` 与 GitHub Actions CI 工作流（6-RID 矩阵 build + test，同时验证 CoreCLR/R2R 动态路径与 NativeAOT 静态路径，针对架构 R5「debug 正常 publish 崩」）；最后做冒烟验证：全空项目能 build、空测试能 test、Demo 能 run 起一个空窗口或打印 banner。
+范围之内（历史 M0 bootstrap 证据）：创建 `PixelEngine.sln` 与当时 plan/00 §5 列出的 18 个项目（`src/` 下 12 个、`demo/` 1 个、`tests/` 4 个、`bench/` 1 个）的 `.csproj` 骨架，并用 `ProjectReference` 强制当时 plan/00 §5 的依赖方向（无任何反向依赖）；建立 `Directory.Build.props`（统一目标框架、语言、Nullable、ImplicitUsings、Deterministic、分析器、热路径 `AllowUnsafeBlocks`）与 `Directory.Packages.props`（中央包版本管理 CPM，锁定 plan/00 §4 全部 NuGet 包版本）；在 `native/box2d/` 下 vendoring Box2D v3.1.1 C 源并搭起 CMake **dual-build（静态 + 动态）× 6 RID** 的脚本骨架与 MSBuild 集成入口（详细打包在 plan/15 落实，本文档只建脚手架）；补齐 `.vscode/`、`tools/` 与 GitHub Actions CI 工作流（6-RID 矩阵 build + test，同时验证 CoreCLR/R2R 动态路径与 NativeAOT 静态路径，针对架构 R5「debug 正常 publish 崩」）；最后做历史 bootstrap 冒烟验证：空骨架项目能 build、空测试能 test、Demo 能 run 起一个空窗口或打印 banner。当前 `PixelEngine.Gui`、`PixelEngine.UI`、`apps/PixelEngine.Editor.Shell`、Hosting 解耦与 Demo player-only 结构以 plan/00 / plan/19 / plan/20 为准。
 
 范围之外（交由邻居文档）：任何 cell / chunk / 渲染 / 物理 / 脚本 / 编辑器 / 序列化 / 音频的**业务逻辑**与公开 API 设计，均在各自子系统计划落地；`EngineConstants` 的**具体常量值**在 plan/02 定义（本文档仅在 `PixelEngine.Core` 建一个无值的 `EngineConstants` 占位壳，见 §3）；Box2D 绑定的实际 `[LibraryImport]` 签名与 task 桥在 plan/06；native 的 codesign / notarization / 完整发行打包在 plan/15；GC 模式实测定档（架构 §12.4）、基准曲线在对应子系统计划。
 
@@ -26,7 +74,7 @@
 |---|---|---|---|
 | 窗口 / 输入 / GL / AL | `Silk.NET.Windowing` / `Silk.NET.Input` / `Silk.NET.OpenGL` / `Silk.NET.OpenAL` | `2.22.0`（架构 §9.1 提及 2.23.x，取最新 2.x） | MIT、.NET Foundation；GL 3.3 Core 基线 |
 | 数学（可选） | `Silk.NET.Maths` | `2.22.0` | 仅与 GL 交互便利处可选；主数学走 BCL |
-| 编辑器 UI | `Hexa.NET.ImGui` / `Hexa.NET.ImGui.Backends` | `2.2.7` | 内嵌 Dear ImGui（锁定决策） |
+| Editor ImGui 面板层 | `Hexa.NET.ImGui` / `Hexa.NET.ImGui.Backends` | `2.2.7` | Unity-like Editor 的 ImGui 面板层技术，非玩家侧 Web-first UI Runtime |
 | 编辑器 UI 扩展 | `Hexa.NET.ImGuizmo` / `Hexa.NET.ImPlot` / `Hexa.NET.ImNodes` | `2.2.7` | gizmo / 曲线 / 节点（plan/00 §4） |
 | 脚本编译 | `Microsoft.CodeAnalysis.CSharp` | `4.14.0` | Roslyn；与 .NET 10 SDK 内置 Roslyn 对齐 |
 | 脚本隔离 | （BCL `System.Runtime.Loader`） | 随框架 | 可回收 ALC，无需包 |
@@ -87,7 +135,9 @@ PixelEngine/
 
 `PixelEngine.sln` 用 solution folder 归类 `src` / `demo` / `tests` / `bench` 与 `Build`（放 `Directory.*.props`、`global.json` 等），并把 `native/`、`tools/`、`.github/` 以 solution items 形式挂入 `Build` 便于 IDE 浏览。
 
-### 3.2 项目清单与依赖方向
+### 3.2 历史 M0 项目清单与依赖方向（已由当前产品结构扩展）
+
+> 本节表格保留为 M0 bootstrap 时的工程骨架证据。当前权威结构以 plan/00 §5 与本文件 §0 状态账本为准，已增加 `PixelEngine.Gui`、`PixelEngine.UI` 与 `apps/PixelEngine.Editor.Shell`，并完成 Hosting 不再引用 Editor、Demo player-only 的后续解耦。
 
 依赖方向（plan/00 §5、§8，绝不反向）：`Demo → Hosting → {Editor, Scripting, Rendering, Audio, Physics, World, Serialization, Content, Simulation} → Interop → Core`。`Editor` 依赖各子系统只读 API；`Simulation` 不依赖 `Rendering`/`Physics`。下表给出每个项目的 SDK 类型、是否热路径（决定 `AllowUnsafeBlocks` 与 SIMD/零分配分析器升级，plan/00 §6）、`OutputType`，以及精确的 `ProjectReference` 清单。中间层兄弟项目之间允许有向无环引用，下列清单已保证整体 DAG 无环、无反向。
 
@@ -154,7 +204,7 @@ vendoring 方式：以 git submodule 引入 `erincatto/box2d`，固定到 v3.1.1
 
 按 plan/00 §7，编译期常量（`ChunkSize=64`、`MoveCap=32`、`PhysicsPixelsPerMeter=16`、`TempFieldDownscale=4` 等）集中在 `PixelEngine.Core` 的 `EngineConstants`。本文档**只**在 `src/PixelEngine.Core/EngineConstants.cs` 建一个带 XML 文档头、`public static class EngineConstants`（partial）的**空壳**，不写任何常量值；**具体常量在 plan/02 定义**。此举仅固定类型归属与命名空间，不构成业务逻辑或占位实现。
 
-### 3.10 冒烟内容（最小可运行壳）
+### 3.10 历史 bootstrap 冒烟内容（最小可运行壳）
 
 为满足冒烟验证而创建的最小内容，均为真实可运行壳而非假实现：`src/*` 全部 12 个库项目**不含任何 `.cs` 业务文件**（除 Core 的 `EngineConstants` 空壳），空 assembly 正常编译；`demo/PixelEngine.Demo/Program.cs` 用 top-level statements 打印引擎 banner（名称 + 版本 + 目标 RID）并退出 0（真实窗口循环依赖 Rendering，留待渲染计划；本文档满足「打印」一档，预留切换到 Silk.NET 空窗口的入口注释）；四个测试项目各含一个 `SmokeTests.cs`，写一个验证「被测 assembly 可加载」的 `[Fact]`（断言其程序集类型可枚举 / `Assembly.Load` 成功），作为装配冒烟，后续被各子系统真实测试替换 / 扩充；`bench/PixelEngine.Benchmarks/Program.cs` 用 `BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args)`，空基准集合可正常启动（真实基准随各子系统加入）。
 
@@ -241,7 +291,7 @@ CI：
 - [x] 已存在文件全部纳入：`.gitignore` 覆盖产物与 `native/out/`、`runtimes/`；`.editorconfig` 含热路径分析器 `error` 升级；`LICENSE`(MIT)/`AGENTS.md` 未被改动
 - [x] `.vscode/extensions.json` 推荐 C# Dev Kit 与 CMake Tools；`tools/` 构建脚本目录存在
 - [x] `.github/workflows/ci.yml` 存在并定义 6-RID 矩阵 build+test 与 R2R/AOT 双路径 publish 冒烟两段（覆盖架构 R5）
-- [x] `dotnet build PixelEngine.sln -c Release` 在本机零警告通过（全空项目）
+- [x] `dotnet build PixelEngine.sln -c Release` 在本机零警告通过（历史 M0 空骨架项目）
 - [x] `dotnet test` 四个测试项目全部通过
 - [x] `dotnet run --project demo/PixelEngine.Demo -c Release` 起一个空窗口或打印 banner 并以 0 退出
 - [x] `dotnet run --project bench/PixelEngine.Benchmarks -c Release` 正常启动且不崩
@@ -261,7 +311,7 @@ CI：
 按 AGENTS.md §6，完成本文档定义的提交节点即用中文提交（在 `main` 上小步提交）。建议拆为四个节点，便于回溯：
 
 - [x] 节点 1：仓库工程化骨架。提交 `global.json`、`nuget.config`、`Directory.Build.props/.targets`、`Directory.Packages.props`、`.gitattributes`、`.vscode/`、补全的 `.gitignore`/`.editorconfig`。提交信息：`build(core): 建立全局 MSBuild 属性、CPM 与工程化配置`
-- [x] 节点 2：解决方案与全部空项目。提交 `PixelEngine.sln` 与 18 个 `.csproj` 骨架、`EngineConstants` 空壳、Demo/tests/bench 最小可运行壳；本机 `dotnet build`/`test`/`run` 冒烟通过。提交信息：`build(core): 建立解决方案与全部项目骨架及依赖方向`
+- [x] 历史节点 2：解决方案与 M0 空骨架项目。提交 `PixelEngine.sln` 与 18 个 `.csproj` 骨架、`EngineConstants` 空壳、Demo/tests/bench 历史最小可运行壳；本机 `dotnet build`/`test`/`run` 冒烟通过。提交信息：`build(core): 建立解决方案与全部项目骨架及依赖方向`
 - [x] 节点 3：native Box2D dual-build 脚手架。提交 Box2D v3.1.1 submodule、`native/CMakeLists.txt`、`CMakePresets.json`、`tools/build-native.*`、`PixelEngine.Native.targets`。提交信息：`build(physics): 搭建 Box2D v3.1.1 vendoring 与 CMake dual-build 脚手架`
 - [x] 节点 4：CI 管线。提交 `.github/workflows/ci.yml`（6-RID 矩阵 + R2R/AOT 双路径验证）与 `tools/verify-publish.ps1`。提交信息：`build(core): 接入 6-RID CI 与 R2R/NativeAOT 双路径发布验证`
 

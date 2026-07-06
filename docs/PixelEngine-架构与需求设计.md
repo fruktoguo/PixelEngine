@@ -1,8 +1,9 @@
 # PixelEngine 架构与需求设计文档
 
-> 面向 .NET 10 LTS（2026）的 Noita 级别 2D 像素世界引擎 + Demo
-> 版本：v2.0（架构决策定稿，编码前最终版）
+> 面向 .NET 10 LTS（2026）的 Noita 级别 2D 像素世界引擎 + Unity-like Editor + Web-first 透明 HTML UI Runtime + Showcase Demo Game
+> 版本：v2.2（新增核心目标与产品定位锚文档）
 > 作者：Lead Architect
+> 产品北极星：`PixelEngine-核心目标与产品定位.md`。本文负责技术架构，最终产品形态、目标用户、Demo 完整度与优先级判断以该文档为产品层依据。
 > 置信度标注约定：本文在关键结论处标注 [高] / [中] / [低]。来自 GDC 2019 "Exploring the Tech and Design of Noita" talk 与多方实现交叉验证者为 [高]；由社区实现反推、未经官方确认者为 [中]；纯属推断 / 需实测者为 [低]。涉及 .NET 10 / Box2D v3 / OpenGL 的 API 事实均按 2026 年官方文档校核。
 
 ---
@@ -11,7 +12,7 @@
 
 ### 1.1 项目定位
 
-本项目是一个自研 2D 像素游戏引擎，其 **WORLD（世界模拟）层对标 Noita（Nolla Games 的 "Falling Everything" 引擎）**。交付物为「引擎 + 一个游戏 Demo」两部分。引擎必须复刻 Noita 的世界技术核心：每个屏幕像素都是一个被独立模拟、且可参与碰撞的物质单元（material cell），具体包括 falling-sand 细胞自动机（cellular automata, CA）、自由粒子（free particles）、像素级精确碰撞（pixel-perfect collision）、细胞生命周期（cell lifecycle）、以及材质反应（material reactions）。
+本项目是一个自研 2D 像素游戏引擎，其 **WORLD（世界模拟）层对标 Noita（Nolla Games 的 "Falling Everything" 引擎）**。引擎必须复刻 Noita 的世界技术核心：每个屏幕像素都是一个被独立模拟、且可参与碰撞的物质单元（material cell），具体包括 falling-sand 细胞自动机（cellular automata, CA）、自由粒子（free particles）、像素级精确碰撞（pixel-perfect collision）、细胞生命周期（cell lifecycle）、以及材质反应（material reactions）。产品交付物由四个面组成：可复用引擎内核、面向资深 Unity 用户的 Unity-like Editor、面向玩家的 Web-first 透明 HTML UI Runtime，以及 Showcase Demo Game。Showcase Demo Game 不以堆叠内容量取胜，而是用完整且聚焦的可玩闭环证明射击/爆炸地形破坏、切割后刚体物理、透明 HTML UI、性能/手感和公开 API dogfood。
 
 **明确不在范围内**的是 Noita 的法杖 / 法术系统（wand/spell system）。我们只做「世界」这一半，不做 roguelite 的构筑玩法。这一点对架构很关键：它意味着我们不需要为成千上万种 modifier 的运行时组合做开放式脚本架构，可以把材质 / 反应做成相对收敛的数据驱动表。
 
@@ -97,7 +98,13 @@ GC：稳态帧循环内**零托管分配**，Gen0 极少触发，无可感知 GC
 
 `PixelEngine.Serialization` 是存档：world manifest、chunk 二进制格式、版本迁移、material id 重映射、free particles / 刚体 / 温度场的持久化（见 §11）。
 
-Demo 层包含玩法：玩家角色控制器（kinematic AABB vs 像素，独立于 Box2D）、输入、相机、UI、关卡内容。
+`PixelEngine.Gui` 是中性 ImGui host / fallback 基础设施（字体、`IGuiContext`、诊断/fallback 绘制），服务 ManagedFallback、诊断与编辑器复用；它不是玩家侧 Web UI 产品主路径。
+
+`PixelEngine.UI` 是 Web-first 透明 HTML UI Runtime：`IGameUiBackend` 抽象、RmlUi HTML/CSS 子集默认后端、Ultralight 可选高保真后端、ManagedFallback 基线、C#↔UI 桥、输入命中/透明区 pass-through、与渲染层 same-GL 合成。RmlUi 不承诺完整 HTML5/CSS3/JS，AI 生成标准 Web 页面走 Ultralight gate。
+
+`PixelEngine.Editor` 是 Dear ImGui 面板层；`apps/PixelEngine.Editor.Shell` 是 Unity-like Editor 顶层应用，拥有 Project Window、Hierarchy、Inspector、Scene View、Game View、Console、Project Settings、Player Settings、Build Settings、Prefab、脚本双击外部编辑器等 authoring UX。壳、Showcase Demo Game 与 Hosting 的依赖方向必须保持 `{Demo, EditorShell} → Hosting`，Hosting 只提供中性 DTO/API，不引用 editor authoring 类型。
+
+Showcase Demo Game 层包含玩法：玩家角色控制器（kinematic AABB vs 像素，独立于 Box2D）、输入、相机、功能完整但聚焦的 showcase 关卡、射击/爆炸/切割后刚体展示、透明 HTML HUD/menu/settings、性能与手感展示。Showcase Demo Game 只依赖引擎公开 API，不为展示效果绕过 Hosting / Scripting facade。
 
 ### 3.2 每帧数据所有权
 
@@ -153,7 +160,9 @@ FRAME N
 │                            emissive buffer，见 §9.3)
 │
 ├─ [10] GPU Upload & Render  渲染线程。dirty-rect 子上传或全帧上传到世界纹理；
-│                            光照 pass + bloom + dither + gamma；绘制角色/UI；present
+│                            光照 pass + bloom + dither + gamma；世界/角色渲染 →
+│                            游戏 Web UI(order=100,透明 alpha,same-GL) →
+│                            可选编辑器 ImGui overlay(order=200) → present
 │
 └─ [11] World streaming(后台) 异步。超激活半径的 chunk 序列化为字节缓冲；进入半径的
                              chunk 从磁盘反序列化为字节缓冲。仅准备数据，不改 live map；
@@ -418,7 +427,7 @@ Box2D v3 复合刚体 API [高]：一个 `b2BodyId`(`b2_dynamicBody`) 挂多个 
 
 ## 9. 渲染
 
-渲染器真实职责很轻 [高]：每帧 blit 一张大的、频繁更新的 RGBA8 纹理（cell 网格）+ 自由粒子合成 + 一个光照 / 后处理 pass。Sim 留在 CPU（匹配 Noita 选择、C#-first 策略、确定性 checkerboard 多线程、直接数组访问的简易像素碰撞），所以 GPU 层主要是「上传 + 合成 + shader」。
+渲染器真实职责很轻 [高]：每帧 blit 一张大的、频繁更新的 RGBA8 纹理（cell 网格）+ 自由粒子合成 + 一个光照 / 后处理 pass。Sim 留在 CPU（匹配 Noita 选择、C#-first 策略、确定性 checkerboard 多线程、直接数组访问的轻量像素碰撞），所以 GPU 层主要是「上传 + 合成 + shader」。
 
 ### 9.1 后端选型：Silk.NET（主）+ FNA（备）
 

@@ -1,7 +1,7 @@
 # Plan 10 — 音频子系统（PixelEngine.Audio）
 
 > 范围：引擎音频全部。权威设计依据：架构文档 §10（§10.1 选型、§10.2 材质驱动事件钩子、§10.3 与帧节奏关系），并受 §1.4（帧时间预算「游戏逻辑 + 音频派发 ≤1ms」）、§3.3（帧相位）、§4.2（sim 降频）、§7.3（`MaterialDef.AudioCues` 字段）、§3.1（Core 事件总线供音频消费）约束。技术栈以 `00-conventions-and-techstack.md` 为准，开发宪法见 `../AGENTS.md`。
-> 状态：`- [ ]` 未开始 / `- [x]` 完成 / `- [~]` 进行中 / `- [!]` 阻塞（后跟原因）。
+> 状态约定：`- [x]` 已有源码、测试、工具、报告或 plan 证据；`- [ ]` 未完成目标；`- [!]` 阻塞、证据债、人工验收或外部环境限制。
 
 ---
 
@@ -45,7 +45,7 @@
 
 `AudioSystem` 是子系统门面，由 Hosting 在引擎装配期创建、在帧循环的音频派发步骤驱动、在关停时释放。它聚合：`OpenAlDevice`（设备 / 上下文 / listener）、`AudioVoicePool`（positional source 池）、`AmbientLoopManager`（材质化 ambient）、`AudioDispatcher`（每帧排空 + 限频 + 派发）、`MaterialAudioTable`（材质→cue 解析）、`AudioClipCache`（资产加载）、`AudioDiagnostics`（计时接入）。
 
-`AudioSystem` 公开：`Initialize(in AudioSettings settings, MaterialAudioTable table, IAudioBackend backend)`、`Update(in CameraView camera, long simTick, bool simSteppedThisFrame)`（每帧主线程调用，构成音频派发步骤）、`Shutdown()`。所有可被 Demo / 脚本直接调用的播放入口属于本子系统的**公开 API**（落沙 Demo 仅依赖公开 API，AGENTS §0），见 §3.8。
+`AudioSystem` 公开：`Initialize(in AudioSettings settings, MaterialAudioTable table, IAudioBackend backend)`、`Update(in CameraView camera, long simTick, bool simSteppedThisFrame)`（每帧主线程调用，构成音频派发步骤）、`Shutdown()`。所有可被 Demo / 脚本直接调用的播放入口属于本子系统的**公开 API**（Showcase Demo Game 仅依赖公开 API，AGENTS §0），见 §3.8。
 
 `IAudioBackend` 抽象后端，默认实现 `OpenAlBackend`（OpenAL Soft）。抽象的目的不是做多后端 MVP，而是让单元测试可注入 `NullAudioBackend`（无声、记录调用）以验证限频 / 去重 / 派发逻辑而无需真实设备。
 

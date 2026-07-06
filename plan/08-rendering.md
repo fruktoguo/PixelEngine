@@ -1,7 +1,7 @@
 # Plan 08 — CPU 侧渲染管线与 OpenGL 后端（PixelEngine.Rendering）
 
 > 权威设计依据：`../docs/PixelEngine-架构与需求设计.md`（下称架构文档）§3.1、§3.3、§7.1、§9.1–§9.5、§4.2–§4.3、§12.1。技术栈与约定以 `00-conventions-and-techstack.md` 为准，开发宪法见 `../AGENTS.md`。
-> 状态标记：`- [ ]` 未开始 / `- [x]` 完成并自测 / `- [~]` 进行中 / `- [!]` 阻塞（后跟原因）。
+> 状态约定：`- [x]` 已有源码、测试、工具、报告或 plan 证据；`- [ ]` 未完成目标；`- [!]` 阻塞、证据债、人工验收或外部环境限制。
 > 本文档只覆盖 **CPU 侧渲染编排 + OpenGL 后端封装**。纯 GPU 计算专项（Radiance Cascades、compute shader、GPU 粒子批绘）见 `09-gpu-compute.md`；ImGui 编辑器 UI 见 `12-editor-tooling-ui.md`（本文档负责提供其可共用的 GL 上下文与帧 present 时机）。
 
 ---

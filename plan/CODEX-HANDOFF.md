@@ -9,7 +9,7 @@
 
 - 修订标识：`plan-supplement-2026-07-04`
 - 制定日期：2026-07-04
-- 触发需求：用户新增 5 项确认需求（独立编辑器应用 / 编辑器内打包 / Windows 优先打包+目录整理 / HTML 交互 UI / Demo 真实可玩化）
+- 触发需求：用户新增 5 项确认需求（Unity-like Editor / 编辑器内打包 / Windows 优先打包+目录整理 / Web-first 透明 HTML UI Runtime / Showcase Demo Game 产品化）
 - 制定方式：多智能体 Workflow（并行设计 → 对抗校验 → 跨计划一致性综合 → 逐文件落盘），已做跨文件一致性收口。
 
 若 Codex 记录的对照标识已是 `plan-supplement-2026-07-04`，说明本轮计划已被读取，无需重复接手。
@@ -19,8 +19,8 @@
 ## 本轮计划变更清单
 
 **新增文档（2 个）**
-- `plan/19-standalone-editor-app.md` — 独立编辑器应用 `apps/PixelEngine.Editor.Shell`（独立 EXE/单窗口/单进程/单 GL 上下文），含 §0 GUI 宿主中性化重构入口门、Project 模型、类 Unity GameObject authoring（层级/Inspector/变换 gizmo/点选拾取/prefab 含嵌套+override）、`.scene` v2 保存往返、复用 plan/12 面板、§5 编辑器内打包（BuildSettings 面板经子进程调 build-player 出**不含编辑器**的玩家包）。
-- `plan/20-interactive-html-ui.md` — 游戏内 HTML 大 UI 模块 `PixelEngine.UI`（RmlUi 子集主后端 + Ultralight 可选 + `ManagedFallbackBackend` 纯托管基线）。
+- `plan/19-standalone-editor-app.md` — Unity-like Editor `apps/PixelEngine.Editor.Shell`（独立 EXE/单窗口/单进程/单 GL 上下文），含 §0 GUI 宿主中性化重构入口门、Project 模型、Unity-like GameObject authoring（层级/Inspector/变换 gizmo/点选拾取/prefab 含嵌套+override）、`.scene` v2 保存往返、复用 plan/12 面板、§5 编辑器内打包（BuildSettings 面板经子进程调 build-player 出**不含编辑器**的玩家包）。
+- `plan/20-interactive-html-ui.md` — Web-first 透明 HTML UI Runtime `PixelEngine.UI`（RmlUi 子集主后端 + Ultralight 可选 + `ManagedFallbackBackend` 纯托管基线）。
 
 **修订文档**
 - `plan/00`（结构/依赖方向定稿/选型表加 UI 后端与门控依赖/RID Windows 优先）
@@ -31,7 +31,7 @@
 - `plan/08`（RenderStyle 差异化着色 + Damage 裂纹 + `RegisterUiLayer` 带序号 UI 层合成）
 - `plan/11`（IWorldEffects `DamageCircle`/`DamageBeam`+DamageKind、MaterialInfo 扩展、`.scene` v2、`IGameUiService` 中性契约）
 - `plan/12`（编辑器锁定决策措辞调和 + 输入多级仲裁 + MaterialLegendPreview；未改动已完成节点 1–9）
-- `plan/13`（Demo 收敛纯玩家运行时 + 数据驱动武器系统六类 + 熔岩矿洞逃生可玩循环）
+- `plan/13`（Showcase Demo Game 收敛为纯玩家运行时 + 数据驱动武器系统六类 + 熔岩矿洞逃生可玩循环）
 - `plan/14`（新增测试：.scene v1/v2 往返、Damage 存档、破坏路由、weapons 加载、任务胜负、build-player NDJSON、player-only 审计）
 - `plan/15`（发行拆玩家包/编辑器工具包 + Windows 优先 + `app/` 子目录布局契约 + build-player 入口 + 审计规则修正）
 - `plan/16`（per-cell 字节预算治理 4B→5B + UI 相位计时 + 可玩循环 profiling 负载）
