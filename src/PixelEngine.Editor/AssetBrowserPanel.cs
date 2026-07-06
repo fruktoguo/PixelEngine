@@ -101,6 +101,35 @@ public sealed class AssetBrowserPanel(
         return played;
     }
 
+    /// <summary>
+    /// 为 Shell 层资产拖拽语义创建 typed payload。
+    /// </summary>
+    /// <param name="path">资产路径。</param>
+    /// <param name="payload">可传递给 Shell drop 服务的 payload。</param>
+    /// <returns>资产存在且有 stable asset id 时返回 true。</returns>
+    public bool TryCreateDragPayload(string path, out AssetBrowserDragPayload payload)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        AssetBrowserItem? item = FindAsset(path);
+        if (item is null)
+        {
+            payload = default;
+            Status = $"资产不存在：{path}";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(item.Value.AssetId))
+        {
+            payload = default;
+            Status = $"资产缺少 stable asset id，不能拖拽：{item.Value.Path}";
+            return false;
+        }
+
+        payload = new AssetBrowserDragPayload(item.Value.AssetId, item.Value.Path, item.Value.Kind);
+        Status = $"拖拽 {item.Value.Path}";
+        return true;
+    }
+
     /// <inheritdoc />
     public void Draw(in EditorContext context)
     {

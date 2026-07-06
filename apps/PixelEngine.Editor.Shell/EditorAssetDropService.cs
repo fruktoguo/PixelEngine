@@ -1,0 +1,308 @@
+using PixelEngine.Hosting;
+using PixelEngine.Scripting;
+
+namespace PixelEngine.Editor.Shell;
+
+internal readonly record struct EditorAssetDropPayload(
+    string AssetId,
+    string LogicalPath,
+    EditorAssetType AssetType)
+{
+    public static EditorAssetDropPayload FromAsset(EditorAssetRecord asset)
+    {
+        return new EditorAssetDropPayload(asset.Id, asset.LogicalPath, asset.AssetType);
+    }
+
+    public static bool TryFromBrowserPayload(AssetBrowserDragPayload payload, out EditorAssetDropPayload result)
+    {
+        if (string.IsNullOrWhiteSpace(payload.AssetId) || string.IsNullOrWhiteSpace(payload.Path))
+        {
+            result = default;
+            return false;
+        }
+
+        result = new EditorAssetDropPayload(payload.AssetId, payload.Path, MapKind(payload.Kind));
+        return true;
+    }
+
+    private static EditorAssetType MapKind(AssetBrowserItemKind kind)
+    {
+        return kind switch
+        {
+            AssetBrowserItemKind.Material => EditorAssetType.Material,
+            AssetBrowserItemKind.Texture => EditorAssetType.Texture,
+            AssetBrowserItemKind.Audio => EditorAssetType.Audio,
+            AssetBrowserItemKind.Scene => EditorAssetType.Scene,
+            AssetBrowserItemKind.Prefab => EditorAssetType.Prefab,
+            AssetBrowserItemKind.Script => EditorAssetType.Script,
+            AssetBrowserItemKind.Json => EditorAssetType.Json,
+            AssetBrowserItemKind.Other => EditorAssetType.Other,
+            _ => EditorAssetType.Other,
+        };
+    }
+}
+
+internal readonly record struct EditorAssetInspectorFieldTarget(
+    int StableId,
+    int ComponentIndex,
+    string FieldName,
+    EditorAssetType ExpectedAssetType);
+
+internal readonly record struct EditorAssetDropResult(
+    bool Succeeded,
+    string Diagnostic,
+    int? StableId = null)
+{
+    public static EditorAssetDropResult Success(string diagnostic, int? stableId = null)
+    {
+        return new EditorAssetDropResult(true, diagnostic, stableId);
+    }
+
+    public static EditorAssetDropResult Failure(string diagnostic)
+    {
+        return new EditorAssetDropResult(false, diagnostic);
+    }
+}
+
+internal static class EditorAssetDropService
+{
+    public static EditorAssetDropResult DropOnHierarchy(
+        EditorSceneModel scene,
+        EditorUndoStack undo,
+        EditorPrefabAssetStore prefabs,
+        EditorAssetDropPayload payload,
+        int? parentStableId)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(undo);
+        ArgumentNullException.ThrowIfNull(prefabs);
+        if (!TryValidate(payload, out string diagnostic))
+        {
+            return EditorAssetDropResult.Failure(diagnostic);
+        }
+
+        if (payload.AssetType != EditorAssetType.Prefab)
+        {
+            return EditorAssetDropResult.Failure($"{payload.AssetType} 资产不能拖拽到 Hierarchy；仅 prefab 可实例化为 GameObject。");
+        }
+
+        try
+        {
+            undo.Execute(scene, new InstantiatePrefabCommand(prefabs, payload.LogicalPath, parentStableId));
+            return EditorAssetDropResult.Success($"已实例化 prefab：{payload.LogicalPath}", scene.SelectedStableId);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or KeyNotFoundException or FileNotFoundException)
+        {
+            return EditorAssetDropResult.Failure($"prefab 拖拽到 Hierarchy 失败：{ex.Message}");
+        }
+    }
+
+    public static EditorAssetDropResult DropOnSceneView(
+        EditorSceneModel scene,
+        EditorUndoStack undo,
+        EditorPrefabAssetStore prefabs,
+        EditorAssetDropPayload payload,
+        EditorSceneTransform worldTransform)
+    {
+        ArgumentNullException.ThrowIfNull(worldTransform);
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(undo);
+        ArgumentNullException.ThrowIfNull(prefabs);
+        if (!TryValidate(payload, out string diagnostic))
+        {
+            return EditorAssetDropResult.Failure(diagnostic);
+        }
+
+        if (payload.AssetType != EditorAssetType.Prefab)
+        {
+            return EditorAssetDropResult.Failure($"{payload.AssetType} 资产不能拖拽到 Scene View；仅 prefab 可放置为 GameObject。");
+        }
+
+        try
+        {
+            undo.Execute(scene, new InstantiatePrefabCommand(prefabs, payload.LogicalPath, parentId: null, worldTransform));
+            return EditorAssetDropResult.Success($"已在 Scene View 放置 prefab：{payload.LogicalPath}", scene.SelectedStableId);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or KeyNotFoundException or FileNotFoundException)
+        {
+            return EditorAssetDropResult.Failure($"prefab 拖拽到 Scene View 失败：{ex.Message}");
+        }
+    }
+
+    public static EditorAssetDropResult DropOnInspectorField(
+        EditorSceneModel scene,
+        EditorUndoStack undo,
+        EditorAssetDropPayload payload,
+        EditorAssetInspectorFieldTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(undo);
+        if (!TryValidate(payload, out string diagnostic))
+        {
+            return EditorAssetDropResult.Failure(diagnostic);
+        }
+
+        if (payload.AssetType != target.ExpectedAssetType)
+        {
+            return EditorAssetDropResult.Failure($"字段 {target.FieldName} 需要 {target.ExpectedAssetType} 资产，收到 {payload.AssetType}。");
+        }
+
+        try
+        {
+            _ = scene.Get(target.StableId).Components[target.ComponentIndex];
+            string value = EditorAssetReferenceCodec.Encode(payload.AssetId, payload.LogicalPath, payload.AssetType);
+            undo.Execute(scene, new SetComponentFieldCommand(target.StableId, target.ComponentIndex, target.FieldName, value));
+            return EditorAssetDropResult.Success($"已把 {payload.LogicalPath} 绑定到字段 {target.FieldName}。", target.StableId);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or KeyNotFoundException or ArgumentOutOfRangeException)
+        {
+            return EditorAssetDropResult.Failure($"资产拖拽到 Inspector 字段失败：{ex.Message}");
+        }
+    }
+
+    public static EditorAssetDropResult DropScriptOnComponentList(
+        EditorSceneModel scene,
+        EditorUndoStack undo,
+        ScriptAssemblyRegistry scripts,
+        EditorAssetDropPayload payload,
+        int stableId)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(undo);
+        ArgumentNullException.ThrowIfNull(scripts);
+        if (!TryValidate(payload, out string diagnostic))
+        {
+            return EditorAssetDropResult.Failure(diagnostic);
+        }
+
+        if (payload.AssetType != EditorAssetType.Script)
+        {
+            return EditorAssetDropResult.Failure($"{payload.AssetType} 资产不能拖拽到组件列表；仅 script 可添加为 Behaviour。");
+        }
+
+        if (!TryResolveBehaviourType(payload, scripts, out string typeName))
+        {
+            return EditorAssetDropResult.Failure($"脚本资产 {payload.LogicalPath} 未解析到可挂载 Behaviour。");
+        }
+
+        try
+        {
+            _ = scene.Get(stableId);
+            undo.Execute(scene, new AddComponentCommand(stableId, new EditorComponentModel(typeName)));
+            return EditorAssetDropResult.Success($"已添加脚本组件：{typeName}", stableId);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or KeyNotFoundException)
+        {
+            return EditorAssetDropResult.Failure($"脚本拖拽到 Inspector 组件列表失败：{ex.Message}");
+        }
+    }
+
+    private static bool TryValidate(EditorAssetDropPayload payload, out string diagnostic)
+    {
+        if (string.IsNullOrWhiteSpace(payload.AssetId))
+        {
+            diagnostic = "拖拽资产缺少 stable asset id。";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(payload.LogicalPath))
+        {
+            diagnostic = "拖拽资产缺少 logical path。";
+            return false;
+        }
+
+        diagnostic = string.Empty;
+        return true;
+    }
+
+    private static bool TryResolveBehaviourType(EditorAssetDropPayload payload, ScriptAssemblyRegistry scripts, out string typeName)
+    {
+        string scriptName = Path.GetFileNameWithoutExtension(payload.LogicalPath);
+        for (int i = 0; i < scripts.Assemblies.Count; i++)
+        {
+            foreach (Type type in scripts.Assemblies[i].GetTypes())
+            {
+                if (type is not { IsAbstract: false } ||
+                    !typeof(Behaviour).IsAssignableFrom(type) ||
+                    type.GetConstructor(Type.EmptyTypes) is null)
+                {
+                    continue;
+                }
+
+                if (string.Equals(type.Name, scriptName, StringComparison.Ordinal) ||
+                    string.Equals(type.FullName, scriptName, StringComparison.Ordinal))
+                {
+                    typeName = type.FullName ?? type.Name;
+                    return true;
+                }
+            }
+        }
+
+        typeName = string.Empty;
+        return false;
+    }
+}
+
+internal readonly record struct EditorAssetReference(
+    string AssetId,
+    string LogicalPath,
+    EditorAssetType AssetType);
+
+internal static class EditorAssetReferenceCodec
+{
+    private const string Prefix = "assetref";
+
+    public static string Encode(string assetId, string logicalPath, EditorAssetType assetType)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(assetId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(logicalPath);
+        return string.Join('|', Prefix, assetType.ToString(), assetId.Trim(), logicalPath.Trim().Replace('\\', '/'));
+    }
+
+    public static bool TryDecode(string? value, out EditorAssetReference reference)
+    {
+        reference = default;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        string[] parts = value.Split('|', 4);
+        if (parts.Length != 4 ||
+            !string.Equals(parts[0], Prefix, StringComparison.Ordinal) ||
+            !Enum.TryParse(parts[1], ignoreCase: false, out EditorAssetType assetType) ||
+            string.IsNullOrWhiteSpace(parts[2]) ||
+            string.IsNullOrWhiteSpace(parts[3]))
+        {
+            return false;
+        }
+
+        reference = new EditorAssetReference(parts[2], parts[3].Replace('\\', '/'), assetType);
+        return true;
+    }
+
+    public static bool TryRewrite(
+        string value,
+        string oldPath,
+        string newPath,
+        string assetId,
+        EditorAssetType assetType,
+        out string rewritten)
+    {
+        rewritten = value;
+        if (!TryDecode(value, out EditorAssetReference reference) || reference.AssetType != assetType)
+        {
+            return false;
+        }
+
+        bool matchesId = string.Equals(reference.AssetId, assetId, StringComparison.OrdinalIgnoreCase);
+        bool matchesPath = string.Equals(reference.LogicalPath, oldPath, StringComparison.OrdinalIgnoreCase);
+        if (!matchesId && !matchesPath)
+        {
+            return false;
+        }
+
+        rewritten = Encode(assetId, newPath, assetType);
+        return !string.Equals(value, rewritten, StringComparison.Ordinal);
+    }
+}

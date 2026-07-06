@@ -73,6 +73,32 @@ public sealed class AssetBrowserPanelTests
         Assert.Equal(["audio/hit.wav"], preview.Played);
     }
 
+    /// <summary>
+    /// 验证 Project Window 能为 Shell 资产拖拽语义创建 typed payload，并拒绝缺 stable id 的旧数据源项。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelCreatesTypedDragPayloadOnlyForStableAssets()
+    {
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("prefabs/rock.prefab", AssetBrowserItemKind.Prefab, 10, DateTimeOffset.UnixEpoch, null, "asset_prefab"),
+            new AssetBrowserItem("textures/legacy.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null),
+        ]);
+        AssetBrowserPanel panel = new(source);
+
+        _ = panel.Refresh();
+        bool created = panel.TryCreateDragPayload("prefabs/rock.prefab", out AssetBrowserDragPayload payload);
+        bool legacyCreated = panel.TryCreateDragPayload("textures/legacy.png", out AssetBrowserDragPayload legacyPayload);
+
+        Assert.True(created);
+        Assert.Equal("asset_prefab", payload.AssetId);
+        Assert.Equal("prefabs/rock.prefab", payload.Path);
+        Assert.Equal(AssetBrowserItemKind.Prefab, payload.Kind);
+        Assert.False(legacyCreated);
+        Assert.Equal(default, legacyPayload);
+        Assert.Contains("stable asset id", panel.Status, StringComparison.Ordinal);
+    }
+
     private sealed class RecordingThumbnailProvider : ITextureThumbnailProvider
     {
         public bool TryGetThumbnail(string assetPath, out AssetThumbnail thumbnail)
