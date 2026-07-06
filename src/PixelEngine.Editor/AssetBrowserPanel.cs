@@ -3,19 +3,30 @@ using Hexa.NET.ImGui;
 namespace PixelEngine.Editor;
 
 /// <summary>
+/// Project Window 脚本资产打开回调。
+/// </summary>
+/// <param name="assetPath">资产逻辑路径。</param>
+/// <param name="diagnostic">可展示给用户的打开诊断。</param>
+/// <returns>成功发起打开时返回 true。</returns>
+public delegate bool ScriptAssetOpenHandler(string assetPath, out string diagnostic);
+
+/// <summary>
 /// content 资源浏览器面板。
 /// </summary>
 /// <param name="source">资产数据源。</param>
 /// <param name="audioPreview">音频试听服务。</param>
 /// <param name="instantiatePrefab">可选 prefab 实例化回调。</param>
+/// <param name="openScriptAsset">可选脚本资产打开回调。</param>
 public sealed class AssetBrowserPanel(
     IAssetBrowserDataSource source,
     IAudioPreviewService? audioPreview = null,
-    Action<string>? instantiatePrefab = null) : IEditorPanel
+    Action<string>? instantiatePrefab = null,
+    ScriptAssetOpenHandler? openScriptAsset = null) : IEditorPanel
 {
     private readonly IAssetBrowserDataSource _source = source ?? throw new ArgumentNullException(nameof(source));
     private readonly IAudioPreviewService? _audioPreview = audioPreview;
     private readonly Action<string>? _instantiatePrefab = instantiatePrefab;
+    private readonly ScriptAssetOpenHandler? _openScriptAsset = openScriptAsset;
     private string _search = string.Empty;
 
     /// <inheritdoc />
@@ -130,6 +141,40 @@ public sealed class AssetBrowserPanel(
         return true;
     }
 
+    /// <summary>
+    /// 打开指定脚本资产。
+    /// </summary>
+    /// <param name="path">资产路径。</param>
+    /// <returns>成功发起打开时返回 true。</returns>
+    public bool TryOpenScriptAsset(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        AssetBrowserItem? item = FindAsset(path);
+        if (item is null)
+        {
+            Status = $"资产不存在：{path}";
+            return false;
+        }
+
+        if (item.Value.Kind != AssetBrowserItemKind.Script)
+        {
+            Status = $"仅 script 资产可外部打开：{item.Value.Path}";
+            return false;
+        }
+
+        if (_openScriptAsset is null)
+        {
+            Status = "脚本外部编辑器不可用";
+            return false;
+        }
+
+        bool opened = _openScriptAsset(item.Value.Path, out string diagnostic);
+        Status = string.IsNullOrWhiteSpace(diagnostic)
+            ? opened ? $"打开脚本 {item.Value.Path}" : $"脚本外部编辑器打开失败：{item.Value.Path}"
+            : diagnostic;
+        return opened;
+    }
+
     /// <inheritdoc />
     public void Draw(in EditorContext context)
     {
@@ -178,6 +223,10 @@ public sealed class AssetBrowserPanel(
         if (ImGui.Selectable(label, selected))
         {
             _ = SelectAsset(item.Path, selection);
+            if (item.Kind == AssetBrowserItemKind.Script && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+            {
+                _ = TryOpenScriptAsset(item.Path);
+            }
         }
 
         if (item.Kind == AssetBrowserItemKind.Audio)

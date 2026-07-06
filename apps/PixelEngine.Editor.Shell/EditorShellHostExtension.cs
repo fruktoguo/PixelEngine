@@ -194,7 +194,8 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             brushPanel));
         _editor.AddPanel(new AssetBrowserPanel(
             new EditorAssetBrowserDataSource(new EditorAssetManifestStore(_project)),
-            instantiatePrefab: _app.InstantiatePrefab));
+            instantiatePrefab: _app.InstantiatePrefab,
+            openScriptAsset: _app.OpenScriptAsset));
         MaterialReactionEditorPanel? materialReactionPanel = TryCreateMaterialReactionPanel(engine);
         if (materialReactionPanel is not null)
         {

@@ -16,6 +16,7 @@ internal sealed class EditorProjectSession : IDisposable
     private readonly EngineWorldSnapshotStore _snapshotStore;
     private readonly EngineEditorPlaySessionService _playSession;
     private readonly EngineSimulationControlService _simulationControl;
+    private readonly EditorScriptAssetOpenService _scriptAssetOpenService;
     private int _runtimeProjectionVersion;
     private bool _disposed;
 
@@ -27,6 +28,7 @@ internal sealed class EditorProjectSession : IDisposable
         EditorUndoStack undoStack,
         EditorSceneRuntimeProjection runtimeProjection,
         EditorPrefabAssetStore prefabs,
+        EditorScriptAssetOpenService scriptAssetOpenService,
         string currentSceneRelativePath)
     {
         Project = project;
@@ -36,6 +38,7 @@ internal sealed class EditorProjectSession : IDisposable
         UndoStack = undoStack;
         RuntimeProjection = runtimeProjection;
         Prefabs = prefabs;
+        _scriptAssetOpenService = scriptAssetOpenService ?? throw new ArgumentNullException(nameof(scriptAssetOpenService));
         CurrentSceneRelativePath = currentSceneRelativePath;
         _runtimeProjectionVersion = sceneModel.Version;
         _snapshotStore = new EngineWorldSnapshotStore(engine);
@@ -86,12 +89,13 @@ internal sealed class EditorProjectSession : IDisposable
             EditorAssetManifestStore assets = new(project);
             _ = assets.Refresh();
             EditorPrefabAssetStore prefabs = new(project.ContentRootPath, assets);
+            EditorScriptAssetOpenService scriptAssetOpenService = new(assets);
             EditorSceneRuntimeProjection projection = ProjectAuthoringScene(engine, sceneModel);
             editorHost.ConfigureAuthoring(sceneModel, undoStack, prefabs);
             _ = engine.AttachScriptingFromServices();
             engine.EnterEditMode();
             _ = engine.AttachWindowRuntime(window);
-            return new EditorProjectSession(project, engine, editorHost, sceneModel, undoStack, projection, prefabs, sceneRelativePath);
+            return new EditorProjectSession(project, engine, editorHost, sceneModel, undoStack, projection, prefabs, scriptAssetOpenService, sceneRelativePath);
         }
         catch
         {
@@ -247,6 +251,12 @@ internal sealed class EditorProjectSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         UndoStack.Execute(SceneModel, new InstantiatePrefabCommand(Prefabs, assetPath, SceneModel.SelectedStableId));
+    }
+
+    public bool OpenScriptAsset(string assetPath, out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _scriptAssetOpenService.TryOpenScriptAsset(assetPath, out diagnostic);
     }
 
     public bool ShowProjectSettings()
