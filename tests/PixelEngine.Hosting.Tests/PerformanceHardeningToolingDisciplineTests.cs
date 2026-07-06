@@ -4158,6 +4158,61 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 Bash 发行审计真实执行时也强制 R2R package 携带 UI native。
+    /// </summary>
+    [Fact]
+    public void BashReleaseArtifactAuditRequiresUiNativeInR2RPackage()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-bash-ui-native-audit-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string packageRoot = Path.Combine(temp, "package");
+            string packageName = "PixelEngine-Demo-9.9.9-win-x64-r2r";
+            string expandedPackage = Path.Combine(packageRoot, packageName);
+            CreateFriendlyExpandedPackage(expandedPackage, includeUiNative: true);
+            string archive = Path.Combine(packageRoot, packageName + ".zip");
+            CreateZipWithRoot(expandedPackage, archive, packageName);
+            _ = WriteTextEvidence(Path.Combine(packageRoot, "SHA256SUMS"), $"{GetSha256(archive)}  {Path.GetFileName(archive)}{Environment.NewLine}");
+
+            ScriptResult audit = RunBashScript(
+                root,
+                "tools/audit-release-artifacts.sh",
+                "--publish-root",
+                ToBashPath(Path.Combine(temp, "missing-publish")),
+                "--package-root",
+                ToBashPath(packageRoot),
+                "--active-rids",
+                "win-x64");
+
+            Assert.Equal(0, audit.ExitCode);
+            Assert.Contains("Package OK: 1 expanded=1", audit.Output, StringComparison.Ordinal);
+
+            File.Delete(Path.Combine(expandedPackage, "app", "runtimes", "win-x64", "native", "PixelEngine.UI.Native.dll"));
+            ScriptResult missingUiNative = RunBashScript(
+                root,
+                "tools/audit-release-artifacts.sh",
+                "--publish-root",
+                ToBashPath(Path.Combine(temp, "missing-publish")),
+                "--package-root",
+                ToBashPath(packageRoot),
+                "--active-rids",
+                "win-x64");
+
+            Assert.NotEqual(0, missingUiNative.ExitCode);
+            Assert.Contains("app/runtimes/win-x64/native/PixelEngine.UI.Native.dll", missingUiNative.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 deterministic package 工具固定 entry 顺序、时间戳与归档实现，相同内容不同 metadata 仍产出相同 hash。
     /// </summary>
     [Fact]
@@ -5913,6 +5968,56 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
         process.WaitForExit();
         return new ScriptResult(process.ExitCode, output);
+    }
+
+    private static void CreateFriendlyExpandedPackage(string root, bool includeUiNative)
+    {
+        _ = WriteTextEvidence(Path.Combine(root, "README.txt"), "readme");
+        _ = WriteTextEvidence(Path.Combine(root, "NOTICE.txt"), "notice");
+        _ = WriteTextEvidence(Path.Combine(root, "PixelEngine Demo.exe"), "launcher");
+        _ = WriteTextEvidence(Path.Combine(root, "app", "PixelEngine.Demo.dll"), "app");
+        _ = WriteTextEvidence(Path.Combine(root, "app", "runtimes", "win-x64", "native", "box2d.dll"), "box2d");
+        if (includeUiNative)
+        {
+            _ = WriteTextEvidence(Path.Combine(root, "app", "runtimes", "win-x64", "native", "PixelEngine.UI.Native.dll"), "ui native");
+        }
+
+        _ = WriteTextEvidence(Path.Combine(root, "content", "materials.json"), "{}");
+        _ = WriteTextEvidence(Path.Combine(root, "content", "reactions.json"), "{}");
+        _ = WriteTextEvidence(Path.Combine(root, "content", "weapons.json"), "{}");
+        _ = WriteTextEvidence(Path.Combine(root, "content", "textures", "17_gravel.png"), "gravel");
+        _ = WriteTextEvidence(Path.Combine(root, "content", "textures", "18_boundary_stone.png"), "boundary");
+        _ = WriteTextEvidence(Path.Combine(root, "content", "scenes", "lava-mine.scene"), "scene");
+
+        string checksumText = string.Join(
+            Environment.NewLine,
+            Directory.GetFiles(root, "*", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(root, path).Replace('\\', '/'))
+                .Order(StringComparer.Ordinal)
+                .Select(relative => $"{new string('0', 64)}  {relative}")) + Environment.NewLine;
+        _ = WriteTextEvidence(Path.Combine(root, "SHA256SUMS"), checksumText);
+    }
+
+    private static void CreateZipWithRoot(string sourceDirectory, string archivePath, string rootName)
+    {
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(archivePath)!);
+        if (File.Exists(archivePath))
+        {
+            File.Delete(archivePath);
+        }
+
+        using FileStream stream = File.Create(archivePath);
+        using System.IO.Compression.ZipArchive archive = new(stream, System.IO.Compression.ZipArchiveMode.Create);
+        foreach (string file in Directory.GetFiles(sourceDirectory, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
+        {
+            string relative = Path.GetRelativePath(sourceDirectory, file).Replace('\\', '/');
+            _ = System.IO.Compression.ZipFileExtensions.CreateEntryFromFile(archive, file, rootName + "/" + relative);
+        }
+    }
+
+    private static string ToBashPath(string path)
+    {
+        return Path.GetFullPath(path).Replace('\\', '/');
     }
 
     private static void CreatePackageSource(string root, DateTimeOffset timestamp)
