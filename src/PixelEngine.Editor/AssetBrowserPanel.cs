@@ -31,7 +31,7 @@ public sealed class AssetBrowserPanel(
     private readonly ScriptAssetOpenHandler? _openScriptAsset = openScriptAsset;
     private readonly AssetBrowserDeleteHandler? _deleteAsset = deleteAsset;
     private string _search = string.Empty;
-    private string? _pendingDeletePath;
+    private AssetBrowserDeleteRequest? _pendingDeleteRequest;
 
     /// <inheritdoc />
     public string Title => EditorDockSpace.AssetBrowserWindowTitle;
@@ -272,7 +272,7 @@ public sealed class AssetBrowserPanel(
         }
 
         ImGui.SameLine();
-        if (string.Equals(_pendingDeletePath, item.Path, StringComparison.OrdinalIgnoreCase))
+        if (IsPendingDeleteFor(item))
         {
             if (ImGui.Button($"确认删除##{item.Path}"))
             {
@@ -282,7 +282,7 @@ public sealed class AssetBrowserPanel(
             ImGui.SameLine();
             if (ImGui.Button($"取消##{item.Path}"))
             {
-                _pendingDeletePath = null;
+                _pendingDeleteRequest = null;
                 Status = $"已取消删除 {item.Path}";
             }
         }
@@ -314,27 +314,64 @@ public sealed class AssetBrowserPanel(
             return false;
         }
 
-        AssetBrowserDeleteResult result = _deleteAsset(new AssetBrowserDeleteRequest(
-            item.Value.Path,
-            item.Value.AssetId,
-            item.Value.Kind,
-            confirmed));
+        AssetBrowserDeleteRequest request;
+        if (confirmed)
+        {
+            if (!TryGetPendingDeleteFor(item.Value, out request))
+            {
+                _pendingDeleteRequest = null;
+                Status = $"删除确认已失效，请重新请求删除：{item.Value.Path}";
+                return false;
+            }
+
+            request = request with { Confirmed = true };
+        }
+        else
+        {
+            request = new AssetBrowserDeleteRequest(
+                item.Value.Path,
+                item.Value.AssetId,
+                item.Value.Kind,
+                Confirmed: false);
+        }
+
+        AssetBrowserDeleteResult result = _deleteAsset(request);
         Status = string.IsNullOrWhiteSpace(result.Diagnostic)
             ? result.Succeeded ? $"已删除 {item.Value.Path}" : $"删除未执行：{item.Value.Path}"
             : result.Diagnostic;
         if (result.RequiresConfirmation)
         {
-            _pendingDeletePath = item.Value.Path;
+            _pendingDeleteRequest = request with { Confirmed = false };
             return false;
         }
 
-        _pendingDeletePath = null;
+        _pendingDeleteRequest = null;
         if (result.Succeeded)
         {
             _ = Refresh();
         }
 
         return result.Succeeded;
+    }
+
+    private bool IsPendingDeleteFor(AssetBrowserItem item)
+    {
+        return TryGetPendingDeleteFor(item, out _);
+    }
+
+    private bool TryGetPendingDeleteFor(AssetBrowserItem item, out AssetBrowserDeleteRequest request)
+    {
+        if (_pendingDeleteRequest is { } pending &&
+            string.Equals(pending.Path, item.Path, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(pending.AssetId, item.AssetId, StringComparison.OrdinalIgnoreCase) &&
+            pending.Kind == item.Kind)
+        {
+            request = pending;
+            return true;
+        }
+
+        request = default;
+        return false;
     }
 
     private void ApplyFilter()
