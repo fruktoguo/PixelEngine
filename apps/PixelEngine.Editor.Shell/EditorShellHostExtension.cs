@@ -7,10 +7,11 @@ using PixelEngine.Rendering;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
+using PixelEngine.UI;
 
 namespace PixelEngine.Editor.Shell;
 
-internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorInputCaptureSource
+internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorInputCaptureSource, IGameUiInputSourceFactory
 {
     private readonly EditorProject _project;
     private readonly EditorShellApp _app;
@@ -176,6 +177,18 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             editorCapture,
             viewportHasInputFocus: _gameViewPanel is { Visible: true, InputFocused: true });
         return true;
+    }
+
+    public IUiInputSource CreateGameUiInputSource(RenderWindow window, IUiInputSource fallback)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        ArgumentNullException.ThrowIfNull(fallback);
+        return new GameViewUiInputSource(
+            fallback,
+            CapturePlayMode,
+            () => _gameViewPanel?.LastViewportSnapshot ?? GameViewViewportSnapshot.Empty,
+            () => _gameViewPanel?.LastPointerPanelPoint ?? default,
+            () => _gameViewPanel is { Visible: true, InputFocused: true });
     }
 
     private PixelEngine.Editor.EditorMode CapturePlayMode()

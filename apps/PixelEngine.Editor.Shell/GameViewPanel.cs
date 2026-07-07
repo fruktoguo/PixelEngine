@@ -28,6 +28,8 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
 
     public bool InputHovered { get; private set; }
 
+    public Vector2 LastPointerPanelPoint { get; private set; }
+
     public GameViewViewportSnapshot LastViewportSnapshot { get; private set; } = GameViewViewportSnapshot.Empty;
 
     public EditorViewportContract CaptureContract(PixelEngine.Editor.EditorMode mode)
@@ -68,6 +70,7 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
             available);
 
         Vector2 mousePanel = ImGui.GetIO().MousePos - panelOriginScreen;
+        LastPointerPanelPoint = mousePanel;
         InputHovered = ImGui.IsWindowHovered() && LastViewportSnapshot.ContainsPanelPoint(mousePanel);
         InputFocused = InputHovered && (ImGui.IsWindowFocused() || ImGui.IsWindowHovered());
 
@@ -83,5 +86,6 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
     {
         InputFocused = false;
         InputHovered = false;
+        LastPointerPanelPoint = default;
     }
 }

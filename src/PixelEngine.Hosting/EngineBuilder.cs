@@ -363,6 +363,15 @@ public sealed class EngineBuilder
         context.RegisterService(scenes);
         IReadOnlyList<IEditorHostExtension> editorHostExtensions = [.. _editorHostExtensions];
         context.RegisterService(editorHostExtensions);
+        for (int i = 0; i < editorHostExtensions.Count; i++)
+        {
+            if (editorHostExtensions[i] is IGameUiInputSourceFactory gameUiInputSourceFactory)
+            {
+                context.RegisterService(gameUiInputSourceFactory);
+                break;
+            }
+        }
+
         EnginePhasePipeline phases = new(commands);
         for (int i = 0; i < _phaseDrivers.Count; i++)
         {
