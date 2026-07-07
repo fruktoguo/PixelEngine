@@ -153,34 +153,14 @@ public sealed class UiInputRouter
 
     private int CaptureCommittedText(Span<char> destination)
     {
-        int textCount = Math.Clamp(_source.CaptureText(destination), 0, destination.Length);
-        return CompactText(destination, textCount);
+        int textCount = _source.CaptureText(destination);
+        return UiTextCompositionNormalizer.NormalizeCommittedText(destination, textCount);
     }
 
     private int CaptureCompositionText(Span<char> destination, out UiTextComposition composition)
     {
-        int textCount = Math.Clamp(_source.CaptureTextComposition(destination, out composition), 0, destination.Length);
-        int write = CompactText(destination, textCount);
-        composition = composition.ClampToTextLength(write);
-        return write;
-    }
-
-    private static int CompactText(Span<char> destination, int textCount)
-    {
-        int write = 0;
-        for (int i = 0; i < textCount; i++)
-        {
-            char character = destination[i];
-            if (character == '\0' || char.IsControl(character))
-            {
-                continue;
-            }
-
-            destination[write++] = character;
-        }
-
-        destination[write..textCount].Clear();
-        return write;
+        int textCount = _source.CaptureTextComposition(destination, out UiTextComposition sourceComposition);
+        return UiTextCompositionNormalizer.NormalizeCompositionText(destination, textCount, in sourceComposition, out composition);
     }
 
     private void ClearActiveComposition()

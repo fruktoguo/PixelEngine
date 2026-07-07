@@ -277,6 +277,21 @@ public sealed class BackendConformanceTests : IDisposable
     }
 
     [Fact]
+    public void ManagedFallbackSafelyIgnoresImeCompositionLifecycleAtBackendBoundary()
+    {
+        using ManagedFallbackBackend backend = CreateManagedBackend(out _);
+        backend.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+
+        backend.FeedTextComposition(
+            "候補",
+            new UiTextComposition(isActive: true, cursorIndex: 99, selectionStart: 1, selectionLength: 99));
+        backend.FeedText("中");
+        backend.FeedTextComposition([], UiTextComposition.Inactive);
+
+        Assert.False(backend.IsDirty);
+    }
+
+    [Fact]
     public void RmlUiVisibleScreenPruningRemovesUnloadedModalAndPreservesStackOrder()
     {
         UiDocumentHandle background = new(10);
