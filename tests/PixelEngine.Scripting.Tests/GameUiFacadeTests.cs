@@ -61,6 +61,44 @@ public sealed class GameUiFacadeTests
     }
 
     /// <summary>
+    /// 验证禁用 UI 的空服务不会保留脚本事件订阅。
+    /// </summary>
+    [Fact]
+    public void NoopGameUiServiceDoesNotRetainUiEventSubscribers()
+    {
+        WeakReference subscribedHandlerTarget = SubscribeTransientNoopUiHandler(unsubscribe: false);
+        WeakReference unsubscribedHandlerTarget = SubscribeTransientNoopUiHandler(unsubscribe: true);
+
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        GC.WaitForPendingFinalizers();
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+
+        Assert.False(subscribedHandlerTarget.IsAlive);
+        Assert.False(unsubscribedHandlerTarget.IsAlive);
+    }
+
+    /// <summary>
+    /// 验证禁用 UI 的空服务对所有脚本写入静默安全失败。
+    /// </summary>
+    [Fact]
+    public void NoopGameUiServiceSilentlyRejectsAllOperations()
+    {
+        IGameUiService gameUi = NoopGameUiService.Instance;
+        UiScreenHandle screen = gameUi.ShowScreen("hud");
+        UiScreenHandle modal = gameUi.PushModal("pause");
+
+        gameUi.HideScreen(new UiScreenHandle(99));
+        gameUi.BindModel(new UiScreenHandle(99), new UiModelName(1), new MissingModel());
+        gameUi.SetValue(new UiScreenHandle(99), new UiPathId(7), new UiValue(42L));
+        gameUi.Invoke(new UiScreenHandle(99), new UiActionId(3), UiValue.FromBoolean(true));
+
+        Assert.Equal(default, screen);
+        Assert.Equal(default, modal);
+        Assert.False(gameUi.TryGetValue(new UiScreenHandle(99), new UiPathId(7), out UiValue value));
+        Assert.Equal(default, value);
+    }
+
+    /// <summary>
     /// 验证脚本 UI 值保留强类型载荷。
     /// </summary>
     [Fact]
@@ -76,6 +114,28 @@ public sealed class GameUiFacadeTests
         Assert.True(flag.AsBoolean());
         Assert.Equal(new UiStringHandle(5), text.AsStringHandle());
         _ = Assert.Throws<InvalidOperationException>(() => flag.AsDouble());
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference SubscribeTransientNoopUiHandler(bool unsubscribe)
+    {
+        NoopSubscriberTarget target = new();
+
+        NoopGameUiService.Instance.UiEventRaised += target.OnUiEvent;
+        if (unsubscribe)
+        {
+            NoopGameUiService.Instance.UiEventRaised -= target.OnUiEvent;
+        }
+
+        return new WeakReference(target);
+    }
+
+    private sealed class NoopSubscriberTarget
+    {
+        public void OnUiEvent(UiEvent uiEvent)
+        {
+            _ = uiEvent;
+        }
     }
 
     private sealed class EmptyContext : IScriptContext
