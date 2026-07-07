@@ -28,6 +28,9 @@ public sealed class GameUiDemoController : Behaviour
         "hud.material_slot",
         "hud.brush_radius",
         "hud.explosions",
+        "hud.shots",
+        "hud.collapse_islands",
+        "hud.collapse_scan",
         "hud.crystals",
         "hud.time",
         "hud.hazard",
@@ -75,6 +78,9 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiPathId HudMaterialSlotPath = Path("hud.material_slot");
     private static readonly UiPathId HudBrushRadiusPath = Path("hud.brush_radius");
     private static readonly UiPathId HudExplosionsPath = Path("hud.explosions");
+    private static readonly UiPathId HudShotsPath = Path("hud.shots");
+    private static readonly UiPathId HudCollapseIslandsPath = Path("hud.collapse_islands");
+    private static readonly UiPathId HudCollapseScanPath = Path("hud.collapse_scan");
     private static readonly UiPathId HudCrystalsPath = Path("hud.crystals");
     private static readonly UiPathId HudTimePath = Path("hud.time");
     private static readonly UiPathId HudHazardPath = Path("hud.hazard");
@@ -99,6 +105,7 @@ public sealed class GameUiDemoController : Behaviour
     private WeaponController? _weapons;
     private MaterialBrush? _brush;
     private ExplosiveTool? _explosive;
+    private PlayableProjectileTool? _projectile;
     private MissionDirector? _mission;
     private RisingHazardDirector? _hazard;
     private bool _subscribed;
@@ -246,6 +253,9 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudMaterialSlotPath, 0.0);
         SetHudValue(HudBrushRadiusPath, 0.0);
         SetHudValue(HudExplosionsPath, 0.0);
+        SetHudValue(HudShotsPath, 0.0);
+        SetHudValue(HudCollapseIslandsPath, 0.0);
+        SetHudValue(HudCollapseScanPath, 0.0);
         SetHudValue(HudCrystalsPath, 0.0);
         SetHudValue(HudTimePath, 1.0);
         SetHudValue(HudHazardPath, 0.0);
@@ -297,6 +307,11 @@ public sealed class GameUiDemoController : Behaviour
             _explosive = explosive;
         }
 
+        if (_projectile is null && Entity.TryGetComponent(out PlayableProjectileTool projectile))
+        {
+            _projectile = projectile;
+        }
+
         if (_mission is null && Entity.TryGetComponent(out MissionDirector mission))
         {
             _mission = mission;
@@ -335,6 +350,10 @@ public sealed class GameUiDemoController : Behaviour
                 {
                     _explosive = sceneExplosive;
                 }
+                else if (_projectile is null && behaviour is PlayableProjectileTool sceneProjectile)
+                {
+                    _projectile = sceneProjectile;
+                }
                 else if (_mission is null && behaviour is MissionDirector sceneMission)
                 {
                     _mission = sceneMission;
@@ -354,7 +373,7 @@ public sealed class GameUiDemoController : Behaviour
 
     private bool HasAllHudSources()
     {
-        return _health is not null && _weapons is not null && _brush is not null && _explosive is not null && _mission is not null && _hazard is not null;
+        return _health is not null && _weapons is not null && _brush is not null && _explosive is not null && _projectile is not null && _mission is not null && _hazard is not null;
     }
 
     private void PublishHealth()
@@ -406,6 +425,19 @@ public sealed class GameUiDemoController : Behaviour
         }
 
         SetHudValue(HudExplosionsPath, _explosive is null ? 0.0 : Ratio(_explosive.ExplosionCount, 10.0));
+        if (_projectile is null)
+        {
+            SetHudValue(HudShotsPath, 0.0);
+            SetHudValue(HudCollapseIslandsPath, 0.0);
+            SetHudValue(HudCollapseScanPath, 0.0);
+            return;
+        }
+
+        int scanRadius = Math.Clamp(_projectile.CollapseScanRadius, 4, 320);
+        double scanCapacity = ((scanRadius * 2) + 1) * ((scanRadius * 2) + 1);
+        SetHudValue(HudShotsPath, Ratio(_projectile.ShotsFired, 10.0));
+        SetHudValue(HudCollapseIslandsPath, Ratio(_projectile.CollapsedFloatingIslands, 10.0));
+        SetHudValue(HudCollapseScanPath, Ratio(_projectile.LastCollapseSolidCandidates, scanCapacity));
     }
 
     private void PublishMission()
