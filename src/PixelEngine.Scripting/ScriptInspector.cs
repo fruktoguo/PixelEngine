@@ -29,6 +29,7 @@ public static class ScriptInspector
                 continue;
             }
 
+            ScriptFieldKind kind = Classify(field, out ScriptAssetKind? assetKind);
             descriptors.Add(new ScriptFieldDescriptor(
                 field.Name,
                 field.FieldType,
@@ -36,9 +37,10 @@ public static class ScriptInspector
                 !field.IsInitOnly,
                 field.IsPublic,
                 field.GetCustomAttribute<SerializeFieldAttribute>() is not null,
-                Classify(field.FieldType),
+                kind,
                 field.GetCustomAttribute<RangeAttribute>()?.Minimum,
-                field.GetCustomAttribute<RangeAttribute>()?.Maximum));
+                field.GetCustomAttribute<RangeAttribute>()?.Maximum,
+                assetKind));
         }
 
         return [.. descriptors];
@@ -60,12 +62,12 @@ public static class ScriptInspector
         ArgumentNullException.ThrowIfNull(behaviour);
         ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
         FieldInfo? field = behaviour.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-        if (field is null || !ShouldShow(field) || field.IsInitOnly || !IsAssignable(field.FieldType, value))
+        if (field is null || !ShouldShow(field) || field.IsInitOnly || !TryNormalizeAssignable(field, value, out object? normalized))
         {
             return false;
         }
 
-        field.SetValue(behaviour, value);
+        field.SetValue(behaviour, normalized);
         return true;
     }
 
@@ -75,16 +77,52 @@ public static class ScriptInspector
             && (field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() is not null);
     }
 
-    private static bool IsAssignable(Type targetType, object? value)
+    private static bool TryNormalizeAssignable(FieldInfo field, object? value, out object? normalized)
     {
-        return value is null
-            ? !targetType.IsValueType || Nullable.GetUnderlyingType(targetType) is not null
-            : targetType.IsInstanceOfType(value);
+        Type targetType = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
+        if (value is null)
+        {
+            normalized = null;
+            return !field.FieldType.IsValueType || Nullable.GetUnderlyingType(field.FieldType) is not null;
+        }
+
+        if (targetType.IsInstanceOfType(value))
+        {
+            normalized = value;
+            return true;
+        }
+
+        if (targetType == typeof(ScriptAssetReference) &&
+            value is string encoded &&
+            ScriptAssetReference.TryDecode(encoded, out ScriptAssetReference reference))
+        {
+            normalized = reference;
+            return true;
+        }
+
+        if (targetType == typeof(string) && value is ScriptAssetReference assetReference)
+        {
+            normalized = assetReference.ToString();
+            return true;
+        }
+
+        normalized = null;
+        return false;
     }
 
-    private static ScriptFieldKind Classify(Type type)
+    private static ScriptFieldKind Classify(FieldInfo field, out ScriptAssetKind? assetKind)
     {
-        Type target = Nullable.GetUnderlyingType(type) ?? type;
+        AssetFieldAttribute? assetField = field.GetCustomAttribute<AssetFieldAttribute>();
+        Type target = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
+        if (assetField is not null)
+        {
+            assetKind = assetField.AssetType;
+            return target == typeof(string) || target == typeof(ScriptAssetReference)
+                ? ScriptFieldKind.AssetReference
+                : ScriptFieldKind.Unsupported;
+        }
+
+        assetKind = null;
         return target == typeof(bool)
             ? ScriptFieldKind.Boolean
             : target == typeof(string)
@@ -160,6 +198,11 @@ public enum ScriptFieldKind
     /// PixelEngine 脚本材质引用字段。
     /// </summary>
     Material,
+
+    /// <summary>
+    /// Project Window stable asset reference 字段。
+    /// </summary>
+    AssetReference,
 }
 
 /// <summary>
@@ -174,6 +217,7 @@ public enum ScriptFieldKind
 /// <param name="Kind">字段在 Inspector 中的编辑器类别。</param>
 /// <param name="RangeMinimum">字段范围滑条最小值；无范围时为 null。</param>
 /// <param name="RangeMaximum">字段范围滑条最大值；无范围时为 null。</param>
+/// <param name="AssetKind">typed asset reference 字段要求的资产类别；非资产字段为 null。</param>
 public readonly record struct ScriptFieldDescriptor(
     string Name,
     Type FieldType,
@@ -183,4 +227,5 @@ public readonly record struct ScriptFieldDescriptor(
     bool IsSerializedPrivate,
     ScriptFieldKind Kind,
     double? RangeMinimum,
-    double? RangeMaximum);
+    double? RangeMaximum,
+    ScriptAssetKind? AssetKind);

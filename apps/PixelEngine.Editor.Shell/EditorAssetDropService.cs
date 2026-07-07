@@ -46,7 +46,49 @@ internal readonly record struct EditorAssetInspectorFieldTarget(
     int StableId,
     int ComponentIndex,
     string FieldName,
-    EditorAssetType ExpectedAssetType);
+    EditorAssetType ExpectedAssetType)
+{
+    public static bool TryCreate(int stableId, int componentIndex, ScriptFieldDescriptor field, out EditorAssetInspectorFieldTarget target)
+    {
+        if (field.Kind != ScriptFieldKind.AssetReference || field.AssetKind is not ScriptAssetKind assetKind)
+        {
+            target = default;
+            return false;
+        }
+
+        target = new EditorAssetInspectorFieldTarget(stableId, componentIndex, field.Name, ToEditorAssetType(assetKind));
+        return true;
+    }
+
+    public static EditorAssetType ToEditorAssetType(ScriptAssetKind assetKind)
+    {
+        return assetKind switch
+        {
+            ScriptAssetKind.Material => EditorAssetType.Material,
+            ScriptAssetKind.Texture => EditorAssetType.Texture,
+            ScriptAssetKind.Audio => EditorAssetType.Audio,
+            ScriptAssetKind.Scene => EditorAssetType.Scene,
+            ScriptAssetKind.Prefab => EditorAssetType.Prefab,
+            ScriptAssetKind.Script => EditorAssetType.Script,
+            _ => throw new ArgumentOutOfRangeException(nameof(assetKind), assetKind, "未知脚本资产字段类型。"),
+        };
+    }
+
+    public static bool TryMapAssetType(ScriptAssetKind assetKind, out EditorAssetType assetType)
+    {
+        assetType = assetKind switch
+        {
+            ScriptAssetKind.Material => EditorAssetType.Material,
+            ScriptAssetKind.Texture => EditorAssetType.Texture,
+            ScriptAssetKind.Audio => EditorAssetType.Audio,
+            ScriptAssetKind.Scene => EditorAssetType.Scene,
+            ScriptAssetKind.Prefab => EditorAssetType.Prefab,
+            ScriptAssetKind.Script => EditorAssetType.Script,
+            _ => EditorAssetType.Other,
+        };
+        return assetType != EditorAssetType.Other;
+    }
+}
 
 internal readonly record struct EditorAssetDropResult(
     bool Succeeded,
@@ -250,35 +292,36 @@ internal readonly record struct EditorAssetReference(
 
 internal static class EditorAssetReferenceCodec
 {
-    private const string Prefix = "assetref";
-
     public static string Encode(string assetId, string logicalPath, EditorAssetType assetType)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(assetId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(logicalPath);
-        return string.Join('|', Prefix, assetType.ToString(), assetId.Trim(), logicalPath.Trim().Replace('\\', '/'));
+        return ScriptAssetReference.Encode(assetId, logicalPath, ToScriptAssetKind(assetType));
     }
 
     public static bool TryDecode(string? value, out EditorAssetReference reference)
     {
         reference = default;
-        if (string.IsNullOrWhiteSpace(value))
+        if (!ScriptAssetReference.TryDecode(value, out ScriptAssetReference scriptReference) ||
+            !EditorAssetInspectorFieldTarget.TryMapAssetType(scriptReference.AssetType, out EditorAssetType assetType))
         {
             return false;
         }
 
-        string[] parts = value.Split('|', 4);
-        if (parts.Length != 4 ||
-            !string.Equals(parts[0], Prefix, StringComparison.Ordinal) ||
-            !Enum.TryParse(parts[1], ignoreCase: false, out EditorAssetType assetType) ||
-            string.IsNullOrWhiteSpace(parts[2]) ||
-            string.IsNullOrWhiteSpace(parts[3]))
-        {
-            return false;
-        }
-
-        reference = new EditorAssetReference(parts[2], parts[3].Replace('\\', '/'), assetType);
+        reference = new EditorAssetReference(scriptReference.AssetId, scriptReference.LogicalPath, assetType);
         return true;
+    }
+
+    private static ScriptAssetKind ToScriptAssetKind(EditorAssetType assetType)
+    {
+        return assetType switch
+        {
+            EditorAssetType.Material => ScriptAssetKind.Material,
+            EditorAssetType.Texture => ScriptAssetKind.Texture,
+            EditorAssetType.Audio => ScriptAssetKind.Audio,
+            EditorAssetType.Scene => ScriptAssetKind.Scene,
+            EditorAssetType.Prefab => ScriptAssetKind.Prefab,
+            EditorAssetType.Script => ScriptAssetKind.Script,
+            _ => throw new ArgumentOutOfRangeException(nameof(assetType), assetType, "该资产类型不能编码为脚本 asset reference。"),
+        };
     }
 
     public static bool TryRewrite(

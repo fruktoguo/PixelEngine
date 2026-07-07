@@ -74,6 +74,35 @@ public sealed class ScriptInspectorTests
         Assert.Equal(ScriptFieldKind.Material, fields.Single(field => field.Name == nameof(AdvancedBehaviour.Material)).Kind);
     }
 
+    /// <summary>
+    /// 验证 Inspector 字段描述会识别 typed asset reference 字段，并支持字符串编码与强类型引用互转写回。
+    /// </summary>
+    [Fact]
+    public void InspectFieldsClassifiesTypedAssetReferencesAndSetsCompatibleValues()
+    {
+        AssetFieldBehaviour behaviour = new();
+        string textureValue = ScriptAssetReference.Encode("asset_texture", "textures/sand.png", ScriptAssetKind.Texture);
+        ScriptAssetReference audioReference = new(ScriptAssetKind.Audio, "asset_audio", "audio/hit.wav");
+
+        ScriptFieldDescriptor[] fields = ScriptInspector.InspectFields(behaviour);
+
+        ScriptFieldDescriptor texture = fields.Single(field => field.Name == nameof(AssetFieldBehaviour.Texture));
+        Assert.Equal(ScriptFieldKind.AssetReference, texture.Kind);
+        Assert.Equal(ScriptAssetKind.Texture, texture.AssetKind);
+        ScriptFieldDescriptor audio = fields.Single(field => field.Name == nameof(AssetFieldBehaviour.Audio));
+        Assert.Equal(ScriptFieldKind.AssetReference, audio.Kind);
+        Assert.Equal(ScriptAssetKind.Audio, audio.AssetKind);
+        ScriptFieldDescriptor unsupported = fields.Single(field => field.Name == nameof(AssetFieldBehaviour.Invalid));
+        Assert.Equal(ScriptFieldKind.Unsupported, unsupported.Kind);
+        Assert.Equal(ScriptAssetKind.Prefab, unsupported.AssetKind);
+
+        Assert.True(ScriptInspector.TrySetFieldValue(behaviour, nameof(AssetFieldBehaviour.Texture), textureValue));
+        Assert.True(ScriptInspector.TrySetFieldValue(behaviour, nameof(AssetFieldBehaviour.Audio), audioReference));
+
+        Assert.Equal(new ScriptAssetReference(ScriptAssetKind.Texture, "asset_texture", "textures/sand.png"), behaviour.Texture);
+        Assert.Equal(audioReference.ToString(), behaviour.Audio);
+    }
+
     private sealed class InspectableBehaviour : Behaviour
     {
         [SerializeField]
@@ -93,6 +122,18 @@ public sealed class ScriptInspectorTests
         {
             privateValue = value;
         }
+    }
+
+    private sealed class AssetFieldBehaviour : Behaviour
+    {
+        [AssetField(ScriptAssetKind.Texture)]
+        public ScriptAssetReference Texture = ScriptAssetReference.Empty;
+
+        [AssetField(ScriptAssetKind.Audio)]
+        public string Audio = string.Empty;
+
+        [AssetField(ScriptAssetKind.Prefab)]
+        public int Invalid = 0;
     }
 
     private sealed class AdvancedBehaviour : Behaviour

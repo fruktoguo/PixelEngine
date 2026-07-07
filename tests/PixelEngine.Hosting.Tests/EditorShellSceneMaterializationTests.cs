@@ -44,6 +44,7 @@ public sealed class EditorShellSceneMaterializationTests
                                 ["Label"] = "child",
                                 ["Material"] = "4",
                                 ["Position"] = "3.5,4.25",
+                                ["TextureReference"] = ScriptAssetReference.Encode("asset_texture", "textures/sand.png", ScriptAssetKind.Texture),
                             },
                         },
                     ],
@@ -70,6 +71,7 @@ public sealed class EditorShellSceneMaterializationTests
         Assert.Equal("child", probe.Label);
         Assert.Equal(new Vector2(3.5f, 4.25f), probe.Position);
         Assert.Equal(new MaterialId(4), probe.Material);
+        Assert.Equal(new ScriptAssetReference(ScriptAssetKind.Texture, "asset_texture", "textures/sand.png"), probe.TextureReference);
     }
 
     /// <summary>
@@ -216,6 +218,47 @@ public sealed class EditorShellSceneMaterializationTests
         }
     }
 
+    /// <summary>
+    /// 验证 .scene loader 会把 stable asset reference 绑定到强类型脚本字段。
+    /// </summary>
+    [Fact]
+    public void SceneDocumentLoaderBindsScriptAssetReferenceFields()
+    {
+        EngineSceneDocument document = new()
+        {
+            FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+            Name = "asset-reference-loader",
+            Entities =
+            [
+                new EngineSceneEntityDocument
+                {
+                    StableId = 1,
+                    Name = "asset-reference",
+                    Transform = new EngineSceneTransformDocument(),
+                    Behaviours =
+                    [
+                        new EngineSceneBehaviourDocument
+                        {
+                            TypeName = typeof(EditorShellProjectionProbe).FullName!,
+                            SerializedFields = new Dictionary<string, string>
+                            {
+                                ["TextureReference"] = ScriptAssetReference.Encode("asset_texture", "textures/sand.png", ScriptAssetKind.Texture),
+                            },
+                        },
+                    ],
+                },
+            ],
+        };
+        ScriptAssemblyRegistry scripts = new();
+        scripts.Register(typeof(EditorShellProjectionProbe).Assembly);
+
+        PixelEngine.Scripting.Scene scene = EngineSceneDocumentLoader.Build(document, scripts);
+
+        ScriptEntityInspection entity = Assert.Single(scene.CaptureInspectionSnapshot());
+        EditorShellProjectionProbe probe = Assert.IsType<EditorShellProjectionProbe>(Assert.Single(entity.Components).Behaviour);
+        Assert.Equal(new ScriptAssetReference(ScriptAssetKind.Texture, "asset_texture", "textures/sand.png"), probe.TextureReference);
+    }
+
     private static void AssertAuthoringAfterRedo(EditorSceneModel model, int rootId, int childId)
     {
         Assert.Equal(2, model.Count);
@@ -289,5 +332,10 @@ public sealed class EditorShellSceneMaterializationTests
         /// 测试 MaterialId 字段。
         /// </summary>
         public MaterialId Material { get; set; }
+
+        /// <summary>
+        /// 测试 typed asset reference 字段。
+        /// </summary>
+        public ScriptAssetReference TextureReference { get; set; }
     }
 }
