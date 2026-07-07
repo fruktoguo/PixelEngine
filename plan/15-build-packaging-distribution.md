@@ -92,7 +92,7 @@
 - [x] 一键出包入口命令：`pwsh tools/build-player.ps1 -Rid win-x64 -Channel r2r -Configuration Release -StartScene scenes/lava-mine.scene`，输出 `build-result.json` 与玩家包归档。
 - [x] 玩家包审计命令：`pwsh tools/audit-release-artifacts.ps1 -PublishRoot artifacts/publish/win-x64/r2r -PackageRoot artifacts/package -ActiveRids win-x64 -RequireAll` 或 Bash 等价入口，用于同时审计 publish 与 package 结构、player-only 断言和 inactive Ultralight native 混入门禁。
 - [x] 矩阵 dry-run 命令：`pwsh tools/release-matrix.ps1 -Config tools/release-rids.json -IncludeWinArm64 true`，用于验证 active RID 派生 package count 和 asset count。
-- [!] 最终 release 预检命令：`pwsh tools/release-evidence-preflight.ps1 -Manifest <release-evidence.json> -ActiveRids <active-rids> -ExpectedPackageCount <n>`，必须在 tag release 证据齐全后才能解除阻塞。
+- [!] 最终 release 预检命令：`pwsh tools/release-evidence-preflight.ps1 -Manifest <release-evidence.json> -ActiveRids <active-rids> -ExpectedPackageCount <n>`；`tools/release-evidence-preflight.ps1|.sh` 为等价入口，必须在 tag release 证据齐全后才能解除阻塞。
 - [!] 最终签名证据路径：macOS `codesign`、`notarytool`、`stapler`、`spctl` 报告仍缺，不得勾选 macOS 完成。
 - [!] 最终上传证据路径：GitHub Release upload markdown 必须列出 `uploaded_asset_count=packageCount+1`、全部 package asset hash 和唯一 `SHA256SUMS` hash。
 - [!] 最终 SIMD 证据路径：AOT 探针报告必须按 x64/arm64 区分 `simdProbeKind`，非 x64 skip 不能冒充 arm64 NEON 证明。

@@ -4,24 +4,38 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ps_script="$script_dir/release-evidence-preflight.ps1"
 pwsh_command=""
-if command -v pwsh >/dev/null 2>&1; then
-  pwsh_command="pwsh"
-elif command -v pwsh.exe >/dev/null 2>&1; then
-  pwsh_command="pwsh.exe"
-elif command -v powershell.exe >/dev/null 2>&1; then
-  pwsh_command="powershell.exe"
-else
-  echo "release-evidence-preflight.sh requires pwsh, pwsh.exe, or powershell.exe." >&2
-  exit 127
-fi
 
-if [[ "$pwsh_command" == *.exe ]]; then
-  if command -v cygpath >/dev/null 2>&1; then
-    ps_script="$(cygpath -w "$ps_script")"
-  elif command -v wslpath >/dev/null 2>&1; then
-    ps_script="$(wslpath -w "$ps_script")"
-  fi
-fi
+try_select_powershell() {
+  local candidate
+  for candidate in pwsh pwsh.exe powershell.exe; do
+    if ! command -v "$candidate" >/dev/null 2>&1; then
+      continue
+    fi
+
+    if "$candidate" -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString() | Out-Null' >/dev/null 2>&1; then
+      pwsh_command="$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+write_missing_manifest_report() {
+  mkdir -p "$artifacts"
+  cat >"$artifacts/release-evidence-preflight.md" <<EOF
+# Release evidence preflight
+
+| Key | Value |
+|---|---|
+| status | blocked_missing_release_manifest |
+| required_rids | $active_rids |
+| required_channels | r2r; aot |
+| required_package_count | $expected_package_count |
+| evidence_manifest | $evidence_manifest_path |
+| source | release-evidence-preflight.sh portable missing-manifest fallback |
+EOF
+}
 
 evidence_manifest_path=""
 artifacts="artifacts/release-evidence-preflight"
@@ -80,22 +94,40 @@ while (($#)); do
   esac
 done
 
-args=(-NoLogo -NoProfile -ExecutionPolicy Bypass -File "$ps_script" -Artifacts "$artifacts")
+if try_select_powershell; then
+  if [[ "$pwsh_command" == *.exe ]]; then
+    if command -v cygpath >/dev/null 2>&1; then
+      ps_script="$(cygpath -w "$ps_script")"
+    elif command -v wslpath >/dev/null 2>&1; then
+      ps_script="$(wslpath -w "$ps_script")"
+    fi
+  fi
 
-if [[ -n "$evidence_manifest_path" ]]; then
-  args+=(-EvidenceManifestPath "$evidence_manifest_path")
+  args=(-NoLogo -NoProfile -ExecutionPolicy Bypass -File "$ps_script" -Artifacts "$artifacts")
+
+  if [[ -n "$evidence_manifest_path" ]]; then
+    args+=(-EvidenceManifestPath "$evidence_manifest_path")
+  fi
+
+  if [[ -n "$active_rids" ]]; then
+    args+=(-ActiveRids "$active_rids")
+  fi
+
+  if [[ -n "$expected_package_count" ]]; then
+    args+=(-ExpectedPackageCount "$expected_package_count")
+  fi
+
+  if (( allow_blocked )); then
+    args+=(-AllowBlocked)
+  fi
+
+  exec "$pwsh_command" "${args[@]}"
 fi
 
-if [[ -n "$active_rids" ]]; then
-  args+=(-ActiveRids "$active_rids")
+if (( allow_blocked )) && [[ -n "$evidence_manifest_path" ]] && [[ ! -f "$evidence_manifest_path" ]]; then
+  write_missing_manifest_report
+  exit 0
 fi
 
-if [[ -n "$expected_package_count" ]]; then
-  args+=(-ExpectedPackageCount "$expected_package_count")
-fi
-
-if (( allow_blocked )); then
-  args+=(-AllowBlocked)
-fi
-
-exec "$pwsh_command" "${args[@]}"
+echo "release-evidence-preflight.sh requires an executable pwsh, pwsh.exe, or powershell.exe." >&2
+exit 127
