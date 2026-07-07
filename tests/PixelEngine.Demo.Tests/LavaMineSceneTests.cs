@@ -187,6 +187,46 @@ public sealed class LavaMineSceneTests
     }
 
     /// <summary>
+    /// 验证正式 lava-mine 场景可在 headless 下经公开输入路线采集水晶、触发物理破坏并完成撤离。
+    /// </summary>
+    [Fact]
+    public async Task LavaMineScriptedRouteCompletesMissionHeadlesslyThroughPublicApis()
+    {
+        using Engine engine = await CreateLavaMineEngineAsync();
+        engine.RunHeadlessTicks(2);
+
+        ScriptInputApi input = engine.Context.GetService<ScriptInputApi>();
+        ScriptCameraApi camera = engine.Context.GetService<ScriptCameraApi>();
+        DemoWindowScriptedInput scripted = new(input, camera, routeProbe: true);
+        scripted.RegisterPhases(engine.Phases);
+
+        ScriptScene scene = engine.Context.GetService<ScriptScene>();
+        MissionDirector mission = FindBehaviour<MissionDirector>(scene);
+        ExtractionTrigger extraction = FindBehaviour<ExtractionTrigger>(scene);
+        WeaponController weapons = FindBehaviour<WeaponController>(scene);
+        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        int maxDestroyedBodies = 0;
+        int maxCreatedBodies = 0;
+
+        for (int i = 0; i < 1_500 && mission.State == MissionState.Playing; i++)
+        {
+            engine.RunHeadlessTicks(1);
+            maxDestroyedBodies = Math.Max(maxDestroyedBodies, physics.LastDestructionResult.DestroyedBodies);
+            maxCreatedBodies = Math.Max(maxCreatedBodies, physics.LastDestructionResult.CreatedBodies);
+        }
+
+        Assert.Equal(MissionState.Won, mission.State);
+        Assert.Equal("extraction_reached", mission.ResultReason);
+        Assert.True(extraction.Reached);
+        Assert.True(mission.CrystalsCollected >= mission.RequiredCrystals);
+        Assert.True(weapons.PrimaryFireCount > 0, "脚本路线应经 WeaponController 公开输入触发至少一次主武器。 ");
+        Assert.True(maxDestroyedBodies > 0, $"脚本路线应触发真实刚体破坏，destroyed={maxDestroyedBodies}。");
+        Assert.True(maxCreatedBodies > 0, $"脚本路线应触发真实刚体重建，created={maxCreatedBodies}。");
+        AssertNoFaultedBehaviours(scene);
+        Assert.Equal(0, scene.ScriptExceptionCount);
+    }
+
+    /// <summary>
     /// 验证 Demo 内容包中的 acid 腐蚀反应会损坏 RigidOwned 木结构，并触发 Physics 刚体重建。
     /// </summary>
     [Fact]
@@ -380,6 +420,17 @@ public sealed class LavaMineSceneTests
         }
 
         Assert.Equal(expectedCount, count);
+    }
+
+    private static void AssertNoFaultedBehaviours(ScriptScene scene)
+    {
+        foreach (ScriptEntityInspection entity in scene.CaptureInspectionSnapshot())
+        {
+            foreach (ScriptComponentInspection component in entity.Components)
+            {
+                Assert.False(component.Faulted, $"Behaviour faulted: {component.TypeName}。");
+            }
+        }
     }
 
     private static void QueueVerticalCut(CellGrid grid, RigidDamageQueue damageQueue, int x, int minY, int maxY)
