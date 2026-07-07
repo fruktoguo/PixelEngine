@@ -87,13 +87,17 @@ public sealed class PlayerControllerIntegrationTests
     public void PlayableHudDrawsWeaponStateAndMaterialLegend()
     {
         using Engine engine = CreateManualScriptEngine(
-            out _,
+            out ScriptInputApi input,
             out _,
             out _,
             out ScriptScene scene,
             DemoMaterials(),
             contentRoot: DemoContentRoot());
         Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 14f;
+        player.SpawnY = 30f;
         _ = entity.AddComponent<PlayerHealth>();
         _ = entity.AddComponent<PlayableProjectileTool>();
         _ = entity.AddComponent<WeaponController>();
@@ -111,6 +115,7 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Contains("swatch:weapon-current:FFE8D06A:14", gui.Drawn);
         Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:Pistol  180/180:", StringComparison.Ordinal));
         Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:目标 水晶 0/3", StringComparison.Ordinal));
+        Assert.Contains("text:射击 0", gui.Drawn);
         Assert.Contains(gui.Drawn, line => line.StartsWith("text:FX ", StringComparison.Ordinal) && line.Contains(" Lights ", StringComparison.Ordinal) && line.Contains(" World particles ", StringComparison.Ordinal));
         Assert.Contains("text:材质", gui.Drawn);
         Assert.Contains("text:sand / Terrain", gui.Drawn);
@@ -118,6 +123,17 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Contains("text:oil / Terrain", gui.Drawn);
         Assert.Contains("text:acid / Terrain", gui.Drawn);
         Assert.Contains(gui.Drawn, line => line.StartsWith("progress:", StringComparison.Ordinal));
+
+        input.Update([Key.Digit6], [], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+
+        RecordingGuiContext firedGui = new();
+        runtime.DrawGui(firedGui);
+
+        Assert.Contains("text:射击 1", firedGui.Drawn);
+        Assert.DoesNotContain("text:射击 1", gui.Drawn);
     }
 
     /// <summary>
