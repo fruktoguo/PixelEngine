@@ -269,7 +269,7 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
 
     private RuntimeUi.UiDocumentSource ResolveSourceByConvention(string screenId, RuntimeUi.UiScreenId runtimeScreen)
     {
-        string path = Path.IsPathRooted(screenId) ? screenId : Path.Combine(_uiRoot, screenId);
+        string path = ResolveUiAssetPath(screenId);
         if (File.Exists(path))
         {
             return RuntimeUi.UiDocumentSource.Asset(path, runtimeScreen.Value);
@@ -285,6 +285,27 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
         return File.Exists(html)
             ? RuntimeUi.UiDocumentSource.Asset(html, runtimeScreen.Value)
             : throw new FileNotFoundException($"找不到 Game UI 屏幕资产：{screenId}。", path);
+    }
+
+    private string ResolveUiAssetPath(string screenId)
+    {
+        if (Path.IsPathRooted(screenId))
+        {
+            throw new InvalidDataException($"Game UI 屏幕资产路径必须相对 content/ui 根目录：{screenId}");
+        }
+
+        string fullPath = Path.GetFullPath(Path.Combine(_uiRoot, screenId));
+        string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(_uiRoot));
+        string rootWithSeparator = root + Path.DirectorySeparatorChar;
+        StringComparison comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        if (!fullPath.Equals(root, comparison) && !fullPath.StartsWith(rootWithSeparator, comparison))
+        {
+            throw new InvalidDataException($"Game UI 屏幕资产路径逃逸 content/ui 根目录：{screenId}");
+        }
+
+        return fullPath;
     }
 
     private void PreloadManifestScreens()

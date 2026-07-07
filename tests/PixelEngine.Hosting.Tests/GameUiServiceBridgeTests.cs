@@ -219,6 +219,47 @@ public sealed class GameUiServiceBridgeTests
     }
 
     /// <summary>
+    /// 验证无 manifest 的约定路径仍被限制在 content/ui 根目录内，不能用绝对路径或 .. 逃逸。
+    /// </summary>
+    [Fact]
+    public void BridgeRejectsConventionScreenPathsEscapingUiRoot()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-path-guard-{Guid.NewGuid():N}");
+        string uiRoot = Path.Combine(root, "ui");
+        _ = Directory.CreateDirectory(uiRoot);
+        string safe = Path.Combine(uiRoot, "safe.xhtml");
+        string outside = Path.Combine(root, "outside.xhtml");
+        File.WriteAllText(safe, "<ui><text>Safe</text></ui>");
+        File.WriteAllText(outside, "<ui><text>Outside</text></ui>");
+
+        try
+        {
+            RecordingBackend backend = new();
+            using RuntimeUi.GameUiHost host = new(backend);
+            host.Initialize(new RuntimeUi.UiBackendInitializeInfo(
+                new RuntimeUi.UiViewport(0, 0, 320, 240, 1f),
+                RuntimeUi.UiBackendKind.ManagedFallback));
+            GameUiServiceBridge bridge = new(host, root);
+
+            _ = bridge.ShowScreen("safe");
+            InvalidDataException relative = Assert.Throws<InvalidDataException>(() => bridge.ShowScreen("../outside.xhtml"));
+            InvalidDataException rooted = Assert.Throws<InvalidDataException>(() => bridge.ShowScreen(outside));
+
+            Assert.Equal(Path.GetFullPath(safe), backend.LastSource.Path);
+            Assert.Equal(1, backend.LoadDocumentCount);
+            Assert.Contains("content/ui", relative.Message);
+            Assert.Contains("content/ui", rooted.Message);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 manifest preload 屏幕会在服务桥创建时载入，后续显示同屏不重复载入。
     /// </summary>
     [Fact]
