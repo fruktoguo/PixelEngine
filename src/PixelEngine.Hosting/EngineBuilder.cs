@@ -23,6 +23,7 @@ public sealed class EngineBuilder
     private bool _headless;
     private bool _deterministicMode;
     private bool _enableGpu = true;
+    private bool _preferComputeSharpBackend;
     private bool _enableGuiRuntime = true;
     private bool _enableGameUi;
     private UiBackendKind _gameUiBackend = UiBackendKind.ManagedFallback;
@@ -111,6 +112,7 @@ public sealed class EngineBuilder
         {
             _enableEditor = false;
             _enableGpu = false;
+            _preferComputeSharpBackend = false;
             _enableGuiRuntime = false;
             _enableGameUi = false;
         }
@@ -138,6 +140,20 @@ public sealed class EngineBuilder
     public EngineBuilder EnableGpu(bool enabled = true)
     {
         _enableGpu = enabled && !_headless;
+        if (!_enableGpu)
+        {
+            _preferComputeSharpBackend = false;
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// 配置是否显式优先选择 ComputeSharp/DX12 后端；实际启用仍受 plan/09 G2 资源契约与可执行后端门控约束。
+    /// </summary>
+    public EngineBuilder PreferComputeSharpBackend(bool enabled = true)
+    {
+        _preferComputeSharpBackend = enabled && _enableGpu && !_headless;
         return this;
     }
 
@@ -322,6 +338,7 @@ public sealed class EngineBuilder
             _headless,
             _deterministicMode,
             _enableGpu,
+            _preferComputeSharpBackend,
             _enableGuiRuntime,
             _enableGameUi,
             _gameUiBackend,

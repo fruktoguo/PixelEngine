@@ -20,6 +20,10 @@ public sealed class RenderPipelineContractTests
 
         settings = new RenderPipelineSettings { RadianceCascades = RadianceCascadeSettings.Default with { BaseRayCount = 63 } };
         AssertThrows<ArgumentOutOfRangeException>(settings.Validate);
+
+        settings = new RenderPipelineSettings { PreferComputeSharpBackend = true };
+        settings.Validate();
+        Assert.True(settings.PreferComputeSharpBackend);
     }
 
     [Fact]
@@ -71,6 +75,9 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("_bloom.Render", source, StringComparison.Ordinal);
         Assert.Contains("_computeBloom!.Render", source, StringComparison.Ordinal);
         Assert.Contains("ComputeCapabilityGate.Evaluate", source, StringComparison.Ordinal);
+        Assert.Contains("RenderPipelineSettings? settings", source, StringComparison.Ordinal);
+        Assert.Contains("Settings.PreferComputeSharpBackend", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("preferComputeSharp: false", source, StringComparison.Ordinal);
         Assert.Contains("_dither.Render", source, StringComparison.Ordinal);
         Assert.Contains("_gamma.Render", source, StringComparison.Ordinal);
         Assert.Contains("_crt.Render", source, StringComparison.Ordinal);

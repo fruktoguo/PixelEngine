@@ -54,10 +54,13 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
     /// <param name="width">初始视口宽度。</param>
     /// <param name="height">初始视口高度。</param>
     /// <param name="computeFeatures">可选 plan/09 G4 compute 功能开关；未传入时使用默认安全配置。</param>
-    public RenderPipeline(RenderWindow window, int width, int height, ComputeFeatureSwitches? computeFeatures = null)
+    /// <param name="settings">可选渲染管线设置；用于在创建 compute gate 前传入 ComputeSharp 后端偏好。</param>
+    public RenderPipeline(RenderWindow window, int width, int height, ComputeFeatureSwitches? computeFeatures = null, RenderPipelineSettings? settings = null)
     {
         ArgumentNullException.ThrowIfNull(window);
         ValidateSize(width, height);
+        Settings = settings ?? new RenderPipelineSettings();
+        Settings.Validate();
         _window = window;
         _gl = window.Gl;
         GlslProfile profile = window.Capabilities.IsGles ? GlslProfile.Gles300 : GlslProfile.DesktopGl330;
@@ -68,7 +71,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         _composite = new CompositePass(_gl, profile);
         _bloom = new BloomPass(_gl, profile);
         GpuCapabilities gpuCapabilities = GpuCapabilities.Query(_gl, window.Capabilities);
-        _computeGate = ComputeCapabilityGate.Evaluate(gpuCapabilities, computeFeatures ?? ComputeFeatureSwitches.Default, preferComputeSharp: false);
+        _computeGate = ComputeCapabilityGate.Evaluate(gpuCapabilities, computeFeatures ?? ComputeFeatureSwitches.Default, Settings.PreferComputeSharpBackend);
         _computeBackend = ComputeBackendFactory.Create(_gl, _computeGate);
         _gpuComputeProfiler = new GpuComputeProfiler(_computeBackend);
         _gpuFrameProfiler = new GlGpuFrameProfiler(_gl, window.Capabilities);
@@ -117,7 +120,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
     /// <summary>
     /// 管线设置。
     /// </summary>
-    public RenderPipelineSettings Settings { get; } = new();
+    public RenderPipelineSettings Settings { get; }
 
     /// <summary>
     /// 当前管线是否可在 GPU point-sprite 路径接管自由粒子渲染。

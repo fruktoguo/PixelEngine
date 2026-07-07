@@ -44,6 +44,7 @@ public sealed class EngineBuilderTests
         Assert.False(context.Options.VSync);
         Assert.True(context.Options.EnableGuiRuntime);
         Assert.False(context.Options.EnableGameUi);
+        Assert.False(context.Options.PreferComputeSharpBackend);
         Assert.Equal(UiBackendKind.ManagedFallback, context.Options.GameUiBackend);
         Assert.Equal(64, context.Events.CapacityPerChannel);
         Assert.Equal(0, context.Options.NoGcRegionBudgetBytes);
@@ -52,6 +53,34 @@ public sealed class EngineBuilderTests
         Assert.Same(context.Clock, context.GetService<FrameClock>());
         Assert.Same(context.Events, context.GetService<EventBus>());
         Assert.Same(context.Counters, context.GetService<EngineCounters>());
+    }
+
+    /// <summary>
+    /// 验证 ComputeSharp 偏好只作为显式配置传入，并受 GPU/headless 门控约束。
+    /// </summary>
+    [Fact]
+    public void PreferComputeSharpBackendWritesOptionsAndRuntimeGatesDisableIt()
+    {
+        using Engine enabled = new EngineBuilder()
+            .WithWorkerCount(1)
+            .PreferComputeSharpBackend()
+            .Build();
+
+        using Engine gpuDisabled = new EngineBuilder()
+            .WithWorkerCount(1)
+            .PreferComputeSharpBackend()
+            .EnableGpu(false)
+            .Build();
+
+        using Engine headless = new EngineBuilder()
+            .WithWorkerCount(1)
+            .UseHeadless()
+            .PreferComputeSharpBackend()
+            .Build();
+
+        Assert.True(enabled.Context.Options.PreferComputeSharpBackend);
+        Assert.False(gpuDisabled.Context.Options.PreferComputeSharpBackend);
+        Assert.False(headless.Context.Options.PreferComputeSharpBackend);
     }
 
     /// <summary>
@@ -298,6 +327,7 @@ public sealed class EngineBuilderTests
         Assert.True(engine.Context.Options.DeterministicMode);
         Assert.False(engine.Context.Options.EnableEditor);
         Assert.False(engine.Context.Options.EnableGpu);
+        Assert.False(engine.Context.Options.PreferComputeSharpBackend);
         Assert.Equal(1, engine.Context.Options.WorkerCount);
         Assert.Equal(1, engine.Context.Jobs.WorkerCount);
     }

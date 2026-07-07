@@ -464,11 +464,16 @@ public sealed class Engine : IDisposable
         {
             GpuParticlesEnabled = Context.Options.EnableGpu,
         };
+        RenderPipelineSettings renderSettings = new()
+        {
+            PreferComputeSharpBackend = Context.Options.PreferComputeSharpBackend,
+        };
         RenderPipeline pipeline = new(
             window,
             Math.Max(1, Context.Options.InternalWidth),
             Math.Max(1, Context.Options.InternalHeight),
-            computeFeatures);
+            computeFeatures,
+            renderSettings);
         Context.Counters.FrameGpuTimerAvailable = pipeline.GpuFrameTimerAvailable;
         RenderPipelineFrameSink sink = new(pipeline);
         RenderPhaseDriver driver = new(

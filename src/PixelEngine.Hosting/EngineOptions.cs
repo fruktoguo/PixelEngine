@@ -23,6 +23,7 @@ public sealed class EngineOptions
         bool headless,
         bool deterministicMode,
         bool enableGpu,
+        bool preferComputeSharpBackend,
         bool enableGuiRuntime,
         bool enableGameUi,
         UiBackendKind gameUiBackend,
@@ -64,6 +65,7 @@ public sealed class EngineOptions
         Headless = headless;
         DeterministicMode = deterministicMode;
         EnableGpu = enableGpu;
+        PreferComputeSharpBackend = preferComputeSharpBackend && enableGpu && !headless;
         EnableGuiRuntime = enableGuiRuntime;
         EnableGameUi = enableGameUi && enableGuiRuntime && !headless;
         GameUiBackend = gameUiBackend;
@@ -162,6 +164,11 @@ public sealed class EngineOptions
     public bool EnableGpu { get; }
 
     /// <summary>
+    /// 是否显式优先选择 ComputeSharp/DX12 后端；仍受 plan/09 G2 资源契约与可执行后端门控约束。
+    /// </summary>
+    public bool PreferComputeSharpBackend { get; }
+
+    /// <summary>
     /// 是否允许 Hosting 自建脚本 GUI runtime；外部编辑器宿主可关闭它以保留窗口/上下文所有权。
     /// </summary>
     public bool EnableGuiRuntime { get; }
@@ -228,6 +235,7 @@ public sealed class EngineOptions
             headless: false,
             deterministicMode: false,
             enableGpu: true,
+            preferComputeSharpBackend: false,
             enableGuiRuntime: true,
             enableGameUi: false,
             gameUiBackend: UiBackendKind.ManagedFallback,
