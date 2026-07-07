@@ -34,6 +34,29 @@ public sealed class EditorScriptAssetOpenServiceTests
     }
 
     /// <summary>
+    /// 验证外部编辑器命令没有 {file} 占位符时，会把脚本路径作为最后一个参数追加。
+    /// </summary>
+    [Fact]
+    public void ConfiguredExternalEditorWithoutFilePlaceholderAppendsScriptPathArgument()
+    {
+        using TempDir temp = new();
+        EditorAssetManifestStore manifest = CreateManifestWithScript(temp.Path, out string scriptPath);
+        RecordingLauncher launcher = new();
+        ProjectSettingsDto settings = CreateSettings("\"C:/Program Files/Code/code.exe\" --reuse-window");
+        EditorScriptAssetOpenService service = new(manifest, () => settings, launcher);
+
+        EditorScriptAssetOpenResult result = service.OpenScriptAsset("scripts/PlayerController.cs");
+
+        Assert.True(result.Success, result.Diagnostic);
+        Assert.False(result.UsedSystemDefault);
+        Assert.Equal(scriptPath, result.ResolvedPath);
+        ProcessStartInfo startInfo = Assert.Single(launcher.Starts);
+        Assert.False(startInfo.UseShellExecute);
+        Assert.Equal("C:/Program Files/Code/code.exe", startInfo.FileName);
+        Assert.Equal(new[] { "--reuse-window", scriptPath }, startInfo.ArgumentList.ToArray());
+    }
+
+    /// <summary>
     /// 验证未配置外部编辑器时回退 OS/default opener。
     /// </summary>
     [Fact]
