@@ -56,6 +56,40 @@ public sealed class EngineBuilderTests
     }
 
     /// <summary>
+    /// 验证 EngineOptions 保留未显式 ComputeSharp 偏好的公开构造路径，避免破坏外部宿主配置代码。
+    /// </summary>
+    [Fact]
+    public void EngineOptionsLegacyConstructorDefaultsComputeSharpPreferenceOff()
+    {
+        EngineOptions options = new(
+            EngineOptions.DefaultWindowWidth,
+            EngineOptions.DefaultWindowHeight,
+            EngineOptions.DefaultWindowTitle,
+            EngineOptions.DefaultInternalWidth,
+            EngineOptions.DefaultInternalHeight,
+            workerCount: 0,
+            gcMode: EngineGcMode.SustainedLowLatency,
+            enableEditor: false,
+            headless: false,
+            deterministicMode: false,
+            enableGpu: true,
+            enableGuiRuntime: true,
+            enableGameUi: false,
+            gameUiBackend: UiBackendKind.ManagedFallback,
+            vSync: true,
+            contentRoot: "content",
+            startScene: null,
+            simHz: EngineConstants.DefaultSimHz,
+            eventCapacityPerChannel: EngineOptions.DefaultEventCapacityPerChannel,
+            noGcRegionBudgetBytes: 0,
+            overload: EngineOverloadOptions.CreateDefault());
+
+        Assert.True(options.EnableGpu);
+        Assert.False(options.Headless);
+        Assert.False(options.PreferComputeSharpBackend);
+    }
+
+    /// <summary>
     /// 验证 ComputeSharp 偏好只作为显式配置传入，并受 GPU/headless 门控约束。
     /// </summary>
     [Fact]
