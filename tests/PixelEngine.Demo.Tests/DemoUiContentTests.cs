@@ -200,6 +200,8 @@ public sealed class DemoUiContentTests
         AssertHudPathWritten(ui, "hud.ammo");
         AssertHudPathWritten(ui, "hud.cooldown");
         AssertHudPathWritten(ui, "hud.heat");
+        AssertHudPathWritten(ui, "hud.reload");
+        AssertHudPathWritten(ui, "hud.overheated");
         AssertHudPathWritten(ui, "hud.crystals");
         AssertHudPathWritten(ui, "hud.time");
         AssertHudPathWritten(ui, "hud.hazard");
@@ -395,8 +397,8 @@ public sealed class DemoUiContentTests
             """
             {
               "weapons": [
-                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" },
-                { "id": "laser", "displayName": "Laser", "kind": "laser", "radius": 1, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 7, "heatPerCell": 1, "beamDps": 1, "muzzleCue": "ui_click", "impactCue": "sizzle_lava_water", "hudColor": "#FFFFFFFF" }
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "reloadSeconds": 1.0, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" },
+                { "id": "laser", "displayName": "Laser", "kind": "laser", "radius": 1, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 7, "heatPerCell": 120, "beamDps": 1, "muzzleCue": "ui_click", "impactCue": "sizzle_lava_water", "hudColor": "#FFFFFFFF" }
               ]
             }
             """);
@@ -431,6 +433,8 @@ public sealed class DemoUiContentTests
             Assert.Equal(1.0, GetHudValue(ui, "hud.ammo"), precision: 3);
             Assert.Equal(1.0, GetHudValue(ui, "hud.cooldown"), precision: 3);
             Assert.Equal(0.0, GetHudValue(ui, "hud.heat"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.reload"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.overheated"), precision: 3);
             Assert.Equal(0.0, GetHudValue(ui, "hud.crystals"), precision: 3);
             Assert.InRange(GetHudValue(ui, "hud.time"), 0.0, 1.0);
             Assert.InRange(GetHudValue(ui, "hud.hazard"), 0.0, 1.0);
@@ -443,6 +447,13 @@ public sealed class DemoUiContentTests
             Assert.Equal(0.047, GetHudValue(ui, "hud.lights"), precision: 3);
             Assert.Equal(0.016, GetHudValue(ui, "hud.bodies"), precision: 3);
 
+            input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+            input.Update([Key.R], [], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+            Assert.True(GetHudValue(ui, "hud.reload") > 0.0);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.overheated"), precision: 3);
+
             health.MaxHealth = 200f;
             input.Update([Key.Digit2], [], mouseX: 0f, mouseY: 0f, wheelY: 0f);
             Assert.True(engine.Context.Events.Channel<MineYieldEvent>().TryEnqueue(new MineYieldEvent(20, 20, 1, 1)));
@@ -450,7 +461,14 @@ public sealed class DemoUiContentTests
 
             Assert.Equal(0.5, GetHudValue(ui, "hud.health"), precision: 3);
             Assert.Equal(1.0, GetHudValue(ui, "hud.weapon"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.reload"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.overheated"), precision: 3);
             Assert.Equal(0.5, GetHudValue(ui, "hud.crystals"), precision: 3);
+
+            input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+            Assert.True(GetHudValue(ui, "hud.heat") > 0.9);
+            Assert.Equal(1.0, GetHudValue(ui, "hud.overheated"), precision: 3);
             Assert.True(GetHudValue(ui, "hud.hazard") > 0.0);
             AssertHudPathWritten(ui, "hud.score");
 
@@ -482,8 +500,8 @@ public sealed class DemoUiContentTests
             """
             {
               "weapons": [
-                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" },
-                { "id": "laser", "displayName": "Laser", "kind": "laser", "radius": 1, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 7, "heatPerCell": 1, "beamDps": 1, "muzzleCue": "ui_click", "impactCue": "sizzle_lava_water", "hudColor": "#FFFFFFFF" }
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "reloadSeconds": 1.0, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" },
+                { "id": "laser", "displayName": "Laser", "kind": "laser", "radius": 1, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 7, "heatPerCell": 120, "beamDps": 1, "muzzleCue": "ui_click", "impactCue": "sizzle_lava_water", "hudColor": "#FFFFFFFF" }
               ]
             }
             """);
@@ -523,6 +541,8 @@ public sealed class DemoUiContentTests
             Assert.Equal(0.5, GetHudValue(ui, "hud.crystals"), precision: 3);
             Assert.True(GetHudValue(ui, "hud.hazard") > 0.0);
             AssertHudPathWritten(ui, "hud.score");
+            AssertHudPathWritten(ui, "hud.reload");
+            AssertHudPathWritten(ui, "hud.overheated");
             AssertHudPathWritten(ui, "hud.fps");
             AssertHudPathWritten(ui, "hud.frame_p99");
             AssertHudPathWritten(ui, "hud.frame_low1");
@@ -640,7 +660,7 @@ public sealed class DemoUiContentTests
 
     private static void AssertManagedModelPaths(GameUiHost host, PixelEngine.UI.UiScreenHandle screen, string[] expectedPaths)
     {
-        PixelEngine.UI.UiPathId[] paths = new PixelEngine.UI.UiPathId[16];
+        PixelEngine.UI.UiPathId[] paths = new PixelEngine.UI.UiPathId[32];
         int count = host.CopyModelPaths(screen, paths);
         int[] actual = [.. paths[..count].Select(path => path.Value).OrderBy(value => value)];
         int[] expected =
@@ -753,6 +773,8 @@ public sealed class DemoUiContentTests
             "hud.ammo",
             "hud.cooldown",
             "hud.heat",
+            "hud.reload",
+            "hud.overheated",
             "hud.crystals",
             "hud.time",
             "hud.hazard",
