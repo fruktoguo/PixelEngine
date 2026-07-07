@@ -271,6 +271,11 @@ public sealed class AssetBrowserPanel(
             }
         }
 
+        if (!string.IsNullOrWhiteSpace(item.PreviewSummary))
+        {
+            ImGui.TextUnformatted($"预览：{item.PreviewSummary}");
+        }
+
         ImGui.SameLine();
         if (IsPendingDeleteFor(item))
         {

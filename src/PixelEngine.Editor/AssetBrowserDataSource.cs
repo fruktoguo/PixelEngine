@@ -63,13 +63,15 @@ public readonly record struct AssetThumbnail(uint TextureHandle, int Width, int 
 /// <param name="LastModifiedUtc">最后修改 UTC 时间。</param>
 /// <param name="Thumbnail">可用缩略图；没有时为 null。</param>
 /// <param name="AssetId">工程级 stable asset id；旧文件系统数据源可为空。</param>
+/// <param name="PreviewSummary">Project Window 可展示的只读资产预览摘要。</param>
 public readonly record struct AssetBrowserItem(
     string Path,
     AssetBrowserItemKind Kind,
     long SizeBytes,
     DateTimeOffset LastModifiedUtc,
     AssetThumbnail? Thumbnail,
-    string? AssetId = null)
+    string? AssetId = null,
+    string? PreviewSummary = null)
 {
     /// <summary>
     /// UI 显示名。
