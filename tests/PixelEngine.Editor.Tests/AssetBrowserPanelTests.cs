@@ -144,6 +144,44 @@ public sealed class AssetBrowserPanelTests
         Assert.Equal("failed scripts/PlayerController.cs", failingPanel.Status);
     }
 
+    /// <summary>
+    /// 验证 Project Window 删除动作必须先经确认回调，且缺 stable id 的旧数据源项不能删除。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelDeletesOnlyStableAssetsAfterConfirmation()
+    {
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_texture"),
+            new AssetBrowserItem("textures/legacy.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null),
+        ]);
+        List<AssetBrowserDeleteRequest> requests = [];
+        AssetBrowserDeleteResult DeleteAsset(AssetBrowserDeleteRequest request)
+        {
+            requests.Add(request);
+            return request.Confirmed
+                ? new AssetBrowserDeleteResult(true, false, $"deleted {request.Path}")
+                : new AssetBrowserDeleteResult(false, true, $"confirm {request.Path}");
+        }
+
+        AssetBrowserPanel panel = new(source, deleteAsset: DeleteAsset);
+
+        _ = panel.Refresh();
+        bool requested = panel.TryRequestDeleteAsset("textures/sand.png");
+        bool confirmed = panel.TryConfirmDeleteAsset("textures/sand.png");
+        bool legacy = panel.TryRequestDeleteAsset("textures/legacy.png");
+
+        Assert.False(requested);
+        Assert.True(confirmed);
+        Assert.False(legacy);
+        Assert.Equal(2, requests.Count);
+        Assert.False(requests[0].Confirmed);
+        Assert.True(requests[1].Confirmed);
+        Assert.Equal("asset_texture", requests[1].AssetId);
+        Assert.Equal(AssetBrowserItemKind.Texture, requests[1].Kind);
+        Assert.Contains("stable asset id", panel.Status, StringComparison.Ordinal);
+    }
+
     private sealed class RecordingThumbnailProvider : ITextureThumbnailProvider
     {
         public bool TryGetThumbnail(string assetPath, out AssetThumbnail thumbnail)

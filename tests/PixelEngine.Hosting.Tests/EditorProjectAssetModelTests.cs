@@ -118,6 +118,76 @@ public sealed class EditorProjectAssetModelTests
     }
 
     /// <summary>
+    /// 验证删除预检会阻止仍被 Scene / 活动 authoring 模型引用的资产。
+    /// </summary>
+    [Fact]
+    public void DeleteAssetPreflightBlocksReferencedAssetsAndReportsLocations()
+    {
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            string contentRoot = Path.Combine(projectRoot, "content");
+            EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
+            EditorAssetRecord texture = manifest.CreateAsset("textures/sand.png", EditorAssetType.Texture, textContents: "texture");
+            string reference = EditorAssetReferenceCodec.Encode(texture.Id, texture.LogicalPath, texture.AssetType);
+            EngineSceneDocument document = CreateSceneWithAssetReference(reference);
+            string scenePath = Path.Combine(contentRoot, "scenes", "main.scene");
+            EngineSceneDocumentLoader.SaveDocument(document, scenePath);
+            EditorSceneModel activeScene = EditorSceneModel.FromDocument(document);
+
+            EditorAssetDeletePreflight preflight = manifest.PreflightDeleteAsset("textures/sand.png", activeScene);
+            EditorAssetDeleteResult delete = manifest.DeleteAsset("textures/sand.png", activeScene, confirmed: true);
+
+            Assert.False(preflight.CanDelete);
+            Assert.Equal(2, preflight.ReferenceCount);
+            Assert.Equal(1, preflight.ReferenceDocuments);
+            Assert.True(preflight.ActiveSceneHasReferences);
+            Assert.Contains(preflight.ReferenceLocations, location => location.StartsWith("scenes/main.scene:", StringComparison.Ordinal));
+            Assert.Contains(preflight.ReferenceLocations, location => location.StartsWith("active scene:", StringComparison.Ordinal));
+            Assert.False(delete.Deleted);
+            Assert.False(delete.RequiresConfirmation);
+            Assert.Contains("仍被 2 处引用", delete.Diagnostic, StringComparison.Ordinal);
+            Assert.True(File.Exists(Path.Combine(contentRoot, "textures", "sand.png")));
+            Assert.True(manifest.TryResolveAssetId(texture.Id, out _));
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
+    /// 验证未引用资产必须先确认，确认后才会从磁盘和 manifest 移除。
+    /// </summary>
+    [Fact]
+    public void DeleteAssetRequiresConfirmationAndRemovesUnreferencedManifestRecord()
+    {
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            string contentRoot = Path.Combine(projectRoot, "content");
+            EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
+            EditorAssetRecord texture = manifest.CreateAsset("textures/unused.png", EditorAssetType.Texture, textContents: "texture");
+
+            EditorAssetDeleteResult request = manifest.DeleteAsset("textures/unused.png");
+            EditorAssetDeleteResult confirmed = manifest.DeleteAsset("textures/unused.png", confirmed: true);
+
+            Assert.False(request.Deleted);
+            Assert.True(request.RequiresConfirmation);
+            Assert.Contains("需要确认", request.Diagnostic, StringComparison.Ordinal);
+            Assert.True(confirmed.Deleted);
+            Assert.False(confirmed.RequiresConfirmation);
+            Assert.False(File.Exists(Path.Combine(contentRoot, "textures", "unused.png")));
+            Assert.False(manifest.TryResolveAssetId(texture.Id, out _));
+            Assert.DoesNotContain(manifest.Refresh(), asset => asset.Id == texture.Id);
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
     /// 验证资产模型拒绝越过 content 根目录的创建和移动路径。
     /// </summary>
     [Fact]
@@ -143,6 +213,35 @@ public sealed class EditorProjectAssetModelTests
     private static string CreateTempProjectRoot()
     {
         return Path.Combine(Path.GetTempPath(), "pixelengine-project-assets-" + Guid.NewGuid().ToString("N"));
+    }
+
+    private static EngineSceneDocument CreateSceneWithAssetReference(string reference)
+    {
+        return new EngineSceneDocument
+        {
+            FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+            Name = "asset-reference",
+            Entities =
+            [
+                new EngineSceneEntityDocument
+                {
+                    StableId = 10,
+                    Name = "Receiver",
+                    Transform = new EngineSceneTransformDocument(),
+                    Behaviours =
+                    [
+                        new EngineSceneBehaviourDocument
+                        {
+                            TypeName = "PixelEngine.Tests.AssetReferenceProbe",
+                            SerializedFields = new Dictionary<string, string>
+                            {
+                                ["Texture"] = reference,
+                            },
+                        },
+                    ],
+                },
+            ],
+        };
     }
 
     private static void SavePrefabDocument(string contentRoot, string logicalPath, string name)

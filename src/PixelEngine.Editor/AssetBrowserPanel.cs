@@ -17,17 +17,21 @@ public delegate bool ScriptAssetOpenHandler(string assetPath, out string diagnos
 /// <param name="audioPreview">音频试听服务。</param>
 /// <param name="instantiatePrefab">可选 prefab 实例化回调。</param>
 /// <param name="openScriptAsset">可选脚本资产打开回调。</param>
+/// <param name="deleteAsset">可选资产删除回调。</param>
 public sealed class AssetBrowserPanel(
     IAssetBrowserDataSource source,
     IAudioPreviewService? audioPreview = null,
     Action<string>? instantiatePrefab = null,
-    ScriptAssetOpenHandler? openScriptAsset = null) : IEditorPanel
+    ScriptAssetOpenHandler? openScriptAsset = null,
+    AssetBrowserDeleteHandler? deleteAsset = null) : IEditorPanel
 {
     private readonly IAssetBrowserDataSource _source = source ?? throw new ArgumentNullException(nameof(source));
     private readonly IAudioPreviewService? _audioPreview = audioPreview;
     private readonly Action<string>? _instantiatePrefab = instantiatePrefab;
     private readonly ScriptAssetOpenHandler? _openScriptAsset = openScriptAsset;
+    private readonly AssetBrowserDeleteHandler? _deleteAsset = deleteAsset;
     private string _search = string.Empty;
+    private string? _pendingDeletePath;
 
     /// <inheritdoc />
     public string Title => EditorDockSpace.AssetBrowserWindowTitle;
@@ -175,6 +179,26 @@ public sealed class AssetBrowserPanel(
         return opened;
     }
 
+    /// <summary>
+    /// 请求删除指定资产；如果数据源要求确认，则只记录待确认状态。
+    /// </summary>
+    /// <param name="path">资产路径。</param>
+    /// <returns>删除已经执行时返回 true。</returns>
+    public bool TryRequestDeleteAsset(string path)
+    {
+        return TryDeleteAsset(path, confirmed: false);
+    }
+
+    /// <summary>
+    /// 确认删除指定资产。
+    /// </summary>
+    /// <param name="path">资产路径。</param>
+    /// <returns>删除已经执行时返回 true。</returns>
+    public bool TryConfirmDeleteAsset(string path)
+    {
+        return TryDeleteAsset(path, confirmed: true);
+    }
+
     /// <inheritdoc />
     public void Draw(in EditorContext context)
     {
@@ -246,6 +270,71 @@ public sealed class AssetBrowserPanel(
                 Status = $"实例化 {item.Path}";
             }
         }
+
+        ImGui.SameLine();
+        if (string.Equals(_pendingDeletePath, item.Path, StringComparison.OrdinalIgnoreCase))
+        {
+            if (ImGui.Button($"确认删除##{item.Path}"))
+            {
+                _ = TryConfirmDeleteAsset(item.Path);
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button($"取消##{item.Path}"))
+            {
+                _pendingDeletePath = null;
+                Status = $"已取消删除 {item.Path}";
+            }
+        }
+        else if (ImGui.Button($"删除##{item.Path}"))
+        {
+            _ = TryRequestDeleteAsset(item.Path);
+        }
+    }
+
+    private bool TryDeleteAsset(string path, bool confirmed)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        AssetBrowserItem? item = FindAsset(path);
+        if (item is null)
+        {
+            Status = $"资产不存在：{path}";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(item.Value.AssetId))
+        {
+            Status = $"资产缺少 stable asset id，不能删除：{item.Value.Path}";
+            return false;
+        }
+
+        if (_deleteAsset is null)
+        {
+            Status = "资产删除服务不可用";
+            return false;
+        }
+
+        AssetBrowserDeleteResult result = _deleteAsset(new AssetBrowserDeleteRequest(
+            item.Value.Path,
+            item.Value.AssetId,
+            item.Value.Kind,
+            confirmed));
+        Status = string.IsNullOrWhiteSpace(result.Diagnostic)
+            ? result.Succeeded ? $"已删除 {item.Value.Path}" : $"删除未执行：{item.Value.Path}"
+            : result.Diagnostic;
+        if (result.RequiresConfirmation)
+        {
+            _pendingDeletePath = item.Value.Path;
+            return false;
+        }
+
+        _pendingDeletePath = null;
+        if (result.Succeeded)
+        {
+            _ = Refresh();
+        }
+
+        return result.Succeeded;
     }
 
     private void ApplyFilter()

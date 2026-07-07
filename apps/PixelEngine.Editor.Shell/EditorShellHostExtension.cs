@@ -218,10 +218,12 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
         _editor.AddPanel(_sceneViewPanel);
         _gameViewPanel = new GameViewPanel(() => pipeline.CurrentViewportTexture);
         _editor.AddPanel(_gameViewPanel);
+        EditorAssetBrowserDataSource assetBrowserDataSource = new(new EditorAssetManifestStore(_project));
         _editor.AddPanel(new AssetBrowserPanel(
-            new EditorAssetBrowserDataSource(new EditorAssetManifestStore(_project)),
+            assetBrowserDataSource,
             instantiatePrefab: _app.InstantiatePrefab,
-            openScriptAsset: _app.OpenScriptAsset));
+            openScriptAsset: _app.OpenScriptAsset,
+            deleteAsset: request => assetBrowserDataSource.DeleteAsset(request, _sceneModel)));
         MaterialReactionEditorPanel? materialReactionPanel = TryCreateMaterialReactionPanel(engine);
         if (materialReactionPanel is not null)
         {
