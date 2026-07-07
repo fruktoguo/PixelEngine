@@ -18,6 +18,7 @@ internal sealed class SceneViewPanel(
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly EditorUndoStack _undo = undo ?? throw new ArgumentNullException(nameof(undo));
     private readonly MaterialBrushPalettePanel? _brushPanel = brushPanel;
+    private bool _visible = true;
     private ImGuizmoOperation _operation = ImGuizmoOperation.Translate;
     private Vector2 _lastImageMin;
     private Vector2 _lastImageSize;
@@ -25,7 +26,20 @@ internal sealed class SceneViewPanel(
 
     public string Title => EditorDockSpace.ViewportWindowTitle;
 
-    public bool Visible { get; set; } = true;
+    public bool Visible
+    {
+        get => _visible;
+        set
+        {
+            _visible = value;
+            if (!value)
+            {
+                InputFocused = false;
+            }
+        }
+    }
+
+    public bool InputFocused { get; private set; }
 
     public void Draw(in EditorContext context)
     {
@@ -34,11 +48,13 @@ internal sealed class SceneViewPanel(
         if (!ImGui.Begin(Title, ref visible, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
         {
             Visible = visible;
+            InputFocused = false;
             ImGui.End();
             return;
         }
 
         Visible = visible;
+        InputFocused = ImGui.IsWindowHovered() || ImGui.IsWindowFocused();
         DrawToolbar();
         if (!_lastTexture.IsValid)
         {
