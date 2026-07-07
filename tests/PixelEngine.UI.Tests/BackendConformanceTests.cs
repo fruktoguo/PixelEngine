@@ -4,12 +4,19 @@ using Xunit;
 
 namespace PixelEngine.UI.Tests;
 
-public sealed class BackendConformanceTests
+public sealed class BackendConformanceTests : IDisposable
 {
+    private readonly List<string> _temporaryUiFiles = [];
+
     [Fact]
     public void ManagedFallbackLifecycleResizeLoadAndScreenStackExposeSharedContract()
     {
-        string path = WriteUi("""
+        string passivePath = WriteUi("""
+            <ui title="Status">
+              <text id="title">Status</text>
+            </ui>
+            """);
+        string interactivePath = WriteUi("""
             <ui title="Main">
               <text id="title">Main</text>
               <button id="start" data-event-click="start_game">Start</button>
@@ -19,8 +26,9 @@ public sealed class BackendConformanceTests
 
         backend.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
         backend.Resize(new UiViewport(0, 0, 640, 480, 1f));
-        UiDocumentHandle document = backend.LoadDocument(UiDocumentSource.Asset(path, 1));
-        backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(1), new UiScreenId(1), document, Modal: false)]);
+        UiDocumentHandle passiveDocument = backend.LoadDocument(UiDocumentSource.Asset(passivePath, 1));
+        UiDocumentHandle interactiveDocument = backend.LoadDocument(UiDocumentSource.Asset(interactivePath, 2));
+        backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(1), new UiScreenId(1), passiveDocument, Modal: false)]);
 
         UiHitResult passThrough = backend.HitTest(12, 16);
         Assert.True(backend.IsDirty);
@@ -29,10 +37,17 @@ public sealed class BackendConformanceTests
         Assert.False(passThrough.WantsMouse);
         Assert.False(passThrough.WantsKeyboard);
 
+        backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(2), new UiScreenId(2), interactiveDocument, Modal: false)]);
+        UiHitResult interactive = backend.HitTest(12, 16);
+        Assert.True(interactive.HitsUi);
+        Assert.False(interactive.Opaque);
+        Assert.True(interactive.WantsMouse);
+        Assert.True(interactive.WantsKeyboard);
+
         backend.Composite(default);
         Assert.False(backend.IsDirty);
 
-        backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(2), new UiScreenId(1), document, Modal: true)]);
+        backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(3), new UiScreenId(2), interactiveDocument, Modal: true)]);
         UiHitResult modal = backend.HitTest(12, 16);
 
         Assert.True(modal.HitsUi);
@@ -132,14 +147,14 @@ public sealed class BackendConformanceTests
         };
         UiInputRouter router = new(host, input);
 
-        UiInputCapture passThrough = router.RefreshCapture();
+        UiInputCapture interactive = router.RefreshCapture();
         _ = host.PushModal(new UiScreenId(4), in source);
         UiInputCapture modal = router.RefreshCapture();
 
-        Assert.True(passThrough.HitsUi);
-        Assert.False(passThrough.Opaque);
-        Assert.True(passThrough.AllowWorldMouse);
-        Assert.True(passThrough.AllowWorldKeyboard);
+        Assert.True(interactive.HitsUi);
+        Assert.False(interactive.Opaque);
+        Assert.False(interactive.AllowWorldMouse);
+        Assert.False(interactive.AllowWorldKeyboard);
         Assert.True(modal.HitsUi);
         Assert.True(modal.Opaque);
         Assert.False(modal.AllowWorldMouse);
@@ -189,11 +204,29 @@ public sealed class BackendConformanceTests
         return new ManagedFallbackBackend(gui, options);
     }
 
-    private static string WriteUi(string contents)
+    private string WriteUi(string contents)
     {
         string path = Path.Combine(Path.GetTempPath(), $"pixelengine-backend-contract-{Guid.NewGuid():N}.xhtml");
         File.WriteAllText(path, contents);
+        _temporaryUiFiles.Add(path);
         return path;
+    }
+
+    public void Dispose()
+    {
+        foreach (string path in _temporaryUiFiles)
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
     }
 
     private sealed class FakeGuiHost : IManagedFallbackGuiHost
