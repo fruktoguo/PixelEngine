@@ -45,6 +45,7 @@ public sealed class EditorShellSceneMaterializationTests
                                 ["Material"] = "4",
                                 ["Position"] = "3.5,4.25",
                                 ["TextureReference"] = ScriptAssetReference.Encode("asset_texture", "textures/sand.png", ScriptAssetKind.Texture),
+                                ["_privateTextureReference"] = ScriptAssetReference.Encode("asset_private_texture", "textures/private.png", ScriptAssetKind.Texture),
                             },
                         },
                     ],
@@ -72,6 +73,7 @@ public sealed class EditorShellSceneMaterializationTests
         Assert.Equal(new Vector2(3.5f, 4.25f), probe.Position);
         Assert.Equal(new MaterialId(4), probe.Material);
         Assert.Equal(new ScriptAssetReference(ScriptAssetKind.Texture, "asset_texture", "textures/sand.png"), probe.TextureReference);
+        Assert.Equal(new ScriptAssetReference(ScriptAssetKind.Texture, "asset_private_texture", "textures/private.png"), probe.PrivateTextureReference);
     }
 
     /// <summary>
@@ -243,6 +245,7 @@ public sealed class EditorShellSceneMaterializationTests
                             SerializedFields = new Dictionary<string, string>
                             {
                                 ["TextureReference"] = ScriptAssetReference.Encode("asset_texture", "textures/sand.png", ScriptAssetKind.Texture),
+                                ["_privateTextureReference"] = ScriptAssetReference.Encode("asset_private_texture", "textures/private.png", ScriptAssetKind.Texture),
                             },
                         },
                     ],
@@ -257,6 +260,48 @@ public sealed class EditorShellSceneMaterializationTests
         ScriptEntityInspection entity = Assert.Single(scene.CaptureInspectionSnapshot());
         EditorShellProjectionProbe probe = Assert.IsType<EditorShellProjectionProbe>(Assert.Single(entity.Components).Behaviour);
         Assert.Equal(new ScriptAssetReference(ScriptAssetKind.Texture, "asset_texture", "textures/sand.png"), probe.TextureReference);
+        Assert.Equal(new ScriptAssetReference(ScriptAssetKind.Texture, "asset_private_texture", "textures/private.png"), probe.PrivateTextureReference);
+    }
+
+    /// <summary>
+    /// 验证统一 SerializedFields 绑定规则拒绝隐藏字段和 readonly 字段，避免绕过 Inspector 暴露边界。
+    /// </summary>
+    [Theory]
+    [InlineData("_hiddenLabel")]
+    [InlineData("_readonlyLabel")]
+    public void SerializedFieldBindingRejectsHiddenAndReadonlyFields(string fieldName)
+    {
+        EngineSceneDocument document = new()
+        {
+            FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+            Name = "rejected-field-binding",
+            Entities =
+            [
+                new EngineSceneEntityDocument
+                {
+                    StableId = 1,
+                    Name = "rejected",
+                    Transform = new EngineSceneTransformDocument(),
+                    Behaviours =
+                    [
+                        new EngineSceneBehaviourDocument
+                        {
+                            TypeName = typeof(EditorShellProjectionProbe).FullName!,
+                            SerializedFields = new Dictionary<string, string>
+                            {
+                                [fieldName] = "mutated",
+                            },
+                        },
+                    ],
+                },
+            ],
+        };
+        ScriptAssemblyRegistry scripts = new();
+        scripts.Register(typeof(EditorShellProjectionProbe).Assembly);
+        EditorSceneModel model = EditorSceneModel.FromDocument(document);
+
+        _ = Assert.Throws<InvalidOperationException>(() => EngineSceneDocumentLoader.Build(document, scripts));
+        _ = Assert.Throws<InvalidOperationException>(() => EditorSceneRuntimeProjection.Build(model, scripts));
     }
 
     private static void AssertAuthoringAfterRedo(EditorSceneModel model, int rootId, int childId)
@@ -337,5 +382,40 @@ public sealed class EditorShellSceneMaterializationTests
         /// 测试 typed asset reference 字段。
         /// </summary>
         public ScriptAssetReference TextureReference { get; set; }
+
+        /// <summary>
+        /// 测试 private SerializeField typed asset reference 字段。
+        /// </summary>
+        [SerializeField]
+        [AssetField(ScriptAssetKind.Texture)]
+        private ScriptAssetReference _privateTextureReference = ScriptAssetReference.Empty;
+
+        /// <summary>
+        /// 测试隐藏字段不会被 SerializedFields 绑定。
+        /// </summary>
+        [SerializeField]
+        [HideInInspector]
+        private string _hiddenLabel = "hidden";
+
+        /// <summary>
+        /// 测试 readonly 字段不会被 SerializedFields 绑定。
+        /// </summary>
+        [SerializeField]
+        private readonly string _readonlyLabel = "readonly";
+
+        /// <summary>
+        /// 暴露 private SerializeField 字段供测试断言。
+        /// </summary>
+        public ScriptAssetReference PrivateTextureReference => _privateTextureReference;
+
+        /// <summary>
+        /// 暴露隐藏字段供测试断言。
+        /// </summary>
+        public string HiddenLabel => _hiddenLabel;
+
+        /// <summary>
+        /// 暴露 readonly 字段供测试断言。
+        /// </summary>
+        public string ReadonlyLabel => _readonlyLabel;
     }
 }

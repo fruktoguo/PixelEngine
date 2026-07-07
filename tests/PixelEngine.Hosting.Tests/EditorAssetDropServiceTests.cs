@@ -1,3 +1,4 @@
+using PixelEngine.Editor;
 using PixelEngine.Editor.Shell;
 using PixelEngine.Scripting;
 using Xunit;
@@ -269,6 +270,52 @@ public sealed class EditorAssetDropServiceTests
         Assert.Equal(EditorAssetType.Texture, decoded.AssetType);
         Assert.Equal("asset_texture", decoded.AssetId);
         Assert.Equal("textures/sand.png", decoded.LogicalPath);
+    }
+
+    /// <summary>
+    /// 验证 Inspector 面板接入口会消费 Project Window typed browser payload，写入字段并同步状态/Console 诊断。
+    /// </summary>
+    [Fact]
+    public void InspectorPanelAcceptsProjectWindowBrowserPayloadAndRecordsDiagnostics()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("drop-inspector-browser-payload");
+        EditorGameObject gameObject = scene.Create("Receiver");
+        gameObject.Components.Add(new EditorComponentModel(typeof(AssetDropProbeBehaviour).FullName!));
+        EditorUndoStack undo = new();
+        ScriptAssemblyRegistry scripts = new();
+        scripts.Register(typeof(AssetDropProbeBehaviour).Assembly);
+        EditorConsoleStore console = new();
+        GameObjectInspectorPanel panel = new(scene, undo, scripts, console);
+        ScriptFieldDescriptor field = ScriptInspector
+            .InspectFields(new AssetDropProbeBehaviour())
+            .Single(item => item.Name == nameof(AssetDropProbeBehaviour.TextureReference));
+
+        EditorAssetDropResult invalid = panel.AcceptAssetBrowserDragPayloadToField(
+            gameObject.StableId,
+            componentIndex: 0,
+            field,
+            new AssetBrowserDragPayload(string.Empty, "textures/sand.png", AssetBrowserItemKind.Texture));
+
+        Assert.False(invalid.Succeeded);
+        Assert.Contains("stable asset id", panel.Status, StringComparison.Ordinal);
+        Assert.Empty(gameObject.Components[0].SerializedFields);
+
+        EditorAssetDropResult valid = panel.AcceptAssetBrowserDragPayloadToField(
+            gameObject.StableId,
+            componentIndex: 0,
+            field,
+            new AssetBrowserDragPayload("asset_texture", "textures/sand.png", AssetBrowserItemKind.Texture));
+
+        Assert.True(valid.Succeeded);
+        Assert.Contains("textures/sand.png", panel.Status, StringComparison.Ordinal);
+        string encoded = gameObject.Components[0].SerializedFields[nameof(AssetDropProbeBehaviour.TextureReference)];
+        Assert.True(EditorAssetReferenceCodec.TryDecode(encoded, out EditorAssetReference decoded));
+        Assert.Equal(EditorAssetType.Texture, decoded.AssetType);
+        EditorConsoleEntry[] entries = console.Snapshot(new EditorConsoleFilter { Category = EditorConsoleCategory.Asset });
+        Assert.Equal(2, entries.Length);
+        Assert.Equal(EditorConsoleSeverity.Warning, entries[0].Severity);
+        Assert.Equal(EditorConsoleSeverity.Info, entries[1].Severity);
+        Assert.All(entries, entry => Assert.Equal("inspector-asset-drop", entry.Source));
     }
 
     /// <summary>

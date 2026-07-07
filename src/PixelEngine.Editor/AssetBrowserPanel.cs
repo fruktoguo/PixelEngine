@@ -253,6 +253,17 @@ public sealed class AssetBrowserPanel(
             }
         }
 
+        if (ImGui.BeginDragDropSource())
+        {
+            if (TryCreateDragPayload(item.Path, out AssetBrowserDragPayload payload))
+            {
+                _ = AssetBrowserDragPayloadImGui.SetPayload(payload);
+                ImGui.TextUnformatted(item.Path);
+            }
+
+            ImGui.EndDragDropSource();
+        }
+
         if (item.Kind == AssetBrowserItemKind.Audio)
         {
             ImGui.SameLine();
