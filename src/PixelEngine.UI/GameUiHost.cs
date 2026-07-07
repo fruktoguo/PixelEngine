@@ -103,6 +103,12 @@ public sealed class GameUiHost : IDisposable
     {
         ThrowIfDisposed();
         EnsureEnabled();
+        screenId.Validate();
+        if (Documents.TryGetDocument(screenId, out UiDocumentHandle existing))
+        {
+            return existing;
+        }
+
         UiDocumentHandle document = _backend.LoadDocument(in source);
         Documents.Register(screenId, document, source.Kind);
         return document;

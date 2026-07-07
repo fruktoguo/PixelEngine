@@ -86,6 +86,24 @@ public sealed class GameUiHostTests
         Assert.Equal(0, host.Documents.StackCount);
     }
 
+    [Fact]
+    public void LoadDocumentReturnsExistingDocumentBeforeBackendLoad()
+    {
+        FakeBackend backend = new();
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        UiDocumentSource firstSource = UiDocumentSource.Asset("content/ui/main.html", 7);
+        UiDocumentSource secondSource = UiDocumentSource.Asset("content/ui/main-duplicate.html", 7);
+
+        UiDocumentHandle first = host.LoadDocument(new UiScreenId(7), in firstSource);
+        UiDocumentHandle second = host.LoadDocument(new UiScreenId(7), in secondSource);
+
+        Assert.Equal(first, second);
+        Assert.Equal(1, backend.LoadCount);
+        Assert.Equal(1, host.Documents.DocumentCount);
+        Assert.Equal(0, host.Documents.StackCount);
+        Assert.Equal(0, backend.LastScreenStackCount);
+    }
 
     [Fact]
     public void InvokeActionForVisibleScreenRoutesToBackendDocument()

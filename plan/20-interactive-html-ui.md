@@ -39,7 +39,7 @@
 
 - [x] 模块依赖方向已锁定：`UI → {Gui, Rendering, Core}`；UI 不引用 Editor/Scripting/Simulation/Physics/World/Content/Serialization/Audio/Demo，脚本可见契约由 Scripting 声明、Hosting bridge 实现。
 - [x] `IGameUiService` 已通过 Hosting `GameUiServiceBridge` 挂到 `EngineContext.GameUi`，支持 Show/Hide/PushModal/BindModel/SetValue/TryGetValue/UiEventRaised/Invoke；禁用 UI 时返回 no-op 服务。
-- [x] `GameUiHost` / `UiDocumentManager` 已管理屏栈、显隐、模态、返回栈、预载和后端 dispatch。
+- [x] `GameUiHost` / `UiDocumentManager` 已管理屏栈、显隐、模态、返回栈、预载和后端 dispatch；`LoadDocument` 对已注册 screen id 幂等返回既有文档，manifest preload / 后续显示不会生成孤儿 backend document。
 - [x] `ManagedFallbackBackend` 已将 `content/ui` 抽象控件树映射到 `PixelEngine.Gui` 中性 host；与 Demo HUD、PauseMenu、PlayableHud、`Behaviour.OnGui` 共用同一 GUI 路径，不另立平行绘制 API。
 - [x] RmlUi native 已使用 `[LibraryImport]` resolver、native handle 生命周期、renderer/context/document/update/render、font registration、mouse/keyboard/text 输入、DOM HitTest、model set/get/copy、action invoke 与 event drain。
 - [x] `RenderPipeline.RegisterUiLayer(int order, IUiCompositeLayer)` 已成为显式 UI 层排序机制；game UI order=100，Editor ImGui order=200，替代多播订阅顺序。
