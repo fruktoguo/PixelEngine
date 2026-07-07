@@ -52,7 +52,7 @@
 - [x] `GameUiAllocationBenchmarks` 已覆盖静态 UI phase、clean composite/draw skip 与空闲输入泵，ShortRun `MemoryDiagnoser` 报告稳态 `Allocated == 0 B`。
 - [x] `UiDirtyRectCollector`、`UiOverlayTexture`、`UiPresentContext.UploadOverlayTexture` 与 `UiOffscreenSurfacePresenter` 已提供离屏 surface dirty upload + textured quad 合成底座。
 - [x] `FontEngine` 已选择 `content/ui/fonts` 优先、共享 `GuiFontManager` 系统候选、CJK glyph range、DPI 字号、missing glyph 诊断；RmlUi/ManagedFallback 可消费同一字体选择。
-- [x] `content/ui/ui-manifest.json` 已支持 screen id、preload、images 清单、路径逃逸拒绝、缺失文件校验、预载 screen/image；Demo 已落五类屏幕并由 `GameUiDemoController` 驱动。
+- [x] `content/ui/ui-manifest.json` 已支持 screen id、preload、images 清单、路径逃逸拒绝、缺失文件校验、预载 screen/image；Demo 已落主菜单、设置、背包、对话、HUD、暂停、结算七类屏幕，并由 `GameUiDemoController` 通过公开 `IGameUiService` 驱动。
 - [x] Demo Web-first HUD 已接入真实任务与武器状态：`GameUiDemoController.OnUpdate` 通过脚本公开 `IGameUiService.SetValue` 发布生命、武器槽位、弹药、冷却/热量、水晶进度、剩余时间、水位危险度与分数；`hud.xhtml` 使用 numeric model paths 与稳定中文 label，保留 `PlayableHud`/`IGuiContext` fallback 诊断路径，且不把未完成的 RmlUi 字符串池能力或真实窗口产品验收标为完成。
 - [x] UI native packaging 已采用 dynamic-only：`PixelEngine.UiNative.targets`、CMake `SHARED`、`runtimes/<rid>/native/`、R2R 包含 UI native、AOT 不携带动态 UI native 并回退 ManagedFallback 的审计测试已落地。
 - [x] `RmlUiNativeProfileGate` 已集中收紧 RmlUi desktop GL3 profile gate：显式 ANGLE/GLES backend request、GLES context、ANGLE renderer/vendor/version 全部拒绝加载 GL3 renderer 并回退 ManagedFallback；`RmlUiNativeProfileGateTests`、`EngineBuilderTests`、`EditorConsoleStoreTests` 与 `HostingProjectDisciplineTests.RmlUiAngleGlesProfileGateFallsBackAndDoesNotMarkM15Complete` 锁定 fallback reason、Console 可见诊断与 M15 不误勾。
@@ -60,13 +60,13 @@
 ## 5. M14 产品验收 checklist
 
 - [!] **透明 UI 产品面**：HUD/menu/settings 必须在真实窗口中证明透明区域透出世界、alpha blend 正确、非交互透明区 pass-through、交互元素 capture、Editor overlay 盖在 game UI 上；当前自动化合成/HitTest/GL restore 已有证据，但仍缺真实窗口 Demo 产品面视频和人工体验确认。
-- [x] **HTML 屏幕覆盖**：主菜单、设置、背包、对话、HUD 已有 `content/ui` 屏幕与 manifest，ManagedFallback 与 RmlUi 能显示/交互，中文字体可显示。
+- [x] **HTML 屏幕覆盖**：主菜单、设置、背包、对话、HUD、暂停、结算已有 `content/ui` 屏幕与 manifest，ManagedFallback 与 RmlUi 能显示/交互，中文字体可显示。
 - [x] **C#↔UI 事件链路**：UI 事件经 `UiEvent` → `ScriptEventBus` → 脚本相位 drain，世界写入通过延迟队列落正确相位；禁用 UI 时 no-op 安全。
 - [!] **输入三级仲裁**：Editor → Web-first UI → Game 的上游捕获门、committed text、RmlUi/ManagedFallback HitTest 已实现；真实平台 IME composition、候选/预编辑可视化、Ultralight HitTest 尚未完成，不能把 KeyChar 或 committed text 冒充 IME。
 - [x] **UI cadence**：UI update 使用 render dt，sim 降到 30Hz 时 UI 仍按渲染 cadence 推进；过载只降低 present cadence，不跳过 update/event drain。
 - [x] **事件驱动重绘**：ManagedFallback/RmlUi dirty/animation 门控已实现，静态屏 `ui.paint=0`、HUD 数值变化重绘、dirty rect upload 底座均有测试证据。
 - [x] **降级路线**：禁用 UI 时不注册 `GameUiHost`/driver/service；RmlUi 不可用、GLES/ANGLE 未支持、Ultralight 未激活时显式回退 ManagedFallback 并记录原因，不伪造后端。
-- [ ] **Demo 产品面打磨**：plan/13 仍需用本 runtime 完成可发行 HUD/menu/settings/pause/result 体验、输入手感和真实窗口路线；本文件只提供 runtime 能力。
+- [!] **Demo 产品面打磨**：HUD/main-menu/settings/pause/result 已有 Web-first content/UI/controller/test 闭合：HUD 暂停按钮进入 `pause`，暂停/设置返回/继续/重开/退出经 `GameUiDemoController` 路由到公开 Runtime facade，Mission 结算会推送 `result` 并发布 numeric result paths；`DemoUiContentTests` 覆盖七屏 manifest、ManagedFallback 显示/交互、公开脚本 UI 服务事件链路与任务结算写入。阻塞：真实窗口透明 UI 产品面视频、输入手感、完整通关/重开点击链路与人工体验确认仍未完成。
 
 ## 6. M15 native / IME / Ultralight / release 证据 checklist
 
@@ -83,7 +83,7 @@
 - [x] `dotnet test tests/PixelEngine.UI.Tests/PixelEngine.UI.Tests.csproj -c Release --filter FullyQualifiedName~GameUiHostTests|FullyQualifiedName~UiInputRouterTests|FullyQualifiedName~GameUiServiceBridgeTests|FullyQualifiedName~BackendConformance` 覆盖宿主、输入、服务桥与后端一致性基线；`UiInputRouterTests` 额外锁定 committed text 不冒充 IME composition，以及 `UiTextCompositionCapabilities` 从输入源透传诊断。
 - [x] `dotnet test tests/PixelEngine.UI.Tests/PixelEngine.UI.Tests.csproj -c Release --filter FullyQualifiedName~RmlUiGlBootstrapSmokeTests|FullyQualifiedName~RmlUiNativeProfileGateTests|FullyQualifiedName~UiOffscreenSurfacePresenterSmokeTests|FullyQualifiedName~ManagedFallbackBackendTests` 覆盖 RmlUi GL3 smoke、ANGLE/GLES profile gate、offscreen upload 底座与 ManagedFallback。
 - [x] `dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --filter FullyQualifiedName~GameUi|FullyQualifiedName~InputArbitrator|FullyQualifiedName~DisabledGameUi` 覆盖 Hosting 装配、输入仲裁与禁用零开销。
-- [x] `dotnet test tests/PixelEngine.Demo.Tests/PixelEngine.Demo.Tests.csproj -c Release --filter FullyQualifiedName~DemoUiContentTests|FullyQualifiedName~GameUiDemoController` 覆盖 Demo content/ui 与公开 API dogfood。
+- [x] `dotnet test tests/PixelEngine.Demo.Tests/PixelEngine.Demo.Tests.csproj -c Release --filter FullyQualifiedName~DemoUiContentTests|FullyQualifiedName~GameUiDemoController` 覆盖 Demo content/ui 与公开 API dogfood；2026-07-07 本地运行 `dotnet test tests/PixelEngine.Demo.Tests/PixelEngine.Demo.Tests.csproj -c Release --filter "FullyQualifiedName~DemoUiContentTests"` 通过 7/7，锁定七屏 manifest、pause/result Web-first flow 与 result model paths。
 - [x] `dotnet run -c Release --project bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -- --filter *GameUiAllocationBenchmarks*` 是 UI 稳态零分配基准入口。
 - [x] `tools/audit-release-artifacts.ps1` / `.sh` 包含 UI native dynamic-only 与 R2R/AOT fallback 审计断言，并在 Ultralight optional profile inactive 时拒绝 `Ultralight` / `WebCore` / `AppCore` native 混入 package 或 publish 产物。
 - [!] `tools/demo-manual-acceptance-preflight.ps1`、release evidence preflight 与 native leak / codesign 相关工具只提供证据入口；未有合格 manifest、真实平台材料和人工/外部复核前保持阻塞。
