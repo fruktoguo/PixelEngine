@@ -23,6 +23,8 @@ public sealed class GameUiDemoController : Behaviour
         "hud.ammo",
         "hud.cooldown",
         "hud.heat",
+        "hud.reload",
+        "hud.overheated",
         "hud.crystals",
         "hud.time",
         "hud.hazard",
@@ -64,6 +66,8 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiPathId HudAmmoPath = Path("hud.ammo");
     private static readonly UiPathId HudCooldownPath = Path("hud.cooldown");
     private static readonly UiPathId HudHeatPath = Path("hud.heat");
+    private static readonly UiPathId HudReloadPath = Path("hud.reload");
+    private static readonly UiPathId HudOverheatedPath = Path("hud.overheated");
     private static readonly UiPathId HudCrystalsPath = Path("hud.crystals");
     private static readonly UiPathId HudTimePath = Path("hud.time");
     private static readonly UiPathId HudHazardPath = Path("hud.hazard");
@@ -227,6 +231,8 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudAmmoPath, 0.0);
         SetHudValue(HudCooldownPath, 1.0);
         SetHudValue(HudHeatPath, 0.0);
+        SetHudValue(HudReloadPath, 0.0);
+        SetHudValue(HudOverheatedPath, 0.0);
         SetHudValue(HudCrystalsPath, 0.0);
         SetHudValue(HudTimePath, 1.0);
         SetHudValue(HudHazardPath, 0.0);
@@ -337,6 +343,8 @@ public sealed class GameUiDemoController : Behaviour
             SetHudValue(HudAmmoPath, 0.0);
             SetHudValue(HudCooldownPath, 1.0);
             SetHudValue(HudHeatPath, 0.0);
+            SetHudValue(HudReloadPath, 0.0);
+            SetHudValue(HudOverheatedPath, 0.0);
             return;
         }
 
@@ -346,6 +354,8 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudAmmoPath, weapon.AmmoMax <= 0 ? 0.0 : Ratio(_weapons.CurrentAmmo, weapon.AmmoMax));
         SetHudValue(HudCooldownPath, weapon.CooldownSeconds <= 0f ? 1.0 : 1.0 - Ratio(_weapons.CooldownRemaining, weapon.CooldownSeconds));
         SetHudValue(HudHeatPath, Ratio(_weapons.Heat, 100f));
+        SetHudValue(HudReloadPath, _weapons.IsReloading && weapon.ReloadSeconds > 0f ? Ratio(_weapons.ReloadRemaining, weapon.ReloadSeconds) : 0.0);
+        SetHudValue(HudOverheatedPath, _weapons.IsOverheated ? 1.0 : 0.0);
     }
 
     private void PublishMission()
