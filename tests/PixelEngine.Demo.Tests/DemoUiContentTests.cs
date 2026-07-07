@@ -685,6 +685,61 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
+    /// 验证弹药耗尽后 WeaponController 不再分派主火，Web-first HUD 稳定发布耗尽弹药状态。
+    /// </summary>
+    [Fact]
+    public void DemoGameUiControllerPublishesDepletedAmmoAndSuppressesExtraDispatchThroughScriptService()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                { "id": "single", "displayName": "Single", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 1, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
+              ]
+            }
+            """);
+        try
+        {
+            using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out FakeGameUiService ui, out ScriptInputApi input);
+            Entity entity = scene.CreateEntity();
+            _ = entity.AddComponent<Transform>();
+            PlayerController player = entity.AddComponent<PlayerController>();
+            player.SpawnX = 12f;
+            player.SpawnY = 12f;
+            WeaponController weapons = entity.AddComponent<WeaponController>();
+            _ = entity.AddComponent<GameUiDemoController>();
+
+            engine.RunHeadlessTicks(1);
+            Assert.Equal(1, weapons.CurrentAmmo);
+            Assert.Equal(1.0, GetHudValue(ui, "hud.ammo"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.shots"), precision: 3);
+
+            input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+
+            Assert.Equal(WeaponKind.SingleShot, weapons.LastDispatchedKind);
+            Assert.Equal(0, weapons.CurrentAmmo);
+            Assert.Equal(1, weapons.PrimaryFireCount);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.ammo"), precision: 3);
+            Assert.Equal(0.1, GetHudValue(ui, "hud.shots"), precision: 3);
+
+            input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(2);
+
+            Assert.Equal(0, weapons.CurrentAmmo);
+            Assert.Equal(1, weapons.PrimaryFireCount);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.ammo"), precision: 3);
+            Assert.Equal(0.1, GetHudValue(ui, "hud.shots"), precision: 3);
+            AssertHudPathWritten(ui, "hud.ammo");
+            AssertHudPathWritten(ui, "hud.shots");
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// 验证 Web-first HUD 的射击计数优先来自 WeaponController 主火路径，非 projectile 武器也会同步。
     /// </summary>
     [Fact]
