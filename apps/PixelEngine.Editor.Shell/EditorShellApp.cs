@@ -7,6 +7,7 @@ namespace PixelEngine.Editor.Shell;
 
 internal sealed class EditorShellApp
 {
+    private const string DefaultWorkbenchBehaviourTypeName = "DefaultWorkbenchBehaviour";
     private static readonly TimeSpan ScriptedBuildProbeTimeout = TimeSpan.FromMinutes(10);
     private readonly EditorShellOptions _options;
     private EditorProject? _pendingProject;
@@ -500,6 +501,39 @@ internal sealed class EditorShellApp
                 return;
             }
 
+            if (!state.ScriptHotReloadRequested)
+            {
+                PixelEngine.Scripting.ScriptHotReloadController controller = CurrentSession.Engine.Context.GetService<PixelEngine.Scripting.ScriptHotReloadController>();
+                controller.RequestReloadFromDirectory($"{CurrentSession.Project.Name}.EditorScripts", CurrentSession.Project.ScriptSourcePath);
+                state.ScriptHotReloadRequested = controller.HasPendingReload;
+                if (state.ScriptHotReloadRequested)
+                {
+                    PixelEngine.Scripting.ScriptHotReloadApplyResult result = CurrentSession.Engine.ApplyPendingScriptHotReload();
+                    state.ScriptHotReloadApplied = result.Status == PixelEngine.Scripting.ScriptHotReloadStatus.Reloaded;
+                }
+
+                return;
+            }
+
+            if (!state.BehaviourRegistered)
+            {
+                string? behaviourTypeName = CurrentSession.GetBehaviourTypeNames()
+                    .FirstOrDefault(static name => IsDefaultWorkbenchBehaviourTypeName(name));
+                state.ScriptHotReloadApplied = state.ScriptHotReloadApplied || behaviourTypeName is not null;
+                state.BehaviourRegistered = behaviourTypeName is not null;
+                state.BehaviourTypeName = behaviourTypeName ?? string.Empty;
+                return;
+            }
+
+            if (!state.BehaviourAttached)
+            {
+                CurrentSession.AddComponentToSelected(state.BehaviourTypeName);
+                state.BehaviourAttached = CurrentSession.SceneModel.SelectedStableId is { } selectedStableId &&
+                    CurrentSession.SceneModel.Get(selectedStableId).Components.Any(component =>
+                        string.Equals(component.TypeName, state.BehaviourTypeName, StringComparison.Ordinal));
+                return;
+            }
+
             if (!state.SceneSaved)
             {
                 _ = SaveScene();
@@ -534,6 +568,10 @@ internal sealed class EditorShellApp
             state.Succeeded = state.RequiredPanelsShown &&
                 state.GameObjectCreated &&
                 state.ScriptSourceCreated &&
+                state.ScriptHotReloadRequested &&
+                state.ScriptHotReloadApplied &&
+                state.BehaviourRegistered &&
+                state.BehaviourAttached &&
                 state.SceneSaved &&
                 state.PlayEntered &&
                 state.PlayExited &&
@@ -541,7 +579,7 @@ internal sealed class EditorShellApp
                 state.BuildOutputReady;
             state.Completed = true;
             state.Diagnostic = state.Succeeded
-                ? "默认工作台自动化路线探针完成。"
+                ? "默认工作台脚本热重载、Behaviour 注册与挂载探针完成。"
                 : "默认工作台自动化路线探针未满足全部条件。";
         }
         catch (Exception ex) when (!OperatingSystem.IsBrowser())
@@ -577,6 +615,12 @@ internal sealed class EditorShellApp
         }
 
         return path;
+    }
+
+    private static bool IsDefaultWorkbenchBehaviourTypeName(string typeName)
+    {
+        return string.Equals(typeName, DefaultWorkbenchBehaviourTypeName, StringComparison.Ordinal) ||
+            typeName.EndsWith("." + DefaultWorkbenchBehaviourTypeName, StringComparison.Ordinal);
     }
 
     private void RunScriptedBuildSettingsProbeActions(ScriptedBuildSettingsProbeState state)
@@ -1021,6 +1065,11 @@ internal sealed class EditorShellApp
             $"game_object_created={state.GameObjectCreated}, " +
             $"script_source_created={state.ScriptSourceCreated}, " +
             $"script_source={SanitizeSummaryValue(state.ScriptSourcePath)}, " +
+            $"script_hot_reload_requested={state.ScriptHotReloadRequested}, " +
+            $"script_hot_reload_applied={state.ScriptHotReloadApplied}, " +
+            $"behaviour_registered={state.BehaviourRegistered}, " +
+            $"behaviour_type={SanitizeSummaryValue(state.BehaviourTypeName)}, " +
+            $"behaviour_attached={state.BehaviourAttached}, " +
             $"scene_saved={state.SceneSaved}, " +
             $"play_entered={state.PlayEntered}, " +
             $"play_exited={state.PlayExited}, " +
@@ -1475,6 +1524,11 @@ internal sealed class ScriptedDefaultWorkbenchProbeState
     public bool GameObjectCreated;
     public bool ScriptSourceCreated;
     public string ScriptSourcePath = string.Empty;
+    public bool ScriptHotReloadRequested;
+    public bool ScriptHotReloadApplied;
+    public bool BehaviourRegistered;
+    public string BehaviourTypeName = string.Empty;
+    public bool BehaviourAttached;
     public bool SceneSaved;
     public bool PlayEntered;
     public bool PlayExited;

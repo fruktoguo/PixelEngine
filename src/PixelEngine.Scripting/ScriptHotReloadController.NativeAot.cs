@@ -7,7 +7,7 @@ namespace PixelEngine.Scripting;
 /// <param name="context">脚本上下文。</param>
 public sealed class ScriptHotReloadController(Scene scene, IScriptContext context) : IDisposable
 {
-    private readonly Scene _scene = scene ?? throw new ArgumentNullException(nameof(scene));
+    private Scene _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly IScriptContext _context = context ?? throw new ArgumentNullException(nameof(context));
 
     /// <summary>
@@ -94,7 +94,17 @@ public sealed class ScriptHotReloadController(Scene scene, IScriptContext contex
         return new ScriptHotReloadApplyResult(
             ScriptHotReloadStatus.NoPendingReload,
             [],
-            OldContextUnloaded: true);
+            OldContextUnloaded: true,
+            LoadedAssembly: null);
+    }
+
+    /// <summary>
+    /// NativeAOT 通道仅更新持有的 Scene 引用；不会启用动态热重载。
+    /// </summary>
+    /// <param name="scene">新的脚本 Scene。</param>
+    public void ReplaceScene(Scene scene)
+    {
+        _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     }
 
     /// <inheritdoc />
@@ -140,7 +150,9 @@ public enum ScriptHotReloadStatus
 /// <param name="Status">热重载状态。</param>
 /// <param name="Diagnostics">诊断文本。</param>
 /// <param name="OldContextUnloaded">旧 ALC 是否已卸载。</param>
+/// <param name="LoadedAssembly">本次热重载成功加载的动态脚本程序集；NativeAOT 通道恒为 null。</param>
 public readonly record struct ScriptHotReloadApplyResult(
     ScriptHotReloadStatus Status,
     string[] Diagnostics,
-    bool OldContextUnloaded);
+    bool OldContextUnloaded,
+    System.Reflection.Assembly? LoadedAssembly);

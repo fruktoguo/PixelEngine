@@ -143,6 +143,58 @@ public sealed class DemoRuntimeScriptingTests
     }
 
     /// <summary>
+    /// 验证 Hosting-owned 热重载会把新脚本程序集注册进 Behaviour registry，使默认工作台新脚本可直接挂载。
+    /// </summary>
+    [Fact]
+    public void AttachScriptingFromServicesRegistersNewHotReloadBehaviourForEditorMounting()
+    {
+        string scriptDirectory = Path.Combine(Path.GetTempPath(), "PixelEngineDefaultWorkbenchHotReload", Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(scriptDirectory);
+        try
+        {
+            File.WriteAllText(Path.Combine(scriptDirectory, "DefaultWorkbenchBehaviour.cs"), DefaultWorkbenchBehaviourSource);
+            MaterialTable materials = Materials(("empty", CellType.Empty));
+            using Engine engine = new EngineBuilder()
+                .UseHeadless()
+                .UseDeterministicMode()
+                .AddScene(new SceneDescriptor("empty", SceneSourceKind.Empty))
+                .WithStartScene("empty")
+                .Build();
+            engine.Context.RegisterService(materials);
+            _ = engine.AttachResidentSimulationWorld(worldWidthCells: 64, worldHeightCells: 64, particleCapacity: 16);
+            engine.AttachScriptScene(new ScriptScene());
+            _ = engine.AttachScriptingFromServices(
+                hotReload: new ScriptHotReloadRuntimeOptions(
+                    $"PixelEngine.Hosting.Tests.DefaultWorkbench.{Guid.NewGuid():N}",
+                    scriptDirectory,
+                    DebounceInterval: TimeSpan.FromMilliseconds(30)));
+            ScriptHotReloadController controller = engine.Context.GetService<ScriptHotReloadController>();
+            controller.RequestReloadFromDirectory(
+                $"PixelEngine.Hosting.Tests.DefaultWorkbench.{Guid.NewGuid():N}",
+                scriptDirectory);
+
+            engine.RunHeadlessTicks(1);
+
+            ScriptAssemblyRegistry scripts = engine.Context.GetService<ScriptAssemblyRegistry>();
+            Assert.Contains(scripts.Assemblies, assembly => assembly.GetType("DefaultWorkbenchBehaviour", throwOnError: false) is not null);
+            EditorSceneModel scene = EditorSceneModel.Empty("default-workbench-hot-reload");
+            EditorGameObject gameObject = scene.Create("Receiver");
+            EditorUndoStack undo = new();
+            EditorAssetDropPayload payload = new("asset_script", "scripts/DefaultWorkbenchBehaviour.cs", EditorAssetType.Script);
+
+            EditorAssetDropResult result = EditorAssetDropService.DropScriptOnComponentList(scene, undo, scripts, payload, gameObject.StableId);
+
+            Assert.True(result.Succeeded, result.Diagnostic);
+            EditorComponentModel component = Assert.Single(gameObject.Components);
+            Assert.Equal("DefaultWorkbenchBehaviour", component.TypeName);
+        }
+        finally
+        {
+            Directory.Delete(scriptDirectory, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// 验证 Hosting-owned 脚本运行时会把 watcher 热重载编译诊断汇入 Editor Console sink。
     /// </summary>
     [Fact]
@@ -369,6 +421,14 @@ public sealed class DemoRuntimeScriptingTests
             {
                 Counter += 10;
             }
+        }
+        """;
+
+    private const string DefaultWorkbenchBehaviourSource = """
+        using PixelEngine.Scripting;
+
+        public sealed class DefaultWorkbenchBehaviour : Behaviour
+        {
         }
         """;
 }

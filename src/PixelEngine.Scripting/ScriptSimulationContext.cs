@@ -192,7 +192,17 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     public IGameTime Time => TimeBackend ?? throw Unsupported(nameof(Time));
 
     /// <inheritdoc />
-    public Scene Scene { get; }
+    public Scene Scene { get; private set; }
+
+    /// <summary>
+    /// 将现有脚本上下文切换到新的脚本 Scene，供编辑态 authoring projection 刷新复用同一 Hosting runtime。
+    /// </summary>
+    /// <param name="scene">新的脚本 Scene。</param>
+    public void ReplaceScene(Scene scene)
+    {
+        ThrowIfDisposed();
+        Scene = scene ?? throw new ArgumentNullException(nameof(scene));
+    }
 
     /// <inheritdoc />
     public void ClearFrameTransientRequests()

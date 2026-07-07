@@ -1127,6 +1127,7 @@ public sealed class Engine : IDisposable
 
     /// <summary>
     /// 将外部编辑态物化出的脚本 Scene 接到当前 Hosting 场景，并注册为后续脚本运行时的输入。
+    /// 已接入脚本运行时后再次调用会替换编辑态 authoring projection，并同步默认脚本运行时引用。
     /// </summary>
     /// <param name="scriptScene">已由调用方物化好的脚本 Scene。</param>
     public void AttachScriptScene(PixelEngine.Scripting.Scene scriptScene)
@@ -1135,13 +1136,40 @@ public sealed class Engine : IDisposable
         ArgumentNullException.ThrowIfNull(scriptScene);
         Scene current = Context.GetService<ISceneService>().Current ??
             throw new InvalidOperationException("当前没有已加载场景，不能接入脚本 Scene。");
-        if (current.ScriptScene is not null)
+        PixelEngine.Scripting.Scene? previous = current.ScriptScene;
+        bool replacing = previous is not null && !ReferenceEquals(previous, scriptScene);
+        if (replacing && _attachedScriptRuntime is not null && _attachedScriptRuntime is not ScriptRuntime)
         {
-            throw new InvalidOperationException("当前场景已经接入脚本 Scene。");
+            throw new InvalidOperationException("当前脚本运行时不支持替换脚本 Scene。");
+        }
+
+        if (replacing)
+        {
+            _attachedScriptRuntime?.EndPlaySession();
         }
 
         current.AttachScriptScene(scriptScene);
         Context.RegisterService(scriptScene);
+        if (replacing && _attachedScriptRuntime is ScriptRuntime scriptRuntime)
+        {
+            scriptRuntime.ReplaceScene(scriptScene);
+        }
+    }
+
+    /// <summary>
+    /// 在编辑态显式应用待处理脚本热重载，复用 Hosting-owned runtime 的程序集注册与诊断路径。
+    /// </summary>
+    /// <returns>热重载应用结果。</returns>
+    public ScriptHotReloadApplyResult ApplyPendingScriptHotReload()
+    {
+        ThrowIfShutdown();
+        return _attachedScriptRuntime is ScriptRuntime scriptRuntime
+            ? scriptRuntime.ApplyPendingReload()
+            : new ScriptHotReloadApplyResult(
+                ScriptHotReloadStatus.NoPendingReload,
+                [],
+                OldContextUnloaded: true,
+                LoadedAssembly: null);
     }
 
     internal void EndScriptPlaySession()
@@ -1312,7 +1340,8 @@ public sealed class Engine : IDisposable
         }
 
         Context.RegisterService(controller);
-        return new ScriptRuntime(controller, diagnosticSink);
+        ScriptAssemblyRegistry scriptAssemblies = Context.GetService<ScriptAssemblyRegistry>();
+        return new ScriptRuntime(controller, diagnosticSink, scriptAssemblies.RegisterOrReplaceByName);
     }
 
     private static bool IsNonFatalWatcherStartFailure(Exception exception)

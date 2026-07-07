@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Reflection;
 using System.Text;
 using Microsoft.CodeAnalysis;
 
@@ -95,7 +96,17 @@ public sealed class ScriptHotReloadController(Scene scene, IScriptContext contex
         return new ScriptHotReloadApplyResult(
             MapStatus(result.Status),
             DiagnosticsToStrings(result.Diagnostics, result.Exception),
-            result.OldContextUnloaded);
+            result.OldContextUnloaded,
+            result.LoadedAssembly);
+    }
+
+    /// <summary>
+    /// 将热重载目标切换到新的脚本 Scene，供编辑态 authoring projection 刷新后继续复用同一 controller。
+    /// </summary>
+    /// <param name="scene">新的脚本 Scene。</param>
+    public void ReplaceScene(Scene scene)
+    {
+        _service.ReplaceScene(scene);
     }
 
     /// <inheritdoc />
@@ -199,7 +210,9 @@ public enum ScriptHotReloadStatus
 /// <param name="Status">热重载状态。</param>
 /// <param name="Diagnostics">Roslyn 诊断文本。</param>
 /// <param name="OldContextUnloaded">旧 ALC 是否已卸载。</param>
+/// <param name="LoadedAssembly">本次热重载成功加载的动态脚本程序集。</param>
 public readonly record struct ScriptHotReloadApplyResult(
     ScriptHotReloadStatus Status,
     string[] Diagnostics,
-    bool OldContextUnloaded);
+    bool OldContextUnloaded,
+    Assembly? LoadedAssembly);

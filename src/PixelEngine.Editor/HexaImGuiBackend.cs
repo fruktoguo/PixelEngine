@@ -1,5 +1,6 @@
 using Hexa.NET.ImGui;
 using Hexa.NET.ImGui.Backends.OpenGL3;
+using Hexa.NET.ImGuizmo;
 using Hexa.NET.ImPlot;
 using PixelEngine.Gui;
 using System.Numerics;
@@ -46,6 +47,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
         _layoutPath = options.LayoutPath;
         ImGui.SetCurrentContext(_context);
         ImGuiImplOpenGL3.SetCurrentContext(_context);
+        ImGuizmo.SetImGuiContext(_context);
         ImPlot.SetImGuiContext(_context);
         _plotContext = ImPlot.CreateContext();
         ImPlot.SetCurrentContext(_plotContext);

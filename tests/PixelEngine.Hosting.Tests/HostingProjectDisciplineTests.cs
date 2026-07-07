@@ -211,7 +211,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("hotReload: new ScriptHotReloadRuntimeOptions", shellSource, StringComparison.Ordinal);
         Assert.Contains("CreateScriptRuntime(scriptScene, scriptContext, hotReload)", hostingEngine, StringComparison.Ordinal);
         Assert.Contains("Context.RegisterService(controller)", hostingEngine, StringComparison.Ordinal);
-        Assert.Contains("new ScriptRuntime(controller, diagnosticSink)", hostingEngine, StringComparison.Ordinal);
+        Assert.Contains("RegisterOrReplaceByName", hostingEngine, StringComparison.Ordinal);
+        Assert.Contains("new ScriptRuntime(controller, diagnosticSink, scriptAssemblies.RegisterOrReplaceByName)", hostingEngine, StringComparison.Ordinal);
         Assert.Contains("IScriptHotReloadDiagnosticSink", scriptingRuntime, StringComparison.Ordinal);
     }
 
@@ -290,7 +291,14 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("EnterPlayTemporary", source, StringComparison.Ordinal);
         Assert.Contains("ExitEditorPlay", source, StringComparison.Ordinal);
         Assert.Contains("BuildSettingsPanel.PanelTitle", source, StringComparison.Ordinal);
+        Assert.Contains("ScriptHotReloadController", source, StringComparison.Ordinal);
+        Assert.Contains("RequestReloadFromDirectory", source, StringComparison.Ordinal);
+        Assert.Contains("GetBehaviourTypeNames", source, StringComparison.Ordinal);
+        Assert.Contains("AddComponentToSelected", source, StringComparison.Ordinal);
         Assert.Contains("script_source_created", source, StringComparison.Ordinal);
+        Assert.Contains("script_hot_reload_applied", source, StringComparison.Ordinal);
+        Assert.Contains("behaviour_registered", source, StringComparison.Ordinal);
+        Assert.Contains("behaviour_attached", source, StringComparison.Ordinal);
         Assert.Contains("build_output_ready", source, StringComparison.Ordinal);
         Assert.Contains("真实窗口 Console 可读性与人工 UX", File.ReadAllText(Path.Combine(root, "plan", "19-standalone-editor-app.md")), StringComparison.Ordinal);
     }
@@ -306,6 +314,7 @@ public sealed class HostingProjectDisciplineTests
         string source = string.Join(
             '\n',
             Directory.EnumerateFiles(shellDirectory, "*.cs").Select(File.ReadAllText));
+        string editorBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "HexaImGuiBackend.cs"));
         XDocument shellProject = XDocument.Load(Path.Combine(shellDirectory, "PixelEngine.Editor.Shell.csproj"));
 
         Assert.Contains("Hexa.NET.ImGuizmo", ReadIncludes(shellProject, "PackageReference"));
@@ -325,6 +334,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("TryPick", source, StringComparison.Ordinal);
         Assert.Contains("SelectGameObject", source, StringComparison.Ordinal);
         Assert.Contains("ImGuizmo.Manipulate", source, StringComparison.Ordinal);
+        Assert.Contains("ImGuizmo.SetImGuiContext(_context)", editorBackend, StringComparison.Ordinal);
         Assert.Contains("ImGuizmoOperation.Translate", source, StringComparison.Ordinal);
         Assert.Contains("ImGuizmoOperation.RotateZ", source, StringComparison.Ordinal);
         Assert.Contains("ImGuizmoOperation.Scale", source, StringComparison.Ordinal);

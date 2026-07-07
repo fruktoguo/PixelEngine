@@ -10,7 +10,7 @@ namespace PixelEngine.Scripting;
 internal sealed class HotReloadService(Scene scene, IScriptContext context, ScriptCompiler compiler, ScriptLoadContext? currentLoadContext = null) : IDisposable
 {
     private readonly Lock _gate = new();
-    private readonly Scene _scene = scene ?? throw new ArgumentNullException(nameof(scene));
+    private Scene _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly IScriptContext _context = context ?? throw new ArgumentNullException(nameof(context));
     private readonly ScriptCompiler _compiler = compiler ?? throw new ArgumentNullException(nameof(compiler));
     private readonly List<WeakReference> _unloadedContexts = [];
@@ -54,6 +54,16 @@ internal sealed class HotReloadService(Scene scene, IScriptContext context, Scri
         lock (_gate)
         {
             _pending = new PendingReload(assemblyName, [.. sources], options);
+        }
+    }
+
+    public void ReplaceScene(Scene scene)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ThrowIfDisposed();
+        lock (_gate)
+        {
+            _scene = scene;
         }
     }
 
@@ -103,10 +113,12 @@ internal sealed class HotReloadService(Scene scene, IScriptContext context, Scri
     public HotReloadResult ApplyPendingReload()
     {
         PendingReload? pending;
+        Scene scene;
         lock (_gate)
         {
             pending = _pending;
             _pending = null;
+            scene = _scene;
         }
 
         if (pending is null)
@@ -120,7 +132,7 @@ internal sealed class HotReloadService(Scene scene, IScriptContext context, Scri
             return HotReloadResult.CompileFailed(compilation.Diagnostics);
         }
 
-        ScriptBehaviourRecord[] records = _scene.CaptureBehaviours();
+        ScriptBehaviourRecord[] records = scene.CaptureBehaviours();
         ScriptStateSnapshot?[] snapshots = pending.Options.PreserveState ? new ScriptStateSnapshot[records.Length] : [];
         string[] typeNames = new string[records.Length];
         for (int i = 0; i < records.Length; i++)
@@ -135,10 +147,11 @@ internal sealed class HotReloadService(Scene scene, IScriptContext context, Scri
         }
 
         ScriptLoadContext newContext = new($"script-reload-{Guid.NewGuid():N}");
+        Assembly assembly;
         ReloadReplacement[] replacements;
         try
         {
-            Assembly assembly = newContext.LoadFromImages(compilation.PeImage, compilation.PdbImage);
+            assembly = newContext.LoadFromImages(compilation.PeImage, compilation.PdbImage);
             replacements = new ReloadReplacement[records.Length];
             for (int i = 0; i < records.Length; i++)
             {
@@ -166,7 +179,7 @@ internal sealed class HotReloadService(Scene scene, IScriptContext context, Scri
         for (int i = 0; i < replacements.Length; i++)
         {
             ReloadReplacement replacement = replacements[i];
-            _scene.DestroyComponent(replacement.Entity, replacement.OldType, _context);
+            scene.DestroyComponent(replacement.Entity, replacement.OldType, _context);
         }
 
         for (int i = 0; i < replacements.Length; i++)
@@ -174,14 +187,14 @@ internal sealed class HotReloadService(Scene scene, IScriptContext context, Scri
             ReloadReplacement replacement = replacements[i];
             if (replacement.Component is not null)
             {
-                _scene.AddComponent(replacement.Entity, replacement.Component);
+                scene.AddComponent(replacement.Entity, replacement.Component);
             }
         }
 
         records.AsSpan().Clear();
         WeakReference? oldReference = ReplaceCurrentContext(newContext);
-        _scene.DispatchStart(_context);
-        return HotReloadResult.Reloaded(compilation.Diagnostics, oldReference);
+        scene.DispatchStart(_context);
+        return HotReloadResult.Reloaded(compilation.Diagnostics, oldReference, assembly);
     }
 
     public void Dispose()
@@ -395,12 +408,14 @@ internal sealed class HotReloadResult
         HotReloadStatus status,
         ImmutableArray<Diagnostic> diagnostics,
         WeakReference? unloadedContext,
-        Exception? exception)
+        Exception? exception,
+        Assembly? loadedAssembly)
     {
         Status = status;
         Diagnostics = diagnostics;
         UnloadedContext = unloadedContext;
         Exception = exception;
+        LoadedAssembly = loadedAssembly;
     }
 
     public HotReloadStatus Status { get; }
@@ -411,26 +426,29 @@ internal sealed class HotReloadResult
 
     public Exception? Exception { get; }
 
+    public Assembly? LoadedAssembly { get; }
+
     public bool OldContextUnloaded => UnloadedContext is null || WaitForUnload(UnloadedContext);
 
     public static HotReloadResult NoPending()
     {
-        return new HotReloadResult(HotReloadStatus.NoPendingReload, [], null, null);
+        return new HotReloadResult(HotReloadStatus.NoPendingReload, [], null, null, null);
     }
 
     public static HotReloadResult CompileFailed(ImmutableArray<Diagnostic> diagnostics)
     {
-        return new HotReloadResult(HotReloadStatus.CompileFailed, diagnostics, null, null);
+        return new HotReloadResult(HotReloadStatus.CompileFailed, diagnostics, null, null, null);
     }
 
     public static HotReloadResult ApplyFailed(ImmutableArray<Diagnostic> diagnostics, Exception exception)
     {
-        return new HotReloadResult(HotReloadStatus.ApplyFailed, diagnostics, null, exception);
+        return new HotReloadResult(HotReloadStatus.ApplyFailed, diagnostics, null, exception, null);
     }
 
-    public static HotReloadResult Reloaded(ImmutableArray<Diagnostic> diagnostics, WeakReference? unloadedContext)
+    public static HotReloadResult Reloaded(ImmutableArray<Diagnostic> diagnostics, WeakReference? unloadedContext, Assembly loadedAssembly)
     {
-        return new HotReloadResult(HotReloadStatus.Reloaded, diagnostics, unloadedContext, null);
+        ArgumentNullException.ThrowIfNull(loadedAssembly);
+        return new HotReloadResult(HotReloadStatus.Reloaded, diagnostics, unloadedContext, null, loadedAssembly);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
