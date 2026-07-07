@@ -245,6 +245,112 @@ public sealed class UiInputRouterTests
     }
 
     [Fact]
+    public void PumpRoutesSyntheticImeCompositionStartUpdateCommitAndCancelLifecycle()
+    {
+        RecordingBackend backend = new()
+        {
+            HitResult = new UiHitResult(HitsUi: true, Opaque: true, WantsMouse: true, WantsKeyboard: true),
+        };
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        FakeInputSource input = new()
+        {
+            HasPointer = true,
+            Pointer = new UiPointerState(12, 34, 0, 0, LeftDown: false, RightDown: false, MiddleDown: false),
+            CompositionText = "k",
+            Composition = new UiTextComposition(isActive: true, cursorIndex: 1),
+        };
+        UiInputRouter router = new(host, input);
+
+        _ = router.Pump();
+        input.CompositionText = "かな";
+        input.Composition = new UiTextComposition(isActive: true, cursorIndex: 2, selectionStart: 0, selectionLength: 2);
+        _ = router.Pump();
+        input.Text = "字";
+        input.CompositionText = string.Empty;
+        input.Composition = UiTextComposition.Inactive;
+        _ = router.Pump();
+        input.CompositionText = "候補";
+        input.Composition = new UiTextComposition(isActive: true, cursorIndex: 2, selectionStart: 0, selectionLength: 2);
+        _ = router.Pump();
+        input.CompositionText = string.Empty;
+        input.Composition = UiTextComposition.Inactive;
+        _ = router.Pump();
+
+        Assert.Equal("字", backend.Text);
+        Assert.Equal(["k", "かな", string.Empty, "候補", string.Empty], backend.CompositionTexts);
+        Assert.Equal(5, backend.Compositions.Count);
+        Assert.True(backend.Compositions[0].IsActive);
+        Assert.True(backend.Compositions[1].IsActive);
+        Assert.False(backend.Compositions[2].IsActive);
+        Assert.True(backend.Compositions[3].IsActive);
+        Assert.False(backend.Compositions[4].IsActive);
+        Assert.Equal(2, backend.Compositions[1].CursorIndex);
+        Assert.Equal(2, backend.Compositions[1].SelectionLength);
+    }
+
+    [Fact]
+    public void PumpClearsSyntheticImeCompositionOnFocusLossWithoutForwardingStalePreedit()
+    {
+        RecordingBackend backend = new()
+        {
+            HitResult = new UiHitResult(HitsUi: true, Opaque: true, WantsMouse: true, WantsKeyboard: true),
+        };
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        FakeInputSource input = new()
+        {
+            HasPointer = true,
+            Pointer = new UiPointerState(12, 34, 0, 0, LeftDown: false, RightDown: false, MiddleDown: false),
+            CompositionText = "候補",
+            Composition = new UiTextComposition(isActive: true, cursorIndex: 2),
+        };
+        UiInputRouter router = new(host, input);
+
+        _ = router.Pump();
+        backend.HitResult = UiHitResult.None;
+        input.Pointer = new UiPointerState(200, 220, 0, 0, LeftDown: true, RightDown: false, MiddleDown: false);
+        input.CompositionText = "stale";
+        input.Composition = new UiTextComposition(isActive: true, cursorIndex: 5);
+        UiInputCapture capture = router.Pump();
+
+        Assert.True(capture.AllowWorldKeyboard);
+        Assert.Equal(["候補", string.Empty], backend.CompositionTexts);
+        Assert.DoesNotContain("stale", backend.CompositionTexts);
+        Assert.False(backend.Compositions[1].IsActive);
+    }
+
+    [Fact]
+    public void PumpDrainsAndClearsSyntheticImeCompositionWhenKeyboardIsBlocked()
+    {
+        RecordingBackend backend = new()
+        {
+            HitResult = new UiHitResult(HitsUi: true, Opaque: true, WantsMouse: true, WantsKeyboard: true),
+        };
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        FakeInputSource input = new()
+        {
+            HasPointer = true,
+            Pointer = new UiPointerState(12, 34, 0, 0, LeftDown: false, RightDown: false, MiddleDown: false),
+            CompositionText = "候補",
+            Composition = new UiTextComposition(isActive: true, cursorIndex: 2),
+        };
+        UiInputRouter router = new(host, input);
+
+        _ = router.Pump();
+        input.Text = "stale";
+        input.CompositionText = "stale";
+        input.Composition = new UiTextComposition(isActive: true, cursorIndex: 5);
+        _ = router.Pump(allowPointer: true, allowKeyboard: false);
+
+        Assert.Equal(string.Empty, backend.Text);
+        Assert.Equal(["候補", string.Empty], backend.CompositionTexts);
+        Assert.DoesNotContain("stale", backend.CompositionTexts);
+        Assert.Equal(string.Empty, input.Text);
+    }
+
+    [Fact]
     public void PumpDoesNotTreatCommittedTextAsImeCompositionWhenSourceHasNoComposition()
     {
         RecordingBackend backend = new()
@@ -299,6 +405,44 @@ public sealed class UiInputRouterTests
         Assert.False(capabilities.SupportsPlatformComposition);
         Assert.Contains("未声明真实平台 IME composition 事件支持", capabilities.Diagnostic, StringComparison.Ordinal);
         capabilities.Validate();
+    }
+
+    [Fact]
+    public void TextCompositionNormalizerCompactsControlsClampsAndClearsInactiveText()
+    {
+        char[] committed = "a\0中\rb\t".ToCharArray();
+        int committedCount = UiTextCompositionNormalizer.NormalizeCommittedText(committed, committed.Length);
+        Assert.Equal(3, committedCount);
+        Assert.Equal("a中b", new string(committed, 0, committedCount));
+        Assert.Equal('\0', committed[3]);
+        Assert.Equal('\0', committed[4]);
+        Assert.Equal('\0', committed[5]);
+
+        char[] preedit = "かな\0\n".ToCharArray();
+        int preeditCount = UiTextCompositionNormalizer.NormalizeCompositionText(
+            preedit,
+            99,
+            new UiTextComposition(isActive: true, cursorIndex: 99, selectionStart: 1, selectionLength: 99),
+            out UiTextComposition activeComposition);
+        Assert.Equal(2, preeditCount);
+        Assert.Equal("かな", new string(preedit, 0, preeditCount));
+        Assert.True(activeComposition.IsActive);
+        Assert.Equal(2, activeComposition.CursorIndex);
+        Assert.Equal(1, activeComposition.SelectionStart);
+        Assert.Equal(1, activeComposition.SelectionLength);
+
+        char[] inactive = "stale".ToCharArray();
+        int inactiveCount = UiTextCompositionNormalizer.NormalizeCompositionText(
+            inactive,
+            inactive.Length,
+            UiTextComposition.Inactive,
+            out UiTextComposition inactiveComposition);
+        Assert.Equal(0, inactiveCount);
+        Assert.False(inactiveComposition.IsActive);
+        for (int i = 0; i < inactive.Length; i++)
+        {
+            Assert.Equal('\0', inactive[i]);
+        }
     }
 
     private sealed class FakeInputSource : IUiInputSource
