@@ -213,6 +213,7 @@ public sealed class DemoUiContentTests
         AssertHudPathWritten(ui, "hud.particles");
         AssertHudPathWritten(ui, "hud.lights");
         AssertHudPathWritten(ui, "hud.bodies");
+        AssertHudPathWritten(ui, "hud.fx");
     }
 
     /// <summary>
@@ -446,6 +447,7 @@ public sealed class DemoUiContentTests
             Assert.Equal(0.064, GetHudValue(ui, "hud.particles"), precision: 3);
             Assert.Equal(0.047, GetHudValue(ui, "hud.lights"), precision: 3);
             Assert.Equal(0.016, GetHudValue(ui, "hud.bodies"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.fx"), precision: 3);
 
             input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
             engine.RunHeadlessTicks(1);
@@ -550,6 +552,40 @@ public sealed class DemoUiContentTests
             AssertHudPathWritten(ui, "hud.particles");
             AssertHudPathWritten(ui, "hud.lights");
             AssertHudPathWritten(ui, "hud.bodies");
+            AssertHudPathWritten(ui, "hud.fx");
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// 验证 Web-first HUD 会发布与 PlayableHud 同口径的短命视觉 FX burst 数。
+    /// </summary>
+    [Fact]
+    public void DemoGameUiControllerPublishesTransientFxHudStateThroughScriptService()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
+              ]
+            }
+            """);
+        try
+        {
+            using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out FakeGameUiService ui, out _);
+            _ = scene.CreateEntity().AddComponent<GameUiDemoController>();
+            _ = scene.CreateEntity().AddComponent<TransientFxEmitter>();
+
+            engine.RunHeadlessTicks(1);
+            engine.RunHeadlessTicks(1);
+
+            double fx = GetHudValue(ui, "hud.fx");
+            Assert.InRange(fx, 0.0001, 1.0);
+            AssertHudPathWritten(ui, "hud.fx");
         }
         finally
         {
@@ -786,6 +822,7 @@ public sealed class DemoUiContentTests
             "hud.particles",
             "hud.lights",
             "hud.bodies",
+            "hud.fx",
         ];
     }
 
@@ -920,6 +957,14 @@ public sealed class DemoUiContentTests
         }
 
         throw new InvalidOperationException("无法从测试输出目录定位 PixelEngine.sln。");
+    }
+
+    private sealed class TransientFxEmitter : Behaviour
+    {
+        protected override void OnStart()
+        {
+            TransientParticleBurst.Emit(Context, x: 12f, y: 12f, count: 8, speed: 10f, lifetime: 60);
+        }
     }
 
     private sealed class FakeGameUiService : ScriptGameUiService
