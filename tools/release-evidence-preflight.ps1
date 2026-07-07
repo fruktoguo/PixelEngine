@@ -200,8 +200,8 @@ function Add-WorkflowRunMetadataCheck {
 
     if ($Values.ContainsKey("event")) {
         $event = [string]$Values["event"]
-        if ($event -notin @("push", "workflow_dispatch")) {
-            $Missing.Add("workflow_run 报告 event 必须为 push 或 workflow_dispatch，实际为 $event")
+        if ($event -ne "push") {
+            $Missing.Add("workflow_run 报告 event 必须为 push/tag push，实际为 $event")
         }
     }
 
