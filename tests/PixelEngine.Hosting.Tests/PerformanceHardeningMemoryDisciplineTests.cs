@@ -1,3 +1,6 @@
+using System.Reflection;
+using System.Runtime;
+using PixelEngine.Hosting;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -118,6 +121,139 @@ public sealed class PerformanceHardeningMemoryDisciplineTests
         Assert.Contains("private static readonly object Gate", coordinator, StringComparison.Ordinal);
         Assert.Contains("System.Threading.Monitor.Enter(Gate)", coordinator, StringComparison.Ordinal);
         Assert.Contains("System.Threading.Monitor.Exit(Gate)", coordinator, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 TryBeginNoGcRegion 的运行时拒绝路径不会泄漏全局 GC 状态门。
+    /// </summary>
+    [Fact]
+    public async Task TryBeginNoGcRegionReleasesCoordinatorGateWhenStartFails()
+    {
+        GCLatencyMode original = GCSettings.LatencyMode;
+        try
+        {
+            try
+            {
+                bool started = InvokeTryBeginNoGcRegion(0);
+                if (started)
+                {
+                    InvokeEndNoGcRegion();
+                }
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+            }
+            catch (InvalidOperationException)
+            {
+            }
+
+            await AssertCoordinatorAllowsLatencyModeChangeFromWorkerAsync(original);
+        }
+        finally
+        {
+            GCSettings.LatencyMode = original;
+        }
+    }
+
+    /// <summary>
+    /// 验证 NoGCRegion 持有期间延迟模式切换会被协调器阻塞，EndNoGcRegion 后再释放。
+    /// </summary>
+    [Fact]
+    public void NoGcRegionCoordinatorBlocksLatencyModeChangesUntilRegionEnds()
+    {
+        const long BudgetBytes = 64L * 1024 * 1024;
+        GCLatencyMode original = GCSettings.LatencyMode;
+        bool started = false;
+        try
+        {
+            started = InvokeTryBeginNoGcRegion(BudgetBytes);
+            if (!started)
+            {
+                AssertCoordinatorAllowsLatencyModeChangeFromWorkerAsync(original).GetAwaiter().GetResult();
+                return;
+            }
+
+            using ManualResetEventSlim workerEntered = new();
+            Exception? workerException = null;
+            Thread latencyThread = new(() =>
+            {
+                try
+                {
+                    workerEntered.Set();
+                    InvokeApplyLatencyMode(original);
+                }
+                catch (Exception exception)
+                {
+                    workerException = exception;
+                }
+            });
+
+            latencyThread.Start();
+            Assert.True(workerEntered.Wait(TimeSpan.FromSeconds(2)));
+            Assert.False(latencyThread.Join(TimeSpan.FromMilliseconds(100)));
+
+            InvokeEndNoGcRegion();
+            started = false;
+
+            Assert.True(latencyThread.Join(TimeSpan.FromSeconds(2)));
+            if (workerException is not null)
+            {
+                throw workerException;
+            }
+        }
+        finally
+        {
+            if (started)
+            {
+                try
+                {
+                    InvokeEndNoGcRegion();
+                }
+                catch (InvalidOperationException)
+                {
+                }
+            }
+
+            GCSettings.LatencyMode = original;
+        }
+    }
+
+    private static bool InvokeTryBeginNoGcRegion(long budgetBytes)
+    {
+        return (bool)InvokeCoordinator("TryBeginNoGcRegion", budgetBytes)!;
+    }
+
+    private static void InvokeEndNoGcRegion()
+    {
+        _ = InvokeCoordinator("EndNoGcRegion");
+    }
+
+    private static void InvokeApplyLatencyMode(GCLatencyMode mode)
+    {
+        _ = InvokeCoordinator("ApplyLatencyMode", mode);
+    }
+
+    private static async Task AssertCoordinatorAllowsLatencyModeChangeFromWorkerAsync(GCLatencyMode mode)
+    {
+        Task latencyTask = Task.Run(() => InvokeApplyLatencyMode(mode));
+        Task completed = await Task.WhenAny(latencyTask, Task.Delay(TimeSpan.FromSeconds(2)));
+        Assert.Same(latencyTask, completed);
+        await latencyTask;
+    }
+
+    private static object? InvokeCoordinator(string methodName, params object?[] parameters)
+    {
+        Type coordinatorType = typeof(Engine).Assembly.GetType("PixelEngine.Hosting.EngineGcCoordinator", throwOnError: true)!;
+        MethodInfo method = coordinatorType.GetMethod(methodName, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
+            ?? throw new MissingMethodException(coordinatorType.FullName, methodName);
+        try
+        {
+            return method.Invoke(null, parameters);
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException is not null)
+        {
+            throw exception.InnerException;
+        }
     }
 
     private static string ReadProductionSource(params string[] relativePath)
