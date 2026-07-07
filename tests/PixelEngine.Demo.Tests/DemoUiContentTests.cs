@@ -276,6 +276,58 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
+    /// 验证 MissionDirector 的真实失败分支会经 Web-first 结算屏只推送一次失败状态。
+    /// </summary>
+    [Theory]
+    [InlineData("time_limit", false)]
+    [InlineData("lava_reached_player", true)]
+    public void DemoGameUiControllerPublishesMissionFailureResultOnceThroughScriptService(string expectedReason, bool triggerByLava)
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
+              ]
+            }
+            """);
+        try
+        {
+            FakeRuntimeControlApi runtime = new();
+            using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out FakeGameUiService ui, out _, runtime);
+            Entity entity = scene.CreateEntity();
+            _ = entity.AddComponent<Transform>();
+            PlayerController player = entity.AddComponent<PlayerController>();
+            player.SpawnX = 12f;
+            player.SpawnY = 12f;
+            _ = entity.AddComponent<PlayerHealth>();
+            _ = entity.AddComponent<WeaponController>();
+            MissionDirector mission = entity.AddComponent<MissionDirector>();
+            mission.RequiredCrystals = 2;
+            mission.TimeLimitSeconds = triggerByLava ? 30f : 0f;
+            mission.InitialLavaSurfaceY = triggerByLava ? 0f : 100f;
+            mission.LavaRiseCellsPerSecond = 0f;
+            _ = entity.AddComponent<GameUiDemoController>();
+
+            engine.RunHeadlessTicks(1);
+            engine.RunHeadlessTicks(3);
+
+            Assert.Equal(MissionState.Lost, mission.State);
+            Assert.Equal(expectedReason, mission.ResultReason);
+            Assert.Equal([GameUiDemoController.ResultScreen], ui.PushedScreens);
+            Assert.Equal(1, runtime.PauseCount);
+            Assert.Equal(0.0, GetUiValue(ui, "result.won"), precision: 3);
+            Assert.Equal(1.0, GetUiValue(ui, "result.reason"), precision: 3);
+            Assert.InRange(GetUiValue(ui, "result.time"), 0.0, 1.0);
+            Assert.Contains(GameUiDemoController.Path("result.reason"), ui.WrittenPaths);
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// 验证 Demo Web-first HUD 每 tick 经公开脚本 UI 服务同步真实生命、武器、任务与危险状态。
     /// </summary>
     [Fact]
