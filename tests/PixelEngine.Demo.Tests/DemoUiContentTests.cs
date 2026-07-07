@@ -205,6 +205,9 @@ public sealed class DemoUiContentTests
         AssertHudPathWritten(ui, "hud.material_slot");
         AssertHudPathWritten(ui, "hud.brush_radius");
         AssertHudPathWritten(ui, "hud.explosions");
+        AssertHudPathWritten(ui, "hud.shots");
+        AssertHudPathWritten(ui, "hud.collapse_islands");
+        AssertHudPathWritten(ui, "hud.collapse_scan");
         AssertHudPathWritten(ui, "hud.crystals");
         AssertHudPathWritten(ui, "hud.time");
         AssertHudPathWritten(ui, "hud.hazard");
@@ -442,6 +445,9 @@ public sealed class DemoUiContentTests
             Assert.Equal(0.0, GetHudValue(ui, "hud.material_slot"), precision: 3);
             Assert.Equal(0.0, GetHudValue(ui, "hud.brush_radius"), precision: 3);
             Assert.Equal(0.0, GetHudValue(ui, "hud.explosions"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.shots"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.collapse_islands"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.collapse_scan"), precision: 3);
             Assert.Equal(0.0, GetHudValue(ui, "hud.crystals"), precision: 3);
             Assert.InRange(GetHudValue(ui, "hud.time"), 0.0, 1.0);
             Assert.InRange(GetHudValue(ui, "hud.hazard"), 0.0, 1.0);
@@ -611,6 +617,66 @@ public sealed class DemoUiContentTests
             AssertHudPathWritten(ui, "hud.material_slot");
             AssertHudPathWritten(ui, "hud.brush_radius");
             AssertHudPathWritten(ui, "hud.explosions");
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// 验证 Web-first HUD 会同步 PlayableProjectileTool 的射击与坍塌扫描状态。
+    /// </summary>
+    [Fact]
+    public void DemoGameUiControllerPublishesProjectileHudStateThroughScriptService()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
+              ]
+            }
+            """);
+        try
+        {
+            using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out FakeGameUiService ui, out ScriptInputApi input);
+            CellGrid grid = engine.Context.GetService<CellGrid>();
+            Assert.True(engine.Context.GetService<MaterialTable>().TryGetId("stone", out ushort stone));
+            FillRect(grid, stone, minX: 34, minY: 24, maxX: 35, maxY: 46);
+            Entity gameplayEntity = scene.CreateEntity();
+            _ = gameplayEntity.AddComponent<Transform>();
+            PlayerController player = gameplayEntity.AddComponent<PlayerController>();
+            player.SpawnX = 14f;
+            player.SpawnY = 30f;
+            PlayableProjectileTool projectile = gameplayEntity.AddComponent<PlayableProjectileTool>();
+            projectile.CooldownSeconds = 0f;
+            projectile.Range = 80f;
+            projectile.ImpactRadius = 1;
+            projectile.ImpactForce = 2f;
+            projectile.UseExplosionDamage = false;
+            projectile.CollapseScanRadius = 6;
+            _ = scene.CreateEntity().AddComponent<GameUiDemoController>();
+
+            engine.RunHeadlessTicks(1);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.shots"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.collapse_islands"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.collapse_scan"), precision: 3);
+
+            input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+
+            int scanRadius = Math.Clamp(projectile.CollapseScanRadius, 4, 320);
+            double scanCapacity = ((scanRadius * 2) + 1) * ((scanRadius * 2) + 1);
+            double expectedScan = Math.Clamp(projectile.LastCollapseSolidCandidates / scanCapacity, 0.0, 1.0);
+            Assert.Equal(1, projectile.ShotsFired);
+            Assert.True(projectile.LastCollapseSolidCandidates > 0);
+            Assert.Equal(0.1, GetHudValue(ui, "hud.shots"), precision: 3);
+            Assert.Equal(Math.Clamp(projectile.CollapsedFloatingIslands / 10.0, 0.0, 1.0), GetHudValue(ui, "hud.collapse_islands"), precision: 3);
+            Assert.Equal(expectedScan, GetHudValue(ui, "hud.collapse_scan"), precision: 3);
+            AssertHudPathWritten(ui, "hud.shots");
+            AssertHudPathWritten(ui, "hud.collapse_islands");
+            AssertHudPathWritten(ui, "hud.collapse_scan");
         }
         finally
         {
@@ -872,6 +938,9 @@ public sealed class DemoUiContentTests
             "hud.material_slot",
             "hud.brush_radius",
             "hud.explosions",
+            "hud.shots",
+            "hud.collapse_islands",
+            "hud.collapse_scan",
             "hud.crystals",
             "hud.time",
             "hud.hazard",
@@ -939,6 +1008,18 @@ public sealed class DemoUiContentTests
 
         _ = engine.AttachScriptingFromServices();
         return engine;
+    }
+
+    private static void FillRect(CellGrid grid, ushort material, int minX, int minY, int maxX, int maxY)
+    {
+        for (int y = minY; y < maxY; y++)
+        {
+            for (int x = minX; x < maxX; x++)
+            {
+                grid.MaterialAt(x, y) = material;
+                grid.FlagsAt(x, y) = default;
+            }
+        }
     }
 
     private static MaterialTable Materials(params (string Name, CellType Type)[] definitions)
