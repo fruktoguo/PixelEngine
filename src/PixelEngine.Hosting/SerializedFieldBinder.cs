@@ -16,10 +16,7 @@ public static class SerializedFieldBinder
     /// </summary>
     /// <param name="component">目标脚本组件。</param>
     /// <param name="fields">字段名到序列化字符串值的映射。</param>
-    [UnconditionalSuppressMessage(
-        "Trimming",
-        "IL2075",
-        Justification = "Serialized field binding is an editor/script content boundary over live Behaviour instances, not a trimmed engine hot path.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Serialized field binding is an editor/script content boundary over live Behaviour instances, not a trimmed engine hot path.")]
     public static void Bind(IComponent component, IReadOnlyDictionary<string, string>? fields)
     {
         ArgumentNullException.ThrowIfNull(component);
