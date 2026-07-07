@@ -33,6 +33,7 @@ public sealed class LavaMineSceneTests
         _ = FindBehaviour<PlayableProjectileTool>(scene);
         _ = FindBehaviour<WeaponController>(scene);
         _ = FindBehaviour<PauseMenu>(scene);
+        _ = FindBehaviour<GameUiDemoController>(scene);
         MissionDirector mission = FindBehaviour<MissionDirector>(scene);
         RisingHazardDirector hazard = FindBehaviour<RisingHazardDirector>(scene);
         ExtractionTrigger extraction = FindBehaviour<ExtractionTrigger>(scene);
