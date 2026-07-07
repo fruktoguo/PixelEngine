@@ -35,6 +35,7 @@ internal sealed class EditorShellApp
             ScriptedBuildSettingsProbe: false,
             ScriptedMenuLayoutProbe: false,
             ScriptedHierarchyProbe: false,
+            ScriptedDefaultWorkbenchProbe: false,
             BuildOutputPath: null,
             CaptureFramePath: null,
             LogDirectory: null));
@@ -109,6 +110,7 @@ internal sealed class EditorShellApp
         ScriptedBuildSettingsProbeState scriptedBuildSettings = new();
         ScriptedMenuLayoutProbeState scriptedMenuLayout = new();
         ScriptedHierarchyProbeState scriptedHierarchy = new();
+        ScriptedDefaultWorkbenchProbeState scriptedDefaultWorkbench = new();
         ScriptedPlayerRunProbeResult scriptedPlayerRun = new();
         while (!shellWindow.Window.IsClosing && !_exitRequested)
         {
@@ -117,6 +119,16 @@ internal sealed class EditorShellApp
             previousSeconds = now;
             if (CurrentSession is null)
             {
+                if (_options.ScriptedDefaultWorkbenchProbe &&
+                    !scriptedDefaultWorkbench.ProjectCreated &&
+                    string.IsNullOrWhiteSpace(_options.ProjectPath))
+                {
+                    string projectRoot = ResolveScriptedDefaultWorkbenchProjectRoot();
+                    CreateProject(projectRoot, "Default Workbench Probe");
+                    scriptedDefaultWorkbench.ProjectCreated = true;
+                    scriptedDefaultWorkbench.ProjectRoot = projectRoot;
+                }
+
                 if (_options.ScriptedProbe &&
                     scriptedProjectClosed &&
                     !scriptedProjectReopened &&
@@ -203,6 +215,10 @@ internal sealed class EditorShellApp
                 {
                     RunScriptedHierarchyProbeActions(scriptedHierarchy);
                 }
+                else if (_options.ScriptedDefaultWorkbenchProbe)
+                {
+                    RunScriptedDefaultWorkbenchProbeActions(scriptedDefaultWorkbench);
+                }
             }
 
             UpdateTitle(shellWindow);
@@ -228,6 +244,11 @@ internal sealed class EditorShellApp
             }
 
             if (_options.ScriptedHierarchyProbe && scriptedHierarchy.Completed)
+            {
+                break;
+            }
+
+            if (_options.ScriptedDefaultWorkbenchProbe && scriptedDefaultWorkbench.Completed)
             {
                 break;
             }
@@ -285,6 +306,10 @@ internal sealed class EditorShellApp
         else if (_options.ScriptedHierarchyProbe)
         {
             WriteScriptedHierarchyProbeSummary(scriptedHierarchy);
+        }
+        else if (_options.ScriptedDefaultWorkbenchProbe)
+        {
+            WriteScriptedDefaultWorkbenchProbeSummary(scriptedDefaultWorkbench);
         }
         else if (_options.ScriptedBuildCancelProbe)
         {
@@ -421,6 +446,137 @@ internal sealed class EditorShellApp
             state.Completed = true;
             state.Diagnostic = ex.Message;
         }
+    }
+
+    private void RunScriptedDefaultWorkbenchProbeActions(ScriptedDefaultWorkbenchProbeState state)
+    {
+        if (CurrentSession is null || state.Completed)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!state.RequiredPanelsShown)
+            {
+                string[] panelTitles =
+                [
+                    EditorDockSpace.SceneHierarchyWindowTitle,
+                    EditorDockSpace.ViewportWindowTitle,
+                    EditorDockSpace.GameViewWindowTitle,
+                    EditorDockSpace.InspectorWindowTitle,
+                    EditorDockSpace.AssetBrowserWindowTitle,
+                    EditorDockSpace.ConsoleDiagnosticsWindowTitle,
+                    ProjectSettingsPanel.PanelTitle,
+                    PlayerSettingsPanel.PanelTitle,
+                    BuildSettingsPanel.PanelTitle,
+                ];
+                int shown = 0;
+                for (int i = 0; i < panelTitles.Length; i++)
+                {
+                    if (ShowPanel(panelTitles[i]))
+                    {
+                        shown++;
+                    }
+                }
+
+                ResetLayout();
+                state.RequiredPanelsShown = shown == panelTitles.Length;
+                state.PanelCount = CurrentSession.PanelCount;
+                return;
+            }
+
+            if (!state.GameObjectCreated)
+            {
+                CreateGameObject();
+                state.GameObjectCreated = CurrentSession.SceneModel.SelectedStableId.HasValue;
+                return;
+            }
+
+            if (!state.ScriptSourceCreated)
+            {
+                state.ScriptSourcePath = CreateDefaultWorkbenchScriptSource(CurrentSession.Project);
+                state.ScriptSourceCreated = File.Exists(state.ScriptSourcePath);
+                return;
+            }
+
+            if (!state.SceneSaved)
+            {
+                _ = SaveScene();
+                state.SceneSaved = File.Exists(CurrentSession.SceneFilePath) && !CurrentSession.SceneModel.IsDirty;
+                return;
+            }
+
+            if (!state.PlayEntered)
+            {
+                PixelEngine.Hosting.EditorPlaySessionResult result = CurrentSession.EnterPlayTemporary();
+                state.PlayEntered = result.Succeeded;
+                state.PlayStatus = result.Message;
+                return;
+            }
+
+            if (!state.PlayExited)
+            {
+                PixelEngine.Hosting.EditorPlaySessionResult result = CurrentSession.ExitEditorPlay();
+                state.PlayExited = result.Succeeded;
+                state.PlayStatus = result.Message;
+                return;
+            }
+
+            if (!state.BuildSettingsShown)
+            {
+                state.BuildSettingsShown = ShowPanel(BuildSettingsPanel.PanelTitle);
+                state.BuildOutputPath = ResolveScriptedBuildOutputDirectory();
+                _ = Directory.CreateDirectory(state.BuildOutputPath);
+                state.BuildOutputReady = Directory.Exists(state.BuildOutputPath);
+            }
+
+            state.Succeeded = state.RequiredPanelsShown &&
+                state.GameObjectCreated &&
+                state.ScriptSourceCreated &&
+                state.SceneSaved &&
+                state.PlayEntered &&
+                state.PlayExited &&
+                state.BuildSettingsShown &&
+                state.BuildOutputReady;
+            state.Completed = true;
+            state.Diagnostic = state.Succeeded
+                ? "默认工作台自动化路线探针完成。"
+                : "默认工作台自动化路线探针未满足全部条件。";
+        }
+        catch (Exception ex) when (!OperatingSystem.IsBrowser())
+        {
+            state.Completed = true;
+            state.Diagnostic = ex.Message;
+        }
+    }
+
+    private string ResolveScriptedDefaultWorkbenchProjectRoot()
+    {
+        string root = string.IsNullOrWhiteSpace(_options.BuildOutputPath)
+            ? string.IsNullOrWhiteSpace(_options.LogDirectory)
+                ? Path.Combine(Environment.CurrentDirectory, "artifacts", "editor-default-workbench-probe")
+                : Path.Combine(_options.LogDirectory, "editor-default-workbench-probe")
+            : Path.Combine(_options.BuildOutputPath, "editor-default-workbench-probe");
+        return Path.GetFullPath(Path.Combine(root, "project-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture)));
+    }
+
+    private static string CreateDefaultWorkbenchScriptSource(EditorProject project)
+    {
+        _ = Directory.CreateDirectory(project.ScriptSourcePath);
+        string path = Path.Combine(project.ScriptSourcePath, "DefaultWorkbenchBehaviour.cs");
+        if (!File.Exists(path))
+        {
+            File.WriteAllText(
+                path,
+                "using PixelEngine.Scripting;" + Environment.NewLine +
+                Environment.NewLine +
+                "public sealed class DefaultWorkbenchBehaviour : Behaviour" + Environment.NewLine +
+                "{" + Environment.NewLine +
+                "}" + Environment.NewLine);
+        }
+
+        return path;
     }
 
     private void RunScriptedBuildSettingsProbeActions(ScriptedBuildSettingsProbeState state)
@@ -848,6 +1004,29 @@ internal sealed class EditorShellApp
             $"deleted={state.Deleted}, " +
             $"initial_count={state.InitialCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
             $"final_count={state.FinalCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
+    }
+
+    private static void WriteScriptedDefaultWorkbenchProbeSummary(ScriptedDefaultWorkbenchProbeState state)
+    {
+        Console.WriteLine(
+            "editor_default_workbench_probe " +
+            "schema=pixelengine.editor-default-workbench-probe/v1, " +
+            $"completed={state.Succeeded}, " +
+            $"project_created={state.ProjectCreated}, " +
+            $"project_root={SanitizeSummaryValue(state.ProjectRoot)}, " +
+            $"required_panels_shown={state.RequiredPanelsShown}, " +
+            $"panel_count={state.PanelCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"game_object_created={state.GameObjectCreated}, " +
+            $"script_source_created={state.ScriptSourceCreated}, " +
+            $"script_source={SanitizeSummaryValue(state.ScriptSourcePath)}, " +
+            $"scene_saved={state.SceneSaved}, " +
+            $"play_entered={state.PlayEntered}, " +
+            $"play_exited={state.PlayExited}, " +
+            $"play_status={SanitizeSummaryValue(state.PlayStatus)}, " +
+            $"build_settings_shown={state.BuildSettingsShown}, " +
+            $"build_output_ready={state.BuildOutputReady}, " +
+            $"build_output={SanitizeSummaryValue(state.BuildOutputPath)}, " +
             $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
     }
 
@@ -1281,6 +1460,27 @@ internal sealed class ScriptedHierarchyProbeState
     public bool Deleted;
     public int InitialCount;
     public int FinalCount;
+    public string Diagnostic = string.Empty;
+}
+
+internal sealed class ScriptedDefaultWorkbenchProbeState
+{
+    public bool Completed;
+    public bool Succeeded;
+    public bool ProjectCreated;
+    public string ProjectRoot = string.Empty;
+    public bool RequiredPanelsShown;
+    public int PanelCount;
+    public bool GameObjectCreated;
+    public bool ScriptSourceCreated;
+    public string ScriptSourcePath = string.Empty;
+    public bool SceneSaved;
+    public bool PlayEntered;
+    public bool PlayExited;
+    public string PlayStatus = string.Empty;
+    public bool BuildSettingsShown;
+    public bool BuildOutputReady;
+    public string BuildOutputPath = string.Empty;
     public string Diagnostic = string.Empty;
 }
 

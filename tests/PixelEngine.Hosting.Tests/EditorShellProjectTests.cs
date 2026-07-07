@@ -76,6 +76,18 @@ public sealed class EditorShellProjectTests
     }
 
     /// <summary>
+    /// 验证默认工作台 scripted probe 参数可被解析，供 M14 自动化路线使用。
+    /// </summary>
+    [Fact]
+    public void ParseRecognizesDefaultWorkbenchProbeFlag()
+    {
+        EditorShellOptions options = EditorShellOptions.Parse(["--scripted-default-workbench-probe", "--build-output", "artifacts/workbench"]);
+
+        Assert.True(options.ScriptedDefaultWorkbenchProbe);
+        Assert.Equal("artifacts/workbench", options.BuildOutputPath);
+    }
+
+    /// <summary>
     /// 验证工程文件中的目录与场景路径不能逃逸工程/content 根。
     /// </summary>
     [Fact]
