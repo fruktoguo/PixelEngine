@@ -28,6 +28,23 @@ internal readonly record struct EditorAssetMoveResult(
     int UpdatedReferenceDocuments,
     bool UpdatedActiveScene);
 
+internal readonly record struct EditorAssetDeletePreflight(
+    EditorAssetRecord Asset,
+    int ReferenceCount,
+    int ReferenceDocuments,
+    bool ActiveSceneHasReferences,
+    IReadOnlyList<string> ReferenceLocations)
+{
+    public bool CanDelete => ReferenceCount == 0;
+}
+
+internal readonly record struct EditorAssetDeleteResult(
+    EditorAssetRecord Asset,
+    bool Deleted,
+    bool RequiresConfirmation,
+    EditorAssetDeletePreflight Preflight,
+    string Diagnostic);
+
 internal sealed class EditorAssetManifestStore
 {
     public const int CurrentFormatVersion = 1;
@@ -183,6 +200,49 @@ internal sealed class EditorAssetManifestStore
         int updatedDocuments = RewriteReferencesInReferenceDocuments(current, next, source.Id, source.AssetType);
         EditorAssetRecord moved = EnsureAsset(next);
         return new EditorAssetMoveResult(moved, updatedDocuments, updatedActiveScene);
+    }
+
+    public EditorAssetDeletePreflight PreflightDeleteAsset(string logicalPath, EditorSceneModel? activeScene = null)
+    {
+        string normalized = NormalizeLogicalPath(logicalPath, nameof(logicalPath));
+        EditorAssetRecord asset = EnsureAsset(normalized);
+        return BuildDeletePreflight(asset, activeScene);
+    }
+
+    public EditorAssetDeleteResult DeleteAsset(string logicalPath, EditorSceneModel? activeScene = null, bool confirmed = false)
+    {
+        string normalized = NormalizeLogicalPath(logicalPath, nameof(logicalPath));
+        EditorAssetRecord asset = EnsureAsset(normalized);
+        EditorAssetDeletePreflight preflight = BuildDeletePreflight(asset, activeScene);
+        if (!preflight.CanDelete)
+        {
+            return new EditorAssetDeleteResult(
+                asset,
+                false,
+                false,
+                preflight,
+                BuildDeleteBlockedDiagnostic(preflight));
+        }
+
+        if (!confirmed)
+        {
+            return new EditorAssetDeleteResult(
+                asset,
+                false,
+                true,
+                preflight,
+                BuildDeleteConfirmationDiagnostic(preflight));
+        }
+
+        string fullPath = ResolveFullPath(asset.LogicalPath);
+        File.Delete(fullPath);
+        SaveDocument(RemoveRecord(LoadDocument(), asset.Id));
+        return new EditorAssetDeleteResult(
+            asset,
+            true,
+            false,
+            preflight,
+            $"已删除资产 {asset.LogicalPath}。");
     }
 
     internal static EditorAssetType Classify(string logicalPath)
@@ -374,6 +434,128 @@ internal sealed class EditorAssetManifestStore
         }
 
         return new EditorAssetManifestDocument { FormatVersion = CurrentFormatVersion, Assets = records };
+    }
+
+    private static EditorAssetManifestDocument RemoveRecord(EditorAssetManifestDocument document, string assetId)
+    {
+        EditorAssetRecordDocument[] records = NormalizeRecords(document.Assets);
+        List<EditorAssetRecordDocument> retained = new(records.Length);
+        bool removed = false;
+        for (int i = 0; i < records.Length; i++)
+        {
+            if (string.Equals(records[i].Id, assetId, StringComparison.OrdinalIgnoreCase))
+            {
+                removed = true;
+                continue;
+            }
+
+            retained.Add(records[i]);
+        }
+
+        if (!removed)
+        {
+            throw new InvalidOperationException($"资产 manifest 缺少 asset id：{assetId}");
+        }
+
+        return new EditorAssetManifestDocument { FormatVersion = CurrentFormatVersion, Assets = [.. retained] };
+    }
+
+    private EditorAssetDeletePreflight BuildDeletePreflight(EditorAssetRecord asset, EditorSceneModel? activeScene)
+    {
+        List<string> locations = [];
+        int documents = CollectReferenceDocuments(asset, locations);
+        bool activeSceneHasReferences = false;
+        if (activeScene is not null)
+        {
+            int before = locations.Count;
+            CollectReferenceLocations(activeScene, "active scene", asset, locations);
+            activeSceneHasReferences = locations.Count != before;
+        }
+
+        return new EditorAssetDeletePreflight(asset, locations.Count, documents, activeSceneHasReferences, locations);
+    }
+
+    private int CollectReferenceDocuments(EditorAssetRecord asset, List<string> locations)
+    {
+        if (!Directory.Exists(_contentRoot))
+        {
+            return 0;
+        }
+
+        int referencedDocuments = 0;
+        string[] files =
+        [
+            .. Directory.EnumerateFiles(_contentRoot, "*.scene", SearchOption.AllDirectories)
+                .Concat(Directory.EnumerateFiles(_contentRoot, "*.prefab", SearchOption.AllDirectories))
+                .Order(StringComparer.OrdinalIgnoreCase),
+        ];
+        for (int i = 0; i < files.Length; i++)
+        {
+            string logicalDocumentPath = NormalizeLogicalPath(Path.GetRelativePath(_contentRoot, files[i]), "reference document");
+            if (string.Equals(logicalDocumentPath, asset.LogicalPath, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            EngineSceneDocument document = EngineSceneDocumentLoader.LoadDocument(files[i]);
+            EditorSceneModel model = EditorSceneModel.FromDocument(document);
+            int before = locations.Count;
+            CollectReferenceLocations(model, logicalDocumentPath, asset, locations);
+            if (locations.Count != before)
+            {
+                referencedDocuments++;
+            }
+        }
+
+        return referencedDocuments;
+    }
+
+    private static void CollectReferenceLocations(EditorSceneModel scene, string documentName, EditorAssetRecord asset, List<string> locations)
+    {
+        EditorGameObject[] objects = [.. scene.EnumerateDepthFirst()];
+        for (int i = 0; i < objects.Length; i++)
+        {
+            EditorGameObject gameObject = objects[i];
+            if (asset.AssetType == EditorAssetType.Prefab &&
+                gameObject.PrefabLink is { } prefabLink &&
+                MatchesPrefabReference(prefabLink, asset.LogicalPath, asset.Id))
+            {
+                locations.Add($"{documentName}:{gameObject.Name}.Prefab");
+            }
+
+            for (int componentIndex = 0; componentIndex < gameObject.Components.Count; componentIndex++)
+            {
+                EditorComponentModel component = gameObject.Components[componentIndex];
+                foreach (KeyValuePair<string, string> field in component.SerializedFields)
+                {
+                    if (MatchesAssetReference(field.Value, asset.LogicalPath, asset.Id, asset.AssetType))
+                    {
+                        locations.Add($"{documentName}:{gameObject.Name}.{component.TypeName}.{field.Key}");
+                    }
+                }
+            }
+        }
+    }
+
+    private static bool MatchesAssetReference(string value, string logicalPath, string assetId, EditorAssetType assetType)
+    {
+        return EditorAssetReferenceCodec.TryDecode(value, out EditorAssetReference reference) &&
+            reference.AssetType == assetType &&
+            (string.Equals(reference.AssetId, assetId, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(reference.LogicalPath, logicalPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string BuildDeleteConfirmationDiagnostic(EditorAssetDeletePreflight preflight)
+    {
+        return $"删除资产 {preflight.Asset.LogicalPath} 需要确认；预检未发现引用。";
+    }
+
+    private static string BuildDeleteBlockedDiagnostic(EditorAssetDeletePreflight preflight)
+    {
+        string sample = preflight.ReferenceLocations.Count == 0
+            ? "无可显示引用位置"
+            : string.Join("; ", preflight.ReferenceLocations.Take(3));
+        return $"资产 {preflight.Asset.LogicalPath} 仍被 {preflight.ReferenceCount} 处引用（{sample}），已拒绝删除以避免丢失引用。";
     }
 
     private int RewriteReferencesInReferenceDocuments(string oldPath, string newPath, string assetId, EditorAssetType assetType)

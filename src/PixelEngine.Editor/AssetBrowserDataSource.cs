@@ -89,6 +89,37 @@ public readonly record struct AssetBrowserDragPayload(
     AssetBrowserItemKind Kind);
 
 /// <summary>
+/// Project Window 资产删除请求。
+/// </summary>
+/// <param name="Path">相对 content 根目录的 logical path。</param>
+/// <param name="AssetId">工程级 stable asset id。</param>
+/// <param name="Kind">资产类型。</param>
+/// <param name="Confirmed">用户是否已确认删除。</param>
+public readonly record struct AssetBrowserDeleteRequest(
+    string Path,
+    string AssetId,
+    AssetBrowserItemKind Kind,
+    bool Confirmed);
+
+/// <summary>
+/// Project Window 资产删除结果。
+/// </summary>
+/// <param name="Succeeded">删除是否已执行。</param>
+/// <param name="RequiresConfirmation">是否需要二次确认。</param>
+/// <param name="Diagnostic">可展示给用户的删除诊断。</param>
+public readonly record struct AssetBrowserDeleteResult(
+    bool Succeeded,
+    bool RequiresConfirmation,
+    string Diagnostic);
+
+/// <summary>
+/// Project Window 资产删除回调。
+/// </summary>
+/// <param name="request">删除请求。</param>
+/// <returns>删除结果。</returns>
+public delegate AssetBrowserDeleteResult AssetBrowserDeleteHandler(AssetBrowserDeleteRequest request);
+
+/// <summary>
 /// 资源浏览器只读数据源。
 /// </summary>
 public interface IAssetBrowserDataSource
