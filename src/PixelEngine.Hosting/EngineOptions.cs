@@ -9,6 +9,57 @@ namespace PixelEngine.Hosting;
 public sealed class EngineOptions
 {
     /// <summary>
+    /// 创建引擎运行配置；默认不偏好 ComputeSharp/DX12 后端，保留既有公开构造路径兼容性。
+    /// </summary>
+    public EngineOptions(
+        int windowWidth,
+        int windowHeight,
+        string windowTitle,
+        int internalWidth,
+        int internalHeight,
+        int workerCount,
+        EngineGcMode gcMode,
+        bool enableEditor,
+        bool headless,
+        bool deterministicMode,
+        bool enableGpu,
+        bool enableGuiRuntime,
+        bool enableGameUi,
+        UiBackendKind gameUiBackend,
+        bool vSync,
+        string contentRoot,
+        string? startScene,
+        double simHz,
+        int eventCapacityPerChannel,
+        long noGcRegionBudgetBytes,
+        EngineOverloadOptions overload)
+        : this(
+            windowWidth,
+            windowHeight,
+            windowTitle,
+            internalWidth,
+            internalHeight,
+            workerCount,
+            gcMode,
+            enableEditor,
+            headless,
+            deterministicMode,
+            enableGpu,
+            false,
+            enableGuiRuntime,
+            enableGameUi,
+            gameUiBackend,
+            vSync,
+            contentRoot,
+            startScene,
+            simHz,
+            eventCapacityPerChannel,
+            noGcRegionBudgetBytes,
+            overload)
+    {
+    }
+
+    /// <summary>
     /// 创建引擎运行配置。
     /// </summary>
     public EngineOptions(
