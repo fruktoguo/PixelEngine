@@ -16,6 +16,32 @@ public sealed class GameUiDemoController : Behaviour
     internal const string PauseScreen = "pause";
     internal const string ResultScreen = "result";
 
+    private static readonly string[] HudModelPaths =
+    [
+        "hud.health",
+        "hud.weapon",
+        "hud.ammo",
+        "hud.cooldown",
+        "hud.heat",
+        "hud.crystals",
+        "hud.time",
+        "hud.hazard",
+        "hud.score",
+    ];
+
+    private static readonly string[] ResultModelPaths =
+    [
+        "result.won",
+        "result.crystals",
+        "result.time",
+        "result.score",
+        "result.reason",
+    ];
+
+    internal static ReadOnlySpan<string> HudModelPathNames => HudModelPaths;
+
+    internal static ReadOnlySpan<string> ResultModelPathNames => ResultModelPaths;
+
     private static readonly UiActionId StartGameAction = Action("start_game");
     private static readonly UiActionId OpenSettingsAction = Action("open_settings");
     private static readonly UiActionId OpenInventoryAction = Action("open_inventory");
