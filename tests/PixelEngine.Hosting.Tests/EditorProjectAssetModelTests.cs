@@ -188,6 +188,70 @@ public sealed class EditorProjectAssetModelTests
     }
 
     /// <summary>
+    /// 验证 Project Window 数据源为纹理、音频、材质、场景、Prefab 与脚本提供只读预览摘要。
+    /// </summary>
+    [Fact]
+    public void ProjectBrowserBuildsPreviewSummariesForCommonAssetTypes()
+    {
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            string contentRoot = Path.Combine(projectRoot, "content");
+            _ = Directory.CreateDirectory(Path.Combine(contentRoot, "textures"));
+            _ = Directory.CreateDirectory(Path.Combine(contentRoot, "audio"));
+            _ = Directory.CreateDirectory(Path.Combine(contentRoot, "scripts"));
+            File.WriteAllBytes(Path.Combine(contentRoot, "textures", "sand.png"), [1, 2, 3]);
+            File.WriteAllBytes(Path.Combine(contentRoot, "audio", "hit.wav"), [4, 5]);
+            File.WriteAllText(Path.Combine(contentRoot, "materials.json"), "{\"materials\":[{\"name\":\"sand\"},{\"name\":\"water\"}]}\n");
+            File.WriteAllText(Path.Combine(contentRoot, "scripts", "DemoBehaviour.cs"), "using PixelEngine.Scripting; public sealed class DemoBehaviour : Behaviour { }\n");
+            SavePrefabDocument(contentRoot, "prefabs/rock.prefab", "Rock");
+            string scenePath = Path.Combine(contentRoot, "scenes", "main.scene");
+            EngineSceneDocumentLoader.SaveDocument(
+                new EngineSceneDocument
+                {
+                    FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+                    Name = "main",
+                    Entities =
+                    [
+                        new EngineSceneEntityDocument
+                        {
+                            StableId = 1,
+                            Name = "Root",
+                            Transform = new EngineSceneTransformDocument(),
+                            Behaviours =
+                            [
+                                new EngineSceneBehaviourDocument { TypeName = "PixelEngine.Tests.DemoBehaviour" },
+                            ],
+                        },
+                        new EngineSceneEntityDocument
+                        {
+                            StableId = 2,
+                            ParentId = 1,
+                            Name = "Child",
+                            Transform = new EngineSceneTransformDocument(),
+                        },
+                    ],
+                },
+                scenePath);
+            EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
+            EditorAssetBrowserDataSource source = new(manifest, new FixedThumbnailProvider("textures/sand.png", new AssetThumbnail(99, 32, 16)));
+
+            IReadOnlyList<AssetBrowserItem> assets = source.ListAssets();
+
+            Assert.Equal("纹理：32×16，3 B", Find(assets, "textures/sand.png").PreviewSummary);
+            Assert.Equal("音频：2 B", Find(assets, "audio/hit.wav").PreviewSummary);
+            Assert.StartsWith("材质定义：2 项", Find(assets, "materials.json").PreviewSummary, StringComparison.Ordinal);
+            Assert.Equal("场景：2 个 GameObject，1 个根，1 个 Behaviour", Find(assets, "scenes/main.scene").PreviewSummary);
+            Assert.Equal("Prefab：1 个 GameObject，1 个根，0 个 Behaviour", Find(assets, "prefabs/rock.prefab").PreviewSummary);
+            Assert.StartsWith("脚本：DemoBehaviour，", Find(assets, "scripts/DemoBehaviour.cs").PreviewSummary, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
     /// 验证资产模型拒绝越过 content 根目录的创建和移动路径。
     /// </summary>
     [Fact]
@@ -263,6 +327,26 @@ public sealed class EditorProjectAssetModelTests
                 ],
             },
             fullPath);
+    }
+
+    private static AssetBrowserItem Find(IReadOnlyList<AssetBrowserItem> assets, string path)
+    {
+        return Assert.Single(assets, item => item.Path == path);
+    }
+
+    private sealed class FixedThumbnailProvider(string path, AssetThumbnail thumbnail) : ITextureThumbnailProvider
+    {
+        public bool TryGetThumbnail(string assetPath, out AssetThumbnail resolved)
+        {
+            if (string.Equals(assetPath, path, StringComparison.OrdinalIgnoreCase))
+            {
+                resolved = thumbnail;
+                return true;
+            }
+
+            resolved = default;
+            return false;
+        }
     }
 
     private static void DeleteDirectory(string path)
