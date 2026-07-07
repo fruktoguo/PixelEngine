@@ -351,6 +351,99 @@ public sealed class EditorShellGameViewContractTests
     }
 
     /// <summary>
+    /// 验证 Game View 输入源只在 Play、聚焦且指针位于图像区域内时转发键盘与文本输入。
+    /// </summary>
+    [Fact]
+    public void GameViewUiInputSourceBlocksKeyboardTextAndCompositionOutsideFocusedPlayImage()
+    {
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 320,
+            textureHeight: 180,
+            imageMinPanel: new Vector2(10f, 20f),
+            availablePanelSize: new Vector2(160f, 160f));
+
+        AssertKeyboardBlocked(PixelEngine.Editor.EditorMode.Edit, focused: true, panelPoint: new Vector2(90f, 65f));
+        AssertKeyboardBlocked(PixelEngine.Editor.EditorMode.Play, focused: false, panelPoint: new Vector2(90f, 65f));
+        AssertKeyboardBlocked(PixelEngine.Editor.EditorMode.Play, focused: true, panelPoint: new Vector2(90f, 130f));
+
+        void AssertKeyboardBlocked(PixelEngine.Editor.EditorMode mode, bool focused, Vector2 panelPoint)
+        {
+            FixedUiInputSource input = new(new UiPointerState(1f, 2f, 0f, 0f, LeftDown: false, RightDown: false, MiddleDown: false))
+            {
+                DownKeys = [new UiKey(65)],
+                Modifiers = UiKeyModifiers.Control,
+                Text = "go",
+                CompositionText = "あい",
+                Composition = new UiTextComposition(isActive: true, cursorIndex: 1),
+            };
+            GameViewUiInputSource source = new(
+                input,
+                () => mode,
+                () => snapshot,
+                () => panelPoint,
+                () => focused);
+            Span<UiKey> keys = stackalloc UiKey[4];
+            Span<char> text = stackalloc char[4];
+            text.Fill('x');
+
+            Assert.False(source.TryGetPointer(out _));
+            Assert.Equal(0, source.CaptureDownKeys(keys, out UiKeyModifiers modifiers));
+            Assert.Equal(UiKeyModifiers.None, modifiers);
+            Assert.Equal(0, input.CaptureDownKeysCalls);
+            Assert.Equal(0, source.CaptureText(text));
+            Assert.True(text.ToArray().All(c => c == '\0'));
+            Assert.Equal(1, input.CaptureTextCalls);
+            Assert.Equal(0, source.CaptureTextComposition(text, out UiTextComposition composition));
+            Assert.False(composition.IsActive);
+            Assert.True(text.ToArray().All(c => c == '\0'));
+            Assert.Equal(1, input.CaptureTextCompositionCalls);
+        }
+    }
+
+    /// <summary>
+    /// 验证 Game View 输入源在合法 Game View 图像内转发键盘、committed text 与 composition 预编辑。
+    /// </summary>
+    [Fact]
+    public void GameViewUiInputSourceForwardsKeyboardTextAndCompositionInsideFocusedPlayImage()
+    {
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 320,
+            textureHeight: 180,
+            imageMinPanel: new Vector2(10f, 20f),
+            availablePanelSize: new Vector2(160f, 160f));
+        FixedUiInputSource input = new(new UiPointerState(1f, 2f, 0f, 0f, LeftDown: false, RightDown: false, MiddleDown: false))
+        {
+            DownKeys = [new UiKey(65)],
+            Modifiers = UiKeyModifiers.Control,
+            Text = "go",
+            CompositionText = "あい",
+            Composition = new UiTextComposition(isActive: true, cursorIndex: 1, selectionStart: 0, selectionLength: 1),
+        };
+        GameViewUiInputSource source = new(
+            input,
+            () => PixelEngine.Editor.EditorMode.Play,
+            () => snapshot,
+            () => new Vector2(90f, 65f),
+            () => true);
+        Span<UiKey> keys = stackalloc UiKey[4];
+        Span<char> text = stackalloc char[4];
+
+        Assert.True(source.TryGetPointer(out UiPointerState pointer));
+        Assert.Equal(160f, pointer.X, precision: 3);
+        Assert.Equal(90f, pointer.Y, precision: 3);
+        Assert.Equal(1, source.CaptureDownKeys(keys, out UiKeyModifiers modifiers));
+        Assert.Equal(new UiKey(65), keys[0]);
+        Assert.Equal(UiKeyModifiers.Control, modifiers);
+        Assert.Equal(2, source.CaptureText(text));
+        Assert.Equal("go", new string(text[..2]));
+        Assert.Equal(2, source.CaptureTextComposition(text, out UiTextComposition composition));
+        Assert.Equal("あい", new string(text[..2]));
+        Assert.True(composition.IsActive);
+        Assert.Equal(1, composition.CursorIndex);
+        Assert.Equal(1, composition.SelectionLength);
+    }
+
+    /// <summary>
     /// 验证 GameViewPanel 只声明运行时视图契约，不复用 Scene View 的 gizmo / 画刷职责。
     /// </summary>
     [Fact]
@@ -371,6 +464,22 @@ public sealed class EditorShellGameViewContractTests
 
     private sealed class FixedUiInputSource(UiPointerState pointer) : IUiInputSource
     {
+        public UiKey[] DownKeys { get; init; } = [];
+
+        public UiKeyModifiers Modifiers { get; init; }
+
+        public string Text { get; set; } = string.Empty;
+
+        public string CompositionText { get; set; } = string.Empty;
+
+        public UiTextComposition Composition { get; init; }
+
+        public int CaptureDownKeysCalls { get; private set; }
+
+        public int CaptureTextCalls { get; private set; }
+
+        public int CaptureTextCompositionCalls { get; private set; }
+
         public bool TryGetPointer(out UiPointerState state)
         {
             state = pointer;
@@ -379,15 +488,29 @@ public sealed class EditorShellGameViewContractTests
 
         public int CaptureDownKeys(Span<UiKey> destination, out UiKeyModifiers modifiers)
         {
-            _ = destination;
-            modifiers = UiKeyModifiers.None;
-            return 0;
+            CaptureDownKeysCalls++;
+            modifiers = Modifiers;
+            int count = Math.Min(destination.Length, DownKeys.Length);
+            DownKeys.AsSpan(0, count).CopyTo(destination);
+            return count;
         }
 
         public int CaptureText(Span<char> destination)
         {
-            _ = destination;
-            return 0;
+            CaptureTextCalls++;
+            int count = Math.Min(destination.Length, Text.Length);
+            Text.AsSpan(0, count).CopyTo(destination);
+            Text = string.Empty;
+            return count;
+        }
+
+        public int CaptureTextComposition(Span<char> destination, out UiTextComposition composition)
+        {
+            CaptureTextCompositionCalls++;
+            int count = Math.Min(destination.Length, CompositionText.Length);
+            CompositionText.AsSpan(0, count).CopyTo(destination);
+            composition = Composition;
+            return count;
         }
     }
 
