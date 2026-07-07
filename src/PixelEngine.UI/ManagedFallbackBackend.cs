@@ -13,6 +13,7 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     private readonly UiScreenStackEntry[] _visibleScreens;
     private readonly UiEvent[] _events;
     private readonly Action<IGuiDrawContext> _drawCallback;
+    private UiViewport _viewport;
     private int _documentCount;
     private int _nextDocumentHandle = 1;
     private int _visibleScreenCount;
@@ -64,6 +65,7 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     {
         ThrowIfDisposed();
         info.Viewport.Validate();
+        _viewport = info.Viewport;
         _initialized = true;
     }
 
@@ -75,6 +77,7 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     {
         ThrowIfDisposed();
         viewport.Validate();
+        _viewport = viewport;
         Dirty = true;
     }
 
@@ -215,13 +218,39 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     public UiHitResult HitTest(float x, float y)
     {
         ThrowIfDisposed();
-        if (_visibleScreenCount == 0)
+        if (_visibleScreenCount == 0 || !float.IsFinite(x) || !float.IsFinite(y))
         {
             return UiHitResult.None;
         }
 
-        bool modal = _visibleScreens[_visibleScreenCount - 1].Modal;
-        return new UiHitResult(HitsUi: true, Opaque: modal, WantsMouse: modal, WantsKeyboard: modal);
+        UiHitResult passiveHit = UiHitResult.None;
+        for (int i = _visibleScreenCount - 1; i >= 0; i--)
+        {
+            UiScreenStackEntry screen = _visibleScreens[i];
+            ManagedUiDocument? document = FindDocument(screen.Document);
+            if (document is null)
+            {
+                continue;
+            }
+
+            if (screen.Modal)
+            {
+                return new UiHitResult(HitsUi: true, Opaque: true, WantsMouse: true, WantsKeyboard: true);
+            }
+
+            UiHitResult hit = HitTestDocument(document, x, y);
+            if (hit.WantsMouse || hit.WantsKeyboard)
+            {
+                return hit;
+            }
+
+            if (hit.HitsUi)
+            {
+                passiveHit = hit;
+            }
+        }
+
+        return passiveHit;
     }
 
     /// <summary>
@@ -484,6 +513,49 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
             default:
                 throw new ArgumentOutOfRangeException(nameof(control), control.Kind, "未知 Managed UI 控件类型。");
         }
+    }
+
+    private UiHitResult HitTestDocument(ManagedUiDocument document, float x, float y)
+    {
+        if (!ContainsDocumentPoint(document, x, y))
+        {
+            return UiHitResult.None;
+        }
+
+        bool interactive = HasInteractiveControl(document);
+        return new UiHitResult(HitsUi: true, Opaque: false, WantsMouse: interactive, WantsKeyboard: interactive);
+    }
+
+    private bool ContainsDocumentPoint(ManagedUiDocument document, float x, float y)
+    {
+        if (document.RootBox.HasPositionAndSize)
+        {
+            float left = document.RootBox.X!.Value;
+            float top = document.RootBox.Y!.Value;
+            float right = left + document.RootBox.Width!.Value;
+            float bottom = top + document.RootBox.Height!.Value;
+            return x >= left && x < right && y >= top && y < bottom;
+        }
+
+        return _viewport.Width > 0 &&
+            _viewport.Height > 0 &&
+            x >= _viewport.X &&
+            x < _viewport.X + _viewport.Width &&
+            y >= _viewport.Y &&
+            y < _viewport.Y + _viewport.Height;
+    }
+
+    private static bool HasInteractiveControl(ManagedUiDocument document)
+    {
+        for (int i = 0; i < document.Controls.Length; i++)
+        {
+            if (document.Controls[i].Kind is ManagedUiControlKind.Button or ManagedUiControlKind.Checkbox)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private ManagedUiControl? FindControl(UiDocumentHandle document, UiPathId path)
