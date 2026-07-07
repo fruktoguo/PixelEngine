@@ -51,6 +51,73 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
+    /// 验证 HUD、暂停与结算屏显式声明 headless / ManagedFallback 可消费的屏幕数据契约。
+    /// </summary>
+    [Fact]
+    public void DemoHudPauseAndResultDeclareHeadlessManagedFallbackContracts()
+    {
+        UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
+
+        AssertScreenContract(
+            manifest,
+            GameUiDemoController.HudScreen,
+            "demo.webfirst.hud/v1",
+            GameUiDemoController.HudModelPathNames.ToArray(),
+            ["pause_game"]);
+        AssertScreenContract(
+            manifest,
+            GameUiDemoController.PauseScreen,
+            "demo.webfirst.pause/v1",
+            [],
+            ["open_settings", "restart_game", "resume_game", "quit_game"]);
+        AssertScreenContract(
+            manifest,
+            GameUiDemoController.ResultScreen,
+            "demo.webfirst.result/v1",
+            GameUiDemoController.ResultModelPathNames.ToArray(),
+            ["restart_game", "quit_game"]);
+    }
+
+    /// <summary>
+    /// 验证 Demo HUD 与结算屏声明的数据路径能被真实 ManagedFallback 后端枚举、写入并读回。
+    /// </summary>
+    [Fact]
+    public void DemoManagedFallbackCopiesHudAndResultModelPathsFromContent()
+    {
+        UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
+        FakeGuiHost gui = new();
+        using ManagedFallbackBackend backend = new(gui);
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 720, 480, 1f), UiBackendKind.ManagedFallback));
+
+        PixelEngine.UI.UiScreenHandle hud = host.ShowScreen(
+            manifest.GetRequiredScreen(GameUiDemoController.HudScreen).ScreenId,
+            manifest.ResolveDocumentSource(GameUiDemoController.HudScreen));
+        PixelEngine.UI.UiScreenHandle result = host.PushModal(
+            manifest.GetRequiredScreen(GameUiDemoController.ResultScreen).ScreenId,
+            manifest.ResolveDocumentSource(GameUiDemoController.ResultScreen));
+
+        string[] hudPaths = GameUiDemoController.HudModelPathNames.ToArray();
+        string[] resultPaths = GameUiDemoController.ResultModelPathNames.ToArray();
+        AssertManagedModelPaths(host, hud, hudPaths);
+        AssertManagedModelPaths(host, result, resultPaths);
+        foreach (string path in hudPaths)
+        {
+            AssertManagedDoubleValueRoundTrips(host, hud, path, 0.42);
+        }
+
+        foreach (string path in resultPaths)
+        {
+            AssertManagedDoubleValueRoundTrips(host, result, path, 0.84);
+        }
+
+        host.Composite(default);
+
+        Assert.Contains("生命", gui.Context.Texts);
+        Assert.Contains("胜利", gui.Context.Texts);
+    }
+
+    /// <summary>
     /// 验证七类 Demo UI 屏幕可由 ManagedFallback 同时显示、叠放并产生按钮/复选框事件。
     /// </summary>
     [Fact]
@@ -346,6 +413,68 @@ public sealed class DemoUiContentTests
         Assert.True(backend.InvokeAction(stack[0].Document, new PixelEngine.UI.UiActionId(UiStableId.Hash("open_settings")), PixelEngine.UI.UiValue.FromBoolean(true)));
         backend.Composite(default);
         window.SwapBuffers();
+    }
+
+    private static void AssertScreenContract(
+        UiManifest manifest,
+        string screenId,
+        string contract,
+        string[] expectedPaths,
+        string[] expectedActions)
+    {
+        XDocument document = XDocument.Load(manifest.GetRequiredScreen(screenId).FullPath);
+        XElement root = document.Root ?? throw new InvalidDataException($"UI screen 缺少根节点：{screenId}");
+
+        Assert.Equal(screenId, (string?)root.Attribute("data-screen"));
+        Assert.Equal(contract, (string?)root.Attribute("data-contract"));
+        Assert.Equal(Sorted(expectedPaths), Sorted(ExtractAttributeValues(document, "path", "data-model")));
+        Assert.Equal(Sorted(expectedActions), Sorted(ExtractAttributeValues(document, "data-event-click", "data-event-change")));
+    }
+
+    private static void AssertManagedModelPaths(GameUiHost host, PixelEngine.UI.UiScreenHandle screen, string[] expectedPaths)
+    {
+        PixelEngine.UI.UiPathId[] paths = new PixelEngine.UI.UiPathId[16];
+        int count = host.CopyModelPaths(screen, paths);
+        int[] actual = [.. paths[..count].Select(path => path.Value).OrderBy(value => value)];
+        int[] expected =
+        [
+            .. expectedPaths
+                .Select(path => new PixelEngine.UI.UiPathId(UiStableId.Hash(path)).Value)
+                .OrderBy(value => value),
+        ];
+        Assert.Equal(expected, actual);
+    }
+
+    private static void AssertManagedDoubleValueRoundTrips(
+        GameUiHost host,
+        PixelEngine.UI.UiScreenHandle screen,
+        string path,
+        double expected)
+    {
+        PixelEngine.UI.UiPathId pathId = new(UiStableId.Hash(path));
+        host.SetModelValue(screen, pathId, new PixelEngine.UI.UiValue(expected));
+
+        Assert.True(host.TryGetModelValue(screen, pathId, out PixelEngine.UI.UiValue value), $"ManagedFallback 未声明 UI path：{path}");
+        Assert.Equal(expected, value.AsDouble(), precision: 3);
+    }
+
+    private static string[] ExtractAttributeValues(XDocument document, params string[] attributeNames)
+    {
+        return
+        [
+            .. document
+                .Descendants()
+                .SelectMany(element => attributeNames.Select(name => (string?)element.Attribute(name)))
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!.Trim()),
+        ];
+    }
+
+    private static string[] Sorted(IEnumerable<string> values)
+    {
+        string[] sorted = [.. values];
+        Array.Sort(sorted, StringComparer.Ordinal);
+        return sorted;
     }
 
     private static void AssertScreen(UiManifest manifest, string id)
