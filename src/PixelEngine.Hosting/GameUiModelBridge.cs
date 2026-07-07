@@ -50,6 +50,7 @@ public sealed class GameUiModelBridge : IGameUiModelPusher
         Validate(screen);
         Validate(modelName);
         ArgumentNullException.ThrowIfNull(model);
+        PruneHiddenBindings();
 
         for (int i = 0; i < _bindingCount; i++)
         {
@@ -75,7 +76,14 @@ public sealed class GameUiModelBridge : IGameUiModelPusher
     {
         for (int i = 0; i < _bindingCount; i++)
         {
-            ref readonly ModelBinding binding = ref _bindings[i];
+            ModelBinding binding = _bindings[i];
+            if (!_host.TryGetDocument(binding.Screen, out _))
+            {
+                RemoveBindingAt(i);
+                i--;
+                continue;
+            }
+
             int pathCount = _host.CopyModelPaths(binding.Screen, _paths);
             for (int pathIndex = 0; pathIndex < pathCount; pathIndex++)
             {
@@ -89,6 +97,31 @@ public sealed class GameUiModelBridge : IGameUiModelPusher
                 _host.SetModelValue(binding.Screen, runtimePath, in runtimeValue);
             }
         }
+    }
+
+    private void PruneHiddenBindings()
+    {
+        for (int i = 0; i < _bindingCount; i++)
+        {
+            if (_host.TryGetDocument(_bindings[i].Screen, out _))
+            {
+                continue;
+            }
+
+            RemoveBindingAt(i);
+            i--;
+        }
+    }
+
+    private void RemoveBindingAt(int index)
+    {
+        int moveCount = _bindingCount - index - 1;
+        if (moveCount > 0)
+        {
+            _bindings.AsSpan(index + 1, moveCount).CopyTo(_bindings.AsSpan(index, moveCount));
+        }
+
+        _bindings[--_bindingCount] = default;
     }
 
     private static RuntimeUi.UiValue ToRuntimeValue(in ScriptUi.UiValue value)
