@@ -425,9 +425,9 @@ public sealed class GameUiDemoController : Behaviour
         }
 
         SetHudValue(HudExplosionsPath, _explosive is null ? 0.0 : Ratio(_explosive.ExplosionCount, 10.0));
+        SetHudValue(HudShotsPath, Ratio(_weapons?.PrimaryFireCount ?? _projectile?.ShotsFired ?? 0, 10.0));
         if (_projectile is null)
         {
-            SetHudValue(HudShotsPath, 0.0);
             SetHudValue(HudCollapseIslandsPath, 0.0);
             SetHudValue(HudCollapseScanPath, 0.0);
             return;
@@ -435,7 +435,6 @@ public sealed class GameUiDemoController : Behaviour
 
         int scanRadius = Math.Clamp(_projectile.CollapseScanRadius, 4, 320);
         double scanCapacity = ((scanRadius * 2) + 1) * ((scanRadius * 2) + 1);
-        SetHudValue(HudShotsPath, Ratio(_projectile.ShotsFired, 10.0));
         SetHudValue(HudCollapseIslandsPath, Ratio(_projectile.CollapsedFloatingIslands, 10.0));
         SetHudValue(HudCollapseScanPath, Ratio(_projectile.LastCollapseSolidCandidates, scanCapacity));
     }

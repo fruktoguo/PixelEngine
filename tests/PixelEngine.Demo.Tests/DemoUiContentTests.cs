@@ -685,6 +685,54 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
+    /// 验证 Web-first HUD 的射击计数优先来自 WeaponController 主火路径，非 projectile 武器也会同步。
+    /// </summary>
+    [Fact]
+    public void DemoGameUiControllerPublishesWeaponControllerFireCountForNonProjectileWeapons()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                { "id": "builder", "displayName": "Builder", "kind": "builder", "damage": 0, "radius": 1, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 5, "spawnMaterial": "stone", "muzzleCue": "ui_click", "impactCue": "impact_stone", "hudColor": "#FFFFFFFF" }
+              ]
+            }
+            """);
+        try
+        {
+            using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out FakeGameUiService ui, out ScriptInputApi input);
+            Entity entity = scene.CreateEntity();
+            _ = entity.AddComponent<Transform>();
+            PlayerController player = entity.AddComponent<PlayerController>();
+            player.SpawnX = 12f;
+            player.SpawnY = 12f;
+            WeaponController weapons = entity.AddComponent<WeaponController>();
+            _ = entity.AddComponent<GameUiDemoController>();
+
+            engine.RunHeadlessTicks(1);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.shots"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.collapse_islands"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.collapse_scan"), precision: 3);
+
+            input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+
+            Assert.Equal(WeaponKind.Builder, weapons.LastDispatchedKind);
+            Assert.Equal(1, weapons.PrimaryFireCount);
+            Assert.Equal(0.1, GetHudValue(ui, "hud.shots"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.collapse_islands"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.collapse_scan"), precision: 3);
+            AssertHudPathWritten(ui, "hud.shots");
+            AssertHudPathWritten(ui, "hud.collapse_islands");
+            AssertHudPathWritten(ui, "hud.collapse_scan");
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// 验证 Web-first HUD 会发布与 PlayableHud 同口径的短命视觉 FX burst 数。
     /// </summary>
     [Fact]
