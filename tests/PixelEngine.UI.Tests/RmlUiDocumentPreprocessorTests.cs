@@ -57,6 +57,57 @@ public sealed class RmlUiDocumentPreprocessorTests
     }
 
     [Fact]
+    public void PrepareReusesConvertedImageAndDisposesTemporaryCacheDirectory()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"pixelengine-rmlui-preprocess-{Guid.NewGuid():N}");
+        string screens = Path.Combine(root, "screens");
+        string images = Path.Combine(root, "images");
+        _ = Directory.CreateDirectory(screens);
+        _ = Directory.CreateDirectory(images);
+        string imagePath = Path.Combine(images, "logo.png");
+        string documentPath = Path.Combine(screens, "main.rml");
+        WritePng(imagePath, 2, 2);
+        File.WriteAllText(
+            documentPath,
+            """
+            <rml>
+              <body>
+                <img id="logo-a" data-image="logo" />
+                <img id="logo-b" src="../images/logo.png" />
+              </body>
+            </rml>
+            """);
+
+        string cacheDirectory;
+        try
+        {
+            string firstSrc;
+            string secondSrc;
+            using (RmlUiImageAssetCache cache = new())
+            {
+                string processed = RmlUiDocumentPreprocessor.Prepare(documentPath, cache);
+                XElement[] imageElements = [.. XDocument.Parse(processed).Descendants("img")];
+
+                Assert.Equal(2, imageElements.Length);
+                firstSrc = imageElements[0].Attribute("src")?.Value ?? throw new InvalidDataException("预处理后的 img 缺少 src。");
+                secondSrc = imageElements[1].Attribute("src")?.Value ?? throw new InvalidDataException("预处理后的 img 缺少 src。");
+                Assert.Equal(firstSrc, secondSrc);
+
+                string tgaPath = firstSrc.Replace('/', Path.DirectorySeparatorChar);
+                Assert.True(File.Exists(tgaPath));
+                cacheDirectory = Path.GetDirectoryName(tgaPath) ?? throw new InvalidDataException("TGA 缓存路径缺少目录。");
+                Assert.True(Directory.Exists(cacheDirectory));
+            }
+
+            Assert.False(Directory.Exists(cacheDirectory));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void PrepareRejectsImageOutsideContentImagesDirectory()
     {
         string root = Path.Combine(Path.GetTempPath(), $"pixelengine-rmlui-preprocess-{Guid.NewGuid():N}");
