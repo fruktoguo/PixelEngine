@@ -229,8 +229,10 @@ public sealed class GameUiServiceBridgeTests
         _ = Directory.CreateDirectory(uiRoot);
         string safe = Path.Combine(uiRoot, "safe.xhtml");
         string outside = Path.Combine(root, "outside.xhtml");
+        string siblingUiDocument = Path.Combine(root, "ui.xhtml");
         File.WriteAllText(safe, "<ui><text>Safe</text></ui>");
         File.WriteAllText(outside, "<ui><text>Outside</text></ui>");
+        File.WriteAllText(siblingUiDocument, "<ui><text>Sibling</text></ui>");
 
         try
         {
@@ -244,11 +246,58 @@ public sealed class GameUiServiceBridgeTests
             _ = bridge.ShowScreen("safe");
             InvalidDataException relative = Assert.Throws<InvalidDataException>(() => bridge.ShowScreen("../outside.xhtml"));
             InvalidDataException rooted = Assert.Throws<InvalidDataException>(() => bridge.ShowScreen(outside));
+            InvalidDataException currentDirectory = Assert.Throws<InvalidDataException>(() => bridge.ShowScreen("."));
+            InvalidDataException collapsedParent = Assert.Throws<InvalidDataException>(() => bridge.ShowScreen("screens/.."));
 
             Assert.Equal(Path.GetFullPath(safe), backend.LastSource.Path);
             Assert.Equal(1, backend.LoadDocumentCount);
             Assert.Contains("content/ui", relative.Message);
             Assert.Contains("content/ui", rooted.Message);
+            Assert.Contains("content/ui", currentDirectory.Message);
+            Assert.Contains("content/ui", collapsedParent.Message);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证无 manifest 的正常相对 UI 路径可通过约定补齐扩展名或显式扩展名载入。
+    /// </summary>
+    [Fact]
+    public void BridgeResolvesConventionRelativeScreenPathsWithOptionalExtension()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-relative-paths-{Guid.NewGuid():N}");
+        string uiRoot = Path.Combine(root, "ui");
+        string screensRoot = Path.Combine(uiRoot, "screens");
+        _ = Directory.CreateDirectory(screensRoot);
+        string hud = Path.Combine(screensRoot, "hud.xhtml");
+        string inventory = Path.Combine(screensRoot, "inventory.xhtml");
+        File.WriteAllText(hud, "<ui><text>HUD</text></ui>");
+        File.WriteAllText(inventory, "<ui><text>Inventory</text></ui>");
+
+        try
+        {
+            RecordingBackend backend = new();
+            using RuntimeUi.GameUiHost host = new(backend);
+            host.Initialize(new RuntimeUi.UiBackendInitializeInfo(
+                new RuntimeUi.UiViewport(0, 0, 320, 240, 1f),
+                RuntimeUi.UiBackendKind.ManagedFallback));
+            GameUiServiceBridge bridge = new(host, root);
+
+            _ = bridge.ShowScreen("screens/hud");
+
+            Assert.Equal(Path.GetFullPath(hud), backend.LastSource.Path);
+            Assert.Equal(1, backend.LoadDocumentCount);
+
+            _ = bridge.ShowScreen("screens/inventory.xhtml");
+
+            Assert.Equal(Path.GetFullPath(inventory), backend.LastSource.Path);
+            Assert.Equal(2, backend.LoadDocumentCount);
         }
         finally
         {
