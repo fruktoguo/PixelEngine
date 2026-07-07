@@ -199,7 +199,8 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             _editor.AddPanel(new GameObjectInspectorPanel(
                 _sceneModel,
                 _undoStack,
-                engine.Context.GetService<ScriptAssemblyRegistry>()));
+                engine.Context.GetService<ScriptAssemblyRegistry>(),
+                _app.ConsoleStore));
         }
 
         MaterialBrushPalettePanel? brushPanel = null;

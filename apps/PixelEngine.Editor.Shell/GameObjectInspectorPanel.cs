@@ -1,17 +1,27 @@
 using Hexa.NET.ImGui;
+using PixelEngine.Editor;
 using PixelEngine.Hosting;
 using PixelEngine.Scripting;
 
 namespace PixelEngine.Editor.Shell;
 
-internal sealed class GameObjectInspectorPanel(EditorSceneModel scene, EditorUndoStack undo, ScriptAssemblyRegistry scripts) : IEditorPanel
+internal sealed class GameObjectInspectorPanel(
+    EditorSceneModel scene,
+    EditorUndoStack undo,
+    ScriptAssemblyRegistry scripts,
+    IEditorConsoleSink? console = null) : IEditorPanel
 {
+    private const string ReadyStatus = "就绪";
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly EditorUndoStack _undo = undo ?? throw new ArgumentNullException(nameof(undo));
     private readonly ScriptAssemblyRegistry _scripts = scripts ?? throw new ArgumentNullException(nameof(scripts));
+    private readonly IEditorConsoleSink? _console = console;
     private string _componentSearch = string.Empty;
+    private string _status = ReadyStatus;
 
     public string Title => EditorDockSpace.InspectorWindowTitle;
+
+    internal string Status => _status;
 
     public bool Visible { get; set; } = true;
 
@@ -39,6 +49,8 @@ internal sealed class GameObjectInspectorPanel(EditorSceneModel scene, EditorUnd
         DrawTransform(gameObject);
         ImGui.SeparatorText("Components");
         DrawComponents(gameObject);
+        ImGui.SeparatorText("Inspector 状态");
+        ImGui.TextUnformatted(_status);
         ImGui.End();
     }
 
@@ -271,14 +283,49 @@ internal sealed class GameObjectInspectorPanel(EditorSceneModel scene, EditorUnd
         string value = ReadFieldValue(component, field);
         string typeLabel = field.AssetKind?.ToString() ?? "Unknown";
         ImGui.TextUnformatted($"{field.Name} ({typeLabel}): {FormatAssetReferenceDisplay(field, value)}");
+        DrawAssetReferenceDropTarget(stableId, componentIndex, field);
         if (!string.IsNullOrWhiteSpace(value))
         {
             ImGui.SameLine();
             if (ImGui.Button($"Clear##assetref_clear_{stableId}_{componentIndex}_{field.Name}"))
             {
                 _undo.Execute(_scene, new SetComponentFieldCommand(stableId, componentIndex, field.Name, null));
+                RecordAssetDropResult(EditorAssetDropResult.Success($"已清除字段 {field.Name} 的资产引用。", stableId));
             }
         }
+    }
+
+    private void DrawAssetReferenceDropTarget(int stableId, int componentIndex, ScriptFieldDescriptor field)
+    {
+        if (!ImGui.BeginDragDropTarget())
+        {
+            return;
+        }
+
+        try
+        {
+            if (AssetBrowserDragPayloadImGui.TryAcceptPayload(out AssetBrowserDragPayload payload))
+            {
+                _ = AcceptAssetBrowserDragPayloadToField(stableId, componentIndex, field, payload);
+            }
+        }
+        finally
+        {
+            ImGui.EndDragDropTarget();
+        }
+    }
+
+    internal EditorAssetDropResult AcceptAssetBrowserDragPayloadToField(
+        int stableId,
+        int componentIndex,
+        ScriptFieldDescriptor field,
+        AssetBrowserDragPayload browserPayload)
+    {
+        EditorAssetDropResult result = EditorAssetDropPayload.TryFromBrowserPayload(browserPayload, out EditorAssetDropPayload payload)
+            ? ApplyAssetDropPayloadToField(stableId, componentIndex, field, payload)
+            : EditorAssetDropResult.Failure("Project Window 拖拽 payload 缺少 stable asset id 或 logical path。");
+        RecordAssetDropResult(result);
+        return result;
     }
 
     internal EditorAssetDropResult ApplyAssetDropPayloadToField(
@@ -290,6 +337,17 @@ internal sealed class GameObjectInspectorPanel(EditorSceneModel scene, EditorUnd
         return EditorAssetInspectorFieldTarget.TryCreate(stableId, componentIndex, field, out EditorAssetInspectorFieldTarget target)
             ? EditorAssetDropService.DropOnInspectorField(_scene, _undo, payload, target)
             : EditorAssetDropResult.Failure($"字段 {field.Name} 不是 typed asset reference 字段。");
+    }
+
+    private void RecordAssetDropResult(EditorAssetDropResult result)
+    {
+        _status = string.IsNullOrWhiteSpace(result.Diagnostic) ? ReadyStatus : result.Diagnostic;
+        _console?.Add(new EditorConsoleEntry(
+            DateTimeOffset.UtcNow,
+            EditorConsoleCategory.Asset,
+            result.Succeeded ? EditorConsoleSeverity.Info : EditorConsoleSeverity.Warning,
+            "inspector-asset-drop",
+            _status));
     }
 
     internal static string FormatAssetReferenceDisplay(ScriptFieldDescriptor field, string value)

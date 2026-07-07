@@ -1,6 +1,4 @@
-using System.Globalization;
 using System.Diagnostics.CodeAnalysis;
-using System.Numerics;
 using System.Reflection;
 using System.Text.Json;
 using PixelEngine.Scripting;
@@ -338,65 +336,8 @@ public static class EngineSceneDocumentLoader
             type.GetConstructor(Type.EmptyTypes) is not null;
     }
 
-    [UnconditionalSuppressMessage(
-        "Trimming",
-        "IL2075",
-        Justification = "Serialized field binding is an editor/script content boundary over live Behaviour instances, not a trimmed engine hot path.")]
     private static void BindSerializedFields(IComponent component, Dictionary<string, string>? fields)
     {
-        if (fields is null || fields.Count == 0)
-        {
-            return;
-        }
-
-        Type type = component.GetType();
-        foreach (KeyValuePair<string, string> field in fields)
-        {
-            BindingFlags flags = BindingFlags.Instance | BindingFlags.Public;
-            PropertyInfo? property = type.GetProperty(field.Key, flags);
-            if (property is { CanWrite: true })
-            {
-                property.SetValue(component, ConvertValue(field.Value, property.PropertyType));
-                continue;
-            }
-
-            FieldInfo? fieldInfo = type.GetField(field.Key, flags);
-            if (fieldInfo is not null)
-            {
-                fieldInfo.SetValue(component, ConvertValue(field.Value, fieldInfo.FieldType));
-                continue;
-            }
-
-            throw new InvalidOperationException($"{type.FullName} 不存在可写公开字段或属性：{field.Key}。");
-        }
-    }
-
-    private static object ConvertValue(string value, Type targetType)
-    {
-        return targetType switch
-        {
-            _ when targetType == typeof(string) => value,
-            _ when targetType == typeof(int) => int.Parse(value, CultureInfo.InvariantCulture),
-            _ when targetType == typeof(long) => long.Parse(value, CultureInfo.InvariantCulture),
-            _ when targetType == typeof(float) => float.Parse(value, CultureInfo.InvariantCulture),
-            _ when targetType == typeof(double) => double.Parse(value, CultureInfo.InvariantCulture),
-            _ when targetType == typeof(bool) => bool.Parse(value),
-            _ when targetType == typeof(ushort) => ushort.Parse(value, CultureInfo.InvariantCulture),
-            _ when targetType == typeof(MaterialId) => new MaterialId(ushort.Parse(value, CultureInfo.InvariantCulture)),
-            _ when targetType == typeof(ScriptAssetReference) && ScriptAssetReference.TryDecode(value, out ScriptAssetReference reference) => reference,
-            _ when targetType == typeof(Vector2) => ParseVector2(value),
-            _ when targetType.IsEnum => Enum.Parse(targetType, value, ignoreCase: true),
-            _ => throw new NotSupportedException($"不支持绑定字段类型：{targetType.FullName}。"),
-        };
-    }
-
-    private static Vector2 ParseVector2(string value)
-    {
-        string[] parts = value.Split(',', StringSplitOptions.TrimEntries);
-        return parts.Length == 2
-            ? new Vector2(
-                float.Parse(parts[0], CultureInfo.InvariantCulture),
-                float.Parse(parts[1], CultureInfo.InvariantCulture))
-            : throw new FormatException($"Vector2 字段必须使用 \"x,y\" 格式：{value}");
+        SerializedFieldBinder.Bind(component, fields);
     }
 }
