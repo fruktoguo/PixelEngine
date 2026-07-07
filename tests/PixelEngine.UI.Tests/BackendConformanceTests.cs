@@ -196,6 +196,83 @@ public sealed class BackendConformanceTests : IDisposable
         Assert.False(backend.Compositions[1].IsActive);
     }
 
+    [Fact]
+    public void ManagedFallbackModelValuesAndActionsExposeSharedContractBoundaries()
+    {
+        string path = WriteUi("""
+            <ui title="Settings">
+              <progress id="health" path="hud.health" value="0.25" />
+              <checkbox id="music" data-event-change="toggle_music" path="settings.music" text="Music" checked="false" />
+            </ui>
+            """);
+        using ManagedFallbackBackend backend = CreateManagedBackend(out _);
+        backend.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        UiDocumentHandle document = backend.LoadDocument(UiDocumentSource.Asset(path, 5));
+        backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(1), new UiScreenId(5), document, Modal: false)]);
+        backend.Composite(default);
+        UiPathId health = UiModelPathName.ToPathId("hud.health");
+        UiPathId music = UiModelPathName.ToPathId("settings.music");
+        UiPathId missing = UiModelPathName.ToPathId("settings.missing");
+        UiActionId toggleMusic = new(UiStableId.Hash("toggle_music"));
+
+        Assert.True(backend.TryGetModelValue(document, health, out UiValue initialHealth));
+        Assert.Equal(0.25, initialHealth.AsDouble());
+        Assert.True(backend.TryGetModelValue(document, music, out UiValue initialMusic));
+        Assert.False(initialMusic.AsBoolean());
+        Assert.False(backend.TryGetModelValue(document, missing, out UiValue missingValue));
+        Assert.Equal(default, missingValue);
+
+        backend.SetModelValue(document, health, new UiValue(0.75));
+        Assert.True(backend.IsDirty);
+        Assert.True(backend.TryGetModelValue(document, health, out UiValue updatedHealth));
+        Assert.Equal(0.75, updatedHealth.AsDouble());
+        backend.Composite(default);
+        Assert.False(backend.IsDirty);
+
+        Assert.True(backend.InvokeAction(document, toggleMusic, UiValue.FromBoolean(true)));
+        Assert.True(backend.IsDirty);
+        Assert.True(backend.TryGetModelValue(document, music, out UiValue updatedMusic));
+        Assert.True(updatedMusic.AsBoolean());
+        Assert.False(backend.InvokeAction(document, new UiActionId(-1), UiValue.FromBoolean(false)));
+        Assert.False(backend.InvokeAction(new UiDocumentHandle(999), toggleMusic, UiValue.FromBoolean(false)));
+        backend.SetModelValue(new UiDocumentHandle(999), health, new UiValue(0.1));
+        Assert.True(backend.TryGetModelValue(document, health, out UiValue unchangedHealth));
+        Assert.Equal(0.75, unchangedHealth.AsDouble());
+    }
+
+    [Fact]
+    public void ManagedFallbackUnloadDocumentAndInvalidViewportStaySafeAtSharedBoundary()
+    {
+        string path = WriteUi("""
+            <ui title="Hud">
+              <progress id="health" path="hud.health" value="0.5" />
+            </ui>
+            """);
+        using ManagedFallbackBackend backend = CreateManagedBackend(out _);
+        backend.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        UiDocumentHandle document = backend.LoadDocument(UiDocumentSource.Asset(path, 6));
+        backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(1), new UiScreenId(6), document, Modal: false)]);
+        Assert.True(backend.HitTest(8, 8).HitsUi);
+
+        backend.UnloadDocument(document);
+
+        Assert.True(backend.IsDirty);
+        Assert.False(backend.HitTest(8, 8).HitsUi);
+        Assert.False(backend.TryGetModelValue(document, UiModelPathName.ToPathId("hud.health"), out UiValue value));
+        Assert.Equal(default, value);
+        UiPathId[] paths = [new UiPathId(-1)];
+        Assert.Equal(0, backend.CopyModelPaths(document, paths));
+        Assert.Equal(new UiPathId(-1), paths[0]);
+        Assert.False(backend.InvokeAction(document, new UiActionId(UiStableId.Hash("noop")), default));
+        backend.Composite(default);
+        Assert.False(backend.IsDirty);
+
+        using ManagedFallbackBackend invalidBackend = CreateManagedBackend(out _);
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => invalidBackend.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 0, 240, 1f), UiBackendKind.ManagedFallback)));
+        invalidBackend.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => invalidBackend.Resize(new UiViewport(0, 0, 320, 240, 0f)));
+    }
+
     private static ManagedFallbackBackend CreateManagedBackend(
         out FakeGuiHost gui,
         ManagedFallbackBackendOptions options = default)
