@@ -21,13 +21,7 @@ internal sealed class GameViewUiInputSource(
     public bool TryGetPointer(out UiPointerState state)
     {
         state = default;
-        if (_modeProvider() != PixelEngine.Editor.EditorMode.Play || !_inputFocusedProvider())
-        {
-            return false;
-        }
-
-        GameViewViewportSnapshot viewport = _viewportProvider();
-        if (!viewport.TryMapPanelToViewport(_panelPointProvider(), out Vector2 viewportPoint))
+        if (!TryMapFocusedViewportPoint(out Vector2 viewportPoint))
         {
             return false;
         }
@@ -50,16 +44,50 @@ internal sealed class GameViewUiInputSource(
 
     public int CaptureDownKeys(Span<UiKey> destination, out UiKeyModifiers modifiers)
     {
+        if (!CanForwardKeyboardInput())
+        {
+            modifiers = UiKeyModifiers.None;
+            return 0;
+        }
+
         return _inner.CaptureDownKeys(destination, out modifiers);
     }
 
     public int CaptureText(Span<char> destination)
     {
+        if (!CanForwardKeyboardInput())
+        {
+            _ = _inner.CaptureText(destination);
+            destination.Clear();
+            return 0;
+        }
+
         return _inner.CaptureText(destination);
     }
 
     public int CaptureTextComposition(Span<char> destination, out UiTextComposition composition)
     {
+        if (!CanForwardKeyboardInput())
+        {
+            _ = _inner.CaptureTextComposition(destination, out _);
+            destination.Clear();
+            composition = UiTextComposition.Inactive;
+            return 0;
+        }
+
         return _inner.CaptureTextComposition(destination, out composition);
+    }
+
+    private bool CanForwardKeyboardInput()
+    {
+        return TryMapFocusedViewportPoint(out _);
+    }
+
+    private bool TryMapFocusedViewportPoint(out Vector2 viewportPoint)
+    {
+        viewportPoint = default;
+        return _modeProvider() == PixelEngine.Editor.EditorMode.Play &&
+            _inputFocusedProvider() &&
+            _viewportProvider().TryMapPanelToViewport(_panelPointProvider(), out viewportPoint);
     }
 }
