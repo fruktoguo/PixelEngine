@@ -25,10 +25,10 @@
 ## 3. 已实现证据 checklist
 
 - [x] 依赖方向已收敛：`{Demo, EditorShell} → Hosting → {Scripting, Rendering, Audio, Physics, World, Serialization, Content, Simulation, UI, Gui} → Interop → Core`；Hosting 编译期不再引用 `PixelEngine.Editor`。
-- [x] 子系统生命周期已按 Core → Content → Simulation → World → Physics → Audio → Rendering → GPU → Scripting → Gui → optional injected Editor 装配，关闭逆序释放。
+- [x] 子系统装配与**初始化顺序**已按 Core → Content → Simulation → World → Physics → Audio → Rendering → GPU → Scripting → Gui → optional injected Editor 装配，关闭逆序释放。
 - [x] 12 相位主循环已绑定：相位 [0] 输入/时间、[1] 脚本与 UI 事件、[2] residency、[3] 粒子沉积、[4] CA、[5] 温度、[6] dirty swap、[7] cell→particle、[8] physics、[9] render buffer、[10] GPU/render/UI、[11] streaming。
 - [x] 不追帧帧节奏已锁定：每帧至多一次 sim/physics step，sim 可降到 30Hz 且 render 逐帧出帧；`EnginePhasePipelineTests` 与 `EngineOverloadControllerTests` 覆盖降频/过载行为。
-- [x] 过载降级已按热场、光照、远 chunk、sim 30Hz、接受低 fps 顺序下发质量档位。
+- [x] 过载降级按五级顺序触发：热场、光照、远 chunk、sim 30Hz、接受低 fps 顺序下发质量档位。
 - [x] 脚本服务后端已聚合 `IWorldAccess`、`IParticleService`、`IPhysicsService`、`IMaterialRegistry`、`ICamera`、`IInput`、`IEventBus`、`IAudioService`、`ISceneService`、`IDiagnostics`、`IRuntimeControlApi`，写操作经延迟命令队列落正确相位。
 - [x] Play/Edit/Step 已接入 `EngineEditorPlaySessionService` 与 `EngineWorldSnapshotStore`，进入 Play 前快照、退出 Play 回滚、脚本生命周期重新派发。
 - [x] GUI 宿主中性化已完成：`PixelEngine.Gui` 承载 `HexaImGuiBackend`、中性 `IGuiContext` 适配与 `GuiFontManager`；玩家包闭包不含 `PixelEngine.Editor.dll`，但允许玩家 HUD 所需 `Hexa.NET.ImGui`。
@@ -55,8 +55,10 @@
 
 ## 6. 证据债 / 阻塞 checklist
 
-- [!] Editor 真实窗口验收：仍需同一 `reviewSessionId` / `gitCommit` 的真实窗口视频、截图、交互 checklist 与人工复核；`scripted_probe_only`、`capture.bmp`、`manual_evidence_attached_pending_review` 均不能转为 [x]。
-- [!] Native leak 证据：仍需 GL driver 级对象创建/销毁、OpenAL、Box2D、ALC 共同覆盖的 detector 报告；`process_smoke_only` 与 managed live-count 只能辅助定位。
+- [!] Editor 真实窗口验收：仍需同一 `reviewSessionId` / `gitCommit` 的真实窗口视频、截图、交互 checklist 与人工复核；`tools/demo-manual-acceptance-preflight.ps1` 的 `hudMenuEditorVideo` / `editor-window` scope 必须携带 `editor_enabled`、`editor_bridge_frames`、`criteria`、`hudReadable`、`menuButtonsClicked`、`editorDockspaceOpened`；`scripted_probe_only`、`capture.bmp`、`manual_evidence_attached_pending_review` 均不能转为 [x]。
+- [!] Editor 真实窗口观测/覆盖仍缺人工复核证据：上述 `manual_evidence_attached_pending_review` 只代表证据入口，不代表 Unity-like Editor UX 验收完成。
+- [!] Native leak 证据：仍需 GL driver 级对象创建/销毁、OpenAL、Box2D、ALC 共同覆盖的 detector 报告；`tools/native-leak-preflight.ps1` 与 `blocked_invalid_native_leak_evidence` 只提供证据门禁，`process_smoke_only` 与 managed live-count 只能辅助定位；native GL/OpenAL/Box2D 工具级泄漏审计仍由 §5 的 native leak detector 阻塞项闭合。
+- [!] Managed native leak detector 辅助证据：`tools/PixelEngine.Tools.ManagedNativeLeakDetector` 已覆盖 `gl_context_rendering_wrappers` 与 `managed_no_gl_context` 等托管 live-count 边界，但 GL driver 级 detector 证据仍保持阻塞。
 - [!] 外部 runner：跨平台 native/resource leak 与真实窗口证据需要目标平台 runner 或人工环境；本机 win-x64 short run 不替代 M15。
 
 ## 7. 验证命令与证据路径 checklist
