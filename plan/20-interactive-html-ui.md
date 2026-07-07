@@ -53,6 +53,7 @@
 - [x] `UiDirtyRectCollector`、`UiOverlayTexture`、`UiPresentContext.UploadOverlayTexture` 与 `UiOffscreenSurfacePresenter` 已提供离屏 surface dirty upload + textured quad 合成底座。
 - [x] `FontEngine` 已选择 `content/ui/fonts` 优先、共享 `GuiFontManager` 系统候选、CJK glyph range、DPI 字号、missing glyph 诊断；RmlUi/ManagedFallback 可消费同一字体选择。
 - [x] `content/ui/ui-manifest.json` 已支持 screen id、preload、images 清单、路径逃逸拒绝、缺失文件校验、预载 screen/image；Demo 已落五类屏幕并由 `GameUiDemoController` 驱动。
+- [x] Demo Web-first HUD 已接入真实任务与武器状态：`GameUiDemoController.OnUpdate` 通过脚本公开 `IGameUiService.SetValue` 发布生命、武器槽位、弹药、冷却/热量、水晶进度、剩余时间、水位危险度与分数；`hud.xhtml` 使用 numeric model paths 与稳定中文 label，保留 `PlayableHud`/`IGuiContext` fallback 诊断路径，且不把未完成的 RmlUi 字符串池能力或真实窗口产品验收标为完成。
 - [x] UI native packaging 已采用 dynamic-only：`PixelEngine.UiNative.targets`、CMake `SHARED`、`runtimes/<rid>/native/`、R2R 包含 UI native、AOT 不携带动态 UI native 并回退 ManagedFallback 的审计测试已落地。
 - [x] `RmlUiNativeProfileGate` 已集中收紧 RmlUi desktop GL3 profile gate：显式 ANGLE/GLES backend request、GLES context、ANGLE renderer/vendor/version 全部拒绝加载 GL3 renderer 并回退 ManagedFallback；`RmlUiNativeProfileGateTests`、`EngineBuilderTests`、`EditorConsoleStoreTests` 与 `HostingProjectDisciplineTests.RmlUiAngleGlesProfileGateFallsBackAndDoesNotMarkM15Complete` 锁定 fallback reason、Console 可见诊断与 M15 不误勾。
 
