@@ -25,6 +25,9 @@ public sealed class GameUiDemoController : Behaviour
         "hud.heat",
         "hud.reload",
         "hud.overheated",
+        "hud.material_slot",
+        "hud.brush_radius",
+        "hud.explosions",
         "hud.crystals",
         "hud.time",
         "hud.hazard",
@@ -69,6 +72,9 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiPathId HudHeatPath = Path("hud.heat");
     private static readonly UiPathId HudReloadPath = Path("hud.reload");
     private static readonly UiPathId HudOverheatedPath = Path("hud.overheated");
+    private static readonly UiPathId HudMaterialSlotPath = Path("hud.material_slot");
+    private static readonly UiPathId HudBrushRadiusPath = Path("hud.brush_radius");
+    private static readonly UiPathId HudExplosionsPath = Path("hud.explosions");
     private static readonly UiPathId HudCrystalsPath = Path("hud.crystals");
     private static readonly UiPathId HudTimePath = Path("hud.time");
     private static readonly UiPathId HudHazardPath = Path("hud.hazard");
@@ -91,6 +97,8 @@ public sealed class GameUiDemoController : Behaviour
     private IRuntimeControlApi? _runtime;
     private PlayerHealth? _health;
     private WeaponController? _weapons;
+    private MaterialBrush? _brush;
+    private ExplosiveTool? _explosive;
     private MissionDirector? _mission;
     private RisingHazardDirector? _hazard;
     private bool _subscribed;
@@ -235,6 +243,9 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudHeatPath, 0.0);
         SetHudValue(HudReloadPath, 0.0);
         SetHudValue(HudOverheatedPath, 0.0);
+        SetHudValue(HudMaterialSlotPath, 0.0);
+        SetHudValue(HudBrushRadiusPath, 0.0);
+        SetHudValue(HudExplosionsPath, 0.0);
         SetHudValue(HudCrystalsPath, 0.0);
         SetHudValue(HudTimePath, 1.0);
         SetHudValue(HudHazardPath, 0.0);
@@ -259,6 +270,7 @@ public sealed class GameUiDemoController : Behaviour
         ResolveHudSources();
         PublishHealth();
         PublishWeapon();
+        PublishTools();
         PublishMission();
         PublishDiagnostics();
     }
@@ -273,6 +285,16 @@ public sealed class GameUiDemoController : Behaviour
         if (_weapons is null && Entity.TryGetComponent(out WeaponController weapons))
         {
             _weapons = weapons;
+        }
+
+        if (_brush is null && Entity.TryGetComponent(out MaterialBrush brush))
+        {
+            _brush = brush;
+        }
+
+        if (_explosive is null && Entity.TryGetComponent(out ExplosiveTool explosive))
+        {
+            _explosive = explosive;
         }
 
         if (_mission is null && Entity.TryGetComponent(out MissionDirector mission))
@@ -305,6 +327,14 @@ public sealed class GameUiDemoController : Behaviour
                 {
                     _weapons = sceneWeapons;
                 }
+                else if (_brush is null && behaviour is MaterialBrush sceneBrush)
+                {
+                    _brush = sceneBrush;
+                }
+                else if (_explosive is null && behaviour is ExplosiveTool sceneExplosive)
+                {
+                    _explosive = sceneExplosive;
+                }
                 else if (_mission is null && behaviour is MissionDirector sceneMission)
                 {
                     _mission = sceneMission;
@@ -324,7 +354,7 @@ public sealed class GameUiDemoController : Behaviour
 
     private bool HasAllHudSources()
     {
-        return _health is not null && _weapons is not null && _mission is not null && _hazard is not null;
+        return _health is not null && _weapons is not null && _brush is not null && _explosive is not null && _mission is not null && _hazard is not null;
     }
 
     private void PublishHealth()
@@ -359,6 +389,23 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudHeatPath, Ratio(_weapons.Heat, 100f));
         SetHudValue(HudReloadPath, _weapons.IsReloading && weapon.ReloadSeconds > 0f ? Ratio(_weapons.ReloadRemaining, weapon.ReloadSeconds) : 0.0);
         SetHudValue(HudOverheatedPath, _weapons.IsOverheated ? 1.0 : 0.0);
+    }
+
+    private void PublishTools()
+    {
+        if (_brush is null)
+        {
+            SetHudValue(HudMaterialSlotPath, 0.0);
+            SetHudValue(HudBrushRadiusPath, 0.0);
+        }
+        else
+        {
+            int slotCount = Math.Max(1, _brush.MaterialSlotCount);
+            SetHudValue(HudMaterialSlotPath, slotCount <= 1 ? 0.0 : Ratio(_brush.SelectedIndex, slotCount - 1));
+            SetHudValue(HudBrushRadiusPath, Ratio(_brush.Radius, Math.Max(1, _brush.MaxRadius)));
+        }
+
+        SetHudValue(HudExplosionsPath, _explosive is null ? 0.0 : Ratio(_explosive.ExplosionCount, 10.0));
     }
 
     private void PublishMission()
