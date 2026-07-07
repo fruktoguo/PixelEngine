@@ -449,6 +449,37 @@ public sealed class GameUiServiceBridgeTests
         }
     }
 
+    /// <summary>
+    /// 验证隐藏屏幕后模型绑定会在下一次推送时移除，不继续占用绑定容量。
+    /// </summary>
+    [Fact]
+    public void ModelBridgePrunesBindingsForHiddenScreensBeforeCapacityCheck()
+    {
+        RecordingBackend backend = new();
+        using RuntimeUi.GameUiHost host = new(backend);
+        host.Initialize(new RuntimeUi.UiBackendInitializeInfo(
+            new RuntimeUi.UiViewport(0, 0, 320, 240, 1f),
+            RuntimeUi.UiBackendKind.ManagedFallback));
+        GameUiModelBridge bridge = new(host, maxBindings: 1);
+        RuntimeUi.UiDocumentSource source = RuntimeUi.UiDocumentSource.Asset("memory://main.xhtml", RuntimeUi.UiStableId.Hash("main"));
+        RuntimeUi.UiScreenId screenId = new(RuntimeUi.UiStableId.Hash("main"));
+
+        RuntimeUi.UiScreenHandle hiddenScreen = host.ShowScreen(screenId, in source);
+        RecordingModel hiddenModel = new(new ScriptUi.UiPathId(7), new ScriptUi.UiValue(1L));
+        bridge.BindModel(new ScriptUi.UiScreenHandle(hiddenScreen.Value), new ScriptUi.UiModelName(1), hiddenModel);
+        Assert.True(host.HideScreen(hiddenScreen));
+
+        bridge.PushGameUiModels();
+        RuntimeUi.UiScreenHandle visibleScreen = host.ShowScreen(screenId, in source);
+        RecordingModel visibleModel = new(new ScriptUi.UiPathId(7), new ScriptUi.UiValue(2L));
+        bridge.BindModel(new ScriptUi.UiScreenHandle(visibleScreen.Value), new ScriptUi.UiModelName(2), visibleModel);
+        bridge.PushGameUiModels();
+
+        Assert.Equal(0, hiddenModel.ReadCount);
+        Assert.Equal(1, visibleModel.ReadCount);
+        Assert.Equal(new ScriptUi.UiPathId(7), visibleModel.LastPath);
+    }
+
     private sealed class RecordingBackend : RuntimeUi.IGameUiBackend
     {
         private RuntimeUi.UiValue _value;
@@ -682,9 +713,12 @@ public sealed class GameUiServiceBridgeTests
     {
         public ScriptUi.UiPathId LastPath { get; private set; }
 
+        public int ReadCount { get; private set; }
+
         public bool TryGetValue(ScriptUi.UiPathId path, out ScriptUi.UiValue result)
         {
             LastPath = path;
+            ReadCount++;
             if (path == expectedPath)
             {
                 result = value;
