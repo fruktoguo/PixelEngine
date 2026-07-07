@@ -204,6 +204,13 @@ public sealed class DemoUiContentTests
         AssertHudPathWritten(ui, "hud.time");
         AssertHudPathWritten(ui, "hud.hazard");
         AssertHudPathWritten(ui, "hud.score");
+        AssertHudPathWritten(ui, "hud.fps");
+        AssertHudPathWritten(ui, "hud.frame_p99");
+        AssertHudPathWritten(ui, "hud.frame_low1");
+        AssertHudPathWritten(ui, "hud.jitter");
+        AssertHudPathWritten(ui, "hud.particles");
+        AssertHudPathWritten(ui, "hud.lights");
+        AssertHudPathWritten(ui, "hud.bodies");
     }
 
     /// <summary>
@@ -428,6 +435,13 @@ public sealed class DemoUiContentTests
             Assert.InRange(GetHudValue(ui, "hud.time"), 0.0, 1.0);
             Assert.InRange(GetHudValue(ui, "hud.hazard"), 0.0, 1.0);
             Assert.True(GetHudValue(ui, "hud.score") > 0.0);
+            Assert.Equal(0.5, GetHudValue(ui, "hud.fps"), precision: 3);
+            Assert.Equal(0.36, GetHudValue(ui, "hud.frame_p99"), precision: 3);
+            Assert.Equal(0.5, GetHudValue(ui, "hud.frame_low1"), precision: 3);
+            Assert.Equal(0.075, GetHudValue(ui, "hud.jitter"), precision: 3);
+            Assert.Equal(0.064, GetHudValue(ui, "hud.particles"), precision: 3);
+            Assert.Equal(0.047, GetHudValue(ui, "hud.lights"), precision: 3);
+            Assert.Equal(0.016, GetHudValue(ui, "hud.bodies"), precision: 3);
 
             health.MaxHealth = 200f;
             input.Update([Key.Digit2], [], mouseX: 0f, mouseY: 0f, wheelY: 0f);
@@ -509,6 +523,13 @@ public sealed class DemoUiContentTests
             Assert.Equal(0.5, GetHudValue(ui, "hud.crystals"), precision: 3);
             Assert.True(GetHudValue(ui, "hud.hazard") > 0.0);
             AssertHudPathWritten(ui, "hud.score");
+            AssertHudPathWritten(ui, "hud.fps");
+            AssertHudPathWritten(ui, "hud.frame_p99");
+            AssertHudPathWritten(ui, "hud.frame_low1");
+            AssertHudPathWritten(ui, "hud.jitter");
+            AssertHudPathWritten(ui, "hud.particles");
+            AssertHudPathWritten(ui, "hud.lights");
+            AssertHudPathWritten(ui, "hud.bodies");
         }
         finally
         {
@@ -736,6 +757,13 @@ public sealed class DemoUiContentTests
             "hud.time",
             "hud.hazard",
             "hud.score",
+            "hud.fps",
+            "hud.frame_p99",
+            "hud.frame_low1",
+            "hud.jitter",
+            "hud.particles",
+            "hud.lights",
+            "hud.bodies",
         ];
     }
 
@@ -773,6 +801,17 @@ public sealed class DemoUiContentTests
         engine.Context.RegisterService(camera);
         engine.Context.RegisterService<IAudioApi>(EngineServiceRole.AudioService, NoopAudioApi.Instance);
         engine.Context.RegisterService<ScriptGameUiService>(ui);
+        engine.Context.Counters.RenderFramesPerSecond = 60.0;
+        engine.Context.Counters.RenderFrameP99Milliseconds = 18.0;
+        engine.Context.Counters.RenderFrameLow1PercentFps = 60.0;
+        engine.Context.Counters.RenderFrameJitterMilliseconds = 1.5;
+        engine.Context.Counters.FreeParticles = 64;
+        engine.Context.Counters.RigidBodies = 2;
+        engine.Context.RegisterService<IDiagnosticsApi>(new EngineScriptDiagnosticsApi(
+            engine.Context.Counters,
+            engine.Context.Clock,
+            new DebugOverlaySettings(),
+            () => 3));
         if (runtime is not null)
         {
             engine.Context.RegisterService(runtime);

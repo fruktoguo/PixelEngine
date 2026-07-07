@@ -1,4 +1,4 @@
-<rml title="HUD" data-screen="hud" data-contract="demo.webfirst.hud/v1" style="left: 14px; top: 14px; width: 320px; height: 264px">
+<rml title="HUD" data-screen="hud" data-contract="demo.webfirst.hud/v1" style="left: 14px; top: 14px; width: 360px; height: 418px">
   <head>
     <style>
       body { font-family: "Noto Sans SC"; color: #e8edf2; background-color: rgba(4, 6, 9, 168); }
@@ -17,6 +17,13 @@
     <progress id="hud_time" path="hud.time" value="1.0" text="剩余时间" />
     <progress id="hud_hazard" path="hud.hazard" value="0.0" text="危险水位" />
     <progress id="hud_score" path="hud.score" value="0.0" text="分数" />
+    <progress id="hud_fps" path="hud.fps" value="0.0" text="Render FPS" />
+    <progress id="hud_frame_p99" path="hud.frame_p99" value="0.0" text="p99 帧耗时" />
+    <progress id="hud_frame_low1" path="hud.frame_low1" value="0.0" text="1% low" />
+    <progress id="hud_jitter" path="hud.jitter" value="0.0" text="jitter" />
+    <progress id="hud_particles" path="hud.particles" value="0.0" text="粒子" />
+    <progress id="hud_lights" path="hud.lights" value="0.0" text="光源" />
+    <progress id="hud_bodies" path="hud.bodies" value="0.0" text="刚体" />
     <button id="hud_pause" data-event-click="pause_game">暂停</button>
   </body>
 </rml>
