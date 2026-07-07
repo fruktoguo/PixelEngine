@@ -53,6 +53,11 @@ public sealed class RenderPipelineSettings
     public bool PreferComputeLighting { get; set; }
 
     /// <summary>
+    /// 创建渲染管线时是否显式优先选择 ComputeSharp/DX12 后端；仍必须满足 G2 资源契约与可执行后端。
+    /// </summary>
+    public bool PreferComputeSharpBackend { get; set; }
+
+    /// <summary>
     /// Radiance Cascades 可选 GI 设置；默认关闭，归入 §4.3 第二级降级。
     /// </summary>
     public RadianceCascadeSettings RadianceCascades { get; set; } = RadianceCascadeSettings.Default;
