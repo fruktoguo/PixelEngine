@@ -1,7 +1,11 @@
 using System.Xml.Linq;
 using PixelEngine.Gui;
+using PixelEngine.Hosting;
 using PixelEngine.Rendering;
+using PixelEngine.Scripting;
+using PixelEngine.Simulation;
 using PixelEngine.UI;
+using ScriptScene = PixelEngine.Scripting.Scene;
 using Xunit;
 using ScriptGameUiService = PixelEngine.Scripting.IGameUiService;
 using ScriptIUiModel = PixelEngine.Scripting.IUiModel;
@@ -56,11 +60,11 @@ public sealed class DemoUiContentTests
         using GameUiHost host = new(backend);
         host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 720, 480, 1f), UiBackendKind.ManagedFallback));
 
-        UiScreenHandle main = host.ShowScreen(manifest.GetRequiredScreen("main-menu").ScreenId, manifest.ResolveDocumentSource("main-menu"));
-        UiScreenHandle hud = host.ShowScreen(manifest.GetRequiredScreen("hud").ScreenId, manifest.ResolveDocumentSource("hud"));
-        UiScreenHandle settings = host.PushModal(manifest.GetRequiredScreen("settings").ScreenId, manifest.ResolveDocumentSource("settings"));
-        UiScreenHandle inventory = host.PushModal(manifest.GetRequiredScreen("inventory").ScreenId, manifest.ResolveDocumentSource("inventory"));
-        UiScreenHandle dialog = host.PushModal(manifest.GetRequiredScreen("dialog").ScreenId, manifest.ResolveDocumentSource("dialog"));
+        PixelEngine.UI.UiScreenHandle main = host.ShowScreen(manifest.GetRequiredScreen("main-menu").ScreenId, manifest.ResolveDocumentSource("main-menu"));
+        PixelEngine.UI.UiScreenHandle hud = host.ShowScreen(manifest.GetRequiredScreen("hud").ScreenId, manifest.ResolveDocumentSource("hud"));
+        PixelEngine.UI.UiScreenHandle settings = host.PushModal(manifest.GetRequiredScreen("settings").ScreenId, manifest.ResolveDocumentSource("settings"));
+        PixelEngine.UI.UiScreenHandle inventory = host.PushModal(manifest.GetRequiredScreen("inventory").ScreenId, manifest.ResolveDocumentSource("inventory"));
+        PixelEngine.UI.UiScreenHandle dialog = host.PushModal(manifest.GetRequiredScreen("dialog").ScreenId, manifest.ResolveDocumentSource("dialog"));
         _ = main;
         _ = hud;
         _ = settings;
@@ -114,8 +118,83 @@ public sealed class DemoUiContentTests
         Assert.NotEqual(default, dialog);
         Assert.Equal(default, controller.ModalScreen);
         Assert.Equal(default, controller.MainScreen);
-        Assert.Contains(GameUiDemoController.Path("hud.health"), ui.WrittenPaths);
-        Assert.Contains(GameUiDemoController.Path("hud.heat"), ui.WrittenPaths);
+        AssertHudPathWritten(ui, "hud.health");
+        AssertHudPathWritten(ui, "hud.weapon");
+        AssertHudPathWritten(ui, "hud.ammo");
+        AssertHudPathWritten(ui, "hud.cooldown");
+        AssertHudPathWritten(ui, "hud.heat");
+        AssertHudPathWritten(ui, "hud.crystals");
+        AssertHudPathWritten(ui, "hud.time");
+        AssertHudPathWritten(ui, "hud.hazard");
+        AssertHudPathWritten(ui, "hud.score");
+    }
+
+    /// <summary>
+    /// 验证 Demo Web-first HUD 每 tick 经公开脚本 UI 服务同步真实生命、武器、任务与危险状态。
+    /// </summary>
+    [Fact]
+    public void DemoGameUiControllerPublishesRealHudStateThroughScriptServiceEachTick()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" },
+                { "id": "laser", "displayName": "Laser", "kind": "laser", "radius": 1, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 7, "heatPerCell": 1, "beamDps": 1, "muzzleCue": "ui_click", "impactCue": "sizzle_lava_water", "hudColor": "#FFFFFFFF" }
+              ]
+            }
+            """);
+        try
+        {
+            using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out FakeGameUiService ui, out ScriptInputApi input);
+            Entity entity = scene.CreateEntity();
+            _ = entity.AddComponent<Transform>();
+            PlayerController player = entity.AddComponent<PlayerController>();
+            player.SpawnX = 12f;
+            player.SpawnY = 12f;
+            PlayerHealth health = entity.AddComponent<PlayerHealth>();
+            _ = entity.AddComponent<WeaponController>();
+            MissionDirector mission = entity.AddComponent<MissionDirector>();
+            mission.RequiredCrystals = 2;
+            mission.TimeLimitSeconds = 30f;
+            mission.InitialLavaSurfaceY = 100f;
+            mission.LavaRiseCellsPerSecond = 0f;
+            RisingHazardDirector hazard = entity.AddComponent<RisingHazardDirector>();
+            hazard.StartSurfaceY = 100f;
+            hazard.TargetSurfaceY = 70f;
+            hazard.RiseSeconds = 1f;
+            hazard.LossSurfaceY = 0f;
+            hazard.EmitterCount = 1;
+            hazard.FillIntervalSeconds = 10f;
+            _ = entity.AddComponent<GameUiDemoController>();
+
+            engine.RunHeadlessTicks(1);
+
+            Assert.Equal(1.0, GetHudValue(ui, "hud.health"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.weapon"), precision: 3);
+            Assert.Equal(1.0, GetHudValue(ui, "hud.ammo"), precision: 3);
+            Assert.Equal(1.0, GetHudValue(ui, "hud.cooldown"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.heat"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.crystals"), precision: 3);
+            Assert.InRange(GetHudValue(ui, "hud.time"), 0.0, 1.0);
+            Assert.InRange(GetHudValue(ui, "hud.hazard"), 0.0, 1.0);
+            Assert.True(GetHudValue(ui, "hud.score") > 0.0);
+
+            health.MaxHealth = 200f;
+            input.Update([Key.Digit2], [], mouseX: 0f, mouseY: 0f, wheelY: 0f);
+            Assert.True(engine.Context.Events.Channel<MineYieldEvent>().TryEnqueue(new MineYieldEvent(20, 20, 1, 1)));
+            engine.RunHeadlessTicks(1);
+
+            Assert.Equal(0.5, GetHudValue(ui, "hud.health"), precision: 3);
+            Assert.Equal(1.0, GetHudValue(ui, "hud.weapon"), precision: 3);
+            Assert.Equal(0.5, GetHudValue(ui, "hud.crystals"), precision: 3);
+            Assert.True(GetHudValue(ui, "hud.hazard") > 0.0);
+            AssertHudPathWritten(ui, "hud.score");
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
     }
 
     /// <summary>
@@ -193,8 +272,11 @@ public sealed class DemoUiContentTests
 
         backend.SetScreenStack(stack);
         backend.Update(1f / 60f);
-        backend.SetModelValue(stack[hudIndex].Document, new PixelEngine.UI.UiPathId(UiStableId.Hash("hud.health")), new PixelEngine.UI.UiValue(0.75));
-        backend.SetModelValue(stack[hudIndex].Document, new PixelEngine.UI.UiPathId(UiStableId.Hash("hud.heat")), new PixelEngine.UI.UiValue(0.25));
+        foreach (string path in HudPaths())
+        {
+            backend.SetModelValue(stack[hudIndex].Document, new PixelEngine.UI.UiPathId(UiStableId.Hash(path)), new PixelEngine.UI.UiValue(path == "hud.cooldown" ? 1.0 : 0.25));
+        }
+
         Assert.True(backend.InvokeAction(stack[0].Document, new PixelEngine.UI.UiActionId(UiStableId.Hash("open_settings")), PixelEngine.UI.UiValue.FromBoolean(true)));
         backend.Composite(default);
         window.SwapBuffers();
@@ -205,6 +287,101 @@ public sealed class DemoUiContentTests
         Assert.True(manifest.TryGetScreen(id, out UiManifestScreen screen), $"缺少 UI screen: {id}");
         Assert.True(File.Exists(screen.FullPath), screen.FullPath);
         Assert.Equal(new UiScreenId(UiStableId.Hash(id)), screen.ScreenId);
+    }
+
+    private static void AssertHudPathWritten(FakeGameUiService ui, string path)
+    {
+        Assert.Contains(GameUiDemoController.Path(path), ui.WrittenPaths);
+        Assert.True(ui.Values.ContainsKey(GameUiDemoController.Path(path)), $"HUD path 未写入值：{path}");
+    }
+
+    private static double GetHudValue(FakeGameUiService ui, string path)
+    {
+        Assert.True(ui.Values.TryGetValue(GameUiDemoController.Path(path), out ScriptUiValue value), $"HUD path 未写入值：{path}");
+        Assert.Equal(PixelEngine.Scripting.UiValueKind.Double, value.Kind);
+        return value.AsDouble();
+    }
+
+    private static string[] HudPaths()
+    {
+        return [
+            "hud.health",
+            "hud.weapon",
+            "hud.ammo",
+            "hud.cooldown",
+            "hud.heat",
+            "hud.crystals",
+            "hud.time",
+            "hud.hazard",
+            "hud.score",
+        ];
+    }
+
+    private static Engine CreateHudEngine(string contentRoot, out ScriptScene scene, out FakeGameUiService ui, out ScriptInputApi input)
+    {
+        Engine engine = new EngineBuilder()
+            .UseHeadless()
+            .UseDeterministicMode()
+            .WithContentRoot(contentRoot)
+            .Build();
+        MaterialTable materials = Materials(
+            ("empty", CellType.Empty),
+            ("sand", CellType.Powder),
+            ("stone", CellType.Solid),
+            ("lava", CellType.Liquid),
+            ("fire", CellType.Fire),
+            ("acid", CellType.Liquid),
+            ("ash", CellType.Powder),
+            ("crystal", CellType.Solid));
+        engine.Context.RegisterService(materials);
+        _ = engine.AttachResidentSimulationWorld(worldWidthCells: 96, worldHeightCells: 96, particleCapacity: 64);
+        scene = new ScriptScene();
+        engine.Context.RegisterService(scene);
+        input = new ScriptInputApi();
+        ScriptCameraApi camera = new(viewportWidth: 40, viewportHeight: 20, centerX: 20, centerY: 10, zoom: 1);
+        ui = new FakeGameUiService();
+        engine.Context.RegisterService<IInputApi>(EngineServiceRole.Input, input);
+        engine.Context.RegisterService(input);
+        engine.Context.RegisterService<ICameraApi>(EngineServiceRole.Camera, camera);
+        engine.Context.RegisterService(camera);
+        engine.Context.RegisterService<IAudioApi>(EngineServiceRole.AudioService, NoopAudioApi.Instance);
+        engine.Context.RegisterService<ScriptGameUiService>(ui);
+        _ = engine.AttachScriptingFromServices();
+        return engine;
+    }
+
+    private static MaterialTable Materials(params (string Name, CellType Type)[] definitions)
+    {
+        MaterialDef[] materials = new MaterialDef[definitions.Length];
+        for (int i = 0; i < materials.Length; i++)
+        {
+            materials[i] = new MaterialDef
+            {
+                Id = (ushort)i,
+                Name = definitions[i].Name,
+                Type = definitions[i].Type,
+                Density = i == 0 ? (byte)0 : (byte)100,
+                HeatCapacity = 1,
+                HeatConduct = 255,
+                TextureId = -1,
+                MeltPoint = float.NaN,
+                FreezePoint = float.NaN,
+                BoilPoint = float.NaN,
+                Integrity = definitions[i].Type == CellType.Solid ? (ushort)40 : (ushort)0,
+                DestroyedTarget = definitions[i].Type == CellType.Solid ? (ushort)1 : (ushort)0,
+                MineYield = definitions[i].Name == "crystal" ? (byte)1 : (byte)0,
+            };
+        }
+
+        return new MaterialTable(materials);
+    }
+
+    private static string CreateTemporaryWeaponContent(string weaponsJson)
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "pixelengine-demo-ui-tests-" + Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "weapons.json"), weaponsJson);
+        return directory;
     }
 
     private static string ExtractUiText(string path)
@@ -264,6 +441,8 @@ public sealed class DemoUiContentTests
 
         public List<ScriptUiPathId> WrittenPaths { get; } = [];
 
+        public Dictionary<ScriptUiPathId, ScriptUiValue> Values { get; } = [];
+
         public ScriptUiScreenHandle ShowScreen(string screenId)
         {
             ShownScreens.Add(screenId);
@@ -291,8 +470,8 @@ public sealed class DemoUiContentTests
         public void SetValue(ScriptUiScreenHandle screen, ScriptUiPathId path, in ScriptUiValue value)
         {
             _ = screen;
-            _ = value;
             WrittenPaths.Add(path);
+            Values[path] = value;
         }
 
         public bool TryGetValue(ScriptUiScreenHandle screen, ScriptUiPathId path, out ScriptUiValue value)
@@ -313,6 +492,25 @@ public sealed class DemoUiContentTests
         public void Raise(ScriptUiActionId action)
         {
             UiEventRaised?.Invoke(new ScriptUiEvent(default, default, action, default));
+        }
+    }
+
+    private sealed class NoopAudioApi : IAudioApi
+    {
+        public static NoopAudioApi Instance { get; } = new();
+
+        public void PlayOneShot(string cue, float volume = 1f)
+        {
+            _ = cue;
+            _ = volume;
+        }
+
+        public void PlayAt(string cue, float x, float y, float volume = 1f)
+        {
+            _ = cue;
+            _ = x;
+            _ = y;
+            _ = volume;
         }
     }
 

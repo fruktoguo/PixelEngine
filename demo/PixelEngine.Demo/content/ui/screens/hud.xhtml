@@ -1,16 +1,22 @@
-<rml title="HUD" style="left: 14px; top: 14px; width: 300px; height: 128px">
+<rml title="HUD" style="left: 14px; top: 14px; width: 320px; height: 264px">
   <head>
     <style>
       body { font-family: "Noto Sans SC"; color: #e8edf2; background-color: rgba(4, 6, 9, 168); }
-      progress { width: 220px; height: 16px; margin-top: 4px; }
+      progress { width: 248px; height: 14px; margin-top: 3px; }
       p { margin: 3px 0px; }
     </style>
   </head>
   <body>
     <p id="hud_title">HUD</p>
     <progress id="hud_health" path="hud.health" value="1.0" text="生命" />
+    <progress id="hud_weapon" path="hud.weapon" value="0.0" text="武器槽位" />
+    <progress id="hud_ammo" path="hud.ammo" value="0.0" text="弹药" />
+    <progress id="hud_cooldown" path="hud.cooldown" value="1.0" text="冷却" />
     <progress id="hud_heat" path="hud.heat" value="0.0" text="热量" />
-    <p id="hud_weapon" data-model="hud.weapon">武器：手枪</p>
+    <progress id="hud_crystals" path="hud.crystals" value="0.0" text="水晶" />
+    <progress id="hud_time" path="hud.time" value="1.0" text="剩余时间" />
+    <progress id="hud_hazard" path="hud.hazard" value="0.0" text="危险水位" />
+    <progress id="hud_score" path="hud.score" value="0.0" text="分数" />
     <button id="hud_pause" data-event-click="open_settings">暂停</button>
   </body>
 </rml>
