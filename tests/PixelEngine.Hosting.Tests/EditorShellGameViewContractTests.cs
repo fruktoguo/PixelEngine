@@ -260,6 +260,95 @@ public sealed class EditorShellGameViewContractTests
     }
 
     /// <summary>
+    /// 验证 Game View 输入源把 panel-local 图像点映射成 UI hit-test 使用的 viewport 坐标。
+    /// </summary>
+    [Fact]
+    public void GameViewUiInputSourceFeedsMappedViewportCoordinatesIntoUiRouterHitTest()
+    {
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 320,
+            textureHeight: 180,
+            imageMinPanel: new Vector2(10f, 20f),
+            availablePanelSize: new Vector2(160f, 160f));
+        Vector2 panelPoint = new(90f, 65f);
+        FixedUiInputSource input = new(new UiPointerState(999f, 888f, 1f, -2f, LeftDown: true, RightDown: false, MiddleDown: false));
+        RecordingBackend backend = new((x, y) => x == 160f && y == 90f
+            ? new UiHitResult(HitsUi: true, Opaque: false, WantsMouse: true, WantsKeyboard: true)
+            : UiHitResult.None);
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 180, 1f), UiBackendKind.ManagedFallback));
+        UiInputRouter router = new(
+            host,
+            new GameViewUiInputSource(
+                input,
+                () => PixelEngine.Editor.EditorMode.Play,
+                () => snapshot,
+                () => panelPoint,
+                () => true));
+
+        EditorHostInputCapture editorCapture = EditorGameViewContract.ResolveEditorInputCapture(
+            EditorGameViewContract.GameView(PixelEngine.Editor.EditorMode.Play),
+            new EditorInputSnapshot(WantCaptureMouse: false, WantCaptureKeyboard: false),
+            snapshot,
+            panelPoint);
+        InputArbitrationState state = InputArbitrator.ApplyEditor(InputArbitrationState.Allowed, editorCapture);
+        UiInputCapture uiCapture = router.Pump(allowPointer: state.AllowWorldMouse, allowKeyboard: state.AllowWorldKeyboard);
+        state = InputArbitrator.ApplyGameUi(state, uiCapture);
+
+        Assert.Equal(EditorHostInputCapture.None, editorCapture);
+        Assert.Equal(160f, backend.LastPointerMoveX, precision: 3);
+        Assert.Equal(90f, backend.LastPointerMoveY, precision: 3);
+        Assert.Equal(160f, backend.LastHitTestX, precision: 3);
+        Assert.Equal(90f, backend.LastHitTestY, precision: 3);
+        Assert.True(uiCapture.WantCaptureMouse);
+        Assert.True(uiCapture.WantCaptureKeyboard);
+        Assert.False(state.AllowWorldMouse);
+        Assert.False(state.AllowWorldKeyboard);
+    }
+
+    /// <summary>
+    /// 验证 Game View 坐标闭环仍保留透明 UI 区域 pass-through 语义。
+    /// </summary>
+    [Fact]
+    public void GameViewUiInputSourceMappedTransparentHitPassesThroughToGameplay()
+    {
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 320,
+            textureHeight: 180,
+            imageMinPanel: new Vector2(10f, 20f),
+            availablePanelSize: new Vector2(160f, 160f));
+        Vector2 panelPoint = new(90f, 65f);
+        FixedUiInputSource input = new(new UiPointerState(0f, 0f, 0f, 0f, LeftDown: false, RightDown: false, MiddleDown: false));
+        RecordingBackend backend = new((_, _) => UiHitResult.None);
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 180, 1f), UiBackendKind.ManagedFallback));
+        UiInputRouter router = new(
+            host,
+            new GameViewUiInputSource(
+                input,
+                () => PixelEngine.Editor.EditorMode.Play,
+                () => snapshot,
+                () => panelPoint,
+                () => true));
+
+        EditorHostInputCapture editorCapture = EditorGameViewContract.ResolveEditorInputCapture(
+            EditorGameViewContract.GameView(PixelEngine.Editor.EditorMode.Play),
+            new EditorInputSnapshot(WantCaptureMouse: false, WantCaptureKeyboard: false),
+            snapshot,
+            panelPoint);
+        InputArbitrationState state = InputArbitrator.ApplyEditor(InputArbitrationState.Allowed, editorCapture);
+        UiInputCapture uiCapture = router.Pump(allowPointer: state.AllowWorldMouse, allowKeyboard: state.AllowWorldKeyboard);
+        state = InputArbitrator.ApplyGameUi(state, uiCapture);
+
+        Assert.Equal(EditorHostInputCapture.None, editorCapture);
+        Assert.Equal(160f, backend.LastHitTestX, precision: 3);
+        Assert.Equal(90f, backend.LastHitTestY, precision: 3);
+        Assert.Equal(UiInputCapture.None, uiCapture);
+        Assert.True(state.AllowWorldMouse);
+        Assert.True(state.AllowWorldKeyboard);
+    }
+
+    /// <summary>
     /// 验证 GameViewPanel 只声明运行时视图契约，不复用 Scene View 的 gizmo / 画刷职责。
     /// </summary>
     [Fact]
@@ -276,5 +365,159 @@ public sealed class EditorShellGameViewContractTests
         Assert.True(contract.UsesRuntimeViewportTexture);
         Assert.Equal(EditorViewportInputClip.ImageRect, contract.InputClip);
         Assert.Equal(EditorViewportCoordinateSpace.ViewportTexturePixels, contract.GameUiCoordinateSpace);
+    }
+
+    private sealed class FixedUiInputSource(UiPointerState pointer) : IUiInputSource
+    {
+        public bool TryGetPointer(out UiPointerState state)
+        {
+            state = pointer;
+            return true;
+        }
+
+        public int CaptureDownKeys(Span<UiKey> destination, out UiKeyModifiers modifiers)
+        {
+            _ = destination;
+            modifiers = UiKeyModifiers.None;
+            return 0;
+        }
+
+        public int CaptureText(Span<char> destination)
+        {
+            _ = destination;
+            return 0;
+        }
+    }
+
+    private sealed class RecordingBackend(Func<float, float, UiHitResult> hitTest) : IGameUiBackend
+    {
+        private readonly Func<float, float, UiHitResult> _hitTest = hitTest ?? throw new ArgumentNullException(nameof(hitTest));
+
+        public UiBackendKind Kind => UiBackendKind.ManagedFallback;
+
+        public bool IsDirty => false;
+
+        public bool IsAnimating => false;
+
+        public float LastPointerMoveX { get; private set; } = float.NaN;
+
+        public float LastPointerMoveY { get; private set; } = float.NaN;
+
+        public float LastHitTestX { get; private set; } = float.NaN;
+
+        public float LastHitTestY { get; private set; } = float.NaN;
+
+        public void Dispose()
+        {
+        }
+
+        public void Initialize(in UiBackendInitializeInfo info)
+        {
+            _ = info;
+        }
+
+        public void Resize(in UiViewport viewport)
+        {
+            _ = viewport;
+        }
+
+        public UiDocumentHandle LoadDocument(in UiDocumentSource source)
+        {
+            _ = source;
+            return default;
+        }
+
+        public void UnloadDocument(UiDocumentHandle document)
+        {
+            _ = document;
+        }
+
+        public void SetScreenStack(ReadOnlySpan<UiScreenStackEntry> stack)
+        {
+            _ = stack;
+        }
+
+        public void Update(float deltaSeconds)
+        {
+            _ = deltaSeconds;
+        }
+
+        public void FeedPointerMove(float x, float y)
+        {
+            LastPointerMoveX = x;
+            LastPointerMoveY = y;
+        }
+
+        public void FeedPointerButton(UiPointerButton button, bool isDown)
+        {
+            _ = button;
+            _ = isDown;
+        }
+
+        public void FeedScroll(float deltaX, float deltaY)
+        {
+            _ = deltaX;
+            _ = deltaY;
+        }
+
+        public void FeedKey(UiKey key, bool isDown, UiKeyModifiers modifiers)
+        {
+            _ = key;
+            _ = isDown;
+            _ = modifiers;
+        }
+
+        public void FeedText(ReadOnlySpan<char> text)
+        {
+            _ = text;
+        }
+
+        public UiHitResult HitTest(float x, float y)
+        {
+            LastHitTestX = x;
+            LastHitTestY = y;
+            return _hitTest(x, y);
+        }
+
+        public void SetModelValue(UiDocumentHandle document, UiPathId path, in UiValue value)
+        {
+            _ = document;
+            _ = path;
+            _ = value;
+        }
+
+        public bool TryGetModelValue(UiDocumentHandle document, UiPathId path, out UiValue value)
+        {
+            _ = document;
+            _ = path;
+            value = default;
+            return false;
+        }
+
+        public int CopyModelPaths(UiDocumentHandle document, Span<UiPathId> destination)
+        {
+            _ = document;
+            _ = destination;
+            return 0;
+        }
+
+        public bool InvokeAction(UiDocumentHandle document, UiActionId action, in UiValue payload)
+        {
+            _ = document;
+            _ = action;
+            _ = payload;
+            return false;
+        }
+
+        public int DrainEvents(Span<UiEvent> destination)
+        {
+            _ = destination;
+            return 0;
+        }
+
+        public void Composite(in UiPresentContext context)
+        {
+            _ = context;
+        }
     }
 }
