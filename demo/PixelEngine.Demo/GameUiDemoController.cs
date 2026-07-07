@@ -254,7 +254,7 @@ public sealed class GameUiDemoController : Behaviour
             _hazard = hazard;
         }
 
-        if (_mission is not null && _hazard is not null)
+        if (HasAllHudSources())
         {
             return;
         }
@@ -266,7 +266,15 @@ public sealed class GameUiDemoController : Behaviour
             for (int j = 0; j < components.Length; j++)
             {
                 Behaviour behaviour = components[j].Behaviour;
-                if (_mission is null && behaviour is MissionDirector sceneMission)
+                if (_health is null && behaviour is PlayerHealth sceneHealth)
+                {
+                    _health = sceneHealth;
+                }
+                else if (_weapons is null && behaviour is WeaponController sceneWeapons)
+                {
+                    _weapons = sceneWeapons;
+                }
+                else if (_mission is null && behaviour is MissionDirector sceneMission)
                 {
                     _mission = sceneMission;
                 }
@@ -275,12 +283,17 @@ public sealed class GameUiDemoController : Behaviour
                     _hazard = sceneHazard;
                 }
 
-                if (_mission is not null && _hazard is not null)
+                if (HasAllHudSources())
                 {
                     return;
                 }
             }
         }
+    }
+
+    private bool HasAllHudSources()
+    {
+        return _health is not null && _weapons is not null && _mission is not null && _hazard is not null;
     }
 
     private void PublishHealth()
