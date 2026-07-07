@@ -44,8 +44,8 @@
 - [x] `PlayerSettingsDto`：已定义窗口标题、分辨率、VSync、图标、版本号、启动场景、输入默认、运行时 UI backend、发行通道，并提供默认值、JSON 读写、校验与路径逃逸拒绝测试。
 - [x] `PlayerSettingsDto` EditorShell / runtime 消费：Player Settings 面板已通过 `PlayerSettingsStore` 读写 Hosting `PlayerSettings.json`，并经 `PlayerSettingsEditorAdapter` 投影到 `EngineBuilder` headless/runtime options、BuildRequest、build-player 参数、`build-result.json` 与 packaged `startup.json`；Demo startup 读取同源 title/size/vsync/runtime UI backend/release channel。
 - [x] `BuildProfileDto`：已定义目标 RID/channel/configuration、R2R/AOT、Debug/Release、入包场景、启动场景、输出目录、符号、Build/Build And Run 参数；EditorShell Build Settings 已通过 `BuildProfileEditorAdapter` / `BuildSettingsStore` 回读并投影到 build-player 请求。
-- [x] `EngineProjectSettingsStore` 读写/校验入口：已提供 `ProjectSettings.json`、`PlayerSettings.json`、`BuildSettings.json` 的 Hosting 中性 JSON 读写入口、默认值与 schema version。
-- [ ] `EngineProject` 统一入口：仍需将上述 DTO 与现有 content/scenes 扫描、`startup.json`、`.scene` loader 统一成更完整的中性工程 schema，禁止引入 EditorShell authoring UI 类型。
+- [x] `EngineProjectSettingsStore` 读写/校验入口：已提供 `ProjectSettings.json`、`PlayerSettings.json`、`BuildSettings.json` 与玩家包 `startup.json` 的 Hosting 中性 JSON 读写入口、默认值与 schema version。
+- [x] `EngineProject` 统一入口：已将上述 DTO 与 content/scenes 扫描、`startup.json`、`.scene` loader 统一成 Hosting 中性工程 schema；`EngineProject.Load` 读取工程根 settings/build profile/startup，`EngineProject.FromContentRoot` 覆盖玩家包 `.scene` / save directory / procedural fallback，EditorShell 继续仅消费 Hosting DTO/store，未引入 EditorShell authoring UI 类型。
 
 ## 5. 未完成目标 checklist
 
@@ -66,7 +66,7 @@
 - [x] `dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --filter FullyQualifiedName~HostingProjectDisciplineTests|FullyQualifiedName~EngineWindowOwnershipTests|FullyQualifiedName~EnginePhasePipelineTests` 覆盖依赖方向、窗口所有权、相位与降频。
 - [x] `dotnet test tests/PixelEngine.UI.Tests/PixelEngine.UI.Tests.csproj -c Release --filter FullyQualifiedName~GameUiHostTests|FullyQualifiedName~UiInputRouterTests|FullyQualifiedName~GameUiServiceBridgeTests` 覆盖 Web-first UI 装配、输入仲裁、服务桥和禁用门控。
 - [x] `dotnet test tests/PixelEngine.Demo.Tests/PixelEngine.Demo.Tests.csproj -c Release --filter FullyQualifiedName~DemoStartupOptionsTests` 覆盖 player startup 分派与 packaged `startup.json` 中 title/window/vsync/runtime UI backend/release channel 消费，当前通过 22/22。
-- [x] `dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --filter "FullyQualifiedName~EditorShellBuildTests|FullyQualifiedName~EngineBuilderTests"` 覆盖 Project/Player Settings store 与面板 scripted probe、ProjectSettings → EditorProject/EngineProject、错误输入不保存、PlayerSettings → BuildRequest/runtime options/build-player 参数/`build-result.json` 投影、EngineBuilder 窗口标题/启动场景与 player build 编排，当前通过 27/27。
+- [x] `dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --filter "FullyQualifiedName~EditorShellBuildTests|FullyQualifiedName~SceneAndHeadlessTests|FullyQualifiedName~HostingProjectDisciplineTests|FullyQualifiedName~EngineBuilderTests"` 覆盖 Project/Player Settings store 与面板 scripted probe、ProjectSettings → EditorProject/EngineProject、EngineProject 统一入口合并 settings/startup/Build Profile/.scene 扫描、错误输入不保存、PlayerSettings → BuildRequest/runtime options/build-player 参数/`build-result.json` 投影、EngineBuilder 窗口标题/启动场景与 player build 编排，当前通过 82/82。
 - [x] `docs/runtime-reports/2026-07-02-demo-window-smoke.md`、`docs/runtime-reports/2026-07-02-demo-window-longrun.md`、`docs/runtime-reports/2026-07-06-editor-shell-attach-probe.md` 是现有 runtime / window / attach 证据路径。
 - [!] `tools/demo-manual-acceptance-preflight.ps1` 与 `tools/native-leak-preflight.ps1` 只提供证据入口；未有合格 manifest 和人工/外部复核前保持阻塞。
 
@@ -74,5 +74,5 @@
 
 - [x] 上游依赖：plan/01、plan/02、plan/03–10、plan/11、plan/12、plan/15、plan/19、plan/20 的公开契约已经在 Hosting 中作为装配边界登记。
 - [x] 下游消费：plan/19 使用窗口所有权、Edit/Play、`.scene` writer 与 Settings DTO；plan/20 使用 UI 装配和 `IGameUiService`；plan/13 使用 startup 分派和公开 runtime services；plan/15 使用 build profile / player-only 审计边界。
-- [x] 本轮闭合节点：`ProjectSettingsDto` / `PlayerSettingsDto` 已绑定到 plan/19 Project Settings / Player Settings 面板、EditorProject/EngineProject 入口与 headless/runtime/build-player/package 消费路径；真实 Settings UX 保存、重启恢复、人工填写与截图证据仍归 M15 `[!]`。
+- [x] 本轮闭合节点：`EngineProject` 统一入口已在 Hosting 层收敛 Project/Player/Build Settings、玩家包 `startup.json`、content/scenes 扫描与 `.scene` descriptor 解析；Demo/player startup 与 EditorShell `ToEngineProject()` 均改走 Hosting 中性入口，真实 Settings UX 保存、重启恢复、人工填写与截图证据仍归 M15 `[!]`。
 - [!] M15 后续节点：补 Editor UX 人工证据与 native leak 外部 detector 证据，完成后再更新 README/plan17 dashboard。

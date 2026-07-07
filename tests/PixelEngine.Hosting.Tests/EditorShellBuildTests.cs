@@ -327,6 +327,75 @@ public sealed class EditorShellBuildTests
     }
 
     /// <summary>
+    /// 验证 Hosting EngineProject 统一入口会合并 settings、startup、Build Profile 与 .scene 扫描。
+    /// </summary>
+    [Fact]
+    public void EngineProjectUnifiedEntryLoadsSettingsStartupAndScannedScenes()
+    {
+        using TempDir temp = new();
+        string contentRoot = Path.Combine(temp.Path, "content");
+        string scenesRoot = Path.Combine(contentRoot, "scenes");
+        _ = Directory.CreateDirectory(scenesRoot);
+        WriteScene(Path.Combine(scenesRoot, "start.scene"), "start-stable");
+        WriteScene(Path.Combine(scenesRoot, "build-only.scene"), "build-stable");
+        WriteScene(Path.Combine(scenesRoot, "bonus.scene"), "bonus-stable");
+
+        ProjectSettingsDto projectSettings = ProjectSettingsDto.CreateDefault("Unified Entry") with
+        {
+            ContentRoot = "content",
+            ScriptSourceDir = "scripts/game",
+            StartScene = "scenes/start.scene",
+        };
+        PlayerSettingsDto playerSettings = new()
+        {
+            WindowTitle = "Unified Player",
+            WindowWidth = 1366,
+            WindowHeight = 768,
+            VSync = false,
+            StartupScene = "scenes/start.scene",
+            RuntimeUiBackend = UiBackendKind.Ultralight,
+            ReleaseChannel = PlayerReleaseChannel.Production,
+        };
+        BuildProfileDto buildProfile = new()
+        {
+            Scenes =
+            [
+                new BuildProfileSceneDto { SceneName = "start", Source = "scenes/start.scene", SourceKind = SceneSourceKind.SceneFile, Included = true, IsStartup = true },
+                new BuildProfileSceneDto { SceneName = "build", Source = "scenes/build-only.scene", SourceKind = SceneSourceKind.SceneFile, Included = true },
+            ],
+        };
+        EngineProjectStartupSettings startupSettings = new()
+        {
+            StartScene = "scenes/start.scene",
+            WindowTitle = "Startup Runtime",
+            WindowWidth = 1440,
+            WindowHeight = 810,
+            VSync = false,
+            RuntimeUiBackend = UiBackendKind.Ultralight,
+            ReleaseChannel = PlayerReleaseChannel.Production,
+        };
+        EngineProjectSettingsStore.SaveProjectSettings(temp.Path, projectSettings);
+        EngineProjectSettingsStore.SavePlayerSettings(temp.Path, playerSettings);
+        EngineProjectSettingsStore.SaveBuildProfile(temp.Path, buildProfile);
+        EngineProjectSettingsStore.SaveStartupSettings(contentRoot, startupSettings);
+
+        EngineProject loaded = EngineProject.Load(temp.Path);
+        SceneDescriptor[] scenes = loaded.Scenes.ToArray();
+
+        Assert.Equal(Path.GetFullPath(temp.Path), loaded.ProjectRoot);
+        Assert.Equal(Path.GetFullPath(contentRoot), loaded.ContentRoot);
+        Assert.Equal(Path.GetFullPath(Path.Combine(temp.Path, "scripts/game")), loaded.ScriptSourceDirectory);
+        Assert.Equal("start-stable", loaded.StartScene);
+        Assert.Equal("Unified Entry", loaded.ProjectSettings!.Name);
+        Assert.Equal("Unified Player", loaded.PlayerSettings!.WindowTitle);
+        Assert.Equal("Startup Runtime", loaded.StartupSettings!.WindowTitle);
+        Assert.Equal(UiBackendKind.Ultralight, loaded.StartupSettings.RuntimeUiBackend);
+        Assert.Equal(["start-stable", "build-stable", "bonus-stable"], [.. scenes.Select(static scene => scene.Name)]);
+        Assert.All(scenes, scene => Assert.Equal(SceneSourceKind.SceneFile, scene.SourceKind));
+        Assert.EndsWith("content/scenes/start.scene", scenes[0].Source!.Replace('\\', '/'), StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 EditorShell Project/Player Settings 面板直接读写 Hosting DTO，非法输入不落盘。
     /// </summary>
     [Fact]
@@ -560,6 +629,19 @@ public sealed class EditorShellBuildTests
             StartScene = "scenes/lava-mine.scene",
             IncludedScenes = ["scenes/lava-mine.scene"],
         };
+    }
+
+    private static void WriteScene(string path, string name)
+    {
+        File.WriteAllText(
+            path,
+            $$"""
+            {
+              "formatVersion": 2,
+              "name": "{{name}}",
+              "entities": []
+            }
+            """);
     }
 
     private static string WriteBuildPlayerScript(string directory, string body)

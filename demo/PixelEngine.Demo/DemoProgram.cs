@@ -754,8 +754,10 @@ public static class DemoProgram
     {
         ArgumentNullException.ThrowIfNull(options);
         string contentRoot = Path.GetFullPath(options.ContentRoot);
-        SceneDescriptor scene = BuildSceneDescriptor(contentRoot, options.Scene);
-        return new EngineProject(contentRoot, scene.Name, [scene]);
+        return EngineProject.FromContentRoot(
+            contentRoot,
+            options.Scene,
+            DemoStartupOptions.DefaultProceduralSceneKey);
     }
 
     /// <summary>
@@ -783,22 +785,6 @@ public static class DemoProgram
         }
 
         return builder.Build();
-    }
-
-    private static SceneDescriptor BuildSceneDescriptor(string contentRoot, string scene)
-    {
-        string source = scene;
-        if (!Path.IsPathRooted(source))
-        {
-            source = Path.Combine(contentRoot, source);
-        }
-
-        string sceneName = Path.GetFileNameWithoutExtension(source);
-        return Directory.Exists(source)
-            ? new SceneDescriptor(sceneName, SceneSourceKind.SaveDirectory, source)
-            : File.Exists(source)
-                ? new SceneDescriptor(sceneName, SceneSourceKind.SceneFile, source)
-                : new SceneDescriptor(sceneName, SceneSourceKind.Procedural, DemoStartupOptions.DefaultProceduralSceneKey);
     }
 
     private static string WriteCrashLog(Exception exception, string? logDirectory)

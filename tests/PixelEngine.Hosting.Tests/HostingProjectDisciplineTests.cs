@@ -576,7 +576,8 @@ public sealed class HostingProjectDisciplineTests
         }
 
         Assert.Contains("ResolveStartupSettings", startupOptions, StringComparison.Ordinal);
-        Assert.Contains("startup.json", startupOptions, StringComparison.Ordinal);
+        Assert.Contains("EngineProjectSettingsStore.LoadStartupSettings", startupOptions, StringComparison.Ordinal);
+        Assert.DoesNotContain("JsonDocument.Parse", startupOptions, StringComparison.Ordinal);
     }
 
     /// <summary>
