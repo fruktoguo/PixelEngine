@@ -43,7 +43,7 @@
 - [x] SIMD 规则已落实：温度 stencil、palette→BGRA、bulk fill/clear、dirty flag 扫描等可向量化；sand/liquid movement 明确保留 scalar。
 - [x] RenderStyle 着色质量档已接入：开启时禁用 zoom palette 行复制，按世界空间逐像素计算 BGRA；关闭时恢复 palette 快路径。
 - [x] bounds-check 消除流程已建立：热路径使用 `MemoryMarshal.GetArrayDataReference`、`Unsafe.Add` 或 fixed 指针漫游，并以 disassembly guard 守门。
-- [x] GC 策略已建立：Workstation 与 Server GC 实测定档，`EngineGcCoordinator` 串行化 GC latency mode 与 NoGCRegion 等进程级状态。
+- [x] GC 策略已建立：Workstation 与 Server GC 实测定档，`EngineGcCoordinator` 串行化 GC latency mode 与 NoGCRegion 等进程级状态，并由 `PerformanceHardeningMemoryDisciplineTests` 覆盖失败/结束路径的 gate 释放与并发 latency mode 阻塞语义。
 - [x] GPU 下放边界已明确：光照、bloom、高密度粒子和可选非权威 pass 可走 GPU；权威 cell 网格留 CPU，无 GPU readback 卡流水线。
 - [x] dirty-rect 证据已建立：静止 chunk 收缩为空、sleeping 区零迭代、满屏静止 vs 满屏激活基准用于证明静止边际成本趋近零。
 - [x] 过载降级链已实现：热场、光照、远处 active chunk、整体 sim 30Hz、真实减速五级降级，绝不 accumulator 追帧。
@@ -120,7 +120,7 @@
 - [x] 多线程验收：CA checkerboard、Box2D task bridge、render buffer、CCL、粒子、温度、序列化均不使用每帧 `Parallel.For`。
 - [x] dirty-rect 验收：静止区零迭代和满屏静止近零 sim 成本已有证据路径。
 - [x] 过载降级验收：五级降级和 RenderStyle/UI present cadence 已接入，保持绝不追帧。
-- [x] GC 验收：GC latency mode 与 NoGCRegion 由 `EngineGcCoordinator` 串行化，压测下 Gen0 不增长的证据路径已登记。
+- [x] GC 验收：GC latency mode 与 NoGCRegion 由 `EngineGcCoordinator` 串行化，`PerformanceHardeningMemoryDisciplineTests.TryBeginNoGcRegionReleasesCoordinatorGateWhenStartFails` / `NoGcRegionCoordinatorBlocksLatencyModeChangesUntilRegionEnds` 已锁定 gate 释放与并发阻塞纪律，压测下 Gen0 不增长的证据路径已登记。
 - [!] SIMD 验收：AVX2 与 scalar fallback 已有基础，AVX-512 目标硬件实测仍阻塞。
 - [!] 延迟+分支验收：硬件计数器入口已建立，但真实 cache miss 和 branch misprediction 数据仍阻塞。
 - [!] cells/frame 验收：当前 full-active CA 未达 2–4M active cells / 8ms 目标，必须优化或正式重校准后再勾选。
