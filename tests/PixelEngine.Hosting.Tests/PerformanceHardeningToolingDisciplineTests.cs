@@ -3735,7 +3735,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("Add-WorkflowRunMetadataCheck", evidence, StringComparison.Ordinal);
         Assert.Contains("必须与 workflow_run 一致", evidence, StringComparison.Ordinal);
         Assert.Contains("workflow_run 报告 workflow 必须为 Release", evidence, StringComparison.Ordinal);
-        Assert.Contains("workflow_run 报告 event 必须为 push 或 workflow_dispatch", evidence, StringComparison.Ordinal);
+        Assert.Contains("workflow_run 报告 event 必须为 push/tag push", evidence, StringComparison.Ordinal);
         Assert.Contains("workflow_run 报告 run_attempt 必须为 >= 1 的整数", evidence, StringComparison.Ordinal);
         Assert.Contains("Get-ReleaseTagVersion", evidence, StringComparison.Ordinal);
         Assert.Contains("workflow_run ref 必须是 refs/tags/v<semver>", evidence, StringComparison.Ordinal);
@@ -4645,8 +4645,53 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
             Assert.Contains("status | blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
             Assert.Contains("workflow_run 报告 workflow 必须为 Release", report, StringComparison.Ordinal);
-            Assert.Contains("workflow_run 报告 event 必须为 push 或 workflow_dispatch", report, StringComparison.Ordinal);
+            Assert.Contains("workflow_run 报告 event 必须为 push/tag push", report, StringComparison.Ordinal);
             Assert.Contains("workflow_run 报告 run_attempt 必须为 >= 1 的整数", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 workflow_dispatch 即使声明 tag ref / release_tag=true，也不能冒充 tag push Release 证据。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsWorkflowDispatchEvenWithTagRef()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-dispatch-tag-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success", suffix: "dispatch-tag");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            string workflowRunReport = (string)rootNode["workflowRunReport"]!;
+            string text = File.ReadAllText(workflowRunReport)
+                .Replace("| event | push |", "| event | workflow_dispatch |", StringComparison.Ordinal);
+            File.WriteAllText(workflowRunReport, text);
+            rootNode["workflowRunSha256"] = GetSha256(workflowRunReport);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "dispatch-tag-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("status | blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("workflow_run 报告 event 必须为 push/tag push", report, StringComparison.Ordinal);
+            Assert.Contains("workflow_dispatch", report, StringComparison.Ordinal);
             Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally

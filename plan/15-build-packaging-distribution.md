@@ -45,7 +45,7 @@
 - [x] 发行激活真相源已集中：`tools/release-rids.json` 声明 channels、active RID、runner、shell、smoke、codesign；任一 dormant RID 翻 active 后由矩阵脚本扩展。
 - [x] 审计脚本已参数化：`tools/audit-release-artifacts.ps1` 与 `.sh` 接收 active RID，`--require-all` 只要求当前激活集，dormant RID 缺失不误判当前 Windows-first 发布失败。
 - [x] 发行证据预检已参数化：`tools/release-evidence-preflight.ps1` 与 `.sh` 从 active RID 和 expected package count 派生包数、上传资产数、SHA256SUMS 覆盖和 deterministic hash 行集。
-- [x] GitHub Release 上传报告约束已写入预检：必须覆盖 package asset 与唯一 `SHA256SUMS`，只写 success 不能冒充完成。
+- [x] GitHub Release 上传报告约束已写入预检：`workflow_run` 必须来自 tag push，且必须覆盖 package asset 与唯一 `SHA256SUMS`；只写 success 或 `workflow_dispatch` 不能冒充完成。
 - [x] 确定性打包工具已落地：`tools/PixelEngine.Tools.DeterministicPackage` 固定 entry 顺序、时间戳、权限与 owner，release job 二次 package 生成 deterministic hash report。
 - [x] build-player 编排器已落地：`tools/build-player.ps1` 与 `.sh` 串 `build-native`、publish、verify、package、audit，输出 `schema=pixelengine.build/v1` NDJSON 与 `build-result.json`。
 - [x] build-player 产品名契约已落地：`-ProductName` 只影响玩家可见启动器和包名，内部 `AssemblyName` 默认保持 `PixelEngine.Demo`，避免带空格 assembly 破坏 restore 或 apphost 载荷。
@@ -73,7 +73,7 @@
 ## 5. 证据债 / 阻塞 checklist
 
 - [!] 阻塞：`release_evidence_attached_pending_review` 只代表证据包已附上并待人工复核，不代表发行验收完成。
-- [!] 阻塞：`workflow_dispatch` 的 GitHub Release 上传报告不是正式 tag release 证据，非 tag 上传必须保持阻塞。
+- [!] 阻塞：`workflow_dispatch` 的 GitHub Release 上传报告不是正式 tag release 证据；即使 ref 指向 tag，也必须由 tag push 触发的 Release workflow 补正式证据。
 - [!] 阻塞：本机 `win-x64` publish、smoke、package、audit 只能算本地工程探针，不能替代 release runner、GitHub Release、目标机器和人工复核。
 - [!] 阻塞：`load-only` 不能证明目标架构可运行，`win-arm64` 仍需要真机或可信 runner smoke。
 - [!] 阻塞：macOS 签名和公证需要 Developer ID 与 notary 凭据，缺凭据时不得出未签名产物冒充完成。
@@ -92,7 +92,7 @@
 - [x] 一键出包入口命令：`pwsh tools/build-player.ps1 -Rid win-x64 -Channel r2r -Configuration Release -StartScene scenes/lava-mine.scene`，输出 `build-result.json` 与玩家包归档。
 - [x] 玩家包审计命令：`pwsh tools/audit-release-artifacts.ps1 -PublishRoot artifacts/publish/win-x64/r2r -PackageRoot artifacts/package -ActiveRids win-x64 -RequireAll` 或 Bash 等价入口，用于同时审计 publish 与 package 结构、player-only 断言和 inactive Ultralight native 混入门禁。
 - [x] 矩阵 dry-run 命令：`pwsh tools/release-matrix.ps1 -Config tools/release-rids.json -IncludeWinArm64 true`，用于验证 active RID 派生 package count 和 asset count。
-- [!] 最终 release 预检命令：`pwsh tools/release-evidence-preflight.ps1 -Manifest <release-evidence.json> -ActiveRids <active-rids> -ExpectedPackageCount <n>`；`tools/release-evidence-preflight.ps1|.sh` 为等价入口，必须在 tag release 证据齐全后才能解除阻塞。
+- [!] 最终 release 预检命令：`pwsh tools/release-evidence-preflight.ps1 -Manifest <release-evidence.json> -ActiveRids <active-rids> -ExpectedPackageCount <n>`；`tools/release-evidence-preflight.ps1|.sh` 为等价入口，只接受 tag push 的 Release workflow 证据，必须在 tag release 证据齐全后才能解除阻塞。
 - [!] 最终签名证据路径：macOS `codesign`、`notarytool`、`stapler`、`spctl` 报告仍缺，不得勾选 macOS 完成。
 - [!] 最终上传证据路径：GitHub Release upload markdown 必须列出 `uploaded_asset_count=packageCount+1`、全部 package asset hash 和唯一 `SHA256SUMS` hash。
 - [!] 最终 SIMD 证据路径：AOT 探针报告必须按 x64/arm64 区分 `simdProbeKind`，非 x64 skip 不能冒充 arm64 NEON 证明。
