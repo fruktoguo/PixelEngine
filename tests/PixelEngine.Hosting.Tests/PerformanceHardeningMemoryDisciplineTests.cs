@@ -159,7 +159,7 @@ public sealed class PerformanceHardeningMemoryDisciplineTests
     /// 验证 NoGCRegion 持有期间延迟模式切换会被协调器阻塞，EndNoGcRegion 后再释放。
     /// </summary>
     [Fact]
-    public void NoGcRegionCoordinatorBlocksLatencyModeChangesUntilRegionEnds()
+    public async Task NoGcRegionCoordinatorBlocksLatencyModeChangesUntilRegionEnds()
     {
         const long BudgetBytes = 64L * 1024 * 1024;
         GCLatencyMode original = GCSettings.LatencyMode;
@@ -169,7 +169,7 @@ public sealed class PerformanceHardeningMemoryDisciplineTests
             started = InvokeTryBeginNoGcRegion(BudgetBytes);
             if (!started)
             {
-                AssertCoordinatorAllowsLatencyModeChangeFromWorkerAsync(original).GetAwaiter().GetResult();
+                await AssertCoordinatorAllowsLatencyModeChangeFromWorkerAsync(original);
                 return;
             }
 
