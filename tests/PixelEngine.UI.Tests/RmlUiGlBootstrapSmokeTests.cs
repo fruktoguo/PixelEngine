@@ -145,6 +145,61 @@ public sealed class RmlUiGlBootstrapSmokeTests
     }
 
     [Fact]
+    public void RmlUiBackendUnloadModalStopsCaptureWhenGlSmokeIsEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine RmlUi unload modal smoke",
+            Width = 64,
+            Height = 64,
+            BackendPreference = RenderBackendPreference.DesktopGl33,
+            EnableDebugContext = true,
+        });
+        using RmlUiBackend backend = new(window);
+        backend.Initialize(new UiBackendInitializeInfo(
+            new UiViewport(0, 0, window.Width, window.Height, 1f),
+            UiBackendKind.RmlUi));
+
+        string documentPath = Path.Combine(Path.GetTempPath(), $"pixelengine-rmlui-unload-{Guid.NewGuid():N}.rml");
+        try
+        {
+            File.WriteAllText(
+                documentPath,
+                """
+                <rml>
+                  <head>
+                    <style>
+                      body { background-color: transparent; pointer-events: none; }
+                    </style>
+                  </head>
+                  <body></body>
+                </rml>
+                """);
+
+            UiDocumentHandle document = backend.LoadDocument(UiDocumentSource.Asset(documentPath, 1));
+            backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(1), new UiScreenId(1), document, Modal: true)]);
+            Assert.True(backend.HitTest(60, 60).WantsMouse);
+
+            backend.UnloadDocument(document);
+            UiHitResult afterUnload = backend.HitTest(60, 60);
+
+            Assert.False(afterUnload.HitsUi);
+            Assert.False(afterUnload.Opaque);
+            Assert.False(afterUnload.WantsMouse);
+            Assert.False(afterUnload.WantsKeyboard);
+        }
+        finally
+        {
+            File.Delete(documentPath);
+        }
+    }
+
+    [Fact]
     public void RmlUiCompositeRestoresGlStateWhenGlSmokeIsEnabled()
     {
         if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))

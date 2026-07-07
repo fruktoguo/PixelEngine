@@ -199,6 +199,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             RmlUiNative.DocumentCloseBound(_renderer, _documents[i].Native);
             _documents[i] = _documents[_documentCount - 1];
             _documents[--_documentCount] = default;
+            _visibleScreenCount = PruneVisibleScreensForDocument(_visibleScreens, _visibleScreenCount, document);
             Dirty = true;
             return;
         }
@@ -385,11 +386,16 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             return UiHitResult.None;
         }
 
+        if (!TryGetTopLoadedVisibleScreen(out UiScreenStackEntry topVisibleScreen))
+        {
+            return UiHitResult.None;
+        }
+
         int flags = RmlUiNative.HitTest(_renderer, x, y);
         bool hitsElement = (flags & HitTestElement) != 0;
         bool wantsMouse = hitsElement || (flags & HitTestMouseInteracting) != 0;
         bool wantsKeyboard = (flags & HitTestKeyboardFocus) != 0;
-        bool modal = _visibleScreens[_visibleScreenCount - 1].Modal;
+        bool modal = topVisibleScreen.Modal;
         return new UiHitResult(
             HitsUi: hitsElement || modal,
             Opaque: modal,
@@ -633,6 +639,52 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             }
         }
 
+        return false;
+    }
+
+    internal static int PruneVisibleScreensForDocument(
+        UiScreenStackEntry[] visibleScreens,
+        int visibleScreenCount,
+        UiDocumentHandle document)
+    {
+        if ((uint)visibleScreenCount > (uint)visibleScreens.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(visibleScreenCount), "RmlUiBackend 可见屏栈计数越界。");
+        }
+
+        int write = 0;
+        for (int read = 0; read < visibleScreenCount; read++)
+        {
+            UiScreenStackEntry screen = visibleScreens[read];
+            if (screen.Document == document)
+            {
+                continue;
+            }
+
+            visibleScreens[write++] = screen;
+        }
+
+        for (int i = write; i < visibleScreenCount; i++)
+        {
+            visibleScreens[i] = default;
+        }
+
+        return write;
+    }
+
+    private bool TryGetTopLoadedVisibleScreen(out UiScreenStackEntry screen)
+    {
+        for (int i = _visibleScreenCount - 1; i >= 0; i--)
+        {
+            UiScreenStackEntry candidate = _visibleScreens[i];
+            if (TryFindDocument(candidate.Document, out _))
+            {
+                screen = candidate;
+                return true;
+            }
+        }
+
+        screen = default;
         return false;
     }
 

@@ -271,6 +271,32 @@ public sealed class BackendConformanceTests : IDisposable
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => invalidBackend.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 0, 240, 1f), UiBackendKind.ManagedFallback)));
         invalidBackend.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => invalidBackend.Resize(new UiViewport(0, 0, 320, 240, 0f)));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => invalidBackend.Resize(new UiViewport(0, 0, 320, 240, float.NaN)));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => invalidBackend.Resize(new UiViewport(0, 0, 320, 240, float.PositiveInfinity)));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => invalidBackend.Resize(new UiViewport(0, 0, 320, 240, float.NegativeInfinity)));
+    }
+
+    [Fact]
+    public void RmlUiVisibleScreenPruningRemovesUnloadedModalAndPreservesStackOrder()
+    {
+        UiDocumentHandle background = new(10);
+        UiDocumentHandle modal = new(20);
+        UiDocumentHandle overlay = new(30);
+        UiScreenStackEntry[] stack =
+        [
+            new(new UiScreenHandle(1), new UiScreenId(1), background, Modal: false),
+            new(new UiScreenHandle(2), new UiScreenId(2), modal, Modal: true),
+            new(new UiScreenHandle(3), new UiScreenId(3), overlay, Modal: false),
+            new(new UiScreenHandle(4), new UiScreenId(2), modal, Modal: true),
+        ];
+
+        int count = RmlUiBackend.PruneVisibleScreensForDocument(stack, stack.Length, modal);
+
+        Assert.Equal(2, count);
+        Assert.Equal(background, stack[0].Document);
+        Assert.Equal(overlay, stack[1].Document);
+        Assert.Equal(default, stack[2]);
+        Assert.Equal(default, stack[3]);
     }
 
     private static ManagedFallbackBackend CreateManagedBackend(
