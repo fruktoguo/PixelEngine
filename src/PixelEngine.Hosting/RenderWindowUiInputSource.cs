@@ -141,6 +141,12 @@ internal sealed class RenderWindowUiInputSource : IUiInputSource
     }
 
     /// <summary>
+    /// 当前 Silk.NET 窗口输入源的 IME composition 能力诊断。
+    /// </summary>
+    public UiTextCompositionCapabilities TextCompositionCapabilities =>
+        UiTextCompositionCapabilities.Unsupported("Silk.NET 窗口输入当前只暴露 KeyChar committed text，未暴露真实平台 IME composition start/update/cancel 事件；预编辑状态保持 inactive，M15 真实平台 IME 仍阻塞。");
+
+    /// <summary>
     /// 读取当前平台 IME composition 预编辑文本。Silk.NET 当前窗口输入只暴露 KeyChar committed text，未暴露真实 composition 事件，因此这里显式返回非活动状态，避免把 KeyChar 冒充预编辑文本。
     /// </summary>
     /// <param name="destination">预编辑文本写入缓冲。</param>

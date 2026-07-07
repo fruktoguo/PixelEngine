@@ -268,6 +268,39 @@ public sealed class UiInputRouterTests
         Assert.Empty(backend.CompositionTexts);
     }
 
+    [Fact]
+    public void TextCompositionCapabilitiesPassThroughInputSourceDiagnostic()
+    {
+        RecordingBackend backend = new()
+        {
+            HitResult = UiHitResult.None,
+        };
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        FakeInputSource input = new()
+        {
+            TextCompositionCapabilities = UiTextCompositionCapabilities.Supported("synthetic platform IME composition events"),
+        };
+
+        UiInputRouter router = new(host, input);
+
+        Assert.True(router.TextCompositionCapabilities.SupportsPlatformComposition);
+        Assert.Equal("synthetic platform IME composition events", router.TextCompositionCapabilities.Diagnostic);
+        router.TextCompositionCapabilities.Validate();
+    }
+
+    [Fact]
+    public void InputSourceDefaultCompositionCapabilitiesAreUnsupportedAndDiagnostic()
+    {
+        IUiInputSource input = new DefaultCapabilityInputSource();
+
+        UiTextCompositionCapabilities capabilities = input.TextCompositionCapabilities;
+
+        Assert.False(capabilities.SupportsPlatformComposition);
+        Assert.Contains("未声明真实平台 IME composition 事件支持", capabilities.Diagnostic, StringComparison.Ordinal);
+        capabilities.Validate();
+    }
+
     private sealed class FakeInputSource : IUiInputSource
     {
         public bool HasPointer { get; set; }
@@ -283,6 +316,9 @@ public sealed class UiInputRouterTests
         public string CompositionText { get; set; } = string.Empty;
 
         public UiTextComposition Composition { get; set; }
+
+        public UiTextCompositionCapabilities TextCompositionCapabilities { get; set; } =
+            UiTextCompositionCapabilities.Unsupported("Fake input source does not support platform composition.");
 
         public int? ReportedTextCount { get; set; }
 
@@ -316,6 +352,28 @@ public sealed class UiInputRouterTests
             CompositionText.AsSpan(0, count).CopyTo(destination);
             composition = Composition;
             return ReportedCompositionTextCount ?? count;
+        }
+    }
+
+    private sealed class DefaultCapabilityInputSource : IUiInputSource
+    {
+        public bool TryGetPointer(out UiPointerState state)
+        {
+            state = default;
+            return false;
+        }
+
+        public int CaptureDownKeys(Span<UiKey> destination, out UiKeyModifiers modifiers)
+        {
+            _ = destination;
+            modifiers = UiKeyModifiers.None;
+            return 0;
+        }
+
+        public int CaptureText(Span<char> destination)
+        {
+            _ = destination;
+            return 0;
         }
     }
 

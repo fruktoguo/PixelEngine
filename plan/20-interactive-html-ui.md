@@ -23,7 +23,7 @@
 - [ ] `UltralightBackend` 真实后端未完成：仓库仍无 Ultralight native 依赖、surface API、JS bridge、字体注册、许可/发行 gate；当前只存在可复用 offscreen presenter 底座与显式回退。本轮已正式保留为未激活 optional profile，并补 release audit 不允许 Ultralight native 混入包的自动化门禁。
 - [!] M14 透明 UI 产品验收未闭合：自动化合成/HitTest/GL restore 不能替代真实窗口 Demo 产品面视频与人工体验确认。
 - [!] M15 RmlUi ANGLE/GLES native profile 未闭合：当前 native shim 是 desktop GL3 official renderer，不是 GLES3/ANGLE 双 profile。
-- [!] M15 真实平台 IME composition 未闭合：committed text 与 `UiTextComposition` 抽象已分离，但真实平台 composition 事件、候选/预编辑可视化和后端一致性仍缺。
+- [!] M15 真实平台 IME composition 未闭合：committed text、`UiTextComposition` 抽象与 `UiTextCompositionCapabilities` 诊断已分离并注册，但真实平台 composition 事件、候选/预编辑可视化和后端一致性仍缺。
 - [!] M15 UI native / Ultralight / release 证据未闭合：真实 release artifact、许可声明、codesign/notarize、Ultralight native gate 仍需外部证据。
 
 ## 3. 三后端状态矩阵
@@ -46,7 +46,7 @@
 - [x] `UiLayerCompositor` 和 native shim 已覆盖 GL 状态保存/恢复，包含 framebuffer/program/VAO/VBO/EBO/active texture/texture2D/blend/scissor/depth/cull/viewport/unpack alignment 等关键状态。
 - [x] `GameUiPhaseDriver` 已使用 render cadence dt 推进 UI update、model bridge、event drain；sim 降频或 TimeScale 不会让 UI 动画追帧、卡顿或重复消费。
 - [x] `UiInputRouter` 已接入 Hosting 窗口输入、key/button/scroll/committed text、HitTest capture、上游 Editor capture 门、失焦清理、文本队列 drain、控制字符过滤和稳态零分配。
-- [x] `UiTextComposition` / `IUiInputSource.CaptureTextComposition` / `IGameUiBackend.FeedTextComposition` 已建立 committed text 与 composition 预编辑状态的抽象边界；当前 Silk KeyChar 路径明确只返回 inactive composition。
+- [x] `UiTextComposition` / `IUiInputSource.CaptureTextComposition` / `IGameUiBackend.FeedTextComposition` 已建立 committed text 与 composition 预编辑状态的抽象边界；`UiTextCompositionCapabilities` 已把真实平台 IME composition 能力诊断注册进 Hosting service；当前 Silk KeyChar 路径明确只返回 inactive composition，并报告 M15 真实平台 IME 仍阻塞。
 - [x] `GameUiModelBridge` 已按当前文档声明 path 推送 `IUiModel`，RmlUi 官方 `DataModelConstructor` 已支持 Empty/Boolean/Int64/Double 标量、dotted path、重复 path 去重和稳定变量名映射。
 - [x] `UiDiagnostics` 已接入 `ui.update` / `ui.paint` / `ui.upload` / `ui.composite`，并进入 `FrameSubPhase`、`EngineCounters` 与 Editor 性能 HUD。
 - [x] `GameUiAllocationBenchmarks` 已覆盖静态 UI phase、clean composite/draw skip 与空闲输入泵，ShortRun `MemoryDiagnoser` 报告稳态 `Allocated == 0 B`。
@@ -79,7 +79,7 @@
 
 ## 7. 验证命令与证据路径 checklist
 
-- [x] `dotnet test tests/PixelEngine.UI.Tests/PixelEngine.UI.Tests.csproj -c Release --filter FullyQualifiedName~GameUiHostTests|FullyQualifiedName~UiInputRouterTests|FullyQualifiedName~GameUiServiceBridgeTests|FullyQualifiedName~BackendConformance` 覆盖宿主、输入、服务桥与后端一致性基线。
+- [x] `dotnet test tests/PixelEngine.UI.Tests/PixelEngine.UI.Tests.csproj -c Release --filter FullyQualifiedName~GameUiHostTests|FullyQualifiedName~UiInputRouterTests|FullyQualifiedName~GameUiServiceBridgeTests|FullyQualifiedName~BackendConformance` 覆盖宿主、输入、服务桥与后端一致性基线；`UiInputRouterTests` 额外锁定 committed text 不冒充 IME composition，以及 `UiTextCompositionCapabilities` 从输入源透传诊断。
 - [x] `dotnet test tests/PixelEngine.UI.Tests/PixelEngine.UI.Tests.csproj -c Release --filter FullyQualifiedName~RmlUiGlBootstrapSmokeTests|FullyQualifiedName~RmlUiNativeProfileGateTests|FullyQualifiedName~UiOffscreenSurfacePresenterSmokeTests|FullyQualifiedName~ManagedFallbackBackendTests` 覆盖 RmlUi GL3 smoke、ANGLE/GLES profile gate、offscreen upload 底座与 ManagedFallback。
 - [x] `dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --filter FullyQualifiedName~GameUi|FullyQualifiedName~InputArbitrator|FullyQualifiedName~DisabledGameUi` 覆盖 Hosting 装配、输入仲裁与禁用零开销。
 - [x] `dotnet test tests/PixelEngine.Demo.Tests/PixelEngine.Demo.Tests.csproj -c Release --filter FullyQualifiedName~DemoUiContentTests|FullyQualifiedName~GameUiDemoController` 覆盖 Demo content/ui 与公开 API dogfood。

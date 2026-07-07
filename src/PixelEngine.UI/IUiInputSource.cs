@@ -28,6 +28,12 @@ public interface IUiInputSource
     int CaptureText(Span<char> destination);
 
     /// <summary>
+    /// 当前输入源的真实平台 IME composition 能力诊断；没有事件来源时必须明确说明不可用原因。
+    /// </summary>
+    UiTextCompositionCapabilities TextCompositionCapabilities =>
+        UiTextCompositionCapabilities.Unsupported("当前输入源未声明真实平台 IME composition 事件支持。");
+
+    /// <summary>
     /// 采集当前平台 IME composition 预编辑文本；平台没有真实 composition 事件时必须返回非活动状态。
     /// </summary>
     /// <param name="destination">预编辑文本写入缓冲。</param>

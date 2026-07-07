@@ -42,6 +42,11 @@ public sealed class UiInputRouter
     public UiInputCapture Capture { get; private set; } = UiInputCapture.None;
 
     /// <summary>
+    /// 当前输入源的真实平台 IME composition 能力诊断。
+    /// </summary>
+    public UiTextCompositionCapabilities TextCompositionCapabilities => _source.TextCompositionCapabilities;
+
+    /// <summary>
     /// 刷新 UI capture；不向后端注入输入，用于游戏输入采样前的同帧仲裁。
     /// </summary>
     /// <returns>当前 UI 输入捕获快照。</returns>
