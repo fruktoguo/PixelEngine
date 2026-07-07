@@ -15,6 +15,9 @@ namespace PixelEngine.Demo.Tests;
 /// </summary>
 public sealed class PlayerControllerIntegrationTests
 {
+    private const int TestWorldWidth = 96;
+    private const int TestWorldHeight = 64;
+
     /// <summary>
     /// 验证 Demo HUD 与暂停菜单只经脚本 GUI 门面绘制玩家状态、笔刷、性能行、菜单按钮和默认折叠的调试叠层。
     /// </summary>
@@ -1085,6 +1088,16 @@ public sealed class PlayerControllerIntegrationTests
 
         Assert.True(player.State.OnGround);
         Assert.True(player.State.Y + player.State.Height <= 46f);
+    }
+
+    /// <summary>
+    /// 验证玩家可站在经脚本公开刚体 API 创建、下落并重新 stamp 的 wood / metal RigidOwned 像素上。
+    /// </summary>
+    [Fact]
+    public void PlayerStandsOnRigidOwnedStampsFromDroppedWoodAndMetalBodies()
+    {
+        AssertPlayerStandsOnDroppedRigidOwnedStamp("wood");
+        AssertPlayerStandsOnDroppedRigidOwnedStamp("metal");
     }
 
     /// <summary>
@@ -2233,6 +2246,114 @@ public sealed class PlayerControllerIntegrationTests
         Assert.True(player.State.AppliedDeltaY < 0f, $"蹬墙后应产生向上的位移，state={Describe(player.State)}");
     }
 
+    private static void AssertPlayerStandsOnDroppedRigidOwnedStamp(string materialName)
+    {
+        MaterialTable materials = DemoMaterials(destructibleSolids: false);
+        Assert.True(materials.TryGetId(materialName, out ushort material));
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials);
+        const int PlatformX = 32;
+        const int PlatformStartY = 20;
+        const int PlatformWidth = 24;
+        const int PlatformHeight = 8;
+        const int StoneFloorY = 44;
+        FillRect(grid, stone, PlatformX - 8, StoneFloorY, PlatformX + PlatformWidth + 8, StoneFloorY + 4);
+        FillRect(grid, material, PlatformX, PlatformStartY, PlatformX + PlatformWidth, PlatformStartY + PlatformHeight);
+        RigidBodyProbe bodyProbe = scene.CreateEntity().AddComponent<RigidBodyProbe>();
+        bodyProbe.X = PlatformX;
+        bodyProbe.Y = PlatformStartY;
+        bodyProbe.Width = PlatformWidth;
+        bodyProbe.Height = PlatformHeight;
+
+        engine.RunHeadlessTicks(2);
+        Assert.True(bodyProbe.Created, $"{materialName} 刚体应经脚本公开 Bodies.CreateFromRegion 创建。");
+        Assert.True(bodyProbe.HasTransform, $"{materialName} 刚体应解析为真实 Physics body。");
+        float bodyStartY = bodyProbe.Transform.Y;
+        int firstStampY = FirstRigidOwnedY(grid, PlatformX - 4, PlatformStartY - 4, PlatformX + PlatformWidth + 4, PlatformStartY + PlatformHeight + 24);
+        Assert.True(firstStampY >= PlatformStartY, $"{materialName} 刚体应在创建后写回 RigidOwned stamp。");
+
+        engine.RunHeadlessTicks(36);
+        Assert.True(bodyProbe.HasTransform, $"{materialName} 刚体下落后应仍可通过脚本公开句柄查询 transform。");
+        Assert.True(
+            bodyProbe.Transform.Y > bodyStartY + 0.01f,
+            $"{materialName} 刚体应沿 +Y 下落，beforeY={bodyStartY:F4}, afterY={bodyProbe.Transform.Y:F4}。");
+        int surfaceY = FirstRigidOwnedY(grid, PlatformX - 6, PlatformStartY - 2, PlatformX + PlatformWidth + 6, PlatformStartY + PlatformHeight + 48);
+        Assert.True(surfaceY > firstStampY, $"{materialName} stamp 顶面应随下落刚体向下移动，beforeY={firstStampY}, afterY={surfaceY}。");
+
+        Entity playerEntity = scene.CreateEntity();
+        PlayerController player = playerEntity.AddComponent<PlayerController>();
+        player.SpawnX = PlatformX + 8f;
+        player.SpawnY = surfaceY - player.Height;
+
+        engine.RunHeadlessTicks(6);
+
+        Assert.False(player.Faulted, player.LastException?.ToString());
+        Assert.True(player.State.OnGround, $"玩家应站在 {materialName} 下落刚体 stamp 上，state={Describe(player.State)}");
+        Assert.True(
+            player.State.Y + player.State.Height <= surfaceY + 0.01f,
+            $"玩家不应下陷进 {materialName} stamp，surfaceY={surfaceY}, state={Describe(player.State)}");
+        Assert.False(
+            ContainsSolidCell(grid, player.State.X + 0.25f, player.State.Y + 0.25f, player.State.Width - 0.5f, player.State.Height - 0.75f),
+            $"玩家 AABB 内部不应与 {materialName} RigidOwned stamp 或其它 solid overlap，state={Describe(player.State)}");
+        Assert.True(CountRigidOwned(grid, PlatformX - 6, surfaceY - 2, PlatformX + PlatformWidth + 6, surfaceY + PlatformHeight + 12) > 0);
+        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        Assert.True(physics.Stats.ActiveBodyCount >= 1);
+        Assert.True(physics.LastStampedCellCount > 0);
+    }
+
+    private static int FirstRigidOwnedY(CellGrid grid, int minX, int minY, int maxX, int maxY)
+    {
+        for (int y = Math.Max(0, minY); y < Math.Min(TestWorldHeight, maxY); y++)
+        {
+            for (int x = Math.Max(0, minX); x < Math.Min(TestWorldWidth, maxX); x++)
+            {
+                if (CellFlags.Has(grid.FlagsAt(x, y), CellFlags.RigidOwned))
+                {
+                    return y;
+                }
+            }
+        }
+
+        return -1;
+    }
+
+    private static int CountRigidOwned(CellGrid grid, int minX, int minY, int maxX, int maxY)
+    {
+        int count = 0;
+        for (int y = Math.Max(0, minY); y < Math.Min(TestWorldHeight, maxY); y++)
+        {
+            for (int x = Math.Max(0, minX); x < Math.Min(TestWorldWidth, maxX); x++)
+            {
+                if (CellFlags.Has(grid.FlagsAt(x, y), CellFlags.RigidOwned))
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private static bool ContainsSolidCell(CellGrid grid, float x, float y, float width, float height)
+    {
+        int minX = Math.Max(0, (int)MathF.Floor(x));
+        int minY = Math.Max(0, (int)MathF.Floor(y));
+        int maxX = Math.Min(TestWorldWidth - 1, (int)MathF.Ceiling(x + width) - 1);
+        int maxY = Math.Min(TestWorldHeight - 1, (int)MathF.Ceiling(y + height) - 1);
+        for (int cy = minY; cy <= maxY; cy++)
+        {
+            for (int cx = minX; cx <= maxX; cx++)
+            {
+                if (grid.MaterialAt(cx, cy) != 0 || CellFlags.Has(grid.FlagsAt(cx, cy), CellFlags.RigidOwned))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private static Engine CreatePlayerEngine(out ScriptInputApi input, out CellGrid grid)
     {
         return CreateScriptEngine(typeof(PlayerController), out input, out grid, out _);
@@ -2447,6 +2568,42 @@ public sealed class PlayerControllerIntegrationTests
 
             Context.World.DamageCircle(X, Y, Radius, Damage, falloff: true, DamageKind.Impact);
             DispatchCount++;
+        }
+    }
+
+    private sealed class RigidBodyProbe : Behaviour
+    {
+        private BodyHandle _handle;
+
+        public int X { get; set; }
+
+        public int Y { get; set; }
+
+        public int Width { get; set; }
+
+        public int Height { get; set; }
+
+        public bool Created { get; private set; }
+
+        public bool HasTransform { get; private set; }
+
+        public BodyTransform Transform { get; private set; }
+
+        protected override void OnUpdate(float dt)
+        {
+            _ = dt;
+            if (!Created)
+            {
+                _handle = Context.Bodies.CreateFromRegion(X, Y, Width, Height);
+                Created = true;
+                return;
+            }
+
+            HasTransform = Context.Bodies.TryGetTransform(_handle, out BodyTransform transform);
+            if (HasTransform)
+            {
+                Transform = transform;
+            }
         }
     }
 
