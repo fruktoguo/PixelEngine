@@ -1012,7 +1012,8 @@ internal sealed class EditorShellApp
         Console.WriteLine(
             "editor_default_workbench_probe " +
             "schema=pixelengine.editor-default-workbench-probe/v1, " +
-            $"completed={state.Succeeded}, " +
+            $"completed={state.Completed}, " +
+            $"succeeded={state.Succeeded}, " +
             $"project_created={state.ProjectCreated}, " +
             $"project_root={SanitizeSummaryValue(state.ProjectRoot)}, " +
             $"required_panels_shown={state.RequiredPanelsShown}, " +

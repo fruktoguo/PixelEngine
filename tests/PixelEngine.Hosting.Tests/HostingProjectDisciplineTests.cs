@@ -281,6 +281,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("ScriptedDefaultWorkbenchProbe", source, StringComparison.Ordinal);
         Assert.Contains("RunScriptedDefaultWorkbenchProbeActions", source, StringComparison.Ordinal);
         Assert.Contains("editor_default_workbench_probe", source, StringComparison.Ordinal);
+        Assert.Contains("completed={state.Completed}", source, StringComparison.Ordinal);
+        Assert.Contains("succeeded={state.Succeeded}", source, StringComparison.Ordinal);
         Assert.Contains("CreateProject(projectRoot, \"Default Workbench Probe\")", source, StringComparison.Ordinal);
         Assert.Contains("CreateGameObject()", source, StringComparison.Ordinal);
         Assert.Contains("CreateDefaultWorkbenchScriptSource", source, StringComparison.Ordinal);
