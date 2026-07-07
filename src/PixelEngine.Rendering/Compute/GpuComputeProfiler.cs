@@ -68,6 +68,7 @@ public sealed class GpuComputeProfiler : IDisposable
             if (_backend.TryGetTimerResult(query, out ulong elapsedNanoseconds))
             {
                 profiler?.RecordSub(_pending[i].Phase, elapsedNanoseconds / 1_000_000.0);
+                _backend.DeleteTimerQuery(query);
                 _pending[i] = default;
             }
         }

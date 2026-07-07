@@ -143,7 +143,7 @@ cascade 层数 `RadianceCascadeCount`、每层角度/空间分辨率、射线步
 - [x] 代码与文档显式标注「非权威/仅渲染/零 sim 回读」，权威像素网格始终在 CPU。
 
 ### 4.7 Profiling 与降级联动（§3.7，架构 §4.3、§12）
-- [x] 每 pass GL timer query（异步取上一帧结果，不 stall），注册 Core 诊断分项；`FrameProfiler.LastSubFrame` 供 plan/12 HUD 消费。
+- [x] 每 pass GL timer query（异步取上一帧结果，不 stall），注册 Core 诊断分项；`FrameProfiler.LastSubFrame` 供 plan/12 HUD 消费；`GpuComputeProfilerTests` 已锁定 completed query 显式 delete、pending query 非阻塞保留、容量覆写时退休最旧 query，避免 timer query 生命周期泄漏或无限积累。
 - [x] 接入架构 §4.3 第二级降级：`RenderPipeline.DegradeGpuComputeOneStep()` 已按 Radiance Cascades→compute bloom→fog-of-war/emissive 顺序落地；Hosting 过载策略进入 `ReducedLighting` 及后续层级时会调用已注册的 `IGpuComputeQualityDegrader` 自动触发。
 - [x] GPU 计时仅诊断用途，绝不回读进 sim；门控位与各 pass 耗时暴露给 `plan/12` 展示。
 
