@@ -173,7 +173,7 @@ public sealed class GameUiDemoController : Behaviour
 
         if (uiEvent.Action == QuitGameAction)
         {
-            _ = _runtime?.RequestShutdown();
+            RequestShutdown();
             return;
         }
 
@@ -421,11 +421,22 @@ public sealed class GameUiDemoController : Behaviour
 
     private void RequestRestart()
     {
+        ClearRuntimeModalState();
+        _lastMissionState = MissionState.Playing;
+        _ = _runtime?.RequestRestartCurrentScene();
+    }
+
+    private void RequestShutdown()
+    {
+        ClearRuntimeModalState();
+        _ = _runtime?.RequestShutdown();
+    }
+
+    private void ClearRuntimeModalState()
+    {
         CloseModal();
         _pausedByUi = false;
         _resultVisible = false;
-        _lastMissionState = MissionState.Playing;
-        _ = _runtime?.RequestRestartCurrentScene();
     }
 
     private void OpenModal(string screenId)

@@ -251,6 +251,31 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
+    /// 验证结算屏重开/退出按钮经脚本 UI 服务路由到运行时控制 facade，并清理结算模态状态。
+    /// </summary>
+    [Fact]
+    public void DemoResultModalRoutesRestartAndQuitThroughRuntimeFacade()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
+              ]
+            }
+            """);
+        try
+        {
+            AssertResultActionRoutes(contentRoot, GameUiDemoController.Action("restart_game"), expectRestart: true);
+            AssertResultActionRoutes(contentRoot, GameUiDemoController.Action("quit_game"), expectRestart: false);
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// 验证 Demo Web-first HUD 每 tick 经公开脚本 UI 服务同步真实生命、武器、任务与危险状态。
     /// </summary>
     [Fact]
@@ -458,6 +483,42 @@ public sealed class DemoUiContentTests
         Assert.Equal(expected, value.AsDouble(), precision: 3);
     }
 
+    private static void AssertResultActionRoutes(string contentRoot, ScriptUiActionId action, bool expectRestart)
+    {
+        FakeRuntimeControlApi runtime = new();
+        using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out FakeGameUiService ui, out _, runtime);
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 12f;
+        _ = entity.AddComponent<PlayerHealth>();
+        _ = entity.AddComponent<WeaponController>();
+        MissionDirector mission = entity.AddComponent<MissionDirector>();
+        mission.RequiredCrystals = 1;
+        mission.TimeLimitSeconds = 30f;
+        mission.InitialLavaSurfaceY = 100f;
+        mission.LavaRiseCellsPerSecond = 0f;
+        GameUiDemoController controller = entity.AddComponent<GameUiDemoController>();
+
+        engine.RunHeadlessTicks(1);
+        mission.MarkLost("scripted_loss");
+        engine.RunHeadlessTicks(2);
+        ScriptUiScreenHandle resultModal = controller.ModalScreen;
+
+        Assert.NotEqual(default, resultModal);
+        Assert.Equal(1, runtime.PauseCount);
+        Assert.Equal([GameUiDemoController.ResultScreen], ui.PushedScreens);
+        Assert.Equal(0.0, GetUiValue(ui, "result.won"), precision: 3);
+
+        ui.Raise(action);
+
+        Assert.Contains(resultModal, ui.HiddenScreens);
+        Assert.Equal(default, controller.ModalScreen);
+        Assert.Equal(expectRestart ? 1 : 0, runtime.RestartCount);
+        Assert.Equal(expectRestart ? 0 : 1, runtime.ShutdownCount);
+    }
+
     private static string[] ExtractAttributeValues(XDocument document, params string[] attributeNames)
     {
         return
@@ -517,7 +578,12 @@ public sealed class DemoUiContentTests
         ];
     }
 
-    private static Engine CreateHudEngine(string contentRoot, out ScriptScene scene, out FakeGameUiService ui, out ScriptInputApi input)
+    private static Engine CreateHudEngine(
+        string contentRoot,
+        out ScriptScene scene,
+        out FakeGameUiService ui,
+        out ScriptInputApi input,
+        IRuntimeControlApi? runtime = null)
     {
         Engine engine = new EngineBuilder()
             .UseHeadless()
@@ -546,6 +612,11 @@ public sealed class DemoUiContentTests
         engine.Context.RegisterService(camera);
         engine.Context.RegisterService<IAudioApi>(EngineServiceRole.AudioService, NoopAudioApi.Instance);
         engine.Context.RegisterService<ScriptGameUiService>(ui);
+        if (runtime is not null)
+        {
+            engine.Context.RegisterService(runtime);
+        }
+
         _ = engine.AttachScriptingFromServices();
         return engine;
     }
