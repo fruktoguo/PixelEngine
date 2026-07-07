@@ -36,6 +36,7 @@ public sealed class GameUiDemoController : Behaviour
         "hud.particles",
         "hud.lights",
         "hud.bodies",
+        "hud.fx",
     ];
 
     private static readonly string[] ResultModelPaths =
@@ -79,6 +80,7 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiPathId HudParticlesPath = Path("hud.particles");
     private static readonly UiPathId HudLightsPath = Path("hud.lights");
     private static readonly UiPathId HudBodiesPath = Path("hud.bodies");
+    private static readonly UiPathId HudFxPath = Path("hud.fx");
     private static readonly UiPathId ResultWonPath = Path("result.won");
     private static readonly UiPathId ResultCrystalsPath = Path("result.crystals");
     private static readonly UiPathId ResultTimePath = Path("result.time");
@@ -244,6 +246,7 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudParticlesPath, 0.0);
         SetHudValue(HudLightsPath, 0.0);
         SetHudValue(HudBodiesPath, 0.0);
+        SetHudValue(HudFxPath, 0.0);
     }
 
     private void PublishHudState()
@@ -387,6 +390,7 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudParticlesPath, Ratio(diagnostics.FreeParticles, 1000.0));
         SetHudValue(HudLightsPath, Ratio(diagnostics.PointLights, 64.0));
         SetHudValue(HudBodiesPath, Ratio(diagnostics.RigidBodies, 128.0));
+        SetHudValue(HudFxPath, Ratio(TransientParticleBurst.ActiveCount(Context.Scene), 16.0));
     }
 
     private void PublishResultState(MissionDirector mission)
