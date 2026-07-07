@@ -20,9 +20,9 @@ public readonly record struct UiViewport(int X, int Y, int Width, int Height, fl
             throw new ArgumentOutOfRangeException(nameof(Width), "UI 视口宽高必须大于 0。");
         }
 
-        if (DpiScale <= 0)
+        if (!float.IsFinite(DpiScale) || DpiScale <= 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(DpiScale), "UI DPI 缩放必须大于 0。");
+            throw new ArgumentOutOfRangeException(nameof(DpiScale), "UI DPI 缩放必须为有限正数。");
         }
     }
 }
