@@ -202,6 +202,9 @@ public sealed class DemoUiContentTests
         AssertHudPathWritten(ui, "hud.heat");
         AssertHudPathWritten(ui, "hud.reload");
         AssertHudPathWritten(ui, "hud.overheated");
+        AssertHudPathWritten(ui, "hud.material_slot");
+        AssertHudPathWritten(ui, "hud.brush_radius");
+        AssertHudPathWritten(ui, "hud.explosions");
         AssertHudPathWritten(ui, "hud.crystals");
         AssertHudPathWritten(ui, "hud.time");
         AssertHudPathWritten(ui, "hud.hazard");
@@ -436,6 +439,9 @@ public sealed class DemoUiContentTests
             Assert.Equal(0.0, GetHudValue(ui, "hud.heat"), precision: 3);
             Assert.Equal(0.0, GetHudValue(ui, "hud.reload"), precision: 3);
             Assert.Equal(0.0, GetHudValue(ui, "hud.overheated"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.material_slot"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.brush_radius"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.explosions"), precision: 3);
             Assert.Equal(0.0, GetHudValue(ui, "hud.crystals"), precision: 3);
             Assert.InRange(GetHudValue(ui, "hud.time"), 0.0, 1.0);
             Assert.InRange(GetHudValue(ui, "hud.hazard"), 0.0, 1.0);
@@ -465,6 +471,9 @@ public sealed class DemoUiContentTests
             Assert.Equal(1.0, GetHudValue(ui, "hud.weapon"), precision: 3);
             Assert.Equal(0.0, GetHudValue(ui, "hud.reload"), precision: 3);
             Assert.Equal(0.0, GetHudValue(ui, "hud.overheated"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.material_slot"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.brush_radius"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.explosions"), precision: 3);
             Assert.Equal(0.5, GetHudValue(ui, "hud.crystals"), precision: 3);
 
             input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
@@ -540,6 +549,9 @@ public sealed class DemoUiContentTests
             Assert.Equal(0.5, GetHudValue(ui, "hud.health"), precision: 3);
             Assert.Equal(1.0, GetHudValue(ui, "hud.weapon"), precision: 3);
             Assert.Equal(1.0, GetHudValue(ui, "hud.ammo"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.material_slot"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.brush_radius"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.explosions"), precision: 3);
             Assert.Equal(0.5, GetHudValue(ui, "hud.crystals"), precision: 3);
             Assert.True(GetHudValue(ui, "hud.hazard") > 0.0);
             AssertHudPathWritten(ui, "hud.score");
@@ -553,6 +565,52 @@ public sealed class DemoUiContentTests
             AssertHudPathWritten(ui, "hud.lights");
             AssertHudPathWritten(ui, "hud.bodies");
             AssertHudPathWritten(ui, "hud.fx");
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// 验证 Web-first HUD 会同步 fallback DemoHud 已展示的材质笔刷与爆破工具状态。
+    /// </summary>
+    [Fact]
+    public void DemoGameUiControllerPublishesBrushAndExplosionHudStateThroughScriptService()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
+              ]
+            }
+            """);
+        try
+        {
+            using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out FakeGameUiService ui, out ScriptInputApi input);
+            Entity entity = scene.CreateEntity();
+            _ = entity.AddComponent<Transform>();
+            _ = entity.AddComponent<MaterialBrush>();
+            ExplosiveTool explosive = entity.AddComponent<ExplosiveTool>();
+            explosive.CooldownSeconds = 0f;
+            _ = entity.AddComponent<GameUiDemoController>();
+
+            engine.RunHeadlessTicks(1);
+
+            Assert.Equal(0.0, GetHudValue(ui, "hud.material_slot"), precision: 3);
+            Assert.Equal(0.167, GetHudValue(ui, "hud.brush_radius"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.explosions"), precision: 3);
+
+            input.Update([Key.Digit6], [MouseButton.Middle], mouseX: 36f, mouseY: 34f, wheelY: 1f);
+            engine.RunHeadlessTicks(1);
+
+            Assert.Equal(0.556, GetHudValue(ui, "hud.material_slot"), precision: 3);
+            Assert.Equal(0.208, GetHudValue(ui, "hud.brush_radius"), precision: 3);
+            Assert.Equal(0.1, GetHudValue(ui, "hud.explosions"), precision: 3);
+            AssertHudPathWritten(ui, "hud.material_slot");
+            AssertHudPathWritten(ui, "hud.brush_radius");
+            AssertHudPathWritten(ui, "hud.explosions");
         }
         finally
         {
@@ -811,6 +869,9 @@ public sealed class DemoUiContentTests
             "hud.heat",
             "hud.reload",
             "hud.overheated",
+            "hud.material_slot",
+            "hud.brush_radius",
+            "hud.explosions",
             "hud.crystals",
             "hud.time",
             "hud.hazard",

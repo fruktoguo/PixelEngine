@@ -46,6 +46,11 @@ public sealed class MaterialBrush : Behaviour
     public int MaxRadius { get; set; } = 24;
 
     /// <summary>
+    /// 可选材质槽位数量。
+    /// </summary>
+    public int MaterialSlotCount => DefaultMaterialNames.Length;
+
+    /// <summary>
     /// 当前选中材质名。
     /// </summary>
     public string SelectedMaterialName => DefaultMaterialNames[SelectedIndex];
