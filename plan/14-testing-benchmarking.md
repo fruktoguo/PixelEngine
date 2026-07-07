@@ -220,7 +220,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 ### 4.7 反汇编守门与 CI 门禁
 
 - [x] `DisassemblyGuard`：用 `[DisassemblyDiagnoser]` 产出热方法汇编，解析断言 `RNGCHKFAIL` 不出现、热 SIMD 方法 ymm/zmm 出现，失败即构建失败（性能 §12.6/§17.3）。
-- [x] 性能回归门禁：每基准维护可审查 baseline，CI 比对超阈值（建议 >5%，按噪声实测定档）即判失败（`AGENTS.md §7`）。
+- [x] 性能回归门禁：每基准维护可审查 baseline，CI 比对超阈值（建议 >5%，按噪声实测定档）即判失败（`AGENTS.md §7`）。`tools/benchmark-regression.ps1` 按 BenchmarkDotNet Markdown 表头解析 `Mean` 列，参数化报告必须用 `rowContains` 唯一匹配行；`PerformanceHardeningToolingDisciplineTests.BenchmarkRegressionGateParsesMeanColumnFromSyntheticReport` / `BenchmarkRegressionGateRequiresRowContainsForAmbiguousParameterizedRows` 锁定缺行、参数行混淆、错误时间列误读与报告格式漂移负例。
 - [x] 6-RID 矩阵：六 RID 全 build；有 runner 的 RID 跑 `dotnet test`，其余 arm64 至少 build-verify；同时验证 CoreCLR/R2R（动态）与 NativeAOT（静态）两路径（架构 §15、R5、消费 plan 15 产物）。
 - [x] CI 工作流接线：`dotnet build -c Release` → `dotnet test`（四工程）→ 反汇编守门 → 基准回归门禁；`src/*` 开 `TreatWarningsAsErrors`（plan/00 §1，与 plan 01 CI 骨架对接）。
 

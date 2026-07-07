@@ -54,6 +54,137 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 Benchmark 回归门禁按 Markdown 表头解析 Mean 列，不会把 Error/StdDev 等时间列误当作均值。
+    /// </summary>
+    [Fact]
+    public void BenchmarkRegressionGateParsesMeanColumnFromSyntheticReport()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-benchmark-regression-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string reports = Path.Combine(temp, "reports");
+            _ = Directory.CreateDirectory(reports);
+            string reportPath = Path.Combine(reports, "synthetic-report-github.md");
+            File.WriteAllText(
+                reportPath,
+                """
+                | Method | Scenario | Mean | Error | StdDev |
+                |------- |--------- |-----:|------:|-------:|
+                | StepJobSystem | FullActiveLiquid | 38.327 ms | 1.000 ns | 2.000 ns |
+                | StepJobSystem | TypicalDirtyRect | 413.100 us | 1.000 ns | 2.000 ns |
+                """);
+
+            string baselinePath = Path.Combine(temp, "baseline.json");
+            File.WriteAllText(
+                baselinePath,
+                """
+                {
+                  "benchmarks": [
+                    {
+                      "name": "PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem.FullActiveLiquid",
+                      "method": "StepJobSystem",
+                      "filter": "*CellThroughputBenchmark.StepJobSystem*",
+                      "rowContains": ["FullActiveLiquid"],
+                      "baselineMeanNs": 38327000.0,
+                      "maxRatio": 1.0
+                    },
+                    {
+                      "name": "PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem.TypicalDirtyRect",
+                      "method": "StepJobSystem",
+                      "filter": "*CellThroughputBenchmark.StepJobSystem*",
+                      "rowContains": ["TypicalDirtyRect"],
+                      "baselineMeanNs": 413100.0,
+                      "maxRatio": 1.0
+                    }
+                  ]
+                }
+                """);
+
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "benchmark-regression.ps1"),
+                "-BaselinePath",
+                baselinePath,
+                "-ReportsPath",
+                reports);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("FullActiveLiquid mean=38327000", result.Output, StringComparison.Ordinal);
+            Assert.Contains("TypicalDirtyRect mean=413100", result.Output, StringComparison.Ordinal);
+            Assert.Contains("Benchmark regression gate passed.", result.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证参数化 benchmark 若缺 rowContains 会失败，防止同名 Method 的多行报告被任意第一行误配。
+    /// </summary>
+    [Fact]
+    public void BenchmarkRegressionGateRequiresRowContainsForAmbiguousParameterizedRows()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-benchmark-regression-ambiguous-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string reports = Path.Combine(temp, "results");
+            _ = Directory.CreateDirectory(reports);
+            File.WriteAllText(
+                Path.Combine(reports, "ambiguous-report-github.md"),
+                """
+                | Method | Scenario | Mean |
+                |------- |--------- |-----:|
+                | StepJobSystem | FullActiveLiquid | 38.327 ms |
+                | StepJobSystem | TypicalDirtyRect | 413.100 us |
+                """);
+
+            string baselinePath = Path.Combine(temp, "baseline.json");
+            File.WriteAllText(
+                baselinePath,
+                """
+                {
+                  "benchmarks": [
+                    {
+                      "name": "PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem",
+                      "method": "StepJobSystem",
+                      "filter": "*CellThroughputBenchmark.StepJobSystem*",
+                      "baselineMeanNs": 38327000.0,
+                      "maxRatio": 1.0
+                    }
+                  ]
+                }
+                """);
+
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "benchmark-regression.ps1"),
+                "-BaselinePath",
+                baselinePath,
+                "-ReportsPath",
+                reports);
+
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains("multiple report rows", result.Output, StringComparison.Ordinal);
+            Assert.Contains("rowContains", result.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 JIT/BDN/IDE 反汇编流程有可复现命令文档。
     /// </summary>
     [Fact]
