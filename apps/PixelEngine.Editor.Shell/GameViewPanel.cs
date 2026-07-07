@@ -19,12 +19,16 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
             _visible = value;
             if (!value)
             {
-                InputFocused = false;
+                ClearInputState();
             }
         }
     }
 
     public bool InputFocused { get; private set; }
+
+    public bool InputHovered { get; private set; }
+
+    public GameViewViewportSnapshot LastViewportSnapshot { get; private set; } = GameViewViewportSnapshot.Empty;
 
     public EditorViewportContract CaptureContract(PixelEngine.Editor.EditorMode mode)
     {
@@ -38,24 +42,46 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
         if (!ImGui.Begin(Title, ref visible, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
         {
             Visible = visible;
-            InputFocused = false;
+            ClearInputState();
             ImGui.End();
             return;
         }
 
         Visible = visible;
-        InputFocused = ImGui.IsWindowHovered() || ImGui.IsWindowFocused();
         RenderViewportTexture texture = _textureProvider();
         if (!texture.IsValid)
         {
+            LastViewportSnapshot = GameViewViewportSnapshot.Empty;
+            ClearInputState();
             ImGui.TextUnformatted("等待游戏视图纹理");
             ImGui.End();
             return;
         }
 
         Vector2 available = ImGui.GetContentRegionAvail();
-        Vector2 size = ViewportPanel.FitTexture(texture.Width, texture.Height, available);
-        ImGui.Image(ViewportPanel.CreateTextureRef(texture.Handle), size, new Vector2(0f, 1f), new Vector2(1f, 0f));
+        Vector2 imageMinScreen = ImGui.GetCursorScreenPos();
+        Vector2 panelOriginScreen = ImGui.GetWindowPos();
+        LastViewportSnapshot = GameViewViewportSnapshot.Create(
+            texture.Width,
+            texture.Height,
+            imageMinScreen - panelOriginScreen,
+            available);
+
+        Vector2 mousePanel = ImGui.GetIO().MousePos - panelOriginScreen;
+        InputHovered = ImGui.IsWindowHovered() && LastViewportSnapshot.ContainsPanelPoint(mousePanel);
+        InputFocused = InputHovered && (ImGui.IsWindowFocused() || ImGui.IsWindowHovered());
+
+        ImGui.Image(
+            ViewportPanel.CreateTextureRef(texture.Handle),
+            LastViewportSnapshot.ImageRect.Size,
+            new Vector2(0f, 1f),
+            new Vector2(1f, 0f));
         ImGui.End();
+    }
+
+    private void ClearInputState()
+    {
+        InputFocused = false;
+        InputHovered = false;
     }
 }

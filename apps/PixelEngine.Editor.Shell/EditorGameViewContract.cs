@@ -1,5 +1,6 @@
 using PixelEngine.Hosting;
 using PixelEngine.Rendering;
+using System.Numerics;
 
 namespace PixelEngine.Editor.Shell;
 
@@ -21,6 +22,21 @@ internal enum EditorViewportInputOwner
     GameUiThenGameplay,
 }
 
+internal enum EditorViewportInputClip
+{
+    ImageRect,
+}
+
+internal enum EditorViewportCoordinateSpace
+{
+    ViewportTexturePixels,
+}
+
+internal enum EditorViewportHitTestSource
+{
+    PanelLocalImageRectMappedToViewport,
+}
+
 internal readonly record struct EditorViewportContract(
     EditorViewportSurface Surface,
     string WindowTitle,
@@ -29,7 +45,13 @@ internal readonly record struct EditorViewportContract(
     bool UsesRuntimeViewportTexture,
     bool AllowsEditorOverlay,
     int GameUiLayerOrder,
-    int EditorOverlayLayerOrder);
+    int EditorOverlayLayerOrder,
+    EditorViewportInputClip InputClip,
+    EditorViewportCoordinateSpace GameUiCoordinateSpace,
+    EditorViewportHitTestSource GameUiHitTestSource)
+{
+    public bool EditorOverlayHasPriority => AllowsEditorOverlay && EditorOverlayLayerOrder > GameUiLayerOrder;
+}
 
 internal static class EditorGameViewContract
 {
@@ -44,7 +66,10 @@ internal static class EditorGameViewContract
             UsesRuntimeViewportTexture: true,
             AllowsEditorOverlay: true,
             UiPresentLayerOrders.Game,
-            UiPresentLayerOrders.Editor);
+            UiPresentLayerOrders.Editor,
+            EditorViewportInputClip.ImageRect,
+            EditorViewportCoordinateSpace.ViewportTexturePixels,
+            EditorViewportHitTestSource.PanelLocalImageRectMappedToViewport);
     }
 
     public static EditorViewportContract GameView(PixelEngine.Editor.EditorMode mode)
@@ -59,7 +84,22 @@ internal static class EditorGameViewContract
             UsesRuntimeViewportTexture: true,
             AllowsEditorOverlay: true,
             UiPresentLayerOrders.Game,
-            UiPresentLayerOrders.Editor);
+            UiPresentLayerOrders.Editor,
+            EditorViewportInputClip.ImageRect,
+            EditorViewportCoordinateSpace.ViewportTexturePixels,
+            EditorViewportHitTestSource.PanelLocalImageRectMappedToViewport);
+    }
+
+    public static EditorHostInputCapture ResolveEditorInputCapture(
+        in EditorViewportContract contract,
+        in PixelEngine.Editor.EditorInputSnapshot editorCapture,
+        in GameViewViewportSnapshot viewport,
+        Vector2 panelPoint)
+    {
+        return ResolveEditorInputCapture(
+            in contract,
+            in editorCapture,
+            viewportHasInputFocus: viewport.ContainsPanelPoint(panelPoint));
     }
 
     public static EditorHostInputCapture ResolveEditorInputCapture(
