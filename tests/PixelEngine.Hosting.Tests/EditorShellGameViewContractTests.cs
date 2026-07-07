@@ -171,6 +171,8 @@ public sealed class EditorShellGameViewContractTests
         Assert.Equal(160f, viewportPoint.X, precision: 3);
         Assert.Equal(90f, viewportPoint.Y, precision: 3);
         Assert.False(snapshot.TryMapPanelToViewport(new Vector2(90f, 130f), out _));
+        Assert.False(snapshot.TryMapPanelToViewport(new Vector2(170f, 65f), out _));
+        Assert.False(snapshot.TryMapPanelToViewport(new Vector2(90f, 110f), out _));
     }
 
     /// <summary>

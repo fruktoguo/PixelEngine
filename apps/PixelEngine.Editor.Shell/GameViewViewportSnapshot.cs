@@ -19,8 +19,8 @@ internal readonly record struct GameViewRect(float X, float Y, float Width, floa
         return IsValid &&
             point.X >= X &&
             point.Y >= Y &&
-            point.X <= Right &&
-            point.Y <= Bottom;
+            point.X < Right &&
+            point.Y < Bottom;
     }
 }
 
