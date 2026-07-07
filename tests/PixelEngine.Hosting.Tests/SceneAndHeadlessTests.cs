@@ -251,6 +251,39 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
+    /// 验证编辑态 authoring projection 刷新可在脚本 runtime 已接入后替换当前脚本 Scene。
+    /// </summary>
+    [Fact]
+    public void AttachScriptSceneReplacesAuthoringProjectionAfterScriptingRuntimeAttached()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+        PixelEngine.Scripting.Scene first = new();
+        first.CreateEntity().AddComponent<SnapshotCounterBehaviour>().Score = 1;
+        PixelEngine.Scripting.Scene replacement = new();
+        replacement.CreateEntity().AddComponent<SnapshotCounterBehaviour>().Score = 2;
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddScene(new SceneDescriptor("authoring"))
+            .WithStartScene("authoring")
+            .Build();
+        engine.Context.RegisterService(materials);
+        _ = engine.AttachResidentSimulationWorld(64, 64, particleCapacity: 8);
+        engine.AttachScriptScene(first);
+        ScriptSimulationContext context = engine.AttachScriptingFromServices();
+
+        engine.AttachScriptScene(replacement);
+
+        Scene current = engine.Context.GetService<ISceneService>().Current!;
+        Assert.Same(replacement, current.ScriptScene);
+        Assert.Same(replacement, engine.Context.GetService<PixelEngine.Scripting.Scene>());
+        Assert.Same(replacement, context.Scene);
+        ScriptEntityInspection snapshot = Assert.Single(context.Scene.CaptureInspectionSnapshot());
+        ScriptComponentInspection component = Assert.Single(snapshot.Components);
+        SnapshotCounterBehaviour script = Assert.IsType<SnapshotCounterBehaviour>(component.Behaviour);
+        Assert.Equal(2, script.Score);
+    }
+
+    /// <summary>
     /// 验证 Hosting 可稳定写出 .scene v2，并在读回时保持实体排序与字段排序。
     /// </summary>
     [Fact]

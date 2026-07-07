@@ -10,6 +10,7 @@ public sealed class ScriptRuntime : IScriptRuntime
 #endif
     private readonly ScriptHotReloadController? _hotReloadController;
     private readonly IScriptHotReloadDiagnosticSink? _hotReloadDiagnosticSink;
+    private readonly Action<System.Reflection.Assembly>? _hotReloadAssemblyLoaded;
     private IScriptContext? _context;
     private Exception? _lastReportedWatcherException;
     private bool _shutdown;
@@ -36,9 +37,24 @@ public sealed class ScriptRuntime : IScriptRuntime
     /// <param name="hotReloadController">热重载控制器。</param>
     /// <param name="hotReloadDiagnosticSink">可选热重载诊断 sink。</param>
     public ScriptRuntime(ScriptHotReloadController hotReloadController, IScriptHotReloadDiagnosticSink? hotReloadDiagnosticSink)
+        : this(hotReloadController, hotReloadDiagnosticSink, hotReloadAssemblyLoaded: null)
+    {
+    }
+
+    /// <summary>
+    /// 创建带热重载控制器、诊断 sink 与程序集注册回调的脚本运行时；控制器会在运行时关闭时释放。
+    /// </summary>
+    /// <param name="hotReloadController">热重载控制器。</param>
+    /// <param name="hotReloadDiagnosticSink">可选热重载诊断 sink。</param>
+    /// <param name="hotReloadAssemblyLoaded">热重载成功后接收最新动态脚本程序集的回调。</param>
+    public ScriptRuntime(
+        ScriptHotReloadController hotReloadController,
+        IScriptHotReloadDiagnosticSink? hotReloadDiagnosticSink,
+        Action<System.Reflection.Assembly>? hotReloadAssemblyLoaded)
     {
         _hotReloadController = hotReloadController ?? throw new ArgumentNullException(nameof(hotReloadController));
         _hotReloadDiagnosticSink = hotReloadDiagnosticSink;
+        _hotReloadAssemblyLoaded = hotReloadAssemblyLoaded;
     }
 
 #if !PIXELENGINE_NATIVEAOT
@@ -70,10 +86,7 @@ public sealed class ScriptRuntime : IScriptRuntime
         _ = _hotReload?.ApplyPendingReload();
 #endif
         ReportWatcherException();
-        if (_hotReloadController is not null)
-        {
-            ReportHotReloadResult(_hotReloadController.ApplyPendingReload());
-        }
+        _ = ApplyPendingReload();
 
         context.Scene.DispatchStart(context);
     }
@@ -134,6 +147,47 @@ public sealed class ScriptRuntime : IScriptRuntime
     }
 
     /// <summary>
+    /// 将热重载目标切换到新的脚本 Scene，供编辑态 authoring projection 刷新复用同一脚本运行时。
+    /// </summary>
+    /// <param name="scene">新的脚本 Scene。</param>
+    public void ReplaceScene(Scene scene)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ThrowIfShutdown();
+        if (_context is ScriptSimulationContext simulationContext)
+        {
+            simulationContext.ReplaceScene(scene);
+        }
+        else if (_context is not null && !ReferenceEquals(_context.Scene, scene))
+        {
+            throw new InvalidOperationException("当前脚本上下文不支持替换脚本 Scene。");
+        }
+
+        _hotReloadController?.ReplaceScene(scene);
+    }
+
+    /// <summary>
+    /// 在编辑态显式应用待处理热重载，复用运行时的程序集注册与诊断路径。
+    /// </summary>
+    /// <returns>热重载应用结果。</returns>
+    public ScriptHotReloadApplyResult ApplyPendingReload()
+    {
+        ThrowIfShutdown();
+        if (_hotReloadController is null)
+        {
+            return new ScriptHotReloadApplyResult(
+                ScriptHotReloadStatus.NoPendingReload,
+                [],
+                OldContextUnloaded: true,
+                LoadedAssembly: null);
+        }
+
+        ScriptHotReloadApplyResult result = _hotReloadController.ApplyPendingReload();
+        ProcessHotReloadResult(result);
+        return result;
+    }
+
+    /// <summary>
     /// 捕获当前脚本字段状态，供 Editor 临时 Play 回滚。
     /// </summary>
     /// <returns>脚本字段快照。</returns>
@@ -169,6 +223,16 @@ public sealed class ScriptRuntime : IScriptRuntime
         _hotReloadController?.Dispose();
         _shutdown = true;
         _context = null;
+    }
+
+    private void ProcessHotReloadResult(ScriptHotReloadApplyResult result)
+    {
+        if (result.Status == ScriptHotReloadStatus.Reloaded && result.LoadedAssembly is not null)
+        {
+            _hotReloadAssemblyLoaded?.Invoke(result.LoadedAssembly);
+        }
+
+        ReportHotReloadResult(result);
     }
 
     private void ReportWatcherException()
