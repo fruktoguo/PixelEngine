@@ -98,6 +98,24 @@ public sealed class EngineWindowOwnershipTests
         Assert.DoesNotContain("return 0;", ExtractCaptureTextBody(source), StringComparison.Ordinal);
         Assert.Contains("public int CaptureTextComposition(Span<char> destination, out UiTextComposition composition)", source, StringComparison.Ordinal);
         Assert.Contains("composition = UiTextComposition.Inactive;", source, StringComparison.Ordinal);
+        Assert.Contains("public UiTextCompositionCapabilities TextCompositionCapabilities =>", source, StringComparison.Ordinal);
+        Assert.Contains("KeyChar committed text", source, StringComparison.Ordinal);
+        Assert.Contains("IME composition start/update/cancel", source, StringComparison.Ordinal);
+        Assert.Contains("M15 真实平台 IME 仍阻塞", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 Game UI 输入路由注册真实平台 IME composition 能力诊断，避免静默丢失阻塞原因。
+    /// </summary>
+    [Fact]
+    public void GameUiRuntimeRegistersTextCompositionCapabilitiesBySourceContract()
+    {
+        string source = ReadRepositoryFile("src", "PixelEngine.Hosting", "Engine.cs");
+
+        Assert.Contains("UiInputRouter inputRouter = new(host, new RenderWindowUiInputSource(window));", source, StringComparison.Ordinal);
+        Assert.Contains("inputRouter.TextCompositionCapabilities.Validate();", source, StringComparison.Ordinal);
+        Assert.Contains("Context.RegisterService(inputRouter.TextCompositionCapabilities);", source, StringComparison.Ordinal);
+        Assert.Contains("Context.RegisterService(inputRouter);", source, StringComparison.Ordinal);
     }
 
     /// <summary>

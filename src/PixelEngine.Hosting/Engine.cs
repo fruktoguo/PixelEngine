@@ -653,6 +653,8 @@ public sealed class Engine : IDisposable
         Context.RegisterService(host);
         Context.RegisterService(backend);
         UiInputRouter inputRouter = new(host, new RenderWindowUiInputSource(window));
+        inputRouter.TextCompositionCapabilities.Validate();
+        Context.RegisterService(inputRouter.TextCompositionCapabilities);
         Context.RegisterService(inputRouter);
         GameUiServiceBridge service = new(host, Context.Options.ContentRoot);
         Context.RegisterService<GameUiServiceBridge>(service);
