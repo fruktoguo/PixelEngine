@@ -111,14 +111,14 @@ public sealed class AssetBrowserPanelTests
             new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_texture"),
         ]);
         List<string> opened = [];
-        AssetBrowserPanel panel = new(
-            source,
-            openScriptAsset: (string path, out string diagnostic) =>
-            {
-                opened.Add(path);
-                diagnostic = $"opened {path}";
-                return true;
-            });
+        bool OpenScriptAsset(string path, out string diagnostic)
+        {
+            opened.Add(path);
+            diagnostic = $"opened {path}";
+            return true;
+        }
+
+        AssetBrowserPanel panel = new(source, openScriptAsset: OpenScriptAsset);
 
         _ = panel.Refresh();
         bool openedScript = panel.TryOpenScriptAsset("scripts/PlayerController.cs");
@@ -129,13 +129,13 @@ public sealed class AssetBrowserPanelTests
         Assert.Equal(["scripts/PlayerController.cs"], opened);
         Assert.Contains("仅 script", panel.Status, StringComparison.Ordinal);
 
-        AssetBrowserPanel failingPanel = new(
-            source,
-            openScriptAsset: (string path, out string diagnostic) =>
-            {
-                diagnostic = $"failed {path}";
-                return false;
-            });
+        static bool FailOpenScriptAsset(string path, out string diagnostic)
+        {
+            diagnostic = $"failed {path}";
+            return false;
+        }
+
+        AssetBrowserPanel failingPanel = new(source, openScriptAsset: FailOpenScriptAsset);
         _ = failingPanel.Refresh();
 
         bool failed = failingPanel.TryOpenScriptAsset("scripts/PlayerController.cs");
