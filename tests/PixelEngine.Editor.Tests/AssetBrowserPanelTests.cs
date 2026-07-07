@@ -182,6 +182,42 @@ public sealed class AssetBrowserPanelTests
         Assert.Contains("stable asset id", panel.Status, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证删除确认绑定原始 stable asset id，资产刷新成同路径新 id 后不能复用旧确认。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelInvalidatesDeleteConfirmationWhenAssetIdChanges()
+    {
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_old"),
+        ]);
+        List<AssetBrowserDeleteRequest> requests = [];
+        AssetBrowserDeleteResult DeleteAsset(AssetBrowserDeleteRequest request)
+        {
+            requests.Add(request);
+            return new AssetBrowserDeleteResult(false, true, $"confirm {request.AssetId}");
+        }
+
+        AssetBrowserPanel panel = new(source, deleteAsset: DeleteAsset);
+
+        _ = panel.Refresh();
+        bool requested = panel.TryRequestDeleteAsset("textures/sand.png");
+        source.ReplaceAssets(
+        [
+            new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_new"),
+        ]);
+        _ = panel.Refresh();
+        bool confirmed = panel.TryConfirmDeleteAsset("textures/sand.png");
+
+        Assert.False(requested);
+        Assert.False(confirmed);
+        AssetBrowserDeleteRequest request = Assert.Single(requests);
+        Assert.Equal("asset_old", request.AssetId);
+        Assert.False(request.Confirmed);
+        Assert.Contains("删除确认已失效", panel.Status, StringComparison.Ordinal);
+    }
+
     private sealed class RecordingThumbnailProvider : ITextureThumbnailProvider
     {
         public bool TryGetThumbnail(string assetPath, out AssetThumbnail thumbnail)
@@ -199,9 +235,16 @@ public sealed class AssetBrowserPanelTests
 
     private sealed class RecordingAssetSource(IReadOnlyList<AssetBrowserItem> assets) : IAssetBrowserDataSource
     {
+        private IReadOnlyList<AssetBrowserItem> _assets = assets;
+
         public IReadOnlyList<AssetBrowserItem> ListAssets()
         {
-            return assets;
+            return _assets;
+        }
+
+        public void ReplaceAssets(IReadOnlyList<AssetBrowserItem> assets)
+        {
+            _assets = assets;
         }
     }
 
