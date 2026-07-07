@@ -265,6 +265,35 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证默认工作台体验的自动化 scripted route 覆盖新建工程、面板、脚本源、保存、Play/Exit 与构建入口。
+    /// </summary>
+    [Fact]
+    public void EditorShellDeclaresDefaultWorkbenchScriptedRoute()
+    {
+        string root = FindRepositoryRoot();
+        string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
+        string source = string.Join(
+            '\n',
+            Directory.EnumerateFiles(shellDirectory, "*.cs").Select(File.ReadAllText));
+        string options = File.ReadAllText(Path.Combine(shellDirectory, "EditorShellOptions.cs"));
+
+        Assert.Contains("--scripted-default-workbench-probe", options, StringComparison.Ordinal);
+        Assert.Contains("ScriptedDefaultWorkbenchProbe", source, StringComparison.Ordinal);
+        Assert.Contains("RunScriptedDefaultWorkbenchProbeActions", source, StringComparison.Ordinal);
+        Assert.Contains("editor_default_workbench_probe", source, StringComparison.Ordinal);
+        Assert.Contains("CreateProject(projectRoot, \"Default Workbench Probe\")", source, StringComparison.Ordinal);
+        Assert.Contains("CreateGameObject()", source, StringComparison.Ordinal);
+        Assert.Contains("CreateDefaultWorkbenchScriptSource", source, StringComparison.Ordinal);
+        Assert.Contains("SaveScene()", source, StringComparison.Ordinal);
+        Assert.Contains("EnterPlayTemporary", source, StringComparison.Ordinal);
+        Assert.Contains("ExitEditorPlay", source, StringComparison.Ordinal);
+        Assert.Contains("BuildSettingsPanel.PanelTitle", source, StringComparison.Ordinal);
+        Assert.Contains("script_source_created", source, StringComparison.Ordinal);
+        Assert.Contains("build_output_ready", source, StringComparison.Ordinal);
+        Assert.Contains("真实窗口 Console 可读性与人工 UX", File.ReadAllText(Path.Combine(root, "plan", "19-standalone-editor-app.md")), StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证编辑器壳按 plan/19 节点 6 接入 Scene View、真实相机控制、ImGuizmo 变换与点选拾取。
     /// </summary>
     [Fact]

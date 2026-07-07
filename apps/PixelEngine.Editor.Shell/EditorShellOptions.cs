@@ -11,6 +11,7 @@ internal sealed record EditorShellOptions(
     bool ScriptedBuildSettingsProbe,
     bool ScriptedMenuLayoutProbe,
     bool ScriptedHierarchyProbe,
+    bool ScriptedDefaultWorkbenchProbe,
     string? BuildOutputPath,
     string? CaptureFramePath,
     string? LogDirectory)
@@ -30,6 +31,7 @@ internal sealed record EditorShellOptions(
         bool scriptedBuildSettingsProbe = false;
         bool scriptedMenuLayoutProbe = false;
         bool scriptedHierarchyProbe = false;
+        bool scriptedDefaultWorkbenchProbe = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -73,6 +75,9 @@ internal sealed record EditorShellOptions(
                 case "--scripted-hierarchy-probe":
                     scriptedHierarchyProbe = true;
                     break;
+                case "--scripted-default-workbench-probe":
+                    scriptedDefaultWorkbenchProbe = true;
+                    break;
                 case "--build-output":
                     buildOutputPath = RequireValue(args, ref i, arg);
                     break;
@@ -87,7 +92,7 @@ internal sealed record EditorShellOptions(
             }
         }
 
-        return new EditorShellOptions(projectPath, scenePath, windowTicks, scriptedProbe, scriptedBuildProbe, scriptedBuildRunProbe, scriptedBuildCancelProbe, scriptedBuildSettingsProbe, scriptedMenuLayoutProbe, scriptedHierarchyProbe, buildOutputPath, captureFramePath, logDirectory);
+        return new EditorShellOptions(projectPath, scenePath, windowTicks, scriptedProbe, scriptedBuildProbe, scriptedBuildRunProbe, scriptedBuildCancelProbe, scriptedBuildSettingsProbe, scriptedMenuLayoutProbe, scriptedHierarchyProbe, scriptedDefaultWorkbenchProbe, buildOutputPath, captureFramePath, logDirectory);
     }
 
     private static string RequireValue(string[] args, ref int index, string option)
