@@ -27,6 +27,13 @@ public sealed class GameUiDemoController : Behaviour
         "hud.time",
         "hud.hazard",
         "hud.score",
+        "hud.fps",
+        "hud.frame_p99",
+        "hud.frame_low1",
+        "hud.jitter",
+        "hud.particles",
+        "hud.lights",
+        "hud.bodies",
     ];
 
     private static readonly string[] ResultModelPaths =
@@ -61,6 +68,13 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiPathId HudTimePath = Path("hud.time");
     private static readonly UiPathId HudHazardPath = Path("hud.hazard");
     private static readonly UiPathId HudScorePath = Path("hud.score");
+    private static readonly UiPathId HudFpsPath = Path("hud.fps");
+    private static readonly UiPathId HudFrameP99Path = Path("hud.frame_p99");
+    private static readonly UiPathId HudFrameLow1Path = Path("hud.frame_low1");
+    private static readonly UiPathId HudJitterPath = Path("hud.jitter");
+    private static readonly UiPathId HudParticlesPath = Path("hud.particles");
+    private static readonly UiPathId HudLightsPath = Path("hud.lights");
+    private static readonly UiPathId HudBodiesPath = Path("hud.bodies");
     private static readonly UiPathId ResultWonPath = Path("result.won");
     private static readonly UiPathId ResultCrystalsPath = Path("result.crystals");
     private static readonly UiPathId ResultTimePath = Path("result.time");
@@ -217,6 +231,13 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudTimePath, 1.0);
         SetHudValue(HudHazardPath, 0.0);
         SetHudValue(HudScorePath, 0.0);
+        SetHudValue(HudFpsPath, 0.0);
+        SetHudValue(HudFrameP99Path, 0.0);
+        SetHudValue(HudFrameLow1Path, 0.0);
+        SetHudValue(HudJitterPath, 0.0);
+        SetHudValue(HudParticlesPath, 0.0);
+        SetHudValue(HudLightsPath, 0.0);
+        SetHudValue(HudBodiesPath, 0.0);
     }
 
     private void PublishHudState()
@@ -230,6 +251,7 @@ public sealed class GameUiDemoController : Behaviour
         PublishHealth();
         PublishWeapon();
         PublishMission();
+        PublishDiagnostics();
     }
 
     private void ResolveHudSources()
@@ -343,6 +365,18 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudHazardPath, HazardRatio(mission.InitialLavaSurfaceY, mission.LavaSurfaceY));
         SetHudValue(HudScorePath, Ratio(mission.Score, 10000.0));
         PublishResultState(mission);
+    }
+
+    private void PublishDiagnostics()
+    {
+        EngineDiagnosticsSnapshot diagnostics = Context.Diagnostics.Capture();
+        SetHudValue(HudFpsPath, Ratio(diagnostics.FramesPerSecond, 120.0));
+        SetHudValue(HudFrameP99Path, Ratio(diagnostics.FrameP99Milliseconds, 50.0));
+        SetHudValue(HudFrameLow1Path, Ratio(diagnostics.FrameLow1PercentFps, 120.0));
+        SetHudValue(HudJitterPath, Ratio(diagnostics.FrameJitterMilliseconds, 20.0));
+        SetHudValue(HudParticlesPath, Ratio(diagnostics.FreeParticles, 1000.0));
+        SetHudValue(HudLightsPath, Ratio(diagnostics.PointLights, 64.0));
+        SetHudValue(HudBodiesPath, Ratio(diagnostics.RigidBodies, 128.0));
     }
 
     private void PublishResultState(MissionDirector mission)
