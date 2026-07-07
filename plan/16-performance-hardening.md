@@ -50,7 +50,7 @@
 - [x] RenderStyle 质量降级已接入一级过载，并与二级光照降级独立。
 - [x] Web-first UI Runtime 相位计时底座已落地：HUD 可分列 `ui.update`、`ui.paint`、`ui.upload`、`ui.composite`，静态 UI paint 为 0，dirty upload smoke 已覆盖。
 - [x] 大世界内存上限已记录：常驻 world 有可配置上限，LRU 驱逐、RLE+LZ4、Damage lane 20KB/chunk 预算已纳入。
-- [x] profiling 工具链已接入：BenchmarkDotNet、MemoryDiagnoser、DisassemblyDiagnoser、DOTNET_JitDisasm、真实窗口 HUD、window_frame_probe 和 release 编译模式审计均有路径。
+- [x] profiling 工具链已接入：BenchmarkDotNet、MemoryDiagnoser、DisassemblyDiagnoser、DOTNET_JitDisasm、真实窗口 HUD、window_frame_probe、GPU compute timer query 生命周期验收和 release 编译模式审计均有路径。
 
 ---
 

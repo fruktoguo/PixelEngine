@@ -23,6 +23,7 @@ public sealed class GpuComputeProfilerTests
         Assert.Equal(["Begin:compute_bloom:1", "End"], backend.Events);
         gpuProfiler.ResolveCompleted(frameProfiler);
         Assert.Contains("Try:1", backend.Events);
+        Assert.Contains("Delete:1", backend.Events);
         frameProfiler.EndFrame();
         Assert.Equal(0.25, frameProfiler.LastSubFrame[(int)FrameSubPhase.GpuComputeBloom]);
     }
@@ -46,6 +47,31 @@ public sealed class GpuComputeProfilerTests
 
         Assert.Equal(0.25, frameProfiler.LastSubFrame[(int)FrameSubPhase.GpuAirSmoke]);
         Assert.Equal(2, backend.Events.Count(static item => item == "Try:1"));
+        Assert.Contains("Delete:1", backend.Events);
+    }
+
+    [Fact]
+    public void MeasureRetiresOldestPendingQueryWhenCapacityIsReached()
+    {
+        RecordingComputeBackend backend = new() { ResultAvailable = false };
+        GpuComputeProfiler gpuProfiler = new(backend);
+        FrameProfiler frameProfiler = new();
+        frameProfiler.BeginFrame();
+
+        for (int i = 0; i < 33; i++)
+        {
+            using (gpuProfiler.Measure($"pass_{i}", FrameSubPhase.GpuComputeBloom))
+            {
+            }
+        }
+
+        Assert.Contains("Delete:1", backend.Events);
+
+        gpuProfiler.ResolveCompleted(frameProfiler);
+        frameProfiler.EndFrame();
+
+        Assert.DoesNotContain("Try:1", backend.Events);
+        Assert.Equal(32, backend.Events.Count(static item => item.StartsWith("Try:", StringComparison.Ordinal)));
     }
 
     [Fact]

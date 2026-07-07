@@ -189,8 +189,6 @@ public sealed class GLComputeBackend : IComputeBackend
         }
 
         _gl.GetQueryObject(queryHandle, QueryObjectParameterName.Result, out elapsedNanoseconds);
-        _gl.DeleteQuery(queryHandle);
-        GlResourceTracker.TrackDeleted(GlResourceKind.TimerQuery, queryHandle);
         return true;
     }
 
