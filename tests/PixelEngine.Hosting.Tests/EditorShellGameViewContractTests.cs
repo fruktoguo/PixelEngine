@@ -1,6 +1,8 @@
 using PixelEngine.Editor;
 using PixelEngine.Editor.Shell;
 using PixelEngine.Rendering;
+using PixelEngine.UI;
+using System.Numerics;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -39,6 +41,9 @@ public sealed class EditorShellGameViewContractTests
         Assert.True(contract.AllowsEditorOverlay);
         Assert.Equal(UiPresentLayerOrders.Game, contract.GameUiLayerOrder);
         Assert.Equal(UiPresentLayerOrders.Editor, contract.EditorOverlayLayerOrder);
+        Assert.Equal(EditorViewportInputClip.ImageRect, contract.InputClip);
+        Assert.Equal(EditorViewportCoordinateSpace.ViewportTexturePixels, contract.GameUiCoordinateSpace);
+        Assert.Equal(EditorViewportHitTestSource.PanelLocalImageRectMappedToViewport, contract.GameUiHitTestSource);
     }
 
     /// <summary>
@@ -58,6 +63,10 @@ public sealed class EditorShellGameViewContractTests
         Assert.Equal(UiPresentLayerOrders.Game, contract.GameUiLayerOrder);
         Assert.Equal(UiPresentLayerOrders.Editor, contract.EditorOverlayLayerOrder);
         Assert.True(contract.EditorOverlayLayerOrder > contract.GameUiLayerOrder);
+        Assert.True(contract.EditorOverlayHasPriority);
+        Assert.Equal(EditorViewportInputClip.ImageRect, contract.InputClip);
+        Assert.Equal(EditorViewportCoordinateSpace.ViewportTexturePixels, contract.GameUiCoordinateSpace);
+        Assert.Equal(EditorViewportHitTestSource.PanelLocalImageRectMappedToViewport, contract.GameUiHitTestSource);
     }
 
     /// <summary>
@@ -143,6 +152,114 @@ public sealed class EditorShellGameViewContractTests
     }
 
     /// <summary>
+    /// 验证 Game View 记录图像矩形、fit scale 与 panel-local 到 viewport 坐标映射。
+    /// </summary>
+    [Fact]
+    public void GameViewViewportSnapshotMapsPanelLocalImageRectToViewportPixels()
+    {
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 320,
+            textureHeight: 180,
+            imageMinPanel: new Vector2(10f, 20f),
+            availablePanelSize: new Vector2(160f, 160f));
+
+        Assert.True(snapshot.IsValid);
+        Assert.Equal(new GameViewRect(10f, 20f, 160f, 90f), snapshot.ImageRect);
+        Assert.Equal(new GameViewRect(0f, 0f, 320f, 180f), snapshot.VisibleViewportRect);
+        Assert.Equal(0.5f, snapshot.FitScale, precision: 3);
+        Assert.True(snapshot.TryMapPanelToViewport(new Vector2(90f, 65f), out Vector2 viewportPoint));
+        Assert.Equal(160f, viewportPoint.X, precision: 3);
+        Assert.Equal(90f, viewportPoint.Y, precision: 3);
+        Assert.False(snapshot.TryMapPanelToViewport(new Vector2(90f, 130f), out _));
+    }
+
+    /// <summary>
+    /// 验证 Game View 面板空白区会在 Editor 层阻断输入，避免 panel 外点击进入 UI 或 gameplay。
+    /// </summary>
+    [Fact]
+    public void GameViewPanelOutsideImageRectBlocksInputBeforeGameUi()
+    {
+        EditorViewportContract contract = EditorGameViewContract.GameView(PixelEngine.Editor.EditorMode.Play);
+        EditorInputSnapshot editorCapture = new(WantCaptureMouse: false, WantCaptureKeyboard: false);
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 320,
+            textureHeight: 180,
+            imageMinPanel: new Vector2(10f, 20f),
+            availablePanelSize: new Vector2(160f, 160f));
+
+        EditorHostInputCapture capture = EditorGameViewContract.ResolveEditorInputCapture(
+            contract,
+            editorCapture,
+            snapshot,
+            panelPoint: new Vector2(90f, 130f));
+        InputArbitrationState state = InputArbitrator.ApplyEditor(InputArbitrationState.Allowed, capture);
+        state = InputArbitrator.ApplyGameUi(
+            state,
+            new UiInputCapture(HitsUi: true, Opaque: false, WantCaptureMouse: true, WantCaptureKeyboard: true));
+
+        Assert.True(capture.WantCaptureMouse);
+        Assert.True(capture.WantCaptureKeyboard);
+        Assert.False(state.AllowWorldMouse);
+        Assert.False(state.AllowWorldKeyboard);
+    }
+
+    /// <summary>
+    /// 验证 Game View 图像内透明 UI 区域可 pass-through 到 gameplay。
+    /// </summary>
+    [Fact]
+    public void GameViewImageTransparentUiPassesThroughToGameplay()
+    {
+        EditorViewportContract contract = EditorGameViewContract.GameView(PixelEngine.Editor.EditorMode.Play);
+        EditorInputSnapshot editorCapture = new(WantCaptureMouse: false, WantCaptureKeyboard: false);
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 320,
+            textureHeight: 180,
+            imageMinPanel: new Vector2(10f, 20f),
+            availablePanelSize: new Vector2(160f, 160f));
+
+        EditorHostInputCapture capture = EditorGameViewContract.ResolveEditorInputCapture(
+            contract,
+            editorCapture,
+            snapshot,
+            panelPoint: new Vector2(90f, 65f));
+        InputArbitrationState state = InputArbitrator.ApplyEditor(InputArbitrationState.Allowed, capture);
+        state = InputArbitrator.ApplyGameUi(state, UiInputCapture.None);
+
+        Assert.Equal(EditorHostInputCapture.None, capture);
+        Assert.True(state.AllowWorldMouse);
+        Assert.True(state.AllowWorldKeyboard);
+    }
+
+    /// <summary>
+    /// 验证 Game View 图像内交互 UI 区域可在 UI 层截断 gameplay 输入。
+    /// </summary>
+    [Fact]
+    public void GameViewImageInteractiveUiCapturesBeforeGameplay()
+    {
+        EditorViewportContract contract = EditorGameViewContract.GameView(PixelEngine.Editor.EditorMode.Play);
+        EditorInputSnapshot editorCapture = new(WantCaptureMouse: false, WantCaptureKeyboard: false);
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 320,
+            textureHeight: 180,
+            imageMinPanel: new Vector2(10f, 20f),
+            availablePanelSize: new Vector2(160f, 160f));
+
+        EditorHostInputCapture capture = EditorGameViewContract.ResolveEditorInputCapture(
+            contract,
+            editorCapture,
+            snapshot,
+            panelPoint: new Vector2(90f, 65f));
+        InputArbitrationState state = InputArbitrator.ApplyEditor(InputArbitrationState.Allowed, capture);
+        state = InputArbitrator.ApplyGameUi(
+            state,
+            new UiInputCapture(HitsUi: true, Opaque: false, WantCaptureMouse: true, WantCaptureKeyboard: true));
+
+        Assert.Equal(EditorHostInputCapture.None, capture);
+        Assert.False(state.AllowWorldMouse);
+        Assert.False(state.AllowWorldKeyboard);
+    }
+
+    /// <summary>
     /// 验证 GameViewPanel 只声明运行时视图契约，不复用 Scene View 的 gizmo / 画刷职责。
     /// </summary>
     [Fact]
@@ -157,5 +274,7 @@ public sealed class EditorShellGameViewContractTests
         Assert.Equal(EditorViewportCameraOwner.RuntimePipelineCamera, contract.CameraOwner);
         Assert.Equal(EditorViewportInputOwner.GameUiThenGameplay, contract.InputOwner);
         Assert.True(contract.UsesRuntimeViewportTexture);
+        Assert.Equal(EditorViewportInputClip.ImageRect, contract.InputClip);
+        Assert.Equal(EditorViewportCoordinateSpace.ViewportTexturePixels, contract.GameUiCoordinateSpace);
     }
 }
