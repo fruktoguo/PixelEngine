@@ -183,6 +183,97 @@ public sealed record ProjectSettingsDto
 }
 
 /// <summary>
+/// 玩家包 content/startup.json 的 Hosting 中性启动设置。
+/// </summary>
+public sealed record EngineProjectStartupSettings
+{
+    /// <summary>
+    /// 启动场景、存档目录或程序化入口键。
+    /// </summary>
+    public string StartScene { get; init; } = "scenes/main.scene";
+
+    /// <summary>
+    /// 玩家窗口标题。
+    /// </summary>
+    public string WindowTitle { get; init; } = EngineOptions.DefaultWindowTitle;
+
+    /// <summary>
+    /// 玩家窗口默认宽度。
+    /// </summary>
+    public int WindowWidth { get; init; } = EngineOptions.DefaultWindowWidth;
+
+    /// <summary>
+    /// 玩家窗口默认高度。
+    /// </summary>
+    public int WindowHeight { get; init; } = EngineOptions.DefaultWindowHeight;
+
+    /// <summary>
+    /// 是否启用垂直同步。
+    /// </summary>
+    public bool VSync { get; init; } = true;
+
+    /// <summary>
+    /// 运行时游戏 UI 后端。
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter<UiBackendKind>))]
+    public UiBackendKind RuntimeUiBackend { get; init; } = UiBackendKind.ManagedFallback;
+
+    /// <summary>
+    /// 玩家包发行通道。
+    /// </summary>
+    public PlayerReleaseChannel ReleaseChannel { get; init; } = PlayerReleaseChannel.Development;
+
+    /// <summary>
+    /// 创建启动设置默认值。
+    /// </summary>
+    public static EngineProjectStartupSettings CreateDefault()
+    {
+        return new EngineProjectStartupSettings();
+    }
+
+    /// <summary>
+    /// 从 Player Settings 投影玩家启动设置。
+    /// </summary>
+    public static EngineProjectStartupSettings FromPlayerSettings(PlayerSettingsDto settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        PlayerSettingsDto normalized = settings.Normalize();
+        return new EngineProjectStartupSettings
+        {
+            StartScene = normalized.StartupScene,
+            WindowTitle = normalized.WindowTitle,
+            WindowWidth = normalized.WindowWidth,
+            WindowHeight = normalized.WindowHeight,
+            VSync = normalized.VSync,
+            RuntimeUiBackend = normalized.RuntimeUiBackend,
+            ReleaseChannel = normalized.ReleaseChannel,
+        };
+    }
+
+    /// <summary>
+    /// 返回规范化后的启动设置；非法时抛出可执行诊断。
+    /// </summary>
+    public EngineProjectStartupSettings Normalize()
+    {
+        if (string.IsNullOrWhiteSpace(WindowTitle))
+        {
+            throw new InvalidOperationException("窗口标题不能为空。");
+        }
+
+        if (WindowWidth <= 0 || WindowHeight <= 0)
+        {
+            throw new InvalidOperationException("窗口尺寸必须大于 0。");
+        }
+
+        return this with
+        {
+            StartScene = NormalizeRelativePath(StartScene, nameof(StartScene), allowEmpty: false),
+            WindowTitle = WindowTitle.Trim(),
+        };
+    }
+}
+
+/// <summary>
 /// 玩家输入默认值设置。
 /// </summary>
 public sealed record PlayerInputDefaultsDto
@@ -632,6 +723,11 @@ public static class EngineProjectSettingsStore
     public const string BuildSettingsFileName = "BuildSettings.json";
 
     /// <summary>
+    /// 玩家包启动设置文件名。
+    /// </summary>
+    public const string StartupSettingsFileName = "startup.json";
+
+    /// <summary>
     /// 从工程根目录加载 Project Settings。
     /// </summary>
     public static ProjectSettingsDto LoadProjectSettings(string projectRoot)
@@ -704,6 +800,56 @@ public static class EngineProjectSettingsStore
     }
 
     /// <summary>
+    /// 从 content 根目录加载玩家包启动设置。
+    /// </summary>
+    public static EngineProjectStartupSettings LoadStartupSettings(string contentRoot, EngineProjectStartupSettings? fallback = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(contentRoot);
+        EngineProjectStartupSettings defaults = (fallback ?? EngineProjectStartupSettings.CreateDefault()).Normalize();
+        string filePath = Path.Combine(contentRoot, StartupSettingsFileName);
+        if (!File.Exists(filePath))
+        {
+            return defaults;
+        }
+
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(filePath));
+        JsonElement root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            throw new JsonException("startup.json 根节点必须是 JSON 对象。");
+        }
+
+        string startScene = ReadOptionalString(root, "startScene", defaults.StartScene);
+        string windowTitle = ReadOptionalString(root, "windowTitle", defaults.WindowTitle);
+        int windowWidth = ReadPositiveInt(root, "windowWidth", defaults.WindowWidth);
+        int windowHeight = ReadPositiveInt(root, "windowHeight", defaults.WindowHeight);
+        bool vSync = ReadOptionalBool(root, "vSync", defaults.VSync);
+        UiBackendKind runtimeUiBackend = ReadOptionalEnum(root, "runtimeUiBackend", defaults.RuntimeUiBackend);
+        PlayerReleaseChannel releaseChannel = ReadOptionalEnum(root, "releaseChannel", defaults.ReleaseChannel);
+
+        return new EngineProjectStartupSettings
+        {
+            StartScene = startScene,
+            WindowTitle = windowTitle,
+            WindowWidth = windowWidth,
+            WindowHeight = windowHeight,
+            VSync = vSync,
+            RuntimeUiBackend = runtimeUiBackend,
+            ReleaseChannel = releaseChannel,
+        }.Normalize();
+    }
+
+    /// <summary>
+    /// 保存玩家包启动设置到 content 根目录。
+    /// </summary>
+    public static void SaveStartupSettings(string contentRoot, EngineProjectStartupSettings settings)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(contentRoot);
+        ArgumentNullException.ThrowIfNull(settings);
+        SaveSettings(Path.Combine(contentRoot, StartupSettingsFileName), settings.Normalize(), EngineProjectSettingsJsonContext.Default.EngineProjectStartupSettings);
+    }
+
+    /// <summary>
     /// 保存 Build Profile 到指定文件。
     /// </summary>
     public static void SaveBuildProfileToFile(string filePath, BuildProfileDto settings)
@@ -722,6 +868,43 @@ public static class EngineProjectSettingsStore
 
         string json = File.ReadAllText(filePath);
         return JsonSerializer.Deserialize(json, typeInfo) ?? fallback;
+    }
+
+    private static string ReadOptionalString(JsonElement root, string propertyName, string fallback)
+    {
+        return root.TryGetProperty(propertyName, out JsonElement element) &&
+            element.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrWhiteSpace(element.GetString())
+                ? element.GetString()!.Trim()
+                : fallback;
+    }
+
+    private static int ReadPositiveInt(JsonElement root, string propertyName, int fallback)
+    {
+        return root.TryGetProperty(propertyName, out JsonElement element) &&
+            element.ValueKind == JsonValueKind.Number &&
+            element.TryGetInt32(out int value) &&
+            value > 0
+                ? value
+                : fallback;
+    }
+
+    private static bool ReadOptionalBool(JsonElement root, string propertyName, bool fallback)
+    {
+        return root.TryGetProperty(propertyName, out JsonElement element) &&
+            (element.ValueKind == JsonValueKind.True || element.ValueKind == JsonValueKind.False)
+                ? element.GetBoolean()
+                : fallback;
+    }
+
+    private static TEnum ReadOptionalEnum<TEnum>(JsonElement root, string propertyName, TEnum fallback)
+        where TEnum : struct
+    {
+        return root.TryGetProperty(propertyName, out JsonElement element) &&
+            element.ValueKind == JsonValueKind.String &&
+            Enum.TryParse(element.GetString(), ignoreCase: true, out TEnum value)
+                ? value
+                : fallback;
     }
 
     private static void SaveSettings<T>(string filePath, T settings, JsonTypeInfo<T> typeInfo)
@@ -839,6 +1022,7 @@ internal static class EngineProjectSettingsValidation
 [JsonSerializable(typeof(ProjectSettingsDto))]
 [JsonSerializable(typeof(ProjectResourceRulesDto))]
 [JsonSerializable(typeof(EditorPreferencesDto))]
+[JsonSerializable(typeof(EngineProjectStartupSettings))]
 [JsonSerializable(typeof(PlayerSettingsDto))]
 [JsonSerializable(typeof(PlayerInputDefaultsDto))]
 [JsonSerializable(typeof(BuildProfileDto))]

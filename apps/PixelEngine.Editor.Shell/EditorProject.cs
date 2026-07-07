@@ -149,8 +149,13 @@ internal sealed class EditorProject
             descriptors[i] = new SceneDescriptor(scene.Name, SceneSourceKind.SceneFile, scene.Path);
         }
 
-        string startSceneName = ResolveSceneName(startScenePath);
-        return new EngineProject(ContentRootPath, startSceneName, descriptors);
+        ProjectSettingsDto settings = ProjectSettingsDto.CreateDefault(Name) with
+        {
+            ContentRoot = ContentRoot,
+            ScriptSourceDir = ScriptSourceDir,
+            StartScene = StartScene,
+        };
+        return EngineProject.FromProjectSettings(ProjectRoot, settings, descriptors, startScenePath);
     }
 
     public string ResolveDisplaySceneName(string? overrideScenePath)

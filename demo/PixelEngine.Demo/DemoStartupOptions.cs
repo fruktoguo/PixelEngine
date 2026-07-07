@@ -2,7 +2,6 @@ using PixelEngine.Core;
 using PixelEngine.Hosting;
 using PixelEngine.Rendering;
 using PixelEngine.UI;
-using System.Text.Json;
 
 namespace PixelEngine.Demo;
 
@@ -146,7 +145,7 @@ public sealed class DemoStartupOptions
         ArgumentNullException.ThrowIfNull(args);
         bool hotReload = true;
         string contentRoot = ResolveDefaultContentRoot(AppContext.BaseDirectory);
-        DemoStartupSettings startupSettings = ResolveStartupSettings(contentRoot);
+        EngineProjectStartupSettings startupSettings = ResolveStartupSettings(contentRoot);
         bool vSync = startupSettings.VSync;
         bool vSyncExplicitlySet = false;
         string windowTitle = startupSettings.WindowTitle;
@@ -312,106 +311,30 @@ public sealed class DemoStartupOptions
         };
     }
 
-    private static DemoStartupSettings ResolveStartupSettings(string contentRoot)
+    private static EngineProjectStartupSettings ResolveStartupSettings(string contentRoot)
     {
-        DemoStartupSettings defaults = DemoStartupSettings.CreateDefault();
-        string startupPath = Path.Combine(contentRoot, "startup.json");
-        if (!File.Exists(startupPath))
+        EngineProjectStartupSettings fallback = EngineProjectStartupSettings.CreateDefault() with
         {
-            return defaults;
-        }
+            StartScene = Path.Combine("scenes", DefaultSceneName + ".scene"),
+            WindowTitle = EngineOptions.DefaultWindowTitle,
+            WindowWidth = DefaultWindowWidth,
+            WindowHeight = DefaultWindowHeight,
+            VSync = true,
+            RuntimeUiBackend = UiBackendKind.ManagedFallback,
+            ReleaseChannel = PlayerReleaseChannel.Development,
+        };
 
         try
         {
-            using FileStream stream = File.OpenRead(startupPath);
-            using JsonDocument document = JsonDocument.Parse(stream);
-            JsonElement root = document.RootElement;
-            string startScene = defaults.StartScene;
-            if (root.TryGetProperty("startScene", out JsonElement startSceneElement) &&
-                startSceneElement.ValueKind == JsonValueKind.String)
-            {
-                string? value = startSceneElement.GetString();
-                if (!string.IsNullOrWhiteSpace(value))
-                {
-                    startScene = value.Replace('\\', Path.DirectorySeparatorChar);
-                }
-            }
-
-            string windowTitle = defaults.WindowTitle;
-            if (root.TryGetProperty("windowTitle", out JsonElement windowTitleElement) &&
-                windowTitleElement.ValueKind == JsonValueKind.String)
-            {
-                string? value = windowTitleElement.GetString();
-                if (!string.IsNullOrWhiteSpace(value))
-                {
-                    windowTitle = value.Trim();
-                }
-            }
-
-            int windowWidth = ReadPositiveInt(root, "windowWidth", defaults.WindowWidth);
-            int windowHeight = ReadPositiveInt(root, "windowHeight", defaults.WindowHeight);
-            bool vSync = defaults.VSync;
-            if (root.TryGetProperty("vSync", out JsonElement vSyncElement) && vSyncElement.ValueKind == JsonValueKind.False)
-            {
-                vSync = false;
-            }
-            UiBackendKind runtimeUiBackend = defaults.RuntimeUiBackend;
-            if (root.TryGetProperty("runtimeUiBackend", out JsonElement backendElement) &&
-                backendElement.ValueKind == JsonValueKind.String &&
-                Enum.TryParse(backendElement.GetString(), ignoreCase: true, out UiBackendKind parsedBackend))
-            {
-                runtimeUiBackend = parsedBackend;
-            }
-
-            PlayerReleaseChannel releaseChannel = defaults.ReleaseChannel;
-            if (root.TryGetProperty("releaseChannel", out JsonElement releaseElement) &&
-                releaseElement.ValueKind == JsonValueKind.String &&
-                Enum.TryParse(releaseElement.GetString(), ignoreCase: true, out PlayerReleaseChannel parsedRelease))
-            {
-                releaseChannel = parsedRelease;
-            }
-
-            return new DemoStartupSettings(startScene, windowTitle, windowWidth, windowHeight, vSync, runtimeUiBackend, releaseChannel);
+            return EngineProjectSettingsStore.LoadStartupSettings(contentRoot, fallback);
         }
-        catch (JsonException)
+        catch (System.Text.Json.JsonException)
         {
+            return fallback;
         }
         catch (IOException)
         {
-        }
-
-        return defaults;
-    }
-
-    private static int ReadPositiveInt(JsonElement root, string propertyName, int fallback)
-    {
-        return root.TryGetProperty(propertyName, out JsonElement element) &&
-            element.ValueKind == JsonValueKind.Number &&
-            element.TryGetInt32(out int value) &&
-            value > 0
-                ? value
-                : fallback;
-    }
-
-    private sealed record DemoStartupSettings(
-        string StartScene,
-        string WindowTitle,
-        int WindowWidth,
-        int WindowHeight,
-        bool VSync,
-        UiBackendKind RuntimeUiBackend,
-        PlayerReleaseChannel ReleaseChannel)
-    {
-        public static DemoStartupSettings CreateDefault()
-        {
-            return new DemoStartupSettings(
-                Path.Combine("scenes", DefaultSceneName + ".scene"),
-                EngineOptions.DefaultWindowTitle,
-                DefaultWindowWidth,
-                DefaultWindowHeight,
-                true,
-                UiBackendKind.ManagedFallback,
-                PlayerReleaseChannel.Development);
+            return fallback;
         }
     }
 
