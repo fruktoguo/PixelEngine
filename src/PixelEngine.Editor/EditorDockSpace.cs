@@ -11,6 +11,7 @@ public sealed class EditorDockSpace
     private static readonly string[] DefaultWindowTitles =
     [
         ViewportWindowTitle,
+        GameViewWindowTitle,
         SceneHierarchyWindowTitle,
         AssetBrowserWindowTitle,
         InspectorWindowTitle,
@@ -32,9 +33,14 @@ public sealed class EditorDockSpace
     ];
 
     /// <summary>
-    /// 中央世界视口窗口标题。
+    /// Scene View 世界视口窗口标题。
     /// </summary>
     public const string ViewportWindowTitle = "世界视口";
+
+    /// <summary>
+    /// Game View 玩家视角窗口标题。
+    /// </summary>
+    public const string GameViewWindowTitle = "Game View";
 
     /// <summary>
     /// 场景层级窗口标题。
@@ -199,6 +205,7 @@ public sealed class EditorDockSpace
 
         ImGuiP.DockBuilderDockWindow(SceneHierarchyWindowTitle, leftNode);
         ImGuiP.DockBuilderDockWindow(ViewportWindowTitle, centerNode);
+        ImGuiP.DockBuilderDockWindow(GameViewWindowTitle, centerNode);
         ImGuiP.DockBuilderDockWindow(InspectorWindowTitle, rightTopNode);
         ImGuiP.DockBuilderDockWindow(WorldInspectorWindowTitle, rightTopNode);
         ImGuiP.DockBuilderDockWindow(MaterialBrushWindowTitle, rightBottomNode);

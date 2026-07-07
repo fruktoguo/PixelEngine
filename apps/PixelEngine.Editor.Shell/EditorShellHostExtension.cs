@@ -21,6 +21,8 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
     private ProjectSettingsPanel? _projectSettingsPanel;
     private PlayerSettingsPanel? _playerSettingsPanel;
     private BuildSettingsPanel? _buildSettingsPanel;
+    private SceneViewPanel? _sceneViewPanel;
+    private GameViewPanel? _gameViewPanel;
     private bool _panelsRegistered;
 
     public EditorShellHostExtension(EditorProject project, EditorShellApp app)
@@ -158,8 +160,29 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
     public bool TryGetInputCapture(out EditorHostInputCapture capture)
     {
         PixelEngine.Editor.EditorInputSnapshot editorCapture = _editor.Input.Capture;
-        capture = new EditorHostInputCapture(editorCapture.WantCaptureMouse, editorCapture.WantCaptureKeyboard);
+        PixelEngine.Editor.EditorMode mode = CapturePlayMode();
+        if (_sceneViewPanel is { Visible: true, InputFocused: true })
+        {
+            capture = EditorGameViewContract.ResolveEditorInputCapture(
+                EditorGameViewContract.SceneView(mode),
+                editorCapture,
+                viewportHasInputFocus: true);
+            return true;
+        }
+
+        EditorViewportContract contract = _gameViewPanel?.CaptureContract(mode) ?? EditorGameViewContract.SceneView(mode);
+        capture = EditorGameViewContract.ResolveEditorInputCapture(
+            contract,
+            editorCapture,
+            viewportHasInputFocus: _gameViewPanel is { Visible: true, InputFocused: true });
         return true;
+    }
+
+    private PixelEngine.Editor.EditorMode CapturePlayMode()
+    {
+        return _app.CurrentSession?.CaptureEditorPlaySession().Mode == PixelEngine.Hosting.EditorMode.Play
+            ? PixelEngine.Editor.EditorMode.Play
+            : PixelEngine.Editor.EditorMode.Edit;
     }
 
     private void RegisterPanels(Engine engine, RenderPipeline pipeline)
@@ -186,12 +209,15 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             brushPanel = new MaterialBrushPalettePanel(materials, editApi);
         }
 
-        _editor.AddPanel(new SceneViewPanel(
+        _sceneViewPanel = new SceneViewPanel(
             () => pipeline.CurrentViewportTexture,
             engine.Context.GetService<ScriptCameraApi>(),
             _sceneModel ?? throw new InvalidOperationException("Scene View 需要先配置 authoring scene model。"),
             _undoStack ?? throw new InvalidOperationException("Scene View 需要先配置 authoring undo stack。"),
-            brushPanel));
+            brushPanel);
+        _editor.AddPanel(_sceneViewPanel);
+        _gameViewPanel = new GameViewPanel(() => pipeline.CurrentViewportTexture);
+        _editor.AddPanel(_gameViewPanel);
         _editor.AddPanel(new AssetBrowserPanel(
             new EditorAssetBrowserDataSource(new EditorAssetManifestStore(_project)),
             instantiatePrefab: _app.InstantiatePrefab,

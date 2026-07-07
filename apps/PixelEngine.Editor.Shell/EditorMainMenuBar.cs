@@ -208,6 +208,7 @@ internal sealed class EditorMainMenuBar
 
         DrawPanelMenuItem(app, "Hierarchy", EditorDockSpace.SceneHierarchyWindowTitle);
         DrawPanelMenuItem(app, "Scene View", EditorDockSpace.ViewportWindowTitle);
+        DrawPanelMenuItem(app, "Game View", EditorDockSpace.GameViewWindowTitle);
         DrawPanelMenuItem(app, "Inspector", EditorDockSpace.InspectorWindowTitle);
         DrawPanelMenuItem(app, "Project", EditorDockSpace.AssetBrowserWindowTitle);
         DrawPanelMenuItem(app, "Console", EditorDockSpace.ConsoleDiagnosticsWindowTitle);

@@ -327,6 +327,7 @@ internal sealed class EditorShellApp
             [
                 EditorDockSpace.SceneHierarchyWindowTitle,
                 EditorDockSpace.ViewportWindowTitle,
+                EditorDockSpace.GameViewWindowTitle,
                 EditorDockSpace.InspectorWindowTitle,
                 EditorDockSpace.AssetBrowserWindowTitle,
                 EditorDockSpace.ConsoleDiagnosticsWindowTitle,
