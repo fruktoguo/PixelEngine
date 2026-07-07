@@ -459,6 +459,64 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
+    /// 验证 Game UI 控制器拆到 UI/root entity 时，HUD 仍会跨场景实体发现真实 gameplay source。
+    /// </summary>
+    [Fact]
+    public void DemoGameUiControllerDiscoversGameplayHudSourcesAcrossSceneEntities()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" },
+                { "id": "laser", "displayName": "Laser", "kind": "laser", "radius": 1, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 7, "heatPerCell": 1, "beamDps": 1, "muzzleCue": "ui_click", "impactCue": "sizzle_lava_water", "hudColor": "#FFFFFFFF" }
+              ]
+            }
+            """);
+        try
+        {
+            using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out FakeGameUiService ui, out ScriptInputApi input);
+            Entity playerEntity = scene.CreateEntity();
+            _ = playerEntity.AddComponent<Transform>();
+            PlayerController player = playerEntity.AddComponent<PlayerController>();
+            player.SpawnX = 12f;
+            player.SpawnY = 12f;
+            PlayerHealth health = playerEntity.AddComponent<PlayerHealth>();
+            _ = playerEntity.AddComponent<WeaponController>();
+            MissionDirector mission = playerEntity.AddComponent<MissionDirector>();
+            mission.RequiredCrystals = 2;
+            mission.TimeLimitSeconds = 30f;
+            mission.InitialLavaSurfaceY = 100f;
+            mission.LavaRiseCellsPerSecond = 0f;
+            RisingHazardDirector hazard = scene.CreateEntity().AddComponent<RisingHazardDirector>();
+            hazard.StartSurfaceY = 100f;
+            hazard.TargetSurfaceY = 70f;
+            hazard.RiseSeconds = 1f;
+            hazard.LossSurfaceY = 0f;
+            hazard.EmitterCount = 1;
+            hazard.FillIntervalSeconds = 10f;
+            _ = scene.CreateEntity().AddComponent<GameUiDemoController>();
+
+            engine.RunHeadlessTicks(1);
+            health.MaxHealth = 200f;
+            input.Update([Key.Digit2], [], mouseX: 0f, mouseY: 0f, wheelY: 0f);
+            Assert.True(engine.Context.Events.Channel<MineYieldEvent>().TryEnqueue(new MineYieldEvent(20, 20, 1, 1)));
+            engine.RunHeadlessTicks(1);
+
+            Assert.Equal(0.5, GetHudValue(ui, "hud.health"), precision: 3);
+            Assert.Equal(1.0, GetHudValue(ui, "hud.weapon"), precision: 3);
+            Assert.Equal(1.0, GetHudValue(ui, "hud.ammo"), precision: 3);
+            Assert.Equal(0.5, GetHudValue(ui, "hud.crystals"), precision: 3);
+            Assert.True(GetHudValue(ui, "hud.hazard") > 0.0);
+            AssertHudPathWritten(ui, "hud.score");
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// 验证禁用游戏大 UI 时，Demo 控制器落到脚本 Noop 服务且不需要改 Demo 逻辑。
     /// </summary>
     [Fact]
