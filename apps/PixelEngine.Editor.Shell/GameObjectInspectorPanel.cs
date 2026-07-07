@@ -209,6 +209,11 @@ internal sealed class GameObjectInspectorPanel(EditorSceneModel scene, EditorUnd
                 break;
             case ScriptFieldKind.Vector:
             case ScriptFieldKind.Material:
+                DrawString(stableId, componentIndex, component, field);
+                break;
+            case ScriptFieldKind.AssetReference:
+                DrawAssetReference(stableId, componentIndex, component, field);
+                break;
             case ScriptFieldKind.Unsupported:
             default:
                 DrawString(stableId, componentIndex, component, field);
@@ -259,6 +264,52 @@ internal sealed class GameObjectInspectorPanel(EditorSceneModel scene, EditorUnd
         {
             _undo.Execute(_scene, new SetComponentFieldCommand(stableId, componentIndex, field.Name, names[index]));
         }
+    }
+
+    private void DrawAssetReference(int stableId, int componentIndex, EditorComponentModel component, ScriptFieldDescriptor field)
+    {
+        string value = ReadFieldValue(component, field);
+        string typeLabel = field.AssetKind?.ToString() ?? "Unknown";
+        ImGui.TextUnformatted($"{field.Name} ({typeLabel}): {FormatAssetReferenceDisplay(field, value)}");
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            ImGui.SameLine();
+            if (ImGui.Button($"Clear##assetref_clear_{stableId}_{componentIndex}_{field.Name}"))
+            {
+                _undo.Execute(_scene, new SetComponentFieldCommand(stableId, componentIndex, field.Name, null));
+            }
+        }
+    }
+
+    internal EditorAssetDropResult ApplyAssetDropPayloadToField(
+        int stableId,
+        int componentIndex,
+        ScriptFieldDescriptor field,
+        EditorAssetDropPayload payload)
+    {
+        return EditorAssetInspectorFieldTarget.TryCreate(stableId, componentIndex, field, out EditorAssetInspectorFieldTarget target)
+            ? EditorAssetDropService.DropOnInspectorField(_scene, _undo, payload, target)
+            : EditorAssetDropResult.Failure($"字段 {field.Name} 不是 typed asset reference 字段。");
+    }
+
+    internal static string FormatAssetReferenceDisplay(ScriptFieldDescriptor field, string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "none";
+        }
+
+        if (!ScriptAssetReference.TryDecode(value, out ScriptAssetReference reference))
+        {
+            return $"invalid reference: {value}";
+        }
+
+        if (field.AssetKind is ScriptAssetKind expected && reference.AssetType != expected)
+        {
+            return $"type mismatch: {reference.AssetType} {reference.LogicalPath}";
+        }
+
+        return $"{reference.LogicalPath} [{reference.AssetId}]";
     }
 
     private static string ReadFieldValue(EditorComponentModel component, ScriptFieldDescriptor field)

@@ -58,6 +58,63 @@ public sealed class RangeAttribute : Attribute
 }
 
 /// <summary>
+/// Inspector 可绑定的工程资产类别。
+/// </summary>
+public enum ScriptAssetKind
+{
+    /// <summary>
+    /// 材质定义资产。
+    /// </summary>
+    Material,
+
+    /// <summary>
+    /// 纹理资产。
+    /// </summary>
+    Texture,
+
+    /// <summary>
+    /// 音频资产。
+    /// </summary>
+    Audio,
+
+    /// <summary>
+    /// 场景资产。
+    /// </summary>
+    Scene,
+
+    /// <summary>
+    /// Prefab 资产。
+    /// </summary>
+    Prefab,
+
+    /// <summary>
+    /// 脚本资产。
+    /// </summary>
+    Script,
+}
+
+/// <summary>
+/// 标记字符串或 <see cref="ScriptAssetReference"/> 字段为 typed asset reference Inspector 字段。
+/// </summary>
+[AttributeUsage(AttributeTargets.Field)]
+public sealed class AssetFieldAttribute : Attribute
+{
+    /// <summary>
+    /// 创建 typed asset reference 字段声明。
+    /// </summary>
+    /// <param name="assetType">字段允许绑定的工程资产类别。</param>
+    public AssetFieldAttribute(ScriptAssetKind assetType)
+    {
+        AssetType = assetType;
+    }
+
+    /// <summary>
+    /// 字段允许绑定的工程资产类别。
+    /// </summary>
+    public ScriptAssetKind AssetType { get; }
+}
+
+/// <summary>
 /// 标记类型是可被脚本运行时发现和挂载的脚本组件。
 /// </summary>
 [AttributeUsage(AttributeTargets.Class)]

@@ -237,6 +237,41 @@ public sealed class EditorAssetDropServiceTests
     }
 
     /// <summary>
+    /// 验证 Inspector 面板可从 ScriptFieldDescriptor 声明生成 typed asset field target 并写入 stable reference。
+    /// </summary>
+    [Fact]
+    public void InspectorPanelAppliesDescriptorDeclaredTypedAssetFieldDrop()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("drop-inspector-descriptor");
+        EditorGameObject gameObject = scene.Create("Receiver");
+        gameObject.Components.Add(new EditorComponentModel(typeof(AssetDropProbeBehaviour).FullName!));
+        EditorUndoStack undo = new();
+        ScriptAssemblyRegistry scripts = new();
+        scripts.Register(typeof(AssetDropProbeBehaviour).Assembly);
+        GameObjectInspectorPanel panel = new(scene, undo, scripts);
+        ScriptFieldDescriptor field = ScriptInspector
+            .InspectFields(new AssetDropProbeBehaviour())
+            .Single(item => item.Name == nameof(AssetDropProbeBehaviour.TextureReference));
+        EditorAssetDropPayload texture = new("asset_texture", "textures/sand.png", EditorAssetType.Texture);
+        EditorAssetDropPayload audio = new("asset_audio", "audio/hit.wav", EditorAssetType.Audio);
+
+        EditorAssetDropResult mismatch = panel.ApplyAssetDropPayloadToField(gameObject.StableId, 0, field, audio);
+
+        Assert.False(mismatch.Succeeded);
+        Assert.False(gameObject.Components[0].SerializedFields.ContainsKey(nameof(AssetDropProbeBehaviour.TextureReference)));
+
+        EditorAssetDropResult matched = panel.ApplyAssetDropPayloadToField(gameObject.StableId, 0, field, texture);
+
+        Assert.True(matched.Succeeded);
+        string encoded = gameObject.Components[0].SerializedFields[nameof(AssetDropProbeBehaviour.TextureReference)];
+        Assert.Equal("textures/sand.png [asset_texture]", GameObjectInspectorPanel.FormatAssetReferenceDisplay(field, encoded));
+        Assert.True(EditorAssetReferenceCodec.TryDecode(encoded, out EditorAssetReference decoded));
+        Assert.Equal(EditorAssetType.Texture, decoded.AssetType);
+        Assert.Equal("asset_texture", decoded.AssetId);
+        Assert.Equal("textures/sand.png", decoded.LogicalPath);
+    }
+
+    /// <summary>
     /// 验证资产移动会重写 Inspector 字段中的 stable asset reference，而不是只重写 prefab link。
     /// </summary>
     [Fact]
@@ -377,5 +412,11 @@ public sealed class EditorAssetDropServiceTests
         /// 测试用 texture asset reference 字段。
         /// </summary>
         public string Texture { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 测试用强类型 texture asset reference 字段。
+        /// </summary>
+        [AssetField(ScriptAssetKind.Texture)]
+        public ScriptAssetReference TextureReference;
     }
 }

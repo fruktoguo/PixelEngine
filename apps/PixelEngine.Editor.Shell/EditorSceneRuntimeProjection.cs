@@ -123,6 +123,7 @@ internal sealed class EditorSceneRuntimeProjection
             _ when targetType == typeof(bool) => bool.Parse(value),
             _ when targetType == typeof(ushort) => ushort.Parse(value, System.Globalization.CultureInfo.InvariantCulture),
             _ when targetType == typeof(MaterialId) => new MaterialId(ushort.Parse(value, System.Globalization.CultureInfo.InvariantCulture)),
+            _ when targetType == typeof(ScriptAssetReference) && ScriptAssetReference.TryDecode(value, out ScriptAssetReference reference) => reference,
             _ when targetType == typeof(System.Numerics.Vector2) => ParseVector2(value),
             _ when targetType.IsEnum => Enum.Parse(targetType, value, ignoreCase: true),
             _ => throw new NotSupportedException($"不支持绑定字段类型：{targetType.FullName}。"),

@@ -20,6 +20,75 @@ public readonly record struct MaterialId(ushort Value)
 }
 
 /// <summary>
+/// 脚本可见的工程资产稳定引用；由 stable asset id、logical path 与资产类型组成。
+/// </summary>
+/// <param name="AssetType">资产类别。</param>
+/// <param name="AssetId">工程级 stable asset id。</param>
+/// <param name="LogicalPath">相对 content 根目录的 logical path。</param>
+public readonly record struct ScriptAssetReference(ScriptAssetKind AssetType, string AssetId, string LogicalPath)
+{
+    private const string Prefix = "assetref";
+
+    /// <summary>
+    /// 空资产引用。
+    /// </summary>
+    public static ScriptAssetReference Empty { get; } = new(ScriptAssetKind.Texture, string.Empty, string.Empty);
+
+    /// <summary>
+    /// 获取该引用是否同时具备 stable asset id 与 logical path。
+    /// </summary>
+    public bool IsValid => !string.IsNullOrWhiteSpace(AssetId) && !string.IsNullOrWhiteSpace(LogicalPath);
+
+    /// <summary>
+    /// 编码为场景 / Prefab 文档可持久化的 stable asset reference 字符串。
+    /// </summary>
+    /// <param name="assetId">工程级 stable asset id。</param>
+    /// <param name="logicalPath">相对 content 根目录的 logical path。</param>
+    /// <param name="assetType">资产类别。</param>
+    /// <returns>可写入 authoring SerializedFields 的编码字符串。</returns>
+    public static string Encode(string assetId, string logicalPath, ScriptAssetKind assetType)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(assetId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(logicalPath);
+        return string.Join('|', Prefix, assetType.ToString(), assetId.Trim(), logicalPath.Trim().Replace('\\', '/'));
+    }
+
+    /// <summary>
+    /// 尝试从 authoring SerializedFields 字符串解码 stable asset reference。
+    /// </summary>
+    /// <param name="value">编码字符串。</param>
+    /// <param name="reference">解码后的引用。</param>
+    /// <returns>格式正确且资产类别可识别时返回 true。</returns>
+    public static bool TryDecode(string? value, out ScriptAssetReference reference)
+    {
+        reference = default;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        string[] parts = value.Split('|', 4);
+        if (parts.Length != 4 ||
+            !string.Equals(parts[0], Prefix, StringComparison.Ordinal) ||
+            !Enum.TryParse(parts[1], ignoreCase: false, out ScriptAssetKind assetType) ||
+            string.IsNullOrWhiteSpace(parts[2]) ||
+            string.IsNullOrWhiteSpace(parts[3]))
+        {
+            return false;
+        }
+
+        reference = new ScriptAssetReference(assetType, parts[2], parts[3].Replace('\\', '/'));
+        return true;
+    }
+
+    /// <inheritdoc />
+    public override string ToString()
+    {
+        return IsValid ? Encode(AssetId, LogicalPath, AssetType) : string.Empty;
+    }
+}
+
+/// <summary>
 /// 脚本读取 cell 时得到的只读快照。
 /// </summary>
 /// <param name="Material">材质句柄。</param>
