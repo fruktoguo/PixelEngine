@@ -4,7 +4,7 @@ using RuntimeUiStableId = PixelEngine.UI.UiStableId;
 namespace PixelEngine.Demo;
 
 /// <summary>
-/// Demo 游戏大 UI 控制器，使用公开脚本 UI 服务驱动主菜单、HUD 与模态页面。
+/// Demo 游戏大 UI 控制器，使用公开脚本 UI 服务驱动主菜单、HUD、暂停、设置与结算页面。
 /// </summary>
 public sealed class GameUiDemoController : Behaviour
 {
@@ -13,6 +13,8 @@ public sealed class GameUiDemoController : Behaviour
     internal const string InventoryScreen = "inventory";
     internal const string DialogScreen = "dialog";
     internal const string HudScreen = "hud";
+    internal const string PauseScreen = "pause";
+    internal const string ResultScreen = "result";
 
     private static readonly UiActionId StartGameAction = Action("start_game");
     private static readonly UiActionId OpenSettingsAction = Action("open_settings");
@@ -20,6 +22,10 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiActionId OpenDialogAction = Action("open_dialog");
     private static readonly UiActionId BackMainAction = Action("back_main");
     private static readonly UiActionId CloseDialogAction = Action("close_dialog");
+    private static readonly UiActionId PauseGameAction = Action("pause_game");
+    private static readonly UiActionId ResumeGameAction = Action("resume_game");
+    private static readonly UiActionId RestartGameAction = Action("restart_game");
+    private static readonly UiActionId QuitGameAction = Action("quit_game");
     private static readonly UiPathId HudHealthPath = Path("hud.health");
     private static readonly UiPathId HudWeaponPath = Path("hud.weapon");
     private static readonly UiPathId HudAmmoPath = Path("hud.ammo");
@@ -29,13 +35,23 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiPathId HudTimePath = Path("hud.time");
     private static readonly UiPathId HudHazardPath = Path("hud.hazard");
     private static readonly UiPathId HudScorePath = Path("hud.score");
+    private static readonly UiPathId ResultWonPath = Path("result.won");
+    private static readonly UiPathId ResultCrystalsPath = Path("result.crystals");
+    private static readonly UiPathId ResultTimePath = Path("result.time");
+    private static readonly UiPathId ResultScorePath = Path("result.score");
+    private static readonly UiPathId ResultReasonPath = Path("result.reason");
 
     private IGameUiService? _ui;
+    private IRuntimeControlApi? _runtime;
     private PlayerHealth? _health;
     private WeaponController? _weapons;
     private MissionDirector? _mission;
     private RisingHazardDirector? _hazard;
     private bool _subscribed;
+    private bool _pausedByUi;
+    private bool _resultVisible;
+    private string _modalScreenId = string.Empty;
+    private MissionState _lastMissionState = MissionState.Playing;
 
     /// <summary>
     /// 当前主菜单屏幕句柄。
@@ -60,7 +76,7 @@ public sealed class GameUiDemoController : Behaviour
     /// <inheritdoc />
     protected override void OnStart()
     {
-        StartForService(Context.GameUi);
+        StartForService(Context.GameUi, TryResolveRuntime());
     }
 
     /// <inheritdoc />
@@ -72,7 +88,13 @@ public sealed class GameUiDemoController : Behaviour
 
     internal void StartForService(IGameUiService ui)
     {
+        StartForService(ui, runtime: null);
+    }
+
+    internal void StartForService(IGameUiService ui, IRuntimeControlApi? runtime)
+    {
         ArgumentNullException.ThrowIfNull(ui);
+        _runtime = runtime;
         if (_subscribed)
         {
             return;
@@ -105,6 +127,30 @@ public sealed class GameUiDemoController : Behaviour
             return;
         }
 
+        if (uiEvent.Action == PauseGameAction)
+        {
+            OpenPauseMenu();
+            return;
+        }
+
+        if (uiEvent.Action == ResumeGameAction)
+        {
+            ResumeGame();
+            return;
+        }
+
+        if (uiEvent.Action == RestartGameAction)
+        {
+            RequestRestart();
+            return;
+        }
+
+        if (uiEvent.Action == QuitGameAction)
+        {
+            _ = _runtime?.RequestShutdown();
+            return;
+        }
+
         if (uiEvent.Action == OpenSettingsAction)
         {
             OpenModal(SettingsScreen);
@@ -125,7 +171,7 @@ public sealed class GameUiDemoController : Behaviour
 
         if (uiEvent.Action == BackMainAction || uiEvent.Action == CloseDialogAction)
         {
-            CloseModal();
+            CloseModalOrReturnToPause();
         }
     }
 
@@ -257,11 +303,50 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudTimePath, mission.TimeLimitSeconds <= 0f ? 0.0 : Ratio(mission.RemainingSeconds, mission.TimeLimitSeconds));
         SetHudValue(HudHazardPath, HazardRatio(mission.InitialLavaSurfaceY, mission.LavaSurfaceY));
         SetHudValue(HudScorePath, Ratio(mission.Score, 10000.0));
+        PublishResultState(mission);
+    }
+
+    private void PublishResultState(MissionDirector mission)
+    {
+        if (mission.State == MissionState.Playing)
+        {
+            _lastMissionState = MissionState.Playing;
+            return;
+        }
+
+        if (!_resultVisible || _lastMissionState != mission.State || _modalScreenId != ResultScreen)
+        {
+            _runtime?.PauseSimulation();
+            _pausedByUi = false;
+            OpenModal(ResultScreen);
+            _resultVisible = ModalScreen.Value != 0 && _modalScreenId == ResultScreen;
+        }
+
+        if (_resultVisible)
+        {
+            SetScreenValue(ModalScreen, ResultWonPath, new UiValue(mission.State == MissionState.Won ? 1.0 : 0.0));
+            SetScreenValue(ModalScreen, ResultCrystalsPath, new UiValue(Ratio(mission.CrystalsCollected, Math.Max(1, mission.RequiredCrystals))));
+            SetScreenValue(ModalScreen, ResultTimePath, new UiValue(mission.TimeLimitSeconds <= 0f ? 0.0 : Ratio(mission.RemainingSeconds, mission.TimeLimitSeconds)));
+            SetScreenValue(ModalScreen, ResultScorePath, new UiValue(Ratio(mission.Score, 10000.0)));
+            SetScreenValue(ModalScreen, ResultReasonPath, new UiValue(string.IsNullOrWhiteSpace(mission.ResultReason) ? 0.0 : 1.0));
+        }
+
+        _lastMissionState = mission.State;
     }
 
     private void SetHudValue(UiPathId path, double value)
     {
-        _ui!.SetValue(HudScreenHandle, path, new UiValue(Clamp01(value)));
+        SetScreenValue(HudScreenHandle, path, new UiValue(Clamp01(value)));
+    }
+
+    private void SetScreenValue(UiScreenHandle screen, UiPathId path, in UiValue value)
+    {
+        if (_ui is null || screen.Value == 0)
+        {
+            return;
+        }
+
+        _ui.SetValue(screen, path, in value);
     }
 
     private static double Ratio(double value, double max)
@@ -294,6 +379,29 @@ public sealed class GameUiDemoController : Behaviour
         MainScreen = default;
     }
 
+    private void OpenPauseMenu()
+    {
+        _runtime?.PauseSimulation();
+        _pausedByUi = true;
+        OpenModal(PauseScreen);
+    }
+
+    private void ResumeGame()
+    {
+        CloseModal();
+        _pausedByUi = false;
+        _runtime?.ResumeSimulation();
+    }
+
+    private void RequestRestart()
+    {
+        CloseModal();
+        _pausedByUi = false;
+        _resultVisible = false;
+        _lastMissionState = MissionState.Playing;
+        _ = _runtime?.RequestRestartCurrentScene();
+    }
+
     private void OpenModal(string screenId)
     {
         if (_ui is null)
@@ -303,17 +411,47 @@ public sealed class GameUiDemoController : Behaviour
 
         CloseModal();
         ModalScreen = _ui.PushModal(screenId);
+        _modalScreenId = ModalScreen.Value == 0 ? string.Empty : screenId;
+    }
+
+    private void CloseModalOrReturnToPause()
+    {
+        bool shouldReturnToPause = _pausedByUi && _modalScreenId != PauseScreen;
+        CloseModal();
+        if (shouldReturnToPause)
+        {
+            OpenModal(PauseScreen);
+        }
     }
 
     private void CloseModal()
     {
         if (_ui is null || ModalScreen.Value == 0)
         {
+            ModalScreen = default;
+            _modalScreenId = string.Empty;
             return;
         }
 
         _ui.HideScreen(ModalScreen);
         ModalScreen = default;
+        _modalScreenId = string.Empty;
+    }
+
+    private IRuntimeControlApi? TryResolveRuntime()
+    {
+        try
+        {
+            return Context.Runtime;
+        }
+        catch (NotSupportedException)
+        {
+            return null;
+        }
+        catch (ObjectDisposedException)
+        {
+            return null;
+        }
     }
 
     internal static UiActionId Action(string id)

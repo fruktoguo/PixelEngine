@@ -1,0 +1,21 @@
+<rml title="结算" style="left: 314px; top: 46px; width: 318px; height: 230px">
+  <head>
+    <style>
+      body { font-family: "Noto Sans SC"; color: #f5f8ff; background-color: rgba(9, 12, 18, 236); }
+      progress { width: 240px; height: 14px; margin-top: 4px; }
+      button { width: 132px; height: 28px; margin-top: 8px; background-color: #315f8d; color: #ffffff; }
+      p { margin: 4px 0px; }
+    </style>
+  </head>
+  <body>
+    <p id="result_title">结算</p>
+    <p id="result_state">撤离成功 / 任务失败</p>
+    <progress id="result_won" path="result.won" value="0.0" text="胜利" />
+    <progress id="result_crystals" path="result.crystals" value="0.0" text="水晶" />
+    <progress id="result_time" path="result.time" value="0.0" text="剩余时间" />
+    <progress id="result_score" path="result.score" value="0.0" text="分数" />
+    <progress id="result_reason" path="result.reason" value="0.0" text="原因记录" />
+    <button id="result_restart" data-event-click="restart_game">重开</button>
+    <button id="result_quit" data-event-click="quit_game">退出</button>
+  </body>
+</rml>

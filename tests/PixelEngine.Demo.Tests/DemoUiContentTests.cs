@@ -25,20 +25,22 @@ namespace PixelEngine.Demo.Tests;
 public sealed class DemoUiContentTests
 {
     /// <summary>
-    /// 验证 Demo UI manifest 声明五类可玩屏幕，且真实可见中文文本落在共享 CJK 字形范围内。
+    /// 验证 Demo UI manifest 声明七类可玩屏幕，且真实可见中文文本落在共享 CJK 字形范围内。
     /// </summary>
     [Fact]
-    public void DemoUiManifestDeclaresFivePlayableScreensAndCjkTextIsCovered()
+    public void DemoUiManifestDeclaresSevenPlayableScreensAndCjkTextIsCovered()
     {
         string uiRoot = DemoUiRoot();
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(uiRoot);
 
-        Assert.Equal(5, manifest.ScreenCount);
+        Assert.Equal(7, manifest.ScreenCount);
         AssertScreen(manifest, "main-menu");
         AssertScreen(manifest, "settings");
         AssertScreen(manifest, "inventory");
         AssertScreen(manifest, "dialog");
         AssertScreen(manifest, "hud");
+        AssertScreen(manifest, "pause");
+        AssertScreen(manifest, "result");
 
         string text = string.Concat(manifest.Screens.ToArray().Select(screen => ExtractUiText(screen.FullPath)));
         string glyphText = string.Concat(text.Where(char.IsLetterOrDigit));
@@ -49,7 +51,7 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
-    /// 验证五类 Demo UI 屏幕可由 ManagedFallback 同时显示、叠放并产生按钮/复选框事件。
+    /// 验证七类 Demo UI 屏幕可由 ManagedFallback 同时显示、叠放并产生按钮/复选框事件。
     /// </summary>
     [Fact]
     public void DemoUiScreensRenderAndInteractThroughManagedFallback()
@@ -65,11 +67,15 @@ public sealed class DemoUiContentTests
         PixelEngine.UI.UiScreenHandle settings = host.PushModal(manifest.GetRequiredScreen("settings").ScreenId, manifest.ResolveDocumentSource("settings"));
         PixelEngine.UI.UiScreenHandle inventory = host.PushModal(manifest.GetRequiredScreen("inventory").ScreenId, manifest.ResolveDocumentSource("inventory"));
         PixelEngine.UI.UiScreenHandle dialog = host.PushModal(manifest.GetRequiredScreen("dialog").ScreenId, manifest.ResolveDocumentSource("dialog"));
+        PixelEngine.UI.UiScreenHandle pause = host.PushModal(manifest.GetRequiredScreen("pause").ScreenId, manifest.ResolveDocumentSource("pause"));
+        PixelEngine.UI.UiScreenHandle result = host.PushModal(manifest.GetRequiredScreen("result").ScreenId, manifest.ResolveDocumentSource("result"));
         _ = main;
         _ = hud;
         _ = settings;
         _ = inventory;
         _ = dialog;
+        _ = pause;
+        _ = result;
         _ = gui.Context.ClickedButtons.Add("设置");
         _ = gui.Context.ToggledCheckboxes.Add("垂直同步");
 
@@ -82,14 +88,18 @@ public sealed class DemoUiContentTests
         Assert.Contains("背包", gui.Context.Texts);
         Assert.Contains("矿工通讯", gui.Context.Texts);
         Assert.Contains("HUD", gui.Context.Texts);
+        Assert.Contains("暂停", gui.Context.Texts);
+        Assert.Contains("结算", gui.Context.Texts);
         Assert.Contains("开始游戏", gui.Context.Buttons);
+        Assert.Contains("继续", gui.Context.Buttons);
+        Assert.Contains("重开", gui.Context.Buttons);
         Assert.Contains("返回", gui.Context.Buttons);
         Assert.True(eventCount >= 2);
         Assert.Contains(events[..eventCount], e => e.Action == new PixelEngine.UI.UiActionId(UiStableId.Hash("open_settings")));
         Assert.Contains(events[..eventCount], e => e.Action == new PixelEngine.UI.UiActionId(UiStableId.Hash("toggle_vsync")));
         Assert.True(host.Documents.HasModalTop);
         Assert.True(host.PopModal());
-        Assert.Equal(4, host.Documents.StackCount);
+        Assert.Equal(6, host.Documents.StackCount);
     }
 
     /// <summary>
@@ -127,6 +137,50 @@ public sealed class DemoUiContentTests
         AssertHudPathWritten(ui, "hud.time");
         AssertHudPathWritten(ui, "hud.hazard");
         AssertHudPathWritten(ui, "hud.score");
+    }
+
+    /// <summary>
+    /// 验证暂停、设置返回、继续、重开与退出按钮经脚本 UI 服务路由到运行时控制 facade。
+    /// </summary>
+    [Fact]
+    public void DemoGameUiControllerRoutesPauseRestartAndQuitThroughRuntimeFacade()
+    {
+        GameUiDemoController controller = new();
+        FakeGameUiService ui = new();
+        FakeRuntimeControlApi runtime = new();
+
+        controller.StartForService(ui, runtime);
+        ui.Raise(GameUiDemoController.Action("pause_game"));
+        ScriptUiScreenHandle firstPause = controller.ModalScreen;
+        ui.Raise(GameUiDemoController.Action("open_settings"));
+        ScriptUiScreenHandle settings = controller.ModalScreen;
+        ui.Raise(GameUiDemoController.Action("back_main"));
+        ScriptUiScreenHandle returnedPause = controller.ModalScreen;
+        ui.Raise(GameUiDemoController.Action("resume_game"));
+        ui.Raise(GameUiDemoController.Action("pause_game"));
+        ScriptUiScreenHandle secondPause = controller.ModalScreen;
+        ui.Raise(GameUiDemoController.Action("restart_game"));
+        ui.Raise(GameUiDemoController.Action("quit_game"));
+
+        Assert.Equal([
+            GameUiDemoController.PauseScreen,
+            GameUiDemoController.SettingsScreen,
+            GameUiDemoController.PauseScreen,
+            GameUiDemoController.PauseScreen,
+        ], ui.PushedScreens);
+        Assert.NotEqual(default, firstPause);
+        Assert.NotEqual(default, settings);
+        Assert.NotEqual(default, returnedPause);
+        Assert.NotEqual(default, secondPause);
+        Assert.Contains(firstPause, ui.HiddenScreens);
+        Assert.Contains(settings, ui.HiddenScreens);
+        Assert.Contains(returnedPause, ui.HiddenScreens);
+        Assert.Contains(secondPause, ui.HiddenScreens);
+        Assert.Equal(default, controller.ModalScreen);
+        Assert.Equal(2, runtime.PauseCount);
+        Assert.Equal(1, runtime.ResumeCount);
+        Assert.Equal(1, runtime.RestartCount);
+        Assert.Equal(1, runtime.ShutdownCount);
     }
 
     /// <summary>
@@ -190,6 +244,18 @@ public sealed class DemoUiContentTests
             Assert.Equal(0.5, GetHudValue(ui, "hud.crystals"), precision: 3);
             Assert.True(GetHudValue(ui, "hud.hazard") > 0.0);
             AssertHudPathWritten(ui, "hud.score");
+
+            Assert.True(engine.Context.Events.Channel<MineYieldEvent>().TryEnqueue(new MineYieldEvent(21, 20, 1, 1)));
+            engine.RunHeadlessTicks(1);
+            mission.MarkExtractionReached();
+            engine.RunHeadlessTicks(1);
+
+            Assert.Contains(GameUiDemoController.ResultScreen, ui.PushedScreens);
+            Assert.Equal(1.0, GetUiValue(ui, "result.won"), precision: 3);
+            Assert.Equal(1.0, GetUiValue(ui, "result.crystals"), precision: 3);
+            Assert.InRange(GetUiValue(ui, "result.time"), 0.0, 1.0);
+            Assert.True(GetUiValue(ui, "result.score") > 0.0);
+            Assert.Equal(1.0, GetUiValue(ui, "result.reason"), precision: 3);
         }
         finally
         {
@@ -237,14 +303,14 @@ public sealed class DemoUiContentTests
         using RmlUiBackend backend = new(window);
         backend.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, window.Width, window.Height, 1f), UiBackendKind.RmlUi));
 
-        Span<UiScreenStackEntry> stack = stackalloc UiScreenStackEntry[5];
+        Span<UiScreenStackEntry> stack = stackalloc UiScreenStackEntry[7];
         int index = 0;
         int hudIndex = -1;
         int mainIndex = -1;
         foreach (UiManifestScreen screen in manifest.Screens)
         {
             UiDocumentHandle document = backend.LoadDocument(screen.ToDocumentSource());
-            stack[index] = new UiScreenStackEntry(new PixelEngine.UI.UiScreenHandle(index + 1), screen.ScreenId, document, Modal: screen.Id is "settings" or "inventory" or "dialog");
+            stack[index] = new UiScreenStackEntry(new PixelEngine.UI.UiScreenHandle(index + 1), screen.ScreenId, document, Modal: screen.Id is "settings" or "inventory" or "dialog" or "pause" or "result");
             if (screen.Id == "main-menu")
             {
                 mainIndex = index;
@@ -297,7 +363,12 @@ public sealed class DemoUiContentTests
 
     private static double GetHudValue(FakeGameUiService ui, string path)
     {
-        Assert.True(ui.Values.TryGetValue(GameUiDemoController.Path(path), out ScriptUiValue value), $"HUD path 未写入值：{path}");
+        return GetUiValue(ui, path);
+    }
+
+    private static double GetUiValue(FakeGameUiService ui, string path)
+    {
+        Assert.True(ui.Values.TryGetValue(GameUiDemoController.Path(path), out ScriptUiValue value), $"UI path 未写入值：{path}");
         Assert.Equal(PixelEngine.Scripting.UiValueKind.Double, value.Kind);
         return value.AsDouble();
     }
@@ -439,6 +510,8 @@ public sealed class DemoUiContentTests
 
         public List<string> PushedScreens { get; } = [];
 
+        public List<ScriptUiScreenHandle> HiddenScreens { get; } = [];
+
         public List<ScriptUiPathId> WrittenPaths { get; } = [];
 
         public Dictionary<ScriptUiPathId, ScriptUiValue> Values { get; } = [];
@@ -451,7 +524,7 @@ public sealed class DemoUiContentTests
 
         public void HideScreen(ScriptUiScreenHandle screen)
         {
-            _ = screen;
+            HiddenScreens.Add(screen);
         }
 
         public ScriptUiScreenHandle PushModal(string screenId)
@@ -492,6 +565,54 @@ public sealed class DemoUiContentTests
         public void Raise(ScriptUiActionId action)
         {
             UiEventRaised?.Invoke(new ScriptUiEvent(default, default, action, default));
+        }
+    }
+
+    private sealed class FakeRuntimeControlApi : IRuntimeControlApi
+    {
+        public int PauseCount { get; private set; }
+
+        public int ResumeCount { get; private set; }
+
+        public int RestartCount { get; private set; }
+
+        public int ShutdownCount { get; private set; }
+
+        public bool IsPlaying { get; private set; } = true;
+
+        public RuntimeControlSnapshot Capture()
+        {
+            return new RuntimeControlSnapshot(IsPlaying, ShutdownCount > 0, RequestedSimHz: 60.0, FrameCount: 0);
+        }
+
+        public void PauseSimulation()
+        {
+            PauseCount++;
+            IsPlaying = false;
+        }
+
+        public void ResumeSimulation()
+        {
+            ResumeCount++;
+            IsPlaying = true;
+        }
+
+        public RuntimeControlResult RequestShutdown()
+        {
+            ShutdownCount++;
+            return new RuntimeControlResult(true, "shutdown");
+        }
+
+        public RuntimeControlResult OpenEditor()
+        {
+            return new RuntimeControlResult(true, "editor");
+        }
+
+        public RuntimeControlResult RequestRestartCurrentScene()
+        {
+            RestartCount++;
+            IsPlaying = true;
+            return new RuntimeControlResult(true, "restart");
         }
     }
 
