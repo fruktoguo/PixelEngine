@@ -67,7 +67,7 @@ public sealed class PlayableHud : Behaviour
         DrawHealth(gui);
         DrawMission(gui);
         DrawWeapon(gui);
-        gui.Text($"射击 {_projectile?.ShotsFired ?? 0}");
+        gui.Text($"射击 {_weapons?.PrimaryFireCount ?? _projectile?.ShotsFired ?? 0}");
         EngineDiagnosticsSnapshot diagnostics = Context.Diagnostics.Capture();
         gui.Text(
             $"FX {TransientParticleBurst.ActiveCount(Context.Scene)}   " +
