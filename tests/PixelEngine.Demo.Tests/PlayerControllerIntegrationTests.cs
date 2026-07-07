@@ -1616,6 +1616,27 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证手榴弹右键副武器会经公开输入生成蓄力投射物，并比左键普通投掷拥有更高初速。
+    /// </summary>
+    [Fact]
+    public void WeaponControllerGrenadeSecondaryFireSpawnsChargedProjectileThroughPublicInput()
+    {
+        GrenadeLaunchProbe primary = LaunchGrenadeWithPublicInput(MouseButton.Left);
+        GrenadeLaunchProbe secondary = LaunchGrenadeWithPublicInput(MouseButton.Right);
+
+        Assert.Equal(1, primary.PrimaryFireCount);
+        Assert.Equal(0, primary.SecondaryFireCount);
+        Assert.Equal(1, secondary.SecondaryFireCount);
+        Assert.Equal(0, secondary.PrimaryFireCount);
+        Assert.Equal(WeaponKind.Grenade, secondary.LastDispatchedKind);
+        Assert.Equal(3, secondary.RemainingAmmo);
+        Assert.True(
+            secondary.DeltaX > primary.DeltaX * 1.25f,
+            $"右键蓄力手雷应比左键普通投掷更快，primary={primary.DeltaX:0.000}, secondary={secondary.DeltaX:0.000}");
+        Assert.Equal(primary.StartY, secondary.StartY, precision: 3);
+    }
+
+    /// <summary>
     /// 验证武器 bomb 的纯视觉爆炸烟尘是短寿命 overlay 特效，真实碎屑粒子也会按 lifetime 收敛。
     /// </summary>
     [Fact]
@@ -2462,6 +2483,83 @@ public sealed class PlayerControllerIntegrationTests
         return count;
     }
 
+    private static GrenadeLaunchProbe LaunchGrenadeWithPublicInput(MouseButton fireButton)
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                {
+                  "id": "test-grenade",
+                  "displayName": "Test Grenade",
+                  "kind": "grenade",
+                  "damage": 30,
+                  "radius": 3,
+                  "falloff": "linear",
+                  "impulse": 8,
+                  "fuseSeconds": 5,
+                  "throwSpeed": 4,
+                  "gravity": 1,
+                  "bounce": 0,
+                  "cooldownSeconds": 0,
+                  "ammoMax": 4,
+                  "reloadSeconds": 0,
+                  "muzzleCue": "ui_click",
+                  "impactCue": "explosion",
+                  "hudColor": "#FFFFFFFF"
+                }
+              ]
+            }
+            """);
+        try
+        {
+            using Engine engine = CreateManualScriptEngine(
+                out ScriptInputApi input,
+                out _,
+                out _,
+                out ScriptScene scene,
+                DemoMaterials(),
+                contentRoot: contentRoot);
+            Entity entity = scene.CreateEntity();
+            _ = entity.AddComponent<Transform>();
+            PlayerController player = entity.AddComponent<PlayerController>();
+            player.SpawnX = 14f;
+            player.SpawnY = 30f;
+            WeaponController weapons = entity.AddComponent<WeaponController>();
+
+            engine.RunHeadlessTicks(2);
+            int entitiesBefore = scene.EntityCount;
+            input.Update([], [fireButton], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1, realDeltaSeconds: 1.0 / 60.0);
+
+            Assert.Equal(fireButton == MouseButton.Left ? 1 : 0, weapons.PrimaryFireCount);
+            Assert.Equal(fireButton == MouseButton.Right ? 1 : 0, weapons.SecondaryFireCount);
+            Assert.Equal(WeaponKind.Grenade, weapons.LastDispatchedKind);
+
+            GrenadeProjectile grenade = FindBehaviour<GrenadeProjectile>(engine);
+            Assert.True(scene.EntityCount > entitiesBefore);
+            float startX = grenade.X;
+            float startY = grenade.Y;
+
+            input.Update([], [], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1, realDeltaSeconds: 1.0 / 60.0);
+
+            return new GrenadeLaunchProbe(
+                weapons.PrimaryFireCount,
+                weapons.SecondaryFireCount,
+                weapons.LastDispatchedKind,
+                weapons.CurrentAmmo,
+                startX,
+                startY,
+                grenade.X - startX,
+                grenade.Y - startY);
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
     private static string CreateTemporaryWeaponContent(string weaponsJson)
     {
         string directory = Path.Combine(Path.GetTempPath(), "pixelengine-weapon-tests-" + Guid.NewGuid().ToString("N"));
@@ -2526,6 +2624,16 @@ public sealed class PlayerControllerIntegrationTests
 
         return count;
     }
+
+    private readonly record struct GrenadeLaunchProbe(
+        int PrimaryFireCount,
+        int SecondaryFireCount,
+        WeaponKind LastDispatchedKind,
+        int RemainingAmmo,
+        float StartX,
+        float StartY,
+        float DeltaX,
+        float DeltaY);
 
     private sealed class ExplosionFlashProbe : Behaviour
     {
