@@ -11,7 +11,7 @@ public sealed class WeaponController : Behaviour
     private const float LaserHeatPerSecond = 38f;
     private const float OverheatLimit = 100f;
     private const float OverheatRecoveryLimit = 35f;
-    private const float DefaultTerrainEffectScaleDefault = 4f;
+    private const float DefaultTerrainEffectScaleDefault = 6f;
     private const float GrenadeTerrainEffectScaleDefault = 10f;
     private PlayerController? _player;
     private PlayableProjectileTool? _projectile;

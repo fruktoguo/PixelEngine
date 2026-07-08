@@ -546,6 +546,18 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证旧中键爆破工具的默认值不再是小当量，避免正式 Demo 里仍出现体感很弱的爆炸。
+    /// </summary>
+    [Fact]
+    public void ExplosiveToolDefaultsToLargeReadableTerrainBlast()
+    {
+        ExplosiveTool tool = new();
+
+        Assert.Equal(36, tool.Radius);
+        Assert.Equal(160f, tool.Force);
+    }
+
+    /// <summary>
     /// 验证爆破工具只通过有限生命周期闪光提交爆炸光源，不再叠加裸点光源造成残留误读。
     /// </summary>
     [Fact]
@@ -2281,7 +2293,7 @@ public sealed class PlayerControllerIntegrationTests
         input.Update([Key.Digit6], [], mouseX: 0, mouseY: 0, wheelY: 0);
         engine.RunHeadlessTicks(1);
         Assert.Equal("builder", weapons.SelectedWeaponId);
-        Assert.Equal(4f, weapons.TerrainEffectScale);
+        Assert.Equal(6f, weapons.TerrainEffectScale);
         Assert.Equal(10f, weapons.GrenadeTerrainEffectScale);
     }
 

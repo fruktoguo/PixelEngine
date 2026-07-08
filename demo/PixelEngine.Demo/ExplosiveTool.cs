@@ -13,12 +13,12 @@ public sealed class ExplosiveTool : Behaviour
     /// <summary>
     /// 爆炸半径，单位 cell。
     /// </summary>
-    public int Radius { get; set; } = 18;
+    public int Radius { get; set; } = 36;
 
     /// <summary>
     /// 爆炸径向冲量强度。
     /// </summary>
-    public float Force { get; set; } = 42f;
+    public float Force { get; set; } = 160f;
 
     /// <summary>
     /// 两次爆破之间的冷却时间，单位秒。
