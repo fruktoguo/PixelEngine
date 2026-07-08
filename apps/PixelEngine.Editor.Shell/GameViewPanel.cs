@@ -30,6 +30,8 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
 
     public Vector2 LastPointerPanelPoint { get; private set; }
 
+    public Vector2 LastPanelOriginFramebuffer { get; private set; }
+
     public GameViewViewportSnapshot LastViewportSnapshot { get; private set; } = GameViewViewportSnapshot.Empty;
 
     public EditorViewportContract CaptureContract(PixelEngine.Editor.EditorMode mode)
@@ -63,6 +65,7 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
         Vector2 available = ImGui.GetContentRegionAvail();
         Vector2 imageMinScreen = ImGui.GetCursorScreenPos();
         Vector2 panelOriginScreen = ImGui.GetWindowPos();
+        LastPanelOriginFramebuffer = panelOriginScreen;
         LastViewportSnapshot = GameViewViewportSnapshot.Create(
             texture.Width,
             texture.Height,
@@ -87,5 +90,6 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
         InputFocused = false;
         InputHovered = false;
         LastPointerPanelPoint = default;
+        LastPanelOriginFramebuffer = default;
     }
 }

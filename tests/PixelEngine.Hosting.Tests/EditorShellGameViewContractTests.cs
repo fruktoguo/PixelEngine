@@ -490,6 +490,33 @@ public sealed class EditorShellGameViewContractTests
         Assert.True(target.IsValid);
     }
 
+    /// <summary>
+    /// 验证 Game View UI present target provider 只在面板可见且 snapshot 有效时输出 framebuffer-space 目标。
+    /// </summary>
+    [Fact]
+    public void GameViewUiPresentTargetProviderUsesVisibleFramebufferImageRect()
+    {
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 320,
+            textureHeight: 180,
+            imageMinPanel: new Vector2(10f, 20f),
+            availablePanelSize: new Vector2(160f, 160f));
+        GameViewUiPresentTargetProvider provider = new(
+            () => snapshot,
+            () => new Vector2(100f, 40f),
+            () => true);
+
+        Assert.True(provider.TryGetPresentTarget(out UiPresentTarget target));
+        Assert.Equal(new UiPresentTarget(110, 60, 160, 90, 1f), target);
+
+        provider = new GameViewUiPresentTargetProvider(
+            () => snapshot,
+            () => new Vector2(100f, 40f),
+            () => false);
+
+        Assert.False(provider.TryGetPresentTarget(out _));
+    }
+
     private sealed class FixedUiInputSource(UiPointerState pointer) : IUiInputSource
     {
         public UiKey[] DownKeys { get; init; } = [];

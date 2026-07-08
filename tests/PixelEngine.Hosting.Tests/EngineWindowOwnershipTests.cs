@@ -56,7 +56,8 @@ public sealed class EngineWindowOwnershipTests
         string body = ExtractAttachGuiRuntimeBody(source);
 
         Assert.Contains("gameUi.BackendKind != UiBackendKind.ManagedFallback", body, StringComparison.Ordinal);
-        Assert.Contains("UiLayerCompositor.Attach(pipeline, gameUi!)", body, StringComparison.Ordinal);
+        Assert.Contains("UiLayerCompositor.Attach(pipeline, gameUi!, gameUiPresentTargetProvider)", body, StringComparison.Ordinal);
+        Assert.Contains("ResolveGameUiPresentTargetProvider(registeredExtensions)", body, StringComparison.Ordinal);
         Assert.Contains("gameUi.BackendKind == UiBackendKind.ManagedFallback", body, StringComparison.Ordinal);
         Assert.Contains("GuiRenderBridge.AttachIfEnabled", body, StringComparison.Ordinal);
         Assert.Contains("Action<IGuiDrawContext>? managedGui = gameUiNeedsGuiBridge ? gameUi!.DrawGui : null;", body, StringComparison.Ordinal);
@@ -81,6 +82,8 @@ public sealed class EngineWindowOwnershipTests
         Assert.Contains("public static class InputArbitrator", ReadRepositoryFile("src", "PixelEngine.Hosting", "InputArbitrator.cs"), StringComparison.Ordinal);
         Assert.Contains("EditorShellHostExtension : IEditorHostExtension, IEditorInputCaptureSource", extension, StringComparison.Ordinal);
         Assert.Contains("RegisterService<IEditorInputCaptureSource>(this)", extension, StringComparison.Ordinal);
+        Assert.Contains("IUiPresentTargetProvider", extension, StringComparison.Ordinal);
+        Assert.Contains("GameViewUiPresentTargetProvider", extension, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -96,12 +99,11 @@ public sealed class EngineWindowOwnershipTests
         Assert.Contains("public int CaptureText(Span<char> destination)", source, StringComparison.Ordinal);
         Assert.Contains("destination[i] = _textBuffer[_textRead];", source, StringComparison.Ordinal);
         Assert.DoesNotContain("return 0;", ExtractCaptureTextBody(source), StringComparison.Ordinal);
+        Assert.Contains("private readonly WindowsImeCompositionReader _imeComposition;", source, StringComparison.Ordinal);
         Assert.Contains("public int CaptureTextComposition(Span<char> destination, out UiTextComposition composition)", source, StringComparison.Ordinal);
-        Assert.Contains("composition = UiTextComposition.Inactive;", source, StringComparison.Ordinal);
+        Assert.Contains("return _imeComposition.CaptureTextComposition(destination, out composition);", source, StringComparison.Ordinal);
         Assert.Contains("public UiTextCompositionCapabilities TextCompositionCapabilities =>", source, StringComparison.Ordinal);
-        Assert.Contains("KeyChar committed text", source, StringComparison.Ordinal);
-        Assert.Contains("IME composition start/update/cancel", source, StringComparison.Ordinal);
-        Assert.Contains("M15 真实平台 IME 仍阻塞", source, StringComparison.Ordinal);
+        Assert.Contains("_imeComposition.Capabilities", source, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -88,6 +88,35 @@ public readonly struct UiPresentContext
     public FrameProfiler? Profiler { get; }
 
     /// <summary>
+    /// 创建一个使用新 UI present 目标和同等裁剪区域的上下文。
+    /// </summary>
+    /// <param name="target">新的 UI present 目标。</param>
+    /// <returns>目标区域替换后的上下文。</returns>
+    public UiPresentContext WithTarget(UiPresentTarget target)
+    {
+        return WithTarget(target, target.Scissor);
+    }
+
+    /// <summary>
+    /// 创建一个使用新 UI present 目标和显式裁剪区域的上下文。
+    /// </summary>
+    /// <param name="target">新的 UI present 目标。</param>
+    /// <param name="clip">新的 framebuffer 裁剪区域。</param>
+    /// <returns>目标区域和裁剪区域替换后的上下文。</returns>
+    public UiPresentContext WithTarget(UiPresentTarget target, UiScissorRect clip)
+    {
+        return new UiPresentContext(
+            Gl,
+            FramebufferWidth,
+            FramebufferHeight,
+            WorldViewport,
+            target,
+            clip,
+            _primitives,
+            Profiler);
+    }
+
+    /// <summary>
     /// 提交一批 2D UI 三角形。坐标以默认 framebuffer 左上角为原点，单位为像素。
     /// </summary>
     /// <param name="vertices">顶点 span。</param>

@@ -10,13 +10,15 @@ namespace PixelEngine.UI;
 public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
 {
     private readonly GameUiHost _host;
+    private readonly IUiPresentTargetProvider? _targetProvider;
     private readonly IDisposable _registration;
     private bool _disposed;
 
-    private UiLayerCompositor(RenderPipeline pipeline, GameUiHost host)
+    private UiLayerCompositor(RenderPipeline pipeline, GameUiHost host, IUiPresentTargetProvider? targetProvider)
     {
         ArgumentNullException.ThrowIfNull(pipeline);
         _host = host ?? throw new ArgumentNullException(nameof(host));
+        _targetProvider = targetProvider;
         _registration = pipeline.RegisterUiLayer(UiPresentLayerOrders.Game, this);
     }
 
@@ -28,7 +30,22 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
     /// <returns>已注册的合成层。</returns>
     public static UiLayerCompositor Attach(RenderPipeline pipeline, GameUiHost host)
     {
-        return new UiLayerCompositor(pipeline, host);
+        return new UiLayerCompositor(pipeline, host, targetProvider: null);
+    }
+
+    /// <summary>
+    /// 使用游戏 UI 固定层级注册合成层，并允许外部宿主覆盖 present 目标区域。
+    /// </summary>
+    /// <param name="pipeline">目标渲染管线。</param>
+    /// <param name="host">游戏 UI 宿主。</param>
+    /// <param name="targetProvider">可选目标区域提供者。</param>
+    /// <returns>已注册的合成层。</returns>
+    public static UiLayerCompositor Attach(
+        RenderPipeline pipeline,
+        GameUiHost host,
+        IUiPresentTargetProvider? targetProvider)
+    {
+        return new UiLayerCompositor(pipeline, host, targetProvider);
     }
 
     /// <summary>
@@ -45,7 +62,11 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(context.Gl);
         long started = Stopwatch.GetTimestamp();
-        _host.Composite(in context);
+        UiPresentContext presentContext = _targetProvider is not null &&
+            _targetProvider.TryGetPresentTarget(out UiPresentTarget target)
+                ? context.WithTarget(target)
+                : context;
+        _host.Composite(in presentContext);
         RecordSub(context.Profiler, started);
         FrameIndex++;
     }
