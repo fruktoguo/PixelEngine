@@ -203,6 +203,8 @@ jobs:
             "| rid | ${{ matrix.rid }} |",
             "| channel | ${{ matrix.channel }} |",
             "| run_id | ${{ github.run_id }} |",
+            "| workflow | Release |",
+            "| run_attempt | ${{ github.run_attempt }} |",
             "| sha | ${{ github.sha }} |",
             "| conclusion | ${{ job.status }} |",
             "| simdProbeKind | $simdProbeKind |",
@@ -242,6 +244,8 @@ jobs:
             "| rid | ${{ matrix.rid }} |",
             "| channel | ${{ matrix.channel }} |",
             "| run_id | ${{ github.run_id }} |",
+            "| workflow | Release |",
+            "| run_attempt | ${{ github.run_attempt }} |",
             "| sha | ${{ github.sha }} |",
             "| conclusion | ${{ job.status }} |"
           ) | Set-Content -Path artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-publish.md -Encoding UTF8
@@ -322,6 +326,8 @@ jobs:
             "| channel | ${{ matrix.channel }} |",
             "| allow_load_only | ${{ matrix.allow_load_only }} |",
             "| run_id | ${{ github.run_id }} |",
+            "| workflow | Release |",
+            "| run_attempt | ${{ github.run_attempt }} |",
             "| sha | ${{ github.sha }} |",
             "| conclusion | ${{ job.status }} |"
           ) | Set-Content -Path artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-verify.md -Encoding UTF8
@@ -434,6 +440,8 @@ jobs:
             "| rid | ${{ matrix.rid }} |",
             "| channel | ${{ matrix.channel }} |",
             "| run_id | ${{ github.run_id }} |",
+            "| workflow | Release |",
+            "| run_attempt | ${{ github.run_attempt }} |",
             "| sha | ${{ github.sha }} |",
             "| conclusion | ${{ job.status }} |"
           ) | Set-Content -Path artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-codesign.md -Encoding UTF8
@@ -445,6 +453,8 @@ jobs:
             "| rid | ${{ matrix.rid }} |",
             "| channel | ${{ matrix.channel }} |",
             "| run_id | ${{ github.run_id }} |",
+            "| workflow | Release |",
+            "| run_attempt | ${{ github.run_attempt }} |",
             "| sha | ${{ github.sha }} |",
             "| conclusion | ${{ job.status }} |"
           ) | Set-Content -Path artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-notarization.md -Encoding UTF8
@@ -501,6 +511,8 @@ jobs:
             "| rid | ${{ matrix.rid }} |",
             "| channel | ${{ matrix.channel }} |",
             "| run_id | ${{ github.run_id }} |",
+            "| workflow | Release |",
+            "| run_attempt | ${{ github.run_attempt }} |",
             "| sha | ${{ github.sha }} |",
             "| conclusion | ${{ job.status }} |"
           ) | Set-Content -Path artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-package.md -Encoding UTF8
@@ -595,6 +607,8 @@ jobs:
             echo "| Key | Value |"
             echo "|---|---|"
             echo "| run_id | ${{ github.run_id }} |"
+            echo "| workflow | Release |"
+            echo "| run_attempt | ${{ github.run_attempt }} |"
             echo "| sha | ${{ github.sha }} |"
             echo "| conclusion | $conclusion |"
             echo "| require_all | true |"
@@ -691,6 +705,8 @@ jobs:
             echo "| Key | Value |"
             echo "|---|---|"
             echo "| run_id | ${{ github.run_id }} |"
+            echo "| workflow | Release |"
+            echo "| run_attempt | ${{ github.run_attempt }} |"
             echo "| sha | ${{ github.sha }} |"
             echo "| conclusion | $conclusion |"
             echo
@@ -763,6 +779,8 @@ jobs:
             "|---|---|",
             "| tag | ${{ github.ref_name }} |",
             "| run_id | ${{ github.run_id }} |",
+            "| workflow | Release |",
+            "| run_attempt | ${{ github.run_attempt }} |",
             "| sha | ${{ github.sha }} |",
             "| release_tag | $isReleaseTag |",
             "| conclusion | $githubReleaseConclusion |",
@@ -778,6 +796,8 @@ jobs:
             "| Key | Value |",
             "|---|---|",
             "| run_id | ${{ github.run_id }} |",
+            "| workflow | Release |",
+            "| run_attempt | ${{ github.run_attempt }} |",
             "| sha | ${{ github.sha }} |",
             "| conclusion | blocked_missing_target_disassembly |",
             "",

@@ -5097,7 +5097,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
-    /// 验证 release evidence 预检要求所有报告来自同一个 workflow run / commit。
+    /// 验证 release evidence 预检要求所有报告来自同一个 workflow / run / attempt / commit。
     /// </summary>
     [Fact]
     public void ReleaseEvidencePreflightRejectsMismatchedRunIdentity()
@@ -5111,7 +5111,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
             JsonObject publishNode = rootNode["artifacts"]!["linux-x64"]!["r2r"]!.AsObject();
             string publishReport = (string)publishNode["publishReport"]!;
-            string text = File.ReadAllText(publishReport).Replace("| sha | abc |", "| sha | different-commit |", StringComparison.Ordinal);
+            string text = File.ReadAllText(publishReport)
+                .Replace("| workflow | Release |", "| workflow | CI |", StringComparison.Ordinal)
+                .Replace("| sha | abc |", "| sha | different-commit |", StringComparison.Ordinal)
+                .Replace("| run_attempt | 1 |", "| run_attempt | 2 |", StringComparison.Ordinal);
             File.WriteAllText(publishReport, text);
             publishNode["publishSha256"] = GetSha256(publishReport);
             File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
@@ -5128,7 +5131,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
             Assert.Contains("blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("linux-x64/r2r/publish 报告 workflow 必须与 workflow_run 一致", report, StringComparison.Ordinal);
             Assert.Contains("linux-x64/r2r/publish 报告 sha 必须与 workflow_run 一致", report, StringComparison.Ordinal);
+            Assert.Contains("linux-x64/r2r/publish 报告 run_attempt 必须与 workflow_run 一致", report, StringComparison.Ordinal);
             Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
@@ -5706,12 +5711,21 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             });
         string r2rLightup = WriteMarkdownEvidence(
             Path.Combine(evidenceRoot, "r2r-lightup.md"),
-            new Dictionary<string, string> { ["run_id"] = "1", ["sha"] = "abc", ["conclusion"] = r2rLightupConclusion });
+            new Dictionary<string, string>
+            {
+                ["run_id"] = "1",
+                ["workflow"] = "Release",
+                ["run_attempt"] = "1",
+                ["sha"] = "abc",
+                ["conclusion"] = r2rLightupConclusion,
+            });
         string artifactAudit = WriteMarkdownEvidence(
             Path.Combine(evidenceRoot, "artifact-audit.md"),
             new Dictionary<string, string>
             {
                 ["run_id"] = "1",
+                ["workflow"] = "Release",
+                ["run_attempt"] = "1",
                 ["sha"] = "abc",
                 ["conclusion"] = "success",
                 ["require_all"] = "true",
@@ -5774,6 +5788,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                             ["rid"] = rid,
                             ["channel"] = channel,
                             ["run_id"] = "1",
+                            ["workflow"] = "Release",
+                            ["run_attempt"] = "1",
                             ["sha"] = "abc",
                             ["conclusion"] = "success",
                             ["simdProbeKind"] = simdProbeKind,
@@ -5815,6 +5831,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         {
             ["tag"] = uploadTag,
             ["run_id"] = "1",
+            ["workflow"] = "Release",
+            ["run_attempt"] = "1",
             ["sha"] = "abc",
             ["release_tag"] = releaseTag,
             ["conclusion"] = githubReleaseConclusion,
@@ -6426,6 +6444,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             "| Key | Value |",
             "|---|---|",
             "| run_id | 1 |",
+            "| workflow | Release |",
+            "| run_attempt | 1 |",
             "| sha | abc |",
             $"| conclusion | {conclusion} |",
             "",
@@ -6461,6 +6481,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 ["rid"] = rid,
                 ["channel"] = channel,
                 ["run_id"] = "1",
+                ["workflow"] = "Release",
+                ["run_attempt"] = "1",
                 ["sha"] = "abc",
                 ["conclusion"] = conclusion,
             });
