@@ -13,6 +13,7 @@ public sealed class AudioSystem : IDisposable
     private AudioVoicePool? _voices;
     private AudioClipCache? _clipCache;
     private bool _ownsBackend;
+    private bool _ownsClipCache;
     private bool _disposed;
 
     /// <summary>
@@ -94,10 +95,12 @@ public sealed class AudioSystem : IDisposable
     /// 挂接 clip cache，供公开播放 API 使用。
     /// </summary>
     /// <param name="clipCache">clip cache。</param>
-    public void AttachClipCache(AudioClipCache clipCache)
+    /// <param name="takeOwnership">是否由 AudioSystem 在关闭时释放 clip cache。</param>
+    public void AttachClipCache(AudioClipCache clipCache, bool takeOwnership = false)
     {
         ThrowIfDisposed();
         _clipCache = clipCache ?? throw new ArgumentNullException(nameof(clipCache));
+        _ownsClipCache = takeOwnership;
         RefreshDiagnostics(default);
     }
 
@@ -274,6 +277,10 @@ public sealed class AudioSystem : IDisposable
         _voices = null;
         AmbientLoops?.Dispose();
         AmbientLoops = null;
+        if (_ownsClipCache)
+        {
+            _clipCache?.Dispose();
+        }
 
         if (_device is not null)
         {
@@ -288,6 +295,7 @@ public sealed class AudioSystem : IDisposable
         _backend = null;
         _ownsBackend = false;
         _clipCache = null;
+        _ownsClipCache = false;
         Diagnostics = default;
     }
 

@@ -6,13 +6,14 @@ namespace PixelEngine.Audio;
 /// <param name="backend">音频后端。</param>
 /// <param name="assets">资产字节源。</param>
 /// <param name="decoder">音频解码器。</param>
-public sealed class AudioClipCache(IAudioBackend backend, IAudioAssetStore assets, IAudioDecoder decoder)
+public sealed class AudioClipCache(IAudioBackend backend, IAudioAssetStore assets, IAudioDecoder decoder) : IDisposable
 {
     private readonly IAudioBackend _backend = backend ?? throw new ArgumentNullException(nameof(backend));
     private readonly IAudioAssetStore _assets = assets ?? throw new ArgumentNullException(nameof(assets));
     private readonly IAudioDecoder _decoder = decoder ?? throw new ArgumentNullException(nameof(decoder));
     private readonly Dictionary<string, AudioClip> _clips = new(StringComparer.Ordinal);
     private int _loadingCount;
+    private bool _disposed;
 
     /// <summary>
     /// 已加载 clip 数。
@@ -32,6 +33,7 @@ public sealed class AudioClipCache(IAudioBackend backend, IAudioAssetStore asset
     /// <returns>加载后的 clip。</returns>
     public async ValueTask<AudioClip> LoadAsync(string assetId, CancellationToken cancellationToken = default)
     {
+        ThrowIfDisposed();
         ArgumentException.ThrowIfNullOrWhiteSpace(assetId);
         if (_clips.TryGetValue(assetId, out AudioClip? existing))
         {
@@ -68,6 +70,7 @@ public sealed class AudioClipCache(IAudioBackend backend, IAudioAssetStore asset
     /// <returns>是否已加载。</returns>
     public bool TryGetLoaded(string assetId, out AudioClip? clip)
     {
+        ThrowIfDisposed();
         ArgumentException.ThrowIfNullOrWhiteSpace(assetId);
         return _clips.TryGetValue(assetId, out clip);
     }
@@ -78,6 +81,7 @@ public sealed class AudioClipCache(IAudioBackend backend, IAudioAssetStore asset
     /// <param name="clip">clip。</param>
     public void Unload(AudioClip clip)
     {
+        ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(clip);
         if (!_clips.TryGetValue(clip.AssetId, out AudioClip? cached) || !ReferenceEquals(cached, clip))
         {
@@ -91,5 +95,27 @@ public sealed class AudioClipCache(IAudioBackend backend, IAudioAssetStore asset
 
         _ = _clips.Remove(clip.AssetId);
         _backend.DeleteBuffer(clip.Buffer.Handle);
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        foreach (AudioClip clip in _clips.Values)
+        {
+            _backend.DeleteBuffer(clip.Buffer.Handle);
+        }
+
+        _clips.Clear();
+        _disposed = true;
+    }
+
+    private void ThrowIfDisposed()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
     }
 }

@@ -1,4 +1,5 @@
 using System.Numerics;
+using PixelEngine.Audio;
 using PixelEngine.Hosting;
 using PixelEngine.Physics;
 using PixelEngine.Simulation;
@@ -194,7 +195,7 @@ public sealed class LavaMineSceneTests
 
         LavaMineRouteResult route = RunLavaMineScriptedRoute(engine);
 
-        Assert.True(route.GoalReached);
+        Assert.True(route.GoalReached, route.Describe());
         Assert.True(route.PrimaryFireCount > 0, "脚本路线应经 WeaponController 公开输入触发至少一次主武器。 ");
         Assert.True(route.MaxDestroyedBodies > 0, $"脚本路线应触发真实刚体破坏，destroyed={route.MaxDestroyedBodies}。");
         Assert.True(route.MaxCreatedBodies > 0, $"脚本路线应触发真实刚体重建，created={route.MaxCreatedBodies}。");
@@ -205,13 +206,29 @@ public sealed class LavaMineSceneTests
     /// 验证正式 lava-mine 场景通关后，Runtime 重开会恢复终点和武器计数基线。
     /// </summary>
     [Fact]
-    public async Task LavaMineRuntimeRestartRestoresMissionBaselineAfterScriptedVictory()
+    public async Task LavaMineRuntimeRestartRestoresGoalBaselineAfterVictory()
     {
         using Engine engine = await CreateLavaMineEngineAsync();
         engine.RunHeadlessTicks(2);
 
-        LavaMineRouteResult route = RunLavaMineScriptedRoute(engine);
-        Assert.True(route.GoalReached);
+        ScriptScene scene = engine.Context.GetService<ScriptScene>();
+        GoalTrigger goal = FindBehaviour<GoalTrigger>(scene);
+        PlayerController player = FindBehaviour<PlayerController>(scene);
+        WeaponController weapons = FindBehaviour<WeaponController>(scene);
+        ScriptInputApi input = engine.Context.GetService<ScriptInputApi>();
+        ScriptCameraApi camera = engine.Context.GetService<ScriptCameraApi>();
+
+        Point2F shot = camera.WorldToScreen(player.CenterX + 16f, player.CenterY);
+        input.Update([], [MouseButton.Left], shot.X, shot.Y, wheelY: 0f);
+        engine.RunHeadlessTicks(2);
+        Assert.True(weapons.PrimaryFireCount > 0, "重开前应先产生一次武器分派，证明重开会恢复武器运行态。");
+
+        player.SpawnX = goal.X + 2f;
+        player.SpawnY = goal.Y + 2f;
+        player.Respawn();
+        input.Update([], [], shot.X, shot.Y, wheelY: 0f);
+        engine.RunHeadlessTicks(2);
+        Assert.True(goal.Reached, "玩家进入终点区域后应先触发通关状态。");
 
         RuntimeControlResult restart = engine.RestartCurrentScene();
         Assert.True(restart.Success, restart.Message);
@@ -358,7 +375,7 @@ public sealed class LavaMineSceneTests
         Assert.Null(engine.AttachCurrentSceneWorld());
         _ = engine.AttachResidentSimulationWorld(worldWidthCells: 640, worldHeightCells: 360);
         _ = engine.AttachPhysics();
-        _ = await engine.AttachAudioFromContentAsync();
+        _ = await engine.AttachAudioFromContentAsync(new NullAudioBackend());
         engine.RegisterScriptAssembly(typeof(DemoProgram).Assembly);
         _ = engine.AttachScriptingFromServices();
         return engine;
@@ -373,12 +390,14 @@ public sealed class LavaMineSceneTests
 
         ScriptScene scene = engine.Context.GetService<ScriptScene>();
         GoalTrigger goal = FindBehaviour<GoalTrigger>(scene);
+        PlayerController player = FindBehaviour<PlayerController>(scene);
         WeaponController weapons = FindBehaviour<WeaponController>(scene);
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
         int maxDestroyedBodies = 0;
         int maxCreatedBodies = 0;
+        int frames = 0;
 
-        for (int i = 0; i < 2_400 && !goal.Reached; i++)
+        for (; frames < 2_400 && !goal.Reached; frames++)
         {
             engine.RunHeadlessTicks(1);
             maxDestroyedBodies = Math.Max(maxDestroyedBodies, physics.LastDestructionResult.DestroyedBodies);
@@ -388,6 +407,11 @@ public sealed class LavaMineSceneTests
         AssertNoFaultedBehaviours(scene);
         return new LavaMineRouteResult(
             goal.Reached,
+            frames,
+            player.State.X,
+            player.State.Y,
+            goal.X,
+            goal.Y,
             weapons.PrimaryFireCount,
             maxDestroyedBodies,
             maxCreatedBodies,
@@ -623,10 +647,21 @@ public sealed class LavaMineSceneTests
 
     private readonly record struct LavaMineRouteResult(
         bool GoalReached,
+        int Frames,
+        float PlayerX,
+        float PlayerY,
+        float GoalX,
+        float GoalY,
         int PrimaryFireCount,
         int MaxDestroyedBodies,
         int MaxCreatedBodies,
-        int ScriptExceptionCount);
+        int ScriptExceptionCount)
+    {
+        public string Describe()
+        {
+            return $"goal={GoalReached}, frames={Frames}, player=({PlayerX:F2},{PlayerY:F2}), goal=({GoalX:F2},{GoalY:F2}), primary={PrimaryFireCount}, destroyed={MaxDestroyedBodies}, created={MaxCreatedBodies}, scriptExceptions={ScriptExceptionCount}";
+        }
+    }
 
     private static string FindRepositoryRoot()
     {

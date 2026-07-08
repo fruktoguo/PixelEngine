@@ -1753,6 +1753,7 @@ public sealed class Engine : IDisposable
         created.Initialize(new AudioSettings(), backend);
         Context.RegisterService(EngineServiceRole.AudioService, created);
         Context.RegisterService(created);
+        _ownedRuntimeResources.Add(created);
         return created;
     }
 
@@ -1765,7 +1766,7 @@ public sealed class Engine : IDisposable
         }
 
         AudioClipCache created = new(audio.Backend, new DirectoryAudioAssetStore(audioRoot), new WavDecoder());
-        audio.AttachClipCache(created);
+        audio.AttachClipCache(created, takeOwnership: true);
         Context.RegisterService(created);
         return created;
     }
