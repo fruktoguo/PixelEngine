@@ -125,7 +125,7 @@ public readonly record struct GpuCapabilities
     public GpuResourceContractKind ComputeSharpResourceContractKind { get; init; }
 
     /// <summary>
-    /// 从 plan/08 的 GL 能力快照构造 compute 能力。无 GL 上下文的测试可直接构造本类型。
+    /// 从 plan/08 的 GL 能力快照构造 compute 基础快照。生产门控必须使用 <see cref="Query(GL, GlCapabilities)" /> 补齐 work group 限制。
     /// </summary>
     /// <param name="capabilities">GL 能力快照。</param>
     /// <returns>compute 能力快照。</returns>

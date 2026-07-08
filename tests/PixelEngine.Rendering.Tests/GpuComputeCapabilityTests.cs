@@ -6,17 +6,24 @@ namespace PixelEngine.Rendering.Tests;
 public sealed class GpuComputeCapabilityTests
 {
     [Fact]
-    public void DesktopGl43CoreReportsGlComputeGateInputs()
+    public void DesktopGl43CoreReportsGlComputeBaseSnapshotInputs()
     {
         GlCapabilities gl = GlCapabilities.FromRaw("4.3 Mesa", "renderer", "vendor", []);
 
         GpuCapabilities gpu = GpuCapabilities.FromGlCapabilities(gl);
+        ComputeCapabilityGate gate = ComputeCapabilityGate.Evaluate(
+            gpu,
+            ComputeFeatureSwitches.Default,
+            preferComputeSharp: false);
 
         Assert.False(gpu.IsGles);
         Assert.False(gpu.IsAngle);
         Assert.True(gpu.HasComputeShader);
         Assert.True(gpu.HasShaderStorageBufferObject);
         Assert.True(gpu.HasShaderImageLoadStore);
+        Assert.False(GpuComputeDispatchGrid.HasQueriedDeviceLimits(in gpu));
+        Assert.False(gate.GlComputeAvailable);
+        Assert.True(gate.BaselineFallback);
     }
 
     [Fact]

@@ -47,9 +47,25 @@ public static class GpuComputeDispatchGrid
     public static bool IsLocalSizeSupported(in GpuCapabilities capabilities)
     {
         return
+            HasQueriedDeviceLimits(in capabilities) &&
             !ExceedsDeviceLimit(LocalSizeX, capabilities.MaxWorkGroupSizeX) &&
             !ExceedsDeviceLimit(LocalSizeY, capabilities.MaxWorkGroupSizeY) &&
             !ExceedsDeviceLimit(LocalSizeZ, capabilities.MaxWorkGroupSizeZ);
+    }
+
+    /// <summary>
+    /// 判断 GL compute work group 限制是否已经从真实 GL 上下文查询。
+    /// </summary>
+    /// <param name="capabilities">GPU compute 能力。</param>
+    /// <returns>是否具备可用于生产门控的 work group 限制。</returns>
+    public static bool HasQueriedDeviceLimits(in GpuCapabilities capabilities)
+    {
+        return capabilities.MaxWorkGroupCountX > 0 &&
+            capabilities.MaxWorkGroupCountY > 0 &&
+            capabilities.MaxWorkGroupCountZ > 0 &&
+            capabilities.MaxWorkGroupSizeX > 0 &&
+            capabilities.MaxWorkGroupSizeY > 0 &&
+            capabilities.MaxWorkGroupSizeZ > 0;
     }
 
     /// <summary>
