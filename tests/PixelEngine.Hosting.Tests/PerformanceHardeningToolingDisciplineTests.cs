@@ -421,6 +421,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             "tools/demo-manual-acceptance-preflight.ps1",
             "tools/native-leak-preflight.ps1",
             "tools/ui-runtime-evidence-preflight.ps1",
+            "tools/editor-ux-evidence-preflight.ps1",
             "tools/release-evidence-preflight.ps1",
         ];
         foreach (string tool in tools)
@@ -463,6 +464,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             "blocked_invalid_ui_runtime_evidence",
             "blocked_missing_ui_runtime_scope_evidence",
             "ui_runtime_evidence_attached_pending_review",
+            "blocked_missing_editor_ux_evidence",
+            "blocked_invalid_editor_ux_evidence",
+            "blocked_missing_editor_ux_scope_evidence",
+            "editor_ux_evidence_attached_pending_review",
             "blocked_missing_release_manifest",
             "blocked_invalid_release_evidence",
             "blocked_missing_release_scope_evidence",
@@ -4023,6 +4028,176 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 Editor UX 证据预检入口覆盖 plan/19 的真实窗口 UX 证据债，且不会把 pending review 误当成完成。
+    /// </summary>
+    [Fact]
+    public void EditorUxEvidencePreflightRequiresManifestScopesAndKeepsPlan19Blocked()
+    {
+        string script = ReadRepositoryFile("tools", "editor-ux-evidence-preflight.ps1");
+        string readme = ReadRepositoryFile("plan", "README.md");
+        string plan = ReadRepositoryFile("plan", "19-standalone-editor-app.md");
+
+        Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
+        Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_editor_ux_evidence", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_editor_ux_evidence", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_editor_ux_scope_evidence", script, StringComparison.Ordinal);
+        Assert.Contains("editor_ux_evidence_attached_pending_review", script, StringComparison.Ordinal);
+        Assert.Contains("editor_full_route_window", script, StringComparison.Ordinal);
+        Assert.Contains("project_window_reference_stability", script, StringComparison.Ordinal);
+        Assert.Contains("script_external_editor", script, StringComparison.Ordinal);
+        Assert.Contains("settings_build_ux", script, StringComparison.Ordinal);
+        Assert.Contains("editor_product_usability", script, StringComparison.Ordinal);
+        Assert.Contains("gitCommit 必须等于当前 HEAD", script, StringComparison.Ordinal);
+
+        Assert.Contains("tools/editor-ux-evidence-preflight.ps1", readme, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_editor_ux_evidence", readme, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_editor_ux_scope_evidence", readme, StringComparison.Ordinal);
+        Assert.Contains("editor_ux_evidence_attached_pending_review", readme, StringComparison.Ordinal);
+        Assert.Contains("tools/editor-ux-evidence-preflight.ps1", plan, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_editor_ux_evidence", plan, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_editor_ux_scope_evidence", plan, StringComparison.Ordinal);
+        Assert.Contains("editor_ux_evidence_attached_pending_review", plan, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 Editor UX 证据预检会真实拒绝缺失 scope，并保持证据齐全时仍为待人工复核的非零退出。
+    /// </summary>
+    [Fact]
+    public void EditorUxEvidencePreflightRejectsMissingScopesAndKeepsPendingReviewNonZero()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-editor-ux-evidence-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string goodManifest = CreateEditorUxEvidenceManifest(temp);
+            string missingManifest = CreateEditorUxEvidenceManifest(temp, suffix: "missing");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(missingManifest))!.AsObject();
+            JsonArray evidence = rootNode["evidence"]!.AsArray();
+            JsonNode? target = evidence.FirstOrDefault(node =>
+                string.Equals((string?)node?["scope"], "project_window_reference_stability", StringComparison.Ordinal));
+            Assert.NotNull(target);
+            _ = evidence.Remove(target);
+            File.WriteAllText(missingManifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string missingArtifacts = Path.Combine(temp, "missing-out");
+            ScriptResult missing = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "editor-ux-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                missingManifest,
+                "-Artifacts",
+                missingArtifacts);
+            Assert.Equal(5, missing.ExitCode);
+            string missingReport = File.ReadAllText(Path.Combine(missingArtifacts, "editor-ux-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_editor_ux_scope_evidence", missingReport, StringComparison.Ordinal);
+            Assert.Contains("缺少 evidence scope：project_window_reference_stability", missingReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: editor_ux_evidence_attached_pending_review", missingReport, StringComparison.Ordinal);
+
+            string goodArtifacts = Path.Combine(temp, "good-out");
+            ScriptResult good = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "editor-ux-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                goodManifest,
+                "-Artifacts",
+                goodArtifacts);
+            Assert.Equal(2, good.ExitCode);
+            string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "editor-ux-evidence-preflight.md"));
+            Assert.Contains("editor_ux_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 Editor UX 证据预检会把 schema 错误写入报告，而不是直接抛异常丢失审计上下文。
+    /// </summary>
+    [Fact]
+    public void EditorUxEvidencePreflightRejectsInvalidSchemaWithReport()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-editor-ux-schema-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateEditorUxEvidenceManifest(temp);
+            string json = File.ReadAllText(manifest);
+            json = json.Replace("\"schemaVersion\": 1", "\"schemaVersion\": 2", StringComparison.Ordinal);
+            File.WriteAllText(manifest, json);
+
+            string artifacts = Path.Combine(temp, "out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "editor-ux-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "editor-ux-evidence-preflight.md"));
+            Assert.Contains("status: blocked_invalid_editor_ux_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("schemaVersion 必须为 1", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: editor_ux_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 Editor UX 证据预检会实际拒绝 sha256 不匹配的真实窗口 evidence。
+    /// </summary>
+    [Fact]
+    public void EditorUxEvidencePreflightRejectsMismatchedEvidenceHash()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-editor-ux-hash-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateEditorUxEvidenceManifest(temp);
+            string json = File.ReadAllText(manifest);
+            json = json.Replace("\"sha256\": \"", "\"sha256\": \"0000", StringComparison.Ordinal);
+            File.WriteAllText(manifest, json);
+
+            string artifacts = Path.Combine(temp, "out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "editor-ux-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "editor-ux-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_editor_ux_scope_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("sha256 不匹配", report, StringComparison.Ordinal);
+            Assert.Contains("editor_full_route_window", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: editor_ux_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证发行编译模式保持默认 R2R 运行时 light-up，AOT 显式 ISA 并跑 SIMD 反汇编探针。
     /// </summary>
     [Fact]
@@ -6690,6 +6865,104 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         };
 
         string manifestPath = Path.Combine(tempRoot, suffix, "ui-runtime-evidence.json");
+        File.WriteAllText(
+            manifestPath,
+            System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        return manifestPath;
+    }
+
+    private static string CreateEditorUxEvidenceManifest(string tempRoot, string suffix = "good")
+    {
+        const string ReviewSessionId = "editor-ux-review-20260709-001";
+        string gitCommit = GetCurrentGitCommit();
+        Dictionary<string, string[]> trueFieldsByScope = new()
+        {
+            ["editor_full_route_window"] =
+            [
+                "shellStarted",
+                "projectOpenedOrCreated",
+                "defaultLayoutVisible",
+                "playExitVerified",
+                "sceneSaved",
+                "buildAndRunVerified",
+            ],
+            ["project_window_reference_stability"] =
+            [
+                "stableIdsChecked",
+                "sceneReferencesChecked",
+                "prefabReferencesChecked",
+                "inspectorAssetFieldsChecked",
+                "buildRequestChecked",
+                "deleteConfirmationChecked",
+            ],
+            ["script_external_editor"] =
+            [
+                "scriptDoubleClickAttempted",
+                "osOrConfiguredEditorObserved",
+                "failureDiagnosticObserved",
+                "noSilentFailure",
+            ],
+            ["settings_build_ux"] =
+            [
+                "projectSettingsSaved",
+                "playerSettingsSaved",
+                "buildSettingsSaved",
+                "restartReloadVerified",
+                "invalidInputRejected",
+                "buildPlayerProjectionVerified",
+            ],
+            ["editor_product_usability"] =
+            [
+                "layoutUsable",
+                "shortcutsChecked",
+                "dragDropChecked",
+                "gizmoChecked",
+                "undoRedoChecked",
+                "consoleDiagnosticsChecked",
+                "buildFeedbackChecked",
+            ],
+        };
+
+        string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "editor-ux-evidence");
+        _ = Directory.CreateDirectory(evidenceRoot);
+
+        List<Dictionary<string, object>> evidence = [];
+        foreach (KeyValuePair<string, string[]> scope in trueFieldsByScope)
+        {
+            List<string> lines =
+            [
+                "# Editor UX evidence",
+                "",
+                $"scope: {scope.Key}",
+                $"reviewSessionId: {ReviewSessionId}",
+                $"gitCommit: {gitCommit}",
+                "conclusion: pass",
+                "risk: evidence still requires human review before plan status can change",
+            ];
+
+            foreach (string field in scope.Value)
+            {
+                lines.Add($"{field}: true");
+            }
+
+            string report = WriteTextEvidence(Path.Combine(evidenceRoot, $"{scope.Key}.md"), string.Join(Environment.NewLine, lines));
+            evidence.Add(new Dictionary<string, object>
+            {
+                ["scope"] = scope.Key,
+                ["path"] = report,
+                ["sha256"] = GetSha256(report),
+            });
+        }
+
+        Dictionary<string, object> manifest = new()
+        {
+            ["schemaVersion"] = 1,
+            ["reviewSessionId"] = ReviewSessionId,
+            ["gitCommit"] = gitCommit,
+            ["evidence"] = evidence,
+        };
+
+        string manifestPath = Path.Combine(tempRoot, suffix, "editor-ux-evidence.json");
         File.WriteAllText(
             manifestPath,
             System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
