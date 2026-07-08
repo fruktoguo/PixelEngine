@@ -162,14 +162,16 @@ internal sealed class EditorShellApp
 
                 shellWindow.Gui.DrawFrame(
                     deltaSeconds,
-                    shellWindow.Window.Width,
-                    shellWindow.Window.Height,
+                    shellWindow.Window.LogicalWidth,
+                    shellWindow.Window.LogicalHeight,
                     _ =>
                     {
                         MainMenu.Draw(this);
                         Layout.DrawDockSpace();
                         ProjectPicker.Draw(this);
-                    });
+                    },
+                    shellWindow.Window.FramebufferScaleX,
+                    shellWindow.Window.FramebufferScaleY);
                 shellWindow.Window.SwapBuffers();
                 ApplyPendingProject(shellWindow);
             }

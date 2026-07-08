@@ -66,7 +66,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
     }
 
     /// <inheritdoc />
-    public void NewFrame(float deltaSeconds, int width, int height)
+    public void NewFrame(float deltaSeconds, int width, int height, float framebufferScaleX, float framebufferScaleY)
     {
         ThrowIfNotInitialized();
         if (deltaSeconds <= 0)
@@ -76,6 +76,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
 
         ImGuiIOPtr io = ImGui.GetIO();
         io.DisplaySize = new Vector2(Math.Max(1, width), Math.Max(1, height));
+        io.DisplayFramebufferScale = new Vector2(NormalizeScale(framebufferScaleX), NormalizeScale(framebufferScaleY));
         io.DeltaTime = deltaSeconds;
         ImGuiImplOpenGL3.NewFrame();
         ImGui.NewFrame();
@@ -205,5 +206,10 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
         {
             throw new InvalidOperationException("ImGui 后端尚未初始化。");
         }
+    }
+
+    private static float NormalizeScale(float scale)
+    {
+        return float.IsFinite(scale) && scale > 0f ? scale : 1f;
     }
 }

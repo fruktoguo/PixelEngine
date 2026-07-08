@@ -17,9 +17,11 @@ public interface IEditorImGuiBackend
     /// 开始一帧 ImGui。
     /// </summary>
     /// <param name="deltaSeconds">距离上一帧的真实秒数。</param>
-    /// <param name="width">framebuffer 宽度。</param>
-    /// <param name="height">framebuffer 高度。</param>
-    void NewFrame(float deltaSeconds, int width, int height);
+    /// <param name="width">平台窗口逻辑宽度。</param>
+    /// <param name="height">平台窗口逻辑高度。</param>
+    /// <param name="framebufferScaleX">逻辑坐标到默认 framebuffer 坐标的 X 轴缩放。</param>
+    /// <param name="framebufferScaleY">逻辑坐标到默认 framebuffer 坐标的 Y 轴缩放。</param>
+    void NewFrame(float deltaSeconds, int width, int height, float framebufferScaleX, float framebufferScaleY);
 
     /// <summary>
     /// 绘制 dockspace。

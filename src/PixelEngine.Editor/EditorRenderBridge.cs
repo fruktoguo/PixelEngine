@@ -120,11 +120,13 @@ public sealed class EditorRenderBridge : IUiPresentLayer, IDisposable
             _pipeline);
         _editor.DrawFrame(
             deltaSeconds,
-            _pipeline.Width,
-            _pipeline.Height,
+            context.LogicalWidth,
+            context.LogicalHeight,
             _counters,
             ++FrameIndex,
             performance,
-            _scriptRuntime is null ? null : _scriptRuntime.DrawGui);
+            _scriptRuntime is null ? null : _scriptRuntime.DrawGui,
+            context.FramebufferScaleX,
+            context.FramebufferScaleY);
     }
 }

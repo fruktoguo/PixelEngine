@@ -15,6 +15,8 @@ public readonly struct UiPresentContext
         GL gl,
         int framebufferWidth,
         int framebufferHeight,
+        int logicalWidth,
+        int logicalHeight,
         PresentationViewport worldViewport,
         UiPrimitiveRenderer primitives,
         FrameProfiler? profiler)
@@ -22,6 +24,8 @@ public readonly struct UiPresentContext
             gl,
             framebufferWidth,
             framebufferHeight,
+            logicalWidth,
+            logicalHeight,
             worldViewport,
             UiPresentTarget.FromPresentationViewport(in worldViewport),
             UiPresentTarget.FromPresentationViewport(in worldViewport).Scissor,
@@ -34,6 +38,8 @@ public readonly struct UiPresentContext
         GL gl,
         int framebufferWidth,
         int framebufferHeight,
+        int logicalWidth,
+        int logicalHeight,
         PresentationViewport worldViewport,
         UiPresentTarget target,
         UiScissorRect clip,
@@ -45,6 +51,8 @@ public readonly struct UiPresentContext
         Gl = gl;
         FramebufferWidth = framebufferWidth;
         FramebufferHeight = framebufferHeight;
+        LogicalWidth = Math.Max(1, logicalWidth);
+        LogicalHeight = Math.Max(1, logicalHeight);
         WorldViewport = worldViewport;
         Target = target;
         Clip = clip;
@@ -66,6 +74,26 @@ public readonly struct UiPresentContext
     /// 默认 framebuffer 高度。
     /// </summary>
     public int FramebufferHeight { get; }
+
+    /// <summary>
+    /// 平台窗口逻辑宽度。ImGui 使用该坐标系布局与接收鼠标输入。
+    /// </summary>
+    public int LogicalWidth { get; }
+
+    /// <summary>
+    /// 平台窗口逻辑高度。ImGui 使用该坐标系布局与接收鼠标输入。
+    /// </summary>
+    public int LogicalHeight { get; }
+
+    /// <summary>
+    /// 逻辑坐标到默认 framebuffer 坐标的 X 轴缩放。
+    /// </summary>
+    public float FramebufferScaleX => FramebufferWidth / (float)LogicalWidth;
+
+    /// <summary>
+    /// 逻辑坐标到默认 framebuffer 坐标的 Y 轴缩放。
+    /// </summary>
+    public float FramebufferScaleY => FramebufferHeight / (float)LogicalHeight;
 
     /// <summary>
     /// 世界画面在默认 framebuffer 中的呈现区域。
@@ -109,6 +137,8 @@ public readonly struct UiPresentContext
             Gl,
             FramebufferWidth,
             FramebufferHeight,
+            LogicalWidth,
+            LogicalHeight,
             WorldViewport,
             target,
             clip,

@@ -42,6 +42,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             CapturePlayMode,
             () => _gameViewPanel?.LastViewportSnapshot ?? GameViewViewportSnapshot.Empty,
             () => _gameViewPanel?.LastPanelOriginFramebuffer ?? default,
+            () => _gameViewPanel?.LastFramebufferScale ?? System.Numerics.Vector2.One,
             () => _gameViewPanel is { Visible: true });
     }
 
