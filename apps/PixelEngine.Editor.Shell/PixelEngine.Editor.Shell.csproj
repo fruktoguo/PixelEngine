@@ -3,6 +3,7 @@
     <OutputType>WinExe</OutputType>
     <AssemblyName>PixelEngine.Editor.Shell</AssemblyName>
     <RootNamespace>PixelEngine.Editor.Shell</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
