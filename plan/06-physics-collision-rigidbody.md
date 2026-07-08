@@ -237,7 +237,7 @@
 - [x] speculative contacts + 多 sub-iteration 推出墙/地/坡（架构 §8.5）。
 - [x] 沿 AABB 边采样固体像素做地面/墙/坡检测：`IsGrounded`/`WallContact`/`SlopeAngle`；step-up；skin width、最大 sub-iteration 可配。
 - [x] 把 `RigidOwned` cell 视为固体；`PhysicsSystem.MoveCharacter` 已在角色水平受阻时经 `RigidStampRegistry` 映射接触边 bodyKey，并复用 `b2Body_ApplyLinearImpulse` 对 dynamic 刚体施反作用冲量。证据：`EnginePhaseDriverTests.PhysicsPhaseCharacterMovePushesRigidOwnedBody`。
-- [x] 脚本创建角色时经 `PhysicsSystem.RegisterCharacterProxy` 注册角色 AABB proxy；相位 8 在 `b2World_Step` 后、`RigidBodyRasterizer.StampInverseSampling` 前对从上方压到角色的动态刚体执行 swept 接触约束，并在写回后裁剪角色 AABB 内的残余 `RigidOwned` stamp，避免掉落 / 旋转碎块穿过玩家后只靠 Demo 脚本下一帧解卡。证据：`PhysicsSyncTests.CharacterProxyBlocksFallingRigidBodyBeforeRestamp`。
+- [x] 脚本创建角色时经 `PhysicsSystem.RegisterCharacterProxy` 注册角色 AABB proxy；相位 8 在 `b2World_Step` 后、`RigidBodyRasterizer.StampInverseSampling` 前对从上方压到角色的动态刚体执行 swept 接触约束，并在写回后裁剪角色 AABB 内的残余 `RigidOwned` stamp，避免掉落 / 旋转碎块穿过玩家后只靠 Demo 脚本下一帧解卡；裁剪残余 stamp 时经 `CellGrid.TryGetFlags` 跳过未驻留 chunk，避免角色 AABB 跨 chunk 边界时冷路径查询崩溃。证据：`PhysicsSyncTests.CharacterProxyBlocksFallingRigidBodyBeforeRestamp`、`PhysicsSyncTests.CharacterProxyBlocksRotatingRigidBodyBeforeRestamp`、`PhysicsSyncTests.CharacterProxyOverlapCleanupSkipsNonResidentChunks`。
 - [x] 公开 `Move(in Vector2 desired, out CharacterCollisionInfo)` + 形状/查询 API，完整中文 XML 注释，零稳态分配。
 
 ### 4.10 PixelEngine.Physics — 编排/诊断/快照

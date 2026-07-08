@@ -216,6 +216,35 @@ public sealed unsafe class PhysicsSyncTests
         }
     }
 
+    /// <summary>
+    /// 验证角色 proxy 清理刚体重叠时跳过未驻留 chunk，避免玩家跨 chunk 边界时因冷路径查询崩溃。
+    /// </summary>
+    [Fact]
+    public void CharacterProxyOverlapCleanupSkipsNonResidentChunks()
+    {
+        PhysicsScale.ConfigureBox2DLengthUnits();
+        B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
+        worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
+        B2WorldId worldId = Box2D.b2CreateWorld(in worldDef);
+
+        try
+        {
+            TestChunkSource source = new(new Chunk(new ChunkCoord(0, 2)));
+            CellGrid grid = new(source, MaterialPropsTable.Empty);
+            PhysicsSystem system = new(worldId, new PhysicsWorld(), grid, new RigidStampRegistry());
+            CharacterController character = new(grid, new Vector2(12f, 190f), new Vector2(6f, 12f));
+            system.RegisterCharacterProxy(character);
+
+            system.SyncStep(1f / 60f);
+
+            Assert.Equal(0, system.LastCharacterProxyContactCount);
+        }
+        finally
+        {
+            Box2D.b2DestroyWorld(worldId);
+        }
+    }
+
     private static BodyLocalMask CreateFilledMask(int width, int height, ushort material, Vector2 origin)
     {
         int area = width * height;

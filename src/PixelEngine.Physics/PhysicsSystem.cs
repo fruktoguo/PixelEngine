@@ -1090,7 +1090,8 @@ public sealed class PhysicsSystem : IDisposable
             {
                 for (int x = rect.MinX; x < rect.MaxX; x++)
                 {
-                    if (!CellFlags.Has(Grid.FlagsAt(x, y), CellFlags.RigidOwned))
+                    if (!Grid.TryGetFlags(x, y, out byte flags) ||
+                        !CellFlags.Has(flags, CellFlags.RigidOwned))
                     {
                         continue;
                     }
