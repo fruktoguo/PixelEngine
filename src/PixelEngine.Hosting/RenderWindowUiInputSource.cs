@@ -11,6 +11,7 @@ internal sealed class RenderWindowUiInputSource : IUiInputSource
     private const int TextBufferCapacity = 256;
 
     private readonly RenderWindow _window;
+    private readonly WindowsImeCompositionReader _imeComposition;
     private readonly char[] _textBuffer = new char[TextBufferCapacity];
     private int _textRead;
     private int _textCount;
@@ -20,6 +21,8 @@ internal sealed class RenderWindowUiInputSource : IUiInputSource
     internal RenderWindowUiInputSource(RenderWindow window)
     {
         _window = window ?? throw new ArgumentNullException(nameof(window));
+        _imeComposition = new WindowsImeCompositionReader(() =>
+            _window.TryGetWin32WindowHandle(out IntPtr hwnd) ? hwnd : IntPtr.Zero);
         for (int i = 0; i < _window.Input.Keyboards.Count; i++)
         {
             _window.Input.Keyboards[i].KeyChar += OnKeyChar;
@@ -141,22 +144,20 @@ internal sealed class RenderWindowUiInputSource : IUiInputSource
     }
 
     /// <summary>
-    /// 当前 Silk.NET 窗口输入源的 IME composition 能力诊断。
+    /// 当前窗口输入源的 IME composition 能力诊断。
     /// </summary>
     public UiTextCompositionCapabilities TextCompositionCapabilities =>
-        UiTextCompositionCapabilities.Unsupported("Silk.NET 窗口输入当前只暴露 KeyChar committed text，未暴露真实平台 IME composition start/update/cancel 事件；预编辑状态保持 inactive，M15 真实平台 IME 仍阻塞。");
+        _imeComposition.Capabilities;
 
     /// <summary>
-    /// 读取当前平台 IME composition 预编辑文本。Silk.NET 当前窗口输入只暴露 KeyChar committed text，未暴露真实 composition 事件，因此这里显式返回非活动状态，避免把 KeyChar 冒充预编辑文本。
+    /// 读取当前平台 IME composition 预编辑文本；已提交文本仍走 <see cref="CaptureText" />。
     /// </summary>
     /// <param name="destination">预编辑文本写入缓冲。</param>
     /// <param name="composition">当前预编辑状态。</param>
     /// <returns>写入字符数量。</returns>
     public int CaptureTextComposition(Span<char> destination, out UiTextComposition composition)
     {
-        _ = destination;
-        composition = UiTextComposition.Inactive;
-        return 0;
+        return _imeComposition.CaptureTextComposition(destination, out composition);
     }
 
     private void OnKeyChar(IKeyboard keyboard, char character)

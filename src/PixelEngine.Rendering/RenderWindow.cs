@@ -178,6 +178,25 @@ public sealed class RenderWindow : IDisposable
     }
 
     /// <summary>
+    /// 尝试取得当前窗口的 Win32 HWND；非 Windows 后端或未暴露 Win32 句柄时返回 false。
+    /// </summary>
+    /// <param name="hwnd">Win32 窗口句柄。</param>
+    /// <returns>当前窗口有有效 HWND 时返回 true。</returns>
+    public bool TryGetWin32WindowHandle(out IntPtr hwnd)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        (IntPtr Hwnd, IntPtr Hdc, IntPtr HInstance)? win32 = _window.Native?.Win32;
+        if (win32 is { } handles && handles.Hwnd != IntPtr.Zero)
+        {
+            hwnd = handles.Hwnd;
+            return true;
+        }
+
+        hwnd = IntPtr.Zero;
+        return false;
+    }
+
+    /// <summary>
     /// 调整窗口尺寸。调用者应随后调用 <see cref="RenderPipeline.Resize"/> 重建渲染目标链。
     /// </summary>
     /// <param name="width">新宽度。</param>
