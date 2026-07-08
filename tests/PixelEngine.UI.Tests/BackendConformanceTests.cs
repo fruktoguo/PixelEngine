@@ -318,6 +318,37 @@ public sealed class BackendConformanceTests : IDisposable
     }
 
     [Fact]
+    public void ManagedFallbackDrawsImeCompositionSelectionOverlay()
+    {
+        string path = WriteUi("""
+            <ui title="Input">
+              <text id="label">Input</text>
+            </ui>
+            """);
+        using ManagedFallbackBackend backend = CreateManagedBackend(out FakeGuiHost gui);
+        backend.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        UiDocumentHandle document = backend.LoadDocument(UiDocumentSource.Asset(path, 8));
+        backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(1), new UiScreenId(8), document, Modal: false)]);
+        backend.Composite(default);
+        gui.Context.Texts.Clear();
+
+        backend.FeedTextComposition(
+            "かな候補",
+            new UiTextComposition(isActive: true, cursorIndex: 3, selectionStart: 1, selectionLength: 2));
+
+        Assert.Equal("IME か[な候]|補", backend.DebugCompositionOverlayText);
+        Assert.True(backend.DebugCompositionOverlayState.IsActive);
+        Assert.Equal(3, backend.DebugCompositionOverlayState.CursorIndex);
+        Assert.Equal(1, backend.DebugCompositionOverlayState.SelectionStart);
+        Assert.Equal(2, backend.DebugCompositionOverlayState.SelectionLength);
+
+        backend.Composite(default);
+
+        Assert.Contains("IME か[な候]|補", gui.Context.Texts);
+        Assert.False(backend.IsDirty);
+    }
+
+    [Fact]
     public void RmlUiVisibleScreenPruningRemovesUnloadedModalAndPreservesStackOrder()
     {
         UiDocumentHandle background = new(10);
