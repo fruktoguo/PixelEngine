@@ -106,6 +106,21 @@ public readonly record struct AssetBrowserItem(
 }
 
 /// <summary>
+/// Project Window 可作为拖拽移动目标的逻辑文件夹。
+/// </summary>
+/// <param name="Path">相对 content 根目录的逻辑文件夹路径；空字符串表示 content 根目录。</param>
+/// <param name="AssetCount">该文件夹及其子文件夹下的资产数量。</param>
+public readonly record struct AssetBrowserFolderItem(
+    string Path,
+    int AssetCount)
+{
+    /// <summary>
+    /// UI 显示名。
+    /// </summary>
+    public string DisplayName => string.IsNullOrWhiteSpace(Path) ? "content/" : Path + "/";
+}
+
+/// <summary>
 /// Project Window 可传递给 Shell 的 typed drag payload。
 /// </summary>
 /// <param name="AssetId">工程级 stable asset id。</param>

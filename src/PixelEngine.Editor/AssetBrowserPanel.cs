@@ -57,6 +57,11 @@ public sealed class AssetBrowserPanel(
     public IReadOnlyList<AssetBrowserItem> FilteredAssets { get; private set; } = [];
 
     /// <summary>
+    /// 当前可作为拖拽移动目标的逻辑文件夹快照。
+    /// </summary>
+    public IReadOnlyList<AssetBrowserFolderItem> FolderTargets { get; private set; } = [];
+
+    /// <summary>
     /// 当前资产类型过滤；null 表示全部类型。
     /// </summary>
     public AssetBrowserItemKind? KindFilter { get; private set; }
@@ -113,6 +118,7 @@ public sealed class AssetBrowserPanel(
     public IReadOnlyList<AssetBrowserItem> Refresh()
     {
         LastAssets = _source.ListAssets();
+        RebuildFolderTargets();
         ApplyFilter();
         return LastAssets;
     }
@@ -303,6 +309,51 @@ public sealed class AssetBrowserPanel(
     }
 
     /// <summary>
+    /// 把 Project Window typed drag payload 移动到目标逻辑文件夹。
+    /// </summary>
+    /// <param name="payload">资产拖拽 payload。</param>
+    /// <param name="targetFolderPath">目标逻辑文件夹；空字符串表示 content 根目录。</param>
+    /// <returns>移动已经执行时返回 true。</returns>
+    public bool TryMoveDragPayloadToFolder(AssetBrowserDragPayload payload, string targetFolderPath)
+    {
+        if (string.IsNullOrWhiteSpace(payload.AssetId) || string.IsNullOrWhiteSpace(payload.Path))
+        {
+            Status = "拖拽移动 payload 缺少 stable asset id 或 logical path。";
+            return false;
+        }
+
+        AssetBrowserItem? item = FindAsset(payload.Path);
+        if (item is null)
+        {
+            Status = $"拖拽移动资产不存在：{payload.Path}";
+            return false;
+        }
+
+        if (!string.Equals(item.Value.AssetId, payload.AssetId, StringComparison.OrdinalIgnoreCase) ||
+            item.Value.Kind != payload.Kind)
+        {
+            Status = $"拖拽移动 payload 已失效：{payload.Path}";
+            return false;
+        }
+
+        if (!TryNormalizeTargetFolder(targetFolderPath, out string normalizedFolder, out string diagnostic))
+        {
+            Status = diagnostic;
+            return false;
+        }
+
+        string fileName = Path.GetFileName(item.Value.Path.Replace('/', Path.DirectorySeparatorChar));
+        string targetPath = string.IsNullOrEmpty(normalizedFolder)
+            ? fileName
+            : normalizedFolder + "/" + fileName;
+        return MoveAsset(new AssetBrowserMoveRequest(
+            item.Value.Path,
+            item.Value.AssetId ?? payload.AssetId,
+            item.Value.Kind,
+            targetPath));
+    }
+
+    /// <summary>
     /// 使用当前待编辑目标路径确认移动 / 重命名。
     /// </summary>
     /// <param name="path">当前资产路径。</param>
@@ -369,6 +420,11 @@ public sealed class AssetBrowserPanel(
         IReadOnlyList<AssetBrowserItem> assets = FilteredAssets.Count == 0 && LastAssets.Count == 0
             ? Refresh()
             : FilteredAssets;
+        for (int i = 0; i < FolderTargets.Count; i++)
+        {
+            DrawFolderDropTarget(FolderTargets[i]);
+        }
+
         for (int i = 0; i < assets.Count; i++)
         {
             DrawAssetRow(assets[i], context.Selection);
@@ -376,6 +432,21 @@ public sealed class AssetBrowserPanel(
 
         ImGui.TextUnformatted(Status);
         ImGui.End();
+    }
+
+    private void DrawFolderDropTarget(AssetBrowserFolderItem folder)
+    {
+        string label = $"{folder.DisplayName} ({folder.AssetCount})##folder-{folder.Path}";
+        _ = ImGui.Selectable(label, false);
+        if (ImGui.BeginDragDropTarget())
+        {
+            if (AssetBrowserDragPayloadImGui.TryAcceptPayload(out AssetBrowserDragPayload payload))
+            {
+                _ = TryMoveDragPayloadToFolder(payload, folder.Path);
+            }
+
+            ImGui.EndDragDropTarget();
+        }
     }
 
     private void DrawAssetRow(AssetBrowserItem item, EditorSelection selection)
@@ -635,6 +706,37 @@ public sealed class AssetBrowserPanel(
         ];
     }
 
+    private void RebuildFolderTargets()
+    {
+        if (LastAssets.Count == 0)
+        {
+            FolderTargets = [];
+            return;
+        }
+
+        Dictionary<string, int> folders = new(StringComparer.OrdinalIgnoreCase)
+        {
+            [string.Empty] = LastAssets.Count,
+        };
+        for (int i = 0; i < LastAssets.Count; i++)
+        {
+            string? folder = GetLogicalDirectoryName(LastAssets[i].Path);
+            while (!string.IsNullOrEmpty(folder))
+            {
+                folders[folder] = folders.TryGetValue(folder, out int count) ? count + 1 : 1;
+                folder = GetLogicalDirectoryName(folder);
+            }
+        }
+
+        FolderTargets =
+        [
+            .. folders
+                .Select(static item => new AssetBrowserFolderItem(item.Key, item.Value))
+                .OrderBy(static item => item.Path.Length == 0 ? 0 : 1)
+                .ThenBy(static item => item.Path, StringComparer.OrdinalIgnoreCase),
+        ];
+    }
+
     private IEnumerable<AssetBrowserItem> ApplySort(IEnumerable<AssetBrowserItem> query)
     {
         return SortMode switch
@@ -669,6 +771,55 @@ public sealed class AssetBrowserPanel(
         }
 
         return null;
+    }
+
+    private static string? GetLogicalDirectoryName(string logicalPath)
+    {
+        string normalized = logicalPath.Replace('\\', '/');
+        int separator = normalized.LastIndexOf('/');
+        return separator <= 0 ? null : normalized[..separator];
+    }
+
+    private static bool TryNormalizeTargetFolder(string targetFolderPath, out string normalized, out string diagnostic)
+    {
+        string candidate = (targetFolderPath ?? string.Empty).Trim().Replace('\\', '/');
+        if (candidate.Length == 0 || candidate == "." || candidate == "/")
+        {
+            normalized = string.Empty;
+            diagnostic = string.Empty;
+            return true;
+        }
+
+        if (Path.IsPathRooted(candidate) || candidate.StartsWith("/", StringComparison.Ordinal))
+        {
+            normalized = string.Empty;
+            diagnostic = $"拖拽移动目标必须是 content 内相对文件夹：{targetFolderPath}";
+            return false;
+        }
+
+        string[] parts = candidate.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        List<string> normalizedParts = new(parts.Length);
+        for (int i = 0; i < parts.Length; i++)
+        {
+            string part = parts[i].Trim();
+            if (part.Length == 0 || part == ".")
+            {
+                continue;
+            }
+
+            if (part == "..")
+            {
+                normalized = string.Empty;
+                diagnostic = $"拖拽移动目标不能越过 content 根目录：{targetFolderPath}";
+                return false;
+            }
+
+            normalizedParts.Add(part);
+        }
+
+        normalized = string.Join("/", normalizedParts);
+        diagnostic = string.Empty;
+        return true;
     }
 
     private static unsafe ImTextureRef CreateTextureRef(uint handle)

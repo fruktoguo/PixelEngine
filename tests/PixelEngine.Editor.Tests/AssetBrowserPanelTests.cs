@@ -301,6 +301,82 @@ public sealed class AssetBrowserPanelTests
     }
 
     /// <summary>
+    /// 验证 Project Window 文件夹拖拽移动会把 stable typed payload 转成同一套 move request。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelMovesDragPayloadToFolderThroughStableRequest()
+    {
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_texture"),
+            new AssetBrowserItem("archive/placeholder.png", AssetBrowserItemKind.Texture, 10, DateTimeOffset.UnixEpoch, null, "asset_placeholder"),
+        ]);
+        List<AssetBrowserMoveRequest> requests = [];
+        AssetBrowserMoveResult MoveAsset(AssetBrowserMoveRequest request)
+        {
+            requests.Add(request);
+            source.ReplaceAssets(
+            [
+                new AssetBrowserItem(request.NewPath, request.Kind, 20, DateTimeOffset.UnixEpoch, null, request.AssetId),
+                new AssetBrowserItem("archive/placeholder.png", AssetBrowserItemKind.Texture, 10, DateTimeOffset.UnixEpoch, null, "asset_placeholder"),
+            ]);
+            return new AssetBrowserMoveResult(true, $"moved {request.NewPath}");
+        }
+
+        AssetBrowserPanel panel = new(source, moveAsset: MoveAsset);
+
+        _ = panel.Refresh();
+        bool moved = panel.TryMoveDragPayloadToFolder(
+            new AssetBrowserDragPayload("asset_texture", "textures/sand.png", AssetBrowserItemKind.Texture),
+            "archive");
+
+        Assert.True(moved);
+        Assert.Contains(panel.FolderTargets, folder => folder.Path == string.Empty && folder.AssetCount == 2);
+        Assert.Contains(panel.FolderTargets, folder => folder.Path == "archive");
+        AssetBrowserMoveRequest request = Assert.Single(requests);
+        Assert.Equal("asset_texture", request.AssetId);
+        Assert.Equal("textures/sand.png", request.Path);
+        Assert.Equal("archive/sand.png", request.NewPath);
+        Assert.Equal(AssetBrowserItemKind.Texture, request.Kind);
+        Assert.Contains(panel.LastAssets, asset => asset.Path == "archive/sand.png" && asset.AssetId == "asset_texture");
+    }
+
+    /// <summary>
+    /// 验证文件夹拖拽移动绑定 stable asset id 和资产类型，旧 payload 不能移动同路径新资产。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelRejectsStaleDragMovePayloads()
+    {
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_new"),
+        ]);
+        List<AssetBrowserMoveRequest> requests = [];
+        AssetBrowserPanel panel = new(source, moveAsset: request =>
+        {
+            requests.Add(request);
+            return new AssetBrowserMoveResult(true, $"moved {request.NewPath}");
+        });
+
+        _ = panel.Refresh();
+        bool movedOldId = panel.TryMoveDragPayloadToFolder(
+            new AssetBrowserDragPayload("asset_old", "textures/sand.png", AssetBrowserItemKind.Texture),
+            "archive");
+        bool movedWrongKind = panel.TryMoveDragPayloadToFolder(
+            new AssetBrowserDragPayload("asset_new", "textures/sand.png", AssetBrowserItemKind.Audio),
+            "archive");
+        bool escaped = panel.TryMoveDragPayloadToFolder(
+            new AssetBrowserDragPayload("asset_new", "textures/sand.png", AssetBrowserItemKind.Texture),
+            "../outside");
+
+        Assert.False(movedOldId);
+        Assert.False(movedWrongKind);
+        Assert.False(escaped);
+        Assert.Empty(requests);
+        Assert.Contains("content 根目录", panel.Status, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证移动确认绑定原始 stable asset id，资产刷新成同路径新 id 后不能复用旧确认。
     /// </summary>
     [Fact]
