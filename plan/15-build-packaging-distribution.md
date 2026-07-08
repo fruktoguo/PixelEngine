@@ -52,7 +52,7 @@
 - [x] build-player dev-audit 分流已落地：`-DevLayout` 允许保留 pdb/xml，但仍检查结构存在性和 player-only 断言；Release 无符号构建走完整发行审计。
 - [x] 内容资产打包已落地：`content/` 是单一真相源，`materials.json`、`reactions.json`、`weapons.json`、场景、纹理、音频进入包根 `content/`，不复制到 `app/content/`。
 - [x] UI native 打包边界已登记：Web-first UI Runtime 的 RmlUi 与 Ultralight 若启用，只能 dynamic-only 落 `runtimes/<rid>/native/`，纳入许可和 SHA256SUMS，不进入 Box2D dual-build；当前 RmlUi native shim 仅为 desktop GL3 renderer，ANGLE/GLES native profile 未闭合时必须经 profile gate 回退 ManagedFallback；当前 Ultralight optional profile inactive，发行审计拒绝未激活的 `Ultralight` / `WebCore` / `AppCore` native 混入。
-- [x] 纪律测试已记录：`HostingProjectDisciplineTests.ReleaseRidGateDeclaresWindowsActiveSetAndMatrixOutputs`、`ReleaseRidGateDryRunActivatesDormantRidFromConfigOnly`、`EditorShellBuildTests.PlayerPackageAuditRejectsEditorClosureAllowsImGuiAndSupportsDevLayout`、`PerformanceHardeningToolingDisciplineTests.ReleaseEvidencePreflightRejectsNonTagUploadReportAsReleaseSuccess`、`ReleaseEvidencePreflightRejectsMismatchedRunIdentity` 等锁定关键边界。
+- [x] 纪律测试已记录：`HostingProjectDisciplineTests.ReleaseRidGateDeclaresWindowsActiveSetAndMatrixOutputs`、`ReleaseRidGateDryRunActivatesDormantRidFromConfigOnly`、`EditorShellBuildTests.PlayerPackageAuditRejectsEditorClosureAllowsImGuiAndSupportsDevLayout`、`PerformanceHardeningToolingDisciplineTests.ReleaseEvidencePreflightRejectsNonTagUploadReportAsReleaseSuccess`、`ReleaseEvidencePreflightRejectsMismatchedRunIdentity`、`ReleaseEvidencePreflightRejectsReportMissingRunIdentityFields` 等锁定关键边界。
 
 ---
 
