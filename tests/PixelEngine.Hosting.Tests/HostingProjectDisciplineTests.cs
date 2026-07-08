@@ -103,6 +103,25 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证正式输出 Demo 默认请求 Web-first UI 产品主路径 RmlUi，并把请求后端写入验证记录。
+    /// </summary>
+    [Fact]
+    public void FinalOutputDemoRequestsRmlUiProductUiBackend()
+    {
+        string root = FindRepositoryRoot();
+        string finalOutputScript = File.ReadAllText(Path.Combine(root, "tools", "update-final-output.ps1"));
+        string buildPlayerPs1 = File.ReadAllText(Path.Combine(root, "tools", "build-player.ps1"));
+        string buildPlayerSh = File.ReadAllText(Path.Combine(root, "tools", "build-player.sh"));
+
+        Assert.Contains("[string]$DemoRuntimeUiBackend = 'RmlUi'", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("'-RuntimeUiBackend', $DemoRuntimeUiBackend", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("demoRuntimeUiBackendRequested = $DemoRuntimeUiBackend", finalOutputScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("'-RuntimeUiBackend', 'ManagedFallback'", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("runtimeUiBackend = $RuntimeUiBackend", buildPlayerPs1, StringComparison.Ordinal);
+        Assert.Contains("\"runtimeUiBackend\"", buildPlayerSh, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证编辑器壳只通过中性 bootstrap 创建唯一窗口，不直接散落创建 RenderWindow。
     /// </summary>
     [Fact]

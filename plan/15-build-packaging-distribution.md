@@ -48,7 +48,7 @@
 - [x] GitHub Release 上传报告约束已写入预检：`workflow_run` 必须来自 tag push，且必须覆盖 package asset 与唯一 `SHA256SUMS`；只写 success、缺少同源 `workflow` / `run_attempt` 或 `workflow_dispatch` 不能冒充完成。
 - [x] 确定性打包工具已落地并纳入 solution：`tools/PixelEngine.Tools.DeterministicPackage` 固定 entry 顺序、时间戳、权限与 owner，release job 二次 package 生成 deterministic hash report，`dotnet build PixelEngine.sln` 会覆盖该工具项目。
 - [x] build-player 编排器已落地：`tools/build-player.ps1` 与 `.sh` 串 `build-native`、publish、verify、package、audit，输出 `schema=pixelengine.build/v1` NDJSON 与 `build-result.json`。
-- [x] 本机正式输出目录已落地：`tools/update-final-output.ps1` 先在 `artifacts/final-output-staging/<timestamp>/` 构建并验证 EditorShell 默认工作台、编辑器出包链路和 Demo 窗口短跑，全部通过后才原子替换 `最终输出/编辑器`、`最终输出/游戏Demo` 与 `_验证记录/manifest.json`；`最终输出/` 只作为本机正式产物入口并已加入 `.gitignore`。正式输出更新脚本的发布 / 验证子进程已显式 `UseShellExecute=false` + `CreateNoWindow=true`，配合 EditorShell / Demo `OutputType=WinExe` 防止正式应用验证或 Build And Run 链路弹出控制台窗口。
+- [x] 本机正式输出目录已落地：`tools/update-final-output.ps1` 先在 `artifacts/final-output-staging/<timestamp>/` 构建并验证 EditorShell 默认工作台、编辑器出包链路和 Demo 窗口短跑，全部通过后才原子替换 `最终输出/编辑器`、`最终输出/游戏Demo` 与 `_验证记录/manifest.json`；`最终输出/` 只作为本机正式产物入口并已加入 `.gitignore`。正式输出 Demo 默认请求 Web-first UI 产品主路径 `RmlUi`，并在 manifest / build-result 记录请求后端；若目标上下文或 native 不满足 `RmlUiNativeProfileGate`，运行时仍显式回退 `ManagedFallback` 并记录 `GameUiBackendSelection`，不把 fallback 冒充 RmlUi/GLES/Ultralight 验收。正式输出更新脚本的发布 / 验证子进程已显式 `UseShellExecute=false` + `CreateNoWindow=true`，配合 EditorShell / Demo `OutputType=WinExe` 防止正式应用验证或 Build And Run 链路弹出控制台窗口。
 - [x] build-player 产品名契约已落地：`-ProductName` 只影响玩家可见启动器和包名，内部 `AssemblyName` 默认保持 `PixelEngine.Demo`，避免带空格 assembly 破坏 restore 或 apphost 载荷。
 - [x] build-player dev-audit 分流已落地：`-DevLayout` 允许保留 pdb/xml，但仍检查结构存在性和 player-only 断言；Release 无符号构建走完整发行审计。
 - [x] 内容资产打包已落地：`content/` 是单一真相源，`materials.json`、`reactions.json`、`weapons.json`、场景、纹理、音频进入包根 `content/`，不复制到 `app/content/`。
@@ -91,7 +91,7 @@
 
 - [x] 本机 Windows-first 探针证据路径：`docs/release-reports/2026-07-02-win-x64-publish.md` 记录 `win-x64` R2R/AOT publish、smoke、package、audit；该路径只作为本地证据，不升级为最终 release 完成。
 - [x] 一键出包入口命令：`pwsh tools/build-player.ps1 -Rid win-x64 -Channel r2r -Configuration Release -StartScene scenes/lava-mine.scene`，输出 `build-result.json` 与玩家包归档。
-- [x] 本机正式输出更新命令：`pwsh -NoProfile -File tools/update-final-output.ps1`，输出 `最终输出/编辑器`、`最终输出/游戏Demo` 与 `最终输出/_验证记录/manifest.json`；只有全部验证通过后才替换正式目录。
+- [x] 本机正式输出更新命令：`pwsh -NoProfile -File tools/update-final-output.ps1`，输出 `最终输出/编辑器`、`最终输出/游戏Demo` 与 `最终输出/_验证记录/manifest.json`；只有全部验证通过后才替换正式目录，默认 `-DemoRuntimeUiBackend RmlUi`，可显式覆盖为 `ManagedFallback`/`Ultralight` 用于回归诊断。
 - [x] 玩家包审计命令：`pwsh tools/audit-release-artifacts.ps1 -PublishRoot artifacts/publish/win-x64/r2r -PackageRoot artifacts/package -ActiveRids win-x64 -RequireAll` 或 Bash 等价入口，用于同时审计 publish 与 package 结构、player-only 断言和 inactive Ultralight native 混入门禁。
 - [x] 矩阵 dry-run 命令：`pwsh tools/release-matrix.ps1 -Config tools/release-rids.json -IncludeWinArm64 true`，用于验证 active RID 派生 package count 和 asset count。
 - [!] 最终 release 预检命令：`pwsh tools/release-evidence-preflight.ps1 -Manifest <release-evidence.json> -ActiveRids <active-rids> -ExpectedPackageCount <n>`；`tools/release-evidence-preflight.ps1|.sh` 为等价入口，只接受 tag push 的 Release workflow 证据，必须在 tag release 证据齐全后才能解除阻塞。
