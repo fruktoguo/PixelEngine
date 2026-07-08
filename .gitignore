@@ -18,6 +18,7 @@ artifacts/
 publish/
 runtimes/
 app/
+**/app/
 **/player/app/
 **/package/*/app/
 *.binlog
