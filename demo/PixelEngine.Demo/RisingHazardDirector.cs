@@ -40,7 +40,7 @@ public sealed class RisingHazardDirector : Behaviour
     public float TargetSurfaceY { get; set; } = 196f;
 
     /// <summary>
-    /// 从初始水位升到目标水位所需秒数。
+    /// 从初始熔岩线升到目标熔岩线所需秒数。
     /// </summary>
     public float RiseSeconds { get; set; } = 180f;
 
@@ -60,12 +60,12 @@ public sealed class RisingHazardDirector : Behaviour
     public float EmitterIntervalSeconds { get; set; } = 0.08f;
 
     /// <summary>
-    /// 水位以下补充熔岩的水平采样间距，单位 cell；越小越密，默认保持低开销。
+    /// 熔岩线以下补充熔岩的水平采样间距，单位 cell；越小越密，默认保持低开销。
     /// </summary>
     public int FillStepCells { get; set; } = 12;
 
     /// <summary>
-    /// 水位以下补充熔岩的垂直采样间距，单位 cell。
+    /// 熔岩线以下补充熔岩的垂直采样间距，单位 cell。
     /// </summary>
     public int FillVerticalStepCells { get; set; } = 8;
 

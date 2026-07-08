@@ -116,6 +116,20 @@ public sealed class PlayerHealth : Behaviour
         _player?.Respawn();
     }
 
+    /// <summary>
+    /// 由脚本层外部碰撞事件施加伤害，例如动态刚体碎块主动压入玩家 AABB。
+    /// </summary>
+    /// <param name="amount">伤害量。</param>
+    public void ApplyExternalDamage(float amount)
+    {
+        if (!float.IsFinite(amount) || amount <= 0f)
+        {
+            return;
+        }
+
+        ApplyDamage(amount);
+    }
+
     private void ResolveMaterials()
     {
         if (_materialsResolved)

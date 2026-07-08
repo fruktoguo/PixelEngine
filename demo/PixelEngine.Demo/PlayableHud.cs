@@ -214,7 +214,7 @@ public sealed class PlayableHud : Behaviour
         };
         gui.TextColored(
             $"目标 水晶 {_mission.CrystalsCollected}/{Math.Max(1, _mission.RequiredCrystals)}  " +
-            $"时间 {_mission.RemainingSeconds:0}s  水位 {_mission.LavaSurfaceY:0}  分数 {_mission.Score}",
+            $"时间 {_mission.RemainingSeconds:0}s  熔岩线 {_mission.LavaSurfaceY:0}  分数 {_mission.Score}",
             stateColor);
     }
 

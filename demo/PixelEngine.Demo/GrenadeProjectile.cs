@@ -56,7 +56,7 @@ public sealed class GrenadeProjectile : Behaviour
         _fuseRemaining = Math.Max(0.01f, fuseSeconds);
         _radius = Math.Max(1, radius);
         _impulse = Math.Max(1f, impulse);
-        _blastForce = Math.Max(_impulse, Math.Max(1f, damage) / 16f);
+        _blastForce = Math.Max(_impulse, Math.Max(1f, damage));
         _gravity = Math.Max(0f, gravity);
         _bounce = Math.Clamp(bounce, 0f, 0.9f);
         _impactCue = string.IsNullOrWhiteSpace(impactCue) ? "explosion.wav" : impactCue;
