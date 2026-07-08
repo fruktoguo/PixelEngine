@@ -9,25 +9,38 @@ namespace PixelEngine.UI.Tests;
 public sealed class RmlUiGlBootstrapSmokeTests
 {
     [Fact]
-    public void RmlUiCompositeResolvesPresentTargetViewportSize()
+    public void RmlUiCompositeResolvesPresentTargetViewportRegion()
     {
         UiPresentContext context = default;
         UiPresentContext targetContext = context.WithTarget(new UiPresentTarget(12, 16, 320, 180, 1f));
 
-        Assert.Equal((64, 48), RmlUiBackend.ResolveCompositeViewportSize(in context, 64, 48));
-        Assert.Equal((320, 180), RmlUiBackend.ResolveCompositeViewportSize(in targetContext, 64, 48));
+        Assert.Equal((0, 0, 64, 48), RmlUiBackend.ResolveCompositeViewportRegion(in context, 64, 48));
+        Assert.Equal((12, 16, 320, 180), RmlUiBackend.ResolveCompositeViewportRegion(in targetContext, 64, 48));
+        Assert.Equal((12, 524, 320, 180), RmlUiBackend.ResolveCompositeViewportRegion(new UiPresentTarget(12, 16, 320, 180, 1f), 720, 64, 48));
     }
 
     [Fact]
     public void RmlUiCompositeSourceDocumentsPresentTargetViewportContract()
     {
         string source = File.ReadAllText(ProjectPath("src", "PixelEngine.UI", "RmlUiBackend.cs"));
+        string nativeBinding = File.ReadAllText(ProjectPath("src", "PixelEngine.UI", "RmlUiNative.cs"));
+        string nativeShim = File.ReadAllText(ProjectPath("native", "ui_native", "PixelEngineUiNative.cpp"));
+        string gl3Renderer = File.ReadAllText(ProjectPath("native", "rmlui", "Backends", "RmlUi_Renderer_GL3.cpp"));
 
-        Assert.Contains("context.Target.IsValid", source, StringComparison.Ordinal);
-        Assert.Contains("context.Target.Width", source, StringComparison.Ordinal);
-        Assert.Contains("context.Target.Height", source, StringComparison.Ordinal);
-        Assert.Contains("RmlUiNative.RendererSetViewport(_renderer, frameWidth, frameHeight)", source, StringComparison.Ordinal);
+        Assert.Contains("context.Target", source, StringComparison.Ordinal);
+        Assert.Contains("target.IsValid", source, StringComparison.Ordinal);
+        Assert.Contains("target.X", source, StringComparison.Ordinal);
+        Assert.Contains("target.Y", source, StringComparison.Ordinal);
+        Assert.Contains("target.Width", source, StringComparison.Ordinal);
+        Assert.Contains("target.Height", source, StringComparison.Ordinal);
+        Assert.Contains("context.FramebufferHeight", source, StringComparison.Ordinal);
+        Assert.Contains("framebufferHeight - target.Y - target.Height", source, StringComparison.Ordinal);
+        Assert.Contains("RmlUiNative.RendererSetViewportRegion(_renderer, x, y, frameWidth, frameHeight)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("context.FramebufferWidth, context.FramebufferHeight", source, StringComparison.Ordinal);
+        Assert.Contains("peui_native_renderer_set_viewport_region", nativeBinding, StringComparison.Ordinal);
+        Assert.Contains("peui_native_renderer_set_viewport_region", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("renderer->renderer->SetViewport(width, height, x, y)", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("glViewport(viewport_offset_x, viewport_offset_y, viewport_width, viewport_height)", gl3Renderer, StringComparison.Ordinal);
     }
 
     [Fact]
