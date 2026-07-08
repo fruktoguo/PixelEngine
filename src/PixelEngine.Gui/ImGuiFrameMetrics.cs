@@ -3,7 +3,7 @@ using System.Numerics;
 namespace PixelEngine.Gui;
 
 /// <summary>
-/// ImGui 帧尺寸换算结果。DisplaySize 使用平台逻辑坐标，DisplayFramebufferScale 描述逻辑坐标到默认 framebuffer 的缩放。
+/// ImGui 帧尺寸换算结果。Hexa OpenGL 后端按 DisplaySize 建默认 framebuffer viewport，因此 DisplaySize 使用 framebuffer 像素。
 /// </summary>
 public readonly record struct ImGuiFrameMetrics
 {
@@ -13,8 +13,10 @@ public readonly record struct ImGuiFrameMetrics
         LogicalHeight = logicalHeight;
         FramebufferScaleX = framebufferScaleX;
         FramebufferScaleY = framebufferScaleY;
-        DisplaySize = new Vector2(logicalWidth, logicalHeight);
-        DisplayFramebufferScale = new Vector2(framebufferScaleX, framebufferScaleY);
+        FramebufferWidth = Math.Max(1, (int)MathF.Round(logicalWidth * framebufferScaleX));
+        FramebufferHeight = Math.Max(1, (int)MathF.Round(logicalHeight * framebufferScaleY));
+        DisplaySize = new Vector2(FramebufferWidth, FramebufferHeight);
+        DisplayFramebufferScale = Vector2.One;
     }
 
     /// <summary>
@@ -28,6 +30,16 @@ public readonly record struct ImGuiFrameMetrics
     public int LogicalHeight { get; }
 
     /// <summary>
+    /// 默认 framebuffer 宽度。
+    /// </summary>
+    public int FramebufferWidth { get; }
+
+    /// <summary>
+    /// 默认 framebuffer 高度。
+    /// </summary>
+    public int FramebufferHeight { get; }
+
+    /// <summary>
     /// 逻辑坐标到默认 framebuffer 坐标的 X 轴缩放。
     /// </summary>
     public float FramebufferScaleX { get; }
@@ -38,12 +50,12 @@ public readonly record struct ImGuiFrameMetrics
     public float FramebufferScaleY { get; }
 
     /// <summary>
-    /// 传给 ImGuiIO.DisplaySize 的逻辑显示尺寸。
+    /// 传给 ImGuiIO.DisplaySize 的显示尺寸。Hexa OpenGL 后端要求它与默认 framebuffer viewport 一致。
     /// </summary>
     public Vector2 DisplaySize { get; }
 
     /// <summary>
-    /// 传给 ImGuiIO.DisplayFramebufferScale 的 framebuffer 缩放。
+    /// 传给 ImGuiIO.DisplayFramebufferScale 的 framebuffer 缩放；Hexa OpenGL 后端路径已在 DisplaySize 中吸收缩放。
     /// </summary>
     public Vector2 DisplayFramebufferScale { get; }
 
@@ -64,6 +76,14 @@ public readonly record struct ImGuiFrameMetrics
             logicalHeight,
             NormalizeScale(framebufferScaleX),
             NormalizeScale(framebufferScaleY));
+    }
+
+    /// <summary>
+    /// 将平台逻辑鼠标坐标映射到当前 ImGui framebuffer 坐标。
+    /// </summary>
+    public Vector2 MapMousePosition(float x, float y)
+    {
+        return new Vector2(x * FramebufferScaleX, y * FramebufferScaleY);
     }
 
     private static float NormalizeScale(float scale)

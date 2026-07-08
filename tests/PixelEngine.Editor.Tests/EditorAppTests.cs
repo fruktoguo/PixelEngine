@@ -197,15 +197,20 @@ public sealed class EditorAppTests
     }
 
     /// <summary>
-    /// 验证高 DPI ImGui 帧使用逻辑布局尺寸与独立 framebuffer scale，避免把 UI 压到左下 1/4。
+    /// 验证高 DPI ImGui 帧对 Hexa OpenGL 后端使用 framebuffer 尺寸，避免 viewport 只覆盖左下 1/4。
     /// </summary>
     [Fact]
-    public void ImGuiFrameMetricsKeepsLogicalDisplaySizeAndFramebufferScaleSeparate()
+    public void ImGuiFrameMetricsUsesFramebufferDisplaySizeForHexaBackend()
     {
         ImGuiFrameMetrics metrics = ImGuiFrameMetrics.Create(640, 360, 2f, 2f);
 
-        Assert.Equal(new Vector2(640f, 360f), metrics.DisplaySize);
-        Assert.Equal(new Vector2(2f, 2f), metrics.DisplayFramebufferScale);
+        Assert.Equal(640, metrics.LogicalWidth);
+        Assert.Equal(360, metrics.LogicalHeight);
+        Assert.Equal(1280, metrics.FramebufferWidth);
+        Assert.Equal(720, metrics.FramebufferHeight);
+        Assert.Equal(new Vector2(1280f, 720f), metrics.DisplaySize);
+        Assert.Equal(Vector2.One, metrics.DisplayFramebufferScale);
+        Assert.Equal(new Vector2(200f, 100f), metrics.MapMousePosition(100f, 50f));
     }
 
     /// <summary>
