@@ -15,6 +15,7 @@ using ScriptUiEvent = PixelEngine.Scripting.UiEvent;
 using ScriptUiModelName = PixelEngine.Scripting.UiModelName;
 using ScriptUiPathId = PixelEngine.Scripting.UiPathId;
 using ScriptUiScreenHandle = PixelEngine.Scripting.UiScreenHandle;
+using ScriptUiStringHandle = PixelEngine.Scripting.UiStringHandle;
 using ScriptUiValue = PixelEngine.Scripting.UiValue;
 
 namespace PixelEngine.Demo.Tests;
@@ -278,6 +279,9 @@ public sealed class DemoUiContentTests
         FakeGameUiService ui = new();
 
         controller.StartForService(ui);
+        ScriptUiStringHandle title = ui.InternString("晶体 3/3");
+        Assert.Equal(title, ui.InternString("晶体 3/3"));
+        Assert.NotEqual(title, ui.InternString("暂停"));
         ui.Raise(GameUiDemoController.Action("open_settings"));
         ScriptUiScreenHandle settings = controller.ModalScreen;
         ui.Raise(GameUiDemoController.Action("open_inventory"));
@@ -1448,6 +1452,7 @@ public sealed class DemoUiContentTests
     private sealed class FakeGameUiService : ScriptGameUiService
     {
         private int _nextHandle = 1;
+        private readonly Dictionary<string, ScriptUiStringHandle> _strings = new(StringComparer.Ordinal);
 
         public event Action<ScriptUiEvent>? UiEventRaised;
 
@@ -1483,6 +1488,19 @@ public sealed class DemoUiContentTests
             _ = screen;
             _ = modelName;
             _ = model;
+        }
+
+        public ScriptUiStringHandle InternString(string value)
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            if (_strings.TryGetValue(value, out ScriptUiStringHandle existing))
+            {
+                return existing;
+            }
+
+            ScriptUiStringHandle handle = new(_strings.Count + 1);
+            _strings.Add(value, handle);
+            return handle;
         }
 
         public void SetValue(ScriptUiScreenHandle screen, ScriptUiPathId path, in ScriptUiValue value)

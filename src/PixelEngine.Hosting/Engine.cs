@@ -638,7 +638,8 @@ public sealed class Engine : IDisposable
         FontEngine fontEngine = new(new FontEngineOptions(Path.Combine(Context.Options.ContentRoot, "ui")));
         UiFontSelection fontSelection = fontEngine.Resolve();
         UiBackendKind requestedBackend = Context.Options.GameUiBackend;
-        IGameUiBackend backend = CreateGameUiBackend(window, requestedBackend, out string? fallbackReason);
+        UiStringPool strings = new();
+        IGameUiBackend backend = CreateGameUiBackend(window, requestedBackend, strings, out string? fallbackReason);
         GameUiHost host = new(backend);
         try
         {
@@ -667,7 +668,7 @@ public sealed class Engine : IDisposable
         inputRouter.TextCompositionCapabilities.Validate();
         Context.RegisterService(inputRouter.TextCompositionCapabilities);
         Context.RegisterService(inputRouter);
-        GameUiServiceBridge service = new(host, Context.Options.ContentRoot);
+        GameUiServiceBridge service = new(host, Context.Options.ContentRoot, stringPool: strings);
         Context.RegisterService<GameUiServiceBridge>(service);
         Context.RegisterService<IGameUiService>(service);
         GameUiPhaseDriver driver = new(host, eventSink: service, modelPusher: service);
@@ -677,7 +678,11 @@ public sealed class Engine : IDisposable
         return host;
     }
 
-    private IGameUiBackend CreateGameUiBackend(RenderWindow window, UiBackendKind requestedBackend, out string? fallbackReason)
+    private IGameUiBackend CreateGameUiBackend(
+        RenderWindow window,
+        UiBackendKind requestedBackend,
+        UiStringPool strings,
+        out string? fallbackReason)
     {
         fallbackReason = null;
         if (requestedBackend == UiBackendKind.ManagedFallback)
@@ -703,7 +708,7 @@ public sealed class Engine : IDisposable
                     $"RmlUi native 不可用：{probe.Error ?? "unknown"}。");
             }
 
-            return new RmlUiBackend(window);
+            return new RmlUiBackend(window, stringResolver: strings);
         }
 
         if (requestedBackend == UiBackendKind.Ultralight)

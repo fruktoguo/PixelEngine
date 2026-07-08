@@ -10,6 +10,7 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
 {
     private readonly RuntimeUi.GameUiHost _host;
     private readonly GameUiModelBridge _modelBridge;
+    private readonly RuntimeUi.UiStringPool _strings;
     private readonly string _uiRoot;
     private readonly RuntimeUi.UiManifest? _manifest;
     private readonly List<EventSubscription> _scriptEventSubscriptions = [];
@@ -22,10 +23,16 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     /// <param name="host">运行时 UI 宿主。</param>
     /// <param name="contentRoot">内容根目录。</param>
     /// <param name="manifest">可选的已加载 UI 清单；为 null 时若 content/ui/ui-manifest.json 存在则自动加载。</param>
-    public GameUiServiceBridge(RuntimeUi.GameUiHost host, string contentRoot, RuntimeUi.UiManifest? manifest = null)
+    /// <param name="stringPool">脚本与运行时后端共享的 UI 字符串池。</param>
+    public GameUiServiceBridge(
+        RuntimeUi.GameUiHost host,
+        string contentRoot,
+        RuntimeUi.UiManifest? manifest = null,
+        RuntimeUi.UiStringPool? stringPool = null)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _modelBridge = new GameUiModelBridge(_host);
+        _strings = stringPool ?? new RuntimeUi.UiStringPool();
         ArgumentException.ThrowIfNullOrWhiteSpace(contentRoot);
         _uiRoot = Path.Combine(Path.GetFullPath(contentRoot), "ui");
         _manifest = manifest ?? LoadManifestIfPresent(_uiRoot);
@@ -150,6 +157,17 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     public void BindModel(ScriptUi.UiScreenHandle screen, ScriptUi.UiModelName modelName, ScriptUi.IUiModel model)
     {
         _modelBridge.BindModel(screen, modelName, model);
+    }
+
+    /// <summary>
+    /// 把脚本文本登记到运行时字符串池，并返回脚本可写入模型的同值句柄。
+    /// </summary>
+    /// <param name="value">要显示的文本。</param>
+    /// <returns>脚本侧字符串句柄。</returns>
+    public ScriptUi.UiStringHandle InternString(string value)
+    {
+        RuntimeUi.UiStringHandle handle = _strings.Intern(value);
+        return new ScriptUi.UiStringHandle(handle.Value);
     }
 
     /// <summary>

@@ -48,6 +48,7 @@ public sealed class GameUiFacadeTests
         IGameUiService gameUi = ((IScriptContext)context).GameUi;
         IGameUiService ui = ((IScriptContext)context).Ui;
         UiScreenHandle screen = gameUi.ShowScreen("main");
+        UiStringHandle text = gameUi.InternString("开始游戏");
         gameUi.HideScreen(screen);
         gameUi.BindModel(screen, new UiModelName(1), new MissingModel());
         gameUi.SetValue(screen, new UiPathId(7), new UiValue(42L));
@@ -56,6 +57,7 @@ public sealed class GameUiFacadeTests
         Assert.Same(NoopGameUiService.Instance, gameUi);
         Assert.Same(gameUi, ui);
         Assert.Equal(default, screen);
+        Assert.Equal(default, text);
         Assert.False(gameUi.TryGetValue(screen, new UiPathId(7), out UiValue value));
         Assert.Equal(default, value);
     }
@@ -86,6 +88,7 @@ public sealed class GameUiFacadeTests
         IGameUiService gameUi = NoopGameUiService.Instance;
         UiScreenHandle screen = gameUi.ShowScreen("hud");
         UiScreenHandle modal = gameUi.PushModal("pause");
+        UiStringHandle text = gameUi.InternString("暂停");
 
         gameUi.HideScreen(new UiScreenHandle(99));
         gameUi.BindModel(new UiScreenHandle(99), new UiModelName(1), new MissingModel());
@@ -94,6 +97,7 @@ public sealed class GameUiFacadeTests
 
         Assert.Equal(default, screen);
         Assert.Equal(default, modal);
+        Assert.Equal(default, text);
         Assert.False(gameUi.TryGetValue(new UiScreenHandle(99), new UiPathId(7), out UiValue value));
         Assert.Equal(default, value);
     }

@@ -72,6 +72,48 @@ public sealed class GameUiServiceBridgeTests
     }
 
     /// <summary>
+    /// 验证脚本侧 InternString 使用与运行时后端共享的字符串池，写入模型后仍保留句柄载荷。
+    /// </summary>
+    [Fact]
+    public void BridgeInternsStringsIntoSharedRuntimeStringPool()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-strings-{Guid.NewGuid():N}");
+        string uiRoot = Path.Combine(root, "ui");
+        _ = Directory.CreateDirectory(uiRoot);
+        File.WriteAllText(Path.Combine(uiRoot, "main.xhtml"), "<ui><text>Main</text></ui>");
+        try
+        {
+            RecordingBackend backend = new();
+            using RuntimeUi.GameUiHost host = new(backend);
+            host.Initialize(new RuntimeUi.UiBackendInitializeInfo(
+                new RuntimeUi.UiViewport(0, 0, 320, 240, 1f),
+                RuntimeUi.UiBackendKind.ManagedFallback));
+            RuntimeUi.UiStringPool strings = new();
+            GameUiServiceBridge bridge = new(host, root, stringPool: strings);
+
+            ScriptUi.UiStringHandle first = bridge.InternString("晶体 3/3");
+            ScriptUi.UiStringHandle duplicate = bridge.InternString("晶体 3/3");
+            ScriptUi.UiStringHandle second = bridge.InternString("暂停");
+            ScriptUi.UiScreenHandle screen = bridge.ShowScreen("main");
+            bridge.SetValue(screen, new ScriptUi.UiPathId(7), ScriptUi.UiValue.FromStringHandle(first));
+
+            Assert.Equal(first, duplicate);
+            Assert.NotEqual(first, second);
+            Assert.True(strings.TryGetString(new RuntimeUi.UiStringHandle(first.Value), out string resolved));
+            Assert.Equal("晶体 3/3", resolved);
+            Assert.True(bridge.TryGetValue(screen, new ScriptUi.UiPathId(7), out ScriptUi.UiValue roundTrip));
+            Assert.Equal(first, roundTrip.AsStringHandle());
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证接入脚本事件总线后，UI 事件不会同步调用脚本处理器，而是等待脚本相位 drain。
     /// </summary>
     [Fact]
