@@ -8,7 +8,7 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
 {
     public const string PanelTitle = EditorDockSpace.PlayerSettingsWindowTitle;
     private static readonly UiBackendKind[] UiBackendOptions = [UiBackendKind.ManagedFallback, UiBackendKind.RmlUi, UiBackendKind.Ultralight];
-    private static readonly string[] UiBackendLabels = ["ManagedFallback", "RmlUi", "Ultralight (inactive optional profile → ManagedFallback)"];
+    private static readonly string[] UiBackendLabels = [.. UiBackendOptions.Select(UltralightOptionalProfileGate.GetDisplayLabel)];
     private static readonly PlayerReleaseChannel[] ReleaseOptions = [PlayerReleaseChannel.Development, PlayerReleaseChannel.Production];
     private static readonly string[] ReleaseLabels = ["Development", "Production"];
     private readonly PlayerSettingsStore _store;

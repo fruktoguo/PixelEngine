@@ -8,7 +8,7 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
 {
     public const string PanelTitle = EditorDockSpace.ProjectSettingsWindowTitle;
     private static readonly UiBackendKind[] UiBackendOptions = [UiBackendKind.ManagedFallback, UiBackendKind.RmlUi, UiBackendKind.Ultralight];
-    private static readonly string[] UiBackendLabels = ["ManagedFallback", "RmlUi", "Ultralight"];
+    private static readonly string[] UiBackendLabels = [.. UiBackendOptions.Select(UltralightOptionalProfileGate.GetDisplayLabel)];
     private readonly ProjectSettingsStore _store;
     private ProjectSettingsDto _settings;
     private string _validationMessage = string.Empty;
@@ -64,6 +64,7 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
             ScriptSourceDir = _settings.ScriptSourceDir,
             StartScene = _settings.StartScene,
             DefaultUiBackend = _settings.DefaultUiBackend,
+            DefaultUiBackendDiagnostic = UltralightOptionalProfileGate.GetInactiveReason(_settings.DefaultUiBackend),
             RequireStableMaterialNames = _settings.ResourceRules.RequireStableMaterialNames,
             ContentFileGlobCount = _settings.ResourceRules.ContentFileGlobs?.Length ?? 0,
             SaveLayoutOnExit = _settings.EditorPreferences.SaveLayoutOnExit,
@@ -124,6 +125,11 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
         {
             next = next with { DefaultUiBackend = UiBackendOptions[backend] };
             changed = true;
+        }
+
+        if (next.DefaultUiBackend == UiBackendKind.Ultralight)
+        {
+            ImGui.TextWrapped(UltralightOptionalProfileGate.InactiveReason);
         }
 
         bool stableNames = _settings.ResourceRules.RequireStableMaterialNames;
@@ -206,6 +212,8 @@ internal sealed record ScriptedProjectSettingsProbeSnapshot
     public string StartScene { get; init; } = string.Empty;
 
     public UiBackendKind DefaultUiBackend { get; init; }
+
+    public string DefaultUiBackendDiagnostic { get; init; } = string.Empty;
 
     public bool RequireStableMaterialNames { get; init; }
 

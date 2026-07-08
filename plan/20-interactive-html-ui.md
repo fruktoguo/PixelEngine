@@ -74,7 +74,7 @@
 
 - [!] **RmlUi ANGLE/GLES profile**：需要真实 GLES3 renderer/loader、shader profile、同一 GL/ANGLE context 函数表注入、状态恢复与真实窗口 smoke；当前 GL3 renderer 不得标为双 profile 完成。
 - [!] **真实平台 IME composition**：需要 Windows/macOS/Linux 目标输入后端提供 composition start/update/commit/cancel、候选/预编辑可视化、focus/capture 清理与 RmlUi/ManagedFallback/Ultralight 一致性；KeyChar/committed text 只能算提交文本。
-- [x] **Ultralight optional profile inactive gate**：`UltralightOptionalProfileGate` 集中声明默认未激活、回退 `ManagedFallback` 与缺失 native SDK/provenance、commercial redistribution license、runtime surface/JS bridge、RID native binaries、SHA256/NOTICE、codesign/notarize、release artifact evidence 的可见诊断；Editor Settings、Hosting fallback、package NOTICE 与 release audit 已同源表达。
+- [x] **Ultralight optional profile inactive gate**：`UltralightOptionalProfileGate` 集中声明默认未激活、回退 `ManagedFallback`、设置界面显示标签与缺失 native SDK/provenance、commercial redistribution license、runtime surface/JS bridge、RID native binaries、SHA256/NOTICE、codesign/notarize、release artifact evidence 的可见诊断；Project Settings / Player Settings、Hosting fallback、package NOTICE 与 release audit 已同源表达。
 - [ ] **UltralightBackend 本体**：实现 native loading、surface creation、dirty rect pull、BGRA8 upload、JS global bridge、DOM HitTest、font/resource loader、lifetime dispose 与 no-op/fallback gate。
 - [!] **Ultralight 许可与发行**：需要许可条款、商业阈值、redistribution 说明、native DLL/so/dylib provenance、SHA256、release artifact、codesign/notarize（macOS 激活后）证据；未满足前发行审计必须拒绝 Ultralight native 混入，不能把 native 文件出现当作 M15 闭合。
 - [!] **UI native release artifact**：需要 win-x64/win-arm64 active R2R release artifact 证据、AOT fallback artifact 证据、`SHA256SUMS`、license README、GitHub release / workflow 同源报告；`workflow_dispatch`、`load-only`、`pending_review` 不能作为完成。

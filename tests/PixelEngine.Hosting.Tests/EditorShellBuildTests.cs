@@ -432,6 +432,13 @@ public sealed class EditorShellBuildTests
         Assert.False(projectPanel.TryApplyProjectSettings(reloadedProject with { ContentRoot = "../outside" }, out string projectDiagnostic));
         Assert.Contains("ContentRoot", projectDiagnostic, StringComparison.Ordinal);
         Assert.Equal("content", projectStore.Load().ContentRoot);
+        Assert.True(projectPanel.TryApplyProjectSettings(reloadedProject with { DefaultUiBackend = UiBackendKind.Ultralight }, out string ultralightDiagnostic));
+        Assert.Equal(string.Empty, ultralightDiagnostic);
+        ScriptedProjectSettingsProbeSnapshot ultralightProjectSnapshot = projectPanel.CaptureScriptedProjectSettingsProbe();
+        Assert.Equal(UiBackendKind.Ultralight, ultralightProjectSnapshot.DefaultUiBackend);
+        Assert.Contains("Ultralight optional profile inactive", ultralightProjectSnapshot.DefaultUiBackendDiagnostic, StringComparison.Ordinal);
+        Assert.Contains(UltralightOptionalProfileGate.FallbackBackend.ToString(), UltralightOptionalProfileGate.InactiveDisplayLabel, StringComparison.Ordinal);
+        Assert.Equal(UiBackendKind.Ultralight, projectStore.Load().DefaultUiBackend);
 
         PlayerSettingsStore playerStore = new(project);
         PlayerSettingsDto fallbackPlayer = playerStore.Load();
