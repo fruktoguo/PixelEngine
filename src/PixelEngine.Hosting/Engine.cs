@@ -918,6 +918,9 @@ public sealed class Engine : IDisposable
         CellGrid grid = Context.GetService<CellGrid>();
         IChunkSource chunks = Context.GetService<IChunkSource>();
         RigidDamageQueue damageQueue = ResolveRigidDamageQueue();
+        PhysicsStepEventBus physicsEvents = Context.TryGetService(out PhysicsStepEventBus existingPhysicsEvents)
+            ? existingPhysicsEvents
+            : new PhysicsStepEventBus();
         ParticleSystem? particles = Context.TryGetService(out ParticleSystem registeredParticles)
             ? registeredParticles
             : null;
@@ -934,6 +937,8 @@ public sealed class Engine : IDisposable
             worldDef: worldDef);
         PhysicsPhaseDriver driver = new(physics, chunks);
         Context.RegisterService(damageQueue);
+        Context.RegisterService<IPhysicsStepEvents>(physicsEvents);
+        Context.RegisterService(physicsEvents);
         Context.RegisterService(physics);
         Context.RegisterService(EngineServiceRole.PhysicsService, physics);
         Context.RegisterService(driver.GetType(), driver);
@@ -1310,6 +1315,9 @@ public sealed class Engine : IDisposable
         PhysicsSystem? physics = Context.TryGetService(out PhysicsSystem registeredPhysics)
             ? registeredPhysics
             : null;
+        IPhysicsStepEvents physicsEvents = Context.TryGetService(out IPhysicsStepEvents registeredPhysicsEvents)
+            ? registeredPhysicsEvents
+            : NoopPhysicsStepEvents.Instance;
         ScriptCameraSyncPhaseDriver? existingCameraSyncDriver =
             camera is ScriptCameraApi && Context.TryGetService(out ScriptCameraSyncPhaseDriver registeredCameraSync)
                 ? registeredCameraSync
@@ -1338,7 +1346,8 @@ public sealed class Engine : IDisposable
             diagnostics,
             runtimeControl,
             gameUi,
-            config);
+            config,
+            physicsEvents);
         Context.RegisterService(scriptContext);
         simulationDriver?.AttachScriptContext(scriptContext);
         runtime ??= CreateScriptRuntime(scriptScene, scriptContext, hotReload);

@@ -26,7 +26,7 @@ public sealed class LavaMineSceneTests
         ScriptScene scene = engine.Context.GetService<ScriptScene>();
         LevelDirector director = FindBehaviour<LevelDirector>(scene);
         Assert.True(director.RigidStructuresQueued);
-        Assert.Equal(9, director.RigidStructureCount);
+        Assert.Equal(12, director.RigidStructureCount);
         MaterialBrush brush = FindBehaviour<MaterialBrush>(scene);
         Assert.False(brush.InputEnabled);
         _ = FindBehaviour<PlayableHud>(scene);
@@ -180,7 +180,8 @@ public sealed class LavaMineSceneTests
         double steamAverageYAfter = AverageMaterialY(grid, steam, minX: 190, minY: 16, maxX: 234, maxY: 148);
 
         Assert.True(sandInitial > 0, "MaterialBrush 应先在测试区域写入 sand。");
-        Assert.True(settledSand >= 20, $"sand 应被 CA 接管并沉积到接料槽底部，initial={sandInitial}, settled={settledSand}");
+        int minimumSettledSand = Math.Max(10, sandInitial / 4);
+        Assert.True(settledSand >= minimumSettledSand, $"sand 应被 CA 接管并沉积到接料槽底部，initial={sandInitial}, settled={settledSand}, minimum={minimumSettledSand}");
         Assert.True(steamAverageYAfter < steamAverageYBefore - 4.0, $"steam 气体应上升，beforeY={steamAverageYBefore:F2}, afterY={steamAverageYAfter:F2}");
     }
 

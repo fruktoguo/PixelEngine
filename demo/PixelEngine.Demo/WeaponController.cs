@@ -11,6 +11,8 @@ public sealed class WeaponController : Behaviour
     private const float LaserHeatPerSecond = 38f;
     private const float OverheatLimit = 100f;
     private const float OverheatRecoveryLimit = 35f;
+    private const float DefaultTerrainEffectScale = 2.5f;
+    private const float GrenadeTerrainEffectScale = 10f;
     private PlayerController? _player;
     private PlayableProjectileTool? _projectile;
     private GrenadeSpawnRequest _pendingGrenade;
@@ -327,12 +329,17 @@ public sealed class WeaponController : Behaviour
         switch (weapon.Kind)
         {
             case WeaponKind.SingleShot:
-                Context.World.DamageCircle(hitX, hitY, Math.Max(1, weapon.Radius), weapon.Damage, weapon.Falloff != WeaponFalloff.None);
+                Context.World.DamageCircle(
+                    hitX,
+                    hitY,
+                    ScaledRadius(weapon),
+                    ScaledDamage(weapon),
+                    weapon.Falloff != WeaponFalloff.None);
                 EmitImpactFeedback(weapon, hitX, hitY, count: 3);
                 break;
             case WeaponKind.Bomb:
-                Context.World.Explode(hitX, hitY, Math.Max(1, weapon.Radius), Math.Max(1f, weapon.Impulse));
-                _impactFlash.Start(hitX, hitY, Math.Max(1, weapon.Radius), 0xFF_30_80_FF);
+                Context.World.Explode(hitX, hitY, ScaledRadius(weapon), ScaledImpulse(weapon));
+                _impactFlash.Start(hitX, hitY, ScaledRadius(weapon), 0xFF_30_80_FF);
                 _impactFlash.SubmitInitial(Context);
                 EmitImpactFeedback(weapon, hitX, hitY, count: 10);
                 break;
@@ -346,7 +353,7 @@ public sealed class WeaponController : Behaviour
                 EmitImpactFeedback(weapon, hitX, hitY, count: 2);
                 break;
             case WeaponKind.Excavator:
-                int excavatorRadius = Math.Max(1, weapon.Radius);
+                int excavatorRadius = ScaledRadius(weapon);
                 PublishMineYieldForCircle(hitX, hitY, excavatorRadius);
                 Context.Cells.Paint((int)MathF.Round(hitX), (int)MathF.Round(hitY), excavatorRadius, new MaterialId(0));
                 EmitImpactFeedback(weapon, hitX, hitY, count: 4);
@@ -355,8 +362,9 @@ public sealed class WeaponController : Behaviour
                 MaterialId material = Context.Materials.Resolve(weapon.SpawnMaterial);
                 if (material != MaterialId.Invalid)
                 {
-                    Context.Cells.Paint((int)MathF.Round(hitX), (int)MathF.Round(hitY), Math.Max(1, weapon.Radius), material);
-                    Context.Particles.Burst(hitX, hitY, material, Math.Clamp(weapon.Radius, 2, 8), speed: 1.5f);
+                    int builderRadius = ScaledRadius(weapon);
+                    Context.Cells.Paint((int)MathF.Round(hitX), (int)MathF.Round(hitY), builderRadius, material);
+                    Context.Particles.Burst(hitX, hitY, material, Math.Clamp(builderRadius, 2, 32), speed: 1.5f);
                 }
 
                 break;
@@ -381,8 +389,8 @@ public sealed class WeaponController : Behaviour
         float hitY,
         float dt)
     {
-        int radius = Math.Max(1, weapon.Radius);
-        float damage = MathF.Max(1f, weapon.BeamDps * MathF.Max(dt, 1f / 60f));
+        int radius = ScaledRadius(weapon);
+        float damage = MathF.Max(1f, weapon.BeamDps * TerrainEffectScale(weapon) * MathF.Max(dt, 1f / 60f));
         float normalX = -dirY;
         float normalY = dirX;
         for (int offset = -radius; offset <= radius; offset++)
@@ -438,9 +446,9 @@ public sealed class WeaponController : Behaviour
             dirX * Math.Max(1f, weapon.ThrowSpeed) * 24f * chargeScale,
             dirY * Math.Max(1f, weapon.ThrowSpeed) * 24f * chargeScale,
             Math.Max(0.05f, weapon.FuseSeconds),
-            Math.Max(1, weapon.Radius),
-            Math.Max(1f, weapon.Damage),
-            Math.Max(1f, weapon.Impulse),
+            ScaledRadius(weapon),
+            ScaledDamage(weapon),
+            ScaledImpulse(weapon),
             Math.Max(0f, weapon.Gravity) * 48f,
             Math.Clamp(weapon.Bounce, 0f, 0.9f),
             ToCuePath(weapon.ImpactCue));
@@ -491,7 +499,7 @@ public sealed class WeaponController : Behaviour
             x,
             y,
             Math.Clamp(count, 1, 32),
-            Math.Max(8f, weapon.Impulse * 1.5f),
+            Math.Max(8f, ScaledImpulse(weapon) * 1.5f),
             lifetime: weapon.Kind == WeaponKind.Bomb ? (ushort)36 : (ushort)24);
     }
 
@@ -567,9 +575,9 @@ public sealed class WeaponController : Behaviour
             return false;
         }
 
-        _projectile.ImpactRadius = Math.Max(1, weapon.Radius);
-        _projectile.ImpactForce = Math.Max(1f, weapon.Impulse);
-        _projectile.ImpactDamage = Math.Max(1f, weapon.Damage);
+        _projectile.ImpactRadius = ScaledRadius(weapon);
+        _projectile.ImpactForce = ScaledImpulse(weapon);
+        _projectile.ImpactDamage = ScaledDamage(weapon);
         _projectile.UseExplosionDamage = false;
         _projectile.CooldownSeconds = Math.Max(0f, weapon.CooldownSeconds);
         _projectile.TracerDurationSeconds = Math.Clamp(weapon.TracerDuration, 0f, 0.25f);
@@ -582,6 +590,26 @@ public sealed class WeaponController : Behaviour
         return _player is null
             ? Context.Camera.ScreenToWorld(Context.Input.MousePixel.X, Context.Input.MousePixel.Y)
             : new Point2F(_player.CenterX, _player.CenterY - 2f);
+    }
+
+    private static int ScaledRadius(WeaponDefinition weapon)
+    {
+        return Math.Max(1, (int)MathF.Round(Math.Max(1, weapon.Radius) * TerrainEffectScale(weapon)));
+    }
+
+    private static float ScaledDamage(WeaponDefinition weapon)
+    {
+        return Math.Max(1f, weapon.Damage * TerrainEffectScale(weapon));
+    }
+
+    private static float ScaledImpulse(WeaponDefinition weapon)
+    {
+        return Math.Max(1f, weapon.Impulse * TerrainEffectScale(weapon));
+    }
+
+    private static float TerrainEffectScale(WeaponDefinition weapon)
+    {
+        return weapon.Kind == WeaponKind.Grenade ? GrenadeTerrainEffectScale : DefaultTerrainEffectScale;
     }
 
     private void ResolveComponents()

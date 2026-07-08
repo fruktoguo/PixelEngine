@@ -1571,6 +1571,8 @@ public sealed class PlayerControllerIntegrationTests
                 materials,
                 contentRoot: contentRoot);
             FillRect(grid, stone, minX: 33, minY: 30, maxX: 38, maxY: 39);
+            FillRect(grid, stone, minX: 45, minY: 33, maxX: 50, maxY: 36);
+            FillRect(grid, stone, minX: 36, minY: 44, maxX: 39, maxY: 47);
             Entity entity = scene.CreateEntity();
             _ = entity.AddComponent<Transform>();
             PlayerController player = entity.AddComponent<PlayerController>();
@@ -1589,8 +1591,8 @@ public sealed class PlayerControllerIntegrationTests
             Assert.Equal((ushort)0, grid.MaterialAt(36, 34));
             Assert.Equal((ushort)0, grid.MaterialAt(33, 31));
             Assert.Equal((ushort)0, grid.MaterialAt(33, 37));
-            Assert.Equal(stone, grid.MaterialAt(37, 34));
-            Assert.Equal(stone, grid.MaterialAt(33, 38));
+            Assert.Equal(stone, grid.MaterialAt(45, 34));
+            Assert.Equal(stone, grid.MaterialAt(36, 44));
 
             input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
             engine.RunHeadlessTicks(1);

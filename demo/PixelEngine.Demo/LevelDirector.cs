@@ -331,22 +331,32 @@ public sealed class LevelDirector : Behaviour
     private void BuildTerrain(int width, int height)
     {
         int floorY = height - 72;
+        // 横向闯关主路径：左到右的地面、熔岩坑、跳台与必须拆除的路障。
         FillRect(10, floorY, width - 20, height - floorY - 12, _dirt);
         FillRect(10, floorY + 18, width - 20, 16, _stone);
         FillRect(28, floorY - 14, 110, 14, _stone);
-        FillRect(156, floorY - 40, 16, 40, _wood);
-        FillRect(258, floorY - 56, 20, 56, _stone);
-        FillRect(384, floorY - 46, 18, 46, _metal);
-        FillRect(512, floorY - 34, 20, 34, _wood);
+
+        FillRect(138, floorY - 58, 18, 58, _wood);
+        FillRect(252, floorY - 34, 22, 34, _stone);
+        FillRect(396, floorY - 32, 22, 32, _metal);
+        FillRect(514, floorY - 26, 22, 26, _wood);
+
         FillRect(168, floorY - 42, 82, 10, _wood);
         FillRect(276, floorY - 74, 92, 10, _metal);
         FillRect(410, floorY - 52, 70, 10, _wood);
+        FillRect(448, floorY - 36, 92, 10, _wood);
         FillRect(532, floorY - 66, 80, 12, _stone);
+
         FillRect(98, floorY - 86, 64, 8, _metal);
         FillRect(224, floorY - 122, 58, 8, _wood);
         FillRect(372, floorY - 118, 72, 8, _metal);
+
+        FillRect(188, floorY - 96, 34, 14, _wood);
+        FillRect(318, floorY - 32, 42, 12, _stone);
+        FillRect(456, floorY - 98, 44, 14, _metal);
         FillRect(138, 108, 12, 96, _stone);
-        FillRect(488, 120, 28, floorY - 52, _stone);
+        FillRect(488, floorY - 84, 42, 12, _wood);
+
         FillSlope(32, floorY - 1, 88, 24, _sand);
         FillSlope(386, floorY - 1, 74, 22, _sand);
     }
@@ -361,15 +371,18 @@ public sealed class LevelDirector : Behaviour
         int floorY = Math.Max(128, LevelHeight) - 72;
         try
         {
-            CreateRigidStructure(156, floorY - 40, 16, 40);
-            CreateRigidStructure(384, floorY - 46, 18, 46);
-            CreateRigidStructure(512, floorY - 34, 20, 34);
+            CreateRigidStructure(138, floorY - 58, 18, 58);
+            CreateRigidStructure(252, floorY - 34, 22, 34);
+            CreateRigidStructure(396, floorY - 32, 22, 32);
+            CreateRigidStructure(514, floorY - 26, 22, 26);
             CreateRigidStructure(168, floorY - 42, 82, 10);
             CreateRigidStructure(276, floorY - 74, 92, 10);
             CreateRigidStructure(410, floorY - 52, 70, 10);
             CreateRigidStructure(98, floorY - 86, 64, 8);
             CreateRigidStructure(224, floorY - 122, 58, 8);
             CreateRigidStructure(372, floorY - 118, 72, 8);
+            CreateRigidStructure(188, floorY - 96, 34, 14);
+            CreateRigidStructure(456, floorY - 98, 44, 14);
             RigidStructuresQueued = true;
             BlockedReason = string.Empty;
         }
@@ -387,10 +400,13 @@ public sealed class LevelDirector : Behaviour
     private void BuildHazards(int height)
     {
         int floorY = height - 72;
-        FillRect(196, floorY - 1, 58, 22, _lava);
-        FillRect(318, floorY - 1, 76, 24, _lava);
-        FillRect(458, floorY - 1, 64, 22, _lava);
-        FillRect(552, floorY - 1, 34, 18, _lava);
+        FillRect(178, floorY - 2, 74, 24, _lava);
+        FillRect(312, floorY - 2, 86, 26, _lava);
+        FillRect(452, floorY - 2, 78, 24, _lava);
+        FillRect(554, floorY - 2, 36, 20, _lava);
+        FillRect(172, floorY + 21, 86, 5, _stone);
+        FillRect(306, floorY + 23, 98, 5, _stone);
+        FillRect(446, floorY + 21, 90, 5, _stone);
     }
 
     private void BuildSpawnHazardProbeArea()
