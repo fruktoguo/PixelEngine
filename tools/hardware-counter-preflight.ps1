@@ -91,19 +91,17 @@ if (-not (Test-Path -LiteralPath $projectPath -PathType Leaf)) {
 }
 
 $benchmarkArgs = @(
-    "run",
-    "--project", $Project,
-    "-c", "Release",
-    "--no-build",
-    "--",
+    "./tools/run-benchmark.ps1",
+    "-Project", $Project,
+    "-Artifacts", $Artifacts,
+    "-BenchmarkDotNetArgs",
     "--filter", $Filter,
-    "--artifacts", $Artifacts,
     "--job", "short",
     "--warmupCount", "1",
     "--iterationCount", "1",
     "--exporters", "markdown"
 )
-$commandLine = '$env:PIXELENGINE_BENCH_HARDWARE_COUNTERS="1"; dotnet ' + ($benchmarkArgs -join " ")
+$commandLine = '$env:PIXELENGINE_BENCH_HARDWARE_COUNTERS="1"; pwsh ' + ($benchmarkArgs -join " ")
 
 if (-not $isWindowsHost) {
     $detail = "Hardware counter preflight failed: 当前脚本验证的是 BenchmarkDotNet Windows ETW 硬件计数器路径。非 Windows runner 不作为 Cache Misses / Branch Mispredictions 验收环境。"
@@ -140,7 +138,15 @@ New-Item -ItemType Directory -Force -Path $artifactRoot | Out-Null
 $previousValue = $env:PIXELENGINE_BENCH_HARDWARE_COUNTERS
 $env:PIXELENGINE_BENCH_HARDWARE_COUNTERS = "1"
 try {
-    & dotnet @benchmarkArgs
+    & (Join-Path $root "tools/run-benchmark.ps1") `
+        -Project $Project `
+        -Artifacts $Artifacts `
+        -BenchmarkDotNetArgs @(
+            "--filter", $Filter,
+            "--job", "short",
+            "--warmupCount", "1",
+            "--iterationCount", "1",
+            "--exporters", "markdown")
     if ($LASTEXITCODE -ne 0) {
         throw "BenchmarkDotNet 硬件计数器运行失败，exit code: $LASTEXITCODE"
     }

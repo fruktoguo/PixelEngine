@@ -161,25 +161,34 @@ if (-not $baseline.benchmarks -or $baseline.benchmarks.Count -eq 0) {
 if ([string]::IsNullOrWhiteSpace($ReportsPath)) {
   Remove-Item -LiteralPath $artifactsPath -Recurse -Force -ErrorAction SilentlyContinue
 
+  $entryIndex = 0
   foreach ($entry in $baseline.benchmarks) {
     $filter = [string]$entry.filter
     if ([string]::IsNullOrWhiteSpace($filter)) {
       throw 'Baseline entry is missing filter.'
     }
 
-    & dotnet run --project $projectPath -c Release --no-build -- `
-      --filter $filter `
-      --artifacts $artifactsPath `
-      --job Short `
-      --warmupCount 1 `
-      --iterationCount 1 `
-      --exporters markdown
+    $entryArtifacts = Join-Path $Artifacts "run-$entryIndex"
+    & (Join-Path $repoRoot "tools/run-benchmark.ps1") `
+      -Project $Project `
+      -Artifacts $entryArtifacts `
+      -BenchmarkDotNetArgs @(
+        "--filter", $filter,
+        "--job", "Short",
+        "--warmupCount", "1",
+        "--iterationCount", "1",
+        "--exporters", "markdown")
     if ($LASTEXITCODE -ne 0) {
       throw "BenchmarkDotNet regression run failed for filter '$filter' with exit code $LASTEXITCODE."
     }
+
+    $entryIndex++
   }
 
   $reportSearchPath = Join-Path $artifactsPath 'results'
+  if (-not (Test-Path -LiteralPath $reportSearchPath)) {
+    $reportSearchPath = $artifactsPath
+  }
 }
 else {
   $reportSearchPath = Resolve-RepositoryPath $ReportsPath

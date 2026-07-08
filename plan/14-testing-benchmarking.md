@@ -224,7 +224,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 ### 4.7 反汇编守门与 CI 门禁
 
 - [x] `DisassemblyGuard`：用 `[DisassemblyDiagnoser]` 产出热方法汇编，解析断言 `RNGCHKFAIL` 不出现、热 SIMD 方法 ymm/zmm 出现，失败即构建失败（性能 §12.6/§17.3）。
-- [x] 性能回归门禁：每基准维护可审查 baseline，CI 比对超阈值（建议 >5%，按噪声实测定档）即判失败（`AGENTS.md §7`）。`tools/benchmark-regression.ps1` 按 BenchmarkDotNet Markdown 表头解析 `Mean` 列，参数化报告必须用 `rowContains` 唯一匹配行；`PerformanceHardeningToolingDisciplineTests.BenchmarkRegressionGateParsesMeanColumnFromSyntheticReport` / `BenchmarkRegressionGateRequiresRowContainsForAmbiguousParameterizedRows` 锁定缺行、参数行混淆、错误时间列误读与报告格式漂移负例。
+- [x] 性能回归门禁：每基准维护可审查 baseline，CI 比对超阈值（建议 >5%，按噪声实测定档）即判失败（`AGENTS.md §7`）。`tools/benchmark-regression.ps1` 按 BenchmarkDotNet Markdown 表头解析 `Mean` 列，参数化报告必须用 `rowContains` 唯一匹配行；Benchmark 执行统一经 `tools/run-benchmark.ps1` 在排除 `.claude` / `bin` / `obj` / artifacts 的临时工作副本中运行，避免本机 Codex worktree 的同名 `.csproj` 污染 BenchmarkDotNet 项目发现；脚本还会把 `Generate Exception` 或 `executed benchmarks: 0` 视为失败，防止 BDN 返回 0 时误判为通过；`PerformanceHardeningToolingDisciplineTests.BenchmarkRegressionGateParsesMeanColumnFromSyntheticReport` / `BenchmarkRegressionGateRequiresRowContainsForAmbiguousParameterizedRows` / `CiRunsDisassemblyAndBenchmarkRegressionGuards` 锁定缺行、参数行混淆、错误时间列误读、报告格式漂移与隔离执行入口。
 - [x] 6-RID 矩阵：六 RID 全 build；有 runner 的 RID 跑 `dotnet test`，其余 arm64 至少 build-verify；同时验证 CoreCLR/R2R（动态）与 NativeAOT（静态）两路径（架构 §15、R5、消费 plan 15 产物）。
 - [x] CI 工作流接线：`dotnet build -c Release` → `dotnet test`（四工程）→ 反汇编守门 → 基准回归门禁；`src/*` 开 `TreatWarningsAsErrors`（plan/00 §1，与 plan 01 CI 骨架对接）。
 
@@ -278,7 +278,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 ## 5. 验收标准
 
-- [x] 四个测试工程与基准工程建立、被 `PixelEngine.sln` 包含、CPM 锁版本、`dotnet test` 与 `dotnet run --project bench/...` 均可执行（plan/00 §4/§6）。
+- [x] 四个测试工程与基准工程建立、被 `PixelEngine.sln` 包含、CPM 锁版本、`dotnet test` 与 `tools/run-benchmark.ps1` / `dotnet run --project bench/... -- --list flat` 均可执行（plan/00 §4/§6）。含忽略 worktree 的仓库内推荐执行入口为 `tools/run-benchmark.ps1`，直接 `dotnet run --project bench/...` 仍保留用于无嵌套 worktree 的普通环境。
 - [x] `MassConservationTests` 全绿：含跨 chunk 边界与四角用例，单 / 多线程均守恒，能复现并拦截人为注入的「边界吞 / 复制像素」回归（架构 §16.2、R2）。
 - [x] `ReactionConservationTests` 全绿：双输出 / 定向反应在所有边界配置下产物计数严格守恒，能拦截人为注入的「边界翻倍 / 丢失」回归（架构 §7.4、不变式 #4、R2）。
 - [x] `DeterministicRegressionTests` 全绿且 golden 稳定：确定性模式下重复运行 bit 一致，golden 更新有可审查 diff（架构 §6.2）。
