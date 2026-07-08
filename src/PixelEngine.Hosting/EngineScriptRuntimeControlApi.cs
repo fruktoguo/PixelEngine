@@ -70,7 +70,10 @@ public sealed class EngineScriptRuntimeControlApi(Engine engine) : IRuntimeContr
         return _engine.RestartCurrentScene();
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 捕获当前运行态设置开关快照。
+    /// </summary>
+    /// <returns>包含 VSync、音频开关及其可切换能力的脚本可读快照。</returns>
     public RuntimeSettingsSnapshot CaptureSettings()
     {
         bool canToggleVSync = _engine.Context.TryGetService(out IRenderPresentationControl presentation) && presentation.CanToggleVSync;
@@ -82,7 +85,11 @@ public sealed class EngineScriptRuntimeControlApi(Engine engine) : IRuntimeContr
         return new RuntimeSettingsSnapshot(vSyncEnabled, canToggleVSync, audioEnabled, canToggleAudio);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 请求在运行时切换窗口 present 的 VSync 状态。
+    /// </summary>
+    /// <param name="enabled">为 true 时开启 VSync；为 false 时关闭。</param>
+    /// <returns>切换结果和可显示诊断消息。</returns>
     public RuntimeControlResult SetVSyncEnabled(bool enabled)
     {
         if (!_engine.Context.TryGetService(out IRenderPresentationControl presentation))
@@ -100,7 +107,11 @@ public sealed class EngineScriptRuntimeControlApi(Engine engine) : IRuntimeContr
         return new RuntimeControlResult(true, enabled ? "VSync 已开启。" : "VSync 已关闭。");
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 请求在运行时启用或静音音频系统。
+    /// </summary>
+    /// <param name="enabled">为 true 时恢复可听音量；为 false 时静音 master 音量。</param>
+    /// <returns>切换结果和可显示诊断消息。</returns>
     public RuntimeControlResult SetAudioEnabled(bool enabled)
     {
         if (!_engine.Context.TryGetService(out AudioSystem audio))
