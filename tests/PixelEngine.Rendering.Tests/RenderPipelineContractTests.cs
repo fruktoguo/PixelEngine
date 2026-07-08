@@ -65,6 +65,25 @@ public sealed class RenderPipelineContractTests
     }
 
     [Fact]
+    public void UiPresentTargetUsesPresentationViewportAsDefaultClip()
+    {
+        PresentationViewport viewport = PresentationViewport.Fit(720, 480, 1920, 1080);
+
+        UiPresentTarget target = UiPresentTarget.FromPresentationViewport(in viewport);
+
+        Assert.Equal(150, target.X);
+        Assert.Equal(0, target.Y);
+        Assert.Equal(1620, target.Width);
+        Assert.Equal(1080, target.Height);
+        Assert.Equal(1f, target.DpiScale);
+        Assert.True(target.IsValid);
+        Assert.Equal(new UiScissorRect(150, 0, 1620, 1080), target.Scissor);
+        target.Validate();
+        AssertThrows<ArgumentOutOfRangeException>(() => new UiPresentTarget(0, 0, 0, 10, 1f).Validate());
+        AssertThrows<ArgumentOutOfRangeException>(() => new UiPresentTarget(0, 0, 10, 10, 0f).Validate());
+    }
+
+    [Fact]
     public void RenderPipelineSourceDocumentsRequiredOrderingAndHooks()
     {
         string source = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderPipeline.cs"));
@@ -142,6 +161,10 @@ public sealed class RenderPipelineContractTests
         string state = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiGlStateSnapshot.cs"));
 
         Assert.Contains("public readonly struct UiPresentContext", context, StringComparison.Ordinal);
+        Assert.Contains("public UiPresentTarget Target", context, StringComparison.Ordinal);
+        Assert.Contains("public UiScissorRect Clip", context, StringComparison.Ordinal);
+        Assert.Contains("Intersect(draw.Scissor, Clip)", context, StringComparison.Ordinal);
+        Assert.Contains("public readonly record struct UiPresentTarget", File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiPresentTarget.cs")), StringComparison.Ordinal);
         Assert.Contains("SubmitTriangles(ReadOnlySpan<UiVertex> vertices, ReadOnlySpan<ushort> indices", context, StringComparison.Ordinal);
         Assert.Contains("UiPrimitiveRenderer", context, StringComparison.Ordinal);
         Assert.Contains("public readonly record struct UiVertex", File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiVertex.cs")), StringComparison.Ordinal);
@@ -187,6 +210,8 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("IUiPresentLayer, IDisposable", guiBridge, StringComparison.Ordinal);
         Assert.Contains("IUiPresentLayer, IDisposable", uiCompositor, StringComparison.Ordinal);
         Assert.Contains("IUiPresentLayer, IDisposable", editorBridge, StringComparison.Ordinal);
+        Assert.Contains("ApplyUiPresentClip(context)", pipeline, StringComparison.Ordinal);
+        Assert.Contains("_gl.Scissor(", pipeline, StringComparison.Ordinal);
     }
 
     private static string ProjectPath(params string[] parts)

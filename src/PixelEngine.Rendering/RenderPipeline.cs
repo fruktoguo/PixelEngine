@@ -709,10 +709,27 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
     {
         _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
         _gl.Viewport(0, 0, (uint)context.FramebufferWidth, (uint)context.FramebufferHeight);
+        ApplyUiPresentClip(context);
         _gl.Disable(EnableCap.DepthTest);
         _gl.Disable(EnableCap.CullFace);
         _gl.Enable(EnableCap.Blend);
         _gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+    }
+
+    private void ApplyUiPresentClip(in UiPresentContext context)
+    {
+        if (context.Clip.Width <= 0 || context.Clip.Height <= 0)
+        {
+            _gl.Disable(EnableCap.ScissorTest);
+            return;
+        }
+
+        _gl.Enable(EnableCap.ScissorTest);
+        _gl.Scissor(
+            context.Clip.X,
+            context.FramebufferHeight - context.Clip.Y - context.Clip.Height,
+            (uint)context.Clip.Width,
+            (uint)context.Clip.Height);
     }
 
     private void EnsureUiLayerCapacity(int required)

@@ -18,11 +18,36 @@ public readonly struct UiPresentContext
         PresentationViewport worldViewport,
         UiPrimitiveRenderer primitives,
         FrameProfiler? profiler)
+        : this(
+            gl,
+            framebufferWidth,
+            framebufferHeight,
+            worldViewport,
+            UiPresentTarget.FromPresentationViewport(in worldViewport),
+            UiPresentTarget.FromPresentationViewport(in worldViewport).Scissor,
+            primitives,
+            profiler)
     {
+    }
+
+    internal UiPresentContext(
+        GL gl,
+        int framebufferWidth,
+        int framebufferHeight,
+        PresentationViewport worldViewport,
+        UiPresentTarget target,
+        UiScissorRect clip,
+        UiPrimitiveRenderer primitives,
+        FrameProfiler? profiler)
+    {
+        target.Validate();
+        clip.Validate();
         Gl = gl;
         FramebufferWidth = framebufferWidth;
         FramebufferHeight = framebufferHeight;
         WorldViewport = worldViewport;
+        Target = target;
+        Clip = clip;
         _primitives = primitives;
         Profiler = profiler;
     }
@@ -48,6 +73,16 @@ public readonly struct UiPresentContext
     public PresentationViewport WorldViewport { get; }
 
     /// <summary>
+    /// 当前 UI 层的目标区域。坐标以默认 framebuffer 左上角为原点。
+    /// </summary>
+    public UiPresentTarget Target { get; }
+
+    /// <summary>
+    /// 当前 UI 层必须遵守的 framebuffer 裁剪区域。
+    /// </summary>
+    public UiScissorRect Clip { get; }
+
+    /// <summary>
     /// 当前帧 profiler；UI 层可用它记录自身细分相位耗时。
     /// </summary>
     public FrameProfiler? Profiler { get; }
@@ -60,7 +95,27 @@ public readonly struct UiPresentContext
     /// <param name="draw">绘制状态。</param>
     public void SubmitTriangles(ReadOnlySpan<UiVertex> vertices, ReadOnlySpan<ushort> indices, in UiDrawState draw)
     {
-        _primitives.SubmitTriangles(vertices, indices, in draw, FramebufferWidth, FramebufferHeight);
+        UiDrawState clipped = draw with { Scissor = Intersect(draw.Scissor, Clip) };
+        _primitives.SubmitTriangles(vertices, indices, in clipped, FramebufferWidth, FramebufferHeight);
+    }
+
+    private static UiScissorRect? Intersect(UiScissorRect? requested, UiScissorRect clip)
+    {
+        if (clip.Width <= 0 || clip.Height <= 0)
+        {
+            return requested;
+        }
+
+        if (requested is not { } rect)
+        {
+            return clip;
+        }
+
+        int left = Math.Max(rect.X, clip.X);
+        int top = Math.Max(rect.Y, clip.Y);
+        int right = Math.Min(rect.X + rect.Width, clip.X + clip.Width);
+        int bottom = Math.Min(rect.Y + rect.Height, clip.Y + clip.Height);
+        return new UiScissorRect(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
     }
 
     /// <summary>
