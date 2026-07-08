@@ -1,6 +1,8 @@
 # ---- .NET ----
 bin/
 obj/
+**/bin/
+**/obj/
 *.user
 *.suo
 *.userprefs
@@ -16,9 +18,12 @@ obj/
 # ---- Build / publish ----
 artifacts/
 publish/
+**/publish/
 runtimes/
 app/
+[Aa]pp/
 **/app/
+**/[Aa]pp/
 **/player/app/
 **/package/*/app/
 *.binlog
