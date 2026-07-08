@@ -1,8 +1,9 @@
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
 namespace PixelEngine.Editor.Shell;
 
-internal static class NativeFolderPicker
+internal static partial class NativeFolderPicker
 {
     private const uint FosPickFolders = 0x00000020;
     private const uint FosForceFileSystem = 0x00000040;
@@ -10,7 +11,9 @@ internal static class NativeFolderPicker
     private const uint FosPathMustExist = 0x00000800;
     private const uint SigDnFileSystemPath = 0x80058000;
     private const int HResultCancelled = unchecked((int)0x800704C7);
+    private const int SOk = 0;
     private static readonly Guid FileOpenDialogClsid = new("DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7");
+    private static readonly Guid ShellItemIid = new("43826D1E-E718-42EE-BC55-A1E261C37BFE");
 
     public static bool TryPickFolder(string initialPath, out string selectedPath, out string diagnostic)
     {
@@ -30,7 +33,13 @@ internal static class NativeFolderPicker
                 ?? throw new NotSupportedException("无法创建 Windows FileOpenDialog 实例。");
             using ComReleaser<IFileOpenDialog> dialog = new((IFileOpenDialog)dialogObject);
             dialog.Instance.SetOptions(FosPickFolders | FosForceFileSystem | FosNoChangeDir | FosPathMustExist);
-            _ = initialPath;
+            using ComReleaser<IShellItem>? defaultFolder = TryCreateShellFolder(initialPath);
+            if (defaultFolder is not null)
+            {
+                dialog.Instance.SetDefaultFolder(defaultFolder.Instance);
+                dialog.Instance.SetFolder(defaultFolder.Instance);
+            }
+
             int hr = dialog.Instance.Show(IntPtr.Zero);
             if (hr == HResultCancelled)
             {
@@ -57,6 +66,61 @@ internal static class NativeFolderPicker
             return false;
         }
     }
+
+    [SupportedOSPlatform("windows")]
+    private static ComReleaser<IShellItem>? TryCreateShellFolder(string initialPath)
+    {
+        if (string.IsNullOrWhiteSpace(initialPath))
+        {
+            return null;
+        }
+
+        string folderPath = initialPath;
+        if (File.Exists(initialPath))
+        {
+            folderPath = Path.GetDirectoryName(Path.GetFullPath(initialPath)) ?? string.Empty;
+        }
+        else if (!Directory.Exists(initialPath))
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
+        {
+            return null;
+        }
+
+        Guid riid = ShellItemIid;
+        int hr = SHCreateItemFromParsingName(Path.GetFullPath(folderPath), IntPtr.Zero, ref riid, out IntPtr itemPointer);
+        if (hr != SOk || itemPointer == IntPtr.Zero)
+        {
+            if (itemPointer != IntPtr.Zero)
+            {
+                _ = Marshal.Release(itemPointer);
+            }
+
+            return null;
+        }
+
+        object shellItem;
+        try
+        {
+            shellItem = Marshal.GetObjectForIUnknown(itemPointer);
+        }
+        finally
+        {
+            _ = Marshal.Release(itemPointer);
+        }
+
+        return new ComReleaser<IShellItem>((IShellItem)shellItem);
+    }
+
+    [LibraryImport("shell32.dll", EntryPoint = "SHCreateItemFromParsingName", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial int SHCreateItemFromParsingName(
+        string path,
+        IntPtr bindContext,
+        ref Guid riid,
+        out IntPtr item);
 
     private sealed class ComReleaser<T>(T instance) : IDisposable
         where T : class

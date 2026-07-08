@@ -144,6 +144,24 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证项目选择器的 Browse 按钮接入 Windows 原生文件夹选择器，并会把当前输入路径作为默认目录。
+    /// </summary>
+    [Fact]
+    public void EditorShellProjectPickerUsesNativeFolderDialogWithInitialPath()
+    {
+        string root = FindRepositoryRoot();
+        string projectPicker = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "ProjectPickerWindow.cs"));
+        string picker = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "NativeFolderPicker.cs"));
+
+        Assert.Contains("NativeFolderPicker.TryPickFolder(path", projectPicker, StringComparison.Ordinal);
+        Assert.Contains("SHCreateItemFromParsingName", picker, StringComparison.Ordinal);
+        Assert.Contains("SetDefaultFolder(defaultFolder.Instance)", picker, StringComparison.Ordinal);
+        Assert.Contains("SetFolder(defaultFolder.Instance)", picker, StringComparison.Ordinal);
+        Assert.Contains("Path.GetDirectoryName(Path.GetFullPath(initialPath))", picker, StringComparison.Ordinal);
+        Assert.DoesNotContain("_ = initialPath;", picker, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Shell 菜单覆盖 plan/19 要求的顶级菜单，并包含 Build Settings 与 Reset Layout 入口。
     /// </summary>
     [Fact]
