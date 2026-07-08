@@ -31,7 +31,7 @@
 
 ### 0.4 未完成目标 checklist
 
-- [x] 本文 §3.2 已改写为当前 `Gui` / `UI` / `Editor.Shell` 后的完整工程清单：`PixelEngine.sln` 当前登记 31 个项目，仓库另有 `tools/PixelEngine.Tools.DeterministicPackage` 作为 package 脚本直调工具项目，不再把早期 `18` 项目表误读为当前结构。
+- [x] 本文 §3.2 已改写为当前 `Gui` / `UI` / `Editor.Shell` 后的完整工程清单：`PixelEngine.sln` 当前登记仓库全部 32 个 `.csproj`，包含 `tools/PixelEngine.Tools.DeterministicPackage`，不再把早期 `18` 项目表误读为当前结构。
 - [x] 新增测试项目、UI / Editor / Demo 专项测试项目与工具项目已在 plan/00、plan/15、plan/19、plan/20 或对应 leaf plan 登记；本文只保留当前清单与 M0 历史口径，不另立新架构。
 
 ### 0.5 证据债 / 阻塞 checklist
@@ -135,11 +135,11 @@ PixelEngine/
 └─ tools/ （脚本 + 2 个工具项目，见 3.2）
 ```
 
-`PixelEngine.sln` 用 solution folder 归类 `src` / `apps` / `demo` / `tests` / `bench` / `tools` 与 `Build`（放 `Directory.*.props`、`global.json` 等），并把 `native/`、`.github/` 以 solution items 形式挂入 `Build` 便于 IDE 浏览。当前 `tools/PixelEngine.Tools.DeterministicPackage` 由 `tools/package.ps1` / `tools/package.sh` 直调，尚未登记进 solution；这是当前事实记录，不视为本文 M0 阻塞。
+`PixelEngine.sln` 用 solution folder 归类 `src` / `apps` / `demo` / `tests` / `bench` / `tools` 与 `Build`（放 `Directory.*.props`、`global.json` 等），并把 `native/`、`.github/` 以 solution items 形式挂入 `Build` 便于 IDE 浏览。当前 `tools/PixelEngine.Tools.DeterministicPackage` 已登记进 solution，并仍由 `tools/package.ps1` / `tools/package.sh` 在发行打包时直调。
 
 ### 3.2 当前工程清单与历史 M0 依赖方向
 
-> 早期 M0 表格的「18 项目（12 src + 1 demo + 4 tests + 1 bench）」只保留为 bootstrap 历史证据；当前权威结构已由 plan/00、plan/15、plan/19、plan/20 与实际源码扩展。2026-07-09 本地 `dotnet sln PixelEngine.sln list` 显示 solution 登记 31 个项目；`rg --files -g "*.csproj"` 显示仓库共有 32 个 `.csproj`，其中 `tools/PixelEngine.Tools.DeterministicPackage` 由打包脚本直调，不在 solution 中。
+> 早期 M0 表格的「18 项目（12 src + 1 demo + 4 tests + 1 bench）」只保留为 bootstrap 历史证据；当前权威结构已由 plan/00、plan/15、plan/19、plan/20 与实际源码扩展。2026-07-09 本地 `dotnet sln PixelEngine.sln list` 与 `rg --files -g "*.csproj"` 均显示当前仓库 32 个 `.csproj` 已全部登记进 solution。
 
 当前 `src/` 引擎与运行时项目（14 个）：`PixelEngine.Core`、`PixelEngine.Interop`、`PixelEngine.Simulation`、`PixelEngine.Content`、`PixelEngine.Serialization`、`PixelEngine.World`、`PixelEngine.Physics`、`PixelEngine.Rendering`、`PixelEngine.Audio`、`PixelEngine.Scripting`、`PixelEngine.Gui`、`PixelEngine.UI`、`PixelEngine.Editor`、`PixelEngine.Hosting`。其中 `PixelEngine.Gui` 是中性 ImGui / GUI bridge 层，`PixelEngine.UI` 是 Web-first UI Runtime，`PixelEngine.Editor` 只承载编辑器 ImGui 面板层；Hosting 解耦后不再硬引用 Editor，Demo 仍只消费 Hosting 公开 API。
 
@@ -147,7 +147,7 @@ PixelEngine/
 
 当前测试项目（13 个）：`PixelEngine.Core.Tests`、`PixelEngine.Content.Tests`、`PixelEngine.Simulation.Tests`、`PixelEngine.Serialization.Tests`、`PixelEngine.World.Tests`、`PixelEngine.Physics.Tests`、`PixelEngine.Rendering.Tests`、`PixelEngine.Audio.Tests`、`PixelEngine.Scripting.Tests`、`PixelEngine.UI.Tests`、`PixelEngine.Editor.Tests`、`PixelEngine.Hosting.Tests`、`PixelEngine.Demo.Tests`。这些测试项目的具体覆盖面归对应 leaf plan 登记，本文只记录结构事实。
 
-当前工具 / 基准项目（2 个 solution 内 + 1 个 solution 外工具）：`bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj`、`tools/PixelEngine.Tools.ManagedNativeLeakDetector/PixelEngine.Tools.ManagedNativeLeakDetector.csproj` 已登记进 solution；`tools/PixelEngine.Tools.DeterministicPackage/PixelEngine.Tools.DeterministicPackage.csproj` 已被 `tools/package.ps1` / `tools/package.sh` 使用但未登记进 solution。若后续决定把 deterministic package tool 纳入 solution，应在 plan/15 与本文同步更新。
+当前工具 / 基准项目（3 个）：`bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj`、`tools/PixelEngine.Tools.ManagedNativeLeakDetector/PixelEngine.Tools.ManagedNativeLeakDetector.csproj`、`tools/PixelEngine.Tools.DeterministicPackage/PixelEngine.Tools.DeterministicPackage.csproj` 均已登记进 solution；其中 deterministic package tool 仍由 `tools/package.ps1` / `tools/package.sh` 在发行打包时直调。
 
 依赖方向仍遵守 plan/00 §5、§8 与 AGENTS.md 不变式：Demo 不直接引用 Editor 或内部实现，Simulation 不引用 Rendering / Physics，Interop 隔离 unsafe / native surface，权威 sim 热路径 native 依赖仍收敛到 Box2D。当前完整 ProjectReference 事实以各 `.csproj`、`dotnet list <proj> reference`、plan/00 与 leaf plan 的依赖纪律测试为准；本文不再维护一张会随产品演进漂移的逐项 reference 表。
 
