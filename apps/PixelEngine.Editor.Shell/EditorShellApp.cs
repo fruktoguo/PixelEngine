@@ -563,6 +563,38 @@ internal sealed class EditorShellApp
                 state.BuildOutputPath = ResolveScriptedBuildOutputDirectory();
                 _ = Directory.CreateDirectory(state.BuildOutputPath);
                 state.BuildOutputReady = Directory.Exists(state.BuildOutputPath);
+                return;
+            }
+
+            if (!state.BuildStarted)
+            {
+                state.BuildStarted = CurrentSession.TryStartScriptedBuildProbe(
+                    state.BuildOutputPath,
+                    runAfterBuild: false,
+                    out state.Diagnostic);
+                state.BuildSnapshot = CurrentSession.CaptureScriptedBuildProbe();
+                if (!state.BuildStarted)
+                {
+                    state.Completed = true;
+                }
+
+                return;
+            }
+
+            if (!state.BuildCompleted)
+            {
+                state.BuildSnapshot = CurrentSession.CaptureScriptedBuildProbe();
+                BuildResult? result = state.BuildSnapshot.Result;
+                if (result is null)
+                {
+                    return;
+                }
+
+                state.BuildCompleted = true;
+                state.BuildOk = result.Ok;
+                state.BuildExitCode = result.ExitCode;
+                state.BuildPackageArchive = result.PackageArchive ?? string.Empty;
+                state.BuildError = result.Error ?? string.Empty;
             }
 
             state.Succeeded = state.RequiredPanelsShown &&
@@ -576,10 +608,13 @@ internal sealed class EditorShellApp
                 state.PlayEntered &&
                 state.PlayExited &&
                 state.BuildSettingsShown &&
-                state.BuildOutputReady;
+                state.BuildOutputReady &&
+                state.BuildStarted &&
+                state.BuildCompleted &&
+                state.BuildOk;
             state.Completed = true;
             state.Diagnostic = state.Succeeded
-                ? "默认工作台脚本热重载、Behaviour 注册与挂载探针完成。"
+                ? "默认工作台脚本热重载、Behaviour 注册、挂载与玩家包构建探针完成。"
                 : "默认工作台自动化路线探针未满足全部条件。";
         }
         catch (Exception ex) when (!OperatingSystem.IsBrowser())
@@ -1077,6 +1112,13 @@ internal sealed class EditorShellApp
             $"build_settings_shown={state.BuildSettingsShown}, " +
             $"build_output_ready={state.BuildOutputReady}, " +
             $"build_output={SanitizeSummaryValue(state.BuildOutputPath)}, " +
+            $"build_started={state.BuildStarted}, " +
+            $"build_completed={state.BuildCompleted}, " +
+            $"build_ok={state.BuildOk}, " +
+            $"build_exit_code={state.BuildExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"build_package_archive={SanitizeSummaryValue(state.BuildPackageArchive)}, " +
+            $"build_error_present={!string.IsNullOrWhiteSpace(state.BuildError)}, " +
+            $"build_log_count={state.BuildSnapshot.LogCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
             $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
     }
 
@@ -1536,6 +1578,13 @@ internal sealed class ScriptedDefaultWorkbenchProbeState
     public bool BuildSettingsShown;
     public bool BuildOutputReady;
     public string BuildOutputPath = string.Empty;
+    public bool BuildStarted;
+    public bool BuildCompleted;
+    public bool BuildOk;
+    public int BuildExitCode;
+    public string BuildPackageArchive = string.Empty;
+    public string BuildError = string.Empty;
+    public ScriptedBuildProbeSnapshot BuildSnapshot = new();
     public string Diagnostic = string.Empty;
 }
 

@@ -291,6 +291,11 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         AppendPowerShellArgument(command, "-Channel", request.Channel == BuildProfileChannel.Aot ? "aot" : "r2r");
         AppendPowerShellArgument(command, "-Configuration", request.Configuration);
         AppendPowerShellArgument(command, "-Output", outputDirectory);
+        if (!string.IsNullOrWhiteSpace(request.ContentRoot))
+        {
+            AppendPowerShellArgument(command, "-ContentRoot", request.ContentRoot);
+        }
+
         AppendPowerShellArgument(command, "-Version", request.Version);
         if (!string.IsNullOrWhiteSpace(request.InformationalVersion))
         {
@@ -350,6 +355,11 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         AddArgument(startInfo, "-Channel", request.Channel == BuildProfileChannel.Aot ? "aot" : "r2r");
         AddArgument(startInfo, "-Configuration", request.Configuration);
         AddArgument(startInfo, "-Output", outputDirectory);
+        if (!string.IsNullOrWhiteSpace(request.ContentRoot))
+        {
+            AddArgument(startInfo, "-ContentRoot", request.ContentRoot);
+        }
+
         AddArgument(startInfo, "-Version", request.Version);
         if (!string.IsNullOrWhiteSpace(request.InformationalVersion))
         {

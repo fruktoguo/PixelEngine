@@ -590,6 +590,7 @@ public sealed class EditorShellBuildTests
             """
             $received = @{
               startScene = $StartScene
+              contentRoot = $ContentRoot
               windowWidth = $WindowWidth
               windowHeight = $WindowHeight
               vSync = $VSync
@@ -624,6 +625,7 @@ public sealed class EditorShellBuildTests
         BuildRequest request = CreateRequest(output) with
         {
             StartScene = "scenes/player.scene",
+            ContentRoot = Path.Combine(temp.Path, "project-content"),
             IncludedScenes = ["scenes/player.scene", "scenes/extra.scene"],
             PlayerWindowWidth = 1440,
             PlayerWindowHeight = 810,
@@ -637,6 +639,8 @@ public sealed class EditorShellBuildTests
         Assert.True(result.Ok, result.Error);
         string received = File.ReadAllText(Path.Combine(output, "received-args.json"));
         Assert.Contains("\"startScene\": \"scenes/player.scene\"", received, StringComparison.Ordinal);
+        Assert.Contains("\"contentRoot\":", received, StringComparison.Ordinal);
+        Assert.Contains("project-content", received, StringComparison.Ordinal);
         Assert.Contains("\"windowWidth\": 1440", received, StringComparison.Ordinal);
         Assert.Contains("\"windowHeight\": 810", received, StringComparison.Ordinal);
         Assert.Contains("\"vSync\": \"false\"", received, StringComparison.OrdinalIgnoreCase);
@@ -721,6 +725,7 @@ public sealed class EditorShellBuildTests
           [string]$Channel,
           [string]$Configuration,
           [string]$Output,
+          [string]$ContentRoot,
           [string]$Version,
           [string]$InformationalVersion,
           [string]$ProductName,

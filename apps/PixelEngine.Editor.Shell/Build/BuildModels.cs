@@ -213,6 +213,8 @@ internal sealed record BuildRequest
 
     public string OutputDirectory { get; init; } = string.Empty;
 
+    public string ContentRoot { get; init; } = string.Empty;
+
     public string Version { get; init; } = string.Empty;
 
     public string InformationalVersion { get; init; } = string.Empty;

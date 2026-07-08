@@ -463,7 +463,10 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         _buildCancellation = new CancellationTokenSource();
         IProgress<BuildProgressEvent> progress = new Progress<BuildProgressEvent>(_pendingEvents.Enqueue);
         BuildRequest request = PlayerSettingsEditorAdapter.ApplyToBuildRequest(
-            _settings.ToRequest(),
+            _settings.ToRequest() with
+            {
+                ContentRoot = _project.ContentRootPath,
+            },
             new PlayerSettingsStore(_project).Load());
         _buildTask = _buildService.RunAsync(request, progress, _buildCancellation.Token);
         _view = _view with

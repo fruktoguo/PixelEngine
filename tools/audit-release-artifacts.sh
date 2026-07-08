@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: tools/audit-release-artifacts.sh [--publish-root <dir>] [--package-root <dir>] [--product-name <name>] [--required-scene <scene>] [--active-rids <csv>] [--dev-layout] [--require-all]
+Usage: tools/audit-release-artifacts.sh [--publish-root <dir>] [--package-root <dir>] [--product-name <name>] [--required-scene <scene>] [--active-rids <csv>] [--dev-layout] [--skip-publish-content-audit] [--skip-demo-content-audit] [--require-all]
 
 Defaults:
   --publish-root artifacts/publish
@@ -505,11 +505,13 @@ assert_friendly_package_layout() {
   (( has_notice )) || fail_audit "package 缺少 NOTICE.txt: $name"
   (( has_launcher )) || fail_audit "package 缺少 launcher: $name -> $launcher"
   [[ -z "$entry" || "$has_entry" -eq 1 ]] || fail_audit "package 缺少 app 依赖入口: $name -> $entry"
-  (( has_materials )) || fail_audit "package 缺少 content/materials.json: $name"
-  (( has_reactions )) || fail_audit "package 缺少 content/reactions.json: $name"
-  (( has_weapons )) || fail_audit "package 缺少 content/weapons.json: $name"
-  (( has_gravel_texture )) || fail_audit "package 缺少 content/textures/17_gravel.png: $name"
-  (( has_boundary_texture )) || fail_audit "package 缺少 content/textures/18_boundary_stone.png: $name"
+  if (( ! skip_demo_content_audit )); then
+    (( has_materials )) || fail_audit "package 缺少 content/materials.json: $name"
+    (( has_reactions )) || fail_audit "package 缺少 content/reactions.json: $name"
+    (( has_weapons )) || fail_audit "package 缺少 content/weapons.json: $name"
+    (( has_gravel_texture )) || fail_audit "package 缺少 content/textures/17_gravel.png: $name"
+    (( has_boundary_texture )) || fail_audit "package 缺少 content/textures/18_boundary_stone.png: $name"
+  fi
   (( has_scene )) || fail_audit "package 缺少 content/$required_scene: $name"
   [[ "$channel" != "r2r" || "$has_ui_native" -eq 1 ]] || fail_audit "package 缺少动态 UI native: $name -> app/runtimes/$rid/native/$(ui_native_name_for_rid "$rid")"
 
@@ -637,11 +639,13 @@ assert_friendly_expanded_package_layout() {
   (( has_notice )) || fail_audit "展开 package 缺少 NOTICE.txt: $name"
   (( has_launcher )) || fail_audit "展开 package 缺少 launcher: $name -> $launcher"
   [[ -z "$entry" || "$has_entry" -eq 1 ]] || fail_audit "展开 package 缺少 app 依赖入口: $name -> $entry"
-  (( has_materials )) || fail_audit "展开 package 缺少 content/materials.json: $name"
-  (( has_reactions )) || fail_audit "展开 package 缺少 content/reactions.json: $name"
-  (( has_weapons )) || fail_audit "展开 package 缺少 content/weapons.json: $name"
-  (( has_gravel_texture )) || fail_audit "展开 package 缺少 content/textures/17_gravel.png: $name"
-  (( has_boundary_texture )) || fail_audit "展开 package 缺少 content/textures/18_boundary_stone.png: $name"
+  if (( ! skip_demo_content_audit )); then
+    (( has_materials )) || fail_audit "展开 package 缺少 content/materials.json: $name"
+    (( has_reactions )) || fail_audit "展开 package 缺少 content/reactions.json: $name"
+    (( has_weapons )) || fail_audit "展开 package 缺少 content/weapons.json: $name"
+    (( has_gravel_texture )) || fail_audit "展开 package 缺少 content/textures/17_gravel.png: $name"
+    (( has_boundary_texture )) || fail_audit "展开 package 缺少 content/textures/18_boundary_stone.png: $name"
+  fi
   (( has_scene )) || fail_audit "展开 package 缺少 content/$required_scene: $name"
   [[ "$channel" != "r2r" || "$has_ui_native" -eq 1 ]] || fail_audit "展开 package 缺少动态 UI native: $name -> app/runtimes/$rid/native/$(ui_native_name_for_rid "$rid")"
 
@@ -685,12 +689,14 @@ audit_publish_directory() {
 
   local entry="$directory/$(entry_name_for_rid "$rid")"
   assert_file_exists "$entry" "缺少发布入口"
-  assert_file_exists "$directory/content/materials.json" "缺少 content/materials.json"
-  assert_file_exists "$directory/content/reactions.json" "缺少 content/reactions.json"
-  assert_file_exists "$directory/content/weapons.json" "缺少 content/weapons.json"
-  assert_file_exists "$directory/content/textures/17_gravel.png" "缺少 content/textures/17_gravel.png"
-  assert_file_exists "$directory/content/textures/18_boundary_stone.png" "缺少 content/textures/18_boundary_stone.png"
-  assert_file_exists "$directory/content/$required_scene" "缺少 content/$required_scene"
+  if (( ! skip_publish_content_audit )); then
+    assert_file_exists "$directory/content/materials.json" "缺少 content/materials.json"
+    assert_file_exists "$directory/content/reactions.json" "缺少 content/reactions.json"
+    assert_file_exists "$directory/content/weapons.json" "缺少 content/weapons.json"
+    assert_file_exists "$directory/content/textures/17_gravel.png" "缺少 content/textures/17_gravel.png"
+    assert_file_exists "$directory/content/textures/18_boundary_stone.png" "缺少 content/textures/18_boundary_stone.png"
+    assert_file_exists "$directory/content/$required_scene" "缺少 content/$required_scene"
+  fi
 
   local box2d_path="$directory/runtimes/$rid/native/$(box2d_dynamic_name_for_rid "$rid")"
   local ui_native_path="$directory/runtimes/$rid/native/$(ui_native_name_for_rid "$rid")"
@@ -900,6 +906,8 @@ assembly_name=""
 required_scene="scenes/lava-mine.scene"
 active_rids_arg=""
 dev_layout=0
+skip_publish_content_audit=0
+skip_demo_content_audit=0
 require_all=0
 
 while [[ $# -gt 0 ]]; do
@@ -939,6 +947,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dev-layout)
       dev_layout=1
+      shift
+      ;;
+    --skip-publish-content-audit)
+      skip_publish_content_audit=1
+      shift
+      ;;
+    --skip-demo-content-audit)
+      skip_demo_content_audit=1
       shift
       ;;
     --require-all)
