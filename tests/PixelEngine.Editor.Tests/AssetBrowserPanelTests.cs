@@ -74,6 +74,48 @@ public sealed class AssetBrowserPanelTests
     }
 
     /// <summary>
+    /// 验证 Project Window 支持类型过滤与稳定排序，满足资源搜索/过滤/排序产品契约。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelFiltersByKindAndSortsAssets()
+    {
+        DateTimeOffset older = DateTimeOffset.UnixEpoch.AddMinutes(1);
+        DateTimeOffset newer = DateTimeOffset.UnixEpoch.AddMinutes(2);
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("scripts/Player.cs", AssetBrowserItemKind.Script, 30, newer, null, "asset_script"),
+            new AssetBrowserItem("textures/z-rock.png", AssetBrowserItemKind.Texture, 10, older, null, "asset_z_texture"),
+            new AssetBrowserItem("audio/hit.wav", AssetBrowserItemKind.Audio, 90, older, null, "asset_audio"),
+            new AssetBrowserItem("textures/a-sand.png", AssetBrowserItemKind.Texture, 60, newer, null, "asset_a_texture"),
+        ]);
+        AssetBrowserPanel panel = new(source);
+
+        _ = panel.Refresh();
+        panel.SetKindFilter(AssetBrowserItemKind.Texture);
+
+        Assert.Equal(AssetBrowserItemKind.Texture, panel.KindFilter);
+        Assert.Equal(["textures/a-sand.png", "textures/z-rock.png"], panel.FilteredAssets.Select(item => item.Path));
+
+        panel.SetSearch("rock");
+
+        AssetBrowserItem filtered = Assert.Single(panel.FilteredAssets);
+        Assert.Equal("textures/z-rock.png", filtered.Path);
+
+        panel.SetSearch(string.Empty);
+        panel.SetKindFilter(null);
+        panel.SetSortMode(AssetBrowserSortMode.SizeDescending);
+
+        Assert.Equal(AssetBrowserSortMode.SizeDescending, panel.SortMode);
+        Assert.Equal(["audio/hit.wav", "textures/a-sand.png", "scripts/Player.cs", "textures/z-rock.png"], panel.FilteredAssets.Select(item => item.Path));
+
+        panel.SetSortMode(AssetBrowserSortMode.KindThenPath);
+
+        Assert.Equal(
+            ["textures/a-sand.png", "textures/z-rock.png", "audio/hit.wav", "scripts/Player.cs"],
+            panel.FilteredAssets.Select(item => item.Path));
+    }
+
+    /// <summary>
     /// 验证 Project Window 能为 Shell 资产拖拽语义创建 typed payload，并拒绝缺 stable id 的旧数据源项。
     /// </summary>
     [Fact]
