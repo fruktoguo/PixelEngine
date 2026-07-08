@@ -96,6 +96,20 @@ public sealed class UiContractTests
     }
 
     [Fact]
+    public void RmlUiValueBridgePreservesStringHandlePayloadWithoutStringPool()
+    {
+        UiValue managed = UiValue.FromStringHandle(new UiStringHandle(77));
+
+        RmlUiNative.NativeUiValue native = RmlUiBackend.ToNativeValue(in managed);
+        UiValue roundTrip = RmlUiBackend.ToUiValue(in native);
+
+        Assert.Equal((int)UiValueKind.StringHandle, native.Kind);
+        Assert.Equal(77, native.Integer);
+        Assert.Equal(managed, roundTrip);
+        Assert.Equal(new UiStringHandle(77), roundTrip.AsStringHandle());
+    }
+
+    [Fact]
     public void UiModelPathNameMapsDottedPathsToLegalCollisionResistantVariables()
     {
         string dotted = UiModelPathName.ToVariableName("hud.health.current");
