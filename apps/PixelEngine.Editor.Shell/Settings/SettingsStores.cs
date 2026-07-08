@@ -69,6 +69,8 @@ internal static class PlayerSettingsEditorAdapter
             .WithWindow(normalized.WindowWidth, normalized.WindowHeight)
             .WithWindowTitle(normalized.WindowTitle)
             .UseVSync(normalized.VSync)
+            .UseGuiRuntime()
+            .EnableGameUi()
             .UseUiBackend(normalized.RuntimeUiBackend);
         if (applyStartupScene)
         {

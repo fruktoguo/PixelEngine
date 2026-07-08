@@ -2,6 +2,7 @@ using System.Text.Json;
 using PixelEngine.Editor.Shell;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
+using PixelEngine.UI;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -67,6 +68,15 @@ public sealed class EditorShellProjectTests
 
         Assert.True(session.Engine.Context.TryGetService(out ScriptHotReloadController _));
         Assert.True(session.Engine.Context.TryGetService(out IScriptContext _));
+        Assert.True(session.Engine.Context.TryGetService(out GameUiHost _));
+        Assert.True(session.Engine.Context.TryGetService(out IGameUiService _));
+        Assert.True(session.Engine.Context.TryGetService(out GameUiBackendSelection selection));
+        Assert.Equal(UiBackendKind.ManagedFallback, selection.ActiveBackend);
+        Assert.Contains(app.ConsoleStore.Snapshot(), entry =>
+            entry.Category == EditorConsoleCategory.Ui &&
+            entry.Severity == EditorConsoleSeverity.Info &&
+            entry.Source == "ui-backend" &&
+            entry.Text.Contains("ManagedFallback", StringComparison.Ordinal));
         Assert.Contains(app.ConsoleStore.Snapshot(), entry =>
             entry.Category == EditorConsoleCategory.Script &&
             entry.Severity == EditorConsoleSeverity.Error &&
