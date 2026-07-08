@@ -383,6 +383,7 @@ public sealed class PhysicsSystem : IDisposable
     public int RestoreBodySnapshots(ReadOnlySpan<RigidBodySnapshot> snapshots)
     {
         ObjectDisposedException.ThrowIf(_shutdown, this);
+        ClearDynamicBodiesForSnapshotRestore();
         int restored = 0;
         for (int i = 0; i < snapshots.Length; i++)
         {
@@ -423,6 +424,25 @@ public sealed class PhysicsSystem : IDisposable
         }
 
         return restored;
+    }
+
+    private void ClearDynamicBodiesForSnapshotRestore()
+    {
+        int slotCount = PhysicsWorld.BodySlotCount;
+        for (int bodyKey = 0; bodyKey < slotCount; bodyKey++)
+        {
+            if (PhysicsWorld.TryGetBody(bodyKey, out PixelRigidBody? body))
+            {
+                Box2D.b2DestroyBody(body.BodyId);
+            }
+        }
+
+        PhysicsWorld.Clear();
+        Registry.Clear();
+        _pendingDamage.Clear();
+        LastErasedCellCount = 0;
+        LastStampedCellCount = 0;
+        LastDestructionResult = default;
     }
 
     /// <summary>

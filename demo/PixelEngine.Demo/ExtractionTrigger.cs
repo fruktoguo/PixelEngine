@@ -66,6 +66,9 @@ public sealed class ExtractionTrigger : Behaviour
     /// <inheritdoc />
     protected override void OnStart()
     {
+        Reached = false;
+        BlockedReason = string.Empty;
+        _pulse = 0f;
         ResolveMaterial();
         ResolveSceneComponents();
     }

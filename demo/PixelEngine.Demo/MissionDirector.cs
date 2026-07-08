@@ -149,7 +149,15 @@ public sealed class MissionDirector : Behaviour
     /// <inheritdoc />
     protected override void OnStart()
     {
+        State = MissionState.Playing;
+        CrystalsCollected = 0;
+        ElapsedSeconds = 0f;
         LavaSurfaceY = InitialLavaSurfaceY;
+        Score = 0;
+        ResultReason = string.Empty;
+        BlockedReason = string.Empty;
+        _externalLavaSurface = false;
+        _menuStatus = string.Empty;
         ResolveComponents();
         _baselineRespawns = _health?.RespawnCount ?? 0;
         _ = Context.Events.Subscribe<MineYieldEvent>(OnMineYield);
