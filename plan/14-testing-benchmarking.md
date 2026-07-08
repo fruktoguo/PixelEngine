@@ -187,6 +187,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] `KeepAliveBoundaryTests`：边界雪崩正确跨界传播、邻居 incoming dirty 在帧边界唤醒为 current dirty 后继续传播；沉降后 rect 收回、chunk 进 sleep；写入恒在 32px halo 内不越界（CA 内核 §5.5/§5.4/§5.8、不变式 #4）。
 - [x] `MultithreadOracleTests`：多线程终态 vs 单线程 oracle 比对统计 / 守恒性质（每材质总数、宏观直方图、堆 / 液面高度容差内一致、无边界伪影），非 bit 比对（CA 内核 §5.7/§6.1/§16.2）。
 - [x] `ReactionTableTests`：`[tag]` 加载期展开为具体材质对正确、概率 0–100→0–255 映射边界、有序对去重（min 归一）、惰性材质 `ReactionCount==0` 早退（材质 / 反应 §7.4）。
+- [x] `SimulationReactionLifetimeTests`：reaction seam 仅对 reactive 材质调用、lifetime 递减 / 归零 sink 调用正确，且覆盖 lifetime sink 清空当前 cell 后同一行后续 cell 仍推进到正确世界坐标，防止 CA row cursor 在 post-lifetime 早退路径滞留（材质 / 反应 §7.4，CA 内核 §5.6）。
 - [x] `ResidencyBoundaryTests`：border ring 使 32px-halo 跨界写入恒落驻留 chunk；KeepAlive 唤醒 border 后补齐新的外圈 border；结构性增删只在相位 2 单线程、不与 sim 相位并发（World 驻留 §3.4、不变式 #4）。
 
 ### 4.3 Physics.Tests（§8）
