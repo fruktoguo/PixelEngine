@@ -195,7 +195,20 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
         else if (frame >= 356)
         {
             _keys[keyCount++] = Key.D;
-            if (frame % 48 is 14 or 15)
+            if (frame == 356)
+            {
+                _keys[keyCount++] = Key.Digit1;
+            }
+
+            target = new Point2F(
+                MathF.Min(604f, 298f + ((frame - 356) * 0.28f)),
+                260f + (frame / 24 % 3 * 12f));
+            if (frame % 9 is 0 or 1)
+            {
+                _buttons[buttonCount++] = MouseButton.Left;
+            }
+
+            if (frame % 40 is 12 or 13)
             {
                 _keys[keyCount++] = Key.Space;
             }

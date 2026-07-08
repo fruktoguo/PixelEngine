@@ -109,6 +109,71 @@ public sealed unsafe class PhysicsSyncTests
         }
     }
 
+    /// <summary>
+    /// 验证动态刚体在 inverse-sampling 写回前会被角色 AABB proxy 约束，而不是穿过玩家后再由脚本层解卡。
+    /// </summary>
+    [Fact]
+    public void CharacterProxyBlocksFallingRigidBodyBeforeRestamp()
+    {
+        PhysicsScale.ConfigureBox2DLengthUnits();
+        B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
+        worldDef.Gravity = new B2Vec2 { X = 0f, Y = 10f };
+        B2WorldId worldId = Box2D.b2CreateWorld(in worldDef);
+
+        try
+        {
+            TestChunkSource source = new(new Chunk(new ChunkCoord(0, 0)));
+            CellGrid grid = new(source, MaterialPropsTable.Empty);
+            PhysicsWorld physicsWorld = new();
+            RigidStampRegistry registry = new();
+            PhysicsSystem system = new(worldId, physicsWorld, grid, registry);
+            FillRect(grid, material: 2, minX: 36, minY: 22, maxX: 56, maxY: 30);
+            int bodyKey = system.CreateBodyFromRegion(36, 22, 20, 8);
+            PixelRigidBody body = physicsWorld.GetBody(bodyKey);
+            Box2D.b2Body_SetLinearVelocity(body.BodyId, new B2Vec2 { X = 0f, Y = PhysicsScale.PixelToPhysics(280f) });
+
+            CharacterController character = new(grid, new Vector2(42f, 48f), new Vector2(6f, 12f));
+            system.RegisterCharacterProxy(character);
+
+            bool everOverlappedCharacter = false;
+            int firstOverlapFrame = -1;
+            int overlapX = 0;
+            int overlapY = 0;
+            int totalProxyContacts = 0;
+            int firstProxyContactFrame = -1;
+            for (int i = 0; i < 90; i++)
+            {
+                system.SyncStep(1f / 60f);
+                if (system.LastCharacterProxyContactCount > 0)
+                {
+                    totalProxyContacts += system.LastCharacterProxyContactCount;
+                    if (firstProxyContactFrame < 0)
+                    {
+                        firstProxyContactFrame = i;
+                    }
+                }
+
+                if (TryFindRigidOwnedInAabb(grid, character.Bounds, out overlapX, out overlapY))
+                {
+                    everOverlappedCharacter = true;
+                    firstOverlapFrame = i;
+                    break;
+                }
+            }
+
+            Assert.False(
+                everOverlappedCharacter,
+                $"动态刚体 stamp 不应进入角色 AABB，firstFrame={firstOverlapFrame}, cell=({overlapX},{overlapY}), bodyY={body.PreviousTransform.Position.Y:F2}。");
+            Assert.True(
+                body.PreviousTransform.Position.Y < 48f,
+                $"刚体应被角色 proxy 阻挡在玩家上方，actualY={body.PreviousTransform.Position.Y:F2}, contacts={totalProxyContacts}, firstContact={firstProxyContactFrame}。");
+        }
+        finally
+        {
+            Box2D.b2DestroyWorld(worldId);
+        }
+    }
+
     private static BodyLocalMask CreateFilledMask(int width, int height, ushort material, Vector2 origin)
     {
         int area = width * height;
@@ -131,6 +196,39 @@ public sealed unsafe class PhysicsSyncTests
         ];
         pieces[0] = ConvexPolygon.From(vertices);
         return ShapeBuilder.BuildBody(worldId, pieces, bodyPositionPixels, density: 1f);
+    }
+
+    private static void FillRect(CellGrid grid, ushort material, int minX, int minY, int maxX, int maxY)
+    {
+        for (int y = minY; y < maxY; y++)
+        {
+            for (int x = minX; x < maxX; x++)
+            {
+                grid.MaterialAt(x, y) = material;
+                grid.FlagsAt(x, y) = default;
+            }
+        }
+    }
+
+    private static bool TryFindRigidOwnedInAabb(CellGrid grid, in AABB bounds, out int hitX, out int hitY)
+    {
+        RectI rect = bounds.ToRectI();
+        for (int y = rect.MinY; y < rect.MaxY; y++)
+        {
+            for (int x = rect.MinX; x < rect.MaxX; x++)
+            {
+                if (CellFlags.Has(grid.FlagsAt(x, y), CellFlags.RigidOwned))
+                {
+                    hitX = x;
+                    hitY = y;
+                    return true;
+                }
+            }
+        }
+
+        hitX = 0;
+        hitY = 0;
+        return false;
     }
 
     private static void AssertNoInternalHoles(List<RigidStampedCell> stamps)

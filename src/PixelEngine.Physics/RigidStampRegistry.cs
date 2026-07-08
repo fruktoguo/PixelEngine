@@ -31,6 +31,17 @@ public sealed class RigidStampRegistry : IRigidCellOwnershipLookup
         return _stamps.TryGetValue(Pack(worldX, worldY), out stamp);
     }
 
+    /// <summary>
+    /// 移除一个 world cell stamp。
+    /// </summary>
+    /// <param name="worldX">world X。</param>
+    /// <param name="worldY">world Y。</param>
+    /// <returns>存在并移除时返回 true。</returns>
+    public bool Remove(int worldX, int worldY)
+    {
+        return _stamps.Remove(Pack(worldX, worldY));
+    }
+
     /// <inheritdoc />
     public bool TryGetBodyAtCell(int worldX, int worldY, out int bodyKey)
     {

@@ -968,6 +968,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             ValidatePositive(height, nameof(height));
 
             CharacterController controller = new(grid, new Vector2(x, y), new Vector2(width, height));
+            physics?.RegisterCharacterProxy(controller);
             CharacterState state = Snapshot(controller, default);
             _characters.Add(new CharacterSlot(controller, state));
             return new CharacterHandle(_characters.Count - 1);
