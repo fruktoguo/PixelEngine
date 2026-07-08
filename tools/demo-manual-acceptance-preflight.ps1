@@ -43,6 +43,17 @@ function Get-FileSha256 {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
+function Get-CurrentGitCommit {
+    param([string]$Root)
+
+    $output = & git -C $Root rev-parse HEAD 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace([string]$output)) {
+        throw "无法读取当前 git HEAD，不能校验人工验收 evidence 是否来自当前提交。"
+    }
+
+    return ([string]$output).Trim()
+}
+
 function Read-UInt32BigEndian {
     param([System.IO.BinaryReader]$Reader)
 
@@ -627,7 +638,9 @@ function Assert-ManualEvidenceMetadata {
     param(
         [object]$Entry,
         [object]$ScopeDefinition,
-        [string]$ResolvedPath
+        [string]$ResolvedPath,
+        [string]$ReviewSessionId,
+        [string]$GitCommit
     )
 
     $scope = [string]$ScopeDefinition.scope
@@ -701,6 +714,30 @@ function Assert-ManualEvidenceMetadata {
         $allowedReport = @(".md", ".txt", ".pdf")
         if ($extension -notin $allowedReport) {
             throw "evidence scope $scope 是 report，文件扩展名必须为 $($allowedReport -join ', ')。"
+        }
+
+        $fileInfo = Get-Item -LiteralPath $ResolvedPath
+        if ($fileInfo.Length -lt 256) {
+            throw "evidence scope $scope report 文件太短，必须包含可审查的观察记录、结论和残余风险。"
+        }
+
+        if ($extension -in @(".md", ".txt")) {
+            $reportText = Get-Content -LiteralPath $ResolvedPath -Raw
+            if (-not $reportText.Contains($ReviewSessionId, [StringComparison]::Ordinal)) {
+                throw "evidence scope $scope report 文件必须包含 reviewSessionId=$ReviewSessionId，防止报告正文与 manifest 拼接。"
+            }
+
+            if (-not $reportText.Contains($GitCommit, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "evidence scope $scope report 文件必须包含 gitCommit=$GitCommit，防止旧报告冒充当前提交。"
+            }
+
+            if (-not ($reportText.Contains("结论", [StringComparison]::Ordinal) -or $reportText.Contains("conclusion", [StringComparison]::OrdinalIgnoreCase))) {
+                throw "evidence scope $scope report 文件必须包含结论/conclusion 字段。"
+            }
+
+            if (-not ($reportText.Contains("风险", [StringComparison]::Ordinal) -or $reportText.Contains("risk", [StringComparison]::OrdinalIgnoreCase))) {
+                throw "evidence scope $scope report 文件必须包含风险/risk 字段。"
+            }
         }
     }
     else {
@@ -1112,6 +1149,11 @@ function Read-EvidenceManifest {
         throw "evidence manifest 缺少 gitCommit。"
     }
 
+    $currentGitCommit = Get-CurrentGitCommit -Root $Root
+    if (-not [string]::Equals($gitCommit, $currentGitCommit, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "evidence manifest gitCommit 必须等于当前 HEAD $currentGitCommit，实际为 $gitCommit。"
+    }
+
     $scopeDefinitions = @(Get-ManualScopes)
     $requiredScopes = @($scopeDefinitions | ForEach-Object { $_.scope })
     $scopeByName = @{}
@@ -1162,7 +1204,7 @@ function Read-EvidenceManifest {
             throw "evidence scope $scope 指向文件不存在：$path"
         }
 
-        Assert-ManualEvidenceMetadata -Entry $entry -ScopeDefinition $scopeByName[$scope] -ResolvedPath $path
+        Assert-ManualEvidenceMetadata -Entry $entry -ScopeDefinition $scopeByName[$scope] -ResolvedPath $path -ReviewSessionId $reviewSessionId -GitCommit $gitCommit
 
         $entryReviewSessionId = [string](Get-JsonPropertyValue -Object $entry -Name "reviewSessionId")
         if ([string]::IsNullOrWhiteSpace($entryReviewSessionId)) {

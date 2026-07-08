@@ -2410,6 +2410,15 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                     ["menuButtonsClicked"] = "too short",
                     ["editorDockspaceOpened"] = "Editor dockspace is opened and visible during the manual video.",
                 });
+            string staleCommitManifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "stale-commit", includeDemoManualMetadata: true);
+            SetFlatEvidenceManifestProperty(staleCommitManifest, "gitCommit", "abcdef123456");
+            string weakReportManifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "weak-report", includeDemoManualMetadata: true);
+            SetFlatEvidenceFileContent(
+                weakReportManifest,
+                "controlFeelReport",
+                "reviewSessionId: session-20260704-demo-001" + Environment.NewLine +
+                "gitCommit: " + GetCurrentGitCommit() + Environment.NewLine +
+                "short report without conclusion and risk");
 
             string badDurationArtifacts = Path.Combine(temp, "bad-duration-out");
             ScriptResult badDuration = RunPowerShellScript(
@@ -2466,6 +2475,34 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Contains("status: blocked_invalid_manual_evidence", badCriteria.Output + badCriteriaReport, StringComparison.Ordinal);
             Assert.Contains("hudMenuEditorVideo criteria.menuButtonsClicked 至少需要 20 个字符", badCriteriaReport, StringComparison.Ordinal);
             Assert.DoesNotContain("status: manual_evidence_attached_pending_review", badCriteriaReport, StringComparison.Ordinal);
+
+            string staleCommitArtifacts = Path.Combine(temp, "stale-commit-out");
+            ScriptResult staleCommit = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
+                "-EvidenceManifestPath",
+                staleCommitManifest,
+                "-Artifacts",
+                staleCommitArtifacts);
+            Assert.Equal(5, staleCommit.ExitCode);
+            string staleCommitReport = File.ReadAllText(Path.Combine(staleCommitArtifacts, "demo-manual-acceptance-preflight.md"));
+            Assert.Contains("status: blocked_invalid_manual_evidence", staleCommit.Output + staleCommitReport, StringComparison.Ordinal);
+            Assert.Contains("evidence manifest gitCommit 必须等于当前 HEAD", staleCommitReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: manual_evidence_attached_pending_review", staleCommitReport, StringComparison.Ordinal);
+
+            string weakReportArtifacts = Path.Combine(temp, "weak-report-out");
+            ScriptResult weakReport = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
+                "-EvidenceManifestPath",
+                weakReportManifest,
+                "-Artifacts",
+                weakReportArtifacts);
+            Assert.Equal(5, weakReport.ExitCode);
+            string weakReportReport = File.ReadAllText(Path.Combine(weakReportArtifacts, "demo-manual-acceptance-preflight.md"));
+            Assert.Contains("status: blocked_invalid_manual_evidence", weakReport.Output + weakReportReport, StringComparison.Ordinal);
+            Assert.Contains("controlFeelReport report 文件太短", weakReportReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: manual_evidence_attached_pending_review", weakReportReport, StringComparison.Ordinal);
         }
         finally
         {
@@ -6084,7 +6121,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "flat-evidence");
         _ = Directory.CreateDirectory(evidenceRoot);
         const string reviewSessionId = "session-20260704-demo-001";
-        const string gitCommit = "abcdef123456";
+        string gitCommit = includeDemoManualMetadata ? GetCurrentGitCommit() : "abcdef123456";
 
         List<Dictionary<string, object>> evidence = [];
         foreach (string scope in scopes)
@@ -6094,7 +6131,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string extension = isVideo ? ".mp4" : ".md";
             string report = isVideo
                 ? WriteMinimalMp4VideoEvidence(Path.Combine(evidenceRoot, $"{safeScope}{extension}"))
-                : WriteTextEvidence(Path.Combine(evidenceRoot, $"{safeScope}{extension}"), $"{scope} evidence");
+                : WriteTextEvidence(
+                    Path.Combine(evidenceRoot, $"{safeScope}{extension}"),
+                    includeDemoManualMetadata
+                        ? CreateDemoManualReportEvidence(scope, reviewSessionId, gitCommit)
+                        : $"{scope} evidence");
             Dictionary<string, object> entry = new()
             {
                 ["scope"] = scope,
@@ -6148,6 +6189,21 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         _ = Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllBytes(path, CreateMinimalMp4VideoBytes(durationSeconds: 60));
         return path;
+    }
+
+    private static string CreateDemoManualReportEvidence(string scope, string reviewSessionId, string gitCommit)
+    {
+        return $"""
+            # {scope} manual report
+
+            reviewSessionId: {reviewSessionId}
+            gitCommit: {gitCommit}
+            conclusion: reviewer confirmed this scope against the live PixelEngine window and recorded the concrete observations required by the manifest checklist.
+            risk: remaining risk is limited to the human review judgment and must still be checked before changing any plan M15 blocker to complete.
+
+            结论: 该报告正文与 manifest 使用同一个 reviewSessionId 和 gitCommit，供预检确认不是把旧报告或空白说明拼接到当前证据。
+            风险: 该报告仍只是人工验收待审材料，不代表 plan/13、plan/19 或 plan/20 的真实窗口体验验收已经完成。
+            """;
     }
 
     private static byte[] CreateFtypOnlyMp4Bytes()
@@ -6327,6 +6383,13 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string path = (string?)entry["path"] ?? throw new InvalidOperationException("evidence entry 缺少 path。");
         File.WriteAllBytes(path, content);
         entry["sha256"] = GetSha256(path);
+        File.WriteAllText(manifestPath, manifest.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static void SetFlatEvidenceManifestProperty(string manifestPath, string propertyName, JsonNode? value)
+    {
+        JsonObject manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
+        manifest[propertyName] = value;
         File.WriteAllText(manifestPath, manifest.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
     }
 
@@ -6596,6 +6659,30 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         using System.Security.Cryptography.SHA256 sha = System.Security.Cryptography.SHA256.Create();
         using FileStream stream = File.OpenRead(path);
         return Convert.ToHexString(sha.ComputeHash(stream)).ToLowerInvariant();
+    }
+
+    private static string GetCurrentGitCommit()
+    {
+        string root = FindRepositoryRoot();
+        using System.Diagnostics.Process process = new();
+        process.StartInfo.FileName = "git";
+        process.StartInfo.WorkingDirectory = root;
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.UseShellExecute = false;
+        process.StartInfo.CreateNoWindow = true;
+        process.StartInfo.ArgumentList.Add("rev-parse");
+        process.StartInfo.ArgumentList.Add("HEAD");
+        _ = process.Start();
+        string output = process.StandardOutput.ReadToEnd();
+        string error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException("无法读取当前 git HEAD：" + error);
+        }
+
+        return output.Trim();
     }
 
     private static ScriptResult RunPowerShellScript(string workingDirectory, string scriptPath, params string[] arguments)
