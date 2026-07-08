@@ -25,7 +25,7 @@
 ## 3. 已实现证据 checklist
 
 - [x] 依赖方向已收敛：`{Demo, EditorShell} → Hosting → {Scripting, Rendering, Audio, Physics, World, Serialization, Content, Simulation, UI, Gui} → Interop → Core`；Hosting 编译期不再引用 `PixelEngine.Editor`。
-- [x] 子系统装配与**初始化顺序**已按 Core → Content → Simulation → World → Physics → Audio → Rendering → GPU → Scripting → Gui → optional injected Editor 装配，关闭逆序释放。
+- [x] 子系统装配与**初始化顺序**已按 Core → Content → Simulation → World → Physics → Audio → Rendering → GPU → Scripting → Gui → optional injected Editor 装配，关闭逆序释放；Hosting 创建的 `AudioSystem` 已纳入 Engine owned runtime resources，owning clip cache 随 `AudioSystem.Shutdown` 删除已上传 buffer，`AudioPhaseDriverTests.EngineLoadsContentAudioAndInjectsScriptAudioApi` 验证 `Engine.Dispose()` 后测试后端 live object 清零。
 - [x] 12 相位主循环已绑定：相位 [0] 输入/时间、[1] 脚本与 UI 事件、[2] residency、[3] 粒子沉积、[4] CA、[5] 温度、[6] dirty swap、[7] cell→particle、[8] physics、[9] render buffer、[10] GPU/render/UI、[11] streaming。
 - [x] 不追帧帧节奏已锁定：每帧至多一次 sim/physics step，sim 可降到 30Hz 且 render 逐帧出帧；`EnginePhasePipelineTests` 与 `EngineOverloadControllerTests` 覆盖降频/过载行为。
 - [x] 过载降级按五级顺序触发：热场、光照、远 chunk、sim 30Hz、接受低 fps 顺序下发质量档位。
@@ -64,6 +64,7 @@
 ## 7. 验证命令与证据路径 checklist
 
 - [x] `dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --filter FullyQualifiedName~HostingProjectDisciplineTests|FullyQualifiedName~EngineWindowOwnershipTests|FullyQualifiedName~EnginePhasePipelineTests` 覆盖依赖方向、窗口所有权、相位与降频。
+- [x] `dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --filter FullyQualifiedName~AudioPhaseDriverTests` 覆盖 content/audio 预加载、脚本音频 API 注入、材质 cue 映射、sim 降频一致性、dispatch 诊断与 Engine-owned 音频资源释放。
 - [x] `dotnet test tests/PixelEngine.UI.Tests/PixelEngine.UI.Tests.csproj -c Release --filter FullyQualifiedName~GameUiHostTests|FullyQualifiedName~UiInputRouterTests|FullyQualifiedName~GameUiServiceBridgeTests` 覆盖 Web-first UI 装配、输入仲裁、服务桥和禁用门控。
 - [x] `dotnet test tests/PixelEngine.Demo.Tests/PixelEngine.Demo.Tests.csproj -c Release --filter FullyQualifiedName~DemoStartupOptionsTests` 覆盖 player startup 分派与 packaged `startup.json` 中 title/window/vsync/runtime UI backend/release channel 消费，当前通过 22/22。
 - [x] `dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --filter "FullyQualifiedName~EditorShellBuildTests|FullyQualifiedName~SceneAndHeadlessTests|FullyQualifiedName~HostingProjectDisciplineTests|FullyQualifiedName~EngineBuilderTests"` 覆盖 Project/Player Settings store 与面板 scripted probe、ProjectSettings → EditorProject/EngineProject、EngineProject 统一入口合并 settings/startup/Build Profile/.scene 扫描、错误输入不保存、PlayerSettings → BuildRequest/runtime options/build-player 参数/`build-result.json` 投影、EngineBuilder 窗口标题/启动场景与 player build 编排，当前通过 82/82。

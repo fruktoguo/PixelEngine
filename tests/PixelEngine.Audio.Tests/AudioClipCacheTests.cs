@@ -143,6 +143,44 @@ public sealed class AudioClipCacheTests
     }
 
     [Fact]
+    public async Task AudioSystemShutdownDisposesOwnedClipCacheButLeavesBorrowedCacheAlive()
+    {
+        byte[] wav = CreateWav(channels: 1, bitsPerSample: 8, sampleRate: 8_000, [128]);
+
+        using NullAudioBackend ownedBackend = new();
+        AudioClipCache ownedCache = new(ownedBackend, new MemoryAssetStore(wav), new WavDecoder());
+        _ = await ownedCache.LoadAsync("ui/owned.wav");
+        using AudioSystem ownedSystem = new();
+        ownedSystem.Initialize(new AudioSettings { MaxVoices = 1 }, ownedBackend);
+        ownedSystem.AttachClipCache(ownedCache, takeOwnership: true);
+
+        Assert.Equal(1, ownedBackend.LiveBufferCount);
+
+        ownedSystem.Shutdown();
+
+        Assert.Equal(0, ownedBackend.LiveObjectCount);
+        _ = Assert.Throws<ObjectDisposedException>(() => ownedCache.TryGetLoaded("ui/owned.wav", out _));
+
+        using NullAudioBackend borrowedBackend = new();
+        AudioClipCache borrowedCache = new(borrowedBackend, new MemoryAssetStore(wav), new WavDecoder());
+        _ = await borrowedCache.LoadAsync("ui/borrowed.wav");
+        using AudioSystem borrowedSystem = new();
+        borrowedSystem.Initialize(new AudioSettings { MaxVoices = 1 }, borrowedBackend);
+        borrowedSystem.AttachClipCache(borrowedCache, takeOwnership: false);
+
+        borrowedSystem.Shutdown();
+
+        Assert.Equal(1, borrowedBackend.LiveBufferCount);
+        Assert.True(borrowedCache.TryGetLoaded("ui/borrowed.wav", out AudioClip? borrowedClip));
+        Assert.NotNull(borrowedClip);
+
+        borrowedCache.Dispose();
+
+        Assert.Equal(0, borrowedBackend.LiveObjectCount);
+        _ = Assert.Throws<ObjectDisposedException>(() => borrowedCache.TryGetLoaded("ui/borrowed.wav", out _));
+    }
+
+    [Fact]
     public void StreamPlayerQueuesAndReturnsProcessedBuffersOnWorker()
     {
         using NullAudioBackend backend = new();

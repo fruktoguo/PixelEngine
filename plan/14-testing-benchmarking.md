@@ -7,7 +7,7 @@
 
 ## 1. 目标与范围
 
-本文件交付「验证层」：四个 xUnit 测试工程（`PixelEngine.Simulation.Tests` / `PixelEngine.Physics.Tests` / `PixelEngine.Serialization.Tests` / `PixelEngine.Scripting.Tests`，见 plan/00 §5）、一个 `bench/PixelEngine.Benchmarks` BenchmarkDotNet 工程、以及在 CI 中执行它们并把性能回归当作 bug 拦截的门禁。它是 `AGENTS.md §7` 与架构 §16.2 的工程落地：CA 内核最易出 bug 的三处（chunk 边界 KeepAlive、单缓冲 parity、跨界反应）必须由性质测试钉死，性能结论必须由实测与反汇编证实而非臆断（§12.7、§17.3）。
+本文件交付「验证层」：覆盖 `PixelEngine.Simulation.Tests` / `PixelEngine.Physics.Tests` / `PixelEngine.Serialization.Tests` / `PixelEngine.Scripting.Tests` / `PixelEngine.Audio.Tests` / `PixelEngine.Hosting.Tests` / `PixelEngine.Demo.Tests` / `PixelEngine.UI.Tests` 等 xUnit 测试工程（见 plan/00 §5 与实际解决方案结构）、一个 `bench/PixelEngine.Benchmarks` BenchmarkDotNet 工程、以及在 CI 中执行它们并把性能回归当作 bug 拦截的门禁。它是 `AGENTS.md §7` 与架构 §16.2 的工程落地：CA 内核最易出 bug 的三处（chunk 边界 KeepAlive、单缓冲 parity、跨界反应）必须由性质测试钉死，性能结论必须由实测与反汇编证实而非臆断（§12.7、§17.3）。
 
 被测对象是各 plan 已实现的子系统，本文件只负责「如何验证它们」，不重新设计任何子系统。因此本文件的范围是：测试工程的结构与命名约定、性质测试 / oracle 比对 / 快照回归的方法学、基准的测量方法学、以及 CI 门禁的判定规则与 6-RID 矩阵。每个 plan 文档自己的「验收标准」勾选项是该子系统的完成判据（`AGENTS.md §7`：每文档验收必须全勾才算完成）；本文件提供执行这些判据的自动化手段，并在 §6 给出测试条目↔各 plan 验收的映射。
 
@@ -24,7 +24,7 @@
 - **xUnit**：`xunit`、`xunit.runner.visualstudio`、`Microsoft.NET.Test.Sdk`，承载单元 / 性质 / 快照回归测试。性质测试的随机用例生成用内核自带的 counter-based 确定性 RNG（架构 §6.2 的 RNG seam），不引入第三方 property-testing 库，以保证种子可复现、可入快照。
 - **BenchmarkDotNet**：含 `[DisassemblyDiagnoser]`（守 bounds-check 消除 / SIMD 寄存器出现，§12.6/§17.3）、`[MemoryDiagnoser]`（守稳态零分配，§12.4）、`[ThreadingDiagnoser]`（核数缩放观测，§12.7）。基准工程以 Release + 发行默认运行时（CoreCLR 自包含 + R2R，§12.3）运行，绝不在 Debug 下出性能数字。
 - **中央包版本管理（CPM）**：所有上述包版本集中于 `Directory.Packages.props`（plan/00 §6）。测试 / 基准工程继承 `Directory.Build.props` 的 `net10.0` / `Nullable` / `LangVersion`；但**测试工程的 `TreatWarningsAsErrors` 与零分配 / SIMD 分析器 error 提升不强加**（测试代码允许分配与 LINQ，避免把测试写法纪律与热路径纪律混淆）。
-- **白盒可见性**：CA 内核的 parity 位、dirty rect、KeepAlive、chunk 驻留等内部状态需要被性质测试读取。被测工程通过 `[assembly: InternalsVisibleTo("PixelEngine.Simulation.Tests")]` 等暴露 `internal` 测试钩子（只读快照导出、确定性模式开关），**不为测试在公开 API 开后门、不暴露可变内部状态**。Demo 相关验证只走公开 API（dogfood，`AGENTS.md §0`），不属本文件四个工程。
+- **白盒可见性**：CA 内核的 parity 位、dirty rect、KeepAlive、chunk 驻留等内部状态需要被性质测试读取。被测工程通过 `[assembly: InternalsVisibleTo("PixelEngine.Simulation.Tests")]` 等暴露 `internal` 测试钩子（只读快照导出、确定性模式开关），**不为测试在公开 API 开后门、不暴露可变内部状态**。Demo 相关验证只走公开 API（dogfood，`AGENTS.md §0`），不放进底层白盒测试钩子。
 - 依赖方向：测试 / 基准工程位于依赖图末端，可引用任意 `src/*` 工程与 `Interop`；它们绝不被 `src/*` 反向引用（plan/00 §5 依赖方向）。
 
 ---
@@ -124,7 +124,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 **可玩循环胜负判定**（plan/13 §3.17，功能完整 showcase / 熔岩矿洞逃生 evidence）：headless 驱动 `MissionDirector` / `GameDirector` 状态机，断言 `ObjectiveCrystal×3` / `crystalsCollected/3` + 抵达撤离出口 → Won；玩家死亡 / 熔岩淹没通路 → Lost；分数（用时 + 剩余弹药 + 未受伤）计算正确；`RisingLavaHazard` 上涨速率数据驱动。已落地的 lava-mine 可作为 showcase/evidence 保留，但测试口径不得回退到旧六水晶口径或继续扩内容量；同时不得把「聚焦」误写成缺少主菜单、设置、暂停、胜负、重开、反馈和独立运行闭环。
 
-**Runtime restart 基线恢复**（plan/13 §3.15、plan/18）：正式 `lava-mine.scene` 的 scripted victory 之后调用 `Engine.RestartCurrentScene()`，断言任务导演、出口触发器、武器计数与脚本 fault 状态回到新局基线；Hosting 侧以空刚体快照读档覆盖当前动态刚体，证明 world snapshot 恢复是替换当前 Physics 状态而非叠加旧 body。
+**Runtime restart 基线恢复**（plan/13 §3.15、plan/18）：正式 `lava-mine.scene` 先用公开输入触发武器分派，再把玩家移动到出口触发通关状态，之后调用 `Engine.RestartCurrentScene()`，断言出口触发器、武器计数与脚本 fault 状态回到新局基线；完整 scripted route 通关由独立用例覆盖，重开基线测试不重复依赖 2400 帧跑图。Hosting 侧以空刚体快照读档覆盖当前动态刚体，证明 world snapshot 恢复是替换当前 Physics 状态而非叠加旧 body。LavaMine headless 场景测试使用 `NullAudioBackend`，音频生命周期由 Hosting 音频装配测试断言 Engine dispose 后后端 live object 归零。
 
 **Explode 语义迁移断言更新**：既有 `ExplosiveTool` / `PlayableProjectile` 的「无条件抛射半径内全部 cell」断言迁移为「破坏驱动（Empty 化 + 碎屑，抗性生效）」新语义（与 plan/05 联动），旧翻倍 / 无条件抛射断言随之改写，不留失效断言。
 
@@ -212,6 +212,12 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] `ScriptExceptionIsolationTests`：脚本回调抛异常不崩主循环、被捕获上报诊断、其余子系统继续；独立覆盖 Behaviour.OnUpdate、ISystem.OnFrame 与 ISystem.OnSimTick 异常隔离（脚本，`AGENTS.md §4`）。
 - [x] `AlcCollectibilityTests`：多轮 load→unload 后旧 ALC 的 `WeakReference` 经 GC 不再存活、托管堆稳态不增长（脚本 §17.4，无内存泄漏）。
 
+### 4.5.1 Audio / Hosting / Demo — 音频生命周期与 headless 稳定性（plan/10/13/18）
+
+- [x] `AudioClipCacheTests`：覆盖 clip cache 加载、缓存、引用计数卸载与后端 buffer 删除；`AudioSystemShutdownDisposesOwnedClipCacheButLeavesBorrowedCacheAlive` 锁定 `AudioSystem.AttachClipCache(..., takeOwnership: true)` 会在 shutdown 时释放 owned cache，而 borrowed cache 留给调用方释放。
+- [x] `AudioPhaseDriverTests.EngineLoadsContentAudioAndInjectsScriptAudioApi`：覆盖 content/audio 预加载、脚本音频 API 注入、Engine-owned `AudioSystem` 释放链路，并断言 `Engine.Dispose()` 后 `NullAudioBackend.LiveObjectCount == 0`。
+- [x] `LavaMineSceneTests`：headless lava-mine 引擎装配使用 `NullAudioBackend`，避免 Demo 场景测试反复占用真实 OpenAL 设备；完整路线通关与重开基线验证已拆分，分别覆盖 scripted route 与 restart baseline。
+
 ### 4.6 Benchmarks（§17.3）
 
 - [x] `CellThroughputBenchmark`：满激活混沌液体 + 典型 dirty-rect 两档活跃 cell 吞吐，落实 §12.8 量级（CA 内核 §12.8）。
@@ -278,7 +284,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 ## 5. 验收标准
 
-- [x] 四个测试工程与基准工程建立、被 `PixelEngine.sln` 包含、CPM 锁版本、`dotnet test` 与 `tools/run-benchmark.ps1` / `dotnet run --project bench/... -- --list flat` 均可执行（plan/00 §4/§6）。含忽略 worktree 的仓库内推荐执行入口为 `tools/run-benchmark.ps1`，直接 `dotnet run --project bench/...` 仍保留用于无嵌套 worktree 的普通环境。
+- [x] 测试工程集合与基准工程建立、被 `PixelEngine.sln` 包含、CPM 锁版本、`dotnet test` 与 `tools/run-benchmark.ps1` / `dotnet run --project bench/... -- --list flat` 均可执行（plan/00 §4/§6）。含忽略 worktree 的仓库内推荐执行入口为 `tools/run-benchmark.ps1`，直接 `dotnet run --project bench/...` 仍保留用于无嵌套 worktree 的普通环境。
 - [x] `MassConservationTests` 全绿：含跨 chunk 边界与四角用例，单 / 多线程均守恒，能复现并拦截人为注入的「边界吞 / 复制像素」回归（架构 §16.2、R2）。
 - [x] `ReactionConservationTests` 全绿：双输出 / 定向反应在所有边界配置下产物计数严格守恒，能拦截人为注入的「边界翻倍 / 丢失」回归（架构 §7.4、不变式 #4、R2）。
 - [x] `DeterministicRegressionTests` 全绿且 golden 稳定：确定性模式下重复运行 bit 一致，golden 更新有可审查 diff（架构 §6.2）。
@@ -344,7 +350,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 按 `AGENTS.md §6`，每完成一个节点用中文 git 提交（type 前缀英文，scope 用 `test`/`build`）：
 
-- [x] `test(core): 建立四测试工程+基准工程骨架与确定性测试基座`（对应 §4.1）。
+- [x] `test(core): 建立测试工程集合+基准工程骨架与确定性测试基座`（对应 §4.1）。
 - [x] `test(sim): CA 内核质量/反应守恒与 parity/KeepAlive/oracle 性质测试`（对应 §4.2）。
 - [x] `test(physics): 凸分解/inverse-sampling/刚体拆分守恒测试`（对应 §4.3）。
 - [x] `test(serialization): save-load 往返/材质重映射/版本迁移测试`（对应 §4.4）。

@@ -43,9 +43,9 @@
 
 ### 3.1 子系统装配与生命周期
 
-`AudioSystem` 是子系统门面，由 Hosting 在引擎装配期创建、在帧循环的音频派发步骤驱动、在关停时释放。它聚合：`OpenAlDevice`（设备 / 上下文 / listener）、`AudioVoicePool`（positional source 池）、`AmbientLoopManager`（材质化 ambient）、`AudioDispatcher`（每帧排空 + 限频 + 派发）、`MaterialAudioTable`（材质→cue 解析）、`AudioClipCache`（资产加载）、`AudioDiagnostics`（计时接入）。
+`AudioSystem` 是子系统门面，由 Hosting 在引擎装配期创建、在帧循环的音频派发步骤驱动、在关停时释放。它聚合：`OpenAlDevice`（设备 / 上下文 / listener）、`AudioVoicePool`（positional source 池）、`AmbientLoopManager`（材质化 ambient）、`AudioDispatcher`（每帧排空 + 限频 + 派发）、`MaterialAudioTable`（材质→cue 解析）、`AudioClipCache`（资产加载）、`AudioDiagnostics`（计时接入）。Hosting 创建的 `AudioSystem` 已纳入 `Engine` owned runtime resources；当 `AudioSystem` 拥有 `AudioClipCache` 时，`Shutdown` 会释放已上传的后端 buffer，避免反复创建 / 销毁引擎时残留 OpenAL buffer。
 
-`AudioSystem` 公开：`Initialize(in AudioSettings settings, MaterialAudioTable table, IAudioBackend backend)`、`Update(in CameraView camera, long simTick, bool simSteppedThisFrame)`（每帧主线程调用，构成音频派发步骤）、`Shutdown()`。所有可被 Demo / 脚本直接调用的播放入口属于本子系统的**公开 API**（Showcase Demo Game 仅依赖公开 API，AGENTS §0），见 §3.8。
+`AudioSystem` 公开：`Initialize(AudioSettings settings, IAudioBackend? backend = null)`、`AttachClipCache(AudioClipCache cache, bool takeOwnership = false)`、`Shutdown()` 等生命周期入口；每帧 listener / dispatch / ambient 推进由 Hosting 的 `AudioPhaseDriver` 组合 dispatcher、cue table 与 listener view 执行。所有可被 Demo / 脚本直接调用的播放入口属于本子系统的**公开 API**（Showcase Demo Game 仅依赖公开 API，AGENTS §0），见 §3.8。
 
 `IAudioBackend` 抽象后端，默认实现 `OpenAlBackend`（OpenAL Soft）。抽象的目的不是做多后端 MVP，而是让单元测试可注入 `NullAudioBackend`（无声、记录调用）以验证限频 / 去重 / 派发逻辑而无需真实设备。
 
@@ -109,7 +109,7 @@ ambient 声部独立于 §3.3 的一次性 voice 池，使用单独的小型 sou
 
 ### 3.8 资产加载与播放接口（公开 API）
 
-`AudioClipCache` 提供 `AudioClip Load(string assetId)`：经 Content 资产管线取字节，按容器选 `IAudioDecoder`（`WavDecoder` 内建；`OggVorbisDecoder` 使用 NVorbis 纯托管路径）解码为 PCM，上传为 `AudioBuffer`（封装 AL buffer id + 采样率 / 声道 / 位深）。短音效全量解码为静态 buffer；长循环 / ambient 经 `AudioStreamPlayer` 用 OpenAL 队列 buffer 流式（双 / 三 buffer），refill 在解码 worker（Core 线程池后台或专属 `AudioStreamThread`），**绝不在主线程**。`AudioClip` 引用计数，`Unload` 释放；解码异步，加载中以静默占位（不阻塞，不假实现——未加载完则该次播放跳过并记诊断）。
+`AudioClipCache` 提供 `ValueTask<AudioClip> LoadAsync(string assetId)`：经 Content 资产管线取字节，按容器选 `IAudioDecoder`（`WavDecoder` 内建；`OggVorbisDecoder` 使用 NVorbis 纯托管路径）解码为 PCM，上传为 `AudioBuffer`（封装 AL buffer id + 采样率 / 声道 / 位深）。短音效全量解码为静态 buffer；长循环 / ambient 经 `AudioStreamPlayer` 用 OpenAL 队列 buffer 流式（双 / 三 buffer），refill 在解码 worker（Core 线程池后台或专属 `AudioStreamThread`），**绝不在主线程**。`AudioClip` 引用计数，单个 clip 可由 `Unload` 释放；cache 也实现 `IDisposable`，由 owning `AudioSystem` 在 shutdown 时批量删除仍缓存的后端 buffer。解码异步，加载中以静默占位（不阻塞，不假实现——未加载完则该次播放跳过并记诊断）。
 
 公开播放 API（供 Demo / 脚本，仅公开 API）：`AudioSystem.PlayOneShot(AudioClip clip, in Vector2 worldPos, float volume = 1, float pitch = 1)`（positional，走 voice 池）、`PlayUi(AudioClip clip, float volume = 1)`（非定位、`AL_SOURCE_RELATIVE` listener 处）、`PlayAmbient(ushort materialId)` / 内部由事件驱动。`AudioSettings` 公开主音量、各类别音量、`MaxVoices` / `MaxAmbientVoices`、`PixelsPerMeter`、距离模型参数、`PerTypeCap` / `CoalesceBucketSize`，运行时可调（编辑器 / Demo 设置）。
 
@@ -154,7 +154,7 @@ OpenAL 封装与生命周期：
 
 - [x] `AudioBuffer`（AL buffer + PCM 元数据）/ `AudioClip`（引用计数资源句柄）。
 - [x] `IAudioDecoder` + `WavDecoder`（纯托管 WAV/PCM，内建无新依赖）。
-- [x] `AudioClipCache.Load(string assetId)` / `Unload`：经 Content 取字节、异步解码、上传 buffer；加载中静默占位不阻塞（架构 §10、AGENTS §2 不写假实现）。
+- [x] `AudioClipCache.LoadAsync(string assetId)` / `Unload` / `Dispose`：经 Content 取字节、异步解码、上传 buffer；单 clip 引用计数归零时删除 buffer，owning `AudioSystem.Shutdown` 可批量释放仍缓存的 buffer；加载中静默占位不阻塞（架构 §10、AGENTS §2 不写假实现）。
 - [x] `AudioStreamPlayer` + 流式 refill worker（队列 buffer，解码在后台线程，不进主线程 / sim 热循环，架构 §10.1）。
 - [x] 公开播放 API：`PlayOneShot(AudioClip, in Vector2 worldPos, float volume, float pitch)` / `PlayUi` / 事件驱动 ambient（Demo 仅依赖公开 API，AGENTS §0）。
 - [x] `OggVorbisDecoder`（NVorbis 纯托管，符合不变式 10）。
@@ -182,7 +182,7 @@ OpenAL 封装与生命周期：
 - [x] **voice stealing**：voice 池压满时按优先级 / 距离 / 年龄抢占，无爆音 / 无泄漏。
 - [x] **ambient 交叉淡变**：材质区域进出时 ambient 平滑淡入淡出、滞回无反复启停。
 - [x] **MPSC 线程安全**：多 worker 并发产生事件、主线程并发排空，无数据竞争 / 丢失 / 重复（与 Core ring 契约联测）。
-- [x] **资产加载**：WAV/PCM 正确加载与播放；加载中不阻塞主线程；`Unload` 无泄漏。
+- [x] **资产加载**：WAV/PCM 正确加载与播放；加载中不阻塞主线程；`Unload` 与 owning `AudioSystem.Shutdown` 释放缓存 buffer 无泄漏，`AudioPhaseDriverTests.EngineLoadsContentAudioAndInjectsScriptAudioApi` 断言 `Engine.Dispose()` 后 `NullAudioBackend.LiveObjectCount == 0`。
 - [x] 不读取 sim 网格于热路径、不进 sim 热循环；混音 / 解码全在 OpenAL 音频线程 / 解码 worker（架构 §10.1）。
 - [x] 未新增除 Silk.NET.OpenAL 外的 native 依赖（不变式 10）；无新 `DllImport`（AGENTS §3）。
 
