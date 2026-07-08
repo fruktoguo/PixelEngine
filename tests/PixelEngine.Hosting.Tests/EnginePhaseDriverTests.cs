@@ -558,6 +558,64 @@ public sealed class EnginePhaseDriverTests
     }
 
     /// <summary>
+    /// 验证脚本公开角色移动 API 撞上 RigidOwned stamp 时，会经 PhysicsSystem 对 dynamic 刚体施加反作用冲量。
+    /// </summary>
+    [Fact]
+    public void PhysicsPhaseCharacterMovePushesRigidOwnedBody()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+        using Engine engine = new EngineBuilder()
+            .UseHeadless()
+            .UseDeterministicMode()
+            .WithWorkerCount(1)
+            .Build();
+        engine.Context.RegisterService(materials);
+        _ = engine.AttachResidentSimulationWorld(worldWidthCells: 96, worldHeightCells: 64, particleCapacity: 16);
+        _ = engine.AttachPhysics();
+
+        CellGrid grid = engine.Context.GetService<CellGrid>();
+        for (int y = 24; y < 36; y++)
+        {
+            for (int x = 48; x < 60; x++)
+            {
+                grid.MaterialAt(x, y) = 1;
+                grid.FlagsAt(x, y) = 0;
+                grid.LifetimeAt(x, y) = 0;
+            }
+        }
+
+        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        physics.SetGravity(System.Numerics.Vector2.Zero);
+        _ = physics.CreateBodyFromRegion(48, 24, 12, 12);
+        Assert.Equal(1, physics.PhysicsWorld.ActiveBodyCount);
+
+        ScriptSimulationContext scripts = new(
+            new ScriptScene(),
+            grid,
+            engine.Context.GetService<SimulationKernel>(),
+            engine.Context.GetService<ParticleSystem>(),
+            materials,
+            physics: physics);
+        engine.Context.RegisterService(scripts);
+
+        CharacterHandle character = scripts.Character.Create(40, 26, 6, 8);
+        CharacterState pending = scripts.Character.Move(character, 16, 0);
+        Assert.Equal(40f, pending.X);
+
+        engine.RunHeadlessTicks(1);
+
+        CharacterState state = scripts.Character.GetState(character);
+        RigidBodySnapshot[] snapshots = new RigidBodySnapshot[4];
+        int written = physics.CopyBodySnapshots(snapshots);
+        Assert.Equal(1, written);
+        Assert.True(state.OnWallRight);
+        Assert.True(state.AppliedDeltaX < state.RequestedDeltaX);
+        Assert.True(
+            snapshots[0].LinearVelocityPixelsPerSecond.X > 0.1f,
+            $"角色应把右侧 RigidOwned 动态刚体推出，velocity={snapshots[0].LinearVelocityPixelsPerSecond.X}");
+    }
+
+    /// <summary>
     /// 验证脚本相位在 sim 降频时仍逐帧 Update，但 FixedSimTick 只随 sim tick 调用。
     /// </summary>
     [Fact]

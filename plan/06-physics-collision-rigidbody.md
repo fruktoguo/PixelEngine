@@ -141,7 +141,7 @@
 
 `CharacterController`（`PixelEngine.Physics` 公开 API，带完整中文 XML 注释）：角色**不是** Marching-Squares 刚体，而是 kinematic AABB（或小 bitmap）**直接对固体像素场解算，完全独立于 Box2D、与 `b2World_Step` 解耦**（架构 §8.5，使移动手感独立于刚体负载）。运行于**相位 1（Game Logic）**，读取相位 1 起点稳定的权威网格（`plan/03` 只读 cell 查询 API）。
 
-算法（架构 §8.5）：输入期望位移 → 沿轴拆分 → 对每轴用 **speculative contacts** 防穿透 + **多次 sub-iteration** 把角色推出墙/地/坡 → 沿 AABB 边采样固体像素直接得**地面/墙/坡检测**（`IsGrounded`、`WallContact`、`SlopeAngle`）。支持 step-up（爬小台阶/坡）、可配置 skin width 与最大 sub-iteration 数。把 `RigidOwned` cell 也视为固体（角色能站在/被推开于动态刚体上，双向耦合在角色侧的体现；可选对刚体施反作用冲量经 `b2Body_ApplyLinearImpulse`）。公开 `Move(in Vector2 desired, out CharacterCollisionInfo info)`、`Bitmap`/`Aabb` 形状设定、地面/墙/坡查询属性。零稳态分配（邻近像素采样走 `Span`/ref 漫游）。
+算法（架构 §8.5）：输入期望位移 → 沿轴拆分 → 对每轴用 **speculative contacts** 防穿透 + **多次 sub-iteration** 把角色推出墙/地/坡 → 沿 AABB 边采样固体像素直接得**地面/墙/坡检测**（`IsGrounded`、`WallContact`、`SlopeAngle`）。支持 step-up（爬小台阶/坡）、可配置 skin width 与最大 sub-iteration 数。把 `RigidOwned` cell 也视为固体（角色能站在/被推开于动态刚体上，双向耦合在角色侧的体现），并在水平移动被 `RigidOwned` stamp 阻挡时经 `RigidStampRegistry` 找回 bodyKey，复用 `b2Body_ApplyLinearImpulse` 施加反作用冲量。公开 `Move(in Vector2 desired, out CharacterCollisionInfo info)`、`Bitmap`/`Aabb` 形状设定、地面/墙/坡查询属性。零稳态分配（邻近像素采样走 `Span`/ref 漫游）。
 
 ### 3.10 相位编排与诊断
 
@@ -236,7 +236,7 @@
 - [x] `CharacterController`：kinematic AABB/小 bitmap，**独立于 Box2D**，运行相位 1，读相位起点稳定网格。
 - [x] speculative contacts + 多 sub-iteration 推出墙/地/坡（架构 §8.5）。
 - [x] 沿 AABB 边采样固体像素做地面/墙/坡检测：`IsGrounded`/`WallContact`/`SlopeAngle`；step-up；skin width、最大 sub-iteration 可配。
-- [x] 把 `RigidOwned` cell 视为固体；可选对刚体施反作用冲量（`b2Body_ApplyLinearImpulse`）。
+- [x] 把 `RigidOwned` cell 视为固体；`PhysicsSystem.MoveCharacter` 已在角色水平受阻时经 `RigidStampRegistry` 映射接触边 bodyKey，并复用 `b2Body_ApplyLinearImpulse` 对 dynamic 刚体施反作用冲量。证据：`EnginePhaseDriverTests.PhysicsPhaseCharacterMovePushesRigidOwnedBody`。
 - [x] 公开 `Move(in Vector2 desired, out CharacterCollisionInfo)` + 形状/查询 API，完整中文 XML 注释，零稳态分配。
 
 ### 4.10 PixelEngine.Physics — 编排/诊断/快照
