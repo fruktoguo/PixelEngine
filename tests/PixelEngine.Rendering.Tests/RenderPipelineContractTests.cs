@@ -74,6 +74,7 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("_composite.Render", source, StringComparison.Ordinal);
         Assert.Contains("_bloom.Render", source, StringComparison.Ordinal);
         Assert.Contains("_computeBloom!.Render", source, StringComparison.Ordinal);
+        Assert.Contains("GpuCapabilities.Query(_gl, window.Capabilities)", source, StringComparison.Ordinal);
         Assert.Contains("ComputeCapabilityGate.Evaluate", source, StringComparison.Ordinal);
         Assert.Contains("RenderPipelineSettings? settings", source, StringComparison.Ordinal);
         Assert.Contains("Settings.PreferComputeSharpBackend", source, StringComparison.Ordinal);

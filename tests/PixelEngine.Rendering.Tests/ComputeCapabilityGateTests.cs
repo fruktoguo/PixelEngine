@@ -392,7 +392,7 @@ public sealed class ComputeCapabilityGateTests
     }
 
     [Fact]
-    public void RealGlCapabilitiesKeepComputeSharpDisabledWithoutPackageReference()
+    public void RealGlCapabilitiesSnapshotRequiresQueriedWorkGroupLimitsBeforeGate()
     {
         GlCapabilities gl = GlCapabilities.FromRaw(
             "4.4.0 NVIDIA",
@@ -407,8 +407,11 @@ public sealed class ComputeCapabilityGateTests
             preferComputeSharp: true);
 
         Assert.False(capabilities.IsComputeSharpCompiled);
+        Assert.False(GpuComputeDispatchGrid.HasQueriedDeviceLimits(in capabilities));
         Assert.False(gate.ComputeSharpAvailable);
-        Assert.Equal(ComputeBackendKind.GlCompute, gate.SelectedBackend);
+        Assert.False(gate.GlComputeAvailable);
+        Assert.True(gate.BaselineFallback);
+        Assert.Equal(ComputeBackendKind.Null, gate.SelectedBackend);
     }
 
     [Fact]
