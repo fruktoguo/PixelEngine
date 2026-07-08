@@ -20,6 +20,27 @@ public sealed class RmlUiGlBootstrapSmokeTests
     }
 
     [Fact]
+    public void RmlUiTextCompositionNormalizesAndClearsPreeditState()
+    {
+        UiTextComposition active = RmlUiBackend.NormalizeTextComposition(
+            "候補",
+            new UiTextComposition(isActive: true, cursorIndex: 99, selectionStart: 1, selectionLength: 99));
+        UiTextComposition empty = RmlUiBackend.NormalizeTextComposition(
+            [],
+            new UiTextComposition(isActive: true, cursorIndex: 1));
+        UiTextComposition inactive = RmlUiBackend.NormalizeTextComposition(
+            "候補",
+            UiTextComposition.Inactive);
+
+        Assert.True(active.IsActive);
+        Assert.Equal(2, active.CursorIndex);
+        Assert.Equal(1, active.SelectionStart);
+        Assert.Equal(1, active.SelectionLength);
+        Assert.False(empty.IsActive);
+        Assert.False(inactive.IsActive);
+    }
+
+    [Fact]
     public void RmlUiCompositeSourceDocumentsPresentTargetViewportContract()
     {
         string source = File.ReadAllText(ProjectPath("src", "PixelEngine.UI", "RmlUiBackend.cs"));
@@ -41,6 +62,23 @@ public sealed class RmlUiGlBootstrapSmokeTests
         Assert.Contains("peui_native_renderer_set_viewport_region", nativeShim, StringComparison.Ordinal);
         Assert.Contains("renderer->renderer->SetViewport(width, height, x, y)", nativeShim, StringComparison.Ordinal);
         Assert.Contains("glViewport(viewport_offset_x, viewport_offset_y, viewport_width, viewport_height)", gl3Renderer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RmlUiCompositionSourceKeepsPreeditSeparateFromCommittedText()
+    {
+        string source = File.ReadAllText(ProjectPath("src", "PixelEngine.UI", "RmlUiBackend.cs"));
+        int start = source.IndexOf("public void FeedTextComposition", StringComparison.Ordinal);
+        int end = source.IndexOf("public UiHitResult HitTest", start, StringComparison.Ordinal);
+        string method = source[start..end];
+
+        Assert.Contains("CompositionText", method, StringComparison.Ordinal);
+        Assert.Contains("CompositionState", method, StringComparison.Ordinal);
+        Assert.Contains("NormalizeTextComposition(text, in composition)", method, StringComparison.Ordinal);
+        Assert.Contains("Dirty = true", method, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProcessTextUtf8", method, StringComparison.Ordinal);
+        Assert.DoesNotContain("FeedText(", method, StringComparison.Ordinal);
+        Assert.Contains("不把它冒充 committed text", source, StringComparison.Ordinal);
     }
 
     [Fact]
