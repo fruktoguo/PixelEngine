@@ -115,6 +115,27 @@ public sealed class CheckerboardSchedulerTests
     }
 
     /// <summary>
+    /// 验证中心 chunk 内部移动直接标记本地 dirty，不在热路径额外回查 chunk map。
+    /// </summary>
+    [Fact]
+    public void StepCaInternalMoveMarksCenterDirtyWithoutExtraChunkLookup()
+    {
+        TestChunkSource source = CreateDenseSource(-1, -1, 1, 1);
+        Chunk center = source.GetRequired(new ChunkCoord(0, 0));
+        Set(center, 10, 10, Sand);
+        center.SetCurrentDirty(DirtyRect.Full);
+        SimulationKernel kernel = new(source, CreateMaterials());
+
+        kernel.StepCa();
+
+        Assert.Equal(1, source.ResolveNeighborhoodCount);
+        Assert.Equal(9, source.TryGetChunkCount);
+        Assert.Equal(0, Get(center, 10, 10));
+        Assert.Equal(Sand, Get(center, 10, 10 + EngineConstants.MoveCap));
+        Assert.False(center.WorkingDirty.IsEmpty);
+    }
+
+    /// <summary>
     /// 验证 resident 但 sleeping 的 chunk 不进入调度桶，静止区域不会被下一帧迭代。
     /// </summary>
     [Fact]
@@ -312,8 +333,11 @@ public sealed class CheckerboardSchedulerTests
 
         public int ResolveNeighborhoodCount { get; private set; }
 
+        public int TryGetChunkCount { get; private set; }
+
         public bool TryGetChunk(ChunkCoord coord, out Chunk chunk)
         {
+            TryGetChunkCount++;
             return _byCoord.TryGetValue(coord, out chunk!);
         }
 
