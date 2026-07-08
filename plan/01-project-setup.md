@@ -28,6 +28,7 @@
 - [x] `dotnet list <proj> reference` 依赖方向核验曾作为工程骨架证据登记。
 - [x] `.github/workflows/ci.yml` 定义 6-RID build+test 与 R2R/AOT publish 冒烟入口，覆盖早期 R5 风险的工程预防。
 - [x] 后续新增的 player-only 审计、Hosting 解耦与 UI / Gui 依赖纪律证据已转由 plan/00、plan/15、plan/19、plan/20 承载。
+- [x] `HostingProjectDisciplineTests.SolutionTracksEveryRepositoryProject` 已锁定仓库全部 `.csproj` 必须登记进 `PixelEngine.sln`，且 solution 中的项目路径必须真实存在，避免后续工具、测试或应用项目绕过常规 build/test 入口。
 
 ### 0.4 未完成目标 checklist
 
