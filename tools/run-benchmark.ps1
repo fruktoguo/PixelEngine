@@ -67,12 +67,12 @@ function Copy-RepositoryForBenchmark {
         ".idea",
         "bin",
         "obj",
+        "out",
         "artifacts",
         "BenchmarkDotNet.Artifacts",
         "TestResults",
         "app",
-        "publish",
-        "runtimes"
+        "publish"
     )) {
         $excludedDirectories.Add($name) | Out-Null
     }
@@ -152,7 +152,12 @@ try {
 
     $diagnosticFiles = @(Get-ChildItem -LiteralPath $artifactsPath -Recurse -File -Include "*.log", "*report*.md", "*report*.html", "*report*.csv" -ErrorAction SilentlyContinue)
     $diagnostics = ($diagnosticFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join [Environment]::NewLine
-    if ($diagnostics.Contains("Generate Exception") -or $diagnostics -match "executed benchmarks:\s*0\b") {
+    if ($diagnostics.Contains("Generate Exception") -or
+        $diagnostics.Contains("There are not any results runs") -or
+        $diagnostics.Contains("No Workload Results were obtained") -or
+        $diagnostics.Contains("Benchmarks with issues") -or
+        $diagnostics.Contains("DllNotFoundException") -or
+        $diagnostics -match "executed benchmarks:\s*0\b") {
         throw "BenchmarkDotNet run produced no executable benchmark results. See artifacts: $artifactsPath"
     }
 }
