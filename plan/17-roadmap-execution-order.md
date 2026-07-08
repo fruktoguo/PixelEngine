@@ -139,7 +139,7 @@ M13/M14/M15 引入的重构、产品面校准与证据闭合有若干**强前置
 | 42 | `feat(material): MaterialDef 破坏/视觉字段(Integrity/DestroyedTarget/RenderStyle/EdgeColor/Opacity/Highlight)+materials.json boundary_stone/gravel(M14)` | plan/04 |
 | 43 | `feat(render): 按 RenderStyle 差异化着色(描边/半透/流动高光)+Damage 裂纹叠色,CPU 算 BGRA 不写回 cell(M14)` | plan/08 |
 | 44 | `feat(demo): 武器库 weapons.json+WeaponCatalog/WeaponController 六类+IWorldEffects DamageCircle/DamageBeam(M14)` | plan/13、11、05 |
-| 45 | `feat(demo): 熔岩矿洞逃生可玩循环——MissionDirector/ObjectiveCrystal×3/RisingHazardDirector/ExtractionTrigger/计分胜负(M14)` | plan/13 |
+| 45 | `feat(demo): 横向熔岩闯关可玩循环——GoalTrigger/熔岩坑/可拆障碍/Web-first 结算(M14)` | plan/13 |
 | 46 | `feat(ui): PixelEngine.UI Web-first 透明 HTML UI Runtime——RmlUi 主/Ultralight 可选/ManagedFallback 基线+相位0-1-10 挂载+输入三级仲裁(M14)` | plan/20、08、18 |
 | 47 | `test: 补齐 M13/M14——player-only 审计/build-player NDJSON 解析/Damage save→load 逐 cell 等价/武器与可玩循环/UI 布局与仲裁(M13/M14)` | plan/14 |
 | 48 | `docs(plan): 统一 Unity-like Editor/Web-first 透明 HTML UI Runtime/Showcase Demo Game 产品口径(M14)` | docs/核心目标、plan/17、19、20、13、README |

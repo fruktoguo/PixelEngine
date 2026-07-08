@@ -112,6 +112,7 @@ public sealed class GameUiDemoController : Behaviour
     private PlayableProjectileTool? _projectile;
     private MissionDirector? _mission;
     private RisingHazardDirector? _hazard;
+    private GoalTrigger? _goal;
     private bool _subscribed;
     private bool _pausedByUi;
     private bool _resultVisible;
@@ -119,6 +120,7 @@ public sealed class GameUiDemoController : Behaviour
     private bool _settingsVSyncEnabled = true;
     private string _modalScreenId = string.Empty;
     private MissionState _lastMissionState = MissionState.Playing;
+    private bool _lastGoalReached;
 
     /// <summary>
     /// 当前主菜单屏幕句柄。
@@ -341,6 +343,11 @@ public sealed class GameUiDemoController : Behaviour
             _hazard = hazard;
         }
 
+        if (_goal is null && Entity.TryGetComponent(out GoalTrigger goal))
+        {
+            _goal = goal;
+        }
+
         if (HasAllHudSources())
         {
             return;
@@ -381,6 +388,10 @@ public sealed class GameUiDemoController : Behaviour
                 {
                     _hazard = sceneHazard;
                 }
+                else if (_goal is null && behaviour is GoalTrigger sceneGoal)
+                {
+                    _goal = sceneGoal;
+                }
 
                 if (HasAllHudSources())
                 {
@@ -392,7 +403,12 @@ public sealed class GameUiDemoController : Behaviour
 
     private bool HasAllHudSources()
     {
-        return _health is not null && _weapons is not null && _brush is not null && _explosive is not null && _projectile is not null && _mission is not null && _hazard is not null;
+        return _health is not null &&
+            _weapons is not null &&
+            _brush is not null &&
+            _explosive is not null &&
+            _projectile is not null &&
+            (_mission is not null || _goal is not null);
     }
 
     private void PublishHealth()
@@ -463,7 +479,7 @@ public sealed class GameUiDemoController : Behaviour
         MissionDirector? mission = _mission;
         if (mission is null)
         {
-            SetHudValue(HudCrystalsPath, 0.0);
+            PublishGoal();
             SetHudValue(HudTimePath, 1.0);
             SetHudValue(HudHazardPath, _hazard is null ? 0.0 : HazardRatio(_hazard.StartSurfaceY, _hazard.CurrentSurfaceY));
             SetHudValue(HudScorePath, 0.0);
@@ -475,6 +491,20 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudHazardPath, HazardRatio(mission.InitialLavaSurfaceY, mission.LavaSurfaceY));
         SetHudValue(HudScorePath, Ratio(mission.Score, 10000.0));
         PublishResultState(mission);
+    }
+
+    private void PublishGoal()
+    {
+        GoalTrigger? goal = _goal;
+        if (goal is null)
+        {
+            SetHudValue(HudCrystalsPath, 0.0);
+            _lastGoalReached = false;
+            return;
+        }
+
+        SetHudValue(HudCrystalsPath, goal.Reached ? 1.0 : 0.0);
+        PublishGoalResultState(goal);
     }
 
     private void PublishDiagnostics()
@@ -516,6 +546,34 @@ public sealed class GameUiDemoController : Behaviour
         }
 
         _lastMissionState = mission.State;
+    }
+
+    private void PublishGoalResultState(GoalTrigger goal)
+    {
+        if (!goal.Reached)
+        {
+            _lastGoalReached = false;
+            return;
+        }
+
+        if (!_resultVisible || !_lastGoalReached || _modalScreenId != ResultScreen)
+        {
+            _runtime?.PauseSimulation();
+            _pausedByUi = false;
+            OpenModal(ResultScreen);
+            _resultVisible = ModalScreen.Value != 0 && _modalScreenId == ResultScreen;
+        }
+
+        if (_resultVisible)
+        {
+            SetScreenValue(ModalScreen, ResultWonPath, new UiValue(1.0));
+            SetScreenValue(ModalScreen, ResultCrystalsPath, new UiValue(1.0));
+            SetScreenValue(ModalScreen, ResultTimePath, new UiValue(1.0));
+            SetScreenValue(ModalScreen, ResultScorePath, new UiValue(0.0));
+            SetScreenValue(ModalScreen, ResultReasonPath, new UiValue(1.0));
+        }
+
+        _lastGoalReached = true;
     }
 
     private void SetHudValue(UiPathId path, double value)
@@ -581,6 +639,7 @@ public sealed class GameUiDemoController : Behaviour
     {
         ClearRuntimeModalState();
         _lastMissionState = MissionState.Playing;
+        _lastGoalReached = false;
         _ = _runtime?.RequestRestartCurrentScene();
     }
 
