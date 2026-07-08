@@ -30,6 +30,8 @@ public sealed class AssetBrowserPanel(
     private readonly Action<string>? _instantiatePrefab = instantiatePrefab;
     private readonly ScriptAssetOpenHandler? _openScriptAsset = openScriptAsset;
     private readonly AssetBrowserDeleteHandler? _deleteAsset = deleteAsset;
+    private static readonly string[] KindFilterLabels = ["全部", "Material", "Texture", "Audio", "Scene", "Prefab", "Script", "Json", "Other"];
+    private static readonly string[] SortModeLabels = ["路径", "类型 / 路径", "最近修改", "大小"];
     private string _search = string.Empty;
     private AssetBrowserDeleteRequest? _pendingDeleteRequest;
 
@@ -50,6 +52,16 @@ public sealed class AssetBrowserPanel(
     public IReadOnlyList<AssetBrowserItem> FilteredAssets { get; private set; } = [];
 
     /// <summary>
+    /// 当前资产类型过滤；null 表示全部类型。
+    /// </summary>
+    public AssetBrowserItemKind? KindFilter { get; private set; }
+
+    /// <summary>
+    /// 当前排序模式。
+    /// </summary>
+    public AssetBrowserSortMode SortMode { get; private set; } = AssetBrowserSortMode.PathAscending;
+
+    /// <summary>
     /// 最近一次面板状态。
     /// </summary>
     public string Status { get; private set; } = "就绪";
@@ -61,6 +73,31 @@ public sealed class AssetBrowserPanel(
     public void SetSearch(string search)
     {
         _search = search ?? string.Empty;
+        ApplyFilter();
+    }
+
+    /// <summary>
+    /// 设置资产类型过滤并刷新筛选结果。
+    /// </summary>
+    /// <param name="kind">目标资产类型；null 表示全部类型。</param>
+    public void SetKindFilter(AssetBrowserItemKind? kind)
+    {
+        KindFilter = kind;
+        ApplyFilter();
+    }
+
+    /// <summary>
+    /// 设置资产排序模式并刷新筛选结果。
+    /// </summary>
+    /// <param name="mode">排序模式。</param>
+    public void SetSortMode(AssetBrowserSortMode mode)
+    {
+        if (!Enum.IsDefined(mode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(mode), mode, "未知 Project Window 排序模式。");
+        }
+
+        SortMode = mode;
         ApplyFilter();
     }
 
@@ -218,6 +255,21 @@ public sealed class AssetBrowserPanel(
 
         ImGui.SameLine();
         _ = ImGui.InputText("搜索", ref _search, 128);
+        int kindIndex = KindFilter.HasValue ? (int)KindFilter.Value + 1 : 0;
+        if (ImGui.Combo("类型", ref kindIndex, KindFilterLabels, KindFilterLabels.Length))
+        {
+            SetKindFilter(kindIndex == 0 ? null : (AssetBrowserItemKind)(kindIndex - 1));
+        }
+
+        ImGui.SameLine();
+        int sortMode = (int)SortMode;
+        if (ImGui.Combo("排序", ref sortMode, SortModeLabels, SortModeLabels.Length) &&
+            sortMode >= 0 &&
+            sortMode < SortModeLabels.Length)
+        {
+            SetSortMode((AssetBrowserSortMode)sortMode);
+        }
+
         ApplyFilter();
 
         IReadOnlyList<AssetBrowserItem> assets = FilteredAssets.Count == 0 && LastAssets.Count == 0
@@ -398,19 +450,42 @@ public sealed class AssetBrowserPanel(
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(_search))
+        IEnumerable<AssetBrowserItem> query = LastAssets;
+        if (!string.IsNullOrWhiteSpace(_search))
         {
-            FilteredAssets = LastAssets;
-            return;
+            query = query.Where(item =>
+                item.Path.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                item.Kind.ToString().Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(item.AssetId) && item.AssetId.Contains(_search, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        if (KindFilter.HasValue)
+        {
+            query = query.Where(item => item.Kind == KindFilter.Value);
         }
 
         FilteredAssets =
         [
-            .. LastAssets.Where(item =>
-                item.Path.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                item.Kind.ToString().Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                (!string.IsNullOrWhiteSpace(item.AssetId) && item.AssetId.Contains(_search, StringComparison.OrdinalIgnoreCase))),
+            .. ApplySort(query),
         ];
+    }
+
+    private IEnumerable<AssetBrowserItem> ApplySort(IEnumerable<AssetBrowserItem> query)
+    {
+        return SortMode switch
+        {
+            AssetBrowserSortMode.PathAscending => query.OrderBy(item => item.Path, StringComparer.OrdinalIgnoreCase),
+            AssetBrowserSortMode.KindThenPath => query
+                .OrderBy(item => item.Kind)
+                .ThenBy(item => item.Path, StringComparer.OrdinalIgnoreCase),
+            AssetBrowserSortMode.LastModifiedDescending => query
+                .OrderByDescending(item => item.LastModifiedUtc)
+                .ThenBy(item => item.Path, StringComparer.OrdinalIgnoreCase),
+            AssetBrowserSortMode.SizeDescending => query
+                .OrderByDescending(item => item.SizeBytes)
+                .ThenBy(item => item.Path, StringComparer.OrdinalIgnoreCase),
+            _ => query,
+        };
     }
 
     private AssetBrowserItem? FindAsset(string path)

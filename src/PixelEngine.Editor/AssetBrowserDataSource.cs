@@ -47,6 +47,32 @@ public enum AssetBrowserItemKind
 }
 
 /// <summary>
+/// Project Window 资产排序模式。
+/// </summary>
+public enum AssetBrowserSortMode
+{
+    /// <summary>
+    /// 按 logical path 升序排序。
+    /// </summary>
+    PathAscending,
+
+    /// <summary>
+    /// 先按资产类型、再按 logical path 排序。
+    /// </summary>
+    KindThenPath,
+
+    /// <summary>
+    /// 按最后修改时间倒序排序。
+    /// </summary>
+    LastModifiedDescending,
+
+    /// <summary>
+    /// 按文件大小倒序排序。
+    /// </summary>
+    SizeDescending,
+}
+
+/// <summary>
 /// ImGui 可展示的纹理缩略图。
 /// </summary>
 /// <param name="TextureHandle">GL 纹理句柄。</param>
