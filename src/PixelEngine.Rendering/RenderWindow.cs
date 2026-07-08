@@ -241,6 +241,7 @@ public sealed class RenderWindow : IDisposable
         RenderBackend backend,
         Action<string>? diagnostics)
     {
+        WindowsDpiAwareness.EnsureEnabled();
         WindowOptions windowOptions = RenderBackendSelector.CreateWindowOptions(options, backend);
         IWindow window = Window.Create(windowOptions);
         IInputContext? input = null;
