@@ -794,6 +794,26 @@ public interface IRuntimeControlApi
     /// </summary>
     /// <returns>控制操作结果。</returns>
     RuntimeControlResult RequestRestartCurrentScene();
+
+    /// <summary>
+    /// 捕获运行时可由游戏 UI 切换的设置状态。
+    /// </summary>
+    /// <returns>运行时设置快照。</returns>
+    RuntimeSettingsSnapshot CaptureSettings();
+
+    /// <summary>
+    /// 切换窗口 VSync。
+    /// </summary>
+    /// <param name="enabled">是否开启 VSync。</param>
+    /// <returns>控制操作结果。</returns>
+    RuntimeControlResult SetVSyncEnabled(bool enabled);
+
+    /// <summary>
+    /// 切换运行时音频总开关。
+    /// </summary>
+    /// <param name="enabled">是否开启音频。</param>
+    /// <returns>控制操作结果。</returns>
+    RuntimeControlResult SetAudioEnabled(bool enabled);
 }
 
 /// <summary>
@@ -815,6 +835,19 @@ public readonly record struct RuntimeControlSnapshot(
 /// <param name="Success">操作是否已被宿主接纳。</param>
 /// <param name="Message">面向脚本/调试 UI 的简短说明。</param>
 public readonly record struct RuntimeControlResult(bool Success, string Message);
+
+/// <summary>
+/// 运行时可调设置快照。
+/// </summary>
+/// <param name="VSyncEnabled">当前 VSync 是否开启。</param>
+/// <param name="CanToggleVSync">当前宿主是否支持运行时切换 VSync。</param>
+/// <param name="AudioEnabled">当前音频是否开启。</param>
+/// <param name="CanToggleAudio">当前宿主是否支持运行时切换音频。</param>
+public readonly record struct RuntimeSettingsSnapshot(
+    bool VSyncEnabled,
+    bool CanToggleVSync,
+    bool AudioEnabled,
+    bool CanToggleAudio);
 
 /// <summary>
 /// 提供脚本可用的事件订阅 API。
