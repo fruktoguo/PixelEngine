@@ -9,6 +9,7 @@ namespace PixelEngine.Hosting;
 public sealed class EditorHostBootstrap : IDisposable
 {
     private readonly GuiWindowInputConnector _inputConnector;
+    private bool _inputConnectorDisposed;
     private bool _disposed;
 
     private EditorHostBootstrap(RenderWindow window, GuiApp gui, GuiWindowInputConnector inputConnector)
@@ -27,6 +28,20 @@ public sealed class EditorHostBootstrap : IDisposable
     /// 已创建且由 bootstrap 拥有的中性 GUI host。
     /// </summary>
     public GuiApp Gui { get; }
+
+    /// <summary>
+    /// 释放项目选择器阶段使用的中性 GUI 输入连接器；窗口与 GUI 仍由 bootstrap 持有。
+    /// </summary>
+    public void DisposeInputConnector()
+    {
+        if (_inputConnectorDisposed)
+        {
+            return;
+        }
+
+        _inputConnector.Dispose();
+        _inputConnectorDisposed = true;
+    }
 
     /// <summary>
     /// 创建编辑器壳启动阶段的窗口与中性 GUI host；调用方可先绘制项目选择器，再把窗口交给 Engine 外部 attach 路径。
@@ -74,7 +89,7 @@ public sealed class EditorHostBootstrap : IDisposable
             return;
         }
 
-        _inputConnector.Dispose();
+        DisposeInputConnector();
         Gui.Dispose();
         Window.Dispose();
         _disposed = true;

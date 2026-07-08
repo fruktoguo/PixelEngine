@@ -12,6 +12,7 @@ internal sealed class EditorShellWindow : IDisposable
         "editor-shell-imgui.ini");
 
     private readonly EditorHostBootstrap _bootstrap;
+    private bool _projectPickerGuiShutdown;
     private bool _disposed;
 
     private EditorShellWindow(EditorHostBootstrap bootstrap)
@@ -25,10 +26,18 @@ internal sealed class EditorShellWindow : IDisposable
 
     public void ShutdownProjectPickerGui()
     {
+        if (_projectPickerGuiShutdown)
+        {
+            return;
+        }
+
+        _bootstrap.DisposeInputConnector();
         if (Gui.IsRunning)
         {
             Gui.Shutdown();
         }
+
+        _projectPickerGuiShutdown = true;
     }
 
     public static EditorShellWindow Create()
