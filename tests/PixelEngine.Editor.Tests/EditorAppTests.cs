@@ -196,6 +196,30 @@ public sealed class EditorAppTests
         Assert.Equal(90f, fitted.Y);
     }
 
+    /// <summary>
+    /// 验证高 DPI ImGui 帧使用逻辑布局尺寸与独立 framebuffer scale，避免把 UI 压到左下 1/4。
+    /// </summary>
+    [Fact]
+    public void ImGuiFrameMetricsKeepsLogicalDisplaySizeAndFramebufferScaleSeparate()
+    {
+        ImGuiFrameMetrics metrics = ImGuiFrameMetrics.Create(640, 360, 2f, 2f);
+
+        Assert.Equal(new Vector2(640f, 360f), metrics.DisplaySize);
+        Assert.Equal(new Vector2(2f, 2f), metrics.DisplayFramebufferScale);
+    }
+
+    /// <summary>
+    /// 验证非法 framebuffer scale 会退回 1，避免 DPI 查询异常污染 ImGui 投影。
+    /// </summary>
+    [Fact]
+    public void ImGuiFrameMetricsNormalizesInvalidFramebufferScale()
+    {
+        ImGuiFrameMetrics metrics = ImGuiFrameMetrics.Create(0, 0, 0f, float.NaN);
+
+        Assert.Equal(new Vector2(1f, 1f), metrics.DisplaySize);
+        Assert.Equal(new Vector2(1f, 1f), metrics.DisplayFramebufferScale);
+    }
+
     private sealed class RecordingPanel : IEditorPanel
     {
         public string Title => "录制面板";
