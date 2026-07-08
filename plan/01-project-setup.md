@@ -31,8 +31,8 @@
 
 ### 0.4 未完成目标 checklist
 
-- [ ] 将本文早期 `18` 项目历史表彻底改写为当前 `Gui` / `UI` / `Editor.Shell` 后的完整工程列表，可在后续专门文档清理批次执行；本轮先通过本账本明确其历史性质，避免误读为当前产品目标。
-- [ ] 若新增测试项目或 UI / Editor / Demo 专项测试项目，应在 plan/00 与对应 leaf plan 同步登记，不在本文单独另立结构。
+- [x] 本文 §3.2 已改写为当前 `Gui` / `UI` / `Editor.Shell` 后的完整工程清单：`PixelEngine.sln` 当前登记 31 个项目，仓库另有 `tools/PixelEngine.Tools.DeterministicPackage` 作为 package 脚本直调工具项目，不再把早期 `18` 项目表误读为当前结构。
+- [x] 新增测试项目、UI / Editor / Demo 专项测试项目与工具项目已在 plan/00、plan/15、plan/19、plan/20 或对应 leaf plan 登记；本文只保留当前清单与 M0 历史口径，不另立新架构。
 
 ### 0.5 证据债 / 阻塞 checklist
 
@@ -127,44 +127,29 @@ PixelEngine/
 │  ├─ PixelEngine.Native.targets (新增) MSBuild 集成入口（动态拷贝 + AOT 静态链）
 │  └─ out/                       构建产物（git 忽略）
 ├─ content/                      (新增，空占位) materials.json/reactions.json/纹理/音效（plan/02+ 填充）
-├─ src/   （12 个项目，见 3.2）
+├─ src/   （14 个当前项目，见 3.2）
+├─ apps/  （1 个当前项目，见 3.2）
 ├─ demo/  （1 个项目）
-├─ tests/ （4 个项目）
-└─ bench/ （1 个项目）
+├─ tests/ （13 个当前项目，见 3.2）
+├─ bench/ （1 个项目）
+└─ tools/ （脚本 + 2 个工具项目，见 3.2）
 ```
 
-`PixelEngine.sln` 用 solution folder 归类 `src` / `demo` / `tests` / `bench` 与 `Build`（放 `Directory.*.props`、`global.json` 等），并把 `native/`、`tools/`、`.github/` 以 solution items 形式挂入 `Build` 便于 IDE 浏览。
+`PixelEngine.sln` 用 solution folder 归类 `src` / `apps` / `demo` / `tests` / `bench` / `tools` 与 `Build`（放 `Directory.*.props`、`global.json` 等），并把 `native/`、`.github/` 以 solution items 形式挂入 `Build` 便于 IDE 浏览。当前 `tools/PixelEngine.Tools.DeterministicPackage` 由 `tools/package.ps1` / `tools/package.sh` 直调，尚未登记进 solution；这是当前事实记录，不视为本文 M0 阻塞。
 
-### 3.2 历史 M0 项目清单与依赖方向（已由当前产品结构扩展）
+### 3.2 当前工程清单与历史 M0 依赖方向
 
-> 本节表格保留为 M0 bootstrap 时的工程骨架证据。当前权威结构以 plan/00 §5 与本文件 §0 状态账本为准，已增加 `PixelEngine.Gui`、`PixelEngine.UI` 与 `apps/PixelEngine.Editor.Shell`，并完成 Hosting 不再引用 Editor、Demo player-only 的后续解耦。
+> 早期 M0 表格的「18 项目（12 src + 1 demo + 4 tests + 1 bench）」只保留为 bootstrap 历史证据；当前权威结构已由 plan/00、plan/15、plan/19、plan/20 与实际源码扩展。2026-07-09 本地 `dotnet sln PixelEngine.sln list` 显示 solution 登记 31 个项目；`rg --files -g "*.csproj"` 显示仓库共有 32 个 `.csproj`，其中 `tools/PixelEngine.Tools.DeterministicPackage` 由打包脚本直调，不在 solution 中。
 
-依赖方向（plan/00 §5、§8，绝不反向）：`Demo → Hosting → {Editor, Scripting, Rendering, Audio, Physics, World, Serialization, Content, Simulation} → Interop → Core`。`Editor` 依赖各子系统只读 API；`Simulation` 不依赖 `Rendering`/`Physics`。下表给出每个项目的 SDK 类型、是否热路径（决定 `AllowUnsafeBlocks` 与 SIMD/零分配分析器升级，plan/00 §6）、`OutputType`，以及精确的 `ProjectReference` 清单。中间层兄弟项目之间允许有向无环引用，下列清单已保证整体 DAG 无环、无反向。
+当前 `src/` 引擎与运行时项目（14 个）：`PixelEngine.Core`、`PixelEngine.Interop`、`PixelEngine.Simulation`、`PixelEngine.Content`、`PixelEngine.Serialization`、`PixelEngine.World`、`PixelEngine.Physics`、`PixelEngine.Rendering`、`PixelEngine.Audio`、`PixelEngine.Scripting`、`PixelEngine.Gui`、`PixelEngine.UI`、`PixelEngine.Editor`、`PixelEngine.Hosting`。其中 `PixelEngine.Gui` 是中性 ImGui / GUI bridge 层，`PixelEngine.UI` 是 Web-first UI Runtime，`PixelEngine.Editor` 只承载编辑器 ImGui 面板层；Hosting 解耦后不再硬引用 Editor，Demo 仍只消费 Hosting 公开 API。
 
-| 项目 | 路径 | SDK / 输出 | 热路径 | ProjectReference |
-|---|---|---|---|---|
-| `PixelEngine.Core` | `src/PixelEngine.Core` | `Microsoft.NET.Sdk` / Library | 是 | （无） |
-| `PixelEngine.Interop` | `src/PixelEngine.Interop` | Library | 是 | Core |
-| `PixelEngine.Simulation` | `src/PixelEngine.Simulation` | Library | 是 | Core |
-| `PixelEngine.Content` | `src/PixelEngine.Content` | Library | 否 | Core, Simulation |
-| `PixelEngine.Serialization` | `src/PixelEngine.Serialization` | Library | 否 | Core, Simulation, Content |
-| `PixelEngine.World` | `src/PixelEngine.World` | Library | 否 | Core, Simulation, Serialization |
-| `PixelEngine.Physics` | `src/PixelEngine.Physics` | Library | 是 | Core, Interop, Simulation |
-| `PixelEngine.Rendering` | `src/PixelEngine.Rendering` | Library | 是 | Core, Simulation, World |
-| `PixelEngine.Audio` | `src/PixelEngine.Audio` | Library | 否 | Core, Content |
-| `PixelEngine.Scripting` | `src/PixelEngine.Scripting` | Library | 否 | Core, Simulation, Physics, World, Content |
-| `PixelEngine.Editor` | `src/PixelEngine.Editor` | Library | 否 | Core, Simulation, Physics, World, Serialization, Content, Rendering, Audio, Scripting |
-| `PixelEngine.Hosting` | `src/PixelEngine.Hosting` | Library | 否 | Core, Interop, Simulation, Content, Serialization, World, Physics, Rendering, Audio, Scripting, Editor |
-| `PixelEngine.Demo` | `demo/PixelEngine.Demo` | Exe | 否 | Hosting（仅此一项，靠传递引用拿到全部公开 API） |
-| `PixelEngine.Simulation.Tests` | `tests/PixelEngine.Simulation.Tests` | Test | 否 | Simulation |
-| `PixelEngine.Physics.Tests` | `tests/PixelEngine.Physics.Tests` | Test | 否 | Physics |
-| `PixelEngine.Serialization.Tests` | `tests/PixelEngine.Serialization.Tests` | Test | 否 | Serialization |
-| `PixelEngine.Scripting.Tests` | `tests/PixelEngine.Scripting.Tests` | Test | 否 | Scripting |
-| `PixelEngine.Benchmarks` | `bench/PixelEngine.Benchmarks` | Exe | 是 | Core, Simulation, Physics, Serialization |
+当前产品入口项目（2 个）：`apps/PixelEngine.Editor.Shell/PixelEngine.Editor.Shell.csproj` 是 Unity-like Editor 独立应用；`demo/PixelEngine.Demo/PixelEngine.Demo.csproj` 是 player/demo 入口，保持 player-only 依赖纪律。
 
-设计要点。其一，`Demo` 只引用 `Hosting`：这是 AGENTS.md「Demo 仅依赖引擎公开 API」的工程化表达——`Hosting` 作为引擎门面，靠 .NET `ProjectReference` 的传递性把全部公开 API 暴露给 Demo；若 Demo 后续发现某能力只能靠内部类实现，按宪法应修引擎 API 而非在 Demo 开后门。其二，`Simulation` 仅引用 `Core`，绝不引用 `Rendering`/`Physics`（plan/00 §5 明文）。其三，`Interop` 单独成 assembly 隔离 unsafe / native surface（架构 §16.1）。其四，热路径项目集 = {Core, Interop, Simulation, Physics, Rendering}（plan/00 §6），它们额外开 `AllowUnsafeBlocks` 并把零分配 / SIMD 分析器升级为 error。
+当前测试项目（13 个）：`PixelEngine.Core.Tests`、`PixelEngine.Content.Tests`、`PixelEngine.Simulation.Tests`、`PixelEngine.Serialization.Tests`、`PixelEngine.World.Tests`、`PixelEngine.Physics.Tests`、`PixelEngine.Rendering.Tests`、`PixelEngine.Audio.Tests`、`PixelEngine.Scripting.Tests`、`PixelEngine.UI.Tests`、`PixelEngine.Editor.Tests`、`PixelEngine.Hosting.Tests`、`PixelEngine.Demo.Tests`。这些测试项目的具体覆盖面归对应 leaf plan 登记，本文只记录结构事实。
 
-> 备注（非阻塞，供 owner 知悉）：架构 §16.1 的早期布局只列了 9 个 src 项目与 3 个 tests，未含 `Scripting`/`Editor`/`Hosting` 与 `Scripting.Tests`；plan/00 §5 作为锚文档已把脚本 / 编辑器 / 宿主三项与脚本测试纳入（与「脚本系统 + 内嵌 ImGui 编辑器」两项锁定决策一致）。本文档以 plan/00 §5 为准，建 12 src + 4 tests。这是细化而非冲突，无需变更架构不变式。
+当前工具 / 基准项目（2 个 solution 内 + 1 个 solution 外工具）：`bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj`、`tools/PixelEngine.Tools.ManagedNativeLeakDetector/PixelEngine.Tools.ManagedNativeLeakDetector.csproj` 已登记进 solution；`tools/PixelEngine.Tools.DeterministicPackage/PixelEngine.Tools.DeterministicPackage.csproj` 已被 `tools/package.ps1` / `tools/package.sh` 使用但未登记进 solution。若后续决定把 deterministic package tool 纳入 solution，应在 plan/15 与本文同步更新。
+
+依赖方向仍遵守 plan/00 §5、§8 与 AGENTS.md 不变式：Demo 不直接引用 Editor 或内部实现，Simulation 不引用 Rendering / Physics，Interop 隔离 unsafe / native surface，权威 sim 热路径 native 依赖仍收敛到 Box2D。当前完整 ProjectReference 事实以各 `.csproj`、`dotnet list <proj> reference`、plan/00 与 leaf plan 的依赖纪律测试为准；本文不再维护一张会随产品演进漂移的逐项 reference 表。
 
 ### 3.3 Directory.Build.props / Directory.Build.targets（全局 MSBuild）
 
