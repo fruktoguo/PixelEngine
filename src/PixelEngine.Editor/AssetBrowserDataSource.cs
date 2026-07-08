@@ -130,6 +130,19 @@ public readonly record struct AssetBrowserDeleteRequest(
     bool Confirmed);
 
 /// <summary>
+/// Project Window 资产移动 / 重命名请求。
+/// </summary>
+/// <param name="Path">当前相对 content 根目录的 logical path。</param>
+/// <param name="AssetId">工程级 stable asset id。</param>
+/// <param name="Kind">资产类型。</param>
+/// <param name="NewPath">移动 / 重命名后的 logical path。</param>
+public readonly record struct AssetBrowserMoveRequest(
+    string Path,
+    string AssetId,
+    AssetBrowserItemKind Kind,
+    string NewPath);
+
+/// <summary>
 /// Project Window 资产删除结果。
 /// </summary>
 /// <param name="Succeeded">删除是否已执行。</param>
@@ -141,11 +154,27 @@ public readonly record struct AssetBrowserDeleteResult(
     string Diagnostic);
 
 /// <summary>
+/// Project Window 资产移动 / 重命名结果。
+/// </summary>
+/// <param name="Succeeded">移动是否已执行。</param>
+/// <param name="Diagnostic">可展示给用户的移动诊断。</param>
+public readonly record struct AssetBrowserMoveResult(
+    bool Succeeded,
+    string Diagnostic);
+
+/// <summary>
 /// Project Window 资产删除回调。
 /// </summary>
 /// <param name="request">删除请求。</param>
 /// <returns>删除结果。</returns>
 public delegate AssetBrowserDeleteResult AssetBrowserDeleteHandler(AssetBrowserDeleteRequest request);
+
+/// <summary>
+/// Project Window 资产移动 / 重命名回调。
+/// </summary>
+/// <param name="request">移动请求。</param>
+/// <returns>移动结果。</returns>
+public delegate AssetBrowserMoveResult AssetBrowserMoveHandler(AssetBrowserMoveRequest request);
 
 /// <summary>
 /// 资源浏览器只读数据源。
