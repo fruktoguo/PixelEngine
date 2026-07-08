@@ -221,12 +221,60 @@ public sealed class Engine : IDisposable
     {
         ThrowIfShutdown();
         EngineContentPackage package = EngineContentLoader.LoadMaterialPackage(Context.Options.ContentRoot);
+        RegisterContentPackage(package);
+        return package;
+    }
+
+    /// <summary>
+    /// 确保当前 Engine 至少具备一个只含 empty 材质的内容包，供内容缺失的窗口探针完成最小可渲染世界初始化。
+    /// </summary>
+    /// <returns>已有或新建的最小内容包。</returns>
+    public EngineContentPackage EnsureMinimalContentPackage()
+    {
+        ThrowIfShutdown();
+        if (Context.TryGetService(out EngineContentPackage existing))
+        {
+            return existing;
+        }
+
+        if (Context.TryGetService(out MaterialTable materials) &&
+            Context.TryGetService(out ReactionTable reactions))
+        {
+            EngineContentPackage package = new(Context.Options.ContentRoot, materials, reactions);
+            RegisterContentPackage(package);
+            return package;
+        }
+
+        MaterialDef[] definitions =
+        [
+            new MaterialDef
+            {
+                Id = 0,
+                Name = "empty",
+                Type = CellType.Empty,
+                HeatCapacity = 1f,
+                TextureId = -1,
+                BaseColorBGRA = 0x00000000,
+                Opacity = 0,
+                DisplayName = "Empty",
+                LegendVisible = false,
+            },
+        ];
+        EngineContentPackage minimal = new(
+            Context.Options.ContentRoot,
+            new MaterialTable(definitions),
+            new ReactionTable([], definitions));
+        RegisterContentPackage(minimal);
+        return minimal;
+    }
+
+    private void RegisterContentPackage(EngineContentPackage package)
+    {
         Context.RegisterService(package);
         Context.RegisterService<IMaterialQuery>(EngineServiceRole.MaterialRegistry, package.MaterialRegistry);
         Context.RegisterService(package.MaterialRegistry);
         Context.RegisterService(package.MaterialTable);
         Context.RegisterService(package.ReactionTable);
-        return package;
     }
 
     /// <summary>

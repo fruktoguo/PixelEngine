@@ -48,6 +48,20 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证面向用户直接启动的编辑器与 Demo 都使用 Windows GUI 子系统，避免发行包启动时弹出控制台窗口。
+    /// </summary>
+    [Fact]
+    public void UserFacingEntryPointsUseWindowsGuiSubsystem()
+    {
+        string root = FindRepositoryRoot();
+        XDocument editor = XDocument.Load(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "PixelEngine.Editor.Shell.csproj"));
+        XDocument demo = XDocument.Load(Path.Combine(root, "demo", "PixelEngine.Demo", "PixelEngine.Demo.csproj"));
+
+        Assert.Equal("WinExe", editor.Descendants("OutputType").Single().Value);
+        Assert.Equal("WinExe", demo.Descendants("OutputType").Single().Value);
+    }
+
+    /// <summary>
     /// 验证编辑器壳只通过中性 bootstrap 创建唯一窗口，不直接散落创建 RenderWindow。
     /// </summary>
     [Fact]
@@ -61,6 +75,51 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("EditorShellWindow.Create()", shellSource, StringComparison.Ordinal);
         Assert.Contains("EditorHostBootstrap.Create", shellSource, StringComparison.Ordinal);
         Assert.DoesNotContain("RenderWindow.Create", shellSource.Replace("EditorHostBootstrap.Create", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证项目选择器交出窗口给 Editor Engine 前会解绑中性 GUI 输入连接器，避免旧 ImGui context 继续抢输入。
+    /// </summary>
+    [Fact]
+    public void EditorShellDisposesProjectPickerInputConnectorBeforeEngineAttach()
+    {
+        string root = FindRepositoryRoot();
+        string shellWindow = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellWindow.cs"));
+        string bootstrap = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Hosting", "EditorHostBootstrap.cs"));
+
+        Assert.Contains("public void DisposeInputConnector()", bootstrap, StringComparison.Ordinal);
+        Assert.Contains("_inputConnectorDisposed", bootstrap, StringComparison.Ordinal);
+        Assert.Contains("_inputConnector.Dispose();", bootstrap, StringComparison.Ordinal);
+        Assert.Contains("_bootstrap.DisposeInputConnector();", shellWindow, StringComparison.Ordinal);
+        Assert.Contains("_projectPickerGuiShutdown", shellWindow, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证中性 Gui 与 Editor ImGui 后端在输入、frame 与 render 前都 pin 到自己的 native context。
+    /// </summary>
+    [Fact]
+    public void HexaImGuiBackendsPinCurrentContextBeforeFrameRenderAndInput()
+    {
+        string root = FindRepositoryRoot();
+        string guiBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "HexaImGuiBackend.cs"));
+        string editorBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "HexaImGuiBackend.cs"));
+
+        foreach (string source in new[] { guiBackend, editorBackend })
+        {
+            string compact = source.Replace(" ", string.Empty, StringComparison.Ordinal)
+                .Replace("\r", string.Empty, StringComparison.Ordinal)
+                .Replace("\n", string.Empty, StringComparison.Ordinal);
+            Assert.Contains("private void SetCurrentContext()", source, StringComparison.Ordinal);
+            Assert.Contains("ImGui.SetCurrentContext(_context);", source, StringComparison.Ordinal);
+            Assert.Contains("ImGuiImplOpenGL3.SetCurrentContext(_context);", source, StringComparison.Ordinal);
+            Assert.Contains("SetCurrentContext();ImGui.AddMouseButtonEvent", compact, StringComparison.Ordinal);
+            Assert.Contains("SetCurrentContext();ImGui.AddMouseWheelEvent", compact, StringComparison.Ordinal);
+            Assert.Contains("SetCurrentContext();ImGui.AddKeyEvent", compact, StringComparison.Ordinal);
+            Assert.Contains("SetCurrentContext();ImGui.Render();", compact, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("ImGuizmo.SetImGuiContext(_context);", editorBackend, StringComparison.Ordinal);
+        Assert.Contains("ImPlot.SetCurrentContext(_plotContext);", editorBackend, StringComparison.Ordinal);
     }
 
     /// <summary>

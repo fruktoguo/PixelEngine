@@ -8,7 +8,6 @@ using PixelEngine.Hosting;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
-using PixelEngine.Simulation;
 using Silk.NET.OpenGL;
 using ScriptScene = PixelEngine.Scripting.Scene;
 
@@ -25,7 +24,7 @@ public static class DemoProgram
     private const int PlayableInternalWidth = 720;
     private const int PlayableInternalHeight = 480;
     private const double PlayableOverloadFrameBudgetMs = 1000.0 / 30.0;
-    private const int PlayableOverloadSustainWindow = 120;
+    private const int PlayableOverloadSustainWindow = 30;
 
     /// <summary>
     /// 执行 Demo 主入口。
@@ -768,27 +767,7 @@ public static class DemoProgram
     public static void AttachMinimalSmokeWorld(Engine engine)
     {
         ArgumentNullException.ThrowIfNull(engine);
-        if (!engine.Context.TryGetService(out MaterialTable _))
-        {
-            MaterialTable materials = new(
-                [
-                    new MaterialDef
-                    {
-                        Id = 0,
-                        Name = "empty",
-                        Type = CellType.Empty,
-                        HeatCapacity = 1f,
-                        TextureId = -1,
-                        BaseColorBGRA = 0x00000000,
-                        Opacity = 0,
-                        DisplayName = "Empty",
-                        LegendVisible = false,
-                    },
-                ]);
-            engine.Context.RegisterService(materials);
-            engine.Context.RegisterService(new ReactionTable([], [materials.Get(0)]));
-        }
-
+        _ = engine.EnsureMinimalContentPackage();
         _ = engine.AttachResidentSimulationWorld(DemoWorldWidthCells, DemoWorldHeightCells, DemoParticleCapacityDefault);
     }
 

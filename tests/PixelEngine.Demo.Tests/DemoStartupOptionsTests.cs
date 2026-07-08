@@ -518,7 +518,7 @@ public sealed class DemoStartupOptionsTests
         Assert.Equal(720, engine.Context.Options.InternalWidth);
         Assert.Equal(480, engine.Context.Options.InternalHeight);
         Assert.Equal(1000.0 / 30.0, engine.Context.Options.Overload.FrameBudgetMs, precision: 3);
-        Assert.Equal(120, engine.Context.Options.Overload.SustainWindow);
+        Assert.Equal(30, engine.Context.Options.Overload.SustainWindow);
     }
 
     /// <summary>

@@ -30,6 +30,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
                 return default;
             }
 
+            SetCurrentContext();
             ImGuiIOPtr io = ImGui.GetIO();
             return new EditorInputSnapshot(io.WantCaptureMouse, io.WantCaptureKeyboard);
         }
@@ -71,6 +72,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
     public void NewFrame(float deltaSeconds, int width, int height, float framebufferScaleX, float framebufferScaleY)
     {
         ThrowIfNotInitialized();
+        SetCurrentContext();
         if (deltaSeconds <= 0)
         {
             deltaSeconds = 1f / 60f;
@@ -91,6 +93,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
     public void DrawDockSpace()
     {
         ThrowIfNotInitialized();
+        SetCurrentContext();
         _dockSpace.Draw();
     }
 
@@ -98,6 +101,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
     public void ResetDockLayout()
     {
         ThrowIfNotInitialized();
+        SetCurrentContext();
         if (!string.IsNullOrWhiteSpace(_layoutPath))
         {
             File.Delete(_layoutPath);
@@ -110,6 +114,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
     public void Render()
     {
         ThrowIfNotInitialized();
+        SetCurrentContext();
         ImGui.Render();
         ImGuiImplOpenGL3.RenderDrawData(ImGui.GetDrawData());
     }
@@ -122,6 +127,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
             return;
         }
 
+        SetCurrentContext();
         System.Numerics.Vector2 mapped = _frameMetrics.MapMousePosition(x, y);
         ImGui.AddMousePosEvent(ImGui.GetIO(), mapped.X, mapped.Y);
     }
@@ -134,6 +140,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
             return;
         }
 
+        SetCurrentContext();
         ImGui.AddMouseButtonEvent(ImGui.GetIO(), button, down);
     }
 
@@ -145,6 +152,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
             return;
         }
 
+        SetCurrentContext();
         ImGui.AddMouseWheelEvent(ImGui.GetIO(), wheelX, wheelY);
     }
 
@@ -156,6 +164,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
             return;
         }
 
+        SetCurrentContext();
         ImGui.AddKeyEvent(ImGui.GetIO(), key, down);
     }
 
@@ -167,6 +176,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
             return;
         }
 
+        SetCurrentContext();
         ImGui.AddInputCharactersUTF8(ImGui.GetIO(), text);
     }
 
@@ -178,6 +188,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
             return;
         }
 
+        SetCurrentContext();
         ImGuiImplOpenGL3.Shutdown();
         _clipboard.Detach();
         ImPlot.DestroyContext(_plotContext);
@@ -215,6 +226,15 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
         {
             throw new InvalidOperationException("ImGui 后端尚未初始化。");
         }
+    }
+
+    private void SetCurrentContext()
+    {
+        ImGui.SetCurrentContext(_context);
+        ImGuiImplOpenGL3.SetCurrentContext(_context);
+        ImGuizmo.SetImGuiContext(_context);
+        ImPlot.SetImGuiContext(_context);
+        ImPlot.SetCurrentContext(_plotContext);
     }
 
 }
