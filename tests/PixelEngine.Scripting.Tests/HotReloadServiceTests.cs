@@ -103,6 +103,34 @@ public sealed class HotReloadServiceTests
     }
 
     /// <summary>
+    /// 验证 typed asset reference 状态在热重载后保留，隐藏字段仍重置。
+    /// </summary>
+    [Fact]
+    public void SuccessfulReloadPreservesScriptAssetReferenceState()
+    {
+        ScriptAssetReference texture = new(ScriptAssetKind.Texture, "asset_texture", "textures/player.png");
+        ScriptAssetReference audio = new(ScriptAssetKind.Audio, "asset_audio", "audio/hit.wav");
+        ScriptAssetReference hidden = new(ScriptAssetKind.Prefab, "asset_hidden", "prefabs/hidden.prefab");
+        Scene scene = new();
+        FakeScriptContext context = new(scene);
+        Entity entity = scene.CreateEntity();
+        HotReloadService service = CreateServiceWithAssetReferenceVersionOne(scene, context, entity, texture, audio, hidden);
+
+        service.RequestReload(
+            $"UserScripts.AssetReference.{Guid.NewGuid():N}",
+            [new ScriptSourceFile("ReloadableScript.cs", AssetReferenceVersionTwoSource)]);
+        HotReloadResult result = service.ApplyPendingReload();
+        Behaviour replacement = scene.CaptureBehaviours()[0].Behaviour;
+
+        Assert.Equal(HotReloadStatus.Reloaded, result.Status);
+        Assert.Equal("asset-v2", ReadVersion(replacement));
+        Assert.Equal(texture, ReadField<ScriptAssetReference>(replacement, "TextureReference"));
+        Assert.Equal(audio, ReadProperty<ScriptAssetReference>(replacement, "AudioReference"));
+        Assert.Equal(new ScriptAssetReference(ScriptAssetKind.Prefab, "asset_hidden_v2", "prefabs/default-v2.prefab"), ReadField<ScriptAssetReference>(replacement, "HiddenReference"));
+        Assert.True(WaitForUnload(result.UnloadedContext!));
+    }
+
+    /// <summary>
     /// 验证完全重置策略不会恢复公开字段或 Persist 字段。
     /// </summary>
     [Fact]
@@ -260,6 +288,32 @@ public sealed class HotReloadServiceTests
         return new HotReloadService(scene, context, compiler, loadContext);
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static HotReloadService CreateServiceWithAssetReferenceVersionOne(
+        Scene scene,
+        FakeScriptContext context,
+        Entity entity,
+        ScriptAssetReference texture,
+        ScriptAssetReference audio,
+        ScriptAssetReference hidden)
+    {
+        ScriptCompiler compiler = new();
+        ScriptCompilationResult compilation = compiler.Compile(
+            $"UserScripts.AssetInitial.{Guid.NewGuid():N}",
+            [new ScriptSourceFile("ReloadableScript.cs", AssetReferenceVersionOneSource)]);
+        Assert.True(compilation.Success, FormatDiagnostics(compilation));
+
+        ScriptLoadContext loadContext = new($"asset-initial-{Guid.NewGuid():N}");
+        Assembly assembly = loadContext.LoadFromImages(compilation.PeImage, compilation.PdbImage);
+        Type type = assembly.GetType("UserScripts.ReloadableScript", throwOnError: true)!;
+        Behaviour behaviour = (Behaviour)Activator.CreateInstance(type)!;
+        WriteField(behaviour, "TextureReference", texture);
+        WriteField(behaviour, "_audioReference", audio);
+        WriteField(behaviour, "HiddenReference", hidden);
+        scene.AddComponent(entity, behaviour);
+        return new HotReloadService(scene, context, compiler, loadContext);
+    }
+
     private static string ReadVersion(Behaviour behaviour)
     {
         return ReadProperty<string>(behaviour, "Version");
@@ -379,6 +433,36 @@ public sealed class HotReloadServiceTests
             {
                 StartedByReload = 1;
             }
+        }
+        """;
+
+    private const string AssetReferenceVersionOneSource = """
+        using PixelEngine.Scripting;
+
+        namespace UserScripts;
+
+        public sealed class ReloadableScript : Behaviour
+        {
+            [AssetField(ScriptAssetKind.Texture)] public ScriptAssetReference TextureReference = ScriptAssetReference.Empty;
+            [Persist, AssetField(ScriptAssetKind.Audio)] private ScriptAssetReference _audioReference = ScriptAssetReference.Empty;
+            [HideInInspector, AssetField(ScriptAssetKind.Prefab)] public ScriptAssetReference HiddenReference = new(ScriptAssetKind.Prefab, "asset_hidden_v1", "prefabs/default-v1.prefab");
+            public ScriptAssetReference AudioReference => _audioReference;
+            public string Version => "asset-v1";
+        }
+        """;
+
+    private const string AssetReferenceVersionTwoSource = """
+        using PixelEngine.Scripting;
+
+        namespace UserScripts;
+
+        public sealed class ReloadableScript : Behaviour
+        {
+            [AssetField(ScriptAssetKind.Texture)] public ScriptAssetReference TextureReference = new(ScriptAssetKind.Texture, "asset_texture_v2", "textures/default-v2.png");
+            [Persist, AssetField(ScriptAssetKind.Audio)] private ScriptAssetReference _audioReference = new(ScriptAssetKind.Audio, "asset_audio_v2", "audio/default-v2.wav");
+            [HideInInspector, AssetField(ScriptAssetKind.Prefab)] public ScriptAssetReference HiddenReference = new(ScriptAssetKind.Prefab, "asset_hidden_v2", "prefabs/default-v2.prefab");
+            public ScriptAssetReference AudioReference => _audioReference;
+            public string Version => "asset-v2";
         }
         """;
 

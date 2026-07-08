@@ -334,6 +334,7 @@ plan/19 独立编辑器引入 GameObject 层级/父子/Transform TRS 的 **autho
 - [x] 热重载五步：`StateSnapshot` 反射快照 → 新 ALC 预构建实例+回填状态 → OnDestroy+退订并提交新组件 → `Unload()`+GC 确认可回收（弱引用探测+超时告警）→ OnStart+恢复订阅（§3.4）
 - [x] 热重载两阶段提交：新程序集装载、类型匹配、构造或状态恢复失败时卸载新 ALC，保留旧组件与旧 ALC 继续运行，并返回 ApplyFailed（§3.4）
 - [x] 状态保持策略：默认保留 `[Persist]`/公开字段、其余重置；提供「完全重置」开关；句柄/订阅不保留由 OnStart 重建（§3.4）
+- [x] typed asset reference 状态保持：热重载快照仅白名单保留 `ScriptAssetReference`，覆盖公开字段与 `[Persist]` 私有字段，`[HideInInspector]` 字段仍重置，避免泛化到任意 struct（§3.4）。证据：`HotReloadServiceTests.SuccessfulReloadPreservesScriptAssetReferenceState`。
 - [x] 防泄漏：禁止跨 ALC 缓存用户 `Type`/委托/实例；句柄经稳定 id 而非对象引用（§3.4，.NET 可回收 ALC 最佳实践）
 
 ### 4.5 异常隔离（§3.5，AGENTS §4）
@@ -383,6 +384,7 @@ plan/19 独立编辑器引入 GameObject 层级/父子/Transform TRS 的 **autho
 - [x] 脚本写入类调用经命令队列在正确相位落地：cell 写标 working dirty 并在 dirty swap 后被下帧 CA 看见；particle 落相位 7；无跨相位竞争（架构 §3.3）。
 - [x] body/character 写入类命令相位落地：body 建/毁、冲量与角色移动已在 Hosting phase 8 step 前落到真实 `PhysicsSystem`/`CharacterController`，并维护脚本句柄/状态 registry（架构 §3.3）。
 - [x] 修改脚本源文件后自动重编译并热重载：旧 ALC 成功 `Unload` 并被 GC 回收（弱引用确认）、组件实例重建、`[Persist]`/公开字段状态按策略恢复（§3.4）
+- [x] `ScriptAssetReference` typed asset reference 在热重载状态快照中按白名单保留，公开字段与 `[Persist]` 私有字段恢复，`[HideInInspector]` 字段仍按新脚本默认值重置；不扩大到任意 struct（§3.4）。证据：`HotReloadServiceTests.SuccessfulReloadPreservesScriptAssetReferenceState`。
 - [x] 编译错误不中断运行：保留旧程序集，诊断（行列+中文摘要）上报编辑器（§3.4）
 - [x] 编译成功但新程序集缺少原脚本类型、构造失败或状态恢复失败时不中断运行：保留旧脚本实例与当前运行场景，后续修复后仍可继续热重载（§3.4）
 - [x] 脚本任一回调抛异常被捕获、记录、该脚本被禁用，**引擎主循环继续、同帧其它脚本不受影响、进程不崩溃**（§3.5，AGENTS §4）
