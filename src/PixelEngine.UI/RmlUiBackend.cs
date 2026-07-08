@@ -101,6 +101,14 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
 
     private bool Dirty { get; set; }
 
+    private string CompositionText { get; set; } = string.Empty;
+
+    private UiTextComposition CompositionState { get; set; } = UiTextComposition.Inactive;
+
+    internal string DebugCompositionText => CompositionText;
+
+    internal UiTextComposition DebugCompositionState => CompositionState;
+
     /// <summary>
     /// 初始化 RmlUi renderer、GL 函数表与字体。
     /// </summary>
@@ -379,7 +387,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
     }
 
     /// <summary>
-    /// 接收 IME composition 预编辑状态；当前 RmlUi native shim 尚未暴露 composition API，安全忽略但不把 committed text 冒充 composition。
+    /// 接收 IME composition 预编辑状态；当前 RmlUi native shim 尚未暴露 composition API，因此只缓存预编辑生命周期供诊断和未来 native bridge 使用，不把它冒充 committed text。
     /// </summary>
     /// <param name="text">当前预编辑文本。</param>
     /// <param name="composition">当前预编辑状态。</param>
@@ -387,8 +395,20 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
     {
         ThrowIfDisposed();
         EnsureInitialized();
-        _ = text;
-        _ = composition;
+        UiTextComposition normalized = NormalizeTextComposition(text, in composition);
+        UiTextComposition current = CompositionState;
+        bool sameState = CompositionEquals(in current, in normalized);
+        bool sameText = normalized.IsActive
+            ? text.SequenceEqual(CompositionText.AsSpan())
+            : CompositionText.Length == 0;
+        if (sameState && sameText)
+        {
+            return;
+        }
+
+        CompositionState = normalized;
+        CompositionText = normalized.IsActive ? text.ToString() : string.Empty;
+        Dirty = true;
     }
 
     /// <summary>
@@ -659,6 +679,21 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             ? Math.Max(0, framebufferHeight - target.Y - target.Height)
             : target.Y;
         return (target.X, y, target.Width, target.Height);
+    }
+
+    internal static UiTextComposition NormalizeTextComposition(ReadOnlySpan<char> text, in UiTextComposition composition)
+    {
+        return composition.IsActive && text.Length > 0
+            ? composition.ClampToTextLength(text.Length)
+            : UiTextComposition.Inactive;
+    }
+
+    private static bool CompositionEquals(in UiTextComposition left, in UiTextComposition right)
+    {
+        return left.IsActive == right.IsActive &&
+            left.CursorIndex == right.CursorIndex &&
+            left.SelectionStart == right.SelectionStart &&
+            left.SelectionLength == right.SelectionLength;
     }
 
     /// <summary>
