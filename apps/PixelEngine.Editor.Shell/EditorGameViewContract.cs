@@ -27,9 +27,15 @@ internal enum EditorViewportInputClip
     ImageRect,
 }
 
+internal enum EditorViewportOutputClip
+{
+    ImageRect,
+}
+
 internal enum EditorViewportCoordinateSpace
 {
     ViewportTexturePixels,
+    FramebufferPixels,
 }
 
 internal enum EditorViewportHitTestSource
@@ -47,7 +53,9 @@ internal readonly record struct EditorViewportContract(
     int GameUiLayerOrder,
     int EditorOverlayLayerOrder,
     EditorViewportInputClip InputClip,
+    EditorViewportOutputClip OutputClip,
     EditorViewportCoordinateSpace GameUiCoordinateSpace,
+    EditorViewportCoordinateSpace GameUiOutputCoordinateSpace,
     EditorViewportHitTestSource GameUiHitTestSource)
 {
     public bool EditorOverlayHasPriority => AllowsEditorOverlay && EditorOverlayLayerOrder > GameUiLayerOrder;
@@ -68,7 +76,9 @@ internal static class EditorGameViewContract
             UiPresentLayerOrders.Game,
             UiPresentLayerOrders.Editor,
             EditorViewportInputClip.ImageRect,
+            EditorViewportOutputClip.ImageRect,
             EditorViewportCoordinateSpace.ViewportTexturePixels,
+            EditorViewportCoordinateSpace.FramebufferPixels,
             EditorViewportHitTestSource.PanelLocalImageRectMappedToViewport);
     }
 
@@ -86,7 +96,9 @@ internal static class EditorGameViewContract
             UiPresentLayerOrders.Game,
             UiPresentLayerOrders.Editor,
             EditorViewportInputClip.ImageRect,
+            EditorViewportOutputClip.ImageRect,
             EditorViewportCoordinateSpace.ViewportTexturePixels,
+            EditorViewportCoordinateSpace.FramebufferPixels,
             EditorViewportHitTestSource.PanelLocalImageRectMappedToViewport);
     }
 

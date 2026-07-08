@@ -1,3 +1,4 @@
+using PixelEngine.Rendering;
 using System.Numerics;
 
 namespace PixelEngine.Editor.Shell;
@@ -85,6 +86,26 @@ internal readonly record struct GameViewViewportSnapshot(
         viewportPoint = new Vector2(
             VisibleViewportRect.X + (normalizedX * VisibleViewportRect.Width),
             VisibleViewportRect.Y + (normalizedY * VisibleViewportRect.Height));
+        return true;
+    }
+
+    public bool TryCreateUiPresentTarget(Vector2 panelOriginFramebuffer, out UiPresentTarget target)
+    {
+        if (!IsValid || !ImageRect.IsValid)
+        {
+            target = default;
+            return false;
+        }
+
+        float left = panelOriginFramebuffer.X + ImageRect.X;
+        float top = panelOriginFramebuffer.Y + ImageRect.Y;
+        float right = left + ImageRect.Width;
+        float bottom = top + ImageRect.Height;
+        int x = (int)MathF.Floor(left);
+        int y = (int)MathF.Floor(top);
+        int width = Math.Max(1, (int)MathF.Ceiling(right) - x);
+        int height = Math.Max(1, (int)MathF.Ceiling(bottom) - y);
+        target = new UiPresentTarget(x, y, width, height, 1f);
         return true;
     }
 }

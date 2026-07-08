@@ -42,7 +42,9 @@ public sealed class EditorShellGameViewContractTests
         Assert.Equal(UiPresentLayerOrders.Game, contract.GameUiLayerOrder);
         Assert.Equal(UiPresentLayerOrders.Editor, contract.EditorOverlayLayerOrder);
         Assert.Equal(EditorViewportInputClip.ImageRect, contract.InputClip);
+        Assert.Equal(EditorViewportOutputClip.ImageRect, contract.OutputClip);
         Assert.Equal(EditorViewportCoordinateSpace.ViewportTexturePixels, contract.GameUiCoordinateSpace);
+        Assert.Equal(EditorViewportCoordinateSpace.FramebufferPixels, contract.GameUiOutputCoordinateSpace);
         Assert.Equal(EditorViewportHitTestSource.PanelLocalImageRectMappedToViewport, contract.GameUiHitTestSource);
     }
 
@@ -65,7 +67,9 @@ public sealed class EditorShellGameViewContractTests
         Assert.True(contract.EditorOverlayLayerOrder > contract.GameUiLayerOrder);
         Assert.True(contract.EditorOverlayHasPriority);
         Assert.Equal(EditorViewportInputClip.ImageRect, contract.InputClip);
+        Assert.Equal(EditorViewportOutputClip.ImageRect, contract.OutputClip);
         Assert.Equal(EditorViewportCoordinateSpace.ViewportTexturePixels, contract.GameUiCoordinateSpace);
+        Assert.Equal(EditorViewportCoordinateSpace.FramebufferPixels, contract.GameUiOutputCoordinateSpace);
         Assert.Equal(EditorViewportHitTestSource.PanelLocalImageRectMappedToViewport, contract.GameUiHitTestSource);
     }
 
@@ -460,6 +464,30 @@ public sealed class EditorShellGameViewContractTests
         Assert.True(contract.UsesRuntimeViewportTexture);
         Assert.Equal(EditorViewportInputClip.ImageRect, contract.InputClip);
         Assert.Equal(EditorViewportCoordinateSpace.ViewportTexturePixels, contract.GameUiCoordinateSpace);
+        Assert.Equal(EditorViewportOutputClip.ImageRect, contract.OutputClip);
+        Assert.Equal(EditorViewportCoordinateSpace.FramebufferPixels, contract.GameUiOutputCoordinateSpace);
+    }
+
+    /// <summary>
+    /// 验证 Game View 输出侧把 panel-local image rect 转成 framebuffer-space UI present target。
+    /// </summary>
+    [Fact]
+    public void GameViewViewportSnapshotCreatesFramebufferUiPresentTargetFromImageRect()
+    {
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 320,
+            textureHeight: 180,
+            imageMinPanel: new Vector2(10.25f, 20.5f),
+            availablePanelSize: new Vector2(160f, 160f));
+
+        Assert.True(snapshot.TryCreateUiPresentTarget(new Vector2(100.5f, 40.25f), out UiPresentTarget target));
+
+        Assert.Equal(110, target.X);
+        Assert.Equal(60, target.Y);
+        Assert.Equal(161, target.Width);
+        Assert.Equal(91, target.Height);
+        Assert.Equal(target.Scissor, new UiScissorRect(110, 60, 161, 91));
+        Assert.True(target.IsValid);
     }
 
     private sealed class FixedUiInputSource(UiPointerState pointer) : IUiInputSource
