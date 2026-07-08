@@ -51,13 +51,37 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
-    /// 验证 HUD、暂停与结算屏显式声明 headless / ManagedFallback 可消费的屏幕数据契约。
+    /// 验证 Demo 七类 Web-first 屏幕显式声明 headless / ManagedFallback 可消费的屏幕数据契约。
     /// </summary>
     [Fact]
-    public void DemoHudPauseAndResultDeclareHeadlessManagedFallbackContracts()
+    public void DemoUiScreensDeclareHeadlessManagedFallbackContracts()
     {
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
 
+        AssertScreenContract(
+            manifest,
+            GameUiDemoController.MainMenuScreen,
+            "demo.webfirst.main-menu/v1",
+            [],
+            ["open_dialog", "open_inventory", "open_settings", "start_game"]);
+        AssertScreenContract(
+            manifest,
+            GameUiDemoController.SettingsScreen,
+            "demo.webfirst.settings/v1",
+            ["settings.audio", "settings.vsync"],
+            ["back_main", "toggle_audio", "toggle_vsync"]);
+        AssertScreenContract(
+            manifest,
+            GameUiDemoController.InventoryScreen,
+            "demo.webfirst.inventory/v1",
+            [],
+            ["back_main"]);
+        AssertScreenContract(
+            manifest,
+            GameUiDemoController.DialogScreen,
+            "demo.webfirst.dialog/v1",
+            [],
+            ["close_dialog", "dialog_next"]);
         AssertScreenContract(
             manifest,
             GameUiDemoController.HudScreen,
