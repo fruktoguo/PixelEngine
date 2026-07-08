@@ -12,6 +12,7 @@ internal static class ChunkUpdater
 {
     public static void UpdateChunk(
         Chunk chunk,
+        in ChunkNeighborhood neighborhood,
         IChunkSource chunks,
         MaterialPropsTable materials,
         byte parityBit,
@@ -29,7 +30,7 @@ internal static class ChunkUpdater
             return;
         }
 
-        NeighborWindow window = new(chunks, chunk.Coord);
+        NeighborWindow window = new(chunk.Coord, in neighborhood);
         Pcg32 rng = RngFactory.ForChunk(worldSeed, chunk.Coord.X, chunk.Coord.Y, frameIndex);
         int worldBaseX = chunk.Coord.X << EngineConstants.ChunkSizeLog2;
         int worldBaseY = chunk.Coord.Y << EngineConstants.ChunkSizeLog2;

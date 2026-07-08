@@ -105,6 +105,57 @@ public ref struct NeighborWindow
     }
 
     /// <summary>
+    /// 从调度阶段已解析的 3x3 邻域构造窗口。
+    /// </summary>
+    /// <param name="center">中心 chunk 坐标。</param>
+    /// <param name="neighborhood">完整驻留的 3x3 邻域。</param>
+    public NeighborWindow(ChunkCoord center, in ChunkNeighborhood neighborhood)
+    {
+        BaseChunkX = center.X;
+        BaseChunkY = center.Y;
+
+        _matBase0 = ref neighborhood.Slot0.GetMaterialBase();
+        _matBase1 = ref neighborhood.Slot1.GetMaterialBase();
+        _matBase2 = ref neighborhood.Slot2.GetMaterialBase();
+        _matBase3 = ref neighborhood.Slot3.GetMaterialBase();
+        _matBase4 = ref neighborhood.Slot4.GetMaterialBase();
+        _matBase5 = ref neighborhood.Slot5.GetMaterialBase();
+        _matBase6 = ref neighborhood.Slot6.GetMaterialBase();
+        _matBase7 = ref neighborhood.Slot7.GetMaterialBase();
+        _matBase8 = ref neighborhood.Slot8.GetMaterialBase();
+
+        _flagsBase0 = ref neighborhood.Slot0.GetFlagsBase();
+        _flagsBase1 = ref neighborhood.Slot1.GetFlagsBase();
+        _flagsBase2 = ref neighborhood.Slot2.GetFlagsBase();
+        _flagsBase3 = ref neighborhood.Slot3.GetFlagsBase();
+        _flagsBase4 = ref neighborhood.Slot4.GetFlagsBase();
+        _flagsBase5 = ref neighborhood.Slot5.GetFlagsBase();
+        _flagsBase6 = ref neighborhood.Slot6.GetFlagsBase();
+        _flagsBase7 = ref neighborhood.Slot7.GetFlagsBase();
+        _flagsBase8 = ref neighborhood.Slot8.GetFlagsBase();
+
+        _lifeBase0 = ref neighborhood.Slot0.GetLifetimeBase();
+        _lifeBase1 = ref neighborhood.Slot1.GetLifetimeBase();
+        _lifeBase2 = ref neighborhood.Slot2.GetLifetimeBase();
+        _lifeBase3 = ref neighborhood.Slot3.GetLifetimeBase();
+        _lifeBase4 = ref neighborhood.Slot4.GetLifetimeBase();
+        _lifeBase5 = ref neighborhood.Slot5.GetLifetimeBase();
+        _lifeBase6 = ref neighborhood.Slot6.GetLifetimeBase();
+        _lifeBase7 = ref neighborhood.Slot7.GetLifetimeBase();
+        _lifeBase8 = ref neighborhood.Slot8.GetLifetimeBase();
+
+        _damageBase0 = ref neighborhood.Slot0.GetDamageBase();
+        _damageBase1 = ref neighborhood.Slot1.GetDamageBase();
+        _damageBase2 = ref neighborhood.Slot2.GetDamageBase();
+        _damageBase3 = ref neighborhood.Slot3.GetDamageBase();
+        _damageBase4 = ref neighborhood.Slot4.GetDamageBase();
+        _damageBase5 = ref neighborhood.Slot5.GetDamageBase();
+        _damageBase6 = ref neighborhood.Slot6.GetDamageBase();
+        _damageBase7 = ref neighborhood.Slot7.GetDamageBase();
+        _damageBase8 = ref neighborhood.Slot8.GetDamageBase();
+    }
+
+    /// <summary>
     /// 中心 chunk 的 X 坐标。
     /// </summary>
     public readonly int BaseChunkX { get; }

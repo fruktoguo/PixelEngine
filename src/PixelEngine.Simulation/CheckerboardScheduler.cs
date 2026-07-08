@@ -23,11 +23,19 @@ public sealed class CheckerboardScheduler
         [],
         [],
     ];
+    private readonly ChunkNeighborhood[][] _bucketNeighborhoods =
+    [
+        [],
+        [],
+        [],
+        [],
+    ];
 
     private readonly int[] _counts = new int[4];
     private Chunk[] _parityPrepareChunks = [];
     private int _parityPrepareCount;
     private Chunk[] _activeBucket = [];
+    private ChunkNeighborhood[] _activeNeighborhoodBucket = [];
     private IChunkSource? _activeChunks;
     private MaterialPropsTable? _activeMaterials;
     private IRigidDamageSink? _activeRigidDamageSink;
@@ -92,6 +100,7 @@ public sealed class CheckerboardScheduler
 
                 long startTimestamp = Stopwatch.GetTimestamp();
                 _activeBucket = _buckets[pass];
+                _activeNeighborhoodBucket = _bucketNeighborhoods[pass];
                 jobs.ParallelRange(count, 1, UpdateRangeJob, this);
                 RecordPass(profiler, pass, startTimestamp);
             }
@@ -166,7 +175,7 @@ public sealed class CheckerboardScheduler
                 continue;
             }
 
-            if (!chunks.ResolveNeighborhood(chunk.Coord, out _))
+            if (!chunks.ResolveNeighborhood(chunk.Coord, out ChunkNeighborhood neighborhood))
             {
                 // 固定 resident world 的最外圈 guard chunk 只提供 halo 读写缓冲，不应被 CA 调度。
                 // 缺少完整 3x3 邻域时直接丢弃这圈 dirty，避免边缘传播把有限世界外壳唤醒成非法 active chunk。
@@ -180,7 +189,9 @@ public sealed class CheckerboardScheduler
             }
 
             int bucket = (chunk.Coord.X & 1) | ((chunk.Coord.Y & 1) << 1);
-            _buckets[bucket][_counts[bucket]++] = chunk;
+            int bucketIndex = _counts[bucket]++;
+            _buckets[bucket][bucketIndex] = chunk;
+            _bucketNeighborhoods[bucket][bucketIndex] = neighborhood;
             awakeCount++;
         }
 
@@ -194,6 +205,7 @@ public sealed class CheckerboardScheduler
             if (_buckets[i].Length < capacity)
             {
                 _buckets[i] = new Chunk[capacity];
+                _bucketNeighborhoods[i] = new ChunkNeighborhood[capacity];
             }
         }
     }
@@ -211,6 +223,7 @@ public sealed class CheckerboardScheduler
         for (int i = 0; i < _buckets.Length; i++)
         {
             Array.Clear(_buckets[i], 0, _counts[i]);
+            Array.Clear(_bucketNeighborhoods[i], 0, _counts[i]);
             _counts[i] = 0;
         }
 
@@ -252,6 +265,7 @@ public sealed class CheckerboardScheduler
     private void ClearContext()
     {
         _activeBucket = [];
+        _activeNeighborhoodBucket = [];
         _activeChunks = null;
         _activeMaterials = null;
         _activeRigidDamageSink = null;
@@ -270,6 +284,7 @@ public sealed class CheckerboardScheduler
         {
             long startTimestamp = Stopwatch.GetTimestamp();
             _activeBucket = _buckets[pass];
+            _activeNeighborhoodBucket = _bucketNeighborhoods[pass];
             UpdateActiveBucketRange(0, _counts[pass]);
             RecordPass(profiler, pass, startTimestamp);
         }
@@ -300,9 +315,11 @@ public sealed class CheckerboardScheduler
         for (int i = start; i < end; i++)
         {
             Chunk chunk = _activeBucket[i];
+            ChunkNeighborhood neighborhood = _activeNeighborhoodBucket[i];
             diagnostics.RecordCaIteration(chunk.Coord, chunk.CurrentDirty);
             ChunkUpdater.UpdateChunk(
                 chunk,
+                in neighborhood,
                 chunks,
                 materials,
                 _activeParityBit,

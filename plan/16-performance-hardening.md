@@ -90,6 +90,7 @@
 - [x] 目标硬件预检入口：`tools/performance-target-evidence-preflight.ps1` 检查 performance manifest、scope/hash、benchmarkRunId、gitCommit、cells/frame、frame budget、AVX-512 与硬件计数器字段；缺 manifest / schema / scope 时必须报告 `blocked_missing_target_performance_manifest`、`blocked_invalid_target_performance_evidence`、`blocked_missing_target_performance_scope_evidence`，完整待审状态只能是 `target_performance_evidence_attached_pending_review`；scope 必须覆盖 `avx512_downclock_net_loss`、`hardware_counters_cache_branch`、`frame_budget_target_hardware` 与逐 RID 的 `cells_frame/<rid>`；机器可读字段必须覆盖 `targetCpuName`、`dotnetVersion`、`benchmarkRunId`、`gitCommit`、`vector512HardwareAccelerated`、`avx512Enabled`、`noNetDownclockLoss`、`elevatedEtwKernelSession`、`cacheMissesPresent`、`branchMispredictionsPresent`、`targetHardware`、`source`、`scenario`、`sampleSeconds`、`frameSamples`、`fixedTickNoCatchUp`、`caP99Ms`、`renderP99Ms`、`physicsP99Ms`、`logicAudioP99Ms`、`representativeHardware`、`activeCellsPerFrame`、`caFrameMs`、`measuredIterations`、`iterationCount`。
 - [x] 硬件计数器预检入口：`tools/hardware-counter-preflight.ps1` 检查平台、管理员权限、BenchmarkDotNet hardware counter 列和报告边界。
 - [x] 关键 BenchmarkDotNet 入口：`bench/PixelEngine.Benchmarks`，重点覆盖 `CellThroughputBenchmark.StepJobSystem`、FullActiveLiquid、dirty-rect、JobSystem、RenderStyle、GameUi allocation；本地 `tools/benchmark-regression.ps1` 回归门禁已加固为按 `Mean` 表头取值、参数化行必须唯一匹配，防止 Error/StdDev 时间列或多参数第一行误判为通过。
+- [x] full-active CA 热路径局部优化证据：checkerboard 装桶阶段保存已验证的 `ChunkNeighborhood` 并传给 `ChunkUpdater` / `NeighborWindow`，避免 active chunk 更新阶段重复 `ResolveNeighborhood`；`CheckerboardSchedulerTests.StepCaWithJobSystemResolvesNeighborhoodOncePerActiveChunk` 锁定每 active chunk 每步一次邻域解析。该项只关闭重复查表风险，不代表 full-active CA 已达最终目标。
 - [!] 最终 cells/frame 命令：在每个代表 RID 上运行 Release BenchmarkDotNet，保留完整报告和 SHA256，再交给 `performance-target-evidence-preflight`。
 - [!] 最终 hardware counter 命令：在 Windows elevated ETW 或等价目标 runner 上采集 `Cache Misses` 与 `Branch Mispredictions`，不能用列缺失报告替代。
 - [!] 最终 frame budget 命令：用真实窗口或 headless 诊断长跑至少 60 秒，导出每 phase p99、样本数、场景名和固定 tick 无追帧字段。
@@ -106,7 +107,7 @@
 - [x] 上游依赖：plan/14 提供 BenchmarkDotNet、反汇编、preflight、真实窗口 probe 和 CI 纪律测试。
 - [x] 协同依赖：plan/15 提供 R2R/AOT、release artifact、SIMD 探针和 active RID 证据来源。
 - [x] 协同依赖：plan/20 提供 Web-first UI Runtime 的 UI phase、dirty upload、RmlUi/Ultralight 后端和真实窗口合成证据来源。
-- [ ] 下一闭合节点：优先补 full-active CA 热路径优化或目标重校准，再跑目标硬件 BenchmarkDotNet 长跑。
+- [ ] 下一闭合节点：继续补 full-active CA 热路径优化或目标重校准，再跑目标硬件 BenchmarkDotNet 长跑。
 - [ ] 下一闭合节点：补 elevated hardware counters 和 AVX-512 机器实测，再更新本账本阻塞项。
 - [ ] 下一闭合节点：把 Showcase Demo Game 熔岩矿洞、Web-first UI Runtime 和发行产物放进同一目标硬件长跑证据包。
 - [!] M15 出口阻塞：只要 full-active CA、AVX-512、硬件计数器、目标硬件、frame budget 任一项未闭合，plan/16 不能改为完成。

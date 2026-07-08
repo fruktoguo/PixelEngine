@@ -78,6 +78,43 @@ public sealed class CheckerboardSchedulerTests
     }
 
     /// <summary>
+    /// 验证 checkerboard 调度复用 bucket 构建时解析出的 3x3 邻域，避免每个 active chunk 在热路径重复查表。
+    /// </summary>
+    [Fact]
+    public void StepCaWithJobSystemResolvesNeighborhoodOncePerActiveChunk()
+    {
+        TestChunkSource source = CreateDenseSource(-1, -1, 4, 2);
+        ChunkCoord[] activeCoords =
+        [
+            new(0, 0),
+            new(1, 0),
+            new(2, 0),
+            new(3, 0),
+            new(0, 1),
+            new(1, 1),
+            new(2, 1),
+            new(3, 1),
+        ];
+
+        foreach (ChunkCoord coord in activeCoords)
+        {
+            Chunk chunk = source.GetRequired(coord);
+            Set(chunk, 10, 10, Sand);
+            chunk.SetCurrentDirty(DirtyRect.Full);
+        }
+
+        using JobSystem jobs = new(workerCount: 2)
+        {
+            SingleThreadThreshold = 0,
+        };
+        SimulationKernel kernel = new(source, CreateMaterials());
+
+        kernel.StepCa(jobs);
+
+        Assert.Equal(activeCoords.Length, source.ResolveNeighborhoodCount);
+    }
+
+    /// <summary>
     /// 验证 resident 但 sleeping 的 chunk 不进入调度桶，静止区域不会被下一帧迭代。
     /// </summary>
     [Fact]
@@ -273,6 +310,8 @@ public sealed class CheckerboardSchedulerTests
 
         public ReadOnlySpan<Chunk> ResidentChunks => _resident;
 
+        public int ResolveNeighborhoodCount { get; private set; }
+
         public bool TryGetChunk(ChunkCoord coord, out Chunk chunk)
         {
             return _byCoord.TryGetValue(coord, out chunk!);
@@ -285,6 +324,7 @@ public sealed class CheckerboardSchedulerTests
 
         public bool ResolveNeighborhood(ChunkCoord center, out ChunkNeighborhood neighborhood)
         {
+            ResolveNeighborhoodCount++;
             if (!TryGetChunk(new ChunkCoord(center.X - 1, center.Y - 1), out Chunk slot0) ||
                 !TryGetChunk(new ChunkCoord(center.X, center.Y - 1), out Chunk slot1) ||
                 !TryGetChunk(new ChunkCoord(center.X + 1, center.Y - 1), out Chunk slot2) ||
