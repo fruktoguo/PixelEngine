@@ -111,6 +111,48 @@ public sealed class UiInputRouterTests
     }
 
     [Fact]
+    public void KeyboardFocusClearsWhenPointerSourceIsUnavailable()
+    {
+        RecordingBackend backend = new()
+        {
+            HitResult = new UiHitResult(HitsUi: true, Opaque: true, WantsMouse: true, WantsKeyboard: true),
+        };
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        FakeInputSource input = new()
+        {
+            HasPointer = true,
+            Pointer = new UiPointerState(12, 34, 0, 0, LeftDown: false, RightDown: false, MiddleDown: false),
+            DownKeys = [new UiKey(65)],
+            Text = "a",
+        };
+        UiInputRouter router = new(host, input);
+
+        UiInputCapture focused = router.Pump();
+        input.HasPointer = false;
+        input.DownKeys = [];
+        input.Text = string.Empty;
+        UiInputCapture focusLost = router.Pump();
+        backend.HitResult = UiHitResult.None;
+        input.HasPointer = true;
+        input.Pointer = new UiPointerState(200, 220, 0, 0, LeftDown: false, RightDown: false, MiddleDown: false);
+        input.DownKeys = [new UiKey(66)];
+        input.Text = "b";
+        UiInputCapture transparentArea = router.Pump();
+
+        Assert.False(focused.AllowWorldKeyboard);
+        Assert.True(focusLost.AllowWorldKeyboard);
+        Assert.True(transparentArea.AllowWorldKeyboard);
+        Assert.Equal("a", backend.Text);
+        Assert.Equal(
+            [
+                (new UiKey(65), true, UiKeyModifiers.None),
+                (new UiKey(65), false, UiKeyModifiers.None),
+            ],
+            backend.Keys);
+    }
+
+    [Fact]
     public void PumpRespectsUpstreamCaptureAndDrainsTextWithoutFeedingUi()
     {
         RecordingBackend backend = new()
