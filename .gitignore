@@ -24,6 +24,8 @@ app/
 [Aa]pp/
 **/app/
 **/[Aa]pp/
+*.app/
+**/*.app/
 **/player/app/
 **/package/*/app/
 *.binlog
