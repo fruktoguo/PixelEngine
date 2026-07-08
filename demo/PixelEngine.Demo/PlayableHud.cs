@@ -29,6 +29,7 @@ public sealed class PlayableHud : Behaviour
     private PlayableProjectileTool? _projectile;
     private WeaponController? _weapons;
     private MissionDirector? _mission;
+    private GoalTrigger? _goal;
     private int _frameGraphIndex;
     private int _frameGraphCount;
 
@@ -66,6 +67,7 @@ public sealed class PlayableHud : Behaviour
 
         DrawHealth(gui);
         DrawMission(gui);
+        DrawGoal(gui);
         DrawWeapon(gui);
         gui.Text($"射击 {_weapons?.PrimaryFireCount ?? _projectile?.ShotsFired ?? 0}");
         EngineDiagnosticsSnapshot diagnostics = Context.Diagnostics.Capture();
@@ -140,6 +142,7 @@ public sealed class PlayableHud : Behaviour
         _health = Entity.TryGetComponent(out PlayerHealth health) ? health : null;
         _projectile = Entity.TryGetComponent(out PlayableProjectileTool projectile) ? projectile : null;
         _weapons = Entity.TryGetComponent(out WeaponController weapons) ? weapons : null;
+        _goal = Entity.TryGetComponent(out GoalTrigger localGoal) ? localGoal : _goal;
         if (Entity.TryGetComponent(out MissionDirector mission))
         {
             _mission = mission;
@@ -161,6 +164,11 @@ public sealed class PlayableHud : Behaviour
                 {
                     _mission = sceneMission;
                     return;
+                }
+
+                if (_goal is null && components[j].Behaviour is GoalTrigger sceneGoal)
+                {
+                    _goal = sceneGoal;
                 }
             }
         }
@@ -216,6 +224,18 @@ public sealed class PlayableHud : Behaviour
             $"目标 水晶 {_mission.CrystalsCollected}/{Math.Max(1, _mission.RequiredCrystals)}  " +
             $"时间 {_mission.RemainingSeconds:0}s  熔岩线 {_mission.LavaSurfaceY:0}  分数 {_mission.Score}",
             stateColor);
+    }
+
+    private void DrawGoal(IGuiContext gui)
+    {
+        if (_mission is not null)
+        {
+            return;
+        }
+
+        uint color = _goal?.Reached == true ? 0xFF_80_F0_80 : 0xFF_E8_D0_6A;
+        string status = _goal?.Reached == true ? "已抵达出口" : "向右穿过熔岩坑与路障，抵达出口";
+        gui.TextColored($"目标 {status}", color);
     }
 
     private void DrawMaterialLegend(IGuiContext gui)

@@ -11,8 +11,8 @@ public sealed class WeaponController : Behaviour
     private const float LaserHeatPerSecond = 38f;
     private const float OverheatLimit = 100f;
     private const float OverheatRecoveryLimit = 35f;
-    private const float DefaultTerrainEffectScale = 2.5f;
-    private const float GrenadeTerrainEffectScale = 10f;
+    private const float DefaultTerrainEffectScaleDefault = 4f;
+    private const float GrenadeTerrainEffectScaleDefault = 10f;
     private PlayerController? _player;
     private PlayableProjectileTool? _projectile;
     private GrenadeSpawnRequest _pendingGrenade;
@@ -24,6 +24,21 @@ public sealed class WeaponController : Behaviour
     /// 武器配置路径，相对 ContentRoot。
     /// </summary>
     public string CatalogPath { get; set; } = "weapons.json";
+
+    /// <summary>
+    /// 普通武器对地形破坏半径、伤害和冲量的统一倍率。
+    /// </summary>
+    public float TerrainEffectScale { get; set; } = DefaultTerrainEffectScaleDefault;
+
+    /// <summary>
+    /// 手雷对地形破坏半径、伤害和冲量的统一倍率。
+    /// </summary>
+    public float GrenadeTerrainEffectScale { get; set; } = GrenadeTerrainEffectScaleDefault;
+
+    /// <summary>
+    /// 是否响应玩家武器输入；测试或编辑沙盒启用材质笔刷时可关闭，避免左键同时射击。
+    /// </summary>
+    public bool InputEnabled { get; set; } = true;
 
     /// <summary>
     /// 当前武器索引。
@@ -128,6 +143,11 @@ public sealed class WeaponController : Behaviour
         RegisterGrenadeSpawnSystem();
         _ = _impactFlash.Update(Context, safeDt);
         CoolDown(safeDt);
+        if (!InputEnabled)
+        {
+            return;
+        }
+
         HandleSelection();
         HandleReload(safeDt);
         if (CurrentWeapon is null || IsReloading)
@@ -390,7 +410,7 @@ public sealed class WeaponController : Behaviour
         float dt)
     {
         int radius = ScaledRadius(weapon);
-        float damage = MathF.Max(1f, weapon.BeamDps * TerrainEffectScale(weapon) * MathF.Max(dt, 1f / 60f));
+        float damage = MathF.Max(1f, weapon.BeamDps * EffectScaleFor(weapon) * MathF.Max(dt, 1f / 60f));
         float normalX = -dirY;
         float normalY = dirX;
         for (int offset = -radius; offset <= radius; offset++)
@@ -592,24 +612,25 @@ public sealed class WeaponController : Behaviour
             : new Point2F(_player.CenterX, _player.CenterY - 2f);
     }
 
-    private static int ScaledRadius(WeaponDefinition weapon)
+    private int ScaledRadius(WeaponDefinition weapon)
     {
-        return Math.Max(1, (int)MathF.Round(Math.Max(1, weapon.Radius) * TerrainEffectScale(weapon)));
+        return Math.Max(1, (int)MathF.Round(Math.Max(1, weapon.Radius) * EffectScaleFor(weapon)));
     }
 
-    private static float ScaledDamage(WeaponDefinition weapon)
+    private float ScaledDamage(WeaponDefinition weapon)
     {
-        return Math.Max(1f, weapon.Damage * TerrainEffectScale(weapon));
+        return Math.Max(1f, weapon.Damage * EffectScaleFor(weapon));
     }
 
-    private static float ScaledImpulse(WeaponDefinition weapon)
+    private float ScaledImpulse(WeaponDefinition weapon)
     {
-        return Math.Max(1f, weapon.Impulse * TerrainEffectScale(weapon));
+        return Math.Max(1f, weapon.Impulse * EffectScaleFor(weapon));
     }
 
-    private static float TerrainEffectScale(WeaponDefinition weapon)
+    private float EffectScaleFor(WeaponDefinition weapon)
     {
-        return weapon.Kind == WeaponKind.Grenade ? GrenadeTerrainEffectScale : DefaultTerrainEffectScale;
+        float configured = weapon.Kind == WeaponKind.Grenade ? GrenadeTerrainEffectScale : TerrainEffectScale;
+        return float.IsFinite(configured) && configured > 0f ? configured : 1f;
     }
 
     private void ResolveComponents()
