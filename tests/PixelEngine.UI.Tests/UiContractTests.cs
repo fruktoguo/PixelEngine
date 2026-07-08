@@ -110,6 +110,31 @@ public sealed class UiContractTests
     }
 
     [Fact]
+    public void UiStringPoolInternsStableHandlesAndRejectsInvalidHandles()
+    {
+        UiStringPool pool = new();
+
+        UiStringHandle first = pool.Intern("开始游戏");
+        UiStringHandle duplicate = pool.Intern("开始游戏");
+        UiStringHandle second = pool.Intern("暂停");
+
+        Assert.Equal(first, duplicate);
+        Assert.NotEqual(first, second);
+        Assert.Equal(2, pool.Count);
+        Assert.True(pool.TryGetString(first, out string firstText));
+        Assert.Equal("开始游戏", firstText);
+        Assert.True(pool.TryGetString(second, out string secondText));
+        Assert.Equal("暂停", secondText);
+        Assert.False(pool.TryGetString(new UiStringHandle(0), out _));
+        Assert.False(pool.TryGetString(new UiStringHandle(99), out _));
+
+        pool.Clear();
+
+        Assert.Equal(0, pool.Count);
+        Assert.False(pool.TryGetString(first, out _));
+    }
+
+    [Fact]
     public void UiModelPathNameMapsDottedPathsToLegalCollisionResistantVariables()
     {
         string dotted = UiModelPathName.ToVariableName("hud.health.current");
