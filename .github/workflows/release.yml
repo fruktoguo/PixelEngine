@@ -194,6 +194,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path artifacts/release-evidence | Out-Null
           $probeOutputPath = "artifacts/release-evidence/${{ matrix.rid }}-${{ matrix.channel }}-simd-output.txt"
           $probeOutput = if (Test-Path -LiteralPath $probeOutputPath -PathType Leaf) { Get-Content -LiteralPath $probeOutputPath -Raw } else { "probe output missing" }
+          $simdProbeKind = if ("${{ matrix.rid }}".EndsWith("-x64", [StringComparison]::Ordinal)) { "x64_ymm_zmm" } else { "arm64_neon" }
           @(
             "# AOT SIMD evidence: ${{ matrix.rid }}/${{ matrix.channel }}",
             "",
@@ -204,6 +205,7 @@ jobs:
             "| run_id | ${{ github.run_id }} |",
             "| sha | ${{ github.sha }} |",
             "| conclusion | ${{ job.status }} |",
+            "| simdProbeKind | $simdProbeKind |",
             "",
             "## Probe output",
             "",
