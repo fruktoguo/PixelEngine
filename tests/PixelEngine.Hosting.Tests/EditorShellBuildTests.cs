@@ -327,6 +327,67 @@ public sealed class EditorShellBuildTests
     }
 
     /// <summary>
+    /// 验证 settings JSON 中可空嵌套对象会归一化为默认值，坏的场景条目返回可执行诊断而非空引用。
+    /// </summary>
+    [Fact]
+    public void EngineProjectSettingsStoreCoalescesNullNestedSettingsAndReportsNullBuildScenes()
+    {
+        using TempDir temp = new();
+        File.WriteAllText(
+            Path.Combine(temp.Path, EngineProjectSettingsStore.ProjectSettingsFileName),
+            """
+            {
+              "formatVersion": 1,
+              "name": "Null Nested",
+              "contentRoot": "content",
+              "scriptSourceDir": "scripts",
+              "startScene": "scenes/main.scene",
+              "resourceRules": null,
+              "editorPreferences": null
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(temp.Path, EngineProjectSettingsStore.PlayerSettingsFileName),
+            """
+            {
+              "formatVersion": 1,
+              "windowTitle": "Null Input",
+              "windowWidth": 1280,
+              "windowHeight": 720,
+              "version": "0.1.0",
+              "startupScene": "scenes/main.scene",
+              "inputDefaults": null
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(temp.Path, EngineProjectSettingsStore.BuildSettingsFileName),
+            """
+            {
+              "formatVersion": 1,
+              "rid": "win-x64",
+              "channel": "R2R",
+              "configuration": "Release",
+              "outputDirectory": "artifacts/player",
+              "productName": "PixelEngine Demo",
+              "version": "0.1.0",
+              "scenes": [ null ]
+            }
+            """);
+
+        ProjectSettingsDto project = EngineProjectSettingsStore.LoadProjectSettings(temp.Path);
+        PlayerSettingsDto player = EngineProjectSettingsStore.LoadPlayerSettings(temp.Path);
+        InvalidOperationException buildError = Assert.Throws<InvalidOperationException>(() => EngineProjectSettingsStore.LoadBuildProfile(temp.Path));
+
+        Assert.True(project.ResourceRules.RequireStableMaterialNames);
+        Assert.Equal(["materials.json", "reactions.json", "scenes/**/*.scene", "ui/**/*"], project.ResourceRules.ContentFileGlobs);
+        Assert.True(project.EditorPreferences.SaveLayoutOnExit);
+        Assert.Equal(string.Empty, project.EditorPreferences.ExternalScriptEditor);
+        Assert.True(player.InputDefaults.EnableKeyboardMouse);
+        Assert.True(player.InputDefaults.EnableGamepad);
+        Assert.Contains("场景条目不能为空", buildError.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Hosting EngineProject 统一入口会合并 settings、startup、Build Profile 与 .scene 扫描。
     /// </summary>
     [Fact]
