@@ -68,6 +68,10 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiActionId ResumeGameAction = Action("resume_game");
     private static readonly UiActionId RestartGameAction = Action("restart_game");
     private static readonly UiActionId QuitGameAction = Action("quit_game");
+    private static readonly UiActionId ToggleAudioAction = Action("toggle_audio");
+    private static readonly UiActionId ToggleVSyncAction = Action("toggle_vsync");
+    private static readonly UiPathId SettingsAudioPath = Path("settings.audio");
+    private static readonly UiPathId SettingsVSyncPath = Path("settings.vsync");
     private static readonly UiPathId HudHealthPath = Path("hud.health");
     private static readonly UiPathId HudWeaponPath = Path("hud.weapon");
     private static readonly UiPathId HudAmmoPath = Path("hud.ammo");
@@ -111,6 +115,8 @@ public sealed class GameUiDemoController : Behaviour
     private bool _subscribed;
     private bool _pausedByUi;
     private bool _resultVisible;
+    private bool _settingsAudioEnabled = true;
+    private bool _settingsVSyncEnabled = true;
     private string _modalScreenId = string.Empty;
     private MissionState _lastMissionState = MissionState.Playing;
 
@@ -167,6 +173,7 @@ public sealed class GameUiDemoController : Behaviour
         MainScreen = _ui.ShowScreen(MainMenuScreen);
         HudScreenHandle = _ui.ShowScreen(HudScreen);
         PublishHudDefaults();
+        RefreshSettingsStateFromRuntime();
     }
 
     /// <inheritdoc />
@@ -209,6 +216,18 @@ public sealed class GameUiDemoController : Behaviour
         if (uiEvent.Action == QuitGameAction)
         {
             RequestShutdown();
+            return;
+        }
+
+        if (uiEvent.Action == ToggleAudioAction)
+        {
+            ToggleAudio();
+            return;
+        }
+
+        if (uiEvent.Action == ToggleVSyncAction)
+        {
+            ToggleVSync();
             return;
         }
 
@@ -571,6 +590,38 @@ public sealed class GameUiDemoController : Behaviour
         _ = _runtime?.RequestShutdown();
     }
 
+    private void ToggleAudio()
+    {
+        bool target = !_settingsAudioEnabled;
+        RuntimeControlResult? result = _runtime?.SetAudioEnabled(target);
+        if (result is null || result.Value.Success)
+        {
+            _settingsAudioEnabled = target;
+        }
+        else
+        {
+            RefreshSettingsStateFromRuntime();
+        }
+
+        PublishSettingsState();
+    }
+
+    private void ToggleVSync()
+    {
+        bool target = !_settingsVSyncEnabled;
+        RuntimeControlResult? result = _runtime?.SetVSyncEnabled(target);
+        if (result is null || result.Value.Success)
+        {
+            _settingsVSyncEnabled = target;
+        }
+        else
+        {
+            RefreshSettingsStateFromRuntime();
+        }
+
+        PublishSettingsState();
+    }
+
     private void ClearRuntimeModalState()
     {
         CloseModal();
@@ -588,6 +639,34 @@ public sealed class GameUiDemoController : Behaviour
         CloseModal();
         ModalScreen = _ui.PushModal(screenId);
         _modalScreenId = ModalScreen.Value == 0 ? string.Empty : screenId;
+        if (_modalScreenId == SettingsScreen)
+        {
+            RefreshSettingsStateFromRuntime();
+            PublishSettingsState();
+        }
+    }
+
+    private void RefreshSettingsStateFromRuntime()
+    {
+        if (_runtime is null)
+        {
+            return;
+        }
+
+        RuntimeSettingsSnapshot settings = _runtime.CaptureSettings();
+        _settingsAudioEnabled = settings.AudioEnabled;
+        _settingsVSyncEnabled = settings.VSyncEnabled;
+    }
+
+    private void PublishSettingsState()
+    {
+        if (ModalScreen.Value == 0 || _modalScreenId != SettingsScreen)
+        {
+            return;
+        }
+
+        SetScreenValue(ModalScreen, SettingsAudioPath, new UiValue(_settingsAudioEnabled ? 1.0 : 0.0));
+        SetScreenValue(ModalScreen, SettingsVSyncPath, new UiValue(_settingsVSyncEnabled ? 1.0 : 0.0));
     }
 
     private void CloseModalOrReturnToPause()

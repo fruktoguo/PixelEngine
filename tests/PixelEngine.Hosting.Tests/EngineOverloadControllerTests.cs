@@ -1,3 +1,4 @@
+using PixelEngine.Audio;
 using PixelEngine.Core;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Time;
@@ -415,6 +416,59 @@ public sealed class EngineOverloadControllerTests
     }
 
     /// <summary>
+    /// 验证脚本运行时设置 API 真实驱动窗口 VSync 控制与 AudioSystem 运行设置。
+    /// </summary>
+    [Fact]
+    public void ScriptRuntimeControlApiTogglesPresentationAndAudioSettings()
+    {
+        using Engine engine = new EngineBuilder()
+            .UseHeadless()
+            .WithWorkerCount(1)
+            .Build();
+        FakePresentationControl presentation = new() { VSyncEnabled = true };
+        using AudioSystem audio = new();
+        audio.Initialize(new AudioSettings
+        {
+            MasterVolume = 0.8f,
+            SfxVolume = 0.7f,
+            UiVolume = 0.6f,
+            AmbientVolume = 0.5f,
+        }, new NullAudioBackend());
+        engine.Context.RegisterService<IRenderPresentationControl>(presentation);
+        engine.Context.RegisterService(audio);
+        EngineScriptRuntimeControlApi api = new(engine);
+
+        RuntimeSettingsSnapshot initial = api.CaptureSettings();
+        Assert.True(initial.VSyncEnabled);
+        Assert.True(initial.CanToggleVSync);
+        Assert.True(initial.AudioEnabled);
+        Assert.True(initial.CanToggleAudio);
+
+        RuntimeControlResult noVSync = api.SetVSyncEnabled(false);
+        RuntimeControlResult muted = api.SetAudioEnabled(false);
+
+        Assert.True(noVSync.Success);
+        Assert.False(presentation.VSyncEnabled);
+        Assert.False(engine.Context.Counters.VSyncEnabled);
+        Assert.True(muted.Success);
+        Assert.Equal(0f, audio.Settings.MasterVolume);
+        Assert.False(api.CaptureSettings().AudioEnabled);
+
+        RuntimeControlResult vSync = api.SetVSyncEnabled(true);
+        RuntimeControlResult unmuted = api.SetAudioEnabled(true);
+
+        Assert.True(vSync.Success);
+        Assert.True(presentation.VSyncEnabled);
+        Assert.True(engine.Context.Counters.VSyncEnabled);
+        Assert.True(unmuted.Success);
+        Assert.Equal(0.8f, audio.Settings.MasterVolume);
+        Assert.Equal(0.7f, audio.Settings.SfxVolume);
+        Assert.Equal(0.6f, audio.Settings.UiVolume);
+        Assert.Equal(0.5f, audio.Settings.AmbientVolume);
+        Assert.True(api.CaptureSettings().AudioEnabled);
+    }
+
+    /// <summary>
     /// 验证脚本请求打开 Editor 时不会在未接入窗口渲染桥的进程里伪造成功。
     /// </summary>
     [Fact]
@@ -463,6 +517,15 @@ public sealed class EngineOverloadControllerTests
         }
 
         return new MaterialTable(materials);
+    }
+
+    private sealed class FakePresentationControl : IRenderPresentationControl
+    {
+        public bool VSyncEnabled { get; set; }
+
+        public bool CanToggleVSync { get; init; } = true;
+
+        public bool GpuFrameTimerAvailable { get; init; }
     }
 
     private static void AddDenseChunks(ResidentChunkMap chunks, int minX, int minY, int maxX, int maxY)

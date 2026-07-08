@@ -291,6 +291,43 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
+    /// 验证设置页音频/VSync 复选框经脚本 UI 服务路由到运行时设置 facade，并回写设置 model path。
+    /// </summary>
+    [Fact]
+    public void DemoGameUiControllerRoutesSettingsTogglesThroughRuntimeFacade()
+    {
+        GameUiDemoController controller = new();
+        FakeGameUiService ui = new();
+        FakeRuntimeControlApi runtime = new();
+
+        controller.StartForService(ui, runtime);
+        ui.Raise(GameUiDemoController.Action("open_settings"));
+
+        Assert.Equal(1.0, GetUiValue(ui, "settings.audio"), precision: 3);
+        Assert.Equal(1.0, GetUiValue(ui, "settings.vsync"), precision: 3);
+
+        ui.Raise(GameUiDemoController.Action("toggle_audio"));
+        ui.Raise(GameUiDemoController.Action("toggle_vsync"));
+
+        Assert.False(runtime.AudioEnabled);
+        Assert.False(runtime.VSyncEnabled);
+        Assert.Equal(1, runtime.AudioToggleCount);
+        Assert.Equal(1, runtime.VSyncToggleCount);
+        Assert.Equal(0.0, GetUiValue(ui, "settings.audio"), precision: 3);
+        Assert.Equal(0.0, GetUiValue(ui, "settings.vsync"), precision: 3);
+
+        ui.Raise(GameUiDemoController.Action("toggle_audio"));
+        ui.Raise(GameUiDemoController.Action("toggle_vsync"));
+
+        Assert.True(runtime.AudioEnabled);
+        Assert.True(runtime.VSyncEnabled);
+        Assert.Equal(2, runtime.AudioToggleCount);
+        Assert.Equal(2, runtime.VSyncToggleCount);
+        Assert.Equal(1.0, GetUiValue(ui, "settings.audio"), precision: 3);
+        Assert.Equal(1.0, GetUiValue(ui, "settings.vsync"), precision: 3);
+    }
+
+    /// <summary>
     /// 验证结算屏重开/退出按钮经脚本 UI 服务路由到运行时控制 facade，并清理结算模态状态。
     /// </summary>
     [Fact]
@@ -1376,11 +1413,24 @@ public sealed class DemoUiContentTests
 
         public int ShutdownCount { get; private set; }
 
+        public int AudioToggleCount { get; private set; }
+
+        public int VSyncToggleCount { get; private set; }
+
         public bool IsPlaying { get; private set; } = true;
+
+        public bool AudioEnabled { get; private set; } = true;
+
+        public bool VSyncEnabled { get; private set; } = true;
 
         public RuntimeControlSnapshot Capture()
         {
             return new RuntimeControlSnapshot(IsPlaying, ShutdownCount > 0, RequestedSimHz: 60.0, FrameCount: 0);
+        }
+
+        public RuntimeSettingsSnapshot CaptureSettings()
+        {
+            return new RuntimeSettingsSnapshot(VSyncEnabled, CanToggleVSync: true, AudioEnabled, CanToggleAudio: true);
         }
 
         public void PauseSimulation()
@@ -1411,6 +1461,20 @@ public sealed class DemoUiContentTests
             RestartCount++;
             IsPlaying = true;
             return new RuntimeControlResult(true, "restart");
+        }
+
+        public RuntimeControlResult SetVSyncEnabled(bool enabled)
+        {
+            VSyncToggleCount++;
+            VSyncEnabled = enabled;
+            return new RuntimeControlResult(true, "vsync");
+        }
+
+        public RuntimeControlResult SetAudioEnabled(bool enabled)
+        {
+            AudioToggleCount++;
+            AudioEnabled = enabled;
+            return new RuntimeControlResult(true, "audio");
         }
     }
 
