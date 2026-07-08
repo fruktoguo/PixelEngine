@@ -73,6 +73,7 @@ function Invoke-ProcessChecked(
   $psi.FileName = $FilePath
   $psi.WorkingDirectory = $WorkingDirectory
   $psi.UseShellExecute = $false
+  $psi.CreateNoWindow = $true
   $psi.RedirectStandardOutput = $true
   $psi.RedirectStandardError = $true
   foreach ($argument in $Arguments) {

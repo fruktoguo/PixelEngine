@@ -48,7 +48,7 @@
 - [x] GitHub Release 上传报告约束已写入预检：`workflow_run` 必须来自 tag push，且必须覆盖 package asset 与唯一 `SHA256SUMS`；只写 success、缺少同源 `workflow` / `run_attempt` 或 `workflow_dispatch` 不能冒充完成。
 - [x] 确定性打包工具已落地：`tools/PixelEngine.Tools.DeterministicPackage` 固定 entry 顺序、时间戳、权限与 owner，release job 二次 package 生成 deterministic hash report。
 - [x] build-player 编排器已落地：`tools/build-player.ps1` 与 `.sh` 串 `build-native`、publish、verify、package、audit，输出 `schema=pixelengine.build/v1` NDJSON 与 `build-result.json`。
-- [x] 本机正式输出目录已落地：`tools/update-final-output.ps1` 先在 `artifacts/final-output-staging/<timestamp>/` 构建并验证 EditorShell 默认工作台、编辑器出包链路和 Demo 窗口短跑，全部通过后才原子替换 `最终输出/编辑器`、`最终输出/游戏Demo` 与 `_验证记录/manifest.json`；`最终输出/` 只作为本机正式产物入口并已加入 `.gitignore`。
+- [x] 本机正式输出目录已落地：`tools/update-final-output.ps1` 先在 `artifacts/final-output-staging/<timestamp>/` 构建并验证 EditorShell 默认工作台、编辑器出包链路和 Demo 窗口短跑，全部通过后才原子替换 `最终输出/编辑器`、`最终输出/游戏Demo` 与 `_验证记录/manifest.json`；`最终输出/` 只作为本机正式产物入口并已加入 `.gitignore`。正式输出更新脚本的发布 / 验证子进程已显式 `UseShellExecute=false` + `CreateNoWindow=true`，配合 EditorShell / Demo `OutputType=WinExe` 防止正式应用验证或 Build And Run 链路弹出控制台窗口。
 - [x] build-player 产品名契约已落地：`-ProductName` 只影响玩家可见启动器和包名，内部 `AssemblyName` 默认保持 `PixelEngine.Demo`，避免带空格 assembly 破坏 restore 或 apphost 载荷。
 - [x] build-player dev-audit 分流已落地：`-DevLayout` 允许保留 pdb/xml，但仍检查结构存在性和 player-only 断言；Release 无符号构建走完整发行审计。
 - [x] 内容资产打包已落地：`content/` 是单一真相源，`materials.json`、`reactions.json`、`weapons.json`、场景、纹理、音频进入包根 `content/`，不复制到 `app/content/`。
