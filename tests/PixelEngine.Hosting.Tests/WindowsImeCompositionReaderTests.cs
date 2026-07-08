@@ -33,6 +33,7 @@ public sealed class WindowsImeCompositionReaderTests
         Assert.Equal(1, composition.CursorIndex);
         Assert.Equal(1, native.GetContextCalls);
         Assert.Equal(1, native.ReleaseContextCalls);
+        Assert.Equal(2, native.GetCompositionStringCalls);
     }
 
     /// <summary>
@@ -80,17 +81,75 @@ public sealed class WindowsImeCompositionReaderTests
         Assert.Equal(4, composition.CursorIndex);
     }
 
+    /// <summary>
+    /// 验证 IMM32 target converted / target not-converted 属性会映射为预编辑选区。
+    /// </summary>
+    [Fact]
+    public void CaptureTextCompositionMapsImmTargetAttributesToSelection()
+    {
+        FakeImeNative native = new()
+        {
+            Context = new IntPtr(0x456),
+            Text = "かな候補",
+            Cursor = 4,
+            Attributes = [0, 1, 1, 3],
+        };
+        WindowsImeCompositionReader reader = new(() => new IntPtr(0x123), native, enableWindowsComposition: true);
+
+        Span<char> buffer = stackalloc char[8];
+        int count = reader.CaptureTextComposition(buffer, out UiTextComposition composition);
+
+        Assert.Equal(4, count);
+        Assert.True(composition.IsActive);
+        Assert.Equal(4, composition.CursorIndex);
+        Assert.Equal(1, composition.SelectionStart);
+        Assert.Equal(3, composition.SelectionLength);
+    }
+
+    /// <summary>
+    /// 验证属性长度超过写入文本长度时按真实写入字符数裁剪。
+    /// </summary>
+    [Fact]
+    public void CaptureTextCompositionClampsSelectionToWrittenTextLength()
+    {
+        FakeImeNative native = new()
+        {
+            Context = new IntPtr(0x456),
+            Text = "abcdef",
+            Cursor = 6,
+            Attributes = [0, 0, 1, 1, 1, 1],
+        };
+        WindowsImeCompositionReader reader = new(() => new IntPtr(0x123), native, enableWindowsComposition: true);
+
+        Span<char> buffer = stackalloc char[4];
+        int count = reader.CaptureTextComposition(buffer, out UiTextComposition composition);
+
+        Assert.Equal(4, count);
+        Assert.Equal("abcd", new string(buffer));
+        Assert.True(composition.IsActive);
+        Assert.Equal(4, composition.CursorIndex);
+        Assert.Equal(2, composition.SelectionStart);
+        Assert.Equal(2, composition.SelectionLength);
+    }
+
     private sealed class FakeImeNative : IWindowsImeNative
     {
+        private const int CompositionAttribute = 0x0010;
+        private const int CompositionString = 0x0008;
+
         public IntPtr Context { get; init; }
 
         public string Text { get; init; } = string.Empty;
+
+        public byte[] Attributes { get; init; } = [];
 
         public int Cursor { get; init; }
 
         public int GetContextCalls { get; private set; }
 
         public int ReleaseContextCalls { get; private set; }
+
+        public int GetCompositionStringCalls { get; private set; }
 
         public IntPtr GetContext(IntPtr hwnd)
         {
@@ -110,6 +169,14 @@ public sealed class WindowsImeCompositionReaderTests
         public int GetCompositionString(IntPtr context, int index, byte[] destination)
         {
             Assert.Equal(Context, context);
+            GetCompositionStringCalls++;
+            if (index == CompositionAttribute)
+            {
+                Array.Copy(Attributes, destination, Math.Min(Attributes.Length, destination.Length));
+                return Attributes.Length;
+            }
+
+            Assert.Equal(CompositionString, index);
             byte[] bytes = Encoding.Unicode.GetBytes(Text);
             Array.Copy(bytes, destination, Math.Min(bytes.Length, destination.Length));
             return bytes.Length;
