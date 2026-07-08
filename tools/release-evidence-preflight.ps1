@@ -165,19 +165,24 @@ function Get-ExpectedRunIdentity {
     }
 
     $values = Read-MarkdownEvidenceTable -Path $resolved
-    foreach ($key in @("run_id", "sha")) {
+    foreach ($key in @("run_id", "sha", "workflow", "run_attempt")) {
         if (-not $values.ContainsKey($key) -or [string]::IsNullOrWhiteSpace([string]$values[$key])) {
             $Missing.Add("workflow_run 报告缺少 $key 字段")
         }
     }
 
-    if (-not $values.ContainsKey("run_id") -or -not $values.ContainsKey("sha")) {
+    if (-not $values.ContainsKey("run_id") -or
+        -not $values.ContainsKey("sha") -or
+        -not $values.ContainsKey("workflow") -or
+        -not $values.ContainsKey("run_attempt")) {
         return $null
     }
 
     return [pscustomobject]@{
         RunId = [string]$values["run_id"]
         Sha = [string]$values["sha"]
+        Workflow = [string]$values["workflow"]
+        RunAttempt = [string]$values["run_attempt"]
     }
 }
 
@@ -232,14 +237,19 @@ function Add-RunIdentityCheck {
     }
 
     $values = Read-MarkdownEvidenceTable -Path $resolved
-    foreach ($key in @("run_id", "sha")) {
+    foreach ($key in @("run_id", "sha", "workflow", "run_attempt")) {
         if (-not $values.ContainsKey($key)) {
             $Missing.Add("$Scope 报告缺少 $key 字段，不能证明与 workflow_run 同源")
             continue
         }
 
         $actual = [string]$values[$key]
-        $expected = if ($key -eq "run_id") { [string]$ExpectedIdentity.RunId } else { [string]$ExpectedIdentity.Sha }
+        $expected = switch ($key) {
+            "run_id" { [string]$ExpectedIdentity.RunId }
+            "sha" { [string]$ExpectedIdentity.Sha }
+            "workflow" { [string]$ExpectedIdentity.Workflow }
+            "run_attempt" { [string]$ExpectedIdentity.RunAttempt }
+        }
         if (-not [string]::Equals($actual, $expected, [StringComparison]::OrdinalIgnoreCase)) {
             $Missing.Add("$Scope 报告 $key 必须与 workflow_run 一致：expected=$expected actual=$actual")
         }

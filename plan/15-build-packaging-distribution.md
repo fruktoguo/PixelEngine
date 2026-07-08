@@ -44,15 +44,15 @@
 - [x] Release workflow 已实现动态矩阵：`.github/workflows/release.yml` 通过 setup job 消费 `tools/release-matrix.ps1` 输出 native/build/expected 矩阵。
 - [x] 发行激活真相源已集中：`tools/release-rids.json` 声明 channels、active RID、runner、shell、smoke、codesign；任一 dormant RID 翻 active 后由矩阵脚本扩展。
 - [x] 审计脚本已参数化：`tools/audit-release-artifacts.ps1` 与 `.sh` 接收 active RID，`--require-all` 只要求当前激活集，dormant RID 缺失不误判当前 Windows-first 发布失败。
-- [x] 发行证据预检已参数化：`tools/release-evidence-preflight.ps1` 与 `.sh` 从 active RID 和 expected package count 派生包数、上传资产数、SHA256SUMS 覆盖和 deterministic hash 行集。
-- [x] GitHub Release 上传报告约束已写入预检：`workflow_run` 必须来自 tag push，且必须覆盖 package asset 与唯一 `SHA256SUMS`；只写 success 或 `workflow_dispatch` 不能冒充完成。
+- [x] 发行证据预检已参数化：`tools/release-evidence-preflight.ps1` 与 `.sh` 从 active RID 和 expected package count 派生包数、上传资产数、SHA256SUMS 覆盖、deterministic hash 行集，以及 `workflow_run` ↔ 子报告的 `run_id` / `sha` / `workflow` / `run_attempt` 同源身份。
+- [x] GitHub Release 上传报告约束已写入预检：`workflow_run` 必须来自 tag push，且必须覆盖 package asset 与唯一 `SHA256SUMS`；只写 success、缺少同源 `workflow` / `run_attempt` 或 `workflow_dispatch` 不能冒充完成。
 - [x] 确定性打包工具已落地：`tools/PixelEngine.Tools.DeterministicPackage` 固定 entry 顺序、时间戳、权限与 owner，release job 二次 package 生成 deterministic hash report。
 - [x] build-player 编排器已落地：`tools/build-player.ps1` 与 `.sh` 串 `build-native`、publish、verify、package、audit，输出 `schema=pixelengine.build/v1` NDJSON 与 `build-result.json`。
 - [x] build-player 产品名契约已落地：`-ProductName` 只影响玩家可见启动器和包名，内部 `AssemblyName` 默认保持 `PixelEngine.Demo`，避免带空格 assembly 破坏 restore 或 apphost 载荷。
 - [x] build-player dev-audit 分流已落地：`-DevLayout` 允许保留 pdb/xml，但仍检查结构存在性和 player-only 断言；Release 无符号构建走完整发行审计。
 - [x] 内容资产打包已落地：`content/` 是单一真相源，`materials.json`、`reactions.json`、`weapons.json`、场景、纹理、音频进入包根 `content/`，不复制到 `app/content/`。
 - [x] UI native 打包边界已登记：Web-first UI Runtime 的 RmlUi 与 Ultralight 若启用，只能 dynamic-only 落 `runtimes/<rid>/native/`，纳入许可和 SHA256SUMS，不进入 Box2D dual-build；当前 RmlUi native shim 仅为 desktop GL3 renderer，ANGLE/GLES native profile 未闭合时必须经 profile gate 回退 ManagedFallback；当前 Ultralight optional profile inactive，发行审计拒绝未激活的 `Ultralight` / `WebCore` / `AppCore` native 混入。
-- [x] 纪律测试已记录：`HostingProjectDisciplineTests.ReleaseRidGateDeclaresWindowsActiveSetAndMatrixOutputs`、`ReleaseRidGateDryRunActivatesDormantRidFromConfigOnly`、`EditorShellBuildTests.PlayerPackageAuditRejectsEditorClosureAllowsImGuiAndSupportsDevLayout`、`PerformanceHardeningToolingDisciplineTests.ReleaseEvidencePreflightRejectsNonTagUploadReportAsReleaseSuccess` 等锁定关键边界。
+- [x] 纪律测试已记录：`HostingProjectDisciplineTests.ReleaseRidGateDeclaresWindowsActiveSetAndMatrixOutputs`、`ReleaseRidGateDryRunActivatesDormantRidFromConfigOnly`、`EditorShellBuildTests.PlayerPackageAuditRejectsEditorClosureAllowsImGuiAndSupportsDevLayout`、`PerformanceHardeningToolingDisciplineTests.ReleaseEvidencePreflightRejectsNonTagUploadReportAsReleaseSuccess`、`ReleaseEvidencePreflightRejectsMismatchedRunIdentity` 等锁定关键边界。
 
 ---
 
