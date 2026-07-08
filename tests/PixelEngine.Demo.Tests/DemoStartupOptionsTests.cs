@@ -677,4 +677,96 @@ public sealed class DemoStartupOptionsTests
         Assert.False(DemoProgram.CanEnableHotReload(options, dynamicCodeSupported: false));
         Assert.False(DemoProgram.CanEnableHotReload(DemoStartupOptions.Parse(["--no-hot-reload"]), dynamicCodeSupported: true));
     }
+
+    /// <summary>
+    /// 验证玩家包 content/scripts 中的 Behaviour 会在 scene 物化前注册。
+    /// </summary>
+    [Fact]
+    public void RegisterPackagedScriptAssembliesLoadsContentScriptsBeforeSceneMaterialization()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), "pixelengine-packaged-scripts-" + Guid.NewGuid().ToString("N"), "content");
+        try
+        {
+            string scripts = Path.Combine(contentRoot, "scripts");
+            _ = Directory.CreateDirectory(scripts);
+            string scenes = Path.Combine(contentRoot, "scenes");
+            _ = Directory.CreateDirectory(scenes);
+            File.WriteAllText(Path.Combine(contentRoot, "startup.json"), """
+                {
+                  "startScene": "scenes/main.scene"
+                }
+                """);
+            File.WriteAllText(Path.Combine(scenes, "main.scene"), """
+                {
+                  "formatVersion": 2,
+                  "name": "main",
+                  "entities": [
+                    {
+                      "stableId": 1,
+                      "name": "Probe",
+                      "transform": { "x": 0, "y": 0, "rotationRadians": 0, "scaleX": 1, "scaleY": 1 },
+                      "behaviours": [
+                        { "typeName": "PackagedDemoBehaviour" }
+                      ]
+                    }
+                  ]
+                }
+                """);
+            File.WriteAllText(Path.Combine(scripts, "PackagedDemoBehaviour.cs"), """
+                using PixelEngine.Scripting;
+
+                public sealed class PackagedDemoBehaviour : Behaviour
+                {
+                }
+                """);
+            DemoStartupOptions options = DemoStartupOptions.Parse(["--content", contentRoot]);
+            EngineProject project = DemoProgram.BuildProject(options);
+            using Engine engine = DemoProgram.BuildEngine(options, project);
+
+            DemoProgram.RegisterPackagedScriptAssemblies(engine, options, dynamicCodeSupported: true);
+
+            ScriptAssemblyRegistry registry = engine.Context.GetService<ScriptAssemblyRegistry>();
+            Assert.Contains(registry.Assemblies, assembly => assembly.GetType("PackagedDemoBehaviour", throwOnError: false) is not null);
+        }
+        finally
+        {
+            string? root = Directory.GetParent(contentRoot)?.FullName;
+            if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证空工程玩家包缺少 materials/reactions 时仍会接入最小可渲染 world，窗口 Probe 不会半初始化闪退。
+    /// </summary>
+    [Fact]
+    public void MinimalSmokeWorldRegistersSimulationForContentlessWindowProbe()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), "pixelengine-contentless-probe-" + Guid.NewGuid().ToString("N"), "content");
+        try
+        {
+            _ = Directory.CreateDirectory(contentRoot);
+            DemoStartupOptions options = DemoStartupOptions.Parse(["--content", contentRoot]);
+            EngineProject project = DemoProgram.BuildProject(options);
+            using Engine engine = DemoProgram.BuildEngine(options, project);
+
+            DemoProgram.AttachMinimalSmokeWorld(engine);
+
+            MaterialTable materials = engine.Context.GetService<MaterialTable>();
+            Assert.True(materials.TryGetId("empty", out ushort empty));
+            Assert.Equal(0, empty);
+            Assert.True(engine.Context.TryGetService(out SimulationPhaseDriver _));
+            Assert.True(engine.Context.TryGetService(out CellGrid _));
+        }
+        finally
+        {
+            string? root = Directory.GetParent(contentRoot)?.FullName;
+            if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
 }

@@ -8,6 +8,7 @@ using PixelEngine.Hosting;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
+using PixelEngine.Simulation;
 using Silk.NET.OpenGL;
 using ScriptScene = PixelEngine.Scripting.Scene;
 
@@ -137,9 +138,12 @@ public static class DemoProgram
         else
         {
             Console.WriteLine("内容包尚未就绪：缺少 materials.json 或 reactions.json，本次仅执行宿主启动冒烟。");
+            AttachMinimalSmokeWorld(engine);
         }
 
-        engine.RegisterScriptAssembly(assembly);
+        ScriptAssemblyRegistry scriptAssemblies = engine.Context.GetService<ScriptAssemblyRegistry>();
+        scriptAssemblies.Register(assembly);
+        RegisterPackagedScriptAssemblies(engine, options, RuntimeFeature.IsDynamicCodeSupported);
         Console.WriteLine(options.HotReloadEnabled
             ? "脚本程序集已注册；热重载等待脚本宿主装配。"
             : "脚本程序集已注册；热重载已由参数关闭。");
@@ -721,6 +725,71 @@ public static class DemoProgram
     {
         ArgumentNullException.ThrowIfNull(options);
         return options.HotReloadEnabled && dynamicCodeSupported;
+    }
+
+    /// <summary>
+    /// 注册玩家包随 content/scripts 分发的脚本程序集。
+    /// </summary>
+    public static void RegisterPackagedScriptAssemblies(Engine engine, DemoStartupOptions options, bool dynamicCodeSupported)
+    {
+        ArgumentNullException.ThrowIfNull(engine);
+        ArgumentNullException.ThrowIfNull(options);
+        string scriptDirectory = Path.Combine(Path.GetFullPath(options.ContentRoot), "scripts");
+        if (!Directory.Exists(scriptDirectory))
+        {
+            return;
+        }
+
+        if (!dynamicCodeSupported || !RuntimeScriptAssemblyCompiler.IsSupported)
+        {
+            throw new InvalidOperationException($"玩家包包含脚本源码但当前运行时不支持动态脚本编译：{scriptDirectory}");
+        }
+
+        RuntimeScriptAssemblyCompileResult result = RuntimeScriptAssemblyCompiler.CompileAndLoadFromDirectory(
+            "PixelEngine.PackagedScripts",
+            scriptDirectory,
+            includeSubdirectories: true);
+        if (!result.Success)
+        {
+            string diagnostics = string.Join(Environment.NewLine, result.Diagnostics);
+            throw new InvalidOperationException($"{result.Error}{Environment.NewLine}{diagnostics}");
+        }
+
+        if (result.Assembly is not null)
+        {
+            engine.Context.GetService<ScriptAssemblyRegistry>().Register(result.Assembly);
+            Console.WriteLine($"随包脚本程序集已注册：{scriptDirectory}");
+        }
+    }
+
+    /// <summary>
+    /// 为不含材质内容包的空工程玩家包接入可渲染的最小 Simulation world。
+    /// </summary>
+    public static void AttachMinimalSmokeWorld(Engine engine)
+    {
+        ArgumentNullException.ThrowIfNull(engine);
+        if (!engine.Context.TryGetService(out MaterialTable _))
+        {
+            MaterialTable materials = new(
+                [
+                    new MaterialDef
+                    {
+                        Id = 0,
+                        Name = "empty",
+                        Type = CellType.Empty,
+                        HeatCapacity = 1f,
+                        TextureId = -1,
+                        BaseColorBGRA = 0x00000000,
+                        Opacity = 0,
+                        DisplayName = "Empty",
+                        LegendVisible = false,
+                    },
+                ]);
+            engine.Context.RegisterService(materials);
+            engine.Context.RegisterService(new ReactionTable([], [materials.Get(0)]));
+        }
+
+        _ = engine.AttachResidentSimulationWorld(DemoWorldWidthCells, DemoWorldHeightCells, DemoParticleCapacityDefault);
     }
 
     private static PixelEngine.Scripting.ScriptHotReloadRuntimeOptions? CreateHotReloadOptions(

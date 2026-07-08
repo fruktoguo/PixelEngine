@@ -32,7 +32,7 @@ internal sealed class ScriptCompiler
         _references = BuildReferences(assemblies);
     }
 
-    public ScriptCompilationResult Compile(string assemblyName, IReadOnlyList<ScriptSourceFile> sources)
+    public ScriptCompilationResult Compile(string assemblyName, IReadOnlyList<ScriptSourceFile> sources, bool emitPdb = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(assemblyName);
         ArgumentNullException.ThrowIfNull(sources);
@@ -56,11 +56,13 @@ internal sealed class ScriptCompiler
             CompilationOptions);
 
         using MemoryStream peStream = new();
-        using MemoryStream pdbStream = new();
-        EmitResult emit = compilation.Emit(peStream, pdbStream);
+        using MemoryStream? pdbStream = emitPdb ? new MemoryStream() : null;
+        EmitResult emit = pdbStream is null
+            ? compilation.Emit(peStream)
+            : compilation.Emit(peStream, pdbStream);
         ImmutableArray<Diagnostic> diagnostics = emit.Diagnostics;
         return emit.Success
-            ? ScriptCompilationResult.Succeeded(peStream.ToArray(), pdbStream.ToArray(), diagnostics)
+            ? ScriptCompilationResult.Succeeded(peStream.ToArray(), pdbStream?.ToArray() ?? [], diagnostics)
             : ScriptCompilationResult.Failed(diagnostics);
     }
 
