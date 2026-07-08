@@ -508,6 +508,68 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
+    /// 验证激光经公开输入打碎 ObjectiveCrystal 后，MineYield 事件会推进 MissionDirector 并同步 Web-first HUD。
+    /// </summary>
+    [Fact]
+    public void DemoGameUiControllerPublishesLaserCrystalMineYieldThroughScriptService()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "reloadSeconds": 1.0, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" },
+                { "id": "laser", "displayName": "Laser", "kind": "laser", "radius": 1, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 7, "heatPerCell": 80, "beamDps": 4800, "muzzleCue": "ui_click", "impactCue": "sizzle_lava_water", "hudColor": "#FFFFFFFF" }
+              ]
+            }
+            """);
+        try
+        {
+            using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out FakeGameUiService ui, out ScriptInputApi input);
+            Entity playerEntity = scene.CreateEntity();
+            _ = playerEntity.AddComponent<Transform>();
+            PlayerController player = playerEntity.AddComponent<PlayerController>();
+            player.SpawnX = 12f;
+            player.SpawnY = 12f;
+            _ = playerEntity.AddComponent<PlayerHealth>();
+            WeaponController weapons = playerEntity.AddComponent<WeaponController>();
+            MissionDirector mission = playerEntity.AddComponent<MissionDirector>();
+            mission.RequiredCrystals = 1;
+            mission.TimeLimitSeconds = 30f;
+            mission.InitialLavaSurfaceY = 100f;
+            mission.LavaRiseCellsPerSecond = 0f;
+            _ = playerEntity.AddComponent<GameUiDemoController>();
+
+            ObjectiveCrystal crystal = scene.CreateEntity().AddComponent<ObjectiveCrystal>();
+            crystal.X = 36;
+            crystal.Y = 34;
+            crystal.Radius = 1;
+
+            engine.RunHeadlessTicks(2);
+            CellGrid grid = engine.Context.GetService<CellGrid>();
+            ushort crystalBefore = grid.GetMaterial(36, 34);
+            Assert.NotEqual((ushort)0, crystalBefore);
+
+            input.Update([Key.Digit2], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+            input.Update([], [], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(3);
+
+            Assert.Equal(WeaponKind.Laser, weapons.LastDispatchedKind);
+            Assert.True(weapons.PrimaryFireCount > 0);
+            Assert.NotEqual(crystalBefore, grid.GetMaterial(36, 34));
+            Assert.True(crystal.CollectedCells > 0);
+            Assert.True(mission.CrystalsCollected > 0);
+            Assert.Equal(1.0, GetHudValue(ui, "hud.weapon"), precision: 3);
+            Assert.Equal(1.0, GetHudValue(ui, "hud.crystals"), precision: 3);
+            Assert.True(GetHudValue(ui, "hud.heat") > 0.0);
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// 验证 Game UI 控制器拆到 UI/root entity 时，HUD 仍会跨场景实体发现真实 gameplay source。
     /// </summary>
     [Fact]
