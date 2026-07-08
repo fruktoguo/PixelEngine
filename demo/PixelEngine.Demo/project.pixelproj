@@ -1,0 +1,17 @@
+{
+  "formatVersion": 1,
+  "name": "PixelEngine Demo",
+  "contentRoot": "content",
+  "scriptSourceDir": "scripts",
+  "startScene": "scenes/lava-mine.scene",
+  "scenes": [
+    {
+      "name": "Lava Mine",
+      "path": "scenes/lava-mine.scene"
+    },
+    {
+      "name": "Empty Window Probe",
+      "path": "scenes/empty-window-probe.scene"
+    }
+  ]
+}

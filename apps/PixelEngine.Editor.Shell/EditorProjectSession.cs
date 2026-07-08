@@ -91,9 +91,10 @@ internal sealed class EditorProjectSession : IDisposable
             _ = assets.Refresh();
             EditorPrefabAssetStore prefabs = new(project.ContentRootPath, assets);
             EditorScriptAssetOpenService scriptAssetOpenService = new(assets);
+            engine.Context.RegisterService<IScriptHotReloadDiagnosticSink>(new EditorConsoleScriptHotReloadDiagnosticSink(app.ConsoleStore));
+            RegisterInitialProjectScriptAssembly(project, engine, app.ConsoleStore);
             EditorSceneRuntimeProjection projection = ProjectAuthoringScene(engine, sceneModel);
             editorHost.ConfigureAuthoring(sceneModel, undoStack, prefabs);
-            engine.Context.RegisterService<IScriptHotReloadDiagnosticSink>(new EditorConsoleScriptHotReloadDiagnosticSink(app.ConsoleStore));
             _ = engine.AttachScriptingFromServices(
                 hotReload: new ScriptHotReloadRuntimeOptions($"{project.Name}.EditorScripts", project.ScriptSourcePath));
             engine.EnterEditMode();
@@ -482,6 +483,34 @@ internal sealed class EditorProjectSession : IDisposable
         engine.Context.RegisterService(sceneModel);
         engine.Context.RegisterService(projection);
         return projection;
+    }
+
+    private static void RegisterInitialProjectScriptAssembly(EditorProject project, Engine engine, IEditorConsoleSink console)
+    {
+        RuntimeScriptAssemblyCompileResult result = RuntimeScriptAssemblyCompiler.CompileAndLoadFromDirectory(
+            $"{project.Name}.EditorScripts",
+            project.ScriptSourcePath);
+        if (!result.HasSources)
+        {
+            return;
+        }
+
+        if (!result.Success || result.Assembly is null)
+        {
+            console.AddScriptDiagnostics(
+                "project-scripts",
+                result.Error ?? "项目脚本编译失败。",
+                result.Diagnostics,
+                success: false);
+            throw new InvalidOperationException(result.Error ?? "项目脚本编译失败。");
+        }
+
+        engine.RegisterScriptAssembly(result.Assembly);
+        console.AddScriptDiagnostics(
+            "project-scripts",
+            $"项目脚本已加载：{project.ScriptSourcePath}",
+            result.Diagnostics,
+            success: true);
     }
 
     private void RefreshEditProjectionIfNeeded(bool force = false)
