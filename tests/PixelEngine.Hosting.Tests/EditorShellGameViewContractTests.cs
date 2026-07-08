@@ -491,10 +491,10 @@ public sealed class EditorShellGameViewContractTests
     }
 
     /// <summary>
-    /// 验证 Game View UI present target provider 只在面板可见且 snapshot 有效时输出 framebuffer-space 目标。
+    /// 验证 Game View UI present target provider 只在 Play 模式、面板可见且 snapshot 有效时输出 framebuffer-space 目标。
     /// </summary>
     [Fact]
-    public void GameViewUiPresentTargetProviderUsesVisibleFramebufferImageRect()
+    public void GameViewUiPresentTargetProviderUsesVisiblePlayModeFramebufferImageRect()
     {
         GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
             textureWidth: 320,
@@ -502,6 +502,7 @@ public sealed class EditorShellGameViewContractTests
             imageMinPanel: new Vector2(10f, 20f),
             availablePanelSize: new Vector2(160f, 160f));
         GameViewUiPresentTargetProvider provider = new(
+            () => PixelEngine.Editor.EditorMode.Play,
             () => snapshot,
             () => new Vector2(100f, 40f),
             () => true);
@@ -510,9 +511,18 @@ public sealed class EditorShellGameViewContractTests
         Assert.Equal(new UiPresentTarget(110, 60, 160, 90, 1f), target);
 
         provider = new GameViewUiPresentTargetProvider(
+            () => PixelEngine.Editor.EditorMode.Play,
             () => snapshot,
             () => new Vector2(100f, 40f),
             () => false);
+
+        Assert.False(provider.TryGetPresentTarget(out _));
+
+        provider = new GameViewUiPresentTargetProvider(
+            () => PixelEngine.Editor.EditorMode.Edit,
+            () => snapshot,
+            () => new Vector2(100f, 40f),
+            () => true);
 
         Assert.False(provider.TryGetPresentTarget(out _));
     }

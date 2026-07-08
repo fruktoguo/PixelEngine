@@ -39,6 +39,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
                 EnableMultiViewport = false,
             });
         _gameUiPresentTargetProvider = new GameViewUiPresentTargetProvider(
+            CapturePlayMode,
             () => _gameViewPanel?.LastViewportSnapshot ?? GameViewViewportSnapshot.Empty,
             () => _gameViewPanel?.LastPanelOriginFramebuffer ?? default,
             () => _gameViewPanel is { Visible: true });
