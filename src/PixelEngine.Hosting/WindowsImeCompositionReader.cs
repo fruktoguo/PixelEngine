@@ -42,13 +42,31 @@ internal sealed class WindowsImeCompositionReader
             return 0;
         }
 
-        IntPtr hwnd = _hwndProvider();
+        IntPtr hwnd;
+        try
+        {
+            hwnd = _hwndProvider();
+        }
+        catch (Exception)
+        {
+            return 0;
+        }
+
         if (hwnd == IntPtr.Zero)
         {
             return 0;
         }
 
-        IntPtr context = _native.GetContext(hwnd);
+        IntPtr context;
+        try
+        {
+            context = _native.GetContext(hwnd);
+        }
+        catch (Exception)
+        {
+            return 0;
+        }
+
         if (context == IntPtr.Zero)
         {
             return 0;
@@ -66,6 +84,11 @@ internal sealed class WindowsImeCompositionReader
             int written = readableBytes == 0
                 ? 0
                 : Encoding.Unicode.GetChars(_compositionBytes.AsSpan(0, readableBytes), destination);
+            if (written == 0)
+            {
+                return 0;
+            }
+
             int cursor = Math.Max(0, _native.GetCompositionCursorPosition(context));
             int attributeBytes = _native.GetCompositionString(context, CompositionAttribute, _attributeBytes);
             FindTargetAttributeRange(
@@ -80,9 +103,20 @@ internal sealed class WindowsImeCompositionReader
                 selectionLength).ClampToTextLength(written);
             return written;
         }
+        catch (Exception)
+        {
+            composition = UiTextComposition.Inactive;
+            return 0;
+        }
         finally
         {
-            _ = _native.ReleaseContext(hwnd, context);
+            try
+            {
+                _ = _native.ReleaseContext(hwnd, context);
+            }
+            catch (Exception)
+            {
+            }
         }
     }
 
