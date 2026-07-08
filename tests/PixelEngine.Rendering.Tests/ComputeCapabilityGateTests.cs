@@ -1,5 +1,6 @@
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Rendering.Compute;
+using Silk.NET.OpenGL;
 using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
@@ -191,17 +192,31 @@ public sealed class ComputeCapabilityGateTests
     }
 
     [Fact]
-    public void ComputeSharpBackendRemainsUnavailableWhenInstantiatedDirectly()
+    public void ComputeSharpBackendRejectsEveryExecutionEntryPointWhenInstantiatedDirectly()
     {
         using IComputeBackend backend = new ComputeSharpBackend();
+        ComputeKernel kernel = new("stub", 1);
 
         Assert.Equal(ComputeBackendKind.ComputeSharp, backend.Kind);
         Assert.False(backend.IsAvailable);
         Assert.False(ComputeSharpBackend.IsExecutable);
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-            () => backend.LoadKernel("stub", "unused"));
-        Assert.Contains("ComputeSharpResourceContract", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("资源契约", exception.Message, StringComparison.Ordinal);
+
+        AssertComputeSharpUnavailable(() => { _ = backend.LoadKernel("stub", "unused"); });
+        AssertComputeSharpUnavailable(() => backend.BindStorageBuffer(0, 0));
+        AssertComputeSharpUnavailable(() => backend.BindTexture(0, 0));
+        AssertComputeSharpUnavailable(() => backend.BindImage(0, 0, 0, false, 0, GLEnum.ReadOnly, GLEnum.Rgba8));
+        AssertComputeSharpUnavailable(() => backend.SetUniform1(kernel, "u_value", 1));
+        AssertComputeSharpUnavailable(() => backend.SetUniform1(kernel, "u_value", 1.0f));
+        AssertComputeSharpUnavailable(() => backend.SetUniform2(kernel, "u_value", 1, 2));
+        AssertComputeSharpUnavailable(() => backend.SetUniform2(kernel, "u_value", 1.0f, 2.0f));
+        AssertComputeSharpUnavailable(() => backend.Dispatch(kernel, 1, 1, 1));
+        AssertComputeSharpUnavailable(() => backend.MemoryBarrier(MemoryBarrierMask.ShaderImageAccessBarrierBit));
+        AssertComputeSharpUnavailable(() => { _ = backend.BeginTimerQuery("stub"); });
+        AssertComputeSharpUnavailable(backend.EndTimerQuery);
+        ulong elapsedNanoseconds = 42;
+        AssertComputeSharpUnavailable(() => { _ = backend.TryGetTimerResult(1, out elapsedNanoseconds); });
+        Assert.Equal(0ul, elapsedNanoseconds);
+        AssertComputeSharpUnavailable(() => backend.DeleteTimerQuery(1));
     }
 
     [Fact]
@@ -452,6 +467,13 @@ public sealed class ComputeCapabilityGateTests
         Assert.Equal(0u, backend.BeginTimerQuery("noop"));
         Assert.False(backend.TryGetTimerResult(0, out ulong elapsed));
         Assert.Equal(0ul, elapsed);
+    }
+
+    private static void AssertComputeSharpUnavailable(Action action)
+    {
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(action);
+        Assert.Contains("ComputeSharpResourceContract", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("资源契约", exception.Message, StringComparison.Ordinal);
     }
 
     private static GpuCapabilities CreateCapabilities(
