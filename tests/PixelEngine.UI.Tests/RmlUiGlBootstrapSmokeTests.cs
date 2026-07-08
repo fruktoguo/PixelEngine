@@ -9,6 +9,28 @@ namespace PixelEngine.UI.Tests;
 public sealed class RmlUiGlBootstrapSmokeTests
 {
     [Fact]
+    public void RmlUiCompositeResolvesPresentTargetViewportSize()
+    {
+        UiPresentContext context = default;
+        UiPresentContext targetContext = context.WithTarget(new UiPresentTarget(12, 16, 320, 180, 1f));
+
+        Assert.Equal((64, 48), RmlUiBackend.ResolveCompositeViewportSize(in context, 64, 48));
+        Assert.Equal((320, 180), RmlUiBackend.ResolveCompositeViewportSize(in targetContext, 64, 48));
+    }
+
+    [Fact]
+    public void RmlUiCompositeSourceDocumentsPresentTargetViewportContract()
+    {
+        string source = File.ReadAllText(ProjectPath("src", "PixelEngine.UI", "RmlUiBackend.cs"));
+
+        Assert.Contains("context.Target.IsValid", source, StringComparison.Ordinal);
+        Assert.Contains("context.Target.Width", source, StringComparison.Ordinal);
+        Assert.Contains("context.Target.Height", source, StringComparison.Ordinal);
+        Assert.Contains("RmlUiNative.RendererSetViewport(_renderer, frameWidth, frameHeight)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("context.FramebufferWidth, context.FramebufferHeight", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CanCreateNativeRendererWhenGlSmokeIsEnabled()
     {
         if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
@@ -394,5 +416,16 @@ public sealed class RmlUiGlBootstrapSmokeTests
         stream.Write(type);
         stream.Write(data);
         stream.Write(stackalloc byte[4]);
+    }
+
+    private static string ProjectPath(params string[] segments)
+    {
+        string root = AppContext.BaseDirectory;
+        for (int i = 0; i < 6 && !File.Exists(Path.Combine(root, "PixelEngine.sln")); i++)
+        {
+            root = Path.GetFullPath(Path.Combine(root, ".."));
+        }
+
+        return Path.Combine([root, .. segments]);
     }
 }
