@@ -41,6 +41,13 @@ public interface IGameUiService
     void BindModel(UiScreenHandle screen, UiModelName modelName, IUiModel model);
 
     /// <summary>
+    /// 把托管字符串登记到 UI 字符串池并返回可写入模型的稳定句柄。
+    /// </summary>
+    /// <param name="value">要显示的文本。</param>
+    /// <returns>字符串池句柄。</returns>
+    UiStringHandle InternString(string value);
+
+    /// <summary>
     /// 向 UI 写入一个模型值。
     /// </summary>
     /// <param name="screen">屏幕实例句柄。</param>
@@ -113,6 +120,13 @@ public sealed class NoopGameUiService : IGameUiService
         _ = screen;
         _ = modelName;
         _ = model;
+    }
+
+    /// <inheritdoc />
+    public UiStringHandle InternString(string value)
+    {
+        _ = value;
+        return default;
     }
 
     /// <inheritdoc />

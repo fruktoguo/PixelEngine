@@ -823,9 +823,10 @@ public sealed class HostingProjectDisciplineTests
         string plan14 = File.ReadAllText(Path.Combine(root, "plan", "14-testing-benchmarking.md"));
         string plan15 = File.ReadAllText(Path.Combine(root, "plan", "15-build-packaging-distribution.md"));
 
-        Assert.Contains("Ultralight (inactive optional profile → ManagedFallback)", playerSettingsPanel, StringComparison.Ordinal);
+        Assert.Contains("UltralightOptionalProfileGate.GetDisplayLabel", playerSettingsPanel, StringComparison.Ordinal);
         Assert.Contains("UltralightOptionalProfileGate.InactiveReason", playerSettingsPanel, StringComparison.Ordinal);
         Assert.Contains("未满足 native SDK / commercial license / release gate 前保持未激活", uiBackendKind, StringComparison.Ordinal);
+        Assert.Contains("Ultralight (inactive optional profile → ManagedFallback)", gate, StringComparison.Ordinal);
         Assert.Contains("public const bool IsActive = false", gate, StringComparison.Ordinal);
         Assert.Contains("commercial redistribution license", gate, StringComparison.Ordinal);
         Assert.Contains("release artifact evidence", gate, StringComparison.Ordinal);
@@ -866,6 +867,27 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("`RmlUiNativeProfileGate` 已识别 `RenderBackend.GlEs30Angle`、GLES context 与 ANGLE renderer/vendor/version 并安全回退", plan20, StringComparison.Ordinal);
         Assert.Contains("RmlUi/Ultralight native 专属上传、真实平台 composition 与高保真浏览器语义仍按 plan/20/M15 标 blocked/pending", plan14, StringComparison.Ordinal);
         Assert.Contains("RmlUi、Ultralight 归 dynamic-only 或系统分发并可门控回退", plan15, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 Hosting 用同一个 UI 字符串池连接脚本服务和 RmlUi 后端，避免 StringHandle 只能裸整数往返。
+    /// </summary>
+    [Fact]
+    public void HostingSharesUiStringPoolBetweenScriptServiceAndRmlUiBackend()
+    {
+        string root = FindRepositoryRoot();
+        string engine = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Hosting", "Engine.cs"));
+        string bridge = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Hosting", "GameUiServiceBridge.cs"));
+        string scripting = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Scripting", "GameUiFacades.cs"));
+        string plan20 = File.ReadAllText(Path.Combine(root, "plan", "20-interactive-html-ui.md"));
+
+        Assert.Contains("UiStringPool strings = new();", engine, StringComparison.Ordinal);
+        Assert.Contains("new RmlUiBackend(window, stringResolver: strings)", engine, StringComparison.Ordinal);
+        Assert.Contains("new(host, Context.Options.ContentRoot, stringPool: strings)", engine, StringComparison.Ordinal);
+        Assert.Contains("UiStringHandle InternString(string value)", scripting, StringComparison.Ordinal);
+        Assert.Contains("RuntimeUi.UiStringPool? stringPool = null", bridge, StringComparison.Ordinal);
+        Assert.Contains("_strings.Intern(value)", bridge, StringComparison.Ordinal);
+        Assert.Contains("脚本公开 `IGameUiService.InternString`", plan20, StringComparison.Ordinal);
     }
 
     /// <summary>
