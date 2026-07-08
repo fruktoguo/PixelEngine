@@ -3,7 +3,7 @@ using Silk.NET.Input;
 
 namespace PixelEngine.Editor;
 
-#pragma warning disable IDE0046, IDE0072, IDE0290
+#pragma warning disable IDE0010, IDE0046, IDE0072, IDE0290
 
 /// <summary>
 /// Silk.NET 输入到 ImGuiIO 的桥接器，并发布输入捕获仲裁状态。
@@ -11,6 +11,12 @@ namespace PixelEngine.Editor;
 public sealed class ImGuiInputBridge
 {
     private readonly IEditorImGuiBackend _backend;
+    private bool _leftCtrlDown;
+    private bool _rightCtrlDown;
+    private bool _leftShiftDown;
+    private bool _rightShiftDown;
+    private bool _leftAltDown;
+    private bool _rightAltDown;
 
     /// <summary>
     /// 创建输入桥。
@@ -84,6 +90,7 @@ public sealed class ImGuiInputBridge
         if (imguiKey != ImGuiKey.None)
         {
             _backend.AddKey(imguiKey, down);
+            UpdateModifierState(key, down);
         }
     }
 
@@ -154,6 +161,39 @@ public sealed class ImGuiInputBridge
             _ => ImGuiKey.None,
         };
     }
+
+    private void UpdateModifierState(Key key, bool down)
+    {
+        switch (key)
+        {
+            case Silk.NET.Input.Key.ControlLeft:
+                _leftCtrlDown = down;
+                _backend.AddKey(ImGuiKey.ModCtrl, _leftCtrlDown || _rightCtrlDown);
+                break;
+            case Silk.NET.Input.Key.ControlRight:
+                _rightCtrlDown = down;
+                _backend.AddKey(ImGuiKey.ModCtrl, _leftCtrlDown || _rightCtrlDown);
+                break;
+            case Silk.NET.Input.Key.ShiftLeft:
+                _leftShiftDown = down;
+                _backend.AddKey(ImGuiKey.ModShift, _leftShiftDown || _rightShiftDown);
+                break;
+            case Silk.NET.Input.Key.ShiftRight:
+                _rightShiftDown = down;
+                _backend.AddKey(ImGuiKey.ModShift, _leftShiftDown || _rightShiftDown);
+                break;
+            case Silk.NET.Input.Key.AltLeft:
+                _leftAltDown = down;
+                _backend.AddKey(ImGuiKey.ModAlt, _leftAltDown || _rightAltDown);
+                break;
+            case Silk.NET.Input.Key.AltRight:
+                _rightAltDown = down;
+                _backend.AddKey(ImGuiKey.ModAlt, _leftAltDown || _rightAltDown);
+                break;
+            default:
+                break;
+        }
+    }
 }
 
-#pragma warning restore IDE0046, IDE0072, IDE0290
+#pragma warning restore IDE0010, IDE0046, IDE0072, IDE0290

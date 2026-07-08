@@ -1,5 +1,6 @@
 using Hexa.NET.ImGui;
 using PixelEngine.Gui;
+using Silk.NET.Input;
 using Xunit;
 
 namespace PixelEngine.UI.Tests;
@@ -24,6 +25,30 @@ public sealed class GuiAppCombinedFrameTests
             framebufferScaleY: 1.5f);
 
         Assert.Equal(["initialize", "new:800x600@2x1.5", "managed", "script", "render"], calls);
+    }
+
+    [Fact]
+    public void GuiInputBridgePublishesModifierKeysForClipboardShortcuts()
+    {
+        List<string> calls = [];
+        FakeGuiBackend backend = new(calls);
+        GuiInputBridge input = new(backend);
+
+        input.Key(Key.ControlLeft, down: true);
+        input.Key(Key.V, down: true);
+        input.Key(Key.V, down: false);
+        input.Key(Key.ControlLeft, down: false);
+
+        Assert.Equal(
+            [
+                "key:LeftCtrl=True",
+                "key:ModCtrl=True",
+                "key:V=True",
+                "key:V=False",
+                "key:LeftCtrl=False",
+                "key:ModCtrl=False",
+            ],
+            calls);
     }
 
     private sealed class FakeGuiBackend(List<string> calls) : IGuiImGuiBackend
@@ -61,6 +86,7 @@ public sealed class GuiAppCombinedFrameTests
 
         public void AddKey(ImGuiKey key, bool down)
         {
+            _calls.Add($"key:{key}={down}");
         }
 
         public void AddText(string text)
