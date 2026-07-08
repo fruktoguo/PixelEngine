@@ -1,6 +1,5 @@
 using Hexa.NET.ImGui;
 using Hexa.NET.ImGui.Backends.OpenGL3;
-using System.Numerics;
 
 namespace PixelEngine.Gui;
 
@@ -12,8 +11,6 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
     private readonly GuiFontManager _fontManager = new();
     private ImGuiContextPtr _context;
     private string _layoutPath = string.Empty;
-    private float _mouseScaleX = 1f;
-    private float _mouseScaleY = 1f;
     private bool _initialized;
 
     /// <inheritdoc />
@@ -70,16 +67,11 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
             deltaSeconds = 1f / 60f;
         }
 
-        float scaleX = NormalizeScale(framebufferScaleX);
-        float scaleY = NormalizeScale(framebufferScaleY);
-        int displayWidth = ScaleFramebufferDimension(width, scaleX);
-        int displayHeight = ScaleFramebufferDimension(height, scaleY);
-        _mouseScaleX = displayWidth / (float)Math.Max(1, width);
-        _mouseScaleY = displayHeight / (float)Math.Max(1, height);
+        ImGuiFrameMetrics metrics = ImGuiFrameMetrics.Create(width, height, framebufferScaleX, framebufferScaleY);
 
         ImGuiIOPtr io = ImGui.GetIO();
-        io.DisplaySize = new Vector2(displayWidth, displayHeight);
-        io.DisplayFramebufferScale = Vector2.One;
+        io.DisplaySize = metrics.DisplaySize;
+        io.DisplayFramebufferScale = metrics.DisplayFramebufferScale;
         io.DeltaTime = deltaSeconds;
         ImGuiImplOpenGL3.NewFrame();
         ImGui.NewFrame();
@@ -98,7 +90,7 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
     {
         if (_initialized)
         {
-            ImGui.AddMousePosEvent(ImGui.GetIO(), x * _mouseScaleX, y * _mouseScaleY);
+            ImGui.AddMousePosEvent(ImGui.GetIO(), x, y);
         }
     }
 
@@ -180,13 +172,4 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
         }
     }
 
-    private static float NormalizeScale(float scale)
-    {
-        return float.IsFinite(scale) && scale > 0f ? scale : 1f;
-    }
-
-    private static int ScaleFramebufferDimension(int logical, float scale)
-    {
-        return Math.Max(1, (int)MathF.Round(Math.Max(1, logical) * scale));
-    }
 }
