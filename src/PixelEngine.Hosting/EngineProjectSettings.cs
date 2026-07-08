@@ -172,12 +172,19 @@ public sealed record ProjectSettingsDto
             throw new InvalidOperationException(error);
         }
 
+        ProjectResourceRulesDto resourceRules = ResourceRules ?? new ProjectResourceRulesDto();
+        EditorPreferencesDto editorPreferences = EditorPreferences ?? new EditorPreferencesDto();
         return this with
         {
             Name = Name.Trim(),
             ContentRoot = NormalizeRelativeDirectory(ContentRoot, nameof(ContentRoot)),
             ScriptSourceDir = NormalizeRelativeDirectory(ScriptSourceDir, nameof(ScriptSourceDir)),
             StartScene = NormalizeRelativePath(StartScene, nameof(StartScene), allowEmpty: false),
+            ResourceRules = resourceRules with
+            {
+                ContentFileGlobs = resourceRules.ContentFileGlobs ?? [],
+            },
+            EditorPreferences = editorPreferences,
         };
     }
 }
@@ -425,6 +432,7 @@ public sealed record PlayerSettingsDto
             Version = Version.Trim(),
             StartupScene = NormalizeRelativePath(StartupScene, nameof(StartupScene), allowEmpty: false),
             IconPath = string.IsNullOrWhiteSpace(IconPath) ? null : NormalizeRelativePath(IconPath, nameof(IconPath), allowEmpty: false),
+            InputDefaults = InputDefaults ?? new PlayerInputDefaultsDto(),
         };
     }
 }
@@ -621,6 +629,12 @@ public sealed record BuildProfileDto
         for (int i = 0; i < Scenes.Count; i++)
         {
             BuildProfileSceneDto scene = Scenes[i];
+            if (scene is null)
+            {
+                error = "场景条目不能为空。";
+                return false;
+            }
+
             if (string.IsNullOrWhiteSpace(scene.SceneName) && string.IsNullOrWhiteSpace(scene.Source))
             {
                 error = "场景名称或来源不能为空。";
