@@ -196,35 +196,49 @@ public sealed class LavaMineSceneTests
         using Engine engine = await CreateLavaMineEngineAsync();
         engine.RunHeadlessTicks(2);
 
-        ScriptInputApi input = engine.Context.GetService<ScriptInputApi>();
-        ScriptCameraApi camera = engine.Context.GetService<ScriptCameraApi>();
-        DemoWindowScriptedInput scripted = new(input, camera, routeProbe: true);
-        scripted.RegisterPhases(engine.Phases);
+        LavaMineRouteResult route = RunLavaMineScriptedRoute(engine);
 
-        ScriptScene scene = engine.Context.GetService<ScriptScene>();
-        MissionDirector mission = FindBehaviour<MissionDirector>(scene);
-        ExtractionTrigger extraction = FindBehaviour<ExtractionTrigger>(scene);
-        WeaponController weapons = FindBehaviour<WeaponController>(scene);
-        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
-        int maxDestroyedBodies = 0;
-        int maxCreatedBodies = 0;
+        Assert.Equal(MissionState.Won, route.State);
+        Assert.Equal("extraction_reached", route.ResultReason);
+        Assert.True(route.ExtractionReached);
+        Assert.True(route.CrystalsCollected >= route.RequiredCrystals);
+        Assert.True(route.PrimaryFireCount > 0, "脚本路线应经 WeaponController 公开输入触发至少一次主武器。 ");
+        Assert.True(route.MaxDestroyedBodies > 0, $"脚本路线应触发真实刚体破坏，destroyed={route.MaxDestroyedBodies}。");
+        Assert.True(route.MaxCreatedBodies > 0, $"脚本路线应触发真实刚体重建，created={route.MaxCreatedBodies}。");
+        Assert.Equal(0, route.ScriptExceptionCount);
+    }
 
-        for (int i = 0; i < 1_500 && mission.State == MissionState.Playing; i++)
-        {
-            engine.RunHeadlessTicks(1);
-            maxDestroyedBodies = Math.Max(maxDestroyedBodies, physics.LastDestructionResult.DestroyedBodies);
-            maxCreatedBodies = Math.Max(maxCreatedBodies, physics.LastDestructionResult.CreatedBodies);
-        }
+    /// <summary>
+    /// 验证正式 lava-mine 场景通关后，Runtime 重开会恢复任务、出口和武器计数基线。
+    /// </summary>
+    [Fact]
+    public async Task LavaMineRuntimeRestartRestoresMissionBaselineAfterScriptedVictory()
+    {
+        using Engine engine = await CreateLavaMineEngineAsync();
+        engine.RunHeadlessTicks(2);
 
-        Assert.Equal(MissionState.Won, mission.State);
-        Assert.Equal("extraction_reached", mission.ResultReason);
-        Assert.True(extraction.Reached);
-        Assert.True(mission.CrystalsCollected >= mission.RequiredCrystals);
-        Assert.True(weapons.PrimaryFireCount > 0, "脚本路线应经 WeaponController 公开输入触发至少一次主武器。 ");
-        Assert.True(maxDestroyedBodies > 0, $"脚本路线应触发真实刚体破坏，destroyed={maxDestroyedBodies}。");
-        Assert.True(maxCreatedBodies > 0, $"脚本路线应触发真实刚体重建，created={maxCreatedBodies}。");
-        AssertNoFaultedBehaviours(scene);
-        Assert.Equal(0, scene.ScriptExceptionCount);
+        LavaMineRouteResult route = RunLavaMineScriptedRoute(engine);
+        Assert.Equal(MissionState.Won, route.State);
+        Assert.True(route.ExtractionReached);
+
+        RuntimeControlResult restart = engine.RestartCurrentScene();
+        Assert.True(restart.Success, restart.Message);
+        engine.RunHeadlessTicks(1);
+
+        ScriptScene restartedScene = engine.Context.GetService<ScriptScene>();
+        MissionDirector restartedMission = FindBehaviour<MissionDirector>(restartedScene);
+        ExtractionTrigger restartedExtraction = FindBehaviour<ExtractionTrigger>(restartedScene);
+        WeaponController restartedWeapons = FindBehaviour<WeaponController>(restartedScene);
+
+        Assert.Equal(MissionState.Playing, restartedMission.State);
+        Assert.Equal(0, restartedMission.CrystalsCollected);
+        Assert.Equal(3, restartedMission.RequiredCrystals);
+        Assert.True(restartedMission.RemainingSeconds > restartedMission.TimeLimitSeconds - 1f);
+        Assert.Equal(string.Empty, restartedMission.ResultReason);
+        Assert.False(restartedExtraction.Reached);
+        Assert.Equal(0, restartedWeapons.PrimaryFireCount);
+        AssertNoFaultedBehaviours(restartedScene);
+        Assert.Equal(0, restartedScene.ScriptExceptionCount);
     }
 
     /// <summary>
@@ -362,6 +376,41 @@ public sealed class LavaMineSceneTests
         engine.RegisterScriptAssembly(typeof(DemoProgram).Assembly);
         _ = engine.AttachScriptingFromServices();
         return engine;
+    }
+
+    private static LavaMineRouteResult RunLavaMineScriptedRoute(Engine engine)
+    {
+        ScriptInputApi input = engine.Context.GetService<ScriptInputApi>();
+        ScriptCameraApi camera = engine.Context.GetService<ScriptCameraApi>();
+        DemoWindowScriptedInput scripted = new(input, camera, routeProbe: true);
+        scripted.RegisterPhases(engine.Phases);
+
+        ScriptScene scene = engine.Context.GetService<ScriptScene>();
+        MissionDirector mission = FindBehaviour<MissionDirector>(scene);
+        ExtractionTrigger extraction = FindBehaviour<ExtractionTrigger>(scene);
+        WeaponController weapons = FindBehaviour<WeaponController>(scene);
+        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        int maxDestroyedBodies = 0;
+        int maxCreatedBodies = 0;
+
+        for (int i = 0; i < 1_500 && mission.State == MissionState.Playing; i++)
+        {
+            engine.RunHeadlessTicks(1);
+            maxDestroyedBodies = Math.Max(maxDestroyedBodies, physics.LastDestructionResult.DestroyedBodies);
+            maxCreatedBodies = Math.Max(maxCreatedBodies, physics.LastDestructionResult.CreatedBodies);
+        }
+
+        AssertNoFaultedBehaviours(scene);
+        return new LavaMineRouteResult(
+            mission.State,
+            mission.ResultReason,
+            extraction.Reached,
+            mission.CrystalsCollected,
+            mission.RequiredCrystals,
+            weapons.PrimaryFireCount,
+            maxDestroyedBodies,
+            maxCreatedBodies,
+            scene.ScriptExceptionCount);
     }
 
     private static TBehaviour FindBehaviour<TBehaviour>(ScriptScene scene)
@@ -614,6 +663,17 @@ public sealed class LavaMineSceneTests
         snapshot = default;
         return false;
     }
+
+    private readonly record struct LavaMineRouteResult(
+        MissionState State,
+        string ResultReason,
+        bool ExtractionReached,
+        int CrystalsCollected,
+        int RequiredCrystals,
+        int PrimaryFireCount,
+        int MaxDestroyedBodies,
+        int MaxCreatedBodies,
+        int ScriptExceptionCount);
 
     private static string FindRepositoryRoot()
     {

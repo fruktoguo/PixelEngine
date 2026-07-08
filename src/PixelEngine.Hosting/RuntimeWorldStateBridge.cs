@@ -141,16 +141,11 @@ internal sealed class RuntimeWorldStateBridge(ParticleSystem particles) : IWorld
     }
 
     /// <summary>
-    /// 恢复刚体快照；Physics 后端接入前遇到非空快照明确失败。
+    /// 恢复刚体快照；Physics 后端接入前暂存，接入后按快照替换当前动态刚体集合。
     /// </summary>
     /// <param name="bodies">刚体快照。</param>
     public void RestoreRigidBodies(ReadOnlySpan<SerializationRigidBodySnapshot> bodies)
     {
-        if (bodies.IsEmpty)
-        {
-            return;
-        }
-
         if (_physics is null)
         {
             _pendingRigidBodies.Clear();

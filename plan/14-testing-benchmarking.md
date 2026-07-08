@@ -124,6 +124,8 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 **可玩循环胜负判定**（plan/13 §3.17，功能完整 showcase / 熔岩矿洞逃生 evidence）：headless 驱动 `MissionDirector` / `GameDirector` 状态机，断言 `ObjectiveCrystal×3` / `crystalsCollected/3` + 抵达撤离出口 → Won；玩家死亡 / 熔岩淹没通路 → Lost；分数（用时 + 剩余弹药 + 未受伤）计算正确；`RisingLavaHazard` 上涨速率数据驱动。已落地的 lava-mine 可作为 showcase/evidence 保留，但测试口径不得回退到旧六水晶口径或继续扩内容量；同时不得把「聚焦」误写成缺少主菜单、设置、暂停、胜负、重开、反馈和独立运行闭环。
 
+**Runtime restart 基线恢复**（plan/13 §3.15、plan/18）：正式 `lava-mine.scene` 的 scripted victory 之后调用 `Engine.RestartCurrentScene()`，断言任务导演、出口触发器、武器计数与脚本 fault 状态回到新局基线；Hosting 侧以空刚体快照读档覆盖当前动态刚体，证明 world snapshot 恢复是替换当前 Physics 状态而非叠加旧 body。
+
 **Explode 语义迁移断言更新**：既有 `ExplosiveTool` / `PlayableProjectile` 的「无条件抛射半径内全部 cell」断言迁移为「破坏驱动（Empty 化 + 碎屑，抗性生效）」新语义（与 plan/05 联动），旧翻倍 / 无条件抛射断言随之改写，不留失效断言。
 
 **Damage 平面存档往返逐 cell 等价**（plan/07 契约）：扩展 `SaveLoadRoundTripTests` 覆盖 Damage lane——按 plan/07 裁定为持久 lane 则 save→load 后逐 cell Damage 等价；bump `SaveFormatVersion` 后旧档迁移 Damage=0、material remap 缺失 fallback 后 Damage 清 0；进 `ChunkSnapshot`/`ChunkCodec`（RLE 段）往返一致。

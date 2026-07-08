@@ -816,6 +816,44 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
+    /// 验证覆盖读档会用快照中的刚体集合替换当前 Physics 状态，而不是叠加恢复。
+    /// </summary>
+    [Fact]
+    public void EnginePersistentWorldLoadClearsRuntimeRigidBodiesWhenSnapshotHasNone()
+    {
+        string savePath = Path.Combine(Path.GetTempPath(), $"pixelengine-host-rigidbody-clear-{Guid.NewGuid():N}");
+        try
+        {
+            MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+            using Engine engine = new EngineBuilder()
+                .WithWorkerCount(1)
+                .Build();
+            engine.Context.RegisterService(materials);
+            _ = engine.AttachResidentSimulationWorld(128, 128, particleCapacity: 8);
+            _ = engine.AttachPhysics();
+            engine.SaveWorldToDirectory(savePath);
+
+            ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
+            _ = edit.PaintRect(16, 16, 31, 31, material: 1);
+            PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+            int bodyKey = physics.CreateBodyFromRegion(16, 16, 16, 16);
+            Assert.Equal(0, bodyKey);
+            Assert.Equal(1, physics.PhysicsWorld.ActiveBodyCount);
+
+            _ = engine.LoadWorldFromDirectory(savePath);
+
+            Assert.Equal(0, physics.PhysicsWorld.ActiveBodyCount);
+        }
+        finally
+        {
+            if (Directory.Exists(savePath))
+            {
+                Directory.Delete(savePath, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 Engine world 快照后端也会恢复存活脚本 Behaviour 的字段状态。
     /// </summary>
     [Fact]

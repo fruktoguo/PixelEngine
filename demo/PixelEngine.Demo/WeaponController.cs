@@ -112,6 +112,7 @@ public sealed class WeaponController : Behaviour
     /// <inheritdoc />
     protected override void OnStart()
     {
+        ResetRuntimeState();
         ResolveComponents();
         RegisterGrenadeSpawnSystem();
         LoadCatalog();
@@ -165,6 +166,23 @@ public sealed class WeaponController : Behaviour
         {
             Ammo[i] = Math.Max(0, Catalog.Weapons[i].AmmoMax);
         }
+    }
+
+    private void ResetRuntimeState()
+    {
+        SelectedIndex = 0;
+        Catalog = null;
+        Ammo = [];
+        Heat = 0f;
+        CooldownRemaining = 0f;
+        ReloadRemaining = 0f;
+        IsOverheated = false;
+        PrimaryFireCount = 0;
+        SecondaryFireCount = 0;
+        LastDispatchedKind = default;
+        _pendingGrenade = default;
+        _impactFlash = default;
+        _laserSparkMaterial = MaterialId.Invalid;
     }
 
     private void CoolDown(float dt)
