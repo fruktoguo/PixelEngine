@@ -12,9 +12,7 @@ public sealed class GrenadeProjectile : Behaviour
     private float _fuseRemaining;
     private float _gravity;
     private float _bounce;
-    private float _blastForce;
     private float _impulse;
-    private int _radius;
     private string _impactCue = "explosion.wav";
     private ExplosionFlashEffect _flash;
 
@@ -32,6 +30,16 @@ public sealed class GrenadeProjectile : Behaviour
     /// 当前 Y 坐标。
     /// </summary>
     public float Y { get; private set; }
+
+    /// <summary>
+    /// 当前爆炸半径，已包含武器控制器注入的地形效果倍率。
+    /// </summary>
+    public int Radius { get; private set; }
+
+    /// <summary>
+    /// 当前爆炸强度，已包含武器控制器注入的地形效果倍率。
+    /// </summary>
+    public float BlastForce { get; private set; }
 
     /// <summary>
     /// 初始化投射物状态。
@@ -54,9 +62,9 @@ public sealed class GrenadeProjectile : Behaviour
         _vx = vx;
         _vy = vy;
         _fuseRemaining = Math.Max(0.01f, fuseSeconds);
-        _radius = Math.Max(1, radius);
+        Radius = Math.Max(1, radius);
         _impulse = Math.Max(1f, impulse);
-        _blastForce = Math.Max(_impulse, Math.Max(1f, damage));
+        BlastForce = Math.Max(_impulse, Math.Max(1f, damage));
         _gravity = Math.Max(0f, gravity);
         _bounce = Math.Clamp(bounce, 0f, 0.9f);
         _impactCue = string.IsNullOrWhiteSpace(impactCue) ? "explosion.wav" : impactCue;
@@ -111,15 +119,15 @@ public sealed class GrenadeProjectile : Behaviour
     private void Detonate()
     {
         Exploded = true;
-        Context.World.Explode(X, Y, _radius, _blastForce);
-        _flash.Start(X, Y, _radius, 0xFF_30_80_FF);
+        Context.World.Explode(X, Y, Radius, BlastForce);
+        _flash.Start(X, Y, Radius, 0xFF_30_80_FF);
         _flash.SubmitInitial(Context);
         Context.Audio.PlayAt(_impactCue, X, Y, 0.8f);
         TransientParticleBurst.Emit(
             Context,
             X,
             Y,
-            Math.Clamp(_radius, 4, 24),
+            Math.Clamp(Radius, 4, 24),
             Math.Max(10f, _impulse * 1.5f),
             lifetime: 40);
     }

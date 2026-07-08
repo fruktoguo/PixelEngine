@@ -93,6 +93,7 @@ public sealed class LavaMineSceneTests
         MaterialBrush brush = FindBehaviour<MaterialBrush>(scene);
         brush.InputEnabled = true;
         FindBehaviour<PlayableProjectileTool>(scene).InputEnabled = false;
+        FindBehaviour<WeaponController>(scene).InputEnabled = false;
         CameraFollow follow = FindBehaviour<CameraFollow>(scene);
         follow.Damping = 0f;
         follow.LookaheadX = 0f;
@@ -135,6 +136,7 @@ public sealed class LavaMineSceneTests
         MaterialBrush brush = FindBehaviour<MaterialBrush>(scene);
         brush.InputEnabled = true;
         FindBehaviour<PlayableProjectileTool>(scene).InputEnabled = false;
+        FindBehaviour<WeaponController>(scene).InputEnabled = false;
         CameraFollow follow = FindBehaviour<CameraFollow>(scene);
         follow.Damping = 0f;
         follow.LookaheadX = 0f;

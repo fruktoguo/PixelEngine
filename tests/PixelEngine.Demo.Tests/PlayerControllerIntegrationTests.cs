@@ -1718,6 +1718,10 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal(0, secondary.PrimaryFireCount);
         Assert.Equal(WeaponKind.Grenade, secondary.LastDispatchedKind);
         Assert.Equal(3, secondary.RemainingAmmo);
+        Assert.Equal(30, primary.Radius);
+        Assert.Equal(300f, primary.BlastForce);
+        Assert.Equal(30, secondary.Radius);
+        Assert.Equal(300f, secondary.BlastForce);
         Assert.True(
             secondary.DeltaX > primary.DeltaX * 1.25f,
             $"右键蓄力手雷应比左键普通投掷更快，primary={primary.DeltaX:0.000}, secondary={secondary.DeltaX:0.000}");
@@ -2277,6 +2281,8 @@ public sealed class PlayerControllerIntegrationTests
         input.Update([Key.Digit6], [], mouseX: 0, mouseY: 0, wheelY: 0);
         engine.RunHeadlessTicks(1);
         Assert.Equal("builder", weapons.SelectedWeaponId);
+        Assert.Equal(4f, weapons.TerrainEffectScale);
+        Assert.Equal(10f, weapons.GrenadeTerrainEffectScale);
     }
 
     /// <summary>
@@ -2640,7 +2646,9 @@ public sealed class PlayerControllerIntegrationTests
                 startX,
                 startY,
                 grenade.X - startX,
-                grenade.Y - startY);
+                grenade.Y - startY,
+                grenade.Radius,
+                grenade.BlastForce);
         }
         finally
         {
@@ -2721,7 +2729,9 @@ public sealed class PlayerControllerIntegrationTests
         float StartX,
         float StartY,
         float DeltaX,
-        float DeltaY);
+        float DeltaY,
+        int Radius,
+        float BlastForce);
 
     private sealed class ExplosionFlashProbe : Behaviour
     {

@@ -174,6 +174,48 @@ public sealed unsafe class PhysicsSyncTests
         }
     }
 
+    /// <summary>
+    /// 验证旋转碎块即使中心没有向下线速度，也会在 inverse-sampling 写回前被角色 proxy 截停。
+    /// </summary>
+    [Fact]
+    public void CharacterProxyBlocksRotatingRigidBodyBeforeRestamp()
+    {
+        PhysicsScale.ConfigureBox2DLengthUnits();
+        B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
+        worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
+        B2WorldId worldId = Box2D.b2CreateWorld(in worldDef);
+
+        try
+        {
+            TestChunkSource source = new(new Chunk(new ChunkCoord(0, 0)));
+            CellGrid grid = new(source, MaterialPropsTable.Empty);
+            PhysicsWorld physicsWorld = new();
+            RigidStampRegistry registry = new();
+            PhysicsSystem system = new(worldId, physicsWorld, grid, registry);
+            FillRect(grid, material: 2, minX: 34, minY: 30, maxX: 58, maxY: 38);
+            int bodyKey = system.CreateBodyFromRegion(34, 30, 24, 8);
+            PixelRigidBody body = physicsWorld.GetBody(bodyKey);
+            Box2D.b2Body_SetLinearVelocity(body.BodyId, new B2Vec2 { X = 0f, Y = 0f });
+            Box2D.b2Body_SetAngularVelocity(body.BodyId, 18f);
+
+            CharacterController character = new(grid, new Vector2(42f, 48f), new Vector2(6f, 12f));
+            system.RegisterCharacterProxy(character);
+
+            system.SyncStep(1f / 30f);
+
+            Assert.True(
+                system.LastCharacterProxyContactCount > 0,
+                $"旋转碎块下沿扫到玩家时应被 proxy 记录接触，bodyY={body.PreviousTransform.Position.Y:F2}。");
+            Assert.False(
+                TryFindRigidOwnedInAabb(grid, character.Bounds, out int overlapX, out int overlapY),
+                $"旋转碎块 stamp 不应进入角色 AABB，cell=({overlapX},{overlapY}), bodyY={body.PreviousTransform.Position.Y:F2}。");
+        }
+        finally
+        {
+            Box2D.b2DestroyWorld(worldId);
+        }
+    }
+
     private static BodyLocalMask CreateFilledMask(int width, int height, ushort material, Vector2 origin)
     {
         int area = width * height;

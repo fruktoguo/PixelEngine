@@ -939,7 +939,10 @@ public sealed class PhysicsSystem : IDisposable
             RectI bodyBounds = BodyBoundsToWorld(body.Mask, in transform);
             RectI previousBounds = BodyBoundsToWorld(body.Mask, body.PreviousTransform);
             B2Vec2 velocity = Box2D.b2Body_GetLinearVelocity(body.BodyId);
-            if (velocity.Y <= 0f)
+            float angularVelocity = Box2D.b2Body_GetAngularVelocity(body.BodyId);
+            bool lowerEdgeMovedDown = bodyBounds.MaxY > previousBounds.MaxY;
+            bool canSweepIntoCharacter = velocity.Y > 0f || lowerEdgeMovedDown || MathF.Abs(angularVelocity) > 0.001f;
+            if (!canSweepIntoCharacter)
             {
                 continue;
             }
