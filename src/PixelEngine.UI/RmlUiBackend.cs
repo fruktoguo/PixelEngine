@@ -47,6 +47,8 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
     private int _documentCount;
     private int _visibleScreenCount;
     private int _nextDocumentHandle = 1;
+    private int _viewportWidth;
+    private int _viewportHeight;
     private bool _disposed;
 
     /// <summary>
@@ -114,6 +116,8 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             throw new InvalidOperationException("RmlUi native renderer 创建失败。");
         }
 
+        _viewportWidth = info.Viewport.Width;
+        _viewportHeight = info.Viewport.Height;
         RegisterFontFace(info.FontSelection);
 
         Dirty = true;
@@ -129,6 +133,8 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
         EnsureInitialized();
         viewport.Validate();
         RmlUiNative.RendererSetViewport(_renderer, viewport.Width, viewport.Height);
+        _viewportWidth = viewport.Width;
+        _viewportHeight = viewport.Height;
         Dirty = true;
     }
 
@@ -593,8 +599,30 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             return;
         }
 
+        (int frameWidth, int frameHeight) = ResolveCompositeViewportSize(
+            in context,
+            _viewportWidth,
+            _viewportHeight);
+        if (frameWidth != _viewportWidth || frameHeight != _viewportHeight)
+        {
+            RmlUiNative.RendererSetViewport(_renderer, frameWidth, frameHeight);
+            _viewportWidth = frameWidth;
+            _viewportHeight = frameHeight;
+            Dirty = true;
+        }
+
         RmlUiNative.Render(_renderer);
         Dirty = false;
+    }
+
+    internal static (int Width, int Height) ResolveCompositeViewportSize(
+        in UiPresentContext context,
+        int fallbackWidth,
+        int fallbackHeight)
+    {
+        return context.Target.IsValid
+            ? (context.Target.Width, context.Target.Height)
+            : (fallbackWidth, fallbackHeight);
     }
 
     /// <summary>
