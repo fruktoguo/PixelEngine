@@ -334,6 +334,10 @@ public sealed class LevelDirector : Behaviour
         FillRect(10, floorY, width - 20, height - floorY - 12, _dirt);
         FillRect(10, floorY + 18, width - 20, 16, _stone);
         FillRect(28, floorY - 14, 110, 14, _stone);
+        FillRect(156, floorY - 40, 16, 40, _wood);
+        FillRect(258, floorY - 56, 20, 56, _stone);
+        FillRect(384, floorY - 46, 18, 46, _metal);
+        FillRect(512, floorY - 34, 20, 34, _wood);
         FillRect(168, floorY - 42, 82, 10, _wood);
         FillRect(276, floorY - 74, 92, 10, _metal);
         FillRect(410, floorY - 52, 70, 10, _wood);
@@ -357,6 +361,9 @@ public sealed class LevelDirector : Behaviour
         int floorY = Math.Max(128, LevelHeight) - 72;
         try
         {
+            CreateRigidStructure(156, floorY - 40, 16, 40);
+            CreateRigidStructure(384, floorY - 46, 18, 46);
+            CreateRigidStructure(512, floorY - 34, 20, 34);
             CreateRigidStructure(168, floorY - 42, 82, 10);
             CreateRigidStructure(276, floorY - 74, 92, 10);
             CreateRigidStructure(410, floorY - 52, 70, 10);
@@ -380,10 +387,10 @@ public sealed class LevelDirector : Behaviour
     private void BuildHazards(int height)
     {
         int floorY = height - 72;
-        FillRect(252, floorY - 1, 84, 22, _lava);
-        FillRect(496, floorY - 1, 52, 18, _acid);
-        FillRect(338, floorY - 18, 44, 16, _water);
-        FillRect(188, floorY - 31, 34, 20, _oil);
+        FillRect(196, floorY - 1, 58, 22, _lava);
+        FillRect(318, floorY - 1, 76, 24, _lava);
+        FillRect(458, floorY - 1, 64, 22, _lava);
+        FillRect(552, floorY - 1, 34, 18, _lava);
     }
 
     private void BuildSpawnHazardProbeArea()

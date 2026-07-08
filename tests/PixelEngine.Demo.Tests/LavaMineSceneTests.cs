@@ -14,7 +14,7 @@ namespace PixelEngine.Demo.Tests;
 public sealed class LavaMineSceneTests
 {
     /// <summary>
-    /// 验证默认关卡会通过脚本公开刚体 API 把木桥与金属梁注册为动态刚体。
+    /// 验证默认横向关卡会通过脚本公开刚体 API 把可拆障碍注册为动态刚体。
     /// </summary>
     [Fact]
     public async Task LavaMineSceneRegistersDestructibleWoodAndMetalStructures()
@@ -25,7 +25,7 @@ public sealed class LavaMineSceneTests
         ScriptScene scene = engine.Context.GetService<ScriptScene>();
         LevelDirector director = FindBehaviour<LevelDirector>(scene);
         Assert.True(director.RigidStructuresQueued);
-        Assert.Equal(6, director.RigidStructureCount);
+        Assert.Equal(9, director.RigidStructureCount);
         MaterialBrush brush = FindBehaviour<MaterialBrush>(scene);
         Assert.False(brush.InputEnabled);
         _ = FindBehaviour<PlayableHud>(scene);
@@ -34,19 +34,15 @@ public sealed class LavaMineSceneTests
         _ = FindBehaviour<WeaponController>(scene);
         _ = FindBehaviour<PauseMenu>(scene);
         _ = FindBehaviour<GameUiDemoController>(scene);
-        MissionDirector mission = FindBehaviour<MissionDirector>(scene);
-        RisingHazardDirector hazard = FindBehaviour<RisingHazardDirector>(scene);
-        ExtractionTrigger extraction = FindBehaviour<ExtractionTrigger>(scene);
-        Assert.Equal(3, CountBehaviours<ObjectiveCrystal>(scene));
-        Assert.Equal(3, mission.RequiredCrystals);
-        Assert.Equal(12, hazard.ActiveEmitterCount);
+        GoalTrigger goal = FindBehaviour<GoalTrigger>(scene);
+        Assert.Equal(0, CountBehaviours<MissionDirector>(scene));
+        Assert.Equal(0, CountBehaviours<RisingHazardDirector>(scene));
+        Assert.Equal(0, CountBehaviours<ExtractionTrigger>(scene));
+        Assert.Equal(0, CountBehaviours<ObjectiveCrystal>(scene));
         Assert.Equal(0, CountBehaviours<DemoHud>(scene));
-        Assert.Equal(hazard.ActiveEmitterCount, CountBehaviours<MaterialEmitter>(scene));
         Assert.Equal(0, CountBehaviours<SparkEmitter>(scene));
-        Assert.Equal(0, CountBehaviours<GoalTrigger>(scene));
-        AssertLavaHazardEmittersAreAmbient(scene, hazard.ActiveEmitterCount);
-        Assert.True(extraction.Width >= 80f);
-        Assert.True(extraction.Height >= 260f);
+        Assert.True(goal.Width >= 20f);
+        Assert.True(goal.Height >= 36f);
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
         Assert.True(physics.Gravity.Y > 0f, $"Demo 刚体重力应沿像素坐标正 Y 向下，actual={physics.Gravity}。");
         Assert.True(physics.PhysicsWorld.ActiveBodyCount >= director.RigidStructureCount);
@@ -188,7 +184,7 @@ public sealed class LavaMineSceneTests
     }
 
     /// <summary>
-    /// 验证正式 lava-mine 场景可在 headless 下经公开输入路线采集水晶、触发物理破坏并完成撤离。
+    /// 验证正式 lava-mine 场景可在 headless 下经公开输入横向路线触发物理破坏并抵达终点。
     /// </summary>
     [Fact]
     public async Task LavaMineScriptedRouteCompletesMissionHeadlesslyThroughPublicApis()
@@ -198,10 +194,7 @@ public sealed class LavaMineSceneTests
 
         LavaMineRouteResult route = RunLavaMineScriptedRoute(engine);
 
-        Assert.Equal(MissionState.Won, route.State);
-        Assert.Equal("extraction_reached", route.ResultReason);
-        Assert.True(route.ExtractionReached);
-        Assert.True(route.CrystalsCollected >= route.RequiredCrystals);
+        Assert.True(route.GoalReached);
         Assert.True(route.PrimaryFireCount > 0, "脚本路线应经 WeaponController 公开输入触发至少一次主武器。 ");
         Assert.True(route.MaxDestroyedBodies > 0, $"脚本路线应触发真实刚体破坏，destroyed={route.MaxDestroyedBodies}。");
         Assert.True(route.MaxCreatedBodies > 0, $"脚本路线应触发真实刚体重建，created={route.MaxCreatedBodies}。");
@@ -209,7 +202,7 @@ public sealed class LavaMineSceneTests
     }
 
     /// <summary>
-    /// 验证正式 lava-mine 场景通关后，Runtime 重开会恢复任务、出口和武器计数基线。
+    /// 验证正式 lava-mine 场景通关后，Runtime 重开会恢复终点和武器计数基线。
     /// </summary>
     [Fact]
     public async Task LavaMineRuntimeRestartRestoresMissionBaselineAfterScriptedVictory()
@@ -218,24 +211,17 @@ public sealed class LavaMineSceneTests
         engine.RunHeadlessTicks(2);
 
         LavaMineRouteResult route = RunLavaMineScriptedRoute(engine);
-        Assert.Equal(MissionState.Won, route.State);
-        Assert.True(route.ExtractionReached);
+        Assert.True(route.GoalReached);
 
         RuntimeControlResult restart = engine.RestartCurrentScene();
         Assert.True(restart.Success, restart.Message);
         engine.RunHeadlessTicks(1);
 
         ScriptScene restartedScene = engine.Context.GetService<ScriptScene>();
-        MissionDirector restartedMission = FindBehaviour<MissionDirector>(restartedScene);
-        ExtractionTrigger restartedExtraction = FindBehaviour<ExtractionTrigger>(restartedScene);
+        GoalTrigger restartedGoal = FindBehaviour<GoalTrigger>(restartedScene);
         WeaponController restartedWeapons = FindBehaviour<WeaponController>(restartedScene);
 
-        Assert.Equal(MissionState.Playing, restartedMission.State);
-        Assert.Equal(0, restartedMission.CrystalsCollected);
-        Assert.Equal(3, restartedMission.RequiredCrystals);
-        Assert.True(restartedMission.RemainingSeconds > restartedMission.TimeLimitSeconds - 1f);
-        Assert.Equal(string.Empty, restartedMission.ResultReason);
-        Assert.False(restartedExtraction.Reached);
+        Assert.False(restartedGoal.Reached);
         Assert.Equal(0, restartedWeapons.PrimaryFireCount);
         AssertNoFaultedBehaviours(restartedScene);
         Assert.Equal(0, restartedScene.ScriptExceptionCount);
@@ -386,14 +372,13 @@ public sealed class LavaMineSceneTests
         scripted.RegisterPhases(engine.Phases);
 
         ScriptScene scene = engine.Context.GetService<ScriptScene>();
-        MissionDirector mission = FindBehaviour<MissionDirector>(scene);
-        ExtractionTrigger extraction = FindBehaviour<ExtractionTrigger>(scene);
+        GoalTrigger goal = FindBehaviour<GoalTrigger>(scene);
         WeaponController weapons = FindBehaviour<WeaponController>(scene);
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
         int maxDestroyedBodies = 0;
         int maxCreatedBodies = 0;
 
-        for (int i = 0; i < 1_500 && mission.State == MissionState.Playing; i++)
+        for (int i = 0; i < 2_400 && !goal.Reached; i++)
         {
             engine.RunHeadlessTicks(1);
             maxDestroyedBodies = Math.Max(maxDestroyedBodies, physics.LastDestructionResult.DestroyedBodies);
@@ -402,11 +387,7 @@ public sealed class LavaMineSceneTests
 
         AssertNoFaultedBehaviours(scene);
         return new LavaMineRouteResult(
-            mission.State,
-            mission.ResultReason,
-            extraction.Reached,
-            mission.CrystalsCollected,
-            mission.RequiredCrystals,
+            goal.Reached,
             weapons.PrimaryFireCount,
             maxDestroyedBodies,
             maxCreatedBodies,
@@ -446,30 +427,6 @@ public sealed class LavaMineSceneTests
         }
 
         return count;
-    }
-
-    private static void AssertLavaHazardEmittersAreAmbient(ScriptScene scene, int expectedCount)
-    {
-        int count = 0;
-        foreach (ScriptEntityInspection entity in scene.CaptureInspectionSnapshot())
-        {
-            foreach (ScriptComponentInspection component in entity.Components)
-            {
-                if (component.Behaviour is not MaterialEmitter emitter)
-                {
-                    continue;
-                }
-
-                count++;
-                Assert.Equal("lava", emitter.MaterialName);
-                Assert.Equal(1, emitter.ParticleCount);
-                Assert.True(emitter.ParticleLifetime <= 34, $"熔岩喷口粒子寿命不应像爆炸残留一样长，actual={emitter.ParticleLifetime}。");
-                Assert.True(emitter.LightRadius <= 22f, $"熔岩喷口持续光半径应保持环境级，actual={emitter.LightRadius}。");
-                Assert.True(emitter.LightIntensity <= 0.28f, $"熔岩喷口持续光强度应保持环境级，actual={emitter.LightIntensity}。");
-            }
-        }
-
-        Assert.Equal(expectedCount, count);
     }
 
     private static void AssertNoFaultedBehaviours(ScriptScene scene)
@@ -665,11 +622,7 @@ public sealed class LavaMineSceneTests
     }
 
     private readonly record struct LavaMineRouteResult(
-        MissionState State,
-        string ResultReason,
-        bool ExtractionReached,
-        int CrystalsCollected,
-        int RequiredCrystals,
+        bool GoalReached,
         int PrimaryFireCount,
         int MaxDestroyedBodies,
         int MaxCreatedBodies,

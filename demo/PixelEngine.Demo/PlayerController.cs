@@ -1,4 +1,5 @@
 using PixelEngine.Scripting;
+using PixelEngine.Simulation;
 
 namespace PixelEngine.Demo;
 
@@ -14,7 +15,9 @@ public sealed class PlayerController : Behaviour
     private float _coyoteTimer;
     private float _jumpBufferTimer;
     private float _footstepTimer;
+    private float _rigidImpactCooldown;
     private Transform? _transform;
+    private PlayerHealth? _health;
 
     /// <summary>
     /// 出生点 X 坐标。
@@ -102,6 +105,21 @@ public sealed class PlayerController : Behaviour
     public float FootstepIntervalSeconds { get; set; } = 0.18f;
 
     /// <summary>
+    /// 动态刚体碎块主动压入玩家 AABB 时的撞击伤害。
+    /// </summary>
+    public float RigidImpactDamage { get; set; } = 35f;
+
+    /// <summary>
+    /// 动态刚体碎块撞击伤害冷却时间，单位秒。
+    /// </summary>
+    public float RigidImpactCooldownSeconds { get; set; } = 0.25f;
+
+    /// <summary>
+    /// 被动态碎块压入后寻找最近安全 AABB 位置的最大距离，单位 cell。
+    /// </summary>
+    public int RigidOverlapResolveDistance { get; set; } = 18;
+
+    /// <summary>
     /// 最近一次角色状态。
     /// </summary>
     public CharacterState State { get; private set; }
@@ -127,6 +145,7 @@ public sealed class PlayerController : Behaviour
         _coyoteTimer = 0f;
         _jumpBufferTimer = 0f;
         _footstepTimer = 0f;
+        _rigidImpactCooldown = 0f;
         State = Context.Character.SetPosition(_body, SpawnX, SpawnY);
         SyncTransform();
     }
@@ -135,6 +154,7 @@ public sealed class PlayerController : Behaviour
     protected override void OnStart()
     {
         EnsureBody();
+        Respawn();
     }
 
     /// <inheritdoc />
@@ -146,6 +166,8 @@ public sealed class PlayerController : Behaviour
         }
 
         EnsureBody();
+        ResolveHealth();
+        _rigidImpactCooldown = MathF.Max(0f, _rigidImpactCooldown - dt);
         CharacterState previousState = State;
         State = Context.Character.GetState(_body);
         ResolveVelocityAfterCollision(State);
@@ -170,6 +192,7 @@ public sealed class PlayerController : Behaviour
         CharacterState moved = Context.Character.MoveNow(_body, dx, dy);
         ResolveVelocityAfterCollision(moved);
         State = moved;
+        ResolveRigidOwnedOverlap();
         SyncTransform();
     }
 
@@ -199,6 +222,19 @@ public sealed class PlayerController : Behaviour
         }
 
         _transform.SetPosition(CenterX, CenterY);
+    }
+
+    private void ResolveHealth()
+    {
+        if (_health is not null)
+        {
+            return;
+        }
+
+        if (Entity.TryGetComponent(out PlayerHealth health))
+        {
+            _health = health;
+        }
     }
 
     private void ApplyHorizontal(float axis, float dt)
@@ -272,6 +308,162 @@ public sealed class PlayerController : Behaviour
         }
     }
 
+    private void ResolveRigidOwnedOverlap()
+    {
+        if (!TryGetRigidOwnedOverlap(State.X, State.Y, out RigidOverlap overlap))
+        {
+            return;
+        }
+
+        if (TryFindSafePosition(State.X, State.Y, in overlap, out float safeX, out float safeY))
+        {
+            State = Context.Character.SetPosition(_body, safeX, safeY);
+            _velocityX = 0f;
+            if (overlap.CenterY < CenterY && _velocityY < 0f)
+            {
+                _velocityY = 0f;
+            }
+            else if (overlap.CenterY >= CenterY && _velocityY > 0f)
+            {
+                _velocityY = 0f;
+            }
+        }
+
+        ApplyRigidImpactDamage();
+    }
+
+    private bool TryFindSafePosition(float currentX, float currentY, in RigidOverlap overlap, out float safeX, out float safeY)
+    {
+        int maxDistance = Math.Clamp(RigidOverlapResolveDistance, 1, 64);
+        int verticalAway = overlap.CenterY < CenterY ? 1 : -1;
+        int horizontalAway = overlap.CenterX < CenterX ? 1 : -1;
+        for (int distance = 1; distance <= maxDistance; distance++)
+        {
+            ReadOnlySpan<(int X, int Y)> candidates =
+            [
+                (0, verticalAway * distance),
+                (horizontalAway * distance, 0),
+                (0, -verticalAway * distance),
+                (-horizontalAway * distance, 0),
+                (horizontalAway * distance, verticalAway * distance),
+                (-horizontalAway * distance, verticalAway * distance),
+            ];
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                float candidateX = currentX + candidates[i].X;
+                float candidateY = currentY + candidates[i].Y;
+                if (!OverlapsSolid(candidateX, candidateY))
+                {
+                    safeX = candidateX;
+                    safeY = candidateY;
+                    return true;
+                }
+            }
+        }
+
+        safeX = currentX;
+        safeY = currentY;
+        return false;
+    }
+
+    private void ApplyRigidImpactDamage()
+    {
+        if (_rigidImpactCooldown > 0f || RigidImpactDamage <= 0f)
+        {
+            return;
+        }
+
+        ResolveHealth();
+        _health?.ApplyExternalDamage(RigidImpactDamage);
+        Context.Audio.PlayAt("player_hurt.wav", CenterX, CenterY, 0.85f);
+        _rigidImpactCooldown = MathF.Max(0.01f, RigidImpactCooldownSeconds);
+    }
+
+    private bool TryGetRigidOwnedOverlap(float x, float y, out RigidOverlap overlap)
+    {
+        int minX = (int)MathF.Floor(x + 0.05f);
+        int minY = (int)MathF.Floor(y + 0.05f);
+        int maxX = (int)MathF.Ceiling(x + Width - 0.05f) - 1;
+        int maxY = (int)MathF.Ceiling(y + Height - 0.05f) - 1;
+        int count = 0;
+        int sumX = 0;
+        int sumY = 0;
+        int rigidMinX = int.MaxValue;
+        int rigidMinY = int.MaxValue;
+        int rigidMaxX = int.MinValue;
+        int rigidMaxY = int.MinValue;
+        for (int cy = minY; cy <= maxY; cy++)
+        {
+            for (int cx = minX; cx <= maxX; cx++)
+            {
+                if (!Context.Cells.IsRigidOwned(cx, cy))
+                {
+                    continue;
+                }
+
+                count++;
+                sumX += cx;
+                sumY += cy;
+                rigidMinX = Math.Min(rigidMinX, cx);
+                rigidMinY = Math.Min(rigidMinY, cy);
+                rigidMaxX = Math.Max(rigidMaxX, cx);
+                rigidMaxY = Math.Max(rigidMaxY, cy);
+            }
+        }
+
+        if (count == 0)
+        {
+            overlap = default;
+            return false;
+        }
+
+        overlap = new RigidOverlap(
+            sumX / (float)count,
+            sumY / (float)count,
+            rigidMinX,
+            rigidMinY,
+            rigidMaxX,
+            rigidMaxY);
+        return true;
+    }
+
+    private bool OverlapsSolid(float x, float y)
+    {
+        int minX = (int)MathF.Floor(x + 0.05f);
+        int minY = (int)MathF.Floor(y + 0.05f);
+        int maxX = (int)MathF.Ceiling(x + Width - 0.05f) - 1;
+        int maxY = (int)MathF.Ceiling(y + Height - 0.05f) - 1;
+        for (int cy = minY; cy <= maxY; cy++)
+        {
+            for (int cx = minX; cx <= maxX; cx++)
+            {
+                if (IsCharacterBlockingCell(cx, cy))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsCharacterBlockingCell(int x, int y)
+    {
+        if (Context.Cells.IsRigidOwned(x, y))
+        {
+            return true;
+        }
+
+        MaterialId material = Context.Cells.GetMaterial(x, y);
+        if (!material.IsValid || material.Value == 0)
+        {
+            return false;
+        }
+
+        MaterialInfo info = Context.Materials.GetInfo(material);
+        return info.CellType is CellType.Solid or CellType.Powder;
+    }
+
     private void EmitMovementAudio(in CharacterState previous, in CharacterState current, float dt)
     {
         if (!previous.OnGround && current.OnGround && current.AppliedDeltaY >= 0f)
@@ -305,4 +497,12 @@ public sealed class PlayerController : Behaviour
     {
         return Math.Clamp(value, -31.5f, 31.5f);
     }
+
+    private readonly record struct RigidOverlap(
+        float CenterX,
+        float CenterY,
+        int MinX,
+        int MinY,
+        int MaxX,
+        int MaxY);
 }

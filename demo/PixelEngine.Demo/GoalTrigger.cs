@@ -96,6 +96,9 @@ public sealed class GoalTrigger : Behaviour
     /// <inheritdoc />
     protected override void OnStart()
     {
+        _player = null;
+        Reached = false;
+        _victoryStatus = string.Empty;
         ResolveMaterial();
         _ = TryResolvePlayer();
     }

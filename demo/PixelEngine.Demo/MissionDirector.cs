@@ -50,7 +50,7 @@ public readonly struct MineYieldEvent(int cellX, int cellY, ushort materialId, u
 }
 
 /// <summary>
-/// 熔岩矿洞逃生任务导演，负责水晶进度、时限、水位、胜负和计分。
+/// 熔岩矿洞逃生任务导演，负责水晶进度、时限、熔岩线、胜负和计分。
 /// </summary>
 public sealed class MissionDirector : Behaviour
 {
@@ -226,7 +226,7 @@ public sealed class MissionDirector : Behaviour
         }
 
         gui.Text($"水晶 {CrystalsCollected}/{Math.Max(1, RequiredCrystals)}   分数 {Score}");
-        gui.Text($"剩余时间 {RemainingSeconds:0}s   熔岩水位 {LavaSurfaceY:0}");
+        gui.Text($"剩余时间 {RemainingSeconds:0}s   熔岩线 {LavaSurfaceY:0}");
         if (!string.IsNullOrWhiteSpace(ResultReason))
         {
             gui.Text($"原因 {ResultReason}");

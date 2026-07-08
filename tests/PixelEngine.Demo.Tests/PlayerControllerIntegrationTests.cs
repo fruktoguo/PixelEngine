@@ -1036,6 +1036,7 @@ public sealed class PlayerControllerIntegrationTests
         Assert.True(materials.TryGetId("stone", out ushort stone));
         using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials);
         FillRect(grid, stone, minX: 16, minY: 12, maxX: 21, maxY: 17);
+        int stoneBefore = CountMaterial(grid, stone, minX: 16, minY: 12, maxX: 20, maxY: 16);
 
         GrenadeProjectile grenade = scene.CreateEntity().AddComponent<GrenadeProjectile>();
         grenade.Initialize(
@@ -1054,9 +1055,9 @@ public sealed class PlayerControllerIntegrationTests
         engine.RunHeadlessTicks(2);
 
         Assert.True(grenade.Exploded);
-        Assert.Equal(stone, grid.MaterialAt(18, 14));
-        Assert.Equal(16, grid.DamageAt(18, 14));
-        Assert.Equal(0, engine.Context.GetService<ParticleSystem>().ActiveCount);
+        Assert.True(CountMaterial(grid, stone, minX: 16, minY: 12, maxX: 20, maxY: 16) < stoneBefore);
+        Assert.True(grid.DamageAt(18, 14) <= 16);
+        Assert.True(engine.Context.GetService<ParticleSystem>().ActiveCount > 0);
     }
 
     /// <summary>
@@ -1114,6 +1115,75 @@ public sealed class PlayerControllerIntegrationTests
     {
         AssertPlayerStandsOnDroppedRigidOwnedStamp("wood");
         AssertPlayerStandsOnDroppedRigidOwnedStamp("metal");
+    }
+
+    /// <summary>
+    /// 验证动态刚体 stamp 主动压入玩家 AABB 时，玩家会被挤出并受到撞击伤害，而不是让碎块直接穿过。
+    /// </summary>
+    [Fact]
+    public void PlayerTakesDamageAndResolvesOutWhenRigidOwnedStampOverlapsFromAbove()
+    {
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials);
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 30f;
+        player.SpawnY = 30f;
+        player.RigidImpactDamage = 20f;
+        player.RigidImpactCooldownSeconds = 1f;
+        PlayerHealth health = entity.AddComponent<PlayerHealth>();
+        FillFloor(grid, stone, y: 50, x0: 0, x1: 96, rigidOwned: false);
+
+        engine.RunHeadlessTicks(2);
+        float initialHealth = health.Health;
+        FillRigidRect(grid, stone, minX: 29, minY: 28, maxX: 38, maxY: 36);
+        engine.RunHeadlessTicks(1);
+
+        Assert.True(health.Health < initialHealth, $"碎块压入时应造成伤害，health={health.Health}, initial={initialHealth}");
+        Assert.False(PlayerOverlapsRigidOwned(grid, player.State), $"玩家应被推出 RigidOwned 重叠区域，state={Describe(player.State)}");
+        Assert.True(player.State.Y >= 36f, $"上方碎块压入时应优先把玩家向下推出，state={Describe(player.State)}");
+    }
+
+    /// <summary>
+    /// 验证经真实 Physics 刚体路径下落的碎块 stamp 到玩家区域时，会触发玩家侧压入解算和伤害。
+    /// </summary>
+    [Fact]
+    public void PlayerTakesDamageWhenDroppedRigidBodyStampFallsThroughCharacterAabb()
+    {
+        MaterialTable materials = DemoMaterials(destructibleSolids: false);
+        Assert.True(materials.TryGetId("wood", out ushort wood));
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials);
+        FillFloor(grid, stone, y: 60, x0: 0, x1: 96, rigidOwned: false);
+        FillRect(grid, wood, minX: 36, minY: 22, maxX: 56, maxY: 30);
+        RigidBodyProbe bodyProbe = scene.CreateEntity().AddComponent<RigidBodyProbe>();
+        bodyProbe.X = 36;
+        bodyProbe.Y = 22;
+        bodyProbe.Width = 20;
+        bodyProbe.Height = 8;
+
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 42f;
+        player.SpawnY = 48f;
+        player.RigidImpactDamage = 12f;
+        player.RigidImpactCooldownSeconds = 1f;
+        PlayerHealth health = entity.AddComponent<PlayerHealth>();
+
+        engine.RunHeadlessTicks(2);
+        float initialHealth = health.Health;
+        for (int i = 0; i < 160 && health.Health >= initialHealth; i++)
+        {
+            engine.RunHeadlessTicks(1);
+        }
+
+        Assert.True(bodyProbe.Created, "测试碎块应经公开 Bodies.CreateFromRegion 创建。");
+        Assert.True(bodyProbe.HasTransform, "测试碎块应进入真实 Physics 刚体路径。");
+        Assert.True(health.Health < initialHealth, $"真实下落刚体 stamp 压入玩家时应造成伤害，health={health.Health}, initial={initialHealth}。");
+        Assert.False(PlayerOverlapsRigidOwned(grid, player.State), $"玩家应被推出真实下落 RigidOwned stamp，state={Describe(player.State)}");
     }
 
     /// <summary>
@@ -2777,6 +2847,38 @@ public sealed class PlayerControllerIntegrationTests
                 grid.FlagsAt(x, y) = default;
             }
         }
+    }
+
+    private static void FillRigidRect(CellGrid grid, ushort material, int minX, int minY, int maxX, int maxY)
+    {
+        for (int y = minY; y < maxY; y++)
+        {
+            for (int x = minX; x < maxX; x++)
+            {
+                grid.MaterialAt(x, y) = material;
+                grid.FlagsAt(x, y) = CellFlags.RigidOwned;
+            }
+        }
+    }
+
+    private static bool PlayerOverlapsRigidOwned(CellGrid grid, in CharacterState state)
+    {
+        int minX = (int)MathF.Floor(state.X + 0.05f);
+        int minY = (int)MathF.Floor(state.Y + 0.05f);
+        int maxX = (int)MathF.Ceiling(state.X + state.Width - 0.05f) - 1;
+        int maxY = (int)MathF.Ceiling(state.Y + state.Height - 0.05f) - 1;
+        for (int y = minY; y <= maxY; y++)
+        {
+            for (int x = minX; x <= maxX; x++)
+            {
+                if (CellFlags.Has(grid.FlagsAt(x, y), CellFlags.RigidOwned))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static void FillSteppedPile(CellGrid grid, ushort material, int startX, int endX, int baseY)
