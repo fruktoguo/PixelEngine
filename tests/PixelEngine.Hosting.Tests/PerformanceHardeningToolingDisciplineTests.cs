@@ -5463,6 +5463,53 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 AOT SIMD probe markdown 报告自身必须声明与 manifest 一致的 simdProbeKind。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsSimdProbeReportKindMismatch()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-simd-kind-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject node = rootNode["artifacts"]!["win-arm64"]!["aot"]!.AsObject();
+            string simdProbe = (string)node["simdProbe"]!;
+            string report = File.ReadAllText(simdProbe).Replace(
+                "| simdProbeKind | arm64_neon |",
+                "| simdProbeKind | x64_ymm_zmm |",
+                StringComparison.Ordinal);
+            File.WriteAllText(simdProbe, report);
+            node["simdProbeSha256"] = GetSha256(simdProbe);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "simd-kind-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string preflightReport = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("blocked_missing_release_scope_evidence", result.Output + preflightReport, StringComparison.Ordinal);
+            Assert.Contains("artifacts.win-arm64.aot.simdProbe 报告 simdProbeKind 必须为 arm64_neon，实际为 x64_ymm_zmm", preflightReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", preflightReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 CA 最内层邻居访问经 3x3 窗口基址与 Unsafe.Add 漫游，不在热更新器内直接数组索引。
     /// </summary>
     [Fact]
@@ -5718,11 +5765,23 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
                 if (channel == "aot")
                 {
+                    string simdProbeKind = rid.EndsWith("-x64", StringComparison.Ordinal) ? "x64_ymm_zmm" : "arm64_neon";
                     string simdExtra = rid.EndsWith("-x64", StringComparison.Ordinal) ? "SIMD evidence contains ymm and zmm." : "SIMD evidence contains NEON.";
-                    string simd = WriteReleaseJobEvidence(evidenceRoot, rid, channel, "simd", "success", simdExtra);
+                    string simd = WriteMarkdownEvidence(
+                        Path.Combine(evidenceRoot, $"{rid}-{channel}-simd.md"),
+                        new Dictionary<string, string>
+                        {
+                            ["rid"] = rid,
+                            ["channel"] = channel,
+                            ["run_id"] = "1",
+                            ["sha"] = "abc",
+                            ["conclusion"] = "success",
+                            ["simdProbeKind"] = simdProbeKind,
+                        },
+                        simdExtra);
                     node["simdProbe"] = simd;
                     node["simdProbeSha256"] = GetSha256(simd);
-                    node["simdProbeKind"] = rid.EndsWith("-x64", StringComparison.Ordinal) ? "x64_ymm_zmm" : "arm64_neon";
+                    node["simdProbeKind"] = simdProbeKind;
                 }
 
                 if (rid.StartsWith("osx-", StringComparison.Ordinal))

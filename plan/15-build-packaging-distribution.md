@@ -95,7 +95,7 @@
 - [!] 最终 release 预检命令：`pwsh tools/release-evidence-preflight.ps1 -Manifest <release-evidence.json> -ActiveRids <active-rids> -ExpectedPackageCount <n>`；`tools/release-evidence-preflight.ps1|.sh` 为等价入口，只接受 tag push 的 Release workflow 证据，必须在 tag release 证据齐全后才能解除阻塞。
 - [!] 最终签名证据路径：macOS `codesign`、`notarytool`、`stapler`、`spctl` 报告仍缺，不得勾选 macOS 完成。
 - [!] 最终上传证据路径：GitHub Release upload markdown 必须列出 `uploaded_asset_count=packageCount+1`、全部 package asset hash 和唯一 `SHA256SUMS` hash。
-- [!] 最终 SIMD 证据路径：AOT 探针报告必须按 x64/arm64 区分 `simdProbeKind`，非 x64 skip 不能冒充 arm64 NEON 证明。
+- [!] 最终 SIMD 证据路径：release manifest 与 AOT 探针报告都必须按 x64/arm64 区分并声明 `simdProbeKind`，非 x64 skip 或报告/manifest 口径不一致不能冒充 arm64 NEON 证明。
 
 ---
 

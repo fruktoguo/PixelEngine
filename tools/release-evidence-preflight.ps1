@@ -397,6 +397,15 @@ function Test-AotSimdEvidence {
         return
     }
 
+    $reportValues = Read-MarkdownEvidenceTable -Path $resolved
+    $reportKind = if ($reportValues.ContainsKey("simdProbeKind")) { [string]$reportValues["simdProbeKind"] } else { "" }
+    if ([string]::IsNullOrWhiteSpace($reportKind)) {
+        $Missing.Add("artifacts.$Rid.aot.simdProbe 报告缺少 simdProbeKind 字段，必须为 $expectedKind")
+    }
+    elseif (-not [string]::Equals($reportKind, $expectedKind, [StringComparison]::Ordinal)) {
+        $Missing.Add("artifacts.$Rid.aot.simdProbe 报告 simdProbeKind 必须为 $expectedKind，实际为 $reportKind")
+    }
+
     $content = Get-Content -Raw -LiteralPath $resolved
     if ($content.Contains("skip", [StringComparison]::OrdinalIgnoreCase) -or
         $content.Contains("skipped", [StringComparison]::OrdinalIgnoreCase)) {
