@@ -7,6 +7,7 @@ internal sealed class GameViewUiPresentTargetProvider(
     Func<PixelEngine.Editor.EditorMode> modeProvider,
     Func<GameViewViewportSnapshot> viewportProvider,
     Func<Vector2> panelOriginFramebufferProvider,
+    Func<Vector2> framebufferScaleProvider,
     Func<bool> visibleProvider) : IUiPresentTargetProvider
 {
     private readonly Func<PixelEngine.Editor.EditorMode> _modeProvider =
@@ -15,6 +16,8 @@ internal sealed class GameViewUiPresentTargetProvider(
         viewportProvider ?? throw new ArgumentNullException(nameof(viewportProvider));
     private readonly Func<Vector2> _panelOriginFramebufferProvider =
         panelOriginFramebufferProvider ?? throw new ArgumentNullException(nameof(panelOriginFramebufferProvider));
+    private readonly Func<Vector2> _framebufferScaleProvider =
+        framebufferScaleProvider ?? throw new ArgumentNullException(nameof(framebufferScaleProvider));
     private readonly Func<bool> _visibleProvider =
         visibleProvider ?? throw new ArgumentNullException(nameof(visibleProvider));
 
@@ -26,6 +29,9 @@ internal sealed class GameViewUiPresentTargetProvider(
             return false;
         }
 
-        return _viewportProvider().TryCreateUiPresentTarget(_panelOriginFramebufferProvider(), out target);
+        return _viewportProvider().TryCreateUiPresentTarget(
+            _panelOriginFramebufferProvider(),
+            _framebufferScaleProvider(),
+            out target);
     }
 }

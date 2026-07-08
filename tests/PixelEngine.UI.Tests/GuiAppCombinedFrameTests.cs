@@ -19,9 +19,11 @@ public sealed class GuiAppCombinedFrameTests
             800,
             600,
             _ => calls.Add("managed"),
-            _ => calls.Add("script"));
+            _ => calls.Add("script"),
+            framebufferScaleX: 2f,
+            framebufferScaleY: 1.5f);
 
-        Assert.Equal(["initialize", "new", "managed", "script", "render"], calls);
+        Assert.Equal(["initialize", "new:800x600@2x1.5", "managed", "script", "render"], calls);
     }
 
     private sealed class FakeGuiBackend(List<string> calls) : IGuiImGuiBackend
@@ -35,9 +37,9 @@ public sealed class GuiAppCombinedFrameTests
             _calls.Add("initialize");
         }
 
-        public void NewFrame(float deltaSeconds, int width, int height)
+        public void NewFrame(float deltaSeconds, int width, int height, float framebufferScaleX, float framebufferScaleY)
         {
-            _calls.Add("new");
+            _calls.Add($"new:{width}x{height}@{framebufferScaleX}x{framebufferScaleY}");
         }
 
         public void Render()

@@ -89,7 +89,10 @@ internal readonly record struct GameViewViewportSnapshot(
         return true;
     }
 
-    public bool TryCreateUiPresentTarget(Vector2 panelOriginFramebuffer, out UiPresentTarget target)
+    public bool TryCreateUiPresentTarget(
+        Vector2 panelOriginFramebuffer,
+        Vector2 framebufferScale,
+        out UiPresentTarget target)
     {
         if (!IsValid || !ImageRect.IsValid)
         {
@@ -97,15 +100,22 @@ internal readonly record struct GameViewViewportSnapshot(
             return false;
         }
 
-        float left = panelOriginFramebuffer.X + ImageRect.X;
-        float top = panelOriginFramebuffer.Y + ImageRect.Y;
-        float right = left + ImageRect.Width;
-        float bottom = top + ImageRect.Height;
+        float scaleX = NormalizeScale(framebufferScale.X);
+        float scaleY = NormalizeScale(framebufferScale.Y);
+        float left = panelOriginFramebuffer.X + (ImageRect.X * scaleX);
+        float top = panelOriginFramebuffer.Y + (ImageRect.Y * scaleY);
+        float right = left + (ImageRect.Width * scaleX);
+        float bottom = top + (ImageRect.Height * scaleY);
         int x = (int)MathF.Floor(left);
         int y = (int)MathF.Floor(top);
         int width = Math.Max(1, (int)MathF.Ceiling(right) - x);
         int height = Math.Max(1, (int)MathF.Ceiling(bottom) - y);
-        target = new UiPresentTarget(x, y, width, height, 1f);
+        target = new UiPresentTarget(x, y, width, height, MathF.Max(scaleX, scaleY));
         return true;
+    }
+
+    private static float NormalizeScale(float scale)
+    {
+        return float.IsFinite(scale) && scale > 0f ? scale : 1f;
     }
 }

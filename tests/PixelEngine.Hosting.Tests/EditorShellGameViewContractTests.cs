@@ -480,13 +480,14 @@ public sealed class EditorShellGameViewContractTests
             imageMinPanel: new Vector2(10.25f, 20.5f),
             availablePanelSize: new Vector2(160f, 160f));
 
-        Assert.True(snapshot.TryCreateUiPresentTarget(new Vector2(100.5f, 40.25f), out UiPresentTarget target));
+        Assert.True(snapshot.TryCreateUiPresentTarget(new Vector2(201f, 80.5f), new Vector2(2f, 2f), out UiPresentTarget target));
 
-        Assert.Equal(110, target.X);
-        Assert.Equal(60, target.Y);
-        Assert.Equal(161, target.Width);
-        Assert.Equal(91, target.Height);
-        Assert.Equal(target.Scissor, new UiScissorRect(110, 60, 161, 91));
+        Assert.Equal(221, target.X);
+        Assert.Equal(121, target.Y);
+        Assert.Equal(321, target.Width);
+        Assert.Equal(181, target.Height);
+        Assert.Equal(2f, target.DpiScale);
+        Assert.Equal(target.Scissor, new UiScissorRect(221, 121, 321, 181));
         Assert.True(target.IsValid);
     }
 
@@ -505,6 +506,7 @@ public sealed class EditorShellGameViewContractTests
             () => PixelEngine.Editor.EditorMode.Play,
             () => snapshot,
             () => new Vector2(100f, 40f),
+            () => Vector2.One,
             () => true);
 
         Assert.True(provider.TryGetPresentTarget(out UiPresentTarget target));
@@ -514,6 +516,7 @@ public sealed class EditorShellGameViewContractTests
             () => PixelEngine.Editor.EditorMode.Play,
             () => snapshot,
             () => new Vector2(100f, 40f),
+            () => Vector2.One,
             () => false);
 
         Assert.False(provider.TryGetPresentTarget(out _));
@@ -522,6 +525,7 @@ public sealed class EditorShellGameViewContractTests
             () => PixelEngine.Editor.EditorMode.Edit,
             () => snapshot,
             () => new Vector2(100f, 40f),
+            () => Vector2.One,
             () => true);
 
         Assert.False(provider.TryGetPresentTarget(out _));

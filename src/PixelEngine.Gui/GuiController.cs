@@ -48,10 +48,15 @@ public sealed class GuiController
     /// <summary>
     /// 开始一帧 ImGui。
     /// </summary>
-    public void NewFrame(float deltaSeconds, int width, int height)
+    /// <param name="deltaSeconds">距离上一帧的真实秒数。</param>
+    /// <param name="width">平台窗口逻辑宽度。</param>
+    /// <param name="height">平台窗口逻辑高度。</param>
+    /// <param name="framebufferScaleX">逻辑坐标到默认 framebuffer 坐标的 X 轴缩放。</param>
+    /// <param name="framebufferScaleY">逻辑坐标到默认 framebuffer 坐标的 Y 轴缩放。</param>
+    public void NewFrame(float deltaSeconds, int width, int height, float framebufferScaleX = 1f, float framebufferScaleY = 1f)
     {
         ThrowIfNotInitialized();
-        Backend.NewFrame(deltaSeconds, width, height);
+        Backend.NewFrame(deltaSeconds, width, height, framebufferScaleX, framebufferScaleY);
     }
 
     /// <summary>

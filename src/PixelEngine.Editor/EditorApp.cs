@@ -144,31 +144,52 @@ public sealed class EditorApp : IDisposable
     /// 绘制一帧 Editor UI。
     /// </summary>
     /// <param name="deltaSeconds">帧间隔秒数。</param>
-    /// <param name="width">framebuffer 宽度。</param>
-    /// <param name="height">framebuffer 高度。</param>
+    /// <param name="width">平台窗口逻辑宽度。</param>
+    /// <param name="height">平台窗口逻辑高度。</param>
     /// <param name="counters">诊断计数器。</param>
     /// <param name="frameIndex">当前帧索引。</param>
-    public void DrawFrame(float deltaSeconds, int width, int height, EngineCounters counters, long frameIndex)
-    {
-        DrawFrame(deltaSeconds, width, height, counters, frameIndex, EditorPerformanceSnapshot.FromCounters(counters));
-    }
-
-    /// <summary>
-    /// 绘制一帧 Editor UI。
-    /// </summary>
-    /// <param name="deltaSeconds">帧间隔秒数。</param>
-    /// <param name="width">framebuffer 宽度。</param>
-    /// <param name="height">framebuffer 高度。</param>
-    /// <param name="counters">诊断计数器。</param>
-    /// <param name="frameIndex">当前帧索引。</param>
-    /// <param name="performance">性能 HUD 只读诊断快照。</param>
+    /// <param name="framebufferScaleX">逻辑坐标到默认 framebuffer 坐标的 X 轴缩放。</param>
+    /// <param name="framebufferScaleY">逻辑坐标到默认 framebuffer 坐标的 Y 轴缩放。</param>
     public void DrawFrame(
         float deltaSeconds,
         int width,
         int height,
         EngineCounters counters,
         long frameIndex,
-        EditorPerformanceSnapshot performance)
+        float framebufferScaleX = 1f,
+        float framebufferScaleY = 1f)
+    {
+        DrawFrame(
+            deltaSeconds,
+            width,
+            height,
+            counters,
+            frameIndex,
+            EditorPerformanceSnapshot.FromCounters(counters),
+            framebufferScaleX,
+            framebufferScaleY);
+    }
+
+    /// <summary>
+    /// 绘制一帧 Editor UI。
+    /// </summary>
+    /// <param name="deltaSeconds">帧间隔秒数。</param>
+    /// <param name="width">平台窗口逻辑宽度。</param>
+    /// <param name="height">平台窗口逻辑高度。</param>
+    /// <param name="counters">诊断计数器。</param>
+    /// <param name="frameIndex">当前帧索引。</param>
+    /// <param name="performance">性能 HUD 只读诊断快照。</param>
+    /// <param name="framebufferScaleX">逻辑坐标到默认 framebuffer 坐标的 X 轴缩放。</param>
+    /// <param name="framebufferScaleY">逻辑坐标到默认 framebuffer 坐标的 Y 轴缩放。</param>
+    public void DrawFrame(
+        float deltaSeconds,
+        int width,
+        int height,
+        EngineCounters counters,
+        long frameIndex,
+        EditorPerformanceSnapshot performance,
+        float framebufferScaleX = 1f,
+        float framebufferScaleY = 1f)
     {
         ArgumentNullException.ThrowIfNull(counters);
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -177,7 +198,7 @@ public sealed class EditorApp : IDisposable
             return;
         }
 
-        _controller.NewFrame(deltaSeconds, width, height);
+        _controller.NewFrame(deltaSeconds, width, height, framebufferScaleX, framebufferScaleY);
         if (Options.EnableDockSpace)
         {
             _controller.DrawDockSpace();
@@ -209,7 +230,9 @@ public sealed class EditorApp : IDisposable
         EngineCounters counters,
         long frameIndex,
         EditorPerformanceSnapshot performance,
-        Action<IGuiContext>? drawScriptGui)
+        Action<IGuiContext>? drawScriptGui,
+        float framebufferScaleX = 1f,
+        float framebufferScaleY = 1f)
     {
         ArgumentNullException.ThrowIfNull(counters);
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -218,7 +241,7 @@ public sealed class EditorApp : IDisposable
             return;
         }
 
-        _controller.NewFrame(deltaSeconds, width, height);
+        _controller.NewFrame(deltaSeconds, width, height, framebufferScaleX, framebufferScaleY);
         if (Options.EnableDockSpace)
         {
             _controller.DrawDockSpace();

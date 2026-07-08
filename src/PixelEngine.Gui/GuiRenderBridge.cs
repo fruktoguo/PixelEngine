@@ -90,10 +90,12 @@ public sealed class GuiRenderBridge : IUiPresentLayer, IDisposable
         _previousSeconds = now;
         _gui.DrawCombinedFrame(
             deltaSeconds,
-            _pipeline.Width,
-            _pipeline.Height,
+            context.LogicalWidth,
+            context.LogicalHeight,
             _managedGui,
-            _scriptRuntime is null ? null : _scriptRuntime.DrawGui);
+            _scriptRuntime is null ? null : _scriptRuntime.DrawGui,
+            context.FramebufferScaleX,
+            context.FramebufferScaleY);
         RecordSub(context.Profiler, started);
         FrameIndex++;
     }

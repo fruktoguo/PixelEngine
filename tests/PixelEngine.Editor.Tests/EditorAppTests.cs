@@ -44,10 +44,10 @@ public sealed class EditorAppTests
         app.AddPanel(panel);
 
         app.Initialize();
-        app.DrawFrame(0.016f, 800, 600, new EngineCounters(), 42);
+        app.DrawFrame(0.016f, 800, 600, new EngineCounters(), 42, framebufferScaleX: 2f, framebufferScaleY: 1.5f);
 
         Assert.True(app.IsRunning);
-        Assert.Equal(["Initialize", "NewFrame:800x600", "DockSpace", "Panel:42", "Render"], backend.Events);
+        Assert.Equal(["Initialize", "NewFrame:800x600@2x1.5", "DockSpace", "Panel:42", "Render"], backend.Events);
         Assert.Equal(1, panel.DrawCount);
     }
 
@@ -81,7 +81,7 @@ public sealed class EditorAppTests
 
         Assert.Equal(640, guiWidth);
         Assert.Equal(360, guiHeight);
-        Assert.Equal(["Initialize", "NewFrame:640x360", "ScriptGui", "Render"], backend.Events);
+        Assert.Equal(["Initialize", "NewFrame:640x360@1x1", "ScriptGui", "Render"], backend.Events);
         Assert.Equal(0, panel.DrawCount);
     }
 
@@ -231,9 +231,9 @@ public sealed class EditorAppTests
             Events.Add("Initialize");
         }
 
-        public void NewFrame(float deltaSeconds, int width, int height)
+        public void NewFrame(float deltaSeconds, int width, int height, float framebufferScaleX, float framebufferScaleY)
         {
-            Events.Add($"NewFrame:{width}x{height}");
+            Events.Add($"NewFrame:{width}x{height}@{framebufferScaleX}x{framebufferScaleY}");
         }
 
         public void DrawDockSpace()

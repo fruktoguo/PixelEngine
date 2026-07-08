@@ -62,28 +62,61 @@ public sealed class GuiApp : IDisposable
     /// <summary>
     /// 绘制一帧 GUI，并在同一 ImGui frame 内调度脚本 GUI。
     /// </summary>
-    public void DrawFrame(float deltaSeconds, int width, int height, Action<IGuiContext>? drawScriptGui)
+    /// <param name="deltaSeconds">距离上一帧的真实秒数。</param>
+    /// <param name="width">平台窗口逻辑宽度。</param>
+    /// <param name="height">平台窗口逻辑高度。</param>
+    /// <param name="drawScriptGui">脚本 GUI 绘制回调。</param>
+    /// <param name="framebufferScaleX">逻辑坐标到默认 framebuffer 坐标的 X 轴缩放。</param>
+    /// <param name="framebufferScaleY">逻辑坐标到默认 framebuffer 坐标的 Y 轴缩放。</param>
+    public void DrawFrame(
+        float deltaSeconds,
+        int width,
+        int height,
+        Action<IGuiContext>? drawScriptGui,
+        float framebufferScaleX = 1f,
+        float framebufferScaleY = 1f)
     {
-        DrawCombinedFrame(deltaSeconds, width, height, drawManagedGui: null, drawScriptGui);
+        DrawCombinedFrame(deltaSeconds, width, height, drawManagedGui: null, drawScriptGui, framebufferScaleX, framebufferScaleY);
     }
 
     /// <summary>
     /// 绘制一帧 GUI，并在同一 ImGui frame 内调度中性 GUI 绘制回调。
     /// </summary>
-    public void DrawManagedFrame(float deltaSeconds, int width, int height, Action<IGuiDrawContext>? drawGui)
+    /// <param name="deltaSeconds">距离上一帧的真实秒数。</param>
+    /// <param name="width">平台窗口逻辑宽度。</param>
+    /// <param name="height">平台窗口逻辑高度。</param>
+    /// <param name="drawGui">中性 GUI 绘制回调。</param>
+    /// <param name="framebufferScaleX">逻辑坐标到默认 framebuffer 坐标的 X 轴缩放。</param>
+    /// <param name="framebufferScaleY">逻辑坐标到默认 framebuffer 坐标的 Y 轴缩放。</param>
+    public void DrawManagedFrame(
+        float deltaSeconds,
+        int width,
+        int height,
+        Action<IGuiDrawContext>? drawGui,
+        float framebufferScaleX = 1f,
+        float framebufferScaleY = 1f)
     {
-        DrawCombinedFrame(deltaSeconds, width, height, drawGui, drawScriptGui: null);
+        DrawCombinedFrame(deltaSeconds, width, height, drawGui, drawScriptGui: null, framebufferScaleX, framebufferScaleY);
     }
 
     /// <summary>
     /// 绘制一帧 GUI，并按固定顺序在同一个 ImGui frame 内调度 Managed UI 与脚本 GUI。
     /// </summary>
+    /// <param name="deltaSeconds">距离上一帧的真实秒数。</param>
+    /// <param name="width">平台窗口逻辑宽度。</param>
+    /// <param name="height">平台窗口逻辑高度。</param>
+    /// <param name="drawManagedGui">Managed UI 绘制回调。</param>
+    /// <param name="drawScriptGui">脚本 GUI 绘制回调。</param>
+    /// <param name="framebufferScaleX">逻辑坐标到默认 framebuffer 坐标的 X 轴缩放。</param>
+    /// <param name="framebufferScaleY">逻辑坐标到默认 framebuffer 坐标的 Y 轴缩放。</param>
     public void DrawCombinedFrame(
         float deltaSeconds,
         int width,
         int height,
         Action<IGuiDrawContext>? drawManagedGui,
-        Action<IGuiContext>? drawScriptGui)
+        Action<IGuiContext>? drawScriptGui,
+        float framebufferScaleX = 1f,
+        float framebufferScaleY = 1f)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!IsRunning)
@@ -91,7 +124,7 @@ public sealed class GuiApp : IDisposable
             return;
         }
 
-        _controller.NewFrame(deltaSeconds, width, height);
+        _controller.NewFrame(deltaSeconds, width, height, framebufferScaleX, framebufferScaleY);
         ScriptGuiContext gui = new(width, height, deltaSeconds, Input.Capture);
         drawManagedGui?.Invoke(gui);
         if (drawScriptGui is not null)

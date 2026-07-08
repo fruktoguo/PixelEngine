@@ -32,6 +32,8 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
 
     public Vector2 LastPanelOriginFramebuffer { get; private set; }
 
+    public Vector2 LastFramebufferScale { get; private set; } = Vector2.One;
+
     public GameViewViewportSnapshot LastViewportSnapshot { get; private set; } = GameViewViewportSnapshot.Empty;
 
     public EditorViewportContract CaptureContract(PixelEngine.Editor.EditorMode mode)
@@ -65,7 +67,10 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
         Vector2 available = ImGui.GetContentRegionAvail();
         Vector2 imageMinScreen = ImGui.GetCursorScreenPos();
         Vector2 panelOriginScreen = ImGui.GetWindowPos();
-        LastPanelOriginFramebuffer = panelOriginScreen;
+        Vector2 framebufferScale = ImGui.GetIO().DisplayFramebufferScale;
+        framebufferScale = new Vector2(NormalizeScale(framebufferScale.X), NormalizeScale(framebufferScale.Y));
+        LastFramebufferScale = framebufferScale;
+        LastPanelOriginFramebuffer = panelOriginScreen * framebufferScale;
         LastViewportSnapshot = GameViewViewportSnapshot.Create(
             texture.Width,
             texture.Height,
@@ -91,5 +96,11 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
         InputHovered = false;
         LastPointerPanelPoint = default;
         LastPanelOriginFramebuffer = default;
+        LastFramebufferScale = Vector2.One;
+    }
+
+    private static float NormalizeScale(float scale)
+    {
+        return float.IsFinite(scale) && scale > 0f ? scale : 1f;
     }
 }
