@@ -54,6 +54,7 @@ public sealed class UiInputRouter
     {
         if (!_source.TryGetPointer(out UiPointerState pointer))
         {
+            _hasKeyboardFocus = false;
             Capture = UiInputCapture.None;
             return Capture;
         }
