@@ -2042,6 +2042,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("particleLightingVideo", script, StringComparison.Ordinal);
         Assert.Contains("audioListeningReport", script, StringComparison.Ordinal);
         Assert.Contains("fullRoutePlaythroughVideo", script, StringComparison.Ordinal);
+        Assert.Contains("lavaCombatPlaythroughVideo", script, StringComparison.Ordinal);
         Assert.Contains("hudMenuEditorVideo", script, StringComparison.Ordinal);
         Assert.Contains("hotReloadWindowReport", script, StringComparison.Ordinal);
         Assert.Contains("minDurationSeconds", script, StringComparison.Ordinal);
@@ -2073,6 +2074,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             "routeCompleted",
             "materialsReactionsBodiesShown",
             "audioLightingHudShown",
+            "lavaDamageObserved",
+            "grenadeLargeTerrainEdit",
+            "obstacleDemolitionRoute",
+            "webFirstResultRestart",
             "hudReadable",
             "menuButtonsClicked",
             "editorDockspaceOpened",
@@ -2279,6 +2284,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             "particleLightingVideo",
             "audioListeningReport",
             "fullRoutePlaythroughVideo",
+            "lavaCombatPlaythroughVideo",
             "hudMenuEditorVideo",
             "hotReloadWindowReport",
         ];
@@ -2339,6 +2345,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             "particleLightingVideo",
             "audioListeningReport",
             "fullRoutePlaythroughVideo",
+            "lavaCombatPlaythroughVideo",
             "hudMenuEditorVideo",
             "hotReloadWindowReport",
         ];
@@ -2389,6 +2396,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             "particleLightingVideo",
             "audioListeningReport",
             "fullRoutePlaythroughVideo",
+            "lavaCombatPlaythroughVideo",
             "hudMenuEditorVideo",
             "hotReloadWindowReport",
         ];
@@ -2542,6 +2550,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             "particleLightingVideo",
             "audioListeningReport",
             "fullRoutePlaythroughVideo",
+            "lavaCombatPlaythroughVideo",
             "hudMenuEditorVideo",
             "hotReloadWindowReport",
         ];
@@ -2595,6 +2604,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             "particleLightingVideo",
             "audioListeningReport",
             "fullRoutePlaythroughVideo",
+            "lavaCombatPlaythroughVideo",
             "hudMenuEditorVideo",
             "hotReloadWindowReport",
         ];
@@ -2647,6 +2657,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             "particleLightingVideo",
             "audioListeningReport",
             "fullRoutePlaythroughVideo",
+            "lavaCombatPlaythroughVideo",
             "hudMenuEditorVideo",
             "hotReloadWindowReport",
         ];
@@ -2699,6 +2710,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             "particleLightingVideo",
             "audioListeningReport",
             "fullRoutePlaythroughVideo",
+            "lavaCombatPlaythroughVideo",
             "hudMenuEditorVideo",
             "hotReloadWindowReport",
         ];
@@ -6333,6 +6345,13 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "routeCompleted",
                 "materialsReactionsBodiesShown",
                 "audioLightingHudShown",
+            ],
+            "lavaCombatPlaythroughVideo" =>
+            [
+                "lavaDamageObserved",
+                "grenadeLargeTerrainEdit",
+                "obstacleDemolitionRoute",
+                "webFirstResultRestart",
             ],
             "hudMenuEditorVideo" =>
             [
