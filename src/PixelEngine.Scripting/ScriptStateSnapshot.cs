@@ -94,7 +94,11 @@ internal sealed class ScriptStateSnapshot
 
     private static bool IsSupportedValueType(Type type)
     {
-        return type.IsPrimitive || type.IsEnum || type == typeof(string) || type == typeof(decimal);
+        return type.IsPrimitive ||
+            type.IsEnum ||
+            type == typeof(string) ||
+            type == typeof(decimal) ||
+            type == typeof(ScriptAssetReference);
     }
 
     private static string Key(string name, Type type)
