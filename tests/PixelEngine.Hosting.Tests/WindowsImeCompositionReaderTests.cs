@@ -59,6 +59,93 @@ public sealed class WindowsImeCompositionReaderTests
     }
 
     /// <summary>
+    /// 验证窗口句柄提供器异常会退化为 inactive，避免窗口层异常冒泡到 UI 输入相位。
+    /// </summary>
+    [Fact]
+    public void CaptureTextCompositionReturnsInactiveWhenHwndProviderThrows()
+    {
+        WindowsImeCompositionReader reader = new(
+            () => throw new InvalidOperationException("window handle unavailable"),
+            new FakeImeNative(),
+            enableWindowsComposition: true);
+
+        Span<char> buffer = stackalloc char[8];
+        int count = reader.CaptureTextComposition(buffer, out UiTextComposition composition);
+
+        Assert.Equal(0, count);
+        Assert.False(composition.IsActive);
+    }
+
+    /// <summary>
+    /// 验证 IMM32 读取异常会退化为 inactive，且已取得的 HIMC 仍会释放。
+    /// </summary>
+    [Fact]
+    public void CaptureTextCompositionReturnsInactiveWhenImmReadThrowsAndReleasesContext()
+    {
+        FakeImeNative native = new()
+        {
+            Context = new IntPtr(0x456),
+            Text = "拼音",
+            ThrowOnGetCompositionString = true,
+        };
+        WindowsImeCompositionReader reader = new(() => new IntPtr(0x123), native, enableWindowsComposition: true);
+
+        Span<char> buffer = stackalloc char[8];
+        int count = reader.CaptureTextComposition(buffer, out UiTextComposition composition);
+
+        Assert.Equal(0, count);
+        Assert.False(composition.IsActive);
+        Assert.Equal(1, native.GetContextCalls);
+        Assert.Equal(1, native.ReleaseContextCalls);
+    }
+
+    /// <summary>
+    /// 验证 ReleaseContext 异常不会污染已经成功读取的 composition 快照。
+    /// </summary>
+    [Fact]
+    public void CaptureTextCompositionIgnoresReleaseContextFailureAfterSuccessfulRead()
+    {
+        FakeImeNative native = new()
+        {
+            Context = new IntPtr(0x456),
+            Text = "拼音",
+            Cursor = 1,
+            ThrowOnReleaseContext = true,
+        };
+        WindowsImeCompositionReader reader = new(() => new IntPtr(0x123), native, enableWindowsComposition: true);
+
+        Span<char> buffer = stackalloc char[8];
+        int count = reader.CaptureTextComposition(buffer, out UiTextComposition composition);
+
+        Assert.Equal(2, count);
+        Assert.Equal("拼音", new string(buffer[..count]));
+        Assert.True(composition.IsActive);
+        Assert.Equal(1, composition.CursorIndex);
+        Assert.Equal(1, native.ReleaseContextCalls);
+    }
+
+    /// <summary>
+    /// 验证目标缓冲没有容量时不会把空文本冒充为 active composition。
+    /// </summary>
+    [Fact]
+    public void CaptureTextCompositionReturnsInactiveWhenDestinationHasNoCapacity()
+    {
+        FakeImeNative native = new()
+        {
+            Context = new IntPtr(0x456),
+            Text = "拼音",
+            Cursor = 1,
+        };
+        WindowsImeCompositionReader reader = new(() => new IntPtr(0x123), native, enableWindowsComposition: true);
+
+        int count = reader.CaptureTextComposition([], out UiTextComposition composition);
+
+        Assert.Equal(0, count);
+        Assert.False(composition.IsActive);
+        Assert.Equal(1, native.ReleaseContextCalls);
+    }
+
+    /// <summary>
     /// 验证光标位置按实际写入缓冲长度夹取，避免后端看到越界 composition 范围。
     /// </summary>
     [Fact]
@@ -145,6 +232,10 @@ public sealed class WindowsImeCompositionReaderTests
 
         public int Cursor { get; init; }
 
+        public bool ThrowOnGetCompositionString { get; init; }
+
+        public bool ThrowOnReleaseContext { get; init; }
+
         public int GetContextCalls { get; private set; }
 
         public int ReleaseContextCalls { get; private set; }
@@ -163,6 +254,8 @@ public sealed class WindowsImeCompositionReaderTests
             Assert.NotEqual(IntPtr.Zero, hwnd);
             Assert.Equal(Context, context);
             ReleaseContextCalls++;
+            _ = ThrowOnReleaseContext ? throw new InvalidOperationException("release failed") : false;
+
             return true;
         }
 
@@ -170,6 +263,8 @@ public sealed class WindowsImeCompositionReaderTests
         {
             Assert.Equal(Context, context);
             GetCompositionStringCalls++;
+            _ = ThrowOnGetCompositionString ? throw new InvalidOperationException("composition read failed") : false;
+
             if (index == CompositionAttribute)
             {
                 Array.Copy(Attributes, destination, Math.Min(Attributes.Length, destination.Length));
