@@ -583,6 +583,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             FileName = result.LauncherExe,
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,
+            CreateNoWindow = true,
         };
         try
         {

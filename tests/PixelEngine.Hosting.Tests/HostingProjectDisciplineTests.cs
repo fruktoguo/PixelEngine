@@ -62,6 +62,22 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证正式输出验证链路与 Editor Build And Run 都隐藏子进程窗口，避免用户启动正式应用时看到控制台窗口。
+    /// </summary>
+    [Fact]
+    public void UserFacingLaunchersCreateNoConsoleWindows()
+    {
+        string root = FindRepositoryRoot();
+        string buildSettingsPanel = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "Build", "BuildSettingsPanel.cs"));
+        string finalOutputScript = File.ReadAllText(Path.Combine(root, "tools", "update-final-output.ps1"));
+
+        Assert.Contains("UseShellExecute = false", buildSettingsPanel, StringComparison.Ordinal);
+        Assert.Contains("CreateNoWindow = true", buildSettingsPanel, StringComparison.Ordinal);
+        Assert.Contains("$psi.UseShellExecute = $false", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("$psi.CreateNoWindow = $true", finalOutputScript, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证编辑器壳只通过中性 bootstrap 创建唯一窗口，不直接散落创建 RenderWindow。
     /// </summary>
     [Fact]

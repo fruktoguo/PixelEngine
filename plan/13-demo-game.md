@@ -20,7 +20,7 @@
 
 ## 2. 技术栈与依赖
 
-运行时与语言：**.NET 10 LTS / C# 14**，与全局一致（plan/00 §1）。`demo/PixelEngine.Demo` 是一个可执行项目（`OutputType=Exe`），`Program.cs` 为入口。Demo **不开 `AllowUnsafeBlocks`**（玩法层无需 unsafe；热路径在引擎内），`Nullable` / `ImplicitUsings` / file-scoped namespace 继承自 `Directory.Build.props`（plan/00 §6）。
+运行时与语言：**.NET 10 LTS / C# 14**，与全局一致（plan/00 §1）。`demo/PixelEngine.Demo` 是面向玩家直接启动的 Windows GUI 可执行项目（`OutputType=WinExe`），`Program.cs` 为入口，正式包启动不应弹出控制台窗口。Demo **不开 `AllowUnsafeBlocks`**（玩法层无需 unsafe；热路径在引擎内），`Nullable` / `ImplicitUsings` / file-scoped namespace 继承自 `Directory.Build.props`（plan/00 §6）。
 
 依赖方向严格单向（plan/00 §5）：`Demo → Hosting → {Scripting, Rendering, Audio, Physics, World, Serialization, Content, Simulation, UI, Gui} → Interop → Core`，**不含 `PixelEngine.Editor`**。Demo 的 `.csproj` **只 `ProjectReference` 到 `PixelEngine.Hosting`**（门面）与 `PixelEngine.Scripting`（`Behaviour`/`Component` 基类与脚本服务接口）；其余子系统能力一律经由 Hosting 暴露的 `EngineContext` 服务接口取得，不直接引用 `PixelEngine.Simulation` 等内部装配（这正是「只用公开 API」的工程强制手段）。CI 用一条依赖方向检查（plan/14）确保 Demo 不出现对引擎内部 assembly 的反向 / 越层引用。
 
