@@ -38,6 +38,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
     private const int HitTestKeyboardFocus = 1 << 2;
 
     private readonly RenderWindow _window;
+    private readonly IUiStringResolver? _stringResolver;
     private readonly NativeDocument[] _documents;
     private readonly UiScreenStackEntry[] _visibleScreens;
     private readonly RmlUiImageAssetCache _imageCache = new();
@@ -54,7 +55,12 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
     /// <param name="window">已初始化的渲染窗口。</param>
     /// <param name="maxDocuments">最大文档数。</param>
     /// <param name="maxVisibleScreens">最大可见屏栈深度。</param>
-    public RmlUiBackend(RenderWindow window, int maxDocuments = 64, int maxVisibleScreens = 32)
+    /// <param name="stringResolver">可选 UI 字符串句柄解析器。</param>
+    public RmlUiBackend(
+        RenderWindow window,
+        int maxDocuments = 64,
+        int maxVisibleScreens = 32,
+        IUiStringResolver? stringResolver = null)
     {
         _window = window ?? throw new ArgumentNullException(nameof(window));
         if (maxDocuments <= 0)
@@ -69,6 +75,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
 
         _documents = new NativeDocument[maxDocuments];
         _visibleScreens = new UiScreenStackEntry[maxVisibleScreens];
+        _stringResolver = stringResolver;
     }
 
     /// <summary>
@@ -421,7 +428,9 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
         }
 
         RmlUiNative.NativeUiValue nativeValue = ToNativeValue(in value);
-        int result = RmlUiNative.SetModelValue(_renderer, document.Value, path.Value, &nativeValue);
+        int result = value.Kind == UiValueKind.StringHandle
+            ? SetModelStringValue(document, path, in value, &nativeValue)
+            : RmlUiNative.SetModelValue(_renderer, document.Value, path.Value, &nativeValue);
         if (result == 0)
         {
             throw new KeyNotFoundException($"RmlUi 文档 {document.Value} 未绑定 UI 模型路径: {path.Value}");
@@ -762,6 +771,31 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
     internal static UiValue ToUiValue(in RmlUiNative.NativeUiValue value)
     {
         return ToUiValue(value.Kind, value.Integer, BitConverter.Int64BitsToDouble(value.Integer));
+    }
+
+    private int SetModelStringValue(
+        UiDocumentHandle document,
+        UiPathId path,
+        in UiValue value,
+        RmlUiNative.NativeUiValue* nativeValue)
+    {
+        UiStringHandle handle = value.AsStringHandle();
+        if (_stringResolver is null || !_stringResolver.TryGetString(handle, out string text))
+        {
+            throw new KeyNotFoundException($"RmlUi UI 字符串句柄未注册：{handle.Value}");
+        }
+
+        byte[] textBytes = Encoding.UTF8.GetBytes(text);
+        fixed (byte* textPointer = textBytes)
+        {
+            return RmlUiNative.SetModelStringValue(
+                _renderer,
+                document.Value,
+                path.Value,
+                nativeValue,
+                textPointer,
+                textBytes.Length);
+        }
     }
 
     private static UiValue ToUiValue(int kind, long integer, double number)

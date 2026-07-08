@@ -230,6 +230,25 @@ internal static unsafe partial class RmlUiNative
     internal static partial int SetModelValue(IntPtr renderer, int documentHandle, int pathHash, NativeUiValue* value);
 
     /// <summary>
+    /// 设置已绑定 DOM 元素的字符串句柄模型值，并提供解析后的 UTF-8 文本。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="documentHandle">托管 UI 文档句柄值。</param>
+    /// <param name="pathHash">模型路径稳定 hash。</param>
+    /// <param name="value">blittable UI 值，Kind 必须为 StringHandle。</param>
+    /// <param name="text">解析后的 UTF-8 文本。</param>
+    /// <param name="textLength">文本字节数。</param>
+    /// <returns>1=成功，0=未找到，负数=错误。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_set_model_string_value")]
+    internal static partial int SetModelStringValue(
+        IntPtr renderer,
+        int documentHandle,
+        int pathHash,
+        NativeUiValue* value,
+        byte* text,
+        int textLength);
+
+    /// <summary>
     /// 读取已绑定 DOM 元素的模型值。
     /// </summary>
     /// <param name="renderer">renderer 句柄。</param>

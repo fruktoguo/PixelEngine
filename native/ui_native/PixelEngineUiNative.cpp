@@ -59,6 +59,7 @@ struct PeUiModelBinding
     std::string path;
     std::string variableName;
     PeUiNativeValue value;
+    std::string resolvedText;
 };
 
 struct PeUiDocumentModel
@@ -423,7 +424,7 @@ PeUiNativeValue InitialValueForElement(Rml::Element* element)
     return EmptyValue();
 }
 
-std::string ValueToText(const PeUiNativeValue& value)
+std::string ValueToText(const PeUiNativeValue& value, const std::string& resolvedText)
 {
     char buffer[64];
     switch (value.kind)
@@ -436,12 +437,14 @@ std::string ValueToText(const PeUiNativeValue& value)
     case 3:
         std::snprintf(buffer, sizeof(buffer), "%.6g", value.number);
         return buffer;
+    case 4:
+        return resolvedText;
     default:
         return "";
     }
 }
 
-void SetVariantFromValue(Rml::Variant& variant, const PeUiNativeValue& value)
+void SetVariantFromValue(Rml::Variant& variant, const PeUiNativeValue& value, const std::string& resolvedText)
 {
     switch (value.kind)
     {
@@ -453,6 +456,9 @@ void SetVariantFromValue(Rml::Variant& variant, const PeUiNativeValue& value)
         break;
     case 3:
         variant = value.number;
+        break;
+    case 4:
+        variant = resolvedText;
         break;
     default:
         variant.Clear();
@@ -490,7 +496,7 @@ PeUiNativeValue ValueFromVariant(const Rml::Variant& variant, const PeUiNativeVa
     }
 }
 
-bool ApplyValueToElement(Rml::Element* element, const PeUiNativeValue& value)
+bool ApplyValueToElement(Rml::Element* element, const PeUiNativeValue& value, const std::string& resolvedText)
 {
     if (element == nullptr)
     {
@@ -498,7 +504,7 @@ bool ApplyValueToElement(Rml::Element* element, const PeUiNativeValue& value)
     }
 
     const Rml::String tag = element->GetTagName();
-    const std::string text = ValueToText(value);
+    const std::string text = ValueToText(value, resolvedText);
     element->SetAttribute("value", text);
     if (value.kind == 1)
     {
@@ -643,7 +649,7 @@ bool BindModelVariable(
             [renderer, documentHandle, pathHash](Rml::Variant& variant) {
                 if (PeUiModelBinding* binding = FindModelBinding(renderer, documentHandle, pathHash))
                 {
-                    SetVariantFromValue(variant, binding->value);
+                    SetVariantFromValue(variant, binding->value, binding->resolvedText);
                     return;
                 }
 
@@ -662,7 +668,7 @@ bool BindModelVariable(
                     if (binding.documentHandle == documentHandle && binding.pathHash == pathHash)
                     {
                         binding.value = value;
-                        ApplyValueToElement(binding.element, binding.value);
+                        ApplyValueToElement(binding.element, binding.value, binding.resolvedText);
                     }
                 }
             }))
@@ -836,6 +842,7 @@ bool TryAddModelBinding(
         path,
         variableName,
         InitialValueForElement(element),
+        std::string(),
     });
     return true;
 }
@@ -1285,7 +1292,7 @@ PE_UI_NATIVE_API int32_t peui_native_set_model_value(
 
     if (value->kind < 0 || value->kind > 3)
     {
-        renderer->lastError = "RmlUi DOM bridge supports Empty/Boolean/Int64/Double values only.";
+        renderer->lastError = "RmlUi DOM bridge supports Empty/Boolean/Int64/Double here; StringHandle requires peui_native_set_model_string_value.";
         return -2;
     }
 
@@ -1300,7 +1307,58 @@ PE_UI_NATIVE_API int32_t peui_native_set_model_value(
         if (binding.documentHandle == document_handle && binding.pathHash == path_hash)
         {
             binding.value = *value;
-            ApplyValueToElement(binding.element, binding.value);
+            binding.resolvedText.clear();
+            ApplyValueToElement(binding.element, binding.value, binding.resolvedText);
+        }
+    }
+
+    if (PeUiDocumentModel* documentModel = FindDocumentModel(renderer, first->document))
+    {
+        documentModel->modelHandle.DirtyVariable(first->variableName);
+    }
+
+    return 1;
+}
+
+PE_UI_NATIVE_API int32_t peui_native_set_model_string_value(
+    PeUiRenderer* renderer,
+    int32_t document_handle,
+    int32_t path_hash,
+    const PeUiNativeValue* value,
+    const char* text,
+    int32_t text_length)
+{
+    if (renderer == nullptr || document_handle <= 0 || path_hash <= 0 || value == nullptr || text_length < 0)
+    {
+        return -1;
+    }
+
+    if (value->kind != 4)
+    {
+        renderer->lastError = "RmlUi DOM bridge string setter requires StringHandle kind.";
+        return -2;
+    }
+
+    if (text == nullptr && text_length > 0)
+    {
+        renderer->lastError = "RmlUi DOM bridge string setter received null UTF-8 text.";
+        return -2;
+    }
+
+    PeUiModelBinding* first = FindModelBinding(renderer, document_handle, path_hash);
+    if (first == nullptr)
+    {
+        return 0;
+    }
+
+    const std::string resolvedText = text_length == 0 ? std::string() : std::string(text, static_cast<size_t>(text_length));
+    for (PeUiModelBinding& binding : renderer->modelBindings)
+    {
+        if (binding.documentHandle == document_handle && binding.pathHash == path_hash)
+        {
+            binding.value = *value;
+            binding.resolvedText = resolvedText;
+            ApplyValueToElement(binding.element, binding.value, binding.resolvedText);
         }
     }
 
@@ -1395,6 +1453,7 @@ PE_UI_NATIVE_API int32_t peui_native_invoke_action(
     }
 
     bool invoked = false;
+    const std::string resolvedText;
     for (PeUiEventBinding& binding : renderer->eventBindings)
     {
         if (binding.documentHandle != document_handle || binding.actionHash != action_hash || binding.element == nullptr)
@@ -1405,9 +1464,10 @@ PE_UI_NATIVE_API int32_t peui_native_invoke_action(
         if (PeUiModelBinding* model = FindModelBindingForElement(renderer, document_handle, binding.element))
         {
             model->value = *value;
+            model->resolvedText.clear();
         }
 
-        invoked = ApplyValueToElement(binding.element, *value) || invoked;
+        invoked = ApplyValueToElement(binding.element, *value, resolvedText) || invoked;
     }
 
     return invoked ? 1 : 0;

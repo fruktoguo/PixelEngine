@@ -45,7 +45,8 @@ public sealed class RmlUiGlBootstrapSmokeTests
             BackendPreference = RenderBackendPreference.DesktopGl33,
             EnableDebugContext = true,
         });
-        using RmlUiBackend backend = new(window);
+        UiStringPool strings = new();
+        using RmlUiBackend backend = new(window, stringResolver: strings);
         backend.Initialize(new UiBackendInitializeInfo(
             new UiViewport(0, 0, window.Width, window.Height, 1f),
             UiBackendKind.RmlUi));
@@ -69,6 +70,7 @@ public sealed class RmlUiGlBootstrapSmokeTests
                       body { background-color: transparent; pointer-events: none; }
                       #panel { position: absolute; left: 4px; top: 4px; width: 24px; height: 24px; background-color: #ff4040; pointer-events: auto; }
                       #score { position: absolute; left: 32px; top: 4px; width: 28px; height: 24px; color: #ffffff; pointer-events: none; }
+                      #title { position: absolute; left: 4px; top: 52px; width: 56px; height: 10px; color: #ffffff; pointer-events: none; }
                       .armed_probe { position: absolute; left: 4px; top: 36px; width: 12px; height: 12px; }
                       #logo { position: absolute; left: 36px; top: 36px; width: 16px; height: 16px; pointer-events: none; }
                     </style>
@@ -78,6 +80,7 @@ public sealed class RmlUiGlBootstrapSmokeTests
                     <div id="score" data-model="score">0</div>
                     <div id="score_mirror" path="score">0</div>
                     <div id="health" path="hud.health.current">0</div>
+                    <div id="title" path="hud.title">title</div>
                     <input class="armed_probe" type="checkbox" path="weapon.armed" />
                     <img id="logo" data-image="logo" />
                   </body>
@@ -91,22 +94,28 @@ public sealed class RmlUiGlBootstrapSmokeTests
             UiPathId scorePath = new(UiStableId.Hash("score"));
             UiPathId healthPath = UiModelPathName.ToPathId("hud.health.current");
             UiPathId armedPath = UiModelPathName.ToPathId("weapon.armed");
-            UiPathId[] paths = new UiPathId[4];
+            UiPathId titlePath = UiModelPathName.ToPathId("hud.title");
+            UiPathId[] paths = new UiPathId[5];
             int pathCount = backend.CopyModelPaths(document, paths);
-            Assert.Equal(3, pathCount);
+            Assert.Equal(4, pathCount);
             Assert.Contains(scorePath, paths[..pathCount]);
             Assert.Contains(healthPath, paths[..pathCount]);
             Assert.Contains(armedPath, paths[..pathCount]);
+            Assert.Contains(titlePath, paths[..pathCount]);
+            UiStringHandle title = strings.Intern("晶体 3/3");
             backend.SetModelValue(document, scorePath, new UiValue(42L));
             backend.SetModelValue(document, healthPath, new UiValue(0.75));
             backend.SetModelValue(document, armedPath, UiValue.FromBoolean(true));
+            backend.SetModelValue(document, titlePath, UiValue.FromStringHandle(title));
             backend.Update(1f / 60f);
             Assert.True(backend.TryGetModelValue(document, scorePath, out UiValue score));
             Assert.True(backend.TryGetModelValue(document, healthPath, out UiValue health));
             Assert.True(backend.TryGetModelValue(document, armedPath, out UiValue armed));
+            Assert.True(backend.TryGetModelValue(document, titlePath, out UiValue titleValue));
             Assert.Equal(42L, score.AsInt64());
             Assert.Equal(0.75, health.AsDouble());
             Assert.True(armed.AsBoolean());
+            Assert.Equal(title, titleValue.AsStringHandle());
             Assert.True(backend.InvokeAction(
                 document,
                 new UiActionId(UiStableId.Hash("start_game")),
