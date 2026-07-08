@@ -549,6 +549,9 @@ internal sealed class EditorProjectSession : IDisposable
                 HeatCapacity = 1f,
                 TextureId = -1,
                 BaseColorBGRA = 0x00000000,
+                DisplayName = "Empty",
+                LegendCategory = MaterialLegendCategory.Special,
+                LegendVisible = false,
             },
             new()
             {
@@ -556,9 +559,15 @@ internal sealed class EditorProjectSession : IDisposable
                 Name = "stone",
                 Type = CellType.Solid,
                 Density = 200,
+                Durability = 40,
+                Hardness = 64,
+                Integrity = 160,
                 HeatCapacity = 1f,
                 TextureId = -1,
                 BaseColorBGRA = 0xFF808080,
+                DisplayName = "Stone",
+                LegendCategory = MaterialLegendCategory.Terrain,
+                LegendVisible = true,
             },
         ];
         MaterialTable materials = new(definitions);
@@ -568,7 +577,7 @@ internal sealed class EditorProjectSession : IDisposable
         engine.Context.RegisterService(query);
     }
 
-    private sealed class ShellMaterialQuery(MaterialTable materials) : IMaterialQuery
+    internal sealed class ShellMaterialQuery(MaterialTable materials) : IMaterialQuery
     {
         private readonly MaterialTable _materials = materials ?? throw new ArgumentNullException(nameof(materials));
 
@@ -592,7 +601,43 @@ internal sealed class EditorProjectSession : IDisposable
         public MaterialInfo GetInfo(MaterialId id)
         {
             ref readonly MaterialDef material = ref _materials.Get(id.Value);
-            return new MaterialInfo(id, material.Name, material.Density, material.Type == CellType.Solid);
+            MaterialProperty flags = material.PropertyFlags;
+            bool emissive = (flags & MaterialProperty.Emissive) != 0 || material.RenderStyle == MaterialRenderStyle.Emissive;
+            bool destructible = id.Value != 0 &&
+                material.Type is CellType.Solid or CellType.Powder &&
+                (flags & MaterialProperty.Indestructible) == 0;
+            return new MaterialInfo(
+                id,
+                material.Name,
+                material.Density,
+                material.Type == CellType.Solid,
+                string.IsNullOrWhiteSpace(material.DisplayName) ? material.Name : material.DisplayName,
+                LegendCategoryName(material.LegendCategory),
+                material.LegendVisible,
+                material.BaseColorBGRA,
+                material.MineYield,
+                material.Type,
+                material.LegendCategory,
+                emissive,
+                material.Hardness != 0 ? material.Hardness : material.Durability,
+                material.MaxIntegrity,
+                destructible,
+                material.Dispersion);
+        }
+
+        private static string LegendCategoryName(MaterialLegendCategory category)
+        {
+            return category switch
+            {
+                MaterialLegendCategory.Terrain => "Terrain",
+                MaterialLegendCategory.Liquid => "Liquid",
+                MaterialLegendCategory.Gas => "Gas",
+                MaterialLegendCategory.Destructible => "Destructible",
+                MaterialLegendCategory.Hazard => "Hazard",
+                MaterialLegendCategory.Resource => "Resource",
+                MaterialLegendCategory.Special => "Special",
+                _ => nameof(MaterialLegendCategory.Special),
+            };
         }
     }
 }

@@ -1,6 +1,7 @@
 using System.Numerics;
 using PixelEngine.Editor.Shell;
 using PixelEngine.Scripting;
+using PixelEngine.Simulation;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -10,6 +11,84 @@ namespace PixelEngine.Hosting.Tests;
 /// </summary>
 public sealed class EditorShellSceneMaterializationTests
 {
+    /// <summary>
+    /// 验证 EditorShell fallback 材质查询不会退化为仅返回 Name/Density/IsSolid 的窄摘要。
+    /// </summary>
+    [Fact]
+    public void ShellFallbackMaterialQueryPublishesFullMaterialInfo()
+    {
+        MaterialTable materials = new(
+        [
+            new MaterialDef
+            {
+                Id = 0,
+                Name = "empty",
+                Type = CellType.Empty,
+                HeatCapacity = 1f,
+                TextureId = -1,
+                LegendVisible = false,
+            },
+            new MaterialDef
+            {
+                Id = 1,
+                Name = "lava",
+                Type = CellType.Liquid,
+                Density = 210,
+                Dispersion = 5,
+                HeatCapacity = 1f,
+                TextureId = -1,
+                BaseColorBGRA = 0xFF1030F0,
+                DisplayName = "Lava",
+                LegendCategory = MaterialLegendCategory.Hazard,
+                MineYield = 2,
+                RenderStyle = MaterialRenderStyle.Emissive,
+                Hardness = 9,
+                MaxIntegrity = 77,
+            },
+            new MaterialDef
+            {
+                Id = 2,
+                Name = "crystal",
+                Type = CellType.Solid,
+                Density = 220,
+                HeatCapacity = 1f,
+                TextureId = -1,
+                DisplayName = "Crystal",
+                LegendCategory = MaterialLegendCategory.Resource,
+                BaseColorBGRA = 0xFFFF80FF,
+                MineYield = 1,
+                Durability = 12,
+                MaxIntegrity = 48,
+            },
+        ]);
+        EditorProjectSession.ShellMaterialQuery query = new(materials);
+
+        Assert.True(query.TryResolve("lava", out MaterialId lavaId));
+        MaterialInfo lava = query.GetInfo(lavaId);
+        Assert.Equal("Lava", lava.DisplayName);
+        Assert.Equal("Hazard", lava.LegendCategory);
+        Assert.True(lava.LegendVisible);
+        Assert.Equal(0xFF1030F0u, lava.BaseColorBgra);
+        Assert.Equal((byte)2, lava.MineYield);
+        Assert.Equal(CellType.Liquid, lava.CellType);
+        Assert.Equal(MaterialLegendCategory.Hazard, lava.Category);
+        Assert.True(lava.Emissive);
+        Assert.Equal((byte)9, lava.Hardness);
+        Assert.Equal((ushort)77, lava.MaxIntegrity);
+        Assert.False(lava.IsDestructible);
+        Assert.Equal((byte)5, lava.FlowRate);
+
+        MaterialInfo crystal = query.GetInfo(query.Resolve("crystal"));
+        Assert.Equal("Crystal", crystal.DisplayName);
+        Assert.Equal("Resource", crystal.LegendCategory);
+        Assert.Equal(MaterialLegendCategory.Resource, crystal.Category);
+        Assert.True(crystal.IsSolid);
+        Assert.True(crystal.IsDestructible);
+        Assert.Equal((byte)12, crystal.Hardness);
+        Assert.Equal((ushort)48, crystal.MaxIntegrity);
+        Assert.Equal((byte)1, crystal.MineYield);
+    }
+
     /// <summary>
     /// 验证 authoring 层级投影到运行时场景时烘焙世界 TRS、保持 StableId 映射，并绑定 Vector2/MaterialId 字段。
     /// </summary>
