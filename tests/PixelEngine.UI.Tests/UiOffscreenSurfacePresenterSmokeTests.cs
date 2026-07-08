@@ -72,6 +72,8 @@ public sealed class UiOffscreenSurfacePresenterSmokeTests
 
         Assert.Contains("UiOverlayTexture", source, StringComparison.Ordinal);
         Assert.Contains("UploadOverlayTexture", source, StringComparison.Ordinal);
+        Assert.Contains("context.Target.Validate()", source, StringComparison.Ordinal);
+        Assert.Contains("PresentCore(in context, pixelsBgra, sourceWidth, sourceHeight, dirtyRects, context.Target)", source, StringComparison.Ordinal);
         Assert.Contains("SubmitTriangles", source, StringComparison.Ordinal);
         Assert.Contains("UiDrawState.Textured", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ToArray", source, StringComparison.Ordinal);
@@ -219,13 +221,13 @@ public sealed class UiOffscreenSurfacePresenterSmokeTests
         {
             PresentCount++;
             ClearErrors(context.Gl);
+            UiPresentContext targetContext = context.WithTarget(new UiPresentTarget(4, 4, 16, 16, 1f));
             _presenter.Present(
-                in context,
+                in targetContext,
                 _pixels,
                 4,
                 4,
-                _rects.AsSpan(0, _rectCount),
-                new UiViewport(0, 0, 16, 16, 1f));
+                _rects.AsSpan(0, _rectCount));
             PresenterGlError = context.Gl.GetError();
             ClearErrors(context.Gl);
             context.SubmitTriangles(_probeVertices, _probeIndices, UiDrawState.Default);
