@@ -18,22 +18,27 @@ public delegate bool ScriptAssetOpenHandler(string assetPath, out string diagnos
 /// <param name="instantiatePrefab">可选 prefab 实例化回调。</param>
 /// <param name="openScriptAsset">可选脚本资产打开回调。</param>
 /// <param name="deleteAsset">可选资产删除回调。</param>
+/// <param name="moveAsset">可选资产移动 / 重命名回调。</param>
 public sealed class AssetBrowserPanel(
     IAssetBrowserDataSource source,
     IAudioPreviewService? audioPreview = null,
     Action<string>? instantiatePrefab = null,
     ScriptAssetOpenHandler? openScriptAsset = null,
-    AssetBrowserDeleteHandler? deleteAsset = null) : IEditorPanel
+    AssetBrowserDeleteHandler? deleteAsset = null,
+    AssetBrowserMoveHandler? moveAsset = null) : IEditorPanel
 {
     private readonly IAssetBrowserDataSource _source = source ?? throw new ArgumentNullException(nameof(source));
     private readonly IAudioPreviewService? _audioPreview = audioPreview;
     private readonly Action<string>? _instantiatePrefab = instantiatePrefab;
     private readonly ScriptAssetOpenHandler? _openScriptAsset = openScriptAsset;
     private readonly AssetBrowserDeleteHandler? _deleteAsset = deleteAsset;
+    private readonly AssetBrowserMoveHandler? _moveAsset = moveAsset;
     private static readonly string[] KindFilterLabels = ["全部", "Material", "Texture", "Audio", "Scene", "Prefab", "Script", "Json", "Other"];
     private static readonly string[] SortModeLabels = ["路径", "类型 / 路径", "最近修改", "大小"];
     private string _search = string.Empty;
     private AssetBrowserDeleteRequest? _pendingDeleteRequest;
+    private AssetBrowserMoveRequest? _pendingMoveRequest;
+    private string _pendingMoveTargetPath = string.Empty;
 
     /// <inheritdoc />
     public string Title => EditorDockSpace.AssetBrowserWindowTitle;
@@ -236,6 +241,95 @@ public sealed class AssetBrowserPanel(
         return TryDeleteAsset(path, confirmed: true);
     }
 
+    /// <summary>
+    /// 开始移动 / 重命名指定资产；确认前绑定当前 stable asset id。
+    /// </summary>
+    /// <param name="path">当前资产路径。</param>
+    /// <returns>资产存在且可移动时返回 true。</returns>
+    public bool BeginMoveAsset(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        AssetBrowserItem? item = FindAsset(path);
+        if (item is null)
+        {
+            Status = $"资产不存在：{path}";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(item.Value.AssetId))
+        {
+            Status = $"资产缺少 stable asset id，不能移动：{item.Value.Path}";
+            return false;
+        }
+
+        _pendingMoveRequest = new AssetBrowserMoveRequest(
+            item.Value.Path,
+            item.Value.AssetId,
+            item.Value.Kind,
+            item.Value.Path);
+        _pendingMoveTargetPath = item.Value.Path;
+        Status = $"准备移动 {item.Value.Path}";
+        return true;
+    }
+
+    /// <summary>
+    /// 直接移动 / 重命名指定资产。
+    /// </summary>
+    /// <param name="path">当前资产路径。</param>
+    /// <param name="newPath">移动后的资产路径。</param>
+    /// <returns>移动已经执行时返回 true。</returns>
+    public bool TryMoveAsset(string path, string newPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newPath);
+        AssetBrowserItem? item = FindAsset(path);
+        if (item is null)
+        {
+            Status = $"资产不存在：{path}";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(item.Value.AssetId))
+        {
+            Status = $"资产缺少 stable asset id，不能移动：{item.Value.Path}";
+            return false;
+        }
+
+        return MoveAsset(new AssetBrowserMoveRequest(
+            item.Value.Path,
+            item.Value.AssetId,
+            item.Value.Kind,
+            newPath));
+    }
+
+    /// <summary>
+    /// 使用当前待编辑目标路径确认移动 / 重命名。
+    /// </summary>
+    /// <param name="path">当前资产路径。</param>
+    /// <returns>移动已经执行时返回 true。</returns>
+    public bool TryConfirmMoveAsset(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        AssetBrowserItem? item = FindAsset(path);
+        if (item is null)
+        {
+            _pendingMoveRequest = null;
+            _pendingMoveTargetPath = string.Empty;
+            Status = $"资产不存在：{path}";
+            return false;
+        }
+
+        if (!TryGetPendingMoveFor(item.Value, out AssetBrowserMoveRequest request))
+        {
+            _pendingMoveRequest = null;
+            _pendingMoveTargetPath = string.Empty;
+            Status = $"移动目标已失效，请重新请求移动：{item.Value.Path}";
+            return false;
+        }
+
+        return MoveAsset(request with { NewPath = _pendingMoveTargetPath });
+    }
+
     /// <inheritdoc />
     public void Draw(in EditorContext context)
     {
@@ -340,6 +434,29 @@ public sealed class AssetBrowserPanel(
         }
 
         ImGui.SameLine();
+        if (IsPendingMoveFor(item))
+        {
+            _ = ImGui.InputText($"新路径##move-{item.Path}", ref _pendingMoveTargetPath, 256);
+            ImGui.SameLine();
+            if (ImGui.Button($"确认移动##{item.Path}"))
+            {
+                _ = TryConfirmMoveAsset(item.Path);
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button($"取消移动##{item.Path}"))
+            {
+                _pendingMoveRequest = null;
+                _pendingMoveTargetPath = string.Empty;
+                Status = $"已取消移动 {item.Path}";
+            }
+        }
+        else if (ImGui.Button($"移动/重命名##{item.Path}"))
+        {
+            _ = BeginMoveAsset(item.Path);
+        }
+
+        ImGui.SameLine();
         if (IsPendingDeleteFor(item))
         {
             if (ImGui.Button($"确认删除##{item.Path}"))
@@ -422,6 +539,34 @@ public sealed class AssetBrowserPanel(
         return result.Succeeded;
     }
 
+    private bool MoveAsset(AssetBrowserMoveRequest request)
+    {
+        if (_moveAsset is null)
+        {
+            Status = "资产移动服务不可用";
+            return false;
+        }
+
+        if (string.Equals(request.Path, request.NewPath, StringComparison.OrdinalIgnoreCase))
+        {
+            Status = $"移动目标与源路径相同：{request.Path}";
+            return false;
+        }
+
+        AssetBrowserMoveResult result = _moveAsset(request);
+        Status = string.IsNullOrWhiteSpace(result.Diagnostic)
+            ? result.Succeeded ? $"已移动资产 {request.Path}" : $"移动未执行：{request.Path}"
+            : result.Diagnostic;
+        if (result.Succeeded)
+        {
+            _pendingMoveRequest = null;
+            _pendingMoveTargetPath = string.Empty;
+            _ = Refresh();
+        }
+
+        return result.Succeeded;
+    }
+
     private bool IsPendingDeleteFor(AssetBrowserItem item)
     {
         return TryGetPendingDeleteFor(item, out _);
@@ -430,6 +575,26 @@ public sealed class AssetBrowserPanel(
     private bool TryGetPendingDeleteFor(AssetBrowserItem item, out AssetBrowserDeleteRequest request)
     {
         if (_pendingDeleteRequest is { } pending &&
+            string.Equals(pending.Path, item.Path, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(pending.AssetId, item.AssetId, StringComparison.OrdinalIgnoreCase) &&
+            pending.Kind == item.Kind)
+        {
+            request = pending;
+            return true;
+        }
+
+        request = default;
+        return false;
+    }
+
+    private bool IsPendingMoveFor(AssetBrowserItem item)
+    {
+        return TryGetPendingMoveFor(item, out _);
+    }
+
+    private bool TryGetPendingMoveFor(AssetBrowserItem item, out AssetBrowserMoveRequest request)
+    {
+        if (_pendingMoveRequest is { } pending &&
             string.Equals(pending.Path, item.Path, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(pending.AssetId, item.AssetId, StringComparison.OrdinalIgnoreCase) &&
             pending.Kind == item.Kind)

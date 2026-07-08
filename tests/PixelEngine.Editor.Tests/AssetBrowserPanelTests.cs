@@ -260,6 +260,78 @@ public sealed class AssetBrowserPanelTests
         Assert.Contains("删除确认已失效", panel.Status, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证 Project Window 移动 / 重命名动作必须携带 stable asset id，并在成功后刷新资产列表。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelMovesOnlyStableAssetsThroughCallbackAndRefreshes()
+    {
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_texture"),
+            new AssetBrowserItem("textures/legacy.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null),
+        ]);
+        List<AssetBrowserMoveRequest> requests = [];
+        AssetBrowserMoveResult MoveAsset(AssetBrowserMoveRequest request)
+        {
+            requests.Add(request);
+            source.ReplaceAssets(
+            [
+                new AssetBrowserItem(request.NewPath, request.Kind, 20, DateTimeOffset.UnixEpoch, null, request.AssetId),
+                new AssetBrowserItem("textures/legacy.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null),
+            ]);
+            return new AssetBrowserMoveResult(true, $"moved {request.NewPath}");
+        }
+
+        AssetBrowserPanel panel = new(source, moveAsset: MoveAsset);
+
+        _ = panel.Refresh();
+        bool moved = panel.TryMoveAsset("textures/sand.png", "textures/renamed/sand.png");
+        bool legacy = panel.TryMoveAsset("textures/legacy.png", "textures/renamed/legacy.png");
+
+        Assert.True(moved);
+        Assert.False(legacy);
+        AssetBrowserMoveRequest request = Assert.Single(requests);
+        Assert.Equal("asset_texture", request.AssetId);
+        Assert.Equal("textures/sand.png", request.Path);
+        Assert.Equal("textures/renamed/sand.png", request.NewPath);
+        Assert.Equal(AssetBrowserItemKind.Texture, request.Kind);
+        Assert.Contains(panel.LastAssets, asset => asset.Path == "textures/renamed/sand.png" && asset.AssetId == "asset_texture");
+        Assert.Contains("stable asset id", panel.Status, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证移动确认绑定原始 stable asset id，资产刷新成同路径新 id 后不能复用旧确认。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelInvalidatesMoveConfirmationWhenAssetIdChanges()
+    {
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_old"),
+        ]);
+        List<AssetBrowserMoveRequest> requests = [];
+        AssetBrowserPanel panel = new(source, moveAsset: request =>
+        {
+            requests.Add(request);
+            return new AssetBrowserMoveResult(true, $"moved {request.NewPath}");
+        });
+
+        _ = panel.Refresh();
+        bool requested = panel.BeginMoveAsset("textures/sand.png");
+        source.ReplaceAssets(
+        [
+            new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_new"),
+        ]);
+        _ = panel.Refresh();
+        bool confirmed = panel.TryConfirmMoveAsset("textures/sand.png");
+
+        Assert.True(requested);
+        Assert.False(confirmed);
+        Assert.Empty(requests);
+        Assert.Contains("移动目标已失效", panel.Status, StringComparison.Ordinal);
+    }
+
     private sealed class RecordingThumbnailProvider : ITextureThumbnailProvider
     {
         public bool TryGetThumbnail(string assetPath, out AssetThumbnail thumbnail)

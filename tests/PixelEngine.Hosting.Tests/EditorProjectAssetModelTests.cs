@@ -204,6 +204,59 @@ public sealed class EditorProjectAssetModelTests
     }
 
     /// <summary>
+    /// 验证 Project Window move request 会回查 stable id，并通过 Shell 数据源重写活动场景与磁盘文档中的 typed asset reference。
+    /// </summary>
+    [Fact]
+    public void ProjectBrowserMoveRequestRechecksStableIdAndRewritesTypedAssetReferences()
+    {
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            string contentRoot = Path.Combine(projectRoot, "content");
+            EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
+            EditorAssetRecord texture = manifest.CreateAsset("textures/sand.png", EditorAssetType.Texture, textContents: "texture");
+            string oldReference = EditorAssetReferenceCodec.Encode(texture.Id, texture.LogicalPath, texture.AssetType);
+            EngineSceneDocument document = CreateSceneWithAssetReference(oldReference);
+            string scenePath = Path.Combine(contentRoot, "scenes", "main.scene");
+            EngineSceneDocumentLoader.SaveDocument(document, scenePath);
+            EditorSceneModel activeScene = EditorSceneModel.FromDocument(document);
+            EditorAssetBrowserDataSource source = new(manifest);
+
+            AssetBrowserMoveResult stale = source.MoveAsset(
+                new AssetBrowserMoveRequest(
+                    "textures/sand.png",
+                    "asset_missing",
+                    AssetBrowserItemKind.Texture,
+                    "textures/moved/sand.png"),
+                activeScene);
+            AssetBrowserMoveResult moved = source.MoveAsset(
+                new AssetBrowserMoveRequest(
+                    "textures/sand.png",
+                    texture.Id,
+                    AssetBrowserItemKind.Texture,
+                    "textures/moved/sand.png"),
+                activeScene);
+
+            string newReference = EditorAssetReferenceCodec.Encode(texture.Id, "textures/moved/sand.png", texture.AssetType);
+            Assert.False(stale.Succeeded);
+            Assert.Contains("stable asset id", stale.Diagnostic, StringComparison.Ordinal);
+            Assert.True(moved.Succeeded);
+            Assert.Contains("重写引用", moved.Diagnostic, StringComparison.Ordinal);
+            Assert.False(File.Exists(Path.Combine(contentRoot, "textures", "sand.png")));
+            Assert.True(File.Exists(Path.Combine(contentRoot, "textures", "moved", "sand.png")));
+            Assert.True(manifest.TryResolveAssetId(texture.Id, out EditorAssetRecord resolved));
+            Assert.Equal("textures/moved/sand.png", resolved.LogicalPath);
+            Assert.Equal(newReference, activeScene.Get(10).Components[0].SerializedFields["Texture"]);
+            EngineSceneDocument saved = EngineSceneDocumentLoader.LoadDocument(scenePath);
+            Assert.Equal(newReference, saved.Entities![0].Behaviours![0].SerializedFields!["Texture"]);
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
     /// 验证删除预检会阻止仍被 Scene / 活动 authoring 模型引用的资产。
     /// </summary>
     [Fact]

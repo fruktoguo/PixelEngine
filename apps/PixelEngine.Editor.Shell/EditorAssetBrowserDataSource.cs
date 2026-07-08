@@ -104,6 +104,37 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource
                 : $"已移动资产：{move.Asset.LogicalPath}");
     }
 
+    public AssetBrowserMoveResult MoveAsset(AssetBrowserMoveRequest request, EditorSceneModel? activeScene = null)
+    {
+        if (string.IsNullOrWhiteSpace(request.AssetId) ||
+            string.IsNullOrWhiteSpace(request.Path) ||
+            string.IsNullOrWhiteSpace(request.NewPath))
+        {
+            return new AssetBrowserMoveResult(false, "移动请求缺少 stable asset id、当前路径或目标路径。");
+        }
+
+        if (!_assets.TryResolveAssetId(request.AssetId, out EditorAssetRecord record))
+        {
+            return new AssetBrowserMoveResult(false, $"资产 manifest 缺少 stable asset id：{request.AssetId}");
+        }
+
+        EditorAssetType requestType = MapKind(request.Kind);
+        if (!string.Equals(record.LogicalPath, request.Path, StringComparison.OrdinalIgnoreCase) || record.AssetType != requestType)
+        {
+            return new AssetBrowserMoveResult(false, $"移动请求与 manifest 不一致：{request.Path} / {request.Kind}。");
+        }
+
+        try
+        {
+            EditorAssetBrowserMoveResult result = MoveAsset(record.LogicalPath, request.NewPath, activeScene);
+            return new AssetBrowserMoveResult(result.Succeeded, result.Diagnostic);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException)
+        {
+            return new AssetBrowserMoveResult(false, ex.Message);
+        }
+    }
+
     private bool TryResolveThumbnail(string logicalPath, out AssetThumbnail thumbnail)
     {
         thumbnail = default;
