@@ -61,6 +61,8 @@ worlds/*.world
 logs/
 *.log
 imgui.ini
+.pixelengine/
+**/.pixelengine/
 
 # ---- OS ----
 Thumbs.db
