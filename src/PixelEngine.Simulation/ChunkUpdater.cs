@@ -60,7 +60,7 @@ internal static class ChunkUpdater
                     continue;
                 }
 
-                ProcessLifetime(ref window, chunks, lifetimeSink, wx, wy, material, parityBit);
+                ProcessLifetime(ref window, chunk, lifetimeSink, wx, wy, material, parityBit);
                 material = window.GetMaterial(wx, wy);
                 if (material == 0)
                 {
@@ -85,9 +85,9 @@ internal static class ChunkUpdater
                 {
                     CellType.Empty => false,
                     CellType.Solid => false,
-                    CellType.Powder => TryMovePowder(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, preferNegative, out activeX, out activeY),
-                    CellType.Liquid => TryMoveLiquid(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, preferNegative, out activeX, out activeY),
-                    CellType.Gas => TryMoveGas(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, ref rng, out activeX, out activeY),
+                    CellType.Powder => TryMovePowder(ref window, chunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, preferNegative, out activeX, out activeY),
+                    CellType.Liquid => TryMoveLiquid(ref window, chunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, preferNegative, out activeX, out activeY),
+                    CellType.Gas => TryMoveGas(ref window, chunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, ref rng, out activeX, out activeY),
                     CellType.Fire => false,
                     _ => throw new InvalidOperationException($"未知 CellType：{materialType}。"),
                 };
@@ -108,6 +108,7 @@ internal static class ChunkUpdater
 
     private static bool TryMovePowder(
         ref NeighborWindow window,
+        Chunk centerChunk,
         IChunkSource chunks,
         MaterialPropsTable materials,
         IRigidDamageSink rigidDamageSink,
@@ -121,13 +122,14 @@ internal static class ChunkUpdater
         out int targetY)
     {
         int firstDx = preferNegative ? -1 : 1;
-        return TryMoveDown(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, out targetX, out targetY) ||
-            TryMoveTo(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx + firstDx, wy + 1, material, parityBit, out targetX, out targetY) ||
-            TryMoveTo(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx - firstDx, wy + 1, material, parityBit, out targetX, out targetY);
+        return TryMoveDown(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, out targetX, out targetY) ||
+            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx + firstDx, wy + 1, material, parityBit, out targetX, out targetY) ||
+            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx - firstDx, wy + 1, material, parityBit, out targetX, out targetY);
     }
 
     private static bool TryMoveDown(
         ref NeighborWindow window,
+        Chunk centerChunk,
         IChunkSource chunks,
         MaterialPropsTable materials,
         IRigidDamageSink rigidDamageSink,
@@ -162,11 +164,12 @@ internal static class ChunkUpdater
         }
 
         return targetY != wy &&
-            TryMoveTo(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx, targetY, material, parityBit, out movedX, out movedY);
+            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx, targetY, material, parityBit, out movedX, out movedY);
     }
 
     private static bool TryMoveLiquid(
         ref NeighborWindow window,
+        Chunk centerChunk,
         IChunkSource chunks,
         MaterialPropsTable materials,
         IRigidDamageSink rigidDamageSink,
@@ -179,18 +182,19 @@ internal static class ChunkUpdater
         out int targetX,
         out int targetY)
     {
-        if (TryMovePowder(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, preferNegative, out targetX, out targetY))
+        if (TryMovePowder(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, preferNegative, out targetX, out targetY))
         {
             return true;
         }
 
         int firstDir = preferNegative ? -1 : 1;
-        return TryMoveHorizontal(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, firstDir, out targetX, out targetY) ||
-            TryMoveHorizontal(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, -firstDir, out targetX, out targetY);
+        return TryMoveHorizontal(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, firstDir, out targetX, out targetY) ||
+            TryMoveHorizontal(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, -firstDir, out targetX, out targetY);
     }
 
     private static bool TryMoveGas(
         ref NeighborWindow window,
+        Chunk centerChunk,
         IChunkSource chunks,
         MaterialPropsTable materials,
         IRigidDamageSink rigidDamageSink,
@@ -204,15 +208,16 @@ internal static class ChunkUpdater
         out int targetY)
     {
         int firstDx = rng.NextInt(2) == 0 ? -1 : 1;
-        return TryMoveTo(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx, wy - 1, material, parityBit, out targetX, out targetY) ||
-            TryMoveTo(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx + firstDx, wy - 1, material, parityBit, out targetX, out targetY) ||
-            TryMoveTo(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx - firstDx, wy - 1, material, parityBit, out targetX, out targetY) ||
-            TryMoveHorizontal(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, firstDx, out targetX, out targetY) ||
-            TryMoveHorizontal(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, -firstDx, out targetX, out targetY);
+        return TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx, wy - 1, material, parityBit, out targetX, out targetY) ||
+            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx + firstDx, wy - 1, material, parityBit, out targetX, out targetY) ||
+            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx - firstDx, wy - 1, material, parityBit, out targetX, out targetY) ||
+            TryMoveHorizontal(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, firstDx, out targetX, out targetY) ||
+            TryMoveHorizontal(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, -firstDx, out targetX, out targetY);
     }
 
     private static bool TryMoveHorizontal(
         ref NeighborWindow window,
+        Chunk centerChunk,
         IChunkSource chunks,
         MaterialPropsTable materials,
         IRigidDamageSink rigidDamageSink,
@@ -241,11 +246,12 @@ internal static class ChunkUpdater
         }
 
         return targetX != wx &&
-            TryMoveTo(ref window, chunks, materials, rigidDamageSink, diagnostics, wx, wy, targetX, wy, material, parityBit, out movedX, out movedY);
+            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, targetX, wy, material, parityBit, out movedX, out movedY);
     }
 
     private static bool TryMoveTo(
         ref NeighborWindow window,
+        Chunk centerChunk,
         IChunkSource chunks,
         MaterialPropsTable materials,
         IRigidDamageSink rigidDamageSink,
@@ -279,10 +285,10 @@ internal static class ChunkUpdater
         _ = window.Swap(sourceX, sourceY, targetX, targetY);
         window.SetFlags(sourceX, sourceY, CellFlags.SetParity(window.GetFlags(sourceX, sourceY), parityBit));
         window.SetFlags(targetX, targetY, CellFlags.SetParity(window.GetFlags(targetX, targetY), parityBit));
-        MarkDirty(chunks, sourceX, sourceY);
+        MarkCenterDirty(centerChunk, sourceX, sourceY);
         if (targetSlot == 4)
         {
-            MarkDirty(chunks, targetX, targetY);
+            MarkCenterDirty(centerChunk, targetX, targetY);
         }
         else
         {
@@ -295,7 +301,7 @@ internal static class ChunkUpdater
 
     private static void ProcessLifetime(
         ref NeighborWindow window,
-        IChunkSource chunks,
+        Chunk centerChunk,
         ILifetimeSink lifetimeSink,
         int wx,
         int wy,
@@ -310,7 +316,7 @@ internal static class ChunkUpdater
 
         lifetime--;
         window.SetLifetime(wx, wy, lifetime);
-        MarkDirty(chunks, wx, wy);
+        MarkCenterDirty(centerChunk, wx, wy);
         if (lifetime == 0)
         {
             lifetimeSink.OnExpired(ref window, wx, wy, material, parityBit);
@@ -447,6 +453,14 @@ internal static class ChunkUpdater
         return targetMaterial == 0 ||
             (!CellFlags.MatchesFrame(window.GetFlags(targetX, targetY), parityBit) &&
             materials.DensityOf(targetMaterial) < materials.DensityOf(sourceMaterial));
+    }
+
+    private static void MarkCenterDirty(Chunk centerChunk, int wx, int wy)
+    {
+        centerChunk.MarkWorkingDirty(
+            CellAddressing.LocalCoord(wx),
+            CellAddressing.LocalCoord(wy),
+            EngineConstants.DirtyRectPadding);
     }
 
     private static void MarkDirty(IChunkSource chunks, int wx, int wy)
