@@ -9,6 +9,7 @@ namespace PixelEngine.Gui;
 public sealed class HexaImGuiBackend : IGuiImGuiBackend
 {
     private readonly GuiFontManager _fontManager = new();
+    private readonly GuiClipboardBridge _clipboard = new();
     private ImGuiContextPtr _context;
     private string _layoutPath = string.Empty;
     private ImGuiFrameMetrics _frameMetrics = ImGuiFrameMetrics.Create(1, 1, 1f, 1f);
@@ -44,6 +45,7 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
         ImGuiImplOpenGL3.SetCurrentContext(_context);
         ImGuiIOPtr io = ImGui.GetIO();
         io.ConfigFlags |= ImGuiConfigFlags.NavEnableKeyboard;
+        _clipboard.Attach();
         if (options.EnableMultiViewport)
         {
             io.ConfigFlags |= ImGuiConfigFlags.ViewportsEnable;
@@ -142,6 +144,7 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
         }
 
         ImGuiImplOpenGL3.Shutdown();
+        _clipboard.Detach();
         if (!string.IsNullOrWhiteSpace(_layoutPath))
         {
             ImGui.SaveIniSettingsToDisk(_layoutPath);
@@ -149,6 +152,7 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
 
         ImGui.DestroyContext(_context);
         _fontManager.Dispose();
+        _clipboard.Dispose();
         _context = default;
         _layoutPath = string.Empty;
         _frameMetrics = ImGuiFrameMetrics.Create(1, 1, 1f, 1f);

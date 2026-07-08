@@ -13,6 +13,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
 {
     private readonly EditorDockSpace _dockSpace = new();
     private readonly GuiFontManager _fontManager = new();
+    private readonly GuiClipboardBridge _clipboard = new();
     private ImGuiContextPtr _context;
     private ImPlotContextPtr _plotContext;
     private string _layoutPath = string.Empty;
@@ -53,6 +54,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
         ImPlot.SetCurrentContext(_plotContext);
         ImGuiIOPtr io = ImGui.GetIO();
         io.ConfigFlags |= EditorDockSpace.BuildConfigFlags(options.EnableMultiViewport);
+        _clipboard.Attach();
         AddConfiguredFont(io, options);
         bool hasSavedLayout = File.Exists(_layoutPath);
         _dockSpace.ResetLayoutState(buildDefaultLayout: !hasSavedLayout);
@@ -177,6 +179,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
         }
 
         ImGuiImplOpenGL3.Shutdown();
+        _clipboard.Detach();
         ImPlot.DestroyContext(_plotContext);
         if (!string.IsNullOrWhiteSpace(_layoutPath))
         {
@@ -185,6 +188,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
 
         ImGui.DestroyContext(_context);
         _fontManager.Dispose();
+        _clipboard.Dispose();
         _context = default;
         _plotContext = default;
         _layoutPath = string.Empty;
