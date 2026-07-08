@@ -11,6 +11,7 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
     private readonly GuiFontManager _fontManager = new();
     private ImGuiContextPtr _context;
     private string _layoutPath = string.Empty;
+    private ImGuiFrameMetrics _frameMetrics = ImGuiFrameMetrics.Create(1, 1, 1f, 1f);
     private bool _initialized;
 
     /// <inheritdoc />
@@ -68,6 +69,7 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
         }
 
         ImGuiFrameMetrics metrics = ImGuiFrameMetrics.Create(width, height, framebufferScaleX, framebufferScaleY);
+        _frameMetrics = metrics;
 
         ImGuiIOPtr io = ImGui.GetIO();
         io.DisplaySize = metrics.DisplaySize;
@@ -90,7 +92,8 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
     {
         if (_initialized)
         {
-            ImGui.AddMousePosEvent(ImGui.GetIO(), x, y);
+            System.Numerics.Vector2 mapped = _frameMetrics.MapMousePosition(x, y);
+            ImGui.AddMousePosEvent(ImGui.GetIO(), mapped.X, mapped.Y);
         }
     }
 
@@ -148,6 +151,7 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
         _fontManager.Dispose();
         _context = default;
         _layoutPath = string.Empty;
+        _frameMetrics = ImGuiFrameMetrics.Create(1, 1, 1f, 1f);
         _initialized = false;
     }
 

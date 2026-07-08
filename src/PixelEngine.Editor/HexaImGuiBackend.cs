@@ -16,6 +16,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
     private ImGuiContextPtr _context;
     private ImPlotContextPtr _plotContext;
     private string _layoutPath = string.Empty;
+    private ImGuiFrameMetrics _frameMetrics = ImGuiFrameMetrics.Create(1, 1, 1f, 1f);
     private bool _initialized;
 
     /// <inheritdoc />
@@ -74,6 +75,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
         }
 
         ImGuiFrameMetrics metrics = ImGuiFrameMetrics.Create(width, height, framebufferScaleX, framebufferScaleY);
+        _frameMetrics = metrics;
 
         ImGuiIOPtr io = ImGui.GetIO();
         io.DisplaySize = metrics.DisplaySize;
@@ -118,7 +120,8 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
             return;
         }
 
-        ImGui.AddMousePosEvent(ImGui.GetIO(), x, y);
+        System.Numerics.Vector2 mapped = _frameMetrics.MapMousePosition(x, y);
+        ImGui.AddMousePosEvent(ImGui.GetIO(), mapped.X, mapped.Y);
     }
 
     /// <inheritdoc />
@@ -185,6 +188,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
         _context = default;
         _plotContext = default;
         _layoutPath = string.Empty;
+        _frameMetrics = ImGuiFrameMetrics.Create(1, 1, 1f, 1f);
         _initialized = false;
     }
 
