@@ -85,9 +85,9 @@ internal static class ChunkUpdater
                 {
                     CellType.Empty => false,
                     CellType.Solid => false,
-                    CellType.Powder => TryMovePowder(ref window, chunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, preferNegative, out activeX, out activeY),
-                    CellType.Liquid => TryMoveLiquid(ref window, chunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, preferNegative, out activeX, out activeY),
-                    CellType.Gas => TryMoveGas(ref window, chunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, ref rng, out activeX, out activeY),
+                    CellType.Powder => TryMovePowder(ref window, chunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, materials.DensityOf(material), parityBit, preferNegative, out activeX, out activeY),
+                    CellType.Liquid => TryMoveLiquid(ref window, chunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, materials.DensityOf(material), materials.DispersionOf(material), parityBit, preferNegative, out activeX, out activeY),
+                    CellType.Gas => TryMoveGas(ref window, chunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, materials.DensityOf(material), materials.DispersionOf(material), parityBit, ref rng, out activeX, out activeY),
                     CellType.Fire => false,
                     _ => throw new InvalidOperationException($"未知 CellType：{materialType}。"),
                 };
@@ -115,16 +115,16 @@ internal static class ChunkUpdater
         SimulationDiagnostics diagnostics,
         int wx,
         int wy,
-        ushort material,
+        byte sourceDensity,
         byte parityBit,
         bool preferNegative,
         out int targetX,
         out int targetY)
     {
         int firstDx = preferNegative ? -1 : 1;
-        return TryMoveDown(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, out targetX, out targetY) ||
-            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx + firstDx, wy + 1, material, parityBit, out targetX, out targetY) ||
-            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx - firstDx, wy + 1, material, parityBit, out targetX, out targetY);
+        return TryMoveDown(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, sourceDensity, parityBit, out targetX, out targetY) ||
+            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx + firstDx, wy + 1, sourceDensity, parityBit, out targetX, out targetY) ||
+            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx - firstDx, wy + 1, sourceDensity, parityBit, out targetX, out targetY);
     }
 
     private static bool TryMoveDown(
@@ -136,7 +136,7 @@ internal static class ChunkUpdater
         SimulationDiagnostics diagnostics,
         int wx,
         int wy,
-        ushort material,
+        byte sourceDensity,
         byte parityBit,
         out int movedX,
         out int movedY)
@@ -155,7 +155,7 @@ internal static class ChunkUpdater
             }
 
             if (!CellFlags.MatchesFrame(window.GetFlags(wx, candidateY), parityBit) &&
-                materials.DensityOf(targetMaterial) < materials.DensityOf(material))
+                materials.DensityOf(targetMaterial) < sourceDensity)
             {
                 targetY = candidateY;
             }
@@ -164,7 +164,7 @@ internal static class ChunkUpdater
         }
 
         return targetY != wy &&
-            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx, targetY, material, parityBit, out movedX, out movedY);
+            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx, targetY, sourceDensity, parityBit, out movedX, out movedY);
     }
 
     private static bool TryMoveLiquid(
@@ -176,20 +176,21 @@ internal static class ChunkUpdater
         SimulationDiagnostics diagnostics,
         int wx,
         int wy,
-        ushort material,
+        byte sourceDensity,
+        byte dispersion,
         byte parityBit,
         bool preferNegative,
         out int targetX,
         out int targetY)
     {
-        if (TryMovePowder(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, preferNegative, out targetX, out targetY))
+        if (TryMovePowder(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, sourceDensity, parityBit, preferNegative, out targetX, out targetY))
         {
             return true;
         }
 
         int firstDir = preferNegative ? -1 : 1;
-        return TryMoveHorizontal(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, firstDir, out targetX, out targetY) ||
-            TryMoveHorizontal(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, -firstDir, out targetX, out targetY);
+        return TryMoveHorizontal(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, sourceDensity, dispersion, parityBit, firstDir, out targetX, out targetY) ||
+            TryMoveHorizontal(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, sourceDensity, dispersion, parityBit, -firstDir, out targetX, out targetY);
     }
 
     private static bool TryMoveGas(
@@ -201,18 +202,19 @@ internal static class ChunkUpdater
         SimulationDiagnostics diagnostics,
         int wx,
         int wy,
-        ushort material,
+        byte sourceDensity,
+        byte dispersion,
         byte parityBit,
         ref Pcg32 rng,
         out int targetX,
         out int targetY)
     {
         int firstDx = rng.NextInt(2) == 0 ? -1 : 1;
-        return TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx, wy - 1, material, parityBit, out targetX, out targetY) ||
-            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx + firstDx, wy - 1, material, parityBit, out targetX, out targetY) ||
-            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx - firstDx, wy - 1, material, parityBit, out targetX, out targetY) ||
-            TryMoveHorizontal(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, firstDx, out targetX, out targetY) ||
-            TryMoveHorizontal(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, material, parityBit, -firstDx, out targetX, out targetY);
+        return TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx, wy - 1, sourceDensity, parityBit, out targetX, out targetY) ||
+            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx + firstDx, wy - 1, sourceDensity, parityBit, out targetX, out targetY) ||
+            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, wx - firstDx, wy - 1, sourceDensity, parityBit, out targetX, out targetY) ||
+            TryMoveHorizontal(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, sourceDensity, dispersion, parityBit, firstDx, out targetX, out targetY) ||
+            TryMoveHorizontal(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, sourceDensity, dispersion, parityBit, -firstDx, out targetX, out targetY);
     }
 
     private static bool TryMoveHorizontal(
@@ -224,7 +226,8 @@ internal static class ChunkUpdater
         SimulationDiagnostics diagnostics,
         int wx,
         int wy,
-        ushort material,
+        byte sourceDensity,
+        byte dispersion,
         byte parityBit,
         int direction,
         out int movedX,
@@ -232,12 +235,12 @@ internal static class ChunkUpdater
     {
         movedX = wx;
         movedY = wy;
-        int maxDistance = Math.Min((int)materials.DispersionOf(material), EngineConstants.MoveCap);
+        int maxDistance = Math.Min((int)dispersion, EngineConstants.MoveCap);
         int targetX = wx;
         for (int step = 1; step <= maxDistance; step++)
         {
             int candidateX = wx + (direction * step);
-            if (!CanDisplace(ref window, materials, material, candidateX, wy, parityBit))
+            if (!CanDisplace(ref window, materials, sourceDensity, candidateX, wy, parityBit, out _, out _))
             {
                 break;
             }
@@ -246,7 +249,7 @@ internal static class ChunkUpdater
         }
 
         return targetX != wx &&
-            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, targetX, wy, material, parityBit, out movedX, out movedY);
+            TryMoveTo(ref window, centerChunk, chunks, materials, rigidDamageSink, diagnostics, wx, wy, targetX, wy, sourceDensity, parityBit, out movedX, out movedY);
     }
 
     private static bool TryMoveTo(
@@ -260,7 +263,7 @@ internal static class ChunkUpdater
         int sourceY,
         int targetX,
         int targetY,
-        ushort sourceMaterial,
+        byte sourceDensity,
         byte parityBit,
         out int movedX,
         out int movedY)
@@ -268,14 +271,12 @@ internal static class ChunkUpdater
         movedX = sourceX;
         movedY = sourceY;
         ValidateMoveCap(sourceX, sourceY, targetX, targetY);
-        if (!CanDisplace(ref window, materials, sourceMaterial, targetX, targetY, parityBit))
+        if (!CanDisplace(ref window, materials, sourceDensity, targetX, targetY, parityBit, out ushort targetMaterial, out byte targetFlags))
         {
             return false;
         }
 
         int targetSlot = window.SlotOf(targetX, targetY);
-        ushort targetMaterial = window.GetMaterial(targetX, targetY);
-        byte targetFlags = window.GetFlags(targetX, targetY);
         if (CellFlags.Has(targetFlags, CellFlags.RigidOwned))
         {
             rigidDamageSink.OnOwnedCellDamaged(targetX, targetY, targetMaterial);
@@ -444,15 +445,18 @@ internal static class ChunkUpdater
     private static bool CanDisplace(
         ref NeighborWindow window,
         MaterialPropsTable materials,
-        ushort sourceMaterial,
+        byte sourceDensity,
         int targetX,
         int targetY,
-        byte parityBit)
+        byte parityBit,
+        out ushort targetMaterial,
+        out byte targetFlags)
     {
-        ushort targetMaterial = window.GetMaterial(targetX, targetY);
+        targetMaterial = window.GetMaterial(targetX, targetY);
+        targetFlags = window.GetFlags(targetX, targetY);
         return targetMaterial == 0 ||
-            (!CellFlags.MatchesFrame(window.GetFlags(targetX, targetY), parityBit) &&
-            materials.DensityOf(targetMaterial) < materials.DensityOf(sourceMaterial));
+            (!CellFlags.MatchesFrame(targetFlags, parityBit) &&
+            materials.DensityOf(targetMaterial) < sourceDensity);
     }
 
     private static void MarkCenterDirty(Chunk centerChunk, int wx, int wy)
