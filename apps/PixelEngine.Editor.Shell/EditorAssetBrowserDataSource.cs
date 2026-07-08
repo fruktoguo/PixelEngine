@@ -4,12 +4,29 @@ using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell;
 
-internal sealed class EditorAssetBrowserDataSource(
-    EditorAssetManifestStore assets,
-    ITextureThumbnailProvider? thumbnailProvider = null) : IAssetBrowserDataSource
+internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource
 {
-    private readonly EditorAssetManifestStore _assets = assets ?? throw new ArgumentNullException(nameof(assets));
-    private readonly ITextureThumbnailProvider? _thumbnailProvider = thumbnailProvider;
+    private readonly EditorAssetManifestStore _assets;
+    private readonly ITextureThumbnailProvider? _thumbnailProvider;
+    private readonly EditorProjectSceneAssetMoveService? _sceneAssetMoveService;
+
+    public EditorAssetBrowserDataSource(EditorProject project, ITextureThumbnailProvider? thumbnailProvider = null)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        _assets = new EditorAssetManifestStore(project);
+        _thumbnailProvider = thumbnailProvider;
+        _sceneAssetMoveService = new EditorProjectSceneAssetMoveService(project, _assets);
+    }
+
+    public EditorAssetBrowserDataSource(
+        EditorAssetManifestStore assets,
+        ITextureThumbnailProvider? thumbnailProvider = null,
+        EditorProjectSceneAssetMoveService? sceneAssetMoveService = null)
+    {
+        _assets = assets ?? throw new ArgumentNullException(nameof(assets));
+        _thumbnailProvider = thumbnailProvider;
+        _sceneAssetMoveService = sceneAssetMoveService;
+    }
 
     public IReadOnlyList<AssetBrowserItem> ListAssets()
     {
@@ -53,6 +70,38 @@ internal sealed class EditorAssetBrowserDataSource(
 
         EditorAssetDeleteResult result = _assets.DeleteAsset(record.LogicalPath, activeScene, request.Confirmed);
         return new AssetBrowserDeleteResult(result.Deleted, result.RequiresConfirmation, result.Diagnostic);
+    }
+
+    public EditorAssetBrowserMoveResult MoveAsset(string currentPath, string newPath, EditorSceneModel? activeScene = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(currentPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newPath);
+        EditorAssetRecord current = _assets.EnsureAsset(currentPath);
+        EditorAssetType newType = EditorAssetManifestStore.Classify(newPath);
+        if (current.AssetType != newType)
+        {
+            return new EditorAssetBrowserMoveResult(
+                false,
+                current,
+                $"资产移动不能改变类型：{current.LogicalPath} -> {newPath}。");
+        }
+
+        if (current.AssetType == EditorAssetType.Scene && _sceneAssetMoveService is not null)
+        {
+            EditorSceneAssetMoveResult result = _sceneAssetMoveService.MoveSceneAsset(current.LogicalPath, newPath, activeScene);
+            return new EditorAssetBrowserMoveResult(
+                true,
+                result.AssetMove.Asset,
+                $"已移动 Scene 资产并同步引用：{result.SettingsUpdates.FormatDiagnostic()}");
+        }
+
+        EditorAssetMoveResult move = _assets.MoveAsset(current.LogicalPath, newPath, activeScene);
+        return new EditorAssetBrowserMoveResult(
+            true,
+            move.Asset,
+            move.UpdatedActiveScene || move.UpdatedReferenceDocuments > 0
+                ? $"已移动资产并重写引用：active={move.UpdatedActiveScene}, documents={move.UpdatedReferenceDocuments.ToString(CultureInfo.InvariantCulture)}"
+                : $"已移动资产：{move.Asset.LogicalPath}");
     }
 
     private bool TryResolveThumbnail(string logicalPath, out AssetThumbnail thumbnail)
@@ -291,3 +340,8 @@ internal sealed class EditorAssetBrowserDataSource(
         };
     }
 }
+
+internal sealed record EditorAssetBrowserMoveResult(
+    bool Succeeded,
+    EditorAssetRecord Asset,
+    string Diagnostic);

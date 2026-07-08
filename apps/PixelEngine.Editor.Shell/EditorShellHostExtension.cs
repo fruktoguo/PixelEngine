@@ -232,7 +232,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
         _editor.AddPanel(_sceneViewPanel);
         _gameViewPanel = new GameViewPanel(() => pipeline.CurrentViewportTexture);
         _editor.AddPanel(_gameViewPanel);
-        EditorAssetBrowserDataSource assetBrowserDataSource = new(new EditorAssetManifestStore(_project));
+        EditorAssetBrowserDataSource assetBrowserDataSource = new(_project);
         _editor.AddPanel(new AssetBrowserPanel(
             assetBrowserDataSource,
             instantiatePrefab: _app.InstantiatePrefab,

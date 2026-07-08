@@ -1,5 +1,6 @@
 using PixelEngine.Editor;
 using PixelEngine.Editor.Shell;
+using PixelEngine.Editor.Shell.Build;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -110,6 +111,91 @@ public sealed class EditorProjectAssetModelTests
             EditorPrefabLink resolved = staleScene.Get(10).PrefabLink!;
             Assert.Equal(original.Id, resolved.AssetId);
             Assert.Equal("prefabs/moved/rock.prefab", resolved.AssetPath);
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
+    /// 验证移动 Scene 资产时同步工程、Project/Player/Build Settings 与玩家 startup 引用。
+    /// </summary>
+    [Fact]
+    public void MoveSceneAssetSynchronizesProjectSettingsAndBuildProfile()
+    {
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            EditorProject project = EditorProject.CreateNew(projectRoot, "Scene Move Project");
+            string contentRoot = project.ContentRootPath;
+            string oldScene = "scenes/main.scene";
+            string newScene = "scenes/moved/lava.scene";
+            EngineProjectSettingsStore.SaveProjectSettings(
+                projectRoot,
+                ProjectSettingsDto.CreateDefault(project.Name) with
+                {
+                    StartScene = oldScene,
+                });
+            EngineProjectSettingsStore.SavePlayerSettings(
+                projectRoot,
+                PlayerSettingsDto.CreateDefault(project.Name) with
+                {
+                    StartupScene = oldScene,
+                });
+            EngineProjectSettingsStore.SaveStartupSettings(
+                contentRoot,
+                EngineProjectStartupSettings.CreateDefault() with
+                {
+                    StartScene = oldScene,
+                });
+            BuildProfileDto buildProfile = new()
+            {
+                OutputDirectory = "artifacts/player",
+                ProductName = "Scene Move Project",
+                Version = "0.1.0",
+                PackageWholeContent = false,
+                Scenes =
+                [
+                    new BuildProfileSceneDto
+                    {
+                        SceneName = "main",
+                        Source = oldScene,
+                        Included = true,
+                        IsStartup = true,
+                        SourceKind = SceneSourceKind.SceneFile,
+                    },
+                ],
+            };
+            EngineProjectSettingsStore.SaveBuildProfile(projectRoot, buildProfile);
+            EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
+            _ = manifest.EnsureAsset(oldScene);
+            EditorAssetBrowserDataSource source = new(
+                manifest,
+                sceneAssetMoveService: new EditorProjectSceneAssetMoveService(project, manifest));
+
+            EditorAssetBrowserMoveResult result = source.MoveAsset(oldScene, newScene);
+
+            Assert.True(result.Succeeded);
+            Assert.Equal(newScene, result.Asset.LogicalPath);
+            Assert.Contains("project=1", result.Diagnostic, StringComparison.Ordinal);
+            Assert.Contains("buildSettings=1", result.Diagnostic, StringComparison.Ordinal);
+            Assert.False(File.Exists(Path.Combine(contentRoot, oldScene.Replace('/', Path.DirectorySeparatorChar))));
+            Assert.True(File.Exists(Path.Combine(contentRoot, newScene.Replace('/', Path.DirectorySeparatorChar))));
+
+            EditorProject reloadedProject = EditorProject.Load(projectRoot);
+            Assert.Equal(newScene, reloadedProject.StartScene);
+            Assert.DoesNotContain(reloadedProject.Scenes, scene => string.Equals(scene.Path, oldScene, StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(reloadedProject.Scenes, scene => string.Equals(scene.Path, newScene, StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(newScene, EngineProjectSettingsStore.LoadProjectSettings(projectRoot).StartScene);
+            Assert.Equal(newScene, EngineProjectSettingsStore.LoadPlayerSettings(projectRoot).StartupScene);
+            Assert.Equal(newScene, EngineProjectSettingsStore.LoadStartupSettings(contentRoot).StartScene);
+
+            BuildProfileDto movedBuildProfile = new BuildSettingsStore(project).Load();
+            BuildRequest request = movedBuildProfile.ToRequest();
+            Assert.Equal(newScene, request.StartScene);
+            Assert.Equal([newScene], request.IncludedScenes);
+            Assert.DoesNotContain(movedBuildProfile.Scenes, scene => string.Equals(scene.Source, oldScene, StringComparison.OrdinalIgnoreCase));
         }
         finally
         {

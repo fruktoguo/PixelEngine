@@ -199,6 +199,55 @@ internal sealed class EditorProject
         Save();
     }
 
+    public bool ReplaceScenePath(string currentRelativePath, string newRelativePath)
+    {
+        string current = NormalizeScenePath(currentRelativePath, DefaultStartScene, nameof(currentRelativePath));
+        string next = NormalizeScenePath(newRelativePath, DefaultStartScene, nameof(newRelativePath));
+        if (string.Equals(current, next, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        bool changed = string.Equals(StartScene, current, StringComparison.OrdinalIgnoreCase);
+        List<EditorProjectSceneEntry> entries = new(Scenes.Count);
+        for (int i = 0; i < Scenes.Count; i++)
+        {
+            EditorProjectSceneEntry scene = Scenes[i];
+            if (string.Equals(scene.Path, current, StringComparison.OrdinalIgnoreCase))
+            {
+                changed = true;
+                AddSceneEntry(entries, next, RenameSceneIfPathDerived(scene.Name, current, next));
+                continue;
+            }
+
+            AddSceneEntry(entries, scene.Path, scene.Name);
+        }
+
+        if (!changed)
+        {
+            return false;
+        }
+
+        if (!ContainsScene(entries, next))
+        {
+            AddSceneEntry(entries, next, Path.GetFileNameWithoutExtension(next) ?? next);
+        }
+
+        string startScene = string.Equals(StartScene, current, StringComparison.OrdinalIgnoreCase) ? next : StartScene;
+        Document = Normalize(new EditorProjectDocument
+        {
+            FormatVersion = CurrentFormatVersion,
+            Name = Name,
+            ContentRoot = ContentRoot,
+            ScriptSourceDir = ScriptSourceDir,
+            StartScene = startScene,
+            Scenes = [.. entries],
+        });
+        Scenes = Document.Scenes ?? [];
+        Save();
+        return true;
+    }
+
     private string ResolveSceneName(string relativePath)
     {
         for (int i = 0; i < Scenes.Count; i++)
@@ -212,6 +261,29 @@ internal sealed class EditorProject
         }
 
         return Path.GetFileNameWithoutExtension(relativePath) ?? relativePath;
+    }
+
+    private static void AddSceneEntry(List<EditorProjectSceneEntry> entries, string path, string name)
+    {
+        if (ContainsScene(entries, path))
+        {
+            return;
+        }
+
+        entries.Add(new EditorProjectSceneEntry
+        {
+            Name = string.IsNullOrWhiteSpace(name) ? Path.GetFileNameWithoutExtension(path) ?? path : name.Trim(),
+            Path = path,
+        });
+    }
+
+    private static string RenameSceneIfPathDerived(string sceneName, string currentPath, string nextPath)
+    {
+        string currentName = Path.GetFileNameWithoutExtension(currentPath) ?? currentPath;
+        return string.IsNullOrWhiteSpace(sceneName) ||
+            string.Equals(sceneName, currentName, StringComparison.OrdinalIgnoreCase)
+                ? Path.GetFileNameWithoutExtension(nextPath) ?? nextPath
+                : sceneName;
     }
 
     private static EditorProjectSceneEntry[] EnsureSceneEntry(EditorProjectSceneEntry[] entries, string relativePath)
