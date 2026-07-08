@@ -16,6 +16,10 @@ namespace PixelEngine.Physics;
 /// </summary>
 public sealed class PhysicsSystem : IDisposable
 {
+    private const int MaxCharacterPushBodies = 16;
+    private const float CharacterPushContactProbe = 0.05f;
+    private const float CharacterPushMinimumBlockedPixels = 0.001f;
+
     private readonly RigidDamageQueue? _damageQueue;
     private readonly RigidBodyDestruction? _destruction;
     private readonly JobSystem? _jobs;
@@ -188,6 +192,17 @@ public sealed class PhysicsSystem : IDisposable
     public int SubStepCount { get; private set; } = 4;
 
     /// <summary>
+    /// 角色水平移动被 <see cref="CellFlags.RigidOwned"/> stamp 阻挡时，每个被阻挡像素转化为刚体冲量的系数。
+    /// 设为 0 可禁用 kinematic→dynamic 反作用推力。
+    /// </summary>
+    public float CharacterPushImpulsePerBlockedPixel { get; set; } = 96f;
+
+    /// <summary>
+    /// 单次角色移动对同一刚体施加的最大水平冲量，单位为像素质量单位每秒。
+    /// </summary>
+    public float CharacterPushMaxImpulse { get; set; } = 512f;
+
+    /// <summary>
     /// 当前 Box2D world 重力向量。
     /// </summary>
     public Vector2 Gravity
@@ -340,6 +355,7 @@ public sealed class PhysicsSystem : IDisposable
         ArgumentNullException.ThrowIfNull(controller);
         long started = Stopwatch.GetTimestamp();
         controller.Move(in desired, out info);
+        ApplyCharacterRigidPush(in info);
         RecordSub(FrameSubPhase.CharacterController, started);
     }
 
@@ -862,6 +878,98 @@ public sealed class PhysicsSystem : IDisposable
         }
 
         return stamped;
+    }
+
+    private void ApplyCharacterRigidPush(in CharacterCollisionInfo info)
+    {
+        float impulsePerBlockedPixel = CharacterPushImpulsePerBlockedPixel;
+        float maxImpulse = CharacterPushMaxImpulse;
+        if (!float.IsFinite(impulsePerBlockedPixel) || impulsePerBlockedPixel < 0f ||
+            !float.IsFinite(maxImpulse) || maxImpulse < 0f)
+        {
+            throw new InvalidOperationException("角色推力配置必须是有限非负数。");
+        }
+
+        if (impulsePerBlockedPixel <= 0f || maxImpulse <= 0f)
+        {
+            return;
+        }
+
+        float requestedX = info.RequestedDelta.X;
+        if (requestedX == 0f)
+        {
+            return;
+        }
+
+        int direction = requestedX > 0f ? 1 : -1;
+        if ((direction > 0 && !info.HitWallRight) || (direction < 0 && !info.HitWallLeft))
+        {
+            return;
+        }
+
+        float blockedPixels = MathF.Abs(requestedX) - MathF.Abs(info.AppliedDelta.X);
+        if (blockedPixels <= CharacterPushMinimumBlockedPixels)
+        {
+            return;
+        }
+
+        float impulse = MathF.Min(maxImpulse, blockedPixels * impulsePerBlockedPixel);
+        if (impulse <= 0f)
+        {
+            return;
+        }
+
+        Span<int> bodyKeys = stackalloc int[MaxCharacterPushBodies];
+        int bodyCount = GatherCharacterPushBodies(in info, direction, bodyKeys);
+        for (int i = 0; i < bodyCount; i++)
+        {
+            _ = ApplyLinearImpulse(bodyKeys[i], direction * impulse, 0f);
+        }
+    }
+
+    private int GatherCharacterPushBodies(in CharacterCollisionInfo info, int direction, Span<int> bodyKeys)
+    {
+        float side = direction > 0
+            ? info.Bounds.Max.X + CharacterPushContactProbe
+            : info.Bounds.Min.X - CharacterPushContactProbe;
+        int cellX = (int)MathF.Floor(side);
+        int minY = (int)MathF.Floor(info.Bounds.Min.Y);
+        int maxY = (int)MathF.Ceiling(info.Bounds.Max.Y) - 1;
+        int bodyCount = 0;
+        for (int y = minY; y <= maxY; y++)
+        {
+            if (!Registry.TryGet(cellX, y, out RigidStamp stamp))
+            {
+                continue;
+            }
+
+            if (ContainsBodyKey(bodyKeys[..bodyCount], stamp.BodyKey))
+            {
+                continue;
+            }
+
+            if (bodyCount >= bodyKeys.Length)
+            {
+                return bodyCount;
+            }
+
+            bodyKeys[bodyCount++] = stamp.BodyKey;
+        }
+
+        return bodyCount;
+    }
+
+    private static bool ContainsBodyKey(ReadOnlySpan<int> bodyKeys, int bodyKey)
+    {
+        for (int i = 0; i < bodyKeys.Length; i++)
+        {
+            if (bodyKeys[i] == bodyKey)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static int CopyBodyConnectedComponents(
