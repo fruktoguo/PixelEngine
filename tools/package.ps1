@@ -217,6 +217,23 @@ function Copy-FilteredContent(
   }
 }
 
+function Copy-PackagedScripts([string]$SourceRoot, [string]$DestinationRoot) {
+  $projectRoot = Split-Path -Parent $SourceRoot
+  if ([string]::IsNullOrWhiteSpace($projectRoot)) {
+    return
+  }
+
+  $sourceScripts = Join-Path $projectRoot 'scripts'
+  if (-not (Test-Path -LiteralPath $sourceScripts -PathType Container)) {
+    return
+  }
+
+  $destinationScripts = Join-Path $DestinationRoot 'scripts'
+  New-Item -ItemType Directory -Force $destinationScripts | Out-Null
+  Get-ChildItem -LiteralPath $sourceScripts -Force |
+    ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $destinationScripts -Recurse -Force }
+}
+
 New-Item -ItemType Directory -Force $OutputRoot | Out-Null
 $samePairPattern = '^PixelEngine-Demo-.+-' + [regex]::Escape($Rid) + '-' + [regex]::Escape($Channel) + '(\.zip|\.tar\.gz)?$'
 Get-ChildItem -LiteralPath $OutputRoot -Force -ErrorAction SilentlyContinue |
@@ -235,6 +252,7 @@ Get-ChildItem -LiteralPath $PublishDir -Force | ForEach-Object {
 Remove-PlayerPackageNoise $appDir $IncludeSymbols.IsPresent
 Remove-Item -LiteralPath $stagedContent -Recurse -Force -ErrorAction SilentlyContinue
 Copy-FilteredContent $ContentRoot $stagedContent $IncludeScene $StartScene $ProductName $WindowWidth $WindowHeight $VSync $RuntimeUiBackend $ReleaseChannel
+Copy-PackagedScripts $ContentRoot $stagedContent
 
 if ($Rid.StartsWith('win-')) {
   $rootEntry = Join-Path $stagingDir $windowsLauncherName
