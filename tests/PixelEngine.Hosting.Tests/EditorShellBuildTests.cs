@@ -575,6 +575,8 @@ public sealed class EditorShellBuildTests
         Assert.Equal(810, engine.Context.Options.WindowHeight);
         Assert.False(engine.Context.Options.VSync);
         Assert.Equal("scenes/player.scene", engine.Context.Options.StartScene);
+        Assert.True(engine.Context.Options.EnableGuiRuntime);
+        Assert.True(engine.Context.Options.EnableGameUi);
         Assert.Equal(UiBackendKind.Ultralight, engine.Context.Options.GameUiBackend);
     }
 

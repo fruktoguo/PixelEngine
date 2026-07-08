@@ -77,7 +77,8 @@ internal sealed class EditorProjectSession : IDisposable
         Engine engine = new EngineBuilder()
             .WithProject(project.ToEngineProject(sceneRelativePath))
             .ApplyRuntimeDefaults(playerSettings, applyStartupScene: false)
-            .UseGuiRuntime(false)
+            .UseGuiRuntime()
+            .EnableGameUi()
             .AddEditorHostExtension(editorHost)
             .Build();
         try
