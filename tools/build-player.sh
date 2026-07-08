@@ -10,6 +10,7 @@ Options:
   --version <semver>
   --informational-version <value>
   --product-name <name>
+  --content-root <dir>
   --icon-path|--application-icon <ico>
   --include-symbols
   --start-scene <scene>
@@ -186,6 +187,7 @@ output=""
 version=""
 informational_version=""
 product_name="PixelEngine Demo"
+content_root=""
 icon_path=""
 include_symbols=0
 start_scene="scenes/playable-world.scene"
@@ -233,6 +235,11 @@ while [[ $# -gt 0 ]]; do
     --product-name|-ProductName)
       require_value "$1" "${2:-}"
       product_name="$2"
+      shift 2
+      ;;
+    --content-root|-ContentRoot)
+      require_value "$1" "${2:-}"
+      content_root="$2"
       shift 2
       ;;
     --icon-path|--application-icon|-IconPath|-ApplicationIcon)
@@ -419,12 +426,14 @@ if [[ -z "$error_message" ]]; then
 fi
 if [[ -z "$error_message" ]]; then
   package_args=(--rid "$rid" --channel "$channel" --version "$version" --publish-dir "$publish_dir" --output-root "$package_root" --player-output-dir "$player_dir" --product-name "$product_name" --start-scene "$start_scene" --window-width "$window_width" --window-height "$window_height" --vsync "$vsync" --runtime-ui-backend "$runtime_ui_backend" --release-channel "$release_channel")
+  if [[ -n "$content_root" ]]; then package_args+=(--content-root "$content_root"); fi
   for scene in "${include_scenes[@]}"; do package_args+=(--include-scene "$scene"); done
   if (( include_symbols || dev_layout )); then package_args+=(--include-symbols); fi
   run_phase "package" 60 82 bash "$repo_root/tools/package.sh" "${package_args[@]}" || error_message="package phase failed"
 fi
 if [[ -z "$error_message" ]]; then
   audit_args=(--publish-root "$publish_root" --package-root "$package_root" --product-name "$product_name" --required-scene "$start_scene")
+  if [[ -n "$content_root" ]]; then audit_args+=(--skip-publish-content-audit --skip-demo-content-audit); fi
   if (( dev_layout || include_symbols )); then audit_args+=(--dev-layout); fi
   run_phase "audit" 82 100 bash "$repo_root/tools/audit-release-artifacts.sh" "${audit_args[@]}" || error_message="audit phase failed"
 fi

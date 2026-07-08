@@ -291,6 +291,12 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("EnterPlayTemporary", source, StringComparison.Ordinal);
         Assert.Contains("ExitEditorPlay", source, StringComparison.Ordinal);
         Assert.Contains("BuildSettingsPanel.PanelTitle", source, StringComparison.Ordinal);
+        Assert.Contains("TryStartScriptedBuildProbe", source, StringComparison.Ordinal);
+        Assert.Contains("CaptureScriptedBuildProbe", source, StringComparison.Ordinal);
+        Assert.Contains("build_started", source, StringComparison.Ordinal);
+        Assert.Contains("build_completed", source, StringComparison.Ordinal);
+        Assert.Contains("build_ok", source, StringComparison.Ordinal);
+        Assert.Contains("build_package_archive", source, StringComparison.Ordinal);
         Assert.Contains("ScriptHotReloadController", source, StringComparison.Ordinal);
         Assert.Contains("RequestReloadFromDirectory", source, StringComparison.Ordinal);
         Assert.Contains("GetBehaviourTypeNames", source, StringComparison.Ordinal);
@@ -300,6 +306,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("behaviour_registered", source, StringComparison.Ordinal);
         Assert.Contains("behaviour_attached", source, StringComparison.Ordinal);
         Assert.Contains("build_output_ready", source, StringComparison.Ordinal);
+        Assert.Contains("玩家包构建探针完成", source, StringComparison.Ordinal);
         Assert.Contains("真实窗口 Console 可读性与人工 UX", File.ReadAllText(Path.Combine(root, "plan", "19-standalone-editor-app.md")), StringComparison.Ordinal);
     }
 
@@ -408,6 +415,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("InformationalVersion", source, StringComparison.Ordinal);
         Assert.Contains("BuildSettingsPanel(_project, console: _app.ConsoleStore)", source, StringComparison.Ordinal);
         Assert.Contains("ShowBuildSettings", source, StringComparison.Ordinal);
+        Assert.Contains("ContentRoot = _project.ContentRootPath", source, StringComparison.Ordinal);
         Assert.Contains("TryStartScriptedBuildProbe", source, StringComparison.Ordinal);
         Assert.Contains("CaptureScriptedBuildProbe", source, StringComparison.Ordinal);
         Assert.Contains("--scripted-build-probe", source, StringComparison.Ordinal);
@@ -591,6 +599,10 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("--allow-load-only", buildPlayerSh, StringComparison.Ordinal);
         Assert.Contains("NativeAOT 仅支持当前宿主 OS", buildPlayerPs1, StringComparison.Ordinal);
         Assert.Contains("NativeAOT 仅支持当前宿主 OS", buildPlayerSh, StringComparison.Ordinal);
+        Assert.Contains("SkipPublishContentAudit", buildPlayerPs1, StringComparison.Ordinal);
+        Assert.Contains("SkipDemoContentAudit", buildPlayerPs1, StringComparison.Ordinal);
+        Assert.Contains("--skip-publish-content-audit", buildPlayerSh, StringComparison.Ordinal);
+        Assert.Contains("--skip-demo-content-audit", buildPlayerSh, StringComparison.Ordinal);
 
         foreach (string script in new[] { packagePs1, packageSh })
         {
@@ -610,6 +622,9 @@ public sealed class HostingProjectDisciplineTests
             Assert.Contains("active", lower, StringComparison.Ordinal);
             Assert.Contains("release-rids.json", script, StringComparison.Ordinal);
             Assert.Contains("dev", lower, StringComparison.Ordinal);
+            Assert.Contains("skip", lower, StringComparison.Ordinal);
+            Assert.Contains("publish", lower, StringComparison.Ordinal);
+            Assert.Contains("content", lower, StringComparison.Ordinal);
             Assert.Contains("PixelEngine.Editor.dll", script, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("ImGuizmo", script, StringComparison.Ordinal);
             Assert.Contains("ImPlot", script, StringComparison.Ordinal);

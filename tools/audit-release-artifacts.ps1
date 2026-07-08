@@ -6,6 +6,8 @@ param(
   [string]$RequiredScene = 'scenes/lava-mine.scene',
   [string]$ActiveRids,
   [switch]$DevLayout,
+  [switch]$SkipPublishContentAudit,
+  [switch]$SkipDemoContentAudit,
   [switch]$RequireAll
 )
 
@@ -337,8 +339,13 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
 
   $launcher = if ($rid.StartsWith('win-')) { "$launcherBaseName.exe" } else { "$launcherBaseName.sh" }
   $requiredEntries = [System.Collections.Generic.List[string]]::new()
-  foreach ($required in @('README.txt', 'NOTICE.txt', 'SHA256SUMS', $launcher, 'content/materials.json', 'content/reactions.json', 'content/weapons.json', 'content/textures/17_gravel.png', 'content/textures/18_boundary_stone.png', "content/$requiredScenePath")) {
+  foreach ($required in @('README.txt', 'NOTICE.txt', 'SHA256SUMS', $launcher, "content/$requiredScenePath")) {
     $requiredEntries.Add($required)
+  }
+  if (-not $SkipDemoContentAudit) {
+    foreach ($required in @('content/materials.json', 'content/reactions.json', 'content/weapons.json', 'content/textures/17_gravel.png', 'content/textures/18_boundary_stone.png')) {
+      $requiredEntries.Add($required)
+    }
   }
 
   if ($channel -eq 'r2r') {
@@ -455,8 +462,13 @@ function Assert-FriendlyExpandedPackageLayout([System.IO.DirectoryInfo]$packageD
 
   $launcher = if ($rid.StartsWith('win-')) { "$launcherBaseName.exe" } else { "$launcherBaseName.sh" }
   $requiredEntries = [System.Collections.Generic.List[string]]::new()
-  foreach ($required in @('README.txt', 'NOTICE.txt', 'SHA256SUMS', $launcher, 'content/materials.json', 'content/reactions.json', 'content/weapons.json', 'content/textures/17_gravel.png', 'content/textures/18_boundary_stone.png', "content/$requiredScenePath")) {
+  foreach ($required in @('README.txt', 'NOTICE.txt', 'SHA256SUMS', $launcher, "content/$requiredScenePath")) {
     $requiredEntries.Add($required)
+  }
+  if (-not $SkipDemoContentAudit) {
+    foreach ($required in @('content/materials.json', 'content/reactions.json', 'content/weapons.json', 'content/textures/17_gravel.png', 'content/textures/18_boundary_stone.png')) {
+      $requiredEntries.Add($required)
+    }
   }
 
   if ($channel -eq 'r2r') {
@@ -557,12 +569,14 @@ function Test-PublishDirectory([string]$rid, [string]$channel) {
 
   $entry = Join-Path $directory (Get-EntryName $rid)
   Assert-FileExists $entry '缺少发布入口'
-  Assert-FileExists (Join-Path $directory 'content/materials.json') '缺少 content/materials.json'
-  Assert-FileExists (Join-Path $directory 'content/reactions.json') '缺少 content/reactions.json'
-  Assert-FileExists (Join-Path $directory 'content/weapons.json') '缺少 content/weapons.json'
-  Assert-FileExists (Join-Path $directory 'content/textures/17_gravel.png') '缺少 content/textures/17_gravel.png'
-  Assert-FileExists (Join-Path $directory 'content/textures/18_boundary_stone.png') '缺少 content/textures/18_boundary_stone.png'
-  Assert-FileExists (Join-Path $directory "content/$requiredScenePath") "缺少必需场景 $requiredScenePath"
+  if (-not $SkipPublishContentAudit) {
+    Assert-FileExists (Join-Path $directory 'content/materials.json') '缺少 content/materials.json'
+    Assert-FileExists (Join-Path $directory 'content/reactions.json') '缺少 content/reactions.json'
+    Assert-FileExists (Join-Path $directory 'content/weapons.json') '缺少 content/weapons.json'
+    Assert-FileExists (Join-Path $directory 'content/textures/17_gravel.png') '缺少 content/textures/17_gravel.png'
+    Assert-FileExists (Join-Path $directory 'content/textures/18_boundary_stone.png') '缺少 content/textures/18_boundary_stone.png'
+    Assert-FileExists (Join-Path $directory "content/$requiredScenePath") "缺少必需场景 $requiredScenePath"
+  }
 
   $box2D = Join-Path $directory "runtimes/$rid/native/$(Get-Box2DName $rid)"
   $uiNative = Join-Path $directory "runtimes/$rid/native/$(Get-UiNativeName $rid)"

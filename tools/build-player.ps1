@@ -13,6 +13,7 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$Output,
 
+  [string]$ContentRoot,
   [string]$Version,
   [string]$InformationalVersion,
   [string]$ProductName = 'PixelEngine Demo',
@@ -326,6 +327,9 @@ try {
     RuntimeUiBackend = $RuntimeUiBackend
     ReleaseChannel = $ReleaseChannel
   }
+  if ($ContentRoot) {
+    $packageArgs.ContentRoot = $ContentRoot
+  }
   if ($IncludeScene.Count -gt 0) {
     $packageArgs.IncludeScene = $IncludeScene
   }
@@ -339,6 +343,10 @@ try {
     PackageRoot = $packageRoot
     ProductName = $ProductName
     RequiredScene = $StartScene
+  }
+  if ($ContentRoot) {
+    $auditArgs.SkipPublishContentAudit = $true
+    $auditArgs.SkipDemoContentAudit = $true
   }
   if ($DevLayout -or $IncludeSymbols) {
     $auditArgs.DevLayout = $true
