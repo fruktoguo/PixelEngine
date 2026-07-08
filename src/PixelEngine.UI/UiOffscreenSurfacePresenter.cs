@@ -28,7 +28,30 @@ public sealed class UiOffscreenSurfacePresenter : IDisposable
     public int Height => _texture?.Height ?? 0;
 
     /// <summary>
-    /// 上传离屏 BGRA8 surface 的脏矩形并把它作为一个 alpha blended textured quad 合成到 UI present 层。
+    /// 上传离屏 BGRA8 surface 的脏矩形并把它作为一个 alpha blended textured quad 合成到当前 UI present 目标。
+    /// </summary>
+    /// <param name="context">渲染管线提供的 UI present 上下文。</param>
+    /// <param name="pixelsBgra">按行连续的 BGRA8 surface 像素，左上角为第 0 行。</param>
+    /// <param name="sourceWidth">surface 宽度。</param>
+    /// <param name="sourceHeight">surface 高度。</param>
+    /// <param name="dirtyRects">待上传脏矩形；纹理已存在且无脏矩形时只重绘现有纹理。</param>
+    public void Present(
+        in UiPresentContext context,
+        ReadOnlySpan<uint> pixelsBgra,
+        int sourceWidth,
+        int sourceHeight,
+        ReadOnlySpan<PixelUploadRect> dirtyRects)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(context.Gl);
+        ValidateSource(pixelsBgra, sourceWidth, sourceHeight);
+        context.Target.Validate();
+
+        PresentCore(in context, pixelsBgra, sourceWidth, sourceHeight, dirtyRects, context.Target);
+    }
+
+    /// <summary>
+    /// 上传离屏 BGRA8 surface 的脏矩形并把它作为一个 alpha blended textured quad 合成到显式 framebuffer 区域。
     /// </summary>
     /// <param name="context">渲染管线提供的 UI present 上下文。</param>
     /// <param name="pixelsBgra">按行连续的 BGRA8 surface 像素，左上角为第 0 行。</param>
@@ -49,6 +72,23 @@ public sealed class UiOffscreenSurfacePresenter : IDisposable
         ValidateSource(pixelsBgra, sourceWidth, sourceHeight);
         viewport.Validate();
 
+        PresentCore(
+            in context,
+            pixelsBgra,
+            sourceWidth,
+            sourceHeight,
+            dirtyRects,
+            new UiPresentTarget(viewport.X, viewport.Y, viewport.Width, viewport.Height, viewport.DpiScale));
+    }
+
+    private void PresentCore(
+        in UiPresentContext context,
+        ReadOnlySpan<uint> pixelsBgra,
+        int sourceWidth,
+        int sourceHeight,
+        ReadOnlySpan<PixelUploadRect> dirtyRects,
+        in UiPresentTarget target)
+    {
         bool needsFullUpload = EnsureTexture(context, sourceWidth, sourceHeight);
         if (needsFullUpload)
         {
@@ -63,7 +103,7 @@ public sealed class UiOffscreenSurfacePresenter : IDisposable
             return;
         }
 
-        SubmitQuad(context, in viewport);
+        SubmitQuad(context, in target);
     }
 
     /// <summary>
@@ -97,12 +137,12 @@ public sealed class UiOffscreenSurfacePresenter : IDisposable
         return true;
     }
 
-    private void SubmitQuad(in UiPresentContext context, in UiViewport viewport)
+    private void SubmitQuad(in UiPresentContext context, in UiPresentTarget target)
     {
-        float left = viewport.X;
-        float top = viewport.Y;
-        float right = viewport.X + viewport.Width;
-        float bottom = viewport.Y + viewport.Height;
+        float left = target.X;
+        float top = target.Y;
+        float right = target.X + target.Width;
+        float bottom = target.Y + target.Height;
         const uint white = 0xFFFFFFFFu;
 
         _vertices[0] = new UiVertex(left, top, 0f, 0f, white);
