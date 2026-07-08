@@ -419,7 +419,8 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
             _gui.Initialize();
         }
 
-        _gui.DrawFrame(_deltaSeconds, context.FramebufferWidth, context.FramebufferHeight, _drawCallback);
+        (int frameWidth, int frameHeight) = ResolveCompositeFrameSize(in context, in _viewport);
+        _gui.DrawFrame(_deltaSeconds, frameWidth, frameHeight, _drawCallback);
         Dirty = false;
     }
 
@@ -575,6 +576,15 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     }
 
     private bool HasCompositionOverlay => CompositionOverlayState.IsActive && !string.IsNullOrEmpty(CompositionOverlayText);
+
+    private static (int Width, int Height) ResolveCompositeFrameSize(
+        in UiPresentContext context,
+        in UiViewport viewport)
+    {
+        return context.Target.IsValid
+            ? (context.Target.Width, context.Target.Height)
+            : (viewport.Width, viewport.Height);
+    }
 
     private static string BuildCompositionOverlayText(ReadOnlySpan<char> text, in UiTextComposition composition)
     {

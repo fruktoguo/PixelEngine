@@ -214,6 +214,37 @@ public sealed class ManagedFallbackBackendTests
     }
 
     [Fact]
+    public void ManagedFallbackCompositeUsesInitializedViewportWhenPresentContextHasNoTarget()
+    {
+        string path = WriteUi("""
+            <ui title="Hud">
+              <text id="status">Ready</text>
+            </ui>
+            """);
+        FakeGuiHost gui = new();
+        using ManagedFallbackBackend backend = new(gui);
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(4, 8, 320, 180, 1f), UiBackendKind.ManagedFallback));
+
+        _ = host.ShowScreen(new UiScreenId(9), UiDocumentSource.Asset(path, 9));
+        host.Composite(default);
+
+        Assert.Equal(320, gui.LastFrameWidth);
+        Assert.Equal(180, gui.LastFrameHeight);
+    }
+
+    [Fact]
+    public void ManagedFallbackCompositeSourceDocumentsPresentTargetFrameSize()
+    {
+        string source = File.ReadAllText(ProjectPath("src", "PixelEngine.UI", "ManagedFallbackBackend.cs"));
+
+        Assert.Contains("context.Target.IsValid", source, StringComparison.Ordinal);
+        Assert.Contains("context.Target.Width", source, StringComparison.Ordinal);
+        Assert.Contains("context.Target.Height", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("context.FramebufferWidth, context.FramebufferHeight", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ManagedFallbackThrowsForMissingDocumentInsteadOfInventingPlaceholder()
     {
         FakeGuiHost gui = new();
@@ -231,6 +262,28 @@ public sealed class ManagedFallbackBackendTests
         return path;
     }
 
+    private static string ProjectPath(params string[] parts)
+    {
+        string? current = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(current))
+        {
+            if (File.Exists(Path.Combine(current, "PixelEngine.sln")))
+            {
+                string result = current;
+                foreach (string part in parts)
+                {
+                    result = Path.Combine(result, part);
+                }
+
+                return result;
+            }
+
+            current = Directory.GetParent(current)?.FullName;
+        }
+
+        throw new DirectoryNotFoundException("无法定位 PixelEngine.sln。");
+    }
+
     private sealed class FakeGuiHost : IManagedFallbackGuiHost
     {
         public FakeGuiDrawContext Context { get; } = new();
@@ -240,6 +293,10 @@ public sealed class ManagedFallbackBackendTests
         public bool Initialized { get; private set; }
 
         public int DrawCount { get; private set; }
+
+        public int LastFrameWidth { get; private set; }
+
+        public int LastFrameHeight { get; private set; }
 
         public List<string> LoadedImages { get; } = [];
 
@@ -252,6 +309,8 @@ public sealed class ManagedFallbackBackendTests
         public void DrawFrame(float deltaSeconds, int width, int height, Action<IGuiDrawContext> drawGui)
         {
             DrawCount++;
+            LastFrameWidth = width;
+            LastFrameHeight = height;
             drawGui(Context);
         }
 
