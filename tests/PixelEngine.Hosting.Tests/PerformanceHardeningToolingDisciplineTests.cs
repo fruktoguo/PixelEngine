@@ -420,6 +420,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             "tools/gpu-particle-benchmark-preflight.ps1",
             "tools/demo-manual-acceptance-preflight.ps1",
             "tools/native-leak-preflight.ps1",
+            "tools/ui-runtime-evidence-preflight.ps1",
             "tools/release-evidence-preflight.ps1",
         ];
         foreach (string tool in tools)
@@ -458,6 +459,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             "blocked_missing_scope_evidence",
             "blocked_invalid_native_leak_evidence",
             "detector_evidence_attached_pending_review",
+            "blocked_missing_ui_runtime_evidence",
+            "blocked_invalid_ui_runtime_evidence",
+            "blocked_missing_ui_runtime_scope_evidence",
+            "ui_runtime_evidence_attached_pending_review",
             "blocked_missing_release_manifest",
             "blocked_invalid_release_evidence",
             "blocked_missing_release_scope_evidence",
@@ -3848,6 +3853,176 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 UI Runtime 证据预检入口覆盖 plan/20 的真实窗口、native、IME、Ultralight 与发行证据债，且不会把 pending review 误当成完成。
+    /// </summary>
+    [Fact]
+    public void UiRuntimeEvidencePreflightRequiresManifestScopesAndKeepsPlan20Blocked()
+    {
+        string script = ReadRepositoryFile("tools", "ui-runtime-evidence-preflight.ps1");
+        string readme = ReadRepositoryFile("plan", "README.md");
+        string plan = ReadRepositoryFile("plan", "20-interactive-html-ui.md");
+
+        Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
+        Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_ui_runtime_evidence", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_ui_runtime_evidence", script, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_ui_runtime_scope_evidence", script, StringComparison.Ordinal);
+        Assert.Contains("ui_runtime_evidence_attached_pending_review", script, StringComparison.Ordinal);
+        Assert.Contains("transparent_ui_product_window", script, StringComparison.Ordinal);
+        Assert.Contains("rmlui_angle_gles_native_profile", script, StringComparison.Ordinal);
+        Assert.Contains("platform_ime_composition", script, StringComparison.Ordinal);
+        Assert.Contains("ultralight_optional_profile_gate", script, StringComparison.Ordinal);
+        Assert.Contains("ui_native_release_artifact", script, StringComparison.Ordinal);
+        Assert.Contains("gitCommit 必须等于当前 HEAD", script, StringComparison.Ordinal);
+
+        Assert.Contains("tools/ui-runtime-evidence-preflight.ps1", readme, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_ui_runtime_evidence", readme, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_ui_runtime_scope_evidence", readme, StringComparison.Ordinal);
+        Assert.Contains("ui_runtime_evidence_attached_pending_review", readme, StringComparison.Ordinal);
+        Assert.Contains("tools/ui-runtime-evidence-preflight.ps1", plan, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_ui_runtime_evidence", plan, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_ui_runtime_scope_evidence", plan, StringComparison.Ordinal);
+        Assert.Contains("ui_runtime_evidence_attached_pending_review", plan, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 UI Runtime 证据预检会真实拒绝缺失 scope，并保持证据齐全时仍为待人工复核的非零退出。
+    /// </summary>
+    [Fact]
+    public void UiRuntimeEvidencePreflightRejectsMissingScopesAndKeepsPendingReviewNonZero()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ui-runtime-evidence-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string goodManifest = CreateUiRuntimeEvidenceManifest(temp);
+            string missingManifest = CreateUiRuntimeEvidenceManifest(temp, suffix: "missing");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(missingManifest))!.AsObject();
+            JsonArray evidence = rootNode["evidence"]!.AsArray();
+            JsonNode? target = evidence.FirstOrDefault(node =>
+                string.Equals((string?)node?["scope"], "platform_ime_composition", StringComparison.Ordinal));
+            Assert.NotNull(target);
+            _ = evidence.Remove(target);
+            File.WriteAllText(missingManifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string missingArtifacts = Path.Combine(temp, "missing-out");
+            ScriptResult missing = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "ui-runtime-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                missingManifest,
+                "-Artifacts",
+                missingArtifacts);
+            Assert.Equal(5, missing.ExitCode);
+            string missingReport = File.ReadAllText(Path.Combine(missingArtifacts, "ui-runtime-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_ui_runtime_scope_evidence", missingReport, StringComparison.Ordinal);
+            Assert.Contains("缺少 evidence scope：platform_ime_composition", missingReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: ui_runtime_evidence_attached_pending_review", missingReport, StringComparison.Ordinal);
+
+            string goodArtifacts = Path.Combine(temp, "good-out");
+            ScriptResult good = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "ui-runtime-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                goodManifest,
+                "-Artifacts",
+                goodArtifacts);
+            Assert.Equal(2, good.ExitCode);
+            string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "ui-runtime-evidence-preflight.md"));
+            Assert.Contains("ui_runtime_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 UI Runtime 证据预检会把 schema 错误写入报告，而不是直接抛异常丢失审计上下文。
+    /// </summary>
+    [Fact]
+    public void UiRuntimeEvidencePreflightRejectsInvalidSchemaWithReport()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ui-runtime-schema-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateUiRuntimeEvidenceManifest(temp);
+            string json = File.ReadAllText(manifest);
+            json = json.Replace("\"schemaVersion\": 1", "\"schemaVersion\": 2", StringComparison.Ordinal);
+            File.WriteAllText(manifest, json);
+
+            string artifacts = Path.Combine(temp, "out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "ui-runtime-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "ui-runtime-evidence-preflight.md"));
+            Assert.Contains("status: blocked_invalid_ui_runtime_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("schemaVersion 必须为 1", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: ui_runtime_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 UI Runtime 证据预检会实际拒绝 sha256 不匹配的真实平台 evidence。
+    /// </summary>
+    [Fact]
+    public void UiRuntimeEvidencePreflightRejectsMismatchedEvidenceHash()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ui-runtime-hash-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateUiRuntimeEvidenceManifest(temp);
+            string json = File.ReadAllText(manifest);
+            json = json.Replace("\"sha256\": \"", "\"sha256\": \"0000", StringComparison.Ordinal);
+            File.WriteAllText(manifest, json);
+
+            string artifacts = Path.Combine(temp, "out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "ui-runtime-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "ui-runtime-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_ui_runtime_scope_evidence", report, StringComparison.Ordinal);
+            Assert.Contains("sha256 不匹配", report, StringComparison.Ordinal);
+            Assert.Contains("transparent_ui_product_window", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: ui_runtime_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证发行编译模式保持默认 R2R 运行时 light-up，AOT 显式 ISA 并跑 SIMD 反汇编探针。
     /// </summary>
     [Fact]
@@ -6424,6 +6599,101 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         JsonObject manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
         manifest[propertyName] = value;
         File.WriteAllText(manifestPath, manifest.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static string CreateUiRuntimeEvidenceManifest(string tempRoot, string suffix = "good")
+    {
+        const string ReviewSessionId = "ui-runtime-review-20260709-001";
+        string gitCommit = GetCurrentGitCommit();
+        Dictionary<string, string[]> trueFieldsByScope = new()
+        {
+            ["transparent_ui_product_window"] =
+            [
+                "sameWindowSameGl",
+                "alphaBlendVerified",
+                "passThroughVerified",
+                "captureVerified",
+                "editorOverlayVerified",
+                "videoOrWalkthroughAttached",
+            ],
+            ["rmlui_angle_gles_native_profile"] =
+            [
+                "glesRendererImplemented",
+                "angleContextVerified",
+                "shaderProfileGles300Es",
+                "sameContextFunctionTable",
+                "stateRestoreSmokePassed",
+            ],
+            ["platform_ime_composition"] =
+            [
+                "windowsImeSmokePassed",
+                "preeditVisible",
+                "candidateWindowChecked",
+                "committedTextSeparated",
+                "backendConsistencyChecked",
+            ],
+            ["ultralight_optional_profile_gate"] =
+            [
+                "nativeSdkProvenanceRecorded",
+                "licenseReviewed",
+                "redistributionDecisionRecorded",
+                "releaseAuditGatePassed",
+                "fallbackPathVerified",
+            ],
+            ["ui_native_release_artifact"] =
+            [
+                "activeRidArtifactsAttached",
+                "aotFallbackVerified",
+                "sha256SumsAttached",
+                "noticeLicenseAttached",
+                "tagReleaseWorkflowEvidence",
+            ],
+        };
+
+        string evidenceRoot = Path.Combine(tempRoot, suffix, "artifacts", "ui-runtime-evidence");
+        _ = Directory.CreateDirectory(evidenceRoot);
+
+        List<Dictionary<string, object>> evidence = [];
+        foreach (KeyValuePair<string, string[]> scope in trueFieldsByScope)
+        {
+            List<string> lines =
+            [
+                "# UI Runtime evidence",
+                "",
+                $"scope: {scope.Key}",
+                $"reviewSessionId: {ReviewSessionId}",
+                $"gitCommit: {gitCommit}",
+                "conclusion: pass",
+                "risk: evidence still requires human review before plan status can change",
+            ];
+
+            foreach (string field in scope.Value)
+            {
+                lines.Add($"{field}: true");
+            }
+
+            string report = WriteTextEvidence(Path.Combine(evidenceRoot, $"{scope.Key}.md"), string.Join(Environment.NewLine, lines));
+            evidence.Add(new Dictionary<string, object>
+            {
+                ["scope"] = scope.Key,
+                ["path"] = report,
+                ["sha256"] = GetSha256(report),
+            });
+        }
+
+        Dictionary<string, object> manifest = new()
+        {
+            ["schemaVersion"] = 1,
+            ["reviewSessionId"] = ReviewSessionId,
+            ["gitCommit"] = gitCommit,
+            ["evidence"] = evidence,
+        };
+
+        string manifestPath = Path.Combine(tempRoot, suffix, "ui-runtime-evidence.json");
+        File.WriteAllText(
+            manifestPath,
+            System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        return manifestPath;
     }
 
     private static string CreatePerformanceTargetEvidenceManifest(string tempRoot, bool includeUnknownScope = false, string suffix = "good")
