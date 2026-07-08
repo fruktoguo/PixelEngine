@@ -37,6 +37,21 @@ public sealed class CellGrid(
     }
 
     /// <summary>
+    /// 尝试读取世界坐标处的 cell flags。
+    /// </summary>
+    public bool TryGetFlags(int wx, int wy, out byte flags)
+    {
+        if (!_chunks.TryGetChunk(CellAddressing.WorldToChunk(wx, wy), out Chunk chunk))
+        {
+            flags = 0;
+            return false;
+        }
+
+        flags = chunk.Flags[CellAddressing.LocalIndex(wx, wy)];
+        return true;
+    }
+
+    /// <summary>
     /// 读取世界坐标处的材质 id。目标 chunk 不驻留时抛出异常。
     /// </summary>
     public ushort GetMaterial(int wx, int wy)
