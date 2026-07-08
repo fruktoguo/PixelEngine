@@ -400,13 +400,13 @@ public sealed class LevelDirector : Behaviour
     private void BuildHazards(int height)
     {
         int floorY = height - 72;
-        FillRect(178, floorY - 2, 74, 24, _lava);
-        FillRect(312, floorY - 2, 86, 26, _lava);
-        FillRect(452, floorY - 2, 78, 24, _lava);
-        FillRect(554, floorY - 2, 36, 20, _lava);
-        FillRect(172, floorY + 21, 86, 5, _stone);
-        FillRect(306, floorY + 23, 98, 5, _stone);
-        FillRect(446, floorY + 21, 90, 5, _stone);
+        FillRect(178, floorY - 2, 58, 24, _lava);
+        FillRect(312, floorY - 2, 54, 26, _lava);
+        FillRect(452, floorY - 2, 54, 24, _lava);
+        FillRect(554, floorY - 2, 28, 20, _lava);
+        FillRect(172, floorY + 21, 70, 5, _stone);
+        FillRect(306, floorY + 23, 66, 5, _stone);
+        FillRect(446, floorY + 21, 66, 5, _stone);
     }
 
     private void BuildSpawnHazardProbeArea()

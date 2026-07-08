@@ -115,6 +115,11 @@ public sealed class PlayerController : Behaviour
     public float RigidImpactCooldownSeconds { get; set; } = 0.25f;
 
     /// <summary>
+    /// 玩家头顶刚体接触伤害探测距离，单位 cell；需覆盖物理 proxy 的顶部 padding。
+    /// </summary>
+    public int RigidImpactContactProbeDistance { get; set; } = 8;
+
+    /// <summary>
     /// 被动态碎块压入后寻找最近安全 AABB 位置的最大距离，单位 cell。
     /// </summary>
     public int RigidOverlapResolveDistance { get; set; } = 18;
@@ -213,6 +218,11 @@ public sealed class PlayerController : Behaviour
 
         ResolveHealth();
         State = Context.Character.GetState(_body);
+        if (TryGetRigidOwnedContactAbove(State.X, State.Y))
+        {
+            ApplyRigidImpactDamage();
+        }
+
         ResolveRigidOwnedOverlap();
         SyncTransform();
     }
@@ -446,6 +456,27 @@ public sealed class PlayerController : Behaviour
             rigidMaxX,
             rigidMaxY);
         return true;
+    }
+
+    private bool TryGetRigidOwnedContactAbove(float x, float y)
+    {
+        int minX = (int)MathF.Floor(x + 0.05f);
+        int maxX = (int)MathF.Ceiling(x + Width - 0.05f) - 1;
+        int probeDistance = Math.Clamp(RigidImpactContactProbeDistance, 1, 32);
+        int minY = (int)MathF.Floor(y) - probeDistance;
+        int maxY = (int)MathF.Floor(y) - 1;
+        for (int cy = minY; cy <= maxY; cy++)
+        {
+            for (int cx = minX; cx <= maxX; cx++)
+            {
+                if (TryIsRigidOwned(cx, cy))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private bool OverlapsSolid(float x, float y)

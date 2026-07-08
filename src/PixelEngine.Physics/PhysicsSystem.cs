@@ -19,6 +19,9 @@ public sealed class PhysicsSystem : IDisposable
     private const int MaxCharacterPushBodies = 16;
     private const float CharacterPushContactProbe = 0.05f;
     private const float CharacterPushMinimumBlockedPixels = 0.001f;
+    private const float CharacterProxyHorizontalPadding = 0.25f;
+    private const float CharacterProxyTopPadding = 6f;
+    private const float CharacterProxyBottomPadding = 0.25f;
 
     private readonly RigidDamageQueue? _damageQueue;
     private readonly RigidBodyDestruction? _destruction;
@@ -29,6 +32,7 @@ public sealed class PhysicsSystem : IDisposable
     private readonly Box2DTaskBridge? _taskBridge;
     private readonly bool _ownsWorld;
     private readonly List<RigidDamageEvent> _pendingDamage = new(256);
+    private readonly Dictionary<CharacterController, CharacterProxy> _characterProxies = [];
     private RigidDamageEvent[] _damageScratch = GC.AllocateArray<RigidDamageEvent>(256, pinned: true);
     private bool _shutdown;
 
@@ -235,6 +239,11 @@ public sealed class PhysicsSystem : IDisposable
     public int LastStampedCellCount { get; private set; }
 
     /// <summary>
+    /// 最近一次同步中由角色 proxy 约束修正的动态刚体次数。
+    /// </summary>
+    public int LastCharacterProxyContactCount { get; private set; }
+
+    /// <summary>
     /// 最近一次同步执行的刚体破坏重建结果。
     /// </summary>
     public RigidDestructionResult LastDestructionResult { get; private set; }
@@ -317,12 +326,15 @@ public sealed class PhysicsSystem : IDisposable
         PublishShatterAudioEvent(LastDestructionResult);
         LastErasedCellCount = Measure(FrameSubPhase.PhysicsErase, EraseAllBodies);
         Registry.Clear();
+        SyncCharacterProxies();
 
         long stepStarted = Stopwatch.GetTimestamp();
         Box2D.b2World_Step(WorldId, dt, subStepCount);
         RecordSub(FrameSubPhase.PhysicsStep, stepStarted);
+        ResolveCharacterProxyBodyContacts();
 
-        LastStampedCellCount = Measure(FrameSubPhase.PhysicsInverseSample, StampAllBodies);
+        int stamped = Measure(FrameSubPhase.PhysicsInverseSample, StampAllBodies);
+        LastStampedCellCount = Math.Max(0, stamped - ClearCharacterProxyOverlaps());
     }
 
     /// <summary>
@@ -357,6 +369,25 @@ public sealed class PhysicsSystem : IDisposable
         controller.Move(in desired, out info);
         ApplyCharacterRigidPush(in info);
         RecordSub(FrameSubPhase.CharacterController, started);
+    }
+
+    /// <summary>
+    /// 注册由像素角色控制器驱动的物理代理，使动态刚体在 inverse-sampling 写回前先受角色 AABB 约束。
+    /// </summary>
+    /// <param name="controller">角色控制器。</param>
+    public void RegisterCharacterProxy(CharacterController controller)
+    {
+        ObjectDisposedException.ThrowIf(_shutdown, this);
+        ArgumentNullException.ThrowIfNull(controller);
+        if (_characterProxies.ContainsKey(controller))
+        {
+            return;
+        }
+
+        B2BodyDef bodyDef = Box2D.b2DefaultBodyDef();
+        bodyDef.Type = B2BodyType.StaticBody;
+        B2BodyId bodyId = Box2D.b2CreateBody(WorldId, in bodyDef);
+        _characterProxies.Add(controller, new CharacterProxy(controller, bodyId));
     }
 
     /// <summary>
@@ -694,11 +725,18 @@ public sealed class PhysicsSystem : IDisposable
 
         _shutdown = true;
         _staticTerrainColliders?.Dispose();
+        if (!_ownsWorld)
+        {
+            DestroyCharacterProxies();
+        }
+
         if (_ownsWorld)
         {
             Box2D.b2DestroyWorld(WorldId);
             PhysicsWorld.Clear();
         }
+
+        _characterProxies.Clear();
 
         _taskBridge?.Dispose();
     }
@@ -878,6 +916,203 @@ public sealed class PhysicsSystem : IDisposable
         }
 
         return stamped;
+    }
+
+    private void ResolveCharacterProxyBodyContacts()
+    {
+        LastCharacterProxyContactCount = 0;
+        if (_characterProxies.Count == 0)
+        {
+            return;
+        }
+
+        int slotCount = PhysicsWorld.BodySlotCount;
+        for (int bodyKey = 0; bodyKey < slotCount; bodyKey++)
+        {
+            if (!PhysicsWorld.TryGetBody(bodyKey, out PixelRigidBody? body))
+            {
+                continue;
+            }
+
+            B2Transform nativeTransform = Box2D.b2Body_GetTransform(body.BodyId);
+            Transform2D transform = PhysicsScale.ToTransform2D(nativeTransform);
+            RectI bodyBounds = BodyBoundsToWorld(body.Mask, in transform);
+            RectI previousBounds = BodyBoundsToWorld(body.Mask, body.PreviousTransform);
+            B2Vec2 velocity = Box2D.b2Body_GetLinearVelocity(body.BodyId);
+            if (velocity.Y <= 0f)
+            {
+                continue;
+            }
+
+            foreach (CharacterProxy proxy in _characterProxies.Values)
+            {
+                RectI proxyBounds = RectI.FromBounds(
+                    (int)MathF.Floor(proxy.MinX),
+                    (int)MathF.Floor(proxy.MinY),
+                    (int)MathF.Ceiling(proxy.MaxX),
+                    (int)MathF.Ceiling(proxy.MaxY));
+                bool horizontalOverlap = bodyBounds.MinX < proxyBounds.MaxX && bodyBounds.MaxX > proxyBounds.MinX;
+                if (!horizontalOverlap)
+                {
+                    _ = proxy.SupportedBodies.Remove(body.BodyKey);
+                    continue;
+                }
+
+                bool continuingContact = proxy.SupportedBodies.TryGetValue(body.BodyKey, out PixelRigidBody? supportedBody) &&
+                    ReferenceEquals(supportedBody, body) &&
+                    bodyBounds.MaxY >= proxyBounds.MinY;
+                bool firstContactFromAbove = bodyBounds.MaxY >= proxyBounds.MinY &&
+                    previousBounds.MaxY <= proxyBounds.MaxY;
+                if (!continuingContact && !firstContactFromAbove)
+                {
+                    continue;
+                }
+
+                float overlap = bodyBounds.MaxY - proxy.MinY;
+                if (overlap <= 0f)
+                {
+                    continue;
+                }
+
+                float correctedY = transform.Position.Y - overlap;
+                Box2D.b2Body_SetTransform(
+                    body.BodyId,
+                    new B2Vec2
+                    {
+                        X = nativeTransform.P.X,
+                        Y = PhysicsScale.PixelToPhysics(correctedY),
+                    },
+                    nativeTransform.Q);
+                Box2D.b2Body_SetLinearVelocity(
+                    body.BodyId,
+                    new B2Vec2
+                    {
+                        X = 0f,
+                        Y = 0f,
+                    });
+                Box2D.b2Body_SetAngularVelocity(body.BodyId, 0f);
+                proxy.SupportedBodies[body.BodyKey] = body;
+                LastCharacterProxyContactCount++;
+                break;
+            }
+        }
+    }
+
+    private void SyncCharacterProxies()
+    {
+        foreach (CharacterProxy proxy in _characterProxies.Values)
+        {
+            SyncCharacterProxy(proxy);
+        }
+    }
+
+    private static unsafe void SyncCharacterProxy(CharacterProxy proxy)
+    {
+        CharacterController controller = proxy.Controller;
+        AABB controllerBounds = controller.Bounds;
+        float minX = controllerBounds.Min.X - CharacterProxyHorizontalPadding;
+        float minY = controllerBounds.Min.Y - CharacterProxyTopPadding;
+        float maxX = controllerBounds.Max.X + CharacterProxyHorizontalPadding;
+        float maxY = controllerBounds.Max.Y + CharacterProxyBottomPadding;
+        float centerX = (minX + maxX) * 0.5f;
+        float centerY = (minY + maxY) * 0.5f;
+        float halfWidth = (maxX - minX) * 0.5f;
+        float halfHeight = (maxY - minY) * 0.5f;
+        if (!NearlyEqual(proxy.CenterX, centerX) || !NearlyEqual(proxy.CenterY, centerY))
+        {
+            Box2D.b2Body_SetTransform(
+                proxy.BodyId,
+                new B2Vec2
+                {
+                    X = PhysicsScale.PixelToPhysics(centerX),
+                    Y = PhysicsScale.PixelToPhysics(centerY),
+                },
+                new B2Rot { C = 1f, S = 0f });
+            proxy.CenterX = centerX;
+            proxy.CenterY = centerY;
+        }
+
+        if (!proxy.HasShape || !NearlyEqual(proxy.HalfWidth, halfWidth) || !NearlyEqual(proxy.HalfHeight, halfHeight))
+        {
+            if (proxy.HasShape)
+            {
+                Box2D.b2DestroyShape(proxy.ShapeId, updateBodyMass: 0);
+                proxy.HasShape = false;
+            }
+
+            B2Vec2* points = stackalloc B2Vec2[4];
+            points[0] = new B2Vec2 { X = PhysicsScale.PixelToPhysics(-halfWidth), Y = PhysicsScale.PixelToPhysics(-halfHeight) };
+            points[1] = new B2Vec2 { X = PhysicsScale.PixelToPhysics(halfWidth), Y = PhysicsScale.PixelToPhysics(-halfHeight) };
+            points[2] = new B2Vec2 { X = PhysicsScale.PixelToPhysics(halfWidth), Y = PhysicsScale.PixelToPhysics(halfHeight) };
+            points[3] = new B2Vec2 { X = PhysicsScale.PixelToPhysics(-halfWidth), Y = PhysicsScale.PixelToPhysics(halfHeight) };
+            B2Hull hull = Box2D.b2ComputeHull(points, 4);
+            if (hull.Count < 3)
+            {
+                return;
+            }
+
+            B2Polygon polygon = PhysicsScale.MakeSharpPolygon(in hull);
+            B2ShapeDef shapeDef = Box2D.b2DefaultShapeDef();
+            proxy.ShapeId = Box2D.b2CreatePolygonShape(proxy.BodyId, in shapeDef, in polygon);
+            proxy.HalfWidth = halfWidth;
+            proxy.HalfHeight = halfHeight;
+            proxy.HasShape = true;
+        }
+        proxy.MinX = minX;
+        proxy.MinY = minY;
+        proxy.MaxX = maxX;
+        proxy.MaxY = maxY;
+    }
+
+    private void DestroyCharacterProxies()
+    {
+        foreach (CharacterProxy proxy in _characterProxies.Values)
+        {
+            if (proxy.HasShape)
+            {
+                Box2D.b2DestroyShape(proxy.ShapeId, updateBodyMass: 0);
+            }
+
+            Box2D.b2DestroyBody(proxy.BodyId);
+        }
+    }
+
+    private int ClearCharacterProxyOverlaps()
+    {
+        int cleared = 0;
+        foreach (CharacterProxy proxy in _characterProxies.Values)
+        {
+            RectI rect = proxy.Controller.Bounds.ToRectI();
+            for (int y = rect.MinY; y < rect.MaxY; y++)
+            {
+                for (int x = rect.MinX; x < rect.MaxX; x++)
+                {
+                    if (!CellFlags.Has(Grid.FlagsAt(x, y), CellFlags.RigidOwned))
+                    {
+                        continue;
+                    }
+
+                    if (Grid.TryClearRigidOwnedCell(x, y))
+                    {
+                        cleared++;
+                    }
+
+                    _ = Registry.Remove(x, y);
+                }
+            }
+        }
+
+        return cleared;
+    }
+
+    private static bool NearlyEqual(float a, float b)
+    {
+        return MathF.Abs(a - b) <= 0.001f;
+    }
+
+    private static RectI BodyBoundsToWorld(BodyLocalMask mask, in Transform2D transform)
+    {
+        return LocalBoundsToWorld(mask, in transform, RectI.FromBounds(0, 0, mask.Width, mask.Height));
     }
 
     private void ApplyCharacterRigidPush(in CharacterCollisionInfo info)
@@ -1071,5 +1306,34 @@ public sealed class PhysicsSystem : IDisposable
         }
 
         _damageScratch = GC.AllocateArray<RigidDamageEvent>(capacity, pinned: true);
+    }
+
+    private sealed class CharacterProxy(CharacterController controller, B2BodyId bodyId)
+    {
+        public CharacterController Controller { get; } = controller;
+
+        public B2BodyId BodyId { get; } = bodyId;
+
+        public B2ShapeId ShapeId { get; set; }
+
+        public float CenterX { get; set; }
+
+        public float CenterY { get; set; }
+
+        public float HalfWidth { get; set; }
+
+        public float HalfHeight { get; set; }
+
+        public float MinX { get; set; }
+
+        public float MinY { get; set; }
+
+        public float MaxX { get; set; }
+
+        public float MaxY { get; set; }
+
+        public Dictionary<int, PixelRigidBody> SupportedBodies { get; } = [];
+
+        public bool HasShape { get; set; }
     }
 }
