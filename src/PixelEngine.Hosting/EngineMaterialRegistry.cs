@@ -61,6 +61,7 @@ public sealed class EngineMaterialRegistry : IMaterialQuery
         bool destructible = id.Value != 0 &&
             material.Type is CellType.Solid or CellType.Powder &&
             (flags & MaterialProperty.Indestructible) == 0;
+        bool blocksCharacter = material.Type is CellType.Solid or CellType.Powder;
         return new MaterialInfo(
             id,
             material.Name,
@@ -77,7 +78,8 @@ public sealed class EngineMaterialRegistry : IMaterialQuery
             material.Hardness != 0 ? material.Hardness : material.Durability,
             material.MaxIntegrity,
             destructible,
-            material.Dispersion);
+            material.Dispersion,
+            blocksCharacter);
     }
 
     private static string LegendCategoryName(MaterialLegendCategory category)

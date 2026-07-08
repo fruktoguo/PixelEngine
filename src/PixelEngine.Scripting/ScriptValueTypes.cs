@@ -116,6 +116,7 @@ public readonly record struct CellView(MaterialId Material, byte Flags, byte Lif
 /// <param name="MaxIntegrity">结构破坏最大完整度阈值；0 表示有效伤害命中后即时破坏。</param>
 /// <param name="IsDestructible">该材质是否会被结构破坏 API 处理。</param>
 /// <param name="FlowRate">液体或气体每步横向扩散距离。</param>
+/// <param name="BlocksCharacter">该材质是否应阻挡 kinematic character。</param>
 public readonly record struct MaterialInfo(
     MaterialId Id,
     string Name,
@@ -132,7 +133,8 @@ public readonly record struct MaterialInfo(
     byte Hardness = 0,
     ushort MaxIntegrity = 0,
     bool IsDestructible = false,
-    byte FlowRate = 0);
+    byte FlowRate = 0,
+    bool BlocksCharacter = false);
 
 /// <summary>
 /// 像素 raycast 的命中结果。

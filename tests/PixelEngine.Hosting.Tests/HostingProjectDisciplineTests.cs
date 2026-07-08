@@ -1070,25 +1070,23 @@ public sealed class HostingProjectDisciplineTests
         EngineSceneDocument document = EngineSceneDocumentLoader.LoadDocument(scenePath);
 
         Assert.Equal("lava-mine", document.Name);
-        Assert.Equal(5, document.Entities!.Length);
-        EngineSceneBehaviourDocument behaviour = Assert.Single(document.Entities[0].Behaviours!);
+        EngineSceneEntityDocument[] entities = document.Entities!;
+        EngineSceneEntityDocument entity = Assert.Single(entities);
+        EngineSceneBehaviourDocument behaviour = Assert.Single(entity.Behaviours!);
         Assert.Equal("PixelEngine.Demo.LevelDirector", behaviour.TypeName);
         Assert.Equal("640", behaviour.SerializedFields!["LevelWidth"]);
         Assert.Equal("360", behaviour.SerializedFields["LevelHeight"]);
         Assert.Equal("true", behaviour.SerializedFields["BuildScriptEntities"]);
-        Assert.Equal("false", behaviour.SerializedFields["BuildGoalTrigger"]);
-        Assert.Contains(
-            document.Entities[1].Behaviours!,
-            item => string.Equals(item.TypeName, "PixelEngine.Demo.MissionDirector", StringComparison.Ordinal));
-        Assert.Contains(
-            document.Entities[1].Behaviours!,
-            item => string.Equals(item.TypeName, "PixelEngine.Demo.RisingHazardDirector", StringComparison.Ordinal));
-        Assert.Contains(
-            document.Entities[1].Behaviours!,
-            item => string.Equals(item.TypeName, "PixelEngine.Demo.ExtractionTrigger", StringComparison.Ordinal));
-        Assert.Equal(
-            3,
-            document.Entities.Count(entity => entity.Behaviours!.Any(item => string.Equals(item.TypeName, "PixelEngine.Demo.ObjectiveCrystal", StringComparison.Ordinal))));
+        Assert.Equal("true", behaviour.SerializedFields["BuildGoalTrigger"]);
+        Assert.Equal("570", behaviour.SerializedFields["GoalX"]);
+        Assert.Equal("208", behaviour.SerializedFields["GoalY"]);
+        Assert.DoesNotContain(
+            entities.SelectMany(item => item.Behaviours!),
+            item => item.TypeName is
+                "PixelEngine.Demo.MissionDirector" or
+                "PixelEngine.Demo.RisingHazardDirector" or
+                "PixelEngine.Demo.ExtractionTrigger" or
+                "PixelEngine.Demo.ObjectiveCrystal");
     }
 
     /// <summary>

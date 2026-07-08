@@ -50,6 +50,11 @@ public interface IScriptContext
     ICharacterController Character { get; }
 
     /// <summary>
+    /// PhysicsSync 后事件；用于脚本在刚体 step / inverse-sample stamp 完成后处理角色压入等后物理交互。
+    /// </summary>
+    IPhysicsStepEvents PhysicsEvents => NoopPhysicsStepEvents.Instance;
+
+    /// <summary>
     /// 相机控制能力。
     /// </summary>
     ICameraApi Camera { get; }
@@ -363,6 +368,102 @@ public interface IRigidBodyApi
     /// </summary>
     /// <param name="handle">刚体句柄。</param>
     void Destroy(BodyHandle handle);
+}
+
+/// <summary>
+/// 提供脚本可订阅的物理相位事件。
+/// </summary>
+public interface IPhysicsStepEvents
+{
+    /// <summary>
+    /// 订阅 PhysicsSync 完成后的回调。回调运行在相位 8 末尾，能读取本 tick 刚体 stamp 后的世界状态。
+    /// </summary>
+    /// <param name="callback">要执行的回调。</param>
+    /// <returns>用于取消订阅的句柄。</returns>
+    IDisposable SubscribePostStep(Action callback);
+}
+
+/// <summary>
+/// 空物理事件后端，供未接入 Physics 的脚本上下文安全降级。
+/// </summary>
+public sealed class NoopPhysicsStepEvents : IPhysicsStepEvents
+{
+    /// <summary>
+    /// 单例实例。
+    /// </summary>
+    public static NoopPhysicsStepEvents Instance { get; } = new();
+
+    private NoopPhysicsStepEvents()
+    {
+    }
+
+    /// <inheritdoc />
+    public IDisposable SubscribePostStep(Action callback)
+    {
+        ArgumentNullException.ThrowIfNull(callback);
+        return NoopSubscription.Instance;
+    }
+
+    private sealed class NoopSubscription : IDisposable
+    {
+        public static NoopSubscription Instance { get; } = new();
+
+        public void Dispose()
+        {
+        }
+    }
+}
+
+/// <summary>
+/// Hosting 物理相位使用的脚本后物理事件总线。
+/// </summary>
+public sealed class PhysicsStepEventBus : IPhysicsStepEvents
+{
+    private readonly List<Action> _postStepCallbacks = [];
+
+    /// <inheritdoc />
+    public IDisposable SubscribePostStep(Action callback)
+    {
+        ArgumentNullException.ThrowIfNull(callback);
+        _postStepCallbacks.Add(callback);
+        return new Subscription(this, callback);
+    }
+
+    /// <summary>
+    /// 由 Hosting 在 PhysicsSync 完成后发布一次。
+    /// </summary>
+    public void PublishPostStep()
+    {
+        for (int i = 0; i < _postStepCallbacks.Count; i++)
+        {
+            _postStepCallbacks[i]();
+        }
+    }
+
+    private void Unsubscribe(Action callback)
+    {
+        _ = _postStepCallbacks.Remove(callback);
+    }
+
+    private sealed class Subscription(PhysicsStepEventBus owner, Action callback) : IDisposable
+    {
+        private PhysicsStepEventBus? _owner = owner;
+        private Action? _callback = callback;
+
+        public void Dispose()
+        {
+            PhysicsStepEventBus? owner = _owner;
+            Action? callback = _callback;
+            if (owner is null || callback is null)
+            {
+                return;
+            }
+
+            _owner = null;
+            _callback = null;
+            owner.Unsubscribe(callback);
+        }
+    }
 }
 
 /// <summary>

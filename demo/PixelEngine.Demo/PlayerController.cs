@@ -1,5 +1,4 @@
 using PixelEngine.Scripting;
-using PixelEngine.Simulation;
 
 namespace PixelEngine.Demo;
 
@@ -18,6 +17,7 @@ public sealed class PlayerController : Behaviour
     private float _rigidImpactCooldown;
     private Transform? _transform;
     private PlayerHealth? _health;
+    private IDisposable? _postPhysicsSubscription;
 
     /// <summary>
     /// 出生点 X 坐标。
@@ -154,7 +154,15 @@ public sealed class PlayerController : Behaviour
     protected override void OnStart()
     {
         EnsureBody();
+        _postPhysicsSubscription ??= Context.PhysicsEvents.SubscribePostStep(HandlePostPhysicsStep);
         Respawn();
+    }
+
+    /// <inheritdoc />
+    protected override void OnDestroy()
+    {
+        _postPhysicsSubscription?.Dispose();
+        _postPhysicsSubscription = null;
     }
 
     /// <inheritdoc />
@@ -192,6 +200,19 @@ public sealed class PlayerController : Behaviour
         CharacterState moved = Context.Character.MoveNow(_body, dx, dy);
         ResolveVelocityAfterCollision(moved);
         State = moved;
+        ResolveRigidOwnedOverlap();
+        SyncTransform();
+    }
+
+    private void HandlePostPhysicsStep()
+    {
+        if (!_hasBody)
+        {
+            return;
+        }
+
+        ResolveHealth();
+        State = Context.Character.GetState(_body);
         ResolveRigidOwnedOverlap();
         SyncTransform();
     }
@@ -396,7 +417,7 @@ public sealed class PlayerController : Behaviour
         {
             for (int cx = minX; cx <= maxX; cx++)
             {
-                if (!Context.Cells.IsRigidOwned(cx, cy))
+                if (!TryIsRigidOwned(cx, cy))
                 {
                     continue;
                 }
@@ -449,19 +470,43 @@ public sealed class PlayerController : Behaviour
 
     private bool IsCharacterBlockingCell(int x, int y)
     {
-        if (Context.Cells.IsRigidOwned(x, y))
+        if (TryIsRigidOwned(x, y))
         {
             return true;
         }
 
-        MaterialId material = Context.Cells.GetMaterial(x, y);
+        MaterialId material = GetMaterialOrInvalid(x, y);
         if (!material.IsValid || material.Value == 0)
         {
             return false;
         }
 
         MaterialInfo info = Context.Materials.GetInfo(material);
-        return info.CellType is CellType.Solid or CellType.Powder;
+        return info.BlocksCharacter;
+    }
+
+    private bool TryIsRigidOwned(int x, int y)
+    {
+        try
+        {
+            return Context.Cells.IsRigidOwned(x, y);
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    private MaterialId GetMaterialOrInvalid(int x, int y)
+    {
+        try
+        {
+            return Context.Cells.GetMaterial(x, y);
+        }
+        catch (InvalidOperationException)
+        {
+            return MaterialId.Invalid;
+        }
     }
 
     private void EmitMovementAudio(in CharacterState previous, in CharacterState current, float dt)

@@ -46,5 +46,9 @@ public sealed class PhysicsPhaseDriver(PhysicsSystem physics, IChunkSource? chun
         context.Context.Counters.RigidBodies = _physics.PhysicsWorld.ActiveBodyCount;
         context.Context.Counters.RigidBodiesDestroyedThisTick = destruction.DestroyedBodies;
         context.Context.Counters.RigidBodiesCreatedThisTick = destruction.CreatedBodies;
+        if (context.Context.TryGetService(out PhysicsStepEventBus physicsEvents))
+        {
+            physicsEvents.PublishPostStep();
+        }
     }
 }

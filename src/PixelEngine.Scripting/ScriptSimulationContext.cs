@@ -21,6 +21,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     private readonly SolidFacade _solids;
     private readonly BodyFacade? _bodies;
     private readonly CharacterFacade _character;
+    private readonly IPhysicsStepEvents _physicsEvents;
     private ScriptCommand[] _drainBuffer = ArrayPool<ScriptCommand>.Shared.Rent(16);
     private bool _disposed;
 
@@ -45,6 +46,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     /// <param name="runtime">运行时控制 facade；未提供时访问 <see cref="Runtime" /> 会抛出明确异常。</param>
     /// <param name="gameUi">游戏大 UI facade；未提供时注入空服务。</param>
     /// <param name="config">配置加载 facade；未提供时访问 <see cref="Config" /> 会抛出明确异常。</param>
+    /// <param name="physicsEvents">物理后事件 facade；未提供时使用空后端。</param>
     public ScriptSimulationContext(
         Scene scene,
         CellGrid grid,
@@ -63,7 +65,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         IDiagnosticsApi? diagnostics = null,
         IRuntimeControlApi? runtime = null,
         IGameUiService? gameUi = null,
-        IConfigApi? config = null)
+        IConfigApi? config = null,
+        IPhysicsStepEvents? physicsEvents = null)
     {
         Scene = scene ?? throw new ArgumentNullException(nameof(scene));
         ArgumentNullException.ThrowIfNull(grid);
@@ -78,6 +81,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         _solids = new SolidFacade(grid);
         _bodies = physics is null ? null : new BodyFacade(_commands, physics);
         _character = new CharacterFacade(_commands, grid, physics, time);
+        _physicsEvents = physicsEvents ?? NoopPhysicsStepEvents.Instance;
         Grid = grid;
         Kernel = kernel;
         Temperature = temperature;
@@ -157,6 +161,9 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 
     /// <inheritdoc />
     public ICharacterController Character => _character;
+
+    /// <inheritdoc />
+    public IPhysicsStepEvents PhysicsEvents => _physicsEvents;
 
     /// <inheritdoc />
     public ICameraApi Camera => CameraBackend ?? throw Unsupported(nameof(Camera));
@@ -692,6 +699,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             bool destructible = id.Value != 0 &&
                 material.Type is CellType.Solid or CellType.Powder &&
                 (flags & MaterialProperty.Indestructible) == 0;
+            bool blocksCharacter = material.Type is CellType.Solid or CellType.Powder;
             return new MaterialInfo(
                 id,
                 material.Name,
@@ -708,7 +716,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 material.Hardness != 0 ? material.Hardness : material.Durability,
                 material.MaxIntegrity,
                 destructible,
-                material.Dispersion);
+                material.Dispersion,
+                blocksCharacter);
         }
 
         private static string LegendCategoryName(MaterialLegendCategory category)
