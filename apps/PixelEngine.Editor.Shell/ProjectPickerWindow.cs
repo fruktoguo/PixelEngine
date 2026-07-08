@@ -8,6 +8,7 @@ internal sealed class ProjectPickerWindow
     private string _newProjectRoot;
     private string _newProjectName = "NewPixelProject";
     private string _openProjectPath;
+    private string _folderPickerDiagnostic = string.Empty;
     private ProjectPickerMode _mode;
 
     public ProjectPickerWindow(EditorShellOptions options)
@@ -79,7 +80,7 @@ internal sealed class ProjectPickerWindow
 
         _mode = ProjectPickerMode.NewProject;
         _ = ImGui.InputText("Project Name", ref _newProjectName, 128);
-        _ = ImGui.InputText("Project Directory", ref _newProjectRoot, 512);
+        DrawPathInputWithBrowse("Project Directory", ref _newProjectRoot, "new_project_root");
         if (ImGui.Button("Create Project"))
         {
             app.CreateProject(_newProjectRoot, _newProjectName);
@@ -100,13 +101,41 @@ internal sealed class ProjectPickerWindow
         }
 
         _mode = ProjectPickerMode.OpenProject;
-        _ = ImGui.InputText("Project Root or project.pixelproj", ref _openProjectPath, 512);
+        DrawPathInputWithBrowse("Project Root or project.pixelproj", ref _openProjectPath, "open_project_root");
         if (ImGui.Button("Open Project"))
         {
             app.OpenProjectPath(_openProjectPath);
         }
 
         ImGui.EndTabItem();
+    }
+
+    private void DrawPathInputWithBrowse(string label, ref string path, string id)
+    {
+        const float BrowseButtonWidth = 88f;
+        ImGui.TextUnformatted(label);
+        float inputWidth = Math.Min(520f, Math.Max(240f, ImGui.GetContentRegionAvail().X - BrowseButtonWidth - ImGui.GetStyle().ItemSpacing.X));
+        ImGui.PushItemWidth(inputWidth);
+        _ = ImGui.InputText($"##{id}_path", ref path, 512);
+        ImGui.PopItemWidth();
+        ImGui.SameLine();
+        if (ImGui.Button($"Browse...##{id}", new Vector2(BrowseButtonWidth, 0f)))
+        {
+            if (NativeFolderPicker.TryPickFolder(path, out string selectedPath, out string diagnostic))
+            {
+                path = selectedPath;
+                _folderPickerDiagnostic = string.Empty;
+            }
+            else if (!string.IsNullOrWhiteSpace(diagnostic))
+            {
+                _folderPickerDiagnostic = diagnostic;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(_folderPickerDiagnostic))
+        {
+            ImGui.TextColored(new Vector4(1.0f, 0.55f, 0.25f, 1.0f), _folderPickerDiagnostic);
+        }
     }
 
     private static void DrawRecentProjectsTab(EditorShellApp app)
