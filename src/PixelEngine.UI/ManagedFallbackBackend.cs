@@ -1,5 +1,6 @@
 using PixelEngine.Gui;
 using PixelEngine.Rendering;
+using System.Text;
 
 namespace PixelEngine.UI;
 
@@ -8,6 +9,9 @@ namespace PixelEngine.UI;
 /// </summary>
 public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable, IGameUiImagePreloader
 {
+    private const int CompositionOverlayTextCapacity = 256;
+    private const uint CompositionOverlayTextColorBgra = 0xFF_FF_D4_4D;
+
     private readonly IManagedFallbackGuiHost _gui;
     private readonly ManagedUiDocument?[] _documents;
     private readonly UiScreenStackEntry[] _visibleScreens;
@@ -41,6 +45,14 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     private ManagedFallbackBackendOptions Options { get; }
 
     private bool Dirty { get; set; }
+
+    private string CompositionOverlayText { get; set; } = string.Empty;
+
+    private UiTextComposition CompositionOverlayState { get; set; } = UiTextComposition.Inactive;
+
+    internal string DebugCompositionOverlayText => CompositionOverlayText;
+
+    internal UiTextComposition DebugCompositionOverlayState => CompositionOverlayState;
 
     /// <summary>
     /// 后端类型，固定为纯托管回退后端。
@@ -199,14 +211,29 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     }
 
     /// <summary>
-    /// 接收 IME composition 预编辑状态；当前托管回退后端尚无文本编辑控件，安全忽略但保留抽象边界。
+    /// 接收 IME composition 预编辑状态；托管回退后端以独立 overlay 显示预编辑文本，不把它写入 committed text。
     /// </summary>
     /// <param name="text">当前预编辑文本。</param>
     /// <param name="composition">当前预编辑状态。</param>
     public void FeedTextComposition(ReadOnlySpan<char> text, in UiTextComposition composition)
     {
-        _ = text;
-        _ = composition;
+        ThrowIfDisposed();
+        int textLength = Math.Min(text.Length, CompositionOverlayTextCapacity);
+        UiTextComposition normalized = composition.IsActive && textLength > 0
+            ? composition.ClampToTextLength(textLength)
+            : UiTextComposition.Inactive;
+        string overlayText = normalized.IsActive
+            ? BuildCompositionOverlayText(text[..textLength], in normalized)
+            : string.Empty;
+        UiTextComposition current = CompositionOverlayState;
+        if (CompositionOverlayText == overlayText && CompositionEquals(in current, in normalized))
+        {
+            return;
+        }
+
+        CompositionOverlayText = overlayText;
+        CompositionOverlayState = normalized;
+        Dirty = true;
     }
 
     /// <summary>
@@ -382,7 +409,7 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     public void Composite(in UiPresentContext context)
     {
         ThrowIfDisposed();
-        if (!_initialized || _visibleScreenCount == 0)
+        if (!_initialized || (_visibleScreenCount == 0 && !HasCompositionOverlay))
         {
             return;
         }
@@ -416,7 +443,7 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     public void DrawGui(IGuiDrawContext gui)
     {
         ThrowIfDisposed();
-        if (!_initialized || _visibleScreenCount == 0)
+        if (!_initialized || (_visibleScreenCount == 0 && !HasCompositionOverlay))
         {
             return;
         }
@@ -437,6 +464,8 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
 
             DrawDocument(gui, _visibleScreens[i], document);
         }
+
+        DrawCompositionOverlay(gui);
     }
 
     private void DrawDocument(IGuiDrawContext gui, UiScreenStackEntry screen, ManagedUiDocument document)
@@ -513,6 +542,79 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
             default:
                 throw new ArgumentOutOfRangeException(nameof(control), control.Kind, "未知 Managed UI 控件类型。");
         }
+    }
+
+    private void DrawCompositionOverlay(IGuiDrawContext gui)
+    {
+        if (!HasCompositionOverlay)
+        {
+            return;
+        }
+
+        float width = Math.Min(
+            Math.Max(180f, (CompositionOverlayText.Length * 10f) + 32f),
+            Math.Max(180f, _viewport.Width - 24f));
+        float height = 42f;
+        float x = _viewport.X + 12f;
+        float y = Math.Max(_viewport.Y, _viewport.Y + _viewport.Height - height - 12f);
+        gui.SetNextWindow(x, y, width, height, GuiDrawCondition.Always);
+        GuiDrawWindowFlags flags =
+            GuiDrawWindowFlags.NoSavedSettings |
+            GuiDrawWindowFlags.NoResize |
+            GuiDrawWindowFlags.NoMove |
+            GuiDrawWindowFlags.NoScrollbar |
+            GuiDrawWindowFlags.AlwaysAutoResize;
+        if (!gui.BeginWindow("ui_ime_composition", "IME composition", flags))
+        {
+            gui.EndWindow();
+            return;
+        }
+
+        gui.TextColored(CompositionOverlayText, CompositionOverlayTextColorBgra);
+        gui.EndWindow();
+    }
+
+    private bool HasCompositionOverlay => CompositionOverlayState.IsActive && !string.IsNullOrEmpty(CompositionOverlayText);
+
+    private static string BuildCompositionOverlayText(ReadOnlySpan<char> text, in UiTextComposition composition)
+    {
+        StringBuilder builder = new(text.Length + 12);
+        _ = builder.Append("IME ");
+        int selectionStart = composition.SelectionLength > 0 ? composition.SelectionStart : -1;
+        int selectionEnd = selectionStart >= 0 ? selectionStart + composition.SelectionLength : -1;
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (i == selectionStart)
+            {
+                _ = builder.Append('[');
+            }
+
+            if (i == composition.CursorIndex)
+            {
+                _ = builder.Append('|');
+            }
+
+            _ = builder.Append(text[i]);
+            if (i + 1 == selectionEnd)
+            {
+                _ = builder.Append(']');
+            }
+        }
+
+        if (composition.CursorIndex == text.Length)
+        {
+            _ = builder.Append('|');
+        }
+
+        return builder.ToString();
+    }
+
+    private static bool CompositionEquals(in UiTextComposition left, in UiTextComposition right)
+    {
+        return left.IsActive == right.IsActive &&
+            left.CursorIndex == right.CursorIndex &&
+            left.SelectionStart == right.SelectionStart &&
+            left.SelectionLength == right.SelectionLength;
     }
 
     private UiHitResult HitTestDocument(ManagedUiDocument document, float x, float y)

@@ -277,17 +277,43 @@ public sealed class BackendConformanceTests : IDisposable
     }
 
     [Fact]
-    public void ManagedFallbackSafelyIgnoresImeCompositionLifecycleAtBackendBoundary()
+    public void ManagedFallbackDrawsImeCompositionOverlayWithoutMixingCommittedText()
     {
-        using ManagedFallbackBackend backend = CreateManagedBackend(out _);
+        string path = WriteUi("""
+            <ui title="Input">
+              <text id="label">Input</text>
+            </ui>
+            """);
+        using ManagedFallbackBackend backend = CreateManagedBackend(out FakeGuiHost gui);
         backend.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        UiDocumentHandle document = backend.LoadDocument(UiDocumentSource.Asset(path, 7));
+        backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(1), new UiScreenId(7), document, Modal: false)]);
+        backend.Composite(default);
+        gui.Context.Texts.Clear();
 
         backend.FeedTextComposition(
             "候補",
-            new UiTextComposition(isActive: true, cursorIndex: 99, selectionStart: 1, selectionLength: 99));
-        backend.FeedText("中");
-        backend.FeedTextComposition([], UiTextComposition.Inactive);
+            new UiTextComposition(isActive: true, cursorIndex: 1));
+        Assert.True(backend.IsDirty);
+        Assert.Equal("IME 候|補", backend.DebugCompositionOverlayText);
+        Assert.True(backend.DebugCompositionOverlayState.IsActive);
 
+        backend.Composite(default);
+
+        Assert.Contains("IME 候|補", gui.Context.Texts);
+        Assert.False(backend.IsDirty);
+
+        backend.FeedText("中");
+        Assert.False(backend.IsDirty);
+
+        backend.FeedTextComposition([], UiTextComposition.Inactive);
+        Assert.True(backend.IsDirty);
+        Assert.Equal(string.Empty, backend.DebugCompositionOverlayText);
+        Assert.False(backend.DebugCompositionOverlayState.IsActive);
+        gui.Context.Texts.Clear();
+        backend.Composite(default);
+
+        Assert.DoesNotContain("IME 候|補", gui.Context.Texts);
         Assert.False(backend.IsDirty);
     }
 
@@ -372,6 +398,8 @@ public sealed class BackendConformanceTests : IDisposable
 
     private sealed class FakeGuiDrawContext : IGuiDrawContext
     {
+        public List<string> Texts { get; } = [];
+
         public HashSet<string> ClickedButtons { get; } = [];
 
         public int Width => 320;
@@ -407,12 +435,12 @@ public sealed class BackendConformanceTests : IDisposable
 
         public void Text(string text)
         {
-            _ = text;
+            Texts.Add(text);
         }
 
         public void TextColored(string text, uint colorBgra)
         {
-            _ = text;
+            Texts.Add(text);
             _ = colorBgra;
         }
 
