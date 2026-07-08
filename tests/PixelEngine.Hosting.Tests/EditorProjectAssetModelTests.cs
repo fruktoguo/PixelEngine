@@ -257,6 +257,74 @@ public sealed class EditorProjectAssetModelTests
     }
 
     /// <summary>
+    /// 验证移动资产会先解析全部引用文档，损坏的 scene/prefab 不会导致文件已移动但引用未重写的半提交状态。
+    /// </summary>
+    [Fact]
+    public void MoveAssetPreflightsReferenceDocumentsBeforeMovingFile()
+    {
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            string contentRoot = Path.Combine(projectRoot, "content");
+            EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
+            EditorAssetRecord texture = manifest.CreateAsset("textures/sand.png", EditorAssetType.Texture, textContents: "texture");
+            string brokenScene = Path.Combine(contentRoot, "scenes", "broken.scene");
+            _ = Directory.CreateDirectory(Path.GetDirectoryName(brokenScene)!);
+            File.WriteAllText(brokenScene, "not json");
+            _ = manifest.EnsureAsset("scenes/broken.scene");
+
+            _ = Assert.ThrowsAny<Exception>(() => manifest.MoveAsset("textures/sand.png", "textures/moved/sand.png"));
+
+            Assert.True(File.Exists(Path.Combine(contentRoot, "textures", "sand.png")));
+            Assert.False(File.Exists(Path.Combine(contentRoot, "textures", "moved", "sand.png")));
+            Assert.True(manifest.TryResolveAssetId(texture.Id, out EditorAssetRecord resolved));
+            Assert.Equal("textures/sand.png", resolved.LogicalPath);
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
+    /// 验证引用文档保存到一半失败时，已写出的引用文档也会恢复到旧路径。
+    /// </summary>
+    [Fact]
+    public void MoveAssetRestoresWrittenReferenceDocumentsWhenLaterSaveFails()
+    {
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            string contentRoot = Path.Combine(projectRoot, "content");
+            EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
+            EditorAssetRecord texture = manifest.CreateAsset("textures/sand.png", EditorAssetType.Texture, textContents: "texture");
+            string oldReference = EditorAssetReferenceCodec.Encode(texture.Id, texture.LogicalPath, texture.AssetType);
+            string firstScene = Path.Combine(contentRoot, "scenes", "a-first.scene");
+            string secondScene = Path.Combine(contentRoot, "scenes", "z-readonly.scene");
+            EngineSceneDocumentLoader.SaveDocument(CreateSceneWithAssetReference(oldReference), firstScene);
+            EngineSceneDocumentLoader.SaveDocument(CreateSceneWithAssetReference(oldReference), secondScene);
+            _ = manifest.EnsureAsset("scenes/a-first.scene");
+            _ = manifest.EnsureAsset("scenes/z-readonly.scene");
+            File.SetAttributes(secondScene, FileAttributes.ReadOnly);
+
+            _ = Assert.ThrowsAny<Exception>(() => manifest.MoveAsset("textures/sand.png", "textures/moved/sand.png"));
+
+            File.SetAttributes(secondScene, FileAttributes.Normal);
+            Assert.True(File.Exists(Path.Combine(contentRoot, "textures", "sand.png")));
+            Assert.False(File.Exists(Path.Combine(contentRoot, "textures", "moved", "sand.png")));
+            Assert.True(manifest.TryResolveAssetId(texture.Id, out EditorAssetRecord resolved));
+            Assert.Equal("textures/sand.png", resolved.LogicalPath);
+            Assert.Equal(oldReference, EngineSceneDocumentLoader.LoadDocument(firstScene).Entities![0].Behaviours![0].SerializedFields!["Texture"]);
+            Assert.Equal(oldReference, EngineSceneDocumentLoader.LoadDocument(secondScene).Entities![0].Behaviours![0].SerializedFields!["Texture"]);
+        }
+        finally
+        {
+            ClearReadOnlyAttributes(projectRoot);
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
     /// 验证删除预检会阻止仍被 Scene / 活动 authoring 模型引用的资产。
     /// </summary>
     [Fact]
@@ -493,6 +561,19 @@ public sealed class EditorProjectAssetModelTests
         if (Directory.Exists(path))
         {
             Directory.Delete(path, recursive: true);
+        }
+    }
+
+    private static void ClearReadOnlyAttributes(string path)
+    {
+        if (!Directory.Exists(path))
+        {
+            return;
+        }
+
+        foreach (string file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+        {
+            File.SetAttributes(file, FileAttributes.Normal);
         }
     }
 }
