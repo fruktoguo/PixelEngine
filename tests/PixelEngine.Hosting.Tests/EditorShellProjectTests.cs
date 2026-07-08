@@ -88,6 +88,91 @@ public sealed class EditorShellProjectTests
     }
 
     /// <summary>
+    /// 验证最近工程文件损坏时不会阻断 EditorShell 启动。
+    /// </summary>
+    [Fact]
+    public void RecentProjectsLoadReturnsEmptyStoreWhenJsonIsCorrupted()
+    {
+        using TempDirectory temp = new();
+        string path = Path.Combine(temp.Path, "recent-projects.json");
+        File.WriteAllText(path, "{ not json");
+
+        RecentProjectsStore store = RecentProjectsStore.Load(path);
+
+        Assert.Empty(store.Entries);
+    }
+
+    /// <summary>
+    /// 验证最近工程加载会跳过无效项、按最近打开排序、去重并裁剪上限。
+    /// </summary>
+    [Fact]
+    public void RecentProjectsLoadNormalizesEntriesByPathOrderAndLimit()
+    {
+        using TempDirectory temp = new();
+        string path = Path.Combine(temp.Path, "recent-projects.json");
+        string duplicateProject = Path.Combine(temp.Path, "Project-duplicate");
+        DateTimeOffset baseTime = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        List<RecentProjectEntry> entries =
+        [
+            new RecentProjectEntry
+            {
+                Name = "Old Duplicate",
+                ProjectPath = duplicateProject,
+                LastOpenedUtc = baseTime.AddDays(-1),
+            },
+            new RecentProjectEntry
+            {
+                Name = "Invalid",
+                ProjectPath = "\0bad",
+                LastOpenedUtc = baseTime.AddYears(1),
+            },
+            new RecentProjectEntry
+            {
+                Name = " ",
+                ProjectPath = Path.Combine(temp.Path, "FallbackName"),
+                LastOpenedUtc = baseTime.AddDays(30),
+            },
+            new RecentProjectEntry
+            {
+                Name = "New Duplicate",
+                ProjectPath = duplicateProject,
+                LastOpenedUtc = baseTime.AddDays(31),
+            },
+        ];
+        for (int i = 0; i < 25; i++)
+        {
+            entries.Add(new RecentProjectEntry
+            {
+                Name = $"Project {i:D2}",
+                ProjectPath = Path.Combine(temp.Path, $"Project-{i:D2}"),
+                LastOpenedUtc = baseTime.AddDays(i),
+            });
+        }
+
+        RecentProjectsDocument document = new()
+        {
+            Entries = [.. entries],
+        };
+        File.WriteAllText(path, JsonSerializer.Serialize(document, EditorShellJsonContext.Default.RecentProjectsDocument));
+
+        RecentProjectsStore store = RecentProjectsStore.Load(path);
+
+        Assert.Equal(RecentProjectsStore.MaxEntries, store.Entries.Count);
+        Assert.DoesNotContain(store.Entries, static entry => entry.Name == "Invalid");
+        RecentProjectEntry duplicate = Assert.Single(store.Entries, entry =>
+            string.Equals(entry.ProjectPath, Path.GetFullPath(duplicateProject), StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("New Duplicate", duplicate.Name);
+        Assert.Contains(store.Entries, static entry => entry.Name == "FallbackName");
+        Assert.All(store.Entries, static entry => Assert.Equal(Path.GetFullPath(entry.ProjectPath), entry.ProjectPath));
+        RecentProjectEntry previous = store.Entries[0];
+        foreach (RecentProjectEntry current in store.Entries.Skip(1))
+        {
+            Assert.True(previous.LastOpenedUtc >= current.LastOpenedUtc);
+            previous = current;
+        }
+    }
+
+    /// <summary>
     /// 验证工程文件中的目录与场景路径不能逃逸工程/content 根。
     /// </summary>
     [Fact]

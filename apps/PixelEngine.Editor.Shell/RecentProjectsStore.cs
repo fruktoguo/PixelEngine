@@ -36,20 +36,100 @@ internal sealed class RecentProjectsStore
             return new RecentProjectsStore(fullPath, []);
         }
 
-        string json = File.ReadAllText(fullPath);
-        RecentProjectsDocument? document = JsonSerializer.Deserialize(
-            json,
-            EditorShellJsonContext.Default.RecentProjectsDocument);
-        List<RecentProjectEntry> entries = document?.Entries is null
-            ? []
-            : [.. document.Entries.Where(static entry => !string.IsNullOrWhiteSpace(entry.ProjectPath))];
-        entries.Sort(static (left, right) => right.LastOpenedUtc.CompareTo(left.LastOpenedUtc));
-        if (entries.Count > MaxEntries)
+        RecentProjectsDocument? document;
+        try
         {
-            entries.RemoveRange(MaxEntries, entries.Count - MaxEntries);
+            string json = File.ReadAllText(fullPath);
+            document = JsonSerializer.Deserialize(
+                json,
+                EditorShellJsonContext.Default.RecentProjectsDocument);
+        }
+        catch (JsonException)
+        {
+            return new RecentProjectsStore(fullPath, []);
+        }
+        catch (IOException)
+        {
+            return new RecentProjectsStore(fullPath, []);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return new RecentProjectsStore(fullPath, []);
         }
 
-        return new RecentProjectsStore(fullPath, entries);
+        return new RecentProjectsStore(fullPath, NormalizeEntries(document?.Entries));
+    }
+
+    private static List<RecentProjectEntry> NormalizeEntries(IEnumerable<RecentProjectEntry?>? source)
+    {
+        if (source is null)
+        {
+            return [];
+        }
+
+        List<RecentProjectEntry> sorted = [];
+        foreach (RecentProjectEntry? entry in source)
+        {
+            if (entry is not null)
+            {
+                sorted.Add(entry);
+            }
+        }
+
+        sorted.Sort(static (left, right) => right.LastOpenedUtc.CompareTo(left.LastOpenedUtc));
+
+        HashSet<string> seenPaths = new(StringComparer.OrdinalIgnoreCase);
+        List<RecentProjectEntry> entries = [];
+        foreach (RecentProjectEntry entry in sorted)
+        {
+            if (!TryGetFullPath(entry.ProjectPath, out string? projectPath) || projectPath is null || !seenPaths.Add(projectPath))
+            {
+                continue;
+            }
+
+            string name = string.IsNullOrWhiteSpace(entry.Name)
+                ? Path.GetFileName(projectPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+                : entry.Name.Trim();
+            entries.Add(new RecentProjectEntry
+            {
+                Name = string.IsNullOrWhiteSpace(name) ? "Project" : name,
+                ProjectPath = projectPath,
+                LastOpenedUtc = entry.LastOpenedUtc,
+            });
+            if (entries.Count == MaxEntries)
+            {
+                break;
+            }
+        }
+
+        return entries;
+    }
+
+    private static bool TryGetFullPath(string? path, out string? fullPath)
+    {
+        fullPath = null;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            fullPath = Path.GetFullPath(path);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
+        catch (PathTooLongException)
+        {
+            return false;
+        }
     }
 
     public void AddOrUpdate(EditorProject project)
