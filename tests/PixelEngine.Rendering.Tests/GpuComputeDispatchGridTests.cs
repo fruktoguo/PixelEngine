@@ -29,6 +29,32 @@ public sealed class GpuComputeDispatchGridTests
     }
 
     [Fact]
+    public void ValidateLocalSizeRejectsUnqueriedDeviceLimits()
+    {
+        GpuCapabilities unqueried = new(
+            glMajorVersion: 4,
+            glMinorVersion: 3,
+            isGles: false,
+            isAngle: false,
+            hasComputeShader: true,
+            hasShaderStorageBufferObject: true,
+            hasShaderImageLoadStore: true,
+            maxWorkGroupCountX: 0,
+            maxWorkGroupCountY: 0,
+            maxWorkGroupCountZ: 0,
+            maxWorkGroupSizeX: 0,
+            maxWorkGroupSizeY: 0,
+            maxWorkGroupSizeZ: 0,
+            isWindows: false,
+            isDx12Available: false,
+            isComputeSharpCompiled: false);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => GpuComputeDispatchGrid.ValidateLocalSize(unqueried));
+        Assert.Contains("查询", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ValidateLocalSizeRejectsDeviceBelowConfiguredLocalSize()
     {
         GpuCapabilities tooSmall = new(
