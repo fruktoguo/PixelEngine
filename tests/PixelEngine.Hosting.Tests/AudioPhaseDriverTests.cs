@@ -45,6 +45,8 @@ public sealed class AudioPhaseDriverTests
             Assert.Equal(1, engine.Phases.Count(EnginePhase.BuildRenderBuffer));
             Assert.Equal(1, backend.PlayCalls);
             Assert.Equal(1, engine.Context.Counters.AudioLoadedClips);
+            engine.Dispose();
+            Assert.Equal(0, backend.LiveObjectCount);
         }
         finally
         {
