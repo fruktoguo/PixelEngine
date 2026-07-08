@@ -46,7 +46,7 @@
 - [x] 审计脚本已参数化：`tools/audit-release-artifacts.ps1` 与 `.sh` 接收 active RID，`--require-all` 只要求当前激活集，dormant RID 缺失不误判当前 Windows-first 发布失败。
 - [x] 发行证据预检已参数化：`tools/release-evidence-preflight.ps1` 与 `.sh` 从 active RID 和 expected package count 派生包数、上传资产数、SHA256SUMS 覆盖、deterministic hash 行集，以及 `workflow_run` ↔ 子报告的 `run_id` / `sha` / `workflow` / `run_attempt` 同源身份。
 - [x] GitHub Release 上传报告约束已写入预检：`workflow_run` 必须来自 tag push，且必须覆盖 package asset 与唯一 `SHA256SUMS`；只写 success、缺少同源 `workflow` / `run_attempt` 或 `workflow_dispatch` 不能冒充完成。
-- [x] 确定性打包工具已落地：`tools/PixelEngine.Tools.DeterministicPackage` 固定 entry 顺序、时间戳、权限与 owner，release job 二次 package 生成 deterministic hash report。
+- [x] 确定性打包工具已落地并纳入 solution：`tools/PixelEngine.Tools.DeterministicPackage` 固定 entry 顺序、时间戳、权限与 owner，release job 二次 package 生成 deterministic hash report，`dotnet build PixelEngine.sln` 会覆盖该工具项目。
 - [x] build-player 编排器已落地：`tools/build-player.ps1` 与 `.sh` 串 `build-native`、publish、verify、package、audit，输出 `schema=pixelengine.build/v1` NDJSON 与 `build-result.json`。
 - [x] 本机正式输出目录已落地：`tools/update-final-output.ps1` 先在 `artifacts/final-output-staging/<timestamp>/` 构建并验证 EditorShell 默认工作台、编辑器出包链路和 Demo 窗口短跑，全部通过后才原子替换 `最终输出/编辑器`、`最终输出/游戏Demo` 与 `_验证记录/manifest.json`；`最终输出/` 只作为本机正式产物入口并已加入 `.gitignore`。正式输出更新脚本的发布 / 验证子进程已显式 `UseShellExecute=false` + `CreateNoWindow=true`，配合 EditorShell / Demo `OutputType=WinExe` 防止正式应用验证或 Build And Run 链路弹出控制台窗口。
 - [x] build-player 产品名契约已落地：`-ProductName` 只影响玩家可见启动器和包名，内部 `AssemblyName` 默认保持 `PixelEngine.Demo`，避免带空格 assembly 破坏 restore 或 apphost 载荷。

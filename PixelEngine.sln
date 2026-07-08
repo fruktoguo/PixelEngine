@@ -109,6 +109,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PixelEngine.UI", "src\Pixel
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PixelEngine.UI.Tests", "tests\PixelEngine.UI.Tests\PixelEngine.UI.Tests.csproj", "{DAE2C991-C0F3-41C4-9CD3-0CC094EA14B2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PixelEngine.Tools.DeterministicPackage", "tools\PixelEngine.Tools.DeterministicPackage\PixelEngine.Tools.DeterministicPackage.csproj", "{8DB0E444-758C-4F09-8020-5017059B5567}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -491,6 +493,18 @@ Global
 		{DAE2C991-C0F3-41C4-9CD3-0CC094EA14B2}.Release|x64.Build.0 = Release|Any CPU
 		{DAE2C991-C0F3-41C4-9CD3-0CC094EA14B2}.Release|x86.ActiveCfg = Release|Any CPU
 		{DAE2C991-C0F3-41C4-9CD3-0CC094EA14B2}.Release|x86.Build.0 = Release|Any CPU
+		{8DB0E444-758C-4F09-8020-5017059B5567}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8DB0E444-758C-4F09-8020-5017059B5567}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8DB0E444-758C-4F09-8020-5017059B5567}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{8DB0E444-758C-4F09-8020-5017059B5567}.Debug|x64.Build.0 = Debug|Any CPU
+		{8DB0E444-758C-4F09-8020-5017059B5567}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{8DB0E444-758C-4F09-8020-5017059B5567}.Debug|x86.Build.0 = Debug|Any CPU
+		{8DB0E444-758C-4F09-8020-5017059B5567}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8DB0E444-758C-4F09-8020-5017059B5567}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8DB0E444-758C-4F09-8020-5017059B5567}.Release|x64.ActiveCfg = Release|Any CPU
+		{8DB0E444-758C-4F09-8020-5017059B5567}.Release|x64.Build.0 = Release|Any CPU
+		{8DB0E444-758C-4F09-8020-5017059B5567}.Release|x86.ActiveCfg = Release|Any CPU
+		{8DB0E444-758C-4F09-8020-5017059B5567}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -527,5 +541,6 @@ Global
 		{C857CB1C-96CF-4D2F-94F3-028DA6204CCF} = {1787FE1D-075E-9E68-7218-25F1BD1BBEAB}
 		{7E7497E9-CB36-427A-BF16-415DA4AA5E9E} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{DAE2C991-C0F3-41C4-9CD3-0CC094EA14B2} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{8DB0E444-758C-4F09-8020-5017059B5567} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 	EndGlobalSection
 EndGlobal

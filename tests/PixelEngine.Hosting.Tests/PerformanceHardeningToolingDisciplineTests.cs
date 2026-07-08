@@ -3896,6 +3896,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string releaseReport = ReadRepositoryFile("docs", "release-reports", "2026-07-02-win-x64-publish.md");
         string plan = ReadRepositoryFile("plan", "15-build-packaging-distribution.md");
         string conventions = ReadRepositoryFile("plan", "00-conventions-and-techstack.md");
+        string solution = ReadRepositoryFile("PixelEngine.sln");
 
         Assert.Contains("Assert-NoDynamicBox2D", auditPs1, StringComparison.Ordinal);
         Assert.Contains("box2d.dll", auditPs1, StringComparison.Ordinal);
@@ -3956,6 +3957,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
         Assert.Contains("PixelEngine.Tools.DeterministicPackage", packagePs1, StringComparison.Ordinal);
         Assert.Contains("PixelEngine.Tools.DeterministicPackage", packageSh, StringComparison.Ordinal);
+        Assert.Contains("tools\\PixelEngine.Tools.DeterministicPackage\\PixelEngine.Tools.DeterministicPackage.csproj", solution, StringComparison.Ordinal);
         Assert.Contains("$appDir = Join-Path $stagingDir 'app'", packagePs1, StringComparison.Ordinal);
         Assert.Contains("$ProductName = 'PixelEngine Demo'", packagePs1, StringComparison.Ordinal);
         Assert.Contains("$windowsLauncherName = \"$ProductName.exe\"", packagePs1, StringComparison.Ordinal);
