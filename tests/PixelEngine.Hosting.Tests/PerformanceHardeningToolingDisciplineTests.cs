@@ -43,8 +43,12 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("./tools/benchmark-regression.ps1", ci, StringComparison.Ordinal);
         Assert.Contains("Copy-RepositoryForBenchmark", runner, StringComparison.Ordinal);
         Assert.Contains("\".claude\"", runner, StringComparison.Ordinal);
+        Assert.Contains("\"out\"", runner, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"runtimes\"", runner, StringComparison.Ordinal);
         Assert.Contains("Push-Location $tempRoot", runner, StringComparison.Ordinal);
         Assert.Contains("Generate Exception", runner, StringComparison.Ordinal);
+        Assert.Contains("There are not any results runs", runner, StringComparison.Ordinal);
+        Assert.Contains("DllNotFoundException", runner, StringComparison.Ordinal);
         Assert.Contains("executed benchmarks:", runner, StringComparison.Ordinal);
         Assert.Contains("tools/run-benchmark.ps1", regression, StringComparison.Ordinal);
         Assert.Contains("tools/run-benchmark.ps1", disassembly, StringComparison.Ordinal);
