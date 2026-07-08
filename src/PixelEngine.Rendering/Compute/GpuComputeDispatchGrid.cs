@@ -74,6 +74,11 @@ public static class GpuComputeDispatchGrid
     /// <param name="capabilities">GPU compute 能力。</param>
     public static void ValidateLocalSize(in GpuCapabilities capabilities)
     {
+        if (!HasQueriedDeviceLimits(in capabilities))
+        {
+            throw new InvalidOperationException("GPU compute work group 限制尚未从真实设备查询。");
+        }
+
         if (ExceedsDeviceLimit(LocalSizeX, capabilities.MaxWorkGroupSizeX))
         {
             throw new InvalidOperationException("GPU compute work group X 尺寸超过当前设备限制。");
