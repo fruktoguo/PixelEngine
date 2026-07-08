@@ -81,6 +81,41 @@ public sealed class LavaMineSceneTests
     }
 
     /// <summary>
+    /// 验证默认关卡是左到右的横向熔岩闯关，而不是旧的上涨熔岩 / 水位任务。
+    /// </summary>
+    [Fact]
+    public async Task LavaMineSceneBuildsDirectSideScrollingLavaRoute()
+    {
+        using Engine engine = await CreateLavaMineEngineAsync();
+        engine.RunHeadlessTicks(2);
+
+        ScriptScene scene = engine.Context.GetService<ScriptScene>();
+        LevelDirector director = FindBehaviour<LevelDirector>(scene);
+        WeaponController weapons = FindBehaviour<WeaponController>(scene);
+        CellGrid grid = engine.Context.GetService<CellGrid>();
+        MaterialTable materials = engine.Context.GetService<MaterialTable>();
+        Assert.True(materials.TryGetId("lava", out ushort lava));
+        Assert.True(materials.TryGetId("wood", out ushort wood));
+        Assert.True(materials.TryGetId("metal", out ushort metal));
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+
+        int floorY = director.LevelHeight - 72;
+        Assert.Equal(0, CountBehaviours<MissionDirector>(scene));
+        Assert.Equal(0, CountBehaviours<RisingHazardDirector>(scene));
+        Assert.True(director.PlayerSpawnX < director.GoalX, $"横向路线应从左向右推进，spawn={director.PlayerSpawnX}, goal={director.GoalX}。");
+        int lavaCells = CountMaterial(grid, lava, minX: 172, minY: floorY - 4, maxX: 582, maxY: floorY + 28);
+        int woodCells = CountRigidOwnedMaterial(grid, wood, minX: 132, minY: floorY - 130, maxX: 250, maxY: floorY + 4);
+        int metalCells = CountRigidOwnedMaterial(grid, metal, minX: 270, minY: floorY - 130, maxX: 430, maxY: floorY + 4);
+        int stoneCells = CountRigidOwnedMaterial(grid, stone, minX: 246, minY: floorY - 40, maxX: 374, maxY: floorY + 4);
+        Assert.True(lavaCells > 200, $"横向路线中段应保留多个 lava 坑，actual={lavaCells}。");
+        Assert.True(woodCells > 200, $"横向路线应包含 wood 可拆路障 / 桥梁，actual={woodCells}。");
+        Assert.True(metalCells > 200, $"横向路线应包含 metal 可拆路障 / 桥梁，actual={metalCells}。");
+        Assert.True(stoneCells > 100, $"横向路线应包含 stone 可拆矮障碍，actual={stoneCells}。");
+        Assert.Equal(6f, weapons.TerrainEffectScale);
+        Assert.Equal(10f, weapons.GrenadeTerrainEffectScale);
+    }
+
+    /// <summary>
     /// 验证默认关卡中材质笔刷可经公开输入和相机 API 擦断木桥，并触发刚体拆分。
     /// </summary>
     [Fact]

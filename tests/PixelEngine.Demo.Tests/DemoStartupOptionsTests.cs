@@ -421,6 +421,8 @@ public sealed class DemoStartupOptionsTests
         WeaponDefinition grenade = Assert.Single(catalog.Weapons, weapon => weapon.Kind == WeaponKind.Grenade);
         Assert.True(grenade.FuseSeconds > 0f);
         Assert.True(grenade.Impulse > 0f);
+        Assert.True(grenade.Radius >= 12);
+        Assert.True(grenade.Damage >= 2_500f);
         WeaponDefinition bomb = Assert.Single(catalog.Weapons, weapon => weapon.Kind == WeaponKind.Bomb);
         Assert.Equal(WeaponFalloff.Quadratic, bomb.Falloff);
         Assert.True(bomb.Impulse > 0f);
