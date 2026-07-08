@@ -17,6 +17,8 @@ obj/
 
 # ---- Build / publish ----
 artifacts/
+FinalOutput/
+最终输出/
 publish/
 **/publish/
 runtimes/
