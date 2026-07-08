@@ -63,12 +63,16 @@ internal static class ChunkUpdater
                 material = window.GetMaterial(wx, wy);
                 if (material == 0)
                 {
+                    wx++;
+                    localOffset++;
                     continue;
                 }
 
                 flags = window.GetFlags(wx, wy);
                 if (CellFlags.MatchesFrame(flags, parityBit) || CellFlags.Has(flags, CellFlags.RigidOwned))
                 {
+                    wx++;
+                    localOffset++;
                     continue;
                 }
 

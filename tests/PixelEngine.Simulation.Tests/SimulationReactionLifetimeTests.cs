@@ -10,6 +10,7 @@ public sealed class SimulationReactionLifetimeTests
     private const ushort Solid = 1;
     private const ushort Fire = 2;
     private const ushort InertFire = 3;
+    private const ushort Sand = 4;
 
     /// <summary>
     /// 验证只有 ReactionCount 非零的材质会在 movement 后对 von Neumann 邻居调用反应执行器。
@@ -87,15 +88,37 @@ public sealed class SimulationReactionLifetimeTests
         Assert.Equal((10, 10, InertFire), sink.Last);
     }
 
+    /// <summary>
+    /// 验证 lifetime sink 清空当前 cell 后，同一行后续 cell 仍按自己的坐标继续处理。
+    /// </summary>
+    [Fact]
+    public void StepCaAdvancesRowCursorAfterLifetimeExpiryClearsCell()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        center.SetCurrentDirty(DirtyRect.Full);
+        Set(center, 62, 10, InertFire);
+        SetLifetime(center, 62, 10, 1);
+        Set(center, 63, 10, Sand);
+        Set(center, 63, 12, Solid);
+        SimulationKernel kernel = new(source, CreateMaterials(), lifetimeSink: new EmptyingLifetimeSink());
+
+        kernel.StepCa();
+
+        Assert.Equal(0, Get(center, 62, 10));
+        Assert.Equal(0, GetLifetime(center, 62, 10));
+        Assert.Equal(0, Get(center, 63, 10));
+        Assert.Equal(Sand, Get(center, 63, 11));
+    }
+
     private static MaterialPropsTable CreateMaterials()
     {
         return new MaterialPropsTable(
-            [CellType.Empty, CellType.Solid, CellType.Fire, CellType.Fire],
-            [0, 255, 1, 1],
-            [0, 0, 0, 0],
-            [0, 0, 0, 0],
-            [0, 0, 1, 0],
-            [0, 0, 0, 0]);
+            [CellType.Empty, CellType.Solid, CellType.Fire, CellType.Fire, CellType.Powder],
+            [0, 255, 1, 1, 120],
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0],
+            [0, 0, 1, 0, 0],
+            [0, 0, 0, 0, 0]);
     }
 
     private static TestChunkSource CreateNeighborhood(ChunkCoord centerCoord, out Chunk center)
@@ -134,6 +157,11 @@ public sealed class SimulationReactionLifetimeTests
         return chunk.Lifetime[CellAddressing.LocalIndexFromLocal(lx, ly)];
     }
 
+    private static ushort Get(Chunk chunk, int lx, int ly)
+    {
+        return chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)];
+    }
+
     private sealed class CountingReactionExecutor(bool returnValue) : IReactionExecutor
     {
         public int Count { get; private set; }
@@ -158,6 +186,16 @@ public sealed class SimulationReactionLifetimeTests
         {
             Count++;
             Last = (wx, wy, material);
+        }
+    }
+
+    private sealed class EmptyingLifetimeSink : ILifetimeSink
+    {
+        public void OnExpired(ref NeighborWindow window, int wx, int wy, ushort material, byte parityBit)
+        {
+            window.SetMaterial(wx, wy, 0);
+            window.SetFlags(wx, wy, 0);
+            window.SetLifetime(wx, wy, 0);
         }
     }
 
