@@ -194,6 +194,81 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
+    /// 验证 Web-first HUD 的交互面板 capture 会真正截断 Demo 玩法输入，HUD 外透明区域则 pass-through 到玩法脚本。
+    /// </summary>
+    [Fact]
+    public void DemoWebFirstHudCaptureBlocksGameplayInputAndTransparentAreaPassesThrough()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
+              ]
+            }
+            """);
+        try
+        {
+            using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out _, out ScriptInputApi input);
+            Entity entity = scene.CreateEntity();
+            _ = entity.AddComponent<Transform>();
+            PlayerController player = entity.AddComponent<PlayerController>();
+            player.SpawnX = 12f;
+            player.SpawnY = 12f;
+            MaterialBrush brush = entity.AddComponent<MaterialBrush>();
+            WeaponController weapons = entity.AddComponent<WeaponController>();
+            using GameUiHost hudHost = CreateDemoHudHost();
+            RoutedUiInputSource uiInput = new();
+            UiInputRouter router = new(hudHost, uiInput);
+
+            engine.RunHeadlessTicks(1);
+            Assert.Equal(0, weapons.PrimaryFireCount);
+            Assert.Equal(0, brush.SelectedIndex);
+            Assert.Equal(4, brush.Radius);
+
+            UiInputCapture captured = RouteScriptInputThroughGameUi(
+                router,
+                uiInput,
+                input,
+                new UiPointerState(20f, 20f, 0f, 1f, LeftDown: true, RightDown: false, MiddleDown: false),
+                [Key.Digit6],
+                [MouseButton.Left]);
+            engine.RunHeadlessTicks(1);
+
+            Assert.True(captured.HitsUi);
+            Assert.False(captured.AllowWorldMouse);
+            Assert.False(captured.AllowWorldKeyboard);
+            Assert.False(input.WasPressed(Key.Digit6));
+            Assert.False(input.WasMousePressed(MouseButton.Left));
+            Assert.Equal(0, weapons.PrimaryFireCount);
+            Assert.Equal(0, brush.SelectedIndex);
+            Assert.Equal(4, brush.Radius);
+
+            UiInputCapture passedThrough = RouteScriptInputThroughGameUi(
+                router,
+                uiInput,
+                input,
+                new UiPointerState(36f, 4f, 0f, 1f, LeftDown: true, RightDown: false, MiddleDown: false),
+                [Key.Digit6],
+                [MouseButton.Left]);
+            engine.RunHeadlessTicks(1);
+
+            Assert.False(passedThrough.HitsUi);
+            Assert.True(passedThrough.AllowWorldMouse);
+            Assert.True(passedThrough.AllowWorldKeyboard);
+            Assert.True(input.WasPressed(Key.Digit6));
+            Assert.True(input.WasMousePressed(MouseButton.Left));
+            Assert.Equal(1, weapons.PrimaryFireCount);
+            Assert.Equal(5, brush.SelectedIndex);
+            Assert.Equal(5, brush.Radius);
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// 验证 Demo UI 控制器使用脚本 UI 服务打开主菜单/HUD、切换模态页并返回。
     /// </summary>
     [Fact]
@@ -1107,6 +1182,41 @@ public sealed class DemoUiContentTests
         Assert.Equal(expectRestart ? 0 : 1, runtime.ShutdownCount);
     }
 
+    private static GameUiHost CreateDemoHudHost()
+    {
+        UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
+        ManagedFallbackBackend backend = new(new FakeGuiHost());
+        GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 720, 480, 1f), UiBackendKind.ManagedFallback));
+        _ = host.ShowScreen(
+            manifest.GetRequiredScreen(GameUiDemoController.HudScreen).ScreenId,
+            manifest.ResolveDocumentSource(GameUiDemoController.HudScreen));
+        return host;
+    }
+
+    private static UiInputCapture RouteScriptInputThroughGameUi(
+        UiInputRouter router,
+        RoutedUiInputSource uiInput,
+        ScriptInputApi input,
+        UiPointerState pointer,
+        Key[] keys,
+        MouseButton[] buttons)
+    {
+        uiInput.Pointer = pointer;
+        UiInputCapture capture = router.Pump();
+        InputArbitrationState state = InputArbitrator.ApplyGameUi(InputArbitrationState.Allowed, capture);
+        ScriptInputSnapshotBuilder.Update(
+            input,
+            keys,
+            buttons,
+            pointer.X,
+            pointer.Y,
+            pointer.WheelDeltaY,
+            state.AllowWorldKeyboard,
+            state.AllowWorldMouse);
+        return capture;
+    }
+
     private static string[] ExtractAttributeValues(XDocument document, params string[] attributeNames)
     {
         return
@@ -1400,6 +1510,30 @@ public sealed class DemoUiContentTests
         public void Raise(ScriptUiActionId action)
         {
             UiEventRaised?.Invoke(new ScriptUiEvent(default, default, action, default));
+        }
+    }
+
+    private sealed class RoutedUiInputSource : IUiInputSource
+    {
+        public UiPointerState Pointer { get; set; }
+
+        public bool TryGetPointer(out UiPointerState state)
+        {
+            state = Pointer;
+            return true;
+        }
+
+        public int CaptureDownKeys(Span<UiKey> destination, out UiKeyModifiers modifiers)
+        {
+            _ = destination;
+            modifiers = UiKeyModifiers.None;
+            return 0;
+        }
+
+        public int CaptureText(Span<char> destination)
+        {
+            _ = destination;
+            return 0;
         }
     }
 
