@@ -522,6 +522,7 @@ public sealed class Engine : IDisposable
         bool hasGuiBridge = Context.TryGetService(out GuiRenderBridge _);
         bool hasUiLayerCompositor = Context.TryGetService(out UiLayerCompositor _);
         IReadOnlyList<IEditorHostExtension>? extensions = null;
+        IUiPresentTargetProvider? gameUiPresentTargetProvider = null;
         bool hasEditorHostExtensions = false;
         if (!_editorHostExtensionsAttached &&
             Context.TryGetService(out IReadOnlyList<IEditorHostExtension> registeredExtensions) &&
@@ -529,6 +530,7 @@ public sealed class Engine : IDisposable
         {
             extensions = registeredExtensions;
             hasEditorHostExtensions = true;
+            gameUiPresentTargetProvider = ResolveGameUiPresentTargetProvider(registeredExtensions);
         }
 
         bool gameUiNeedsDirectLayer = gameUi is not null && gameUi.BackendKind != UiBackendKind.ManagedFallback;
@@ -545,7 +547,7 @@ public sealed class Engine : IDisposable
 
         if (needsUiLayerCompositor && !hasUiLayerCompositor)
         {
-            UiLayerCompositor compositor = UiLayerCompositor.Attach(pipeline, gameUi!);
+            UiLayerCompositor compositor = UiLayerCompositor.Attach(pipeline, gameUi!, gameUiPresentTargetProvider);
             Context.RegisterService(compositor);
             _ownedRuntimeResources.Add(compositor);
         }
@@ -606,6 +608,19 @@ public sealed class Engine : IDisposable
         }
 
         _editorHostExtensionsAttached = true;
+    }
+
+    private static IUiPresentTargetProvider? ResolveGameUiPresentTargetProvider(IReadOnlyList<IEditorHostExtension> extensions)
+    {
+        for (int i = 0; i < extensions.Count; i++)
+        {
+            if (extensions[i] is IUiPresentTargetProvider provider)
+            {
+                return provider;
+            }
+        }
+
+        return null;
     }
 
     private GuiApp ResolveGuiApp()

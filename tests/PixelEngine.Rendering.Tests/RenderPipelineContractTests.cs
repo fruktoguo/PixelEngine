@@ -163,8 +163,11 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("public readonly struct UiPresentContext", context, StringComparison.Ordinal);
         Assert.Contains("public UiPresentTarget Target", context, StringComparison.Ordinal);
         Assert.Contains("public UiScissorRect Clip", context, StringComparison.Ordinal);
+        Assert.Contains("public UiPresentContext WithTarget(UiPresentTarget target)", context, StringComparison.Ordinal);
+        Assert.Contains("WithTarget(target, target.Scissor)", context, StringComparison.Ordinal);
         Assert.Contains("Intersect(draw.Scissor, Clip)", context, StringComparison.Ordinal);
         Assert.Contains("public readonly record struct UiPresentTarget", File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiPresentTarget.cs")), StringComparison.Ordinal);
+        Assert.Contains("public interface IUiPresentTargetProvider", File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "IUiPresentTargetProvider.cs")), StringComparison.Ordinal);
         Assert.Contains("SubmitTriangles(ReadOnlySpan<UiVertex> vertices, ReadOnlySpan<ushort> indices", context, StringComparison.Ordinal);
         Assert.Contains("UiPrimitiveRenderer", context, StringComparison.Ordinal);
         Assert.Contains("public readonly record struct UiVertex", File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "UiVertex.cs")), StringComparison.Ordinal);
@@ -206,6 +209,8 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("PixelStore(PixelStoreParameter.UnpackAlignment", state, StringComparison.Ordinal);
         Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Game, this)", guiBridge, StringComparison.Ordinal);
         Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Game, this)", uiCompositor, StringComparison.Ordinal);
+        Assert.Contains("IUiPresentTargetProvider? targetProvider", uiCompositor, StringComparison.Ordinal);
+        Assert.Contains("context.WithTarget(target)", uiCompositor, StringComparison.Ordinal);
         Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Editor, this)", editorBridge, StringComparison.Ordinal);
         Assert.Contains("IUiPresentLayer, IDisposable", guiBridge, StringComparison.Ordinal);
         Assert.Contains("IUiPresentLayer, IDisposable", uiCompositor, StringComparison.Ordinal);

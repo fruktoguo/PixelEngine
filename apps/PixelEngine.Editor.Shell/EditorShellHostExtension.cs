@@ -11,11 +11,12 @@ using PixelEngine.UI;
 
 namespace PixelEngine.Editor.Shell;
 
-internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorInputCaptureSource, IGameUiInputSourceFactory
+internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorInputCaptureSource, IGameUiInputSourceFactory, IUiPresentTargetProvider
 {
     private readonly EditorProject _project;
     private readonly EditorShellApp _app;
     private readonly EditorApp _editor;
+    private readonly GameViewUiPresentTargetProvider _gameUiPresentTargetProvider;
     private EditorSceneModel? _sceneModel;
     private EditorUndoStack? _undoStack;
     private EditorPrefabAssetStore? _prefabs;
@@ -37,6 +38,10 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
                 LayoutPath = EditorShellWindow.DefaultLayoutPath,
                 EnableMultiViewport = false,
             });
+        _gameUiPresentTargetProvider = new GameViewUiPresentTargetProvider(
+            () => _gameViewPanel?.LastViewportSnapshot ?? GameViewViewportSnapshot.Empty,
+            () => _gameViewPanel?.LastPanelOriginFramebuffer ?? default,
+            () => _gameViewPanel is { Visible: true });
     }
 
     public int PanelCount => _editor.PanelCount;
@@ -189,6 +194,11 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             () => _gameViewPanel?.LastViewportSnapshot ?? GameViewViewportSnapshot.Empty,
             () => _gameViewPanel?.LastPointerPanelPoint ?? default,
             () => _gameViewPanel is { Visible: true, InputFocused: true });
+    }
+
+    public bool TryGetPresentTarget(out UiPresentTarget target)
+    {
+        return _gameUiPresentTargetProvider.TryGetPresentTarget(out target);
     }
 
     private PixelEngine.Editor.EditorMode CapturePlayMode()
