@@ -174,6 +174,7 @@ function Write-BuildResult([bool]$Ok, [int]$ExitCode, [string]$ErrorMessage) {
     channel = $Channel
     releaseChannel = $ReleaseChannel
     configuration = $Configuration
+    runtimeUiBackend = $RuntimeUiBackend
     version = $resolvedVersion
     informationalVersion = $resolvedInformationalVersion
     packageArchive = if ($archive) { $archive.FullName } else { $null }

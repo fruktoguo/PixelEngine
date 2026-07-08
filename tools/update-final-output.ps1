@@ -14,7 +14,10 @@ param(
 
   [int]$DemoProbeTimeoutSeconds = 180,
 
-  [int]$DemoWindowTicks = 80
+  [int]$DemoWindowTicks = 80,
+
+  [ValidateSet('ManagedFallback', 'RmlUi', 'Ultralight')]
+  [string]$DemoRuntimeUiBackend = 'RmlUi'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -228,7 +231,7 @@ $demoBuildResult = Invoke-ProcessChecked `
     '-WindowWidth', '1080',
     '-WindowHeight', '720',
     '-VSync', 'true',
-    '-RuntimeUiBackend', 'ManagedFallback',
+    '-RuntimeUiBackend', $DemoRuntimeUiBackend,
     '-ReleaseChannel', 'Production'
   ) `
   -WorkingDirectory $repoRoot `
@@ -285,6 +288,7 @@ $manifest = [ordered]@{
   rid = $Rid
   configuration = $Configuration
   demoChannel = $DemoChannel
+  demoRuntimeUiBackendRequested = $DemoRuntimeUiBackend
   editorExecutable = '编辑器/PixelEngine.Editor.Shell.exe'
   demoExecutable = '游戏Demo/PixelEngine Demo.exe'
   updatePolicy = 'staged-build-and-verify-before-replace'

@@ -375,6 +375,7 @@ write_result() {
     printf '  "channel": "%s",\n' "$(json_escape "$channel")"
     printf '  "releaseChannel": "%s",\n' "$(json_escape "$release_channel")"
     printf '  "configuration": "%s",\n' "$(json_escape "$configuration")"
+    printf '  "runtimeUiBackend": "%s",\n' "$(json_escape "$runtime_ui_backend")"
     printf '  "version": "%s",\n' "$(json_escape "$version")"
     printf '  "informationalVersion": "%s",\n' "$(json_escape "$informational_version")"
     printf '  "packageArchive": %s,\n' "$(if [[ -n "$archive" ]]; then printf '"%s"' "$(json_escape "$archive")"; else printf 'null'; fi)"
