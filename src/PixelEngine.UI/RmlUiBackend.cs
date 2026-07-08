@@ -730,7 +730,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
         }
     }
 
-    private static RmlUiNative.NativeUiValue ToNativeValue(in UiValue value)
+    internal static RmlUiNative.NativeUiValue ToNativeValue(in UiValue value)
     {
         return value.Kind switch
         {
@@ -750,12 +750,16 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
                 Kind = (int)UiValueKind.Double,
                 Integer = BitConverter.DoubleToInt64Bits(value.AsDouble()),
             },
-            UiValueKind.StringHandle => throw new NotSupportedException("RmlUi DOM 数据桥尚未接入真实字符串池，不能设置 StringHandle。"),
+            UiValueKind.StringHandle => new RmlUiNative.NativeUiValue
+            {
+                Kind = (int)UiValueKind.StringHandle,
+                Integer = value.AsStringHandle().Value,
+            },
             _ => throw new ArgumentOutOfRangeException(nameof(value), "未知 UI 值类型。"),
         };
     }
 
-    private static UiValue ToUiValue(in RmlUiNative.NativeUiValue value)
+    internal static UiValue ToUiValue(in RmlUiNative.NativeUiValue value)
     {
         return ToUiValue(value.Kind, value.Integer, BitConverter.Int64BitsToDouble(value.Integer));
     }
