@@ -28,6 +28,17 @@ internal readonly record struct EditorAssetMoveResult(
     int UpdatedReferenceDocuments,
     bool UpdatedActiveScene);
 
+internal sealed record EditorAssetReferenceDocumentMovePlan(
+    string OriginalFullPath,
+    string SaveFullPath,
+    string OriginalText,
+    EditorSceneModel Model);
+
+internal sealed record EditorAssetReferenceDocumentWriteRollback(
+    string OriginalFullPath,
+    string SaveFullPath,
+    string OriginalText);
+
 internal readonly record struct EditorAssetDeletePreflight(
     EditorAssetRecord Asset,
     int ReferenceCount,
@@ -193,13 +204,31 @@ internal sealed class EditorAssetManifestStore
             _ = Directory.CreateDirectory(targetDirectory);
         }
 
-        File.Move(sourceFullPath, targetFullPath);
-        SaveDocument(ReplaceRecordLogicalPath(LoadDocument(), source.Id, next));
+        EditorAssetManifestDocument originalManifest = LoadDocument();
+        EditorAssetManifestDocument movedManifest = ReplaceRecordLogicalPath(originalManifest, source.Id, next);
+        IReadOnlyList<EditorAssetReferenceDocumentMovePlan> referenceDocuments = LoadReferenceDocumentMovePlans(sourceFullPath, targetFullPath);
 
-        bool updatedActiveScene = activeScene is not null && RewriteReferences(activeScene, current, next, source.Id, source.AssetType);
-        int updatedDocuments = RewriteReferencesInReferenceDocuments(current, next, source.Id, source.AssetType);
-        EditorAssetRecord moved = EnsureAsset(next);
-        return new EditorAssetMoveResult(moved, updatedDocuments, updatedActiveScene);
+        List<EditorAssetReferenceDocumentWriteRollback> writtenReferenceDocuments = [];
+        File.Move(sourceFullPath, targetFullPath);
+        try
+        {
+            SaveDocument(movedManifest);
+            int updatedDocuments = RewriteReferencesInReferenceDocuments(
+                referenceDocuments,
+                current,
+                next,
+                source.Id,
+                source.AssetType,
+                writtenReferenceDocuments);
+            bool updatedActiveScene = activeScene is not null && RewriteReferences(activeScene, current, next, source.Id, source.AssetType);
+            EditorAssetRecord moved = EnsureAsset(next);
+            return new EditorAssetMoveResult(moved, updatedDocuments, updatedActiveScene);
+        }
+        catch
+        {
+            RollBackMove(sourceFullPath, targetFullPath, originalManifest, writtenReferenceDocuments);
+            throw;
+        }
     }
 
     public EditorAssetDeletePreflight PreflightDeleteAsset(string logicalPath, EditorSceneModel? activeScene = null)
@@ -558,34 +587,104 @@ internal sealed class EditorAssetManifestStore
         return $"资产 {preflight.Asset.LogicalPath} 仍被 {preflight.ReferenceCount} 处引用（{sample}），已拒绝删除以避免丢失引用。";
     }
 
-    private int RewriteReferencesInReferenceDocuments(string oldPath, string newPath, string assetId, EditorAssetType assetType)
+    private IReadOnlyList<EditorAssetReferenceDocumentMovePlan> LoadReferenceDocumentMovePlans(string sourceFullPath, string targetFullPath)
     {
         if (!Directory.Exists(_contentRoot))
         {
-            return 0;
+            return [];
         }
 
-        int updated = 0;
         string[] files =
         [
             .. Directory.EnumerateFiles(_contentRoot, "*.scene", SearchOption.AllDirectories)
                 .Concat(Directory.EnumerateFiles(_contentRoot, "*.prefab", SearchOption.AllDirectories))
                 .Order(StringComparer.OrdinalIgnoreCase),
         ];
+        EditorAssetReferenceDocumentMovePlan[] plans = new EditorAssetReferenceDocumentMovePlan[files.Length];
         for (int i = 0; i < files.Length; i++)
         {
             EngineSceneDocument document = EngineSceneDocumentLoader.LoadDocument(files[i]);
-            EditorSceneModel model = EditorSceneModel.FromDocument(document);
-            if (!RewriteReferences(model, oldPath, newPath, assetId, assetType))
+            string savePath = string.Equals(
+                Path.GetFullPath(files[i]),
+                sourceFullPath,
+                StringComparison.OrdinalIgnoreCase)
+                ? targetFullPath
+                : files[i];
+            plans[i] = new EditorAssetReferenceDocumentMovePlan(
+                files[i],
+                savePath,
+                File.ReadAllText(files[i]),
+                EditorSceneModel.FromDocument(document));
+        }
+
+        return plans;
+    }
+
+    private static int RewriteReferencesInReferenceDocuments(
+        IReadOnlyList<EditorAssetReferenceDocumentMovePlan> documents,
+        string oldPath,
+        string newPath,
+        string assetId,
+        EditorAssetType assetType,
+        List<EditorAssetReferenceDocumentWriteRollback> writtenDocuments)
+    {
+        int updated = 0;
+        for (int i = 0; i < documents.Count; i++)
+        {
+            EditorAssetReferenceDocumentMovePlan document = documents[i];
+            if (!RewriteReferences(document.Model, oldPath, newPath, assetId, assetType))
             {
                 continue;
             }
 
-            EngineSceneDocumentLoader.SaveDocument(model.ToDocument(), files[i]);
+            EngineSceneDocumentLoader.SaveDocument(document.Model.ToDocument(), document.SaveFullPath);
+            writtenDocuments.Add(new EditorAssetReferenceDocumentWriteRollback(
+                document.OriginalFullPath,
+                document.SaveFullPath,
+                document.OriginalText));
             updated++;
         }
 
         return updated;
+    }
+
+    private void RollBackMove(
+        string sourceFullPath,
+        string targetFullPath,
+        EditorAssetManifestDocument originalManifest,
+        IReadOnlyList<EditorAssetReferenceDocumentWriteRollback> writtenReferenceDocuments)
+    {
+        if (File.Exists(targetFullPath) && !File.Exists(sourceFullPath))
+        {
+            string? sourceDirectory = Path.GetDirectoryName(sourceFullPath);
+            if (!string.IsNullOrEmpty(sourceDirectory))
+            {
+                _ = Directory.CreateDirectory(sourceDirectory);
+            }
+
+            File.Move(targetFullPath, sourceFullPath);
+        }
+
+        RestoreReferenceDocuments(writtenReferenceDocuments);
+        SaveDocument(originalManifest);
+    }
+
+    private static void RestoreReferenceDocuments(IReadOnlyList<EditorAssetReferenceDocumentWriteRollback> writtenReferenceDocuments)
+    {
+        for (int i = writtenReferenceDocuments.Count - 1; i >= 0; i--)
+        {
+            EditorAssetReferenceDocumentWriteRollback rollback = writtenReferenceDocuments[i];
+            string restorePath = File.Exists(rollback.OriginalFullPath) || !string.Equals(rollback.SaveFullPath, rollback.OriginalFullPath, StringComparison.OrdinalIgnoreCase)
+                ? rollback.OriginalFullPath
+                : rollback.SaveFullPath;
+            string? directory = Path.GetDirectoryName(Path.GetFullPath(restorePath));
+            if (!string.IsNullOrEmpty(directory))
+            {
+                _ = Directory.CreateDirectory(directory);
+            }
+
+            File.WriteAllText(restorePath, rollback.OriginalText);
+        }
     }
 
     private static bool RewriteReferences(EditorSceneModel scene, string oldPath, string newPath, string assetId, EditorAssetType assetType)
