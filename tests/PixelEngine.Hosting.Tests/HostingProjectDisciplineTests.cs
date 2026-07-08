@@ -13,6 +13,31 @@ namespace PixelEngine.Hosting.Tests;
 public sealed class HostingProjectDisciplineTests
 {
     /// <summary>
+    /// 验证仓库内所有项目都登记在 solution 中，避免工具、测试或应用项目绕过常规 build/test 入口。
+    /// </summary>
+    [Fact]
+    public void SolutionTracksEveryRepositoryProject()
+    {
+        string root = FindRepositoryRoot();
+        string solution = File.ReadAllText(Path.Combine(root, "PixelEngine.sln"));
+        string[] projectFiles =
+        [
+            .. Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories)
+                .Where(static path => IsRepositoryProjectPath(path))
+                .Select(path => Path.GetRelativePath(root, path).Replace('/', '\\'))
+                .Order(StringComparer.OrdinalIgnoreCase),
+        ];
+        string[] solutionProjects =
+        [
+            .. Regex.Matches(solution, "\"([^\"]+\\.csproj)\"")
+                .Select(static match => match.Groups[1].Value)
+                .Order(StringComparer.OrdinalIgnoreCase),
+        ];
+
+        Assert.Equal(projectFiles, solutionProjects, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// 验证 Demo 只经 Hosting 与 Scripting 公开入口引用引擎。
     /// </summary>
     [Fact]
@@ -1333,6 +1358,22 @@ public sealed class HostingProjectDisciplineTests
         }
 
         throw new InvalidOperationException("无法从测试输出目录定位 PixelEngine.sln。");
+    }
+
+    private static bool IsRepositoryProjectPath(string path)
+    {
+        return !PathContainsDirectory(path, ".git") &&
+            !PathContainsDirectory(path, ".claude") &&
+            !PathContainsDirectory(path, "artifacts") &&
+            !PathContainsDirectory(path, "bin") &&
+            !PathContainsDirectory(path, "obj") &&
+            !PathContainsDirectory(path, "最终输出");
+    }
+
+    private static bool PathContainsDirectory(string path, string directoryName)
+    {
+        string[] parts = Path.GetFullPath(path).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return parts.Any(part => string.Equals(part, directoryName, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string RunPowerShellScript(string workingDirectory, string scriptPath, params string[] arguments)
