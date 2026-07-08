@@ -568,6 +568,19 @@ function Get-ManualScopes {
             title = "从出生点用至少一种解法完整抵达出口，贯穿材质/反应/刚体/粒子/光照/音频"
         },
         [pscustomobject]@{
+            scope = "lavaCombatPlaythroughVideo"
+            kind = "video"
+            minDurationSeconds = 30.0
+            checklist = @("lavaDamageObserved", "grenadeLargeTerrainEdit", "obstacleDemolitionRoute", "webFirstResultRestart")
+            criteria = @{
+                lavaDamageObserved = "视频必须展示玩家接触横向关卡中的 lava 后生命值下降或受伤反馈可见。"
+                grenadeLargeTerrainEdit = "视频必须展示手雷爆炸对地形产生明显大范围修改，效果不能退回旧的小半径。"
+                obstacleDemolitionRoute = "视频必须展示拆除 wood、stone 或 metal 障碍后继续横向前进并接近或抵达出口。"
+                webFirstResultRestart = "视频必须展示 Web-first 结算或暂停 UI 的重开/继续/退出点击链路至少一项可交互。"
+            }
+            title = "横向熔岩闯关战斗：lava 扣血、手雷大范围破坏、拆障碍前进、Web-first 结算/重开点击"
+        },
+        [pscustomobject]@{
             scope = "hudMenuEditorVideo"
             kind = "video"
             minDurationSeconds = 10.0

@@ -32,7 +32,7 @@
 
 ## 必须 scope
 
-manifest 使用 `schemaVersion: 1`，顶层必须声明 `reviewSessionId` 与 `gitCommit`，`evidence` 数组只能包含这些 scope：`controlFeelReport`、`materialBrushAndReactionVideo`、`rigidBodyGameplayVideo`、`particleLightingVideo`、`audioListeningReport`、`fullRoutePlaythroughVideo`、`hudMenuEditorVideo`、`hotReloadWindowReport`。每个 entry 必须声明同一个 `reviewSessionId` / `gitCommit`、`path`、`sha256`、`kind`、`reviewer`、`capturedAt`、`notes` 与 `checklist`，脚本会重新计算文件 SHA256 并比对；视频 scope 还必须声明 `durationSeconds`，其中完整通关路线至少 30 秒，其它视频至少 10 秒。视频文件不再只做容器头 sniff：`.mp4/.mov` 必须能解析出 `ftyp`、`moov`、视频 track、正 duration 和非空 `mdat`，实际 duration 不能短于 scope 要求且 manifest 不得虚报超过实际时长；`.mkv/.webm` 必须能通过 `ffprobe` 确认 video stream 与 duration，否则拒绝进入待审。缺失、未知 scope、缺 checklist、时长不足、只有 `ftyp`/EBML 头、视频结构无效、不同 session/commit 拼接或 hash 不匹配都不能进入待审状态。
+manifest 使用 `schemaVersion: 1`，顶层必须声明 `reviewSessionId` 与 `gitCommit`，`evidence` 数组只能包含这些 scope：`controlFeelReport`、`materialBrushAndReactionVideo`、`rigidBodyGameplayVideo`、`particleLightingVideo`、`audioListeningReport`、`fullRoutePlaythroughVideo`、`lavaCombatPlaythroughVideo`、`hudMenuEditorVideo`、`hotReloadWindowReport`。每个 entry 必须声明同一个 `reviewSessionId` / `gitCommit`、`path`、`sha256`、`kind`、`reviewer`、`capturedAt`、`notes` 与 `checklist`，脚本会重新计算文件 SHA256 并比对；视频 scope 还必须声明 `durationSeconds`，其中完整通关路线与横向熔岩闯关战斗视频至少 30 秒，其它视频至少 10 秒。视频文件不再只做容器头 sniff：`.mp4/.mov` 必须能解析出 `ftyp`、`moov`、视频 track、正 duration 和非空 `mdat`，实际 duration 不能短于 scope 要求且 manifest 不得虚报超过实际时长；`.mkv/.webm` 必须能通过 `ffprobe` 确认 video stream 与 duration，否则拒绝进入待审。缺失、未知 scope、缺 checklist、时长不足、只有 `ftyp`/EBML 头、视频结构无效、不同 session/commit 拼接或 hash 不匹配都不能进入待审状态。
 
 这些 scope 对应 plan/13 剩余阻塞：真实输入手感、真实鼠标/滚轮/数字键操作与 CA 视觉接管、刚体可推/可砸/可继续破坏、粒子与 bloom/fog 视觉质量、音频听感与空间感、完整路线通关、HUD/菜单/Editor 交互、开发态热重载体验。
 
@@ -46,6 +46,7 @@ manifest 使用 `schemaVersion: 1`，顶层必须声明 `reviewSessionId` 与 `g
 - `particleLightingVideo`: `particlesVisible`、`bloomFogLighting`、`noParticleLeak`
 - `audioListeningReport`: `materialImpacts`、`ambientAndReaction`、`spatialMix`
 - `fullRoutePlaythroughVideo`: `routeCompleted`、`materialsReactionsBodiesShown`、`audioLightingHudShown`
+- `lavaCombatPlaythroughVideo`: `lavaDamageObserved`、`grenadeLargeTerrainEdit`、`obstacleDemolitionRoute`、`webFirstResultRestart`
 - `hudMenuEditorVideo`: `hudReadable`、`menuButtonsClicked`、`editorDockspaceOpened`
 - `hotReloadWindowReport`: `behaviourSourceEdited`、`alcReloadObserved`、`statePreserved`
 
