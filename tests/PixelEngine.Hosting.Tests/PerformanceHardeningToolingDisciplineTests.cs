@@ -5146,6 +5146,53 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 release evidence 预检拒绝缺少 workflow / run_attempt 的子报告，避免旧报告冒充同源 release evidence。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsReportMissingRunIdentityFields()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-missing-run-identity-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject publishNode = rootNode["artifacts"]!["linux-x64"]!["r2r"]!.AsObject();
+            string publishReport = (string)publishNode["publishReport"]!;
+            string text = File.ReadAllText(publishReport)
+                .Replace("| workflow | Release |" + Environment.NewLine, string.Empty, StringComparison.Ordinal)
+                .Replace("| run_attempt | 1 |" + Environment.NewLine, string.Empty, StringComparison.Ordinal);
+            File.WriteAllText(publishReport, text);
+            publishNode["publishSha256"] = GetSha256(publishReport);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "missing-run-identity-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("linux-x64/r2r/publish 报告缺少 workflow 字段，不能证明与 workflow_run 同源", report, StringComparison.Ordinal);
+            Assert.Contains("linux-x64/r2r/publish 报告缺少 run_attempt 字段，不能证明与 workflow_run 同源", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 release evidence 预检会解析 SHA256SUMS 内容，拒绝占位或伪造 checksum 文件。
     /// </summary>
     [Fact]
