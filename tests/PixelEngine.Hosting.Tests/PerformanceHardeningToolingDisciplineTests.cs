@@ -33,6 +33,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     public void CiRunsDisassemblyAndBenchmarkRegressionGuards()
     {
         string ci = ReadRepositoryFile(".github", "workflows", "ci.yml");
+        string runner = ReadRepositoryFile("tools", "run-benchmark.ps1");
         string regression = ReadRepositoryFile("tools", "benchmark-regression.ps1");
         string disassembly = ReadRepositoryFile("tools", "disassembly-guard.ps1");
         string baseline = ReadRepositoryFile("bench", "PixelEngine.Benchmarks", "baselines", "ci-baseline.json");
@@ -40,6 +41,13 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("benchmark-guard", ci, StringComparison.Ordinal);
         Assert.Contains("./tools/disassembly-guard.ps1", ci, StringComparison.Ordinal);
         Assert.Contains("./tools/benchmark-regression.ps1", ci, StringComparison.Ordinal);
+        Assert.Contains("Copy-RepositoryForBenchmark", runner, StringComparison.Ordinal);
+        Assert.Contains("\".claude\"", runner, StringComparison.Ordinal);
+        Assert.Contains("Push-Location $tempRoot", runner, StringComparison.Ordinal);
+        Assert.Contains("Generate Exception", runner, StringComparison.Ordinal);
+        Assert.Contains("executed benchmarks:", runner, StringComparison.Ordinal);
+        Assert.Contains("tools/run-benchmark.ps1", regression, StringComparison.Ordinal);
+        Assert.Contains("tools/run-benchmark.ps1", disassembly, StringComparison.Ordinal);
         Assert.Contains("BenchmarkDotNet regression run", regression, StringComparison.Ordinal);
         Assert.Contains("maxRatio", regression, StringComparison.Ordinal);
         Assert.Contains("rowContains", regression, StringComparison.Ordinal);

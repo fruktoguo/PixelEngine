@@ -50,7 +50,7 @@
 - [x] RenderStyle 质量降级已接入一级过载，并与二级光照降级独立。
 - [x] Web-first UI Runtime 相位计时底座已落地：HUD 可分列 `ui.update`、`ui.paint`、`ui.upload`、`ui.composite`，静态 UI paint 为 0，dirty upload smoke 已覆盖。
 - [x] 大世界内存上限已记录：常驻 world 有可配置上限，LRU 驱逐、RLE+LZ4、Damage lane 20KB/chunk 预算已纳入。
-- [x] profiling 工具链已接入：BenchmarkDotNet、MemoryDiagnoser、DisassemblyDiagnoser、DOTNET_JitDisasm、真实窗口 HUD、window_frame_probe、GPU compute timer query 生命周期验收和 release 编译模式审计均有路径。
+- [x] profiling 工具链已接入：BenchmarkDotNet、MemoryDiagnoser、DisassemblyDiagnoser、DOTNET_JitDisasm、真实窗口 HUD、window_frame_probe、GPU compute timer query 生命周期验收和 release 编译模式审计均有路径；本地 BenchmarkDotNet 入口已加固为 `tools/run-benchmark.ps1` 隔离工作副本执行，排除 `.claude/worktrees` 同名项目导致的 0 benchmark 执行假成功。
 
 ---
 
@@ -89,7 +89,7 @@
 - [x] 真实窗口 HUD 样本路径：`docs/runtime-reports/2026-07-04-performance-hud-steady-window-samples.md` 记录 CPU busy、GPU elapsed、present wait、滚动百分位和负载计数样本。
 - [x] 目标硬件预检入口：`tools/performance-target-evidence-preflight.ps1` 检查 performance manifest、scope/hash、benchmarkRunId、gitCommit、cells/frame、frame budget、AVX-512 与硬件计数器字段；缺 manifest / schema / scope 时必须报告 `blocked_missing_target_performance_manifest`、`blocked_invalid_target_performance_evidence`、`blocked_missing_target_performance_scope_evidence`，完整待审状态只能是 `target_performance_evidence_attached_pending_review`；scope 必须覆盖 `avx512_downclock_net_loss`、`hardware_counters_cache_branch`、`frame_budget_target_hardware` 与逐 RID 的 `cells_frame/<rid>`；机器可读字段必须覆盖 `targetCpuName`、`dotnetVersion`、`benchmarkRunId`、`gitCommit`、`vector512HardwareAccelerated`、`avx512Enabled`、`noNetDownclockLoss`、`elevatedEtwKernelSession`、`cacheMissesPresent`、`branchMispredictionsPresent`、`targetHardware`、`source`、`scenario`、`sampleSeconds`、`frameSamples`、`fixedTickNoCatchUp`、`caP99Ms`、`renderP99Ms`、`physicsP99Ms`、`logicAudioP99Ms`、`representativeHardware`、`activeCellsPerFrame`、`caFrameMs`、`measuredIterations`、`iterationCount`。
 - [x] 硬件计数器预检入口：`tools/hardware-counter-preflight.ps1` 检查平台、管理员权限、BenchmarkDotNet hardware counter 列和报告边界。
-- [x] 关键 BenchmarkDotNet 入口：`bench/PixelEngine.Benchmarks`，重点覆盖 `CellThroughputBenchmark.StepJobSystem`、FullActiveLiquid、dirty-rect、JobSystem、RenderStyle、GameUi allocation；本地 `tools/benchmark-regression.ps1` 回归门禁已加固为按 `Mean` 表头取值、参数化行必须唯一匹配，防止 Error/StdDev 时间列或多参数第一行误判为通过。
+- [x] 关键 BenchmarkDotNet 入口：`bench/PixelEngine.Benchmarks`，重点覆盖 `CellThroughputBenchmark.StepJobSystem`、FullActiveLiquid、dirty-rect、JobSystem、RenderStyle、GameUi allocation；本地 `tools/benchmark-regression.ps1` 回归门禁已加固为按 `Mean` 表头取值、参数化行必须唯一匹配，防止 Error/StdDev 时间列或多参数第一行误判为通过；实际运行委托 `tools/run-benchmark.ps1` 在临时工作副本中执行并拒绝 `Generate Exception` / `executed benchmarks: 0`，避免忽略 worktree 污染 BDN 项目发现。
 - [x] full-active CA 热路径局部优化证据：checkerboard 装桶阶段保存已验证的 `ChunkNeighborhood` 并传给 `ChunkUpdater` / `NeighborWindow`，避免 active chunk 更新阶段重复 `ResolveNeighborhood`；`ChunkUpdater` 的中心 chunk movement / lifetime dirty 标记改为直接本地写入，避免同 chunk 内移动在热路径额外回查 chunk map；`CheckerboardSchedulerTests.StepCaWithJobSystemResolvesNeighborhoodOncePerActiveChunk` 锁定每 active chunk 每步一次邻域解析，`CheckerboardSchedulerTests.StepCaInternalMoveMarksCenterDirtyWithoutExtraChunkLookup` 锁定内部移动只发生 3×3 邻域解析的 9 次查表。该项只关闭重复查表风险，不代表 full-active CA 已达最终目标。
 - [!] 最终 cells/frame 命令：在每个代表 RID 上运行 Release BenchmarkDotNet，保留完整报告和 SHA256，再交给 `performance-target-evidence-preflight`。
 - [!] 最终 hardware counter 命令：在 Windows elevated ETW 或等价目标 runner 上采集 `Cache Misses` 与 `Branch Mispredictions`，不能用列缺失报告替代。

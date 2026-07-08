@@ -13,12 +13,14 @@ $artifactsPath = Join-Path $repoRoot $Artifacts
 
 if (-not $SkipRun) {
   Remove-Item -LiteralPath $artifactsPath -Recurse -Force -ErrorAction SilentlyContinue
-  & dotnet run --project $projectPath -c Release --no-build -- `
-    --filter $Filter `
-    --artifacts $artifactsPath `
-    --job Short `
-    --warmupCount 1 `
-    --iterationCount 1
+  & (Join-Path $repoRoot "tools/run-benchmark.ps1") `
+    -Project $Project `
+    -Artifacts $Artifacts `
+    -BenchmarkDotNetArgs @(
+      "--filter", $Filter,
+      "--job", "Short",
+      "--warmupCount", "1",
+      "--iterationCount", "1")
   if ($LASTEXITCODE -ne 0) {
     throw "BenchmarkDotNet disassembly run failed with exit code $LASTEXITCODE."
   }
