@@ -937,6 +937,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains(@"out\$(PixelEngineUiNativeRid)\shared\", uiNativeTargets, StringComparison.Ordinal);
         Assert.Contains(@"runtimes\$(PixelEngineUiNativeRid)\native\$(PixelEngineUiNativeLibraryName)", uiNativeTargets, StringComparison.Ordinal);
         Assert.Contains("CopyToPublishDirectory=\"PreserveNewest\"", uiNativeTargets, StringComparison.Ordinal);
+        Assert.Contains("'$(PublishAot)' != 'true'", uiNativeTargets, StringComparison.Ordinal);
         Assert.DoesNotContain("<NativeLibrary", uiNativeTargets, StringComparison.Ordinal);
         Assert.Contains("add_library(pixelengine_ui_native SHARED", uiNativeCMake, StringComparison.Ordinal);
         Assert.Contains("OUTPUT_NAME \"PixelEngine.UI.Native\"", uiNativeCMake, StringComparison.Ordinal);

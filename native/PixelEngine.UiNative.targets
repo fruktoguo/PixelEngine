@@ -21,7 +21,8 @@
     <PixelEngineUiNativeLibraryPath>$(PixelEngineUiNativeSharedDir)$(PixelEngineUiNativeLibraryName)</PixelEngineUiNativeLibraryPath>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(PixelEngineUiNativeRid)' != '' and '$(PixelEngineUiNativeLibraryName)' != '' and Exists('$(PixelEngineUiNativeLibraryPath)')">
+  <!-- UI native is a dynamic-only RmlUi dependency; NativeAOT must publish ManagedFallback without this DLL. -->
+  <ItemGroup Condition="'$(PixelEngineUiNativeRid)' != '' and '$(PixelEngineUiNativeLibraryName)' != '' and Exists('$(PixelEngineUiNativeLibraryPath)') and '$(PublishAot)' != 'true'">
     <None Include="$(PixelEngineUiNativeLibraryPath)"
           Link="runtimes\$(PixelEngineUiNativeRid)\native\$(PixelEngineUiNativeLibraryName)"
           CopyToOutputDirectory="PreserveNewest"
