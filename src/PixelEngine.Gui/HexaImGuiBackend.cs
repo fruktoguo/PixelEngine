@@ -12,6 +12,8 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
     private readonly GuiFontManager _fontManager = new();
     private ImGuiContextPtr _context;
     private string _layoutPath = string.Empty;
+    private float _mouseScaleX = 1f;
+    private float _mouseScaleY = 1f;
     private bool _initialized;
 
     /// <inheritdoc />
@@ -68,9 +70,16 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
             deltaSeconds = 1f / 60f;
         }
 
+        float scaleX = NormalizeScale(framebufferScaleX);
+        float scaleY = NormalizeScale(framebufferScaleY);
+        int displayWidth = ScaleFramebufferDimension(width, scaleX);
+        int displayHeight = ScaleFramebufferDimension(height, scaleY);
+        _mouseScaleX = displayWidth / (float)Math.Max(1, width);
+        _mouseScaleY = displayHeight / (float)Math.Max(1, height);
+
         ImGuiIOPtr io = ImGui.GetIO();
-        io.DisplaySize = new Vector2(Math.Max(1, width), Math.Max(1, height));
-        io.DisplayFramebufferScale = new Vector2(NormalizeScale(framebufferScaleX), NormalizeScale(framebufferScaleY));
+        io.DisplaySize = new Vector2(displayWidth, displayHeight);
+        io.DisplayFramebufferScale = Vector2.One;
         io.DeltaTime = deltaSeconds;
         ImGuiImplOpenGL3.NewFrame();
         ImGui.NewFrame();
@@ -89,7 +98,7 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
     {
         if (_initialized)
         {
-            ImGui.AddMousePosEvent(ImGui.GetIO(), x, y);
+            ImGui.AddMousePosEvent(ImGui.GetIO(), x * _mouseScaleX, y * _mouseScaleY);
         }
     }
 
@@ -174,5 +183,10 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
     private static float NormalizeScale(float scale)
     {
         return float.IsFinite(scale) && scale > 0f ? scale : 1f;
+    }
+
+    private static int ScaleFramebufferDimension(int logical, float scale)
+    {
+        return Math.Max(1, (int)MathF.Round(Math.Max(1, logical) * scale));
     }
 }
