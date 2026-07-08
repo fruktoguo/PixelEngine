@@ -2,6 +2,7 @@ using Hexa.NET.ImGui;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Gui;
 using PixelEngine.Rendering;
+using Silk.NET.Input;
 using System.Numerics;
 using Xunit;
 
@@ -138,6 +139,32 @@ public sealed class EditorAppTests
 
         Assert.False(capture.AllowWorldMouse);
         Assert.True(capture.AllowWorldKeyboard);
+    }
+
+    /// <summary>
+    /// 验证编辑器输入桥会为 Ctrl+V/C/A 这类文本编辑快捷键同步 ImGui 聚合修饰键。
+    /// </summary>
+    [Fact]
+    public void EditorInputBridgePublishesModifierKeysForClipboardShortcuts()
+    {
+        RecordingBackend backend = new();
+        ImGuiInputBridge input = new(backend);
+
+        input.Key(Key.ControlLeft, down: true);
+        input.Key(Key.V, down: true);
+        input.Key(Key.V, down: false);
+        input.Key(Key.ControlLeft, down: false);
+
+        Assert.Equal(
+            [
+                "Key:LeftCtrl=True",
+                "Key:ModCtrl=True",
+                "Key:V=True",
+                "Key:V=False",
+                "Key:LeftCtrl=False",
+                "Key:ModCtrl=False",
+            ],
+            backend.Events);
     }
 
     /// <summary>
@@ -295,6 +322,7 @@ public sealed class EditorAppTests
 
         public void AddKey(ImGuiKey key, bool down)
         {
+            Events.Add($"Key:{key}={down}");
         }
 
         public void AddText(string text)
