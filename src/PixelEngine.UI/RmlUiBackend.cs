@@ -47,8 +47,12 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
     private int _documentCount;
     private int _visibleScreenCount;
     private int _nextDocumentHandle = 1;
-    private int _viewportWidth;
-    private int _viewportHeight;
+    private int _baseViewportWidth;
+    private int _baseViewportHeight;
+    private int _appliedViewportX;
+    private int _appliedViewportY;
+    private int _appliedViewportWidth;
+    private int _appliedViewportHeight;
     private bool _disposed;
 
     /// <summary>
@@ -116,8 +120,12 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             throw new InvalidOperationException("RmlUi native renderer 创建失败。");
         }
 
-        _viewportWidth = info.Viewport.Width;
-        _viewportHeight = info.Viewport.Height;
+        _baseViewportWidth = info.Viewport.Width;
+        _baseViewportHeight = info.Viewport.Height;
+        _appliedViewportX = 0;
+        _appliedViewportY = 0;
+        _appliedViewportWidth = info.Viewport.Width;
+        _appliedViewportHeight = info.Viewport.Height;
         RegisterFontFace(info.FontSelection);
 
         Dirty = true;
@@ -133,8 +141,12 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
         EnsureInitialized();
         viewport.Validate();
         RmlUiNative.RendererSetViewport(_renderer, viewport.Width, viewport.Height);
-        _viewportWidth = viewport.Width;
-        _viewportHeight = viewport.Height;
+        _baseViewportWidth = viewport.Width;
+        _baseViewportHeight = viewport.Height;
+        _appliedViewportX = 0;
+        _appliedViewportY = 0;
+        _appliedViewportWidth = viewport.Width;
+        _appliedViewportHeight = viewport.Height;
         Dirty = true;
     }
 
@@ -599,15 +611,20 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             return;
         }
 
-        (int frameWidth, int frameHeight) = ResolveCompositeViewportSize(
+        (int x, int y, int frameWidth, int frameHeight) = ResolveCompositeViewportRegion(
             in context,
-            _viewportWidth,
-            _viewportHeight);
-        if (frameWidth != _viewportWidth || frameHeight != _viewportHeight)
+            _baseViewportWidth,
+            _baseViewportHeight);
+        if (x != _appliedViewportX ||
+            y != _appliedViewportY ||
+            frameWidth != _appliedViewportWidth ||
+            frameHeight != _appliedViewportHeight)
         {
-            RmlUiNative.RendererSetViewport(_renderer, frameWidth, frameHeight);
-            _viewportWidth = frameWidth;
-            _viewportHeight = frameHeight;
+            RmlUiNative.RendererSetViewportRegion(_renderer, x, y, frameWidth, frameHeight);
+            _appliedViewportX = x;
+            _appliedViewportY = y;
+            _appliedViewportWidth = frameWidth;
+            _appliedViewportHeight = frameHeight;
             Dirty = true;
         }
 
@@ -615,14 +632,33 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
         Dirty = false;
     }
 
-    internal static (int Width, int Height) ResolveCompositeViewportSize(
+    internal static (int X, int Y, int Width, int Height) ResolveCompositeViewportRegion(
         in UiPresentContext context,
         int fallbackWidth,
         int fallbackHeight)
     {
-        return context.Target.IsValid
-            ? (context.Target.Width, context.Target.Height)
-            : (fallbackWidth, fallbackHeight);
+        return ResolveCompositeViewportRegion(
+            context.Target,
+            context.FramebufferHeight,
+            fallbackWidth,
+            fallbackHeight);
+    }
+
+    internal static (int X, int Y, int Width, int Height) ResolveCompositeViewportRegion(
+        UiPresentTarget target,
+        int framebufferHeight,
+        int fallbackWidth,
+        int fallbackHeight)
+    {
+        if (!target.IsValid)
+        {
+            return (0, 0, fallbackWidth, fallbackHeight);
+        }
+
+        int y = framebufferHeight > 0
+            ? Math.Max(0, framebufferHeight - target.Y - target.Height)
+            : target.Y;
+        return (target.X, y, target.Width, target.Height);
     }
 
     /// <summary>

@@ -1087,6 +1087,20 @@ PE_UI_NATIVE_API void peui_native_renderer_set_viewport(PeUiRenderer* renderer, 
     }
 }
 
+PE_UI_NATIVE_API void peui_native_renderer_set_viewport_region(PeUiRenderer* renderer, int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    if (renderer == nullptr || renderer->renderer == nullptr || width <= 0 || height <= 0)
+    {
+        return;
+    }
+
+    renderer->renderer->SetViewport(width, height, x, y);
+    if (renderer->context != nullptr)
+    {
+        renderer->context->SetDimensions(Rml::Vector2i(width, height));
+    }
+}
+
 PE_UI_NATIVE_API int32_t peui_native_register_font_face(PeUiRenderer* renderer, const char* font_path)
 {
     if (renderer == nullptr || font_path == nullptr || font_path[0] == '\0')
