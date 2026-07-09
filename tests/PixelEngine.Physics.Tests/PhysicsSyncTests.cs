@@ -175,6 +175,50 @@ public sealed unsafe class PhysicsSyncTests
     }
 
     /// <summary>
+    /// 验证高速下落碎块即使单步跨过角色 AABB，也会通过扫掠 AABB proxy 被截停。
+    /// </summary>
+    [Fact]
+    public void CharacterProxySweepsFastFallingRigidBodyBeforeRestamp()
+    {
+        PhysicsScale.ConfigureBox2DLengthUnits();
+        B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
+        worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
+        B2WorldId worldId = Box2D.b2CreateWorld(in worldDef);
+
+        try
+        {
+            TestChunkSource source = new(new Chunk(new ChunkCoord(0, 0)));
+            CellGrid grid = new(source, MaterialPropsTable.Empty);
+            PhysicsWorld physicsWorld = new();
+            RigidStampRegistry registry = new();
+            PhysicsSystem system = new(worldId, physicsWorld, grid, registry);
+            FillRect(grid, material: 2, minX: 36, minY: 34, maxX: 56, maxY: 42);
+            int bodyKey = system.CreateBodyFromRegion(36, 34, 20, 8);
+            PixelRigidBody body = physicsWorld.GetBody(bodyKey);
+            Box2D.b2Body_SetLinearVelocity(body.BodyId, new B2Vec2 { X = 0f, Y = PhysicsScale.PixelToPhysics(1_200f) });
+
+            CharacterController character = new(grid, new Vector2(42f, 48f), new Vector2(6f, 12f));
+            system.RegisterCharacterProxy(character);
+
+            system.SyncStep(1f / 60f);
+
+            Assert.True(
+                system.LastCharacterProxyContactCount > 0,
+                $"高速碎块扫过玩家时应被 proxy 捕获，bodyY={body.PreviousTransform.Position.Y:F2}。");
+            Assert.False(
+                TryFindRigidOwnedInAabb(grid, character.Bounds, out int overlapX, out int overlapY),
+                $"高速碎块 stamp 不应进入角色 AABB，cell=({overlapX},{overlapY}), bodyY={body.PreviousTransform.Position.Y:F2}。");
+            Assert.True(
+                body.PreviousTransform.Position.Y < 48f,
+                $"高速碎块应被截停在玩家上方，actualY={body.PreviousTransform.Position.Y:F2}。");
+        }
+        finally
+        {
+            Box2D.b2DestroyWorld(worldId);
+        }
+    }
+
+    /// <summary>
     /// 验证旋转碎块即使中心没有向下线速度，也会在 inverse-sampling 写回前被角色 proxy 截停。
     /// </summary>
     [Fact]

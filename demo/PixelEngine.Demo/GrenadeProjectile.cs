@@ -89,7 +89,14 @@ public sealed class GrenadeProjectile : Behaviour
         float moveX = _vx * safeDt;
         float moveY = _vy * safeDt;
         float length = MathF.Sqrt((moveX * moveX) + (moveY * moveY));
-        if (length > 0.001f && Context.Solids.Raycast(X, Y, moveX / length, moveY / length, length, out RaycastHit hit))
+        RaycastHit hit = default;
+        if (length > 0.001f && !TryRaycast(moveX / length, moveY / length, length, out hit))
+        {
+            Detonate();
+            return;
+        }
+
+        if (length > 0.001f && hit.Hit)
         {
             X = hit.X;
             Y = hit.Y;
@@ -114,6 +121,25 @@ public sealed class GrenadeProjectile : Behaviour
         {
             Detonate();
         }
+    }
+
+    private bool TryRaycast(float dx, float dy, float length, out RaycastHit hit)
+    {
+        try
+        {
+            _ = Context.Solids.Raycast(X, Y, dx, dy, length, out hit);
+            return true;
+        }
+        catch (InvalidOperationException exception) when (IsUnresidentChunk(exception))
+        {
+            hit = default;
+            return false;
+        }
+    }
+
+    private static bool IsUnresidentChunk(InvalidOperationException exception)
+    {
+        return exception.Message.Contains("目标 chunk 未驻留", StringComparison.Ordinal);
     }
 
     private void Detonate()

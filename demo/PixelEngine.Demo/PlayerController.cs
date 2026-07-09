@@ -125,6 +125,31 @@ public sealed class PlayerController : Behaviour
     public int RigidOverlapResolveDistance { get; set; } = 18;
 
     /// <summary>
+    /// 是否启用玩家逃出关卡边界后的自动重生。
+    /// </summary>
+    public bool EnableEscapeRespawn { get; set; }
+
+    /// <summary>
+    /// 自动重生边界左侧 X 坐标。
+    /// </summary>
+    public float EscapeMinX { get; set; } = -256f;
+
+    /// <summary>
+    /// 自动重生边界右侧 X 坐标。
+    /// </summary>
+    public float EscapeMaxX { get; set; } = 896f;
+
+    /// <summary>
+    /// 自动重生边界上侧 Y 坐标。
+    /// </summary>
+    public float EscapeMinY { get; set; } = -256f;
+
+    /// <summary>
+    /// 自动重生边界下侧 Y 坐标。
+    /// </summary>
+    public float EscapeMaxY { get; set; } = 512f;
+
+    /// <summary>
     /// 最近一次角色状态。
     /// </summary>
     public CharacterState State { get; private set; }
@@ -183,6 +208,11 @@ public sealed class PlayerController : Behaviour
         _rigidImpactCooldown = MathF.Max(0f, _rigidImpactCooldown - dt);
         CharacterState previousState = State;
         State = Context.Character.GetState(_body);
+        if (TryRespawnWhenEscaped())
+        {
+            return;
+        }
+
         ResolveVelocityAfterCollision(State);
         EmitMovementAudio(previousState, State, dt);
         float axis = Context.Input.Axis(Axis.Horizontal);
@@ -206,6 +236,7 @@ public sealed class PlayerController : Behaviour
         ResolveVelocityAfterCollision(moved);
         State = moved;
         ResolveRigidOwnedOverlap();
+        _ = TryRespawnWhenEscaped();
         SyncTransform();
     }
 
@@ -218,7 +249,12 @@ public sealed class PlayerController : Behaviour
 
         ResolveHealth();
         State = Context.Character.GetState(_body);
-        if (TryGetRigidOwnedContactAbove(State.X, State.Y))
+        if (TryRespawnWhenEscaped())
+        {
+            return;
+        }
+
+        if (Context.PhysicsEvents.LastCharacterImpactCount > 0 || TryGetRigidOwnedContactAbove(State.X, State.Y))
         {
             ApplyRigidImpactDamage();
         }
@@ -394,6 +430,25 @@ public sealed class PlayerController : Behaviour
 
         safeX = currentX;
         safeY = currentY;
+        return false;
+    }
+
+    private bool TryRespawnWhenEscaped()
+    {
+        if (!EnableEscapeRespawn)
+        {
+            return false;
+        }
+
+        if (State.X + State.Width < EscapeMinX ||
+            State.X > EscapeMaxX ||
+            State.Y + State.Height < EscapeMinY ||
+            State.Y > EscapeMaxY)
+        {
+            Respawn();
+            return true;
+        }
+
         return false;
     }
 

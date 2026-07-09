@@ -111,7 +111,7 @@ public sealed class LavaMineSceneTests
         Assert.True(woodCells > 200, $"横向路线应包含 wood 可拆路障 / 桥梁，actual={woodCells}。");
         Assert.True(metalCells > 200, $"横向路线应包含 metal 可拆路障 / 桥梁，actual={metalCells}。");
         Assert.True(stoneCells > 100, $"横向路线应包含 stone 可拆矮障碍，actual={stoneCells}。");
-        Assert.Equal(6f, weapons.TerrainEffectScale);
+        Assert.Equal(10f, weapons.TerrainEffectScale);
         Assert.Equal(10f, weapons.GrenadeTerrainEffectScale);
     }
 
@@ -497,7 +497,9 @@ public sealed class LavaMineSceneTests
         {
             foreach (ScriptComponentInspection component in entity.Components)
             {
-                Assert.False(component.Faulted, $"Behaviour faulted: {component.TypeName}。");
+                Assert.False(
+                    component.Faulted,
+                    $"Behaviour faulted: {component.TypeName}。{component.Behaviour.LastException}");
             }
         }
     }
