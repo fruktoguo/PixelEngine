@@ -4726,6 +4726,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("blocked_missing_editor_ux_scope_evidence", readme, StringComparison.Ordinal);
         Assert.Contains("editor_ux_evidence_attached_pending_review", readme, StringComparison.Ordinal);
         Assert.Contains("shellStarted", readme, StringComparison.Ordinal);
+        Assert.Contains("editorShellExeLaunched", readme, StringComparison.Ordinal);
+        Assert.Contains("singleTopLevelWindowVerified", readme, StringComparison.Ordinal);
+        Assert.Contains("singleProcessInProcessHost", readme, StringComparison.Ordinal);
+        Assert.Contains("noConsoleWindowObserved", readme, StringComparison.Ordinal);
         Assert.Contains("videoDurationSeconds>=60", readme, StringComparison.Ordinal);
         Assert.Contains("capturedFrameCount>=600", readme, StringComparison.Ordinal);
         Assert.Contains("routeStepCount>=8", readme, StringComparison.Ordinal);
@@ -4746,6 +4750,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("blocked_missing_editor_ux_evidence", plan, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_editor_ux_scope_evidence", plan, StringComparison.Ordinal);
         Assert.Contains("editor_ux_evidence_attached_pending_review", plan, StringComparison.Ordinal);
+        Assert.Contains("editorShellExeLaunched", plan, StringComparison.Ordinal);
+        Assert.Contains("singleProcessInProcessHost", plan, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -4848,6 +4854,59 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string outputReport = File.ReadAllText(Path.Combine(artifacts, "editor-ux-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_editor_ux_scope_evidence", outputReport, StringComparison.Ordinal);
             Assert.Contains("editor_full_route_window videoDurationSeconds 必须至少为 60", outputReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: editor_ux_evidence_attached_pending_review", outputReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证完整路线证据不能只展示 UI 流程，还必须证明正式 Shell 拓扑：单窗口、单进程 in-process host 且不弹控制台。
+    /// </summary>
+    [Fact]
+    public void EditorUxEvidencePreflightRejectsWeakFullRouteShellTopology()
+    {
+        // Arrange：搭建测试场景与依赖
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-editor-ux-weak-route-topology-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateEditorUxEvidenceManifest(temp);
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonArray evidence = rootNode["evidence"]!.AsArray();
+            JsonObject fullRoute = evidence
+                .Select(node => node!.AsObject())
+                .Single(node => string.Equals((string?)node["scope"], "editor_full_route_window", StringComparison.Ordinal));
+
+            string reportPath = Path.Combine(root, (string)fullRoute["path"]!);
+            string report = File.ReadAllText(reportPath)
+                .Replace("singleProcessInProcessHost: true", "singleProcessInProcessHost: false", StringComparison.Ordinal)
+                .Replace("noConsoleWindowObserved: true", "noConsoleWindowObserved: false", StringComparison.Ordinal);
+            File.WriteAllText(reportPath, report);
+            fullRoute["sha256"] = GetSha256(reportPath);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "out");
+            // Act：执行被测操作
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "editor-ux-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            // Assert：验证不变式与预期结果
+            Assert.Equal(5, result.ExitCode);
+            string outputReport = File.ReadAllText(Path.Combine(artifacts, "editor-ux-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_editor_ux_scope_evidence", outputReport, StringComparison.Ordinal);
+            Assert.Contains("editor_full_route_window singleProcessInProcessHost 必须为 true", outputReport, StringComparison.Ordinal);
             Assert.DoesNotContain("status: editor_ux_evidence_attached_pending_review", outputReport, StringComparison.Ordinal);
         }
         finally
@@ -7945,6 +8004,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             ["editor_full_route_window"] =
             [
                 "shellStarted",
+                "editorShellExeLaunched",
+                "singleTopLevelWindowVerified",
+                "singleProcessInProcessHost",
+                "noConsoleWindowObserved",
                 "projectOpenedOrCreated",
                 "defaultLayoutVisible",
                 "playExitVerified",
