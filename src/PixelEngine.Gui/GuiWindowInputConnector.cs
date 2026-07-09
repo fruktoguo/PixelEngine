@@ -123,6 +123,8 @@ public sealed class GuiWindowInputConnector : IDisposable
 
     private void ForwardMousePosition(Vector2 position)
     {
-        _input.MouseMove(position.X, position.Y);
+        _input.MouseMoveFramebuffer(
+            position.X * _window.FramebufferScaleX,
+            position.Y * _window.FramebufferScaleY);
     }
 }

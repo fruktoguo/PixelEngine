@@ -192,7 +192,7 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
-    /// 验证中性 Gui 与 Editor 输入连接器在点击前刷新鼠标坐标，避免 DPI/窗口切换后按钮命中使用旧位置。
+    /// 验证中性 Gui 与 Editor 输入连接器在点击前按当前 framebuffer scale 刷新鼠标坐标，避免 DPI/窗口切换后按钮命中使用旧位置。
     /// </summary>
     [Fact]
     public void GuiInputConnectorsRefreshPointerPositionBeforeMouseButtons()
@@ -207,8 +207,10 @@ public sealed class HostingProjectDisciplineTests
                 .Replace("\r", string.Empty, StringComparison.Ordinal)
                 .Replace("\n", string.Empty, StringComparison.Ordinal);
             Assert.Contains("privatevoidForwardMousePosition(Vector2position)", compact, StringComparison.Ordinal);
+            Assert.Contains("_input.MouseMoveFramebuffer(position.X*_window.FramebufferScaleX,position.Y*_window.FramebufferScaleY);", compact, StringComparison.Ordinal);
             Assert.Contains("privatevoidOnMouseDown(IMousemouse,Silk.NET.Input.MouseButtonbutton){ForwardMousePosition(mouse.Position);_input.MouseButton(button,down:true);}", compact, StringComparison.Ordinal);
             Assert.Contains("privatevoidOnMouseUp(IMousemouse,Silk.NET.Input.MouseButtonbutton){ForwardMousePosition(mouse.Position);_input.MouseButton(button,down:false);}", compact, StringComparison.Ordinal);
+            Assert.DoesNotContain("_input.MouseMove(position.X,position.Y);", compact, StringComparison.Ordinal);
         }
     }
 
@@ -249,6 +251,10 @@ public sealed class HostingProjectDisciplineTests
         string root = FindRepositoryRoot();
         string guiBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "HexaImGuiBackend.cs"));
         string editorBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "HexaImGuiBackend.cs"));
+        string guiBridge = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "GuiInputBridge.cs"));
+        string editorBridge = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "ImGuiInputBridge.cs"));
+        string guiInterface = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "IGuiImGuiBackend.cs"));
+        string editorInterface = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "IEditorImGuiBackend.cs"));
 
         foreach (string source in new[] { guiBackend, editorBackend })
         {
@@ -260,7 +266,21 @@ public sealed class HostingProjectDisciplineTests
             Assert.Contains("ImGui.AddMousePosEvent(ImGui.GetIO(),mapped.X,mapped.Y);", compact, StringComparison.Ordinal);
             Assert.Contains("io.DisplaySize=metrics.DisplaySize;", compact, StringComparison.Ordinal);
             Assert.Contains("io.DisplayFramebufferScale=metrics.DisplayFramebufferScale;", compact, StringComparison.Ordinal);
+            Assert.Contains("publicvoidAddFramebufferMousePosition(floatx,floaty)", compact, StringComparison.Ordinal);
+            Assert.Contains("ImGui.AddMousePosEvent(ImGui.GetIO(),x,y);", compact, StringComparison.Ordinal);
         }
+
+        foreach (string source in new[] { guiBridge, editorBridge })
+        {
+            string compact = source.Replace(" ", string.Empty, StringComparison.Ordinal)
+                .Replace("\r", string.Empty, StringComparison.Ordinal)
+                .Replace("\n", string.Empty, StringComparison.Ordinal);
+            Assert.Contains("publicvoidMouseMoveFramebuffer(floatx,floaty)", compact, StringComparison.Ordinal);
+            Assert.Contains("_backend.AddFramebufferMousePosition(x,y);", compact, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("void AddFramebufferMousePosition(float x, float y);", guiInterface, StringComparison.Ordinal);
+        Assert.Contains("void AddFramebufferMousePosition(float x, float y);", editorInterface, StringComparison.Ordinal);
     }
 
     /// <summary>
