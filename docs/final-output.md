@@ -7,6 +7,7 @@
 - `最终输出/编辑器/`：编辑器应用，入口为 `PixelEngine.Editor.Shell.exe`。
 - `最终输出/游戏Demo/`：玩家 Demo 包，入口为 `PixelEngine Demo.exe`。
 - `最终输出/_验证记录/`：本次替换前的验证日志、截图和 `manifest.json`。
+  - `manifest.json` 会记录 `gitCommit`、`sourceWorktreePolicy=tracked-clean-required`、`sourceTrackedWorktreeClean=true`、校验清单位置和验证日志路径。
 
 更新规则：
 
