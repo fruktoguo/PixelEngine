@@ -174,6 +174,10 @@ public sealed class DemoUiContentTests
         Assert.Contains("路线余量", defaultLoopText);
         Assert.Contains("熔岩接触危险", defaultLoopText);
         Assert.Contains("抵达右侧出口 / 挑战失败", defaultLoopText);
+        Assert.Contains("胜利：进入右侧出口触发区。", defaultLoopText);
+        Assert.Contains("失败：生命耗尽或路线中断。", defaultLoopText);
+        Assert.Contains("路线评分", defaultLoopText);
+        Assert.Contains("失败原因记录", defaultLoopText);
         Assert.DoesNotContain("可选任务时间", defaultLoopText);
         Assert.DoesNotContain("上涨熔岩压力", defaultLoopText);
         Assert.DoesNotContain("水晶", defaultLoopText);
