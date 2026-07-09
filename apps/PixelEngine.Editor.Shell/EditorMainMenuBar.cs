@@ -1,3 +1,4 @@
+using System.Numerics;
 using Hexa.NET.ImGui;
 using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Editor.Shell.Settings;
@@ -9,6 +10,18 @@ namespace PixelEngine.Editor.Shell;
 /// </summary>
 internal sealed class EditorMainMenuBar
 {
+    private const float ToolbarHeight = 36f;
+    private const float ToolbarButtonWidth = 92f;
+    private const string ToolbarWindowName = "##PixelEngineEditorToolbar";
+    private const ImGuiWindowFlags ToolbarWindowFlags =
+        ImGuiWindowFlags.NoTitleBar |
+        ImGuiWindowFlags.NoResize |
+        ImGuiWindowFlags.NoMove |
+        ImGuiWindowFlags.NoScrollbar |
+        ImGuiWindowFlags.NoScrollWithMouse |
+        ImGuiWindowFlags.NoSavedSettings |
+        ImGuiWindowFlags.NoDocking;
+
     public void Draw(EditorShellApp app)
     {
         ArgumentNullException.ThrowIfNull(app);
@@ -24,6 +37,108 @@ internal sealed class EditorMainMenuBar
         DrawPlayMenu(app);
         DrawHelpMenu(app);
         ImGui.EndMainMenuBar();
+        DrawToolbar(app);
+    }
+
+    internal static EditorMainToolbarState CaptureToolbarState(EditorShellApp app)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        EditorProjectSession? session = app.CurrentSession;
+        bool hasSession = session is not null;
+        Hosting.EditorPlaySessionSnapshot playSession = hasSession
+            ? session!.CaptureEditorPlaySession()
+            : default;
+        bool isPlaying = hasSession && playSession.Mode == Hosting.EditorMode.Play;
+        string projectName = app.CurrentProject?.Name ?? "No Project";
+        string sceneName = session?.CurrentSceneDisplayName ?? "No Scene";
+        int objectCount = session?.SceneModel.Count ?? 0;
+
+        return new EditorMainToolbarState(
+            app.HasOpenProject,
+            hasSession,
+            isPlaying,
+            session?.SceneModel.IsDirty == true,
+            projectName,
+            sceneName,
+            objectCount,
+            hasSession ? playSession.Mode.ToString() : "No Project");
+    }
+
+    private static void DrawToolbar(EditorShellApp app)
+    {
+        EditorMainToolbarState state = CaptureToolbarState(app);
+        ImGuiViewportPtr viewport = ImGui.GetMainViewport();
+        float menuHeight = ImGui.GetFrameHeight();
+        ImGui.SetNextWindowPos(new Vector2(viewport.Pos.X, viewport.Pos.Y + menuHeight));
+        ImGui.SetNextWindowSize(new Vector2(viewport.Size.X, ToolbarHeight));
+
+        if (!ImGui.Begin(ToolbarWindowName, ToolbarWindowFlags))
+        {
+            ImGui.End();
+            return;
+        }
+
+        if (ToolbarButton("New Project", enabled: true))
+        {
+            app.FocusProjectPicker(ProjectPickerMode.NewProject);
+        }
+
+        ImGui.SameLine();
+        if (ToolbarButton("Open Project", enabled: true))
+        {
+            app.FocusProjectPicker(ProjectPickerMode.OpenProject);
+        }
+
+        ImGui.SameLine();
+        if (ToolbarButton("Save Scene", state.HasSession))
+        {
+            _ = app.SaveScene();
+        }
+
+        ImGui.SameLine();
+        if (ToolbarButton("Build", state.HasOpenProject))
+        {
+            app.ShowBuildSettings();
+        }
+
+        float playControlsX = Math.Max(390f, (viewport.Size.X * 0.5f) - (((ToolbarButtonWidth * 3f) + 16f) * 0.5f));
+        ImGui.SameLine(playControlsX);
+        if (ToolbarButton("Play", state.CanEnterPlay))
+        {
+            app.EnterPlayMode();
+        }
+
+        ImGui.SameLine();
+        if (ToolbarButton("Pause", state.CanEnterEdit))
+        {
+            app.EnterEditMode();
+        }
+
+        ImGui.SameLine();
+        if (ToolbarButton("Step", state.HasSession))
+        {
+            app.StepOnce();
+        }
+
+        ImGui.SameLine();
+        ImGui.TextUnformatted(state.StatusText);
+        ImGui.End();
+    }
+
+    private static bool ToolbarButton(string label, bool enabled)
+    {
+        if (!enabled)
+        {
+            ImGui.BeginDisabled();
+        }
+
+        bool clicked = ImGui.Button(label, new Vector2(ToolbarButtonWidth, 0f));
+        if (!enabled)
+        {
+            ImGui.EndDisabled();
+        }
+
+        return clicked && enabled;
     }
 
     private static void DrawFileMenu(EditorShellApp app)
@@ -299,4 +414,24 @@ internal sealed class EditorMainMenuBar
 
         ImGui.EndMenu();
     }
+}
+
+internal readonly record struct EditorMainToolbarState(
+    bool HasOpenProject,
+    bool HasSession,
+    bool IsPlaying,
+    bool IsDirty,
+    string ProjectName,
+    string SceneName,
+    int ObjectCount,
+    string Mode)
+{
+    public bool CanEnterPlay => HasSession && !IsPlaying;
+
+    public bool CanEnterEdit => HasSession && IsPlaying;
+
+    public string StatusText =>
+        HasOpenProject
+            ? $"{ProjectName} / {SceneName}{(IsDirty ? "*" : string.Empty)} / {Mode} / {ObjectCount} objects"
+            : "No Project";
 }

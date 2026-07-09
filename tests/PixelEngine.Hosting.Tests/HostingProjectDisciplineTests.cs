@@ -545,6 +545,12 @@ public sealed class HostingProjectDisciplineTests
             "Profiler",
             "About",
             "Shortcuts",
+            "New Project",
+            "Open Project",
+            "Save Scene",
+            "Build",
+            "Pause",
+            "Step",
         })
         {
             // Assert：验证预期结果
@@ -553,6 +559,22 @@ public sealed class HostingProjectDisciplineTests
 
         Assert.Contains("DrawPanelMenuItem", menu, StringComparison.Ordinal);
         Assert.Contains("app.ShowPanel(panelTitle)", menu, StringComparison.Ordinal);
+        Assert.Contains("DrawToolbar(app)", menu, StringComparison.Ordinal);
+        Assert.Contains("EditorMainToolbarState", menu, StringComparison.Ordinal);
+        Assert.Contains("CaptureToolbarState", menu, StringComparison.Ordinal);
+        Assert.Contains("##PixelEngineEditorToolbar", menu, StringComparison.Ordinal);
+        Assert.Contains("ImGui.SetNextWindowPos", menu, StringComparison.Ordinal);
+        Assert.Contains("ImGui.SetNextWindowSize", menu, StringComparison.Ordinal);
+        Assert.Contains("app.FocusProjectPicker(ProjectPickerMode.NewProject)", menu, StringComparison.Ordinal);
+        Assert.Contains("app.FocusProjectPicker(ProjectPickerMode.OpenProject)", menu, StringComparison.Ordinal);
+        Assert.Contains("app.SaveScene()", menu, StringComparison.Ordinal);
+        Assert.Contains("app.ShowBuildSettings()", menu, StringComparison.Ordinal);
+        Assert.Contains("app.EnterPlayMode()", menu, StringComparison.Ordinal);
+        Assert.Contains("app.EnterEditMode()", menu, StringComparison.Ordinal);
+        Assert.Contains("app.StepOnce()", menu, StringComparison.Ordinal);
+        Assert.Contains("StatusText", menu, StringComparison.Ordinal);
+        Assert.Contains("SceneModel.IsDirty", menu, StringComparison.Ordinal);
+        Assert.Contains("CaptureEditorPlaySession", menu, StringComparison.Ordinal);
         Assert.Contains("app.NewScene()", menu, StringComparison.Ordinal);
         Assert.Contains("app.OpenScene(scene.Path)", menu, StringComparison.Ordinal);
         Assert.Contains("app.RequestExit()", menu, StringComparison.Ordinal);
