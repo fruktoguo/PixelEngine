@@ -43,10 +43,12 @@
   - 优先级：P1。
   - 验收：shutdown 后对应 live-object/ALC 计数为 0；不是 process smoke；manifest/hash/commit 同源并经人工复核。
 
-- [ ] `EVID-003` 固定 Windows-first baseline 与长期兼容矩阵使用的目标硬件/runner 清单。
+- [x] `EVID-003` 固定 Windows-first baseline 与长期兼容矩阵使用的目标硬件/runner 清单。
   - 优先级：P1。
   - 依赖：`SCOPE-001`。
+  - 设计来源：`plan/00-conventions-and-techstack.md` §3–§4；`plan/15-build-packaging-distribution.md` §2、§6；`plan/16-performance-hardening.md` §4、§6；`.github/workflows/ci.yml`；`tools/release-rids.json`。
   - 验收：每个 required/conditional RID 明确 CPU、GPU、OS、driver、runner、管理员/签名权限和可执行的 benchmark/smoke；性能与发行任务只引用该清单，不再写模糊“目标硬件”。
+  - 证据：`tools/target-hardware-matrix.json`、`docs/target-hardware-matrix.md`、`tools/validate-target-hardware-matrix.ps1`、`docs/evidence-2026-07-10-target-hardware-matrix.md`；校验输出 `Target hardware matrix valid: 6 RIDs; active=win-arm64,win-x64; conditional=win-arm64; observed_local=win-x64.`。
 
 ## 玩家包与 Release
 

@@ -1,0 +1,347 @@
+{
+  "schema": "pixelengine.target-hardware-matrix/v1",
+  "generatedAt": "2026-07-10",
+  "sourceOfTruth": "tools/release-rids.json",
+  "sourceCommit": "796b57817b9136340b70ee0594fe743f1f094d97",
+  "product": {
+    "name": "PixelEngine Windows-first 1.0",
+    "configuration": "Release",
+    "dotnetSdk": "10.0.x",
+    "requiredRids": ["win-x64"],
+    "conditionalRids": ["win-arm64"],
+    "activeRidsAtSnapshot": ["win-x64", "win-arm64"],
+    "longTermCompatibilityRids": ["win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64"],
+    "identityCapturePerRun": ["rid", "runner", "runnerImage", "cpu", "gpu", "driver", "os", "dotnetVersion", "gitCommit", "benchmarkRunId"]
+  },
+  "entries": [
+    {
+      "rid": "win-x64",
+      "lifecycle": "active_required",
+      "productRequirement": "required",
+      "targetArchitecture": "x64",
+      "runner": {
+        "provider": "github-hosted",
+        "label": "windows-latest",
+        "shell": "pwsh",
+        "hostArchitecture": "x64",
+        "targetArchitecture": "x64",
+        "identityCapture": ["runner.os", "ImageVersion", "dotnet --info", "Get-CimInstance Win32_Processor", "Get-CimInstance Win32_VideoController"]
+      },
+      "hardware": {
+        "cpu": {
+          "value": "AMD Ryzen 7 5800X 8-Core Processor; 8 cores / 16 logical processors",
+          "status": "observed_local",
+          "source": "Win32_Processor on the current Windows host",
+          "verificationCommand": "Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors"
+        },
+        "gpu": {
+          "value": "AMD Radeon RX 7900 XT",
+          "status": "observed_local",
+          "source": "physical adapter selected from Win32_VideoController; virtual display adapters excluded",
+          "verificationCommand": "Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,AdapterCompatibility"
+        },
+        "driver": {
+          "value": "AMD Radeon RX 7900 XT driver 32.0.31021.5001",
+          "status": "observed_local",
+          "source": "Win32_VideoController.DriverVersion"
+        },
+        "os": {
+          "value": "Microsoft Windows 11 专业版 10.0.26100 build 26100; x64",
+          "status": "observed_local",
+          "source": "Win32_OperatingSystem and Win32_ComputerSystem"
+        },
+        "dotnet": {
+          "value": ".NET SDK 10.0.108",
+          "status": "observed_local",
+          "source": "dotnet --version"
+        }
+      },
+      "permissions": {
+        "administratorRequiredFor": ["ETW Cache Misses/Branch Mispredictions collection"],
+        "administratorStatus": "must_be_captured_per_run; current matrix does not claim elevated ETW evidence",
+        "signing": "not_required_for current Windows-first configuration; release-rids.json codesign=false",
+        "credentials": "none for local build/test/benchmark; GitHub Actions permission remains external",
+        "externalConditions": ["GitHub workflow run is required for CI evidence", "target-performance evidence still requires a stable run identity"]
+      },
+      "benchmark": {
+        "status": "locally_runnable_entry; target conclusion not established",
+        "command": "dotnet run --project bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -c Release -- --filter \"*CellThroughputBenchmark.StepJobSystem*\" --job MediumRun --warmupCount 3 --iterationCount 3 --exporters markdown,csv",
+        "hardwareCounterCommand": "pwsh tools/hardware-counter-preflight.ps1 -RunBenchmark",
+        "requiredFields": ["rid", "representativeHardware", "benchmarkDotNet", "activeCellsPerFrame", "caFrameMs", "measuredIterations", "iterationCount", "gitCommit", "benchmarkRunId"],
+        "notes": "当前本机入口可执行，但正式 PERF-001/PERF-003/PERF-009 结论仍需同源报告和目标门槛。"
+      },
+        "smoke": {
+          "status": "locally_runnable_native_path",
+          "releaseSmokeProfile": "native",
+          "commands": [
+          "pwsh tools/build-native.ps1 -Rid win-x64 -Configuration Release",
+          "dotnet build PixelEngine.sln -c Release",
+          "dotnet test PixelEngine.sln -c Release --no-build -m:1",
+          "pwsh tools/verify-publish.ps1 -Rid win-x64 -Channel r2r -SkipPublish",
+          "dotnet run --project demo/PixelEngine.Demo/PixelEngine.Demo.csproj -c Release --no-build -- --no-hot-reload --window-ticks 3600 --content demo/PixelEngine.Demo/content"
+        ],
+        "nativeMode": "native",
+        "targetHardwareRunRequired": true
+      }
+    },
+    {
+      "rid": "win-arm64",
+      "lifecycle": "active_conditional",
+      "productRequirement": "conditional",
+      "targetArchitecture": "arm64",
+      "runner": {
+        "provider": "github-hosted",
+        "label": "windows-latest",
+        "shell": "pwsh",
+        "hostArchitecture": "x64",
+        "targetArchitecture": "arm64",
+        "identityCapture": ["runner.os", "ImageVersion", "dotnet --info", "target-device CPU/GPU/driver/OS inventory"]
+      },
+      "hardware": {
+        "cpu": {
+          "value": "EXTERNAL_REQUIRED: exact Windows ARM64 target CPU model and core count",
+          "status": "required_at_target_run",
+          "source": "win-arm64 device or trusted ARM64 runner inventory",
+          "verificationCommand": "Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors"
+        },
+        "gpu": {
+          "value": "EXTERNAL_REQUIRED: exact ARM64 GPU model",
+          "status": "required_at_target_run",
+          "source": "win-arm64 target device inventory",
+          "verificationCommand": "Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,AdapterCompatibility"
+        },
+        "driver": {
+          "value": "EXTERNAL_REQUIRED: target GPU driver version",
+          "status": "required_at_target_run",
+          "source": "win-arm64 target device inventory"
+        },
+        "os": {
+          "value": "EXTERNAL_REQUIRED: Windows ARM64 edition, build and OS architecture",
+          "status": "required_at_target_run",
+          "source": "win-arm64 target device inventory"
+        },
+        "dotnet": {
+          "value": ".NET SDK 10.0.x on the Windows build runner; target runtime version must be recorded on device",
+          "status": "runner_and_target_required",
+          "source": "actions/setup-dotnet plus target device dotnet --info"
+        }
+      },
+      "permissions": {
+        "administratorRequiredFor": ["ETW counters on a Windows ARM64 performance device"],
+        "administratorStatus": "external target-device permission required for PERF-009",
+        "signing": "not_required_for current Windows-first configuration; release-rids.json codesign=false",
+        "credentials": "none for build-only CI; device access is external",
+        "externalConditions": ["current CI entry is build_only=true", "load-only does not satisfy final smoke", "real ARM64 device or trusted ARM64 runner is required before activation evidence"]
+      },
+      "benchmark": {
+        "status": "target_device_required",
+        "command": "dotnet run --project bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -c Release -- --filter \"*CellThroughputBenchmark.StepJobSystem*\" --job MediumRun --warmupCount 3 --iterationCount 3 --exporters markdown,csv",
+        "hardwareCounterCommand": "pwsh tools/hardware-counter-preflight.ps1 -RunBenchmark",
+        "requiredFields": ["rid", "representativeHardware", "benchmarkDotNet", "activeCellsPerFrame", "caFrameMs", "measuredIterations", "iterationCount", "gitCommit", "benchmarkRunId"],
+        "notes": "命令和 schema 固定；不能在 x64 windows-latest build-only job 上冒充 ARM64 性能结论。"
+      },
+        "smoke": {
+          "status": "load_only_until_external_device",
+          "releaseSmokeProfile": "load-only",
+          "commands": [
+          "pwsh tools/build-native.ps1 -Rid win-arm64 -Configuration Release",
+          "dotnet build PixelEngine.sln -c Release",
+          "pwsh tools/verify-publish.ps1 -Rid win-arm64 -Channel r2r -AllowLoadOnly -SkipPublish",
+          "target device: run the win-arm64 player package, enter lava-mine, and exit cleanly"
+        ],
+        "nativeMode": "native",
+        "targetHardwareRunRequired": true
+      }
+    },
+    {
+      "rid": "linux-x64",
+      "lifecycle": "dormant_long_term",
+      "productRequirement": "long_term_compatibility",
+      "targetArchitecture": "x64",
+      "runner": {
+        "provider": "github-hosted",
+        "label": "ubuntu-latest",
+        "shell": "bash",
+        "hostArchitecture": "x64",
+        "targetArchitecture": "x64",
+        "identityCapture": ["runner.os", "ImageVersion", "uname -a", "lscpu", "lspci", "dotnet --info"]
+      },
+      "hardware": {
+        "cpu": {"value": "EXTERNAL_REQUIRED: exact ubuntu-latest runner CPU model", "status": "required_at_run", "source": "GitHub runner lscpu"},
+        "gpu": {"value": "EXTERNAL_REQUIRED: exact GPU or software renderer", "status": "required_at_run", "source": "GitHub runner lspci/renderer inventory"},
+        "driver": {"value": "EXTERNAL_REQUIRED: Mesa/driver version or documented headless renderer", "status": "required_at_run", "source": "runner graphics inventory"},
+        "os": {"value": "EXTERNAL_REQUIRED: ubuntu-latest image, kernel and glibc versions", "status": "required_at_run", "source": "runner ImageVersion, uname -a and ldd --version"},
+        "dotnet": {"value": ".NET SDK 10.0.x", "status": "runner_required", "source": "actions/setup-dotnet plus dotnet --info"}
+      },
+      "permissions": {
+        "administratorRequiredFor": ["ETW equivalent only if a Linux counter collector is explicitly selected"],
+        "administratorStatus": "runner default permissions; record sudo use per run",
+        "signing": "not_required while dormant; re-evaluate if activated",
+        "credentials": "none for build/test; GitHub runner access required",
+        "externalConditions": ["dormant RID is not a Windows-first release gate", "glibc and native smoke must be recorded when activated"]
+      },
+      "benchmark": {
+        "status": "target_runner_required",
+        "command": "dotnet run --project bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -c Release -- --filter \"*CellThroughputBenchmark.StepJobSystem*\" --job MediumRun --warmupCount 3 --iterationCount 3 --exporters markdown,csv",
+        "hardwareCounterCommand": "runner-specific counter collector; do not claim Windows ETW columns on Linux",
+        "requiredFields": ["rid", "representativeHardware", "benchmarkDotNet", "activeCellsPerFrame", "caFrameMs", "measuredIterations", "iterationCount", "gitCommit", "benchmarkRunId"],
+        "notes": "Benchmark is a compatibility-matrix command; no target result is claimed in this snapshot."
+      },
+        "smoke": {
+          "status": "runner_required_native",
+          "releaseSmokeProfile": "native",
+          "commands": [
+          "bash tools/build-native.sh --rid linux-x64 --configuration Release",
+          "dotnet build PixelEngine.sln -c Release",
+          "dotnet test PixelEngine.sln -c Release --no-build -m:1",
+          "bash tools/verify-publish.sh --rid linux-x64 --channel r2r"
+        ],
+        "nativeMode": "native",
+        "targetHardwareRunRequired": false
+      }
+    },
+    {
+      "rid": "linux-arm64",
+      "lifecycle": "dormant_long_term",
+      "productRequirement": "long_term_compatibility",
+      "targetArchitecture": "arm64",
+      "runner": {
+        "provider": "github-hosted",
+        "label": "ubuntu-24.04-arm",
+        "releaseRunnerLabel": "ubuntu-latest",
+        "shell": "bash",
+        "hostArchitecture": "arm64",
+        "targetArchitecture": "arm64",
+        "identityCapture": ["runner.os", "ImageVersion", "uname -a", "lscpu", "lspci", "dotnet --info"]
+      },
+      "hardware": {
+        "cpu": {"value": "EXTERNAL_REQUIRED: exact ubuntu-24.04-arm runner CPU model", "status": "required_at_run", "source": "GitHub runner lscpu"},
+        "gpu": {"value": "EXTERNAL_REQUIRED: exact ARM64 GPU or software renderer", "status": "required_at_run", "source": "GitHub runner lspci/renderer inventory"},
+        "driver": {"value": "EXTERNAL_REQUIRED: ARM64 Mesa/driver version or documented headless renderer", "status": "required_at_run", "source": "runner graphics inventory"},
+        "os": {"value": "EXTERNAL_REQUIRED: Ubuntu 24.04 ARM64 image, kernel and glibc versions", "status": "required_at_run", "source": "runner ImageVersion, uname -a and ldd --version"},
+        "dotnet": {"value": ".NET SDK 10.0.x", "status": "runner_required", "source": "actions/setup-dotnet plus dotnet --info"}
+      },
+      "permissions": {
+        "administratorRequiredFor": ["sudo apt-get for qemu-user-static/cross toolchain setup"],
+        "administratorStatus": "CI explicitly uses sudo for the smoke runner setup",
+        "signing": "not_required while dormant; re-evaluate if activated",
+        "credentials": "none for build/test; GitHub ARM64 runner access required",
+        "externalConditions": ["QEMU smoke is compatibility evidence, not target GPU performance evidence", "native ARM64 performance requires matching hardware"]
+      },
+      "benchmark": {
+        "status": "target_runner_required",
+        "command": "dotnet run --project bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -c Release -- --filter \"*CellThroughputBenchmark.StepJobSystem*\" --job MediumRun --warmupCount 3 --iterationCount 3 --exporters markdown,csv",
+        "hardwareCounterCommand": "runner-specific counter collector; do not claim Windows ETW columns on Linux ARM64",
+        "requiredFields": ["rid", "representativeHardware", "benchmarkDotNet", "activeCellsPerFrame", "caFrameMs", "measuredIterations", "iterationCount", "gitCommit", "benchmarkRunId"],
+        "notes": "The release smoke runner may use QEMU; a target-hardware benchmark must state whether it ran natively."
+      },
+        "smoke": {
+          "status": "runner_required_qemu_or_native",
+          "releaseSmokeProfile": "qemu",
+          "commands": [
+          "sudo apt-get update && sudo apt-get install -y qemu-user-static",
+          "bash tools/build-native.sh --rid linux-arm64 --configuration Release",
+          "dotnet build PixelEngine.sln -c Release",
+          "dotnet test PixelEngine.sln -c Release --no-build -m:1",
+          "bash tools/verify-publish.sh --rid linux-arm64 --channel r2r"
+        ],
+        "nativeMode": "native_or_qemu_for_smoke_only",
+        "targetHardwareRunRequired": false
+      }
+    },
+    {
+      "rid": "osx-x64",
+      "lifecycle": "dormant_long_term",
+      "productRequirement": "long_term_compatibility",
+      "targetArchitecture": "x64",
+      "runner": {
+        "provider": "github-hosted",
+        "label": "macos-15-intel",
+        "shell": "bash",
+        "hostArchitecture": "x64",
+        "targetArchitecture": "x64",
+        "identityCapture": ["runner.os", "ImageVersion", "sw_vers", "sysctl hw.model", "system_profiler SPDisplaysDataType", "dotnet --info"]
+      },
+      "hardware": {
+        "cpu": {"value": "EXTERNAL_REQUIRED: exact macos-15-intel runner CPU model", "status": "required_at_run", "source": "runner sysctl hw.model and CPU inventory"},
+        "gpu": {"value": "EXTERNAL_REQUIRED: exact Intel GPU model or renderer", "status": "required_at_run", "source": "system_profiler SPDisplaysDataType"},
+        "driver": {"value": "EXTERNAL_REQUIRED: macOS graphics stack version", "status": "required_at_run", "source": "sw_vers/system_profiler"},
+        "os": {"value": "EXTERNAL_REQUIRED: macOS 15 Intel image/build", "status": "required_at_run", "source": "sw_vers and ImageVersion"},
+        "dotnet": {"value": ".NET SDK 10.0.x", "status": "runner_required", "source": "actions/setup-dotnet plus dotnet --info"}
+      },
+      "permissions": {
+        "administratorRequiredFor": ["none for build/test; native leak or performance tools may add platform-specific permissions"],
+        "administratorStatus": "record per run",
+        "signing": "Developer ID codesign/notarization required if this dormant RID is activated",
+        "credentials": "Developer ID and notarization credentials are external and currently unavailable",
+        "externalConditions": ["dormant RID does not block Windows-first 1.0", "codesign, notarization, staple and spctl evidence required on activation"]
+      },
+      "benchmark": {
+        "status": "target_runner_required",
+        "command": "dotnet run --project bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -c Release -- --filter \"*CellThroughputBenchmark.StepJobSystem*\" --job MediumRun --warmupCount 3 --iterationCount 3 --exporters markdown,csv",
+        "hardwareCounterCommand": "runner-specific counter collector; record platform permission boundary",
+        "requiredFields": ["rid", "representativeHardware", "benchmarkDotNet", "activeCellsPerFrame", "caFrameMs", "measuredIterations", "iterationCount", "gitCommit", "benchmarkRunId"],
+        "notes": "No macOS target benchmark is claimed by this matrix snapshot."
+      },
+        "smoke": {
+          "status": "runner_required_native",
+          "releaseSmokeProfile": "native",
+          "commands": [
+          "bash tools/build-native.sh --rid osx-x64 --configuration Release",
+          "dotnet build PixelEngine.sln -c Release",
+          "dotnet test PixelEngine.sln -c Release --no-build -m:1",
+          "bash tools/verify-publish.sh --rid osx-x64 --channel r2r"
+        ],
+        "nativeMode": "native",
+        "targetHardwareRunRequired": false
+      }
+    },
+    {
+      "rid": "osx-arm64",
+      "lifecycle": "dormant_long_term",
+      "productRequirement": "long_term_compatibility",
+      "targetArchitecture": "arm64",
+      "runner": {
+        "provider": "github-hosted",
+        "label": "macos-14",
+        "shell": "bash",
+        "hostArchitecture": "arm64",
+        "targetArchitecture": "arm64",
+        "identityCapture": ["runner.os", "ImageVersion", "sw_vers", "sysctl hw.model", "system_profiler SPDisplaysDataType", "dotnet --info"]
+      },
+      "hardware": {
+        "cpu": {"value": "EXTERNAL_REQUIRED: exact macos-14 arm64 runner CPU model", "status": "required_at_run", "source": "runner sysctl hw.model and CPU inventory"},
+        "gpu": {"value": "EXTERNAL_REQUIRED: exact Apple GPU model", "status": "required_at_run", "source": "system_profiler SPDisplaysDataType"},
+        "driver": {"value": "EXTERNAL_REQUIRED: macOS graphics stack version", "status": "required_at_run", "source": "sw_vers/system_profiler"},
+        "os": {"value": "EXTERNAL_REQUIRED: macOS 14 ARM64 image/build", "status": "required_at_run", "source": "sw_vers and ImageVersion"},
+        "dotnet": {"value": ".NET SDK 10.0.x", "status": "runner_required", "source": "actions/setup-dotnet plus dotnet --info"}
+      },
+      "permissions": {
+        "administratorRequiredFor": ["none for build/test; native leak or performance tools may add platform-specific permissions"],
+        "administratorStatus": "record per run",
+        "signing": "Developer ID codesign/notarization required if this dormant RID is activated",
+        "credentials": "Developer ID and notarization credentials are external and currently unavailable",
+        "externalConditions": ["dormant RID does not block Windows-first 1.0", "codesign, notarization, staple and spctl evidence required on activation"]
+      },
+      "benchmark": {
+        "status": "target_runner_required",
+        "command": "dotnet run --project bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -c Release -- --filter \"*CellThroughputBenchmark.StepJobSystem*\" --job MediumRun --warmupCount 3 --iterationCount 3 --exporters markdown,csv",
+        "hardwareCounterCommand": "runner-specific counter collector; record platform permission boundary",
+        "requiredFields": ["rid", "representativeHardware", "benchmarkDotNet", "activeCellsPerFrame", "caFrameMs", "measuredIterations", "iterationCount", "gitCommit", "benchmarkRunId"],
+        "notes": "No macOS target benchmark is claimed by this matrix snapshot."
+      },
+        "smoke": {
+          "status": "runner_required_native",
+          "releaseSmokeProfile": "native",
+          "commands": [
+          "bash tools/build-native.sh --rid osx-arm64 --configuration Release",
+          "dotnet build PixelEngine.sln -c Release",
+          "dotnet test PixelEngine.sln -c Release --no-build -m:1",
+          "bash tools/verify-publish.sh --rid osx-arm64 --channel r2r"
+        ],
+        "nativeMode": "native",
+        "targetHardwareRunRequired": false
+      }
+    }
+  ]
+}
