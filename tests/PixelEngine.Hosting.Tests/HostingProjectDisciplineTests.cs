@@ -150,6 +150,26 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证正式输出更新在替换目录前会调用独立 verifier 审计待发布目录，避免更新脚本和审计脚本口径漂移。
+    /// </summary>
+    [Fact]
+    public void FinalOutputUpdateRunsVerifierBeforeReplace()
+    {
+        string root = FindRepositoryRoot();
+        string finalOutputScript = File.ReadAllText(Path.Combine(root, "tools", "update-final-output.ps1"));
+
+        int replaceIndex = finalOutputScript.IndexOf("Replace-FinalOutput $nextRoot $outputRootFull", StringComparison.Ordinal);
+        int verifyIndex = finalOutputScript.IndexOf("-Name 'verify-final-output'", StringComparison.Ordinal);
+
+        Assert.True(replaceIndex >= 0, "update-final-output.ps1 应包含原子替换正式输出目录步骤。");
+        Assert.True(verifyIndex >= 0 && verifyIndex < replaceIndex, "update-final-output.ps1 应在替换前调用独立 verifier，失败时保留旧正式输出。");
+        Assert.Contains("tools/verify-final-output.ps1", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("'-OutputRoot', $nextRoot", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("verify-final-output.stdout.log", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("独立审计：$($verifyFinalOutputResult.StdoutPath)", finalOutputScript, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证本机正式输出提供独立审计入口，可在不重新打包的情况下校验 manifest、入口和 SHA256SUMS。
     /// </summary>
     [Fact]

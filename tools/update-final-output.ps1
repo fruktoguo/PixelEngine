@@ -390,6 +390,14 @@ PixelEngine 正式输出
 
 Write-FinalOutputChecksums $nextRoot (Join-Path $nextRoot 'SHA256SUMS')
 
+$verifyFinalOutputResult = Invoke-ProcessChecked `
+  -Name 'verify-final-output' `
+  -FilePath $pwsh `
+  -Arguments @('-NoProfile', '-File', (Join-Path $repoRoot 'tools/verify-final-output.ps1'), '-OutputRoot', $nextRoot) `
+  -WorkingDirectory $repoRoot `
+  -StdoutPath (Join-Path $logRoot 'verify-final-output.stdout.log') `
+  -StderrPath (Join-Path $logRoot 'verify-final-output.stderr.log')
+
 Replace-FinalOutput $nextRoot $outputRootFull
 
 Write-Host "正式输出已更新：$outputRootFull"
@@ -397,3 +405,4 @@ Write-Host "编辑器入口：$(Join-Path $outputRootFull '编辑器/PixelEngine
 Write-Host "Demo 入口：$(Join-Path $outputRootFull '游戏Demo/PixelEngine Demo.exe')"
 Write-Host "验证 manifest：$(Join-Path $outputRootFull '_验证记录/manifest.json')"
 Write-Host "完整性校验：$(Join-Path $outputRootFull 'SHA256SUMS')"
+Write-Host "独立审计：$($verifyFinalOutputResult.StdoutPath)"
