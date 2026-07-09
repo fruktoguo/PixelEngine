@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using PixelEngine.Rendering;
+using PixelEngine.Testing;
 using Silk.NET.OpenGL;
 using Xunit;
 
@@ -178,14 +179,10 @@ public sealed class RmlUiGlBootstrapSmokeTests
     /// <summary>
     /// 验证Can Create Native Renderer When Gl Smoke Is Enabled。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
+    [Trait("Category", "NativeSmoke")]
     public void CanCreateNativeRendererWhenGlSmokeIsEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
-
         using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
             Title = "PixelEngine RmlUi GL smoke",
@@ -203,15 +200,10 @@ public sealed class RmlUiGlBootstrapSmokeTests
     /// <summary>
     /// 验证Can Create Native Renderer On Angle Gles When Angle Smoke Is Enabled。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact("PIXELENGINE_RENDERING_ANGLE_SMOKE")]
+    [Trait("Category", "NativeSmoke")]
     public void CanCreateNativeRendererOnAngleGlesWhenAngleSmokeIsEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"), "1", StringComparison.Ordinal) &&
-            !string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
-
         RenderWindow? window = null;
         try
         {
@@ -226,14 +218,7 @@ public sealed class RmlUiGlBootstrapSmokeTests
         }
         catch (Exception ex)
         {
-            // ANGLE 不可用时跳过，不把环境缺失写成产品完成。
-            // 未强制 ANGLE smoke 时允许环境无 ANGLE；强制时必须能建窗。
-            bool requireAngle = string.Equals(
-                Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"),
-                "1",
-                StringComparison.Ordinal);
-            Assert.False(requireAngle, $"显式 ANGLE smoke 要求可创建 GlEs30Angle 窗口，但失败：{ex}");
-            return;
+            throw new InvalidOperationException($"显式 ANGLE smoke 要求可创建 GlEs30Angle 窗口，但失败：{ex.Message}", ex);
         }
 
         using (window)
@@ -253,14 +238,10 @@ public sealed class RmlUiGlBootstrapSmokeTests
     /// <summary>
     /// 验证Rml Ui Backend Can Load And Render Document When Gl Smoke Is Enabled。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
+    [Trait("Category", "NativeSmoke")]
     public void RmlUiBackendCanLoadAndRenderDocumentWhenGlSmokeIsEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
-
         using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
             Title = "PixelEngine RmlUi backend smoke",
@@ -277,15 +258,10 @@ public sealed class RmlUiGlBootstrapSmokeTests
     /// <summary>
     /// 验证Rml Ui Backend Can Load And Render Document On Angle When Smoke Is Enabled。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact("PIXELENGINE_RENDERING_ANGLE_SMOKE")]
+    [Trait("Category", "NativeSmoke")]
     public void RmlUiBackendCanLoadAndRenderDocumentOnAngleWhenSmokeIsEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"), "1", StringComparison.Ordinal) &&
-            !string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
-
         RenderWindow? window = null;
         try
         {
@@ -300,12 +276,7 @@ public sealed class RmlUiGlBootstrapSmokeTests
         }
         catch (Exception ex)
         {
-            bool requireAngle = string.Equals(
-                Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"),
-                "1",
-                StringComparison.Ordinal);
-            Assert.False(requireAngle, $"显式 ANGLE smoke 要求可创建 GlEs30Angle 窗口，但失败：{ex}");
-            return;
+            throw new InvalidOperationException($"显式 ANGLE smoke 要求可创建 GlEs30Angle 窗口，但失败：{ex.Message}", ex);
         }
 
         using (window)
@@ -440,14 +411,10 @@ public sealed class RmlUiGlBootstrapSmokeTests
     /// <summary>
     /// 验证Rml Ui Backend Unload Modal Stops Capture When Gl Smoke Is Enabled。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
+    [Trait("Category", "NativeSmoke")]
     public void RmlUiBackendUnloadModalStopsCaptureWhenGlSmokeIsEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
-
         using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
             Title = "PixelEngine RmlUi unload modal smoke",
@@ -462,12 +429,13 @@ public sealed class RmlUiGlBootstrapSmokeTests
     /// <summary>
     /// 验证Rml Ui Backend Unload Modal Stops Capture On Angle When Smoke Is Enabled。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact("PIXELENGINE_RENDERING_ANGLE_SMOKE")]
+    [Trait("Category", "NativeSmoke")]
     public void RmlUiBackendUnloadModalStopsCaptureOnAngleWhenSmokeIsEnabled()
     {
         if (!TryCreateAngleSmokeWindow("PixelEngine RmlUi ANGLE unload modal smoke", out RenderWindow? window))
         {
-            return;
+            throw new InvalidOperationException("ANGLE smoke window 创建失败。");
         }
 
         RenderWindow smokeWindow = window ?? throw new InvalidOperationException("ANGLE smoke window 创建成功但返回 null。");
@@ -480,14 +448,10 @@ public sealed class RmlUiGlBootstrapSmokeTests
     /// <summary>
     /// 验证Rml Ui Composite Restores Gl State When Gl Smoke Is Enabled。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
+    [Trait("Category", "NativeSmoke")]
     public void RmlUiCompositeRestoresGlStateWhenGlSmokeIsEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
-
         using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
             Title = "PixelEngine RmlUi GL state smoke",
@@ -502,12 +466,13 @@ public sealed class RmlUiGlBootstrapSmokeTests
     /// <summary>
     /// 验证Rml Ui Composite Restores Gl State On Angle When Smoke Is Enabled。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact("PIXELENGINE_RENDERING_ANGLE_SMOKE")]
+    [Trait("Category", "NativeSmoke")]
     public void RmlUiCompositeRestoresGlStateOnAngleWhenSmokeIsEnabled()
     {
         if (!TryCreateAngleSmokeWindow("PixelEngine RmlUi ANGLE GL state smoke", out RenderWindow? window))
         {
-            return;
+            throw new InvalidOperationException("ANGLE smoke window 创建失败。");
         }
 
         RenderWindow smokeWindow = window ?? throw new InvalidOperationException("ANGLE smoke window 创建成功但返回 null。");
@@ -616,12 +581,6 @@ public sealed class RmlUiGlBootstrapSmokeTests
     private static bool TryCreateAngleSmokeWindow(string title, out RenderWindow? window)
     {
         window = null;
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"), "1", StringComparison.Ordinal) &&
-            !string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
         try
         {
             window = RenderWindow.Create(new RenderWindowOptions
@@ -637,12 +596,7 @@ public sealed class RmlUiGlBootstrapSmokeTests
         }
         catch (Exception ex)
         {
-            bool requireAngle = string.Equals(
-                Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"),
-                "1",
-                StringComparison.Ordinal);
-            Assert.False(requireAngle, $"显式 ANGLE smoke 要求可创建 GlEs30Angle 窗口，但失败：{ex}");
-            return false;
+            throw new InvalidOperationException($"显式 ANGLE smoke 要求可创建 GlEs30Angle 窗口，但失败：{ex.Message}", ex);
         }
     }
 

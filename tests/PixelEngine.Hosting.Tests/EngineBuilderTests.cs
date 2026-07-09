@@ -4,6 +4,7 @@ using PixelEngine.Core.Events;
 using PixelEngine.Core.Threading;
 using PixelEngine.Core.Time;
 using PixelEngine.Rendering;
+using PixelEngine.Testing;
 using PixelEngine.UI;
 using System.Runtime;
 using Xunit;
@@ -180,15 +181,11 @@ public sealed class EngineBuilderTests
     /// <summary>
     /// 验证窗口运行时会记录请求/实际 Game UI 后端，并在 RmlUi 不可用时显式降级。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
+    [Trait("Category", "NativeSmoke")]
     public void GameUiBackendSelectionIsRecordedWhenGlSmokeIsEnabled()
     {
-        // Arrange：准备输入与初始状态
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
-
+        // Arrange：准备输入与初始状态；NativeSmokeFact 在 discovery 阶段负责未启用环境的 skipped 状态。
         using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
             Title = "PixelEngine Game UI backend selection smoke",
@@ -242,15 +239,11 @@ public sealed class EngineBuilderTests
     /// <summary>
     /// 验证未激活的 Ultralight 可选后端不会伪造实现或崩溃，而是记录原因后回退托管基线。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
+    [Trait("Category", "NativeSmoke")]
     public void UltralightGameUiBackendFallsBackToManagedWhenGlSmokeIsEnabled()
     {
-        // Arrange：准备输入与初始状态
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
-
+        // Arrange：准备输入与初始状态；NativeSmokeFact 在 discovery 阶段负责未启用环境的 skipped 状态。
         using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
             Title = "PixelEngine Ultralight fallback smoke",
@@ -308,15 +301,11 @@ public sealed class EngineBuilderTests
     /// <summary>
     /// 验证禁用游戏大 UI 时，真实窗口运行时不会注册 GameUi 服务、相位 driver 或 UI 计时开销。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
+    [Trait("Category", "NativeSmoke")]
     public void DisabledGameUiDoesNotRegisterRuntimeServicesWhenWindowIsAttached()
     {
-        // Arrange：搭建测试场景与依赖
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
-
+        // Arrange：搭建测试场景与依赖；NativeSmokeFact 在 discovery 阶段负责未启用环境的 skipped 状态。
         using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
             Title = "PixelEngine disabled Game UI smoke",

@@ -1,5 +1,6 @@
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Rendering;
+using PixelEngine.Testing;
 using Silk.NET.OpenGL;
 using Xunit;
 
@@ -13,14 +14,10 @@ public sealed class UiOffscreenSurfacePresenterSmokeTests
     /// <summary>
     /// 验证Offscreen Surface上传Dirty Rect And Composites经Render Pipeline When Gl Smoke Is Enabled。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
+    [Trait("Category", "NativeSmoke")]
     public void OffscreenSurfaceUploadsDirtyRectAndCompositesThroughRenderPipelineWhenGlSmokeIsEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
-
         using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
             Title = "PixelEngine offscreen UI surface smoke",
@@ -63,7 +60,15 @@ public sealed class UiOffscreenSurfacePresenterSmokeTests
         Assert.True(layer.PresentCount >= 2, $"UI layer 应被 RenderPipeline 调用，actual={layer.PresentCount}");
         Assert.Equal(GLEnum.NoError, layer.PresenterGlError);
         Assert.Equal(GLEnum.NoError, layer.ProbeGlError);
-        Assert.True(CountWhitePixels(framebuffer!, window.Width, x0: 20, y0: 0, x1: 28, y1: 8) > 0, MaxPixelMessage(framebuffer!, window.Width));
+        Assert.True(
+            CountWhitePixels(
+                framebuffer!,
+                window.Width,
+                x0: layer.ProbeX,
+                y0: layer.ProbeY,
+                x1: layer.ProbeX + 8,
+                y1: layer.ProbeY + 8) > 0,
+            MaxPixelMessage(framebuffer!, window.Width));
         Assert.True(CountWhitePixels(framebuffer!, window.Width, x0: 4, y0: 4, x1: 12, y1: 12) > 0, MaxPixelMessage(framebuffer!, window.Width));
         byte[] outside = PixelAtTopLeftOrigin(framebuffer!, window.Width, x: 1, y: 1);
         Assert.True(outside[0] < 240 || outside[1] < 240 || outside[2] < 240, $"脏矩形外不应被错误涂成白色，actual rgba=({outside[0]},{outside[1]},{outside[2]},{outside[3]})");
@@ -202,6 +207,10 @@ public sealed class UiOffscreenSurfacePresenterSmokeTests
 
         public int PresentCount { get; private set; }
 
+        public int ProbeX { get; private set; }
+
+        public int ProbeY { get; private set; }
+
         public GLEnum PresenterGlError { get; private set; } = GLEnum.NoError;
 
         public GLEnum ProbeGlError { get; private set; } = GLEnum.NoError;
@@ -239,6 +248,12 @@ public sealed class UiOffscreenSurfacePresenterSmokeTests
                 _rects.AsSpan(0, _rectCount));
             PresenterGlError = context.Gl.GetError();
             ClearErrors(context.Gl);
+            ProbeX = context.WorldViewport.X + 20;
+            ProbeY = context.WorldViewport.Y;
+            _probeVertices[0] = new UiVertex(ProbeX, ProbeY, 0f, 0f, 0xFFFFFFFFu);
+            _probeVertices[1] = new UiVertex(ProbeX + 8f, ProbeY, 0f, 0f, 0xFFFFFFFFu);
+            _probeVertices[2] = new UiVertex(ProbeX + 8f, ProbeY + 8f, 0f, 0f, 0xFFFFFFFFu);
+            _probeVertices[3] = new UiVertex(ProbeX, ProbeY + 8f, 0f, 0f, 0xFFFFFFFFu);
             context.SubmitTriangles(_probeVertices, _probeIndices, UiDrawState.Default);
             ProbeGlError = context.Gl.GetError();
             _rectCount = 0;

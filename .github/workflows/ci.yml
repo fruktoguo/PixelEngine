@@ -111,6 +111,44 @@ jobs:
           if-no-files-found: error
           path: artifacts/ci-matrix-evidence/build-test-${{ matrix.rid }}.md
 
+  native-smoke:
+    name: native-smoke (win-x64)
+    runs-on: windows-latest
+    env:
+      PIXELENGINE_RENDERING_GL_SMOKE: '1'
+      PIXELENGINE_RENDERING_ANGLE_SMOKE: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build native
+        shell: pwsh
+        run: ./tools/build-native.ps1 -Rid win-x64 -Configuration Release
+
+      - name: Build solution
+        shell: pwsh
+        run: dotnet build PixelEngine.sln -c Release
+
+      - name: Run native smoke tests
+        shell: pwsh
+        run: ./tools/run-native-smoke.ps1 -Configuration Release -ResultsDirectory artifacts/native-smoke
+
+      - name: Upload native smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-smoke-report-win-x64
+          if-no-files-found: error
+          path: artifacts/native-smoke
+
   benchmark-guard:
     name: benchmark-guard (win-x64)
     runs-on: windows-latest

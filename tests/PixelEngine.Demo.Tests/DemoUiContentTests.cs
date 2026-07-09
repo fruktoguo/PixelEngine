@@ -5,6 +5,7 @@ using PixelEngine.Hosting;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
+using PixelEngine.Testing;
 using PixelEngine.UI;
 using ScriptScene = PixelEngine.Scripting.Scene;
 using Xunit;
@@ -1359,15 +1360,11 @@ public sealed class DemoUiContentTests
     /// <summary>
     /// 验证 GL smoke 开启时，同一批 Demo UI 屏幕能被 RmlUi 后端载入、绑定模型并合成。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
+    [Trait("Category", "NativeSmoke")]
     public void DemoUiScreensLoadThroughRmlUiBackendWhenGlSmokeIsEnabled()
     {
-        // Arrange：准备输入与初始状态
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
-
+        // Arrange：准备输入与初始状态；NativeSmokeFact 在 discovery 阶段负责未启用环境的 skipped 状态。
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
         using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
@@ -1406,7 +1403,8 @@ public sealed class DemoUiContentTests
         Assert.True(hudIndex >= 0);
         backend.SetScreenStack(stack.Slice(mainIndex, 1));
         backend.Update(1f / 60f);
-        backend.FeedPointerMove(48f, 118f);
+        // main-menu 的 start_game/open_settings 行相隔 34px；选择 settings 行验证真实事件映射。
+        backend.FeedPointerMove(48f, 152f);
         backend.FeedPointerButton(UiPointerButton.Left, isDown: true);
         backend.FeedPointerButton(UiPointerButton.Left, isDown: false);
         backend.Update(1f / 60f);

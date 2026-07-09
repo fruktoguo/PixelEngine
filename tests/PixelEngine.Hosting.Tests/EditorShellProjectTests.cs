@@ -2,6 +2,7 @@ using System.Text.Json;
 using PixelEngine.Editor.Shell;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
+using PixelEngine.Testing;
 using PixelEngine.UI;
 using Xunit;
 
@@ -100,15 +101,11 @@ public sealed class EditorShellProjectTests
     /// <summary>
     /// 验证 EditorProjectSession.Open 遇到合法但不存在的脚本源目录时仍能打开工程，并把 watcher 失败写入 Console。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
+    [Trait("Category", "NativeSmoke")]
     public void OpenAllowsMissingScriptSourceDirectoryAndReportsWatcherStartFailedToConsole()
     {
-        // Arrange：准备输入与初始状态
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
-
+        // Arrange：准备输入与初始状态；NativeSmokeFact 在 discovery 阶段负责未启用环境的 skipped 状态。
         using TempDirectory temp = new();
         EditorProject project = EditorProject.CreateNew(Path.Combine(temp.Path, "MissingScriptsProject"), "Missing Scripts");
         Directory.Delete(project.ScriptSourcePath, recursive: true);
