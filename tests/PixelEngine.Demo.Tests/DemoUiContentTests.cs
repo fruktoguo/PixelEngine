@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using System.Text.Json;
 using PixelEngine.Gui;
 using PixelEngine.Hosting;
 using PixelEngine.Rendering;
@@ -177,6 +178,35 @@ public sealed class DemoUiContentTests
         Assert.DoesNotContain("上涨熔岩压力", defaultLoopText);
         Assert.DoesNotContain("水晶", defaultLoopText);
         Assert.DoesNotContain("水位", defaultLoopText);
+    }
+
+    /// <summary>
+    /// 验证背包与对话屏幕绑定默认六武器目录和横向熔岩闯关提示，不退回静态占位文案。
+    /// </summary>
+    [Fact]
+    public void DemoInventoryAndDialogTextMatchesDefaultWeaponCatalogAndRoute()
+    {
+        UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
+        WeaponCatalog catalog = LoadDefaultWeaponCatalog();
+        string[] inventoryText = UiVisibleText(manifest.GetRequiredScreen(GameUiDemoController.InventoryScreen).FullPath);
+        string[] dialogText = UiVisibleText(manifest.GetRequiredScreen(GameUiDemoController.DialogScreen).FullPath);
+
+        Assert.Equal(6, catalog.Weapons.Length);
+        for (int i = 0; i < catalog.Weapons.Length; i++)
+        {
+            string expectedPrefix = $"{i + 1} {catalog.Weapons[i].DisplayName}";
+            Assert.Contains(inventoryText, text => text.StartsWith(expectedPrefix, StringComparison.Ordinal));
+        }
+
+        Assert.Contains(inventoryText, text => text.Contains("开路与触发坍塌", StringComparison.Ordinal));
+        Assert.Contains(inventoryText, text => text.Contains("临时搭桥", StringComparison.Ordinal));
+        Assert.Contains("出口在右侧高台，先越过熔岩坑。", dialogText);
+        Assert.Contains("用 Grenade / Bomb 拆障碍，Builder 可补桥。", dialogText);
+        Assert.DoesNotContain("手枪", inventoryText);
+        Assert.DoesNotContain("激光炮", inventoryText);
+        Assert.DoesNotContain("手榴弹", inventoryText);
+        Assert.DoesNotContain("水位", dialogText);
+        Assert.DoesNotContain("水晶", dialogText);
     }
 
     /// <summary>
@@ -1546,6 +1576,15 @@ public sealed class DemoUiContentTests
             "hud.bodies",
             "hud.fx",
         ];
+    }
+
+    private static WeaponCatalog LoadDefaultWeaponCatalog()
+    {
+        string path = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content", "weapons.json");
+        WeaponCatalog catalog = JsonSerializer.Deserialize(File.ReadAllText(path), DemoConfigJsonContext.Default.WeaponCatalog)
+            ?? throw new InvalidDataException("默认 weapons.json 无法反序列化。");
+        catalog.Validate();
+        return catalog;
     }
 
     private static Engine CreateHudEngine(
