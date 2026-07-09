@@ -49,7 +49,7 @@
       "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8c/16t; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
       "command": "dotnet build PixelEngine.sln -c Release --no-restore --disable-build-servers -m:1; dotnet test PixelEngine.sln -c Release --no-build --no-restore -m:1 --logger \"console;verbosity=minimal\"; dotnet test tests/PixelEngine.Simulation.Tests/PixelEngine.Simulation.Tests.csproj -c Release --no-restore -m:1; dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --no-build --no-restore --filter \"FullyQualifiedName~PerformanceHardeningToolingDisciplineTests.SimulationHotNeighborAccessUsesUnsafeBaseRefs\" -m:1; git diff --check",
       "reportPath": "docs/evidence-2026-07-10-arch-002-api-boundary.md",
-      "sha256": "b6d19de32c4a81b6198bb23a43f8825f3a3eec2ff9365f08c4f33b94651ca3c3",
+      "sha256": "d227b6133af1c074945a365058dc713a15e74281561c043b679cb97f2cbaed67",
       "notes": "Chunk 对外只读 span、CellGrid/NeighborWindow 裸 ref 降为 internal、Physics 擦除迁移到受控 API；全量回归 1497 passed、34 expected skipped。"
     },
     {
