@@ -1,4 +1,4 @@
-<rml title="设置" data-screen="settings" data-contract="demo.webfirst.settings/v1" style="left: 344px; top: 34px; width: 250px; height: 168px">
+<rml title="设置" data-screen="settings" data-contract="demo.webfirst.settings/v1" style="left: 344px; top: 34px; width: 304px; height: 204px">
   <head>
     <style>
       body { font-family: "Noto Sans SC"; color: #edf4ff; background-color: rgba(13, 20, 28, 226); }
@@ -8,8 +8,10 @@
   </head>
   <body>
     <p id="settings_title">设置</p>
-    <checkbox id="settings_vsync" path="settings.vsync" text="垂直同步" checked="true" data-event-change="toggle_vsync" />
-    <checkbox id="settings_audio" path="settings.audio" text="音效" checked="true" data-event-change="toggle_audio" />
+    <p id="settings_audio_hint">音频总开关会改写运行时 AudioSystem。</p>
+    <p id="settings_vsync_hint">Present VSync 会改写当前窗口交换策略。</p>
+    <checkbox id="settings_vsync" path="settings.vsync" text="Present VSync" checked="true" data-event-change="toggle_vsync" />
+    <checkbox id="settings_audio" path="settings.audio" text="音频总开关" checked="true" data-event-change="toggle_audio" />
     <button id="settings_back" data-event-click="back_main">返回</button>
   </body>
 </rml>
