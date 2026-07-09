@@ -1,4 +1,4 @@
-<rml title="结算" data-screen="result" data-contract="demo.webfirst.result/v1" style="left: 314px; top: 46px; width: 318px; height: 230px">
+<rml title="结算" data-screen="result" data-contract="demo.webfirst.result/v1" style="left: 314px; top: 46px; width: 360px; height: 264px">
   <head>
     <style>
       body { font-family: "Noto Sans SC"; color: #f5f8ff; background-color: rgba(9, 12, 18, 236); }
@@ -10,11 +10,13 @@
   <body>
     <p id="result_title">结算</p>
     <p id="result_state">抵达右侧出口 / 挑战失败</p>
+    <p id="result_win_hint">胜利：进入右侧出口触发区。</p>
+    <p id="result_loss_hint">失败：生命耗尽或路线中断。</p>
     <progress id="result_won" path="result.won" value="0.0" text="胜利" />
     <progress id="result_crystals" path="result.crystals" value="0.0" text="出口进度" />
     <progress id="result_time" path="result.time" value="0.0" text="路线余量" />
-    <progress id="result_score" path="result.score" value="0.0" text="分数" />
-    <progress id="result_reason" path="result.reason" value="0.0" text="原因记录" />
+    <progress id="result_score" path="result.score" value="0.0" text="路线评分" />
+    <progress id="result_reason" path="result.reason" value="0.0" text="失败原因记录" />
     <button id="result_restart" data-event-click="restart_game">重开</button>
     <button id="result_quit" data-event-click="quit_game">退出</button>
   </body>
