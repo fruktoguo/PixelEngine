@@ -106,6 +106,7 @@ public sealed class GameUiDemoController : Behaviour
     private IGameUiService? _ui;
     private IRuntimeControlApi? _runtime;
     private PlayerHealth? _health;
+    private PlayerController? _player;
     private WeaponController? _weapons;
     private MaterialBrush? _brush;
     private ExplosiveTool? _explosive;
@@ -113,6 +114,8 @@ public sealed class GameUiDemoController : Behaviour
     private MissionDirector? _mission;
     private RisingHazardDirector? _hazard;
     private GoalTrigger? _goal;
+    private GoalTrigger? _goalProgressSource;
+    private float _goalRouteStartCenterX;
     private bool _subscribed;
     private bool _pausedByUi;
     private bool _resultVisible;
@@ -313,6 +316,11 @@ public sealed class GameUiDemoController : Behaviour
             _health = health;
         }
 
+        if (_player is null && Entity.TryGetComponent(out PlayerController player))
+        {
+            _player = player;
+        }
+
         if (_weapons is null && Entity.TryGetComponent(out WeaponController weapons))
         {
             _weapons = weapons;
@@ -364,6 +372,10 @@ public sealed class GameUiDemoController : Behaviour
                 {
                     _health = sceneHealth;
                 }
+                else if (_player is null && behaviour is PlayerController scenePlayer)
+                {
+                    _player = scenePlayer;
+                }
                 else if (_weapons is null && behaviour is WeaponController sceneWeapons)
                 {
                     _weapons = sceneWeapons;
@@ -404,6 +416,7 @@ public sealed class GameUiDemoController : Behaviour
     private bool HasAllHudSources()
     {
         return _health is not null &&
+            _player is not null &&
             _weapons is not null &&
             _brush is not null &&
             _explosive is not null &&
@@ -479,8 +492,8 @@ public sealed class GameUiDemoController : Behaviour
         MissionDirector? mission = _mission;
         if (mission is null)
         {
-            PublishGoal();
-            SetHudValue(HudTimePath, 1.0);
+            double goalProgress = PublishGoal();
+            SetHudValue(HudTimePath, 1.0 - goalProgress);
             SetHudValue(HudHazardPath, _hazard is null ? 0.0 : HazardRatio(_hazard.StartSurfaceY, _hazard.CurrentSurfaceY));
             SetHudValue(HudScorePath, 0.0);
             return;
@@ -493,18 +506,47 @@ public sealed class GameUiDemoController : Behaviour
         PublishResultState(mission);
     }
 
-    private void PublishGoal()
+    private double PublishGoal()
     {
         GoalTrigger? goal = _goal;
         if (goal is null)
         {
             SetHudValue(HudCrystalsPath, 0.0);
             _lastGoalReached = false;
-            return;
+            return 0.0;
         }
 
-        SetHudValue(HudCrystalsPath, goal.Reached ? 1.0 : 0.0);
+        double progress = GoalProgress(goal);
+        SetHudValue(HudCrystalsPath, progress);
         PublishGoalResultState(goal);
+        return progress;
+    }
+
+    private double GoalProgress(GoalTrigger goal)
+    {
+        if (goal.Reached)
+        {
+            return 1.0;
+        }
+
+        PlayerController? player = _player;
+        if (player is null)
+        {
+            return 0.0;
+        }
+
+        if (!ReferenceEquals(_goalProgressSource, goal))
+        {
+            _goalProgressSource = goal;
+            _goalRouteStartCenterX = player.CenterX;
+        }
+
+        float startCenterX = _goalRouteStartCenterX;
+        float goalCenterX = goal.X + (goal.Width * 0.5f);
+        float distance = goalCenterX - startCenterX;
+        return MathF.Abs(distance) <= 0.001f
+            ? player.CenterX >= goalCenterX ? 1.0 : 0.0
+            : Math.Clamp((player.CenterX - startCenterX) / distance, 0.0f, 1.0f);
     }
 
     private void PublishDiagnostics()
@@ -568,7 +610,7 @@ public sealed class GameUiDemoController : Behaviour
         {
             SetScreenValue(ModalScreen, ResultWonPath, new UiValue(1.0));
             SetScreenValue(ModalScreen, ResultCrystalsPath, new UiValue(1.0));
-            SetScreenValue(ModalScreen, ResultTimePath, new UiValue(1.0));
+            SetScreenValue(ModalScreen, ResultTimePath, new UiValue(0.0));
             SetScreenValue(ModalScreen, ResultScorePath, new UiValue(0.0));
             SetScreenValue(ModalScreen, ResultReasonPath, new UiValue(1.0));
         }

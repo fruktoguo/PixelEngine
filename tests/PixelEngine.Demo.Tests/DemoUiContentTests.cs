@@ -624,9 +624,67 @@ public sealed class DemoUiContentTests
             Assert.Equal(1.0, GetHudValue(ui, "hud.crystals"), precision: 3);
             Assert.Equal(1.0, GetUiValue(ui, "result.won"), precision: 3);
             Assert.Equal(1.0, GetUiValue(ui, "result.crystals"), precision: 3);
-            Assert.Equal(1.0, GetUiValue(ui, "result.time"), precision: 3);
+            Assert.Equal(0.0, GetUiValue(ui, "result.time"), precision: 3);
             Assert.Equal(0.0, GetUiValue(ui, "result.score"), precision: 3);
             Assert.Equal(1.0, GetUiValue(ui, "result.reason"), precision: 3);
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// 验证默认横向闯关无 MissionDirector 时，HUD 用玩家到 GoalTrigger 的横向距离表达出口进度和路线余量。
+    /// </summary>
+    [Fact]
+    public void DemoGameUiControllerPublishesGoalRouteProgressWithoutMissionDirector()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+            """
+            {
+              "weapons": [
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
+              ]
+            }
+            """);
+        try
+        {
+            using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out FakeGameUiService ui, out _);
+            Entity entity = scene.CreateEntity();
+            _ = entity.AddComponent<Transform>();
+            PlayerController player = entity.AddComponent<PlayerController>();
+            player.SpawnX = 12f;
+            player.SpawnY = 12f;
+            _ = entity.AddComponent<PlayerHealth>();
+            _ = entity.AddComponent<WeaponController>();
+            GoalTrigger goal = entity.AddComponent<GoalTrigger>();
+            goal.X = 112f;
+            goal.Y = 8f;
+            goal.Width = 28f;
+            goal.Height = 28f;
+            goal.CelebrationParticleCount = 0;
+            _ = entity.AddComponent<GameUiDemoController>();
+
+            engine.RunHeadlessTicks(1);
+
+            Assert.Equal(0.0, GetHudValue(ui, "hud.crystals"), precision: 3);
+            Assert.Equal(1.0, GetHudValue(ui, "hud.time"), precision: 3);
+
+            player.SpawnX = 67.5f;
+            player.Respawn();
+            engine.RunHeadlessTicks(1);
+
+            Assert.Equal(0.5, GetHudValue(ui, "hud.crystals"), precision: 3);
+            Assert.Equal(0.5, GetHudValue(ui, "hud.time"), precision: 3);
+
+            player.SpawnX = 123f;
+            player.Respawn();
+            engine.RunHeadlessTicks(2);
+
+            Assert.True(goal.Reached);
+            Assert.Equal(1.0, GetHudValue(ui, "hud.crystals"), precision: 3);
+            Assert.Equal(0.0, GetHudValue(ui, "hud.time"), precision: 3);
         }
         finally
         {
