@@ -199,23 +199,17 @@ public sealed class EditorApp : IDisposable
         }
 
         _controller.NewFrame(deltaSeconds, width, height, framebufferScaleX, framebufferScaleY);
-        // ImGui 帧内顺序：DockSpace 宿主 → 各可见面板 Draw → Render 提交 draw data。
-        if (Options.EnableDockSpace)
-        {
-            _controller.DrawDockSpace();
-        }
-
+        // ImGui 帧内顺序：Chrome → DockSpace 宿主 → 各可见面板 Draw → Render 提交 draw data。
         EditorContext context = new(counters, Selection, frameIndex, performance);
         if (Options.EnableDockSpace)
         {
-            for (int i = 0; i < _panels.Count; i++)
-            {
-                IEditorPanel panel = _panels[i];
-                if (panel.Visible)
-                {
-                    panel.Draw(in context);
-                }
-            }
+            DrawPanels(in context, chromeOnly: true);
+            _controller.DrawDockSpace();
+        }
+
+        if (Options.EnableDockSpace)
+        {
+            DrawPanels(in context, chromeOnly: false);
         }
 
         _controller.Render();
@@ -243,22 +237,16 @@ public sealed class EditorApp : IDisposable
         }
 
         _controller.NewFrame(deltaSeconds, width, height, framebufferScaleX, framebufferScaleY);
-        if (Options.EnableDockSpace)
-        {
-            _controller.DrawDockSpace();
-        }
-
         EditorContext context = new(counters, Selection, frameIndex, performance);
         if (Options.EnableDockSpace)
         {
-            for (int i = 0; i < _panels.Count; i++)
-            {
-                IEditorPanel panel = _panels[i];
-                if (panel.Visible)
-                {
-                    panel.Draw(in context);
-                }
-            }
+            DrawPanels(in context, chromeOnly: true);
+            _controller.DrawDockSpace();
+        }
+
+        if (Options.EnableDockSpace)
+        {
+            DrawPanels(in context, chromeOnly: false);
         }
 
         if (drawScriptGui is not null)
@@ -268,6 +256,19 @@ public sealed class EditorApp : IDisposable
         }
 
         _controller.Render();
+    }
+
+    private void DrawPanels(in EditorContext context, bool chromeOnly)
+    {
+        for (int i = 0; i < _panels.Count; i++)
+        {
+            IEditorPanel panel = _panels[i];
+            bool isChrome = panel is IEditorChromePanel;
+            if (panel.Visible && isChrome == chromeOnly)
+            {
+                panel.Draw(in context);
+            }
+        }
     }
 
     /// <inheritdoc />

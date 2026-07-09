@@ -37,21 +37,24 @@ public sealed class EditorAppTests
     }
 
     /// <summary>
-    /// 验证启用时按 NewFrame → DockSpace → Panel → Render 顺序调度。
+    /// 验证启用时按 NewFrame → Chrome → DockSpace → Panel → Render 顺序调度。
     /// </summary>
     [Fact]
     public void DrawFrameDispatchesDockSpacePanelsAndRenderInOrder()
     {
         RecordingBackend backend = new();
+        RecordingChromePanel chrome = new();
         RecordingPanel panel = new();
         using EditorApp app = new(backend, new EditorAppOptions());
+        app.AddPanel(chrome);
         app.AddPanel(panel);
 
         app.Initialize();
         app.DrawFrame(0.016f, 800, 600, new EngineCounters(), 42, framebufferScaleX: 2f, framebufferScaleY: 1.5f);
 
         Assert.True(app.IsRunning);
-        Assert.Equal(["Initialize", "NewFrame:800x600@2x1.5", "DockSpace", "Panel:42", "Render"], backend.Events);
+        Assert.Equal(["Initialize", "NewFrame:800x600@2x1.5", "Chrome:42", "DockSpace", "Panel:42", "Render"], backend.Events);
+        Assert.Equal(1, chrome.DrawCount);
         Assert.Equal(1, panel.DrawCount);
     }
 
@@ -300,6 +303,21 @@ public sealed class EditorAppTests
         {
             DrawCount++;
             RecordingBackend.Current?.Events.Add($"Panel:{context.FrameIndex}");
+        }
+    }
+
+    private sealed class RecordingChromePanel : IEditorChromePanel
+    {
+        public string Title => "录制工具栏";
+
+        public bool Visible { get; set; } = true;
+
+        public int DrawCount { get; private set; }
+
+        public void Draw(in EditorContext context)
+        {
+            DrawCount++;
+            RecordingBackend.Current?.Events.Add($"Chrome:{context.FrameIndex}");
         }
     }
 

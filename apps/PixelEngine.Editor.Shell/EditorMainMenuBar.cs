@@ -68,11 +68,7 @@ internal sealed class EditorMainMenuBar
     {
         EditorMainToolbarState state = CaptureToolbarState(app);
         ImGuiViewportPtr viewport = ImGui.GetMainViewport();
-        float menuHeight = ImGui.GetFrameHeight();
-        ImGui.SetNextWindowPos(new Vector2(viewport.Pos.X, viewport.Pos.Y + menuHeight));
-        ImGui.SetNextWindowSize(new Vector2(viewport.Size.X, ToolbarHeight));
-
-        if (!ImGui.Begin(ToolbarWindowName, ToolbarWindowFlags))
+        if (!ImGuiP.BeginViewportSideBar(ToolbarWindowName, viewport, ImGuiDir.Up, ToolbarHeight, ToolbarWindowFlags))
         {
             ImGui.End();
             return;
