@@ -1,9 +1,9 @@
 # 2026-07-10 ARCH-002 Chunk/CellGrid API 边界验收
 
-taskIds: `ARCH-002`  
-commit: `5ff732dd`  
-runSessionId: `local-20260710-arch002-api-boundary`  
-runIdentityStatus: `captured`  
+taskIds: `ARCH-002`
+commit: `5ff732dd`
+runSessionId: `local-20260710-arch002-api-boundary`
+runIdentityStatus: `captured`
 hardware: `Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8c/16t; .NET SDK 10.0.108; .NET 10.0.8; win-x64`
 
 ## 目标
