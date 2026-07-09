@@ -27,6 +27,28 @@ public sealed class GpuAirSmokePipelineTests
     }
 
     /// <summary>
+    /// 验证ARCH-005未完成生产接线前，air/smoke不会被声明为运行时能力。
+    /// </summary>
+    [Fact]
+    public void AirSmokeIsNotProductionRuntimeCapabilityUntilPipelineWiringExists()
+    {
+        string pipeline = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderPipeline.cs"));
+        string plan = File.ReadAllText(ProjectPath("plan", "09-gpu-compute.md"));
+        string scope = File.ReadAllText(ProjectPath("plan", "tasks", "20-scope-decisions.md"));
+        string hardwareMatrix = File.ReadAllText(ProjectPath("docs", "target-hardware-matrix.md"));
+
+        Assert.False(AirSmokeSettings.Default.Enabled);
+        Assert.False(ComputeFeatureSwitches.Default.NonAuthoritativeAirEnabled);
+        Assert.DoesNotContain("AirSmokePass", pipeline, StringComparison.Ordinal);
+        Assert.DoesNotContain("GpuAirSmokePipeline", pipeline, StringComparison.Ordinal);
+        Assert.DoesNotContain("AirSmokeResources", pipeline, StringComparison.Ordinal);
+        Assert.DoesNotContain("UploadSeed", pipeline, StringComparison.Ordinal);
+        Assert.Contains("deferred_not_enabled", plan, StringComparison.Ordinal);
+        Assert.Contains("deferred_not_enabled", scope, StringComparison.Ordinal);
+        Assert.Contains("deferred_not_enabled", hardwareMatrix, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证Constructor Loads Air Smoke Kernel Only。
     /// </summary>
     [Fact]

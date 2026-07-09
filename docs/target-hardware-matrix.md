@@ -24,6 +24,14 @@
 | `osx-x64` | dormant / long-term | `macos-15-intel` / `bash` | `sw_vers`、`sysctl`、`system_profiler` 在 run 中记录 | 激活时需要 Developer ID、notarization、staple、spctl；当前无凭据 | native build、solution test、R2R verify；签名与发行证据另行门控 |
 | `osx-arm64` | dormant / long-term | `macos-14` / `bash` | Apple Silicon CPU/GPU/OS/driver 在 run 中记录 | 激活时需要 Developer ID、notarization、staple、spctl；当前无凭据 | native build、solution test、R2R verify；签名与发行证据另行门控 |
 
+## 功能支持矩阵
+
+该表补充 RID 硬件清单的产品能力声明；机器可读的 RID 激活真相仍以 `tools/target-hardware-matrix.json` 为准。
+
+| 功能 | `win-x64` | `win-arm64` | 其他 RID | 当前状态与解除条件 |
+|---|---|---|---|---|
+| GPU air/smoke 非权威视觉 pass | 未启用 | 未启用 | 未启用 | `deferred_not_enabled`；当前只有独立 pass/资源/shader 契约测试，待生产 `RenderPipeline`/`Hosting` 补齐 seed、dispatch、density 合成、回退和窗口 smoke |
+
 ## 证据纪律
 
 - 每次真实 benchmark、CI、smoke 或发行运行必须记录 RID、runner label/image、CPU、GPU、driver、OS、`.NET`、`gitCommit` 和 `benchmarkRunId`；未知硬件只能写 `EXTERNAL_REQUIRED`，不能用 `windows-latest` 代替硬件身份。

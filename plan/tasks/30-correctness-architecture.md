@@ -30,7 +30,7 @@
   - 设计来源：产品定位 §8；`plan/11-scripting-system.md`；`plan/13-demo-game.md`。
   - 验收：玩法和发行入口只依赖公开稳定 facade；低层服务解析仅允许在引擎内部或专用诊断程序集；项目纪律测试锁定边界。
 
-- [ ] `ARCH-005` 将 GPU air/smoke 明确接入生产 RenderPipeline/Hosting，或从基线能力中降级为未启用组件。
+- [~] `ARCH-005` 将 GPU air/smoke 明确接入生产 RenderPipeline/Hosting，或从基线能力中降级为未启用组件。
   - 优先级：P2。
   - 依赖：`BASE-008`、`SCOPE-002`。
   - 设计来源：`plan/09-gpu-compute.md`。

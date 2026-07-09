@@ -8,7 +8,7 @@ public readonly record struct AirSmokeSettings(
     float Diffusion)
 {
     /// <summary>
-    /// 默认关闭；air/smoke 是纯视觉增强，不是 plan/08 基线功能。
+    /// 默认关闭；air/smoke 是纯视觉增强，不是 plan/08 基线功能，且当前尚未接入生产 RenderPipeline。
     /// </summary>
     public static AirSmokeSettings Default { get; } = new(
         Enabled: false,

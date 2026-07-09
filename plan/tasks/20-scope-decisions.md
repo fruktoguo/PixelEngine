@@ -11,6 +11,10 @@
 - [x] `SCOPE-005` 证据状态严格分层：自动化测试证明契约，scripted probe 证明入口，人工材料证明体验，目标硬件报告证明性能，tag workflow 证明发行。任何较低层证据不得冒充较高层完成态。
 - [x] `SCOPE-006` Showcase Demo 的唯一正式验收路线是“横向熔岩矿洞逃生”：从左侧出生点穿越熔岩坑和可拆障碍到达右侧出口；旧“引水成石桥/坍塌木桥”仅保留为历史机制测试，不再作为产品完成条件。
 
+## 当前能力声明
+
+`ARCH-005` 的当前产品状态为 `deferred_not_enabled`：GPU air/smoke 仅保留独立 pass、资源和 shader 契约测试，不属于 Windows-first 1.0 的运行时能力。生产 `RenderPipeline` 尚未接入其 seed、dispatch、density 合成和回退链；任何诊断、plan 或支持矩阵都不得把现有源码存在或直接 pass 测试写成已启用能力。
+
 ## 可选 backlog
 
 - [ ] `OPT-001` 实现可执行 ComputeSharp 后端。优先级：P3。前置：正式选择 D3D12 render graph，或实现带非零 device/queue/resource/fence 的 GL-DX12 shared-resource 契约。阻塞主线：否。

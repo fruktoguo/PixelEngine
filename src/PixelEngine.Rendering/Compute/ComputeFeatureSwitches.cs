@@ -6,7 +6,7 @@ namespace PixelEngine.Rendering.Compute;
 /// <param name="BloomComputeEnabled">是否允许 compute bloom。</param>
 /// <param name="RadianceCascadesEnabled">是否允许 Radiance Cascades。</param>
 /// <param name="GpuParticlesEnabled">是否允许 GPU 粒子批绘。</param>
-/// <param name="NonAuthoritativeAirEnabled">是否允许非权威 air/smoke 渲染增强 pass。</param>
+/// <param name="NonAuthoritativeAirEnabled">是否允许非权威 air/smoke 渲染增强 pass；ARCH-005 在生产接线完成前强制关闭。</param>
 public readonly record struct ComputeFeatureSwitches(
     bool BloomComputeEnabled,
     bool RadianceCascadesEnabled,
