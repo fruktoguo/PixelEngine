@@ -304,6 +304,36 @@ public sealed class BackendConformanceTests : IDisposable
     }
 
     [Fact]
+    public void ManagedFallbackPublishesSelectionExcludeRectDistinctFromCaretPoint()
+    {
+        using ManagedFallbackBackend backend = CreateManagedBackend(out _);
+        backend.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        UiImeGeometry expected = UiImeGeometryLayout.ComputePreeditOverlayGeometry(
+            new UiViewport(0, 0, 320, 240, 1f),
+            textLength: 4,
+            cursorIndex: 3,
+            selectionStart: 1,
+            selectionLength: 2);
+
+        backend.FeedTextComposition(
+            "かな候補",
+            new UiTextComposition(isActive: true, cursorIndex: 3, selectionStart: 1, selectionLength: 2));
+
+        Assert.True(backend.TryGetImeGeometry(out UiImeGeometry geometry));
+        Assert.True(geometry.HasCaretRect);
+        Assert.True(geometry.HasExcludeRect);
+        Assert.Equal(expected.CaretX, geometry.CaretX, precision: 3);
+        Assert.Equal(expected.ExcludeX, geometry.ExcludeX, precision: 3);
+        Assert.Equal(expected.ExcludeWidth, geometry.ExcludeWidth, precision: 3);
+        // 选区排除区应宽于 caret，且起点在 caret 左侧（光标在选区末尾）。
+        Assert.True(geometry.ExcludeWidth > geometry.CaretWidth);
+        Assert.True(geometry.ExcludeX < geometry.CaretX);
+        Assert.True(geometry.TryGetExcludeRect(out float ex, out _, out float ew, out _));
+        Assert.Equal(geometry.ExcludeX, ex, precision: 3);
+        Assert.Equal(geometry.ExcludeWidth, ew, precision: 3);
+    }
+
+    [Fact]
     public void ManagedFallbackDrawsImeCompositionOverlayWithoutMixingCommittedText()
     {
         string path = WriteUi("""

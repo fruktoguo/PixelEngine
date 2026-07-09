@@ -109,19 +109,32 @@ internal sealed class WindowsImeCompositionReader
         {
             int caretLeft = 0;
             int caretTop = 0;
-            int caretRight = 0;
-            int caretBottom = 0;
             bool hasCaretRect = geometry.HasCaretRect;
+            bool hasExclude = geometry.TryGetExcludeRect(
+                out float excludeX,
+                out float excludeY,
+                out float excludeWidth,
+                out float excludeHeight);
+            int excludeLeft = 0;
+            int excludeTop = 0;
+            int excludeRight = 0;
+            int excludeBottom = 0;
+            if (hasExclude)
+            {
+                excludeLeft = ToClientCoordinate(excludeX);
+                excludeTop = ToClientCoordinate(excludeY);
+                // 宽高至少 1 逻辑像素，避免 IMM32 忽略零面积矩形。
+                int excludeW = Math.Max(1, ToClientCoordinate(excludeWidth));
+                int excludeH = Math.Max(1, ToClientCoordinate(excludeHeight));
+                excludeRight = excludeLeft + excludeW;
+                excludeBottom = excludeTop + excludeH;
+            }
+
             if (hasCaretRect)
             {
                 caretLeft = ToClientCoordinate(geometry.CaretX);
                 caretTop = ToClientCoordinate(geometry.CaretY);
-                // 宽高至少 1 逻辑像素，避免 IMM32 忽略零面积矩形。
-                int caretWidth = Math.Max(1, ToClientCoordinate(geometry.CaretWidth));
-                int caretHeight = Math.Max(1, ToClientCoordinate(geometry.CaretHeight));
-                caretRight = caretLeft + caretWidth;
-                caretBottom = caretTop + caretHeight;
-                // CFS_POINT 给插入点，CFS_RECT 同步 caret 占用区，便于 IME 贴近控件定位。
+                // CFS_POINT 给插入点；CFS_RECT 使用排除区（选区或 caret），便于 IME 贴近预编辑定位。
                 Win32CompositionForm compositionForm = new()
                 {
                     Style = Win32ImeNative.CompositionFormStylePoint | Win32ImeNative.CompositionFormStyleRect,
@@ -130,31 +143,33 @@ internal sealed class WindowsImeCompositionReader
                         X = caretLeft,
                         Y = caretTop,
                     },
-                    Area = new Win32Rect
-                    {
-                        Left = caretLeft,
-                        Top = caretTop,
-                        Right = caretRight,
-                        Bottom = caretBottom,
-                    },
+                    Area = hasExclude
+                        ? new Win32Rect
+                        {
+                            Left = excludeLeft,
+                            Top = excludeTop,
+                            Right = excludeRight,
+                            Bottom = excludeBottom,
+                        }
+                        : default,
                 };
                 _ = _native.SetCompositionWindow(context, in compositionForm);
             }
 
             if (geometry.HasCandidateAnchor)
             {
-                // 有 caret rect 时同时 CFS_EXCLUDE，避免候选窗盖住预编辑/插入点。
+                // 有排除区时 CFS_EXCLUDE，避免候选窗盖住预编辑选区/插入点。
                 int candidateStyle = Win32ImeNative.CandidateFormStyleCandidatePos;
                 Win32Rect excludeArea = default;
-                if (hasCaretRect)
+                if (hasExclude)
                 {
                     candidateStyle |= Win32ImeNative.CandidateFormStyleExclude;
                     excludeArea = new Win32Rect
                     {
-                        Left = caretLeft,
-                        Top = caretTop,
-                        Right = caretRight,
-                        Bottom = caretBottom,
+                        Left = excludeLeft,
+                        Top = excludeTop,
+                        Right = excludeRight,
+                        Bottom = excludeBottom,
                     };
                 }
 

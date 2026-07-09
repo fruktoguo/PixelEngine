@@ -1,14 +1,14 @@
 namespace PixelEngine.UI;
 
 /// <summary>
-/// UI 坐标空间中的 IME caret rect 与候选窗锚点；仅用于平台定位 composition/candidate 窗口，不表示 committed text。
+/// UI 坐标空间中的 IME caret rect、排除矩形与候选窗锚点；仅用于平台定位 composition/candidate 窗口，不表示 committed text。
 /// </summary>
 public readonly struct UiImeGeometry
 {
     /// <summary>
     /// 创建完整的 IME 定位几何。
     /// </summary>
-    /// <param name="hasCaretRect">是否提供 caret rect。</param>
+    /// <param name="hasCaretRect">是否提供 caret rect（插入点）。</param>
     /// <param name="caretX">caret 左上角 x（UI 坐标）。</param>
     /// <param name="caretY">caret 左上角 y（UI 坐标）。</param>
     /// <param name="caretWidth">caret 宽度。</param>
@@ -16,6 +16,11 @@ public readonly struct UiImeGeometry
     /// <param name="hasCandidateAnchor">是否提供候选窗锚点。</param>
     /// <param name="candidateAnchorX">候选窗锚点 x（UI 坐标）。</param>
     /// <param name="candidateAnchorY">候选窗锚点 y（UI 坐标）。</param>
+    /// <param name="hasExcludeRect">是否提供独立排除矩形（覆盖预编辑选区等）；缺省时平台回退使用 caret rect。</param>
+    /// <param name="excludeX">排除矩形左上角 x。</param>
+    /// <param name="excludeY">排除矩形左上角 y。</param>
+    /// <param name="excludeWidth">排除矩形宽度。</param>
+    /// <param name="excludeHeight">排除矩形高度。</param>
     public UiImeGeometry(
         bool hasCaretRect,
         float caretX,
@@ -24,7 +29,12 @@ public readonly struct UiImeGeometry
         float caretHeight,
         bool hasCandidateAnchor,
         float candidateAnchorX,
-        float candidateAnchorY)
+        float candidateAnchorY,
+        bool hasExcludeRect = false,
+        float excludeX = 0f,
+        float excludeY = 0f,
+        float excludeWidth = 0f,
+        float excludeHeight = 0f)
     {
         HasCaretRect = hasCaretRect &&
             float.IsFinite(caretX) &&
@@ -43,6 +53,18 @@ public readonly struct UiImeGeometry
             float.IsFinite(candidateAnchorY);
         CandidateAnchorX = HasCandidateAnchor ? candidateAnchorX : 0f;
         CandidateAnchorY = HasCandidateAnchor ? candidateAnchorY : 0f;
+
+        HasExcludeRect = hasExcludeRect &&
+            float.IsFinite(excludeX) &&
+            float.IsFinite(excludeY) &&
+            float.IsFinite(excludeWidth) &&
+            float.IsFinite(excludeHeight) &&
+            excludeWidth > 0f &&
+            excludeHeight > 0f;
+        ExcludeX = HasExcludeRect ? excludeX : 0f;
+        ExcludeY = HasExcludeRect ? excludeY : 0f;
+        ExcludeWidth = HasExcludeRect ? excludeWidth : 0f;
+        ExcludeHeight = HasExcludeRect ? excludeHeight : 0f;
     }
 
     /// <summary>
@@ -51,7 +73,7 @@ public readonly struct UiImeGeometry
     public static UiImeGeometry None => default;
 
     /// <summary>
-    /// 由 caret rect 创建几何；候选窗锚点默认落在 caret 左下角。
+    /// 由 caret rect 创建几何；候选窗锚点默认落在 caret 左下角；排除区回退为 caret。
     /// </summary>
     /// <param name="caretX">caret 左上角 x。</param>
     /// <param name="caretY">caret 左上角 y。</param>
@@ -124,9 +146,69 @@ public readonly struct UiImeGeometry
     public float CandidateAnchorY { get; }
 
     /// <summary>
+    /// 是否存在独立排除矩形（例如预编辑选区）。
+    /// </summary>
+    public bool HasExcludeRect { get; }
+
+    /// <summary>
+    /// 排除矩形左上角 x。
+    /// </summary>
+    public float ExcludeX { get; }
+
+    /// <summary>
+    /// 排除矩形左上角 y。
+    /// </summary>
+    public float ExcludeY { get; }
+
+    /// <summary>
+    /// 排除矩形宽度。
+    /// </summary>
+    public float ExcludeWidth { get; }
+
+    /// <summary>
+    /// 排除矩形高度。
+    /// </summary>
+    public float ExcludeHeight { get; }
+
+    /// <summary>
     /// 是否至少提供 caret 或候选锚点之一。
     /// </summary>
     public bool HasAny => HasCaretRect || HasCandidateAnchor;
+
+    /// <summary>
+    /// 解析用于 IMM32 CFS_RECT / CFS_EXCLUDE 的排除区：优先独立 exclude，否则回退 caret rect。
+    /// </summary>
+    /// <param name="x">排除区左上角 x。</param>
+    /// <param name="y">排除区左上角 y。</param>
+    /// <param name="width">排除区宽度。</param>
+    /// <param name="height">排除区高度。</param>
+    /// <returns>存在可用排除区时返回 true。</returns>
+    public bool TryGetExcludeRect(out float x, out float y, out float width, out float height)
+    {
+        if (HasExcludeRect)
+        {
+            x = ExcludeX;
+            y = ExcludeY;
+            width = ExcludeWidth;
+            height = ExcludeHeight;
+            return true;
+        }
+
+        if (HasCaretRect)
+        {
+            x = CaretX;
+            y = CaretY;
+            width = CaretWidth;
+            height = CaretHeight;
+            return true;
+        }
+
+        x = 0f;
+        y = 0f;
+        width = 0f;
+        height = 0f;
+        return false;
+    }
 
     /// <summary>
     /// 对几何做平移与可选缩放，供 Game View / DPI 坐标回写平台窗口。
@@ -155,6 +237,11 @@ public readonly struct UiImeGeometry
             CaretHeight * sy,
             HasCandidateAnchor,
             (CandidateAnchorX * sx) + ox,
-            (CandidateAnchorY * sy) + oy);
+            (CandidateAnchorY * sy) + oy,
+            HasExcludeRect,
+            (ExcludeX * sx) + ox,
+            (ExcludeY * sy) + oy,
+            ExcludeWidth * sx,
+            ExcludeHeight * sy);
     }
 }
