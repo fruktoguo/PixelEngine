@@ -1,15 +1,14 @@
 using PixelEngine.Hosting;
 using PixelEngine.Scripting;
-using ScriptScene = PixelEngine.Scripting.Scene;
 
 namespace PixelEngine.Demo;
 
 /// <summary>
 /// 把 Demo 专项负载计数发布到引擎 counters，供性能 HUD 与窗口 profiling 读取。
 /// </summary>
-internal sealed class DemoLoadCountersPhaseDriver(ScriptScene scene) : IEnginePhaseDriver
+internal sealed class DemoLoadCountersPhaseDriver(EngineProbeApi probe) : IEnginePhaseDriver
 {
-    private readonly ScriptScene _scene = scene ?? throw new ArgumentNullException(nameof(scene));
+    private readonly EngineProbeApi _probe = probe ?? throw new ArgumentNullException(nameof(probe));
     private RisingHazardDirector? _risingHazard;
     private int _framesUntilRescan;
 
@@ -39,7 +38,7 @@ internal sealed class DemoLoadCountersPhaseDriver(ScriptScene scene) : IEnginePh
             return null;
         }
 
-        ScriptEntityInspection[] entities = _scene.CaptureInspectionSnapshot();
+        ScriptEntityInspection[] entities = _probe.ScriptScene.CaptureInspectionSnapshot();
         for (int i = 0; i < entities.Length; i++)
         {
             ScriptComponentInspection[] components = entities[i].Components;

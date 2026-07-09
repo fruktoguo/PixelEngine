@@ -1562,6 +1562,44 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证 Demo 启动器与 benchmark probe 不直接解析具体 Physics/Rendering 服务，统一消费 Hosting probe facade。
+    /// </summary>
+    [Fact]
+    public void DemoAndBenchmarkProbesUseStableHostingFacade()
+    {
+        string root = FindRepositoryRoot();
+        string demoSource = string.Join(
+            '\n',
+            Directory.EnumerateFiles(Path.Combine(root, "demo", "PixelEngine.Demo"), "*.cs", SearchOption.AllDirectories)
+                .Select(File.ReadAllText));
+        string benchmarkSource = string.Join(
+            '\n',
+            Directory.EnumerateFiles(Path.Combine(root, "bench", "PixelEngine.Benchmarks"), "*.cs", SearchOption.AllDirectories)
+                .Select(File.ReadAllText));
+        string probeSource = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Hosting", "EngineProbeApi.cs"));
+
+        Assert.DoesNotContain("Context.GetService", demoSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Context.TryGetService", demoSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetService<PhysicsSystem>", demoSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetService<RenderPipeline>", demoSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Context.GetService", benchmarkSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Context.TryGetService", benchmarkSource, StringComparison.Ordinal);
+        Assert.Contains("engine.Probe", demoSource, StringComparison.Ordinal);
+        Assert.Contains("engine.RegisterScriptAssembly", demoSource, StringComparison.Ordinal);
+        Assert.Contains("engine.CurrentScene", demoSource, StringComparison.Ordinal);
+        Assert.Contains("ParticleRenderProbeResult", probeSource, StringComparison.Ordinal);
+        Assert.Contains("RegisterBeforeSwapBuffers", probeSource, StringComparison.Ordinal);
+
+        Type[] publicProbePropertyTypes =
+        [
+            .. typeof(EngineProbeApi).GetProperties().Select(static property => property.PropertyType),
+        ];
+        Assert.DoesNotContain(
+            publicProbePropertyTypes,
+            static type => type.FullName is "PixelEngine.Physics.PhysicsSystem" or "PixelEngine.Rendering.RenderPipeline");
+    }
+
+    /// <summary>
     /// 验证 Demo 已收敛为纯玩家运行时，不再暴露内嵌编辑器启动入口或旧 editor-window 证据字段。
     /// </summary>
     [Fact]

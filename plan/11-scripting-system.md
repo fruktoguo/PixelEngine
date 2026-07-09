@@ -413,6 +413,8 @@ facade 聚合的能力实现来自：`plan/03`（cell 读写、per-cell `Damage`
 
 M13/M14 协同（本轮扩展，§3.9–§3.11）：`plan/13` showcase Demo 可玩闭环 反推 §3.9 玩法门面（武器库/差异化破坏/富粒子）；`plan/20` 提供 §3.10 交互 UI 后端（脚本经 `IGameUiService` 驱动、相位安全写入）；`plan/18`（Hosting）承载 `.scene` schema v2（`ParentId`/Transform 块/`ConvertValue` Vector2/往返）与 authoring→扁平运行时物化，`plan/19`（编辑器壳）持 GameObject 层级 authoring 模型——本文件仅保证 `Scripting.Scene`/`Transform` 扁平物化目标与字段对齐（§3.11），**不**承接层级与 schema 演进。
 
+窗口与 benchmark probe 的运行时边界由 Hosting 的 `Engine.Probe` 承载：它可以组合本文件已经定义的公开 `IScriptContext`/脚本 API，但只向 Demo 暴露诊断快照和受控操作，不要求 Demo 直接解析 Physics/Rendering 具体服务；该 probe 不属于玩法脚本契约，也不改变 `IScriptContext` 的相位安全规则。
+
 下游消费者：`plan/12`（编辑器 Inspector 反射、热重载按钮入口）、`plan/13`（Showcase Demo Game + 可操作角色，仅依赖本系统暴露的公开 API——是公开 API 的 dogfood 验证，架构 §3.1/§1.2）。
 
 执行顺序（plan/README、plan/17）：位于「可编程与可编辑：11 → 12」，刻意置于 sim/物理稳定（03–07）之后、编辑器（12）与 Demo（13）之前。

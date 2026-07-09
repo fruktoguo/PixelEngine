@@ -1,5 +1,10 @@
+using PixelEngine.Physics;
+using PixelEngine.Rendering;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
+using PixelEngine.Scripting;
+using Silk.NET.OpenGL;
+using ScriptScene = PixelEngine.Scripting.Scene;
 
 namespace PixelEngine.Hosting;
 
@@ -13,6 +18,15 @@ public sealed class EngineProbeApi
     private readonly TemperatureField _temperature;
     private readonly MaterialTable _materials;
     private readonly ParticleSystem _particles;
+    private PhysicsSystem? Physics { get; set; }
+    private RenderPipeline? RenderPipeline { get; set; }
+    private RenderPhaseDriver? RenderDriver { get; set; }
+    private IScriptContext? ScriptContext { get; set; }
+    private ScriptInputApi? InputApi { get; set; }
+    private ScriptCameraApi? CameraApi { get; set; }
+    private ScriptLightingApi? LightingApi { get; set; }
+    private ScriptCameraSynchronizer? CameraSync { get; set; }
+    private ScriptLightingSynchronizer? LightingSync { get; set; }
 
     internal EngineProbeApi(
         CellGrid grid,
@@ -32,6 +46,108 @@ public sealed class EngineProbeApi
     /// 当前活跃自由粒子数量。
     /// </summary>
     public int ActiveParticles => _particles.ActiveCount;
+
+    /// <summary>
+    /// 当前脚本场景；脚本上下文尚未接入时访问会抛出明确异常。
+    /// </summary>
+    public ScriptScene ScriptScene => RequireScriptContext().Scene;
+
+    /// <summary>
+    /// Hosting 注入的脚本输入 probe；用于窗口 scripted probe 写入确定性输入快照。
+    /// </summary>
+    public ScriptInputApi Input => InputApi ?? throw MissingBinding("ScriptInputApi");
+
+    /// <summary>
+    /// Hosting 注入的脚本相机 probe；用于窗口 scripted probe 做世界/屏幕坐标转换。
+    /// </summary>
+    public ScriptCameraApi Camera => CameraApi ?? throw MissingBinding("ScriptCameraApi");
+
+    /// <summary>
+    /// Hosting 注入的脚本光照 probe；用于窗口 scripted probe 发出测试光源与 fog 请求。
+    /// </summary>
+    public ScriptLightingApi Lighting => LightingApi ?? throw MissingBinding("ScriptLightingApi");
+
+    /// <summary>
+    /// 当前脚本相机同步到 Rendering 后的快照。
+    /// </summary>
+    public ScriptCameraSynchronizer CameraSynchronizer => CameraSync ?? throw MissingBinding("ScriptCameraSynchronizer");
+
+    /// <summary>
+    /// 当前脚本光照同步到 Rendering 后的快照。
+    /// </summary>
+    public ScriptLightingSynchronizer LightingSynchronizer => LightingSync ?? throw MissingBinding("ScriptLightingSynchronizer");
+
+    /// <summary>
+    /// 当前同步后的点光源只读快照。
+    /// </summary>
+    public ReadOnlySpan<LightSource> PointLights => LightingSynchronizer.PointLights;
+
+    /// <summary>
+    /// 当前同步后的 fog-of-war buffer。
+    /// </summary>
+    public FogOfWarBuffer FogOfWar => LightingSynchronizer.FogOfWar;
+
+    /// <summary>
+    /// 当前物理系统的稳定统计快照；未接入 Physics 时返回默认空快照。
+    /// </summary>
+    public PhysicsSystemStats PhysicsStats => Physics?.Stats ?? default;
+
+    /// <summary>
+    /// 最近一次 Rendering phase 提交的 overlay 数量；未接入 Rendering 时返回 -1。
+    /// </summary>
+    public int RenderOverlayCount => RenderDriver?.LastOverlayCount ?? -1;
+
+    /// <summary>
+    /// 当前粒子渲染请求是否由 GPU point-sprite 路径接管。
+    /// </summary>
+    public bool CanRenderParticlesOnGpu => RenderPipeline?.CanRenderParticlesOnGpu ?? false;
+
+    /// <summary>
+    /// 当前 GPU frame timer 是否可用；未接入 Rendering 时返回 false。
+    /// </summary>
+    public bool GpuFrameTimerAvailable => RenderPipeline?.GpuFrameTimerAvailable ?? false;
+
+    /// <summary>
+    /// 捕获当前 Hosting/Scripting 诊断快照。
+    /// </summary>
+    /// <returns>脚本可消费的诊断快照。</returns>
+    public EngineDiagnosticsSnapshot CaptureDiagnostics()
+    {
+        return RequireScriptContext().Diagnostics.Capture();
+    }
+
+    /// <summary>
+    /// 当前脚本/渲染帧序号。
+    /// </summary>
+    public long FrameCount => ScriptContext?.Time.FrameCount ?? _kernel.FrameIndex;
+
+    /// <summary>
+    /// 设置粒子渲染请求并返回实际可用的 probe 结果。
+    /// </summary>
+    /// <param name="requested">请求的粒子渲染模式。</param>
+    /// <returns>请求、实际生效模式和 GPU 可用性。</returns>
+    public ParticleRenderProbeResult SetParticleRenderMode(ParticleRenderMode requested)
+    {
+        Rendering.RenderPipeline pipeline = RenderPipeline ?? throw MissingBinding("RenderPipeline");
+        pipeline.Settings.ParticleRenderMode = requested;
+        bool gpuAvailable = pipeline.CanRenderParticlesOnGpu;
+        ParticleRenderMode effective = gpuAvailable
+            ? ParticleRenderMode.GpuPointSprite
+            : ParticleRenderMode.CpuStamp;
+        return new ParticleRenderProbeResult(requested, effective, gpuAvailable);
+    }
+
+    /// <summary>
+    /// 注册一次 present 前 probe 回调；回调不会接触 RenderPipeline 或 OpenGL 事件签名。
+    /// </summary>
+    /// <param name="callback">交换缓冲前执行的回调。</param>
+    /// <returns>解除注册的订阅。</returns>
+    public IDisposable RegisterBeforeSwapBuffers(Action callback)
+    {
+        ArgumentNullException.ThrowIfNull(callback);
+        Rendering.RenderPipeline pipeline = RenderPipeline ?? throw MissingBinding("RenderPipeline");
+        return new SwapCallbackSubscription(pipeline, callback);
+    }
 
     /// <summary>
     /// 按材质与颜色变体统计当前活跃自由粒子数量；只读扫描活跃前缀，不分配。
@@ -155,4 +271,103 @@ public sealed class EngineProbeApi
         ParticleSpawn spawn = new(x, y, velocityX, velocityY, material, colorVariant, (byte)Math.Min(byte.MaxValue, life));
         return _particles.TrySpawn(in spawn);
     }
+
+    internal void AttachPhysics(PhysicsSystem physics)
+    {
+        Physics = physics ?? throw new ArgumentNullException(nameof(physics));
+    }
+
+    internal void AttachRendering(RenderPipeline pipeline, RenderPhaseDriver driver)
+    {
+        RenderPipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
+        RenderDriver = driver ?? throw new ArgumentNullException(nameof(driver));
+    }
+
+    internal void AttachScriptContext(IScriptContext context)
+    {
+        ScriptContext = context ?? throw new ArgumentNullException(nameof(context));
+        InputApi ??= context.Input as ScriptInputApi;
+        CameraApi ??= context.Camera as ScriptCameraApi;
+        LightingApi ??= context.Lighting as ScriptLightingApi;
+    }
+
+    internal void AttachRegisteredScriptBindings(
+        IScriptContext? context,
+        ScriptInputApi? input,
+        ScriptCameraApi? camera,
+        ScriptLightingApi? lighting,
+        ScriptCameraSynchronizer? cameraSynchronizer,
+        ScriptLightingSynchronizer? lightingSynchronizer)
+    {
+        if (context is not null)
+        {
+            AttachScriptContext(context);
+        }
+
+        InputApi ??= input;
+        CameraApi ??= camera;
+        LightingApi ??= lighting;
+        CameraSync ??= cameraSynchronizer;
+        LightingSync ??= lightingSynchronizer;
+    }
+
+    internal void AttachCameraSynchronizer(ScriptCameraSynchronizer synchronizer)
+    {
+        CameraSync = synchronizer ?? throw new ArgumentNullException(nameof(synchronizer));
+    }
+
+    internal void AttachLightingSynchronizer(ScriptLightingSynchronizer synchronizer)
+    {
+        LightingSync = synchronizer ?? throw new ArgumentNullException(nameof(synchronizer));
+    }
+
+    private IScriptContext RequireScriptContext()
+    {
+        return ScriptContext ?? throw MissingBinding("IScriptContext");
+    }
+
+    private static InvalidOperationException MissingBinding(string name)
+    {
+        return new InvalidOperationException($"EngineProbeApi 尚未接入 {name}，请先完成对应 Engine 装配阶段。");
+    }
+
+    private sealed class SwapCallbackSubscription : IDisposable
+    {
+        private readonly Action _callback;
+        private readonly Action<GL> _handler;
+        private RenderPipeline? _pipeline;
+
+        public SwapCallbackSubscription(RenderPipeline pipeline, Action callback)
+        {
+            _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
+            _callback = callback ?? throw new ArgumentNullException(nameof(callback));
+            _handler = Handle;
+            pipeline.BeforeSwapBuffers += _handler;
+        }
+
+        private void Handle(GL _)
+        {
+            _callback();
+        }
+
+        public void Dispose()
+        {
+            RenderPipeline? current = Interlocked.Exchange(ref _pipeline, null);
+            if (current is not null)
+            {
+                current.BeforeSwapBuffers -= _handler;
+            }
+        }
+    }
 }
+
+/// <summary>
+/// 粒子渲染 probe 对请求模式、实际模式和 GPU 能力的稳定快照。
+/// </summary>
+/// <param name="Requested">调用方请求的模式。</param>
+/// <param name="Effective">当前机器实际可执行的模式。</param>
+/// <param name="GpuAvailable">GPU point-sprite 路径是否可执行。</param>
+public readonly record struct ParticleRenderProbeResult(
+    ParticleRenderMode Requested,
+    ParticleRenderMode Effective,
+    bool GpuAvailable);

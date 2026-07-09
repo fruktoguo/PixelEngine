@@ -1,17 +1,12 @@
 using PixelEngine.Hosting;
 using PixelEngine.Rendering;
-using PixelEngine.Scripting;
 
 namespace PixelEngine.Demo;
 
 /// <summary>
 /// Demo 窗口粒子 / 光照长跑探针，验证短寿命粒子退场与光照请求同步。
 /// </summary>
-internal sealed class DemoParticleLightProbe(
-    EngineProbeApi probe,
-    ScriptLightingApi lighting,
-    ScriptLightingSynchronizer lightingSync,
-    ScriptCameraSynchronizer cameraSync) : IEnginePhaseDriver
+internal sealed class DemoParticleLightProbe(EngineProbeApi probe) : IEnginePhaseDriver
 {
     private const int BurstCount = 96;
     private const int TailStartFrame = 80;
@@ -21,9 +16,6 @@ internal sealed class DemoParticleLightProbe(
     private const float CenterY = 180f;
 
     private readonly EngineProbeApi _probe = probe ?? throw new ArgumentNullException(nameof(probe));
-    private readonly ScriptLightingApi _lighting = lighting ?? throw new ArgumentNullException(nameof(lighting));
-    private readonly ScriptLightingSynchronizer _lightingSync = lightingSync ?? throw new ArgumentNullException(nameof(lightingSync));
-    private readonly ScriptCameraSynchronizer _cameraSync = cameraSync ?? throw new ArgumentNullException(nameof(cameraSync));
     private ushort _fire;
     private int _frames;
 
@@ -124,8 +116,8 @@ internal sealed class DemoParticleLightProbe(
             }
         }
 
-        _lighting.AddPointLight(CenterX, CenterY, 72f, 0xFF_30_90_FF, 1.2f);
-        _lighting.RevealAround(CenterX, CenterY, 64f, 220);
+        _probe.Lighting.AddPointLight(CenterX, CenterY, 72f, 0xFF_30_90_FF, 1.2f);
+        _probe.Lighting.RevealAround(CenterX, CenterY, 64f, 220);
     }
 
     private void Capture(EngineTickContext context)
@@ -140,11 +132,11 @@ internal sealed class DemoParticleLightProbe(
         }
 
         LifetimeKillObserved |= context.Context.Counters.FreeParticlesKilledThisTick > 0;
-        LightObserved |= _lightingSync.PointLights.Length > 0;
-        CameraState camera = _cameraSync.Current;
+        LightObserved |= _probe.PointLights.Length > 0;
+        CameraState camera = _probe.CameraSynchronizer.Current;
         int fogX = (int)MathF.Round((CenterX - camera.OriginWorldX) / camera.CellsPerPixel);
         int fogY = (int)MathF.Round((CenterY - camera.OriginWorldY) / camera.CellsPerPixel);
-        byte alpha = _lightingSync.FogOfWar.RevealAlpha(fogX, fogY);
+        byte alpha = _probe.FogOfWar.RevealAlpha(fogX, fogY);
         if (alpha > MaxFogAlpha)
         {
             MaxFogAlpha = alpha;

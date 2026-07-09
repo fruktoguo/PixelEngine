@@ -2612,7 +2612,7 @@ public sealed class PlayerControllerIntegrationTests
     {
         // Arrange：搭建测试场景与依赖
         using Engine engine = CreateBaseEngine(out ScriptInputApi input, out _, out ScriptCameraApi camera);
-        DemoWindowScriptedInput scripted = new(input, camera);
+        DemoWindowScriptedInput scripted = new(engine.Probe);
         scripted.RegisterPhases(engine.Phases);
 
         int firstLeftClickFrame = -1;
