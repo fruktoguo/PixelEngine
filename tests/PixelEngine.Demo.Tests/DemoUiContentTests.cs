@@ -156,13 +156,16 @@ public sealed class DemoUiContentTests
         string[] mainText = UiVisibleText(manifest.GetRequiredScreen(GameUiDemoController.MainMenuScreen).FullPath);
         defaultLoopText = [.. mainText, .. defaultLoopText];
 
-        Assert.Contains("横向逃生：向右推进。", defaultLoopText);
-        Assert.Contains("拆障碍，避熔岩，抵达出口。", defaultLoopText);
-        Assert.Contains("目标：向右推进，拆除路障，避开熔岩，抵达出口", defaultLoopText);
+        Assert.Contains("横向逃生：左起点到右出口。", defaultLoopText);
+        Assert.Contains("跳过熔岩坑，拆除路障。", defaultLoopText);
+        Assert.Contains("出口进度就是到右侧出口的距离。", defaultLoopText);
+        Assert.Contains("熔岩只在坑内，接触会受伤。", defaultLoopText);
+        Assert.Contains("目标：左起点到右出口，拆路障，避熔岩坑", defaultLoopText);
+        Assert.Contains("出口进度表示到右侧出口的距离", defaultLoopText);
         Assert.Contains("出口进度", defaultLoopText);
         Assert.Contains("路线余量", defaultLoopText);
-        Assert.Contains("熔岩危险", defaultLoopText);
-        Assert.Contains("抵达出口 / 挑战失败", defaultLoopText);
+        Assert.Contains("熔岩接触危险", defaultLoopText);
+        Assert.Contains("抵达右侧出口 / 挑战失败", defaultLoopText);
         Assert.DoesNotContain("可选任务时间", defaultLoopText);
         Assert.DoesNotContain("上涨熔岩压力", defaultLoopText);
         Assert.DoesNotContain("水晶", defaultLoopText);
