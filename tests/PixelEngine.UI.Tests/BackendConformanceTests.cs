@@ -442,6 +442,54 @@ public sealed class BackendConformanceTests : IDisposable
     }
 
     /// <summary>
+    /// 验证 Ultralight 未激活后端暴露统一诊断，且不会捕获输入、模型、事件或合成输出。
+    /// </summary>
+    [Fact]
+    public void UltralightInactiveBackendRejectsExecutionWithoutCapturingInput()
+    {
+        using UltralightBackend backend = new();
+
+        Assert.Equal(UiBackendKind.Ultralight, backend.Kind);
+        Assert.False(backend.IsAvailable);
+        Assert.False(backend.IsDirty);
+        Assert.False(backend.IsAnimating);
+        Assert.Contains("Ultralight optional profile inactive", backend.ActivationFailureReason, StringComparison.Ordinal);
+        Assert.Contains("commercial redistribution license", backend.ActivationFailureReason, StringComparison.Ordinal);
+        Assert.Contains("ManagedFallback", backend.ActivationFailureReason, StringComparison.Ordinal);
+
+        NotSupportedException initialize = Assert.Throws<NotSupportedException>(() =>
+            backend.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.Ultralight)));
+        NotSupportedException load = Assert.Throws<NotSupportedException>(() =>
+            backend.LoadDocument(UiDocumentSource.Asset("missing.xhtml", 9)));
+
+        Assert.Equal(backend.ActivationFailureReason, initialize.Message);
+        Assert.Equal(backend.ActivationFailureReason, load.Message);
+
+        backend.FeedPointerMove(10, 12);
+        backend.FeedPointerButton(UiPointerButton.Left, isDown: true);
+        backend.FeedScroll(0, -1);
+        backend.FeedKey(new UiKey(13), isDown: true, UiKeyModifiers.Control);
+        backend.FeedText("text");
+        backend.FeedTextComposition("候補", new UiTextComposition(isActive: true, cursorIndex: 1));
+        backend.SetScreenStack([]);
+        backend.Update(1f / 60f);
+        backend.Composite(default);
+
+        Assert.Equal(UiHitResult.None, backend.HitTest(10, 12));
+        Assert.False(backend.TryGetImeGeometry(out UiImeGeometry geometry));
+        Assert.False(geometry.HasAny);
+        Assert.False(backend.TryGetModelValue(new UiDocumentHandle(1), UiModelPathName.ToPathId("hud.health"), out UiValue value));
+        Assert.Equal(default, value);
+        UiPathId[] paths = [new UiPathId(-1)];
+        Assert.Equal(0, backend.CopyModelPaths(new UiDocumentHandle(1), paths));
+        Assert.Equal(new UiPathId(-1), paths[0]);
+        Assert.False(backend.InvokeAction(new UiDocumentHandle(1), new UiActionId(1), UiValue.FromBoolean(true)));
+        UiEvent[] events = [new(new UiDocumentHandle(-1), new UiElementId(-1), new UiActionId(-1), default)];
+        Assert.Equal(0, backend.DrainEvents(events));
+        Assert.Equal(new UiDocumentHandle(-1), events[0].Document);
+    }
+
+    /// <summary>
     /// 验证Rml Ui Visible Screen Pruning Removes Unloaded Modal And保持Stack Order。
     /// </summary>
     [Fact]
