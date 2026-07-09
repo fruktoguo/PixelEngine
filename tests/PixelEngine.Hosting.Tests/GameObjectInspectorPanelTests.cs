@@ -43,12 +43,67 @@ public sealed class GameObjectInspectorPanelTests
         Assert.Equal("asset_script", snapshot.AssetId);
         Assert.Equal(1024, snapshot.SizeBytes);
         Assert.Equal("脚本：Player，1 KB", snapshot.PreviewSummary);
+        Assert.Equal("Open", snapshot.PrimaryActionLabel);
         Assert.Equal("就绪", snapshot.Status);
 
         Assert.False(missing.Found);
         Assert.Equal("Unknown", missing.Kind);
         Assert.Null(missing.AssetId);
         Assert.Contains("资产不存在", missing.Status, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证资产 Inspector 主操作复用 Project Window 的脚本打开与 Prefab 实例化能力，并写回状态。
+    /// </summary>
+    [Fact]
+    public void InspectorPanelInvokesProjectAssetPrimaryActions()
+    {
+        // Arrange：准备输入与初始状态
+        EditorSceneModel scene = EditorSceneModel.Empty("asset-inspector-actions");
+        EditorUndoStack undo = new();
+        ScriptAssemblyRegistry scripts = new();
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("scripts/Player.cs", AssetBrowserItemKind.Script, 10, DateTimeOffset.UnixEpoch, null, "asset_script"),
+            new AssetBrowserItem("prefabs/Crate.prefab", AssetBrowserItemKind.Prefab, 20, DateTimeOffset.UnixEpoch, null, "asset_prefab"),
+            new AssetBrowserItem("textures/Crate.png", AssetBrowserItemKind.Texture, 30, DateTimeOffset.UnixEpoch, null, "asset_texture"),
+        ]);
+        List<string> openedScripts = [];
+        List<string> instantiatedPrefabs = [];
+        bool OpenScriptAsset(string path, out string diagnostic)
+        {
+            openedScripts.Add(path);
+            diagnostic = $"opened {path}";
+            return true;
+        }
+
+        GameObjectInspectorPanel panel = new(
+            scene,
+            undo,
+            scripts,
+            assetSource: source,
+            instantiatePrefab: instantiatedPrefabs.Add,
+            openScriptAsset: OpenScriptAsset);
+
+        bool scriptOpened = panel.TryInvokePrimaryAssetAction("scripts/Player.cs");
+
+        // Assert：验证预期结果
+        Assert.True(scriptOpened);
+        Assert.Equal(["scripts/Player.cs"], openedScripts);
+        Assert.Equal("opened scripts/Player.cs", panel.Status);
+
+        bool prefabInstantiated = panel.TryInvokePrimaryAssetAction("prefabs/Crate.prefab");
+
+        Assert.True(prefabInstantiated);
+        Assert.Equal(["prefabs/Crate.prefab"], instantiatedPrefabs);
+        Assert.Equal("实例化 prefabs/Crate.prefab", panel.Status);
+
+        bool textureHandled = panel.TryInvokePrimaryAssetAction("textures/Crate.png");
+
+        Assert.False(textureHandled);
+        Assert.Equal(["scripts/Player.cs"], openedScripts);
+        Assert.Equal(["prefabs/Crate.prefab"], instantiatedPrefabs);
+        Assert.Contains("没有 Inspector 主操作", panel.Status, StringComparison.Ordinal);
     }
 
     private sealed class RecordingAssetSource(IReadOnlyList<AssetBrowserItem> assets) : IAssetBrowserDataSource

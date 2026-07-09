@@ -12,7 +12,9 @@ internal sealed class GameObjectInspectorPanel(
     EditorUndoStack undo,
     ScriptAssemblyRegistry scripts,
     IEditorConsoleSink? console = null,
-    IAssetBrowserDataSource? assetSource = null) : IEditorPanel
+    IAssetBrowserDataSource? assetSource = null,
+    Action<string>? instantiatePrefab = null,
+    ScriptAssetOpenHandler? openScriptAsset = null) : IEditorPanel
 {
     private const string ReadyStatus = "就绪";
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
@@ -20,6 +22,8 @@ internal sealed class GameObjectInspectorPanel(
     private readonly ScriptAssemblyRegistry _scripts = scripts ?? throw new ArgumentNullException(nameof(scripts));
     private readonly IEditorConsoleSink? _console = console;
     private readonly IAssetBrowserDataSource? _assetSource = assetSource;
+    private readonly Action<string>? _instantiatePrefab = instantiatePrefab;
+    private readonly ScriptAssetOpenHandler? _openScriptAsset = openScriptAsset;
     private string _componentSearch = string.Empty;
 
     public string Title => EditorDockSpace.InspectorWindowTitle;
@@ -70,7 +74,7 @@ internal sealed class GameObjectInspectorPanel(
         ArgumentException.ThrowIfNullOrWhiteSpace(assetPath);
         if (_assetSource is null)
         {
-            return new AssetInspectorSnapshot(assetPath, Found: false, "Unknown", null, 0, null, "资产数据源不可用");
+            return new AssetInspectorSnapshot(assetPath, Found: false, "Unknown", null, 0, null, null, "资产数据源不可用");
         }
 
         IReadOnlyList<AssetBrowserItem> assets = _assetSource.ListAssets();
@@ -86,11 +90,68 @@ internal sealed class GameObjectInspectorPanel(
                     item.AssetId,
                     item.SizeBytes,
                     item.PreviewSummary,
+                    GetPrimaryAssetActionLabel(item.Kind),
                     "就绪");
             }
         }
 
-        return new AssetInspectorSnapshot(assetPath, Found: false, "Unknown", null, 0, null, $"资产不存在：{assetPath}");
+        return new AssetInspectorSnapshot(assetPath, Found: false, "Unknown", null, 0, null, null, $"资产不存在：{assetPath}");
+    }
+
+    internal bool TryInvokePrimaryAssetAction(string assetPath)
+    {
+        AssetInspectorSnapshot asset = CaptureAssetInspector(assetPath);
+        if (!asset.Found)
+        {
+            RecordInspectorStatus(asset.Status, EditorConsoleSeverity.Warning, "inspector-asset-action");
+            return false;
+        }
+
+        if (!Enum.TryParse(asset.Kind, ignoreCase: false, out AssetBrowserItemKind kind))
+        {
+            RecordInspectorStatus($"资产类型不可操作：{asset.Kind}", EditorConsoleSeverity.Warning, "inspector-asset-action");
+            return false;
+        }
+
+        switch (kind)
+        {
+            case AssetBrowserItemKind.Script:
+                if (_openScriptAsset is null)
+                {
+                    RecordInspectorStatus("脚本外部编辑器不可用", EditorConsoleSeverity.Warning, "inspector-asset-action");
+                    return false;
+                }
+
+                bool opened = _openScriptAsset(asset.Path, out string diagnostic);
+                RecordInspectorStatus(
+                    string.IsNullOrWhiteSpace(diagnostic)
+                        ? opened ? $"打开脚本 {asset.Path}" : $"脚本外部编辑器打开失败：{asset.Path}"
+                        : diagnostic,
+                    opened ? EditorConsoleSeverity.Info : EditorConsoleSeverity.Warning,
+                    "inspector-asset-action");
+                return opened;
+
+            case AssetBrowserItemKind.Prefab:
+                if (_instantiatePrefab is null)
+                {
+                    RecordInspectorStatus("Prefab 实例化服务不可用", EditorConsoleSeverity.Warning, "inspector-asset-action");
+                    return false;
+                }
+
+                _instantiatePrefab(asset.Path);
+                RecordInspectorStatus($"实例化 {asset.Path}", EditorConsoleSeverity.Info, "inspector-asset-action");
+                return true;
+
+            case AssetBrowserItemKind.Material:
+            case AssetBrowserItemKind.Texture:
+            case AssetBrowserItemKind.Audio:
+            case AssetBrowserItemKind.Scene:
+            case AssetBrowserItemKind.Json:
+            case AssetBrowserItemKind.Other:
+            default:
+                RecordInspectorStatus($"当前资产没有 Inspector 主操作：{asset.Path}", EditorConsoleSeverity.Info, "inspector-asset-action");
+                return false;
+        }
     }
 
     private void DrawAssetInspector(string assetPath)
@@ -102,8 +163,40 @@ internal sealed class GameObjectInspectorPanel(
         ImGui.TextUnformatted($"StableId: {asset.AssetId ?? "none"}");
         ImGui.TextUnformatted($"Size: {asset.SizeBytes} bytes");
         ImGui.TextUnformatted($"Preview: {asset.PreviewSummary ?? "none"}");
+        if (!string.IsNullOrWhiteSpace(asset.PrimaryActionLabel) && ImGui.Button($"{asset.PrimaryActionLabel}##asset-primary-action"))
+        {
+            _ = TryInvokePrimaryAssetAction(asset.Path);
+        }
+
         ImGui.SeparatorText("Inspector 状态");
-        ImGui.TextUnformatted(asset.Status);
+        ImGui.TextUnformatted(Status == ReadyStatus ? asset.Status : Status);
+    }
+
+    private static string? GetPrimaryAssetActionLabel(AssetBrowserItemKind kind)
+    {
+        return kind switch
+        {
+            AssetBrowserItemKind.Script => "Open",
+            AssetBrowserItemKind.Prefab => "Instantiate",
+            AssetBrowserItemKind.Material or
+            AssetBrowserItemKind.Texture or
+            AssetBrowserItemKind.Audio or
+            AssetBrowserItemKind.Scene or
+            AssetBrowserItemKind.Json or
+            AssetBrowserItemKind.Other => null,
+            _ => null,
+        };
+    }
+
+    private void RecordInspectorStatus(string status, EditorConsoleSeverity severity, string source)
+    {
+        Status = string.IsNullOrWhiteSpace(status) ? ReadyStatus : status;
+        _console?.Add(new EditorConsoleEntry(
+            DateTimeOffset.UtcNow,
+            EditorConsoleCategory.Asset,
+            severity,
+            source,
+            Status));
     }
 
     private void DrawHeader(EditorGameObject gameObject)
@@ -489,4 +582,5 @@ internal readonly record struct AssetInspectorSnapshot(
     string? AssetId,
     long SizeBytes,
     string? PreviewSummary,
+    string? PrimaryActionLabel,
     string Status);

@@ -239,7 +239,9 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
                 _undoStack,
                 engine.Context.GetService<ScriptAssemblyRegistry>(),
                 _app.ConsoleStore,
-                assetBrowserDataSource));
+                assetBrowserDataSource,
+                _app.InstantiatePrefab,
+                _app.OpenScriptAsset));
         }
 
         MaterialBrushPalettePanel? brushPanel = null;
