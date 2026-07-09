@@ -546,6 +546,47 @@ public sealed class AssetBrowserPanelTests
     }
 
     /// <summary>
+    /// 验证 Project Window 文件夹 rename / recursive move 会走 Shell 回调并刷新资产与文件夹列表。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelMovesFolderThroughCallbackAndRefreshes()
+    {
+        // Arrange：准备输入与初始状态
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("levels/one.scene", AssetBrowserItemKind.Scene, 10, DateTimeOffset.UnixEpoch, null, "asset_scene"),
+        ]);
+        source.ReplaceFolders([new AssetBrowserFolderItem("levels", 1)]);
+        List<AssetBrowserFolderMoveRequest> requests = [];
+        AssetBrowserFolderMoveResult MoveFolder(AssetBrowserFolderMoveRequest request)
+        {
+            requests.Add(request);
+            source.ReplaceAssets(
+            [
+                new AssetBrowserItem("world/levels/one.scene", AssetBrowserItemKind.Scene, 10, DateTimeOffset.UnixEpoch, null, "asset_scene"),
+            ]);
+            source.ReplaceFolders([new AssetBrowserFolderItem("world", 1), new AssetBrowserFolderItem("world/levels", 1)]);
+            return new AssetBrowserFolderMoveResult(true, $"moved {request.NewPath}");
+        }
+
+        AssetBrowserPanel panel = new(source, moveFolder: MoveFolder);
+
+        _ = panel.Refresh();
+        bool moved = panel.TryMoveFolder("levels", "world/levels");
+        bool rootMoved = panel.TryMoveFolder(string.Empty, "world/root");
+
+        // Assert：验证预期结果
+        Assert.True(moved);
+        Assert.False(rootMoved);
+        AssetBrowserFolderMoveRequest request = Assert.Single(requests);
+        Assert.Equal("levels", request.Path);
+        Assert.Equal("world/levels", request.NewPath);
+        Assert.Contains(panel.LastAssets, asset => asset.Path == "world/levels/one.scene" && asset.AssetId == "asset_scene");
+        Assert.Contains(panel.FolderTargets, folder => folder.Path == "world/levels");
+        Assert.Contains("content 根目录", panel.Status, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Project Window 文件夹行可选中，并与资产选择互斥。
     /// </summary>
     [Fact]

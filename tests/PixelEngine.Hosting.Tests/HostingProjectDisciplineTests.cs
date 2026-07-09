@@ -611,12 +611,17 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("\"Material\"", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("\"UI Screen\"", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("createAsset: assetBrowserDataSource.CreateAsset", host, StringComparison.Ordinal);
+        Assert.Contains("moveFolder: request => assetBrowserDataSource.MoveFolder(request, _sceneModel)", host, StringComparison.Ordinal);
+        Assert.Contains("public AssetBrowserFolderMoveResult MoveFolder", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("public AssetBrowserCreateResult CreateAsset", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("IAssetBrowserFolderDataSource", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("public IReadOnlyList<AssetBrowserFolderItem> ListFolders", shellAssetBrowserDataSource, StringComparison.Ordinal);
+        Assert.Contains("_assets.MoveFolder(request.Path, request.NewPath, activeScene)", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("_assets.CreateAsset(request.Path, type)", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("_assets.CreateFolder(request.Path)", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("public string CreateFolder", shellAssetManifestStore, StringComparison.Ordinal);
+        Assert.Contains("public EditorAssetFolderMoveResult MoveFolder", shellAssetManifestStore, StringComparison.Ordinal);
+        Assert.Contains("RewriteUiManifestScreenPaths", shellAssetManifestStore, StringComparison.Ordinal);
         Assert.Contains("EditorAssetType.Material", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("EditorAssetType.UiScreen", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("UpsertUiScreenManifestEntry", shellAssetManifestStore, StringComparison.Ordinal);

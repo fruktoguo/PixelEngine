@@ -168,6 +168,15 @@ public readonly record struct AssetBrowserMoveRequest(
     string NewPath);
 
 /// <summary>
+/// Project Window 文件夹移动 / 重命名请求。
+/// </summary>
+/// <param name="Path">当前相对 content 根目录的文件夹路径。</param>
+/// <param name="NewPath">移动 / 重命名后的文件夹路径。</param>
+public readonly record struct AssetBrowserFolderMoveRequest(
+    string Path,
+    string NewPath);
+
+/// <summary>
 /// Project Window 资产创建请求。
 /// </summary>
 /// <param name="Path">相对 content 根目录的新资产 logical path。</param>
@@ -197,6 +206,15 @@ public readonly record struct AssetBrowserMoveResult(
     string Diagnostic);
 
 /// <summary>
+/// Project Window 文件夹移动 / 重命名结果。
+/// </summary>
+/// <param name="Succeeded">移动是否已执行。</param>
+/// <param name="Diagnostic">可展示给用户的移动诊断。</param>
+public readonly record struct AssetBrowserFolderMoveResult(
+    bool Succeeded,
+    string Diagnostic);
+
+/// <summary>
 /// Project Window 资产创建结果。
 /// </summary>
 /// <param name="Succeeded">创建是否已执行。</param>
@@ -222,6 +240,13 @@ public delegate AssetBrowserDeleteResult AssetBrowserDeleteHandler(AssetBrowserD
 /// <param name="request">移动请求。</param>
 /// <returns>移动结果。</returns>
 public delegate AssetBrowserMoveResult AssetBrowserMoveHandler(AssetBrowserMoveRequest request);
+
+/// <summary>
+/// Project Window 文件夹移动 / 重命名回调。
+/// </summary>
+/// <param name="request">移动请求。</param>
+/// <returns>移动结果。</returns>
+public delegate AssetBrowserFolderMoveResult AssetBrowserFolderMoveHandler(AssetBrowserFolderMoveRequest request);
 
 /// <summary>
 /// Project Window 资产创建回调。

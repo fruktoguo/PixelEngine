@@ -35,6 +35,19 @@ internal readonly record struct EditorAssetMoveResult(
     int UpdatedReferenceDocuments,
     bool UpdatedActiveScene);
 
+internal readonly record struct EditorAssetFolderMoveResult(
+    string LogicalPath,
+    string NewLogicalPath,
+    int MovedAssets,
+    int UpdatedReferenceDocuments,
+    bool UpdatedActiveScene);
+
+internal readonly record struct EditorAssetPathRewrite(
+    string AssetId,
+    string OldPath,
+    string NewPath,
+    EditorAssetType AssetType);
+
 /// <summary>
 /// EditorAssetReferenceDocumentMovePlan。
 /// </summary>
@@ -261,6 +274,9 @@ internal sealed class EditorAssetManifestStore
         try
         {
             SaveDocument(movedManifest);
+            RewriteUiManifestScreenPaths(
+                [new EditorAssetPathRewrite(source.Id, current, next, source.AssetType)],
+                writtenReferenceDocuments);
             int updatedDocuments = RewriteReferencesInReferenceDocuments(
                 referenceDocuments,
                 current,
@@ -275,6 +291,72 @@ internal sealed class EditorAssetManifestStore
         catch
         {
             RollBackMove(sourceFullPath, targetFullPath, originalManifest, writtenReferenceDocuments);
+            throw;
+        }
+    }
+
+    public EditorAssetFolderMoveResult MoveFolder(string currentFolderPath, string newFolderPath, EditorSceneModel? activeScene = null)
+    {
+        string current = NormalizeLogicalPath(currentFolderPath, nameof(currentFolderPath));
+        string next = NormalizeLogicalPath(newFolderPath, nameof(newFolderPath));
+        if (string.Equals(current, next, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("文件夹移动目标与源路径相同。");
+        }
+
+        if (IsUnderLogicalFolder(next, current))
+        {
+            throw new InvalidOperationException($"文件夹不能移动到自身子目录：{current} -> {next}");
+        }
+
+        string sourceFullPath = ResolveFullPath(current);
+        string targetFullPath = ResolveFullPath(next);
+        if (!Directory.Exists(sourceFullPath))
+        {
+            throw new DirectoryNotFoundException($"文件夹不存在：{current}");
+        }
+
+        if (File.Exists(targetFullPath) || Directory.Exists(targetFullPath))
+        {
+            throw new InvalidOperationException($"目标路径已存在：{next}");
+        }
+
+        EditorAssetManifestDocument originalManifest = LoadDocument();
+        EditorAssetPathRewrite[] rewrites = BuildFolderAssetRewrites(originalManifest, current, next);
+        EditorAssetManifestDocument movedManifest = ReplaceFolderLogicalPathPrefix(originalManifest, rewrites);
+        IReadOnlyList<EditorAssetReferenceDocumentMovePlan> referenceDocuments = LoadReferenceDocumentFolderMovePlans(sourceFullPath, targetFullPath, current);
+        string? targetParent = Path.GetDirectoryName(targetFullPath);
+        if (!string.IsNullOrEmpty(targetParent))
+        {
+            _ = Directory.CreateDirectory(targetParent);
+        }
+
+        List<EditorAssetReferenceDocumentWriteRollback> writtenReferenceDocuments = [];
+        Directory.Move(sourceFullPath, targetFullPath);
+        try
+        {
+            SaveDocument(movedManifest);
+            RewriteUiManifestScreenPaths(rewrites, writtenReferenceDocuments);
+            int updatedDocuments = RewriteFolderReferencesInReferenceDocuments(referenceDocuments, rewrites, writtenReferenceDocuments);
+            bool updatedActiveScene = false;
+            if (activeScene is not null)
+            {
+                for (int i = 0; i < rewrites.Length; i++)
+                {
+                    updatedActiveScene |= RewriteReferences(
+                        activeScene,
+                        rewrites[i].OldPath,
+                        rewrites[i].NewPath,
+                        rewrites[i].AssetId,
+                        rewrites[i].AssetType);
+                }
+            }
+
+            return new EditorAssetFolderMoveResult(current, next, rewrites.Length, updatedDocuments, updatedActiveScene);
+        }
+        catch
+        {
+            RollBackFolderMove(sourceFullPath, targetFullPath, originalManifest, writtenReferenceDocuments);
             throw;
         }
     }
@@ -619,6 +701,62 @@ internal sealed class EditorAssetManifestStore
             : new EditorAssetManifestDocument { FormatVersion = CurrentFormatVersion, Assets = records };
     }
 
+    private static EditorAssetPathRewrite[] BuildFolderAssetRewrites(EditorAssetManifestDocument document, string currentFolderPath, string newFolderPath)
+    {
+        EditorAssetRecordDocument[] records = NormalizeRecords(document.Assets);
+        List<EditorAssetPathRewrite> rewrites = [];
+        for (int i = 0; i < records.Length; i++)
+        {
+            EditorAssetRecordDocument record = records[i];
+            if (!IsUnderLogicalFolder(record.LogicalPath, currentFolderPath))
+            {
+                continue;
+            }
+
+            string movedPath = MoveLogicalPath(record.LogicalPath, currentFolderPath, newFolderPath);
+            EditorAssetType movedType = Classify(movedPath);
+            if (movedType != record.AssetType)
+            {
+                throw new InvalidOperationException($"文件夹移动会改变资产类型：{record.LogicalPath} {record.AssetType} -> {movedPath} {movedType}。");
+            }
+
+            rewrites.Add(new EditorAssetPathRewrite(record.Id, record.LogicalPath, movedPath, record.AssetType));
+        }
+
+        return [.. rewrites.OrderBy(static item => item.OldPath, StringComparer.OrdinalIgnoreCase)];
+    }
+
+    private static EditorAssetManifestDocument ReplaceFolderLogicalPathPrefix(
+        EditorAssetManifestDocument document,
+        IReadOnlyList<EditorAssetPathRewrite> rewrites)
+    {
+        EditorAssetRecordDocument[] records = NormalizeRecords(document.Assets);
+        Dictionary<string, EditorAssetPathRewrite> byId = new(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < rewrites.Count; i++)
+        {
+            byId[rewrites[i].AssetId] = rewrites[i];
+        }
+
+        for (int i = 0; i < records.Length; i++)
+        {
+            if (!byId.TryGetValue(records[i].Id, out EditorAssetPathRewrite rewrite))
+            {
+                continue;
+            }
+
+            records[i] = new EditorAssetRecordDocument
+            {
+                Id = records[i].Id,
+                LogicalPath = rewrite.NewPath,
+                AssetType = rewrite.AssetType,
+                SizeBytes = records[i].SizeBytes,
+                LastModifiedUtc = records[i].LastModifiedUtc,
+            };
+        }
+
+        return new EditorAssetManifestDocument { FormatVersion = CurrentFormatVersion, Assets = records };
+    }
+
     private static EditorAssetManifestDocument RemoveRecord(EditorAssetManifestDocument document, string assetId)
     {
         EditorAssetRecordDocument[] records = NormalizeRecords(document.Assets);
@@ -771,6 +909,40 @@ internal sealed class EditorAssetManifestStore
         return plans;
     }
 
+    private IReadOnlyList<EditorAssetReferenceDocumentMovePlan> LoadReferenceDocumentFolderMovePlans(
+        string sourceFolderFullPath,
+        string targetFolderFullPath,
+        string currentFolderPath)
+    {
+        if (!Directory.Exists(ContentRoot))
+        {
+            return [];
+        }
+
+        string[] files =
+        [
+            .. Directory.EnumerateFiles(ContentRoot, "*.scene", SearchOption.AllDirectories)
+                .Concat(Directory.EnumerateFiles(ContentRoot, "*.prefab", SearchOption.AllDirectories))
+                .Order(StringComparer.OrdinalIgnoreCase),
+        ];
+        EditorAssetReferenceDocumentMovePlan[] plans = new EditorAssetReferenceDocumentMovePlan[files.Length];
+        for (int i = 0; i < files.Length; i++)
+        {
+            string logicalDocumentPath = NormalizeLogicalPath(Path.GetRelativePath(ContentRoot, files[i]), "reference document");
+            string savePath = IsUnderLogicalFolder(logicalDocumentPath, currentFolderPath)
+                ? Path.Combine(targetFolderFullPath, Path.GetRelativePath(sourceFolderFullPath, files[i]))
+                : files[i];
+            EngineSceneDocument document = EngineSceneDocumentLoader.LoadDocument(files[i]);
+            plans[i] = new EditorAssetReferenceDocumentMovePlan(
+                files[i],
+                savePath,
+                File.ReadAllText(files[i]),
+                EditorSceneModel.FromDocument(document));
+        }
+
+        return plans;
+    }
+
     private static int RewriteReferencesInReferenceDocuments(
         IReadOnlyList<EditorAssetReferenceDocumentMovePlan> documents,
         string oldPath,
@@ -799,6 +971,103 @@ internal sealed class EditorAssetManifestStore
         return updated;
     }
 
+    private static int RewriteFolderReferencesInReferenceDocuments(
+        IReadOnlyList<EditorAssetReferenceDocumentMovePlan> documents,
+        IReadOnlyList<EditorAssetPathRewrite> rewrites,
+        List<EditorAssetReferenceDocumentWriteRollback> writtenDocuments)
+    {
+        int updated = 0;
+        for (int documentIndex = 0; documentIndex < documents.Count; documentIndex++)
+        {
+            EditorAssetReferenceDocumentMovePlan document = documents[documentIndex];
+            bool changed = false;
+            for (int rewriteIndex = 0; rewriteIndex < rewrites.Count; rewriteIndex++)
+            {
+                EditorAssetPathRewrite rewrite = rewrites[rewriteIndex];
+                changed |= RewriteReferences(document.Model, rewrite.OldPath, rewrite.NewPath, rewrite.AssetId, rewrite.AssetType);
+            }
+
+            if (!changed)
+            {
+                continue;
+            }
+
+            EngineSceneDocumentLoader.SaveDocument(document.Model.ToDocument(), document.SaveFullPath);
+            writtenDocuments.Add(new EditorAssetReferenceDocumentWriteRollback(
+                document.OriginalFullPath,
+                document.SaveFullPath,
+                document.OriginalText));
+            updated++;
+        }
+
+        return updated;
+    }
+
+    private void RewriteUiManifestScreenPaths(
+        IReadOnlyList<EditorAssetPathRewrite> rewrites,
+        List<EditorAssetReferenceDocumentWriteRollback> writtenDocuments)
+    {
+        bool hasUiScreenRewrite = false;
+        for (int i = 0; i < rewrites.Count; i++)
+        {
+            if (rewrites[i].AssetType == EditorAssetType.UiScreen)
+            {
+                hasUiScreenRewrite = true;
+                break;
+            }
+        }
+
+        if (!hasUiScreenRewrite)
+        {
+            return;
+        }
+
+        string manifestPath = Path.Combine(ContentRoot, "ui", "ui-manifest.json");
+        if (!File.Exists(manifestPath))
+        {
+            return;
+        }
+
+        string originalText = File.ReadAllText(manifestPath);
+        EditorUiManifestDocument document = LoadUiManifestDocument(manifestPath);
+        EditorUiManifestScreenDocument[] screens = NormalizeUiScreens(document.Screens);
+        bool changed = false;
+        for (int screenIndex = 0; screenIndex < screens.Length; screenIndex++)
+        {
+            for (int rewriteIndex = 0; rewriteIndex < rewrites.Count; rewriteIndex++)
+            {
+                EditorAssetPathRewrite rewrite = rewrites[rewriteIndex];
+                if (rewrite.AssetType != EditorAssetType.UiScreen ||
+                    !TryBuildUiScreenManifestPath(rewrite.OldPath, out string oldScreenPath) ||
+                    !TryBuildUiScreenManifestPath(rewrite.NewPath, out string newScreenPath) ||
+                    !string.Equals(screens[screenIndex].Path, oldScreenPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                screens[screenIndex] = new EditorUiManifestScreenDocument
+                {
+                    Id = screens[screenIndex].Id,
+                    Path = newScreenPath,
+                    Preload = screens[screenIndex].Preload,
+                };
+                changed = true;
+            }
+        }
+
+        if (!changed)
+        {
+            return;
+        }
+
+        SaveUiManifestDocument(manifestPath, new EditorUiManifestDocument
+        {
+            Screens = screens,
+            Images = document.Images,
+        });
+        writtenDocuments.Add(new EditorAssetReferenceDocumentWriteRollback(manifestPath, manifestPath, originalText));
+    }
+
     private void RollBackMove(
         string sourceFullPath,
         string targetFullPath,
@@ -814,6 +1083,27 @@ internal sealed class EditorAssetManifestStore
             }
 
             File.Move(targetFullPath, sourceFullPath);
+        }
+
+        RestoreReferenceDocuments(writtenReferenceDocuments);
+        SaveDocument(originalManifest);
+    }
+
+    private void RollBackFolderMove(
+        string sourceFullPath,
+        string targetFullPath,
+        EditorAssetManifestDocument originalManifest,
+        IReadOnlyList<EditorAssetReferenceDocumentWriteRollback> writtenReferenceDocuments)
+    {
+        if (Directory.Exists(targetFullPath) && !Directory.Exists(sourceFullPath))
+        {
+            string? sourceParent = Path.GetDirectoryName(sourceFullPath);
+            if (!string.IsNullOrEmpty(sourceParent))
+            {
+                _ = Directory.CreateDirectory(sourceParent);
+            }
+
+            Directory.Move(targetFullPath, sourceFullPath);
         }
 
         RestoreReferenceDocuments(writtenReferenceDocuments);
@@ -975,6 +1265,23 @@ internal sealed class EditorAssetManifestStore
     {
         string normalized = logicalPath.Replace('\\', '/');
         return normalized.StartsWith(folderName + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string MoveLogicalPath(string logicalPath, string currentFolderPath, string newFolderPath)
+    {
+        return newFolderPath.TrimEnd('/') + logicalPath[currentFolderPath.Length..];
+    }
+
+    private static bool TryBuildUiScreenManifestPath(string logicalPath, out string screenPath)
+    {
+        if (TryBuildUiScreenManifestEntry(logicalPath, out _, out string resolvedPath))
+        {
+            screenPath = resolvedPath;
+            return true;
+        }
+
+        screenPath = string.Empty;
+        return false;
     }
 
     private static bool TryBuildUiScreenManifestEntry(string logicalPath, out string screenId, out string screenPath)

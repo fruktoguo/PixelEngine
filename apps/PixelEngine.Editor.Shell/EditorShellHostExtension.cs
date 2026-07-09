@@ -266,6 +266,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             openScriptAsset: _app.OpenScriptAsset,
             deleteAsset: request => assetBrowserDataSource.DeleteAsset(request, _sceneModel),
             moveAsset: request => assetBrowserDataSource.MoveAsset(request, _sceneModel),
+            moveFolder: request => assetBrowserDataSource.MoveFolder(request, _sceneModel),
             createAsset: assetBrowserDataSource.CreateAsset));
         MaterialReactionEditorPanel? materialReactionPanel = TryCreateMaterialReactionPanel(engine);
         if (materialReactionPanel is not null)
