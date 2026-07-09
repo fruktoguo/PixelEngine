@@ -417,10 +417,63 @@ public sealed class RmlUiGlBootstrapSmokeTests
             BackendPreference = RenderBackendPreference.DesktopGl33,
             EnableDebugContext = true,
         });
+        RunUnloadModalStopsCaptureSmoke(window, RmlUiNativeProfileGate.NativeProfileDesktopGl3);
+    }
+
+    [Fact]
+    public void RmlUiBackendUnloadModalStopsCaptureOnAngleWhenSmokeIsEnabled()
+    {
+        if (!TryCreateAngleSmokeWindow("PixelEngine RmlUi ANGLE unload modal smoke", out RenderWindow? window))
+        {
+            return;
+        }
+
+        using (window!)
+        {
+            RunUnloadModalStopsCaptureSmoke(window, RmlUiNativeProfileGate.NativeProfileGles3Angle);
+        }
+    }
+
+    [Fact]
+    public void RmlUiCompositeRestoresGlStateWhenGlSmokeIsEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine RmlUi GL state smoke",
+            Width = 64,
+            Height = 64,
+            BackendPreference = RenderBackendPreference.DesktopGl33,
+            EnableDebugContext = true,
+        });
+        RunCompositeRestoresGlStateSmoke(window, RmlUiNativeProfileGate.NativeProfileDesktopGl3);
+    }
+
+    [Fact]
+    public void RmlUiCompositeRestoresGlStateOnAngleWhenSmokeIsEnabled()
+    {
+        if (!TryCreateAngleSmokeWindow("PixelEngine RmlUi ANGLE GL state smoke", out RenderWindow? window))
+        {
+            return;
+        }
+
+        using (window!)
+        {
+            RunCompositeRestoresGlStateSmoke(window, RmlUiNativeProfileGate.NativeProfileGles3Angle);
+        }
+    }
+
+    private static void RunUnloadModalStopsCaptureSmoke(RenderWindow window, int expectedProfileId)
+    {
         using RmlUiBackend backend = new(window);
         backend.Initialize(new UiBackendInitializeInfo(
             new UiViewport(0, 0, window.Width, window.Height, 1f),
             UiBackendKind.RmlUi));
+        Assert.Equal(expectedProfileId, RmlUiNative.GetRendererProfile());
 
         string documentPath = Path.Combine(Path.GetTempPath(), $"pixelengine-rmlui-unload-{Guid.NewGuid():N}.rml");
         try
@@ -456,27 +509,14 @@ public sealed class RmlUiGlBootstrapSmokeTests
         }
     }
 
-    [Fact]
-    public void RmlUiCompositeRestoresGlStateWhenGlSmokeIsEnabled()
+    private static void RunCompositeRestoresGlStateSmoke(RenderWindow window, int expectedProfileId)
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
-        {
-            Title = "PixelEngine RmlUi GL state smoke",
-            Width = 64,
-            Height = 64,
-            BackendPreference = RenderBackendPreference.DesktopGl33,
-            EnableDebugContext = true,
-        });
         GL gl = window.Gl;
         using RmlUiBackend backend = new(window);
         backend.Initialize(new UiBackendInitializeInfo(
             new UiViewport(0, 0, window.Width, window.Height, 1f),
             UiBackendKind.RmlUi));
+        Assert.Equal(expectedProfileId, RmlUiNative.GetRendererProfile());
 
         string documentPath = Path.Combine(Path.GetTempPath(), $"pixelengine-rmlui-state-{Guid.NewGuid():N}.rml");
         uint texture = gl.GenTexture();
@@ -520,6 +560,39 @@ public sealed class RmlUiGlBootstrapSmokeTests
         {
             gl.DeleteTexture(texture);
             File.Delete(documentPath);
+        }
+    }
+
+    private static bool TryCreateAngleSmokeWindow(string title, out RenderWindow? window)
+    {
+        window = null;
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"), "1", StringComparison.Ordinal) &&
+            !string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        try
+        {
+            window = RenderWindow.Create(new RenderWindowOptions
+            {
+                Title = title,
+                Width = 64,
+                Height = 64,
+                BackendPreference = RenderBackendPreference.GlEs30Angle,
+                EnableDebugContext = true,
+            });
+            Assert.Equal(RenderBackend.GlEs30Angle, window.Backend);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            bool requireAngle = string.Equals(
+                Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"),
+                "1",
+                StringComparison.Ordinal);
+            Assert.False(requireAngle, $"显式 ANGLE smoke 要求可创建 GlEs30Angle 窗口，但失败：{ex}");
+            return false;
         }
     }
 
