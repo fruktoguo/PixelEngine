@@ -6,6 +6,7 @@ namespace PixelEngine.Editor.Tests;
 
 /// <summary>
 /// 材质/反应编辑器热重载服务测试。
+/// 不变式：材质/反应编辑触发热重载且表内容一致。
 /// </summary>
 public sealed class MaterialReactionEditorPanelTests
 {
@@ -15,6 +16,7 @@ public sealed class MaterialReactionEditorPanelTests
     [Fact]
     public void FileContentServiceAppliesStableReloadAndReplacesDeletedLiveCells()
     {
+        // Arrange：准备输入与初始状态
         using TempContent temp = TempContent.Create();
         MaterialTable materials = new(
         [
@@ -41,6 +43,7 @@ public sealed class MaterialReactionEditorPanelTests
 
         MaterialReactionApplyResult result = service.Apply(document);
 
+        // Assert：验证预期结果
         Assert.Equal([1], result.MaterialReload.TombstoneIds);
         Assert.Equal(1, result.MaterialReload.AddedCount);
         Assert.Equal(1, result.LiveGridFallbackReplacementCount);
@@ -61,6 +64,7 @@ public sealed class MaterialReactionEditorPanelTests
     [Fact]
     public void PreviewExpandsTagInputsAndOutputRepresentatives()
     {
+        // Arrange：准备输入与初始状态
         using TempContent temp = TempContent.Create();
         MaterialTable materials = new(
         [
@@ -84,6 +88,7 @@ public sealed class MaterialReactionEditorPanelTests
 
         MaterialReactionPreviewResult preview = service.Preview(document);
 
+        // Assert：验证预期结果
         Assert.Equal(3, preview.MaterialCount);
         Assert.Equal(1, preview.SourceReactionCount);
         Assert.Equal(2, preview.PackedReactionCount);
@@ -96,6 +101,7 @@ public sealed class MaterialReactionEditorPanelTests
     [Fact]
     public void ApplyReloadsChangedAssetsWithoutChangingStableRuntimeId()
     {
+        // Arrange：准备输入与初始状态
         using TempContent temp = TempContent.Create();
         MaterialTable materials = new(
         [
@@ -130,6 +136,7 @@ public sealed class MaterialReactionEditorPanelTests
 
         MaterialReactionApplyResult result = service.Apply(document);
 
+        // Assert：验证预期结果
         Assert.Empty(result.MaterialReload.TombstoneIds);
         Assert.Equal(0, result.MaterialReload.AddedCount);
         Assert.True(materials.TryGetId("empty", out ushort emptyId));
@@ -148,6 +155,7 @@ public sealed class MaterialReactionEditorPanelTests
     [Fact]
     public void ApplyFallsBackMissingRubbleTargetWithoutReorderingRuntimeIds()
     {
+        // Arrange：准备输入与初始状态
         using TempContent temp = TempContent.Create();
         MaterialTable materials = new(
         [
@@ -175,6 +183,7 @@ public sealed class MaterialReactionEditorPanelTests
 
         MaterialReactionApplyResult result = service.Apply(document);
 
+        // Assert：验证预期结果
         Assert.Empty(result.MaterialReload.TombstoneIds);
         Assert.True(materials.TryGetId("stone", out ushort stoneId));
         Assert.Equal(1, stoneId);
@@ -190,6 +199,7 @@ public sealed class MaterialReactionEditorPanelTests
     [Fact]
     public void MaterialEditorDocumentRoundTripsPlayableAndVisualFields()
     {
+        // Arrange：准备输入与初始状态
         MaterialDocumentJson materials = new()
         {
             Materials =
@@ -219,6 +229,7 @@ public sealed class MaterialReactionEditorPanelTests
 
         MaterialReactionEditorDocument document = MaterialReactionEditorDocument.FromContent(materials, reactions);
         MaterialDocumentJson roundTripped = document.ToMaterialDocument();
+        // Assert：验证预期结果
         MaterialJson row = Assert.Single(roundTripped.Materials!);
 
         Assert.Equal(20, row.Durability);
@@ -243,6 +254,7 @@ public sealed class MaterialReactionEditorPanelTests
     [Fact]
     public void MaterialEditorRowAliasesGameplayAndVisualFieldNames()
     {
+        // Arrange：准备输入与初始状态
         MaterialEditorRow row = new()
         {
             Name = "stone",
@@ -265,6 +277,7 @@ public sealed class MaterialReactionEditorPanelTests
 
         MaterialJson json = row.ToContent();
 
+        // Assert：验证预期结果
         Assert.Equal(32, json.Dispersion);
         Assert.Equal(12, json.Durability);
         Assert.Equal(300, json.Integrity);
@@ -286,6 +299,7 @@ public sealed class MaterialReactionEditorPanelTests
     [Fact]
     public void MaterialLegendPreviewGroupsAllMaterialsWithSwatchAndGameplayValues()
     {
+        // Arrange：准备输入与初始状态
         MaterialReactionEditorDocument document = new();
         document.Materials.Add(new MaterialEditorRow
         {
@@ -324,6 +338,7 @@ public sealed class MaterialReactionEditorPanelTests
         preview.Rebuild(document);
         MaterialLegendPreviewEntry[] entries = preview.Entries.ToArray();
 
+        // Assert：验证预期结果
         Assert.Equal(2, entries.Length);
         Assert.Equal(MaterialLegendCategory.Terrain, entries[0].LegendCategory);
         Assert.Equal("hidden_stone", entries[0].Name);
@@ -348,11 +363,13 @@ public sealed class MaterialReactionEditorPanelTests
     [Fact]
     public void MaterialLegendPreviewIsEditorOnlyAndDoesNotReusePlayableHud()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string panelSource = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "MaterialReactionEditorPanel.cs"));
         string editorSource = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "MaterialLegendPreview.cs"));
         string demoHudSource = File.ReadAllText(Path.Combine(root, "demo", "PixelEngine.Demo", "PlayableHud.cs"));
 
+        // Assert：验证预期结果
         Assert.Contains("flow rate", panelSource, StringComparison.Ordinal);
         Assert.Contains("max integrity", panelSource, StringComparison.Ordinal);
         Assert.Contains("rubble target", panelSource, StringComparison.Ordinal);
@@ -417,8 +434,8 @@ public sealed class MaterialReactionEditorPanelTests
             string root = Path.Combine(Path.GetTempPath(), "pixelengine-editor-" + Guid.NewGuid().ToString("N"));
             _ = Directory.CreateDirectory(root);
             TempContent temp = new(root);
-            File.WriteAllText(temp.MaterialsPath, """{ "materials": [ { "name": "empty", "type": "Empty", "heatCapacity": 1 } ] }""");
-            File.WriteAllText(temp.ReactionsPath, """{ "reactions": [] }""");
+            File.WriteAllText(temp.MaterialsPath, /*lang=json,strict*/ """{ "materials": [ { "name": "empty", "type": "Empty", "heatCapacity": 1 } ] }""");
+            File.WriteAllText(temp.ReactionsPath, /*lang=json,strict*/ """{ "reactions": [] }""");
             return temp;
         }
 

@@ -5,6 +5,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Dispersion / FlowRate 与 32px 移动上限不变式测试。
+/// 不变式：Dispersion/FlowRate 遵守 32px 移动上限。
 /// </summary>
 public sealed class DispersionMoveCapTests
 {

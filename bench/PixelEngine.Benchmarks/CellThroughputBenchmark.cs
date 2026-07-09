@@ -6,7 +6,7 @@ using PixelEngine.Simulation;
 namespace PixelEngine.Benchmarks;
 
 /// <summary>
-/// CA cell/frame 吞吐基准，覆盖满激活混沌液体与典型 dirty-rect 两档活跃规模。
+/// 热路径：SimulationKernel 单帧 CA 更新；假设 8×8 活跃区块网格，对比满激活/全休眠/典型脏矩形三档规模。
 /// </summary>
 [MemoryDiagnoser]
 public class CellThroughputBenchmark : IDisposable
@@ -82,7 +82,7 @@ public class CellThroughputBenchmark : IDisposable
     }
 
     /// <summary>
-    /// 单线程 checkerboard 等价顺序路径，用作吞吐 baseline。
+    /// 基准对照：单线程 StepCa（Baseline），用于对比 JobSystem 并行路径。
     /// </summary>
     [Benchmark(Baseline = true)]
     public void StepSingleThread()
@@ -92,7 +92,7 @@ public class CellThroughputBenchmark : IDisposable
     }
 
     /// <summary>
-    /// JobSystem 4-pass checkerboard 路径。
+    /// 基准热路径：JobSystem 驱动的 SimulationKernel.StepCa 单帧步进。
     /// </summary>
     [Benchmark]
     public void StepJobSystem()

@@ -7,6 +7,7 @@ namespace PixelEngine.Demo;
 /// </summary>
 public sealed class LevelDirector : Behaviour
 {
+    /// <summary>关卡宽度，单位 cell。</summary>
     public int LevelWidth { get; set; } = 640;
     public int LevelHeight { get; set; } = 360;
     public float PlayerSpawnX { get; set; } = 48f;

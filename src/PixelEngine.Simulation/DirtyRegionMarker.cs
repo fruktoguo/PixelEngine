@@ -3,8 +3,20 @@ using PixelEngine.Core;
 
 namespace PixelEngine.Simulation;
 
+/// <summary>
+/// 将世界坐标上的单格或矩形变更传播为 chunk 级 dirty 标记，并在需要时唤醒邻接 chunk 边界。
+/// </summary>
 internal static class DirtyRegionMarker
 {
+    /// <summary>
+    /// 标记单个世界格子的 dirty 区域；目标 chunk 必须已驻留，否则抛异常。
+    /// </summary>
+    /// <param name="chunks">chunk 驻留源。</param>
+    /// <param name="wx">世界坐标 X。</param>
+    /// <param name="wy">世界坐标 Y。</param>
+    /// <param name="target">dirty 写入相位。</param>
+    /// <param name="includeBoundaryNeighbors">为 true 时向邻接 chunk 传播 padding 范围内的边界 dirty。</param>
+    /// <param name="diagnostics">可选诊断记录器。</param>
     public static void MarkCell(
         IChunkSource chunks,
         int wx,
@@ -33,6 +45,9 @@ internal static class DirtyRegionMarker
         }
     }
 
+    /// <summary>
+    /// 尝试标记单格 dirty；邻接 chunk 未全部驻留时返回 false 且不修改任何 chunk。
+    /// </summary>
     public static bool TryMarkCell(
         IChunkSource chunks,
         int wx,
@@ -49,6 +64,7 @@ internal static class DirtyRegionMarker
             return false;
         }
 
+        // 先校验邻域完整性，避免部分标记导致 CA 边界不一致。
         if (includeBoundaryNeighbors && !BoundaryNeighborsResident(chunks, coord, wx, wy))
         {
             return false;
@@ -63,6 +79,9 @@ internal static class DirtyRegionMarker
         return !includeBoundaryNeighbors || TryMarkBoundaryNeighbors(chunks, coord, wx, wy, target, diagnostics);
     }
 
+    /// <summary>
+    /// 将世界矩形（含 padding）拆分到相交的各 chunk，仅标记 Current 相位 dirty。
+    /// </summary>
     public static void MarkRectCurrent(
         IChunkSource chunks,
         int minX,
@@ -94,6 +113,7 @@ internal static class DirtyRegionMarker
                     throw new InvalidOperationException($"dirty 矩形传播目标 chunk 未驻留：{coord}。");
                 }
 
+                // 计算世界矩形与该 chunk 的交集，再转为 chunk 本地坐标。
                 int chunkMinX = cx * EngineConstants.ChunkSize;
                 int chunkMinY = cy * EngineConstants.ChunkSize;
                 int chunkMaxX = chunkMinX + EngineConstants.ChunkSize - 1;
@@ -123,6 +143,9 @@ internal static class DirtyRegionMarker
         _ = TryMarkBoundaryNeighbors(chunks, center, wx, wy, target, diagnostics, throwOnMissing: true);
     }
 
+    /// <summary>
+    /// 遍历 3×3 邻域，将 padding 膨胀后的 dirty 区域投影到各邻接 chunk。
+    /// </summary>
     private static bool TryMarkBoundaryNeighbors(
         IChunkSource chunks,
         ChunkCoord center,
@@ -186,6 +209,7 @@ internal static class DirtyRegionMarker
                 }
                 else
                 {
+                    // Working 相位通过入站槽唤醒邻 chunk，维持双缓冲边界一致性。
                     int neighborSlot = ((dy + 1) * 3) + dx + 1;
                     int incomingSlot = KeepAliveDirections.IncomingSlotForTouchedNeighborSlot(neighborSlot);
                     neighbor.MarkIncomingDirty(incomingSlot, neighborRect);
@@ -206,6 +230,9 @@ internal static class DirtyRegionMarker
         return true;
     }
 
+    /// <summary>
+    /// 检查 padding 膨胀后所有可能受影响的邻接 chunk 是否均已驻留。
+    /// </summary>
     private static bool BoundaryNeighborsResident(IChunkSource chunks, ChunkCoord center, int wx, int wy)
     {
         const int chunkSize = EngineConstants.ChunkSize;

@@ -72,6 +72,7 @@ public sealed class CompositePass : IDisposable
         quad.Draw();
     }
 
+    // fragment 光照合成：scene * visibility + emissive additive，由调用方预先绑定输出 FBO。
     private void Begin(EmissiveBuffer emissive, LightMaskTexture visibility)
     {
         _gl.Disable(EnableCap.Blend);

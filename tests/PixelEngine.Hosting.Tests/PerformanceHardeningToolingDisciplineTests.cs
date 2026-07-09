@@ -5,7 +5,8 @@ using Xunit;
 namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
-/// plan/16 profiling 与反汇编工具链纪律测试。
+/// plan/16 性能硬化工具链纪律测试：BenchmarkDotNet、反汇编守门、各类证据预检脚本与发行审计不变式。
+/// 不变式：CI 门禁可复现、证据 manifest 哈希一致、缺 scope/坏结论必须失败且 pending review 非零。
 /// </summary>
 public sealed class PerformanceHardeningToolingDisciplineTests
 {
@@ -13,6 +14,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     /// 验证 BenchmarkDotNet 入口默认接入内存、线程与反汇编 diagnoser。
     /// </summary>
     [Fact]
+
+    // —— BenchmarkDotNet 与 CI 回归门禁 ——
     public void BenchmarkProgramEnablesRequiredDiagnosers()
     {
         string program = ReadRepositoryFile("bench", "PixelEngine.Benchmarks", "Program.cs");
@@ -32,12 +35,14 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void CiRunsDisassemblyAndBenchmarkRegressionGuards()
     {
+        // Arrange：准备输入与初始状态
         string ci = ReadRepositoryFile(".github", "workflows", "ci.yml");
         string runner = ReadRepositoryFile("tools", "run-benchmark.ps1");
         string regression = ReadRepositoryFile("tools", "benchmark-regression.ps1");
         string disassembly = ReadRepositoryFile("tools", "disassembly-guard.ps1");
         string baseline = ReadRepositoryFile("bench", "PixelEngine.Benchmarks", "baselines", "ci-baseline.json");
 
+        // Assert：验证预期结果
         Assert.Contains("benchmark-guard", ci, StringComparison.Ordinal);
         Assert.Contains("./tools/disassembly-guard.ps1", ci, StringComparison.Ordinal);
         Assert.Contains("./tools/benchmark-regression.ps1", ci, StringComparison.Ordinal);
@@ -71,6 +76,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void BenchmarkRegressionGateParsesMeanColumnFromSyntheticReport()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-benchmark-regression-" + Guid.NewGuid().ToString("N"));
 
@@ -91,7 +97,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string baselinePath = Path.Combine(temp, "baseline.json");
             File.WriteAllText(
                 baselinePath,
-                """
+                                     /*lang=json,strict*/
+                                     """
                 {
                   "benchmarks": [
                     {
@@ -114,6 +121,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 }
                 """);
 
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "benchmark-regression.ps1"),
@@ -122,6 +130,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-ReportsPath",
                 reports);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(0, result.ExitCode);
             Assert.Contains("FullActiveLiquid mean=38327000", result.Output, StringComparison.Ordinal);
             Assert.Contains("TypicalDirtyRect mean=413100", result.Output, StringComparison.Ordinal);
@@ -142,6 +151,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void BenchmarkRegressionGateRequiresRowContainsForAmbiguousParameterizedRows()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-benchmark-regression-ambiguous-" + Guid.NewGuid().ToString("N"));
 
@@ -161,7 +171,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string baselinePath = Path.Combine(temp, "baseline.json");
             File.WriteAllText(
                 baselinePath,
-                """
+                                     /*lang=json,strict*/
+                                     """
                 {
                   "benchmarks": [
                     {
@@ -175,6 +186,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 }
                 """);
 
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "benchmark-regression.ps1"),
@@ -183,6 +195,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-ReportsPath",
                 reports);
 
+            // Assert：验证不变式与预期结果
             Assert.NotEqual(0, result.ExitCode);
             Assert.Contains("multiple report rows", result.Output, StringComparison.Ordinal);
             Assert.Contains("rowContains", result.Output, StringComparison.Ordinal);
@@ -200,6 +213,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     /// 验证 JIT/BDN/IDE 反汇编流程有可复现命令文档。
     /// </summary>
     [Fact]
+
+    // —— 反汇编与硬件计数器预检 ——
     public void DisassemblyWorkflowIsDocumentedWithReproducibleCommands()
     {
         string document = ReadRepositoryFile("docs", "performance-disassembly-workflow.md");
@@ -219,11 +234,13 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void HardwareCounterPreflightReportsPrivilegeAndCounterColumns()
     {
+        // Arrange：准备输入与初始状态
         string script = ReadRepositoryFile("tools", "hardware-counter-preflight.ps1");
         string report = ReadRepositoryFile("docs", "benchmark-reports", "2026-07-02-latency-branch-calibration.md");
         string plan = ReadRepositoryFile("plan", "16-performance-hardening.md");
         string testingPlan = ReadRepositoryFile("plan", "14-testing-benchmarking.md");
 
+        // Assert：验证预期结果
         Assert.Contains("PIXELENGINE_BENCH_HARDWARE_COUNTERS", script, StringComparison.Ordinal);
         Assert.Contains("HardwareCounter.CacheMisses", script, StringComparison.Ordinal);
         Assert.Contains("HardwareCounter.BranchMispredictions", script, StringComparison.Ordinal);
@@ -256,11 +273,13 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void HardwareCounterPreflightWritesHostBoundaryReport()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-hardware-counter-preflight-" + Guid.NewGuid().ToString("N"));
 
         try
         {
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "hardware-counter-preflight.ps1"),
@@ -268,6 +287,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 temp,
                 "-AllowBlocked");
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(0, result.ExitCode);
             string preflightReport = File.ReadAllText(Path.Combine(temp, "hardware-counter-preflight.md"));
             Assert.Contains("benchmark_requested | False", preflightReport, StringComparison.Ordinal);
@@ -304,12 +324,16 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     /// 验证目标硬件性能证据预检要求 AVX-512、6 RID cells/frame、帧预算与硬件计数器 scope/hash，不把本机短样本当作通过。
     /// </summary>
     [Fact]
+
+    // —— 性能目标证据预检 ——
     public void PerformanceTargetEvidencePreflightRequiresManifestScopesAndHashes()
     {
+        // Arrange：准备输入与初始状态
         string script = ReadRepositoryFile("tools", "performance-target-evidence-preflight.ps1");
         string report = ReadRepositoryFile("docs", "benchmark-reports", "2026-07-02-performance-target-evidence.md");
         string plan = ReadRepositoryFile("plan", "16-performance-hardening.md");
 
+        // Assert：验证预期结果
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
         Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
         Assert.Contains("schemaVersion", script, StringComparison.Ordinal);
@@ -408,8 +432,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     /// 验证 plan/README 的证据预检状态索引覆盖全部外部证据入口，并明确待审/本机探针状态不是验收通过。
     /// </summary>
     [Fact]
+
+    // —— 热路径与计划文档索引 ——
     public void PlanReadmeIndexesAllEvidencePreflightStatusesAsNonPassing()
     {
+        // Arrange：准备输入与初始状态
         string readme = ReadRepositoryFile("plan", "README.md");
 
         string[] tools =
@@ -426,6 +453,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         ];
         foreach (string tool in tools)
         {
+            // Assert：验证预期结果
             Assert.Contains(tool, readme, StringComparison.Ordinal);
         }
 
@@ -494,12 +522,16 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     /// 验证 native 资源泄漏预检不会把进程 smoke 误当作 GL/OpenAL/Box2D/ALC 泄漏验收。
     /// </summary>
     [Fact]
+
+    // —— 原生泄漏检测证据预检 ——
     public void NativeLeakPreflightRequiresExternalDetectorEvidence()
     {
+        // Arrange：准备输入与初始状态
         string script = ReadRepositoryFile("tools", "native-leak-preflight.ps1");
         string report = ReadRepositoryFile("docs", "runtime-reports", "2026-07-02-demo-window-longrun.md");
         string plan = ReadRepositoryFile("plan", "18-hosting-runtime.md");
 
+        // Assert：验证预期结果
         Assert.Contains("DetectorReportPath", script, StringComparison.Ordinal);
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
         Assert.Contains("schemaVersion 必须为 1", script, StringComparison.Ordinal);
@@ -558,12 +590,14 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void ManagedNativeLeakDetectorIsSolutionTrackedAndDocumentsManagedCoverage()
     {
+        // Arrange：准备输入与初始状态
         string solution = ReadRepositoryFile("PixelEngine.sln");
         string project = ReadRepositoryFile("tools", "PixelEngine.Tools.ManagedNativeLeakDetector", "PixelEngine.Tools.ManagedNativeLeakDetector.csproj");
         string program = ReadRepositoryFile("tools", "PixelEngine.Tools.ManagedNativeLeakDetector", "Program.cs");
         string report = ReadRepositoryFile("docs", "runtime-reports", "2026-07-02-demo-window-longrun.md");
         string plan = ReadRepositoryFile("plan", "18-hosting-runtime.md");
 
+        // Assert：验证预期结果
         Assert.Contains("tools\\PixelEngine.Tools.ManagedNativeLeakDetector\\PixelEngine.Tools.ManagedNativeLeakDetector.csproj", solution, StringComparison.Ordinal);
         Assert.Contains("PixelEngine.Audio.csproj", project, StringComparison.Ordinal);
         Assert.Contains("PixelEngine.Interop.csproj", project, StringComparison.Ordinal);
@@ -605,6 +639,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void ManagedNativeLeakDetectorWritesManifestAcceptedByNativeLeakPreflight()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-managed-native-leak-detector-" + Guid.NewGuid().ToString("N"));
 
@@ -626,6 +661,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "--git-commit",
                 "abcdef123456");
 
+            // Assert：验证预期结果
             Assert.Equal(0, detector.ExitCode);
             string manifest = Path.Combine(output, "evidence.json");
             Assert.True(File.Exists(manifest), detector.Output);
@@ -691,6 +727,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void NativeLeakPreflightRejectsBadHashesAndKeepsPendingReviewNonZero()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-native-leak-evidence-" + Guid.NewGuid().ToString("N"));
 
@@ -700,6 +737,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string badManifest = CreateNativeLeakEvidenceManifest(temp, corruptHashScope: "gl", suffix: "bad");
 
             string badArtifacts = Path.Combine(temp, "bad-out");
+            // Act：执行被测操作
             ScriptResult bad = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "native-leak-preflight.ps1"),
@@ -707,6 +745,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 badManifest,
                 "-Artifacts",
                 badArtifacts);
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, bad.ExitCode);
             string badReport = File.ReadAllText(Path.Combine(badArtifacts, "native-leak-preflight.md"));
             Assert.Contains("blocked_invalid_native_leak_evidence", bad.Output + badReport, StringComparison.Ordinal);
@@ -739,6 +778,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void NativeLeakPreflightRejectsMixedDetectorRunIds()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-native-leak-mixed-run-" + Guid.NewGuid().ToString("N"));
 
@@ -751,6 +791,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
             string artifacts = Path.Combine(temp, "mixed-run-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "native-leak-preflight.ps1"),
@@ -759,6 +800,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "native-leak-preflight.md"));
             Assert.Contains("blocked_invalid_native_leak_evidence", result.Output + report, StringComparison.Ordinal);
@@ -780,6 +822,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void NativeLeakPreflightRejectsSingleDetectorReportWithoutMachineReadableCoverage()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-native-leak-single-detector-" + Guid.NewGuid().ToString("N"));
 
@@ -787,6 +830,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         {
             string badReport = WriteTextEvidence(Path.Combine(temp, "bad-detector.md"), "no leaks, trust me");
             string badArtifacts = Path.Combine(temp, "bad-out");
+            // Act：执行被测操作
             ScriptResult bad = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "native-leak-preflight.ps1"),
@@ -797,6 +841,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 badArtifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, bad.ExitCode);
             string badPreflightReport = File.ReadAllText(Path.Combine(badArtifacts, "native-leak-preflight.md"));
             Assert.Contains("blocked_invalid_native_leak_evidence", bad.Output + badPreflightReport, StringComparison.Ordinal);
@@ -846,6 +891,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void NativeLeakPreflightRejectsInvalidSchemaWithReport()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-native-leak-schema-" + Guid.NewGuid().ToString("N"));
 
@@ -856,6 +902,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, json);
 
             string artifacts = Path.Combine(temp, "schema-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "native-leak-preflight.ps1"),
@@ -864,6 +911,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "native-leak-preflight.md"));
             Assert.Contains("blocked_invalid_native_leak_evidence", result.Output + report, StringComparison.Ordinal);
@@ -885,6 +933,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void NativeLeakPreflightRejectsMissingRequiredScopeWithReport()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-native-leak-missing-scope-" + Guid.NewGuid().ToString("N"));
 
@@ -897,6 +946,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
             string artifacts = Path.Combine(temp, "missing-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "native-leak-preflight.ps1"),
@@ -905,6 +955,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "native-leak-preflight.md"));
             Assert.Contains("blocked_missing_scope_evidence", result.Output + report, StringComparison.Ordinal);
@@ -926,6 +977,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void NativeLeakPreflightRejectsUnknownScopeWithReport()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-native-leak-unknown-scope-" + Guid.NewGuid().ToString("N"));
 
@@ -944,6 +996,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
             string artifacts = Path.Combine(temp, "unknown-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "native-leak-preflight.ps1"),
@@ -952,6 +1005,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string preflightReport = File.ReadAllText(Path.Combine(artifacts, "native-leak-preflight.md"));
             Assert.Contains("blocked_invalid_native_leak_evidence", result.Output + preflightReport, StringComparison.Ordinal);
@@ -973,6 +1027,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void NativeLeakPreflightRejectsDetectorReportWithoutNoLeaksConclusion()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-native-leak-bad-conclusion-" + Guid.NewGuid().ToString("N"));
 
@@ -996,6 +1051,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
             string artifacts = Path.Combine(temp, "bad-conclusion-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "native-leak-preflight.ps1"),
@@ -1004,6 +1060,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string preflightReport = File.ReadAllText(Path.Combine(artifacts, "native-leak-preflight.md"));
             Assert.Contains("blocked_invalid_native_leak_evidence", result.Output + preflightReport, StringComparison.Ordinal);
@@ -1025,6 +1082,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void NativeLeakPreflightRejectsDetectorReportWithoutZeroLiveCounts()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-native-leak-live-count-" + Guid.NewGuid().ToString("N"));
 
@@ -1049,6 +1107,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
             string artifacts = Path.Combine(temp, "live-count-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "native-leak-preflight.ps1"),
@@ -1057,6 +1116,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string preflightReport = File.ReadAllText(Path.Combine(artifacts, "native-leak-preflight.md"));
             Assert.Contains("blocked_invalid_native_leak_evidence", result.Output + preflightReport, StringComparison.Ordinal);
@@ -1122,12 +1182,16 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     /// 验证 GPU 粒子目标硬件基准预检只收集证据，不把本机短 probe 当作 plan/09 验收。
     /// </summary>
     [Fact]
+
+    // —— GPU 粒子基准证据预检 ——
     public void GpuParticleBenchmarkPreflightRequiresTargetHardwareEvidence()
     {
+        // Arrange：准备输入与初始状态
         string script = ReadRepositoryFile("tools", "gpu-particle-benchmark-preflight.ps1");
         string report = ReadRepositoryFile("docs", "runtime-reports", "2026-07-02-particle-frame-probe.md");
         string plan = ReadRepositoryFile("plan", "09-gpu-compute.md");
 
+        // Assert：验证预期结果
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
         Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
         Assert.Contains("RunProbe", script, StringComparison.Ordinal);
@@ -1208,6 +1272,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void GpuParticleBenchmarkPreflightRejectsMissingScopesAndKeepsPendingReviewNonZero()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-evidence-" + Guid.NewGuid().ToString("N"));
 
@@ -1220,6 +1285,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 suffix: "bad");
 
             string badArtifacts = Path.Combine(temp, "bad-out");
+            // Act：执行被测操作
             ScriptResult bad = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
@@ -1227,6 +1293,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 badManifest,
                 "-Artifacts",
                 badArtifacts);
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, bad.ExitCode);
             string badReport = File.ReadAllText(Path.Combine(badArtifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("blocked_missing_target_gpu_scope_evidence", badReport, StringComparison.Ordinal);
@@ -1259,11 +1326,13 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void GpuParticleBenchmarkPreflightRejectsFailedLocalProbe()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-local-fail-" + Guid.NewGuid().ToString("N"));
 
         try
         {
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
@@ -1273,6 +1342,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 temp);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(temp, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("status: blocked_invalid_local_probe", report, StringComparison.Ordinal);
@@ -1295,6 +1365,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void GpuParticleBenchmarkPreflightWritesLocalComparisonForSuccessfulFakeProbe()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-local-success-" + Guid.NewGuid().ToString("N"));
 
@@ -1322,6 +1393,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 """);
 
             string blockedArtifacts = Path.Combine(temp, "blocked");
+            // Act：执行被测操作
             ScriptResult blocked = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
@@ -1337,6 +1409,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 blockedArtifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(2, blocked.ExitCode);
             string blockedReport = File.ReadAllText(Path.Combine(blockedArtifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("status: local_probe_only", blocked.Output + blockedReport, StringComparison.Ordinal);
@@ -1398,6 +1471,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void GpuParticleBenchmarkPreflightRejectsGpuProbeThatFallsBackToCpuSummary()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-local-mode-" + Guid.NewGuid().ToString("N"));
 
@@ -1413,6 +1487,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 exit /b 0
                 """);
 
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
@@ -1428,6 +1503,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 temp);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(temp, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("status: blocked_invalid_local_probe", report, StringComparison.Ordinal);
@@ -1451,6 +1527,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void GpuParticleBenchmarkPreflightRejectsComparisonReportWithoutGpuFasterThanCpu()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-comparison-" + Guid.NewGuid().ToString("N"));
 
@@ -1472,6 +1549,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 """);
 
             string artifacts = Path.Combine(temp, "bad-comparison-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
@@ -1480,6 +1558,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
@@ -1502,6 +1581,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void GpuParticleBenchmarkPreflightRejectsComparisonWallValuesThatDoNotMatchProbeSummaries()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-wall-mismatch-" + Guid.NewGuid().ToString("N"));
 
@@ -1517,6 +1597,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 comparisonSpeedupRatio: 10.0);
 
             string artifacts = Path.Combine(temp, "bad-wall-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
@@ -1525,6 +1606,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
@@ -1546,6 +1628,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void GpuParticleBenchmarkPreflightRejectsComparisonSpeedupRatioThatDoesNotMatchWallValues()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-ratio-mismatch-" + Guid.NewGuid().ToString("N"));
 
@@ -1559,6 +1642,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 comparisonSpeedupRatio: 9.0);
 
             string artifacts = Path.Combine(temp, "bad-ratio-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
@@ -1567,6 +1651,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
@@ -1589,6 +1674,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void GpuParticleBenchmarkPreflightRejectsComparisonWithTooShortSampleSeconds()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-short-sample-" + Guid.NewGuid().ToString("N"));
 
@@ -1597,6 +1683,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string manifest = CreateGpuParticleEvidenceManifest(temp, suffix: "bad-sample", sampleSeconds: 5.0);
 
             string artifacts = Path.Combine(temp, "bad-sample-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
@@ -1605,6 +1692,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
@@ -1626,6 +1714,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void GpuParticleBenchmarkPreflightRejectsComparisonSampleSecondsNotBackedByProbeSummaries()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-sample-backed-" + Guid.NewGuid().ToString("N"));
 
@@ -1638,6 +1727,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 probeSampleSeconds: 2.0);
 
             string artifacts = Path.Combine(temp, "bad-sample-backed-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
@@ -1646,6 +1736,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
@@ -1667,6 +1758,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void GpuParticleBenchmarkPreflightRejectsTargetHardwareReportWithoutMachineFields()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-hardware-fields-" + Guid.NewGuid().ToString("N"));
 
@@ -1676,6 +1768,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             SetFlatEvidenceFileContent(manifest, "targetHardwareReport", "targetGpuName: Test GPU");
 
             string artifacts = Path.Combine(temp, "bad-hardware-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
@@ -1684,6 +1777,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
@@ -1705,6 +1799,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void GpuParticleBenchmarkPreflightRejectsMismatchedTargetEvidenceIdentity()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-identity-" + Guid.NewGuid().ToString("N"));
 
@@ -1720,6 +1815,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 """);
 
             string artifacts = Path.Combine(temp, "bad-identity-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
@@ -1728,6 +1824,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
@@ -1749,6 +1846,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void GpuParticleBenchmarkPreflightRejectsTargetHardwareReportWithoutParticleCount()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-hardware-count-" + Guid.NewGuid().ToString("N"));
 
@@ -1769,6 +1867,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 """);
 
             string artifacts = Path.Combine(temp, "bad-hardware-count-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
@@ -1777,6 +1876,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
@@ -1798,6 +1898,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void GpuParticleBenchmarkPreflightRejectsTargetProbeWithTooFewMeasuredFrames()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-probe-frames-" + Guid.NewGuid().ToString("N"));
 
@@ -1806,6 +1907,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string manifest = CreateGpuParticleEvidenceManifest(temp, suffix: "bad-frames", measuredFrames: 120);
 
             string artifacts = Path.Combine(temp, "bad-frames-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
@@ -1814,6 +1916,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
@@ -1835,6 +1938,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void GpuParticleBenchmarkPreflightRejectsMismatchedEvidenceHash()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-bad-hash-" + Guid.NewGuid().ToString("N"));
 
@@ -1846,6 +1950,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(badManifest, json);
 
             string badArtifacts = Path.Combine(temp, "bad-hash-out");
+            // Act：执行被测操作
             ScriptResult bad = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
@@ -1854,6 +1959,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 badArtifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, bad.ExitCode);
             string badReport = File.ReadAllText(Path.Combine(badArtifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("blocked_invalid_target_gpu_evidence", bad.Output + badReport, StringComparison.Ordinal);
@@ -1877,6 +1983,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void GpuParticleBenchmarkPreflightRejectsUnknownAndDuplicateScopes()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-scope-" + Guid.NewGuid().ToString("N"));
 
@@ -1890,6 +1997,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             AddDuplicateFlatEvidenceScope(duplicateManifest, "comparisonReport");
 
             string unknownArtifacts = Path.Combine(temp, "unknown-out");
+            // Act：执行被测操作
             ScriptResult unknown = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
@@ -1897,6 +2005,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 unknownManifest,
                 "-Artifacts",
                 unknownArtifacts);
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, unknown.ExitCode);
             string unknownReport = File.ReadAllText(Path.Combine(unknownArtifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("status: blocked_invalid_target_gpu_evidence", unknown.Output + unknownReport, StringComparison.Ordinal);
@@ -1932,6 +2041,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void GpuParticleBenchmarkPreflightRejectsInvalidSchemaWithReport()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-gpu-particle-schema-" + Guid.NewGuid().ToString("N"));
 
@@ -1942,6 +2052,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, json);
 
             string artifacts = Path.Combine(temp, "schema-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "gpu-particle-benchmark-preflight.ps1"),
@@ -1950,6 +2061,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "gpu-particle-benchmark-preflight.md"));
             Assert.Contains("status: blocked_invalid_target_gpu_evidence", report, StringComparison.Ordinal);
@@ -1969,13 +2081,17 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     /// 验证 Demo 人工验收预检只索引视觉/听感/手感证据，不把 scripted probe 当作 plan/13 通过。
     /// </summary>
     [Fact]
+
+    // —— Demo 人工验收证据预检 ——
     public void DemoManualAcceptancePreflightRequiresHumanEvidence()
     {
+        // Arrange：准备输入与初始状态
         string script = ReadRepositoryFile("tools", "demo-manual-acceptance-preflight.ps1");
         string report = ReadRepositoryFile("docs", "runtime-reports", "2026-07-02-demo-manual-acceptance.md");
         string plan = ReadRepositoryFile("plan", "13-demo-game.md");
         string hostingPlan = ReadRepositoryFile("plan", "18-hosting-runtime.md");
 
+        // Assert：验证预期结果
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
         Assert.Contains("RunScriptedProbes", script, StringComparison.Ordinal);
         Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
@@ -2164,6 +2280,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void DemoManualAcceptancePreflightRejectsScriptedProbeSummaryBelowSemanticThreshold()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-summary-semantics-" + Guid.NewGuid().ToString("N"));
 
@@ -2173,6 +2290,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string source = ReadRepositoryFile("tools", "demo-manual-acceptance-preflight.ps1");
             int start = source.IndexOf("function ConvertFrom-ScriptedProbeSummary", StringComparison.Ordinal);
             int end = source.IndexOf("function Invoke-ScriptedProbe", StringComparison.Ordinal);
+            // Assert：验证预期结果
             Assert.True(start >= 0);
             Assert.True(end > start);
             string harness = string.Concat(
@@ -2234,6 +2352,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void DemoManualAcceptancePreflightRejectsBlankScriptedProbeCapture()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-blank-bmp-" + Guid.NewGuid().ToString("N"));
 
@@ -2246,6 +2365,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string source = ReadRepositoryFile("tools", "demo-manual-acceptance-preflight.ps1");
             int start = source.IndexOf("function Resolve-RepositoryRoot", StringComparison.Ordinal);
             int end = source.IndexOf("function Get-ManualScopes", StringComparison.Ordinal);
+            // Assert：验证预期结果
             Assert.True(start >= 0);
             Assert.True(end > start);
             string harness = string.Concat(
@@ -2283,6 +2403,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void DemoManualAcceptancePreflightRejectsMissingScopesAndKeepsPendingReviewNonZero()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-evidence-" + Guid.NewGuid().ToString("N"));
 
@@ -2305,6 +2426,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string badManifest = CreateFlatEvidenceManifest(temp, manualScopes[..^1], suffix: "bad", includeDemoManualMetadata: true);
 
             string badArtifacts = Path.Combine(temp, "bad-out");
+            // Act：执行被测操作
             ScriptResult bad = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
@@ -2312,6 +2434,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 badManifest,
                 "-Artifacts",
                 badArtifacts);
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, bad.ExitCode);
             string badReport = File.ReadAllText(Path.Combine(badArtifacts, "demo-manual-acceptance-preflight.md"));
             Assert.Contains("blocked_missing_manual_scope_evidence", badReport, StringComparison.Ordinal);
@@ -2344,6 +2467,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void DemoManualAcceptancePreflightRejectsMixedReviewSessionIds()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-mixed-session-" + Guid.NewGuid().ToString("N"));
 
@@ -2366,6 +2490,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             SetFlatEvidenceProperty(manifest, "hudMenuEditorVideo", "reviewSessionId", "session-old-ui");
 
             string artifacts = Path.Combine(temp, "mixed-session-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
@@ -2374,6 +2499,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "demo-manual-acceptance-preflight.md"));
             Assert.Contains("status: blocked_invalid_manual_evidence", result.Output + report, StringComparison.Ordinal);
@@ -2395,6 +2521,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void DemoManualAcceptancePreflightRejectsInvalidMetadata()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-metadata-" + Guid.NewGuid().ToString("N"));
 
@@ -2451,6 +2578,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "short report without conclusion and risk");
 
             string badDurationArtifacts = Path.Combine(temp, "bad-duration-out");
+            // Act：执行被测操作
             ScriptResult badDuration = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
@@ -2458,6 +2586,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 badDurationManifest,
                 "-Artifacts",
                 badDurationArtifacts);
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, badDuration.ExitCode);
             string badDurationReport = File.ReadAllText(Path.Combine(badDurationArtifacts, "demo-manual-acceptance-preflight.md"));
             Assert.Contains("status: blocked_invalid_manual_evidence", badDuration.Output + badDurationReport, StringComparison.Ordinal);
@@ -2549,6 +2678,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void DemoManualAcceptancePreflightRejectsRenamedTextAsVideoEvidence()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-text-video-" + Guid.NewGuid().ToString("N"));
 
@@ -2574,6 +2704,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "this is plain text renamed to mp4");
 
             string artifacts = Path.Combine(temp, "text-video-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
@@ -2582,6 +2713,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "demo-manual-acceptance-preflight.md"));
             Assert.Contains("status: blocked_invalid_manual_evidence", result.Output + report, StringComparison.Ordinal);
@@ -2603,6 +2735,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void DemoManualAcceptancePreflightRejectsFtypOnlyVideoEvidence()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-ftyp-only-video-" + Guid.NewGuid().ToString("N"));
 
@@ -2628,6 +2761,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 CreateFtypOnlyMp4Bytes());
 
             string artifacts = Path.Combine(temp, "ftyp-only-video-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
@@ -2636,6 +2770,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "demo-manual-acceptance-preflight.md"));
             Assert.Contains("status: blocked_invalid_manual_evidence", result.Output + report, StringComparison.Ordinal);
@@ -2657,6 +2792,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void DemoManualAcceptancePreflightRejectsMismatchedEvidenceHash()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-bad-hash-" + Guid.NewGuid().ToString("N"));
         string[] manualScopes =
@@ -2680,6 +2816,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(badManifest, json);
 
             string badArtifacts = Path.Combine(temp, "bad-hash-out");
+            // Act：执行被测操作
             ScriptResult bad = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
@@ -2688,6 +2825,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 badArtifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, bad.ExitCode);
             string badReport = File.ReadAllText(Path.Combine(badArtifacts, "demo-manual-acceptance-preflight.md"));
             Assert.Contains("status: blocked_invalid_manual_evidence", badReport, StringComparison.Ordinal);
@@ -2710,6 +2848,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void DemoManualAcceptancePreflightRejectsInvalidSchemaWithReport()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-demo-manual-schema-" + Guid.NewGuid().ToString("N"));
         string[] manualScopes =
@@ -2732,6 +2871,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, json);
 
             string artifacts = Path.Combine(temp, "schema-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
@@ -2740,6 +2880,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "demo-manual-acceptance-preflight.md"));
             Assert.Contains("status: blocked_invalid_manual_evidence", report, StringComparison.Ordinal);
@@ -2759,13 +2900,17 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     /// 验证 CI 矩阵证据预检要求真实 GitHub Actions 运行证据，不把本地 workflow 接线当作 plan/14 通过。
     /// </summary>
     [Fact]
+
+    // —— CI 矩阵证据预检 ——
     public void CiMatrixEvidencePreflightRequiresWorkflowRunEvidence()
     {
+        // Arrange：准备输入与初始状态
         string script = ReadRepositoryFile("tools", "ci-matrix-evidence-preflight.ps1");
         string ci = ReadRepositoryFile(".github", "workflows", "ci.yml");
         string report = ReadRepositoryFile("docs", "benchmark-reports", "2026-07-02-ci-matrix-evidence.md");
         string plan = ReadRepositoryFile("plan", "14-testing-benchmarking.md");
 
+        // Assert：验证预期结果
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
         Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
         Assert.Contains("DeclaredSha256", script, StringComparison.Ordinal);
@@ -2842,6 +2987,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void CiMatrixEvidencePreflightRejectsFailedReportsAndKeepsPendingReviewNonZero()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ci-evidence-" + Guid.NewGuid().ToString("N"));
 
@@ -2851,6 +2997,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string badManifest = CreateCiEvidenceManifest(temp, benchmarkConclusion: "failure", suffix: "bad");
 
             string badArtifacts = Path.Combine(temp, "bad-out");
+            // Act：执行被测操作
             ScriptResult bad = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "ci-matrix-evidence-preflight.ps1"),
@@ -2858,6 +3005,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 badManifest,
                 "-Artifacts",
                 badArtifacts);
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, bad.ExitCode);
             string badReport = File.ReadAllText(Path.Combine(badArtifacts, "ci-matrix-evidence-preflight.md"));
             Assert.Contains("报告 conclusion 必须为 success", badReport, StringComparison.Ordinal);
@@ -2889,6 +3037,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void CiMatrixEvidencePreflightRejectsInvalidSchemaWithReport()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ci-schema-" + Guid.NewGuid().ToString("N"));
 
@@ -2899,6 +3048,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, json);
 
             string artifacts = Path.Combine(temp, "schema-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "ci-matrix-evidence-preflight.ps1"),
@@ -2907,6 +3057,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "ci-matrix-evidence-preflight.md"));
             Assert.Contains("status: blocked_invalid_ci_evidence", report, StringComparison.Ordinal);
@@ -2928,6 +3079,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void CiMatrixEvidencePreflightRejectsMismatchedEvidenceHash()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ci-hash-" + Guid.NewGuid().ToString("N"));
 
@@ -2938,6 +3090,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, json);
 
             string artifacts = Path.Combine(temp, "hash-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "ci-matrix-evidence-preflight.ps1"),
@@ -2946,6 +3099,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "ci-matrix-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_ci_scope_evidence", report, StringComparison.Ordinal);
@@ -2968,6 +3122,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void CiMatrixEvidencePreflightRejectsWinArm64TestsRanMasquerade()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ci-win-arm64-tests-" + Guid.NewGuid().ToString("N"));
 
@@ -2980,6 +3135,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
             string artifacts = Path.Combine(temp, "win-arm64-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "ci-matrix-evidence-preflight.ps1"),
@@ -2988,6 +3144,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "ci-matrix-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_ci_scope_evidence", result.Output + report, StringComparison.Ordinal);
@@ -3010,6 +3167,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void CiMatrixEvidencePreflightRequiresExplicitTestsRanField()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ci-tests-ran-required-" + Guid.NewGuid().ToString("N"));
 
@@ -3022,6 +3180,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
             string artifacts = Path.Combine(temp, "missing-tests-ran-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "ci-matrix-evidence-preflight.ps1"),
@@ -3030,6 +3189,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "ci-matrix-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_ci_scope_evidence", result.Output + report, StringComparison.Ordinal);
@@ -3051,6 +3211,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void CiMatrixEvidencePreflightRejectsMismatchedRunIdentity()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ci-run-identity-" + Guid.NewGuid().ToString("N"));
 
@@ -3067,6 +3228,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
             string artifacts = Path.Combine(temp, "run-identity-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "ci-matrix-evidence-preflight.ps1"),
@@ -3075,6 +3237,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "ci-matrix-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_ci_scope_evidence", result.Output + report, StringComparison.Ordinal);
@@ -3096,6 +3259,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void CiMatrixEvidencePreflightRejectsMismatchedRunnerIdentity()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ci-runner-identity-" + Guid.NewGuid().ToString("N"));
 
@@ -3113,6 +3277,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
             string artifacts = Path.Combine(temp, "runner-identity-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "ci-matrix-evidence-preflight.ps1"),
@@ -3121,6 +3286,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "ci-matrix-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_ci_scope_evidence", result.Output + report, StringComparison.Ordinal);
@@ -3143,6 +3309,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void CiMatrixEvidencePreflightRejectsWrongWorkflowMetadata()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ci-workflow-metadata-" + Guid.NewGuid().ToString("N"));
 
@@ -3161,6 +3328,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
             string artifacts = Path.Combine(temp, "workflow-metadata-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "ci-matrix-evidence-preflight.ps1"),
@@ -3169,6 +3337,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "ci-matrix-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_ci_scope_evidence", result.Output + report, StringComparison.Ordinal);
@@ -3191,8 +3360,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     /// 验证目标性能证据预检的真实脚本行为：未知 scope 被拒绝，证据齐全也保持待审非零退出。
     /// </summary>
     [Fact]
+
+    // —— 性能目标证据预检 ——
     public void PerformanceTargetEvidencePreflightRejectsUnknownScopesAndKeepsPendingReviewNonZero()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-evidence-" + Guid.NewGuid().ToString("N"));
 
@@ -3202,6 +3374,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string badManifest = CreatePerformanceTargetEvidenceManifest(temp, includeUnknownScope: true, suffix: "bad");
 
             string badArtifacts = Path.Combine(temp, "bad-out");
+            // Act：执行被测操作
             ScriptResult bad = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
@@ -3209,6 +3382,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 badManifest,
                 "-Artifacts",
                 badArtifacts);
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, bad.ExitCode);
             string badReport = File.ReadAllText(Path.Combine(badArtifacts, "performance-target-evidence-preflight.md"));
             Assert.Contains("未知 evidence scope", badReport, StringComparison.Ordinal);
@@ -3240,6 +3414,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void PerformanceTargetEvidencePreflightRejectsInvalidSchemaWithReport()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-schema-" + Guid.NewGuid().ToString("N"));
 
@@ -3251,6 +3426,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, json);
 
             string artifacts = Path.Combine(temp, "out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
@@ -3259,6 +3435,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
             Assert.Contains("status: blocked_invalid_target_performance_evidence", report, StringComparison.Ordinal);
@@ -3280,6 +3457,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void PerformanceTargetEvidencePreflightRejectsMismatchedEvidenceHash()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-hash-" + Guid.NewGuid().ToString("N"));
 
@@ -3291,6 +3469,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, json);
 
             string artifacts = Path.Combine(temp, "out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
@@ -3299,6 +3478,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
@@ -3321,6 +3501,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void PerformanceTargetEvidencePreflightRejectsMissingRequiredScopeWithReport()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-missing-scope-" + Guid.NewGuid().ToString("N"));
 
@@ -3331,6 +3512,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             JsonArray evidence = rootNode["evidence"]!.AsArray();
             JsonNode? target = evidence.FirstOrDefault(node =>
                 string.Equals((string?)node?["scope"], "hardware_counters_cache_branch", StringComparison.Ordinal));
+            // Assert：验证预期结果
             Assert.NotNull(target);
             _ = evidence.Remove(target);
             File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
@@ -3365,6 +3547,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void PerformanceTargetEvidencePreflightRejectsMixedBenchmarkRunIds()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-run-id-" + Guid.NewGuid().ToString("N"));
 
@@ -3390,6 +3573,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 """);
 
             string artifacts = Path.Combine(temp, "run-id-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
@@ -3398,6 +3582,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
@@ -3419,6 +3604,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void PerformanceTargetEvidencePreflightRejectsCellsFrameWithoutBenchmarkDotNet()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-cells-frame-" + Guid.NewGuid().ToString("N"));
 
@@ -3431,6 +3617,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
             string artifacts = Path.Combine(temp, "cells-frame-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
@@ -3439,6 +3626,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_target_performance_scope_evidence", result.Output + report, StringComparison.Ordinal);
@@ -3460,6 +3648,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void PerformanceTargetEvidencePreflightRejectsCellsFramePlainKeyValueSummary()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-cells-plain-" + Guid.NewGuid().ToString("N"));
 
@@ -3480,6 +3669,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 """);
 
             string artifacts = Path.Combine(temp, "cells-plain-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
@@ -3488,6 +3678,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
@@ -3509,6 +3700,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void PerformanceTargetEvidencePreflightRejectsAvx512ReportWithoutNoNetDownclockLoss()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-avx512-" + Guid.NewGuid().ToString("N"));
 
@@ -3528,6 +3720,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 """);
 
             string artifacts = Path.Combine(temp, "avx512-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
@@ -3536,6 +3729,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
@@ -3555,8 +3749,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     /// 验证硬件计数器 evidence 必须同时包含 Cache Misses 与 Branch Mispredictions。
     /// </summary>
     [Fact]
+
+    // —— 反汇编与硬件计数器预检 ——
     public void PerformanceTargetEvidencePreflightRejectsHardwareCounterReportWithoutBranchMispredictions()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-counters-" + Guid.NewGuid().ToString("N"));
 
@@ -3578,6 +3775,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 """);
 
             string artifacts = Path.Combine(temp, "counters-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
@@ -3586,6 +3784,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
@@ -3605,8 +3804,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     /// 验证目标硬件帧预算 evidence 必须满足 plan/16 的 p99 阈值。
     /// </summary>
     [Fact]
+
+    // —— 性能目标证据预检 ——
     public void PerformanceTargetEvidencePreflightRejectsFrameBudgetAbovePlanThreshold()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-frame-budget-" + Guid.NewGuid().ToString("N"));
 
@@ -3630,6 +3832,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 """);
 
             string artifacts = Path.Combine(temp, "frame-budget-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
@@ -3638,6 +3841,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
@@ -3659,6 +3863,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void PerformanceTargetEvidencePreflightRejectsFrameBudgetWithoutDiagnosticsSource()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-frame-budget-source-" + Guid.NewGuid().ToString("N"));
 
@@ -3678,6 +3883,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 """);
 
             string artifacts = Path.Combine(temp, "frame-budget-source-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
@@ -3686,6 +3892,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
@@ -3707,6 +3914,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void PerformanceTargetEvidencePreflightRejectsCellsFrameReportBelowTarget()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-cells-target-" + Guid.NewGuid().ToString("N"));
 
@@ -3730,6 +3938,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 """);
 
             string artifacts = Path.Combine(temp, "cells-target-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
@@ -3738,6 +3947,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
@@ -3759,6 +3969,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void PerformanceTargetEvidencePreflightRejectsCellsFrameWithoutRepresentativeHardware()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-cells-representative-" + Guid.NewGuid().ToString("N"));
 
@@ -3782,6 +3993,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 """);
 
             string artifacts = Path.Combine(temp, "cells-representative-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
@@ -3790,6 +4002,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
@@ -3811,6 +4024,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void PerformanceTargetEvidencePreflightRejectsCellsFrameWithTooFewMeasuredIterations()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-cells-iterations-" + Guid.NewGuid().ToString("N"));
 
@@ -3834,6 +4048,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 """);
 
             string artifacts = Path.Combine(temp, "cells-iterations-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
@@ -3842,6 +4057,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_target_performance_scope_evidence", report, StringComparison.Ordinal);
@@ -3861,12 +4077,16 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     /// 验证 UI Runtime 证据预检入口覆盖 plan/20 的真实窗口、native、IME、Ultralight 与发行证据债，且不会把 pending review 误当成完成。
     /// </summary>
     [Fact]
+
+    // —— UI 运行时证据预检 ——
     public void UiRuntimeEvidencePreflightRequiresManifestScopesAndKeepsPlan20Blocked()
     {
+        // Arrange：准备输入与初始状态
         string script = ReadRepositoryFile("tools", "ui-runtime-evidence-preflight.ps1");
         string readme = ReadRepositoryFile("plan", "README.md");
         string plan = ReadRepositoryFile("plan", "20-interactive-html-ui.md");
 
+        // Assert：验证预期结果
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
         Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_ui_runtime_evidence", script, StringComparison.Ordinal);
@@ -3896,6 +4116,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void UiRuntimeEvidencePreflightRejectsMissingScopesAndKeepsPendingReviewNonZero()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ui-runtime-evidence-" + Guid.NewGuid().ToString("N"));
 
@@ -3907,6 +4128,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             JsonArray evidence = rootNode["evidence"]!.AsArray();
             JsonNode? target = evidence.FirstOrDefault(node =>
                 string.Equals((string?)node?["scope"], "platform_ime_composition", StringComparison.Ordinal));
+            // Assert：验证预期结果
             Assert.NotNull(target);
             _ = evidence.Remove(target);
             File.WriteAllText(missingManifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
@@ -3952,6 +4174,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void UiRuntimeEvidencePreflightRejectsInvalidSchemaWithReport()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ui-runtime-schema-" + Guid.NewGuid().ToString("N"));
 
@@ -3963,6 +4186,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, json);
 
             string artifacts = Path.Combine(temp, "out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "ui-runtime-evidence-preflight.ps1"),
@@ -3971,6 +4195,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "ui-runtime-evidence-preflight.md"));
             Assert.Contains("status: blocked_invalid_ui_runtime_evidence", report, StringComparison.Ordinal);
@@ -3992,6 +4217,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void UiRuntimeEvidencePreflightRejectsMismatchedEvidenceHash()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ui-runtime-hash-" + Guid.NewGuid().ToString("N"));
 
@@ -4003,6 +4229,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, json);
 
             string artifacts = Path.Combine(temp, "out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "ui-runtime-evidence-preflight.ps1"),
@@ -4011,6 +4238,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "ui-runtime-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_ui_runtime_scope_evidence", report, StringComparison.Ordinal);
@@ -4031,12 +4259,16 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     /// 验证 Editor UX 证据预检入口覆盖 plan/19 的真实窗口 UX 证据债，且不会把 pending review 误当成完成。
     /// </summary>
     [Fact]
+
+    // —— 编辑器 UX 证据预检 ——
     public void EditorUxEvidencePreflightRequiresManifestScopesAndKeepsPlan19Blocked()
     {
+        // Arrange：准备输入与初始状态
         string script = ReadRepositoryFile("tools", "editor-ux-evidence-preflight.ps1");
         string readme = ReadRepositoryFile("plan", "README.md");
         string plan = ReadRepositoryFile("plan", "19-standalone-editor-app.md");
 
+        // Assert：验证预期结果
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
         Assert.Contains("AllowBlocked", script, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_editor_ux_evidence", script, StringComparison.Ordinal);
@@ -4066,6 +4298,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void EditorUxEvidencePreflightRejectsMissingScopesAndKeepsPendingReviewNonZero()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-editor-ux-evidence-" + Guid.NewGuid().ToString("N"));
 
@@ -4077,6 +4310,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             JsonArray evidence = rootNode["evidence"]!.AsArray();
             JsonNode? target = evidence.FirstOrDefault(node =>
                 string.Equals((string?)node?["scope"], "project_window_reference_stability", StringComparison.Ordinal));
+            // Assert：验证预期结果
             Assert.NotNull(target);
             _ = evidence.Remove(target);
             File.WriteAllText(missingManifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
@@ -4122,6 +4356,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void EditorUxEvidencePreflightRejectsInvalidSchemaWithReport()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-editor-ux-schema-" + Guid.NewGuid().ToString("N"));
 
@@ -4133,6 +4368,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, json);
 
             string artifacts = Path.Combine(temp, "out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "editor-ux-evidence-preflight.ps1"),
@@ -4141,6 +4377,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "editor-ux-evidence-preflight.md"));
             Assert.Contains("status: blocked_invalid_editor_ux_evidence", report, StringComparison.Ordinal);
@@ -4162,6 +4399,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void EditorUxEvidencePreflightRejectsMismatchedEvidenceHash()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-editor-ux-hash-" + Guid.NewGuid().ToString("N"));
 
@@ -4173,6 +4411,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, json);
 
             string artifacts = Path.Combine(temp, "out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "editor-ux-evidence-preflight.ps1"),
@@ -4181,6 +4420,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "editor-ux-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_editor_ux_scope_evidence", report, StringComparison.Ordinal);
@@ -4201,13 +4441,17 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     /// 验证发行编译模式保持默认 R2R 运行时 light-up，AOT 显式 ISA 并跑 SIMD 反汇编探针。
     /// </summary>
     [Fact]
+
+    // —— 发行打包与证据审计 ——
     public void ReleasePublishModesPreserveR2RLightUpAndAotIsaAudit()
     {
+        // Arrange：准备输入与初始状态
         string props = ReadRepositoryFile("Directory.Build.props");
         string release = ReadRepositoryFile(".github", "workflows", "release.yml");
         string aotProbePs1 = ReadRepositoryFile("tools", "aot-simd-probe.ps1");
         string aotProbeSh = ReadRepositoryFile("tools", "aot-simd-probe.sh");
 
+        // Assert：验证预期结果
         Assert.Contains("Condition=\"'$(Channel)' == 'R2R'\"", props, StringComparison.Ordinal);
         Assert.Contains("<PublishReadyToRun>true</PublishReadyToRun>", props, StringComparison.Ordinal);
         Assert.Contains("<PublishReadyToRunComposite>true</PublishReadyToRunComposite>", props, StringComparison.Ordinal);
@@ -4243,6 +4487,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void ReleaseArtifactAuditsRejectMispackagedNativeAndChecksumOutputs()
     {
+        // Arrange：准备输入与初始状态
         string auditPs1 = ReadRepositoryFile("tools", "audit-release-artifacts.ps1");
         string auditSh = ReadRepositoryFile("tools", "audit-release-artifacts.sh");
         string packagePs1 = ReadRepositoryFile("tools", "package.ps1");
@@ -4260,6 +4505,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string conventions = ReadRepositoryFile("plan", "00-conventions-and-techstack.md");
         string solution = ReadRepositoryFile("PixelEngine.sln");
 
+        // Assert：验证预期结果
         Assert.Contains("Assert-NoDynamicBox2D", auditPs1, StringComparison.Ordinal);
         Assert.Contains("box2d.dll", auditPs1, StringComparison.Ordinal);
         Assert.Contains("libbox2d.so", auditPs1, StringComparison.Ordinal);
@@ -4527,6 +4773,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void ReleaseEvidencePreflightBashEntryDelegatesActiveRidArguments()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string artifacts = "artifacts/test-release-evidence-preflight-bash-" + Guid.NewGuid().ToString("N");
         string artifactPath = Path.Combine(root, artifacts);
@@ -4546,6 +4793,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "2",
                 "--allow-blocked");
 
+            // Assert：验证预期结果
             Assert.Equal(0, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifactPath, "release-evidence-preflight.md"));
             Assert.Contains("| status | blocked_missing_release_manifest |", report, StringComparison.Ordinal);
@@ -4567,6 +4815,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void PackageScriptPlacesRuntimeFilesUnderAppAndAuditRejectsRootClutter()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-friendly-package-" + Guid.NewGuid().ToString("N"));
 
@@ -4608,6 +4857,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             _ = WriteTextEvidence(Path.Combine(content, "textures", "18_boundary_stone.png"), "boundary");
             _ = WriteTextEvidence(Path.Combine(content, "scenes", "lava-mine.scene"), "scene");
 
+            // Act：执行被测操作
             ScriptResult package = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "package.ps1"),
@@ -4625,6 +4875,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 playerOutput,
                 "-ContentRoot",
                 content);
+            // Assert：验证不变式与预期结果
             Assert.Equal(0, package.ExitCode);
             Assert.Contains("PlayerOutput:", package.Output, StringComparison.Ordinal);
 
@@ -4822,6 +5073,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void PowerShellReleaseArtifactAuditRejectsUiNativeInAotPackage()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-pwsh-ui-native-aot-audit-" + Guid.NewGuid().ToString("N"));
 
@@ -4835,6 +5087,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             CreateZipWithRoot(expandedPackage, archive, packageName);
             _ = WriteTextEvidence(Path.Combine(packageRoot, "SHA256SUMS"), $"{GetSha256(archive)}  {Path.GetFileName(archive)}{Environment.NewLine}");
 
+            // Act：执行被测操作
             ScriptResult audit = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "audit-release-artifacts.ps1"),
@@ -4845,6 +5098,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-ActiveRids",
                 "win-x64");
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(0, audit.ExitCode);
             Assert.Contains("Package audit passed. Packages: 1. Expanded: 1.", audit.Output, StringComparison.Ordinal);
 
@@ -4877,6 +5131,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void PowerShellReleaseArtifactAuditRejectsInactiveUltralightNativeInPackage()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-pwsh-ultralight-native-audit-" + Guid.NewGuid().ToString("N"));
 
@@ -4890,6 +5145,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             CreateZipWithRoot(expandedPackage, archive, packageName);
             _ = WriteTextEvidence(Path.Combine(packageRoot, "SHA256SUMS"), $"{GetSha256(archive)}  {Path.GetFileName(archive)}{Environment.NewLine}");
 
+            // Act：执行被测操作
             ScriptResult clean = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "audit-release-artifacts.ps1"),
@@ -4899,6 +5155,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 packageRoot,
                 "-ActiveRids",
                 "win-x64");
+            // Assert：验证不变式与预期结果
             Assert.Equal(0, clean.ExitCode);
 
             string ultralightNative = Path.Combine(expandedPackage, "app", "runtimes", "win-x64", "native", "Ultralight.dll");
@@ -4937,6 +5194,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void BashReleaseArtifactAuditRequiresUiNativeInR2RPackage()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-bash-ui-native-audit-" + Guid.NewGuid().ToString("N"));
 
@@ -4960,6 +5218,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "--active-rids",
                 "win-x64");
 
+            // Assert：验证预期结果
             Assert.Equal(0, audit.ExitCode);
             Assert.Contains("Package OK: 1 expanded=1", audit.Output, StringComparison.Ordinal);
 
@@ -4992,6 +5251,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void BashReleaseArtifactAuditRejectsUiNativeInAotPackage()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-bash-ui-native-aot-audit-" + Guid.NewGuid().ToString("N"));
 
@@ -5015,6 +5275,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "--active-rids",
                 "win-x64");
 
+            // Assert：验证预期结果
             Assert.Equal(0, audit.ExitCode);
             Assert.Contains("Package OK: 1 expanded=1", audit.Output, StringComparison.Ordinal);
 
@@ -5047,6 +5308,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void BashReleaseArtifactAuditRejectsInactiveUltralightNativeInPackage()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-bash-ultralight-native-audit-" + Guid.NewGuid().ToString("N"));
 
@@ -5069,6 +5331,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 ToBashPath(packageRoot),
                 "--active-rids",
                 "win-x64");
+            // Assert：验证预期结果
             Assert.Equal(0, clean.ExitCode);
 
             _ = WriteTextEvidence(Path.Combine(expandedPackage, "app", "runtimes", "win-x64", "native", "WebCore.dll"), "inactive ultralight native");
@@ -5106,6 +5369,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void BashReleaseArtifactAuditRejectsHexaNamedEditorUiClosure()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-bash-editor-closure-audit-" + Guid.NewGuid().ToString("N"));
 
@@ -5129,6 +5393,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "--active-rids",
                 "win-x64");
 
+            // Assert：验证预期结果
             Assert.Equal(0, clean.ExitCode);
 
             _ = WriteTextEvidence(Path.Combine(expandedPackage, "app", "Hexa.NET.ImGuizmo.dll"), "guizmo");
@@ -5164,6 +5429,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void DeterministicPackageToolProducesStableZipAndTarGzArchives()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-deterministic-package-" + Guid.NewGuid().ToString("N"));
 
@@ -5180,6 +5446,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string tarB = Path.Combine(temp, "b.tar.gz");
             string project = Path.Combine(root, "tools", "PixelEngine.Tools.DeterministicPackage", "PixelEngine.Tools.DeterministicPackage.csproj");
 
+            // Assert：验证预期结果
             Assert.Equal(0, RunDotNet(root, "run", "--project", project, "-c", "Release", "--", "--source", sourceA, "--output", zipA, "--root-name", "PixelEngine-Demo-test-win-x64-r2r", "--format", "zip").ExitCode);
             Assert.Equal(0, RunDotNet(root, "run", "--project", project, "-c", "Release", "--", "--source", sourceB, "--output", zipB, "--root-name", "PixelEngine-Demo-test-win-x64-r2r", "--format", "zip").ExitCode);
             Assert.Equal(GetSha256(zipA), GetSha256(zipB));
@@ -5203,6 +5470,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void ReleaseEvidencePreflightRejectsFailedReportsAndKeepsPendingReviewNonZero()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-evidence-" + Guid.NewGuid().ToString("N"));
 
@@ -5213,6 +5481,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string badR2RManifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success", r2rLightupConclusion: "failure", suffix: "bad-r2r");
 
             string badArtifacts = Path.Combine(temp, "bad-out");
+            // Act：执行被测操作
             ScriptResult bad = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
@@ -5220,6 +5489,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 badManifest,
                 "-Artifacts",
                 badArtifacts);
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, bad.ExitCode);
             string badReport = File.ReadAllText(Path.Combine(badArtifacts, "release-evidence-preflight.md"));
             Assert.Contains("报告 conclusion 必须为 success", badReport, StringComparison.Ordinal);
@@ -5263,6 +5533,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void ReleaseEvidencePreflightRejectsWrongWorkflowMetadata()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-workflow-metadata-" + Guid.NewGuid().ToString("N"));
 
@@ -5280,6 +5551,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
             string artifacts = Path.Combine(temp, "workflow-metadata-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
@@ -5288,6 +5560,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
             Assert.Contains("status | blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
@@ -5311,6 +5584,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void ReleaseEvidencePreflightRejectsWorkflowDispatchEvenWithTagRef()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-dispatch-tag-" + Guid.NewGuid().ToString("N"));
 
@@ -5326,6 +5600,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
             string artifacts = Path.Combine(temp, "dispatch-tag-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
@@ -5334,6 +5609,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
             Assert.Contains("status | blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
@@ -5356,6 +5632,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void ReleaseEvidencePreflightRejectsInvalidSchemaWithReport()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-schema-" + Guid.NewGuid().ToString("N"));
 
@@ -5366,6 +5643,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, json);
 
             string artifacts = Path.Combine(temp, "schema-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
@@ -5374,6 +5652,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
             Assert.Contains("blocked_invalid_release_evidence", result.Output + report, StringComparison.Ordinal);
@@ -5395,6 +5674,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     [Fact]
     public void ReleaseEvidencePreflightRejectsMalformedJsonWithReport()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-malformed-json-" + Guid.NewGuid().ToString("N"));
 
@@ -5405,6 +5685,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             File.WriteAllText(manifest, "{ invalid");
 
             string artifacts = Path.Combine(temp, "json-out");
+            // Act：执行被测操作
             ScriptResult result = RunPowerShellScript(
                 root,
                 Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
@@ -5413,6 +5694,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-Artifacts",
                 artifacts);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(5, result.ExitCode);
             string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
             Assert.Contains("blocked_invalid_release_evidence", result.Output + report, StringComparison.Ordinal);
@@ -5978,6 +6260,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     /// 验证 CA 最内层邻居访问经 3x3 窗口基址与 Unsafe.Add 漫游，不在热更新器内直接数组索引。
     /// </summary>
     [Fact]
+
+    // —— 热路径与计划文档索引 ——
     public void SimulationHotNeighborAccessUsesUnsafeBaseRefs()
     {
         string chunk = ReadRepositoryFile("src", "PixelEngine.Simulation", "Chunk.cs");
@@ -5996,7 +6280,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("Unsafe.Add(ref SelectFlagsBase(slot), local)", window, StringComparison.Ordinal);
         Assert.Contains("Unsafe.Add(ref SelectLifetimeBase(slot), local)", window, StringComparison.Ordinal);
 
-        Assert.Contains("NeighborWindow window = new(chunks, chunk.Coord);", updater, StringComparison.Ordinal);
+        Assert.Contains("NeighborWindow window = new(chunk.Coord, in neighborhood);", updater, StringComparison.Ordinal);
         Assert.Contains("ref ushort materialBase = ref chunk.GetMaterialBase();", updater, StringComparison.Ordinal);
         Assert.Contains("ref byte flagsBase = ref chunk.GetFlagsBase();", updater, StringComparison.Ordinal);
         Assert.Contains("int localOffset = (ly * EngineConstants.ChunkSize) + rect.MinX;", updater, StringComparison.Ordinal);
@@ -7253,12 +7537,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string output = process.StandardOutput.ReadToEnd();
         string error = process.StandardError.ReadToEnd();
         process.WaitForExit();
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException("无法读取当前 git HEAD：" + error);
-        }
-
-        return output.Trim();
+        return process.ExitCode != 0 ? throw new InvalidOperationException("无法读取当前 git HEAD：" + error) : output.Trim();
     }
 
     private static ScriptResult RunPowerShellScript(string workingDirectory, string scriptPath, params string[] arguments)

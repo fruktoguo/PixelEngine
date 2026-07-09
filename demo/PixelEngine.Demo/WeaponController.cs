@@ -142,12 +142,14 @@ public sealed class WeaponController : Behaviour
         LoadCatalog();
         RegisterGrenadeSpawnSystem();
         _ = _impactFlash.Update(Context, safeDt);
+        // 热量、冷却与过热恢复
         CoolDown(safeDt);
         if (!InputEnabled)
         {
             return;
         }
 
+        // 数字键 1-6 与滚轮切换武器；R 触发换弹
         HandleSelection();
         HandleReload(safeDt);
         if (CurrentWeapon is null || IsReloading)
@@ -287,6 +289,7 @@ public sealed class WeaponController : Behaviour
             return;
         }
 
+        // SingleShot 优先复用 PlayableProjectileTool 已验证的弹道与坍塌后端
         bool dispatched = TryDispatchViaProjectileBackend(weapon, secondary);
         if (!dispatched)
         {
@@ -346,6 +349,7 @@ public sealed class WeaponController : Behaviour
             hitY = hit.Y;
         }
 
+        // 按武器类型分派到 World API、手雷生成或激光束
         switch (weapon.Kind)
         {
             case WeaponKind.SingleShot:

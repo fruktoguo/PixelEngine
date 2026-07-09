@@ -56,6 +56,7 @@ public sealed class MpscRingBuffer<T>
     /// </summary>
     /// <param name="item">待入队元素。</param>
     /// <returns>若入队成功则为 <see langword="true"/>；队列满时为 <see langword="false"/>。</returns>
+    // 基于 per-slot sequence 的 MPSC 入队：CAS 抢占 tail 后写入元素并发布 sequence。
     public bool TryEnqueue(in T item)
     {
         while (true)

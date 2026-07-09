@@ -64,6 +64,7 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
         LastRebuiltChunkCount = 0;
         LastDestroyedChunkCount = 0;
 
+        // 仅围绕 awake 刚体 AABB 维护地形 chain；范围外立即销毁。
         HashSet<ChunkCoord> wanted = BuildWantedChunkSet(physicsWorld);
         DestroyOutOfRange(wanted);
         foreach (ChunkCoord coord in wanted)
@@ -106,6 +107,7 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
     private HashSet<ChunkCoord> BuildWantedChunkSet(PhysicsWorld physicsWorld)
     {
         HashSet<ChunkCoord> wanted = [];
+        // 每个 awake 刚体 AABB 按 expandedChunkRadius 膨胀后并入 wanted 集。
         for (int i = 0; i < physicsWorld.BodySlotCount; i++)
         {
             if (!physicsWorld.TryGetBody(i, out PixelRigidBody? body) ||
@@ -173,6 +175,7 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
             return;
         }
 
+        // 内容 hash 未变则跳过重建，降低每帧 contour 追踪开销。
         if (_colliders.TryGetValue(chunk.Coord, out TerrainCollider? collider) && collider.ContentHash == hash)
         {
             return;
@@ -201,12 +204,14 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
         byte[] mask = ArrayPool<byte>.Shared.Rent(EngineConstants.ChunkArea);
         try
         {
+            // 排除 RigidOwned 像素，避免静态地形与刚体 stamp 重复碰撞。
             BuildTerrainMask(chunk, mask.AsSpan(0, EngineConstants.ChunkArea));
             B2BodyDef bodyDef = Box2D.b2DefaultBodyDef();
             bodyDef.Type = B2BodyType.StaticBody;
             B2BodyId bodyId = Box2D.b2CreateBody(_worldId, in bodyDef);
             List<B2ChainId> chains = [];
             CreateContourChains(chunk, bodyId, mask.AsSpan(0, EngineConstants.ChunkArea), chains);
+            // contour 失败时回退 row-run 矩形 chain，保证薄地形仍有 collider。
             if (chains.Count == 0)
             {
                 CreateTilemapFallbackChains(chunk, bodyId, chains);
@@ -236,6 +241,7 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
         ContourRange[] ranges = ArrayPool<ContourRange>.Shared.Rent(maxPointCount / 4);
         try
         {
+            // Marching Squares 提轮廓 → Douglas-Peucker 简化 → Box2D chain。
             int rangeCount = MarchingSquares.TraceContours(mask, EngineConstants.ChunkSize, EngineConstants.ChunkSize, points, ranges);
             int baseX = chunk.Coord.X << EngineConstants.ChunkSizeLog2;
             int baseY = chunk.Coord.Y << EngineConstants.ChunkSizeLog2;

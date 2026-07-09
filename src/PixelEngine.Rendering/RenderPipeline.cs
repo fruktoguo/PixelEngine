@@ -64,12 +64,14 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         _window = window;
         _gl = window.Gl;
         GlslProfile profile = window.Capabilities.IsGles ? GlslProfile.Gles300 : GlslProfile.DesktopGl330;
+        // 阶段 1：创建全屏几何与 fragment 后处理 pass。
         _quad = new FullscreenQuad(_gl);
         _worldBlit = new WorldBlitPass(_gl, profile);
         _overlay = new OverlayRenderer(_gl, profile);
         _gpuParticles = new GpuParticleRenderer(_gl, profile);
         _composite = new CompositePass(_gl, profile);
         _bloom = new BloomPass(_gl, profile);
+        // 阶段 2：评估 GPU compute 能力并选择性装配 bloom/RC/composite 路径。
         GpuCapabilities gpuCapabilities = GpuCapabilities.Query(_gl, window.Capabilities);
         _computeGate = ComputeCapabilityGate.Evaluate(gpuCapabilities, computeFeatures ?? ComputeFeatureSwitches.Default, Settings.PreferComputeSharpBackend);
         _computeBackend = ComputeBackendFactory.Create(_gl, _computeGate);
@@ -87,6 +89,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         _radianceCascades = computeBloomPipeline is not null && _computeGate.FeatureSwitches.RadianceCascadesEnabled
             ? new RadianceCascadePass(_gl, new GpuRadianceCascadePipeline(_computeBackend), width, height)
             : null;
+        // 阶段 3：分配世界纹理、PBO 上传器、光照 mask 与 scene/lit/post FBO 链。
         _dither = new DitherPass(_gl, profile);
         _gamma = new GammaPass(_gl, profile);
         _crt = new CrtPass(_gl, profile);
@@ -402,6 +405,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         GlGpuFrameProfiler.GpuFrameScope gpuFrame = _gpuFrameProfiler.Measure();
 
         long started = Stopwatch.GetTimestamp();
+        // --- GPU 上传阶段：世界像素、emissive/occluder 与 fog-of-war visibility ---
         UploadWorld(renderBuffer, dirtyRects);
         _emissive.Upload(aux.Emissive);
         _occluder.Upload(aux.Occluder);
@@ -409,6 +413,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         RecordSub(profiler, FrameSubPhase.GpuUpload, started);
 
         started = Stopwatch.GetTimestamp();
+        // --- 光照合成阶段：world blit → GPU 粒子 → compute/fragment 光照 ---
         _scene.Clear();
         _worldBlit.Render(_worldTexture, _scene, camera, _quad);
         RenderGpuParticlesIfEnabled(particles, materials, camera);
@@ -429,6 +434,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         }
         RecordSub(profiler, FrameSubPhase.Lighting, started);
 
+        // --- Bloom/RC 阶段：仅在 Full 质量档启用 ---
         ColorRenderTarget current = _lit;
         if (Settings.QualityLevel == LightingQualityLevel.Full)
         {
@@ -454,11 +460,13 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
             RecordSub(profiler, FrameSubPhase.Bloom, started);
         }
 
+        // --- 后处理阶段：dither → gamma → CRT ---
         started = Stopwatch.GetTimestamp();
         current = RenderPost(current);
         CurrentViewportTexture = new RenderViewportTexture(current.Handle, current.Width, current.Height);
         RecordSub(profiler, FrameSubPhase.PostProcess, started);
 
+        // --- Present 阶段：缩放上屏、overlay、UI 层与交换缓冲 ---
         started = Stopwatch.GetTimestamp();
         PresentationViewport presentation = PresentationViewport.Fit(Width, Height, _window.Width, _window.Height);
         _present.Render(current, presentation, _quad);
@@ -568,6 +576,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         _uploader.UploadDirtyRects(_worldTexture, renderBuffer, dirtyRects);
     }
 
+    // 构建 visibility mask：无 fog 时全可见，再叠加点光源 reveal 贡献。
     private void UploadVisibility(FogOfWarBuffer? fogOfWar, ReadOnlySpan<LightSource> pointLights)
     {
         if (fogOfWar is null)
@@ -632,6 +641,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         }
     }
 
+    // 在 _postA/_postB 间乒乓切换，按设置串联 dither/gamma/CRT。
     private ColorRenderTarget RenderPost(ColorRenderTarget source)
     {
         ColorRenderTarget current = source;
@@ -696,6 +706,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
             Settings.RadianceCascades.Validate().Enabled;
     }
 
+    // 按 order 升序绘制 UI 层；每层前后保存/恢复 GL 状态以防污染世界渲染。
     private void PresentUiLayers(in UiPresentContext context)
     {
         for (int i = 0; i < UiLayerCount; i++)

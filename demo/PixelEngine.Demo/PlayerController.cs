@@ -208,6 +208,7 @@ public sealed class PlayerController : Behaviour
         _rigidImpactCooldown = MathF.Max(0f, _rigidImpactCooldown - dt);
         CharacterState previousState = State;
         State = Context.Character.GetState(_body);
+        // 越界自动重生（可玩关卡默认关闭）
         if (TryRespawnWhenEscaped())
         {
             return;
@@ -223,6 +224,7 @@ public sealed class PlayerController : Behaviour
             _jumpBufferTimer = JumpBufferTime;
         }
 
+        // Coyote time 与 jump buffer：平台动作手感核心
         _jumpBufferTimer = MathF.Max(0f, _jumpBufferTimer - dt);
         _coyoteTimer = State.OnGround ? CoyoteTime : MathF.Max(0f, _coyoteTimer - dt);
 
@@ -230,6 +232,7 @@ public sealed class PlayerController : Behaviour
         ApplyVertical(dt);
         TryConsumeJump();
 
+        // 单帧位移钳制，避免高速穿模
         float dx = ClampDisplacement(_velocityX * dt);
         float dy = ClampDisplacement(_velocityY * dt);
         CharacterState moved = Context.Character.MoveNow(_body, dx, dy);
@@ -240,6 +243,7 @@ public sealed class PlayerController : Behaviour
         SyncTransform();
     }
 
+    // 物理步后处理：刚体压顶伤害与 RigidOwned 重叠解脱
     private void HandlePostPhysicsStep()
     {
         if (!_hasBody)

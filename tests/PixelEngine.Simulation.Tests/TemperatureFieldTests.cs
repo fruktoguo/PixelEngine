@@ -5,6 +5,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Plan 04 温度场测试。
+/// 不变式：温度扩散与热源写入满足 Plan 04 数值契约。
 /// </summary>
 public sealed class TemperatureFieldTests
 {
@@ -19,6 +20,7 @@ public sealed class TemperatureFieldTests
     [Fact]
     public void ConductStepSpreadsHeatAcrossChunkBoundary()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Chunk east = source.GetRequired(new ChunkCoord(1, 0));
         Fill(center, Water);
@@ -29,6 +31,7 @@ public sealed class TemperatureFieldTests
 
         field.ConductStep(source, materials.Hot);
 
+        // Assert：验证预期结果
         Assert.True(field.GetTemperature(60, 8) < 100);
         Assert.True(field.GetTemperature(64, 8) > 0);
         Assert.Equal(4, field.Downscale);
@@ -42,6 +45,7 @@ public sealed class TemperatureFieldTests
     [Fact]
     public void ApplyPhaseTransitionsMeltsAndBoilsByThreshold()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 8, 10, Ice);
         Set(center, 12, 10, Water);
@@ -53,6 +57,7 @@ public sealed class TemperatureFieldTests
 
         field.ApplyPhaseTransitions(source, materials, CellFlags.Parity);
 
+        // Assert：验证预期结果
         Assert.Equal(Water, Get(center, 8, 10));
         Assert.Equal(Steam, Get(center, 12, 10));
         Assert.True(CellFlags.MatchesFrame(GetFlags(center, 8, 10), CellFlags.Parity));
@@ -85,6 +90,7 @@ public sealed class TemperatureFieldTests
     [Fact]
     public void ApplyPhaseTransitionsRoutesRigidOwnedMeltToDamageSink()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 8, 10, Ice);
         center.Flags[CellAddressing.LocalIndexFromLocal(8, 10)] = CellFlags.RigidOwned;
@@ -99,6 +105,7 @@ public sealed class TemperatureFieldTests
         field.ApplyPhaseTransitions(source, materials, parityBit, sink);
 
         byte flags = GetFlags(center, 8, 10);
+        // Assert：验证预期结果
         Assert.Equal(Water, Get(center, 8, 10));
         Assert.False(CellFlags.Has(flags, CellFlags.RigidOwned));
         Assert.True(CellFlags.MatchesFrame(flags, parityBit));
@@ -126,6 +133,7 @@ public sealed class TemperatureFieldTests
     [Fact]
     public void FloatStorageSimdAndScalarConductStepMatch()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource simdSource = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk simdCenter);
         TestChunkSource scalarSource = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk scalarCenter);
         Fill(simdCenter, Water);
@@ -145,6 +153,7 @@ public sealed class TemperatureFieldTests
             {
                 int worldX = tx * simd.Downscale;
                 int worldY = ty * simd.Downscale;
+                // Assert：验证预期结果
                 Assert.Equal(scalar.GetTemperature(worldX, worldY), simd.GetTemperature(worldX, worldY), 5);
             }
         }
@@ -163,6 +172,7 @@ public sealed class TemperatureFieldTests
     [Fact]
     public void ParallelConductStepMatchesSingleThreadConductStep()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource parallelSource = CreateNeighborhood(new ChunkCoord(0, 0), out _);
         TestChunkSource singleThreadSource = CreateNeighborhood(new ChunkCoord(0, 0), out _);
         FillAll(parallelSource, Water);
@@ -180,6 +190,7 @@ public sealed class TemperatureFieldTests
         parallel.ConductStep(parallelSource, materials.Hot, jobs, frameIndex: 13, worldSeed: 17);
         singleThread.ConductStep(singleThreadSource, materials.Hot, frameIndex: 13, worldSeed: 17);
 
+        // Assert：验证预期结果
         Assert.True(parallel.LastConductStepUsedJobSystem);
         Assert.InRange(parallel.LastConductStepWorkerCount, 1, jobs.WorkerCount);
         Assert.Equal(singleThread.GetTemperature(32, 32), parallel.GetTemperature(32, 32), 5);
@@ -194,6 +205,7 @@ public sealed class TemperatureFieldTests
     [Fact]
     public void ConductStepWithJobSystemFallsBackForSmallRowCounts()
     {
+        // Arrange：准备输入与初始状态
         Chunk chunk = new(new ChunkCoord(0, 0));
         Fill(chunk, Water);
         TestChunkSource source = new(chunk);
@@ -207,6 +219,7 @@ public sealed class TemperatureFieldTests
 
         field.ConductStep(source, materials.Hot, jobs);
 
+        // Assert：验证预期结果
         Assert.False(field.LastConductStepUsedJobSystem);
         Assert.Equal(1, field.LastConductStepWorkerCount);
         Assert.True(field.GetTemperature(32, 32) < 100);
@@ -236,12 +249,14 @@ public sealed class TemperatureFieldTests
     [Fact]
     public void AmbientCoolingPrunesExpiredTemperatureGlowBlocks()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Fill(center, Water);
         MaterialTable materials = CreateMaterials(waterHeatConduct: 0);
         TemperatureField field = new(storageKind: TemperatureStorageKind.Float32);
         field.AddHeat(32, 32, 90);
 
+        // Assert：验证预期结果
         Assert.True(field.HasActiveBlocks);
 
         for (int i = 0; i < 30; i++)
@@ -259,8 +274,10 @@ public sealed class TemperatureFieldTests
     [Fact]
     public void StepIntervalAndContactFireOnlyDegradeGateTemperaturePasses()
     {
+        // Arrange：准备输入与初始状态
         TemperatureField field = new(stepInterval: 3);
 
+        // Assert：验证预期结果
         Assert.True(field.ShouldRun(0));
         Assert.False(field.ShouldRun(1));
         Assert.True(field.ShouldRun(3));

@@ -6,6 +6,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// 验证脚本 ALC 在多轮 Roslyn 编译与卸载后仍可回收。
+/// 不变式：多轮 Roslyn 编译卸载后 ScriptLoadContext 可被 GC 回收。
 /// </summary>
 [Collection("ALC collectibility")]
 public sealed class AlcCollectibilityTests

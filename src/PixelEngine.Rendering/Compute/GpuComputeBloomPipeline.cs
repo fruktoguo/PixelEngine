@@ -175,11 +175,13 @@ public sealed class GpuComputeBloomPipeline
         InsertImageBarrier();
     }
 
+    // 所有 bloom/light pass 统一将 RGBA8 输出绑定到 image unit 0。
     private void BindOutput(uint outputImage)
     {
         _backend.BindImage(0, outputImage, level: 0, layered: false, layer: 0, GLEnum.WriteOnly, GLEnum.Rgba8);
     }
 
+    // dispatch 后屏障：保证后续 pass 的 texture/image 采样可见本次写入。
     private void InsertImageBarrier()
     {
         _backend.MemoryBarrier(MemoryBarrierMask.ShaderImageAccessBarrierBit | MemoryBarrierMask.TextureFetchBarrierBit);

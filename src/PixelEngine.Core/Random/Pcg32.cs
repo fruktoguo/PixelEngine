@@ -37,6 +37,7 @@ public struct Pcg32 : IRandomSource
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxExclusive);
 
+        // Lemire 式无偏取模：拒绝低于 threshold 的采样以避免 modulo bias。
         uint bound = (uint)maxExclusive;
         uint threshold = unchecked(0U - bound) % bound;
         while (true)

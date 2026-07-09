@@ -99,6 +99,7 @@ public sealed class EngineEditorPlaySessionService(Engine engine, IEditorPlaySna
     /// <returns>模式切换结果。</returns>
     public EditorPlaySessionResult EnterPlayCurrent()
     {
+        // 直接 Play：不捕获快照，退出时保留运行期对世界造成的修改。
         _engine.EnterPlayMode();
         _source = EditorPlaySource.CurrentState;
         _temporarySnapshotActive = false;
@@ -112,6 +113,7 @@ public sealed class EngineEditorPlaySessionService(Engine engine, IEditorPlaySna
     /// <returns>模式切换结果。</returns>
     public EditorPlaySessionResult EnterPlayTemporary()
     {
+        // 临时 Play：进入前保存世界快照，退出 Edit 时回滚到进入 Play 前的编辑态。
         if (_snapshotStore is null)
         {
             _statusMessage = "临时 Play 缺少快照后端。";
@@ -138,6 +140,7 @@ public sealed class EngineEditorPlaySessionService(Engine engine, IEditorPlaySna
     /// <returns>模式切换结果。</returns>
     public EditorPlaySessionResult ExitPlay()
     {
+        // 先结束脚本 Play session，再按需恢复快照，最后切回 Edit 让编辑工具重新接管输入。
         _engine.EndScriptPlaySession();
         if (_temporarySnapshotActive)
         {

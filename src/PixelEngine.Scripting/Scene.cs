@@ -262,6 +262,7 @@ public sealed class Scene
     internal void FlushDestroyed(IScriptContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+        // 帧末统一销毁：先 OnDestroy 再摘组件/实体，避免 OnUpdate 期间读到悬空引用。
         for (int i = 0; i < _destroyQueue.Count; i++)
         {
             Entity entity = _destroyQueue[i];
@@ -349,6 +350,7 @@ public sealed class Scene
     internal void RestorePlaySessionSnapshot(ScriptPlaySessionSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        // Play Session 快照恢复：先删多余实体，再补缺失 id，最后对齐 Behaviour 集合与序列化状态。
         HashSet<int> savedEntityIds = [.. snapshot.EntityIds];
         Entity[] currentEntities = [.. _entities.Values];
         for (int i = 0; i < currentEntities.Length; i++)
@@ -550,6 +552,7 @@ public sealed class Scene
         private Entity[] _entities = [];
         private T[] _components = [];
 
+        // 同类型组件稠密分桶：entityId→index 映射支撑 O(1) 增删与顺序遍历派发。
         public int Count { get; private set; }
 
         public void Add(Entity entity, T component)
@@ -607,6 +610,7 @@ public sealed class Scene
                 return;
             }
 
+            // swap-remove 保持稠密存储，避免 Destroy 后留下空洞影响逐帧遍历。
             int last = --Count;
             _ = _indices.Remove(entityId);
             if (index != last)

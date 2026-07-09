@@ -61,9 +61,11 @@ public sealed class GameUiPhaseDriver : IEnginePhaseDriver
 
     private void RunUi(EngineTickContext context)
     {
+        // 游戏 UI 使用渲染帧 dt（非 sim tick dt），与动画/交互节奏对齐墙钟帧率。
         float deltaSeconds = ResolveRenderDeltaSeconds(context);
         LastDeltaSeconds = deltaSeconds;
         long started = Stopwatch.GetTimestamp();
+        // 先推送脚本/服务层模型，再 Update 后端并 drain 本帧 UI 事件到桥接层。
         _modelPusher?.PushGameUiModels();
         _host.Update(deltaSeconds);
         LastDrainedEventCount = _host.DrainEvents(_eventBuffer);

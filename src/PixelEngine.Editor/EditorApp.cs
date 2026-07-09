@@ -199,6 +199,7 @@ public sealed class EditorApp : IDisposable
         }
 
         _controller.NewFrame(deltaSeconds, width, height, framebufferScaleX, framebufferScaleY);
+        // ImGui 帧内顺序：DockSpace 宿主 → 各可见面板 Draw → Render 提交 draw data。
         if (Options.EnableDockSpace)
         {
             _controller.DrawDockSpace();

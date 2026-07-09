@@ -10,7 +10,8 @@ using ScriptScene = PixelEngine.Scripting.Scene;
 namespace PixelEngine.Demo.Tests;
 
 /// <summary>
-/// Demo lava-mine 场景端到端装配测试。
+/// Lava Mine Demo 场景加载与可玩性契约测试。
+/// 不变式：场景材质/实体/脚本组件齐备、关卡目标与危险区在 headless tick 下可验证。
 /// </summary>
 public sealed class LavaMineSceneTests
 {
@@ -20,11 +21,13 @@ public sealed class LavaMineSceneTests
     [Fact]
     public async Task LavaMineSceneRegistersDestructibleWoodAndMetalStructures()
     {
+        // Arrange：准备输入与初始状态
         using Engine engine = await CreateLavaMineEngineAsync();
         engine.RunHeadlessTicks(2);
 
         ScriptScene scene = engine.Context.GetService<ScriptScene>();
         LevelDirector director = FindBehaviour<LevelDirector>(scene);
+        // Assert：验证预期结果
         Assert.True(director.RigidStructuresQueued);
         Assert.Equal(12, director.RigidStructureCount);
         MaterialBrush brush = FindBehaviour<MaterialBrush>(scene);
@@ -86,6 +89,7 @@ public sealed class LavaMineSceneTests
     [Fact]
     public async Task LavaMineSceneBuildsDirectSideScrollingLavaRoute()
     {
+        // Arrange：准备输入与初始状态
         using Engine engine = await CreateLavaMineEngineAsync();
         engine.RunHeadlessTicks(2);
 
@@ -95,6 +99,7 @@ public sealed class LavaMineSceneTests
         ExplosiveTool explosive = FindBehaviour<ExplosiveTool>(scene);
         CellGrid grid = engine.Context.GetService<CellGrid>();
         MaterialTable materials = engine.Context.GetService<MaterialTable>();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("lava", out ushort lava));
         Assert.True(materials.TryGetId("wood", out ushort wood));
         Assert.True(materials.TryGetId("metal", out ushort metal));
@@ -125,6 +130,7 @@ public sealed class LavaMineSceneTests
     [Fact]
     public async Task MaterialBrushCanDigRigidBridgeThroughPublicInput()
     {
+        // Arrange：准备输入与初始状态
         using Engine engine = await CreateLavaMineEngineAsync();
         engine.RunHeadlessTicks(2);
 
@@ -156,6 +162,7 @@ public sealed class LavaMineSceneTests
             maxCreatedBodies = Math.Max(maxCreatedBodies, physics.LastDestructionResult.CreatedBodies);
         }
 
+        // Assert：验证预期结果
         Assert.True(CountEmpty(grid, 168, 246, 250, 256) > 0);
         Assert.True(maxDestroyedBodies > 0);
         Assert.True(maxCreatedBodies > 0);
@@ -168,6 +175,7 @@ public sealed class LavaMineSceneTests
     [Fact]
     public async Task MaterialBrushPaintedMaterialsAreTakenOverByCaRules()
     {
+        // Arrange：准备输入与初始状态
         using Engine engine = await CreateLavaMineEngineAsync();
         engine.RunHeadlessTicks(2);
 
@@ -187,6 +195,7 @@ public sealed class LavaMineSceneTests
         CellGrid grid = engine.Context.GetService<CellGrid>();
         ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
         MaterialTable materials = engine.Context.GetService<MaterialTable>();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("sand", out ushort sand));
         Assert.True(materials.TryGetId("water", out ushort water));
         Assert.True(materials.TryGetId("oil", out ushort oil));
@@ -250,6 +259,7 @@ public sealed class LavaMineSceneTests
     [Fact]
     public async Task LavaMineRuntimeRestartRestoresGoalBaselineAfterVictory()
     {
+        // Arrange：准备输入与初始状态
         using Engine engine = await CreateLavaMineEngineAsync();
         engine.RunHeadlessTicks(2);
 
@@ -263,6 +273,7 @@ public sealed class LavaMineSceneTests
         Point2F shot = camera.WorldToScreen(player.CenterX + 16f, player.CenterY);
         input.Update([], [MouseButton.Left], shot.X, shot.Y, wheelY: 0f);
         engine.RunHeadlessTicks(2);
+        // Assert：验证预期结果
         Assert.True(weapons.PrimaryFireCount > 0, "重开前应先产生一次武器分派，证明重开会恢复武器运行态。");
 
         player.SpawnX = goal.X + 2f;
@@ -292,6 +303,7 @@ public sealed class LavaMineSceneTests
     [Fact]
     public async Task AcidCorrosionDamagesRigidWoodAndRebuildsBody()
     {
+        // Arrange：准备输入与初始状态
         using Engine engine = await CreateLavaMineEngineAsync();
         engine.RunHeadlessTicks(2);
 
@@ -299,6 +311,7 @@ public sealed class LavaMineSceneTests
         ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
         MaterialTable materials = engine.Context.GetService<MaterialTable>();
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("wood", out ushort wood));
         Assert.True(materials.TryGetId("acid", out ushort acid));
 
@@ -337,6 +350,7 @@ public sealed class LavaMineSceneTests
     [Fact]
     public async Task MetalLavaMeltsSupportAndDropsUpperWoodStructure()
     {
+        // Arrange：准备输入与初始状态
         using Engine engine = await CreateLavaMineEngineAsync();
         engine.RunHeadlessTicks(2);
 
@@ -345,6 +359,7 @@ public sealed class LavaMineSceneTests
         MaterialTable materials = engine.Context.GetService<MaterialTable>();
         TemperatureField temperature = engine.Context.GetService<TemperatureField>();
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("wood", out ushort wood));
         Assert.True(materials.TryGetId("metal", out ushort metal));
         Assert.True(materials.TryGetId("molten_metal", out ushort moltenMetal));

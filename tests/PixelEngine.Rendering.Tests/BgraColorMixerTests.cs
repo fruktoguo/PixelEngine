@@ -2,6 +2,9 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// BGRA 颜色混合器测试：验证 SIMD/标量路径与 oracle 结果一致。
+/// </summary>
 public sealed class BgraColorMixerTests
 {
     [Theory]

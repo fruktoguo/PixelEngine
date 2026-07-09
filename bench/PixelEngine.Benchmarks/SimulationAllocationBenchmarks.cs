@@ -4,7 +4,7 @@ using PixelEngine.Simulation;
 namespace PixelEngine.Benchmarks;
 
 /// <summary>
-/// Simulation 内核稳态零分配基准。
+/// 热路径：SimulationKernel 单帧在不同脏区比例下的分配。
 /// </summary>
 [MemoryDiagnoser]
 public class SimulationAllocationBenchmarks
@@ -61,7 +61,7 @@ public class SimulationAllocationBenchmarks
     }
 
     /// <summary>
-    /// 单粒 powder 的 StepCa + dirty swap 稳态分配基准。
+    /// 验证Step Ca And Swap Single Powder。
     /// </summary>
     [Benchmark]
     public void StepCaAndSwapSinglePowder()
@@ -76,7 +76,7 @@ public class SimulationAllocationBenchmarks
     }
 
     /// <summary>
-    /// 单 cell 结构伤害累计的稳态分配基准。
+    /// 验证Apply Structural Damage Accumulates。
     /// </summary>
     [Benchmark]
     public bool ApplyStructuralDamageAccumulates()

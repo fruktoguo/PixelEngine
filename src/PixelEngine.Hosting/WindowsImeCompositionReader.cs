@@ -239,12 +239,7 @@ internal sealed class WindowsImeCompositionReader
 
     private static int ToClientCoordinate(float value)
     {
-        if (!float.IsFinite(value))
-        {
-            return 0;
-        }
-
-        return (int)MathF.Round(value);
+        return float.IsFinite(value) ? (int)MathF.Round(value) : 0;
     }
 
     internal static void FindTargetAttributeRange(

@@ -6,6 +6,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// 连通分量标记测试。
+/// 不变式：连通分量标记与 flood-fill oracle 一致。
 /// </summary>
 public sealed class ConnectedComponentLabelerTests
 {

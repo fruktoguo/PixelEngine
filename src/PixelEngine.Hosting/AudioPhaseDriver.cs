@@ -43,6 +43,7 @@ public sealed class AudioPhaseDriver : IEnginePhaseDriver
         phases.Register(EnginePhase.BuildRenderBuffer, RunAudio);
     }
 
+    // 挂在相位 9 末尾：listener/voice 每渲染帧推进；事件派发仅在 RunSim 帧执行以避免重复触发。
     private void RunAudio(EngineTickContext context)
     {
         AudioListenerView view = _listenerProvider(context);

@@ -177,6 +177,7 @@ public sealed class Chunk
             return;
         }
 
+        // 隔帧 chunk 把 dirty 区内 cell 标为“上帧已处理”，避免 parity 跳变漏更新。
         byte staleParity = (byte)((parityBit ^ CellFlags.Parity) & CellFlags.Parity);
         for (int ly = rect.MinY; ly <= rect.MaxY; ly++)
         {
@@ -229,6 +230,7 @@ public sealed class Chunk
     /// </summary>
     public void SwapDirtyRects()
     {
+        // 帧边界双缓冲：working + 8 路 KeepAlive 合并为下帧 current。
         DirtyRect next = WorkingDirty;
         for (int i = 0; i < _incoming.Length; i++)
         {

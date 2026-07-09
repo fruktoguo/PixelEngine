@@ -79,6 +79,7 @@ public sealed unsafe class PboUploader : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         ValidateSameSize(texture, buffer);
 
+        // ping-pong PBO：CPU 写入下一槽位，GPU 从上一槽位异步 unpack 到世界纹理。
         PboSlot slot = CopyBufferToNextPbo(buffer);
         slot.Buffer.Bind();
         texture.Bind();
@@ -121,6 +122,7 @@ public sealed unsafe class PboUploader : IDisposable
         PboSlot slot = CopyBufferToNextPbo(buffer);
         slot.Buffer.Bind();
         texture.Bind();
+        // 利用 UnpackRowLength/Skip* 从整帧 PBO 中按 rect 子区上传，避免 per-rect 重拷贝。
         _gl.PixelStore(GLEnum.UnpackRowLength, buffer.Width);
 
         foreach (PixelUploadRect rect in rects)
@@ -202,10 +204,12 @@ public sealed unsafe class PboUploader : IDisposable
 
         if (Mode == PboUploadMode.PersistentMapped)
         {
+            // persistent 路径：等待上一帧 fence 后直接 memcpy 到常驻映射区。
             CopyToPersistentPbo(slot, buffer);
             return slot;
         }
 
+        // orphan + unsynchronized map：每帧重分配 PBO 以避免 GPU 读回阻塞 CPU。
         slot.Buffer.Bind();
         slot.Buffer.Allocate((nuint)buffer.ByteLength, BufferUsageARB.StreamDraw);
         void* destination = slot.Buffer.Map(

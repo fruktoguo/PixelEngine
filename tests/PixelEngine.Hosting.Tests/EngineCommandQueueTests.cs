@@ -4,6 +4,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// 延迟命令队列测试。
+/// 不变式：延迟命令在 flush 前不生效、跨相位提交顺序确定。
 /// </summary>
 public sealed class EngineCommandQueueTests
 {

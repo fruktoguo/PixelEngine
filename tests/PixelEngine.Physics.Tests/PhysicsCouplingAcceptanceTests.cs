@@ -8,6 +8,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// CA 与像素刚体双向耦合验收测试。
+/// 不变式：CA↔刚体双向耦合不穿透、伤害与 stamp 一致。
 /// </summary>
 public sealed class PhysicsCouplingAcceptanceTests
 {
@@ -24,6 +25,7 @@ public sealed class PhysicsCouplingAcceptanceTests
     [Fact]
     public void SandPilesOnRigidOwnedSolidCell()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = TestChunkSource.CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         SetCurrentDirty(center, DirtyRect.Full);
         Set(center, 10, 10, Sand);
@@ -38,6 +40,7 @@ public sealed class PhysicsCouplingAcceptanceTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(Sand, Get(center, 10, 10));
         Assert.Equal(RigidStone, Get(center, 10, 11));
         Assert.True(CellFlags.Has(GetFlags(center, 10, 11), CellFlags.RigidOwned));
@@ -53,6 +56,7 @@ public sealed class PhysicsCouplingAcceptanceTests
     [InlineData(Acid, Empty)]
     public void ReactionsDamageRigidOwnedCells(ushort reactiveMaterial, ushort expectedRigidOutput)
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = TestChunkSource.CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         SetCurrentDirty(center, DirtyRect.Full);
         Set(center, 10, 10, reactiveMaterial);
@@ -73,6 +77,7 @@ public sealed class PhysicsCouplingAcceptanceTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(expectedRigidOutput, Get(center, targetX, targetY));
         Assert.False(CellFlags.Has(GetFlags(center, targetX, targetY), CellFlags.RigidOwned));
         Span<RigidDamageEvent> drained = stackalloc RigidDamageEvent[2];
@@ -86,6 +91,7 @@ public sealed class PhysicsCouplingAcceptanceTests
     [Fact]
     public void DamagedRigidBodySplitsIntoSteppingRotatingChildBodies()
     {
+        // Arrange：搭建测试场景与依赖
         PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         worldDef.Gravity = new B2Vec2 { X = 0f, Y = 10f };
@@ -108,8 +114,10 @@ public sealed class PhysicsCouplingAcceptanceTests
             QueueVerticalCut(grid, damageQueue, x: 32, minY: 8, maxY: 24);
             PhysicsSystem system = new(worldId, physicsWorld, grid, registry, damageQueue, destruction);
 
+            // Act：执行被测操作
             system.SyncStep(1f / 30f);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(1, system.LastDestructionResult.DestroyedBodies);
             Assert.Equal(2, system.LastDestructionResult.CreatedBodies);
             Assert.Equal(2, physicsWorld.ActiveBodyCount);

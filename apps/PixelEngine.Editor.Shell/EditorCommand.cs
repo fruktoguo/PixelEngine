@@ -1,5 +1,8 @@
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// 可撤销的编辑器场景命令接口。
+/// </summary>
 internal interface IEditorCommand
 {
     string Name { get; }
@@ -9,6 +12,9 @@ internal interface IEditorCommand
     void Undo(EditorSceneModel scene);
 }
 
+/// <summary>
+/// 编辑器场景操作的 Undo/Redo 栈。
+/// </summary>
 internal sealed class EditorUndoStack
 {
     private readonly Stack<IEditorCommand> _undo = new();
@@ -66,6 +72,9 @@ internal sealed class EditorUndoStack
     }
 }
 
+/// <summary>
+/// Undo 命令：CreateGameObject。
+/// </summary>
 internal sealed class CreateGameObjectCommand(string name, int? parentId = null, int? insertIndex = null) : IEditorCommand
 {
     private EditorSceneObjectSnapshot? _created;
@@ -93,6 +102,9 @@ internal sealed class CreateGameObjectCommand(string name, int? parentId = null,
     }
 }
 
+/// <summary>
+/// Undo 命令：DeleteGameObject。
+/// </summary>
 internal sealed class DeleteGameObjectCommand(int stableId) : IEditorCommand
 {
     private EditorSceneObjectSnapshot? _deleted;
@@ -113,6 +125,9 @@ internal sealed class DeleteGameObjectCommand(int stableId) : IEditorCommand
     }
 }
 
+/// <summary>
+/// Undo 命令：RenameGameObject。
+/// </summary>
 internal sealed class RenameGameObjectCommand(int stableId, string newName) : IEditorCommand
 {
     private string? _oldName;
@@ -136,6 +151,9 @@ internal sealed class RenameGameObjectCommand(int stableId, string newName) : IE
     }
 }
 
+/// <summary>
+/// Undo 命令：SetGameObjectEnabled。
+/// </summary>
 internal sealed class SetGameObjectEnabledCommand(int stableId, bool enabled) : IEditorCommand
 {
     private bool? _oldEnabled;
@@ -159,6 +177,9 @@ internal sealed class SetGameObjectEnabledCommand(int stableId, bool enabled) : 
     }
 }
 
+/// <summary>
+/// Undo 命令：SetTransform。
+/// </summary>
 internal sealed class SetTransformCommand(int stableId, EditorSceneTransform newTransform) : IEditorCommand
 {
     private EditorSceneTransform? _oldTransform;
@@ -185,6 +206,9 @@ internal sealed class SetTransformCommand(int stableId, EditorSceneTransform new
     }
 }
 
+/// <summary>
+/// Undo 命令：AddComponent。
+/// </summary>
 internal sealed class AddComponentCommand(int stableId, EditorComponentModel component, int? insertIndex = null) : IEditorCommand
 {
     public string Name => "Add Component";
@@ -201,6 +225,9 @@ internal sealed class AddComponentCommand(int stableId, EditorComponentModel com
     }
 }
 
+/// <summary>
+/// Undo 命令：RemoveComponent。
+/// </summary>
 internal sealed class RemoveComponentCommand(int stableId, int componentIndex) : IEditorCommand
 {
     private EditorComponentModel? _removed;
@@ -221,6 +248,9 @@ internal sealed class RemoveComponentCommand(int stableId, int componentIndex) :
     }
 }
 
+/// <summary>
+/// Undo 命令：MoveComponent。
+/// </summary>
 internal sealed class MoveComponentCommand(int stableId, int fromIndex, int toIndex) : IEditorCommand
 {
     public string Name => "Move Component";
@@ -236,6 +266,9 @@ internal sealed class MoveComponentCommand(int stableId, int fromIndex, int toIn
     }
 }
 
+/// <summary>
+/// Undo 命令：SetComponentField。
+/// </summary>
 internal sealed class SetComponentFieldCommand(int stableId, int componentIndex, string fieldName, string? value) : IEditorCommand
 {
     private string? _oldValue;
@@ -262,6 +295,9 @@ internal sealed class SetComponentFieldCommand(int stableId, int componentIndex,
     }
 }
 
+/// <summary>
+/// Undo 命令：ReparentGameObject。
+/// </summary>
 internal sealed class ReparentGameObjectCommand(int stableId, int? newParentId, int? newIndex = null) : IEditorCommand
 {
     private int? _oldParentId;
@@ -288,6 +324,9 @@ internal sealed class ReparentGameObjectCommand(int stableId, int? newParentId, 
     }
 }
 
+/// <summary>
+/// Undo 命令：DuplicateGameObject。
+/// </summary>
 internal sealed class DuplicateGameObjectCommand(int stableId) : IEditorCommand
 {
     private EditorSceneObjectSnapshot? _duplicate;
@@ -315,6 +354,9 @@ internal sealed class DuplicateGameObjectCommand(int stableId) : IEditorCommand
     }
 }
 
+/// <summary>
+/// Undo 命令：CreatePrefabAsset。
+/// </summary>
 internal sealed class CreatePrefabAssetCommand(EditorPrefabAssetStore prefabs, int stableId, string assetPath) : IEditorCommand
 {
     private EditorSceneObjectSnapshot? _before;
@@ -356,6 +398,9 @@ internal sealed class CreatePrefabAssetCommand(EditorPrefabAssetStore prefabs, i
     }
 }
 
+/// <summary>
+/// Undo 命令：InstantiatePrefab。
+/// </summary>
 internal sealed class InstantiatePrefabCommand(
     EditorPrefabAssetStore prefabs,
     string assetPath,
@@ -402,6 +447,9 @@ internal sealed class InstantiatePrefabCommand(
     }
 }
 
+/// <summary>
+/// Undo 命令：RevertPrefabOverrides。
+/// </summary>
 internal sealed class RevertPrefabOverridesCommand(int stableId) : IEditorCommand
 {
     private EditorPrefabLink? _oldLink;

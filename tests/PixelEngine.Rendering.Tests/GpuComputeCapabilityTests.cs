@@ -3,8 +3,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// GPU 计算能力测试：设备特性与着色器编译门控。
+/// </summary>
 public sealed class GpuComputeCapabilityTests
 {
+    /// <summary>
+    /// 验证Desktop Gl43Core Reports Gl Compute Base Snapshot Inputs。
+    /// </summary>
     [Fact]
     public void DesktopGl43CoreReportsGlComputeBaseSnapshotInputs()
     {
@@ -26,6 +32,9 @@ public sealed class GpuComputeCapabilityTests
         Assert.True(gate.BaselineFallback);
     }
 
+    /// <summary>
+    /// 验证Angle Gles30Forces Baseline Fallback。
+    /// </summary>
     [Fact]
     public void AngleGles30ForcesBaselineFallback()
     {
@@ -45,6 +54,9 @@ public sealed class GpuComputeCapabilityTests
         Assert.Equal(ComputeFeatureSwitches.Disabled, gate.FeatureSwitches);
     }
 
+    /// <summary>
+    /// 验证Gl Compute选择Enabled Feature Switches。
+    /// </summary>
     [Fact]
     public void GlComputeSelectsEnabledFeatureSwitches()
     {
@@ -79,6 +91,9 @@ public sealed class GpuComputeCapabilityTests
         Assert.Equal(features, gate.FeatureSwitches);
     }
 
+    /// <summary>
+    /// 验证Compute Sharp Requires Explicit Preference Resource Contract And Executable Backend。
+    /// </summary>
     [Fact]
     public void ComputeSharpRequiresExplicitPreferenceResourceContractAndExecutableBackend()
     {
@@ -117,6 +132,9 @@ public sealed class GpuComputeCapabilityTests
         Assert.False(withPreference.ComputeSharpAvailable);
     }
 
+    /// <summary>
+    /// 验证Gpu Compute Resources Reject Zero Handles。
+    /// </summary>
     [Fact]
     public void GpuComputeResourcesRejectZeroHandles()
     {

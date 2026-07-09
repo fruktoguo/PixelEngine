@@ -6,7 +6,7 @@ using PixelEngine.Simulation.Particles;
 namespace PixelEngine.Benchmarks;
 
 /// <summary>
-/// Rendering 相位 9 CPU 热路径稳态零分配基准。
+/// 热路径：RenderBufferBuilder.Build 的托管分配。
 /// </summary>
 [MemoryDiagnoser]
 public class RenderingAllocationBenchmarks
@@ -78,7 +78,7 @@ public class RenderingAllocationBenchmarks
     }
 
     /// <summary>
-    /// render buffer 构建稳态分配基准。
+    /// 验证Build Render Buffer行为符合预期。
     /// </summary>
     [Benchmark]
     public void BuildRenderBuffer()
@@ -87,7 +87,7 @@ public class RenderingAllocationBenchmarks
     }
 
     /// <summary>
-    /// 自由粒子 stamp 稳态分配基准。
+    /// 验证Stamp Particles。
     /// </summary>
     [Benchmark]
     public void StampParticles()

@@ -6,6 +6,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// 脚本光照请求同步测试。
+/// 不变式：脚本光照请求合并到渲染相位、无效句柄被忽略。
 /// </summary>
 public sealed class ScriptLightingSynchronizerTests
 {

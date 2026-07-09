@@ -44,6 +44,7 @@ public sealed class AudioClipCache(IAudioBackend backend, IAudioAssetStore asset
         _ = Interlocked.Increment(ref _loadingCount);
         try
         {
+            // --- 异步加载链：读资产字节 → 解码 PCM → 上传 OpenAL buffer → 注册缓存 ---
             byte[] bytes = await _assets.LoadBytesAsync(assetId, cancellationToken).ConfigureAwait(false);
             if (!_decoder.TryDecode(bytes, out DecodedAudioData decoded))
             {

@@ -7,7 +7,7 @@ using PixelEngine.UI;
 namespace PixelEngine.Benchmarks;
 
 /// <summary>
-/// 游戏大 UI 相位稳态零分配基准。
+/// 热路径：GameUiHost 合帧与文档切换；假设 ManagedFallback 后端与固定视口。
 /// </summary>
 [MemoryDiagnoser]
 public class GameUiAllocationBenchmarks
@@ -42,7 +42,7 @@ public class GameUiAllocationBenchmarks
     }
 
     /// <summary>
-    /// 静态 UI 逻辑相位：无 model push、无事件、无动画，仅推进后端 update 与固定 drain 缓冲。
+    /// 验证Run Static Ui Phase Frame行为符合预期。
     /// </summary>
     [Benchmark]
     public long RunStaticUiPhaseFrame()
@@ -52,7 +52,7 @@ public class GameUiAllocationBenchmarks
     }
 
     /// <summary>
-    /// 静态无脏 UI present 层：应跳过后端绘制/光栅化并保持 ui.paint=0。
+    /// 验证Composite Clean Frame Skip。
     /// </summary>
     [Benchmark]
     public double CompositeCleanFrameSkip()
@@ -62,7 +62,7 @@ public class GameUiAllocationBenchmarks
     }
 
     /// <summary>
-    /// ManagedFallback 静态无脏 GUI 路径：应跳过托管控件绘制。
+    /// 验证Draw Gui Clean Frame Skip。
     /// </summary>
     [Benchmark]
     public double DrawGuiCleanFrameSkip()

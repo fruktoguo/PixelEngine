@@ -5,6 +5,7 @@ namespace PixelEngine.World.Tests;
 
 /// <summary>
 /// Plan 07 世界激活区与驻留元数据测试。
+/// 不变式：激活区元数据与 chunk 状态一致。
 /// </summary>
 public sealed class WorldResidencyTests
 {

@@ -2,6 +2,9 @@ using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// 编辑器场景图：层级、选择、Prefab 与 Undo 命令目标模型。
+/// </summary>
 internal sealed class EditorSceneModel
 {
     private readonly Dictionary<int, EditorGameObject> _objects = [];
@@ -33,6 +36,7 @@ internal sealed class EditorSceneModel
     public static EditorSceneModel FromDocument(EngineSceneDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
+        // 两遍构建：先创建节点，再按 ParentId 挂接层级
         EditorSceneModel model = new(document.Name ?? "main");
         EngineSceneEntityDocument[] entities = document.Entities ?? [];
         for (int i = 0; i < entities.Length; i++)
@@ -75,6 +79,9 @@ internal sealed class EditorSceneModel
         return model;
     }
 
+    /// <summary>
+    /// 将编辑场景图序列化为可落盘的 <see cref="EngineSceneDocument"/>。
+    /// </summary>
     public EngineSceneDocument ToDocument()
     {
         EditorGameObject[] ordered = [.. EnumerateDepthFirst()];
@@ -126,6 +133,9 @@ internal sealed class EditorSceneModel
             : throw new KeyNotFoundException($"GameObject {stableId} 不存在。");
     }
 
+    /// <summary>
+    /// 在层级中创建 GameObject 并自动选中。
+    /// </summary>
     public EditorGameObject Create(string name, int? parentId = null, int? insertIndex = null)
     {
         EditorGameObject gameObject = new(AllocateStableId(), name);
@@ -694,6 +704,9 @@ internal sealed class EditorSceneModel
     }
 }
 
+/// <summary>
+/// EditorSceneObjectSnapshot 数据结构。
+/// </summary>
 internal sealed class EditorSceneObjectSnapshot(int? parentId, int index, EditorGameObject[] objects)
 {
     public int? ParentId { get; } = parentId;

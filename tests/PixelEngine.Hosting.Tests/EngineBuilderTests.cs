@@ -12,6 +12,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// EngineBuilder、EngineContext 与 Engine 生命周期测试。
+/// 不变式：服务注册顺序与生命周期正确、Build 后 Context 可按角色解析依赖。
 /// </summary>
 public sealed class EngineBuilderTests
 {
@@ -21,6 +22,7 @@ public sealed class EngineBuilderTests
     [Fact]
     public void BuildCreatesEngineContextWithCoreServices()
     {
+        // Arrange：准备输入与初始状态
         using Engine engine = new EngineBuilder()
             .WithWindow(1920, 1080)
             .WithInternalResolution(960, 540)
@@ -33,6 +35,7 @@ public sealed class EngineBuilderTests
             .Build();
 
         EngineContext context = engine.Context;
+        // Assert：验证预期结果
         Assert.Equal(EngineRunState.Created, engine.State);
         Assert.Equal(1920, context.Options.WindowWidth);
         Assert.Equal(1080, context.Options.WindowHeight);
@@ -61,6 +64,7 @@ public sealed class EngineBuilderTests
     [Fact]
     public void EngineOptionsLegacyConstructorDefaultsComputeSharpPreferenceOff()
     {
+        // Arrange：准备输入与初始状态
         EngineOptions options = new(
             EngineOptions.DefaultWindowWidth,
             EngineOptions.DefaultWindowHeight,
@@ -84,6 +88,7 @@ public sealed class EngineBuilderTests
             noGcRegionBudgetBytes: 0,
             overload: EngineOverloadOptions.CreateDefault());
 
+        // Assert：验证预期结果
         Assert.True(options.EnableGpu);
         Assert.False(options.Headless);
         Assert.False(options.PreferComputeSharpBackend);
@@ -95,6 +100,7 @@ public sealed class EngineBuilderTests
     [Fact]
     public void PreferComputeSharpBackendWritesOptionsAndRuntimeGatesDisableIt()
     {
+        // Arrange：准备输入与初始状态
         using Engine enabled = new EngineBuilder()
             .WithWorkerCount(1)
             .PreferComputeSharpBackend()
@@ -112,6 +118,7 @@ public sealed class EngineBuilderTests
             .PreferComputeSharpBackend()
             .Build();
 
+        // Assert：验证预期结果
         Assert.True(enabled.Context.Options.PreferComputeSharpBackend);
         Assert.False(gpuDisabled.Context.Options.PreferComputeSharpBackend);
         Assert.False(headless.Context.Options.PreferComputeSharpBackend);
@@ -144,6 +151,7 @@ public sealed class EngineBuilderTests
     [Fact]
     public void EnableGameUiWritesOptionsAndRuntimeGatesDisableIt()
     {
+        // Arrange：准备输入与初始状态
         using Engine enabled = new EngineBuilder()
             .WithWorkerCount(1)
             .EnableGameUi()
@@ -162,6 +170,7 @@ public sealed class EngineBuilderTests
             .EnableGameUi()
             .Build();
 
+        // Assert：验证预期结果
         Assert.True(enabled.Context.Options.EnableGameUi);
         Assert.Equal(UiBackendKind.ManagedFallback, enabled.Context.Options.GameUiBackend);
         Assert.False(guiDisabled.Context.Options.EnableGameUi);
@@ -174,6 +183,7 @@ public sealed class EngineBuilderTests
     [Fact]
     public void GameUiBackendSelectionIsRecordedWhenGlSmokeIsEnabled()
     {
+        // Arrange：准备输入与初始状态
         if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
         {
             return;
@@ -198,6 +208,7 @@ public sealed class EngineBuilderTests
         _ = engine.AttachWindowRuntime(window);
 
         GameUiBackendSelection selection = engine.Context.GetService<GameUiBackendSelection>();
+        // Assert：验证预期结果
         Assert.Equal(UiBackendKind.RmlUi, selection.RequestedBackend);
         bool nativeAvailable = RmlUiNativeInfo.TryQuery(out _);
         RmlUiNativeProfileDecision decision = RmlUiNativeProfileGate.Evaluate(window.Backend, window.Capabilities);
@@ -234,6 +245,7 @@ public sealed class EngineBuilderTests
     [Fact]
     public void UltralightGameUiBackendFallsBackToManagedWhenGlSmokeIsEnabled()
     {
+        // Arrange：准备输入与初始状态
         if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
         {
             return;
@@ -258,6 +270,7 @@ public sealed class EngineBuilderTests
         _ = engine.AttachWindowRuntime(window);
 
         GameUiBackendSelection selection = engine.Context.GetService<GameUiBackendSelection>();
+        // Assert：验证预期结果
         Assert.Equal(UiBackendKind.Ultralight, selection.RequestedBackend);
         Assert.Equal(UiBackendKind.ManagedFallback, selection.ActiveBackend);
         Assert.True(selection.UsedFallback);
@@ -298,6 +311,7 @@ public sealed class EngineBuilderTests
     [Fact]
     public void DisabledGameUiDoesNotRegisterRuntimeServicesWhenWindowIsAttached()
     {
+        // Arrange：搭建测试场景与依赖
         if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
         {
             return;
@@ -319,14 +333,16 @@ public sealed class EngineBuilderTests
         _ = engine.LoadContentPackage();
         _ = engine.AttachResidentSimulationWorld(64, 64, particleCapacity: 8);
         _ = engine.AttachWindowRuntime(window);
+        // Act：执行被测操作
         _ = engine.RunOneTick(realDeltaSeconds: 1.0 / 60.0);
 
+        // Assert：验证不变式与预期结果
         Assert.False(engine.Context.Options.EnableGameUi);
         Assert.False(engine.Context.TryGetService(out GameUiHost _));
         Assert.False(engine.Context.TryGetService(out GameUiPhaseDriver _));
         Assert.False(engine.Context.TryGetService(out GameUiServiceBridge _));
         Assert.False(engine.Context.TryGetService(out GameUiBackendSelection _));
-        Assert.False(engine.Context.TryGetService(out PixelEngine.Scripting.IGameUiService _));
+        Assert.False(engine.Context.TryGetService(out Scripting.IGameUiService _));
         Assert.Equal(0.0, engine.Context.Counters.UiUpdateMilliseconds);
         Assert.Equal(0.0, engine.Context.Counters.UiCompositeMilliseconds);
         Assert.Equal(0.0, engine.Context.Counters.UiPaintMilliseconds);
@@ -339,6 +355,7 @@ public sealed class EngineBuilderTests
     [Fact]
     public void BuildAppliesSustainedLowLatencyGcModeByDefault()
     {
+        // Arrange：准备输入与初始状态
         GCLatencyMode original = GCSettings.LatencyMode;
         try
         {
@@ -346,6 +363,7 @@ public sealed class EngineBuilderTests
                 .WithWorkerCount(1)
                 .Build();
 
+            // Assert：验证预期结果
             Assert.Equal(EngineGcMode.SustainedLowLatency, engine.Context.Options.GcMode);
             Assert.Equal(GCLatencyMode.SustainedLowLatency, GCSettings.LatencyMode);
         }
@@ -361,11 +379,13 @@ public sealed class EngineBuilderTests
     [Fact]
     public void HeadlessDeterministicBuildAppliesRuntimeFlags()
     {
+        // Arrange：准备输入与初始状态
         using Engine engine = new EngineBuilder()
             .UseHeadless()
             .UseDeterministicMode()
             .Build();
 
+        // Assert：验证预期结果
         Assert.True(engine.Context.Options.Headless);
         Assert.True(engine.Context.Options.DeterministicMode);
         Assert.False(engine.Context.Options.EnableEditor);
@@ -381,14 +401,17 @@ public sealed class EngineBuilderTests
     [Fact]
     public void RunOneTickAdvancesFrameClockWithoutCatchUp()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
             .WithSimHz(EngineConstants.SimHzDownscaled)
             .Build();
 
+        // Act：执行被测操作
         FrameTiming first = engine.RunOneTick(realDeltaSeconds: 1.0);
         FrameTiming second = engine.RunOneTick(realDeltaSeconds: 1.0);
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(EngineRunState.Running, engine.State);
         Assert.True(first.RunSim);
         Assert.False(second.RunSim);
@@ -422,13 +445,16 @@ public sealed class EngineBuilderTests
     [Fact]
     public void RunOneTickCanWrapCriticalFrameInNoGcRegion()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
             .WithNoGcRegionBudget(64 * 1024 * 1024)
             .Build();
 
+        // Act：执行被测操作
         _ = engine.RunOneTick();
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(64 * 1024 * 1024, engine.Context.Options.NoGcRegionBudgetBytes);
         Assert.Equal(64 * 1024 * 1024, engine.Context.Counters.NoGcRegionBudgetBytes);
         Assert.Equal(1, engine.Context.Counters.NoGcRegionStartAttempts);
@@ -463,6 +489,7 @@ public sealed class EngineBuilderTests
     [Fact]
     public void SubsystemsInitializeInOrderAndShutdownInReverseOrder()
     {
+        // Arrange：准备输入与初始状态
         List<string> events = [];
         RecordingSubsystem first = new("first", events);
         RecordingSubsystem second = new("second", events);
@@ -474,6 +501,7 @@ public sealed class EngineBuilderTests
 
         EngineLifecycle lifecycle = engine.Context.GetService<EngineLifecycle>();
 
+        // Assert：验证预期结果
         Assert.Equal(2, lifecycle.Count);
         Assert.Equal(2, lifecycle.InitializedCount);
         Assert.Equal(["init:first", "init:second"], events);
@@ -527,10 +555,12 @@ public sealed class EngineBuilderTests
     [Fact]
     public void ServiceRolesExposeOnlyRegisteredBackendsAsAvailable()
     {
+        // Arrange：准备输入与初始状态
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
             .Build();
 
+        // Assert：验证预期结果
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.EventBus));
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.Diagnostics));
         Assert.False(engine.Context.IsServiceAvailable(EngineServiceRole.WorldAccess));

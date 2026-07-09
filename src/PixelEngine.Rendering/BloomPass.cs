@@ -85,10 +85,13 @@ public sealed class BloomPass : IDisposable
 
         BloomSettings normalized = (settings ?? BloomSettings.Default).Normalize();
         EnsureChain(source.Width, source.Height, normalized.Iterations);
+        // --- pass 1：bright-pass 提取高亮到 mip[0] ---
         RenderBrightPass(source, _mips[0], quad, normalized.Threshold);
+        // --- pass 2：dual-Kawase mip 链或 Gaussian 回退生成 bloom 纹理 ---
         ColorRenderTarget bloomTexture = normalized.Mode == BloomMode.Gaussian
             ? RenderGaussian(quad, normalized)
             : RenderDualKawase(quad, normalized);
+        // --- pass 3：scene + bloom additive composite 到目标 FBO ---
         RenderComposite(source, bloomTexture, destination, quad, normalized.Intensity);
     }
 

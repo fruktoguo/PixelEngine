@@ -4,6 +4,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// 玩家包随包脚本编译测试。
+/// 不变式：玩家包随包脚本可编译且类型可发现。
 /// </summary>
 public sealed class RuntimeScriptAssemblyCompilerTests
 {

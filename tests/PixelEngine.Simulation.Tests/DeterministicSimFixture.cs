@@ -5,6 +5,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// CA 确定性回归测试基座：固定 3x3 世界、固定 seed、单线程推进和规范化快照。
+/// 不变式：回归基座世界尺寸/材质固定、快照规范化后可字节级比较。
 /// </summary>
 internal sealed class DeterministicSimFixture
 {

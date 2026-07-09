@@ -369,6 +369,7 @@ public sealed class ParticleSystem : IParticleReadback, ICellDestructionSink
         ArgumentNullException.ThrowIfNull(kernel);
         ArgumentNullException.ThrowIfNull(grid);
 
+        // 相位 3b：swap-remove 处理沉积/死亡，Flying 粒子留待下帧积分。
         int i = 0;
         while (i < ActiveCount)
         {
@@ -419,6 +420,7 @@ public sealed class ParticleSystem : IParticleReadback, ICellDestructionSink
         ArgumentNullException.ThrowIfNull(kernel);
         ArgumentNullException.ThrowIfNull(grid);
 
+        // 相位 7：圆形区域内按 mask 筛选 cell，读清后经 kernel 转为粒子。
         int ejected = 0;
         int ejectionLimit = Settings.MaxEjectionPerTick;
         for (int requestIndex = 0; requestIndex < _ejectionRequestCount && ejected < ejectionLimit; requestIndex++)
@@ -525,6 +527,7 @@ public sealed class ParticleSystem : IParticleReadback, ICellDestructionSink
         CellGrid grid = _activeGrid ?? throw new InvalidOperationException("粒子积分缺少 CellGrid 上下文。");
         ref Particle particleBase = ref _particles[0];
         ref ParticleOutcome outcomeBase = ref _outcomes[0];
+        // 相位 3a：积分位移与重力，仅写 outcome 不写网格。
         for (int i = start; i < end; i++)
         {
             ref Particle particleSlot = ref Unsafe.Add(ref particleBase, i);
@@ -563,6 +566,7 @@ public sealed class ParticleSystem : IParticleReadback, ICellDestructionSink
         int lastOpenX = oldCellX;
         int lastOpenY = oldCellY;
 
+        // 沿运动轨迹逐步采样，首个固体或越界 cell 决定沉积落点。
         for (int step = 1; step <= steps; step++)
         {
             float t = step / (float)steps;
@@ -607,6 +611,7 @@ public sealed class ParticleSystem : IParticleReadback, ICellDestructionSink
             return true;
         }
 
+        // 更重粒子可挤占较轻 occupant，被挤出的材质留在粒子槽等待邻格沉积。
         if (grid.MaterialProps.DensityOf(particle.Material) > grid.MaterialProps.DensityOf(targetMaterial))
         {
             _ = kernel.ReadAndClearCell(x, y, out _, out _);

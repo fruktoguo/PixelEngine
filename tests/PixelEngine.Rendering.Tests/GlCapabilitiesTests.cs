@@ -2,8 +2,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// GL 能力探测测试：GLES/桌面 GL 特性识别与回退标记。
+/// </summary>
 public sealed class GlCapabilitiesTests
 {
+    /// <summary>
+    /// 验证Desktop Gl44Reports Compute And Buffer Storage。
+    /// </summary>
     [Fact]
     public void DesktopGl44ReportsComputeAndBufferStorage()
     {
@@ -21,6 +27,9 @@ public sealed class GlCapabilitiesTests
         Assert.True(capabilities.HasBufferStorage);
     }
 
+    /// <summary>
+    /// 验证Desktop Gl43Extension Reports Buffer Storage。
+    /// </summary>
     [Fact]
     public void DesktopGl43ExtensionReportsBufferStorage()
     {
@@ -34,6 +43,9 @@ public sealed class GlCapabilitiesTests
         Assert.True(capabilities.HasBufferStorage);
     }
 
+    /// <summary>
+    /// 验证Gles30不会Report Compute By Default。
+    /// </summary>
     [Fact]
     public void Gles30DoesNotReportComputeByDefault()
     {
@@ -51,6 +63,9 @@ public sealed class GlCapabilitiesTests
         Assert.False(capabilities.HasBufferStorage);
     }
 
+    /// <summary>
+    /// 验证Angle Renderer Reports Angle Even When Version Looks Desktop Gl。
+    /// </summary>
     [Fact]
     public void AngleRendererReportsAngleEvenWhenVersionLooksDesktopGl()
     {

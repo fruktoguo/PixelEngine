@@ -21,7 +21,8 @@ using ScriptUiValue = PixelEngine.Scripting.UiValue;
 namespace PixelEngine.Demo.Tests;
 
 /// <summary>
-/// Demo 大 UI 内容资产与脚本导航测试。
+/// Demo UI 内容与 RmlUi 文档预处理契约测试。
+/// 不变式：manifest 资源可解析、样式与文档路径与 content root 对齐、缺资源时行为可预期。
 /// </summary>
 public sealed class DemoUiContentTests
 {
@@ -31,9 +32,11 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoUiManifestDeclaresSevenPlayableScreensAndCjkTextIsCovered()
     {
+        // Arrange：准备输入与初始状态
         string uiRoot = DemoUiRoot();
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(uiRoot);
 
+        // Assert：验证预期结果
         Assert.Equal(7, manifest.ScreenCount);
         AssertScreen(manifest, "main-menu");
         AssertScreen(manifest, "settings");
@@ -109,16 +112,17 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoManagedFallbackCopiesHudAndResultModelPathsFromContent()
     {
+        // Arrange：准备输入与初始状态
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
         FakeGuiHost gui = new();
         using ManagedFallbackBackend backend = new(gui);
         using GameUiHost host = new(backend);
         host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 720, 480, 1f), UiBackendKind.ManagedFallback));
 
-        PixelEngine.UI.UiScreenHandle hud = host.ShowScreen(
+        UI.UiScreenHandle hud = host.ShowScreen(
             manifest.GetRequiredScreen(GameUiDemoController.HudScreen).ScreenId,
             manifest.ResolveDocumentSource(GameUiDemoController.HudScreen));
-        PixelEngine.UI.UiScreenHandle result = host.PushModal(
+        UI.UiScreenHandle result = host.PushModal(
             manifest.GetRequiredScreen(GameUiDemoController.ResultScreen).ScreenId,
             manifest.ResolveDocumentSource(GameUiDemoController.ResultScreen));
 
@@ -138,6 +142,7 @@ public sealed class DemoUiContentTests
 
         host.Composite(default);
 
+        // Assert：验证预期结果
         Assert.Contains("生命", gui.Context.Texts);
         Assert.Contains("胜利", gui.Context.Texts);
     }
@@ -148,6 +153,7 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoDefaultHudAndResultTextDescribesSideScrollingGoalNotLegacyMission()
     {
+        // Arrange：准备输入与初始状态
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
         string[] hudText = UiVisibleText(manifest.GetRequiredScreen(GameUiDemoController.HudScreen).FullPath);
         string[] resultText = UiVisibleText(manifest.GetRequiredScreen(GameUiDemoController.ResultScreen).FullPath);
@@ -156,6 +162,7 @@ public sealed class DemoUiContentTests
         string[] mainText = UiVisibleText(manifest.GetRequiredScreen(GameUiDemoController.MainMenuScreen).FullPath);
         defaultLoopText = [.. mainText, .. defaultLoopText];
 
+        // Assert：验证预期结果
         Assert.Contains("横向逃生：左起点到右出口。", defaultLoopText);
         Assert.Contains("跳过熔岩坑，拆除路障。", defaultLoopText);
         Assert.Contains("出口进度就是到右侧出口的距离。", defaultLoopText);
@@ -178,19 +185,20 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoUiScreensRenderAndInteractThroughManagedFallback()
     {
+        // Arrange：准备输入与初始状态
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
         FakeGuiHost gui = new();
         using ManagedFallbackBackend backend = new(gui);
         using GameUiHost host = new(backend);
         host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 720, 480, 1f), UiBackendKind.ManagedFallback));
 
-        PixelEngine.UI.UiScreenHandle main = host.ShowScreen(manifest.GetRequiredScreen("main-menu").ScreenId, manifest.ResolveDocumentSource("main-menu"));
-        PixelEngine.UI.UiScreenHandle hud = host.ShowScreen(manifest.GetRequiredScreen("hud").ScreenId, manifest.ResolveDocumentSource("hud"));
-        PixelEngine.UI.UiScreenHandle settings = host.PushModal(manifest.GetRequiredScreen("settings").ScreenId, manifest.ResolveDocumentSource("settings"));
-        PixelEngine.UI.UiScreenHandle inventory = host.PushModal(manifest.GetRequiredScreen("inventory").ScreenId, manifest.ResolveDocumentSource("inventory"));
-        PixelEngine.UI.UiScreenHandle dialog = host.PushModal(manifest.GetRequiredScreen("dialog").ScreenId, manifest.ResolveDocumentSource("dialog"));
-        PixelEngine.UI.UiScreenHandle pause = host.PushModal(manifest.GetRequiredScreen("pause").ScreenId, manifest.ResolveDocumentSource("pause"));
-        PixelEngine.UI.UiScreenHandle result = host.PushModal(manifest.GetRequiredScreen("result").ScreenId, manifest.ResolveDocumentSource("result"));
+        UI.UiScreenHandle main = host.ShowScreen(manifest.GetRequiredScreen("main-menu").ScreenId, manifest.ResolveDocumentSource("main-menu"));
+        UI.UiScreenHandle hud = host.ShowScreen(manifest.GetRequiredScreen("hud").ScreenId, manifest.ResolveDocumentSource("hud"));
+        UI.UiScreenHandle settings = host.PushModal(manifest.GetRequiredScreen("settings").ScreenId, manifest.ResolveDocumentSource("settings"));
+        UI.UiScreenHandle inventory = host.PushModal(manifest.GetRequiredScreen("inventory").ScreenId, manifest.ResolveDocumentSource("inventory"));
+        UI.UiScreenHandle dialog = host.PushModal(manifest.GetRequiredScreen("dialog").ScreenId, manifest.ResolveDocumentSource("dialog"));
+        UI.UiScreenHandle pause = host.PushModal(manifest.GetRequiredScreen("pause").ScreenId, manifest.ResolveDocumentSource("pause"));
+        UI.UiScreenHandle result = host.PushModal(manifest.GetRequiredScreen("result").ScreenId, manifest.ResolveDocumentSource("result"));
         _ = main;
         _ = hud;
         _ = settings;
@@ -205,6 +213,7 @@ public sealed class DemoUiContentTests
         RuntimeUiEvent[] events = new RuntimeUiEvent[8];
         int eventCount = host.DrainEvents(events);
 
+        // Assert：验证预期结果
         Assert.Contains("PixelEngine 熔岩矿洞", gui.Context.Texts);
         Assert.Contains("设置", gui.Context.Texts);
         Assert.Contains("背包", gui.Context.Texts);
@@ -217,8 +226,8 @@ public sealed class DemoUiContentTests
         Assert.Contains("重开", gui.Context.Buttons);
         Assert.Contains("返回", gui.Context.Buttons);
         Assert.True(eventCount >= 2);
-        Assert.Contains(events[..eventCount], e => e.Action == new PixelEngine.UI.UiActionId(UiStableId.Hash("open_settings")));
-        Assert.Contains(events[..eventCount], e => e.Action == new PixelEngine.UI.UiActionId(UiStableId.Hash("toggle_vsync")));
+        Assert.Contains(events[..eventCount], e => e.Action == new UI.UiActionId(UiStableId.Hash("open_settings")));
+        Assert.Contains(events[..eventCount], e => e.Action == new UI.UiActionId(UiStableId.Hash("toggle_vsync")));
         Assert.True(host.Documents.HasModalTop);
         Assert.True(host.PopModal());
         Assert.Equal(6, host.Documents.StackCount);
@@ -230,9 +239,11 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoManagedFallbackConsumesProductScreenMarginShorthand()
     {
+        // Arrange：准备输入与初始状态
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
         UiManifestScreen mainMenu = manifest.GetRequiredScreen(GameUiDemoController.MainMenuScreen);
         string xhtml = File.ReadAllText(mainMenu.FullPath);
+        // Assert：验证预期结果
         Assert.Contains("p { margin: 4px 0px; }", xhtml, StringComparison.Ordinal);
 
         FakeGuiHost gui = new();
@@ -254,8 +265,10 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoWebFirstHudCaptureBlocksGameplayInputAndTransparentAreaPassesThrough()
     {
+        // Arrange：搭建测试场景与依赖
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
@@ -276,7 +289,9 @@ public sealed class DemoUiContentTests
             RoutedUiInputSource uiInput = new();
             UiInputRouter router = new(hudHost, uiInput);
 
+            // Act：执行被测操作
             engine.RunHeadlessTicks(1);
+            // Assert：验证不变式与预期结果
             Assert.Equal(0, weapons.PrimaryFireCount);
             Assert.Equal(0, brush.SelectedIndex);
             Assert.Equal(4, brush.Radius);
@@ -329,11 +344,13 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoGameUiControllerOpensScreensAndClosesModalsThroughScriptService()
     {
+        // Arrange：准备输入与初始状态
         GameUiDemoController controller = new();
         FakeGameUiService ui = new();
 
         controller.StartForService(ui);
         ScriptUiStringHandle title = ui.InternString("晶体 3/3");
+        // Assert：验证预期结果
         Assert.Equal(title, ui.InternString("晶体 3/3"));
         Assert.NotEqual(title, ui.InternString("暂停"));
         ui.Raise(GameUiDemoController.Action("open_settings"));
@@ -385,6 +402,7 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoGameUiControllerRoutesPauseRestartAndQuitThroughRuntimeFacade()
     {
+        // Arrange：准备输入与初始状态
         GameUiDemoController controller = new();
         FakeGameUiService ui = new();
         FakeRuntimeControlApi runtime = new();
@@ -402,6 +420,7 @@ public sealed class DemoUiContentTests
         ui.Raise(GameUiDemoController.Action("restart_game"));
         ui.Raise(GameUiDemoController.Action("quit_game"));
 
+        // Assert：验证预期结果
         Assert.Equal([
             GameUiDemoController.PauseScreen,
             GameUiDemoController.SettingsScreen,
@@ -429,6 +448,7 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoGameUiControllerRoutesSettingsTogglesThroughRuntimeFacade()
     {
+        // Arrange：准备输入与初始状态
         GameUiDemoController controller = new();
         FakeGameUiService ui = new();
         FakeRuntimeControlApi runtime = new();
@@ -436,6 +456,7 @@ public sealed class DemoUiContentTests
         controller.StartForService(ui, runtime);
         ui.Raise(GameUiDemoController.Action("open_settings"));
 
+        // Assert：验证预期结果
         Assert.Equal(1.0, GetUiValue(ui, "settings.audio"), precision: 3);
         Assert.Equal(1.0, GetUiValue(ui, "settings.vsync"), precision: 3);
 
@@ -467,7 +488,8 @@ public sealed class DemoUiContentTests
     public void DemoResultModalRoutesRestartAndQuitThroughRuntimeFacade()
     {
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
@@ -493,8 +515,10 @@ public sealed class DemoUiContentTests
     [InlineData("lava_reached_player", true)]
     public void DemoGameUiControllerPublishesMissionFailureResultOnceThroughScriptService(string expectedReason, bool triggerByLava)
     {
+        // Arrange：搭建测试场景与依赖
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
@@ -519,9 +543,11 @@ public sealed class DemoUiContentTests
             mission.LavaRiseCellsPerSecond = 0f;
             _ = entity.AddComponent<GameUiDemoController>();
 
+            // Act：执行被测操作
             engine.RunHeadlessTicks(1);
             engine.RunHeadlessTicks(3);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(MissionState.Lost, mission.State);
             Assert.Equal(expectedReason, mission.ResultReason);
             Assert.Equal([GameUiDemoController.ResultScreen], ui.PushedScreens);
@@ -543,8 +569,10 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoGameUiControllerPublishesMissionVictoryResultOnceThroughScriptService()
     {
+        // Arrange：搭建测试场景与依赖
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
@@ -569,7 +597,9 @@ public sealed class DemoUiContentTests
             mission.LavaRiseCellsPerSecond = 0f;
             _ = entity.AddComponent<GameUiDemoController>();
 
+            // Act：执行被测操作
             engine.RunHeadlessTicks(1);
+            // Assert：验证不变式与预期结果
             Assert.True(engine.Context.Events.Channel<MineYieldEvent>().TryEnqueue(new MineYieldEvent(20, 20, 1, 1)));
             engine.RunHeadlessTicks(1);
             mission.MarkExtractionReached();
@@ -594,8 +624,10 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoGameUiControllerPublishesGoalTriggerResultWithoutMissionDirector()
     {
+        // Arrange：搭建测试场景与依赖
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
@@ -621,9 +653,11 @@ public sealed class DemoUiContentTests
             goal.CelebrationParticleCount = 0;
             _ = entity.AddComponent<GameUiDemoController>();
 
+            // Act：执行被测操作
             engine.RunHeadlessTicks(4);
             engine.RunHeadlessTicks(3);
 
+            // Assert：验证不变式与预期结果
             Assert.True(goal.Reached);
             Assert.DoesNotContain(scene.CaptureInspectionSnapshot(), inspected =>
                 inspected.Components.Any(component => component.Behaviour is MissionDirector));
@@ -648,8 +682,10 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoGameUiControllerPublishesGoalRouteProgressWithoutMissionDirector()
     {
+        // Arrange：搭建测试场景与依赖
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
@@ -674,8 +710,10 @@ public sealed class DemoUiContentTests
             goal.CelebrationParticleCount = 0;
             _ = entity.AddComponent<GameUiDemoController>();
 
+            // Act：执行被测操作
             engine.RunHeadlessTicks(1);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(0.0, GetHudValue(ui, "hud.crystals"), precision: 3);
             Assert.Equal(1.0, GetHudValue(ui, "hud.time"), precision: 3);
 
@@ -706,8 +744,10 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoGameUiControllerPublishesRealHudStateThroughScriptServiceEachTick()
     {
+        // Arrange：搭建测试场景与依赖
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "reloadSeconds": 1.0, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" },
@@ -739,8 +779,10 @@ public sealed class DemoUiContentTests
             hazard.FillIntervalSeconds = 10f;
             _ = entity.AddComponent<GameUiDemoController>();
 
+            // Act：执行被测操作
             engine.RunHeadlessTicks(1);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(1.0, GetHudValue(ui, "hud.health"), precision: 3);
             Assert.Equal(0.0, GetHudValue(ui, "hud.weapon"), precision: 3);
             Assert.Equal(1.0, GetHudValue(ui, "hud.ammo"), precision: 3);
@@ -819,8 +861,10 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoGameUiControllerPublishesLaserCrystalMineYieldThroughScriptService()
     {
+        // Arrange：搭建测试场景与依赖
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "reloadSeconds": 1.0, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" },
@@ -850,9 +894,11 @@ public sealed class DemoUiContentTests
             crystal.Y = 34;
             crystal.Radius = 1;
 
+            // Act：执行被测操作
             engine.RunHeadlessTicks(2);
             CellGrid grid = engine.Context.GetService<CellGrid>();
             ushort crystalBefore = grid.GetMaterial(36, 34);
+            // Assert：验证不变式与预期结果
             Assert.NotEqual((ushort)0, crystalBefore);
 
             input.Update([Key.Digit2], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
@@ -881,8 +927,10 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoGameUiControllerDiscoversGameplayHudSourcesAcrossSceneEntities()
     {
+        // Arrange：搭建测试场景与依赖
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "reloadSeconds": 1.0, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" },
@@ -914,9 +962,11 @@ public sealed class DemoUiContentTests
             hazard.FillIntervalSeconds = 10f;
             _ = scene.CreateEntity().AddComponent<GameUiDemoController>();
 
+            // Act：执行被测操作
             engine.RunHeadlessTicks(1);
             health.MaxHealth = 200f;
             input.Update([Key.Digit2], [], mouseX: 0f, mouseY: 0f, wheelY: 0f);
+            // Assert：验证不变式与预期结果
             Assert.True(engine.Context.Events.Channel<MineYieldEvent>().TryEnqueue(new MineYieldEvent(20, 20, 1, 1)));
             engine.RunHeadlessTicks(1);
 
@@ -952,8 +1002,10 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoGameUiControllerPublishesBrushAndExplosionHudStateThroughScriptService()
     {
+        // Arrange：搭建测试场景与依赖
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
@@ -970,8 +1022,10 @@ public sealed class DemoUiContentTests
             explosive.CooldownSeconds = 0f;
             _ = entity.AddComponent<GameUiDemoController>();
 
+            // Act：执行被测操作
             engine.RunHeadlessTicks(1);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(0.0, GetHudValue(ui, "hud.material_slot"), precision: 3);
             Assert.Equal(0.167, GetHudValue(ui, "hud.brush_radius"), precision: 3);
             Assert.Equal(0.0, GetHudValue(ui, "hud.explosions"), precision: 3);
@@ -998,8 +1052,10 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoGameUiControllerPublishesProjectileHudStateThroughScriptService()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
@@ -1010,6 +1066,7 @@ public sealed class DemoUiContentTests
         {
             using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out FakeGameUiService ui, out ScriptInputApi input);
             CellGrid grid = engine.Context.GetService<CellGrid>();
+            // Assert：验证预期结果
             Assert.True(engine.Context.GetService<MaterialTable>().TryGetId("stone", out ushort stone));
             FillRect(grid, stone, minX: 34, minY: 24, maxX: 35, maxY: 46);
             Entity gameplayEntity = scene.CreateEntity();
@@ -1058,8 +1115,10 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoGameUiControllerPublishesDepletedAmmoAndSuppressesExtraDispatchThroughScriptService()
     {
+        // Arrange：搭建测试场景与依赖
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "single", "displayName": "Single", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 1, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
@@ -1077,7 +1136,9 @@ public sealed class DemoUiContentTests
             WeaponController weapons = entity.AddComponent<WeaponController>();
             _ = entity.AddComponent<GameUiDemoController>();
 
+            // Act：执行被测操作
             engine.RunHeadlessTicks(1);
+            // Assert：验证不变式与预期结果
             Assert.Equal(1, weapons.CurrentAmmo);
             Assert.Equal(1.0, GetHudValue(ui, "hud.ammo"), precision: 3);
             Assert.Equal(0.0, GetHudValue(ui, "hud.shots"), precision: 3);
@@ -1113,8 +1174,10 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoGameUiControllerPublishesWeaponControllerFireCountForNonProjectileWeapons()
     {
+        // Arrange：搭建测试场景与依赖
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "builder", "displayName": "Builder", "kind": "builder", "damage": 0, "radius": 1, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 5, "spawnMaterial": "stone", "muzzleCue": "ui_click", "impactCue": "impact_stone", "hudColor": "#FFFFFFFF" }
@@ -1132,7 +1195,9 @@ public sealed class DemoUiContentTests
             WeaponController weapons = entity.AddComponent<WeaponController>();
             _ = entity.AddComponent<GameUiDemoController>();
 
+            // Act：执行被测操作
             engine.RunHeadlessTicks(1);
+            // Assert：验证不变式与预期结果
             Assert.Equal(0.0, GetHudValue(ui, "hud.shots"), precision: 3);
             Assert.Equal(0.0, GetHudValue(ui, "hud.collapse_islands"), precision: 3);
             Assert.Equal(0.0, GetHudValue(ui, "hud.collapse_scan"), precision: 3);
@@ -1161,8 +1226,10 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoGameUiControllerPublishesTransientFxHudStateThroughScriptService()
     {
+        // Arrange：搭建测试场景与依赖
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
@@ -1175,10 +1242,12 @@ public sealed class DemoUiContentTests
             _ = scene.CreateEntity().AddComponent<GameUiDemoController>();
             _ = scene.CreateEntity().AddComponent<TransientFxEmitter>();
 
+            // Act：执行被测操作
             engine.RunHeadlessTicks(1);
             engine.RunHeadlessTicks(1);
 
             double fx = GetHudValue(ui, "hud.fx");
+            // Assert：验证不变式与预期结果
             Assert.InRange(fx, 0.0001, 1.0);
             AssertHudPathWritten(ui, "hud.fx");
         }
@@ -1196,7 +1265,7 @@ public sealed class DemoUiContentTests
     {
         GameUiDemoController controller = new();
 
-        controller.StartForService(PixelEngine.Scripting.NoopGameUiService.Instance);
+        controller.StartForService(NoopGameUiService.Instance);
         controller.HandleUiEvent(new ScriptUiEvent(default, default, GameUiDemoController.Action("open_settings"), default));
 
         Assert.Equal(default, controller.MainScreen);
@@ -1211,6 +1280,7 @@ public sealed class DemoUiContentTests
     [Fact]
     public void DemoUiScreensLoadThroughRmlUiBackendWhenGlSmokeIsEnabled()
     {
+        // Arrange：准备输入与初始状态
         if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
         {
             return;
@@ -1235,7 +1305,7 @@ public sealed class DemoUiContentTests
         foreach (UiManifestScreen screen in manifest.Screens)
         {
             UiDocumentHandle document = backend.LoadDocument(screen.ToDocumentSource());
-            stack[index] = new UiScreenStackEntry(new PixelEngine.UI.UiScreenHandle(index + 1), screen.ScreenId, document, Modal: screen.Id is "settings" or "inventory" or "dialog" or "pause" or "result");
+            stack[index] = new UiScreenStackEntry(new UI.UiScreenHandle(index + 1), screen.ScreenId, document, Modal: screen.Id is "settings" or "inventory" or "dialog" or "pause" or "result");
             if (screen.Id == "main-menu")
             {
                 mainIndex = index;
@@ -1249,6 +1319,7 @@ public sealed class DemoUiContentTests
             index++;
         }
 
+        // Assert：验证预期结果
         Assert.True(mainIndex >= 0);
         Assert.True(hudIndex >= 0);
         backend.SetScreenStack(stack.Slice(mainIndex, 1));
@@ -1259,16 +1330,16 @@ public sealed class DemoUiContentTests
         backend.Update(1f / 60f);
         Span<RuntimeUiEvent> events = stackalloc RuntimeUiEvent[4];
         int eventCount = backend.DrainEvents(events);
-        Assert.Contains(events[..eventCount].ToArray(), e => e.Action == new PixelEngine.UI.UiActionId(UiStableId.Hash("open_settings")));
+        Assert.Contains(events[..eventCount].ToArray(), e => e.Action == new UI.UiActionId(UiStableId.Hash("open_settings")));
 
         backend.SetScreenStack(stack);
         backend.Update(1f / 60f);
         foreach (string path in HudPaths())
         {
-            backend.SetModelValue(stack[hudIndex].Document, new PixelEngine.UI.UiPathId(UiStableId.Hash(path)), new PixelEngine.UI.UiValue(path == "hud.cooldown" ? 1.0 : 0.25));
+            backend.SetModelValue(stack[hudIndex].Document, new UI.UiPathId(UiStableId.Hash(path)), new UI.UiValue(path == "hud.cooldown" ? 1.0 : 0.25));
         }
 
-        Assert.True(backend.InvokeAction(stack[0].Document, new PixelEngine.UI.UiActionId(UiStableId.Hash("open_settings")), PixelEngine.UI.UiValue.FromBoolean(true)));
+        Assert.True(backend.InvokeAction(stack[0].Document, new UI.UiActionId(UiStableId.Hash("open_settings")), UI.UiValue.FromBoolean(true)));
         backend.Composite(default);
         window.SwapBuffers();
     }
@@ -1289,15 +1360,15 @@ public sealed class DemoUiContentTests
         Assert.Equal(Sorted(expectedActions), Sorted(ExtractAttributeValues(document, "data-event-click", "data-event-change")));
     }
 
-    private static void AssertManagedModelPaths(GameUiHost host, PixelEngine.UI.UiScreenHandle screen, string[] expectedPaths)
+    private static void AssertManagedModelPaths(GameUiHost host, UI.UiScreenHandle screen, string[] expectedPaths)
     {
-        PixelEngine.UI.UiPathId[] paths = new PixelEngine.UI.UiPathId[32];
+        UI.UiPathId[] paths = new UI.UiPathId[32];
         int count = host.CopyModelPaths(screen, paths);
         int[] actual = [.. paths[..count].Select(path => path.Value).OrderBy(value => value)];
         int[] expected =
         [
             .. expectedPaths
-                .Select(path => new PixelEngine.UI.UiPathId(UiStableId.Hash(path)).Value)
+                .Select(path => new UI.UiPathId(UiStableId.Hash(path)).Value)
                 .OrderBy(value => value),
         ];
         Assert.Equal(expected, actual);
@@ -1305,14 +1376,14 @@ public sealed class DemoUiContentTests
 
     private static void AssertManagedDoubleValueRoundTrips(
         GameUiHost host,
-        PixelEngine.UI.UiScreenHandle screen,
+        UI.UiScreenHandle screen,
         string path,
         double expected)
     {
-        PixelEngine.UI.UiPathId pathId = new(UiStableId.Hash(path));
-        host.SetModelValue(screen, pathId, new PixelEngine.UI.UiValue(expected));
+        UI.UiPathId pathId = new(UiStableId.Hash(path));
+        host.SetModelValue(screen, pathId, new UI.UiValue(expected));
 
-        Assert.True(host.TryGetModelValue(screen, pathId, out PixelEngine.UI.UiValue value), $"ManagedFallback 未声明 UI path：{path}");
+        Assert.True(host.TryGetModelValue(screen, pathId, out UI.UiValue value), $"ManagedFallback 未声明 UI path：{path}");
         Assert.Equal(expected, value.AsDouble(), precision: 3);
     }
 
@@ -1442,7 +1513,7 @@ public sealed class DemoUiContentTests
     private static double GetUiValue(FakeGameUiService ui, string path)
     {
         Assert.True(ui.Values.TryGetValue(GameUiDemoController.Path(path), out ScriptUiValue value), $"UI path 未写入值：{path}");
-        Assert.Equal(PixelEngine.Scripting.UiValueKind.Double, value.Kind);
+        Assert.Equal(Scripting.UiValueKind.Double, value.Kind);
         return value.AsDouble();
     }
 

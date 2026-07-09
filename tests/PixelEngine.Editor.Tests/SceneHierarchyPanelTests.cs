@@ -6,6 +6,7 @@ namespace PixelEngine.Editor.Tests;
 
 /// <summary>
 /// 场景层级面板测试。
+/// 不变式：层级树与场景实体一一对应。
 /// </summary>
 public sealed class SceneHierarchyPanelTests
 {

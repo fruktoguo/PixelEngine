@@ -6,6 +6,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// Game UI 脚本契约测试。
+/// 不变式：Game UI 脚本契约与后端能力表一致。
 /// </summary>
 public sealed class GameUiFacadeTests
 {
@@ -43,6 +44,7 @@ public sealed class GameUiFacadeTests
     [Fact]
     public void DefaultScriptContextGameUiIsNoopWhenNotInjected()
     {
+        // Arrange：准备输入与初始状态
         EmptyContext context = new();
 
         IGameUiService gameUi = ((IScriptContext)context).GameUi;
@@ -54,6 +56,7 @@ public sealed class GameUiFacadeTests
         gameUi.SetValue(screen, new UiPathId(7), new UiValue(42L));
         gameUi.Invoke(screen, new UiActionId(3), UiValue.FromBoolean(true));
 
+        // Assert：验证预期结果
         Assert.Same(NoopGameUiService.Instance, gameUi);
         Assert.Same(gameUi, ui);
         Assert.Equal(default, screen);
@@ -85,6 +88,7 @@ public sealed class GameUiFacadeTests
     [Fact]
     public void NoopGameUiServiceSilentlyRejectsAllOperations()
     {
+        // Arrange：准备输入与初始状态
         IGameUiService gameUi = NoopGameUiService.Instance;
         UiScreenHandle screen = gameUi.ShowScreen("hud");
         UiScreenHandle modal = gameUi.PushModal("pause");
@@ -95,6 +99,7 @@ public sealed class GameUiFacadeTests
         gameUi.SetValue(new UiScreenHandle(99), new UiPathId(7), new UiValue(42L));
         gameUi.Invoke(new UiScreenHandle(99), new UiActionId(3), UiValue.FromBoolean(true));
 
+        // Assert：验证预期结果
         Assert.Equal(default, screen);
         Assert.Equal(default, modal);
         Assert.Equal(default, text);

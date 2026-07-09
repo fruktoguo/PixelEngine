@@ -10,6 +10,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// PhysicsSystem 生命周期、快照与事件 facade 测试。
+/// 不变式：PhysicsSystem 生命周期、快照与事件 facade 不泄漏原生句柄。
 /// </summary>
 public sealed class PhysicsSystemFacadeTests
 {
@@ -19,6 +20,7 @@ public sealed class PhysicsSystemFacadeTests
     [Fact]
     public void InitializeCreatesOwnedWorldWithTaskBridgeAndShutdownDisposesFacade()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = new(new Chunk(new ChunkCoord(0, 0)));
         CellGrid grid = new(source, MaterialPropsTable.Empty);
         using JobSystem jobs = new(workerCount: 2);
@@ -27,6 +29,7 @@ public sealed class PhysicsSystemFacadeTests
 
         PhysicsSystem system = PhysicsSystem.Initialize(grid, jobs, worldDef: worldDef);
 
+        // Assert：验证预期结果
         Assert.True(system.WorldId.Index1 > 0);
         Assert.Equal(jobs.WorkerCount, system.TaskBridgeWorkerCount);
         Assert.Equal(0, system.TaskBridgeFaultedCallbackCount);
@@ -46,6 +49,7 @@ public sealed class PhysicsSystemFacadeTests
     [Fact]
     public void OwnedWorldLiveBodyCountReturnsZeroAfterDestroyAndShutdown()
     {
+        // Arrange：准备输入与初始状态
         Chunk chunk = new(new ChunkCoord(0, 0));
         TestChunkSource source = new(chunk);
         CellGrid grid = new(source, MaterialPropsTable.Empty);
@@ -57,6 +61,7 @@ public sealed class PhysicsSystemFacadeTests
         FillSolidRegion(grid, x: 8, y: 8, width: 8, height: 8, material: 2);
         int firstBody = system.CreateBodyFromRegion(8, 8, 8, 8);
 
+        // Assert：验证预期结果
         Assert.Equal(1, system.LiveBodyCount);
 
         FillSolidRegion(grid, x: 40, y: 40, width: 8, height: 8, material: 3);
@@ -82,6 +87,7 @@ public sealed class PhysicsSystemFacadeTests
     [Fact]
     public void RuntimeTuningUpdatesGravitySubStepsAndFragmentThreshold()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = new(new Chunk(new ChunkCoord(0, 0)));
         CellGrid grid = new(source, MaterialPropsTable.Empty);
         using JobSystem jobs = new(workerCount: 1);
@@ -96,6 +102,7 @@ public sealed class PhysicsSystemFacadeTests
             system.SetGravity(new Vector2(1.25f, 9.5f));
             system.SetFragmentPixelThreshold(9);
 
+            // Assert：验证预期结果
             Assert.Equal(8, system.SubStepCount);
             Assert.Equal(new Vector2(1.25f, 9.5f), system.Gravity);
             Assert.Equal(9, system.FragmentPixelThreshold);
@@ -113,6 +120,7 @@ public sealed class PhysicsSystemFacadeTests
     [Fact]
     public void CopyBodySnapshotsReturnsImmutableMaskTransformAndVelocities()
     {
+        // Arrange：准备输入与初始状态
         PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
@@ -142,6 +150,7 @@ public sealed class PhysicsSystemFacadeTests
 
             int written = system.CopyBodySnapshots(snapshots);
 
+            // Assert：验证预期结果
             Assert.Equal(1, written);
             RigidBodySnapshot snapshot = snapshots[0];
             Assert.Equal(body.BodyKey, snapshot.BodyKey);
@@ -170,6 +179,7 @@ public sealed class PhysicsSystemFacadeTests
     [Fact]
     public void CopyConnectedComponentDebugSnapshotsReturnsBodyMaskComponents()
     {
+        // Arrange：准备输入与初始状态
         PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
@@ -188,6 +198,7 @@ public sealed class PhysicsSystemFacadeTests
 
             int written = system.CopyConnectedComponentDebugSnapshots(snapshots);
 
+            // Assert：验证预期结果
             Assert.Equal(2, written);
             Assert.All(snapshots.AsSpan(0, written).ToArray(), snapshot =>
             {
@@ -209,6 +220,7 @@ public sealed class PhysicsSystemFacadeTests
     [Fact]
     public void SyncStepPublishesRigidbodyShatterAudioEventWhenBodySplits()
     {
+        // Arrange：搭建测试场景与依赖
         PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
@@ -230,8 +242,10 @@ public sealed class PhysicsSystemFacadeTests
             QueueVerticalCutDamage(grid, damageQueue, x: 32, minY: 8, maxY: 24);
             PhysicsSystem system = new(worldId, physicsWorld, grid, registry, damageQueue, destruction, eventBus: events);
 
+            // Act：执行被测操作
             system.SyncStep(1f / 60f);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(1, system.LastDestructionResult.DamagedBodies);
             Assert.Equal(1, system.LastDestructionResult.DestroyedBodies);
             Assert.Equal(2, system.LastDestructionResult.CreatedBodies);

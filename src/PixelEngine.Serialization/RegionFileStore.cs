@@ -41,6 +41,7 @@ public sealed class RegionFileStore : IChunkStore
 
         int localIndex = LocalIndex(coord);
         using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        // region 文件头为 32x32 固定索引表，按 localIndex 随机定位 chunk blob。
         RegionIndexEntry entry = ReadIndexEntry(stream, localIndex);
         if (!entry.Exists)
         {
@@ -107,6 +108,7 @@ public sealed class RegionFileStore : IChunkStore
 
         try
         {
+            // 写路径：复制旧 region → 追加/删 blob → 更新索引 → 原子替换，崩溃不致损坏主文件。
             using (FileStream temp = new(tempPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
             {
                 if (File.Exists(path))
@@ -145,6 +147,7 @@ public sealed class RegionFileStore : IChunkStore
 
     private static RegionIndexEntry AppendBlob(FileStream stream, ReadOnlySpan<byte> blob)
     {
+        // region 采用追加写：新 blob 落在文件尾，索引项指向 offset/length。
         long offset = Math.Max(stream.Length, IndexBytes);
         stream.Position = offset;
         stream.Write(blob);

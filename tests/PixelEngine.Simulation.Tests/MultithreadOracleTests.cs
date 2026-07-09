@@ -6,6 +6,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Simulation 多线程 checkerboard 与单线程 oracle 的统计性质测试。
+/// 不变式：多线程 checkerboard 统计性质与单线程 oracle 在容差内一致。
 /// </summary>
 public sealed class MultithreadOracleTests
 {
@@ -21,6 +22,7 @@ public sealed class MultithreadOracleTests
     [Fact]
     public void StepCaWithJobSystemMatchesSingleThreadOracleStatistics()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource singleSource = CreateSeededSource();
         TestChunkSource multiSource = CreateSeededSource();
         SimulationKernel single = new(singleSource, CreateMaterials(), worldSeed: 42)
@@ -41,6 +43,7 @@ public sealed class MultithreadOracleTests
             multi.SwapDirtyRects();
         }
 
+        // Assert：验证预期结果
         Assert.Equal(CountMaterials(singleSource), CountMaterials(multiSource));
         Assert.Equal(CountBoundaryBandMaterials(singleSource), CountBoundaryBandMaterials(multiSource));
     }
@@ -51,6 +54,7 @@ public sealed class MultithreadOracleTests
     [Fact]
     public void StepCaWithJobSystemMatchesSingleThreadOracleMacroProfiles()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource singleSource = CreateSeededSource();
         TestChunkSource multiSource = CreateSeededSource();
         SimulationKernel single = new(singleSource, CreateMaterials(), worldSeed: 77)
@@ -71,6 +75,7 @@ public sealed class MultithreadOracleTests
             multi.SwapDirtyRects();
         }
 
+        // Assert：验证预期结果
         Assert.Equal(CountMaterials(singleSource), CountMaterials(multiSource));
         AssertProfileWithinTolerance(HeightProfile(singleSource, Sand), HeightProfile(multiSource, Sand), maxTotalDelta: 0, maxSingleDelta: 0);
         AssertProfileWithinTolerance(HeightProfile(singleSource, Water), HeightProfile(multiSource, Water), maxTotalDelta: 0, maxSingleDelta: 0);

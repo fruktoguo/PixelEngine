@@ -82,6 +82,7 @@ public sealed class UiInputRouter
     /// <returns>当前 UI 输入捕获快照。</returns>
     public UiInputCapture Pump(bool allowPointer, bool allowKeyboard)
     {
+        // 阶段 1：指针与滚轮——边沿检测按钮变化，避免每帧重复注入相同按下态。
         if (allowPointer && _source.TryGetPointer(out UiPointerState pointer))
         {
             _host.FeedPointerMove(pointer.X, pointer.Y);
@@ -101,6 +102,7 @@ public sealed class UiInputRouter
             FeedButton(UiPointerButton.Middle, isDown: false, ref _middleDown);
         }
 
+        // 阶段 2：命中测试刷新 capture，供上游游戏输入门仲裁。
         if (allowPointer)
         {
             _ = RefreshCapture();
@@ -111,6 +113,7 @@ public sealed class UiInputRouter
             Capture = UiInputCapture.None;
         }
 
+        // 阶段 3：键盘/文本——committed 与 composition 分通道注入；IME 几何回写给平台定位候选窗。
         if (allowKeyboard && Capture.WantCaptureKeyboard)
         {
             _downKeyCount = Math.Clamp(_source.CaptureDownKeys(_downKeys, out UiKeyModifiers modifiers), 0, _downKeys.Length);

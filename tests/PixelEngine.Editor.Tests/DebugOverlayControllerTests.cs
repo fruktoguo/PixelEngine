@@ -10,6 +10,7 @@ namespace PixelEngine.Editor.Tests;
 
 /// <summary>
 /// 调试叠层控制器测试。
+/// 不变式：调试叠层开关不影响模拟结果、只读诊断。
 /// </summary>
 public sealed class DebugOverlayControllerTests
 {

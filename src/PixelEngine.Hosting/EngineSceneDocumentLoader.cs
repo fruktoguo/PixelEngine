@@ -60,7 +60,7 @@ public static class EngineSceneDocumentLoader
     /// <param name="path">.scene 文件路径。</param>
     /// <param name="scriptAssemblies">已注册脚本程序集。</param>
     /// <returns>物化后的脚本场景。</returns>
-    public static PixelEngine.Scripting.Scene Load(string path, ScriptAssemblyRegistry scriptAssemblies)
+    public static Scripting.Scene Load(string path, ScriptAssemblyRegistry scriptAssemblies)
     {
         ArgumentNullException.ThrowIfNull(scriptAssemblies);
         return Build(LoadDocument(path), scriptAssemblies);
@@ -72,14 +72,14 @@ public static class EngineSceneDocumentLoader
     /// <param name="document">场景文档。</param>
     /// <param name="scriptAssemblies">已注册脚本程序集。</param>
     /// <returns>物化后的脚本场景。</returns>
-    public static PixelEngine.Scripting.Scene Build(EngineSceneDocument document, ScriptAssemblyRegistry scriptAssemblies)
+    public static Scripting.Scene Build(EngineSceneDocument document, ScriptAssemblyRegistry scriptAssemblies)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(scriptAssemblies);
         ValidateFormat(document);
         ValidateSceneGraph(document);
 
-        PixelEngine.Scripting.Scene scene = new();
+        Scripting.Scene scene = new();
         EngineSceneEntityDocument[] entities = document.Entities ?? [];
         Dictionary<int, EngineSceneTransformDocument> transformsByStableId = new(entities.Length);
         for (int i = 0; i < entities.Length; i++)

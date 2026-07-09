@@ -8,6 +8,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// 静态地形 collider 测试。
+/// 不变式：静态地形 collider 与固体栅格对齐。
 /// </summary>
 public sealed class StaticTerrainCollidersTests
 {
@@ -17,6 +18,7 @@ public sealed class StaticTerrainCollidersTests
     [Fact]
     public void UpdateBuildsRebuildsAndDestroysChunkChainsNearAwakeBodies()
     {
+        // Arrange：准备输入与初始状态
         PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
@@ -34,6 +36,7 @@ public sealed class StaticTerrainCollidersTests
 
             colliders.Update(source, physicsWorld);
 
+            // Assert：验证预期结果
             Assert.Equal(1, colliders.ColliderChunkCount);
             Assert.Equal(1, colliders.LastRebuiltChunkCount);
             Assert.Equal(0, colliders.LastDestroyedChunkCount);
@@ -69,6 +72,7 @@ public sealed class StaticTerrainCollidersTests
     [Fact]
     public void UpdateExcludesRigidOwnedCellsFromTerrainMask()
     {
+        // Arrange：准备输入与初始状态
         PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         B2WorldId worldId = Box2D.b2CreateWorld(in worldDef);
@@ -89,6 +93,7 @@ public sealed class StaticTerrainCollidersTests
 
             colliders.Update(source, physicsWorld);
 
+            // Assert：验证预期结果
             Assert.Equal(0, colliders.ColliderChunkCount);
             Assert.Equal(0, colliders.LastRebuiltChunkCount);
         }

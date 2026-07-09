@@ -89,6 +89,7 @@ public sealed class UiOffscreenSurfacePresenter : IDisposable
         ReadOnlySpan<PixelUploadRect> dirtyRects,
         in UiPresentTarget target)
     {
+        // 阶段 1：按需创建/缩放 GL 纹理；尺寸变化或首帧走全量上传。
         bool needsFullUpload = EnsureTexture(context, sourceWidth, sourceHeight);
         if (needsFullUpload)
         {
@@ -96,6 +97,7 @@ public sealed class UiOffscreenSurfacePresenter : IDisposable
         }
         else if (!dirtyRects.IsEmpty)
         {
+            // 阶段 2：增量上传脏矩形，复用 Ultralight/CPU surface 的局部失效。
             context.UploadOverlayTexture(_texture!, pixelsBgra, sourceWidth, sourceHeight, dirtyRects);
         }
         else if (_texture is null)
@@ -103,6 +105,7 @@ public sealed class UiOffscreenSurfacePresenter : IDisposable
             return;
         }
 
+        // 阶段 3：以 alpha blended textured quad 合成到 present 目标。
         SubmitQuad(context, in target);
     }
 

@@ -2,8 +2,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// 光照通道契约测试：输入输出绑定与 pass 顺序。
+/// </summary>
 public sealed class LightingPassContractTests
 {
+    /// <summary>
+    /// 验证Composite Shader Uses World Visibility And Emissive Inputs。
+    /// </summary>
     [Fact]
     public void CompositeShaderUsesWorldVisibilityAndEmissiveInputs()
     {
@@ -17,6 +23,9 @@ public sealed class LightingPassContractTests
         Assert.Contains("+ emissive", fragment, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Shader Sources Support Gles Profile。
+    /// </summary>
     [Fact]
     public void ShaderSourcesSupportGlesProfile()
     {
@@ -29,6 +38,9 @@ public sealed class LightingPassContractTests
         Assert.Contains("textureSize", shadow, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Shadow Cpu Finds Nearest Occluder Per Ray。
+    /// </summary>
     [Fact]
     public void ShadowCpuFindsNearestOccluderPerRay()
     {
@@ -45,6 +57,9 @@ public sealed class LightingPassContractTests
         Assert.Equal(light.Radius, distances[3]);
     }
 
+    /// <summary>
+    /// 验证Shadow Cpu Validates Dimensions And Output。
+    /// </summary>
     [Fact]
     public void ShadowCpuValidatesDimensionsAndOutput()
     {
@@ -58,6 +73,9 @@ public sealed class LightingPassContractTests
         AssertThrows<ArgumentException>(() => ShadowMap1DPass.ComputeCpu(occluder, 2, 2, light, emptyDistances));
     }
 
+    /// <summary>
+    /// 验证Light Source Validation Rejects Invalid Values。
+    /// </summary>
     [Fact]
     public void LightSourceValidationRejectsInvalidValues()
     {

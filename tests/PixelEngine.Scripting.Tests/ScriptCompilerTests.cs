@@ -6,6 +6,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// Roslyn 脚本编译与可回收装载上下文测试。
+/// 不变式：Roslyn 编译诊断可解析、可回收上下文不泄漏程序集。
 /// </summary>
 public sealed class ScriptCompilerTests
 {

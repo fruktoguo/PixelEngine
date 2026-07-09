@@ -4,6 +4,9 @@ using PixelEngine.Editor.Shell.Settings;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// Editor Shell 顶部菜单栏：文件、编辑、构建与帮助。
+/// </summary>
 internal sealed class EditorMainMenuBar
 {
     public void Draw(EditorShellApp app)

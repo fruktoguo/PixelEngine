@@ -6,6 +6,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// Engine 12 相位调度测试。
+/// 不变式：12 相位按文档顺序执行、相位边界不交叉写入共享状态。
 /// </summary>
 public sealed class EnginePhasePipelineTests
 {

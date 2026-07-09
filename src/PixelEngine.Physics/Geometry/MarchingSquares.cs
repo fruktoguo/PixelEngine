@@ -63,6 +63,7 @@ public static class MarchingSquares
             throw new ArgumentException("ranges 不能为空。", nameof(ranges));
         }
 
+        // 从固体 mask 提取边界有向边，再串联为闭合 contour。
         List<BoundaryEdge> edges = BuildBoundaryEdges(solidMask, width, height);
         if (edges.Count == 0)
         {
@@ -121,6 +122,7 @@ public static class MarchingSquares
                 currentEdgeIndex = FindNextEdge(edges, edgesByStart, used, currentEdge);
             }
 
+            // 有符号面积区分外轮廓（CCW）与内孔（CW）。
             Span<Vector2> contour = destination[startOffset..written];
             bool isHole = SignedArea(contour) > 0f;
             ranges[rangeCount] = new ContourRange(startOffset, contour.Length, isHole);

@@ -6,7 +6,7 @@ using System.Runtime;
 namespace PixelEngine.Benchmarks;
 
 /// <summary>
-/// 稳态帧循环零分配与 GC 模式观测基准。
+/// 热路径：模拟+渲染稳态帧循环；测量 GC 暂停分布。
 /// </summary>
 [MemoryDiagnoser]
 public class GcPauseBenchmark
@@ -40,12 +40,12 @@ public class GcPauseBenchmark
     /// <summary>
     /// 当前运行时是否启用 Server GC；用于报告中区分 Workstation / Server GC。
     /// </summary>
-    public bool IsServerGc => System.Runtime.GCSettings.IsServerGC;
+    public bool IsServerGc => GCSettings.IsServerGC;
 
     /// <summary>
     /// 当前 GC 延迟模式；Workstation/Server 对比时保持同一低延迟配置。
     /// </summary>
-    public GCLatencyMode LatencyMode => System.Runtime.GCSettings.LatencyMode;
+    public GCLatencyMode LatencyMode => GCSettings.LatencyMode;
 
     /// <summary>
     /// 基准进程内强制使用 SustainedLowLatency，与 Hosting 默认运行态一致。
@@ -53,8 +53,8 @@ public class GcPauseBenchmark
     [GlobalSetup]
     public void SetLatencyMode()
     {
-        _originalLatencyMode = System.Runtime.GCSettings.LatencyMode;
-        System.Runtime.GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
+        _originalLatencyMode = GCSettings.LatencyMode;
+        GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
     }
 
     /// <summary>
@@ -63,11 +63,11 @@ public class GcPauseBenchmark
     [GlobalCleanup]
     public void RestoreLatencyMode()
     {
-        System.Runtime.GCSettings.LatencyMode = _originalLatencyMode;
+        GCSettings.LatencyMode = _originalLatencyMode;
     }
 
     /// <summary>
-    /// 稳态 sim tick：MemoryDiagnoser 应报告 0 B/op。
+    /// 验证Steady Simulation Tick。
     /// </summary>
     [Benchmark]
     public void SteadySimulationTick()
@@ -78,7 +78,7 @@ public class GcPauseBenchmark
     }
 
     /// <summary>
-    /// 稳态 pool 租还：验证基础设施无分配。
+    /// 验证Steady Pool Rent Return。
     /// </summary>
     [Benchmark]
     public void SteadyPoolRentReturn()

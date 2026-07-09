@@ -4,8 +4,14 @@ using Xunit;
 
 namespace PixelEngine.Audio.Tests;
 
+/// <summary>
+/// 音频验收测试：端到端播放与设置联动。
+/// </summary>
 public sealed class AudioAcceptanceTests
 {
+    /// <summary>
+    /// 验证音频系统默认后端初始化或回退且不崩溃。
+    /// </summary>
     [Fact]
     public void AudioSystemDefaultBackendInitializesOrFallsBackWithoutCrashing()
     {
@@ -17,6 +23,9 @@ public sealed class AudioAcceptanceTests
         audio.Shutdown();
     }
 
+    /// <summary>
+    /// 验证调度器放置声源到米制空间针对定位事件。
+    /// </summary>
     [Fact]
     public void DispatcherPlacesSourceInMeterSpaceForPositionedEvents()
     {
@@ -41,6 +50,9 @@ public sealed class AudioAcceptanceTests
         Assert.Equal(new System.Numerics.Vector3(2f, 3f, 0f), backend.GetSourcePosition(voices[0].Source));
     }
 
+    /// <summary>
+    /// 验证调度器保持左右声道与距离针对定位声源。
+    /// </summary>
     [Fact]
     public void DispatcherPreservesLeftRightAndDistanceForPositionedSources()
     {
@@ -70,6 +82,9 @@ public sealed class AudioAcceptanceTests
         Assert.Equal(new System.Numerics.Vector3(3f, 0f, 0f), backend.GetSourcePosition(voices[2].Source));
     }
 
+    /// <summary>
+    /// 验证音频系统更新监听器自相机And配置距离衰减。
+    /// </summary>
     [Fact]
     public void AudioSystemUpdatesListenerFromCameraAndConfiguresDistanceAttenuation()
     {
@@ -97,6 +112,9 @@ public sealed class AudioAcceptanceTests
         Assert.Equal(0.75f, backend.GetSourceRolloffFactor(audio.Voices[0].Source));
     }
 
+    /// <summary>
+    /// 验证MPSC 环形缓冲馈送调度器来自并发生产者。
+    /// </summary>
     [Fact]
     public async Task MpscRingFeedsDispatcherFromConcurrentProducers()
     {
@@ -144,6 +162,9 @@ public sealed class AudioAcceptanceTests
         Assert.Equal(totalEvents, player.PlayedCount);
     }
 
+    /// <summary>
+    /// 验证调度器路由环境区域到循环管理器不占用定位声道。
+    /// </summary>
     [Fact]
     public void DispatcherRoutesAmbientRegionToLoopManagerWithoutPositionalVoice()
     {
@@ -184,6 +205,9 @@ public sealed class AudioAcceptanceTests
         Assert.Equal(1, backend.StopCalls);
     }
 
+    /// <summary>
+    /// 验证调度器触发全部材质事件族且使用不同提示音。
+    /// </summary>
     [Fact]
     public void DispatcherTriggersAllMaterialEventFamiliesWithDistinctCues()
     {

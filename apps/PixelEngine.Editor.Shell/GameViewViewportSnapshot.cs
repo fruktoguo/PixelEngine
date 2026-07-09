@@ -4,6 +4,7 @@ using System.Numerics;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>Game View 面板内的轴对齐矩形，用于命中测试与坐标映射。</summary>
 internal readonly record struct GameViewRect(float X, float Y, float Width, float Height)
 {
     public float Right => X + Width;
@@ -26,6 +27,9 @@ internal readonly record struct GameViewRect(float X, float Y, float Width, floa
     }
 }
 
+/// <summary>
+/// Game View 视口快照：纹理尺寸、面板内图像区域与 panel↔viewport 坐标映射。
+/// </summary>
 internal readonly record struct GameViewViewportSnapshot(
     bool IsValid,
     int TextureWidth,

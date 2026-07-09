@@ -5,6 +5,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// 区域 / 光束世界效果跨 chunk 边界的破坏质量守恒测试。
+/// 不变式：区域/光束效果跨 chunk 边界破坏质量守恒。
 /// </summary>
 public sealed class WorldEffectBoundaryConservationTests
 {
@@ -18,6 +19,7 @@ public sealed class WorldEffectBoundaryConservationTests
     [Fact]
     public void DamageCircleAcrossFourChunkCornerConservesDestroyedRubbleAndDebris()
     {
+        // Arrange：准备输入与初始状态
         DeterministicSimFixture.TestChunkSource source = DeterministicSimFixture.TestChunkSource.CreateDense(0, 0, 1, 1);
         MaterialTable materials = CreateMaterials();
         ParticleSystem particles = new(capacity: 64);
@@ -29,6 +31,7 @@ public sealed class WorldEffectBoundaryConservationTests
 
         int destroyed = kernel.DamageCircle(centerX, centerY, radius, damage: 10, falloff: false);
 
+        // Assert：验证预期结果
         Assert.Equal(expected, destroyed);
         Assert.Equal(expected, CountMaterial(source, Gravel));
         Assert.Equal(0, CountMaterial(source, Stone));
@@ -42,6 +45,7 @@ public sealed class WorldEffectBoundaryConservationTests
     [Fact]
     public void DamageBeamAcrossHorizontalChunkBoundaryConservesDestroyedRubbleAndDebris()
     {
+        // Arrange：准备输入与初始状态
         DeterministicSimFixture.TestChunkSource source = DeterministicSimFixture.TestChunkSource.CreateDense(0, 0, 1, 0);
         MaterialTable materials = CreateMaterials();
         ParticleSystem particles = new(capacity: 16);
@@ -53,6 +57,7 @@ public sealed class WorldEffectBoundaryConservationTests
 
         int destroyed = kernel.DamageBeam(startX, y, dirX: 1f, dirY: 0f, length, damagePerCell: 10);
 
+        // Assert：验证预期结果
         Assert.Equal(expected, destroyed);
         Assert.Equal(expected, CountMaterial(source, Gravel));
         Assert.Equal(0, CountMaterial(source, Stone));
@@ -66,6 +71,7 @@ public sealed class WorldEffectBoundaryConservationTests
     [Fact]
     public void StructuralDamageEntriesDoNotAllocateAfterWarmup()
     {
+        // Arrange：准备输入与初始状态
         DeterministicSimFixture.TestChunkSource source = DeterministicSimFixture.TestChunkSource.CreateDense(0, 0, 0, 0);
         MaterialTable materials = CreateMaterials();
         SimulationKernel kernel = new(source, new MaterialPropsTable(materials.Hot));
@@ -88,6 +94,7 @@ public sealed class WorldEffectBoundaryConservationTests
         }
 
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        // Assert：验证预期结果
         Assert.True(destroyed > 0);
         Assert.Equal(0, allocated);
     }

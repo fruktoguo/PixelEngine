@@ -8,6 +8,7 @@ namespace PixelEngine.World.Tests;
 
 /// <summary>
 /// WorldStreamer 与 WorldManager 相位分离测试。
+/// 不变式：SubmitPlan 在相位 2 摘卸载、I/O 异步后 ApplyPrepared 才改驻留表、material remap 与温度场一致。
 /// </summary>
 public sealed class WorldStreamerTests
 {
@@ -17,6 +18,7 @@ public sealed class WorldStreamerTests
     [Fact]
     public void SubmitPlanDetachesUnloadWithoutDoingIoAndApplyPreparedFinalizes()
     {
+        // Arrange：搭建测试场景与依赖
         ResidentChunkMap chunks = new();
         ResidencyTable residency = new();
         ChunkMemoryBudget budget = Budget();
@@ -33,8 +35,10 @@ public sealed class WorldStreamerTests
         temperature.AddHeat((coord.X << 6) + 4, (coord.Y << 6) + 4, 12.5f);
         ResidencyPlan plan = new([], [coord], [new ResidencyStateChange(coord, ChunkResidencyState.Detached)]);
 
+        // Act：执行被测操作
         streamer.SubmitPlan(plan);
 
+        // Assert：验证不变式与预期结果
         Assert.False(chunks.Contains(coord));
         Assert.True(residency.TryGetInfo(coord, out ChunkResidencyInfo detached));
         Assert.Equal(ChunkResidencyState.Detached, detached.State);
@@ -55,6 +59,7 @@ public sealed class WorldStreamerTests
     [Fact]
     public void ProcessIoLoadsChunkRemapsMaterialAndApplyPreparedAddsResident()
     {
+        // Arrange：搭建测试场景与依赖
         ResidentChunkMap chunks = new();
         ResidencyTable residency = new();
         ChunkMemoryBudget budget = Budget();
@@ -70,7 +75,9 @@ public sealed class WorldStreamerTests
         };
         ResidencyPlan plan = new([coord], [], []);
 
+        // Act：执行被测操作
         streamer.SubmitPlan(plan);
+        // Assert：验证不变式与预期结果
         Assert.False(chunks.Contains(coord));
         Assert.Equal(1, streamer.ProcessIoOnce());
         Assert.Equal(1, streamer.ApplyPrepared(frame: 5));
@@ -91,6 +98,7 @@ public sealed class WorldStreamerTests
     [Fact]
     public void WorldManagerApplyResidencySubmitsLoadsForBorderArea()
     {
+        // Arrange：准备输入与初始状态
         using TempWorldDirectory world = TempWorldDirectory.Create();
         WorldManager manager = new(
             new WorldCamera(32, 32, viewportCellsX: 64, viewportCellsY: 64),
@@ -107,6 +115,7 @@ public sealed class WorldStreamerTests
 
         manager.ApplyResidency(frame: 1);
 
+        // Assert：验证预期结果
         Assert.Equal(9, manager.Streamer.PendingRequestCount);
         Assert.Equal(9, manager.Residency.Count);
 
@@ -125,6 +134,7 @@ public sealed class WorldStreamerTests
     [Fact]
     public void WorldManagerPansEvictsAndReloadsPersistedChunk()
     {
+        // Arrange：搭建测试场景与依赖
         using TempWorldDirectory world = TempWorldDirectory.Create();
         MaterialTable materials = Materials(("empty", CellType.Empty), ("sand", CellType.Powder));
         int chunkBytes = ChunkMemoryBudget.EstimatedResidentChunkBytes;
@@ -144,8 +154,10 @@ public sealed class WorldStreamerTests
             });
 
         manager.ApplyResidency(frame: 1);
+        // Act：执行被测操作
         _ = manager.Streamer.ProcessIoOnce();
         manager.ApplyResidency(frame: 2);
+        // Assert：验证不变式与预期结果
         Assert.True(manager.Chunks.TryGetChunk(new ChunkCoord(0, 0), out Chunk edited));
         edited.Material[0] = 1;
 
@@ -171,6 +183,7 @@ public sealed class WorldStreamerTests
     [Fact]
     public void StreamingPanningStressKeepsDetachedOutOfLiveMapAndPersistsEdit()
     {
+        // Arrange：准备输入与初始状态
         using JobSystem jobs = new(workerCount: 2)
         {
             SingleThreadThreshold = 0,
@@ -194,6 +207,7 @@ public sealed class WorldStreamerTests
             });
         long frame = 1;
         Pump(manager, jobs, ref frame, iterations: 2);
+        // Assert：验证预期结果
         Assert.True(manager.Chunks.TryGetChunk(new ChunkCoord(0, 0), out Chunk edited));
         edited.Material[0] = 1;
 
@@ -215,6 +229,7 @@ public sealed class WorldStreamerTests
     [Fact]
     public void StreamingLongPanningStressKeepsResidentMemoryUnderConfiguredCap()
     {
+        // Arrange：准备输入与初始状态
         using JobSystem jobs = new(workerCount: 2)
         {
             SingleThreadThreshold = 0,
@@ -239,6 +254,7 @@ public sealed class WorldStreamerTests
             });
         long frame = 1;
         Pump(manager, jobs, ref frame, iterations: 4);
+        // Assert：验证预期结果
         Assert.InRange(manager.MemoryBudget.ResidentBytes, 0, capBytes);
 
         long[] focusX =
@@ -268,6 +284,7 @@ public sealed class WorldStreamerTests
     [Fact]
     public void ProcessIoOnceWithJobSystemPreparesMultipleLoads()
     {
+        // Arrange：搭建测试场景与依赖
         using JobSystem jobs = new(workerCount: 2)
         {
             SingleThreadThreshold = 0,
@@ -282,8 +299,10 @@ public sealed class WorldStreamerTests
         WriteStoredChunk(store, first, savedMaterial: 1, temp: (Half)1f);
         WriteStoredChunk(store, second, savedMaterial: 1, temp: (Half)2f);
         WorldStreamer streamer = new(chunks, residency, budget, temperature, store, IdentityRemap());
+        // Act：执行被测操作
         streamer.SubmitPlan(new ResidencyPlan([first, second], [], []));
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(2, streamer.ProcessIoOnce(jobs));
         Assert.Equal(2, streamer.ApplyPrepared(frame: 3));
 
@@ -300,6 +319,7 @@ public sealed class WorldStreamerTests
     [Fact]
     public void ProcessIoOnceWithoutRequestsDoesNotAllocateAfterWarmup()
     {
+        // Arrange：搭建测试场景与依赖
         WorldStreamer streamer = new(
             new ResidentChunkMap(),
             new ResidencyTable(),
@@ -308,6 +328,7 @@ public sealed class WorldStreamerTests
             new MemoryChunkStore(),
             IdentityRemap());
 
+        // Act：执行被测操作
         _ = streamer.ProcessIoOnce();
 
         long before = GC.GetAllocatedBytesForCurrentThread();
@@ -318,6 +339,7 @@ public sealed class WorldStreamerTests
         }
 
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        // Assert：验证不变式与预期结果
         Assert.Equal(0, processed);
         Assert.Equal(0, allocated);
     }

@@ -70,7 +70,7 @@ public class ReactionLookupBenchmark
     }
 
     /// <summary>
-    /// 大切片 direct table 查找路径。
+    /// 验证Find Direct。
     /// </summary>
     [Benchmark]
     public int FindDirect()
@@ -220,7 +220,7 @@ public class ReactionTemperatureAllocationBenchmarks
     }
 
     /// <summary>
-    /// 反应早退路径：`ReactionCount==0` 不进入反应表。
+    /// 验证Step Ca With Inert Reaction Early Out。
     /// </summary>
     [Benchmark]
     public void StepCaWithInertReactionEarlyOut()

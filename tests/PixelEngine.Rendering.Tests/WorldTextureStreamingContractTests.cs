@@ -4,8 +4,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// 世界纹理流式契约测试：区块上传与驻留同步。
+/// </summary>
 public sealed class WorldTextureStreamingContractTests
 {
+    /// <summary>
+    /// 验证Render Buffer Exposes Bgra Span And调整大小行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderBufferExposesBgraSpanAndResizes()
     {
@@ -34,6 +40,9 @@ public sealed class WorldTextureStreamingContractTests
         Assert.Equal(12, buffer.Pixels.Length);
     }
 
+    /// <summary>
+    /// 验证Render Buffer Rejects Invalid Sizes行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderBufferRejectsInvalidSizes()
     {
@@ -46,6 +55,9 @@ public sealed class WorldTextureStreamingContractTests
         AssertThrowsOutOfRange(() => buffer.Resize(1, -1));
     }
 
+    /// <summary>
+    /// 验证Dirty Rect Upload Validation Rejects Empty And Out Of Bounds Rects。
+    /// </summary>
     [Fact]
     public void DirtyRectUploadValidationRejectsEmptyAndOutOfBoundsRects()
     {
@@ -65,6 +77,9 @@ public sealed class WorldTextureStreamingContractTests
         AssertThrowsOutOfRange(() => buffer.ValidateRect(new PixelUploadRect(0, 2, 1, 3)));
     }
 
+    /// <summary>
+    /// 验证Render Buffer Source Uses Pinned Uint Bgra Storage行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderBufferSourceUsesPinnedUintBgraStorage()
     {
@@ -76,6 +91,9 @@ public sealed class WorldTextureStreamingContractTests
         Assert.Contains("sizeof(uint)", source, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Rendering Sources Do Not Introduce Per Chunk Texture Path行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderingSourcesDoNotIntroducePerChunkTexturePath()
     {
@@ -94,6 +112,9 @@ public sealed class WorldTextureStreamingContractTests
             source);
     }
 
+    /// <summary>
+    /// 验证Pbo Uploader Exposes Non Default Persistent Mapped Path。
+    /// </summary>
     [Fact]
     public void PboUploaderExposesNonDefaultPersistentMappedPath()
     {

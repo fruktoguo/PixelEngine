@@ -4,6 +4,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// 脚本生命周期派发的稳态分配测试。
+/// 不变式：生命周期派发稳态零额外分配（预热后）。
 /// </summary>
 public sealed class ScriptDispatchAllocationTests
 {

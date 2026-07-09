@@ -8,6 +8,7 @@ namespace PixelEngine.Editor.Tests;
 
 /// <summary>
 /// 存读档面板测试。
+/// 不变式：存读档面板操作映射到 WorldSaveService 契约。
 /// </summary>
 public sealed class SaveLoadPanelTests
 {
@@ -36,6 +37,7 @@ public sealed class SaveLoadPanelTests
     [Fact]
     public void WorldSaveLoadPanelServiceSavesListsAndLoadsThroughWorldSaveService()
     {
+        // Arrange：准备输入与初始状态
         string root = Path.Combine(Path.GetTempPath(), "pixelengine-saves-" + Guid.NewGuid().ToString("N"));
         _ = Directory.CreateDirectory(root);
         try
@@ -59,6 +61,7 @@ public sealed class SaveLoadPanelTests
             IReadOnlyList<SaveSlotInfo> slots = service.ListSaveSlots();
             SaveLoadOperationResult load = service.Load("slot-one");
 
+            // Assert：验证预期结果
             Assert.True(save.Success);
             SaveSlotInfo slot = Assert.Single(slots);
             Assert.Equal("slot-one", slot.Id);

@@ -89,20 +89,17 @@ public readonly struct UiImeGeometry
             float.IsFinite(caretHeight) &&
             caretWidth > 0f &&
             caretHeight > 0f;
-        if (!valid)
-        {
-            return None;
-        }
-
-        return new UiImeGeometry(
-            hasCaretRect: true,
-            caretX,
-            caretY,
-            caretWidth,
-            caretHeight,
-            hasCandidateAnchor: true,
-            caretX,
-            caretY + caretHeight);
+        return valid
+            ? new UiImeGeometry(
+                hasCaretRect: true,
+                caretX,
+                caretY,
+                caretWidth,
+                caretHeight,
+                hasCandidateAnchor: true,
+                caretX,
+                caretY + caretHeight)
+            : None;
     }
 
     /// <summary>

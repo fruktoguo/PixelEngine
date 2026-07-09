@@ -28,12 +28,13 @@ internal static class EngineGcCoordinator
     /// <returns>成功进入 NoGCRegion 时为 true；预算不足或运行时拒绝时为 false。</returns>
     public static bool TryBeginNoGcRegion(long budgetBytes)
     {
-        System.Threading.Monitor.Enter(Gate);
+        // 全局门保证 LatencyMode 切换与 NoGCRegion 不会与其他 Engine 实例交错。
+        Monitor.Enter(Gate);
         try
         {
             if (!GC.TryStartNoGCRegion(budgetBytes, disallowFullBlockingGC: true))
             {
-                System.Threading.Monitor.Exit(Gate);
+                Monitor.Exit(Gate);
                 return false;
             }
 
@@ -41,7 +42,7 @@ internal static class EngineGcCoordinator
         }
         catch
         {
-            System.Threading.Monitor.Exit(Gate);
+            Monitor.Exit(Gate);
             throw;
         }
     }
@@ -57,7 +58,7 @@ internal static class EngineGcCoordinator
         }
         finally
         {
-            System.Threading.Monitor.Exit(Gate);
+            Monitor.Exit(Gate);
         }
     }
 }

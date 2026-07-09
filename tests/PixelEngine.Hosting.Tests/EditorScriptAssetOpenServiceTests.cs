@@ -6,6 +6,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// Project Window 脚本外部编辑器 opener 自动化测试。
+/// 不变式：脚本资产经配置的外部编辑器打开、缺失路径给出可诊断错误。
 /// </summary>
 public sealed class EditorScriptAssetOpenServiceTests
 {
@@ -15,6 +16,7 @@ public sealed class EditorScriptAssetOpenServiceTests
     [Fact]
     public void ConfiguredExternalEditorUsesConfiguredCommandAndFilePlaceholder()
     {
+        // Arrange：准备输入与初始状态
         using TempDir temp = new();
         EditorAssetManifestStore manifest = CreateManifestWithScript(temp.Path, out string scriptPath);
         RecordingLauncher launcher = new();
@@ -23,6 +25,7 @@ public sealed class EditorScriptAssetOpenServiceTests
 
         EditorScriptAssetOpenResult result = service.OpenScriptAsset("scripts/PlayerController.cs");
 
+        // Assert：验证预期结果
         Assert.True(result.Success, result.Diagnostic);
         Assert.False(result.UsedSystemDefault);
         Assert.Equal("scripts/PlayerController.cs", result.LogicalPath);
@@ -39,6 +42,7 @@ public sealed class EditorScriptAssetOpenServiceTests
     [Fact]
     public void ConfiguredExternalEditorWithoutFilePlaceholderAppendsScriptPathArgument()
     {
+        // Arrange：准备输入与初始状态
         using TempDir temp = new();
         EditorAssetManifestStore manifest = CreateManifestWithScript(temp.Path, out string scriptPath);
         RecordingLauncher launcher = new();
@@ -47,6 +51,7 @@ public sealed class EditorScriptAssetOpenServiceTests
 
         EditorScriptAssetOpenResult result = service.OpenScriptAsset("scripts/PlayerController.cs");
 
+        // Assert：验证预期结果
         Assert.True(result.Success, result.Diagnostic);
         Assert.False(result.UsedSystemDefault);
         Assert.Equal(scriptPath, result.ResolvedPath);
@@ -62,6 +67,7 @@ public sealed class EditorScriptAssetOpenServiceTests
     [Fact]
     public void UnconfiguredExternalEditorFallsBackToSystemDefaultOpener()
     {
+        // Arrange：准备输入与初始状态
         using TempDir temp = new();
         EditorAssetManifestStore manifest = CreateManifestWithScript(temp.Path, out string scriptPath);
         RecordingLauncher launcher = new();
@@ -69,6 +75,7 @@ public sealed class EditorScriptAssetOpenServiceTests
 
         EditorScriptAssetOpenResult result = service.OpenScriptAsset("scripts/PlayerController.cs");
 
+        // Assert：验证预期结果
         Assert.True(result.Success, result.Diagnostic);
         Assert.True(result.UsedSystemDefault);
         Assert.Equal("system-default", result.EditorCommand);
@@ -103,6 +110,7 @@ public sealed class EditorScriptAssetOpenServiceTests
     [Fact]
     public void NonScriptAssetIsRejectedWithoutStartingProcess()
     {
+        // Arrange：准备输入与初始状态
         using TempDir temp = new();
         string contentRoot = Path.Combine(temp.Path, "content");
         EditorAssetManifestStore manifest = new(temp.Path, contentRoot);
@@ -112,6 +120,7 @@ public sealed class EditorScriptAssetOpenServiceTests
 
         EditorScriptAssetOpenResult result = service.OpenScriptAsset("textures/sand.png");
 
+        // Assert：验证预期结果
         Assert.False(result.Success);
         Assert.Contains("不是 script 类型", result.Diagnostic, StringComparison.Ordinal);
         Assert.Empty(launcher.Starts);

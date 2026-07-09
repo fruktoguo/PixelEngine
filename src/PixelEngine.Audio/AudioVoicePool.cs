@@ -98,6 +98,7 @@ public sealed class AudioVoicePool : IDisposable
         ThrowIfDisposed();
         RefreshFinishedVoices();
 
+        // 优先复用已停止的空闲槽位，避免无谓抢占。
         for (int i = 0; i < _voices.Length; i++)
         {
             AudioVoice voice = _voices[i];
@@ -109,6 +110,7 @@ public sealed class AudioVoicePool : IDisposable
             }
         }
 
+        // 池满时按优先级 / 距离 / 年龄评分抢占最低价值 voice。
         int stealIndex = -1;
         float bestScore = 0f;
         for (int i = 0; i < _voices.Length; i++)

@@ -30,6 +30,7 @@ public sealed class ScriptingPhaseDriver(IScriptRuntime runtime, IScriptContext 
         phases.Register(EnginePhase.GameLogicAndScripts, RunScripts);
     }
 
+    // 相位 1：Update 用渲染帧 dt（含 TimeScale），FixedSimTick 仅在 RunSim 帧执行一次。
     private void RunScripts(EngineTickContext context)
     {
         Runtime.BeginFrame();

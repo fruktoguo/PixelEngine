@@ -55,7 +55,7 @@ public class TemperatureConductStencilBenchmarks
     }
 
     /// <summary>
-    /// Float32 scalar fallback。
+    /// 验证Float32Scalar。
     /// </summary>
     [Benchmark(Baseline = true)]
     public void Float32Scalar()
@@ -64,7 +64,7 @@ public class TemperatureConductStencilBenchmarks
     }
 
     /// <summary>
-    /// Float32 Intrinsics light-up 路径。
+    /// 验证Float32Intrinsics。
     /// </summary>
     [Benchmark]
     public void Float32Intrinsics()
@@ -73,7 +73,7 @@ public class TemperatureConductStencilBenchmarks
     }
 
     /// <summary>
-    /// Float16 内存优先 scalar 路径。
+    /// 验证Float16Scalar。
     /// </summary>
     [Benchmark]
     public void Float16Scalar()

@@ -1,5 +1,8 @@
 namespace PixelEngine.Editor.Shell.Build;
 
+/// <summary>
+/// 定位仓库根目录与 build-player 脚本路径。
+/// </summary>
 internal class BuildToolLocator
 {
     public virtual BuildToolLocatorResult Locate()

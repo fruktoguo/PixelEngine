@@ -5,6 +5,7 @@ namespace PixelEngine.Demo.Tests;
 
 /// <summary>
 /// 真实窗口帧时间探针输出格式测试。
+/// 不变式：帧时间探针输出格式稳定、可被自动化解析。
 /// </summary>
 public sealed class DemoWindowFrameTimeProbeTests
 {

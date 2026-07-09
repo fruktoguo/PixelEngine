@@ -2,6 +2,9 @@ using Hexa.NET.ImGui;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// Hierarchy 面板：场景树选择与 GameObject 操作。
+/// </summary>
 internal sealed class GameObjectHierarchyPanel(EditorSceneModel scene, EditorUndoStack undo, EditorPrefabAssetStore prefabs) : IEditorPanel
 {
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));

@@ -4,8 +4,14 @@ using Xunit;
 
 namespace PixelEngine.Audio.Tests;
 
+/// <summary>
+/// 材质音频表测试：材质到音效映射与回退。
+/// </summary>
 public sealed class MaterialAudioTableTests
 {
+    /// <summary>
+    /// 验证材质音频表映射全部事件类型自提示音集。
+    /// </summary>
     [Fact]
     public void MaterialAudioTableMapsAllEventTypesFromCueSet()
     {
@@ -38,6 +44,9 @@ public sealed class MaterialAudioTableTests
         AssertCue(table, AudioEventType.AmbientRegion, 60);
     }
 
+    /// <summary>
+    /// 验证材质音频表拒绝未知材质未配置提示音And顺序错误的定义。
+    /// </summary>
     [Fact]
     public void MaterialAudioTableRejectsUnknownMaterialUnconfiguredCueAndMisorderedDefinitions()
     {
@@ -56,6 +65,9 @@ public sealed class MaterialAudioTableTests
         ]));
     }
 
+    /// <summary>
+    /// 验证材质音频播放器解析缓冲并播放声道。
+    /// </summary>
     [Fact]
     public void MaterialAudioPlayerResolvesBufferAndPlaysVoice()
     {
@@ -83,6 +95,9 @@ public sealed class MaterialAudioTableTests
         Assert.Equal(7, buffers.LastCueHandle);
     }
 
+    /// <summary>
+    /// 验证材质音频播放器应用运行时分类音量。
+    /// </summary>
     [Fact]
     public void MaterialAudioPlayerAppliesRuntimeCategoryVolume()
     {

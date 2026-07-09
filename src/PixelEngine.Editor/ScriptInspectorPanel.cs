@@ -119,6 +119,7 @@ public sealed class ScriptInspectorPanel(Scene scene, MaterialTable? materials =
         }
 
         Visible = visible;
+        // 面板绘制顺序：热重载控件 → 实体列表 → 组件选择 → 反射字段编辑。
         DrawHotReloadControls();
         ScriptEntityInspection[] snapshot = Refresh();
         DrawEntityPicker(snapshot, context.Selection);
@@ -200,6 +201,7 @@ public sealed class ScriptInspectorPanel(Scene scene, MaterialTable? materials =
         }
     }
 
+    // 按 ScriptFieldKind 分发 ImGui 控件；写回经 ScriptInspector 反射落到 Behaviour 实例。
     private void DrawField(Behaviour behaviour, ScriptFieldDescriptor field)
     {
         if (!field.CanWrite || field.Kind == ScriptFieldKind.Unsupported)
@@ -230,6 +232,9 @@ public sealed class ScriptInspectorPanel(Scene scene, MaterialTable? materials =
                 break;
             case ScriptFieldKind.Material:
                 DrawMaterial(behaviour, field);
+                break;
+            case ScriptFieldKind.AssetReference:
+                ImGui.TextUnformatted($"{field.Name}: {field.Value}");
                 break;
             default:
                 ImGui.TextUnformatted($"{field.Name}: {field.Value}");
@@ -634,6 +639,7 @@ public sealed class ScriptInspectorHotReloadAdapter : IScriptInspectorHotReload
             return new ScriptInspectorHotReloadResult(false, $"脚本源目录不存在：{_sourceDirectory}", []);
         }
 
+        // Inspector 手动热重载：先排队目录内全部 .cs，再同步 Apply（与文件监视 debounce 路径共用控制器）。
         _controller.RequestReloadFromDirectory(_assemblyName, _sourceDirectory);
         ScriptHotReloadApplyResult result = _controller.ApplyPendingReload();
         bool success = result.Status == ScriptHotReloadStatus.Reloaded;

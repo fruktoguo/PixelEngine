@@ -14,6 +14,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// Hosting 过载降级编排测试。
+/// 不变式：过载检测触发可观测降级、恢复后状态可回到正常路径。
 /// </summary>
 public sealed class EngineOverloadControllerTests
 {
@@ -57,16 +58,19 @@ public sealed class EngineOverloadControllerTests
     [Fact]
     public void EngineAppliesSim30HzQualityTierToFrameClock()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
             .WithOverloadPolicy(frameBudgetMs: 10, sustainWindow: 1)
             .Build();
 
+        // Act：执行被测操作
         _ = engine.RunOneTick(realDeltaSeconds: 0.011);
         _ = engine.RunOneTick(realDeltaSeconds: 0.011);
         _ = engine.RunOneTick(realDeltaSeconds: 0.011);
         _ = engine.RunOneTick(realDeltaSeconds: 0.011);
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(EngineQualityTier.Sim30Hz, engine.Context.QualityTier);
         Assert.Equal(EngineConstants.SimHzDownscaled, engine.Context.Clock.SimHz);
         Assert.Equal(EngineConstants.SimHzDownscaled, engine.Context.Counters.SimHz);
@@ -97,6 +101,7 @@ public sealed class EngineOverloadControllerTests
     [Fact]
     public void EngineAppliesReducedThermalQualityTierToTemperatureField()
     {
+        // Arrange：搭建测试场景与依赖
         TemperatureField temperature = new();
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
@@ -104,8 +109,10 @@ public sealed class EngineOverloadControllerTests
             .Build();
         engine.Context.RegisterService(temperature);
 
+        // Act：执行被测操作
         _ = engine.RunOneTick(realDeltaSeconds: 0.011);
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(EngineQualityTier.ReducedThermal, engine.Context.QualityTier);
         Assert.Equal(4, temperature.StepInterval);
         Assert.True(temperature.ShouldRun(0));
@@ -126,6 +133,7 @@ public sealed class EngineOverloadControllerTests
     [Fact]
     public void EngineAppliesRenderStyleQualityTierIndependentlyFromLighting()
     {
+        // Arrange：搭建测试场景与依赖
         RecordingRenderStyleQualityController renderStyle = new();
         RecordingGpuComputeQualityDegrader gpu = new();
         using Engine engine = new EngineBuilder()
@@ -135,8 +143,10 @@ public sealed class EngineOverloadControllerTests
         engine.Context.RegisterService<IRenderStyleQualityController>(renderStyle);
         engine.Context.RegisterService<IGpuComputeQualityDegrader>(gpu);
 
+        // Act：执行被测操作
         _ = engine.RunOneTick(realDeltaSeconds: 0.011);
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(EngineQualityTier.ReducedThermal, engine.Context.QualityTier);
         Assert.Equal(RenderBufferStyleLevel.Off, renderStyle.RenderStyleLevel);
         Assert.Equal(0, gpu.CallCount);
@@ -155,6 +165,7 @@ public sealed class EngineOverloadControllerTests
     [Fact]
     public void OverloadedSim30HzKeepsRenderFramesWithoutCatchUp()
     {
+        // Arrange：搭建测试场景与依赖
         List<EnginePhase> phases = [];
         EngineBuilder builder = new EngineBuilder()
             .WithWorkerCount(1)
@@ -162,10 +173,12 @@ public sealed class EngineOverloadControllerTests
         RegisterAllPhases(builder, phases);
         using Engine engine = builder.Build();
 
+        // Act：执行被测操作
         _ = engine.RunOneTick(realDeltaSeconds: 0.011);
         _ = engine.RunOneTick(realDeltaSeconds: 0.011);
         _ = engine.RunOneTick(realDeltaSeconds: 0.011);
         _ = engine.RunOneTick(realDeltaSeconds: 0.011);
+        // Assert：验证不变式与预期结果
         Assert.Equal(EngineQualityTier.Sim30Hz, engine.Context.QualityTier);
 
         phases.Clear();
@@ -194,6 +207,7 @@ public sealed class EngineOverloadControllerTests
     [Fact]
     public void EngineAppliesGpuComputeDegradationWhenReducedLightingTierIsReached()
     {
+        // Arrange：搭建测试场景与依赖
         RecordingGpuComputeQualityDegrader degrader = new();
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
@@ -201,7 +215,9 @@ public sealed class EngineOverloadControllerTests
             .Build();
         engine.Context.RegisterService<IGpuComputeQualityDegrader>(degrader);
 
+        // Act：执行被测操作
         _ = engine.RunOneTick(realDeltaSeconds: 0.011);
+        // Assert：验证不变式与预期结果
         Assert.Equal(0, degrader.CallCount);
 
         _ = engine.RunOneTick(realDeltaSeconds: 0.011);
@@ -219,6 +235,7 @@ public sealed class EngineOverloadControllerTests
     [Fact]
     public void EngineAppliesDistantChunkThrottleFromWorldCamera()
     {
+        // Arrange：搭建测试场景与依赖
         string worldPath = Path.Combine(Path.GetTempPath(), $"pixelengine-throttle-{Guid.NewGuid():N}");
         try
         {
@@ -253,10 +270,12 @@ public sealed class EngineOverloadControllerTests
                 .Build();
             engine.Context.RegisterService(world);
 
+            // Act：执行被测操作
             _ = engine.RunOneTick(realDeltaSeconds: 0.020);
             _ = engine.RunOneTick(realDeltaSeconds: 0.020);
             _ = engine.RunOneTick(realDeltaSeconds: 0.020);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(EngineQualityTier.DistantChunkThrottle, engine.Context.QualityTier);
             CaIterationSnapshot[] iterations = new CaIterationSnapshot[16];
             int count = kernel.CopyCaIterationSnapshots(iterations);
@@ -316,6 +335,7 @@ public sealed class EngineOverloadControllerTests
     [Fact]
     public void ScriptDiagnosticsApiCapturesHudCounters()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
             .Build();
@@ -324,11 +344,13 @@ public sealed class EngineOverloadControllerTests
         engine.Context.Counters.FreeParticles = 7;
         engine.Context.Counters.RigidBodies = 2;
         engine.Context.Counters.SimHz = 60;
+        // Act：执行被测操作
         _ = engine.RunOneTick(realDeltaSeconds: 0.02);
 
         EngineScriptDiagnosticsApi api = new(engine.Context.Counters, engine.Context.Clock, new DebugOverlaySettings(), () => 4);
         EngineDiagnosticsSnapshot snapshot = api.Capture();
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(engine.Context.Clock.FrameIndex, snapshot.FrameCount);
         Assert.Equal(50f, snapshot.FramesPerSecond, precision: 2);
         Assert.Equal(20f, snapshot.FrameMilliseconds, precision: 2);
@@ -357,10 +379,12 @@ public sealed class EngineOverloadControllerTests
     [Fact]
     public void ScriptDiagnosticsApiCapturesWindowedFrameRateStatistics()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
             .Build();
 
+        // Act：执行被测操作
         _ = engine.RunOneTick(realDeltaSeconds: 0.010);
         _ = engine.RunOneTick(realDeltaSeconds: 0.020);
         _ = engine.RunOneTick(realDeltaSeconds: 0.030);
@@ -368,6 +392,7 @@ public sealed class EngineOverloadControllerTests
         EngineScriptDiagnosticsApi api = new(engine.Context.Counters, engine.Context.Clock, new DebugOverlaySettings());
         EngineDiagnosticsSnapshot snapshot = api.Capture();
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(3, snapshot.FrameSampleCount);
         Assert.Equal(50f, snapshot.FramesPerSecond, precision: 2);
         Assert.Equal(20f, snapshot.FrameMilliseconds, precision: 2);
@@ -383,6 +408,7 @@ public sealed class EngineOverloadControllerTests
     [Fact]
     public void ScriptRuntimeControlApiControlsEngineModeAndShutdownRequest()
     {
+        // Arrange：准备输入与初始状态
         using Engine engine = new EngineBuilder()
             .UseHeadless()
             .WithWorkerCount(1)
@@ -390,6 +416,7 @@ public sealed class EngineOverloadControllerTests
         EngineScriptRuntimeControlApi api = new(engine);
 
         RuntimeControlSnapshot initial = api.Capture();
+        // Assert：验证预期结果
         Assert.True(initial.IsPlaying);
         Assert.False(initial.IsShutdownRequested);
 
@@ -421,6 +448,7 @@ public sealed class EngineOverloadControllerTests
     [Fact]
     public void ScriptRuntimeControlApiTogglesPresentationAndAudioSettings()
     {
+        // Arrange：准备输入与初始状态
         using Engine engine = new EngineBuilder()
             .UseHeadless()
             .WithWorkerCount(1)
@@ -439,6 +467,7 @@ public sealed class EngineOverloadControllerTests
         EngineScriptRuntimeControlApi api = new(engine);
 
         RuntimeSettingsSnapshot initial = api.CaptureSettings();
+        // Assert：验证预期结果
         Assert.True(initial.VSyncEnabled);
         Assert.True(initial.CanToggleVSync);
         Assert.True(initial.AudioEnabled);

@@ -121,6 +121,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
     {
         ThrowIfDisposed();
         info.Viewport.Validate();
+        // 阶段 1：加载 GL 函数表并创建 native renderer。
         if (!RmlUiGlBootstrap.TryLoad(_window, out _))
         {
             throw new InvalidOperationException("RmlUi native GL 函数表初始化失败。");
@@ -138,6 +139,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
         _appliedViewportY = 0;
         _appliedViewportWidth = info.Viewport.Width;
         _appliedViewportHeight = info.Viewport.Height;
+        // 阶段 2：注册字体并标记首帧需重绘。
         RegisterFontFace(info.FontSelection);
 
         Dirty = true;
@@ -181,6 +183,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             throw new InvalidOperationException("RmlUiBackend 文档容量已满。");
         }
 
+        // 预处理：PNG→TGA 改写 img/src，再载入内存文档并绑定 DOM 桥。
         string documentText = RmlUiDocumentPreprocessor.Prepare(source.Path, _imageCache);
         byte[] documentBytes = Encoding.UTF8.GetBytes(documentText);
         byte[] sourceBytes = Encoding.UTF8.GetBytes(source.Path + '\0');
@@ -254,6 +257,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             throw new InvalidOperationException("RmlUiBackend 可见屏栈容量不足。");
         }
 
+        // 差量同步：先隐藏离开栈的文档，再按新栈顺序显示。
         for (int i = 0; i < _visibleScreenCount; i++)
         {
             if (!ContainsDocument(stack, _visibleScreens[i].Document) &&
@@ -413,6 +417,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
     {
         ThrowIfDisposed();
         EnsureInitialized();
+        // IME 预编辑桥接：规范化状态后计算 overlay 几何，再推送到 native TextInputContext。
         UiTextComposition normalized = NormalizeTextComposition(text, in composition);
         int textLength = normalized.IsActive ? text.Length : 0;
         UiViewport geometryViewport = new(0, 0, _baseViewportWidth, _baseViewportHeight, 1f);
@@ -618,6 +623,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             throw new KeyNotFoundException($"RmlUi 文档不存在: {document.Value}");
         }
 
+        // DOM 数据桥：标量直接写入；字符串句柄需经 resolver 展开为 UTF-8。
         RmlUiNative.NativeUiValue nativeValue = ToNativeValue(in value);
         int result = value.Kind == UiValueKind.StringHandle
             ? SetModelStringValue(document, path, in value, &nativeValue)
@@ -784,6 +790,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             return;
         }
 
+        // Present 前将逻辑 UI 坐标映射到 framebuffer 区域（含 Y 轴翻转）。
         (int x, int y, int frameWidth, int frameHeight) = ResolveCompositeViewportRegion(
             in context,
             _baseViewportWidth,

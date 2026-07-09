@@ -4,6 +4,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// 脚本相机 API 测试。
+/// 不变式：脚本相机 API 读写不越界、句柄无效时安全失败。
 /// </summary>
 public sealed class ScriptCameraApiTests
 {

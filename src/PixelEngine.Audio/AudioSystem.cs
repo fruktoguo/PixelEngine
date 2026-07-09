@@ -66,6 +66,7 @@ public sealed class AudioSystem : IDisposable
 
         ArgumentNullException.ThrowIfNull(settings);
         Settings = settings.Validate();
+        // --- 后端选择：显式注入 → OpenAL → NullAudioBackend 静默降级 ---
         if (backend is not null)
         {
             _backend = backend;
@@ -86,6 +87,7 @@ public sealed class AudioSystem : IDisposable
             InitializationWarning = failureReason ?? "OpenAL 初始化失败，已启用无声后端。";
         }
 
+        // --- voice 池预创建：初始化期分配全部 OpenAL source ---
         _voices = new AudioVoicePool(_backend, Settings);
         CurrentListener = new AudioListenerState(Vector3.Zero, -Vector3.UnitZ, Vector3.UnitY, Settings.MasterVolume);
         RefreshDiagnostics(default);
@@ -171,7 +173,7 @@ public sealed class AudioSystem : IDisposable
         ArgumentNullException.ThrowIfNull(clip);
         AudioSpace space = new(Settings.PixelsPerMeter);
         Vector3 position = space.ToMeters(worldPos.X, worldPos.Y);
-        AudioVoice? voice = Voices.Acquire(128, PixelEngine.Core.Events.AudioEventType.ParticleImpact, position, CurrentListener.Position, 0);
+        AudioVoice? voice = Voices.Acquire(128, Core.Events.AudioEventType.ParticleImpact, position, CurrentListener.Position, 0);
         if (voice is null)
         {
             RefreshDiagnostics(default);
@@ -193,7 +195,7 @@ public sealed class AudioSystem : IDisposable
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(clip);
-        AudioVoice? voice = Voices.Acquire(byte.MaxValue, PixelEngine.Core.Events.AudioEventType.AmbientRegion, CurrentListener.Position, CurrentListener.Position, 0);
+        AudioVoice? voice = Voices.Acquire(byte.MaxValue, Core.Events.AudioEventType.AmbientRegion, CurrentListener.Position, CurrentListener.Position, 0);
         if (voice is null)
         {
             RefreshDiagnostics(default);
@@ -273,6 +275,7 @@ public sealed class AudioSystem : IDisposable
             return;
         }
 
+        // --- 逆序释放：voice 池 → ambient → clip cache → OpenAL device/backend ---
         _voices?.Dispose();
         _voices = null;
         AmbientLoops?.Dispose();

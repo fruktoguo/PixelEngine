@@ -14,7 +14,8 @@ using ScriptScene = PixelEngine.Scripting.Scene;
 namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
-/// Hosting 真实子系统相位驱动测试。
+/// EnginePhaseDriver 多相位编排与过载/暂停契约测试。
+/// 不变式：固定 tick 顺序、脏区与脚本 flush 窗口、过载时降级策略可观测且可恢复。
 /// </summary>
 public sealed class EnginePhaseDriverTests
 {
@@ -43,6 +44,7 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void SimulationPhaseDriverRunsExistingSimulationPhases()
     {
+        // Arrange：搭建测试场景与依赖
         MaterialTable materials = Materials(("empty", CellType.Empty));
         TestChunkSource chunks = new(new Chunk(new ChunkCoord(0, 0)));
         CellGrid grid = new(chunks, new MaterialPropsTable(materials.Hot));
@@ -55,8 +57,10 @@ public sealed class EnginePhaseDriverTests
             .AddPhaseDriver(driver)
             .Build();
 
+        // Act：执行被测操作
         _ = engine.RunOneTick();
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(1u, kernel.FrameIndex);
         Assert.Equal(0, particles.ActiveCount);
         Assert.Equal(0, engine.Context.Counters.FreeParticles);
@@ -73,6 +77,7 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void AttachPhysicsRegistersServiceAndRunsPhaseEight()
     {
+        // Arrange：搭建测试场景与依赖
         MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
@@ -81,8 +86,10 @@ public sealed class EnginePhaseDriverTests
         _ = engine.AttachResidentSimulationWorld(worldWidthCells: 64, worldHeightCells: 64, particleCapacity: 16);
 
         PhysicsPhaseDriver driver = engine.AttachPhysics();
+        // Act：执行被测操作
         _ = engine.RunOneTick();
 
+        // Assert：验证不变式与预期结果
         Assert.Same(driver, engine.Context.GetService<PhysicsPhaseDriver>());
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.PhysicsService));
         Assert.Same(engine.Context.GetService<PhysicsSystem>(), engine.Context.GetService<PhysicsSystem>());
@@ -96,11 +103,13 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void RenderPhaseDriverBuildsBufferAndSubmitsFrame()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
         Chunk chunk = new(new ChunkCoord(0, 0));
         chunk.Material[0] = 1;
         TestChunkSource chunks = new(chunk);
         ParticleSystem particles = new(capacity: 16);
+        // Assert：验证预期结果
         Assert.True(particles.TrySpawn(new ParticleSpawn(1, 0, 0, 0, Material: 1, ColorVariant: 0, Life: 10)));
         TemperatureField temperature = new();
         ScriptCameraApi camera = new(viewportWidth: 32, viewportHeight: 16, centerX: 16, centerY: 8, zoom: 1);
@@ -158,10 +167,12 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void RenderPhaseDriverSkipsCpuParticleStampWhenSinkUsesGpuParticles()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = Materials(("empty", CellType.Empty), ("spark", CellType.Fire));
         Chunk chunk = new(new ChunkCoord(0, 0));
         TestChunkSource chunks = new(chunk);
         ParticleSystem particles = new(capacity: 16);
+        // Assert：验证预期结果
         Assert.True(particles.TrySpawn(new ParticleSpawn(1, 0, 0, 0, Material: 1, ColorVariant: 0, Life: 10)));
         TemperatureField temperature = new();
         ScriptCameraApi camera = new(viewportWidth: 32, viewportHeight: 16, centerX: 16, centerY: 8, zoom: 1);
@@ -200,10 +211,12 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void RenderPhaseDriverRefreshesRenderBufferAfterCpuParticleStamp()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = Materials(("empty", CellType.Empty), ("spark", CellType.Fire));
         Chunk chunk = new(new ChunkCoord(0, 0));
         TestChunkSource chunks = new(chunk);
         ParticleSystem particles = new(capacity: 16);
+        // Assert：验证预期结果
         Assert.True(particles.TrySpawn(new ParticleSpawn(1, 0, 0, 0, Material: 1, ColorVariant: 0, Life: 10)));
         TemperatureField temperature = new();
         ScriptCameraApi camera = new(viewportWidth: 32, viewportHeight: 16, centerX: 16, centerY: 8, zoom: 1);
@@ -245,6 +258,7 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void RenderPhaseDriverRefreshesRenderBufferWhenCameraMovesWithoutSimStep()
     {
+        // Arrange：搭建测试场景与依赖
         MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
         Chunk chunk = new(new ChunkCoord(0, 0));
         chunk.Material[CellAddressing.LocalIndexFromLocal(0, 0)] = 1;
@@ -271,7 +285,9 @@ public sealed class EnginePhaseDriverTests
             .AddPhaseDriver(driver)
             .Build();
 
+        // Act：执行被测操作
         FrameTiming first = engine.RunOneTick();
+        // Assert：验证不变式与预期结果
         Assert.True(first.RunSim);
         Assert.Equal(0xFF_80_80_80u, sink.FirstPixel);
 
@@ -291,6 +307,7 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void RenderDebugOverlayShowsNoCaIterationRectForSleepingChunk()
     {
+        // Arrange：搭建测试场景与依赖
         MaterialTable materials = Materials(("empty", CellType.Empty), ("sand", CellType.Powder));
         Chunk active = new(new ChunkCoord(0, 0));
         active.Material[CellAddressing.LocalIndexFromLocal(1, 1)] = 1;
@@ -327,8 +344,10 @@ public sealed class EnginePhaseDriverTests
             .AddPhaseDriver(render)
             .Build();
 
+        // Act：执行被测操作
         _ = engine.RunOneTick();
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(ChunkState.Sleeping, sleeping.State);
         Assert.Contains(sink.Overlays, static command =>
             command.PrimitiveType == OverlayPrimitiveType.OutlineRectangle &&
@@ -347,6 +366,7 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void WorldPhaseDriverRunsResidencyAndStreamingBatch()
     {
+        // Arrange：搭建测试场景与依赖
         string worldPath = Path.Combine(Path.GetTempPath(), $"pixelengine-world-phase-{Guid.NewGuid():N}");
         try
         {
@@ -369,8 +389,10 @@ public sealed class EnginePhaseDriverTests
                 .AddPhaseDriver(new WorldPhaseDriver(world))
                 .Build();
 
+            // Act：执行被测操作
             _ = engine.RunOneTick();
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(1, engine.Phases.Count(EnginePhase.ResidencyApply));
             Assert.Equal(1, engine.Phases.Count(EnginePhase.WorldStreaming));
             Assert.Equal(0, world.Streamer.PendingRequestCount);
@@ -391,6 +413,7 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void HeadlessTicksDriveAvailableSimulationAndWorldPhaseDrivers()
     {
+        // Arrange：搭建测试场景与依赖
         string worldPath = Path.Combine(Path.GetTempPath(), $"pixelengine-headless-phase-{Guid.NewGuid():N}");
         try
         {
@@ -420,8 +443,10 @@ public sealed class EnginePhaseDriverTests
                 .AddPhaseDriver(new WorldPhaseDriver(world))
                 .Build();
 
+            // Act：执行被测操作
             engine.RunHeadlessTicks(3);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(3, engine.Context.Clock.FrameIndex);
             Assert.Equal(3, engine.Context.Clock.SimTickIndex);
             Assert.Equal(3u, kernel.FrameIndex);
@@ -443,6 +468,7 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void HeadlessTicksDriveAttachedPhysicsPhase()
     {
+        // Arrange：搭建测试场景与依赖
         MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
         using Engine engine = new EngineBuilder()
             .UseHeadless()
@@ -453,8 +479,10 @@ public sealed class EnginePhaseDriverTests
         _ = engine.AttachResidentSimulationWorld(worldWidthCells: 64, worldHeightCells: 64, particleCapacity: 16);
         _ = engine.AttachPhysics();
 
+        // Act：执行被测操作
         engine.RunHeadlessTicks(2);
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(2, engine.Context.Clock.FrameIndex);
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.PhysicsService));
         Assert.Equal(1, engine.Phases.Count(EnginePhase.PhysicsSync));
@@ -467,6 +495,7 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void PhysicsPhaseFlushesScriptBodyCommandsBeforeStep()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
         using Engine engine = new EngineBuilder()
             .UseHeadless()
@@ -498,6 +527,7 @@ public sealed class EnginePhaseDriverTests
         engine.Context.RegisterService(scripts);
 
         BodyHandle handle = scripts.Bodies.CreateFromRegion(8, 8, 16, 16);
+        // Assert：验证预期结果
         Assert.False(scripts.Bodies.TryGetTransform(handle, out _));
         Assert.Equal(0, engine.Context.GetService<PhysicsSystem>().PhysicsWorld.ActiveBodyCount);
 
@@ -517,6 +547,7 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void PhysicsPhaseFlushesScriptCharacterMoveCommands()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
         using Engine engine = new EngineBuilder()
             .UseHeadless()
@@ -546,6 +577,7 @@ public sealed class EnginePhaseDriverTests
 
         CharacterHandle handle = scripts.Character.Create(4, 0, 4, 4);
         CharacterState pending = scripts.Character.Move(handle, 0, 20);
+        // Assert：验证预期结果
         Assert.Equal(0f, pending.Y);
 
         engine.RunHeadlessTicks(1);
@@ -563,6 +595,7 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void PhysicsPhaseCharacterMovePushesRigidOwnedBody()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
         using Engine engine = new EngineBuilder()
             .UseHeadless()
@@ -587,6 +620,7 @@ public sealed class EnginePhaseDriverTests
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
         physics.SetGravity(System.Numerics.Vector2.Zero);
         _ = physics.CreateBodyFromRegion(48, 24, 12, 12);
+        // Assert：验证预期结果
         Assert.Equal(1, physics.PhysicsWorld.ActiveBodyCount);
 
         ScriptSimulationContext scripts = new(
@@ -621,16 +655,19 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void ScriptingPhaseDriverUpdatesEveryFrameButFixedOnlyOnSimFrames()
     {
+        // Arrange：搭建测试场景与依赖
         RecordingScriptRuntime runtime = new();
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
-            .WithSimHz(PixelEngine.Core.EngineConstants.SimHzDownscaled)
+            .WithSimHz(Core.EngineConstants.SimHzDownscaled)
             .AddPhaseDriver(new ScriptingPhaseDriver(runtime, new FakeScriptContext(new ScriptScene())))
             .Build();
 
+        // Act：执行被测操作
         _ = engine.RunOneTick();
         _ = engine.RunOneTick();
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(1, runtime.InitializeCount);
         Assert.Equal(2, runtime.BeginCount);
         Assert.Equal(2, runtime.UpdateCount);
@@ -670,7 +707,7 @@ public sealed class EnginePhaseDriverTests
         script.Events = events;
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
-            .WithSimHz(PixelEngine.Core.EngineConstants.SimHzDownscaled)
+            .WithSimHz(Core.EngineConstants.SimHzDownscaled)
             .AddPhaseDriver(new ScriptingPhaseDriver(new ScriptRuntime(), new FakeScriptContext(scene)))
             .Build();
 
@@ -688,6 +725,7 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void GameUiPhaseDriverUpdatesEveryRenderFrameAndDrainsEvents()
     {
+        // Arrange：搭建测试场景与依赖
         RecordingGameUiBackend backend = new();
         using GameUi.GameUiHost host = new(backend);
         host.Initialize(new GameUi.UiBackendInitializeInfo(new GameUi.UiViewport(0, 0, 320, 180, 1f), GameUi.UiBackendKind.ManagedFallback));
@@ -695,14 +733,16 @@ public sealed class EnginePhaseDriverTests
         GameUiPhaseDriver driver = new(host, eventCapacity: 4, sink);
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
-            .WithSimHz(PixelEngine.Core.EngineConstants.SimHzDownscaled)
+            .WithSimHz(Core.EngineConstants.SimHzDownscaled)
             .AddPhaseDriver(driver)
             .Build();
 
+        // Act：执行被测操作
         FrameTiming first = engine.RunOneTick(realDeltaSeconds: 1.0 / 120.0);
         FrameTiming second = engine.RunOneTick(realDeltaSeconds: 1.0 / 30.0);
         FrameTiming overloaded = engine.RunOneTick(realDeltaSeconds: 1.0 / 10.0);
 
+        // Assert：验证不变式与预期结果
         Assert.True(first.RunSim);
         Assert.False(second.RunSim);
         Assert.True(overloaded.RunSim);
@@ -723,6 +763,7 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void OverloadThrottlesGameUiPresentWithoutSkippingUiUpdate()
     {
+        // Arrange：搭建测试场景与依赖
         RecordingGameUiBackend backend = new()
         {
             IsAnimatingOverride = true,
@@ -738,10 +779,12 @@ public sealed class EnginePhaseDriverTests
             .Build();
         engine.Context.RegisterService(host);
 
+        // Act：执行被测操作
         _ = engine.RunOneTick(realDeltaSeconds: 0.011);
         _ = engine.RunOneTick(realDeltaSeconds: 0.011);
         _ = engine.RunOneTick(realDeltaSeconds: 0.011);
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(EngineQualityTier.DistantChunkThrottle, engine.Context.QualityTier);
         Assert.Equal(3, host.PresentationIntervalFrames);
         Assert.Equal(3, backend.UpdateCount);
@@ -769,6 +812,7 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void EditorPlaySessionExitEndsScriptPlayLifecycle()
     {
+        // Arrange：搭建测试场景与依赖
         ScriptScene scene = new();
         Entity entity = scene.CreateEntity();
         HostingLifecycleScript script = entity.AddComponent<HostingLifecycleScript>();
@@ -781,11 +825,13 @@ public sealed class EnginePhaseDriverTests
         EngineEditorPlaySessionService service = new(engine);
 
         _ = service.EnterPlayCurrent();
+        // Act：执行被测操作
         _ = engine.RunOneTick();
         EditorPlaySessionResult exit = service.ExitPlay();
         _ = service.EnterPlayCurrent();
         _ = engine.RunOneTick();
 
+        // Assert：验证不变式与预期结果
         Assert.True(exit.Succeeded);
         Assert.Equal(EngineExecutionMode.Play, engine.Mode);
         Assert.Equal(["start", "update", "fixed", "destroy", "start", "update", "fixed"], events);
@@ -797,17 +843,20 @@ public sealed class EnginePhaseDriverTests
     [Fact]
     public void AttachScriptingRegistersRuntimeAndRunsPhaseOne()
     {
+        // Arrange：搭建测试场景与依赖
         RecordingScriptRuntime runtime = new();
         FakeScriptContext context = new(new ScriptScene());
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
-            .WithSimHz(PixelEngine.Core.EngineConstants.SimHzDownscaled)
+            .WithSimHz(Core.EngineConstants.SimHzDownscaled)
             .Build();
 
         engine.AttachScripting(context, runtime);
+        // Act：执行被测操作
         _ = engine.RunOneTick();
         _ = engine.RunOneTick();
 
+        // Assert：验证不变式与预期结果
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.Scripting));
         Assert.Same(runtime, engine.Context.GetService<IScriptRuntime>());
         Assert.Same(context, engine.Context.GetService<IScriptContext>());
@@ -943,7 +992,7 @@ public sealed class EnginePhaseDriverTests
             ReadOnlySpan<Particle> particles,
             MaterialTable materials,
             FogOfWarBuffer? fogOfWar,
-            PixelEngine.Core.Diagnostics.FrameProfiler? profiler)
+            FrameProfiler? profiler)
         {
             _ = camera;
             _ = dirtyRects;

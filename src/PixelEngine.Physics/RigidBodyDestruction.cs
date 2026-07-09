@@ -99,6 +99,7 @@ public sealed class RigidBodyDestruction
             return default;
         }
 
+        // 按 bodyKey 合并本帧 damage 事件，每体最多重建一次。
         Dictionary<int, HashSet<int>> damagedLocalByBody = BuildDamageMap(registry, damageEvents);
         int damagedBodies = 0;
         int skippedSleeping = 0;
@@ -112,6 +113,7 @@ public sealed class RigidBodyDestruction
             }
 
             damagedBodies++;
+            // sleeping 刚体延迟重建，避免静止堆叠体每帧 CCL 开销。
             if (Box2D.b2Body_IsAwake(body.BodyId) == 0)
             {
                 skippedSleeping++;
@@ -121,6 +123,7 @@ public sealed class RigidBodyDestruction
             workItems.Add(new RebuildWorkItem(body, ParentBodyState.Capture(body.BodyId), damagedLocals));
         }
 
+        // 准备阶段：CCL + 凸分解可并行；Apply 阶段串行改 Box2D world。
         long prepareStarted = Stopwatch.GetTimestamp();
         RebuildPlan[] plans = PreparePlans(workItems, jobs);
         LastPreparationMilliseconds = ElapsedMilliseconds(prepareStarted);
@@ -163,6 +166,7 @@ public sealed class RigidBodyDestruction
                 damagedLocalByBody.Add(stamp.BodyKey, locals);
             }
 
+            // local 坐标打包为 int，避免 (x,y) 结构体在 HashSet 中额外分配。
             _ = locals.Add((stamp.LocalY << 16) ^ stamp.LocalX);
         }
 
@@ -206,6 +210,7 @@ public sealed class RigidBodyDestruction
         RigidStampRegistry registry,
         RebuildPlan plan)
     {
+        // Apply：先擦网格 stamp 再销毁父 body，子 body 继承父 transform 与速度。
         int erased = RigidBodyRasterizer.EraseAtCurrentTransform(plan.Body, grid, registry);
         _ = erased;
         Box2D.b2DestroyBody(plan.Body.BodyId);
@@ -290,6 +295,7 @@ public sealed class RigidBodyDestruction
         {
             sourceMask.SolidBits.CopyTo(solid);
             sourceMask.Materials.CopyTo(materials);
+            // 先把 damage 触及的 body-local 像素挖空，再对剩余固体做 CCL。
             foreach (int packed in workItem.DamagedLocals)
             {
                 int localX = packed & 0xFFFF;
@@ -312,6 +318,7 @@ public sealed class RigidBodyDestruction
             for (int i = 0; i < componentCount; i++)
             {
                 ConnectedComponent component = components[i];
+                // 低于阈值的连通块转自由粒子，不再创建子刚体。
                 if (component.IsFragment)
                 {
                     CollectFragmentParticles(sourceMask, labels.AsSpan(0, area), component, workItem.Parent, plan.FragmentSpawns);
@@ -455,12 +462,12 @@ public sealed class RigidBodyDestruction
         B2Transform nativeTransform,
         B2Vec2 linearVelocity,
         float angularVelocity,
-        PixelEngine.Core.Mathematics.Transform2D transform)
+        Transform2D transform)
     {
         public readonly B2Transform NativeTransform = nativeTransform;
         public readonly B2Vec2 LinearVelocity = linearVelocity;
         public readonly float AngularVelocity = angularVelocity;
-        public readonly PixelEngine.Core.Mathematics.Transform2D Transform = transform;
+        public readonly Transform2D Transform = transform;
         public readonly Vector2 PositionPixels = transform.Position;
 
         public static ParentBodyState Capture(B2BodyId bodyId)

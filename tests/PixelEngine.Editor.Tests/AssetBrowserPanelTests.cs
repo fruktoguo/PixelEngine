@@ -4,6 +4,7 @@ namespace PixelEngine.Editor.Tests;
 
 /// <summary>
 /// 资源浏览器面板测试。
+/// 不变式：资源浏览与工程资产模型同步、过滤规则确定。
 /// </summary>
 public sealed class AssetBrowserPanelTests
 {
@@ -13,6 +14,7 @@ public sealed class AssetBrowserPanelTests
     [Fact]
     public void FileSystemDataSourceClassifiesContentAssetsAndThumbnails()
     {
+        // Arrange：准备输入与初始状态
         string root = Path.Combine(Path.GetTempPath(), "pixelengine-assets-" + Guid.NewGuid().ToString("N"));
         _ = Directory.CreateDirectory(root);
         try
@@ -30,6 +32,7 @@ public sealed class AssetBrowserPanelTests
 
             IReadOnlyList<AssetBrowserItem> assets = source.ListAssets();
 
+            // Assert：验证预期结果
             Assert.Contains(assets, item => item.Path == "materials.json" && item.Kind == AssetBrowserItemKind.Material);
             AssetBrowserItem texture = Assert.Single(assets, item => item.Path == "textures/sand.png");
             Assert.Equal(AssetBrowserItemKind.Texture, texture.Kind);
@@ -50,6 +53,7 @@ public sealed class AssetBrowserPanelTests
     [Fact]
     public void AssetBrowserPanelFiltersSelectsAndPreviewsAudio()
     {
+        // Arrange：准备输入与初始状态
         RecordingAssetSource source = new(
         [
             new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 10, DateTimeOffset.UnixEpoch, new AssetThumbnail(5, 8, 8)),
@@ -65,6 +69,7 @@ public sealed class AssetBrowserPanelTests
         bool selected = panel.SelectAsset("audio/hit.wav", selection);
         bool played = panel.TryPreviewAudio("audio/hit.wav");
 
+        // Assert：验证预期结果
         AssetBrowserItem filtered = Assert.Single(panel.FilteredAssets);
         Assert.Equal("audio/hit.wav", filtered.Path);
         Assert.True(selected);
@@ -79,6 +84,7 @@ public sealed class AssetBrowserPanelTests
     [Fact]
     public void AssetBrowserPanelFiltersByKindAndSortsAssets()
     {
+        // Arrange：准备输入与初始状态
         DateTimeOffset older = DateTimeOffset.UnixEpoch.AddMinutes(1);
         DateTimeOffset newer = DateTimeOffset.UnixEpoch.AddMinutes(2);
         RecordingAssetSource source = new(
@@ -93,6 +99,7 @@ public sealed class AssetBrowserPanelTests
         _ = panel.Refresh();
         panel.SetKindFilter(AssetBrowserItemKind.Texture);
 
+        // Assert：验证预期结果
         Assert.Equal(AssetBrowserItemKind.Texture, panel.KindFilter);
         Assert.Equal(["textures/a-sand.png", "textures/z-rock.png"], panel.FilteredAssets.Select(item => item.Path));
 
@@ -121,6 +128,7 @@ public sealed class AssetBrowserPanelTests
     [Fact]
     public void AssetBrowserPanelCreatesTypedDragPayloadOnlyForStableAssets()
     {
+        // Arrange：准备输入与初始状态
         RecordingAssetSource source = new(
         [
             new AssetBrowserItem("prefabs/rock.prefab", AssetBrowserItemKind.Prefab, 10, DateTimeOffset.UnixEpoch, null, "asset_prefab"),
@@ -132,6 +140,7 @@ public sealed class AssetBrowserPanelTests
         bool created = panel.TryCreateDragPayload("prefabs/rock.prefab", out AssetBrowserDragPayload payload);
         bool legacyCreated = panel.TryCreateDragPayload("textures/legacy.png", out AssetBrowserDragPayload legacyPayload);
 
+        // Assert：验证预期结果
         Assert.True(created);
         Assert.Equal("asset_prefab", payload.AssetId);
         Assert.Equal("prefabs/rock.prefab", payload.Path);
@@ -147,6 +156,7 @@ public sealed class AssetBrowserPanelTests
     [Fact]
     public void AssetBrowserPanelOpensOnlyScriptAssetsThroughCallbackAndStoresDiagnostics()
     {
+        // Arrange：准备输入与初始状态
         RecordingAssetSource source = new(
         [
             new AssetBrowserItem("scripts/PlayerController.cs", AssetBrowserItemKind.Script, 10, DateTimeOffset.UnixEpoch, null, "asset_script"),
@@ -166,6 +176,7 @@ public sealed class AssetBrowserPanelTests
         bool openedScript = panel.TryOpenScriptAsset("scripts/PlayerController.cs");
         bool openedTexture = panel.TryOpenScriptAsset("textures/sand.png");
 
+        // Assert：验证预期结果
         Assert.True(openedScript);
         Assert.False(openedTexture);
         Assert.Equal(["scripts/PlayerController.cs"], opened);
@@ -192,6 +203,7 @@ public sealed class AssetBrowserPanelTests
     [Fact]
     public void AssetBrowserPanelDeletesOnlyStableAssetsAfterConfirmation()
     {
+        // Arrange：准备输入与初始状态
         RecordingAssetSource source = new(
         [
             new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_texture"),
@@ -213,6 +225,7 @@ public sealed class AssetBrowserPanelTests
         bool confirmed = panel.TryConfirmDeleteAsset("textures/sand.png");
         bool legacy = panel.TryRequestDeleteAsset("textures/legacy.png");
 
+        // Assert：验证预期结果
         Assert.False(requested);
         Assert.True(confirmed);
         Assert.False(legacy);
@@ -230,6 +243,7 @@ public sealed class AssetBrowserPanelTests
     [Fact]
     public void AssetBrowserPanelInvalidatesDeleteConfirmationWhenAssetIdChanges()
     {
+        // Arrange：准备输入与初始状态
         RecordingAssetSource source = new(
         [
             new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_old"),
@@ -252,6 +266,7 @@ public sealed class AssetBrowserPanelTests
         _ = panel.Refresh();
         bool confirmed = panel.TryConfirmDeleteAsset("textures/sand.png");
 
+        // Assert：验证预期结果
         Assert.False(requested);
         Assert.False(confirmed);
         AssetBrowserDeleteRequest request = Assert.Single(requests);
@@ -266,6 +281,7 @@ public sealed class AssetBrowserPanelTests
     [Fact]
     public void AssetBrowserPanelMovesOnlyStableAssetsThroughCallbackAndRefreshes()
     {
+        // Arrange：准备输入与初始状态
         RecordingAssetSource source = new(
         [
             new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_texture"),
@@ -289,6 +305,7 @@ public sealed class AssetBrowserPanelTests
         bool moved = panel.TryMoveAsset("textures/sand.png", "textures/renamed/sand.png");
         bool legacy = panel.TryMoveAsset("textures/legacy.png", "textures/renamed/legacy.png");
 
+        // Assert：验证预期结果
         Assert.True(moved);
         Assert.False(legacy);
         AssetBrowserMoveRequest request = Assert.Single(requests);
@@ -306,6 +323,7 @@ public sealed class AssetBrowserPanelTests
     [Fact]
     public void AssetBrowserPanelMovesDragPayloadToFolderThroughStableRequest()
     {
+        // Arrange：准备输入与初始状态
         RecordingAssetSource source = new(
         [
             new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_texture"),
@@ -330,6 +348,7 @@ public sealed class AssetBrowserPanelTests
             new AssetBrowserDragPayload("asset_texture", "textures/sand.png", AssetBrowserItemKind.Texture),
             "archive");
 
+        // Assert：验证预期结果
         Assert.True(moved);
         Assert.Contains(panel.FolderTargets, folder => folder.Path == string.Empty && folder.AssetCount == 2);
         Assert.Contains(panel.FolderTargets, folder => folder.Path == "archive");
@@ -347,6 +366,7 @@ public sealed class AssetBrowserPanelTests
     [Fact]
     public void AssetBrowserPanelRejectsStaleDragMovePayloads()
     {
+        // Arrange：准备输入与初始状态
         RecordingAssetSource source = new(
         [
             new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_new"),
@@ -369,6 +389,7 @@ public sealed class AssetBrowserPanelTests
             new AssetBrowserDragPayload("asset_new", "textures/sand.png", AssetBrowserItemKind.Texture),
             "../outside");
 
+        // Assert：验证预期结果
         Assert.False(movedOldId);
         Assert.False(movedWrongKind);
         Assert.False(escaped);
@@ -382,6 +403,7 @@ public sealed class AssetBrowserPanelTests
     [Fact]
     public void AssetBrowserPanelInvalidatesMoveConfirmationWhenAssetIdChanges()
     {
+        // Arrange：准备输入与初始状态
         RecordingAssetSource source = new(
         [
             new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_old"),
@@ -402,6 +424,7 @@ public sealed class AssetBrowserPanelTests
         _ = panel.Refresh();
         bool confirmed = panel.TryConfirmMoveAsset("textures/sand.png");
 
+        // Assert：验证预期结果
         Assert.True(requested);
         Assert.False(confirmed);
         Assert.Empty(requests);

@@ -49,7 +49,7 @@ public class TextureUploadBenchmark
     }
 
     /// <summary>
-    /// 模拟默认全帧上传前的 CPU memcpy：整张 BGRA8 render buffer 复制到 PBO staging。
+    /// 验证Full Frame Pbo Copy。
     /// </summary>
     [Benchmark(Baseline = true)]
     public void FullFramePboCopy()
@@ -58,7 +58,7 @@ public class TextureUploadBenchmark
     }
 
     /// <summary>
-    /// 模拟 dirty-rect 上传前的 CPU 子区 copy：逐脏矩形逐行复制。
+    /// 验证Dirty Rect Sub Upload Copy。
     /// </summary>
     [Benchmark]
     public void DirtyRectSubUploadCopy()
@@ -75,7 +75,7 @@ public class TextureUploadBenchmark
     }
 
     /// <summary>
-    /// 模拟 GL 4.4 persistent-mapped 快车道：render 阶段直接写入持久映射目标，无额外 PBO staging copy。
+    /// 验证Persistent Mapped Direct Write。
     /// </summary>
     [Benchmark]
     public void PersistentMappedDirectWrite()

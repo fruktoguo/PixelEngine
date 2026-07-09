@@ -101,6 +101,7 @@ public sealed class LevelDirector : Behaviour
     /// <inheritdoc />
     protected override void OnStart()
     {
+        // 启动阶段：解析材质 → 铺设像素世界 → 排队刚体结构 → 注册实体构建系统
         ResolveMaterials();
         if (!_materialsResolved)
         {
@@ -116,6 +117,7 @@ public sealed class LevelDirector : Behaviour
     protected override void OnUpdate(float dt)
     {
         _ = dt;
+        // 容错重试：材质未就绪或世界未建成时延迟补建
         ResolveMaterials();
         if (!_materialsResolved)
         {
@@ -173,6 +175,7 @@ public sealed class LevelDirector : Behaviour
         BlockedReason = _materialsResolved ? string.Empty : "关卡生成所需材质未全部解析。";
     }
 
+    // 像素关卡铺设：清场 → 边界 → 地形 → 危险区 → 探针 → 终点标记
     private void BuildWorld()
     {
         int width = Math.Max(128, LevelWidth);
@@ -186,6 +189,7 @@ public sealed class LevelDirector : Behaviour
         _worldBuilt = true;
     }
 
+    // 装配玩家实体树：移动/生命/相机/工具链/HUD/UI 控制器
     private void BuildEntities()
     {
         if (_entitiesBuilt)
@@ -366,6 +370,7 @@ public sealed class LevelDirector : Behaviour
         FillSlope(386, floorY - 1, 74, 22, _sand);
     }
 
+    // 把木/金属跳台等区域提升为可破坏刚体，供射击与爆破验证
     private void QueueRigidStructures()
     {
         if (!_worldBuilt || RigidStructuresQueued)

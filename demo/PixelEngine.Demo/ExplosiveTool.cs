@@ -61,6 +61,7 @@ public sealed class ExplosiveTool : Behaviour
         float safeDt = MathF.Max(0f, dt);
         _ = _flash.Update(Context, safeDt);
         _cooldownRemaining = MathF.Max(0f, _cooldownRemaining - safeDt);
+        // 中键冷却结束后在鼠标世界坐标触发 Explode 与闪光反馈
         if (_cooldownRemaining > 0f || !Context.Input.WasMousePressed(MouseButton.Middle))
         {
             return;

@@ -5,6 +5,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// Scripting 项目的最小程序集加载冒烟测试。
+/// 不变式：测试程序集可加载、最小冒烟路径不抛异常。
 /// </summary>
 public sealed class SmokeTests
 {
@@ -29,6 +30,7 @@ public sealed class SmokeTests
     [Fact]
     public void SceneStoresComponentsByEntity()
     {
+        // Arrange：准备输入与初始状态
         Scene scene = new();
         Entity entity = scene.CreateEntity();
 
@@ -36,6 +38,7 @@ public sealed class SmokeTests
         IComponent dynamicComponent = entity.AddComponent(typeof(DynamicComponent));
         component.Value = 42;
 
+        // Assert：验证预期结果
         Assert.Equal(1, scene.EntityCount);
         Assert.True(entity.TryGetComponent(out TestComponent loaded));
         Assert.True(entity.TryGetComponent(out DynamicComponent loadedDynamic));
@@ -61,6 +64,7 @@ public sealed class SmokeTests
     [Fact]
     public void SceneDispatchesBehaviourLifecycle()
     {
+        // Arrange：准备输入与初始状态
         Scene scene = new();
         FakeScriptContext context = new(scene);
         Entity entity = scene.CreateEntity();
@@ -78,6 +82,7 @@ public sealed class SmokeTests
         entity.Destroy();
         scene.FlushDestroyed(context);
 
+        // Assert：验证预期结果
         Assert.Equal(["start", "update", "fixed", "destroy"], events);
         Assert.Equal(0, scene.EntityCount);
     }
@@ -88,6 +93,7 @@ public sealed class SmokeTests
     [Fact]
     public void SceneIsolatesFaultedBehaviourCallbacks()
     {
+        // Arrange：准备输入与初始状态
         RecordingDiagnostics diagnostics = new();
         Scene scene = new(diagnostics);
         FakeScriptContext context = new(scene, new FakeGameTime(123));
@@ -101,6 +107,7 @@ public sealed class SmokeTests
         scene.DispatchUpdate(context, 0.016f);
         scene.DispatchUpdate(context, 0.016f);
 
+        // Assert：验证预期结果
         Assert.True(failing.Faulted);
         Assert.False(failing.Enabled);
         Assert.NotNull(failing.LastException);
@@ -141,6 +148,7 @@ public sealed class SmokeTests
     [Fact]
     public void SceneIsolatesFaultedSystemCallbacks()
     {
+        // Arrange：准备输入与初始状态
         RecordingDiagnostics diagnostics = new();
         Scene scene = new(diagnostics);
         List<string> events = [];
@@ -151,6 +159,7 @@ public sealed class SmokeTests
         scene.DispatchFrameSystems(context, 0.016f);
         scene.DispatchFrameSystems(context, 0.016f);
 
+        // Assert：验证预期结果
         Assert.Equal(["frame:healthy", "frame:healthy"], events);
         Assert.Equal(1, scene.ScriptExceptionCount);
         ScriptExceptionRecord record = diagnostics.Records[0];
@@ -167,6 +176,7 @@ public sealed class SmokeTests
     [Fact]
     public void SceneIsolatesFaultedSimSystemCallbacks()
     {
+        // Arrange：准备输入与初始状态
         RecordingDiagnostics diagnostics = new();
         Scene scene = new(diagnostics);
         List<string> events = [];
@@ -177,6 +187,7 @@ public sealed class SmokeTests
         scene.DispatchSimSystems(context);
         scene.DispatchSimSystems(context);
 
+        // Assert：验证预期结果
         Assert.Equal(["sim:healthy", "sim:healthy"], events);
         Assert.Equal(1, scene.ScriptExceptionCount);
         ScriptExceptionRecord record = diagnostics.Records[0];

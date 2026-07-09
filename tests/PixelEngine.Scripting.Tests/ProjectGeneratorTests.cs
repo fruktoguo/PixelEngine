@@ -6,6 +6,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// 脚本项目生成器测试。
+/// 不变式：生成的 csproj/场景文件满足 Scripting 装配契约。
 /// </summary>
 public sealed class ProjectGeneratorTests
 {
@@ -15,6 +16,7 @@ public sealed class ProjectGeneratorTests
     [Fact]
     public void GenerateOrRefreshCreatesLocalProjectFromTemplate()
     {
+        // Arrange：准备输入与初始状态
         string directory = CreateTempDirectory();
         try
         {
@@ -29,6 +31,7 @@ public sealed class ProjectGeneratorTests
                 EngineRoot = root,
             });
 
+            // Assert：验证预期结果
             Assert.True(result.ProjectChanged);
             Assert.True(result.SolutionChanged);
             Assert.True(File.Exists(result.ProjectPath));
@@ -62,6 +65,7 @@ public sealed class ProjectGeneratorTests
     [Fact]
     public void GenerateOrRefreshCreatesPackageProjectFromTemplate()
     {
+        // Arrange：准备输入与初始状态
         string directory = CreateTempDirectory();
         try
         {
@@ -76,6 +80,7 @@ public sealed class ProjectGeneratorTests
             });
 
             XDocument project = XDocument.Load(result.ProjectPath);
+            // Assert：验证预期结果
             Assert.Equal("true", ReadProperty(project, "GenerateDocumentationFile"));
             Assert.Equal(["PixelEngine.Hosting", "PixelEngine.Scripting"], ReadIncludes(project, "PackageReference"));
             Assert.Empty(ReadIncludes(project, "ProjectReference"));
@@ -96,6 +101,7 @@ public sealed class ProjectGeneratorTests
     [Fact]
     public void RefreshAfterScriptCreatedIsIdempotentWhenFilesAreCurrent()
     {
+        // Arrange：准备输入与初始状态
         string directory = CreateTempDirectory();
         try
         {
@@ -114,6 +120,7 @@ public sealed class ProjectGeneratorTests
 
             ProjectGenerationResult second = generator.RefreshAfterScriptCreated(options);
 
+            // Assert：验证预期结果
             Assert.False(second.ProjectChanged);
             Assert.False(second.SolutionChanged);
             Assert.Equal(firstProject, File.ReadAllText(second.ProjectPath));
@@ -131,6 +138,7 @@ public sealed class ProjectGeneratorTests
     [Fact]
     public void GeneratedLocalProjectCompilesAndRunsAgainstPublicApi()
     {
+        // Arrange：准备输入与初始状态
         string directory = CreateTempDirectory();
         try
         {
@@ -182,6 +190,7 @@ public sealed class ProjectGeneratorTests
                 "-c",
                 "Release");
 
+            // Assert：验证预期结果
             Assert.True(run.ExitCode == 0, run.Output);
             string documentationPath = Path.Combine(
                 directory,

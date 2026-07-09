@@ -5,8 +5,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// GPU 计算 Profiler 测试：计时采集与报告格式。
+/// </summary>
 public sealed class GpuComputeProfilerTests
 {
+    /// <summary>
+    /// 验证Measure Uses Backend Timer And Records Completed Result Without Stalling。
+    /// </summary>
     [Fact]
     public void MeasureUsesBackendTimerAndRecordsCompletedResultWithoutStalling()
     {
@@ -28,6 +34,9 @@ public sealed class GpuComputeProfilerTests
         Assert.Equal(0.25, frameProfiler.LastSubFrame[(int)FrameSubPhase.GpuComputeBloom]);
     }
 
+    /// <summary>
+    /// 验证Resolve Completed保持Pending Query Until Result Is Available。
+    /// </summary>
     [Fact]
     public void ResolveCompletedKeepsPendingQueryUntilResultIsAvailable()
     {
@@ -50,6 +59,9 @@ public sealed class GpuComputeProfilerTests
         Assert.Contains("Delete:1", backend.Events);
     }
 
+    /// <summary>
+    /// 验证Measure Retires Oldest Pending Query When Capacity Is Reached。
+    /// </summary>
     [Fact]
     public void MeasureRetiresOldestPendingQueryWhenCapacityIsReached()
     {
@@ -74,6 +86,9 @@ public sealed class GpuComputeProfilerTests
         Assert.Equal(32, backend.Events.Count(static item => item.StartsWith("Try:", StringComparison.Ordinal)));
     }
 
+    /// <summary>
+    /// 验证空后端不会Start Timer Query。
+    /// </summary>
     [Fact]
     public void NullBackendDoesNotStartTimerQuery()
     {
@@ -87,6 +102,9 @@ public sealed class GpuComputeProfilerTests
         gpuProfiler.ResolveCompleted(null);
     }
 
+    /// <summary>
+    /// 验证Render Pipeline Source解析Gpu Timers And Wraps Gpu Passes行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderPipelineSourceResolvesGpuTimersAndWrapsGpuPasses()
     {

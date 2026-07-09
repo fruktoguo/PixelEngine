@@ -5,6 +5,7 @@ namespace PixelEngine.World.Tests;
 
 /// <summary>
 /// Plan 07 驻留规划与内存预算测试。
+/// 不变式：驻留规划在内存预算内、优先级与相机距离单调。
 /// </summary>
 public sealed class ResidencyPlannerTests
 {
@@ -14,8 +15,10 @@ public sealed class ResidencyPlannerTests
     [Fact]
     public void StreamingConfigDefaultsTo512MbCapAndValidatesEvictionTarget()
     {
+        // Arrange：准备输入与初始状态
         WorldStreamingConfig defaults = new WorldStreamingConfig().Validate();
 
+        // Assert：验证预期结果
         Assert.Equal(512L * 1024 * 1024, defaults.ResidentMemoryCapBytes);
         Assert.Equal(448L * 1024 * 1024, defaults.EvictionTargetBytes);
         ArgumentOutOfRangeException exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
@@ -33,6 +36,7 @@ public sealed class ResidencyPlannerTests
     [Fact]
     public void PlanLoadsMissingBorderAreaAndClassifiesExistingChunks()
     {
+        // Arrange：准备输入与初始状态
         ResidencyTable table = new();
         ChunkCoord activeCoord = new(0, 0);
         ChunkCoord borderCoord = new(-1, 0);
@@ -48,6 +52,7 @@ public sealed class ResidencyPlannerTests
 
         ResidencyStateChange[] stateChanges = plan.StateChanges.ToArray();
         ChunkCoord[] loadCoords = plan.LoadCoords.ToArray();
+        // Assert：验证预期结果
         Assert.Contains(new ResidencyStateChange(activeCoord, ChunkResidencyState.Active), stateChanges);
         Assert.Contains(new ResidencyStateChange(borderCoord, ChunkResidencyState.Border), stateChanges);
         Assert.Contains(new ChunkCoord(-1, -1), loadCoords);
@@ -79,6 +84,7 @@ public sealed class ResidencyPlannerTests
     [Fact]
     public void BudgetEvictsOnlyCachedChunksOutsideBorderByLruDistance()
     {
+        // Arrange：准备输入与初始状态
         ResidencyTable table = new();
         table.Set(new ChunkCoord(0, 0), Info(ChunkResidencyState.Active, frame: 1));
         table.Set(new ChunkCoord(2, 0), Info(ChunkResidencyState.Border, frame: 1));
@@ -95,6 +101,7 @@ public sealed class ResidencyPlannerTests
             .SelectEvictions(table, new ChunkRect(-2, -2, 2, 2), budget.EvictionTargetBytes)
             .ToArray();
 
+        // Assert：验证预期结果
         Assert.Equal([new ChunkCoord(8, 0), new ChunkCoord(-7, 0), new ChunkCoord(5, 0)], evictions);
         Assert.DoesNotContain(new ChunkCoord(0, 0), evictions);
         Assert.DoesNotContain(new ChunkCoord(2, 0), evictions);
@@ -106,6 +113,7 @@ public sealed class ResidencyPlannerTests
     [Fact]
     public void PlanMarksOutsideResidentsCachedAndSubmitsBudgetEvictions()
     {
+        // Arrange：准备输入与初始状态
         ResidencyTable table = new();
         ChunkCoord outside = new(4, 0);
         ChunkCoord cached = new(5, 0);
@@ -121,6 +129,7 @@ public sealed class ResidencyPlannerTests
             table,
             budget);
 
+        // Assert：验证预期结果
         Assert.Contains(new ResidencyStateChange(outside, ChunkResidencyState.Cached), plan.StateChanges.ToArray());
         Assert.Equal([cached], plan.UnloadCoords.ToArray());
         Assert.Contains(new ResidencyStateChange(cached, ChunkResidencyState.Detached), plan.StateChanges.ToArray());
@@ -132,6 +141,7 @@ public sealed class ResidencyPlannerTests
     [Fact]
     public void PlanReusesScratchBuffersAfterWarmup()
     {
+        // Arrange：准备输入与初始状态
         ResidencyTable table = new();
         table.Set(new ChunkCoord(0, 0), Info(ChunkResidencyState.Active, frame: 10));
         table.Set(new ChunkCoord(4, 0), Info(ChunkResidencyState.Active, frame: 8));
@@ -151,6 +161,7 @@ public sealed class ResidencyPlannerTests
             _ = planner.Plan(active, border, table, budget);
         }
 
+        // Assert：验证预期结果
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
     }
 

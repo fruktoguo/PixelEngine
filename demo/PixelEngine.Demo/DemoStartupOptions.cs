@@ -376,8 +376,8 @@ public sealed class DemoStartupOptions
     {
         return value.Trim().ToLowerInvariant() switch
         {
-            "cpu" or "cpu-stamp" => PixelEngine.Rendering.ParticleRenderMode.CpuStamp,
-            "gpu" or "gpu-point-sprite" => PixelEngine.Rendering.ParticleRenderMode.GpuPointSprite,
+            "cpu" or "cpu-stamp" => Rendering.ParticleRenderMode.CpuStamp,
+            "gpu" or "gpu-point-sprite" => Rendering.ParticleRenderMode.GpuPointSprite,
             _ => throw new ArgumentException("--particle-render-mode 仅支持 cpu 或 gpu。", nameof(value)),
         };
     }

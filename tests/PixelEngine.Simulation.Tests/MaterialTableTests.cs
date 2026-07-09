@@ -4,6 +4,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Plan 04 材质定义、热表与 name↔id 注册表测试。
+/// 不变式：材质定义、热表与 name↔id 双向解析一致。
 /// </summary>
 public sealed class MaterialTableTests
 {
@@ -13,8 +14,10 @@ public sealed class MaterialTableTests
     [Fact]
     public void MaterialHotTableCopiesRuntimeFieldsFromDefinitions()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable table = new(CreateDefinitions());
 
+        // Assert：验证预期结果
         Assert.Equal(3, table.Count);
         Assert.Equal(CellType.Liquid, table.Hot.Type[1]);
         Assert.Equal(100, table.Hot.Density[1]);
@@ -96,6 +99,7 @@ public sealed class MaterialTableTests
     [Fact]
     public void ReloadStablePreservesIdsAppendsAndTombstones()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable table = new(CreateDefinitions());
         MaterialDef[] reloaded =
         [
@@ -106,6 +110,7 @@ public sealed class MaterialTableTests
 
         MaterialReloadResult result = table.ReloadStable(reloaded, [0, 4, 9], fallbackId: 0);
 
+        // Assert：验证预期结果
         Assert.Equal([2], result.TombstoneIds);
         Assert.Equal(1, result.AddedCount);
         Assert.Equal(2, result.PreservedCount);

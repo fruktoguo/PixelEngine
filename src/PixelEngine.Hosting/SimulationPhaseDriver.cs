@@ -78,6 +78,7 @@ public sealed class SimulationPhaseDriver(
         phases.Register(EnginePhase.CellToParticle, RunCellToParticle);
     }
 
+    // 相位 3：自由粒子积分、沉积写回 cell，并在脚本安全窗口 flush cell 命令。
     private void RunParticleToCell(EngineTickContext context)
     {
         Particles.ResetTickStats();
@@ -87,11 +88,13 @@ public sealed class SimulationPhaseDriver(
         Particles.PublishDiagnostics(context.Context.Counters);
     }
 
+    // 相位 4：CA checkerboard 主步进；过载时可按可见区对远距 chunk 降频。
     private void RunCaSimulation(EngineTickContext context)
     {
         Kernel.StepCa(context.Context.Jobs, BuildCaThrottlePolicy(context.Context));
     }
 
+    // 相位 5：热传导与相变；步进间隔由过载策略通过 TemperatureField.SetStepInterval 控制。
     private void RunTemperature(EngineTickContext context)
     {
         if (!Temperature.ShouldRun(Kernel.FrameIndex))
@@ -104,11 +107,13 @@ public sealed class SimulationPhaseDriver(
         Temperature.ApplyPhaseTransitions(_chunks, Materials, Kernel.CurrentParity, rigidDamageSink);
     }
 
+    // 相位 6：交换 dirty rectangle 双缓冲，为下一 tick 的 CA 读写分离做准备。
     private void RunDirtyRectSwap(EngineTickContext context)
     {
         Kernel.SwapDirtyRects();
     }
 
+    // 相位 7：cell 抛射为自由粒子，并 flush 脚本粒子命令。
     private void RunCellToParticle(EngineTickContext context)
     {
         _ = _scriptContext?.FlushParticleCommands();
@@ -116,6 +121,7 @@ public sealed class SimulationPhaseDriver(
         Particles.PublishDiagnostics(context.Context.Counters);
     }
 
+    // DistantChunkThrottle 档位起：仅相机可见区（加 1 chunk 边距）全速 CA，远距 chunk 隔帧更新。
     private static CaChunkThrottlePolicy BuildCaThrottlePolicy(EngineContext context)
     {
         if (context.QualityTier < EngineQualityTier.DistantChunkThrottle ||

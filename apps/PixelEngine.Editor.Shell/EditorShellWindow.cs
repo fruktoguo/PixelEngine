@@ -4,6 +4,9 @@ using PixelEngine.Rendering;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// Editor Shell 主窗口：ImGui 帧循环、面板布局与输入路由。
+/// </summary>
 internal sealed class EditorShellWindow : IDisposable
 {
     public static readonly string DefaultLayoutPath = Path.Combine(

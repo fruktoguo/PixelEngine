@@ -2,8 +2,14 @@ using Xunit;
 
 namespace PixelEngine.UI.Tests;
 
+/// <summary>
+/// GameUiHost 宿主测试：初始化、帧循环与后端切换。
+/// </summary>
 public sealed class GameUiHostTests
 {
+    /// <summary>
+    /// 验证Show Screen Loads Document Once And Tracks Stack。
+    /// </summary>
     [Fact]
     public void ShowScreenLoadsDocumentOnceAndTracksStack()
     {
@@ -23,6 +29,9 @@ public sealed class GameUiHostTests
         Assert.Equal(2, host.Documents.StackCount);
     }
 
+    /// <summary>
+    /// 验证Push Modal And Pop Modal Respect Top Only。
+    /// </summary>
     [Fact]
     public void PushModalAndPopModalRespectTopOnly()
     {
@@ -43,6 +52,9 @@ public sealed class GameUiHostTests
         Assert.False(host.PopModal());
     }
 
+    /// <summary>
+    /// 验证Disabled Host Rejects Document Load And不会Initialize Backend。
+    /// </summary>
     [Fact]
     public void DisabledHostRejectsDocumentLoadAndDoesNotInitializeBackend()
     {
@@ -56,6 +68,9 @@ public sealed class GameUiHostTests
         Assert.False(backend.Initialized);
     }
 
+    /// <summary>
+    /// 验证Initialize Passes Font Selection To Backend。
+    /// </summary>
     [Fact]
     public void InitializePassesFontSelectionToBackend()
     {
@@ -71,6 +86,9 @@ public sealed class GameUiHostTests
         Assert.Equal(selection, backend.InitialFontSelection);
     }
 
+    /// <summary>
+    /// 验证Preload Image路由To Supporting Backend。
+    /// </summary>
     [Fact]
     public void PreloadImageRoutesToSupportingBackend()
     {
@@ -86,6 +104,9 @@ public sealed class GameUiHostTests
         Assert.Equal(0, host.Documents.StackCount);
     }
 
+    /// <summary>
+    /// 验证Load Document Returns Existing Document Before Backend Load。
+    /// </summary>
     [Fact]
     public void LoadDocumentReturnsExistingDocumentBeforeBackendLoad()
     {
@@ -105,6 +126,9 @@ public sealed class GameUiHostTests
         Assert.Equal(0, backend.LastScreenStackCount);
     }
 
+    /// <summary>
+    /// 验证Invoke Action For Visible Screen路由To Backend Document。
+    /// </summary>
     [Fact]
     public void InvokeActionForVisibleScreenRoutesToBackendDocument()
     {
@@ -123,6 +147,9 @@ public sealed class GameUiHostTests
         Assert.False(host.InvokeAction(new UiScreenHandle(999), action, in payload));
     }
 
+    /// <summary>
+    /// 验证Composite Runs Only When Backend Is Dirty Or Animating。
+    /// </summary>
     [Fact]
     public void CompositeRunsOnlyWhenBackendIsDirtyOrAnimating()
     {
@@ -152,6 +179,9 @@ public sealed class GameUiHostTests
         Assert.True(host.NeedsComposite);
     }
 
+    /// <summary>
+    /// 验证Presentation Frame Interval Skips Paint But保持Dirty State。
+    /// </summary>
     [Fact]
     public void PresentationFrameIntervalSkipsPaintButKeepsDirtyState()
     {
@@ -301,7 +331,7 @@ public sealed class GameUiHostTests
             return 0;
         }
 
-        public void Composite(in PixelEngine.Rendering.UiPresentContext context)
+        public void Composite(in Rendering.UiPresentContext context)
         {
             CompositeCount++;
             if (IsDirty)

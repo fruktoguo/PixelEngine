@@ -74,12 +74,14 @@ public sealed class CheckerboardScheduler
         ArgumentNullException.ThrowIfNull(customUpdateExecutor);
         ArgumentNullException.ThrowIfNull(diagnostics);
 
+        // 先把 awake 且 current-dirty 的 chunk 分到 2x2 parity bucket，再按 4-pass 顺序更新。
         int awakeCount = BuildBuckets(chunks, throttlePolicy);
         if (awakeCount == 0)
         {
             return;
         }
 
+        // 远区降频 chunk 需先裁剪 current dirty，避免隔帧更新时 parity 不一致。
         PrepareThrottledChunkParity(parityBit);
         CaptureContext(chunks, materials, rigidDamageSink, reactionExecutor, lifetimeSink, customUpdateExecutor, diagnostics, parityBit, frameIndex, worldSeed);
         try
@@ -90,6 +92,7 @@ public sealed class CheckerboardScheduler
                 return;
             }
 
+            // 每个 pass 内 bucket 互不邻接，可并行；pass 之间串行保证无写冲突。
             for (int pass = 0; pass < _buckets.Length; pass++)
             {
                 int count = _counts[pass];
@@ -164,6 +167,7 @@ public sealed class CheckerboardScheduler
         int awakeCount = 0;
         foreach (Chunk chunk in residentChunks)
         {
+            // sleeping 或本帧无 current dirty 的 chunk 不进调度，保持零 CA 迭代。
             if (chunk.State != ChunkState.Awake || chunk.CurrentDirty.IsEmpty)
             {
                 continue;
@@ -316,6 +320,7 @@ public sealed class CheckerboardScheduler
         {
             Chunk chunk = _activeBucket[i];
             ChunkNeighborhood neighborhood = _activeNeighborhoodBucket[i];
+            // 记录本帧实际迭代的 dirty rect，供 Editor 叠层验证 sleeping 区零迭代。
             diagnostics.RecordCaIteration(chunk.Coord, chunk.CurrentDirty);
             ChunkUpdater.UpdateChunk(
                 chunk,

@@ -3,8 +3,14 @@ using Xunit;
 
 namespace PixelEngine.Audio.Tests;
 
+/// <summary>
+/// 音频监听器状态测试：位置/朝向更新与平滑。
+/// </summary>
 public sealed class AudioListenerStateTests
 {
+    /// <summary>
+    /// 验证音频空间将单元格坐标转换为米。
+    /// </summary>
     [Fact]
     public void AudioSpaceConvertsCellsToMeters()
     {
@@ -15,6 +21,9 @@ public sealed class AudioListenerStateTests
         Assert.Equal(new Vector3(2f, -0.5f, 0f), meters);
     }
 
+    /// <summary>
+    /// 验证监听器状态使用视口中心And与配置的深度。
+    /// </summary>
     [Fact]
     public void ListenerStateUsesViewportCenterAndConfiguredDepth()
     {
@@ -34,6 +43,9 @@ public sealed class AudioListenerStateTests
         Assert.Equal(0.75f, listener.Gain);
     }
 
+    /// <summary>
+    /// 验证监听视图拒绝无效视口。
+    /// </summary>
     [Fact]
     public void ListenerViewRejectsInvalidViewport()
     {

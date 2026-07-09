@@ -14,7 +14,8 @@ using ScriptScene = PixelEngine.Scripting.Scene;
 namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
-/// ScriptSimulationContext facade 的真实后端验收。
+/// ScriptSimulationContext facade 的真实 Simulation/Physics 后端验收。
+/// 不变式：未注入服务走 noop、世界写入经延迟命令队列、材质/cell/刚体采样直读后端。
 /// </summary>
 public sealed class ScriptSimulationContextTests
 {
@@ -43,6 +44,7 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void UiEventHandlersQueueWorldWritesUntilCellCommandFlush()
     {
+        // Arrange：准备输入与初始状态
         using Fixture fixture = Fixture.Create();
         MaterialId stone = fixture.Context.Materials.Resolve("stone");
         _ = fixture.Context.Events.Subscribe<UiEvent>(_ => fixture.Context.Cells.SetCell(5, 5, stone));
@@ -52,6 +54,7 @@ public sealed class ScriptSimulationContextTests
             new UiActionId(3),
             default);
 
+        // Assert：验证预期结果
         Assert.True(fixture.Context.Events.TryPublish(in uiEvent));
         fixture.ScriptEvents.DrainEvents();
 
@@ -69,12 +72,14 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void FacadesReadMaterialCellsAndSolidsFromSimulationBackends()
     {
+        // Arrange：准备输入与初始状态
         Fixture fixture = Fixture.Create();
         fixture.Grid.SetMaterial(4, 4, 2);
         fixture.Grid.FlagsAt(4, 4) = 7;
         fixture.Grid.LifetimeAt(4, 4) = 9;
         fixture.Grid.DamageAt(4, 4) = 11;
 
+        // Assert：验证预期结果
         Assert.True(fixture.Context.Materials.TryResolve("stone", out MaterialId stone));
         Assert.Equal((ushort)2, stone.Value);
         MaterialInfo info = fixture.Context.Materials.GetInfo(stone);
@@ -108,8 +113,10 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void MaterialInfoFacadeReflectsMaterialReload()
     {
+        // Arrange：准备输入与初始状态
         Fixture fixture = Fixture.Create();
 
+        // Assert：验证预期结果
         Assert.True(fixture.Materials.TryGetId("stone", out ushort stoneId));
         MaterialInfo before = fixture.Context.Materials.GetInfo(new MaterialId(stoneId));
         Assert.Equal(6, before.Hardness);
@@ -156,10 +163,12 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void CellCommandsFlushIntoWorkingDirtyWithoutImmediateMutation()
     {
+        // Arrange：准备输入与初始状态
         Fixture fixture = Fixture.Create();
         MaterialId sand = fixture.Context.Materials.Resolve("sand");
 
         fixture.Context.Cells.SetCell(2, 2, sand);
+        // Assert：验证预期结果
         Assert.Equal((ushort)0, fixture.Grid.GetMaterial(2, 2));
         Assert.True(fixture.Chunk.WorkingDirty.IsEmpty);
 
@@ -181,12 +190,14 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void CellAndParticleCommandsFlushIndependently()
     {
+        // Arrange：准备输入与初始状态
         Fixture fixture = Fixture.Create();
         MaterialId stone = fixture.Context.Materials.Resolve("stone");
 
         fixture.Context.Cells.Paint(6, 6, radius: 1, stone);
         fixture.Context.Particles.Spawn(new ParticleSpawnDesc(6, 6, 0, 0, stone, 10));
 
+        // Assert：验证预期结果
         Assert.Equal(1, fixture.Context.FlushCellCommands());
         Assert.Equal(stone.Value, fixture.Grid.GetMaterial(6, 6));
         Assert.False(fixture.Chunk.CurrentDirty.IsEmpty);
@@ -203,6 +214,7 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void ParticleCommandsFlushIntoParticleSystem()
     {
+        // Arrange：准备输入与初始状态
         Fixture fixture = Fixture.Create();
         MaterialId sand = fixture.Context.Materials.Resolve("sand");
 
@@ -218,6 +230,7 @@ public sealed class ScriptSimulationContextTests
             BaseSpeed: 60f,
             SpeedJitter: 0f,
             LifeTicks: 7));
+        // Assert：验证预期结果
         Assert.Equal(0, fixture.Particles.ActiveCount);
 
         int flushed = fixture.Context.FlushParticleCommands();
@@ -253,12 +266,14 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void ParticleEmitCommandsDoNotAllocateAfterWarmup()
     {
+        // Arrange：准备输入与初始状态
         using Fixture fixture = Fixture.Create();
         MaterialId sand = fixture.Context.Materials.Resolve("sand");
         ParticleEmit emit = new(4, 5, sand, Count: 1, DirAngleRad: 0f, DirSpreadRad: 0.1f, BaseSpeed: 60f, SpeedJitter: 3f, LifeTicks: 7);
         const int Iterations = 128;
 
         fixture.Context.Particles.Emit(in emit);
+        // Assert：验证预期结果
         Assert.Equal(1, fixture.Context.FlushParticleCommands());
         fixture.Particles.Clear();
 
@@ -282,11 +297,13 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void ParticleEmitParticlesUseFiniteLifetimeAndExpire()
     {
+        // Arrange：准备输入与初始状态
         Fixture fixture = Fixture.Create();
         MaterialId sand = fixture.Context.Materials.Resolve("sand");
         ParticleEmit emit = new(8, 9, sand, Count: 4, DirAngleRad: 0f, DirSpreadRad: 0f, BaseSpeed: 60f, SpeedJitter: 0f, LifeTicks: 3);
 
         fixture.Context.Particles.Emit(in emit);
+        // Assert：验证预期结果
         Assert.Equal(1, fixture.Context.FlushParticleCommands());
         Assert.Equal(4, fixture.Particles.ActiveCount);
 
@@ -306,11 +323,13 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void BurstParticlesUseFiniteDefaultLifetimeAndExpire()
     {
+        // Arrange：准备输入与初始状态
         Fixture fixture = Fixture.Create();
         MaterialId sand = fixture.Context.Materials.Resolve("sand");
 
         fixture.Context.Particles.Burst(8, 9, sand, count: 2, speed: 6);
 
+        // Assert：验证预期结果
         Assert.Equal(1, fixture.Context.FlushParticleCommands());
         Assert.Equal(2, fixture.Particles.ActiveCount);
         Assert.Equal(EngineConstants.ParticleMaxLifetimeTicks, fixture.Particles.ActiveReadOnly[0].Life);
@@ -331,6 +350,7 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void WorldDamageCommandsFlushIntoStructuralDamage()
     {
+        // Arrange：准备输入与初始状态
         Fixture fixture = Fixture.Create();
         MaterialId stone = fixture.Context.Materials.Resolve("stone");
         MaterialId sand = fixture.Context.Materials.Resolve("sand");
@@ -339,6 +359,7 @@ public sealed class ScriptSimulationContextTests
         fixture.Context.World.DamageCircle(15f, 15f, radius: 3, damage: 80f, falloff: false);
         fixture.Context.World.DamageBeam(12f, 12f, 1f, 0f, length: 5, damagePerCell: 80f);
 
+        // Assert：验证预期结果
         Assert.Equal(stone.Value, fixture.Grid.GetMaterial(15, 15));
         Assert.Equal(2, fixture.Context.FlushCellCommands());
 
@@ -371,11 +392,13 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void WorldDamageAndHeatCommandsDoNotAllocateAfterWarmup()
     {
+        // Arrange：准备输入与初始状态
         using Fixture fixture = Fixture.Create();
         MaterialId stone = fixture.Context.Materials.Resolve("stone");
         const int Iterations = 128;
 
         QueueDamageAndHeat(fixture);
+        // Assert：验证预期结果
         Assert.Equal(3, fixture.Context.FlushCellCommands());
 
         long before = GC.GetAllocatedBytesForCurrentThread();
@@ -398,11 +421,13 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void WorldExplodeFlushesStructuralDamageDebrisAndRigidImpulse()
     {
+        // Arrange：准备输入与初始状态
         using Fixture fixture = Fixture.Create(withPhysics: true);
         MaterialId sand = fixture.Context.Materials.Resolve("sand");
         MaterialId stone = fixture.Context.Materials.Resolve("stone");
         FillRect(fixture.Chunk, minX: 48, minY: 48, maxX: 60, maxY: 60, material: 2);
         BodyHandle handle = fixture.Context.Bodies.CreateFromRegion(48, 48, 12, 12);
+        // Assert：验证预期结果
         Assert.Equal(1, fixture.Context.FlushPhysicsCommands());
         Assert.True(fixture.Context.Bodies.TryGetTransform(handle, out _));
         FillRect(fixture.Chunk, minX: 32, minY: 32, maxX: 36, maxY: 36, material: stone.Value);
@@ -428,6 +453,7 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void WorldExplodeDoesNotEjectLiquidGasOrFireAsPersistentVisualDebris()
     {
+        // Arrange：准备输入与初始状态
         using Fixture fixture = Fixture.Create();
         MaterialId sand = fixture.Context.Materials.Resolve("sand");
         MaterialId water = fixture.Context.Materials.Resolve("water");
@@ -440,6 +466,7 @@ public sealed class ScriptSimulationContextTests
 
         fixture.Context.World.Explode(11f, 10f, radius: 4, force: 12f);
 
+        // Assert：验证预期结果
         Assert.Equal(1, fixture.Context.FlushParticleCommands());
         fixture.Particles.RunEjectionPass(fixture.Kernel, fixture.Grid);
 
@@ -460,12 +487,14 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void CharacterFacadeMovesAgainstSolidPixelsAndReturnsCollisionState()
     {
+        // Arrange：准备输入与初始状态
         using Fixture fixture = Fixture.Create();
         FillRect(fixture.Chunk, minX: 0, minY: 10, maxX: 32, maxY: 11, material: 2);
         CharacterHandle handle = fixture.Context.Character.Create(4, 0, 4, 4);
 
         CharacterState pending = fixture.Context.Character.Move(handle, 0, 20);
 
+        // Assert：验证预期结果
         Assert.Equal(4f, pending.X);
         Assert.Equal(0f, pending.Y);
         Assert.False(pending.OnGround);
@@ -507,11 +536,13 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void BodyFacadeFlushesCreateQueryImpulseAndDestroyThroughPhysics()
     {
+        // Arrange：准备输入与初始状态
         using Fixture fixture = Fixture.Create(withPhysics: true);
         FillRect(fixture.Chunk, minX: 8, minY: 8, maxX: 24, maxY: 24, material: 2);
 
         BodyHandle handle = fixture.Context.Bodies.CreateFromRegion(8, 8, 16, 16);
 
+        // Assert：验证预期结果
         Assert.False(fixture.Context.Bodies.TryGetTransform(handle, out _));
         Assert.Equal(0, fixture.Physics!.PhysicsWorld.ActiveBodyCount);
         Assert.Equal((ushort)2, fixture.Grid.GetMaterial(16, 16));
@@ -543,11 +574,13 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void ScriptFrameTimeReadsFromFrameClock()
     {
-        FrameClock clock = new(PixelEngine.Core.EngineConstants.SimHzDownscaled);
+        // Arrange：准备输入与初始状态
+        FrameClock clock = new(EngineConstants.SimHzDownscaled);
         ScriptFrameTime time = new(clock);
 
         _ = clock.BeginFrame(0);
 
+        // Assert：验证预期结果
         Assert.Equal(1, time.FrameCount);
         Assert.Equal((float)clock.Dt, time.FixedStep);
         Assert.Equal((float)clock.Dt, time.DeltaTime);
@@ -569,6 +602,7 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void ScriptContextExposesInjectedCameraAndInputBackends()
     {
+        // Arrange：准备输入与初始状态
         ScriptOverlayApi overlay = new();
         Fixture fixture = Fixture.Create(
             camera: new ScriptCameraApi(100, 50, centerX: 10, centerY: 20),
@@ -579,6 +613,7 @@ public sealed class ScriptSimulationContextTests
         fixture.Context.Lighting.RevealAround(10, 20, 8);
         fixture.Context.Overlay.SolidRectangle(4, 5, 6, 7, 0xFF010203u);
 
+        // Assert：验证预期结果
         Assert.Equal(10f, fixture.Context.Camera.CenterX);
         Assert.True(fixture.Context.Input.WasPressed(Key.Space));
         Assert.True(fixture.Context.Input.WasMousePressed(MouseButton.Middle));
@@ -595,7 +630,7 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public void ScriptCameraFollowsEntityTransform()
     {
-        PixelEngine.Scripting.Scene scene = new();
+        ScriptScene scene = new();
         Entity entity = scene.CreateEntity();
         Transform transform = entity.AddComponent<Transform>();
         transform.SetPosition(42f, 24f);
@@ -614,9 +649,11 @@ public sealed class ScriptSimulationContextTests
     [Fact]
     public async Task ScriptAudioApiPlaysLoadedCueThroughAudioSystem()
     {
+        // Arrange：搭建测试场景与依赖
         byte[] wav = CreateWav(channels: 1, bitsPerSample: 8, sampleRate: 8_000, [128]);
         using NullAudioBackend backend = new();
         AudioClipCache cache = new(backend, new MemoryAssetStore(wav), new WavDecoder());
+        // Act：执行被测操作
         _ = await cache.LoadAsync("sfx/hit.wav");
         using AudioSystem audio = new();
         audio.Initialize(new AudioSettings { MaxVoices = 2, PixelsPerMeter = 16f, SfxVolume = 0.5f }, backend);
@@ -625,6 +662,7 @@ public sealed class ScriptSimulationContextTests
         api.PlayAt("sfx/hit.wav", 32, 16, volume: 0.25f);
         api.PlayOneShot("sfx/hit.wav", volume: 0.5f);
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(2, backend.PlayCalls);
         Assert.Equal(new System.Numerics.Vector3(2f, 1f, 0f), backend.GetSourcePosition(1));
         Assert.Equal(0.125f, backend.GetSourceGain(1), precision: 5);

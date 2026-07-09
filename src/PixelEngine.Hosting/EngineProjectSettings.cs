@@ -262,21 +262,15 @@ public sealed record EngineProjectStartupSettings
     /// </summary>
     public EngineProjectStartupSettings Normalize()
     {
-        if (string.IsNullOrWhiteSpace(WindowTitle))
-        {
-            throw new InvalidOperationException("窗口标题不能为空。");
-        }
-
-        if (WindowWidth <= 0 || WindowHeight <= 0)
-        {
-            throw new InvalidOperationException("窗口尺寸必须大于 0。");
-        }
-
-        return this with
-        {
-            StartScene = NormalizeRelativePath(StartScene, nameof(StartScene), allowEmpty: false),
-            WindowTitle = WindowTitle.Trim(),
-        };
+        return string.IsNullOrWhiteSpace(WindowTitle)
+            ? throw new InvalidOperationException("窗口标题不能为空。")
+            : WindowWidth <= 0 || WindowHeight <= 0
+            ? throw new InvalidOperationException("窗口尺寸必须大于 0。")
+            : this with
+            {
+                StartScene = NormalizeRelativePath(StartScene, nameof(StartScene), allowEmpty: false),
+                WindowTitle = WindowTitle.Trim(),
+            };
     }
 }
 
@@ -421,19 +415,16 @@ public sealed record PlayerSettingsDto
     /// </summary>
     public PlayerSettingsDto Normalize()
     {
-        if (!TryNormalize(out string error))
-        {
-            throw new InvalidOperationException(error);
-        }
-
-        return this with
-        {
-            WindowTitle = WindowTitle.Trim(),
-            Version = Version.Trim(),
-            StartupScene = NormalizeRelativePath(StartupScene, nameof(StartupScene), allowEmpty: false),
-            IconPath = string.IsNullOrWhiteSpace(IconPath) ? null : NormalizeRelativePath(IconPath, nameof(IconPath), allowEmpty: false),
-            InputDefaults = InputDefaults ?? new PlayerInputDefaultsDto(),
-        };
+        return TryNormalize(out string error)
+            ? this with
+            {
+                WindowTitle = WindowTitle.Trim(),
+                Version = Version.Trim(),
+                StartupScene = NormalizeRelativePath(StartupScene, nameof(StartupScene), allowEmpty: false),
+                IconPath = string.IsNullOrWhiteSpace(IconPath) ? null : NormalizeRelativePath(IconPath, nameof(IconPath), allowEmpty: false),
+                InputDefaults = InputDefaults ?? new PlayerInputDefaultsDto(),
+            }
+            : throw new InvalidOperationException(error);
     }
 }
 
@@ -684,35 +675,32 @@ public sealed record BuildProfileDto
     /// </summary>
     public BuildProfileDto Normalize()
     {
-        if (!TryNormalize(out string error))
-        {
-            throw new InvalidOperationException(error);
-        }
-
-        return this with
-        {
-            Rid = Rid.Trim(),
-            Configuration = Configuration.Trim(),
-            OutputDirectory = OutputDirectory.Trim(),
-            ProductName = ProductName.Trim(),
-            Version = Version.Trim(),
-            InformationalVersion = InformationalVersion.Trim(),
-            IconPath = string.IsNullOrWhiteSpace(IconPath) ? null : IconPath.Trim(),
-            Scenes = [.. Scenes.Select(static scene =>
+        return TryNormalize(out string error)
+            ? this with
             {
-                string scenePath = string.IsNullOrWhiteSpace(scene.Source) ? scene.SceneName : scene.Source;
-                string normalizedPath = NormalizeRelativePath(scenePath, nameof(BuildProfileSceneDto.Source), allowEmpty: false);
-                string? normalizedSource = string.IsNullOrWhiteSpace(scene.Source) ? null : normalizedPath;
-                string sceneName = string.IsNullOrWhiteSpace(scene.SceneName)
-                    ? Path.GetFileNameWithoutExtension(normalizedPath) ?? normalizedPath
-                    : scene.SceneName.Trim();
-                return scene with
+                Rid = Rid.Trim(),
+                Configuration = Configuration.Trim(),
+                OutputDirectory = OutputDirectory.Trim(),
+                ProductName = ProductName.Trim(),
+                Version = Version.Trim(),
+                InformationalVersion = InformationalVersion.Trim(),
+                IconPath = string.IsNullOrWhiteSpace(IconPath) ? null : IconPath.Trim(),
+                Scenes = [.. Scenes.Select(static scene =>
                 {
-                    SceneName = sceneName,
-                    Source = normalizedSource,
-                };
-            })],
-        };
+                    string scenePath = string.IsNullOrWhiteSpace(scene.Source) ? scene.SceneName : scene.Source;
+                    string normalizedPath = NormalizeRelativePath(scenePath, nameof(BuildProfileSceneDto.Source), allowEmpty: false);
+                    string? normalizedSource = string.IsNullOrWhiteSpace(scene.Source) ? null : normalizedPath;
+                    string sceneName = string.IsNullOrWhiteSpace(scene.SceneName)
+                        ? Path.GetFileNameWithoutExtension(normalizedPath) ?? normalizedPath
+                        : scene.SceneName.Trim();
+                    return scene with
+                    {
+                        SceneName = sceneName,
+                        Source = normalizedSource,
+                    };
+                })],
+            }
+            : throw new InvalidOperationException(error);
     }
 }
 
@@ -934,6 +922,9 @@ public static class EngineProjectSettingsStore
     }
 }
 
+/// <summary>
+/// 工程/玩家设置路径规范化与校验辅助；禁止绝对路径与 <c>..</c> 越界。
+/// </summary>
 internal static class EngineProjectSettingsValidation
 {
     internal static string NormalizeRelativeDirectory(string value, string fieldName)
@@ -944,12 +935,9 @@ internal static class EngineProjectSettingsValidation
 
     internal static string NormalizeRelativePath(string value, string fieldName, bool allowEmpty)
     {
-        if (!TryNormalizeRelativePath(value, fieldName, allowEmpty, out string normalized, out string error))
-        {
-            throw new InvalidOperationException(error);
-        }
-
-        return normalized;
+        return TryNormalizeRelativePath(value, fieldName, allowEmpty, out string normalized, out string error)
+            ? normalized
+            : throw new InvalidOperationException(error);
     }
 
     internal static bool TryNormalizeRelativeDirectory(string value, string fieldName, out string normalized, out string error)

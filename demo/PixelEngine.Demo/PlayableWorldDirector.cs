@@ -30,6 +30,7 @@ public sealed class PlayableWorldDirector : Behaviour
     protected override void OnUpdate(float dt)
     {
         _ = dt;
+        // 揭示视口光照，并确保实体构建系统在首帧后完成装配
         Context.Lighting.RevealViewport();
         RegisterEntityBuildSystem();
     }
@@ -45,6 +46,7 @@ public sealed class PlayableWorldDirector : Behaviour
         _entityBuildSystemRegistered = true;
     }
 
+    // 程序化场景实体装配：玩家、相机、射击工具与简洁 HUD（无 LevelDirector 像素铺设）
     private void BuildEntities()
     {
         if (_entitiesBuilt)

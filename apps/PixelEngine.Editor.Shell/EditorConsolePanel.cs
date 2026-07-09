@@ -2,6 +2,9 @@ using Hexa.NET.ImGui;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// Console 面板 ImGui 绘制与过滤器 UI。
+/// </summary>
 internal sealed class EditorConsolePanel(EditorShellApp app) : IEditorPanel
 {
     private static readonly string[] CategoryOptions = ["All", .. Enum.GetNames<EditorConsoleCategory>()];

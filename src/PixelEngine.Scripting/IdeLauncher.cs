@@ -4,10 +4,16 @@ using Microsoft.Win32;
 
 namespace PixelEngine.Scripting;
 
+/// <summary>
+/// 探测本机已安装的 IDE 并用其打开脚本解决方案。
+/// </summary>
 internal sealed class IdeLauncher(IIdeLauncherEnvironment? environment = null)
 {
     private readonly IIdeLauncherEnvironment _environment = environment ?? new IdeLauncherEnvironment();
 
+    /// <summary>
+    /// 扫描 Rider、Visual Studio 与 VS Code 安装路径，返回去重后的候选列表。
+    /// </summary>
     public IReadOnlyList<IdeCandidate> DiscoverInstalledIdes()
     {
         List<IdeCandidate> candidates = [];
@@ -17,6 +23,9 @@ internal sealed class IdeLauncher(IIdeLauncherEnvironment? environment = null)
         return Deduplicate(candidates);
     }
 
+    /// <summary>
+    /// 使用优先级最高的已发现 IDE 打开指定 .sln 文件。
+    /// </summary>
     public IdeLaunchResult OpenSolution(string solutionPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(solutionPath);
@@ -31,6 +40,7 @@ internal sealed class IdeLauncher(IIdeLauncherEnvironment? environment = null)
             return IdeLaunchResult.Failed("未找到 Rider、Visual Studio 或 VS Code。");
         }
 
+        // 候选列表已按探测顺序排序，取首个可用 IDE。
         IdeCandidate candidate = candidates[0];
         ProcessStartInfo startInfo = new()
         {
@@ -67,6 +77,9 @@ internal sealed class IdeLauncher(IIdeLauncherEnvironment? environment = null)
         }
     }
 
+    /// <summary>
+    /// 通过 vswhere 定位最新 Visual Studio 安装的 devenv.exe。
+    /// </summary>
     private void AddVisualStudioCandidates(List<IdeCandidate> candidates)
     {
         string? vswhere = _environment.FindOnPath("vswhere")
@@ -105,6 +118,9 @@ internal sealed class IdeLauncher(IIdeLauncherEnvironment? environment = null)
         }
     }
 
+    /// <summary>
+    /// 从 Windows 注册表读取 VS Code 的 open 命令行并提取可执行路径。
+    /// </summary>
     private string? TryReadVsCodeRegistryCommand()
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -132,6 +148,9 @@ internal sealed class IdeLauncher(IIdeLauncherEnvironment? environment = null)
         return string.IsNullOrWhiteSpace(root) ? null : Path.Combine([root, .. segments]);
     }
 
+    /// <summary>
+    /// 解析注册表或快捷方式风格的命令行，提取首个可执行文件路径。
+    /// </summary>
     private static string? ExtractExecutableFromCommand(string? command)
     {
         if (string.IsNullOrWhiteSpace(command))
@@ -171,6 +190,9 @@ internal sealed class IdeLauncher(IIdeLauncherEnvironment? environment = null)
     }
 }
 
+/// <summary>
+/// IDE 启动器的环境抽象，便于单元测试注入假文件系统与进程。
+/// </summary>
 internal interface IIdeLauncherEnvironment
 {
     string? GetEnvironmentVariable(string name);
@@ -186,6 +208,9 @@ internal interface IIdeLauncherEnvironment
     bool Start(ProcessStartInfo startInfo);
 }
 
+/// <summary>
+/// 基于真实操作系统 API 的 <see cref="IIdeLauncherEnvironment"/> 默认实现。
+/// </summary>
 internal sealed class IdeLauncherEnvironment : IIdeLauncherEnvironment
 {
     public string? GetEnvironmentVariable(string name)
@@ -292,8 +317,14 @@ internal sealed class IdeLauncherEnvironment : IIdeLauncherEnvironment
     }
 }
 
+/// <summary>
+/// 已探测到的 IDE 安装信息。
+/// </summary>
 internal sealed record IdeCandidate(IdeKind Kind, string Name, string ExecutablePath);
 
+/// <summary>
+/// IDE 启动尝试的结果。
+/// </summary>
 internal sealed record IdeLaunchResult(bool Success, IdeCandidate? Candidate, string? Error)
 {
     public static IdeLaunchResult Launched(IdeCandidate candidate)
@@ -307,6 +338,9 @@ internal sealed record IdeLaunchResult(bool Success, IdeCandidate? Candidate, st
     }
 }
 
+/// <summary>
+/// 支持的 IDE 种类。
+/// </summary>
 internal enum IdeKind
 {
     Rider,

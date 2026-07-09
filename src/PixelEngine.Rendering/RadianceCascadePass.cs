@@ -52,8 +52,11 @@ public sealed class RadianceCascadePass : IDisposable
 
         _resources.Resize(scene.Width, scene.Height);
         using GpuComputeProfiler.GpuTimerScope _ = gpuProfiler?.Measure("radiance_cascades", FrameSubPhase.GpuRadianceCascades) ?? default;
+        // CP-R0：occluder → Jump Flood SDF
         uint sdf = BuildSdf(occluder, occluderThreshold);
+        // CP-R1/R2：自底向上构建并合并 cascade radiance
         uint radiance = BuildRadiance(sdf, emissive, settings);
+        // CP-R3：radiance 叠加到 scene 输出
         _pipeline.DispatchApply(scene.Handle, radiance, destination.Handle, destination.Width, destination.Height, intensity);
     }
 
@@ -71,9 +74,11 @@ public sealed class RadianceCascadePass : IDisposable
 
     private uint BuildSdf(LightMaskTexture occluder, float threshold)
     {
+        // 种子 pass：实心 occluder 像素写入零距离种子。
         _pipeline.DispatchSdfInitialize(occluder.Handle, _resources.SdfA, _resources.Width, _resources.Height, threshold);
         uint source = _resources.SdfA;
         uint destination = _resources.SdfB;
+        // JFA 多步跳跃：步长从 max(w,h)/2 减半至 1，乒乓写入 SdfA/SdfB。
         for (int jump = HighestPowerOfTwoAtLeast(Math.Max(_resources.Width, _resources.Height)) / 2; jump >= 1; jump /= 2)
         {
             _pipeline.DispatchSdfJump(source, destination, _resources.Width, _resources.Height, jump);
@@ -83,6 +88,7 @@ public sealed class RadianceCascadePass : IDisposable
         return source;
     }
 
+    // 自最远层向近层迭代：build → merge，乒乓复用 CascadeA/CascadeB 纹理。
     private uint BuildRadiance(uint sdf, EmissiveBuffer emissive, RadianceCascadeSettings settings)
     {
         uint accumulated = 0;

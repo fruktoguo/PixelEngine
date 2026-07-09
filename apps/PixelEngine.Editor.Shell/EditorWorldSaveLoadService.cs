@@ -4,6 +4,9 @@ using PixelEngine.World;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// 编辑器内 Simulation world 存档的保存与加载。
+/// </summary>
 internal sealed class EditorWorldSaveLoadService(Engine engine, string saveRoot) : ISaveLoadService
 {
     private const string ManifestFileName = "manifest.bin";

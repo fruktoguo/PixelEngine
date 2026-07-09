@@ -6,6 +6,7 @@ namespace PixelEngine.World.Tests;
 
 /// <summary>
 /// WorldSaveService 整世界存档 / 读档测试。
+/// 不变式：整世界存档/读档 round-trip 后材质与温度场一致。
 /// </summary>
 public sealed class WorldSaveServiceTests
 {
@@ -26,6 +27,7 @@ public sealed class WorldSaveServiceTests
     [Fact]
     public void SaveAllAndLoadAllRoundTripsWorldStateWithMaterialRemap()
     {
+        // Arrange：准备输入与初始状态
         using TempWorldDirectory save = TempWorldDirectory.Create();
         WorldSaveService service = new();
         ResidentChunkMap sourceChunks = new();
@@ -58,6 +60,7 @@ public sealed class WorldSaveServiceTests
 
         service.SaveAll(saveContext, state, save.Path);
 
+        // Assert：验证预期结果
         Assert.True(File.Exists(Path.Combine(save.Path, "manifest.bin")));
         Assert.True(sourceResidency.TryGetInfo(coord, out ChunkResidencyInfo flushed));
         Assert.False(flushed.DirtySinceLoad);
@@ -100,6 +103,7 @@ public sealed class WorldSaveServiceTests
     [Fact]
     public void LoadAllRejectsMissingChunkBlob()
     {
+        // Arrange：准备输入与初始状态
         using TempWorldDirectory save = TempWorldDirectory.Create();
         WorldSaveService service = new();
         ResidentChunkMap chunks = new();
@@ -115,6 +119,7 @@ public sealed class WorldSaveServiceTests
             save.Path);
         File.Delete(Path.Combine(save.Path, "regions", "r.0.0.rgn"));
 
+        // Assert：验证预期结果
         InvalidDataException exception = Assert.Throws<InvalidDataException>(() =>
             service.LoadAll(
                 save.Path,
@@ -130,6 +135,7 @@ public sealed class WorldSaveServiceTests
     [Fact]
     public void LoadAllRemapsDeletedMaterialsToFallback()
     {
+        // Arrange：准备输入与初始状态
         using TempWorldDirectory save = TempWorldDirectory.Create();
         WorldSaveService service = new();
         MaterialTable savedMaterials = Materials(("empty", CellType.Empty), ("deleted", CellType.Solid));
@@ -155,6 +161,7 @@ public sealed class WorldSaveServiceTests
             new WorldLoadContext(loadedChunks, new ResidencyTable(), new TemperatureField(), currentMaterials, 0, CellFlags.Parity),
             restored);
 
+        // Assert：验证预期结果
         Assert.Equal(3, result.MaterialFallbackHitCount);
         Assert.True(loadedChunks.TryGetChunk(new ChunkCoord(0, 0), out Chunk loadedChunk));
         Assert.Equal(0, loadedChunk.Material[0]);

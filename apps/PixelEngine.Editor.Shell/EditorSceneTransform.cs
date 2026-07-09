@@ -1,5 +1,8 @@
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// 编辑器场景 Transform：位置、旋转与缩放。
+/// </summary>
 internal sealed class EditorSceneTransform
 {
     public float X { get; set; }

@@ -92,6 +92,7 @@ public sealed class ScriptHotReloadController(Scene scene, IScriptContext contex
     /// <returns>热重载结果与诊断文本。</returns>
     public ScriptHotReloadApplyResult ApplyPendingReload()
     {
+        // 相位 1 应用：Roslyn 编译 → 状态迁移 → ALC 切换，失败时旧脚本保持运行。
         HotReloadResult result = _service.ApplyPendingReload();
         return new ScriptHotReloadApplyResult(
             MapStatus(result.Status),

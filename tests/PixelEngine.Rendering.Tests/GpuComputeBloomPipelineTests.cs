@@ -4,8 +4,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// GPU 泛光计算管线测试：多级模糊与合成不变式。
+/// </summary>
 public sealed class GpuComputeBloomPipelineTests
 {
+    /// <summary>
+    /// 验证Constructor Loads Initial Bloom And Light Kernels。
+    /// </summary>
     [Fact]
     public void ConstructorLoadsInitialBloomAndLightKernels()
     {
@@ -27,6 +33,9 @@ public sealed class GpuComputeBloomPipelineTests
         Assert.All(backend.LoadedSources, static source => Assert.Contains("#version 430", source, StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// 验证Bright Pass Binds Source Output Uniforms And Dispatches Ceil Groups。
+    /// </summary>
     [Fact]
     public void BrightPassBindsSourceOutputUniformsAndDispatchesCeilGroups()
     {
@@ -48,6 +57,9 @@ public sealed class GpuComputeBloomPipelineTests
             item.Contains("TextureFetchBarrierBit", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// 验证Light Composite Binds Three Inputs And Output。
+    /// </summary>
     [Fact]
     public void LightCompositeBindsThreeInputsAndOutput()
     {
@@ -72,6 +84,9 @@ public sealed class GpuComputeBloomPipelineTests
         Assert.Contains("Dispatch:light_composite=1,1,1", backend.Events);
     }
 
+    /// <summary>
+    /// 验证Downsample Binds Source Output Texel Size And Dispatches。
+    /// </summary>
     [Fact]
     public void DownsampleBindsSourceOutputTexelSizeAndDispatches()
     {
@@ -95,6 +110,9 @@ public sealed class GpuComputeBloomPipelineTests
         Assert.Contains("Dispatch:bloom_downsample=4,2,1", backend.Events);
     }
 
+    /// <summary>
+    /// 验证Dual Kawase Up Binds Base Texture For Additive Upsample。
+    /// </summary>
     [Fact]
     public void DualKawaseUpBindsBaseTextureForAdditiveUpsample()
     {
@@ -119,6 +137,9 @@ public sealed class GpuComputeBloomPipelineTests
         Assert.Contains("Dispatch:bloom_dualkawase_up=2,1,1", backend.Events);
     }
 
+    /// <summary>
+    /// 验证Compute Bloom Pass Uses Cp B2Downsample In Render Chain。
+    /// </summary>
     [Fact]
     public void ComputeBloomPassUsesCpB2DownsampleInRenderChain()
     {
@@ -130,6 +151,9 @@ public sealed class GpuComputeBloomPipelineTests
         Assert.True(source.IndexOf("DispatchDownsample", StringComparison.Ordinal) < source.IndexOf("DispatchDualKawaseDown", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// 验证Rejects Zero Handles Before Dispatch。
+    /// </summary>
     [Fact]
     public void RejectsZeroHandlesBeforeDispatch()
     {
@@ -142,6 +166,9 @@ public sealed class GpuComputeBloomPipelineTests
         Assert.Contains("句柄", exception.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Dispatch Methods Do Not Allocate Managed Memory。
+    /// </summary>
     [Fact]
     public void DispatchMethodsDoNotAllocateManagedMemory()
     {

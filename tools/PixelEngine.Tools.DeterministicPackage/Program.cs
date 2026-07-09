@@ -3,9 +3,13 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 
+// 确定性打包工具：按固定时间戳与排序规则生成可复现的 zip/tar.gz 发布包并输出 SHA256。
 Options options = Options.Parse(args);
 DeterministicPackageWriter.Write(options);
 
+/// <summary>
+/// 命令行参数：源目录、输出路径、包内根名、格式与时间戳。
+/// </summary>
 internal sealed record Options(
     string Source,
     string Output,
@@ -83,6 +87,9 @@ internal sealed record Options(
     }
 }
 
+/// <summary>
+/// 以确定性元数据（时间戳、权限、排序）写入 zip 或 tar.gz 包。
+/// </summary>
 internal static class DeterministicPackageWriter
 {
     private const int DirectoryMode = 0x1ED; // 0755

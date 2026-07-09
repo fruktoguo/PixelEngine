@@ -30,6 +30,7 @@ public sealed unsafe class PhysicsWorld
 
     private PixelRigidBody AddBody(B2BodyId bodyId, BodyLocalMask mask, int? preferredBodyKey)
     {
+        // bodyKey 优先复用 free list 空洞；读档时可指定稳定 id 恢复。
         int key = preferredBodyKey.HasValue ? ReservePreferredKey(preferredBodyKey.Value) : ReserveNextKey();
         PixelRigidBody body = new(key, bodyId, mask)
         {
@@ -44,17 +45,20 @@ public sealed unsafe class PhysicsWorld
             _bodies[key] = body;
         }
 
+        // userData 存 key+1，0 保留给 native 空槽语义。
         Box2D.b2Body_SetUserData(bodyId, (void*)(nint)(key + 1));
         return body;
     }
 
     private int ReserveNextKey()
     {
+        // 优先弹出 free list，保持 slot 稠密且 key 单调递增。
         return _freeKeys.Count > 0 ? _freeKeys.Pop() : _bodies.Count;
     }
 
     private int ReservePreferredKey(int key)
     {
+        // 读档恢复：在目标 key 前用 null 占位并登记可复用 slot。
         while (_bodies.Count < key)
         {
             _freeKeys.Push(_bodies.Count);
@@ -75,6 +79,7 @@ public sealed unsafe class PhysicsWorld
         return key;
     }
 
+    // 指定 key 被占用后，从 free list 剔除避免重复分配。
     private void RemoveFromFreeKeys(int key)
     {
         if (_freeKeys.Count == 0)
@@ -133,6 +138,7 @@ public sealed unsafe class PhysicsWorld
     public void RemoveBody(int bodyKey)
     {
         PixelRigidBody _ = GetBody(bodyKey);
+        // 逻辑删除：slot 置 null 并回收 key，不压缩数组以保持 bodyKey 稳定。
         _bodies[bodyKey] = null;
         _freeKeys.Push(bodyKey);
     }

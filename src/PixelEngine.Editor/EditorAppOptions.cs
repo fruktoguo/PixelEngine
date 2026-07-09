@@ -21,7 +21,7 @@ public sealed record EditorAppOptions
     public string LayoutPath { get; init; } = "imgui.ini";
 
     /// <summary>
-    /// 首选中文字体路径；为空时由 <see cref="PixelEngine.Gui.GuiFontManager"/> 从系统字体中探测。
+    /// 首选中文字体路径；为空时由 <see cref="Gui.GuiFontManager"/> 从系统字体中探测。
     /// </summary>
     public string? PreferredFontPath { get; init; }
 

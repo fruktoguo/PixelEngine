@@ -6,6 +6,9 @@ using Xunit;
 
 namespace PixelEngine.UI.Tests;
 
+/// <summary>
+/// UI 契约测试：视口、模型路径与屏幕栈 API 约定。
+/// </summary>
 public sealed class UiContractTests
 {
     [Theory]
@@ -32,6 +35,9 @@ public sealed class UiContractTests
         Assert.True(type.IsValueType);
     }
 
+    /// <summary>
+    /// 验证Ui Assembly不会Reference Editor Or Scripting。
+    /// </summary>
     [Fact]
     public void UiAssemblyDoesNotReferenceEditorOrScripting()
     {
@@ -42,6 +48,9 @@ public sealed class UiContractTests
         Assert.DoesNotContain("PixelEngine.Scripting", references);
     }
 
+    /// <summary>
+    /// 验证Ui Project References Only Core Gui And Rendering。
+    /// </summary>
     [Fact]
     public void UiProjectReferencesOnlyCoreGuiAndRendering()
     {
@@ -57,6 +66,9 @@ public sealed class UiContractTests
         Assert.Empty(ReadIncludes(project, "PackageReference"));
     }
 
+    /// <summary>
+    /// 验证Ui Public Api Members Have Chinese Xml Documentation。
+    /// </summary>
     [Fact]
     public void UiPublicApiMembersHaveChineseXmlDocumentation()
     {
@@ -80,6 +92,9 @@ public sealed class UiContractTests
         }
     }
 
+    /// <summary>
+    /// 验证Ui Value保持Typed Payload。
+    /// </summary>
     [Fact]
     public void UiValuePreservesTypedPayload()
     {
@@ -95,6 +110,9 @@ public sealed class UiContractTests
         _ = Assert.Throws<InvalidOperationException>(() => scalar.AsInt64());
     }
 
+    /// <summary>
+    /// 验证Rml Ui Value Bridge保持String Handle Payload Without String Pool。
+    /// </summary>
     [Fact]
     public void RmlUiValueBridgePreservesStringHandlePayloadWithoutStringPool()
     {
@@ -109,6 +127,9 @@ public sealed class UiContractTests
         Assert.Equal(new UiStringHandle(77), roundTrip.AsStringHandle());
     }
 
+    /// <summary>
+    /// 验证Ui String Pool Interns Stable Handles And Rejects Invalid Handles。
+    /// </summary>
     [Fact]
     public void UiStringPoolInternsStableHandlesAndRejectsInvalidHandles()
     {
@@ -134,6 +155,9 @@ public sealed class UiContractTests
         Assert.False(pool.TryGetString(first, out _));
     }
 
+    /// <summary>
+    /// 验证Ui Model Path Name Maps Dotted Paths To Legal Collision Resistant Variables。
+    /// </summary>
     [Fact]
     public void UiModelPathNameMapsDottedPathsToLegalCollisionResistantVariables()
     {

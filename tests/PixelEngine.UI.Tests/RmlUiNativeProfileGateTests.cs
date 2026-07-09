@@ -3,8 +3,14 @@ using Xunit;
 
 namespace PixelEngine.UI.Tests;
 
+/// <summary>
+/// RmlUi 原生配置门控测试：特性开关与降级路径。
+/// </summary>
 public sealed class RmlUiNativeProfileGateTests
 {
+    /// <summary>
+    /// 验证Desktop Gl33Allows Rml Ui Gl3Renderer。
+    /// </summary>
     [Fact]
     public void DesktopGl33AllowsRmlUiGl3Renderer()
     {
@@ -28,6 +34,9 @@ public sealed class RmlUiNativeProfileGateTests
         Assert.Equal(RmlUiNativeProfileGate.NativeProfileDesktopGl3, RmlUiNativeProfileGate.ToNativeProfileId(decision.RequestedProfile));
     }
 
+    /// <summary>
+    /// 验证Gles Angle Request选择Gles3Angle Native Profile。
+    /// </summary>
     [Fact]
     public void GlesAngleRequestSelectsGles3AngleNativeProfile()
     {
@@ -56,6 +65,9 @@ public sealed class RmlUiNativeProfileGateTests
         Assert.Equal(RmlUiNativeProfileGate.NativeProfileGles3Angle, RmlUiNativeProfileGate.ToNativeProfileId(decision.RequestedProfile));
     }
 
+    /// <summary>
+    /// 验证Angle Desktop Looking Context选择Gles3Angle Instead Of Desktop Gl3。
+    /// </summary>
     [Fact]
     public void AngleDesktopLookingContextSelectsGles3AngleInsteadOfDesktopGl3()
     {
@@ -75,6 +87,9 @@ public sealed class RmlUiNativeProfileGateTests
         Assert.Equal("RmlUi_Renderer_GLES3_ANGLE", decision.NativeRendererSymbol);
     }
 
+    /// <summary>
+    /// 验证Explicit Gles Angle Backend Request选择Gles Profile Even When Capability String Looks Desktop。
+    /// </summary>
     [Fact]
     public void ExplicitGlesAngleBackendRequestSelectsGlesProfileEvenWhenCapabilityStringLooksDesktop()
     {
@@ -97,6 +112,9 @@ public sealed class RmlUiNativeProfileGateTests
         Assert.Equal("#version 300 es", decision.ShaderVersionDirective);
     }
 
+    /// <summary>
+    /// 验证Desktop Gl Below33回退With Version Reason。
+    /// </summary>
     [Fact]
     public void DesktopGlBelow33FallsBackWithVersionReason()
     {
@@ -119,6 +137,9 @@ public sealed class RmlUiNativeProfileGateTests
         Assert.Equal("#version 330 core", decision.ShaderVersionDirective);
     }
 
+    /// <summary>
+    /// 验证Gles Below30回退With Es Version Reason。
+    /// </summary>
     [Fact]
     public void GlesBelow30FallsBackWithEsVersionReason()
     {

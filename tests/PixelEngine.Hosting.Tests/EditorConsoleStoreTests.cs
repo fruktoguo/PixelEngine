@@ -8,6 +8,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// plan/19 Console 产品面自动化切片测试。
+/// 不变式：控制台条目按级别归档、环形缓冲不丢关键错误行。
 /// </summary>
 public sealed class EditorConsoleStoreTests
 {
@@ -17,6 +18,7 @@ public sealed class EditorConsoleStoreTests
     [Fact]
     public void SnapshotFiltersByCategorySeveritySourceTextAndTimestamp()
     {
+        // Arrange：准备输入与初始状态
         DateTimeOffset start = new(2026, 7, 6, 0, 0, 0, TimeSpan.Zero);
         EditorConsoleStore store = new();
         store.Add(new EditorConsoleEntry(start, EditorConsoleCategory.Build, EditorConsoleSeverity.Info, "build-player", "native ready"));
@@ -33,6 +35,7 @@ public sealed class EditorConsoleStoreTests
             To = start.AddMinutes(90),
         });
 
+        // Assert：验证预期结果
         EditorConsoleEntry entry = Assert.Single(filtered);
         Assert.Equal(EditorConsoleCategory.Asset, entry.Category);
         Assert.Equal(EditorConsoleSeverity.Error, entry.Severity);
@@ -47,6 +50,7 @@ public sealed class EditorConsoleStoreTests
     [Fact]
     public void SnapshotAppliesCapacityEvictionAndStableTimestampOrdering()
     {
+        // Arrange：准备输入与初始状态
         DateTimeOffset start = new(2026, 7, 6, 0, 0, 0, TimeSpan.Zero);
         EditorConsoleStore capacityStore = new(capacity: 8);
         for (int i = 0; i < 10; i++)
@@ -55,6 +59,7 @@ public sealed class EditorConsoleStoreTests
         }
 
         EditorConsoleEntry[] retained = capacityStore.Snapshot();
+        // Assert：验证预期结果
         Assert.Equal(8, retained.Length);
         Assert.Equal("event-2", retained[0].Text);
         Assert.Equal("event-9", retained[^1].Text);
@@ -74,6 +79,7 @@ public sealed class EditorConsoleStoreTests
     [Fact]
     public void ConsoleSinkHelpersClassifyBuildAssetUiAndScriptDiagnostics()
     {
+        // Arrange：准备输入与初始状态
         DateTimeOffset timestamp = new(2026, 7, 6, 0, 0, 0, TimeSpan.Zero);
         EditorConsoleStore store = new();
         store.AddBuildEvent(new BuildProgressEvent(BuildEventKind.Log, BuildPhase.Audit, 0.9f, BuildLogLevel.Error, "stderr audit line", timestamp));
@@ -103,6 +109,7 @@ public sealed class EditorConsoleStoreTests
             ["warning CS0168", "error CS1002"]));
 
         EditorConsoleEntry[] entries = store.Snapshot();
+        // Assert：验证预期结果
         Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Build && entry.Severity == EditorConsoleSeverity.Error && entry.Text.Contains("stderr audit line", StringComparison.Ordinal));
         Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Build && entry.Source == "build-result" && entry.Severity == EditorConsoleSeverity.Error && entry.Text.Contains("build summary failed", StringComparison.Ordinal));
         Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Build && entry.Severity == EditorConsoleSeverity.Warning && entry.Text == "result warning");
@@ -122,6 +129,7 @@ public sealed class EditorConsoleStoreTests
     [Fact]
     public void BuildSettingsPanelSinksPreflightProgressAndResultIntoConsole()
     {
+        // Arrange：准备输入与初始状态
         using TempDir temp = new();
         EditorProject project = EditorProject.CreateNew(Path.Combine(temp.Path, "ConsoleProject"), "Console Project");
         EditorConsoleStore console = new();
@@ -143,6 +151,7 @@ public sealed class EditorConsoleStoreTests
         };
         BuildSettingsPanel panel = new(project, service, console);
 
+        // Assert：验证预期结果
         Assert.True(panel.TryStartScriptedBuildProbe(Path.Combine(temp.Path, "out"), runAfterBuild: false, out string diagnostic), diagnostic);
         Assert.True(SpinWait.SpinUntil(
             () =>
@@ -194,7 +203,7 @@ public sealed class EditorConsoleStoreTests
         public TempDir()
         {
             Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "pixelengine-console-tests", Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
+            _ = Directory.CreateDirectory(Path);
         }
 
         public string Path { get; }

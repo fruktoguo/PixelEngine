@@ -255,6 +255,7 @@ public sealed class TemperatureField
         ArgumentNullException.ThrowIfNull(chunks);
         ArgumentNullException.ThrowIfNull(materials);
         _lastConductStepVectorizedCellCount = 0;
+        // 降级模式跳过传导与相变，仅保留接触式火传播路径。
         if (ContactFireOnly)
         {
             LastConductStepUsedJobSystem = false;
@@ -271,6 +272,7 @@ public sealed class TemperatureField
             _activeConductWorldSeed = worldSeed;
             try
             {
+                // 活跃行较少时回退单线程，避免 JobSystem 调度开销盖过传导收益。
                 if (ShouldConductSingleThread(jobs, rowCount))
                 {
                     LastConductStepUsedJobSystem = false;
@@ -296,6 +298,7 @@ public sealed class TemperatureField
             LastConductStepWorkerCount = 0;
         }
 
+        // 传导写入 scratch，帧末 ping-pong 交换后再向环境冷却并剔除近零 block。
         foreach (TemperatureBlock block in _blocks.Values)
         {
             block.Swap();
@@ -314,6 +317,7 @@ public sealed class TemperatureField
         PruneAmbientBlocks();
     }
 
+    // 分批剔除近环境温度 block，避免单次遍历中修改 Dictionary 枚举器。
     private void PruneAmbientBlocks()
     {
         while (true)
@@ -373,6 +377,7 @@ public sealed class TemperatureField
         {
             int baseX = chunk.Coord.X << EngineConstants.ChunkSizeLog2;
             int baseY = chunk.Coord.Y << EngineConstants.ChunkSizeLog2;
+            // 有温度 block 或 chunk 无 current dirty 时扫全 chunk，否则只扫 CA dirty 区。
             DirtyRect rect = chunk.CurrentDirty.IsEmpty || _blocks.ContainsKey(chunk.Coord)
                 ? DirtyRect.Full
                 : chunk.CurrentDirty;
@@ -450,6 +455,7 @@ public sealed class TemperatureField
             capacityRow[tx] = MathF.Max(AverageHeatCapacity(chunk, materials, tx, ty), 0.0001f);
         }
 
+        // 行内传导概率全满且非边界行时走 SIMD 内区，边界列仍标量处理跨界采样。
         if (SimdAvailable && ty > 0 && ty < BlockSize - 1 && CanVectorizeConductRow(conductChanceRow))
         {
             ConductCellScalar(block, conductChanceRow, capacityRow, worldBaseX, worldBaseY, 0, ty, frameIndex, worldSeed);
@@ -631,6 +637,7 @@ public sealed class TemperatureField
 
         int worldX = worldBaseX + (tx * Downscale);
         int worldY = worldBaseY + (ty * Downscale);
+        // 非满传导材质按确定性 hash 概率门控，避免每 tick 全量 5-point 更新。
         if (chance != byte.MaxValue && ConductRandomByte(worldX, worldY, frameIndex, worldSeed) >= chance)
         {
             block.WriteScratch(index, center);
@@ -833,6 +840,7 @@ public sealed class TemperatureField
             _currentHalf!.CopyTo(_scratchHalf!, 0);
         }
 
+        // ping-pong：传导结果在 scratch，帧末交换 current/scratch 指针。
         public void Swap()
         {
             if (StorageKind == TemperatureStorageKind.Float32)

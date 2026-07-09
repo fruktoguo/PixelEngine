@@ -37,7 +37,7 @@ public unsafe class CoreAllocationBenchmarks
     }
 
     /// <summary>
-    /// ArrayPool 租借包装稳态租还。
+    /// 验证Rented Array Rent Dispose。
     /// </summary>
     [Benchmark]
     public void RentedArrayRentDispose()
@@ -47,7 +47,7 @@ public unsafe class CoreAllocationBenchmarks
     }
 
     /// <summary>
-    /// FrameProfiler using-scope 计时。
+    /// 验证Frame Profiler Measure。
     /// </summary>
     [Benchmark]
     public void FrameProfilerMeasure()
@@ -56,7 +56,7 @@ public unsafe class CoreAllocationBenchmarks
     }
 
     /// <summary>
-    /// JobSystem ParallelFor 稳态派发。
+    /// 验证Job System Parallel For。
     /// </summary>
     [Benchmark]
     public int JobSystemParallelFor()
@@ -66,7 +66,7 @@ public unsafe class CoreAllocationBenchmarks
     }
 
     /// <summary>
-    /// JobSystem 多 worker ParallelRange 稳态派发。
+    /// 验证Job System Parallel Range Multi Worker。
     /// </summary>
     [Benchmark]
     public int JobSystemParallelRangeMultiWorker()
@@ -76,7 +76,7 @@ public unsafe class CoreAllocationBenchmarks
     }
 
     /// <summary>
-    /// JobSystem 多 worker ParallelRangeRaw 稳态派发。
+    /// 验证Job System Parallel Range Raw Multi Worker。
     /// </summary>
     [Benchmark]
     public int JobSystemParallelRangeRawMultiWorker()

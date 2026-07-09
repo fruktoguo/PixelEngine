@@ -269,6 +269,7 @@ public sealed unsafe partial class JobSystem : IDisposable
         }
     }
 
+    // 同一 JobSystem 实例同时只允许一个未 Wait 的 batch，避免 worker 竞争 _currentBatch。
     private void EnterDispatch()
     {
         ThrowIfDisposed();
@@ -316,6 +317,7 @@ public sealed unsafe partial class JobSystem : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
     }
 
+    // 持久 worker 主循环：等待 _batchVersion 变化后参与当前 fork-join batch 的区间窃取。
     private void WorkerLoop(int workerIndex)
     {
         long seenVersion = 0;
@@ -371,6 +373,7 @@ public sealed unsafe partial class JobSystem : IDisposable
             _completed.Reset();
         }
 
+        // 各 worker 通过 Interlocked 窃取子区间；最后一个完成的 worker 置位 _completed。
         public void Execute(int workerIndex)
         {
             try

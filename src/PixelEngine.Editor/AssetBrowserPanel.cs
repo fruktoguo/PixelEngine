@@ -188,6 +188,7 @@ public sealed class AssetBrowserPanel(
             return false;
         }
 
+        // 拖拽语义绑定 stable assetId，移动时须与当前列表项交叉校验以防陈旧 payload。
         payload = new AssetBrowserDragPayload(item.Value.AssetId, item.Value.Path, item.Value.Kind);
         Status = $"拖拽 {item.Value.Path}";
         return true;
@@ -336,6 +337,7 @@ public sealed class AssetBrowserPanel(
             return false;
         }
 
+        // 目标文件夹归一化为 content 逻辑路径，再拼接文件名生成新 logical path。
         if (!TryNormalizeTargetFolder(targetFolderPath, out string normalizedFolder, out string diagnostic))
         {
             Status = diagnostic;
@@ -417,6 +419,7 @@ public sealed class AssetBrowserPanel(
 
         ApplyFilter();
 
+        // 首帧或空缓存时主动 Refresh；列表绘制与 Shell 拖拽 drop 共用同一份筛选快照。
         IReadOnlyList<AssetBrowserItem> assets = FilteredAssets.Count == 0 && LastAssets.Count == 0
             ? Refresh()
             : FilteredAssets;
@@ -440,6 +443,7 @@ public sealed class AssetBrowserPanel(
         _ = ImGui.Selectable(label, false);
         if (ImGui.BeginDragDropTarget())
         {
+            // Shell 层 drop 服务消费 typed payload；此处只校验 assetId 并委托移动服务。
             if (AssetBrowserDragPayloadImGui.TryAcceptPayload(out AssetBrowserDragPayload payload))
             {
                 _ = TryMoveDragPayloadToFolder(payload, folder.Path);
@@ -597,6 +601,7 @@ public sealed class AssetBrowserPanel(
             : result.Diagnostic;
         if (result.RequiresConfirmation)
         {
+            // 删除需二次确认时保留 pending 状态，由 UI 按钮触发 Confirm 路径。
             _pendingDeleteRequest = request with { Confirmed = false };
             return false;
         }

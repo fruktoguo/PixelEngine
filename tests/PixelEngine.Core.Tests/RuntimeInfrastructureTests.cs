@@ -13,7 +13,7 @@ namespace PixelEngine.Core.Tests;
 public sealed class RuntimeInfrastructureTests
 {
     /// <summary>
-    /// 验证 CounterRng 纯函数式输出与基础雪崩性。
+    /// 验证Counter Rng Is Deterministic And Avalanches Bits。
     /// </summary>
     [Fact]
     public void CounterRngIsDeterministicAndAvalanchesBits()
@@ -27,7 +27,7 @@ public sealed class RuntimeInfrastructureTests
     }
 
     /// <summary>
-    /// 验证 chunk RNG 工厂为不同 chunk 产生不同流。
+    /// 验证Rng Factory Creates Different Chunk Streams。
     /// </summary>
     [Fact]
     public void RngFactoryCreatesDifferentChunkStreams()
@@ -39,7 +39,7 @@ public sealed class RuntimeInfrastructureTests
     }
 
     /// <summary>
-    /// 验证 SPSC ring buffer 满队列与 drain 语义。
+    /// 验证Ring Buffer Reports Full And Drains In Order。
     /// </summary>
     [Fact]
     public void RingBufferReportsFullAndDrainsInOrder()
@@ -56,7 +56,7 @@ public sealed class RuntimeInfrastructureTests
     }
 
     /// <summary>
-    /// 验证 MPSC ring buffer 多生产者不丢失事件。
+    /// 验证MPSC 环形缓冲Buffer Accepts Concurrent Producers。
     /// </summary>
     [Fact]
     public async Task MpscRingBufferAcceptsConcurrentProducers()
@@ -84,7 +84,7 @@ public sealed class RuntimeInfrastructureTests
     }
 
     /// <summary>
-    /// 验证 FrameClock 不追帧且 30Hz 模式隔帧执行。
+    /// 验证Frame Clock Never Runs More Than One Sim Step Per Frame。
     /// </summary>
     [Fact]
     public void FrameClockNeverRunsMoreThanOneSimStepPerFrame()
@@ -107,7 +107,7 @@ public sealed class RuntimeInfrastructureTests
     }
 
     /// <summary>
-    /// 验证暂停态 render-only 帧只推进渲染帧，不推进 sim/physics tick。
+    /// 验证Frame Clock Render Only Frame不会Advance Sim Tick。
     /// </summary>
     [Fact]
     public void FrameClockRenderOnlyFrameDoesNotAdvanceSimTick()
@@ -125,7 +125,7 @@ public sealed class RuntimeInfrastructureTests
     }
 
     /// <summary>
-    /// 验证强制单步帧不受 30Hz 隔帧规则影响，始终执行恰好一个 sim tick。
+    /// 验证Frame Clock Forced Sim Frame Runs One Sim Tick Even When Downscaled。
     /// </summary>
     [Fact]
     public void FrameClockForcedSimFrameRunsOneSimTickEvenWhenDownscaled()
@@ -143,7 +143,7 @@ public sealed class RuntimeInfrastructureTests
     }
 
     /// <summary>
-    /// 验证读档恢复帧计数不会触发补步，并拒绝非法 tick 关系。
+    /// 验证Frame Clock Restore Counters Sets Saved Frame State。
     /// </summary>
     [Fact]
     public void FrameClockRestoreCountersSetsSavedFrameState()
@@ -160,7 +160,7 @@ public sealed class RuntimeInfrastructureTests
     }
 
     /// <summary>
-    /// 验证 BudgetMonitor 连续超预算后置位，回落后复位。
+    /// 验证Budget Monitor Tracks Sustained Over Budget Frames。
     /// </summary>
     [Fact]
     public void BudgetMonitorTracksSustainedOverBudgetFrames()
@@ -180,7 +180,7 @@ public sealed class RuntimeInfrastructureTests
     }
 
     /// <summary>
-    /// 验证 FrameProfiler 覆盖全部主相位并能平均历史。
+    /// 验证Frame Profiler Records All Main Phases。
     /// </summary>
     [Fact]
     public void FrameProfilerRecordsAllMainPhases()
@@ -204,7 +204,7 @@ public sealed class RuntimeInfrastructureTests
     }
 
     /// <summary>
-    /// 验证 FrameProfiler 接受全部细分相位，包含渲染管线诊断项。
+    /// 验证Frame Profiler Records All Sub Phases。
     /// </summary>
     [Fact]
     public void FrameProfilerRecordsAllSubPhases()

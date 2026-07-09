@@ -1,5 +1,8 @@
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// GameObject 与 Prefab 资产的链接及 override 列表。
+/// </summary>
 internal sealed class EditorPrefabLink
 {
     public string? AssetId { get; set; }
@@ -27,6 +30,7 @@ internal sealed class EditorPrefabLink
     }
 }
 
+/// <summary>Prefab 实例相对源资产的单条属性 override。</summary>
 internal sealed class EditorPrefabOverride
 {
     public string? SourceStableId { get; set; }

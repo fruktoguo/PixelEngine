@@ -3,8 +3,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// 渲染后端选择器测试：偏好顺序与自动回退。
+/// </summary>
 public sealed class RenderBackendSelectorTests
 {
+    /// <summary>
+    /// 验证Auto Preference Tries Desktop Then Gles。
+    /// </summary>
     [Fact]
     public void AutoPreferenceTriesDesktopThenGles()
     {
@@ -15,6 +21,9 @@ public sealed class RenderBackendSelectorTests
         Assert.Equal(RenderBackend.GlEs30Angle, order[1]);
     }
 
+    /// <summary>
+    /// 验证Desktop Options Request Open Gl33Core。
+    /// </summary>
     [Fact]
     public void DesktopOptionsRequestOpenGl33Core()
     {
@@ -41,6 +50,9 @@ public sealed class RenderBackendSelectorTests
         Assert.False(windowOptions.ShouldSwapAutomatically);
     }
 
+    /// <summary>
+    /// 验证Gles Options Request Open Gles30。
+    /// </summary>
     [Fact]
     public void GlesOptionsRequestOpenGles30()
     {
@@ -57,6 +69,9 @@ public sealed class RenderBackendSelectorTests
         Assert.Equal(new APIVersion(3, 0), windowOptions.API.Version);
     }
 
+    /// <summary>
+    /// 验证Window Timing Options Are Forwarded To Silk。
+    /// </summary>
     [Fact]
     public void WindowTimingOptionsAreForwardedToSilk()
     {
@@ -75,6 +90,9 @@ public sealed class RenderBackendSelectorTests
         Assert.False(windowOptions.ShouldSwapAutomatically);
     }
 
+    /// <summary>
+    /// 验证Rejects Invalid Window Timing Rates。
+    /// </summary>
     [Fact]
     public void RejectsInvalidWindowTimingRates()
     {

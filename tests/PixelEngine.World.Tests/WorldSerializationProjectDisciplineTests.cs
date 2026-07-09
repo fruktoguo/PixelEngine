@@ -6,6 +6,7 @@ namespace PixelEngine.World.Tests;
 
 /// <summary>
 /// World / Serialization 项目的工程纪律测试。
+/// 不变式：World/Serialization 项目引用与版本迁移链可审计。
 /// </summary>
 public sealed class WorldSerializationProjectDisciplineTests
 {
@@ -26,6 +27,8 @@ public sealed class WorldSerializationProjectDisciplineTests
     /// 验证 plan/07 允许的 World / Serialization 项目引用方向。
     /// </summary>
     [Fact]
+
+    // —— 工程引用与 solution 纪律 ——
     public void WorldAndSerializationKeepExpectedProjectReferences()
     {
         string root = FindRepositoryRoot();

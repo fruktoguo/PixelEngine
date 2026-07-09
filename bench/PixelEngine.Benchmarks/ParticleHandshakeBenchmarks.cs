@@ -116,7 +116,7 @@ public class ParticleIntegrationBenchmark
     }
 
     /// <summary>
-    /// 只读遍历活跃前缀，验证 ReadOnlySpan 迭代形态。
+    /// 验证Read Active Prefix。
     /// </summary>
     [Benchmark]
     public float ReadActivePrefix()

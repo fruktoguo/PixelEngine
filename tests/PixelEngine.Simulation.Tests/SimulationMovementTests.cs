@@ -5,6 +5,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Simulation 节点 3 的单线程 movement 与 parity 测试。
+/// 不变式：单线程 movement 与 parity 推进可复现。
 /// </summary>
 public sealed class SimulationMovementTests
 {
@@ -21,6 +22,7 @@ public sealed class SimulationMovementTests
     [Fact]
     public void StepCaMovesPowderDownAndMarksParityAndDirty()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         SetCurrentDirty(center, DirtyRect.Full);
         Set(center, 10, 10, Sand);
@@ -29,6 +31,7 @@ public sealed class SimulationMovementTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(CellFlags.Parity, kernel.CurrentParity);
         Assert.Equal(1U, kernel.FrameIndex);
         Assert.Equal(0, Get(center, 10, 10));
@@ -44,6 +47,7 @@ public sealed class SimulationMovementTests
     [Fact]
     public void StepCaDoesNotMovePowderHorizontallyOnFlatSupport()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         SetCurrentDirty(center, DirtyRect.Full);
         Set(center, 10, 10, Sand);
@@ -54,6 +58,7 @@ public sealed class SimulationMovementTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(Sand, Get(center, 10, 10));
         Assert.Equal(0, Get(center, 9, 10));
         Assert.Equal(0, Get(center, 11, 10));
@@ -65,6 +70,7 @@ public sealed class SimulationMovementTests
     [Fact]
     public void StepCaCollapsesPowderDownToObstacleInOneTick()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         SetCurrentDirty(center, DirtyRect.Full);
         Set(center, 10, 10, Sand);
@@ -73,6 +79,7 @@ public sealed class SimulationMovementTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(0, Get(center, 10, 10));
         Assert.Equal(0, Get(center, 10, 11));
         Assert.Equal(Sand, Get(center, 10, 29));
@@ -103,6 +110,7 @@ public sealed class SimulationMovementTests
     [Fact]
     public void StepCaAlternatesPowderDiagonalBiasAcrossFrames()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         SetCurrentDirty(center, DirtyRect.Full);
         Set(center, 10, 10, Sand);
@@ -111,6 +119,7 @@ public sealed class SimulationMovementTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(Sand, Get(center, 11, 11));
 
         Set(center, 11, 11, 0);
@@ -133,6 +142,7 @@ public sealed class SimulationMovementTests
     [Fact]
     public void StepCaUsesParityToPreventMovedLiquidFromMovingTwice()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         SetCurrentDirty(center, DirtyRect.Full);
         Set(center, 10, 10, Water);
@@ -143,6 +153,7 @@ public sealed class SimulationMovementTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(0, Get(center, 10, 10));
         Assert.Equal(Water, Get(center, 13, 10));
         Assert.Equal(0, Get(center, 16, 10));
@@ -197,6 +208,7 @@ public sealed class SimulationMovementTests
     [Fact]
     public void StepCaDoesNotMoveFireOrSolid()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         SetCurrentDirty(center, DirtyRect.Full);
         Set(center, 30, 30, Fire);
@@ -205,6 +217,7 @@ public sealed class SimulationMovementTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(Fire, Get(center, 30, 30));
         Assert.Equal(Solid, Get(center, 31, 30));
         Assert.True(CellFlags.MatchesFrame(GetFlags(center, 30, 30), kernel.CurrentParity));
@@ -256,6 +269,7 @@ public sealed class SimulationMovementTests
     [Fact]
     public void StepCaReportsRigidOwnedTargetDamageAndConsumesOwnedFlag()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         SetCurrentDirty(center, DirtyRect.Full);
         Set(center, 10, 10, Sand);
@@ -266,6 +280,7 @@ public sealed class SimulationMovementTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(1, damageSink.Count);
         Assert.Equal((10, 11), damageSink.Last);
         Assert.Equal(Sand, Get(center, 10, 11));
@@ -279,6 +294,7 @@ public sealed class SimulationMovementTests
     [Fact]
     public void StepCaMarksKeepAliveIncomingSlotWhenMovingAcrossChunkBoundary()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Chunk south = source.GetRequired(new ChunkCoord(0, 1));
         SetCurrentDirty(center, DirtyRect.Full);
@@ -287,6 +303,7 @@ public sealed class SimulationMovementTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(0, Get(center, 10, 63));
         Assert.Equal(Sand, Get(south, 10, EngineConstants.MoveCap - 1));
         Assert.Equal(DirtyRect.Empty, south.WorkingDirty);
@@ -299,6 +316,7 @@ public sealed class SimulationMovementTests
     [Fact]
     public void StepCaClampsLiquidDispersionToMoveCap()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         SetCurrentDirty(center, DirtyRect.Full);
         Set(center, 10, 10, Water);
@@ -309,6 +327,7 @@ public sealed class SimulationMovementTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(0, Get(center, 10, 10));
         Assert.Equal(Water, Get(center, 10 + EngineConstants.MoveCap, 10));
         Assert.Equal(0, Get(center, 10 + EngineConstants.MoveCap + 1, 10));

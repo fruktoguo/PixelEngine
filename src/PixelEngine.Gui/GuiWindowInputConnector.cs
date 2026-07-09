@@ -103,13 +103,13 @@ public sealed class GuiWindowInputConnector : IDisposable
         ForwardMousePosition(position);
     }
 
-    private void OnMouseDown(IMouse mouse, Silk.NET.Input.MouseButton button)
+    private void OnMouseDown(IMouse mouse, MouseButton button)
     {
         ForwardMousePosition(mouse.Position);
         _input.MouseButton(button, down: true);
     }
 
-    private void OnMouseUp(IMouse mouse, Silk.NET.Input.MouseButton button)
+    private void OnMouseUp(IMouse mouse, MouseButton button)
     {
         ForwardMousePosition(mouse.Position);
         _input.MouseButton(button, down: false);
@@ -121,6 +121,7 @@ public sealed class GuiWindowInputConnector : IDisposable
         _input.MouseWheel(wheel.X, wheel.Y);
     }
 
+    // 逻辑坐标乘 framebuffer scale，与 ImGui DisplayFramebufferScale 对齐。
     private void ForwardMousePosition(Vector2 position)
     {
         _input.MouseMoveFramebuffer(

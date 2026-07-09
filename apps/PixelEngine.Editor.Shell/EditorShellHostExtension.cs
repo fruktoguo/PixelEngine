@@ -11,6 +11,9 @@ using PixelEngine.UI;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// Hosting 扩展：将 Editor Shell 接入 Engine 的输入、UI present 与 Game View 契约。
+/// </summary>
 internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorInputCaptureSource, IGameUiInputSourceFactory, IUiPresentTargetProvider
 {
     private readonly EditorProject _project;
@@ -32,7 +35,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
         _project = project ?? throw new ArgumentNullException(nameof(project));
         _app = app ?? throw new ArgumentNullException(nameof(app));
         _editor = new EditorApp(
-            new PixelEngine.Editor.HexaImGuiBackend(),
+            new HexaImGuiBackend(),
             new EditorAppOptions
             {
                 LayoutPath = EditorShellWindow.DefaultLayoutPath,
@@ -135,6 +138,9 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             throw new InvalidOperationException("Player Settings 面板尚未注册。");
     }
 
+    /// <summary>
+    /// 绑定场景模型、撤销栈与 Prefab 存储，供后续面板注册使用。
+    /// </summary>
     public void ConfigureAuthoring(EditorSceneModel sceneModel, EditorUndoStack undoStack, EditorPrefabAssetStore prefabs)
     {
         if (_panelsRegistered)
@@ -147,12 +153,16 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
         _prefabs = prefabs ?? throw new ArgumentNullException(nameof(prefabs));
     }
 
+    /// <summary>
+    /// 将 Editor 面板、输入桥接与渲染桥接挂载到 Engine 窗口运行时。
+    /// </summary>
     public IDisposable? Attach(Engine engine, RenderWindow window, RenderPipeline pipeline)
     {
         ArgumentNullException.ThrowIfNull(engine);
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(pipeline);
         engine.Context.RegisterService<IEditorInputCaptureSource>(this);
+        // 注册层级/Inspector/资产浏览器/构建设置等 ImGui 面板
         RegisterPanels(engine, pipeline);
         EditorWindowInputConnector input = new(window, _editor.Input);
         Bridge = EditorRenderBridge.AttachIfEnabled(
@@ -167,8 +177,8 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
 
     public bool TryGetInputCapture(out EditorHostInputCapture capture)
     {
-        PixelEngine.Editor.EditorInputSnapshot editorCapture = _editor.Input.Capture;
-        PixelEngine.Editor.EditorMode mode = CapturePlayMode();
+        EditorInputSnapshot editorCapture = _editor.Input.Capture;
+        EditorMode mode = CapturePlayMode();
         if (_sceneViewPanel is { Visible: true, InputFocused: true })
         {
             capture = EditorGameViewContract.ResolveEditorInputCapture(
@@ -205,11 +215,11 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
         return _gameUiPresentTargetProvider.TryGetPresentTarget(out target);
     }
 
-    private PixelEngine.Editor.EditorMode CapturePlayMode()
+    private EditorMode CapturePlayMode()
     {
-        return _app.CurrentSession?.CaptureEditorPlaySession().Mode == PixelEngine.Hosting.EditorMode.Play
-            ? PixelEngine.Editor.EditorMode.Play
-            : PixelEngine.Editor.EditorMode.Edit;
+        return _app.CurrentSession?.CaptureEditorPlaySession().Mode == Hosting.EditorMode.Play
+            ? EditorMode.Play
+            : EditorMode.Edit;
     }
 
     private void RegisterPanels(Engine engine, RenderPipeline pipeline)
@@ -374,12 +384,12 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
         }
     }
 
-    private sealed class EditorSimulationControlAdapter(EditorShellApp app) : PixelEngine.Editor.ISimulationControlService
+    private sealed class EditorSimulationControlAdapter(EditorShellApp app) : ISimulationControlService
     {
-        public PixelEngine.Editor.SimulationControlSnapshot Capture()
+        public SimulationControlSnapshot Capture()
         {
-            PixelEngine.Hosting.SimulationControlSnapshot snapshot = app.CurrentSession?.CaptureSimulationControl() ?? default;
-            return new PixelEngine.Editor.SimulationControlSnapshot(
+            Hosting.SimulationControlSnapshot snapshot = app.CurrentSession?.CaptureSimulationControl() ?? default;
+            return new SimulationControlSnapshot(
                 snapshot.IsPlaying,
                 snapshot.SimHz,
                 snapshot.FrameIndex,
@@ -408,67 +418,67 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
         }
     }
 
-    private sealed class EditorPlaySessionAdapter(EditorShellApp app) : PixelEngine.Editor.IEditorPlaySessionService
+    private sealed class EditorPlaySessionAdapter(EditorShellApp app) : IEditorPlaySessionService
     {
-        public PixelEngine.Editor.EditorPlaySessionSnapshot Capture()
+        public EditorPlaySessionSnapshot Capture()
         {
             return app.CurrentSession is { } session
                 ? Convert(session.CaptureEditorPlaySession())
-                : new PixelEngine.Editor.EditorPlaySessionSnapshot(
-                    PixelEngine.Editor.EditorMode.Edit,
-                    PixelEngine.Editor.EditorPlaySource.CurrentState,
+                : new EditorPlaySessionSnapshot(
+                    EditorMode.Edit,
+                    EditorPlaySource.CurrentState,
                     false,
                     "没有打开工程。");
         }
 
-        public PixelEngine.Editor.EditorPlaySessionResult EnterPlayCurrent()
+        public EditorPlaySessionResult EnterPlayCurrent()
         {
             return app.CurrentSession is { } session
                 ? Convert(session.EnterPlayCurrent())
                 : MissingProjectResult();
         }
 
-        public PixelEngine.Editor.EditorPlaySessionResult EnterPlayTemporary()
+        public EditorPlaySessionResult EnterPlayTemporary()
         {
             return app.CurrentSession is { } session
                 ? Convert(session.EnterPlayTemporary())
                 : MissingProjectResult();
         }
 
-        public PixelEngine.Editor.EditorPlaySessionResult ExitPlay()
+        public EditorPlaySessionResult ExitPlay()
         {
             return app.CurrentSession is { } session
                 ? Convert(session.ExitEditorPlay())
                 : MissingProjectResult();
         }
 
-        private static PixelEngine.Editor.EditorPlaySessionResult MissingProjectResult()
+        private static EditorPlaySessionResult MissingProjectResult()
         {
-            PixelEngine.Editor.EditorPlaySessionSnapshot snapshot = new(
-                PixelEngine.Editor.EditorMode.Edit,
-                PixelEngine.Editor.EditorPlaySource.CurrentState,
+            EditorPlaySessionSnapshot snapshot = new(
+                EditorMode.Edit,
+                EditorPlaySource.CurrentState,
                 false,
                 "没有打开工程。");
-            return new PixelEngine.Editor.EditorPlaySessionResult(false, snapshot, snapshot.StatusMessage);
+            return new EditorPlaySessionResult(false, snapshot, snapshot.StatusMessage);
         }
 
-        private static PixelEngine.Editor.EditorPlaySessionResult Convert(PixelEngine.Hosting.EditorPlaySessionResult result)
+        private static EditorPlaySessionResult Convert(Hosting.EditorPlaySessionResult result)
         {
-            return new PixelEngine.Editor.EditorPlaySessionResult(
+            return new EditorPlaySessionResult(
                 result.Succeeded,
                 Convert(result.Snapshot),
                 result.Message);
         }
 
-        private static PixelEngine.Editor.EditorPlaySessionSnapshot Convert(PixelEngine.Hosting.EditorPlaySessionSnapshot snapshot)
+        private static EditorPlaySessionSnapshot Convert(Hosting.EditorPlaySessionSnapshot snapshot)
         {
-            return new PixelEngine.Editor.EditorPlaySessionSnapshot(
-                snapshot.Mode == PixelEngine.Hosting.EditorMode.Play
-                    ? PixelEngine.Editor.EditorMode.Play
-                    : PixelEngine.Editor.EditorMode.Edit,
-                snapshot.Source == PixelEngine.Hosting.EditorPlaySource.TemporarySnapshot
-                    ? PixelEngine.Editor.EditorPlaySource.TemporarySnapshot
-                    : PixelEngine.Editor.EditorPlaySource.CurrentState,
+            return new EditorPlaySessionSnapshot(
+                snapshot.Mode == Hosting.EditorMode.Play
+                    ? EditorMode.Play
+                    : EditorMode.Edit,
+                snapshot.Source == Hosting.EditorPlaySource.TemporarySnapshot
+                    ? EditorPlaySource.TemporarySnapshot
+                    : EditorPlaySource.CurrentState,
                 snapshot.TemporarySnapshotActive,
                 snapshot.StatusMessage);
         }

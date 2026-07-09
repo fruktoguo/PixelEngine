@@ -37,12 +37,14 @@ public sealed class ReactionEngine(
         byte parityBit,
         byte randomByte)
     {
+        // 任一端 cell 已在本帧更新过则跳过，维持 checkerboard 单写约束。
         if (CellFlags.MatchesFrame(window.GetFlags(wx1, wy1), parityBit) ||
             CellFlags.MatchesFrame(window.GetFlags(wx2, wy2), parityBit))
         {
             return false;
         }
 
+        // packed 表按 materialA 索引查找与 neighbor 的匹配反应。
         ref readonly MaterialDef def = ref _materials.Get(materialA);
         int reactionIndex = _reactions.Find(materialA, materialB, in def);
         if (reactionIndex < 0)
@@ -56,6 +58,7 @@ public sealed class ReactionEngine(
             return false;
         }
 
+        // 酸碱接触走独立腐蚀路径：可累加 Damage 而非直接替换输出材质。
         CorrosionReactionResult corrosion = TryApplyCorrosion(
             ref window,
             wx1,
@@ -77,6 +80,7 @@ public sealed class ReactionEngine(
             return false;
         }
 
+        // 常规反应：双端同时写输出材质并标记 parity。
         ApplyOutput(ref window, wx1, wy1, reaction.OutputA, parityBit);
         ApplyOutput(ref window, wx2, wy2, reaction.OutputB, parityBit);
         EmitSideEffects(reaction, wx1, wy1, wx2, wy2);
@@ -175,6 +179,7 @@ public sealed class ReactionEngine(
         ushort maxIntegrity = _materials.Hot.MaxIntegrity[material];
         if (maxIntegrity != 0)
         {
+            // 腐蚀未击穿完整性时只改 Damage/parity，酸侧可能仅标记已反应。
             int accumulated = Math.Min(byte.MaxValue, window.GetDamage(wx, wy) + effectiveDamage);
             if (accumulated * EngineConstants.DamageIntegrityScale < maxIntegrity)
             {
@@ -198,6 +203,7 @@ public sealed class ReactionEngine(
         window.SetMaterial(wx, wy, material);
         window.SetLifetime(wx, wy, DefaultLifetimeByte(material));
         byte flags = window.GetFlags(wx, wy);
+        // 输出为 fire 材质时置 Burning 位，供燃烧子系统识别。
         flags = IsFireMaterial(material) ? CellFlags.Set(flags, CellFlags.Burning) : CellFlags.Clear(flags, CellFlags.Burning);
         window.SetFlags(wx, wy, CellFlags.SetParity(flags, parityBit));
     }
@@ -248,6 +254,7 @@ public sealed class ReactionEngine(
             return;
         }
 
+        // 热/粒子/烟雾副作用延迟到 Hosting 安全相位，经 sink 落地而非直接写网格。
         IReactionSideEffectSink sink = _sideEffects ??
             throw new InvalidOperationException("反应产生副作用，但 ReactionEngine 未配置 IReactionSideEffectSink。");
         if ((reaction.Flags & ReactionFlags.EmitHeat) != 0)

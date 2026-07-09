@@ -6,6 +6,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// Douglas-Peucker 折线简化测试。
+/// 不变式：简化折线顶点单调、误差阈值内保形。
 /// </summary>
 public sealed class DouglasPeuckerTests
 {

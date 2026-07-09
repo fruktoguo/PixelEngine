@@ -8,6 +8,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// 独立编辑器 authoring 场景物化与命令栈测试。
+/// 不变式：authoring 场景物化可撤销、实体/组件与命令栈一致。
 /// </summary>
 public sealed class EditorShellSceneMaterializationTests
 {
@@ -17,6 +18,7 @@ public sealed class EditorShellSceneMaterializationTests
     [Fact]
     public void ShellFallbackMaterialQueryPublishesFullMaterialInfo()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = new(
         [
             new MaterialDef
@@ -63,6 +65,7 @@ public sealed class EditorShellSceneMaterializationTests
         ]);
         EditorProjectSession.ShellMaterialQuery query = new(materials);
 
+        // Assert：验证预期结果
         Assert.True(query.TryResolve("lava", out MaterialId lavaId));
         MaterialInfo lava = query.GetInfo(lavaId);
         Assert.Equal("Lava", lava.DisplayName);
@@ -95,6 +98,7 @@ public sealed class EditorShellSceneMaterializationTests
     [Fact]
     public void RuntimeProjectionBakesHierarchyAndBindsStableIdsVector2AndMaterialId()
     {
+        // Arrange：准备输入与初始状态
         EditorSceneModel model = EditorSceneModel.FromDocument(new EngineSceneDocument
         {
             FormatVersion = 2,
@@ -136,6 +140,7 @@ public sealed class EditorShellSceneMaterializationTests
 
         EditorSceneRuntimeProjection projection = EditorSceneRuntimeProjection.Build(model, scripts);
 
+        // Assert：验证预期结果
         Assert.True(projection.TryGetRuntimeEntityId(10, out int rootRuntimeId));
         Assert.True(projection.TryGetRuntimeEntityId(20, out int childRuntimeId));
         Assert.NotEqual(rootRuntimeId, childRuntimeId);
@@ -161,6 +166,7 @@ public sealed class EditorShellSceneMaterializationTests
     [Fact]
     public void UndoRedoCommandStackRoundTripsAuthoringMutations()
     {
+        // Arrange：准备输入与初始状态
         EditorSceneModel model = EditorSceneModel.Empty("commands");
         EditorUndoStack undo = new();
 
@@ -182,6 +188,7 @@ public sealed class EditorShellSceneMaterializationTests
         AssertAuthoringAfterRedo(model, rootId, childId);
         for (int i = 0; i < 9; i++)
         {
+            // Assert：验证预期结果
             Assert.True(undo.Undo(model));
         }
 
@@ -202,6 +209,7 @@ public sealed class EditorShellSceneMaterializationTests
     [Fact]
     public void PrefabInstancesApplyOverridesRevertAndRefreshFromAsset()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-prefab-{Guid.NewGuid():N}");
         try
         {
@@ -221,6 +229,7 @@ public sealed class EditorShellSceneMaterializationTests
             undo.Execute(scene, new SetComponentFieldCommand(instance.StableId, componentIndex: 0, fieldName: "Label", value: "override"));
             prefabs.RefreshPrefabInstances(scene);
 
+            // Assert：验证预期结果
             Assert.Equal(9, instance.Transform.X);
             Assert.Equal("override", instance.Components[0].SerializedFields["Label"]);
             undo.Execute(scene, new RevertPrefabOverridesCommand(instance.StableId));
@@ -255,6 +264,7 @@ public sealed class EditorShellSceneMaterializationTests
     [Fact]
     public void NestedPrefabInstancesExpandAndPropagateNestedAssetUpdates()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-nested-prefab-{Guid.NewGuid():N}");
         try
         {
@@ -275,6 +285,7 @@ public sealed class EditorShellSceneMaterializationTests
 
             EditorGameObject parentInstance = prefabs.InstantiatePrefab(scene, ParentPath, parentId: null);
             EditorGameObject childInstance = scene.Get(parentInstance.Children[0]);
+            // Assert：验证预期结果
             Assert.Equal(nestedLeaf.Name, childInstance.Name);
             Assert.Equal("leaf-a", childInstance.Components[0].SerializedFields["Label"]);
 
@@ -305,6 +316,7 @@ public sealed class EditorShellSceneMaterializationTests
     [Fact]
     public void SceneDocumentLoaderBindsScriptAssetReferenceFields()
     {
+        // Arrange：准备输入与初始状态
         EngineSceneDocument document = new()
         {
             FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
@@ -334,8 +346,9 @@ public sealed class EditorShellSceneMaterializationTests
         ScriptAssemblyRegistry scripts = new();
         scripts.Register(typeof(EditorShellProjectionProbe).Assembly);
 
-        PixelEngine.Scripting.Scene scene = EngineSceneDocumentLoader.Build(document, scripts);
+        Scripting.Scene scene = EngineSceneDocumentLoader.Build(document, scripts);
 
+        // Assert：验证预期结果
         ScriptEntityInspection entity = Assert.Single(scene.CaptureInspectionSnapshot());
         EditorShellProjectionProbe probe = Assert.IsType<EditorShellProjectionProbe>(Assert.Single(entity.Components).Behaviour);
         Assert.Equal(new ScriptAssetReference(ScriptAssetKind.Texture, "asset_texture", "textures/sand.png"), probe.TextureReference);
@@ -350,6 +363,7 @@ public sealed class EditorShellSceneMaterializationTests
     [InlineData("_readonlyLabel")]
     public void SerializedFieldBindingRejectsHiddenAndReadonlyFields(string fieldName)
     {
+        // Arrange：准备输入与初始状态
         EngineSceneDocument document = new()
         {
             FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
@@ -379,6 +393,7 @@ public sealed class EditorShellSceneMaterializationTests
         scripts.Register(typeof(EditorShellProjectionProbe).Assembly);
         EditorSceneModel model = EditorSceneModel.FromDocument(document);
 
+        // Assert：验证预期结果
         _ = Assert.Throws<InvalidOperationException>(() => EngineSceneDocumentLoader.Build(document, scripts));
         _ = Assert.Throws<InvalidOperationException>(() => EditorSceneRuntimeProjection.Build(model, scripts));
     }
@@ -462,25 +477,20 @@ public sealed class EditorShellSceneMaterializationTests
         /// </summary>
         public ScriptAssetReference TextureReference { get; set; }
 
-        /// <summary>
-        /// 测试 private SerializeField typed asset reference 字段。
-        /// </summary>
+#pragma warning disable IDE0032 // SerializedFieldBinder 测试需要显式反射字段，不能改成 auto property。
+#pragma warning disable IDE0044 // _privateTextureReference 必须保持非 readonly，才能验证 [SerializeField] private 字段可被绑定。
         [SerializeField]
         [AssetField(ScriptAssetKind.Texture)]
         private ScriptAssetReference _privateTextureReference = ScriptAssetReference.Empty;
+#pragma warning restore IDE0044
 
-        /// <summary>
-        /// 测试隐藏字段不会被 SerializedFields 绑定。
-        /// </summary>
         [SerializeField]
         [HideInInspector]
-        private string _hiddenLabel = "hidden";
+        private readonly string _hiddenLabel = "hidden";
 
-        /// <summary>
-        /// 测试 readonly 字段不会被 SerializedFields 绑定。
-        /// </summary>
         [SerializeField]
         private readonly string _readonlyLabel = "readonly";
+#pragma warning restore IDE0032
 
         /// <summary>
         /// 暴露 private SerializeField 字段供测试断言。
@@ -488,13 +498,13 @@ public sealed class EditorShellSceneMaterializationTests
         public ScriptAssetReference PrivateTextureReference => _privateTextureReference;
 
         /// <summary>
-        /// 暴露隐藏字段供测试断言。
+        /// 暴露隐藏字段的当前值，避免反射测试字段被编译器视为未使用。
         /// </summary>
-        public string HiddenLabel => _hiddenLabel;
+        public string HiddenLabelProbe => _hiddenLabel;
 
         /// <summary>
-        /// 暴露 readonly 字段供测试断言。
+        /// 暴露 readonly 字段的当前值，避免反射测试字段被编译器视为未使用。
         /// </summary>
-        public string ReadonlyLabel => _readonlyLabel;
+        public string ReadonlyLabelProbe => _readonlyLabel;
     }
 }

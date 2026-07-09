@@ -45,6 +45,7 @@ public sealed class ViewportPanel(Func<RenderViewportTexture> textureProvider) :
 
         Vector2 available = ImGui.GetContentRegionAvail();
         Vector2 size = FitTexture(LastTexture.Width, LastTexture.Height, available);
+        // UV 翻转：OpenGL 纹理原点在左下，ImGui Image 期望左上为 (0,0)。
         ImGui.Image(CreateTextureRef(LastTexture.Handle), size, new Vector2(0f, 1f), new Vector2(1f, 0f));
         ImGui.End();
     }

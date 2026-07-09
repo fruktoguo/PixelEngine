@@ -4,8 +4,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// 粒子合成器测试：与背景混合及深度排序。
+/// </summary>
 public sealed class ParticleCompositorTests
 {
+    /// <summary>
+    /// 验证Stamp Rounds World Position And Clips Viewport。
+    /// </summary>
     [Fact]
     public void StampRoundsWorldPositionAndClipsViewport()
     {
@@ -31,6 +37,9 @@ public sealed class ParticleCompositorTests
         Assert.Equal(0u, target.Pixels[0]);
     }
 
+    /// <summary>
+    /// 验证Stamp Writes Emissive For Fire And Emissive Materials。
+    /// </summary>
     [Fact]
     public void StampWritesEmissiveForFireAndEmissiveMaterials()
     {
@@ -60,6 +69,9 @@ public sealed class ParticleCompositorTests
         Assert.Equal(0u, aux.Emissive[2]);
     }
 
+    /// <summary>
+    /// 验证Stamp Can Use Texture Provider And Color Variant。
+    /// </summary>
     [Fact]
     public void StampCanUseTextureProviderAndColorVariant()
     {

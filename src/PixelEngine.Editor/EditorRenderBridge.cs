@@ -113,6 +113,7 @@ public sealed class EditorRenderBridge : IUiPresentLayer, IDisposable
         double now = _clock.Elapsed.TotalSeconds;
         float deltaSeconds = (float)Math.Max(0.0, now - _previousSeconds);
         _previousSeconds = now;
+        // Editor present 层（UiPresentLayerOrders.Editor）：在共享 GL context 内绘制 dockspace 与脚本 GUI。
         EditorPerformanceSnapshot performance = EditorPerformanceSnapshot.Create(
             _counters,
             _profiler,

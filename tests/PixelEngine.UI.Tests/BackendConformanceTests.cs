@@ -4,10 +4,16 @@ using Xunit;
 
 namespace PixelEngine.UI.Tests;
 
+/// <summary>
+/// UI 后端一致性测试：托管回退与 RmlUi 在生命周期、屏幕栈、命中测试与模型路径上共享同一契约。
+/// </summary>
 public sealed class BackendConformanceTests : IDisposable
 {
     private readonly List<string> _temporaryUiFiles = [];
 
+    /// <summary>
+    /// 验证托管回退生命周期、Resize、加载与屏幕栈暴露共享契约。
+    /// </summary>
     [Fact]
     public void ManagedFallbackLifecycleResizeLoadAndScreenStackExposeSharedContract()
     {
@@ -56,6 +62,9 @@ public sealed class BackendConformanceTests : IDisposable
         Assert.True(modal.WantsKeyboard);
     }
 
+    /// <summary>
+    /// 验证复制模型路径截断到目标缓冲And保持稳定唯一顺序。
+    /// </summary>
     [Fact]
     public void CopyModelPathsTruncatesToDestinationAndKeepsStableUniqueOrder()
     {
@@ -89,6 +98,9 @@ public sealed class BackendConformanceTests : IDisposable
         Assert.Equal(0, backend.CopyModelPaths(document, empty));
     }
 
+    /// <summary>
+    /// 验证Drain Events Respects Destination Capacity And Ring Overflow Boundary。
+    /// </summary>
     [Fact]
     public void DrainEventsRespectsDestinationCapacityAndRingOverflowBoundary()
     {
@@ -127,6 +139,9 @@ public sealed class BackendConformanceTests : IDisposable
         Assert.Equal(second, events[0]);
     }
 
+    /// <summary>
+    /// 验证Ui Input Router Maps Hit Test Into World Input Capture Semantics。
+    /// </summary>
     [Fact]
     public void UiInputRouterMapsHitTestIntoWorldInputCaptureSemantics()
     {
@@ -161,6 +176,9 @@ public sealed class BackendConformanceTests : IDisposable
         Assert.False(modal.AllowWorldKeyboard);
     }
 
+    /// <summary>
+    /// 验证Ui Input Router馈送Committed Text And Composition经Separate Backend Channels。
+    /// </summary>
     [Fact]
     public void UiInputRouterFeedsCommittedTextAndCompositionThroughSeparateBackendChannels()
     {
@@ -196,6 +214,9 @@ public sealed class BackendConformanceTests : IDisposable
         Assert.False(backend.Compositions[1].IsActive);
     }
 
+    /// <summary>
+    /// 验证托管回退Model Values And Actions Expose Shared Contract Boundaries。
+    /// </summary>
     [Fact]
     public void ManagedFallbackModelValuesAndActionsExposeSharedContractBoundaries()
     {
@@ -240,6 +261,9 @@ public sealed class BackendConformanceTests : IDisposable
         Assert.Equal(0.75, unchangedHealth.AsDouble());
     }
 
+    /// <summary>
+    /// 验证托管回退Unload Document And Invalid Viewport Stay Safe At Shared Boundary。
+    /// </summary>
     [Fact]
     public void ManagedFallbackUnloadDocumentAndInvalidViewportStaySafeAtSharedBoundary()
     {
@@ -276,6 +300,9 @@ public sealed class BackendConformanceTests : IDisposable
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => invalidBackend.Resize(new UiViewport(0, 0, 320, 240, float.NegativeInfinity)));
     }
 
+    /// <summary>
+    /// 验证托管回退Publishes Ime Caret And Candidate Geometry For Active Composition。
+    /// </summary>
     [Fact]
     public void ManagedFallbackPublishesImeCaretAndCandidateGeometryForActiveComposition()
     {
@@ -303,6 +330,9 @@ public sealed class BackendConformanceTests : IDisposable
         Assert.False(inactive.HasAny);
     }
 
+    /// <summary>
+    /// 验证托管回退Publishes Selection Exclude Rect Distinct From Caret Point。
+    /// </summary>
     [Fact]
     public void ManagedFallbackPublishesSelectionExcludeRectDistinctFromCaretPoint()
     {
@@ -333,6 +363,9 @@ public sealed class BackendConformanceTests : IDisposable
         Assert.Equal(geometry.ExcludeWidth, ew, precision: 3);
     }
 
+    /// <summary>
+    /// 验证托管回退Draws Ime Composition Overlay Without Mixing Committed Text。
+    /// </summary>
     [Fact]
     public void ManagedFallbackDrawsImeCompositionOverlayWithoutMixingCommittedText()
     {
@@ -374,6 +407,9 @@ public sealed class BackendConformanceTests : IDisposable
         Assert.False(backend.IsDirty);
     }
 
+    /// <summary>
+    /// 验证托管回退Draws Ime Composition Selection Overlay。
+    /// </summary>
     [Fact]
     public void ManagedFallbackDrawsImeCompositionSelectionOverlay()
     {
@@ -405,6 +441,9 @@ public sealed class BackendConformanceTests : IDisposable
         Assert.False(backend.IsDirty);
     }
 
+    /// <summary>
+    /// 验证Rml Ui Visible Screen Pruning Removes Unloaded Modal And保持Stack Order。
+    /// </summary>
     [Fact]
     public void RmlUiVisibleScreenPruningRemovesUnloadedModalAndPreservesStackOrder()
     {

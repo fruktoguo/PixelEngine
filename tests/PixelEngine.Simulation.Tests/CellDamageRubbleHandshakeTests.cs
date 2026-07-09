@@ -5,6 +5,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// 结构破坏动作与 rubble / 碎屑 / 采集事件握手测试。
+/// 不变式：破坏动作产生 rubble/碎屑/采集事件且质量守恒。
 /// </summary>
 public sealed class CellDamageRubbleHandshakeTests
 {
@@ -20,6 +21,7 @@ public sealed class CellDamageRubbleHandshakeTests
     [Fact]
     public void StructuralDamageDestroyedCellPublishesRubbleDebrisAndMineYield()
     {
+        // Arrange：准备输入与初始状态
         DeterministicSimFixture.TestChunkSource source = DeterministicSimFixture.TestChunkSource.CreateDense(-1, -1, 1, 1);
         Chunk chunk = source.GetRequired(new ChunkCoord(0, 0));
         MaterialTable materials = new(CreateMaterials());
@@ -31,6 +33,7 @@ public sealed class CellDamageRubbleHandshakeTests
 
         bool destroyed = kernel.ApplyStructuralDamage(63, 10, damage: 20);
 
+        // Assert：验证预期结果
         Assert.True(destroyed);
         Assert.Equal(Gravel, chunk.Material[local]);
         Assert.Equal(CellFlags.SetParity(0, kernel.CurrentParity), chunk.Flags[local]);
@@ -51,6 +54,7 @@ public sealed class CellDamageRubbleHandshakeTests
     [Fact]
     public void StructuralDamageDestroyedCellSpawnsDebrisParticlesThroughParticleSystem()
     {
+        // Arrange：准备输入与初始状态
         DeterministicSimFixture.TestChunkSource source = DeterministicSimFixture.TestChunkSource.CreateDense(0, 0, 0, 0);
         Chunk chunk = source.GetRequired(new ChunkCoord(0, 0));
         MaterialTable materials = new(CreateMaterials());
@@ -61,6 +65,7 @@ public sealed class CellDamageRubbleHandshakeTests
 
         bool destroyed = kernel.ApplyStructuralDamage(20, 20, damage: 20);
 
+        // Assert：验证预期结果
         Assert.True(destroyed);
         Assert.Equal(Gravel, chunk.Material[local]);
         Assert.Equal(4, particles.ActiveCount);
@@ -81,6 +86,7 @@ public sealed class CellDamageRubbleHandshakeTests
     [Fact]
     public void StructuralDamageSpawnsDebrisOnlyForDestroyedCellsWithPositiveDebrisCount()
     {
+        // Arrange：准备输入与初始状态
         const ushort NoDebrisStone = 5;
         DeterministicSimFixture.TestChunkSource source = DeterministicSimFixture.TestChunkSource.CreateDense(0, 0, 0, 0);
         Chunk chunk = source.GetRequired(new ChunkCoord(0, 0));
@@ -94,6 +100,7 @@ public sealed class CellDamageRubbleHandshakeTests
         Set(chunk, 22, 20, Stone);
         Set(chunk, 24, 20, NoDebrisStone);
 
+        // Assert：验证预期结果
         Assert.False(kernel.ApplyStructuralDamage(22, 20, damage: 3));
         Assert.Equal(0, particles.ActiveCount);
 
@@ -108,6 +115,7 @@ public sealed class CellDamageRubbleHandshakeTests
     [Fact]
     public void StructuralDamageDestroyedToEmptyPublishesSourceDebrisMaterialAndNoMineYieldWithoutDiggable()
     {
+        // Arrange：准备输入与初始状态
         DeterministicSimFixture.TestChunkSource source = DeterministicSimFixture.TestChunkSource.CreateDense(0, 0, 0, 0);
         Chunk chunk = source.GetRequired(new ChunkCoord(0, 0));
         MaterialTable materials = new(CreateMaterials());
@@ -121,6 +129,7 @@ public sealed class CellDamageRubbleHandshakeTests
 
         bool destroyed = kernel.ApplyStructuralDamage(12, 12, damage: 10);
 
+        // Assert：验证预期结果
         Assert.True(destroyed);
         Assert.Equal(Empty, chunk.Material[local]);
         Assert.Equal(0, chunk.Flags[local]);
@@ -135,6 +144,7 @@ public sealed class CellDamageRubbleHandshakeTests
     [Fact]
     public void StructuralDamageDoesNotPublishForRigidOwnedAccumulationOrIndestructibleCells()
     {
+        // Arrange：准备输入与初始状态
         DeterministicSimFixture.TestChunkSource source = DeterministicSimFixture.TestChunkSource.CreateDense(0, 0, 0, 0);
         Chunk chunk = source.GetRequired(new ChunkCoord(0, 0));
         MaterialTable materials = new(CreateMaterials());
@@ -151,6 +161,7 @@ public sealed class CellDamageRubbleHandshakeTests
         Set(chunk, 13, 10, Crystal);
         chunk.Damage[CellAddressing.LocalIndexFromLocal(11, 10)] = 6;
 
+        // Assert：验证预期结果
         Assert.False(kernel.ApplyStructuralDamage(10, 10, damage: 3));
         Assert.False(kernel.ApplyStructuralDamage(11, 10, damage: 100));
         Assert.False(kernel.ApplyStructuralDamage(13, 10, damage: 0));

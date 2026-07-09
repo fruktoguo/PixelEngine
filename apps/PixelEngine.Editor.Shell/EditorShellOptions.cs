@@ -1,5 +1,8 @@
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// Editor Shell 启动参数与脚本化验收探针开关。
+/// </summary>
 internal sealed record EditorShellOptions(
     string? ProjectPath,
     string? ScenePath,

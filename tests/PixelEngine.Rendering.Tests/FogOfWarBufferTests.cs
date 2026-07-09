@@ -2,8 +2,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// 战争迷雾缓冲测试：可见性更新、扩张与边界处理。
+/// </summary>
 public sealed class FogOfWarBufferTests
 {
+    /// <summary>
+    /// 验证Constructor Maps Viewport Cells To Ceil Tile Grid。
+    /// </summary>
     [Fact]
     public void ConstructorMapsViewportCellsToCeilTileGrid()
     {
@@ -17,6 +23,9 @@ public sealed class FogOfWarBufferTests
         Assert.Equal(6, fog.Length);
     }
 
+    /// <summary>
+    /// 验证Reveal Circle Maps Cells To Coarse Tiles。
+    /// </summary>
     [Fact]
     public void RevealCircleMapsCellsToCoarseTiles()
     {
@@ -30,6 +39,9 @@ public sealed class FogOfWarBufferTests
         Assert.Equal(0, fog.RevealAlpha(64, 31));
     }
 
+    /// <summary>
+    /// 验证Reveal Circle Clips To Viewport Boundary。
+    /// </summary>
     [Fact]
     public void RevealCircleClipsToViewportBoundary()
     {
@@ -44,6 +56,9 @@ public sealed class FogOfWarBufferTests
         Assert.Equal(0, fog.RevealAlpha(0, 64));
     }
 
+    /// <summary>
+    /// 验证Reveal Alpha保持Largest Reveal And Clear Resets。
+    /// </summary>
     [Fact]
     public void RevealAlphaKeepsLargestRevealAndClearResets()
     {
@@ -61,6 +76,9 @@ public sealed class FogOfWarBufferTests
         Assert.Equal(0, fog.RevealAlpha(7, 7));
     }
 
+    /// <summary>
+    /// 验证Reveal All Marks Every Viewport Tile。
+    /// </summary>
     [Fact]
     public void RevealAllMarksEveryViewportTile()
     {
@@ -74,6 +92,9 @@ public sealed class FogOfWarBufferTests
         Assert.Equal(180, fog.RevealAlpha(95, 63));
     }
 
+    /// <summary>
+    /// 验证Validation Rejects Invalid Sizes And Radius。
+    /// </summary>
     [Fact]
     public void ValidationRejectsInvalidSizesAndRadius()
     {

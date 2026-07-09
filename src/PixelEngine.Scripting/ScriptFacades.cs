@@ -201,6 +201,7 @@ public enum DamageKind : byte
     Heat,
 }
 
+// IWorldEffects / IParticleSpawner 等写 API 只入队命令，禁止在相位 1 回调里直接改权威网格。
 /// <summary>
 /// 提供脚本可用的世界级复合效果 API。
 /// </summary>
@@ -422,6 +423,7 @@ public sealed class NoopPhysicsStepEvents : IPhysicsStepEvents
     }
 }
 
+// 以下实现类为 ScriptSimulationContext / Hosting 提供可注入后端，接口层只声明相位契约。
 /// <summary>
 /// Hosting 物理相位使用的脚本后物理事件总线。
 /// </summary>
@@ -445,6 +447,7 @@ public sealed class PhysicsStepEventBus : IPhysicsStepEvents
     /// </summary>
     public void PublishPostStep(int characterImpactCount = 0)
     {
+        // 在相位 8 末尾发布：回调可读取本 tick 刚体 stamp 后的权威网格。
         LastCharacterImpactCount = Math.Max(0, characterImpactCount);
         for (int i = 0; i < _postStepCallbacks.Count; i++)
         {

@@ -10,6 +10,7 @@ namespace PixelEngine.Editor.Tests;
 
 /// <summary>
 /// Editor 框架契约测试。
+/// 不变式：Editor 框架服务解析与模式切换契约稳定。
 /// </summary>
 public sealed class EditorAppTests
 {
@@ -19,6 +20,7 @@ public sealed class EditorAppTests
     [Fact]
     public void DisabledEditorDoesNotTouchBackendOrPanels()
     {
+        // Arrange：准备输入与初始状态
         RecordingBackend backend = new();
         RecordingPanel panel = new();
         using EditorApp app = new(backend, new EditorAppOptions { Enabled = false });
@@ -27,6 +29,7 @@ public sealed class EditorAppTests
         app.Initialize();
         app.DrawFrame(1f / 60f, 1280, 720, new EngineCounters(), 3);
 
+        // Assert：验证预期结果
         Assert.False(app.IsRunning);
         Assert.Equal(0, backend.InitializeCount);
         Assert.Equal(0, backend.RenderCount);
@@ -58,6 +61,7 @@ public sealed class EditorAppTests
     [Fact]
     public void DrawFrameCanDispatchScriptGuiWithoutDockSpace()
     {
+        // Arrange：准备输入与初始状态
         RecordingBackend backend = new();
         RecordingPanel panel = new();
         using EditorApp app = new(backend, new EditorAppOptions { EnableDockSpace = false });
@@ -80,6 +84,7 @@ public sealed class EditorAppTests
                 RecordingBackend.Current?.Events.Add("ScriptGui");
             });
 
+        // Assert：验证预期结果
         Assert.Equal(640, guiWidth);
         Assert.Equal(360, guiHeight);
         Assert.Equal(["Initialize", "NewFrame:640x360@1x1", "ScriptGui", "Render"], backend.Events);
@@ -111,11 +116,13 @@ public sealed class EditorAppTests
     [Fact]
     public void ImGuiControllerHonorsEnabledFlagAndShutdown()
     {
+        // Arrange：准备输入与初始状态
         RecordingBackend disabledBackend = new();
         ImGuiController disabled = new(disabledBackend, new EditorAppOptions { Enabled = false });
 
         disabled.Initialize();
 
+        // Assert：验证预期结果
         Assert.False(disabled.IsInitialized);
         Assert.Equal(0, disabledBackend.InitializeCount);
 
@@ -147,6 +154,7 @@ public sealed class EditorAppTests
     [Fact]
     public void EditorInputBridgePublishesModifierKeysForClipboardShortcuts()
     {
+        // Arrange：准备输入与初始状态
         RecordingBackend backend = new();
         ImGuiInputBridge input = new(backend);
 
@@ -155,6 +163,7 @@ public sealed class EditorAppTests
         input.Key(Key.V, down: false);
         input.Key(Key.ControlLeft, down: false);
 
+        // Assert：验证预期结果
         Assert.Equal(
             [
                 "Key:LeftCtrl=True",

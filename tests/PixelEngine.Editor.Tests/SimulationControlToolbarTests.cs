@@ -4,6 +4,7 @@ namespace PixelEngine.Editor.Tests;
 
 /// <summary>
 /// sim 控制条测试。
+/// 不变式：sim 控制条只影响执行模式、不直接改网格。
 /// </summary>
 public sealed class SimulationControlToolbarTests
 {

@@ -4,6 +4,9 @@ using PixelEngine.UI;
 
 namespace PixelEngine.Editor.Shell.Settings;
 
+/// <summary>
+/// Project Settings ImGui 面板。
+/// </summary>
 internal sealed class ProjectSettingsPanel : IEditorPanel
 {
     public const string PanelTitle = EditorDockSpace.ProjectSettingsWindowTitle;
@@ -47,12 +50,9 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
                 ExternalScriptEditor = "system-default",
             },
         };
-        if (!TryApplyProjectSettings(next, out string diagnostic))
-        {
-            throw new InvalidOperationException(diagnostic);
-        }
-
-        return CaptureScriptedProjectSettingsProbe();
+        return !TryApplyProjectSettings(next, out string diagnostic)
+            ? throw new InvalidOperationException(diagnostic)
+            : CaptureScriptedProjectSettingsProbe();
     }
 
     public ScriptedProjectSettingsProbeSnapshot CaptureScriptedProjectSettingsProbe()
@@ -92,6 +92,7 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
     public void Draw(in EditorContext context)
     {
         _ = context;
+        // 项目级设置：内容根、脚本目录、启动场景与 UI 后端
         bool visible = Visible;
         if (!ImGui.Begin(Title, ref visible))
         {
@@ -201,6 +202,9 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
     }
 }
 
+/// <summary>
+/// 脚本化验收探针：ScriptedProjectSettingsProbeSnapshot。
+/// </summary>
 internal sealed record ScriptedProjectSettingsProbeSnapshot
 {
     public string Name { get; init; } = string.Empty;

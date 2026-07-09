@@ -39,7 +39,7 @@ public class PaletteBgraConversionBenchmarks
     }
 
     /// <summary>
-    /// 标量 palette 转 BGRA8。
+    /// 验证Convert Scalar。
     /// </summary>
     [Benchmark(Baseline = true)]
     public void ConvertScalar()
@@ -48,7 +48,7 @@ public class PaletteBgraConversionBenchmarks
     }
 
     /// <summary>
-    /// 默认运行时 dispatcher；支持时可使用已验证的窄 SIMD 路径，否则回落标量。
+    /// 验证Convert。
     /// </summary>
     [Benchmark]
     public void Convert()
@@ -57,7 +57,7 @@ public class PaletteBgraConversionBenchmarks
     }
 
     /// <summary>
-    /// 运行时 light-up 转色路径；AVX2 可用时使用 gather，否则回落标量。
+    /// 验证Convert Avx2Experimental。
     /// </summary>
     [Benchmark]
     public void ConvertAvx2Experimental()
@@ -102,7 +102,7 @@ public class BgraColorNoiseBenchmarks
     }
 
     /// <summary>
-    /// 标量 color-noise 混合。
+    /// 验证Apply Color Noise Scalar。
     /// </summary>
     [Benchmark(Baseline = true)]
     public void ApplyColorNoiseScalar()
@@ -111,7 +111,7 @@ public class BgraColorNoiseBenchmarks
     }
 
     /// <summary>
-    /// 运行时 light-up color-noise 混合。
+    /// 验证Apply Color Noise。
     /// </summary>
     [Benchmark]
     public void ApplyColorNoise()
@@ -179,7 +179,7 @@ public class RenderStyleSegmentedBenchmarks
     }
 
     /// <summary>
-    /// 未破损 SolidOpaque 样式段的 render buffer 构建。
+    /// 验证Build Render Buffer Styled Segmented行为符合预期。
     /// </summary>
     [Benchmark]
     public void BuildRenderBufferStyledSegmented()
@@ -235,7 +235,7 @@ public class RenderStyleSegmentScannerBenchmarks
     }
 
     /// <summary>
-    /// 扫描全等 material 且 Damage 全零的最长前缀。
+    /// 验证Count Solid Unbroken Run。
     /// </summary>
     [Benchmark]
     public int CountSolidUnbrokenRun()

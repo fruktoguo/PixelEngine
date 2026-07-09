@@ -4,6 +4,9 @@ using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// 资产浏览器面板的数据源，对接 manifest 与拖放。
+/// </summary>
 internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource
 {
     private readonly EditorAssetManifestStore _assets;
@@ -28,8 +31,12 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource
         _sceneAssetMoveService = sceneAssetMoveService;
     }
 
+    /// <summary>
+    /// 刷新 manifest 并映射为资产浏览器条目（含缩略图与预览摘要）。
+    /// </summary>
     public IReadOnlyList<AssetBrowserItem> ListAssets()
     {
+        // 资产浏览：manifest 刷新 → 分类映射 → 缩略图解析
         IReadOnlyList<EditorAssetRecord> records = _assets.Refresh();
         AssetBrowserItem[] items = new AssetBrowserItem[records.Count];
         for (int i = 0; i < records.Count; i++)
@@ -372,6 +379,9 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource
     }
 }
 
+/// <summary>
+/// EditorAssetBrowserMoveResult 数据结构。
+/// </summary>
 internal sealed record EditorAssetBrowserMoveResult(
     bool Succeeded,
     EditorAssetRecord Asset,

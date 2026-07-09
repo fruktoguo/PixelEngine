@@ -9,7 +9,7 @@ namespace PixelEngine.Audio.Tests;
 public sealed class AudioProjectDisciplineTests
 {
     /// <summary>
-    /// 验证 Audio 使用 OpenAL 绑定并允许封装层 unsafe。
+    /// 验证Audio Project References Open Al And Allows Unsafe。
     /// </summary>
     [Fact]
     public void AudioProjectReferencesOpenAlAndAllowsUnsafe()
@@ -23,7 +23,7 @@ public sealed class AudioProjectDisciplineTests
     }
 
     /// <summary>
-    /// 验证 Audio 只引用允许的基础项目，不反向依赖 World / Physics / Rendering / Hosting。
+    /// 验证Audio保持Expected Project References。
     /// </summary>
     [Fact]
     public void AudioKeepsExpectedProjectReferences()
@@ -35,7 +35,7 @@ public sealed class AudioProjectDisciplineTests
     }
 
     /// <summary>
-    /// 验证 Audio 源码不声明新的平台互操作入口。
+    /// 验证Audio Sources Do Not Declare Dll Import。
     /// </summary>
     [Fact]
     public void AudioSourcesDoNotDeclareDllImport()
@@ -50,7 +50,7 @@ public sealed class AudioProjectDisciplineTests
     }
 
     /// <summary>
-    /// 验证 OpenAL 后端暴露释放后 live-object 计数，供 native leak detector 证据采集。
+    /// 验证Open Al Backend Exposes Live Object Counts用于泄漏取证。
     /// </summary>
     [Fact]
     public void OpenAlBackendExposesLiveObjectCountsForLeakEvidence()
@@ -61,7 +61,7 @@ public sealed class AudioProjectDisciplineTests
     }
 
     /// <summary>
-    /// 验证音频主派发路径不读取 sim 网格，也不调用加载 / 流式 worker。
+    /// 验证Audio Dispatch Hot Path不会Access Grid Or Asset Loading。
     /// </summary>
     [Fact]
     public void AudioDispatchHotPathDoesNotAccessGridOrAssetLoading()

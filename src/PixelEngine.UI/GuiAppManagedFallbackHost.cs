@@ -7,10 +7,10 @@ namespace PixelEngine.UI;
 /// <summary>
 /// 把 <see cref="GuiApp" /> 适配为 ManagedFallbackBackend 可复用的绘制宿主。
 /// </summary>
-public sealed class GuiAppManagedFallbackHost : IManagedFallbackGuiHost, IDisposable
+public sealed class GuiAppManagedFallbackHost(GuiApp gui, RenderWindow? window) : IManagedFallbackGuiHost, IDisposable
 {
-    private readonly GuiApp _gui;
-    private readonly RenderWindow? _window;
+    private readonly GuiApp _gui = gui ?? throw new ArgumentNullException(nameof(gui));
+    private readonly RenderWindow? _window = window;
     private ImageEntry[] _images = new ImageEntry[8];
     private int _imageCount;
 
@@ -21,17 +21,6 @@ public sealed class GuiAppManagedFallbackHost : IManagedFallbackGuiHost, IDispos
     public GuiAppManagedFallbackHost(GuiApp gui)
         : this(gui, window: null)
     {
-    }
-
-    /// <summary>
-    /// 创建可把 UI 图片上传到当前渲染窗口 GL 上下文的 GUI host 适配器。
-    /// </summary>
-    /// <param name="gui">共享 GUI 应用。</param>
-    /// <param name="window">当前渲染窗口；为空时不允许绘制图片。</param>
-    public GuiAppManagedFallbackHost(GuiApp gui, RenderWindow? window)
-    {
-        _gui = gui ?? throw new ArgumentNullException(nameof(gui));
-        _window = window;
     }
 
     /// <summary>
@@ -81,6 +70,7 @@ public sealed class GuiAppManagedFallbackHost : IManagedFallbackGuiHost, IDispos
             throw new InvalidOperationException("当前 Gui host 未绑定 RenderWindow，无法上传 UI 图片纹理。");
         }
 
+        // 解码 PNG 并上传到当前共享 GL context；UnpackAlignment=1 兼容非 4 字节对齐行宽。
         UiImageBitmap bitmap = UiPngImageLoader.Load(fullPath);
         GlTexture texture = new(_window.Gl, bitmap.Width, bitmap.Height, InternalFormat.Rgba8, PixelFormat.Rgba, PixelType.UnsignedByte);
         texture.Bind();

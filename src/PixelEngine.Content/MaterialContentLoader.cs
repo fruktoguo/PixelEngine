@@ -64,6 +64,7 @@ public static class MaterialContentLoader
         ArgumentNullException.ThrowIfNull(materialsDocument);
         ArgumentNullException.ThrowIfNull(reactionsDocument);
 
+        // 冷加载管线：name→id 索引 → MaterialDef → tag 代表材质 → 展开并打包 reaction 表。
         MaterialJson[] materialJson = RequireNonEmpty(materialsDocument.Materials, "materials");
         Dictionary<string, ushort> nameToId = BuildNameIndex(materialJson);
         MaterialDef[] baseDefinitions = BuildBaseDefinitions(materialJson, nameToId);
@@ -87,6 +88,7 @@ public static class MaterialContentLoader
         ArgumentNullException.ThrowIfNull(reactionsDocument);
         ArgumentNullException.ThrowIfNull(currentMaterials);
 
+        // 热重载管线：保留既有 name→id，新材质追加 id，reaction 始终引用稳定 runtime id。
         MaterialJson[] materialJson = RequireNonEmpty(materialsDocument.Materials, "materials");
         Dictionary<string, ushort> nameToId = BuildStableNameIndex(materialJson, currentMaterials);
         MaterialDef[] liveDefinitions = BuildBaseDefinitions(materialJson, nameToId, stableIds: true);
@@ -338,11 +340,13 @@ public static class MaterialContentLoader
             propertyFlags[i] = definitions[i].PropertyFlags;
         }
 
+        // 逐条展开 tag 输入与双向 reaction，按 owner 材质（InputA）分桶。
         for (int i = 0; i < reactions.Length; i++)
         {
             AppendReaction(reactions[i], i, propertyFlags, nameToId, representatives, byOwner);
         }
 
+        // 每个 owner 桶按 InputB 排序后写入全局 packed 表，并回写 ReactionStart/Count 到 MaterialDef。
         List<Reaction> packed = [];
         finalDefinitions = new MaterialDef[definitions.Length];
         for (int i = 0; i < definitions.Length; i++)
@@ -399,6 +403,7 @@ public static class MaterialContentLoader
                     Flags = flags,
                 });
 
+                // 非 Directional 反应自动生成反向 owner 条目，保证 A↔B 邻接对称。
                 if ((flags & ReactionFlags.Directional) == 0 && materialA != materialB)
                 {
                     AddOwnerReaction(byOwner[materialB], new Reaction

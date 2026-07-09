@@ -8,6 +8,7 @@ namespace PixelEngine.Editor.Tests;
 
 /// <summary>
 /// 脚本 Inspector 面板测试。
+/// 不变式：Inspector 面板与脚本反射字段同步。
 /// </summary>
 public sealed class ScriptInspectorPanelTests
 {

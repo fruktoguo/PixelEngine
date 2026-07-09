@@ -7,6 +7,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// ShapeBuilder 测试。
+/// 不变式：ShapeBuilder 输出与输入顶点语义一致。
 /// </summary>
 public sealed class ShapeBuilderTests
 {

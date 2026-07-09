@@ -5,6 +5,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Simulation 节点 1 的寻址、chunk 与 CellGrid 数据结构测试。
+/// 不变式：寻址、chunk 与 CellGrid 索引不变式在边界成立。
 /// </summary>
 public sealed class SimulationDataStructureTests
 {
@@ -47,6 +48,7 @@ public sealed class SimulationDataStructureTests
     [Fact]
     public void ChunkResetClearsSoaAndDirtyState()
     {
+        // Arrange：准备输入与初始状态
         Chunk chunk = new(new ChunkCoord(2, 3));
         int local = CellAddressing.LocalIndexFromLocal(10, 11);
         chunk.Material[local] = 7;
@@ -57,6 +59,7 @@ public sealed class SimulationDataStructureTests
 
         chunk.Reset(new ChunkCoord(-4, 5));
 
+        // Assert：验证预期结果
         Assert.Equal(EngineConstants.ChunkArea, chunk.Material.Length);
         Assert.Equal(EngineConstants.ChunkArea, chunk.Flags.Length);
         Assert.Equal(EngineConstants.ChunkArea, chunk.Lifetime.Length);
@@ -98,6 +101,7 @@ public sealed class SimulationDataStructureTests
     [Fact]
     public void CellGridWritesMaterialMarksDirtyAndReadsCellType()
     {
+        // Arrange：准备输入与初始状态
         Chunk chunk = new(new ChunkCoord(1, -1));
         TestChunkSource source = new(chunk);
         MaterialPropsTable props = new(
@@ -117,6 +121,7 @@ public sealed class SimulationDataStructureTests
 
         grid.SetMaterial(64, -1, 2);
 
+        // Assert：验证预期结果
         Assert.True(grid.TryGetMaterial(64, -1, out ushort material));
         Assert.Equal(2, material);
         Assert.Equal(CellType.Powder, grid.GetCellType(64, -1));
@@ -135,6 +140,7 @@ public sealed class SimulationDataStructureTests
     [Fact]
     public void ChunkSourceResolvesNeighborhoodInStableSlotOrder()
     {
+        // Arrange：准备输入与初始状态
         Chunk[] chunks = new Chunk[9];
         int index = 0;
         for (int dy = -1; dy <= 1; dy++)
@@ -146,6 +152,7 @@ public sealed class SimulationDataStructureTests
         }
 
         TestChunkSource source = new(chunks);
+        // Assert：验证预期结果
         Assert.True(source.ResolveNeighborhood(new ChunkCoord(10, 20), out ChunkNeighborhood neighborhood));
         Assert.Equal(new ChunkCoord(9, 19), neighborhood.Slot0.Coord);
         Assert.Equal(new ChunkCoord(10, 20), neighborhood.Slot4.Coord);
@@ -158,6 +165,7 @@ public sealed class SimulationDataStructureTests
     [Fact]
     public void NeighborWindowReadsWritesAndSwapsAcrossNeighborhood()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhoodSource(new ChunkCoord(4, 5), out Chunk center, out Chunk right);
         NeighborWindow window = new(source, center.Coord);
 
@@ -175,6 +183,7 @@ public sealed class SimulationDataStructureTests
         window.SetLifetime(rightWx, rightWy, 8);
         window.SetDamage(rightWx, rightWy, 11);
 
+        // Assert：验证预期结果
         Assert.Equal(4, window.SlotOf(centerWx, centerWy));
         Assert.Equal(5, window.SlotOf(rightWx, rightWy));
         Assert.Equal(17, window.GetMaterial(centerWx, centerWy));
@@ -201,6 +210,7 @@ public sealed class SimulationDataStructureTests
     [Fact]
     public void ApplyStructuralDamageDestroysSolidAndRoutesRigidOwned()
     {
+        // Arrange：准备输入与初始状态
         Chunk chunk = new(new ChunkCoord(0, 0));
         TestChunkSource source = new(chunk);
         MaterialTable materials = new(
@@ -226,6 +236,7 @@ public sealed class SimulationDataStructureTests
         bool solidDestroyed = kernel.ApplyStructuralDamage(10, 10, 9);
         bool immuneDestroyed = kernel.ApplyStructuralDamage(12, 10, 255);
 
+        // Assert：验证预期结果
         Assert.False(rigidDestroyed);
         Assert.True(solidDestroyed);
         Assert.False(immuneDestroyed);

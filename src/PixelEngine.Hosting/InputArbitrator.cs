@@ -6,6 +6,11 @@ namespace PixelEngine.Hosting;
 /// <summary>
 /// Hosting 侧输入仲裁器，按 Editor ImGui、游戏 GUI/HTML UI、世界脚本的优先级合并输入捕获结果。
 /// </summary>
+/// <remarks>
+/// 仲裁链（高优先级先消费）：Editor 捕获 → ImGui → GameUi → 脚本/世界。
+/// 每层通过 <see cref="InputArbitrationState.Apply"/> 与运算收缩 AllowWorld* 许可，
+/// 最终由 <see cref="InputArbitrationState.ToScriptInputRoute"/> 交给相位 0 输入采样。
+/// </remarks>
 public static class InputArbitrator
 {
     /// <summary>

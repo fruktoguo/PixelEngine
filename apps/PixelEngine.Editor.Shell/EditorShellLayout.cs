@@ -2,6 +2,9 @@ using Hexa.NET.ImGui;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// Editor Shell 默认 Dock 布局与面板可见性状态。
+/// </summary>
 internal sealed class EditorShellLayout
 {
     private const int MinimumSavedDockSpaceWidth = 800;

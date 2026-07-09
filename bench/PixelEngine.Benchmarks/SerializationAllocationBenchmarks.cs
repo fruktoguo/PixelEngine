@@ -45,7 +45,7 @@ public class SerializationAllocationBenchmarks
     }
 
     /// <summary>
-    /// chunk snapshot → RLE payload → LZ4 block 的稳态字节准备路径。
+    /// 验证Encode Chunk To Pooled Writers。
     /// </summary>
     [Benchmark]
     public void EncodeChunkToPooledWriters()

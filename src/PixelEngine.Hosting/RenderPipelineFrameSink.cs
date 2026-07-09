@@ -52,7 +52,7 @@ public sealed class RenderPipelineFrameSink : IRenderFrameSink
         ReadOnlySpan<Particle> particles,
         MaterialTable materials,
         FogOfWarBuffer? fogOfWar,
-        PixelEngine.Core.Diagnostics.FrameProfiler? profiler)
+        Core.Diagnostics.FrameProfiler? profiler)
     {
         _pipeline.RenderFrame(renderBuffer, aux, camera, dirtyRects, overlays, pointLights, particles, materials, fogOfWar, profiler);
     }

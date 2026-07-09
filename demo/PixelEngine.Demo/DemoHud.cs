@@ -73,10 +73,10 @@ public sealed class DemoHud : Behaviour
 
     private void ResolveComponents()
     {
-        _health = Entity.TryGetComponent<PlayerHealth>(out PlayerHealth health) ? health : null;
-        _brush = Entity.TryGetComponent<MaterialBrush>(out MaterialBrush brush) ? brush : null;
-        _explosive = Entity.TryGetComponent<ExplosiveTool>(out ExplosiveTool explosive) ? explosive : null;
-        _goal = Entity.TryGetComponent<GoalTrigger>(out GoalTrigger goal) ? goal : null;
+        _health = Entity.TryGetComponent(out PlayerHealth health) ? health : null;
+        _brush = Entity.TryGetComponent(out MaterialBrush brush) ? brush : null;
+        _explosive = Entity.TryGetComponent(out ExplosiveTool explosive) ? explosive : null;
+        _goal = Entity.TryGetComponent(out GoalTrigger goal) ? goal : null;
         BlockedReason = _health is null || _brush is null || _explosive is null || _goal is null
             ? "HUD 等待玩家脚本组件。"
             : string.Empty;

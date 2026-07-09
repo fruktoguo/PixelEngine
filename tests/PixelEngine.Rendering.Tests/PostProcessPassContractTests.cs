@@ -2,8 +2,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// 后处理通道契约测试：pass 链路与资源生命周期。
+/// </summary>
 public sealed class PostProcessPassContractTests
 {
+    /// <summary>
+    /// 验证Bloom Settings Normalize Clamps Valid Values。
+    /// </summary>
     [Fact]
     public void BloomSettingsNormalizeClampsValidValues()
     {
@@ -17,6 +23,9 @@ public sealed class PostProcessPassContractTests
         Assert.Equal(8f, normalized.KawaseOffset);
     }
 
+    /// <summary>
+    /// 验证Bloom Settings Reject Invalid Values。
+    /// </summary>
     [Fact]
     public void BloomSettingsRejectInvalidValues()
     {
@@ -26,6 +35,9 @@ public sealed class PostProcessPassContractTests
         AssertThrows<ArgumentOutOfRangeException>(() => new BloomSettings(BloomMode.DualKawase, 1f, 1f, 1, 0f).Normalize());
     }
 
+    /// <summary>
+    /// 验证Bloom Shader Sources Contain Required Passes。
+    /// </summary>
     [Fact]
     public void BloomShaderSourcesContainRequiredPasses()
     {
@@ -43,6 +55,9 @@ public sealed class PostProcessPassContractTests
         Assert.Contains("scene.rgb + bloom", composite, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Fragment Bloom Enables Additive Blend After Fullscreen Pass Begin。
+    /// </summary>
     [Fact]
     public void FragmentBloomEnablesAdditiveBlendAfterFullscreenPassBegin()
     {
@@ -57,6 +72,9 @@ public sealed class PostProcessPassContractTests
         Assert.Contains("BlendFunc(BlendingFactor.One, BlendingFactor.One)", source, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Final Post Shader Sources Contain Dither Gamma And Crt Controls。
+    /// </summary>
     [Fact]
     public void FinalPostShaderSourcesContainDitherGammaAndCrtControls()
     {

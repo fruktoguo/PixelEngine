@@ -8,6 +8,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// Demo 运行态脚本后端装配测试。
+/// 不变式：Demo 脚本后端经 Hosting 装配、热重载探针可观测且不影响 headless tick。
 /// </summary>
 public sealed class DemoRuntimeScriptingTests
 {
@@ -17,6 +18,7 @@ public sealed class DemoRuntimeScriptingTests
     [Fact]
     public void EngineMaterializesAndDrivesCurrentSceneBehaviour()
     {
+        // Arrange：搭建测试场景与依赖
         MaterialTable materials = Materials(("empty", CellType.Empty));
         using Engine engine = new EngineBuilder()
             .UseHeadless()
@@ -38,9 +40,11 @@ public sealed class DemoRuntimeScriptingTests
         _ = engine.AttachPhysics();
 
         ScriptSimulationContext scriptContext = engine.AttachScriptingFromServices();
+        // Act：执行被测操作
         engine.RunHeadlessTicks(1);
 
         Scene? current = engine.Context.GetService<ISceneService>().Current;
+        // Assert：验证不变式与预期结果
         Assert.NotNull(current);
         Assert.Same(scriptScene, current.ScriptScene);
         Assert.Same(scriptContext, engine.Context.GetService<IScriptContext>());
@@ -68,6 +72,7 @@ public sealed class DemoRuntimeScriptingTests
     [Fact]
     public void AttachScriptingFromServicesResyncsLightingAfterScriptsWhenSynchronizerAlreadyExists()
     {
+        // Arrange：搭建测试场景与依赖
         MaterialTable materials = Materials(("empty", CellType.Empty));
         using Engine engine = new EngineBuilder()
             .UseHeadless()
@@ -85,8 +90,10 @@ public sealed class DemoRuntimeScriptingTests
 
         engine.RegisterScriptAssembly(typeof(HostingLightingProbeBehaviour).Assembly);
         _ = engine.AttachScriptingFromServices();
+        // Act：执行被测操作
         engine.RunHeadlessTicks(1);
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(1, lighting.PointLights.Length);
         Assert.Equal(0xFF_40_80_FFu, lighting.PointLights[0].ColorBgra);
     }
@@ -97,6 +104,7 @@ public sealed class DemoRuntimeScriptingTests
     [Fact]
     public void AttachScriptingFromServicesAppliesWatchedHotReloadAtFrameBoundary()
     {
+        // Arrange：搭建测试场景与依赖
         string scriptDirectory = Path.Combine(Path.GetTempPath(), "PixelEngineHotReload", Guid.NewGuid().ToString("N"));
         _ = Directory.CreateDirectory(scriptDirectory);
         try
@@ -118,8 +126,10 @@ public sealed class DemoRuntimeScriptingTests
                     DebounceInterval: TimeSpan.FromMilliseconds(30)));
             ScriptHotReloadController controller = engine.Context.GetService<ScriptHotReloadController>();
 
+            // Act：执行被测操作
             engine.RunHeadlessTicks(1);
             Behaviour initial = GetSingleBehaviour<HostingHotReloadProbeBehaviour>(context.Scene);
+            // Assert：验证不变式与预期结果
             Assert.Equal("v1", ReadProperty<string>(initial, "Version"));
             Assert.Equal(2, ReadField<int>(initial, "Counter"));
 
@@ -148,6 +158,7 @@ public sealed class DemoRuntimeScriptingTests
     [Fact]
     public void AttachScriptingFromServicesRegistersNewHotReloadBehaviourForEditorMounting()
     {
+        // Arrange：搭建测试场景与依赖
         string scriptDirectory = Path.Combine(Path.GetTempPath(), "PixelEngineDefaultWorkbenchHotReload", Guid.NewGuid().ToString("N"));
         _ = Directory.CreateDirectory(scriptDirectory);
         try
@@ -173,9 +184,11 @@ public sealed class DemoRuntimeScriptingTests
                 $"PixelEngine.Hosting.Tests.DefaultWorkbench.{Guid.NewGuid():N}",
                 scriptDirectory);
 
+            // Act：执行被测操作
             engine.RunHeadlessTicks(1);
 
             ScriptAssemblyRegistry scripts = engine.Context.GetService<ScriptAssemblyRegistry>();
+            // Assert：验证不变式与预期结果
             Assert.Contains(scripts.Assemblies, assembly => assembly.GetType("DefaultWorkbenchBehaviour", throwOnError: false) is not null);
             EditorSceneModel scene = EditorSceneModel.Empty("default-workbench-hot-reload");
             EditorGameObject gameObject = scene.Create("Receiver");
@@ -200,6 +213,7 @@ public sealed class DemoRuntimeScriptingTests
     [Fact]
     public void AttachScriptingFromServicesReportsWatchedHotReloadCompileDiagnosticsToConsoleSink()
     {
+        // Arrange：准备输入与初始状态
         string scriptDirectory = Path.Combine(Path.GetTempPath(), "PixelEngineConsoleHotReload", Guid.NewGuid().ToString("N"));
         _ = Directory.CreateDirectory(scriptDirectory);
         try
@@ -221,6 +235,7 @@ public sealed class DemoRuntimeScriptingTests
                     $"PixelEngine.Hosting.Tests.ConsoleHotReload.{Guid.NewGuid():N}",
                     scriptDirectory,
                     DebounceInterval: TimeSpan.FromMilliseconds(30)));
+            // Assert：验证预期结果
             Assert.True(engine.Context.TryGetService(out ScriptHotReloadController _));
             Assert.Contains(console.Snapshot(), entry =>
                 entry.Category == EditorConsoleCategory.Script &&

@@ -9,7 +9,7 @@ namespace PixelEngine.Core.Tests;
 public sealed unsafe class MemoryTests
 {
     /// <summary>
-    /// 验证 pinned 缓冲指针在 GC 压力下保持稳定。
+    /// 验证Pinned Buffer Pointer Stays Stable Across Gc。
     /// </summary>
     [Fact]
     public void PinnedBufferPointerStaysStableAcrossGc()
@@ -27,7 +27,7 @@ public sealed unsafe class MemoryTests
     }
 
     /// <summary>
-    /// 验证 NativeBuffer 可读写、清零和释放。
+    /// 验证Native Buffer Can Be Written Cleared And Disposed。
     /// </summary>
     [Fact]
     public void NativeBufferCanBeWrittenClearedAndDisposed()
@@ -73,7 +73,7 @@ public sealed unsafe class MemoryTests
     }
 
     /// <summary>
-    /// 验证 DoubleBuffer 只交换引用。
+    /// 验证Double Buffer Swap Only Exchanges References。
     /// </summary>
     [Fact]
     public void DoubleBufferSwapOnlyExchangesReferences()
@@ -95,7 +95,7 @@ public sealed unsafe class MemoryTests
     }
 
     /// <summary>
-    /// 验证 SoaBuffer 扩容后所有列同步扩容并保留旧数据。
+    /// 验证Soa Buffer Ensure Capacity保持Columns。
     /// </summary>
     [Fact]
     public void SoaBufferEnsureCapacityPreservesColumns()

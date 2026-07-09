@@ -241,6 +241,7 @@ public sealed class RenderWindow : IDisposable
         RenderBackend backend,
         Action<string>? diagnostics)
     {
+        // --- 窗口创建：DPI 感知 → Silk.NET 窗口 → 输入上下文 ---
         WindowsDpiAwareness.EnsureEnabled();
         WindowOptions windowOptions = RenderBackendSelector.CreateWindowOptions(options, backend);
         IWindow window = Window.Create(windowOptions);
@@ -251,6 +252,7 @@ public sealed class RenderWindow : IDisposable
         {
             window.Initialize();
             input = window.CreateInput();
+            // --- GL 上下文：查询能力快照并按后端校验最低版本 ---
             gl = GL.GetApi(window);
             INativeContext nativeContext = gl.Context;
             GlCapabilities capabilities = GlCapabilities.Query(gl);

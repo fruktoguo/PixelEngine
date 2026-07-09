@@ -6,6 +6,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// 凸分解测试。
+/// 不变式：凸分解覆盖原形状、凸包数量在预算内。
 /// </summary>
 public sealed class ConvexDecomposerTests
 {

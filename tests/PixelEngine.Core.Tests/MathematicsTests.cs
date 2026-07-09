@@ -8,7 +8,7 @@ namespace PixelEngine.Core.Tests;
 public sealed class MathematicsTests
 {
     /// <summary>
-    /// 验证负坐标下 floor 除法与 modulo 满足数学定义。
+    /// 验证Floor Div And Mod Match Floored Definition For Negative Coordinates。
     /// </summary>
     [Fact]
     public void FloorDivAndModMatchFlooredDefinitionForNegativeCoordinates()
@@ -26,7 +26,7 @@ public sealed class MathematicsTests
     }
 
     /// <summary>
-    /// 验证 Transform2D 正逆变换可还原局部点。
+    /// 验证Transform2D Inverse Restores Transformed Point。
     /// </summary>
     [Fact]
     public void Transform2DInverseRestoresTransformedPoint()
@@ -41,7 +41,7 @@ public sealed class MathematicsTests
     }
 
     /// <summary>
-    /// 验证 RectI 扩张和边界钳制不会越出 chunk。
+    /// 验证Rect I Encapsulate And Expand Clamped Stay Inside Chunk Bounds。
     /// </summary>
     [Fact]
     public void RectIEncapsulateAndExpandClampedStayInsideChunkBounds()
@@ -59,7 +59,7 @@ public sealed class MathematicsTests
     }
 
     /// <summary>
-    /// 验证 Fixed 四则、比较和整数转换保持确定性原始位。
+    /// 验证Fixed Arithmetic Uses Stable Raw Representation。
     /// </summary>
     [Fact]
     public void FixedArithmeticUsesStableRawRepresentation()

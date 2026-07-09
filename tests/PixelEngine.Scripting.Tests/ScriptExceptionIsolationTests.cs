@@ -4,6 +4,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// 验证脚本异常隔离不会让 Scene 派发路径崩溃，并会记录诊断与跳过故障脚本。
+/// 不变式：脚本异常被隔离记录、Scene 派发路径不崩溃。
 /// </summary>
 public sealed class ScriptExceptionIsolationTests
 {
@@ -13,6 +14,7 @@ public sealed class ScriptExceptionIsolationTests
     [Fact]
     public void BehaviourUpdateExceptionIsReportedAndDoesNotStopHealthyBehaviours()
     {
+        // Arrange：准备输入与初始状态
         RecordingDiagnostics diagnostics = new();
         Scene scene = new(diagnostics);
         FakeScriptContext context = new(scene, new FakeGameTime(101));
@@ -22,6 +24,7 @@ public sealed class ScriptExceptionIsolationTests
         Exception? firstDispatch = Record.Exception(() => scene.DispatchUpdate(context, 0.016f));
         Exception? secondDispatch = Record.Exception(() => scene.DispatchUpdate(context, 0.016f));
 
+        // Assert：验证预期结果
         Assert.Null(firstDispatch);
         Assert.Null(secondDispatch);
         Assert.True(faulted.Faulted);
@@ -43,6 +46,7 @@ public sealed class ScriptExceptionIsolationTests
     [Fact]
     public void FrameSystemExceptionIsReportedOnceAndDoesNotStopLaterSystems()
     {
+        // Arrange：准备输入与初始状态
         RecordingDiagnostics diagnostics = new();
         Scene scene = new(diagnostics);
         List<string> events = [];
@@ -53,6 +57,7 @@ public sealed class ScriptExceptionIsolationTests
         Exception? firstDispatch = Record.Exception(() => scene.DispatchFrameSystems(context, 0.016f));
         Exception? secondDispatch = Record.Exception(() => scene.DispatchFrameSystems(context, 0.016f));
 
+        // Assert：验证预期结果
         Assert.Null(firstDispatch);
         Assert.Null(secondDispatch);
         Assert.Equal(["frame:healthy", "frame:healthy"], events);
@@ -71,6 +76,7 @@ public sealed class ScriptExceptionIsolationTests
     [Fact]
     public void SimSystemExceptionIsReportedOnceAndDoesNotStopLaterSystems()
     {
+        // Arrange：准备输入与初始状态
         RecordingDiagnostics diagnostics = new();
         Scene scene = new(diagnostics);
         List<string> events = [];
@@ -81,6 +87,7 @@ public sealed class ScriptExceptionIsolationTests
         Exception? firstDispatch = Record.Exception(() => scene.DispatchSimSystems(context));
         Exception? secondDispatch = Record.Exception(() => scene.DispatchSimSystems(context));
 
+        // Assert：验证预期结果
         Assert.Null(firstDispatch);
         Assert.Null(secondDispatch);
         Assert.Equal(["sim:healthy", "sim:healthy"], events);

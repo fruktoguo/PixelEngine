@@ -2,6 +2,9 @@ using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell.Build;
 
+/// <summary>
+/// 项目级 Build Settings JSON 读写。
+/// </summary>
 internal sealed class BuildSettingsStore(EditorProject project)
 {
     private readonly EditorProject _project = project ?? throw new ArgumentNullException(nameof(project));

@@ -9,7 +9,8 @@ using Xunit;
 namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
-/// Hosting 项目的工程纪律测试。
+/// Hosting 层工程纪律测试：solution 完整性、公开入口引用、正式输出与编辑器壳装配不变式。
+/// 不变式：用户入口仅经 Hosting/Scripting/Editor 公开项目、WinExe 无控制台、产物可审计校验。
 /// </summary>
 public sealed class HostingProjectDisciplineTests
 {
@@ -17,8 +18,11 @@ public sealed class HostingProjectDisciplineTests
     /// 验证仓库内所有项目都登记在 solution 中，避免工具、测试或应用项目绕过常规 build/test 入口。
     /// </summary>
     [Fact]
+
+    // —— 解决方案与项目引用纪律 ——
     public void SolutionTracksEveryRepositoryProject()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string solution = File.ReadAllText(Path.Combine(root, "PixelEngine.sln"));
         string[] projectFiles =
@@ -35,6 +39,7 @@ public sealed class HostingProjectDisciplineTests
                 .Order(StringComparer.OrdinalIgnoreCase),
         ];
 
+        // Assert：验证预期结果
         Assert.Equal(projectFiles, solutionProjects, StringComparer.OrdinalIgnoreCase);
     }
 
@@ -107,13 +112,17 @@ public sealed class HostingProjectDisciplineTests
     /// 验证正式输出 Demo 默认请求 Web-first UI 产品主路径 RmlUi，并把请求后端写入验证记录。
     /// </summary>
     [Fact]
+
+    // —— 正式输出与玩家包构建 ——
     public void FinalOutputDemoRequestsRmlUiProductUiBackend()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string finalOutputScript = File.ReadAllText(Path.Combine(root, "tools", "update-final-output.ps1"));
         string buildPlayerPs1 = File.ReadAllText(Path.Combine(root, "tools", "build-player.ps1"));
         string buildPlayerSh = File.ReadAllText(Path.Combine(root, "tools", "build-player.sh"));
 
+        // Assert：验证预期结果
         Assert.Contains("[string]$DemoRuntimeUiBackend = 'RmlUi'", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("'-RuntimeUiBackend', $DemoRuntimeUiBackend", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("demoRuntimeUiBackendRequested = $DemoRuntimeUiBackend", finalOutputScript, StringComparison.Ordinal);
@@ -146,11 +155,13 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void FinalOutputVerifierAuditsExistingOutputWithoutRepackaging()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string verifier = File.ReadAllText(Path.Combine(root, "tools", "verify-final-output.ps1"));
         string finalOutputDoc = File.ReadAllText(Path.Combine(root, "docs", "final-output.md"));
         string plan15 = File.ReadAllText(Path.Combine(root, "plan", "15-build-packaging-distribution.md"));
 
+        // Assert：验证预期结果
         Assert.Contains("pixelengine.final-output-verify/v1", verifier, StringComparison.Ordinal);
         Assert.Contains("Get-FileHash -LiteralPath $filePath -Algorithm SHA256", verifier, StringComparison.Ordinal);
         Assert.Contains("git -C $repoRoot rev-parse HEAD", verifier, StringComparison.Ordinal);
@@ -181,6 +192,7 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void FinalOutputVerifierRejectsDirectoryAndChecksumSetDrift()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string outputRoot = Path.Combine(Path.GetTempPath(), "pixelengine-final-output-" + Guid.NewGuid().ToString("N"));
         string verifier = Path.Combine(root, "tools", "verify-final-output.ps1");
@@ -188,6 +200,7 @@ public sealed class HostingProjectDisciplineTests
         {
             WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
             ProcessResult clean = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+            // Assert：验证预期结果
             Assert.Equal(0, clean.ExitCode);
             Assert.Contains("final_output_verify schema=pixelengine.final-output-verify/v1, ok=True", clean.Stdout, StringComparison.Ordinal);
 
@@ -234,9 +247,11 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void FinalOutputPrunesEditorDeveloperMetadataByDefault()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string finalOutputScript = File.ReadAllText(Path.Combine(root, "tools", "update-final-output.ps1"));
 
+        // Assert：验证预期结果
         Assert.Contains("[switch]$IncludeEditorSymbols", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("function Remove-EditorDeveloperMetadata", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains(".Extension.Equals('.pdb'", finalOutputScript, StringComparison.Ordinal);
@@ -251,6 +266,8 @@ public sealed class HostingProjectDisciplineTests
     /// 验证编辑器壳只通过中性 bootstrap 创建唯一窗口，不直接散落创建 RenderWindow。
     /// </summary>
     [Fact]
+
+    // —— 编辑器壳与 UI 后端 ——
     public void EditorShellCreatesWindowOnlyThroughNeutralBootstrap()
     {
         string root = FindRepositoryRoot();
@@ -286,6 +303,7 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void GuiInputConnectorsRefreshPointerPositionBeforeMouseButtons()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string guiConnector = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "GuiWindowInputConnector.cs"));
         string editorConnector = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorWindowInputConnector.cs"));
@@ -295,10 +313,11 @@ public sealed class HostingProjectDisciplineTests
             string compact = source.Replace(" ", string.Empty, StringComparison.Ordinal)
                 .Replace("\r", string.Empty, StringComparison.Ordinal)
                 .Replace("\n", string.Empty, StringComparison.Ordinal);
+            // Assert：验证预期结果
             Assert.Contains("privatevoidForwardMousePosition(Vector2position)", compact, StringComparison.Ordinal);
             Assert.Contains("_input.MouseMoveFramebuffer(position.X*_window.FramebufferScaleX,position.Y*_window.FramebufferScaleY);", compact, StringComparison.Ordinal);
-            Assert.Contains("privatevoidOnMouseDown(IMousemouse,Silk.NET.Input.MouseButtonbutton){ForwardMousePosition(mouse.Position);_input.MouseButton(button,down:true);}", compact, StringComparison.Ordinal);
-            Assert.Contains("privatevoidOnMouseUp(IMousemouse,Silk.NET.Input.MouseButtonbutton){ForwardMousePosition(mouse.Position);_input.MouseButton(button,down:false);}", compact, StringComparison.Ordinal);
+            Assert.Contains("privatevoidOnMouseDown(IMousemouse,MouseButtonbutton){ForwardMousePosition(mouse.Position);_input.MouseButton(button,down:true);}", compact, StringComparison.Ordinal);
+            Assert.Contains("privatevoidOnMouseUp(IMousemouse,MouseButtonbutton){ForwardMousePosition(mouse.Position);_input.MouseButton(button,down:false);}", compact, StringComparison.Ordinal);
             Assert.DoesNotContain("_input.MouseMove(position.X,position.Y);", compact, StringComparison.Ordinal);
         }
     }
@@ -309,6 +328,7 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void HexaImGuiBackendsPinCurrentContextBeforeFrameRenderAndInput()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string guiBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "HexaImGuiBackend.cs"));
         string editorBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "HexaImGuiBackend.cs"));
@@ -318,6 +338,7 @@ public sealed class HostingProjectDisciplineTests
             string compact = source.Replace(" ", string.Empty, StringComparison.Ordinal)
                 .Replace("\r", string.Empty, StringComparison.Ordinal)
                 .Replace("\n", string.Empty, StringComparison.Ordinal);
+            // Assert：验证预期结果
             Assert.Contains("private void SetCurrentContext()", source, StringComparison.Ordinal);
             Assert.Contains("ImGui.SetCurrentContext(_context);", source, StringComparison.Ordinal);
             Assert.Contains("ImGuiImplOpenGL3.SetCurrentContext(_context);", source, StringComparison.Ordinal);
@@ -337,6 +358,7 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void HexaImGuiBackendsMapLogicalMouseCoordinatesToFramebuffer()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string guiBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "HexaImGuiBackend.cs"));
         string editorBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "HexaImGuiBackend.cs"));
@@ -350,6 +372,7 @@ public sealed class HostingProjectDisciplineTests
             string compact = source.Replace(" ", string.Empty, StringComparison.Ordinal)
                 .Replace("\r", string.Empty, StringComparison.Ordinal)
                 .Replace("\n", string.Empty, StringComparison.Ordinal);
+            // Assert：验证预期结果
             Assert.Contains("ImGuiFrameMetrics.Create(width,height,framebufferScaleX,framebufferScaleY)", compact, StringComparison.Ordinal);
             Assert.Contains("Vector2mapped=_frameMetrics.MapMousePosition(x,y);", compact, StringComparison.Ordinal);
             Assert.Contains("ImGui.AddMousePosEvent(ImGui.GetIO(),mapped.X,mapped.Y);", compact, StringComparison.Ordinal);
@@ -378,12 +401,14 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void EditorShellWiresProjectPickerMenuAndLayout()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
         string shellSource = string.Join(
             '\n',
             Directory.EnumerateFiles(shellDirectory, "*.cs").Select(File.ReadAllText));
 
+        // Assert：验证预期结果
         Assert.Contains("project.pixelproj", shellSource, StringComparison.Ordinal);
         Assert.Contains("EngineProject", shellSource, StringComparison.Ordinal);
         Assert.Contains("RecentProjectsStore.LoadDefault()", shellSource, StringComparison.Ordinal);
@@ -397,6 +422,8 @@ public sealed class HostingProjectDisciplineTests
     /// 验证项目选择器的 Browse 按钮接入 Windows 原生文件夹选择器，并会把当前输入路径作为默认目录。
     /// </summary>
     [Fact]
+
+    // —— 解决方案与项目引用纪律 ——
     public void EditorShellProjectPickerUsesNativeFolderDialogWithInitialPath()
     {
         string root = FindRepositoryRoot();
@@ -415,8 +442,11 @@ public sealed class HostingProjectDisciplineTests
     /// 验证 Shell 菜单覆盖 plan/19 要求的顶级菜单，并包含 Build Settings 与 Reset Layout 入口。
     /// </summary>
     [Fact]
+
+    // —— 编辑器壳与 UI 后端 ——
     public void EditorShellMainMenuDeclaresRequiredMenus()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string menu = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorMainMenuBar.cs"));
         string layout = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellLayout.cs"));
@@ -453,6 +483,7 @@ public sealed class HostingProjectDisciplineTests
             "Shortcuts",
         })
         {
+            // Assert：验证预期结果
             Assert.Contains(item, menu, StringComparison.Ordinal);
         }
 
@@ -495,12 +526,14 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void EditorShellSessionAttachesEngineThroughHostExtension()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
         string source = string.Join(
             '\n',
             Directory.EnumerateFiles(shellDirectory, "*.cs").Select(File.ReadAllText));
 
+        // Assert：验证预期结果
         Assert.Contains("EditorProjectSession.Open", source, StringComparison.Ordinal);
         Assert.Contains(".WithProject(project.ToEngineProject(sceneRelativePath))", source, StringComparison.Ordinal);
         Assert.Contains(".ApplyRuntimeDefaults(playerSettings, applyStartupScene: false)", source, StringComparison.Ordinal);
@@ -522,8 +555,11 @@ public sealed class HostingProjectDisciplineTests
     /// 验证 EditorShell 只接入 Hosting-owned 脚本 runtime 与 Console 诊断 sink，不自行装配脚本运行时。
     /// </summary>
     [Fact]
+
+    // —— Hosting 装配与内容加载 ——
     public void EditorShellConsumesHostingOwnedScriptingRuntimeAndConsoleDiagnostics()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
         string shellSource = string.Join(
@@ -532,6 +568,7 @@ public sealed class HostingProjectDisciplineTests
         string hostingEngine = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Hosting", "Engine.cs"));
         string scriptingRuntime = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Scripting", "ScriptRuntime.cs"));
 
+        // Assert：验证预期结果
         Assert.DoesNotContain("EditorConsoleScriptRuntime", shellSource, StringComparison.Ordinal);
         Assert.DoesNotContain("new ScriptRuntime(", shellSource, StringComparison.Ordinal);
         Assert.DoesNotContain("new ScriptHotReloadController(", shellSource, StringComparison.Ordinal);
@@ -549,8 +586,11 @@ public sealed class HostingProjectDisciplineTests
     /// 验证编辑器壳按 plan/19 节点 4 拥有独立 authoring 模型、StableId 映射、层级面板与命令栈。
     /// </summary>
     [Fact]
+
+    // —— 编辑器壳与 UI 后端 ——
     public void EditorShellDeclaresGameObjectAuthoringModelAndHierarchy()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
         string source = string.Join(
@@ -559,6 +599,7 @@ public sealed class HostingProjectDisciplineTests
         string editorSelection = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "EditorSelection.cs"));
         string hostingEngine = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Hosting", "Engine.cs"));
 
+        // Assert：验证预期结果
         Assert.Contains("class EditorSceneModel", source, StringComparison.Ordinal);
         Assert.Contains("class EditorGameObject", source, StringComparison.Ordinal);
         Assert.Contains("class EditorComponentModel", source, StringComparison.Ordinal);
@@ -585,7 +626,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("ScriptInspector.InspectFields", source, StringComparison.Ordinal);
         Assert.Contains("GameObjectStableId", editorSelection, StringComparison.Ordinal);
         Assert.Contains("SelectGameObject", editorSelection, StringComparison.Ordinal);
-        Assert.Contains("AttachScriptScene(PixelEngine.Scripting.Scene scriptScene)", hostingEngine, StringComparison.Ordinal);
+        Assert.Contains("AttachScriptScene(Scripting.Scene scriptScene)", hostingEngine, StringComparison.Ordinal);
         Assert.Contains("--scripted-hierarchy-probe", File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellOptions.cs")), StringComparison.Ordinal);
         Assert.Contains("editor_hierarchy_probe", source, StringComparison.Ordinal);
         Assert.Contains("RunScriptedHierarchyProbeActions", source, StringComparison.Ordinal);
@@ -600,6 +641,7 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void EditorShellDeclaresDefaultWorkbenchScriptedRoute()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
         string source = string.Join(
@@ -607,6 +649,7 @@ public sealed class HostingProjectDisciplineTests
             Directory.EnumerateFiles(shellDirectory, "*.cs").Select(File.ReadAllText));
         string options = File.ReadAllText(Path.Combine(shellDirectory, "EditorShellOptions.cs"));
 
+        // Assert：验证预期结果
         Assert.Contains("--scripted-default-workbench-probe", options, StringComparison.Ordinal);
         Assert.Contains("ScriptedDefaultWorkbenchProbe", source, StringComparison.Ordinal);
         Assert.Contains("RunScriptedDefaultWorkbenchProbeActions", source, StringComparison.Ordinal);
@@ -645,6 +688,7 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void EditorShellDeclaresSceneViewGizmoCameraAndPicking()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
         string source = string.Join(
@@ -653,6 +697,7 @@ public sealed class HostingProjectDisciplineTests
         string editorBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "HexaImGuiBackend.cs"));
         XDocument shellProject = XDocument.Load(Path.Combine(shellDirectory, "PixelEngine.Editor.Shell.csproj"));
 
+        // Assert：验证预期结果
         Assert.Contains("Hexa.NET.ImGuizmo", ReadIncludes(shellProject, "PackageReference"));
         Assert.Contains("class SceneViewPanel", source, StringComparison.Ordinal);
         Assert.Contains("new SceneViewPanel(", source, StringComparison.Ordinal);
@@ -684,6 +729,7 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void EditorShellDeclaresSceneSaveAndPrefabAuthoring()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
         string source = string.Join(
@@ -692,6 +738,7 @@ public sealed class HostingProjectDisciplineTests
         string editorAssetSource = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "AssetBrowserDataSource.cs"));
         string hostingSceneDocument = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Hosting", "EngineSceneDocument.cs"));
 
+        // Assert：验证预期结果
         Assert.Contains("SceneOverridePath", source, StringComparison.Ordinal);
         Assert.Contains("CurrentSceneRelativePath", source, StringComparison.Ordinal);
         Assert.Contains("SaveSceneAsAuto", source, StringComparison.Ordinal);
@@ -717,12 +764,14 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void EditorShellDeclaresBuildSettingsPanelAndPlayerBuildService()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
         string source = string.Join(
             '\n',
             Directory.EnumerateFiles(shellDirectory, "*.cs", SearchOption.AllDirectories).Select(File.ReadAllText));
 
+        // Assert：验证预期结果
         Assert.Contains("namespace PixelEngine.Editor.Shell.Build", source, StringComparison.Ordinal);
         Assert.Contains("class BuildSettingsPanel", source, StringComparison.Ordinal);
         Assert.Contains("BuildProfileDto", source, StringComparison.Ordinal);
@@ -826,9 +875,11 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void EditorShellRegistersMaterialReactionEditorWithRuntimeReloadServices()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string source = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellHostExtension.cs"));
 
+        // Assert：验证预期结果
         Assert.Contains("TryCreateMaterialReactionPanel", source, StringComparison.Ordinal);
         Assert.Contains("MaterialReactionEditorPanel panel = new(content)", source, StringComparison.Ordinal);
         Assert.Contains("FileMaterialReactionContentService content = new(", source, StringComparison.Ordinal);
@@ -849,12 +900,14 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void EditorShellRegistersEditorModePanelWithPlaySessionAdapter()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
         string source = string.Join(
             '\n',
             Directory.EnumerateFiles(shellDirectory, "*.cs").Select(File.ReadAllText));
 
+        // Assert：验证预期结果
         Assert.Contains("new EditorModePanel(new EditorPlaySessionAdapter(_app))", source, StringComparison.Ordinal);
         Assert.Contains("class EditorPlaySessionAdapter", source, StringComparison.Ordinal);
         Assert.Contains("IEditorPlaySessionService", source, StringComparison.Ordinal);
@@ -873,6 +926,7 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void EditorShellRegistersSaveLoadPanelThroughHostingWorldSaveApi()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string shellDirectory = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
         string source = string.Join(
@@ -880,6 +934,7 @@ public sealed class HostingProjectDisciplineTests
             Directory.EnumerateFiles(shellDirectory, "*.cs").Select(File.ReadAllText));
         string engine = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Hosting", "Engine.cs"));
 
+        // Assert：验证预期结果
         Assert.Contains("new SaveLoadPanel(new EditorWorldSaveLoadService", source, StringComparison.Ordinal);
         Assert.Contains("class EditorWorldSaveLoadService", source, StringComparison.Ordinal);
         Assert.Contains("ISaveLoadService", source, StringComparison.Ordinal);
@@ -899,6 +954,7 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void BuildPlayerScriptsDeclareNdjsonResultStartupAndPlayerOnlyAuditContracts()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string buildPlayerPs1 = File.ReadAllText(Path.Combine(root, "tools", "build-player.ps1"));
         string buildPlayerSh = File.ReadAllText(Path.Combine(root, "tools", "build-player.sh"));
@@ -910,6 +966,7 @@ public sealed class HostingProjectDisciplineTests
 
         foreach (string script in new[] { buildPlayerPs1, buildPlayerSh })
         {
+            // Assert：验证预期结果
             Assert.Contains("pixelengine.build/v1", script, StringComparison.Ordinal);
             Assert.Contains("build-result.json", script, StringComparison.Ordinal);
             Assert.Contains("build-native", script, StringComparison.Ordinal);
@@ -971,6 +1028,7 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void ReleaseRidGateDeclaresWindowsActiveSetAndMatrixOutputs()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string ridConfigPath = Path.Combine(root, "tools", "release-rids.json");
         string matrixScript = File.ReadAllText(Path.Combine(root, "tools", "release-matrix.ps1"));
@@ -981,6 +1039,7 @@ public sealed class HostingProjectDisciplineTests
         JsonArray channels = config["channels"]!.AsArray();
         JsonArray rids = config["rids"]!.AsArray();
 
+        // Assert：验证预期结果
         Assert.Equal(["r2r", "aot"], [.. channels.Select(node => node!.GetValue<string>())]);
         Assert.Equal(6, rids.Count);
 
@@ -1033,6 +1092,7 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void ReleaseRidGateDryRunActivatesDormantRidFromConfigOnly()
     {
+        // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
         string tempDirectory = Path.Combine(Path.GetTempPath(), "PixelEngine.ReleaseRidGate." + Guid.NewGuid().ToString("N"));
         _ = Directory.CreateDirectory(tempDirectory);
@@ -1048,11 +1108,13 @@ public sealed class HostingProjectDisciplineTests
             linuxX64["active"] = true;
             File.WriteAllText(tempConfigPath, config.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
+            // Act：执行被测操作
             JsonObject matrix = JsonNode.Parse(RunPowerShellScript(root, Path.Combine(root, "tools", "release-matrix.ps1"), "-RidConfigPath", tempConfigPath, "-Print"))!.AsObject();
             JsonObject expected = matrix["expected"]!.AsObject();
             JsonArray activeRids = expected["activeRids"]!.AsArray();
             JsonArray buildEntries = matrix["build-matrix"]!["include"]!.AsArray();
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(["win-x64", "win-arm64", "linux-x64"], [.. activeRids.Select(node => node!.GetValue<string>())]);
             Assert.Equal(6, expected["packageCount"]!.GetValue<int>());
             Assert.Equal(7, expected["assetCount"]!.GetValue<int>());
@@ -1083,6 +1145,7 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void ReleaseLayoutLocksPublishIntermediateAndSingleFileDecision()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string props = File.ReadAllText(Path.Combine(root, "Directory.Build.props"));
         string publishR2rPs1 = File.ReadAllText(Path.Combine(root, "tools", "publish-r2r.ps1"));
@@ -1091,6 +1154,7 @@ public sealed class HostingProjectDisciplineTests
         string packageSh = File.ReadAllText(Path.Combine(root, "tools", "package.sh"));
         string plan = File.ReadAllText(Path.Combine(root, "plan", "15-build-packaging-distribution.md"));
 
+        // Assert：验证预期结果
         Assert.Contains("plan/15 §3.7.1", props, StringComparison.Ordinal);
         Assert.Contains("<PublishSingleFile>false</PublishSingleFile>", props, StringComparison.Ordinal);
         Assert.Contains("_PUBLISH_INTERMEDIATE_README.txt", publishR2rPs1, StringComparison.Ordinal);
@@ -1109,8 +1173,11 @@ public sealed class HostingProjectDisciplineTests
     /// 验证 HTML UI native 作为 dynamic-only 依赖随 UI/Demo publish 落入 runtimes/native，不进入 Box2D dual-build 静态链。
     /// </summary>
     [Fact]
+
+    // —— 性能、原生与发布模式 ——
     public void HtmlUiNativePackagingUsesDynamicOnlyRuntimeLayout()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string directoryTargets = File.ReadAllText(Path.Combine(root, "Directory.Build.targets"));
         string uiNativeTargets = File.ReadAllText(Path.Combine(root, "native", "PixelEngine.UiNative.targets"));
@@ -1122,6 +1189,7 @@ public sealed class HostingProjectDisciplineTests
         string auditPs1 = File.ReadAllText(Path.Combine(root, "tools", "audit-release-artifacts.ps1"));
         string auditSh = File.ReadAllText(Path.Combine(root, "tools", "audit-release-artifacts.sh"));
 
+        // Assert：验证预期结果
         Assert.Contains("PixelEngine.UiNative.targets", directoryTargets, StringComparison.Ordinal);
         Assert.Contains("'$(MSBuildProjectName)' == 'PixelEngine.UI' or '$(MSBuildProjectName)' == 'PixelEngine.Demo'", directoryTargets, StringComparison.Ordinal);
         Assert.Contains(@"out\$(PixelEngineUiNativeRid)\shared\", uiNativeTargets, StringComparison.Ordinal);
@@ -1158,8 +1226,11 @@ public sealed class HostingProjectDisciplineTests
     /// 验证 Ultralight 设置入口和计划口径都明确写成未激活 optional profile，避免误导为真后端完成。
     /// </summary>
     [Fact]
+
+    // —— 编辑器壳与 UI 后端 ——
     public void UltralightOptionalProfileIsVisibleInactiveGateNotCompletedBackend()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string playerSettingsPanel = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "Settings", "PlayerSettingsPanel.cs"));
         string uiBackendKind = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.UI", "UiBackendKind.cs"));
@@ -1168,6 +1239,7 @@ public sealed class HostingProjectDisciplineTests
         string plan14 = File.ReadAllText(Path.Combine(root, "plan", "14-testing-benchmarking.md"));
         string plan15 = File.ReadAllText(Path.Combine(root, "plan", "15-build-packaging-distribution.md"));
 
+        // Assert：验证预期结果
         Assert.Contains("UltralightOptionalProfileGate.GetDisplayLabel", playerSettingsPanel, StringComparison.Ordinal);
         Assert.Contains("UltralightOptionalProfileGate.InactiveReason", playerSettingsPanel, StringComparison.Ordinal);
         Assert.Contains("未满足 native SDK / commercial license / release gate 前保持未激活", uiBackendKind, StringComparison.Ordinal);
@@ -1189,6 +1261,7 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void RmlUiAngleGlesProfileGateFallsBackAndDoesNotMarkM15Complete()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string gate = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.UI", "RmlUiNativeProfileGate.cs"));
         string bootstrap = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.UI", "RmlUiGlBootstrap.cs"));
@@ -1200,6 +1273,7 @@ public sealed class HostingProjectDisciplineTests
         string plan14 = File.ReadAllText(Path.Combine(root, "plan", "14-testing-benchmarking.md"));
         string plan15 = File.ReadAllText(Path.Combine(root, "plan", "15-build-packaging-distribution.md"));
 
+        // Assert：验证预期结果
         Assert.Contains("RenderBackend.GlEs30Angle", gate, StringComparison.Ordinal);
         Assert.Contains("capabilities.IsGles || capabilities.IsAngle", gate, StringComparison.Ordinal);
         Assert.Contains("RmlUi_Renderer_GLES3_ANGLE", gate, StringComparison.Ordinal);
@@ -1208,7 +1282,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("NativeProfileGles3Angle", gate, StringComparison.Ordinal);
         Assert.Contains("RmlUiNativeProfileGate.CanUseNativeRenderer(window.Backend, window.Capabilities", bootstrap, StringComparison.Ordinal);
         Assert.Contains("RmlUiNative.SetRendererProfile", bootstrap, StringComparison.Ordinal);
-        Assert.Contains("RmlUiNativeProfileGate.CanUseNativeRenderer(window.Backend, window.Capabilities", engine, StringComparison.Ordinal);
+        Assert.Contains("RmlUiNativeProfileGate.Evaluate(window.Backend, window.Capabilities)", engine, StringComparison.Ordinal);
+        Assert.Contains("if (!decision.CanUseNativeRenderer)", engine, StringComparison.Ordinal);
         Assert.Contains("RmlUi_Renderer_GL3.cpp", uiNativeCMake, StringComparison.Ordinal);
         Assert.Contains("RenderInterface_GL3", uiNativeCpp, StringComparison.Ordinal);
         Assert.Contains("peui_native_set_renderer_profile", uiNativeCpp, StringComparison.Ordinal);
@@ -1228,12 +1303,14 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void HostingSharesUiStringPoolBetweenScriptServiceAndRmlUiBackend()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string engine = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Hosting", "Engine.cs"));
         string bridge = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Hosting", "GameUiServiceBridge.cs"));
         string scripting = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Scripting", "GameUiFacades.cs"));
         string plan20 = File.ReadAllText(Path.Combine(root, "plan", "20-interactive-html-ui.md"));
 
+        // Assert：验证预期结果
         Assert.Contains("UiStringPool strings = new();", engine, StringComparison.Ordinal);
         Assert.Contains("new RmlUiBackend(window, stringResolver: strings)", engine, StringComparison.Ordinal);
         Assert.Contains("new(host, Context.Options.ContentRoot, stringPool: strings)", engine, StringComparison.Ordinal);
@@ -1249,12 +1326,14 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void DemoContentDeclaresWeaponsAndResolvableMaterialTextures()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string contentRoot = Path.Combine(root, "demo", "PixelEngine.Demo", "content");
         string weaponsPath = Path.Combine(contentRoot, "weapons.json");
         string materialsPath = Path.Combine(contentRoot, "materials.json");
         string reactionsPath = Path.Combine(contentRoot, "reactions.json");
 
+        // Assert：验证预期结果
         Assert.True(File.Exists(weaponsPath), "Demo content 必须包含 weapons.json。");
         Assert.True(File.Exists(materialsPath), "Demo content 必须包含 materials.json。");
         Assert.True(File.Exists(reactionsPath), "Demo content 必须包含 reactions.json。");
@@ -1320,12 +1399,14 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void DemoRuntimeDoesNotExposeInProcessEditorEntry()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string demoDirectory = Path.Combine(root, "demo", "PixelEngine.Demo");
         string startupOptions = File.ReadAllText(Path.Combine(demoDirectory, "DemoStartupOptions.cs"));
         string demoProgram = File.ReadAllText(Path.Combine(demoDirectory, "DemoProgram.cs"));
         string pauseMenu = File.ReadAllText(Path.Combine(demoDirectory, "PauseMenu.cs"));
 
+        // Assert：验证预期结果
         Assert.DoesNotContain("--editor", startupOptions, StringComparison.Ordinal);
         Assert.DoesNotContain("EnableEditor", startupOptions, StringComparison.Ordinal);
         Assert.DoesNotContain("editor_enabled=", demoProgram, StringComparison.Ordinal);
@@ -1341,11 +1422,13 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void DemoLavaMineSceneFileUsesLevelDirectorBehaviour()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string scenePath = Path.Combine(root, "demo", "PixelEngine.Demo", "content", "scenes", "lava-mine.scene");
 
         EngineSceneDocument document = EngineSceneDocumentLoader.LoadDocument(scenePath);
 
+        // Assert：验证预期结果
         Assert.Equal("lava-mine", document.Name);
         EngineSceneEntityDocument[] entities = document.Entities!;
         EngineSceneEntityDocument entity = Assert.Single(entities);
@@ -1427,6 +1510,7 @@ public sealed class HostingProjectDisciplineTests
     [Fact]
     public void HostingPublicApiMembersHaveChineseXmlDocumentation()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string projectDirectory = Path.Combine(root, "src", "PixelEngine.Hosting");
         foreach (string file in Directory.EnumerateFiles(projectDirectory, "*.cs", SearchOption.TopDirectoryOnly))
@@ -1438,6 +1522,7 @@ public sealed class HostingProjectDisciplineTests
                 if (braceDepth <= 1 && IsPublicApiDeclaration(lines[i]))
                 {
                     int previous = PreviousNonAttributeLine(lines, i);
+                    // Assert：验证预期结果
                     Assert.True(
                         previous >= 0 && IsChineseXmlDocumentationBlock(lines, previous),
                         $"{file}:{i + 1} 公开 API 缺少中文 XML 文档注释。");
@@ -1734,7 +1819,7 @@ public sealed class HostingProjectDisciplineTests
     private static void WriteTextFile(string outputRoot, string relativePath, string content)
     {
         string fullPath = Path.Combine(outputRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         File.WriteAllText(fullPath, content);
     }
 

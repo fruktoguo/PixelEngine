@@ -3,10 +3,19 @@ using System.IO.Compression;
 
 namespace PixelEngine.UI;
 
+/// <summary>
+/// 轻量 PNG 解码器，将 UI 图片资产解码为 <see cref="UiImageBitmap" />。
+/// 仅支持 8-bit、标准 deflate/adaptive filter、非交错 PNG。
+/// </summary>
 internal static class UiPngImageLoader
 {
     private static readonly byte[] PngSignature = [137, 80, 78, 71, 13, 10, 26, 10];
 
+    /// <summary>
+    /// 从磁盘载入 PNG 并解码为 BGRA 位图。
+    /// </summary>
+    /// <param name="path">PNG 文件路径。</param>
+    /// <returns>解码后的 UI 位图。</returns>
     internal static UiImageBitmap Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -23,6 +32,7 @@ internal static class UiPngImageLoader
         byte[]? palette = null;
         byte[]? transparency = null;
         using MemoryStream idat = new();
+        // 阶段 1：遍历 chunk 流，收集 IHDR/PLTE/tRNS 元数据并拼接 IDAT。
         int offset = PngSignature.Length;
         while (offset < bytes.Length)
         {
@@ -88,10 +98,14 @@ internal static class UiPngImageLoader
             throw new InvalidDataException($"UI 图片仅支持 8-bit PNG，当前 bitDepth={bitDepth}。");
         }
 
+        // 阶段 2：解压 IDAT 并还原 scanline 为 BGRA 像素。
         byte[] decompressed = Decompress(idat.ToArray());
         return DecodeScanlines(width, height, colorType, decompressed, palette, transparency);
     }
 
+    /// <summary>
+    /// 使用 ZLib 解压 PNG IDAT 拼接结果。
+    /// </summary>
     private static byte[] Decompress(byte[] compressed)
     {
         using MemoryStream source = new(compressed, writable: false);
@@ -101,6 +115,9 @@ internal static class UiPngImageLoader
         return output.ToArray();
     }
 
+    /// <summary>
+    /// 逐行应用 PNG filter 并解码为 BGRA 像素数组。
+    /// </summary>
     private static UiImageBitmap DecodeScanlines(
         int width,
         int height,
@@ -123,6 +140,7 @@ internal static class UiPngImageLoader
         int sourceOffset = 0;
         for (int y = 0; y < height; y++)
         {
+            // 每行首字节为 filter 类型，随后为已压缩的原始通道数据。
             byte filter = rows[sourceOffset++];
             rows.Slice(sourceOffset, rowBytes).CopyTo(current);
             sourceOffset += rowBytes;
@@ -135,6 +153,9 @@ internal static class UiPngImageLoader
         return new UiImageBitmap(width, height, rgba);
     }
 
+    /// <summary>
+    /// 根据 PNG colorType 返回每像素原始通道数。
+    /// </summary>
     private static int ChannelsFor(byte colorType)
     {
         return colorType switch
@@ -148,6 +169,9 @@ internal static class UiPngImageLoader
         };
     }
 
+    /// <summary>
+    /// 就地应用 PNG 行过滤器（None/Sub/Up/Average/Paeth）。
+    /// </summary>
     private static void ApplyFilter(byte filter, Span<byte> row, ReadOnlySpan<byte> previous, int bytesPerPixel)
     {
         for (int i = 0; i < row.Length; i++)
@@ -168,6 +192,9 @@ internal static class UiPngImageLoader
         }
     }
 
+    /// <summary>
+    /// 将单行原始通道数据按 colorType 打包为 BGRA <c>uint</c>。
+    /// </summary>
     private static void DecodeRow(
         byte colorType,
         ReadOnlySpan<byte> row,
@@ -226,11 +253,17 @@ internal static class UiPngImageLoader
         return PackRgba(palette[offset], palette[offset + 1], palette[offset + 2], alpha);
     }
 
+    /// <summary>
+    /// 将 RGBA 字节打包为 BGRA 格式的 <c>uint</c>。
+    /// </summary>
     private static uint PackRgba(byte r, byte g, byte b, byte a)
     {
         return (uint)(r | (g << 8) | (b << 16) | (a << 24));
     }
 
+    /// <summary>
+    /// Paeth 预测器：在 left/up/upLeft 三者中选与估计值距离最近者。
+    /// </summary>
     private static int Paeth(int left, int up, int upLeft)
     {
         int estimate = left + up - upLeft;

@@ -33,6 +33,7 @@ public sealed class FontEngine
     /// <returns>字体选择。</returns>
     public UiFontSelection Resolve()
     {
+        // 字体解析优先级：显式路径 → content/ui/fonts → 共享系统 CJK 候选 → 后端默认。
         float pixelSize = GuiFontManager.ScaleFontSize(_options.BaseSizePixels, _options.DpiScale);
         if (_options.PreferredFontPath is not null)
         {

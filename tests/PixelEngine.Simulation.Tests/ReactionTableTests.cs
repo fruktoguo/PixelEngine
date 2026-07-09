@@ -4,6 +4,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Plan 04 反应表与 tag 展开规则测试。
+/// 不变式：反应表查找与 tag 展开规则确定且对称。
 /// </summary>
 public sealed class ReactionTableTests
 {
@@ -26,6 +27,7 @@ public sealed class ReactionTableTests
     [Fact]
     public void FindUsesLinearLookupForSmallSlices()
     {
+        // Arrange：准备输入与初始状态
         MaterialDef owner = Material(1, "acid") with { ReactionStart = 0, ReactionCount = 2 };
         Reaction[] reactions =
         [
@@ -36,6 +38,7 @@ public sealed class ReactionTableTests
 
         int index = table.Find(1, 7, in owner);
 
+        // Assert：验证预期结果
         Assert.Equal(ReactionLookupMode.Linear, table.ModeByMaterial[1]);
         Assert.Equal(1, index);
         Assert.Equal(8, table.At(index).OutputA);
@@ -68,6 +71,7 @@ public sealed class ReactionTableTests
     [Fact]
     public void FindUsesBinaryLookupForMediumSortedSlices()
     {
+        // Arrange：准备输入与初始状态
         MaterialDef owner = Material(0, "fire") with { ReactionStart = 0, ReactionCount = 10 };
         Reaction[] reactions = new Reaction[10];
         for (ushort i = 0; i < reactions.Length; i++)
@@ -77,6 +81,7 @@ public sealed class ReactionTableTests
 
         ReactionTable table = new(reactions, CreateMaterials(16, owner));
 
+        // Assert：验证预期结果
         Assert.Equal(ReactionLookupMode.Binary, table.ModeByMaterial[0]);
         Assert.Equal(8, table.Find(0, 9, in owner));
         Assert.Equal(-1, table.Find(0, 15, in owner));
@@ -88,6 +93,7 @@ public sealed class ReactionTableTests
     [Fact]
     public void FindUsesDirectTableForLargeSlices()
     {
+        // Arrange：准备输入与初始状态
         MaterialDef owner = Material(0, "fire") with { ReactionStart = 0, ReactionCount = 40 };
         Reaction[] reactions = new Reaction[40];
         for (ushort i = 0; i < reactions.Length; i++)
@@ -97,6 +103,7 @@ public sealed class ReactionTableTests
 
         ReactionTable table = new(reactions, CreateMaterials(64, owner));
 
+        // Assert：验证预期结果
         Assert.Equal(ReactionLookupMode.DirectTable, table.ModeByMaterial[0]);
         Assert.Equal(32, table.Find(0, 33, in owner));
         Assert.Equal(-1, table.Find(0, 63, in owner));

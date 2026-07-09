@@ -7,6 +7,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// Box2D task bridge 验收测试。
+/// 不变式：任务桥接验收场景覆盖动态/静态体与确定性步进。
 /// </summary>
 public sealed unsafe class Box2DTaskBridgeAcceptanceTests
 {
@@ -21,6 +22,7 @@ public sealed unsafe class Box2DTaskBridgeAcceptanceTests
     [Fact]
     public void ForceSingleThreadWorldStepReplaysSameBodyState()
     {
+        // Arrange：准备输入与初始状态
         using JobSystem firstJobs = new(workerCount: 1);
         using Box2DTaskBridge firstBridge = new(firstJobs, forceSingleThread: true);
         SceneSummary first = RunScene(firstBridge, SerialBodyCount);
@@ -29,6 +31,7 @@ public sealed unsafe class Box2DTaskBridgeAcceptanceTests
         using Box2DTaskBridge secondBridge = new(secondJobs, forceSingleThread: true);
         SceneSummary second = RunScene(secondBridge, SerialBodyCount);
 
+        // Assert：验证预期结果
         Assert.Equal(1, first.WorkerCount);
         Assert.Equal(1, second.WorkerCount);
         Assert.Equal(0, first.FaultedCallbackCount);
@@ -50,6 +53,7 @@ public sealed unsafe class Box2DTaskBridgeAcceptanceTests
     [Fact]
     public void MultiWorkerWorldStepMatchesSerialSceneStatistics()
     {
+        // Arrange：准备输入与初始状态
         using JobSystem serialJobs = new(workerCount: 1);
         using Box2DTaskBridge serialBridge = new(serialJobs, forceSingleThread: true);
         SceneSummary serial = RunScene(serialBridge, ParallelBodyCount);
@@ -58,6 +62,7 @@ public sealed unsafe class Box2DTaskBridgeAcceptanceTests
         using Box2DTaskBridge parallelBridge = new(parallelJobs);
         SceneSummary parallel = RunScene(parallelBridge, ParallelBodyCount);
 
+        // Assert：验证预期结果
         Assert.Equal(4, parallel.WorkerCount);
         Assert.Equal(0, parallel.FaultedCallbackCount);
         Assert.Equal(serial.BodyCount, parallel.BodyCount);
@@ -72,6 +77,7 @@ public sealed unsafe class Box2DTaskBridgeAcceptanceTests
     [Fact]
     public void EnqueueTaskKeepsWorkerIndexInRangeAndExclusive()
     {
+        // Arrange：准备输入与初始状态
         using JobSystem jobs = new(workerCount: 4);
         using Box2DTaskBridge bridge = new(jobs);
         WorkerIndexStats stats = default;
@@ -83,6 +89,7 @@ public sealed unsafe class Box2DTaskBridgeAcceptanceTests
         void* handle = enqueue(&StressWorkerIndexTask, 4096, 1, &stats, bridge.UserTaskContext);
         finish(handle, bridge.UserTaskContext);
 
+        // Assert：验证预期结果
         Assert.Equal((nint)bridge.UserTaskContext, (nint)handle);
         Assert.Equal(4096, stats.TotalItems);
         Assert.True(stats.CallbackCount > 0);

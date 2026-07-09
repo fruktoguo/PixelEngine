@@ -4,6 +4,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// 脚本输入快照 API 测试。
+/// 不变式：输入 API 快照与 Hosting 仲裁结果一致。
 /// </summary>
 public sealed class ScriptInputApiTests
 {

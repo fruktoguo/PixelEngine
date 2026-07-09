@@ -5,6 +5,9 @@ using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell.Build;
 
+/// <summary>
+/// 玩家包构建服务接口。
+/// </summary>
 internal interface IPlayerBuildService
 {
     Task<BuildPreflight> PreflightAsync(CancellationToken cancellationToken = default);
@@ -15,6 +18,9 @@ internal interface IPlayerBuildService
         CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// 调用 build-player 脚本执行玩家包构建。
+/// </summary>
 internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPlayerBuildService
 {
     private const string EventSchema = "pixelengine.build/v1";
@@ -94,6 +100,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         };
     }
 
+    // 启动 build-player 子进程，按行解析 JSON 事件并上报进度
     public async Task<BuildResult> RunAsync(
         BuildRequest request,
         IProgress<BuildProgressEvent> progress,
@@ -286,7 +293,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
     private static string BuildPowerShellBuildPlayerCommand(string buildPlayerPath, BuildRequest request, string outputDirectory)
     {
         StringBuilder command = new();
-        command.Append("& ").Append(ToPowerShellLiteral(buildPlayerPath));
+        _ = command.Append("& ").Append(ToPowerShellLiteral(buildPlayerPath));
         AppendPowerShellArgument(command, "-Rid", request.Rid);
         AppendPowerShellArgument(command, "-Channel", request.Channel == BuildProfileChannel.Aot ? "aot" : "r2r");
         AppendPowerShellArgument(command, "-Configuration", request.Configuration);
@@ -310,7 +317,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
 
         if (request.IncludeSymbols)
         {
-            command.Append(" -IncludeSymbols");
+            _ = command.Append(" -IncludeSymbols");
         }
 
         AppendPowerShellArgument(command, "-StartScene", request.StartScene);
@@ -321,27 +328,27 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         AppendPowerShellArgument(command, "-ReleaseChannel", request.ReleaseChannel.ToString());
         if (request.IncludedScenes.Length > 0)
         {
-            command.Append(" -IncludeScene @(");
+            _ = command.Append(" -IncludeScene @(");
             for (int i = 0; i < request.IncludedScenes.Length; i++)
             {
                 if (i > 0)
                 {
-                    command.Append(',');
+                    _ = command.Append(',');
                 }
 
-                command.Append(ToPowerShellLiteral(request.IncludedScenes[i]));
+                _ = command.Append(ToPowerShellLiteral(request.IncludedScenes[i]));
             }
 
-            command.Append(')');
+            _ = command.Append(')');
         }
 
-        command.Append("; exit $LASTEXITCODE");
+        _ = command.Append("; exit $LASTEXITCODE");
         return command.ToString();
     }
 
     private static void AppendPowerShellArgument(StringBuilder command, string name, string value)
     {
-        command.Append(' ').Append(name).Append(' ').Append(ToPowerShellLiteral(value));
+        _ = command.Append(' ').Append(name).Append(' ').Append(ToPowerShellLiteral(value));
     }
 
     private static string ToPowerShellLiteral(string value)

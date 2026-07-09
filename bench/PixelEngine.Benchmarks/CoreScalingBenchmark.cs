@@ -4,7 +4,7 @@ using PixelEngine.Core.Threading;
 namespace PixelEngine.Benchmarks;
 
 /// <summary>
-/// Core JobSystem worker 数扩展性与单线程回退阈值基准。
+/// 热路径：JobSystem.ParallelRange 扩展性；固定任务粒度下变化 worker 数。
 /// </summary>
 [MemoryDiagnoser]
 public class CoreScalingBenchmark : IDisposable
@@ -55,7 +55,7 @@ public class CoreScalingBenchmark : IDisposable
     }
 
     /// <summary>
-    /// worker 1→N 扩展性主基准。
+    /// 验证Parallel Range Sum。
     /// </summary>
     [Benchmark]
     public long ParallelRangeSum()
@@ -72,7 +72,7 @@ public class CoreScalingBenchmark : IDisposable
     }
 
     /// <summary>
-    /// 小任务触发 SingleThreadThreshold 的回退路径。
+    /// 验证Single Thread Threshold Fallback。
     /// </summary>
     [Benchmark]
     public long SingleThreadThresholdFallback()

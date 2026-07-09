@@ -5,6 +5,9 @@ using Silk.NET.OpenGL;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// Editor Shell 主应用：项目会话、Engine 生命周期与 ImGui 工作台编排。
+/// </summary>
 internal sealed class EditorShellApp
 {
     private const string DefaultWorkbenchBehaviourTypeName = "DefaultWorkbenchBehaviour";
@@ -113,6 +116,7 @@ internal sealed class EditorShellApp
         ScriptedHierarchyProbeState scriptedHierarchy = new();
         ScriptedDefaultWorkbenchProbeState scriptedDefaultWorkbench = new();
         ScriptedPlayerRunProbeResult scriptedPlayerRun = new();
+        // 主循环：无项目时显示 ProjectPicker；有项目时由 Session 驱动 Engine tick
         while (!shellWindow.Window.IsClosing && !_exitRequested)
         {
             double now = stopwatch.Elapsed.TotalSeconds;
@@ -505,13 +509,13 @@ internal sealed class EditorShellApp
 
             if (!state.ScriptHotReloadRequested)
             {
-                PixelEngine.Scripting.ScriptHotReloadController controller = CurrentSession.Engine.Context.GetService<PixelEngine.Scripting.ScriptHotReloadController>();
+                Scripting.ScriptHotReloadController controller = CurrentSession.Engine.Context.GetService<Scripting.ScriptHotReloadController>();
                 controller.RequestReloadFromDirectory($"{CurrentSession.Project.Name}.EditorScripts", CurrentSession.Project.ScriptSourcePath);
                 state.ScriptHotReloadRequested = controller.HasPendingReload;
                 if (state.ScriptHotReloadRequested)
                 {
-                    PixelEngine.Scripting.ScriptHotReloadApplyResult result = CurrentSession.Engine.ApplyPendingScriptHotReload();
-                    state.ScriptHotReloadApplied = result.Status == PixelEngine.Scripting.ScriptHotReloadStatus.Reloaded;
+                    Scripting.ScriptHotReloadApplyResult result = CurrentSession.Engine.ApplyPendingScriptHotReload();
+                    state.ScriptHotReloadApplied = result.Status == Scripting.ScriptHotReloadStatus.Reloaded;
                 }
 
                 return;
@@ -545,7 +549,7 @@ internal sealed class EditorShellApp
 
             if (!state.PlayEntered)
             {
-                PixelEngine.Hosting.EditorPlaySessionResult result = CurrentSession.EnterPlayTemporary();
+                Hosting.EditorPlaySessionResult result = CurrentSession.EnterPlayTemporary();
                 state.PlayEntered = result.Succeeded;
                 state.PlayStatus = result.Message;
                 return;
@@ -553,7 +557,7 @@ internal sealed class EditorShellApp
 
             if (!state.PlayExited)
             {
-                PixelEngine.Hosting.EditorPlaySessionResult result = CurrentSession.ExitEditorPlay();
+                Hosting.EditorPlaySessionResult result = CurrentSession.ExitEditorPlay();
                 state.PlayExited = result.Succeeded;
                 state.PlayStatus = result.Message;
                 return;
@@ -1190,6 +1194,9 @@ internal sealed class EditorShellApp
         }
     }
 
+    /// <summary>
+    /// 排队打开项目；实际 Session 在帧末由 <see cref="ApplyPendingProject"/> 创建。
+    /// </summary>
     public void OpenProject(EditorProject project)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -1377,6 +1384,7 @@ internal sealed class EditorShellApp
         _exitRequested = true;
     }
 
+    // 帧末创建 EditorProjectSession，接管 Engine tick 与 ImGui 面板
     private void ApplyPendingProject(EditorShellWindow shellWindow)
     {
         if (_pendingProject is null)
@@ -1442,7 +1450,7 @@ internal sealed class EditorShellApp
         int height = shellWindow.Window.Height;
         byte[] bgra = new byte[checked(width * height * 4)];
         shellWindow.Window.Gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-        shellWindow.Window.Gl.ReadPixels<byte>(0, 0, (uint)width, (uint)height, PixelFormat.Bgra, PixelType.UnsignedByte, bgra);
+        shellWindow.Window.Gl.ReadPixels(0, 0, (uint)width, (uint)height, PixelFormat.Bgra, PixelType.UnsignedByte, bgra);
         WriteBgraBottomUpBmp(path, width, height, bgra);
         Console.WriteLine($"EditorShell framebuffer 截图已写入：{path}");
     }
@@ -1481,6 +1489,9 @@ internal sealed class EditorShellApp
     }
 }
 
+/// <summary>
+/// 脚本化验收探针：ScriptedPlayerRunProbeResult。
+/// </summary>
 internal sealed record ScriptedPlayerRunProbeResult(
     bool Started = false,
     bool Completed = false,
@@ -1493,6 +1504,9 @@ internal sealed record ScriptedPlayerRunProbeResult(
     string CapturePath = "",
     string Diagnostic = "");
 
+/// <summary>
+/// 脚本化验收探针：ScriptedBuildCancelProbeState。
+/// </summary>
 internal sealed class ScriptedBuildCancelProbeState
 {
     public bool FirstStarted;
@@ -1512,6 +1526,9 @@ internal sealed class ScriptedBuildCancelProbeState
     public ScriptedBuildProbeSnapshot RerunSnapshot = new();
 }
 
+/// <summary>
+/// 脚本化验收探针：ScriptedBuildSettingsProbeState。
+/// </summary>
 internal sealed class ScriptedBuildSettingsProbeState
 {
     public bool Applied;
@@ -1524,6 +1541,9 @@ internal sealed class ScriptedBuildSettingsProbeState
     public ScriptedBuildSettingsProbeSnapshot After = new();
 }
 
+/// <summary>
+/// 脚本化验收探针：ScriptedMenuLayoutProbeState。
+/// </summary>
 internal sealed class ScriptedMenuLayoutProbeState
 {
     public bool Completed;
@@ -1540,6 +1560,9 @@ internal sealed class ScriptedMenuLayoutProbeState
     public string Diagnostic = string.Empty;
 }
 
+/// <summary>
+/// 脚本化验收探针：ScriptedHierarchyProbeState。
+/// </summary>
 internal sealed class ScriptedHierarchyProbeState
 {
     public bool Completed;
@@ -1557,6 +1580,9 @@ internal sealed class ScriptedHierarchyProbeState
     public string Diagnostic = string.Empty;
 }
 
+/// <summary>
+/// 脚本化验收探针：ScriptedDefaultWorkbenchProbeState。
+/// </summary>
 internal sealed class ScriptedDefaultWorkbenchProbeState
 {
     public bool Completed;
@@ -1590,6 +1616,9 @@ internal sealed class ScriptedDefaultWorkbenchProbeState
     public string Diagnostic = string.Empty;
 }
 
+/// <summary>
+/// ScriptedBuildFrameStats。
+/// </summary>
 internal sealed class ScriptedBuildFrameStats
 {
     private double _totalSeconds;

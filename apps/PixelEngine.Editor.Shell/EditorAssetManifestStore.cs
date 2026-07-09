@@ -4,6 +4,9 @@ using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// Content 资产类型枚举。
+/// </summary>
 internal enum EditorAssetType
 {
     Material,
@@ -16,6 +19,9 @@ internal enum EditorAssetType
     Other,
 }
 
+/// <summary>
+/// 资产清单中的一条记录，含稳定 id 与逻辑路径。
+/// </summary>
 internal readonly record struct EditorAssetRecord(
     string Id,
     string LogicalPath,
@@ -28,12 +34,18 @@ internal readonly record struct EditorAssetMoveResult(
     int UpdatedReferenceDocuments,
     bool UpdatedActiveScene);
 
+/// <summary>
+/// EditorAssetReferenceDocumentMovePlan。
+/// </summary>
 internal sealed record EditorAssetReferenceDocumentMovePlan(
     string OriginalFullPath,
     string SaveFullPath,
     string OriginalText,
     EditorSceneModel Model);
 
+/// <summary>
+/// EditorAssetReferenceDocumentWriteRollback。
+/// </summary>
 internal sealed record EditorAssetReferenceDocumentWriteRollback(
     string OriginalFullPath,
     string SaveFullPath,
@@ -56,14 +68,13 @@ internal readonly record struct EditorAssetDeleteResult(
     EditorAssetDeletePreflight Preflight,
     string Diagnostic);
 
+/// <summary>
+/// Content 资产清单的扫描、索引、移动与脚本模板生成。
+/// </summary>
 internal sealed class EditorAssetManifestStore
 {
     public const int CurrentFormatVersion = 1;
     public const string ManifestRelativePath = ".pixelengine/assets.json";
-
-    private readonly string _projectRoot;
-    private readonly string _contentRoot;
-    private readonly string _manifestPath;
 
     public EditorAssetManifestStore(EditorProject project)
         : this(
@@ -76,19 +87,22 @@ internal sealed class EditorAssetManifestStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(projectRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(contentRoot);
-        _projectRoot = Path.GetFullPath(projectRoot);
-        _contentRoot = Path.IsPathRooted(contentRoot)
+        ProjectRoot = Path.GetFullPath(projectRoot);
+        ContentRoot = Path.IsPathRooted(contentRoot)
             ? Path.GetFullPath(contentRoot)
-            : Path.GetFullPath(Path.Combine(_projectRoot, contentRoot));
-        _manifestPath = Path.Combine(_projectRoot, ManifestRelativePath.Replace('/', Path.DirectorySeparatorChar));
+            : Path.GetFullPath(Path.Combine(ProjectRoot, contentRoot));
+        ManifestPath = Path.Combine(ProjectRoot, ManifestRelativePath.Replace('/', Path.DirectorySeparatorChar));
     }
 
-    public string ProjectRoot => _projectRoot;
+    public string ProjectRoot { get; }
 
-    public string ContentRoot => _contentRoot;
+    public string ContentRoot { get; }
 
-    public string ManifestPath => _manifestPath;
+    public string ManifestPath { get; }
 
+    /// <summary>
+    /// 重新扫描 content 目录并写回 manifest，返回最新资产列表。
+    /// </summary>
     public IReadOnlyList<EditorAssetRecord> Refresh()
     {
         return RefreshCore();
@@ -137,17 +151,11 @@ internal sealed class EditorAssetManifestStore
     {
         string normalized = NormalizeLogicalPath(logicalPath, nameof(logicalPath));
         string fullPath = ResolveFullPath(normalized);
-        if (!File.Exists(fullPath))
-        {
-            throw new FileNotFoundException("资产文件不存在，无法登记到 manifest。", fullPath);
-        }
-
-        if (TryResolveLogicalPath(normalized, out EditorAssetRecord record))
-        {
-            return record;
-        }
-
-        throw new InvalidOperationException($"无法登记资产：{normalized}");
+        return !File.Exists(fullPath)
+            ? throw new FileNotFoundException("资产文件不存在，无法登记到 manifest。", fullPath)
+            : TryResolveLogicalPath(normalized, out EditorAssetRecord record)
+            ? record
+            : throw new InvalidOperationException($"无法登记资产：{normalized}");
     }
 
     public EditorAssetRecord CreateAsset(string logicalPath, EditorAssetType assetType, string? textContents = null)
@@ -175,8 +183,12 @@ internal sealed class EditorAssetManifestStore
         return EnsureAsset(normalized);
     }
 
+    /// <summary>
+    /// 移动资产文件并同步 manifest 与场景/预制体中的引用编码。
+    /// </summary>
     public EditorAssetMoveResult MoveAsset(string currentLogicalPath, string newLogicalPath, EditorSceneModel? activeScene = null)
     {
+        // 文件移动 + manifest 更新 + 引用文档重写，失败时整体回滚
         string current = NormalizeLogicalPath(currentLogicalPath, nameof(currentLogicalPath));
         string next = NormalizeLogicalPath(newLogicalPath, nameof(newLogicalPath));
         if (string.Equals(current, next, StringComparison.OrdinalIgnoreCase))
@@ -293,17 +305,18 @@ internal sealed class EditorAssetManifestStore
             };
     }
 
+    // 扫描 content 目录并与 manifest 合并，尽量保留已有 stable asset id
     private IReadOnlyList<EditorAssetRecord> RefreshCore()
     {
         EditorAssetManifestDocument document = LoadDocument();
         Dictionary<string, EditorAssetRecordDocument> byPath = BuildRecordMap(document.Assets);
         HashSet<string> usedIds = new(StringComparer.OrdinalIgnoreCase);
         List<EditorAssetRecordDocument> refreshed = [];
-        if (Directory.Exists(_contentRoot))
+        if (Directory.Exists(ContentRoot))
         {
-            foreach (string fullPath in Directory.EnumerateFiles(_contentRoot, "*", SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase))
+            foreach (string fullPath in Directory.EnumerateFiles(ContentRoot, "*", SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase))
             {
-                string logicalPath = NormalizeLogicalPath(Path.GetRelativePath(_contentRoot, fullPath), "content file");
+                string logicalPath = NormalizeLogicalPath(Path.GetRelativePath(ContentRoot, fullPath), "content file");
                 FileInfo info = new(fullPath);
                 string id = byPath.TryGetValue(logicalPath, out EditorAssetRecordDocument? existing) &&
                     !string.IsNullOrWhiteSpace(existing.Id) &&
@@ -338,11 +351,11 @@ internal sealed class EditorAssetManifestStore
     private string ResolveFullPath(string logicalPath)
     {
         string normalized = NormalizeLogicalPath(logicalPath, nameof(logicalPath));
-        string fullPath = Path.GetFullPath(Path.Combine(_contentRoot, normalized));
-        string rootWithSeparator = _contentRoot.EndsWith(Path.DirectorySeparatorChar)
-            ? _contentRoot
-            : _contentRoot + Path.DirectorySeparatorChar;
-        bool insideContentRoot = string.Equals(fullPath, _contentRoot, StringComparison.OrdinalIgnoreCase) ||
+        string fullPath = Path.GetFullPath(Path.Combine(ContentRoot, normalized));
+        string rootWithSeparator = ContentRoot.EndsWith(Path.DirectorySeparatorChar)
+            ? ContentRoot
+            : ContentRoot + Path.DirectorySeparatorChar;
+        bool insideContentRoot = string.Equals(fullPath, ContentRoot, StringComparison.OrdinalIgnoreCase) ||
             fullPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase);
         return insideContentRoot
             ? fullPath
@@ -351,31 +364,28 @@ internal sealed class EditorAssetManifestStore
 
     private EditorAssetManifestDocument LoadDocument()
     {
-        if (!File.Exists(_manifestPath))
+        if (!File.Exists(ManifestPath))
         {
             return new EditorAssetManifestDocument { FormatVersion = CurrentFormatVersion, Assets = [] };
         }
 
-        string json = File.ReadAllText(_manifestPath);
+        string json = File.ReadAllText(ManifestPath);
         EditorAssetManifestDocument document = JsonSerializer.Deserialize(
                 json,
                 EditorShellJsonContext.Default.EditorAssetManifestDocument) ??
             throw new JsonException("资产 manifest 为空或格式无效。");
-        if (document.FormatVersion != CurrentFormatVersion)
-        {
-            throw new NotSupportedException($"不支持的资产 manifest 版本：{document.FormatVersion}。");
-        }
-
-        return new EditorAssetManifestDocument
-        {
-            FormatVersion = CurrentFormatVersion,
-            Assets = NormalizeRecords(document.Assets),
-        };
+        return document.FormatVersion != CurrentFormatVersion
+            ? throw new NotSupportedException($"不支持的资产 manifest 版本：{document.FormatVersion}。")
+            : new EditorAssetManifestDocument
+            {
+                FormatVersion = CurrentFormatVersion,
+                Assets = NormalizeRecords(document.Assets),
+            };
     }
 
     private void SaveDocument(EditorAssetManifestDocument document)
     {
-        string? directory = Path.GetDirectoryName(_manifestPath);
+        string? directory = Path.GetDirectoryName(ManifestPath);
         if (!string.IsNullOrEmpty(directory))
         {
             _ = Directory.CreateDirectory(directory);
@@ -389,7 +399,7 @@ internal sealed class EditorAssetManifestStore
         string json = JsonSerializer.Serialize(
             normalized,
             EditorShellJsonContext.Default.EditorAssetManifestDocument);
-        File.WriteAllText(_manifestPath, json);
+        File.WriteAllText(ManifestPath, json);
     }
 
     private static EditorAssetRecordDocument[] NormalizeRecords(EditorAssetRecordDocument[]? records)
@@ -457,12 +467,9 @@ internal sealed class EditorAssetManifestStore
             break;
         }
 
-        if (!replaced)
-        {
-            throw new InvalidOperationException($"资产 manifest 缺少 asset id：{assetId}");
-        }
-
-        return new EditorAssetManifestDocument { FormatVersion = CurrentFormatVersion, Assets = records };
+        return !replaced
+            ? throw new InvalidOperationException($"资产 manifest 缺少 asset id：{assetId}")
+            : new EditorAssetManifestDocument { FormatVersion = CurrentFormatVersion, Assets = records };
     }
 
     private static EditorAssetManifestDocument RemoveRecord(EditorAssetManifestDocument document, string assetId)
@@ -481,12 +488,9 @@ internal sealed class EditorAssetManifestStore
             retained.Add(records[i]);
         }
 
-        if (!removed)
-        {
-            throw new InvalidOperationException($"资产 manifest 缺少 asset id：{assetId}");
-        }
-
-        return new EditorAssetManifestDocument { FormatVersion = CurrentFormatVersion, Assets = [.. retained] };
+        return !removed
+            ? throw new InvalidOperationException($"资产 manifest 缺少 asset id：{assetId}")
+            : new EditorAssetManifestDocument { FormatVersion = CurrentFormatVersion, Assets = [.. retained] };
     }
 
     private EditorAssetDeletePreflight BuildDeletePreflight(EditorAssetRecord asset, EditorSceneModel? activeScene)
@@ -506,7 +510,7 @@ internal sealed class EditorAssetManifestStore
 
     private int CollectReferenceDocuments(EditorAssetRecord asset, List<string> locations)
     {
-        if (!Directory.Exists(_contentRoot))
+        if (!Directory.Exists(ContentRoot))
         {
             return 0;
         }
@@ -514,13 +518,13 @@ internal sealed class EditorAssetManifestStore
         int referencedDocuments = 0;
         string[] files =
         [
-            .. Directory.EnumerateFiles(_contentRoot, "*.scene", SearchOption.AllDirectories)
-                .Concat(Directory.EnumerateFiles(_contentRoot, "*.prefab", SearchOption.AllDirectories))
+            .. Directory.EnumerateFiles(ContentRoot, "*.scene", SearchOption.AllDirectories)
+                .Concat(Directory.EnumerateFiles(ContentRoot, "*.prefab", SearchOption.AllDirectories))
                 .Order(StringComparer.OrdinalIgnoreCase),
         ];
         for (int i = 0; i < files.Length; i++)
         {
-            string logicalDocumentPath = NormalizeLogicalPath(Path.GetRelativePath(_contentRoot, files[i]), "reference document");
+            string logicalDocumentPath = NormalizeLogicalPath(Path.GetRelativePath(ContentRoot, files[i]), "reference document");
             if (string.Equals(logicalDocumentPath, asset.LogicalPath, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
@@ -589,15 +593,15 @@ internal sealed class EditorAssetManifestStore
 
     private IReadOnlyList<EditorAssetReferenceDocumentMovePlan> LoadReferenceDocumentMovePlans(string sourceFullPath, string targetFullPath)
     {
-        if (!Directory.Exists(_contentRoot))
+        if (!Directory.Exists(ContentRoot))
         {
             return [];
         }
 
         string[] files =
         [
-            .. Directory.EnumerateFiles(_contentRoot, "*.scene", SearchOption.AllDirectories)
-                .Concat(Directory.EnumerateFiles(_contentRoot, "*.prefab", SearchOption.AllDirectories))
+            .. Directory.EnumerateFiles(ContentRoot, "*.scene", SearchOption.AllDirectories)
+                .Concat(Directory.EnumerateFiles(ContentRoot, "*.prefab", SearchOption.AllDirectories))
                 .Order(StringComparer.OrdinalIgnoreCase),
         ];
         EditorAssetReferenceDocumentMovePlan[] plans = new EditorAssetReferenceDocumentMovePlan[files.Length];
@@ -803,6 +807,12 @@ internal sealed class EditorAssetManifestStore
             case EditorAssetType.Json:
                 File.WriteAllText(fullPath, "{}" + Environment.NewLine);
                 break;
+            case EditorAssetType.Texture:
+                break;
+            case EditorAssetType.Audio:
+                break;
+            case EditorAssetType.Other:
+                break;
             default:
                 File.WriteAllText(fullPath, string.Empty);
                 break;
@@ -894,15 +904,13 @@ public sealed class {{className}} : Behaviour
             normalized.Add(part);
         }
 
-        if (normalized.Count == 0)
-        {
-            throw new InvalidOperationException($"{fieldName} 不能解析为空路径。");
-        }
-
-        return string.Join('/', normalized);
+        return normalized.Count == 0 ? throw new InvalidOperationException($"{fieldName} 不能解析为空路径。") : string.Join('/', normalized);
     }
 }
 
+/// <summary>
+/// EditorAssetManifestDocument JSON 文档模型。
+/// </summary>
 internal sealed class EditorAssetManifestDocument
 {
     public int FormatVersion { get; init; } = EditorAssetManifestStore.CurrentFormatVersion;
@@ -910,6 +918,9 @@ internal sealed class EditorAssetManifestDocument
     public EditorAssetRecordDocument[]? Assets { get; init; }
 }
 
+/// <summary>
+/// EditorAssetRecordDocument JSON 文档模型。
+/// </summary>
 internal sealed class EditorAssetRecordDocument
 {
     public string Id { get; init; } = string.Empty;

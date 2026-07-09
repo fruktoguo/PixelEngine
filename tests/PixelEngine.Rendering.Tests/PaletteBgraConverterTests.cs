@@ -2,6 +2,9 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// 调色板 BGRA 转换器测试：索引色到 BGRA 映射正确性。
+/// </summary>
 public sealed class PaletteBgraConverterTests
 {
     [Theory]
@@ -30,6 +33,9 @@ public sealed class PaletteBgraConverterTests
         Assert.Equal(scalar, accelerated);
     }
 
+    /// <summary>
+    /// 验证Convert回退To Scalar For Short Sixteen Entry Palette Runs。
+    /// </summary>
     [Fact]
     public void ConvertFallsBackToScalarForShortSixteenEntryPaletteRuns()
     {
@@ -49,6 +55,9 @@ public sealed class PaletteBgraConverterTests
         Assert.Equal(scalar, accelerated);
     }
 
+    /// <summary>
+    /// 验证Avx2Experimental与…一致Scalar。
+    /// </summary>
     [Fact]
     public void Avx2ExperimentalMatchesScalar()
     {
@@ -73,6 +82,9 @@ public sealed class PaletteBgraConverterTests
         Assert.Equal(scalar, avx2);
     }
 
+    /// <summary>
+    /// 验证Convert Rejects Short Destination。
+    /// </summary>
     [Fact]
     public void ConvertRejectsShortDestination()
     {

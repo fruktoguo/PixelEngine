@@ -2,8 +2,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// 渲染窗口 DPI 感知纪律测试：缩放与坐标映射约定。
+/// </summary>
 public sealed class RenderWindowDpiAwarenessDisciplineTests
 {
+    /// <summary>
+    /// 验证Render Window Enables Windows Dpi Awareness Before Silk Window Creation行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderWindowEnablesWindowsDpiAwarenessBeforeSilkWindowCreation()
     {

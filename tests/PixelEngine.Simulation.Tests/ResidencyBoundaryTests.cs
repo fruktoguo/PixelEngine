@@ -8,6 +8,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// World 驻留 border ring 与 CA 32px halo 的边界安全测试。
+/// 不变式：border ring 与 32px halo 在 chunk 边界安全无越界读。
 /// </summary>
 public sealed class ResidencyBoundaryTests
 {
@@ -19,6 +20,7 @@ public sealed class ResidencyBoundaryTests
     [Fact]
     public void ActiveRectCornersResolveFullNeighborhoodThroughBorderRing()
     {
+        // Arrange：准备输入与初始状态
         using TempWorldDirectory world = TempWorldDirectory.Create();
         WorldManager manager = CreateManager(
             world.Path,
@@ -40,6 +42,7 @@ public sealed class ResidencyBoundaryTests
 
         foreach (ChunkCoord coord in active)
         {
+            // Assert：验证预期结果
             Assert.True(manager.Chunks.ResolveNeighborhood(coord, out _));
             Assert.True(manager.Residency.TryGetInfo(coord, out ChunkResidencyInfo info));
             Assert.Equal(ChunkResidencyState.Active, info.State);
@@ -70,6 +73,7 @@ public sealed class ResidencyBoundaryTests
     [Fact]
     public void ActiveEdgeKeepAlivePromotesBorderAndLoadsOuterRing()
     {
+        // Arrange：准备输入与初始状态
         using TempWorldDirectory world = TempWorldDirectory.Create();
         WorldManager manager = CreateManager(world.Path, focusX: 32, focusY: 32, viewportCellsX: 64, viewportCellsY: 64, maxStreamOps: 32);
         PumpResidency(manager, frame: 1);
@@ -81,6 +85,7 @@ public sealed class ResidencyBoundaryTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(Sand, Get(south, 10, EngineConstants.MoveCap - 1));
         BoundaryWakeSnapshot[] wakes = new BoundaryWakeSnapshot[4];
         int wakeCount = kernel.CopyBoundaryWakeSnapshots(wakes);
@@ -107,6 +112,7 @@ public sealed class ResidencyBoundaryTests
     [Fact]
     public void PhaseTwoDetachKeepsActiveAndBorderResidentAndOnlyRemovesCachedOutside()
     {
+        // Arrange：搭建测试场景与依赖
         ResidentChunkMap chunks = new();
         ResidencyTable residency = new();
         ChunkMemoryBudget budget = new(
@@ -120,8 +126,10 @@ public sealed class ResidencyBoundaryTests
         ResidencyPlan plan = planner.Plan(new ChunkRect(0, 0, 0, 0), new ChunkRect(-1, -1, 1, 1), residency, budget);
         WorldStreamer streamer = new(chunks, residency, budget, new TemperatureField(), new MemoryChunkStore(), IdentityRemap());
 
+        // Act：执行被测操作
         streamer.SubmitPlan(plan);
 
+        // Assert：验证不变式与预期结果
         Assert.True(chunks.Contains(new ChunkCoord(0, 0)));
         Assert.True(chunks.Contains(new ChunkCoord(0, 1)));
         Assert.False(chunks.Contains(outside));

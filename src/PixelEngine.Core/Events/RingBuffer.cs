@@ -39,6 +39,7 @@ public sealed class RingBuffer<T>
     /// </summary>
     /// <param name="item">待入队元素。</param>
     /// <returns>若入队成功则为 <see langword="true"/>；队列满时为 <see langword="false"/>。</returns>
+    // SPSC 无锁入队：单生产者写 tail，消费者通过 Volatile.Read(head) 判断容量。
     public bool TryEnqueue(in T item)
     {
         int tail = _tail;

@@ -3,8 +3,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// Rendering 工程纪律测试：依赖边界与互操作约束。
+/// </summary>
 public sealed class RenderingProjectDisciplineTests
 {
+    /// <summary>
+    /// 验证Rendering Project References Required Projects And Allows Unsafe行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderingProjectReferencesRequiredProjectsAndAllowsUnsafe()
     {
@@ -18,6 +24,9 @@ public sealed class RenderingProjectDisciplineTests
         Assert.Contains("..\\PixelEngine.World\\PixelEngine.World.csproj", xml, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Render Window不会Use Silk Run Loop行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderWindowDoesNotUseSilkRunLoop()
     {
@@ -30,6 +39,9 @@ public sealed class RenderingProjectDisciplineTests
         Assert.DoesNotContain(".Run(", source, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Render Pipeline Uses Real Gpu Timestamp And Separates Present Wait行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderPipelineUsesRealGpuTimestampAndSeparatesPresentWait()
     {
@@ -46,6 +58,9 @@ public sealed class RenderingProjectDisciplineTests
         Assert.DoesNotContain("Flush()", gpuFrame, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Rendering Sources Do Not Read Back Gpu Data Into Simulation行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderingSourcesDoNotReadBackGpuDataIntoSimulation()
     {
@@ -58,6 +73,9 @@ public sealed class RenderingProjectDisciplineTests
         Assert.DoesNotContain("PixelPackBuffer", source, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Gl Resource Counts Reports Total And Per Kind。
+    /// </summary>
     [Fact]
     public void GlResourceCountsReportsTotalAndPerKind()
     {
@@ -83,6 +101,9 @@ public sealed class RenderingProjectDisciplineTests
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => counts.GetCount((GlResourceKind)int.MaxValue));
     }
 
+    /// <summary>
+    /// 验证Gl Resource Tracker Covers Rendering Owned Native Objects。
+    /// </summary>
     [Fact]
     public void GlResourceTrackerCoversRenderingOwnedNativeObjects()
     {
@@ -133,6 +154,9 @@ public sealed class RenderingProjectDisciplineTests
         Assert.Contains("GlResourceTracker.Snapshot().Total", detector, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Rendering不会Hard Depend On Vulkan Gl4Or Compute Sharp Package行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderingDoesNotHardDependOnVulkanGl4OrComputeSharpPackage()
     {
@@ -150,6 +174,9 @@ public sealed class RenderingProjectDisciplineTests
         Assert.DoesNotContain("ComputeSharp.GraphicsDevice", source.Replace(support, string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Compute Sharp Dx12Resource Contract Is Documented And Blocked Until Real Interop Exists。
+    /// </summary>
     [Fact]
     public void ComputeSharpDx12ResourceContractIsDocumentedAndBlockedUntilRealInteropExists()
     {
@@ -213,6 +240,9 @@ public sealed class RenderingProjectDisciplineTests
         Assert.Contains("PackageReference Include=\"ComputeSharp\" Condition=\"'$(EnableComputeSharpBackend)' == 'true'\"", project, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Rendering Hot Path Sources Avoid Linq And Iterator分配s行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderingHotPathSourcesAvoidLinqAndIteratorAllocations()
     {
@@ -237,6 +267,9 @@ public sealed class RenderingProjectDisciplineTests
         Assert.DoesNotContain("Action<", source.Replace("event Action<GL>?", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Bgra Color Noise Mixing Has Simd Fallback And基准。
+    /// </summary>
     [Fact]
     public void BgraColorNoiseMixingHasSimdFallbackAndBenchmark()
     {
@@ -252,6 +285,9 @@ public sealed class RenderingProjectDisciplineTests
         Assert.Contains("BgraColorNoiseBenchmarks", benchmark, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Palette Bgra Conversion Has Simd Fallback And基准。
+    /// </summary>
     [Fact]
     public void PaletteBgraConversionHasSimdFallbackAndBenchmark()
     {
@@ -270,6 +306,9 @@ public sealed class RenderingProjectDisciplineTests
         Assert.Contains("ConvertAvx2Experimental", benchmark, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Render Style Segmented Path Uses Palette Simd Fallback And基准行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderStyleSegmentedPathUsesPaletteSimdFallbackAndBenchmark()
     {

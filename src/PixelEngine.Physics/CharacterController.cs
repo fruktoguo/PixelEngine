@@ -104,6 +104,7 @@ public sealed class CharacterController
         bool hitWallLeft = false;
         bool hitWallRight = false;
 
+        // 分轴解算：先水平再垂直，避免斜向移动在角点卡死。
         if (desired.X != 0f)
         {
             MoveHorizontal(desired.X, ref hitWallLeft, ref hitWallRight);
@@ -155,6 +156,7 @@ public sealed class CharacterController
         float sign = MathF.Sign(delta);
         float remaining = MathF.Abs(delta);
         int iterations = 0;
+        // 固定步长子迭代，碰撞时尝试 StepUp 再判定撞墙。
         while (remaining > 0f && iterations++ < MaxSubIterations)
         {
             float step = MathF.Min(CollisionStep, remaining) * sign;
@@ -217,6 +219,7 @@ public sealed class CharacterController
             return false;
         }
 
+        // 逐像素抬高 AABB，找到可水平通过的台阶高度。
         for (int stepUp = 1; stepUp <= StepUpHeight; stepUp++)
         {
             Vector2 raised = Position + new Vector2(0f, -stepUp);
@@ -313,6 +316,7 @@ public sealed class CharacterController
         }
 
         byte flags = _grid.FlagsAt(x, y);
+        // RigidOwned stamp 与固体同等阻挡，供角色与碎块交互。
         if (CellFlags.Has(flags, CellFlags.RigidOwned))
         {
             return true;

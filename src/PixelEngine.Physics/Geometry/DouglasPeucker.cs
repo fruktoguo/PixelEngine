@@ -95,6 +95,7 @@ public static class DouglasPeucker
         return uniqueCount <= 0 ? 0 : uniqueCount + (repeatsFirst ? 1 : 0);
     }
 
+    // 开放折线：递归找距端点连线最远的点，超 epsilon 则保留并分治。
     private static int SimplifyOpen(ReadOnlySpan<Vector2> points, Span<Vector2> destination, float epsilon)
     {
         if (points.Length <= 2)
@@ -132,6 +133,7 @@ public static class DouglasPeucker
         }
     }
 
+    // 闭合轮廓：在唯一顶点环上分治简化，输出保持首尾重复闭合点。
     private static int SimplifyClosed(ReadOnlySpan<Vector2> points, Span<Vector2> destination, float epsilon)
     {
         bool repeatsFirst = points.Length > 1 && points[0] == points[^1];

@@ -8,6 +8,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// Box2D v3.1 C ABI 薄绑定测试。
+/// 不变式：blittable 结构体尺寸与 vendored Box2D v3.1 header 对齐。
 /// </summary>
 public sealed unsafe class Box2DInteropTests
 {

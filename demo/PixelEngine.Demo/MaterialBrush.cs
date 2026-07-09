@@ -76,6 +76,7 @@ public sealed class MaterialBrush : Behaviour
             return;
         }
 
+        // 数字键选材质、滚轮调半径，左键按住涂抹世界 cell
         HandleMaterialSelection();
         HandleRadius();
         HandlePaint();

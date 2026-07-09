@@ -6,6 +6,9 @@ using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell.Build;
 
+/// <summary>
+/// Build Settings ImGui 面板。
+/// </summary>
 internal sealed class BuildSettingsPanel : IEditorPanel
 {
     public const string PanelTitle = EditorDockSpace.BuildSettingsWindowTitle;
@@ -154,6 +157,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         _ = context;
         DrainEvents();
         RefreshTasks();
+        // 构建面板主布局：设置 → 场景 → 操作 → 进度 → 日志 → 结果
         bool visible = Visible;
         if (!ImGui.Begin(Title, ref visible))
         {
@@ -450,6 +454,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         _view = _view with { Preflight = null };
     }
 
+    // 校验并持久化 profile，异步调用 PlayerBuildService 启动子进程构建
     private void StartBuild(bool runAfterBuild)
     {
         if (_view.IsRunning || !_settings.TryNormalize(out _validationMessage))
@@ -484,6 +489,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         _buildCancellation?.Cancel();
     }
 
+    // 轮询预检/构建 Task 完成态并更新 UI 视图与控制台
     private void RefreshTasks()
     {
         if (_preflightTask is { IsCompleted: true } preflightTask)
@@ -534,6 +540,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         }
     }
 
+    // 从并发队列取出 build-player JSON 事件，刷新进度条与日志
     private void DrainEvents()
     {
         while (_pendingEvents.TryDequeue(out BuildProgressEvent? item))

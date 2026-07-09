@@ -5,6 +5,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Simulation 项目的工程纪律测试。
+/// 不变式：Simulation 项目引用与 plan 文档约定一致。
 /// </summary>
 public sealed class SimulationProjectDisciplineTests
 {

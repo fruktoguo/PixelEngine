@@ -1,5 +1,8 @@
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// 编辑器场景中的 GameObject 节点，持有层级、Transform 与组件列表。
+/// </summary>
 internal sealed class EditorGameObject
 {
     public EditorGameObject(int stableId, string name)

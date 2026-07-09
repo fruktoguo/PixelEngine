@@ -7,6 +7,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// plan/14 凸分解验收测试。
+/// 不变式：凹形状分解后可被 Box2D 稳定接受。
 /// </summary>
 public sealed unsafe class ConvexDecompositionTests
 {

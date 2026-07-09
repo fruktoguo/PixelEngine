@@ -7,6 +7,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// EditorShell 资产拖拽语义测试。
+/// 不变式：拖拽语义映射到正确资产类型、非法路径拒绝且不改工程模型。
 /// </summary>
 public sealed class EditorAssetDropServiceTests
 {
@@ -16,6 +17,7 @@ public sealed class EditorAssetDropServiceTests
     [Fact]
     public void DropPrefabOnHierarchyCreatesUndoableInstanceAndRejectsOtherAssets()
     {
+        // Arrange：准备输入与初始状态
         string projectRoot = CreateTempProjectRoot();
         try
         {
@@ -36,6 +38,7 @@ public sealed class EditorAssetDropServiceTests
                 EditorAssetDropPayload.FromAsset(texture),
                 parent.StableId);
 
+            // Assert：验证预期结果
             Assert.False(invalid.Succeeded);
             Assert.Contains("仅 prefab", invalid.Diagnostic, StringComparison.Ordinal);
             Assert.Equal(1, scene.Count);
@@ -70,6 +73,7 @@ public sealed class EditorAssetDropServiceTests
     [Fact]
     public void DropPrefabOnSceneViewAppliesWorldTransformAndRejectsOtherAssets()
     {
+        // Arrange：准备输入与初始状态
         string projectRoot = CreateTempProjectRoot();
         try
         {
@@ -97,6 +101,7 @@ public sealed class EditorAssetDropServiceTests
                 EditorAssetDropPayload.FromAsset(audio),
                 transform);
 
+            // Assert：验证预期结果
             Assert.False(invalid.Succeeded);
             Assert.Contains("仅 prefab", invalid.Diagnostic, StringComparison.Ordinal);
             Assert.Equal(0, scene.Count);
@@ -132,6 +137,7 @@ public sealed class EditorAssetDropServiceTests
     [Fact]
     public void DropNonPrefabAssetsOnHierarchyAndSceneViewAlwaysFailWithoutSideEffects()
     {
+        // Arrange：准备输入与初始状态
         string projectRoot = CreateTempProjectRoot();
         try
         {
@@ -155,6 +161,7 @@ public sealed class EditorAssetDropServiceTests
                 EditorAssetDropResult hierarchy = EditorAssetDropService.DropOnHierarchy(scene, undo, prefabs, payloads[i], parentStableId: null);
                 EditorAssetDropResult sceneView = EditorAssetDropService.DropOnSceneView(scene, undo, prefabs, payloads[i], transform);
 
+                // Assert：验证预期结果
                 Assert.False(hierarchy.Succeeded);
                 Assert.False(sceneView.Succeeded);
                 Assert.Contains("仅 prefab", hierarchy.Diagnostic, StringComparison.Ordinal);
@@ -175,6 +182,7 @@ public sealed class EditorAssetDropServiceTests
     [Fact]
     public void DropOnInspectorFieldEncodesTypedAssetReferenceAndRejectsMismatch()
     {
+        // Arrange：准备输入与初始状态
         EditorSceneModel scene = EditorSceneModel.Empty("drop-inspector");
         EditorGameObject gameObject = scene.Create("Receiver");
         gameObject.Components.Add(new EditorComponentModel(typeof(AssetDropProbeBehaviour).FullName!));
@@ -185,6 +193,7 @@ public sealed class EditorAssetDropServiceTests
 
         EditorAssetDropResult mismatch = EditorAssetDropService.DropOnInspectorField(scene, undo, audio, target);
 
+        // Assert：验证预期结果
         Assert.False(mismatch.Succeeded);
         Assert.Contains("需要 Texture", mismatch.Diagnostic, StringComparison.Ordinal);
         Assert.False(gameObject.Components[0].SerializedFields.ContainsKey("Texture"));
@@ -207,6 +216,7 @@ public sealed class EditorAssetDropServiceTests
     [Fact]
     public void DropOnInspectorFieldAcceptsAllTypedAssetReferenceKinds()
     {
+        // Arrange：准备输入与初始状态
         (EditorAssetType Type, string Path)[] cases =
         [
             (EditorAssetType.Prefab, "prefabs/rock.prefab"),
@@ -229,6 +239,7 @@ public sealed class EditorAssetDropServiceTests
 
             EditorAssetDropResult result = EditorAssetDropService.DropOnInspectorField(scene, undo, payload, target);
 
+            // Assert：验证预期结果
             Assert.True(result.Succeeded);
             Assert.True(EditorAssetReferenceCodec.TryDecode(gameObject.Components[0].SerializedFields[fieldName], out EditorAssetReference decoded));
             Assert.Equal(cases[i].Type, decoded.AssetType);
@@ -243,6 +254,7 @@ public sealed class EditorAssetDropServiceTests
     [Fact]
     public void InspectorPanelAppliesDescriptorDeclaredTypedAssetFieldDrop()
     {
+        // Arrange：准备输入与初始状态
         EditorSceneModel scene = EditorSceneModel.Empty("drop-inspector-descriptor");
         EditorGameObject gameObject = scene.Create("Receiver");
         gameObject.Components.Add(new EditorComponentModel(typeof(AssetDropProbeBehaviour).FullName!));
@@ -258,6 +270,7 @@ public sealed class EditorAssetDropServiceTests
 
         EditorAssetDropResult mismatch = panel.ApplyAssetDropPayloadToField(gameObject.StableId, 0, field, audio);
 
+        // Assert：验证预期结果
         Assert.False(mismatch.Succeeded);
         Assert.False(gameObject.Components[0].SerializedFields.ContainsKey(nameof(AssetDropProbeBehaviour.TextureReference)));
 
@@ -278,6 +291,7 @@ public sealed class EditorAssetDropServiceTests
     [Fact]
     public void InspectorPanelAcceptsProjectWindowBrowserPayloadAndRecordsDiagnostics()
     {
+        // Arrange：准备输入与初始状态
         EditorSceneModel scene = EditorSceneModel.Empty("drop-inspector-browser-payload");
         EditorGameObject gameObject = scene.Create("Receiver");
         gameObject.Components.Add(new EditorComponentModel(typeof(AssetDropProbeBehaviour).FullName!));
@@ -296,6 +310,7 @@ public sealed class EditorAssetDropServiceTests
             field,
             new AssetBrowserDragPayload(string.Empty, "textures/sand.png", AssetBrowserItemKind.Texture));
 
+        // Assert：验证预期结果
         Assert.False(invalid.Succeeded);
         Assert.Contains("stable asset id", panel.Status, StringComparison.Ordinal);
         Assert.Empty(gameObject.Components[0].SerializedFields);
@@ -324,6 +339,7 @@ public sealed class EditorAssetDropServiceTests
     [Fact]
     public void MoveAssetRewritesInspectorAssetReferencesInActiveSceneAndDocuments()
     {
+        // Arrange：准备输入与初始状态
         string projectRoot = CreateTempProjectRoot();
         try
         {
@@ -338,6 +354,7 @@ public sealed class EditorAssetDropServiceTests
 
             EditorAssetMoveResult result = manifest.MoveAsset("textures/sand.png", "textures/moved/sand.png", activeScene);
 
+            // Assert：验证预期结果
             Assert.Equal(texture.Id, result.Asset.Id);
             Assert.True(result.UpdatedActiveScene);
             Assert.Equal(1, result.UpdatedReferenceDocuments);
@@ -362,6 +379,7 @@ public sealed class EditorAssetDropServiceTests
     [Fact]
     public void DropScriptOnComponentListAddsBehaviourAndRejectsInvalidScripts()
     {
+        // Arrange：准备输入与初始状态
         EditorSceneModel scene = EditorSceneModel.Empty("drop-script");
         EditorGameObject gameObject = scene.Create("Receiver");
         ScriptAssemblyRegistry scripts = new();
@@ -374,6 +392,7 @@ public sealed class EditorAssetDropServiceTests
         EditorAssetDropResult wrongType = EditorAssetDropService.DropScriptOnComponentList(scene, undo, scripts, texture, gameObject.StableId);
         EditorAssetDropResult unresolved = EditorAssetDropService.DropScriptOnComponentList(scene, undo, scripts, missingScript, gameObject.StableId);
 
+        // Assert：验证预期结果
         Assert.False(wrongType.Succeeded);
         Assert.False(unresolved.Succeeded);
         Assert.Empty(gameObject.Components);
