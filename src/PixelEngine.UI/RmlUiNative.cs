@@ -248,6 +248,8 @@ internal static unsafe partial class RmlUiNative
     /// <param name="textLength">字节数。</param>
     /// <param name="isActive">1=更新预编辑，0=取消。</param>
     /// <param name="cursorIndex">预编辑内光标字符索引。</param>
+    /// <param name="selectionStart">预编辑内选区起点。</param>
+    /// <param name="selectionLength">预编辑内选区长度。</param>
     /// <returns>1=已应用到焦点上下文，0=无焦点或未应用。</returns>
     [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_set_text_composition")]
     internal static partial int SetTextComposition(
@@ -255,7 +257,9 @@ internal static unsafe partial class RmlUiNative
         byte* text,
         int textLength,
         int isActive,
-        int cursorIndex);
+        int cursorIndex,
+        int selectionStart,
+        int selectionLength);
 
     /// <summary>
     /// 确认当前预编辑为最终提交字符串；未在 composing 时返回 0，调用方应走 ProcessTextUtf8。
