@@ -119,29 +119,47 @@ struct PeUiGlResolver
     void* user;
 };
 
-// 捕获 RmlUi 当前焦点文本输入上下文，供 IME caret/候选锚点几何查询（不处理 composition 字符串提交）。
+// 捕获 RmlUi 焦点文本输入上下文，并提供 IME composition 预编辑写入/取消/确认（对齐 RmlUi TextInputContext 契约）。
 class PeUiTextInputHandler final : public Rml::TextInputHandler
 {
 public:
     void OnActivate(Rml::TextInputContext* input_context) override
     {
+        if (active_context != input_context && composing)
+        {
+            CancelComposition();
+        }
+
         active_context = input_context;
     }
 
     void OnDeactivate(Rml::TextInputContext* input_context) override
     {
-        if (active_context == input_context)
+        if (active_context != input_context)
         {
-            active_context = nullptr;
+            return;
         }
+
+        if (composing)
+        {
+            CancelComposition();
+        }
+
+        active_context = nullptr;
     }
 
     void OnDestroy(Rml::TextInputContext* input_context) override
     {
-        if (active_context == input_context)
+        if (active_context != input_context)
         {
-            active_context = nullptr;
+            return;
         }
+
+        // 上下文即将销毁，不能再写回；只清理本地 composition 状态。
+        composing = false;
+        composition_range_start = 0;
+        composition_range_end = 0;
+        active_context = nullptr;
     }
 
     Rml::TextInputContext* ActiveContext() const
@@ -149,8 +167,91 @@ public:
         return active_context;
     }
 
+    bool IsComposing() const
+    {
+        return composing;
+    }
+
+    // 更新预编辑字符串；无焦点时返回 0，成功返回 1。
+    int32_t SetComposition(Rml::StringView composition, int32_t cursor_index)
+    {
+        if (active_context == nullptr)
+        {
+            return 0;
+        }
+
+        if (!composing)
+        {
+            composing = true;
+            composition_range_start = 0;
+            composition_range_end = 0;
+            active_context->GetSelectionRange(composition_range_start, composition_range_end);
+        }
+
+        active_context->SetText(composition, composition_range_start, composition_range_end);
+        const int length = static_cast<int>(Rml::StringUtilities::LengthUTF8(composition));
+        composition_range_end = composition_range_start + length;
+
+        const int clamped_cursor = std::max(0, std::min(cursor_index, length));
+        active_context->SetCursorPosition(composition_range_start + clamped_cursor);
+        active_context->SetCompositionRange(composition_range_start, composition_range_end);
+        return 1;
+    }
+
+    // 取消预编辑并移除 composition 区间文本；未在 composing 时 no-op 成功返回 1。
+    int32_t CancelComposition()
+    {
+        if (!composing)
+        {
+            return 1;
+        }
+
+        if (active_context != nullptr)
+        {
+            active_context->SetText(Rml::StringView(), composition_range_start, composition_range_end);
+            active_context->SetCursorPosition(composition_range_start);
+            active_context->SetCompositionRange(0, 0);
+        }
+
+        composing = false;
+        composition_range_start = 0;
+        composition_range_end = 0;
+        return 1;
+    }
+
+    // 确认预编辑为最终提交字符串（尊重 max length 等控件约束）。
+    int32_t ConfirmComposition(Rml::StringView composition)
+    {
+        if (active_context == nullptr)
+        {
+            return 0;
+        }
+
+        if (!composing)
+        {
+            // 无预编辑时退回普通文本插入路径由调用方 ProcessTextInput 处理。
+            return 0;
+        }
+
+        active_context->SetText(composition, composition_range_start, composition_range_end);
+        const int length = static_cast<int>(Rml::StringUtilities::LengthUTF8(composition));
+        composition_range_end = composition_range_start + length;
+        active_context->SetCompositionRange(composition_range_start, composition_range_end);
+        active_context->CommitComposition(composition);
+        active_context->SetCursorPosition(composition_range_end);
+        active_context->SetCompositionRange(0, 0);
+
+        composing = false;
+        composition_range_start = 0;
+        composition_range_end = 0;
+        return 1;
+    }
+
 private:
     Rml::TextInputContext* active_context = nullptr;
+    bool composing = false;
+    int composition_range_start = 0;
+    int composition_range_end = 0;
 };
 
 PeUiTextInputHandler g_textInputHandler;
@@ -1165,6 +1266,65 @@ PE_UI_NATIVE_API int32_t peui_native_try_get_active_text_input_geometry(
     *out_anchor_x = bounds.Left();
     *out_anchor_y = bounds.Bottom();
     return 1;
+}
+
+// 更新 IME 预编辑字符串；is_active=0 表示取消预编辑。无焦点文本框时返回 0（安全忽略）。
+// 不得用本 API 传递 committed text；确认提交请用 peui_native_confirm_text_composition。
+PE_UI_NATIVE_API int32_t peui_native_set_text_composition(
+    PeUiRenderer* renderer,
+    const char* text_utf8,
+    int32_t text_length,
+    int32_t is_active,
+    int32_t cursor_index)
+{
+    if (renderer == nullptr)
+    {
+        return 0;
+    }
+
+    if (is_active == 0)
+    {
+        return g_textInputHandler.CancelComposition();
+    }
+
+    Rml::StringView composition;
+    if (text_utf8 != nullptr && text_length > 0)
+    {
+        composition = Rml::StringView(text_utf8, text_utf8 + text_length);
+    }
+
+    return g_textInputHandler.SetComposition(composition, cursor_index);
+}
+
+// 将当前预编辑确认提交为最终字符串；未在 composing 时返回 0，调用方应走 ProcessTextInput。
+PE_UI_NATIVE_API int32_t peui_native_confirm_text_composition(
+    PeUiRenderer* renderer,
+    const char* text_utf8,
+    int32_t text_length)
+{
+    if (renderer == nullptr)
+    {
+        return 0;
+    }
+
+    Rml::StringView composition;
+    if (text_utf8 != nullptr && text_length > 0)
+    {
+        composition = Rml::StringView(text_utf8, text_utf8 + text_length);
+    }
+
+    return g_textInputHandler.ConfirmComposition(composition);
+}
+
+// 查询 native 是否正处于 composition 预编辑中。
+PE_UI_NATIVE_API int32_t peui_native_is_text_composition_active(PeUiRenderer* renderer)
+{
+    if (renderer == nullptr)
+    {
+        return 0;
+    }
+
+    return g_textInputHandler.IsComposing() ? 1 : 0;
 }
 
 PE_UI_NATIVE_API void peui_native_renderer_set_viewport(PeUiRenderer* renderer, int32_t width, int32_t height)

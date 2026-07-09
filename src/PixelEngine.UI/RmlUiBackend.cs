@@ -362,9 +362,9 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
     }
 
     /// <summary>
-    /// 把已提交文本按 UTF-8 注入 RmlUi。
+    /// 把已提交文本注入 RmlUi；若当前存在 IME 预编辑，则经 ConfirmComposition 确认，绝不把 preedit 通道与 committed 通道混用。
     /// </summary>
-    /// <param name="text">本帧文本。</param>
+    /// <param name="text">本帧已提交文本。</param>
     public void FeedText(ReadOnlySpan<char> text)
     {
         ThrowIfDisposed();
@@ -384,6 +384,20 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
         int written = Encoding.UTF8.GetBytes(text, utf8);
         fixed (byte* pointer = utf8)
         {
+            // 路由顺序为先 FeedText 再清除 composition：有预编辑时走 ConfirmComposition。
+            if (CompositionState.IsActive || RmlUiNative.IsTextCompositionActive(_renderer) == 1)
+            {
+                int confirmed = RmlUiNative.ConfirmTextComposition(_renderer, pointer, written);
+                if (confirmed == 1)
+                {
+                    CompositionState = UiTextComposition.Inactive;
+                    CompositionText = string.Empty;
+                    CompositionImeGeometry = UiImeGeometry.None;
+                    Dirty = true;
+                    return;
+                }
+            }
+
             _ = RmlUiNative.ProcessTextUtf8(_renderer, pointer, written);
         }
 
@@ -391,7 +405,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
     }
 
     /// <summary>
-    /// 接收 IME composition 预编辑状态；当前 RmlUi native shim 尚未暴露 composition API，因此只缓存预编辑生命周期供诊断和未来 native bridge 使用，不把它冒充 committed text。
+    /// 接收 IME composition 预编辑状态并桥接到 RmlUi TextInputContext；不得把已提交文本经此通道注入。
     /// </summary>
     /// <param name="text">当前预编辑文本。</param>
     /// <param name="composition">当前预编辑状态。</param>
@@ -400,11 +414,12 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
         ThrowIfDisposed();
         EnsureInitialized();
         UiTextComposition normalized = NormalizeTextComposition(text, in composition);
+        int textLength = normalized.IsActive ? text.Length : 0;
         UiViewport geometryViewport = new(0, 0, _baseViewportWidth, _baseViewportHeight, 1f);
         UiImeGeometry geometry = normalized.IsActive
             ? UiImeGeometryLayout.ComputePreeditOverlayGeometry(
                 in geometryViewport,
-                text.Length,
+                textLength,
                 normalized.CursorIndex)
             : UiImeGeometry.None;
         UiTextComposition current = CompositionState;
@@ -418,10 +433,52 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             return;
         }
 
+        if (normalized.IsActive)
+        {
+            ApplyNativeComposition(text[..textLength], normalized.CursorIndex, isActive: true);
+        }
+        else
+        {
+            ApplyNativeComposition([], cursorIndex: 0, isActive: false);
+        }
+
         CompositionState = normalized;
-        CompositionText = normalized.IsActive ? text.ToString() : string.Empty;
+        CompositionText = normalized.IsActive ? text[..textLength].ToString() : string.Empty;
         CompositionImeGeometry = geometry;
         Dirty = true;
+    }
+
+    private void ApplyNativeComposition(ReadOnlySpan<char> text, int cursorIndex, bool isActive)
+    {
+        if (_renderer == IntPtr.Zero)
+        {
+            return;
+        }
+
+        if (!isActive)
+        {
+            _ = RmlUiNative.SetTextComposition(_renderer, null, 0, isActive: 0, cursorIndex: 0);
+            return;
+        }
+
+        int byteCount = text.IsEmpty ? 0 : Encoding.UTF8.GetByteCount(text);
+        if (byteCount > MaxStackTextBytes)
+        {
+            throw new ArgumentOutOfRangeException(nameof(text), "单帧 IME 预编辑文本超过 RmlUi 栈缓冲上限。");
+        }
+
+        if (byteCount == 0)
+        {
+            _ = RmlUiNative.SetTextComposition(_renderer, null, 0, isActive: 1, cursorIndex);
+            return;
+        }
+
+        Span<byte> utf8 = stackalloc byte[byteCount];
+        int written = Encoding.UTF8.GetBytes(text, utf8);
+        fixed (byte* pointer = utf8)
+        {
+            _ = RmlUiNative.SetTextComposition(_renderer, pointer, written, isActive: 1, cursorIndex);
+        }
     }
 
     /// <summary>

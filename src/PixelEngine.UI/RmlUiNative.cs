@@ -241,6 +241,41 @@ internal static unsafe partial class RmlUiNative
         out float anchorY);
 
     /// <summary>
+    /// 更新或取消 RmlUi 焦点文本框的 IME 预编辑字符串；isActive=0 为取消。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="text">UTF-8 预编辑文本；取消时可为空。</param>
+    /// <param name="textLength">字节数。</param>
+    /// <param name="isActive">1=更新预编辑，0=取消。</param>
+    /// <param name="cursorIndex">预编辑内光标字符索引。</param>
+    /// <returns>1=已应用到焦点上下文，0=无焦点或未应用。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_set_text_composition")]
+    internal static partial int SetTextComposition(
+        IntPtr renderer,
+        byte* text,
+        int textLength,
+        int isActive,
+        int cursorIndex);
+
+    /// <summary>
+    /// 确认当前预编辑为最终提交字符串；未在 composing 时返回 0，调用方应走 ProcessTextUtf8。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="text">UTF-8 提交文本。</param>
+    /// <param name="textLength">字节数。</param>
+    /// <returns>1=已确认 composition，0=未在 composing 或无焦点。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_confirm_text_composition")]
+    internal static partial int ConfirmTextComposition(IntPtr renderer, byte* text, int textLength);
+
+    /// <summary>
+    /// 查询 native 是否正处于 composition 预编辑中。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <returns>1=正在 composing。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_is_text_composition_active")]
+    internal static partial int IsTextCompositionActive(IntPtr renderer);
+
+    /// <summary>
     /// 对当前 RmlUi context 执行 DOM 命中测试。
     /// </summary>
     /// <param name="renderer">renderer 句柄。</param>
