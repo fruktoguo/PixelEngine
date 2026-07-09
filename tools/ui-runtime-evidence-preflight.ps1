@@ -258,9 +258,22 @@ function Get-RequiredUiRuntimeScopes {
         [pscustomobject]@{
             scope = "ultralight_optional_profile_gate"
             title = "Ultralight optional profile：后端/许可/provenance/发行 gate 或明确 inactive gate 复核"
-            trueFields = @("nativeSdkProvenanceRecorded", "licenseReviewed", "redistributionDecisionRecorded", "releaseAuditGatePassed", "fallbackPathVerified")
+            trueFields = @(
+                "nativeSdkProvenanceRecorded",
+                "licenseReviewed",
+                "redistributionDecisionRecorded",
+                "releaseAuditGatePassed",
+                "fallbackPathVerified",
+                "inactiveProfileExecutionBlocked",
+                "inactiveBackendRejectsDocuments",
+                "inactiveBackendCapturesNoInput",
+                "inactiveBackendProducesNoCompositeOutput",
+                "releaseAuditRejectsInactiveNative"
+            )
             minimumNumberFields = @(
-                @{ name = "licenseDocumentCount"; minimum = 1 }
+                @{ name = "licenseDocumentCount"; minimum = 1 },
+                @{ name = "inactiveBoundaryTestCount"; minimum = 1 },
+                @{ name = "releaseAuditRejectionCaseCount"; minimum = 1 }
             )
         },
         [pscustomobject]@{
