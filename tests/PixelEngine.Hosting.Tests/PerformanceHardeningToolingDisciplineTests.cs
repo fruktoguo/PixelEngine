@@ -2360,6 +2360,22 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("durationSeconds", readme, StringComparison.Ordinal);
         Assert.Contains("视频结构", readme, StringComparison.Ordinal);
         Assert.Contains("真实 duration", readme, StringComparison.Ordinal);
+        Assert.Contains("controlFeelReport", readme, StringComparison.Ordinal);
+        Assert.Contains("materialBrushAndReactionVideo", readme, StringComparison.Ordinal);
+        Assert.Contains("rigidBodyGameplayVideo", readme, StringComparison.Ordinal);
+        Assert.Contains("particleLightingVideo", readme, StringComparison.Ordinal);
+        Assert.Contains("audioListeningReport", readme, StringComparison.Ordinal);
+        Assert.Contains("fullRoutePlaythroughVideo", readme, StringComparison.Ordinal);
+        Assert.Contains("lavaCombatPlaythroughVideo", readme, StringComparison.Ordinal);
+        Assert.Contains("hudMenuEditorVideo", readme, StringComparison.Ordinal);
+        Assert.Contains("hotReloadWindowReport", readme, StringComparison.Ordinal);
+        Assert.Contains("手感", readme, StringComparison.Ordinal);
+        Assert.Contains("横向熔岩战斗", readme, StringComparison.Ordinal);
+        Assert.Contains("HUD/菜单/EditorShell", readme, StringComparison.Ordinal);
+        Assert.Contains("至少 30 秒", readme, StringComparison.Ordinal);
+        Assert.Contains("其它视频至少 10 秒", readme, StringComparison.Ordinal);
+        Assert.Contains("scripted probe 只可辅助生成 `scripted_probe_only`", readme, StringComparison.Ordinal);
+        Assert.Contains("不能替代真实窗口人工体验结论", readme, StringComparison.Ordinal);
         Assert.Contains("capture_unique_visible_pixels", readme, StringComparison.Ordinal);
         Assert.Contains("拒绝空白/纯色画面", readme, StringComparison.Ordinal);
 
