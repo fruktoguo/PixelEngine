@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-10",
-  "generatedFromCommit": "5ff732ddbb33efd13f81adc0c998b92f541f915a",
+  "generatedFromCommit": "f3b91ab9c7562d244145400de504f1678ff8fd1b",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -51,6 +51,19 @@
       "reportPath": "docs/evidence-2026-07-10-arch-002-api-boundary.md",
       "sha256": "d227b6133af1c074945a365058dc713a15e74281561c043b679cb97f2cbaed67",
       "notes": "Chunk 对外只读 span、CellGrid/NeighborWindow 裸 ref 降为 internal、Physics 擦除迁移到受控 API；全量回归 1497 passed、34 expected skipped。"
+    },
+    {
+      "entryId": "arch-003-task-fault-propagation-20260710",
+      "taskIds": ["ARCH-003"],
+      "evidenceState": "complete_local_fault_propagation_regression",
+      "commit": "f3b91ab9c7562d244145400de504f1678ff8fd1b",
+      "runSessionId": "local-20260710-arch003-task-fault-propagation",
+      "runIdentityStatus": "captured",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8c/16t; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "dotnet build PixelEngine.sln -c Release --no-restore --disable-build-servers -m:1; 对 tests 下 13 个测试程序集逐一执行 dotnet test -c Release --no-build --no-restore -m:1 --logger console;verbosity=minimal; pwsh tools/validate-task-catalog.ps1; git diff --check",
+      "reportPath": "docs/evidence-2026-07-10-arch-003-task-fault-propagation.md",
+      "sha256": "75df1511c5675d65493c1ef8015f3fcaf634184b43fb4b9f5ce70dbf6fd7827e",
+      "notes": "Box2D callback 首异常捕获、tick 边界传播、PhysicsSystem 失败锁存和单线程/worker fault injection 已验证；程序集级串行全量回归 1466 passed、34 expected skipped。"
     },
     {
       "entryId": "test-001-native-smoke-20260710",
