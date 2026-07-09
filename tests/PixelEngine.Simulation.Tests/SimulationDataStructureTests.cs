@@ -51,30 +51,30 @@ public sealed class SimulationDataStructureTests
         // Arrange：准备输入与初始状态
         Chunk chunk = new(new ChunkCoord(2, 3));
         int local = CellAddressing.LocalIndexFromLocal(10, 11);
-        chunk.Material[local] = 7;
-        chunk.Flags[local] = CellFlags.RigidOwned;
-        chunk.Lifetime[local] = 9;
-        chunk.Damage[local] = 5;
+        chunk.MaterialBuffer[local] = 7;
+        chunk.FlagsBuffer[local] = CellFlags.RigidOwned;
+        chunk.LifetimeBuffer[local] = 9;
+        chunk.DamageBuffer[local] = 5;
         chunk.MarkWorkingDirty(10, 11, EngineConstants.DirtyRectPadding);
 
         chunk.Reset(new ChunkCoord(-4, 5));
 
         // Assert：验证预期结果
-        Assert.Equal(EngineConstants.ChunkArea, chunk.Material.Length);
-        Assert.Equal(EngineConstants.ChunkArea, chunk.Flags.Length);
-        Assert.Equal(EngineConstants.ChunkArea, chunk.Lifetime.Length);
+        Assert.Equal(EngineConstants.ChunkArea, chunk.MaterialBuffer.Length);
+        Assert.Equal(EngineConstants.ChunkArea, chunk.FlagsBuffer.Length);
+        Assert.Equal(EngineConstants.ChunkArea, chunk.LifetimeBuffer.Length);
         Assert.Equal(new ChunkCoord(-4, 5), chunk.Coord);
-        Assert.Equal(0, chunk.Material[local]);
-        Assert.Equal(0, chunk.Flags[local]);
-        Assert.Equal(0, chunk.Lifetime[local]);
-        Assert.Equal(0, chunk.Damage[local]);
+        Assert.Equal(0, chunk.MaterialBuffer[local]);
+        Assert.Equal(0, chunk.FlagsBuffer[local]);
+        Assert.Equal(0, chunk.LifetimeBuffer[local]);
+        Assert.Equal(0, chunk.DamageBuffer[local]);
         Assert.Equal(DirtyRect.Empty, chunk.CurrentDirty);
         Assert.Equal(DirtyRect.Empty, chunk.WorkingDirty);
         Assert.Equal(ChunkState.Sleeping, chunk.State);
 
         ref ushort materialBase = ref chunk.GetMaterialBase();
         materialBase = 11;
-        Assert.Equal(11, chunk.Material[0]);
+        Assert.Equal(11, chunk.MaterialBuffer[0]);
     }
 
     /// <summary>
@@ -85,14 +85,14 @@ public sealed class SimulationDataStructureTests
     {
         ChunkPool pool = new();
         Chunk first = pool.Rent(new ChunkCoord(0, 0));
-        first.Material[0] = 42;
+        first.MaterialBuffer[0] = 42;
 
         pool.Return(first);
         Chunk second = pool.Rent(new ChunkCoord(1, 1));
 
         Assert.Same(first, second);
         Assert.Equal(new ChunkCoord(1, 1), second.Coord);
-        Assert.Equal(0, second.Material[0]);
+        Assert.Equal(0, second.MaterialBuffer[0]);
     }
 
     /// <summary>
@@ -225,12 +225,12 @@ public sealed class SimulationDataStructureTests
         int solidLocal = CellAddressing.LocalIndexFromLocal(10, 10);
         int rigidLocal = CellAddressing.LocalIndexFromLocal(11, 10);
         int immuneLocal = CellAddressing.LocalIndexFromLocal(12, 10);
-        chunk.Material[solidLocal] = 1;
-        chunk.Material[rigidLocal] = 1;
-        chunk.Material[immuneLocal] = 3;
-        chunk.Flags[rigidLocal] = CellFlags.RigidOwned;
-        chunk.Damage[rigidLocal] = 12;
-        chunk.Damage[immuneLocal] = 7;
+        chunk.MaterialBuffer[solidLocal] = 1;
+        chunk.MaterialBuffer[rigidLocal] = 1;
+        chunk.MaterialBuffer[immuneLocal] = 3;
+        chunk.FlagsBuffer[rigidLocal] = CellFlags.RigidOwned;
+        chunk.DamageBuffer[rigidLocal] = 12;
+        chunk.DamageBuffer[immuneLocal] = 7;
 
         bool rigidDestroyed = kernel.ApplyStructuralDamage(11, 10, 9);
         bool solidDestroyed = kernel.ApplyStructuralDamage(10, 10, 9);
@@ -243,11 +243,11 @@ public sealed class SimulationDataStructureTests
         Assert.Equal(1, damageSink.Count);
         Assert.Equal((11, 10), damageSink.Last);
         Assert.Equal(1, damageSink.LastMaterial);
-        Assert.Equal(0, chunk.Damage[rigidLocal]);
-        Assert.Equal(2, chunk.Material[solidLocal]);
-        Assert.Equal(0, chunk.Damage[solidLocal]);
-        Assert.Equal(3, chunk.Material[immuneLocal]);
-        Assert.Equal(0, chunk.Damage[immuneLocal]);
+        Assert.Equal(0, chunk.DamageBuffer[rigidLocal]);
+        Assert.Equal(2, chunk.MaterialBuffer[solidLocal]);
+        Assert.Equal(0, chunk.DamageBuffer[solidLocal]);
+        Assert.Equal(3, chunk.MaterialBuffer[immuneLocal]);
+        Assert.Equal(0, chunk.DamageBuffer[immuneLocal]);
     }
 
     /// <summary>

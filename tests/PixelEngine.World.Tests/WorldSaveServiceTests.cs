@@ -37,9 +37,9 @@ public sealed class WorldSaveServiceTests
         ChunkCoord coord = new(-1, 2);
         Chunk sourceChunk = new(coord);
         int local = CellAddressing.LocalIndexFromLocal(4, 8);
-        sourceChunk.Material[local] = 1;
-        sourceChunk.Lifetime[local] = 9;
-        sourceChunk.Damage[local] = 4;
+        sourceChunk.MaterialBuffer[local] = 1;
+        sourceChunk.LifetimeBuffer[local] = 9;
+        sourceChunk.DamageBuffer[local] = 4;
         sourceChunks.Add(sourceChunk);
         sourceResidency.Set(coord, new ChunkResidencyInfo(ChunkResidencyState.Active, 7, ChunkMemoryBudget.EstimatedResidentChunkBytes, DirtySinceLoad: true));
         int worldX = (coord.X << 6) + 4;
@@ -85,9 +85,9 @@ public sealed class WorldSaveServiceTests
         Assert.Equal(1, result.LoadedChunkCount);
         Assert.Equal(0, result.MaterialFallbackHitCount);
         Assert.True(loadedChunks.TryGetChunk(coord, out Chunk loadedChunk));
-        Assert.Equal(2, loadedChunk.Material[local]);
-        Assert.Equal(9, loadedChunk.Lifetime[local]);
-        Assert.Equal(4, loadedChunk.Damage[local]);
+        Assert.Equal(2, loadedChunk.MaterialBuffer[local]);
+        Assert.Equal(9, loadedChunk.LifetimeBuffer[local]);
+        Assert.Equal(4, loadedChunk.DamageBuffer[local]);
         Assert.Equal(DirtyRect.Full, loadedChunk.CurrentDirty);
         Assert.Equal(37.5f, loadedTemperature.GetTemperature(worldX, worldY));
         Assert.True(loadedResidency.TryGetInfo(coord, out ChunkResidencyInfo loadedInfo));
@@ -143,7 +143,7 @@ public sealed class WorldSaveServiceTests
         ResidencyTable sourceResidency = new();
         TemperatureField sourceTemperature = new();
         Chunk chunk = new(new ChunkCoord(0, 0));
-        chunk.Material[0] = 1;
+        chunk.MaterialBuffer[0] = 1;
         sourceChunks.Add(chunk);
         FakeWorldStateBridge state = new(
             [new FreeParticleSnapshot(0, 0, 0, 0, 1, 0, 1)],
@@ -164,7 +164,7 @@ public sealed class WorldSaveServiceTests
         // Assert：验证预期结果
         Assert.Equal(3, result.MaterialFallbackHitCount);
         Assert.True(loadedChunks.TryGetChunk(new ChunkCoord(0, 0), out Chunk loadedChunk));
-        Assert.Equal(0, loadedChunk.Material[0]);
+        Assert.Equal(0, loadedChunk.MaterialBuffer[0]);
         Assert.Equal((ushort)0, restored.RestoredParticles[0].Material);
         Assert.Equal([0], restored.RestoredBodies[0].Material.ToArray());
     }

@@ -117,9 +117,9 @@ public class CellThroughputBenchmark : IDisposable
             for (int cx = 0; cx < ActiveChunksPerAxis; cx++)
             {
                 Chunk chunk = _source.GetRequired(new ChunkCoord(cx, cy));
-                for (int i = 0; i < chunk.Material.Length; i++)
+                for (int i = 0; i < chunk.MaterialBuffer.Length; i++)
                 {
-                    chunk.Material[i] = (i & 1) == 0 ? Water : Oil;
+                    chunk.MaterialBuffer[i] = (i & 1) == 0 ? Water : Oil;
                 }
 
                 chunk.SetCurrentDirty(DirtyRect.Full);
@@ -134,7 +134,7 @@ public class CellThroughputBenchmark : IDisposable
         {
             for (int x = 24; x < 40; x++)
             {
-                chunk.Material[CellAddressing.LocalIndexFromLocal(x, y)] = ((x + y) & 1) == 0 ? Sand : Water;
+                chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(x, y)] = ((x + y) & 1) == 0 ? Sand : Water;
             }
         }
 
@@ -148,7 +148,7 @@ public class CellThroughputBenchmark : IDisposable
             for (int cx = 0; cx < ActiveChunksPerAxis; cx++)
             {
                 Chunk chunk = _source.GetRequired(new ChunkCoord(cx, cy));
-                Array.Fill(chunk.Material, Rock);
+                Array.Fill(chunk.MaterialBuffer, Rock);
             }
         }
     }

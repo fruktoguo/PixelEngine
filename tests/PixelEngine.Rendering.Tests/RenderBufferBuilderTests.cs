@@ -266,8 +266,8 @@ public sealed class RenderBufferBuilderTests
         ResidentChunkMap chunks = new();
         Chunk chunk = new(new ChunkCoord(0, 0));
         SetMaterial(chunk, 1, 1, 1);
-        chunk.Flags[CellAddressing.LocalIndexFromLocal(1, 1)] = 0xAA;
-        chunk.Lifetime[CellAddressing.LocalIndexFromLocal(1, 1)] = 9;
+        chunk.FlagsBuffer[CellAddressing.LocalIndexFromLocal(1, 1)] = 0xAA;
+        chunk.LifetimeBuffer[CellAddressing.LocalIndexFromLocal(1, 1)] = 9;
         chunks.Add(chunk);
         MaterialTable materials = Materials(
             Material(0, "empty", CellType.Empty, 0),
@@ -284,9 +284,9 @@ public sealed class RenderBufferBuilderTests
         new RenderBufferBuilder().Build(context, target, aux);
 
         int local = CellAddressing.LocalIndexFromLocal(1, 1);
-        Assert.Equal((ushort)1, chunk.Material[local]);
-        Assert.Equal(0xAA, chunk.Flags[local]);
-        Assert.Equal(9, chunk.Lifetime[local]);
+        Assert.Equal((ushort)1, chunk.MaterialBuffer[local]);
+        Assert.Equal(0xAA, chunk.FlagsBuffer[local]);
+        Assert.Equal(9, chunk.LifetimeBuffer[local]);
     }
 
     /// <summary>
@@ -509,7 +509,7 @@ public sealed class RenderBufferBuilderTests
         SetMaterial(chunk, 2, 0, 3);
         SetMaterial(chunk, 3, 0, 4);
         int damagedLocal = CellAddressing.LocalIndexFromLocal(0, 0);
-        chunk.Damage[damagedLocal] = 50;
+        chunk.DamageBuffer[damagedLocal] = 50;
         chunks.Add(chunk);
         MaterialTable materials = Materials(
             Material(0, "empty", CellType.Empty, 0),
@@ -550,8 +550,8 @@ public sealed class RenderBufferBuilderTests
         Assert.NotEqual(0xFF001020u, target.Pixels[1]);
         Assert.Equal(0x80404040u, target.Pixels[2]);
         Assert.NotEqual(0u, aux.Emissive[3]);
-        Assert.Equal((ushort)1, chunk.Material[damagedLocal]);
-        Assert.Equal(50, chunk.Damage[damagedLocal]);
+        Assert.Equal((ushort)1, chunk.MaterialBuffer[damagedLocal]);
+        Assert.Equal(50, chunk.DamageBuffer[damagedLocal]);
     }
 
     /// <summary>
@@ -563,7 +563,7 @@ public sealed class RenderBufferBuilderTests
         ResidentChunkMap chunks = new();
         Chunk chunk = new(new ChunkCoord(0, 0));
         SetMaterial(chunk, 0, 0, 1);
-        chunk.Damage[0] = 200;
+        chunk.DamageBuffer[0] = 200;
         chunks.Add(chunk);
         MaterialTable materials = Materials(
             Material(0, "empty", CellType.Empty, 0),
@@ -586,7 +586,7 @@ public sealed class RenderBufferBuilderTests
             .Build(context, target, aux);
 
         Assert.Equal(0xFF404040u, target.Pixels[0]);
-        Assert.Equal(200, chunk.Damage[0]);
+        Assert.Equal(200, chunk.DamageBuffer[0]);
     }
 
     /// <summary>
@@ -687,7 +687,7 @@ public sealed class RenderBufferBuilderTests
         SetMaterial(chunk, 5, 0, 4);
         SetMaterial(chunk, 6, 0, 5);
         SetMaterial(chunk, 7, 0, 1);
-        chunk.Damage[CellAddressing.LocalIndexFromLocal(2, 0)] = 40;
+        chunk.DamageBuffer[CellAddressing.LocalIndexFromLocal(2, 0)] = 40;
         chunks.Add(chunk);
         MaterialTable materials = Materials(
             Material(0, "empty", CellType.Empty, 0),
@@ -817,7 +817,7 @@ public sealed class RenderBufferBuilderTests
         ResidentChunkMap chunks = new();
         Chunk chunk = new(new ChunkCoord(0, 0));
         SetMaterial(chunk, 0, 0, 1);
-        chunk.Damage[0] = 200;
+        chunk.DamageBuffer[0] = 200;
         chunks.Add(chunk);
         MaterialTable materials = Materials(
             Material(0, "empty", CellType.Empty, 0),
@@ -856,7 +856,7 @@ public sealed class RenderBufferBuilderTests
 
     private static void SetMaterial(Chunk chunk, int lx, int ly, ushort material)
     {
-        chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
     }
 
     private static MaterialDef Material(ushort id, string name, CellType type, uint color)

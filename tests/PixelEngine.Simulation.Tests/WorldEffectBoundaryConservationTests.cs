@@ -189,7 +189,7 @@ public sealed class WorldEffectBoundaryConservationTests
     private static void SetWorld(DeterministicSimFixture.TestChunkSource source, int worldX, int worldY, ushort material)
     {
         Chunk chunk = source.GetRequired(CellAddressing.WorldToChunk(worldX, worldY));
-        chunk.Material[CellAddressing.LocalIndex(worldX, worldY)] = material;
+        chunk.MaterialBuffer[CellAddressing.LocalIndex(worldX, worldY)] = material;
     }
 
     private static int CountMaterial(DeterministicSimFixture.TestChunkSource source, ushort material)
@@ -197,7 +197,7 @@ public sealed class WorldEffectBoundaryConservationTests
         int count = 0;
         foreach (Chunk chunk in source.ResidentChunks.ToArray())
         {
-            ReadOnlySpan<ushort> cells = chunk.Material;
+            ReadOnlySpan<ushort> cells = chunk.MaterialBuffer;
             for (int i = 0; i < cells.Length; i++)
             {
                 if (cells[i] == material)
@@ -212,15 +212,15 @@ public sealed class WorldEffectBoundaryConservationTests
 
     private static void ResetDamageArena(Chunk chunk)
     {
-        chunk.Material.AsSpan().Clear();
-        chunk.Flags.AsSpan().Clear();
-        chunk.Lifetime.AsSpan().Clear();
-        chunk.Damage.AsSpan().Clear();
-        chunk.Material[CellAddressing.LocalIndexFromLocal(10, 10)] = Stone;
+        chunk.MaterialBuffer.AsSpan().Clear();
+        chunk.FlagsBuffer.AsSpan().Clear();
+        chunk.LifetimeBuffer.AsSpan().Clear();
+        chunk.DamageBuffer.AsSpan().Clear();
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(10, 10)] = Stone;
         FillLocalCircle(chunk, centerX: 20, centerY: 20, radius: 2, Stone);
         for (int x = 32; x <= 37; x++)
         {
-            chunk.Material[CellAddressing.LocalIndexFromLocal(x, 32)] = Stone;
+            chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(x, 32)] = Stone;
         }
     }
 
@@ -235,7 +235,7 @@ public sealed class WorldEffectBoundaryConservationTests
                 int dx = x - centerX;
                 if ((dx * dx) + (dy * dy) <= radiusSquared)
                 {
-                    chunk.Material[CellAddressing.LocalIndexFromLocal(x, y)] = material;
+                    chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(x, y)] = material;
                 }
             }
         }

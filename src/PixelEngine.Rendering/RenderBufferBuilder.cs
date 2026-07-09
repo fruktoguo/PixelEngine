@@ -185,7 +185,7 @@ public sealed class RenderBufferBuilder(
                     int segment = GetStyledPaletteRunLength(context, chunk, localStart + offset, run - offset, worldX + offset, worldY);
                     if (segment > 0)
                     {
-                        ReadOnlySpan<ushort> materials = chunk.Material.AsSpan(localStart + offset, segment);
+                        ReadOnlySpan<ushort> materials = chunk.Material.Slice(localStart + offset, segment);
                         Span<uint> pixelRun = pixels.Slice(rowOffset + offset, segment);
                         PaletteBgraConverter.Convert(materials, palette, pixelRun);
                         if (hot.HasColorNoise)
@@ -294,7 +294,7 @@ public sealed class RenderBufferBuilder(
                     continue;
                 }
 
-                ReadOnlySpan<ushort> materials = chunk.Material.AsSpan(
+                ReadOnlySpan<ushort> materials = chunk.Material.Slice(
                     CellAddressing.LocalIndexFromLocal(localX, localY),
                     run);
                 PaletteBgraConverter.Convert(materials, palette, pixelRun);

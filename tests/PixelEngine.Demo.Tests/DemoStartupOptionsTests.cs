@@ -166,7 +166,7 @@ public sealed class DemoStartupOptionsTests
                 ]);
             ResidentChunkMap chunks = new();
             Chunk chunk = new(new ChunkCoord(0, 0));
-            chunk.Material[0] = 1;
+            chunk.MaterialBuffer[0] = 1;
             chunks.Add(chunk);
             new WorldSaveService().SaveAll(
                 new WorldSaveContext(
@@ -514,17 +514,17 @@ public sealed class DemoStartupOptionsTests
 
     private static void SetLocal(Chunk chunk, int x, int y, ushort material)
     {
-        chunk.Material[CellAddressing.LocalIndexFromLocal(x, y)] = material;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(x, y)] = material;
     }
 
     private static ushort GetLocal(Chunk chunk, int x, int y)
     {
-        return chunk.Material[CellAddressing.LocalIndexFromLocal(x, y)];
+        return chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(x, y)];
     }
 
     private static byte GetDamage(Chunk chunk, int x, int y)
     {
-        return chunk.Damage[CellAddressing.LocalIndexFromLocal(x, y)];
+        return chunk.DamageBuffer[CellAddressing.LocalIndexFromLocal(x, y)];
     }
 
     /// <summary>

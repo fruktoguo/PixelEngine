@@ -315,7 +315,7 @@ public sealed class CharacterController
             return false;
         }
 
-        byte flags = _grid.FlagsAt(x, y);
+        byte flags = _grid.GetFlags(x, y);
         // RigidOwned stamp 与固体同等阻挡，供角色与碎块交互。
         if (CellFlags.Has(flags, CellFlags.RigidOwned))
         {

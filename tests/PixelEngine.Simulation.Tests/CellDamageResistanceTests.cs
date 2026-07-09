@@ -107,16 +107,16 @@ public sealed class CellDamageResistanceTests
 
     private static void Set(Chunk chunk, int lx, int ly, ushort material)
     {
-        chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
     }
 
     private static ushort Get(Chunk chunk, int lx, int ly)
     {
-        return chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)];
+        return chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)];
     }
 
     private static byte Damage(Chunk chunk, int lx, int ly)
     {
-        return chunk.Damage[CellAddressing.LocalIndexFromLocal(lx, ly)];
+        return chunk.DamageBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)];
     }
 }

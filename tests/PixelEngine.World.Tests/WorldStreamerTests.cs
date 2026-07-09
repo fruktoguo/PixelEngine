@@ -28,7 +28,7 @@ public sealed class WorldStreamerTests
         WorldStreamer streamer = new(chunks, residency, budget, temperature, store, remap);
         ChunkCoord coord = new(2, 3);
         Chunk chunk = new(coord);
-        chunk.Material[0] = 1;
+        chunk.MaterialBuffer[0] = 1;
         chunks.Add(chunk);
         residency.Set(coord, new ChunkResidencyInfo(ChunkResidencyState.Cached, 1, ChunkMemoryBudget.EstimatedResidentChunkBytes, DirtySinceLoad: true));
         budget.Add(ChunkMemoryBudget.EstimatedResidentChunkBytes);
@@ -83,8 +83,8 @@ public sealed class WorldStreamerTests
         Assert.Equal(1, streamer.ApplyPrepared(frame: 5));
 
         Assert.True(chunks.TryGetChunk(coord, out Chunk loaded));
-        Assert.Equal(2, loaded.Material[0]);
-        Assert.Equal(13, loaded.Damage[0]);
+        Assert.Equal(2, loaded.MaterialBuffer[0]);
+        Assert.Equal(13, loaded.DamageBuffer[0]);
         Assert.Equal(DirtyRect.Full, loaded.CurrentDirty);
         Assert.Equal(22, temperature.GetTemperature(coord.X << 6, coord.Y << 6));
         Assert.True(residency.TryGetInfo(coord, out ChunkResidencyInfo info));
@@ -159,7 +159,7 @@ public sealed class WorldStreamerTests
         manager.ApplyResidency(frame: 2);
         // Assert：验证不变式与预期结果
         Assert.True(manager.Chunks.TryGetChunk(new ChunkCoord(0, 0), out Chunk edited));
-        edited.Material[0] = 1;
+        edited.MaterialBuffer[0] = 1;
 
         manager.UpdateCamera(320, 32);
         manager.ApplyResidency(frame: 3);
@@ -209,7 +209,7 @@ public sealed class WorldStreamerTests
         Pump(manager, jobs, ref frame, iterations: 2);
         // Assert：验证预期结果
         Assert.True(manager.Chunks.TryGetChunk(new ChunkCoord(0, 0), out Chunk edited));
-        edited.Material[0] = 1;
+        edited.MaterialBuffer[0] = 1;
 
         long[] focusX = [320, 640, 32, 640, 32];
         for (int i = 0; i < focusX.Length; i++)
@@ -308,8 +308,8 @@ public sealed class WorldStreamerTests
 
         Assert.True(chunks.TryGetChunk(first, out Chunk firstChunk));
         Assert.True(chunks.TryGetChunk(second, out Chunk secondChunk));
-        Assert.Equal(1, firstChunk.Material[0]);
-        Assert.Equal(1, secondChunk.Material[0]);
+        Assert.Equal(1, firstChunk.MaterialBuffer[0]);
+        Assert.Equal(1, secondChunk.MaterialBuffer[0]);
         Assert.Equal(2, chunks.Count);
     }
 
@@ -347,12 +347,12 @@ public sealed class WorldStreamerTests
     private static void WriteStoredChunk(MemoryChunkStore store, ChunkCoord coord, ushort savedMaterial, Half temp, byte damage = 0)
     {
         Chunk chunk = new(coord);
-        chunk.Material[0] = savedMaterial;
-        chunk.Damage[0] = damage;
+        chunk.MaterialBuffer[0] = savedMaterial;
+        chunk.DamageBuffer[0] = damage;
         Half[] temperature = new Half[TemperatureField.BlockArea];
         temperature[0] = temp;
         ArrayBufferWriter<byte> writer = new();
-        new ChunkCodec().Encode(new ChunkSnapshot(coord, chunk.Material, chunk.Flags, chunk.Lifetime, chunk.Damage, temperature), writer);
+        new ChunkCodec().Encode(new PixelEngine.Serialization.ChunkSnapshot(coord, chunk.MaterialBuffer, chunk.FlagsBuffer, chunk.LifetimeBuffer, chunk.DamageBuffer, temperature), writer);
         store.Write(coord, writer.WrittenSpan);
     }
 

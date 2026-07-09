@@ -17,7 +17,7 @@ public class SerializationAllocationBenchmarks
     private readonly byte[] _flags = new byte[EngineConstants.ChunkArea];
     private readonly byte[] _lifetime = new byte[EngineConstants.ChunkArea];
     private readonly byte[] _damage = new byte[EngineConstants.ChunkArea];
-    private readonly Half[] _temperature = new Half[ChunkSnapshot.TemperatureCellCount];
+    private readonly Half[] _temperature = new Half[PixelEngine.Serialization.ChunkSnapshot.TemperatureCellCount];
     private readonly ChunkCodec _codec = new();
     private readonly PooledByteBufferWriter _outputWriter = new(WriterCapacity);
     private readonly PooledByteBufferWriter _payloadWriter = new(WriterCapacity);
@@ -52,7 +52,7 @@ public class SerializationAllocationBenchmarks
     {
         _outputWriter.Clear();
         _payloadWriter.Clear();
-        ChunkSnapshot snapshot = new(
+        PixelEngine.Serialization.ChunkSnapshot snapshot = new(
             new ChunkCoord(7, -3),
             _material,
             _flags,

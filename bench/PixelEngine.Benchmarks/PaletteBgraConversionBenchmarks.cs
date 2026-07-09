@@ -172,9 +172,9 @@ public class RenderStyleSegmentedBenchmarks
             CameraState.OneToOne(0, 0, 256, 256),
             simStepped: true);
 
-        for (int i = 0; i < _chunk.Material.Length; i++)
+        for (int i = 0; i < _chunk.MaterialBuffer.Length; i++)
         {
-            _chunk.Material[i] = Stone;
+            _chunk.MaterialBuffer[i] = Stone;
         }
     }
 

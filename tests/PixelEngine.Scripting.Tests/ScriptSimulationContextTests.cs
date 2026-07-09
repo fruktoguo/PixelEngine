@@ -900,7 +900,7 @@ public sealed class ScriptSimulationContextTests
         {
             for (int x = minX; x < maxX; x++)
             {
-                chunk.Material[CellAddressing.LocalIndexFromLocal(x, y)] = material;
+                chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(x, y)] = material;
             }
         }
     }

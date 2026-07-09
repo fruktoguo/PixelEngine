@@ -52,7 +52,7 @@ public static class MaterialLiveGridRemapper
         {
             Chunk chunk = resident[chunkIndex];
             bool chunkDirty = false;
-            Span<ushort> material = chunk.Material;
+            Span<ushort> material = chunk.MaterialBuffer;
             for (int i = 0; i < material.Length; i++)
             {
                 if (!Contains(materialIds, material[i]))
@@ -61,7 +61,7 @@ public static class MaterialLiveGridRemapper
                 }
 
                 material[i] = fallbackId;
-                chunk.Damage[i] = 0;
+                chunk.DamageBuffer[i] = 0;
                 replaced++;
                 chunkDirty = true;
             }

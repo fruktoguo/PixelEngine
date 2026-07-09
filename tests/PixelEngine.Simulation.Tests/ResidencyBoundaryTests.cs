@@ -210,12 +210,12 @@ public sealed class ResidencyBoundaryTests
 
     private static void Set(Chunk chunk, int lx, int ly, ushort material)
     {
-        chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
     }
 
     private static ushort Get(Chunk chunk, int lx, int ly)
     {
-        return chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)];
+        return chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)];
     }
 
     private static MaterialPropsTable CreateProps()

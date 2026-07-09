@@ -557,12 +557,12 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         {
             ushort material = grid.GetMaterial(x, y);
             ushort maxIntegrity = grid.MaterialProps.MaxIntegrityOf(material);
-            byte damage = grid.DamageAt(x, y);
+            byte damage = grid.GetDamage(x, y);
             int integrity = Math.Max(0, maxIntegrity - damage);
             return new CellView(
                 new MaterialId(material),
-                grid.FlagsAt(x, y),
-                grid.LifetimeAt(x, y),
+                grid.GetFlags(x, y),
+                grid.GetLifetime(x, y),
                 (byte)Math.Min(byte.MaxValue, integrity));
         }
 
@@ -573,7 +573,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 
         public bool IsRigidOwned(int x, int y)
         {
-            return CellFlags.Has(grid.FlagsAt(x, y), CellFlags.RigidOwned);
+            return CellFlags.Has(grid.GetFlags(x, y), CellFlags.RigidOwned);
         }
 
         public void SetCell(int x, int y, MaterialId material)

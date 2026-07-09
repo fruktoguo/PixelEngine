@@ -263,22 +263,22 @@ public sealed class PhysicsCouplingAcceptanceTests
 
     private static void Set(Chunk chunk, int x, int y, ushort material)
     {
-        chunk.Material[CellAddressing.LocalIndex(x, y)] = material;
+        chunk.MaterialBuffer[CellAddressing.LocalIndex(x, y)] = material;
     }
 
     private static ushort Get(Chunk chunk, int x, int y)
     {
-        return chunk.Material[CellAddressing.LocalIndex(x, y)];
+        return chunk.MaterialBuffer[CellAddressing.LocalIndex(x, y)];
     }
 
     private static void SetFlags(Chunk chunk, int x, int y, byte flags)
     {
-        chunk.Flags[CellAddressing.LocalIndex(x, y)] = flags;
+        chunk.FlagsBuffer[CellAddressing.LocalIndex(x, y)] = flags;
     }
 
     private static byte GetFlags(Chunk chunk, int x, int y)
     {
-        return chunk.Flags[CellAddressing.LocalIndex(x, y)];
+        return chunk.FlagsBuffer[CellAddressing.LocalIndex(x, y)];
     }
 
     private sealed class TestChunkSource(params Chunk[] chunks) : IChunkSource

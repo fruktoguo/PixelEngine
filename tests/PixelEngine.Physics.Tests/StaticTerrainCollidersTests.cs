@@ -47,7 +47,7 @@ public sealed class StaticTerrainCollidersTests
             Assert.Equal(0, colliders.LastRebuiltChunkCount);
             Assert.Equal(0, colliders.LastDestroyedChunkCount);
 
-            chunk.Material[CellAddressing.LocalIndexFromLocal(8, 48)] = 0;
+            chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(8, 48)] = 0;
             colliders.Update(source, physicsWorld);
 
             Assert.Equal(1, colliders.ColliderChunkCount);
@@ -81,9 +81,9 @@ public sealed class StaticTerrainCollidersTests
         {
             Chunk chunk = new(new ChunkCoord(0, 0));
             FillRect(chunk, minX: 8, minY: 48, maxX: 56, maxY: 56, material: 2);
-            for (int i = 0; i < chunk.Flags.Length; i++)
+            for (int i = 0; i < chunk.FlagsBuffer.Length; i++)
             {
-                chunk.Flags[i] = CellFlags.RigidOwned;
+                chunk.FlagsBuffer[i] = CellFlags.RigidOwned;
             }
 
             TestChunkSource source = new(chunk);
@@ -147,7 +147,7 @@ public sealed class StaticTerrainCollidersTests
         {
             for (int x = minX; x < maxX; x++)
             {
-                chunk.Material[CellAddressing.LocalIndexFromLocal(x, y)] = material;
+                chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(x, y)] = material;
             }
         }
     }

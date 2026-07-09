@@ -93,7 +93,7 @@ public sealed class TemperatureFieldTests
         // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 8, 10, Ice);
-        center.Flags[CellAddressing.LocalIndexFromLocal(8, 10)] = CellFlags.RigidOwned;
+        center.FlagsBuffer[CellAddressing.LocalIndexFromLocal(8, 10)] = CellFlags.RigidOwned;
         center.SetCurrentDirty(new DirtyRect(8, 10, 8, 10));
         MaterialTable materials = CreateMaterials();
         TemperatureField field = new();
@@ -389,7 +389,7 @@ public sealed class TemperatureFieldTests
 
     private static void Fill(Chunk chunk, ushort material)
     {
-        Array.Fill(chunk.Material, material);
+        Array.Fill(chunk.MaterialBuffer, material);
     }
 
     private static void FillAll(TestChunkSource source, ushort material)
@@ -410,17 +410,17 @@ public sealed class TemperatureFieldTests
 
     private static void Set(Chunk chunk, int lx, int ly, ushort material)
     {
-        chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
     }
 
     private static ushort Get(Chunk chunk, int lx, int ly)
     {
-        return chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)];
+        return chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)];
     }
 
     private static byte GetFlags(Chunk chunk, int lx, int ly)
     {
-        return chunk.Flags[CellAddressing.LocalIndexFromLocal(lx, ly)];
+        return chunk.FlagsBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)];
     }
 
     private sealed class RecordingRigidDamageSink : IRigidDamageSink

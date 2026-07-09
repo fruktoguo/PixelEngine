@@ -16,10 +16,10 @@ public sealed class Chunk
     /// </summary>
     public Chunk(ChunkCoord coord)
     {
-        Material = GC.AllocateArray<ushort>(EngineConstants.ChunkArea, pinned: true);
-        Flags = GC.AllocateArray<byte>(EngineConstants.ChunkArea, pinned: true);
-        Lifetime = GC.AllocateArray<byte>(EngineConstants.ChunkArea, pinned: true);
-        Damage = GC.AllocateArray<byte>(EngineConstants.ChunkArea, pinned: true);
+        MaterialBuffer = GC.AllocateArray<ushort>(EngineConstants.ChunkArea, pinned: true);
+        FlagsBuffer = GC.AllocateArray<byte>(EngineConstants.ChunkArea, pinned: true);
+        LifetimeBuffer = GC.AllocateArray<byte>(EngineConstants.ChunkArea, pinned: true);
+        DamageBuffer = GC.AllocateArray<byte>(EngineConstants.ChunkArea, pinned: true);
         _incoming = GC.AllocateArray<PaddedDirtyRectSlot>(IncomingSlotCount, pinned: true);
         Reset(coord);
     }
@@ -32,22 +32,29 @@ public sealed class Chunk
     /// <summary>
     /// 每 cell 的运行时材质 id，0 表示 Empty。
     /// </summary>
-    public ushort[] Material { get; }
+    public ReadOnlySpan<ushort> Material => MaterialBuffer;
 
     /// <summary>
     /// 每 cell 的运行时 flag。
     /// </summary>
-    public byte[] Flags { get; }
+    public ReadOnlySpan<byte> Flags => FlagsBuffer;
 
     /// <summary>
     /// 每 cell 的 lifetime 计数器。
     /// </summary>
-    public byte[] Lifetime { get; }
+    public ReadOnlySpan<byte> Lifetime => LifetimeBuffer;
 
     /// <summary>
     /// 每 cell 的累计结构破坏度；仅允许存活 Solid cell 非零。
     /// </summary>
-    public byte[] Damage { get; }
+    public ReadOnlySpan<byte> Damage => DamageBuffer;
+
+    // 可写数组仅是实现 seam；公开调用者必须使用 CellGrid 或按相位划分的 edit API，
+    // 以保持 dirty/parity/KeepAlive 与刚体 ownership 的耦合。
+    internal ushort[] MaterialBuffer { get; }
+    internal byte[] FlagsBuffer { get; }
+    internal byte[] LifetimeBuffer { get; }
+    internal byte[] DamageBuffer { get; }
 
     /// <summary>
     /// 本帧迭代用 dirty rectangle。
@@ -80,10 +87,10 @@ public sealed class Chunk
     public void Reset(ChunkCoord coord)
     {
         Coord = coord;
-        Array.Clear(Material);
-        Array.Clear(Flags);
-        Array.Clear(Lifetime);
-        Array.Clear(Damage);
+        Array.Clear(MaterialBuffer);
+        Array.Clear(FlagsBuffer);
+        Array.Clear(LifetimeBuffer);
+        Array.Clear(DamageBuffer);
         ClearDirty();
         Parity = 0;
         State = ChunkState.Sleeping;
@@ -92,33 +99,33 @@ public sealed class Chunk
     /// <summary>
     /// 获取 Material 数组首元素引用，供热路径 ref 漫游使用。
     /// </summary>
-    public ref ushort GetMaterialBase()
+    internal ref ushort GetMaterialBase()
     {
-        return ref MemoryMarshal.GetArrayDataReference(Material);
+        return ref MemoryMarshal.GetArrayDataReference(MaterialBuffer);
     }
 
     /// <summary>
     /// 获取 Flags 数组首元素引用，供热路径 ref 漫游使用。
     /// </summary>
-    public ref byte GetFlagsBase()
+    internal ref byte GetFlagsBase()
     {
-        return ref MemoryMarshal.GetArrayDataReference(Flags);
+        return ref MemoryMarshal.GetArrayDataReference(FlagsBuffer);
     }
 
     /// <summary>
     /// 获取 Lifetime 数组首元素引用，供热路径 ref 漫游使用。
     /// </summary>
-    public ref byte GetLifetimeBase()
+    internal ref byte GetLifetimeBase()
     {
-        return ref MemoryMarshal.GetArrayDataReference(Lifetime);
+        return ref MemoryMarshal.GetArrayDataReference(LifetimeBuffer);
     }
 
     /// <summary>
     /// 获取 Damage 数组首元素引用，供热路径 ref 漫游使用。
     /// </summary>
-    public ref byte GetDamageBase()
+    internal ref byte GetDamageBase()
     {
-        return ref MemoryMarshal.GetArrayDataReference(Damage);
+        return ref MemoryMarshal.GetArrayDataReference(DamageBuffer);
     }
 
     /// <summary>
@@ -184,8 +191,8 @@ public sealed class Chunk
             int localStart = (ly * EngineConstants.ChunkSize) + rect.MinX;
             int run = rect.MaxX - rect.MinX + 1;
             CellSpanOps.SetParityForOccupiedCells(
-                Material.AsSpan(localStart, run),
-                Flags.AsSpan(localStart, run),
+                MaterialBuffer.AsSpan(localStart, run),
+                FlagsBuffer.AsSpan(localStart, run),
                 staleParity);
         }
     }

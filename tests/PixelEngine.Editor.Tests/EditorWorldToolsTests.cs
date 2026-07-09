@@ -113,8 +113,8 @@ public sealed class EditorWorldToolsTests
         // Arrange：准备输入与初始状态
         Chunk chunk = new(new ChunkCoord(0, 0));
         int local = CellAddressing.LocalIndexFromLocal(3, 4);
-        chunk.Material[local] = 1;
-        chunk.Flags[local] = CellFlags.Burning | CellFlags.RigidOwned | CellFlags.Parity;
+        chunk.MaterialBuffer[local] = 1;
+        chunk.FlagsBuffer[local] = CellFlags.Burning | CellFlags.RigidOwned | CellFlags.Parity;
         chunk.Parity = CellFlags.Parity;
         chunk.SetCurrentDirty(new DirtyRect(1, 2, 5, 6));
         TestChunkSource chunks = new(chunk);
@@ -150,7 +150,7 @@ public sealed class EditorWorldToolsTests
     {
         // Arrange：准备输入与初始状态
         Chunk chunk = new(new ChunkCoord(0, 0));
-        chunk.Material[CellAddressing.LocalIndexFromLocal(2, 3)] = 1;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(2, 3)] = 1;
         TestChunkSource chunks = new(chunk);
         MaterialTable materials = CreateMaterials();
         SimulationKernel kernel = new(chunks, new MaterialPropsTable(materials.Hot));
@@ -184,7 +184,7 @@ public sealed class EditorWorldToolsTests
         edit.PaintCell(63, 10, 1);
 
         // Assert：验证预期结果
-        Assert.Equal(1, center.Material[CellAddressing.LocalIndexFromLocal(63, 10)]);
+        Assert.Equal(1, center.MaterialBuffer[CellAddressing.LocalIndexFromLocal(63, 10)]);
         Assert.Equal(new DirtyRect(61, 8, 63, 12), center.CurrentDirty);
         Assert.Equal(new DirtyRect(0, 8, 1, 12), east.CurrentDirty);
         Assert.Equal(DirtyRect.Empty, center.WorkingDirty);

@@ -7052,9 +7052,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string window = ReadRepositoryFile("src", "PixelEngine.Simulation", "NeighborWindow.cs");
         string updater = ReadRepositoryFile("src", "PixelEngine.Simulation", "ChunkUpdater.cs");
 
-        Assert.Contains("MemoryMarshal.GetArrayDataReference(Material)", chunk, StringComparison.Ordinal);
-        Assert.Contains("MemoryMarshal.GetArrayDataReference(Flags)", chunk, StringComparison.Ordinal);
-        Assert.Contains("MemoryMarshal.GetArrayDataReference(Lifetime)", chunk, StringComparison.Ordinal);
+        Assert.Contains("MemoryMarshal.GetArrayDataReference(MaterialBuffer)", chunk, StringComparison.Ordinal);
+        Assert.Contains("MemoryMarshal.GetArrayDataReference(FlagsBuffer)", chunk, StringComparison.Ordinal);
+        Assert.Contains("MemoryMarshal.GetArrayDataReference(LifetimeBuffer)", chunk, StringComparison.Ordinal);
 
         Assert.Contains("ref struct NeighborWindow", window, StringComparison.Ordinal);
         Assert.Contains("ref ushort _matBase0", window, StringComparison.Ordinal);
@@ -7076,9 +7076,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("ushort activeMaterial = material;", updater, StringComparison.Ordinal);
         Assert.DoesNotContain("ushort activeMaterial = window.GetMaterial(activeX, activeY);", updater, StringComparison.Ordinal);
         Assert.Contains("localOffset++", updater, StringComparison.Ordinal);
-        Assert.DoesNotContain("chunk.Material[", updater, StringComparison.Ordinal);
-        Assert.DoesNotContain("chunk.Flags[", updater, StringComparison.Ordinal);
-        Assert.DoesNotContain("chunk.Lifetime[", updater, StringComparison.Ordinal);
+        Assert.DoesNotContain("chunk.MaterialBuffer[", updater, StringComparison.Ordinal);
+        Assert.DoesNotContain("chunk.FlagsBuffer[", updater, StringComparison.Ordinal);
+        Assert.DoesNotContain("chunk.LifetimeBuffer[", updater, StringComparison.Ordinal);
     }
 
     private static string ReadRepositoryFile(params string[] relativePath)

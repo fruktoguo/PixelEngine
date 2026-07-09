@@ -127,7 +127,7 @@ public sealed class CharacterControllerTests
         {
             for (int x = minX; x < maxX; x++)
             {
-                chunk.Material[CellAddressing.LocalIndexFromLocal(x, y)] = material;
+                chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(x, y)] = material;
             }
         }
     }
@@ -139,7 +139,7 @@ public sealed class CharacterControllerTests
             for (int x = minX; x < maxX; x++)
             {
                 int index = CellAddressing.LocalIndexFromLocal(x, y);
-                chunk.Flags[index] = CellFlags.RigidOwned;
+                chunk.FlagsBuffer[index] = CellFlags.RigidOwned;
             }
         }
     }

@@ -422,22 +422,22 @@ public sealed class SimulationMovementTests
 
     private static void Set(Chunk chunk, int lx, int ly, ushort material)
     {
-        chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
     }
 
     private static void SetFlags(Chunk chunk, int lx, int ly, byte flags)
     {
-        chunk.Flags[CellAddressing.LocalIndexFromLocal(lx, ly)] = flags;
+        chunk.FlagsBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] = flags;
     }
 
     private static ushort Get(Chunk chunk, int lx, int ly)
     {
-        return chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)];
+        return chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)];
     }
 
     private static byte GetFlags(Chunk chunk, int lx, int ly)
     {
-        return chunk.Flags[CellAddressing.LocalIndexFromLocal(lx, ly)];
+        return chunk.FlagsBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)];
     }
 
     private sealed class TestChunkSource : IChunkSource

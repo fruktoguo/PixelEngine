@@ -86,7 +86,7 @@ public sealed class EngineProbeApi
     /// <returns>当前材质 id。</returns>
     public ushort MaterialAt(int x, int y)
     {
-        return _grid.MaterialAt(x, y);
+        return _grid.GetMaterial(x, y);
     }
 
     /// <summary>
