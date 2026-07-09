@@ -169,6 +169,27 @@ Assert-ChecksumContains $relativePaths ([string]$manifest.editorExecutable) '编
 Assert-ChecksumContains $relativePaths ([string]$manifest.demoExecutable) 'Demo 入口'
 Assert-ChecksumContains $relativePaths ([string]$validation.demoBuildResult) 'demo-build-result'
 
+$actualFiles = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+Get-ChildItem -LiteralPath $outputRootFull -File -Recurse -Force |
+  ForEach-Object {
+    $relative = [IO.Path]::GetRelativePath($outputRootFull, $_.FullName).Replace('\', '/')
+    if ($relative -ne 'SHA256SUMS') {
+      [void]$actualFiles.Add($relative)
+    }
+  }
+
+foreach ($actual in $actualFiles) {
+  if (-not $relativePaths.Contains($actual)) {
+    throw "正式输出包含未登记文件：$actual"
+  }
+}
+
+foreach ($listed in $relativePaths) {
+  if (-not $actualFiles.Contains($listed)) {
+    throw "SHA256SUMS 登记了不存在的文件：$listed"
+  }
+}
+
 if ($manifest.editorSymbolsIncluded -eq $false) {
   $editorRoot = Split-Path -Parent $editorExe
   $metadata = Get-ChildItem -LiteralPath $editorRoot -File -Recurse -Force |
