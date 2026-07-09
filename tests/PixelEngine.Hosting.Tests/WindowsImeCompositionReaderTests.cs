@@ -263,6 +263,31 @@ public sealed class WindowsImeCompositionReaderTests
         Assert.Equal(0, native.SetCandidateWindowCalls);
     }
 
+    /// <summary>
+    /// 验证窗口输入源在写 IMM32 前把 framebuffer 坐标反变换为逻辑 client 坐标。
+    /// </summary>
+    [Fact]
+    public void RenderWindowUiInputSourceConvertsFramebufferImeGeometryToLogicalClient()
+    {
+        UiImeGeometry framebuffer = UiImeGeometry.FromCaretRect(220f, 160f, 4f, 18f);
+
+        UiImeGeometry logical = RenderWindowUiInputSource.ToLogicalClientGeometry(in framebuffer, 2f, 2f);
+
+        Assert.True(logical.HasCaretRect);
+        Assert.Equal(110f, logical.CaretX, precision: 3);
+        Assert.Equal(80f, logical.CaretY, precision: 3);
+        Assert.Equal(2f, logical.CaretWidth, precision: 3);
+        Assert.Equal(9f, logical.CaretHeight, precision: 3);
+        Assert.Equal(110f, logical.CandidateAnchorX, precision: 3);
+        Assert.Equal(89f, logical.CandidateAnchorY, precision: 3);
+
+        UiImeGeometry identity = RenderWindowUiInputSource.ToLogicalClientGeometry(in framebuffer, 1f, 1f);
+        Assert.Equal(220f, identity.CaretX, precision: 3);
+        Assert.Equal(160f, identity.CaretY, precision: 3);
+
+        Assert.False(RenderWindowUiInputSource.ToLogicalClientGeometry(UiImeGeometry.None, 2f, 2f).HasAny);
+    }
+
     private sealed class FakeImeNative : IWindowsImeNative
     {
         private const int CompositionAttribute = 0x0010;

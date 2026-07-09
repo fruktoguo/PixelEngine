@@ -162,11 +162,39 @@ internal sealed class RenderWindowUiInputSource : IUiInputSource
 
     /// <summary>
     /// 把 UI caret/候选锚点回写到 Win32 IMM32 composition/candidate 窗口。
+    /// 输入与 <see cref="TryGetPointer"/> 同源为 framebuffer 坐标；IMM32 需要逻辑 client 坐标，故在此做 DPI 反变换。
     /// </summary>
-    /// <param name="geometry">UI 坐标空间中的定位几何。</param>
+    /// <param name="geometry">UI/framebuffer 坐标空间中的定位几何。</param>
     public void ApplyImeGeometry(in UiImeGeometry geometry)
     {
-        _imeComposition.ApplyImeGeometry(in geometry);
+        _imeComposition.ApplyImeGeometry(ToLogicalClientGeometry(in geometry, _window.FramebufferScaleX, _window.FramebufferScaleY));
+    }
+
+    /// <summary>
+    /// 将 framebuffer 坐标中的 IME 几何转换为窗口逻辑 client 坐标（IMM32 坐标系）。
+    /// </summary>
+    /// <param name="framebufferGeometry">与 UI hit-test / pointer 同源的 framebuffer 几何。</param>
+    /// <param name="framebufferScaleX">逻辑宽度 → framebuffer 的水平缩放。</param>
+    /// <param name="framebufferScaleY">逻辑高度 → framebuffer 的垂直缩放。</param>
+    /// <returns>逻辑 client 坐标几何；无效缩放时原样返回。</returns>
+    internal static UiImeGeometry ToLogicalClientGeometry(
+        in UiImeGeometry framebufferGeometry,
+        float framebufferScaleX,
+        float framebufferScaleY)
+    {
+        if (!framebufferGeometry.HasAny)
+        {
+            return UiImeGeometry.None;
+        }
+
+        float scaleX = float.IsFinite(framebufferScaleX) && framebufferScaleX > 0f ? framebufferScaleX : 1f;
+        float scaleY = float.IsFinite(framebufferScaleY) && framebufferScaleY > 0f ? framebufferScaleY : 1f;
+        if (scaleX == 1f && scaleY == 1f)
+        {
+            return framebufferGeometry;
+        }
+
+        return framebufferGeometry.Transform(0f, 0f, 1f / scaleX, 1f / scaleY);
     }
 
     private void OnKeyChar(IKeyboard keyboard, char character)
