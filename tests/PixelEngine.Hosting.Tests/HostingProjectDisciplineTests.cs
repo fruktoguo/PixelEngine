@@ -152,6 +152,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("git -C $repoRoot status --porcelain --untracked-files=no", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("正式输出需要干净的已跟踪工作树", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("Assert-CleanTrackedWorktree", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("sourceWorktreePolicy = 'tracked-clean-required'", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("sourceTrackedWorktreeClean = $true", finalOutputScript, StringComparison.Ordinal);
     }
 
     /// <summary>
