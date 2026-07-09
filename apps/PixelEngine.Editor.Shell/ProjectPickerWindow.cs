@@ -8,14 +8,20 @@ namespace PixelEngine.Editor.Shell;
 /// </summary>
 internal sealed class ProjectPickerWindow
 {
+    private readonly IProjectFolderPicker _folderPicker;
     private string _newProjectRoot;
     private string _newProjectName = "NewPixelProject";
     private string _openProjectPath;
-    private string _folderPickerDiagnostic = string.Empty;
     private ProjectPickerMode _mode;
 
     public ProjectPickerWindow(EditorShellOptions options)
+        : this(options, NativeProjectFolderPicker.Instance)
     {
+    }
+
+    internal ProjectPickerWindow(EditorShellOptions options, IProjectFolderPicker folderPicker)
+    {
+        _folderPicker = folderPicker ?? throw new ArgumentNullException(nameof(folderPicker));
         string defaultProjectsRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
             "PixelEngine Projects");
@@ -25,6 +31,8 @@ internal sealed class ProjectPickerWindow
             ? ProjectPickerMode.NewProject
             : ProjectPickerMode.OpenProject;
     }
+
+    internal string FolderPickerDiagnostic { get; private set; } = string.Empty;
 
     public void Focus(ProjectPickerMode mode)
     {
@@ -124,21 +132,26 @@ internal sealed class ProjectPickerWindow
         ImGui.SameLine();
         if (ImGui.Button($"Browse...##{id}", new Vector2(BrowseButtonWidth, 0f)))
         {
-            if (NativeFolderPicker.TryPickFolder(path, out string selectedPath, out string diagnostic))
-            {
-                path = selectedPath;
-                _folderPickerDiagnostic = string.Empty;
-            }
-            else if (!string.IsNullOrWhiteSpace(diagnostic))
-            {
-                _folderPickerDiagnostic = diagnostic;
-            }
+            _ = ApplyFolderPicker(ref path);
         }
 
-        if (!string.IsNullOrWhiteSpace(_folderPickerDiagnostic))
+        if (!string.IsNullOrWhiteSpace(FolderPickerDiagnostic))
         {
-            ImGui.TextColored(new Vector4(1.0f, 0.55f, 0.25f, 1.0f), _folderPickerDiagnostic);
+            ImGui.TextColored(new Vector4(1.0f, 0.55f, 0.25f, 1.0f), FolderPickerDiagnostic);
         }
+    }
+
+    internal bool ApplyFolderPicker(ref string path)
+    {
+        if (_folderPicker.TryPickFolder(path, out string selectedPath, out string diagnostic))
+        {
+            path = selectedPath;
+            FolderPickerDiagnostic = string.Empty;
+            return true;
+        }
+
+        FolderPickerDiagnostic = diagnostic;
+        return false;
     }
 
     private static void DrawRecentProjectsTab(EditorShellApp app)
@@ -190,4 +203,23 @@ internal enum ProjectPickerMode
 {
     NewProject,
     OpenProject,
+}
+
+internal interface IProjectFolderPicker
+{
+    bool TryPickFolder(string initialPath, out string selectedPath, out string diagnostic);
+}
+
+internal sealed class NativeProjectFolderPicker : IProjectFolderPicker
+{
+    public static NativeProjectFolderPicker Instance { get; } = new();
+
+    private NativeProjectFolderPicker()
+    {
+    }
+
+    public bool TryPickFolder(string initialPath, out string selectedPath, out string diagnostic)
+    {
+        return NativeFolderPicker.TryPickFolder(initialPath, out selectedPath, out diagnostic);
+    }
 }
