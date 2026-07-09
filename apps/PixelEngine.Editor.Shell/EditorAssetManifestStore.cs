@@ -82,6 +82,25 @@ internal readonly record struct EditorAssetDeleteResult(
     EditorAssetDeletePreflight Preflight,
     string Diagnostic);
 
+internal readonly record struct EditorAssetFolderDeletePreflight(
+    string LogicalPath,
+    int AssetCount,
+    int ReferenceCount,
+    int ReferenceDocuments,
+    bool ActiveSceneHasReferences,
+    IReadOnlyList<string> ReferenceLocations)
+{
+    public bool CanDelete => ReferenceCount == 0;
+}
+
+internal readonly record struct EditorAssetFolderDeleteResult(
+    string LogicalPath,
+    int AssetCount,
+    bool Deleted,
+    bool RequiresConfirmation,
+    EditorAssetFolderDeletePreflight Preflight,
+    string Diagnostic);
+
 /// <summary>
 /// Content 资产清单的扫描、索引、移动与脚本模板生成。
 /// </summary>
@@ -170,6 +189,12 @@ internal sealed class EditorAssetManifestStore
             : TryResolveLogicalPath(normalized, out EditorAssetRecord record)
             ? record
             : throw new InvalidOperationException($"无法登记资产：{normalized}");
+    }
+
+    public IReadOnlyList<EditorAssetRecord> ListFolderAssets(string logicalFolderPath)
+    {
+        string normalized = NormalizeLogicalPath(logicalFolderPath, nameof(logicalFolderPath));
+        return CollectFolderAssets(normalized);
     }
 
     public EditorAssetRecord CreateAsset(string logicalPath, EditorAssetType assetType, string? textContents = null)
@@ -402,6 +427,60 @@ internal sealed class EditorAssetManifestStore
             false,
             preflight,
             $"已删除资产 {asset.LogicalPath}。");
+    }
+
+    public EditorAssetFolderDeletePreflight PreflightDeleteFolder(string logicalFolderPath, EditorSceneModel? activeScene = null)
+    {
+        string normalized = NormalizeLogicalPath(logicalFolderPath, nameof(logicalFolderPath));
+        string fullPath = ResolveFullPath(normalized);
+        return !Directory.Exists(fullPath)
+            ? throw new DirectoryNotFoundException($"文件夹不存在：{normalized}")
+            : BuildFolderDeletePreflight(normalized, CollectFolderAssets(normalized), activeScene);
+    }
+
+    public EditorAssetFolderDeleteResult DeleteFolder(string logicalFolderPath, EditorSceneModel? activeScene = null, bool confirmed = false)
+    {
+        string normalized = NormalizeLogicalPath(logicalFolderPath, nameof(logicalFolderPath));
+        string fullPath = ResolveFullPath(normalized);
+        if (!Directory.Exists(fullPath))
+        {
+            throw new DirectoryNotFoundException($"文件夹不存在：{normalized}");
+        }
+
+        IReadOnlyList<EditorAssetRecord> assets = CollectFolderAssets(normalized);
+        EditorAssetFolderDeletePreflight preflight = BuildFolderDeletePreflight(normalized, assets, activeScene);
+        if (!preflight.CanDelete)
+        {
+            return new EditorAssetFolderDeleteResult(
+                normalized,
+                assets.Count,
+                false,
+                false,
+                preflight,
+                BuildFolderDeleteBlockedDiagnostic(preflight));
+        }
+
+        if (!confirmed)
+        {
+            return new EditorAssetFolderDeleteResult(
+                normalized,
+                assets.Count,
+                false,
+                true,
+                preflight,
+                BuildFolderDeleteConfirmationDiagnostic(preflight));
+        }
+
+        Directory.Delete(fullPath, recursive: true);
+        SaveDocument(RemoveRecords(LoadDocument(), [.. assets.Select(static asset => asset.Id)]));
+        RemoveUiManifestScreenEntries(assets);
+        return new EditorAssetFolderDeleteResult(
+            normalized,
+            assets.Count,
+            true,
+            false,
+            preflight,
+            $"已删除文件夹 {normalized}，包含 {assets.Count.ToString(CultureInfo.InvariantCulture)} 个资产。");
     }
 
     internal static EditorAssetType Classify(string logicalPath)
@@ -778,10 +857,53 @@ internal sealed class EditorAssetManifestStore
             : new EditorAssetManifestDocument { FormatVersion = CurrentFormatVersion, Assets = [.. retained] };
     }
 
+    private static EditorAssetManifestDocument RemoveRecords(EditorAssetManifestDocument document, IReadOnlyList<string> assetIds)
+    {
+        if (assetIds.Count == 0)
+        {
+            return document;
+        }
+
+        HashSet<string> removedIds = new(assetIds, StringComparer.OrdinalIgnoreCase);
+        EditorAssetRecordDocument[] records = NormalizeRecords(document.Assets);
+        List<EditorAssetRecordDocument> retained = new(records.Length);
+        for (int i = 0; i < records.Length; i++)
+        {
+            if (removedIds.Contains(records[i].Id))
+            {
+                continue;
+            }
+
+            retained.Add(records[i]);
+        }
+
+        return new EditorAssetManifestDocument { FormatVersion = CurrentFormatVersion, Assets = [.. retained] };
+    }
+
+    private IReadOnlyList<EditorAssetRecord> CollectFolderAssets(string logicalFolderPath)
+    {
+        IReadOnlyList<EditorAssetRecord> records = Refresh();
+        List<EditorAssetRecord> assets = [];
+        for (int i = 0; i < records.Count; i++)
+        {
+            if (IsUnderLogicalFolder(records[i].LogicalPath, logicalFolderPath))
+            {
+                assets.Add(records[i]);
+            }
+        }
+
+        return [.. assets.OrderBy(static asset => asset.LogicalPath, StringComparer.OrdinalIgnoreCase)];
+    }
+
     private EditorAssetDeletePreflight BuildDeletePreflight(EditorAssetRecord asset, EditorSceneModel? activeScene)
     {
+        return BuildDeletePreflight(asset, activeScene, ignoredReferenceFolder: null);
+    }
+
+    private EditorAssetDeletePreflight BuildDeletePreflight(EditorAssetRecord asset, EditorSceneModel? activeScene, string? ignoredReferenceFolder)
+    {
         List<string> locations = [];
-        int documents = CollectReferenceDocuments(asset, locations);
+        int documents = CollectReferenceDocuments(asset, locations, ignoredReferenceFolder);
         bool activeSceneHasReferences = false;
         if (activeScene is not null)
         {
@@ -793,7 +915,35 @@ internal sealed class EditorAssetManifestStore
         return new EditorAssetDeletePreflight(asset, locations.Count, documents, activeSceneHasReferences, locations);
     }
 
-    private int CollectReferenceDocuments(EditorAssetRecord asset, List<string> locations)
+    private EditorAssetFolderDeletePreflight BuildFolderDeletePreflight(
+        string logicalFolderPath,
+        IReadOnlyList<EditorAssetRecord> assets,
+        EditorSceneModel? activeScene)
+    {
+        List<string> locations = [];
+        int documents = 0;
+        bool activeSceneHasReferences = false;
+        for (int i = 0; i < assets.Count; i++)
+        {
+            documents += CollectReferenceDocuments(assets[i], locations, logicalFolderPath);
+            if (activeScene is not null)
+            {
+                int before = locations.Count;
+                CollectReferenceLocations(activeScene, "active scene", assets[i], locations);
+                activeSceneHasReferences |= locations.Count != before;
+            }
+        }
+
+        return new EditorAssetFolderDeletePreflight(
+            logicalFolderPath,
+            assets.Count,
+            locations.Count,
+            documents,
+            activeSceneHasReferences,
+            locations);
+    }
+
+    private int CollectReferenceDocuments(EditorAssetRecord asset, List<string> locations, string? ignoredReferenceFolder = null)
     {
         if (!Directory.Exists(ContentRoot))
         {
@@ -811,6 +961,12 @@ internal sealed class EditorAssetManifestStore
         {
             string logicalDocumentPath = NormalizeLogicalPath(Path.GetRelativePath(ContentRoot, files[i]), "reference document");
             if (string.Equals(logicalDocumentPath, asset.LogicalPath, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(ignoredReferenceFolder) &&
+                IsUnderLogicalFolder(logicalDocumentPath, ignoredReferenceFolder))
             {
                 continue;
             }
@@ -874,6 +1030,19 @@ internal sealed class EditorAssetManifestStore
             ? "无可显示引用位置"
             : string.Join("; ", preflight.ReferenceLocations.Take(3));
         return $"资产 {preflight.Asset.LogicalPath} 仍被 {preflight.ReferenceCount} 处引用（{sample}），已拒绝删除以避免丢失引用。";
+    }
+
+    private static string BuildFolderDeleteConfirmationDiagnostic(EditorAssetFolderDeletePreflight preflight)
+    {
+        return $"删除文件夹 {preflight.LogicalPath} 需要确认；将递归删除 {preflight.AssetCount.ToString(CultureInfo.InvariantCulture)} 个资产。";
+    }
+
+    private static string BuildFolderDeleteBlockedDiagnostic(EditorAssetFolderDeletePreflight preflight)
+    {
+        string sample = preflight.ReferenceLocations.Count == 0
+            ? "无可显示引用位置"
+            : string.Join("; ", preflight.ReferenceLocations.Take(3));
+        return $"文件夹 {preflight.LogicalPath} 内资产仍被 {preflight.ReferenceCount.ToString(CultureInfo.InvariantCulture)} 处引用（{sample}），已拒绝删除以避免丢失引用。";
     }
 
     private IReadOnlyList<EditorAssetReferenceDocumentMovePlan> LoadReferenceDocumentMovePlans(string sourceFullPath, string targetFullPath)
@@ -1066,6 +1235,69 @@ internal sealed class EditorAssetManifestStore
             Images = document.Images,
         });
         writtenDocuments.Add(new EditorAssetReferenceDocumentWriteRollback(manifestPath, manifestPath, originalText));
+    }
+
+    private void RemoveUiManifestScreenEntries(IReadOnlyList<EditorAssetRecord> assets)
+    {
+        bool hasUiScreen = false;
+        for (int i = 0; i < assets.Count; i++)
+        {
+            if (assets[i].AssetType == EditorAssetType.UiScreen)
+            {
+                hasUiScreen = true;
+                break;
+            }
+        }
+
+        if (!hasUiScreen)
+        {
+            return;
+        }
+
+        string manifestPath = Path.Combine(ContentRoot, "ui", "ui-manifest.json");
+        if (!File.Exists(manifestPath))
+        {
+            return;
+        }
+
+        HashSet<string> removedScreenPaths = new(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < assets.Count; i++)
+        {
+            if (assets[i].AssetType == EditorAssetType.UiScreen &&
+                TryBuildUiScreenManifestPath(assets[i].LogicalPath, out string screenPath))
+            {
+                _ = removedScreenPaths.Add(screenPath);
+            }
+        }
+
+        if (removedScreenPaths.Count == 0)
+        {
+            return;
+        }
+
+        EditorUiManifestDocument document = LoadUiManifestDocument(manifestPath);
+        EditorUiManifestScreenDocument[] screens = NormalizeUiScreens(document.Screens);
+        List<EditorUiManifestScreenDocument> retained = new(screens.Length);
+        for (int i = 0; i < screens.Length; i++)
+        {
+            if (removedScreenPaths.Contains(screens[i].Path))
+            {
+                continue;
+            }
+
+            retained.Add(screens[i]);
+        }
+
+        if (retained.Count == screens.Length)
+        {
+            return;
+        }
+
+        SaveUiManifestDocument(manifestPath, new EditorUiManifestDocument
+        {
+            Screens = [.. retained],
+            Images = document.Images,
+        });
     }
 
     private void RollBackMove(

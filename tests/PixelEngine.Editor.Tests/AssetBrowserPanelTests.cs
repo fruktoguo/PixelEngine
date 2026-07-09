@@ -587,6 +587,54 @@ public sealed class AssetBrowserPanelTests
     }
 
     /// <summary>
+    /// 验证 Project Window 文件夹递归删除会携带子资产 stable id 集合、二次确认并刷新列表。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelDeletesFolderThroughCallbackAfterConfirmation()
+    {
+        // Arrange：准备输入与初始状态
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("levels/one.scene", AssetBrowserItemKind.Scene, 10, DateTimeOffset.UnixEpoch, null, "asset_scene"),
+            new AssetBrowserItem("levels/textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_texture"),
+        ]);
+        source.ReplaceFolders([new AssetBrowserFolderItem("levels", 2)]);
+        List<AssetBrowserFolderDeleteRequest> requests = [];
+        AssetBrowserFolderDeleteResult DeleteFolder(AssetBrowserFolderDeleteRequest request)
+        {
+            requests.Add(request);
+            if (!request.Confirmed)
+            {
+                return new AssetBrowserFolderDeleteResult(false, true, $"confirm {request.Path}");
+            }
+
+            source.ReplaceAssets([]);
+            source.ReplaceFolders([]);
+            return new AssetBrowserFolderDeleteResult(true, false, $"deleted {request.Path}");
+        }
+
+        AssetBrowserPanel panel = new(source, deleteFolder: DeleteFolder);
+
+        _ = panel.Refresh();
+        bool requested = panel.TryRequestDeleteFolder("levels");
+        bool confirmed = panel.TryConfirmDeleteFolder("levels");
+        bool rootDeleted = panel.TryRequestDeleteFolder(string.Empty);
+
+        // Assert：验证预期结果
+        Assert.False(requested);
+        Assert.True(confirmed);
+        Assert.False(rootDeleted);
+        Assert.Equal(2, requests.Count);
+        Assert.Equal("levels", requests[0].Path);
+        Assert.False(requests[0].Confirmed);
+        Assert.Equal(["asset_scene", "asset_texture"], requests[0].AssetIds);
+        Assert.True(requests[1].Confirmed);
+        Assert.Empty(panel.LastAssets);
+        Assert.DoesNotContain(panel.FolderTargets, folder => folder.Path == "levels");
+        Assert.Contains("content 根目录", panel.Status, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Project Window 文件夹行可选中，并与资产选择互斥。
     /// </summary>
     [Fact]

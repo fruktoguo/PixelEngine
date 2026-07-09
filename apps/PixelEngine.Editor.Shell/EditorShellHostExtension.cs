@@ -265,6 +265,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             instantiatePrefab: _app.InstantiatePrefab,
             openScriptAsset: _app.OpenScriptAsset,
             deleteAsset: request => assetBrowserDataSource.DeleteAsset(request, _sceneModel),
+            deleteFolder: request => assetBrowserDataSource.DeleteFolder(request, _sceneModel),
             moveAsset: request => assetBrowserDataSource.MoveAsset(request, _sceneModel),
             moveFolder: request => assetBrowserDataSource.MoveFolder(request, _sceneModel),
             createAsset: assetBrowserDataSource.CreateAsset));
