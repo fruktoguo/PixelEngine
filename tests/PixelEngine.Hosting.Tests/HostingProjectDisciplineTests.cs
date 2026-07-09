@@ -1299,6 +1299,7 @@ public sealed class HostingProjectDisciplineTests
         string playerSettingsPanel = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "Settings", "PlayerSettingsPanel.cs"));
         string uiBackendKind = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.UI", "UiBackendKind.cs"));
         string gate = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.UI", "UltralightOptionalProfileGate.cs"));
+        string backend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.UI", "UltralightBackend.cs"));
         string plan20 = File.ReadAllText(Path.Combine(root, "plan", "20-interactive-html-ui.md"));
         string plan14 = File.ReadAllText(Path.Combine(root, "plan", "14-testing-benchmarking.md"));
         string plan15 = File.ReadAllText(Path.Combine(root, "plan", "15-build-packaging-distribution.md"));
@@ -1311,6 +1312,10 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("public const bool IsActive = false", gate, StringComparison.Ordinal);
         Assert.Contains("commercial redistribution license", gate, StringComparison.Ordinal);
         Assert.Contains("release artifact evidence", gate, StringComparison.Ordinal);
+        Assert.Contains("public sealed class UltralightBackend", backend, StringComparison.Ordinal);
+        Assert.Contains("public bool IsAvailable => UltralightOptionalProfileGate.IsActive", backend, StringComparison.Ordinal);
+        Assert.Contains("throw new NotSupportedException(ActivationFailureReason)", backend, StringComparison.Ordinal);
+        Assert.Contains("return UiHitResult.None", backend, StringComparison.Ordinal);
         Assert.Contains("未激活 optional profile", plan20, StringComparison.Ordinal);
         Assert.Contains("release audit 不允许 Ultralight native 混入", plan20, StringComparison.Ordinal);
         Assert.Contains("optional profile 默认 inactive", plan14, StringComparison.Ordinal);
