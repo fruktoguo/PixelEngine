@@ -45,6 +45,20 @@ function Assert-UnderRepo([string]$Path, [string]$Label) {
 
 Assert-UnderRepo $outputRootFull '正式输出目录'
 
+function Assert-CleanTrackedWorktree {
+  $statusLines = & git -C $repoRoot status --porcelain --untracked-files=no
+  if ($LASTEXITCODE -ne 0) {
+    throw '无法读取 git 工作树状态，停止更新正式输出。'
+  }
+
+  $status = ($statusLines | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join "`n"
+  if (-not [string]::IsNullOrWhiteSpace($status)) {
+    throw "正式输出需要干净的已跟踪工作树。请先提交或还原以下已跟踪改动：`n$status"
+  }
+}
+
+Assert-CleanTrackedWorktree
+
 $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $stagingRoot = Join-Path $repoRoot "artifacts/final-output-staging/$timestamp"
 $editorPublish = Join-Path $stagingRoot 'editor-publish'
