@@ -515,6 +515,25 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证玩家 AABB 探出常驻世界时，危险材质采样会跳过未驻留 chunk 而不是 fault。
+    /// </summary>
+    [Fact]
+    public void PlayerHealthSkipsHazardSamplesOutsideResidentWorld()
+    {
+        using Engine engine = CreateManualScriptEngine(out _, out _, out _, out ScriptScene scene, DemoMaterials());
+        Entity entity = scene.CreateEntity();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 84f;
+        player.SpawnY = 62f;
+        PlayerHealth health = entity.AddComponent<PlayerHealth>();
+
+        engine.RunHeadlessTicks(2);
+
+        Assert.False(health.Faulted, health.LastException?.ToString());
+        Assert.Equal(0, scene.ScriptExceptionCount);
+    }
+
+    /// <summary>
     /// 验证 Demo 爆破工具会从鼠标世界坐标触发抗性感知破坏、碎屑粒子与瞬时光照反馈。
     /// </summary>
     [Fact]
@@ -553,8 +572,8 @@ public sealed class PlayerControllerIntegrationTests
     {
         ExplosiveTool tool = new();
 
-        Assert.Equal(36, tool.Radius);
-        Assert.Equal(160f, tool.Force);
+        Assert.Equal(72, tool.Radius);
+        Assert.Equal(320f, tool.Force);
     }
 
     /// <summary>
@@ -570,7 +589,7 @@ public sealed class PlayerControllerIntegrationTests
         tool.CooldownSeconds = 0f;
 
         input.Update([], [MouseButton.Middle], mouseX: 12.25f, mouseY: 12.75f, wheelY: 0f);
-        engine.RunHeadlessTicks(1, realDeltaSeconds: 1.0 / 60.0);
+        engine.RunHeadlessTicks(2, realDeltaSeconds: 1.0 / 60.0);
 
         ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
         Assert.Equal(1, lighting.PointLights.Length);
@@ -1073,6 +1092,37 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证手雷高速飞出常驻世界时会在最后有效位置引爆，而不是让 raycast 未驻留 chunk 异常隔离脚本。
+    /// </summary>
+    [Fact]
+    public void GrenadeDetonatesInsteadOfFaultingWhenRaycastLeavesResidentWorld()
+    {
+        using Engine engine = CreateManualScriptEngine(out _, out _, out _, out ScriptScene scene, DemoMaterials());
+        GrenadeProjectile grenade = scene.CreateEntity().AddComponent<GrenadeProjectile>();
+        grenade.Initialize(
+            x: 80f,
+            y: 60f,
+            vx: 0f,
+            vy: 1200f,
+            fuseSeconds: 5f,
+            radius: 4,
+            damage: 16f,
+            impulse: 8f,
+            gravity: 0f,
+            bounce: 0f,
+            impactCue: "explosion.wav");
+
+        for (int i = 0; i < 8 && !grenade.Exploded && !grenade.Faulted; i++)
+        {
+            engine.RunHeadlessTicks(1, realDeltaSeconds: 1.0 / 60.0);
+        }
+
+        Assert.False(grenade.Faulted, grenade.LastException?.ToString());
+        Assert.True(grenade.Exploded);
+        Assert.Equal(0, scene.ScriptExceptionCount);
+    }
+
+    /// <summary>
     /// 验证玩家可在普通 settled cell 地面上接地、水平跑动并响应跳跃输入。
     /// </summary>
     [Fact]
@@ -1196,6 +1246,30 @@ public sealed class PlayerControllerIntegrationTests
         Assert.True(bodyProbe.HasTransform, "测试碎块应进入真实 Physics 刚体路径。");
         Assert.True(health.Health < initialHealth, $"真实下落刚体 stamp 压入玩家时应造成伤害，health={health.Health}, initial={initialHealth}。");
         Assert.False(PlayerOverlapsRigidOwned(grid, player.State), $"玩家应被推出真实下落 RigidOwned stamp，state={Describe(player.State)}");
+    }
+
+    /// <summary>
+    /// 验证 PhysicsSync 角色 proxy 命中事件会直接驱动玩家刚体撞击伤害，不依赖 post-step 后仍残留 RigidOwned cell。
+    /// </summary>
+    [Fact]
+    public void PlayerConsumesPhysicsProxyImpactEventAsRigidDamage()
+    {
+        using Engine engine = CreateManualScriptEngine(out _, out _, out _, out ScriptScene scene, DemoMaterials());
+        PhysicsStepEventBus physicsEvents = engine.Context.GetService<PhysicsStepEventBus>();
+
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.RigidImpactDamage = 11f;
+        player.RigidImpactCooldownSeconds = 1f;
+        PlayerHealth health = entity.AddComponent<PlayerHealth>();
+
+        engine.RunHeadlessTicks(1);
+        float initialHealth = health.Health;
+
+        physicsEvents.PublishPostStep(characterImpactCount: 1);
+
+        Assert.Equal(initialHealth - 11f, health.Health);
     }
 
     /// <summary>
@@ -2293,7 +2367,7 @@ public sealed class PlayerControllerIntegrationTests
         input.Update([Key.Digit6], [], mouseX: 0, mouseY: 0, wheelY: 0);
         engine.RunHeadlessTicks(1);
         Assert.Equal("builder", weapons.SelectedWeaponId);
-        Assert.Equal(6f, weapons.TerrainEffectScale);
+        Assert.Equal(10f, weapons.TerrainEffectScale);
         Assert.Equal(10f, weapons.GrenadeTerrainEffectScale);
     }
 

@@ -200,6 +200,11 @@ public sealed class LevelDirector : Behaviour
         player.SpawnY = PlayerSpawnY;
         player.Width = 6f;
         player.Height = 12f;
+        player.EnableEscapeRespawn = true;
+        player.EscapeMinX = -64f;
+        player.EscapeMinY = -128f;
+        player.EscapeMaxX = LevelWidth + 64f;
+        player.EscapeMaxY = LevelHeight + 96f;
 
         PlayerHealth health = playerEntity.AddComponent<PlayerHealth>();
         health.ForceHazardForProbe = BuildSpawnHazardProbe;
@@ -236,10 +241,10 @@ public sealed class LevelDirector : Behaviour
         if (BuildGoalTrigger)
         {
             GoalTrigger goal = playerEntity.AddComponent<GoalTrigger>();
-            goal.X = GoalX;
-            goal.Y = GoalY;
-            goal.Width = 34f;
-            goal.Height = 54f;
+            goal.X = MathF.Max(16f, GoalX - 24f);
+            goal.Y = MathF.Max(16f, GoalY - 96f);
+            goal.Width = MathF.Max(64f, LevelWidth - goal.X - 16f);
+            goal.Height = MathF.Max(120f, LevelHeight - goal.Y - 24f);
         }
 
         _ = playerEntity.AddComponent<PlayerVisual>();
@@ -336,7 +341,7 @@ public sealed class LevelDirector : Behaviour
         FillRect(10, floorY + 18, width - 20, 16, _stone);
         FillRect(28, floorY - 14, 110, 14, _stone);
 
-        FillRect(138, floorY - 58, 18, 58, _wood);
+        FillRect(138, floorY - 20, 18, 20, _wood);
         FillRect(252, floorY - 34, 22, 34, _stone);
         FillRect(396, floorY - 32, 22, 32, _metal);
         FillRect(514, floorY - 26, 22, 26, _wood);
@@ -371,7 +376,7 @@ public sealed class LevelDirector : Behaviour
         int floorY = Math.Max(128, LevelHeight) - 72;
         try
         {
-            CreateRigidStructure(138, floorY - 58, 18, 58);
+            CreateRigidStructure(138, floorY - 20, 18, 20);
             CreateRigidStructure(252, floorY - 34, 22, 34);
             CreateRigidStructure(396, floorY - 32, 22, 32);
             CreateRigidStructure(514, floorY - 26, 22, 26);

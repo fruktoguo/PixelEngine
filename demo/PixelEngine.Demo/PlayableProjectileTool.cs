@@ -219,7 +219,7 @@ public sealed class PlayableProjectileTool : Behaviour
         dy /= length;
         float hitX = startX + (dx * Range);
         float hitY = startY + (dy * Range);
-        if (Context.Solids.Raycast(startX, startY, dx, dy, Range, out RaycastHit hit))
+        if (TryRaycastSolid(startX, startY, dx, dy, Range, out RaycastHit hit) && hit.Hit)
         {
             hitX = hit.X;
             hitY = hit.Y;
@@ -247,6 +247,25 @@ public sealed class PlayableProjectileTool : Behaviour
         QueueCollapseScan(hitX, hitY);
         _cooldownRemaining = MathF.Max(0f, CooldownSeconds);
         return true;
+    }
+
+    private bool TryRaycastSolid(float x, float y, float dx, float dy, float range, out RaycastHit hit)
+    {
+        try
+        {
+            _ = Context.Solids.Raycast(x, y, dx, dy, range, out hit);
+            return true;
+        }
+        catch (InvalidOperationException exception) when (IsUnresidentChunk(exception))
+        {
+            hit = default;
+            return false;
+        }
+    }
+
+    private static bool IsUnresidentChunk(InvalidOperationException exception)
+    {
+        return exception.Message.Contains("目标 chunk 未驻留", StringComparison.Ordinal);
     }
 
     private void EmitSmallImpactParticles(float hitX, float hitY)

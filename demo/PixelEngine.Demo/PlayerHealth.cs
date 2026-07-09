@@ -161,12 +161,35 @@ public sealed class PlayerHealth : Behaviour
         {
             for (int x = minX; x < maxX; x++)
             {
-                MaterialId material = Context.Cells.GetMaterial(x, y);
+                if (!TryGetMaterial(x, y, out MaterialId material))
+                {
+                    continue;
+                }
+
                 damage = MathF.Max(damage, DamageFor(material));
             }
         }
 
         return damage;
+    }
+
+    private bool TryGetMaterial(int x, int y, out MaterialId material)
+    {
+        try
+        {
+            material = Context.Cells.GetMaterial(x, y);
+            return true;
+        }
+        catch (InvalidOperationException exception) when (IsUnresidentChunk(exception))
+        {
+            material = default;
+            return false;
+        }
+    }
+
+    private static bool IsUnresidentChunk(InvalidOperationException exception)
+    {
+        return exception.Message.Contains("目标 chunk 未驻留", StringComparison.Ordinal);
     }
 
     private float DamageFor(MaterialId material)

@@ -244,6 +244,11 @@ public sealed class PhysicsSystem : IDisposable
     public int LastCharacterProxyContactCount { get; private set; }
 
     /// <summary>
+    /// 最近一次同步中兜底清理角色 AABB 内 RigidOwned stamp 的 cell 数；非 0 表示 proxy 漏判风险。
+    /// </summary>
+    public int LastCharacterProxyOverlapClearedCount { get; private set; }
+
+    /// <summary>
     /// 最近一次同步执行的刚体破坏重建结果。
     /// </summary>
     public RigidDestructionResult LastDestructionResult { get; private set; }
@@ -334,7 +339,13 @@ public sealed class PhysicsSystem : IDisposable
         ResolveCharacterProxyBodyContacts();
 
         int stamped = Measure(FrameSubPhase.PhysicsInverseSample, StampAllBodies);
-        LastStampedCellCount = Math.Max(0, stamped - ClearCharacterProxyOverlaps());
+        LastCharacterProxyOverlapClearedCount = ClearCharacterProxyOverlaps();
+        if (LastCharacterProxyOverlapClearedCount > 0)
+        {
+            LastCharacterProxyContactCount++;
+        }
+
+        LastStampedCellCount = Math.Max(0, stamped - LastCharacterProxyOverlapClearedCount);
     }
 
     /// <summary>
@@ -954,8 +965,9 @@ public sealed class PhysicsSystem : IDisposable
                     (int)MathF.Floor(proxy.MinY),
                     (int)MathF.Ceiling(proxy.MaxX),
                     (int)MathF.Ceiling(proxy.MaxY));
-                bool horizontalOverlap = bodyBounds.MinX < proxyBounds.MaxX && bodyBounds.MaxX > proxyBounds.MinX;
-                if (!horizontalOverlap)
+                RectI sweptBounds = bodyBounds;
+                sweptBounds.Encapsulate(in previousBounds);
+                if (!sweptBounds.Intersects(in proxyBounds))
                 {
                     _ = proxy.SupportedBodies.Remove(body.BodyKey);
                     continue;
@@ -963,16 +975,17 @@ public sealed class PhysicsSystem : IDisposable
 
                 bool continuingContact = proxy.SupportedBodies.TryGetValue(body.BodyKey, out PixelRigidBody? supportedBody) &&
                     ReferenceEquals(supportedBody, body) &&
-                    bodyBounds.MaxY >= proxyBounds.MinY;
-                bool firstContactFromAbove = bodyBounds.MaxY >= proxyBounds.MinY &&
+                    sweptBounds.MaxY >= proxyBounds.MinY;
+                bool firstContactFromAbove = sweptBounds.MaxY >= proxyBounds.MinY &&
+                    previousBounds.MinY <= proxyBounds.MaxY &&
                     previousBounds.MaxY <= proxyBounds.MaxY;
                 if (!continuingContact && !firstContactFromAbove)
                 {
                     continue;
                 }
 
-                float overlap = bodyBounds.MaxY - proxy.MinY;
-                if (overlap <= 0f)
+                float overlap = Math.Max(bodyBounds.MaxY, sweptBounds.MaxY) - proxy.MinY;
+                if (overlap < 0f)
                 {
                     continue;
                 }

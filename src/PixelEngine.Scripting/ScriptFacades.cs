@@ -376,6 +376,11 @@ public interface IRigidBodyApi
 public interface IPhysicsStepEvents
 {
     /// <summary>
+    /// 最近一次 PhysicsSync 中角色 proxy 或兜底 overlap 清理记录到的刚体撞击次数。
+    /// </summary>
+    int LastCharacterImpactCount { get; }
+
+    /// <summary>
     /// 订阅 PhysicsSync 完成后的回调。回调运行在相位 8 末尾，能读取本 tick 刚体 stamp 后的世界状态。
     /// </summary>
     /// <param name="callback">要执行的回调。</param>
@@ -396,6 +401,9 @@ public sealed class NoopPhysicsStepEvents : IPhysicsStepEvents
     private NoopPhysicsStepEvents()
     {
     }
+
+    /// <inheritdoc />
+    public int LastCharacterImpactCount => 0;
 
     /// <inheritdoc />
     public IDisposable SubscribePostStep(Action callback)
@@ -422,6 +430,9 @@ public sealed class PhysicsStepEventBus : IPhysicsStepEvents
     private readonly List<Action> _postStepCallbacks = [];
 
     /// <inheritdoc />
+    public int LastCharacterImpactCount { get; private set; }
+
+    /// <inheritdoc />
     public IDisposable SubscribePostStep(Action callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
@@ -432,8 +443,9 @@ public sealed class PhysicsStepEventBus : IPhysicsStepEvents
     /// <summary>
     /// 由 Hosting 在 PhysicsSync 完成后发布一次。
     /// </summary>
-    public void PublishPostStep()
+    public void PublishPostStep(int characterImpactCount = 0)
     {
+        LastCharacterImpactCount = Math.Max(0, characterImpactCount);
         for (int i = 0; i < _postStepCallbacks.Count; i++)
         {
             _postStepCallbacks[i]();
