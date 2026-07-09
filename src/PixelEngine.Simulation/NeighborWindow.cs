@@ -8,6 +8,16 @@ namespace PixelEngine.Simulation;
 /// </summary>
 public ref struct NeighborWindow
 {
+    private readonly Chunk _chunk0;
+    private readonly Chunk _chunk1;
+    private readonly Chunk _chunk2;
+    private readonly Chunk _chunk3;
+    private readonly Chunk _chunk4;
+    private readonly Chunk _chunk5;
+    private readonly Chunk _chunk6;
+    private readonly Chunk _chunk7;
+    private readonly Chunk _chunk8;
+
     private ref ushort _matBase0;
     private ref ushort _matBase1;
     private ref ushort _matBase2;
@@ -63,6 +73,16 @@ public ref struct NeighborWindow
         BaseChunkX = center.X;
         BaseChunkY = center.Y;
 
+        _chunk0 = neighborhood.Slot0;
+        _chunk1 = neighborhood.Slot1;
+        _chunk2 = neighborhood.Slot2;
+        _chunk3 = neighborhood.Slot3;
+        _chunk4 = neighborhood.Slot4;
+        _chunk5 = neighborhood.Slot5;
+        _chunk6 = neighborhood.Slot6;
+        _chunk7 = neighborhood.Slot7;
+        _chunk8 = neighborhood.Slot8;
+
         _matBase0 = ref neighborhood.Slot0.GetMaterialBase();
         _matBase1 = ref neighborhood.Slot1.GetMaterialBase();
         _matBase2 = ref neighborhood.Slot2.GetMaterialBase();
@@ -114,6 +134,16 @@ public ref struct NeighborWindow
         BaseChunkX = center.X;
         BaseChunkY = center.Y;
 
+        _chunk0 = neighborhood.Slot0;
+        _chunk1 = neighborhood.Slot1;
+        _chunk2 = neighborhood.Slot2;
+        _chunk3 = neighborhood.Slot3;
+        _chunk4 = neighborhood.Slot4;
+        _chunk5 = neighborhood.Slot5;
+        _chunk6 = neighborhood.Slot6;
+        _chunk7 = neighborhood.Slot7;
+        _chunk8 = neighborhood.Slot8;
+
         _matBase0 = ref neighborhood.Slot0.GetMaterialBase();
         _matBase1 = ref neighborhood.Slot1.GetMaterialBase();
         _matBase2 = ref neighborhood.Slot2.GetMaterialBase();
@@ -164,6 +194,27 @@ public ref struct NeighborWindow
     /// 中心 chunk 的 Y 坐标。
     /// </summary>
     public readonly int BaseChunkY { get; }
+
+    /// <summary>
+    /// 按 3x3 slot 读取调度阶段已经解析的驻留 chunk。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly Chunk GetChunk(int slot)
+    {
+        return slot switch
+        {
+            0 => _chunk0,
+            1 => _chunk1,
+            2 => _chunk2,
+            3 => _chunk3,
+            4 => _chunk4,
+            5 => _chunk5,
+            6 => _chunk6,
+            7 => _chunk7,
+            8 => _chunk8,
+            _ => throw new ArgumentOutOfRangeException(nameof(slot)),
+        };
+    }
 
     /// <summary>
     /// 计算世界坐标落入 3x3 邻域的 slot。
