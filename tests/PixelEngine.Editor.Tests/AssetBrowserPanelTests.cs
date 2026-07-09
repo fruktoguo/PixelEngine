@@ -466,27 +466,31 @@ public sealed class AssetBrowserPanelTests
         // Arrange：准备输入与初始状态
         RecordingAssetSource source = new([]);
         List<AssetBrowserCreateRequest> requests = [];
+        List<AssetBrowserItem> createdAssets = [];
         AssetBrowserCreateResult CreateAsset(AssetBrowserCreateRequest request)
         {
             requests.Add(request);
-            source.ReplaceAssets(
-            [
-                new AssetBrowserItem(request.Path, request.Kind, 10, DateTimeOffset.UnixEpoch, null, "asset_created"),
-            ]);
+            createdAssets.Add(new AssetBrowserItem(request.Path, request.Kind, 10, DateTimeOffset.UnixEpoch, null, "asset_created"));
+            source.ReplaceAssets(createdAssets);
             return new AssetBrowserCreateResult(true, $"created {request.Path}", "asset_created", request.Path);
         }
 
         AssetBrowserPanel panel = new(source, createAsset: CreateAsset);
 
-        bool created = panel.TryCreateAsset("scripts/NewBehaviour.cs", AssetBrowserItemKind.Script);
+        bool materialCreated = panel.TryCreateAsset("materials.json", AssetBrowserItemKind.Material);
+        bool scriptCreated = panel.TryCreateAsset("scripts/NewBehaviour.cs", AssetBrowserItemKind.Script);
         bool unsupported = panel.TryCreateAsset("textures/generated.png", AssetBrowserItemKind.Texture);
 
         // Assert：验证预期结果
-        Assert.True(created);
+        Assert.True(materialCreated);
+        Assert.True(scriptCreated);
         Assert.False(unsupported);
-        AssetBrowserCreateRequest request = Assert.Single(requests);
-        Assert.Equal("scripts/NewBehaviour.cs", request.Path);
-        Assert.Equal(AssetBrowserItemKind.Script, request.Kind);
+        Assert.Equal(2, requests.Count);
+        Assert.Equal("materials.json", requests[0].Path);
+        Assert.Equal(AssetBrowserItemKind.Material, requests[0].Kind);
+        Assert.Equal("scripts/NewBehaviour.cs", requests[1].Path);
+        Assert.Equal(AssetBrowserItemKind.Script, requests[1].Kind);
+        Assert.Contains(panel.LastAssets, asset => asset.Path == "materials.json" && asset.AssetId == "asset_created");
         Assert.Contains(panel.LastAssets, asset => asset.Path == "scripts/NewBehaviour.cs" && asset.AssetId == "asset_created");
         Assert.Contains("暂不支持", panel.Status, StringComparison.Ordinal);
     }

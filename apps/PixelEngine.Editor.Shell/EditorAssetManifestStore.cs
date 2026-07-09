@@ -804,6 +804,8 @@ internal sealed class EditorAssetManifestStore
                 File.WriteAllText(fullPath, CreateScriptTemplate(logicalPath));
                 break;
             case EditorAssetType.Material:
+                File.WriteAllText(fullPath, /*lang=json,strict*/ "{\"materials\":[]}" + Environment.NewLine);
+                break;
             case EditorAssetType.Json:
                 File.WriteAllText(fullPath, "{}" + Environment.NewLine);
                 break;
