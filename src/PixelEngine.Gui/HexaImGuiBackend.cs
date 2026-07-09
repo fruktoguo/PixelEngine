@@ -103,6 +103,16 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
     }
 
     /// <inheritdoc />
+    public void AddFramebufferMousePosition(float x, float y)
+    {
+        if (_initialized)
+        {
+            SetCurrentContext();
+            ImGui.AddMousePosEvent(ImGui.GetIO(), x, y);
+        }
+    }
+
+    /// <inheritdoc />
     public void AddMouseButton(int button, bool down)
     {
         if (_initialized)

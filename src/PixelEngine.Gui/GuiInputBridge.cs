@@ -40,6 +40,14 @@ public sealed class GuiInputBridge
     }
 
     /// <summary>
+    /// 注入已位于默认 framebuffer 坐标系的鼠标位置。
+    /// </summary>
+    public void MouseMoveFramebuffer(float x, float y)
+    {
+        _backend.AddFramebufferMousePosition(x, y);
+    }
+
+    /// <summary>
     /// 注入鼠标按键。
     /// </summary>
     public void MouseButton(MouseButton button, bool down)

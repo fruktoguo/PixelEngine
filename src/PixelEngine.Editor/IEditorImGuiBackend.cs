@@ -52,6 +52,13 @@ public interface IEditorImGuiBackend
     void AddMousePosition(float x, float y);
 
     /// <summary>
+    /// 注入已位于默认 framebuffer 坐标系的鼠标位置事件。
+    /// </summary>
+    /// <param name="x">Framebuffer X 坐标。</param>
+    /// <param name="y">Framebuffer Y 坐标。</param>
+    void AddFramebufferMousePosition(float x, float y);
+
+    /// <summary>
     /// 注入鼠标按键事件。
     /// </summary>
     /// <param name="button">ImGui 鼠标键索引。</param>

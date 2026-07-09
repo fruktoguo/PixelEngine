@@ -43,6 +43,16 @@ public sealed class ImGuiInputBridge
     }
 
     /// <summary>
+    /// 注入已位于默认 framebuffer 坐标系的鼠标位置。
+    /// </summary>
+    /// <param name="x">Framebuffer X 坐标。</param>
+    /// <param name="y">Framebuffer Y 坐标。</param>
+    public void MouseMoveFramebuffer(float x, float y)
+    {
+        _backend.AddFramebufferMousePosition(x, y);
+    }
+
+    /// <summary>
     /// 注入鼠标按键。
     /// </summary>
     /// <param name="button">Silk.NET 鼠标键。</param>

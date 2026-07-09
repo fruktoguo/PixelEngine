@@ -76,6 +76,10 @@ public sealed class GuiAppCombinedFrameTests
         {
         }
 
+        public void AddFramebufferMousePosition(float x, float y)
+        {
+        }
+
         public void AddMouseButton(int button, bool down)
         {
         }
