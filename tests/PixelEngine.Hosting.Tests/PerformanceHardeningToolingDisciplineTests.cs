@@ -1235,6 +1235,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string script = ReadRepositoryFile("tools", "gpu-particle-benchmark-preflight.ps1");
         string report = ReadRepositoryFile("docs", "runtime-reports", "2026-07-02-particle-frame-probe.md");
         string plan = ReadRepositoryFile("plan", "09-gpu-compute.md");
+        string readme = ReadRepositoryFile("plan", "README.md");
 
         // Assert：验证预期结果
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
@@ -1309,6 +1310,35 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("tools/gpu-particle-benchmark-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("local_probe_only", plan, StringComparison.Ordinal);
         Assert.Contains("target_gpu_evidence_attached_pending_review", plan, StringComparison.Ordinal);
+
+        Assert.Contains("GPU 粒子长基准", readme, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_target_gpu_evidence", readme, StringComparison.Ordinal);
+        Assert.Contains("local_probe_only", readme, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_local_probe", readme, StringComparison.Ordinal);
+        Assert.Contains("target_gpu_evidence_attached_pending_review", readme, StringComparison.Ordinal);
+        Assert.Contains("local-comparison.md/json", readme, StringComparison.Ordinal);
+        Assert.Contains("local_only: true", readme, StringComparison.Ordinal);
+        Assert.Contains("target_gpu_evidence: false", readme, StringComparison.Ordinal);
+        Assert.Contains("schemaVersion=1", readme, StringComparison.Ordinal);
+        Assert.Contains("targetHardwareReport", readme, StringComparison.Ordinal);
+        Assert.Contains("cpuProbeReport", readme, StringComparison.Ordinal);
+        Assert.Contains("gpuProbeReport", readme, StringComparison.Ordinal);
+        Assert.Contains("comparisonReport", readme, StringComparison.Ordinal);
+        Assert.Contains("path + sha256", readme, StringComparison.Ordinal);
+        Assert.Contains("targetGpuName", readme, StringComparison.Ordinal);
+        Assert.Contains("targetGpuDriver", readme, StringComparison.Ordinal);
+        Assert.Contains("gpuBackend", readme, StringComparison.Ordinal);
+        Assert.Contains("particleCount", readme, StringComparison.Ordinal);
+        Assert.Contains("benchmarkRunId", readme, StringComparison.Ordinal);
+        Assert.Contains("particle_frame_probe source=PixelEngineParticleFrameProbe", readme, StringComparison.Ordinal);
+        Assert.Contains("benchmark_run_id", readme, StringComparison.Ordinal);
+        Assert.Contains("requested_count=active_count>=100000", readme, StringComparison.Ordinal);
+        Assert.Contains("measured_frames>=300", readme, StringComparison.Ordinal);
+        Assert.Contains("gpuFasterThanCpu: true", readme, StringComparison.Ordinal);
+        Assert.Contains("cpuWallAvgMs>gpuWallAvgMs", readme, StringComparison.Ordinal);
+        Assert.Contains("speedupRatio>1", readme, StringComparison.Ordinal);
+        Assert.Contains("sampleSeconds>=10", readme, StringComparison.Ordinal);
+        Assert.Contains("不能解除 plan/09/M15 目标 GPU 长基准阻塞", readme, StringComparison.Ordinal);
     }
 
     /// <summary>
