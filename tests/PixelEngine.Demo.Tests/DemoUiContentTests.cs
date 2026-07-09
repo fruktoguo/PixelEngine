@@ -564,6 +564,32 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
+    /// 验证真实 result.xhtml 按钮经 ManagedFallback 产生事件后，再由 Demo UI 控制器路由到运行时 facade。
+    /// </summary>
+    [Fact]
+    public void DemoResultButtonsRouteThroughManagedFallbackEventsToRuntimeFacade()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+                                 /*lang=json,strict*/
+                                 """
+            {
+              "weapons": [
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
+              ]
+            }
+            """);
+        try
+        {
+            AssertResultButtonRoutesThroughManagedFallback(contentRoot, "重开", "restart_game", expectRestart: true);
+            AssertResultButtonRoutesThroughManagedFallback(contentRoot, "退出", "quit_game", expectRestart: false);
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// 验证 MissionDirector 的真实失败分支会经 Web-first 结算屏只推送一次失败状态。
     /// </summary>
     [Theory]
@@ -1477,6 +1503,41 @@ public sealed class DemoUiContentTests
         Assert.Equal(default, controller.ModalScreen);
         Assert.Equal(expectRestart ? 1 : 0, runtime.RestartCount);
         Assert.Equal(expectRestart ? 0 : 1, runtime.ShutdownCount);
+    }
+
+    private static void AssertResultButtonRoutesThroughManagedFallback(
+        string contentRoot,
+        string buttonText,
+        string expectedAction,
+        bool expectRestart)
+    {
+        ScriptUiActionId action = DrainResultButtonActionThroughManagedFallback(buttonText, expectedAction);
+        AssertResultActionRoutes(contentRoot, action, expectRestart);
+    }
+
+    private static ScriptUiActionId DrainResultButtonActionThroughManagedFallback(string buttonText, string expectedAction)
+    {
+        UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
+        FakeGuiHost gui = new();
+        using ManagedFallbackBackend backend = new(gui);
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 720, 480, 1f), UiBackendKind.ManagedFallback));
+
+        _ = host.PushModal(
+            manifest.GetRequiredScreen(GameUiDemoController.ResultScreen).ScreenId,
+            manifest.ResolveDocumentSource(GameUiDemoController.ResultScreen));
+        _ = gui.Context.ClickedButtons.Add(buttonText);
+
+        host.Composite(default);
+
+        RuntimeUiEvent[] events = new RuntimeUiEvent[4];
+        int eventCount = host.DrainEvents(events);
+        UI.UiActionId expected = new(UiStableId.Hash(expectedAction));
+        RuntimeUiEvent uiEvent = Assert.Single(events[..eventCount], e => e.Action == expected);
+
+        Assert.Contains("结算", gui.Context.Texts);
+        Assert.Contains(buttonText, gui.Context.Buttons);
+        return new ScriptUiActionId(uiEvent.Action.Value);
     }
 
     private static GameUiHost CreateDemoHudHost()
