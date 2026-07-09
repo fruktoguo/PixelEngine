@@ -323,6 +323,29 @@ public ref struct NeighborWindow
     }
 
     /// <summary>
+    /// 在 movement 扫描阶段一次 slot/local 解析读取非空目标的 material / flags。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryReadNonEmptyMoveTarget(
+        int targetX,
+        int targetY,
+        out ushort targetMaterial,
+        out byte targetFlags)
+    {
+        int targetSlot = SlotOf(targetX, targetY);
+        int targetLocal = CellAddressing.LocalIndex(targetX, targetY);
+        targetMaterial = Unsafe.Add(ref SelectMaterialBase(targetSlot), targetLocal);
+        if (targetMaterial == 0)
+        {
+            targetFlags = 0;
+            return false;
+        }
+
+        targetFlags = Unsafe.Add(ref SelectFlagsBase(targetSlot), targetLocal);
+        return true;
+    }
+
+    /// <summary>
     /// 在 movement 扫描阶段一次 slot/local 解析判断目标是否可被源 cell 置换。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

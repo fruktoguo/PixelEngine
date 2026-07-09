@@ -147,14 +147,13 @@ internal static class ChunkUpdater
         for (int step = 1; step <= EngineConstants.MoveCap; step++)
         {
             int candidateY = wy + step;
-            ushort targetMaterial = window.GetMaterial(wx, candidateY);
-            if (targetMaterial == 0)
+            if (!window.TryReadNonEmptyMoveTarget(wx, candidateY, out ushort targetMaterial, out byte targetFlags))
             {
                 targetY = candidateY;
                 continue;
             }
 
-            if (!CellFlags.MatchesFrame(window.GetFlags(wx, candidateY), parityBit) &&
+            if (!CellFlags.MatchesFrame(targetFlags, parityBit) &&
                 materials.DensityOf(targetMaterial) < sourceDensity)
             {
                 targetY = candidateY;
