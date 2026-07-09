@@ -78,11 +78,42 @@ public interface IGuiDrawContext
     void Separator();
 
     /// <summary>
+    /// 设置当前窗口内下一个控件的局部绘制位置；不支持的后端可忽略。
+    /// </summary>
+    /// <param name="x">窗口局部 X 坐标。</param>
+    /// <param name="y">窗口局部 Y 坐标。</param>
+    void SetCursor(float x, float y)
+    {
+    }
+
+    /// <summary>
+    /// 在当前布局中增加垂直留白；不支持的后端可忽略。
+    /// </summary>
+    /// <param name="height">留白高度，单位像素。</param>
+    void AddVerticalSpacing(float height)
+    {
+    }
+
+    /// <summary>
     /// 绘制按钮。
     /// </summary>
     /// <param name="label">按钮标签。</param>
     /// <returns>按钮在本帧被点击时返回 true。</returns>
     bool Button(string label);
+
+    /// <summary>
+    /// 绘制指定尺寸的按钮；不支持尺寸的后端可退回普通按钮。
+    /// </summary>
+    /// <param name="label">按钮标签。</param>
+    /// <param name="width">显示宽度。</param>
+    /// <param name="height">显示高度。</param>
+    /// <returns>按钮在本帧被点击时返回 true。</returns>
+    bool Button(string label, float width, float height)
+    {
+        _ = width;
+        _ = height;
+        return Button(label);
+    }
 
     /// <summary>
     /// 绘制复选框并在变化时回写值。
@@ -98,6 +129,20 @@ public interface IGuiDrawContext
     /// <param name="value01">进度值。</param>
     /// <param name="label">可选覆盖文本。</param>
     void ProgressBar(float value01, string? label = null);
+
+    /// <summary>
+    /// 绘制指定尺寸的 0..1 进度条；不支持尺寸的后端可退回默认进度条。
+    /// </summary>
+    /// <param name="value01">进度值。</param>
+    /// <param name="label">可选覆盖文本。</param>
+    /// <param name="width">显示宽度。</param>
+    /// <param name="height">显示高度。</param>
+    void ProgressBar(float value01, string? label, float width, float height)
+    {
+        _ = width;
+        _ = height;
+        ProgressBar(value01, label);
+    }
 
     /// <summary>
     /// 绘制颜色色块。

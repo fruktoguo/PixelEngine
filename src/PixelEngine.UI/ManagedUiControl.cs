@@ -21,6 +21,8 @@ internal sealed class ManagedUiControl
 
     internal UiValue Value { get; set; }
 
+    internal ManagedUiStyle Style { get; init; }
+
     internal string ImagePath { get; init; } = string.Empty;
 
     internal int ImageWidth { get; init; }

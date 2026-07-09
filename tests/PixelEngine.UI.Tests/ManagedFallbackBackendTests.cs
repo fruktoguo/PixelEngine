@@ -178,6 +178,38 @@ public sealed class ManagedFallbackBackendTests
     }
 
     [Fact]
+    public void ManagedFallbackConsumesSimpleStyleRulesForControlLayout()
+    {
+        string path = WriteUi("""
+            <rml title="Menu" style="left: 24px; top: 24px; width: 280px; height: 206px">
+              <head>
+                <style>
+                  button { width: 180px; height: 28px; margin-top: 6px; }
+                  progress { width: 240px; height: 14px; margin-top: 4px; }
+                  #start_game { position: absolute; left: 28px; top: 72px; }
+                </style>
+              </head>
+              <body>
+                <button id="start_game" data-event-click="start_game">开始游戏</button>
+                <progress id="health" path="hud.health" value="0.5" text="生命" />
+              </body>
+            </rml>
+            """);
+        FakeGuiHost gui = new();
+        using ManagedFallbackBackend backend = new(gui);
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+
+        _ = host.ShowScreen(new UiScreenId(10), UiDocumentSource.Asset(path, 10));
+        host.Composite(default);
+
+        Assert.Equal((28f, 72f), Assert.Single(gui.Context.Cursors));
+        Assert.Equal(("开始游戏", 180f, 28f), Assert.Single(gui.Context.SizedButtons));
+        Assert.Equal((0.5f, "生命", 240f, 14f), Assert.Single(gui.Context.SizedProgressBars));
+        Assert.Contains(4f, gui.Context.VerticalSpacings);
+    }
+
+    [Fact]
     public void ManagedFallbackDrawsImageControlFromImagesDirectory()
     {
         string root = Path.Combine(Path.GetTempPath(), $"pixelengine-ui-image-{Guid.NewGuid():N}");
@@ -331,6 +363,14 @@ public sealed class ManagedFallbackBackendTests
 
         public List<ImageCall> Images { get; } = [];
 
+        public List<(float X, float Y)> Cursors { get; } = [];
+
+        public List<float> VerticalSpacings { get; } = [];
+
+        public List<(string Label, float Width, float Height)> SizedButtons { get; } = [];
+
+        public List<(float Value, string? Label, float Width, float Height)> SizedProgressBars { get; } = [];
+
         public HashSet<string> ClickedButtons { get; } = [];
 
         public HashSet<string> ToggledCheckboxes { get; } = [];
@@ -383,8 +423,25 @@ public sealed class ManagedFallbackBackendTests
         {
         }
 
+        public void SetCursor(float x, float y)
+        {
+            Cursors.Add((x, y));
+        }
+
+        public void AddVerticalSpacing(float height)
+        {
+            VerticalSpacings.Add(height);
+        }
+
         public bool Button(string label)
         {
+            Buttons.Add(label);
+            return ClickedButtons.Remove(label);
+        }
+
+        public bool Button(string label, float width, float height)
+        {
+            SizedButtons.Add((label, width, height));
             Buttons.Add(label);
             return ClickedButtons.Remove(label);
         }
@@ -402,6 +459,11 @@ public sealed class ManagedFallbackBackendTests
 
         public void ProgressBar(float value01, string? label = null)
         {
+        }
+
+        public void ProgressBar(float value01, string? label, float width, float height)
+        {
+            SizedProgressBars.Add((value01, label, width, height));
         }
 
         public void ColorSwatch(string id, uint colorBgra, float size = 16f)
