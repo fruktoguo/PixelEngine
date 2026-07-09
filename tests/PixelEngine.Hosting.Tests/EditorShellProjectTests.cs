@@ -14,6 +14,59 @@ namespace PixelEngine.Hosting.Tests;
 public sealed class EditorShellProjectTests
 {
     /// <summary>
+    /// 验证项目选择器 Browse 成功时用文件夹选择器结果回填路径，并清理旧诊断。
+    /// </summary>
+    [Fact]
+    public void ProjectPickerBrowseSuccessUpdatesPathAndClearsDiagnostic()
+    {
+        FakeProjectFolderPicker picker = new(success: true, selectedPath: @"D:\Pixel Projects\Demo", diagnostic: string.Empty);
+        ProjectPickerWindow window = new(EditorShellOptions.Parse([]), picker);
+        string path = @"C:\Old";
+
+        Assert.True(window.ApplyFolderPicker(ref path));
+
+        Assert.Equal(@"C:\Old", picker.InitialPath);
+        Assert.Equal(@"D:\Pixel Projects\Demo", path);
+        Assert.Empty(window.FolderPickerDiagnostic);
+    }
+
+    /// <summary>
+    /// 验证项目选择器 Browse 失败时保留原路径并显示失败诊断。
+    /// </summary>
+    [Fact]
+    public void ProjectPickerBrowseFailureKeepsPathAndStoresDiagnostic()
+    {
+        FakeProjectFolderPicker picker = new(success: false, selectedPath: string.Empty, diagnostic: "打开文件夹选择器失败：COM 不可用");
+        ProjectPickerWindow window = new(EditorShellOptions.Parse([]), picker);
+        string path = @"C:\Project";
+
+        Assert.False(window.ApplyFolderPicker(ref path));
+
+        Assert.Equal(@"C:\Project", picker.InitialPath);
+        Assert.Equal(@"C:\Project", path);
+        Assert.Equal("打开文件夹选择器失败：COM 不可用", window.FolderPickerDiagnostic);
+    }
+
+    /// <summary>
+    /// 验证项目选择器 Browse 取消时不会改写路径，也不会保留旧失败诊断。
+    /// </summary>
+    [Fact]
+    public void ProjectPickerBrowseCancelClearsStaleDiagnosticAndKeepsPath()
+    {
+        FakeProjectFolderPicker picker = new(success: false, selectedPath: string.Empty, diagnostic: "上一次失败");
+        ProjectPickerWindow window = new(EditorShellOptions.Parse([]), picker);
+        string path = @"C:\Project";
+        Assert.False(window.ApplyFolderPicker(ref path));
+        Assert.Equal("上一次失败", window.FolderPickerDiagnostic);
+
+        picker.Diagnostic = string.Empty;
+        Assert.False(window.ApplyFolderPicker(ref path));
+
+        Assert.Equal(@"C:\Project", path);
+        Assert.Empty(window.FolderPickerDiagnostic);
+    }
+
+    /// <summary>
     /// 验证新建工程会落盘 project.pixelproj 与默认 content/scenes/main.scene 骨架。
     /// </summary>
     [Fact]
@@ -268,6 +321,25 @@ public sealed class EditorShellProjectTests
 
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => EditorProject.Load(projectRoot));
         Assert.Contains(messageFragment, ex.Message, StringComparison.Ordinal);
+    }
+
+    private sealed class FakeProjectFolderPicker(bool success, string selectedPath, string diagnostic) : IProjectFolderPicker
+    {
+        public bool Success { get; set; } = success;
+
+        public string SelectedPath { get; set; } = selectedPath;
+
+        public string Diagnostic { get; set; } = diagnostic;
+
+        public string InitialPath { get; private set; } = string.Empty;
+
+        public bool TryPickFolder(string initialPath, out string selectedPath, out string diagnostic)
+        {
+            InitialPath = initialPath;
+            selectedPath = SelectedPath;
+            diagnostic = Diagnostic;
+            return Success;
+        }
     }
 
     private sealed class TempDirectory : IDisposable

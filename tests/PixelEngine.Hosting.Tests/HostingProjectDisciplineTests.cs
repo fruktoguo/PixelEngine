@@ -491,7 +491,10 @@ public sealed class HostingProjectDisciplineTests
         string projectPicker = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "ProjectPickerWindow.cs"));
         string picker = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "NativeFolderPicker.cs"));
 
-        Assert.Contains("NativeFolderPicker.TryPickFolder(path", projectPicker, StringComparison.Ordinal);
+        Assert.Contains("IProjectFolderPicker", projectPicker, StringComparison.Ordinal);
+        Assert.Contains("NativeProjectFolderPicker.Instance", projectPicker, StringComparison.Ordinal);
+        Assert.Contains("_folderPicker.TryPickFolder(path", projectPicker, StringComparison.Ordinal);
+        Assert.Contains("NativeFolderPicker.TryPickFolder(initialPath", projectPicker, StringComparison.Ordinal);
         Assert.Contains("SHCreateItemFromParsingName", picker, StringComparison.Ordinal);
         Assert.Contains("SetDefaultFolder(defaultFolder.Instance)", picker, StringComparison.Ordinal);
         Assert.Contains("SetFolder(defaultFolder.Instance)", picker, StringComparison.Ordinal);
