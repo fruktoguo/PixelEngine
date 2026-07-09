@@ -261,7 +261,71 @@ public readonly record struct ParticleEmit(
     float DirSpreadRad,
     float BaseSpeed,
     float SpeedJitter,
-    ushort LifeTicks);
+    ushort LifeTicks)
+{
+    /// <summary>
+    /// 从方向向量、速度区间与锥半角创建发射描述；速度单位为 cell/秒。
+    /// </summary>
+    /// <param name="originX">发射原点 X 坐标。</param>
+    /// <param name="originY">发射原点 Y 坐标。</param>
+    /// <param name="dirX">中心方向向量 X 分量。</param>
+    /// <param name="dirY">中心方向向量 Y 分量。</param>
+    /// <param name="coneRadians">方向半角扩散，单位弧度。</param>
+    /// <param name="minSpeed">速度区间下限，单位 cell/秒。</param>
+    /// <param name="maxSpeed">速度区间上限，单位 cell/秒。</param>
+    /// <param name="count">请求发射的粒子数量。</param>
+    /// <param name="material">粒子材质句柄。</param>
+    /// <param name="lifeTicks">粒子 lifetime；0 表示使用粒子系统默认最大 lifetime。</param>
+    /// <returns>规范化后的速度锥发射描述。</returns>
+    public static ParticleEmit FromVelocityCone(
+        float originX,
+        float originY,
+        float dirX,
+        float dirY,
+        float coneRadians,
+        float minSpeed,
+        float maxSpeed,
+        int count,
+        MaterialId material,
+        ushort lifeTicks)
+    {
+        ValidateFinite(originX, nameof(originX));
+        ValidateFinite(originY, nameof(originY));
+        ValidateFinite(dirX, nameof(dirX));
+        ValidateFinite(dirY, nameof(dirY));
+        ValidateFinite(coneRadians, nameof(coneRadians));
+        ValidateFinite(minSpeed, nameof(minSpeed));
+        ValidateFinite(maxSpeed, nameof(maxSpeed));
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
+
+        float lengthSq = (dirX * dirX) + (dirY * dirY);
+        if (lengthSq <= float.Epsilon)
+        {
+            throw new ArgumentOutOfRangeException(nameof(dirX), "粒子发射方向向量不能为零。");
+        }
+
+        float lower = MathF.Max(0f, MathF.Min(minSpeed, maxSpeed));
+        float upper = MathF.Max(0f, MathF.Max(minSpeed, maxSpeed));
+        return new ParticleEmit(
+            originX,
+            originY,
+            material,
+            count,
+            MathF.Atan2(dirY, dirX),
+            MathF.Max(0f, coneRadians),
+            (lower + upper) * 0.5f,
+            (upper - lower) * 0.5f,
+            lifeTicks);
+    }
+
+    private static void ValidateFinite(float value, string name)
+    {
+        if (!float.IsFinite(value))
+        {
+            throw new ArgumentOutOfRangeException(name, value, "粒子发射参数必须为有限数值。");
+        }
+    }
+}
 
 /// <summary>
 /// 矩形区域，单位由调用接口约定。

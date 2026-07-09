@@ -303,6 +303,45 @@ public interface IParticleSpawner
     /// </summary>
     /// <param name="emit">粒子速度锥发射描述。</param>
     void Emit(in ParticleEmit emit);
+
+    /// <summary>
+    /// 延迟按方向向量、锥半角与速度区间发射一组自由粒子；脚本层速度以 cell/秒 表示。
+    /// </summary>
+    /// <param name="originX">发射原点 X 坐标。</param>
+    /// <param name="originY">发射原点 Y 坐标。</param>
+    /// <param name="dirX">中心方向向量 X 分量。</param>
+    /// <param name="dirY">中心方向向量 Y 分量。</param>
+    /// <param name="coneRadians">方向半角扩散，单位弧度。</param>
+    /// <param name="minSpeed">速度区间下限，单位 cell/秒。</param>
+    /// <param name="maxSpeed">速度区间上限，单位 cell/秒。</param>
+    /// <param name="count">请求发射的粒子数量。</param>
+    /// <param name="material">粒子材质句柄。</param>
+    /// <param name="lifeTicks">粒子 lifetime；0 表示使用粒子系统默认最大 lifetime。</param>
+    void Emit(
+        float originX,
+        float originY,
+        float dirX,
+        float dirY,
+        float coneRadians,
+        float minSpeed,
+        float maxSpeed,
+        int count,
+        MaterialId material,
+        ushort lifeTicks)
+    {
+        ParticleEmit emit = ParticleEmit.FromVelocityCone(
+            originX,
+            originY,
+            dirX,
+            dirY,
+            coneRadians,
+            minSpeed,
+            maxSpeed,
+            count,
+            material,
+            lifeTicks);
+        Emit(in emit);
+    }
 }
 
 /// <summary>

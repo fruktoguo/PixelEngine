@@ -275,8 +275,9 @@ public interface IParticleSpawner
 {
     void Spawn(in ParticleSpawnDesc desc);
     void Burst(float x, float y, MaterialId material, int count, float speed);
-    /// <summary>从 origin 发射 count 个粒子，速度在以 (dirX,dirY) 为轴、半角 coneRadians 的锥内按 [minSpeed,maxSpeed] 分布，寿命 life。延迟入队，相位 7 cell→particle 安全窗口落地。</summary>
-    void Emit(float originX, float originY, float dirX, float dirY, float coneRadians, float minSpeed, float maxSpeed, int count, MaterialId material, float life);
+    void Emit(in ParticleEmit emit);
+    /// <summary>从 origin 发射 count 个粒子，速度在以 (dirX,dirY) 为轴、半角 coneRadians 的锥内按 [minSpeed,maxSpeed] 分布，寿命 lifeTicks。延迟入队，相位 7 cell→particle 安全窗口落地。</summary>
+    void Emit(float originX, float originY, float dirX, float dirY, float coneRadians, float minSpeed, float maxSpeed, int count, MaterialId material, ushort lifeTicks);
 }
 ```
 
@@ -356,7 +357,7 @@ plan/19 独立编辑器引入 GameObject 层级/父子/Transform TRS 的 **autho
 - [x] Hosting 装配期构造完整 `IScriptContext` 并注入各子系统公开 API（§3.8）：cell/material/particle/solid/body/character/time/events/audio/input/camera/lighting 均有真实后端或已注册服务时的真实注入路径；Hosting 会注册 `ScriptSimulationContext` 供 Simulation/Physics 相位 flush；可选 `ScriptHotReloadRuntimeOptions` 会创建并注册 `ScriptHotReloadController`，由 `ScriptRuntime` 在相位 1 应用源码 watcher 排队的热重载。
 
 ### 4.8 玩法与交互 UI 门面扩展（§3.9/§3.10/§3.11）
-- [x] `MaterialInfo` 增 `DisplayName`/`BaseColorBgra`/`CellType`/`Category`/`Emissive`/`Hardness`/`MaxIntegrity`/`IsDestructible`/`FlowRate` 只读字段，从 `MaterialDef` 只读投影，随材质热重载刷新；补全中文 XML 注释（§3.9，plan/04，守 #7 不写回颜色）。证据：`ScriptSimulationContextTests.FacadesReadMaterialCellsAndSolidsFromSimulationBackends`/`MaterialInfoFacadeReflectsMaterialReload`。
+- [x] `MaterialInfo` 增 `DisplayName`/`BaseColorBgra`/`CellType`/`Category`/`Emissive`/`Hardness`/`MaxIntegrity`/`IsDestructible`/`FlowRate`/`Flammability`/`AutoIgnitionTemp`/`FireHp`/`TemperatureOfFire`/`GeneratesSmoke`/`HeatConduct`/`HeatCapacity`/`RenderStyle`/`Properties` 只读字段，从 `MaterialDef` 只读投影，随材质热重载刷新；补全中文 XML 注释（§3.9，plan/04，守 #7 不写回颜色）。证据：`ScriptSimulationContextTests.FacadesReadMaterialCellsAndSolidsFromSimulationBackends`/`MaterialInfoFacadeReflectsMaterialReload`。
 - [x] `CellView` 增 `Integrity`（`byte`）字段 = `MaxIntegrity(Material) − Damage(x,y)`（消费 plan/03 per-cell `Damage` SoA lane），即时只读投影不写回（§3.9）。证据：`ScriptSimulationContextTests.FacadesReadMaterialCellsAndSolidsFromSimulationBackends` 覆盖 `DamageAt`→`CellView.Integrity`。
 - [x] `enum DamageKind`（`Impact`/`Beam`/`Corrosion`/`Heat`）为 `public`，含中文 XML 注释（§3.9）
 - [x] `IWorldEffects` 增 `DamageCircle(x,y,radius,damage,falloff,kind)`：按材质 `Hardness`/`MaxIntegrity` 圆形衰减扣耐久、破坏归零转 `RubbleTarget`/`Empty` + 碎屑请求 + `MineYield` 采集事件；延迟命令、安全相位落地标 dirty + KeepAlive（§3.9，plan/05，守 #1/#2/#3/#6）。证据：`WorldDamageCommandsFlushIntoStructuralDamage`、`CellDamageResistanceTests`、`CellDamageRubbleHandshakeTests`、`WorldEffectBoundaryConservationTests`。
@@ -364,7 +365,7 @@ plan/19 独立编辑器引入 GameObject 层级/父子/Transform TRS 的 **autho
 - [x] `IWorldEffects` 增 `AddHeat(x,y,radius,deltaC)`：映射 plan/04 §3.9 `TemperatureField.AddHeat`，圆形注热延迟入队落温度场安全窗口（§3.9）。证据：`WorldAddHeatFlushesIntoTemperatureField`。
 - [x] `IWorldEffects.Explode` 内部改组合实现：`DamageCircle` 破坏 + 邻近刚体径向 `ApplyImpulse`（保留签名，取代无条件抛射，使抗性生效，§3.9）。证据：`WorldExplodeFlushesStructuralDamageDebrisAndRigidImpulse`。
 - [x] 命中刚体像素不累加 `Damage`：破坏 flush 前查 `CellFlags.RigidOwned`，命中经 `IRigidDamageSink.OnOwnedCellDamaged` 路由（本门面只发意图，实现归 plan/05/06，守 #5）。证据：`RigidOwnedDamageRoutingTests`。
-- [x] `IParticleSpawner` 增 `Emit(origin,dir,coneRadians,minSpeed,maxSpeed,count,material,life)`：富速度锥分布，延迟到相位 7 落地（§3.9，plan/05）；脚本调用点不返回实际发射数，避免把后端容量/上限结果伪造成同步结果。证据：`IParticleSpawner.Emit(in ParticleEmit)` 经 `ScriptCommandKind.EmitParticles` 入队，`ScriptSimulationContextTests.ParticleCommandsFlushIntoParticleSystem` 验证相位 7 flush 后进入真实 `ParticleSystem` 并按 fixed step 缩放速度。
+- [x] `IParticleSpawner` 增 `Emit(in ParticleEmit)` 与 `Emit(origin,dir,coneRadians,minSpeed,maxSpeed,count,material,lifeTicks)`：富速度锥分布，延迟到相位 7 落地（§3.9，plan/05）；脚本调用点不返回实际发射数，避免把后端容量/上限结果伪造成同步结果。证据：`IParticleSpawner.Emit(in ParticleEmit)` 经 `ScriptCommandKind.EmitParticles` 入队，`ParticleEmit.FromVelocityCone` 规范化方向向量 / 速度区间，`ScriptSimulationContextTests.ParticleCommandsFlushIntoParticleSystem` 与 `ParticleEmitVelocityConeOverloadMapsDirectionAndSpeedRange` 验证相位 7 flush 后进入真实 `ParticleSystem` 并按 fixed step 缩放速度。
 - [x] 新增命令 kind（`DamageCircle`/`DamageBeam`/`AddHeat`/`Emit`）编码为 blittable `ScriptCommand` 并在 `ScriptSimulationContext` flush（与现 `Explode`/`SetCell`/`Spawn` 同构，零分配，§3.9）。证据：`WorldDamageAndHeatCommandsDoNotAllocateAfterWarmup` 覆盖 Damage/Heat 命令，`ParticleEmitCommandsDoNotAllocateAfterWarmup` 覆盖 Emit 命令。
 - [x] `IScriptContext` 增 `IGameUiService Ui { get; }`（兼容保留 `GameUi`）：`ShowScreen`/`HideScreen`/`PushModal`/`BindModel`/`SetValue`/`TryGetValue`/`Invoke`/`UiEventRaised`；UI 后端事件由 `GameUiPhaseDriver` drain 成 blittable `UiEvent`，经脚本事件总线在相位 1 派发到 `Behaviour` 处理器（§3.10，plan/20）。证据：`GameUiFacadeTests.DefaultScriptContextGameUiIsNoopWhenNotInjected`、`GameUiServiceBridgeTests`、`EnginePhaseDriverTests.GameUiPhaseDriverUpdatesEveryRenderFrameAndDrainsEvents`。
 - [x] UI→世界写入经 §3.3 延迟命令队列落正确相位（不在 UI 事件回调直接改世界，§3.10，守 #6）
