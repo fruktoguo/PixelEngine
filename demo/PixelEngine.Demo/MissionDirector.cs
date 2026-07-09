@@ -72,7 +72,7 @@ public sealed class MissionDirector : Behaviour
     public float TimeLimitSeconds { get; set; } = 240f;
 
     /// <summary>
-    /// 熔岩初始表面 Y 坐标；坐标越小表示水位越高。
+    /// 熔岩初始表面 Y 坐标；坐标越小表示熔岩线越高。
     /// </summary>
     public float InitialLavaSurfaceY { get; set; } = 336f;
 

@@ -153,6 +153,11 @@ public sealed class DemoUiContentTests
         string[] resultText = UiVisibleText(manifest.GetRequiredScreen(GameUiDemoController.ResultScreen).FullPath);
         string[] defaultLoopText = [.. hudText, .. resultText];
 
+        string[] mainText = UiVisibleText(manifest.GetRequiredScreen(GameUiDemoController.MainMenuScreen).FullPath);
+        defaultLoopText = [.. mainText, .. defaultLoopText];
+
+        Assert.Contains("横向逃生：向右推进。", defaultLoopText);
+        Assert.Contains("拆障碍，避熔岩，抵达出口。", defaultLoopText);
         Assert.Contains("目标：向右推进，拆除路障，避开熔岩，抵达出口", defaultLoopText);
         Assert.Contains("出口进度", defaultLoopText);
         Assert.Contains("路线余量", defaultLoopText);

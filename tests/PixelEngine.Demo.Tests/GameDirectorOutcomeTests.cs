@@ -95,7 +95,7 @@ public sealed class GameDirectorOutcomeTests
     }
 
     /// <summary>
-    /// 验证上涨熔岩按配置速率推进水位，并同步到任务导演。
+    /// 验证上涨熔岩按配置速率推进熔岩线，并同步到任务导演。
     /// </summary>
     [Fact]
     public void RisingHazardUsesConfiguredRiseRateAndSynchronizesMissionSurface()
