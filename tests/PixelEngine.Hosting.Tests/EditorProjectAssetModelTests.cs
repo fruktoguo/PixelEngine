@@ -69,6 +69,7 @@ public sealed class EditorProjectAssetModelTests
             EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
             EditorAssetBrowserDataSource source = new(manifest);
 
+            AssetBrowserCreateResult material = source.CreateAsset(new AssetBrowserCreateRequest("materials.json", AssetBrowserItemKind.Material));
             AssetBrowserCreateResult scene = source.CreateAsset(new AssetBrowserCreateRequest("scenes/NewScene.scene", AssetBrowserItemKind.Scene));
             AssetBrowserCreateResult prefab = source.CreateAsset(new AssetBrowserCreateRequest("prefabs/NewPrefab.prefab", AssetBrowserItemKind.Prefab));
             AssetBrowserCreateResult script = source.CreateAsset(new AssetBrowserCreateRequest("scripts/NewBehaviour.cs", AssetBrowserItemKind.Script));
@@ -78,11 +79,14 @@ public sealed class EditorProjectAssetModelTests
             IReadOnlyList<AssetBrowserItem> assets = source.ListAssets();
 
             // Assert：验证预期结果
+            Assert.True(material.Succeeded);
             Assert.True(scene.Succeeded);
             Assert.True(prefab.Succeeded);
             Assert.True(script.Succeeded);
             Assert.True(json.Succeeded);
             Assert.False(texture.Succeeded);
+            Assert.StartsWith("asset_", material.AssetId, StringComparison.Ordinal);
+            Assert.Equal(AssetBrowserItemKind.Material, Find(assets, "materials.json").Kind);
             Assert.StartsWith("asset_", scene.AssetId, StringComparison.Ordinal);
             Assert.Equal(AssetBrowserItemKind.Scene, Find(assets, "scenes/NewScene.scene").Kind);
             Assert.Equal(AssetBrowserItemKind.Prefab, Find(assets, "prefabs/NewPrefab.prefab").Kind);
@@ -91,6 +95,8 @@ public sealed class EditorProjectAssetModelTests
 
             EngineSceneDocument sceneDocument = EngineSceneDocumentLoader.LoadDocument(Path.Combine(contentRoot, "scenes", "NewScene.scene"));
             EngineSceneDocument prefabDocument = EngineSceneDocumentLoader.LoadDocument(Path.Combine(contentRoot, "prefabs", "NewPrefab.prefab"));
+            Assert.Equal("{\"materials\":[]}" + Environment.NewLine, File.ReadAllText(Path.Combine(contentRoot, "materials.json")));
+            Assert.StartsWith("材质定义：0 项", Find(assets, "materials.json").PreviewSummary, StringComparison.Ordinal);
             Assert.Equal("NewScene", sceneDocument.Name);
             Assert.Empty(sceneDocument.Entities ?? []);
             Assert.Equal("NewPrefab", prefabDocument.Name);

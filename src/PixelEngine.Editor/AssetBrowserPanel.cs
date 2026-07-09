@@ -40,13 +40,14 @@ public sealed class AssetBrowserPanel(
     private static readonly string[] SortModeLabels = ["路径", "类型 / 路径", "最近修改", "大小"];
     private static readonly AssetBrowserItemKind[] CreateKinds =
     [
+        AssetBrowserItemKind.Material,
         AssetBrowserItemKind.Scene,
         AssetBrowserItemKind.Prefab,
         AssetBrowserItemKind.Script,
         AssetBrowserItemKind.Json,
     ];
 
-    private static readonly string[] CreateKindLabels = ["Scene", "Prefab", "Script", "Json"];
+    private static readonly string[] CreateKindLabels = ["Material", "Scene", "Prefab", "Script", "Json"];
     private string _search = string.Empty;
     private AssetBrowserDeleteRequest? _pendingDeleteRequest;
     private AssetBrowserMoveRequest? _pendingMoveRequest;

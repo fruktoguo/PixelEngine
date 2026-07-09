@@ -413,7 +413,7 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource
 
     private static bool IsCreatableType(EditorAssetType type)
     {
-        return type is EditorAssetType.Scene or EditorAssetType.Prefab or EditorAssetType.Script or EditorAssetType.Json;
+        return type is EditorAssetType.Material or EditorAssetType.Scene or EditorAssetType.Prefab or EditorAssetType.Script or EditorAssetType.Json;
     }
 }
 
