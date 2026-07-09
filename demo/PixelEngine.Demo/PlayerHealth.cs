@@ -1,4 +1,5 @@
 using PixelEngine.Scripting;
+using PixelEngine.Simulation;
 
 namespace PixelEngine.Demo;
 
@@ -194,13 +195,54 @@ public sealed class PlayerHealth : Behaviour
 
     private float DamageFor(MaterialId material)
     {
-        return material == _lava
-            ? LavaDamagePerSecond
-            : material == _fire
-                ? FireDamagePerSecond
-                : material == _acid
-                    ? AcidDamagePerSecond
-                    : 0f;
+        if (material == _lava)
+        {
+            return LavaDamagePerSecond;
+        }
+
+        if (material == _fire)
+        {
+            return FireDamagePerSecond;
+        }
+
+        if (material == _acid)
+        {
+            return AcidDamagePerSecond;
+        }
+
+        if (!material.IsValid)
+        {
+            return 0f;
+        }
+
+        MaterialInfo info = Context.Materials.GetInfo(material);
+        MaterialProperty properties = info.Properties;
+        if ((properties & MaterialProperty.Acid) != 0)
+        {
+            return AcidDamagePerSecond;
+        }
+
+        if ((properties & MaterialProperty.Fire) != 0)
+        {
+            return FireDamagePerSecond;
+        }
+
+        bool hotHazard =
+            info.TemperatureOfFire > 0 &&
+            (info.Category == MaterialLegendCategory.Hazard ||
+             info.RenderStyle == MaterialRenderStyle.Hazard ||
+             info.RenderStyle == MaterialRenderStyle.Emissive ||
+             info.Emissive ||
+             (properties & MaterialProperty.MoltenMetal) != 0);
+        if (hotHazard)
+        {
+            float heatScale = Math.Clamp(info.TemperatureOfFire / 255f, 0.25f, 1f);
+            return MathF.Max(FireDamagePerSecond, LavaDamagePerSecond * heatScale);
+        }
+
+        return info.Category == MaterialLegendCategory.Hazard || info.RenderStyle == MaterialRenderStyle.Hazard
+            ? FireDamagePerSecond
+            : 0f;
     }
 
     private void ApplyDamage(float amount)

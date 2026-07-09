@@ -1,4 +1,5 @@
 using PixelEngine.Hosting;
+using PixelEngine.Content;
 using PixelEngine.Core.Time;
 using PixelEngine.Gui;
 using PixelEngine.Physics;
@@ -547,6 +548,16 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证危险材质伤害会消费 MaterialInfo 的 tag / 分类 / 高温字段，而不只硬编码 lava / fire / acid 三个名字。
+    /// </summary>
+    [Fact]
+    public void PlayerHealthSamplesMaterialInfoHazardMetadata()
+    {
+        AssertMaterialInfoHazardDamagesPlayer("molten_metal");
+        AssertMaterialInfoHazardDamagesPlayer("acid_gas");
+    }
+
+    /// <summary>
     /// 验证玩家 AABB 探出常驻世界时，危险材质采样会跳过未驻留 chunk 而不是 fault。
     /// </summary>
     [Fact]
@@ -563,6 +574,30 @@ public sealed class PlayerControllerIntegrationTests
 
         Assert.False(health.Faulted, health.LastException?.ToString());
         Assert.Equal(0, scene.ScriptExceptionCount);
+    }
+
+    private static void AssertMaterialInfoHazardDamagesPlayer(string materialName)
+    {
+        MaterialTable materials = DemoContentMaterials();
+        Assert.True(materials.TryGetId(materialName, out ushort hazard), $"缺少测试材质 {materialName}");
+        using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials);
+        Entity entity = scene.CreateEntity();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 12f;
+        PlayerHealth health = entity.AddComponent<PlayerHealth>();
+        health.MaxHealth = 100f;
+        health.LavaDamagePerSecond = 60f;
+        health.FireDamagePerSecond = 20f;
+        health.AcidDamagePerSecond = 40f;
+        health.HurtParticleCount = 0;
+        FillRect(grid, hazard, minX: 12, minY: 12, maxX: 18, maxY: 24);
+
+        engine.RunHeadlessTicks(1);
+
+        Assert.True(health.Health < health.MaxHealth, $"{materialName} 应经 MaterialInfo 元数据造成伤害。");
+        Assert.Equal(1, health.DamageEventCount);
+        Assert.Equal(0, health.RespawnCount);
     }
 
     /// <summary>
@@ -2815,6 +2850,14 @@ public sealed class PlayerControllerIntegrationTests
     private static string DemoContentRoot()
     {
         return Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
+    }
+
+    private static MaterialTable DemoContentMaterials()
+    {
+        string contentRoot = DemoContentRoot();
+        string materialsJson = File.ReadAllText(Path.Combine(contentRoot, "materials.json"));
+        string reactionsJson = File.ReadAllText(Path.Combine(contentRoot, "reactions.json"));
+        return MaterialContentLoader.Load(materialsJson, reactionsJson).Materials;
     }
 
     private static float MaxTemperature(TemperatureField temperature, int minX, int minY, int maxX, int maxY)
