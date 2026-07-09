@@ -192,6 +192,27 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证中性 Gui 与 Editor 输入连接器在点击前刷新鼠标坐标，避免 DPI/窗口切换后按钮命中使用旧位置。
+    /// </summary>
+    [Fact]
+    public void GuiInputConnectorsRefreshPointerPositionBeforeMouseButtons()
+    {
+        string root = FindRepositoryRoot();
+        string guiConnector = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "GuiWindowInputConnector.cs"));
+        string editorConnector = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorWindowInputConnector.cs"));
+
+        foreach (string source in new[] { guiConnector, editorConnector })
+        {
+            string compact = source.Replace(" ", string.Empty, StringComparison.Ordinal)
+                .Replace("\r", string.Empty, StringComparison.Ordinal)
+                .Replace("\n", string.Empty, StringComparison.Ordinal);
+            Assert.Contains("privatevoidForwardMousePosition(Vector2position)", compact, StringComparison.Ordinal);
+            Assert.Contains("privatevoidOnMouseDown(IMousemouse,Silk.NET.Input.MouseButtonbutton){ForwardMousePosition(mouse.Position);_input.MouseButton(button,down:true);}", compact, StringComparison.Ordinal);
+            Assert.Contains("privatevoidOnMouseUp(IMousemouse,Silk.NET.Input.MouseButtonbutton){ForwardMousePosition(mouse.Position);_input.MouseButton(button,down:false);}", compact, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
     /// 验证中性 Gui 与 Editor ImGui 后端在输入、frame 与 render 前都 pin 到自己的 native context。
     /// </summary>
     [Fact]
@@ -217,6 +238,29 @@ public sealed class HostingProjectDisciplineTests
 
         Assert.Contains("ImGuizmo.SetImGuiContext(_context);", editorBackend, StringComparison.Ordinal);
         Assert.Contains("ImPlot.SetCurrentContext(_plotContext);", editorBackend, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证两个 Hexa ImGui 后端都把 Silk.NET 逻辑鼠标坐标映射到 framebuffer 坐标后再交给 ImGui。
+    /// </summary>
+    [Fact]
+    public void HexaImGuiBackendsMapLogicalMouseCoordinatesToFramebuffer()
+    {
+        string root = FindRepositoryRoot();
+        string guiBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "HexaImGuiBackend.cs"));
+        string editorBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "HexaImGuiBackend.cs"));
+
+        foreach (string source in new[] { guiBackend, editorBackend })
+        {
+            string compact = source.Replace(" ", string.Empty, StringComparison.Ordinal)
+                .Replace("\r", string.Empty, StringComparison.Ordinal)
+                .Replace("\n", string.Empty, StringComparison.Ordinal);
+            Assert.Contains("ImGuiFrameMetrics.Create(width,height,framebufferScaleX,framebufferScaleY)", compact, StringComparison.Ordinal);
+            Assert.Contains("Vector2mapped=_frameMetrics.MapMousePosition(x,y);", compact, StringComparison.Ordinal);
+            Assert.Contains("ImGui.AddMousePosEvent(ImGui.GetIO(),mapped.X,mapped.Y);", compact, StringComparison.Ordinal);
+            Assert.Contains("io.DisplaySize=metrics.DisplaySize;", compact, StringComparison.Ordinal);
+            Assert.Contains("io.DisplayFramebufferScale=metrics.DisplayFramebufferScale;", compact, StringComparison.Ordinal);
+        }
     }
 
     /// <summary>
