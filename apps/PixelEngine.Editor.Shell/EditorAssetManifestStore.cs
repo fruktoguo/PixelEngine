@@ -232,8 +232,8 @@ internal sealed class EditorAssetManifestStore
                 source.Id,
                 source.AssetType,
                 writtenReferenceDocuments);
-            bool updatedActiveScene = activeScene is not null && RewriteReferences(activeScene, current, next, source.Id, source.AssetType);
             EditorAssetRecord moved = EnsureAsset(next);
+            bool updatedActiveScene = activeScene is not null && RewriteReferences(activeScene, current, next, source.Id, source.AssetType);
             return new EditorAssetMoveResult(moved, updatedDocuments, updatedActiveScene);
         }
         catch
