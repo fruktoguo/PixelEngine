@@ -331,6 +331,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         // Arrange：准备输入与初始状态
         string script = ReadRepositoryFile("tools", "performance-target-evidence-preflight.ps1");
         string report = ReadRepositoryFile("docs", "benchmark-reports", "2026-07-02-performance-target-evidence.md");
+        string readme = ReadRepositoryFile("plan", "README.md");
         string plan = ReadRepositoryFile("plan", "16-performance-hardening.md");
 
         // Assert：验证预期结果
@@ -391,6 +392,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         {
             Assert.Contains(field, script, StringComparison.Ordinal);
             Assert.Contains(field, report, StringComparison.Ordinal);
+            Assert.Contains(field, readme, StringComparison.Ordinal);
             Assert.Contains(field, plan, StringComparison.Ordinal);
         }
 
@@ -416,6 +418,29 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("CellThroughputBenchmark.StepJobSystem", report, StringComparison.Ordinal);
         Assert.Contains("FullActiveLiquid", report, StringComparison.Ordinal);
         Assert.Contains("未知 scope", report, StringComparison.Ordinal);
+
+        Assert.Contains("tools/performance-target-evidence-preflight.ps1", readme, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_target_performance_manifest", readme, StringComparison.Ordinal);
+        Assert.Contains("blocked_invalid_target_performance_evidence", readme, StringComparison.Ordinal);
+        Assert.Contains("blocked_missing_target_performance_scope_evidence", readme, StringComparison.Ordinal);
+        Assert.Contains("target_performance_evidence_attached_pending_review", readme, StringComparison.Ordinal);
+        Assert.Contains("avx512_downclock_net_loss", readme, StringComparison.Ordinal);
+        Assert.Contains("hardware_counters_cache_branch", readme, StringComparison.Ordinal);
+        Assert.Contains("frame_budget_target_hardware", readme, StringComparison.Ordinal);
+        Assert.Contains("cells_frame/osx-arm64", readme, StringComparison.Ordinal);
+        Assert.Contains("sampleSeconds>=60", readme, StringComparison.Ordinal);
+        Assert.Contains("frameSamples>=3600", readme, StringComparison.Ordinal);
+        Assert.Contains("caP99Ms<=8", readme, StringComparison.Ordinal);
+        Assert.Contains("renderP99Ms<=4", readme, StringComparison.Ordinal);
+        Assert.Contains("physicsP99Ms<=4", readme, StringComparison.Ordinal);
+        Assert.Contains("logicAudioP99Ms<=1", readme, StringComparison.Ordinal);
+        Assert.Contains("activeCellsPerFrame>=2000000", readme, StringComparison.Ordinal);
+        Assert.Contains("caFrameMs<=8", readme, StringComparison.Ordinal);
+        Assert.Contains("measuredIterations>=3", readme, StringComparison.Ordinal);
+        Assert.Contains("iterationCount>=measuredIterations", readme, StringComparison.Ordinal);
+        Assert.Contains("BenchmarkDotNet v", readme, StringComparison.Ordinal);
+        Assert.Contains("CellThroughputBenchmark.StepJobSystem", readme, StringComparison.Ordinal);
+        Assert.Contains("FullActiveLiquid", readme, StringComparison.Ordinal);
 
         Assert.Contains("tools/performance-target-evidence-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_performance_manifest", plan, StringComparison.Ordinal);
