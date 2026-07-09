@@ -117,6 +117,15 @@ public readonly record struct CellView(MaterialId Material, byte Flags, byte Lif
 /// <param name="IsDestructible">该材质是否会被结构破坏 API 处理。</param>
 /// <param name="FlowRate">液体或气体每步横向扩散距离。</param>
 /// <param name="BlocksCharacter">该材质是否应阻挡 kinematic character。</param>
+/// <param name="Flammability">接触点燃概率权重，范围 0-255。</param>
+/// <param name="AutoIgnitionTemp">自燃温度阈值，单位摄氏度；0 表示不开启自燃。</param>
+/// <param name="FireHp">燃烧耐久；-1 表示永燃。</param>
+/// <param name="TemperatureOfFire">燃烧或高温材质每 tick 注入温度场的热量基准。</param>
+/// <param name="GeneratesSmoke">燃烧或反应产烟倾向，0 表示不产烟。</param>
+/// <param name="HeatConduct">每帧热传导概率权重，范围 0-255。</param>
+/// <param name="HeatCapacity">热容量，用于温度场能量换算。</param>
+/// <param name="RenderStyle">渲染相位使用的材质着色风格。</param>
+/// <param name="Properties">材质标签与运行时行为位。</param>
 public readonly record struct MaterialInfo(
     MaterialId Id,
     string Name,
@@ -134,7 +143,16 @@ public readonly record struct MaterialInfo(
     ushort MaxIntegrity = 0,
     bool IsDestructible = false,
     byte FlowRate = 0,
-    bool BlocksCharacter = false);
+    bool BlocksCharacter = false,
+    byte Flammability = 0,
+    ushort AutoIgnitionTemp = 0,
+    int FireHp = 0,
+    byte TemperatureOfFire = 0,
+    byte GeneratesSmoke = 0,
+    byte HeatConduct = 0,
+    float HeatCapacity = 1f,
+    MaterialRenderStyle RenderStyle = MaterialRenderStyle.Ground,
+    MaterialProperty Properties = MaterialProperty.None);
 
 /// <summary>
 /// 像素 raycast 的命中结果。

@@ -46,6 +46,13 @@ public sealed class EditorShellSceneMaterializationTests
                 RenderStyle = MaterialRenderStyle.Emissive,
                 Hardness = 9,
                 MaxIntegrity = 77,
+                Flammability = 180,
+                AutoIgnitionTemp = 450,
+                FireHp = -1,
+                TemperatureOfFire = 240,
+                GeneratesSmoke = 12,
+                HeatConduct = 250,
+                PropertyFlags = MaterialProperty.Emissive | MaterialProperty.Acid,
             },
             new MaterialDef
             {
@@ -80,6 +87,15 @@ public sealed class EditorShellSceneMaterializationTests
         Assert.Equal((ushort)77, lava.MaxIntegrity);
         Assert.False(lava.IsDestructible);
         Assert.Equal((byte)5, lava.FlowRate);
+        Assert.Equal((byte)180, lava.Flammability);
+        Assert.Equal((ushort)450, lava.AutoIgnitionTemp);
+        Assert.Equal(-1, lava.FireHp);
+        Assert.Equal((byte)240, lava.TemperatureOfFire);
+        Assert.Equal((byte)12, lava.GeneratesSmoke);
+        Assert.Equal((byte)250, lava.HeatConduct);
+        Assert.Equal(1f, lava.HeatCapacity);
+        Assert.Equal(MaterialRenderStyle.Emissive, lava.RenderStyle);
+        Assert.True((lava.Properties & MaterialProperty.Acid) != 0);
 
         MaterialInfo crystal = query.GetInfo(query.Resolve("crystal"));
         Assert.Equal("Crystal", crystal.DisplayName);

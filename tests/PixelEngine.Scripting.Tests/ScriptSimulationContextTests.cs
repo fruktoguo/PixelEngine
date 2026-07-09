@@ -95,6 +95,15 @@ public sealed class ScriptSimulationContextTests
         Assert.Equal(40, info.MaxIntegrity);
         Assert.True(info.IsDestructible);
         Assert.Equal(3, info.FlowRate);
+        Assert.Equal(91, info.Flammability);
+        Assert.Equal(320, info.AutoIgnitionTemp);
+        Assert.Equal(44, info.FireHp);
+        Assert.Equal(120, info.TemperatureOfFire);
+        Assert.Equal(7, info.GeneratesSmoke);
+        Assert.Equal(177, info.HeatConduct);
+        Assert.Equal(2.5f, info.HeatCapacity);
+        Assert.Equal(MaterialRenderStyle.Emissive, info.RenderStyle);
+        Assert.True((info.Properties & MaterialProperty.Diggable) != 0);
         Assert.Equal(stone, fixture.Context.Cells.GetMaterial(4, 4));
         Assert.Equal(new CellView(stone, 7, 9, 29), fixture.Context.Cells.Sample(4, 4));
         Assert.True(fixture.Context.Cells.IsSolid(4, 4));
@@ -139,6 +148,13 @@ public sealed class ScriptSimulationContextTests
                 RenderStyle = MaterialRenderStyle.Solid,
                 PropertyFlags = MaterialProperty.Diggable,
                 MineYield = 2,
+                Flammability = 33,
+                AutoIgnitionTemp = 451,
+                FireHp = 22,
+                TemperatureOfFire = 88,
+                GeneratesSmoke = 9,
+                HeatConduct = 111,
+                HeatCapacity = 3.25f,
             },
         ];
 
@@ -155,6 +171,15 @@ public sealed class ScriptSimulationContextTests
         Assert.Equal(96, after.MaxIntegrity);
         Assert.Equal(5, after.FlowRate);
         Assert.Equal(2, after.MineYield);
+        Assert.Equal(33, after.Flammability);
+        Assert.Equal(451, after.AutoIgnitionTemp);
+        Assert.Equal(22, after.FireHp);
+        Assert.Equal(88, after.TemperatureOfFire);
+        Assert.Equal(9, after.GeneratesSmoke);
+        Assert.Equal(111, after.HeatConduct);
+        Assert.Equal(3.25f, after.HeatCapacity);
+        Assert.Equal(MaterialRenderStyle.Solid, after.RenderStyle);
+        Assert.Equal(MaterialProperty.Diggable, after.Properties);
     }
 
     /// <summary>
@@ -772,7 +797,6 @@ public sealed class ScriptSimulationContextTests
             materials[i] = CreateMaterial((ushort)i, definitions[i].Name, definitions[i].Type) with
             {
                 Density = i == 0 ? (byte)0 : (byte)100,
-                HeatCapacity = 1,
                 Integrity = definitions[i].Type == CellType.Solid ? (ushort)40 : (ushort)0,
                 DestroyedTarget = definitions[i].Type == CellType.Solid ? (ushort)1 : (ushort)0,
                 Hardness = definitions[i].Name == "stone" ? (byte)6 : (byte)0,
@@ -782,6 +806,13 @@ public sealed class ScriptSimulationContextTests
                 LegendCategory = definitions[i].Name == "stone" ? MaterialLegendCategory.Destructible : MaterialLegendCategory.Terrain,
                 RenderStyle = definitions[i].Name == "stone" ? MaterialRenderStyle.Emissive : MaterialRenderStyle.Ground,
                 PropertyFlags = definitions[i].Name == "stone" ? MaterialProperty.Emissive | MaterialProperty.Diggable : MaterialProperty.None,
+                Flammability = definitions[i].Name == "stone" ? (byte)91 : (byte)0,
+                AutoIgnitionTemp = definitions[i].Name == "stone" ? (ushort)320 : (ushort)0,
+                FireHp = definitions[i].Name == "stone" ? 44 : 0,
+                TemperatureOfFire = definitions[i].Name == "stone" ? (byte)120 : (byte)0,
+                GeneratesSmoke = definitions[i].Name == "stone" ? (byte)7 : (byte)0,
+                HeatConduct = definitions[i].Name == "stone" ? (byte)177 : (byte)255,
+                HeatCapacity = definitions[i].Name == "stone" ? 2.5f : 1f,
             };
         }
 
