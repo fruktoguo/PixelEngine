@@ -7,11 +7,17 @@ namespace PixelEngine.Interop;
 /// </summary>
 public static partial class Win32ImeNative
 {
+    /// <summary>CFS_RECT：提供 rcArea 作为 composition 相关矩形。</summary>
+    public const int CompositionFormStyleRect = 0x0001;
+
     /// <summary>CFS_POINT：按 ptCurrentPos 定位 composition 窗。</summary>
     public const int CompositionFormStylePoint = 0x0002;
 
     /// <summary>CFS_CANDIDATEPOS：按 ptCurrentPos 定位候选窗。</summary>
     public const int CandidateFormStyleCandidatePos = 0x0040;
+
+    /// <summary>CFS_EXCLUDE：候选窗避开 rcArea 矩形（通常为 caret/composition 区）。</summary>
+    public const int CandidateFormStyleExclude = 0x0080;
 
     /// <summary>
     /// 取得窗口当前输入法上下文。
