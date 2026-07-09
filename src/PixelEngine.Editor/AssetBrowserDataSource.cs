@@ -36,6 +36,11 @@ public enum AssetBrowserItemKind
     Script,
 
     /// <summary>
+    /// Web-first UI Screen 文档资产。
+    /// </summary>
+    UiScreen,
+
+    /// <summary>
     /// 普通 JSON 资产。
     /// </summary>
     Json,
@@ -322,8 +327,15 @@ public sealed class FileSystemAssetBrowserDataSource(string contentRoot, ITextur
                 ".scene" or ".world" => AssetBrowserItemKind.Scene,
                 ".prefab" => AssetBrowserItemKind.Prefab,
                 ".cs" => AssetBrowserItemKind.Script,
+                ".xhtml" or ".html" when IsUnderLogicalFolder(path, "ui/screens") => AssetBrowserItemKind.UiScreen,
                 ".json" => AssetBrowserItemKind.Json,
                 _ => AssetBrowserItemKind.Other,
             };
+    }
+
+    private static bool IsUnderLogicalFolder(string logicalPath, string folderName)
+    {
+        string normalized = logicalPath.Replace('\\', '/');
+        return normalized.StartsWith(folderName + "/", StringComparison.OrdinalIgnoreCase);
     }
 }

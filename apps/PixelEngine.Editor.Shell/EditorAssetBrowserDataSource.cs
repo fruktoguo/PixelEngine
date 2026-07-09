@@ -193,6 +193,7 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource
             AssetBrowserItemKind.Scene => BuildSceneAssetPreview(record, "场景"),
             AssetBrowserItemKind.Prefab => BuildSceneAssetPreview(record, "Prefab"),
             AssetBrowserItemKind.Script => BuildScriptAssetPreview(record),
+            AssetBrowserItemKind.UiScreen => BuildUiScreenAssetPreview(record),
             AssetBrowserItemKind.Json => BuildJsonAssetPreview(record, "JSON"),
             AssetBrowserItemKind.Other => $"文件：{FormatSize(record.SizeBytes)}",
             _ => $"文件：{FormatSize(record.SizeBytes)}",
@@ -255,6 +256,22 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource
         catch (Exception ex) when (IsPreviewFailure(ex))
         {
             return $"脚本摘要不可用：{FormatSize(record.SizeBytes)}";
+        }
+    }
+
+    private string BuildUiScreenAssetPreview(EditorAssetRecord record)
+    {
+        try
+        {
+            string fullPath = ResolveAssetFullPath(record.LogicalPath);
+            string? title = TryReadRmlTitle(fullPath);
+            return string.IsNullOrWhiteSpace(title)
+                ? $"UI Screen：{FormatSize(record.SizeBytes)}"
+                : $"UI Screen：{title}，{FormatSize(record.SizeBytes)}";
+        }
+        catch (Exception ex) when (IsPreviewFailure(ex))
+        {
+            return $"UI Screen 摘要不可用：{FormatSize(record.SizeBytes)}";
         }
     }
 
@@ -347,6 +364,39 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource
         return null;
     }
 
+    private static string? TryReadRmlTitle(string fullPath)
+    {
+        foreach (string line in File.ReadLines(fullPath).Take(40))
+        {
+            int titleIndex = line.IndexOf("title=", StringComparison.OrdinalIgnoreCase);
+            if (titleIndex < 0)
+            {
+                continue;
+            }
+
+            int quoteStart = titleIndex + "title=".Length;
+            while (quoteStart < line.Length && char.IsWhiteSpace(line[quoteStart]))
+            {
+                quoteStart++;
+            }
+
+            if (quoteStart >= line.Length || (line[quoteStart] != '"' && line[quoteStart] != '\''))
+            {
+                continue;
+            }
+
+            char quote = line[quoteStart];
+            int valueStart = quoteStart + 1;
+            int valueEnd = line.IndexOf(quote, valueStart);
+            if (valueEnd > valueStart)
+            {
+                return line[valueStart..valueEnd];
+            }
+        }
+
+        return null;
+    }
+
     private static bool IsIdentifierStart(char value)
     {
         return char.IsLetter(value) || value == '_';
@@ -389,6 +439,7 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource
             EditorAssetType.Scene => AssetBrowserItemKind.Scene,
             EditorAssetType.Prefab => AssetBrowserItemKind.Prefab,
             EditorAssetType.Script => AssetBrowserItemKind.Script,
+            EditorAssetType.UiScreen => AssetBrowserItemKind.UiScreen,
             EditorAssetType.Json => AssetBrowserItemKind.Json,
             EditorAssetType.Other => AssetBrowserItemKind.Other,
             _ => AssetBrowserItemKind.Other,
@@ -405,6 +456,7 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource
             AssetBrowserItemKind.Scene => EditorAssetType.Scene,
             AssetBrowserItemKind.Prefab => EditorAssetType.Prefab,
             AssetBrowserItemKind.Script => EditorAssetType.Script,
+            AssetBrowserItemKind.UiScreen => EditorAssetType.UiScreen,
             AssetBrowserItemKind.Json => EditorAssetType.Json,
             AssetBrowserItemKind.Other => EditorAssetType.Other,
             _ => EditorAssetType.Other,
@@ -413,7 +465,7 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource
 
     private static bool IsCreatableType(EditorAssetType type)
     {
-        return type is EditorAssetType.Material or EditorAssetType.Scene or EditorAssetType.Prefab or EditorAssetType.Script or EditorAssetType.Json;
+        return type is EditorAssetType.Material or EditorAssetType.Scene or EditorAssetType.Prefab or EditorAssetType.Script or EditorAssetType.UiScreen or EditorAssetType.Json;
     }
 }
 

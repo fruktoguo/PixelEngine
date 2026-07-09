@@ -35,6 +35,7 @@ internal readonly record struct EditorAssetDropPayload(
             AssetBrowserItemKind.Scene => EditorAssetType.Scene,
             AssetBrowserItemKind.Prefab => EditorAssetType.Prefab,
             AssetBrowserItemKind.Script => EditorAssetType.Script,
+            AssetBrowserItemKind.UiScreen => EditorAssetType.UiScreen,
             AssetBrowserItemKind.Json => EditorAssetType.Json,
             AssetBrowserItemKind.Other => EditorAssetType.Other,
             _ => EditorAssetType.Other,
@@ -363,6 +364,7 @@ internal static class EditorAssetReferenceCodec
             case EditorAssetType.Script:
                 scriptAssetKind = ScriptAssetKind.Script;
                 return true;
+            case EditorAssetType.UiScreen:
             case EditorAssetType.Json:
             case EditorAssetType.Other:
             default:

@@ -15,6 +15,7 @@ internal enum EditorAssetType
     Scene,
     Prefab,
     Script,
+    UiScreen,
     Json,
     Other,
 }
@@ -180,7 +181,24 @@ internal sealed class EditorAssetManifestStore
         }
 
         WriteDefaultAsset(fullPath, normalized, assetType, textContents);
-        return EnsureAsset(normalized);
+        try
+        {
+            if (assetType == EditorAssetType.UiScreen)
+            {
+                UpsertUiScreenManifestEntry(normalized);
+            }
+
+            return EnsureAsset(normalized);
+        }
+        catch
+        {
+            if (File.Exists(fullPath))
+            {
+                File.Delete(fullPath);
+            }
+
+            throw;
+        }
     }
 
     /// <summary>
@@ -300,6 +318,7 @@ internal sealed class EditorAssetManifestStore
                 ".scene" or ".world" => EditorAssetType.Scene,
                 ".prefab" => EditorAssetType.Prefab,
                 ".cs" => EditorAssetType.Script,
+                ".xhtml" or ".html" when IsUnderLogicalFolder(logicalPath, "ui/screens") => EditorAssetType.UiScreen,
                 ".json" => EditorAssetType.Json,
                 _ => EditorAssetType.Other,
             };
@@ -400,6 +419,116 @@ internal sealed class EditorAssetManifestStore
             normalized,
             EditorShellJsonContext.Default.EditorAssetManifestDocument);
         File.WriteAllText(ManifestPath, json);
+    }
+
+    private void UpsertUiScreenManifestEntry(string logicalPath)
+    {
+        if (!TryBuildUiScreenManifestEntry(logicalPath, out string screenId, out string screenPath))
+        {
+            return;
+        }
+
+        string uiRoot = Path.Combine(ContentRoot, "ui");
+        string manifestPath = Path.Combine(uiRoot, "ui-manifest.json");
+        _ = Directory.CreateDirectory(uiRoot);
+        EditorUiManifestDocument document = LoadUiManifestDocument(manifestPath);
+        EditorUiManifestScreenDocument[] screens = NormalizeUiScreens(document.Screens);
+        for (int i = 0; i < screens.Length; i++)
+        {
+            EditorUiManifestScreenDocument screen = screens[i];
+            bool sameId = string.Equals(screen.Id, screenId, StringComparison.OrdinalIgnoreCase);
+            bool samePath = string.Equals(screen.Path, screenPath, StringComparison.OrdinalIgnoreCase);
+            if (sameId && samePath)
+            {
+                SaveUiManifestDocument(manifestPath, new EditorUiManifestDocument
+                {
+                    Screens = screens,
+                    Images = document.Images,
+                });
+                return;
+            }
+
+            if (sameId)
+            {
+                throw new InvalidOperationException($"UI manifest 已存在同名 screen id：{screenId}");
+            }
+        }
+
+        EditorUiManifestScreenDocument[] updated =
+        [
+            .. screens,
+            new EditorUiManifestScreenDocument
+            {
+                Id = screenId,
+                Path = screenPath,
+                Preload = true,
+            },
+        ];
+        SaveUiManifestDocument(manifestPath, new EditorUiManifestDocument
+        {
+            Screens = [.. updated.OrderBy(static item => item.Id, StringComparer.OrdinalIgnoreCase)],
+            Images = document.Images,
+        });
+    }
+
+    private static EditorUiManifestDocument LoadUiManifestDocument(string manifestPath)
+    {
+        if (!File.Exists(manifestPath))
+        {
+            return new EditorUiManifestDocument { Screens = [], Images = [] };
+        }
+
+        try
+        {
+            string json = File.ReadAllText(manifestPath);
+            return JsonSerializer.Deserialize(
+                    json,
+                    EditorShellJsonContext.Default.EditorUiManifestDocument) ??
+                new EditorUiManifestDocument { Screens = [], Images = [] };
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException($"UI manifest 格式无效：{manifestPath}", ex);
+        }
+    }
+
+    private static void SaveUiManifestDocument(string manifestPath, EditorUiManifestDocument document)
+    {
+        string json = JsonSerializer.Serialize(
+            new EditorUiManifestDocument
+            {
+                Screens = NormalizeUiScreens(document.Screens),
+                Images = document.Images ?? [],
+            },
+            EditorShellJsonContext.Default.EditorUiManifestDocument);
+        File.WriteAllText(manifestPath, json);
+    }
+
+    private static EditorUiManifestScreenDocument[] NormalizeUiScreens(EditorUiManifestScreenDocument[]? screens)
+    {
+        if (screens is null || screens.Length == 0)
+        {
+            return [];
+        }
+
+        Dictionary<string, EditorUiManifestScreenDocument> byPath = new(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < screens.Length; i++)
+        {
+            EditorUiManifestScreenDocument screen = screens[i];
+            if (string.IsNullOrWhiteSpace(screen.Id) || string.IsNullOrWhiteSpace(screen.Path))
+            {
+                continue;
+            }
+
+            byPath[screen.Path.Trim().Replace('\\', '/')] = new EditorUiManifestScreenDocument
+            {
+                Id = screen.Id.Trim(),
+                Path = screen.Path.Trim().Replace('\\', '/'),
+                Preload = screen.Preload,
+            };
+        }
+
+        return [.. byPath.Values.OrderBy(static item => item.Id, StringComparer.OrdinalIgnoreCase)];
     }
 
     private static EditorAssetRecordDocument[] NormalizeRecords(EditorAssetRecordDocument[]? records)
@@ -803,6 +932,9 @@ internal sealed class EditorAssetManifestStore
             case EditorAssetType.Script:
                 File.WriteAllText(fullPath, CreateScriptTemplate(logicalPath));
                 break;
+            case EditorAssetType.UiScreen:
+                File.WriteAllText(fullPath, CreateUiScreenTemplate(logicalPath));
+                break;
             case EditorAssetType.Material:
                 File.WriteAllText(fullPath, /*lang=json,strict*/ "{\"materials\":[]}" + Environment.NewLine);
                 break;
@@ -821,6 +953,29 @@ internal sealed class EditorAssetManifestStore
         }
     }
 
+    private static bool IsUnderLogicalFolder(string logicalPath, string folderName)
+    {
+        string normalized = logicalPath.Replace('\\', '/');
+        return normalized.StartsWith(folderName + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryBuildUiScreenManifestEntry(string logicalPath, out string screenId, out string screenPath)
+    {
+        string normalized = logicalPath.Replace('\\', '/');
+        const string Prefix = "ui/";
+        if (!normalized.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            screenId = string.Empty;
+            screenPath = string.Empty;
+            return false;
+        }
+
+        string name = Path.GetFileNameWithoutExtension(normalized);
+        screenId = ToKebabCase(string.IsNullOrWhiteSpace(name) ? "new-screen" : name);
+        screenPath = normalized[Prefix.Length..];
+        return true;
+    }
+
     private static string CreateScriptTemplate(string logicalPath)
     {
         string name = Path.GetFileNameWithoutExtension(logicalPath);
@@ -832,6 +987,63 @@ public sealed class {{className}} : Behaviour
 {
 }
 """;
+    }
+
+    private static string CreateUiScreenTemplate(string logicalPath)
+    {
+        string name = Path.GetFileNameWithoutExtension(logicalPath);
+        string screenId = ToKebabCase(string.IsNullOrWhiteSpace(name) ? "new-screen" : name);
+        string title = string.IsNullOrWhiteSpace(name) ? "New Screen" : name;
+        return $$"""
+<rml title="{{title}}" data-screen="{{screenId}}" data-contract="editor.ui-screen/v1" style="left: 24px; top: 24px; width: 360px; min-height: 160px">
+  <head>
+    <style>
+      body { font-family: "Noto Sans SC"; color: #e8edf2; background-color: rgba(8, 10, 14, 180); padding: 12px; }
+      p { margin: 4px 0px; }
+    </style>
+  </head>
+  <body>
+    <p id="{{screenId}}_title">{{title}}</p>
+  </body>
+</rml>
+""";
+    }
+
+    private static string ToKebabCase(string value)
+    {
+        ReadOnlySpan<char> source = value.AsSpan();
+        Span<char> buffer = stackalloc char[Math.Min(source.Length * 2, 256)];
+        int length = 0;
+        bool previousWasSeparator = false;
+        for (int i = 0; i < source.Length && length < buffer.Length; i++)
+        {
+            char current = source[i];
+            if (char.IsLetterOrDigit(current))
+            {
+                if (char.IsUpper(current) && length > 0 && !previousWasSeparator && length < buffer.Length)
+                {
+                    buffer[length++] = '-';
+                }
+
+                if (length < buffer.Length)
+                {
+                    buffer[length++] = char.ToLowerInvariant(current);
+                    previousWasSeparator = false;
+                }
+            }
+            else if (length > 0 && !previousWasSeparator && length < buffer.Length)
+            {
+                buffer[length++] = '-';
+                previousWasSeparator = true;
+            }
+        }
+
+        while (length > 0 && buffer[length - 1] == '-')
+        {
+            length--;
+        }
+
+        return length == 0 ? "new-screen" : new string(buffer[..length]);
     }
 
     private static string SanitizeIdentifier(string value)
@@ -934,4 +1146,26 @@ internal sealed class EditorAssetRecordDocument
     public long SizeBytes { get; init; }
 
     public DateTimeOffset LastModifiedUtc { get; init; }
+}
+
+/// <summary>
+/// content/ui/ui-manifest.json 的最小编辑器投影。
+/// </summary>
+internal sealed class EditorUiManifestDocument
+{
+    public EditorUiManifestScreenDocument[]? Screens { get; init; }
+
+    public JsonElement[]? Images { get; init; }
+}
+
+/// <summary>
+/// UI manifest screen 条目。
+/// </summary>
+internal sealed class EditorUiManifestScreenDocument
+{
+    public string Id { get; init; } = string.Empty;
+
+    public string Path { get; init; } = string.Empty;
+
+    public bool Preload { get; init; }
 }
