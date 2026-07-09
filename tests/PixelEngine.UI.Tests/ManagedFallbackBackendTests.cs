@@ -184,12 +184,14 @@ public sealed class ManagedFallbackBackendTests
             <rml title="Menu" style="left: 24px; top: 24px; width: 280px; height: 206px">
               <head>
                 <style>
-                  button { width: 180px; height: 28px; margin-top: 6px; }
+                  button { width: 180px; height: 28px; margin: 10px 0px; margin-top: 6px; }
                   progress { width: 240px; height: 14px; margin-top: 4px; }
+                  p { margin: 5px 0px; }
                   #start_game { position: absolute; left: 28px; top: 72px; }
                 </style>
               </head>
               <body>
+                <p>Ready</p>
                 <button id="start_game" data-event-click="start_game">开始游戏</button>
                 <progress id="health" path="hud.health" value="0.5" text="生命" />
               </body>
@@ -206,6 +208,8 @@ public sealed class ManagedFallbackBackendTests
         Assert.Equal((28f, 72f), Assert.Single(gui.Context.Cursors));
         Assert.Equal(("开始游戏", 180f, 28f), Assert.Single(gui.Context.SizedButtons));
         Assert.Equal((0.5f, "生命", 240f, 14f), Assert.Single(gui.Context.SizedProgressBars));
+        Assert.Contains("Ready", gui.Context.Texts);
+        Assert.Contains(5f, gui.Context.VerticalSpacings);
         Assert.Contains(4f, gui.Context.VerticalSpacings);
     }
 

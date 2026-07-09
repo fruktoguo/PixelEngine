@@ -195,6 +195,30 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
+    /// 验证真实 Demo 屏幕使用的 CSS margin shorthand 会进入 ManagedFallback 垂直布局子集。
+    /// </summary>
+    [Fact]
+    public void DemoManagedFallbackConsumesProductScreenMarginShorthand()
+    {
+        UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
+        UiManifestScreen mainMenu = manifest.GetRequiredScreen(GameUiDemoController.MainMenuScreen);
+        string xhtml = File.ReadAllText(mainMenu.FullPath);
+        Assert.Contains("p { margin: 4px 0px; }", xhtml, StringComparison.Ordinal);
+
+        FakeGuiHost gui = new();
+        using ManagedFallbackBackend backend = new(gui);
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 720, 480, 1f), UiBackendKind.ManagedFallback));
+
+        _ = host.ShowScreen(mainMenu.ScreenId, manifest.ResolveDocumentSource(GameUiDemoController.MainMenuScreen));
+        host.Composite(default);
+
+        Assert.Contains("PixelEngine 熔岩矿洞", gui.Context.Texts);
+        Assert.Contains("开始游戏", gui.Context.Buttons);
+        Assert.Contains(4f, gui.Context.VerticalSpacings);
+    }
+
+    /// <summary>
     /// 验证 Web-first HUD 的交互面板 capture 会真正截断 Demo 玩法输入，HUD 外透明区域则 pass-through 到玩法脚本。
     /// </summary>
     [Fact]
@@ -1735,6 +1759,8 @@ public sealed class DemoUiContentTests
 
         public List<string> Buttons { get; } = [];
 
+        public List<float> VerticalSpacings { get; } = [];
+
         public HashSet<string> ClickedButtons { get; } = [];
 
         public HashSet<string> ToggledCheckboxes { get; } = [];
@@ -1787,6 +1813,11 @@ public sealed class DemoUiContentTests
 
         public void Separator()
         {
+        }
+
+        public void AddVerticalSpacing(float height)
+        {
+            VerticalSpacings.Add(height);
         }
 
         public bool Button(string label)
