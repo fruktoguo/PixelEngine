@@ -468,7 +468,7 @@ try {
     }
 }
 catch {
-    $detail = "UI Runtime evidence preflight failed: evidence manifest JSON 或 schema 无效。不得据此勾选 plan/20 的 UI Runtime M15 阻塞项。"
+    $detail = "UI Runtime evidence preflight failed: evidence manifest JSON 或 schema 无效。不得据此将 UI-001 至 UI-003 标为完成。"
     Write-UiRuntimeEvidenceReport -Path $reportPath -Status "blocked_invalid_ui_runtime_evidence" -ExitCode 5 -Evidence @($evidence) -Missing @("ui runtime evidence manifest 无效：$($_.Exception.Message)") -Detail $detail
     Write-Host "UI Runtime evidence preflight blocked_invalid_ui_runtime_evidence. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
     if (-not $AllowBlocked) {
@@ -520,7 +520,7 @@ foreach ($definition in $scopeDefinitions) {
 }
 
 if ($missing.Count -gt 0) {
-    $detail = "UI Runtime evidence preflight failed: manifest 存在，但真实窗口透明 UI、RmlUi ANGLE/GLES、真实平台 IME、Ultralight gate 或 UI native release artifact 证据不完整。不得据此勾选 plan/20 的 M14/M15 阻塞项。"
+    $detail = "UI Runtime evidence preflight failed: manifest 存在，但真实窗口透明 UI、RmlUi ANGLE/GLES、真实平台 IME、inactive Ultralight gate 或 UI native release artifact 证据不完整。不得据此将 UI-001 至 UI-003 标为完成。"
     Write-UiRuntimeEvidenceReport -Path $reportPath -Status "blocked_missing_ui_runtime_scope_evidence" -ExitCode 5 -Evidence @($evidence) -Missing @($missing) -Detail $detail
     Write-Host "UI Runtime evidence preflight blocked_missing_ui_runtime_scope_evidence. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
     if (-not $AllowBlocked) {
@@ -531,7 +531,7 @@ if ($missing.Count -gt 0) {
     exit 0
 }
 
-$detail = "UI Runtime evidence manifest is complete and SHA256/semantic checks passed. Human review still must confirm the attached materials prove same-window transparent UI product behavior, RmlUi ANGLE/GLES native profile, real IME composition, Ultralight profile gate, and UI native release artifacts before plan/20 can be unblocked."
+$detail = "UI Runtime evidence manifest is complete and SHA256/semantic checks passed. Human review still must confirm the attached materials prove same-window transparent UI product behavior, RmlUi ANGLE/GLES native profile, real IME composition, inactive Ultralight profile gate, and UI native release artifacts before UI-001 through UI-003 can be completed."
 Write-UiRuntimeEvidenceReport -Path $reportPath -Status "ui_runtime_evidence_attached_pending_review" -ExitCode 2 -Evidence @($evidence) -Missing @($missing) -Detail $detail
 Write-Host "UI Runtime evidence preflight ui_runtime_evidence_attached_pending_review. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
 

@@ -1,5 +1,7 @@
 # Plan 12 — Editor ImGui 面板层与调试工具（PixelEngine.Editor）
 
+> **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
+
 > 本文档定义 `PixelEngine.Editor` 子系统的完整实现计划：基于 **Dear ImGui（Hexa.NET.ImGui）** 的 Editor ImGui 面板层、停靠式调试工具与调参/诊断 UI。
 > 权威依据：`../docs/PixelEngine-架构与需求设计.md`（下称「架构」，重点 §17、§3.3、§4、§7、§11）；技术栈：`00-conventions-and-techstack.md`；开发宪法：`../AGENTS.md`。
 > 状态约定：`- [x]` 已有源码、测试、工具、报告或 plan 证据；`- [ ]` 未完成目标；`- [!]` 阻塞、证据债、人工验收或外部环境限制。

@@ -673,7 +673,7 @@ if ($missingEvidence.Count -gt 0) {
 }
 
 if ($evidence.Count -eq 4) {
-    $detail = "External detector evidence manifest attached. Four required scopes are present and SHA256 hashes were recorded. Human review must confirm the reports cover GL, OpenAL, Box2D and ALC with no leaks before plan/18 can be unblocked."
+    $detail = "External detector evidence manifest attached. Four required scopes are present and SHA256 hashes were recorded. Human review must confirm the reports cover GL, OpenAL, Box2D and ALC with no leaks before EVID-002 can be completed."
     Write-NativeLeakReport -Path $reportPath -Status "detector_evidence_attached_pending_review" -Detector $DetectorName -DetectorReport $DetectorReportPath -Evidence $evidence -Runs $runs -Detail $detail
     Write-Host "Native leak preflight detector_evidence_attached_pending_review. Report: $reportPath"
     if (-not $AllowBlocked) {
@@ -713,7 +713,7 @@ if ($singleDetectorIssues.Count -gt 0) {
 
 $hash = Get-FileHash -Algorithm SHA256 -Path $DetectorReportPath
 $relativeDetectorReport = ConvertTo-RelativePath -Root $root -Path $DetectorReportPath
-$detail = "External detector report attached. detector=$DetectorName report=$relativeDetectorReport sha256=$($hash.Hash). Machine-readable no-leaks coverage for GL, OpenAL, Box2D and ALC is present; human review must still confirm detector quality before plan/18 can be unblocked."
+$detail = "External detector report attached. detector=$DetectorName report=$relativeDetectorReport sha256=$($hash.Hash). Machine-readable no-leaks coverage for GL, OpenAL, Box2D and ALC is present; human review must still confirm detector quality before EVID-002 can be completed."
 Write-NativeLeakReport -Path $reportPath -Status "detector_report_attached_pending_review" -Detector $DetectorName -DetectorReport $relativeDetectorReport -Evidence $evidence -Runs $runs -Detail $detail
 Write-Host "Native leak preflight detector_report_attached_pending_review. Report: $reportPath"
 if (-not $AllowBlocked) {

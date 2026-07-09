@@ -401,7 +401,7 @@ try {
 }
 catch {
     $reason = "ci evidence manifest 无效：$($_.Exception.Message)"
-    $detail = "CI matrix evidence preflight failed: manifest JSON 无法解析或 schemaVersion 不受支持。不得据此勾选 plan/14 的 CI 矩阵阻塞项。"
+    $detail = "CI matrix evidence preflight failed: manifest JSON 无法解析或 schemaVersion 不受支持。不得据此将 CI-003 标为完成。"
     Write-CiEvidenceReport -Path $reportPath -Status "blocked_invalid_ci_evidence" -ExitCode 5 -Evidence @($evidence) -Missing @($reason) -Detail $detail
     Write-Host "CI matrix evidence preflight blocked_invalid_ci_evidence. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
     if (-not $AllowBlocked) {
@@ -495,7 +495,7 @@ foreach ($rid in $verifyRids) {
 }
 
 if ($missing.Count -gt 0) {
-    $detail = "CI matrix evidence preflight failed: manifest 存在，但 6-RID build/test、benchmark guard 或 publish verify 证据不完整。不得据此勾选 plan/14 的 CI 矩阵阻塞项。"
+    $detail = "CI matrix evidence preflight failed: manifest 存在，但 6-RID build/test、benchmark guard 或 publish verify 证据不完整。不得据此将 CI-003 标为完成。"
     Write-CiEvidenceReport -Path $reportPath -Status "blocked_missing_ci_scope_evidence" -ExitCode 5 -Evidence @($evidence) -Missing @($missing) -Detail $detail
     Write-Host "CI matrix evidence preflight blocked_missing_ci_scope_evidence. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
     if (-not $AllowBlocked) {
@@ -506,7 +506,7 @@ if ($missing.Count -gt 0) {
     exit 0
 }
 
-$detail = "CI matrix evidence manifest is complete, SHA256 hashes matched, workflow metadata identified the CI push/pull_request run, and markdown evidence fields reported success for required jobs. Human review still must confirm the GitHub Actions run proves 6-RID build, available-RID dotnet test, benchmark guard, and R2R/AOT publish verify before plan/14 can be unblocked."
+$detail = "CI matrix evidence manifest is complete, SHA256 hashes matched, workflow metadata identified the CI push/pull_request run, and markdown evidence fields reported success for required jobs. Human review still must confirm the GitHub Actions run proves 6-RID build, available-RID dotnet test, benchmark guard, and R2R/AOT publish verify before CI-003 can be completed."
 Write-CiEvidenceReport -Path $reportPath -Status "ci_matrix_evidence_attached_pending_review" -ExitCode 2 -Evidence @($evidence) -Missing @($missing) -Detail $detail
 Write-Host "CI matrix evidence preflight ci_matrix_evidence_attached_pending_review. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
 

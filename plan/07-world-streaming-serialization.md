@@ -1,5 +1,7 @@
 # Plan 07 — 世界管理、流式装卸与存档（PixelEngine.World + PixelEngine.Serialization）
 
+> **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
+
 > 范围：chunk 驻留与流式装卸、世界常驻内存管理、持久化 / 存档。权威依据：`../docs/PixelEngine-架构与需求设计.md`（下称架构文档）§3.4、§5.1、§11、§12.2、§6.3；不变式见 `../AGENTS.md §1`（重点 #4 跨界写入恒在 halo 内、#8 material 字符串键入盘）；技术栈以 `00-conventions-and-techstack.md` 为准。
 > 状态约定：`- [x]` 已有源码、测试、工具、报告或 plan 证据；`- [ ]` 未完成目标；`- [!]` 阻塞、证据债、人工验收或外部环境限制。
 

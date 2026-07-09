@@ -1,5 +1,7 @@
 # Plan 13 — Showcase Demo Game（demo/PixelEngine.Demo）
 
+> **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
+
 > 本文件定义在 PixelEngine 引擎之上开发的Showcase Demo Game。Demo 与引擎的关系等同「Unity 游戏之于 Unity 引擎」：**只依赖引擎的公开 API，绝不触碰引擎内部类**。Demo 是引擎公开 API 的 dogfood 验证——若某玩法能力只能靠引擎内部实现，即判定引擎 API 设计有缺陷，记为「需引擎补 API」并上报，**不得在 Demo 里开后门**（`AGENTS.md §0`）。
 > 权威设计依据：`../docs/PixelEngine-架构与需求设计.md`（下称架构文档）。技术栈定稿：`00-conventions-and-techstack.md`。开发宪法：`../AGENTS.md`。
 > 状态约定：`- [x]` 已有源码、测试、工具、报告或 plan 证据；`- [ ]` 未完成目标；`- [!]` 阻塞、证据债、人工验收或外部环境限制。

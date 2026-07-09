@@ -1283,7 +1283,7 @@ function Write-ManualAcceptanceReport {
     $lines.Add("")
     $lines.Add("## 说明")
     $lines.Add("")
-    $lines.Add('该脚本只收集 plan/13 真实窗口人工验收证据。`scripted_probe_only` 与 `manual_evidence_attached_pending_review` 都不是验收通过状态；plan/13 的 `[!]` 只有在人工确认视觉、听感、手感、完整路线和热重载体验后才能改为 `[x]`。')
+    $lines.Add('该脚本只收集 DEMO-001 至 DEMO-005 的真实窗口人工验收证据。`scripted_probe_only` 与 `manual_evidence_attached_pending_review` 都不是完成状态；对应 canonical task 只有在人工确认视觉、听感、手感、完整路线和热重载体验后才能改为 `[x]`。')
     $lines.Add("")
     $lines.Add("## 人工验收 scope")
     $lines.Add("")

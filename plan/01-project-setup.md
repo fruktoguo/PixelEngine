@@ -1,5 +1,7 @@
 # Plan 01 — 项目骨架与构建管线
 
+> **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
+
 > 本文档记录 PixelEngine 工程骨架、构建管线、native dual-build 入口与 CI / publish 预检底座；早期“空项目 / bootstrap”内容仅作为历史 M0 工程地基证据，不再代表当前产品目标。权威依据：`AGENTS.md`（开发宪法）、`plan/00-conventions-and-techstack.md`（技术栈定稿，下称「plan/00」）、`docs/PixelEngine-架构与需求设计.md`（架构文档，下称「架构 §x.y」）。
 > 锁定的当前全局决策（不可改）：脚本系统 = 项目引用模型 + Roslyn + 可回收 ALC 热重载；Unity-like Editor = 独立 Editor Shell + Editor ImGui 面板层；Web-first UI Runtime = `PixelEngine.UI` 透明 HTML UI（ManagedFallback 恒在、RmlUi 默认、Ultralight 可选）；Showcase Demo Game = 功能完整但聚焦的 showcase Demo，仅依赖引擎公开 API；一步到位、无 MVP、无临时实现；能多线程 / 省内存 / 上 GPU 就全上。
 > 状态约定：`- [ ]` 未开始 / `- [x]` 完成并有可追溯证据 / `- [!]` 外部证据、人工验收、硬件、发行或 native 阻塞；进行中事项必须拆成已完成子项与未完成/阻塞子项。

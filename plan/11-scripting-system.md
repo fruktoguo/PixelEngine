@@ -1,5 +1,7 @@
 # Plan 11 — C# 脚本系统（PixelEngine.Scripting）
 
+> **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
+
 > 本文件定义开发者用 C# 编写 PixelEngine 游戏逻辑的完整机制。技术栈以 `00-conventions-and-techstack.md` 为准，架构依据 `../docs/PixelEngine-架构与需求设计.md`（下称「架构文档」），开发宪法 `../AGENTS.md`。
 > 状态约定：`- [x]` 已有源码、测试、工具、报告或 plan 证据；`- [ ]` 未完成目标；`- [!]` 阻塞、证据债、人工验收或外部环境限制。
 > 范围边界：本文件**只**覆盖 `PixelEngine.Scripting` 程序集与其对外的脚本 API 契约。编辑器 UI（Inspector 面板、热重载按钮的具体绘制）属 `plan/12`，本文件只定义供其调用的协作接口；各「世界能力」接口（事件总线、材质查询、粒子、物理、音频等）的**实现**分别属 plan/02、04、05、06、10，本文件只**聚合并暴露**它们的公开契约。

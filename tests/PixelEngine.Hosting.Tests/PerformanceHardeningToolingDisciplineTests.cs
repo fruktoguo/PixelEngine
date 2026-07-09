@@ -258,7 +258,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string report = ReadRepositoryFile("docs", "benchmark-reports", "2026-07-02-latency-branch-calibration.md");
         string plan = ReadRepositoryFile("plan", "16-performance-hardening.md");
         string testingPlan = ReadRepositoryFile("plan", "14-testing-benchmarking.md");
-        string readme = ReadRepositoryFile("plan", "README.md");
+        string readme = ReadRepositoryFile("plan", "tasks", "70-evidence-contracts.md");
 
         // Assert：验证预期结果
         Assert.Contains("PIXELENGINE_BENCH_HARDWARE_COUNTERS", script, StringComparison.Ordinal);
@@ -293,7 +293,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("同时出现 `Cache Misses` 与 `Branch Mispredictions` 列", readme, StringComparison.Ordinal);
         Assert.Contains("`ready` 只表示权限预检通过", readme, StringComparison.Ordinal);
         Assert.Contains("`counters_present` 只表示本地列检查通过", readme, StringComparison.Ordinal);
-        Assert.Contains("不能解除 plan/16 的硬件计数器 / M15 性能阻塞", readme, StringComparison.Ordinal);
+        Assert.Contains("不能解除 `PERF-009`", readme, StringComparison.Ordinal);
         Assert.Contains("hardware_counters_cache_branch", readme, StringComparison.Ordinal);
         Assert.Contains("benchmarkRunId", readme, StringComparison.Ordinal);
         Assert.Contains("gitCommit", readme, StringComparison.Ordinal);
@@ -363,7 +363,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         // Arrange：准备输入与初始状态
         string script = ReadRepositoryFile("tools", "performance-target-evidence-preflight.ps1");
         string report = ReadRepositoryFile("docs", "benchmark-reports", "2026-07-02-performance-target-evidence.md");
-        string readme = ReadRepositoryFile("plan", "README.md");
+        string readme = ReadRepositoryFile("plan", "tasks", "70-evidence-contracts.md");
         string plan = ReadRepositoryFile("plan", "16-performance-hardening.md");
 
         // Assert：验证预期结果
@@ -491,15 +491,15 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
-    /// 验证 plan/README 的证据预检状态索引覆盖全部外部证据入口，并明确待审/本机探针状态不是验收通过。
+    /// 验证 canonical evidence 合同覆盖全部外部证据入口，并明确待审/本机探针状态不是验收通过。
     /// </summary>
     [Fact]
 
     // —— 热路径与计划文档索引 ——
-    public void PlanReadmeIndexesAllEvidencePreflightStatusesAsNonPassing()
+    public void TaskEvidenceCatalogIndexesAllEvidencePreflightStatusesAsNonPassing()
     {
         // Arrange：准备输入与初始状态
-        string readme = ReadRepositoryFile("plan", "README.md");
+        string readme = ReadRepositoryFile("plan", "tasks", "70-evidence-contracts.md");
 
         string[] tools =
         [
@@ -575,9 +575,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("process_smoke_only", readme, StringComparison.Ordinal);
         Assert.Contains("ready", readme, StringComparison.Ordinal);
         Assert.Contains("counters_present", readme, StringComparison.Ordinal);
-        Assert.Contains("都不是对应 plan 验收通过状态", readme, StringComparison.Ordinal);
+        Assert.Contains("都不是对应 canonical task 的完成状态", readme, StringComparison.Ordinal);
         Assert.Contains("本地计数器列检查通过", readme, StringComparison.Ordinal);
-        Assert.Contains("对应 plan 条目仍保持 `- [!]`", readme, StringComparison.Ordinal);
+        Assert.Contains("对应 canonical task 仍保持 `[!]`", readme, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -592,7 +592,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string script = ReadRepositoryFile("tools", "native-leak-preflight.ps1");
         string report = ReadRepositoryFile("docs", "runtime-reports", "2026-07-02-demo-window-longrun.md");
         string plan = ReadRepositoryFile("plan", "18-hosting-runtime.md");
-        string readme = ReadRepositoryFile("plan", "README.md");
+        string readme = ReadRepositoryFile("plan", "tasks", "70-evidence-contracts.md");
 
         // Assert：验证预期结果
         Assert.Contains("DetectorReportPath", script, StringComparison.Ordinal);
@@ -662,7 +662,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("process_smoke_only", readme, StringComparison.Ordinal);
         Assert.Contains("gl_context_rendering_wrappers", readme, StringComparison.Ordinal);
         Assert.Contains("managed_no_gl_context", readme, StringComparison.Ordinal);
-        Assert.Contains("不能解除 plan/18/M15 native leak 阻塞", readme, StringComparison.Ordinal);
+        Assert.Contains("不能解除 `EVID-002`", readme, StringComparison.Ordinal);
         Assert.Contains("外部 GL driver 级 detector", readme, StringComparison.Ordinal);
     }
 
@@ -1272,7 +1272,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string script = ReadRepositoryFile("tools", "gpu-particle-benchmark-preflight.ps1");
         string report = ReadRepositoryFile("docs", "runtime-reports", "2026-07-02-particle-frame-probe.md");
         string plan = ReadRepositoryFile("plan", "09-gpu-compute.md");
-        string readme = ReadRepositoryFile("plan", "README.md");
+        string readme = ReadRepositoryFile("plan", "tasks", "70-evidence-contracts.md");
 
         // Assert：验证预期结果
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
@@ -1375,7 +1375,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("cpuWallAvgMs>gpuWallAvgMs", readme, StringComparison.Ordinal);
         Assert.Contains("speedupRatio>1", readme, StringComparison.Ordinal);
         Assert.Contains("sampleSeconds>=10", readme, StringComparison.Ordinal);
-        Assert.Contains("不能解除 plan/09/M15 目标 GPU 长基准阻塞", readme, StringComparison.Ordinal);
+        Assert.Contains("不能解除 `PERF-010`", readme, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -2201,7 +2201,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string script = ReadRepositoryFile("tools", "demo-manual-acceptance-preflight.ps1");
         string report = ReadRepositoryFile("docs", "runtime-reports", "2026-07-02-demo-manual-acceptance.md");
         string plan = ReadRepositoryFile("plan", "13-demo-game.md");
-        string readme = ReadRepositoryFile("plan", "README.md");
+        string readme = ReadRepositoryFile("plan", "tasks", "70-evidence-contracts.md");
         string hostingPlan = ReadRepositoryFile("plan", "18-hosting-runtime.md");
 
         // Assert：验证预期结果
@@ -3080,7 +3080,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string ci = ReadRepositoryFile(".github", "workflows", "ci.yml");
         string report = ReadRepositoryFile("docs", "benchmark-reports", "2026-07-02-ci-matrix-evidence.md");
         string plan = ReadRepositoryFile("plan", "14-testing-benchmarking.md");
-        string readme = ReadRepositoryFile("plan", "README.md");
+        string readme = ReadRepositoryFile("plan", "tasks", "70-evidence-contracts.md");
 
         // Assert：验证预期结果
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
@@ -3163,7 +3163,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("其余可测 RID 必须 `tests_ran=true`", readme, StringComparison.Ordinal);
         Assert.Contains("publish verify scope 覆盖 `win-x64` / `linux-x64` / `osx-x64` / `osx-arm64`", readme, StringComparison.Ordinal);
         Assert.Contains("`channels=r2r,aot` 且 `conclusion=success`", readme, StringComparison.Ordinal);
-        Assert.Contains("仍需人工确认对应 GitHub Actions run 的 job 结论，不能解除 plan/14/M15 阻塞", readme, StringComparison.Ordinal);
+        Assert.Contains("仍需人工确认对应 GitHub Actions run 的 job 结论，不能解除 `CI-003`", readme, StringComparison.Ordinal);
 
         Assert.Contains("tools/ci-matrix-evidence-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("blocked_invalid_ci_evidence", plan, StringComparison.Ordinal);
@@ -4343,7 +4343,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     {
         // Arrange：准备输入与初始状态
         string script = ReadRepositoryFile("tools", "ui-runtime-evidence-preflight.ps1");
-        string readme = ReadRepositoryFile("plan", "README.md");
+        string readme = ReadRepositoryFile("plan", "tasks", "70-evidence-contracts.md");
         string plan = ReadRepositoryFile("plan", "20-interactive-html-ui.md");
 
         // Assert：验证预期结果
@@ -4702,7 +4702,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     {
         // Arrange：准备输入与初始状态
         string script = ReadRepositoryFile("tools", "editor-ux-evidence-preflight.ps1");
-        string readme = ReadRepositoryFile("plan", "README.md");
+        string readme = ReadRepositoryFile("plan", "tasks", "70-evidence-contracts.md");
         string plan = ReadRepositoryFile("plan", "19-standalone-editor-app.md");
 
         // Assert：验证预期结果
@@ -5319,7 +5319,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("tools/release-evidence-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("tools/release-evidence-preflight.ps1|.sh", plan, StringComparison.Ordinal);
 
-        string readme = ReadRepositoryFile("plan", "README.md");
+        string readme = ReadRepositoryFile("plan", "tasks", "70-evidence-contracts.md");
         Assert.Contains("active RID × `r2r/aot`", readme, StringComparison.Ordinal);
         Assert.Contains("`publish` / `verify` / `package_report` / `package` / 单一 `SHA256SUMS`", readme, StringComparison.Ordinal);
         Assert.Contains("`workflow_run`、`artifact_audit`、`github_release_upload`、`deterministic_hash`、`r2r_lightup`", readme, StringComparison.Ordinal);
@@ -5337,7 +5337,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("`simdProbeKind`（x64=`x64_ymm_zmm`、arm64=`arm64_neon`）", readme, StringComparison.Ordinal);
         Assert.Contains("不能是 skip", readme, StringComparison.Ordinal);
         Assert.Contains("`codesign` / `notarization` success 报告", readme, StringComparison.Ordinal);
-        Assert.Contains("仍需人工复核，不能解除 plan/15/M15 阻塞", readme, StringComparison.Ordinal);
+        Assert.Contains("仍需人工复核，不能解除 `REL-003`", readme, StringComparison.Ordinal);
 
         Assert.Contains("tools/release-evidence-preflight.ps1", conventions, StringComparison.Ordinal);
         Assert.Contains("发行与 Box2D dual-build 工具链已在 `plan/15`", conventions, StringComparison.Ordinal);
