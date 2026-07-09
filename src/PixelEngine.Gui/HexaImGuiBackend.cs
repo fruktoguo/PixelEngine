@@ -52,6 +52,7 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
             io.ConfigFlags |= ImGuiConfigFlags.ViewportsEnable;
         }
 
+        GuiTheme.ApplyCurrent(options.Theme);
         AddConfiguredFont(io, options);
         if (File.Exists(_layoutPath))
         {

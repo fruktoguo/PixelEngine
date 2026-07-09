@@ -56,6 +56,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
         ImGuiIOPtr io = ImGui.GetIO();
         io.ConfigFlags |= EditorDockSpace.BuildConfigFlags(options.EnableMultiViewport);
         _clipboard.Attach();
+        GuiTheme.ApplyCurrent(options.Theme);
         AddConfiguredFont(io, options);
         bool hasSavedLayout = File.Exists(_layoutPath);
         _dockSpace.ResetLayoutState(buildDefaultLayout: !hasSavedLayout);

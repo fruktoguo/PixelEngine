@@ -1,3 +1,5 @@
+using PixelEngine.Gui;
+
 namespace PixelEngine.Editor;
 
 /// <summary>
@@ -44,6 +46,11 @@ public sealed record EditorAppOptions
     /// 是否绘制 Editor dockspace 与注册面板；游戏 HUD 模式可关闭以只保留 ImGui frame lifecycle。
     /// </summary>
     public bool EnableDockSpace { get; init; } = true;
+
+    /// <summary>
+    /// 初始化 ImGui context 时应用的主题。
+    /// </summary>
+    public GuiThemeKind Theme { get; init; } = GuiThemeKind.Unity6Dark;
 
     /// <summary>
     /// 校验并返回规范化后的选项。

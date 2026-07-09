@@ -215,7 +215,7 @@ internal sealed class EditorMainMenuBar
         DrawPanelMenuItem(app, "Inspector", EditorDockSpace.InspectorWindowTitle);
         DrawPanelMenuItem(app, "Project", EditorDockSpace.AssetBrowserWindowTitle);
         DrawPanelMenuItem(app, "Console", EditorDockSpace.ConsoleDiagnosticsWindowTitle);
-        DrawPanelMenuItem(app, "Performance HUD", EditorDockSpace.PerformanceHudWindowTitle);
+        DrawPanelMenuItem(app, "Profiler", EditorDockSpace.PerformanceHudWindowTitle);
         DrawPanelMenuItem(app, "Project Settings...", ProjectSettingsPanel.PanelTitle);
         DrawPanelMenuItem(app, "Player Settings...", PlayerSettingsPanel.PanelTitle);
         DrawPanelMenuItem(app, "Build Settings...", BuildSettingsPanel.PanelTitle);

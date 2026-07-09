@@ -542,7 +542,7 @@ public sealed class HostingProjectDisciplineTests
             "Inspector",
             "Project",
             "Console",
-            "Performance HUD",
+            "Profiler",
             "About",
             "Shortcuts",
         })
@@ -562,6 +562,11 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("app.CreateChildGameObject()", menu, StringComparison.Ordinal);
         Assert.Contains("app.AddComponentToSelected", menu, StringComparison.Ordinal);
         Assert.Contains("public const string BuildSettingsWindowTitle", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("ViewportWindowTitle = \"Scene\"", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("SceneHierarchyWindowTitle = \"Hierarchy\"", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("AssetBrowserWindowTitle = \"Project\"", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("ConsoleDiagnosticsWindowTitle = \"Console\"", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("PerformanceHudWindowTitle = \"Profiler\"", dockSpace, StringComparison.Ordinal);
         Assert.Contains("DockBuilderDockWindow(BuildSettingsWindowTitle", dockSpace, StringComparison.Ordinal);
         Assert.Contains("DockBuilderDockWindow(AssetBrowserWindowTitle, bottomNode)", dockSpace, StringComparison.Ordinal);
         Assert.Contains("File.Delete(LayoutPath)", layout, StringComparison.Ordinal);

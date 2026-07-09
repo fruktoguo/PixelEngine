@@ -56,6 +56,7 @@ internal sealed class EditorShellWindow : IDisposable
         {
             Enabled = true,
             LayoutPath = DefaultLayoutPath,
+            Theme = GuiThemeKind.Unity6Dark,
         };
         return new EditorShellWindow(EditorHostBootstrap.Create(windowOptions, guiOptions));
     }
