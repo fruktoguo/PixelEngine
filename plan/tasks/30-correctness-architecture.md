@@ -30,11 +30,12 @@
   - 设计来源：产品定位 §8；`plan/11-scripting-system.md`；`plan/13-demo-game.md`。
   - 验收：玩法和发行入口只依赖公开稳定 facade；低层服务解析仅允许在引擎内部或专用诊断程序集；项目纪律测试锁定边界。
 
-- [~] `ARCH-005` 将 GPU air/smoke 明确接入生产 RenderPipeline/Hosting，或从基线能力中降级为未启用组件。
+- [x] `ARCH-005` 将 GPU air/smoke 明确接入生产 RenderPipeline/Hosting，或从基线能力中降级为未启用组件。
   - 优先级：P2。
   - 依赖：`BASE-008`、`SCOPE-002`。
   - 设计来源：`plan/09-gpu-compute.md`。
   - 验收：二选一并写入支持矩阵；若接入，配置能够创建、执行、合成和降级该 pass；若不接入，计划和产品声明不得称其为运行时能力。
+  - 完成结果：选择 `deferred_not_enabled`；生产 gate 强制关闭未接入的 air/smoke 能力位，计划、产品范围和硬件功能支持矩阵已同步；证据：`docs/evidence-2026-07-10-arch-005-air-smoke-status.md`。
 
 ## 提交边界
 
