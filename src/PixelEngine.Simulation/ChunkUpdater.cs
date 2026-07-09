@@ -240,7 +240,7 @@ internal static class ChunkUpdater
         for (int step = 1; step <= maxDistance; step++)
         {
             int candidateX = wx + (direction * step);
-            if (!CanDisplace(ref window, materials, sourceDensity, candidateX, wy, parityBit, out _, out _))
+            if (!window.CanDisplaceForMove(candidateX, wy, materials, sourceDensity, parityBit))
             {
                 break;
             }
@@ -439,23 +439,6 @@ internal static class ChunkUpdater
         {
             MarkKeepAliveIfCrossChunk(chunks, wx, wy, slot, diagnostics);
         }
-    }
-
-    private static bool CanDisplace(
-        ref NeighborWindow window,
-        MaterialPropsTable materials,
-        byte sourceDensity,
-        int targetX,
-        int targetY,
-        byte parityBit,
-        out ushort targetMaterial,
-        out byte targetFlags)
-    {
-        targetMaterial = window.GetMaterial(targetX, targetY);
-        targetFlags = window.GetFlags(targetX, targetY);
-        return targetMaterial == 0 ||
-            (!CellFlags.MatchesFrame(targetFlags, parityBit) &&
-            materials.DensityOf(targetMaterial) < sourceDensity);
     }
 
     private static void MarkCenterDirty(Chunk centerChunk, int wx, int wy)

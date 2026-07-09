@@ -323,6 +323,30 @@ public ref struct NeighborWindow
     }
 
     /// <summary>
+    /// 在 movement 扫描阶段一次 slot/local 解析判断目标是否可被源 cell 置换。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool CanDisplaceForMove(
+        int targetX,
+        int targetY,
+        MaterialPropsTable materials,
+        byte sourceDensity,
+        byte parityBit)
+    {
+        int targetSlot = SlotOf(targetX, targetY);
+        int targetLocal = CellAddressing.LocalIndex(targetX, targetY);
+        ushort targetMaterial = Unsafe.Add(ref SelectMaterialBase(targetSlot), targetLocal);
+        if (targetMaterial == 0)
+        {
+            return true;
+        }
+
+        byte targetFlags = Unsafe.Add(ref SelectFlagsBase(targetSlot), targetLocal);
+        return !CellFlags.MatchesFrame(targetFlags, parityBit) &&
+            materials.DensityOf(targetMaterial) < sourceDensity;
+    }
+
+    /// <summary>
     /// 在 movement 热路径中一次性完成目标可置换判断、刚体占用通知、cell swap 与 parity 标记。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
