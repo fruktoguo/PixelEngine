@@ -92,6 +92,7 @@ public sealed class LavaMineSceneTests
         ScriptScene scene = engine.Context.GetService<ScriptScene>();
         LevelDirector director = FindBehaviour<LevelDirector>(scene);
         WeaponController weapons = FindBehaviour<WeaponController>(scene);
+        ExplosiveTool explosive = FindBehaviour<ExplosiveTool>(scene);
         CellGrid grid = engine.Context.GetService<CellGrid>();
         MaterialTable materials = engine.Context.GetService<MaterialTable>();
         Assert.True(materials.TryGetId("lava", out ushort lava));
@@ -113,6 +114,9 @@ public sealed class LavaMineSceneTests
         Assert.True(stoneCells > 100, $"横向路线应包含 stone 可拆矮障碍，actual={stoneCells}。");
         Assert.Equal(10f, weapons.TerrainEffectScale);
         Assert.Equal(10f, weapons.GrenadeTerrainEffectScale);
+        Assert.Equal(10f, explosive.TerrainEffectScale);
+        Assert.Equal(720, explosive.EffectiveRadius);
+        Assert.Equal(3_200f, explosive.EffectiveForce);
     }
 
     /// <summary>

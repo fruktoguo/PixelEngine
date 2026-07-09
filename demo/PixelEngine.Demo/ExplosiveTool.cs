@@ -21,6 +21,21 @@ public sealed class ExplosiveTool : Behaviour
     public float Force { get; set; } = 320f;
 
     /// <summary>
+    /// 对地形破坏半径与冲量的倍率；正式 Demo 用它把独立中键爆破纳入 10x 地形修改口径。
+    /// </summary>
+    public float TerrainEffectScale { get; set; } = 1f;
+
+    /// <summary>
+    /// 当前实际提交给 <c>World.Explode</c> 的爆炸半径。
+    /// </summary>
+    public int EffectiveRadius => Math.Max(1, (int)MathF.Round(Math.Max(1, Radius) * NormalizedTerrainEffectScale));
+
+    /// <summary>
+    /// 当前实际提交给 <c>World.Explode</c> 的径向冲量强度。
+    /// </summary>
+    public float EffectiveForce => MathF.Max(1f, Force * NormalizedTerrainEffectScale);
+
+    /// <summary>
     /// 两次爆破之间的冷却时间，单位秒。
     /// </summary>
     public float CooldownSeconds { get; set; } = 0.35f;
@@ -53,8 +68,8 @@ public sealed class ExplosiveTool : Behaviour
 
         (float mouseX, float mouseY) = Context.Input.MousePixel;
         Point2F world = Context.Camera.ScreenToWorld(mouseX, mouseY);
-        int radius = Math.Max(1, Radius);
-        float force = MathF.Max(1f, Force);
+        int radius = EffectiveRadius;
+        float force = EffectiveForce;
         Context.World.Explode(world.X, world.Y, radius, force);
         _flash.Start(world.X, world.Y, radius, 0xFF_30_80_FF);
         _flash.SubmitInitial(Context);
@@ -62,5 +77,14 @@ public sealed class ExplosiveTool : Behaviour
         LastExplosionY = world.Y;
         ExplosionCount++;
         _cooldownRemaining = MathF.Max(0f, CooldownSeconds);
+    }
+
+    private float NormalizedTerrainEffectScale
+    {
+        get
+        {
+            float scale = TerrainEffectScale;
+            return float.IsFinite(scale) && scale > 0f ? scale : 1f;
+        }
     }
 }
