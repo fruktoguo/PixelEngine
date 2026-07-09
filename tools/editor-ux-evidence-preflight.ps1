@@ -233,7 +233,18 @@ function Get-RequiredEditorUxScopes {
         [pscustomobject]@{
             scope = "editor_full_route_window"
             title = "真实窗口完整路线：启动 Shell、新建/打开工程、默认布局、Play/Exit、保存、Build And Run"
-            trueFields = @("shellStarted", "projectOpenedOrCreated", "defaultLayoutVisible", "playExitVerified", "sceneSaved", "buildAndRunVerified")
+            trueFields = @(
+                "shellStarted",
+                "editorShellExeLaunched",
+                "singleTopLevelWindowVerified",
+                "singleProcessInProcessHost",
+                "noConsoleWindowObserved",
+                "projectOpenedOrCreated",
+                "defaultLayoutVisible",
+                "playExitVerified",
+                "sceneSaved",
+                "buildAndRunVerified"
+            )
             minimumNumberFields = @(
                 @{ name = "videoDurationSeconds"; minimum = 60 },
                 @{ name = "capturedFrameCount"; minimum = 600 },
