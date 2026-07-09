@@ -702,7 +702,12 @@ public sealed class Engine : IDisposable
         UiFontSelection fontSelection = fontEngine.Resolve();
         UiBackendKind requestedBackend = Context.Options.GameUiBackend;
         UiStringPool strings = new();
-        IGameUiBackend backend = CreateGameUiBackend(window, requestedBackend, strings, out string? fallbackReason);
+        IGameUiBackend backend = CreateGameUiBackend(
+            window,
+            requestedBackend,
+            strings,
+            out string? fallbackReason,
+            out string? activeNativeProfile);
         GameUiHost host = new(backend);
         try
         {
@@ -711,6 +716,7 @@ public sealed class Engine : IDisposable
         catch (Exception ex) when (backend.Kind == UiBackendKind.RmlUi && IsRmlUiFallbackException(ex))
         {
             fallbackReason = $"RmlUi 初始化失败，回退 ManagedFallback：{ex.GetType().Name}: {ex.Message}";
+            activeNativeProfile = null;
             host.Dispose();
             backend = CreateManagedFallbackGameUiBackend(window);
             host = new GameUiHost(backend);
@@ -718,7 +724,11 @@ public sealed class Engine : IDisposable
         }
 
         Context.RegisterService(fontEngine);
-        Context.RegisterService(new GameUiBackendSelection(requestedBackend, backend.Kind, fallbackReason));
+        Context.RegisterService(new GameUiBackendSelection(
+            requestedBackend,
+            backend.Kind,
+            fallbackReason,
+            activeNativeProfile));
         Context.RegisterService(host);
         Context.RegisterService(backend);
         IUiInputSource inputSource = new RenderWindowUiInputSource(window);
@@ -745,9 +755,11 @@ public sealed class Engine : IDisposable
         RenderWindow window,
         UiBackendKind requestedBackend,
         UiStringPool strings,
-        out string? fallbackReason)
+        out string? fallbackReason,
+        out string? activeNativeProfile)
     {
         fallbackReason = null;
+        activeNativeProfile = null;
         if (requestedBackend == UiBackendKind.ManagedFallback)
         {
             return CreateManagedFallbackGameUiBackend(window);
@@ -755,12 +767,13 @@ public sealed class Engine : IDisposable
 
         if (requestedBackend == UiBackendKind.RmlUi)
         {
-            if (!RmlUiNativeProfileGate.CanUseNativeRenderer(window.Backend, window.Capabilities, out string? profileFallbackReason))
+            RmlUiNativeProfileDecision decision = RmlUiNativeProfileGate.Evaluate(window.Backend, window.Capabilities);
+            if (!decision.CanUseNativeRenderer)
             {
                 return CreateManagedFallbackGameUiBackend(
                     window,
                     out fallbackReason,
-                    profileFallbackReason ?? "RmlUi native profile gate 拒绝当前上下文，回退 ManagedFallback。");
+                    decision.FallbackReason ?? "RmlUi native profile gate 拒绝当前上下文，回退 ManagedFallback。");
             }
 
             if (!RmlUiNativeInfo.TryQuery(out RmlUiNativeProbe probe))
@@ -771,6 +784,8 @@ public sealed class Engine : IDisposable
                     $"RmlUi native 不可用：{probe.Error ?? "unknown"}。");
             }
 
+            activeNativeProfile =
+                $"{decision.NativeRendererSymbol}; {decision.ShaderVersionDirective}; profileId={RmlUiNativeProfileGate.ToNativeProfileId(decision.RequestedProfile)}";
             return new RmlUiBackend(window, stringResolver: strings);
         }
 
