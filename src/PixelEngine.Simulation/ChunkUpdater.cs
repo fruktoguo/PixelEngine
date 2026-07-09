@@ -271,21 +271,20 @@ internal static class ChunkUpdater
         movedX = sourceX;
         movedY = sourceY;
         ValidateMoveCap(sourceX, sourceY, targetX, targetY);
-        if (!CanDisplace(ref window, materials, sourceDensity, targetX, targetY, parityBit, out ushort targetMaterial, out byte targetFlags))
+        if (!window.TryMoveCell(
+            sourceX,
+            sourceY,
+            targetX,
+            targetY,
+            materials,
+            sourceDensity,
+            parityBit,
+            rigidDamageSink,
+            out int targetSlot))
         {
             return false;
         }
 
-        int targetSlot = window.SlotOf(targetX, targetY);
-        if (CellFlags.Has(targetFlags, CellFlags.RigidOwned))
-        {
-            rigidDamageSink.OnOwnedCellDamaged(targetX, targetY, targetMaterial);
-            window.SetFlags(targetX, targetY, CellFlags.Clear(targetFlags, CellFlags.RigidOwned));
-        }
-
-        _ = window.Swap(sourceX, sourceY, targetX, targetY);
-        window.SetFlags(sourceX, sourceY, CellFlags.SetParity(window.GetFlags(sourceX, sourceY), parityBit));
-        window.SetFlags(targetX, targetY, CellFlags.SetParity(window.GetFlags(targetX, targetY), parityBit));
         MarkCenterDirty(centerChunk, sourceX, sourceY);
         if (targetSlot == 4)
         {
