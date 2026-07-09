@@ -243,10 +243,24 @@ function Get-RequiredEditorUxScopes {
         [pscustomobject]@{
             scope = "project_window_reference_stability"
             title = "Project Window 引用稳定性：移动/重命名/删除确认后 stable id、Scene、Prefab、Inspector 字段与 Build 入包不丢引用"
-            trueFields = @("stableIdsChecked", "sceneReferencesChecked", "prefabReferencesChecked", "inspectorAssetFieldsChecked", "buildRequestChecked", "deleteConfirmationChecked")
+            trueFields = @(
+                "stableIdsChecked",
+                "stableIdsBeforeAfterRecorded",
+                "sceneReferencesChecked",
+                "prefabReferencesChecked",
+                "inspectorAssetFieldsChecked",
+                "projectPlayerBuildSettingsChecked",
+                "startupSettingsChecked",
+                "buildRequestChecked",
+                "buildPackageReferenceAuditPassed",
+                "deleteConfirmationChecked",
+                "brokenReferenceCountZero"
+            )
             minimumNumberFields = @(
                 @{ name = "assetOperationCount"; minimum = 3 },
-                @{ name = "referenceDocumentCount"; minimum = 2 }
+                @{ name = "referenceDocumentCount"; minimum = 2 },
+                @{ name = "stableAssetKindCount"; minimum = 4 },
+                @{ name = "buildPackageAuditCount"; minimum = 1 }
             )
         },
         [pscustomobject]@{
