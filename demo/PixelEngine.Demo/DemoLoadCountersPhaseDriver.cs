@@ -23,7 +23,7 @@ internal sealed class DemoLoadCountersPhaseDriver(ScriptScene scene) : IEnginePh
     private void Publish(EngineTickContext context)
     {
         RisingHazardDirector? hazard = ResolveRisingHazard();
-        context.Context.Counters.LavaActiveAreaCells = hazard?.ActiveAreaCells ?? 0;
+        context.Context.Counters.SetCustomMetric("lava_active_area_cells", hazard?.ActiveAreaCells ?? 0);
     }
 
     private RisingHazardDirector? ResolveRisingHazard()

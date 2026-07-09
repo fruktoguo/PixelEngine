@@ -168,6 +168,7 @@ barrier 语义说明：本设计不暴露独立 `Barrier` 原语——每个 `Pa
 - `enum FrameSubPhase : byte`，覆盖 HUD 需要的细分（架构 §17.1「CA pass A–D / physics step / 形状重建」）：`CaPassA, CaPassB, CaPassC, CaPassD, PhysicsStep, ShapeRebuild, GpuUpload, AudioDispatch`。
 - `sealed class FrameProfiler`：`ProfilerScope Measure(FramePhase phase)`（返回 `readonly struct ProfilerScope : IDisposable`，using-scope 零分配，基于 `Stopwatch.GetTimestamp`）、`void Record(FramePhase, double ms)`、`void RecordSub(FrameSubPhase, double ms)`、`void BeginFrame()`、`void EndFrame()`、`ReadOnlySpan<double> LastFrame { get; }`（每相位 ms）、`double Average(FramePhase, int window)`（近 N 帧环形平均）。
 - `sealed class EngineCounters`（架构 §17.1 HUD 计数项；plan/00 §93 各子系统注册）：`long ActiveChunks, ActiveCells, FreeParticles, RigidBodies, ResidentChunks`、`long ResidentMemoryBytes`、`double SimHz`；提供线程安全的 worker 累加入口（`WorkerLocal<long[]>` 风格或 `Interlocked`），相位末合并。
+- `CustomMetricChannel CustomMetric`：Core 只提供带稳定 label 的整数值发布/一致快照读取，不解释 Demo/玩法语义；Editor 仅展示通用 channel，具体玩法通过 Hosting/公开计数器 API 发布（ARCH-001）。
 - `sealed class BudgetMonitor`（架构 §4.3 降级的检测数据源，不含策略）：构造 `BudgetMonitor(double budgetMs, int sustainWindow)`；`void Submit(double frameMs)`、`bool IsSustainedOverBudget { get; }`、`int ConsecutiveOverBudgetFrames { get; }`。Hosting 据此按 §4.3 五级顺序降级，Core 只回答「是否连续超预算」。
 
 ### 3.8 编译期常量 `EngineConstants`（`PixelEngine.Core`）

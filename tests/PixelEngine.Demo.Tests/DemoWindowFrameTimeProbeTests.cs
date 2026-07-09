@@ -40,9 +40,9 @@ public sealed class DemoWindowFrameTimeProbeTests
                 CellDestructionEventsThisTick = i,
                 RigidBodiesDestroyedThisTick = i % 3,
                 RigidBodiesCreatedThisTick = i % 4,
-                LavaActiveAreaCells = i * 10000,
                 SimHz = 60 - i,
             };
+            counters.SetCustomMetric("test_metric", i * 10000);
             probe.RecordFrame(i, sub, counters);
         }
 
@@ -71,11 +71,12 @@ public sealed class DemoWindowFrameTimeProbeTests
         Assert.Contains("destruction_events_p95=8.000", summary);
         Assert.Contains("destruction_events_p99=8.000", summary);
         Assert.Contains("destruction_events_max=8.000", summary);
-        Assert.Contains("lava_active_area_avg=45000.000", summary);
-        Assert.Contains("lava_active_area_p50=40000.000", summary);
-        Assert.Contains("lava_active_area_p95=60000.000", summary);
-        Assert.Contains("lava_active_area_p99=60000.000", summary);
-        Assert.Contains("lava_active_area_max=60000.000", summary);
+        Assert.Contains("custom_metric_name=test_metric", summary);
+        Assert.Contains("custom_metric_avg=45000.000", summary);
+        Assert.Contains("custom_metric_p50=40000.000", summary);
+        Assert.Contains("custom_metric_p95=60000.000", summary);
+        Assert.Contains("custom_metric_p99=60000.000", summary);
+        Assert.Contains("custom_metric_max=60000.000", summary);
         Assert.Contains("sim_hz_avg=55.500", summary);
         Assert.Contains("sim_hz_p50=55.000", summary);
         Assert.Contains("sim_hz_p95=57.000", summary);

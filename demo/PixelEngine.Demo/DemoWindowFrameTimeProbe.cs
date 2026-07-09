@@ -29,7 +29,8 @@ internal sealed class DemoWindowFrameTimeProbe(int warmupFrames, string scenario
     private readonly List<double> _freeParticles = [];
     private readonly List<double> _rigidBodies = [];
     private readonly List<double> _destructionEvents = [];
-    private readonly List<double> _lavaActiveArea = [];
+    private readonly List<double> _customMetric = [];
+    private string _customMetricName = string.Empty;
     private readonly List<double> _simHz = [];
     private int _framesSeen;
 
@@ -71,7 +72,8 @@ internal sealed class DemoWindowFrameTimeProbe(int warmupFrames, string scenario
         _freeParticles.Add(counters.FreeParticles);
         _rigidBodies.Add(counters.RigidBodies);
         _destructionEvents.Add(counters.CellDestructionEventsThisTick + counters.RigidBodiesDestroyedThisTick + counters.RigidBodiesCreatedThisTick);
-        _lavaActiveArea.Add(counters.LavaActiveAreaCells);
+        counters.CustomMetric.Read(out _customMetricName, out long customMetricValue);
+        _customMetric.Add(customMetricValue);
         _simHz.Add(counters.SimHz);
     }
 
@@ -86,7 +88,8 @@ internal sealed class DemoWindowFrameTimeProbe(int warmupFrames, string scenario
             LoadStats("free_particles", _freeParticles) + ", " +
             LoadStats("rigid_bodies", _rigidBodies) + ", " +
             LoadStats("destruction_events", _destructionEvents) + ", " +
-            LoadStats("lava_active_area", _lavaActiveArea) + ", " +
+            $"custom_metric_name={_customMetricName}, " +
+            LoadStats("custom_metric", _customMetric) + ", " +
             LoadStats("sim_hz", _simHz) + ", " +
             Stats("wall", _wallMs) + ", " +
             Stats("cpu_work", _cpuWorkMs) + ", " +
