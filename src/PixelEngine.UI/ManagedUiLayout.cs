@@ -303,12 +303,17 @@ internal static class ManagedUiLayout
 
     private static ManagedUiStyle ReadStyle(string? style)
     {
+        float? marginTop = TryReadFloat(ReadStyleProperty(style, "margin-top"), out float explicitMarginTop)
+            ? explicitMarginTop
+            : TryReadMarginTop(ReadStyleProperty(style, "margin"), out float shorthandMarginTop)
+                ? shorthandMarginTop
+                : null;
         return new ManagedUiStyle(
             X: TryReadFloat(ReadStyleProperty(style, "left"), out float x) ? x : null,
             Y: TryReadFloat(ReadStyleProperty(style, "top"), out float y) ? y : null,
             Width: TryReadFloat(ReadStyleProperty(style, "width"), out float width) ? width : null,
             Height: TryReadFloat(ReadStyleProperty(style, "height"), out float height) ? height : null,
-            MarginTop: TryReadFloat(ReadStyleProperty(style, "margin-top"), out float marginTop) ? marginTop : null);
+            MarginTop: marginTop);
     }
 
     private static float? ReadFloat(XElement element, string? style, string attributeName, string cssName)
@@ -398,6 +403,25 @@ internal static class ManagedUiLayout
 
         return float.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out result) &&
             float.IsFinite(result);
+    }
+
+    private static bool TryReadMarginTop(string? value, out float result)
+    {
+        result = 0f;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        ReadOnlySpan<char> remaining = value.AsSpan().Trim();
+        if (remaining.IsEmpty)
+        {
+            return false;
+        }
+
+        int separator = remaining.IndexOfAny(" \t\r\n".AsSpan());
+        ReadOnlySpan<char> top = separator >= 0 ? remaining[..separator] : remaining;
+        return TryReadFloat(top.ToString(), out result);
     }
 
     private static bool StringEquals(string? left, string? right)
