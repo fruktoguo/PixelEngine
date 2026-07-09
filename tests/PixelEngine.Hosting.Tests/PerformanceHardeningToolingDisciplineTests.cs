@@ -4869,6 +4869,26 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("tools/release-evidence-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("tools/release-evidence-preflight.ps1|.sh", plan, StringComparison.Ordinal);
 
+        string readme = ReadRepositoryFile("plan", "README.md");
+        Assert.Contains("active RID × `r2r/aot`", readme, StringComparison.Ordinal);
+        Assert.Contains("`publish` / `verify` / `package_report` / `package` / 单一 `SHA256SUMS`", readme, StringComparison.Ordinal);
+        Assert.Contains("`workflow_run`、`artifact_audit`、`github_release_upload`、`deterministic_hash`、`r2r_lightup`", readme, StringComparison.Ordinal);
+        Assert.Contains("`simd_probe` scope", readme, StringComparison.Ordinal);
+        Assert.Contains("`run_id` / `sha` / `workflow=Release` / `run_attempt` 同源", readme, StringComparison.Ordinal);
+        Assert.Contains("`event=push` 且 `ref=refs/tags/v<semver>`", readme, StringComparison.Ordinal);
+        Assert.Contains("`release_tag=true` 且 `tag` 与 ref 一致", readme, StringComparison.Ordinal);
+        Assert.Contains("`uploaded_asset_count=packageCount+1`", readme, StringComparison.Ordinal);
+        Assert.Contains("每个 package asset hash 与唯一 `SHA256SUMS` hash", readme, StringComparison.Ordinal);
+        Assert.Contains("必须逐 active RID × channel 给出 `result=match` 明细行", readme, StringComparison.Ordinal);
+        Assert.Contains("`require_all=true`", readme, StringComparison.Ordinal);
+        Assert.Contains("`aot_dynamic_box2d_rejected=true`", readme, StringComparison.Ordinal);
+        Assert.Contains("`package_layout_checked=true`", readme, StringComparison.Ordinal);
+        Assert.Contains("`checksum_checked=true`", readme, StringComparison.Ordinal);
+        Assert.Contains("`simdProbeKind`（x64=`x64_ymm_zmm`、arm64=`arm64_neon`）", readme, StringComparison.Ordinal);
+        Assert.Contains("不能是 skip", readme, StringComparison.Ordinal);
+        Assert.Contains("`codesign` / `notarization` success 报告", readme, StringComparison.Ordinal);
+        Assert.Contains("仍需人工复核，不能解除 plan/15/M15 阻塞", readme, StringComparison.Ordinal);
+
         Assert.Contains("tools/release-evidence-preflight.ps1", conventions, StringComparison.Ordinal);
         Assert.Contains("发行与 Box2D dual-build 工具链已在 `plan/15`", conventions, StringComparison.Ordinal);
         Assert.Contains("tools/audit-release-artifacts.*", conventions, StringComparison.Ordinal);
