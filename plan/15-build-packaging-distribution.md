@@ -1,5 +1,7 @@
 # Plan 15 — M15 发行、打包与分发证据账本
 
+> **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
+
 > 本文件是 M15 的发行证据账本，承载玩家包、Windows-first active set、长期 6-RID 保留矩阵、R2R/AOT、native 打包、签名、公证、GitHub Release 与 build-player 的可追溯状态。
 > 产品北极星：Engine Core + Unity-like Editor + Web-first UI Runtime + Showcase Demo Game。技术依据：`../docs/PixelEngine-架构与需求设计.md`、`00-conventions-and-techstack.md`、`../AGENTS.md`。
 > 状态标记：只使用 `- [x]`、`- [ ]`、`- [!]`。进行中状态必须拆成已完成子项与未完成或阻塞子项。

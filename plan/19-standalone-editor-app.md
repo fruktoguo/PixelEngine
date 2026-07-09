@@ -1,5 +1,7 @@
 # Plan 19 — Unity-like Editor 独立应用（PixelEngine.Editor.Shell）
 
+> **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
+
 > 产品依据：`../docs/PixelEngine-核心目标与产品定位.md`。本文件是 Unity-like Editor 状态账本，负责独立编辑器壳、项目/资源/Hierarchy/Inspector/Scene View/Game View/Console/Settings/Prefab/Build Settings、EditorShell 与玩家包解耦，以及 M13 结构闭合、M14 UX Contract、M15 人工 UX 证据。
 > 状态约定：`- [x]` 已有源码、测试、工具、报告或 plan 证据；`- [ ]` 未完成目标；`- [!]` 外部证据债、人工验收、硬件/native/发行/真实窗口阻塞。本文不再使用进行中状态，所有部分完成事项拆成已完成子项与未完成/阻塞子项。
 

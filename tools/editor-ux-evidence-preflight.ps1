@@ -470,7 +470,7 @@ try {
     }
 }
 catch {
-    $detail = "Editor UX evidence preflight failed: evidence manifest JSON 或 schema 无效。不得据此勾选 plan/19 的 M15 UX 阻塞项。"
+    $detail = "Editor UX evidence preflight failed: evidence manifest JSON 或 schema 无效。不得据此将 EDITOR-001 至 EDITOR-003 标为完成。"
     Write-EditorUxEvidenceReport -Path $reportPath -Status "blocked_invalid_editor_ux_evidence" -ExitCode 5 -Evidence @($evidence) -Missing @("editor ux evidence manifest 无效：$($_.Exception.Message)") -Detail $detail
     Write-Host "Editor UX evidence preflight blocked_invalid_editor_ux_evidence. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
     if (-not $AllowBlocked) {
@@ -522,7 +522,7 @@ foreach ($definition in $scopeDefinitions) {
 }
 
 if ($missing.Count -gt 0) {
-    $detail = "Editor UX evidence preflight failed: manifest 存在，但真实窗口完整路线、Project Window 引用稳定性、脚本外部编辑器、Settings UX 或产品可用性证据不完整。不得据此勾选 plan/19 的 M15 UX 阻塞项。"
+    $detail = "Editor UX evidence preflight failed: manifest 存在，但真实窗口完整路线、Project Window 引用稳定性、脚本外部编辑器、Settings UX 或产品可用性证据不完整。不得据此将 EDITOR-001 至 EDITOR-003 标为完成。"
     Write-EditorUxEvidenceReport -Path $reportPath -Status "blocked_missing_editor_ux_scope_evidence" -ExitCode 5 -Evidence @($evidence) -Missing @($missing) -Detail $detail
     Write-Host "Editor UX evidence preflight blocked_missing_editor_ux_scope_evidence. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
     if (-not $AllowBlocked) {
@@ -533,7 +533,7 @@ if ($missing.Count -gt 0) {
     exit 0
 }
 
-$detail = "Editor UX evidence manifest is complete and SHA256/semantic checks passed. Human review still must confirm the attached materials prove the full Editor window route, Project Window reference stability, script external editor behavior, Settings UX, and product usability before plan/19 can be unblocked."
+$detail = "Editor UX evidence manifest is complete and SHA256/semantic checks passed. Human review still must confirm the attached materials prove the full Editor window route, Project Window reference stability, script external editor behavior, Settings UX, and product usability before EDITOR-001 through EDITOR-003 can be completed."
 Write-EditorUxEvidenceReport -Path $reportPath -Status "editor_ux_evidence_attached_pending_review" -ExitCode 2 -Evidence @($evidence) -Missing @($missing) -Detail $detail
 Write-Host "Editor UX evidence preflight editor_ux_evidence_attached_pending_review. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
 

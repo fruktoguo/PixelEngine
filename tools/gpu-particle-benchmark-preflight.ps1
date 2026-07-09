@@ -562,7 +562,7 @@ function Write-Report {
     $lines.Add("")
     $lines.Add("## 说明")
     $lines.Add("")
-    $lines.Add('该脚本只负责收集/校验 plan/09 高密度 GPU 粒子基准证据。`local_probe_only` 与 `target_gpu_evidence_attached_pending_review` 都不是验收通过状态；plan 勾选仍需要人工确认目标 GPU 硬件上的长基准结论。')
+    $lines.Add('该脚本只负责收集/校验 PERF-010 高密度 GPU 粒子基准证据。`local_probe_only` 与 `target_gpu_evidence_attached_pending_review` 都不是完成状态；PERF-010 仍需要人工确认目标 GPU 硬件上的长基准结论。')
     $lines.Add("")
 
     if ($ProbeSummaries.Count -gt 0) {
@@ -814,7 +814,7 @@ if (-not [string]::IsNullOrWhiteSpace($EvidenceManifestPath) -and $status -ne "b
             $exitCode = 5
         }
         else {
-            $notes.Add("已附加目标 GPU 硬件基准证据清单，但仍需人工确认 comparisonReport 与 plan/09 验收语义。")
+            $notes.Add("已附加目标 GPU 硬件基准证据清单，但仍需人工确认 comparisonReport 满足 PERF-010 验收语义。")
             $exitCode = 2
         }
     }

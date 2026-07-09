@@ -66,31 +66,32 @@ PixelEngine 是一个自研的、对标 Noita 世界模拟的高性能 2D 像素
 
 ## 5. plan/ 工作方式
 
-- `plan/` 下每个文档是一个子系统/阶段的完整计划，含「目标 / 技术栈 / 详细设计 / 实现清单（带勾选）/ 验收标准（带勾选）/ 依赖 / 提交节点」。
-- 条目状态约定：`- [ ]` 未开始；`- [x]` 已完成并自测通过；`- [~]` 进行中；`- [!]` 阻塞（后跟原因）。
-- 完成一个条目即勾选；**完成一个文档定义的「提交节点」就立即用中文 git 提交**（见 §6）。
-- 执行顺序与依赖见 `plan/README.md` 与 `plan/17-roadmap-execution-order.md`，不得乱序跳过前置。
-- 计划本身发现问题（与架构文档/不变式冲突、依赖缺失）要先改计划再改代码，保持计划与实现同步。
+- `plan/tasks/README.md` 是唯一的执行状态真相源；选择下一项、更新状态、判断完成和恢复中断工作都从该目录开始。
+- `plan/00-*.md` 至 `plan/20-*.md` 是子系统详细设计与历史清单。原有 checkbox 只作迁移快照，不再作为 live task，也不得继续在其中新增执行状态。
+- 每个 canonical task 必须有唯一 ID，且全目录只能有一个状态 checkbox：`- [ ]` 未开始；`- [~]` 进行中；`- [!]` 阻塞并写明解除条件；`- [x]` 实现、测试、验收和所需证据全部完成。
+- 开始任务时先检查依赖，再把唯一状态改为 `[~]`；完成任务定义的提交节点就立即用中文 git 提交（见 §6），不得等整条轨道结束后合并提交。
+- 若实现发现详细设计、产品目标或架构不变式存在冲突，先更新上层文档与 canonical task，再修改代码。所有计划文档改动必须通过 `tools/validate-task-catalog.ps1`。
 
 ---
 
 ## 6. Git 提交规范
 
-- **每完成一个计划提交节点，必须用中文写一次 git 提交。** 不攒大堆改动一次性提交。
+- **每完成一个 canonical task 定义的提交节点，必须用中文写一次 git 提交。** 不攒大堆改动一次性提交。
 - 不提交 `bin/`、`obj/`、构建产物、存档（见 `.gitignore`）。
 - 提交信息格式（中文正文，类型前缀用英文便于工具识别）：
 
   ```
   <type>(<scope>): <中文简述>
 
-  <中文正文：做了什么、为什么、对应 plan 条目/章节>
+  <中文正文：做了什么、为什么、对应 task 与设计章节>
 
-  对应计划: plan/03-simulation-kernel.md §实现清单 第N项
+  对应任务: PERF-002
+  设计依据: plan/08-rendering.md §实现清单 第N项
   ```
 
   `type` ∈ `feat|fix|perf|refactor|test|docs|build|chore`；`scope` 如 `sim|physics|render|audio|script|editor|demo|core|world|build`。
 - 示例：`feat(sim): 实现 64x64 chunk 与 per-chunk dirty rectangle`
-- 当前分支 `main`（本地仓库）。涉及高风险大改可开 `feat/<name>` 分支，但默认在 main 上按节点小步提交。
+- 以当前检出的本地分支为准；涉及高风险大改可开 `feat/<name>` 分支，并始终按提交节点小步提交。
 - **不使用 `--no-verify`，不跳过 hook，不强推。** push 仅在用户明确要求时。
 
 ---
@@ -101,7 +102,7 @@ PixelEngine 是一个自研的、对标 Noita 世界模拟的高性能 2D 像素
 - CA 内核重点测：质量守恒（含跨 chunk 边界）、反应守恒（双输出/定向反应在边界不翻倍/不丢失）、单线程 oracle 比对多线程统计性质、movement 规则、parity 防重复。（§16.2）
 - physics 测：凸分解每片 ≤8 顶点且凸、覆盖原 mask、`radius=0`；inverse-sampling 旋转水密无洞。
 - serialization 测：save→load 逐 cell 等价；改 materials.json 顺序/增删后旧档正确重映射；版本迁移链。
-- 每个 plan 文档的「验收标准」必须全部勾选才算该文档完成。
+- canonical task 只有在其验收条件、测试和要求的证据全部满足后才能改为 `[x]`；旧 plan checkbox 不再用于判定完成。
 - 改性能敏感代码后跑对应 benchmark，回归即视为 bug。
 
 ---

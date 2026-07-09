@@ -1,0 +1,184 @@
+{
+  "schema": "pixelengine.task-source-coverage/v2",
+  "snapshotCommit": "179efc3a90f95fbf5222cc1ac55e63b6841c0022",
+  "countsIncludeIndentedCheckboxes": true,
+  "mappingSemantics": "completed capability bundles plus related follow-up tasks; not one-to-one checkbox ownership",
+  "legacyCheckboxTotal": 1692,
+  "plans": [
+    {
+      "path": "plan/00-conventions-and-techstack.md",
+      "expected": { "done": 23, "open": 2, "active": 0, "blocked": 7 },
+      "checkboxSha256": "ccfbec4e754dac5441597aeff046910d73f20e8722b8d5fadf117ca907708fec",
+      "completedCapabilityIds": ["BASE-001", "BASE-018", "SCOPE-001", "SCOPE-002", "SCOPE-003", "SCOPE-004", "SCOPE-005"],
+      "followUpTaskIds": ["EVID-003", "PERF-009", "PERF-012", "REL-003", "OPT-001", "OPT-002", "OPT-003", "OPT-004"]
+    },
+    {
+      "path": "plan/01-project-setup.md",
+      "expected": { "done": 91, "open": 0, "active": 0, "blocked": 6 },
+      "checkboxSha256": "d33958e2127827e61429f570927a5f9bb72c94fa96432b2400c2f44376d0c9cb",
+      "completedCapabilityIds": ["BASE-001", "BASE-017"],
+      "followUpTaskIds": ["CI-001", "CI-002", "CI-003", "EVID-003", "REL-001", "REL-002", "REL-003", "REL-004", "REL-005"]
+    },
+    {
+      "path": "plan/02-core-infrastructure.md",
+      "expected": { "done": 87, "open": 2, "active": 0, "blocked": 6 },
+      "checkboxSha256": "3d22aae99d19b956d9671ba9a311651b0ed00a53fcceb2fa2383548154fd3e4c",
+      "completedCapabilityIds": ["BASE-002"],
+      "followUpTaskIds": ["ARCH-001", "PERF-004", "PERF-009", "PERF-011", "PERF-012", "EVID-003"]
+    },
+    {
+      "path": "plan/03-simulation-kernel.md",
+      "expected": { "done": 124, "open": 2, "active": 0, "blocked": 6 },
+      "checkboxSha256": "566f9b62ceb1167c9539783427de8966d39fa18a1536cd777cfe2f221e66eb41",
+      "completedCapabilityIds": ["BASE-003"],
+      "followUpTaskIds": ["ARCH-002", "PERF-003", "PERF-004", "PERF-008", "PERF-009"]
+    },
+    {
+      "path": "plan/04-materials-reactions-temperature.md",
+      "expected": { "done": 97, "open": 2, "active": 0, "blocked": 6 },
+      "checkboxSha256": "1012605d7c8bd2a8391d791fedeb78180ba297f5592d3dcde527ec813408c350",
+      "completedCapabilityIds": ["BASE-004"],
+      "followUpTaskIds": ["PERF-009", "PERF-011", "DEMO-002", "DEMO-003", "DEMO-004"]
+    },
+    {
+      "path": "plan/05-particles-lifecycle.md",
+      "expected": { "done": 69, "open": 2, "active": 0, "blocked": 6 },
+      "checkboxSha256": "9cfcc81dfd69e5d286c53100de98a80ced280b2aeb11513db31dca081862abb2",
+      "completedCapabilityIds": ["BASE-005"],
+      "followUpTaskIds": ["PERF-008", "PERF-010", "DEMO-002", "DEMO-003"]
+    },
+    {
+      "path": "plan/06-physics-collision-rigidbody.md",
+      "expected": { "done": 111, "open": 0, "active": 0, "blocked": 0 },
+      "checkboxSha256": "e2684f05071f81b462554399f4e8eb4a323159258bdab3adce0b8ba898c62957",
+      "completedCapabilityIds": ["BASE-006"],
+      "followUpTaskIds": ["ARCH-003", "PERF-004", "PERF-005", "PERF-008", "EVID-002"]
+    },
+    {
+      "path": "plan/07-world-streaming-serialization.md",
+      "expected": { "done": 73, "open": 0, "active": 0, "blocked": 0 },
+      "checkboxSha256": "63dae4c028a2c445af8f7761ceb7e8a06a9577ae694b168887e7e0c787dba040",
+      "completedCapabilityIds": ["BASE-007"],
+      "followUpTaskIds": ["PERF-006"]
+    },
+    {
+      "path": "plan/08-rendering.md",
+      "expected": { "done": 101, "open": 0, "active": 0, "blocked": 0 },
+      "checkboxSha256": "2360102fee80f08c610f83cebca8a40bde29ccef74c24c35612ae56d19570f18",
+      "completedCapabilityIds": ["BASE-008"],
+      "followUpTaskIds": ["PERF-001", "PERF-002", "PERF-008", "UI-001", "UI-003"]
+    },
+    {
+      "path": "plan/09-gpu-compute.md",
+      "expected": { "done": 43, "open": 0, "active": 0, "blocked": 2 },
+      "checkboxSha256": "5d9b5591f5b49461e056154b812918fa48734265e444f6325a3b540ec097205f",
+      "completedCapabilityIds": ["BASE-008", "SCOPE-002"],
+      "followUpTaskIds": ["ARCH-005", "PERF-010", "OPT-001"]
+    },
+    {
+      "path": "plan/10-audio.md",
+      "expected": { "done": 50, "open": 0, "active": 0, "blocked": 0 },
+      "checkboxSha256": "4a23a6c92633f9586610732b5289bcd163d2380e46d4b99924767ca180135eff",
+      "completedCapabilityIds": ["BASE-009"],
+      "followUpTaskIds": ["DEMO-003", "PERF-008", "PERF-011", "EVID-002"]
+    },
+    {
+      "path": "plan/11-scripting-system.md",
+      "expected": { "done": 94, "open": 0, "active": 0, "blocked": 0 },
+      "checkboxSha256": "aa4cbd6dc9685b2abb739aa5f0c61a48ba79f1db66417f683a7c8e7edd77f237",
+      "completedCapabilityIds": ["BASE-011"],
+      "followUpTaskIds": ["ARCH-004", "DEMO-005"]
+    },
+    {
+      "path": "plan/12-editor-tooling-ui.md",
+      "expected": { "done": 96, "open": 0, "active": 0, "blocked": 0 },
+      "checkboxSha256": "f12a69812523ca45d088d6347011d19f491c985a0540a67e878138dd9e2769ca",
+      "completedCapabilityIds": ["BASE-012"],
+      "followUpTaskIds": ["EDITOR-001", "EDITOR-002", "EDITOR-003"]
+    },
+    {
+      "path": "plan/13-demo-game.md",
+      "expected": { "done": 42, "open": 0, "active": 0, "blocked": 22 },
+      "checkboxSha256": "8640831734c4f676c8158b1d187fcc15836e9f6c9c98d174be95cde8fb468edc",
+      "completedCapabilityIds": ["BASE-015", "SCOPE-006"],
+      "followUpTaskIds": ["DEMO-001", "DEMO-002", "DEMO-003", "DEMO-004", "DEMO-005", "UI-001", "PERF-007", "PERF-008"]
+    },
+    {
+      "path": "plan/14-testing-benchmarking.md",
+      "expected": { "done": 102, "open": 0, "active": 0, "blocked": 2 },
+      "checkboxSha256": "e54a48da76b33c0871abc3ec3a819a4ad578563ef92106ad9cb12586338ef9ed",
+      "completedCapabilityIds": ["BASE-016"],
+      "followUpTaskIds": ["CI-001", "CI-002", "CI-003", "TEST-001", "TEST-002", "PERF-001", "PERF-008", "PERF-009", "PERF-010", "PERF-011", "PERF-012", "EVID-002", "EVID-003"]
+    },
+    {
+      "path": "plan/15-build-packaging-distribution.md",
+      "expected": { "done": 49, "open": 13, "active": 0, "blocked": 23 },
+      "checkboxSha256": "5d7c7957be041540763542dcc0915d6d21dd5cdc4399338a4bb2df4f2ad3b3aa",
+      "completedCapabilityIds": ["BASE-017", "SCOPE-001", "SCOPE-003"],
+      "followUpTaskIds": ["CI-003", "EVID-003", "PERF-012", "REL-001", "REL-002", "REL-003", "REL-004", "REL-005", "OPT-002", "OPT-004"]
+    },
+    {
+      "path": "plan/16-performance-hardening.md",
+      "expected": { "done": 49, "open": 14, "active": 0, "blocked": 27 },
+      "checkboxSha256": "f3833318e590cc81708128231539a07ad9df23364899db56764f0dde15dd6eb6",
+      "completedCapabilityIds": ["BASE-016"],
+      "followUpTaskIds": ["PERF-001", "PERF-002", "PERF-003", "PERF-004", "PERF-005", "PERF-006", "PERF-007", "PERF-008", "PERF-009", "PERF-010", "PERF-011", "PERF-012", "EVID-003"]
+    },
+    {
+      "path": "plan/17-roadmap-execution-order.md",
+      "expected": { "done": 14, "open": 1, "active": 0, "blocked": 3 },
+      "checkboxSha256": "2c05d244b140a72bdeca3f417751d6af81e787c0dc90042bcc76363d18c15315",
+      "completedCapabilityIds": ["BASE-018", "SCOPE-001", "SCOPE-002", "SCOPE-003", "SCOPE-004", "SCOPE-006"],
+      "followUpTaskIds": ["CI-001", "CI-003", "PERF-003", "PERF-008", "PERF-009", "EDITOR-003", "UI-001", "UI-002", "UI-003", "DEMO-004", "EVID-002", "REL-003"]
+    },
+    {
+      "path": "plan/18-hosting-runtime.md",
+      "expected": { "done": 40, "open": 0, "active": 0, "blocked": 9 },
+      "checkboxSha256": "95a389f529bcc7a0f80be10c937d68a1458aec8b1d1395c37aa009e29030ff3c",
+      "completedCapabilityIds": ["BASE-010"],
+      "followUpTaskIds": ["ARCH-003", "EDITOR-002", "EDITOR-003", "EVID-002", "PERF-008"]
+    },
+    {
+      "path": "plan/19-standalone-editor-app.md",
+      "expected": { "done": 77, "open": 3, "active": 0, "blocked": 9 },
+      "checkboxSha256": "d720faa86838f1c13e068e8ec6b6ba26e790a0a92759c6da16c3e79b8918ccc8",
+      "completedCapabilityIds": ["BASE-013"],
+      "followUpTaskIds": ["EDITOR-001", "EDITOR-002", "EDITOR-003", "UI-002", "DEMO-005", "DOC-001", "DOC-002", "REL-001"]
+    },
+    {
+      "path": "plan/20-interactive-html-ui.md",
+      "expected": { "done": 66, "open": 3, "active": 0, "blocked": 16 },
+      "checkboxSha256": "65837beb150722b447107c39705dc73b8e05a9cec34aacf200bbe8a8cf0b37fb",
+      "completedCapabilityIds": ["BASE-014", "SCOPE-003", "SCOPE-004"],
+      "followUpTaskIds": ["UI-001", "UI-002", "UI-003", "PERF-010", "REL-005", "OPT-002", "OPT-003"]
+    }
+  ],
+  "catalogOnlyTaskIds": ["EVID-001", "PLAN-001"],
+  "requiredExecutionStages": [
+    {
+      "id": "A",
+      "name": "可信控制面",
+      "taskIds": ["PLAN-001", "EVID-001", "EVID-003", "CI-001", "TEST-001", "CI-002", "TEST-002", "PERF-001"]
+    },
+    {
+      "id": "B",
+      "name": "M14 正确性与性能加固",
+      "taskIds": ["ARCH-001", "ARCH-002", "ARCH-003", "ARCH-004", "ARCH-005", "PERF-002", "PERF-003", "PERF-004", "PERF-005", "PERF-006", "PERF-007", "PERF-011", "DOC-002"]
+    },
+    {
+      "id": "C",
+      "name": "候选版本冻结",
+      "taskIds": ["REL-001"]
+    },
+    {
+      "id": "D",
+      "name": "M15 产品与目标环境证据",
+      "taskIds": ["PERF-008", "PERF-009", "PERF-010", "PERF-012", "EVID-002", "EDITOR-001", "EDITOR-002", "EDITOR-003", "UI-001", "UI-002", "UI-003", "DEMO-001", "DEMO-002", "DEMO-003", "DEMO-004", "DEMO-005", "DOC-001", "CI-003", "REL-004", "REL-005"]
+    },
+    {
+      "id": "E",
+      "name": "确定性发行",
+      "taskIds": ["REL-002", "REL-003"]
+    }
+  ]
+}

@@ -497,7 +497,7 @@ try {
     $manifestGitCommit = Get-RequiredManifestString -Node $manifest -Name "gitCommit"
 }
 catch {
-    $detail = "Target performance evidence preflight failed: evidence manifest JSON 或 schema 无效。不得据此勾选 plan/16 的目标硬件阻塞项。"
+    $detail = "Target performance evidence preflight failed: evidence manifest JSON 或 schema 无效。不得据此将 PERF-003、PERF-008、PERF-009、PERF-011 或 PERF-012 标为完成。"
     Write-PerformanceEvidenceReport -Path $reportPath -Status "blocked_invalid_target_performance_evidence" -ExitCode 5 -Evidence @($evidence) -Missing @("performance target evidence manifest 无效：$($_.Exception.Message)") -Detail $detail
     Write-Host "Performance target evidence preflight blocked_invalid_target_performance_evidence. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
     if (-not $AllowBlocked) {
@@ -588,7 +588,7 @@ if ($missing.Count -eq 0) {
 }
 
 if ($missing.Count -gt 0) {
-    $detail = "Target performance evidence preflight failed: manifest 存在，但 AVX-512 降频净损、6 RID cells/frame、帧预算或硬件计数器证据不完整。不得据此勾选 plan/16 的目标硬件阻塞项。"
+    $detail = "Target performance evidence preflight failed: manifest 存在，但 AVX-512 降频净损、6 RID cells/frame、帧预算或硬件计数器证据不完整。不得据此将 PERF-003、PERF-008、PERF-009、PERF-011 或 PERF-012 标为完成。"
     Write-PerformanceEvidenceReport -Path $reportPath -Status "blocked_missing_target_performance_scope_evidence" -ExitCode 5 -Evidence @($evidence) -Missing @($missing) -Detail $detail
     Write-Host "Performance target evidence preflight blocked_missing_target_performance_scope_evidence. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
     if (-not $AllowBlocked) {
@@ -599,7 +599,7 @@ if ($missing.Count -gt 0) {
     exit 0
 }
 
-$detail = "Target performance evidence manifest is complete and SHA256 hashes matched. Human review still must confirm the evidence proves AVX-512 has no net downclock loss, 6 RID cells/frame targets were measured with BenchmarkDotNet on representative hardware, frame budgets meet plan/16 §5, and hardware counters include Cache Misses / Branch Mispredictions before plan/16 can be unblocked."
+$detail = "Target performance evidence manifest is complete and SHA256 hashes matched. Human review still must confirm the evidence proves AVX-512 has no net downclock loss, 6 RID cells/frame targets were measured with BenchmarkDotNet on representative hardware, frame budgets meet the canonical thresholds, and hardware counters include Cache Misses / Branch Mispredictions before PERF-003, PERF-008, PERF-009, PERF-011 and PERF-012 can be completed."
 Write-PerformanceEvidenceReport -Path $reportPath -Status "target_performance_evidence_attached_pending_review" -ExitCode 2 -Evidence @($evidence) -Missing @($missing) -Detail $detail
 Write-Host "Performance target evidence preflight target_performance_evidence_attached_pending_review. Report: $(ConvertTo-RepositoryRelativePath -Root $root -Path $reportPath)"
 

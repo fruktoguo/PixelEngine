@@ -1,5 +1,7 @@
 # Plan 17 — 路线图、执行顺序与提交节点总表
 
+> **状态迁移（2026-07-10）**：本文件保留 M0-M15 依赖设计、提交节点与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
+
 > 本文件是实际编码的节奏表:把 `plan/01`–`plan/20` 编织进里程碑 M0–M15,给出依赖图、并行关系、退出标准与中文 git 提交节点序列。与架构文档 §18 的 M0–M10 对齐,并把用户新增的脚本系统(plan/11)、Editor ImGui 面板层(plan/12)、Unity-like Editor 与发行解耦(plan/19,含 GUI 宿主中性化程序集 `PixelEngine.Gui`)、Web-first 透明 HTML UI Runtime(plan/20,`PixelEngine.UI`)纳入。M13/M14/M15 三个里程碑在 M12 之后续接:M13「Unity-like Editor 结构闭合与发行解耦」、M14「Unity-like Editor / Web-first 透明 HTML UI Runtime 产品面校准与 Showcase Demo Game」、M15「证据、基准、发行与产品化闭合」。
 > 原则:vertical-slice-first(尽早让「沙能下落并渲染上屏」端到端跑通),一步到位、无 MVP、无临时实现(`AGENTS.md`)。
 
@@ -148,7 +150,9 @@ M13/M14/M15 引入的重构、产品面校准与证据闭合有若干**强前置
 
 > 提交粒度可按实际拆得更细;但**每完成一个节点必须立即用中文提交**,不攒堆。每次提交前确保该节点相关测试通过(`AGENTS.md §7`)。提交节点 32–34 是 M13 入口门(GUI 宿主中性化重构),必须先于 40 的玩家包 player-only 审计;38(build-player 编排器)先于 39(编辑器内打包面板);41(Damage 平面+bump SaveFormatVersion)先于 42/43;48 是本轮产品口径校准节点,49–50 是 M15 证据与发行闭合节点,不得用 `*_pending_review`、`local_probe_only`、`scripted_probe_only`、`process_smoke_only`、`ready` 或 `counters_present` 代替验收。
 
-## 6. 验收(本路线图)
+## 6. 历史验收快照（已迁移，禁止更新）
+
+> 本节只保留迁移前的审计证据，不再汇总当前完成度。对应的唯一状态已归并到 `tasks/30-correctness-architecture.md` 至 `tasks/60-validation-release.md`，旧条目覆盖见 `tasks/90-legacy-coverage.md`。
 
 - [!] M0–M12 全部退出标准达成。阻塞：`plan/00`、`plan/09`、`plan/13`、`plan/14`、`plan/15`、`plan/16`、`plan/18` 仍保留目标硬件、发行产物(win-x64 优先激活集全绿+dormant 可一键激活)、macOS 签名公证、真实窗口人工验收、AVX-512/硬件计数器、ComputeSharp/DX12 资源契约与 native 泄漏审计等外部或架构决策阻塞；各 preflight 只接受 evidence manifest 或明确探针报告，`*_pending_review`、`local_probe_only`、`scripted_probe_only` 与 `process_smoke_only` 仍不是验收通过，不能假装已达成。
 - [x] M13 全部退出标准达成:GUI 宿主中性化重构落地(`PixelEngine.Gui` 抽出、`Hosting` 编译期不再引用 `PixelEngine.Editor`、`DemoProgram` 改用中性 host);`apps/PixelEngine.Editor.Shell` 独立进程内可开工程/编辑层级/Inspector/gizmo/prefab(嵌套+override)/.scene v2 往返无损/Play 就绪;编辑器内一键出包经 build-player 产出并通过玩家包 player-only 审计(app/ 内无 `PixelEngine.Editor.dll` 与编辑器专属面板闭包、允许玩家 HUD 所需 `Hexa.NET.ImGui`);win-x64 优先 RID 激活门控+app/ 子目录布局落地;plan/18 §5 editor-window 证据从 Demo `--editor` 等价迁移到 shell `--window-ticks`/scripted-probe。证据: `dotnet test tests\PixelEngine.Hosting.Tests\PixelEngine.Hosting.Tests.csproj -c Release --filter "FullyQualifiedName~HostingProjectDisciplineTests|FullyQualifiedName~EditorShellBuildTests|FullyQualifiedName~EngineWindowOwnershipTests"` 通过 38/38; `dotnet test tests\PixelEngine.Demo.Tests\PixelEngine.Demo.Tests.csproj -c Release --filter "DemoStartupOptionsTests"` 通过 21/21; `apps/PixelEngine.Editor.Shell --window-ticks 180 --scripted-probe` 输出 `editor_enabled=True`、`editor_running=True`、`editor_panels=17`、`editor_bridge_frames=138`、`scripted_play_entered=True`、`scripted_play_exited=True`、`scripted_scene_saved=True`、`scripted_project_closed=True`、`scripted_project_reopened=True` 并写出 `artifacts/m13-editor-shell-current-probe/capture.bmp`; `tools/build-player.ps1 -Rid win-x64 -Channel r2r -Configuration Release -StartScene scenes/lava-mine.scene` 产出 `artifacts/m13-build-player-current/build-result.json` (`ok=true`) 与 `PixelEngine-Demo-0.1.0-win-x64-r2r.zip`, 审计通过且包根仅保留启动入口/README/NOTICE/SHA256SUMS 与 `app/`、`content/`, 递归确认 `app/` 内无 `PixelEngine.Editor*`、`*ImGuizmo*`、`*ImPlot*`。

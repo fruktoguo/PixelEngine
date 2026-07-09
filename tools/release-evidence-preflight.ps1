@@ -810,7 +810,7 @@ try {
 }
 catch {
     $reason = "release evidence manifest 无效：$($_.Exception.Message)"
-    $detail = "Release evidence preflight failed: manifest JSON 无法解析或 schemaVersion 不受支持。不得据此勾选 plan/15 阻塞项。"
+    $detail = "Release evidence preflight failed: manifest JSON 无法解析或 schemaVersion 不受支持。不得据此将 REL-002 至 REL-005 标为完成。"
     Write-ReleaseEvidenceReport -Path $reportPath -Status "blocked_invalid_release_evidence" -Evidence $evidence -Missing @($reason) -RequiredRids $rids -RequiredChannels $channels -Detail $detail
     Write-Host "Release evidence preflight blocked_invalid_release_evidence. Report: $reportPath"
 
@@ -948,7 +948,7 @@ elseif ($checksumPaths.Count -eq 1) {
 Test-PackageVersionsMatchReleaseTag -Missing $missing -ReleaseVersion $releaseVersion -ExpectedPackages $expectedChecksumPackages
 
 if ($missing.Count -gt 0) {
-    $detail = "Release evidence preflight failed: release manifest 存在，但外部证据不完整。缺失项必须由 release workflow、目标 runner、macOS signing/notary 或 GitHub Release 上传结果补齐；不得据此勾选 plan/15 阻塞项。"
+    $detail = "Release evidence preflight failed: release manifest 存在，但外部证据不完整。缺失项必须由 release workflow、目标 runner、macOS signing/notary 或 GitHub Release 上传结果补齐；不得据此将 REL-002 至 REL-005 标为完成。"
     Write-ReleaseEvidenceReport -Path $reportPath -Status "blocked_missing_release_scope_evidence" -Evidence $evidence -Missing $missing -RequiredRids $rids -RequiredChannels $channels -Detail $detail
     Write-Host "Release evidence preflight blocked_missing_release_scope_evidence. Report: $reportPath"
 
@@ -959,7 +959,7 @@ if ($missing.Count -gt 0) {
     exit 5
 }
 
-$detail = "Release evidence manifest is complete, declared SHA256 hashes matched, and markdown evidence fields reported success for required jobs. Human review still must confirm the reports prove active RID R2R/AOT outputs, AOT SIMD probes, R2R runtime light-up, macOS codesign/notarization where applicable, deterministic hashes and GitHub Release upload before plan/15 can be unblocked."
+$detail = "Release evidence manifest is complete, declared SHA256 hashes matched, and markdown evidence fields reported success for required jobs. Human review still must confirm the reports prove active RID R2R/AOT outputs, AOT SIMD probes, R2R runtime light-up, macOS codesign/notarization where applicable, deterministic hashes and GitHub Release upload before REL-002 through REL-005 can be completed."
 Write-ReleaseEvidenceReport -Path $reportPath -Status "release_evidence_attached_pending_review" -Evidence $evidence -Missing $missing -RequiredRids $rids -RequiredChannels $channels -Detail $detail
 Write-Host "Release evidence preflight release_evidence_attached_pending_review. Report: $reportPath"
 

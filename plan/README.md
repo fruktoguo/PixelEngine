@@ -1,100 +1,81 @@
-# PixelEngine 计划总览（plan/ 索引）
+# PixelEngine 计划文档索引
 
-本文件夹是 PixelEngine 的完整实现计划。每个文档是一个子系统/阶段的完整、带勾选条目的计划，覆盖目标、技术栈、详细设计、实现清单、验收标准、依赖与提交节点。一步到位、无 MVP、无临时实现——细节见 `../AGENTS.md`。
+`plan/` 保存 PixelEngine 的产品、架构和子系统设计。当前任务状态、执行顺序、依赖和完成条件统一由 [`tasks/README.md`](tasks/README.md) 管理；本文件只负责文档导航，不维护第二套进度表。
 
-产品北极星：`../docs/PixelEngine-核心目标与产品定位.md`，用于定义 PixelEngine 最终要开发到什么地步、面向谁、Demo 完整度与优先级判断规则。
+## 1. 从哪里开始
 
-权威设计依据：`../docs/PixelEngine-架构与需求设计.md`（架构文档，19 章）。技术栈定稿：`00-conventions-and-techstack.md`。
+| 目的 | 入口 |
+|---|---|
+| 选择下一项工作、查看状态 | [`tasks/README.md`](tasks/README.md) |
+| 查看 canonical task 全量覆盖 | [`tasks/90-legacy-coverage.md`](tasks/90-legacy-coverage.md) |
+| 理解产品目标 | [`../docs/PixelEngine-核心目标与产品定位.md`](../docs/PixelEngine-核心目标与产品定位.md) |
+| 理解架构与性能不变式 | [`../docs/PixelEngine-架构与需求设计.md`](../docs/PixelEngine-架构与需求设计.md) |
+| 查看开发纪律 | [`../AGENTS.md`](../AGENTS.md) |
+| 查看历史里程碑依赖图 | [`17-roadmap-execution-order.md`](17-roadmap-execution-order.md) |
 
-## 文档清单
+文档权威顺序为：`AGENTS.md` 与架构不变式 > 产品目标 > 子系统详细设计 > canonical task。发生冲突时，先修正上层设计和任务定义，再实现代码。
 
-| # | 文档 | 范围 | 关键依赖 |
-|---|---|---|---|
-| 00 | `00-conventions-and-techstack.md` | 技术栈定稿、解决方案结构、全局约定（锚文档） | — |
-| 01 | `01-project-setup.md` | 解决方案/项目骨架、CPM、Directory.Build、native 构建、CI、git | 00 |
-| 02 | `02-core-infrastructure.md` | Core：数学/内存/线程池+barrier/RNG/事件总线/时间/诊断/常量 | 01 |
-| 03 | `03-simulation-kernel.md` | CA 内核：CellGrid(SoA)/chunk/dirtyrect/checkerboard/movement/parity/KeepAlive | 02 |
-| 04 | `04-materials-reactions-temperature.md` | 材质定义/反应表([tag]展开)/温度场/相变/数据驱动(含 Content 加载器与 schema) | 03 |
-| 05 | `05-particles-lifecycle.md` | 自由粒子池/cell↔particle handshake/生命周期 | 03 |
-| 06 | `06-physics-collision-rigidbody.md` | CCL/marchingsquares/DP/凸分解/Box2D 桥+task 桥/两世界同步/角色控制器 | 02、03、Interop |
-| 07 | `07-world-streaming-serialization.md` | chunk 驻留/border ring/流式装卸/内存上限/存档/id 重映射/版本迁移 | 03、04 |
-| 08 | `08-rendering.md` | Silk.NET/纹理流式(PBO)/粒子合成/光照/bloom/post/相机 | 02、03、05 |
-| 09 | `09-gpu-compute.md` | GPU 计算：光照(含 Radiance Cascades)/bloom/高密度粒子/可选非权威 sim pass | 08 |
-| 10 | `10-audio.md` | OpenAL/positional source 池/事件驱动材质音效/限频去重 | 02 |
-| 11 | `11-scripting-system.md` | 项目引用模型/Behaviour&Component API/Roslyn+ALC 热重载/世界脚本接口/IDE 启动 | 02、Hosting |
-| 12 | `12-editor-tooling-ui.md` | Editor ImGui 面板层：面板框架/材质编辑器/世界编辑/调试叠层/检视器/资源浏览/sim 控制 | 08、03、06、11 |
-| 13 | `13-demo-game.md` | Showcase Demo Game：可操作角色/玩法/关卡/内容（仅依赖引擎公开 API） | 11、全部引擎子系统 |
-| 14 | `14-testing-benchmarking.md` | 测试策略/性质测试/oracle 比对/基准/CI 门禁 | 02–13 |
-| 15 | `15-build-packaging-distribution.md` | Windows 优先发行+跨平台矩阵保留/R2R/AOT/app 布局/build-player/native dual-build/打包/codesign/分发 | 01、06 |
-| 16 | `16-performance-hardening.md` | 跨切面性能加固清单：多线程/内存/SIMD/GC/GPU/profiling | 02–13 |
-| 17 | `17-roadmap-execution-order.md` | 执行顺序/依赖图/里程碑映射(M0–M15)/提交节点总表 | 全部 |
-| 18 | `18-hosting-runtime.md` | 引擎宿主:Engine 门面/12 相位主循环编排/子系统装配/场景/Play-Edit 模式/过载降级编排/headless | 02–10 |
-| 19 | `19-standalone-editor-app.md` | Unity-like Editor：顶层壳/项目/窗口生命周期/GameObject authoring/gizmo/prefab/.scene 保存/编辑器内构建面板(build-player)/玩家包解耦 | 12、18、11、08、15 |
-| 20 | `20-interactive-html-ui.md` | Web-first 透明 HTML UI Runtime（PixelEngine.UI）：后端选型/显式 UI 层合成/C#↔UI 桥/输入三级仲裁/相位0-1-10 挂载 | 08、12、18、13、11 |
+## 2. 子系统设计
 
-> 模块归属与编号说明（见 `00-conventions-and-techstack.md §5.1`）：数据模型类型(`MaterialDef`/`Reaction`/`CellType`/`AudioCueSet`)归 `Simulation`、事件类型(`AudioEvent`)归 `Core`；`PixelEngine.Content` 无独立文档,其设计分布于 `plan/04`(加载器+schema)、`plan/07`(id 重映射)、`plan/12`(编辑器热重载);**12 相位帧循环的编排者是 `Hosting`(`plan/18`)**。编辑器面板实现归 `plan/12`，Unity-like Editor 顶层应用、GameObject authoring UX 及编辑器内构建面板归 `plan/19`；Web-first 透明 HTML UI Runtime 归 `plan/20`（`PixelEngine.UI`），编辑器 ImGui 与玩家侧 HTML UI Runtime 为两套并存 UI（共享 ImGui host 与字体栈的中性 `PixelEngine.Gui` 见 `plan/19`/`plan/20`）。
+编号文档保留完整设计、历史清单和历史证据。文件内原有 checkbox 是迁移快照，不再代表当前执行状态，也不应继续新增 live task。
 
-## 执行顺序（vertical-slice-first）
-
-地基先行：**00 → 01 → 02**（约定/骨架/Core）。
-世界主体：**03 → 05 → 04 → 07**（CA 内核 → 粒子 → 材质反应 → 世界/存档）。
-可视可听：**08 → 09 → 10**（渲染 → GPU 计算 → 音频）。
-碰撞物理：**06**（像素碰撞与刚体，刻意置于 sim 稳定之后）。
-宿主与可编程：**18 → 11**（引擎宿主/主循环编排 → 脚本系统）。
-Editor 面板层：**12**（Editor ImGui 面板层）。
-GUI 宿主中性化重构（入口门）：把玩家 HUD 所需的 ImGui host+字体栈从 Editor 下沉进新中性程序集 **`PixelEngine.Gui`**、`Hosting` 删除对 `PixelEngine.Editor` 的硬引用改暴露抽象 GUI/相位[10] 钩子——此重构是 plan/19 壳注入、plan/15 玩家包审计、plan/20 UI 字体/回退复用三者的共同强前置。
-Unity-like Editor 与编辑器内构建：**19**（在 12 与 GUI 中性化重构之后，先于玩家包审计新规则）。
-玩家 UI Runtime：**20** Web-first 透明 HTML UI Runtime（在 12/13 之后）。
-集成与交付：**13 → 14 → 15 → 16**（Demo → 测试 → 打包 → 性能加固）。
-**17** 给出精确的依赖图与里程碑（M0–M15）映射，实际编码以 17 为节奏表。
-
-> 顺序中部分项可并行（如 08 渲染可与 04/05 并行起步），精确并行关系见 `17`。但不得在前置未完成时声称后置完成。
-
-## 进度总览
-
-| 文档 | 状态 | 备注 |
+| # | 文档 | 范围 |
 |---|---|---|
-| 00 约定/技术栈 | - [!] | 发行矩阵/目标硬件/签名与发布证据待外部复核 |
-| 01 项目骨架 | - [x] | 解决方案、项目骨架、Box2D dual-build、CI 已完成 |
-| 02 Core | - [x] | Core 基础设施实现与测试/基准门禁已完成 |
-| 03 CA 内核 | - [x] | 实现清单与既有验收标准已完成；M14 Damage lane 底座/基础破坏 API 已落地，碎屑/MineYield/裂纹渲染等玩法联动待后续计划 |
-| 04 材质/反应/温度 | - [x] | 既有材质/反应/温度已完成；M14 材质破坏/视觉字段、Content schema、boundary_stone/gravel 与 Damage 契约登记已落地，碎屑/MineYield 事件与武器 DamageKind 联动待 plan/05/13 |
-| 05 粒子/生命周期 | - [x] | 实现清单与验收标准已完成 |
-| 06 物理/碰撞/刚体 | - [x] | 实现清单与验收标准已完成；metal 梁近 lava 熔化→上方结构脱落成动态刚体 headless 验收已由 `TemperatureFieldTests.ApplyPhaseTransitionsRoutesRigidOwnedMeltToDamageSink` / `ApplyPhaseTransitionsScansActiveTemperatureBlocksOutsideDirtyRect` 与 `LavaMineSceneTests.MetalLavaMeltsSupportAndDropsUpperWoodStructure` 闭合 |
-| 07 世界/流式/存档 | - [x] | 实现清单与既有验收标准已完成；Damage 持久 lane、v1 chunk 兼容读取与 v3 manifest 迁移已落地 |
-| 08 渲染 | - [x] | 实现清单与验收标准已完成 |
-| 09 GPU 计算 | - [!] | ComputeSharp/DX12 资源契约与目标 GPU 长基准证据待补 |
-| 10 音频 | - [x] | 实现清单与验收标准已完成 |
-| 11 脚本系统 | - [x] | 实现清单与验收标准已完成 |
-| 12 Editor ImGui 面板层 | - [x] | 实现清单与验收标准已完成；native/Ultralight 真实脏矩形上传实现仍归 plan/20 后续切片 |
-| 13 Showcase Demo Game | - [!] | Showcase Demo Game 代码与自动化主链已大量落地；默认 lava-mine 已收敛为横向熔岩闯关、12 个可拆动态结构、开局可跳/可拆矮障碍、扩大右侧出口区、普通武器/手雷 10x 地形效果、中键爆破放大、越界采样/raycast 防 fault、正式关卡 escape respawn 与 PhysicsSync 碎块砸人事件处理；正式 lava-mine 通关后 Runtime 重开任务/出口/武器基线与刚体快照替换恢复已有自动化证据；仍缺真实窗口完整路线、Web-first 透明 HTML UI Runtime 展示、听感、手感与人工验收证据 |
-| 14 测试/基准 | - [!] | 硬件计数器与 6-RID CI 运行证据待补 |
-| 15 打包/分发 | - [!] | app/ 布局、build-player、玩家包/编辑器工具包分流与 player-only 审计已落地；Windows 优先 RID 激活门控、macOS 签名公证、GitHub Release 证据待补 |
-| 16 性能加固 | - [!] | CA 热路径已继续收敛中心 chunk dirty 标记查表；BenchmarkDotNet 本地入口已隔离 `.claude/worktrees` 同名项目污染；AVX-512、目标硬件性能、硬件计数器与帧预算证据待补 |
-| 17 路线图 | - [!] | M0-M15 总退出标准仍受外部证据、UI native/IME/Ultralight 与真实体验验收阻塞 |
-| 18 宿主/运行时 | - [!] | Editor 人工验收与 native leak detector 证据待补 |
-| 19 Unity-like Editor | - [!] | M13 顶层壳/GameObject authoring/build-player 子进程编排、默认 dock 布局、层级/Inspector/gizmo/prefab/.scene v2、玩家包解耦与 Play/Edit 机器证据已闭合；M14 ProjectPicker Windows 原生文件夹选择器与文本输入 Ctrl+V modifier 契约、Project Window 资产模型/搜索过滤排序/删除确认/只读预览摘要、按钮+新路径输入的 move/rename 请求入口、移动前引用文档预检、Scene 资产移动同步 Settings/Build、广义 Inspector 资产字段类型、Game View viewport/input/output target 自动化切片已补齐，真实窗口拖拽移动/人工 UX 证据仍阻塞 |
-| 20 Web-first 透明 HTML UI Runtime | - [!] | ManagedFallback/RmlUi 基线、GL 合成、C#↔UI、IME composition 抽象、降级与 #10 门控修订已落地；RmlUi DOM 数据桥已覆盖 Empty/Boolean/Int64/Double、StringHandle 句柄 payload 往返、脚本公开 `IGameUiService.InternString` 与 Hosting/RmlUi 共享字符串池解析文本写入；Demo HUD 输入仲裁自动化已覆盖真实 `hud.xhtml` capture/pass-through 到玩法消费者，Game View 输出侧 UI present target/clip 契约已补齐；仍阻塞于透明 UI 真实窗口产品验收、RmlUi ANGLE/GLES profile、真实平台 IME composition 事件/预编辑可视化、Ultralight 可选后端本体/许可/发行证据 |
+| 00 | [`00-conventions-and-techstack.md`](00-conventions-and-techstack.md) | 技术栈、解决方案结构、全局约定、依赖边界 |
+| 01 | [`01-project-setup.md`](01-project-setup.md) | 工程骨架、CPM、native 构建、CI 与 Git |
+| 02 | [`02-core-infrastructure.md`](02-core-infrastructure.md) | Core 数学、内存、线程池、事件、时间与诊断 |
+| 03 | [`03-simulation-kernel.md`](03-simulation-kernel.md) | CA 网格、chunk、dirty rectangle、checkerboard、parity 与 KeepAlive |
+| 04 | [`04-materials-reactions-temperature.md`](04-materials-reactions-temperature.md) | 材质、反应、温度、相变与 Content schema |
+| 05 | [`05-particles-lifecycle.md`](05-particles-lifecycle.md) | 自由粒子、cell/particle 转换与生命周期 |
+| 06 | [`06-physics-collision-rigidbody.md`](06-physics-collision-rigidbody.md) | 像素碰撞、刚体、Box2D task bridge 与双向耦合 |
+| 07 | [`07-world-streaming-serialization.md`](07-world-streaming-serialization.md) | 世界流式、驻留、存档、ID remap 与迁移 |
+| 08 | [`08-rendering.md`](08-rendering.md) | 纹理流式、粒子合成、光照、后处理与相机 |
+| 09 | [`09-gpu-compute.md`](09-gpu-compute.md) | GL compute、Radiance Cascades 与非权威 GPU pass |
+| 10 | [`10-audio.md`](10-audio.md) | OpenAL、source pool、材质音效与限频去重 |
+| 11 | [`11-scripting-system.md`](11-scripting-system.md) | Behaviour/Component API、Roslyn 与 ALC 热重载 |
+| 12 | [`12-editor-tooling-ui.md`](12-editor-tooling-ui.md) | Editor 面板、检视器、资源浏览与调试工具 |
+| 13 | [`13-demo-game.md`](13-demo-game.md) | Demo 玩法、关卡、反馈与公开 API dogfood |
+| 14 | [`14-testing-benchmarking.md`](14-testing-benchmarking.md) | 性质测试、oracle、BenchmarkDotNet 与门禁 |
+| 15 | [`15-build-packaging-distribution.md`](15-build-packaging-distribution.md) | R2R/AOT、build-player、native 分发与 Release |
+| 16 | [`16-performance-hardening.md`](16-performance-hardening.md) | 多线程、零分配、SIMD、GPU 与 profiling |
+| 17 | [`17-roadmap-execution-order.md`](17-roadmap-execution-order.md) | M0-M15 历史依赖图和里程碑定义 |
+| 18 | [`18-hosting-runtime.md`](18-hosting-runtime.md) | Engine 门面、12 相位循环、场景与 Play/Edit 模式 |
+| 19 | [`19-standalone-editor-app.md`](19-standalone-editor-app.md) | 独立 Editor、authoring、prefab、scene 与构建面板 |
+| 20 | [`20-interactive-html-ui.md`](20-interactive-html-ui.md) | PixelEngine.UI、透明合成、输入仲裁与 IME |
 
-## 证据 / 预检状态索引
+## 3. 主任务目录
 
-| 领域 | 工具 | 阻塞 / 待审 / 检查状态 |
-|---|---|---|
-| 硬件计数器 | `tools/hardware-counter-preflight.ps1` | `blocked_non_windows`、`blocked_non_admin`、`missing_counter_columns`、`ready`、`counters_present`；该入口只验证 BenchmarkDotNet Windows ETW 硬件计数器路径，非 Windows runner 不作为 Cache Misses / Branch Mispredictions 验收环境，Windows 采集必须在管理员 PowerShell 或专用 runner 下取得 elevated ETW Kernel Session；`-RunBenchmark` 后必须在 markdown 报告中同时出现 `Cache Misses` 与 `Branch Mispredictions` 列，`ready` 只表示权限预检通过、`counters_present` 只表示本地列检查通过，仍不能解除 plan/16 的硬件计数器 / M15 性能阻塞；最终目标性能证据还必须进入 `performance-target-evidence-preflight` 的 `hardware_counters_cache_branch` scope，并与同一次 `benchmarkRunId` / `gitCommit` 同源 |
-| CI 矩阵 | `tools/ci-matrix-evidence-preflight.ps1` | `blocked_missing_ci_manifest`、`blocked_invalid_ci_evidence`、`blocked_missing_ci_scope_evidence`、`ci_matrix_evidence_attached_pending_review`；manifest 必须包含 `workflow_run`、`benchmark_guard`、6 RID `buildTest/<rid>` 与 4 RID `verifyPublish/<rid>` scope，并逐项提供 path + sha256；`workflow_run` 必须来自 `workflow=CI`、`event=push` 或 `pull_request`、有效 `run_attempt>=1`、`ref=refs/heads/*` 或 `refs/pull/*`，所有 build / benchmark / verify 报告必须与 `workflow_run` 的 `run_id` / `sha` 同源；`benchmark_guard` 必须在 `windows-latest` 上 `conclusion=success`；6 RID build/test 覆盖 `win-x64` / `win-arm64` / `linux-x64` / `linux-arm64` / `osx-x64` / `osx-arm64`，runner 必须分别匹配 `windows-latest` / `ubuntu-latest` / `ubuntu-24.04-arm` / `macos-15-intel` / `macos-14`，且 `testsRan` 必须显式存在：除 `win-arm64` 当前为 `build_only=true` / `tests_ran=false` 外，其余可测 RID 必须 `tests_ran=true`；publish verify scope 覆盖 `win-x64` / `linux-x64` / `osx-x64` / `osx-arm64`，每项必须 `channels=r2r,aot` 且 `conclusion=success`；证据齐全也只进入 `ci_matrix_evidence_attached_pending_review`，仍需人工确认对应 GitHub Actions run 的 job 结论，不能解除 plan/14/M15 阻塞 |
-| 目标性能 | `tools/performance-target-evidence-preflight.ps1` | `blocked_missing_target_performance_manifest`、`blocked_invalid_target_performance_evidence`、`blocked_missing_target_performance_scope_evidence`、`target_performance_evidence_attached_pending_review`；manifest 必须含同一次 `benchmarkRunId` / `gitCommit`，scope 覆盖 `avx512_downclock_net_loss` / `hardware_counters_cache_branch` / `frame_budget_target_hardware` / `cells_frame/win-x64` / `cells_frame/win-arm64` / `cells_frame/linux-x64` / `cells_frame/linux-arm64` / `cells_frame/osx-x64` / `cells_frame/osx-arm64`，`cellsFrame` 六 RID 均需 `benchmarkDotNet=true`；AVX-512 证据必须含 `targetCpuName` / `dotnetVersion` 且 `vector512HardwareAccelerated=true` / `avx512Enabled=true` / `noNetDownclockLoss=true`；硬件计数器证据必须含 `elevatedEtwKernelSession=true` / `cacheMissesPresent=true` / `branchMispredictionsPresent=true`，正文包含 `Cache Misses` / `Branch Mispredictions`；帧预算证据必须含 `targetHardware` / `source=PixelEngineDiagnostics` / `scenario` / `demoScene=lava-mine`，且 `sampleSeconds>=60` / `frameSamples>=3600` / `fixedTickNoCatchUp=true` / `playerPackageRun=true` / `realWindowRun=true` / `degradationPolicyObserved=true` / `frameTimelineCaptured=true` / `caP99Ms<=8` / `renderP99Ms<=4` / `physicsP99Ms<=4` / `logicAudioP99Ms<=1`；每个 `cells_frame/<rid>` 必须含 `rid` / `representativeHardware=true` / `activeCellsPerFrame>=2000000` / `caFrameMs<=8` / `measuredIterations>=3` / `iterationCount>=measuredIterations`，并附 `BenchmarkDotNet v`、`CellThroughputBenchmark.StepJobSystem`、`FullActiveLiquid` 原始报告特征 |
-| GPU 粒子长基准 | `tools/gpu-particle-benchmark-preflight.ps1` | `blocked_missing_target_gpu_evidence`、`local_probe_only`、`blocked_invalid_local_probe`、`blocked_missing_target_gpu_scope_evidence`、`blocked_invalid_target_gpu_evidence`、`target_gpu_evidence_attached_pending_review`；`-RunProbe` 只生成本机短样本 `local-comparison.md/json`，必须显式 `local_only: true` / `target_gpu_evidence: false`，不能作为验收；目标 manifest 必须为 `schemaVersion=1`，scope 覆盖 `targetHardwareReport` / `cpuProbeReport` / `gpuProbeReport` / `comparisonReport`，每项提供 path + sha256 且不允许未知或重复 scope；`targetHardwareReport` 必须含 `targetGpuName` / `targetGpuDriver` / `gpuBackend` / `operatingSystem` / `cpuName` / `dotnetVersion` / `gitCommit` / `particleCount` / `benchmarkRunId`；CPU/GPU probe 必须含 `particle_frame_probe source=PixelEngineParticleFrameProbe`，同一 `benchmark_run_id` / `gitCommit`，CPU mode 必须走 `particle_stamp_avg_ms>0` 且 `gpu_particle_avg_ms=0`，GPU mode 必须 `gpu_available=True` 且 `gpu_particle_avg_ms>0` / `particle_stamp_avg_ms=0`，两者 `requested_count=active_count>=100000` 且 `measured_frames>=300`；`comparisonReport` 必须含 `gpuFasterThanCpu: true`、`cpuWallAvgMs>gpuWallAvgMs`、`speedupRatio>1`、`sampleSeconds>=10`，并且 wall/time/frame 数值必须能由 CPU/GPU probe 重算验证；待审状态仍不能解除 plan/09/M15 目标 GPU 长基准阻塞 |
-| Showcase Demo Game 人工验收 | `tools/demo-manual-acceptance-preflight.ps1` | `blocked_missing_manual_evidence`、`scripted_probe_only`、`blocked_missing_manual_scope_evidence`、`blocked_invalid_manual_evidence`、`manual_evidence_attached_pending_review`；manifest `gitCommit` 必须等于当前 HEAD，所有人工 scope 必须同一 `reviewSessionId` / `gitCommit` 并携带 reviewer/capturedAt/notes/checklist/criteria；必须覆盖 `controlFeelReport`、`materialBrushAndReactionVideo`、`rigidBodyGameplayVideo`、`particleLightingVideo`、`audioListeningReport`、`fullRoutePlaythroughVideo`、`lavaCombatPlaythroughVideo`、`hudMenuEditorVideo`、`hotReloadWindowReport`，分别锁定手感、材质反应、刚体玩法、粒子光照、听感、完整通关路线、玩家包独立运行、横向熔岩战斗、HUD/菜单/EditorShell 与热重载；video scope 还必须通过扩展名、`durationSeconds`、视频结构和真实 duration 校验，`fullRoutePlaythroughVideo` 与 `lavaCombatPlaythroughVideo` 至少 30 秒，其它视频至少 10 秒；`fullRoutePlaythroughVideo` 必须额外证明不含编辑器的玩家包独立启动并进入同一 lava-mine 内容；scripted probe 只可辅助生成 `scripted_probe_only`，其截图必须记录 `capture_unique_visible_pixels` 且拒绝空白/纯色画面，不能替代真实窗口人工体验结论 |
-| Native leak | `tools/native-leak-preflight.ps1` | `blocked_missing_detector`、`process_smoke_only`、`detector_report_attached_pending_review`、`blocked_missing_scope_evidence`、`blocked_invalid_native_leak_evidence`、`detector_evidence_attached_pending_review`；单 detector report 必须声明 `detector`、`conclusion=no_leaks`、`scopes=GL; OpenAL; Box2D; ALC`，并给出 `glObjectsLiveAfterShutdown=0`、`openAlObjectsLiveAfterShutdown=0`、`box2DBodiesLiveAfterShutdown=0`、`alcLoadContextsAliveAfterUnload=0`；manifest 证据必须为 `schemaVersion=1`，顶层含同一次 `detectorRunId` / `gitCommit`，scope 仅允许 `gl` / `openal` / `box2d` / `alc`，每项必须逐项提供 path + sha256 + detector，report 内 `scope` / `detector` / `detectorRunId` / `gitCommit` / `conclusion=no_leaks` 必须与 manifest 同源且对应 live-object 计数为 0；`process_smoke_only`、managed `gl_context_rendering_wrappers` / `managed_no_gl_context` 与任何 pending review 都不能解除 plan/18/M15 native leak 阻塞，仍需外部 GL driver 级 detector 和人工复核确认 |
-| UI Runtime 真实平台证据 | `tools/ui-runtime-evidence-preflight.ps1` | `blocked_missing_ui_runtime_evidence`、`blocked_invalid_ui_runtime_evidence`、`blocked_missing_ui_runtime_scope_evidence`、`ui_runtime_evidence_attached_pending_review`；manifest `gitCommit` 必须等于当前 HEAD，scope 覆盖 `transparent_ui_product_window` / `rmlui_angle_gles_native_profile` / `platform_ime_composition` / `ultralight_optional_profile_gate` / `ui_native_release_artifact`，所有报告必须含同一 `reviewSessionId` / `gitCommit`、conclusion 与可复核 risk，并满足 scope 专属 true 字段和数值下限：透明 UI 必须证明 `sameWindowSameGl` / `noSecondWindow` / `noSecondProcess` / `singleRenderContextVerified` / `worldVisibleThroughTransparentPixels`，并提供 `videoDurationSeconds>=30` / `capturedFrameCount>=300` / `transparentPixelSampleCount>=3` / `passThroughSampleCount>=3`；ANGLE/GLES `smokeFrameCount>=60`、IME `compositionSessionCount>=1`、Ultralight `licenseDocumentCount>=1` / `inactiveBoundaryTestCount>=1` / `releaseAuditRejectionCaseCount>=1` 且必须证明 inactive profile 阻断执行、拒绝文档、不捕获输入、不产生合成输出并拒绝 inactive native 混入发行包，release `releaseArtifactCount>=1` / `sha256EntryCount>=1` |
-| Editor UX 人工验收 | `tools/editor-ux-evidence-preflight.ps1` | `blocked_missing_editor_ux_evidence`、`blocked_invalid_editor_ux_evidence`、`blocked_missing_editor_ux_scope_evidence`、`editor_ux_evidence_attached_pending_review`；manifest `gitCommit` 必须等于当前 HEAD，scope 覆盖 `editor_full_route_window` / `project_window_reference_stability` / `script_external_editor` / `settings_build_ux` / `editor_product_usability`，所有报告必须含同一 `reviewSessionId` / `gitCommit`、结论和可复核 risk，并满足 scope 专属 true 字段和数值下限：完整路线 `shellStarted` / `editorShellExeLaunched` / `singleTopLevelWindowVerified` / `singleProcessInProcessHost` / `noConsoleWindowObserved` / `projectOpenedOrCreated` / `defaultLayoutVisible` / `playExitVerified` / `sceneSaved` / `buildAndRunVerified` 且 `videoDurationSeconds>=60` / `capturedFrameCount>=600` / `routeStepCount>=8`；Project Window 引用稳定性 `stableIdsChecked` / `stableIdsBeforeAfterRecorded` / `sceneReferencesChecked` / `prefabReferencesChecked` / `inspectorAssetFieldsChecked` / `projectPlayerBuildSettingsChecked` / `startupSettingsChecked` / `buildRequestChecked` / `buildPackageReferenceAuditPassed` / `deleteConfirmationChecked` / `brokenReferenceCountZero` 且 `assetOperationCount>=3` / `referenceDocumentCount>=2` / `stableAssetKindCount>=4` / `buildPackageAuditCount>=1`；脚本外部编辑器 `scriptDoubleClickAttempted` / `osOrConfiguredEditorObserved` / `failureDiagnosticObserved` / `noSilentFailure` 且 `scriptOpenAttemptCount>=1`；Settings/Build UX `projectSettingsSaved` / `playerSettingsSaved` / `buildSettingsSaved` / `restartReloadVerified` / `invalidInputRejected` / `buildPlayerProjectionVerified` 且 `settingsRoundTripCount>=1` / `buildRunAttemptCount>=1`；产品可用性 `layoutUsable` / `shortcutsChecked` / `dragDropChecked` / `gizmoChecked` / `undoRedoChecked` / `consoleDiagnosticsChecked` / `buildFeedbackChecked` 且 `interactionChecklistItemCount>=7` / `reviewerCount>=1` |
-| 发行证据 | `tools/release-evidence-preflight.ps1` / `.sh` + release workflow 上传报告 | `blocked_missing_release_manifest`、`blocked_invalid_release_evidence`、`blocked_missing_release_scope_evidence`、`blocked_not_tag_release`、`release_evidence_attached_pending_review`；manifest 必须按 active RID × `r2r/aot` 覆盖 `publish` / `verify` / `package_report` / `package` / 单一 `SHA256SUMS`，并包含 `workflow_run`、`artifact_audit`、`github_release_upload`、`deterministic_hash`、`r2r_lightup` 与 AOT `simd_probe` scope；每个 package 文件名必须匹配所在 `artifacts.<rid>.<channel>` 节点、release tag version 和平台扩展名；所有 markdown 报告必须与 `workflow_run` 的 `run_id` / `sha` / `workflow=Release` / `run_attempt` 同源，`workflow_run` 必须来自 `event=push` 且 `ref=refs/tags/v<semver>`，上传报告必须 `release_tag=true` 且 `tag` 与 ref 一致；GitHub Release 上传必须列出 `uploaded_asset_count=packageCount+1`、每个 package asset hash、唯一 `SHA256SUMS` hash 与每个上传资产的 `browser_download_url/<asset>`，下载 URL 必须绑定同一 release tag；`deterministic_hash` 不能只写 `conclusion=success`，必须逐 active RID × channel 给出 `result=match` 明细行；`artifact_audit` 必须 `require_all=true`、`aot_dynamic_box2d_rejected=true`、`package_layout_checked=true`、`checksum_checked=true`；AOT SIMD 报告必须按 RID 声明 `simdProbeKind`（x64=`x64_ymm_zmm`、arm64=`arm64_neon`）且不能是 skip；macOS active RID 还必须附 `codesign` / `notarization` success 报告；即使证据齐全也只进入 `release_evidence_attached_pending_review`，仍需人工复核，不能解除 plan/15/M15 阻塞 |
-| build-player 产物校验 | `tools/build-player.ps1`/`.sh`（NDJSON `schema=pixelengine.build/v1` + `build-result.json`；`audit` 分 dev-audit 结构存在性+player-only 断言 与严格 `audit-release-artifacts`） | build-player 产物校验+player-only 闭包审计已落地：PowerShell/Bash 均拒绝 app/ 含 `PixelEngine.Editor.dll` 及编辑器专属 `Hexa.NET.ImGuizmo*`/`Hexa.NET.ImPlot*`/`ImGuizmo*`/`ImPlot*`，允许玩家 HUD 所需 `Hexa.NET.ImGui`；仍不替代 GitHub Release / macOS 签名公证 / 完整 RID 证据 |
+canonical task 按职责拆成以下轨道：
 
-以上 `*_pending_review`、`local_probe_only`、`scripted_probe_only`、`process_smoke_only`、`ready` 与 `counters_present` 都不是对应 plan 验收通过状态，只说明证据入口可执行、待人工复核或本地计数器列检查通过；对应 plan 条目仍保持 `- [!]`，直到外部证据内容本身闭合验收。M15 专门收口这些证据债，不能把 scripted probe、短跑截图或本地预检状态写成最终产品验收。
+| 文档 | 内容 |
+|---|---|
+| [`tasks/10-completed-baseline.md`](tasks/10-completed-baseline.md) | 已确认可依赖的能力基线 |
+| [`tasks/20-scope-decisions.md`](tasks/20-scope-decisions.md) | Windows-first、可选 native、M14/M15 与 Demo 路线决策 |
+| [`tasks/30-correctness-architecture.md`](tasks/30-correctness-architecture.md) | 正确性、职责边界、故障传播与公开 API |
+| [`tasks/40-performance.md`](tasks/40-performance.md) | render buffer、CA、零分配与目标硬件证据 |
+| [`tasks/50-product-editor-ui-demo.md`](tasks/50-product-editor-ui-demo.md) | Editor、UI、IME、Demo 与用户文档 |
+| [`tasks/60-validation-release.md`](tasks/60-validation-release.md) | CI、测试质量、证据、玩家包与发行 |
+| [`tasks/70-evidence-contracts.md`](tasks/70-evidence-contracts.md) | 外部 evidence preflight 的 manifest、scope、阈值与状态语义 |
+| [`tasks/90-legacy-coverage.md`](tasks/90-legacy-coverage.md) | 旧计划迁移覆盖和冲突处理 |
 
-## 使用约定
+当前主序列是：恢复 CI 与可信基线，修复正确性和性能缺口，闭合 M14 产品面，最后以 M15 的真实硬件、远端 CI 和发行证据收口。可选 `OPT-*` 不阻塞 Windows-first 1.0。
 
-- 完成条目即勾选；完成文档定义的「提交节点」立即用中文 git 提交（`AGENTS.md §6`）。
-- 计划与架构文档/不变式冲突时，先改计划再改代码。
-- 阻塞项标 `- [!] 阻塞：原因` 并上报，不写假实现绕过。
+## 4. 迁移快照
+
+`2026-07-10`、commit `179efc3a` 的旧计划快照包含 21 份编号文档和 1692 个 checkbox：1498 完成、44 未开始、0 进行中、150 阻塞。它们已归并为 72 个唯一任务，详细映射由 [`tasks/source-coverage.json`](tasks/source-coverage.json) 记录。
+
+旧 checkbox 不会删除，因为它们仍承载设计细节和历史证据；但是完成率不得再从旧 checkbox 机械推导。canonical task 的 `[x]` 只有在实现、测试、验收和要求的证据都完成后才能设置。
+
+## 5. 维护流程
+
+1. 从 [`tasks/README.md`](tasks/README.md) 按依赖选择任务，将唯一状态项改为 `[~]`。
+2. 阅读任务引用的编号设计文档；若设计过时，先更新详细设计和 task。
+3. 实现并完成任务定义的验证；外部设备、凭据或人工验收缺失时保持 `[!]`。
+4. 将任务改为 `[x]`，同步证据索引，并按 `AGENTS.md` 的提交节点立即提交。
+5. 修改计划文档后运行任务目录校验：
+
+```pwsh
+./tools/validate-task-catalog.ps1
+```
+
+该脚本检查任务 ID 唯一性、canonical checkbox 格式、21 份旧计划计数、1692 项快照总数、旧计划映射和审计新增任务覆盖。

@@ -1,5 +1,7 @@
 # Plan 06 — 像素碰撞、刚体与 Box2D 桥（PixelEngine.Physics + PixelEngine.Interop）
 
+> **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
+
 > 范围：全像素碰撞与刚体物理的**全部**实现。包含 Box2D v3.1 的 `[LibraryImport]` 薄绑定、自建 task-callback 桥、像素簇→刚体管线（CCL→Marching Squares→Douglas-Peucker→凸分解→复合刚体）、两世界栅格化同步、破坏/挖掘重建、静态地形局部 collider、以及独立于 Box2D 的玩家/生物角色控制器。
 > 权威依据：架构文档 §8（全像素碰撞与刚体）、§14（C#/C++ 边界与 task 桥）、§6.4（确定性 physics workerCount=1）；不变式 #5（CA↔刚体双向耦合）、#9（CPU sim 权威）、#10（native 收敛到 Box2D）。技术栈：`plan/00` §4 物理行；工程宪法：`AGENTS.md`。
 > 状态约定：`- [x]` 已有源码、测试、工具、报告或 plan 证据；`- [ ]` 未完成目标；`- [!]` 阻塞、证据债、人工验收或外部环境限制。
