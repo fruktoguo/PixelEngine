@@ -6574,9 +6574,12 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("NeighborWindow window = new(chunk.Coord, in neighborhood);", updater, StringComparison.Ordinal);
         Assert.Contains("ref ushort materialBase = ref chunk.GetMaterialBase();", updater, StringComparison.Ordinal);
         Assert.Contains("ref byte flagsBase = ref chunk.GetFlagsBase();", updater, StringComparison.Ordinal);
+        Assert.Contains("ref byte lifetimeBase = ref chunk.GetLifetimeBase();", updater, StringComparison.Ordinal);
         Assert.Contains("int localOffset = (ly * EngineConstants.ChunkSize) + rect.MinX;", updater, StringComparison.Ordinal);
         Assert.Contains("Unsafe.Add(ref materialBase, localOffset)", updater, StringComparison.Ordinal);
         Assert.Contains("Unsafe.Add(ref flagsBase, localOffset)", updater, StringComparison.Ordinal);
+        Assert.Contains("ref byte lifetime = ref Unsafe.Add(ref lifetimeBase, localOffset);", updater, StringComparison.Ordinal);
+        Assert.Contains("ProcessLifetime(ref window, chunk, lifetimeSink, wx, wy, material, parityBit, ref lifetime);", updater, StringComparison.Ordinal);
         Assert.Contains("localOffset++", updater, StringComparison.Ordinal);
         Assert.DoesNotContain("chunk.Material[", updater, StringComparison.Ordinal);
         Assert.DoesNotContain("chunk.Flags[", updater, StringComparison.Ordinal);

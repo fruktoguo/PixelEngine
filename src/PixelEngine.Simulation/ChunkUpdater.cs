@@ -36,6 +36,7 @@ internal static class ChunkUpdater
         int worldBaseY = chunk.Coord.Y << EngineConstants.ChunkSizeLog2;
         ref ushort materialBase = ref chunk.GetMaterialBase();
         ref byte flagsBase = ref chunk.GetFlagsBase();
+        ref byte lifetimeBase = ref chunk.GetLifetimeBase();
 
         // bottom-up 扫描：粉液下落依赖下方 cell 已在本帧或上帧落定。
         for (int ly = rect.MaxY; ly >= rect.MinY; ly--)
@@ -62,21 +63,25 @@ internal static class ChunkUpdater
                 }
 
                 // lifetime 先于位移：到期可能清空 cell，后续 movement 直接跳过。
-                ProcessLifetime(ref window, chunk, lifetimeSink, wx, wy, material, parityBit);
-                material = window.GetMaterial(wx, wy);
-                if (material == 0)
+                ref byte lifetime = ref Unsafe.Add(ref lifetimeBase, localOffset);
+                if (lifetime != 0)
                 {
-                    wx++;
-                    localOffset++;
-                    continue;
-                }
+                    ProcessLifetime(ref window, chunk, lifetimeSink, wx, wy, material, parityBit, ref lifetime);
+                    material = Unsafe.Add(ref materialBase, localOffset);
+                    if (material == 0)
+                    {
+                        wx++;
+                        localOffset++;
+                        continue;
+                    }
 
-                flags = window.GetFlags(wx, wy);
-                if (CellFlags.MatchesFrame(flags, parityBit) || CellFlags.Has(flags, CellFlags.RigidOwned))
-                {
-                    wx++;
-                    localOffset++;
-                    continue;
+                    flags = Unsafe.Add(ref flagsBase, localOffset);
+                    if (CellFlags.MatchesFrame(flags, parityBit) || CellFlags.Has(flags, CellFlags.RigidOwned))
+                    {
+                        wx++;
+                        localOffset++;
+                        continue;
+                    }
                 }
 
                 bool preferNegative = ((parityBit ^ (byte)(ly & 1)) & CellFlags.Parity) == 0;
@@ -304,16 +309,15 @@ internal static class ChunkUpdater
         int wx,
         int wy,
         ushort material,
-        byte parityBit)
+        byte parityBit,
+        ref byte lifetime)
     {
-        byte lifetime = window.GetLifetime(wx, wy);
         if (lifetime == 0)
         {
             return;
         }
 
         lifetime--;
-        window.SetLifetime(wx, wy, lifetime);
         MarkCenterDirty(centerChunk, wx, wy);
         if (lifetime == 0)
         {
