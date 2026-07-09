@@ -4120,6 +4120,17 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("blocked_missing_ui_runtime_evidence", readme, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_ui_runtime_scope_evidence", readme, StringComparison.Ordinal);
         Assert.Contains("ui_runtime_evidence_attached_pending_review", readme, StringComparison.Ordinal);
+        Assert.Contains("同一 `reviewSessionId` / `gitCommit`", readme, StringComparison.Ordinal);
+        Assert.Contains("conclusion", readme, StringComparison.Ordinal);
+        Assert.Contains("risk", readme, StringComparison.Ordinal);
+        Assert.Contains("true 字段", readme, StringComparison.Ordinal);
+        Assert.Contains("videoDurationSeconds>=30", readme, StringComparison.Ordinal);
+        Assert.Contains("capturedFrameCount>=300", readme, StringComparison.Ordinal);
+        Assert.Contains("smokeFrameCount>=60", readme, StringComparison.Ordinal);
+        Assert.Contains("compositionSessionCount>=1", readme, StringComparison.Ordinal);
+        Assert.Contains("licenseDocumentCount>=1", readme, StringComparison.Ordinal);
+        Assert.Contains("releaseArtifactCount>=1", readme, StringComparison.Ordinal);
+        Assert.Contains("sha256EntryCount>=1", readme, StringComparison.Ordinal);
         Assert.Contains("tools/ui-runtime-evidence-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_ui_runtime_evidence", plan, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_ui_runtime_scope_evidence", plan, StringComparison.Ordinal);
