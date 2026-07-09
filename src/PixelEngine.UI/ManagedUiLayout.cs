@@ -27,7 +27,7 @@ internal static class ManagedUiLayout
         XDocument document = XDocument.Load(source.Path, LoadOptions.None);
         XElement root = document.Root ?? throw new InvalidDataException("UI 文档缺少根节点。");
         string title = ReadAttribute(root, "title") ?? Path.GetFileNameWithoutExtension(source.Path);
-        Dictionary<string, ManagedUiStyle> styleRules = ReadStyleRules(root);
+        List<ManagedUiStyleRule> styleRules = ReadStyleRules(root);
         ManagedUiBox rootBox = ReadBox(root);
         List<ManagedUiControl> controls = new(Math.Min(maxControls, 16));
         CollectControls(root, source.Path, styleRules, controls, maxControls);
@@ -37,7 +37,7 @@ internal static class ManagedUiLayout
     private static void CollectControls(
         XElement element,
         string documentPath,
-        Dictionary<string, ManagedUiStyle> styleRules,
+        List<ManagedUiStyleRule> styleRules,
         List<ManagedUiControl> controls,
         int maxControls)
     {
@@ -61,7 +61,7 @@ internal static class ManagedUiLayout
     private static ManagedUiControl? TryCreateControl(
         XElement element,
         string documentPath,
-        Dictionary<string, ManagedUiStyle> styleRules)
+        List<ManagedUiStyleRule> styleRules)
     {
         string name = element.Name.LocalName;
         ManagedUiStyle style = ResolveStyle(element, styleRules);
@@ -197,9 +197,9 @@ internal static class ManagedUiLayout
             ReadFloat(element, style, "height", "height"));
     }
 
-    private static Dictionary<string, ManagedUiStyle> ReadStyleRules(XElement root)
+    private static List<ManagedUiStyleRule> ReadStyleRules(XElement root)
     {
-        Dictionary<string, ManagedUiStyle> rules = new(StringComparer.OrdinalIgnoreCase);
+        List<ManagedUiStyleRule> rules = new(16);
         foreach (XElement styleElement in root.Descendants().Where(static element => StringEquals(element.Name.LocalName, "style")))
         {
             ParseStyleSheet(styleElement.Value, rules);
@@ -208,7 +208,7 @@ internal static class ManagedUiLayout
         return rules;
     }
 
-    private static void ParseStyleSheet(string css, Dictionary<string, ManagedUiStyle> rules)
+    private static void ParseStyleSheet(string css, List<ManagedUiStyleRule> rules)
     {
         ReadOnlySpan<char> remaining = css.AsSpan();
         while (!remaining.IsEmpty)
@@ -239,55 +239,123 @@ internal static class ManagedUiLayout
 
                 ReadOnlySpan<char> selector = selectors[selectorStart..i].Trim();
                 selectorStart = i + 1;
-                if (!IsSupportedSelector(selector))
+                if (!TryParseSelector(selector, out ManagedUiSelector parsed))
                 {
                     continue;
                 }
 
-                string key = selector.ToString();
-                rules[key] = rules.TryGetValue(key, out ManagedUiStyle existing)
-                    ? existing.Merge(in style)
-                    : style;
+                rules.Add(new ManagedUiStyleRule(parsed, style));
             }
 
             remaining = remaining[(close + 1)..];
         }
     }
 
-    private static bool IsSupportedSelector(ReadOnlySpan<char> selector)
+    private static bool TryParseSelector(ReadOnlySpan<char> selector, out ManagedUiSelector parsed)
     {
-        return !selector.IsEmpty &&
-            (selector[0] is '#' or '.'
-                ? selector.Length > 1 && IsSimpleSelectorToken(selector[1..])
-                : IsSimpleSelectorToken(selector));
+        parsed = default;
+        if (selector.IsEmpty)
+        {
+            return false;
+        }
+
+        if (selector[0] == '#')
+        {
+            if (selector.Length <= 1 || !IsSimpleSelectorToken(selector[1..]))
+            {
+                return false;
+            }
+
+            parsed = ManagedUiSelector.Id(selector[1..].ToString());
+            return true;
+        }
+
+        if (selector[0] == '.')
+        {
+            if (selector.Length <= 1 || !IsSimpleSelectorToken(selector[1..]))
+            {
+                return false;
+            }
+
+            parsed = ManagedUiSelector.Class(selector[1..].ToString());
+            return true;
+        }
+
+        int classSeparator = selector.IndexOf('.');
+        if (classSeparator >= 0)
+        {
+            ReadOnlySpan<char> tag = selector[..classSeparator];
+            ReadOnlySpan<char> className = selector[(classSeparator + 1)..];
+            if (tag.IsEmpty || className.IsEmpty ||
+                tag.IndexOf('.') >= 0 ||
+                className.IndexOf('.') >= 0 ||
+                !IsSimpleSelectorToken(tag) ||
+                !IsSimpleSelectorToken(className))
+            {
+                return false;
+            }
+
+            parsed = ManagedUiSelector.TagClass(tag.ToString(), className.ToString());
+            return true;
+        }
+
+        if (!IsSimpleSelectorToken(selector))
+        {
+            return false;
+        }
+
+        parsed = ManagedUiSelector.Tag(selector.ToString());
+        return true;
     }
 
-    private static ManagedUiStyle ResolveStyle(XElement element, Dictionary<string, ManagedUiStyle> rules)
+    private static ManagedUiStyle ResolveStyle(XElement element, List<ManagedUiStyleRule> rules)
     {
         ManagedUiStyle style = ManagedUiStyle.Empty;
         string tag = element.Name.LocalName;
-        if (rules.TryGetValue(tag, out ManagedUiStyle tagStyle))
-        {
-            style = style.Merge(in tagStyle);
-        }
-
         string? classes = ReadAttribute(element, "class");
-        if (!string.IsNullOrWhiteSpace(classes))
+        string? id = ReadAttribute(element, "id");
+        for (int i = 0; i < rules.Count; i++)
         {
-            foreach (string className in SplitClassNames(classes))
+            ManagedUiStyleRule rule = rules[i];
+            if (rule.Selector.Kind == ManagedUiSelectorKind.Tag &&
+                rule.Selector.Matches(tag, classes, id))
             {
-                if (rules.TryGetValue("." + className, out ManagedUiStyle classStyle))
-                {
-                    style = style.Merge(in classStyle);
-                }
+                ManagedUiStyle ruleStyle = rule.Style;
+                style = style.Merge(in ruleStyle);
             }
         }
 
-        string? id = ReadAttribute(element, "id");
-        if (!string.IsNullOrWhiteSpace(id) &&
-            rules.TryGetValue("#" + id, out ManagedUiStyle idStyle))
+        for (int i = 0; i < rules.Count; i++)
         {
-            style = style.Merge(in idStyle);
+            ManagedUiStyleRule rule = rules[i];
+            if (rule.Selector.Kind == ManagedUiSelectorKind.Class &&
+                rule.Selector.Matches(tag, classes, id))
+            {
+                ManagedUiStyle ruleStyle = rule.Style;
+                style = style.Merge(in ruleStyle);
+            }
+        }
+
+        for (int i = 0; i < rules.Count; i++)
+        {
+            ManagedUiStyleRule rule = rules[i];
+            if (rule.Selector.Kind == ManagedUiSelectorKind.TagClass &&
+                rule.Selector.Matches(tag, classes, id))
+            {
+                ManagedUiStyle ruleStyle = rule.Style;
+                style = style.Merge(in ruleStyle);
+            }
+        }
+
+        for (int i = 0; i < rules.Count; i++)
+        {
+            ManagedUiStyleRule rule = rules[i];
+            if (rule.Selector.Kind == ManagedUiSelectorKind.Id &&
+                rule.Selector.Matches(tag, classes, id))
+            {
+                ManagedUiStyle ruleStyle = rule.Style;
+                style = style.Merge(in ruleStyle);
+            }
         }
 
         ManagedUiStyle elementStyle = ReadElementStyle(element);
@@ -467,4 +535,70 @@ internal static class ManagedUiLayout
         return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
     }
 
+    private enum ManagedUiSelectorKind
+    {
+        Tag,
+        Class,
+        TagClass,
+        Id,
+    }
+
+    private readonly record struct ManagedUiStyleRule(ManagedUiSelector Selector, ManagedUiStyle Style);
+
+    private readonly record struct ManagedUiSelector(
+        ManagedUiSelectorKind Kind,
+        string TagName,
+        string ClassName,
+        string IdValue)
+    {
+        public static ManagedUiSelector Tag(string tagName)
+        {
+            return new ManagedUiSelector(ManagedUiSelectorKind.Tag, tagName, string.Empty, string.Empty);
+        }
+
+        public static ManagedUiSelector Class(string className)
+        {
+            return new ManagedUiSelector(ManagedUiSelectorKind.Class, string.Empty, className, string.Empty);
+        }
+
+        public static ManagedUiSelector TagClass(string tagName, string className)
+        {
+            return new ManagedUiSelector(ManagedUiSelectorKind.TagClass, tagName, className, string.Empty);
+        }
+
+        public static ManagedUiSelector Id(string id)
+        {
+            return new ManagedUiSelector(ManagedUiSelectorKind.Id, string.Empty, string.Empty, id);
+        }
+
+        public bool Matches(string tagName, string? classes, string? elementId)
+        {
+            return Kind switch
+            {
+                ManagedUiSelectorKind.Tag => StringEquals(tagName, TagName),
+                ManagedUiSelectorKind.Class => HasClass(classes, ClassName),
+                ManagedUiSelectorKind.TagClass => StringEquals(tagName, TagName) && HasClass(classes, ClassName),
+                ManagedUiSelectorKind.Id => StringEquals(elementId, IdValue),
+                _ => false,
+            };
+        }
+    }
+
+    private static bool HasClass(string? classes, string className)
+    {
+        if (string.IsNullOrWhiteSpace(classes))
+        {
+            return false;
+        }
+
+        foreach (string current in SplitClassNames(classes))
+        {
+            if (StringEquals(current, className))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

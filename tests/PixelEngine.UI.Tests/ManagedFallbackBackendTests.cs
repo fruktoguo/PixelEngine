@@ -239,6 +239,41 @@ public sealed class ManagedFallbackBackendTests
     }
 
     /// <summary>
+    /// 验证托管回退Consumes Tag Class Rules In Source Order。
+    /// </summary>
+    [Fact]
+    public void ManagedFallbackConsumesTagClassRulesInSourceOrder()
+    {
+        string path = WriteUi("""
+            <rml title="Menu" style="left: 24px; top: 24px; width: 280px; height: 206px">
+              <head>
+                <style>
+                  .primary { width: 180px; height: 26px; margin-top: 4px; }
+                  button.primary { height: 34px; margin-top: 9px; }
+                  button.primary { width: 220px; }
+                  .wide { width: 196px; }
+                  #start_game { top: 64px; }
+                </style>
+              </head>
+              <body>
+                <button id="start_game" class="wide primary" data-event-click="start_game">开始游戏</button>
+              </body>
+            </rml>
+            """);
+        FakeGuiHost gui = new();
+        using ManagedFallbackBackend backend = new(gui);
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+
+        _ = host.ShowScreen(new UiScreenId(11), UiDocumentSource.Asset(path, 11));
+        host.Composite(default);
+
+        (string _, float width, float height) = Assert.Single(gui.Context.SizedButtons, static item => item.Label == "开始游戏");
+        Assert.Equal((220f, 34f), (width, height));
+        Assert.Contains(9f, gui.Context.VerticalSpacings);
+    }
+
+    /// <summary>
     /// 验证托管回退Draws Image Control From Images Directory。
     /// </summary>
     [Fact]
