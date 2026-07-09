@@ -4,7 +4,7 @@
 
 ## P1：引擎边界
 
-- [~] `ARCH-001` 移除 Core/Editor 中的 Demo 专属 `LavaActiveAreaCells` 语义，改为通用、无玩法含义的自定义 metric channel。
+- [x] `ARCH-001` 移除 Core/Editor 中的 Demo 专属 `LavaActiveAreaCells` 语义，改为通用、无玩法含义的自定义 metric channel。
   - 优先级：P1。
   - 依赖：`BASE-002`、`BASE-012`。
   - 设计来源：`AGENTS.md §0`；`plan/02-core-infrastructure.md`；`plan/13-demo-game.md`。
