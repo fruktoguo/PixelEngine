@@ -31,7 +31,7 @@ internal sealed class WindowsImeCompositionReader
     }
 
     internal UiTextCompositionCapabilities Capabilities => _enabled
-        ? UiTextCompositionCapabilities.Supported("Windows IMM32 输入源可从 Win32 HWND 采集真实 IME composition 预编辑状态，并支持 UI caret/候选锚点回写 ImmSetCompositionWindow/ImmSetCandidateWindow；真实窗口候选窗与产品体验仍归 M15 人工验收。")
+        ? UiTextCompositionCapabilities.Supported("Windows IMM32 输入源可从 Win32 HWND 采集真实 IME composition 预编辑状态，并支持 UI caret/候选锚点回写 ImmSetCompositionWindow(CFS_POINT|CFS_RECT)/ImmSetCandidateWindow(CFS_CANDIDATEPOS|CFS_EXCLUDE)；真实窗口候选窗与产品体验仍归 M15 人工验收。")
         : UiTextCompositionCapabilities.Unsupported("当前平台不是 Windows，或未启用 Windows IMM32 composition reader；预编辑状态保持 inactive。");
 
     internal int CaptureTextComposition(Span<char> destination, out UiTextComposition composition)
@@ -107,15 +107,35 @@ internal sealed class WindowsImeCompositionReader
 
         try
         {
-            if (geometry.HasCaretRect)
+            int caretLeft = 0;
+            int caretTop = 0;
+            int caretRight = 0;
+            int caretBottom = 0;
+            bool hasCaretRect = geometry.HasCaretRect;
+            if (hasCaretRect)
             {
+                caretLeft = ToClientCoordinate(geometry.CaretX);
+                caretTop = ToClientCoordinate(geometry.CaretY);
+                // 宽高至少 1 逻辑像素，避免 IMM32 忽略零面积矩形。
+                int caretWidth = Math.Max(1, ToClientCoordinate(geometry.CaretWidth));
+                int caretHeight = Math.Max(1, ToClientCoordinate(geometry.CaretHeight));
+                caretRight = caretLeft + caretWidth;
+                caretBottom = caretTop + caretHeight;
+                // CFS_POINT 给插入点，CFS_RECT 同步 caret 占用区，便于 IME 贴近控件定位。
                 Win32CompositionForm compositionForm = new()
                 {
-                    Style = Win32ImeNative.CompositionFormStylePoint,
+                    Style = Win32ImeNative.CompositionFormStylePoint | Win32ImeNative.CompositionFormStyleRect,
                     CurrentPos = new Win32Point
                     {
-                        X = ToClientCoordinate(geometry.CaretX),
-                        Y = ToClientCoordinate(geometry.CaretY),
+                        X = caretLeft,
+                        Y = caretTop,
+                    },
+                    Area = new Win32Rect
+                    {
+                        Left = caretLeft,
+                        Top = caretTop,
+                        Right = caretRight,
+                        Bottom = caretBottom,
                     },
                 };
                 _ = _native.SetCompositionWindow(context, in compositionForm);
@@ -123,15 +143,31 @@ internal sealed class WindowsImeCompositionReader
 
             if (geometry.HasCandidateAnchor)
             {
+                // 有 caret rect 时同时 CFS_EXCLUDE，避免候选窗盖住预编辑/插入点。
+                int candidateStyle = Win32ImeNative.CandidateFormStyleCandidatePos;
+                Win32Rect excludeArea = default;
+                if (hasCaretRect)
+                {
+                    candidateStyle |= Win32ImeNative.CandidateFormStyleExclude;
+                    excludeArea = new Win32Rect
+                    {
+                        Left = caretLeft,
+                        Top = caretTop,
+                        Right = caretRight,
+                        Bottom = caretBottom,
+                    };
+                }
+
                 Win32CandidateForm candidateForm = new()
                 {
                     Index = 0,
-                    Style = Win32ImeNative.CandidateFormStyleCandidatePos,
+                    Style = candidateStyle,
                     CurrentPos = new Win32Point
                     {
                         X = ToClientCoordinate(geometry.CandidateAnchorX),
                         Y = ToClientCoordinate(geometry.CandidateAnchorY),
                     },
+                    Area = excludeArea,
                 };
                 _ = _native.SetCandidateWindow(context, in candidateForm);
             }

@@ -236,12 +236,55 @@ public sealed class WindowsImeCompositionReaderTests
         Assert.Equal(1, native.ReleaseContextCalls);
         Assert.Equal(1, native.SetCompositionWindowCalls);
         Assert.Equal(1, native.SetCandidateWindowCalls);
-        Assert.Equal(Win32ImeNative.CompositionFormStylePoint, native.LastCompositionForm.Style);
+        Assert.Equal(
+            Win32ImeNative.CompositionFormStylePoint | Win32ImeNative.CompositionFormStyleRect,
+            native.LastCompositionForm.Style);
         Assert.Equal(120, native.LastCompositionForm.CurrentPos.X);
         Assert.Equal(341, native.LastCompositionForm.CurrentPos.Y);
-        Assert.Equal(Win32ImeNative.CandidateFormStyleCandidatePos, native.LastCandidateForm.Style);
+        Assert.Equal(120, native.LastCompositionForm.Area.Left);
+        Assert.Equal(341, native.LastCompositionForm.Area.Top);
+        Assert.Equal(122, native.LastCompositionForm.Area.Right);
+        Assert.Equal(359, native.LastCompositionForm.Area.Bottom);
+        Assert.Equal(
+            Win32ImeNative.CandidateFormStyleCandidatePos | Win32ImeNative.CandidateFormStyleExclude,
+            native.LastCandidateForm.Style);
         Assert.Equal(120, native.LastCandidateForm.CurrentPos.X);
         Assert.Equal(359, native.LastCandidateForm.CurrentPos.Y);
+        Assert.Equal(120, native.LastCandidateForm.Area.Left);
+        Assert.Equal(341, native.LastCandidateForm.Area.Top);
+        Assert.Equal(122, native.LastCandidateForm.Area.Right);
+        Assert.Equal(359, native.LastCandidateForm.Area.Bottom);
+    }
+
+    /// <summary>
+    /// 验证仅有候选锚点、无 caret rect 时仍用 CFS_CANDIDATEPOS，且不附加 CFS_EXCLUDE。
+    /// </summary>
+    [Fact]
+    public void ApplyImeGeometryCandidateOnlyDoesNotSetExcludeRect()
+    {
+        FakeImeNative native = new() { Context = new IntPtr(0x456) };
+        WindowsImeCompositionReader reader = new(() => new IntPtr(0x123), native, enableWindowsComposition: true);
+        UiImeGeometry geometry = new(
+            hasCaretRect: false,
+            caretX: 0f,
+            caretY: 0f,
+            caretWidth: 0f,
+            caretHeight: 0f,
+            hasCandidateAnchor: true,
+            candidateAnchorX: 50.2f,
+            candidateAnchorY: 80.6f);
+
+        reader.ApplyImeGeometry(in geometry);
+
+        Assert.Equal(0, native.SetCompositionWindowCalls);
+        Assert.Equal(1, native.SetCandidateWindowCalls);
+        Assert.Equal(Win32ImeNative.CandidateFormStyleCandidatePos, native.LastCandidateForm.Style);
+        Assert.Equal(50, native.LastCandidateForm.CurrentPos.X);
+        Assert.Equal(81, native.LastCandidateForm.CurrentPos.Y);
+        Assert.Equal(0, native.LastCandidateForm.Area.Left);
+        Assert.Equal(0, native.LastCandidateForm.Area.Top);
+        Assert.Equal(0, native.LastCandidateForm.Area.Right);
+        Assert.Equal(0, native.LastCandidateForm.Area.Bottom);
     }
 
     /// <summary>
