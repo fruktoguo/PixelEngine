@@ -21,7 +21,7 @@ public sealed class EngineCounters
     private long _cellDestructionEventsThisTick;
     private long _rigidBodiesCreatedThisTick;
     private long _rigidBodiesDestroyedThisTick;
-    private long _lavaActiveAreaCells;
+    private readonly CustomMetricChannel _customMetric = new();
     private long _materialRemapFallbackHits;
     private long _noGcRegionEndFailures;
     private long _noGcRegionStartedLastFrame;
@@ -84,9 +84,19 @@ public sealed class EngineCounters
     public long RigidBodiesDestroyedThisTick { get => Volatile.Read(ref _rigidBodiesDestroyedThisTick); set => Volatile.Write(ref _rigidBodiesDestroyedThisTick, value); }
 
     /// <summary>
-    /// 获取或设置 Demo 上涨熔岩当前覆盖的活跃面积估算，单位 cell。
+    /// 获取通用自定义 metric 通道；Core 不解释 label 的玩法语义。
     /// </summary>
-    public long LavaActiveAreaCells { get => Volatile.Read(ref _lavaActiveAreaCells); set => Volatile.Write(ref _lavaActiveAreaCells, value); }
+    public CustomMetricChannel CustomMetric => _customMetric;
+
+    /// <summary>
+    /// 发布通用自定义 metric 的当前值。
+    /// </summary>
+    /// <param name="name">由发布方定义的稳定 label。</param>
+    /// <param name="value">label 对应的整数值。</param>
+    public void SetCustomMetric(string name, long value)
+    {
+        _customMetric.Publish(name, value);
+    }
 
     /// <summary>
     /// 获取或设置 material 重映射 fallback 命中次数。

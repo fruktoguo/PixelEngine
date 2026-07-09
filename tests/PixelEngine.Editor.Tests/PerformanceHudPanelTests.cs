@@ -51,7 +51,6 @@ public sealed class PerformanceHudPanelTests
             CellDestructionEventsThisTick = 5,
             RigidBodiesDestroyedThisTick = 2,
             RigidBodiesCreatedThisTick = 3,
-            LavaActiveAreaCells = 12_345,
             ResidentChunks = 55,
             ResidentMemoryBytes = 6_291_456,
             SimHz = 30,
@@ -71,6 +70,7 @@ public sealed class PerformanceHudPanelTests
             EffectiveFramesPerSecond = 103.09,
             VSyncEnabled = true,
         };
+        counters.SetCustomMetric("test_metric", 12_345);
         counters.AddUiFontMissingGlyphs(2);
         EditorRuntimeDiagnostics runtime = new(0.5, 4, "Sim30Hz", 7);
 
@@ -115,7 +115,8 @@ public sealed class PerformanceHudPanelTests
         Assert.Equal(5, sample.CellDestructionEvents);
         Assert.Equal(2, sample.RigidBodiesDestroyed);
         Assert.Equal(3, sample.RigidBodiesCreated);
-        Assert.Equal(12_345, sample.LavaActiveAreaCells);
+        Assert.Equal("test_metric", sample.CustomMetricName);
+        Assert.Equal(12_345, sample.CustomMetricValue);
         Assert.Equal(55, sample.ResidentChunks);
         Assert.Equal(6_291_456, sample.ResidentMemoryBytes);
         Assert.Equal(8.37, sample.VariableWorkMs, 3);

@@ -549,6 +549,7 @@ public static class DemoProgram
         int playerCenterY = (int)MathF.Round(player?.CenterY ?? 0f);
         ushort playerCenterMaterial = probe.MaterialAt(playerCenterX, playerCenterY);
         CameraState renderCamera = cameraSync.Current;
+        engine.Context.Counters.CustomMetric.Read(out string customMetricName, out long customMetricValue);
 
         Console.WriteLine(
             $"脚本化窗口输入摘要：frames={scriptedInput.FramesInjected}, " +
@@ -572,7 +573,8 @@ public static class DemoProgram
             $"playable_collapse_skip={projectile?.LastCollapseSkipReason ?? "<missing>"}, " +
             $"playable_collapse_candidates={projectile?.LastCollapseSolidCandidates ?? 0}, " +
             $"destruction_events={engine.Context.Counters.CellDestructionEventsThisTick + engine.Context.Counters.RigidBodiesDestroyedThisTick + engine.Context.Counters.RigidBodiesCreatedThisTick}, " +
-            $"lava_active_area={engine.Context.Counters.LavaActiveAreaCells}, " +
+            $"custom_metric_name={customMetricName}, " +
+            $"custom_metric={customMetricValue}, " +
             $"particles={probe.ActiveParticles}, " +
             $"max_particles={scriptedProbe?.MaxParticles ?? probe.ActiveParticles}, " +
             $"lights={lighting.PointLights.Length}, " +
