@@ -89,7 +89,7 @@ public sealed class EditorConsoleStoreTests
         store.AddUiBackendSelection(new GameUiBackendSelection(
             UiBackendKind.RmlUi,
             UiBackendKind.ManagedFallback,
-            "RmlUi desktop GL3 renderer 不支持 GLES/ANGLE；回退 ManagedFallback。"));
+            "RmlUi GLES3/ANGLE renderer profile 需要 OpenGL ES 3.0+ 与同 context 函数表；回退 ManagedFallback，避免误用 desktop GL3 #version 330 shader。"));
         new EditorConsoleScriptHotReloadDiagnosticSink(store).Report(new ScriptHotReloadDiagnostic(
             DateTimeOffset.UtcNow,
             ScriptHotReloadDiagnosticKind.ReloadResult,
@@ -103,8 +103,8 @@ public sealed class EditorConsoleStoreTests
         Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Build && entry.Severity == EditorConsoleSeverity.Warning && entry.Text == "result warning");
         Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Asset && entry.Severity == EditorConsoleSeverity.Error && entry.Source == "asset-opener");
         Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Ui && entry.Severity == EditorConsoleSeverity.Warning && entry.Text.Contains("ManagedFallback", StringComparison.Ordinal));
-        Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Ui && entry.Severity == EditorConsoleSeverity.Warning && entry.Text.Contains("GLES/ANGLE", StringComparison.Ordinal));
-        Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Ui && entry.Severity == EditorConsoleSeverity.Warning && entry.Text.Contains("GL3 renderer", StringComparison.Ordinal));
+        Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Ui && entry.Severity == EditorConsoleSeverity.Warning && entry.Text.Contains("GLES3/ANGLE", StringComparison.Ordinal));
+        Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Ui && entry.Severity == EditorConsoleSeverity.Warning && entry.Text.Contains("#version 330", StringComparison.Ordinal));
         Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Script && entry.Severity == EditorConsoleSeverity.Error && entry.Text.Contains("脚本编译失败", StringComparison.Ordinal));
         Assert.Contains(entries, entry => entry.Category == EditorConsoleCategory.Script && entry.Severity == EditorConsoleSeverity.Error && entry.Text.Contains("error CS1002", StringComparison.Ordinal));
     }

@@ -199,23 +199,24 @@ public sealed class EngineBuilderTests
 
         GameUiBackendSelection selection = engine.Context.GetService<GameUiBackendSelection>();
         Assert.Equal(UiBackendKind.RmlUi, selection.RequestedBackend);
-        if (window.Backend == RenderBackend.GlEs30Angle || window.Capabilities.IsGles || window.Capabilities.IsAngle || !RmlUiNativeInfo.TryQuery(out _))
+        bool nativeAvailable = RmlUiNativeInfo.TryQuery(out _);
+        RmlUiNativeProfileDecision decision = RmlUiNativeProfileGate.Evaluate(window.Backend, window.Capabilities);
+        if (nativeAvailable && decision.CanUseNativeRenderer)
+        {
+            Assert.Equal(UiBackendKind.RmlUi, selection.ActiveBackend);
+            Assert.False(selection.UsedFallback);
+            Assert.Null(selection.FallbackReason);
+            if (decision.RequestedProfile == RmlUiNativeRendererProfile.Gles3Angle)
+            {
+                Assert.Equal("#version 300 es", decision.ShaderVersionDirective);
+            }
+        }
+        else
         {
             Assert.Equal(UiBackendKind.ManagedFallback, selection.ActiveBackend);
             Assert.True(selection.UsedFallback);
             Assert.False(string.IsNullOrWhiteSpace(selection.FallbackReason));
             Assert.Contains("ManagedFallback", selection.FallbackReason, StringComparison.Ordinal);
-            if (window.Backend == RenderBackend.GlEs30Angle || window.Capabilities.IsGles || window.Capabilities.IsAngle)
-            {
-                Assert.Contains("GL3 renderer", selection.FallbackReason, StringComparison.Ordinal);
-                Assert.Contains("GLES3/ANGLE renderer", selection.FallbackReason, StringComparison.Ordinal);
-            }
-        }
-        else
-        {
-            Assert.Equal(UiBackendKind.RmlUi, selection.ActiveBackend);
-            Assert.False(selection.UsedFallback);
-            Assert.Null(selection.FallbackReason);
         }
     }
 
