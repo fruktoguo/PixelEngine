@@ -1,5 +1,6 @@
 using PixelEngine.Editor;
 using PixelEngine.Editor.Shell;
+using PixelEngine.Gui;
 using PixelEngine.Rendering;
 using PixelEngine.UI;
 using System.Numerics;
@@ -586,6 +587,94 @@ public sealed class EditorShellGameViewContractTests
     }
 
     /// <summary>
+    /// 验证 shipped 路径：ManagedFallback 预编辑布局 → UiInputRouter 发布 → GameView 映射到 window client。
+    /// </summary>
+    [Fact]
+    public void UiInputRouterPublishesManagedFallbackImeGeometryThroughGameViewMapping()
+    {
+        // 320x180 viewport；fitScale=0.5；panel origin fb=(100,40)；dpi=2
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 320,
+            textureHeight: 180,
+            imageMinPanel: new Vector2(10f, 20f),
+            availablePanelSize: new Vector2(160f, 160f));
+        // 指针必须落在图像内以透传；modal 屏保证 WantCaptureKeyboard。
+        FixedUiInputSource inner = new(new UiPointerState(0f, 0f, 0f, 0f, LeftDown: false, RightDown: false, MiddleDown: false))
+        {
+            CompositionText = "候補",
+            Composition = new UiTextComposition(isActive: true, cursorIndex: 1),
+        };
+        GameViewUiInputSource gameViewSource = new(
+            inner,
+            () => PixelEngine.Editor.EditorMode.Play,
+            () => snapshot,
+            () => new Vector2(90f, 65f),
+            () => true,
+            () => new Vector2(100f, 40f),
+            () => new Vector2(2f, 2f));
+
+        NullGuiHost gui = new();
+        using ManagedFallbackBackend backend = new(gui);
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 180, 1f), UiBackendKind.ManagedFallback));
+        string uiPath = Path.Combine(Path.GetTempPath(), $"pixelengine-gameview-ime-{Guid.NewGuid():N}.xhtml");
+        File.WriteAllText(uiPath, """
+            <ui title="Ime">
+              <text id="label">IME</text>
+            </ui>
+            """);
+        try
+        {
+            UiDocumentHandle document = backend.LoadDocument(UiDocumentSource.Asset(uiPath, 1));
+            // Modal 使任意图像内指针都 WantCaptureKeyboard，从而泵入 composition。
+            backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(1), new UiScreenId(1), document, Modal: true)]);
+            UiInputRouter router = new(host, gameViewSource);
+
+            _ = router.Pump(allowPointer: true, allowKeyboard: true);
+
+            Assert.True(backend.TryGetImeGeometry(out UiImeGeometry viewportGeometry));
+            Assert.True(viewportGeometry.HasAny);
+            UiImeGeometry expected = UiImeGeometryLayout.ComputePreeditOverlayGeometry(
+                new UiViewport(0, 0, 320, 180, 1f),
+                textLength: 2,
+                cursorIndex: 1);
+            Assert.Equal(expected.CaretX, viewportGeometry.CaretX, precision: 3);
+            Assert.Equal(expected.CaretY, viewportGeometry.CaretY, precision: 3);
+
+            Assert.True(inner.ApplyImeGeometryCalls >= 1);
+            Assert.True(inner.LastImeGeometry.HasCaretRect);
+            Assert.True(snapshot.TryMapViewportImeGeometryToWindowClient(
+                in expected,
+                new Vector2(100f, 40f),
+                new Vector2(2f, 2f),
+                out UiImeGeometry mappedExpected));
+            Assert.Equal(mappedExpected.CaretX, inner.LastImeGeometry.CaretX, precision: 3);
+            Assert.Equal(mappedExpected.CaretY, inner.LastImeGeometry.CaretY, precision: 3);
+            Assert.Equal(mappedExpected.CaretWidth, inner.LastImeGeometry.CaretWidth, precision: 3);
+            Assert.Equal(mappedExpected.CaretHeight, inner.LastImeGeometry.CaretHeight, precision: 3);
+
+            // 关闭 composition 后应清除 window 几何。
+            inner.Composition = UiTextComposition.Inactive;
+            inner.CompositionText = string.Empty;
+            _ = router.Pump(allowPointer: true, allowKeyboard: true);
+            Assert.False(inner.LastImeGeometry.HasAny);
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(uiPath);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 Game View UI present target provider 只在 Play 模式、面板可见且 snapshot 有效时输出 framebuffer-space 目标。
     /// </summary>
     [Fact]
@@ -625,6 +714,30 @@ public sealed class EditorShellGameViewContractTests
         Assert.False(provider.TryGetPresentTarget(out _));
     }
 
+    private sealed class NullGuiHost : IManagedFallbackGuiHost
+    {
+        public bool IsRunning { get; private set; }
+
+        public void Initialize()
+        {
+            IsRunning = true;
+        }
+
+        public void DrawFrame(float deltaSeconds, int width, int height, Action<IGuiDrawContext> drawGui)
+        {
+            _ = deltaSeconds;
+            _ = width;
+            _ = height;
+            _ = drawGui;
+        }
+
+        public ManagedFallbackImage LoadImage(string path)
+        {
+            _ = path;
+            return new ManagedFallbackImage(1, 1, 1);
+        }
+    }
+
     private sealed class FixedUiInputSource(UiPointerState pointer) : IUiInputSource
     {
         public UiKey[] DownKeys { get; init; } = [];
@@ -635,7 +748,7 @@ public sealed class EditorShellGameViewContractTests
 
         public string CompositionText { get; set; } = string.Empty;
 
-        public UiTextComposition Composition { get; init; }
+        public UiTextComposition Composition { get; set; }
 
         public int CaptureDownKeysCalls { get; private set; }
 
