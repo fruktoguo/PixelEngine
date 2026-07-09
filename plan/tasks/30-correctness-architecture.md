@@ -24,7 +24,7 @@
 
 ## P2：公开 API 与生产接线
 
-- [~] `ARCH-004` 收敛 Demo 启动器/benchmark probe 对 `PhysicsSystem`、`RenderPipeline` 等具体服务的直接解析，补齐稳定 Hosting/Scripting probe facade。
+- [x] `ARCH-004` 收敛 Demo 启动器/benchmark probe 对 `PhysicsSystem`、`RenderPipeline` 等具体服务的直接解析，补齐稳定 Hosting/Scripting probe facade。
   - 优先级：P2。
   - 依赖：`BASE-010`、`BASE-011`、`BASE-015`。
   - 设计来源：产品定位 §8；`plan/11-scripting-system.md`；`plan/13-demo-game.md`。
