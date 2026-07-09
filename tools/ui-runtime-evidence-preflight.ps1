@@ -233,10 +233,23 @@ function Get-RequiredUiRuntimeScopes {
         [pscustomobject]@{
             scope = "transparent_ui_product_window"
             title = "真实窗口透明 UI 产品面：same-window/same-GL、alpha、pass-through、capture、Editor overlay"
-            trueFields = @("sameWindowSameGl", "alphaBlendVerified", "passThroughVerified", "captureVerified", "editorOverlayVerified", "videoOrWalkthroughAttached")
+            trueFields = @(
+                "sameWindowSameGl",
+                "noSecondWindow",
+                "noSecondProcess",
+                "singleRenderContextVerified",
+                "alphaBlendVerified",
+                "worldVisibleThroughTransparentPixels",
+                "passThroughVerified",
+                "captureVerified",
+                "editorOverlayVerified",
+                "videoOrWalkthroughAttached"
+            )
             minimumNumberFields = @(
                 @{ name = "videoDurationSeconds"; minimum = 30 },
-                @{ name = "capturedFrameCount"; minimum = 300 }
+                @{ name = "capturedFrameCount"; minimum = 300 },
+                @{ name = "transparentPixelSampleCount"; minimum = 3 },
+                @{ name = "passThroughSampleCount"; minimum = 3 }
             )
         },
         [pscustomobject]@{

@@ -4368,8 +4368,14 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("conclusion", readme, StringComparison.Ordinal);
         Assert.Contains("risk", readme, StringComparison.Ordinal);
         Assert.Contains("true 字段", readme, StringComparison.Ordinal);
+        Assert.Contains("noSecondWindow", readme, StringComparison.Ordinal);
+        Assert.Contains("noSecondProcess", readme, StringComparison.Ordinal);
+        Assert.Contains("singleRenderContextVerified", readme, StringComparison.Ordinal);
+        Assert.Contains("worldVisibleThroughTransparentPixels", readme, StringComparison.Ordinal);
         Assert.Contains("videoDurationSeconds>=30", readme, StringComparison.Ordinal);
         Assert.Contains("capturedFrameCount>=300", readme, StringComparison.Ordinal);
+        Assert.Contains("transparentPixelSampleCount>=3", readme, StringComparison.Ordinal);
+        Assert.Contains("passThroughSampleCount>=3", readme, StringComparison.Ordinal);
         Assert.Contains("smokeFrameCount>=60", readme, StringComparison.Ordinal);
         Assert.Contains("compositionSessionCount>=1", readme, StringComparison.Ordinal);
         Assert.Contains("licenseDocumentCount>=1", readme, StringComparison.Ordinal);
@@ -4381,6 +4387,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("blocked_missing_ui_runtime_evidence", plan, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_ui_runtime_scope_evidence", plan, StringComparison.Ordinal);
         Assert.Contains("ui_runtime_evidence_attached_pending_review", plan, StringComparison.Ordinal);
+        Assert.Contains("noSecondWindow", plan, StringComparison.Ordinal);
+        Assert.Contains("worldVisibleThroughTransparentPixels", plan, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -4568,6 +4576,59 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string outputReport = File.ReadAllText(Path.Combine(artifacts, "ui-runtime-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_ui_runtime_scope_evidence", outputReport, StringComparison.Ordinal);
             Assert.Contains("transparent_ui_product_window videoDurationSeconds 必须至少为 30", outputReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: ui_runtime_evidence_attached_pending_review", outputReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证透明 UI 产品面证据不能只给视频和 alpha 结论，还必须证明没有第二窗口/进程且透明像素真实透出世界。
+    /// </summary>
+    [Fact]
+    public void UiRuntimeEvidencePreflightRejectsWeakTransparentWindowTopologyAndPixelEvidence()
+    {
+        // Arrange：搭建测试场景与依赖
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ui-runtime-weak-window-topology-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateUiRuntimeEvidenceManifest(temp);
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonArray evidence = rootNode["evidence"]!.AsArray();
+            JsonObject transparentEntry = evidence
+                .Select(static node => node!.AsObject())
+                .Single(static node => string.Equals((string?)node["scope"], "transparent_ui_product_window", StringComparison.Ordinal));
+            string reportPath = (string)transparentEntry["path"]!;
+            string report = File.ReadAllText(reportPath)
+                .Replace("noSecondWindow: true", "noSecondWindow: false", StringComparison.Ordinal)
+                .Replace("worldVisibleThroughTransparentPixels: true", "worldVisibleThroughTransparentPixels: false", StringComparison.Ordinal)
+                .Replace("transparentPixelSampleCount: 3", "transparentPixelSampleCount: 0", StringComparison.Ordinal);
+            File.WriteAllText(reportPath, report);
+            transparentEntry["sha256"] = GetSha256(reportPath);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "out");
+            // Act：执行被测操作
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "ui-runtime-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            // Assert：验证不变式与预期结果
+            Assert.Equal(5, result.ExitCode);
+            string outputReport = File.ReadAllText(Path.Combine(artifacts, "ui-runtime-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_ui_runtime_scope_evidence", outputReport, StringComparison.Ordinal);
+            Assert.Contains("transparent_ui_product_window noSecondWindow 必须为 true", outputReport, StringComparison.Ordinal);
             Assert.DoesNotContain("status: ui_runtime_evidence_attached_pending_review", outputReport, StringComparison.Ordinal);
         }
         finally
@@ -7741,7 +7802,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             ["transparent_ui_product_window"] =
             [
                 "sameWindowSameGl",
+                "noSecondWindow",
+                "noSecondProcess",
+                "singleRenderContextVerified",
                 "alphaBlendVerified",
+                "worldVisibleThroughTransparentPixels",
                 "passThroughVerified",
                 "captureVerified",
                 "editorOverlayVerified",
@@ -7845,6 +7910,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             {
                 ["videoDurationSeconds"] = 30,
                 ["capturedFrameCount"] = 300,
+                ["transparentPixelSampleCount"] = 3,
+                ["passThroughSampleCount"] = 3,
             },
             "rmlui_angle_gles_native_profile" => new Dictionary<string, double>
             {
