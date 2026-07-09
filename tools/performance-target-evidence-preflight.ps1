@@ -342,6 +342,7 @@ function Assert-FrameBudgetEvidence {
     [void](Get-RequiredField -Fields $fields -Name "targetHardware" -Scope $scope)
     $source = Get-RequiredField -Fields $fields -Name "source" -Scope $scope
     $scenario = Get-RequiredField -Fields $fields -Name "scenario" -Scope $scope
+    $demoScene = Get-RequiredField -Fields $fields -Name "demoScene" -Scope $scope
     $sampleSeconds = Get-RequiredDouble -Fields $fields -Name "sampleSeconds" -Scope $scope
     $frameSamples = Get-RequiredInt -Fields $fields -Name "frameSamples" -Scope $scope
     $caP99Ms = Get-RequiredDouble -Fields $fields -Name "caP99Ms" -Scope $scope
@@ -382,6 +383,15 @@ function Assert-FrameBudgetEvidence {
     if ($logicAudioP99Ms -gt 1.0) {
         throw "$scope logicAudioP99Ms 必须 <= 1ms。"
     }
+
+    if (-not [string]::Equals($demoScene, "lava-mine", [StringComparison]::Ordinal)) {
+        throw "$scope demoScene 必须为 lava-mine。"
+    }
+
+    Assert-TrueField -Fields $fields -Name "playerPackageRun" -Scope $scope
+    Assert-TrueField -Fields $fields -Name "realWindowRun" -Scope $scope
+    Assert-TrueField -Fields $fields -Name "degradationPolicyObserved" -Scope $scope
+    Assert-TrueField -Fields $fields -Name "frameTimelineCaptured" -Scope $scope
 
     Assert-EvidenceRunIdentity -Fields $fields -Scope $scope -BenchmarkRunId $BenchmarkRunId -GitCommit $GitCommit
 }
