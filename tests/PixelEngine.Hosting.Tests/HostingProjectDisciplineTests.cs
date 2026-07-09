@@ -563,8 +563,11 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("EditorMainToolbarState", menu, StringComparison.Ordinal);
         Assert.Contains("CaptureToolbarState", menu, StringComparison.Ordinal);
         Assert.Contains("##PixelEngineEditorToolbar", menu, StringComparison.Ordinal);
-        Assert.Contains("ImGui.SetNextWindowPos", menu, StringComparison.Ordinal);
-        Assert.Contains("ImGui.SetNextWindowSize", menu, StringComparison.Ordinal);
+        Assert.Contains("ImGuiP.BeginViewportSideBar", menu, StringComparison.Ordinal);
+        Assert.Contains("ImGuiDir.Up", menu, StringComparison.Ordinal);
+        Assert.Contains("ToolbarHeight", menu, StringComparison.Ordinal);
+        Assert.Contains("IEditorChromePanel", host, StringComparison.Ordinal);
+        Assert.Contains("DrawPanels(in context, chromeOnly: true)", File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "EditorApp.cs")), StringComparison.Ordinal);
         Assert.Contains("app.FocusProjectPicker(ProjectPickerMode.NewProject)", menu, StringComparison.Ordinal);
         Assert.Contains("app.FocusProjectPicker(ProjectPickerMode.OpenProject)", menu, StringComparison.Ordinal);
         Assert.Contains("app.SaveScene()", menu, StringComparison.Ordinal);

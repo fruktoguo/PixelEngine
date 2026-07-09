@@ -366,7 +366,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             : EditorRuntimeDiagnostics.FullQuality;
     }
 
-    private sealed class EditorMainMenuPanel(EditorShellApp app) : IEditorPanel
+    private sealed class EditorMainMenuPanel(EditorShellApp app) : IEditorChromePanel
     {
         private readonly EditorMainMenuBar _menu = new();
 

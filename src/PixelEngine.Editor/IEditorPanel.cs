@@ -21,3 +21,8 @@ public interface IEditorPanel
     /// <param name="context">当前 Editor 上下文。</param>
     void Draw(in EditorContext context);
 }
+
+/// <summary>
+/// DockSpace 创建前绘制的编辑器 chrome 面板，例如主菜单栏、全局工具栏与状态栏。
+/// </summary>
+public interface IEditorChromePanel : IEditorPanel;
