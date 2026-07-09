@@ -41,14 +41,25 @@ public sealed class SceneHierarchyPanelTests
         RecordingFocus focus = new();
         SceneHierarchyPanel panel = new(source, focus);
         EditorSelection selection = new();
+        selection.SelectFolder("levels");
 
         bool entitySelected = panel.SelectEntity("script:1", selection);
-        bool bodySelected = panel.SelectBody(7, selection);
 
         Assert.True(entitySelected);
         Assert.Equal("script:1", selection.EntityHandle);
+        Assert.Null(selection.AssetPath);
+        Assert.Null(selection.FolderPath);
+        Assert.Null(selection.BodyId);
+
+        selection.SelectFolder("levels");
+        bool bodySelected = panel.SelectBody(7, selection);
+
         Assert.True(bodySelected);
         Assert.Equal(7, selection.BodyId);
+        Assert.Null(selection.AssetPath);
+        Assert.Null(selection.FolderPath);
+        Assert.Null(selection.EntityHandle);
+        Assert.Null(selection.GameObjectStableId);
         Assert.Equal([(12.5f, 18.25f)], focus.Points);
     }
 

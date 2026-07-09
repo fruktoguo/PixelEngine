@@ -162,6 +162,39 @@ public sealed class AssetBrowserPanel(
     }
 
     /// <summary>
+    /// 选择 Project Window 文件夹并同步 Editor 选择态。
+    /// </summary>
+    /// <param name="path">文件夹逻辑路径；空字符串表示 content 根目录。</param>
+    /// <param name="selection">Editor 选择态。</param>
+    /// <returns>文件夹存在时返回 true。</returns>
+    public bool SelectFolder(string path, EditorSelection selection)
+    {
+        ArgumentNullException.ThrowIfNull(selection);
+        if (FolderTargets.Count == 0)
+        {
+            _ = Refresh();
+        }
+
+        string normalized = (path ?? string.Empty).Trim().Replace('\\', '/');
+        for (int i = 0; i < FolderTargets.Count; i++)
+        {
+            AssetBrowserFolderItem folder = FolderTargets[i];
+            if (!string.Equals(folder.Path, normalized, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            selection.SelectFolder(folder.Path);
+            Status = $"选中文件夹 {folder.DisplayName}";
+            return true;
+        }
+
+        Status = $"文件夹不存在：{path}";
+        return false;
+    }
+
+
+    /// <summary>
     /// 试听指定音频资产。
     /// </summary>
     /// <param name="path">资产路径。</param>
@@ -478,7 +511,7 @@ public sealed class AssetBrowserPanel(
             : FilteredAssets;
         for (int i = 0; i < FolderTargets.Count; i++)
         {
-            DrawFolderDropTarget(FolderTargets[i]);
+            DrawFolderDropTarget(FolderTargets[i], context.Selection);
         }
 
         for (int i = 0; i < assets.Count; i++)
@@ -516,10 +549,15 @@ public sealed class AssetBrowserPanel(
         }
     }
 
-    private void DrawFolderDropTarget(AssetBrowserFolderItem folder)
+    private void DrawFolderDropTarget(AssetBrowserFolderItem folder, EditorSelection selection)
     {
         string label = $"{folder.DisplayName} ({folder.AssetCount})##folder-{folder.Path}";
-        _ = ImGui.Selectable(label, false);
+        bool selected = string.Equals(selection.FolderPath, folder.Path, StringComparison.Ordinal);
+        if (ImGui.Selectable(label, selected))
+        {
+            _ = SelectFolder(folder.Path, selection);
+        }
+
         if (ImGui.BeginDragDropTarget())
         {
             // Shell 层 drop 服务消费 typed payload；此处只校验 assetId 并委托移动服务。

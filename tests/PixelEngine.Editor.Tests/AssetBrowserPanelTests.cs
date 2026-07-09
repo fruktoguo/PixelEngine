@@ -78,6 +78,7 @@ public sealed class AssetBrowserPanelTests
         Assert.Equal("audio/hit.wav", filtered.Path);
         Assert.True(selected);
         Assert.Equal("audio/hit.wav", selection.AssetPath);
+        Assert.Null(selection.FolderPath);
         Assert.True(played);
         Assert.Equal(["audio/hit.wav"], preview.Played);
     }
@@ -96,6 +97,15 @@ public sealed class AssetBrowserPanelTests
 
         // Assert：验证预期结果
         Assert.Equal("scripts/Player.cs", selection.AssetPath);
+        Assert.Null(selection.FolderPath);
+        Assert.Null(selection.GameObjectStableId);
+        Assert.Null(selection.EntityHandle);
+        Assert.Null(selection.BodyId);
+
+        selection.SelectFolder("scripts");
+
+        Assert.Equal("scripts", selection.FolderPath);
+        Assert.Null(selection.AssetPath);
         Assert.Null(selection.GameObjectStableId);
         Assert.Null(selection.EntityHandle);
         Assert.Null(selection.BodyId);
@@ -104,6 +114,7 @@ public sealed class AssetBrowserPanelTests
 
         Assert.Equal(9, selection.GameObjectStableId);
         Assert.Null(selection.AssetPath);
+        Assert.Null(selection.FolderPath);
         Assert.Null(selection.EntityHandle);
         Assert.Null(selection.BodyId);
     }
@@ -532,6 +543,34 @@ public sealed class AssetBrowserPanelTests
         Assert.Empty(panel.LastAssets);
         Assert.Contains(panel.FolderTargets, folder => folder.Path == string.Empty && folder.AssetCount == 0);
         Assert.Contains(panel.FolderTargets, folder => folder.Path == "levels" && folder.AssetCount == 0);
+    }
+
+    /// <summary>
+    /// 验证 Project Window 文件夹行可选中，并与资产选择互斥。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelSelectsFolderAndClearsAssetSelection()
+    {
+        // Arrange：准备输入与初始状态
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("levels/one.scene", AssetBrowserItemKind.Scene, 10, DateTimeOffset.UnixEpoch, null, "asset_scene"),
+        ]);
+        source.ReplaceFolders([new AssetBrowserFolderItem("levels", 1)]);
+        AssetBrowserPanel panel = new(source);
+        EditorSelection selection = new();
+
+        _ = panel.Refresh();
+        bool assetSelected = panel.SelectAsset("levels/one.scene", selection);
+        bool folderSelected = panel.SelectFolder("levels", selection);
+
+        // Assert：验证预期结果
+        Assert.True(assetSelected);
+        Assert.True(folderSelected);
+        Assert.Equal("levels", selection.FolderPath);
+        Assert.Null(selection.AssetPath);
+        Assert.Null(selection.GameObjectStableId);
+        Assert.Contains("选中文件夹", panel.Status, StringComparison.Ordinal);
     }
 
     private sealed class RecordingThumbnailProvider : ITextureThumbnailProvider
