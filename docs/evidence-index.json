@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-10",
-  "generatedFromCommit": "796b57817b9136340b70ee0594fe743f1f094d97",
+  "generatedFromCommit": "b7fcf5321a4daf5d5a282350fd61e4886cc0bd13",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -13,6 +13,19 @@
     "completeState": "只有同时捕获 commit、runSessionId、硬件、命令、稳定报告和 SHA256 的条目才能标记 complete。"
   },
   "entries": [
+    {
+      "entryId": "ci-001-workflow-validation-20260710",
+      "taskIds": ["CI-001"],
+      "evidenceState": "local_static_validation_complete",
+      "commit": "b7fcf5321a4daf5d5a282350fd61e4886cc0bd13",
+      "runSessionId": "local-20260710-ci001-actionlint",
+      "runIdentityStatus": "captured",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; local static validation; no GitHub runner run",
+      "command": "python -c \"import yaml, pathlib; yaml.safe_load(pathlib.Path('.github/workflows/ci.yml').read_text(encoding='utf-8'))\"; GOSUMDB=off go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/ci.yml",
+      "reportPath": "docs/evidence-2026-07-10-ci-001-workflow-validation.md",
+      "sha256": "53c9c906bd4aa6ff9fd8b53f2f6e18eff70a9480393a55e7b4b965413b35a7a9",
+      "notes": "本地 YAML/actionlint 和矩阵结构验证通过；远端 push/run 未执行，CI-002 仍保持阻塞。"
+    },
     {
       "entryId": "target-hardware-matrix-20260710",
       "taskIds": ["EVID-003"],
