@@ -4569,6 +4569,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("stableIdsChecked", readme, StringComparison.Ordinal);
         Assert.Contains("assetOperationCount>=3", readme, StringComparison.Ordinal);
         Assert.Contains("referenceDocumentCount>=2", readme, StringComparison.Ordinal);
+        Assert.Contains("stableAssetKindCount>=4", readme, StringComparison.Ordinal);
+        Assert.Contains("buildPackageAuditCount>=1", readme, StringComparison.Ordinal);
         Assert.Contains("scriptDoubleClickAttempted", readme, StringComparison.Ordinal);
         Assert.Contains("scriptOpenAttemptCount>=1", readme, StringComparison.Ordinal);
         Assert.Contains("projectSettingsSaved", readme, StringComparison.Ordinal);
@@ -4683,6 +4685,59 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string outputReport = File.ReadAllText(Path.Combine(artifacts, "editor-ux-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_editor_ux_scope_evidence", outputReport, StringComparison.Ordinal);
             Assert.Contains("editor_full_route_window videoDurationSeconds 必须至少为 60", outputReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: editor_ux_evidence_attached_pending_review", outputReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 Project Window 引用稳定性证据必须覆盖前后 stable id、零断引用和 Build 包引用审计。
+    /// </summary>
+    [Fact]
+    public void EditorUxEvidencePreflightRejectsWeakProjectReferenceStabilityEvidence()
+    {
+        // Arrange：准备输入与初始状态
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-editor-ux-weak-project-reference-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateEditorUxEvidenceManifest(temp);
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonArray evidence = rootNode["evidence"]!.AsArray();
+            JsonObject projectReference = evidence
+                .Select(static node => node!.AsObject())
+                .Single(static node => string.Equals((string?)node["scope"], "project_window_reference_stability", StringComparison.Ordinal));
+
+            string reportPath = Path.Combine(root, (string)projectReference["path"]!);
+            string report = File.ReadAllText(reportPath)
+                .Replace("brokenReferenceCountZero: true", "brokenReferenceCountZero: false", StringComparison.Ordinal)
+                .Replace("buildPackageAuditCount: 1", "buildPackageAuditCount: 0", StringComparison.Ordinal);
+            File.WriteAllText(reportPath, report);
+            projectReference["sha256"] = GetSha256(reportPath);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "out");
+            // Act：执行被测操作
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "editor-ux-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            // Assert：验证不变式与预期结果
+            Assert.Equal(5, result.ExitCode);
+            string outputReport = File.ReadAllText(Path.Combine(artifacts, "editor-ux-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_editor_ux_scope_evidence", outputReport, StringComparison.Ordinal);
+            Assert.Contains("project_window_reference_stability brokenReferenceCountZero 必须为 true", outputReport, StringComparison.Ordinal);
             Assert.DoesNotContain("status: editor_ux_evidence_attached_pending_review", outputReport, StringComparison.Ordinal);
         }
         finally
@@ -7584,11 +7639,16 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             ["project_window_reference_stability"] =
             [
                 "stableIdsChecked",
+                "stableIdsBeforeAfterRecorded",
                 "sceneReferencesChecked",
                 "prefabReferencesChecked",
                 "inspectorAssetFieldsChecked",
+                "projectPlayerBuildSettingsChecked",
+                "startupSettingsChecked",
                 "buildRequestChecked",
+                "buildPackageReferenceAuditPassed",
                 "deleteConfirmationChecked",
+                "brokenReferenceCountZero",
             ],
             ["script_external_editor"] =
             [
@@ -7683,6 +7743,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             {
                 ["assetOperationCount"] = 3,
                 ["referenceDocumentCount"] = 2,
+                ["stableAssetKindCount"] = 4,
+                ["buildPackageAuditCount"] = 1,
             },
             "script_external_editor" => new Dictionary<string, double>
             {
