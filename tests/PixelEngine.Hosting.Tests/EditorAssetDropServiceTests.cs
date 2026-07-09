@@ -249,6 +249,44 @@ public sealed class EditorAssetDropServiceTests
     }
 
     /// <summary>
+    /// 验证 Json/Other 资产不会被当成脚本 typed asset reference 编码，也不会抛未实现异常。
+    /// </summary>
+    [Fact]
+    public void JsonAndOtherAssetsAreRejectedFromTypedAssetReferenceEncoding()
+    {
+        // Arrange：准备输入与初始状态
+        EditorSceneModel scene = EditorSceneModel.Empty("drop-inspector-unsupported-asset");
+        EditorGameObject gameObject = scene.Create("Receiver");
+        gameObject.Components.Add(new EditorComponentModel(typeof(AssetDropProbeBehaviour).FullName!));
+        EditorUndoStack undo = new();
+
+        foreach (EditorAssetType assetType in new[] { EditorAssetType.Json, EditorAssetType.Other })
+        {
+            string assetId = "asset_" + assetType.ToString().ToLowerInvariant();
+            string path = assetType == EditorAssetType.Json ? "config/settings.json" : "docs/readme.txt";
+            EditorAssetDropPayload payload = new(assetId, path, assetType);
+            EditorAssetInspectorFieldTarget target = new(gameObject.StableId, 0, assetType + "Field", assetType);
+
+            // Act：执行被测操作
+            bool encoded = EditorAssetReferenceCodec.TryEncode(assetId, path, assetType, out string value, out string diagnostic);
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+                EditorAssetReferenceCodec.Encode(assetId, path, assetType));
+            EditorAssetDropResult result = EditorAssetDropService.DropOnInspectorField(scene, undo, payload, target);
+
+            // Assert：验证不变式与预期结果
+            Assert.False(encoded);
+            Assert.Empty(value);
+            Assert.Contains("不能编码为脚本 typed asset reference", diagnostic, StringComparison.Ordinal);
+            Assert.Contains("不能编码为脚本 typed asset reference", exception.Message, StringComparison.Ordinal);
+            Assert.False(result.Succeeded);
+            Assert.Contains("不能编码为脚本 typed asset reference", result.Diagnostic, StringComparison.Ordinal);
+            Assert.False(gameObject.Components[0].SerializedFields.ContainsKey(target.FieldName));
+        }
+
+        Assert.False(undo.CanUndo);
+    }
+
+    /// <summary>
     /// 验证 Inspector 面板可从 ScriptFieldDescriptor 声明生成 typed asset field target 并写入 stable reference。
     /// </summary>
     [Fact]

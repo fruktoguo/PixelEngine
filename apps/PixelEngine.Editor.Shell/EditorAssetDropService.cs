@@ -195,7 +195,11 @@ internal static class EditorAssetDropService
         try
         {
             _ = scene.Get(target.StableId).Components[target.ComponentIndex];
-            string value = EditorAssetReferenceCodec.Encode(payload.AssetId, payload.LogicalPath, payload.AssetType);
+            if (!EditorAssetReferenceCodec.TryEncode(payload.AssetId, payload.LogicalPath, payload.AssetType, out string value, out string encodeDiagnostic))
+            {
+                return EditorAssetDropResult.Failure($"资产拖拽到 Inspector 字段失败：{encodeDiagnostic}");
+            }
+
             undo.Execute(scene, new SetComponentFieldCommand(target.StableId, target.ComponentIndex, target.FieldName, value));
             return EditorAssetDropResult.Success($"已把 {payload.LogicalPath} 绑定到字段 {target.FieldName}。", target.StableId);
         }
@@ -300,7 +304,28 @@ internal static class EditorAssetReferenceCodec
 {
     public static string Encode(string assetId, string logicalPath, EditorAssetType assetType)
     {
-        return ScriptAssetReference.Encode(assetId, logicalPath, ToScriptAssetKind(assetType));
+        return TryEncode(assetId, logicalPath, assetType, out string value, out string diagnostic)
+            ? value
+            : throw new InvalidOperationException(diagnostic);
+    }
+
+    public static bool TryEncode(
+        string assetId,
+        string logicalPath,
+        EditorAssetType assetType,
+        out string value,
+        out string diagnostic)
+    {
+        if (!TryMapToScriptAssetKind(assetType, out ScriptAssetKind scriptAssetKind))
+        {
+            value = string.Empty;
+            diagnostic = $"{assetType} 资产不能编码为脚本 typed asset reference。";
+            return false;
+        }
+
+        value = ScriptAssetReference.Encode(assetId, logicalPath, scriptAssetKind);
+        diagnostic = string.Empty;
+        return true;
     }
 
     public static bool TryDecode(string? value, out EditorAssetReference reference)
@@ -316,20 +341,34 @@ internal static class EditorAssetReferenceCodec
         return true;
     }
 
-    private static ScriptAssetKind ToScriptAssetKind(EditorAssetType assetType)
+    private static bool TryMapToScriptAssetKind(EditorAssetType assetType, out ScriptAssetKind scriptAssetKind)
     {
-        return assetType switch
+        switch (assetType)
         {
-            EditorAssetType.Material => ScriptAssetKind.Material,
-            EditorAssetType.Texture => ScriptAssetKind.Texture,
-            EditorAssetType.Audio => ScriptAssetKind.Audio,
-            EditorAssetType.Scene => ScriptAssetKind.Scene,
-            EditorAssetType.Prefab => ScriptAssetKind.Prefab,
-            EditorAssetType.Script => ScriptAssetKind.Script,
-            EditorAssetType.Json => throw new NotImplementedException(),
-            EditorAssetType.Other => throw new NotImplementedException(),
-            _ => throw new ArgumentOutOfRangeException(nameof(assetType), assetType, "该资产类型不能编码为脚本 asset reference。"),
-        };
+            case EditorAssetType.Material:
+                scriptAssetKind = ScriptAssetKind.Material;
+                return true;
+            case EditorAssetType.Texture:
+                scriptAssetKind = ScriptAssetKind.Texture;
+                return true;
+            case EditorAssetType.Audio:
+                scriptAssetKind = ScriptAssetKind.Audio;
+                return true;
+            case EditorAssetType.Scene:
+                scriptAssetKind = ScriptAssetKind.Scene;
+                return true;
+            case EditorAssetType.Prefab:
+                scriptAssetKind = ScriptAssetKind.Prefab;
+                return true;
+            case EditorAssetType.Script:
+                scriptAssetKind = ScriptAssetKind.Script;
+                return true;
+            case EditorAssetType.Json:
+            case EditorAssetType.Other:
+            default:
+                scriptAssetKind = default;
+                return false;
+        }
     }
 
     public static bool TryRewrite(
