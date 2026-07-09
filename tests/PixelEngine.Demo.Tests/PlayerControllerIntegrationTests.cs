@@ -121,7 +121,9 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Contains("begin:playable-hud:Playable HUD:NoTitleBar, NoResize, NoMove, NoSavedSettings, NoScrollbar", gui.Drawn);
         Assert.Contains("swatch:weapon-current:FFE8D06A:14", gui.Drawn);
         Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:Pistol  180/180:", StringComparison.Ordinal));
-        Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:目标 水晶 0/3", StringComparison.Ordinal));
+        Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:目标 左起点 -> 右出口，穿过熔岩坑与路障", StringComparison.Ordinal));
+        Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:旧任务诊断 采集 0/3", StringComparison.Ordinal));
+        Assert.DoesNotContain(gui.Drawn, line => line.StartsWith("text-colored:目标 水晶", StringComparison.Ordinal));
         Assert.Contains("text:射击 0", gui.Drawn);
         Assert.Contains(gui.Drawn, line => line.StartsWith("text:FX ", StringComparison.Ordinal) && line.Contains(" Lights ", StringComparison.Ordinal) && line.Contains(" World particles ", StringComparison.Ordinal));
         Assert.Contains("text:材质", gui.Drawn);

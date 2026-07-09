@@ -66,8 +66,8 @@ public sealed class PlayableHud : Behaviour
         }
 
         DrawHealth(gui);
-        DrawMission(gui);
         DrawGoal(gui);
+        DrawMissionDiagnostics(gui);
         DrawWeapon(gui);
         gui.Text($"射击 {_weapons?.PrimaryFireCount ?? _projectile?.ShotsFired ?? 0}");
         EngineDiagnosticsSnapshot diagnostics = Context.Diagnostics.Capture();
@@ -206,7 +206,7 @@ public sealed class PlayableHud : Behaviour
         gui.ProgressBar(Math.Clamp(_weapons.Heat / 100f, 0f, 1f), _weapons.IsOverheated ? "过热" : "热量");
     }
 
-    private void DrawMission(IGuiContext gui)
+    private void DrawMissionDiagnostics(IGuiContext gui)
     {
         if (_mission is null)
         {
@@ -221,18 +221,13 @@ public sealed class PlayableHud : Behaviour
             _ => 0xFF_E8_D0_6A,
         };
         gui.TextColored(
-            $"目标 水晶 {_mission.CrystalsCollected}/{Math.Max(1, _mission.RequiredCrystals)}  " +
-            $"时间 {_mission.RemainingSeconds:0}s  熔岩线 {_mission.LavaSurfaceY:0}  分数 {_mission.Score}",
+            $"旧任务诊断 采集 {_mission.CrystalsCollected}/{Math.Max(1, _mission.RequiredCrystals)}  " +
+            $"时间 {_mission.RemainingSeconds:0}s  危险线 {_mission.LavaSurfaceY:0}  分数 {_mission.Score}",
             stateColor);
     }
 
     private void DrawGoal(IGuiContext gui)
     {
-        if (_mission is not null)
-        {
-            return;
-        }
-
         uint color = _goal?.Reached == true ? 0xFF_80_F0_80 : 0xFF_E8_D0_6A;
         string status = _goal?.Reached == true ? "已抵达右侧出口" : "左起点 -> 右出口，穿过熔岩坑与路障";
         gui.TextColored($"目标 {status}", color);
