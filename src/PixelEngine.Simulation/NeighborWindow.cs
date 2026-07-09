@@ -322,6 +322,58 @@ public ref struct NeighborWindow
         return slot1 != slot2;
     }
 
+    /// <summary>
+    /// 在 movement 热路径中一次性完成目标可置换判断、刚体占用通知、cell swap 与 parity 标记。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryMoveCell(
+        int sourceX,
+        int sourceY,
+        int targetX,
+        int targetY,
+        MaterialPropsTable materials,
+        byte sourceDensity,
+        byte parityBit,
+        IRigidDamageSink rigidDamageSink,
+        out int targetSlot)
+    {
+        int sourceSlot = SlotOf(sourceX, sourceY);
+        targetSlot = SlotOf(targetX, targetY);
+        int sourceLocal = CellAddressing.LocalIndex(sourceX, sourceY);
+        int targetLocal = CellAddressing.LocalIndex(targetX, targetY);
+
+        ref ushort targetMaterial = ref Unsafe.Add(ref SelectMaterialBase(targetSlot), targetLocal);
+        ref byte targetFlags = ref Unsafe.Add(ref SelectFlagsBase(targetSlot), targetLocal);
+        if (targetMaterial != 0 &&
+            (CellFlags.MatchesFrame(targetFlags, parityBit) ||
+            materials.DensityOf(targetMaterial) >= sourceDensity))
+        {
+            return false;
+        }
+
+        if (CellFlags.Has(targetFlags, CellFlags.RigidOwned))
+        {
+            rigidDamageSink.OnOwnedCellDamaged(targetX, targetY, targetMaterial);
+            targetFlags = CellFlags.Clear(targetFlags, CellFlags.RigidOwned);
+        }
+
+        ref ushort sourceMaterial = ref Unsafe.Add(ref SelectMaterialBase(sourceSlot), sourceLocal);
+        (sourceMaterial, targetMaterial) = (targetMaterial, sourceMaterial);
+
+        ref byte sourceFlags = ref Unsafe.Add(ref SelectFlagsBase(sourceSlot), sourceLocal);
+        (sourceFlags, targetFlags) = (targetFlags, sourceFlags);
+        sourceFlags = CellFlags.SetParity(sourceFlags, parityBit);
+        targetFlags = CellFlags.SetParity(targetFlags, parityBit);
+
+        ref byte sourceLifetime = ref Unsafe.Add(ref SelectLifetimeBase(sourceSlot), sourceLocal);
+        ref byte targetLifetime = ref Unsafe.Add(ref SelectLifetimeBase(targetSlot), targetLocal);
+        (sourceLifetime, targetLifetime) = (targetLifetime, sourceLifetime);
+
+        Unsafe.Add(ref SelectDamageBase(sourceSlot), sourceLocal) = 0;
+        Unsafe.Add(ref SelectDamageBase(targetSlot), targetLocal) = 0;
+        return true;
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private ref ushort SelectMaterialBase(int slot)
     {
