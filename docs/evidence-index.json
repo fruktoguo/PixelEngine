@@ -1,18 +1,31 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-10",
-  "generatedFromCommit": "5af1541fd4ad365e83ad11e39125838ed5f685d5",
+  "generatedFromCommit": "796b57817b9136340b70ee0594fe743f1f094d97",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
     "volatileRoots": ["artifacts/", "BenchmarkDotNet.Artifacts/", "scratch/", "publish/", "最终输出/"]
   },
   "identityPolicy": {
-    "commit": "报告文件最后一次写入的 Git commit；若原始报告声明了 runCommit，必须在 notes 中区分并保持同源。",
+    "commit": "报告或验证实际执行/来源内容所绑定的 Git commit；稳定报告文件自身由 sha256 独立保护，若原始报告声明了 runCommit，必须在 notes 中区分并保持同源。",
     "runSessionId": "实际 benchmark、probe、CI 或人工 session 的身份；历史报告未记录时使用 null，不得推造。",
     "completeState": "只有同时捕获 commit、runSessionId、硬件、命令、稳定报告和 SHA256 的条目才能标记 complete。"
   },
   "entries": [
+    {
+      "entryId": "target-hardware-matrix-20260710",
+      "taskIds": ["EVID-003"],
+      "evidenceState": "complete_inventory_control_plane",
+      "commit": "796b57817b9136340b70ee0594fe743f1f094d97",
+      "runSessionId": "local-20260710-evid003-target-matrix",
+      "runIdentityStatus": "captured",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT; driver 32.0.31021.5001; .NET SDK 10.0.108",
+      "command": "Get-CimInstance Win32_OperatingSystem; Get-CimInstance Win32_Processor; Get-CimInstance Win32_VideoController; pwsh tools/validate-target-hardware-matrix.ps1",
+      "reportPath": "docs/evidence-2026-07-10-target-hardware-matrix.md",
+      "sha256": "5bf8793d09f0c534c378ab3ee8131f43782cdbd354f5c6e1fceb9afe591fd5bc",
+      "notes": "矩阵和 release-rids.json 一致性已验证；未知 RID 硬件显式保留 EXTERNAL_REQUIRED，不把 runner label 当作硬件实测。"
+    },
     {
       "entryId": "completed-baseline-capabilities",
       "taskIds": ["BASE-001", "BASE-002", "BASE-003", "BASE-004", "BASE-005", "BASE-006", "BASE-007", "BASE-008", "BASE-009", "BASE-010", "BASE-011", "BASE-012", "BASE-013", "BASE-014", "BASE-015", "BASE-016", "BASE-017", "BASE-018"],
@@ -49,7 +62,7 @@
       "hardware": "Microsoft Windows 11 专业版; AMD Ryzen 7 5800X 8-Core Processor; .NET SDK 10.0.108; win-x64",
       "command": "pwsh tools/validate-task-catalog.ps1",
       "reportPath": "docs/evidence-2026-07-10-task-catalog-validation.md",
-      "sha256": "c968d24bc6fd949f588b860386b5e81a87265e9315453a259b58aa26f60f0f83",
+      "sha256": "6d6b7b26a2e9474f3007488c03c8e30d11e2374b0106f250c32243ebd71f5f42",
       "notes": "当前任务目录校验通过；报告绑定实施前 HEAD，未把既存未跟踪目录纳入任务变更。"
     },
     {

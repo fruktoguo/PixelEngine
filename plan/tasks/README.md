@@ -104,3 +104,4 @@ pwsh tools/validate-task-catalog.ps1
 
 - 稳定证据索引：[`docs/evidence-index.md`](../../docs/evidence-index.md)；机器可读版本为 [`docs/evidence-index.json`](../../docs/evidence-index.json)。
 - 索引校验：`pwsh tools/validate-evidence-index.ps1`。该校验会重算报告 SHA256、拒绝 volatile output 路径，并要求历史报告显式声明未记录的 run/session identity。
+- Windows-first 目标矩阵：[`tools/target-hardware-matrix.json`](../../tools/target-hardware-matrix.json) 与 [`docs/target-hardware-matrix.md`](../../docs/target-hardware-matrix.md)；一致性校验：`pwsh tools/validate-target-hardware-matrix.ps1`。

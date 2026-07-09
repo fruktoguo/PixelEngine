@@ -8,7 +8,8 @@
 |---|---|---|---|---|---|---|
 | `completed-baseline-capabilities` | `BASE-001`–`BASE-018` | `baseline_coverage_only` | `5af1541f` | 未记录 | [completed baseline](../plan/tasks/10-completed-baseline.md) | `7fff9692…d7874c` |
 | `scope-decisions-20260710` | `SCOPE-001`–`SCOPE-006` | `decision_record` | `5af1541f` | 未记录 | [scope decisions](../plan/tasks/20-scope-decisions.md) | `96519945…e47d1f` |
-| `task-catalog-20260710` | `PLAN-001`, `EVID-001` | `complete` | `5af1541f` | `local-20260710-evid001-task-catalog` | [task catalog validation](evidence-2026-07-10-task-catalog-validation.md) | `c968d24b…f0f83` |
+| `target-hardware-matrix-20260710` | `EVID-003` | `complete_inventory_control_plane` | `796b5781` | `local-20260710-evid003-target-matrix` | [target hardware validation](evidence-2026-07-10-target-hardware-matrix.md) | `5bf8793d…1fd5bc` |
+| `task-catalog-20260710` | `PLAN-001`, `EVID-001` | `complete` | `5af1541f` | `local-20260710-evid001-task-catalog` | [task catalog validation](evidence-2026-07-10-task-catalog-validation.md) | `6d6b7b26…d71f5f42` |
 | `plan14-short-20260702` | `BASE-016`, `PERF-001`, `PERF-003`, `PERF-011` | `historical_calibration` | `eb8895f8` | 未记录 | [plan14 short](benchmark-reports/2026-07-02-plan14-short.md) | `1d09196c…e9496` |
 | `jobsystem-parallelrange-20260703` | `BASE-016`, `PERF-004` | `historical_short_benchmark` | `eb8895f8` | 未记录 | [JobSystem allocation](benchmark-reports/2026-07-03-jobsystem-parallelrange-zero-allocation.md) | `045ea7e7…a4052` |
 | `gc-mode-20260702` | `BASE-016`, `PERF-001`, `PERF-011` | `historical_short_benchmark` | `b7d01c85` | 未记录 | [GC mode](benchmark-reports/2026-07-02-gc-mode.md) | `1988ed77…38856` |
