@@ -159,6 +159,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("demoExecutable", verifier, StringComparison.Ordinal);
         Assert.Contains("demo-build-result.json 不是 ok=true", verifier, StringComparison.Ordinal);
         Assert.Contains("Assert-ChecksumContains $relativePaths $manifestRelative 'manifest'", verifier, StringComparison.Ordinal);
+        Assert.Contains("正式输出包含未登记文件", verifier, StringComparison.Ordinal);
+        Assert.Contains("SHA256SUMS 登记了不存在的文件", verifier, StringComparison.Ordinal);
         Assert.Contains(".Extension.Equals('.pdb'", verifier, StringComparison.Ordinal);
         Assert.Contains(".Extension.Equals('.xml'", verifier, StringComparison.Ordinal);
         Assert.DoesNotContain("dotnet publish", verifier, StringComparison.OrdinalIgnoreCase);
@@ -167,7 +169,9 @@ public sealed class HostingProjectDisciplineTests
 
         Assert.Contains("pwsh -NoProfile -File tools/verify-final-output.ps1", finalOutputDoc, StringComparison.Ordinal);
         Assert.Contains("不重新打包", finalOutputDoc, StringComparison.Ordinal);
+        Assert.Contains("未登记的额外文件", finalOutputDoc, StringComparison.Ordinal);
         Assert.Contains("本机正式输出审计命令", plan15, StringComparison.Ordinal);
+        Assert.Contains("未登记额外文件", plan15, StringComparison.Ordinal);
     }
 
     /// <summary>
