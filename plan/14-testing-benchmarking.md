@@ -284,7 +284,7 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 ## 5. 验收标准
 
-- [x] 测试工程集合与基准工程建立、被 `PixelEngine.sln` 包含、CPM 锁版本、`dotnet test` 与 `tools/run-benchmark.ps1` / `dotnet run --project bench/... -- --list flat` 均可执行（plan/00 §4/§6）。含忽略 worktree 的仓库内推荐执行入口为 `tools/run-benchmark.ps1`，直接 `dotnet run --project bench/...` 仍保留用于无嵌套 worktree 的普通环境。
+- [x] 测试工程集合与基准工程建立、被 `PixelEngine.sln` 包含、CPM 锁版本、`dotnet test`、`tools/run-tests.ps1`、`tools/run-benchmark.ps1` 与 `dotnet run --project bench/... -- --list flat` 均可执行（plan/00 §4/§6）。含忽略 worktree 的仓库内推荐基准入口为 `tools/run-benchmark.ps1`，直接 `dotnet run --project bench/...` 仍保留用于无嵌套 worktree 的普通环境；本轮新增本机测试入口 `tools/run-tests.ps1`，先 `dotnet build PixelEngine.sln -c Release --disable-build-servers -m:1` 一次，再按测试工程顺序 `dotnet test --no-build --disable-build-servers -m:1`，用于避免多个 testhost 并发写同一 `obj` 目录导致 CS2012 文件锁误判，契约由 `PerformanceHardeningToolingDisciplineTests.LocalTestRunnerBuildsOnceThenRunsProjectsSequentiallyNoBuild` 锁定。该入口只是本机/agent 稳定验证工具，不替代 §4.7 的 6-RID CI 矩阵证据。
 - [x] `MassConservationTests` 全绿：含跨 chunk 边界与四角用例，单 / 多线程均守恒，能复现并拦截人为注入的「边界吞 / 复制像素」回归（架构 §16.2、R2）。
 - [x] `ReactionConservationTests` 全绿：双输出 / 定向反应在所有边界配置下产物计数严格守恒，能拦截人为注入的「边界翻倍 / 丢失」回归（架构 §7.4、不变式 #4、R2）。
 - [x] `DeterministicRegressionTests` 全绿且 golden 稳定：确定性模式下重复运行 bit 一致，golden 更新有可审查 diff（架构 §6.2）。
