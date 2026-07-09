@@ -170,6 +170,54 @@ public sealed class RmlUiGlBootstrapSmokeTests
 
         Assert.True(RmlUiGlBootstrap.TryProbeRenderer(window, out RmlUiGlVersion version));
         Assert.True(version.Major >= 3);
+        Assert.Equal(RmlUiNativeProfileGate.NativeProfileDesktopGl3, RmlUiNative.GetRendererProfile());
+    }
+
+    [Fact]
+    public void CanCreateNativeRendererOnAngleGlesWhenAngleSmokeIsEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"), "1", StringComparison.Ordinal) &&
+            !string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        RenderWindow? window = null;
+        try
+        {
+            window = RenderWindow.Create(new RenderWindowOptions
+            {
+                Title = "PixelEngine RmlUi ANGLE GLES smoke",
+                Width = 64,
+                Height = 64,
+                BackendPreference = RenderBackendPreference.GlEs30Angle,
+                EnableDebugContext = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            // ANGLE 不可用时跳过，不把环境缺失写成产品完成。
+            // 未强制 ANGLE smoke 时允许环境无 ANGLE；强制时必须能建窗。
+            bool requireAngle = string.Equals(
+                Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"),
+                "1",
+                StringComparison.Ordinal);
+            Assert.False(requireAngle, $"显式 ANGLE smoke 要求可创建 GlEs30Angle 窗口，但失败：{ex}");
+            return;
+        }
+
+        using (window)
+        {
+            Assert.Equal(RenderBackend.GlEs30Angle, window.Backend);
+            RmlUiNativeProfileDecision decision = RmlUiNativeProfileGate.Evaluate(window.Backend, window.Capabilities);
+            Assert.Equal(RmlUiNativeRendererProfile.Gles3Angle, decision.RequestedProfile);
+            Assert.True(decision.CanUseNativeRenderer, decision.FallbackReason);
+            Assert.Equal("#version 300 es", decision.ShaderVersionDirective);
+
+            Assert.True(RmlUiGlBootstrap.TryProbeRenderer(window, out RmlUiGlVersion version), "RmlUi native 应在 ANGLE/GLES 上下文用 300 es profile 成功 create/destroy renderer。");
+            Assert.True(version.Major >= 3 || window.Capabilities.MajorVersion >= 3);
+            Assert.Equal(RmlUiNativeProfileGate.NativeProfileGles3Angle, RmlUiNative.GetRendererProfile());
+        }
     }
 
     [Fact]
