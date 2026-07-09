@@ -8,13 +8,19 @@ internal sealed class GameViewUiInputSource(
     Func<PixelEngine.Editor.EditorMode> modeProvider,
     Func<GameViewViewportSnapshot> viewportProvider,
     Func<Vector2> panelPointProvider,
-    Func<bool> inputFocusedProvider) : IUiInputSource
+    Func<bool> inputFocusedProvider,
+    Func<Vector2>? panelOriginFramebufferProvider = null,
+    Func<Vector2>? framebufferScaleProvider = null) : IUiInputSource
 {
     private readonly IUiInputSource _inner = inner ?? throw new ArgumentNullException(nameof(inner));
     private readonly Func<PixelEngine.Editor.EditorMode> _modeProvider = modeProvider ?? throw new ArgumentNullException(nameof(modeProvider));
     private readonly Func<GameViewViewportSnapshot> _viewportProvider = viewportProvider ?? throw new ArgumentNullException(nameof(viewportProvider));
     private readonly Func<Vector2> _panelPointProvider = panelPointProvider ?? throw new ArgumentNullException(nameof(panelPointProvider));
     private readonly Func<bool> _inputFocusedProvider = inputFocusedProvider ?? throw new ArgumentNullException(nameof(inputFocusedProvider));
+    private readonly Func<Vector2> _panelOriginFramebufferProvider =
+        panelOriginFramebufferProvider ?? (() => Vector2.Zero);
+    private readonly Func<Vector2> _framebufferScaleProvider =
+        framebufferScaleProvider ?? (() => Vector2.One);
 
     public UiTextCompositionCapabilities TextCompositionCapabilities => _inner.TextCompositionCapabilities;
 
@@ -79,7 +85,8 @@ internal sealed class GameViewUiInputSource(
     }
 
     /// <summary>
-    /// 将 viewport 纹理坐标中的 IME 几何映射回面板坐标后交给窗口输入源，供 IMM32 定位候选窗。
+    /// 将 viewport 纹理坐标中的 IME 几何映射到窗口 client/framebuffer 坐标后交给窗口输入源，供 IMM32 定位候选窗。
+    /// 映射与 Game View present target 同源：viewport → panel-local → panel origin + DPI。
     /// </summary>
     /// <param name="geometry">viewport 坐标中的定位几何。</param>
     public void ApplyImeGeometry(in UiImeGeometry geometry)
@@ -91,21 +98,16 @@ internal sealed class GameViewUiInputSource(
         }
 
         GameViewViewportSnapshot viewport = _viewportProvider();
-        if (!viewport.IsValid ||
-            !viewport.ImageRect.IsValid ||
-            viewport.VisibleViewportRect.Width <= 0f ||
-            viewport.VisibleViewportRect.Height <= 0f)
+        if (!viewport.TryMapViewportImeGeometryToWindowClient(
+                in geometry,
+                _panelOriginFramebufferProvider(),
+                _framebufferScaleProvider(),
+                out UiImeGeometry mapped))
         {
             _inner.ApplyImeGeometry(UiImeGeometry.None);
             return;
         }
 
-        float scaleX = viewport.ImageRect.Width / viewport.VisibleViewportRect.Width;
-        float scaleY = viewport.ImageRect.Height / viewport.VisibleViewportRect.Height;
-        float offsetX = viewport.ImageRect.X - (viewport.VisibleViewportRect.X * scaleX);
-        float offsetY = viewport.ImageRect.Y - (viewport.VisibleViewportRect.Y * scaleY);
-        // 将 viewport 空间整段几何线性映射到面板局部；窗口输入源再按 client 坐标写回 IMM32。
-        UiImeGeometry mapped = geometry.Transform(offsetX, offsetY, scaleX, scaleY);
         _inner.ApplyImeGeometry(in mapped);
     }
 
