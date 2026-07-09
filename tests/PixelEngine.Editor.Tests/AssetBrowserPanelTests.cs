@@ -546,6 +546,47 @@ public sealed class AssetBrowserPanelTests
     }
 
     /// <summary>
+    /// 验证 Project Window 创建输入会跟随选中文件夹，并自动避开已有 logical path。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelCreatesInSelectedFolderWithUniqueSuggestedNames()
+    {
+        // Arrange：准备输入与初始状态
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("scripts/NewBehaviour.cs", AssetBrowserItemKind.Script, 10, DateTimeOffset.UnixEpoch, null, "asset_script_0"),
+            new AssetBrowserItem("scripts/NewBehaviour1.cs", AssetBrowserItemKind.Script, 10, DateTimeOffset.UnixEpoch, null, "asset_script_1"),
+        ]);
+        List<AssetBrowserCreateRequest> requests = [];
+        AssetBrowserCreateResult CreateAsset(AssetBrowserCreateRequest request)
+        {
+            requests.Add(request);
+            source.ReplaceAssets(
+            [
+                .. source.ListAssets(),
+                new AssetBrowserItem(request.Path, request.Kind, 10, DateTimeOffset.UnixEpoch, null, "asset_created"),
+            ]);
+            return new AssetBrowserCreateResult(true, $"created {request.Path}", "asset_created", request.Path);
+        }
+
+        AssetBrowserPanel panel = new(source, createAsset: CreateAsset);
+
+        _ = panel.Refresh();
+        bool prepared = panel.BeginCreateAssetInFolder("scripts", AssetBrowserItemKind.Script);
+        bool created = panel.TryCreateCurrentAsset();
+
+        // Assert：验证预期结果
+        Assert.True(prepared);
+        Assert.True(created);
+        AssetBrowserCreateRequest request = Assert.Single(requests);
+        Assert.Equal("scripts/NewBehaviour2.cs", request.Path);
+        Assert.Equal(AssetBrowserItemKind.Script, request.Kind);
+        Assert.Equal("scripts/NewBehaviour3.cs", panel.CreatePath);
+        Assert.Equal(AssetBrowserItemKind.Script, panel.CreateKind);
+        Assert.Contains(panel.LastAssets, asset => asset.Path == "scripts/NewBehaviour2.cs" && asset.AssetId == "asset_created");
+    }
+
+    /// <summary>
     /// 验证 Project Window 文件夹 rename / recursive move 会走 Shell 回调并刷新资产与文件夹列表。
     /// </summary>
     [Fact]
