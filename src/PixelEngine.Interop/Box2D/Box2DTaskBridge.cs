@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using PixelEngine.Core.Threading;
 
@@ -10,6 +11,7 @@ namespace PixelEngine.Interop.Box2D;
 public sealed unsafe class Box2DTaskBridge : IDisposable
 {
     private readonly GCHandle _jobsHandle;
+    private readonly GCHandle _faultStateHandle;
     private readonly BridgeContext* _context;
     private bool _disposed;
 
@@ -23,8 +25,10 @@ public sealed unsafe class Box2DTaskBridge : IDisposable
         ArgumentNullException.ThrowIfNull(jobs);
 
         _jobsHandle = GCHandle.Alloc(jobs, GCHandleType.Normal);
+        _faultStateHandle = GCHandle.Alloc(new BridgeFaultState(), GCHandleType.Normal);
         _context = (BridgeContext*)NativeMemory.AllocZeroed((nuint)sizeof(BridgeContext));
         _context->JobSystemHandle = GCHandle.ToIntPtr(_jobsHandle);
+        _context->FaultStateHandle = GCHandle.ToIntPtr(_faultStateHandle);
         _context->WorkerCount = forceSingleThread ? 1 : jobs.WorkerCount;
         _context->ForceSingleThread = forceSingleThread ? 1 : 0;
     }
@@ -59,6 +63,37 @@ public sealed unsafe class Box2DTaskBridge : IDisposable
     public int FaultedCallbackCount => _disposed ? 0 : Volatile.Read(ref _context->FaultedCallbackCount);
 
     /// <summary>
+    /// 获取当前 physics tick 是否捕获过 callback 异常。
+    /// </summary>
+    public bool HasFaulted
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return GetFaultState().HasFaulted;
+        }
+    }
+
+    /// <summary>
+    /// 开始一个新的 physics tick，并清除上一个已处理 tick 的首异常状态。
+    /// </summary>
+    public void BeginTick()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        GetFaultState().Reset();
+    }
+
+    /// <summary>
+    /// 将当前 tick 的首个 callback 异常重新抛回托管 physics 编排器。
+    /// </summary>
+    /// <exception cref="Exception">当前 tick 捕获的首个 callback 异常。</exception>
+    public void ThrowIfFaulted()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        GetFaultState().ThrowIfFaulted();
+    }
+
+    /// <summary>
     /// 将 task callbacks 和 worker 数写入 Box2D world 定义。
     /// </summary>
     /// <param name="worldDef">world 定义。</param>
@@ -81,6 +116,7 @@ public sealed unsafe class Box2DTaskBridge : IDisposable
 
         _disposed = true;
         NativeMemory.Free(_context);
+        _faultStateHandle.Free();
         _jobsHandle.Free();
     }
 
@@ -102,7 +138,7 @@ public sealed unsafe class Box2DTaskBridge : IDisposable
         void* userContext)
     {
         BridgeContext* context = (BridgeContext*)userContext;
-        if (task is null || itemCount <= 0)
+        if (context is null || task is null || itemCount <= 0)
         {
             return null;
         }
@@ -118,17 +154,13 @@ public sealed unsafe class Box2DTaskBridge : IDisposable
             }
 
             JobSystem jobs = GetJobSystem(context);
-            TaskInvocation invocation = new(task, taskContext);
+            TaskInvocation invocation = new(task, taskContext, context);
             jobs.ParallelRangeRaw(itemCount, safeMinRange, &InvokeTask, &invocation);
             return userContext;
         }
-        catch
+        catch (Exception exception)
         {
-            if (context is not null)
-            {
-                _ = Interlocked.Increment(ref context->FaultedCallbackCount);
-            }
-
+            RecordCallbackException(context, exception);
             return null;
         }
     }
@@ -149,7 +181,39 @@ public sealed unsafe class Box2DTaskBridge : IDisposable
     private static void InvokeTask(int start, int end, int workerIndex, void* context)
     {
         TaskInvocation* invocation = (TaskInvocation*)context;
-        invocation->Task(start, end, (uint)workerIndex, invocation->TaskContext);
+        try
+        {
+            invocation->Task(start, end, (uint)workerIndex, invocation->TaskContext);
+        }
+        catch (Exception exception)
+        {
+            // 异常绝不能跨过 unmanaged callback 边界；先记录，待 b2World_Step 返回后由 PhysicsSystem rethrow。
+            RecordCallbackException(invocation->Bridge, exception);
+        }
+    }
+
+    private static void RecordCallbackException(BridgeContext* context, Exception exception)
+    {
+        if (context is null)
+        {
+            return;
+        }
+
+        BridgeFaultState state = GetFaultState(context);
+        state.CaptureFirst(exception);
+        _ = Interlocked.Increment(ref context->FaultedCallbackCount);
+    }
+
+    private BridgeFaultState GetFaultState()
+    {
+        return GetFaultState(_context);
+    }
+
+    private static BridgeFaultState GetFaultState(BridgeContext* context)
+    {
+        GCHandle handle = GCHandle.FromIntPtr(context->FaultStateHandle);
+        return handle.Target as BridgeFaultState
+            ?? throw new InvalidOperationException("Box2D task bridge 缺少 fault state。");
     }
 
     private static JobSystem GetJobSystem(BridgeContext* context)
@@ -167,6 +231,9 @@ public sealed unsafe class Box2DTaskBridge : IDisposable
         /// <summary>JobSystem 的 GCHandle。</summary>
         public IntPtr JobSystemHandle;
 
+        /// <summary>托管首异常状态的 GCHandle。</summary>
+        public IntPtr FaultStateHandle;
+
         /// <summary>Box2D 可用 worker 数。</summary>
         public int WorkerCount;
 
@@ -179,9 +246,42 @@ public sealed unsafe class Box2DTaskBridge : IDisposable
 
     private readonly struct TaskInvocation(
         delegate* unmanaged[Cdecl]<int, int, uint, void*, void> task,
-        void* taskContext)
+        void* taskContext,
+        BridgeContext* bridge)
     {
         public readonly delegate* unmanaged[Cdecl]<int, int, uint, void*, void> Task = task;
         public readonly void* TaskContext = taskContext;
+        public readonly BridgeContext* Bridge = bridge;
+    }
+
+    private sealed class BridgeFaultState
+    {
+        private ExceptionDispatchInfo? _firstException;
+        private int _faulted;
+
+        public bool HasFaulted => Volatile.Read(ref _faulted) != 0;
+
+        public void Reset()
+        {
+            _ = Interlocked.Exchange(ref _firstException, null);
+            Volatile.Write(ref _faulted, 0);
+        }
+
+        public void CaptureFirst(Exception exception)
+        {
+            _ = Interlocked.CompareExchange(ref _firstException, ExceptionDispatchInfo.Capture(exception), null);
+            Volatile.Write(ref _faulted, 1);
+        }
+
+        public void ThrowIfFaulted()
+        {
+            if (Volatile.Read(ref _faulted) == 0)
+            {
+                return;
+            }
+
+            (Volatile.Read(ref _firstException) ??
+                ExceptionDispatchInfo.Capture(new InvalidOperationException("Box2D task callback 失败，但未记录原始异常。"))).Throw();
+        }
     }
 }

@@ -16,7 +16,7 @@
   - 设计来源：`plan/03-simulation-kernel.md`；架构 §5；不变式 #1–#4。
   - 验收：不安全写入口降为 internal 或受控 edit API；Simulation/Hosting/Demo 不依赖裸写；新增 API discipline 与行为回归测试。
 
-- [ ] `ARCH-003` 让 Box2D task callback 的 JobSystem 异常可靠传播到当前 physics tick，并阻止继续消费未完整推进的物理状态。
+- [~] `ARCH-003` 让 Box2D task callback 的 JobSystem 异常可靠传播到当前 physics tick，并阻止继续消费未完整推进的物理状态。
   - 优先级：P1。
   - 依赖：`BASE-006`、`BASE-010`。
   - 设计来源：`plan/06-physics-collision-rigidbody.md`；`plan/18-hosting-runtime.md`。

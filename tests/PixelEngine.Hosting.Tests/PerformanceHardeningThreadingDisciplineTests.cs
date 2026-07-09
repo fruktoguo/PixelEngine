@@ -68,6 +68,24 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 PhysicsSystem 在 native step 返回后先传播 task fault，再允许读回和 inverse-sample。
+    /// </summary>
+    [Fact]
+    public void PhysicsStepPropagatesTaskFaultBeforeConsumingWorldState()
+    {
+        string source = ReadProductionSource("src", "PixelEngine.Physics", "PhysicsSystem.cs");
+        int stepIndex = source.IndexOf("Box2D.b2World_Step", StringComparison.Ordinal);
+        int faultCheckIndex = source.IndexOf("_taskBridge?.ThrowIfFaulted()", stepIndex, StringComparison.Ordinal);
+        int resolveContactsIndex = source.IndexOf("ResolveCharacterProxyBodyContacts();", stepIndex, StringComparison.Ordinal);
+
+        Assert.True(stepIndex >= 0);
+        Assert.True(faultCheckIndex > stepIndex);
+        Assert.True(resolveContactsIndex > faultCheckIndex);
+        Assert.Contains("_physicsTickFailure = ExceptionDispatchInfo.Capture(exception);", source, StringComparison.Ordinal);
+        Assert.Contains("ThrowIfPreviousPhysicsTickFaulted();", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 CA checkerboard 调度按 4-pass bucket 经 JobSystem 派发，并具备低活跃 chunk 单线程回退。
     /// </summary>
     [Fact]

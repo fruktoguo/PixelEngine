@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Numerics;
 using System.Buffers;
+using System.Runtime.ExceptionServices;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Core.Events;
 using PixelEngine.Core.Mathematics;
@@ -34,6 +35,7 @@ public sealed class PhysicsSystem : IDisposable
     private readonly List<RigidDamageEvent> _pendingDamage = new(256);
     private readonly Dictionary<CharacterController, CharacterProxy> _characterProxies = [];
     private RigidDamageEvent[] _damageScratch = GC.AllocateArray<RigidDamageEvent>(256, pinned: true);
+    private ExceptionDispatchInfo? _physicsTickFailure;
     private bool _shutdown;
 
     /// <summary>
@@ -184,6 +186,11 @@ public sealed class PhysicsSystem : IDisposable
     public int TaskBridgeFaultedCallbackCount => _taskBridge?.FaultedCallbackCount ?? 0;
 
     /// <summary>
+    /// 获取 PhysicsSystem 是否因一次不完整的 Box2D tick 已锁存失败。
+    /// </summary>
+    public bool PhysicsTickFaulted => _physicsTickFailure is not null;
+
+    /// <summary>
     /// 当前 PhysicsSystem 负责追踪的 live Box2D body 数，用于 native leak detector 采集关闭前后计数。
     /// </summary>
     public int LiveBodyCount => _shutdown && _ownsWorld
@@ -325,6 +332,8 @@ public sealed class PhysicsSystem : IDisposable
         }
 
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(subStepCount);
+        ThrowIfPreviousPhysicsTickFaulted();
+        _taskBridge?.BeginTick();
 
         // 8a：排空 damage queue 并重建受损刚体
         DrainDamageQueue();
@@ -337,7 +346,18 @@ public sealed class PhysicsSystem : IDisposable
 
         // 8c：Box2D step，再用角色 proxy 约束压入的动态刚体
         long stepStarted = Stopwatch.GetTimestamp();
-        Box2D.b2World_Step(WorldId, dt, subStepCount);
+        try
+        {
+            Box2D.b2World_Step(WorldId, dt, subStepCount);
+            // native step 返回后必须先检查 callback fault；失败时禁止读回 transform 或 restamp。
+            _taskBridge?.ThrowIfFaulted();
+        }
+        catch (Exception exception)
+        {
+            _physicsTickFailure = ExceptionDispatchInfo.Capture(exception);
+            throw;
+        }
+
         RecordSub(FrameSubPhase.PhysicsStep, stepStarted);
         ResolveCharacterProxyBodyContacts();
 
@@ -350,6 +370,18 @@ public sealed class PhysicsSystem : IDisposable
         }
 
         LastStampedCellCount = Math.Max(0, stamped - LastCharacterProxyOverlapClearedCount);
+    }
+
+    private void ThrowIfPreviousPhysicsTickFaulted()
+    {
+        if (_physicsTickFailure is null)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            "上一个 Physics tick 未完整推进，已阻止继续消费 Box2D 状态；请重新创建 PhysicsSystem。",
+            _physicsTickFailure.SourceException);
     }
 
     /// <summary>
