@@ -262,7 +262,8 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             instantiatePrefab: _app.InstantiatePrefab,
             openScriptAsset: _app.OpenScriptAsset,
             deleteAsset: request => assetBrowserDataSource.DeleteAsset(request, _sceneModel),
-            moveAsset: request => assetBrowserDataSource.MoveAsset(request, _sceneModel)));
+            moveAsset: request => assetBrowserDataSource.MoveAsset(request, _sceneModel),
+            createAsset: assetBrowserDataSource.CreateAsset));
         MaterialReactionEditorPanel? materialReactionPanel = TryCreateMaterialReactionPanel(engine);
         if (materialReactionPanel is not null)
         {
