@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-10",
-  "generatedFromCommit": "1280385bc8ec9f70c3fc0eba4c98b92f4999863d",
+  "generatedFromCommit": "464f40a397ca3bf279d541fcfef9e0629628e1f4",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -79,6 +79,19 @@
       "notes": "Engine.Probe facade、Demo/benchmark 直接解析纪律和延迟脚本绑定已验证；本地覆盖 1468 passed、34 expected skipped。Hosting 聚合 testhost 曾超时，全部类过滤组随后串行通过。"
     },
     {
+      "entryId": "arch-005-air-smoke-status-20260710",
+      "taskIds": ["ARCH-005"],
+      "evidenceState": "complete_local_runtime_boundary_regression",
+      "commit": "464f40a397ca3bf279d541fcfef9e0629628e1f4",
+      "runSessionId": "local-20260710-arch005-air-smoke-status",
+      "runIdentityStatus": "captured",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8c/16t; AMD Radeon RX 7900 XT driver 32.0.31021.5001; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "dotnet build PixelEngine.sln -c Release --no-restore -m:1; dotnet test tests/PixelEngine.Rendering.Tests/PixelEngine.Rendering.Tests.csproj -c Release --no-build --no-restore -m:1 --logger console;verbosity=minimal; dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --no-build --no-restore -m:1 --filter FullyQualifiedName~HostingProjectDisciplineTests|FullyQualifiedName~EngineBuilderTests --logger console;verbosity=minimal; pwsh -NoProfile -File tools/validate-task-catalog.ps1; pwsh -NoProfile -File tools/validate-target-hardware-matrix.ps1; git diff --check",
+      "reportPath": "docs/evidence-2026-07-10-arch-005-air-smoke-status.md",
+      "sha256": "53eba06e42e09188e920cd70d13069196f7cf091dcfdaedf30df652ac5524882",
+      "notes": "ARCH-005 选择 deferred_not_enabled；生产 RenderPipeline 未创建/播种/dispatch/合成 air/smoke，gate 强制诊断位为 0；Rendering 172 passed/20 skipped、Hosting 相关类 67 passed/3 skipped、solution build 32 项目 0 warning/0 error。"
+    },
+    {
       "entryId": "test-001-native-smoke-20260710",
       "taskIds": ["TEST-001"],
       "evidenceState": "complete_local_native_smoke",
@@ -134,13 +147,13 @@
       "entryId": "scope-decisions-20260710",
       "taskIds": ["SCOPE-001", "SCOPE-002", "SCOPE-003", "SCOPE-004", "SCOPE-005", "SCOPE-006"],
       "evidenceState": "decision_record",
-      "commit": "5af1541fd4ad365e83ad11e39125838ed5f685d5",
+      "commit": "464f40a397ca3bf279d541fcfef9e0629628e1f4",
       "runSessionId": null,
       "runIdentityStatus": "not_recorded_in_source_report",
       "hardware": "产品范围决策；不绑定硬件或运行 session",
-      "command": "git show 5af1541fd4ad365e83ad11e39125838ed5f685d5:plan/tasks/20-scope-decisions.md",
+      "command": "git show 464f40a397ca3bf279d541fcfef9e0629628e1f4:plan/tasks/20-scope-decisions.md",
       "reportPath": "plan/tasks/20-scope-decisions.md",
-      "sha256": "965199450ed2033881c8c93ad52a5aebd32cc7d33aa0c9ec5d94f0b8d3e47d1f",
+      "sha256": "9745c77424cd1c5557238db92f48babad8de11ab3f323c57f986d794c4a87472",
       "notes": "稳定范围决策记录；不把 scope 决策伪装成目标硬件、CI 或人工体验证据。"
     },
     {
