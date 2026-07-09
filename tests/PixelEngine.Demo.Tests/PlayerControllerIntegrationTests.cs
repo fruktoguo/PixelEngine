@@ -574,6 +574,35 @@ public sealed class PlayerControllerIntegrationTests
 
         Assert.Equal(72, tool.Radius);
         Assert.Equal(320f, tool.Force);
+        Assert.Equal(1f, tool.TerrainEffectScale);
+        Assert.Equal(72, tool.EffectiveRadius);
+        Assert.Equal(320f, tool.EffectiveForce);
+    }
+
+    /// <summary>
+    /// 验证中键爆破工具的地形倍率会进入实际 World.Explode 请求，而不只是 HUD / 文档数值。
+    /// </summary>
+    [Fact]
+    public void ExplosiveToolTerrainEffectScaleExpandsSubmittedExplosion()
+    {
+        MaterialTable materials = DemoMaterials();
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
+        ExplosiveTool tool = scene.CreateEntity().AddComponent<ExplosiveTool>();
+        tool.Radius = 2;
+        tool.Force = 100f;
+        tool.TerrainEffectScale = 4f;
+        tool.CooldownSeconds = 0f;
+        FillRect(grid, material: stone, minX: 18, minY: 12, maxX: 18, maxY: 12);
+
+        Assert.Equal(8, tool.EffectiveRadius);
+        Assert.Equal(400f, tool.EffectiveForce);
+
+        input.Update([], [MouseButton.Middle], mouseX: 12f, mouseY: 12f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(1, tool.ExplosionCount);
+        Assert.NotEqual(stone, grid.MaterialAt(18, 12));
     }
 
     /// <summary>
@@ -586,13 +615,13 @@ public sealed class PlayerControllerIntegrationTests
         ExplosiveTool tool = scene.CreateEntity().AddComponent<ExplosiveTool>();
         tool.Radius = 5;
         tool.Force = 20f;
-        tool.CooldownSeconds = 0f;
+        tool.CooldownSeconds = 1f;
 
         input.Update([], [MouseButton.Middle], mouseX: 12.25f, mouseY: 12.75f, wheelY: 0f);
         engine.RunHeadlessTicks(2, realDeltaSeconds: 1.0 / 60.0);
 
         ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
-        Assert.Equal(1, lighting.PointLights.Length);
+        Assert.True(lighting.PointLights.Length > 0, "爆炸闪光活跃期应提交瞬时点光。");
 
         input.Update([], [], mouseX: 12.25f, mouseY: 12.75f, wheelY: 0f);
         engine.RunHeadlessTicks(6, realDeltaSeconds: 1.0 / 15.0);

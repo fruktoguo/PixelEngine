@@ -220,7 +220,7 @@ public sealed class LevelDirector : Behaviour
         brush.InputEnabled = false;
 
         ExplosiveTool explosive = playerEntity.AddComponent<ExplosiveTool>();
-        _ = explosive;
+        explosive.TerrainEffectScale = 10f;
 
         PlayableProjectileTool projectile = playerEntity.AddComponent<PlayableProjectileTool>();
         projectile.ImpactRadius = 3;
