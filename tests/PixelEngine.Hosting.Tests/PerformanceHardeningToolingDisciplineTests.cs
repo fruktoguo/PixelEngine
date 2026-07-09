@@ -239,6 +239,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string report = ReadRepositoryFile("docs", "benchmark-reports", "2026-07-02-latency-branch-calibration.md");
         string plan = ReadRepositoryFile("plan", "16-performance-hardening.md");
         string testingPlan = ReadRepositoryFile("plan", "14-testing-benchmarking.md");
+        string readme = ReadRepositoryFile("plan", "README.md");
 
         // Assert：验证预期结果
         Assert.Contains("PIXELENGINE_BENCH_HARDWARE_COUNTERS", script, StringComparison.Ordinal);
@@ -265,6 +266,18 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("docs/benchmark-reports/2026-07-02-plan14-short.md", testingPlan, StringComparison.Ordinal);
         Assert.Contains("- [!] 反应 cache-miss / branch-misprediction 硬件计数器报告仍需管理员 ETW Kernel Session", testingPlan, StringComparison.Ordinal);
         Assert.Contains("tools/hardware-counter-preflight.ps1", testingPlan, StringComparison.Ordinal);
+
+        Assert.Contains("BenchmarkDotNet Windows ETW 硬件计数器路径", readme, StringComparison.Ordinal);
+        Assert.Contains("非 Windows runner 不作为 Cache Misses / Branch Mispredictions 验收环境", readme, StringComparison.Ordinal);
+        Assert.Contains("elevated ETW Kernel Session", readme, StringComparison.Ordinal);
+        Assert.Contains("`-RunBenchmark`", readme, StringComparison.Ordinal);
+        Assert.Contains("同时出现 `Cache Misses` 与 `Branch Mispredictions` 列", readme, StringComparison.Ordinal);
+        Assert.Contains("`ready` 只表示权限预检通过", readme, StringComparison.Ordinal);
+        Assert.Contains("`counters_present` 只表示本地列检查通过", readme, StringComparison.Ordinal);
+        Assert.Contains("不能解除 plan/16 的硬件计数器 / M15 性能阻塞", readme, StringComparison.Ordinal);
+        Assert.Contains("hardware_counters_cache_branch", readme, StringComparison.Ordinal);
+        Assert.Contains("benchmarkRunId", readme, StringComparison.Ordinal);
+        Assert.Contains("gitCommit", readme, StringComparison.Ordinal);
     }
 
     /// <summary>
