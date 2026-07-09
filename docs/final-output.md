@@ -25,6 +25,14 @@
 pwsh -NoProfile -File tools/update-final-output.ps1
 ```
 
+校验现有正式输出（不重新打包、不替换目录）：
+
+```pwsh
+pwsh -NoProfile -File tools/verify-final-output.ps1
+```
+
+该校验会读取 `最终输出/_验证记录/manifest.json` 与 `SHA256SUMS`，确认 manifest 绑定当前 `HEAD`、来源门禁为 `tracked-clean-required`、入口文件和验证记录存在、Demo build-result 为 `ok=true`，并逐项重算 SHA256。若只审计历史提交生成的旧产物，可显式传 `-AllowCommitMismatch`。
+
 可选参数：
 
 ```pwsh

@@ -140,6 +140,37 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证本机正式输出提供独立审计入口，可在不重新打包的情况下校验 manifest、入口和 SHA256SUMS。
+    /// </summary>
+    [Fact]
+    public void FinalOutputVerifierAuditsExistingOutputWithoutRepackaging()
+    {
+        string root = FindRepositoryRoot();
+        string verifier = File.ReadAllText(Path.Combine(root, "tools", "verify-final-output.ps1"));
+        string finalOutputDoc = File.ReadAllText(Path.Combine(root, "docs", "final-output.md"));
+        string plan15 = File.ReadAllText(Path.Combine(root, "plan", "15-build-packaging-distribution.md"));
+
+        Assert.Contains("pixelengine.final-output-verify/v1", verifier, StringComparison.Ordinal);
+        Assert.Contains("Get-FileHash -LiteralPath $filePath -Algorithm SHA256", verifier, StringComparison.Ordinal);
+        Assert.Contains("git -C $repoRoot rev-parse HEAD", verifier, StringComparison.Ordinal);
+        Assert.Contains("sourceWorktreePolicy -ne 'tracked-clean-required'", verifier, StringComparison.Ordinal);
+        Assert.Contains("sourceTrackedWorktreeClean -ne $true", verifier, StringComparison.Ordinal);
+        Assert.Contains("editorExecutable", verifier, StringComparison.Ordinal);
+        Assert.Contains("demoExecutable", verifier, StringComparison.Ordinal);
+        Assert.Contains("demo-build-result.json 不是 ok=true", verifier, StringComparison.Ordinal);
+        Assert.Contains("Assert-ChecksumContains $relativePaths $manifestRelative 'manifest'", verifier, StringComparison.Ordinal);
+        Assert.Contains(".Extension.Equals('.pdb'", verifier, StringComparison.Ordinal);
+        Assert.Contains(".Extension.Equals('.xml'", verifier, StringComparison.Ordinal);
+        Assert.DoesNotContain("dotnet publish", verifier, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("build-player.ps1", verifier, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Replace-FinalOutput", verifier, StringComparison.Ordinal);
+
+        Assert.Contains("pwsh -NoProfile -File tools/verify-final-output.ps1", finalOutputDoc, StringComparison.Ordinal);
+        Assert.Contains("不重新打包", finalOutputDoc, StringComparison.Ordinal);
+        Assert.Contains("本机正式输出审计命令", plan15, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证本机正式输出只能从已提交的已跟踪源码生成，避免未提交改动被误发布成正式版。
     /// </summary>
     [Fact]
