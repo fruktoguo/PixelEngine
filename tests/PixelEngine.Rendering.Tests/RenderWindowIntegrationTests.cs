@@ -1,6 +1,7 @@
 using PixelEngine.Rendering.Compute;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
+using PixelEngine.Testing;
 using Silk.NET.OpenGL;
 using Xunit;
 
@@ -9,18 +10,15 @@ namespace PixelEngine.Rendering.Tests;
 /// <summary>
 /// RenderWindow 集成冒烟测试：需 PIXELENGINE_RENDERING_GL_SMOKE=1（ANGLE 用 PIXELENGINE_RENDERING_ANGLE_SMOKE=1），验证真实 GL 上下文与管线各阶段。
 /// </summary>
+[Trait("Category", "NativeSmoke")]
 public sealed class RenderWindowIntegrationTests
 {
     /// <summary>
     /// 在 GL 冒烟环境变量启用时，能够创建窗口并交换缓冲区，且 GL 版本不低于 3.0。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void CanCreateWindowWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
@@ -39,13 +37,9 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// 释放窗口后 IsClosing 应为 true。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void IsClosingReturnsTrueAfterDisposeWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
@@ -63,13 +57,9 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// 经 PBO 全量/脏矩形上传世界纹理；若支持则额外验证持久映射 PBO 模式。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void CanUploadWorldTextureThroughPboWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
@@ -108,13 +98,9 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// UI 叠加纹理脏矩形上传后恢复 GL 像素解包状态与活动纹理单元。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void UiOverlayTextureUploadsDirtyRectWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
@@ -170,13 +156,9 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// 创建光照相关 GPU 资源并串联 shadow/composite/bloom/dither/gamma/crt 各 pass。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void CanCreateLightingResourcesAndRunCompositeWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
@@ -227,13 +209,9 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// 支持非 4 字节对齐宽度的光照遮罩上传。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void CanUploadUnalignedLightMaskWidthWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
@@ -257,13 +235,9 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// WorldBlit 保持 CPU 第 0 行映射到视口顶部（Y 轴不翻转）。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void WorldBlitKeepsCpuTopRowAtViewportTopWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
@@ -300,13 +274,9 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// OverlayRenderer 能绘制实心/描边矩形与精灵命令。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void CanRenderOverlayWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
@@ -374,13 +344,9 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// RenderPipeline 单帧渲染（含 CRT 与叠加）不抛异常。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void CanRenderFrameThroughRenderPipelineWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = CreateSmokeWindow("PixelEngine pipeline smoke", RenderBackendPreference.Auto);
         RenderPipelineFrame(window);
@@ -389,13 +355,9 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// 管线最终视口纹理保持 CPU 上下行序，不因后处理翻转。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void RenderPipelineViewportKeepsSingleTopBottomOrientationWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = CreateSmokeWindow("PixelEngine pipeline orientation smoke", RenderBackendPreference.Auto);
         using RenderPipeline pipeline = new(window, 16, 16);
@@ -423,13 +385,9 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// 泛光后视口上下半区颜色不互相镜像。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void RenderPipelineBloomDoesNotMirrorTopAndBottomHalvesWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = CreateSmokeWindow("PixelEngine bloom orientation smoke", RenderBackendPreference.Auto);
         using RenderPipeline pipeline = new(window, 32, 32);
@@ -460,13 +418,9 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// 泛光运行时 CPU 上传的自发光仍落在视口底部边沿。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void RenderPipelineKeepsCpuUploadedEmissiveAtBottomEdgeWhenBloomRuns()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = CreateSmokeWindow("PixelEngine emissive edge orientation smoke", RenderBackendPreference.Auto);
         using RenderPipeline pipeline = new(window, 32, 32);
@@ -496,13 +450,9 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// 清空 Emissive 后多帧渲染，泛光残影应衰减至接近零。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void BloomDoesNotRetainExpiredEmissiveInputAcrossFramesWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = CreateSmokeWindow("PixelEngine bloom decay smoke", RenderBackendPreference.Auto);
         using RenderPipeline pipeline = new(window, 32, 32);
@@ -538,13 +488,9 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// PreferComputeLighting 下经 Compute Bloom 完成单帧渲染。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void CanRenderFrameThroughComputeBloomWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = CreateSmokeWindow("PixelEngine compute bloom smoke", RenderBackendPreference.Auto);
         RenderPipelineFrame(window, preferComputeLighting: true);
@@ -553,13 +499,9 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// GpuPointSprite 模式下 GPU 粒子渲染单帧成功。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void CanRenderFrameThroughGpuParticlesWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = CreateSmokeWindow("PixelEngine GPU particle smoke", RenderBackendPreference.Auto);
         using RenderPipeline pipeline = new(window, 16, 16);
@@ -595,20 +537,16 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// 在支持 GL Compute 时，Compute Bloom 与 Fragment Bloom 像素误差 ≤2。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void ComputeBloomMatchesFragmentBloomForSolidInputWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = CreateSmokeWindow("PixelEngine compute bloom equivalence smoke", RenderBackendPreference.Auto);
         GpuCapabilities gpuCapabilities = GpuCapabilities.Query(window.Gl, window.Capabilities);
         ComputeCapabilityGate gate = ComputeCapabilityGate.Evaluate(gpuCapabilities, ComputeFeatureSwitches.Default, preferComputeSharp: false);
         if (!gate.GlComputeAvailable)
         {
-            return;
+            EnsureGlComputeAvailable(gate);
         }
 
         using FullscreenQuad quad = new(window.Gl);
@@ -643,20 +581,16 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// 独立 RadianceCascadePass 在遮挡/自发光输入下可完成渲染。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void CanRunRadianceCascadePassWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = CreateSmokeWindow("PixelEngine radiance cascades smoke", RenderBackendPreference.Auto);
         GpuCapabilities gpuCapabilities = GpuCapabilities.Query(window.Gl, window.Capabilities);
         ComputeCapabilityGate gate = ComputeCapabilityGate.Evaluate(gpuCapabilities, ComputeFeatureSwitches.Default, preferComputeSharp: false);
         if (!gate.GlComputeAvailable)
         {
-            return;
+            EnsureGlComputeAvailable(gate);
         }
 
         using IComputeBackend backend = ComputeBackendFactory.Create(window.Gl, gate);
@@ -692,20 +626,16 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// RenderPipeline 启用辐射级联特性后单帧渲染成功。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void CanRenderFrameThroughRadianceCascadesWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = CreateSmokeWindow("PixelEngine render pipeline radiance cascades smoke", RenderBackendPreference.Auto);
         GpuCapabilities gpuCapabilities = GpuCapabilities.Query(window.Gl, window.Capabilities);
         ComputeCapabilityGate gate = ComputeCapabilityGate.Evaluate(gpuCapabilities, ComputeFeatureSwitches.Default, preferComputeSharp: false);
         if (!gate.GlComputeAvailable)
         {
-            return;
+            EnsureGlComputeAvailable(gate);
         }
 
         ComputeFeatureSwitches features = ComputeFeatureSwitches.Default with { RadianceCascadesEnabled = true };
@@ -733,20 +663,16 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// GpuAirSmokePipeline 扩散一步后密度纹理句柄非零。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact]
     public void CanRunAirSmokeDiffusePassWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
 
         using RenderWindow window = CreateSmokeWindow("PixelEngine air smoke smoke", RenderBackendPreference.Auto);
         GpuCapabilities gpuCapabilities = GpuCapabilities.Query(window.Gl, window.Capabilities);
         ComputeCapabilityGate gate = ComputeCapabilityGate.Evaluate(gpuCapabilities, ComputeFeatureSwitches.Default, preferComputeSharp: false);
         if (!gate.GlComputeAvailable)
         {
-            return;
+            EnsureGlComputeAvailable(gate);
         }
 
         using IComputeBackend backend = ComputeBackendFactory.Create(window.Gl, gate);
@@ -764,14 +690,9 @@ public sealed class RenderWindowIntegrationTests
     /// <summary>
     /// ANGLE GLES 后端创建窗口并完成管线帧渲染。
     /// </summary>
-    [Fact]
+    [NativeSmokeFact("PIXELENGINE_RENDERING_ANGLE_SMOKE")]
     public void CanRenderFrameThroughGlesAngleWhenExplicitlyEnabled()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"), "1", StringComparison.Ordinal))
-        {
-            return;
-        }
-
         using RenderWindow window = CreateSmokeWindow("PixelEngine ANGLE smoke", RenderBackendPreference.GlEs30Angle);
 
         Assert.Equal(RenderBackend.GlEs30Angle, window.Backend);
@@ -795,6 +716,11 @@ public sealed class RenderWindowIntegrationTests
             BackendPreference = preference,
             EnableDebugContext = true,
         });
+    }
+
+    private static void EnsureGlComputeAvailable(ComputeCapabilityGate gate)
+    {
+        throw new InvalidOperationException($"当前 GL smoke context 不支持 GL compute，selected backend={gate.SelectedBackend}，native smoke 无法完成。");
     }
 
     private static void RenderPipelineFrame(RenderWindow window, bool preferComputeLighting = false)

@@ -17,4 +17,8 @@
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../NativeSmokeFactAttribute.cs" Link="NativeSmokeFactAttribute.cs" />
+  </ItemGroup>
 </Project>

@@ -21,10 +21,11 @@
 
 ## 测试质量
 
-- [ ] `TEST-001` 把 GL/ANGLE/native smoke 从“环境变量未开即返回并计为通过”改为显式 skipped/trait/job，并在 CI 中至少有一个真实执行 job。
+- [~] `TEST-001` 把 GL/ANGLE/native smoke 从“环境变量未开即返回并计为通过”改为显式 skipped/trait/job，并在 CI 中至少有一个真实执行 job。
   - 优先级：P1。
   - 依赖：`CI-001`。
   - 验收：普通单测报告能区分未执行；native-smoke job 开启要求的环境并报告真实用例数；失败不能静默降级成 pass。
+  - 设计来源：`plan/14-testing-benchmarking.md` §3.11、§4.7；`plan/20-interactive-html-ui.md` §3–§4；`.github/workflows/ci.yml`。
 
 - [ ] `TEST-002` 建立 coverage 收集、报告和最低阈值，区分行为测试与源码纪律测试。
   - 优先级：P2。
