@@ -23,6 +23,7 @@ public delegate bool ScriptAssetOpenHandler(string assetPath, out string diagnos
 /// <param name="moveAsset">可选资产移动 / 重命名回调。</param>
 /// <param name="moveFolder">可选文件夹移动 / 重命名回调。</param>
 /// <param name="createAsset">可选资产创建回调。</param>
+/// <param name="importAsset">可选资产导入回调。</param>
 public sealed class AssetBrowserPanel(
     IAssetBrowserDataSource source,
     IAudioPreviewService? audioPreview = null,
@@ -32,7 +33,8 @@ public sealed class AssetBrowserPanel(
     AssetBrowserFolderDeleteHandler? deleteFolder = null,
     AssetBrowserMoveHandler? moveAsset = null,
     AssetBrowserFolderMoveHandler? moveFolder = null,
-    AssetBrowserCreateHandler? createAsset = null) : IEditorPanel
+    AssetBrowserCreateHandler? createAsset = null,
+    AssetBrowserImportHandler? importAsset = null) : IEditorPanel
 {
     private readonly IAssetBrowserDataSource _source = source ?? throw new ArgumentNullException(nameof(source));
     private readonly IAudioPreviewService? _audioPreview = audioPreview;
@@ -43,6 +45,7 @@ public sealed class AssetBrowserPanel(
     private readonly AssetBrowserMoveHandler? _moveAsset = moveAsset;
     private readonly AssetBrowserFolderMoveHandler? _moveFolder = moveFolder;
     private readonly AssetBrowserCreateHandler? _createAsset = createAsset;
+    private readonly AssetBrowserImportHandler? _importAsset = importAsset;
     private static readonly string[] KindFilterLabels = ["全部", "Folder", "Material", "Texture", "Audio", "Scene", "Prefab", "Script", "UI Screen", "Json", "Other"];
     private static readonly string[] SortModeLabels = ["路径", "类型 / 路径", "最近修改", "大小"];
     private static readonly AssetBrowserItemKind[] CreateKinds =
@@ -57,6 +60,13 @@ public sealed class AssetBrowserPanel(
     ];
 
     private static readonly string[] CreateKindLabels = ["Folder", "Material", "Scene", "Prefab", "Script", "UI Screen", "Json"];
+    private static readonly AssetBrowserItemKind[] ImportKinds =
+    [
+        AssetBrowserItemKind.Texture,
+        AssetBrowserItemKind.Audio,
+    ];
+
+    private static readonly string[] ImportKindLabels = ["Texture", "Audio"];
     private string _search = string.Empty;
     private AssetBrowserDeleteRequest? _pendingDeleteRequest;
     private AssetBrowserFolderDeleteRequest? _pendingFolderDeleteRequest;
@@ -95,6 +105,21 @@ public sealed class AssetBrowserPanel(
     /// 当前 New Asset 输入。
     /// </summary>
     public string CreatePath { get; private set; } = "scripts/NewBehaviour.cs";
+
+    /// <summary>
+    /// 当前 Import Type 输入。
+    /// </summary>
+    public AssetBrowserItemKind ImportKind { get; private set; } = AssetBrowserItemKind.Texture;
+
+    /// <summary>
+    /// 当前外部源文件输入。
+    /// </summary>
+    public string ImportSourcePath { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// 当前导入目标 logical path 输入。
+    /// </summary>
+    public string ImportDestinationPath { get; private set; } = "textures/NewTexture.png";
 
     /// <summary>
     /// 当前资产类型过滤；null 表示全部类型。
@@ -534,6 +559,81 @@ public sealed class AssetBrowserPanel(
     }
 
     /// <summary>
+    /// 准备从外部源文件导入到指定 Project Window 文件夹。
+    /// </summary>
+    /// <param name="sourceFullPath">外部源文件完整路径。</param>
+    /// <param name="folderPath">目标逻辑文件夹；空字符串表示 content 根目录。</param>
+    /// <param name="kind">导入资产类型。</param>
+    /// <returns>支持该导入类型时返回 true。</returns>
+    public bool BeginImportAssetInFolder(string sourceFullPath, string folderPath, AssetBrowserItemKind kind)
+    {
+        if (!IsImportKindSupported(kind))
+        {
+            Status = $"Project Window 暂不支持导入 {kind} 资产。";
+            return false;
+        }
+
+        string candidateName = Path.GetFileName((sourceFullPath ?? string.Empty).Trim());
+        if (string.IsNullOrWhiteSpace(candidateName))
+        {
+            candidateName = Path.GetFileName(GetDefaultCreatePath(kind));
+        }
+
+        ImportKind = kind;
+        ImportSourcePath = sourceFullPath ?? string.Empty;
+        ImportDestinationPath = MakePathUnique(ApplyFolderToCreatePath(folderPath, candidateName), kind);
+        Status = $"准备导入 {kind} 到 {ImportDestinationPath}";
+        return true;
+    }
+
+    /// <summary>
+    /// 导入外部 Texture / Audio 文件到 content。
+    /// </summary>
+    /// <param name="sourceFullPath">外部源文件完整路径。</param>
+    /// <param name="destinationPath">目标 logical path。</param>
+    /// <param name="kind">导入资产类型。</param>
+    /// <returns>导入成功时返回 true。</returns>
+    public bool TryImportAsset(string sourceFullPath, string destinationPath, AssetBrowserItemKind kind)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceFullPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationPath);
+        if (!IsImportKindSupported(kind))
+        {
+            Status = $"Project Window 暂不支持导入 {kind} 资产。";
+            return false;
+        }
+
+        if (_importAsset is null)
+        {
+            Status = "资产导入服务不可用";
+            return false;
+        }
+
+        AssetBrowserImportResult result = _importAsset(new AssetBrowserImportRequest(sourceFullPath, destinationPath, kind));
+        Status = string.IsNullOrWhiteSpace(result.Diagnostic)
+            ? result.Succeeded ? $"已导入资产 {destinationPath}" : $"导入未执行：{destinationPath}"
+            : result.Diagnostic;
+        if (result.Succeeded)
+        {
+            _ = Refresh();
+            ImportSourcePath = sourceFullPath;
+            ImportKind = kind;
+            ImportDestinationPath = SuggestNextImportPath(kind, destinationPath);
+        }
+
+        return result.Succeeded;
+    }
+
+    /// <summary>
+    /// 使用当前 Import Type / Source / Destination 输入导入资产。
+    /// </summary>
+    /// <returns>导入成功时返回 true。</returns>
+    public bool TryImportCurrentAsset()
+    {
+        return TryImportAsset(ImportSourcePath, ImportDestinationPath, ImportKind);
+    }
+
+    /// <summary>
     /// 把 Project Window typed drag payload 移动到目标逻辑文件夹。
     /// </summary>
     /// <param name="payload">资产拖拽 payload。</param>
@@ -692,6 +792,44 @@ public sealed class AssetBrowserPanel(
         if (ImGui.Button("Create"))
         {
             _ = TryCreateAsset(CreatePath, CreateKind);
+        }
+
+        DrawImportControls(selection);
+    }
+
+    private void DrawImportControls(EditorSelection selection)
+    {
+        int importKindIndex = Array.IndexOf(ImportKinds, ImportKind);
+        if (importKindIndex < 0)
+        {
+            importKindIndex = Array.IndexOf(ImportKinds, AssetBrowserItemKind.Texture);
+            ImportKind = AssetBrowserItemKind.Texture;
+        }
+
+        if (ImGui.Combo("Import Type", ref importKindIndex, ImportKindLabels, ImportKindLabels.Length) &&
+            importKindIndex >= 0 &&
+            importKindIndex < ImportKinds.Length)
+        {
+            ImportKind = ImportKinds[importKindIndex];
+            string folder = selection.FolderPath ?? string.Empty;
+            ImportDestinationPath = MakePathUnique(ApplyFolderToCreatePath(folder, GetDefaultCreatePath(ImportKind)), ImportKind);
+        }
+
+        string importSourcePath = ImportSourcePath;
+        if (ImGui.InputText("Source File", ref importSourcePath, 512))
+        {
+            ImportSourcePath = importSourcePath;
+        }
+
+        string importDestinationPath = ImportDestinationPath;
+        if (ImGui.InputText("Import As", ref importDestinationPath, 256))
+        {
+            ImportDestinationPath = importDestinationPath;
+        }
+
+        if (ImGui.Button("Import"))
+        {
+            _ = TryImportAsset(ImportSourcePath, ImportDestinationPath, ImportKind);
         }
     }
 
@@ -1041,6 +1179,11 @@ public sealed class AssetBrowserPanel(
         return Array.IndexOf(CreateKinds, kind) >= 0;
     }
 
+    private static bool IsImportKindSupported(AssetBrowserItemKind kind)
+    {
+        return Array.IndexOf(ImportKinds, kind) >= 0;
+    }
+
     private static string GetDefaultCreatePath(AssetBrowserItemKind kind)
     {
         return kind switch
@@ -1071,10 +1214,15 @@ public sealed class AssetBrowserPanel(
 
     private string MakeCreatePathUnique(string path)
     {
+        return MakePathUnique(path, CreateKind);
+    }
+
+    private string MakePathUnique(string path, AssetBrowserItemKind kind)
+    {
         string normalized = (path ?? string.Empty).Trim().Replace('\\', '/');
         if (normalized.Length == 0)
         {
-            return GetDefaultCreatePath(CreateKind);
+            return GetDefaultCreatePath(kind);
         }
 
         if (!CreatePathExists(normalized))
@@ -1085,14 +1233,14 @@ public sealed class AssetBrowserPanel(
         string directory = Path.GetDirectoryName(normalized)?.Replace('\\', '/') ?? string.Empty;
         string extension = Path.GetExtension(normalized);
         string name = Path.GetFileNameWithoutExtension(normalized);
-        if (CreateKind == AssetBrowserItemKind.Folder)
+        if (kind == AssetBrowserItemKind.Folder)
         {
             extension = string.Empty;
             name = Path.GetFileName(normalized);
         }
 
         string baseName = string.IsNullOrWhiteSpace(name)
-            ? Path.GetFileNameWithoutExtension(GetDefaultCreatePath(CreateKind))
+            ? Path.GetFileNameWithoutExtension(GetDefaultCreatePath(kind))
             : name;
         for (int index = 1; index < 10_000; index++)
         {
@@ -1156,6 +1304,11 @@ public sealed class AssetBrowserPanel(
         return string.IsNullOrWhiteSpace(directory)
             ? nextName + extension
             : directory + "/" + nextName + extension;
+    }
+
+    private string SuggestNextImportPath(AssetBrowserItemKind kind, string previousPath)
+    {
+        return MakePathUnique(SuggestNextCreatePathCandidate(kind, previousPath), kind);
     }
 
     private static string IncrementTrailingNumber(string value, int offset)

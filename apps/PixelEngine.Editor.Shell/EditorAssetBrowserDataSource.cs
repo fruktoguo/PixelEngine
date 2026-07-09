@@ -274,6 +274,39 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource, IA
         }
     }
 
+    public AssetBrowserImportResult ImportAsset(AssetBrowserImportRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.SourceFullPath) || string.IsNullOrWhiteSpace(request.Path))
+        {
+            return new AssetBrowserImportResult(false, "资产导入请求缺少源文件或 logical path。");
+        }
+
+        if (!Enum.IsDefined(request.Kind))
+        {
+            return new AssetBrowserImportResult(false, $"未知资产类型：{request.Kind}。");
+        }
+
+        EditorAssetType type = MapKind(request.Kind);
+        if (!IsImportableType(type))
+        {
+            return new AssetBrowserImportResult(false, $"Project Window 暂不支持导入 {request.Kind} 资产。");
+        }
+
+        try
+        {
+            EditorAssetRecord asset = _assets.ImportAsset(request.SourceFullPath, request.Path, type);
+            return new AssetBrowserImportResult(
+                true,
+                $"已导入资产：{asset.LogicalPath}",
+                asset.Id,
+                asset.LogicalPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException)
+        {
+            return new AssetBrowserImportResult(false, ex.Message);
+        }
+    }
+
     private bool TryResolveThumbnail(string logicalPath, out AssetThumbnail thumbnail)
     {
         thumbnail = default;
@@ -567,6 +600,11 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource, IA
     private static bool IsCreatableType(EditorAssetType type)
     {
         return type is EditorAssetType.Material or EditorAssetType.Scene or EditorAssetType.Prefab or EditorAssetType.Script or EditorAssetType.UiScreen or EditorAssetType.Json;
+    }
+
+    private static bool IsImportableType(EditorAssetType type)
+    {
+        return type is EditorAssetType.Texture or EditorAssetType.Audio;
     }
 }
 

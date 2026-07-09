@@ -587,6 +587,48 @@ public sealed class AssetBrowserPanelTests
     }
 
     /// <summary>
+    /// 验证 Project Window 导入输入会跟随选中文件夹，并自动避开已有 Texture logical path。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelImportsTextureIntoSelectedFolderWithUniqueSuggestedPath()
+    {
+        // Arrange：准备输入与初始状态
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("textures/source.png", AssetBrowserItemKind.Texture, 10, DateTimeOffset.UnixEpoch, null, "asset_texture_0"),
+        ]);
+        List<AssetBrowserImportRequest> requests = [];
+        AssetBrowserImportResult ImportAsset(AssetBrowserImportRequest request)
+        {
+            requests.Add(request);
+            source.ReplaceAssets(
+            [
+                .. source.ListAssets(),
+                new AssetBrowserItem(request.Path, request.Kind, 12, DateTimeOffset.UnixEpoch, null, "asset_imported"),
+            ]);
+            return new AssetBrowserImportResult(true, $"imported {request.Path}", "asset_imported", request.Path);
+        }
+
+        AssetBrowserPanel panel = new(source, importAsset: ImportAsset);
+        string sourcePath = Path.Combine(Path.GetTempPath(), "source.png");
+
+        _ = panel.Refresh();
+        bool prepared = panel.BeginImportAssetInFolder(sourcePath, "textures", AssetBrowserItemKind.Texture);
+        bool imported = panel.TryImportCurrentAsset();
+
+        // Assert：验证预期结果
+        Assert.True(prepared);
+        Assert.True(imported);
+        AssetBrowserImportRequest request = Assert.Single(requests);
+        Assert.Equal(sourcePath, request.SourceFullPath);
+        Assert.Equal("textures/source1.png", request.Path);
+        Assert.Equal(AssetBrowserItemKind.Texture, request.Kind);
+        Assert.Equal("textures/source2.png", panel.ImportDestinationPath);
+        Assert.Equal(AssetBrowserItemKind.Texture, panel.ImportKind);
+        Assert.Contains(panel.LastAssets, asset => asset.Path == "textures/source1.png" && asset.AssetId == "asset_imported");
+    }
+
+    /// <summary>
     /// 验证 Project Window 文件夹 rename / recursive move 会走 Shell 回调并刷新资产与文件夹列表。
     /// </summary>
     [Fact]
