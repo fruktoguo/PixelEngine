@@ -2329,7 +2329,7 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
-    /// 验证真实可玩场景使用受控爆破与更宽的悬空块扫描配置，避免满屏高速碎点和弹坑残块长时间浮空。
+    /// 验证真实可玩场景使用受控左键破坏弹与大范围中键爆破，避免满屏高速碎点且保留直接拆障碍能力。
     /// </summary>
     [Fact]
     public void PlayableWorldDirectorConfiguresProjectileForReadablePlayableDemo()
@@ -2352,6 +2352,13 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal(72, projectile.PlayerSupportProtectionRadius);
         Assert.False(projectile.AllowOverhangFallbackCollapse);
         Assert.False(projectile.AllowImpactFallbackCollapse);
+
+        ExplosiveTool explosive = FindBehaviour<ExplosiveTool>(engine);
+        Assert.Equal(72, explosive.Radius);
+        Assert.Equal(320f, explosive.Force);
+        Assert.Equal(10f, explosive.TerrainEffectScale);
+        Assert.Equal(720, explosive.EffectiveRadius);
+        Assert.Equal(3_200f, explosive.EffectiveForce);
     }
 
     /// <summary>

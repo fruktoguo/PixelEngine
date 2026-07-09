@@ -92,6 +92,9 @@ public sealed class PlayableWorldDirector : Behaviour
         projectile.PlayerSupportProtectionRadius = 72;
         projectile.InputEnabled = false;
 
+        ExplosiveTool explosive = playerEntity.AddComponent<ExplosiveTool>();
+        explosive.TerrainEffectScale = 10f;
+
         _ = playerEntity.AddComponent<WeaponController>();
 
         _ = playerEntity.AddComponent<PlayerVisual>();
