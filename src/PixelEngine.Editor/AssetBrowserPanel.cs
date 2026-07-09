@@ -18,6 +18,7 @@ public delegate bool ScriptAssetOpenHandler(string assetPath, out string diagnos
 /// <param name="instantiatePrefab">可选 prefab 实例化回调。</param>
 /// <param name="openScriptAsset">可选脚本资产打开回调。</param>
 /// <param name="deleteAsset">可选资产删除回调。</param>
+/// <param name="deleteFolder">可选文件夹递归删除回调。</param>
 /// <param name="moveAsset">可选资产移动 / 重命名回调。</param>
 /// <param name="moveFolder">可选文件夹移动 / 重命名回调。</param>
 /// <param name="createAsset">可选资产创建回调。</param>
@@ -27,6 +28,7 @@ public sealed class AssetBrowserPanel(
     Action<string>? instantiatePrefab = null,
     ScriptAssetOpenHandler? openScriptAsset = null,
     AssetBrowserDeleteHandler? deleteAsset = null,
+    AssetBrowserFolderDeleteHandler? deleteFolder = null,
     AssetBrowserMoveHandler? moveAsset = null,
     AssetBrowserFolderMoveHandler? moveFolder = null,
     AssetBrowserCreateHandler? createAsset = null) : IEditorPanel
@@ -36,6 +38,7 @@ public sealed class AssetBrowserPanel(
     private readonly Action<string>? _instantiatePrefab = instantiatePrefab;
     private readonly ScriptAssetOpenHandler? _openScriptAsset = openScriptAsset;
     private readonly AssetBrowserDeleteHandler? _deleteAsset = deleteAsset;
+    private readonly AssetBrowserFolderDeleteHandler? _deleteFolder = deleteFolder;
     private readonly AssetBrowserMoveHandler? _moveAsset = moveAsset;
     private readonly AssetBrowserFolderMoveHandler? _moveFolder = moveFolder;
     private readonly AssetBrowserCreateHandler? _createAsset = createAsset;
@@ -55,6 +58,7 @@ public sealed class AssetBrowserPanel(
     private static readonly string[] CreateKindLabels = ["Folder", "Material", "Scene", "Prefab", "Script", "UI Screen", "Json"];
     private string _search = string.Empty;
     private AssetBrowserDeleteRequest? _pendingDeleteRequest;
+    private AssetBrowserFolderDeleteRequest? _pendingFolderDeleteRequest;
     private AssetBrowserMoveRequest? _pendingMoveRequest;
     private string _pendingMoveTargetPath = string.Empty;
     private AssetBrowserFolderMoveRequest? _pendingFolderMoveRequest;
@@ -370,6 +374,26 @@ public sealed class AssetBrowserPanel(
     }
 
     /// <summary>
+    /// 请求递归删除指定文件夹；如果数据源要求确认，则只记录待确认状态。
+    /// </summary>
+    /// <param name="path">文件夹路径。</param>
+    /// <returns>删除已经执行时返回 true。</returns>
+    public bool TryRequestDeleteFolder(string path)
+    {
+        return TryDeleteFolder(path, confirmed: false);
+    }
+
+    /// <summary>
+    /// 确认递归删除指定文件夹。
+    /// </summary>
+    /// <param name="path">文件夹路径。</param>
+    /// <returns>删除已经执行时返回 true。</returns>
+    public bool TryConfirmDeleteFolder(string path)
+    {
+        return TryDeleteFolder(path, confirmed: true);
+    }
+
+    /// <summary>
     /// 开始移动 / 重命名指定资产；确认前绑定当前 stable asset id。
     /// </summary>
     /// <param name="path">当前资产路径。</param>
@@ -664,6 +688,26 @@ public sealed class AssetBrowserPanel(
             {
                 _ = BeginMoveFolder(folder.Path);
             }
+
+            ImGui.SameLine();
+            if (IsPendingFolderDeleteFor(folder))
+            {
+                if (ImGui.Button($"确认删除##folder-delete-{folder.Path}"))
+                {
+                    _ = TryConfirmDeleteFolder(folder.Path);
+                }
+
+                ImGui.SameLine();
+                if (ImGui.Button($"取消删除##folder-delete-{folder.Path}"))
+                {
+                    _pendingFolderDeleteRequest = null;
+                    Status = $"已取消删除文件夹 {folder.DisplayName}";
+                }
+            }
+            else if (ImGui.Button($"删除##folder-delete-{folder.Path}"))
+            {
+                _ = TryRequestDeleteFolder(folder.Path);
+            }
         }
     }
 
@@ -885,6 +929,62 @@ public sealed class AssetBrowserPanel(
         return result.Succeeded;
     }
 
+    private bool TryDeleteFolder(string path, bool confirmed)
+    {
+        if (!TryFindFolder(path, out AssetBrowserFolderItem folder))
+        {
+            Status = $"文件夹不存在：{path}";
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(folder.Path))
+        {
+            Status = "content 根目录不能删除。";
+            return false;
+        }
+
+        if (_deleteFolder is null)
+        {
+            Status = "文件夹删除服务不可用";
+            return false;
+        }
+
+        AssetBrowserFolderDeleteRequest request;
+        if (confirmed)
+        {
+            if (!TryGetPendingFolderDelete(folder.Path, out request))
+            {
+                _pendingFolderDeleteRequest = null;
+                Status = $"文件夹删除确认已失效，请重新请求删除：{folder.DisplayName}";
+                return false;
+            }
+
+            request = request with { Confirmed = true };
+        }
+        else if (!TryBuildFolderDeleteRequest(folder.Path, confirmed: false, out request))
+        {
+            return false;
+        }
+
+        AssetBrowserFolderDeleteResult result = _deleteFolder(request);
+        Status = string.IsNullOrWhiteSpace(result.Diagnostic)
+            ? result.Succeeded ? $"已删除文件夹 {folder.Path}" : $"文件夹删除未执行：{folder.Path}"
+            : result.Diagnostic;
+        if (result.RequiresConfirmation)
+        {
+            _pendingFolderDeleteRequest = request with { Confirmed = false };
+            return false;
+        }
+
+        _pendingFolderDeleteRequest = null;
+        if (result.Succeeded)
+        {
+            _ = Refresh();
+        }
+
+        return result.Succeeded;
+    }
+
     private static bool IsCreateKindSupported(AssetBrowserItemKind kind)
     {
         return Array.IndexOf(CreateKinds, kind) >= 0;
@@ -930,12 +1030,31 @@ public sealed class AssetBrowserPanel(
         return TryGetPendingDeleteFor(item, out _);
     }
 
+    private bool IsPendingFolderDeleteFor(AssetBrowserFolderItem folder)
+    {
+        return TryGetPendingFolderDelete(folder.Path, out _);
+    }
+
     private bool TryGetPendingDeleteFor(AssetBrowserItem item, out AssetBrowserDeleteRequest request)
     {
         if (_pendingDeleteRequest is { } pending &&
             string.Equals(pending.Path, item.Path, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(pending.AssetId, item.AssetId, StringComparison.OrdinalIgnoreCase) &&
             pending.Kind == item.Kind)
+        {
+            request = pending;
+            return true;
+        }
+
+        request = default;
+        return false;
+    }
+
+    private bool TryGetPendingFolderDelete(string path, out AssetBrowserFolderDeleteRequest request)
+    {
+        string normalized = (path ?? string.Empty).Trim().Replace('\\', '/');
+        if (_pendingFolderDeleteRequest is { } pending &&
+            string.Equals(pending.Path, normalized, StringComparison.OrdinalIgnoreCase))
         {
             request = pending;
             return true;
@@ -1104,6 +1223,43 @@ public sealed class AssetBrowserPanel(
 
         folder = default;
         return false;
+    }
+
+    private bool TryBuildFolderDeleteRequest(string folderPath, bool confirmed, out AssetBrowserFolderDeleteRequest request)
+    {
+        string normalized = (folderPath ?? string.Empty).Trim().Replace('\\', '/');
+        List<string> assetIds = [];
+        for (int i = 0; i < LastAssets.Count; i++)
+        {
+            AssetBrowserItem item = LastAssets[i];
+            if (!IsAssetUnderFolder(item.Path, normalized))
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(item.AssetId))
+            {
+                Status = $"文件夹包含缺少 stable asset id 的资产，不能递归删除：{item.Path}";
+                request = default;
+                return false;
+            }
+
+            assetIds.Add(item.AssetId);
+        }
+
+        request = new AssetBrowserFolderDeleteRequest(
+            normalized,
+            [.. assetIds.Order(StringComparer.OrdinalIgnoreCase)],
+            confirmed);
+        return true;
+    }
+
+    private static bool IsAssetUnderFolder(string assetPath, string folderPath)
+    {
+        string normalizedAsset = assetPath.Replace('\\', '/');
+        string normalizedFolder = folderPath.Trim().Replace('\\', '/').TrimEnd('/');
+        return normalizedFolder.Length > 0 &&
+            normalizedAsset.StartsWith(normalizedFolder + "/", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? GetLogicalDirectoryName(string logicalPath)

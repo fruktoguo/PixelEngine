@@ -100,6 +100,43 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource, IA
         return new AssetBrowserDeleteResult(result.Deleted, result.RequiresConfirmation, result.Diagnostic);
     }
 
+    public AssetBrowserFolderDeleteResult DeleteFolder(AssetBrowserFolderDeleteRequest request, EditorSceneModel? activeScene = null)
+    {
+        if (string.IsNullOrWhiteSpace(request.Path))
+        {
+            return new AssetBrowserFolderDeleteResult(false, false, "文件夹删除请求缺少 logical path。");
+        }
+
+        try
+        {
+            IReadOnlyList<EditorAssetRecord> currentAssets = _assets.ListFolderAssets(request.Path);
+            string[] currentIds =
+            [
+                .. currentAssets
+                    .Select(static asset => asset.Id)
+                    .Order(StringComparer.OrdinalIgnoreCase),
+            ];
+            string[] requestIds =
+            [
+                .. (request.AssetIds ?? [])
+                    .Where(static assetId => !string.IsNullOrWhiteSpace(assetId))
+                    .Select(static assetId => assetId.Trim())
+                    .Order(StringComparer.OrdinalIgnoreCase),
+            ];
+            if (!currentIds.SequenceEqual(requestIds, StringComparer.OrdinalIgnoreCase))
+            {
+                return new AssetBrowserFolderDeleteResult(false, false, $"文件夹删除请求与当前资产集合不一致：{request.Path}。");
+            }
+
+            EditorAssetFolderDeleteResult result = _assets.DeleteFolder(request.Path, activeScene, request.Confirmed);
+            return new AssetBrowserFolderDeleteResult(result.Deleted, result.RequiresConfirmation, result.Diagnostic);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException)
+        {
+            return new AssetBrowserFolderDeleteResult(false, false, ex.Message);
+        }
+    }
+
     public EditorAssetBrowserMoveResult MoveAsset(string currentPath, string newPath, EditorSceneModel? activeScene = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(currentPath);

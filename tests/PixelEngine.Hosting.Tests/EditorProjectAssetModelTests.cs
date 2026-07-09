@@ -618,6 +618,88 @@ public sealed class EditorProjectAssetModelTests
     }
 
     /// <summary>
+    /// 验证 Project Window 文件夹递归删除会阻止仍被外部 Scene / 活动 authoring 模型引用的子资产。
+    /// </summary>
+    [Fact]
+    public void DeleteFolderPreflightBlocksReferencedChildAssets()
+    {
+        // Arrange：准备输入与初始状态
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            string contentRoot = Path.Combine(projectRoot, "content");
+            EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
+            EditorAssetRecord texture = manifest.CreateAsset("levels/textures/sand.png", EditorAssetType.Texture, textContents: "texture");
+            string reference = EditorAssetReferenceCodec.Encode(texture.Id, texture.LogicalPath, texture.AssetType);
+            EngineSceneDocument document = CreateSceneWithAssetReference(reference);
+            string scenePath = Path.Combine(contentRoot, "scenes", "main.scene");
+            EngineSceneDocumentLoader.SaveDocument(document, scenePath);
+            EditorSceneModel activeScene = EditorSceneModel.FromDocument(document);
+            EditorAssetBrowserDataSource source = new(manifest);
+
+            AssetBrowserFolderDeleteResult stale = source.DeleteFolder(
+                new AssetBrowserFolderDeleteRequest("levels", ["asset_missing"], Confirmed: true),
+                activeScene);
+            AssetBrowserFolderDeleteResult blocked = source.DeleteFolder(
+                new AssetBrowserFolderDeleteRequest("levels", [texture.Id], Confirmed: true),
+                activeScene);
+
+            // Assert：验证预期结果
+            Assert.False(stale.Succeeded);
+            Assert.Contains("资产集合不一致", stale.Diagnostic, StringComparison.Ordinal);
+            Assert.False(blocked.Succeeded);
+            Assert.False(blocked.RequiresConfirmation);
+            Assert.Contains("仍被", blocked.Diagnostic, StringComparison.Ordinal);
+            Assert.True(File.Exists(Path.Combine(contentRoot, "levels", "textures", "sand.png")));
+            Assert.True(manifest.TryResolveAssetId(texture.Id, out EditorAssetRecord resolved));
+            Assert.Equal("levels/textures/sand.png", resolved.LogicalPath);
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
+    /// 验证未引用文件夹必须二次确认，确认后递归删除磁盘、manifest 与 UI Screen manifest entry。
+    /// </summary>
+    [Fact]
+    public void DeleteFolderRequiresConfirmationAndRemovesManifestRecords()
+    {
+        // Arrange：准备输入与初始状态
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            string contentRoot = Path.Combine(projectRoot, "content");
+            EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
+            EditorAssetBrowserDataSource source = new(manifest);
+            AssetBrowserCreateResult uiScreen = source.CreateAsset(new AssetBrowserCreateRequest("ui/screens/menu/Hud.xhtml", AssetBrowserItemKind.UiScreen));
+            AssetBrowserCreateResult script = source.CreateAsset(new AssetBrowserCreateRequest("ui/screens/menu/MenuBehaviour.cs", AssetBrowserItemKind.Script));
+
+            AssetBrowserFolderDeleteResult requested = source.DeleteFolder(
+                new AssetBrowserFolderDeleteRequest("ui/screens/menu", [script.AssetId!, uiScreen.AssetId!], Confirmed: false));
+            AssetBrowserFolderDeleteResult confirmed = source.DeleteFolder(
+                new AssetBrowserFolderDeleteRequest("ui/screens/menu", [script.AssetId!, uiScreen.AssetId!], Confirmed: true));
+
+            // Assert：验证预期结果
+            Assert.False(requested.Succeeded);
+            Assert.True(requested.RequiresConfirmation);
+            Assert.Contains("需要确认", requested.Diagnostic, StringComparison.Ordinal);
+            Assert.True(confirmed.Succeeded);
+            Assert.False(confirmed.RequiresConfirmation);
+            Assert.False(Directory.Exists(Path.Combine(contentRoot, "ui", "screens", "menu")));
+            Assert.False(manifest.TryResolveAssetId(uiScreen.AssetId!, out _));
+            Assert.False(manifest.TryResolveAssetId(script.AssetId!, out _));
+            using JsonDocument uiManifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(contentRoot, "ui", "ui-manifest.json")));
+            Assert.Empty(uiManifest.RootElement.GetProperty("screens").EnumerateArray());
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
     /// 验证 Project Window 数据源为纹理、音频、材质、场景、Prefab 与脚本提供只读预览摘要。
     /// </summary>
     [Fact]
