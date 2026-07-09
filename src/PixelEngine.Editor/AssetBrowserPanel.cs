@@ -100,6 +100,11 @@ public sealed class AssetBrowserPanel(
     public IReadOnlyList<AssetBrowserFolderItem> FolderTargets { get; private set; } = [];
 
     /// <summary>
+    /// 当前 Project Window 文件夹作用域；空字符串表示 content 根目录。
+    /// </summary>
+    public string ActiveFolderPath { get; private set; } = string.Empty;
+
+    /// <summary>
     /// 当前 Create Type 输入。
     /// </summary>
     public AssetBrowserItemKind CreateKind { get; private set; } = AssetBrowserItemKind.Script;
@@ -182,6 +187,7 @@ public sealed class AssetBrowserPanel(
     {
         LastAssets = _source.ListAssets();
         RebuildFolderTargets();
+        EnsureActiveFolderStillExists();
         ApplyFilter();
         return LastAssets;
     }
@@ -231,7 +237,9 @@ public sealed class AssetBrowserPanel(
             }
 
             selection.SelectFolder(folder.Path);
+            ActiveFolderPath = folder.Path;
             ApplyCreateFolderContext(folder.Path);
+            ApplyFilter();
             Status = $"选中文件夹 {folder.DisplayName}";
             return true;
         }
@@ -1470,6 +1478,11 @@ public sealed class AssetBrowserPanel(
         }
 
         IEnumerable<AssetBrowserItem> query = LastAssets;
+        if (!string.IsNullOrWhiteSpace(ActiveFolderPath))
+        {
+            query = query.Where(item => IsAssetVisibleInFolderScope(item.Path, ActiveFolderPath));
+        }
+
         if (!string.IsNullOrWhiteSpace(_search))
         {
             query = query.Where(item =>
@@ -1487,6 +1500,24 @@ public sealed class AssetBrowserPanel(
         [
             .. ApplySort(query),
         ];
+    }
+
+    private void EnsureActiveFolderStillExists()
+    {
+        if (string.IsNullOrWhiteSpace(ActiveFolderPath))
+        {
+            return;
+        }
+
+        for (int i = 0; i < FolderTargets.Count; i++)
+        {
+            if (string.Equals(FolderTargets[i].Path, ActiveFolderPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+        }
+
+        ActiveFolderPath = string.Empty;
     }
 
     private void RebuildFolderTargets()
@@ -1618,6 +1649,12 @@ public sealed class AssetBrowserPanel(
         string normalizedFolder = folderPath.Trim().Replace('\\', '/').TrimEnd('/');
         return normalizedFolder.Length > 0 &&
             normalizedAsset.StartsWith(normalizedFolder + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsAssetVisibleInFolderScope(string assetPath, string folderPath)
+    {
+        string normalizedFolder = folderPath.Trim().Replace('\\', '/').TrimEnd('/');
+        return normalizedFolder.Length == 0 || IsAssetUnderFolder(assetPath, normalizedFolder);
     }
 
     private static string? GetLogicalDirectoryName(string logicalPath)
