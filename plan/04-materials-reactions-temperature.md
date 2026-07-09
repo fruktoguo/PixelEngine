@@ -639,7 +639,7 @@ public sealed class TemperatureField
 - `plan/07-world-streaming-serialization.md`：消费 `BuildIdNameTable` / `BuildRemapLut`（存档 name↔id remap 落盘，不变式 #8）；**落地 `Damage` lane 入 `ChunkSnapshot`/`ChunkCodec`、bump `SaveFormatVersion`、旧档迁移与 remap 清 0（§3.11）**。
 - `plan/08-rendering.md`：消费 `BaseColorBGRA` / `TextureId` / `ColorNoise` / `Emissive`（上色与 emissive，架构 §9）；**消费 `MaterialVisualTable`（`RenderStyle`/`EdgeColorBGRA`/`Opacity`/`HighlightColorBGRA`）做差异化着色 + `MaterialSwatchProvider` 图例采样，渲染相位 CPU 算 BGRA 不写回 cell（守 #7，§3.2）**。
 - `plan/10-audio.md`：消费 `AudioCueSet`（材质化音效，架构 §10.2）。
-- `plan/11-scripting-system.md`：消费 `MaterialTable.TryGetId`（按 name 查 id）、`RegisterCustomUpdate`（脚本注册 custom-update）；**门面公开 `IWorldEffects.DamageCircle/DamageBeam/AddHeat`、`MaterialInfo` 增 `DisplayName/Hardness(=Durability)/Integrity/MineYield/FlowRate/IsDestructible` 供武器与图例读（§3.11 / §C.4）**。
+- `plan/11-scripting-system.md`：消费 `MaterialTable.TryGetId`（按 name 查 id）、`RegisterCustomUpdate`（脚本注册 custom-update）；**门面公开 `IWorldEffects.DamageCircle/DamageBeam/AddHeat`、`MaterialInfo` 增图例、采集、结构破坏、燃烧、温度、渲染风格与标签只读字段供武器、图例、危险采样与编辑器 fallback 查询消费（§3.11 / §C.4）**。
 - `plan/13-demo-game.md`：填 `content/materials.json` / `reactions.json` 实际内容（含 boundary_stone/gravel/crystal 及全材质抗性 / 视觉字段）；消费采集事件（`MineYield`）驱动可玩循环，`MaterialLegendHud` 经 `MaterialSwatchProvider` 展示 `LegendVisible` 材质。
 - `plan/14-testing-benchmarking.md`：边界反应守恒、tag 展开、name↔id remap、cache-miss、温度相变链测试与基准。
 
