@@ -512,7 +512,8 @@ function Test-GitHubReleaseUploadedAssets {
         [string]$Root,
         [string]$Path,
         [hashtable]$ExpectedPackages,
-        [string]$ChecksumSha256
+        [string]$ChecksumSha256,
+        [string]$ExpectedTag
     )
 
     $resolved = Resolve-EvidencePath -Root $Root -Path $Path
@@ -573,7 +574,8 @@ function Test-GitHubReleaseUploadedAssets {
         else {
             $downloadUrl = ([string]$values[$downloadUrlKey]).Trim()
             $escapedName = [regex]::Escape($name)
-            if ($downloadUrl -notmatch "^https://.+/releases/download/[^/]+/$escapedName$") {
+            $tagPattern = if ([string]::IsNullOrWhiteSpace($ExpectedTag)) { "[^/]+" } else { [regex]::Escape($ExpectedTag) }
+            if ($downloadUrl -notmatch "^https://github\.com/.+/releases/download/$tagPattern/$escapedName$") {
                 $Missing.Add("github_release_upload browser_download_url 必须指向 GitHub Release 下载资产：$name actual=$downloadUrl")
             }
         }
@@ -939,7 +941,8 @@ if ($checksumPaths.Count -gt 1) {
 elseif ($checksumPaths.Count -eq 1) {
     $checksumPath = [string](@($checksumPaths.Keys)[0])
     Test-ReleaseChecksumRows -Missing $missing -Root $root -Path $checksumPath -ExpectedPackages $expectedChecksumPackages
-    Test-GitHubReleaseUploadedAssets -Missing $missing -Root $root -Path $githubReleaseUploadReport -ExpectedPackages $expectedChecksumPackages -ChecksumSha256 ([string]$checksumSha256ByPath[$checksumPath])
+    $expectedReleaseTag = if ([string]::IsNullOrWhiteSpace($releaseVersion)) { "" } else { "v$releaseVersion" }
+    Test-GitHubReleaseUploadedAssets -Missing $missing -Root $root -Path $githubReleaseUploadReport -ExpectedPackages $expectedChecksumPackages -ChecksumSha256 ([string]$checksumSha256ByPath[$checksumPath]) -ExpectedTag $expectedReleaseTag
 }
 
 Test-PackageVersionsMatchReleaseTag -Missing $missing -ReleaseVersion $releaseVersion -ExpectedPackages $expectedChecksumPackages
