@@ -565,6 +565,18 @@ function Test-GitHubReleaseUploadedAssets {
         if (-not [string]::Equals($actualHash, $expectedHash, [StringComparison]::OrdinalIgnoreCase)) {
             $Missing.Add("github_release_upload asset hash 不匹配：$name expected=$expectedHash actual=$actualHash")
         }
+
+        $downloadUrlKey = "browser_download_url/$name"
+        if (-not $values.ContainsKey($downloadUrlKey)) {
+            $Missing.Add("github_release_upload 缺少 browser_download_url：$name")
+        }
+        else {
+            $downloadUrl = ([string]$values[$downloadUrlKey]).Trim()
+            $escapedName = [regex]::Escape($name)
+            if ($downloadUrl -notmatch "^https://.+/releases/download/[^/]+/$escapedName$") {
+                $Missing.Add("github_release_upload browser_download_url 必须指向 GitHub Release 下载资产：$name actual=$downloadUrl")
+            }
+        }
     }
 
     foreach ($key in $values.Keys) {
@@ -576,6 +588,18 @@ function Test-GitHubReleaseUploadedAssets {
         $name = $keyText.Substring("asset/".Length)
         if (-not $expectedAssets.ContainsKey($name)) {
             $Missing.Add("github_release_upload 包含 manifest 未声明的上传 asset：$name")
+        }
+    }
+
+    foreach ($key in $values.Keys) {
+        $keyText = [string]$key
+        if (-not $keyText.StartsWith("browser_download_url/", [StringComparison]::Ordinal)) {
+            continue
+        }
+
+        $name = $keyText.Substring("browser_download_url/".Length)
+        if (-not $expectedAssets.ContainsKey($name)) {
+            $Missing.Add("github_release_upload 包含 manifest 未声明的 browser_download_url：$name")
         }
     }
 }
