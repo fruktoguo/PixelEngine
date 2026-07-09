@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-10",
-  "generatedFromCommit": "bdeb5aa578c101c6cf514136f13e42e1d80f4c6d",
+  "generatedFromCommit": "9548d549fac5fee8d0bc0de80db08d3c2079c7c7",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -13,6 +13,19 @@
     "completeState": "只有同时捕获 commit、runSessionId、硬件、命令、稳定报告和 SHA256 的条目才能标记 complete。"
   },
   "entries": [
+    {
+      "entryId": "perf-001-benchmark-baseline-20260710",
+      "taskIds": ["PERF-001"],
+      "evidenceState": "complete_local_formal_benchmark_baseline",
+      "commit": "9548d549fac5fee8d0bc0de80db08d3c2079c7c7",
+      "runSessionId": "local-20260710-perf001-bdn",
+      "runIdentityStatus": "captured",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8c/16t; AMD Radeon RX 7900 XT driver 32.0.31021.5001; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "pwsh tools/run-benchmark.ps1 -Artifacts artifacts/perf-001-cell-fixed -BenchmarkDotNetArgs @('--filter','*CellThroughputBenchmark*','--launchCount','1','--warmupCount','3','--iterationCount','5'); 同参数分别运行 *RenderingAllocationBenchmarks*、*PhysicsBenchmarks*、*ParticleIntegrationBenchmark*、*GameUiAllocationBenchmarks*",
+      "reportPath": "docs/evidence-2026-07-10-perf-001-benchmark-baseline.md",
+      "sha256": "43b3e97d467f1583139b639f89e52a7d4f37ccd6ac57121f6d5f668ea7977f0c",
+      "notes": "当前 commit 的正式 BDN 基线：CA 6、render 2、physics 8、粒子 9、UI 4，共 29 个 benchmark；均有 warmup 与多次 measured iteration，原始 artifacts 只作可再生引用。MinIterationTime/outlier warning 按原始报告保留。"
+    },
     {
       "entryId": "test-001-native-smoke-20260710",
       "taskIds": ["TEST-001"],
