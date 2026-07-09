@@ -1,5 +1,5 @@
-using System.Xml.Linq;
 using System.Text.Json;
+using System.Xml.Linq;
 using PixelEngine.Gui;
 using PixelEngine.Hosting;
 using PixelEngine.Rendering;
@@ -210,6 +210,28 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
+    /// 验证设置屏幕说明真实运行态 AudioSystem / Present VSync 开关，不退回无语义占位面板。
+    /// </summary>
+    [Fact]
+    public void DemoSettingsTextDescribesRuntimeAudioAndVSyncControls()
+    {
+        UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
+        UiManifestScreen settings = manifest.GetRequiredScreen(GameUiDemoController.SettingsScreen);
+        string[] settingsText = UiVisibleText(settings.FullPath);
+
+        Assert.Contains("音频总开关会改写运行时 AudioSystem。", settingsText);
+        Assert.Contains("Present VSync 会改写当前窗口交换策略。", settingsText);
+        Assert.Contains("Present VSync", settingsText);
+        Assert.Contains("音频总开关", settingsText);
+        XDocument document = XDocument.Load(settings.FullPath);
+        string[] modelPaths = ExtractAttributeValues(document, "path", "data-model");
+        Assert.Contains("settings.vsync", modelPaths);
+        Assert.Contains("settings.audio", modelPaths);
+        Assert.DoesNotContain("音效", settingsText);
+        Assert.DoesNotContain("占位", settingsText);
+    }
+
+    /// <summary>
     /// 验证七类 Demo UI 屏幕可由 ManagedFallback 同时显示、叠放并产生按钮/复选框事件。
     /// </summary>
     [Fact]
@@ -237,7 +259,7 @@ public sealed class DemoUiContentTests
         _ = pause;
         _ = result;
         _ = gui.Context.ClickedButtons.Add("设置");
-        _ = gui.Context.ToggledCheckboxes.Add("垂直同步");
+        _ = gui.Context.ToggledCheckboxes.Add("Present VSync");
 
         host.Composite(default);
         RuntimeUiEvent[] events = new RuntimeUiEvent[8];
