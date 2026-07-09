@@ -472,9 +472,8 @@ public sealed class LavaMineSceneTests
 
     private static LavaMineRouteResult RunLavaMineScriptedRoute(Engine engine)
     {
-        ScriptInputApi input = engine.Context.GetService<ScriptInputApi>();
-        ScriptCameraApi camera = engine.Context.GetService<ScriptCameraApi>();
-        DemoWindowScriptedInput scripted = new(input, camera, routeProbe: true);
+        EngineProbeApi probe = engine.Probe;
+        DemoWindowScriptedInput scripted = new(probe, routeProbe: true);
         scripted.RegisterPhases(engine.Phases);
 
         ScriptScene scene = engine.Context.GetService<ScriptScene>();

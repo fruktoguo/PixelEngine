@@ -562,6 +562,29 @@ public sealed class EngineBuilderTests
     }
 
     /// <summary>
+    /// 验证 Engine.Probe 在 Simulation/Physics 装配后绑定稳定统计快照，而不要求调用方解析 PhysicsSystem。
+    /// </summary>
+    [Fact]
+    public void EngineProbeBindsPhysicsStatsAfterResidentWorldAttach()
+    {
+        using Engine engine = new EngineBuilder()
+            .UseHeadless()
+            .WithWorkerCount(1)
+            .WithContentRoot(Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content"))
+            .Build();
+
+        _ = engine.LoadContentPackage();
+        _ = engine.AttachResidentSimulationWorld(64, 64, particleCapacity: 8);
+        Assert.Same(engine.Probe, engine.Context.GetService<EngineProbeApi>());
+        Assert.Equal(0, engine.Probe.ActiveParticles);
+        Assert.Equal(-1, engine.Probe.RenderOverlayCount);
+
+        _ = engine.AttachPhysics();
+        Assert.Equal(1, engine.Probe.PhysicsStats.TaskBridgeWorkerCount);
+        Assert.Equal(0, engine.Probe.PhysicsStats.ActiveBodyCount);
+    }
+
+    /// <summary>
     /// 验证角色服务注册会同时进入 typed service 表与能力表。
     /// </summary>
     [Fact]

@@ -8,10 +8,9 @@ namespace PixelEngine.Demo;
 /// <summary>
 /// Demo 窗口短跑的固定输入脚本，用于在真实窗口相位链路中自动触发玩法动作。
 /// </summary>
-internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCameraApi camera, bool routeProbe = false) : IEnginePhaseDriver
+internal sealed class DemoWindowScriptedInput(EngineProbeApi probe, bool routeProbe = false) : IEnginePhaseDriver
 {
-    private readonly ScriptInputApi _input = input ?? throw new ArgumentNullException(nameof(input));
-    private readonly ScriptCameraApi _camera = camera ?? throw new ArgumentNullException(nameof(camera));
+    private readonly EngineProbeApi _probe = probe ?? throw new ArgumentNullException(nameof(probe));
     private readonly bool _routeProbe = routeProbe;
     private readonly Key[] _keys = new Key[3];
     private readonly MouseButton[] _buttons = new MouseButton[2];
@@ -124,8 +123,8 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
                 _keys[keyCount++] = Key.Space;
             }
         }
-        Point2F screen = _camera.WorldToScreen(target.X, target.Y);
-        _input.Update(
+        Point2F screen = _probe.Camera.WorldToScreen(target.X, target.Y);
+        _probe.Input.Update(
             _keys.AsSpan(0, keyCount),
             _buttons.AsSpan(0, buttonCount),
             screen.X,
@@ -244,8 +243,8 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
             _keys[keyCount++] = Key.Digit2;
         }
 
-        Point2F screen = _camera.WorldToScreen(target.X, target.Y);
-        _input.Update(
+        Point2F screen = _probe.Camera.WorldToScreen(target.X, target.Y);
+        _probe.Input.Update(
             _keys.AsSpan(0, keyCount),
             _buttons.AsSpan(0, buttonCount),
             screen.X,
@@ -258,19 +257,9 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
 /// Demo 脚本化窗口短跑的运行态探针，累计会被后续帧覆盖的瞬时结果。
 /// </summary>
 internal sealed class DemoWindowScriptedProbe(
-    PhysicsSystem physics,
-    EngineProbeApi probe,
-    ScriptLightingSynchronizer lighting,
-    Scripting.Scene scene,
-    ScriptCameraApi camera,
-    ScriptCameraSynchronizer cameraSync) : IEnginePhaseDriver
+    EngineProbeApi probe) : IEnginePhaseDriver
 {
-    private readonly PhysicsSystem _physics = physics ?? throw new ArgumentNullException(nameof(physics));
     private readonly EngineProbeApi _probe = probe ?? throw new ArgumentNullException(nameof(probe));
-    private readonly ScriptLightingSynchronizer _lighting = lighting ?? throw new ArgumentNullException(nameof(lighting));
-    private readonly Scripting.Scene _scene = scene ?? throw new ArgumentNullException(nameof(scene));
-    private readonly ScriptCameraApi _camera = camera ?? throw new ArgumentNullException(nameof(camera));
-    private readonly ScriptCameraSynchronizer _cameraSync = cameraSync ?? throw new ArgumentNullException(nameof(cameraSync));
     private PlayerController? _player;
 
     /// <summary>
@@ -424,12 +413,13 @@ internal sealed class DemoWindowScriptedProbe(
     private void Capture(EngineTickContext context)
     {
         _ = context;
-        MaxDestroyedBodies = Math.Max(MaxDestroyedBodies, _physics.LastDestructionResult.DestroyedBodies);
-        MaxCreatedBodies = Math.Max(MaxCreatedBodies, _physics.LastDestructionResult.CreatedBodies);
-        MaxActiveBodies = Math.Max(MaxActiveBodies, _physics.PhysicsWorld.ActiveBodyCount);
+        PhysicsSystemStats physics = _probe.PhysicsStats;
+        MaxDestroyedBodies = Math.Max(MaxDestroyedBodies, physics.LastDestructionResult.DestroyedBodies);
+        MaxCreatedBodies = Math.Max(MaxCreatedBodies, physics.LastDestructionResult.CreatedBodies);
+        MaxActiveBodies = Math.Max(MaxActiveBodies, physics.ActiveBodyCount);
         MaxParticles = Math.Max(MaxParticles, _probe.ActiveParticles);
-        MaxLights = Math.Max(MaxLights, _lighting.PointLights.Length);
-        MaxTransientBursts = Math.Max(MaxTransientBursts, TransientParticleBurst.ActiveCount(_scene));
+        MaxLights = Math.Max(MaxLights, _probe.PointLights.Length);
+        MaxTransientBursts = Math.Max(MaxTransientBursts, TransientParticleBurst.ActiveCount(_probe.ScriptScene));
     }
 
     private void CaptureAudio(EngineTickContext context)
@@ -453,8 +443,8 @@ internal sealed class DemoWindowScriptedProbe(
             return;
         }
 
-        CameraState renderCamera = _cameraSync.Current;
-        CameraSnapshot scriptSnapshot = _camera.Snapshot();
+        CameraState renderCamera = _probe.CameraSynchronizer.Current;
+        CameraSnapshot scriptSnapshot = _probe.Camera.Snapshot();
         RenderCameraSynced &= Math.Abs(renderCamera.OriginWorldX - scriptSnapshot.OriginWorldX) <= 0.05f &&
             Math.Abs(renderCamera.OriginWorldY - scriptSnapshot.OriginWorldY) <= 0.05f &&
             Math.Abs(renderCamera.CellsPerPixel - scriptSnapshot.CellsPerPixel) <= 0.001f &&
@@ -469,8 +459,8 @@ internal sealed class DemoWindowScriptedProbe(
             PlayerMaxX = playerX;
             PlayerMinY = playerY;
             PlayerMaxY = playerY;
-            CameraMinX = _camera.CenterX;
-            CameraMaxX = _camera.CenterX;
+            CameraMinX = _probe.Camera.CenterX;
+            CameraMaxX = _probe.Camera.CenterX;
             RenderOriginMinX = renderCamera.OriginWorldX;
             RenderOriginMaxX = renderCamera.OriginWorldX;
         }
@@ -480,8 +470,8 @@ internal sealed class DemoWindowScriptedProbe(
             PlayerMaxX = Math.Max(PlayerMaxX, playerX);
             PlayerMinY = Math.Min(PlayerMinY, playerY);
             PlayerMaxY = Math.Max(PlayerMaxY, playerY);
-            CameraMinX = Math.Min(CameraMinX, _camera.CenterX);
-            CameraMaxX = Math.Max(CameraMaxX, _camera.CenterX);
+            CameraMinX = Math.Min(CameraMinX, _probe.Camera.CenterX);
+            CameraMaxX = Math.Max(CameraMaxX, _probe.Camera.CenterX);
             RenderOriginMinX = Math.Min(RenderOriginMinX, renderCamera.OriginWorldX);
             RenderOriginMaxX = Math.Max(RenderOriginMaxX, renderCamera.OriginWorldX);
         }
@@ -516,7 +506,7 @@ internal sealed class DemoWindowScriptedProbe(
             return _player;
         }
 
-        foreach (ScriptEntityInspection entity in _scene.CaptureInspectionSnapshot())
+        foreach (ScriptEntityInspection entity in _probe.ScriptScene.CaptureInspectionSnapshot())
         {
             foreach (ScriptComponentInspection component in entity.Components)
             {

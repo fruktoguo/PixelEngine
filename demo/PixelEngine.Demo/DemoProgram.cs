@@ -143,9 +143,10 @@ public static class DemoProgram
             AttachMinimalSmokeWorld(engine);
         }
 
+        EngineProbeApi probe = engine.Probe;
+
         // 注册 Demo 与随包脚本程序集，并按能力接入 Scripting 与热重载
-        ScriptAssemblyRegistry scriptAssemblies = engine.Context.GetService<ScriptAssemblyRegistry>();
-        scriptAssemblies.Register(assembly);
+        engine.RegisterScriptAssembly(assembly);
         RegisterPackagedScriptAssemblies(engine, options, RuntimeFeature.IsDynamicCodeSupported);
         Console.WriteLine(options.HotReloadEnabled
             ? "脚本程序集已注册；热重载等待脚本宿主装配。"
@@ -166,14 +167,14 @@ public static class DemoProgram
             }
 
             Console.WriteLine("脚本运行时已接入 Hosting/Simulation 后端。");
-            new DemoLoadCountersPhaseDriver(engine.Context.GetService<ScriptScene>()).RegisterPhases(engine.Phases);
+            new DemoLoadCountersPhaseDriver(probe).RegisterPhases(engine.Phases);
         }
 
         // Headless 模式只跑逻辑 tick，不创建窗口
         if (options.Headless)
         {
             engine.RunHeadlessTicks(options.HeadlessTicks);
-            Hosting.Scene? current = engine.Context.GetService<ISceneService>().Current;
+            Hosting.Scene? current = engine.CurrentScene;
             Console.WriteLine($"Engine frame: {engine.Context.Clock.FrameIndex}, scene: {current?.Name}");
             return;
         }
@@ -182,7 +183,7 @@ public static class DemoProgram
         if (options.ParticleFrameProbe)
         {
             particleFrameProbe = new DemoParticleFrameTimeProbe(
-                engine.Context.GetService<EngineProbeApi>(),
+                probe,
                 options.ParticleProbeCount,
                 options.ParticleProbeWarmupFrames,
                 options.ParticleProbeRunId,
@@ -193,9 +194,9 @@ public static class DemoProgram
 
         // 窗口运行时：标题诊断、帧截图、粒子渲染模式与脚本化探针
         RenderWindow window = engine.AttachWindowRuntime();
-        RegisterWindowTitleDiagnostics(engine, window);
-        FrameCaptureState? frameCapture = RegisterFrameCapture(engine, window, options);
-        ApplyParticleRenderMode(engine, options);
+        RegisterWindowTitleDiagnostics(probe, window, engine.Phases);
+        FrameCaptureState? frameCapture = RegisterFrameCapture(probe, window, options);
+        ParticleRenderProbeResult? particleRenderProbe = ApplyParticleRenderMode(probe, options);
         DemoWindowScriptedInput? scriptedInput = null;
         DemoWindowScriptedProbe? scriptedProbe = null;
         DemoReactionTemperatureProbe? reactionProbe = null;
@@ -203,39 +204,25 @@ public static class DemoProgram
         DemoParticleLightProbe? particleLightProbe = null;
         if (options.ScriptedWindowDemo)
         {
-            scriptedInput = new DemoWindowScriptedInput(
-                engine.Context.GetService<ScriptInputApi>(),
-                engine.Context.GetService<ScriptCameraApi>(),
-                options.ScriptedWindowRoute);
+            scriptedInput = new DemoWindowScriptedInput(probe, options.ScriptedWindowRoute);
             scriptedInput.RegisterPhases(engine.Phases);
-            scriptedProbe = new DemoWindowScriptedProbe(
-                engine.Context.GetService<PhysicsSystem>(),
-                engine.Context.GetService<EngineProbeApi>(),
-                engine.Context.GetService<ScriptLightingSynchronizer>(),
-                engine.Context.GetService<ScriptScene>(),
-                engine.Context.GetService<ScriptCameraApi>(),
-                engine.Context.GetService<ScriptCameraSynchronizer>());
+            scriptedProbe = new DemoWindowScriptedProbe(probe);
             scriptedProbe.RegisterPhases(engine.Phases);
             if (IsReactionProbeScene(options.Scene))
             {
-                reactionProbe = new DemoReactionTemperatureProbe(
-                    engine.Context.GetService<EngineProbeApi>());
+                reactionProbe = new DemoReactionTemperatureProbe(probe);
                 reactionProbe.RegisterPhases(engine.Phases);
             }
 
             if (IsAudioProbeScene(options.Scene))
             {
-                audioProbe = new DemoAudioProbe(engine.Context.GetService<EngineProbeApi>());
+                audioProbe = new DemoAudioProbe(probe);
                 audioProbe.RegisterPhases(engine.Phases);
             }
 
             if (IsParticleLightProbeScene(options.Scene))
             {
-                particleLightProbe = new DemoParticleLightProbe(
-                    engine.Context.GetService<EngineProbeApi>(),
-                    engine.Context.GetService<ScriptLightingApi>(),
-                    engine.Context.GetService<ScriptLightingSynchronizer>(),
-                    engine.Context.GetService<ScriptCameraSynchronizer>());
+                particleLightProbe = new DemoParticleLightProbe(probe);
                 particleLightProbe.RegisterPhases(engine.Phases);
             }
 
@@ -290,16 +277,19 @@ public static class DemoProgram
                 engine.Context.Counters.VSyncEnabled));
             if (scriptedInput is not null)
             {
-                WriteScriptedWindowSummary(engine, scriptedInput, scriptedProbe, reactionProbe, audioProbe, particleLightProbe);
+                WriteScriptedWindowSummary(engine, probe, scriptedInput, scriptedProbe, reactionProbe, audioProbe, particleLightProbe);
             }
 
             if (particleFrameProbe is not null)
             {
-                RenderPipeline pipeline = engine.Context.GetService<RenderPipeline>();
-                ParticleRenderMode effective = pipeline.CanRenderParticlesOnGpu
-                    ? ParticleRenderMode.GpuPointSprite
-                    : ParticleRenderMode.CpuStamp;
-                Console.WriteLine(particleFrameProbe.BuildSummary(effective, pipeline.CanRenderParticlesOnGpu));
+                ParticleRenderProbeResult renderResult = particleRenderProbe ??
+                    new ParticleRenderProbeResult(
+                        ParticleRenderMode.CpuStamp,
+                        ParticleRenderMode.CpuStamp,
+                        GpuAvailable: false);
+                Console.WriteLine(particleFrameProbe.BuildSummary(
+                    renderResult.Effective,
+                    renderResult.GpuAvailable));
             }
 
             CaptureFrameIfRequested(window, options, frameCapture);
@@ -318,55 +308,51 @@ public static class DemoProgram
                 : options.ScriptedWindowDemo ? "scripted_demo" : "static";
     }
 
-    private static void ApplyParticleRenderMode(Engine engine, DemoStartupOptions options)
+    private static ParticleRenderProbeResult? ApplyParticleRenderMode(EngineProbeApi probe, DemoStartupOptions options)
     {
         if (!options.ParticleRenderMode.HasValue)
         {
-            return;
+            return null;
         }
 
-        RenderPipeline pipeline = engine.Context.GetService<RenderPipeline>();
-        pipeline.Settings.ParticleRenderMode = options.ParticleRenderMode.Value;
-        bool gpuAvailable = pipeline.CanRenderParticlesOnGpu;
-        ParticleRenderMode effective = gpuAvailable
-            ? ParticleRenderMode.GpuPointSprite
-            : ParticleRenderMode.CpuStamp;
+        ParticleRenderProbeResult result = probe.SetParticleRenderMode(options.ParticleRenderMode.Value);
         Console.WriteLine(
             $"粒子渲染模式：requested={ParticleRenderModeName(options.ParticleRenderMode.Value)}, " +
-            $"effective={ParticleRenderModeName(effective)}, gpu_available={gpuAvailable}。");
-        if (options.ParticleRenderMode.Value == ParticleRenderMode.GpuPointSprite && !gpuAvailable)
+            $"effective={ParticleRenderModeName(result.Effective)}, gpu_available={result.GpuAvailable}。");
+        if (options.ParticleRenderMode.Value == ParticleRenderMode.GpuPointSprite && !result.GpuAvailable)
         {
             Console.WriteLine("GPU 粒子模式不可用：需要 GL compute 能力门控与 GpuParticlesEnabled 同时可用，本次不会静默当作 GPU 样本。");
         }
+
+        return result;
     }
 
-    private static void RegisterWindowTitleDiagnostics(Engine engine, RenderWindow window)
+    private static void RegisterWindowTitleDiagnostics(EngineProbeApi probe, RenderWindow window, EnginePhasePipeline phases)
     {
-        engine.Phases.Register(EnginePhase.GpuUploadAndRender, context =>
+        phases.Register(EnginePhase.GpuUploadAndRender, context =>
         {
             if ((context.Context.Clock.FrameIndex & 15) != 0)
             {
                 return;
             }
 
-            EngineDiagnosticsSnapshot diagnostics = engine.Context.GetService<IDiagnosticsApi>().Capture();
+            EngineDiagnosticsSnapshot diagnostics = probe.CaptureDiagnostics();
             window.SetTitle(
                 $"PixelEngine Demo | Render FPS {diagnostics.FramesPerSecond:0.0} | Sim {diagnostics.SimHz:0}Hz | Bodies {diagnostics.RigidBodies}");
         });
     }
 
-    private static FrameCaptureState? RegisterFrameCapture(Engine engine, RenderWindow window, DemoStartupOptions options)
+    private static FrameCaptureState? RegisterFrameCapture(EngineProbeApi probe, RenderWindow window, DemoStartupOptions options)
     {
         if (string.IsNullOrWhiteSpace(options.CaptureFramePath) || options.WindowTicks <= 0)
         {
             return null;
         }
 
-        RenderPipeline pipeline = engine.Context.GetService<RenderPipeline>();
         FrameCaptureState state = new(Path.GetFullPath(options.CaptureFramePath));
-        pipeline.BeforeSwapBuffers += _ =>
+        _ = probe.RegisterBeforeSwapBuffers(() =>
         {
-            if (state.Captured || engine.Context.Clock.FrameIndex < options.WindowTicks)
+            if (state.Captured || probe.FrameCount < options.WindowTicks)
             {
                 return;
             }
@@ -374,7 +360,7 @@ public static class DemoProgram
             CaptureFramebuffer(window, state.Path);
             state.Captured = true;
             Console.WriteLine($"窗口 framebuffer 截图已写入：{state.Path}");
-        };
+        });
         return state;
     }
 
@@ -509,13 +495,14 @@ public static class DemoProgram
 
     private static void WriteScriptedWindowSummary(
         Engine engine,
+        EngineProbeApi probe,
         DemoWindowScriptedInput scriptedInput,
         DemoWindowScriptedProbe? scriptedProbe,
         DemoReactionTemperatureProbe? reactionProbe,
         DemoAudioProbe? audioProbe,
         DemoParticleLightProbe? particleLightProbe)
     {
-        ScriptScene scene = engine.Context.GetService<ScriptScene>();
+        ScriptScene scene = probe.ScriptScene;
         DemoHud? hud = FindBehaviour<DemoHud>(scene);
         PauseMenu? pause = FindBehaviour<PauseMenu>(scene);
         GoalTrigger? goal = FindBehaviour<GoalTrigger>(scene);
@@ -528,15 +515,10 @@ public static class DemoProgram
         PlayableProjectileTool? projectile = FindBehaviour<PlayableProjectileTool>(scene);
         WeaponController? weapons = FindBehaviour<WeaponController>(scene);
         LevelDirector? director = FindBehaviour<LevelDirector>(scene);
-        EngineProbeApi probe = engine.Context.GetService<EngineProbeApi>();
-        PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
-        ScriptCameraApi camera = engine.Context.GetService<ScriptCameraApi>();
-        ScriptCameraSynchronizer cameraSync = engine.Context.GetService<ScriptCameraSynchronizer>();
-        ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
-        EngineDiagnosticsSnapshot diagnostics = engine.Context.GetService<IDiagnosticsApi>().Capture();
-        RenderPhaseDriver? renderDriver = engine.Context.TryGetService(out RenderPhaseDriver registeredRenderDriver)
-            ? registeredRenderDriver
-            : null;
+        PhysicsSystemStats physics = probe.PhysicsStats;
+        ScriptCameraApi camera = probe.Camera;
+        CameraState renderCamera = probe.CameraSynchronizer.Current;
+        EngineDiagnosticsSnapshot diagnostics = probe.CaptureDiagnostics();
         ushort paintedMaterial = probe.MaterialAt(
             (int)MathF.Round(scriptedInput.BrushTargetWorld.X),
             (int)MathF.Round(scriptedInput.BrushTargetWorld.Y));
@@ -548,7 +530,6 @@ public static class DemoProgram
         int playerCenterX = (int)MathF.Round(player?.CenterX ?? 0f);
         int playerCenterY = (int)MathF.Round(player?.CenterY ?? 0f);
         ushort playerCenterMaterial = probe.MaterialAt(playerCenterX, playerCenterY);
-        CameraState renderCamera = cameraSync.Current;
         engine.Context.Counters.CustomMetric.Read(out string customMetricName, out long customMetricValue);
 
         Console.WriteLine(
@@ -577,14 +558,14 @@ public static class DemoProgram
             $"custom_metric={customMetricValue}, " +
             $"particles={probe.ActiveParticles}, " +
             $"max_particles={scriptedProbe?.MaxParticles ?? probe.ActiveParticles}, " +
-            $"lights={lighting.PointLights.Length}, " +
-            $"max_lights={scriptedProbe?.MaxLights ?? lighting.PointLights.Length}, " +
+            $"lights={probe.PointLights.Length}, " +
+            $"max_lights={scriptedProbe?.MaxLights ?? probe.PointLights.Length}, " +
             $"physics_destroyed={physics.LastDestructionResult.DestroyedBodies}, " +
             $"physics_created={physics.LastDestructionResult.CreatedBodies}, " +
             $"max_physics_destroyed={scriptedProbe?.MaxDestroyedBodies ?? physics.LastDestructionResult.DestroyedBodies}, " +
             $"max_physics_created={scriptedProbe?.MaxCreatedBodies ?? physics.LastDestructionResult.CreatedBodies}, " +
-            $"active_bodies={physics.PhysicsWorld.ActiveBodyCount}, " +
-            $"max_active_bodies={scriptedProbe?.MaxActiveBodies ?? physics.PhysicsWorld.ActiveBodyCount}, " +
+            $"active_bodies={physics.ActiveBodyCount}, " +
+            $"max_active_bodies={scriptedProbe?.MaxActiveBodies ?? physics.ActiveBodyCount}, " +
             $"audio_played={engine.Context.Counters.AudioPlayed}, " +
             $"audio_drained={engine.Context.Counters.AudioDrained}, " +
             $"max_audio_played={scriptedProbe?.MaxAudioPlayed ?? engine.Context.Counters.AudioPlayed}, " +
@@ -610,7 +591,7 @@ public static class DemoProgram
             $"player_center=({player?.CenterX ?? 0f:0.00},{player?.CenterY ?? 0f:0.00}), " +
             $"player_visual={(playerVisual is not null ? "present" : "missing")}, " +
             $"player_visual_overlays={playerVisual?.LastOverlayCommandsSubmitted ?? 0}, " +
-            $"render_overlays={renderDriver?.LastOverlayCount ?? -1}, " +
+            $"render_overlays={probe.RenderOverlayCount}, " +
             $"camera_center=({camera.CenterX:0.00},{camera.CenterY:0.00}), " +
             $"camera_zoom={camera.Zoom:0.00}, " +
             $"camera_samples={scriptedProbe?.CameraSamples ?? 0}, " +
@@ -765,7 +746,7 @@ public static class DemoProgram
 
         if (result.Assembly is not null)
         {
-            engine.Context.GetService<ScriptAssemblyRegistry>().Register(result.Assembly);
+            engine.RegisterScriptAssembly(result.Assembly);
             Console.WriteLine($"随包脚本程序集已注册：{scriptDirectory}");
         }
     }

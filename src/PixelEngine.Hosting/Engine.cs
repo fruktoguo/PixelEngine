@@ -60,6 +60,33 @@ public sealed class Engine : IDisposable
     public EngineContext Context { get; }
 
     /// <summary>
+    /// Hosting 为 Demo/benchmark probe 提供的稳定运行时门面。
+    /// </summary>
+    /// <remarks>
+    /// 该门面只暴露统计快照、脚本公开 API 和受控 probe 操作，不把 PhysicsSystem 或 RenderPipeline 本体交给玩家入口。
+    /// </remarks>
+    public EngineProbeApi Probe
+    {
+        get
+        {
+            EngineProbeApi probe = Context.GetService<EngineProbeApi>();
+            probe.AttachRegisteredScriptBindings(
+                Context.TryGetService(out IScriptContext scriptContext) ? scriptContext : null,
+                Context.TryGetService(out ScriptInputApi input) ? input : null,
+                Context.TryGetService(out ScriptCameraApi camera) ? camera : null,
+                Context.TryGetService(out ScriptLightingApi lighting) ? lighting : null,
+                Context.TryGetService(out ScriptCameraSynchronizer cameraSynchronizer) ? cameraSynchronizer : null,
+                Context.TryGetService(out ScriptLightingSynchronizer lightingSynchronizer) ? lightingSynchronizer : null);
+            return probe;
+        }
+    }
+
+    /// <summary>
+    /// 当前 Hosting 场景；没有注册场景时返回 <see langword="null" />。
+    /// </summary>
+    public Scene? CurrentScene => Context.TryGetService(out ISceneService scenes) ? scenes.Current : null;
+
+    /// <summary>
     /// 12 相位同步调度管线。
     /// </summary>
     public EnginePhasePipeline Phases { get; }
@@ -485,6 +512,10 @@ public sealed class Engine : IDisposable
             window is null ? 0 : Context.Options.InternalHeight);
         Context.RegisterService(synchronizer);
         Context.RegisterService(driver.GetType(), driver);
+        if (Context.TryGetService(out EngineProbeApi probe))
+        {
+            probe.AttachCameraSynchronizer(synchronizer);
+        }
         driver.RegisterPhases(Phases);
         _ = synchronizer.Sync(
             window is null ? 0 : Context.Options.InternalWidth,
@@ -545,6 +576,10 @@ public sealed class Engine : IDisposable
         Context.RegisterService<IRenderFrameSink>(sink);
         Context.RegisterService(sink);
         Context.RegisterService(driver.GetType(), driver);
+        if (Context.TryGetService(out EngineProbeApi probe))
+        {
+            probe.AttachRendering(pipeline, driver);
+        }
         driver.RegisterPhases(Phases);
         _ownedRuntimeResources.Add(pipeline);
         AttachGuiRuntime(window, pipeline);
@@ -887,6 +922,10 @@ public sealed class Engine : IDisposable
         ScriptLightingSyncPhaseDriver driver = new(synchronizer);
         Context.RegisterService(synchronizer);
         Context.RegisterService(driver.GetType(), driver);
+        if (Context.TryGetService(out EngineProbeApi probe))
+        {
+            probe.AttachLightingSynchronizer(synchronizer);
+        }
         driver.RegisterPhases(Phases);
         synchronizer.Sync();
         return synchronizer;
@@ -961,6 +1000,10 @@ public sealed class Engine : IDisposable
         Context.RegisterService(physics);
         Context.RegisterService(EngineServiceRole.PhysicsService, physics);
         Context.RegisterService(driver.GetType(), driver);
+        if (Context.TryGetService(out EngineProbeApi probe))
+        {
+            probe.AttachPhysics(physics);
+        }
         driver.RegisterPhases(Phases);
         if (Context.TryGetService(out RuntimeWorldStateBridge stateBridge))
         {
@@ -1369,6 +1412,10 @@ public sealed class Engine : IDisposable
             config,
             physicsEvents);
         Context.RegisterService(scriptContext);
+        if (Context.TryGetService(out EngineProbeApi probe))
+        {
+            probe.AttachScriptContext(scriptContext);
+        }
         simulationDriver?.AttachScriptContext(scriptContext);
         runtime ??= CreateScriptRuntime(scriptScene, scriptContext, hotReload);
         AttachScripting(scriptContext, runtime);
