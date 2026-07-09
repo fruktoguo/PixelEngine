@@ -143,6 +143,28 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
+    /// 验证默认横向熔岩闯关的 Web-first HUD / 结算文案不会误导成旧水晶或水位任务线。
+    /// </summary>
+    [Fact]
+    public void DemoDefaultHudAndResultTextDescribesSideScrollingGoalNotLegacyMission()
+    {
+        UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
+        string[] hudText = UiVisibleText(manifest.GetRequiredScreen(GameUiDemoController.HudScreen).FullPath);
+        string[] resultText = UiVisibleText(manifest.GetRequiredScreen(GameUiDemoController.ResultScreen).FullPath);
+        string[] defaultLoopText = [.. hudText, .. resultText];
+
+        Assert.Contains("目标：向右推进，拆除路障，避开熔岩，抵达出口", defaultLoopText);
+        Assert.Contains("出口进度", defaultLoopText);
+        Assert.Contains("路线余量", defaultLoopText);
+        Assert.Contains("熔岩危险", defaultLoopText);
+        Assert.Contains("抵达出口 / 挑战失败", defaultLoopText);
+        Assert.DoesNotContain("可选任务时间", defaultLoopText);
+        Assert.DoesNotContain("上涨熔岩压力", defaultLoopText);
+        Assert.DoesNotContain("水晶", defaultLoopText);
+        Assert.DoesNotContain("水位", defaultLoopText);
+    }
+
+    /// <summary>
     /// 验证七类 Demo UI 屏幕可由 ManagedFallback 同时显示、叠放并产生按钮/复选框事件。
     /// </summary>
     [Fact]
@@ -1309,6 +1331,21 @@ public sealed class DemoUiContentTests
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .Select(value => value!.Trim()),
         ];
+    }
+
+    private static string[] UiVisibleText(string path)
+    {
+        XDocument document = XDocument.Load(path);
+        IEnumerable<string> elementText = document
+            .Descendants()
+            .Where(element => !element.HasElements)
+            .Select(element => element.Value.Trim());
+        IEnumerable<string> attributeText = document
+            .Descendants()
+            .Select(element => (string?)element.Attribute("text"))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim());
+        return [.. elementText.Concat(attributeText).Where(value => value.Length > 0)];
     }
 
     private static string[] Sorted(IEnumerable<string> values)
