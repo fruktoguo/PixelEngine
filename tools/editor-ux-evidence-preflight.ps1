@@ -160,6 +160,40 @@ function Assert-TrueField {
     }
 }
 
+function Get-RequiredNumber {
+    param(
+        [System.Collections.IDictionary]$Fields,
+        [string]$Name,
+        [string]$Scope
+    )
+
+    $value = Get-RequiredField -Fields $Fields -Name $Name -Scope $Scope
+    $parsed = 0.0
+    if (-not [double]::TryParse(
+        $value,
+        [Globalization.NumberStyles]::Float,
+        [Globalization.CultureInfo]::InvariantCulture,
+        [ref]$parsed)) {
+        throw "$Scope $Name 必须为数字。"
+    }
+
+    return $parsed
+}
+
+function Assert-NumberAtLeast {
+    param(
+        [System.Collections.IDictionary]$Fields,
+        [string]$Name,
+        [double]$Minimum,
+        [string]$Scope
+    )
+
+    $actual = Get-RequiredNumber -Fields $Fields -Name $Name -Scope $Scope
+    if ($actual -lt $Minimum) {
+        throw "$Scope $Name 必须至少为 $Minimum，实际为 $actual。"
+    }
+}
+
 function Assert-CommonEvidenceIdentity {
     param(
         [System.Collections.IDictionary]$Fields,
@@ -200,26 +234,46 @@ function Get-RequiredEditorUxScopes {
             scope = "editor_full_route_window"
             title = "真实窗口完整路线：启动 Shell、新建/打开工程、默认布局、Play/Exit、保存、Build And Run"
             trueFields = @("shellStarted", "projectOpenedOrCreated", "defaultLayoutVisible", "playExitVerified", "sceneSaved", "buildAndRunVerified")
+            minimumNumberFields = @(
+                @{ name = "videoDurationSeconds"; minimum = 60 },
+                @{ name = "capturedFrameCount"; minimum = 600 },
+                @{ name = "routeStepCount"; minimum = 8 }
+            )
         },
         [pscustomobject]@{
             scope = "project_window_reference_stability"
             title = "Project Window 引用稳定性：移动/重命名/删除确认后 stable id、Scene、Prefab、Inspector 字段与 Build 入包不丢引用"
             trueFields = @("stableIdsChecked", "sceneReferencesChecked", "prefabReferencesChecked", "inspectorAssetFieldsChecked", "buildRequestChecked", "deleteConfirmationChecked")
+            minimumNumberFields = @(
+                @{ name = "assetOperationCount"; minimum = 3 },
+                @{ name = "referenceDocumentCount"; minimum = 2 }
+            )
         },
         [pscustomobject]@{
             scope = "script_external_editor"
             title = "脚本外部编辑器：真实 OS opener 或 configured editor 打开，失败提示可见"
             trueFields = @("scriptDoubleClickAttempted", "osOrConfiguredEditorObserved", "failureDiagnosticObserved", "noSilentFailure")
+            minimumNumberFields = @(
+                @{ name = "scriptOpenAttemptCount"; minimum = 1 }
+            )
         },
         [pscustomobject]@{
             scope = "settings_build_ux"
             title = "Project/Player/Build Settings UX：填写、保存、重启恢复、错误输入校验、build-player 参数投影"
             trueFields = @("projectSettingsSaved", "playerSettingsSaved", "buildSettingsSaved", "restartReloadVerified", "invalidInputRejected", "buildPlayerProjectionVerified")
+            minimumNumberFields = @(
+                @{ name = "settingsRoundTripCount"; minimum = 1 },
+                @{ name = "buildRunAttemptCount"; minimum = 1 }
+            )
         },
         [pscustomobject]@{
             scope = "editor_product_usability"
             title = "编辑器产品可用性：布局、快捷键、拖拽、gizmo、Undo/Redo、Console、Build 面板反馈可理解可恢复"
             trueFields = @("layoutUsable", "shortcutsChecked", "dragDropChecked", "gizmoChecked", "undoRedoChecked", "consoleDiagnosticsChecked", "buildFeedbackChecked")
+            minimumNumberFields = @(
+                @{ name = "interactionChecklistItemCount"; minimum = 7 },
+                @{ name = "reviewerCount"; minimum = 1 }
+            )
         }
     )
 }
@@ -271,6 +325,14 @@ function Add-ScopedEvidence {
         foreach ($field in @($ScopeDefinition.trueFields)) {
             Assert-TrueField -Fields $fields -Name ([string]$field) -Scope $scope
         }
+
+        foreach ($field in @($ScopeDefinition.minimumNumberFields)) {
+            Assert-NumberAtLeast `
+                -Fields $fields `
+                -Name ([string]$field.name) `
+                -Minimum ([double]$field.minimum) `
+                -Scope $scope
+        }
     }
     catch {
         $Missing.Add("scope $scope 语义无效：$($_.Exception.Message)")
@@ -309,6 +371,10 @@ function Write-EditorUxEvidenceReport {
     foreach ($scope in Get-RequiredEditorUxScopes) {
         $lines.Add("- $($scope.scope): $($scope.title)")
         $lines.Add("  required_true_fields: $($scope.trueFields -join ', ')")
+        $numberFields = @($scope.minimumNumberFields | ForEach-Object { "$($_.name)>=$($_.minimum)" })
+        if ($numberFields.Count -gt 0) {
+            $lines.Add("  required_number_fields: $($numberFields -join ', ')")
+        }
     }
     $lines.Add("")
 

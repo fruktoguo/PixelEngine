@@ -4331,6 +4331,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("script_external_editor", script, StringComparison.Ordinal);
         Assert.Contains("settings_build_ux", script, StringComparison.Ordinal);
         Assert.Contains("editor_product_usability", script, StringComparison.Ordinal);
+        Assert.Contains("videoDurationSeconds", script, StringComparison.Ordinal);
+        Assert.Contains("interactionChecklistItemCount", script, StringComparison.Ordinal);
         Assert.Contains("gitCommit 必须等于当前 HEAD", script, StringComparison.Ordinal);
 
         Assert.Contains("tools/editor-ux-evidence-preflight.ps1", readme, StringComparison.Ordinal);
@@ -4391,6 +4393,59 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Equal(2, good.ExitCode);
             string goodReport = File.ReadAllText(Path.Combine(goodArtifacts, "editor-ux-evidence-preflight.md"));
             Assert.Contains("editor_ux_evidence_attached_pending_review", good.Output + goodReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 Editor UX 证据预检会拒绝时长/帧数不足的弱真实窗口路线证据。
+    /// </summary>
+    [Fact]
+    public void EditorUxEvidencePreflightRejectsWeakFullRouteDuration()
+    {
+        // Arrange：准备输入与初始状态
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-editor-ux-weak-route-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateEditorUxEvidenceManifest(temp);
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonArray evidence = rootNode["evidence"]!.AsArray();
+            JsonObject fullRoute = evidence
+                .Select(node => node!.AsObject())
+                .Single(node => string.Equals((string?)node["scope"], "editor_full_route_window", StringComparison.Ordinal));
+
+            string reportPath = Path.Combine(root, (string)fullRoute["path"]!);
+            string report = File.ReadAllText(reportPath);
+            report = report.Replace("videoDurationSeconds: 60", "videoDurationSeconds: 2", StringComparison.Ordinal);
+            report = report.Replace("capturedFrameCount: 600", "capturedFrameCount: 12", StringComparison.Ordinal);
+            File.WriteAllText(reportPath, report);
+            fullRoute["sha256"] = GetSha256(reportPath);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "out");
+            // Act：执行被测操作
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "editor-ux-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            // Assert：验证不变式与预期结果
+            Assert.Equal(5, result.ExitCode);
+            string outputReport = File.ReadAllText(Path.Combine(artifacts, "editor-ux-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_editor_ux_scope_evidence", outputReport, StringComparison.Ordinal);
+            Assert.Contains("editor_full_route_window videoDurationSeconds 必须至少为 60", outputReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: editor_ux_evidence_attached_pending_review", outputReport, StringComparison.Ordinal);
         }
         finally
         {
@@ -7315,6 +7370,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 lines.Add($"{field}: true");
             }
 
+            foreach (KeyValuePair<string, double> field in GetEditorUxMinimumNumberFields(scope.Key))
+            {
+                lines.Add($"{field.Key}: {field.Value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}");
+            }
+
             string report = WriteTextEvidence(Path.Combine(evidenceRoot, $"{scope.Key}.md"), string.Join(Environment.NewLine, lines));
             evidence.Add(new Dictionary<string, object>
             {
@@ -7337,6 +7397,39 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             manifestPath,
             System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         return manifestPath;
+    }
+
+    private static Dictionary<string, double> GetEditorUxMinimumNumberFields(string scope)
+    {
+        return scope switch
+        {
+            "editor_full_route_window" => new Dictionary<string, double>
+            {
+                ["videoDurationSeconds"] = 60,
+                ["capturedFrameCount"] = 600,
+                ["routeStepCount"] = 8,
+            },
+            "project_window_reference_stability" => new Dictionary<string, double>
+            {
+                ["assetOperationCount"] = 3,
+                ["referenceDocumentCount"] = 2,
+            },
+            "script_external_editor" => new Dictionary<string, double>
+            {
+                ["scriptOpenAttemptCount"] = 1,
+            },
+            "settings_build_ux" => new Dictionary<string, double>
+            {
+                ["settingsRoundTripCount"] = 1,
+                ["buildRunAttemptCount"] = 1,
+            },
+            "editor_product_usability" => new Dictionary<string, double>
+            {
+                ["interactionChecklistItemCount"] = 7,
+                ["reviewerCount"] = 1,
+            },
+            _ => [],
+        };
     }
 
     private static string CreatePerformanceTargetEvidenceManifest(string tempRoot, bool includeUnknownScope = false, string suffix = "good")
