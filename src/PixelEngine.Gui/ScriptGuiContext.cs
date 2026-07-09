@@ -100,9 +100,40 @@ public sealed class ScriptGuiContext(int width, int height, float deltaTime, Gui
     }
 
     /// <inheritdoc />
+    public void SetCursor(float x, float y)
+    {
+        if (!float.IsFinite(x) || !float.IsFinite(y))
+        {
+            throw new ArgumentOutOfRangeException(nameof(x), "GUI 控件局部坐标必须是有限数值。");
+        }
+
+        ImGui.SetCursorPos(new Vector2(Math.Max(0f, x), Math.Max(0f, y)));
+    }
+
+    /// <inheritdoc />
+    public void AddVerticalSpacing(float height)
+    {
+        if (!float.IsFinite(height) || height <= 0f)
+        {
+            return;
+        }
+
+        ImGui.Dummy(new Vector2(1f, height));
+    }
+
+    /// <inheritdoc />
     public bool Button(string label)
     {
         return ImGui.Button(label ?? string.Empty);
+    }
+
+    /// <inheritdoc />
+    public bool Button(string label, float width, float height)
+    {
+        Vector2 size = new(
+            float.IsFinite(width) && width > 0f ? width : 0f,
+            float.IsFinite(height) && height > 0f ? height : 0f);
+        return ImGui.Button(label ?? string.Empty, size);
     }
 
     /// <inheritdoc />
@@ -116,6 +147,16 @@ public sealed class ScriptGuiContext(int width, int height, float deltaTime, Gui
     {
         float clamped = float.IsFinite(value01) ? Math.Clamp(value01, 0f, 1f) : 0f;
         ImGui.ProgressBar(clamped, new Vector2(-1f, 0f), label ?? string.Empty);
+    }
+
+    /// <inheritdoc />
+    public void ProgressBar(float value01, string? label, float width, float height)
+    {
+        float clamped = float.IsFinite(value01) ? Math.Clamp(value01, 0f, 1f) : 0f;
+        Vector2 size = new(
+            float.IsFinite(width) && width > 0f ? width : -1f,
+            float.IsFinite(height) && height > 0f ? height : 0f);
+        ImGui.ProgressBar(clamped, size, label ?? string.Empty);
     }
 
     /// <inheritdoc />

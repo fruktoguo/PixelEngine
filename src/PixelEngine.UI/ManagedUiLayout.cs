@@ -26,20 +26,26 @@ internal static class ManagedUiLayout
         XDocument document = XDocument.Load(source.Path, LoadOptions.None);
         XElement root = document.Root ?? throw new InvalidDataException("UI 文档缺少根节点。");
         string title = ReadAttribute(root, "title") ?? Path.GetFileNameWithoutExtension(source.Path);
+        Dictionary<string, ManagedUiStyle> styleRules = ReadStyleRules(root);
         ManagedUiBox rootBox = ReadBox(root);
         List<ManagedUiControl> controls = new(Math.Min(maxControls, 16));
-        CollectControls(root, source.Path, controls, maxControls);
+        CollectControls(root, source.Path, styleRules, controls, maxControls);
         return new ManagedUiDocument(handle, source, title, rootBox, [.. controls]);
     }
 
-    private static void CollectControls(XElement element, string documentPath, List<ManagedUiControl> controls, int maxControls)
+    private static void CollectControls(
+        XElement element,
+        string documentPath,
+        Dictionary<string, ManagedUiStyle> styleRules,
+        List<ManagedUiControl> controls,
+        int maxControls)
     {
         if (controls.Count >= maxControls)
         {
             throw new InvalidDataException("UI 文档控件数量超过 ManagedFallbackBackend 容量。");
         }
 
-        ManagedUiControl? control = TryCreateControl(element, documentPath);
+        ManagedUiControl? control = TryCreateControl(element, documentPath, styleRules);
         if (control is not null)
         {
             controls.Add(control);
@@ -47,13 +53,17 @@ internal static class ManagedUiLayout
 
         foreach (XElement child in element.Elements())
         {
-            CollectControls(child, documentPath, controls, maxControls);
+            CollectControls(child, documentPath, styleRules, controls, maxControls);
         }
     }
 
-    private static ManagedUiControl? TryCreateControl(XElement element, string documentPath)
+    private static ManagedUiControl? TryCreateControl(
+        XElement element,
+        string documentPath,
+        Dictionary<string, ManagedUiStyle> styleRules)
     {
         string name = element.Name.LocalName;
+        ManagedUiStyle style = ResolveStyle(element, styleRules);
         if (StringEquals(name, "text") || StringEquals(name, "p") || StringEquals(name, "span"))
         {
             string text = ReadText(element);
@@ -63,6 +73,7 @@ internal static class ManagedUiLayout
                 Id = ReadId(element, text),
                 Text = text,
                 Element = new UiElementId(UiStableId.Hash(ReadId(element, text))),
+                Style = style,
             };
         }
 
@@ -80,6 +91,7 @@ internal static class ManagedUiLayout
                 Text = text,
                 Element = new UiElementId(UiStableId.Hash(id)),
                 Action = new UiActionId(UiStableId.Hash(action)),
+                Style = style,
             };
         }
 
@@ -99,6 +111,7 @@ internal static class ManagedUiLayout
                 Path = pathId,
                 ModelVariableName = UiModelPathName.ToVariableName(path),
                 Value = UiValue.FromBoolean(initial),
+                Style = style,
             };
         }
 
@@ -117,6 +130,7 @@ internal static class ManagedUiLayout
                 Path = pathId,
                 ModelVariableName = UiModelPathName.ToVariableName(path),
                 Value = new UiValue(value),
+                Style = style,
             };
         }
 
@@ -125,9 +139,8 @@ internal static class ManagedUiLayout
             string id = ReadId(element, ReadAttribute(element, "data-image") ?? ReadAttribute(element, "src") ?? "image");
             string imagePath = ResolveImagePath(documentPath, element);
             UiImageBitmap bitmap = UiPngImageLoader.Load(imagePath);
-            string? style = ReadAttribute(element, "style");
-            float width = ReadFloat(element, style, "width", "width") ?? bitmap.Width;
-            float height = ReadFloat(element, style, "height", "height") ?? bitmap.Height;
+            float width = style.Width ?? bitmap.Width;
+            float height = style.Height ?? bitmap.Height;
             return new ManagedUiControl
             {
                 Kind = ManagedUiControlKind.Image,
@@ -139,6 +152,7 @@ internal static class ManagedUiLayout
                 ImageHeight = bitmap.Height,
                 DisplayWidth = width,
                 DisplayHeight = height,
+                Style = style,
             };
         }
 
@@ -180,6 +194,121 @@ internal static class ManagedUiLayout
             ReadFloat(element, style, "y", "top"),
             ReadFloat(element, style, "width", "width"),
             ReadFloat(element, style, "height", "height"));
+    }
+
+    private static Dictionary<string, ManagedUiStyle> ReadStyleRules(XElement root)
+    {
+        Dictionary<string, ManagedUiStyle> rules = new(StringComparer.OrdinalIgnoreCase);
+        foreach (XElement styleElement in root.Descendants().Where(static element => StringEquals(element.Name.LocalName, "style")))
+        {
+            ParseStyleSheet(styleElement.Value, rules);
+        }
+
+        return rules;
+    }
+
+    private static void ParseStyleSheet(string css, Dictionary<string, ManagedUiStyle> rules)
+    {
+        ReadOnlySpan<char> remaining = css.AsSpan();
+        while (!remaining.IsEmpty)
+        {
+            int open = remaining.IndexOf('{');
+            if (open < 0)
+            {
+                break;
+            }
+
+            ReadOnlySpan<char> selectors = remaining[..open].Trim();
+            remaining = remaining[(open + 1)..];
+            int close = remaining.IndexOf('}');
+            if (close < 0)
+            {
+                break;
+            }
+
+            ReadOnlySpan<char> declarations = remaining[..close];
+            ManagedUiStyle style = ReadStyle(declarations.ToString());
+            int selectorStart = 0;
+            for (int i = 0; i <= selectors.Length; i++)
+            {
+                if (i < selectors.Length && selectors[i] != ',')
+                {
+                    continue;
+                }
+
+                ReadOnlySpan<char> selector = selectors[selectorStart..i].Trim();
+                selectorStart = i + 1;
+                if (!IsSupportedSelector(selector))
+                {
+                    continue;
+                }
+
+                string key = selector.ToString();
+                rules[key] = rules.TryGetValue(key, out ManagedUiStyle existing)
+                    ? existing.Merge(in style)
+                    : style;
+            }
+
+            remaining = remaining[(close + 1)..];
+        }
+    }
+
+    private static bool IsSupportedSelector(ReadOnlySpan<char> selector)
+    {
+        if (selector.IsEmpty)
+        {
+            return false;
+        }
+
+        if (selector[0] == '#')
+        {
+            return selector.Length > 1 && selector[1..].IndexOfAny(" .>+~[:".AsSpan()) < 0;
+        }
+
+        return selector.IndexOfAny("#. >+~[:".AsSpan()) < 0;
+    }
+
+    private static ManagedUiStyle ResolveStyle(XElement element, Dictionary<string, ManagedUiStyle> rules)
+    {
+        ManagedUiStyle style = ManagedUiStyle.Empty;
+        string tag = element.Name.LocalName;
+        if (rules.TryGetValue(tag, out ManagedUiStyle tagStyle))
+        {
+            style = style.Merge(in tagStyle);
+        }
+
+        string? id = ReadAttribute(element, "id");
+        if (!string.IsNullOrWhiteSpace(id) &&
+            rules.TryGetValue("#" + id, out ManagedUiStyle idStyle))
+        {
+            style = style.Merge(in idStyle);
+        }
+
+        ManagedUiStyle elementStyle = ReadElementStyle(element);
+        return style.Merge(in elementStyle);
+    }
+
+    private static ManagedUiStyle ReadElementStyle(XElement element)
+    {
+        string? inlineStyle = ReadAttribute(element, "style");
+        ManagedUiStyle inline = ReadStyle(inlineStyle);
+        ManagedUiStyle attributes = new(
+            ReadFloat(element, inlineStyle, "x", "left"),
+            ReadFloat(element, inlineStyle, "y", "top"),
+            ReadFloat(element, inlineStyle, "width", "width"),
+            ReadFloat(element, inlineStyle, "height", "height"),
+            ReadFloat(element, inlineStyle, "margin-top", "margin-top"));
+        return inline.Merge(in attributes);
+    }
+
+    private static ManagedUiStyle ReadStyle(string? style)
+    {
+        return new ManagedUiStyle(
+            X: TryReadFloat(ReadStyleProperty(style, "left"), out float x) ? x : null,
+            Y: TryReadFloat(ReadStyleProperty(style, "top"), out float y) ? y : null,
+            Width: TryReadFloat(ReadStyleProperty(style, "width"), out float width) ? width : null,
+            Height: TryReadFloat(ReadStyleProperty(style, "height"), out float height) ? height : null,
+            MarginTop: TryReadFloat(ReadStyleProperty(style, "margin-top"), out float marginTop) ? marginTop : null);
     }
 
     private static float? ReadFloat(XElement element, string? style, string attributeName, string cssName)

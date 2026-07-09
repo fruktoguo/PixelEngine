@@ -504,13 +504,18 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
 
     private void DrawControl(IGuiDrawContext gui, UiScreenStackEntry screen, ManagedUiControl control)
     {
+        ManagedUiStyle style = control.Style;
+        ApplyControlLayout(gui, in style);
         switch (control.Kind)
         {
             case ManagedUiControlKind.Text:
                 gui.Text(control.Text);
                 break;
             case ManagedUiControlKind.Button:
-                if (gui.Button(control.Text))
+                bool clicked = style.HasSize
+                    ? gui.Button(control.Text, style.Width!.Value, style.Height!.Value)
+                    : gui.Button(control.Text);
+                if (clicked)
                 {
                     Enqueue(new UiEvent(screen.Document, control.Element, control.Action, default));
                 }
@@ -527,7 +532,20 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
                 break;
             case ManagedUiControlKind.Progress:
                 double progress = control.Value.Kind == UiValueKind.Double ? control.Value.AsDouble() : 0.0;
-                gui.ProgressBar((float)Math.Clamp(progress, 0.0, 1.0), string.IsNullOrEmpty(control.Text) ? null : control.Text);
+                string? label = string.IsNullOrEmpty(control.Text) ? null : control.Text;
+                if (style.HasSize)
+                {
+                    gui.ProgressBar(
+                        (float)Math.Clamp(progress, 0.0, 1.0),
+                        label,
+                        style.Width!.Value,
+                        style.Height!.Value);
+                }
+                else
+                {
+                    gui.ProgressBar((float)Math.Clamp(progress, 0.0, 1.0), label);
+                }
+
                 break;
             case ManagedUiControlKind.Image:
                 ManagedFallbackImage image = _gui.LoadImage(control.ImagePath);
@@ -542,6 +560,20 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(control), control.Kind, "未知 Managed UI 控件类型。");
+        }
+    }
+
+    private static void ApplyControlLayout(IGuiDrawContext gui, in ManagedUiStyle style)
+    {
+        if (style.HasPosition)
+        {
+            gui.SetCursor(style.X!.Value, style.Y!.Value);
+            return;
+        }
+
+        if (style.MarginTop is float marginTop && marginTop > 0f)
+        {
+            gui.AddVerticalSpacing(marginTop);
         }
     }
 
