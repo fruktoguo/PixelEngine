@@ -598,6 +598,11 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("ResetLayoutState(buildDefaultLayout: true)", layout, StringComparison.Ordinal);
         Assert.Contains("new EditorConsolePanel(_app)", host, StringComparison.Ordinal);
         Assert.Contains("new BuildSettingsPanel(_project, console: _app.ConsoleStore)", host, StringComparison.Ordinal);
+        Assert.Contains("AssetBrowserCreateRequest", File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "AssetBrowserDataSource.cs")), StringComparison.Ordinal);
+        Assert.Contains("TryCreateAsset", File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "AssetBrowserPanel.cs")), StringComparison.Ordinal);
+        Assert.Contains("createAsset: assetBrowserDataSource.CreateAsset", host, StringComparison.Ordinal);
+        Assert.Contains("public AssetBrowserCreateResult CreateAsset", File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorAssetBrowserDataSource.cs")), StringComparison.Ordinal);
+        Assert.Contains("_assets.CreateAsset(request.Path, type)", File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorAssetBrowserDataSource.cs")), StringComparison.Ordinal);
         string shellApp = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellApp.cs"));
         Assert.Contains("--scripted-menu-layout-probe", File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellOptions.cs")), StringComparison.Ordinal);
         Assert.Contains("editor_menu_layout_probe", shellApp, StringComparison.Ordinal);

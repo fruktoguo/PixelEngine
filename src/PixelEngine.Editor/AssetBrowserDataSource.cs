@@ -158,6 +158,15 @@ public readonly record struct AssetBrowserMoveRequest(
     string NewPath);
 
 /// <summary>
+/// Project Window 资产创建请求。
+/// </summary>
+/// <param name="Path">相对 content 根目录的新资产 logical path。</param>
+/// <param name="Kind">要创建的资产类型。</param>
+public readonly record struct AssetBrowserCreateRequest(
+    string Path,
+    AssetBrowserItemKind Kind);
+
+/// <summary>
 /// Project Window 资产删除结果。
 /// </summary>
 /// <param name="Succeeded">删除是否已执行。</param>
@@ -178,6 +187,19 @@ public readonly record struct AssetBrowserMoveResult(
     string Diagnostic);
 
 /// <summary>
+/// Project Window 资产创建结果。
+/// </summary>
+/// <param name="Succeeded">创建是否已执行。</param>
+/// <param name="Diagnostic">可展示给用户的创建诊断。</param>
+/// <param name="AssetId">创建后的 stable asset id；失败时为空。</param>
+/// <param name="Path">创建后的 logical path；失败时为空。</param>
+public readonly record struct AssetBrowserCreateResult(
+    bool Succeeded,
+    string Diagnostic,
+    string? AssetId = null,
+    string? Path = null);
+
+/// <summary>
 /// Project Window 资产删除回调。
 /// </summary>
 /// <param name="request">删除请求。</param>
@@ -190,6 +212,13 @@ public delegate AssetBrowserDeleteResult AssetBrowserDeleteHandler(AssetBrowserD
 /// <param name="request">移动请求。</param>
 /// <returns>移动结果。</returns>
 public delegate AssetBrowserMoveResult AssetBrowserMoveHandler(AssetBrowserMoveRequest request);
+
+/// <summary>
+/// Project Window 资产创建回调。
+/// </summary>
+/// <param name="request">创建请求。</param>
+/// <returns>创建结果。</returns>
+public delegate AssetBrowserCreateResult AssetBrowserCreateHandler(AssetBrowserCreateRequest request);
 
 /// <summary>
 /// 资源浏览器只读数据源。

@@ -55,6 +55,58 @@ public sealed class EditorProjectAssetModelTests
     }
 
     /// <summary>
+    /// 验证 Project Window 创建常见资产时落盘默认模板、登记 stable asset id 并刷新浏览器数据。
+    /// </summary>
+    [Fact]
+    public void ProjectBrowserCreatesCommonAssetsWithTemplatesAndStableIds()
+    {
+        // Arrange：准备输入与初始状态
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            string contentRoot = Path.Combine(projectRoot, "content");
+            _ = Directory.CreateDirectory(contentRoot);
+            EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
+            EditorAssetBrowserDataSource source = new(manifest);
+
+            AssetBrowserCreateResult scene = source.CreateAsset(new AssetBrowserCreateRequest("scenes/NewScene.scene", AssetBrowserItemKind.Scene));
+            AssetBrowserCreateResult prefab = source.CreateAsset(new AssetBrowserCreateRequest("prefabs/NewPrefab.prefab", AssetBrowserItemKind.Prefab));
+            AssetBrowserCreateResult script = source.CreateAsset(new AssetBrowserCreateRequest("scripts/NewBehaviour.cs", AssetBrowserItemKind.Script));
+            AssetBrowserCreateResult json = source.CreateAsset(new AssetBrowserCreateRequest("data/NewAsset.json", AssetBrowserItemKind.Json));
+            AssetBrowserCreateResult texture = source.CreateAsset(new AssetBrowserCreateRequest("textures/generated.png", AssetBrowserItemKind.Texture));
+
+            IReadOnlyList<AssetBrowserItem> assets = source.ListAssets();
+
+            // Assert：验证预期结果
+            Assert.True(scene.Succeeded);
+            Assert.True(prefab.Succeeded);
+            Assert.True(script.Succeeded);
+            Assert.True(json.Succeeded);
+            Assert.False(texture.Succeeded);
+            Assert.StartsWith("asset_", scene.AssetId, StringComparison.Ordinal);
+            Assert.Equal(AssetBrowserItemKind.Scene, Find(assets, "scenes/NewScene.scene").Kind);
+            Assert.Equal(AssetBrowserItemKind.Prefab, Find(assets, "prefabs/NewPrefab.prefab").Kind);
+            Assert.Equal(AssetBrowserItemKind.Script, Find(assets, "scripts/NewBehaviour.cs").Kind);
+            Assert.Equal(AssetBrowserItemKind.Json, Find(assets, "data/NewAsset.json").Kind);
+
+            EngineSceneDocument sceneDocument = EngineSceneDocumentLoader.LoadDocument(Path.Combine(contentRoot, "scenes", "NewScene.scene"));
+            EngineSceneDocument prefabDocument = EngineSceneDocumentLoader.LoadDocument(Path.Combine(contentRoot, "prefabs", "NewPrefab.prefab"));
+            Assert.Equal("NewScene", sceneDocument.Name);
+            Assert.Empty(sceneDocument.Entities ?? []);
+            Assert.Equal("NewPrefab", prefabDocument.Name);
+            EngineSceneEntityDocument prefabRoot = Assert.Single(prefabDocument.Entities ?? []);
+            Assert.Equal("NewPrefab", prefabRoot.Name);
+            Assert.Contains("public sealed class NewBehaviour : Behaviour", File.ReadAllText(Path.Combine(contentRoot, "scripts", "NewBehaviour.cs")), StringComparison.Ordinal);
+            Assert.Equal("{}" + Environment.NewLine, File.ReadAllText(Path.Combine(contentRoot, "data", "NewAsset.json")));
+            Assert.Contains("暂不支持", texture.Diagnostic, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
     /// 验证移动 prefab 时 stable asset id 不变，并重写场景 / 活动 authoring 模型中的 prefab 引用。
     /// </summary>
     [Fact]

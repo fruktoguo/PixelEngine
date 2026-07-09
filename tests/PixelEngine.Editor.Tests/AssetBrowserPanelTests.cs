@@ -431,6 +431,40 @@ public sealed class AssetBrowserPanelTests
         Assert.Contains("移动目标已失效", panel.Status, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证 Project Window 创建资产入口通过 Shell 回调创建稳定资产并刷新列表。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelCreatesAssetsThroughCallbackAndRefreshes()
+    {
+        // Arrange：准备输入与初始状态
+        RecordingAssetSource source = new([]);
+        List<AssetBrowserCreateRequest> requests = [];
+        AssetBrowserCreateResult CreateAsset(AssetBrowserCreateRequest request)
+        {
+            requests.Add(request);
+            source.ReplaceAssets(
+            [
+                new AssetBrowserItem(request.Path, request.Kind, 10, DateTimeOffset.UnixEpoch, null, "asset_created"),
+            ]);
+            return new AssetBrowserCreateResult(true, $"created {request.Path}", "asset_created", request.Path);
+        }
+
+        AssetBrowserPanel panel = new(source, createAsset: CreateAsset);
+
+        bool created = panel.TryCreateAsset("scripts/NewBehaviour.cs", AssetBrowserItemKind.Script);
+        bool unsupported = panel.TryCreateAsset("textures/generated.png", AssetBrowserItemKind.Texture);
+
+        // Assert：验证预期结果
+        Assert.True(created);
+        Assert.False(unsupported);
+        AssetBrowserCreateRequest request = Assert.Single(requests);
+        Assert.Equal("scripts/NewBehaviour.cs", request.Path);
+        Assert.Equal(AssetBrowserItemKind.Script, request.Kind);
+        Assert.Contains(panel.LastAssets, asset => asset.Path == "scripts/NewBehaviour.cs" && asset.AssetId == "asset_created");
+        Assert.Contains("暂不支持", panel.Status, StringComparison.Ordinal);
+    }
+
     private sealed class RecordingThumbnailProvider : ITextureThumbnailProvider
     {
         public bool TryGetThumbnail(string assetPath, out AssetThumbnail thumbnail)

@@ -19,13 +19,15 @@ public delegate bool ScriptAssetOpenHandler(string assetPath, out string diagnos
 /// <param name="openScriptAsset">可选脚本资产打开回调。</param>
 /// <param name="deleteAsset">可选资产删除回调。</param>
 /// <param name="moveAsset">可选资产移动 / 重命名回调。</param>
+/// <param name="createAsset">可选资产创建回调。</param>
 public sealed class AssetBrowserPanel(
     IAssetBrowserDataSource source,
     IAudioPreviewService? audioPreview = null,
     Action<string>? instantiatePrefab = null,
     ScriptAssetOpenHandler? openScriptAsset = null,
     AssetBrowserDeleteHandler? deleteAsset = null,
-    AssetBrowserMoveHandler? moveAsset = null) : IEditorPanel
+    AssetBrowserMoveHandler? moveAsset = null,
+    AssetBrowserCreateHandler? createAsset = null) : IEditorPanel
 {
     private readonly IAssetBrowserDataSource _source = source ?? throw new ArgumentNullException(nameof(source));
     private readonly IAudioPreviewService? _audioPreview = audioPreview;
@@ -33,12 +35,24 @@ public sealed class AssetBrowserPanel(
     private readonly ScriptAssetOpenHandler? _openScriptAsset = openScriptAsset;
     private readonly AssetBrowserDeleteHandler? _deleteAsset = deleteAsset;
     private readonly AssetBrowserMoveHandler? _moveAsset = moveAsset;
+    private readonly AssetBrowserCreateHandler? _createAsset = createAsset;
     private static readonly string[] KindFilterLabels = ["全部", "Material", "Texture", "Audio", "Scene", "Prefab", "Script", "Json", "Other"];
     private static readonly string[] SortModeLabels = ["路径", "类型 / 路径", "最近修改", "大小"];
+    private static readonly AssetBrowserItemKind[] CreateKinds =
+    [
+        AssetBrowserItemKind.Scene,
+        AssetBrowserItemKind.Prefab,
+        AssetBrowserItemKind.Script,
+        AssetBrowserItemKind.Json,
+    ];
+
+    private static readonly string[] CreateKindLabels = ["Scene", "Prefab", "Script", "Json"];
     private string _search = string.Empty;
     private AssetBrowserDeleteRequest? _pendingDeleteRequest;
     private AssetBrowserMoveRequest? _pendingMoveRequest;
     private string _pendingMoveTargetPath = string.Empty;
+    private AssetBrowserItemKind _createKind = AssetBrowserItemKind.Script;
+    private string _createPath = "scripts/NewBehaviour.cs";
 
     /// <inheritdoc />
     public string Title => EditorDockSpace.AssetBrowserWindowTitle;
@@ -310,6 +324,40 @@ public sealed class AssetBrowserPanel(
     }
 
     /// <summary>
+    /// 创建指定类型的 Project Window 资产。
+    /// </summary>
+    /// <param name="path">新资产 logical path。</param>
+    /// <param name="kind">新资产类型。</param>
+    /// <returns>创建成功时返回 true。</returns>
+    public bool TryCreateAsset(string path, AssetBrowserItemKind kind)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        if (!IsCreateKindSupported(kind))
+        {
+            Status = $"Project Window 暂不支持直接创建 {kind} 资产。";
+            return false;
+        }
+
+        if (_createAsset is null)
+        {
+            Status = "资产创建服务不可用";
+            return false;
+        }
+
+        AssetBrowserCreateResult result = _createAsset(new AssetBrowserCreateRequest(path, kind));
+        Status = string.IsNullOrWhiteSpace(result.Diagnostic)
+            ? result.Succeeded ? $"已创建资产 {path}" : $"创建未执行：{path}"
+            : result.Diagnostic;
+        if (result.Succeeded)
+        {
+            _createPath = SuggestNextCreatePath(kind, path);
+            _ = Refresh();
+        }
+
+        return result.Succeeded;
+    }
+
+    /// <summary>
     /// 把 Project Window typed drag payload 移动到目标逻辑文件夹。
     /// </summary>
     /// <param name="payload">资产拖拽 payload。</param>
@@ -401,6 +449,8 @@ public sealed class AssetBrowserPanel(
         }
 
         ImGui.SameLine();
+        DrawCreateControls();
+        ImGui.SameLine();
         _ = ImGui.InputText("搜索", ref _search, 128);
         int kindIndex = KindFilter.HasValue ? (int)KindFilter.Value + 1 : 0;
         if (ImGui.Combo("类型", ref kindIndex, KindFilterLabels, KindFilterLabels.Length))
@@ -435,6 +485,32 @@ public sealed class AssetBrowserPanel(
 
         ImGui.TextUnformatted(Status);
         ImGui.End();
+    }
+
+    private void DrawCreateControls()
+    {
+        int createKindIndex = Array.IndexOf(CreateKinds, _createKind);
+        if (createKindIndex < 0)
+        {
+            createKindIndex = Array.IndexOf(CreateKinds, AssetBrowserItemKind.Script);
+            _createKind = AssetBrowserItemKind.Script;
+        }
+
+        if (ImGui.Combo("Create Type", ref createKindIndex, CreateKindLabels, CreateKindLabels.Length) &&
+            createKindIndex >= 0 &&
+            createKindIndex < CreateKinds.Length)
+        {
+            _createKind = CreateKinds[createKindIndex];
+            _createPath = GetDefaultCreatePath(_createKind);
+        }
+
+        ImGui.SameLine();
+        _ = ImGui.InputText("New Asset", ref _createPath, 256);
+        ImGui.SameLine();
+        if (ImGui.Button("Create"))
+        {
+            _ = TryCreateAsset(_createPath, _createKind);
+        }
     }
 
     private void DrawFolderDropTarget(AssetBrowserFolderItem folder)
@@ -641,6 +717,44 @@ public sealed class AssetBrowserPanel(
         }
 
         return result.Succeeded;
+    }
+
+    private static bool IsCreateKindSupported(AssetBrowserItemKind kind)
+    {
+        return Array.IndexOf(CreateKinds, kind) >= 0;
+    }
+
+    private static string GetDefaultCreatePath(AssetBrowserItemKind kind)
+    {
+        return kind switch
+        {
+            AssetBrowserItemKind.Material => "materials.json",
+            AssetBrowserItemKind.Texture => "textures/NewTexture.png",
+            AssetBrowserItemKind.Audio => "audio/NewAudio.wav",
+            AssetBrowserItemKind.Scene => "scenes/NewScene.scene",
+            AssetBrowserItemKind.Prefab => "prefabs/NewPrefab.prefab",
+            AssetBrowserItemKind.Script => "scripts/NewBehaviour.cs",
+            AssetBrowserItemKind.Json => "data/NewAsset.json",
+            AssetBrowserItemKind.Other => "NewAsset",
+            _ => "NewAsset",
+        };
+    }
+
+    private static string SuggestNextCreatePath(AssetBrowserItemKind kind, string previousPath)
+    {
+        if (string.IsNullOrWhiteSpace(previousPath))
+        {
+            return GetDefaultCreatePath(kind);
+        }
+
+        string normalized = previousPath.Replace('\\', '/');
+        string directory = Path.GetDirectoryName(normalized)?.Replace('\\', '/') ?? string.Empty;
+        string extension = Path.GetExtension(normalized);
+        string name = Path.GetFileNameWithoutExtension(normalized);
+        string nextName = string.IsNullOrWhiteSpace(name) ? Path.GetFileNameWithoutExtension(GetDefaultCreatePath(kind)) : name + "1";
+        return string.IsNullOrWhiteSpace(directory)
+            ? nextName + extension
+            : directory + "/" + nextName + extension;
     }
 
     private bool IsPendingDeleteFor(AssetBrowserItem item)
