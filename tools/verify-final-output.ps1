@@ -49,6 +49,25 @@ function Assert-ChecksumContains([Collections.Generic.HashSet[string]]$RelativeP
   }
 }
 
+function Get-OutputFileText([string]$RelativePath, [string]$Label) {
+  $full = Resolve-OutputPath $RelativePath $Label
+  Assert-FileExists $full $Label
+  return Get-Content -Raw -LiteralPath $full
+}
+
+function Assert-SummaryValue([string]$Text, [string]$Prefix, [string]$Key, [string]$Expected, [string]$Label) {
+  $line = ($Text -split "`r?`n" | Where-Object { $_.StartsWith($Prefix, [StringComparison]::Ordinal) } | Select-Object -Last 1)
+  if (-not $line -or -not $line.Contains("$Key=$Expected", [StringComparison]::Ordinal)) {
+    throw "$Label 缺少成功摘要：$Prefix$key=$Expected"
+  }
+}
+
+function Assert-TextContains([string]$Text, [string]$Needle, [string]$Label) {
+  if (-not $Text.Contains($Needle, [StringComparison]::Ordinal)) {
+    throw "$Label 缺少验证标记：$Needle"
+  }
+}
+
 if (-not (Test-Path -LiteralPath $outputRootFull -PathType Container)) {
   throw "正式输出目录不存在：$outputRootFull"
 }
@@ -120,6 +139,16 @@ foreach ($relative in $validationPaths) {
   $full = Resolve-OutputPath $relative 'validation path'
   Assert-FileExists $full "验证记录 $relative"
 }
+
+$editorProbeStdout = Get-OutputFileText ([string]$validation.editorDefaultWorkbenchProbe.stdout) '编辑器默认工作台 probe stdout'
+Assert-SummaryValue $editorProbeStdout 'editor_default_workbench_probe ' 'completed' 'True' '编辑器默认工作台 probe stdout'
+Assert-SummaryValue $editorProbeStdout 'editor_default_workbench_probe ' 'succeeded' 'True' '编辑器默认工作台 probe stdout'
+Assert-SummaryValue $editorProbeStdout 'editor_default_workbench_probe ' 'build_completed' 'True' '编辑器默认工作台 probe stdout'
+Assert-SummaryValue $editorProbeStdout 'editor_default_workbench_probe ' 'build_ok' 'True' '编辑器默认工作台 probe stdout'
+
+$demoProbeStdout = Get-OutputFileText ([string]$validation.demoWindowProbe.stdout) 'Demo 窗口 probe stdout'
+Assert-TextContains $demoProbeStdout 'window_frame_probe' 'Demo 窗口 probe stdout'
+Assert-TextContains $demoProbeStdout 'PixelEngine.Demo' 'Demo 窗口 probe stdout'
 
 $demoBuildResultPath = Resolve-OutputPath ([string]$validation.demoBuildResult) 'demoBuildResult'
 $demoBuildResult = Get-Content -Raw -LiteralPath $demoBuildResultPath | ConvertFrom-Json

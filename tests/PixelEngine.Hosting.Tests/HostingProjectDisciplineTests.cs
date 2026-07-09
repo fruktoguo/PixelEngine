@@ -170,6 +170,9 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("editorExecutable", verifier, StringComparison.Ordinal);
         Assert.Contains("demoExecutable", verifier, StringComparison.Ordinal);
         Assert.Contains("demo-build-result.json 不是 ok=true", verifier, StringComparison.Ordinal);
+        Assert.Contains("editor_default_workbench_probe ", verifier, StringComparison.Ordinal);
+        Assert.Contains("window_frame_probe", verifier, StringComparison.Ordinal);
+        Assert.Contains("PixelEngine.Demo", verifier, StringComparison.Ordinal);
         Assert.Contains("Assert-ChecksumContains $relativePaths $manifestRelative 'manifest'", verifier, StringComparison.Ordinal);
         Assert.Contains("正式输出包含未登记文件", verifier, StringComparison.Ordinal);
         Assert.Contains("SHA256SUMS 登记了不存在的文件", verifier, StringComparison.Ordinal);
@@ -214,6 +217,44 @@ public sealed class HostingProjectDisciplineTests
             ProcessResult missing = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
             Assert.NotEqual(0, missing.ExitCode);
             Assert.Contains("SHA256SUMS 登记了不存在的文件", missing.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(outputRoot))
+            {
+                Directory.Delete(outputRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证正式输出审计脚本不会只相信 manifest 布尔值；验证日志必须包含真实 probe 成功 marker。
+    /// </summary>
+    [Fact]
+    public void FinalOutputVerifierRejectsProbeLogsMissingSuccessMarkers()
+    {
+        string root = FindRepositoryRoot();
+        string outputRoot = Path.Combine(Path.GetTempPath(), "pixelengine-final-output-" + Guid.NewGuid().ToString("N"));
+        string verifier = Path.Combine(root, "tools", "verify-final-output.ps1");
+        try
+        {
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            WriteTextFile(outputRoot, "_验证记录/logs/editor-default-workbench.stdout.log", "editor stdout without structured success marker");
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult editorMissing = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, editorMissing.ExitCode);
+            Assert.Contains("编辑器默认工作台 probe stdout 缺少成功摘要", editorMissing.CombinedOutput, StringComparison.Ordinal);
+
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            WriteTextFile(outputRoot, "_验证记录/logs/demo-window.stdout.log", "demo stdout without frame marker");
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult demoMissing = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, demoMissing.ExitCode);
+            Assert.Contains("Demo 窗口 probe stdout 缺少验证标记", demoMissing.CombinedOutput, StringComparison.Ordinal);
         }
         finally
         {
@@ -1759,10 +1800,13 @@ public sealed class HostingProjectDisciplineTests
     {
         WriteTextFile(outputRoot, "编辑器/PixelEngine.Editor.Shell.exe", "editor");
         WriteTextFile(outputRoot, "游戏Demo/PixelEngine Demo.exe", "demo");
-        WriteTextFile(outputRoot, "_验证记录/logs/editor-default-workbench.stdout.log", "editor stdout");
+        WriteTextFile(
+            outputRoot,
+            "_验证记录/logs/editor-default-workbench.stdout.log",
+            "editor_default_workbench_probe completed=True succeeded=True build_completed=True build_ok=True");
         WriteTextFile(outputRoot, "_验证记录/logs/editor-default-workbench.stderr.log", "");
         WriteTextFile(outputRoot, "_验证记录/editor-default-workbench.bmp", "editor capture");
-        WriteTextFile(outputRoot, "_验证记录/logs/demo-window.stdout.log", "demo stdout");
+        WriteTextFile(outputRoot, "_验证记录/logs/demo-window.stdout.log", "PixelEngine.Demo window_frame_probe frames=80");
         WriteTextFile(outputRoot, "_验证记录/logs/demo-window.stderr.log", "");
         WriteTextFile(outputRoot, "_验证记录/demo-window.bmp", "demo capture");
         WriteTextFile(outputRoot, "README.txt", "PixelEngine final output");

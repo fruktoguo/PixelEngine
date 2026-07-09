@@ -31,7 +31,7 @@ pwsh -NoProfile -File tools/update-final-output.ps1
 pwsh -NoProfile -File tools/verify-final-output.ps1
 ```
 
-该校验会读取 `最终输出/_验证记录/manifest.json` 与 `SHA256SUMS`，确认 manifest 绑定当前 `HEAD`、来源门禁为 `tracked-clean-required`、入口文件和验证记录存在、Demo build-result 为 `ok=true`，逐项重算 SHA256，并拒绝 `SHA256SUMS` 未登记的额外文件或登记了不存在文件的清单。若只审计历史提交生成的旧产物，可显式传 `-AllowCommitMismatch`。
+该校验会读取 `最终输出/_验证记录/manifest.json` 与 `SHA256SUMS`，确认 manifest 绑定当前 `HEAD`、来源门禁为 `tracked-clean-required`、入口文件和验证记录存在、编辑器 / Demo probe stdout 含成功 marker、Demo build-result 为 `ok=true`，逐项重算 SHA256，并拒绝 `SHA256SUMS` 未登记的额外文件或登记了不存在文件的清单。若只审计历史提交生成的旧产物，可显式传 `-AllowCommitMismatch`。
 
 可选参数：
 
