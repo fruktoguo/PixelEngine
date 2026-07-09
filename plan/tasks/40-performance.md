@@ -4,7 +4,7 @@
 
 ## 基线与首要瓶颈
 
-- [ ] `PERF-001` 在当前 HEAD 建立可复现的正式性能基线，替换 `NA`、Dry/ColdStart 单次报告和旧 commit 数据。
+- [~] `PERF-001` 在当前 HEAD 建立可复现的正式性能基线，替换 `NA`、Dry/ColdStart 单次报告和旧 commit 数据。
   - 优先级：P0。
   - 依赖：`CI-001` 可并行；本地无需等待远端。
   - 设计来源：`plan/14-testing-benchmarking.md`；`plan/16-performance-hardening.md`。

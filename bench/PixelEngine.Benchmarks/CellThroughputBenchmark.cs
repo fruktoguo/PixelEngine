@@ -67,6 +67,9 @@ public class CellThroughputBenchmark : IDisposable
     public void SetupIteration()
     {
         ResetChunks();
+        // Chunk.Reset 只重置网格与 dirty 元数据；内核的 frame/parity 也必须回到
+        // 同一初态，否则相邻测量会以不同 parity 进入 CA，失去可比性。
+        _kernel.RestoreFrameState(frameIndex: 0, currentParity: 0);
         if (Profile == CellProfile.FullActiveLiquid)
         {
             FillFullActiveLiquid();
