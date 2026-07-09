@@ -220,6 +220,27 @@ internal static unsafe partial class RmlUiNative
     internal static partial int ProcessTextUtf8(IntPtr renderer, byte* text, int textLength);
 
     /// <summary>
+    /// 查询当前焦点文本输入控件的 caret rect / 候选锚点（UI 坐标）；无焦点时返回 0。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="caretX">caret 左上角 x。</param>
+    /// <param name="caretY">caret 左上角 y。</param>
+    /// <param name="caretWidth">caret 宽度。</param>
+    /// <param name="caretHeight">caret 高度。</param>
+    /// <param name="anchorX">候选窗锚点 x。</param>
+    /// <param name="anchorY">候选窗锚点 y。</param>
+    /// <returns>1=成功，0=无焦点或不可用。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_try_get_active_text_input_geometry")]
+    internal static partial int TryGetActiveTextInputGeometry(
+        IntPtr renderer,
+        out float caretX,
+        out float caretY,
+        out float caretWidth,
+        out float caretHeight,
+        out float anchorX,
+        out float anchorY);
+
+    /// <summary>
     /// 对当前 RmlUi context 执行 DOM 命中测试。
     /// </summary>
     /// <param name="renderer">renderer 句柄。</param>
