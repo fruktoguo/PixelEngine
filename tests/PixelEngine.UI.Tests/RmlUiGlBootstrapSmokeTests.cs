@@ -236,11 +236,63 @@ public sealed class RmlUiGlBootstrapSmokeTests
             BackendPreference = RenderBackendPreference.DesktopGl33,
             EnableDebugContext = true,
         });
+        RunDocumentLoadRenderHitTestSmoke(
+            window,
+            expectedProfileId: RmlUiNativeProfileGate.NativeProfileDesktopGl3);
+    }
+
+    [Fact]
+    public void RmlUiBackendCanLoadAndRenderDocumentOnAngleWhenSmokeIsEnabled()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"), "1", StringComparison.Ordinal) &&
+            !string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        RenderWindow? window = null;
+        try
+        {
+            window = RenderWindow.Create(new RenderWindowOptions
+            {
+                Title = "PixelEngine RmlUi ANGLE backend document smoke",
+                Width = 64,
+                Height = 64,
+                BackendPreference = RenderBackendPreference.GlEs30Angle,
+                EnableDebugContext = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            bool requireAngle = string.Equals(
+                Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_ANGLE_SMOKE"),
+                "1",
+                StringComparison.Ordinal);
+            Assert.False(requireAngle, $"显式 ANGLE smoke 要求可创建 GlEs30Angle 窗口，但失败：{ex}");
+            return;
+        }
+
+        using (window)
+        {
+            Assert.Equal(RenderBackend.GlEs30Angle, window.Backend);
+            RunDocumentLoadRenderHitTestSmoke(
+                window,
+                expectedProfileId: RmlUiNativeProfileGate.NativeProfileGles3Angle);
+        }
+    }
+
+    private static void RunDocumentLoadRenderHitTestSmoke(RenderWindow window, int expectedProfileId)
+    {
+        RmlUiNativeProfileDecision decision = RmlUiNativeProfileGate.Evaluate(window.Backend, window.Capabilities);
+        Assert.True(decision.CanUseNativeRenderer, decision.FallbackReason);
+        Assert.Equal(expectedProfileId, RmlUiNativeProfileGate.ToNativeProfileId(decision.RequestedProfile));
+
         UiStringPool strings = new();
         using RmlUiBackend backend = new(window, stringResolver: strings);
         backend.Initialize(new UiBackendInitializeInfo(
             new UiViewport(0, 0, window.Width, window.Height, 1f),
             UiBackendKind.RmlUi));
+        Assert.Equal(expectedProfileId, RmlUiNative.GetRendererProfile());
 
         string root = Path.Combine(Path.GetTempPath(), $"pixelengine-rmlui-{Guid.NewGuid():N}");
         string screens = Path.Combine(root, "screens");
@@ -332,6 +384,11 @@ public sealed class RmlUiGlBootstrapSmokeTests
             backend.FeedKey(new UiKey(65), isDown: true, UiKeyModifiers.Control);
             backend.FeedKey(new UiKey(65), isDown: false, UiKeyModifiers.Control);
             backend.FeedText("a");
+            // IME composition 必须与 committed text 分离：预编辑后 cancel 不得走 FeedText。
+            backend.FeedTextComposition("候", new UiTextComposition(isActive: true, cursorIndex: 1));
+            Assert.True(backend.DebugCompositionState.IsActive);
+            backend.FeedTextComposition([], UiTextComposition.Inactive);
+            Assert.False(backend.DebugCompositionState.IsActive);
             backend.Update(1f / 60f);
 
             UiPresentContext context = default;
