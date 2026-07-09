@@ -6,8 +6,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// 渲染缓冲构建器测试：覆盖世界到屏幕像素映射、调色板快路径、样式着色、缓存复用与性能门控。
+/// </summary>
 public sealed class RenderBufferBuilderTests
 {
+    /// <summary>
+    /// 验证相机 1:1 映射下，屏幕像素正确对应世界单元格材质颜色，且非发光材质不写入 Emissive。
+    /// </summary>
     [Fact]
     public void BuildMapsScreenPixelsToWorldCellsAndMaterialColors()
     {
@@ -34,6 +40,9 @@ public sealed class RenderBufferBuilderTests
         Assert.All(aux.Emissive.ToArray(), static value => Assert.Equal(0u, value));
     }
 
+    /// <summary>
+    /// 验证调色板快路径按区块行展开，同时写入 Emissive 与 Occluder 辅助缓冲。
+    /// </summary>
     [Fact]
     public void BuildPaletteFastPathSpansChunkRowsAndWritesAux()
     {
@@ -70,6 +79,9 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(byte.MaxValue, aux.Occluder[2]);
     }
 
+    /// <summary>
+    /// 验证快路径对带 ColorNoise 的材质应用与标量算法一致的世界坐标噪声。
+    /// </summary>
     [Fact]
     public void BuildPaletteFastPathAppliesColorNoise()
     {
@@ -94,6 +106,9 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(ExpectedColorNoise(0xFF404040u, 96, 3, 5), target.Pixels[0]);
     }
 
+    /// <summary>
+    /// 验证 0.5x 缩放下快路径跨区块行重复采样单元格，并正确填充 Emissive/Occluder。
+    /// </summary>
     [Fact]
     public void BuildPaletteZoomFastPathRepeatsCellsAcrossChunkRowsAndWritesAux()
     {
@@ -153,6 +168,9 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(expectedOccluder, aux.Occluder.ToArray());
     }
 
+    /// <summary>
+    /// 验证并行 Job 按行独立采样，避免跨任务复制导致行数据错乱。
+    /// </summary>
     [Fact]
     public void BuildPaletteZoomFastPathSamplesRepeatedRowsWithoutCrossJobCopies()
     {
@@ -199,6 +217,9 @@ public sealed class RenderBufferBuilderTests
             $"2x zoom 并行路径应按屏幕行独立采样，避免跨任务复制旧行，actual calls={counting.TryGetChunkCalls}。");
     }
 
+    /// <summary>
+    /// 验证纹理提供器、温度发光叠加及 Emissive/Occluder 辅助输出。
+    /// </summary>
     [Fact]
     public void BuildAppliesTextureProviderTemperatureGlowAndAuxOutputs()
     {
@@ -236,6 +257,9 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(byte.MaxValue, aux.Occluder[1]);
     }
 
+    /// <summary>
+    /// 验证构建过程只读模拟数据，不修改材质/标志/寿命字段。
+    /// </summary>
     [Fact]
     public void BuildDoesNotMutateSimulationCells()
     {
@@ -265,6 +289,9 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(9, chunk.Lifetime[local]);
     }
 
+    /// <summary>
+    /// 验证存在 IDebugCellColorProvider 时优先使用调试色而非材质基色。
+    /// </summary>
     [Fact]
     public void BuildUsesDebugCellColorProviderWhenPresent()
     {
@@ -290,6 +317,9 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(0xCC445566u, target.Pixels[0]);
     }
 
+    /// <summary>
+    /// 验证无模拟步进时，调试色提供器仍会触发缓冲重建。
+    /// </summary>
     [Fact]
     public void BuildRebuildsWhenDebugCellColorProviderIsPresentEvenWithoutSimStep()
     {
@@ -316,6 +346,9 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(0xCC445566u, target.Pixels[0]);
     }
 
+    /// <summary>
+    /// 验证模拟未步进时复用上一帧像素与辅助缓冲，避免无效重绘。
+    /// </summary>
     [Fact]
     public void BuildReusesPreviousBuffersWhenSimDidNotStep()
     {
@@ -345,6 +378,9 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(123, aux.Occluder[0]);
     }
 
+    /// <summary>
+    /// 验证全空材质世界将像素与辅助缓冲清零为透明。
+    /// </summary>
     [Fact]
     public void BuildClearsBuffersForTransparentEmptyWorld()
     {
@@ -370,6 +406,9 @@ public sealed class RenderBufferBuilderTests
         Assert.All(aux.Occluder.ToArray(), static value => Assert.Equal((byte)0, value));
     }
 
+    /// <summary>
+    /// 验证存在温度场但无可见材质时仍清空缓冲。
+    /// </summary>
     [Fact]
     public void BuildClearsTransparentEmptyWorldEvenWhenTemperatureBlocksExist()
     {
@@ -397,6 +436,9 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(0, aux.Occluder[0]);
     }
 
+    /// <summary>
+    /// 验证空世界缓存会在区块变脏后失效并反映新材质。
+    /// </summary>
     [Fact]
     public void BuildInvalidatesEmptyWorldCacheWhenChunkBecomesDirty()
     {
@@ -431,6 +473,9 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(0xFF112233u, target.Pixels[0]);
     }
 
+    /// <summary>
+    /// 验证材质 0 若配置为可见色，则不会当作透明空世界清空。
+    /// </summary>
     [Fact]
     public void BuildDoesNotClearWhenMaterialZeroIsVisible()
     {
@@ -451,6 +496,9 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(0xFF010203u, target.Pixels[0]);
     }
 
+    /// <summary>
+    /// 验证可破坏/液体/气体/危险等渲染样式与损伤着色，且不写回模拟单元格。
+    /// </summary>
     [Fact]
     public void BuildAppliesRenderStylesAndDamageWithoutMutatingCells()
     {
@@ -506,6 +554,9 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(50, chunk.Damage[damagedLocal]);
     }
 
+    /// <summary>
+    /// 验证 StyleLevel.Off 时忽略样式效果，仅输出材质基色。
+    /// </summary>
     [Fact]
     public void BuildStyleLevelOffFallsBackToBaseColor()
     {
@@ -538,6 +589,9 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(200, chunk.Damage[0]);
     }
 
+    /// <summary>
+    /// 验证样式质量门控：Off 仍可走调色板缩放快路径，Full 有样式时禁用行复制快路径。
+    /// </summary>
     [Fact]
     public void RenderStyleQualityGateControlsPaletteZoomFastPath()
     {
@@ -578,6 +632,9 @@ public sealed class RenderBufferBuilderTests
             $"StyleLevel.Full 且存在样式效果时应禁用 zoom 行复制快路径，off={offCalls}, full={counting.TryGetChunkCalls}。");
     }
 
+    /// <summary>
+    /// 验证未破损纯固体连续段走分段调色板路径，减少逐像素取区块次数。
+    /// </summary>
     [Fact]
     public void BuildUsesStyledSegmentedPalettePathForUnbrokenSolidRuns()
     {
@@ -614,6 +671,9 @@ public sealed class RenderBufferBuilderTests
         Assert.All(aux.Occluder.ToArray(), static value => Assert.Equal(byte.MaxValue, value));
     }
 
+    /// <summary>
+    /// 验证混合材质连续段的分段路径与标量路径像素/aux 完全一致。
+    /// </summary>
     [Fact]
     public void BuildStyledSegmentedPathMatchesScalarPathForMixedRuns()
     {
@@ -687,6 +747,9 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(scalarAux.Occluder.ToArray(), segmentedAux.Occluder.ToArray());
     }
 
+    /// <summary>
+    /// 验证 MaterialSwatchProvider 对发光/粉末材质返回稳定代表色。
+    /// </summary>
     [Fact]
     public void MaterialSwatchProviderReturnsStableRepresentativeColor()
     {
@@ -703,6 +766,9 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(0xFF405060u, MaterialSwatchProvider.GetSwatch(materials, 2));
     }
 
+    /// <summary>
+    /// 验证仅当样式路径激活时 FrameProfiler 记录 RenderStyleShading 子阶段耗时。
+    /// </summary>
     [Fact]
     public void BuildRecordsRenderStyleSubPhaseOnlyWhenStylePathIsActive()
     {
@@ -742,6 +808,9 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(0, offProfiler.LastSubFrame[(int)FrameSubPhase.RenderStyleShading]);
     }
 
+    /// <summary>
+    /// 验证可在运行时开关样式路径并影响 Profiler 子阶段计时。
+    /// </summary>
     [Fact]
     public void RenderStyleQualityControllerTogglesStylePathAtRuntime()
     {

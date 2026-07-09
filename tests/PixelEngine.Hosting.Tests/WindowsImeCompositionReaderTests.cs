@@ -7,6 +7,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// Windows IME composition reader 的边界测试。
+/// 不变式：IME 组合串边界正确、空串与 surrogate 不崩溃。
 /// </summary>
 public sealed class WindowsImeCompositionReaderTests
 {
@@ -16,6 +17,7 @@ public sealed class WindowsImeCompositionReaderTests
     [Fact]
     public void CaptureTextCompositionReadsPreeditTextAndCursorFromImm()
     {
+        // Arrange：准备输入与初始状态
         FakeImeNative native = new()
         {
             Context = new IntPtr(0x456),
@@ -27,6 +29,7 @@ public sealed class WindowsImeCompositionReaderTests
         Span<char> buffer = stackalloc char[8];
         int count = reader.CaptureTextComposition(buffer, out UiTextComposition composition);
 
+        // Assert：验证预期结果
         Assert.True(reader.Capabilities.SupportsPlatformComposition);
         Assert.Equal(2, count);
         Assert.Equal("拼音", new string(buffer[..count]));
@@ -43,6 +46,7 @@ public sealed class WindowsImeCompositionReaderTests
     [Fact]
     public void CaptureTextCompositionReturnsInactiveWhenPlatformOrContextUnavailable()
     {
+        // Arrange：准备输入与初始状态
         FakeImeNative native = new() { Context = new IntPtr(0x456), Text = "拼音", Cursor = 1 };
         WindowsImeCompositionReader disabled = new(() => new IntPtr(0x123), native, enableWindowsComposition: false);
         WindowsImeCompositionReader noHwnd = new(() => IntPtr.Zero, native, enableWindowsComposition: true);
@@ -50,6 +54,7 @@ public sealed class WindowsImeCompositionReaderTests
 
         Span<char> buffer = stackalloc char[8];
 
+        // Assert：验证预期结果
         Assert.False(disabled.Capabilities.SupportsPlatformComposition);
         Assert.Equal(0, disabled.CaptureTextComposition(buffer, out UiTextComposition disabledComposition));
         Assert.False(disabledComposition.IsActive);
@@ -83,6 +88,7 @@ public sealed class WindowsImeCompositionReaderTests
     [Fact]
     public void CaptureTextCompositionReturnsInactiveWhenImmReadThrowsAndReleasesContext()
     {
+        // Arrange：准备输入与初始状态
         FakeImeNative native = new()
         {
             Context = new IntPtr(0x456),
@@ -94,6 +100,7 @@ public sealed class WindowsImeCompositionReaderTests
         Span<char> buffer = stackalloc char[8];
         int count = reader.CaptureTextComposition(buffer, out UiTextComposition composition);
 
+        // Assert：验证预期结果
         Assert.Equal(0, count);
         Assert.False(composition.IsActive);
         Assert.Equal(1, native.GetContextCalls);
@@ -106,6 +113,7 @@ public sealed class WindowsImeCompositionReaderTests
     [Fact]
     public void CaptureTextCompositionIgnoresReleaseContextFailureAfterSuccessfulRead()
     {
+        // Arrange：准备输入与初始状态
         FakeImeNative native = new()
         {
             Context = new IntPtr(0x456),
@@ -118,6 +126,7 @@ public sealed class WindowsImeCompositionReaderTests
         Span<char> buffer = stackalloc char[8];
         int count = reader.CaptureTextComposition(buffer, out UiTextComposition composition);
 
+        // Assert：验证预期结果
         Assert.Equal(2, count);
         Assert.Equal("拼音", new string(buffer[..count]));
         Assert.True(composition.IsActive);
@@ -131,6 +140,7 @@ public sealed class WindowsImeCompositionReaderTests
     [Fact]
     public void CaptureTextCompositionReturnsInactiveWhenDestinationHasNoCapacity()
     {
+        // Arrange：准备输入与初始状态
         FakeImeNative native = new()
         {
             Context = new IntPtr(0x456),
@@ -141,6 +151,7 @@ public sealed class WindowsImeCompositionReaderTests
 
         int count = reader.CaptureTextComposition([], out UiTextComposition composition);
 
+        // Assert：验证预期结果
         Assert.Equal(0, count);
         Assert.False(composition.IsActive);
         Assert.Equal(1, native.ReleaseContextCalls);
@@ -152,6 +163,7 @@ public sealed class WindowsImeCompositionReaderTests
     [Fact]
     public void CaptureTextCompositionClampsCursorToWrittenTextLength()
     {
+        // Arrange：准备输入与初始状态
         FakeImeNative native = new()
         {
             Context = new IntPtr(0x456),
@@ -163,6 +175,7 @@ public sealed class WindowsImeCompositionReaderTests
         Span<char> buffer = stackalloc char[4];
         int count = reader.CaptureTextComposition(buffer, out UiTextComposition composition);
 
+        // Assert：验证预期结果
         Assert.Equal(4, count);
         Assert.Equal("comp", new string(buffer));
         Assert.True(composition.IsActive);
@@ -175,6 +188,7 @@ public sealed class WindowsImeCompositionReaderTests
     [Fact]
     public void CaptureTextCompositionMapsImmTargetAttributesToSelection()
     {
+        // Arrange：准备输入与初始状态
         FakeImeNative native = new()
         {
             Context = new IntPtr(0x456),
@@ -187,6 +201,7 @@ public sealed class WindowsImeCompositionReaderTests
         Span<char> buffer = stackalloc char[8];
         int count = reader.CaptureTextComposition(buffer, out UiTextComposition composition);
 
+        // Assert：验证预期结果
         Assert.Equal(4, count);
         Assert.True(composition.IsActive);
         Assert.Equal(4, composition.CursorIndex);
@@ -200,6 +215,7 @@ public sealed class WindowsImeCompositionReaderTests
     [Fact]
     public void CaptureTextCompositionClampsSelectionToWrittenTextLength()
     {
+        // Arrange：准备输入与初始状态
         FakeImeNative native = new()
         {
             Context = new IntPtr(0x456),
@@ -212,6 +228,7 @@ public sealed class WindowsImeCompositionReaderTests
         Span<char> buffer = stackalloc char[4];
         int count = reader.CaptureTextComposition(buffer, out UiTextComposition composition);
 
+        // Assert：验证预期结果
         Assert.Equal(4, count);
         Assert.Equal("abcd", new string(buffer));
         Assert.True(composition.IsActive);
@@ -226,12 +243,14 @@ public sealed class WindowsImeCompositionReaderTests
     [Fact]
     public void ApplyImeGeometryWritesCompositionAndCandidateWindows()
     {
+        // Arrange：准备输入与初始状态
         FakeImeNative native = new() { Context = new IntPtr(0x456) };
         WindowsImeCompositionReader reader = new(() => new IntPtr(0x123), native, enableWindowsComposition: true);
         UiImeGeometry geometry = UiImeGeometry.FromCaretRect(120.4f, 340.6f, 2f, 18f);
 
         reader.ApplyImeGeometry(in geometry);
 
+        // Assert：验证预期结果
         Assert.Equal(1, native.GetContextCalls);
         Assert.Equal(1, native.ReleaseContextCalls);
         Assert.Equal(1, native.SetCompositionWindowCalls);
@@ -262,6 +281,7 @@ public sealed class WindowsImeCompositionReaderTests
     [Fact]
     public void ApplyImeGeometryCandidateOnlyDoesNotSetExcludeRect()
     {
+        // Arrange：准备输入与初始状态
         FakeImeNative native = new() { Context = new IntPtr(0x456) };
         WindowsImeCompositionReader reader = new(() => new IntPtr(0x123), native, enableWindowsComposition: true);
         UiImeGeometry geometry = new(
@@ -276,6 +296,7 @@ public sealed class WindowsImeCompositionReaderTests
 
         reader.ApplyImeGeometry(in geometry);
 
+        // Assert：验证预期结果
         Assert.Equal(0, native.SetCompositionWindowCalls);
         Assert.Equal(1, native.SetCandidateWindowCalls);
         Assert.Equal(Win32ImeNative.CandidateFormStyleCandidatePos, native.LastCandidateForm.Style);
@@ -293,6 +314,7 @@ public sealed class WindowsImeCompositionReaderTests
     [Fact]
     public void ApplyImeGeometryUsesSelectionExcludeRectSeparateFromCaretPoint()
     {
+        // Arrange：准备输入与初始状态
         FakeImeNative native = new() { Context = new IntPtr(0x456) };
         WindowsImeCompositionReader reader = new(() => new IntPtr(0x123), native, enableWindowsComposition: true);
         UiImeGeometry geometry = new(
@@ -312,6 +334,7 @@ public sealed class WindowsImeCompositionReaderTests
 
         reader.ApplyImeGeometry(in geometry);
 
+        // Assert：验证预期结果
         Assert.Equal(1, native.SetCompositionWindowCalls);
         Assert.Equal(140, native.LastCompositionForm.CurrentPos.X);
         Assert.Equal(200, native.LastCompositionForm.CurrentPos.Y);
@@ -332,6 +355,7 @@ public sealed class WindowsImeCompositionReaderTests
     [Fact]
     public void UiImeGeometryTransformScalesExcludeRect()
     {
+        // Arrange：准备输入与初始状态
         UiImeGeometry source = new(
             hasCaretRect: true,
             caretX: 10f,
@@ -349,6 +373,7 @@ public sealed class WindowsImeCompositionReaderTests
 
         UiImeGeometry scaled = source.Transform(100f, 40f, 2f, 2f);
 
+        // Assert：验证预期结果
         Assert.True(scaled.HasExcludeRect);
         Assert.Equal(108f, scaled.ExcludeX, precision: 3);
         Assert.Equal(80f, scaled.ExcludeY, precision: 3);
@@ -383,10 +408,12 @@ public sealed class WindowsImeCompositionReaderTests
     [Fact]
     public void RenderWindowUiInputSourceConvertsFramebufferImeGeometryToLogicalClient()
     {
+        // Arrange：准备输入与初始状态
         UiImeGeometry framebuffer = UiImeGeometry.FromCaretRect(220f, 160f, 4f, 18f);
 
         UiImeGeometry logical = RenderWindowUiInputSource.ToLogicalClientGeometry(in framebuffer, 2f, 2f);
 
+        // Assert：验证预期结果
         Assert.True(logical.HasCaretRect);
         Assert.Equal(110f, logical.CaretX, precision: 3);
         Assert.Equal(80f, logical.CaretY, precision: 3);

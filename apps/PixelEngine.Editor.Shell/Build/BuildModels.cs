@@ -6,6 +6,9 @@ using PixelEngine.UI;
 
 namespace PixelEngine.Editor.Shell.Build;
 
+/// <summary>
+/// 构建日志级别。
+/// </summary>
 internal enum BuildLogLevel
 {
     Info,
@@ -13,6 +16,9 @@ internal enum BuildLogLevel
     Error,
 }
 
+/// <summary>
+/// 构建事件类型。
+/// </summary>
 internal enum BuildEventKind
 {
     Log,
@@ -20,6 +26,9 @@ internal enum BuildEventKind
     Result,
 }
 
+/// <summary>
+/// 构建流水线阶段。
+/// </summary>
 internal enum BuildPhase
 {
     Unknown,
@@ -31,6 +40,9 @@ internal enum BuildPhase
     Done,
 }
 
+/// <summary>
+/// 解析当前宿主 RID 并判断 AOT 构建是否可在本机执行。
+/// </summary>
 internal static class BuildHostRid
 {
     public static string Current
@@ -61,6 +73,9 @@ internal static class BuildHostRid
     }
 }
 
+/// <summary>
+/// BuildToolLocatorResult 数据结构。
+/// </summary>
 internal sealed record BuildToolLocatorResult
 {
     public string RepositoryRoot { get; init; } = string.Empty;
@@ -76,6 +91,9 @@ internal sealed record BuildToolLocatorResult
     public bool UsesPowerShell { get; init; }
 }
 
+/// <summary>
+/// BuildPreflight。
+/// </summary>
 internal sealed record BuildPreflight
 {
     public bool Ok { get; init; }
@@ -89,6 +107,9 @@ internal sealed record BuildPreflight
     public string Diagnostic { get; init; } = string.Empty;
 }
 
+/// <summary>
+/// BuildProfile 与 EditorProject 之间的适配器。
+/// </summary>
 internal static class BuildProfileEditorAdapter
 {
     public static BuildProfileDto CreateDefault(EditorProject project)
@@ -203,6 +224,9 @@ internal static class BuildProfileEditorAdapter
     }
 }
 
+/// <summary>
+/// BuildRequest。
+/// </summary>
 internal sealed record BuildRequest
 {
     public string Rid { get; init; } = string.Empty;
@@ -242,6 +266,9 @@ internal sealed record BuildRequest
     public PlayerReleaseChannel ReleaseChannel { get; init; } = PlayerReleaseChannel.Development;
 }
 
+/// <summary>
+/// BuildProgressEvent。
+/// </summary>
 internal sealed record BuildProgressEvent(
     BuildEventKind Kind,
     BuildPhase Phase,
@@ -250,6 +277,9 @@ internal sealed record BuildProgressEvent(
     string Message,
     DateTimeOffset Timestamp);
 
+/// <summary>
+/// BuildResult 数据结构。
+/// </summary>
 internal sealed record BuildResult
 {
     public bool Ok { get; init; }
@@ -287,6 +317,9 @@ internal sealed record BuildResult
     public int ExitCode { get; init; }
 }
 
+/// <summary>
+/// BuildRunView。
+/// </summary>
 internal sealed record BuildRunView
 {
     public bool IsRunning { get; init; }
@@ -302,6 +335,9 @@ internal sealed record BuildRunView
     public BuildPreflight? Preflight { get; init; }
 }
 
+/// <summary>
+/// 脚本化验收探针：ScriptedBuildProbeSnapshot。
+/// </summary>
 internal sealed record ScriptedBuildProbeSnapshot
 {
     public bool Started { get; init; }
@@ -317,6 +353,9 @@ internal sealed record ScriptedBuildProbeSnapshot
     public int LogCount { get; init; }
 }
 
+/// <summary>
+/// 脚本化验收探针：ScriptedBuildSettingsProbeSnapshot。
+/// </summary>
 internal sealed record ScriptedBuildSettingsProbeSnapshot
 {
     public string Rid { get; init; } = string.Empty;
@@ -344,6 +383,9 @@ internal sealed record ScriptedBuildSettingsProbeSnapshot
     public string StartupScene { get; init; } = string.Empty;
 }
 
+/// <summary>
+/// BuildLog。
+/// </summary>
 internal sealed class BuildLog(int capacity = 512)
 {
     private readonly BuildProgressEvent[] _events = new BuildProgressEvent[Math.Max(8, capacity)];

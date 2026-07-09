@@ -5,6 +5,7 @@ namespace PixelEngine.Editor.Tests;
 
 /// <summary>
 /// 编辑/运行模式面板与输入仲裁测试。
+/// 不变式：编辑/运行模式与输入仲裁状态联动。
 /// </summary>
 public sealed class EditorModePanelTests
 {

@@ -6,6 +6,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Simulation 节点 6 的 checkerboard 调度测试。
+/// 不变式：红黑切片调度无读写竞争、统计与单线程参考等价。
 /// </summary>
 public sealed class CheckerboardSchedulerTests
 {
@@ -37,6 +38,7 @@ public sealed class CheckerboardSchedulerTests
     [Fact]
     public void StepCaWithJobSystemProcessesAllCheckerboardBuckets()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateDenseSource(-1, -1, 4, 2);
         ChunkCoord[] activeCoords =
         [
@@ -67,6 +69,7 @@ public sealed class CheckerboardSchedulerTests
 
         CaIterationSnapshot[] iterations = new CaIterationSnapshot[activeCoords.Length];
         int iterationCount = kernel.CopyCaIterationSnapshots(iterations);
+        // Assert：验证预期结果
         Assert.Equal(activeCoords.Length, iterationCount);
         Assert.All(iterations, static iteration => Assert.Equal(DirtyRect.Full, iteration.Rect));
         foreach (ChunkCoord coord in activeCoords)
@@ -83,6 +86,7 @@ public sealed class CheckerboardSchedulerTests
     [Fact]
     public void StepCaWithJobSystemResolvesNeighborhoodOncePerActiveChunk()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateDenseSource(-1, -1, 4, 2);
         ChunkCoord[] activeCoords =
         [
@@ -111,6 +115,7 @@ public sealed class CheckerboardSchedulerTests
 
         kernel.StepCa(jobs);
 
+        // Assert：验证预期结果
         Assert.Equal(activeCoords.Length, source.ResolveNeighborhoodCount);
     }
 
@@ -120,6 +125,7 @@ public sealed class CheckerboardSchedulerTests
     [Fact]
     public void StepCaInternalMoveMarksCenterDirtyWithoutExtraChunkLookup()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateDenseSource(-1, -1, 1, 1);
         Chunk center = source.GetRequired(new ChunkCoord(0, 0));
         Set(center, 10, 10, Sand);
@@ -128,6 +134,7 @@ public sealed class CheckerboardSchedulerTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(1, source.ResolveNeighborhoodCount);
         Assert.Equal(9, source.TryGetChunkCount);
         Assert.Equal(0, Get(center, 10, 10));
@@ -141,6 +148,7 @@ public sealed class CheckerboardSchedulerTests
     [Fact]
     public void StepCaSkipsSleepingChunksEvenWhenResident()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateDenseSource(-1, -1, 2, 2);
         Chunk active = source.GetRequired(new ChunkCoord(0, 0));
         Chunk sleeping = source.GetRequired(new ChunkCoord(2, 2));
@@ -155,6 +163,7 @@ public sealed class CheckerboardSchedulerTests
 
         kernel.StepCa(jobs);
 
+        // Assert：验证预期结果
         Assert.Equal(0, Get(active, 10, 10));
         Assert.Equal(Sand, Get(active, 10, 10 + EngineConstants.MoveCap));
         Assert.Equal(Sand, Get(sleeping, 10, 10));
@@ -168,6 +177,7 @@ public sealed class CheckerboardSchedulerTests
     [Fact]
     public void StepCaSkipsFullSleepingFootprint()
     {
+        // Arrange：准备输入与初始状态
         const int activeChunksPerAxis = 8;
         TestChunkSource source = CreateDenseSource(-1, -1, activeChunksPerAxis, activeChunksPerAxis);
         for (int cy = 0; cy < activeChunksPerAxis; cy++)
@@ -189,6 +199,7 @@ public sealed class CheckerboardSchedulerTests
         kernel.SwapDirtyRects();
 
         CaIterationSnapshot[] iterations = new CaIterationSnapshot[1];
+        // Assert：验证预期结果
         Assert.Equal(0, kernel.CopyCaIterationSnapshots(iterations));
         for (int cy = 0; cy < activeChunksPerAxis; cy++)
         {
@@ -210,6 +221,7 @@ public sealed class CheckerboardSchedulerTests
     [Fact]
     public void DistantChunkThrottleDefersDirtyWhenCohortIsSkipped()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateDenseSource(-1, -1, 2, 1);
         Chunk distant = source.GetRequired(new ChunkCoord(2, 0));
         Set(distant, 10, 10, Sand);
@@ -230,6 +242,7 @@ public sealed class CheckerboardSchedulerTests
         kernel.StepCa(jobs, policy);
 
         CaIterationSnapshot[] iterations = new CaIterationSnapshot[1];
+        // Assert：验证预期结果
         Assert.Equal(0, kernel.CopyCaIterationSnapshots(iterations));
         Assert.Equal(Sand, Get(distant, 10, 10));
         Assert.Equal(DirtyRect.Full, distant.WorkingDirty);
@@ -246,6 +259,7 @@ public sealed class CheckerboardSchedulerTests
     [Fact]
     public void DistantChunkThrottlePreparesParityBeforeDeferredChunkRunsAgain()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateDenseSource(-1, -1, 2, 1);
         Chunk distant = source.GetRequired(new ChunkCoord(1, 0));
         Chunk below = source.GetRequired(new ChunkCoord(1, 1));
@@ -266,6 +280,7 @@ public sealed class CheckerboardSchedulerTests
 
         kernel.StepCa(jobs, policy);
         kernel.SwapDirtyRects();
+        // Assert：验证预期结果
         Assert.Equal(0, Get(distant, 10, 0));
         Assert.Equal(Sand, Get(distant, 10, EngineConstants.MoveCap));
 

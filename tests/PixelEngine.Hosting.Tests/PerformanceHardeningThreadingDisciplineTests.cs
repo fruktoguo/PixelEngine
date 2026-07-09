@@ -12,6 +12,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// plan/16 多线程覆盖面与 worker 元数据性能纪律测试。
+/// 不变式：worker 元数据与并行覆盖面在源码可审计。
 /// </summary>
 public sealed class PerformanceHardeningThreadingDisciplineTests
 {
@@ -19,6 +20,8 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     /// 验证生产源码不引入每帧临时并行 API，统一经 JobSystem 持久 worker 派发。
     /// </summary>
     [Fact]
+
+    // —— 多线程与 worker 纪律 ——
     public void ProductionSourcesDoNotUseBclAdHocParallelDispatch()
     {
         string root = FindRepositoryRoot();
@@ -45,6 +48,7 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     [Fact]
     public void Box2DTaskBridgeCallbacksDoNotSuppressGcTransition()
     {
+        // Arrange：准备输入与初始状态
         MethodInfo[] callbackMethods =
         [
             typeof(Box2DTaskBridge).GetMethod(nameof(Box2DTaskBridge.EnqueueTask))!,
@@ -54,6 +58,7 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
 
         foreach (MethodInfo method in callbackMethods)
         {
+            // Assert：验证预期结果
             Assert.NotNull(method.GetCustomAttribute<UnmanagedCallersOnlyAttribute>());
             Assert.Null(method.GetCustomAttribute<SuppressGCTransitionAttribute>());
         }
@@ -68,9 +73,11 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     [Fact]
     public void CheckerboardSchedulerUsesFourPassJobSystemBarrierWithSmallWorkFallback()
     {
+        // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string source = StripComments(File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Simulation", "CheckerboardScheduler.cs")));
 
+        // Assert：验证预期结果
         Assert.Contains("private readonly Chunk[][] _buckets", source, StringComparison.Ordinal);
         Assert.Contains("for (int pass = 0; pass < _buckets.Length; pass++)", source, StringComparison.Ordinal);
         Assert.Contains("jobs.ParallelRange(count, 1, UpdateRangeJob, this)", source, StringComparison.Ordinal);
@@ -87,6 +94,7 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     [Fact]
     public void JobSystemFallsBackToSingleThreadForSmallWork()
     {
+        // Arrange：准备输入与初始状态
         using JobSystem jobs = new(workerCount: 2)
         {
             SingleThreadThreshold = 8,
@@ -106,6 +114,7 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
             },
             captured);
 
+        // Assert：验证预期结果
         Assert.Equal(1, captured[0]);
         Assert.Equal(0, captured[1]);
         Assert.Equal(4, captured[2]);
@@ -149,8 +158,10 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     [Fact]
     public void RigidBodyDestructionPreparesRebuildPlansThroughJobSystem()
     {
+        // Arrange：准备输入与初始状态
         string source = ReadProductionSource("src", "PixelEngine.Physics", "RigidBodyDestruction.cs");
 
+        // Assert：验证预期结果
         Assert.Contains("Dictionary<int, HashSet<int>> damagedLocalByBody = BuildDamageMap", source, StringComparison.Ordinal);
         Assert.Contains("if (!damagedLocalByBody.TryGetValue(stamp.BodyKey", source, StringComparison.Ordinal);
         Assert.Contains("_ = locals.Add((stamp.LocalY << 16) ^ stamp.LocalX)", source, StringComparison.Ordinal);
@@ -172,8 +183,10 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     [Fact]
     public void WorldStreamerPreparesOfflineSerializationBatchThroughJobSystem()
     {
+        // Arrange：准备输入与初始状态
         string source = ReadProductionSource("src", "PixelEngine.World", "WorldStreamer.cs");
 
+        // Assert：验证预期结果
         Assert.Contains("public int ProcessIoOnce(JobSystem? jobs)", source, StringComparison.Ordinal);
         Assert.Contains("jobs.ParallelRange(requestCount, 1, PrepareRange, _preparationBatch)", source, StringComparison.Ordinal);
         Assert.Contains("private static void PrepareRange(int start, int end, int workerIndex, object? context)", source, StringComparison.Ordinal);
@@ -197,9 +210,11 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     [Fact]
     public void TemperatureStencilDispatchesRowsThroughJobSystem()
     {
+        // Arrange：准备输入与初始状态
         string temperature = ReadProductionSource("src", "PixelEngine.Simulation", "TemperatureField.cs");
         string phaseDriver = ReadProductionSource("src", "PixelEngine.Hosting", "SimulationPhaseDriver.cs");
 
+        // Assert：验证预期结果
         Assert.Contains("private static readonly RangeJob ConductRowsJob", temperature, StringComparison.Ordinal);
         Assert.Contains("public void ConductStep(", temperature, StringComparison.Ordinal);
         Assert.Contains("JobSystem jobs", temperature, StringComparison.Ordinal);
@@ -216,8 +231,10 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     [Fact]
     public void TemperatureStencilUsesVectorizedFivePointPathWithScalarFallback()
     {
+        // Arrange：准备输入与初始状态
         string temperature = ReadProductionSource("src", "PixelEngine.Simulation", "TemperatureField.cs");
 
+        // Assert：验证预期结果
         Assert.Contains("public bool SimdAvailable => EnableSimd", temperature, StringComparison.Ordinal);
         Assert.Contains("StorageKind == TemperatureStorageKind.Float32", temperature, StringComparison.Ordinal);
         Assert.Contains("Vector256.IsHardwareAccelerated", temperature, StringComparison.Ordinal);
@@ -256,10 +273,12 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     [Fact]
     public void BulkEditUsesRowRunFillClearAndRectDirty()
     {
+        // Arrange：准备输入与初始状态
         string kernel = ReadProductionSource("src", "PixelEngine.Simulation", "SimulationKernel.cs");
         string marker = ReadProductionSource("src", "PixelEngine.Simulation", "DirtyRegionMarker.cs");
         string brush = ReadProductionSource("src", "PixelEngine.Editor", "MaterialBrushApplicator.cs");
 
+        // Assert：验证预期结果
         Assert.Contains("EditRectAtInputPhase", kernel, StringComparison.Ordinal);
         Assert.Contains("ClearRectAtInputPhase", kernel, StringComparison.Ordinal);
         Assert.Contains("chunk.Material.AsSpan(localStart, run).Fill(material)", kernel, StringComparison.Ordinal);
@@ -276,16 +295,19 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     [Fact]
     public void SandAndLiquidMovementRemainScalar()
     {
+        // Arrange：准备输入与初始状态
         string source = ReadProductionSource("src", "PixelEngine.Simulation", "ChunkUpdater.cs");
 
         int powderStart = source.IndexOf("private static bool TryMovePowder", StringComparison.Ordinal);
         int lifetimeStart = source.IndexOf("private static void ProcessLifetime", StringComparison.Ordinal);
+        // Assert：验证预期结果
         Assert.True(powderStart >= 0);
         Assert.True(lifetimeStart > powderStart);
 
         string movementSection = source[powderStart..lifetimeStart];
         Assert.Contains("TryMoveTo", movementSection, StringComparison.Ordinal);
-        Assert.Contains("window.Swap(sourceX, sourceY, targetX, targetY)", movementSection, StringComparison.Ordinal);
+        Assert.Contains("window.TryMoveCell(", movementSection, StringComparison.Ordinal);
+        Assert.Contains("TryMoveTo(ref window", movementSection, StringComparison.Ordinal);
         Assert.DoesNotContain("Vector<", movementSection, StringComparison.Ordinal);
         Assert.DoesNotContain("System.Numerics", movementSection, StringComparison.Ordinal);
         Assert.DoesNotContain("System.Runtime.Intrinsics", movementSection, StringComparison.Ordinal);
@@ -302,10 +324,12 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
     [Fact]
     public void WorkerLocalSlotsArePaddedToCacheLine()
     {
+        // Arrange：准备输入与初始状态
         Type slotType = typeof(WorkerLocal<object>).GetNestedType("PaddedSlot", BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("WorkerLocal<T>.PaddedSlot 不存在。");
 
         StructLayoutAttribute? layout = slotType.StructLayoutAttribute;
+        // Assert：验证预期结果
         Assert.NotNull(layout);
         Assert.Equal(LayoutKind.Sequential, layout.Value);
 

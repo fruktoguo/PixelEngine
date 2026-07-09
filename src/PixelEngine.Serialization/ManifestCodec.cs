@@ -32,6 +32,7 @@ public sealed class ManifestCodec
         ReadOnlySpan<RigidBodySnapshot> bodies = manifest.RigidBodies.Span;
         ReadOnlySpan<ChunkCoord> chunks = manifest.ChunkIndex.Span;
 
+        // 固定头：magic + 版本 + 种子/时间 + 各段长度计数，随后顺序写入各 payload 段。
         Span<byte> header = writer.GetSpan(HeaderSize);
         BinaryPrimitives.WriteUInt32LittleEndian(header[..sizeof(uint)], Magic);
         BinaryPrimitives.WriteInt32LittleEndian(header.Slice(4, 4), manifest.FormatVersion);
@@ -79,6 +80,7 @@ public sealed class ManifestCodec
         int bodyCount = ReadNonNegativeCount(source.Slice(32, 4), "rigid body 数量");
         int chunkCount = ReadNonNegativeCount(source.Slice(36, 4), "chunk 索引数量");
 
+        // 按 header 声明长度顺序解码：player → 材质名表 → 粒子 → 刚体 → chunk 索引。
         int offset = HeaderSize;
         byte[] playerState = ReadByteArray(source, ref offset, playerStateBytes, "player state");
         MaterialNameTable materialNames = MaterialNameTable.Read(source[offset..], out int materialBytes);

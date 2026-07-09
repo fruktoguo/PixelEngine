@@ -21,7 +21,6 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     private readonly SolidFacade _solids;
     private readonly BodyFacade? _bodies;
     private readonly CharacterFacade _character;
-    private readonly IPhysicsStepEvents _physicsEvents;
     private ScriptCommand[] _drainBuffer = ArrayPool<ScriptCommand>.Shared.Rent(16);
     private bool _disposed;
 
@@ -74,6 +73,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         ArgumentNullException.ThrowIfNull(particleSystem);
         ArgumentNullException.ThrowIfNull(materials);
 
+        // 读路径直连 Grid；写路径统一入队，由 Hosting 按相位 Flush 到 Simulation 后端。
         _cells = new CellFacade(_commands, grid);
         _world = new WorldEffectsFacade(_commands, hasPhysics: physics is not null);
         _materials = new MaterialFacade(materials);
@@ -81,7 +81,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         _solids = new SolidFacade(grid);
         _bodies = physics is null ? null : new BodyFacade(_commands, physics);
         _character = new CharacterFacade(_commands, grid, physics, time);
-        _physicsEvents = physicsEvents ?? NoopPhysicsStepEvents.Instance;
+        PhysicsEvents = physicsEvents ?? NoopPhysicsStepEvents.Instance;
         Grid = grid;
         Kernel = kernel;
         Temperature = temperature;
@@ -163,7 +163,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     public ICharacterController Character => _character;
 
     /// <inheritdoc />
-    public IPhysicsStepEvents PhysicsEvents => _physicsEvents;
+    public IPhysicsStepEvents PhysicsEvents { get; }
 
     /// <inheritdoc />
     public ICameraApi Camera => CameraBackend ?? throw Unsupported(nameof(Camera));
@@ -227,6 +227,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     public int FlushCellCommands()
     {
         ThrowIfDisposed();
+        // dirty swap 前落地：走相位 1 输入 API，使写入对本帧 CA current dirty 立即可见。
         Span<ScriptCommand> commands = Drain(ScriptCommandTarget.CellWrite);
         for (int i = 0; i < commands.Length; i++)
         {
@@ -281,6 +282,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     public int FlushParticleCommands()
     {
         ThrowIfDisposed();
+        // 相位 7：自由粒子与抛射请求在此消费，避免与 CA movement 同 tick 争用网格。
         Span<ScriptCommand> commands = Drain(ScriptCommandTarget.Particle);
         for (int i = 0; i < commands.Length; i++)
         {
@@ -332,6 +334,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             return 0;
         }
 
+        // Physics step 前落地刚体/角色命令，保证本 tick 解算看到最新冲量与碰撞体。
         for (int i = 0; i < commands.Length; i++)
         {
             ref readonly ScriptCommand command = ref commands[i];
@@ -641,6 +644,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(force);
             int centerX = (int)MathF.Floor(x);
             int centerY = (int)MathF.Floor(y);
+            // 爆炸拆成 cell 破坏、粒子抛射、可选径向冲量三路命令，分别在不同安全相位 Flush。
             commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.DamageCircle(centerX, centerY, radius, ToDamageUShort(force * ExplosionDamageScale), falloff: true, DamageKind.Impact));
             float jitter = MathF.Max(1f, force * 0.25f);
             commands.Enqueue(ScriptCommandTarget.Particle, ScriptCommand.Explode(centerX, centerY, radius, force, jitter));
@@ -847,6 +851,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         {
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+            // 脚本句柄先占位 Pending，Flush 成功后再映射到 PhysicsSystem 的 body key。
             BodyHandle handle = new(_bodyKeys.Count);
             _bodyKeys.Add(PendingBodyKey);
             commands.Enqueue(ScriptCommandTarget.Physics, ScriptCommand.CreateBodyFromRegion(handle, x, y, width, height));
@@ -856,7 +861,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         public bool TryGetTransform(BodyHandle handle, out BodyTransform transform)
         {
             if (!TryGetBodyKey(handle, out int bodyKey) || bodyKey < 0 ||
-                !physics.TryGetBodyTransform(bodyKey, out PixelEngine.Core.Mathematics.Transform2D physicsTransform))
+                !physics.TryGetBodyTransform(bodyKey, out Core.Mathematics.Transform2D physicsTransform))
             {
                 transform = default;
                 return false;

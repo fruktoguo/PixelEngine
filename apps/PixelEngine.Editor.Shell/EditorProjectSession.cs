@@ -7,6 +7,9 @@ using PixelEngine.Simulation;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// 当前打开项目的运行时会话，持有 Engine、场景与撤销栈。
+/// </summary>
 internal sealed class EditorProjectSession : IDisposable
 {
     private const int DefaultEditorWorldWidth = 720;
@@ -74,6 +77,7 @@ internal sealed class EditorProjectSession : IDisposable
         EditorShellHostExtension editorHost = new(project, app);
         string sceneRelativePath = project.ResolveSceneRelativePath(app.SceneOverridePath);
         PlayerSettingsDto playerSettings = new PlayerSettingsStore(project).Load();
+        // 按 PlayerSettings 构造 Engine，并挂载 Editor 扩展与内容包
         Engine engine = new EngineBuilder()
             .WithProject(project.ToEngineProject(sceneRelativePath))
             .ApplyRuntimeDefaults(playerSettings, applyStartupScene: false)
@@ -113,13 +117,20 @@ internal sealed class EditorProjectSession : IDisposable
         }
     }
 
+    /// <summary>
+    /// 推进一帧编辑器运行：先同步场景投影，再驱动 Engine tick。
+    /// </summary>
     public void RunOneTick(double deltaSeconds)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        // 编辑模式下场景图变更后重建 ScriptScene 投影
         RefreshEditProjectionIfNeeded();
         _ = Engine.RunOneTick(deltaSeconds);
     }
 
+    /// <summary>
+    /// 进入游玩模式（临时 Play 会话，退出后恢复编辑快照）。
+    /// </summary>
     public void EnterPlayMode()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -132,30 +143,30 @@ internal sealed class EditorProjectSession : IDisposable
         _ = ExitEditorPlay();
     }
 
-    public PixelEngine.Hosting.EditorPlaySessionSnapshot CaptureEditorPlaySession()
+    public Hosting.EditorPlaySessionSnapshot CaptureEditorPlaySession()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _playSession.Capture();
     }
 
-    public PixelEngine.Hosting.EditorPlaySessionResult EnterPlayCurrent()
+    public Hosting.EditorPlaySessionResult EnterPlayCurrent()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         RefreshEditProjectionIfNeeded();
         return _playSession.EnterPlayCurrent();
     }
 
-    public PixelEngine.Hosting.EditorPlaySessionResult EnterPlayTemporary()
+    public Hosting.EditorPlaySessionResult EnterPlayTemporary()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         RefreshEditProjectionIfNeeded();
         return _playSession.EnterPlayTemporary();
     }
 
-    public PixelEngine.Hosting.EditorPlaySessionResult ExitEditorPlay()
+    public Hosting.EditorPlaySessionResult ExitEditorPlay()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        PixelEngine.Hosting.EditorPlaySessionResult result = _playSession.ExitPlay();
+        Hosting.EditorPlaySessionResult result = _playSession.ExitPlay();
         RefreshEditProjectionIfNeeded();
         return result;
     }
@@ -304,7 +315,7 @@ internal sealed class EditorProjectSession : IDisposable
         return _editorHost.TryStartScriptedBuildProbe(outputDirectory, runAfterBuild, out diagnostic);
     }
 
-    public PixelEngine.Editor.Shell.Build.ScriptedBuildProbeSnapshot CaptureScriptedBuildProbe()
+    public ScriptedBuildProbeSnapshot CaptureScriptedBuildProbe()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _editorHost.CaptureScriptedBuildProbe();
@@ -320,13 +331,13 @@ internal sealed class EditorProjectSession : IDisposable
         _editorHost.CancelScriptedBuildProbe();
     }
 
-    public PixelEngine.Editor.Shell.Build.ScriptedBuildSettingsProbeSnapshot ApplyScriptedBuildSettingsProbe(string outputDirectory)
+    public ScriptedBuildSettingsProbeSnapshot ApplyScriptedBuildSettingsProbe(string outputDirectory)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _editorHost.ApplyScriptedBuildSettingsProbe(outputDirectory);
     }
 
-    public PixelEngine.Editor.Shell.Build.ScriptedBuildSettingsProbeSnapshot CaptureScriptedBuildSettingsProbe()
+    public ScriptedBuildSettingsProbeSnapshot CaptureScriptedBuildSettingsProbe()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _editorHost.CaptureScriptedBuildSettingsProbe();
@@ -374,7 +385,7 @@ internal sealed class EditorProjectSession : IDisposable
         _simulationControl.SetSimHz(simHz);
     }
 
-    public PixelEngine.Hosting.SimulationControlSnapshot CaptureSimulationControl()
+    public Hosting.SimulationControlSnapshot CaptureSimulationControl()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _simulationControl.Capture();
@@ -382,6 +393,9 @@ internal sealed class EditorProjectSession : IDisposable
 
     public string SceneFilePath => Project.ResolveSceneFullPath(CurrentSceneRelativePath);
 
+    /// <summary>
+    /// 将当前场景图序列化到磁盘并清除脏标记。
+    /// </summary>
     public void SaveScene()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -423,6 +437,9 @@ internal sealed class EditorProjectSession : IDisposable
         return CurrentSceneRelativePath;
     }
 
+    /// <summary>
+    /// 从 content 加载场景文档并替换当前编辑场景图。
+    /// </summary>
     public void OpenScene(string sceneRelativePath)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -513,6 +530,7 @@ internal sealed class EditorProjectSession : IDisposable
             success: true);
     }
 
+    // 场景图版本变化时重建 ScriptScene 投影，使 Inspector/Game View 与文档一致
     private void RefreshEditProjectionIfNeeded(bool force = false)
     {
         if (Engine.Mode == EngineExecutionMode.Play || (!force && SceneModel.Version == _runtimeProjectionVersion))

@@ -7,6 +7,7 @@ namespace PixelEngine.Editor.Tests;
 
 /// <summary>
 /// 子系统调参面板测试。
+/// 不变式：子系统调参写入可回滚、非法值被拒绝。
 /// </summary>
 public sealed class TuningPanelTests
 {

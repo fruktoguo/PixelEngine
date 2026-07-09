@@ -4,6 +4,9 @@ using PixelEngine.UI;
 
 namespace PixelEngine.Editor.Shell.Settings;
 
+/// <summary>
+/// Player Settings ImGui 面板。
+/// </summary>
 internal sealed class PlayerSettingsPanel : IEditorPanel
 {
     public const string PanelTitle = EditorDockSpace.PlayerSettingsWindowTitle;
@@ -48,12 +51,9 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
             RuntimeUiBackend = UiBackendKind.ManagedFallback,
             ReleaseChannel = PlayerReleaseChannel.Production,
         };
-        if (!TryApplyPlayerSettings(next, out string diagnostic))
-        {
-            throw new InvalidOperationException(diagnostic);
-        }
-
-        return CaptureScriptedPlayerSettingsProbe();
+        return !TryApplyPlayerSettings(next, out string diagnostic)
+            ? throw new InvalidOperationException(diagnostic)
+            : CaptureScriptedPlayerSettingsProbe();
     }
 
     public ScriptedPlayerSettingsProbeSnapshot CaptureScriptedPlayerSettingsProbe()
@@ -94,6 +94,7 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
     public void Draw(in EditorContext context)
     {
         _ = context;
+        // 玩家包运行时设置：窗口、VSync、启动场景与发布通道
         bool visible = Visible;
         if (!ImGui.Begin(Title, ref visible))
         {
@@ -231,6 +232,9 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
     }
 }
 
+/// <summary>
+/// 脚本化验收探针：ScriptedPlayerSettingsProbeSnapshot。
+/// </summary>
 internal sealed record ScriptedPlayerSettingsProbeSnapshot
 {
     public string WindowTitle { get; init; } = string.Empty;

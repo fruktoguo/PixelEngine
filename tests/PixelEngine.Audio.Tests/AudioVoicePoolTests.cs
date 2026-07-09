@@ -4,8 +4,14 @@ using Xunit;
 
 namespace PixelEngine.Audio.Tests;
 
+/// <summary>
+/// 音频声道池测试：借还、上限与饥饿策略。
+/// </summary>
 public sealed class AudioVoicePoolTests
 {
+    /// <summary>
+    /// 验证声道池预分配声源And复用已停止声道。
+    /// </summary>
     [Fact]
     public void VoicePoolPreallocatesSourcesAndReusesStoppedVoices()
     {
@@ -23,6 +29,9 @@ public sealed class AudioVoicePoolTests
         Assert.Equal(1, backend.StopCalls);
     }
 
+    /// <summary>
+    /// 验证声道池释放全部预分配声源用于泄漏取证。
+    /// </summary>
     [Fact]
     public void VoicePoolDisposesAllPreallocatedSourcesForLeakEvidence()
     {
@@ -37,6 +46,9 @@ public sealed class AudioVoicePoolTests
         Assert.Equal(0, backend.LiveObjectCount);
     }
 
+    /// <summary>
+    /// 验证声道池窃取更低优先级更远声道当池满时。
+    /// </summary>
     [Fact]
     public void VoicePoolStealsLowerPriorityFartherVoiceWhenFull()
     {
@@ -54,6 +66,9 @@ public sealed class AudioVoicePoolTests
         Assert.Equal(1, backend.StopCalls);
     }
 
+    /// <summary>
+    /// 验证声道池拒绝更低优先级当全部声道优先级更高时。
+    /// </summary>
     [Fact]
     public void VoicePoolRejectsLowerPriorityWhenAllVoicesAreHigherPriority()
     {
@@ -69,6 +84,9 @@ public sealed class AudioVoicePoolTests
         Assert.Equal(0, pool.StealCount);
     }
 
+    /// <summary>
+    /// 验证空后端记录监听器与播放。
+    /// </summary>
     [Fact]
     public void NullBackendRecordsListenerAndPlayback()
     {

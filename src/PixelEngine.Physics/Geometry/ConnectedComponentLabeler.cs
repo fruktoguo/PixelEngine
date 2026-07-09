@@ -39,6 +39,7 @@ public static class ConnectedComponentLabeler
             Span<int> stack = rentedStack.AsSpan(0, area);
             int componentCount = 0;
 
+            // 线性扫描未标记固体种子，每个种子启动一次 flood fill。
             for (int index = 0; index < area; index++)
             {
                 if (solidMask[index] == 0 || labels[index] != 0)
@@ -94,6 +95,7 @@ public static class ConnectedComponentLabeler
         int maxY = -1;
         bool touchesBorder = false;
 
+        // 显式栈 flood fill：同时累计像素数、包围盒与是否触边。
         while (stackCount > 0)
         {
             int index = stack[--stackCount];
@@ -112,6 +114,7 @@ public static class ConnectedComponentLabeler
             TryPush(solidMask, width, height, labels, stack, ref stackCount, label, x, y - 1);
             TryPush(solidMask, width, height, labels, stack, ref stackCount, label, x, y + 1);
 
+            // Eight 连通额外检查四个对角邻居。
             if (connectivity == Connectivity.Eight)
             {
                 TryPush(solidMask, width, height, labels, stack, ref stackCount, label, x - 1, y - 1);

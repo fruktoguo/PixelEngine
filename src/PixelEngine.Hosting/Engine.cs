@@ -412,6 +412,7 @@ public sealed class Engine : IDisposable
         return AttachWindowRuntime(window, takeOwnership: false);
     }
 
+    // 窗口运行时接入：注册窗口服务、串联输入/相机/渲染，并在相位 0 监听关闭请求。
     private RenderWindow AttachWindowRuntime(RenderWindow window, bool takeOwnership)
     {
         ThrowIfShutdown();
@@ -540,7 +541,7 @@ public sealed class Engine : IDisposable
         Context.RegisterService(pipeline);
         Context.RegisterService<IGpuComputeQualityDegrader>(pipeline);
         Context.RegisterService<IRenderPresentationControl>(pipeline);
-        Context.RegisterService<IRenderStyleQualityController>(driver.RenderStyleQuality);
+        Context.RegisterService(driver.RenderStyleQuality);
         Context.RegisterService<IRenderFrameSink>(sink);
         Context.RegisterService(sink);
         Context.RegisterService(driver.GetType(), driver);
@@ -550,6 +551,7 @@ public sealed class Engine : IDisposable
         return driver;
     }
 
+    // GUI 叠层装配：按脚本 GUI / GameUi / Editor 扩展需求惰性创建 UiLayerCompositor 与 GuiRenderBridge。
     private void AttachGuiRuntime(RenderWindow window, RenderPipeline pipeline)
     {
         IScriptRuntime? scriptRuntime = null;
@@ -581,6 +583,7 @@ public sealed class Engine : IDisposable
             gameUiPresentTargetProvider = ResolveGameUiPresentTargetProvider(registeredExtensions);
         }
 
+        // RmlUi/Ultralight 走独立 present 层；ManagedFallback 复用 ImGui bridge。
         bool gameUiNeedsDirectLayer = gameUi is not null && gameUi.BackendKind != UiBackendKind.ManagedFallback;
         bool gameUiNeedsGuiBridge = gameUi is not null && gameUi.BackendKind == UiBackendKind.ManagedFallback;
         bool needsGuiBridge = hasScriptGui || gameUiNeedsGuiBridge;
@@ -691,6 +694,7 @@ public sealed class Engine : IDisposable
         return created;
     }
 
+    // GameUi 宿主解析：创建后端、初始化字体/输入路由，RmlUi 初始化失败时自动回退 ManagedFallback。
     private GameUiHost ResolveGameUiHost(RenderWindow window)
     {
         if (Context.TryGetService(out GameUiHost existing))
@@ -713,6 +717,7 @@ public sealed class Engine : IDisposable
         {
             InitializeGameUiHost(host, backend, window, fontSelection);
         }
+        // native 库缺失、入口点不匹配或 GL 初始化失败时降级到托管 UI 后端。
         catch (Exception ex) when (backend.Kind == UiBackendKind.RmlUi && IsRmlUiFallbackException(ex))
         {
             fallbackReason = $"RmlUi 初始化失败，回退 ManagedFallback：{ex.GetType().Name}: {ex.Message}";
@@ -742,7 +747,7 @@ public sealed class Engine : IDisposable
         Context.RegisterService(inputRouter.TextCompositionCapabilities);
         Context.RegisterService(inputRouter);
         GameUiServiceBridge service = new(host, Context.Options.ContentRoot, stringPool: strings);
-        Context.RegisterService<GameUiServiceBridge>(service);
+        Context.RegisterService(service);
         Context.RegisterService<IGameUiService>(service);
         GameUiPhaseDriver driver = new(host, eventSink: service, modelPusher: service);
         Context.RegisterService(driver.GetType(), driver);
@@ -751,6 +756,7 @@ public sealed class Engine : IDisposable
         return host;
     }
 
+    // 按请求后端类型选择实现；RmlUi 需通过 native profile gate 与 DLL 探针双重校验。
     private IGameUiBackend CreateGameUiBackend(
         RenderWindow window,
         UiBackendKind requestedBackend,
@@ -789,15 +795,12 @@ public sealed class Engine : IDisposable
             return new RmlUiBackend(window, stringResolver: strings);
         }
 
-        if (requestedBackend == UiBackendKind.Ultralight)
-        {
-            return CreateManagedFallbackGameUiBackend(
+        return requestedBackend == UiBackendKind.Ultralight
+            ? CreateManagedFallbackGameUiBackend(
                 window,
                 out fallbackReason,
-                UltralightOptionalProfileGate.InactiveReason);
-        }
-
-        throw new ArgumentOutOfRangeException(nameof(requestedBackend), requestedBackend, "未知游戏 UI 后端。");
+                UltralightOptionalProfileGate.InactiveReason)
+            : throw new ArgumentOutOfRangeException(nameof(requestedBackend), requestedBackend, "未知游戏 UI 后端。");
     }
 
     private ManagedFallbackBackend CreateManagedFallbackGameUiBackend(RenderWindow window)
@@ -828,6 +831,7 @@ public sealed class Engine : IDisposable
         return ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or InvalidOperationException;
     }
 
+    // 输入仲裁：Editor 捕获 → ImGui → GameUi，最终转换为脚本输入路由。
     private ScriptInputRoute ResolveGuiInputRoute()
     {
         InputArbitrationState input = ApplyEditorInputCapture(InputArbitrationState.Allowed);
@@ -1218,13 +1222,13 @@ public sealed class Engine : IDisposable
     /// 已接入脚本运行时后再次调用会替换编辑态 authoring projection，并同步默认脚本运行时引用。
     /// </summary>
     /// <param name="scriptScene">已由调用方物化好的脚本 Scene。</param>
-    public void AttachScriptScene(PixelEngine.Scripting.Scene scriptScene)
+    public void AttachScriptScene(Scripting.Scene scriptScene)
     {
         ThrowIfShutdown();
         ArgumentNullException.ThrowIfNull(scriptScene);
         Scene current = Context.GetService<ISceneService>().Current ??
             throw new InvalidOperationException("当前没有已加载场景，不能接入脚本 Scene。");
-        PixelEngine.Scripting.Scene? previous = current.ScriptScene;
+        Scripting.Scene? previous = current.ScriptScene;
         bool replacing = previous is not null && !ReferenceEquals(previous, scriptScene);
         if (replacing && _attachedScriptRuntime is not null && _attachedScriptRuntime is not ScriptRuntime)
         {
@@ -1302,7 +1306,8 @@ public sealed class Engine : IDisposable
             throw new ArgumentException("自定义脚本运行时不能同时由 Hosting 自动接入热重载。", nameof(hotReload));
         }
 
-        PixelEngine.Scripting.Scene scriptScene = ResolveCurrentScriptScene();
+        // 从已注册服务物化脚本上下文：优先复用 Simulation 相位驱动中的真实世界句柄。
+        Scripting.Scene scriptScene = ResolveCurrentScriptScene();
         SimulationPhaseDriver? simulationDriver = Context.TryGetService(out SimulationPhaseDriver driver)
             ? driver
             : null;
@@ -1385,14 +1390,13 @@ public sealed class Engine : IDisposable
         ScriptCameraSyncPhaseDriver? cameraSyncDriver,
         ScriptLightingSyncPhaseDriver? lightingSyncDriver)
     {
-        // Window runtime can attach camera/lighting before scripting. Registering the same drivers
-        // once after ScriptingPhaseDriver keeps their documented "after script update" semantics.
+        // 窗口运行时可能在脚本接入前就绑定了相机/光照驱动；此处二次注册以保证它们在脚本 Update 之后同步。
         cameraSyncDriver?.RegisterPhases(Phases);
         lightingSyncDriver?.RegisterPhases(Phases);
     }
 
     private IScriptRuntime CreateScriptRuntime(
-        PixelEngine.Scripting.Scene scriptScene,
+        Scripting.Scene scriptScene,
         IScriptContext scriptContext,
         ScriptHotReloadRuntimeOptions? hotReload)
     {
@@ -1460,7 +1464,7 @@ public sealed class Engine : IDisposable
 
         if (scene.Descriptor.SourceKind == SceneSourceKind.SceneFile && scene.ResolvedSource is not null)
         {
-            PixelEngine.Scripting.Scene scriptScene = EngineSceneDocumentLoader.Load(
+            Scripting.Scene scriptScene = EngineSceneDocumentLoader.Load(
                 scene.ResolvedSource,
                 Context.GetService<ScriptAssemblyRegistry>());
             scene.AttachScriptScene(scriptScene);
@@ -1470,7 +1474,7 @@ public sealed class Engine : IDisposable
 
         if (scene.Descriptor.SourceKind == SceneSourceKind.Procedural && scene.ResolvedSource is not null)
         {
-            PixelEngine.Scripting.Scene scriptScene = BuildProceduralScriptScene(
+            Scripting.Scene scriptScene = BuildProceduralScriptScene(
                 scene.ResolvedSource,
                 Context.GetService<ScriptAssemblyRegistry>());
             scene.AttachScriptScene(scriptScene);
@@ -1478,10 +1482,10 @@ public sealed class Engine : IDisposable
         }
     }
 
-    private PixelEngine.Scripting.Scene ResolveCurrentScriptScene()
+    private Scripting.Scene ResolveCurrentScriptScene()
     {
         MaterializeCurrentSceneScriptsIfPossible();
-        if (Context.TryGetService(out PixelEngine.Scripting.Scene scriptScene))
+        if (Context.TryGetService(out Scripting.Scene scriptScene))
         {
             return scriptScene;
         }
@@ -1842,7 +1846,7 @@ public sealed class Engine : IDisposable
             audio.AttachAmbientLoopManager(new AmbientLoopManager(audio.Backend, table, resolver, settings));
         }
 
-        AudioDispatcher dispatcher = new(Context.Events.Channel<PixelEngine.Core.Events.AudioEvent>(), audio.Voices, settings);
+        AudioDispatcher dispatcher = new(Context.Events.Channel<Core.Events.AudioEvent>(), audio.Voices, settings);
         MaterialAudioPlayer player = new(table, resolver, settings);
         return new AudioPhaseDriver(audio, BuildAudioListenerView, dispatcher, player);
     }
@@ -1888,8 +1892,8 @@ public sealed class Engine : IDisposable
     private static void AddResidentChunks(ResidentChunkMap chunks, int worldWidthCells, int worldHeightCells)
     {
         const int ResidentBorderChunks = 2;
-        int lastPlayableChunkX = (worldWidthCells - 1) / PixelEngine.Core.EngineConstants.ChunkSize;
-        int lastPlayableChunkY = (worldHeightCells - 1) / PixelEngine.Core.EngineConstants.ChunkSize;
+        int lastPlayableChunkX = (worldWidthCells - 1) / Core.EngineConstants.ChunkSize;
+        int lastPlayableChunkY = (worldHeightCells - 1) / Core.EngineConstants.ChunkSize;
         // Resident world 没有 WorldManager 的按帧边界补环，脚本/input-phase 写入会把第一圈 border 标成 current dirty。
         // 预驻留第二圈，保证被唤醒的 border chunk 也能构造 CA 所需的完整 3x3 邻域。
         for (int cy = -ResidentBorderChunks; cy <= lastPlayableChunkY + ResidentBorderChunks; cy++)
@@ -1942,6 +1946,7 @@ public sealed class Engine : IDisposable
         return residency;
     }
 
+    // Simulation 世界装配：构建 CellGrid/Kernel、注册编辑 API 与 EngineServiceRole 别名。
     private SimulationPhaseDriver AttachSimulationWorld(
         ResidentChunkMap chunks,
         MaterialTable materials,
@@ -2094,6 +2099,7 @@ public sealed class Engine : IDisposable
         return null;
     }
 
+    // 程序化世界：Describe 获取尺寸/种子 → 装配 resident chunks → Populate 填充初始内容。
     private bool AttachProceduralSceneWorld(Scene scene, int particleCapacity)
     {
         if (scene.Descriptor.SourceKind != SceneSourceKind.Procedural)
@@ -2170,13 +2176,13 @@ public sealed class Engine : IDisposable
         return Path.GetFullPath(Path.Combine(directory, source));
     }
 
-    private static PixelEngine.Scripting.Scene BuildProceduralScriptScene(
+    private static Scripting.Scene BuildProceduralScriptScene(
         string entryBehaviourName,
         ScriptAssemblyRegistry scriptAssemblies)
     {
         Type behaviourType = ResolveBehaviourType(entryBehaviourName, scriptAssemblies);
-        PixelEngine.Scripting.Scene scriptScene = new();
-        PixelEngine.Scripting.Entity entity = scriptScene.CreateEntity();
+        Scripting.Scene scriptScene = new();
+        Entity entity = scriptScene.CreateEntity();
         _ = entity.AddComponent(behaviourType);
         return scriptScene;
     }
@@ -2258,6 +2264,7 @@ public sealed class Engine : IDisposable
         FrameTiming timing;
         try
         {
+            // 相位 0：过载策略、帧率统计与帧时钟推进。
             using (profiler.Measure(FramePhase.InputAndTime))
             {
                 ApplyOverloadPolicy(realDeltaSeconds);
@@ -2266,8 +2273,10 @@ public sealed class Engine : IDisposable
                 PublishScriptFrameTime(timing);
             }
 
+            // 相位 1-11：按 EnginePhasePipeline 顺序执行各子系统 tick。
             Phases.Execute(this, timing);
             Context.Counters.SimHz = Context.Clock.SimHz;
+            // 首次脚本 tick 后捕获重开关卡基线快照。
             TryCaptureRestartSnapshot(timing);
             if (IsShutdownRequested)
             {
@@ -2367,6 +2376,7 @@ public sealed class Engine : IDisposable
         ObjectDisposedException.ThrowIf(State == EngineRunState.Shutdown, this);
     }
 
+    // 过载降级：根据帧耗时调整质量档位，并联动热力学步进、渲染风格、GameUi 与 GPU compute。
     private void ApplyOverloadPolicy(double realDeltaSeconds)
     {
         EngineOverloadController overload = Context.GetService<EngineOverloadController>();
@@ -2389,10 +2399,11 @@ public sealed class Engine : IDisposable
         }
 
         Context.Clock.SimHz = tier >= EngineQualityTier.Sim30Hz
-            ? PixelEngine.Core.EngineConstants.SimHzDownscaled
+            ? Core.EngineConstants.SimHzDownscaled
             : RequestedSimHz;
     }
 
+    // GameUi present 降频：过载越高，paint/composite 间隔越大以回收 CPU/GPU 预算。
     private void ApplyGameUiDegradation(EngineQualityTier tier)
     {
         if (!Context.TryGetService(out GameUiHost gameUiHost))
@@ -2537,6 +2548,7 @@ public sealed class Engine : IDisposable
         return (uint)index < (uint)subPhases.Length ? subPhases[index] : 0.0;
     }
 
+    // ReducedThermal 起将热力学步进间隔从每 tick 降为每 4 tick，降低温度/相变 CPU 开销。
     private void ApplyThermalDegradation(EngineQualityTier tier)
     {
         if (!Context.TryGetService(out TemperatureField temperature))
@@ -2549,6 +2561,7 @@ public sealed class Engine : IDisposable
             : FullThermalStepInterval);
     }
 
+    // ReducedThermal 起关闭 CPU RenderStyle 差异化着色，减轻 render buffer 构建成本。
     private void ApplyRenderStyleDegradation(EngineQualityTier tier)
     {
         if (!Context.TryGetService(out IRenderStyleQualityController renderStyle))

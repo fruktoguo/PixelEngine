@@ -5,6 +5,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// plan/16 热路径源码纪律测试。
+/// 不变式：热路径禁用 LINQ/分配、关键循环保持内联友好结构。
 /// </summary>
 public sealed class PerformanceHardeningHotPathDisciplineTests
 {
@@ -34,6 +35,8 @@ public sealed class PerformanceHardeningHotPathDisciplineTests
     /// 验证 plan/16 明确列出的热路径文件不含 LINQ、迭代器、params 或字符串拼接。
     /// </summary>
     [Fact]
+
+    // —— 热路径源码纪律 ——
     public void HotPathSourcesAvoidAllocationProneConstructs()
     {
         string root = FindRepositoryRoot();

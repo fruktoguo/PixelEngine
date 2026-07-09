@@ -60,6 +60,7 @@ public static class DemoProgram
         Justification = "NativeAOT win-x64 publish is smoke-tested from this entry point; remaining Enum.GetValues(Type) analysis comes from the Silk.NET/System.Text.Json dependency closure rather than Demo startup code.")]
     public static int Execute(string[] args)
     {
+        // 打包发布时把 app/ 原生依赖目录加入 PATH
         ConfigurePackagedNativeSearchPath();
         DemoStartupOptions? options = null;
         try
@@ -98,7 +99,7 @@ public static class DemoProgram
     }
 
     /// <summary>
-    /// 按给定参数构造并运行 Demo。
+    /// Demo 运行时主流程：构造 Engine → 挂载内容/脚本/窗口 → Headless 或窗口循环。
     /// </summary>
     /// <param name="options">启动参数。</param>
     public static void Run(DemoStartupOptions options)
@@ -112,6 +113,8 @@ public static class DemoProgram
         EngineProject project = BuildProject(options);
         using Engine engine = BuildEngine(options, project);
         engine.RegisterProceduralWorldGenerator(PlayableCavernWorldGenerator.Key, new PlayableCavernWorldGenerator());
+
+        // 内容包就绪时挂载 Simulation/Physics/Audio；否则走最小冒烟 world
         bool contentLoaded = false;
         if (engine.HasContentPackage())
         {
@@ -140,6 +143,7 @@ public static class DemoProgram
             AttachMinimalSmokeWorld(engine);
         }
 
+        // 注册 Demo 与随包脚本程序集，并按能力接入 Scripting 与热重载
         ScriptAssemblyRegistry scriptAssemblies = engine.Context.GetService<ScriptAssemblyRegistry>();
         scriptAssemblies.Register(assembly);
         RegisterPackagedScriptAssemblies(engine, options, RuntimeFeature.IsDynamicCodeSupported);
@@ -148,7 +152,7 @@ public static class DemoProgram
             : "脚本程序集已注册；热重载已由参数关闭。");
         if (contentLoaded)
         {
-            PixelEngine.Scripting.ScriptHotReloadRuntimeOptions? hotReload = CreateHotReloadOptions(
+            ScriptHotReloadRuntimeOptions? hotReload = CreateHotReloadOptions(
                 options,
                 RuntimeFeature.IsDynamicCodeSupported);
             _ = engine.AttachScriptingFromServices(hotReload: hotReload);
@@ -165,10 +169,11 @@ public static class DemoProgram
             new DemoLoadCountersPhaseDriver(engine.Context.GetService<ScriptScene>()).RegisterPhases(engine.Phases);
         }
 
+        // Headless 模式只跑逻辑 tick，不创建窗口
         if (options.Headless)
         {
             engine.RunHeadlessTicks(options.HeadlessTicks);
-            PixelEngine.Hosting.Scene? current = engine.Context.GetService<ISceneService>().Current;
+            Hosting.Scene? current = engine.Context.GetService<ISceneService>().Current;
             Console.WriteLine($"Engine frame: {engine.Context.Clock.FrameIndex}, scene: {current?.Name}");
             return;
         }
@@ -186,7 +191,8 @@ public static class DemoProgram
             particleFrameProbe.RegisterPhases(engine.Phases);
         }
 
-        PixelEngine.Rendering.RenderWindow window = engine.AttachWindowRuntime();
+        // 窗口运行时：标题诊断、帧截图、粒子渲染模式与脚本化探针
+        RenderWindow window = engine.AttachWindowRuntime();
         RegisterWindowTitleDiagnostics(engine, window);
         FrameCaptureState? frameCapture = RegisterFrameCapture(engine, window, options);
         ApplyParticleRenderMode(engine, options);
@@ -242,6 +248,7 @@ public static class DemoProgram
             Console.WriteLine("可玩 Demo 控制：A/D 或方向键移动，Space/W/Up 跳跃，鼠标左键射击破坏地形，Esc 暂停。");
         }
 
+        // 有限帧数短跑：采集 tick 耗时与相位 profile 后退出
         if (options.WindowTicks > 0)
         {
             DemoWindowFrameTimeProbe windowFrameProbe = new(
@@ -405,7 +412,7 @@ public static class DemoProgram
         int height = window.Height;
         byte[] bgra = new byte[checked(width * height * 4)];
         window.Gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-        window.Gl.ReadPixels<byte>(0, 0, (uint)width, (uint)height, PixelFormat.Bgra, PixelType.UnsignedByte, bgra);
+        window.Gl.ReadPixels(0, 0, (uint)width, (uint)height, PixelFormat.Bgra, PixelType.UnsignedByte, bgra);
         WriteBgraBottomUpBmp(path, width, height, bgra);
     }
 
@@ -771,7 +778,7 @@ public static class DemoProgram
         _ = engine.AttachResidentSimulationWorld(DemoWorldWidthCells, DemoWorldHeightCells, DemoParticleCapacityDefault);
     }
 
-    private static PixelEngine.Scripting.ScriptHotReloadRuntimeOptions? CreateHotReloadOptions(
+    private static ScriptHotReloadRuntimeOptions? CreateHotReloadOptions(
         DemoStartupOptions options,
         bool dynamicCodeSupported)
     {
@@ -785,7 +792,7 @@ public static class DemoProgram
         string? sourceDirectory = contentDirectory.Parent?.FullName;
         return string.IsNullOrWhiteSpace(sourceDirectory) || !Directory.Exists(sourceDirectory)
             ? null
-            : new PixelEngine.Scripting.ScriptHotReloadRuntimeOptions(
+            : new ScriptHotReloadRuntimeOptions(
                 "PixelEngine.Demo.HotReload",
                 sourceDirectory,
                 PreserveState: true,

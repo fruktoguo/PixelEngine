@@ -4,6 +4,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// 连续 cell span 批量扫描 SIMD helper 测试。
+/// 不变式：连续 span 扫描结果与逐格 oracle 一致。
 /// </summary>
 public sealed class CellSpanOpsTests
 {

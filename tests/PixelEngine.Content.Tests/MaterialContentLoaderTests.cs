@@ -57,7 +57,7 @@ public sealed class MaterialContentLoaderTests
     [Fact]
     public void LoadClampsDispersionToMoveCap()
     {
-        const string materialsJson = """
+        const string materialsJson = /*lang=json,strict*/ """
         { "materials": [
           { "name": "empty", "type": "Empty", "heatCapacity": 1 },
           { "name": "water", "type": "Liquid", "dispersion": 255, "heatCapacity": 1 }
@@ -77,7 +77,7 @@ public sealed class MaterialContentLoaderTests
     [Fact]
     public void LoadFallsBackMissingDestroyedTargetToEmpty()
     {
-        const string materialsJson = """
+        const string materialsJson = /*lang=json,strict*/ """
         { "materials": [
           { "name": "empty", "type": "Empty", "heatCapacity": 1 },
           { "name": "stone", "type": "Solid", "heatCapacity": 1, "integrity": 40, "destroyedTarget": "missing_gravel" }
@@ -128,7 +128,7 @@ public sealed class MaterialContentLoaderTests
     [Fact]
     public void LoadRejectsOutputTagWithoutRepresentative()
     {
-        const string materialsJson = """
+        const string materialsJson = /*lang=json,strict*/ """
         {
           "materials": [
             { "name": "empty", "type": "Empty", "heatCapacity": 1 },
@@ -137,7 +137,7 @@ public sealed class MaterialContentLoaderTests
           ]
         }
         """;
-        const string reactionsJson = """
+        const string reactionsJson = /*lang=json,strict*/ """
         {
           "reactions": [
             { "inputA": "[fire]", "inputB": "[corrodible]", "outputA": "[fire]", "outputB": "empty" }
@@ -156,7 +156,7 @@ public sealed class MaterialContentLoaderTests
     [Fact]
     public void LoadRejectsProbabilityOutsideSchemaRange()
     {
-        const string reactionsJson = """
+        const string reactionsJson = /*lang=json,strict*/ """
         { "reactions": [
           { "inputA": "fire", "inputB": "wood", "outputA": "ash", "outputB": "smoke", "probability": 101 }
         ] }
@@ -173,7 +173,7 @@ public sealed class MaterialContentLoaderTests
     [Fact]
     public void LoadRejectsRuntimeOnlyCustomUpdateProperty()
     {
-        const string materialsJson = """
+        const string materialsJson = /*lang=json,strict*/ """
         { "materials": [
           { "name": "empty", "type": "Empty", "heatCapacity": 1, "tags": [ "has_custom_update" ] }
         ] }
@@ -226,9 +226,9 @@ public sealed class MaterialContentLoaderTests
         Assert.Equal(0, reaction.OutputB);
     }
 
-    private const string EmptyReactionsJson = """{ "reactions": [] }""";
+    private const string EmptyReactionsJson = /*lang=json,strict*/ """{ "reactions": [] }""";
 
-    private const string ReactionsJson = """
+    private const string ReactionsJson = /*lang=json,strict*/ """
     {
       "reactions": [
         {
@@ -243,7 +243,7 @@ public sealed class MaterialContentLoaderTests
     }
     """;
 
-    private const string MaterialsJson = """
+    private const string MaterialsJson = /*lang=json,strict*/ """
     {
       "tagRepresentatives": [
         { "tag": "fire", "material": "smoke" },

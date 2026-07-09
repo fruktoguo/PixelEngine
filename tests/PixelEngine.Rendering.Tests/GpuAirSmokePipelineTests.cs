@@ -4,8 +4,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// GPU 空气烟雾管线测试：调度网格、资源绑定与输出契约。
+/// </summary>
 public sealed class GpuAirSmokePipelineTests
 {
+    /// <summary>
+    /// 验证Air Smoke Settings Default Off And Validates Range。
+    /// </summary>
     [Fact]
     public void AirSmokeSettingsDefaultOffAndValidatesRange()
     {
@@ -20,6 +26,9 @@ public sealed class GpuAirSmokePipelineTests
         Assert.Contains(nameof(AirSmokeSettings.Diffusion), exception.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Constructor Loads Air Smoke Kernel Only。
+    /// </summary>
     [Fact]
     public void ConstructorLoadsAirSmokeKernelOnly()
     {
@@ -30,6 +39,9 @@ public sealed class GpuAirSmokePipelineTests
         Assert.Equal([GpuComputeShaderSources.AirSmokeDiffuseMargolusName], backend.LoadedKernelNames);
     }
 
+    /// <summary>
+    /// 验证Dispatch Margolus Step Binds Independent Density Images And Parity。
+    /// </summary>
     [Fact]
     public void DispatchMargolusStepBindsIndependentDensityImagesAndParity()
     {
@@ -57,6 +69,9 @@ public sealed class GpuAirSmokePipelineTests
             item.Contains("TextureFetchBarrierBit", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// 验证Source Documents Non Authoritative No Readback Contract。
+    /// </summary>
     [Fact]
     public void SourceDocumentsNonAuthoritativeNoReadbackContract()
     {
@@ -70,6 +85,9 @@ public sealed class GpuAirSmokePipelineTests
         Assert.Contains("CPU→GPU 单向播种", resources, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Source And Pipeline Use Same Image Format And Uniform Names。
+    /// </summary>
     [Fact]
     public void SourceAndPipelineUseSameImageFormatAndUniformNames()
     {
@@ -87,6 +105,9 @@ public sealed class GpuAirSmokePipelineTests
         Assert.DoesNotContain("uDissipation", pipelineSource, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Dispatch不会Allocate Managed Memory。
+    /// </summary>
     [Fact]
     public void DispatchDoesNotAllocateManagedMemory()
     {

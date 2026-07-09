@@ -5,6 +5,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// 脚本事件总线适配测试。
+/// 不变式：事件总线订阅/发布顺序确定、异常不污染其他订阅者。
 /// </summary>
 public sealed class ScriptEventBusTests
 {
@@ -14,11 +15,13 @@ public sealed class ScriptEventBusTests
     [Fact]
     public void ScriptEventBusDrainsSubscribedCoreEvents()
     {
+        // Arrange：准备输入与初始状态
         EventBus coreEvents = new(capacityPerChannel: 8);
         using ScriptEventBus scriptEvents = new(coreEvents);
         List<int> values = [];
         using IDisposable subscription = scriptEvents.Subscribe<TestEvent>(item => values.Add(item.Value));
 
+        // Assert：验证预期结果
         Assert.True(coreEvents.Channel<TestEvent>().TryEnqueue(new TestEvent(7)));
         scriptEvents.DrainEvents();
         subscription.Dispose();
@@ -76,6 +79,7 @@ public sealed class ScriptEventBusTests
     [Fact]
     public void ScriptRuntimeClearsTransientOverlayAtFrameStart()
     {
+        // Arrange：准备输入与初始状态
         EventBus coreEvents = new(capacityPerChannel: 8);
         using ScriptEventBus scriptEvents = new(coreEvents);
         Scene scene = new();
@@ -86,6 +90,7 @@ public sealed class ScriptEventBusTests
         runtime.Initialize(context);
 
         overlay.SolidRectangle(1, 2, 3, 4, 0xFF_10_20_30);
+        // Assert：验证预期结果
         Assert.Equal(1, overlay.CommandCount);
 
         runtime.BeginFrame();
@@ -107,6 +112,7 @@ public sealed class ScriptEventBusTests
     [Fact]
     public void BehaviourOwnedSubscriptionsAreDisposedOnDestroy()
     {
+        // Arrange：准备输入与初始状态
         EventBus coreEvents = new(capacityPerChannel: 8);
         using ScriptEventBus scriptEvents = new(coreEvents);
         Scene scene = new();
@@ -117,6 +123,7 @@ public sealed class ScriptEventBusTests
         runtime.Initialize(context);
 
         runtime.BeginFrame();
+        // Assert：验证预期结果
         Assert.True(coreEvents.Channel<TestEvent>().TryEnqueue(new TestEvent(1)));
         runtime.Update(0.016f);
         scene.Destroy(entity);
@@ -133,6 +140,7 @@ public sealed class ScriptEventBusTests
     [Fact]
     public void EventHandlerExceptionFaultsOwningBehaviour()
     {
+        // Arrange：准备输入与初始状态
         EventBus coreEvents = new(capacityPerChannel: 8);
         using ScriptEventBus scriptEvents = new(coreEvents);
         Scene scene = new();
@@ -142,6 +150,7 @@ public sealed class ScriptEventBusTests
         runtime.Initialize(context);
 
         runtime.BeginFrame();
+        // Assert：验证预期结果
         Assert.True(coreEvents.Channel<TestEvent>().TryEnqueue(new TestEvent(5)));
         runtime.Update(0.016f);
         Assert.True(coreEvents.Channel<TestEvent>().TryEnqueue(new TestEvent(7)));

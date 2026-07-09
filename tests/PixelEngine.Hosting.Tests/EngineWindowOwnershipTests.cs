@@ -4,6 +4,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// 窗口与渲染管线所有权契约测试。
+/// 不变式：渲染窗口所有权单一、headless 与有窗口模式互斥装配。
 /// </summary>
 public sealed class EngineWindowOwnershipTests
 {
@@ -69,9 +70,11 @@ public sealed class EngineWindowOwnershipTests
     [Fact]
     public void ResolveGuiInputRouteAppliesNeutralEditorCaptureBeforeGameUiBySourceContract()
     {
+        // Arrange：准备输入与初始状态
         string engine = ReadRepositoryFile("src", "PixelEngine.Hosting", "Engine.cs");
         string extension = ReadRepositoryFile("apps", "PixelEngine.Editor.Shell", "EditorShellHostExtension.cs");
 
+        // Assert：验证预期结果
         Assert.Contains("InputArbitrationState input = ApplyEditorInputCapture(InputArbitrationState.Allowed);", ExtractResolveGuiInputRouteBody(engine), StringComparison.Ordinal);
         Assert.Contains("InputArbitrator.ApplyGameUi(input, uiCapture)", ExtractResolveGuiInputRouteBody(engine), StringComparison.Ordinal);
         Assert.Contains("Pump(", ExtractResolveGuiInputRouteBody(engine), StringComparison.Ordinal);
@@ -92,8 +95,10 @@ public sealed class EngineWindowOwnershipTests
     [Fact]
     public void RenderWindowUiInputSourceQueuesKeyboardTextBySourceContract()
     {
+        // Arrange：准备输入与初始状态
         string source = ReadRepositoryFile("src", "PixelEngine.Hosting", "RenderWindowUiInputSource.cs");
 
+        // Assert：验证预期结果
         Assert.Contains("private const int TextBufferCapacity", source, StringComparison.Ordinal);
         Assert.Contains("KeyChar += OnKeyChar", source, StringComparison.Ordinal);
         Assert.Contains("public int CaptureText(Span<char> destination)", source, StringComparison.Ordinal);

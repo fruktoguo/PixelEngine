@@ -8,6 +8,7 @@ namespace PixelEngine.Demo.Tests;
 
 /// <summary>
 /// 熔岩矿洞逃生胜负状态机与计分验收。
+/// 不变式：熔岩矿洞胜负状态机单调、计分与关卡事件一一对应。
 /// </summary>
 public sealed class GameDirectorOutcomeTests
 {
@@ -17,8 +18,10 @@ public sealed class GameDirectorOutcomeTests
     [Fact]
     public void CollectingRequiredCrystalsAndEnteringExtractionWinsWithDeterministicScore()
     {
+        // Arrange：搭建测试场景与依赖
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" },
@@ -45,7 +48,9 @@ public sealed class GameDirectorOutcomeTests
             extraction.Height = 24f;
             extraction.CelebrationParticleCount = 0;
 
+            // Act：执行被测操作
             engine.RunHeadlessTicks(1);
+            // Assert：验证不变式与预期结果
             Assert.Equal(MissionState.Playing, mission.State);
             Assert.Equal("目标水晶未集齐或任务已结束。", extraction.BlockedReason);
 
@@ -76,6 +81,7 @@ public sealed class GameDirectorOutcomeTests
     [Fact]
     public void PlayerDeathMarksMissionLost()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreateMissionEngine(contentRoot: null, out ScriptScene scene);
         MissionFixture fixture = CreateMissionEntity(scene);
         PlayerHealth health = fixture.Health;
@@ -87,8 +93,10 @@ public sealed class GameDirectorOutcomeTests
         mission.InitialLavaSurfaceY = 80f;
         mission.LavaRiseCellsPerSecond = 0f;
 
+        // Act：执行被测操作
         engine.RunHeadlessTicks(2);
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(MissionState.Lost, mission.State);
         Assert.Equal("player_death", mission.ResultReason);
         Assert.True(health.RespawnCount > 0);

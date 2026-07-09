@@ -6,6 +6,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// Marching Squares 外轮廓测试。
+/// 不变式：外轮廓追踪不丢段、方向一致。
 /// </summary>
 public sealed class MarchingSquaresTests
 {

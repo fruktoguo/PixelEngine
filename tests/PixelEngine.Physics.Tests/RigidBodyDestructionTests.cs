@@ -10,6 +10,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// 刚体破坏/挖掘重建测试。
+/// 不变式：破坏/挖掘后刚体重建守恒像素质量。
 /// </summary>
 public sealed class RigidBodyDestructionTests
 {
@@ -19,6 +20,7 @@ public sealed class RigidBodyDestructionTests
     [Fact]
     public void RebuildDirtySplitsDamagedBodyIntoChildBodies()
     {
+        // Arrange：准备输入与初始状态
         PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
@@ -42,6 +44,7 @@ public sealed class RigidBodyDestructionTests
 
             RigidDestructionResult result = destruction.RebuildDirty(worldId, physicsWorld, grid, registry, damage, jobs);
 
+            // Assert：验证预期结果
             Assert.Equal(1, result.DamagedBodies);
             Assert.Equal(1, result.DestroyedBodies);
             Assert.Equal(2, result.CreatedBodies);
@@ -63,6 +66,7 @@ public sealed class RigidBodyDestructionTests
     [Fact]
     public void RebuildDirtyTurnsSmallRemainingComponentsIntoParticles()
     {
+        // Arrange：准备输入与初始状态
         PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
@@ -86,6 +90,7 @@ public sealed class RigidBodyDestructionTests
 
             RigidDestructionResult result = destruction.RebuildDirty(worldId, physicsWorld, grid, registry, [new RigidDamageEvent(damaged.WorldX, damaged.WorldY)]);
 
+            // Assert：验证预期结果
             Assert.Equal(1, result.DestroyedBodies);
             Assert.Equal(0, result.CreatedBodies);
             Assert.Equal(3, result.FragmentPixels);
@@ -105,6 +110,7 @@ public sealed class RigidBodyDestructionTests
     [Fact]
     public void RebuildDirtyTurnsDegenerateRemainingComponentIntoFragments()
     {
+        // Arrange：准备输入与初始状态
         PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
@@ -126,6 +132,7 @@ public sealed class RigidBodyDestructionTests
 
             RigidDestructionResult result = destruction.RebuildDirty(worldId, physicsWorld, grid, registry, damage);
 
+            // Assert：验证预期结果
             Assert.Equal(1, result.DestroyedBodies);
             Assert.Equal(0, result.CreatedBodies);
             Assert.Equal(8, result.FragmentPixels);
@@ -144,6 +151,7 @@ public sealed class RigidBodyDestructionTests
     [Fact]
     public void RebuildDirtySkipsSleepingBody()
     {
+        // Arrange：准备输入与初始状态
         PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
@@ -165,6 +173,7 @@ public sealed class RigidBodyDestructionTests
 
             RigidDestructionResult result = destruction.RebuildDirty(worldId, physicsWorld, grid, registry, damage);
 
+            // Assert：验证预期结果
             Assert.Equal(1, result.DamagedBodies);
             Assert.Equal(1, result.SkippedSleepingBodies);
             Assert.Equal(0, result.DestroyedBodies);

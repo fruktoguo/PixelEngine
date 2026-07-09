@@ -3,8 +3,14 @@ using PixelEngine.Core.Events;
 
 namespace PixelEngine.Audio.Tests;
 
+/// <summary>
+/// 音频设置测试：默认值、克隆与变更通知。
+/// </summary>
 public sealed class AudioSettingsTests
 {
+    /// <summary>
+    /// 验证Default Settings Validate And Expose声道池Defaults。
+    /// </summary>
     [Fact]
     public void DefaultSettingsValidateAndExposeVoicePoolDefaults()
     {
@@ -30,6 +36,9 @@ public sealed class AudioSettingsTests
         Assert.Equal(0.75f, settings.GetCategoryVolume(AudioVolumeCategory.Ambient));
     }
 
+    /// <summary>
+    /// 验证Settings Reject Invalid Values。
+    /// </summary>
     [Fact]
     public void SettingsRejectInvalidValues()
     {
@@ -48,6 +57,9 @@ public sealed class AudioSettingsTests
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new AudioSettings { CooldownTableCapacity = 3 }.Validate());
     }
 
+    /// <summary>
+    /// 验证Runtime Settings Resize声道池And调度器限制行为符合预期。
+    /// </summary>
     [Fact]
     public void RuntimeSettingsResizeVoicePoolAndDispatcherCaps()
     {
@@ -93,6 +105,9 @@ public sealed class AudioSettingsTests
         Assert.Equal(2, second.Played);
     }
 
+    /// <summary>
+    /// 验证音频系统应用设置调整大小Voices And更新监听器Gain。
+    /// </summary>
     [Fact]
     public void AudioSystemApplySettingsResizesVoicesAndUpdatesListenerGain()
     {

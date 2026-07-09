@@ -5,6 +5,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Plan 04 反应执行器行为测试。
+/// 不变式：双输出与 parity 正确、概率/定向/守恒语义、反应表查找与生命周期一致。
 /// </summary>
 public sealed class ReactionEngineTests
 {
@@ -25,14 +26,17 @@ public sealed class ReactionEngineTests
     [Fact]
     public void TryReactAppliesOutputsParityAndDefaultLifetime()
     {
+        // Arrange：搭建测试场景与依赖
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Fire);
         Set(center, 11, 10, Wood);
         NeighborWindow window = new(source, center.Coord);
         ReactionEngine engine = CreateSetup(Reaction(Fire, Wood, Fire, Ash, 255)).Engine;
 
+        // Act：执行被测操作
         bool reacted = engine.TryReact(ref window, 10, 10, Fire, 11, 10, Wood, CellFlags.Parity, randomByte: 254);
 
+        // Assert：验证不变式与预期结果
         Assert.True(reacted);
         Assert.Equal(Fire, Get(center, 10, 10));
         Assert.Equal(Ash, Get(center, 11, 10));
@@ -85,14 +89,17 @@ public sealed class ReactionEngineTests
     [Fact]
     public void ContactFireReactionMarksFireOutputBurning()
     {
+        // Arrange：搭建测试场景与依赖
         ReactionSetup setup = CreateSetup(Reaction(Fire, Wood, Fire, Fire, 255));
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Fire);
         Set(center, 11, 10, Wood);
         NeighborWindow window = new(source, center.Coord);
 
+        // Act：执行被测操作
         bool reacted = setup.Engine.TryReact(ref window, 10, 10, Fire, 11, 10, Wood, CellFlags.Parity, randomByte: 0);
 
+        // Assert：验证不变式与预期结果
         Assert.True(reacted);
         Assert.Equal(Fire, Get(center, 11, 10));
         Assert.True(CellFlags.Has(GetFlags(center, 11, 10), CellFlags.Burning));
@@ -105,6 +112,7 @@ public sealed class ReactionEngineTests
     [Fact]
     public void CorrosionReactionAccumulatesStructuralDamageAndKeepsAcidSource()
     {
+        // Arrange：搭建测试场景与依赖
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Acid);
         Set(center, 11, 10, CorrodibleStone);
@@ -112,6 +120,7 @@ public sealed class ReactionEngineTests
         RecordingCellDestructionSink destruction = new();
         ReactionEngine engine = CreateCorrosionEngine(CreateCorrosionMaterials(stoneHardness: 220, stoneIntegrity: 160), destruction);
 
+        // Act：执行被测操作
         bool reacted = engine.TryReact(
             ref window,
             10,
@@ -123,6 +132,7 @@ public sealed class ReactionEngineTests
             CellFlags.Parity,
             randomByte: 0);
 
+        // Assert：验证不变式与预期结果
         Assert.True(reacted);
         Assert.Equal(Acid, Get(center, 10, 10));
         Assert.Equal(CorrodibleStone, Get(center, 11, 10));
@@ -138,6 +148,7 @@ public sealed class ReactionEngineTests
     [Fact]
     public void CorrosionReactionDestroysToRubbleAndPublishesCellDestruction()
     {
+        // Arrange：搭建测试场景与依赖
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Acid);
         Set(center, 11, 10, CorrodibleStone);
@@ -145,6 +156,7 @@ public sealed class ReactionEngineTests
         RecordingCellDestructionSink destruction = new();
         ReactionEngine engine = CreateCorrosionEngine(CreateCorrosionMaterials(stoneHardness: 90, stoneIntegrity: 100), destruction);
 
+        // Act：执行被测操作
         bool reacted = engine.TryReact(
             ref window,
             10,
@@ -156,6 +168,7 @@ public sealed class ReactionEngineTests
             CellFlags.Parity,
             randomByte: 0);
 
+        // Assert：验证不变式与预期结果
         Assert.True(reacted);
         Assert.Equal(AcidGas, Get(center, 10, 10));
         Assert.Equal(CorrosionRubble, Get(center, 11, 10));
@@ -170,12 +183,14 @@ public sealed class ReactionEngineTests
     [Fact]
     public void CorrosionReactionDoesNotBypassHighHardnessMetal()
     {
+        // Arrange：搭建测试场景与依赖
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Acid);
         Set(center, 11, 10, CorrodibleMetal);
         NeighborWindow window = new(source, center.Coord);
         ReactionEngine engine = CreateCorrosionEngine(CreateCorrosionMaterials(stoneHardness: 90, stoneIntegrity: 100));
 
+        // Act：执行被测操作
         bool reacted = engine.TryReact(
             ref window,
             10,
@@ -187,6 +202,7 @@ public sealed class ReactionEngineTests
             CellFlags.Parity,
             randomByte: 0);
 
+        // Assert：验证不变式与预期结果
         Assert.False(reacted);
         Assert.Equal(Acid, Get(center, 10, 10));
         Assert.Equal(CorrodibleMetal, Get(center, 11, 10));
@@ -199,6 +215,7 @@ public sealed class ReactionEngineTests
     [Fact]
     public void StepCaSuccessfulBoundaryReactionMarksDirtyAndKeepAlive()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Chunk east = source.GetRequired(new ChunkCoord(1, 0));
         Set(center, 63, 10, Fire);
@@ -211,6 +228,7 @@ public sealed class ReactionEngineTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(Smoke, Get(center, 63, 10));
         Assert.Equal(Ash, Get(east, 0, 10));
         Assert.Equal(new DirtyRect(61, 8, 63, 12), center.WorkingDirty);
@@ -227,6 +245,7 @@ public sealed class ReactionEngineTests
     [Fact]
     public void StepCaBoundaryReactionIsNotDoubledWhenBothChunksAreDirty()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateHorizontalBoundaryNeighborhood(out Chunk center, out Chunk east);
         Set(center, 63, 10, Fire);
         Set(east, 0, 10, Wood);
@@ -237,6 +256,7 @@ public sealed class ReactionEngineTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(Smoke, Get(center, 63, 10));
         Assert.Equal(Ash, Get(east, 0, 10));
         Assert.Equal(1, kernel.Diagnostics.ReactionSuccessCount);
@@ -251,6 +271,7 @@ public sealed class ReactionEngineTests
     [Fact]
     public void StepCaVerticalBoundaryReactionIsNotDoubledWhenBothChunksAreDirty()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateVerticalBoundaryNeighborhood(out Chunk center, out Chunk south);
         Set(center, 20, 63, Fire);
         Set(south, 20, 0, Wood);
@@ -261,6 +282,7 @@ public sealed class ReactionEngineTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(Smoke, Get(center, 20, 63));
         Assert.Equal(Ash, Get(south, 20, 0));
         Assert.Equal(1, kernel.Diagnostics.ReactionSuccessCount);
@@ -275,6 +297,7 @@ public sealed class ReactionEngineTests
     [Fact]
     public void StepCaFourCornerBoundaryReactionsAreCountedOncePerPair()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateFourCornerBoundaryNeighborhood(
             out Chunk northwest,
             out Chunk northeast,
@@ -293,6 +316,7 @@ public sealed class ReactionEngineTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(Smoke, Get(northwest, 63, 63));
         Assert.Equal(Smoke, Get(northeast, 0, 63));
         Assert.Equal(Ash, Get(southwest, 63, 0));
@@ -307,6 +331,7 @@ public sealed class ReactionEngineTests
     [Fact]
     public void TryReactEmitsSideEffectsWhenConfigured()
     {
+        // Arrange：搭建测试场景与依赖
         RecordingReactionSideEffects sideEffects = new();
         ReactionSetup setup = CreateSetup(
             Reaction(Fire, Wood, Smoke, Ash, 255, ReactionFlags.EmitHeat | ReactionFlags.SpawnParticle),
@@ -317,8 +342,10 @@ public sealed class ReactionEngineTests
         Set(center, 11, 10, Wood);
         NeighborWindow window = new(source, center.Coord);
 
+        // Act：执行被测操作
         bool reacted = setup.Engine.TryReact(ref window, 10, 10, Fire, 11, 10, Wood, CellFlags.Parity, randomByte: 0);
 
+        // Assert：验证不变式与预期结果
         Assert.True(reacted);
         Assert.Equal(2, sideEffects.HeatCount);
         Assert.Equal((10, 10, Smoke, (byte)44), sideEffects.FirstHeat);
@@ -334,6 +361,7 @@ public sealed class ReactionEngineTests
     [Fact]
     public void TryReactThrowsWhenSideEffectSinkIsMissing()
     {
+        // Arrange：搭建测试场景与依赖
         ReactionSetup setup = CreateSetup(Reaction(Fire, Wood, Smoke, Ash, 255, ReactionFlags.EmitHeat));
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Fire);
@@ -343,6 +371,7 @@ public sealed class ReactionEngineTests
         InvalidOperationException? exception = null;
         try
         {
+            // Act：执行被测操作
             _ = setup.Engine.TryReact(ref window, 10, 10, Fire, 11, 10, Wood, CellFlags.Parity, randomByte: 0);
         }
         catch (InvalidOperationException caught)
@@ -350,6 +379,7 @@ public sealed class ReactionEngineTests
             exception = caught;
         }
 
+        // Assert：验证不变式与预期结果
         Assert.NotNull(exception);
         Assert.Contains("IReactionSideEffectSink", exception.Message, StringComparison.Ordinal);
     }

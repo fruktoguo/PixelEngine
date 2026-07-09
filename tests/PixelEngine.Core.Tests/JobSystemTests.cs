@@ -13,7 +13,7 @@ public sealed unsafe class JobSystemTests
     private static readonly RangeJob CountRangeJob = CountRange;
 
     /// <summary>
-    /// 验证 ParallelRange workerIndex 范围稳定且全部任务执行一次。
+    /// 验证ParallelRange 的 workerIndex 落在配置范围内且覆盖全部任务。
     /// </summary>
     [Fact]
     public void ParallelRangeUsesWorkerIndicesWithinConfiguredRange()
@@ -41,7 +41,7 @@ public sealed unsafe class JobSystemTests
     }
 
     /// <summary>
-    /// 验证 ParallelFor 可处理 unmanaged state 列表。
+    /// 验证ParallelFor 处理全部 unmanaged 列表项。
     /// </summary>
     [Fact]
     public void ParallelForProcessesAllItems()
@@ -65,7 +65,7 @@ public sealed unsafe class JobSystemTests
     }
 
     /// <summary>
-    /// 验证 ParallelRangeRaw 可调用 unmanaged 函数指针。
+    /// 验证Parallel Range Raw Invokes Unmanaged Callback。
     /// </summary>
     [Fact]
     public void ParallelRangeRawInvokesUnmanagedCallback()
@@ -82,7 +82,7 @@ public sealed unsafe class JobSystemTests
     }
 
     /// <summary>
-    /// 验证小任务低于阈值时回退到 workerIndex 0 单线程执行。
+    /// 验证Parallel Range回退To Single Thread低于阈值。
     /// </summary>
     [Fact]
     public void ParallelRangeFallsBackToSingleThreadBelowThreshold()
@@ -103,7 +103,7 @@ public sealed unsafe class JobSystemTests
     }
 
     /// <summary>
-    /// 验证多 worker ParallelRange 稳态派发不再为 RangeBatch / ManualResetEventSlim 分配托管对象。
+    /// 验证Parallel Range Multi Worker Dispatch不会Allocate。
     /// </summary>
     [Fact]
     public void ParallelRangeMultiWorkerDispatchDoesNotAllocate()
@@ -125,7 +125,7 @@ public sealed unsafe class JobSystemTests
     }
 
     /// <summary>
-    /// 验证 Box2D task bridge 使用的 raw range 稳态派发同样不分配托管对象。
+    /// 验证Parallel Range Raw Multi Worker Dispatch不会Allocate。
     /// </summary>
     [Fact]
     public void ParallelRangeRawMultiWorkerDispatchDoesNotAllocate()
@@ -147,7 +147,7 @@ public sealed unsafe class JobSystemTests
     }
 
     /// <summary>
-    /// 验证 WorkerLocal 内部槽位包含 64 字节 cache-line padding。
+    /// 验证Worker Local Slot Defines Cache Line Padding。
     /// </summary>
     [Fact]
     public void WorkerLocalSlotDefinesCacheLinePadding()

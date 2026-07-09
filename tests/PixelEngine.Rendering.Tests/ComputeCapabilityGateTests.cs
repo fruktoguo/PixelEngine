@@ -5,8 +5,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// GPU 计算能力门控测试：根据 GL 版本与 SSBO/Image 支持选择 Compute 后端或 Plan-08 基线回退。
+/// </summary>
 public sealed class ComputeCapabilityGateTests
 {
+    /// <summary>
+    /// 桌面 GL 4.3 且具备 Compute/SSBO/Image 时选择 GlCompute 后端。
+    /// </summary>
     [Fact]
     public void DesktopGl43WithRequiredCapabilitiesSelectsGlCompute()
     {
@@ -29,6 +35,9 @@ public sealed class ComputeCapabilityGateTests
         Assert.True(gate.FeatureSwitches.BloomComputeEnabled);
     }
 
+    /// <summary>
+    /// GL 3.3 无 Compute 能力时回退 Null 后端并禁用全部 Compute 特性开关。
+    /// </summary>
     [Fact]
     public void Gl33FallsBackToPlan08Baseline()
     {
@@ -50,6 +59,9 @@ public sealed class ComputeCapabilityGateTests
         Assert.Equal(ComputeFeatureSwitches.Disabled, gate.FeatureSwitches);
     }
 
+    /// <summary>
+    /// macOS GL 4.1 无 Compute 时同样回退 Plan-08 基线。
+    /// </summary>
     [Fact]
     public void MacGl41FallsBackToPlan08Baseline()
     {
@@ -71,6 +83,9 @@ public sealed class ComputeCapabilityGateTests
         Assert.Equal(ComputeFeatureSwitches.Disabled, gate.FeatureSwitches);
     }
 
+    /// <summary>
+    /// 验证Gl Compute回退When Device Work Group Limit Is Below Engine Local Size。
+    /// </summary>
     [Fact]
     public void GlComputeFallsBackWhenDeviceWorkGroupLimitIsBelowEngineLocalSize()
     {
@@ -102,6 +117,9 @@ public sealed class ComputeCapabilityGateTests
         Assert.Equal(ComputeBackendKind.Null, gate.SelectedBackend);
     }
 
+    /// <summary>
+    /// 验证Angle Context回退Even When Compute Flag Is Present。
+    /// </summary>
     [Fact]
     public void AngleContextFallsBackEvenWhenComputeFlagIsPresent()
     {
@@ -124,6 +142,9 @@ public sealed class ComputeCapabilityGateTests
         Assert.Equal(ComputeBackendKind.Null, gate.SelectedBackend);
     }
 
+    /// <summary>
+    /// 验证Disabled Compute Creates空后端Without Gl Entry Point。
+    /// </summary>
     [Fact]
     public void DisabledComputeCreatesNullBackendWithoutGlEntryPoint()
     {
@@ -144,6 +165,9 @@ public sealed class ComputeCapabilityGateTests
         Assert.False(backend.IsAvailable);
     }
 
+    /// <summary>
+    /// 验证Compute Sharp Gate Requires Resource Contract And Executable Backend。
+    /// </summary>
     [Fact]
     public void ComputeSharpGateRequiresResourceContractAndExecutableBackend()
     {
@@ -191,6 +215,9 @@ public sealed class ComputeCapabilityGateTests
         Assert.Equal(ComputeBackendKind.GlCompute, forgedOpenGlGate.SelectedBackend);
     }
 
+    /// <summary>
+    /// 验证Compute Sharp Backend Rejects Every Execution Entry Point When Instantiated Directly。
+    /// </summary>
     [Fact]
     public void ComputeSharpBackendRejectsEveryExecutionEntryPointWhenInstantiatedDirectly()
     {
@@ -219,6 +246,9 @@ public sealed class ComputeCapabilityGateTests
         AssertComputeSharpUnavailable(() => backend.DeleteTimerQuery(1));
     }
 
+    /// <summary>
+    /// 验证Open Gl Gpu Compute Resources Declare They Cannot Be Consumed By Compute Sharp。
+    /// </summary>
     [Fact]
     public void OpenGlGpuComputeResourcesDeclareTheyCannotBeConsumedByComputeSharp()
     {
@@ -238,6 +268,9 @@ public sealed class ComputeCapabilityGateTests
         Assert.False(resources.CanBeConsumedByComputeSharp);
     }
 
+    /// <summary>
+    /// 验证Compute Sharp Resource Contract Requires D3D Or Shared Resources And Fence。
+    /// </summary>
     [Fact]
     public void ComputeSharpResourceContractRequiresD3DOrSharedResourcesAndFence()
     {
@@ -347,6 +380,9 @@ public sealed class ComputeCapabilityGateTests
         Assert.Equal(11, d3d.FenceHandle);
     }
 
+    /// <summary>
+    /// 验证Gate Publishes Selected Backend And Feature Switches To Core Counters。
+    /// </summary>
     [Fact]
     public void GatePublishesSelectedBackendAndFeatureSwitchesToCoreCounters()
     {
@@ -379,6 +415,9 @@ public sealed class ComputeCapabilityGateTests
         Assert.Equal(1, counters.GpuComputeAirSmokeEnabled);
     }
 
+    /// <summary>
+    /// 验证Baseline Fallback Publishes Disabled Feature Switches。
+    /// </summary>
     [Fact]
     public void BaselineFallbackPublishesDisabledFeatureSwitches()
     {
@@ -406,6 +445,9 @@ public sealed class ComputeCapabilityGateTests
         Assert.Equal(0, counters.GpuComputeAirSmokeEnabled);
     }
 
+    /// <summary>
+    /// 验证Real Gl Capabilities Snapshot Requires Queried Work Group Limits Before Gate。
+    /// </summary>
     [Fact]
     public void RealGlCapabilitiesSnapshotRequiresQueriedWorkGroupLimitsBeforeGate()
     {
@@ -429,6 +471,9 @@ public sealed class ComputeCapabilityGateTests
         Assert.Equal(ComputeBackendKind.Null, gate.SelectedBackend);
     }
 
+    /// <summary>
+    /// 验证Resources Snapshot Validates Positive Size。
+    /// </summary>
     [Fact]
     public void ResourcesSnapshotValidatesPositiveSize()
     {
@@ -452,6 +497,9 @@ public sealed class ComputeCapabilityGateTests
         Assert.False(string.IsNullOrWhiteSpace(exception.Message));
     }
 
+    /// <summary>
+    /// 验证空后端Is Noop And Never Reports Timer Result。
+    /// </summary>
     [Fact]
     public void NullBackendIsNoopAndNeverReportsTimerResult()
     {

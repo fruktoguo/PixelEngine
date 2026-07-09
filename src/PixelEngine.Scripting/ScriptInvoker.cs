@@ -1,5 +1,8 @@
 namespace PixelEngine.Scripting;
 
+/// <summary>
+/// 脚本生命周期与系统回调的统一调用入口；捕获异常并隔离故障脚本/系统。
+/// </summary>
 internal sealed class ScriptInvoker(IScriptDiagnosticSink? diagnostics = null)
 {
     [ThreadStatic]
@@ -12,8 +15,14 @@ internal sealed class ScriptInvoker(IScriptDiagnosticSink? diagnostics = null)
     private readonly List<ScriptExceptionRecord> _exceptions = [];
     private readonly HashSet<ISystem> _faultedSystems = [];
 
+    /// <summary>
+    /// 本帧累积的脚本异常记录（只读视图）。
+    /// </summary>
     public IReadOnlyList<ScriptExceptionRecord> Exceptions => _exceptions;
 
+    /// <summary>
+    /// 获取当前线程正在执行的 Behaviour 与 Invoker；用于嵌套 API 上下文查询。
+    /// </summary>
     internal static bool TryGetCurrentOwner(out Behaviour behaviour, out ScriptInvoker invoker)
     {
         behaviour = currentBehaviour!;
@@ -21,6 +30,9 @@ internal sealed class ScriptInvoker(IScriptDiagnosticSink? diagnostics = null)
         return behaviour is not null && invoker is not null;
     }
 
+    /// <summary>
+    /// 调用 <see cref="Behaviour"/> 的 OnStart；故障或禁用脚本被跳过。
+    /// </summary>
     public void InvokeStart(Behaviour behaviour, IScriptContext context)
     {
         if (ShouldSkip(behaviour))
@@ -39,6 +51,9 @@ internal sealed class ScriptInvoker(IScriptDiagnosticSink? diagnostics = null)
         }
     }
 
+    /// <summary>
+    /// 调用 OnUpdate；运行在相位 1。
+    /// </summary>
     public void InvokeUpdate(Behaviour behaviour, IScriptContext context, float dt)
     {
         if (ShouldSkip(behaviour))
@@ -57,6 +72,9 @@ internal sealed class ScriptInvoker(IScriptDiagnosticSink? diagnostics = null)
         }
     }
 
+    /// <summary>
+    /// 调用 OnFixedSimTick；仅在本帧执行 sim step 时触发。
+    /// </summary>
     public void InvokeFixedSimTick(Behaviour behaviour, IScriptContext context)
     {
         if (ShouldSkip(behaviour))
@@ -75,6 +93,9 @@ internal sealed class ScriptInvoker(IScriptDiagnosticSink? diagnostics = null)
         }
     }
 
+    /// <summary>
+    /// 调用 OnGui；用于脚本侧即时模式 UI。
+    /// </summary>
     public void InvokeGui(Behaviour behaviour, IScriptContext context, IGuiContext gui)
     {
         if (ShouldSkip(behaviour))
@@ -93,6 +114,9 @@ internal sealed class ScriptInvoker(IScriptDiagnosticSink? diagnostics = null)
         }
     }
 
+    /// <summary>
+    /// 调用 OnDestroy；无论故障状态如何都会尝试执行，并在 finally 中释放事件订阅。
+    /// </summary>
     public void InvokeDestroy(Behaviour behaviour, IScriptContext context)
     {
         try
@@ -110,6 +134,9 @@ internal sealed class ScriptInvoker(IScriptDiagnosticSink? diagnostics = null)
         }
     }
 
+    /// <summary>
+    /// 调用事件总线分发的处理器；异常时隔离对应 Behaviour。
+    /// </summary>
     public void InvokeEvent<TEvent>(Behaviour behaviour, Action<TEvent> handler, TEvent item)
         where TEvent : unmanaged
     {
@@ -129,6 +156,9 @@ internal sealed class ScriptInvoker(IScriptDiagnosticSink? diagnostics = null)
         }
     }
 
+    /// <summary>
+    /// 调用 <see cref="ISystem.OnFrame"/>；故障系统后续帧被跳过。
+    /// </summary>
     public void InvokeFrameSystem(ISystem system, IScriptContext context, float dt)
     {
         if (_faultedSystems.Contains(system))
@@ -146,6 +176,9 @@ internal sealed class ScriptInvoker(IScriptDiagnosticSink? diagnostics = null)
         }
     }
 
+    /// <summary>
+    /// 调用 <see cref="ISystem.OnSimTick"/>；故障系统后续 sim tick 被跳过。
+    /// </summary>
     public void InvokeSimSystem(ISystem system, IScriptContext context)
     {
         if (_faultedSystems.Contains(system))
@@ -168,6 +201,9 @@ internal sealed class ScriptInvoker(IScriptDiagnosticSink? diagnostics = null)
         return behaviour.Faulted || !behaviour.Enabled;
     }
 
+    /// <summary>
+    /// 压入当前 Behaviour 到线程静态栈，供嵌套调用与上下文 API 识别所有者。
+    /// </summary>
     private InvocationScope Enter(Behaviour behaviour)
     {
         InvocationScope scope = new(currentBehaviour, currentInvoker);
@@ -214,6 +250,9 @@ internal sealed class ScriptInvoker(IScriptDiagnosticSink? diagnostics = null)
         }
     }
 
+    /// <summary>
+    /// 恢复进入作用域前的线程静态调用上下文。
+    /// </summary>
     private readonly struct InvocationScope(Behaviour? previousBehaviour, ScriptInvoker? previousInvoker) : IDisposable
     {
         public void Dispose()

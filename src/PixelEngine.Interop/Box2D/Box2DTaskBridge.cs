@@ -110,6 +110,7 @@ public sealed unsafe class Box2DTaskBridge : IDisposable
         try
         {
             int safeMinRange = Math.Max(1, minRange);
+            // 单线程或任务过小则同步执行；否则经 JobSystem.ParallelRangeRaw fork-join。
             if (context is null || context->ForceSingleThread != 0 || context->WorkerCount <= 1 || itemCount <= safeMinRange)
             {
                 task(0, itemCount, 0, taskContext);

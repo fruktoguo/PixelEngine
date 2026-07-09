@@ -1,8 +1,14 @@
+#pragma warning disable IDE0032 // Counter properties intentionally use Volatile-backed fields for cross-thread snapshots.
+
 namespace PixelEngine.Core.Diagnostics;
 
 /// <summary>
 /// 保存诊断 HUD 与预算监测需要的引擎计数器。
 /// </summary>
+/// <remarks>
+/// 计数器分三类：sim/世界态（chunk、粒子、刚体）、帧预算分解（CPU/GPU/UI/present），
+/// 以及音频与 GPU compute 门控诊断；跨线程累加字段使用 Interlocked/Volatile 保证 HUD 读取一致性。
+/// </remarks>
 public sealed class EngineCounters
 {
     private long _activeChunks;

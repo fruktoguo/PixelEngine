@@ -4,6 +4,9 @@ using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// 移动场景资产时同步 project 与 manifest 引用。
+/// </summary>
 internal sealed class EditorProjectSceneAssetMoveService(EditorProject project, EditorAssetManifestStore manifest)
 {
     private readonly EditorProject _project = project ?? throw new ArgumentNullException(nameof(project));
@@ -152,8 +155,14 @@ internal sealed class EditorProjectSceneAssetMoveService(EditorProject project, 
     }
 }
 
+/// <summary>
+/// EditorSceneAssetMoveResult 数据结构。
+/// </summary>
 internal sealed record EditorSceneAssetMoveResult(EditorAssetMoveResult AssetMove, SceneSettingsSyncCounts SettingsUpdates);
 
+/// <summary>
+/// SceneSettingsSyncCounts。
+/// </summary>
 internal sealed record SceneSettingsSyncCounts(
     int ProjectFile,
     int ProjectSettings,

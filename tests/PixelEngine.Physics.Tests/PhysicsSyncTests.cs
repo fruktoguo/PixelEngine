@@ -9,6 +9,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// 相位 8 CA↔刚体同步测试。
+/// 不变式：stamp/erase 不误删普通 cell、SyncStep 排空伤害队列并重 stamp、角色 proxy 先于写回约束刚体。
 /// </summary>
 public sealed unsafe class PhysicsSyncTests
 {
@@ -18,6 +19,7 @@ public sealed unsafe class PhysicsSyncTests
     [Fact]
     public void EraseDoesNotClearCellAfterRigidOwnedFlagWasConsumed()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = new(new Chunk(new ChunkCoord(0, 0)));
         CellGrid grid = new(source, MaterialPropsTable.Empty);
         BodyLocalMask mask = CreateFilledMask(1, 1, material: 2, Vector2.Zero);
@@ -32,6 +34,7 @@ public sealed unsafe class PhysicsSyncTests
 
         int erased = RigidBodyRasterizer.EraseAtCurrentTransform(body, grid, registry);
 
+        // Assert：验证预期结果
         Assert.Equal(1, stamped);
         Assert.Equal(0, erased);
         Assert.Equal((ushort)9, grid.GetMaterial(cell.WorldX, cell.WorldY));
@@ -44,6 +47,7 @@ public sealed unsafe class PhysicsSyncTests
     [Fact]
     public void StampInverseSamplingRotatedFilledMaskHasNoInternalHoles()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = new(new Chunk(new ChunkCoord(0, 0)));
         CellGrid grid = new(source, MaterialPropsTable.Empty);
         BodyLocalMask mask = CreateFilledMask(7, 7, material: 2, new Vector2(3.5f, 3.5f));
@@ -53,6 +57,7 @@ public sealed unsafe class PhysicsSyncTests
 
         int stamped = RigidBodyRasterizer.StampInverseSampling(body, in transform, grid, registry);
 
+        // Assert：验证预期结果
         Assert.Equal(stamped, body.PreviousStamps.Count);
         Assert.True(stamped >= mask.SolidPixelCount);
         AssertNoInternalHoles(body.PreviousStamps);
@@ -71,6 +76,7 @@ public sealed unsafe class PhysicsSyncTests
     [Fact]
     public void SyncStepStepsWorldAndRestampsRigidBody()
     {
+        // Arrange：搭建测试场景与依赖
         PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
@@ -90,8 +96,10 @@ public sealed unsafe class PhysicsSyncTests
             PhysicsSystem system = new(worldId, physicsWorld, grid, registry, damageQueue);
             damageQueue.OnOwnedCellDamaged(3, 4);
 
+            // Act：执行被测操作
             system.SyncStep(0.25f);
 
+            // Assert：验证不变式与预期结果
             RigidDamageEvent damage = Assert.Single(system.PendingDamage);
             Assert.Equal(new RigidDamageEvent(3, 4), damage);
             Assert.True(body.PreviousTransform.Position.X > 30f);
@@ -115,6 +123,7 @@ public sealed unsafe class PhysicsSyncTests
     [Fact]
     public void CharacterProxyBlocksFallingRigidBodyBeforeRestamp()
     {
+        // Arrange：搭建测试场景与依赖
         PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         worldDef.Gravity = new B2Vec2 { X = 0f, Y = 10f };
@@ -143,6 +152,7 @@ public sealed unsafe class PhysicsSyncTests
             int firstProxyContactFrame = -1;
             for (int i = 0; i < 90; i++)
             {
+                // Act：执行被测操作
                 system.SyncStep(1f / 60f);
                 if (system.LastCharacterProxyContactCount > 0)
                 {
@@ -161,6 +171,7 @@ public sealed unsafe class PhysicsSyncTests
                 }
             }
 
+            // Assert：验证不变式与预期结果
             Assert.False(
                 everOverlappedCharacter,
                 $"动态刚体 stamp 不应进入角色 AABB，firstFrame={firstOverlapFrame}, cell=({overlapX},{overlapY}), bodyY={body.PreviousTransform.Position.Y:F2}。");
@@ -180,6 +191,7 @@ public sealed unsafe class PhysicsSyncTests
     [Fact]
     public void CharacterProxySweepsFastFallingRigidBodyBeforeRestamp()
     {
+        // Arrange：搭建测试场景与依赖
         PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
@@ -200,8 +212,10 @@ public sealed unsafe class PhysicsSyncTests
             CharacterController character = new(grid, new Vector2(42f, 48f), new Vector2(6f, 12f));
             system.RegisterCharacterProxy(character);
 
+            // Act：执行被测操作
             system.SyncStep(1f / 60f);
 
+            // Assert：验证不变式与预期结果
             Assert.True(
                 system.LastCharacterProxyContactCount > 0,
                 $"高速碎块扫过玩家时应被 proxy 捕获，bodyY={body.PreviousTransform.Position.Y:F2}。");
@@ -224,6 +238,7 @@ public sealed unsafe class PhysicsSyncTests
     [Fact]
     public void CharacterProxyBlocksRotatingRigidBodyBeforeRestamp()
     {
+        // Arrange：搭建测试场景与依赖
         PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
@@ -245,8 +260,10 @@ public sealed unsafe class PhysicsSyncTests
             CharacterController character = new(grid, new Vector2(42f, 48f), new Vector2(6f, 12f));
             system.RegisterCharacterProxy(character);
 
+            // Act：执行被测操作
             system.SyncStep(1f / 30f);
 
+            // Assert：验证不变式与预期结果
             Assert.True(
                 system.LastCharacterProxyContactCount > 0,
                 $"旋转碎块下沿扫到玩家时应被 proxy 记录接触，bodyY={body.PreviousTransform.Position.Y:F2}。");
@@ -266,6 +283,7 @@ public sealed unsafe class PhysicsSyncTests
     [Fact]
     public void CharacterProxyOverlapCleanupSkipsNonResidentChunks()
     {
+        // Arrange：搭建测试场景与依赖
         PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
@@ -279,8 +297,10 @@ public sealed unsafe class PhysicsSyncTests
             CharacterController character = new(grid, new Vector2(12f, 190f), new Vector2(6f, 12f));
             system.RegisterCharacterProxy(character);
 
+            // Act：执行被测操作
             system.SyncStep(1f / 60f);
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(0, system.LastCharacterProxyContactCount);
         }
         finally

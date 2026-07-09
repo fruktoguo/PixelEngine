@@ -5,8 +5,14 @@ using Xunit;
 
 namespace PixelEngine.UI.Tests;
 
+/// <summary>
+/// 托管回退 UI 后端测试：XHTML 控件绘制、静态屏幕跳过、事件排空与离屏合成。
+/// </summary>
 public sealed class ManagedFallbackBackendTests
 {
+    /// <summary>
+    /// 验证托管回退绘制 XHTML 控件并排空按钮点击事件。
+    /// </summary>
     [Fact]
     public void ManagedFallbackDrawsXhtmlControlsAndDrainsButtonEvent()
     {
@@ -37,6 +43,9 @@ public sealed class ManagedFallbackBackendTests
         Assert.Equal(new UiActionId(UiStableId.Hash("start_game")), events[0].Action);
     }
 
+    /// <summary>
+    /// 验证托管回退跳过静态屏幕直到模型变更。
+    /// </summary>
     [Fact]
     public void ManagedFallbackSkipsStaticScreenUntilModelChanges()
     {
@@ -67,6 +76,9 @@ public sealed class ManagedFallbackBackendTests
         Assert.False(host.NeedsComposite);
     }
 
+    /// <summary>
+    /// 验证托管回退Draw Gui跳过静态屏幕直到模型变更。
+    /// </summary>
     [Fact]
     public void ManagedFallbackDrawGuiSkipsStaticScreenUntilModelChanges()
     {
@@ -98,6 +110,9 @@ public sealed class ManagedFallbackBackendTests
     }
 
 
+    /// <summary>
+    /// 验证托管回退Checkbox Updates Model Value And Raises Event。
+    /// </summary>
     [Fact]
     public void ManagedFallbackCheckboxUpdatesModelValueAndRaisesEvent()
     {
@@ -130,6 +145,9 @@ public sealed class ManagedFallbackBackendTests
         Assert.True(backend.HitTest(10, 10).WantsMouse);
     }
 
+    /// <summary>
+    /// 验证托管回退Invoke Action Updates Matching Control Value。
+    /// </summary>
     [Fact]
     public void ManagedFallbackInvokeActionUpdatesMatchingControlValue()
     {
@@ -154,6 +172,9 @@ public sealed class ManagedFallbackBackendTests
         Assert.True(host.NeedsComposite);
     }
 
+    /// <summary>
+    /// 验证托管回退Applies Root Box Model Before Drawing Window。
+    /// </summary>
     [Fact]
     public void ManagedFallbackAppliesRootBoxModelBeforeDrawingWindow()
     {
@@ -177,6 +198,9 @@ public sealed class ManagedFallbackBackendTests
         Assert.True((gui.Context.LastWindowFlags & GuiDrawWindowFlags.NoMove) != 0);
     }
 
+    /// <summary>
+    /// 验证托管回退Consumes Simple Style Rules For Control Layout。
+    /// </summary>
     [Fact]
     public void ManagedFallbackConsumesSimpleStyleRulesForControlLayout()
     {
@@ -213,6 +237,9 @@ public sealed class ManagedFallbackBackendTests
         Assert.Contains(4f, gui.Context.VerticalSpacings);
     }
 
+    /// <summary>
+    /// 验证托管回退Draws Image Control From Images Directory。
+    /// </summary>
     [Fact]
     public void ManagedFallbackDrawsImageControlFromImagesDirectory()
     {
@@ -249,6 +276,9 @@ public sealed class ManagedFallbackBackendTests
         Assert.Equal(16f, image.Height);
     }
 
+    /// <summary>
+    /// 验证托管回退Composite Uses Initialized Viewport When Present Context Has No Target。
+    /// </summary>
     [Fact]
     public void ManagedFallbackCompositeUsesInitializedViewportWhenPresentContextHasNoTarget()
     {
@@ -269,6 +299,9 @@ public sealed class ManagedFallbackBackendTests
         Assert.Equal(180, gui.LastFrameHeight);
     }
 
+    /// <summary>
+    /// 验证托管回退Composite Source Documents Present Target Frame Size。
+    /// </summary>
     [Fact]
     public void ManagedFallbackCompositeSourceDocumentsPresentTargetFrameSize()
     {
@@ -280,6 +313,9 @@ public sealed class ManagedFallbackBackendTests
         Assert.DoesNotContain("context.FramebufferWidth, context.FramebufferHeight", source, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证托管回退Throws For Missing Document Instead Of Inventing Placeholder。
+    /// </summary>
     [Fact]
     public void ManagedFallbackThrowsForMissingDocumentInsteadOfInventingPlaceholder()
     {

@@ -2,8 +2,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// 叠加渲染器契约测试：HUD 层合成与透明度处理。
+/// </summary>
 public sealed class OverlayRendererContractTests
 {
+    /// <summary>
+    /// 验证Commands Use Viewport Pixel Coordinates。
+    /// </summary>
     [Fact]
     public void CommandsUseViewportPixelCoordinates()
     {
@@ -26,6 +32,9 @@ public sealed class OverlayRendererContractTests
         Assert.Equal(10f, line.LineEndY);
     }
 
+    /// <summary>
+    /// 验证Command Validation Rejects Invalid Input。
+    /// </summary>
     [Fact]
     public void CommandValidationRejectsInvalidInput()
     {
@@ -38,6 +47,9 @@ public sealed class OverlayRendererContractTests
         AssertThrows<ArgumentOutOfRangeException>(() => new OverlaySprite(1, 16, 16, 0.75f, 0f, 0.25f, 1f).Validate());
     }
 
+    /// <summary>
+    /// 验证Shader Sources Expose Overlay Contract。
+    /// </summary>
     [Fact]
     public void ShaderSourcesExposeOverlayContract()
     {

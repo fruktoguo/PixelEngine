@@ -4,6 +4,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// 脚本光照 API 测试。
+/// 不变式：光照 API 请求在渲染相位前合并。
 /// </summary>
 public sealed class ScriptLightingApiTests
 {

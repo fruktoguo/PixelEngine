@@ -4,6 +4,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// 脚本延迟命令队列测试。
+/// 不变式：脚本延迟命令在 flush 窗口前不改世界。
 /// </summary>
 public sealed class ScriptCommandQueueTests
 {

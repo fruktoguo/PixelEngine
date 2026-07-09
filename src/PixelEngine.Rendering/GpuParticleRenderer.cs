@@ -98,6 +98,7 @@ public sealed unsafe class GpuParticleRenderer : IDisposable
             return;
         }
 
+        // --- CPU 侧：只读粒子前缀 → pinned staging → VBO 子区上传 ---
         EnsureCapacity(particles.Length);
         FillVertices(particles, materials, camera);
         UploadVertices(particles.Length);
@@ -111,11 +112,13 @@ public sealed unsafe class GpuParticleRenderer : IDisposable
         _gl.Enable(EnableCap.ProgramPointSize);
         _gl.Enable(EnableCap.Blend);
 
+        // --- GPU pass 1：alpha 混合写入 scene FBO ---
         scene.BindFramebuffer();
         _gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
         _gl.Uniform1(_emissivePassLocation, 0);
         _gl.DrawArrays(PrimitiveType.Points, 0, (uint)particles.Length);
 
+        // --- GPU pass 2：加色混合写入 emissive buffer，供 bloom/光照消费 ---
         emissive.BindFramebuffer();
         _gl.BlendFunc(BlendingFactor.One, BlendingFactor.One);
         _gl.Uniform1(_emissivePassLocation, 1);
@@ -156,6 +159,7 @@ public sealed unsafe class GpuParticleRenderer : IDisposable
         _vertexBuffer.Allocate((nuint)(capacity * VertexStrideBytes), BufferUsageARB.DynamicDraw);
     }
 
+    // 将 CPU 粒子 SoA 展开为交错 VBO 顶点：世界坐标、BGRA、emissive 标志与 point size。
     private void FillVertices(ReadOnlySpan<Particle> particles, MaterialTable materials, CameraState camera)
     {
         float pointSize = MathF.Max(1f, 1f / camera.CellsPerPixel);
@@ -180,6 +184,7 @@ public sealed unsafe class GpuParticleRenderer : IDisposable
         }
     }
 
+    // BufferSubData 上传活跃前缀；容量不足时 EnsureCapacity 已扩容 VBO。
     private void UploadVertices(int count)
     {
         _vertexBuffer.Bind();

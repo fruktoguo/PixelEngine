@@ -75,6 +75,7 @@ public sealed class AudioDispatcher
     {
         ArgumentNullException.ThrowIfNull(player);
         long startTimestamp = Stopwatch.GetTimestamp();
+        // --- 阶段 1：从 Core MPSC ring 排空本帧事件并合并限频 ---
         _coalescer.BeginFrame();
         int drained = _events.DrainTo(_eventScratch);
         for (int i = 0; i < drained; i++)
@@ -87,8 +88,10 @@ public sealed class AudioDispatcher
         int dropped = _coalescer.DroppedCount;
         int dispatched = 0;
         int played = 0;
+        // AmbientRegion 由专用 loop 管理器处理，不占用 one-shot voice 槽位。
         ambientLoops?.Update(_coalescedScratch.AsSpan(0, coalescedEventCount));
 
+        // --- 阶段 2：冷却去重 → voice 池申请 → 材质音效解析播放 ---
         for (int i = 0; i < coalescedEventCount; i++)
         {
             CoalescedAudioEvent audioEvent = _coalescedScratch[i];
@@ -124,6 +127,7 @@ public sealed class AudioDispatcher
             }
         }
 
+        // --- 阶段 3：回收已停止 voice 并汇总派发统计 ---
         _voices.RefreshFinishedVoices();
         long elapsedTimestamp = Stopwatch.GetTimestamp() - startTimestamp;
         double elapsedMilliseconds = elapsedTimestamp * 1000.0 / Stopwatch.Frequency;

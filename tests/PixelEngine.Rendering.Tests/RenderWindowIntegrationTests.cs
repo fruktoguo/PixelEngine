@@ -6,8 +6,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// RenderWindow 集成冒烟测试：需 PIXELENGINE_RENDERING_GL_SMOKE=1（ANGLE 用 PIXELENGINE_RENDERING_ANGLE_SMOKE=1），验证真实 GL 上下文与管线各阶段。
+/// </summary>
 public sealed class RenderWindowIntegrationTests
 {
+    /// <summary>
+    /// 在 GL 冒烟环境变量启用时，能够创建窗口并交换缓冲区，且 GL 版本不低于 3.0。
+    /// </summary>
     [Fact]
     public void CanCreateWindowWhenExplicitlyEnabled()
     {
@@ -30,6 +36,9 @@ public sealed class RenderWindowIntegrationTests
         Assert.True(window.Capabilities.MajorVersion >= 3);
     }
 
+    /// <summary>
+    /// 释放窗口后 IsClosing 应为 true。
+    /// </summary>
     [Fact]
     public void IsClosingReturnsTrueAfterDisposeWhenExplicitlyEnabled()
     {
@@ -51,6 +60,9 @@ public sealed class RenderWindowIntegrationTests
         Assert.True(window.IsClosing);
     }
 
+    /// <summary>
+    /// 经 PBO 全量/脏矩形上传世界纹理；若支持则额外验证持久映射 PBO 模式。
+    /// </summary>
     [Fact]
     public void CanUploadWorldTextureThroughPboWhenExplicitlyEnabled()
     {
@@ -93,6 +105,9 @@ public sealed class RenderWindowIntegrationTests
         Assert.True(uploader.CapacityBytes >= buffer.ByteLength);
     }
 
+    /// <summary>
+    /// UI 叠加纹理脏矩形上传后恢复 GL 像素解包状态与活动纹理单元。
+    /// </summary>
     [Fact]
     public void UiOverlayTextureUploadsDirtyRectWhenExplicitlyEnabled()
     {
@@ -152,6 +167,9 @@ public sealed class RenderWindowIntegrationTests
         Assert.Equal([0, 0, 0, 0], outsideB);
     }
 
+    /// <summary>
+    /// 创建光照相关 GPU 资源并串联 shadow/composite/bloom/dither/gamma/crt 各 pass。
+    /// </summary>
     [Fact]
     public void CanCreateLightingResourcesAndRunCompositeWhenExplicitlyEnabled()
     {
@@ -206,6 +224,9 @@ public sealed class RenderWindowIntegrationTests
         Assert.Equal(32, shadow.RayCount);
     }
 
+    /// <summary>
+    /// 支持非 4 字节对齐宽度的光照遮罩上传。
+    /// </summary>
     [Fact]
     public void CanUploadUnalignedLightMaskWidthWhenExplicitlyEnabled()
     {
@@ -233,6 +254,9 @@ public sealed class RenderWindowIntegrationTests
         Assert.Equal(5, texture.Height);
     }
 
+    /// <summary>
+    /// WorldBlit 保持 CPU 第 0 行映射到视口顶部（Y 轴不翻转）。
+    /// </summary>
     [Fact]
     public void WorldBlitKeepsCpuTopRowAtViewportTopWhenExplicitlyEnabled()
     {
@@ -273,6 +297,9 @@ public sealed class RenderWindowIntegrationTests
         Assert.True(bottom[2] > bottom[0], $"视口底部应为 CPU 末行蓝色，actual rgba=({bottom[0]},{bottom[1]},{bottom[2]},{bottom[3]})");
     }
 
+    /// <summary>
+    /// OverlayRenderer 能绘制实心/描边矩形与精灵命令。
+    /// </summary>
     [Fact]
     public void CanRenderOverlayWhenExplicitlyEnabled()
     {
@@ -312,7 +339,7 @@ public sealed class RenderWindowIntegrationTests
     private static byte[] ReadPixelRgba(GL gl, int x, int y)
     {
         byte[] pixel = new byte[4];
-        gl.ReadPixels<byte>(x, y, 1, 1, PixelFormat.Rgba, PixelType.UnsignedByte, pixel);
+        gl.ReadPixels(x, y, 1, 1, PixelFormat.Rgba, PixelType.UnsignedByte, pixel);
 
         return pixel;
     }
@@ -321,7 +348,7 @@ public sealed class RenderWindowIntegrationTests
     {
         byte[] pixels = new byte[checked(width * height * 4)];
         gl.BindTexture(TextureTarget.Texture2D, texture);
-        gl.GetTexImage<byte>(TextureTarget.Texture2D, 0, PixelFormat.Rgba, PixelType.UnsignedByte, pixels);
+        gl.GetTexImage(TextureTarget.Texture2D, 0, PixelFormat.Rgba, PixelType.UnsignedByte, pixels);
         return pixels;
     }
 
@@ -344,6 +371,9 @@ public sealed class RenderWindowIntegrationTests
         return Math.Max(rgba[0], Math.Max(rgba[1], rgba[2]));
     }
 
+    /// <summary>
+    /// RenderPipeline 单帧渲染（含 CRT 与叠加）不抛异常。
+    /// </summary>
     [Fact]
     public void CanRenderFrameThroughRenderPipelineWhenExplicitlyEnabled()
     {
@@ -356,6 +386,9 @@ public sealed class RenderWindowIntegrationTests
         RenderPipelineFrame(window);
     }
 
+    /// <summary>
+    /// 管线最终视口纹理保持 CPU 上下行序，不因后处理翻转。
+    /// </summary>
     [Fact]
     public void RenderPipelineViewportKeepsSingleTopBottomOrientationWhenExplicitlyEnabled()
     {
@@ -387,6 +420,9 @@ public sealed class RenderWindowIntegrationTests
         Assert.True(bottom[2] > bottom[0], $"最终 viewport 底部应为 CPU 末行蓝色，actual rgba=({bottom[0]},{bottom[1]},{bottom[2]},{bottom[3]})");
     }
 
+    /// <summary>
+    /// 泛光后视口上下半区颜色不互相镜像。
+    /// </summary>
     [Fact]
     public void RenderPipelineBloomDoesNotMirrorTopAndBottomHalvesWhenExplicitlyEnabled()
     {
@@ -421,6 +457,9 @@ public sealed class RenderWindowIntegrationTests
         Assert.True(bottom[2] > bottom[0], $"bloom 后底部应保持蓝色，actual rgba=({bottom[0]},{bottom[1]},{bottom[2]},{bottom[3]})");
     }
 
+    /// <summary>
+    /// 泛光运行时 CPU 上传的自发光仍落在视口底部边沿。
+    /// </summary>
     [Fact]
     public void RenderPipelineKeepsCpuUploadedEmissiveAtBottomEdgeWhenBloomRuns()
     {
@@ -454,6 +493,9 @@ public sealed class RenderWindowIntegrationTests
         Assert.True(top[0] < 32 && top[1] < 32 && top[2] < 32, $"底部 emissive 不应翻到顶部，actual top rgba=({top[0]},{top[1]},{top[2]},{top[3]})");
     }
 
+    /// <summary>
+    /// 清空 Emissive 后多帧渲染，泛光残影应衰减至接近零。
+    /// </summary>
     [Fact]
     public void BloomDoesNotRetainExpiredEmissiveInputAcrossFramesWhenExplicitlyEnabled()
     {
@@ -493,6 +535,9 @@ public sealed class RenderWindowIntegrationTests
         Assert.True(decayedBrightness <= 8, $"emissive 清空后 bloom 不应残留，actual rgba=({decayedCenter[0]},{decayedCenter[1]},{decayedCenter[2]},{decayedCenter[3]})");
     }
 
+    /// <summary>
+    /// PreferComputeLighting 下经 Compute Bloom 完成单帧渲染。
+    /// </summary>
     [Fact]
     public void CanRenderFrameThroughComputeBloomWhenExplicitlyEnabled()
     {
@@ -505,6 +550,9 @@ public sealed class RenderWindowIntegrationTests
         RenderPipelineFrame(window, preferComputeLighting: true);
     }
 
+    /// <summary>
+    /// GpuPointSprite 模式下 GPU 粒子渲染单帧成功。
+    /// </summary>
     [Fact]
     public void CanRenderFrameThroughGpuParticlesWhenExplicitlyEnabled()
     {
@@ -544,6 +592,9 @@ public sealed class RenderWindowIntegrationTests
         Assert.Equal(16, pipeline.Width);
     }
 
+    /// <summary>
+    /// 在支持 GL Compute 时，Compute Bloom 与 Fragment Bloom 像素误差 ≤2。
+    /// </summary>
     [Fact]
     public void ComputeBloomMatchesFragmentBloomForSolidInputWhenExplicitlyEnabled()
     {
@@ -589,6 +640,9 @@ public sealed class RenderWindowIntegrationTests
         }
     }
 
+    /// <summary>
+    /// 独立 RadianceCascadePass 在遮挡/自发光输入下可完成渲染。
+    /// </summary>
     [Fact]
     public void CanRunRadianceCascadePassWhenExplicitlyEnabled()
     {
@@ -635,6 +689,9 @@ public sealed class RenderWindowIntegrationTests
         Assert.Equal(16, destination.Width);
     }
 
+    /// <summary>
+    /// RenderPipeline 启用辐射级联特性后单帧渲染成功。
+    /// </summary>
     [Fact]
     public void CanRenderFrameThroughRadianceCascadesWhenExplicitlyEnabled()
     {
@@ -673,6 +730,9 @@ public sealed class RenderWindowIntegrationTests
         Assert.Equal(16, pipeline.Width);
     }
 
+    /// <summary>
+    /// GpuAirSmokePipeline 扩散一步后密度纹理句柄非零。
+    /// </summary>
     [Fact]
     public void CanRunAirSmokeDiffusePassWhenExplicitlyEnabled()
     {
@@ -701,6 +761,9 @@ public sealed class RenderWindowIntegrationTests
         Assert.NotEqual(0u, pass.DensityTexture);
     }
 
+    /// <summary>
+    /// ANGLE GLES 后端创建窗口并完成管线帧渲染。
+    /// </summary>
     [Fact]
     public void CanRenderFrameThroughGlesAngleWhenExplicitlyEnabled()
     {
@@ -765,7 +828,7 @@ public sealed class RenderWindowIntegrationTests
     {
         byte[] rgba = new byte[checked(target.Width * target.Height * 4)];
         target.BindFramebuffer();
-        window.Gl.ReadPixels<byte>(0, 0, (uint)target.Width, (uint)target.Height, GLEnum.Rgba, GLEnum.UnsignedByte, out rgba[0]);
+        window.Gl.ReadPixels(0, 0, (uint)target.Width, (uint)target.Height, GLEnum.Rgba, GLEnum.UnsignedByte, out rgba[0]);
         return rgba;
     }
 }

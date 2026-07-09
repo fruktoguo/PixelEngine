@@ -6,6 +6,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Plan 05 节点 3 的自由粒子生命周期与 R13 无泄漏回退测试。
+/// 不变式：粒子生命周期与 R13 无泄漏回退路径可触发。
 /// </summary>
 public sealed class ParticleLifecycleTests
 {
@@ -18,6 +19,7 @@ public sealed class ParticleLifecycleTests
     [Fact]
     public void ResolveDepositsKillsExpiredParticleBeforeDepositingIntoEmptyCell()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         MaterialPropsTable materials = CreateMaterials();
         CellGrid grid = new(source, materials);
@@ -29,6 +31,7 @@ public sealed class ParticleLifecycleTests
         particles.IntegrateAndAdvance(grid);
         particles.ResolveDeposits(kernel, grid);
 
+        // Assert：验证预期结果
         Assert.Equal(0, particles.ActiveCount);
         Assert.Equal(0, Get(center, 10, 10));
         Assert.Equal(1, particles.Stats.KilledByLifetimeThisTick);
@@ -41,6 +44,7 @@ public sealed class ParticleLifecycleTests
     [Fact]
     public void BlockedParticleStaysWhileLifeRemainsThenDies()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         FillAll(source.ResidentChunks, Solid);
         MaterialPropsTable materials = CreateMaterials();
@@ -53,6 +57,7 @@ public sealed class ParticleLifecycleTests
         particles.IntegrateAndAdvance(grid);
         particles.ResolveDeposits(kernel, grid);
 
+        // Assert：验证预期结果
         Assert.Equal(1, particles.ActiveCount);
         Assert.Equal(1, particles.ActiveReadOnly[0].Life);
         Assert.Equal(0, particles.Stats.KilledByLifetimeThisTick);
@@ -73,6 +78,7 @@ public sealed class ParticleLifecycleTests
     [Fact]
     public void ContinuousEjectionWithoutDepositSpaceIsBoundedAndEventuallyDrains()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         FillAll(source.ResidentChunks, Solid);
         MaterialPropsTable materials = CreateMaterials();
@@ -87,6 +93,7 @@ public sealed class ParticleLifecycleTests
         {
             particles.ResetTickStats();
             Set(center, 10, 10, Sand);
+            // Assert：验证预期结果
             Assert.True(particles.RequestEjection(new EjectionRequest(10, 10, 0, 0, 0, EjectMask.Powder)));
             particles.RunEjectionPass(kernel, grid);
             Set(center, 10, 10, Solid);
@@ -116,6 +123,7 @@ public sealed class ParticleLifecycleTests
     [Fact]
     public void NonResidentLandingKeepsShortLivedParticleWithoutDepositingAtLastOpenCell()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         MaterialPropsTable materials = CreateMaterials();
         CellGrid grid = new(source, materials);
@@ -127,6 +135,7 @@ public sealed class ParticleLifecycleTests
         particles.IntegrateAndAdvance(grid);
         particles.ResolveDeposits(kernel, grid);
 
+        // Assert：验证预期结果
         Assert.Equal(1, particles.ActiveCount);
         Assert.Equal(2, particles.ActiveReadOnly[0].Life);
         Assert.Equal(0, Get(center, 63, 10));

@@ -5,6 +5,7 @@ namespace PixelEngine.World.Tests;
 
 /// <summary>
 /// World live chunk map 与流式队列测试。
+/// 不变式：live map 与流式队列操作原子、无重复装载。
 /// </summary>
 public sealed class ResidentChunkMapAndQueueTests
 {

@@ -5,8 +5,14 @@ using Xunit;
 
 namespace PixelEngine.UI.Tests;
 
+/// <summary>
+/// RmlUi 文档预处理器测试：路径重写与资源内联。
+/// </summary>
 public sealed class RmlUiDocumentPreprocessorTests
 {
+    /// <summary>
+    /// 验证Prepare Rewrites Data Image Png To Rml Ui Readable Tga。
+    /// </summary>
     [Fact]
     public void PrepareRewritesDataImagePngToRmlUiReadableTga()
     {
@@ -56,6 +62,9 @@ public sealed class RmlUiDocumentPreprocessorTests
         }
     }
 
+    /// <summary>
+    /// 验证Prepare复用Converted Image And Disposes Temporary Cache Directory。
+    /// </summary>
     [Fact]
     public void PrepareReusesConvertedImageAndDisposesTemporaryCacheDirectory()
     {
@@ -107,6 +116,9 @@ public sealed class RmlUiDocumentPreprocessorTests
         }
     }
 
+    /// <summary>
+    /// 验证Prepare Rejects Image Outside Content Images Directory。
+    /// </summary>
     [Fact]
     public void PrepareRejectsImageOutsideContentImagesDirectory()
     {

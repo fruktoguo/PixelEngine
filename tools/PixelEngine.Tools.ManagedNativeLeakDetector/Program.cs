@@ -12,14 +12,22 @@ using Silk.NET.OpenGL;
 
 namespace PixelEngine.Tools.ManagedNativeLeakDetector;
 
+/// <summary>
+/// 托管/原生边界泄漏探测器：分阶段创建 GL、OpenAL、Box2D、ALC 探针资源，
+/// 销毁后统计存活句柄并生成 evidence.json 证据清单（供 plan/18 审查）。
+/// </summary>
 internal static class Program
 {
     private const string DetectorName = "managed-native-leak-detector";
 
+    /// <summary>
+    /// 入口：解析参数 → 四阶段采集 → 写 manifest；任一阶段失败仍尽量完成其余报告。
+    /// </summary>
     public static int Main(string[] args)
     {
         try
         {
+            // --- 阶段 0：解析输出目录、运行 ID 与 git 提交 ---
             Options options = Options.Parse(args);
             _ = Directory.CreateDirectory(options.Output);
             string detectorRunId = string.IsNullOrWhiteSpace(options.DetectorRunId)
@@ -29,6 +37,7 @@ internal static class Program
                 ? ResolveGitCommit()
                 : options.GitCommit;
 
+            // --- 阶段 1–4：GL → OpenAL → Box2D → ALC 探针采集 ---
             List<ScopeReport> reports =
             [
                 WriteScopeReport(options.Output, detectorRunId, gitCommit, CollectGl()),
@@ -37,6 +46,7 @@ internal static class Program
                 WriteScopeReport(options.Output, detectorRunId, gitCommit, CollectAlc(options.Output)),
             ];
 
+            // --- 阶段 5：汇总 evidence.json ---
             string manifestPath = Path.Combine(options.Output, "evidence.json");
             WriteManifest(manifestPath, detectorRunId, gitCommit, reports);
             Console.WriteLine($"Managed native leak detector wrote {manifestPath}");
@@ -49,6 +59,9 @@ internal static class Program
         }
     }
 
+    /// <summary>
+    /// 阶段一（GL）：创建 RenderWindow 与纹理/缓冲/FBO/着色器包装，销毁后记录 GlResourceTracker 存活数。
+    /// </summary>
     private static ScopeResult CollectGl()
     {
         try
@@ -66,7 +79,7 @@ internal static class Program
             using GlTexture texture = new(window.Gl, 8, 8);
             using GlBuffer buffer = new(window.Gl, BufferTargetARB.ArrayBuffer);
             buffer.Allocate(256, BufferUsageARB.DynamicDraw);
-            using PixelEngine.Rendering.Framebuffer framebuffer = new(window.Gl);
+            using Rendering.Framebuffer framebuffer = new(window.Gl);
             framebuffer.AttachColorTexture(texture);
             (string vertexShader, string fragmentShader) = CreateDetectorShaders(window.Capabilities.IsGles);
             using ShaderProgram program = ShaderProgram.Create(
@@ -134,6 +147,9 @@ internal static class Program
                 """);
     }
 
+    /// <summary>
+    /// 阶段二（OpenAL）：初始化 OpenAL 或 Null 音频后端，创建并删除音源/缓冲后统计存活对象。
+    /// </summary>
     private static ScopeResult CollectOpenAl()
     {
         string coverage;
@@ -172,6 +188,9 @@ internal static class Program
             Detail: failureReason ?? "Created and deleted one source and one buffer before shutdown.");
     }
 
+    /// <summary>
+    /// 阶段三（Box2D）：构建世界与刚体后关闭 PhysicsSystem，检查 LiveBodyCount。
+    /// </summary>
     private static ScopeResult CollectBox2D()
     {
         TestChunkSource source = new(new Chunk(new ChunkCoord(0, 0)));
@@ -192,6 +211,9 @@ internal static class Program
             Detail: "Created an owned Box2D world, built one dynamic body from cells, then shut the physics system down.");
     }
 
+    /// <summary>
+    /// 阶段四（ALC）：通过 ScriptHotReloadController 连续热重载四次，统计未回收 ALC 数量。
+    /// </summary>
     private static ScopeResult CollectAlc(string output)
     {
         string sourceRoot = Path.Combine(output, "alc-sources");

@@ -224,6 +224,7 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     public void FeedTextComposition(ReadOnlySpan<char> text, in UiTextComposition composition)
     {
         ThrowIfDisposed();
+        // IME 预编辑：托管回退不走控件内嵌输入，以屏幕底部 overlay 显示，不写入 committed text。
         int textLength = Math.Min(text.Length, CompositionOverlayTextCapacity);
         UiTextComposition normalized = composition.IsActive && textLength > 0
             ? composition.ClampToTextLength(textLength)
@@ -280,6 +281,7 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
             return UiHitResult.None;
         }
 
+        // 自顶向下命中：模态屏直接吞掉全部输入；非模态屏记录 passive 命中供底层透传判断。
         UiHitResult passiveHit = UiHitResult.None;
         for (int i = _visibleScreenCount - 1; i >= 0; i--)
         {
@@ -483,6 +485,7 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         Dirty = false;
     }
 
+    // 按屏栈底→顶顺序绘制各文档窗口，最后叠加 IME composition overlay。
     private void DrawVisibleScreens(IGuiDrawContext gui)
     {
         for (int i = 0; i < _visibleScreenCount; i++)

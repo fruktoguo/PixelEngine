@@ -15,6 +15,7 @@ public static class RngFactory
     /// <returns>chunk 专属随机数源。</returns>
     public static Pcg32 ForChunk(ulong worldSeed, int chunkX, int chunkY, uint frame)
     {
+        // 每个 chunk×帧组合派生独立 PCG 流，保证并行 CA pass 间无随机序列串扰。
         ulong seed = Mix64(worldSeed ^ ((ulong)frame << 32));
         ulong stream = Mix64(((ulong)(uint)chunkX << 32) | (uint)chunkY);
         return new Pcg32(seed, stream);

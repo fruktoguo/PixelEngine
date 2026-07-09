@@ -326,18 +326,22 @@ public sealed class PhysicsSystem : IDisposable
 
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(subStepCount);
 
+        // 8a：排空 damage queue 并重建受损刚体
         DrainDamageQueue();
         LastDestructionResult = RebuildDamagedBodies();
         PublishShatterAudioEvent(LastDestructionResult);
+        // 8b：擦除上一帧 RigidOwned stamp，同步角色 proxy AABB
         LastErasedCellCount = Measure(FrameSubPhase.PhysicsErase, EraseAllBodies);
         Registry.Clear();
         SyncCharacterProxies();
 
+        // 8c：Box2D step，再用角色 proxy 约束压入的动态刚体
         long stepStarted = Stopwatch.GetTimestamp();
         Box2D.b2World_Step(WorldId, dt, subStepCount);
         RecordSub(FrameSubPhase.PhysicsStep, stepStarted);
         ResolveCharacterProxyBodyContacts();
 
+        // 8d：inverse-sample 写回网格，并清理角色 AABB 内漏判的 RigidOwned
         int stamped = Measure(FrameSubPhase.PhysicsInverseSample, StampAllBodies);
         LastCharacterProxyOverlapClearedCount = ClearCharacterProxyOverlaps();
         if (LastCharacterProxyOverlapClearedCount > 0)
@@ -771,6 +775,7 @@ public sealed class PhysicsSystem : IDisposable
         return result;
     }
 
+    // 批量排空相位 4 写入的 damage queue，扩容 scratch 以应对突发事件
     private void DrainDamageQueue()
     {
         _pendingDamage.Clear();
@@ -929,6 +934,7 @@ public sealed class PhysicsSystem : IDisposable
         return stamped;
     }
 
+    // 动态刚体从上方扫入角色 proxy 时，将其顶起并清零速度，模拟“站在碎块上”
     private void ResolveCharacterProxyBodyContacts()
     {
         LastCharacterProxyContactCount = 0;
@@ -1093,6 +1099,7 @@ public sealed class PhysicsSystem : IDisposable
         }
     }
 
+    // 兜底：清除角色 AABB 内 inverse-sample 漏写的 RigidOwned stamp
     private int ClearCharacterProxyOverlaps()
     {
         int cleared = 0;
@@ -1132,6 +1139,7 @@ public sealed class PhysicsSystem : IDisposable
         return LocalBoundsToWorld(mask, in transform, RectI.FromBounds(0, 0, mask.Width, mask.Height));
     }
 
+    // 角色水平移动被 RigidOwned 阻挡时，把被挡像素转化为对刚体的水平冲量
     private void ApplyCharacterRigidPush(in CharacterCollisionInfo info)
     {
         float impulsePerBlockedPixel = CharacterPushImpulsePerBlockedPixel;
@@ -1325,6 +1333,7 @@ public sealed class PhysicsSystem : IDisposable
         _damageScratch = GC.AllocateArray<RigidDamageEvent>(capacity, pinned: true);
     }
 
+    /// <summary>角色 kinematic 对应的 Box2D static proxy，用于承托动态刚体。</summary>
     private sealed class CharacterProxy(CharacterController controller, B2BodyId bodyId)
     {
         public CharacterController Controller { get; } = controller;

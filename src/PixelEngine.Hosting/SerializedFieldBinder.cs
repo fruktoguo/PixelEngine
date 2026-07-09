@@ -79,26 +79,23 @@ public static class SerializedFieldBinder
     private static object? ConvertValue(string value, Type targetType)
     {
         Type normalized = Nullable.GetUnderlyingType(targetType) ?? targetType;
-        if (string.IsNullOrEmpty(value) && Nullable.GetUnderlyingType(targetType) is not null)
-        {
-            return null;
-        }
-
-        return normalized switch
-        {
-            _ when normalized == typeof(string) => value,
-            _ when normalized == typeof(int) => int.Parse(value, CultureInfo.InvariantCulture),
-            _ when normalized == typeof(long) => long.Parse(value, CultureInfo.InvariantCulture),
-            _ when normalized == typeof(float) => float.Parse(value, CultureInfo.InvariantCulture),
-            _ when normalized == typeof(double) => double.Parse(value, CultureInfo.InvariantCulture),
-            _ when normalized == typeof(bool) => bool.Parse(value),
-            _ when normalized == typeof(ushort) => ushort.Parse(value, CultureInfo.InvariantCulture),
-            _ when normalized == typeof(MaterialId) => new MaterialId(ushort.Parse(value, CultureInfo.InvariantCulture)),
-            _ when normalized == typeof(ScriptAssetReference) && ScriptAssetReference.TryDecode(value, out ScriptAssetReference reference) => reference,
-            _ when normalized == typeof(Vector2) => ParseVector2(value),
-            _ when normalized.IsEnum => Enum.Parse(normalized, value, ignoreCase: true),
-            _ => throw new NotSupportedException($"不支持绑定字段类型：{targetType.FullName}。"),
-        };
+        return string.IsNullOrEmpty(value) && Nullable.GetUnderlyingType(targetType) is not null
+            ? null
+            : normalized switch
+            {
+                _ when normalized == typeof(string) => value,
+                _ when normalized == typeof(int) => int.Parse(value, CultureInfo.InvariantCulture),
+                _ when normalized == typeof(long) => long.Parse(value, CultureInfo.InvariantCulture),
+                _ when normalized == typeof(float) => float.Parse(value, CultureInfo.InvariantCulture),
+                _ when normalized == typeof(double) => double.Parse(value, CultureInfo.InvariantCulture),
+                _ when normalized == typeof(bool) => bool.Parse(value),
+                _ when normalized == typeof(ushort) => ushort.Parse(value, CultureInfo.InvariantCulture),
+                _ when normalized == typeof(MaterialId) => new MaterialId(ushort.Parse(value, CultureInfo.InvariantCulture)),
+                _ when normalized == typeof(ScriptAssetReference) && ScriptAssetReference.TryDecode(value, out ScriptAssetReference reference) => reference,
+                _ when normalized == typeof(Vector2) => ParseVector2(value),
+                _ when normalized.IsEnum => Enum.Parse(normalized, value, ignoreCase: true),
+                _ => throw new NotSupportedException($"不支持绑定字段类型：{targetType.FullName}。"),
+            };
     }
 
     private static Vector2 ParseVector2(string value)

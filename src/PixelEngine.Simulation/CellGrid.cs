@@ -74,6 +74,7 @@ public sealed class CellGrid(
     {
         ref ushort target = ref MaterialAt(wx, wy);
         ref byte flags = ref FlagsAt(wx, wy);
+        // 覆盖 RigidOwned cell 前先通知物理层，避免 stamp 与材质写入不一致。
         bool wasRigidOwned = NotifyRigidDamageIfNeeded(wx, wy, flags, target);
         target = material;
         if (wasRigidOwned)
@@ -205,6 +206,7 @@ public sealed class CellGrid(
         }
 
         ChunkCoord coord = CellAddressing.WorldToChunk(wx, wy);
+        // stamp 须邻域完整驻留，否则 working dirty 无法正确唤醒边界 chunk。
         if (!_chunks.TryGetChunk(coord, out Chunk chunk) ||
             !DirtyRegionMarker.TryMarkCell(_chunks, wx, wy, DirtyPhaseTarget.Working, includeBoundaryNeighbors: true))
         {
@@ -233,6 +235,7 @@ public sealed class CellGrid(
             EngineConstants.DirtyRectPadding);
     }
 
+    // 刚体 erase/stamp 走 working dirty 并唤醒邻接，供下一帧 CA 重检交界。
     private void MarkRigidDirty(int wx, int wy)
     {
         DirtyRegionMarker.MarkCell(_chunks, wx, wy, DirtyPhaseTarget.Working, includeBoundaryNeighbors: true);

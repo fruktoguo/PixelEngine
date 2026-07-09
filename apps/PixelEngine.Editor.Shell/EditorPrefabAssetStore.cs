@@ -2,6 +2,9 @@ using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// Prefab 资产文件的读写与实例化。
+/// </summary>
 internal sealed class EditorPrefabAssetStore(string contentRoot, EditorAssetManifestStore? assets = null)
 {
     private readonly string _contentRoot = string.IsNullOrWhiteSpace(contentRoot)

@@ -5,8 +5,14 @@ using Xunit;
 
 namespace PixelEngine.UI.Tests;
 
+/// <summary>
+/// UI 离屏表面呈现器冒烟测试：离屏合成与上传。
+/// </summary>
 public sealed class UiOffscreenSurfacePresenterSmokeTests
 {
+    /// <summary>
+    /// 验证Offscreen Surface上传Dirty Rect And Composites经Render Pipeline When Gl Smoke Is Enabled。
+    /// </summary>
     [Fact]
     public void OffscreenSurfaceUploadsDirtyRectAndCompositesThroughRenderPipelineWhenGlSmokeIsEnabled()
     {
@@ -65,6 +71,9 @@ public sealed class UiOffscreenSurfacePresenterSmokeTests
         Assert.NotEqual(0u, layer.TextureHandle);
     }
 
+    /// <summary>
+    /// 验证Offscreen Surface Presenter Source Documents Real Upload Contract。
+    /// </summary>
     [Fact]
     public void OffscreenSurfacePresenterSourceDocumentsRealUploadContract()
     {
@@ -83,7 +92,7 @@ public sealed class UiOffscreenSurfacePresenterSmokeTests
     private static byte[] ReadFramebufferRgba(GL gl, int width, int height)
     {
         byte[] pixels = new byte[checked(width * height * 4)];
-        gl.ReadPixels<byte>(0, 0, (uint)width, (uint)height, PixelFormat.Rgba, PixelType.UnsignedByte, pixels);
+        gl.ReadPixels(0, 0, (uint)width, (uint)height, PixelFormat.Rgba, PixelType.UnsignedByte, pixels);
         return pixels;
     }
 
@@ -91,7 +100,7 @@ public sealed class UiOffscreenSurfacePresenterSmokeTests
     {
         byte[] pixels = new byte[checked(width * height * 4)];
         gl.BindTexture(TextureTarget.Texture2D, texture);
-        gl.GetTexImage<byte>(TextureTarget.Texture2D, 0, PixelFormat.Rgba, PixelType.UnsignedByte, pixels);
+        gl.GetTexImage(TextureTarget.Texture2D, 0, PixelFormat.Rgba, PixelType.UnsignedByte, pixels);
         return pixels;
     }
 

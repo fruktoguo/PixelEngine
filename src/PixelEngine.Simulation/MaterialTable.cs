@@ -162,6 +162,7 @@ public sealed class MaterialTable : IMaterialCustomUpdateExecutor
         int preservedCount = 0;
         int fallbackReplacementCount = 0;
 
+        // 按 name 匹配：保留 id 更新定义；新 name 追加到表尾。
         foreach (KeyValuePair<string, MaterialDef> entry in incoming)
         {
             if (_nameToId.TryGetValue(entry.Key, out ushort existingId))
@@ -177,6 +178,7 @@ public sealed class MaterialTable : IMaterialCustomUpdateExecutor
             }
         }
 
+        // 旧表有而 incoming 无的 name 标 tombstone，live grid 后续 remap 到 fallback。
         List<ushort> tombstones = [];
         for (int i = 0; i < _defs.Length; i++)
         {

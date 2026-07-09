@@ -40,6 +40,7 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
             throw new InvalidOperationException("ImGui 后端已经初始化。");
         }
 
+        // 创建独立 ImGui context，与 Editor/Game 共享同一 OpenGL context 但隔离 ini 与字体 atlas。
         _context = ImGui.CreateContext();
         _layoutPath = options.LayoutPath;
         SetCurrentContext();

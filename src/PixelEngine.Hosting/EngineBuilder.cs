@@ -326,6 +326,7 @@ public sealed class EngineBuilder
     /// </summary>
     public Engine Build()
     {
+        // 1) 物化不可变 EngineOptions，并应用 GC 延迟模式。
         EngineOptions options = new(
             _windowWidth,
             _windowHeight,
@@ -350,6 +351,7 @@ public sealed class EngineBuilder
             _noGcRegionBudgetBytes,
             _overload);
         EngineGcCoordinator.ApplyLatencyMode(options.GcMode.ToLatencyMode());
+        // 2) 创建 Core 运行时服务：JobSystem、帧时钟、事件总线、计数器与过载控制器。
         JobSystem jobs = new(options.WorkerCount);
         FrameClock clock = new(options.SimHz);
         EventBus events = new(options.EventCapacityPerChannel);
@@ -364,6 +366,7 @@ public sealed class EngineBuilder
         ScriptAssemblyRegistry scriptAssemblies = new();
         EngineLifecycle lifecycle = BuildLifecycle();
         SceneService scenes = BuildSceneService(options);
+        // 3) 装配 EngineContext 并注册所有 Core/Hosting 基础服务。
         EngineContext context = new(options, jobs, clock, events, counters, profiler);
         context.RegisterService(context);
         context.RegisterService(options);
@@ -389,6 +392,7 @@ public sealed class EngineBuilder
             }
         }
 
+        // 4) 构建 12 相位管线：先绑定相位驱动，再注册自定义 OnPhase hook。
         EnginePhasePipeline phases = new(commands);
         for (int i = 0; i < _phaseDrivers.Count; i++)
         {
@@ -404,6 +408,7 @@ public sealed class EngineBuilder
         context.RegisterService(phases);
         try
         {
+            // 5) 按注册顺序初始化子系统，再返回 Engine 门面。
             lifecycle.Initialize(context);
             return new Engine(context, phases, lifecycle);
         }

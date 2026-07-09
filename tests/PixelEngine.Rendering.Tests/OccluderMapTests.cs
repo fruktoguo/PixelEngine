@@ -2,8 +2,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// 遮挡图测试：静态遮挡写入、查询与脏区传播。
+/// </summary>
 public sealed class OccluderMapTests
 {
+    /// <summary>
+    /// 验证Constructor Copies Solidity With Explicit Size。
+    /// </summary>
     [Fact]
     public void ConstructorCopiesSolidityWithExplicitSize()
     {
@@ -19,6 +25,9 @@ public sealed class OccluderMapTests
         Assert.Equal(30, map.Get(0, 1));
     }
 
+    /// <summary>
+    /// 验证Copy From Render Aux Buffers Uses Cpu Occluder Channel。
+    /// </summary>
     [Fact]
     public void CopyFromRenderAuxBuffersUsesCpuOccluderChannel()
     {
@@ -33,6 +42,9 @@ public sealed class OccluderMapTests
         Assert.Equal(44, map.Get(1, 1));
     }
 
+    /// <summary>
+    /// 验证Set Get And Clear Use Screen Coordinates。
+    /// </summary>
     [Fact]
     public void SetGetAndClearUseScreenCoordinates()
     {
@@ -46,6 +58,9 @@ public sealed class OccluderMapTests
         Assert.Equal(0, map.Get(2, 1));
     }
 
+    /// <summary>
+    /// 验证Size Validation Rejects Invalid Or Mismatched Input。
+    /// </summary>
     [Fact]
     public void SizeValidationRejectsInvalidOrMismatchedInput()
     {
@@ -58,6 +73,9 @@ public sealed class OccluderMapTests
         AssertThrows<ArgumentException>(() => map.CopyFrom([1, 2, 3], 2, 2));
     }
 
+    /// <summary>
+    /// 验证Coordinate Validation Rejects Out Of Range Access。
+    /// </summary>
     [Fact]
     public void CoordinateValidationRejectsOutOfRangeAccess()
     {

@@ -189,12 +189,9 @@ internal sealed class RenderWindowUiInputSource : IUiInputSource
 
         float scaleX = float.IsFinite(framebufferScaleX) && framebufferScaleX > 0f ? framebufferScaleX : 1f;
         float scaleY = float.IsFinite(framebufferScaleY) && framebufferScaleY > 0f ? framebufferScaleY : 1f;
-        if (scaleX == 1f && scaleY == 1f)
-        {
-            return framebufferGeometry;
-        }
-
-        return framebufferGeometry.Transform(0f, 0f, 1f / scaleX, 1f / scaleY);
+        return scaleX == 1f && scaleY == 1f
+            ? framebufferGeometry
+            : framebufferGeometry.Transform(0f, 0f, 1f / scaleX, 1f / scaleY);
     }
 
     private void OnKeyChar(IKeyboard keyboard, char character)

@@ -5,6 +5,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// 双输出反应的输入 / 输出计数账本与中间概率守恒测试。
+/// 不变式：双输出反应输入/输出账本闭合、中间概率不丢质量。
 /// </summary>
 public sealed class ReactionConservationTests
 {
@@ -21,6 +22,7 @@ public sealed class ReactionConservationTests
     [Fact]
     public void IntermediateProbabilityCensusKeepsDataminedLavaWaterLedgerBalanced()
     {
+        // Arrange：搭建测试场景与依赖
         byte probability = ReactionExpansionRules.RateToProbabilityByte(80);
         ReactionEngine engine = CreateReactionSetup(probability).Engine;
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
@@ -31,6 +33,7 @@ public sealed class ReactionConservationTests
         {
             ResetPair(center, 10, 10, Lava, 11, 10, Water);
 
+            // Act：执行被测操作
             _ = engine.TryReact(
                 ref window,
                 10,
@@ -48,6 +51,7 @@ public sealed class ReactionConservationTests
 
         int expectedSuccesses = probability;
         int expectedMisses = 256 - probability;
+        // Assert：验证不变式与预期结果
         Assert.Equal(expectedMisses, ledger[Lava]);
         Assert.Equal(expectedMisses, ledger[Water]);
         Assert.Equal(expectedSuccesses, ledger[Rock]);
@@ -61,6 +65,7 @@ public sealed class ReactionConservationTests
     [Fact]
     public void DataminedLavaWaterLedgerConservesCountsAcrossBoundaryMatrix()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateDenseSource(-2, -2, 3, 3);
         Chunk center = source.GetRequired(new ChunkCoord(0, 0));
         Chunk east = source.GetRequired(new ChunkCoord(1, 0));
@@ -72,6 +77,7 @@ public sealed class ReactionConservationTests
         SimulationKernel kernel = new(source, new MaterialPropsTable(setup.Materials.Hot), worldSeed: 0xBEEFUL, reactionExecutor: setup.Engine);
 
         int[] before = CountMaterials(source);
+        // Assert：验证预期结果
         Assert.Equal(5, before[Lava]);
         Assert.Equal(5, before[Water]);
         Assert.Equal(0, before[Rock]);

@@ -11,6 +11,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// Audio phase driver 集成测试。
+/// 不变式：音频相位与 Simulation tick 对齐、listener 状态随相机更新。
 /// </summary>
 public sealed class AudioPhaseDriverTests
 {
@@ -20,11 +21,13 @@ public sealed class AudioPhaseDriverTests
     [Fact]
     public async Task EngineLoadsContentAudioAndInjectsScriptAudioApi()
     {
+        // Arrange：搭建测试场景与依赖
         string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-hosting-audio-{Guid.NewGuid():N}");
         try
         {
             string audioRoot = Path.Combine(contentRoot, "audio");
             _ = Directory.CreateDirectory(audioRoot);
+            // Act：执行被测操作
             await File.WriteAllBytesAsync(
                 Path.Combine(audioRoot, "ui_click.wav"),
                 CreateWav(channels: 1, bitsPerSample: 8, sampleRate: 8_000, [128]));
@@ -35,10 +38,11 @@ public sealed class AudioPhaseDriverTests
                 .Build();
 
             int loaded = await engine.AttachAudioFromContentAsync(backend);
-            PixelEngine.Scripting.IAudioApi api = engine.Context.GetService<PixelEngine.Scripting.IAudioApi>();
+            Scripting.IAudioApi api = engine.Context.GetService<Scripting.IAudioApi>();
             api.PlayOneShot("ui_click.wav");
             _ = engine.RunOneTick();
 
+            // Assert：验证不变式与预期结果
             Assert.Equal(1, loaded);
             Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.AudioService));
             Assert.Equal(1, engine.Context.GetService<AudioClipCache>().LoadedCount);
@@ -63,17 +67,20 @@ public sealed class AudioPhaseDriverTests
     [Fact]
     public async Task EngineMapsMaterialAudioCuesToLoadedClips()
     {
+        // Arrange：搭建测试场景与依赖
         string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-hosting-audio-cues-{Guid.NewGuid():N}");
         try
         {
             string audioRoot = Path.Combine(contentRoot, "audio");
             _ = Directory.CreateDirectory(audioRoot);
+            // Act：执行被测操作
             await File.WriteAllBytesAsync(
                 Path.Combine(audioRoot, "impact_sand.wav"),
                 CreateWav(channels: 1, bitsPerSample: 8, sampleRate: 8_000, [128]));
             await File.WriteAllTextAsync(
                 Path.Combine(audioRoot, "cues.json"),
-                """
+                                     /*lang=json,strict*/
+                                     """
                 {
                   "cues": [
                     { "handle": 1, "asset": "impact_sand.wav" }
@@ -101,6 +108,7 @@ public sealed class AudioPhaseDriverTests
             ]));
 
             int loaded = await engine.AttachAudioFromContentAsync(backend);
+            // Assert：验证不变式与预期结果
             Assert.True(engine.Context.TryGetService(out IAudioCueBufferResolver _));
             Assert.True(engine.Context.Events.Channel<AudioEvent>().TryEnqueue(
                 new AudioEvent(AudioEventType.ParticleImpact, 4, 8, materialId: 1, magnitude: 1f)));
@@ -126,6 +134,7 @@ public sealed class AudioPhaseDriverTests
     [Fact]
     public void AudioPhaseDriverUpdatesListenerOnRenderOnlyFrames()
     {
+        // Arrange：准备输入与初始状态
         using NullAudioBackend backend = new();
         using AudioSystem audio = new();
         audio.Initialize(new AudioSettings(), backend);
@@ -137,6 +146,7 @@ public sealed class AudioPhaseDriverTests
             .Build();
         engine.EnterEditMode();
 
+        // Assert：验证预期结果
         Assert.Equal(1, engine.Phases.Count(EnginePhase.BuildRenderBuffer));
 
         _ = engine.RunOneTick();
@@ -152,6 +162,7 @@ public sealed class AudioPhaseDriverTests
     [Fact]
     public void AudioPhaseDriverAdvancesAmbientOnRenderOnlyEmptyFrames()
     {
+        // Arrange：准备输入与初始状态
         AudioSettings settings = new()
         {
             MaxVoices = 1,
@@ -169,6 +180,7 @@ public sealed class AudioPhaseDriverTests
         MaterialAudioTable table = BuildAmbientTable();
         audio.AttachAmbientLoopManager(new AmbientLoopManager(backend, table, new BufferResolver(), settings));
         MpscRingBuffer<AudioEvent> ring = new(8);
+        // Assert：验证预期结果
         Assert.True(ring.TryEnqueue(new AudioEvent(AudioEventType.AmbientRegion, 4, 8, 1, 0.8f)));
         AudioDispatcher dispatcher = new(ring, audio.Voices, settings);
         MaterialAudioPlayer player = new(table, new BufferResolver(), settings);
@@ -198,6 +210,7 @@ public sealed class AudioPhaseDriverTests
     [Fact]
     public void AudioPhaseDriverKeepsDispatchConsistentWithDownscaledSim()
     {
+        // Arrange：准备输入与初始状态
         AudioSettings settings = new()
         {
             MaxVoices = 2,
@@ -216,6 +229,7 @@ public sealed class AudioPhaseDriverTests
             .WithSimHz(EngineConstants.SimHzDownscaled)
             .OnPhase(EnginePhase.ParticleToCell, _ =>
             {
+                // Assert：验证预期结果
                 Assert.True(ring.TryEnqueue(new AudioEvent(AudioEventType.ParticleImpact, 0, 0, 1, 1f)));
             })
             .AddPhaseDriver(new AudioPhaseDriver(
@@ -244,6 +258,7 @@ public sealed class AudioPhaseDriverTests
     [Fact]
     public void AudioPhaseDriverRecordsDispatchDiagnostics()
     {
+        // Arrange：准备输入与初始状态
         AudioSettings settings = new()
         {
             MaxVoices = 64,
@@ -268,6 +283,7 @@ public sealed class AudioPhaseDriverTests
             .Build();
         engine.EnterEditMode();
 
+        // Assert：验证预期结果
         Assert.True(ring.TryEnqueue(new AudioEvent(AudioEventType.ParticleImpact, -4, 0, 1, 1f)));
         _ = engine.RunOneTick();
         for (int i = 0; i < 32; i++)

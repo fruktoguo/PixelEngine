@@ -34,6 +34,7 @@ public sealed class MaterialReactionEditorDocument
         ArgumentNullException.ThrowIfNull(materials);
         ArgumentNullException.ThrowIfNull(reactions);
         MaterialReactionEditorDocument document = new();
+        // 从 Content DTO 构建可变行：runtime id 只读附带，不参与 JSON 往返。
         if (materials.TagRepresentatives is not null)
         {
             for (int i = 0; i < materials.TagRepresentatives.Length; i++)
@@ -416,7 +417,7 @@ public sealed class MaterialEditorRow
 
     private static byte ClampFlowRate(int value)
     {
-        return (byte)Math.Clamp(value, byte.MinValue, PixelEngine.Core.EngineConstants.MoveCap);
+        return (byte)Math.Clamp(value, byte.MinValue, Core.EngineConstants.MoveCap);
     }
 
     private static ushort ClampUshort(int value)

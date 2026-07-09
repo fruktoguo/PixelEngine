@@ -94,7 +94,7 @@ public sealed class GuiInputBridge
         _backend.AddText(text);
     }
 
-    private static ImGuiKey MapKey(Silk.NET.Input.Key key)
+    private static ImGuiKey MapKey(Key key)
     {
         if (key == Silk.NET.Input.Key.Tab)
         {
@@ -153,7 +153,7 @@ public sealed class GuiInputBridge
         };
     }
 
-    private void UpdateModifierState(Silk.NET.Input.Key key, bool down)
+    private void UpdateModifierState(Key key, bool down)
     {
         switch (key)
         {

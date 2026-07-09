@@ -6,6 +6,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// kinematic AABB 角色控制器测试。
+/// 不变式：kinematic AABB 解算不穿透、贴地/斜坡行为稳定。
 /// </summary>
 public sealed class CharacterControllerTests
 {
@@ -49,6 +50,7 @@ public sealed class CharacterControllerTests
     [Fact]
     public void MoveHorizontalCanStepUpSmallObstacle()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = new(new Chunk(new ChunkCoord(0, 0)));
         FillRect(source.Center, 0, 10, 32, 11, material: 1);
         FillRect(source.Center, 8, 9, 9, 10, material: 1);
@@ -57,6 +59,7 @@ public sealed class CharacterControllerTests
 
         controller.Move(new Vector2(8, 0), out CharacterCollisionInfo info);
 
+        // Assert：验证预期结果
         Assert.False(info.HitWallRight);
         Assert.True(controller.Position.X > 8f);
         Assert.True(controller.Position.Y < 6f);

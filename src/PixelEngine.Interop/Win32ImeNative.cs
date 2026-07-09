@@ -86,6 +86,8 @@ public static partial class Win32ImeNative
         return ImmSetCandidateWindow(context, in form);
     }
 
+    // --- IMM32 P/Invoke：调用方须在 Windows 且持有有效 HWND；非 Windows 平台勿引用。 ---
+
     [LibraryImport("imm32.dll", SetLastError = false)]
     private static partial IntPtr ImmGetContext(IntPtr hwnd);
 

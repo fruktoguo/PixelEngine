@@ -6,6 +6,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// Hosting 输入仲裁器契约测试。
+/// 不变式：编辑器与游戏输入互斥、焦点切换时快照一致。
 /// </summary>
 public sealed class InputArbitratorTests
 {

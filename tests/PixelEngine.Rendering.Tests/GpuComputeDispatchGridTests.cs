@@ -4,6 +4,9 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// GPU 计算调度网格测试：分块尺寸与覆盖范围。
+/// </summary>
 public sealed class GpuComputeDispatchGridTests
 {
     [Theory]
@@ -20,6 +23,9 @@ public sealed class GpuComputeDispatchGridTests
         Assert.Equal(1u, size.GroupsZ);
     }
 
+    /// <summary>
+    /// 验证Work Group Size Comes From Engine Constants。
+    /// </summary>
     [Fact]
     public void WorkGroupSizeComesFromEngineConstants()
     {
@@ -28,6 +34,9 @@ public sealed class GpuComputeDispatchGridTests
         Assert.Equal(EngineConstants.GpuComputeWorkGroupSizeZ, GpuComputeDispatchGrid.LocalSizeZ);
     }
 
+    /// <summary>
+    /// 验证Validate Local Size Rejects Unqueried Device Limits。
+    /// </summary>
     [Fact]
     public void ValidateLocalSizeRejectsUnqueriedDeviceLimits()
     {
@@ -54,6 +63,9 @@ public sealed class GpuComputeDispatchGridTests
         Assert.Contains("查询", exception.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Validate Local Size Rejects Device Below Configured Local Size。
+    /// </summary>
     [Fact]
     public void ValidateLocalSizeRejectsDeviceBelowConfiguredLocalSize()
     {

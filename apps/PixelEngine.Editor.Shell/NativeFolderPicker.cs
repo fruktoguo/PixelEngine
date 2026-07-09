@@ -3,6 +3,9 @@ using System.Runtime.Versioning;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// Windows 原生文件夹选择对话框封装，供项目路径与构建输出目录选取。
+/// </summary>
 internal static partial class NativeFolderPicker
 {
     private const uint FosPickFolders = 0x00000020;

@@ -1,5 +1,8 @@
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// 编辑器侧 Behaviour 组件的序列化模型，字段以字符串键值对存储。
+/// </summary>
 internal sealed class EditorComponentModel
 {
     public EditorComponentModel(string typeName)

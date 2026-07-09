@@ -4,8 +4,14 @@ using Xunit;
 
 namespace PixelEngine.Audio.Tests;
 
+/// <summary>
+/// 环境循环管理器测试：循环淡入淡出与并发上限。
+/// </summary>
 public sealed class AmbientLoopManagerTests
 {
+    /// <summary>
+    /// 验证环境循环在滞回区间内淡入，离开后淡出。
+    /// </summary>
     [Fact]
     public void AmbientLoopManagerFadesInHysteresisAndFadesOut()
     {
@@ -34,6 +40,9 @@ public sealed class AmbientLoopManagerTests
         Assert.Equal(9, buffers.LastCueHandle);
     }
 
+    /// <summary>
+    /// 验证环境循环管理器忽略低于阈值And缺失提示音。
+    /// </summary>
     [Fact]
     public void AmbientLoopManagerIgnoresBelowThresholdAndMissingCue()
     {
@@ -52,6 +61,9 @@ public sealed class AmbientLoopManagerTests
         Assert.Equal(0, manager.ActiveVoiceCount);
     }
 
+    /// <summary>
+    /// 验证环境循环管理器可被禁用With零环境声道。
+    /// </summary>
     [Fact]
     public void AmbientLoopManagerCanBeDisabledWithZeroAmbientVoices()
     {
@@ -68,6 +80,9 @@ public sealed class AmbientLoopManagerTests
         Assert.Equal(0, manager.ActiveVoiceCount);
     }
 
+    /// <summary>
+    /// 验证环境循环管理器应用设置调整大小And更新阈值。
+    /// </summary>
     [Fact]
     public void AmbientLoopManagerApplySettingsResizesAndUpdatesThresholds()
     {

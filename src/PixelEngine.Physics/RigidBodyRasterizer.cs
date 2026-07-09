@@ -23,6 +23,7 @@ public static class RigidBodyRasterizer
         ArgumentNullException.ThrowIfNull(registry);
 
         int erased = 0;
+        // 仅擦除 registry 仍指向本体的 stamp，避免误清其它 body 像素。
         List<RigidStampedCell> previous = body.PreviousStamps;
         for (int i = 0; i < previous.Count; i++)
         {
@@ -68,6 +69,7 @@ public static class RigidBodyRasterizer
         List<RigidStampedCell> stamps = body.PreviousStamps;
         stamps.Clear();
 
+        // 遍历 transform 后 AABB，中心点 inverse-sample 命中固体则 stamp。
         int stamped = 0;
         for (int wy = bounds.MinY; wy < bounds.MaxY; wy++)
         {
@@ -82,6 +84,7 @@ public static class RigidBodyRasterizer
             }
         }
 
+        // 旋转采样可能漏边：对邻接已 stamp cell 做子像素偏移补点。
         if (stamped < mask.SolidPixelCount)
         {
             stamped += StampAntiErosionCells(body, in transform, grid, registry, stamps, bounds, stamped);
@@ -194,6 +197,7 @@ public static class RigidBodyRasterizer
         out int localX,
         out int localY)
     {
+        // 世界坐标逆变换回 body-local，floor 对齐像素格采样固体。
         Vector2 local = transform.InverseTransformPoint(new Vector2(worldX, worldY)) + mask.LocalOrigin;
         localX = (int)MathF.Floor(local.X);
         localY = (int)MathF.Floor(local.Y);

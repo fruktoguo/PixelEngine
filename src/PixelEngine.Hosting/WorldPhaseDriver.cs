@@ -24,11 +24,13 @@ public sealed class WorldPhaseDriver(WorldManager world) : IEnginePhaseDriver
         phases.Register(EnginePhase.WorldStreaming, ProcessStreaming);
     }
 
+    // 相位 2：应用本帧 chunk 驻留增删，在 CA 模拟前确定权威 chunk 集合。
     private void ApplyResidency(EngineTickContext context)
     {
         World.ApplyResidency(context.Timing.FrameIndex);
     }
 
+    // 相位 11：后台流式 I/O 单步推进；无 sim 的渲染帧也会运行以保持 chunk 预取。
     private void ProcessStreaming(EngineTickContext context)
     {
         _ = World.Streamer.ProcessIoOnce(context.Context.Jobs);

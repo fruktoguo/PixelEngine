@@ -35,6 +35,7 @@ public sealed class ChunkCodec
         ArgumentNullException.ThrowIfNull(payloadWriter);
 
         payloadWriter.Clear();
+        // 各 SoA 平面先 RLE 分段拼接，再整体 LZ4；flags 存档前剥离 parity 等瞬时位。
         RleCodec.EncodeU16(snapshot.Material, payloadWriter);
         int materialBytes = payloadWriter.WrittenCount;
 
@@ -90,6 +91,7 @@ public sealed class ChunkCodec
         byte[] payload = ArrayPool<byte>.Shared.Rent(header.UncompressedPayloadBytes);
         try
         {
+            // 先解压整块 payload，再按 header 段长顺序解码各 RLE 平面。
             int written = Lz4BlockCodec.Decompress(
                 source[header.EncodedHeaderSize..],
                 payload.AsSpan(0, header.UncompressedPayloadBytes),
@@ -114,6 +116,7 @@ public sealed class ChunkCodec
                 throw new InvalidDataException("Flags RLE 解码长度不等于 ChunkArea。");
             }
 
+            // 读档后按当前 CA parity 重置 flags 瞬时位，避免跨会话 parity 错位。
             PersistentCellFlags.ResetTransientInPlace(destination.Flags, currentParityBit);
             offset += header.FlagsRleBytes;
             int lifetimeWritten = RleCodec.DecodeU8(payloadSpan.Slice(offset, header.LifetimeRleBytes), destination.Lifetime);
@@ -145,6 +148,7 @@ public sealed class ChunkCodec
         }
     }
 
+    /// <summary>温度子块按原始 Half 字节序直接写入，不做 RLE（分布通常较分散）。</summary>
     private static void WriteTemperature(ReadOnlySpan<Half> temperature, IBufferWriter<byte> writer)
     {
         ReadOnlySpan<byte> bytes = MemoryMarshal.AsBytes(temperature);
@@ -153,6 +157,7 @@ public sealed class ChunkCodec
         writer.Advance(bytes.Length);
     }
 
+    /// <summary>从 payload 尾段按 Half 字节序还原温度子块。</summary>
     private static void ReadTemperature(ReadOnlySpan<byte> source, Span<Half> destination)
     {
         if (source.Length != destination.Length * 2)

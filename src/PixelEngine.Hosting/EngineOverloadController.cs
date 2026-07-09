@@ -37,6 +37,8 @@ public sealed class EngineOverloadController
     public EngineQualityTier SubmitFrame(double frameMs)
     {
         _monitor.Submit(frameMs);
+        // 连续超预算达到 SustainWindow 的整数倍时升一档：
+        // Full → ReducedThermal → ReducedLighting → DistantChunkThrottle → Sim30Hz → SlowMotion。
         if (_monitor.IsSustainedOverBudget &&
             _monitor.ConsecutiveOverBudgetFrames % _options.SustainWindow == 0)
         {

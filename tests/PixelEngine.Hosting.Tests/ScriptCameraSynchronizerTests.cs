@@ -8,6 +8,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// 脚本相机到 Rendering/World 的同步测试。
+/// 不变式：脚本相机请求同步到 Rendering/World、一帧内不重复提交。
 /// </summary>
 public sealed class ScriptCameraSynchronizerTests
 {

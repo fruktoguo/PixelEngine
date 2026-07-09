@@ -4,6 +4,9 @@ using System.Xml.Linq;
 
 namespace PixelEngine.Scripting;
 
+/// <summary>
+/// 根据模板生成或刷新用户脚本 .csproj 与 .sln 文件。
+/// </summary>
 internal sealed class ProjectGenerator
 {
     private const string LocalTemplateName = "PixelEngine.Game.local.csproj.template";
@@ -23,6 +26,9 @@ internal sealed class ProjectGenerator
         _templateDirectory = Path.GetFullPath(templateDirectory);
     }
 
+    /// <summary>
+    /// 生成或刷新脚本项目与解决方案；内容未变时跳过写入。
+    /// </summary>
     public ProjectGenerationResult GenerateOrRefresh(GameProjectGenerationOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -41,11 +47,17 @@ internal sealed class ProjectGenerator
         return new ProjectGenerationResult(projectPath, solutionPath, projectChanged, solutionChanged);
     }
 
+    /// <summary>
+    /// 新建脚本文件后刷新项目；当前与 <see cref="GenerateOrRefresh"/> 行为相同。
+    /// </summary>
     public ProjectGenerationResult RefreshAfterScriptCreated(GameProjectGenerationOptions options)
     {
         return GenerateOrRefresh(options);
     }
 
+    /// <summary>
+    /// 从模板构建 .csproj 文本，替换占位符并确保生成 XML 文档。
+    /// </summary>
     private string BuildProjectText(GameProjectGenerationOptions options)
     {
         string templateName = options.ReferenceMode == GameProjectReferenceMode.Local
@@ -80,6 +92,9 @@ internal sealed class ProjectGenerator
             : project.Declaration + Environment.NewLine + project.ToString(SaveOptions.DisableFormatting) + Environment.NewLine;
     }
 
+    /// <summary>
+    /// 生成 Visual Studio 12 格式解决方案文本；项目 GUID 由名称与相对路径稳定派生。
+    /// </summary>
     private static string BuildSolutionText(string projectName, string projectPath, string solutionPath)
     {
         string solutionDirectory = Path.GetDirectoryName(solutionPath) ?? Directory.GetCurrentDirectory();
@@ -112,6 +127,9 @@ internal sealed class ProjectGenerator
         return builder.ToString();
     }
 
+    /// <summary>
+    /// 确保项目启用 GenerateDocumentationFile，便于 IDE 显示脚本 API 文档。
+    /// </summary>
     private static void EnsureGenerateDocumentationFile(XDocument project)
     {
         XElement root = project.Root ?? throw new InvalidOperationException("项目模板不是有效 XML。");
@@ -132,6 +150,9 @@ internal sealed class ProjectGenerator
         generateDocumentationFile.Value = "true";
     }
 
+    /// <summary>
+    /// 仅当目标文件不存在或内容不同时写入，减少 IDE 无关刷新。
+    /// </summary>
     private static bool WriteIfChanged(string path, string content)
     {
         if (File.Exists(path))
@@ -171,11 +192,17 @@ internal sealed class ProjectGenerator
         throw new ArgumentOutOfRangeException(nameof(options), options.ReferenceMode, "未知脚本项目引用模式。");
     }
 
+    /// <summary>
+    /// 将路径规范为 MSBuild 友好的正斜杠形式。
+    /// </summary>
     private static string NormalizeMsBuildPath(string path)
     {
         return path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Replace('\\', '/');
     }
 
+    /// <summary>
+    /// 从当前程序集目录向上搜索引擎源码树中的 Templates 目录。
+    /// </summary>
     private static string FindDefaultTemplateDirectory()
     {
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
@@ -194,6 +221,9 @@ internal sealed class ProjectGenerator
         throw new DirectoryNotFoundException("无法定位 PixelEngine.Scripting/Templates 模板目录。");
     }
 
+    /// <summary>
+    /// 由输入字符串派生稳定的 RFC 4122 风格 GUID，用于解决方案项目标识。
+    /// </summary>
     private static Guid CreateStableGuid(string value)
     {
         byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(value));
@@ -205,17 +235,38 @@ internal sealed class ProjectGenerator
     }
 }
 
+/// <summary>
+/// 脚本项目生成选项。
+/// </summary>
 internal sealed record GameProjectGenerationOptions(string ProjectDirectory, string ProjectName, GameProjectReferenceMode ReferenceMode)
 {
+    /// <summary>
+    /// 本地引用模式下的引擎根目录。
+    /// </summary>
     public string? EngineRoot { get; init; }
 
+    /// <summary>
+    /// NuGet 包引用模式下的 PixelEngine 版本号。
+    /// </summary>
     public string? PixelEngineVersion { get; init; }
 }
 
+/// <summary>
+/// 脚本项目对引擎的引用方式。
+/// </summary>
 internal enum GameProjectReferenceMode
 {
+    /// <summary>通过本地工程路径引用引擎。</summary>
     Local,
+    /// <summary>通过 NuGet 包引用引擎。</summary>
     Package,
 }
 
+/// <summary>
+/// 项目生成操作的结果摘要。
+/// </summary>
+/// <param name="ProjectPath">生成的 .csproj 绝对路径。</param>
+/// <param name="SolutionPath">生成的 .sln 绝对路径。</param>
+/// <param name="ProjectChanged">.csproj 是否被实际写入。</param>
+/// <param name="SolutionChanged">.sln 是否被实际写入。</param>
 internal readonly record struct ProjectGenerationResult(string ProjectPath, string SolutionPath, bool ProjectChanged, bool SolutionChanged);

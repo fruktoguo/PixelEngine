@@ -10,6 +10,7 @@ namespace PixelEngine.Demo.Tests;
 
 /// <summary>
 /// Demo 启动参数解析测试。
+/// 不变式：命令行开关解析确定、非法组合给出明确默认值或错误。
 /// </summary>
 public sealed class DemoStartupOptionsTests
 {
@@ -35,11 +36,11 @@ public sealed class DemoStartupOptionsTests
     {
         DemoStartupOptions options = DemoStartupOptions.Parse([]);
 
-        PixelEngine.Hosting.EngineProject project = DemoProgram.BuildProject(options);
-        PixelEngine.Hosting.SceneDescriptor scene = project.Scenes[0];
+        EngineProject project = DemoProgram.BuildProject(options);
+        SceneDescriptor scene = project.Scenes[0];
 
         Assert.Equal("lava-mine", project.StartScene);
-        Assert.Equal(PixelEngine.Hosting.SceneSourceKind.SceneFile, scene.SourceKind);
+        Assert.Equal(SceneSourceKind.SceneFile, scene.SourceKind);
         Assert.False(string.IsNullOrEmpty(scene.Source));
         string source = scene.Source!;
         Assert.EndsWith("content/scenes/lava-mine.scene", source.Replace('\\', '/'), StringComparison.Ordinal);
@@ -51,19 +52,22 @@ public sealed class DemoStartupOptionsTests
     [Fact]
     public void StartupJsonSelectsPackagedStartSceneUnlessSceneIsExplicit()
     {
+        // Arrange：准备输入与初始状态
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-startup-json-" + Guid.NewGuid().ToString("N"));
         try
         {
             _ = Directory.CreateDirectory(temp);
             File.WriteAllText(
                 Path.Combine(temp, "startup.json"),
-                """
+                                     /*lang=json,strict*/
+                                     """
                 {
                   "startScene": "scenes/lava-mine.scene"
                 }
                 """);
 
             DemoStartupOptions packaged = DemoStartupOptions.Parse(["--content", temp]);
+            // Assert：验证预期结果
             Assert.Equal("scenes/lava-mine.scene", packaged.Scene);
 
             DemoStartupOptions explicitScene = DemoStartupOptions.Parse([
@@ -87,13 +91,15 @@ public sealed class DemoStartupOptionsTests
     [Fact]
     public void StartupJsonFeedsPlayerWindowAndRuntimeSettings()
     {
+        // Arrange：准备输入与初始状态
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-startup-player-settings-" + Guid.NewGuid().ToString("N"));
         try
         {
             _ = Directory.CreateDirectory(temp);
             File.WriteAllText(
                 Path.Combine(temp, "startup.json"),
-                """
+                                     /*lang=json,strict*/
+                                     """
                 {
                   "startScene": "scenes/player-settings.scene",
                   "windowTitle": "Player Settings Runtime",
@@ -109,6 +115,7 @@ public sealed class DemoStartupOptionsTests
             EngineProject project = DemoProgram.BuildProject(options);
             using Engine engine = DemoProgram.BuildEngine(options, project);
 
+            // Assert：验证预期结果
             Assert.Equal("scenes/player-settings.scene", options.Scene);
             Assert.Equal("Player Settings Runtime", options.WindowTitle);
             Assert.Equal(1440, options.WindowWidth);
@@ -137,6 +144,7 @@ public sealed class DemoStartupOptionsTests
     [Fact]
     public void StartupJsonSaveDirectoryRestoresWorldThroughPlayerProject()
     {
+        // Arrange：准备输入与初始状态
         string temp = Path.Combine(Path.GetTempPath(), "pixelengine-startup-save-" + Guid.NewGuid().ToString("N"));
         try
         {
@@ -144,7 +152,8 @@ public sealed class DemoStartupOptionsTests
             _ = Directory.CreateDirectory(temp);
             File.WriteAllText(
                 Path.Combine(temp, "startup.json"),
-                """
+                                     /*lang=json,strict*/
+                                     """
                 {
                   "startScene": "saves/mine"
                 }
@@ -174,6 +183,7 @@ public sealed class DemoStartupOptionsTests
 
             DemoStartupOptions options = DemoStartupOptions.Parse(["--content", temp]);
             EngineProject project = DemoProgram.BuildProject(options);
+            // Assert：验证预期结果
             Assert.Equal(1, project.Scenes.Length);
             SceneDescriptor scene = project.Scenes[0];
             Assert.Equal("mine", project.StartScene);
@@ -233,6 +243,7 @@ public sealed class DemoStartupOptionsTests
     [Fact]
     public void DefaultPlayableWorldBuildsSideScrollingLavaRoute()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
         DemoStartupOptions options = DemoStartupOptions.Parse([
             "--headless",
@@ -242,20 +253,21 @@ public sealed class DemoStartupOptionsTests
             "--scene",
             DemoStartupOptions.DefaultSceneName,
         ]);
-        PixelEngine.Hosting.EngineProject project = DemoProgram.BuildProject(options);
-        using PixelEngine.Hosting.Engine engine = DemoProgram.BuildEngine(options, project);
+        EngineProject project = DemoProgram.BuildProject(options);
+        using Engine engine = DemoProgram.BuildEngine(options, project);
         PlayableCavernWorldGenerator generator = new();
         engine.RegisterProceduralWorldGenerator(
             PlayableCavernWorldGenerator.Key,
             generator);
-        PixelEngine.Hosting.EngineContentPackage package = engine.LoadContentPackage();
+        EngineContentPackage package = engine.LoadContentPackage();
+        // Assert：验证预期结果
         Assert.True(package.MaterialCount > 0);
-        PixelEngine.World.WorldLoadResult? worldLoad = engine.AttachCurrentSceneWorld();
+        WorldLoadResult? worldLoad = engine.AttachCurrentSceneWorld();
         Assert.Null(worldLoad);
 
         MaterialTable materials = engine.Context.GetService<MaterialTable>();
         CellGrid grid = engine.Context.GetService<CellGrid>();
-        PixelEngine.Hosting.ProceduralWorldDescriptor descriptor = generator.Describe(default);
+        ProceduralWorldDescriptor descriptor = generator.Describe(default);
         Assert.True(materials.TryGetId("metal", out ushort metal));
         Assert.True(materials.TryGetId("wood", out ushort wood));
         Assert.True(materials.TryGetId("stone", out ushort stone));
@@ -293,6 +305,7 @@ public sealed class DemoStartupOptionsTests
     [Fact]
     public void DemoContentMaterialsExposeCrystalGameplayAndLegendFields()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
         DemoStartupOptions options = DemoStartupOptions.Parse([
             "--headless",
@@ -300,12 +313,13 @@ public sealed class DemoStartupOptionsTests
             "--content",
             contentRoot,
         ]);
-        PixelEngine.Hosting.EngineProject project = DemoProgram.BuildProject(options);
-        using PixelEngine.Hosting.Engine engine = DemoProgram.BuildEngine(options, project);
+        EngineProject project = DemoProgram.BuildProject(options);
+        using Engine engine = DemoProgram.BuildEngine(options, project);
 
         _ = engine.LoadContentPackage();
 
         MaterialTable materials = engine.Context.GetService<MaterialTable>();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("crystal", out ushort crystalId));
         ref readonly MaterialDef crystal = ref materials.Get(crystalId);
         Assert.Equal(CellType.Solid, crystal.Type);
@@ -325,6 +339,7 @@ public sealed class DemoStartupOptionsTests
     [Fact]
     public void DemoContentMaterialsDriveStructuralDamageResistance()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
         DemoStartupOptions options = DemoStartupOptions.Parse([
             "--headless",
@@ -332,10 +347,11 @@ public sealed class DemoStartupOptionsTests
             "--content",
             contentRoot,
         ]);
-        PixelEngine.Hosting.EngineProject project = DemoProgram.BuildProject(options);
-        using PixelEngine.Hosting.Engine engine = DemoProgram.BuildEngine(options, project);
+        EngineProject project = DemoProgram.BuildProject(options);
+        using Engine engine = DemoProgram.BuildEngine(options, project);
         _ = engine.LoadContentPackage();
         MaterialTable materials = engine.Context.GetService<MaterialTable>();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("sand", out ushort sand));
         Assert.True(materials.TryGetId("dirt", out ushort dirt));
         Assert.True(materials.TryGetId("stone", out ushort stone));
@@ -390,8 +406,9 @@ public sealed class DemoStartupOptionsTests
     [Fact]
     public void WeaponCatalogLoadsThroughEngineConfigApi()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
-        using PixelEngine.Hosting.Engine engine = new PixelEngine.Hosting.EngineBuilder()
+        using Engine engine = new EngineBuilder()
             .UseHeadless()
             .WithContentRoot(contentRoot)
             .Build();
@@ -401,6 +418,7 @@ public sealed class DemoStartupOptionsTests
         WeaponCatalog catalog = engine.LoadConfig("weapons.json", DemoConfigJsonContext.Default.WeaponCatalog);
         catalog.Validate();
 
+        // Assert：验证预期结果
         Assert.Equal(6, catalog.Weapons.Length);
         Assert.Equal(
             [WeaponKind.SingleShot, WeaponKind.Laser, WeaponKind.Grenade, WeaponKind.Bomb, WeaponKind.Excavator, WeaponKind.Builder],
@@ -442,15 +460,17 @@ public sealed class DemoStartupOptionsTests
     [Fact]
     public void WeaponCatalogConfigApiReportsMissingAndInvalidFiles()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = Path.Combine(Path.GetTempPath(), "PixelEngine.WeaponCatalogLoadTests", Guid.NewGuid().ToString("N"));
         _ = Directory.CreateDirectory(contentRoot);
         try
         {
-            using PixelEngine.Hosting.Engine engine = new PixelEngine.Hosting.EngineBuilder()
+            using Engine engine = new EngineBuilder()
                 .UseHeadless()
                 .WithContentRoot(contentRoot)
                 .Build();
 
+            // Assert：验证预期结果
             FileNotFoundException missing = Assert.Throws<FileNotFoundException>(
                 () => engine.LoadConfig("weapons.json", DemoConfigJsonContext.Default.WeaponCatalog));
             Assert.Contains("weapons.json", missing.FileName, StringComparison.OrdinalIgnoreCase);
@@ -460,12 +480,12 @@ public sealed class DemoStartupOptionsTests
                 () => engine.LoadConfig("weapons.json", DemoConfigJsonContext.Default.WeaponCatalog));
             Assert.False(string.IsNullOrWhiteSpace(invalid.Message));
 
-            File.WriteAllText(Path.Combine(contentRoot, "weapons.json"), "{ \"weapons\": [{ \"id\": \"bad\", \"displayName\": \"Bad\", \"kind\": \"wrongKind\" }] }");
+            File.WriteAllText(Path.Combine(contentRoot, "weapons.json"), /*lang=json,strict*/ "{ \"weapons\": [{ \"id\": \"bad\", \"displayName\": \"Bad\", \"kind\": \"wrongKind\" }] }");
             System.Text.Json.JsonException invalidKind = Assert.Throws<System.Text.Json.JsonException>(
                 () => engine.LoadConfig("weapons.json", DemoConfigJsonContext.Default.WeaponCatalog));
             Assert.False(string.IsNullOrWhiteSpace(invalidKind.Message));
 
-            File.WriteAllText(Path.Combine(contentRoot, "weapons.json"), "{ \"weapons\": [{ \"displayName\": \"Broken\", \"kind\": \"builder\", \"ammoMax\": 1 }] }");
+            File.WriteAllText(Path.Combine(contentRoot, "weapons.json"), /*lang=json,strict*/ "{ \"weapons\": [{ \"displayName\": \"Broken\", \"kind\": \"builder\", \"ammoMax\": 1 }] }");
             InvalidDataException missingField = Assert.Throws<InvalidDataException>(
                 () => engine.LoadConfig("weapons.json", DemoConfigJsonContext.Default.WeaponCatalog).Validate());
             Assert.Contains("id", missingField.Message, StringComparison.OrdinalIgnoreCase);
@@ -514,8 +534,8 @@ public sealed class DemoStartupOptionsTests
     public void DefaultEngineUsesPlayableWindowSize()
     {
         DemoStartupOptions options = DemoStartupOptions.Parse(["--no-hot-reload"]);
-        PixelEngine.Hosting.EngineProject project = DemoProgram.BuildProject(options);
-        using PixelEngine.Hosting.Engine engine = DemoProgram.BuildEngine(options, project);
+        EngineProject project = DemoProgram.BuildProject(options);
+        using Engine engine = DemoProgram.BuildEngine(options, project);
 
         Assert.Equal(1080, engine.Context.Options.WindowWidth);
         Assert.Equal(720, engine.Context.Options.WindowHeight);
@@ -533,8 +553,8 @@ public sealed class DemoStartupOptionsTests
     {
         DemoStartupOptions defaultOptions = DemoStartupOptions.Parse(["--window-ticks", "1"]);
         DemoStartupOptions noVSync = DemoStartupOptions.Parse(["--window-ticks", "1", "--no-vsync"]);
-        PixelEngine.Hosting.EngineProject project = DemoProgram.BuildProject(noVSync);
-        using PixelEngine.Hosting.Engine engine = DemoProgram.BuildEngine(noVSync, project);
+        EngineProject project = DemoProgram.BuildProject(noVSync);
+        using Engine engine = DemoProgram.BuildEngine(noVSync, project);
 
         Assert.True(defaultOptions.VSync);
         Assert.False(noVSync.VSync);
@@ -695,12 +715,12 @@ public sealed class DemoStartupOptionsTests
             _ = Directory.CreateDirectory(scripts);
             string scenes = Path.Combine(contentRoot, "scenes");
             _ = Directory.CreateDirectory(scenes);
-            File.WriteAllText(Path.Combine(contentRoot, "startup.json"), """
+            File.WriteAllText(Path.Combine(contentRoot, "startup.json"), /*lang=json,strict*/ """
                 {
                   "startScene": "scenes/main.scene"
                 }
                 """);
-            File.WriteAllText(Path.Combine(scenes, "main.scene"), """
+            File.WriteAllText(Path.Combine(scenes, "main.scene"), /*lang=json,strict*/ """
                 {
                   "formatVersion": 2,
                   "name": "main",

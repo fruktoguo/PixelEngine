@@ -3,8 +3,14 @@ using Xunit;
 
 namespace PixelEngine.UI.Tests;
 
+/// <summary>
+/// UI 输入路由测试：验证指针/键盘/文本泵送、捕获仲裁及焦点与 IME 边沿行为。
+/// </summary>
 public sealed class UiInputRouterTests
 {
+    /// <summary>
+    /// 验证 Pump 将指针/键盘/文本输入馈送到后端并返回正确的捕获状态。
+    /// </summary>
     [Fact]
     public void PumpFeedsPointerKeyboardTextAndReturnsCapture()
     {
@@ -37,6 +43,9 @@ public sealed class UiInputRouterTests
         Assert.Equal(34f, backend.HitY);
     }
 
+    /// <summary>
+    /// 验证 Pump 产生按键/按钮释放边沿，UI 不捕获时允许世界输入。
+    /// </summary>
     [Fact]
     public void PumpRaisesReleaseEdgesAndAllowsWorldWhenUiDoesNotCapture()
     {
@@ -67,6 +76,9 @@ public sealed class UiInputRouterTests
         Assert.Empty(backend.Keys);
     }
 
+    /// <summary>
+    /// 验证指针移出 UI 后键盘焦点保持，点击外部区域时清除焦点。
+    /// </summary>
     [Fact]
     public void KeyboardFocusPersistsAfterPointerLeavesAndClearsOnOutsideClick()
     {
@@ -110,6 +122,9 @@ public sealed class UiInputRouterTests
             backend.Keys);
     }
 
+    /// <summary>
+    /// 验证键盘焦点Clears When Pointer Source Is Unavailable。
+    /// </summary>
     [Fact]
     public void KeyboardFocusClearsWhenPointerSourceIsUnavailable()
     {
@@ -152,6 +167,9 @@ public sealed class UiInputRouterTests
             backend.Keys);
     }
 
+    /// <summary>
+    /// 验证Pump Respects Upstream Capture And Drains Text Without Feeding Ui。
+    /// </summary>
     [Fact]
     public void PumpRespectsUpstreamCaptureAndDrainsTextWithoutFeedingUi()
     {
@@ -182,6 +200,9 @@ public sealed class UiInputRouterTests
         Assert.Equal(string.Empty, input.Text);
     }
 
+    /// <summary>
+    /// 验证Pump馈送Committed Text In Order And Filters Control Characters。
+    /// </summary>
     [Fact]
     public void PumpFeedsCommittedTextInOrderAndFiltersControlCharacters()
     {
@@ -204,6 +225,9 @@ public sealed class UiInputRouterTests
         Assert.Equal("a中b", backend.Text);
     }
 
+    /// <summary>
+    /// 验证Pump Clamps Committed Text To Router Buffer Capacity。
+    /// </summary>
     [Fact]
     public void PumpClampsCommittedTextToRouterBufferCapacity()
     {
@@ -228,6 +252,9 @@ public sealed class UiInputRouterTests
         Assert.Equal(string.Empty, input.Text);
     }
 
+    /// <summary>
+    /// 验证Pump Drains Committed Text When Keyboard Is Blocked。
+    /// </summary>
     [Fact]
     public void PumpDrainsCommittedTextWhenKeyboardIsBlocked()
     {
@@ -252,6 +279,9 @@ public sealed class UiInputRouterTests
         Assert.Equal(string.Empty, input.Text);
     }
 
+    /// <summary>
+    /// 验证Pump馈送Ime Composition Separately From Committed Text And Clears When Inactive。
+    /// </summary>
     [Fact]
     public void PumpFeedsImeCompositionSeparatelyFromCommittedTextAndClearsWhenInactive()
     {
@@ -286,6 +316,9 @@ public sealed class UiInputRouterTests
         Assert.False(backend.Compositions[1].IsActive);
     }
 
+    /// <summary>
+    /// 验证Pump Publishes Backend Ime Geometry To Input Source And在…时清除Inactive。
+    /// </summary>
     [Fact]
     public void PumpPublishesBackendImeGeometryToInputSourceAndClearsOnInactive()
     {
@@ -307,12 +340,12 @@ public sealed class UiInputRouterTests
         UiInputRouter router = new(host, input);
 
         _ = router.Pump();
-        Assert.Equal(1, input.AppliedGeometries.Count);
-        Assert.True(input.AppliedGeometries[0].HasCaretRect);
-        Assert.Equal(40f, input.AppliedGeometries[0].CaretX);
-        Assert.Equal(200f, input.AppliedGeometries[0].CaretY);
-        Assert.Equal(40f, input.AppliedGeometries[0].CandidateAnchorX);
-        Assert.Equal(218f, input.AppliedGeometries[0].CandidateAnchorY);
+        UiImeGeometry appliedGeometry = Assert.Single(input.AppliedGeometries);
+        Assert.True(appliedGeometry.HasCaretRect);
+        Assert.Equal(40f, appliedGeometry.CaretX);
+        Assert.Equal(200f, appliedGeometry.CaretY);
+        Assert.Equal(40f, appliedGeometry.CandidateAnchorX);
+        Assert.Equal(218f, appliedGeometry.CandidateAnchorY);
 
         input.CompositionText = string.Empty;
         input.Composition = UiTextComposition.Inactive;
@@ -321,6 +354,9 @@ public sealed class UiInputRouterTests
         Assert.False(input.AppliedGeometries[1].HasAny);
     }
 
+    /// <summary>
+    /// 验证Pump路由Synthetic Ime Composition Start Update Commit And Cancel Lifecycle。
+    /// </summary>
     [Fact]
     public void PumpRoutesSyntheticImeCompositionStartUpdateCommitAndCancelLifecycle()
     {
@@ -366,6 +402,9 @@ public sealed class UiInputRouterTests
         Assert.Equal(2, backend.Compositions[1].SelectionLength);
     }
 
+    /// <summary>
+    /// 验证Pump Clears Synthetic Ime Composition On Focus Loss Without Forwarding Stale Preedit。
+    /// </summary>
     [Fact]
     public void PumpClearsSyntheticImeCompositionOnFocusLossWithoutForwardingStalePreedit()
     {
@@ -397,6 +436,9 @@ public sealed class UiInputRouterTests
         Assert.False(backend.Compositions[1].IsActive);
     }
 
+    /// <summary>
+    /// 验证Pump Drains And Clears Synthetic Ime Composition When Keyboard Is Blocked。
+    /// </summary>
     [Fact]
     public void PumpDrainsAndClearsSyntheticImeCompositionWhenKeyboardIsBlocked()
     {
@@ -427,6 +469,9 @@ public sealed class UiInputRouterTests
         Assert.Equal(string.Empty, input.Text);
     }
 
+    /// <summary>
+    /// 验证Pump不会Treat Committed Text As Ime Composition When Source Has No Composition。
+    /// </summary>
     [Fact]
     public void PumpDoesNotTreatCommittedTextAsImeCompositionWhenSourceHasNoComposition()
     {
@@ -451,6 +496,9 @@ public sealed class UiInputRouterTests
         Assert.Empty(backend.CompositionTexts);
     }
 
+    /// <summary>
+    /// 验证Text Composition Capabilities Pass经Input Source Diagnostic。
+    /// </summary>
     [Fact]
     public void TextCompositionCapabilitiesPassThroughInputSourceDiagnostic()
     {
@@ -472,6 +520,9 @@ public sealed class UiInputRouterTests
         router.TextCompositionCapabilities.Validate();
     }
 
+    /// <summary>
+    /// 验证Input Source Default Composition Capabilities Are Unsupported And Diagnostic。
+    /// </summary>
     [Fact]
     public void InputSourceDefaultCompositionCapabilitiesAreUnsupportedAndDiagnostic()
     {
@@ -484,6 +535,9 @@ public sealed class UiInputRouterTests
         capabilities.Validate();
     }
 
+    /// <summary>
+    /// 验证Text Composition Normalizer Compacts Controls Clamps And Clears Inactive Text。
+    /// </summary>
     [Fact]
     public void TextCompositionNormalizerCompactsControlsClampsAndClearsInactiveText()
     {

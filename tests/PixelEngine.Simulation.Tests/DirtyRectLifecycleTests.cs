@@ -4,6 +4,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Simulation 节点 4 的 dirty rectangle 生命周期测试。
+/// 不变式：dirty rect 合并/清空与 CA 步进相位一致。
 /// </summary>
 public sealed class DirtyRectLifecycleTests
 {

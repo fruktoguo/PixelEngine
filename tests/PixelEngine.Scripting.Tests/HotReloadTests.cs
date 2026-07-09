@@ -6,6 +6,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// plan/14 §4.5 的脚本热重载端到端验收测试。
+/// 不变式：端到端热重载后脚本行为更新、未引用旧 ALC。
 /// </summary>
 public sealed class HotReloadTests
 {

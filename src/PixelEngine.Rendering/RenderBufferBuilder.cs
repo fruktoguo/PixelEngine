@@ -60,6 +60,7 @@ public sealed class RenderBufferBuilder(
         }
 
         aux.Resize(target.Width, target.Height);
+        // 早退：本帧未推进 sim 且无调试着色时跳过重建。
         if (!context.SimStepped && context.DebugCellColors is null)
         {
             RecordSub(profiler, started);
@@ -67,6 +68,7 @@ public sealed class RenderBufferBuilder(
         }
 
         aux.Clear();
+        // 空世界快路径：全 resident chunk 材质为 empty 时直接清零目标 buffer。
         if (CanClearEmptyWorld(context))
         {
             target.Pixels.Clear();
@@ -79,6 +81,7 @@ public sealed class RenderBufferBuilder(
         _state.Target = target;
         _state.Aux = aux;
         _state.Builder = this;
+        // 按行并行或单线程扫描视口，内部选择 palette/style/scalar 快路径。
         if (_jobs is null)
         {
             BuildRows(0, target.Height, 0, _state);
@@ -99,6 +102,7 @@ public sealed class RenderBufferBuilder(
         RenderBuffer target = buildState.Target!;
         RenderAuxBuffers aux = buildState.Aux!;
         RenderBufferBuilder builder = buildState.Builder!;
+        // 快路径选择：1:1 palette → zoom palette → style 分段 → 逐像素标量采样。
         if (builder.CanUsePaletteFastPath(context))
         {
             builder.BuildRowsPaletteFast(context, target, aux, start, end);
@@ -117,6 +121,7 @@ public sealed class RenderBufferBuilder(
             return;
         }
 
+        // 标量回退：逐屏幕像素采样世界 cell 并写入 emissive/occluder 副输出。
         Span<uint> pixels = target.Pixels;
         Span<uint> emissive = aux.Emissive;
         Span<byte> occluder = aux.Occluder;
@@ -158,6 +163,7 @@ public sealed class RenderBufferBuilder(
             int row = sy * target.Width;
             int worldY = originY + sy;
             int localY = CellAddressing.LocalCoord(worldY);
+            // 按 chunk 行内连续区间批量转换，style 材质在边界处截断 run。
             int sx = 0;
             while (sx < target.Width)
             {
@@ -414,6 +420,7 @@ public sealed class RenderBufferBuilder(
             (hot.BaseColorBGRA[materialId] >> 24) == byte.MaxValue;
     }
 
+    // 空世界检测：材质 id 0 为透明 empty 且所有 resident chunk 全为 0 时可跳过像素写入。
     private bool CanClearEmptyWorld(RenderFrameContext context)
     {
         if (context.DebugCellColors is not null)
@@ -601,6 +608,7 @@ public sealed class RenderBufferBuilder(
         }
     }
 
+    // 标量采样管线：纹理 → 色噪 → 温度辉光 → 材质 style → 调试色 → emissive/occluder 标记。
     private uint SampleCell(RenderFrameContext context, int worldX, int worldY, out bool isEmissive, out bool isOccluder)
     {
         isEmissive = false;
@@ -683,6 +691,7 @@ public sealed class RenderBufferBuilder(
         out bool styledEmissive)
     {
         styledEmissive = false;
+        // 按材质渲染风格应用粉末噪点、液体高光、气体透明度、危险脉冲等视觉效果。
         switch (renderStyle)
         {
             case MaterialRenderStyle.Powder:

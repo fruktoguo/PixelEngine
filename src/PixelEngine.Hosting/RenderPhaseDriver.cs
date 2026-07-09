@@ -19,7 +19,7 @@ public sealed class RenderPhaseDriver(
     ScriptCameraSynchronizer camera,
     ScriptLightingSynchronizer lighting,
     IRenderFrameSink sink,
-    PixelEngine.Core.Threading.JobSystem? jobs = null,
+    Core.Threading.JobSystem? jobs = null,
     IMaterialTextureProvider? textures = null,
     SimulationKernel? kernel = null,
     PhysicsSystem? physics = null,
@@ -71,6 +71,7 @@ public sealed class RenderPhaseDriver(
         phases.Register(EnginePhase.GpuUploadAndRender, PresentFrame);
     }
 
+    // 相位 9：从 chunk/温度/相机构建 CPU render buffer，并按需 stamp 自由粒子。
     private void BuildFrame(EngineTickContext context)
     {
         CameraState camera = _camera.Current;
@@ -116,6 +117,7 @@ public sealed class RenderPhaseDriver(
         return _debugOverlays?.HasCellColorOverlays == true;
     }
 
+    // 相位 10：合成 overlay/光照后提交 GPU 上传与窗口 present。
     private void PresentFrame(EngineTickContext context)
     {
         if (!_frameBuilt)

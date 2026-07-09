@@ -33,13 +33,16 @@ public sealed class GpuAirSmokePipeline
     {
         settings = settings.Validate();
         ValidateHandles(sourceDensity, destinationDensity);
+        // Margolus 以 2×2 block 为调度单位，dispatch grid 覆盖 ceil(w/2)×ceil(h/2)。
         ComputeDispatchSize groups = GpuComputeDispatchGrid.ForTexture2D((width + 1) / 2, (height + 1) / 2);
+        // 绑定密度读写 image：source 只读、destination 只写，parity 控制棋盘格相位。
         _backend.BindImage(0, sourceDensity, level: 0, layered: false, layer: 0, GLEnum.ReadOnly, GLEnum.R16f);
         _backend.BindImage(1, destinationDensity, level: 0, layered: false, layer: 0, GLEnum.WriteOnly, GLEnum.R16f);
         _backend.SetUniform2(_margolus, "uOutputSize", width, height);
         _backend.SetUniform1(_margolus, "uParity", parity & 1);
         _backend.SetUniform1(_margolus, "uDiffusion", settings.Diffusion);
         _backend.Dispatch(_margolus, groups.GroupsX, groups.GroupsY, groups.GroupsZ);
+        // 屏障保证下一 pass 或 fragment 采样能读到最新密度场。
         _backend.MemoryBarrier(MemoryBarrierMask.ShaderImageAccessBarrierBit | MemoryBarrierMask.TextureFetchBarrierBit);
     }
 

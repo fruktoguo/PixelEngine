@@ -27,5 +27,5 @@ public interface IRenderFrameSink
         ReadOnlySpan<Particle> particles,
         MaterialTable materials,
         FogOfWarBuffer? fogOfWar,
-        PixelEngine.Core.Diagnostics.FrameProfiler? profiler);
+        Core.Diagnostics.FrameProfiler? profiler);
 }

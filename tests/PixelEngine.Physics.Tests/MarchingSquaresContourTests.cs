@@ -6,6 +6,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// plan/14 Marching Squares 轮廓验收测试。
+/// 不变式：轮廓顶点闭合、与参考栅格边界对齐。
 /// </summary>
 public sealed class MarchingSquaresContourTests
 {

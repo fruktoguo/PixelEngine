@@ -3,6 +3,9 @@ using System.Numerics;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// 启动时项目选择/创建窗口。
+/// </summary>
 internal sealed class ProjectPickerWindow
 {
     private string _newProjectRoot;
@@ -180,6 +183,9 @@ internal sealed class ProjectPickerWindow
     }
 }
 
+/// <summary>
+/// 项目选择器模式：打开或创建。
+/// </summary>
 internal enum ProjectPickerMode
 {
     NewProject,

@@ -126,6 +126,7 @@ public sealed class GuiApp : IDisposable
 
         _controller.NewFrame(deltaSeconds, width, height, framebufferScaleX, framebufferScaleY);
         ScriptGuiContext gui = new(width, height, deltaSeconds, Input.Capture);
+        // 同一 ImGui frame 内固定顺序：Managed UI → 脚本 OnGui，共享 Input.Capture 仲裁。
         drawManagedGui?.Invoke(gui);
         if (drawScriptGui is not null)
         {

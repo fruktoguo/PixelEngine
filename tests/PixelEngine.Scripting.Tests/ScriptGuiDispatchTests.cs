@@ -4,6 +4,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// 脚本 GUI 生命周期派发测试。
+/// 不变式：GUI 生命周期派发与 Behaviour 启用状态一致。
 /// </summary>
 public sealed class ScriptGuiDispatchTests
 {
@@ -13,6 +14,7 @@ public sealed class ScriptGuiDispatchTests
     [Fact]
     public void DrawGuiDispatchesEnabledBehavioursInUpdateOrder()
     {
+        // Arrange：搭建测试场景与依赖
         Scene scene = new();
         FakeScriptContext context = new(scene);
         ScriptRuntime runtime = new();
@@ -31,8 +33,10 @@ public sealed class ScriptGuiDispatchTests
         disabled.Enabled = false;
 
         scene.DispatchUpdate(context, 0.016f);
+        // Act：执行被测操作
         runtime.DrawGui(new FakeGuiContext());
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(["update:first", "update:second", "gui:first", "gui:second"], events);
     }
 

@@ -5,6 +5,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// CA KeepAlive 边界唤醒与 32px halo 专项测试。
+/// 不变式：KeepAlive halo 唤醒范围与 32px 边界规则一致。
 /// </summary>
 public sealed class KeepAliveBoundaryTests
 {
@@ -17,6 +18,7 @@ public sealed class KeepAliveBoundaryTests
     [Fact]
     public void BoundaryAvalancheMarksIncomingDirtyAndContinuesAfterSwap()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateGrid(-1, 1, -1, 2);
         Chunk center = source.GetRequired(new ChunkCoord(0, 0));
         Chunk south = source.GetRequired(new ChunkCoord(0, 1));
@@ -26,6 +28,7 @@ public sealed class KeepAliveBoundaryTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(0, Get(center, 10, EngineConstants.ChunkSize - 1));
         Assert.Equal(Sand, Get(south, 10, EngineConstants.MoveCap - 1));
         Assert.Equal(DirtyRect.Empty, south.WorkingDirty);
@@ -53,6 +56,7 @@ public sealed class KeepAliveBoundaryTests
     [Fact]
     public void SettledBoundaryChunkShrinksDirtyAndSleeps()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateGrid(-1, 1, -1, 1);
         Chunk center = source.GetRequired(new ChunkCoord(0, 0));
         center.SetCurrentDirty(new DirtyRect(8, 60, 12, 63));
@@ -65,6 +69,7 @@ public sealed class KeepAliveBoundaryTests
         kernel.StepCa();
         kernel.SwapDirtyRects();
 
+        // Assert：验证预期结果
         Assert.Equal(Sand, Get(center, 10, 62));
         Assert.Equal(DirtyRect.Empty, center.CurrentDirty);
         Assert.Equal(DirtyRect.Empty, center.WorkingDirty);

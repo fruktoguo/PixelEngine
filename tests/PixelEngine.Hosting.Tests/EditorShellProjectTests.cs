@@ -9,6 +9,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// 独立编辑器工程模型测试。
+/// 不变式：编辑器工程模型读写与 Hosting 项目描述一致。
 /// </summary>
 public sealed class EditorShellProjectTests
 {
@@ -18,11 +19,13 @@ public sealed class EditorShellProjectTests
     [Fact]
     public void CreateNewWritesProjectDocumentAndDefaultSceneSkeleton()
     {
+        // Arrange：准备输入与初始状态
         using TempDirectory temp = new();
         string projectRoot = Path.Combine(temp.Path, "SampleProject");
 
         EditorProject project = EditorProject.CreateNew(projectRoot, " Sample ");
 
+        // Assert：验证预期结果
         Assert.Equal("Sample", project.Name);
         Assert.Equal("content", project.ContentRoot);
         Assert.Equal("scripts", project.ScriptSourceDir);
@@ -47,6 +50,7 @@ public sealed class EditorShellProjectTests
     [Fact]
     public void OpenAllowsMissingScriptSourceDirectoryAndReportsWatcherStartFailedToConsole()
     {
+        // Arrange：准备输入与初始状态
         if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))
         {
             return;
@@ -66,6 +70,7 @@ public sealed class EditorShellProjectTests
 
         using EditorProjectSession session = EditorProjectSession.Open(project, window, app);
 
+        // Assert：验证预期结果
         Assert.True(session.Engine.Context.TryGetService(out ScriptHotReloadController _));
         Assert.True(session.Engine.Context.TryGetService(out IScriptContext _));
         Assert.True(session.Engine.Context.TryGetService(out GameUiHost _));
@@ -103,12 +108,14 @@ public sealed class EditorShellProjectTests
     [Fact]
     public void RecentProjectsLoadReturnsEmptyStoreWhenJsonIsCorrupted()
     {
+        // Arrange：准备输入与初始状态
         using TempDirectory temp = new();
         string path = Path.Combine(temp.Path, "recent-projects.json");
         File.WriteAllText(path, "{ not json");
 
         RecentProjectsStore store = RecentProjectsStore.Load(path);
 
+        // Assert：验证预期结果
         Assert.Empty(store.Entries);
     }
 

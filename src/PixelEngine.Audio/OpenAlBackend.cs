@@ -33,6 +33,8 @@ public sealed unsafe class OpenAlBackend : IAudioBackend
     /// </summary>
     public int LiveObjectCount => LiveSourceCount + LiveBufferCount;
 
+    // --- OpenAL 对象生命周期：source/buffer 创建与删除，并跟踪 live 计数供泄漏检测 ---
+
     /// <inheritdoc />
     public uint CreateSource()
     {
@@ -66,6 +68,8 @@ public sealed unsafe class OpenAlBackend : IAudioBackend
         _al.DeleteBuffer(buffer);
         _ = _liveBuffers.Remove(buffer);
     }
+
+    // --- PCM 缓冲上传与流式队列：buffer 数据写入与 source 队列管理 ---
 
     /// <inheritdoc />
     public void UploadBuffer(uint buffer, AudioSampleFormat format, ReadOnlySpan<byte> pcm, int sampleRate)
@@ -121,6 +125,8 @@ public sealed unsafe class OpenAlBackend : IAudioBackend
         _al.GetSourceProperty(source, GetSourceInteger.BuffersProcessed, out int processed);
         return processed;
     }
+
+    // --- source 播放控制：距离衰减、增益、循环与启停 ---
 
     /// <inheritdoc />
     public void ConfigureSource(uint source, AudioSettings settings)
@@ -183,6 +189,8 @@ public sealed unsafe class OpenAlBackend : IAudioBackend
             _ => AudioSourceState.Initial,
         };
     }
+
+    // --- listener 声场：主音量、位置与朝向（at/orient） ---
 
     /// <inheritdoc />
     public void SetListener(in AudioListenerState listener)

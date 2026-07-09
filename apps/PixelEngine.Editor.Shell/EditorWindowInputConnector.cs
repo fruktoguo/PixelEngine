@@ -4,6 +4,9 @@ using System.Numerics;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// 将 Silk 窗口输入连接到 Editor 与 Game View 输入路由。
+/// </summary>
 internal sealed class EditorWindowInputConnector : IDisposable
 {
     private readonly RenderWindow _window;
@@ -94,13 +97,13 @@ internal sealed class EditorWindowInputConnector : IDisposable
         ForwardMousePosition(position);
     }
 
-    private void OnMouseDown(IMouse mouse, Silk.NET.Input.MouseButton button)
+    private void OnMouseDown(IMouse mouse, MouseButton button)
     {
         ForwardMousePosition(mouse.Position);
         _input.MouseButton(button, down: true);
     }
 
-    private void OnMouseUp(IMouse mouse, Silk.NET.Input.MouseButton button)
+    private void OnMouseUp(IMouse mouse, MouseButton button)
     {
         ForwardMousePosition(mouse.Position);
         _input.MouseButton(button, down: false);

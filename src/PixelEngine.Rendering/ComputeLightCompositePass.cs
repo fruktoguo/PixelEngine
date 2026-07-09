@@ -48,6 +48,7 @@ public sealed class ComputeLightCompositePass
             throw new ArgumentException("Compute light composite 输入与输出尺寸必须一致。", nameof(destination));
         }
 
+        // CP-L0 compute dispatch：scene × visibility + emissive，替代 fragment CompositePass。
         _pipeline.DispatchLightComposite(
             scene.Handle,
             visibility.Handle,

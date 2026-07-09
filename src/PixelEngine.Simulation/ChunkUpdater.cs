@@ -30,6 +30,7 @@ internal static class ChunkUpdater
             return;
         }
 
+        // 以 3x3 邻域窗口读写，跨界移动/反应恒落在 32px halo 内。
         NeighborWindow window = new(chunk.Coord, in neighborhood);
         Pcg32 rng = RngFactory.ForChunk(worldSeed, chunk.Coord.X, chunk.Coord.Y, frameIndex);
         int worldBaseX = chunk.Coord.X << EngineConstants.ChunkSizeLog2;
@@ -37,6 +38,7 @@ internal static class ChunkUpdater
         ref ushort materialBase = ref chunk.GetMaterialBase();
         ref byte flagsBase = ref chunk.GetFlagsBase();
 
+        // bottom-up 扫描：粉液下落依赖下方 cell 已在本帧或上帧落定。
         for (int ly = rect.MaxY; ly >= rect.MinY; ly--)
         {
             int wy = worldBaseY + ly;
@@ -60,6 +62,7 @@ internal static class ChunkUpdater
                     continue;
                 }
 
+                // lifetime 先于位移：到期可能清空 cell，后续 movement 直接跳过。
                 ProcessLifetime(ref window, chunk, lifetimeSink, wx, wy, material, parityBit);
                 material = window.GetMaterial(wx, wy);
                 if (material == 0)
@@ -93,6 +96,7 @@ internal static class ChunkUpdater
                 };
 
                 ushort activeMaterial = window.GetMaterial(activeX, activeY);
+                // 位移后的活跃坐标上尝试 von Neumann 反应，再跑材质自定义更新。
                 bool reacted = TryReactVonNeumann(ref window, chunks, materials, reactionExecutor, rigidDamageSink, diagnostics, activeX, activeY, activeMaterial, parityBit, ref rng);
                 bool customUpdated = !reacted && TryRunCustomUpdate(ref window, chunks, materials, customUpdateExecutor, activeX, activeY, activeMaterial, parityBit);
                 if (!moved && !reacted && !customUpdated && materialType == CellType.Fire)
@@ -144,6 +148,7 @@ internal static class ChunkUpdater
         movedX = wx;
         movedY = wy;
         int targetY = wy;
+        // 垂直扫描受 MoveCap 约束，保证目标仍在 halo 内且可一次交换到位。
         for (int step = 1; step <= EngineConstants.MoveCap; step++)
         {
             int candidateY = wy + step;
@@ -285,6 +290,7 @@ internal static class ChunkUpdater
         }
 
         MarkCenterDirty(centerChunk, sourceX, sourceY);
+        // 目标在本 chunk 内写 working dirty；跨界则对邻 chunk 发 KeepAlive 唤醒。
         if (targetSlot == 4)
         {
             MarkCenterDirty(centerChunk, targetX, targetY);
@@ -383,6 +389,7 @@ internal static class ChunkUpdater
         byte neighborFlagsBefore = window.GetFlags(neighborX, neighborY);
         diagnostics.RecordReactionAttempt();
         byte randomByte = (byte)(rng.NextUInt() >> 24);
+        // 反应概率由 chunk 级确定性 RNG 驱动，保证可重演。
         bool reacted = reactionExecutor.TryReact(ref window, wx, wy, material, neighborX, neighborY, neighborMaterial, parityBit, randomByte);
         if (reacted)
         {

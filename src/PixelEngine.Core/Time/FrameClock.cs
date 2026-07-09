@@ -145,6 +145,7 @@ public sealed class FrameClock
         RunSimThisFrame = false;
     }
 
+    // 30Hz 时 _simStride=2：每隔一渲染帧执行一次 sim，避免单帧内追补多个固定步长。
     private bool ShouldRunSim(long frameIndex)
     {
         return _simStride <= 1 || (frameIndex & (_simStride - 1)) == 1;

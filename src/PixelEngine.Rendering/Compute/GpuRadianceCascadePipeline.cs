@@ -127,6 +127,7 @@ public sealed class GpuRadianceCascadePipeline
         _backend.BindImage(0, outputCascade, level: 0, layered: false, layer: 0, GLEnum.WriteOnly, GLEnum.Rgba16f);
     }
 
+    // 通用 16×16 tile dispatch：按视口尺寸计算 work group，dispatch 后插入 image/texture 屏障。
     private void Dispatch(ComputeKernel kernel, int width, int height, MemoryBarrierMask barrier)
     {
         ComputeDispatchSize groups = GpuComputeDispatchGrid.ForTexture2D(width, height);

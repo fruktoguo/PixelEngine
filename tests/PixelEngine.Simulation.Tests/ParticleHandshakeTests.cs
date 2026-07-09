@@ -8,6 +8,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Plan 05 节点 2 的自由粒子积分与 cell↔particle handshake 测试。
+/// 不变式：粒子↔cell handshake 不泄漏、积分后归属明确。
 /// </summary>
 public sealed class ParticleHandshakeTests
 {
@@ -21,6 +22,7 @@ public sealed class ParticleHandshakeTests
     [Fact]
     public void IntegrateAndAdvanceUpdatesBallisticsWithoutWritingGrid()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         CellGrid grid = new(source, CreateMaterials());
         ParticleSystem particles = new(capacity: 1);
@@ -29,6 +31,7 @@ public sealed class ParticleHandshakeTests
         particles.IntegrateAndAdvance(grid);
 
         Particle particle = particles.ActiveReadOnly[0];
+        // Assert：验证预期结果
         Assert.Equal(6.75f, particle.X);
         Assert.Equal(7.75f, particle.Y);
         Assert.Equal(2.45f, particle.Vy, precision: 5);
@@ -44,6 +47,7 @@ public sealed class ParticleHandshakeTests
     [Fact]
     public void ParallelIntegrationMatchesSingleThreadIntegration()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out _);
         CellGrid grid = new(source, CreateMaterials());
         ParticleSystem single = new(capacity: 16);
@@ -62,6 +66,7 @@ public sealed class ParticleHandshakeTests
         };
         parallel.IntegrateAndAdvance(jobs, grid);
 
+        // Assert：验证预期结果
         Assert.Equal(single.ActiveCount, parallel.ActiveCount);
         for (int i = 0; i < single.ActiveCount; i++)
         {
@@ -75,6 +80,7 @@ public sealed class ParticleHandshakeTests
     [Fact]
     public void RunEjectionPassClearsSourceCellAndSpawnsParticle()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Sand);
         MaterialPropsTable materials = CreateMaterials();
@@ -82,6 +88,7 @@ public sealed class ParticleHandshakeTests
         SimulationKernel kernel = new(source, materials);
         ParticleSystem particles = new(capacity: 4);
 
+        // Assert：验证预期结果
         Assert.True(particles.RequestEjection(new EjectionRequest(10, 10, 0, 2, 0, EjectMask.Powder)));
         particles.RunEjectionPass(kernel, grid);
 
@@ -100,6 +107,7 @@ public sealed class ParticleHandshakeTests
     [Fact]
     public void RunEjectionPassReportsRigidOwnedSourceDamage()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Solid);
         center.Flags[CellAddressing.LocalIndexFromLocal(10, 10)] = CellFlags.RigidOwned;
@@ -109,6 +117,7 @@ public sealed class ParticleHandshakeTests
         SimulationKernel kernel = new(source, materials, rigidDamageSink: damageSink);
         ParticleSystem particles = new(capacity: 4);
 
+        // Assert：验证预期结果
         Assert.True(particles.RequestEjection(new EjectionRequest(10, 10, 0, 2, 0, EjectMask.Solid)));
         particles.RunEjectionPass(kernel, grid);
 
@@ -123,6 +132,7 @@ public sealed class ParticleHandshakeTests
     [Fact]
     public void RunEjectionPassUsesMaterialDefaultLifetimeClampedToParticleMax()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Water);
         MaterialPropsTable materials = CreateMaterials();
@@ -130,6 +140,7 @@ public sealed class ParticleHandshakeTests
         SimulationKernel kernel = new(source, materials);
         ParticleSystem particles = new(capacity: 1);
 
+        // Assert：验证预期结果
         Assert.True(particles.RequestEjection(new EjectionRequest(10, 10, 0, 0, 0, EjectMask.Liquid)));
         particles.RunEjectionPass(kernel, grid);
 
@@ -143,6 +154,7 @@ public sealed class ParticleHandshakeTests
     [Fact]
     public void RuntimeSettingsAffectEjectionLifetimeImpulseAndLimit()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Water);
         Set(center, 11, 10, Water);
@@ -153,6 +165,7 @@ public sealed class ParticleHandshakeTests
             capacity: 4,
             settings: new ParticleSystemSettings(4, 0.2f, 12, 0.05f, 2f, 1));
 
+        // Assert：验证预期结果
         Assert.True(particles.RequestEjection(new EjectionRequest(10, 10, 0, 3, 0, EjectMask.Liquid)));
         Assert.True(particles.RequestEjection(new EjectionRequest(11, 10, 0, 3, 0, EjectMask.Liquid)));
         particles.RunEjectionPass(kernel, grid);
@@ -170,6 +183,7 @@ public sealed class ParticleHandshakeTests
     [Fact]
     public void RunEjectionPassEmitsExplosionAudioEvent()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Sand);
         MaterialPropsTable materials = CreateMaterials();
@@ -178,6 +192,7 @@ public sealed class ParticleHandshakeTests
         EventBus events = new(capacityPerChannel: 8);
         ParticleSystem particles = new(capacity: 4, events: events);
 
+        // Assert：验证预期结果
         Assert.True(particles.RequestEjection(new EjectionRequest(10, 10, 0, 2, 0, EjectMask.Powder)));
         particles.RunEjectionPass(kernel, grid);
 
@@ -197,6 +212,7 @@ public sealed class ParticleHandshakeTests
     [Fact]
     public void RunEjectionPassDoesNotClearSourceCellWhenParticlePoolIsFull()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Sand);
         MaterialPropsTable materials = CreateMaterials();
@@ -205,6 +221,7 @@ public sealed class ParticleHandshakeTests
         ParticleSystem particles = new(capacity: 1);
         _ = particles.TrySpawn(new ParticleSpawn(1, 1, 0, 0, Sand, 0, 10));
 
+        // Assert：验证预期结果
         Assert.True(particles.RequestEjection(new EjectionRequest(10, 10, 0, 2, 0, EjectMask.Powder)));
         particles.RunEjectionPass(kernel, grid);
 
@@ -219,6 +236,7 @@ public sealed class ParticleHandshakeTests
     [Fact]
     public void ResolveDepositsWritesParticleBackToGridAfterCollision()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Solid);
         MaterialPropsTable materials = CreateMaterials();
@@ -228,6 +246,7 @@ public sealed class ParticleHandshakeTests
         _ = particles.TrySpawn(new ParticleSpawn(10.25f, 9.25f, 0, 1, Sand, 0, 10));
 
         particles.IntegrateAndAdvance(grid);
+        // Assert：验证预期结果
         Assert.Equal(0, Get(center, 10, 9));
 
         particles.ResolveDeposits(kernel, grid);
@@ -245,6 +264,7 @@ public sealed class ParticleHandshakeTests
     [Fact]
     public void ResolveDepositsEmitsParticleImpactAudioEvent()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Solid);
         MaterialPropsTable materials = CreateMaterials();
@@ -259,6 +279,7 @@ public sealed class ParticleHandshakeTests
 
         Span<AudioEvent> drained = stackalloc AudioEvent[2];
         int count = events.Channel<AudioEvent>().DrainTo(drained);
+        // Assert：验证预期结果
         Assert.Equal(1, count);
         Assert.Equal(AudioEventType.ParticleImpact, drained[0].Type);
         Assert.Equal(10, drained[0].CellX);
@@ -294,6 +315,7 @@ public sealed class ParticleHandshakeTests
     [Fact]
     public void ResolveDepositsDisplacesLighterCellIntoParticleWithoutLosingMass()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Water);
         MaterialPropsTable materials = CreateMaterials();
@@ -305,6 +327,7 @@ public sealed class ParticleHandshakeTests
         particles.IntegrateAndAdvance(grid);
         particles.ResolveDeposits(kernel, grid);
 
+        // Assert：验证预期结果
         Assert.Equal(Sand, Get(center, 10, 10));
         Assert.Equal(1, particles.ActiveCount);
         Assert.Equal(Water, particles.ActiveReadOnly[0].Material);

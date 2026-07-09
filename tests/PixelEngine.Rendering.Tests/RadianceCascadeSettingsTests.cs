@@ -4,8 +4,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// 辐射级联设置测试：默认参数与校验边界。
+/// </summary>
 public sealed class RadianceCascadeSettingsTests
 {
+    /// <summary>
+    /// 验证Default Settings Come From Engine Constants And Stay Disabled。
+    /// </summary>
     [Fact]
     public void DefaultSettingsComeFromEngineConstantsAndStayDisabled()
     {
@@ -19,12 +25,18 @@ public sealed class RadianceCascadeSettingsTests
         Assert.Equal(settings, settings.Validate());
     }
 
+    /// <summary>
+    /// 验证Feature Switch保持Radiance Cascades Disabled By Default。
+    /// </summary>
     [Fact]
     public void FeatureSwitchKeepsRadianceCascadesDisabledByDefault()
     {
         Assert.False(ComputeFeatureSwitches.Default.RadianceCascadesEnabled);
     }
 
+    /// <summary>
+    /// 验证Validate Rejects Non Power Of Two Ray Count。
+    /// </summary>
     [Fact]
     public void ValidateRejectsNonPowerOfTwoRayCount()
     {

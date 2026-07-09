@@ -4,25 +4,27 @@ using System.Numerics;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// Game View ImGui 面板：显示运行时 viewport 纹理。
+/// </summary>
 internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider) : IEditorPanel
 {
     private readonly Func<RenderViewportTexture> _textureProvider = textureProvider ?? throw new ArgumentNullException(nameof(textureProvider));
-    private bool _visible = true;
 
     public string Title => EditorDockSpace.GameViewWindowTitle;
 
     public bool Visible
     {
-        get => _visible;
+        get;
         set
         {
-            _visible = value;
+            field = value;
             if (!value)
             {
                 ClearInputState();
             }
         }
-    }
+    } = true;
 
     public bool InputFocused { get; private set; }
 
@@ -36,7 +38,7 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
 
     public GameViewViewportSnapshot LastViewportSnapshot { get; private set; } = GameViewViewportSnapshot.Empty;
 
-    public EditorViewportContract CaptureContract(PixelEngine.Editor.EditorMode mode)
+    public EditorViewportContract CaptureContract(EditorMode mode)
     {
         return EditorGameViewContract.GameView(mode);
     }

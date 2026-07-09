@@ -106,6 +106,9 @@ internal readonly record struct EditorAssetDropResult(
     }
 }
 
+/// <summary>
+/// 资产拖放到 Hierarchy/Inspector 的解析与引用编码。
+/// </summary>
 internal static class EditorAssetDropService
 {
     public static EditorAssetDropResult DropOnHierarchy(
@@ -290,6 +293,9 @@ internal readonly record struct EditorAssetReference(
     string LogicalPath,
     EditorAssetType AssetType);
 
+/// <summary>
+/// 资产引用字符串的编解码。
+/// </summary>
 internal static class EditorAssetReferenceCodec
 {
     public static string Encode(string assetId, string logicalPath, EditorAssetType assetType)
@@ -320,6 +326,8 @@ internal static class EditorAssetReferenceCodec
             EditorAssetType.Scene => ScriptAssetKind.Scene,
             EditorAssetType.Prefab => ScriptAssetKind.Prefab,
             EditorAssetType.Script => ScriptAssetKind.Script,
+            EditorAssetType.Json => throw new NotImplementedException(),
+            EditorAssetType.Other => throw new NotImplementedException(),
             _ => throw new ArgumentOutOfRangeException(nameof(assetType), assetType, "该资产类型不能编码为脚本 asset reference。"),
         };
     }

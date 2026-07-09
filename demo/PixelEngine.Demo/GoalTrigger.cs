@@ -195,7 +195,7 @@ public sealed class GoalTrigger : Behaviour
             return true;
         }
 
-        if (Entity.TryGetComponent<PlayerController>(out PlayerController localPlayer))
+        if (Entity.TryGetComponent(out PlayerController localPlayer))
         {
             _player = localPlayer;
             return true;

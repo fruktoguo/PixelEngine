@@ -55,6 +55,7 @@ public sealed class MigrationChain
             throw new InvalidDataException($"存档版本 {fromVersion} 高于当前支持版本 {TargetVersion}。");
         }
 
+        // 逐级应用 vN→vN+1 迁移器，每步必须恰好前进一个版本号。
         MigrationContext context = new(payload, fromVersion);
         while (context.FormatVersion < TargetVersion)
         {
@@ -81,6 +82,7 @@ public sealed class MigrationChain
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(output);
+        // 流式包装：整段读入内存后走字节级 Upgrade，再写回输出流。
         using MemoryStream buffer = new();
         input.CopyTo(buffer);
         byte[] upgraded = Upgrade(buffer.ToArray(), fromVersion);

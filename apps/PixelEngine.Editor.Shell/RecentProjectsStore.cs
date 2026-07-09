@@ -2,6 +2,9 @@ using System.Text.Json;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// 最近打开项目列表的持久化存储。
+/// </summary>
 internal sealed class RecentProjectsStore
 {
     public const int MaxEntries = 20;
@@ -177,11 +180,17 @@ internal sealed class RecentProjectsStore
     }
 }
 
+/// <summary>
+/// RecentProjectsDocument JSON 文档模型。
+/// </summary>
 internal sealed class RecentProjectsDocument
 {
     public RecentProjectEntry[]? Entries { get; init; }
 }
 
+/// <summary>
+/// RecentProjectEntry。
+/// </summary>
 internal sealed class RecentProjectEntry
 {
     public string Name { get; init; } = string.Empty;

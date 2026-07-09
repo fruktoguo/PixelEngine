@@ -3,6 +3,9 @@ using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// Console 日志分类。
+/// </summary>
 internal enum EditorConsoleCategory
 {
     General,
@@ -14,6 +17,9 @@ internal enum EditorConsoleCategory
     Runtime,
 }
 
+/// <summary>
+/// Console 日志严重级别。
+/// </summary>
 internal enum EditorConsoleSeverity
 {
     Trace,
@@ -29,6 +35,9 @@ internal readonly record struct EditorConsoleEntry(
     string Source,
     string Text);
 
+/// <summary>
+/// EditorConsoleFilter。
+/// </summary>
 internal sealed record EditorConsoleFilter
 {
     public EditorConsoleCategory? Category { get; init; }
@@ -47,37 +56,13 @@ internal sealed record EditorConsoleFilter
 
     public bool Matches(in EditorConsoleEntry entry)
     {
-        if (Category is { } category && entry.Category != category)
-        {
-            return false;
-        }
-
-        if (Severity is { } severity && entry.Severity != severity)
-        {
-            return false;
-        }
-
-        if (MinimumSeverity is { } minimum && entry.Severity < minimum)
-        {
-            return false;
-        }
-
-        if (From is { } from && entry.Timestamp < from)
-        {
-            return false;
-        }
-
-        if (To is { } to && entry.Timestamp > to)
-        {
-            return false;
-        }
-
-        if (!Contains(entry.Source, SourceContains))
-        {
-            return false;
-        }
-
-        return Contains(entry.Text, TextContains);
+        return !(Category is { } category && entry.Category != category) &&
+            !(Severity is { } severity && entry.Severity != severity) &&
+            !(MinimumSeverity is { } minimum && entry.Severity < minimum) &&
+            !(From is { } from && entry.Timestamp < from) &&
+            !(To is { } to && entry.Timestamp > to) &&
+            Contains(entry.Source, SourceContains) &&
+            Contains(entry.Text, TextContains);
     }
 
     private static bool Contains(string value, string? filter)
@@ -87,11 +72,17 @@ internal sealed record EditorConsoleFilter
     }
 }
 
+/// <summary>
+/// 编辑器控制台日志接收端接口。
+/// </summary>
 internal interface IEditorConsoleSink
 {
     void Add(EditorConsoleEntry entry);
 }
 
+/// <summary>
+/// 向 Console 写入 Build 等分类日志的扩展方法。
+/// </summary>
 internal static class EditorConsoleSinkExtensions
 {
     public static void AddBuildEvent(this IEditorConsoleSink sink, BuildProgressEvent item, string source = "build-player")
@@ -213,17 +204,17 @@ internal static class EditorConsoleSinkExtensions
 
     private static EditorConsoleSeverity ClassifyScriptDiagnostic(string diagnostic, bool success)
     {
-        if (!success || diagnostic.Contains("error", StringComparison.OrdinalIgnoreCase))
-        {
-            return EditorConsoleSeverity.Error;
-        }
-
-        return diagnostic.Contains("warning", StringComparison.OrdinalIgnoreCase)
+        return !success || diagnostic.Contains("error", StringComparison.OrdinalIgnoreCase)
+            ? EditorConsoleSeverity.Error
+            : diagnostic.Contains("warning", StringComparison.OrdinalIgnoreCase)
             ? EditorConsoleSeverity.Warning
             : EditorConsoleSeverity.Info;
     }
 }
 
+/// <summary>
+/// 编辑器控制台日志环形缓冲与过滤查询。
+/// </summary>
 internal sealed class EditorConsoleStore : IEditorConsoleSink
 {
     public const int DefaultCapacity = 2048;

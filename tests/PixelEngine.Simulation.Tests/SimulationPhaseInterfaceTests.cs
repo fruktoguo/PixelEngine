@@ -6,6 +6,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Simulation 节点 8 的帧相位接口与诊断钩子测试。
+/// 不变式：帧相位接口钩子按序调用、诊断计数准确。
 /// </summary>
 public sealed class SimulationPhaseInterfaceTests
 {
@@ -19,11 +20,13 @@ public sealed class SimulationPhaseInterfaceTests
     [Fact]
     public void DepositCellMarksCurrentDirtySoCurrentFrameCaProcessesIt()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         SimulationKernel kernel = new(source, CreateMaterials());
 
         kernel.DepositCell(10, 10, Sand, CellFlags.Burning);
 
+        // Assert：验证预期结果
         Assert.Equal(Sand, Get(center, 10, 10));
         Assert.Equal(7, GetLifetime(center, 10, 10));
         Assert.True(CellFlags.Has(GetFlags(center, 10, 10), CellFlags.Burning));
@@ -60,6 +63,7 @@ public sealed class SimulationPhaseInterfaceTests
     [Fact]
     public void EditCellAtInputPhaseMarksCurrentDirtyAndBoundaryWake()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Chunk east = source.GetRequired(new ChunkCoord(1, 0));
         MaterialTable materials = new(
@@ -72,6 +76,7 @@ public sealed class SimulationPhaseInterfaceTests
 
         edit.PaintCell(63, 10, 1);
 
+        // Assert：验证预期结果
         Assert.Equal(1, Get(center, 63, 10));
         Assert.Equal(new DirtyRect(61, 8, 63, 12), center.CurrentDirty);
         Assert.Equal(new DirtyRect(0, 8, 1, 12), east.CurrentDirty);
@@ -86,6 +91,7 @@ public sealed class SimulationPhaseInterfaceTests
     [Fact]
     public void EditRectAtInputPhaseWritesRowsAndMarksPaddedDirtyAcrossChunks()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateDenseSource(-1, -1, 2, 1);
         Chunk center = source.GetRequired(new ChunkCoord(0, 0));
         Chunk east = source.GetRequired(new ChunkCoord(1, 0));
@@ -93,6 +99,7 @@ public sealed class SimulationPhaseInterfaceTests
 
         int writes = kernel.EditRectAtInputPhase(62, 10, 65, 12, Sand, persistentFlags: 0);
 
+        // Assert：验证预期结果
         Assert.Equal(12, writes);
         Assert.Equal(Sand, Get(center, 62, 10));
         Assert.Equal(Sand, Get(center, 63, 12));
@@ -125,6 +132,7 @@ public sealed class SimulationPhaseInterfaceTests
     [Fact]
     public void ReadAndClearCellReturnsOriginalCellAndMarksCurrentDirty()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Sand);
         Set(center, 10, 11, Solid);
@@ -135,6 +143,7 @@ public sealed class SimulationPhaseInterfaceTests
 
         ushort material = kernel.ReadAndClearCell(10, 11, out byte flags, out byte lifetime);
 
+        // Assert：验证预期结果
         Assert.Equal(Solid, material);
         Assert.Equal(CellFlags.RigidOwned, flags);
         Assert.Equal(5, lifetime);
@@ -174,6 +183,7 @@ public sealed class SimulationPhaseInterfaceTests
     [Fact]
     public void SnapshotChunkReturnsDeepCopy()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Sand);
         SetFlags(center, 10, 10, CellFlags.Burning);
@@ -185,6 +195,7 @@ public sealed class SimulationPhaseInterfaceTests
         SetFlags(center, 10, 10, 0);
 
         int local = CellAddressing.LocalIndexFromLocal(10, 10);
+        // Assert：验证预期结果
         Assert.Equal(Sand, snapshot.Material[local]);
         Assert.Equal(CellFlags.Burning, snapshot.Flags[local]);
         Assert.Equal(new DirtyRect(10, 10, 10, 10), snapshot.CurrentDirty);
@@ -196,6 +207,7 @@ public sealed class SimulationPhaseInterfaceTests
     [Fact]
     public void MovementAcrossChunkBoundaryRecordsBoundaryWakeDiagnostics()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 63, Sand);
         center.SetCurrentDirty(DirtyRect.Full);
@@ -203,6 +215,7 @@ public sealed class SimulationPhaseInterfaceTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(1, kernel.Diagnostics.BoundaryWakeCount);
         BoundaryWakeRecord record = kernel.Diagnostics.BoundaryWakeRecords[0];
         Assert.Equal(new ChunkCoord(0, 1), record.TargetCoord);
@@ -216,6 +229,7 @@ public sealed class SimulationPhaseInterfaceTests
     [Fact]
     public void SuccessfulBoundaryReactionRecordsProbe()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Chunk east = source.GetRequired(new ChunkCoord(1, 0));
         Set(center, 63, 10, Fire);
@@ -225,6 +239,7 @@ public sealed class SimulationPhaseInterfaceTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(1, kernel.Diagnostics.ReactionAttemptCount);
         Assert.Equal(1, kernel.Diagnostics.ReactionSuccessCount);
         Assert.Equal(1, kernel.Diagnostics.BoundaryReactionCount);

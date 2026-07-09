@@ -5,6 +5,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// Hosting 输入快照构建器测试。
+/// 不变式：输入快照与仲裁后状态一致、键鼠轮询无丢帧合并。
 /// </summary>
 public sealed class ScriptInputSnapshotBuilderTests
 {

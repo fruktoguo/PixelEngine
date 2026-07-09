@@ -4,6 +4,9 @@ using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// 编辑器项目模型：场景列表、内容根路径与 project.json 持久化。
+/// </summary>
 internal sealed class EditorProject
 {
     public const int CurrentFormatVersion = 1;
@@ -477,6 +480,9 @@ internal sealed class EditorProject
     }
 }
 
+/// <summary>
+/// EditorProjectDocument JSON 文档模型。
+/// </summary>
 internal sealed class EditorProjectDocument
 {
     public int FormatVersion { get; init; } = EditorProject.CurrentFormatVersion;
@@ -492,6 +498,9 @@ internal sealed class EditorProjectDocument
     public EditorProjectSceneEntry[]? Scenes { get; init; }
 }
 
+/// <summary>
+/// EditorProjectSceneEntry。
+/// </summary>
 internal sealed class EditorProjectSceneEntry
 {
     public string Name { get; init; } = string.Empty;

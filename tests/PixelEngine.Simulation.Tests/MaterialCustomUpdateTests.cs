@@ -5,6 +5,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Plan 04 custom-update 与 burning cell 系统测试。
+/// 不变式：custom-update 与燃烧 cell 行为符合 Plan 04 语义。
 /// </summary>
 public sealed class MaterialCustomUpdateTests
 {
@@ -19,6 +20,7 @@ public sealed class MaterialCustomUpdateTests
     [Fact]
     public void RegisteredCustomUpdateRunsOnlyForFlaggedMaterial()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = CreateMaterials();
         int callCount = 0;
         materials.RegisterCustomUpdate("custom", (ref cell, ref window, ref context) =>
@@ -34,6 +36,7 @@ public sealed class MaterialCustomUpdateTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(1, callCount);
         Assert.Equal(Ash, Get(center, 10, 10));
         Assert.True(CellFlags.MatchesFrame(GetFlags(center, 10, 10), kernel.CurrentParity));
@@ -69,6 +72,7 @@ public sealed class MaterialCustomUpdateTests
     [Fact]
     public void BurningCustomUpdateEmitsHeatAndSmoke()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = CreateMaterials();
         RecordingReactionSideEffects sideEffects = new();
         BurningCellSystem burning = new(materials, Ash, sideEffects);
@@ -86,6 +90,7 @@ public sealed class MaterialCustomUpdateTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(1, sideEffects.HeatCount);
         Assert.Equal((10, 10, Fire, (byte)77), sideEffects.FirstHeat);
         Assert.Equal(1, sideEffects.SmokeCount);
@@ -100,6 +105,7 @@ public sealed class MaterialCustomUpdateTests
     [Fact]
     public void BurningLifetimeExpiryConvertsToBurnoutMaterial()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = CreateMaterials();
         BurningCellSystem burning = new(materials, Ash);
         materials.RegisterCustomUpdate("fire", burning.UpdateBurning);
@@ -116,6 +122,7 @@ public sealed class MaterialCustomUpdateTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(Ash, Get(center, 10, 10));
         Assert.False(CellFlags.Has(GetFlags(center, 10, 10), CellFlags.Burning));
         Assert.True(CellFlags.MatchesFrame(GetFlags(center, 10, 10), kernel.CurrentParity));

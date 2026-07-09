@@ -34,6 +34,8 @@ public sealed class GLComputeBackend : IComputeBackend
     /// <inheritdoc />
     public bool IsAvailable => true;
 
+    // --- kernel 加载：编译 compute shader → 链接 program → 注册到销毁列表 ---
+
     /// <inheritdoc />
     public ComputeKernel LoadKernel(string name, string source)
     {
@@ -121,6 +123,8 @@ public sealed class GLComputeBackend : IComputeBackend
         _gl.Uniform2(location, x, y);
     }
 
+    // --- dispatch：绑定 program 后发起 glDispatchCompute，由调用方负责前置 uniform/image 绑定 ---
+
     /// <inheritdoc />
     public void Dispatch(ComputeKernel kernel, uint groupsX, uint groupsY, uint groupsZ)
     {
@@ -140,6 +144,8 @@ public sealed class GLComputeBackend : IComputeBackend
         ObjectDisposedException.ThrowIf(_disposed, this);
         _gl.MemoryBarrier(barriers);
     }
+
+    // --- GPU 计时：GL_TIME_ELAPSED query，供 GpuComputeProfiler 异步解析 ---
 
     /// <inheritdoc />
     public uint BeginTimerQuery(string passName)

@@ -80,7 +80,7 @@ public sealed class CameraFollow : Behaviour
     /// <inheritdoc />
     protected override void OnStart()
     {
-        if (Entity.TryGetComponent<PlayerController>(out PlayerController target))
+        if (Entity.TryGetComponent(out PlayerController target))
         {
             _target = target;
         }
@@ -100,7 +100,7 @@ public sealed class CameraFollow : Behaviour
     {
         if (_target is null)
         {
-            if (Entity.TryGetComponent<PlayerController>(out PlayerController target))
+            if (Entity.TryGetComponent(out PlayerController target))
             {
                 _target = target;
             }

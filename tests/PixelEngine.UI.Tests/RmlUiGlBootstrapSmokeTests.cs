@@ -6,8 +6,14 @@ using Xunit;
 
 namespace PixelEngine.UI.Tests;
 
+/// <summary>
+/// RmlUi GL 引导冒烟测试：校验视口区域解析、IME 组合输入规范化及 C#/native 源码契约。
+/// </summary>
 public sealed class RmlUiGlBootstrapSmokeTests
 {
+    /// <summary>
+    /// 验证Rml Ui Composite解析Present Target Viewport Region。
+    /// </summary>
     [Fact]
     public void RmlUiCompositeResolvesPresentTargetViewportRegion()
     {
@@ -19,6 +25,9 @@ public sealed class RmlUiGlBootstrapSmokeTests
         Assert.Equal((12, 524, 320, 180), RmlUiBackend.ResolveCompositeViewportRegion(new UiPresentTarget(12, 16, 320, 180, 1f), 720, 64, 48));
     }
 
+    /// <summary>
+    /// 验证Rml Ui Text Composition规范化And Clears Preedit State。
+    /// </summary>
     [Fact]
     public void RmlUiTextCompositionNormalizesAndClearsPreeditState()
     {
@@ -40,6 +49,9 @@ public sealed class RmlUiGlBootstrapSmokeTests
         Assert.False(inactive.IsActive);
     }
 
+    /// <summary>
+    /// 验证Rml Ui Composite Source Documents Present Target Viewport Contract。
+    /// </summary>
     [Fact]
     public void RmlUiCompositeSourceDocumentsPresentTargetViewportContract()
     {
@@ -64,6 +76,9 @@ public sealed class RmlUiGlBootstrapSmokeTests
         Assert.Contains("glViewport(viewport_offset_x, viewport_offset_y, viewport_width, viewport_height)", gl3Renderer, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Rml Ui Composition Source保持Preedit Separate From Committed Text。
+    /// </summary>
     [Fact]
     public void RmlUiCompositionSourceKeepsPreeditSeparateFromCommittedText()
     {
@@ -89,6 +104,9 @@ public sealed class RmlUiGlBootstrapSmokeTests
         Assert.Contains("CompositionState.IsActive", feedText, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Rml Ui Ime Geometry Source Prefers Native Text Input Bounds Over Overlay Fallback。
+    /// </summary>
     [Fact]
     public void RmlUiImeGeometrySourcePrefersNativeTextInputBoundsOverOverlayFallback()
     {
@@ -105,6 +123,9 @@ public sealed class RmlUiGlBootstrapSmokeTests
         Assert.Contains("GetBoundingBox", nativeShim, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Rml Ui Gles Angle Profile Source Documents Shader Rewrite And Native Profile Api。
+    /// </summary>
     [Fact]
     public void RmlUiGlesAngleProfileSourceDocumentsShaderRewriteAndNativeProfileApi()
     {
@@ -126,6 +147,9 @@ public sealed class RmlUiGlBootstrapSmokeTests
         Assert.Contains("Gles300Angle", gl3, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Rml Ui Native Composition Bridge Documents Set Confirm And Cancel Apis。
+    /// </summary>
     [Fact]
     public void RmlUiNativeCompositionBridgeDocumentsSetConfirmAndCancelApis()
     {
@@ -151,6 +175,9 @@ public sealed class RmlUiGlBootstrapSmokeTests
         Assert.DoesNotContain("ProcessTextUtf8", compositionMethod, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Can Create Native Renderer When Gl Smoke Is Enabled。
+    /// </summary>
     [Fact]
     public void CanCreateNativeRendererWhenGlSmokeIsEnabled()
     {
@@ -173,6 +200,9 @@ public sealed class RmlUiGlBootstrapSmokeTests
         Assert.Equal(RmlUiNativeProfileGate.NativeProfileDesktopGl3, RmlUiNative.GetRendererProfile());
     }
 
+    /// <summary>
+    /// 验证Can Create Native Renderer On Angle Gles When Angle Smoke Is Enabled。
+    /// </summary>
     [Fact]
     public void CanCreateNativeRendererOnAngleGlesWhenAngleSmokeIsEnabled()
     {
@@ -220,6 +250,9 @@ public sealed class RmlUiGlBootstrapSmokeTests
         }
     }
 
+    /// <summary>
+    /// 验证Rml Ui Backend Can Load And Render Document When Gl Smoke Is Enabled。
+    /// </summary>
     [Fact]
     public void RmlUiBackendCanLoadAndRenderDocumentWhenGlSmokeIsEnabled()
     {
@@ -241,6 +274,9 @@ public sealed class RmlUiGlBootstrapSmokeTests
             expectedProfileId: RmlUiNativeProfileGate.NativeProfileDesktopGl3);
     }
 
+    /// <summary>
+    /// 验证Rml Ui Backend Can Load And Render Document On Angle When Smoke Is Enabled。
+    /// </summary>
     [Fact]
     public void RmlUiBackendCanLoadAndRenderDocumentOnAngleWhenSmokeIsEnabled()
     {
@@ -401,6 +437,9 @@ public sealed class RmlUiGlBootstrapSmokeTests
         }
     }
 
+    /// <summary>
+    /// 验证Rml Ui Backend Unload Modal Stops Capture When Gl Smoke Is Enabled。
+    /// </summary>
     [Fact]
     public void RmlUiBackendUnloadModalStopsCaptureWhenGlSmokeIsEnabled()
     {
@@ -420,6 +459,9 @@ public sealed class RmlUiGlBootstrapSmokeTests
         RunUnloadModalStopsCaptureSmoke(window, RmlUiNativeProfileGate.NativeProfileDesktopGl3);
     }
 
+    /// <summary>
+    /// 验证Rml Ui Backend Unload Modal Stops Capture On Angle When Smoke Is Enabled。
+    /// </summary>
     [Fact]
     public void RmlUiBackendUnloadModalStopsCaptureOnAngleWhenSmokeIsEnabled()
     {
@@ -428,12 +470,16 @@ public sealed class RmlUiGlBootstrapSmokeTests
             return;
         }
 
-        using (window!)
+        RenderWindow smokeWindow = window ?? throw new InvalidOperationException("ANGLE smoke window 创建成功但返回 null。");
+        using (smokeWindow)
         {
-            RunUnloadModalStopsCaptureSmoke(window, RmlUiNativeProfileGate.NativeProfileGles3Angle);
+            RunUnloadModalStopsCaptureSmoke(smokeWindow, RmlUiNativeProfileGate.NativeProfileGles3Angle);
         }
     }
 
+    /// <summary>
+    /// 验证Rml Ui Composite Restores Gl State When Gl Smoke Is Enabled。
+    /// </summary>
     [Fact]
     public void RmlUiCompositeRestoresGlStateWhenGlSmokeIsEnabled()
     {
@@ -453,6 +499,9 @@ public sealed class RmlUiGlBootstrapSmokeTests
         RunCompositeRestoresGlStateSmoke(window, RmlUiNativeProfileGate.NativeProfileDesktopGl3);
     }
 
+    /// <summary>
+    /// 验证Rml Ui Composite Restores Gl State On Angle When Smoke Is Enabled。
+    /// </summary>
     [Fact]
     public void RmlUiCompositeRestoresGlStateOnAngleWhenSmokeIsEnabled()
     {
@@ -461,9 +510,10 @@ public sealed class RmlUiGlBootstrapSmokeTests
             return;
         }
 
-        using (window!)
+        RenderWindow smokeWindow = window ?? throw new InvalidOperationException("ANGLE smoke window 创建成功但返回 null。");
+        using (smokeWindow)
         {
-            RunCompositeRestoresGlStateSmoke(window, RmlUiNativeProfileGate.NativeProfileGles3Angle);
+            RunCompositeRestoresGlStateSmoke(smokeWindow, RmlUiNativeProfileGate.NativeProfileGles3Angle);
         }
     }
 

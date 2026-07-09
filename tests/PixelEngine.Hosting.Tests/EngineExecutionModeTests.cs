@@ -10,6 +10,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// Play/Edit/Step 执行模式测试。
+/// 不变式：Play/Edit/Step 模式切换不泄漏输入、暂停时 tick 可冻结。
 /// </summary>
 public sealed class EngineExecutionModeTests
 {
@@ -19,6 +20,7 @@ public sealed class EngineExecutionModeTests
     [Fact]
     public void EditModeTickKeepsRenderPhasesButPausesSim()
     {
+        // Arrange：搭建测试场景与依赖
         List<EnginePhase> phases = [];
         EngineBuilder builder = new EngineBuilder()
             .WithWorkerCount(1);
@@ -26,8 +28,10 @@ public sealed class EngineExecutionModeTests
         using Engine engine = builder.Build();
 
         engine.EnterEditMode();
+        // Act：执行被测操作
         FrameTiming timing = engine.RunOneTick();
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(EngineExecutionMode.Edit, engine.Mode);
         Assert.False(timing.RunSim);
         Assert.False(timing.RunPhysics);
@@ -49,6 +53,7 @@ public sealed class EngineExecutionModeTests
     [Fact]
     public void StepOnceRunsOneSimTickThenReturnsToEditMode()
     {
+        // Arrange：准备输入与初始状态
         List<EngineExecutionMode> observedModes = [];
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
@@ -58,6 +63,7 @@ public sealed class EngineExecutionModeTests
         engine.EnterEditMode();
         FrameTiming timing = engine.StepOnce();
 
+        // Assert：验证预期结果
         Assert.True(timing.RunSim);
         Assert.True(timing.RunPhysics);
         Assert.Equal(1, engine.Context.Clock.FrameIndex);
@@ -74,15 +80,18 @@ public sealed class EngineExecutionModeTests
     [Fact]
     public void StepOnceForcesSimTickWhenClockIsDownscaled()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
             .WithSimHz(EngineConstants.SimHzDownscaled)
             .Build();
 
         engine.EnterEditMode();
+        // Act：执行被测操作
         _ = engine.RunOneTick();
         FrameTiming timing = engine.StepOnce();
 
+        // Assert：验证不变式与预期结果
         Assert.True(timing.RunSim);
         Assert.True(timing.RunPhysics);
         Assert.Equal(2, engine.Context.Clock.FrameIndex);
@@ -96,6 +105,7 @@ public sealed class EngineExecutionModeTests
     [Fact]
     public void EngineSimulationControlServiceDrivesEngineClockAndModes()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
             .Build();
@@ -106,9 +116,11 @@ public sealed class EngineExecutionModeTests
         control.StepOnce();
         SimulationControlSnapshot stepped = control.Capture();
         control.EnterPlayMode();
+        // Act：执行被测操作
         _ = engine.RunOneTick();
         SimulationControlSnapshot playing = control.Capture();
 
+        // Assert：验证不变式与预期结果
         Assert.False(stepped.IsPlaying);
         Assert.Equal(EngineConstants.SimHzDownscaled, stepped.SimHz);
         Assert.Equal(1, stepped.SimTickIndex);
@@ -123,6 +135,7 @@ public sealed class EngineExecutionModeTests
     [Fact]
     public void EngineEditorPlaySessionServiceDrivesCurrentStatePlay()
     {
+        // Arrange：准备输入与初始状态
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
             .Build();
@@ -131,6 +144,7 @@ public sealed class EngineExecutionModeTests
         EditorPlaySessionResult play = service.EnterPlayCurrent();
         EditorPlaySessionResult edit = service.ExitPlay();
 
+        // Assert：验证预期结果
         Assert.True(play.Succeeded);
         Assert.True(edit.Succeeded);
         Assert.Equal(EngineExecutionMode.Edit, engine.Mode);
@@ -162,6 +176,7 @@ public sealed class EngineExecutionModeTests
     [Fact]
     public void EngineEditorPlaySessionServiceSavesAndRestoresTemporarySnapshot()
     {
+        // Arrange：准备输入与初始状态
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
             .Build();
@@ -171,6 +186,7 @@ public sealed class EngineExecutionModeTests
         EditorPlaySessionResult play = service.EnterPlayTemporary();
         EditorPlaySessionResult edit = service.ExitPlay();
 
+        // Assert：验证预期结果
         Assert.True(play.Succeeded);
         Assert.True(edit.Succeeded);
         Assert.Equal(["save", "restore"], store.Calls);
@@ -202,6 +218,7 @@ public sealed class EngineExecutionModeTests
     [Fact]
     public void EngineLoadsContentPackageAndRegistersMaterialServices()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-content-{Guid.NewGuid():N}");
         try
         {
@@ -215,6 +232,7 @@ public sealed class EngineExecutionModeTests
 
             EngineContentPackage package = engine.LoadContentPackage();
 
+            // Assert：验证预期结果
             Assert.True(package.TryResolveMaterial("empty", out MaterialId emptyId));
             Assert.Equal(0, emptyId.Value);
             Assert.Equal(2, package.MaterialCount);
@@ -261,7 +279,7 @@ public sealed class EngineExecutionModeTests
         }
     }
 
-    private const string MaterialsJson = """
+    private const string MaterialsJson = /*lang=json,strict*/ """
     {
       "materials": [
         { "name": "empty", "type": "Empty", "heatCapacity": 1 },
@@ -270,5 +288,5 @@ public sealed class EngineExecutionModeTests
     }
     """;
 
-    private const string ReactionsJson = """{ "reactions": [] }""";
+    private const string ReactionsJson = /*lang=json,strict*/ """{ "reactions": [] }""";
 }

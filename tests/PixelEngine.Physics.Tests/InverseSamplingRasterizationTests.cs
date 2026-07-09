@@ -7,6 +7,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// plan/14 inverse-sampling 栅格化验收测试。
+/// 不变式：inverse-sampling 栅格化与正向 stamp oracle 一致。
 /// </summary>
 public sealed class InverseSamplingRasterizationTests
 {

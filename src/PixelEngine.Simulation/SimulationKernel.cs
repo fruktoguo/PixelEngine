@@ -107,6 +107,7 @@ public sealed class SimulationKernel(
         byte flags = CellFlags.SetParity(persistentFlags, CurrentParity);
         byte lifetime = DefaultLifetimeByte(material);
         int writes = 0;
+        // 相位 1 批量写入：按 chunk 行连续段填充 SoA，最后统一扩 current dirty rect。
         ForEachChunkRowRun(minX, minY, maxX, maxY, (chunk, localStart, run, worldX, worldY) =>
         {
             for (int i = 0; i < run; i++)
@@ -199,6 +200,7 @@ public sealed class SimulationKernel(
     /// </summary>
     public void StepCa(CaChunkThrottlePolicy throttlePolicy = default)
     {
+        // 单线程 CA 入口：先清空本帧迭代诊断，再翻转 parity 驱动 checkerboard 相位。
         Diagnostics.ResetCaIterationRecords();
         AdvanceParity();
         throttlePolicy = throttlePolicy.ForFrame(FrameIndex);
@@ -214,6 +216,7 @@ public sealed class SimulationKernel(
         Diagnostics.ResetCaIterationRecords();
         AdvanceParity();
         throttlePolicy = throttlePolicy.ForFrame(FrameIndex);
+        // 确定性 oracle / 调试可强制走单线程，避免 JobSystem 引入调度差异。
         if (ForceSingleThread)
         {
             _scheduler.StepSingleThread(_chunks, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, _customUpdateExecutor, Diagnostics, Profiler, throttlePolicy);
@@ -370,6 +373,7 @@ public sealed class SimulationKernel(
         }
 
         byte flags = chunk.Flags[local];
+        // RigidOwned cell 不参与 Damage 平面累加，只通知物理层做刚体重建。
         if (CellFlags.Has(flags, CellFlags.RigidOwned))
         {
             _rigidDamageSink.OnOwnedCellDamaged(wx, wy, material);
@@ -398,6 +402,7 @@ public sealed class SimulationKernel(
         ushort maxIntegrity = MaterialProps.MaxIntegrityOf(material);
         if (maxIntegrity != 0)
         {
+            // 未达完整性阈值时只累加 Damage 并标 working dirty，cell 材质保持不变。
             int accumulated = Math.Min(byte.MaxValue, chunk.Damage[local] + effectiveDamage);
             if (accumulated * EngineConstants.DamageIntegrityScale < maxIntegrity)
             {
@@ -432,6 +437,7 @@ public sealed class SimulationKernel(
             return 0;
         }
 
+        // 圆形破坏：按距离平方剪枝，可选线性 falloff 衰减当量。
         int destroyed = 0;
         int radiusSquared = radius * radius;
         int minX = centerX - radius;
@@ -493,6 +499,7 @@ public sealed class SimulationKernel(
 
         float stepX = dirX / magnitude;
         float stepY = dirY / magnitude;
+        // 光束破坏：沿归一化方向逐 cell 采样，跳过重复格点。
         int destroyed = 0;
         int lastX = int.MinValue;
         int lastY = int.MinValue;
@@ -551,6 +558,7 @@ public sealed class SimulationKernel(
 
     private void DestroyCell(Chunk chunk, int local, int wx, int wy, ushort sourceMaterial)
     {
+        // 结构破坏落地：转为碎块材质或 Empty，并上报采集/碎屑副作用。
         ushort rubbleTarget = MaterialProps.RubbleTargetOf(sourceMaterial);
         chunk.Material[local] = rubbleTarget;
         chunk.Flags[local] = rubbleTarget == 0 ? (byte)0 : CellFlags.SetParity(0, CurrentParity);
@@ -579,6 +587,7 @@ public sealed class SimulationKernel(
 
     private void MarkDamageDirty(int wx, int wy)
     {
+        // 破坏只写 working dirty；先本 chunk 再邻接唤醒，保证下一帧 CA 重检受损区。
         _ = DirtyRegionMarker.TryMarkCell(_chunks, wx, wy, DirtyPhaseTarget.Working, includeBoundaryNeighbors: false, Diagnostics);
         _ = DirtyRegionMarker.TryMarkCell(_chunks, wx, wy, DirtyPhaseTarget.Working, includeBoundaryNeighbors: true, Diagnostics);
     }
@@ -587,6 +596,7 @@ public sealed class SimulationKernel(
     {
         ChunkCoord minCoord = CellAddressing.WorldToChunk(minX, minY);
         ChunkCoord maxCoord = CellAddressing.WorldToChunk(maxX, maxY);
+        // 矩形编辑按 chunk 切片遍历；未驻留 chunk 直接抛错，调用方须保证矩形已加载。
         for (int cy = minCoord.Y; cy <= maxCoord.Y; cy++)
         {
             for (int cx = minCoord.X; cx <= maxCoord.X; cx++)

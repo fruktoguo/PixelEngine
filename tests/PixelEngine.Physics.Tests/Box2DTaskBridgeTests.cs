@@ -8,6 +8,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// Box2D task callback 桥测试。
+/// 不变式：Box2D 任务桥接在 worker 上完成且不阻塞主相位。
 /// </summary>
 public sealed unsafe class Box2DTaskBridgeTests
 {

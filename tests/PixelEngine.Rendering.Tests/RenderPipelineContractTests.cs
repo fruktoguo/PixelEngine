@@ -3,8 +3,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// 渲染管线契约测试：各 pass 编排与资源依赖。
+/// </summary>
 public sealed class RenderPipelineContractTests
 {
+    /// <summary>
+    /// 验证Render Pipeline Settings Validate Rejects Invalid Values行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderPipelineSettingsValidateRejectsInvalidValues()
     {
@@ -26,6 +32,9 @@ public sealed class RenderPipelineContractTests
         Assert.True(settings.PreferComputeSharpBackend);
     }
 
+    /// <summary>
+    /// 验证Render Viewport Texture Requires Valid Handle And Dimensions行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderViewportTextureRequiresValidHandleAndDimensions()
     {
@@ -41,6 +50,9 @@ public sealed class RenderPipelineContractTests
         AssertThrows<ArgumentOutOfRangeException>(() => new RenderViewportTexture(7, 64, 0));
     }
 
+    /// <summary>
+    /// 验证Presentation Viewport Fits Internal Canvas Into Framebuffer。
+    /// </summary>
     [Fact]
     public void PresentationViewportFitsInternalCanvasIntoFramebuffer()
     {
@@ -64,6 +76,9 @@ public sealed class RenderPipelineContractTests
         Assert.Equal(400, tall.Height);
     }
 
+    /// <summary>
+    /// 验证Ui Present Target Uses Presentation Viewport As Default Clip。
+    /// </summary>
     [Fact]
     public void UiPresentTargetUsesPresentationViewportAsDefaultClip()
     {
@@ -83,6 +98,9 @@ public sealed class RenderPipelineContractTests
         AssertThrows<ArgumentOutOfRangeException>(() => new UiPresentTarget(0, 0, 10, 10, 0f).Validate());
     }
 
+    /// <summary>
+    /// 验证Render Pipeline Source Documents Required Ordering And Hooks行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderPipelineSourceDocumentsRequiredOrderingAndHooks()
     {
@@ -133,6 +151,9 @@ public sealed class RenderPipelineContractTests
         Assert.True(source.IndexOf("PresentUiLayers(new UiPresentContext", StringComparison.Ordinal) < source.IndexOf("BeforePresentUi?.Invoke", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// 验证Composite Shaders Sample Cpu Uploaded Effect Masks With Top Left Origin。
+    /// </summary>
     [Fact]
     public void CompositeShadersSampleCpuUploadedEffectMasksWithTopLeftOrigin()
     {
@@ -146,6 +167,9 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("texture(uVisibilityTexture, cpuUv)", GpuComputeShaderSources.LightComposite, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Ui Present Layers Use Stable Orders For Game And Editor。
+    /// </summary>
     [Fact]
     public void UiPresentLayersUseStableOrdersForGameAndEditor()
     {

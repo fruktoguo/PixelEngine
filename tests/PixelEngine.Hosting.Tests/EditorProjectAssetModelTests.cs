@@ -7,6 +7,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// Project Window 工程级资产模型测试。
+/// 不变式：工程资产树与磁盘同步、重命名/移动保持引用完整性。
 /// </summary>
 public sealed class EditorProjectAssetModelTests
 {
@@ -16,6 +17,7 @@ public sealed class EditorProjectAssetModelTests
     [Fact]
     public void ManifestGeneratesStableIdsAndProjectBrowserConsumesLogicalAssets()
     {
+        // Arrange：准备输入与初始状态
         string projectRoot = CreateTempProjectRoot();
         try
         {
@@ -25,6 +27,7 @@ public sealed class EditorProjectAssetModelTests
             File.WriteAllText(Path.Combine(contentRoot, "materials.json"), "{}\n");
             EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
 
+            // Assert：验证预期结果
             EditorAssetRecord texture = Assert.Single(
                 manifest.Refresh(),
                 asset => asset.LogicalPath == "textures/sand.png");
@@ -57,6 +60,7 @@ public sealed class EditorProjectAssetModelTests
     [Fact]
     public void MovePrefabKeepsAssetIdAndRewritesScenePrefabReferences()
     {
+        // Arrange：准备输入与初始状态
         string projectRoot = CreateTempProjectRoot();
         try
         {
@@ -93,6 +97,7 @@ public sealed class EditorProjectAssetModelTests
                 "prefabs/moved/rock.prefab",
                 activeScene);
 
+            // Assert：验证预期结果
             Assert.Equal(original.Id, result.Asset.Id);
             Assert.Equal("prefabs/moved/rock.prefab", result.Asset.LogicalPath);
             Assert.True(result.UpdatedActiveScene);
@@ -124,6 +129,7 @@ public sealed class EditorProjectAssetModelTests
     [Fact]
     public void MoveSceneAssetSynchronizesProjectSettingsAndBuildProfile()
     {
+        // Arrange：准备输入与初始状态
         string projectRoot = CreateTempProjectRoot();
         try
         {
@@ -176,6 +182,7 @@ public sealed class EditorProjectAssetModelTests
 
             EditorAssetBrowserMoveResult result = source.MoveAsset(oldScene, newScene);
 
+            // Assert：验证预期结果
             Assert.True(result.Succeeded);
             Assert.Equal(newScene, result.Asset.LogicalPath);
             Assert.Contains("project=1", result.Diagnostic, StringComparison.Ordinal);
@@ -209,6 +216,7 @@ public sealed class EditorProjectAssetModelTests
     [Fact]
     public void ProjectBrowserMoveRequestRechecksStableIdAndRewritesTypedAssetReferences()
     {
+        // Arrange：准备输入与初始状态
         string projectRoot = CreateTempProjectRoot();
         try
         {
@@ -238,6 +246,7 @@ public sealed class EditorProjectAssetModelTests
                 activeScene);
 
             string newReference = EditorAssetReferenceCodec.Encode(texture.Id, "textures/moved/sand.png", texture.AssetType);
+            // Assert：验证预期结果
             Assert.False(stale.Succeeded);
             Assert.Contains("stable asset id", stale.Diagnostic, StringComparison.Ordinal);
             Assert.True(moved.Succeeded);
@@ -262,6 +271,7 @@ public sealed class EditorProjectAssetModelTests
     [Fact]
     public void MoveAssetPreflightsReferenceDocumentsBeforeMovingFile()
     {
+        // Arrange：准备输入与初始状态
         string projectRoot = CreateTempProjectRoot();
         try
         {
@@ -273,6 +283,7 @@ public sealed class EditorProjectAssetModelTests
             File.WriteAllText(brokenScene, "not json");
             _ = manifest.EnsureAsset("scenes/broken.scene");
 
+            // Assert：验证预期结果
             _ = Assert.ThrowsAny<Exception>(() => manifest.MoveAsset("textures/sand.png", "textures/moved/sand.png"));
 
             Assert.True(File.Exists(Path.Combine(contentRoot, "textures", "sand.png")));
@@ -292,6 +303,7 @@ public sealed class EditorProjectAssetModelTests
     [Fact]
     public void MoveAssetRestoresWrittenReferenceDocumentsWhenLaterSaveFails()
     {
+        // Arrange：准备输入与初始状态
         string projectRoot = CreateTempProjectRoot();
         try
         {
@@ -307,6 +319,7 @@ public sealed class EditorProjectAssetModelTests
             _ = manifest.EnsureAsset("scenes/z-readonly.scene");
             File.SetAttributes(secondScene, FileAttributes.ReadOnly);
 
+            // Assert：验证预期结果
             _ = Assert.ThrowsAny<Exception>(() => manifest.MoveAsset("textures/sand.png", "textures/moved/sand.png"));
 
             File.SetAttributes(secondScene, FileAttributes.Normal);
@@ -330,6 +343,7 @@ public sealed class EditorProjectAssetModelTests
     [Fact]
     public void DeleteAssetPreflightBlocksReferencedAssetsAndReportsLocations()
     {
+        // Arrange：准备输入与初始状态
         string projectRoot = CreateTempProjectRoot();
         try
         {
@@ -345,6 +359,7 @@ public sealed class EditorProjectAssetModelTests
             EditorAssetDeletePreflight preflight = manifest.PreflightDeleteAsset("textures/sand.png", activeScene);
             EditorAssetDeleteResult delete = manifest.DeleteAsset("textures/sand.png", activeScene, confirmed: true);
 
+            // Assert：验证预期结果
             Assert.False(preflight.CanDelete);
             Assert.Equal(2, preflight.ReferenceCount);
             Assert.Equal(1, preflight.ReferenceDocuments);
@@ -369,6 +384,7 @@ public sealed class EditorProjectAssetModelTests
     [Fact]
     public void DeleteAssetRequiresConfirmationAndRemovesUnreferencedManifestRecord()
     {
+        // Arrange：准备输入与初始状态
         string projectRoot = CreateTempProjectRoot();
         try
         {
@@ -379,6 +395,7 @@ public sealed class EditorProjectAssetModelTests
             EditorAssetDeleteResult request = manifest.DeleteAsset("textures/unused.png");
             EditorAssetDeleteResult confirmed = manifest.DeleteAsset("textures/unused.png", confirmed: true);
 
+            // Assert：验证预期结果
             Assert.False(request.Deleted);
             Assert.True(request.RequiresConfirmation);
             Assert.Contains("需要确认", request.Diagnostic, StringComparison.Ordinal);
@@ -400,6 +417,7 @@ public sealed class EditorProjectAssetModelTests
     [Fact]
     public void ProjectBrowserBuildsPreviewSummariesForCommonAssetTypes()
     {
+        // Arrange：准备输入与初始状态
         string projectRoot = CreateTempProjectRoot();
         try
         {
@@ -409,7 +427,7 @@ public sealed class EditorProjectAssetModelTests
             _ = Directory.CreateDirectory(Path.Combine(contentRoot, "scripts"));
             File.WriteAllBytes(Path.Combine(contentRoot, "textures", "sand.png"), [1, 2, 3]);
             File.WriteAllBytes(Path.Combine(contentRoot, "audio", "hit.wav"), [4, 5]);
-            File.WriteAllText(Path.Combine(contentRoot, "materials.json"), "{\"materials\":[{\"name\":\"sand\"},{\"name\":\"water\"}]}\n");
+            File.WriteAllText(Path.Combine(contentRoot, "materials.json"), /*lang=json,strict*/ "{\"materials\":[{\"name\":\"sand\"},{\"name\":\"water\"}]}\n");
             File.WriteAllText(Path.Combine(contentRoot, "scripts", "DemoBehaviour.cs"), "using PixelEngine.Scripting; public sealed class DemoBehaviour : Behaviour { }\n");
             SavePrefabDocument(contentRoot, "prefabs/rock.prefab", "Rock");
             string scenePath = Path.Combine(contentRoot, "scenes", "main.scene");
@@ -445,6 +463,7 @@ public sealed class EditorProjectAssetModelTests
 
             IReadOnlyList<AssetBrowserItem> assets = source.ListAssets();
 
+            // Assert：验证预期结果
             Assert.Equal("纹理：32×16，3 B", Find(assets, "textures/sand.png").PreviewSummary);
             Assert.Equal("音频：2 B", Find(assets, "audio/hit.wav").PreviewSummary);
             Assert.StartsWith("材质定义：2 项", Find(assets, "materials.json").PreviewSummary, StringComparison.Ordinal);
@@ -464,6 +483,7 @@ public sealed class EditorProjectAssetModelTests
     [Fact]
     public void AssetModelRejectsPathsOutsideContentRoot()
     {
+        // Arrange：准备输入与初始状态
         string projectRoot = CreateTempProjectRoot();
         try
         {
@@ -472,6 +492,7 @@ public sealed class EditorProjectAssetModelTests
             EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
             _ = manifest.EnsureAsset("prefabs/rock.prefab");
 
+            // Assert：验证预期结果
             _ = Assert.Throws<InvalidOperationException>(() => manifest.CreateAsset("../outside.prefab", EditorAssetType.Prefab));
             _ = Assert.Throws<InvalidOperationException>(() => manifest.MoveAsset("prefabs/rock.prefab", "../outside.prefab"));
         }

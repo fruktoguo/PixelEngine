@@ -2,15 +2,13 @@ using PixelEngine.Scripting;
 
 namespace PixelEngine.Editor.Shell;
 
-internal sealed class EditorConsoleScriptHotReloadDiagnosticSink : IScriptHotReloadDiagnosticSink
+/// <summary>
+/// 将脚本热重载诊断写入 Editor Console。
+/// </summary>
+internal sealed class EditorConsoleScriptHotReloadDiagnosticSink(IEditorConsoleSink console) : IScriptHotReloadDiagnosticSink
 {
     private const string Source = "script-hot-reload";
-    private readonly IEditorConsoleSink _console;
-
-    public EditorConsoleScriptHotReloadDiagnosticSink(IEditorConsoleSink console)
-    {
-        _console = console ?? throw new ArgumentNullException(nameof(console));
-    }
+    private readonly IEditorConsoleSink _console = console ?? throw new ArgumentNullException(nameof(console));
 
     public void Report(ScriptHotReloadDiagnostic diagnostic)
     {

@@ -4,6 +4,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// demo-playability 结构破坏抗性分档测试。
+/// 不变式：结构破坏抗性分档与材质表一致、阈值边界可复现。
 /// </summary>
 public sealed class CellDamageResistanceTests
 {

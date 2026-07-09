@@ -2,8 +2,14 @@ using Xunit;
 
 namespace PixelEngine.UI.Tests;
 
+/// <summary>
+/// UI 清单加载器测试：清单解析、校验与资源引用。
+/// </summary>
 public sealed class UiManifestLoaderTests
 {
+    /// <summary>
+    /// 验证Load From Directory解析Screens To Asset Sources。
+    /// </summary>
     [Fact]
     public void LoadFromDirectoryResolvesScreensToAssetSources()
     {
@@ -11,7 +17,7 @@ public sealed class UiManifestLoaderTests
         string main = WriteAsset(root, "main.xhtml", "<ui />");
         _ = WriteAsset(root, "settings/settings.xhtml", "<ui />");
         string logo = WriteAsset(root, "images/logo.png", "png");
-        WriteManifest(root, """
+        WriteManifest(root, /*lang=json,strict*/ """
             {
               "screens": [
                 { "id": "main", "path": "main.xhtml", "preload": true },
@@ -51,12 +57,15 @@ public sealed class UiManifestLoaderTests
         Assert.Equal(image, manifest.GetRequiredImage("logo"));
     }
 
+    /// <summary>
+    /// 验证Load Rejects Duplicate Screen Ids。
+    /// </summary>
     [Fact]
     public void LoadRejectsDuplicateScreenIds()
     {
         string root = CreateUiRoot();
         _ = WriteAsset(root, "main.xhtml", "<ui />");
-        WriteManifest(root, """
+        WriteManifest(root, /*lang=json,strict*/ """
             {
               "screens": [
                 { "id": "main", "path": "main.xhtml" },
@@ -68,13 +77,16 @@ public sealed class UiManifestLoaderTests
         _ = Assert.Throws<InvalidDataException>(() => UiManifestLoader.LoadFromDirectory(root));
     }
 
+    /// <summary>
+    /// 验证Load Rejects Path Escaping Ui Root。
+    /// </summary>
     [Fact]
     public void LoadRejectsPathEscapingUiRoot()
     {
         string root = CreateUiRoot();
         string outside = Path.Combine(Path.GetDirectoryName(root)!, "outside.xhtml");
         File.WriteAllText(outside, "<ui />");
-        WriteManifest(root, """
+        WriteManifest(root, /*lang=json,strict*/ """
             {
               "screens": [
                 { "id": "outside", "path": "../outside.xhtml" }
@@ -85,11 +97,14 @@ public sealed class UiManifestLoaderTests
         _ = Assert.Throws<InvalidDataException>(() => UiManifestLoader.LoadFromDirectory(root));
     }
 
+    /// <summary>
+    /// 验证Load Rejects Missing Screen Document。
+    /// </summary>
     [Fact]
     public void LoadRejectsMissingScreenDocument()
     {
         string root = CreateUiRoot();
-        WriteManifest(root, """
+        WriteManifest(root, /*lang=json,strict*/ """
             {
               "screens": [
                 { "id": "main", "path": "missing.xhtml" }
@@ -100,13 +115,16 @@ public sealed class UiManifestLoaderTests
         _ = Assert.Throws<FileNotFoundException>(() => UiManifestLoader.LoadFromDirectory(root));
     }
 
+    /// <summary>
+    /// 验证Load Rejects Image Outside Images Directory。
+    /// </summary>
     [Fact]
     public void LoadRejectsImageOutsideImagesDirectory()
     {
         string root = CreateUiRoot();
         _ = WriteAsset(root, "main.xhtml", "<ui />");
         _ = WriteAsset(root, "logo.png", "png");
-        WriteManifest(root, """
+        WriteManifest(root, /*lang=json,strict*/ """
             {
               "screens": [
                 { "id": "main", "path": "main.xhtml" }
@@ -120,13 +138,16 @@ public sealed class UiManifestLoaderTests
         _ = Assert.Throws<InvalidDataException>(() => UiManifestLoader.LoadFromDirectory(root));
     }
 
+    /// <summary>
+    /// 验证Load Rejects Duplicate Image Ids。
+    /// </summary>
     [Fact]
     public void LoadRejectsDuplicateImageIds()
     {
         string root = CreateUiRoot();
         _ = WriteAsset(root, "main.xhtml", "<ui />");
         _ = WriteAsset(root, "images/logo.png", "png");
-        WriteManifest(root, """
+        WriteManifest(root, /*lang=json,strict*/ """
             {
               "screens": [
                 { "id": "main", "path": "main.xhtml" }
@@ -141,12 +162,15 @@ public sealed class UiManifestLoaderTests
         _ = Assert.Throws<InvalidDataException>(() => UiManifestLoader.LoadFromDirectory(root));
     }
 
+    /// <summary>
+    /// 验证Load Rejects Missing Image Asset。
+    /// </summary>
     [Fact]
     public void LoadRejectsMissingImageAsset()
     {
         string root = CreateUiRoot();
         _ = WriteAsset(root, "main.xhtml", "<ui />");
-        WriteManifest(root, """
+        WriteManifest(root, /*lang=json,strict*/ """
             {
               "screens": [
                 { "id": "main", "path": "main.xhtml" }
@@ -160,13 +184,16 @@ public sealed class UiManifestLoaderTests
         _ = Assert.Throws<FileNotFoundException>(() => UiManifestLoader.LoadFromDirectory(root));
     }
 
+    /// <summary>
+    /// 验证Asset Directories Report Optional Folder Presence。
+    /// </summary>
     [Fact]
     public void AssetDirectoriesReportOptionalFolderPresence()
     {
         string root = CreateUiRoot();
         _ = Directory.CreateDirectory(Path.Combine(root, "fonts"));
         _ = WriteAsset(root, "main.xhtml", "<ui />");
-        WriteManifest(root, """
+        WriteManifest(root, /*lang=json,strict*/ """
             {
               "screens": [
                 { "id": "main", "path": "main.xhtml" }

@@ -43,6 +43,7 @@ public sealed class WorldBlitPass : IDisposable
             throw new ArgumentException("Camera viewport 必须与 world blit 输出尺寸一致。", nameof(camera));
         }
 
+        // 世界纹理 nearest 采样到 scene FBO，Y 轴在 fragment 中翻转以匹配 CPU 上传朝向。
         destination.BindFramebuffer();
         _gl.Viewport(0, 0, (uint)destination.Width, (uint)destination.Height);
         _gl.Disable(EnableCap.Blend);

@@ -6,14 +6,14 @@ using System.Text;
 using PixelEngine.Editor.Shell;
 using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Editor.Shell.Settings;
-using PixelEngine.Hosting;
 using PixelEngine.UI;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
-/// 独立编辑器内 build-player 编排、设置校验与玩家包审计测试。
+/// 独立编辑器 build-player 编排、设置校验与玩家包审计测试。
+/// 不变式：NDJSON 进度可解析、build-result 与 stderr 合并、设置非法时拒绝构建。
 /// </summary>
 public sealed class EditorShellBuildTests
 {
@@ -23,6 +23,7 @@ public sealed class EditorShellBuildTests
     [Fact]
     public async Task PlayerBuildServiceParsesNdjsonFallbackStderrAndBuildResult()
     {
+        // Arrange：搭建测试场景与依赖
         using TempDir temp = new();
         string script = WriteBuildPlayerScript(
             temp.Path,
@@ -56,8 +57,10 @@ public sealed class EditorShellBuildTests
         PlayerBuildService service = new(new FakeLocator(temp.Path, script));
         RecordingProgress progress = new();
 
+        // Act：执行被测操作
         BuildResult result = await service.RunAsync(CreateRequest(temp.Path), progress, CancellationToken.None);
 
+        // Assert：验证不变式与预期结果
         Assert.True(result.Ok, result.Error);
         Assert.Equal(0, result.ExitCode);
         Assert.Equal("win-x64", result.Rid);
@@ -70,11 +73,12 @@ public sealed class EditorShellBuildTests
         Assert.Contains(progress.Events, e => e.Kind == BuildEventKind.Result && e.Phase == BuildPhase.Done);
 
         Assert.True(PlayerBuildService.TryParseProgressLine(
-            """{"schema":"pixelengine.build/v1","kind":"progress","phase":"publish","percent":50,"level":"info","message":"half","timestamp":"2026-07-06T00:00:00Z"}""",
+                                 /*lang=json,strict*/
+                                 """{"schema":"pixelengine.build/v1","kind":"progress","phase":"publish","percent":50,"level":"info","message":"half","timestamp":"2026-07-06T00:00:00Z"}""",
             out BuildProgressEvent parsed));
         Assert.Equal(BuildPhase.Publish, parsed.Phase);
         Assert.Equal(0.5f, parsed.Percent, precision: 3);
-        Assert.False(PlayerBuildService.TryParseProgressLine("""{"schema":"other","kind":"progress"}""", out _));
+        Assert.False(PlayerBuildService.TryParseProgressLine(/*lang=json,strict*/ """{"schema":"other","kind":"progress"}""", out _));
         Assert.False(PlayerBuildService.TryParseProgressLine("not-json", out _));
     }
 
@@ -84,6 +88,7 @@ public sealed class EditorShellBuildTests
     [Fact]
     public async Task PlayerBuildServiceCombinesNonZeroExitAndMissingResultFailures()
     {
+        // Arrange：搭建测试场景与依赖
         using TempDir okResultTemp = new();
         string okResultScript = WriteBuildPlayerScript(
             okResultTemp.Path,
@@ -111,8 +116,10 @@ public sealed class EditorShellBuildTests
             """);
         PlayerBuildService okResultService = new(new FakeLocator(okResultTemp.Path, okResultScript));
 
+        // Act：执行被测操作
         BuildResult nonZero = await okResultService.RunAsync(CreateRequest(okResultTemp.Path), new RecordingProgress(), CancellationToken.None);
 
+        // Assert：验证不变式与预期结果
         Assert.False(nonZero.Ok);
         Assert.Equal(7, nonZero.ExitCode);
         Assert.Contains("exit code=7", nonZero.Error, StringComparison.Ordinal);
@@ -142,6 +149,7 @@ public sealed class EditorShellBuildTests
     [Fact]
     public async Task PlayerBuildServiceCancellationKillsProcessTreeAndAllowsRerun()
     {
+        // Arrange：搭建测试场景与依赖
         using TempDir temp = new();
         string script = WriteBuildPlayerScript(
             temp.Path,
@@ -176,6 +184,7 @@ public sealed class EditorShellBuildTests
         PlayerBuildService service = new(new FakeLocator(temp.Path, script));
         string output = Path.Combine(temp.Path, "out");
         using CancellationTokenSource cts = new();
+        // Act：执行被测操作
         Task<BuildResult> running = service.RunAsync(CreateRequest(output), new RecordingProgress(), cts.Token);
         string childPidPath = Path.Combine(output, "child.pid");
         int childPid = await WaitForPidAsync(childPidPath);
@@ -183,6 +192,7 @@ public sealed class EditorShellBuildTests
         await cts.CancelAsync();
         BuildResult canceled = await running;
 
+        // Assert：验证不变式与预期结果
         Assert.False(canceled.Ok);
         Assert.Equal(-2, canceled.ExitCode);
         Assert.Contains("已取消", canceled.Error, StringComparison.Ordinal);
@@ -199,6 +209,7 @@ public sealed class EditorShellBuildTests
     [Fact]
     public async Task BuildProfileDtoValidationAndPreflightReportActionableErrors()
     {
+        // Arrange：准备输入与初始状态
         BuildProfileDto valid = new()
         {
             OutputDirectory = "artifacts/player",
@@ -214,6 +225,7 @@ public sealed class EditorShellBuildTests
         };
 
         BuildProfileDto normalizedValid = valid.Normalize();
+        // Assert：验证预期结果
         Assert.Equal(valid.Rid, normalizedValid.Rid);
         Assert.Equal(valid.Scenes.Count, normalizedValid.Scenes.Count);
         BuildRequest request = normalizedValid.ToRequest();
@@ -248,6 +260,7 @@ public sealed class EditorShellBuildTests
     [Fact]
     public void EngineProjectSettingsStoreRoundTripsHostingDtosAndRejectsPathEscape()
     {
+        // Arrange：准备输入与初始状态
         using TempDir temp = new();
         ProjectSettingsDto project = new()
         {
@@ -260,6 +273,7 @@ public sealed class EditorShellBuildTests
 
         ProjectSettingsDto loadedProject = EngineProjectSettingsStore.LoadProjectSettings(temp.Path);
 
+        // Assert：验证预期结果
         Assert.Equal("PixelEngine Demo", loadedProject.Name);
         Assert.Equal("content", loadedProject.ContentRoot);
         Assert.Equal("scripts/game", loadedProject.ScriptSourceDir);
@@ -318,9 +332,9 @@ public sealed class EditorShellBuildTests
         Assert.True(defaultScene.IsStartup);
         Assert.Equal("scenes/main.scene", defaultScene.Source);
 
-        Assert.Throws<InvalidOperationException>(() => EngineProjectSettingsStore.SaveProjectSettings(temp.Path, project with { ContentRoot = "../outside" }));
-        Assert.Throws<InvalidOperationException>(() => EngineProjectSettingsStore.SavePlayerSettings(temp.Path, player with { StartupScene = "/outside.scene" }));
-        Assert.Throws<InvalidOperationException>(() => EngineProjectSettingsStore.SaveBuildProfile(temp.Path, profile with
+        _ = Assert.Throws<InvalidOperationException>(() => EngineProjectSettingsStore.SaveProjectSettings(temp.Path, project with { ContentRoot = "../outside" }));
+        _ = Assert.Throws<InvalidOperationException>(() => EngineProjectSettingsStore.SavePlayerSettings(temp.Path, player with { StartupScene = "/outside.scene" }));
+        _ = Assert.Throws<InvalidOperationException>(() => EngineProjectSettingsStore.SaveBuildProfile(temp.Path, profile with
         {
             Scenes = [profile.Scenes[0] with { Source = "../outside.scene" }],
         }));
@@ -332,10 +346,12 @@ public sealed class EditorShellBuildTests
     [Fact]
     public void EngineProjectSettingsStoreCoalescesNullNestedSettingsAndReportsNullBuildScenes()
     {
+        // Arrange：准备输入与初始状态
         using TempDir temp = new();
         File.WriteAllText(
             Path.Combine(temp.Path, EngineProjectSettingsStore.ProjectSettingsFileName),
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "formatVersion": 1,
               "name": "Null Nested",
@@ -348,7 +364,8 @@ public sealed class EditorShellBuildTests
             """);
         File.WriteAllText(
             Path.Combine(temp.Path, EngineProjectSettingsStore.PlayerSettingsFileName),
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "formatVersion": 1,
               "windowTitle": "Null Input",
@@ -361,7 +378,8 @@ public sealed class EditorShellBuildTests
             """);
         File.WriteAllText(
             Path.Combine(temp.Path, EngineProjectSettingsStore.BuildSettingsFileName),
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "formatVersion": 1,
               "rid": "win-x64",
@@ -376,6 +394,7 @@ public sealed class EditorShellBuildTests
 
         ProjectSettingsDto project = EngineProjectSettingsStore.LoadProjectSettings(temp.Path);
         PlayerSettingsDto player = EngineProjectSettingsStore.LoadPlayerSettings(temp.Path);
+        // Assert：验证预期结果
         InvalidOperationException buildError = Assert.Throws<InvalidOperationException>(() => EngineProjectSettingsStore.LoadBuildProfile(temp.Path));
 
         Assert.True(project.ResourceRules.RequireStableMaterialNames);
@@ -393,6 +412,7 @@ public sealed class EditorShellBuildTests
     [Fact]
     public void EngineProjectUnifiedEntryLoadsSettingsStartupAndScannedScenes()
     {
+        // Arrange：准备输入与初始状态
         using TempDir temp = new();
         string contentRoot = Path.Combine(temp.Path, "content");
         string scenesRoot = Path.Combine(contentRoot, "scenes");
@@ -443,6 +463,7 @@ public sealed class EditorShellBuildTests
         EngineProject loaded = EngineProject.Load(temp.Path);
         SceneDescriptor[] scenes = loaded.Scenes.ToArray();
 
+        // Assert：验证预期结果
         Assert.Equal(Path.GetFullPath(temp.Path), loaded.ProjectRoot);
         Assert.Equal(Path.GetFullPath(contentRoot), loaded.ContentRoot);
         Assert.Equal(Path.GetFullPath(Path.Combine(temp.Path, "scripts/game")), loaded.ScriptSourceDirectory);
@@ -462,12 +483,14 @@ public sealed class EditorShellBuildTests
     [Fact]
     public void EditorShellSettingsStoresAndPanelsRoundTripHostingDtos()
     {
+        // Arrange：准备输入与初始状态
         using TempDir temp = new();
         string projectRoot = Path.Combine(temp.Path, "SettingsProject");
         EditorProject project = EditorProject.CreateNew(projectRoot, " Settings Project ");
 
         ProjectSettingsStore projectStore = new(project);
         ProjectSettingsDto fallbackProject = projectStore.Load();
+        // Assert：验证预期结果
         Assert.Equal("Settings Project", fallbackProject.Name);
         Assert.Equal(project.ContentRoot, fallbackProject.ContentRoot);
         Assert.Equal(project.ScriptSourceDir, fallbackProject.ScriptSourceDir);
@@ -529,6 +552,7 @@ public sealed class EditorShellBuildTests
     [Fact]
     public void PlayerSettingsProjectionFeedsBuildRequestAndRuntimeOptions()
     {
+        // Arrange：准备输入与初始状态
         BuildRequest request = CreateRequest("artifacts/player") with
         {
             ProductName = "Build Profile Name",
@@ -551,6 +575,7 @@ public sealed class EditorShellBuildTests
 
         BuildRequest projected = PlayerSettingsEditorAdapter.ApplyToBuildRequest(request, settings);
 
+        // Assert：验证预期结果
         Assert.Equal("Player Projection", projected.ProductName);
         Assert.Equal("2.3.4", projected.Version);
         Assert.Equal("icons/player.ico", projected.IconPath);
@@ -586,6 +611,7 @@ public sealed class EditorShellBuildTests
     [Fact]
     public async Task PlayerBuildServicePassesPlayerSettingsRuntimeArgumentsToBuildPlayer()
     {
+        // Arrange：搭建测试场景与依赖
         using TempDir temp = new();
         string script = WriteBuildPlayerScript(
             temp.Path,
@@ -636,8 +662,10 @@ public sealed class EditorShellBuildTests
             ReleaseChannel = PlayerReleaseChannel.Production,
         };
 
+        // Act：执行被测操作
         BuildResult result = await service.RunAsync(request, new RecordingProgress(), CancellationToken.None);
 
+        // Assert：验证不变式与预期结果
         Assert.True(result.Ok, result.Error);
         string received = File.ReadAllText(Path.Combine(output, "received-args.json"));
         Assert.Contains("\"startScene\": \"scenes/player.scene\"", received, StringComparison.Ordinal);
@@ -657,7 +685,9 @@ public sealed class EditorShellBuildTests
     [Fact]
     public void PlayerPackageAuditRejectsEditorClosureAllowsImGuiAndSupportsDevLayout()
     {
+        // Arrange：准备输入与初始状态
         string shell = FindPowerShell();
+        // Assert：验证预期结果
         Assert.False(string.IsNullOrWhiteSpace(shell), "player-only audit 测试需要 pwsh。");
 
         using TempDir temp = new();
@@ -753,7 +783,7 @@ public sealed class EditorShellBuildTests
     {
         Assert.False(settings.TryNormalize(out string error));
         Assert.Contains(expected, error, StringComparison.Ordinal);
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => settings.Normalize());
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(settings.Normalize);
         Assert.Contains(expected, exception.Message, StringComparison.Ordinal);
     }
 
@@ -814,13 +844,13 @@ public sealed class EditorShellBuildTests
         bool includeDebugFiles)
     {
         string root = Path.Combine(packageRoot, "PixelEngine-Demo-test-win-x64-r2r");
-        Directory.CreateDirectory(Path.Combine(root, "app"));
-        Directory.CreateDirectory(Path.Combine(root, "content", "textures"));
-        foreach ((string Relative, string Contents) file in RequiredPackageFiles(includeImGui))
+        _ = Directory.CreateDirectory(Path.Combine(root, "app"));
+        _ = Directory.CreateDirectory(Path.Combine(root, "content", "textures"));
+        foreach ((string Relative, string Contents) in RequiredPackageFiles(includeImGui))
         {
-            string path = Path.Combine(root, file.Relative.Replace('/', Path.DirectorySeparatorChar));
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, file.Contents);
+            string path = Path.Combine(root, Relative.Replace('/', Path.DirectorySeparatorChar));
+            _ = Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, Contents);
         }
 
         if (includeEditor)
@@ -868,10 +898,9 @@ public sealed class EditorShellBuildTests
 
     private static void RewriteExpandedPackageChecksum(string expandedRoot)
     {
-        string[] files = Directory.GetFiles(expandedRoot, "*", SearchOption.AllDirectories)
+        string[] files = [.. Directory.GetFiles(expandedRoot, "*", SearchOption.AllDirectories)
             .Where(static file => !string.Equals(Path.GetFileName(file), "SHA256SUMS", StringComparison.Ordinal))
-            .Order(StringComparer.Ordinal)
-            .ToArray();
+            .Order(StringComparer.Ordinal)];
         using StreamWriter writer = new(Path.Combine(expandedRoot, "SHA256SUMS"), append: false, Encoding.UTF8);
         foreach (string file in files)
         {
@@ -882,7 +911,7 @@ public sealed class EditorShellBuildTests
 
     private static void CreatePackageRootChecksum(string packageRoot, string expandedRoot)
     {
-        Directory.CreateDirectory(packageRoot);
+        _ = Directory.CreateDirectory(packageRoot);
         string packagePath = Path.Combine(packageRoot, "PixelEngine-Demo-test-win-x64-r2r.zip");
         if (File.Exists(packagePath))
         {
@@ -895,7 +924,7 @@ public sealed class EditorShellBuildTests
             foreach (string file in Directory.GetFiles(expandedRoot, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
             {
                 string relative = Path.GetRelativePath(expandedRoot, file).Replace('\\', '/');
-                archive.CreateEntryFromFile(file, $"{rootName}/{relative}", CompressionLevel.NoCompression);
+                _ = archive.CreateEntryFromFile(file, $"{rootName}/{relative}", CompressionLevel.NoCompression);
             }
         }
 
@@ -1011,7 +1040,7 @@ public sealed class EditorShellBuildTests
     {
         private readonly ConcurrentQueue<BuildProgressEvent> _events = new();
 
-        public IReadOnlyCollection<BuildProgressEvent> Events => _events.ToArray();
+        public IReadOnlyCollection<BuildProgressEvent> Events => [.. _events];
 
         public void Report(BuildProgressEvent value)
         {
@@ -1024,7 +1053,7 @@ public sealed class EditorShellBuildTests
         public TempDir()
         {
             Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "pixelengine-build-tests", Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
+            _ = Directory.CreateDirectory(Path);
         }
 
         public string Path { get; }

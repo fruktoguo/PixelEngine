@@ -46,6 +46,7 @@ public sealed class BudgetMonitor
             throw new ArgumentOutOfRangeException(nameof(frameMs), frameMs, "帧耗时必须是非负有限毫秒数。");
         }
 
+        // 一旦回落到预算内立即清零，要求连续超预算才触发 Hosting 过载升档。
         ConsecutiveOverBudgetFrames = frameMs > _budgetMs
             ? ConsecutiveOverBudgetFrames + 1
             : 0;

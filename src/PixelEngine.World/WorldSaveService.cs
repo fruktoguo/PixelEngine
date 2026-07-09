@@ -36,6 +36,7 @@ public sealed class WorldSaveService(ChunkCodec? chunkCodec = null, ManifestCode
         Half[] temperature = new Half[TemperatureField.BlockArea];
         ArrayBufferWriter<byte> chunkBuffer = new();
 
+        // 逐驻留 chunk 编码 blob 并写入 region store；温度子块与 SoA 一并序列化。
         for (int i = 0; i < chunks.Length; i++)
         {
             Chunk chunk = chunks[i];
@@ -83,6 +84,7 @@ public sealed class WorldSaveService(ChunkCodec? chunkCodec = null, ManifestCode
         MaterialRemap remap = MaterialRemap.Build(manifest.MaterialNames, world.Materials, world.FallbackMaterialId);
         RegionFileStore chunkStore = new(savePath);
 
+        // 先清空 live map，再按 manifest 索引顺序解码 chunk 并做材质 id 重映射。
         ClearWorld(world);
         LoadChunks(world, chunkStore, manifest.ChunkIndex.Span, remap);
 
@@ -120,6 +122,7 @@ public sealed class WorldSaveService(ChunkCodec? chunkCodec = null, ManifestCode
                 chunkBuffer.WrittenSpan,
                 new ChunkSnapshot(coord, chunk.Material, chunk.Flags, chunk.Lifetime, chunk.Damage, temperature),
                 world.CurrentParityBit);
+            // 读档后全 chunk 标 current dirty，保证首帧 CA 重检材质变化区。
             remap.RemapInPlace(chunk.Material, chunk.Damage);
             world.Temperature.ImportBlock(coord, temperature);
             chunk.SetCurrentDirty(DirtyRect.Full);
@@ -203,6 +206,7 @@ public sealed class WorldSaveService(ChunkCodec? chunkCodec = null, ManifestCode
             _ = Directory.CreateDirectory(directory);
         }
 
+        // 先写临时文件再原子 rename，避免崩溃留下半截 manifest。
         string tempPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {

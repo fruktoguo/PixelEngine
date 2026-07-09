@@ -8,6 +8,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Plan 05 节点 1 的 Particle 布局与连续缓冲池测试。
+/// 不变式：粒子池布局紧凑、连续缓冲无别名破坏。
 /// </summary>
 public sealed class ParticleSystemTests
 {
@@ -51,7 +52,9 @@ public sealed class ParticleSystemTests
     [Fact]
     public void TrySpawnWritesActivePrefixAndDropsWhenFull()
     {
+        // Arrange：准备输入与初始状态
         ParticleSystem particles = new(capacity: 2);
+        // Assert：验证预期结果
         Assert.True(particles.TrySpawn(new ParticleSpawn(1, 2, 3, 4, 5, 6, 7)));
         Assert.True(particles.TrySpawn(new ParticleSpawn(8, 9, 10, 11, 12, 13, 255)));
 
@@ -71,6 +74,7 @@ public sealed class ParticleSystemTests
     [Fact]
     public void ApplySettingsLimitsActiveCountAndClampsLifetime()
     {
+        // Arrange：准备输入与初始状态
         ParticleSystem particles = new(capacity: 4);
         _ = particles.TrySpawn(new ParticleSpawn(1, 0, 0, 0, 101, 1, 10));
         _ = particles.TrySpawn(new ParticleSpawn(2, 0, 0, 0, 102, 2, 10));
@@ -79,6 +83,7 @@ public sealed class ParticleSystemTests
         particles.ApplySettings(new ParticleSystemSettings(2, 0.1f, 5, 0.05f, 1f, 16));
         bool spawned = particles.TrySpawn(new ParticleSpawn(4, 0, 0, 0, 104, 4, 10));
 
+        // Assert：验证预期结果
         Assert.False(spawned);
         Assert.Equal(2, particles.ActiveCount);
         Assert.Equal(2, particles.Settings.MaxActiveCount);
@@ -141,6 +146,7 @@ public sealed class ParticleSystemTests
     [Fact]
     public void RestoreFromRebuildsActivePrefixAndClearsTickState()
     {
+        // Arrange：准备输入与初始状态
         ParticleSystem particles = new(capacity: 3);
         _ = particles.TrySpawn(new ParticleSpawn(1, 0, 0, 0, 101, 1, 10));
         _ = particles.TrySpawn(new ParticleSpawn(2, 0, 0, 0, 102, 2, 10));
@@ -151,6 +157,7 @@ public sealed class ParticleSystemTests
 
         particles.RestoreFrom(snapshot);
 
+        // Assert：验证预期结果
         Assert.Equal(1, particles.ActiveCount);
         Assert.Equal((ushort)201, particles.ActiveReadOnly[0].Material);
         Assert.Equal(0, particles.Stats.SpawnedThisTick);
@@ -181,11 +188,13 @@ public sealed class ParticleSystemTests
     [Fact]
     public void RequestDebrisSpawnsRequestedParticlesWithFiniteLifetime()
     {
+        // Arrange：准备输入与初始状态
         ParticleSystem particles = new(capacity: 8);
         DebrisEjectionRequest request = new(12, 18, 7, Count: 3, BaseSpeed: 2f, SpeedJitter: 1f, LifeTicks: 25);
 
         particles.RequestDebris(in request);
 
+        // Assert：验证预期结果
         Assert.Equal(3, particles.ActiveCount);
         Assert.Equal(3, particles.Stats.SpawnedThisTick);
         for (int i = 0; i < particles.ActiveCount; i++)
@@ -206,6 +215,7 @@ public sealed class ParticleSystemTests
     [Fact]
     public void RequestDebrisHonorsEjectionLimitAndCapacity()
     {
+        // Arrange：准备输入与初始状态
         ParticleSystem limited = new(
             capacity: 4,
             settings: new ParticleSystemSettings(4, 0.2f, 40, 0.05f, 1f, MaxEjectionPerTick: 2));
@@ -213,6 +223,7 @@ public sealed class ParticleSystemTests
 
         limited.RequestDebris(in request);
 
+        // Assert：验证预期结果
         Assert.Equal(2, limited.ActiveCount);
         Assert.Equal(2, limited.Stats.SpawnedThisTick);
         Assert.Equal(2, limited.Stats.DroppedThisTick);
@@ -235,6 +246,7 @@ public sealed class ParticleSystemTests
     [Fact]
     public void EmitSpawnsParticlesInsideVelocityConeWithFiniteLifetime()
     {
+        // Arrange：准备输入与初始状态
         ParticleSystem particles = new(capacity: 8);
         ParticleEmissionRequest emit = new(
             X: 10.25f,
@@ -249,6 +261,7 @@ public sealed class ParticleSystemTests
 
         int spawned = particles.Emit(in emit);
 
+        // Assert：验证预期结果
         Assert.Equal(6, spawned);
         Assert.Equal(6, particles.ActiveCount);
         Assert.Equal(6, particles.Stats.SpawnedThisTick);
@@ -272,6 +285,7 @@ public sealed class ParticleSystemTests
     [Fact]
     public void EmitHonorsEjectionLimitAndCapacity()
     {
+        // Arrange：准备输入与初始状态
         ParticleSystem limited = new(
             capacity: 4,
             settings: new ParticleSystemSettings(4, 0.2f, 40, 0.05f, 1f, MaxEjectionPerTick: 2));
@@ -279,6 +293,7 @@ public sealed class ParticleSystemTests
 
         int spawned = limited.Emit(in emit);
 
+        // Assert：验证预期结果
         Assert.Equal(2, spawned);
         Assert.Equal(2, limited.ActiveCount);
         Assert.Equal(2, limited.Stats.SpawnedThisTick);

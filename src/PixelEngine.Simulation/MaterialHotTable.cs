@@ -448,6 +448,7 @@ public sealed class MaterialHotTable
         bool hasTexturedMaterials = false;
         bool hasColorNoise = false;
 
+        // 逐材质拉平为并列 SoA 列，渲染/CA 热路径只读这些数组。
         for (int i = 0; i < count; i++)
         {
             MaterialDef def = definitions[i];
@@ -471,6 +472,7 @@ public sealed class MaterialHotTable
             heatCapacity[i] = def.HeatCapacity;
             defaultLifetime[i] = def.DefaultLifetime;
             durability[i] = def.Durability;
+            // Hardness 缺省时回退 Durability，与结构破坏吸收公式共用一列。
             hardness[i] = def.Hardness != 0 ? def.Hardness : def.Durability;
             maxIntegrity[i] = def.Integrity;
             rubbleTarget[i] = def.DestroyedTarget;
@@ -544,6 +546,7 @@ public sealed class MaterialHotTable
         ValidateColumnLengths(type.Length, density, dispersion, reactionStart, reactionCount, defaultLifetime);
 
         int count = type.Length;
+        // 测试夹具缺省相变阈值为 NaN，表示该材质不参与 melt/freeze/boil。
         float[] noPhase = new float[count];
         Array.Fill(noPhase, float.NaN);
         float[] heatCapacity = new float[count];

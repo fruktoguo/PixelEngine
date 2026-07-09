@@ -171,6 +171,7 @@ public ref struct NeighborWindow
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly int SlotOf(int wx, int wy)
     {
+        // 3x3 slot 布局：行优先，中心 chunk 恒为 slot 4。
         int dcx = CellAddressing.ChunkOf(wx) - BaseChunkX;
         int dcy = CellAddressing.ChunkOf(wy) - BaseChunkY;
         return ((dcy + 1) * 3) + dcx + 1;
@@ -304,6 +305,7 @@ public ref struct NeighborWindow
         int local1 = CellAddressing.LocalIndex(wx1, wy1);
         int local2 = CellAddressing.LocalIndex(wx2, wy2);
 
+        // 交换 Material/Flags/Lifetime 三元组；Damage 清零避免破坏度随 swap 漂移。
         ref ushort material1 = ref Unsafe.Add(ref SelectMaterialBase(slot1), local1);
         ref ushort material2 = ref Unsafe.Add(ref SelectMaterialBase(slot2), local2);
         (material1, material2) = (material2, material1);
@@ -391,6 +393,7 @@ public ref struct NeighborWindow
 
         ref ushort targetMaterial = ref Unsafe.Add(ref SelectMaterialBase(targetSlot), targetLocal);
         ref byte targetFlags = ref Unsafe.Add(ref SelectFlagsBase(targetSlot), targetLocal);
+        // 目标非空时须未更新且密度更低才可置换；否则 movement 失败。
         if (targetMaterial != 0 &&
             (CellFlags.MatchesFrame(targetFlags, parityBit) ||
             materials.DensityOf(targetMaterial) >= sourceDensity))
@@ -409,6 +412,7 @@ public ref struct NeighborWindow
 
         ref byte sourceFlags = ref Unsafe.Add(ref SelectFlagsBase(sourceSlot), sourceLocal);
         (sourceFlags, targetFlags) = (targetFlags, sourceFlags);
+        // 交换后双方立即标记本帧 parity，满足 checkerboard 单写约束。
         sourceFlags = CellFlags.SetParity(sourceFlags, parityBit);
         targetFlags = CellFlags.SetParity(targetFlags, parityBit);
 

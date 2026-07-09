@@ -82,6 +82,7 @@ public sealed class WorldStreamer
     public int ApplyPrepared(long frame)
     {
         int applied = 0;
+        // 相位 2：把后台完成的 load/unload 事件合并回 live map，sim 侧此后才可见新驻留区。
         while (_completed.TryDequeue(out CompletedStreamingOperation operation))
         {
             if (operation.Kind == CompletedStreamingKind.Loaded)
@@ -105,6 +106,7 @@ public sealed class WorldStreamer
     public void SubmitPlan(ResidencyPlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
+        // 驻留计划先改元数据状态，再摘 live chunk 入队后台 I/O，加载请求仅登记不阻塞 sim。
         ApplyStateChanges(plan.StateChanges);
         SubmitUnloads(plan.UnloadCoords);
         SubmitLoads(plan.LoadCoords);
@@ -145,6 +147,7 @@ public sealed class WorldStreamer
         }
 
         EnsurePreparedCapacity(requestCount);
+        // 编解码可并行准备，磁盘写与完成队列入队在调用线程顺序提交，避免 region 文件竞写。
         if (jobs is not null && requestCount > 1)
         {
             _preparationBatch.Requests = _requestBatch;
@@ -229,6 +232,7 @@ public sealed class WorldStreamer
                 continue;
             }
 
+            // 卸载先从 live map 摘下 chunk，再携带温度子块入队；sim 不再读写该坐标。
             Half[] temperature = ArrayPool<Half>.Shared.Rent(TemperatureField.BlockArea);
             bool queued = false;
             try
@@ -329,6 +333,7 @@ public sealed class WorldStreamer
         buffer.Clear();
         try
         {
+            // 磁盘缺失时保留 pool 租出的空 chunk，由生成器或后续输入填充。
             if (_chunkStore.TryRead(coord, buffer))
             {
                 _chunkCodec.Decode(

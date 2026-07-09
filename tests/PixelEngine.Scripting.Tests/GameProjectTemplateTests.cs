@@ -5,6 +5,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// 游戏项目模板测试。
+/// 不变式：模板生成工程可编译、默认场景与脚本入口存在。
 /// </summary>
 public sealed class GameProjectTemplateTests
 {

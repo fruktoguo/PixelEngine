@@ -155,6 +155,7 @@ public sealed class GameUiDemoController : Behaviour
     protected override void OnUpdate(float dt)
     {
         _ = dt;
+        // 每帧聚合玩法数据源并推送到 HUD 绑定路径
         PublishHudState();
     }
 
@@ -175,6 +176,7 @@ public sealed class GameUiDemoController : Behaviour
         _ui = ui;
         _ui.UiEventRaised += HandleUiEvent;
         _subscribed = true;
+        // 启动时显示主菜单与常驻 HUD 屏幕，并写入默认值
         MainScreen = _ui.ShowScreen(MainMenuScreen);
         HudScreenHandle = _ui.ShowScreen(HudScreen);
         PublishHudDefaults();
@@ -191,9 +193,13 @@ public sealed class GameUiDemoController : Behaviour
         }
     }
 
+    /// <summary>
+    /// 处理 UI 服务上报的动作事件，分派到菜单、暂停、设置与运行时控制。
+    /// </summary>
     internal void HandleUiEvent(UiEvent uiEvent)
     {
         LastAction = uiEvent.Action;
+        // UI 动作分派：主菜单 / 暂停 / 设置模态 / 运行时控制
         if (uiEvent.Action == StartGameAction)
         {
             HideMainMenu();
@@ -301,6 +307,7 @@ public sealed class GameUiDemoController : Behaviour
             return;
         }
 
+        // HUD 刷新流水线：解析引用 → 健康/武器/工具/任务/诊断
         ResolveHudSources();
         PublishHealth();
         PublishWeapon();
@@ -562,6 +569,7 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudFxPath, Ratio(TransientParticleBurst.ActiveCount(Context.Scene), 16.0));
     }
 
+    // 任务胜负时暂停模拟并弹出结算模态，持续刷新结果绑定
     private void PublishResultState(MissionDirector mission)
     {
         if (mission.State == MissionState.Playing)

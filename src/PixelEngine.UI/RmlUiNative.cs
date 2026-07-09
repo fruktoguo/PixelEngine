@@ -41,14 +41,6 @@ internal static unsafe partial class RmlUiNative
     internal static partial IntPtr GetRmlUiVersionUtf8();
 
     /// <summary>
-    /// 用宿主提供的 OpenGL resolver 初始化 native GL 函数表。
-    /// </summary>
-    /// <param name="resolver">函数入口 resolver。</param>
-    /// <param name="user">resolver 用户数据。</param>
-    /// <param name="major">加载到的 GL 主版本。</param>
-    /// <param name="minor">加载到的 GL 次版本。</param>
-    /// <returns>成功返回 1。</returns>
-    /// <summary>
     /// 设置 native renderer shader profile：0=desktop GL3（#version 330），1=GLES3/ANGLE（#version 300 es）。
     /// 必须在 <see cref="CreateRenderer" /> 之前调用。
     /// </summary>

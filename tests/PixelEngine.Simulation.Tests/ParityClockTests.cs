@@ -5,6 +5,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// CA 单缓冲 parity 时钟位测试。
+/// 不变式：parity 位每帧翻转、读写窗口与单缓冲模型一致。
 /// </summary>
 public sealed class ParityClockTests
 {
@@ -18,6 +19,7 @@ public sealed class ParityClockTests
     [Fact]
     public void ParityBitTogglesAcrossTicksWithoutClearingCellFlags()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Chunk south = source.GetRequired(new ChunkCoord(0, 1));
         center.SetCurrentDirty(DirtyRect.Full);
@@ -25,6 +27,7 @@ public sealed class ParityClockTests
         SimulationKernel kernel = new(source, CreateMaterials());
 
         kernel.StepCa();
+        // Assert：验证预期结果
         Assert.Equal(CellFlags.Parity, kernel.CurrentParity);
         Assert.Equal(Sand, Get(center, 10, 10 + EngineConstants.MoveCap));
         Assert.True(CellFlags.MatchesFrame(GetFlags(center, 10, 10 + EngineConstants.MoveCap), kernel.CurrentParity));
@@ -63,6 +66,7 @@ public sealed class ParityClockTests
     [Fact]
     public void MovedLiquidCellIsProcessedAtMostOncePerFrame()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         center.SetCurrentDirty(DirtyRect.Full);
         Set(center, 10, 10, Water);
@@ -73,6 +77,7 @@ public sealed class ParityClockTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(0, Get(center, 10, 10));
         Assert.Equal(Water, Get(center, 13, 10));
         Assert.Equal(0, Get(center, 16, 10));

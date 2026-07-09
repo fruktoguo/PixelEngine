@@ -3,8 +3,14 @@ using PixelEngine.Core.Diagnostics;
 
 namespace PixelEngine.UI.Tests;
 
+/// <summary>
+/// 字体引擎测试：字形度量、光栅化与缓存。
+/// </summary>
 public sealed class FontEngineTests
 {
+    /// <summary>
+    /// 验证Font Engine Uses Content Fonts Before System Candidates。
+    /// </summary>
     [Fact]
     public void FontEngineUsesContentFontsBeforeSystemCandidates()
     {
@@ -22,6 +28,9 @@ public sealed class FontEngineTests
         Assert.Equal(30f, selection.PixelSize);
     }
 
+    /// <summary>
+    /// 验证Font Engine解析Demo Bundled Cjk Subset Font。
+    /// </summary>
     [Fact]
     public void FontEngineResolvesDemoBundledCjkSubsetFont()
     {
@@ -43,6 +52,9 @@ public sealed class FontEngineTests
         Assert.Equal(UiFontSource.ContentFonts, selection.Source);
     }
 
+    /// <summary>
+    /// 验证Font Engine Shares Glyph Coverage With Gui Font Manager。
+    /// </summary>
     [Fact]
     public void FontEngineSharesGlyphCoverageWithGuiFontManager()
     {
@@ -57,6 +69,9 @@ public sealed class FontEngineTests
         Assert.True(result.HasMissingGlyphs);
     }
 
+    /// <summary>
+    /// 验证Font Engine Publishes Missing Glyph Diagnostics。
+    /// </summary>
     [Fact]
     public void FontEnginePublishesMissingGlyphDiagnostics()
     {
@@ -72,6 +87,9 @@ public sealed class FontEngineTests
         Assert.Equal(1, counters.UiFontMissingGlyphs);
     }
 
+    /// <summary>
+    /// 验证Preferred Font Path Is Normalized Before Resolve。
+    /// </summary>
     [Fact]
     public void PreferredFontPathIsNormalizedBeforeResolve()
     {

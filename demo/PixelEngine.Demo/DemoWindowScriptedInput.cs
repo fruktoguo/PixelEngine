@@ -65,6 +65,7 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
             return;
         }
 
+        // 可玩短跑脚本：分段注入移动、跳跃、切枪与射击瞄准
         int keyCount = 0;
         int buttonCount = 0;
         Point2F target = BrushTargetWorld;
@@ -134,6 +135,7 @@ internal sealed class DemoWindowScriptedInput(ScriptInputApi input, ScriptCamera
 
     private void InjectRouteProbe(int frame)
     {
+        // 全路线探针：沿关卡关键坐标扫射以验证通道开辟与终点推进
         int keyCount = 0;
         int buttonCount = 0;
         Point2F target = RouteColumnTargetWorld;
@@ -259,14 +261,14 @@ internal sealed class DemoWindowScriptedProbe(
     PhysicsSystem physics,
     EngineProbeApi probe,
     ScriptLightingSynchronizer lighting,
-    PixelEngine.Scripting.Scene scene,
+    Scripting.Scene scene,
     ScriptCameraApi camera,
     ScriptCameraSynchronizer cameraSync) : IEnginePhaseDriver
 {
     private readonly PhysicsSystem _physics = physics ?? throw new ArgumentNullException(nameof(physics));
     private readonly EngineProbeApi _probe = probe ?? throw new ArgumentNullException(nameof(probe));
     private readonly ScriptLightingSynchronizer _lighting = lighting ?? throw new ArgumentNullException(nameof(lighting));
-    private readonly PixelEngine.Scripting.Scene _scene = scene ?? throw new ArgumentNullException(nameof(scene));
+    private readonly Scripting.Scene _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly ScriptCameraApi _camera = camera ?? throw new ArgumentNullException(nameof(camera));
     private readonly ScriptCameraSynchronizer _cameraSync = cameraSync ?? throw new ArgumentNullException(nameof(cameraSync));
     private PlayerController? _player;

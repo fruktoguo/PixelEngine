@@ -161,6 +161,7 @@ public abstract class Behaviour : IComponent
         }
     }
 
+    // 回调异常隔离：禁用脚本并保留 LastException，供 Inspector 与诊断面板展示。
     internal void MarkFaulted(Exception exception)
     {
         LastException = exception;

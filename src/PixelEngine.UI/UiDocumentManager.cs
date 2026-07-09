@@ -151,6 +151,7 @@ public sealed class UiDocumentManager
             throw new InvalidOperationException("UI 屏栈容量已满。");
         }
 
+        // 屏栈只追加不覆盖：同一 screenId 多次 Show 会生成多个 handle，由 Hide 精确移除。
         UiScreenHandle handle = new(_nextScreenHandle++);
         if (_nextScreenHandle <= 0)
         {

@@ -3,6 +3,9 @@ using System.IO.Compression;
 
 namespace PixelEngine.Demo;
 
+/// <summary>
+/// 解码后的材质地图 RGBA 像素缓冲，行优先存储。
+/// </summary>
 internal readonly struct MaterialMapImage
 {
     public MaterialMapImage(int width, int height, uint[] rgba)
@@ -31,6 +34,9 @@ internal readonly struct MaterialMapImage
     }
 }
 
+/// <summary>
+/// 轻量 PNG 解码器，仅支持 Demo 材质地图所需的 8-bit 格式与标准 filter。
+/// </summary>
 internal static class MaterialMapPngLoader
 {
     private static readonly byte[] PngSignature = [137, 80, 78, 71, 13, 10, 26, 10];
@@ -51,6 +57,7 @@ internal static class MaterialMapPngLoader
         byte[]? palette = null;
         byte[]? transparency = null;
         using MemoryStream idat = new();
+        // 逐 chunk 解析 IHDR / PLTE / tRNS / IDAT
         int offset = PngSignature.Length;
         while (offset < bytes.Length)
         {
@@ -116,6 +123,7 @@ internal static class MaterialMapPngLoader
             throw new InvalidDataException($"材质地图仅支持 8-bit PNG，当前 bitDepth={bitDepth}。");
         }
 
+        // zlib 解压 IDAT 后按 scanline filter 还原 RGBA
         byte[] decompressed = Decompress(idat.ToArray());
         return DecodeScanlines(width, height, colorType, decompressed, palette, transparency);
     }

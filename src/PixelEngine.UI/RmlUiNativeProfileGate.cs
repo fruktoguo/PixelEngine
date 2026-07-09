@@ -72,16 +72,14 @@ public static class RmlUiNativeProfileGate
     public static RmlUiNativeProfileDecision Evaluate(RenderBackend backend, GlCapabilities capabilities)
     {
         ArgumentNullException.ThrowIfNull(capabilities);
-        if (RequiresGlesAngleProfile(backend, capabilities))
-        {
-            return CanUseGlesAngleProfile(capabilities)
+        // UI 后端切换门控：GLES/ANGLE 与 desktop GL3 使用不同 shader profile，不满足则回退 ManagedFallback。
+        return RequiresGlesAngleProfile(backend, capabilities)
+            ? CanUseGlesAngleProfile(capabilities)
                 ? CreateGlesAngleAllowedDecision()
-                : CreateGlesAngleBlockedDecision(backend, capabilities);
-        }
-
-        return IsAtLeast(capabilities, 3, 3)
-            ? CreateDesktopAllowedDecision()
-            : CreateDesktopBlockedDecision(backend, capabilities);
+                : CreateGlesAngleBlockedDecision(backend, capabilities)
+            : IsAtLeast(capabilities, 3, 3)
+                ? CreateDesktopAllowedDecision()
+                : CreateDesktopBlockedDecision(backend, capabilities);
     }
 
     /// <summary>

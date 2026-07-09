@@ -7,6 +7,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// 刚体 inverse-sampling 与跨 chunk 同步验收测试。
+/// 不变式：inverse-sampling 跨 chunk 同步无空洞与重影。
 /// </summary>
 public sealed class RigidBodyRasterizerAcceptanceTests
 {
@@ -16,6 +17,7 @@ public sealed class RigidBodyRasterizerAcceptanceTests
     [Fact]
     public void InverseSamplingMultipleRotationsIsWatertightAndDoesNotErodeMask()
     {
+        // Arrange：准备输入与初始状态
         float[] angles = [0f, 0.13f, 0.37f, 0.79f, 1.21f, 1.57f, 2.44f];
         BodyLocalMask mask = CreateFilledMask(width: 9, height: 7, material: 2, origin: new Vector2(4.5f, 3.5f));
 
@@ -29,6 +31,7 @@ public sealed class RigidBodyRasterizerAcceptanceTests
 
             int stamped = RigidBodyRasterizer.StampInverseSampling(body, in transform, grid, registry);
 
+            // Assert：验证预期结果
             Assert.True(stamped >= mask.SolidPixelCount, $"角度 {angles[i]} 出现亚像素侵蚀：{stamped} < {mask.SolidPixelCount}。");
             Assert.Equal(stamped, body.PreviousStamps.Count);
             AssertNoInternalHoles(body.PreviousStamps);
@@ -48,6 +51,7 @@ public sealed class RigidBodyRasterizerAcceptanceTests
     [Fact]
     public void StampAndEraseAcrossChunkBoundaryKeepsRegistryConsistent()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = TestChunkSource.CreateSquare(radius: 1);
         CellGrid grid = new(source, MaterialPropsTable.Empty);
         BodyLocalMask mask = CreateFilledMask(width: 8, height: 8, material: 3, origin: new Vector2(4f, 4f));
@@ -57,6 +61,7 @@ public sealed class RigidBodyRasterizerAcceptanceTests
 
         int stamped = RigidBodyRasterizer.StampInverseSampling(body, in transform, grid, registry);
 
+        // Assert：验证预期结果
         Assert.True(stamped >= mask.SolidPixelCount);
         Assert.Contains(body.PreviousStamps, static stamp => stamp.WorldX < 64);
         Assert.Contains(body.PreviousStamps, static stamp => stamp.WorldX >= 64);
@@ -90,6 +95,7 @@ public sealed class RigidBodyRasterizerAcceptanceTests
     [Fact]
     public void StampNearMissingBoundaryNeighborSkipsCellInsteadOfThrowing()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = new(new Chunk(new ChunkCoord(0, 0)));
         CellGrid grid = new(source, MaterialPropsTable.Empty);
         BodyLocalMask mask = CreateFilledMask(width: 1, height: 1, material: 4, origin: Vector2.Zero);
@@ -99,6 +105,7 @@ public sealed class RigidBodyRasterizerAcceptanceTests
 
         int stamped = RigidBodyRasterizer.StampInverseSampling(body, in transform, grid, registry);
 
+        // Assert：验证预期结果
         Assert.Equal(0, stamped);
         Assert.Empty(body.PreviousStamps);
         Assert.False(registry.TryGet(63, 20, out _));

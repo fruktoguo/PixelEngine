@@ -80,8 +80,8 @@ public sealed class ScriptInputApi : IInputApi
     {
         return axis switch
         {
-            PixelEngine.Scripting.Axis.Horizontal => Positive(Key.D, Key.Right) - Positive(Key.A, Key.Left),
-            PixelEngine.Scripting.Axis.Vertical => Positive(Key.S, Key.Down) - Positive(Key.W, Key.Up),
+            Scripting.Axis.Horizontal => Positive(Key.D, Key.Right) - Positive(Key.A, Key.Left),
+            Scripting.Axis.Vertical => Positive(Key.S, Key.Down) - Positive(Key.W, Key.Up),
             _ => throw new ArgumentOutOfRangeException(nameof(axis), axis, "未知输入轴。"),
         };
     }

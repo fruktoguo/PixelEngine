@@ -1,10 +1,12 @@
 using Hexa.NET.ImGui;
-using PixelEngine.Editor;
 using PixelEngine.Hosting;
 using PixelEngine.Scripting;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// Inspector 面板：Transform 与组件字段编辑。
+/// </summary>
 internal sealed class GameObjectInspectorPanel(
     EditorSceneModel scene,
     EditorUndoStack undo,
@@ -17,11 +19,10 @@ internal sealed class GameObjectInspectorPanel(
     private readonly ScriptAssemblyRegistry _scripts = scripts ?? throw new ArgumentNullException(nameof(scripts));
     private readonly IEditorConsoleSink? _console = console;
     private string _componentSearch = string.Empty;
-    private string _status = ReadyStatus;
 
     public string Title => EditorDockSpace.InspectorWindowTitle;
 
-    internal string Status => _status;
+    internal string Status { get; private set; } = ReadyStatus;
 
     public bool Visible { get; set; } = true;
 
@@ -36,6 +37,7 @@ internal sealed class GameObjectInspectorPanel(
         }
 
         Visible = visible;
+        // 无选中时早退；否则绘制头部、Transform 与组件列表
         int? stableId = context.Selection.GameObjectStableId ?? _scene.SelectedStableId;
         if (!stableId.HasValue || !_scene.TryGet(stableId.Value, out EditorGameObject? gameObject))
         {
@@ -50,7 +52,7 @@ internal sealed class GameObjectInspectorPanel(
         ImGui.SeparatorText("Components");
         DrawComponents(gameObject);
         ImGui.SeparatorText("Inspector 状态");
-        ImGui.TextUnformatted(_status);
+        ImGui.TextUnformatted(Status);
         ImGui.End();
     }
 
@@ -131,6 +133,7 @@ internal sealed class GameObjectInspectorPanel(
 
     private void DrawComponents(EditorGameObject gameObject)
     {
+        // 遍历已有组件并提供 Add Component 搜索下拉
         for (int i = 0; i < gameObject.Components.Count; i++)
         {
             DrawComponent(gameObject, i);
@@ -205,6 +208,7 @@ internal sealed class GameObjectInspectorPanel(
             return;
         }
 
+        // 按 ScriptFieldKind 分派到布尔/数值/字符串/枚举/资产引用编辑器
         switch (field.Kind)
         {
             case ScriptFieldKind.Boolean:
@@ -341,33 +345,24 @@ internal sealed class GameObjectInspectorPanel(
 
     private void RecordAssetDropResult(EditorAssetDropResult result)
     {
-        _status = string.IsNullOrWhiteSpace(result.Diagnostic) ? ReadyStatus : result.Diagnostic;
+        Status = string.IsNullOrWhiteSpace(result.Diagnostic) ? ReadyStatus : result.Diagnostic;
         _console?.Add(new EditorConsoleEntry(
             DateTimeOffset.UtcNow,
             EditorConsoleCategory.Asset,
             result.Succeeded ? EditorConsoleSeverity.Info : EditorConsoleSeverity.Warning,
             "inspector-asset-drop",
-            _status));
+            Status));
     }
 
     internal static string FormatAssetReferenceDisplay(ScriptFieldDescriptor field, string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return "none";
-        }
-
-        if (!ScriptAssetReference.TryDecode(value, out ScriptAssetReference reference))
-        {
-            return $"invalid reference: {value}";
-        }
-
-        if (field.AssetKind is ScriptAssetKind expected && reference.AssetType != expected)
-        {
-            return $"type mismatch: {reference.AssetType} {reference.LogicalPath}";
-        }
-
-        return $"{reference.LogicalPath} [{reference.AssetId}]";
+        return string.IsNullOrWhiteSpace(value)
+            ? "none"
+            : !ScriptAssetReference.TryDecode(value, out ScriptAssetReference reference)
+            ? $"invalid reference: {value}"
+            : field.AssetKind is ScriptAssetKind expected && reference.AssetType != expected
+            ? $"type mismatch: {reference.AssetType} {reference.LogicalPath}"
+            : $"{reference.LogicalPath} [{reference.AssetId}]";
     }
 
     private static string ReadFieldValue(EditorComponentModel component, ScriptFieldDescriptor field)

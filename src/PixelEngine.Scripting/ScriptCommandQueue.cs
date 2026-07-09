@@ -3,13 +3,22 @@ using PixelEngine.Core;
 
 namespace PixelEngine.Scripting;
 
+/// <summary>
+/// 脚本命令在相位 1 入队后，按目标子系统分桶延迟到相位 2 消费。
+/// </summary>
 internal enum ScriptCommandTarget
 {
+    /// <summary>格子写入与材质修改。</summary>
     CellWrite,
+    /// <summary>粒子生成与发射。</summary>
     Particle,
+    /// <summary>刚体与角色物理操作。</summary>
     Physics,
 }
 
+/// <summary>
+/// 脚本侧可提交的模拟/物理命令种类。
+/// </summary>
 internal enum ScriptCommandKind
 {
     SetCell,
@@ -28,6 +37,9 @@ internal enum ScriptCommandKind
     MoveCharacter,
 }
 
+/// <summary>
+/// 单条脚本命令的紧凑载荷；各工厂方法将语义映射到统一字段布局。
+/// </summary>
 internal readonly record struct ScriptCommand(
     ScriptCommandKind Kind,
     int X,
@@ -127,12 +139,15 @@ internal readonly record struct ScriptCommand(
     }
 }
 
+/// <summary>
+/// 线程本地分桶的脚本命令队列；相位 1 入队，相位 2 按目标一次性排空。
+/// </summary>
 internal sealed class ScriptCommandQueue : IDisposable
 {
     private const int TargetCount = 3;
     private readonly ThreadLocal<Bucket>[] _buckets;
     private readonly List<Bucket>[] _registeredBuckets;
-    private readonly System.Threading.Lock _registryGate = new();
+    private readonly Lock _registryGate = new();
 
     public ScriptCommandQueue()
     {
@@ -142,16 +157,23 @@ internal sealed class ScriptCommandQueue : IDisposable
         {
             int target = i;
             _registeredBuckets[i] = new List<Bucket>(capacity: 1);
+            // trackAllValues=false：仅跟踪当前线程桶，降低 ThreadLocal 开销。
             _buckets[i] = new ThreadLocal<Bucket>(() => CreateBucket(target), trackAllValues: false);
         }
     }
 
+    /// <summary>
+    /// 将命令入队到指定目标子系统的当前线程桶。
+    /// </summary>
     public void Enqueue(ScriptCommandTarget target, in ScriptCommand command)
     {
         ValidateTarget(target);
         _buckets[(int)target].Value!.Enqueue(in command);
     }
 
+    /// <summary>
+    /// 统计指定目标下所有已注册桶中的命令总数。
+    /// </summary>
     public int Count(ScriptCommandTarget target)
     {
         ValidateTarget(target);
@@ -168,6 +190,9 @@ internal sealed class ScriptCommandQueue : IDisposable
         return count;
     }
 
+    /// <summary>
+    /// 排空指定目标的全部命令到调用方缓冲；缓冲不足时抛异常。
+    /// </summary>
     public int DrainTo(ScriptCommandTarget target, Span<ScriptCommand> destination)
     {
         ValidateTarget(target);
@@ -205,6 +230,9 @@ internal sealed class ScriptCommandQueue : IDisposable
         }
     }
 
+    /// <summary>
+    /// 线程首次访问某目标时创建桶并注册到全局列表，供跨线程 Drain 汇总。
+    /// </summary>
     private Bucket CreateBucket(int target)
     {
         Bucket bucket = new();
@@ -224,6 +252,9 @@ internal sealed class ScriptCommandQueue : IDisposable
         }
     }
 
+    /// <summary>
+    /// 单线程命令桶；使用 ArrayPool 动态扩容并在 Drain 后清零槽位。
+    /// </summary>
     private sealed class Bucket : IDisposable
     {
         private ScriptCommand[] _commands = ArrayPool<ScriptCommand>.Shared.Rent(4);

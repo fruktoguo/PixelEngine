@@ -12,6 +12,7 @@ namespace PixelEngine.Demo.Tests;
 
 /// <summary>
 /// Demo 玩家控制器端到端脚本集成测试。
+/// 不变式：输入经 ScriptInputApi、HUD/暂停菜单只经 GUI 门面、武器与关卡状态与 Simulation 一致。
 /// </summary>
 public sealed class PlayerControllerIntegrationTests
 {
@@ -24,6 +25,7 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void DemoHudAndPauseMenuDrawExpectedGuiThroughScriptContext()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out _, out _, out ScriptScene scene, DemoMaterials());
         Entity entity = scene.CreateEntity();
         _ = entity.AddComponent<PlayerController>();
@@ -34,12 +36,14 @@ public sealed class PlayerControllerIntegrationTests
         _ = entity.AddComponent<DemoHud>();
         _ = entity.AddComponent<PauseMenu>();
 
+        // Act：执行被测操作
         engine.RunHeadlessTicks(1);
 
         IScriptRuntime runtime = engine.Context.GetService<IScriptRuntime>();
         RecordingGuiContext hudGui = new();
         runtime.DrawGui(hudGui);
 
+        // Assert：验证不变式与预期结果
         Assert.Contains("begin:demo-hud:Demo HUD:NoTitleBar, NoResize, NoMove, NoSavedSettings", hudGui.Drawn);
         Assert.Contains("swatch:selected-material:FF5FC8D8:14", hudGui.Drawn);
         Assert.Contains(hudGui.Drawn, line => line.StartsWith("progress:", StringComparison.Ordinal));
@@ -86,6 +90,7 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayableHudDrawsWeaponStateAndMaterialLegend()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreateManualScriptEngine(
             out ScriptInputApi input,
             out _,
@@ -105,12 +110,14 @@ public sealed class PlayerControllerIntegrationTests
         mission.RequiredCrystals = 3;
         _ = entity.AddComponent<PlayableHud>();
 
+        // Act：执行被测操作
         engine.RunHeadlessTicks(2);
 
         IScriptRuntime runtime = engine.Context.GetService<IScriptRuntime>();
         RecordingGuiContext gui = new();
         runtime.DrawGui(gui);
 
+        // Assert：验证不变式与预期结果
         Assert.Contains("begin:playable-hud:Playable HUD:NoTitleBar, NoResize, NoMove, NoSavedSettings, NoScrollbar", gui.Drawn);
         Assert.Contains("swatch:weapon-current:FFE8D06A:14", gui.Drawn);
         Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:Pistol  180/180:", StringComparison.Ordinal));
@@ -142,8 +149,10 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PauseMenuButtonsDriveRestartAndDiagnosticsFacades()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out _, out _, out ScriptScene scene, DemoMaterials());
         _ = scene.CreateEntity().AddComponent<PauseMenu>();
+        // Act：执行被测操作
         engine.RunHeadlessTicks(1);
 
         input.Update([Key.Escape], [], mouseX: 0, mouseY: 0, wheelY: 0);
@@ -159,6 +168,7 @@ public sealed class PlayerControllerIntegrationTests
         RecordingGuiContext overlayGui = new(toggledCheckboxes: ["dirty rect"]);
         runtime.DrawGui(overlayGui);
 
+        // Assert：验证不变式与预期结果
         Assert.True(diagnostics.IsOverlayEnabled(DebugOverlayKind.DirtyRects));
 
         RecordingGuiContext restartGui = new(clickedButtons: ["重开"]);
@@ -175,6 +185,7 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void GoalTriggerMarksReachedAndQueuesCelebrationFeedback()
     {
+        // Arrange：搭建测试场景与依赖
         RecordingAudioApi audio = new();
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(out _, out _, out _, out ScriptScene scene, materials, audio);
@@ -191,8 +202,10 @@ public sealed class PlayerControllerIntegrationTests
         goal.CelebrationParticleSpeed = 30f;
         goal.GoalAudioCue = "goal_reached.wav";
 
+        // Act：执行被测操作
         engine.RunHeadlessTicks(1);
 
+        // Assert：验证不变式与预期结果
         Assert.True(goal.Reached, $"玩家应进入终点触发区，state={Describe(player.State)}");
 
         ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
@@ -228,6 +241,7 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void MissionDirectorCollectsMineYieldAndScoresExtraction()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreateManualScriptEngine(
             out _,
             out _,
@@ -248,8 +262,10 @@ public sealed class PlayerControllerIntegrationTests
         mission.InitialLavaSurfaceY = 60f;
         mission.LavaRiseCellsPerSecond = 0f;
 
+        // Act：执行被测操作
         engine.RunHeadlessTicks(1);
 
+        // Assert：验证不变式与预期结果
         Assert.True(engine.Context.Events.Channel<MineYieldEvent>().TryEnqueue(new MineYieldEvent(20, 20, 1, 2)));
         Assert.True(engine.Context.Events.Channel<MineYieldEvent>().TryEnqueue(new MineYieldEvent(21, 20, 1, 2)));
         engine.RunHeadlessTicks(1);
@@ -286,6 +302,7 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void MissionDirectorLosesWhenTimeLimitExpires()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreateManualScriptEngine(out _, out _, out _, out ScriptScene scene, DemoMaterials());
         Entity entity = scene.CreateEntity();
         _ = entity.AddComponent<Transform>();
@@ -298,8 +315,10 @@ public sealed class PlayerControllerIntegrationTests
         mission.InitialLavaSurfaceY = 60f;
         mission.LavaRiseCellsPerSecond = 0f;
 
+        // Act：执行被测操作
         engine.RunHeadlessTicks(2);
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(MissionState.Lost, mission.State);
         Assert.Equal("time_limit", mission.ResultReason);
 
@@ -319,7 +338,9 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void ObjectiveCrystalPublishesMineYieldWhenCellsAreDestroyed()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = MissionMaterials();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("crystal", out ushort crystalMaterial));
         using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials);
         Entity playerEntity = scene.CreateEntity();
@@ -354,7 +375,9 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void DamageCircleDestroysObjectiveCrystalAndMissionDirectorCollectsMineYield()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = MissionMaterials();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("crystal", out ushort crystalMaterial));
         using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials);
         Entity playerEntity = scene.CreateEntity();
@@ -392,6 +415,7 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void ExtractionTriggerRequiresCrystalsBeforeWinningMission()
     {
+        // Arrange：搭建测试场景与依赖
         RecordingAudioApi audio = new();
         using Engine engine = CreateManualScriptEngine(
             out _,
@@ -419,8 +443,10 @@ public sealed class PlayerControllerIntegrationTests
         extraction.Height = 20f;
         extraction.CelebrationMaterialName = "crystal";
 
+        // Act：执行被测操作
         engine.RunHeadlessTicks(1);
 
+        // Assert：验证不变式与预期结果
         Assert.False(extraction.Reached);
         Assert.Equal(MissionState.Playing, mission.State);
         Assert.Equal("目标水晶未集齐或任务已结束。", extraction.BlockedReason);
@@ -439,7 +465,9 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void RisingHazardDirectorDrivesEmittersAndMissionLoss()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = MissionMaterials();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("lava", out ushort lava));
         using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials);
         Entity entity = scene.CreateEntity();
@@ -478,8 +506,10 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayerHealthSamplesHazardsEmitsFeedbackAndRespawns()
     {
+        // Arrange：准备输入与初始状态
         RecordingAudioApi audio = new();
         MaterialTable materials = DemoMaterials();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("lava", out ushort lava));
         using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
         Entity entity = scene.CreateEntity();
@@ -539,7 +569,9 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void ExplosiveToolMiddleClickDamagesCellsAndQueuesLighting()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = DemoMaterials();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
         ExplosiveTool tool = scene.CreateEntity().AddComponent<ExplosiveTool>();
@@ -585,7 +617,9 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void ExplosiveToolTerrainEffectScaleExpandsSubmittedExplosion()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = DemoMaterials();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
         ExplosiveTool tool = scene.CreateEntity().AddComponent<ExplosiveTool>();
@@ -611,6 +645,7 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void ExplosiveToolExplosionLightDoesNotPersist()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out _, out _, out ScriptScene scene, DemoMaterials());
         ExplosiveTool tool = scene.CreateEntity().AddComponent<ExplosiveTool>();
         tool.Radius = 5;
@@ -618,9 +653,11 @@ public sealed class PlayerControllerIntegrationTests
         tool.CooldownSeconds = 1f;
 
         input.Update([], [MouseButton.Middle], mouseX: 12.25f, mouseY: 12.75f, wheelY: 0f);
+        // Act：执行被测操作
         engine.RunHeadlessTicks(2, realDeltaSeconds: 1.0 / 60.0);
 
         ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
+        // Assert：验证不变式与预期结果
         Assert.True(lighting.PointLights.Length > 0, "爆炸闪光活跃期应提交瞬时点光。");
 
         input.Update([], [], mouseX: 12.25f, mouseY: 12.75f, wheelY: 0f);
@@ -636,7 +673,9 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void ExplosiveToolExplosionParticlesDoNotPersistAfterLifetime()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = DemoMaterials();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
         ExplosiveTool tool = scene.CreateEntity().AddComponent<ExplosiveTool>();
@@ -653,7 +692,7 @@ public sealed class PlayerControllerIntegrationTests
         Assert.True(particles.ActiveCount > 0);
 
         input.Update([], [], mouseX: 12.25f, mouseY: 12.75f, wheelY: 0f);
-        engine.RunHeadlessTicks(PixelEngine.Core.EngineConstants.ParticleMaxLifetimeTicks + 4);
+        engine.RunHeadlessTicks(Core.EngineConstants.ParticleMaxLifetimeTicks + 4);
 
         Assert.Equal(0, particles.ActiveCount);
         Assert.Equal(0, TransientParticleBurst.ActiveCount(scene));
@@ -665,7 +704,9 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void EngineProbeCountsActiveParticlesByMaterialAndVariant()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = DemoMaterials();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("fire", out ushort fire));
         Assert.True(materials.TryGetId("stone", out ushort stone));
         using Engine engine = CreateManualScriptEngine(out _, out _, out _, out _, materials);
@@ -696,7 +737,9 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void ExplodeSemanticsMigration_ExplosiveToolLowForceAccumulatesDamageWithoutClearingStone()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = DemoMaterials();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
         ExplosiveTool tool = scene.CreateEntity().AddComponent<ExplosiveTool>();
@@ -721,7 +764,9 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void ExplosiveToolMiddleClickPushesNearbyRigidBody()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = DemoMaterials(destructibleSolids: false);
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
         FillRect(grid, stone, minX: 48, minY: 24, maxX: 72, maxY: 36);
@@ -754,7 +799,9 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void MaterialBrushSelectsRadiusPaintsAndErasesWorldCells()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = DemoMaterials();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
         MaterialBrush brush = scene.CreateEntity().AddComponent<MaterialBrush>();
@@ -784,8 +831,10 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void MaterialEmitterWritesCellsParticlesAudioAndLighting()
     {
+        // Arrange：准备输入与初始状态
         RecordingAudioApi audio = new();
         MaterialTable materials = DemoMaterials();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
         MaterialEmitter emitter = scene.CreateEntity().AddComponent<MaterialEmitter>();
@@ -833,6 +882,7 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void CameraFollowTracksPlayerZoomAndClampsToWorldBounds()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out ScriptCameraApi camera, out ScriptScene scene);
         Entity entity = scene.CreateEntity();
         _ = entity.AddComponent<Transform>();
@@ -850,8 +900,10 @@ public sealed class PlayerControllerIntegrationTests
         follow.MaxY = 64f;
         FillFloor(grid, material: 1, y: 46, x0: 0, x1: 96, rigidOwned: false);
 
+        // Act：执行被测操作
         engine.RunHeadlessTicks(4);
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(2f, camera.Zoom);
         CameraSnapshot firstSnapshot = camera.Snapshot();
         Assert.Equal(MathF.Truncate(firstSnapshot.OriginWorldX), firstSnapshot.OriginWorldX);
@@ -895,6 +947,7 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void CameraFollowMouseWheelAdjustsIntegerZoomLevels()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out ScriptCameraApi camera, out ScriptScene scene);
         Entity entity = scene.CreateEntity();
         PlayerController player = entity.AddComponent<PlayerController>();
@@ -912,7 +965,9 @@ public sealed class PlayerControllerIntegrationTests
         follow.MaxY = 120f;
         FillFloor(grid, material: 1, y: 46, x0: 0, x1: 96, rigidOwned: false);
 
+        // Act：执行被测操作
         engine.RunHeadlessTicks(2);
+        // Assert：验证不变式与预期结果
         Assert.Equal(2f, camera.Zoom);
         CameraSnapshot zoomedSnapshot = camera.Snapshot();
         Assert.Equal(MathF.Truncate(zoomedSnapshot.OriginWorldX), zoomedSnapshot.OriginWorldX);
@@ -939,6 +994,7 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayerVisualSubmitsOverlayAndLocalLight()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, DemoMaterials());
         FillFloor(grid, material: 6, y: 46, x0: 0, x1: 96, rigidOwned: false);
         Entity entity = scene.CreateEntity();
@@ -951,8 +1007,10 @@ public sealed class PlayerControllerIntegrationTests
         ScriptOverlayApi overlay = engine.Context.GetService<ScriptOverlayApi>();
 
         input.Update([], [], mouseX: 20, mouseY: 10, wheelY: 0);
+        // Act：执行被测操作
         engine.RunHeadlessTicks(2);
 
+        // Assert：验证不变式与预期结果
         Assert.True(overlay.CommandCount >= 6);
         Assert.Contains(
             Enumerable.Range(0, overlay.CommandCount).Select(overlay.GetCommand),
@@ -969,8 +1027,10 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayerVisualIgnoresDegenerateTracer()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         Entity entity = scene.CreateEntity();
         _ = entity.AddComponent<Transform>();
@@ -1004,12 +1064,15 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void ExplosionFlashEffectExpiresAndStopsLighting()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreateManualScriptEngine(out _, out _, out _, out ScriptScene scene, DemoMaterials());
         ExplosionFlashProbe probe = scene.CreateEntity().AddComponent<ExplosionFlashProbe>();
         probe.Trigger(18f, 14f, 8f, durationSeconds: 0.05f);
 
+        // Act：执行被测操作
         engine.RunHeadlessTicks(1);
 
+        // Assert：验证不变式与预期结果
         Assert.True(probe.LastOverlayCommandsSubmitted > 0);
         ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
         Assert.Equal(1, lighting.PointLights.Length);
@@ -1028,12 +1091,15 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void ExplosionFlashEffectUsesRealDeltaForVisualLifetime()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreateManualScriptEngine(out _, out _, out _, out ScriptScene scene, DemoMaterials());
         ExplosionFlashProbe probe = scene.CreateEntity().AddComponent<ExplosionFlashProbe>();
         probe.Trigger(18f, 14f, 8f, durationSeconds: 0.10f);
 
+        // Act：执行被测操作
         engine.RunHeadlessTicks(1, realDeltaSeconds: 1.0 / 15.0);
 
+        // Assert：验证不变式与预期结果
         Assert.True(probe.Active);
         Assert.True(probe.LastOverlayCommandsSubmitted > 0);
 
@@ -1051,6 +1117,7 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void GrenadeExplosionFlashDoesNotPersistAfterDetonation()
     {
+        // Arrange：搭建测试场景与依赖
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(out _, out _, out _, out ScriptScene scene, materials);
         Entity entity = scene.CreateEntity();
@@ -1070,8 +1137,10 @@ public sealed class PlayerControllerIntegrationTests
 
         ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
         int particlesBeforeDetonation = particles.ActiveCount;
+        // Act：执行被测操作
         engine.RunHeadlessTicks(2);
 
+        // Assert：验证不变式与预期结果
         Assert.True(grenade.Exploded);
         Assert.Equal(1, CountBehaviours<GrenadeProjectile>(scene));
         Assert.Equal(particlesBeforeDetonation, particles.ActiveCount);
@@ -1094,7 +1163,9 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void GrenadeDetonationAppliesSingleExplosionDamagePass()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = DemoMaterials();
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials);
         FillRect(grid, stone, minX: 16, minY: 12, maxX: 21, maxY: 17);
@@ -1128,6 +1199,7 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void GrenadeDetonatesInsteadOfFaultingWhenRaycastLeavesResidentWorld()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreateManualScriptEngine(out _, out _, out _, out ScriptScene scene, DemoMaterials());
         GrenadeProjectile grenade = scene.CreateEntity().AddComponent<GrenadeProjectile>();
         grenade.Initialize(
@@ -1145,9 +1217,11 @@ public sealed class PlayerControllerIntegrationTests
 
         for (int i = 0; i < 8 && !grenade.Exploded && !grenade.Faulted; i++)
         {
+            // Act：执行被测操作
             engine.RunHeadlessTicks(1, realDeltaSeconds: 1.0 / 60.0);
         }
 
+        // Assert：验证不变式与预期结果
         Assert.False(grenade.Faulted, grenade.LastException?.ToString());
         Assert.True(grenade.Exploded);
         Assert.Equal(0, scene.ScriptExceptionCount);
@@ -1159,11 +1233,14 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayerRunsAndJumpsFromSettledTerrain()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreatePlayerEngine(out ScriptInputApi input, out CellGrid grid);
         FillFloor(grid, material: 1, y: 46, x0: 0, x1: 96, rigidOwned: false);
 
+        // Act：执行被测操作
         engine.RunHeadlessTicks(20);
         PlayerController player = FindPlayer(engine);
+        // Assert：验证不变式与预期结果
         Assert.True(player.State.OnGround, $"玩家应落在普通地面上，state={Describe(player.State)}");
 
         float startX = player.State.X;
@@ -1216,8 +1293,10 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayerTakesDamageAndResolvesOutWhenRigidOwnedStampOverlapsFromAbove()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials);
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         Entity entity = scene.CreateEntity();
         _ = entity.AddComponent<Transform>();
@@ -1245,7 +1324,9 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayerTakesDamageWhenDroppedRigidBodyStampFallsThroughCharacterAabb()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = DemoMaterials(destructibleSolids: false);
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("wood", out ushort wood));
         Assert.True(materials.TryGetId("stone", out ushort stone));
         using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials);
@@ -1309,6 +1390,7 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayerRunsAcrossUnevenPowderPile()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
         Entity entity = scene.CreateEntity();
@@ -1318,6 +1400,7 @@ public sealed class PlayerControllerIntegrationTests
         player.MaxRunSpeed = 145f;
         player.GroundAcceleration = 1_850f;
         player.AirAcceleration = 1_150f;
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("sand", out ushort sand));
 
         FillSteppedPile(grid, sand, startX: 0, endX: 72, baseY: 42);
@@ -1338,9 +1421,11 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayableProjectileLeftClickQueuesAudioAndParticles()
     {
+        // Arrange：准备输入与初始状态
         RecordingAudioApi audio = new();
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         FillFloor(grid, stone, y: 46, x0: 0, x1: 96, rigidOwned: false);
         FillWall(grid, stone, x: 34, y0: 24, y1: 46);
@@ -1370,9 +1455,11 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void ExplodeSemanticsMigration_PlayableProjectileLowDamageAccumulatesDamageWithoutClearingStone()
     {
+        // Arrange：准备输入与初始状态
         RecordingAudioApi audio = new();
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         FillFloor(grid, stone, y: 46, x0: 0, x1: 96, rigidOwned: false);
         FillWall(grid, stone, x: 34, y0: 24, y1: 46);
@@ -1407,8 +1494,10 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayableProjectileAutoFiresWhileLeftMouseIsHeld()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         FillWall(grid, stone, x: 54, y0: 12, y1: 54);
         Entity entity = scene.CreateEntity();
@@ -1437,6 +1526,7 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void WeaponControllerSwitchesAndRoutesHitscanThroughProjectileBackend()
     {
+        // Arrange：准备输入与初始状态
         RecordingAudioApi audio = new();
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(
@@ -1447,6 +1537,7 @@ public sealed class PlayerControllerIntegrationTests
             materials,
             audio,
             contentRoot: DemoContentRoot());
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         FillWall(grid, stone, x: 34, y0: 24, y1: 46);
         Entity entity = scene.CreateEntity();
@@ -1496,8 +1587,10 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void WeaponControllerReloadsAndLocksOutOverheatedWeapon()
     {
+        // Arrange：搭建测试场景与依赖
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 {
@@ -1551,9 +1644,11 @@ public sealed class PlayerControllerIntegrationTests
             player.SpawnY = 30f;
             WeaponController weapons = entity.AddComponent<WeaponController>();
 
+            // Act：执行被测操作
             engine.RunHeadlessTicks(2);
             input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
             engine.RunHeadlessTicks(1);
+            // Assert：验证不变式与预期结果
             Assert.Equal(0, weapons.CurrentAmmo);
 
             input.Update([Key.R], [], mouseX: 36f, mouseY: 34f, wheelY: 0f);
@@ -1590,8 +1685,10 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void WeaponControllerExcavatorPublishesMineYieldEvent()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 {
@@ -1613,6 +1710,7 @@ public sealed class PlayerControllerIntegrationTests
         try
         {
             MaterialTable materials = MissionMaterials();
+            // Assert：验证预期结果
             Assert.True(materials.TryGetId("crystal", out ushort crystal));
             using Engine engine = CreateManualScriptEngine(
                 out ScriptInputApi input,
@@ -1656,8 +1754,10 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void WeaponControllerExcavatorClearsCircleAndRespectsCooldownRate()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 {
@@ -1679,6 +1779,7 @@ public sealed class PlayerControllerIntegrationTests
         try
         {
             MaterialTable materials = DemoMaterials();
+            // Assert：验证预期结果
             Assert.True(materials.TryGetId("stone", out ushort stone));
             using Engine engine = CreateManualScriptEngine(
                 out ScriptInputApi input,
@@ -1731,8 +1832,10 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void WeaponControllerDispatchesSixWeaponKindsIntoDistinctEffects()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 40, "radius": 2, "falloff": "none", "impulse": 8, "cooldownSeconds": 0, "ammoMax": 10, "tracerDuration": 0.03, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" },
@@ -1756,6 +1859,7 @@ public sealed class PlayerControllerIntegrationTests
                 materials,
                 audio,
                 contentRoot: contentRoot);
+            // Assert：验证预期结果
             Assert.True(materials.TryGetId("stone", out ushort stone));
             FillRect(grid, stone, minX: 32, minY: 24, maxX: 38, maxY: 40);
             Entity entity = scene.CreateEntity();
@@ -1826,9 +1930,11 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void WeaponControllerGrenadeSecondaryFireSpawnsChargedProjectileThroughPublicInput()
     {
+        // Arrange：准备输入与初始状态
         GrenadeLaunchProbe primary = LaunchGrenadeWithPublicInput(MouseButton.Left);
         GrenadeLaunchProbe secondary = LaunchGrenadeWithPublicInput(MouseButton.Right);
 
+        // Assert：验证预期结果
         Assert.Equal(1, primary.PrimaryFireCount);
         Assert.Equal(0, primary.SecondaryFireCount);
         Assert.Equal(1, secondary.SecondaryFireCount);
@@ -1851,8 +1957,10 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void WeaponControllerBombExplosionEffectsExpire()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "bomb", "displayName": "Bomb", "kind": "bomb", "damage": 60, "radius": 5, "falloff": "linear", "cooldownSeconds": 0, "ammoMax": 8, "impulse": 18, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
@@ -1862,6 +1970,7 @@ public sealed class PlayerControllerIntegrationTests
         try
         {
             MaterialTable materials = DemoMaterials();
+            // Assert：验证预期结果
             Assert.True(materials.TryGetId("stone", out ushort stone));
             using Engine engine = CreateManualScriptEngine(
                 out ScriptInputApi input,
@@ -1891,7 +2000,7 @@ public sealed class PlayerControllerIntegrationTests
             Assert.True(particles.ActiveCount > 0);
 
             input.Update([], [], mouseX: 36f, mouseY: 30f, wheelY: 0f);
-            engine.RunHeadlessTicks(PixelEngine.Core.EngineConstants.ParticleMaxLifetimeTicks + 8);
+            engine.RunHeadlessTicks(Core.EngineConstants.ParticleMaxLifetimeTicks + 8);
 
             Assert.Equal(0, TransientParticleBurst.ActiveCount(scene));
             Assert.Equal(0, particles.ActiveCount);
@@ -1908,8 +2017,10 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void LaserBeamSparksRemainBoundedAndExpireAfterCeaseFire()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 { "id": "laser", "displayName": "Laser", "kind": "laser", "damage": 10, "radius": 2, "falloff": "none", "cooldownSeconds": 0, "ammoMax": 200, "heatPerCell": 4, "beamDps": 600, "muzzleCue": "ui_click", "impactCue": "sizzle_lava_water", "hudColor": "#FFFFFFFF" }
@@ -1926,6 +2037,7 @@ public sealed class PlayerControllerIntegrationTests
                 out ScriptScene scene,
                 materials,
                 contentRoot: contentRoot);
+            // Assert：验证预期结果
             Assert.True(materials.TryGetId("stone", out ushort stone));
             Assert.True(materials.TryGetId("fire", out ushort fire));
             FillRect(grid, stone, minX: 32, minY: 24, maxX: 38, maxY: 40);
@@ -1974,9 +2086,11 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayableProjectileConvertsDetachedSolidIslandIntoRigidBody()
     {
+        // Arrange：准备输入与初始状态
         RecordingAudioApi audio = new();
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         FillRect(grid, stone, minX: 40, minY: 26, maxX: 50, maxY: 34);
 
@@ -2009,9 +2123,11 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayableProjectileConvertsTopBorderDetachedIslandIntoRigidBody()
     {
+        // Arrange：准备输入与初始状态
         RecordingAudioApi audio = new();
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         FillRect(grid, stone, minX: 40, minY: 20, maxX: 50, maxY: 31);
 
@@ -2044,9 +2160,11 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayableProjectileConvertsImpactFracturedShelfIntoRigidBody()
     {
+        // Arrange：准备输入与初始状态
         RecordingAudioApi audio = new();
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         FillRect(grid, stone, minX: 38, minY: 18, maxX: 70, maxY: 42);
 
@@ -2085,9 +2203,11 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayableProjectileConvertsLargerFullyDetachedIslandIntoRigidBody()
     {
+        // Arrange：准备输入与初始状态
         RecordingAudioApi audio = new();
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         FillRect(grid, stone, minX: 40, minY: 18, maxX: 65, maxY: 36);
 
@@ -2124,9 +2244,11 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayableProjectileConvertsDefaultMediumDetachedIslandIntoRigidBody()
     {
+        // Arrange：准备输入与初始状态
         RecordingAudioApi audio = new();
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         FillRect(grid, stone, minX: 40, minY: 18, maxX: 70, maxY: 42);
 
@@ -2158,9 +2280,11 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayableProjectileDoesNotConvertSupportedTerrainSlabByDefault()
     {
+        // Arrange：准备输入与初始状态
         RecordingAudioApi audio = new();
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         FillRect(grid, stone, minX: 22, minY: 20, maxX: 82, maxY: 50);
 
@@ -2194,8 +2318,10 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayableProjectileDoesNotConvertTerrainConnectedAboveScanWindow()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         FillRect(grid, stone, minX: 40, minY: 18, maxX: 49, maxY: 33);
 
@@ -2229,8 +2355,10 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayableProjectileKeepsFiringAfterCollapseScanSkipsSupportedTerrain()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         FillRect(grid, stone, minX: 28, minY: 20, maxX: 82, maxY: 50);
 
@@ -2265,9 +2393,11 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayableProjectileContinuesCollapseScanAfterFirstConvertedIsland()
     {
+        // Arrange：准备输入与初始状态
         RecordingAudioApi audio = new();
         MaterialTable materials = DemoMaterials();
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials, audio);
+        // Assert：验证预期结果
         Assert.True(materials.TryGetId("stone", out ushort stone));
         FillRect(grid, stone, minX: 40, minY: 22, maxX: 48, maxY: 30);
         FillRect(grid, stone, minX: 56, minY: 20, maxX: 72, maxY: 32);
@@ -2302,6 +2432,7 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayableWorldDirectorDisablesDebugOverlaysOnSceneStart()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreateScriptEngine(typeof(PlayableWorldDirector), out _, out _, out _);
         IDiagnosticsApi diagnostics = engine.Context.GetService<IDiagnosticsApi>();
         DebugOverlayKind[] overlays =
@@ -2321,9 +2452,11 @@ public sealed class PlayerControllerIntegrationTests
             diagnostics.SetOverlay(overlay, enabled: true);
         }
 
+        // Act：执行被测操作
         engine.RunHeadlessTicks(3);
 
         DebugOverlaySettings settings = engine.Context.GetService<DebugOverlaySettings>();
+        // Assert：验证不变式与预期结果
         Assert.Equal(default, settings.Enabled);
         Assert.All(overlays, overlay => Assert.False(diagnostics.IsOverlayEnabled(overlay)));
     }
@@ -2334,11 +2467,14 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayableWorldDirectorConfiguresProjectileForReadablePlayableDemo()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreateScriptEngine(typeof(PlayableWorldDirector), out _, out _, out _);
 
+        // Act：执行被测操作
         engine.RunHeadlessTicks(3);
 
         PlayableProjectileTool projectile = FindBehaviour<PlayableProjectileTool>(engine);
+        // Assert：验证不变式与预期结果
         Assert.Equal(3, projectile.ImpactRadius);
         Assert.Equal(9f, projectile.ImpactForce);
         Assert.Equal(36f, projectile.ImpactDamage);
@@ -2367,6 +2503,7 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayableWeaponCatalogMapsDigitsToSixDefaultWeapons()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreateManualScriptEngine(
             out ScriptInputApi input,
             out _,
@@ -2379,8 +2516,10 @@ public sealed class PlayerControllerIntegrationTests
         _ = entity.AddComponent<PlayableProjectileTool>();
         WeaponController weapons = entity.AddComponent<WeaponController>();
 
+        // Act：执行被测操作
         engine.RunHeadlessTicks(2);
 
+        // Assert：验证不变式与预期结果
         Assert.NotNull(weapons.Catalog);
         Assert.Equal(
             ["pistol", "laser", "grenade", "bomb", "excavator", "builder"],
@@ -2434,6 +2573,7 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void ScriptedPlayableDemoFirstLeftClickTargetsCollapseTerrain()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreateBaseEngine(out ScriptInputApi input, out _, out ScriptCameraApi camera);
         DemoWindowScriptedInput scripted = new(input, camera);
         scripted.RegisterPhases(engine.Phases);
@@ -2442,6 +2582,7 @@ public sealed class PlayerControllerIntegrationTests
         Point2F firstLeftClickWorld = default;
         for (int frame = 0; frame < 140; frame++)
         {
+            // Act：执行被测操作
             _ = engine.RunOneTick(1.0 / 60.0);
             if (!input.WasMousePressed(MouseButton.Left))
             {
@@ -2454,6 +2595,7 @@ public sealed class PlayerControllerIntegrationTests
             break;
         }
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(124, firstLeftClickFrame);
         Assert.Equal(scripted.PlayableCollapseTargetWorld.X, firstLeftClickWorld.X, precision: 3);
         Assert.Equal(scripted.PlayableCollapseTargetWorld.Y, firstLeftClickWorld.Y, precision: 3);
@@ -2466,15 +2608,18 @@ public sealed class PlayerControllerIntegrationTests
     [Fact]
     public void PlayerWallJumpsAwayFromSolidWall()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = CreatePlayerEngine(out ScriptInputApi input, out CellGrid grid);
         FillWall(grid, material: 1, x: 32, y0: 16, y1: 48);
 
+        // Act：执行被测操作
         engine.RunHeadlessTicks(1);
         PlayerController player = FindPlayer(engine);
         player.SpawnX = 32.95f;
         player.Respawn();
 
         engine.RunHeadlessTicks(1);
+        // Assert：验证不变式与预期结果
         Assert.True(player.State.OnWallLeft, $"玩家应贴左墙，state={Describe(player.State)}");
 
         float beforeJumpX = player.State.X;
@@ -2660,7 +2805,7 @@ public sealed class PlayerControllerIntegrationTests
         engine.Context.RegisterService(input);
         engine.Context.RegisterService<ICameraApi>(EngineServiceRole.Camera, camera);
         engine.Context.RegisterService(camera);
-        engine.Context.RegisterService<IAudioApi>(EngineServiceRole.AudioService, audio ?? NoOpAudioApi.Instance);
+        engine.Context.RegisterService(EngineServiceRole.AudioService, audio ?? NoOpAudioApi.Instance);
         grid = engine.Context.GetService<CellGrid>();
         return engine;
     }
@@ -2704,7 +2849,8 @@ public sealed class PlayerControllerIntegrationTests
     private static GrenadeLaunchProbe LaunchGrenadeWithPublicInput(MouseButton fireButton)
     {
         string contentRoot = CreateTemporaryWeaponContent(
-            """
+                                 /*lang=json,strict*/
+                                 """
             {
               "weapons": [
                 {

@@ -7,6 +7,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// 物理尺度与坐标转换测试。
+/// 不变式：像素↔物理单位换算双向可逆、常量与文档一致。
 /// </summary>
 public sealed class PhysicsScaleTests
 {

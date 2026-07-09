@@ -85,6 +85,7 @@ public sealed class GuiRenderBridge : IUiPresentLayer, IDisposable
             _gui.Initialize();
         }
 
+        // present 相位驱动 GuiApp：Managed UI 与脚本 OnGui 共享同一 ImGui frame 与输入 capture。
         double now = _clock.Elapsed.TotalSeconds;
         float deltaSeconds = (float)Math.Max(0.0, now - _previousSeconds);
         _previousSeconds = now;

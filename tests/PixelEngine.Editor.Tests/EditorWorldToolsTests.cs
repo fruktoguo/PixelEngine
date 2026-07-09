@@ -6,6 +6,7 @@ namespace PixelEngine.Editor.Tests;
 
 /// <summary>
 /// Editor 世界编辑工具测试。
+/// 不变式：世界编辑工具写入经 Simulation 安全窗口。
 /// </summary>
 public sealed class EditorWorldToolsTests
 {
@@ -15,6 +16,7 @@ public sealed class EditorWorldToolsTests
     [Fact]
     public void BrushApplicatorPaintsCircleMask()
     {
+        // Arrange：准备输入与初始状态
         RecordingEditApi edit = new();
         MaterialBrushApplicator applicator = new(edit);
         MaterialBrushSettings settings = new()
@@ -27,6 +29,7 @@ public sealed class EditorWorldToolsTests
 
         int writes = applicator.ApplyAt(10, 20, settings);
 
+        // Assert：验证预期结果
         Assert.Equal(5, writes);
         Assert.Contains((10, 20, (ushort)2), edit.Painted);
         Assert.DoesNotContain((9, 19, (ushort)2), edit.Painted);
@@ -60,6 +63,7 @@ public sealed class EditorWorldToolsTests
     [Fact]
     public void BrushApplicatorUsesBulkRectForFullProbabilitySquare()
     {
+        // Arrange：准备输入与初始状态
         RecordingEditApi edit = new();
         MaterialBrushApplicator applicator = new(edit);
         MaterialBrushSettings settings = new()
@@ -72,6 +76,7 @@ public sealed class EditorWorldToolsTests
 
         int writes = applicator.ApplyAt(10, 20, settings);
 
+        // Assert：验证预期结果
         Assert.Equal(25, writes);
         Assert.Equal([(8, 18, 12, 22, 4)], edit.PaintedRects);
         Assert.Empty(edit.Painted);
@@ -105,6 +110,7 @@ public sealed class EditorWorldToolsTests
     [Fact]
     public void SimulationEditApiReadsCellChunkAndBodySnapshot()
     {
+        // Arrange：准备输入与初始状态
         Chunk chunk = new(new ChunkCoord(0, 0));
         int local = CellAddressing.LocalIndexFromLocal(3, 4);
         chunk.Material[local] = 1;
@@ -122,6 +128,7 @@ public sealed class EditorWorldToolsTests
 
         bool found = source.TryInspectCell(3, 4, out SimulationCellInspection inspection);
 
+        // Assert：验证预期结果
         Assert.True(found);
         Assert.Equal(1, inspection.MaterialId);
         Assert.Equal("sand", inspection.MaterialName);
@@ -141,6 +148,7 @@ public sealed class EditorWorldToolsTests
     [Fact]
     public void WorldInspectorPanelRefreshesFromSelection()
     {
+        // Arrange：准备输入与初始状态
         Chunk chunk = new(new ChunkCoord(0, 0));
         chunk.Material[CellAddressing.LocalIndexFromLocal(2, 3)] = 1;
         TestChunkSource chunks = new(chunk);
@@ -152,6 +160,7 @@ public sealed class EditorWorldToolsTests
 
         bool found = panel.RefreshFromSelection(selection);
 
+        // Assert：验证预期结果
         Assert.True(found);
         Assert.True(panel.LastInspection.HasValue);
         SimulationCellInspection inspection = panel.LastInspection.Value;
@@ -165,6 +174,7 @@ public sealed class EditorWorldToolsTests
     [Fact]
     public void SimulationEditApiPaintsAtInputPhaseAndMarksCurrentDirty()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource chunks = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Chunk east = chunks.GetRequired(new ChunkCoord(1, 0));
         MaterialTable materials = CreateMaterials();
@@ -173,6 +183,7 @@ public sealed class EditorWorldToolsTests
 
         edit.PaintCell(63, 10, 1);
 
+        // Assert：验证预期结果
         Assert.Equal(1, center.Material[CellAddressing.LocalIndexFromLocal(63, 10)]);
         Assert.Equal(new DirtyRect(61, 8, 63, 12), center.CurrentDirty);
         Assert.Equal(new DirtyRect(0, 8, 1, 12), east.CurrentDirty);

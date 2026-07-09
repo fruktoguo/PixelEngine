@@ -5,8 +5,14 @@ using Xunit;
 
 namespace PixelEngine.Audio.Tests;
 
+/// <summary>
+/// 音频片段缓存测试：加载、复用与驱逐。
+/// </summary>
 public sealed class AudioClipCacheTests
 {
+    /// <summary>
+    /// 验证WAV 解码器解码 PCM16 单声道。
+    /// </summary>
     [Fact]
     public void WavDecoderDecodesPcm16Mono()
     {
@@ -23,6 +29,9 @@ public sealed class AudioClipCacheTests
         Assert.Equal([1, 0, 2, 0], data.Pcm);
     }
 
+    /// <summary>
+    /// 验证WAV 解码器拒绝不支持或畸形输入。
+    /// </summary>
     [Fact]
     public void WavDecoderRejectsUnsupportedOrMalformedInput()
     {
@@ -32,6 +41,9 @@ public sealed class AudioClipCacheTests
         Assert.False(decoder.TryDecode(CreateWav(channels: 1, bitsPerSample: 24, sampleRate: 44_100, [0, 0, 0]), out _));
     }
 
+    /// <summary>
+    /// 验证Ogg Vorbis 解码器解码单声道 Vorbis 为 PCM16。
+    /// </summary>
     [Fact]
     public void OggVorbisDecoderDecodesMonoVorbisToPcm16()
     {
@@ -49,6 +61,9 @@ public sealed class AudioClipCacheTests
         Assert.Equal(0, data.Pcm.Length % 2);
     }
 
+    /// <summary>
+    /// 验证Ogg Vorbis 解码器拒绝非 Ogg 输入。
+    /// </summary>
     [Fact]
     public void OggVorbisDecoderRejectsNonOggInput()
     {
@@ -58,6 +73,9 @@ public sealed class AudioClipCacheTests
         Assert.False(decoder.TryDecode(CreateWav(channels: 1, bitsPerSample: 16, sampleRate: 8_000, [0, 0]), out _));
     }
 
+    /// <summary>
+    /// 验证片段缓存加载并缓存And删除后端缓冲。
+    /// </summary>
     [Fact]
     public async Task ClipCacheLoadsCachesAndDeletesBackendBuffer()
     {
@@ -85,6 +103,9 @@ public sealed class AudioClipCacheTests
         _ = Assert.Throws<ObjectDisposedException>(() => backend.UploadBuffer(first.Buffer.Handle, AudioSampleFormat.Stereo8, [1], 44_100));
     }
 
+    /// <summary>
+    /// 验证目录资源库加载相对路径音频And拒绝路径逃逸。
+    /// </summary>
     [Fact]
     public async Task DirectoryAssetStoreLoadsRelativeAudioAndRejectsEscapes()
     {
@@ -113,6 +134,9 @@ public sealed class AudioClipCacheTests
         }
     }
 
+    /// <summary>
+    /// 验证音频系统播放已加载的一次性音效And发布诊断信息。
+    /// </summary>
     [Fact]
     public async Task AudioSystemPlaysLoadedOneShotAndPublishesDiagnostics()
     {
@@ -142,6 +166,9 @@ public sealed class AudioClipCacheTests
         system.Shutdown();
     }
 
+    /// <summary>
+    /// 验证音频系统关闭时释放自有片段缓存But保留借用的缓存。
+    /// </summary>
     [Fact]
     public async Task AudioSystemShutdownDisposesOwnedClipCacheButLeavesBorrowedCacheAlive()
     {
@@ -180,6 +207,9 @@ public sealed class AudioClipCacheTests
         _ = Assert.Throws<ObjectDisposedException>(() => borrowedCache.TryGetLoaded("ui/borrowed.wav", out _));
     }
 
+    /// <summary>
+    /// 验证Stream Player Queues And Returns Processed Buffers On Worker。
+    /// </summary>
     [Fact]
     public void StreamPlayerQueuesAndReturnsProcessedBuffersOnWorker()
     {

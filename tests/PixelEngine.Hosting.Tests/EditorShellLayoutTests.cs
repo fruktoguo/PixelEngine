@@ -5,6 +5,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// 验证独立编辑器壳的 ImGui dock layout 自愈逻辑。
+/// 不变式：dock layout 损坏时可自愈、默认面板组合可恢复。
 /// </summary>
 public sealed class EditorShellLayoutTests
 {

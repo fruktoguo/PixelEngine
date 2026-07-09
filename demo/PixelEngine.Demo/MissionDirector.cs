@@ -149,6 +149,7 @@ public sealed class MissionDirector : Behaviour
     /// <inheritdoc />
     protected override void OnStart()
     {
+        // 初始化任务计时、熔岩线与采矿事件订阅
         State = MissionState.Playing;
         CrystalsCollected = 0;
         ElapsedSeconds = 0f;
@@ -172,6 +173,7 @@ public sealed class MissionDirector : Behaviour
         }
 
         ResolveComponents();
+        // 任务主循环：计时 → 熔岩上升 → 计分 → 超时/死亡/熔岩淹没判负
         ElapsedSeconds += dt;
         if (!_externalLavaSurface)
         {
@@ -206,6 +208,7 @@ public sealed class MissionDirector : Behaviour
             return;
         }
 
+        // 胜负结算菜单：展示统计并提供重开/退出
         float x = MathF.Max(12f, (gui.Width - ResultMenuWidth) * 0.5f);
         float y = MathF.Max(12f, (gui.Height - ResultMenuHeight) * 0.5f);
         gui.SetNextWindow(x, y, ResultMenuWidth, ResultMenuHeight, GuiCondition.FirstUseEver);
@@ -352,6 +355,9 @@ public sealed class MissionDirector : Behaviour
         }
     }
 
+    /// <summary>
+    /// 按剩余时间、剩余弹药与无伤奖励计算当前结算分数。
+    /// </summary>
     private int CalculateScore()
     {
         int remainingTimeScore = Math.Max(0, (int)MathF.Floor(RemainingSeconds) * Math.Max(0, TimeScorePerSecond));

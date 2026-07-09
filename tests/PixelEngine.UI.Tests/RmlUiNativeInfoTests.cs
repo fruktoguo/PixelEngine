@@ -3,8 +3,14 @@ using System.Runtime.InteropServices;
 
 namespace PixelEngine.UI.Tests;
 
+/// <summary>
+/// RmlUi 原生信息测试：版本与能力报告结构。
+/// </summary>
 public sealed class RmlUiNativeInfoTests
 {
+    /// <summary>
+    /// 验证Native Probe Reports Unavailable Instead Of Throwing When Library Is Missing。
+    /// </summary>
     [Fact]
     public void NativeProbeReportsUnavailableInsteadOfThrowingWhenLibraryIsMissing()
     {

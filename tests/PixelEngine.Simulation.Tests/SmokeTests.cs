@@ -5,6 +5,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Simulation 项目的最小程序集加载冒烟测试。
+/// 不变式：测试程序集可加载、最小冒烟路径不抛异常。
 /// </summary>
 public sealed class SmokeTests
 {

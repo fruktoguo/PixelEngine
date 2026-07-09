@@ -97,6 +97,8 @@ public static class GpuComputeShaderSources
         AirSmokeDiffuseMargolusName,
     ];
 
+    // --- CP-B1..CP-B5：bloom compute pass 源码（bright-pass → downsample → dual-Kawase → composite）---
+
     /// <summary>
     /// bloom bright-pass compute shader，输出超过阈值的高亮颜色。
     /// </summary>
@@ -264,6 +266,8 @@ void main()
 }
 """;
 
+    // --- CP-L0：fragment composite 的可选 compute 替代路径（world × visibility + emissive）---
+
     /// <summary>
     /// light composite compute shader，将世界色、光照与自发光合成到输出 image。
     /// </summary>
@@ -296,6 +300,8 @@ void main()
     imageStore(uOutputImage, pixel, vec4(clamp(color, 0.0, 1.0), world.a));
 }
 """;
+
+    // --- CP-R0..CP-R3：Radiance Cascades（SDF JFA → cascade build → merge → apply）---
 
     /// <summary>
     /// Radiance Cascades SDF Jump Flood compute shader 入口，生成渲染侧 SDF image。
@@ -489,6 +495,8 @@ void main()
     imageStore(uOutputImage, pixel, vec4(clamp(scene.rgb + radiance, 0.0, 1.0), scene.a));
 }
 """;
+
+    // --- CP-A1：非权威 air/smoke Margolus 扩散（仅渲染侧密度纹理，不回写 CPU sim）---
 
     /// <summary>
     /// 非权威 air/smoke Margolus 2×2 扩散 compute shader，维护独立密度纹理。

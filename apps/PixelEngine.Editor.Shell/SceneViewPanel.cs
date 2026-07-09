@@ -6,6 +6,9 @@ using System.Numerics;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// Scene View ImGui 面板：编辑相机与场景 overlay。
+/// </summary>
 internal sealed class SceneViewPanel(
     Func<RenderViewportTexture> textureProvider,
     ScriptCameraApi camera,
@@ -18,7 +21,6 @@ internal sealed class SceneViewPanel(
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly EditorUndoStack _undo = undo ?? throw new ArgumentNullException(nameof(undo));
     private readonly MaterialBrushPalettePanel? _brushPanel = brushPanel;
-    private bool _visible = true;
     private ImGuizmoOperation _operation = ImGuizmoOperation.Translate;
     private Vector2 _lastImageMin;
     private Vector2 _lastImageSize;
@@ -28,16 +30,16 @@ internal sealed class SceneViewPanel(
 
     public bool Visible
     {
-        get => _visible;
+        get;
         set
         {
-            _visible = value;
+            field = value;
             if (!value)
             {
                 InputFocused = false;
             }
         }
-    }
+    } = true;
 
     public bool InputFocused { get; private set; }
 

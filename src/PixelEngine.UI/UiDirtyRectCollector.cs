@@ -44,6 +44,7 @@ public sealed class UiDirtyRectCollector
             return Count;
         }
 
+        // 脏矩形合并：与已有矩形相邻或重叠则 union，移除旧项后从头重扫，减少碎片化上传区域。
         UiDirtyRect merged = rect;
         int index = 0;
         while (index < Count)
@@ -59,6 +60,7 @@ public sealed class UiDirtyRectCollector
             index = 0;
         }
 
+        // 容量已满时退化为与 _rects[0] 继续合并，避免丢弃脏区导致全屏重传。
         if (Count == _rects.Length)
         {
             CoalesceIntoFirst(in merged);

@@ -4,6 +4,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// CA movement 规则的精确终态测试。
+/// 不变式：各 movement 规则终态与 parity 位符合单步 oracle。
 /// </summary>
 public sealed class MovementRuleTests
 {
@@ -38,6 +39,7 @@ public sealed class MovementRuleTests
     [Fact]
     public void WaterSpreadsAsSingleLayerOnSupport()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         center.SetCurrentDirty(DirtyRect.Full);
         Set(center, 10, 10, Water);
@@ -48,6 +50,7 @@ public sealed class MovementRuleTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(0, Get(center, 10, 10));
         Assert.Equal(Water, Get(center, 13, 10));
         Assert.Equal(0, Get(center, 13, 11));
@@ -102,6 +105,7 @@ public sealed class MovementRuleTests
     [Fact]
     public void PowderDiagonalBiasAlternatesAcrossEvenTicks()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         center.SetCurrentDirty(DirtyRect.Full);
         Set(center, 10, 10, Sand);
@@ -109,6 +113,7 @@ public sealed class MovementRuleTests
         SimulationKernel kernel = new(source, CreateMaterials());
 
         kernel.StepCa();
+        // Assert：验证预期结果
         Assert.Equal(Sand, Get(center, 11, 11));
 
         Set(center, 11, 11, 0);

@@ -5,6 +5,7 @@ namespace PixelEngine.Editor.Tests;
 
 /// <summary>
 /// 性能 HUD 聚合与只读上下文测试。
+/// 不变式：性能 HUD 只聚合只读指标、不反馈到模拟。
 /// </summary>
 public sealed class PerformanceHudPanelTests
 {
@@ -14,6 +15,7 @@ public sealed class PerformanceHudPanelTests
     [Fact]
     public void BuildSampleAggregatesProfilerCountersAndRuntimeDiagnostics()
     {
+        // Arrange：准备输入与初始状态
         FrameProfiler profiler = new();
         profiler.BeginFrame();
         profiler.Record(FramePhase.ParticleToCell, 0.4);
@@ -75,6 +77,7 @@ public sealed class PerformanceHudPanelTests
         PerformanceHudSample sample = PerformanceHudPanel.BuildSample(
             EditorPerformanceSnapshot.Create(counters, profiler, runtime));
 
+        // Assert：验证预期结果
         Assert.Equal(1.0, sample.ParticleMs, 3);
         Assert.Equal(0.1, sample.CaPassAMs, 3);
         Assert.Equal(0.2, sample.CaPassBMs, 3);
@@ -130,6 +133,7 @@ public sealed class PerformanceHudPanelTests
     [Fact]
     public void CaptureSampleReadsContextWithoutMutatingCounters()
     {
+        // Arrange：准备输入与初始状态
         EngineCounters counters = new()
         {
             ActiveChunks = 3,
@@ -146,6 +150,7 @@ public sealed class PerformanceHudPanelTests
         PerformanceHudSample first = panel.CaptureSample(in context);
         PerformanceHudSample second = panel.CaptureSample(in context);
 
+        // Assert：验证预期结果
         Assert.Equal(3, first.ActiveChunks);
         Assert.Equal(9, second.ActiveCells);
         Assert.Equal(60, panel.LastSample.SimHz);
@@ -159,6 +164,7 @@ public sealed class PerformanceHudPanelTests
     [Fact]
     public void CaptureSamplePublishesWarmupExcludedRollingPercentiles()
     {
+        // Arrange：准备输入与初始状态
         PerformanceHudPanel panel = new();
         EditorSelection selection = new();
 
@@ -182,6 +188,7 @@ public sealed class PerformanceHudPanelTests
             _ = panel.CaptureSample(in context);
         }
 
+        // Assert：验证预期结果
         Assert.Equal(120, panel.FrameStatistics.SampleCount);
         Assert.True(panel.FrameStatistics.IsSteady);
         Assert.Equal(120.5, panel.FrameStatistics.AverageMs, 3);
@@ -201,6 +208,7 @@ public sealed class PerformanceHudPanelTests
     [Fact]
     public void CaptureSampleMarksSpikeWithoutDuplicatingSameFrame()
     {
+        // Arrange：准备输入与初始状态
         PerformanceHudPanel panel = new();
         EditorSelection selection = new();
 
@@ -213,6 +221,7 @@ public sealed class PerformanceHudPanelTests
         PerformanceHudStatistics spikeStats = panel.FrameStatistics;
         CaptureFrame(panel, selection, 101, 30.0);
 
+        // Assert：验证预期结果
         Assert.True(spikeStats.IsSpike);
         Assert.True(panel.FrameStatistics.IsSpike);
         Assert.Equal(41, panel.FrameStatistics.SampleCount);
@@ -226,6 +235,7 @@ public sealed class PerformanceHudPanelTests
     [Fact]
     public void CaptureSampleLeavesGpuStatisticsEmptyWhenTimerUnavailable()
     {
+        // Arrange：准备输入与初始状态
         PerformanceHudPanel panel = new();
         EditorSelection selection = new();
 
@@ -248,6 +258,7 @@ public sealed class PerformanceHudPanelTests
             _ = panel.CaptureSample(in context);
         }
 
+        // Assert：验证预期结果
         Assert.Equal(120, panel.FrameStatistics.SampleCount);
         Assert.Equal(0, panel.GpuStatistics.SampleCount);
         Assert.Equal(0, panel.GpuStatistics.P99Ms);
@@ -259,6 +270,7 @@ public sealed class PerformanceHudPanelTests
     [Fact]
     public void CaptureSampleTracksVariableAndFixedCostStatistics()
     {
+        // Arrange：准备输入与初始状态
         PerformanceHudPanel panel = new();
         EditorSelection selection = new();
 
@@ -293,6 +305,7 @@ public sealed class PerformanceHudPanelTests
             _ = panel.CaptureSample(in context);
         }
 
+        // Assert：验证预期结果
         Assert.Equal(120, panel.VariableWorkStatistics.SampleCount);
         Assert.Equal(7.0, panel.VariableWorkStatistics.AverageMs, 3);
         Assert.Equal(2.0, panel.FixedOverheadStatistics.AverageMs, 3);
@@ -306,6 +319,7 @@ public sealed class PerformanceHudPanelTests
     [Fact]
     public void CaptureSamplePercentilesUseRecentRingWindowAfterWraparound()
     {
+        // Arrange：准备输入与初始状态
         PerformanceHudPanel panel = new();
         EditorSelection selection = new();
 
@@ -315,6 +329,7 @@ public sealed class PerformanceHudPanelTests
             CaptureFrame(panel, selection, frame, frameMs);
         }
 
+        // Assert：验证预期结果
         Assert.Equal(512, panel.FrameStatistics.SampleCount);
         Assert.Equal(20.0, panel.FrameStatistics.AverageMs, 3);
         Assert.Equal(20.0, panel.FrameStatistics.P50Ms, 3);

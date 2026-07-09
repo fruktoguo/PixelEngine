@@ -4,6 +4,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// demo-playability 激光烧穿速率与热相变验收测试。
+/// 不变式：激光烧穿速率与热相变符合 demo-playability 验收阈值。
 /// </summary>
 public sealed class DamageBeamBurnThroughTests
 {

@@ -120,6 +120,7 @@ public sealed class RisingHazardDirector : Behaviour
         ResolveMission();
         ResolveMaterial();
         RegisterEmitterBuildSystem();
+        // 熔岩线插值上升 → 同步 MissionDirector → 驱动喷口与体积填充 → 淹没判负
         _elapsedSeconds += dt;
         float duration = Math.Max(0.001f, RiseSeconds);
         float t = Math.Clamp(_elapsedSeconds / duration, 0f, 1f);

@@ -222,23 +222,20 @@ public sealed class EngineProject
     private static SceneDescriptor[] ScanSceneFiles(string contentRoot)
     {
         string scenesRoot = Path.Combine(contentRoot, "scenes");
-        if (!Directory.Exists(scenesRoot))
-        {
-            return [];
-        }
-
-        return
-        [
-            .. Directory
-                .EnumerateFiles(scenesRoot, "*.scene", SearchOption.AllDirectories)
-                .Order(StringComparer.Ordinal)
-                .Select(path =>
-                {
-                    string fullPath = Path.GetFullPath(path);
-                    string name = ReadSceneStableName(fullPath);
-                    return new SceneDescriptor(name, SceneSourceKind.SceneFile, fullPath);
-                }),
-        ];
+        return Directory.Exists(scenesRoot)
+            ?
+            [
+                .. Directory
+                    .EnumerateFiles(scenesRoot, "*.scene", SearchOption.AllDirectories)
+                    .Order(StringComparer.Ordinal)
+                    .Select(path =>
+                    {
+                        string fullPath = Path.GetFullPath(path);
+                        string name = ReadSceneStableName(fullPath);
+                        return new SceneDescriptor(name, SceneSourceKind.SceneFile, fullPath);
+                    }),
+            ]
+            : [];
     }
 
     private static SceneDescriptor ResolveSceneDescriptor(
@@ -269,22 +266,13 @@ public sealed class EngineProject
             return new SceneDescriptor(name, SceneSourceKind.SceneFile, fullSource);
         }
 
-        if (Directory.Exists(fullSource))
-        {
-            return new SceneDescriptor(sceneName, SceneSourceKind.SaveDirectory, fullSource);
-        }
-
-        if (File.Exists(fullSource))
-        {
-            return new SceneDescriptor(ReadSceneStableName(fullSource), SceneSourceKind.SceneFile, fullSource);
-        }
-
-        if (!string.IsNullOrWhiteSpace(proceduralFallbackKey))
-        {
-            return new SceneDescriptor(sceneName, SceneSourceKind.Procedural, proceduralFallbackKey.Trim());
-        }
-
-        return new SceneDescriptor(sceneName);
+        return Directory.Exists(fullSource)
+            ? new SceneDescriptor(sceneName, SceneSourceKind.SaveDirectory, fullSource)
+            : File.Exists(fullSource)
+            ? new SceneDescriptor(ReadSceneStableName(fullSource), SceneSourceKind.SceneFile, fullSource)
+            : !string.IsNullOrWhiteSpace(proceduralFallbackKey)
+            ? new SceneDescriptor(sceneName, SceneSourceKind.Procedural, proceduralFallbackKey.Trim())
+            : new SceneDescriptor(sceneName);
     }
 
     private static string ReadSceneStableName(string scenePath)

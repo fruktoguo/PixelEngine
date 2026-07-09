@@ -3,9 +3,12 @@ using System.Numerics;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// Game View 上的 Game UI 输入源，按 viewport 契约裁剪坐标。
+/// </summary>
 internal sealed class GameViewUiInputSource(
     IUiInputSource inner,
-    Func<PixelEngine.Editor.EditorMode> modeProvider,
+    Func<EditorMode> modeProvider,
     Func<GameViewViewportSnapshot> viewportProvider,
     Func<Vector2> panelPointProvider,
     Func<bool> inputFocusedProvider,
@@ -13,7 +16,7 @@ internal sealed class GameViewUiInputSource(
     Func<Vector2>? framebufferScaleProvider = null) : IUiInputSource
 {
     private readonly IUiInputSource _inner = inner ?? throw new ArgumentNullException(nameof(inner));
-    private readonly Func<PixelEngine.Editor.EditorMode> _modeProvider = modeProvider ?? throw new ArgumentNullException(nameof(modeProvider));
+    private readonly Func<EditorMode> _modeProvider = modeProvider ?? throw new ArgumentNullException(nameof(modeProvider));
     private readonly Func<GameViewViewportSnapshot> _viewportProvider = viewportProvider ?? throw new ArgumentNullException(nameof(viewportProvider));
     private readonly Func<Vector2> _panelPointProvider = panelPointProvider ?? throw new ArgumentNullException(nameof(panelPointProvider));
     private readonly Func<bool> _inputFocusedProvider = inputFocusedProvider ?? throw new ArgumentNullException(nameof(inputFocusedProvider));
@@ -119,7 +122,7 @@ internal sealed class GameViewUiInputSource(
     private bool TryMapFocusedViewportPoint(out Vector2 viewportPoint)
     {
         viewportPoint = default;
-        return _modeProvider() == PixelEngine.Editor.EditorMode.Play &&
+        return _modeProvider() == EditorMode.Play &&
             _inputFocusedProvider() &&
             _viewportProvider().TryMapPanelToViewport(_panelPointProvider(), out viewportPoint);
     }

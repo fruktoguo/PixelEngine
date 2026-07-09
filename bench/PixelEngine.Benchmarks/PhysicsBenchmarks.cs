@@ -88,7 +88,7 @@ public class PhysicsBenchmarks
     }
 
     /// <summary>
-    /// 使用 workerCount=1 的 Box2D task bridge 推进同规模多体 world。
+    /// 验证Box2D Task Bridge Step Worker1。
     /// </summary>
     [Benchmark(Baseline = true)]
     public void Box2DTaskBridgeStepWorker1()
@@ -97,7 +97,7 @@ public class PhysicsBenchmarks
     }
 
     /// <summary>
-    /// 使用 workerCount=4 的 Box2D task bridge 推进同规模多体 world。
+    /// 验证Box2D Task Bridge Step Worker4。
     /// </summary>
     [Benchmark]
     public void Box2DTaskBridgeStepWorker4()
@@ -120,7 +120,7 @@ public class PhysicsBenchmarks
     }
 
     /// <summary>
-    /// 在预热后的 PhysicsSystem 上执行稳态 erase、Box2D step 与 inverse-sampling restamp。
+    /// 验证Physics System Sync Step Steady State。
     /// </summary>
     [Benchmark]
     public int PhysicsSystemSyncStepSteadyState()

@@ -5,6 +5,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// demo-playability RigidOwned 破坏路由测试。
+/// 不变式：RigidOwned 伤害只路由到所属刚体队列。
 /// </summary>
 public sealed class RigidOwnedDamageRoutingTests
 {
@@ -17,6 +18,7 @@ public sealed class RigidOwnedDamageRoutingTests
     [Fact]
     public void DamageCircleRoutesRigidOwnedCellToPhysicsQueueWithoutAccumulatingDamage()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = TestChunkSource.CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         int local = CellAddressing.LocalIndexFromLocal(10, 10);
         center.Material[local] = Stone;
@@ -27,6 +29,7 @@ public sealed class RigidOwnedDamageRoutingTests
 
         int destroyed = kernel.DamageCircle(10, 10, radius: 0, damage: 255, falloff: false);
 
+        // Assert：验证预期结果
         Assert.Equal(0, destroyed);
         Assert.Equal(Stone, center.Material[local]);
         Assert.True(CellFlags.Has(center.Flags[local], CellFlags.RigidOwned));
@@ -42,6 +45,7 @@ public sealed class RigidOwnedDamageRoutingTests
     [Fact]
     public void DamageBeamRoutesRigidOwnedCellToPhysicsQueueWithoutMutatingMaterial()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = TestChunkSource.CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         int normalLocal = CellAddressing.LocalIndexFromLocal(8, 10);
         int rigidLocal = CellAddressing.LocalIndexFromLocal(9, 10);
@@ -53,6 +57,7 @@ public sealed class RigidOwnedDamageRoutingTests
 
         int destroyed = kernel.DamageBeam(8, 10, dirX: 1f, dirY: 0f, length: 1, damagePerCell: 255);
 
+        // Assert：验证预期结果
         Assert.Equal(1, destroyed);
         Assert.Equal(Empty, center.Material[normalLocal]);
         Assert.Equal(Stone, center.Material[rigidLocal]);

@@ -97,21 +97,12 @@ public enum ScriptAssetKind
 /// 标记字符串或 <see cref="ScriptAssetReference"/> 字段为 typed asset reference Inspector 字段。
 /// </summary>
 [AttributeUsage(AttributeTargets.Field)]
-public sealed class AssetFieldAttribute : Attribute
+public sealed class AssetFieldAttribute(ScriptAssetKind assetType) : Attribute
 {
-    /// <summary>
-    /// 创建 typed asset reference 字段声明。
-    /// </summary>
-    /// <param name="assetType">字段允许绑定的工程资产类别。</param>
-    public AssetFieldAttribute(ScriptAssetKind assetType)
-    {
-        AssetType = assetType;
-    }
-
     /// <summary>
     /// 字段允许绑定的工程资产类别。
     /// </summary>
-    public ScriptAssetKind AssetType { get; }
+    public ScriptAssetKind AssetType { get; } = assetType;
 }
 
 /// <summary>

@@ -36,6 +36,7 @@ public sealed class SilkInputPhaseDriver(
         phases.Register(EnginePhase.InputAndTime, CaptureInput);
     }
 
+    // 相位 0：泵送窗口事件，按输入仲裁路由采样键鼠并写入脚本输入快照。
     private void CaptureInput(EngineTickContext context)
     {
         _window.DoEvents();
@@ -115,6 +116,7 @@ public sealed class SilkInputPhaseDriver(
         _lastWheelY = currentWheelY;
         float framebufferX = mouse.Position.X * _window.FramebufferScaleX;
         float framebufferY = mouse.Position.Y * _window.FramebufferScaleY;
+        // 逻辑视口与帧缓冲不一致时，将鼠标坐标映射回 sim 内部分辨率空间。
         if (_logicalViewportWidth > 0 && _logicalViewportHeight > 0)
         {
             PresentationViewport viewport = PresentationViewport.Fit(

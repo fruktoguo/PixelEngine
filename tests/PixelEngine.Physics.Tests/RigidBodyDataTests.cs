@@ -6,6 +6,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// 刚体数据结构测试。
+/// 不变式：刚体数据布局与序列化字段稳定。
 /// </summary>
 public sealed unsafe class RigidBodyDataTests
 {
@@ -87,7 +88,7 @@ public sealed unsafe class RigidBodyDataTests
 
             Assert.Equal(0, body.BodyKey);
             Assert.Same(body, physicsWorld.GetBody(0));
-            Assert.Equal<nint>(1, (nint)userData);
+            Assert.Equal(1, (nint)userData);
         }
         finally
         {

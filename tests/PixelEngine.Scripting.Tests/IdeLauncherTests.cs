@@ -5,6 +5,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// IDE 启动器测试。
+/// 不变式：IDE 启动器解析工作区与脚本路径正确。
 /// </summary>
 public sealed class IdeLauncherTests
 {

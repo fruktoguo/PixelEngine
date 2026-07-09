@@ -83,7 +83,7 @@ public sealed class RegionFileStoreTests
         store.Write(rightEdge, [31]);
         store.Write(leftEdge, [0]);
 
-        string regionPath = System.IO.Path.Combine(world.Path, "regions", "r.-1.0.rgn");
+        string regionPath = Path.Combine(world.Path, "regions", "r.-1.0.rgn");
         Assert.True(File.Exists(regionPath));
 
         ArrayBufferWriter<byte> rightDestination = new();

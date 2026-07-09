@@ -73,6 +73,7 @@ public sealed class FrameProfiler
         LastWallMilliseconds = elapsed * 1000.0 / Stopwatch.Frequency;
         _current.CopyTo(_last, 0);
         _subCurrent.CopyTo(_subLast, 0);
+        // 主相位历史写入 256 帧环，供 Average() 计算滑动窗口均值。
         int offset = _historyIndex * FrameStats.PhaseCount;
         _current.CopyTo(_history, offset);
         _historyIndex = (_historyIndex + 1) & (HistoryLength - 1);

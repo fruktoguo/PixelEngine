@@ -465,7 +465,7 @@ public sealed class GameUiHost : IDisposable
     /// 合成 UI 到当前渲染管线的 present 层。
     /// </summary>
     /// <param name="context">渲染管线提供的 UI present 上下文。</param>
-    public void Composite(in PixelEngine.Rendering.UiPresentContext context)
+    public void Composite(in Rendering.UiPresentContext context)
     {
         ThrowIfDisposed();
         if (Options.Enabled && _initialized && NeedsComposite && ShouldPresentThisFrame())
@@ -520,12 +520,14 @@ public sealed class GameUiHost : IDisposable
         }
     }
 
+    // 屏栈变更后同步到后端：Show/Hide/PopModal 均经此路径差量推送可见文档。
     private void PublishScreenStack()
     {
         int count = Documents.CopyStack(_screenStackBuffer);
         _backend.SetScreenStack(_screenStackBuffer.AsSpan(0, count));
     }
 
+    // UI present 降频：仅跳过 paint/composite，不影响 Update、输入泵与事件 drain。
     private bool ShouldPresentThisFrame()
     {
         if (PresentationIntervalFrames <= 1)

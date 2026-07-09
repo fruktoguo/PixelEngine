@@ -62,6 +62,7 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(context.Gl);
         long started = Stopwatch.GetTimestamp();
+        // 可选 target 覆盖：GameView 等宿主可把 UI 合成到子视口而非全屏 framebuffer。
         UiPresentContext presentContext = _targetProvider is not null &&
             _targetProvider.TryGetPresentTarget(out UiPresentTarget target)
                 ? context.WithTarget(target)

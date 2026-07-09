@@ -6,6 +6,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// 热重载服务测试。
+/// 不变式：热重载替换行为实例且保留场景引用完整性。
 /// </summary>
 public sealed class HotReloadServiceTests
 {
@@ -15,6 +16,7 @@ public sealed class HotReloadServiceTests
     [Fact]
     public void CompileFailureKeepsExistingScripts()
     {
+        // Arrange：准备输入与初始状态
         Scene scene = new();
         FakeScriptContext context = new(scene);
         Entity entity = scene.CreateEntity();
@@ -24,6 +26,7 @@ public sealed class HotReloadServiceTests
         HotReloadResult result = service.ApplyPendingReload();
         Behaviour behaviour = scene.CaptureBehaviours()[0].Behaviour;
 
+        // Assert：验证预期结果
         Assert.Equal(HotReloadStatus.CompileFailed, result.Status);
         Assert.Equal("v1", ReadVersion(behaviour));
         Assert.Equal(42, ReadField<int>(behaviour, "Counter"));
@@ -35,6 +38,7 @@ public sealed class HotReloadServiceTests
     [Fact]
     public void ApplyFailureForMissingTypeKeepsExistingScripts()
     {
+        // Arrange：准备输入与初始状态
         Scene scene = new();
         FakeScriptContext context = new(scene);
         Entity entity = scene.CreateEntity();
@@ -46,6 +50,7 @@ public sealed class HotReloadServiceTests
         HotReloadResult result = service.ApplyPendingReload();
         Behaviour behaviour = scene.CaptureBehaviours()[0].Behaviour;
 
+        // Assert：验证预期结果
         Assert.Equal(HotReloadStatus.ApplyFailed, result.Status);
         Assert.NotNull(result.Exception);
         Assert.Equal("v1", ReadVersion(behaviour));
@@ -58,6 +63,7 @@ public sealed class HotReloadServiceTests
     [Fact]
     public void ApplyFailureForConstructorExceptionKeepsExistingScriptsAndCurrentContext()
     {
+        // Arrange：准备输入与初始状态
         Scene scene = new();
         FakeScriptContext context = new(scene);
         Entity entity = scene.CreateEntity();
@@ -69,6 +75,7 @@ public sealed class HotReloadServiceTests
         HotReloadResult failed = service.ApplyPendingReload();
         Behaviour oldBehaviour = scene.CaptureBehaviours()[0].Behaviour;
 
+        // Assert：验证预期结果
         Assert.Equal(HotReloadStatus.ApplyFailed, failed.Status);
         Assert.NotNull(failed.Exception);
         Assert.Equal("v1", ReadVersion(oldBehaviour));
@@ -108,6 +115,7 @@ public sealed class HotReloadServiceTests
     [Fact]
     public void SuccessfulReloadPreservesScriptAssetReferenceState()
     {
+        // Arrange：准备输入与初始状态
         ScriptAssetReference texture = new(ScriptAssetKind.Texture, "asset_texture", "textures/player.png");
         ScriptAssetReference audio = new(ScriptAssetKind.Audio, "asset_audio", "audio/hit.wav");
         ScriptAssetReference hidden = new(ScriptAssetKind.Prefab, "asset_hidden", "prefabs/hidden.prefab");
@@ -122,6 +130,7 @@ public sealed class HotReloadServiceTests
         HotReloadResult result = service.ApplyPendingReload();
         Behaviour replacement = scene.CaptureBehaviours()[0].Behaviour;
 
+        // Assert：验证预期结果
         Assert.Equal(HotReloadStatus.Reloaded, result.Status);
         Assert.Equal("asset-v2", ReadVersion(replacement));
         Assert.Equal(texture, ReadField<ScriptAssetReference>(replacement, "TextureReference"));
@@ -136,6 +145,7 @@ public sealed class HotReloadServiceTests
     [Fact]
     public void SuccessfulReloadCanResetStateCompletely()
     {
+        // Arrange：准备输入与初始状态
         Scene scene = new();
         FakeScriptContext context = new(scene);
         Entity entity = scene.CreateEntity();
@@ -148,6 +158,7 @@ public sealed class HotReloadServiceTests
         HotReloadResult result = service.ApplyPendingReload();
         Behaviour replacement = scene.CaptureBehaviours()[0].Behaviour;
 
+        // Assert：验证预期结果
         Assert.Equal(HotReloadStatus.Reloaded, result.Status);
         Assert.Equal("v2", ReadVersion(replacement));
         Assert.Equal(0, ReadField<int>(replacement, "Counter"));
@@ -162,6 +173,7 @@ public sealed class HotReloadServiceTests
     [Fact]
     public void RepeatedReloadsUnloadPreviousContexts()
     {
+        // Arrange：准备输入与初始状态
         const int ReloadCount = 50;
         Scene scene = new();
         FakeScriptContext context = new(scene);
@@ -176,6 +188,7 @@ public sealed class HotReloadServiceTests
                 [new ScriptSourceFile("ReloadableScript.cs", VersionTwoSource)]);
             HotReloadResult result = service.ApplyPendingReload();
 
+            // Assert：验证预期结果
             Assert.Equal(HotReloadStatus.Reloaded, result.Status);
             unloadedContexts[i] = result.UnloadedContext!;
         }
@@ -194,6 +207,7 @@ public sealed class HotReloadServiceTests
     [Fact]
     public void ScriptRuntimeBeginFrameAppliesPendingReloadBeforeStartDispatch()
     {
+        // Arrange：准备输入与初始状态
         Scene scene = new();
         FakeScriptContext context = new(scene);
         Entity entity = scene.CreateEntity();
@@ -208,6 +222,7 @@ public sealed class HotReloadServiceTests
         runtime.BeginFrame();
         Behaviour replacement = scene.CaptureBehaviours()[0].Behaviour;
 
+        // Assert：验证预期结果
         Assert.False(service.HasPendingReload);
         Assert.Equal("v2", ReadVersion(replacement));
         Assert.Equal(1, ReadField<int>(replacement, "StartedByReload"));
@@ -220,6 +235,7 @@ public sealed class HotReloadServiceTests
     [Fact]
     public void SourceWatcherDebouncesChangesIntoPendingReload()
     {
+        // Arrange：准备输入与初始状态
         string directory = Path.Combine(Path.GetTempPath(), "PixelEngineScripts", Guid.NewGuid().ToString("N"));
         _ = Directory.CreateDirectory(directory);
         try
@@ -233,6 +249,7 @@ public sealed class HotReloadServiceTests
 
             File.WriteAllText(Path.Combine(directory, "ReloadableScript.cs"), VersionTwoSource);
 
+            // Assert：验证预期结果
             Assert.True(
                 SpinWait.SpinUntil(() => service.HasPendingReload || service.LastWatcherException is not null, TimeSpan.FromSeconds(5)),
                 service.LastWatcherException?.ToString() ?? "watcher 未在超时时间内触发 reload");

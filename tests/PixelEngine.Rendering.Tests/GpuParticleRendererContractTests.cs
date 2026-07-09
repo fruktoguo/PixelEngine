@@ -2,8 +2,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// GPU 粒子渲染器契约测试：缓冲布局与绘制调用约定。
+/// </summary>
 public sealed class GpuParticleRendererContractTests
 {
+    /// <summary>
+    /// 验证Particle Render Mode Defaults To Cpu Stamp And Validates Enum。
+    /// </summary>
     [Fact]
     public void ParticleRenderModeDefaultsToCpuStampAndValidatesEnum()
     {
@@ -16,6 +22,9 @@ public sealed class GpuParticleRendererContractTests
         Assert.Contains(nameof(RenderPipelineSettings.ParticleRenderMode), exception.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Gpu Particle Renderer Declares Stable Packed Vertex Contract。
+    /// </summary>
     [Fact]
     public void GpuParticleRendererDeclaresStablePackedVertexContract()
     {
@@ -29,6 +38,9 @@ public sealed class GpuParticleRendererContractTests
         Assert.Contains("ReadOnlySpan<Particle> particles", source, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Gpu Particle Upload不会Reallocate Vbo On Steady Frames。
+    /// </summary>
     [Fact]
     public void GpuParticleUploadDoesNotReallocateVboOnSteadyFrames()
     {
@@ -43,6 +55,9 @@ public sealed class GpuParticleRendererContractTests
         Assert.DoesNotContain(".Allocate(", uploadMethod, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Gpu Particle Shader Sources Expose Camera And Point Sprite Contracts。
+    /// </summary>
     [Fact]
     public void GpuParticleShaderSourcesExposeCameraAndPointSpriteContracts()
     {
@@ -60,6 +75,9 @@ public sealed class GpuParticleRendererContractTests
         Assert.Contains("discard", fragment, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Render Pipeline Orders Gpu Particles Between World And Overlay行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderPipelineOrdersGpuParticlesBetweenWorldAndOverlay()
     {
@@ -71,6 +89,9 @@ public sealed class GpuParticleRendererContractTests
         Assert.True(source.IndexOf("RenderGpuParticlesIfEnabled", StringComparison.Ordinal) < source.IndexOf("_overlay.Render", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// 验证Render Pipeline Gates Gpu Particles By G4Feature Switch行为符合预期。
+    /// </summary>
     [Fact]
     public void RenderPipelineGatesGpuParticlesByG4FeatureSwitch()
     {

@@ -50,7 +50,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
     private readonly float[] _simHzHistory = new float[HistoryLength];
     private readonly float[] _phaseBars = new float[PhaseBarCount];
     private readonly float[] _statsScratch = new float[HistoryLength];
-    private PixelEngine.Rendering.IRenderPresentationControl? _presentationControl;
+    private Rendering.IRenderPresentationControl? _presentationControl;
     private long _lastCapturedFrame = -1;
     private int _historyOffset;
     private int _historyCount;
@@ -148,6 +148,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
     /// </summary>
     public static PerformanceHudSample BuildSample(EditorPerformanceSnapshot snapshot)
     {
+        // 从 FramePhase/FrameSubPhase 与 EngineCounters 聚合 plan/02 诊断，回退链保证旧计数器仍可读。
         ReadOnlySpan<double> phases = snapshot.LastFrame;
         ReadOnlySpan<double> subPhases = snapshot.LastSubFrame;
         EngineCounters? counters = snapshot.Counters;
@@ -316,6 +317,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
             snapshot.Runtime.ConsecutiveOverBudgetFrames);
     }
 
+    // 瓶颈判定：present/vsync 等待占比高 → present-bound；否则比较 CPU/GPU busy 判定 CPU/GPU-bound。
     private static string DetermineBoundType(
         double cpuMs,
         double gpuMs,
@@ -356,6 +358,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
         return total;
     }
 
+    // 环形缓冲写入本帧样本；_historyOffset 作为 ImPlot 环形曲线起点。
     private void WriteHistory(PerformanceHudSample sample)
     {
         int index = _historyOffset;

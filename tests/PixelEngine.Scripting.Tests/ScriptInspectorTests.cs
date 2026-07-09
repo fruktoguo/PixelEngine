@@ -4,6 +4,7 @@ namespace PixelEngine.Scripting.Tests;
 
 /// <summary>
 /// 脚本 Inspector 反射测试。
+/// 不变式：Inspector 反射暴露可序列化字段、只读属性只读。
 /// </summary>
 public sealed class ScriptInspectorTests
 {
@@ -13,6 +14,7 @@ public sealed class ScriptInspectorTests
     [Fact]
     public void InspectFieldsReturnsVisiblePublicAndSerializedPrivateFields()
     {
+        // Arrange：准备输入与初始状态
         InspectableBehaviour behaviour = new()
         {
             PublicValue = 7,
@@ -22,6 +24,7 @@ public sealed class ScriptInspectorTests
 
         ScriptFieldDescriptor[] fields = ScriptInspector.InspectFields(behaviour);
 
+        // Assert：验证预期结果
         Assert.Equal(["PublicValue", "privateValue"], [.. fields.Select(field => field.Name).Order(StringComparer.Ordinal)]);
         ScriptFieldDescriptor publicField = fields.Single(field => field.Name == "PublicValue");
         Assert.Equal(typeof(int), publicField.FieldType);
@@ -80,6 +83,7 @@ public sealed class ScriptInspectorTests
     [Fact]
     public void InspectFieldsClassifiesTypedAssetReferencesAndSetsCompatibleValues()
     {
+        // Arrange：准备输入与初始状态
         AssetFieldBehaviour behaviour = new();
         string textureValue = ScriptAssetReference.Encode("asset_texture", "textures/sand.png", ScriptAssetKind.Texture);
         ScriptAssetReference audioReference = new(ScriptAssetKind.Audio, "asset_audio", "audio/hit.wav");
@@ -87,6 +91,7 @@ public sealed class ScriptInspectorTests
         ScriptFieldDescriptor[] fields = ScriptInspector.InspectFields(behaviour);
 
         ScriptFieldDescriptor texture = fields.Single(field => field.Name == nameof(AssetFieldBehaviour.Texture));
+        // Assert：验证预期结果
         Assert.Equal(ScriptFieldKind.AssetReference, texture.Kind);
         Assert.Equal(ScriptAssetKind.Texture, texture.AssetKind);
         ScriptFieldDescriptor audio = fields.Single(field => field.Name == nameof(AssetFieldBehaviour.Audio));

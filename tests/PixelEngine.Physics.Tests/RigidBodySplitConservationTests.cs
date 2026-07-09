@@ -10,6 +10,7 @@ namespace PixelEngine.Physics.Tests;
 
 /// <summary>
 /// plan/14 刚体破坏拆分守恒验收测试。
+/// 不变式：刚体拆分前后像素计数守恒。
 /// </summary>
 public sealed class RigidBodySplitConservationTests
 {
@@ -19,6 +20,7 @@ public sealed class RigidBodySplitConservationTests
     [Fact]
     public void SplitBodyConservesRemainingPixelsAndTransfersVelocity()
     {
+        // Arrange：准备输入与初始状态
         PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
@@ -42,6 +44,7 @@ public sealed class RigidBodySplitConservationTests
 
             RigidDestructionResult result = destruction.RebuildDirty(worldId, physicsWorld, grid, registry, damage, jobs);
 
+            // Assert：验证预期结果
             Assert.Equal(2, result.CreatedBodies);
             Assert.Equal(mask.SolidPixelCount - damage.Length, CountBodyMaskPixels(physicsWorld));
             Assert.Equal(2, physicsWorld.ActiveBodyCount);
@@ -59,6 +62,7 @@ public sealed class RigidBodySplitConservationTests
     [Fact]
     public void SmallComponentsBecomeParticlesInsteadOfBodies()
     {
+        // Arrange：准备输入与初始状态
         PhysicsScale.ConfigureBox2DLengthUnits();
         B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
         worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
@@ -82,6 +86,7 @@ public sealed class RigidBodySplitConservationTests
 
             RigidDestructionResult result = destruction.RebuildDirty(worldId, physicsWorld, grid, registry, [new RigidDamageEvent(damaged.WorldX, damaged.WorldY)]);
 
+            // Assert：验证预期结果
             Assert.Equal(0, result.CreatedBodies);
             Assert.Equal(3, result.FragmentPixels);
             Assert.Equal(0, physicsWorld.ActiveBodyCount);

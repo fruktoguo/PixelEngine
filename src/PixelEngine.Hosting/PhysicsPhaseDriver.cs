@@ -24,6 +24,7 @@ public sealed class PhysicsPhaseDriver(PhysicsSystem physics, IChunkSource? chun
         phases.Register(EnginePhase.PhysicsSync, RunPhysicsSync);
     }
 
+    // 相位 8：flush 脚本物理命令 → 同步静态地形 collider → Box2D step → 发布诊断与事件。
     private void RunPhysicsSync(EngineTickContext context)
     {
         if (!context.Timing.RunPhysics)

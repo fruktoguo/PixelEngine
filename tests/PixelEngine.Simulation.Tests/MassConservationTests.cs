@@ -6,6 +6,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// 无反应 CA movement 的材质质量守恒性质测试。
+/// 不变式：无反应 movement 不创造/销毁材质计数。
 /// </summary>
 public sealed class MassConservationTests
 {

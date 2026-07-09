@@ -3,8 +3,14 @@ using Xunit;
 
 namespace PixelEngine.Audio.Tests;
 
+/// <summary>
+/// 音频调度器测试：事件合并、上限丢弃与分发顺序。
+/// </summary>
 public sealed class AudioDispatcherTests
 {
+    /// <summary>
+    /// 验证合并器合并邻近同类型事件，超出每类型上限时丢弃。
+    /// </summary>
     [Fact]
     public void CoalescerMergesNearbyEventsAndDropsBeyondPerTypeCap()
     {
@@ -34,6 +40,9 @@ public sealed class AudioDispatcherTests
         Assert.Equal(8, output[0].CellY);
     }
 
+    /// <summary>
+    /// 验证Coalescer保持分离各类型与各桶。
+    /// </summary>
     [Fact]
     public void CoalescerKeepsSeparateTypesAndBuckets()
     {
@@ -52,6 +61,9 @@ public sealed class AudioDispatcherTests
         Assert.Equal(0, coalescer.DroppedCount);
     }
 
+    /// <summary>
+    /// 验证冷却追踪器抑制相同材质与类型在冷却时间内。
+    /// </summary>
     [Fact]
     public void CooldownTrackerSuppressesSameMaterialAndTypeWithinCooldown()
     {
@@ -64,6 +76,9 @@ public sealed class AudioDispatcherTests
         Assert.True(cooldowns.ShouldPlay(7, AudioEventType.Explosion, tick: 14, cooldownTicks: 4));
     }
 
+    /// <summary>
+    /// 验证调度器排空环形缓冲合并Cooldowns And使用声道池。
+    /// </summary>
     [Fact]
     public void DispatcherDrainsRingCoalescesCooldownsAndUsesVoicePool()
     {
@@ -105,6 +120,9 @@ public sealed class AudioDispatcherTests
         Assert.Equal(AudioEventType.Explosion, player.Events[1].Type);
     }
 
+    /// <summary>
+    /// 验证调度器限制一千同坐标撞击。
+    /// </summary>
     [Fact]
     public void DispatcherCapsThousandSameCoordinateImpacts()
     {
@@ -140,6 +158,9 @@ public sealed class AudioDispatcherTests
         Assert.Equal(999f, player.Events[0].Magnitude);
     }
 
+    /// <summary>
+    /// 验证调度器抑制相同材质与类型在冷却时间内。
+    /// </summary>
     [Fact]
     public void DispatcherSuppressesSameMaterialAndTypeWithinCooldown()
     {
@@ -169,6 +190,9 @@ public sealed class AudioDispatcherTests
         Assert.Equal(1, third.Played);
     }
 
+    /// <summary>
+    /// 验证调度器报告声道丢弃当池无法窃取时。
+    /// </summary>
     [Fact]
     public void DispatcherReportsVoiceDropWhenPoolCannotSteal()
     {
@@ -196,6 +220,9 @@ public sealed class AudioDispatcherTests
         Assert.Equal(1, voices.DroppedVoiceCount);
     }
 
+    /// <summary>
+    /// 验证调度器不会在…期间分配稳态分发。
+    /// </summary>
     [Fact]
     public void DispatcherDoesNotAllocateDuringSteadyDispatch()
     {
@@ -234,6 +261,9 @@ public sealed class AudioDispatcherTests
         Assert.Equal(2, player.PlayedCount);
     }
 
+    /// <summary>
+    /// 验证调度器消费全部核心音频事件类型。
+    /// </summary>
     [Fact]
     public void DispatcherConsumesAllCoreAudioEventTypes()
     {

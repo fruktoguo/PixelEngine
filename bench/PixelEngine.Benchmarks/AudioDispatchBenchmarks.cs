@@ -5,7 +5,7 @@ using PixelEngine.Core.Events;
 namespace PixelEngine.Benchmarks;
 
 /// <summary>
-/// 音频帧尾派发预算基准。
+/// 热路径：AudioDispatcher 事件合并与分发。
 /// </summary>
 [MemoryDiagnoser]
 [ShortRunJob]
@@ -40,9 +40,8 @@ public class AudioDispatchBenchmarks
     }
 
     /// <summary>
-    /// 派发 64 个不合并的 impact 事件，覆盖主线程预算压力路径。
+    /// 验证每帧调度 64 个粒子撞击事件的热路径。
     /// </summary>
-    /// <returns>单帧派发统计。</returns>
     [Benchmark]
     public AudioDispatchStats DispatchSixtyFourImpactEvents()
     {

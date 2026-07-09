@@ -5,6 +5,9 @@ using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// 在外部 IDE 中打开 .cs 脚本资产。
+/// </summary>
 internal sealed class EditorScriptAssetOpenService(
     EditorAssetManifestStore assets,
     Func<ProjectSettingsDto>? settingsProvider = null,
@@ -231,11 +234,17 @@ internal sealed class EditorScriptAssetOpenService(
     }
 }
 
+/// <summary>
+/// 外部脚本编辑器进程启动器接口。
+/// </summary>
 internal interface IExternalScriptEditorProcessLauncher
 {
     bool Start(ProcessStartInfo startInfo, out string diagnostic);
 }
 
+/// <summary>
+/// 默认的外部脚本编辑器进程启动实现。
+/// </summary>
 internal sealed class ExternalScriptEditorProcessLauncher : IExternalScriptEditorProcessLauncher
 {
     public bool Start(ProcessStartInfo startInfo, out string diagnostic)
@@ -264,6 +273,9 @@ internal sealed class ExternalScriptEditorProcessLauncher : IExternalScriptEdito
     }
 }
 
+/// <summary>
+/// EditorScriptAssetOpenResult 数据结构。
+/// </summary>
 internal sealed record EditorScriptAssetOpenResult(
     bool Success,
     string AssetId,

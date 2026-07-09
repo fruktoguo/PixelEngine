@@ -165,7 +165,7 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <inheritdoc />
     protected override void OnStart()
     {
-        _player = Entity.TryGetComponent<PlayerController>(out PlayerController player) ? player : null;
+        _player = Entity.TryGetComponent(out PlayerController player) ? player : null;
     }
 
     /// <inheritdoc />
@@ -174,6 +174,7 @@ public sealed class PlayableProjectileTool : Behaviour
         float safeDt = MathF.Max(0f, dt);
         _cooldownRemaining = MathF.Max(0f, _cooldownRemaining - safeDt);
         TracerRemainingSeconds = MathF.Max(0f, TracerRemainingSeconds - safeDt);
+        // 左键冷却结束后朝鼠标方向发射
         if (InputEnabled && _cooldownRemaining <= 0f && Context.Input.IsMouseDown(MouseButton.Left))
         {
             _ = TryFire();
@@ -195,7 +196,7 @@ public sealed class PlayableProjectileTool : Behaviour
     {
         if (_player is null)
         {
-            if (!Entity.TryGetComponent<PlayerController>(out PlayerController player))
+            if (!Entity.TryGetComponent(out PlayerController player))
             {
                 return false;
             }
@@ -203,6 +204,7 @@ public sealed class PlayableProjectileTool : Behaviour
             _player = player;
         }
 
+        // 屏幕鼠标 → 世界坐标，从玩家胸口略上方沿方向射线求命中点
         (float mouseX, float mouseY) = Context.Input.MousePixel;
         Point2F target = Context.Camera.ScreenToWorld(mouseX, mouseY);
         float startX = _player.CenterX;
@@ -225,6 +227,7 @@ public sealed class PlayableProjectileTool : Behaviour
             hitY = hit.Y;
         }
 
+        // 大枪走 Explode；小枪走 DamageCircle 并补粒子反馈
         if (UseExplosionDamage)
         {
             Context.World.Explode(hitX, hitY, Math.Max(1, ImpactRadius), MathF.Max(1f, ImpactForce));
@@ -304,6 +307,7 @@ public sealed class PlayableProjectileTool : Behaviour
         _pendingCollapseScans = Math.Clamp(CollapseScanRetryFrames, 1, 8);
     }
 
+    // 延迟帧扫描：爆破后等待 CA 稳定，再把悬空固体岛转为刚体
     private void ProcessPendingCollapseScan()
     {
         if (_pendingCollapseFrames <= 0)
@@ -339,6 +343,7 @@ public sealed class PlayableProjectileTool : Behaviour
         }
     }
 
+    // 在弹坑周围做 4-连通 flood fill，筛选真正悬空且尺寸合规的固体岛
     private int ConvertFloatingSolidIslandsNear(int centerX, int centerY, int maxConversions)
     {
         int radius = Math.Clamp(CollapseScanRadius, 4, 320);

@@ -33,8 +33,10 @@ public static class ConvexDecomposer
         {
             Span<Vector2> vertices = rentedVertices.AsSpan(0, count);
             polygon[..count].CopyTo(vertices);
+            // 统一为逆时针 winding，保证 ear clipping 与凸性判定一致。
             EnsureCounterClockwise(vertices);
 
+            // 小凸多边形直接输出，跳过后续三角化与合并。
             if (count <= 8 && IsConvex(vertices))
             {
                 destination[0] = ConvexPolygon.From(vertices);
@@ -103,6 +105,7 @@ public static class ConvexDecomposer
         int guard = vertices.Length * vertices.Length;
         Span<Vector2> triangle = stackalloc Vector2[3];
 
+        // Ear clipping：每次移除一个耳三角形，直至剩余三角面或无法继续。
         while (indexCount > 3 && guard-- > 0)
         {
             bool clipped = false;
@@ -156,6 +159,7 @@ public static class ConvexDecomposer
         return written;
     }
 
+    // 贪心合并共享边的相邻凸片，减少 Box2D shape 数量。
     private static int MergeAdjacentConvexPieces(Span<ConvexPolygon> pieces, int count)
     {
         Span<Vector2> merged = stackalloc Vector2[8];
@@ -202,6 +206,7 @@ public static class ConvexDecomposer
             return 0;
         }
 
+        // 合并后凸包面积须与源片面积近似，防止凹角被 hull 吞掉。
         float sourceArea = Math.Abs(Area(left)) + Math.Abs(Area(right));
         float hullArea = Math.Abs(SignedArea(destination[..hullCount]));
         float tolerance = MathF.Max(1e-4f, sourceArea * 1e-4f);
@@ -256,6 +261,7 @@ public static class ConvexDecomposer
                 return x != 0 ? x : a.Y.CompareTo(b.Y);
             });
 
+            // Andrew monotone chain：先下凸壳再上凸壳，得到合并候选凸包。
             int count = 0;
             for (int i = 0; i < sorted.Length; i++)
             {
@@ -324,6 +330,7 @@ public static class ConvexDecomposer
             return false;
         }
 
+        // 耳顶点三角形内不能包含其它未裁剪顶点。
         for (int i = 0; i < indices.Length; i++)
         {
             int candidate = indices[i];

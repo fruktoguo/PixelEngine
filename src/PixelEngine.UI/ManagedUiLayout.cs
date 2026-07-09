@@ -23,6 +23,7 @@ internal static class ManagedUiLayout
             throw new FileNotFoundException("找不到 UI 文档。", source.Path);
         }
 
+        // 解析 XHTML 子集：先读 style 规则与根盒模型，再 DFS 收集可绑定控件。
         XDocument document = XDocument.Load(source.Path, LoadOptions.None);
         XElement root = document.Root ?? throw new InvalidDataException("UI 文档缺少根节点。");
         string title = ReadAttribute(root, "title") ?? Path.GetFileNameWithoutExtension(source.Path);
@@ -255,17 +256,10 @@ internal static class ManagedUiLayout
 
     private static bool IsSupportedSelector(ReadOnlySpan<char> selector)
     {
-        if (selector.IsEmpty)
-        {
-            return false;
-        }
-
-        if (selector[0] == '#')
-        {
-            return selector.Length > 1 && selector[1..].IndexOfAny(" .>+~[:".AsSpan()) < 0;
-        }
-
-        return selector.IndexOfAny("#. >+~[:".AsSpan()) < 0;
+        return !selector.IsEmpty &&
+            (selector[0] == '#'
+                ? selector.Length > 1 && selector[1..].IndexOfAny(" .>+~[:".AsSpan()) < 0
+                : selector.IndexOfAny("#. >+~[:".AsSpan()) < 0);
     }
 
     private static ManagedUiStyle ResolveStyle(XElement element, Dictionary<string, ManagedUiStyle> rules)

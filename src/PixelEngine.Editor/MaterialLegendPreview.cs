@@ -130,7 +130,7 @@ public readonly record struct MaterialLegendPreviewEntry(
             (byte)Math.Clamp(row.Alpha, byte.MinValue, byte.MaxValue),
             row.FlowTintBGRA,
             (ushort)Math.Clamp(row.MaxIntegrity, ushort.MinValue, ushort.MaxValue),
-            (byte)Math.Clamp(row.FlowRate, byte.MinValue, PixelEngine.Core.EngineConstants.MoveCap),
+            (byte)Math.Clamp(row.FlowRate, byte.MinValue, Core.EngineConstants.MoveCap),
             (byte)Math.Clamp(row.DebrisCount, byte.MinValue, byte.MaxValue),
             (byte)Math.Clamp(row.MineYield, byte.MinValue, byte.MaxValue),
             row.LegendVisible);

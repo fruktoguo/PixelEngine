@@ -4,6 +4,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// 确定性模式下固定初态到 golden 终态的回归测试。
+/// 不变式：固定 seed 与初态下终态哈希与 golden 一致。
 /// </summary>
 public sealed class DeterministicRegressionTests
 {

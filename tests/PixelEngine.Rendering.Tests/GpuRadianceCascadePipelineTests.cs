@@ -4,8 +4,14 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// GPU 辐射级联管线测试：级联更新与光照合成。
+/// </summary>
 public sealed class GpuRadianceCascadePipelineTests
 {
+    /// <summary>
+    /// 验证Constructor Loads Radiance Cascade Kernels Only。
+    /// </summary>
     [Fact]
     public void ConstructorLoadsRadianceCascadeKernelsOnly()
     {
@@ -23,6 +29,9 @@ public sealed class GpuRadianceCascadePipelineTests
             backend.LoadedKernelNames);
     }
 
+    /// <summary>
+    /// 验证Sdf Initialize And Jump Use No Readback Image Barriers。
+    /// </summary>
     [Fact]
     public void SdfInitializeAndJumpUseNoReadbackImageBarriers()
     {
@@ -44,6 +53,9 @@ public sealed class GpuRadianceCascadePipelineTests
         });
     }
 
+    /// <summary>
+    /// 验证Cascade Build Merge And Apply Bind Expected Resources。
+    /// </summary>
     [Fact]
     public void CascadeBuildMergeAndApplyBindExpectedResources()
     {
@@ -69,6 +81,9 @@ public sealed class GpuRadianceCascadePipelineTests
         Assert.Contains("Uniform1f:rc_apply:uRadianceIntensity=0.75", backend.Events);
     }
 
+    /// <summary>
+    /// 验证Dispatch Methods Do Not Allocate Managed Memory。
+    /// </summary>
     [Fact]
     public void DispatchMethodsDoNotAllocateManagedMemory()
     {

@@ -121,6 +121,7 @@ public sealed unsafe class OverlayRenderer : IDisposable
             commands[i].Validate();
         }
 
+        // --- 准备 GL 状态：绑定默认 FBO、设置呈现 viewport 与 alpha 混合 ---
         if (bindDefaultFramebuffer)
         {
             _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
@@ -144,6 +145,7 @@ public sealed unsafe class OverlayRenderer : IDisposable
         _gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
         _gl.BindVertexArray(_vao);
 
+        // --- 按纹理/纯色分批展开命令到 CPU 顶点缓冲，超容量或纹理切换时 flush ---
         int vertexCount = 0;
         bool batchUsesTexture = false;
         uint batchTexture = 0;
@@ -195,6 +197,7 @@ public sealed unsafe class OverlayRenderer : IDisposable
         _disposed = true;
     }
 
+    // 单批 flush：可选绑定 sprite 纹理，BufferSubData 后 DrawArrays 三角形。
     private void Flush(int vertexCount, bool usesTexture, uint textureHandle)
     {
         if (usesTexture)

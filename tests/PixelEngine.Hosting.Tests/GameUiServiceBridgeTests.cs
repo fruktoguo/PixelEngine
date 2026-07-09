@@ -9,6 +9,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// Game UI 脚本服务桥测试。
+/// 不变式：脚本 GUI 请求经桥接落到正确后端、未注入时走安全默认。
 /// </summary>
 public sealed class GameUiServiceBridgeTests
 {
@@ -18,6 +19,7 @@ public sealed class GameUiServiceBridgeTests
     [Fact]
     public void BridgeMapsScriptServiceCallsAndRaisesEvents()
     {
+        // Arrange：准备输入与初始状态
         string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-bridge-{Guid.NewGuid():N}");
         string uiRoot = Path.Combine(root, "ui");
         _ = Directory.CreateDirectory(uiRoot);
@@ -51,6 +53,7 @@ public sealed class GameUiServiceBridgeTests
                     RuntimeUi.UiValue.FromBoolean(true)),
             ]);
 
+            // Assert：验证预期结果
             Assert.True(found);
             Assert.Equal(42L, value.AsInt64());
             Assert.True(invokedValueFound);
@@ -77,6 +80,7 @@ public sealed class GameUiServiceBridgeTests
     [Fact]
     public void BridgeInternsStringsIntoSharedRuntimeStringPool()
     {
+        // Arrange：准备输入与初始状态
         string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-strings-{Guid.NewGuid():N}");
         string uiRoot = Path.Combine(root, "ui");
         _ = Directory.CreateDirectory(uiRoot);
@@ -97,6 +101,7 @@ public sealed class GameUiServiceBridgeTests
             ScriptUi.UiScreenHandle screen = bridge.ShowScreen("main");
             bridge.SetValue(screen, new ScriptUi.UiPathId(7), ScriptUi.UiValue.FromStringHandle(first));
 
+            // Assert：验证预期结果
             Assert.Equal(first, duplicate);
             Assert.NotEqual(first, second);
             Assert.True(strings.TryGetString(new RuntimeUi.UiStringHandle(first.Value), out string resolved));
@@ -119,6 +124,7 @@ public sealed class GameUiServiceBridgeTests
     [Fact]
     public void BridgePublishesUiEventsThroughScriptEventBusWhenAttached()
     {
+        // Arrange：准备输入与初始状态
         string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-script-events-{Guid.NewGuid():N}");
         string uiRoot = Path.Combine(root, "ui");
         _ = Directory.CreateDirectory(uiRoot);
@@ -151,6 +157,7 @@ public sealed class GameUiServiceBridgeTests
                     RuntimeUi.UiValue.FromBoolean(true)),
             ]);
 
+            // Assert：验证预期结果
             Assert.Equal(0, eventCount);
 
             scriptEvents.DrainEvents();
@@ -176,6 +183,7 @@ public sealed class GameUiServiceBridgeTests
     [Fact]
     public void BridgeMigratesExistingUiEventHandlersWhenScriptEventBusAttaches()
     {
+        // Arrange：准备输入与初始状态
         string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-event-migrate-{Guid.NewGuid():N}");
         string uiRoot = Path.Combine(root, "ui");
         _ = Directory.CreateDirectory(uiRoot);
@@ -203,6 +211,7 @@ public sealed class GameUiServiceBridgeTests
                     default),
             ]);
 
+            // Assert：验证预期结果
             Assert.Equal(0, eventCount);
 
             scriptEvents.DrainEvents();
@@ -224,12 +233,13 @@ public sealed class GameUiServiceBridgeTests
     [Fact]
     public void BridgeResolvesScreensThroughManifestWhenPresent()
     {
+        // Arrange：准备输入与初始状态
         string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-manifest-{Guid.NewGuid():N}");
         string uiRoot = Path.Combine(root, "ui");
         _ = Directory.CreateDirectory(Path.Combine(uiRoot, "screens"));
         string expected = Path.Combine(uiRoot, "screens", "main.xhtml");
         File.WriteAllText(expected, "<ui><text>Main</text></ui>");
-        File.WriteAllText(Path.Combine(uiRoot, RuntimeUi.UiManifestLoader.ManifestFileName), """
+        File.WriteAllText(Path.Combine(uiRoot, RuntimeUi.UiManifestLoader.ManifestFileName), /*lang=json,strict*/ """
             {
               "screens": [
                 { "id": "main", "path": "screens/main.xhtml", "preload": true }
@@ -248,6 +258,7 @@ public sealed class GameUiServiceBridgeTests
 
             _ = bridge.ShowScreen("main");
 
+            // Assert：验证预期结果
             Assert.Equal(Path.GetFullPath(expected), backend.LastSource.Path);
             Assert.Equal(RuntimeUi.UiStableId.Hash("main"), backend.LastSource.StableId);
         }
@@ -266,6 +277,7 @@ public sealed class GameUiServiceBridgeTests
     [Fact]
     public void BridgeRejectsConventionScreenPathsEscapingUiRoot()
     {
+        // Arrange：准备输入与初始状态
         string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-path-guard-{Guid.NewGuid():N}");
         string uiRoot = Path.Combine(root, "ui");
         _ = Directory.CreateDirectory(uiRoot);
@@ -286,6 +298,7 @@ public sealed class GameUiServiceBridgeTests
             GameUiServiceBridge bridge = new(host, root);
 
             _ = bridge.ShowScreen("safe");
+            // Assert：验证预期结果
             InvalidDataException relative = Assert.Throws<InvalidDataException>(() => bridge.ShowScreen("../outside.xhtml"));
             InvalidDataException rooted = Assert.Throws<InvalidDataException>(() => bridge.ShowScreen(outside));
             InvalidDataException currentDirectory = Assert.Throws<InvalidDataException>(() => bridge.ShowScreen("."));
@@ -313,6 +326,7 @@ public sealed class GameUiServiceBridgeTests
     [Fact]
     public void BridgeResolvesConventionRelativeScreenPathsWithOptionalExtension()
     {
+        // Arrange：准备输入与初始状态
         string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-relative-paths-{Guid.NewGuid():N}");
         string uiRoot = Path.Combine(root, "ui");
         string screensRoot = Path.Combine(uiRoot, "screens");
@@ -333,6 +347,7 @@ public sealed class GameUiServiceBridgeTests
 
             _ = bridge.ShowScreen("screens/hud");
 
+            // Assert：验证预期结果
             Assert.Equal(Path.GetFullPath(hud), backend.LastSource.Path);
             Assert.Equal(1, backend.LoadDocumentCount);
 
@@ -356,6 +371,7 @@ public sealed class GameUiServiceBridgeTests
     [Fact]
     public void BridgePreloadsManifestScreensWithoutShowingThem()
     {
+        // Arrange：准备输入与初始状态
         string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-preload-{Guid.NewGuid():N}");
         string uiRoot = Path.Combine(root, "ui");
         _ = Directory.CreateDirectory(Path.Combine(uiRoot, "screens"));
@@ -363,7 +379,7 @@ public sealed class GameUiServiceBridgeTests
         string settings = Path.Combine(uiRoot, "screens", "settings.xhtml");
         File.WriteAllText(main, "<ui><text>Main</text></ui>");
         File.WriteAllText(settings, "<ui><text>Settings</text></ui>");
-        File.WriteAllText(Path.Combine(uiRoot, RuntimeUi.UiManifestLoader.ManifestFileName), """
+        File.WriteAllText(Path.Combine(uiRoot, RuntimeUi.UiManifestLoader.ManifestFileName), /*lang=json,strict*/ """
             {
               "screens": [
                 { "id": "main", "path": "screens/main.xhtml", "preload": true },
@@ -382,6 +398,7 @@ public sealed class GameUiServiceBridgeTests
 
             GameUiServiceBridge bridge = new(host, root);
 
+            // Assert：验证预期结果
             Assert.Equal(1, backend.LoadDocumentCount);
             Assert.Equal(1, host.Documents.DocumentCount);
             Assert.Equal(0, host.Documents.StackCount);
@@ -412,13 +429,14 @@ public sealed class GameUiServiceBridgeTests
     [Fact]
     public void BridgePreloadsManifestImagesThroughManagedFallbackBackend()
     {
+        // Arrange：准备输入与初始状态
         string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-image-preload-{Guid.NewGuid():N}");
         string uiRoot = Path.Combine(root, "ui");
         string images = Path.Combine(uiRoot, "images");
         _ = Directory.CreateDirectory(images);
         string logo = Path.Combine(images, "logo.png");
         File.WriteAllBytes(logo, [1, 2, 3, 4]);
-        File.WriteAllText(Path.Combine(uiRoot, RuntimeUi.UiManifestLoader.ManifestFileName), """
+        File.WriteAllText(Path.Combine(uiRoot, RuntimeUi.UiManifestLoader.ManifestFileName), /*lang=json,strict*/ """
             {
               "screens": [
                 { "id": "main", "path": "main.xhtml", "preload": false }
@@ -441,6 +459,7 @@ public sealed class GameUiServiceBridgeTests
 
             _ = new GameUiServiceBridge(host, root);
 
+            // Assert：验证预期结果
             Assert.Equal(Path.GetFullPath(logo), Assert.Single(gui.LoadedImages));
             Assert.Equal(0, host.Documents.DocumentCount);
             Assert.Equal(0, host.Documents.StackCount);
@@ -460,6 +479,7 @@ public sealed class GameUiServiceBridgeTests
     [Fact]
     public void BridgePushesBoundModelValuesToUiPaths()
     {
+        // Arrange：准备输入与初始状态
         string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gameui-model-{Guid.NewGuid():N}");
         string uiRoot = Path.Combine(root, "ui");
         _ = Directory.CreateDirectory(uiRoot);
@@ -478,6 +498,7 @@ public sealed class GameUiServiceBridgeTests
             bridge.BindModel(screen, new ScriptUi.UiModelName(1), model);
             bridge.PushGameUiModels();
 
+            // Assert：验证预期结果
             Assert.Equal(new ScriptUi.UiPathId(7), model.LastPath);
             Assert.True(bridge.TryGetValue(screen, new ScriptUi.UiPathId(7), out ScriptUi.UiValue value));
             Assert.Equal(99L, value.AsInt64());
@@ -497,6 +518,7 @@ public sealed class GameUiServiceBridgeTests
     [Fact]
     public void ModelBridgePrunesBindingsForHiddenScreensBeforeCapacityCheck()
     {
+        // Arrange：准备输入与初始状态
         RecordingBackend backend = new();
         using RuntimeUi.GameUiHost host = new(backend);
         host.Initialize(new RuntimeUi.UiBackendInitializeInfo(
@@ -509,6 +531,7 @@ public sealed class GameUiServiceBridgeTests
         RuntimeUi.UiScreenHandle hiddenScreen = host.ShowScreen(screenId, in source);
         RecordingModel hiddenModel = new(new ScriptUi.UiPathId(7), new ScriptUi.UiValue(1L));
         bridge.BindModel(new ScriptUi.UiScreenHandle(hiddenScreen.Value), new ScriptUi.UiModelName(1), hiddenModel);
+        // Assert：验证预期结果
         Assert.True(host.HideScreen(hiddenScreen));
 
         bridge.PushGameUiModels();

@@ -5,8 +5,14 @@ using Xunit;
 
 namespace PixelEngine.UI.Tests;
 
+/// <summary>
+/// Gui 应用组合帧测试：UI 与世界渲染合帧顺序。
+/// </summary>
 public sealed class GuiAppCombinedFrameTests
 {
+    /// <summary>
+    /// 验证Draw Combined Frame Runs Managed Then Script In Single Frame。
+    /// </summary>
     [Fact]
     public void DrawCombinedFrameRunsManagedThenScriptInSingleFrame()
     {
@@ -27,6 +33,9 @@ public sealed class GuiAppCombinedFrameTests
         Assert.Equal(["initialize", "new:800x600@2x1.5", "managed", "script", "render"], calls);
     }
 
+    /// <summary>
+    /// 验证Gui Input Bridge Publishes Modifier Keys For Clipboard Shortcuts。
+    /// </summary>
     [Fact]
     public void GuiInputBridgePublishesModifierKeysForClipboardShortcuts()
     {

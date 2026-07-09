@@ -4,6 +4,7 @@ namespace PixelEngine.Simulation.Tests;
 
 /// <summary>
 /// Simulation 节点 7 的 reaction seam 与 lifetime seam 测试。
+/// 不变式：reaction seam 与 lifetime seam 不交叉污染。
 /// </summary>
 public sealed class SimulationReactionLifetimeTests
 {
@@ -74,6 +75,7 @@ public sealed class SimulationReactionLifetimeTests
     [Fact]
     public void StepCaCallsLifetimeSinkWhenLifetimeExpires()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         center.SetCurrentDirty(DirtyRect.Full);
         Set(center, 10, 10, InertFire);
@@ -83,6 +85,7 @@ public sealed class SimulationReactionLifetimeTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(0, GetLifetime(center, 10, 10));
         Assert.Equal(1, sink.Count);
         Assert.Equal((10, 10, InertFire), sink.Last);
@@ -94,6 +97,7 @@ public sealed class SimulationReactionLifetimeTests
     [Fact]
     public void StepCaAdvancesRowCursorAfterLifetimeExpiryClearsCell()
     {
+        // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         center.SetCurrentDirty(DirtyRect.Full);
         Set(center, 62, 10, InertFire);
@@ -104,6 +108,7 @@ public sealed class SimulationReactionLifetimeTests
 
         kernel.StepCa();
 
+        // Assert：验证预期结果
         Assert.Equal(0, Get(center, 62, 10));
         Assert.Equal(0, GetLifetime(center, 62, 10));
         Assert.Equal(0, Get(center, 63, 10));

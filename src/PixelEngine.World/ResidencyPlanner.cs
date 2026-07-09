@@ -157,6 +157,7 @@ public sealed class ResidencyPlanner
         ValidateActiveInsideBorder(active, border);
 
         _plan.Clear();
+        // 每帧 I/O 操作有上限，超出部分留待后续帧继续装载。
         int remainingOps = _config.MaxStreamOpsPerFrame;
 
         for (int y = border.MinCy; y <= border.MaxCy; y++)
@@ -185,6 +186,7 @@ public sealed class ResidencyPlanner
             }
         }
 
+        // border 外的驻留 chunk 降级为 Cached，保留磁盘副本但不参与 active 模拟。
         foreach (KeyValuePair<ChunkCoord, ChunkResidencyInfo> entry in table)
         {
             if (border.Contains(entry.Key) || entry.Value.State is ChunkResidencyState.Cached or ChunkResidencyState.Detached)
@@ -195,6 +197,7 @@ public sealed class ResidencyPlanner
             _plan.AddStateChange(new ResidencyStateChange(entry.Key, ChunkResidencyState.Cached));
         }
 
+        // 内存超限时按 LRU 选出卸载候选，同时登记 Detached 状态变更。
         if (remainingOps > 0 && budget.OverCap)
         {
             ReadOnlySpan<ChunkCoord> evictions = budget.SelectEvictions(table, border, budget.EvictionTargetBytes);

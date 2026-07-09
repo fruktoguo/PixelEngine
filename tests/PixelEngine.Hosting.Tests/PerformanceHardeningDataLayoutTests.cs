@@ -9,6 +9,7 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// plan/16 SoA 与内存预算性能纪律测试。
+/// 不变式：SoA 布局与内存预算常量与 plan/16 源码约定一致。
 /// </summary>
 public sealed class PerformanceHardeningDataLayoutTests
 {
@@ -16,6 +17,8 @@ public sealed class PerformanceHardeningDataLayoutTests
     /// 验证权威 cell 热数据以 Material/Flags/Lifetime 三个独立连续数组存储。
     /// </summary>
     [Fact]
+
+    // —— 数据布局纪律 ——
     public void ChunkStoresAuthorityCellStateAsSeparateSoAArrays()
     {
         Chunk chunk = new(new ChunkCoord(0, 0));

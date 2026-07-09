@@ -10,7 +10,8 @@ using PhysicsSystem = PixelEngine.Physics.PhysicsSystem;
 namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
-/// 场景、项目模型与 headless 驱动测试。
+/// 场景服务、项目模型与 headless 引擎驱动测试。
+/// 不变式：场景切换/卸载生命周期正确、无窗口 tick 可推进 CA/物理/脚本相位且反应表已接入。
 /// </summary>
 public sealed class SceneAndHeadlessTests
 {
@@ -26,6 +27,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void BuildLoadsProjectScenesAndStartScene()
     {
+        // Arrange：准备输入与初始状态
         EngineProject project = new(
             "game-content",
             "start",
@@ -41,6 +43,7 @@ public sealed class SceneAndHeadlessTests
 
         ISceneService scenes = engine.Context.GetService<ISceneService>();
 
+        // Assert：验证预期结果
         Assert.Equal("game-content", engine.Context.Options.ContentRoot);
         Assert.Equal("start", engine.Context.Options.StartScene);
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.SceneService));
@@ -58,6 +61,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void SceneServiceSwitchesAndUnloadsCurrentScene()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
             .AddScene(new SceneDescriptor("a"))
@@ -66,8 +70,10 @@ public sealed class SceneAndHeadlessTests
             .Build();
         ISceneService scenes = engine.Context.GetService<ISceneService>();
 
+        // Act：执行被测操作
         Scene loaded = engine.LoadScene("b");
 
+        // Assert：验证不变式与预期结果
         Assert.Same(loaded, scenes.Current);
         Assert.Equal(SceneSourceKind.SaveDirectory, loaded.Descriptor.SourceKind);
         Assert.Equal("saves/b", loaded.Descriptor.Source);
@@ -90,6 +96,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void ResidentSimulationWorldRunsLoadedReactionTable()
     {
+        // Arrange：搭建测试场景与依赖
         MaterialDef[] definitions = CreateReactionMaterials();
         MaterialTable materials = new(definitions);
         ReactionTable reactions = new(
@@ -125,8 +132,10 @@ public sealed class SceneAndHeadlessTests
         simulation.Kernel.EditCellAtInputPhase(10, 10, Fire, persistentFlags: 0);
         simulation.Kernel.EditCellAtInputPhase(11, 10, Wood, persistentFlags: 0);
 
+        // Act：执行被测操作
         _ = engine.RunOneTick(1.0 / 60.0);
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(Stone, simulation.Grid.GetMaterial(10, 10));
         Assert.Equal(Ash, simulation.Grid.GetMaterial(11, 10));
         Assert.True(engine.Context.GetService<ReactionEngine>() is not null);
@@ -138,6 +147,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void LoadSceneFileInstantiatesScriptBehaviours()
     {
+        // Arrange：搭建测试场景与依赖
         string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-scene-file-{Guid.NewGuid():N}");
         try
         {
@@ -176,8 +186,10 @@ public sealed class SceneAndHeadlessTests
                 .Build();
             engine.RegisterScriptAssembly(typeof(SceneFileTestBehaviour).Assembly);
 
+            // Act：执行被测操作
             Scene loaded = engine.LoadScene("c");
 
+            // Assert：验证不变式与预期结果
             Assert.NotNull(loaded.ScriptScene);
             Assert.Equal(1, loaded.ScriptScene.EntityCount);
             ScriptEntityInspection[] snapshot = loaded.ScriptScene.CaptureInspectionSnapshot();
@@ -186,7 +198,7 @@ public sealed class SceneAndHeadlessTests
             Assert.Equal(42, behaviour.Health);
             Assert.Equal(Vector2.Zero, behaviour.Position);
             Assert.False(behaviour.Enabled);
-            Assert.Same(loaded.ScriptScene, engine.Context.GetService<PixelEngine.Scripting.Scene>());
+            Assert.Same(loaded.ScriptScene, engine.Context.GetService<Scripting.Scene>());
         }
         finally
         {
@@ -203,6 +215,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void AttachScriptSceneOverridesSceneFileMaterialization()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-authoring-scene-{Guid.NewGuid():N}");
         try
         {
@@ -210,7 +223,8 @@ public sealed class SceneAndHeadlessTests
             _ = Directory.CreateDirectory(sceneDirectory);
             File.WriteAllText(
                 Path.Combine(sceneDirectory, "authoring.scene"),
-                """
+                                     /*lang=json,strict*/
+                                     """
                 {
                   "formatVersion": 2,
                   "name": "authoring",
@@ -223,8 +237,8 @@ public sealed class SceneAndHeadlessTests
                 .AddScene(new SceneDescriptor("authoring", SceneSourceKind.SceneFile, "scenes/authoring.scene"))
                 .WithStartScene("authoring")
                 .Build();
-            PixelEngine.Scripting.Scene authoringScene = new();
-            PixelEngine.Scripting.Entity entity = authoringScene.CreateEntity();
+            Scripting.Scene authoringScene = new();
+            Entity entity = authoringScene.CreateEntity();
             Transform transform = entity.AddComponent<Transform>();
             transform.SetPosition(12, 34);
 
@@ -234,8 +248,9 @@ public sealed class SceneAndHeadlessTests
             ScriptSimulationContext context = engine.AttachScriptingFromServices();
 
             Scene current = engine.Context.GetService<ISceneService>().Current!;
+            // Assert：验证预期结果
             Assert.Same(authoringScene, current.ScriptScene);
-            Assert.Same(authoringScene, engine.Context.GetService<PixelEngine.Scripting.Scene>());
+            Assert.Same(authoringScene, engine.Context.GetService<Scripting.Scene>());
             Assert.Same(authoringScene, context.Scene);
             ScriptEntityInspection snapshot = Assert.Single(authoringScene.CaptureInspectionSnapshot());
             Assert.Equal(12, snapshot.Transform!.X);
@@ -256,10 +271,11 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void AttachScriptSceneReplacesAuthoringProjectionAfterScriptingRuntimeAttached()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
-        PixelEngine.Scripting.Scene first = new();
+        Scripting.Scene first = new();
         first.CreateEntity().AddComponent<SnapshotCounterBehaviour>().Score = 1;
-        PixelEngine.Scripting.Scene replacement = new();
+        Scripting.Scene replacement = new();
         replacement.CreateEntity().AddComponent<SnapshotCounterBehaviour>().Score = 2;
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
@@ -274,8 +290,9 @@ public sealed class SceneAndHeadlessTests
         engine.AttachScriptScene(replacement);
 
         Scene current = engine.Context.GetService<ISceneService>().Current!;
+        // Assert：验证预期结果
         Assert.Same(replacement, current.ScriptScene);
-        Assert.Same(replacement, engine.Context.GetService<PixelEngine.Scripting.Scene>());
+        Assert.Same(replacement, engine.Context.GetService<Scripting.Scene>());
         Assert.Same(replacement, context.Scene);
         ScriptEntityInspection snapshot = Assert.Single(context.Scene.CaptureInspectionSnapshot());
         ScriptComponentInspection component = Assert.Single(snapshot.Components);
@@ -289,6 +306,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void SaveSceneDocumentWritesStableV2Json()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-scene-save-{Guid.NewGuid():N}");
         try
         {
@@ -349,6 +367,7 @@ public sealed class SceneAndHeadlessTests
             engine.SaveSceneDocument(document, scenePath);
 
             string json = File.ReadAllText(scenePath);
+            // Assert：验证预期结果
             Assert.Contains("\"formatVersion\":2", json, StringComparison.Ordinal);
             Assert.True(json.IndexOf("\"stableId\":10", StringComparison.Ordinal) < json.IndexOf("\"stableId\":20", StringComparison.Ordinal));
             Assert.True(json.IndexOf("\"Label\"", StringComparison.Ordinal) < json.IndexOf("\"Position\"", StringComparison.Ordinal));
@@ -376,6 +395,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void SceneDocumentV2RoundTripsParentTransformVector2AndStableOrder()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-scene-roundtrip-{Guid.NewGuid():N}");
         try
         {
@@ -446,6 +466,7 @@ public sealed class SceneAndHeadlessTests
             string secondJson = File.ReadAllText(secondPath);
             EngineSceneDocument loadedAgain = EngineSceneDocumentLoader.LoadDocument(secondPath);
 
+            // Assert：验证预期结果
             Assert.Equal(firstJson, secondJson);
             Assert.Equal(EngineSceneDocumentLoader.CurrentFormatVersion, loadedAgain.FormatVersion);
             Assert.Equal("roundtrip", loadedAgain.Name);
@@ -462,7 +483,7 @@ public sealed class SceneAndHeadlessTests
 
             ScriptAssemblyRegistry scripts = new();
             scripts.Register(typeof(SceneFileTestBehaviour).Assembly);
-            PixelEngine.Scripting.Scene runtimeScene = EngineSceneDocumentLoader.Build(loadedAgain, scripts);
+            Scripting.Scene runtimeScene = EngineSceneDocumentLoader.Build(loadedAgain, scripts);
             SceneFileTestBehaviour behaviour = Assert.IsType<SceneFileTestBehaviour>(Assert.Single(runtimeScene.CaptureInspectionSnapshot()[2].Components).Behaviour);
             Assert.Equal(new Vector2(3.5f, 4.25f), behaviour.Position);
         }
@@ -481,6 +502,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void SceneDocumentV1LoadsRootDefaultsAndSavesAsV2()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-scene-v1-upgrade-{Guid.NewGuid():N}");
         try
         {
@@ -489,7 +511,8 @@ public sealed class SceneAndHeadlessTests
             _ = Directory.CreateDirectory(Path.GetDirectoryName(scenePath)!);
             File.WriteAllText(
                 scenePath,
-                """
+                                     /*lang=json,strict*/
+                                     """
                 {
                   "formatVersion": 1,
                   "name": "legacy",
@@ -509,10 +532,11 @@ public sealed class SceneAndHeadlessTests
 
             EngineSceneDocument loaded = EngineSceneDocumentLoader.LoadDocument(scenePath);
             ScriptAssemblyRegistry scripts = new();
-            PixelEngine.Scripting.Scene runtimeScene = EngineSceneDocumentLoader.Build(loaded, scripts);
+            Scripting.Scene runtimeScene = EngineSceneDocumentLoader.Build(loaded, scripts);
             engine.SaveSceneDocument(loaded, upgradedPath);
             EngineSceneDocument upgraded = EngineSceneDocumentLoader.LoadDocument(upgradedPath);
 
+            // Assert：验证预期结果
             EngineSceneEntityDocument loadedEntity = Assert.Single(loaded.Entities!);
             Assert.Equal(1, loaded.FormatVersion);
             Assert.Null(loadedEntity.ParentId);
@@ -543,6 +567,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void SceneDocumentV2BuildsTransformHierarchyAndVector2Fields()
     {
+        // Arrange：准备输入与初始状态
         EngineSceneDocument document = new()
         {
             FormatVersion = 2,
@@ -579,9 +604,10 @@ public sealed class SceneAndHeadlessTests
         ScriptAssemblyRegistry scripts = new();
         scripts.Register(typeof(SceneFileTestBehaviour).Assembly);
 
-        PixelEngine.Scripting.Scene scene = EngineSceneDocumentLoader.Build(document, scripts);
+        Scripting.Scene scene = EngineSceneDocumentLoader.Build(document, scripts);
 
         ScriptEntityInspection[] snapshot = scene.CaptureInspectionSnapshot();
+        // Assert：验证预期结果
         Assert.Equal(2, snapshot.Length);
         Assert.Equal(10, snapshot[0].Transform!.X);
         Assert.Equal(20, snapshot[0].Transform!.Y);
@@ -601,6 +627,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void SceneDocumentV2BakesParentRotationAndScaleIntoRuntimeTransform()
     {
+        // Arrange：准备输入与初始状态
         EngineSceneDocument document = new()
         {
             FormatVersion = 2,
@@ -628,9 +655,10 @@ public sealed class SceneAndHeadlessTests
         };
         ScriptAssemblyRegistry scripts = new();
 
-        PixelEngine.Scripting.Scene scene = EngineSceneDocumentLoader.Build(document, scripts);
+        Scripting.Scene scene = EngineSceneDocumentLoader.Build(document, scripts);
 
         Transform child = scene.CaptureInspectionSnapshot()[1].Transform!;
+        // Assert：验证预期结果
         Assert.InRange(child.X, -8.001f, -7.999f);
         Assert.InRange(child.Y, 29.999f, 30.001f);
         Assert.Equal(MathF.PI / 2f, child.RotationRadians);
@@ -642,8 +670,10 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void SceneDocumentV2RejectsInvalidHierarchy()
     {
+        // Arrange：准备输入与初始状态
         ScriptAssemblyRegistry scripts = new();
 
+        // Assert：验证预期结果
         _ = Assert.Throws<InvalidOperationException>(() => EngineSceneDocumentLoader.Build(new EngineSceneDocument
         {
             FormatVersion = 2,
@@ -675,6 +705,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void RegisterScriptAssemblyMaterializesCurrentProceduralScene()
     {
+        // Arrange：准备输入与初始状态
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
             .AddScene(new SceneDescriptor("proc", SceneSourceKind.Procedural, nameof(ProceduralEntryBehaviour)))
@@ -684,12 +715,13 @@ public sealed class SceneAndHeadlessTests
         engine.RegisterScriptAssembly(typeof(ProceduralEntryBehaviour).Assembly);
 
         Scene? current = engine.Context.GetService<ISceneService>().Current;
+        // Assert：验证预期结果
         Assert.NotNull(current);
         Assert.NotNull(current.ScriptScene);
         Assert.Equal(1, current.ScriptScene.EntityCount);
         ScriptEntityInspection[] snapshot = current.ScriptScene.CaptureInspectionSnapshot();
         _ = Assert.IsType<ProceduralEntryBehaviour>(snapshot[0].Components[0].Behaviour);
-        Assert.Same(current.ScriptScene, engine.Context.GetService<PixelEngine.Scripting.Scene>());
+        Assert.Same(current.ScriptScene, engine.Context.GetService<Scripting.Scene>());
     }
 
     /// <summary>
@@ -717,6 +749,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void AttachCurrentSceneWorldBuildsRegisteredProceduralWorld()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
@@ -728,6 +761,7 @@ public sealed class SceneAndHeadlessTests
 
         WorldLoadResult? result = engine.AttachCurrentSceneWorld(particleCapacity: 8);
 
+        // Assert：验证预期结果
         Assert.Null(result);
         Assert.Equal(77L, engine.Context.Clock.FrameIndex);
         Assert.Equal(77L, engine.Context.Clock.SimTickIndex);
@@ -747,6 +781,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void EngineWorldSnapshotStoreRestoresResidentWorld()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
@@ -765,6 +800,7 @@ public sealed class SceneAndHeadlessTests
         engine.Context.Clock.RestoreCounters(frameIndex: 13, simTickIndex: 13);
         SaveLoadOperationResult restore = store.RestoreTemporarySnapshot();
 
+        // Assert：验证预期结果
         Assert.True(save.Success, save.Message);
         Assert.True(restore.Success, restore.Message);
         Assert.Equal(1, engine.Context.GetService<CellGrid>().GetMaterial(4, 5));
@@ -779,6 +815,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void EnginePersistentWorldSaveLoadRestoresRuntimeCounters()
     {
+        // Arrange：准备输入与初始状态
         string savePath = Path.Combine(Path.GetTempPath(), $"pixelengine-host-persistent-save-{Guid.NewGuid():N}");
         try
         {
@@ -799,6 +836,7 @@ public sealed class SceneAndHeadlessTests
             engine.Context.Clock.RestoreCounters(frameIndex: 17, simTickIndex: 17);
             WorldLoadResult result = engine.LoadWorldFromDirectory(savePath);
 
+            // Assert：验证预期结果
             Assert.Equal(11L, result.GameTimeTicks);
             Assert.Equal(1, engine.Context.GetService<CellGrid>().GetMaterial(4, 5));
             Assert.Equal(24.5f, engine.Context.GetService<TemperatureField>().GetTemperature(4, 5));
@@ -821,6 +859,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void EnginePersistentWorldLoadClearsRuntimeRigidBodiesWhenSnapshotHasNone()
     {
+        // Arrange：准备输入与初始状态
         string savePath = Path.Combine(Path.GetTempPath(), $"pixelengine-host-rigidbody-clear-{Guid.NewGuid():N}");
         try
         {
@@ -837,6 +876,7 @@ public sealed class SceneAndHeadlessTests
             _ = edit.PaintRect(16, 16, 31, 31, material: 1);
             PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
             int bodyKey = physics.CreateBodyFromRegion(16, 16, 16, 16);
+            // Assert：验证预期结果
             Assert.Equal(0, bodyKey);
             Assert.Equal(1, physics.PhysicsWorld.ActiveBodyCount);
 
@@ -859,8 +899,9 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void EngineWorldSnapshotStoreRestoresScriptBehaviourFields()
     {
+        // Arrange：准备输入与初始状态
         MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
-        PixelEngine.Scripting.Scene scriptScene = new();
+        Scripting.Scene scriptScene = new();
         Entity entity = scriptScene.CreateEntity();
         SnapshotCounterBehaviour script = entity.AddComponent<SnapshotCounterBehaviour>();
         script.Score = 7;
@@ -877,6 +918,7 @@ public sealed class SceneAndHeadlessTests
         script.Score = 99;
         SaveLoadOperationResult restore = store.RestoreTemporarySnapshot();
 
+        // Assert：验证预期结果
         Assert.True(save.Success, save.Message);
         Assert.True(restore.Success, restore.Message);
         Assert.Equal(7, script.Score);
@@ -888,8 +930,9 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void TemporaryPlayExitRestoresScriptSceneTopology()
     {
+        // Arrange：搭建测试场景与依赖
         MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
-        PixelEngine.Scripting.Scene scriptScene = new();
+        Scripting.Scene scriptScene = new();
         Entity entity = scriptScene.CreateEntity();
         SnapshotCounterBehaviour script = entity.AddComponent<SnapshotCounterBehaviour>();
         script.Score = 7;
@@ -908,10 +951,12 @@ public sealed class SceneAndHeadlessTests
         Entity transient = scriptScene.CreateEntity();
         transient.AddComponent<SnapshotCounterBehaviour>().Score = 123;
         entity.Destroy();
+        // Act：执行被测操作
         _ = engine.RunOneTick();
         EditorPlaySessionResult exit = session.ExitPlay();
 
         ScriptEntityInspection[] restored = scriptScene.CaptureInspectionSnapshot();
+        // Assert：验证不变式与预期结果
         Assert.True(play.Succeeded, play.Message);
         Assert.True(exit.Succeeded, exit.Message);
         Assert.Equal(EngineExecutionMode.Edit, engine.Mode);
@@ -927,8 +972,9 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void RuntimeRestartRestoresCapturedWorldAndScriptBaseline()
     {
+        // Arrange：搭建测试场景与依赖
         MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
-        PixelEngine.Scripting.Scene scriptScene = new();
+        Scripting.Scene scriptScene = new();
         Entity entity = scriptScene.CreateEntity();
         SnapshotCounterBehaviour script = entity.AddComponent<SnapshotCounterBehaviour>();
         script.Score = 7;
@@ -942,6 +988,7 @@ public sealed class SceneAndHeadlessTests
         ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
         IRuntimeControlApi runtime = engine.Context.GetService<IRuntimeControlApi>();
 
+        // Act：执行被测操作
         _ = engine.RunOneTick();
         edit.PaintCell(4, 5, 1);
         script.Score = 99;
@@ -951,6 +998,7 @@ public sealed class SceneAndHeadlessTests
         script.Score = 55;
         RuntimeControlResult secondRestart = runtime.RequestRestartCurrentScene();
 
+        // Assert：验证不变式与预期结果
         Assert.True(firstRestart.Success, firstRestart.Message);
         Assert.True(secondRestart.Success, secondRestart.Message);
         Assert.Equal(EngineExecutionMode.Play, engine.Mode);
@@ -964,6 +1012,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void AttachWorldFromSaveDirectoryLoadsWorldAndRegistersRuntimeServices()
     {
+        // Arrange：准备输入与初始状态
         string savePath = Path.Combine(Path.GetTempPath(), $"pixelengine-host-save-{Guid.NewGuid():N}");
         try
         {
@@ -1003,6 +1052,7 @@ public sealed class SceneAndHeadlessTests
             Scene current = engine.Context.GetService<ISceneService>().Current!;
             WorldLoadResult result = engine.AttachWorldFromSaveDirectory(current.ResolvedSource!, particleCapacity: 4);
 
+            // Assert：验证预期结果
             Assert.Equal(123UL, result.WorldSeed);
             Assert.Equal(456L, result.GameTimeTicks);
             Assert.Equal(1, result.LoadedChunkCount);
@@ -1039,6 +1089,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void AttachWorldFromSaveDirectoryRestoresRigidBodySnapshotsThroughPhysics()
     {
+        // Arrange：准备输入与初始状态
         string savePath = Path.Combine(Path.GetTempPath(), $"pixelengine-host-rigidbody-save-{Guid.NewGuid():N}");
         try
         {
@@ -1089,6 +1140,7 @@ public sealed class SceneAndHeadlessTests
 
             WorldLoadResult result = engine.AttachWorldFromSaveDirectory(savePath);
 
+            // Assert：验证预期结果
             Assert.Equal(1, result.LoadedChunkCount);
             Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.PhysicsService));
             PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
@@ -1112,6 +1164,7 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void AttachCurrentSceneWorldLoadsSceneFileInitialSaveDirectory()
     {
+        // Arrange：准备输入与初始状态
         string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-scene-world-{Guid.NewGuid():N}");
         try
         {
@@ -1138,7 +1191,8 @@ public sealed class SceneAndHeadlessTests
             string scenePath = Path.Combine(sceneDirectory, "mine.scene");
             File.WriteAllText(
                 scenePath,
-                """
+                                     /*lang=json,strict*/
+                                     """
                 {
                   "formatVersion": 1,
                   "name": "mine",
@@ -1156,6 +1210,7 @@ public sealed class SceneAndHeadlessTests
 
             WorldLoadResult? result = engine.AttachCurrentSceneWorld(particleCapacity: 4);
 
+            // Assert：验证预期结果
             Assert.True(result.HasValue);
             Assert.Equal(9UL, result.Value.WorldSeed);
             Assert.Equal(10L, result.Value.GameTimeTicks);
@@ -1188,13 +1243,16 @@ public sealed class SceneAndHeadlessTests
     [Fact]
     public void RunHeadlessTicksAdvancesFixedNumberOfFrames()
     {
+        // Arrange：搭建测试场景与依赖
         using Engine headless = new EngineBuilder()
             .UseHeadless()
             .UseDeterministicMode()
             .Build();
 
+        // Act：执行被测操作
         headless.RunHeadlessTicks(5);
 
+        // Assert：验证不变式与预期结果
         Assert.Equal(5, headless.Context.Clock.FrameIndex);
         Assert.Equal(5, headless.Context.Clock.SimTickIndex);
         Assert.False(headless.Context.Options.EnableGpu);

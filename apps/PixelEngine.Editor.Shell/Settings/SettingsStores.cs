@@ -4,6 +4,9 @@ using PixelEngine.UI;
 
 namespace PixelEngine.Editor.Shell.Settings;
 
+/// <summary>
+/// 项目级 Project Settings JSON 读写。
+/// </summary>
 internal sealed class ProjectSettingsStore(EditorProject project)
 {
     private readonly EditorProject _project = project ?? throw new ArgumentNullException(nameof(project));
@@ -12,17 +15,14 @@ internal sealed class ProjectSettingsStore(EditorProject project)
 
     public ProjectSettingsDto Load()
     {
-        if (File.Exists(SettingsPath))
-        {
-            return EngineProjectSettingsStore.LoadProjectSettings(_project.ProjectRoot);
-        }
-
-        return ProjectSettingsDto.CreateDefault(_project.Name) with
-        {
-            ContentRoot = _project.ContentRoot,
-            ScriptSourceDir = _project.ScriptSourceDir,
-            StartScene = _project.ResolveSceneRelativePath(null),
-        };
+        return File.Exists(SettingsPath)
+            ? EngineProjectSettingsStore.LoadProjectSettings(_project.ProjectRoot)
+            : (ProjectSettingsDto.CreateDefault(_project.Name) with
+            {
+                ContentRoot = _project.ContentRoot,
+                ScriptSourceDir = _project.ScriptSourceDir,
+                StartScene = _project.ResolveSceneRelativePath(null),
+            });
     }
 
     public void Save(ProjectSettingsDto settings)
@@ -33,6 +33,9 @@ internal sealed class ProjectSettingsStore(EditorProject project)
     }
 }
 
+/// <summary>
+/// 项目级 Player Settings JSON 读写。
+/// </summary>
 internal sealed class PlayerSettingsStore(EditorProject project)
 {
     private readonly EditorProject _project = project ?? throw new ArgumentNullException(nameof(project));
@@ -41,15 +44,12 @@ internal sealed class PlayerSettingsStore(EditorProject project)
 
     public PlayerSettingsDto Load()
     {
-        if (File.Exists(SettingsPath))
-        {
-            return EngineProjectSettingsStore.LoadPlayerSettings(_project.ProjectRoot);
-        }
-
-        return PlayerSettingsDto.CreateDefault(_project.Name) with
-        {
-            StartupScene = _project.ResolveSceneRelativePath(null),
-        };
+        return File.Exists(SettingsPath)
+            ? EngineProjectSettingsStore.LoadPlayerSettings(_project.ProjectRoot)
+            : (PlayerSettingsDto.CreateDefault(_project.Name) with
+            {
+                StartupScene = _project.ResolveSceneRelativePath(null),
+            });
     }
 
     public void Save(PlayerSettingsDto settings)
@@ -59,6 +59,9 @@ internal sealed class PlayerSettingsStore(EditorProject project)
     }
 }
 
+/// <summary>
+/// PlayerSettings 与运行时投影之间的适配器。
+/// </summary>
 internal static class PlayerSettingsEditorAdapter
 {
     public static EngineBuilder ApplyRuntimeDefaults(this EngineBuilder builder, PlayerSettingsDto settings, bool applyStartupScene = true)
@@ -121,15 +124,15 @@ internal static class PlayerSettingsEditorAdapter
 
     private static string[] EnsureIncluded(string[] scenes, string startupScene)
     {
-        if (scenes.Length == 0 || scenes.Any(scene => string.Equals(scene, startupScene, StringComparison.OrdinalIgnoreCase)))
-        {
-            return scenes;
-        }
-
-        return [.. scenes, startupScene];
+        return scenes.Length == 0 || scenes.Any(scene => string.Equals(scene, startupScene, StringComparison.OrdinalIgnoreCase))
+            ? scenes
+            : [.. scenes, startupScene];
     }
 }
 
+/// <summary>
+/// PlayerSettingsRuntimeProjectionSnapshot 数据结构。
+/// </summary>
 internal sealed record PlayerSettingsRuntimeProjectionSnapshot(
     string WindowTitle,
     int WindowWidth,

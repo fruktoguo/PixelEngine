@@ -3,16 +3,19 @@ using PixelEngine.Scripting;
 
 namespace PixelEngine.Editor.Shell;
 
+/// <summary>
+/// 将编辑器场景投影到运行时 Script Scene 的同步服务。
+/// </summary>
 internal sealed class EditorSceneRuntimeProjection
 {
     private readonly Dictionary<int, int> _stableToRuntime = [];
 
-    private EditorSceneRuntimeProjection(PixelEngine.Scripting.Scene scene)
+    private EditorSceneRuntimeProjection(Scripting.Scene scene)
     {
         Scene = scene;
     }
 
-    public PixelEngine.Scripting.Scene Scene { get; }
+    public Scripting.Scene Scene { get; }
 
     public IReadOnlyDictionary<int, int> StableIdToEntityId => _stableToRuntime;
 
@@ -25,7 +28,7 @@ internal sealed class EditorSceneRuntimeProjection
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(scriptAssemblies);
-        EditorSceneRuntimeProjection projection = new(new PixelEngine.Scripting.Scene());
+        EditorSceneRuntimeProjection projection = new(new Scripting.Scene());
         foreach (EditorGameObject gameObject in model.EnumerateDepthFirst())
         {
             Entity entity = projection.Scene.CreateEntity();

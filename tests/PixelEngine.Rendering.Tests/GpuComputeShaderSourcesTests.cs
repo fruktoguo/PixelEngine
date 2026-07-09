@@ -2,6 +2,9 @@ using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
 
+/// <summary>
+/// GPU 计算着色器源码测试：内嵌资源完整性与版本声明。
+/// </summary>
 public sealed class GpuComputeShaderSourcesTests
 {
     private static readonly string[] ExpectedPassNames =
@@ -19,6 +22,9 @@ public sealed class GpuComputeShaderSourcesTests
         GpuComputeShaderSources.AirSmokeDiffuseMargolusName,
     ];
 
+    /// <summary>
+    /// 验证Pass Names Expose Plan09Initial Compute Set。
+    /// </summary>
     [Fact]
     public void PassNamesExposePlan09InitialComputeSet()
     {
@@ -37,6 +43,9 @@ public sealed class GpuComputeShaderSourcesTests
         Assert.Contains("void main()", source, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Bloom Compute Sources Match Fragment Bloom Semantics。
+    /// </summary>
     [Fact]
     public void BloomComputeSourcesMatchFragmentBloomSemantics()
     {
@@ -49,6 +58,9 @@ public sealed class GpuComputeShaderSourcesTests
         Assert.Contains("world.rgb * visibility * uExposure", GpuComputeShaderSources.LightComposite, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Radiance Cascade Sources Expose Render Side Contracts。
+    /// </summary>
     [Fact]
     public void RadianceCascadeSourcesExposeRenderSideContracts()
     {
@@ -64,6 +76,9 @@ public sealed class GpuComputeShaderSourcesTests
         Assert.Contains("GPU->CPU readback", GpuComputeShaderSources.RadianceCascadeApply, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Particle Point Sprite Sources Expose Render Side Contracts。
+    /// </summary>
     [Fact]
     public void ParticlePointSpriteSourcesExposeRenderSideContracts()
     {
@@ -98,6 +113,9 @@ public sealed class GpuComputeShaderSourcesTests
         Assert.Contains("uEmissiveScale", fragment, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Air Smoke Diffuse Margolus Source Exposes Non Authoritative Diffusion Contract。
+    /// </summary>
     [Fact]
     public void AirSmokeDiffuseMargolusSourceExposesNonAuthoritativeDiffusionContract()
     {
@@ -123,6 +141,9 @@ public sealed class GpuComputeShaderSourcesTests
         Assert.Contains("out11 = total - out00 - out10 - out01", source, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证Get Source Returns Registered Sources Only。
+    /// </summary>
     [Fact]
     public void GetSourceReturnsRegisteredSourcesOnly()
     {

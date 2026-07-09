@@ -39,9 +39,9 @@ public sealed class Scene
     /// <summary>
     /// 从 .scene 文档物化出的脚本实体场景；非脚本场景来源时为空。
     /// </summary>
-    public PixelEngine.Scripting.Scene? ScriptScene { get; private set; }
+    public Scripting.Scene? ScriptScene { get; private set; }
 
-    internal void AttachScriptScene(PixelEngine.Scripting.Scene scriptScene)
+    internal void AttachScriptScene(Scripting.Scene scriptScene)
     {
         ScriptScene = scriptScene ?? throw new ArgumentNullException(nameof(scriptScene));
     }

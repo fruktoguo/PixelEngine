@@ -86,7 +86,7 @@ internal sealed class RuntimeWorldStateBridge(ParticleSystem particles) : IWorld
             return;
         }
 
-        PixelEngine.Physics.RigidBodySnapshot[] runtime = new PixelEngine.Physics.RigidBodySnapshot[destination.Length];
+        Physics.RigidBodySnapshot[] runtime = new Physics.RigidBodySnapshot[destination.Length];
         int written = _physics.CopyBodySnapshots(runtime);
         if (written != destination.Length)
         {
@@ -95,7 +95,7 @@ internal sealed class RuntimeWorldStateBridge(ParticleSystem particles) : IWorld
 
         for (int i = 0; i < written; i++)
         {
-            PixelEngine.Physics.RigidBodySnapshot snapshot = runtime[i];
+            Physics.RigidBodySnapshot snapshot = runtime[i];
             BodyLocalMask mask = snapshot.Mask;
             destination[i] = new SerializationRigidBodySnapshot(
                 snapshot.BodyKey,
@@ -157,7 +157,7 @@ internal sealed class RuntimeWorldStateBridge(ParticleSystem particles) : IWorld
             return;
         }
 
-        PixelEngine.Physics.RigidBodySnapshot[] runtime = new PixelEngine.Physics.RigidBodySnapshot[bodies.Length];
+        Physics.RigidBodySnapshot[] runtime = new Physics.RigidBodySnapshot[bodies.Length];
         for (int i = 0; i < bodies.Length; i++)
         {
             SerializationRigidBodySnapshot body = bodies[i];
@@ -167,7 +167,7 @@ internal sealed class RuntimeWorldStateBridge(ParticleSystem particles) : IWorld
                 new Vector2(body.LocalOriginX, body.LocalOriginY),
                 body.BodyLocalMask.Span,
                 body.Material.Span);
-            runtime[i] = new PixelEngine.Physics.RigidBodySnapshot(
+            runtime[i] = new Physics.RigidBodySnapshot(
                 body.Id,
                 new Transform2D(new Vector2(body.PosX, body.PosY), body.RotCos, body.RotSin),
                 new Vector2(body.LinVelX, body.LinVelY),
