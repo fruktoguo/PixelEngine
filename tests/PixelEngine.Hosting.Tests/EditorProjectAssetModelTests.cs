@@ -384,6 +384,92 @@ public sealed class EditorProjectAssetModelTests
     }
 
     /// <summary>
+    /// 验证 Project Window 文件夹递归移动会保留子资产 stable id，并重写活动场景与磁盘文档中的 typed asset reference。
+    /// </summary>
+    [Fact]
+    public void ProjectBrowserMoveFolderKeepsAssetIdsAndRewritesTypedAssetReferences()
+    {
+        // Arrange：准备输入与初始状态
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            string contentRoot = Path.Combine(projectRoot, "content");
+            EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
+            EditorAssetRecord texture = manifest.CreateAsset("levels/textures/sand.png", EditorAssetType.Texture, textContents: "texture");
+            EditorAssetRecord script = manifest.CreateAsset("levels/scripts/DemoBehaviour.cs", EditorAssetType.Script);
+            string oldReference = EditorAssetReferenceCodec.Encode(texture.Id, texture.LogicalPath, texture.AssetType);
+            EngineSceneDocument document = CreateSceneWithAssetReference(oldReference);
+            string scenePath = Path.Combine(contentRoot, "scenes", "main.scene");
+            EngineSceneDocumentLoader.SaveDocument(document, scenePath);
+            EditorSceneModel activeScene = EditorSceneModel.FromDocument(document);
+            EditorAssetBrowserDataSource source = new(manifest);
+
+            AssetBrowserFolderMoveResult result = source.MoveFolder(
+                new AssetBrowserFolderMoveRequest("levels", "world/levels"),
+                activeScene);
+
+            string newReference = EditorAssetReferenceCodec.Encode(texture.Id, "world/levels/textures/sand.png", texture.AssetType);
+            // Assert：验证预期结果
+            Assert.True(result.Succeeded);
+            Assert.Contains("assets=2", result.Diagnostic, StringComparison.Ordinal);
+            Assert.False(Directory.Exists(Path.Combine(contentRoot, "levels")));
+            Assert.True(File.Exists(Path.Combine(contentRoot, "world", "levels", "textures", "sand.png")));
+            Assert.True(File.Exists(Path.Combine(contentRoot, "world", "levels", "scripts", "DemoBehaviour.cs")));
+            Assert.True(manifest.TryResolveAssetId(texture.Id, out EditorAssetRecord movedTexture));
+            Assert.True(manifest.TryResolveAssetId(script.Id, out EditorAssetRecord movedScript));
+            Assert.Equal("world/levels/textures/sand.png", movedTexture.LogicalPath);
+            Assert.Equal("world/levels/scripts/DemoBehaviour.cs", movedScript.LogicalPath);
+            Assert.Equal(newReference, activeScene.Get(10).Components[0].SerializedFields["Texture"]);
+            EngineSceneDocument saved = EngineSceneDocumentLoader.LoadDocument(scenePath);
+            Assert.Equal(newReference, saved.Entities![0].Behaviours![0].SerializedFields!["Texture"]);
+            Assert.Contains(source.ListFolders(), folder => folder.Path == "world/levels" && folder.AssetCount == 2);
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
+    /// 验证移动 UI Screen 文件夹时同步 ui-manifest screen path，并拒绝会改变资产类型的目录移动。
+    /// </summary>
+    [Fact]
+    public void ProjectBrowserMoveFolderUpdatesUiManifestAndRejectsAssetTypeChanges()
+    {
+        // Arrange：准备输入与初始状态
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            string contentRoot = Path.Combine(projectRoot, "content");
+            EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
+            EditorAssetBrowserDataSource source = new(manifest);
+            AssetBrowserCreateResult created = source.CreateAsset(new AssetBrowserCreateRequest("ui/screens/menu/Hud.xhtml", AssetBrowserItemKind.UiScreen));
+
+            AssetBrowserFolderMoveResult moved = source.MoveFolder(new AssetBrowserFolderMoveRequest("ui/screens/menu", "ui/screens/hud"));
+            AssetBrowserFolderMoveResult rejected = source.MoveFolder(new AssetBrowserFolderMoveRequest("ui/screens/hud", "ui/moved"));
+
+            // Assert：验证预期结果
+            Assert.True(created.Succeeded);
+            Assert.True(moved.Succeeded);
+            Assert.False(rejected.Succeeded);
+            Assert.Contains("改变资产类型", rejected.Diagnostic, StringComparison.Ordinal);
+            Assert.True(manifest.TryResolveAssetId(created.AssetId!, out EditorAssetRecord screen));
+            Assert.Equal("ui/screens/hud/Hud.xhtml", screen.LogicalPath);
+            using JsonDocument uiManifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(contentRoot, "ui", "ui-manifest.json")));
+            JsonElement screenEntry = Assert.Single(uiManifest.RootElement.GetProperty("screens").EnumerateArray());
+            Assert.Equal("hud", screenEntry.GetProperty("id").GetString());
+            Assert.Equal("screens/hud/Hud.xhtml", screenEntry.GetProperty("path").GetString());
+            Assert.True(screenEntry.GetProperty("preload").GetBoolean());
+            Assert.True(File.Exists(Path.Combine(contentRoot, "ui", "screens", "hud", "Hud.xhtml")));
+            Assert.False(Directory.Exists(Path.Combine(contentRoot, "ui", "moved")));
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
     /// 验证移动资产会先解析全部引用文档，损坏的 scene/prefab 不会导致文件已移动但引用未重写的半提交状态。
     /// </summary>
     [Fact]

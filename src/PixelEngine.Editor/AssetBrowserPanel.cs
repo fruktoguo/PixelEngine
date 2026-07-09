@@ -19,6 +19,7 @@ public delegate bool ScriptAssetOpenHandler(string assetPath, out string diagnos
 /// <param name="openScriptAsset">可选脚本资产打开回调。</param>
 /// <param name="deleteAsset">可选资产删除回调。</param>
 /// <param name="moveAsset">可选资产移动 / 重命名回调。</param>
+/// <param name="moveFolder">可选文件夹移动 / 重命名回调。</param>
 /// <param name="createAsset">可选资产创建回调。</param>
 public sealed class AssetBrowserPanel(
     IAssetBrowserDataSource source,
@@ -27,6 +28,7 @@ public sealed class AssetBrowserPanel(
     ScriptAssetOpenHandler? openScriptAsset = null,
     AssetBrowserDeleteHandler? deleteAsset = null,
     AssetBrowserMoveHandler? moveAsset = null,
+    AssetBrowserFolderMoveHandler? moveFolder = null,
     AssetBrowserCreateHandler? createAsset = null) : IEditorPanel
 {
     private readonly IAssetBrowserDataSource _source = source ?? throw new ArgumentNullException(nameof(source));
@@ -35,6 +37,7 @@ public sealed class AssetBrowserPanel(
     private readonly ScriptAssetOpenHandler? _openScriptAsset = openScriptAsset;
     private readonly AssetBrowserDeleteHandler? _deleteAsset = deleteAsset;
     private readonly AssetBrowserMoveHandler? _moveAsset = moveAsset;
+    private readonly AssetBrowserFolderMoveHandler? _moveFolder = moveFolder;
     private readonly AssetBrowserCreateHandler? _createAsset = createAsset;
     private static readonly string[] KindFilterLabels = ["全部", "Folder", "Material", "Texture", "Audio", "Scene", "Prefab", "Script", "UI Screen", "Json", "Other"];
     private static readonly string[] SortModeLabels = ["路径", "类型 / 路径", "最近修改", "大小"];
@@ -54,6 +57,8 @@ public sealed class AssetBrowserPanel(
     private AssetBrowserDeleteRequest? _pendingDeleteRequest;
     private AssetBrowserMoveRequest? _pendingMoveRequest;
     private string _pendingMoveTargetPath = string.Empty;
+    private AssetBrowserFolderMoveRequest? _pendingFolderMoveRequest;
+    private string _pendingFolderMoveTargetPath = string.Empty;
     private AssetBrowserItemKind _createKind = AssetBrowserItemKind.Script;
     private string _createPath = "scripts/NewBehaviour.cs";
 
@@ -191,6 +196,72 @@ public sealed class AssetBrowserPanel(
 
         Status = $"文件夹不存在：{path}";
         return false;
+    }
+
+    /// <summary>
+    /// 开始移动 / 重命名指定文件夹。
+    /// </summary>
+    /// <param name="path">当前文件夹路径。</param>
+    /// <returns>文件夹存在且可移动时返回 true。</returns>
+    public bool BeginMoveFolder(string path)
+    {
+        if (!TryFindFolder(path, out AssetBrowserFolderItem folder))
+        {
+            Status = $"文件夹不存在：{path}";
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(folder.Path))
+        {
+            Status = "content 根目录不能移动。";
+            return false;
+        }
+
+        _pendingFolderMoveRequest = new AssetBrowserFolderMoveRequest(folder.Path, folder.Path);
+        _pendingFolderMoveTargetPath = folder.Path;
+        Status = $"准备移动文件夹 {folder.DisplayName}";
+        return true;
+    }
+
+    /// <summary>
+    /// 直接移动 / 重命名指定文件夹。
+    /// </summary>
+    /// <param name="path">当前文件夹路径。</param>
+    /// <param name="newPath">移动后的文件夹路径。</param>
+    /// <returns>移动已经执行时返回 true。</returns>
+    public bool TryMoveFolder(string path, string newPath)
+    {
+        if (!TryFindFolder(path, out AssetBrowserFolderItem folder))
+        {
+            Status = $"文件夹不存在：{path}";
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(folder.Path))
+        {
+            Status = "content 根目录不能移动。";
+            return false;
+        }
+
+        return MoveFolder(new AssetBrowserFolderMoveRequest(folder.Path, newPath));
+    }
+
+    /// <summary>
+    /// 使用当前待编辑目标路径确认文件夹移动 / 重命名。
+    /// </summary>
+    /// <param name="path">当前文件夹路径。</param>
+    /// <returns>移动已经执行时返回 true。</returns>
+    public bool TryConfirmMoveFolder(string path)
+    {
+        if (!TryGetPendingFolderMove(path, out AssetBrowserFolderMoveRequest request))
+        {
+            _pendingFolderMoveRequest = null;
+            _pendingFolderMoveTargetPath = string.Empty;
+            Status = $"文件夹移动目标已失效，请重新请求移动：{path}";
+            return false;
+        }
+
+        return MoveFolder(request with { NewPath = _pendingFolderMoveTargetPath });
     }
 
 
@@ -568,6 +639,32 @@ public sealed class AssetBrowserPanel(
 
             ImGui.EndDragDropTarget();
         }
+
+        if (!string.IsNullOrEmpty(folder.Path))
+        {
+            ImGui.SameLine();
+            if (IsPendingFolderMoveFor(folder))
+            {
+                _ = ImGui.InputText($"新路径##move-folder-{folder.Path}", ref _pendingFolderMoveTargetPath, 256);
+                ImGui.SameLine();
+                if (ImGui.Button($"确认移动##folder-{folder.Path}"))
+                {
+                    _ = TryConfirmMoveFolder(folder.Path);
+                }
+
+                ImGui.SameLine();
+                if (ImGui.Button($"取消移动##folder-{folder.Path}"))
+                {
+                    _pendingFolderMoveRequest = null;
+                    _pendingFolderMoveTargetPath = string.Empty;
+                    Status = $"已取消移动文件夹 {folder.DisplayName}";
+                }
+            }
+            else if (ImGui.Button($"移动/重命名##folder-{folder.Path}"))
+            {
+                _ = BeginMoveFolder(folder.Path);
+            }
+        }
     }
 
     private void DrawAssetRow(AssetBrowserItem item, EditorSelection selection)
@@ -760,6 +857,34 @@ public sealed class AssetBrowserPanel(
         return result.Succeeded;
     }
 
+    private bool MoveFolder(AssetBrowserFolderMoveRequest request)
+    {
+        if (_moveFolder is null)
+        {
+            Status = "文件夹移动服务不可用";
+            return false;
+        }
+
+        if (string.Equals(request.Path, request.NewPath, StringComparison.OrdinalIgnoreCase))
+        {
+            Status = $"文件夹移动目标与源路径相同：{request.Path}";
+            return false;
+        }
+
+        AssetBrowserFolderMoveResult result = _moveFolder(request);
+        Status = string.IsNullOrWhiteSpace(result.Diagnostic)
+            ? result.Succeeded ? $"已移动文件夹 {request.Path}" : $"文件夹移动未执行：{request.Path}"
+            : result.Diagnostic;
+        if (result.Succeeded)
+        {
+            _pendingFolderMoveRequest = null;
+            _pendingFolderMoveTargetPath = string.Empty;
+            _ = Refresh();
+        }
+
+        return result.Succeeded;
+    }
+
     private static bool IsCreateKindSupported(AssetBrowserItemKind kind)
     {
         return Array.IndexOf(CreateKinds, kind) >= 0;
@@ -823,6 +948,25 @@ public sealed class AssetBrowserPanel(
     private bool IsPendingMoveFor(AssetBrowserItem item)
     {
         return TryGetPendingMoveFor(item, out _);
+    }
+
+    private bool IsPendingFolderMoveFor(AssetBrowserFolderItem folder)
+    {
+        return TryGetPendingFolderMove(folder.Path, out _);
+    }
+
+    private bool TryGetPendingFolderMove(string path, out AssetBrowserFolderMoveRequest request)
+    {
+        string normalized = (path ?? string.Empty).Trim().Replace('\\', '/');
+        if (_pendingFolderMoveRequest is { } pending &&
+            string.Equals(pending.Path, normalized, StringComparison.OrdinalIgnoreCase))
+        {
+            request = pending;
+            return true;
+        }
+
+        request = default;
+        return false;
     }
 
     private bool TryGetPendingMoveFor(AssetBrowserItem item, out AssetBrowserMoveRequest request)
@@ -939,6 +1083,27 @@ public sealed class AssetBrowserPanel(
         }
 
         return null;
+    }
+
+    private bool TryFindFolder(string path, out AssetBrowserFolderItem folder)
+    {
+        if (FolderTargets.Count == 0)
+        {
+            _ = Refresh();
+        }
+
+        string normalized = (path ?? string.Empty).Trim().Replace('\\', '/');
+        for (int i = 0; i < FolderTargets.Count; i++)
+        {
+            if (string.Equals(FolderTargets[i].Path, normalized, StringComparison.OrdinalIgnoreCase))
+            {
+                folder = FolderTargets[i];
+                return true;
+            }
+        }
+
+        folder = default;
+        return false;
     }
 
     private static string? GetLogicalDirectoryName(string logicalPath)

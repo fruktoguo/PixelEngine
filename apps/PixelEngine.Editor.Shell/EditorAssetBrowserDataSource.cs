@@ -163,6 +163,30 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource, IA
         }
     }
 
+    public AssetBrowserFolderMoveResult MoveFolder(AssetBrowserFolderMoveRequest request, EditorSceneModel? activeScene = null)
+    {
+        if (string.IsNullOrWhiteSpace(request.Path) || string.IsNullOrWhiteSpace(request.NewPath))
+        {
+            return new AssetBrowserFolderMoveResult(false, "文件夹移动请求缺少当前路径或目标路径。");
+        }
+
+        try
+        {
+            EditorAssetFolderMoveResult result = _assets.MoveFolder(request.Path, request.NewPath, activeScene);
+            string movedAssets = result.MovedAssets.ToString(CultureInfo.InvariantCulture);
+            string updatedDocuments = result.UpdatedReferenceDocuments.ToString(CultureInfo.InvariantCulture);
+            return new AssetBrowserFolderMoveResult(
+                true,
+                result.UpdatedActiveScene || result.UpdatedReferenceDocuments > 0
+                    ? $"已移动文件夹并重写引用：assets={movedAssets}, active={result.UpdatedActiveScene}, documents={updatedDocuments}"
+                    : $"已移动文件夹：{result.LogicalPath} -> {result.NewLogicalPath}，assets={movedAssets}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException)
+        {
+            return new AssetBrowserFolderMoveResult(false, ex.Message);
+        }
+    }
+
     public AssetBrowserCreateResult CreateAsset(AssetBrowserCreateRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Path))
