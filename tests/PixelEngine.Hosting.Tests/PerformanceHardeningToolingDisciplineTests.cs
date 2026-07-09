@@ -2950,6 +2950,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string ci = ReadRepositoryFile(".github", "workflows", "ci.yml");
         string report = ReadRepositoryFile("docs", "benchmark-reports", "2026-07-02-ci-matrix-evidence.md");
         string plan = ReadRepositoryFile("plan", "14-testing-benchmarking.md");
+        string readme = ReadRepositoryFile("plan", "README.md");
 
         // Assert：验证预期结果
         Assert.Contains("EvidenceManifestPath", script, StringComparison.Ordinal);
@@ -3016,6 +3017,24 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("run_attempt", report, StringComparison.Ordinal);
         Assert.Contains("push/pull_request", report, StringComparison.Ordinal);
         Assert.Contains("同一个 GitHub Actions run", report, StringComparison.Ordinal);
+
+        Assert.Contains("manifest 必须包含 `workflow_run`、`benchmark_guard`、6 RID `buildTest/<rid>` 与 4 RID `verifyPublish/<rid>` scope", readme, StringComparison.Ordinal);
+        Assert.Contains("逐项提供 path + sha256", readme, StringComparison.Ordinal);
+        Assert.Contains("`workflow=CI`", readme, StringComparison.Ordinal);
+        Assert.Contains("`event=push` 或 `pull_request`", readme, StringComparison.Ordinal);
+        Assert.Contains("`run_attempt>=1`", readme, StringComparison.Ordinal);
+        Assert.Contains("`ref=refs/heads/*` 或 `refs/pull/*`", readme, StringComparison.Ordinal);
+        Assert.Contains("`run_id` / `sha` 同源", readme, StringComparison.Ordinal);
+        Assert.Contains("`benchmark_guard` 必须在 `windows-latest` 上 `conclusion=success`", readme, StringComparison.Ordinal);
+        Assert.Contains("`win-x64` / `win-arm64` / `linux-x64` / `linux-arm64` / `osx-x64` / `osx-arm64`", readme, StringComparison.Ordinal);
+        Assert.Contains("`windows-latest` / `ubuntu-latest` / `ubuntu-24.04-arm` / `macos-15-intel` / `macos-14`", readme, StringComparison.Ordinal);
+        Assert.Contains("`testsRan` 必须显式存在", readme, StringComparison.Ordinal);
+        Assert.Contains("`win-arm64` 当前为 `build_only=true` / `tests_ran=false`", readme, StringComparison.Ordinal);
+        Assert.Contains("其余可测 RID 必须 `tests_ran=true`", readme, StringComparison.Ordinal);
+        Assert.Contains("publish verify scope 覆盖 `win-x64` / `linux-x64` / `osx-x64` / `osx-arm64`", readme, StringComparison.Ordinal);
+        Assert.Contains("`channels=r2r,aot` 且 `conclusion=success`", readme, StringComparison.Ordinal);
+        Assert.Contains("仍需人工确认对应 GitHub Actions run 的 job 结论，不能解除 plan/14/M15 阻塞", readme, StringComparison.Ordinal);
+
         Assert.Contains("tools/ci-matrix-evidence-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("blocked_invalid_ci_evidence", plan, StringComparison.Ordinal);
         Assert.Contains("ci_matrix_evidence_attached_pending_review", plan, StringComparison.Ordinal);
