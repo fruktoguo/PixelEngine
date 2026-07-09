@@ -434,7 +434,7 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
-    /// 验证 RisingHazardDirector 通过 MaterialEmitter 注入熔岩、同步水位，并在淹没阈值触发任务失败。
+    /// 验证 RisingHazardDirector 通过 MaterialEmitter 注入熔岩、同步熔岩线，并在淹没阈值触发任务失败。
     /// </summary>
     [Fact]
     public void RisingHazardDirectorDrivesEmittersAndMissionLoss()

@@ -280,7 +280,7 @@ public sealed class RisingHazardDirector : Behaviour
             }
         }
 
-        BlockedReason = "场景中未找到 MissionDirector；熔岩仍会上升，但无法同步任务水位。";
+        BlockedReason = "场景中未找到 MissionDirector；熔岩仍会上升，但无法同步任务熔岩线。";
     }
 
     private sealed class EmitterBuildSystem(RisingHazardDirector director) : ISystem
