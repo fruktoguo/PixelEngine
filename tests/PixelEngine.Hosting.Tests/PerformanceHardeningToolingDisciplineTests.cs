@@ -555,6 +555,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string script = ReadRepositoryFile("tools", "native-leak-preflight.ps1");
         string report = ReadRepositoryFile("docs", "runtime-reports", "2026-07-02-demo-window-longrun.md");
         string plan = ReadRepositoryFile("plan", "18-hosting-runtime.md");
+        string readme = ReadRepositoryFile("plan", "README.md");
 
         // Assert：验证预期结果
         Assert.Contains("DetectorReportPath", script, StringComparison.Ordinal);
@@ -607,6 +608,25 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("native GL/OpenAL/Box2D 工具级泄漏审计仍由 §5 的 native leak detector 阻塞项闭合", plan, StringComparison.Ordinal);
         Assert.Contains("tools/native-leak-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("blocked_invalid_native_leak_evidence", plan, StringComparison.Ordinal);
+
+        Assert.Contains("Native leak", readme, StringComparison.Ordinal);
+        Assert.Contains("detector_report_attached_pending_review", readme, StringComparison.Ordinal);
+        Assert.Contains("detector_evidence_attached_pending_review", readme, StringComparison.Ordinal);
+        Assert.Contains("schemaVersion=1", readme, StringComparison.Ordinal);
+        Assert.Contains("detectorRunId", readme, StringComparison.Ordinal);
+        Assert.Contains("gitCommit", readme, StringComparison.Ordinal);
+        Assert.Contains("scope 仅允许 `gl` / `openal` / `box2d` / `alc`", readme, StringComparison.Ordinal);
+        Assert.Contains("path + sha256 + detector", readme, StringComparison.Ordinal);
+        Assert.Contains("conclusion=no_leaks", readme, StringComparison.Ordinal);
+        Assert.Contains("glObjectsLiveAfterShutdown=0", readme, StringComparison.Ordinal);
+        Assert.Contains("openAlObjectsLiveAfterShutdown=0", readme, StringComparison.Ordinal);
+        Assert.Contains("box2DBodiesLiveAfterShutdown=0", readme, StringComparison.Ordinal);
+        Assert.Contains("alcLoadContextsAliveAfterUnload=0", readme, StringComparison.Ordinal);
+        Assert.Contains("process_smoke_only", readme, StringComparison.Ordinal);
+        Assert.Contains("gl_context_rendering_wrappers", readme, StringComparison.Ordinal);
+        Assert.Contains("managed_no_gl_context", readme, StringComparison.Ordinal);
+        Assert.Contains("不能解除 plan/18/M15 native leak 阻塞", readme, StringComparison.Ordinal);
+        Assert.Contains("外部 GL driver 级 detector", readme, StringComparison.Ordinal);
     }
 
     /// <summary>
