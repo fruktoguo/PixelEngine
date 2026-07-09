@@ -374,6 +374,60 @@ internal sealed class EditorAssetManifestStore
         }
     }
 
+    public EditorAssetRecord ImportAsset(string sourceFullPath, string logicalPath, EditorAssetType assetType)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceFullPath);
+        string sourcePath = Path.GetFullPath(sourceFullPath);
+        if (!File.Exists(sourcePath))
+        {
+            throw new FileNotFoundException("导入源文件不存在。", sourcePath);
+        }
+
+        if (assetType is not (EditorAssetType.Texture or EditorAssetType.Audio))
+        {
+            throw new InvalidOperationException($"Project Window 只支持导入 Texture / Audio 二进制资产，收到：{assetType}。");
+        }
+
+        string normalized = NormalizeLogicalPath(logicalPath, nameof(logicalPath));
+        EditorAssetType classified = Classify(normalized);
+        if (classified != assetType)
+        {
+            throw new InvalidOperationException($"导入目标 {normalized} 的类型 {classified} 与请求类型 {assetType} 不一致。");
+        }
+
+        string targetPath = ResolveFullPath(normalized);
+        if (string.Equals(sourcePath, targetPath, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("导入源文件与目标路径相同。");
+        }
+
+        if (File.Exists(targetPath) || Directory.Exists(targetPath))
+        {
+            throw new InvalidOperationException($"目标资产已存在：{normalized}");
+        }
+
+        string? targetDirectory = Path.GetDirectoryName(targetPath);
+        if (!string.IsNullOrEmpty(targetDirectory))
+        {
+            _ = Directory.CreateDirectory(targetDirectory);
+        }
+
+        File.Copy(sourcePath, targetPath, overwrite: false);
+        try
+        {
+            return EnsureAsset(normalized);
+        }
+        catch
+        {
+            if (File.Exists(targetPath))
+            {
+                File.Delete(targetPath);
+            }
+
+            throw;
+        }
+    }
+
     public string CreateFolder(string logicalFolderPath)
     {
         string normalized = NormalizeLogicalPath(logicalFolderPath, nameof(logicalFolderPath));

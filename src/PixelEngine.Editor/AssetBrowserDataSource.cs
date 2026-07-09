@@ -197,6 +197,17 @@ public readonly record struct AssetBrowserCreateRequest(
     AssetBrowserItemKind Kind);
 
 /// <summary>
+/// Project Window 资产导入请求。
+/// </summary>
+/// <param name="SourceFullPath">要导入的外部源文件完整路径。</param>
+/// <param name="Path">相对 content 根目录的目标 logical path。</param>
+/// <param name="Kind">要导入的资产类型。</param>
+public readonly record struct AssetBrowserImportRequest(
+    string SourceFullPath,
+    string Path,
+    AssetBrowserItemKind Kind);
+
+/// <summary>
 /// Project Window 资产删除结果。
 /// </summary>
 /// <param name="Succeeded">删除是否已执行。</param>
@@ -250,6 +261,19 @@ public readonly record struct AssetBrowserCreateResult(
     string? Path = null);
 
 /// <summary>
+/// Project Window 资产导入结果。
+/// </summary>
+/// <param name="Succeeded">导入是否已执行。</param>
+/// <param name="Diagnostic">可展示给用户的导入诊断。</param>
+/// <param name="AssetId">导入后的 stable asset id；失败时为空。</param>
+/// <param name="Path">导入后的 logical path；失败时为空。</param>
+public readonly record struct AssetBrowserImportResult(
+    bool Succeeded,
+    string Diagnostic,
+    string? AssetId = null,
+    string? Path = null);
+
+/// <summary>
 /// Project Window 资产删除回调。
 /// </summary>
 /// <param name="request">删除请求。</param>
@@ -283,6 +307,13 @@ public delegate AssetBrowserFolderMoveResult AssetBrowserFolderMoveHandler(Asset
 /// <param name="request">创建请求。</param>
 /// <returns>创建结果。</returns>
 public delegate AssetBrowserCreateResult AssetBrowserCreateHandler(AssetBrowserCreateRequest request);
+
+/// <summary>
+/// Project Window 资产导入回调。
+/// </summary>
+/// <param name="request">导入请求。</param>
+/// <returns>导入结果。</returns>
+public delegate AssetBrowserImportResult AssetBrowserImportHandler(AssetBrowserImportRequest request);
 
 /// <summary>
 /// 资源浏览器只读数据源。

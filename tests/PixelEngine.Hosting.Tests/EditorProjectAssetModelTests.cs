@@ -135,6 +135,62 @@ public sealed class EditorProjectAssetModelTests
     }
 
     /// <summary>
+    /// 验证 Project Window 可把外部 Texture / Audio 文件导入 content，并登记 stable asset id。
+    /// </summary>
+    [Fact]
+    public void ProjectBrowserImportsTextureAndAudioAssetsWithStableIds()
+    {
+        // Arrange：准备输入与初始状态
+        string projectRoot = CreateTempProjectRoot();
+        string importsRoot = Path.Combine(Path.GetTempPath(), "pixelengine-imports-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            string contentRoot = Path.Combine(projectRoot, "content");
+            _ = Directory.CreateDirectory(contentRoot);
+            _ = Directory.CreateDirectory(importsRoot);
+            string sourceTexture = Path.Combine(importsRoot, "source.png");
+            string sourceAudio = Path.Combine(importsRoot, "hit.wav");
+            File.WriteAllBytes(sourceTexture, [1, 2, 3, 4]);
+            File.WriteAllBytes(sourceAudio, [5, 6, 7, 8, 9]);
+            EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
+            EditorAssetBrowserDataSource source = new(manifest);
+
+            AssetBrowserImportResult texture = source.ImportAsset(new AssetBrowserImportRequest(sourceTexture, "textures/source.png", AssetBrowserItemKind.Texture));
+            AssetBrowserImportResult audio = source.ImportAsset(new AssetBrowserImportRequest(sourceAudio, "audio/hit.wav", AssetBrowserItemKind.Audio));
+            AssetBrowserImportResult duplicate = source.ImportAsset(new AssetBrowserImportRequest(sourceTexture, "textures/source.png", AssetBrowserItemKind.Texture));
+            AssetBrowserImportResult missing = source.ImportAsset(new AssetBrowserImportRequest(Path.Combine(importsRoot, "missing.png"), "textures/missing.png", AssetBrowserItemKind.Texture));
+            AssetBrowserImportResult wrongKind = source.ImportAsset(new AssetBrowserImportRequest(sourceTexture, "data/source.json", AssetBrowserItemKind.Json));
+
+            IReadOnlyList<AssetBrowserItem> assets = source.ListAssets();
+
+            // Assert：验证预期结果
+            Assert.True(texture.Succeeded);
+            Assert.True(audio.Succeeded);
+            Assert.StartsWith("asset_", texture.AssetId, StringComparison.Ordinal);
+            Assert.StartsWith("asset_", audio.AssetId, StringComparison.Ordinal);
+            Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(Path.Combine(contentRoot, "textures", "source.png")));
+            Assert.Equal([5, 6, 7, 8, 9], File.ReadAllBytes(Path.Combine(contentRoot, "audio", "hit.wav")));
+            Assert.Equal(AssetBrowserItemKind.Texture, Find(assets, "textures/source.png").Kind);
+            Assert.Equal(AssetBrowserItemKind.Audio, Find(assets, "audio/hit.wav").Kind);
+            Assert.Equal(texture.AssetId, Find(assets, "textures/source.png").AssetId);
+            Assert.Equal(audio.AssetId, Find(assets, "audio/hit.wav").AssetId);
+            Assert.StartsWith("纹理：", Find(assets, "textures/source.png").PreviewSummary, StringComparison.Ordinal);
+            Assert.StartsWith("音频：", Find(assets, "audio/hit.wav").PreviewSummary, StringComparison.Ordinal);
+            Assert.False(duplicate.Succeeded);
+            Assert.False(missing.Succeeded);
+            Assert.False(wrongKind.Succeeded);
+            Assert.Contains("已存在", duplicate.Diagnostic, StringComparison.Ordinal);
+            Assert.Contains("不存在", missing.Diagnostic, StringComparison.Ordinal);
+            Assert.Contains("暂不支持", wrongKind.Diagnostic, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+            DeleteDirectory(importsRoot);
+        }
+    }
+
+    /// <summary>
     /// 验证 Project Window 创建文件夹拒绝越界、重复目录和与文件同名的目标。
     /// </summary>
     [Fact]
