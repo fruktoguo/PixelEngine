@@ -105,9 +105,13 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
 
     private UiTextComposition CompositionState { get; set; } = UiTextComposition.Inactive;
 
+    private UiImeGeometry CompositionImeGeometry { get; set; } = UiImeGeometry.None;
+
     internal string DebugCompositionText => CompositionText;
 
     internal UiTextComposition DebugCompositionState => CompositionState;
+
+    internal UiImeGeometry DebugCompositionImeGeometry => CompositionImeGeometry;
 
     /// <summary>
     /// 初始化 RmlUi renderer、GL 函数表与字体。
@@ -396,19 +400,40 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
         ThrowIfDisposed();
         EnsureInitialized();
         UiTextComposition normalized = NormalizeTextComposition(text, in composition);
+        UiViewport geometryViewport = new(0, 0, _baseViewportWidth, _baseViewportHeight, 1f);
+        UiImeGeometry geometry = normalized.IsActive
+            ? UiImeGeometryLayout.ComputePreeditOverlayGeometry(
+                in geometryViewport,
+                text.Length,
+                normalized.CursorIndex)
+            : UiImeGeometry.None;
         UiTextComposition current = CompositionState;
         bool sameState = CompositionEquals(in current, in normalized);
         bool sameText = normalized.IsActive
             ? text.SequenceEqual(CompositionText.AsSpan())
             : CompositionText.Length == 0;
-        if (sameState && sameText)
+        bool sameGeometry = GeometryEquals(CompositionImeGeometry, geometry);
+        if (sameState && sameText && sameGeometry)
         {
             return;
         }
 
         CompositionState = normalized;
         CompositionText = normalized.IsActive ? text.ToString() : string.Empty;
+        CompositionImeGeometry = geometry;
         Dirty = true;
+    }
+
+    /// <summary>
+    /// 返回当前预编辑状态对应的 caret rect / 候选窗锚点（在 native composition 完成前与 ManagedFallback 共用 overlay 布局契约）。
+    /// </summary>
+    /// <param name="geometry">UI 坐标空间中的定位几何。</param>
+    /// <returns>存在有效定位信息时返回 true。</returns>
+    public bool TryGetImeGeometry(out UiImeGeometry geometry)
+    {
+        ThrowIfDisposed();
+        geometry = CompositionImeGeometry;
+        return geometry.HasAny;
     }
 
     /// <summary>
@@ -694,6 +719,18 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             left.CursorIndex == right.CursorIndex &&
             left.SelectionStart == right.SelectionStart &&
             left.SelectionLength == right.SelectionLength;
+    }
+
+    private static bool GeometryEquals(in UiImeGeometry left, in UiImeGeometry right)
+    {
+        return left.HasCaretRect == right.HasCaretRect &&
+            left.HasCandidateAnchor == right.HasCandidateAnchor &&
+            left.CaretX.Equals(right.CaretX) &&
+            left.CaretY.Equals(right.CaretY) &&
+            left.CaretWidth.Equals(right.CaretWidth) &&
+            left.CaretHeight.Equals(right.CaretHeight) &&
+            left.CandidateAnchorX.Equals(right.CandidateAnchorX) &&
+            left.CandidateAnchorY.Equals(right.CandidateAnchorY);
     }
 
     /// <summary>

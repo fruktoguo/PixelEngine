@@ -89,6 +89,34 @@ internal readonly record struct GameViewViewportSnapshot(
         return true;
     }
 
+    /// <summary>
+    /// 将 viewport 纹理坐标映射回 Game View 面板局部坐标。
+    /// </summary>
+    /// <param name="viewportPoint">viewport 纹理像素坐标。</param>
+    /// <param name="panelPoint">面板局部坐标。</param>
+    /// <returns>映射成功时返回 true。</returns>
+    public bool TryMapViewportToPanel(Vector2 viewportPoint, out Vector2 panelPoint)
+    {
+        if (!IsValid || !ImageRect.IsValid || VisibleViewportRect.Width <= 0f || VisibleViewportRect.Height <= 0f)
+        {
+            panelPoint = default;
+            return false;
+        }
+
+        float normalizedX = (viewportPoint.X - VisibleViewportRect.X) / VisibleViewportRect.Width;
+        float normalizedY = (viewportPoint.Y - VisibleViewportRect.Y) / VisibleViewportRect.Height;
+        if (!float.IsFinite(normalizedX) || !float.IsFinite(normalizedY))
+        {
+            panelPoint = default;
+            return false;
+        }
+
+        panelPoint = new Vector2(
+            ImageRect.X + (normalizedX * ImageRect.Width),
+            ImageRect.Y + (normalizedY * ImageRect.Height));
+        return true;
+    }
+
     public bool TryCreateUiPresentTarget(
         Vector2 panelOriginFramebuffer,
         Vector2 framebufferScale,

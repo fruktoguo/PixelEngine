@@ -106,6 +106,17 @@ public interface IGameUiBackend : IDisposable
     }
 
     /// <summary>
+    /// 读取当前 UI 焦点文本的 IME caret rect / 候选窗锚点，供平台定位 composition/candidate 窗口。
+    /// </summary>
+    /// <param name="geometry">UI 坐标空间中的定位几何。</param>
+    /// <returns>存在有效定位信息时返回 true。</returns>
+    bool TryGetImeGeometry(out UiImeGeometry geometry)
+    {
+        geometry = UiImeGeometry.None;
+        return false;
+    }
+
+    /// <summary>
     /// 命中测试并返回输入捕获意图。
     /// </summary>
     /// <param name="x">UI 坐标 x。</param>

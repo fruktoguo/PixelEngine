@@ -78,6 +78,37 @@ internal sealed class GameViewUiInputSource(
         return _inner.CaptureTextComposition(destination, out composition);
     }
 
+    /// <summary>
+    /// 将 viewport 纹理坐标中的 IME 几何映射回面板坐标后交给窗口输入源，供 IMM32 定位候选窗。
+    /// </summary>
+    /// <param name="geometry">viewport 坐标中的定位几何。</param>
+    public void ApplyImeGeometry(in UiImeGeometry geometry)
+    {
+        if (!geometry.HasAny)
+        {
+            _inner.ApplyImeGeometry(UiImeGeometry.None);
+            return;
+        }
+
+        GameViewViewportSnapshot viewport = _viewportProvider();
+        if (!viewport.IsValid ||
+            !viewport.ImageRect.IsValid ||
+            viewport.VisibleViewportRect.Width <= 0f ||
+            viewport.VisibleViewportRect.Height <= 0f)
+        {
+            _inner.ApplyImeGeometry(UiImeGeometry.None);
+            return;
+        }
+
+        float scaleX = viewport.ImageRect.Width / viewport.VisibleViewportRect.Width;
+        float scaleY = viewport.ImageRect.Height / viewport.VisibleViewportRect.Height;
+        float offsetX = viewport.ImageRect.X - (viewport.VisibleViewportRect.X * scaleX);
+        float offsetY = viewport.ImageRect.Y - (viewport.VisibleViewportRect.Y * scaleY);
+        // 将 viewport 空间整段几何线性映射到面板局部；窗口输入源再按 client 坐标写回 IMM32。
+        UiImeGeometry mapped = geometry.Transform(offsetX, offsetY, scaleX, scaleY);
+        _inner.ApplyImeGeometry(in mapped);
+    }
+
     private bool CanForwardKeyboardInput()
     {
         return TryMapFocusedViewportPoint(out _);

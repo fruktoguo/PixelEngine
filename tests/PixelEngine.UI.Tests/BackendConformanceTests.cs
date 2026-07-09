@@ -277,6 +277,33 @@ public sealed class BackendConformanceTests : IDisposable
     }
 
     [Fact]
+    public void ManagedFallbackPublishesImeCaretAndCandidateGeometryForActiveComposition()
+    {
+        using ManagedFallbackBackend backend = CreateManagedBackend(out _);
+        backend.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        UiImeGeometry expected = UiImeGeometryLayout.ComputePreeditOverlayGeometry(
+            new UiViewport(0, 0, 320, 240, 1f),
+            textLength: 2,
+            cursorIndex: 1);
+
+        backend.FeedTextComposition(
+            "候補",
+            new UiTextComposition(isActive: true, cursorIndex: 1));
+
+        Assert.True(backend.TryGetImeGeometry(out UiImeGeometry geometry));
+        Assert.True(geometry.HasCaretRect);
+        Assert.True(geometry.HasCandidateAnchor);
+        Assert.Equal(expected.CaretX, geometry.CaretX);
+        Assert.Equal(expected.CaretY, geometry.CaretY);
+        Assert.Equal(expected.CandidateAnchorX, geometry.CandidateAnchorX);
+        Assert.Equal(expected.CandidateAnchorY, geometry.CandidateAnchorY);
+
+        backend.FeedTextComposition([], UiTextComposition.Inactive);
+        Assert.False(backend.TryGetImeGeometry(out UiImeGeometry inactive));
+        Assert.False(inactive.HasAny);
+    }
+
+    [Fact]
     public void ManagedFallbackDrawsImeCompositionOverlayWithoutMixingCommittedText()
     {
         string path = WriteUi("""

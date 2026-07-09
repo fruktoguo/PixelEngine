@@ -159,6 +159,21 @@ public sealed class EditorShellGameViewContractTests
     /// 验证 Game View 记录图像矩形、fit scale 与 panel-local 到 viewport 坐标映射。
     /// </summary>
     [Fact]
+    public void GameViewViewportSnapshotMapsViewportPixelsBackToPanelLocal()
+    {
+        // 验证 Game View viewport 纹理坐标可映射回面板局部坐标，供 IME 几何回写。
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 200,
+            textureHeight: 100,
+            imageMinPanel: new Vector2(80f, 40f),
+            availablePanelSize: new Vector2(100f, 50f));
+
+        Assert.True(snapshot.TryMapViewportToPanel(new Vector2(100f, 50f), out Vector2 panelPoint));
+        Assert.Equal(130f, panelPoint.X, 3);
+        Assert.Equal(65f, panelPoint.Y, 3);
+    }
+
+    [Fact]
     public void GameViewViewportSnapshotMapsPanelLocalImageRectToViewportPixels()
     {
         GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(

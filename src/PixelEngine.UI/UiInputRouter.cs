@@ -131,6 +131,7 @@ public sealed class UiInputRouter
                 {
                     _host.FeedTextComposition(_textBuffer.AsSpan(0, compositionTextCount), in composition);
                     _hasActiveComposition = true;
+                    PublishImeGeometry();
                 }
                 else
                 {
@@ -172,7 +173,19 @@ public sealed class UiInputRouter
         }
 
         _host.FeedTextComposition([], UiTextComposition.Inactive);
+        _source.ApplyImeGeometry(UiImeGeometry.None);
         _hasActiveComposition = false;
+    }
+
+    private void PublishImeGeometry()
+    {
+        if (_host.TryGetImeGeometry(out UiImeGeometry geometry) && geometry.HasAny)
+        {
+            _source.ApplyImeGeometry(in geometry);
+            return;
+        }
+
+        _source.ApplyImeGeometry(UiImeGeometry.None);
     }
 
     private void ReleasePreviousKeys()
