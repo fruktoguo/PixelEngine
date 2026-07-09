@@ -470,6 +470,55 @@ public sealed class EditorProjectAssetModelTests
     }
 
     /// <summary>
+    /// 验证 UI Manifest 面板可把现有 UI Screen 文件可视化登记进 manifest，并可切换 preload。
+    /// </summary>
+    [Fact]
+    public void UiManifestPanelSyncsScreensAndTogglesPreload()
+    {
+        // Arrange：准备输入与初始状态
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            string contentRoot = Path.Combine(projectRoot, "content");
+            _ = Directory.CreateDirectory(Path.Combine(contentRoot, "ui", "screens", "menu"));
+            File.WriteAllText(Path.Combine(contentRoot, "ui", "screens", "hud.xhtml"), "<rml title=\"HUD\"><body /></rml>\n");
+            File.WriteAllText(Path.Combine(contentRoot, "ui", "screens", "menu", "hud.xhtml"), "<rml title=\"Menu HUD\"><body /></rml>\n");
+            EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
+            _ = manifest.Refresh();
+            UiManifestPanel panel = new(manifest);
+
+            IReadOnlyList<EditorUiManifestScreenEntry> before = panel.CaptureScreens();
+            EditorUiManifestSyncResult sync = panel.SyncScreens();
+            IReadOnlyList<EditorUiManifestScreenEntry> after = panel.CaptureScreens();
+            bool toggled = panel.TrySetPreload("hud", preload: false);
+
+            // Assert：验证预期结果
+            Assert.Empty(before);
+            Assert.Equal(2, sync.RegisteredScreens);
+            Assert.Equal(2, after.Count);
+            EditorUiManifestScreenEntry hud = Assert.Single(after, screen => screen.Path == "screens/hud.xhtml");
+            EditorUiManifestScreenEntry menuHud = Assert.Single(after, screen => screen.Path == "screens/menu/hud.xhtml");
+            Assert.Equal("hud", hud.Id);
+            Assert.Equal("hud-2", menuHud.Id);
+            Assert.True(hud.Preload);
+            Assert.True(hud.FileExists);
+            Assert.Equal("ui/screens/hud.xhtml", hud.LogicalPath);
+            Assert.StartsWith("asset_", hud.AssetId, StringComparison.Ordinal);
+            Assert.True(toggled);
+            Assert.Contains("preload=False", panel.Status, StringComparison.Ordinal);
+            using JsonDocument uiManifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(contentRoot, "ui", "ui-manifest.json")));
+            JsonElement screen = Assert.Single(
+                uiManifest.RootElement.GetProperty("screens").EnumerateArray(),
+                item => item.GetProperty("id").GetString() == "hud");
+            Assert.False(screen.GetProperty("preload").GetBoolean());
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
     /// 验证移动资产会先解析全部引用文档，损坏的 scene/prefab 不会导致文件已移动但引用未重写的半提交状态。
     /// </summary>
     [Fact]

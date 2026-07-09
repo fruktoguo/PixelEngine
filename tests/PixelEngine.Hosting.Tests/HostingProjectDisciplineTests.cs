@@ -591,12 +591,15 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("SceneHierarchyWindowTitle = \"Hierarchy\"", dockSpace, StringComparison.Ordinal);
         Assert.Contains("AssetBrowserWindowTitle = \"Project\"", dockSpace, StringComparison.Ordinal);
         Assert.Contains("ConsoleDiagnosticsWindowTitle = \"Console\"", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("UiManifestWindowTitle = \"UI Manifest\"", dockSpace, StringComparison.Ordinal);
         Assert.Contains("PerformanceHudWindowTitle = \"Profiler\"", dockSpace, StringComparison.Ordinal);
         Assert.Contains("DockBuilderDockWindow(BuildSettingsWindowTitle", dockSpace, StringComparison.Ordinal);
         Assert.Contains("DockBuilderDockWindow(AssetBrowserWindowTitle, bottomNode)", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("DockBuilderDockWindow(UiManifestWindowTitle, bottomNode)", dockSpace, StringComparison.Ordinal);
         Assert.Contains("File.Delete(LayoutPath)", layout, StringComparison.Ordinal);
         Assert.Contains("ResetLayoutState(buildDefaultLayout: true)", layout, StringComparison.Ordinal);
         Assert.Contains("new EditorConsolePanel(_app)", host, StringComparison.Ordinal);
+        Assert.Contains("new UiManifestPanel(new EditorAssetManifestStore(_project))", host, StringComparison.Ordinal);
         Assert.Contains("new BuildSettingsPanel(_project, console: _app.ConsoleStore)", host, StringComparison.Ordinal);
         string assetBrowserDataSource = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "AssetBrowserDataSource.cs"));
         string assetBrowserPanel = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "AssetBrowserPanel.cs"));
@@ -627,6 +630,10 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("public EditorAssetFolderMoveResult MoveFolder", shellAssetManifestStore, StringComparison.Ordinal);
         Assert.Contains("RemoveUiManifestScreenEntries", shellAssetManifestStore, StringComparison.Ordinal);
         Assert.Contains("RewriteUiManifestScreenPaths", shellAssetManifestStore, StringComparison.Ordinal);
+        Assert.Contains("public IReadOnlyList<EditorUiManifestScreenEntry> ListUiManifestScreens", shellAssetManifestStore, StringComparison.Ordinal);
+        Assert.Contains("public EditorUiManifestSyncResult SyncUiManifestScreens", shellAssetManifestStore, StringComparison.Ordinal);
+        Assert.Contains("TrySetUiManifestScreenPreload", shellAssetManifestStore, StringComparison.Ordinal);
+        Assert.Contains("DrawPanelMenuItem(app, \"UI Manifest\", UiManifestPanel.PanelTitle)", menu, StringComparison.Ordinal);
         Assert.Contains("EditorAssetType.Material", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("EditorAssetType.UiScreen", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("UpsertUiScreenManifestEntry", shellAssetManifestStore, StringComparison.Ordinal);
