@@ -93,7 +93,7 @@
 
 稳定 `workerIndex` 的分配：Box2D 用 `workerIndex` 索引每 worker 私有数据，**绝不允许两个并发回调复用同一 index**（R14）。JobSystem 须提供「带稳定 worker 槽位的区间派发」API（`plan/02` 协调点）；桥把 JobSystem 的物理线程槽位直接当 `workerIndex`，保证 `[0, workerCount)` 内无并发复用。
 
-纪律：这些回调每个 `Step` 触发多次（按 island/color 分区）且每次重入托管代码，**绝不能 `[SuppressGCTransition]`**——必须走正常 GC 转换（架构 §14.2/§14.3，明确例外）。回调内 blittable、不抛异常（异常跨越 native 边界是 UB；内部 try/catch 兜底记诊断、绝不外泄）。确定性模式：`workerCount=1`，`EnqueueTask` 直接在调用线程串行执行整个区间（架构 §6.4/§14.2）。
+纪律：这些回调每个 `Step` 触发多次（按 island/color 分区）且每次重入托管代码，**绝不能 `[SuppressGCTransition]`**——必须走正常 GC 转换（架构 §14.2/§14.3，明确例外）。callback 边界内仍不得让异常穿过 unmanaged frame：桥在 callback 内捕获并保存本 tick 首个 `ExceptionDispatchInfo`，`PhysicsSystem` 在 `b2World_Step` 返回后立即 `ThrowIfFaulted()`；若失败则不执行 transform 读回、contact 消费或 inverse-sample restamp，并锁存 system，后续 tick 直接拒绝。确定性模式：`workerCount=1`，`EnqueueTask` 直接在调用线程串行执行整个区间（架构 §6.4/§14.2）。
 
 ### 3.3 物理尺度与坐标转换（架构 §8.1、R9）
 
@@ -123,7 +123,7 @@
 
 - **(8a) `RigidBodyDestruction` — CCL 检测新脱落块 + 破坏重建**：先排空 `RigidDamageQueue`（§3.6 末），对 dirty 刚体执行 §3.7 重建；同时对地形改变区域跑 CCL 检测新脱落的连通固体块→建新刚体（§3.4）。
 - **(8b) `RigidBodyRasterizer.EraseAtCurrentTransform`**：对每活跃刚体，按其上一帧 stamp 的 cell 列表，在**当前（旧）变换**处把 owned 像素从网格擦除（写 `Empty`、清 `RigidOwned` 位），使 CA 不再当它地形（架构 §8.3 步骤 1）。
-- **(8c) `b2World_Step(worldId, dt, subStepCount=4)`**：经 §3.2 task 桥多线程（非 Box2D 自开线程；确定性时 workerCount=1）。`subStepCount=4` 是 Box2D 内部子步、与「额外 CA step」无关（架构 §4.1、§8.3）。
+- **(8c) `b2World_Step(worldId, dt, subStepCount=4)`**：经 §3.2 task 桥多线程（非 Box2D 自开线程；确定性时 workerCount=1）。返回后立即检查 task callback fault；若有首异常则终止本 tick，不读回、不消费 contact、不 inverse-stamp。`subStepCount=4` 是 Box2D 内部子步、与「额外 CA step」无关（架构 §4.1、§8.3）。
 - **(8d) 读回 transform**：`b2World_GetBodyEvents` 取移动事件或逐体 `b2Body_GetPosition`/`b2Body_GetRotation`，更新 `PixelRigidBody`（架构 §8.3 步骤 3）。
 - **(8e) `RigidBodyRasterizer.StampInverseSampling`**：**inverse sampling 重栅格化**（架构 §8.3 步骤 4，水密关键）——对刚体 AABB 内每个目标 cell，把 cell 中心反变换到 body-local 空间、最近邻采样不可变 mask；命中固体则写回 material、置 `RigidOwned` 位、登记进本帧 stamp 列表与 `RigidStampRegistry`，并标记所在 chunk dirty 唤醒 CA（经 `plan/03` KeepAlive 接口）。**绝不用 forward sampling**（正向变换源像素在旋转下留洞，架构 §8.3 [高]）。
 

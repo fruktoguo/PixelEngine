@@ -78,6 +78,54 @@ public sealed unsafe class Box2DTaskBridgeTests
         Assert.Equal(0, stats.OutOfRangeWorker);
     }
 
+    /// <summary>
+    /// 验证 callback 异常不会穿过 native 边界，而会在 physics tick 检查点重新抛出并可被 reset。
+    /// </summary>
+    [Fact]
+    public void CallbackFailureIsCapturedAndRethrownAtTickBoundary()
+    {
+        using JobSystem jobs = new(workerCount: 1);
+        using Box2DTaskBridge bridge = new(jobs, forceSingleThread: true);
+        bridge.BeginTick();
+
+        delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<int, int, uint, void*, void>, int, int, void*, void*, void*> enqueue =
+            &Box2DTaskBridge.EnqueueTask;
+
+        void* handle = enqueue(&ThrowTask, 1, 1, null, bridge.UserTaskContext);
+
+        Assert.Equal(nint.Zero, (nint)handle);
+        Assert.True(bridge.HasFaulted);
+        Assert.Equal(1, bridge.FaultedCallbackCount);
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(bridge.ThrowIfFaulted);
+        Assert.Contains("注入 Box2D callback failure", exception.Message, StringComparison.Ordinal);
+
+        bridge.BeginTick();
+        Assert.False(bridge.HasFaulted);
+        bridge.ThrowIfFaulted();
+        Assert.Equal(1, bridge.FaultedCallbackCount);
+    }
+
+    /// <summary>
+    /// 验证 JobSystem worker 上的 callback 异常也会在 unmanaged callback 内被捕获并传播到 tick 检查点。
+    /// </summary>
+    [Fact]
+    public void WorkerCallbackFailureIsCapturedWithoutEscapingWorkerBoundary()
+    {
+        using JobSystem jobs = new(workerCount: 2);
+        using Box2DTaskBridge bridge = new(jobs);
+        bridge.BeginTick();
+
+        delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<int, int, uint, void*, void>, int, int, void*, void*, void*> enqueue =
+            &Box2DTaskBridge.EnqueueTask;
+
+        void* handle = enqueue(&ThrowTask, 64, 1, null, bridge.UserTaskContext);
+
+        Assert.Equal((nint)bridge.UserTaskContext, (nint)handle);
+        Assert.True(bridge.FaultedCallbackCount > 0);
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(bridge.ThrowIfFaulted);
+        Assert.Contains("注入 Box2D callback failure", exception.Message, StringComparison.Ordinal);
+    }
+
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void CountTask(int start, int end, uint workerIndex, void* context)
     {
@@ -106,6 +154,16 @@ public sealed unsafe class Box2DTaskBridgeTests
                 return;
             }
         }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void ThrowTask(int start, int end, uint workerIndex, void* context)
+    {
+        _ = start;
+        _ = end;
+        _ = workerIndex;
+        _ = context;
+        throw new InvalidOperationException("注入 Box2D callback failure");
     }
 
     private unsafe struct TaskStats
