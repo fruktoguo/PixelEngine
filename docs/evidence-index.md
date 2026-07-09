@@ -6,6 +6,7 @@
 
 | entry | task IDs | 状态 | commit | run/session | 报告 | SHA256 |
 |---|---|---|---|---|---|---|
+| `test-001-native-smoke-20260710` | `TEST-001` | `complete_local_native_smoke` | `bdeb5aa5` | `local-20260710-test001-native-smoke` | [TEST-001 native smoke](evidence-2026-07-10-test-001-native-smoke.md) | `0f4ff66c…a91b13aa` |
 | `completed-baseline-capabilities` | `BASE-001`–`BASE-018` | `baseline_coverage_only` | `5af1541f` | 未记录 | [completed baseline](../plan/tasks/10-completed-baseline.md) | `7fff9692…d7874c` |
 | `scope-decisions-20260710` | `SCOPE-001`–`SCOPE-006` | `decision_record` | `5af1541f` | 未记录 | [scope decisions](../plan/tasks/20-scope-decisions.md) | `96519945…e47d1f` |
 | `ci-001-workflow-validation-20260710` | `CI-001` | `local_static_validation_complete` | `b7fcf532` | `local-20260710-ci001-actionlint` | [CI-001 workflow validation](evidence-2026-07-10-ci-001-workflow-validation.md) | `53c9c906…b35a7a9` |
