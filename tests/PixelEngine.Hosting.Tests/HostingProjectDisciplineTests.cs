@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -172,6 +173,42 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("未登记的额外文件", finalOutputDoc, StringComparison.Ordinal);
         Assert.Contains("本机正式输出审计命令", plan15, StringComparison.Ordinal);
         Assert.Contains("未登记额外文件", plan15, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证正式输出审计脚本会真实拒绝目录文件集与 SHA256SUMS 清单不一致的产物。
+    /// </summary>
+    [Fact]
+    public void FinalOutputVerifierRejectsDirectoryAndChecksumSetDrift()
+    {
+        string root = FindRepositoryRoot();
+        string outputRoot = Path.Combine(Path.GetTempPath(), "pixelengine-final-output-" + Guid.NewGuid().ToString("N"));
+        string verifier = Path.Combine(root, "tools", "verify-final-output.ps1");
+        try
+        {
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            ProcessResult clean = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+            Assert.Equal(0, clean.ExitCode);
+            Assert.Contains("final_output_verify schema=pixelengine.final-output-verify/v1, ok=True", clean.Stdout, StringComparison.Ordinal);
+
+            File.WriteAllText(Path.Combine(outputRoot, "未登记.txt"), "extra");
+            ProcessResult extra = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+            Assert.NotEqual(0, extra.ExitCode);
+            Assert.Contains("正式输出包含未登记文件", extra.CombinedOutput, StringComparison.Ordinal);
+
+            File.Delete(Path.Combine(outputRoot, "未登记.txt"));
+            File.AppendAllText(Path.Combine(outputRoot, "SHA256SUMS"), Environment.NewLine + new string('0', 64) + "  不存在.txt" + Environment.NewLine);
+            ProcessResult missing = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+            Assert.NotEqual(0, missing.ExitCode);
+            Assert.Contains("SHA256SUMS 登记了不存在的文件", missing.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(outputRoot))
+            {
+                Directory.Delete(outputRoot, recursive: true);
+            }
+        }
     }
 
     /// <summary>
@@ -1575,5 +1612,148 @@ public sealed class HostingProjectDisciplineTests
         Assert.Equal(0, process.ExitCode);
         Assert.True(string.IsNullOrWhiteSpace(stderr), stderr);
         return stdout;
+    }
+
+    private static ProcessResult RunPowerShellScriptRaw(string workingDirectory, string scriptPath, params string[] arguments)
+    {
+        using System.Diagnostics.Process process = new();
+        process.StartInfo.FileName = "pwsh";
+        process.StartInfo.WorkingDirectory = workingDirectory;
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.UseShellExecute = false;
+        process.StartInfo.ArgumentList.Add("-NoLogo");
+        process.StartInfo.ArgumentList.Add("-NoProfile");
+        process.StartInfo.ArgumentList.Add("-ExecutionPolicy");
+        process.StartInfo.ArgumentList.Add("Bypass");
+        process.StartInfo.ArgumentList.Add("-File");
+        process.StartInfo.ArgumentList.Add(scriptPath);
+        foreach (string argument in arguments)
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
+
+        _ = process.Start();
+        string stdout = process.StandardOutput.ReadToEnd();
+        string stderr = process.StandardError.ReadToEnd();
+        Assert.True(process.WaitForExit(30_000), $"脚本超时: {scriptPath}");
+        return new ProcessResult(process.ExitCode, stdout, stderr);
+    }
+
+    private static string ReadCurrentGitHead(string root)
+    {
+        using System.Diagnostics.Process process = new();
+        process.StartInfo.FileName = "git";
+        process.StartInfo.WorkingDirectory = root;
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.UseShellExecute = false;
+        process.StartInfo.ArgumentList.Add("-C");
+        process.StartInfo.ArgumentList.Add(root);
+        process.StartInfo.ArgumentList.Add("rev-parse");
+        process.StartInfo.ArgumentList.Add("HEAD");
+
+        _ = process.Start();
+        string stdout = process.StandardOutput.ReadToEnd();
+        string stderr = process.StandardError.ReadToEnd();
+        Assert.True(process.WaitForExit(30_000), "git rev-parse HEAD 超时。");
+        Assert.Equal(0, process.ExitCode);
+        Assert.True(string.IsNullOrWhiteSpace(stderr), stderr);
+        return stdout.Trim();
+    }
+
+    private static void WriteMinimalFinalOutput(string outputRoot, string gitCommit)
+    {
+        WriteTextFile(outputRoot, "编辑器/PixelEngine.Editor.Shell.exe", "editor");
+        WriteTextFile(outputRoot, "游戏Demo/PixelEngine Demo.exe", "demo");
+        WriteTextFile(outputRoot, "_验证记录/logs/editor-default-workbench.stdout.log", "editor stdout");
+        WriteTextFile(outputRoot, "_验证记录/logs/editor-default-workbench.stderr.log", "");
+        WriteTextFile(outputRoot, "_验证记录/editor-default-workbench.bmp", "editor capture");
+        WriteTextFile(outputRoot, "_验证记录/logs/demo-window.stdout.log", "demo stdout");
+        WriteTextFile(outputRoot, "_验证记录/logs/demo-window.stderr.log", "");
+        WriteTextFile(outputRoot, "_验证记录/demo-window.bmp", "demo capture");
+        WriteTextFile(outputRoot, "README.txt", "PixelEngine final output");
+        WriteTextFile(
+            outputRoot,
+            "_验证记录/demo-build-result.json",
+            JsonSerializer.Serialize(new
+            {
+                ok = true,
+                runtimeUiBackend = "RmlUi",
+            }));
+        WriteTextFile(
+            outputRoot,
+            "_验证记录/manifest.json",
+            JsonSerializer.Serialize(new
+            {
+                schema = "pixelengine.final-output/v1",
+                gitCommit,
+                sourceWorktreePolicy = "tracked-clean-required",
+                sourceTrackedWorktreeClean = true,
+                rid = "win-x64",
+                configuration = "Release",
+                demoChannel = "r2r",
+                demoRuntimeUiBackendRequested = "RmlUi",
+                editorSymbolsIncluded = false,
+                editorDeveloperMetadataPolicy = "pdb-and-xml-pruned",
+                editorExecutable = "编辑器/PixelEngine.Editor.Shell.exe",
+                demoExecutable = "游戏Demo/PixelEngine Demo.exe",
+                checksumFile = "SHA256SUMS",
+                validation = new
+                {
+                    editorDefaultWorkbenchProbe = new
+                    {
+                        completed = true,
+                        succeeded = true,
+                        buildOk = true,
+                        stdout = "_验证记录/logs/editor-default-workbench.stdout.log",
+                        stderr = "_验证记录/logs/editor-default-workbench.stderr.log",
+                        capture = "_验证记录/editor-default-workbench.bmp",
+                    },
+                    demoWindowProbe = new
+                    {
+                        completed = true,
+                        stdout = "_验证记录/logs/demo-window.stdout.log",
+                        stderr = "_验证记录/logs/demo-window.stderr.log",
+                        capture = "_验证记录/demo-window.bmp",
+                    },
+                    demoBuildResult = "_验证记录/demo-build-result.json",
+                },
+            }));
+        WriteFinalOutputChecksums(outputRoot);
+    }
+
+    private static void WriteTextFile(string outputRoot, string relativePath, string content)
+    {
+        string fullPath = Path.Combine(outputRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        File.WriteAllText(fullPath, content);
+    }
+
+    private static void WriteFinalOutputChecksums(string outputRoot)
+    {
+        string[] files =
+        [
+            .. Directory.EnumerateFiles(outputRoot, "*", SearchOption.AllDirectories)
+                .Where(static path => !string.Equals(Path.GetFileName(path), "SHA256SUMS", StringComparison.OrdinalIgnoreCase))
+                .Order(StringComparer.OrdinalIgnoreCase),
+        ];
+        string[] lines =
+        [
+            .. files.Select(path =>
+                Sha256Hex(path) + "  " + Path.GetRelativePath(outputRoot, path).Replace('\\', '/')),
+        ];
+        File.WriteAllLines(Path.Combine(outputRoot, "SHA256SUMS"), lines);
+    }
+
+    private static string Sha256Hex(string path)
+    {
+        using FileStream stream = File.OpenRead(path);
+        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+    }
+
+    private readonly record struct ProcessResult(int ExitCode, string Stdout, string Stderr)
+    {
+        public string CombinedOutput => Stdout + Environment.NewLine + Stderr;
     }
 }
