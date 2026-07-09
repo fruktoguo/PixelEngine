@@ -712,10 +712,13 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("ConfigureAuthoring(sceneModel, undoStack, prefabs)", source, StringComparison.Ordinal);
         Assert.Contains("GameObjectHierarchyPanel(_sceneModel, _undoStack, _prefabs)", source, StringComparison.Ordinal);
         Assert.Contains("GameObjectInspectorPanel(", source, StringComparison.Ordinal);
-        Assert.Contains("assetBrowserDataSource));", source, StringComparison.Ordinal);
+        Assert.Contains("assetBrowserDataSource,", source, StringComparison.Ordinal);
         Assert.Contains("CaptureAssetInspector", source, StringComparison.Ordinal);
         Assert.Contains("AssetInspectorSnapshot", source, StringComparison.Ordinal);
         Assert.Contains("DrawAssetInspector", source, StringComparison.Ordinal);
+        Assert.Contains("TryInvokePrimaryAssetAction", source, StringComparison.Ordinal);
+        Assert.Contains("_app.InstantiatePrefab", source, StringComparison.Ordinal);
+        Assert.Contains("_app.OpenScriptAsset", source, StringComparison.Ordinal);
         Assert.Contains("engine.Context.GetService<ScriptAssemblyRegistry>()", source, StringComparison.Ordinal);
         Assert.Contains("new CreateGameObjectCommand", source, StringComparison.Ordinal);
         Assert.Contains("new DeleteGameObjectCommand", source, StringComparison.Ordinal);
