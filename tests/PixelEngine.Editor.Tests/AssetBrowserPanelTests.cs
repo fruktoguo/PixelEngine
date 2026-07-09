@@ -808,6 +808,68 @@ public sealed class AssetBrowserPanelTests
         Assert.Contains("选中文件夹", panel.Status, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证 Project Window 文件夹选择会限定资产列表作用域，根目录恢复全量列表。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelScopesFilteredAssetsToSelectedFolder()
+    {
+        // Arrange：准备输入与初始状态
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("levels/one.scene", AssetBrowserItemKind.Scene, 10, DateTimeOffset.UnixEpoch, null, "asset_scene"),
+            new AssetBrowserItem("levels/textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_texture"),
+            new AssetBrowserItem("scripts/Player.cs", AssetBrowserItemKind.Script, 30, DateTimeOffset.UnixEpoch, null, "asset_script"),
+        ]);
+        source.ReplaceFolders([new AssetBrowserFolderItem("levels", 2), new AssetBrowserFolderItem("scripts", 1)]);
+        AssetBrowserPanel panel = new(source);
+        EditorSelection selection = new();
+
+        _ = panel.Refresh();
+        bool selectedFolder = panel.SelectFolder("levels", selection);
+        panel.SetKindFilter(AssetBrowserItemKind.Texture);
+
+        // Assert：验证预期结果
+        Assert.True(selectedFolder);
+        Assert.Equal("levels", panel.ActiveFolderPath);
+        Assert.Equal(["levels/textures/sand.png"], panel.FilteredAssets.Select(static item => item.Path));
+
+        bool selectedRoot = panel.SelectFolder(string.Empty, selection);
+        panel.SetKindFilter(null);
+
+        Assert.True(selectedRoot);
+        Assert.Equal(string.Empty, panel.ActiveFolderPath);
+        Assert.Equal(["levels/one.scene", "levels/textures/sand.png", "scripts/Player.cs"], panel.FilteredAssets.Select(static item => item.Path));
+    }
+
+    /// <summary>
+    /// 验证刷新后当前文件夹不存在时会回退到 content 根目录作用域。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelResetsFolderScopeWhenFolderDisappears()
+    {
+        // Arrange：准备输入与初始状态
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("levels/one.scene", AssetBrowserItemKind.Scene, 10, DateTimeOffset.UnixEpoch, null, "asset_scene"),
+        ]);
+        source.ReplaceFolders([new AssetBrowserFolderItem("levels", 1)]);
+        AssetBrowserPanel panel = new(source);
+        EditorSelection selection = new();
+
+        _ = panel.Refresh();
+        bool selectedFolder = panel.SelectFolder("levels", selection);
+        source.ReplaceAssets([new AssetBrowserItem("scripts/Player.cs", AssetBrowserItemKind.Script, 30, DateTimeOffset.UnixEpoch, null, "asset_script")]);
+        source.ReplaceFolders([new AssetBrowserFolderItem("scripts", 1)]);
+        _ = panel.Refresh();
+
+        // Assert：验证预期结果
+        Assert.True(selectedFolder);
+        Assert.Equal(string.Empty, panel.ActiveFolderPath);
+        AssetBrowserItem visible = Assert.Single(panel.FilteredAssets);
+        Assert.Equal("scripts/Player.cs", visible.Path);
+    }
+
     private sealed class RecordingThumbnailProvider : ITextureThumbnailProvider
     {
         public bool TryGetThumbnail(string assetPath, out AssetThumbnail thumbnail)
