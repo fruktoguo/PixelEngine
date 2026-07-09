@@ -11,13 +11,15 @@ internal sealed class GameObjectInspectorPanel(
     EditorSceneModel scene,
     EditorUndoStack undo,
     ScriptAssemblyRegistry scripts,
-    IEditorConsoleSink? console = null) : IEditorPanel
+    IEditorConsoleSink? console = null,
+    IAssetBrowserDataSource? assetSource = null) : IEditorPanel
 {
     private const string ReadyStatus = "就绪";
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly EditorUndoStack _undo = undo ?? throw new ArgumentNullException(nameof(undo));
     private readonly ScriptAssemblyRegistry _scripts = scripts ?? throw new ArgumentNullException(nameof(scripts));
     private readonly IEditorConsoleSink? _console = console;
+    private readonly IAssetBrowserDataSource? _assetSource = assetSource;
     private string _componentSearch = string.Empty;
 
     public string Title => EditorDockSpace.InspectorWindowTitle;
@@ -38,10 +40,17 @@ internal sealed class GameObjectInspectorPanel(
 
         Visible = visible;
         // 无选中时早退；否则绘制头部、Transform 与组件列表
+        if (!context.Selection.GameObjectStableId.HasValue && !string.IsNullOrWhiteSpace(context.Selection.AssetPath))
+        {
+            DrawAssetInspector(context.Selection.AssetPath!);
+            ImGui.End();
+            return;
+        }
+
         int? stableId = context.Selection.GameObjectStableId ?? _scene.SelectedStableId;
         if (!stableId.HasValue || !_scene.TryGet(stableId.Value, out EditorGameObject? gameObject))
         {
-            ImGui.TextUnformatted("未选中 GameObject");
+            ImGui.TextUnformatted("未选中 GameObject 或 Asset");
             ImGui.End();
             return;
         }
@@ -54,6 +63,47 @@ internal sealed class GameObjectInspectorPanel(
         ImGui.SeparatorText("Inspector 状态");
         ImGui.TextUnformatted(Status);
         ImGui.End();
+    }
+
+    internal AssetInspectorSnapshot CaptureAssetInspector(string assetPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(assetPath);
+        if (_assetSource is null)
+        {
+            return new AssetInspectorSnapshot(assetPath, Found: false, "Unknown", null, 0, null, "资产数据源不可用");
+        }
+
+        IReadOnlyList<AssetBrowserItem> assets = _assetSource.ListAssets();
+        for (int i = 0; i < assets.Count; i++)
+        {
+            AssetBrowserItem item = assets[i];
+            if (string.Equals(item.Path, assetPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return new AssetInspectorSnapshot(
+                    item.Path,
+                    Found: true,
+                    item.Kind.ToString(),
+                    item.AssetId,
+                    item.SizeBytes,
+                    item.PreviewSummary,
+                    "就绪");
+            }
+        }
+
+        return new AssetInspectorSnapshot(assetPath, Found: false, "Unknown", null, 0, null, $"资产不存在：{assetPath}");
+    }
+
+    private void DrawAssetInspector(string assetPath)
+    {
+        AssetInspectorSnapshot asset = CaptureAssetInspector(assetPath);
+        ImGui.SeparatorText("Asset");
+        ImGui.TextUnformatted($"Path: {asset.Path}");
+        ImGui.TextUnformatted($"Type: {asset.Kind}");
+        ImGui.TextUnformatted($"StableId: {asset.AssetId ?? "none"}");
+        ImGui.TextUnformatted($"Size: {asset.SizeBytes} bytes");
+        ImGui.TextUnformatted($"Preview: {asset.PreviewSummary ?? "none"}");
+        ImGui.SeparatorText("Inspector 状态");
+        ImGui.TextUnformatted(asset.Status);
     }
 
     private void DrawHeader(EditorGameObject gameObject)
@@ -431,3 +481,12 @@ internal sealed class GameObjectInspectorPanel(
             type.GetConstructor(Type.EmptyTypes) is not null;
     }
 }
+
+internal readonly record struct AssetInspectorSnapshot(
+    string Path,
+    bool Found,
+    string Kind,
+    string? AssetId,
+    long SizeBytes,
+    string? PreviewSummary,
+    string Status);

@@ -79,6 +79,32 @@ public sealed class AssetBrowserPanelTests
     }
 
     /// <summary>
+    /// 验证 Project Window 选择资产与 Hierarchy 选择 GameObject 互斥，避免 Inspector 显示旧对象。
+    /// </summary>
+    [Fact]
+    public void EditorSelectionSwitchesBetweenProjectAssetsAndGameObjects()
+    {
+        // Arrange：准备输入与初始状态
+        EditorSelection selection = new();
+
+        selection.SelectGameObject(7);
+        selection.SelectAsset("scripts/Player.cs");
+
+        // Assert：验证预期结果
+        Assert.Equal("scripts/Player.cs", selection.AssetPath);
+        Assert.Null(selection.GameObjectStableId);
+        Assert.Null(selection.EntityHandle);
+        Assert.Null(selection.BodyId);
+
+        selection.SelectGameObject(9);
+
+        Assert.Equal(9, selection.GameObjectStableId);
+        Assert.Null(selection.AssetPath);
+        Assert.Null(selection.EntityHandle);
+        Assert.Null(selection.BodyId);
+    }
+
+    /// <summary>
     /// 验证 Project Window 支持类型过滤与稳定排序，满足资源搜索/过滤/排序产品契约。
     /// </summary>
     [Fact]

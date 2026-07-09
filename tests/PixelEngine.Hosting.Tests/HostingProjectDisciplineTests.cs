@@ -712,6 +712,10 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("ConfigureAuthoring(sceneModel, undoStack, prefabs)", source, StringComparison.Ordinal);
         Assert.Contains("GameObjectHierarchyPanel(_sceneModel, _undoStack, _prefabs)", source, StringComparison.Ordinal);
         Assert.Contains("GameObjectInspectorPanel(", source, StringComparison.Ordinal);
+        Assert.Contains("assetBrowserDataSource));", source, StringComparison.Ordinal);
+        Assert.Contains("CaptureAssetInspector", source, StringComparison.Ordinal);
+        Assert.Contains("AssetInspectorSnapshot", source, StringComparison.Ordinal);
+        Assert.Contains("DrawAssetInspector", source, StringComparison.Ordinal);
         Assert.Contains("engine.Context.GetService<ScriptAssemblyRegistry>()", source, StringComparison.Ordinal);
         Assert.Contains("new CreateGameObjectCommand", source, StringComparison.Ordinal);
         Assert.Contains("new DeleteGameObjectCommand", source, StringComparison.Ordinal);
@@ -725,6 +729,9 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("ScriptInspector.InspectFields", source, StringComparison.Ordinal);
         Assert.Contains("GameObjectStableId", editorSelection, StringComparison.Ordinal);
         Assert.Contains("SelectGameObject", editorSelection, StringComparison.Ordinal);
+        Assert.Contains("SelectAsset", editorSelection, StringComparison.Ordinal);
+        Assert.Contains("AssetPath = null;", editorSelection, StringComparison.Ordinal);
+        Assert.Contains("GameObjectStableId = null;", editorSelection, StringComparison.Ordinal);
         Assert.Contains("AttachScriptScene(Scripting.Scene scriptScene)", hostingEngine, StringComparison.Ordinal);
         Assert.Contains("--scripted-hierarchy-probe", File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellOptions.cs")), StringComparison.Ordinal);
         Assert.Contains("editor_hierarchy_probe", source, StringComparison.Ordinal);

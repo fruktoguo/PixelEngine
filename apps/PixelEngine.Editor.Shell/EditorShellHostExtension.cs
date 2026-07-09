@@ -230,6 +230,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
         }
 
         _editor.AddPanel(new EditorMainMenuPanel(_app));
+        EditorAssetBrowserDataSource assetBrowserDataSource = new(_project);
         if (_sceneModel is not null && _undoStack is not null && _prefabs is not null)
         {
             _editor.AddPanel(new GameObjectHierarchyPanel(_sceneModel, _undoStack, _prefabs));
@@ -237,7 +238,8 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
                 _sceneModel,
                 _undoStack,
                 engine.Context.GetService<ScriptAssemblyRegistry>(),
-                _app.ConsoleStore));
+                _app.ConsoleStore,
+                assetBrowserDataSource));
         }
 
         MaterialBrushPalettePanel? brushPanel = null;
@@ -256,7 +258,6 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
         _editor.AddPanel(_sceneViewPanel);
         _gameViewPanel = new GameViewPanel(() => pipeline.CurrentViewportTexture);
         _editor.AddPanel(_gameViewPanel);
-        EditorAssetBrowserDataSource assetBrowserDataSource = new(_project);
         _editor.AddPanel(new AssetBrowserPanel(
             assetBrowserDataSource,
             instantiatePrefab: _app.InstantiatePrefab,
