@@ -755,7 +755,7 @@ public sealed class Engine : IDisposable
 
         if (requestedBackend == UiBackendKind.RmlUi)
         {
-            if (!RmlUiNativeProfileGate.CanUseDesktopGl3(window.Backend, window.Capabilities, out string? profileFallbackReason))
+            if (!RmlUiNativeProfileGate.CanUseNativeRenderer(window.Backend, window.Capabilities, out string? profileFallbackReason))
             {
                 return CreateManagedFallbackGameUiBackend(
                     window,

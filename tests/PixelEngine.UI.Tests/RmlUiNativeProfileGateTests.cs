@@ -25,10 +25,11 @@ public sealed class RmlUiNativeProfileGateTests
         Assert.Equal("#version 330 core", decision.ShaderVersionDirective);
         Assert.True(decision.RequiresSameContextFunctionResolver);
         Assert.Null(decision.FallbackReason);
+        Assert.Equal(RmlUiNativeProfileGate.NativeProfileDesktopGl3, RmlUiNativeProfileGate.ToNativeProfileId(decision.RequestedProfile));
     }
 
     [Fact]
-    public void GlesAngleRequestFallsBackWithExplicitRendererReason()
+    public void GlesAngleRequestSelectsGles3AngleNativeProfile()
     {
         GlCapabilities capabilities = GlCapabilities.FromRaw(
             "OpenGL ES 3.0 ANGLE",
@@ -36,27 +37,27 @@ public sealed class RmlUiNativeProfileGateTests
             "Google Inc.",
             []);
 
-        bool allowed = RmlUiNativeProfileGate.CanUseDesktopGl3(capabilities, out string? fallbackReason);
+        bool desktopOnly = RmlUiNativeProfileGate.CanUseDesktopGl3(capabilities, out string? desktopFallback);
+        bool nativeAllowed = RmlUiNativeProfileGate.CanUseNativeRenderer(
+            RenderBackend.DesktopGl33,
+            capabilities,
+            out string? nativeFallback);
         RmlUiNativeProfileDecision decision = RmlUiNativeProfileGate.Evaluate(RenderBackend.DesktopGl33, capabilities);
 
-        Assert.False(allowed);
-        Assert.NotNull(fallbackReason);
-        Assert.Contains("desktop GL3 renderer", fallbackReason, StringComparison.Ordinal);
-        Assert.Contains("GLES/ANGLE", fallbackReason, StringComparison.Ordinal);
-        Assert.Contains("GLES3/ANGLE renderer", fallbackReason, StringComparison.Ordinal);
-        Assert.Contains("#version 300 es", fallbackReason, StringComparison.Ordinal);
-        Assert.Contains("同 context 函数表", fallbackReason, StringComparison.Ordinal);
-        Assert.Contains("状态恢复 smoke", fallbackReason, StringComparison.Ordinal);
-        Assert.Contains("ManagedFallback", fallbackReason, StringComparison.Ordinal);
+        Assert.False(desktopOnly);
+        Assert.NotNull(desktopFallback);
+        Assert.True(nativeAllowed);
+        Assert.Null(nativeFallback);
         Assert.Equal(RmlUiNativeRendererProfile.Gles3Angle, decision.RequestedProfile);
-        Assert.False(decision.CanUseNativeRenderer);
+        Assert.True(decision.CanUseNativeRenderer);
         Assert.Equal("RmlUi_Renderer_GLES3_ANGLE", decision.NativeRendererSymbol);
         Assert.Equal("#version 300 es", decision.ShaderVersionDirective);
         Assert.True(decision.RequiresSameContextFunctionResolver);
+        Assert.Equal(RmlUiNativeProfileGate.NativeProfileGles3Angle, RmlUiNativeProfileGate.ToNativeProfileId(decision.RequestedProfile));
     }
 
     [Fact]
-    public void AngleDesktopLookingContextStillFallsBackInsteadOfUsingGl3Renderer()
+    public void AngleDesktopLookingContextSelectsGles3AngleInsteadOfDesktopGl3()
     {
         GlCapabilities capabilities = GlCapabilities.FromRaw(
             "4.1.0",
@@ -64,20 +65,18 @@ public sealed class RmlUiNativeProfileGateTests
             "Google Inc.",
             []);
 
-        bool allowed = RmlUiNativeProfileGate.CanUseDesktopGl3(capabilities, out string? fallbackReason);
+        bool desktopOnly = RmlUiNativeProfileGate.CanUseDesktopGl3(capabilities, out _);
         RmlUiNativeProfileDecision decision = RmlUiNativeProfileGate.Evaluate(RenderBackend.DesktopGl33, capabilities);
 
-        Assert.False(allowed);
-        Assert.NotNull(fallbackReason);
-        Assert.Contains("ANGLE", fallbackReason, StringComparison.Ordinal);
-        Assert.Contains("GL3 renderer", fallbackReason, StringComparison.Ordinal);
-        Assert.Contains("ManagedFallback", fallbackReason, StringComparison.Ordinal);
+        Assert.False(desktopOnly);
         Assert.Equal(RmlUiNativeRendererProfile.Gles3Angle, decision.RequestedProfile);
-        Assert.False(decision.CanUseNativeRenderer);
+        Assert.True(decision.CanUseNativeRenderer);
+        Assert.Equal("#version 300 es", decision.ShaderVersionDirective);
+        Assert.Equal("RmlUi_Renderer_GLES3_ANGLE", decision.NativeRendererSymbol);
     }
 
     [Fact]
-    public void ExplicitGlesAngleBackendRequestFallsBackEvenWhenCapabilityStringLooksDesktop()
+    public void ExplicitGlesAngleBackendRequestSelectsGlesProfileEvenWhenCapabilityStringLooksDesktop()
     {
         GlCapabilities capabilities = GlCapabilities.FromRaw(
             "4.6.0 NVIDIA 551.23",
@@ -85,16 +84,17 @@ public sealed class RmlUiNativeProfileGateTests
             "NVIDIA Corporation",
             []);
 
-        bool allowed = RmlUiNativeProfileGate.CanUseDesktopGl3(RenderBackend.GlEs30Angle, capabilities, out string? fallbackReason);
+        bool desktopOnly = RmlUiNativeProfileGate.CanUseDesktopGl3(
+            RenderBackend.GlEs30Angle,
+            capabilities,
+            out _);
         RmlUiNativeProfileDecision decision = RmlUiNativeProfileGate.Evaluate(RenderBackend.GlEs30Angle, capabilities);
 
-        Assert.False(allowed);
-        Assert.NotNull(fallbackReason);
-        Assert.Contains("GLES/ANGLE request", fallbackReason, StringComparison.Ordinal);
-        Assert.Contains("GL3 renderer", fallbackReason, StringComparison.Ordinal);
-        Assert.Contains("ManagedFallback", fallbackReason, StringComparison.Ordinal);
+        Assert.False(desktopOnly);
         Assert.Equal(RmlUiNativeRendererProfile.Gles3Angle, decision.RequestedProfile);
+        Assert.True(decision.CanUseNativeRenderer);
         Assert.Equal("RmlUi_Renderer_GLES3_ANGLE", decision.NativeRendererSymbol);
+        Assert.Equal("#version 300 es", decision.ShaderVersionDirective);
     }
 
     [Fact]
@@ -117,5 +117,29 @@ public sealed class RmlUiNativeProfileGateTests
         Assert.False(decision.CanUseNativeRenderer);
         Assert.Equal("RmlUi_Renderer_GL3", decision.NativeRendererSymbol);
         Assert.Equal("#version 330 core", decision.ShaderVersionDirective);
+    }
+
+    [Fact]
+    public void GlesBelow30FallsBackWithEsVersionReason()
+    {
+        GlCapabilities capabilities = GlCapabilities.FromRaw(
+            "OpenGL ES 2.0",
+            "WebGL 1.0",
+            "Google Inc.",
+            []);
+
+        bool nativeAllowed = RmlUiNativeProfileGate.CanUseNativeRenderer(
+            RenderBackend.GlEs30Angle,
+            capabilities,
+            out string? fallbackReason);
+        RmlUiNativeProfileDecision decision = RmlUiNativeProfileGate.Evaluate(RenderBackend.GlEs30Angle, capabilities);
+
+        Assert.False(nativeAllowed);
+        Assert.NotNull(fallbackReason);
+        Assert.Contains("OpenGL ES 3.0+", fallbackReason, StringComparison.Ordinal);
+        Assert.Contains("ManagedFallback", fallbackReason, StringComparison.Ordinal);
+        Assert.Contains("#version 330", fallbackReason, StringComparison.Ordinal);
+        Assert.Equal(RmlUiNativeRendererProfile.Gles3Angle, decision.RequestedProfile);
+        Assert.False(decision.CanUseNativeRenderer);
     }
 }
