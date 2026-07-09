@@ -68,11 +68,17 @@ public readonly record struct ComputeCapabilityGate
             : glComputeAvailable
                 ? ComputeBackendKind.GlCompute
                 : ComputeBackendKind.Null;
+        // ARCH-005：air/smoke 目前只有独立 pass 与资源契约，RenderPipeline 尚未拥有
+        // seed→dispatch→composite 的完整生命周期。先把该位从生产能力结果中强制清零，
+        // 防止诊断/HUD 把未接入的组件报告成运行时能力；接入完成后再移除此边界。
+        ComputeFeatureSwitches effectiveFeatures = backend == ComputeBackendKind.Null
+            ? ComputeFeatureSwitches.Disabled
+            : features with { NonAuthoritativeAirEnabled = false };
         return new ComputeCapabilityGate(
             glComputeAvailable,
             computeSharpAvailable,
             backend == ComputeBackendKind.Null,
-            backend == ComputeBackendKind.Null ? ComputeFeatureSwitches.Disabled : features,
+            effectiveFeatures,
             backend);
     }
 

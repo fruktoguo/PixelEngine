@@ -349,7 +349,7 @@ public sealed class EngineCounters
     public long GpuComputeParticlesEnabled { get; set; }
 
     /// <summary>
-    /// 获取或设置 G4 非权威 air/smoke 开关是否开启。
+    /// 获取或设置 G4 非权威 air/smoke 开关是否开启；ARCH-005 当前未接入生产 RenderPipeline，因此生产 gate 始终发布为 0。
     /// </summary>
     public long GpuComputeAirSmokeEnabled { get; set; }
 

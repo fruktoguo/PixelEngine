@@ -1,5 +1,7 @@
 # ComputeSharp/DX12 资源契约决策记录
 
+> **ARCH-005 当前状态（2026-07-10）**：air/smoke 资源契约与 pass 仍是未接入生产 `RenderPipeline` 的独立源码/测试资产，产品状态为 `deferred_not_enabled`。本记录描述资源契约边界，不把契约存在视为运行时支持。
+
 ## 结论
 
 当前 `plan/09` 的 GL compute、bloom、光照、Radiance Cascades、air/smoke 与 GPU 粒子路径绑定的是 `plan/08` 的 OpenGL 资源契约：`GpuComputeResources` 保存 OpenGL texture handle，`IComputeBackend.BindTexture` / `BindImage` / `BindStorageBuffer` 接收的 `uint` 在当前实现中是 GL texture / image / SSBO 名称。`RenderPipeline` 也持有 Silk.NET `GL` 实例和同一个 OpenGL context。

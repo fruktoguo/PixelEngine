@@ -412,7 +412,8 @@ public sealed class ComputeCapabilityGateTests
         Assert.Equal(1, counters.GpuComputeBloomEnabled);
         Assert.Equal(1, counters.GpuComputeRadianceCascadesEnabled);
         Assert.Equal(1, counters.GpuComputeParticlesEnabled);
-        Assert.Equal(1, counters.GpuComputeAirSmokeEnabled);
+        Assert.False(gate.FeatureSwitches.NonAuthoritativeAirEnabled);
+        Assert.Equal(0, counters.GpuComputeAirSmokeEnabled);
     }
 
     /// <summary>

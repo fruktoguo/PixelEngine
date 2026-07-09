@@ -2,6 +2,8 @@
 
 > **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
 
+> **ARCH-005 当前状态（2026-07-10）**：`deferred_not_enabled`。`AirSmokePass`、`GpuAirSmokePipeline`、`AirSmokeResources` 与 shader 目前是独立源码和直接契约测试，尚未由生产 `RenderPipeline`/`Hosting` 创建、播种、dispatch 或合成；`ComputeCapabilityGate` 会强制 `NonAuthoritativeAirEnabled=false`，避免诊断把它报告为运行时能力。本文后续旧 checkbox 仅是迁移快照，不能覆盖这一当前状态。解除条件是补齐生产生命周期、CPU→GPU seed 路径、density 合成、质量/降级回退和窗口 smoke，并同步支持矩阵与证据。
+
 > 本文档定义 PixelEngine 的 **GPU 计算（compute）加速层**，作为 `plan/08-rendering.md` 渲染管线的高性能增强路径，对应架构文档（下称「架构」）§9.3 / §9.4 / §9.5，并受 §4.3 过载降级顺序联动。权威设计依据：`../docs/PixelEngine-架构与需求设计.md`；技术栈定稿：`00-conventions-and-techstack.md`；开发宪法：`../AGENTS.md`。
 > 状态约定：`- [x]` 已有源码、测试、工具、报告或 plan 证据；`- [ ]` 未完成目标；`- [!]` 阻塞、证据债、人工验收或外部环境限制。
 
