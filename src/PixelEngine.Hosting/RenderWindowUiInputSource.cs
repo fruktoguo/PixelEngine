@@ -160,6 +160,15 @@ internal sealed class RenderWindowUiInputSource : IUiInputSource
         return _imeComposition.CaptureTextComposition(destination, out composition);
     }
 
+    /// <summary>
+    /// 把 UI caret/候选锚点回写到 Win32 IMM32 composition/candidate 窗口。
+    /// </summary>
+    /// <param name="geometry">UI 坐标空间中的定位几何。</param>
+    public void ApplyImeGeometry(in UiImeGeometry geometry)
+    {
+        _imeComposition.ApplyImeGeometry(in geometry);
+    }
+
     private void OnKeyChar(IKeyboard keyboard, char character)
     {
         _ = keyboard;

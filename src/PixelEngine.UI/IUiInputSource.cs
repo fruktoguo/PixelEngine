@@ -45,4 +45,13 @@ public interface IUiInputSource
         composition = UiTextComposition.Inactive;
         return 0;
     }
+
+    /// <summary>
+    /// 把 UI 后端给出的 IME caret/候选锚点回写到平台输入法窗口；无平台能力时安全忽略。
+    /// </summary>
+    /// <param name="geometry">UI 坐标空间中的定位几何；<see cref="UiImeGeometry.None" /> 表示清除/无定位。</param>
+    void ApplyImeGeometry(in UiImeGeometry geometry)
+    {
+        _ = geometry;
+    }
 }

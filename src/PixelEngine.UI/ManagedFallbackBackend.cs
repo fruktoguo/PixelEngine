@@ -50,9 +50,15 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
 
     private UiTextComposition CompositionOverlayState { get; set; } = UiTextComposition.Inactive;
 
+    private UiImeGeometry CompositionImeGeometry { get; set; } = UiImeGeometry.None;
+
+    private int CompositionTextLength { get; set; }
+
     internal string DebugCompositionOverlayText => CompositionOverlayText;
 
     internal UiTextComposition DebugCompositionOverlayState => CompositionOverlayState;
+
+    internal UiImeGeometry DebugCompositionImeGeometry => CompositionImeGeometry;
 
     /// <summary>
     /// 后端类型，固定为纯托管回退后端。
@@ -225,15 +231,37 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         string overlayText = normalized.IsActive
             ? BuildCompositionOverlayText(text[..textLength], in normalized)
             : string.Empty;
+        UiImeGeometry geometry = normalized.IsActive
+            ? UiImeGeometryLayout.ComputePreeditOverlayGeometry(
+                in _viewport,
+                textLength,
+                normalized.CursorIndex)
+            : UiImeGeometry.None;
         UiTextComposition current = CompositionOverlayState;
-        if (CompositionOverlayText == overlayText && CompositionEquals(in current, in normalized))
+        if (CompositionOverlayText == overlayText &&
+            CompositionEquals(in current, in normalized) &&
+            GeometryEquals(CompositionImeGeometry, geometry))
         {
             return;
         }
 
         CompositionOverlayText = overlayText;
         CompositionOverlayState = normalized;
+        CompositionTextLength = normalized.IsActive ? textLength : 0;
+        CompositionImeGeometry = geometry;
         Dirty = true;
+    }
+
+    /// <summary>
+    /// 返回当前预编辑 overlay 的 caret rect / 候选窗锚点。
+    /// </summary>
+    /// <param name="geometry">UI 坐标空间中的定位几何。</param>
+    /// <returns>存在有效定位信息时返回 true。</returns>
+    public bool TryGetImeGeometry(out UiImeGeometry geometry)
+    {
+        ThrowIfDisposed();
+        geometry = CompositionImeGeometry;
+        return geometry.HasAny;
     }
 
     /// <summary>
@@ -584,12 +612,13 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
             return;
         }
 
+        int preeditLength = Math.Max(CompositionTextLength, 1);
         float width = Math.Min(
-            Math.Max(180f, (CompositionOverlayText.Length * 10f) + 32f),
-            Math.Max(180f, _viewport.Width - 24f));
-        float height = 42f;
-        float x = _viewport.X + 12f;
-        float y = Math.Max(_viewport.Y, _viewport.Y + _viewport.Height - height - 12f);
+            Math.Max(UiImeGeometryLayout.MinOverlayWidth, (preeditLength * UiImeGeometryLayout.CharWidth) + 32f),
+            Math.Max(UiImeGeometryLayout.MinOverlayWidth, _viewport.Width - (UiImeGeometryLayout.OverlayMargin * 2f)));
+        float height = UiImeGeometryLayout.OverlayHeight;
+        float x = _viewport.X + UiImeGeometryLayout.OverlayMargin;
+        float y = Math.Max(_viewport.Y, _viewport.Y + _viewport.Height - height - UiImeGeometryLayout.OverlayMargin);
         gui.SetNextWindow(x, y, width, height, GuiDrawCondition.Always);
         GuiDrawWindowFlags flags =
             GuiDrawWindowFlags.NoSavedSettings |
@@ -657,6 +686,18 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
             left.CursorIndex == right.CursorIndex &&
             left.SelectionStart == right.SelectionStart &&
             left.SelectionLength == right.SelectionLength;
+    }
+
+    private static bool GeometryEquals(in UiImeGeometry left, in UiImeGeometry right)
+    {
+        return left.HasCaretRect == right.HasCaretRect &&
+            left.HasCandidateAnchor == right.HasCandidateAnchor &&
+            left.CaretX.Equals(right.CaretX) &&
+            left.CaretY.Equals(right.CaretY) &&
+            left.CaretWidth.Equals(right.CaretWidth) &&
+            left.CaretHeight.Equals(right.CaretHeight) &&
+            left.CandidateAnchorX.Equals(right.CandidateAnchorX) &&
+            left.CandidateAnchorY.Equals(right.CandidateAnchorY);
     }
 
     private UiHitResult HitTestDocument(ManagedUiDocument document, float x, float y)

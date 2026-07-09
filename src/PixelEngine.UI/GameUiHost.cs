@@ -433,6 +433,23 @@ public sealed class GameUiHost : IDisposable
     }
 
     /// <summary>
+    /// 读取当前后端 IME caret rect / 候选窗锚点。
+    /// </summary>
+    /// <param name="geometry">UI 坐标空间中的定位几何。</param>
+    /// <returns>存在有效定位信息时返回 true。</returns>
+    public bool TryGetImeGeometry(out UiImeGeometry geometry)
+    {
+        ThrowIfDisposed();
+        if (Options.Enabled && _initialized)
+        {
+            return _backend.TryGetImeGeometry(out geometry);
+        }
+
+        geometry = UiImeGeometry.None;
+        return false;
+    }
+
+    /// <summary>
     /// 执行 UI 命中测试并返回输入捕获意图。
     /// </summary>
     /// <param name="x">UI 坐标 x。</param>

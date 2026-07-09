@@ -31,7 +31,7 @@ internal sealed class WindowsImeCompositionReader
     }
 
     internal UiTextCompositionCapabilities Capabilities => _enabled
-        ? UiTextCompositionCapabilities.Supported("Windows IMM32 输入源可从 Win32 HWND 采集真实 IME composition 预编辑状态；候选窗与预编辑可视化仍归 M15 真实窗口验收。")
+        ? UiTextCompositionCapabilities.Supported("Windows IMM32 输入源可从 Win32 HWND 采集真实 IME composition 预编辑状态，并支持 UI caret/候选锚点回写 ImmSetCompositionWindow/ImmSetCandidateWindow；真实窗口候选窗与产品体验仍归 M15 人工验收。")
         : UiTextCompositionCapabilities.Unsupported("当前平台不是 Windows，或未启用 Windows IMM32 composition reader；预编辑状态保持 inactive。");
 
     internal int CaptureTextComposition(Span<char> destination, out UiTextComposition composition)
@@ -42,32 +42,7 @@ internal sealed class WindowsImeCompositionReader
             return 0;
         }
 
-        IntPtr hwnd;
-        try
-        {
-            hwnd = _hwndProvider();
-        }
-        catch (Exception)
-        {
-            return 0;
-        }
-
-        if (hwnd == IntPtr.Zero)
-        {
-            return 0;
-        }
-
-        IntPtr context;
-        try
-        {
-            context = _native.GetContext(hwnd);
-        }
-        catch (Exception)
-        {
-            return 0;
-        }
-
-        if (context == IntPtr.Zero)
+        if (!TryGetContext(out IntPtr hwnd, out IntPtr context))
         {
             return 0;
         }
@@ -110,14 +85,115 @@ internal sealed class WindowsImeCompositionReader
         }
         finally
         {
-            try
+            ReleaseContextSafe(hwnd, context);
+        }
+    }
+
+    /// <summary>
+    /// 把 UI 坐标中的 caret/候选锚点写回 IMM32 composition/candidate 窗口（窗口 client 坐标）。
+    /// </summary>
+    /// <param name="geometry">定位几何；无有效信息时安全忽略。</param>
+    internal void ApplyImeGeometry(in UiImeGeometry geometry)
+    {
+        if (!_enabled || !geometry.HasAny)
+        {
+            return;
+        }
+
+        if (!TryGetContext(out IntPtr hwnd, out IntPtr context))
+        {
+            return;
+        }
+
+        try
+        {
+            if (geometry.HasCaretRect)
             {
-                _ = _native.ReleaseContext(hwnd, context);
+                Win32CompositionForm compositionForm = new()
+                {
+                    Style = Win32ImeNative.CompositionFormStylePoint,
+                    CurrentPos = new Win32Point
+                    {
+                        X = ToClientCoordinate(geometry.CaretX),
+                        Y = ToClientCoordinate(geometry.CaretY),
+                    },
+                };
+                _ = _native.SetCompositionWindow(context, in compositionForm);
             }
-            catch (Exception)
+
+            if (geometry.HasCandidateAnchor)
             {
+                Win32CandidateForm candidateForm = new()
+                {
+                    Index = 0,
+                    Style = Win32ImeNative.CandidateFormStyleCandidatePos,
+                    CurrentPos = new Win32Point
+                    {
+                        X = ToClientCoordinate(geometry.CandidateAnchorX),
+                        Y = ToClientCoordinate(geometry.CandidateAnchorY),
+                    },
+                };
+                _ = _native.SetCandidateWindow(context, in candidateForm);
             }
         }
+        catch (Exception)
+        {
+        }
+        finally
+        {
+            ReleaseContextSafe(hwnd, context);
+        }
+    }
+
+    private bool TryGetContext(out IntPtr hwnd, out IntPtr context)
+    {
+        hwnd = IntPtr.Zero;
+        context = IntPtr.Zero;
+        try
+        {
+            hwnd = _hwndProvider();
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+
+        if (hwnd == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        try
+        {
+            context = _native.GetContext(hwnd);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+
+        return context != IntPtr.Zero;
+    }
+
+    private void ReleaseContextSafe(IntPtr hwnd, IntPtr context)
+    {
+        try
+        {
+            _ = _native.ReleaseContext(hwnd, context);
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    private static int ToClientCoordinate(float value)
+    {
+        if (!float.IsFinite(value))
+        {
+            return 0;
+        }
+
+        return (int)MathF.Round(value);
     }
 
     internal static void FindTargetAttributeRange(
@@ -164,6 +240,10 @@ internal interface IWindowsImeNative
     int GetCompositionString(IntPtr context, int index, byte[] destination);
 
     int GetCompositionCursorPosition(IntPtr context);
+
+    bool SetCompositionWindow(IntPtr context, in Win32CompositionForm form);
+
+    bool SetCandidateWindow(IntPtr context, in Win32CandidateForm form);
 }
 
 internal sealed class WindowsImeNativeMethods : IWindowsImeNative
@@ -194,5 +274,15 @@ internal sealed class WindowsImeNativeMethods : IWindowsImeNative
     int IWindowsImeNative.GetCompositionCursorPosition(IntPtr context)
     {
         return Win32ImeNative.GetCompositionInteger(context, CompositionCursorPosition);
+    }
+
+    bool IWindowsImeNative.SetCompositionWindow(IntPtr context, in Win32CompositionForm form)
+    {
+        return Win32ImeNative.SetCompositionWindow(context, in form);
+    }
+
+    bool IWindowsImeNative.SetCandidateWindow(IntPtr context, in Win32CandidateForm form)
+    {
+        return Win32ImeNative.SetCandidateWindow(context, in form);
     }
 }

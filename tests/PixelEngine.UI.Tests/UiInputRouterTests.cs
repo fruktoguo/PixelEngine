@@ -287,6 +287,41 @@ public sealed class UiInputRouterTests
     }
 
     [Fact]
+    public void PumpPublishesBackendImeGeometryToInputSourceAndClearsOnInactive()
+    {
+        UiImeGeometry published = UiImeGeometry.FromCaretRect(40f, 200f, 2f, 18f);
+        RecordingBackend backend = new()
+        {
+            HitResult = new UiHitResult(HitsUi: true, Opaque: true, WantsMouse: true, WantsKeyboard: true),
+            ImeGeometry = published,
+        };
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+        FakeInputSource input = new()
+        {
+            HasPointer = true,
+            Pointer = new UiPointerState(12, 34, 0, 0, LeftDown: false, RightDown: false, MiddleDown: false),
+            CompositionText = "候",
+            Composition = new UiTextComposition(isActive: true, cursorIndex: 1),
+        };
+        UiInputRouter router = new(host, input);
+
+        _ = router.Pump();
+        Assert.Equal(1, input.AppliedGeometries.Count);
+        Assert.True(input.AppliedGeometries[0].HasCaretRect);
+        Assert.Equal(40f, input.AppliedGeometries[0].CaretX);
+        Assert.Equal(200f, input.AppliedGeometries[0].CaretY);
+        Assert.Equal(40f, input.AppliedGeometries[0].CandidateAnchorX);
+        Assert.Equal(218f, input.AppliedGeometries[0].CandidateAnchorY);
+
+        input.CompositionText = string.Empty;
+        input.Composition = UiTextComposition.Inactive;
+        _ = router.Pump();
+        Assert.Equal(2, input.AppliedGeometries.Count);
+        Assert.False(input.AppliedGeometries[1].HasAny);
+    }
+
+    [Fact]
     public void PumpRoutesSyntheticImeCompositionStartUpdateCommitAndCancelLifecycle()
     {
         RecordingBackend backend = new()
@@ -510,6 +545,8 @@ public sealed class UiInputRouterTests
 
         public int? ReportedCompositionTextCount { get; set; }
 
+        public List<UiImeGeometry> AppliedGeometries { get; } = [];
+
         public bool TryGetPointer(out UiPointerState state)
         {
             state = Pointer;
@@ -538,6 +575,11 @@ public sealed class UiInputRouterTests
             CompositionText.AsSpan(0, count).CopyTo(destination);
             composition = Composition;
             return ReportedCompositionTextCount ?? count;
+        }
+
+        public void ApplyImeGeometry(in UiImeGeometry geometry)
+        {
+            AppliedGeometries.Add(geometry);
         }
     }
 
@@ -580,6 +622,8 @@ public sealed class UiInputRouterTests
         public List<string> CompositionTexts { get; } = [];
 
         public List<UiTextComposition> Compositions { get; } = [];
+
+        public UiImeGeometry ImeGeometry { get; set; } = UiImeGeometry.None;
 
         public float HitX { get; private set; }
 
@@ -651,6 +695,12 @@ public sealed class UiInputRouterTests
         {
             CompositionTexts.Add(text.ToString());
             Compositions.Add(composition);
+        }
+
+        public bool TryGetImeGeometry(out UiImeGeometry geometry)
+        {
+            geometry = ImeGeometry;
+            return geometry.HasAny;
         }
 
         public UiHitResult HitTest(float x, float y)

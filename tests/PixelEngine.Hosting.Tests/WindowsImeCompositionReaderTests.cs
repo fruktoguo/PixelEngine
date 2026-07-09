@@ -1,4 +1,5 @@
 using System.Text;
+using PixelEngine.Interop;
 using PixelEngine.UI;
 using Xunit;
 
@@ -219,6 +220,49 @@ public sealed class WindowsImeCompositionReaderTests
         Assert.Equal(2, composition.SelectionLength);
     }
 
+    /// <summary>
+    /// 验证 UI caret/候选锚点会回写到 IMM32 composition 与 candidate 窗口，而不是依赖 KeyChar。
+    /// </summary>
+    [Fact]
+    public void ApplyImeGeometryWritesCompositionAndCandidateWindows()
+    {
+        FakeImeNative native = new() { Context = new IntPtr(0x456) };
+        WindowsImeCompositionReader reader = new(() => new IntPtr(0x123), native, enableWindowsComposition: true);
+        UiImeGeometry geometry = UiImeGeometry.FromCaretRect(120.4f, 340.6f, 2f, 18f);
+
+        reader.ApplyImeGeometry(in geometry);
+
+        Assert.Equal(1, native.GetContextCalls);
+        Assert.Equal(1, native.ReleaseContextCalls);
+        Assert.Equal(1, native.SetCompositionWindowCalls);
+        Assert.Equal(1, native.SetCandidateWindowCalls);
+        Assert.Equal(Win32ImeNative.CompositionFormStylePoint, native.LastCompositionForm.Style);
+        Assert.Equal(120, native.LastCompositionForm.CurrentPos.X);
+        Assert.Equal(341, native.LastCompositionForm.CurrentPos.Y);
+        Assert.Equal(Win32ImeNative.CandidateFormStyleCandidatePos, native.LastCandidateForm.Style);
+        Assert.Equal(120, native.LastCandidateForm.CurrentPos.X);
+        Assert.Equal(359, native.LastCandidateForm.CurrentPos.Y);
+    }
+
+    /// <summary>
+    /// 验证无几何信息、无 HWND 或禁用 Windows 时不调用 IMM32 定位 API。
+    /// </summary>
+    [Fact]
+    public void ApplyImeGeometryIsNoOpWhenGeometryOrPlatformUnavailable()
+    {
+        FakeImeNative native = new() { Context = new IntPtr(0x456) };
+        WindowsImeCompositionReader disabled = new(() => new IntPtr(0x123), native, enableWindowsComposition: false);
+        WindowsImeCompositionReader noHwnd = new(() => IntPtr.Zero, native, enableWindowsComposition: true);
+        WindowsImeCompositionReader active = new(() => new IntPtr(0x123), native, enableWindowsComposition: true);
+
+        disabled.ApplyImeGeometry(UiImeGeometry.FromCaretRect(10, 20, 2, 18));
+        noHwnd.ApplyImeGeometry(UiImeGeometry.FromCaretRect(10, 20, 2, 18));
+        active.ApplyImeGeometry(UiImeGeometry.None);
+
+        Assert.Equal(0, native.SetCompositionWindowCalls);
+        Assert.Equal(0, native.SetCandidateWindowCalls);
+    }
+
     private sealed class FakeImeNative : IWindowsImeNative
     {
         private const int CompositionAttribute = 0x0010;
@@ -241,6 +285,14 @@ public sealed class WindowsImeCompositionReaderTests
         public int ReleaseContextCalls { get; private set; }
 
         public int GetCompositionStringCalls { get; private set; }
+
+        public int SetCompositionWindowCalls { get; private set; }
+
+        public int SetCandidateWindowCalls { get; private set; }
+
+        public Win32CompositionForm LastCompositionForm { get; private set; }
+
+        public Win32CandidateForm LastCandidateForm { get; private set; }
 
         public IntPtr GetContext(IntPtr hwnd)
         {
@@ -281,6 +333,22 @@ public sealed class WindowsImeCompositionReaderTests
         {
             Assert.Equal(Context, context);
             return Cursor;
+        }
+
+        public bool SetCompositionWindow(IntPtr context, in Win32CompositionForm form)
+        {
+            Assert.Equal(Context, context);
+            SetCompositionWindowCalls++;
+            LastCompositionForm = form;
+            return true;
+        }
+
+        public bool SetCandidateWindow(IntPtr context, in Win32CandidateForm form)
+        {
+            Assert.Equal(Context, context);
+            SetCandidateWindowCalls++;
+            LastCandidateForm = form;
+            return true;
         }
     }
 }
