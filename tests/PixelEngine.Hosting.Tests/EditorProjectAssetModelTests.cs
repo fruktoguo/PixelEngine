@@ -298,7 +298,7 @@ public sealed class EditorProjectAssetModelTests
     }
 
     /// <summary>
-    /// 验证引用文档保存到一半失败时，已写出的引用文档也会恢复到旧路径。
+    /// 验证引用文档保存到一半失败时，已写出的引用文档会恢复到旧路径，活动 authoring 场景不会被污染。
     /// </summary>
     [Fact]
     public void MoveAssetRestoresWrittenReferenceDocumentsWhenLaterSaveFails()
@@ -315,12 +315,13 @@ public sealed class EditorProjectAssetModelTests
             string secondScene = Path.Combine(contentRoot, "scenes", "z-readonly.scene");
             EngineSceneDocumentLoader.SaveDocument(CreateSceneWithAssetReference(oldReference), firstScene);
             EngineSceneDocumentLoader.SaveDocument(CreateSceneWithAssetReference(oldReference), secondScene);
+            EditorSceneModel activeScene = EditorSceneModel.FromDocument(CreateSceneWithAssetReference(oldReference));
             _ = manifest.EnsureAsset("scenes/a-first.scene");
             _ = manifest.EnsureAsset("scenes/z-readonly.scene");
             File.SetAttributes(secondScene, FileAttributes.ReadOnly);
 
             // Assert：验证预期结果
-            _ = Assert.ThrowsAny<Exception>(() => manifest.MoveAsset("textures/sand.png", "textures/moved/sand.png"));
+            _ = Assert.ThrowsAny<Exception>(() => manifest.MoveAsset("textures/sand.png", "textures/moved/sand.png", activeScene));
 
             File.SetAttributes(secondScene, FileAttributes.Normal);
             Assert.True(File.Exists(Path.Combine(contentRoot, "textures", "sand.png")));
@@ -329,6 +330,7 @@ public sealed class EditorProjectAssetModelTests
             Assert.Equal("textures/sand.png", resolved.LogicalPath);
             Assert.Equal(oldReference, EngineSceneDocumentLoader.LoadDocument(firstScene).Entities![0].Behaviours![0].SerializedFields!["Texture"]);
             Assert.Equal(oldReference, EngineSceneDocumentLoader.LoadDocument(secondScene).Entities![0].Behaviours![0].SerializedFields!["Texture"]);
+            Assert.Equal(oldReference, activeScene.Get(10).Components[0].SerializedFields["Texture"]);
         }
         finally
         {
