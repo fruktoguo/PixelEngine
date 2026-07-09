@@ -504,6 +504,36 @@ public sealed class AssetBrowserPanelTests
         Assert.Contains("暂不支持", panel.Status, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证 Project Window 创建 Folder 后会刷新空文件夹 drop target，而不是伪装成资产条目。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelCreatesFolderAndRefreshesEmptyFolderTargets()
+    {
+        // Arrange：准备输入与初始状态
+        RecordingAssetSource source = new([]);
+        List<AssetBrowserCreateRequest> requests = [];
+        AssetBrowserCreateResult CreateAsset(AssetBrowserCreateRequest request)
+        {
+            requests.Add(request);
+            source.ReplaceFolders([new AssetBrowserFolderItem(request.Path, 0)]);
+            return new AssetBrowserCreateResult(true, $"created {request.Path}", null, request.Path);
+        }
+
+        AssetBrowserPanel panel = new(source, createAsset: CreateAsset);
+
+        bool created = panel.TryCreateAsset("levels", AssetBrowserItemKind.Folder);
+
+        // Assert：验证预期结果
+        Assert.True(created);
+        AssetBrowserCreateRequest request = Assert.Single(requests);
+        Assert.Equal("levels", request.Path);
+        Assert.Equal(AssetBrowserItemKind.Folder, request.Kind);
+        Assert.Empty(panel.LastAssets);
+        Assert.Contains(panel.FolderTargets, folder => folder.Path == string.Empty && folder.AssetCount == 0);
+        Assert.Contains(panel.FolderTargets, folder => folder.Path == "levels" && folder.AssetCount == 0);
+    }
+
     private sealed class RecordingThumbnailProvider : ITextureThumbnailProvider
     {
         public bool TryGetThumbnail(string assetPath, out AssetThumbnail thumbnail)
@@ -519,18 +549,29 @@ public sealed class AssetBrowserPanelTests
         }
     }
 
-    private sealed class RecordingAssetSource(IReadOnlyList<AssetBrowserItem> assets) : IAssetBrowserDataSource
+    private sealed class RecordingAssetSource(IReadOnlyList<AssetBrowserItem> assets) : IAssetBrowserDataSource, IAssetBrowserFolderDataSource
     {
         private IReadOnlyList<AssetBrowserItem> _assets = assets;
+        private IReadOnlyList<AssetBrowserFolderItem> _folders = [];
 
         public IReadOnlyList<AssetBrowserItem> ListAssets()
         {
             return _assets;
         }
 
+        public IReadOnlyList<AssetBrowserFolderItem> ListFolders()
+        {
+            return _folders;
+        }
+
         public void ReplaceAssets(IReadOnlyList<AssetBrowserItem> assets)
         {
             _assets = assets;
+        }
+
+        public void ReplaceFolders(IReadOnlyList<AssetBrowserFolderItem> folders)
+        {
+            _folders = folders;
         }
     }
 

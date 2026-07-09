@@ -7,7 +7,7 @@ namespace PixelEngine.Editor.Shell;
 /// <summary>
 /// 资产浏览器面板的数据源，对接 manifest 与拖放。
 /// </summary>
-internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource
+internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource, IAssetBrowserFolderDataSource
 {
     private readonly EditorAssetManifestStore _assets;
     private readonly ITextureThumbnailProvider? _thumbnailProvider;
@@ -55,6 +55,27 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource
         }
 
         return items;
+    }
+
+    public IReadOnlyList<AssetBrowserFolderItem> ListFolders()
+    {
+        if (!Directory.Exists(_assets.ContentRoot))
+        {
+            return [];
+        }
+
+        List<AssetBrowserFolderItem> folders =
+        [
+            new AssetBrowserFolderItem(string.Empty, Directory.EnumerateFiles(_assets.ContentRoot, "*", SearchOption.AllDirectories).Count()),
+        ];
+        foreach (string directory in Directory.EnumerateDirectories(_assets.ContentRoot, "*", SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase))
+        {
+            string relative = Path.GetRelativePath(_assets.ContentRoot, directory).Replace('\\', '/');
+            int assetCount = Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories).Count();
+            folders.Add(new AssetBrowserFolderItem(relative, assetCount));
+        }
+
+        return folders;
     }
 
     public AssetBrowserDeleteResult DeleteAsset(AssetBrowserDeleteRequest request, EditorSceneModel? activeScene = null)
@@ -154,6 +175,23 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource
             return new AssetBrowserCreateResult(false, $"未知资产类型：{request.Kind}。");
         }
 
+        if (request.Kind == AssetBrowserItemKind.Folder)
+        {
+            try
+            {
+                string folder = _assets.CreateFolder(request.Path);
+                return new AssetBrowserCreateResult(
+                    true,
+                    $"已创建文件夹：{folder}",
+                    null,
+                    folder);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException)
+            {
+                return new AssetBrowserCreateResult(false, ex.Message);
+            }
+        }
+
         EditorAssetType type = MapKind(request.Kind);
         if (!IsCreatableType(type))
         {
@@ -185,6 +223,7 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource
     {
         return kind switch
         {
+            AssetBrowserItemKind.Folder => "文件夹",
             AssetBrowserItemKind.Texture => thumbnail is { } image
                 ? $"纹理：{image.Width.ToString(CultureInfo.InvariantCulture)}×{image.Height.ToString(CultureInfo.InvariantCulture)}，{FormatSize(record.SizeBytes)}"
                 : $"纹理：{FormatSize(record.SizeBytes)}",
@@ -458,6 +497,7 @@ internal sealed class EditorAssetBrowserDataSource : IAssetBrowserDataSource
             AssetBrowserItemKind.Script => EditorAssetType.Script,
             AssetBrowserItemKind.UiScreen => EditorAssetType.UiScreen,
             AssetBrowserItemKind.Json => EditorAssetType.Json,
+            AssetBrowserItemKind.Folder => EditorAssetType.Other,
             AssetBrowserItemKind.Other => EditorAssetType.Other,
             _ => EditorAssetType.Other,
         };

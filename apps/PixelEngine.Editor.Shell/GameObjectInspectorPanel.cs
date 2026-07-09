@@ -148,6 +148,7 @@ internal sealed class GameObjectInspectorPanel(
             case AssetBrowserItemKind.Scene:
             case AssetBrowserItemKind.UiScreen:
             case AssetBrowserItemKind.Json:
+            case AssetBrowserItemKind.Folder:
             case AssetBrowserItemKind.Other:
             default:
                 RecordInspectorStatus($"当前资产没有 Inspector 主操作：{asset.Path}", EditorConsoleSeverity.Info, "inspector-asset-action");
@@ -185,6 +186,7 @@ internal sealed class GameObjectInspectorPanel(
             AssetBrowserItemKind.Scene or
             AssetBrowserItemKind.UiScreen or
             AssetBrowserItemKind.Json or
+            AssetBrowserItemKind.Folder or
             AssetBrowserItemKind.Other => null,
             _ => null,
         };

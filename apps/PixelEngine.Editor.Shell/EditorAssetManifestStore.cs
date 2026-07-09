@@ -201,6 +201,24 @@ internal sealed class EditorAssetManifestStore
         }
     }
 
+    public string CreateFolder(string logicalFolderPath)
+    {
+        string normalized = NormalizeLogicalPath(logicalFolderPath, nameof(logicalFolderPath));
+        string fullPath = ResolveFullPath(normalized);
+        if (File.Exists(fullPath))
+        {
+            throw new InvalidOperationException($"目标路径已存在同名资产文件：{normalized}");
+        }
+
+        if (Directory.Exists(fullPath))
+        {
+            throw new InvalidOperationException($"文件夹已存在：{normalized}");
+        }
+
+        _ = Directory.CreateDirectory(fullPath);
+        return normalized;
+    }
+
     /// <summary>
     /// 移动资产文件并同步 manifest 与场景/预制体中的引用编码。
     /// </summary>

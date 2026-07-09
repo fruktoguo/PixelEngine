@@ -36,10 +36,11 @@ public sealed class AssetBrowserPanel(
     private readonly AssetBrowserDeleteHandler? _deleteAsset = deleteAsset;
     private readonly AssetBrowserMoveHandler? _moveAsset = moveAsset;
     private readonly AssetBrowserCreateHandler? _createAsset = createAsset;
-    private static readonly string[] KindFilterLabels = ["全部", "Material", "Texture", "Audio", "Scene", "Prefab", "Script", "UI Screen", "Json", "Other"];
+    private static readonly string[] KindFilterLabels = ["全部", "Folder", "Material", "Texture", "Audio", "Scene", "Prefab", "Script", "UI Screen", "Json", "Other"];
     private static readonly string[] SortModeLabels = ["路径", "类型 / 路径", "最近修改", "大小"];
     private static readonly AssetBrowserItemKind[] CreateKinds =
     [
+        AssetBrowserItemKind.Folder,
         AssetBrowserItemKind.Material,
         AssetBrowserItemKind.Scene,
         AssetBrowserItemKind.Prefab,
@@ -48,7 +49,7 @@ public sealed class AssetBrowserPanel(
         AssetBrowserItemKind.Json,
     ];
 
-    private static readonly string[] CreateKindLabels = ["Material", "Scene", "Prefab", "Script", "UI Screen", "Json"];
+    private static readonly string[] CreateKindLabels = ["Folder", "Material", "Scene", "Prefab", "Script", "UI Screen", "Json"];
     private string _search = string.Empty;
     private AssetBrowserDeleteRequest? _pendingDeleteRequest;
     private AssetBrowserMoveRequest? _pendingMoveRequest;
@@ -730,6 +731,7 @@ public sealed class AssetBrowserPanel(
     {
         return kind switch
         {
+            AssetBrowserItemKind.Folder => "New Folder",
             AssetBrowserItemKind.Material => "materials.json",
             AssetBrowserItemKind.Texture => "textures/NewTexture.png",
             AssetBrowserItemKind.Audio => "audio/NewAudio.wav",
@@ -830,16 +832,22 @@ public sealed class AssetBrowserPanel(
 
     private void RebuildFolderTargets()
     {
-        if (LastAssets.Count == 0)
-        {
-            FolderTargets = [];
-            return;
-        }
-
         Dictionary<string, int> folders = new(StringComparer.OrdinalIgnoreCase)
         {
             [string.Empty] = LastAssets.Count,
         };
+        if (_source is IAssetBrowserFolderDataSource folderSource)
+        {
+            IReadOnlyList<AssetBrowserFolderItem> explicitFolders = folderSource.ListFolders();
+            for (int i = 0; i < explicitFolders.Count; i++)
+            {
+                string folderPath = explicitFolders[i].Path;
+                folders[folderPath] = folders.TryGetValue(folderPath, out int count)
+                    ? Math.Max(count, explicitFolders[i].AssetCount)
+                    : explicitFolders[i].AssetCount;
+            }
+        }
+
         for (int i = 0; i < LastAssets.Count; i++)
         {
             string? folder = GetLogicalDirectoryName(LastAssets[i].Path);
