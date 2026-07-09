@@ -12,6 +12,7 @@ internal static partial class NativeFolderPicker
     private const uint FosForceFileSystem = 0x00000040;
     private const uint FosNoChangeDir = 0x00000008;
     private const uint FosPathMustExist = 0x00000800;
+    private const uint FosFileMustExist = 0x00001000;
     private const uint SigDnFileSystemPath = 0x80058000;
     private const int HResultCancelled = unchecked((int)0x800704C7);
     private const int SOk = 0;
@@ -66,6 +67,60 @@ internal static partial class NativeFolderPicker
         catch (Exception exception) when (exception is COMException or InvalidCastException or NotSupportedException)
         {
             diagnostic = $"打开文件夹选择器失败：{exception.Message}";
+            return false;
+        }
+    }
+
+    public static bool TryPickFile(string initialPath, out string selectedPath, out string diagnostic)
+    {
+        selectedPath = string.Empty;
+        diagnostic = string.Empty;
+        if (!OperatingSystem.IsWindows())
+        {
+            diagnostic = "当前平台暂未实现原生文件选择器，请直接粘贴路径。";
+            return false;
+        }
+
+        try
+        {
+            Type dialogType = Type.GetTypeFromCLSID(FileOpenDialogClsid, throwOnError: true)
+                ?? throw new NotSupportedException("无法创建 Windows FileOpenDialog。");
+            object dialogObject = Activator.CreateInstance(dialogType)
+                ?? throw new NotSupportedException("无法创建 Windows FileOpenDialog 实例。");
+            using ComReleaser<IFileOpenDialog> dialog = new((IFileOpenDialog)dialogObject);
+            dialog.Instance.SetOptions(FosForceFileSystem | FosNoChangeDir | FosPathMustExist | FosFileMustExist);
+            dialog.Instance.SetTitle("Import Asset");
+            dialog.Instance.SetOkButtonLabel("Import");
+            using ComReleaser<IShellItem>? defaultFolder = TryCreateShellFolder(initialPath);
+            if (defaultFolder is not null)
+            {
+                dialog.Instance.SetDefaultFolder(defaultFolder.Instance);
+                dialog.Instance.SetFolder(defaultFolder.Instance);
+            }
+
+            int hr = dialog.Instance.Show(IntPtr.Zero);
+            if (hr == HResultCancelled)
+            {
+                return false;
+            }
+
+            Marshal.ThrowExceptionForHR(hr);
+            dialog.Instance.GetResult(out IShellItem item);
+            using ComReleaser<IShellItem> result = new(item);
+            result.Instance.GetDisplayName(SigDnFileSystemPath, out IntPtr pathPointer);
+            try
+            {
+                selectedPath = Marshal.PtrToStringUni(pathPointer) ?? string.Empty;
+                return !string.IsNullOrWhiteSpace(selectedPath);
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem(pathPointer);
+            }
+        }
+        catch (Exception exception) when (exception is COMException or InvalidCastException or NotSupportedException)
+        {
+            diagnostic = $"打开文件选择器失败：{exception.Message}";
             return false;
         }
     }

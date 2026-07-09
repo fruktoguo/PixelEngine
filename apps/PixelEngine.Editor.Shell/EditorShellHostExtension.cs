@@ -269,7 +269,10 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             moveAsset: request => assetBrowserDataSource.MoveAsset(request, _sceneModel),
             moveFolder: request => assetBrowserDataSource.MoveFolder(request, _sceneModel),
             createAsset: assetBrowserDataSource.CreateAsset,
-            importAsset: assetBrowserDataSource.ImportAsset));
+            importAsset: assetBrowserDataSource.ImportAsset,
+            pickImportSource: static (initialPath, _) => NativeFolderPicker.TryPickFile(initialPath, out string selectedPath, out string diagnostic)
+                ? new AssetBrowserImportSourcePickResult(true, selectedPath, string.Empty)
+                : new AssetBrowserImportSourcePickResult(false, string.Empty, diagnostic)));
         _editor.AddPanel(new UiManifestPanel(new EditorAssetManifestStore(_project)));
         MaterialReactionEditorPanel? materialReactionPanel = TryCreateMaterialReactionPanel(engine);
         if (materialReactionPanel is not null)

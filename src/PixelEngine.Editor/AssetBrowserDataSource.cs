@@ -208,6 +208,17 @@ public readonly record struct AssetBrowserImportRequest(
     AssetBrowserItemKind Kind);
 
 /// <summary>
+/// Project Window 导入源文件选择结果。
+/// </summary>
+/// <param name="Succeeded">是否选择了源文件。</param>
+/// <param name="SourceFullPath">选择的源文件完整路径；取消或失败时为空。</param>
+/// <param name="Diagnostic">失败诊断；取消时为空。</param>
+public readonly record struct AssetBrowserImportSourcePickResult(
+    bool Succeeded,
+    string SourceFullPath,
+    string Diagnostic);
+
+/// <summary>
 /// Project Window 资产删除结果。
 /// </summary>
 /// <param name="Succeeded">删除是否已执行。</param>
@@ -314,6 +325,14 @@ public delegate AssetBrowserCreateResult AssetBrowserCreateHandler(AssetBrowserC
 /// <param name="request">导入请求。</param>
 /// <returns>导入结果。</returns>
 public delegate AssetBrowserImportResult AssetBrowserImportHandler(AssetBrowserImportRequest request);
+
+/// <summary>
+/// Project Window 导入源文件选择回调。
+/// </summary>
+/// <param name="initialPath">当前源文件输入，用作原生对话框默认位置。</param>
+/// <param name="kind">当前导入资产类型。</param>
+/// <returns>源文件选择结果。</returns>
+public delegate AssetBrowserImportSourcePickResult AssetBrowserImportSourcePickHandler(string initialPath, AssetBrowserItemKind kind);
 
 /// <summary>
 /// 资源浏览器只读数据源。

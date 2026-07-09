@@ -24,6 +24,7 @@ public delegate bool ScriptAssetOpenHandler(string assetPath, out string diagnos
 /// <param name="moveFolder">可选文件夹移动 / 重命名回调。</param>
 /// <param name="createAsset">可选资产创建回调。</param>
 /// <param name="importAsset">可选资产导入回调。</param>
+/// <param name="pickImportSource">可选导入源文件选择回调。</param>
 public sealed class AssetBrowserPanel(
     IAssetBrowserDataSource source,
     IAudioPreviewService? audioPreview = null,
@@ -34,7 +35,8 @@ public sealed class AssetBrowserPanel(
     AssetBrowserMoveHandler? moveAsset = null,
     AssetBrowserFolderMoveHandler? moveFolder = null,
     AssetBrowserCreateHandler? createAsset = null,
-    AssetBrowserImportHandler? importAsset = null) : IEditorPanel
+    AssetBrowserImportHandler? importAsset = null,
+    AssetBrowserImportSourcePickHandler? pickImportSource = null) : IEditorPanel
 {
     private readonly IAssetBrowserDataSource _source = source ?? throw new ArgumentNullException(nameof(source));
     private readonly IAudioPreviewService? _audioPreview = audioPreview;
@@ -46,6 +48,7 @@ public sealed class AssetBrowserPanel(
     private readonly AssetBrowserFolderMoveHandler? _moveFolder = moveFolder;
     private readonly AssetBrowserCreateHandler? _createAsset = createAsset;
     private readonly AssetBrowserImportHandler? _importAsset = importAsset;
+    private readonly AssetBrowserImportSourcePickHandler? _pickImportSource = pickImportSource;
     private static readonly string[] KindFilterLabels = ["全部", "Folder", "Material", "Texture", "Audio", "Scene", "Prefab", "Script", "UI Screen", "Json", "Other"];
     private static readonly string[] SortModeLabels = ["路径", "类型 / 路径", "最近修改", "大小"];
     private static readonly AssetBrowserItemKind[] CreateKinds =
@@ -634,6 +637,31 @@ public sealed class AssetBrowserPanel(
     }
 
     /// <summary>
+    /// 打开导入源文件选择器，并把结果映射到当前 Project Window 文件夹。
+    /// </summary>
+    /// <param name="folderPath">目标逻辑文件夹；空字符串表示 content 根目录。</param>
+    /// <returns>成功选择源文件时返回 true。</returns>
+    public bool TryPickImportSource(string folderPath)
+    {
+        if (_pickImportSource is null)
+        {
+            Status = "导入源文件选择器不可用";
+            return false;
+        }
+
+        AssetBrowserImportSourcePickResult result = _pickImportSource(ImportSourcePath, ImportKind);
+        if (!result.Succeeded)
+        {
+            Status = string.IsNullOrWhiteSpace(result.Diagnostic)
+                ? "已取消选择导入源文件"
+                : result.Diagnostic;
+            return false;
+        }
+
+        return BeginImportAssetInFolder(result.SourceFullPath, folderPath, ImportKind);
+    }
+
+    /// <summary>
     /// 把 Project Window typed drag payload 移动到目标逻辑文件夹。
     /// </summary>
     /// <param name="payload">资产拖拽 payload。</param>
@@ -819,6 +847,12 @@ public sealed class AssetBrowserPanel(
         if (ImGui.InputText("Source File", ref importSourcePath, 512))
         {
             ImportSourcePath = importSourcePath;
+        }
+
+        ImGui.SameLine();
+        if (ImGui.Button("Browse Source"))
+        {
+            _ = TryPickImportSource(selection.FolderPath ?? string.Empty);
         }
 
         string importDestinationPath = ImportDestinationPath;
