@@ -37,6 +37,7 @@ internal readonly record struct EditorAssetDropPayload(
             AssetBrowserItemKind.Script => EditorAssetType.Script,
             AssetBrowserItemKind.UiScreen => EditorAssetType.UiScreen,
             AssetBrowserItemKind.Json => EditorAssetType.Json,
+            AssetBrowserItemKind.Folder => EditorAssetType.Other,
             AssetBrowserItemKind.Other => EditorAssetType.Other,
             _ => EditorAssetType.Other,
         };

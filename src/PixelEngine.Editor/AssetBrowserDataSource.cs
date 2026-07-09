@@ -6,6 +6,11 @@ namespace PixelEngine.Editor;
 public enum AssetBrowserItemKind
 {
     /// <summary>
+    /// Project Window 逻辑文件夹。
+    /// </summary>
+    Folder,
+
+    /// <summary>
     /// 材质定义资产。
     /// </summary>
     Material,
@@ -238,6 +243,18 @@ public interface IAssetBrowserDataSource
 }
 
 /// <summary>
+/// 可枚举空文件夹的 Project Window 数据源扩展。
+/// </summary>
+public interface IAssetBrowserFolderDataSource
+{
+    /// <summary>
+    /// 枚举当前可见逻辑文件夹。
+    /// </summary>
+    /// <returns>文件夹快照。</returns>
+    IReadOnlyList<AssetBrowserFolderItem> ListFolders();
+}
+
+/// <summary>
 /// 纹理缩略图提供器。
 /// </summary>
 public interface ITextureThumbnailProvider
@@ -269,7 +286,7 @@ public interface IAudioPreviewService
 /// </summary>
 /// <param name="contentRoot">内容根目录。</param>
 /// <param name="thumbnailProvider">纹理缩略图提供器。</param>
-public sealed class FileSystemAssetBrowserDataSource(string contentRoot, ITextureThumbnailProvider? thumbnailProvider = null) : IAssetBrowserDataSource
+public sealed class FileSystemAssetBrowserDataSource(string contentRoot, ITextureThumbnailProvider? thumbnailProvider = null) : IAssetBrowserDataSource, IAssetBrowserFolderDataSource
 {
     private readonly string _contentRoot = string.IsNullOrWhiteSpace(contentRoot)
         ? throw new ArgumentException("content 根目录不能为空。", nameof(contentRoot))
@@ -305,6 +322,28 @@ public sealed class FileSystemAssetBrowserDataSource(string contentRoot, ITextur
         }
 
         return items;
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<AssetBrowserFolderItem> ListFolders()
+    {
+        if (!Directory.Exists(_contentRoot))
+        {
+            return [];
+        }
+
+        List<AssetBrowserFolderItem> folders =
+        [
+            new AssetBrowserFolderItem(string.Empty, Directory.EnumerateFiles(_contentRoot, "*", SearchOption.AllDirectories).Count()),
+        ];
+        foreach (string directory in Directory.EnumerateDirectories(_contentRoot, "*", SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase))
+        {
+            string relative = Path.GetRelativePath(_contentRoot, directory).Replace('\\', '/');
+            int assetCount = Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories).Count();
+            folders.Add(new AssetBrowserFolderItem(relative, assetCount));
+        }
+
+        return folders;
     }
 
     private bool TryResolveThumbnail(string relativePath, out AssetThumbnail thumbnail)

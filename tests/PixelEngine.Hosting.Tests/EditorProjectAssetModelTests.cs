@@ -70,6 +70,7 @@ public sealed class EditorProjectAssetModelTests
             EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
             EditorAssetBrowserDataSource source = new(manifest);
 
+            AssetBrowserCreateResult folder = source.CreateAsset(new AssetBrowserCreateRequest("levels", AssetBrowserItemKind.Folder));
             AssetBrowserCreateResult material = source.CreateAsset(new AssetBrowserCreateRequest("materials.json", AssetBrowserItemKind.Material));
             AssetBrowserCreateResult scene = source.CreateAsset(new AssetBrowserCreateRequest("scenes/NewScene.scene", AssetBrowserItemKind.Scene));
             AssetBrowserCreateResult prefab = source.CreateAsset(new AssetBrowserCreateRequest("prefabs/NewPrefab.prefab", AssetBrowserItemKind.Prefab));
@@ -79,8 +80,10 @@ public sealed class EditorProjectAssetModelTests
             AssetBrowserCreateResult texture = source.CreateAsset(new AssetBrowserCreateRequest("textures/generated.png", AssetBrowserItemKind.Texture));
 
             IReadOnlyList<AssetBrowserItem> assets = source.ListAssets();
+            IReadOnlyList<AssetBrowserFolderItem> folders = source.ListFolders();
 
             // Assert：验证预期结果
+            Assert.True(folder.Succeeded);
             Assert.True(material.Succeeded);
             Assert.True(scene.Succeeded);
             Assert.True(prefab.Succeeded);
@@ -88,6 +91,11 @@ public sealed class EditorProjectAssetModelTests
             Assert.True(uiScreen.Succeeded);
             Assert.True(json.Succeeded);
             Assert.False(texture.Succeeded);
+            Assert.Null(folder.AssetId);
+            Assert.Equal("levels", folder.Path);
+            Assert.True(Directory.Exists(Path.Combine(contentRoot, "levels")));
+            Assert.Contains(folders, item => item.Path == "levels" && item.AssetCount == 0);
+            Assert.DoesNotContain(assets, item => item.Path == "levels");
             Assert.StartsWith("asset_", material.AssetId, StringComparison.Ordinal);
             Assert.Equal(AssetBrowserItemKind.Material, Find(assets, "materials.json").Kind);
             Assert.StartsWith("asset_", scene.AssetId, StringComparison.Ordinal);
@@ -119,6 +127,44 @@ public sealed class EditorProjectAssetModelTests
             Assert.Contains("public sealed class NewBehaviour : Behaviour", File.ReadAllText(Path.Combine(contentRoot, "scripts", "NewBehaviour.cs")), StringComparison.Ordinal);
             Assert.Equal("{}" + Environment.NewLine, File.ReadAllText(Path.Combine(contentRoot, "data", "NewAsset.json")));
             Assert.Contains("暂不支持", texture.Diagnostic, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
+    /// 验证 Project Window 创建文件夹拒绝越界、重复目录和与文件同名的目标。
+    /// </summary>
+    [Fact]
+    public void ProjectBrowserCreateFolderRejectsUnsafeAndConflictingPaths()
+    {
+        // Arrange：准备输入与初始状态
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            string contentRoot = Path.Combine(projectRoot, "content");
+            _ = Directory.CreateDirectory(contentRoot);
+            EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
+            EditorAssetBrowserDataSource source = new(manifest);
+
+            AssetBrowserCreateResult created = source.CreateAsset(new AssetBrowserCreateRequest("levels", AssetBrowserItemKind.Folder));
+            AssetBrowserCreateResult duplicate = source.CreateAsset(new AssetBrowserCreateRequest("levels", AssetBrowserItemKind.Folder));
+            AssetBrowserCreateResult escaped = source.CreateAsset(new AssetBrowserCreateRequest("../outside", AssetBrowserItemKind.Folder));
+            AssetBrowserCreateResult material = source.CreateAsset(new AssetBrowserCreateRequest("materials.json", AssetBrowserItemKind.Material));
+            AssetBrowserCreateResult fileConflict = source.CreateAsset(new AssetBrowserCreateRequest("materials.json", AssetBrowserItemKind.Folder));
+
+            // Assert：验证预期结果
+            Assert.True(created.Succeeded);
+            Assert.False(duplicate.Succeeded);
+            Assert.False(escaped.Succeeded);
+            Assert.True(material.Succeeded);
+            Assert.False(fileConflict.Succeeded);
+            Assert.Contains("已存在", duplicate.Diagnostic, StringComparison.Ordinal);
+            Assert.Contains("content 根目录", escaped.Diagnostic, StringComparison.Ordinal);
+            Assert.Contains("同名资产文件", fileConflict.Diagnostic, StringComparison.Ordinal);
+            Assert.False(Directory.Exists(Path.Combine(projectRoot, "outside")));
         }
         finally
         {
