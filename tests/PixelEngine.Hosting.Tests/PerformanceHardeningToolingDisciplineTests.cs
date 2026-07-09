@@ -4271,6 +4271,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("smokeFrameCount>=60", readme, StringComparison.Ordinal);
         Assert.Contains("compositionSessionCount>=1", readme, StringComparison.Ordinal);
         Assert.Contains("licenseDocumentCount>=1", readme, StringComparison.Ordinal);
+        Assert.Contains("inactiveBoundaryTestCount>=1", readme, StringComparison.Ordinal);
+        Assert.Contains("releaseAuditRejectionCaseCount>=1", readme, StringComparison.Ordinal);
         Assert.Contains("releaseArtifactCount>=1", readme, StringComparison.Ordinal);
         Assert.Contains("sha256EntryCount>=1", readme, StringComparison.Ordinal);
         Assert.Contains("tools/ui-runtime-evidence-preflight.ps1", plan, StringComparison.Ordinal);
@@ -4464,6 +4466,58 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string outputReport = File.ReadAllText(Path.Combine(artifacts, "ui-runtime-evidence-preflight.md"));
             Assert.Contains("status: blocked_missing_ui_runtime_scope_evidence", outputReport, StringComparison.Ordinal);
             Assert.Contains("transparent_ui_product_window videoDurationSeconds 必须至少为 30", outputReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: ui_runtime_evidence_attached_pending_review", outputReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 Ultralight optional profile 证据不能只声明许可存在，还必须证明未激活边界不执行且发行审计拒绝 native 混入。
+    /// </summary>
+    [Fact]
+    public void UiRuntimeEvidencePreflightRejectsWeakUltralightInactiveGateEvidence()
+    {
+        // Arrange：搭建测试场景与依赖
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ui-runtime-weak-ultralight-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateUiRuntimeEvidenceManifest(temp);
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonArray evidence = rootNode["evidence"]!.AsArray();
+            JsonObject ultralightEntry = evidence
+                .Select(static node => node!.AsObject())
+                .Single(static node => string.Equals((string?)node["scope"], "ultralight_optional_profile_gate", StringComparison.Ordinal));
+            string reportPath = (string)ultralightEntry["path"]!;
+            string report = File.ReadAllText(reportPath)
+                .Replace("inactiveBackendCapturesNoInput: true", "inactiveBackendCapturesNoInput: false", StringComparison.Ordinal)
+                .Replace("inactiveBoundaryTestCount: 1", "inactiveBoundaryTestCount: 0", StringComparison.Ordinal);
+            File.WriteAllText(reportPath, report);
+            ultralightEntry["sha256"] = GetSha256(reportPath);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "out");
+            // Act：执行被测操作
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "ui-runtime-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            // Assert：验证不变式与预期结果
+            Assert.Equal(5, result.ExitCode);
+            string outputReport = File.ReadAllText(Path.Combine(artifacts, "ui-runtime-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_ui_runtime_scope_evidence", outputReport, StringComparison.Ordinal);
+            Assert.Contains("ultralight_optional_profile_gate inactiveBackendCapturesNoInput 必须为 true", outputReport, StringComparison.Ordinal);
             Assert.DoesNotContain("status: ui_runtime_evidence_attached_pending_review", outputReport, StringComparison.Ordinal);
         }
         finally
@@ -7413,6 +7467,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "redistributionDecisionRecorded",
                 "releaseAuditGatePassed",
                 "fallbackPathVerified",
+                "inactiveProfileExecutionBlocked",
+                "inactiveBackendRejectsDocuments",
+                "inactiveBackendCapturesNoInput",
+                "inactiveBackendProducesNoCompositeOutput",
+                "releaseAuditRejectsInactiveNative",
             ],
             ["ui_native_release_artifact"] =
             [
@@ -7495,6 +7554,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             "ultralight_optional_profile_gate" => new Dictionary<string, double>
             {
                 ["licenseDocumentCount"] = 1,
+                ["inactiveBoundaryTestCount"] = 1,
+                ["releaseAuditRejectionCaseCount"] = 1,
             },
             "ui_native_release_artifact" => new Dictionary<string, double>
             {
