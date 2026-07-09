@@ -607,8 +607,10 @@ public sealed class HostingProjectDisciplineTests
         string shellAssetManifestStore = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorAssetManifestStore.cs"));
         Assert.Contains("AssetBrowserCreateRequest", assetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("AssetBrowserImportRequest", assetBrowserDataSource, StringComparison.Ordinal);
+        Assert.Contains("AssetBrowserImportSourcePickResult", assetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("TryCreateAsset", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("TryImportAsset", assetBrowserPanel, StringComparison.Ordinal);
+        Assert.Contains("TryPickImportSource", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("AssetBrowserItemKind.Folder", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("AssetBrowserItemKind.Material", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("AssetBrowserItemKind.UiScreen", assetBrowserPanel, StringComparison.Ordinal);
@@ -617,8 +619,10 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("\"Folder\"", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("\"Material\"", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("\"UI Screen\"", assetBrowserPanel, StringComparison.Ordinal);
+        Assert.Contains("Browse Source", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("createAsset: assetBrowserDataSource.CreateAsset", host, StringComparison.Ordinal);
         Assert.Contains("importAsset: assetBrowserDataSource.ImportAsset", host, StringComparison.Ordinal);
+        Assert.Contains("pickImportSource: static (initialPath, _) => NativeFolderPicker.TryPickFile", host, StringComparison.Ordinal);
         Assert.Contains("deleteFolder: request => assetBrowserDataSource.DeleteFolder(request, _sceneModel)", host, StringComparison.Ordinal);
         Assert.Contains("moveFolder: request => assetBrowserDataSource.MoveFolder(request, _sceneModel)", host, StringComparison.Ordinal);
         Assert.Contains("public AssetBrowserFolderDeleteResult DeleteFolder", shellAssetBrowserDataSource, StringComparison.Ordinal);

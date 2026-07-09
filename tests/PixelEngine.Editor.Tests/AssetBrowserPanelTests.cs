@@ -629,6 +629,69 @@ public sealed class AssetBrowserPanelTests
     }
 
     /// <summary>
+    /// 验证 Project Window Browse Source 会把文件选择器结果转换为当前文件夹下的导入目标。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelBrowseImportSourceUpdatesSourceAndDestination()
+    {
+        // Arrange：准备输入与初始状态
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("audio/hit.wav", AssetBrowserItemKind.Audio, 10, DateTimeOffset.UnixEpoch, null, "asset_audio"),
+        ]);
+        List<(string InitialPath, AssetBrowserItemKind Kind)> picks = [];
+        AssetBrowserImportSourcePickResult PickSource(string initialPath, AssetBrowserItemKind kind)
+        {
+            picks.Add((initialPath, kind));
+            return new AssetBrowserImportSourcePickResult(true, @"D:\Imports\hit.wav", string.Empty);
+        }
+
+        AssetBrowserPanel panel = new(source, pickImportSource: PickSource);
+        _ = panel.Refresh();
+        bool prepared = panel.BeginImportAssetInFolder(@"C:\Previous\old.wav", "audio", AssetBrowserItemKind.Audio);
+        bool picked = panel.TryPickImportSource("audio");
+
+        // Assert：验证预期结果
+        Assert.True(prepared);
+        Assert.True(picked);
+        (string initialPath, AssetBrowserItemKind kind) = Assert.Single(picks);
+        Assert.Equal(@"C:\Previous\old.wav", initialPath);
+        Assert.Equal(AssetBrowserItemKind.Audio, kind);
+        Assert.Equal(@"D:\Imports\hit.wav", panel.ImportSourcePath);
+        Assert.Equal("audio/hit1.wav", panel.ImportDestinationPath);
+        Assert.Contains("准备导入", panel.Status, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 Project Window Browse Source 取消或失败时不覆盖现有导入输入。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelBrowseImportSourceCancelAndFailureKeepCurrentInput()
+    {
+        // Arrange：准备输入与初始状态
+        RecordingAssetSource source = new([]);
+        AssetBrowserImportSourcePickResult nextPick = new(false, string.Empty, string.Empty);
+        AssetBrowserPanel panel = new(source, pickImportSource: (_, _) => nextPick);
+
+        bool prepared = panel.BeginImportAssetInFolder(@"C:\Imports\sand.png", "textures", AssetBrowserItemKind.Texture);
+        bool cancelled = panel.TryPickImportSource("textures");
+
+        // Assert：验证预期结果
+        Assert.True(prepared);
+        Assert.False(cancelled);
+        Assert.Equal(@"C:\Imports\sand.png", panel.ImportSourcePath);
+        Assert.Equal("textures/sand.png", panel.ImportDestinationPath);
+        Assert.Contains("取消", panel.Status, StringComparison.Ordinal);
+        nextPick = new AssetBrowserImportSourcePickResult(false, string.Empty, "打开文件选择器失败：COM 不可用");
+        bool failed = panel.TryPickImportSource("textures");
+
+        Assert.False(failed);
+        Assert.Equal(@"C:\Imports\sand.png", panel.ImportSourcePath);
+        Assert.Equal("textures/sand.png", panel.ImportDestinationPath);
+        Assert.Equal("打开文件选择器失败：COM 不可用", panel.Status);
+    }
+
+    /// <summary>
     /// 验证 Project Window 文件夹 rename / recursive move 会走 Shell 回调并刷新资产与文件夹列表。
     /// </summary>
     [Fact]
