@@ -140,6 +140,21 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证本机正式输出只能从已提交的已跟踪源码生成，避免未提交改动被误发布成正式版。
+    /// </summary>
+    [Fact]
+    public void FinalOutputRequiresCleanTrackedWorktree()
+    {
+        string root = FindRepositoryRoot();
+        string finalOutputScript = File.ReadAllText(Path.Combine(root, "tools", "update-final-output.ps1"));
+
+        Assert.Contains("function Assert-CleanTrackedWorktree", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("git -C $repoRoot status --porcelain --untracked-files=no", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("正式输出需要干净的已跟踪工作树", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("Assert-CleanTrackedWorktree", finalOutputScript, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证本机正式输出默认清理编辑器开发元数据，只在显式诊断开关下保留符号。
     /// </summary>
     [Fact]
