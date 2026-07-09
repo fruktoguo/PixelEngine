@@ -425,14 +425,52 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
     }
 
     /// <summary>
-    /// 返回当前预编辑状态对应的 caret rect / 候选窗锚点（在 native composition 完成前与 ManagedFallback 共用 overlay 布局契约）。
+    /// 返回当前预编辑状态对应的 caret rect / 候选窗锚点；优先使用 RmlUi 焦点文本控件边界，否则回退 preedit overlay 布局契约。
     /// </summary>
     /// <param name="geometry">UI 坐标空间中的定位几何。</param>
     /// <returns>存在有效定位信息时返回 true。</returns>
     public bool TryGetImeGeometry(out UiImeGeometry geometry)
     {
         ThrowIfDisposed();
+        if (TryGetNativeTextInputGeometry(out geometry))
+        {
+            return true;
+        }
+
         geometry = CompositionImeGeometry;
+        return geometry.HasAny;
+    }
+
+    private bool TryGetNativeTextInputGeometry(out UiImeGeometry geometry)
+    {
+        geometry = UiImeGeometry.None;
+        if (_renderer == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        int ok = RmlUiNative.TryGetActiveTextInputGeometry(
+            _renderer,
+            out float caretX,
+            out float caretY,
+            out float caretWidth,
+            out float caretHeight,
+            out float anchorX,
+            out float anchorY);
+        if (ok != 1)
+        {
+            return false;
+        }
+
+        geometry = new UiImeGeometry(
+            hasCaretRect: true,
+            caretX,
+            caretY,
+            caretWidth,
+            caretHeight,
+            hasCandidateAnchor: true,
+            anchorX,
+            anchorY);
         return geometry.HasAny;
     }
 

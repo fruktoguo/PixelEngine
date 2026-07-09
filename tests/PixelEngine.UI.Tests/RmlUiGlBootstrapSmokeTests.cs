@@ -82,6 +82,22 @@ public sealed class RmlUiGlBootstrapSmokeTests
     }
 
     [Fact]
+    public void RmlUiImeGeometrySourcePrefersNativeTextInputBoundsOverOverlayFallback()
+    {
+        string source = File.ReadAllText(ProjectPath("src", "PixelEngine.UI", "RmlUiBackend.cs"));
+        string nativeBinding = File.ReadAllText(ProjectPath("src", "PixelEngine.UI", "RmlUiNative.cs"));
+        string nativeShim = File.ReadAllText(ProjectPath("native", "ui_native", "PixelEngineUiNative.cpp"));
+
+        Assert.Contains("TryGetNativeTextInputGeometry", source, StringComparison.Ordinal);
+        Assert.Contains("TryGetActiveTextInputGeometry", source, StringComparison.Ordinal);
+        Assert.Contains("CompositionImeGeometry", source, StringComparison.Ordinal);
+        Assert.Contains("peui_native_try_get_active_text_input_geometry", nativeBinding, StringComparison.Ordinal);
+        Assert.Contains("peui_native_try_get_active_text_input_geometry", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("SetTextInputHandler", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("GetBoundingBox", nativeShim, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CanCreateNativeRendererWhenGlSmokeIsEnabled()
     {
         if (!string.Equals(Environment.GetEnvironmentVariable("PIXELENGINE_RENDERING_GL_SMOKE"), "1", StringComparison.Ordinal))

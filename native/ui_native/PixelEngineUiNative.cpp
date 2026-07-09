@@ -1,6 +1,8 @@
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/ElementDocument.h>
 #include <RmlUi/Core/SystemInterface.h>
+#include <RmlUi/Core/TextInputContext.h>
+#include <RmlUi/Core/TextInputHandler.h>
 #include <RmlUi_Renderer_GL3.h>
 #include <RmlUi_Include_GL3.h>
 
@@ -116,6 +118,42 @@ struct PeUiGlResolver
     PeUiGetProcAddress resolver;
     void* user;
 };
+
+// 捕获 RmlUi 当前焦点文本输入上下文，供 IME caret/候选锚点几何查询（不处理 composition 字符串提交）。
+class PeUiTextInputHandler final : public Rml::TextInputHandler
+{
+public:
+    void OnActivate(Rml::TextInputContext* input_context) override
+    {
+        active_context = input_context;
+    }
+
+    void OnDeactivate(Rml::TextInputContext* input_context) override
+    {
+        if (active_context == input_context)
+        {
+            active_context = nullptr;
+        }
+    }
+
+    void OnDestroy(Rml::TextInputContext* input_context) override
+    {
+        if (active_context == input_context)
+        {
+            active_context = nullptr;
+        }
+    }
+
+    Rml::TextInputContext* ActiveContext() const
+    {
+        return active_context;
+    }
+
+private:
+    Rml::TextInputContext* active_context = nullptr;
+};
+
+PeUiTextInputHandler g_textInputHandler;
 
 class PeUiGlStateGuard final
 {
@@ -1022,8 +1060,10 @@ PE_UI_NATIVE_API PeUiRenderer* peui_native_create_renderer(int32_t width, int32_
     {
         Rml::SetSystemInterface(&g_systemInterface);
         Rml::SetRenderInterface(instance->renderer.get());
+        Rml::SetTextInputHandler(&g_textInputHandler);
         if (!Rml::Initialise())
         {
+            Rml::SetTextInputHandler(nullptr);
             Rml::SetRenderInterface(nullptr);
             Rml::SetSystemInterface(nullptr);
             return nullptr;
@@ -1066,11 +1106,65 @@ PE_UI_NATIVE_API void peui_native_destroy_renderer(PeUiRenderer* renderer)
     {
         Rml::Shutdown();
         g_rmlInitialised = false;
+        Rml::SetTextInputHandler(nullptr);
         Rml::SetRenderInterface(nullptr);
         Rml::SetSystemInterface(nullptr);
     }
 
     delete renderer;
+}
+
+// 读取当前焦点文本输入区域的 caret rect / 候选锚点（UI 坐标，左上原点）。
+// 无焦点或无法取边界时返回 0；成功返回 1。
+PE_UI_NATIVE_API int32_t peui_native_try_get_active_text_input_geometry(
+    PeUiRenderer* renderer,
+    float* out_caret_x,
+    float* out_caret_y,
+    float* out_caret_width,
+    float* out_caret_height,
+    float* out_anchor_x,
+    float* out_anchor_y)
+{
+    if (renderer == nullptr ||
+        out_caret_x == nullptr ||
+        out_caret_y == nullptr ||
+        out_caret_width == nullptr ||
+        out_caret_height == nullptr ||
+        out_anchor_x == nullptr ||
+        out_anchor_y == nullptr)
+    {
+        return 0;
+    }
+
+    Rml::TextInputContext* context = g_textInputHandler.ActiveContext();
+    if (context == nullptr)
+    {
+        return 0;
+    }
+
+    Rml::Rectanglef bounds;
+    if (!context->GetBoundingBox(bounds))
+    {
+        return 0;
+    }
+
+    // RmlUi 边界为屏幕空间矩形；caret 取左上插入条近似，候选锚点取左下角。
+    const float width = bounds.Width();
+    const float height = bounds.Height();
+    if (!(width > 0.0f) || !(height > 0.0f))
+    {
+        return 0;
+    }
+
+    const float caret_width = 2.0f;
+    const float caret_height = std::min(height, 18.0f);
+    *out_caret_x = bounds.Left();
+    *out_caret_y = bounds.Top() + std::max(0.0f, (height - caret_height) * 0.5f);
+    *out_caret_width = caret_width;
+    *out_caret_height = caret_height;
+    *out_anchor_x = bounds.Left();
+    *out_anchor_y = bounds.Bottom();
+    return 1;
 }
 
 PE_UI_NATIVE_API void peui_native_renderer_set_viewport(PeUiRenderer* renderer, int32_t width, int32_t height)
