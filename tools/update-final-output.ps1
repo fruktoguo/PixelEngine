@@ -17,7 +17,9 @@ param(
   [int]$DemoWindowTicks = 80,
 
   [ValidateSet('ManagedFallback', 'RmlUi', 'Ultralight')]
-  [string]$DemoRuntimeUiBackend = 'RmlUi'
+  [string]$DemoRuntimeUiBackend = 'RmlUi',
+
+  [switch]$IncludeEditorSymbols
 )
 
 $ErrorActionPreference = 'Stop'
@@ -144,6 +146,19 @@ function Copy-Directory([string]$Source, [string]$Destination) {
 
   New-Item -ItemType Directory -Force -Path $Destination | Out-Null
   Get-ChildItem -LiteralPath $Source -Force | Copy-Item -Destination $Destination -Recurse -Force
+}
+
+function Remove-EditorDeveloperMetadata([string]$EditorRoot) {
+  if (-not (Test-Path -LiteralPath $EditorRoot -PathType Container)) {
+    throw "编辑器正式输出目录不存在：$EditorRoot"
+  }
+
+  Get-ChildItem -LiteralPath $EditorRoot -File -Recurse -Force |
+    Where-Object {
+      $_.Extension.Equals('.pdb', [StringComparison]::OrdinalIgnoreCase) -or
+      $_.Extension.Equals('.xml', [StringComparison]::OrdinalIgnoreCase)
+    } |
+    Remove-Item -Force
 }
 
 function Write-FinalOutputChecksums([string]$Root, [string]$OutputPath) {
@@ -304,6 +319,9 @@ New-Item -ItemType Directory -Force -Path $finalEditorDir, $finalDemoDir, $final
 Copy-Directory $editorPublish $finalEditorDir
 Copy-Directory $demoPlayerDir $finalDemoDir
 Copy-Directory $validationRoot $finalValidationDir
+if (-not $IncludeEditorSymbols.IsPresent) {
+  Remove-EditorDeveloperMetadata $finalEditorDir
+}
 
 $manifest = [ordered]@{
   schema = 'pixelengine.final-output/v1'
@@ -313,6 +331,8 @@ $manifest = [ordered]@{
   configuration = $Configuration
   demoChannel = $DemoChannel
   demoRuntimeUiBackendRequested = $DemoRuntimeUiBackend
+  editorSymbolsIncluded = $IncludeEditorSymbols.IsPresent
+  editorDeveloperMetadataPolicy = if ($IncludeEditorSymbols.IsPresent) { 'included-for-diagnostics' } else { 'pdb-and-xml-pruned' }
   editorExecutable = '编辑器/PixelEngine.Editor.Shell.exe'
   demoExecutable = '游戏Demo/PixelEngine Demo.exe'
   updatePolicy = 'staged-build-and-verify-before-replace'
@@ -344,6 +364,7 @@ $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $final
 PixelEngine 正式输出
 
 此目录只由 tools/update-final-output.ps1 更新。脚本会先在 artifacts/final-output-staging 下构建与验证，编辑器默认工作台和游戏 Demo 窗口验证全部通过后，才替换本目录。
+默认编辑器正式输出会清理 .pdb/.xml 开发元数据；需要诊断符号时请显式使用 -IncludeEditorSymbols 重新生成。
 
 - 编辑器：编辑器\PixelEngine.Editor.Shell.exe
 - 游戏 Demo：游戏Demo\PixelEngine Demo.exe

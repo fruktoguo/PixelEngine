@@ -15,6 +15,7 @@
 - 脚本先把所有中间产物写入 `artifacts/final-output-staging/<timestamp>/`。
 - 编辑器默认工作台探针、编辑器出包探针和 Demo 窗口短跑全部通过后，才原子替换 `最终输出/`。
 - 任一步失败时保留旧的 `最终输出/`，不会把半成品发布成正式版。
+- 编辑器正式输出默认清理 `.pdb` / `.xml` 开发元数据；需要诊断符号时显式传 `-IncludeEditorSymbols` 重新生成。
 
 常用命令：
 
@@ -26,6 +27,12 @@ pwsh -NoProfile -File tools/update-final-output.ps1
 
 ```pwsh
 pwsh -NoProfile -File tools/update-final-output.ps1 -Rid win-x64 -DemoChannel r2r -Configuration Release
+```
+
+诊断符号：
+
+```pwsh
+pwsh -NoProfile -File tools/update-final-output.ps1 -IncludeEditorSymbols
 ```
 
 `最终输出/` 已加入 `.gitignore`，只作为本机正式产物目录，不提交到仓库。

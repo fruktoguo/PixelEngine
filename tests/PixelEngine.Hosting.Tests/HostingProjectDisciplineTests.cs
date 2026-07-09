@@ -140,6 +140,25 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证本机正式输出默认清理编辑器开发元数据，只在显式诊断开关下保留符号。
+    /// </summary>
+    [Fact]
+    public void FinalOutputPrunesEditorDeveloperMetadataByDefault()
+    {
+        string root = FindRepositoryRoot();
+        string finalOutputScript = File.ReadAllText(Path.Combine(root, "tools", "update-final-output.ps1"));
+
+        Assert.Contains("[switch]$IncludeEditorSymbols", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("function Remove-EditorDeveloperMetadata", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains(".Extension.Equals('.pdb'", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains(".Extension.Equals('.xml'", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("if (-not $IncludeEditorSymbols.IsPresent)", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("Remove-EditorDeveloperMetadata $finalEditorDir", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("editorSymbolsIncluded = $IncludeEditorSymbols.IsPresent", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("editorDeveloperMetadataPolicy = if ($IncludeEditorSymbols.IsPresent) { 'included-for-diagnostics' } else { 'pdb-and-xml-pruned' }", finalOutputScript, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证编辑器壳只通过中性 bootstrap 创建唯一窗口，不直接散落创建 RenderWindow。
     /// </summary>
     [Fact]
