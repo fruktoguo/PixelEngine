@@ -156,6 +156,11 @@ internal static class EditorConsoleSinkExtensions
         string message = selection.UsedFallback
             ? selection.FallbackReason ?? $"UI backend 从 {selection.RequestedBackend} 回退到 {selection.ActiveBackend}。"
             : $"UI backend 使用 {selection.ActiveBackend}。";
+        if (!string.IsNullOrWhiteSpace(selection.ActiveNativeProfile))
+        {
+            message = $"{message} nativeProfile={selection.ActiveNativeProfile}";
+        }
+
         sink.Add(new EditorConsoleEntry(
             DateTimeOffset.UtcNow,
             EditorConsoleCategory.Ui,

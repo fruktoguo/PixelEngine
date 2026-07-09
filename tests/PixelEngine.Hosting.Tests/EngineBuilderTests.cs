@@ -206,6 +206,13 @@ public sealed class EngineBuilderTests
             Assert.Equal(UiBackendKind.RmlUi, selection.ActiveBackend);
             Assert.False(selection.UsedFallback);
             Assert.Null(selection.FallbackReason);
+            Assert.False(string.IsNullOrWhiteSpace(selection.ActiveNativeProfile));
+            Assert.Contains(decision.NativeRendererSymbol, selection.ActiveNativeProfile, StringComparison.Ordinal);
+            Assert.Contains(decision.ShaderVersionDirective, selection.ActiveNativeProfile, StringComparison.Ordinal);
+            Assert.Contains(
+                $"profileId={RmlUiNativeProfileGate.ToNativeProfileId(decision.RequestedProfile)}",
+                selection.ActiveNativeProfile,
+                StringComparison.Ordinal);
             if (decision.RequestedProfile == RmlUiNativeRendererProfile.Gles3Angle)
             {
                 Assert.Equal("#version 300 es", decision.ShaderVersionDirective);
@@ -217,6 +224,7 @@ public sealed class EngineBuilderTests
             Assert.True(selection.UsedFallback);
             Assert.False(string.IsNullOrWhiteSpace(selection.FallbackReason));
             Assert.Contains("ManagedFallback", selection.FallbackReason, StringComparison.Ordinal);
+            Assert.True(string.IsNullOrWhiteSpace(selection.ActiveNativeProfile));
         }
     }
 
