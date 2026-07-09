@@ -10,15 +10,31 @@ namespace PixelEngine.UI;
 public static unsafe class RmlUiGlBootstrap
 {
     /// <summary>
-    /// 使用当前 <see cref="RenderWindow" /> 的 OpenGL context 初始化 native GL 函数表。
+    /// 使用当前 <see cref="RenderWindow" /> 的 OpenGL context 初始化 native GL 函数表，并按 gate 选择 desktop/GLES shader profile。
     /// </summary>
     /// <param name="window">已初始化且当前线程拥有的渲染窗口。</param>
     /// <param name="version">native renderer 加载到的 GL 版本。</param>
-    /// <returns>成功返回 true；缺 native 库、入口缺失或 GL 函数不可用时返回 false。</returns>
+    /// <returns>成功返回 true；缺 native 库、入口缺失、profile 拒绝或 GL 函数不可用时返回 false。</returns>
     public static bool TryLoad(RenderWindow window, out RmlUiGlVersion version)
     {
         ArgumentNullException.ThrowIfNull(window);
-        if (!RmlUiNativeProfileGate.CanUseDesktopGl3(window.Backend, window.Capabilities, out _))
+        if (!RmlUiNativeProfileGate.CanUseNativeRenderer(window.Backend, window.Capabilities, out _))
+        {
+            version = default;
+            return false;
+        }
+
+        RmlUiNativeProfileDecision decision = RmlUiNativeProfileGate.Evaluate(window.Backend, window.Capabilities);
+        try
+        {
+            int profileOk = RmlUiNative.SetRendererProfile(RmlUiNativeProfileGate.ToNativeProfileId(decision.RequestedProfile));
+            if (profileOk != 1)
+            {
+                version = default;
+                return false;
+            }
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
         {
             version = default;
             return false;

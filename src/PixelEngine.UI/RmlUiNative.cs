@@ -48,6 +48,22 @@ internal static unsafe partial class RmlUiNative
     /// <param name="major">加载到的 GL 主版本。</param>
     /// <param name="minor">加载到的 GL 次版本。</param>
     /// <returns>成功返回 1。</returns>
+    /// <summary>
+    /// 设置 native renderer shader profile：0=desktop GL3（#version 330），1=GLES3/ANGLE（#version 300 es）。
+    /// 必须在 <see cref="CreateRenderer" /> 之前调用。
+    /// </summary>
+    /// <param name="profile">profile 枚举整型。</param>
+    /// <returns>1=成功，0=非法 profile。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_set_renderer_profile")]
+    internal static partial int SetRendererProfile(int profile);
+
+    /// <summary>
+    /// 读取当前 native renderer shader profile。
+    /// </summary>
+    /// <returns>0=desktop，1=GLES3/ANGLE。</returns>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_get_renderer_profile")]
+    internal static partial int GetRendererProfile();
+
     [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_load_gl")]
     internal static partial int LoadGl(
         delegate* unmanaged[Cdecl]<IntPtr, byte*, IntPtr> resolver,

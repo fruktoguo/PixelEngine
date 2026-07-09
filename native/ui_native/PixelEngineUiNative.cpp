@@ -1132,6 +1132,7 @@ PE_UI_NATIVE_API int32_t peui_native_load_gl(PeUiGetProcAddress resolver, void* 
     }
 
     PeUiGlResolver state{resolver, user};
+    // Same-context host resolver: works for desktop GL and ANGLE/GLES function tables injected by RenderWindow.
     const int version = gladLoadGLUserPtr(LoadGlFromHost, &state);
     if (version == 0)
     {
@@ -1151,6 +1152,23 @@ PE_UI_NATIVE_API int32_t peui_native_load_gl(PeUiGetProcAddress resolver, void* 
     return 1;
 }
 
+// 0 = desktop GL3 (#version 330), 1 = GLES3/ANGLE (#version 300 es). Must be set before create_renderer.
+PE_UI_NATIVE_API int32_t peui_native_set_renderer_profile(int32_t profile)
+{
+    if (profile != 0 && profile != 1)
+    {
+        return 0;
+    }
+
+    RenderInterface_GL3::SetPixelEngineGlShaderProfile(profile);
+    return 1;
+}
+
+PE_UI_NATIVE_API int32_t peui_native_get_renderer_profile()
+{
+    return RenderInterface_GL3::GetPixelEngineGlShaderProfile();
+}
+
 PE_UI_NATIVE_API PeUiRenderer* peui_native_create_renderer(int32_t width, int32_t height)
 {
     if (width <= 0 || height <= 0)
@@ -1163,6 +1181,7 @@ PE_UI_NATIVE_API PeUiRenderer* peui_native_create_renderer(int32_t width, int32_
         return nullptr;
     }
 
+    // CreateShaders runs in the constructor and reads the current PixelEngine GL shader profile.
     auto instance = std::make_unique<PeUiRenderer>();
     instance->renderer = std::make_unique<RenderInterface_GL3>();
     if (!*instance->renderer)

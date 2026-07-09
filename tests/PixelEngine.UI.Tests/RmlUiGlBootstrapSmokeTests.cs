@@ -106,6 +106,27 @@ public sealed class RmlUiGlBootstrapSmokeTests
     }
 
     [Fact]
+    public void RmlUiGlesAngleProfileSourceDocumentsShaderRewriteAndNativeProfileApi()
+    {
+        string gate = File.ReadAllText(ProjectPath("src", "PixelEngine.UI", "RmlUiNativeProfileGate.cs"));
+        string bootstrap = File.ReadAllText(ProjectPath("src", "PixelEngine.UI", "RmlUiGlBootstrap.cs"));
+        string nativeBinding = File.ReadAllText(ProjectPath("src", "PixelEngine.UI", "RmlUiNative.cs"));
+        string nativeShim = File.ReadAllText(ProjectPath("native", "ui_native", "PixelEngineUiNative.cpp"));
+        string gl3 = File.ReadAllText(ProjectPath("native", "rmlui", "Backends", "RmlUi_Renderer_GL3.cpp"));
+
+        Assert.Contains("CanUseNativeRenderer", gate, StringComparison.Ordinal);
+        Assert.Contains("NativeProfileGles3Angle = 1", gate, StringComparison.Ordinal);
+        Assert.Contains("SetRendererProfile", bootstrap, StringComparison.Ordinal);
+        Assert.Contains("ToNativeProfileId", bootstrap, StringComparison.Ordinal);
+        Assert.Contains("peui_native_set_renderer_profile", nativeBinding, StringComparison.Ordinal);
+        Assert.Contains("peui_native_set_renderer_profile", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("SetPixelEngineGlShaderProfile", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("RewriteShaderSource", gl3, StringComparison.Ordinal);
+        Assert.Contains("#version 300 es\\nprecision highp float;", gl3, StringComparison.Ordinal);
+        Assert.Contains("Gles300Angle", gl3, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RmlUiNativeCompositionBridgeDocumentsSetConfirmAndCancelApis()
     {
         string source = File.ReadAllText(ProjectPath("src", "PixelEngine.UI", "RmlUiBackend.cs"));

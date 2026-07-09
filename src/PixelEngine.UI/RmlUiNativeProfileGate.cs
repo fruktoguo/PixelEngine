@@ -3,10 +3,20 @@ using PixelEngine.Rendering;
 namespace PixelEngine.UI;
 
 /// <summary>
-/// RmlUi native renderer profile gate：当前只允许桌面 OpenGL GL3 renderer，不把 GLES/ANGLE 冒充为 GL3。
+/// RmlUi native renderer profile gate：在 desktop GL3 与 GLES3/ANGLE 双 profile 间选择，禁止用错误 shader 冒充另一 profile。
 /// </summary>
 public static class RmlUiNativeProfileGate
 {
+    /// <summary>
+    /// Desktop GL3 profile 对应的 native 整型值（与 peui_native_set_renderer_profile 一致）。
+    /// </summary>
+    public const int NativeProfileDesktopGl3 = 0;
+
+    /// <summary>
+    /// GLES3/ANGLE profile 对应的 native 整型值。
+    /// </summary>
+    public const int NativeProfileGles3Angle = 1;
+
     /// <summary>
     /// 判断当前 GL 上下文是否允许加载 RmlUi desktop GL3 renderer。
     /// </summary>
@@ -28,9 +38,29 @@ public static class RmlUiNativeProfileGate
     public static bool CanUseDesktopGl3(RenderBackend backend, GlCapabilities capabilities, out string? fallbackReason)
     {
         RmlUiNativeProfileDecision decision = Evaluate(backend, capabilities);
+        if (decision.RequestedProfile != RmlUiNativeRendererProfile.DesktopGl3)
+        {
+            fallbackReason = decision.FallbackReason ??
+                "当前上下文需要 GLES3/ANGLE native profile（#version 300 es），不能使用 desktop GL3 renderer。";
+            return false;
+        }
+
         fallbackReason = decision.FallbackReason;
-        return decision.CanUseNativeRenderer &&
-            decision.RequestedProfile == RmlUiNativeRendererProfile.DesktopGl3;
+        return decision.CanUseNativeRenderer;
+    }
+
+    /// <summary>
+    /// 判断当前上下文是否允许加载任一已实现的 RmlUi native renderer profile（desktop GL3 或 GLES3/ANGLE）。
+    /// </summary>
+    /// <param name="backend">窗口创建时选中的渲染后端。</param>
+    /// <param name="capabilities">当前窗口的 GL 能力快照。</param>
+    /// <param name="fallbackReason">不允许时写入可见降级原因。</param>
+    /// <returns>允许使用 native renderer 时返回 true。</returns>
+    public static bool CanUseNativeRenderer(RenderBackend backend, GlCapabilities capabilities, out string? fallbackReason)
+    {
+        RmlUiNativeProfileDecision decision = Evaluate(backend, capabilities);
+        fallbackReason = decision.FallbackReason;
+        return decision.CanUseNativeRenderer;
     }
 
     /// <summary>
@@ -42,11 +72,28 @@ public static class RmlUiNativeProfileGate
     public static RmlUiNativeProfileDecision Evaluate(RenderBackend backend, GlCapabilities capabilities)
     {
         ArgumentNullException.ThrowIfNull(capabilities);
-        return RequiresGlesAngleProfile(backend, capabilities)
-            ? CreateGlesAngleBlockedDecision(backend, capabilities)
-            : !IsAtLeast(capabilities, 3, 3)
-                ? CreateDesktopBlockedDecision(backend, capabilities)
-                : CreateDesktopAllowedDecision();
+        if (RequiresGlesAngleProfile(backend, capabilities))
+        {
+            return CanUseGlesAngleProfile(capabilities)
+                ? CreateGlesAngleAllowedDecision()
+                : CreateGlesAngleBlockedDecision(backend, capabilities);
+        }
+
+        return IsAtLeast(capabilities, 3, 3)
+            ? CreateDesktopAllowedDecision()
+            : CreateDesktopBlockedDecision(backend, capabilities);
+    }
+
+    /// <summary>
+    /// 将 profile 决策映射为 native peui_native_set_renderer_profile 整型。
+    /// </summary>
+    /// <param name="profile">托管 profile 枚举。</param>
+    /// <returns>native profile 整型。</returns>
+    public static int ToNativeProfileId(RmlUiNativeRendererProfile profile)
+    {
+        return profile == RmlUiNativeRendererProfile.Gles3Angle
+            ? NativeProfileGles3Angle
+            : NativeProfileDesktopGl3;
     }
 
     private static string DescribeContext(RenderBackend backend, GlCapabilities capabilities)
@@ -74,6 +121,24 @@ public static class RmlUiNativeProfileGate
         return backend == RenderBackend.GlEs30Angle || capabilities.IsGles || capabilities.IsAngle;
     }
 
+    private static bool CanUseGlesAngleProfile(GlCapabilities capabilities)
+    {
+        // GLES/ANGLE path requires ES 3.0+ (or ANGLE reporting compatible 3.0+).
+        // Desktop-looking ANGLE strings (e.g. 4.1.0 ANGLE) still route here and typically expose ES 3.
+        return IsAtLeast(capabilities, 3, 0);
+    }
+
+    private static RmlUiNativeProfileDecision CreateGlesAngleAllowedDecision()
+    {
+        return new RmlUiNativeProfileDecision(
+            RmlUiNativeRendererProfile.Gles3Angle,
+            CanUseNativeRenderer: true,
+            NativeRendererSymbol: "RmlUi_Renderer_GLES3_ANGLE",
+            ShaderVersionDirective: "#version 300 es",
+            RequiresSameContextFunctionResolver: true,
+            FallbackReason: null);
+    }
+
     private static RmlUiNativeProfileDecision CreateGlesAngleBlockedDecision(RenderBackend backend, GlCapabilities capabilities)
     {
         return new RmlUiNativeProfileDecision(
@@ -83,8 +148,8 @@ public static class RmlUiNativeProfileGate
             ShaderVersionDirective: "#version 300 es",
             RequiresSameContextFunctionResolver: true,
             FallbackReason:
-                $"RmlUi 当前 native shim 只包含 desktop GL3 renderer（RmlUi_Renderer_GL3），请求/上下文为 {DescribeContext(backend, capabilities)}；" +
-                "GLES3/ANGLE renderer profile 需要独立 RmlUi_Renderer_GLES3_ANGLE、loader、#version 300 es shader、同 context 函数表验证和状态恢复 smoke，回退 ManagedFallback，避免误用 GL3 renderer。");
+                $"RmlUi GLES3/ANGLE renderer profile 需要 OpenGL ES 3.0+ 与同 context 函数表，当前上下文为 {DescribeContext(backend, capabilities)}；" +
+                "回退 ManagedFallback，避免误用 desktop GL3 #version 330 shader。");
     }
 
     private static RmlUiNativeProfileDecision CreateDesktopBlockedDecision(RenderBackend backend, GlCapabilities capabilities)
@@ -122,7 +187,7 @@ public enum RmlUiNativeRendererProfile
     DesktopGl3,
 
     /// <summary>
-    /// OpenGL ES 3.0 / ANGLE renderer；当前仓库尚未实现该 native profile。
+    /// OpenGL ES 3.0 / ANGLE renderer（#version 300 es shader profile）。
     /// </summary>
     Gles3Angle,
 }
