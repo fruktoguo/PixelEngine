@@ -69,16 +69,24 @@ public sealed class RmlUiGlBootstrapSmokeTests
     {
         string source = File.ReadAllText(ProjectPath("src", "PixelEngine.UI", "RmlUiBackend.cs"));
         int start = source.IndexOf("public void FeedTextComposition", StringComparison.Ordinal);
-        int end = source.IndexOf("public UiHitResult HitTest", start, StringComparison.Ordinal);
+        int end = source.IndexOf("private void ApplyNativeComposition", start, StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start);
         string method = source[start..end];
 
         Assert.Contains("CompositionText", method, StringComparison.Ordinal);
         Assert.Contains("CompositionState", method, StringComparison.Ordinal);
         Assert.Contains("NormalizeTextComposition(text, in composition)", method, StringComparison.Ordinal);
+        Assert.Contains("ApplyNativeComposition", method, StringComparison.Ordinal);
         Assert.Contains("Dirty = true", method, StringComparison.Ordinal);
         Assert.DoesNotContain("ProcessTextUtf8", method, StringComparison.Ordinal);
         Assert.DoesNotContain("FeedText(", method, StringComparison.Ordinal);
-        Assert.Contains("不把它冒充 committed text", source, StringComparison.Ordinal);
+
+        int feedTextStart = source.IndexOf("public void FeedText(", StringComparison.Ordinal);
+        int feedTextEnd = source.IndexOf("public void FeedTextComposition", feedTextStart, StringComparison.Ordinal);
+        string feedText = source[feedTextStart..feedTextEnd];
+        Assert.Contains("ConfirmTextComposition", feedText, StringComparison.Ordinal);
+        Assert.Contains("ProcessTextUtf8", feedText, StringComparison.Ordinal);
+        Assert.Contains("CompositionState.IsActive", feedText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -95,6 +103,31 @@ public sealed class RmlUiGlBootstrapSmokeTests
         Assert.Contains("peui_native_try_get_active_text_input_geometry", nativeShim, StringComparison.Ordinal);
         Assert.Contains("SetTextInputHandler", nativeShim, StringComparison.Ordinal);
         Assert.Contains("GetBoundingBox", nativeShim, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RmlUiNativeCompositionBridgeDocumentsSetConfirmAndCancelApis()
+    {
+        string source = File.ReadAllText(ProjectPath("src", "PixelEngine.UI", "RmlUiBackend.cs"));
+        string nativeBinding = File.ReadAllText(ProjectPath("src", "PixelEngine.UI", "RmlUiNative.cs"));
+        string nativeShim = File.ReadAllText(ProjectPath("native", "ui_native", "PixelEngineUiNative.cpp"));
+        int compositionStart = source.IndexOf("public void FeedTextComposition", StringComparison.Ordinal);
+        int compositionEnd = source.IndexOf("private void ApplyNativeComposition", compositionStart, StringComparison.Ordinal);
+        Assert.True(compositionStart >= 0 && compositionEnd > compositionStart);
+        string compositionMethod = source[compositionStart..compositionEnd];
+
+        Assert.Contains("peui_native_set_text_composition", nativeBinding, StringComparison.Ordinal);
+        Assert.Contains("peui_native_confirm_text_composition", nativeBinding, StringComparison.Ordinal);
+        Assert.Contains("peui_native_is_text_composition_active", nativeBinding, StringComparison.Ordinal);
+        Assert.Contains("peui_native_set_text_composition", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("peui_native_confirm_text_composition", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("SetComposition", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("CancelComposition", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("ConfirmComposition", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("CommitComposition", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("SetTextComposition", source, StringComparison.Ordinal);
+        Assert.Contains("ConfirmTextComposition", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProcessTextUtf8", compositionMethod, StringComparison.Ordinal);
     }
 
     [Fact]
