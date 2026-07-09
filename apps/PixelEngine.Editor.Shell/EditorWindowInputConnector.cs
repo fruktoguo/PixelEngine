@@ -91,18 +91,18 @@ internal sealed class EditorWindowInputConnector : IDisposable
     private void OnMouseMove(IMouse mouse, Vector2 position)
     {
         _ = mouse;
-        _input.MouseMove(position.X, position.Y);
+        ForwardMousePosition(position);
     }
 
     private void OnMouseDown(IMouse mouse, Silk.NET.Input.MouseButton button)
     {
-        _ = mouse;
+        ForwardMousePosition(mouse.Position);
         _input.MouseButton(button, down: true);
     }
 
     private void OnMouseUp(IMouse mouse, Silk.NET.Input.MouseButton button)
     {
-        _ = mouse;
+        ForwardMousePosition(mouse.Position);
         _input.MouseButton(button, down: false);
     }
 
@@ -110,5 +110,10 @@ internal sealed class EditorWindowInputConnector : IDisposable
     {
         _ = mouse;
         _input.MouseWheel(wheel.X, wheel.Y);
+    }
+
+    private void ForwardMousePosition(Vector2 position)
+    {
+        _input.MouseMove(position.X, position.Y);
     }
 }
