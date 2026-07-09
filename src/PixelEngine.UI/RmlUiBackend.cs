@@ -435,11 +435,16 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
 
         if (normalized.IsActive)
         {
-            ApplyNativeComposition(text[..textLength], normalized.CursorIndex, isActive: true);
+            ApplyNativeComposition(
+                text[..textLength],
+                normalized.CursorIndex,
+                normalized.SelectionStart,
+                normalized.SelectionLength,
+                isActive: true);
         }
         else
         {
-            ApplyNativeComposition([], cursorIndex: 0, isActive: false);
+            ApplyNativeComposition([], cursorIndex: 0, selectionStart: 0, selectionLength: 0, isActive: false);
         }
 
         CompositionState = normalized;
@@ -448,7 +453,12 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
         Dirty = true;
     }
 
-    private void ApplyNativeComposition(ReadOnlySpan<char> text, int cursorIndex, bool isActive)
+    private void ApplyNativeComposition(
+        ReadOnlySpan<char> text,
+        int cursorIndex,
+        int selectionStart,
+        int selectionLength,
+        bool isActive)
     {
         if (_renderer == IntPtr.Zero)
         {
@@ -457,7 +467,14 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
 
         if (!isActive)
         {
-            _ = RmlUiNative.SetTextComposition(_renderer, null, 0, isActive: 0, cursorIndex: 0);
+            _ = RmlUiNative.SetTextComposition(
+                _renderer,
+                null,
+                0,
+                isActive: 0,
+                cursorIndex: 0,
+                selectionStart: 0,
+                selectionLength: 0);
             return;
         }
 
@@ -469,7 +486,14 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
 
         if (byteCount == 0)
         {
-            _ = RmlUiNative.SetTextComposition(_renderer, null, 0, isActive: 1, cursorIndex);
+            _ = RmlUiNative.SetTextComposition(
+                _renderer,
+                null,
+                0,
+                isActive: 1,
+                cursorIndex,
+                selectionStart,
+                selectionLength);
             return;
         }
 
@@ -477,7 +501,14 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
         int written = Encoding.UTF8.GetBytes(text, utf8);
         fixed (byte* pointer = utf8)
         {
-            _ = RmlUiNative.SetTextComposition(_renderer, pointer, written, isActive: 1, cursorIndex);
+            _ = RmlUiNative.SetTextComposition(
+                _renderer,
+                pointer,
+                written,
+                isActive: 1,
+                cursorIndex,
+                selectionStart,
+                selectionLength);
         }
     }
 

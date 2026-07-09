@@ -173,7 +173,11 @@ public:
     }
 
     // 更新预编辑字符串；无焦点时返回 0，成功返回 1。
-    int32_t SetComposition(Rml::StringView composition, int32_t cursor_index)
+    int32_t SetComposition(
+        Rml::StringView composition,
+        int32_t cursor_index,
+        int32_t selection_start,
+        int32_t selection_length)
     {
         if (active_context == nullptr)
         {
@@ -195,6 +199,16 @@ public:
         const int clamped_cursor = std::max(0, std::min(cursor_index, length));
         active_context->SetCursorPosition(composition_range_start + clamped_cursor);
         active_context->SetCompositionRange(composition_range_start, composition_range_end);
+
+        if (selection_length > 0 && length > 0)
+        {
+            const int sel_start = std::max(0, std::min(selection_start, length));
+            const int sel_end = std::max(sel_start, std::min(sel_start + selection_length, length));
+            active_context->SetSelectionRange(
+                composition_range_start + sel_start,
+                composition_range_start + sel_end);
+        }
+
         return 1;
     }
 
@@ -1275,7 +1289,9 @@ PE_UI_NATIVE_API int32_t peui_native_set_text_composition(
     const char* text_utf8,
     int32_t text_length,
     int32_t is_active,
-    int32_t cursor_index)
+    int32_t cursor_index,
+    int32_t selection_start,
+    int32_t selection_length)
 {
     if (renderer == nullptr)
     {
@@ -1293,7 +1309,7 @@ PE_UI_NATIVE_API int32_t peui_native_set_text_composition(
         composition = Rml::StringView(text_utf8, text_utf8 + text_length);
     }
 
-    return g_textInputHandler.SetComposition(composition, cursor_index);
+    return g_textInputHandler.SetComposition(composition, cursor_index, selection_start, selection_length);
 }
 
 // 将当前预编辑确认提交为最终字符串；未在 composing 时返回 0，调用方应走 ProcessTextInput。
