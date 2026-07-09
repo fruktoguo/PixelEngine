@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-10",
-  "generatedFromCommit": "9548d549fac5fee8d0bc0de80db08d3c2079c7c7",
+  "generatedFromCommit": "72d90ad29c42f700185e27bf3a21662653131cfd",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -25,6 +25,19 @@
       "reportPath": "docs/evidence-2026-07-10-perf-001-benchmark-baseline.md",
       "sha256": "43b3e97d467f1583139b639f89e52a7d4f37ccd6ac57121f6d5f668ea7977f0c",
       "notes": "当前 commit 的正式 BDN 基线：CA 6、render 2、physics 8、粒子 9、UI 4，共 29 个 benchmark；均有 warmup 与多次 measured iteration，原始 artifacts 只作可再生引用。MinIterationTime/outlier warning 按原始报告保留。"
+    },
+    {
+      "entryId": "arch-001-custom-metric-20260710",
+      "taskIds": ["ARCH-001"],
+      "evidenceState": "complete_local_api_boundary_regression",
+      "commit": "72d90ad29c42f700185e27bf3a21662653131cfd",
+      "runSessionId": "local-20260710-arch001-custom-metric",
+      "runIdentityStatus": "captured",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8c/16t; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "dotnet build PixelEngine.sln -c Release --no-restore --disable-build-servers -m:1; dotnet test PixelEngine.sln -c Release --no-build --no-restore -m:1; rg -n -i \"\\blava\\b|熔岩\" src/PixelEngine.Core src/PixelEngine.Hosting src/PixelEngine.Editor -g '*.cs'",
+      "reportPath": "docs/evidence-2026-07-10-arch-001-custom-metric.md",
+      "sha256": "e87e076db8d39a4e7d6ea911229f26b76e0b392518fa12c67a6f098b595364c3",
+      "notes": "Core/Hosting/Editor 不再有完整 lava/熔岩诊断语义；CustomMetricChannel、HUD/probe 迁移和全量回归已验证。Demo 的玩法 label 仅在 Demo 层通过公开 EngineCounters API 发布。"
     },
     {
       "entryId": "test-001-native-smoke-20260710",
