@@ -99,7 +99,7 @@ internal static class ChunkUpdater
                     _ => throw new InvalidOperationException($"未知 CellType：{materialType}。"),
                 };
 
-                ushort activeMaterial = window.GetMaterial(activeX, activeY);
+                ushort activeMaterial = material;
                 // 位移后的活跃坐标上尝试 von Neumann 反应，再跑材质自定义更新。
                 bool reacted = TryReactVonNeumann(ref window, materials, reactionExecutor, rigidDamageSink, diagnostics, activeX, activeY, activeMaterial, parityBit, ref rng);
                 bool customUpdated = !reacted && TryRunCustomUpdate(ref window, chunks, materials, customUpdateExecutor, activeX, activeY, activeMaterial, parityBit);

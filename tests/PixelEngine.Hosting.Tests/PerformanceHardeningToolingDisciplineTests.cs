@@ -6580,6 +6580,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("Unsafe.Add(ref flagsBase, localOffset)", updater, StringComparison.Ordinal);
         Assert.Contains("ref byte lifetime = ref Unsafe.Add(ref lifetimeBase, localOffset);", updater, StringComparison.Ordinal);
         Assert.Contains("ProcessLifetime(ref window, chunk, lifetimeSink, wx, wy, material, parityBit, ref lifetime);", updater, StringComparison.Ordinal);
+        Assert.Contains("ushort activeMaterial = material;", updater, StringComparison.Ordinal);
+        Assert.DoesNotContain("ushort activeMaterial = window.GetMaterial(activeX, activeY);", updater, StringComparison.Ordinal);
         Assert.Contains("localOffset++", updater, StringComparison.Ordinal);
         Assert.DoesNotContain("chunk.Material[", updater, StringComparison.Ordinal);
         Assert.DoesNotContain("chunk.Flags[", updater, StringComparison.Ordinal);
