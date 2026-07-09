@@ -122,6 +122,24 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证本机正式输出会写出根级 SHA256SUMS，并在 manifest / README 中登记，便于人工验收绑定到已验证产物。
+    /// </summary>
+    [Fact]
+    public void FinalOutputWritesAuditableChecksumManifest()
+    {
+        string root = FindRepositoryRoot();
+        string finalOutputScript = File.ReadAllText(Path.Combine(root, "tools", "update-final-output.ps1"));
+
+        Assert.Contains("function Write-FinalOutputChecksums", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("Get-FileHash -LiteralPath $fileFull -Algorithm SHA256", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("Set-Content -LiteralPath $outputFull -Value $lines -Encoding UTF8", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("checksumFile = 'SHA256SUMS'", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("Write-FinalOutputChecksums $nextRoot (Join-Path $nextRoot 'SHA256SUMS')", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("完整性校验：SHA256SUMS", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("Write-Host \"完整性校验：$(Join-Path $outputRootFull 'SHA256SUMS')\"", finalOutputScript, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证编辑器壳只通过中性 bootstrap 创建唯一窗口，不直接散落创建 RenderWindow。
     /// </summary>
     [Fact]
