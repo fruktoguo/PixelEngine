@@ -68,6 +68,9 @@ public sealed class EditorSelection
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(assetPath);
         AssetPath = assetPath;
+        EntityHandle = null;
+        GameObjectStableId = null;
+        BodyId = null;
     }
 
     /// <summary>
@@ -93,6 +96,7 @@ public sealed class EditorSelection
         }
 
         GameObjectStableId = stableId;
+        AssetPath = null;
         EntityHandle = null;
         BodyId = null;
     }
