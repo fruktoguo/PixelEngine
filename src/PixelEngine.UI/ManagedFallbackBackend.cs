@@ -235,7 +235,9 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
             ? UiImeGeometryLayout.ComputePreeditOverlayGeometry(
                 in _viewport,
                 textLength,
-                normalized.CursorIndex)
+                normalized.CursorIndex,
+                normalized.SelectionStart,
+                normalized.SelectionLength)
             : UiImeGeometry.None;
         UiTextComposition current = CompositionOverlayState;
         if (CompositionOverlayText == overlayText &&
@@ -692,12 +694,17 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     {
         return left.HasCaretRect == right.HasCaretRect &&
             left.HasCandidateAnchor == right.HasCandidateAnchor &&
+            left.HasExcludeRect == right.HasExcludeRect &&
             left.CaretX.Equals(right.CaretX) &&
             left.CaretY.Equals(right.CaretY) &&
             left.CaretWidth.Equals(right.CaretWidth) &&
             left.CaretHeight.Equals(right.CaretHeight) &&
             left.CandidateAnchorX.Equals(right.CandidateAnchorX) &&
-            left.CandidateAnchorY.Equals(right.CandidateAnchorY);
+            left.CandidateAnchorY.Equals(right.CandidateAnchorY) &&
+            left.ExcludeX.Equals(right.ExcludeX) &&
+            left.ExcludeY.Equals(right.ExcludeY) &&
+            left.ExcludeWidth.Equals(right.ExcludeWidth) &&
+            left.ExcludeHeight.Equals(right.ExcludeHeight);
     }
 
     private UiHitResult HitTestDocument(ManagedUiDocument document, float x, float y)

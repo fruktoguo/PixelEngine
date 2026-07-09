@@ -420,7 +420,9 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             ? UiImeGeometryLayout.ComputePreeditOverlayGeometry(
                 in geometryViewport,
                 textLength,
-                normalized.CursorIndex)
+                normalized.CursorIndex,
+                normalized.SelectionStart,
+                normalized.SelectionLength)
             : UiImeGeometry.None;
         UiTextComposition current = CompositionState;
         bool sameState = CompositionEquals(in current, in normalized);
@@ -851,12 +853,17 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
     {
         return left.HasCaretRect == right.HasCaretRect &&
             left.HasCandidateAnchor == right.HasCandidateAnchor &&
+            left.HasExcludeRect == right.HasExcludeRect &&
             left.CaretX.Equals(right.CaretX) &&
             left.CaretY.Equals(right.CaretY) &&
             left.CaretWidth.Equals(right.CaretWidth) &&
             left.CaretHeight.Equals(right.CaretHeight) &&
             left.CandidateAnchorX.Equals(right.CandidateAnchorX) &&
-            left.CandidateAnchorY.Equals(right.CandidateAnchorY);
+            left.CandidateAnchorY.Equals(right.CandidateAnchorY) &&
+            left.ExcludeX.Equals(right.ExcludeX) &&
+            left.ExcludeY.Equals(right.ExcludeY) &&
+            left.ExcludeWidth.Equals(right.ExcludeWidth) &&
+            left.ExcludeHeight.Equals(right.ExcludeHeight);
     }
 
     /// <summary>

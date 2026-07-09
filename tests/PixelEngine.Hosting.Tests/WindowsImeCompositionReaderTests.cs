@@ -288,6 +288,77 @@ public sealed class WindowsImeCompositionReaderTests
     }
 
     /// <summary>
+    /// 验证独立排除矩形写入 CFS_RECT/CFS_EXCLUDE 的 Area，而 CFS_POINT 仍用 caret 插入点。
+    /// </summary>
+    [Fact]
+    public void ApplyImeGeometryUsesSelectionExcludeRectSeparateFromCaretPoint()
+    {
+        FakeImeNative native = new() { Context = new IntPtr(0x456) };
+        WindowsImeCompositionReader reader = new(() => new IntPtr(0x123), native, enableWindowsComposition: true);
+        UiImeGeometry geometry = new(
+            hasCaretRect: true,
+            caretX: 140f,
+            caretY: 200f,
+            caretWidth: 2f,
+            caretHeight: 18f,
+            hasCandidateAnchor: true,
+            candidateAnchorX: 100f,
+            candidateAnchorY: 218f,
+            hasExcludeRect: true,
+            excludeX: 100f,
+            excludeY: 200f,
+            excludeWidth: 40f,
+            excludeHeight: 18f);
+
+        reader.ApplyImeGeometry(in geometry);
+
+        Assert.Equal(1, native.SetCompositionWindowCalls);
+        Assert.Equal(140, native.LastCompositionForm.CurrentPos.X);
+        Assert.Equal(200, native.LastCompositionForm.CurrentPos.Y);
+        Assert.Equal(100, native.LastCompositionForm.Area.Left);
+        Assert.Equal(200, native.LastCompositionForm.Area.Top);
+        Assert.Equal(140, native.LastCompositionForm.Area.Right);
+        Assert.Equal(218, native.LastCompositionForm.Area.Bottom);
+        Assert.Equal(
+            Win32ImeNative.CandidateFormStyleCandidatePos | Win32ImeNative.CandidateFormStyleExclude,
+            native.LastCandidateForm.Style);
+        Assert.Equal(100, native.LastCandidateForm.Area.Left);
+        Assert.Equal(140, native.LastCandidateForm.Area.Right);
+    }
+
+    /// <summary>
+    /// 验证 Transform 同步缩放独立排除矩形。
+    /// </summary>
+    [Fact]
+    public void UiImeGeometryTransformScalesExcludeRect()
+    {
+        UiImeGeometry source = new(
+            hasCaretRect: true,
+            caretX: 10f,
+            caretY: 20f,
+            caretWidth: 2f,
+            caretHeight: 18f,
+            hasCandidateAnchor: true,
+            candidateAnchorX: 10f,
+            candidateAnchorY: 38f,
+            hasExcludeRect: true,
+            excludeX: 4f,
+            excludeY: 20f,
+            excludeWidth: 30f,
+            excludeHeight: 18f);
+
+        UiImeGeometry scaled = source.Transform(100f, 40f, 2f, 2f);
+
+        Assert.True(scaled.HasExcludeRect);
+        Assert.Equal(108f, scaled.ExcludeX, precision: 3);
+        Assert.Equal(80f, scaled.ExcludeY, precision: 3);
+        Assert.Equal(60f, scaled.ExcludeWidth, precision: 3);
+        Assert.Equal(36f, scaled.ExcludeHeight, precision: 3);
+        Assert.Equal(120f, scaled.CaretX, precision: 3);
+        Assert.Equal(80f, scaled.CaretY, precision: 3);
+    }
+
+    /// <summary>
     /// 验证无几何信息、无 HWND 或禁用 Windows 时不调用 IMM32 定位 API。
     /// </summary>
     [Fact]
