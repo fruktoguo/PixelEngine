@@ -146,6 +146,30 @@ function Copy-Directory([string]$Source, [string]$Destination) {
   Get-ChildItem -LiteralPath $Source -Force | Copy-Item -Destination $Destination -Recurse -Force
 }
 
+function Write-FinalOutputChecksums([string]$Root, [string]$OutputPath) {
+  $rootFull = [IO.Path]::GetFullPath($Root)
+  $outputFull = [IO.Path]::GetFullPath($OutputPath)
+  $lines = [Collections.Generic.List[string]]::new()
+  Get-ChildItem -LiteralPath $rootFull -File -Recurse -Force |
+    Sort-Object FullName |
+    ForEach-Object {
+      $fileFull = [IO.Path]::GetFullPath($_.FullName)
+      if ([string]::Equals($fileFull, $outputFull, [StringComparison]::OrdinalIgnoreCase)) {
+        return
+      }
+
+      $relative = [IO.Path]::GetRelativePath($rootFull, $fileFull).Replace('\', '/')
+      $hash = (Get-FileHash -LiteralPath $fileFull -Algorithm SHA256).Hash.ToLowerInvariant()
+      $lines.Add("$hash  $relative")
+    }
+
+  if ($lines.Count -eq 0) {
+    throw "正式输出 checksum 清单为空：$rootFull"
+  }
+
+  Set-Content -LiteralPath $outputFull -Value $lines -Encoding UTF8
+}
+
 function Replace-FinalOutput([string]$SourceRoot, [string]$DestinationRoot) {
   Assert-UnderRepo $SourceRoot '待发布目录'
   Assert-UnderRepo $DestinationRoot '正式输出目录'
@@ -292,6 +316,7 @@ $manifest = [ordered]@{
   editorExecutable = '编辑器/PixelEngine.Editor.Shell.exe'
   demoExecutable = '游戏Demo/PixelEngine Demo.exe'
   updatePolicy = 'staged-build-and-verify-before-replace'
+  checksumFile = 'SHA256SUMS'
   validation = [ordered]@{
     editorDefaultWorkbenchProbe = [ordered]@{
       completed = $true
@@ -323,7 +348,10 @@ PixelEngine 正式输出
 - 编辑器：编辑器\PixelEngine.Editor.Shell.exe
 - 游戏 Demo：游戏Demo\PixelEngine Demo.exe
 - 验证记录：_验证记录\manifest.json
+- 完整性校验：SHA256SUMS
 "@ | Set-Content -LiteralPath (Join-Path $nextRoot 'README.txt') -Encoding UTF8
+
+Write-FinalOutputChecksums $nextRoot (Join-Path $nextRoot 'SHA256SUMS')
 
 Replace-FinalOutput $nextRoot $outputRootFull
 
@@ -331,3 +359,4 @@ Write-Host "正式输出已更新：$outputRootFull"
 Write-Host "编辑器入口：$(Join-Path $outputRootFull '编辑器/PixelEngine.Editor.Shell.exe')"
 Write-Host "Demo 入口：$(Join-Path $outputRootFull '游戏Demo/PixelEngine Demo.exe')"
 Write-Host "验证 manifest：$(Join-Path $outputRootFull '_验证记录/manifest.json')"
+Write-Host "完整性校验：$(Join-Path $outputRootFull 'SHA256SUMS')"
