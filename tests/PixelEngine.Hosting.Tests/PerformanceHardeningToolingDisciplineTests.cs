@@ -5208,7 +5208,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("`event=push` 且 `ref=refs/tags/v<semver>`", readme, StringComparison.Ordinal);
         Assert.Contains("`release_tag=true` 且 `tag` 与 ref 一致", readme, StringComparison.Ordinal);
         Assert.Contains("`uploaded_asset_count=packageCount+1`", readme, StringComparison.Ordinal);
-        Assert.Contains("每个 package asset hash、唯一 `SHA256SUMS` hash 与每个上传资产的 `browser_download_url/<asset>`", readme, StringComparison.Ordinal);
+        Assert.Contains("每个 package asset hash、唯一 `SHA256SUMS` hash 与每个上传资产的 `browser_download_url/<asset>`，下载 URL 必须绑定同一 release tag", readme, StringComparison.Ordinal);
         Assert.Contains("必须逐 active RID × channel 给出 `result=match` 明细行", readme, StringComparison.Ordinal);
         Assert.Contains("`require_all=true`", readme, StringComparison.Ordinal);
         Assert.Contains("`aot_dynamic_box2d_rejected=true`", readme, StringComparison.Ordinal);
@@ -6647,9 +6647,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
             JsonObject githubRelease = rootNode["githubRelease"]!.AsObject();
             string upload = (string)githubRelease["uploadReport"]!;
-            string[] lines = File.ReadAllLines(upload)
-                .Where(static line => !line.Contains("browser_download_url/", StringComparison.Ordinal))
-                .ToArray();
+            IEnumerable<string> lines = File.ReadAllLines(upload)
+                .Where(static line => !line.Contains("browser_download_url/", StringComparison.Ordinal));
             File.WriteAllLines(upload, lines);
             githubRelease["uploadSha256"] = GetSha256(upload);
             File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
@@ -6668,6 +6667,54 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Contains("blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
             Assert.Contains("github_release_upload 缺少 browser_download_url：PixelEngine-Demo-0.1.0-win-x64-r2r.zip", report, StringComparison.Ordinal);
             Assert.Contains("github_release_upload 缺少 browser_download_url：SHA256SUMS", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 GitHub Release 下载 URL 必须绑定到 workflow tag，不能指向其它 tag 的资产。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsDownloadUrlsFromDifferentTag()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-upload-download-tag-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject githubRelease = rootNode["githubRelease"]!.AsObject();
+            string upload = (string)githubRelease["uploadReport"]!;
+            string text = File.ReadAllText(upload).Replace(
+                "/releases/download/v0.1.0/",
+                "/releases/download/v0.0.9/",
+                StringComparison.Ordinal);
+            File.WriteAllText(upload, text);
+            githubRelease["uploadSha256"] = GetSha256(upload);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "wrong-download-tag-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("github_release_upload browser_download_url 必须指向 GitHub Release 下载资产：PixelEngine-Demo-0.1.0-win-x64-r2r.zip", report, StringComparison.Ordinal);
+            Assert.Contains("/releases/download/v0.0.9/", report, StringComparison.Ordinal);
             Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
         }
         finally
