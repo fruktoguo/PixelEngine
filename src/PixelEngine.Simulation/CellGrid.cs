@@ -56,7 +56,35 @@ public sealed class CellGrid(
     /// </summary>
     public ushort GetMaterial(int wx, int wy)
     {
-        return MaterialAt(wx, wy);
+        Chunk chunk = RequireChunk(wx, wy);
+        return chunk.Material[CellAddressing.LocalIndex(wx, wy)];
+    }
+
+    /// <summary>
+    /// 读取世界坐标处的 cell flags。目标 chunk 不驻留时抛出异常。
+    /// </summary>
+    public byte GetFlags(int wx, int wy)
+    {
+        Chunk chunk = RequireChunk(wx, wy);
+        return chunk.Flags[CellAddressing.LocalIndex(wx, wy)];
+    }
+
+    /// <summary>
+    /// 读取世界坐标处的 lifetime。目标 chunk 不驻留时抛出异常。
+    /// </summary>
+    public byte GetLifetime(int wx, int wy)
+    {
+        Chunk chunk = RequireChunk(wx, wy);
+        return chunk.Lifetime[CellAddressing.LocalIndex(wx, wy)];
+    }
+
+    /// <summary>
+    /// 读取世界坐标处的累计结构破坏度。目标 chunk 不驻留时抛出异常。
+    /// </summary>
+    public byte GetDamage(int wx, int wy)
+    {
+        Chunk chunk = RequireChunk(wx, wy);
+        return chunk.Damage[CellAddressing.LocalIndex(wx, wy)];
     }
 
     /// <summary>
@@ -72,18 +100,20 @@ public sealed class CellGrid(
     /// </summary>
     public void SetMaterial(int wx, int wy, ushort material)
     {
-        ref ushort target = ref MaterialAt(wx, wy);
-        ref byte flags = ref FlagsAt(wx, wy);
+        Chunk chunk = RequireChunk(wx, wy);
+        int local = CellAddressing.LocalIndex(wx, wy);
+        ref ushort target = ref chunk.MaterialBuffer[local];
+        ref byte flags = ref chunk.FlagsBuffer[local];
         // 覆盖 RigidOwned cell 前先通知物理层，避免 stamp 与材质写入不一致。
         bool wasRigidOwned = NotifyRigidDamageIfNeeded(wx, wy, flags, target);
         target = material;
         if (wasRigidOwned)
         {
             flags = 0;
-            LifetimeAt(wx, wy) = 0;
+            chunk.LifetimeBuffer[local] = 0;
         }
 
-        DamageAt(wx, wy) = 0;
+        chunk.DamageBuffer[local] = 0;
         MarkDirty(wx, wy);
     }
 
@@ -98,53 +128,56 @@ public sealed class CellGrid(
         }
 
         int local = CellAddressing.LocalIndex(wx, wy);
-        bool wasRigidOwned = NotifyRigidDamageIfNeeded(wx, wy, chunk.Flags[local], chunk.Material[local]);
-        chunk.Material[local] = material;
+        bool wasRigidOwned = NotifyRigidDamageIfNeeded(wx, wy, chunk.FlagsBuffer[local], chunk.MaterialBuffer[local]);
+        chunk.MaterialBuffer[local] = material;
         if (wasRigidOwned)
         {
-            chunk.Flags[local] = 0;
-            chunk.Lifetime[local] = 0;
+            chunk.FlagsBuffer[local] = 0;
+            chunk.LifetimeBuffer[local] = 0;
         }
 
-        chunk.Damage[local] = 0;
+        chunk.DamageBuffer[local] = 0;
         MarkDirty(wx, wy);
         return true;
     }
 
     /// <summary>
-    /// 返回世界坐标处材质 id 的可写引用。
+    /// 返回世界坐标处材质 id 的内部可写引用。
     /// </summary>
-    public ref ushort MaterialAt(int wx, int wy)
+    /// <remarks>
+    /// 仅供 Simulation 热路径与受信任测试夹具使用；跨程序集生产代码必须使用本类的受控写 API。
+    /// </remarks>
+    internal ref ushort MaterialAt(int wx, int wy)
     {
         Chunk chunk = RequireChunk(wx, wy);
-        return ref chunk.Material[CellAddressing.LocalIndex(wx, wy)];
+        return ref chunk.MaterialBuffer[CellAddressing.LocalIndex(wx, wy)];
     }
 
     /// <summary>
-    /// 返回世界坐标处 flag 的可写引用。
+    /// 返回世界坐标处 flag 的内部可写引用。
     /// </summary>
-    public ref byte FlagsAt(int wx, int wy)
+    internal ref byte FlagsAt(int wx, int wy)
     {
         Chunk chunk = RequireChunk(wx, wy);
-        return ref chunk.Flags[CellAddressing.LocalIndex(wx, wy)];
+        return ref chunk.FlagsBuffer[CellAddressing.LocalIndex(wx, wy)];
     }
 
     /// <summary>
-    /// 返回世界坐标处 lifetime 的可写引用。
+    /// 返回世界坐标处 lifetime 的内部可写引用。
     /// </summary>
-    public ref byte LifetimeAt(int wx, int wy)
+    internal ref byte LifetimeAt(int wx, int wy)
     {
         Chunk chunk = RequireChunk(wx, wy);
-        return ref chunk.Lifetime[CellAddressing.LocalIndex(wx, wy)];
+        return ref chunk.LifetimeBuffer[CellAddressing.LocalIndex(wx, wy)];
     }
 
     /// <summary>
-    /// 返回世界坐标处累计结构破坏度的可写引用。
+    /// 返回世界坐标处累计结构破坏度的内部可写引用。
     /// </summary>
-    public ref byte DamageAt(int wx, int wy)
+    internal ref byte DamageAt(int wx, int wy)
     {
         Chunk chunk = RequireChunk(wx, wy);
-        return ref chunk.Damage[CellAddressing.LocalIndex(wx, wy)];
+        return ref chunk.DamageBuffer[CellAddressing.LocalIndex(wx, wy)];
     }
 
     /// <summary>
@@ -157,21 +190,48 @@ public sealed class CellGrid(
     }
 
     /// <summary>
+    /// 清空一个非刚体 cell，并标记 dirty。刚体 cell 会先通知 damage sink 并保留原状。
+    /// </summary>
+    public bool TryClearCell(int wx, int wy)
+    {
+        if (!_chunks.TryGetChunk(CellAddressing.WorldToChunk(wx, wy), out Chunk chunk))
+        {
+            return false;
+        }
+
+        int local = CellAddressing.LocalIndex(wx, wy);
+        byte flags = chunk.FlagsBuffer[local];
+        ushort material = chunk.MaterialBuffer[local];
+        if (CellFlags.Has(flags, CellFlags.RigidOwned))
+        {
+            _ = NotifyRigidDamageIfNeeded(wx, wy, flags, material);
+            return false;
+        }
+
+        chunk.MaterialBuffer[local] = 0;
+        chunk.FlagsBuffer[local] = 0;
+        chunk.LifetimeBuffer[local] = 0;
+        chunk.DamageBuffer[local] = 0;
+        MarkDirty(wx, wy);
+        return true;
+    }
+
+    /// <summary>
     /// 相位 8：仅当目标仍是刚体占用 cell 时清空它，不触发刚体 damage 回调。
     /// </summary>
     public bool TryClearRigidOwnedCell(int wx, int wy)
     {
         Chunk chunk = RequireChunk(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
-        if (!CellFlags.Has(chunk.Flags[local], CellFlags.RigidOwned))
+        if (!CellFlags.Has(chunk.FlagsBuffer[local], CellFlags.RigidOwned))
         {
             return false;
         }
 
-        chunk.Material[local] = 0;
-        chunk.Flags[local] = 0;
-        chunk.Lifetime[local] = 0;
-        chunk.Damage[local] = 0;
+        chunk.MaterialBuffer[local] = 0;
+        chunk.FlagsBuffer[local] = 0;
+        chunk.LifetimeBuffer[local] = 0;
+        chunk.DamageBuffer[local] = 0;
         MarkRigidDirty(wx, wy);
         return true;
     }
@@ -188,10 +248,10 @@ public sealed class CellGrid(
 
         Chunk chunk = RequireChunk(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
-        chunk.Material[local] = material;
-        chunk.Flags[local] = CellFlags.RigidOwned;
-        chunk.Lifetime[local] = 0;
-        chunk.Damage[local] = 0;
+        chunk.MaterialBuffer[local] = material;
+        chunk.FlagsBuffer[local] = CellFlags.RigidOwned;
+        chunk.LifetimeBuffer[local] = 0;
+        chunk.DamageBuffer[local] = 0;
         MarkRigidDirty(wx, wy);
     }
 
@@ -214,10 +274,10 @@ public sealed class CellGrid(
         }
 
         int local = CellAddressing.LocalIndex(wx, wy);
-        chunk.Material[local] = material;
-        chunk.Flags[local] = CellFlags.RigidOwned;
-        chunk.Lifetime[local] = 0;
-        chunk.Damage[local] = 0;
+        chunk.MaterialBuffer[local] = material;
+        chunk.FlagsBuffer[local] = CellFlags.RigidOwned;
+        chunk.LifetimeBuffer[local] = 0;
+        chunk.DamageBuffer[local] = 0;
         return true;
     }
 

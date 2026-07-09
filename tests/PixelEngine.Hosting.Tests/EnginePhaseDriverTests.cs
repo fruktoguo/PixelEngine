@@ -106,7 +106,7 @@ public sealed class EnginePhaseDriverTests
         // Arrange：准备输入与初始状态
         MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
         Chunk chunk = new(new ChunkCoord(0, 0));
-        chunk.Material[0] = 1;
+        chunk.MaterialBuffer[0] = 1;
         TestChunkSource chunks = new(chunk);
         ParticleSystem particles = new(capacity: 16);
         // Assert：验证预期结果
@@ -261,7 +261,7 @@ public sealed class EnginePhaseDriverTests
         // Arrange：搭建测试场景与依赖
         MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
         Chunk chunk = new(new ChunkCoord(0, 0));
-        chunk.Material[CellAddressing.LocalIndexFromLocal(0, 0)] = 1;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(0, 0)] = 1;
         TestChunkSource chunks = new(chunk);
         ParticleSystem particles = new(capacity: 16);
         TemperatureField temperature = new();
@@ -310,10 +310,10 @@ public sealed class EnginePhaseDriverTests
         // Arrange：搭建测试场景与依赖
         MaterialTable materials = Materials(("empty", CellType.Empty), ("sand", CellType.Powder));
         Chunk active = new(new ChunkCoord(0, 0));
-        active.Material[CellAddressing.LocalIndexFromLocal(1, 1)] = 1;
+        active.MaterialBuffer[CellAddressing.LocalIndexFromLocal(1, 1)] = 1;
         active.SetCurrentDirty(new DirtyRect(1, 1, 1, 1));
         Chunk sleeping = new(new ChunkCoord(2, 0));
-        sleeping.Material[CellAddressing.LocalIndexFromLocal(1, 1)] = 1;
+        sleeping.MaterialBuffer[CellAddressing.LocalIndexFromLocal(1, 1)] = 1;
         TestChunkSource chunks = new(active, sleeping);
         MaterialPropsTable props = new(materials.Hot);
         CellGrid grid = new(chunks, props);

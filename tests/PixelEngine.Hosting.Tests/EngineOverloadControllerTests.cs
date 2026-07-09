@@ -281,7 +281,7 @@ public sealed class EngineOverloadControllerTests
             int count = kernel.CopyCaIterationSnapshots(iterations);
             Assert.True(ContainsIteration(iterations, count, near.Coord));
             Assert.False(ContainsIteration(iterations, count, far.Coord));
-            Assert.Equal(1, far.Material[CellAddressing.LocalIndexFromLocal(10, 0)]);
+            Assert.Equal(1, far.MaterialBuffer[CellAddressing.LocalIndexFromLocal(10, 0)]);
             Assert.Equal(DirtyRect.Full, far.CurrentDirty);
         }
         finally
@@ -577,7 +577,7 @@ public sealed class EngineOverloadControllerTests
 
     private static void Set(Chunk chunk, int lx, int ly, ushort material)
     {
-        chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
     }
 
     private static bool ContainsIteration(ReadOnlySpan<CaIterationSnapshot> iterations, int count, ChunkCoord coord)

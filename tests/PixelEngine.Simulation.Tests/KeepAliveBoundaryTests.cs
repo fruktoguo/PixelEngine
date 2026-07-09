@@ -125,12 +125,12 @@ public sealed class KeepAliveBoundaryTests
 
     private static void Set(Chunk chunk, int lx, int ly, ushort material)
     {
-        chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
     }
 
     private static ushort Get(Chunk chunk, int lx, int ly)
     {
-        return chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)];
+        return chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)];
     }
 
     private static void AssertCellsEmpty(Chunk chunk, int lx, int minY, int maxY)
@@ -143,9 +143,9 @@ public sealed class KeepAliveBoundaryTests
 
     private static void AssertChunkEmpty(Chunk chunk)
     {
-        for (int i = 0; i < chunk.Material.Length; i++)
+        for (int i = 0; i < chunk.MaterialBuffer.Length; i++)
         {
-            Assert.Equal(0, chunk.Material[i]);
+            Assert.Equal(0, chunk.MaterialBuffer[i]);
         }
     }
 

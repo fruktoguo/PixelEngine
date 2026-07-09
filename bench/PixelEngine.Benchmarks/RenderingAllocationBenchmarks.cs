@@ -61,7 +61,7 @@ public class RenderingAllocationBenchmarks
         {
             for (int x = 0; x < 64; x++)
             {
-                _chunk.Material[CellAddressing.LocalIndexFromLocal(x, y)] = Sand;
+                _chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(x, y)] = Sand;
             }
         }
 

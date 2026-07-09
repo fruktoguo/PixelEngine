@@ -110,7 +110,7 @@ public sealed class ParticleHandshakeTests
         // Arrange：准备输入与初始状态
         TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         Set(center, 10, 10, Solid);
-        center.Flags[CellAddressing.LocalIndexFromLocal(10, 10)] = CellFlags.RigidOwned;
+        center.FlagsBuffer[CellAddressing.LocalIndexFromLocal(10, 10)] = CellFlags.RigidOwned;
         CountingRigidDamageSink damageSink = new();
         MaterialPropsTable materials = CreateMaterials();
         CellGrid grid = new(source, materials, damageSink);
@@ -370,12 +370,12 @@ public sealed class ParticleHandshakeTests
 
     private static void Set(Chunk chunk, int lx, int ly, ushort material)
     {
-        chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
     }
 
     private static ushort Get(Chunk chunk, int lx, int ly)
     {
-        return chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)];
+        return chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)];
     }
 
     private sealed class TestChunkSource : IChunkSource

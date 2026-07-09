@@ -1022,8 +1022,8 @@ public sealed class SceneAndHeadlessTests
             TemperatureField savedTemperature = new();
             ChunkCoord coord = new(0, 0);
             Chunk chunk = new(coord);
-            chunk.Material[0] = 1;
-            chunk.Lifetime[0] = 9;
+            chunk.MaterialBuffer[0] = 1;
+            chunk.LifetimeBuffer[0] = 9;
             savedChunks.Add(chunk);
             savedTemperature.AddHeat(0, 0, 24.5f);
             FakeWorldStateBridge savedState = new(
@@ -1174,7 +1174,7 @@ public sealed class SceneAndHeadlessTests
             MaterialTable materials = Materials(("empty", CellType.Empty), ("sand", CellType.Powder));
             ResidentChunkMap savedChunks = new();
             Chunk chunk = new(new ChunkCoord(0, 0));
-            chunk.Material[0] = 1;
+            chunk.MaterialBuffer[0] = 1;
             savedChunks.Add(chunk);
             new WorldSaveService().SaveAll(
                 new WorldSaveContext(

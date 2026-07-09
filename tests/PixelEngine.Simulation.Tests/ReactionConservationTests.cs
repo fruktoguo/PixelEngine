@@ -217,7 +217,7 @@ public sealed class ReactionConservationTests
 
     private static bool ContainsNonEmptyCell(Chunk chunk)
     {
-        foreach (ushort material in chunk.Material)
+        foreach (ushort material in chunk.MaterialBuffer)
         {
             if (material != Empty)
             {
@@ -233,7 +233,7 @@ public sealed class ReactionConservationTests
         int[] counts = new int[MaterialCount];
         foreach (Chunk chunk in source.ResidentChunks)
         {
-            foreach (ushort material in chunk.Material)
+            foreach (ushort material in chunk.MaterialBuffer)
             {
                 if (material < counts.Length)
                 {
@@ -256,22 +256,22 @@ public sealed class ReactionConservationTests
     private static void ClearCell(Chunk chunk, int lx, int ly)
     {
         int local = CellAddressing.LocalIndexFromLocal(lx, ly);
-        chunk.Material[local] = Empty;
-        chunk.Flags[local] = 0;
-        chunk.Lifetime[local] = 0;
+        chunk.MaterialBuffer[local] = Empty;
+        chunk.FlagsBuffer[local] = 0;
+        chunk.LifetimeBuffer[local] = 0;
     }
 
     private static void Set(Chunk chunk, int lx, int ly, ushort material)
     {
         int local = CellAddressing.LocalIndexFromLocal(lx, ly);
-        chunk.Material[local] = material;
-        chunk.Flags[local] = 0;
-        chunk.Lifetime[local] = 0;
+        chunk.MaterialBuffer[local] = material;
+        chunk.FlagsBuffer[local] = 0;
+        chunk.LifetimeBuffer[local] = 0;
     }
 
     private static ushort Get(Chunk chunk, int lx, int ly)
     {
-        return chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)];
+        return chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)];
     }
 
     private readonly record struct ReactionSetup(MaterialTable Materials, ReactionEngine Engine);

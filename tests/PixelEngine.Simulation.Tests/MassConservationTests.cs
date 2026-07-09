@@ -109,7 +109,7 @@ public sealed class MassConservationTests
         int[] counts = new int[MaterialCount];
         foreach (Chunk chunk in source.ResidentChunks)
         {
-            foreach (ushort material in chunk.Material)
+            foreach (ushort material in chunk.MaterialBuffer)
             {
                 if (material < counts.Length)
                 {
@@ -148,7 +148,7 @@ public sealed class MassConservationTests
 
     private static void Set(Chunk chunk, int lx, int ly, ushort material)
     {
-        chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
     }
 
     private sealed class TestChunkSource : IChunkSource

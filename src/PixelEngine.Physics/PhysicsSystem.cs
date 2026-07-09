@@ -861,7 +861,7 @@ public sealed class PhysicsSystem : IDisposable
                 int wx = worldX + lx;
                 int wy = worldY + ly;
                 ushort material = Grid.GetMaterial(wx, wy);
-                byte flags = Grid.FlagsAt(wx, wy);
+                byte flags = Grid.GetFlags(wx, wy);
                 if (material == 0 || CellFlags.Has(flags, CellFlags.RigidOwned))
                 {
                     continue;
@@ -890,11 +890,10 @@ public sealed class PhysicsSystem : IDisposable
 
                 int wx = worldX + lx;
                 int wy = worldY + ly;
-                Grid.MaterialAt(wx, wy) = 0;
-                Grid.FlagsAt(wx, wy) = 0;
-                Grid.LifetimeAt(wx, wy) = 0;
-                Grid.DamageAt(wx, wy) = 0;
-                Grid.MarkDirty(wx, wy);
+                if (!Grid.TryClearCell(wx, wy))
+                {
+                    throw new InvalidOperationException($"物理源 cell 无法按非刚体语义清除：({wx},{wy})。");
+                }
             }
         }
     }

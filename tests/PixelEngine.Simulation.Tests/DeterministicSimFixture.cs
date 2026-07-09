@@ -73,8 +73,8 @@ internal sealed class DeterministicSimFixture
                 for (int lx = 0; lx < EngineConstants.ChunkSize; lx++)
                 {
                     int local = CellAddressing.LocalIndexFromLocal(lx, ly);
-                    ushort material = chunk.Material[local];
-                    byte persistentFlags = (byte)(chunk.Flags[local] & CellFlags.Burning);
+                    ushort material = chunk.MaterialBuffer[local];
+                    byte persistentFlags = (byte)(chunk.FlagsBuffer[local] & CellFlags.Burning);
                     if (material == Empty && persistentFlags == 0)
                     {
                         continue;
@@ -142,8 +142,8 @@ internal sealed class DeterministicSimFixture
     public void Set(Chunk chunk, int lx, int ly, ushort material, byte flags = 0)
     {
         int local = CellAddressing.LocalIndexFromLocal(lx, ly);
-        chunk.Material[local] = material;
-        chunk.Flags[local] = flags;
+        chunk.MaterialBuffer[local] = material;
+        chunk.FlagsBuffer[local] = flags;
     }
 
     private static MaterialDef Def(ushort id, string name, CellType type, byte density, byte dispersion = 0)

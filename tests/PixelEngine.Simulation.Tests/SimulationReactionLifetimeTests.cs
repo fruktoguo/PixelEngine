@@ -149,22 +149,22 @@ public sealed class SimulationReactionLifetimeTests
 
     private static void Set(Chunk chunk, int lx, int ly, ushort material)
     {
-        chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
     }
 
     private static void SetLifetime(Chunk chunk, int lx, int ly, byte lifetime)
     {
-        chunk.Lifetime[CellAddressing.LocalIndexFromLocal(lx, ly)] = lifetime;
+        chunk.LifetimeBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] = lifetime;
     }
 
     private static byte GetLifetime(Chunk chunk, int lx, int ly)
     {
-        return chunk.Lifetime[CellAddressing.LocalIndexFromLocal(lx, ly)];
+        return chunk.LifetimeBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)];
     }
 
     private static ushort Get(Chunk chunk, int lx, int ly)
     {
-        return chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)];
+        return chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)];
     }
 
     private sealed class CountingReactionExecutor(bool returnValue) : IReactionExecutor

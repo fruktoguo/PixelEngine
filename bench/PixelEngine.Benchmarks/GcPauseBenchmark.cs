@@ -96,7 +96,7 @@ public class GcPauseBenchmark
         }
 
         Chunk center = _source.GetRequired(new ChunkCoord(0, 0));
-        center.Material[CellAddressing.LocalIndexFromLocal(10, 10)] = Sand;
+        center.MaterialBuffer[CellAddressing.LocalIndexFromLocal(10, 10)] = Sand;
         center.SetCurrentDirty(new DirtyRect(10, 10, 10, 10));
     }
 

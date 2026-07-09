@@ -21,9 +21,9 @@ public sealed class RigidOwnedDamageRoutingTests
         // Arrange：准备输入与初始状态
         TestChunkSource source = TestChunkSource.CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         int local = CellAddressing.LocalIndexFromLocal(10, 10);
-        center.Material[local] = Stone;
-        center.Flags[local] = CellFlags.RigidOwned;
-        center.Damage[local] = 77;
+        center.MaterialBuffer[local] = Stone;
+        center.FlagsBuffer[local] = CellFlags.RigidOwned;
+        center.DamageBuffer[local] = 77;
         RigidDamageQueue damageQueue = new();
         SimulationKernel kernel = new(source, CreateMaterials(), rigidDamageSink: damageQueue);
 
@@ -31,9 +31,9 @@ public sealed class RigidOwnedDamageRoutingTests
 
         // Assert：验证预期结果
         Assert.Equal(0, destroyed);
-        Assert.Equal(Stone, center.Material[local]);
-        Assert.True(CellFlags.Has(center.Flags[local], CellFlags.RigidOwned));
-        Assert.Equal(0, center.Damage[local]);
+        Assert.Equal(Stone, center.MaterialBuffer[local]);
+        Assert.True(CellFlags.Has(center.FlagsBuffer[local], CellFlags.RigidOwned));
+        Assert.Equal(0, center.DamageBuffer[local]);
         Span<RigidDamageEvent> drained = stackalloc RigidDamageEvent[1];
         Assert.Equal(1, damageQueue.DrainTo(drained));
         Assert.Equal(new RigidDamageEvent(10, 10, Stone), drained[0]);
@@ -49,9 +49,9 @@ public sealed class RigidOwnedDamageRoutingTests
         TestChunkSource source = TestChunkSource.CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
         int normalLocal = CellAddressing.LocalIndexFromLocal(8, 10);
         int rigidLocal = CellAddressing.LocalIndexFromLocal(9, 10);
-        center.Material[normalLocal] = Stone;
-        center.Material[rigidLocal] = Stone;
-        center.Flags[rigidLocal] = CellFlags.RigidOwned;
+        center.MaterialBuffer[normalLocal] = Stone;
+        center.MaterialBuffer[rigidLocal] = Stone;
+        center.FlagsBuffer[rigidLocal] = CellFlags.RigidOwned;
         RigidDamageQueue damageQueue = new();
         SimulationKernel kernel = new(source, CreateMaterials(), rigidDamageSink: damageQueue);
 
@@ -59,10 +59,10 @@ public sealed class RigidOwnedDamageRoutingTests
 
         // Assert：验证预期结果
         Assert.Equal(1, destroyed);
-        Assert.Equal(Empty, center.Material[normalLocal]);
-        Assert.Equal(Stone, center.Material[rigidLocal]);
-        Assert.True(CellFlags.Has(center.Flags[rigidLocal], CellFlags.RigidOwned));
-        Assert.Equal(0, center.Damage[rigidLocal]);
+        Assert.Equal(Empty, center.MaterialBuffer[normalLocal]);
+        Assert.Equal(Stone, center.MaterialBuffer[rigidLocal]);
+        Assert.True(CellFlags.Has(center.FlagsBuffer[rigidLocal], CellFlags.RigidOwned));
+        Assert.Equal(0, center.DamageBuffer[rigidLocal]);
         Span<RigidDamageEvent> drained = stackalloc RigidDamageEvent[1];
         Assert.Equal(1, damageQueue.DrainTo(drained));
         Assert.Equal(new RigidDamageEvent(9, 10, Stone), drained[0]);

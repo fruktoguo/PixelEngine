@@ -119,7 +119,7 @@ public sealed class MultithreadOracleTests
         int[] counts = new int[MaterialCount];
         foreach (Chunk chunk in source.ResidentChunks)
         {
-            foreach (ushort material in chunk.Material)
+            foreach (ushort material in chunk.MaterialBuffer)
             {
                 if (material < counts.Length)
                 {
@@ -173,7 +173,7 @@ public sealed class MultithreadOracleTests
             {
                 for (int lx = 0; lx < EngineConstants.ChunkSize; lx++)
                 {
-                    if (chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] == material)
+                    if (chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] == material)
                     {
                         int profileIndex = baseX + lx - minX;
                         heights[profileIndex] = Math.Max(heights[profileIndex], baseY + ly);
@@ -194,7 +194,7 @@ public sealed class MultithreadOracleTests
             {
                 for (int lx = 0; lx < EngineConstants.ChunkSize; lx++)
                 {
-                    if (chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] != material)
+                    if (chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] != material)
                     {
                         continue;
                     }
@@ -224,7 +224,7 @@ public sealed class MultithreadOracleTests
 
     private static void CountAt(Chunk chunk, int lx, int ly, int[] counts)
     {
-        ushort material = chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)];
+        ushort material = chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)];
         if (material < counts.Length)
         {
             counts[material]++;
@@ -258,7 +258,7 @@ public sealed class MultithreadOracleTests
 
     private static void Set(Chunk chunk, int lx, int ly, ushort material)
     {
-        chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
     }
 
     private sealed class TestChunkSource : IChunkSource

@@ -112,13 +112,13 @@ public sealed class SimulationKernel(
         {
             for (int i = 0; i < run; i++)
             {
-                NotifyRigidDamageIfNeeded(worldX + i, worldY, chunk.Flags[localStart + i], chunk.Material[localStart + i]);
+                NotifyRigidDamageIfNeeded(worldX + i, worldY, chunk.FlagsBuffer[localStart + i], chunk.MaterialBuffer[localStart + i]);
             }
 
-            chunk.Material.AsSpan(localStart, run).Fill(material);
-            chunk.Flags.AsSpan(localStart, run).Fill(flags);
-            chunk.Lifetime.AsSpan(localStart, run).Fill(lifetime);
-            chunk.Damage.AsSpan(localStart, run).Clear();
+            chunk.MaterialBuffer.AsSpan(localStart, run).Fill(material);
+            chunk.FlagsBuffer.AsSpan(localStart, run).Fill(flags);
+            chunk.LifetimeBuffer.AsSpan(localStart, run).Fill(lifetime);
+            chunk.DamageBuffer.AsSpan(localStart, run).Clear();
             writes += run;
         });
 
@@ -133,16 +133,16 @@ public sealed class SimulationKernel(
     {
         Chunk chunk = RequireChunk(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
-        if (chunk.Material[local] == 0 && chunk.Flags[local] == 0 && chunk.Lifetime[local] == 0)
+        if (chunk.MaterialBuffer[local] == 0 && chunk.FlagsBuffer[local] == 0 && chunk.LifetimeBuffer[local] == 0)
         {
             return;
         }
 
-        NotifyRigidDamageIfNeeded(wx, wy, chunk.Flags[local], chunk.Material[local]);
-        chunk.Material[local] = 0;
-        chunk.Flags[local] = 0;
-        chunk.Lifetime[local] = 0;
-        chunk.Damage[local] = 0;
+        NotifyRigidDamageIfNeeded(wx, wy, chunk.FlagsBuffer[local], chunk.MaterialBuffer[local]);
+        chunk.MaterialBuffer[local] = 0;
+        chunk.FlagsBuffer[local] = 0;
+        chunk.LifetimeBuffer[local] = 0;
+        chunk.DamageBuffer[local] = 0;
         MarkDirty(wx, wy);
     }
 
@@ -163,8 +163,8 @@ public sealed class SimulationKernel(
             for (int i = 0; i < run; i++)
             {
                 int local = localStart + i;
-                rowChanged |= chunk.Material[local] != 0 || chunk.Flags[local] != 0 || chunk.Lifetime[local] != 0 || chunk.Damage[local] != 0;
-                NotifyRigidDamageIfNeeded(worldX + i, worldY, chunk.Flags[local], chunk.Material[local]);
+                rowChanged |= chunk.MaterialBuffer[local] != 0 || chunk.FlagsBuffer[local] != 0 || chunk.LifetimeBuffer[local] != 0 || chunk.DamageBuffer[local] != 0;
+                NotifyRigidDamageIfNeeded(worldX + i, worldY, chunk.FlagsBuffer[local], chunk.MaterialBuffer[local]);
             }
 
             if (!rowChanged)
@@ -172,10 +172,10 @@ public sealed class SimulationKernel(
                 return;
             }
 
-            chunk.Material.AsSpan(localStart, run).Clear();
-            chunk.Flags.AsSpan(localStart, run).Clear();
-            chunk.Lifetime.AsSpan(localStart, run).Clear();
-            chunk.Damage.AsSpan(localStart, run).Clear();
+            chunk.MaterialBuffer.AsSpan(localStart, run).Clear();
+            chunk.FlagsBuffer.AsSpan(localStart, run).Clear();
+            chunk.LifetimeBuffer.AsSpan(localStart, run).Clear();
+            chunk.DamageBuffer.AsSpan(localStart, run).Clear();
             writes += run;
         });
 
@@ -244,16 +244,16 @@ public sealed class SimulationKernel(
     {
         Chunk chunk = RequireChunk(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
-        ushort material = chunk.Material[local];
-        flags = chunk.Flags[local];
-        lifetime = chunk.Lifetime[local];
+        ushort material = chunk.MaterialBuffer[local];
+        flags = chunk.FlagsBuffer[local];
+        lifetime = chunk.LifetimeBuffer[local];
         if (material != 0 || flags != 0 || lifetime != 0)
         {
             NotifyRigidDamageIfNeeded(wx, wy, flags, material);
-            chunk.Material[local] = 0;
-            chunk.Flags[local] = 0;
-            chunk.Lifetime[local] = 0;
-            chunk.Damage[local] = 0;
+            chunk.MaterialBuffer[local] = 0;
+            chunk.FlagsBuffer[local] = 0;
+            chunk.LifetimeBuffer[local] = 0;
+            chunk.DamageBuffer[local] = 0;
             DirtyRegionMarker.MarkCell(_chunks, wx, wy, DirtyPhaseTarget.Current, includeBoundaryNeighbors: true, Diagnostics);
         }
 
@@ -282,8 +282,8 @@ public sealed class SimulationKernel(
         int localX = CellAddressing.LocalCoord(wx);
         int localY = CellAddressing.LocalCoord(wy);
         int local = CellAddressing.LocalIndexFromLocal(localX, localY);
-        ushort material = chunk.Material[local];
-        byte flags = chunk.Flags[local];
+        ushort material = chunk.MaterialBuffer[local];
+        byte flags = chunk.FlagsBuffer[local];
         string materialName = material < materials.Count && !materials.IsTombstone(material)
             ? materials.GetName(material)
             : string.Empty;
@@ -344,7 +344,7 @@ public sealed class SimulationKernel(
         long count = 0;
         foreach (Chunk chunk in _chunks.ResidentChunks)
         {
-            count += CellSpanOps.CountNonZeroUShort(chunk.Material);
+            count += CellSpanOps.CountNonZeroUShort(chunk.MaterialBuffer);
         }
 
         return count;
@@ -365,31 +365,31 @@ public sealed class SimulationKernel(
         }
 
         int local = CellAddressing.LocalIndex(wx, wy);
-        ushort material = chunk.Material[local];
+        ushort material = chunk.MaterialBuffer[local];
         if (material == 0)
         {
-            chunk.Damage[local] = 0;
+            chunk.DamageBuffer[local] = 0;
             return false;
         }
 
-        byte flags = chunk.Flags[local];
+        byte flags = chunk.FlagsBuffer[local];
         // RigidOwned cell 不参与 Damage 平面累加，只通知物理层做刚体重建。
         if (CellFlags.Has(flags, CellFlags.RigidOwned))
         {
             _rigidDamageSink.OnOwnedCellDamaged(wx, wy, material);
-            chunk.Damage[local] = 0;
+            chunk.DamageBuffer[local] = 0;
             return false;
         }
 
         if (MaterialProps.TypeOf(material) is not (CellType.Solid or CellType.Powder))
         {
-            chunk.Damage[local] = 0;
+            chunk.DamageBuffer[local] = 0;
             return false;
         }
 
         if ((MaterialProps.PropertyFlagsOf(material) & MaterialProperty.Indestructible) != 0)
         {
-            chunk.Damage[local] = 0;
+            chunk.DamageBuffer[local] = 0;
             return false;
         }
 
@@ -403,10 +403,10 @@ public sealed class SimulationKernel(
         if (maxIntegrity != 0)
         {
             // 未达完整性阈值时只累加 Damage 并标 working dirty，cell 材质保持不变。
-            int accumulated = Math.Min(byte.MaxValue, chunk.Damage[local] + effectiveDamage);
+            int accumulated = Math.Min(byte.MaxValue, chunk.DamageBuffer[local] + effectiveDamage);
             if (accumulated * EngineConstants.DamageIntegrityScale < maxIntegrity)
             {
-                chunk.Damage[local] = (byte)accumulated;
+                chunk.DamageBuffer[local] = (byte)accumulated;
                 MarkDamageDirty(wx, wy);
                 return false;
             }
@@ -548,11 +548,11 @@ public sealed class SimulationKernel(
     {
         Chunk chunk = RequireChunk(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
-        NotifyRigidDamageIfNeeded(wx, wy, chunk.Flags[local], chunk.Material[local]);
-        chunk.Material[local] = material;
-        chunk.Flags[local] = CellFlags.SetParity(persistentFlags, CurrentParity);
-        chunk.Lifetime[local] = DefaultLifetimeByte(material);
-        chunk.Damage[local] = 0;
+        NotifyRigidDamageIfNeeded(wx, wy, chunk.FlagsBuffer[local], chunk.MaterialBuffer[local]);
+        chunk.MaterialBuffer[local] = material;
+        chunk.FlagsBuffer[local] = CellFlags.SetParity(persistentFlags, CurrentParity);
+        chunk.LifetimeBuffer[local] = DefaultLifetimeByte(material);
+        chunk.DamageBuffer[local] = 0;
         MarkDirty(wx, wy);
     }
 
@@ -560,10 +560,10 @@ public sealed class SimulationKernel(
     {
         // 结构破坏落地：转为碎块材质或 Empty，并上报采集/碎屑副作用。
         ushort rubbleTarget = MaterialProps.RubbleTargetOf(sourceMaterial);
-        chunk.Material[local] = rubbleTarget;
-        chunk.Flags[local] = rubbleTarget == 0 ? (byte)0 : CellFlags.SetParity(0, CurrentParity);
-        chunk.Lifetime[local] = DefaultLifetimeByte(rubbleTarget);
-        chunk.Damage[local] = 0;
+        chunk.MaterialBuffer[local] = rubbleTarget;
+        chunk.FlagsBuffer[local] = rubbleTarget == 0 ? (byte)0 : CellFlags.SetParity(0, CurrentParity);
+        chunk.LifetimeBuffer[local] = DefaultLifetimeByte(rubbleTarget);
+        chunk.DamageBuffer[local] = 0;
         MarkDamageDirty(wx, wy);
         NotifyCellDestroyed(wx, wy, sourceMaterial, rubbleTarget);
     }

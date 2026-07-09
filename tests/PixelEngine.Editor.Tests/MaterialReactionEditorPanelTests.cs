@@ -24,7 +24,7 @@ public sealed class MaterialReactionEditorPanelTests
             new MaterialDef { Id = 1, Name = "sand", Type = CellType.Powder, Density = 100, HeatCapacity = 1 },
         ]);
         Chunk chunk = new(new ChunkCoord(0, 0));
-        chunk.Material[0] = 1;
+        chunk.MaterialBuffer[0] = 1;
         TestChunkSource chunks = new(chunk);
         bool hotReloaded = false;
         ReactionTable? reloadedReactions = null;
@@ -47,7 +47,7 @@ public sealed class MaterialReactionEditorPanelTests
         Assert.Equal([1], result.MaterialReload.TombstoneIds);
         Assert.Equal(1, result.MaterialReload.AddedCount);
         Assert.Equal(1, result.LiveGridFallbackReplacementCount);
-        Assert.Equal(0, chunk.Material[0]);
+        Assert.Equal(0, chunk.MaterialBuffer[0]);
         Assert.Equal(new DirtyRect(0, 0, 63, 63), chunk.WorkingDirty);
         Assert.True(materials.IsTombstone(1));
         Assert.True(materials.TryGetId("fire", out ushort fireId));

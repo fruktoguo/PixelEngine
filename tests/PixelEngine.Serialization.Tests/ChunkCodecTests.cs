@@ -60,12 +60,12 @@ public sealed class ChunkCodecTests
         byte[] lifetime = new byte[EngineConstants.ChunkArea];
         byte[] damage = new byte[EngineConstants.ChunkArea];
         Half[] temperature = new Half[ChunkSnapshot.TemperatureCellCount];
-        codec.Encode(new ChunkSnapshot(new ChunkCoord(0, 0), material, flags, lifetime, damage, temperature), writer);
+        codec.Encode(new PixelEngine.Serialization.ChunkSnapshot(new ChunkCoord(0, 0), material, flags, lifetime, damage, temperature), writer);
 
         InvalidDataException exception = Assert.Throws<InvalidDataException>(() =>
             codec.Decode(
                 writer.WrittenSpan,
-                new ChunkSnapshot(new ChunkCoord(1, 0), material, flags, lifetime, damage, temperature),
+                new PixelEngine.Serialization.ChunkSnapshot(new ChunkCoord(1, 0), material, flags, lifetime, damage, temperature),
                 currentParityBit: 0));
 
         Assert.Contains("坐标", exception.Message, StringComparison.Ordinal);
@@ -109,7 +109,7 @@ public sealed class ChunkCodecTests
         FillSource(material, flags, lifetime, noDamage, temperature);
         noDamage.AsSpan().Clear();
         ArrayBufferWriter<byte> writer = new();
-        WriteLegacyV1Blob(new ChunkSnapshot(new ChunkCoord(2, 3), material, flags, lifetime, noDamage, temperature), writer);
+        WriteLegacyV1Blob(new PixelEngine.Serialization.ChunkSnapshot(new ChunkCoord(2, 3), material, flags, lifetime, noDamage, temperature), writer);
 
         ushort[] decodedMaterial = new ushort[EngineConstants.ChunkArea];
         byte[] decodedFlags = new byte[EngineConstants.ChunkArea];
@@ -119,7 +119,7 @@ public sealed class ChunkCodecTests
 
         new ChunkCodec().Decode(
             writer.WrittenSpan,
-            new ChunkSnapshot(new ChunkCoord(2, 3), decodedMaterial, decodedFlags, decodedLifetime, decodedDamage, decodedTemperature),
+            new PixelEngine.Serialization.ChunkSnapshot(new ChunkCoord(2, 3), decodedMaterial, decodedFlags, decodedLifetime, decodedDamage, decodedTemperature),
             currentParityBit: 0);
 
         Assert.Equal(material, decodedMaterial);

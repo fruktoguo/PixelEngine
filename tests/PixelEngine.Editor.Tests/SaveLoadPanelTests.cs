@@ -47,7 +47,7 @@ public sealed class SaveLoadPanelTests
             ResidencyTable sourceResidency = new();
             TemperatureField sourceTemperature = new();
             Chunk chunk = new(new ChunkCoord(0, 0));
-            chunk.Material[0] = 1;
+            chunk.MaterialBuffer[0] = 1;
             sourceChunks.Add(chunk);
             sourceResidency.Set(chunk.Coord, new ChunkResidencyInfo(ChunkResidencyState.Active, 0, ChunkMemoryBudget.EstimatedResidentChunkBytes, DirtySinceLoad: true));
 
@@ -71,7 +71,7 @@ public sealed class SaveLoadPanelTests
             _ = Assert.NotNull(load.LoadResult);
             Assert.Equal(0, load.LoadResult.Value.MaterialFallbackHitCount);
             Assert.True(loadedChunks.TryGetChunk(new ChunkCoord(0, 0), out Chunk loaded));
-            Assert.Equal(1, loaded.Material[0]);
+            Assert.Equal(1, loaded.MaterialBuffer[0]);
         }
         finally
         {

@@ -84,10 +84,10 @@ public sealed class SaveLoadRoundTripTests
         Assert.Equal(1, result.LoadedChunkCount);
         Assert.Equal(0, result.MaterialFallbackHitCount);
         Assert.True(loadedChunks.TryGetChunk(coord, out Chunk loadedChunk));
-        Assert.Equal((ushort)2, loadedChunk.Material[local]);
-        Assert.Equal((byte)123, loadedChunk.Lifetime[local]);
-        Assert.Equal((byte)77, loadedChunk.Damage[local]);
-        Assert.Equal(CellFlags.Burning, loadedChunk.Flags[local]);
+        Assert.Equal((ushort)2, loadedChunk.MaterialBuffer[local]);
+        Assert.Equal((byte)123, loadedChunk.LifetimeBuffer[local]);
+        Assert.Equal((byte)77, loadedChunk.DamageBuffer[local]);
+        Assert.Equal(CellFlags.Burning, loadedChunk.FlagsBuffer[local]);
         Assert.Equal(DirtyRect.Full, loadedChunk.CurrentDirty);
         Assert.Equal(42.5f, loadedTemperature.GetTemperature(worldX, worldY));
         Assert.Equal((ushort)2, restored.RestoredParticles[0].Material);
@@ -114,10 +114,10 @@ public sealed class SaveLoadRoundTripTests
         Chunk sourceChunk = new(coord);
         int keptLocal = CellAddressing.LocalIndexFromLocal(3, 4);
         int missingLocal = CellAddressing.LocalIndexFromLocal(5, 6);
-        sourceChunk.Material[keptLocal] = 1;
-        sourceChunk.Damage[keptLocal] = 41;
-        sourceChunk.Material[missingLocal] = 2;
-        sourceChunk.Damage[missingLocal] = 93;
+        sourceChunk.MaterialBuffer[keptLocal] = 1;
+        sourceChunk.DamageBuffer[keptLocal] = 41;
+        sourceChunk.MaterialBuffer[missingLocal] = 2;
+        sourceChunk.DamageBuffer[missingLocal] = 93;
         sourceChunks.Add(sourceChunk);
         sourceResidency.Set(
             coord,
@@ -157,10 +157,10 @@ public sealed class SaveLoadRoundTripTests
 
         Assert.Equal(1, result.MaterialFallbackHitCount);
         Assert.True(loadedChunks.TryGetChunk(coord, out Chunk loadedChunk));
-        Assert.Equal((ushort)2, loadedChunk.Material[keptLocal]);
-        Assert.Equal((byte)41, loadedChunk.Damage[keptLocal]);
-        Assert.Equal((ushort)0, loadedChunk.Material[missingLocal]);
-        Assert.Equal((byte)0, loadedChunk.Damage[missingLocal]);
+        Assert.Equal((ushort)2, loadedChunk.MaterialBuffer[keptLocal]);
+        Assert.Equal((byte)41, loadedChunk.DamageBuffer[keptLocal]);
+        Assert.Equal((ushort)0, loadedChunk.MaterialBuffer[missingLocal]);
+        Assert.Equal((byte)0, loadedChunk.DamageBuffer[missingLocal]);
     }
 
     /// <summary>
@@ -199,9 +199,9 @@ public sealed class SaveLoadRoundTripTests
         Assert.Equal(1, result.LoadedChunkCount);
         Assert.Equal(0, result.MaterialFallbackHitCount);
         Assert.True(loadedChunks.TryGetChunk(coord, out Chunk loadedChunk));
-        Assert.Equal((ushort)1, loadedChunk.Material[local]);
-        Assert.Equal((byte)22, loadedChunk.Lifetime[local]);
-        Assert.All(loadedChunk.Damage, value => Assert.Equal(0, value));
+        Assert.Equal((ushort)1, loadedChunk.MaterialBuffer[local]);
+        Assert.Equal((byte)22, loadedChunk.LifetimeBuffer[local]);
+        Assert.All(loadedChunk.DamageBuffer, value => Assert.Equal(0, value));
         Assert.Equal(13.5f, loadedTemperature.GetTemperature(coord.X << 6, coord.Y << 6));
     }
 
@@ -209,10 +209,10 @@ public sealed class SaveLoadRoundTripTests
     {
         Chunk chunk = new(coord);
         int local = CellAddressing.LocalIndexFromLocal(5, 9);
-        chunk.Material[local] = 1;
-        chunk.Lifetime[local] = 123;
-        chunk.Damage[local] = 77;
-        chunk.Flags[local] = CellFlags.Burning |
+        chunk.MaterialBuffer[local] = 1;
+        chunk.LifetimeBuffer[local] = 123;
+        chunk.DamageBuffer[local] = 77;
+        chunk.FlagsBuffer[local] = CellFlags.Burning |
             CellFlags.Parity |
             CellFlags.Settled |
             CellFlags.FreeFalling |
@@ -284,7 +284,7 @@ public sealed class SaveLoadRoundTripTests
 
         ArrayBufferWriter<byte> chunkBuffer = new();
         byte[] noDamage = new byte[EngineConstants.ChunkArea];
-        WriteLegacyV1ChunkBlob(new ChunkSnapshot(coord, material, flags, lifetime, noDamage, temperature), chunkBuffer);
+        WriteLegacyV1ChunkBlob(new PixelEngine.Serialization.ChunkSnapshot(coord, material, flags, lifetime, noDamage, temperature), chunkBuffer);
         new RegionFileStore(savePath).Write(coord, chunkBuffer.WrittenSpan);
     }
 

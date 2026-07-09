@@ -23,20 +23,20 @@ public sealed class PerformanceHardeningDataLayoutTests
     {
         Chunk chunk = new(new ChunkCoord(0, 0));
 
-        Assert.Equal(EngineConstants.ChunkArea, chunk.Material.Length);
-        Assert.Equal(EngineConstants.ChunkArea, chunk.Flags.Length);
-        Assert.Equal(EngineConstants.ChunkArea, chunk.Lifetime.Length);
-        Assert.NotSame(chunk.Material, chunk.Flags);
-        Assert.NotSame(chunk.Material, chunk.Lifetime);
-        Assert.NotSame(chunk.Flags, chunk.Lifetime);
+        Assert.Equal(EngineConstants.ChunkArea, chunk.MaterialBuffer.Length);
+        Assert.Equal(EngineConstants.ChunkArea, chunk.FlagsBuffer.Length);
+        Assert.Equal(EngineConstants.ChunkArea, chunk.LifetimeBuffer.Length);
+        Assert.NotSame(chunk.MaterialBuffer, chunk.FlagsBuffer);
+        Assert.NotSame(chunk.MaterialBuffer, chunk.LifetimeBuffer);
+        Assert.NotSame(chunk.FlagsBuffer, chunk.LifetimeBuffer);
 
-        chunk.Material[17] = 42;
-        chunk.Flags[17] = 0b_0101_0000;
-        chunk.Lifetime[17] = 9;
+        chunk.MaterialBuffer[17] = 42;
+        chunk.FlagsBuffer[17] = 0b_0101_0000;
+        chunk.LifetimeBuffer[17] = 9;
 
-        Assert.Equal(42, chunk.Material[17]);
-        Assert.Equal(0b_0101_0000, chunk.Flags[17]);
-        Assert.Equal(9, chunk.Lifetime[17]);
+        Assert.Equal(42, chunk.MaterialBuffer[17]);
+        Assert.Equal(0b_0101_0000, chunk.FlagsBuffer[17]);
+        Assert.Equal(9, chunk.LifetimeBuffer[17]);
     }
 
     /// <summary>

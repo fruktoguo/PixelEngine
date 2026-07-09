@@ -42,12 +42,12 @@ public sealed class ChunkSnapshotTests
         Half[] temperature = new Half[ChunkSnapshot.TemperatureCellCount];
 
         ArgumentException exception = Assert.Throws<ArgumentException>(() =>
-            _ = new ChunkSnapshot(new ChunkCoord(0, 0), material, flags, lifetime, damage, temperature));
+            _ = new PixelEngine.Serialization.ChunkSnapshot(new ChunkCoord(0, 0), material, flags, lifetime, damage, temperature));
 
         Assert.Contains("Material", exception.Message, StringComparison.Ordinal);
 
         ArgumentException damageException = Assert.Throws<ArgumentException>(() =>
-            _ = new ChunkSnapshot(
+            _ = new PixelEngine.Serialization.ChunkSnapshot(
                 new ChunkCoord(0, 0),
                 new ushort[EngineConstants.ChunkArea],
                 flags,

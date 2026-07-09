@@ -29,7 +29,7 @@ public class TemperatureConductStencilBenchmarks
             for (int cx = -1; cx <= 1; cx++)
             {
                 Chunk chunk = new(new ChunkCoord(cx, cy));
-                Array.Fill(chunk.Material, (ushort)1);
+                Array.Fill(chunk.MaterialBuffer, (ushort)1);
                 chunks[write++] = chunk;
             }
         }

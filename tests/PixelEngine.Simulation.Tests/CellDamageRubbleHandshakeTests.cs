@@ -28,17 +28,17 @@ public sealed class CellDamageRubbleHandshakeTests
         RecordingCellDestructionSink sink = new();
         SimulationKernel kernel = new(source, new MaterialPropsTable(materials.Hot), cellDestructionSink: sink);
         int local = CellAddressing.LocalIndexFromLocal(63, 10);
-        chunk.Material[local] = Crystal;
-        chunk.Damage[local] = 2;
+        chunk.MaterialBuffer[local] = Crystal;
+        chunk.DamageBuffer[local] = 2;
 
         bool destroyed = kernel.ApplyStructuralDamage(63, 10, damage: 20);
 
         // Assert：验证预期结果
         Assert.True(destroyed);
-        Assert.Equal(Gravel, chunk.Material[local]);
-        Assert.Equal(CellFlags.SetParity(0, kernel.CurrentParity), chunk.Flags[local]);
-        Assert.Equal(9, chunk.Lifetime[local]);
-        Assert.Equal(0, chunk.Damage[local]);
+        Assert.Equal(Gravel, chunk.MaterialBuffer[local]);
+        Assert.Equal(CellFlags.SetParity(0, kernel.CurrentParity), chunk.FlagsBuffer[local]);
+        Assert.Equal(9, chunk.LifetimeBuffer[local]);
+        Assert.Equal(0, chunk.DamageBuffer[local]);
         Assert.Equal(1, sink.Count);
         Assert.Equal(new CellDestructionEvent(63, 10, Crystal, Gravel, Gravel, 4, 3), sink.Last);
 
@@ -61,13 +61,13 @@ public sealed class CellDamageRubbleHandshakeTests
         ParticleSystem particles = new(capacity: 8);
         SimulationKernel kernel = new(source, new MaterialPropsTable(materials.Hot), cellDestructionSink: particles);
         int local = CellAddressing.LocalIndexFromLocal(20, 20);
-        chunk.Material[local] = Crystal;
+        chunk.MaterialBuffer[local] = Crystal;
 
         bool destroyed = kernel.ApplyStructuralDamage(20, 20, damage: 20);
 
         // Assert：验证预期结果
         Assert.True(destroyed);
-        Assert.Equal(Gravel, chunk.Material[local]);
+        Assert.Equal(Gravel, chunk.MaterialBuffer[local]);
         Assert.Equal(4, particles.ActiveCount);
         Assert.Equal(4, particles.Stats.SpawnedThisTick);
         for (int i = 0; i < particles.ActiveCount; i++)
@@ -122,19 +122,19 @@ public sealed class CellDamageRubbleHandshakeTests
         RecordingCellDestructionSink sink = new();
         SimulationKernel kernel = new(source, new MaterialPropsTable(materials.Hot), cellDestructionSink: sink);
         int local = CellAddressing.LocalIndexFromLocal(12, 12);
-        chunk.Material[local] = Dirt;
-        chunk.Flags[local] = CellFlags.Burning;
-        chunk.Lifetime[local] = 7;
-        chunk.Damage[local] = 4;
+        chunk.MaterialBuffer[local] = Dirt;
+        chunk.FlagsBuffer[local] = CellFlags.Burning;
+        chunk.LifetimeBuffer[local] = 7;
+        chunk.DamageBuffer[local] = 4;
 
         bool destroyed = kernel.ApplyStructuralDamage(12, 12, damage: 10);
 
         // Assert：验证预期结果
         Assert.True(destroyed);
-        Assert.Equal(Empty, chunk.Material[local]);
-        Assert.Equal(0, chunk.Flags[local]);
-        Assert.Equal(0, chunk.Lifetime[local]);
-        Assert.Equal(0, chunk.Damage[local]);
+        Assert.Equal(Empty, chunk.MaterialBuffer[local]);
+        Assert.Equal(0, chunk.FlagsBuffer[local]);
+        Assert.Equal(0, chunk.LifetimeBuffer[local]);
+        Assert.Equal(0, chunk.DamageBuffer[local]);
         Assert.Equal(new CellDestructionEvent(12, 12, Dirt, Empty, Dirt, 2, 0), sink.Last);
     }
 
@@ -159,7 +159,7 @@ public sealed class CellDamageRubbleHandshakeTests
         Set(chunk, 11, 10, Stone, CellFlags.RigidOwned);
         Set(chunk, 12, 10, Stone);
         Set(chunk, 13, 10, Crystal);
-        chunk.Damage[CellAddressing.LocalIndexFromLocal(11, 10)] = 6;
+        chunk.DamageBuffer[CellAddressing.LocalIndexFromLocal(11, 10)] = 6;
 
         // Assert：验证预期结果
         Assert.False(kernel.ApplyStructuralDamage(10, 10, damage: 3));
@@ -179,7 +179,7 @@ public sealed class CellDamageRubbleHandshakeTests
         Assert.False(kernel.ApplyStructuralDamage(12, 10, damage: 100));
 
         Assert.Equal(1, rigidSink.Count);
-        Assert.Equal(0, chunk.Damage[CellAddressing.LocalIndexFromLocal(11, 10)]);
+        Assert.Equal(0, chunk.DamageBuffer[CellAddressing.LocalIndexFromLocal(11, 10)]);
         Assert.Equal(0, destructionSink.Count);
     }
 
@@ -221,8 +221,8 @@ public sealed class CellDamageRubbleHandshakeTests
     private static void Set(Chunk chunk, int lx, int ly, ushort material, byte flags = 0)
     {
         int local = CellAddressing.LocalIndexFromLocal(lx, ly);
-        chunk.Material[local] = material;
-        chunk.Flags[local] = flags;
+        chunk.MaterialBuffer[local] = material;
+        chunk.FlagsBuffer[local] = flags;
     }
 
     private sealed class RecordingCellDestructionSink : ICellDestructionSink

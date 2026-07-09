@@ -305,7 +305,7 @@ public ref struct NeighborWindow
     /// 返回材质 id 的可写引用。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ref ushort MaterialAt(int wx, int wy)
+    internal ref ushort MaterialAt(int wx, int wy)
     {
         int slot = SlotOf(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
@@ -316,7 +316,7 @@ public ref struct NeighborWindow
     /// 返回 flag 的可写引用。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ref byte FlagsAt(int wx, int wy)
+    internal ref byte FlagsAt(int wx, int wy)
     {
         int slot = SlotOf(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
@@ -327,7 +327,7 @@ public ref struct NeighborWindow
     /// 返回 lifetime 的可写引用。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ref byte LifetimeAt(int wx, int wy)
+    internal ref byte LifetimeAt(int wx, int wy)
     {
         int slot = SlotOf(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
@@ -338,7 +338,7 @@ public ref struct NeighborWindow
     /// 返回累计结构破坏度的可写引用。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ref byte DamageAt(int wx, int wy)
+    internal ref byte DamageAt(int wx, int wy)
     {
         int slot = SlotOf(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);

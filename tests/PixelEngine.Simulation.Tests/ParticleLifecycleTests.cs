@@ -179,18 +179,18 @@ public sealed class ParticleLifecycleTests
     {
         for (int chunkIndex = 0; chunkIndex < chunks.Length; chunkIndex++)
         {
-            chunks[chunkIndex].Material.AsSpan().Fill(material);
+            chunks[chunkIndex].MaterialBuffer.AsSpan().Fill(material);
         }
     }
 
     private static void Set(Chunk chunk, int lx, int ly, ushort material)
     {
-        chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
     }
 
     private static ushort Get(Chunk chunk, int lx, int ly)
     {
-        return chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)];
+        return chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)];
     }
 
     private sealed class TestChunkSource : IChunkSource

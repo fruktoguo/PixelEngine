@@ -104,27 +104,27 @@
 
 **SoA 布局**（架构 §7.1，不变式 #7「颜色不入 cell」）。每 `Chunk` 拥有三条与 cell 一一对应的本地数组，长度恒 `4096`，POH 分配：
 
-- `ushort[] Material`（4096 × 2B = 8KB）：材质 id；运行时数值 id 仅作索引（架构 §11.2、不变式 #8）。`0` 约定为 `Empty`。
-- `byte[] Flags`（4KB）：bit0=parity 时钟位、bit1=settled/sleep、bit2=burning、bit3=freefalling、**bit4=RigidOwned（刚体占用,语义由 `plan/06` 拥有）**、bit5–7 备用（架构 §7.1）。持久位/瞬时位区分由 `plan/07` 存档消费，本内核只读写运行时语义。**契约(plan/06)**：当 movement/reaction 将覆盖/消耗一个置了 `RigidOwned` 的 cell（即「CA 挖得动刚体」）时，内核须经 `IRigidDamageSink.OnOwnedCellDamaged(wx,wy)` 钩子上报,由 `plan/06` 入 `RigidDamageQueue` 触发刚体形状重建；钩子为空实现时退化为普通 CA 行为。
-- `byte[] Lifetime`（4KB）：fire/gas 倒计时（架构 §7.1）。
-- `byte[] Damage`（4KB）：per-cell 累计结构伤害（`0`=未损；**非**满血值——满血阈值由 `plan/04` 材质字段 `MaxIntegrity` 表达）。默认 0，仅在单线程输入/安全相位经 `ApplyStructuralDamage`（§3.12）原地累加；写新 cell 时归 0。**只允许存在于不参与 movement 的存活 `Solid`**（强制不变式，§3.12）；`Powder/Liquid/Gas` 因 `MaxIntegrity==0` 即时破坏、永不累计。渲染相位 9（plan/08）只读此 lane 做裂纹叠色（§3.12 只读通路，不写回 cell，守 #7）。此 lane 触及架构 §7.1/§12.2 每-cell 字节预算承重墙，预算评审已在 §4.11 落地并同步 plan/07/16 口径。
+- `ushort[] Material`（4096 × 2B = 8KB）：材质 id；运行时数值 id 仅作索引（架构 §11.2、不变式 #8）。`0` 约定为 `Empty`。数组只在 Simulation 内部保存，`Chunk.Material` 对外发布 `ReadOnlySpan<ushort>`，避免外部持有可写数组别名。
+- `byte[] Flags`（4KB）：bit0=parity 时钟位、bit1=settled/sleep、bit2=burning、bit3=freefalling、**bit4=RigidOwned（刚体占用,语义由 `plan/06` 拥有）**、bit5–7 备用（架构 §7.1）。持久位/瞬时位区分由 `plan/07` 存档消费，本内核只读写运行时语义。**契约(plan/06)**：当 movement/reaction 将覆盖/消耗一个置了 `RigidOwned` 的 cell（即「CA 挖得动刚体」）时，内核须经 `IRigidDamageSink.OnOwnedCellDamaged(wx,wy)` 钩子上报,由 `plan/06` 入 `RigidDamageQueue` 触发刚体形状重建；钩子为空实现时退化为普通 CA 行为。公开面通过 `Chunk.Flags` 的 `ReadOnlySpan<byte>` 提供只读访问。
+- `byte[] Lifetime`（4KB）：fire/gas 倒计时（架构 §7.1）；公开面为 `ReadOnlySpan<byte>`。
+- `byte[] Damage`（4KB）：per-cell 累计结构伤害（`0`=未损；**非**满血值——满血阈值由 `plan/04` 材质字段 `MaxIntegrity` 表达）。默认 0，仅在单线程输入/安全相位经 `ApplyStructuralDamage`（§3.12）原地累加；写新 cell 时归 0。**只允许存在于不参与 movement 的存活 `Solid`**（强制不变式，§3.12）；`Powder/Liquid/Gas` 因 `MaxIntegrity==0` 即时破坏、永不累计。渲染相位 9（plan/08）只读此 lane 做裂纹叠色（§3.12 只读通路，不写回 cell，守 #7）。此 lane 触及架构 §7.1/§12.2 每-cell 字节预算承重墙，预算评审已在 §4.11 落地并同步 plan/07/16 口径；公开面为 `ReadOnlySpan<byte>`。
 - **注意**：`Temperature`（1/4 分辨率热场）与 `Render`（BGRA8）**不在本文件**——温度场属相位 5（plan/04），render buffer 属相位 9（plan/08）。本内核既不分配也不存储它们（不变式 #7）。
 
 每 chunk sim 态在破坏模型落地前约 16KB（架构 §12.2），加元数据 ~18–20KB；`Damage` lane 落地后（§3.12/§4.11）per-cell **4B→5B（+25%）**、每常驻 chunk sim 态 **16KB→20KB**（`Material`8KB+`Flags`4KB+`Lifetime`4KB+`Damage`4KB），加元数据 ~22–24KB。此增量触及架构 §7.1/§12.2 字节预算承重墙，预算评审已选择保留渐进损伤/裂纹能力并同步三处数字（plan/03 此处、plan/07 存档预算、plan/16 内存加固）。
 
 `CellGrid`（`CellGrid.cs`）是**按世界坐标索引**的访问门面，背后路由到 `IChunkSource` 解析出的 `Chunk`：
 
-- 冷路径/编辑/测试 API：`ushort GetMaterial(int wx, int wy)`、`void SetMaterial(int wx,int wy,ushort id)`、`ref byte FlagsAt(...)` 等，做一次 chunk 解析 + 本地索引；用于相位 3/7 入口、编辑器、测试 oracle。
+- 冷路径/编辑/测试 API：`GetMaterial/GetFlags/GetLifetime/GetDamage` 只读 getter，以及会维护 dirty 的 `SetMaterial/TryWriteCell/TryClearCell` 和刚体专用 stamp/erase API，做一次 chunk 解析 + 本地索引；用于相位 3/7 入口、编辑器、测试 oracle。旧的 `MaterialAt/FlagsAt/LifetimeAt/DamageAt` ref 入口仅保留为 Simulation 与受信任测试夹具的 `internal` seam，不属于公开 API。
 - 热路径访问**不走** `CellGrid`，而走 §3.3 的 `NeighborWindow`（消除 per-cell chunk 解析与 bounds-check）。
 - `CellGrid` 持有对 `MaterialPropsTable` 的只读引用，供查 `Density`/`Dispersion`/`Type`。
 
 `Chunk`（`Chunk.cs`）字段：
 
-- `ChunkCoord Coord`；`ushort[] Material; byte[] Flags; byte[] Lifetime; byte[] Damage;`（POH，同缓冲原地；`Damage` 预算评审见 §4.11）。
+- `ChunkCoord Coord`；四条 POH SoA 数组由 `Chunk` 私有持有，公开只读为 `ReadOnlySpan`，受信任实现通过 internal buffer seam 做同缓冲原地更新；`Damage` 预算评审见 §4.11。
 - dirty rectangle **双缓冲**（架构 §5.4）：`DirtyRect _current`（本帧迭代范围）、`DirtyRect _working`（本帧累积下帧范围）。
 - KeepAlive 入站槽：`DirtyRect[] _incoming`（长度 8，每方向一个，见 §3.7）。
 - `ChunkState State`（`Awake`/`Sleeping`）；`byte Parity`（最近一次被处理的帧 parity，调试用）。
-- 缓存的 `ref`/指针基址封装（`GetMaterialBase()` 等用 `MemoryMarshal.GetArrayDataReference`）。
+- 缓存的 `ref`/指针基址封装（`GetMaterialBase()` 等用 `MemoryMarshal.GetArrayDataReference`）仅为 internal 热路径入口，不向外部玩法程序集发布。
 
 `readonly struct DirtyRect`（值语义，本地坐标 0..63，闭区间，`Min>Max` 表示空）：`MinX,MinY,MaxX,MaxY`；方法 `bool IsEmpty`、`DirtyRect Union(int lx,int ly,int padding)`（钳制到 `[0,63]`）、`DirtyRect Union(DirtyRect)`、`static DirtyRect Empty`、`static DirtyRect Full`。`DirtyRect` 不可变，grow 返回新值写回字段（无堆分配，纯值拷贝）。
 

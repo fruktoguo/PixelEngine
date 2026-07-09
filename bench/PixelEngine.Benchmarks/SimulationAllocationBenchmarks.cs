@@ -68,7 +68,7 @@ public class SimulationAllocationBenchmarks
     {
         ResetWorld();
         Chunk center = _source.GetRequired(new ChunkCoord(0, 0));
-        center.Material[CellAddressing.LocalIndexFromLocal(10, 10)] = Sand;
+        center.MaterialBuffer[CellAddressing.LocalIndexFromLocal(10, 10)] = Sand;
         center.SetCurrentDirty(new DirtyRect(10, 10, 10, 10));
 
         _kernel.StepCa();
@@ -140,7 +140,7 @@ public class SimulationAllocationBenchmarks
 
     private static void Set(Chunk chunk, int lx, int ly, ushort material)
     {
-        chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
     }
 
     private static void FillRect(Chunk chunk, ushort material, int minX, int minY, int maxX, int maxY)

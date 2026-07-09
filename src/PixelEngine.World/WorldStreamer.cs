@@ -2,6 +2,7 @@ using System.Buffers;
 using PixelEngine.Core.Threading;
 using PixelEngine.Serialization;
 using PixelEngine.Simulation;
+using SerializedChunkSnapshot = PixelEngine.Serialization.ChunkSnapshot;
 
 namespace PixelEngine.World;
 
@@ -338,9 +339,9 @@ public sealed class WorldStreamer
             {
                 _chunkCodec.Decode(
                     buffer.WrittenSpan,
-                    new ChunkSnapshot(coord, chunk.Material, chunk.Flags, chunk.Lifetime, chunk.Damage, temperature.AsSpan(0, TemperatureField.BlockArea)),
+                    new SerializedChunkSnapshot(coord, chunk.MaterialBuffer, chunk.FlagsBuffer, chunk.LifetimeBuffer, chunk.DamageBuffer, temperature.AsSpan(0, TemperatureField.BlockArea)),
                     CurrentParityBit);
-                _materialRemap.RemapInPlace(chunk.Material, chunk.Damage);
+                _materialRemap.RemapInPlace(chunk.MaterialBuffer, chunk.DamageBuffer);
             }
 
             chunk.SetCurrentDirty(DirtyRect.Full);
@@ -364,7 +365,7 @@ public sealed class WorldStreamer
             PooledByteBufferWriter payload = RentPayloadWriter();
             buffer.Clear();
             _chunkCodec.Encode(
-                new ChunkSnapshot(chunk.Coord, chunk.Material, chunk.Flags, chunk.Lifetime, chunk.Damage, temperature.AsSpan(0, TemperatureField.BlockArea)),
+                new SerializedChunkSnapshot(chunk.Coord, chunk.MaterialBuffer, chunk.FlagsBuffer, chunk.LifetimeBuffer, chunk.DamageBuffer, temperature.AsSpan(0, TemperatureField.BlockArea)),
                 buffer,
                 payload);
             ChunkCoord coord = chunk.Coord;

@@ -261,13 +261,13 @@ public class ReactionTemperatureAllocationBenchmarks
     {
         foreach (Chunk chunk in _chunks)
         {
-            Array.Fill(chunk.Material, material);
+            Array.Fill(chunk.MaterialBuffer, material);
         }
     }
 
     private static void Set(Chunk chunk, int lx, int ly, ushort material)
     {
-        chunk.Material[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(lx, ly)] = material;
     }
 
     private static MaterialDef[] CreateMaterials()
