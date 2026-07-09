@@ -198,9 +198,36 @@ public sealed class EditorAppTests
         string[] titles = EditorDockSpace.GetDefaultWindowTitles().ToArray();
 
         Assert.Contains(EditorDockSpace.ViewportWindowTitle, titles);
+        Assert.Contains(EditorDockSpace.GameViewWindowTitle, titles);
         Assert.Contains(EditorDockSpace.SceneHierarchyWindowTitle, titles);
+        Assert.Contains(EditorDockSpace.AssetBrowserWindowTitle, titles);
         Assert.Contains(EditorDockSpace.InspectorWindowTitle, titles);
         Assert.Contains(EditorDockSpace.PerformanceHudWindowTitle, titles);
+        Assert.Equal("Scene", EditorDockSpace.ViewportWindowTitle);
+        Assert.Equal("Game View", EditorDockSpace.GameViewWindowTitle);
+        Assert.Equal("Hierarchy", EditorDockSpace.SceneHierarchyWindowTitle);
+        Assert.Equal("Project", EditorDockSpace.AssetBrowserWindowTitle);
+        Assert.Equal("Console", EditorDockSpace.ConsoleDiagnosticsWindowTitle);
+        Assert.Equal("Profiler", EditorDockSpace.PerformanceHudWindowTitle);
+    }
+
+    /// <summary>
+    /// 验证 Editor 默认主题使用 Unity 6 深灰 token，而玩家侧中性 GUI 仍保留 neutral 默认。
+    /// </summary>
+    [Fact]
+    public void EditorDefaultsToUnity6DarkThemeWithoutChangingNeutralGuiDefault()
+    {
+        EditorAppOptions editorOptions = new();
+        GuiAppOptions guiOptions = new();
+        GuiThemeTokens tokens = GuiTheme.GetTokens(editorOptions.Theme);
+
+        Assert.Equal(GuiThemeKind.Unity6Dark, editorOptions.Theme);
+        Assert.Equal(GuiThemeKind.NeutralDark, guiOptions.Theme);
+        Assert.Equal("Unity 6 Dark", tokens.Name);
+        Assert.Equal(0f, tokens.WindowRounding);
+        Assert.Equal(0f, tokens.TabRounding);
+        Assert.Equal(new Vector4(0x38 / 255f, 0x38 / 255f, 0x38 / 255f, 1f), tokens.WindowBg);
+        Assert.Equal(new Vector4(0x3D / 255f, 0x6D / 255f, 0x99 / 255f, 1f), tokens.Accent);
     }
 
     /// <summary>
@@ -227,7 +254,7 @@ public sealed class EditorAppTests
 
         Vector2 fitted = ViewportPanel.FitTexture(320, 180, new Vector2(160, 160));
 
-        Assert.Equal("世界视口", panel.Title);
+        Assert.Equal("Scene", panel.Title);
         Assert.Equal(160f, fitted.X);
         Assert.Equal(90f, fitted.Y);
     }

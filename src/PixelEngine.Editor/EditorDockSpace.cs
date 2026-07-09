@@ -35,7 +35,7 @@ public sealed class EditorDockSpace
     /// <summary>
     /// Scene View 世界视口窗口标题。
     /// </summary>
-    public const string ViewportWindowTitle = "世界视口";
+    public const string ViewportWindowTitle = "Scene";
 
     /// <summary>
     /// Game View 玩家视角窗口标题。
@@ -45,12 +45,12 @@ public sealed class EditorDockSpace
     /// <summary>
     /// 场景层级窗口标题。
     /// </summary>
-    public const string SceneHierarchyWindowTitle = "场景层级";
+    public const string SceneHierarchyWindowTitle = "Hierarchy";
 
     /// <summary>
     /// 资源浏览器窗口标题。
     /// </summary>
-    public const string AssetBrowserWindowTitle = "资源浏览器";
+    public const string AssetBrowserWindowTitle = "Project";
 
     /// <summary>
     /// Inspector 窗口标题。
@@ -60,62 +60,62 @@ public sealed class EditorDockSpace
     /// <summary>
     /// 世界检视器窗口标题。
     /// </summary>
-    public const string WorldInspectorWindowTitle = "世界检视器";
+    public const string WorldInspectorWindowTitle = "World Inspector";
 
     /// <summary>
     /// 材质与画刷窗口标题。
     /// </summary>
-    public const string MaterialBrushWindowTitle = "材质/画刷";
+    public const string MaterialBrushWindowTitle = "Tools";
 
     /// <summary>
     /// 材质/反应编辑器窗口标题。
     /// </summary>
-    public const string MaterialReactionEditorWindowTitle = "材质/反应编辑器";
+    public const string MaterialReactionEditorWindowTitle = "Materials";
 
     /// <summary>
     /// 调试叠层窗口标题。
     /// </summary>
-    public const string DebugOverlayWindowTitle = "调试叠层";
+    public const string DebugOverlayWindowTitle = "Overlays";
 
     /// <summary>
     /// sim 控制条窗口标题。
     /// </summary>
-    public const string SimulationControlWindowTitle = "Sim 控制";
+    public const string SimulationControlWindowTitle = "Simulation";
 
     /// <summary>
     /// 存读档窗口标题。
     /// </summary>
-    public const string SaveLoadWindowTitle = "存读档";
+    public const string SaveLoadWindowTitle = "Save/Load";
 
     /// <summary>
     /// 物理调参窗口标题。
     /// </summary>
-    public const string PhysicsTuningWindowTitle = "物理调参";
+    public const string PhysicsTuningWindowTitle = "Physics";
 
     /// <summary>
     /// 粒子调参窗口标题。
     /// </summary>
-    public const string ParticleTuningWindowTitle = "粒子调参";
+    public const string ParticleTuningWindowTitle = "Particles";
 
     /// <summary>
     /// 光照调参窗口标题。
     /// </summary>
-    public const string LightingTuningWindowTitle = "光照调参";
+    public const string LightingTuningWindowTitle = "Lighting";
 
     /// <summary>
     /// 编辑/运行模式窗口标题。
     /// </summary>
-    public const string EditorModeWindowTitle = "编辑/运行";
+    public const string EditorModeWindowTitle = "Play Mode";
 
     /// <summary>
     /// 性能 HUD 窗口标题。
     /// </summary>
-    public const string PerformanceHudWindowTitle = "性能 HUD";
+    public const string PerformanceHudWindowTitle = "Profiler";
 
     /// <summary>
     /// 控制台与诊断窗口标题。
     /// </summary>
-    public const string ConsoleDiagnosticsWindowTitle = "控制台/诊断";
+    public const string ConsoleDiagnosticsWindowTitle = "Console";
 
     /// <summary>
     /// Project Settings 窗口标题。
@@ -130,7 +130,7 @@ public sealed class EditorDockSpace
     /// <summary>
     /// 构建与发布窗口标题。
     /// </summary>
-    public const string BuildSettingsWindowTitle = "构建与发布";
+    public const string BuildSettingsWindowTitle = "Build Settings";
 
     private bool _layoutBuilt;
 
