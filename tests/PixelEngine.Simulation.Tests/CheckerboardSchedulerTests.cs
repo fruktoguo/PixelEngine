@@ -143,6 +143,31 @@ public sealed class CheckerboardSchedulerTests
     }
 
     /// <summary>
+    /// 验证跨 chunk 移动复用已解析的邻域 chunk 标记 KeepAlive，不在热路径额外回查 chunk map。
+    /// </summary>
+    [Fact]
+    public void StepCaBoundaryMoveMarksKeepAliveWithoutExtraChunkLookup()
+    {
+        // Arrange：准备输入与初始状态
+        TestChunkSource source = CreateDenseSource(-1, -1, 1, 1);
+        Chunk center = source.GetRequired(new ChunkCoord(0, 0));
+        Chunk south = source.GetRequired(new ChunkCoord(0, 1));
+        Set(center, 10, EngineConstants.ChunkSize - 1, Sand);
+        center.SetCurrentDirty(DirtyRect.Full);
+        SimulationKernel kernel = new(source, CreateMaterials());
+
+        kernel.StepCa();
+
+        // Assert：验证预期结果
+        Assert.Equal(1, source.ResolveNeighborhoodCount);
+        Assert.Equal(9, source.TryGetChunkCount);
+        Assert.Equal(0, Get(center, 10, EngineConstants.ChunkSize - 1));
+        Assert.Equal(Sand, Get(south, 10, EngineConstants.MoveCap - 1));
+        Assert.False(center.WorkingDirty.IsEmpty);
+        Assert.False(south.GetIncomingDirty(KeepAliveDirections.SlotNorth).IsEmpty);
+    }
+
+    /// <summary>
     /// 验证 resident 但 sleeping 的 chunk 不进入调度桶，静止区域不会被下一帧迭代。
     /// </summary>
     [Fact]
