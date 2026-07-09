@@ -23,7 +23,7 @@ public sealed class ExplosiveTool : Behaviour
     /// <summary>
     /// 对地形破坏半径与冲量的倍率；正式 Demo 用它把独立中键爆破纳入 10x 地形修改口径。
     /// </summary>
-    public float TerrainEffectScale { get; set; } = 1f;
+    public float TerrainEffectScale { get; set; } = 10f;
 
     /// <summary>
     /// 当前实际提交给 <c>World.Explode</c> 的爆炸半径。
