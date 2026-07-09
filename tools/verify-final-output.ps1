@@ -133,6 +133,7 @@ if ($demoBuildResult.runtimeUiBackend -ne $manifest.demoRuntimeUiBackendRequeste
 
 $checksumLines = Get-Content -LiteralPath $checksumPath
 $relativePaths = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$expectedHashes = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::OrdinalIgnoreCase)
 $checksumCount = 0
 foreach ($line in $checksumLines) {
   if ([string]::IsNullOrWhiteSpace($line)) {
@@ -149,13 +150,7 @@ foreach ($line in $checksumLines) {
     throw "SHA256SUMS 存在重复路径：$relativePath"
   }
 
-  $filePath = Resolve-OutputPath $relativePath 'checksum entry'
-  Assert-FileExists $filePath "checksum 文件 $relativePath"
-  $actualHash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256).Hash.ToLowerInvariant()
-  if ($actualHash -ne $expectedHash) {
-    throw "SHA256 不匹配：$relativePath expected=$expectedHash actual=$actualHash"
-  }
-
+  $expectedHashes[$relativePath] = $expectedHash
   $checksumCount++
 }
 
@@ -187,6 +182,16 @@ foreach ($actual in $actualFiles) {
 foreach ($listed in $relativePaths) {
   if (-not $actualFiles.Contains($listed)) {
     throw "SHA256SUMS 登记了不存在的文件：$listed"
+  }
+}
+
+foreach ($listed in $relativePaths) {
+  $filePath = Resolve-OutputPath $listed 'checksum entry'
+  Assert-FileExists $filePath "checksum 文件 $listed"
+  $actualHash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256).Hash.ToLowerInvariant()
+  $expectedHash = $expectedHashes[$listed]
+  if ($actualHash -ne $expectedHash) {
+    throw "SHA256 不匹配：$listed expected=$expectedHash actual=$actualHash"
   }
 }
 
