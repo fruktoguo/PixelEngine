@@ -2308,6 +2308,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             "routeCompleted",
             "materialsReactionsBodiesShown",
             "audioLightingHudShown",
+            "playerPackageStandaloneRun",
             "lavaDamageObserved",
             "grenadeLargeTerrainEdit",
             "obstacleDemolitionRoute",
@@ -2695,6 +2696,18 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                     ["sandPileTraversal"] = false,
                     ["rigidOwnedStanding"] = true,
                 });
+            string badStandaloneManifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "bad-standalone", includeDemoManualMetadata: true);
+            SetFlatEvidenceProperty(
+                badStandaloneManifest,
+                "fullRoutePlaythroughVideo",
+                "checklist",
+                new JsonObject
+                {
+                    ["routeCompleted"] = true,
+                    ["materialsReactionsBodiesShown"] = true,
+                    ["audioLightingHudShown"] = true,
+                    ["playerPackageStandaloneRun"] = false,
+                });
             string badCriteriaManifest = CreateFlatEvidenceManifest(temp, manualScopes, suffix: "bad-criteria", includeDemoManualMetadata: true);
             SetFlatEvidenceProperty(
                 badCriteriaManifest,
@@ -2759,6 +2772,20 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.Contains("status: blocked_invalid_manual_evidence", badChecklist.Output + badChecklistReport, StringComparison.Ordinal);
             Assert.Contains("controlFeelReport checklist.sandPileTraversal 必须为 true", badChecklistReport, StringComparison.Ordinal);
             Assert.DoesNotContain("status: manual_evidence_attached_pending_review", badChecklistReport, StringComparison.Ordinal);
+
+            string badStandaloneArtifacts = Path.Combine(temp, "bad-standalone-out");
+            ScriptResult badStandalone = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "demo-manual-acceptance-preflight.ps1"),
+                "-EvidenceManifestPath",
+                badStandaloneManifest,
+                "-Artifacts",
+                badStandaloneArtifacts);
+            Assert.Equal(5, badStandalone.ExitCode);
+            string badStandaloneReport = File.ReadAllText(Path.Combine(badStandaloneArtifacts, "demo-manual-acceptance-preflight.md"));
+            Assert.Contains("status: blocked_invalid_manual_evidence", badStandalone.Output + badStandaloneReport, StringComparison.Ordinal);
+            Assert.Contains("fullRoutePlaythroughVideo checklist.playerPackageStandaloneRun 必须为 true", badStandaloneReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: manual_evidence_attached_pending_review", badStandaloneReport, StringComparison.Ordinal);
 
             string badCriteriaArtifacts = Path.Combine(temp, "bad-criteria-out");
             ScriptResult badCriteria = RunPowerShellScript(
@@ -7403,6 +7430,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "routeCompleted",
                 "materialsReactionsBodiesShown",
                 "audioLightingHudShown",
+                "playerPackageStandaloneRun",
             ],
             "lavaCombatPlaythroughVideo" =>
             [

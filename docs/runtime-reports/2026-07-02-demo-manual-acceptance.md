@@ -45,7 +45,7 @@ manifest 使用 `schemaVersion: 1`，顶层必须声明 `reviewSessionId` 与 `g
 - `rigidBodyGameplayVideo`: `pushAndImpact`、`digBridgeCollapse`、`continuedDamage`
 - `particleLightingVideo`: `particlesVisible`、`bloomFogLighting`、`noParticleLeak`
 - `audioListeningReport`: `materialImpacts`、`ambientAndReaction`、`spatialMix`
-- `fullRoutePlaythroughVideo`: `routeCompleted`、`materialsReactionsBodiesShown`、`audioLightingHudShown`
+- `fullRoutePlaythroughVideo`: `routeCompleted`、`materialsReactionsBodiesShown`、`audioLightingHudShown`、`playerPackageStandaloneRun`
 - `lavaCombatPlaythroughVideo`: `lavaDamageObserved`、`grenadeLargeTerrainEdit`、`obstacleDemolitionRoute`、`webFirstResultRestart`
 - `hudMenuEditorVideo`: `hudReadable`、`menuButtonsClicked`、`editorDockspaceOpened`
 - `hotReloadWindowReport`: `behaviourSourceEdited`、`alcReloadObserved`、`statePreserved`
