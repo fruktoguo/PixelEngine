@@ -654,6 +654,7 @@ internal sealed class EditorProjectSession : IDisposable
             bool destructible = id.Value != 0 &&
                 material.Type is CellType.Solid or CellType.Powder &&
                 (flags & MaterialProperty.Indestructible) == 0;
+            bool blocksCharacter = material.Type is CellType.Solid or CellType.Powder;
             return new MaterialInfo(
                 id,
                 material.Name,
@@ -670,7 +671,17 @@ internal sealed class EditorProjectSession : IDisposable
                 material.Hardness != 0 ? material.Hardness : material.Durability,
                 material.MaxIntegrity,
                 destructible,
-                material.Dispersion);
+                material.Dispersion,
+                blocksCharacter,
+                material.Flammability,
+                material.AutoIgnitionTemp,
+                material.FireHp,
+                material.TemperatureOfFire,
+                material.GeneratesSmoke,
+                material.HeatConduct,
+                material.HeatCapacity,
+                material.RenderStyle,
+                flags);
         }
 
         private static string LegendCategoryName(MaterialLegendCategory category)

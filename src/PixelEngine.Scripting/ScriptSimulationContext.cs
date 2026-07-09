@@ -721,7 +721,16 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 material.MaxIntegrity,
                 destructible,
                 material.Dispersion,
-                blocksCharacter);
+                blocksCharacter,
+                material.Flammability,
+                material.AutoIgnitionTemp,
+                material.FireHp,
+                material.TemperatureOfFire,
+                material.GeneratesSmoke,
+                material.HeatConduct,
+                material.HeatCapacity,
+                material.RenderStyle,
+                flags);
         }
 
         private static string LegendCategoryName(MaterialLegendCategory category)
