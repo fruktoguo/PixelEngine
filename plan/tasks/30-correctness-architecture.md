@@ -10,7 +10,7 @@
   - 设计来源：`AGENTS.md §0`；`plan/02-core-infrastructure.md`；`plan/13-demo-game.md`。
   - 验收：Core、Hosting、Editor 不出现 `lava`/任务/关卡专属诊断字段；Demo 通过公开注册 API发布同等诊断；现有 HUD/探针测试迁移并全绿。
 
-- [~] `ARCH-002` 收紧 `Chunk`/`CellGrid` 的公开可写数组和 `ref` 返回，确保外部调用不能绕过 dirty、parity、KeepAlive 与 rigid-damage 通知。
+- [x] `ARCH-002` 收紧 `Chunk`/`CellGrid` 的公开可写数组和 `ref` 返回，确保外部调用不能绕过 dirty、parity、KeepAlive 与 rigid-damage 通知。
   - 优先级：P1。
   - 依赖：`BASE-003`、`BASE-006`。
   - 设计来源：`plan/03-simulation-kernel.md`；架构 §5；不变式 #1–#4。
