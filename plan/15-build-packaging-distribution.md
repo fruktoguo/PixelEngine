@@ -44,7 +44,7 @@
 - [x] Release workflow 已实现动态矩阵：`.github/workflows/release.yml` 通过 setup job 消费 `tools/release-matrix.ps1` 输出 native/build/expected 矩阵。
 - [x] 发行激活真相源已集中：`tools/release-rids.json` 声明 channels、active RID、runner、shell、smoke、codesign；任一 dormant RID 翻 active 后由矩阵脚本扩展。
 - [x] 审计脚本已参数化：`tools/audit-release-artifacts.ps1` 与 `.sh` 接收 active RID，`--require-all` 只要求当前激活集，dormant RID 缺失不误判当前 Windows-first 发布失败。
-- [x] 发行证据预检已参数化：`tools/release-evidence-preflight.ps1` 与 `.sh` 从 active RID 和 expected package count 派生包数、上传资产数、SHA256SUMS 覆盖、deterministic hash 行集，以及 `workflow_run` ↔ 子报告的 `run_id` / `sha` / `workflow` / `run_attempt` 同源身份。
+- [x] 发行证据预检已参数化：`tools/release-evidence-preflight.ps1` 与 `.sh` 从 active RID 和 expected package count 派生包数、上传资产数、SHA256SUMS 覆盖、deterministic hash 行集，以及 `workflow_run` ↔ 子报告的 `run_id` / `sha` / `workflow` / `run_attempt` 同源身份；每个 `artifacts.<rid>.<channel>.package` 叶子文件名还必须匹配 `PixelEngine-Demo-<tag-version>-<rid>-<channel>.<zip|tar.gz>`，防止 manifest 把包挂到错误 RID/channel 节点。
 - [x] GitHub Release 上传报告约束已写入预检：`workflow_run` 必须来自 tag push，且必须覆盖 package asset 与唯一 `SHA256SUMS`；只写 success、缺少同源 `workflow` / `run_attempt` 或 `workflow_dispatch` 不能冒充完成。
 - [x] 确定性打包工具已落地并纳入 solution：`tools/PixelEngine.Tools.DeterministicPackage` 固定 entry 顺序、时间戳、权限与 owner，release job 二次 package 生成 deterministic hash report，`dotnet build PixelEngine.sln` 会覆盖该工具项目。
 - [x] build-player 编排器已落地：`tools/build-player.ps1` 与 `.sh` 串 `build-native`、publish、verify、package、audit，输出 `schema=pixelengine.build/v1` NDJSON 与 `build-result.json`。
@@ -80,7 +80,7 @@
 - [!] 阻塞：macOS 签名和公证需要 Developer ID 与 notary 凭据，缺凭据时不得出未签名产物冒充完成。
 - [!] 阻塞：Linux 动态链 glibc 需要目标 runner 的 `ldd` 或等价检查，Windows 本机不能替代。
 - [!] 阻塞：完整 6-RID dual-build 产物需要对应 runner 或交叉编译证据，本机 `win-x64` 不能替代其它 RID。
-- [!] 阻塞：SHA256SUMS 必须覆盖全部 active package 且与 GitHub Release 上传 asset hash 一致，局部 checksum 文件不能替代。
+- [!] 阻塞：SHA256SUMS 必须覆盖全部 active package 且与 GitHub Release 上传 asset hash 一致，局部 checksum 文件不能替代；manifest package 文件名还必须与所在 RID/channel 节点、平台扩展名和 release tag version 一致。
 - [!] 阻塞：deterministic hash report 必须逐 active RID × channel 给出 match 行，只写 `conclusion=success` 不能通过。
 - [!] 阻塞：发行证据 manifest、workflow run 报告、artifact audit、SIMD 探针、signing 报告和 GitHub upload 报告必须同 run_id、sha、workflow、attempt，不允许拼接不同运行。
 - [!] 阻塞：Ultralight optional profile inactive 前不得携带 `Ultralight` / `WebCore` / `AppCore` native，也不得把 native 文件、NOTICE 文案或 startup 请求冒充 SDK provenance、commercial redistribution license、codesign/notarize 或 release artifact evidence。

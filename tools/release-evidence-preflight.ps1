@@ -603,6 +603,35 @@ function Test-PackageVersionsMatchReleaseTag {
     }
 }
 
+function Test-PackageNameMatchesArtifactNode {
+    param(
+        [System.Collections.Generic.List[string]]$Missing,
+        [string]$PackageName,
+        [string]$Rid,
+        [string]$Channel,
+        [string]$ReleaseVersion
+    )
+
+    if ([string]::IsNullOrWhiteSpace($PackageName)) {
+        $Missing.Add("artifacts.$Rid.$Channel.package 缺少 package 文件名")
+        return
+    }
+
+    $expectedExtension = if ($Rid.StartsWith("win-", [StringComparison]::Ordinal)) { "zip" } else { "tar.gz" }
+    $pattern = "^PixelEngine-Demo-(?<version>.+)-$([regex]::Escape($Rid))-$([regex]::Escape($Channel))\.$([regex]::Escape($expectedExtension))$"
+    if ($PackageName -notmatch $pattern) {
+        $Missing.Add("artifacts.$Rid.$Channel.package 文件名必须匹配 PixelEngine-Demo-<version>-$Rid-$Channel.$expectedExtension，实际为 $PackageName")
+        return
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ReleaseVersion)) {
+        $packageVersion = $Matches["version"]
+        if (-not [string]::Equals($packageVersion, $ReleaseVersion, [StringComparison]::Ordinal)) {
+            $Missing.Add("artifacts.$Rid.$Channel.package 文件名版本必须与 release tag 一致：expected=$ReleaseVersion actual=$packageVersion")
+        }
+    }
+}
+
 function Get-JsonPropertyNames {
     param([object]$Node)
 
@@ -831,6 +860,7 @@ foreach ($rid in $rids) {
         $packageReportPath = [string]$node.packageReport
         $packagePath = [string]$node.package
         $packageName = Split-Path -Leaf $packagePath
+        Test-PackageNameMatchesArtifactNode -Missing $missing -PackageName $packageName -Rid $rid -Channel $channel -ReleaseVersion $releaseVersion
         if (-not [string]::IsNullOrWhiteSpace($packageName)) {
             if ($expectedChecksumPackages.ContainsKey($packageName)) {
                 $missing.Add("manifest 包含重复 package 文件名：$packageName")

@@ -6631,6 +6631,53 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 release manifest 中 package 文件名必须与所在 RID/channel 节点和 tag version 一致。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsPackageNameNotMatchingArtifactNode()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-package-name-node-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject node = rootNode["artifacts"]!["win-x64"]!["r2r"]!.AsObject();
+            string oldPackage = (string)node["package"]!;
+            string badPackage = Path.Combine(
+                Path.GetDirectoryName(oldPackage)!,
+                "PixelEngine-Demo-0.1.0-linux-x64-r2r.zip");
+            File.Copy(oldPackage, badPackage);
+            node["package"] = badPackage;
+            node["packageSha256"] = GetSha256(badPackage);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "package-name-node-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("artifacts.win-x64.r2r.package 文件名必须匹配 PixelEngine-Demo-<version>-win-x64-r2r.zip", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 deterministic hash 报告不能只靠 conclusion=success 冒充全部 RID/channel hash 匹配。
     /// </summary>
     [Fact]
