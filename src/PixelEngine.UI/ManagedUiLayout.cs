@@ -257,9 +257,9 @@ internal static class ManagedUiLayout
     private static bool IsSupportedSelector(ReadOnlySpan<char> selector)
     {
         return !selector.IsEmpty &&
-            (selector[0] == '#'
-                ? selector.Length > 1 && selector[1..].IndexOfAny(" .>+~[:".AsSpan()) < 0
-                : selector.IndexOfAny("#. >+~[:".AsSpan()) < 0);
+            (selector[0] is '#' or '.'
+                ? selector.Length > 1 && IsSimpleSelectorToken(selector[1..])
+                : IsSimpleSelectorToken(selector));
     }
 
     private static ManagedUiStyle ResolveStyle(XElement element, Dictionary<string, ManagedUiStyle> rules)
@@ -269,6 +269,18 @@ internal static class ManagedUiLayout
         if (rules.TryGetValue(tag, out ManagedUiStyle tagStyle))
         {
             style = style.Merge(in tagStyle);
+        }
+
+        string? classes = ReadAttribute(element, "class");
+        if (!string.IsNullOrWhiteSpace(classes))
+        {
+            foreach (string className in SplitClassNames(classes))
+            {
+                if (rules.TryGetValue("." + className, out ManagedUiStyle classStyle))
+                {
+                    style = style.Merge(in classStyle);
+                }
+            }
         }
 
         string? id = ReadAttribute(element, "id");
@@ -293,6 +305,13 @@ internal static class ManagedUiLayout
             ReadFloat(element, inlineStyle, "height", "height"),
             ReadFloat(element, inlineStyle, "margin-top", "margin-top"));
         return inline.Merge(in attributes);
+    }
+
+    private static IEnumerable<string> SplitClassNames(string value)
+    {
+        return value.Split(
+            [' ', '\t', '\r', '\n'],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
     private static ManagedUiStyle ReadStyle(string? style)
@@ -416,6 +435,31 @@ internal static class ManagedUiLayout
         int separator = remaining.IndexOfAny(" \t\r\n".AsSpan());
         ReadOnlySpan<char> top = separator >= 0 ? remaining[..separator] : remaining;
         return TryReadFloat(top.ToString(), out result);
+    }
+
+    private static bool IsSimpleSelectorToken(ReadOnlySpan<char> selector)
+    {
+        if (selector.IsEmpty)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < selector.Length; i++)
+        {
+            char ch = selector[i];
+            bool allowed =
+                ch is (>= 'a' and <= 'z') or
+                    (>= 'A' and <= 'Z') or
+                    (>= '0' and <= '9') or
+                    '_' or
+                    '-';
+            if (!allowed)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool StringEquals(string? left, string? right)

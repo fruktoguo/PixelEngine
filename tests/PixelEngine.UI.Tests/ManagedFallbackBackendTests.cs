@@ -209,6 +209,7 @@ public sealed class ManagedFallbackBackendTests
               <head>
                 <style>
                   button { width: 180px; height: 28px; margin: 10px 0px; margin-top: 6px; }
+                  .primary { width: 196px; height: 32px; margin-top: 8px; }
                   progress { width: 240px; height: 14px; margin-top: 4px; }
                   p { margin: 5px 0px; }
                   #start_game { position: absolute; left: 28px; top: 72px; }
@@ -216,7 +217,7 @@ public sealed class ManagedFallbackBackendTests
               </head>
               <body>
                 <p>Ready</p>
-                <button id="start_game" data-event-click="start_game">开始游戏</button>
+                <button id="start_game" class="primary" data-event-click="start_game">开始游戏</button>
                 <progress id="health" path="hud.health" value="0.5" text="生命" />
               </body>
             </rml>
@@ -230,7 +231,7 @@ public sealed class ManagedFallbackBackendTests
         host.Composite(default);
 
         Assert.Equal((28f, 72f), Assert.Single(gui.Context.Cursors));
-        Assert.Equal(("开始游戏", 180f, 28f), Assert.Single(gui.Context.SizedButtons));
+        Assert.Equal(("开始游戏", 196f, 32f), Assert.Single(gui.Context.SizedButtons));
         Assert.Equal((0.5f, "生命", 240f, 14f), Assert.Single(gui.Context.SizedProgressBars));
         Assert.Contains("Ready", gui.Context.Texts);
         Assert.Contains(5f, gui.Context.VerticalSpacings);
