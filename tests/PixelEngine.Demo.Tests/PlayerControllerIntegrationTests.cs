@@ -1706,8 +1706,8 @@ public sealed class PlayerControllerIntegrationTests
             Assert.Equal((ushort)0, grid.MaterialAt(36, 34));
             Assert.Equal((ushort)0, grid.MaterialAt(33, 31));
             Assert.Equal((ushort)0, grid.MaterialAt(33, 37));
-            Assert.Equal(stone, grid.MaterialAt(55, 34));
-            Assert.Equal(stone, grid.MaterialAt(36, 52));
+            Assert.Equal((ushort)0, grid.MaterialAt(55, 34));
+            Assert.Equal((ushort)0, grid.MaterialAt(36, 52));
 
             input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
             engine.RunHeadlessTicks(1);
