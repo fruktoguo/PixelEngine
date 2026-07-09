@@ -5178,6 +5178,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("notarizationReport", evidence, StringComparison.Ordinal);
         Assert.Contains("r2rLightupReport", evidence, StringComparison.Ordinal);
         Assert.Contains("githubRelease", evidence, StringComparison.Ordinal);
+        Assert.Contains("browser_download_url", evidence, StringComparison.Ordinal);
         Assert.Contains("deterministicHashReport", evidence, StringComparison.Ordinal);
         Assert.DoesNotContain("status \"passed\"", evidence, StringComparison.OrdinalIgnoreCase);
 
@@ -5191,6 +5192,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("同一个 GitHub Actions run", releaseReport, StringComparison.Ordinal);
         Assert.Contains("conclusion: success", releaseReport, StringComparison.Ordinal);
         Assert.Contains("simdProbeKind", releaseReport, StringComparison.Ordinal);
+        Assert.Contains("browser_download_url", releaseReport, StringComparison.Ordinal);
         Assert.Contains("arm64_neon", releaseReport, StringComparison.Ordinal);
         Assert.Contains("pending review 误当成验收通过", releaseReport, StringComparison.Ordinal);
         Assert.Contains("release-evidence-manifest.example.json", releaseReport, StringComparison.Ordinal);
@@ -5206,7 +5208,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("`event=push` 且 `ref=refs/tags/v<semver>`", readme, StringComparison.Ordinal);
         Assert.Contains("`release_tag=true` 且 `tag` 与 ref 一致", readme, StringComparison.Ordinal);
         Assert.Contains("`uploaded_asset_count=packageCount+1`", readme, StringComparison.Ordinal);
-        Assert.Contains("每个 package asset hash 与唯一 `SHA256SUMS` hash", readme, StringComparison.Ordinal);
+        Assert.Contains("每个 package asset hash、唯一 `SHA256SUMS` hash 与每个上传资产的 `browser_download_url/<asset>`", readme, StringComparison.Ordinal);
         Assert.Contains("必须逐 active RID × channel 给出 `result=match` 明细行", readme, StringComparison.Ordinal);
         Assert.Contains("`require_all=true`", readme, StringComparison.Ordinal);
         Assert.Contains("`aot_dynamic_box2d_rejected=true`", readme, StringComparison.Ordinal);
@@ -6631,6 +6633,53 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 GitHub Release 上传报告必须包含每个资产的 browser_download_url，不能只列 hash。
+    /// </summary>
+    [Fact]
+    public void ReleaseEvidencePreflightRejectsUploadReportWithoutDownloadUrls()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-release-upload-download-url-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateReleaseEvidenceManifest(temp, packageConclusion: "success");
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonObject githubRelease = rootNode["githubRelease"]!.AsObject();
+            string upload = (string)githubRelease["uploadReport"]!;
+            string[] lines = File.ReadAllLines(upload)
+                .Where(static line => !line.Contains("browser_download_url/", StringComparison.Ordinal))
+                .ToArray();
+            File.WriteAllLines(upload, lines);
+            githubRelease["uploadSha256"] = GetSha256(upload);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "missing-download-url-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "release-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "release-evidence-preflight.md"));
+            Assert.Contains("blocked_missing_release_scope_evidence", result.Output + report, StringComparison.Ordinal);
+            Assert.Contains("github_release_upload 缺少 browser_download_url：PixelEngine-Demo-0.1.0-win-x64-r2r.zip", report, StringComparison.Ordinal);
+            Assert.Contains("github_release_upload 缺少 browser_download_url：SHA256SUMS", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status | release_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 release manifest 中 package 文件名必须与所在 RID/channel 节点和 tag version 一致。
     /// </summary>
     [Fact]
@@ -7160,9 +7209,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             foreach ((string name, string hash) in packageChecksums.OrderBy(item => item.Name, StringComparer.Ordinal))
             {
                 uploadEvidence[$"asset/{name}"] = hash;
+                uploadEvidence[$"browser_download_url/{name}"] = $"https://github.com/fruktoguo/PixelEngine/releases/download/{uploadTag}/{name}";
             }
 
             uploadEvidence["asset/SHA256SUMS"] = checksumHash;
+            uploadEvidence["browser_download_url/SHA256SUMS"] = $"https://github.com/fruktoguo/PixelEngine/releases/download/{uploadTag}/SHA256SUMS";
         }
 
         string upload = WriteMarkdownEvidence(
