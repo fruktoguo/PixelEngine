@@ -442,17 +442,18 @@ public sealed class WeaponController : Behaviour
         }
 
         int count = Math.Clamp(radius + 3, 3, 12);
-        float angle = MathF.Atan2(-dirY, -dirX);
-        Context.Particles.Emit(new ParticleEmit(
+        float baseSpeed = MathF.Max(24f, weapon.BeamDps * 0.015f);
+        Context.Particles.Emit(
             hitX,
             hitY,
-            _laserSparkMaterial,
-            count,
-            angle,
-            DirSpreadRad: 0.65f,
-            BaseSpeed: MathF.Max(24f, weapon.BeamDps * 0.015f),
-            SpeedJitter: 18f,
-            LifeTicks: 18));
+            -dirX,
+            -dirY,
+            coneRadians: 0.65f,
+            minSpeed: MathF.Max(0f, baseSpeed - 18f),
+            maxSpeed: baseSpeed + 18f,
+            count: count,
+            material: _laserSparkMaterial,
+            lifeTicks: 18);
     }
 
     private static int RangeOrHitLength(float length)
