@@ -1,4 +1,5 @@
 using PixelEngine.Rendering;
+using PixelEngine.UI;
 using System.Numerics;
 
 namespace PixelEngine.Editor.Shell;
@@ -115,6 +116,50 @@ internal readonly record struct GameViewViewportSnapshot(
             ImageRect.X + (normalizedX * ImageRect.Width),
             ImageRect.Y + (normalizedY * ImageRect.Height));
         return true;
+    }
+
+    /// <summary>
+    /// 将 viewport 纹理坐标中的 IME caret/候选锚点映射到窗口 client / framebuffer 坐标，
+    /// 与 <see cref="TryCreateUiPresentTarget"/> 使用同一 panel origin + DPI 约定，供 IMM32 定位。
+    /// </summary>
+    /// <param name="viewportGeometry">viewport 纹理像素空间中的 IME 几何。</param>
+    /// <param name="panelOriginFramebuffer">Game View 面板原点在 framebuffer/client 空间的位置（已含 DPI 缩放）。</param>
+    /// <param name="framebufferScale">逻辑面板坐标 → framebuffer 的缩放。</param>
+    /// <param name="windowGeometry">映射后的窗口 client 坐标几何。</param>
+    /// <returns>snapshot 有效且输入几何有效时返回 true。</returns>
+    public bool TryMapViewportImeGeometryToWindowClient(
+        in UiImeGeometry viewportGeometry,
+        Vector2 panelOriginFramebuffer,
+        Vector2 framebufferScale,
+        out UiImeGeometry windowGeometry)
+    {
+        windowGeometry = UiImeGeometry.None;
+        if (!viewportGeometry.HasAny ||
+            !IsValid ||
+            !ImageRect.IsValid ||
+            VisibleViewportRect.Width <= 0f ||
+            VisibleViewportRect.Height <= 0f)
+        {
+            return false;
+        }
+
+        float fitScaleX = ImageRect.Width / VisibleViewportRect.Width;
+        float fitScaleY = ImageRect.Height / VisibleViewportRect.Height;
+        if (!float.IsFinite(fitScaleX) || !float.IsFinite(fitScaleY) || fitScaleX <= 0f || fitScaleY <= 0f)
+        {
+            return false;
+        }
+
+        float panelOffsetX = ImageRect.X - (VisibleViewportRect.X * fitScaleX);
+        float panelOffsetY = ImageRect.Y - (VisibleViewportRect.Y * fitScaleY);
+        // 先 viewport → panel-local，再 panel-local → window client（与 present target 同源）。
+        UiImeGeometry panelLocal = viewportGeometry.Transform(panelOffsetX, panelOffsetY, fitScaleX, fitScaleY);
+        float dpiX = NormalizeScale(framebufferScale.X);
+        float dpiY = NormalizeScale(framebufferScale.Y);
+        float originX = float.IsFinite(panelOriginFramebuffer.X) ? panelOriginFramebuffer.X : 0f;
+        float originY = float.IsFinite(panelOriginFramebuffer.Y) ? panelOriginFramebuffer.Y : 0f;
+        windowGeometry = panelLocal.Transform(originX, originY, dpiX, dpiY);
+        return windowGeometry.HasAny;
     }
 
     public bool TryCreateUiPresentTarget(

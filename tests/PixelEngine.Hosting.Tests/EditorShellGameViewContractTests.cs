@@ -507,6 +507,85 @@ public sealed class EditorShellGameViewContractTests
     }
 
     /// <summary>
+    /// 验证 IME 几何从 viewport 映射到 window client 时与 present target 使用同一 panel origin + DPI 约定。
+    /// </summary>
+    [Fact]
+    public void GameViewViewportSnapshotMapsImeGeometryToWindowClientWithPanelOriginAndDpi()
+    {
+        // fitScale = 0.5（160x90 image for 320x180 texture）
+        // panel-local caret = (100*0.5+10, 80*0.5+20) = (60, 60)；size *= 0.5 → (2, 9)
+        // window = origin + panel-local * dpi = (100,40) + (60,60)*2 = (220, 160)；size *= 2 → (4, 18)
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 320,
+            textureHeight: 180,
+            imageMinPanel: new Vector2(10f, 20f),
+            availablePanelSize: new Vector2(160f, 160f));
+        UiImeGeometry viewportGeometry = UiImeGeometry.FromCaretRect(100f, 80f, 4f, 18f);
+
+        Assert.True(snapshot.TryMapViewportImeGeometryToWindowClient(
+            in viewportGeometry,
+            panelOriginFramebuffer: new Vector2(100f, 40f),
+            framebufferScale: new Vector2(2f, 2f),
+            out UiImeGeometry windowGeometry));
+
+        Assert.True(windowGeometry.HasCaretRect);
+        Assert.Equal(220f, windowGeometry.CaretX, precision: 3);
+        Assert.Equal(160f, windowGeometry.CaretY, precision: 3);
+        Assert.Equal(4f, windowGeometry.CaretWidth, precision: 3);
+        Assert.Equal(18f, windowGeometry.CaretHeight, precision: 3);
+        Assert.True(windowGeometry.HasCandidateAnchor);
+        Assert.Equal(220f, windowGeometry.CandidateAnchorX, precision: 3);
+        Assert.Equal(178f, windowGeometry.CandidateAnchorY, precision: 3);
+
+        Assert.False(snapshot.TryMapViewportImeGeometryToWindowClient(
+            UiImeGeometry.None,
+            new Vector2(100f, 40f),
+            Vector2.One,
+            out UiImeGeometry none));
+        Assert.False(none.HasAny);
+        Assert.False(GameViewViewportSnapshot.Empty.TryMapViewportImeGeometryToWindowClient(
+            in viewportGeometry,
+            new Vector2(100f, 40f),
+            Vector2.One,
+            out _));
+    }
+
+    /// <summary>
+    /// 验证 GameViewUiInputSource 把 viewport IME 几何发布为 window client 坐标，而不是停留在 panel-local。
+    /// </summary>
+    [Fact]
+    public void GameViewUiInputSourceMapsImeGeometryToWindowClientCoordinates()
+    {
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 320,
+            textureHeight: 180,
+            imageMinPanel: new Vector2(10f, 20f),
+            availablePanelSize: new Vector2(160f, 160f));
+        FixedUiInputSource inner = new(new UiPointerState(0f, 0f, 0f, 0f, LeftDown: false, RightDown: false, MiddleDown: false));
+        GameViewUiInputSource source = new(
+            inner,
+            () => PixelEngine.Editor.EditorMode.Play,
+            () => snapshot,
+            () => new Vector2(90f, 65f),
+            () => true,
+            () => new Vector2(100f, 40f),
+            () => new Vector2(2f, 2f));
+
+        source.ApplyImeGeometry(UiImeGeometry.FromCaretRect(100f, 80f, 4f, 18f));
+
+        Assert.Equal(1, inner.ApplyImeGeometryCalls);
+        Assert.True(inner.LastImeGeometry.HasCaretRect);
+        Assert.Equal(220f, inner.LastImeGeometry.CaretX, precision: 3);
+        Assert.Equal(160f, inner.LastImeGeometry.CaretY, precision: 3);
+        Assert.Equal(4f, inner.LastImeGeometry.CaretWidth, precision: 3);
+        Assert.Equal(18f, inner.LastImeGeometry.CaretHeight, precision: 3);
+
+        source.ApplyImeGeometry(UiImeGeometry.None);
+        Assert.Equal(2, inner.ApplyImeGeometryCalls);
+        Assert.False(inner.LastImeGeometry.HasAny);
+    }
+
+    /// <summary>
     /// 验证 Game View UI present target provider 只在 Play 模式、面板可见且 snapshot 有效时输出 framebuffer-space 目标。
     /// </summary>
     [Fact]
@@ -564,6 +643,10 @@ public sealed class EditorShellGameViewContractTests
 
         public int CaptureTextCompositionCalls { get; private set; }
 
+        public int ApplyImeGeometryCalls { get; private set; }
+
+        public UiImeGeometry LastImeGeometry { get; private set; }
+
         public bool TryGetPointer(out UiPointerState state)
         {
             state = pointer;
@@ -595,6 +678,12 @@ public sealed class EditorShellGameViewContractTests
             CompositionText.AsSpan(0, count).CopyTo(destination);
             composition = Composition;
             return count;
+        }
+
+        public void ApplyImeGeometry(in UiImeGeometry geometry)
+        {
+            ApplyImeGeometryCalls++;
+            LastImeGeometry = geometry;
         }
     }
 

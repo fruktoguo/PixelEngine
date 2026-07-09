@@ -195,7 +195,9 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             CapturePlayMode,
             () => _gameViewPanel?.LastViewportSnapshot ?? GameViewViewportSnapshot.Empty,
             () => _gameViewPanel?.LastPointerPanelPoint ?? default,
-            () => _gameViewPanel is { Visible: true, InputFocused: true });
+            () => _gameViewPanel is { Visible: true, InputFocused: true },
+            () => _gameViewPanel?.LastPanelOriginFramebuffer ?? default,
+            () => _gameViewPanel?.LastFramebufferScale ?? System.Numerics.Vector2.One);
     }
 
     public bool TryGetPresentTarget(out UiPresentTarget target)
