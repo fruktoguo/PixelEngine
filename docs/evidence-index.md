@@ -2,12 +2,13 @@
 
 本索引登记可长期保留的证据报告。机器可读真相是 [`evidence-index.json`](evidence-index.json)，可用 `pwsh tools/validate-evidence-index.ps1` 重算每个报告的 SHA256 并检查路径、任务 ID、Git commit 和 run/session 身份。
 
-`artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/`、`publish/` 与 `最终输出/` 都是可再生或会被清理的输出目录，不能作为唯一证据。索引中的 `commit` 是报告文件最后一次写入的 Git commit；`runSessionId` 只有在原始报告确实记录时才填写。历史报告没有 run identity 时明确标为 `not_recorded_in_source_report`，不会被补造为完成证据。
+`artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/`、`publish/` 与 `最终输出/` 都是可再生或会被清理的输出目录，不能作为唯一证据。索引中的 `commit` 是报告或验证实际执行/来源内容所绑定的 Git commit，稳定报告文件自身由 SHA256 独立保护；`runSessionId` 只有在原始报告确实记录时才填写。历史报告没有 run identity 时明确标为 `not_recorded_in_source_report`，不会被补造为完成证据。
 
 | entry | task IDs | 状态 | commit | run/session | 报告 | SHA256 |
 |---|---|---|---|---|---|---|
 | `completed-baseline-capabilities` | `BASE-001`–`BASE-018` | `baseline_coverage_only` | `5af1541f` | 未记录 | [completed baseline](../plan/tasks/10-completed-baseline.md) | `7fff9692…d7874c` |
 | `scope-decisions-20260710` | `SCOPE-001`–`SCOPE-006` | `decision_record` | `5af1541f` | 未记录 | [scope decisions](../plan/tasks/20-scope-decisions.md) | `96519945…e47d1f` |
+| `ci-001-workflow-validation-20260710` | `CI-001` | `local_static_validation_complete` | `b7fcf532` | `local-20260710-ci001-actionlint` | [CI-001 workflow validation](evidence-2026-07-10-ci-001-workflow-validation.md) | `53c9c906…b35a7a9` |
 | `target-hardware-matrix-20260710` | `EVID-003` | `complete_inventory_control_plane` | `796b5781` | `local-20260710-evid003-target-matrix` | [target hardware validation](evidence-2026-07-10-target-hardware-matrix.md) | `5bf8793d…1fd5bc` |
 | `task-catalog-20260710` | `PLAN-001`, `EVID-001` | `complete` | `5af1541f` | `local-20260710-evid001-task-catalog` | [task catalog validation](evidence-2026-07-10-task-catalog-validation.md) | `6d6b7b26…d71f5f42` |
 | `plan14-short-20260702` | `BASE-016`, `PERF-001`, `PERF-003`, `PERF-011` | `historical_calibration` | `eb8895f8` | 未记录 | [plan14 short](benchmark-reports/2026-07-02-plan14-short.md) | `1d09196c…e9496` |

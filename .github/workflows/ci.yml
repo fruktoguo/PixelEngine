@@ -65,12 +65,23 @@ jobs:
         run: bash ./tools/build-native.sh --rid "${{ matrix.rid }}" --configuration Release
 
       - name: Build solution
-        shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: dotnet build PixelEngine.sln -c Release
+
+      - name: Build solution
+        if: runner.os != 'Windows'
+        shell: bash
         run: dotnet build PixelEngine.sln -c Release
 
       - name: Test solution
-        if: matrix.build_only != 'true'
-        shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
+        if: matrix.build_only != 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: dotnet test PixelEngine.sln -c Release --no-build
+
+      - name: Test solution
+        if: matrix.build_only != 'true' && runner.os != 'Windows'
+        shell: bash
         run: dotnet test PixelEngine.sln -c Release --no-build
 
       - name: Write build-test evidence
