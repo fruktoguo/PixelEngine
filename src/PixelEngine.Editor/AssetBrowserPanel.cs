@@ -1,4 +1,5 @@
 using Hexa.NET.ImGui;
+using System.Globalization;
 
 namespace PixelEngine.Editor;
 
@@ -63,8 +64,6 @@ public sealed class AssetBrowserPanel(
     private string _pendingMoveTargetPath = string.Empty;
     private AssetBrowserFolderMoveRequest? _pendingFolderMoveRequest;
     private string _pendingFolderMoveTargetPath = string.Empty;
-    private AssetBrowserItemKind _createKind = AssetBrowserItemKind.Script;
-    private string _createPath = "scripts/NewBehaviour.cs";
 
     /// <inheritdoc />
     public string Title => EditorDockSpace.AssetBrowserWindowTitle;
@@ -86,6 +85,16 @@ public sealed class AssetBrowserPanel(
     /// 当前可作为拖拽移动目标的逻辑文件夹快照。
     /// </summary>
     public IReadOnlyList<AssetBrowserFolderItem> FolderTargets { get; private set; } = [];
+
+    /// <summary>
+    /// 当前 Create Type 输入。
+    /// </summary>
+    public AssetBrowserItemKind CreateKind { get; private set; } = AssetBrowserItemKind.Script;
+
+    /// <summary>
+    /// 当前 New Asset 输入。
+    /// </summary>
+    public string CreatePath { get; private set; } = "scripts/NewBehaviour.cs";
 
     /// <summary>
     /// 当前资产类型过滤；null 表示全部类型。
@@ -194,12 +203,39 @@ public sealed class AssetBrowserPanel(
             }
 
             selection.SelectFolder(folder.Path);
+            ApplyCreateFolderContext(folder.Path);
             Status = $"选中文件夹 {folder.DisplayName}";
             return true;
         }
 
         Status = $"文件夹不存在：{path}";
         return false;
+    }
+
+    /// <summary>
+    /// 将 Project Window 的创建输入重定向到指定文件夹。
+    /// </summary>
+    /// <param name="folderPath">目标文件夹；空字符串表示 content 根目录。</param>
+    /// <param name="kind">要创建的资产类型。</param>
+    /// <returns>文件夹存在且创建类型受支持时返回 true。</returns>
+    public bool BeginCreateAssetInFolder(string folderPath, AssetBrowserItemKind kind)
+    {
+        if (!IsCreateKindSupported(kind))
+        {
+            Status = $"Project Window 暂不支持直接创建 {kind} 资产。";
+            return false;
+        }
+
+        if (!TryFindFolder(folderPath, out AssetBrowserFolderItem folder))
+        {
+            Status = $"文件夹不存在：{folderPath}";
+            return false;
+        }
+
+        CreateKind = kind;
+        CreatePath = MakeCreatePathUnique(ApplyFolderToCreatePath(folder.Path, GetDefaultCreatePath(kind)));
+        Status = $"准备在 {folder.DisplayName} 创建 {kind}";
+        return true;
     }
 
     /// <summary>
@@ -481,11 +517,20 @@ public sealed class AssetBrowserPanel(
             : result.Diagnostic;
         if (result.Succeeded)
         {
-            _createPath = SuggestNextCreatePath(kind, path);
             _ = Refresh();
+            CreatePath = SuggestNextCreatePath(kind, path);
         }
 
         return result.Succeeded;
+    }
+
+    /// <summary>
+    /// 使用当前 Create Type / New Asset 输入创建资产。
+    /// </summary>
+    /// <returns>创建成功时返回 true。</returns>
+    public bool TryCreateCurrentAsset()
+    {
+        return TryCreateAsset(CreatePath, CreateKind);
     }
 
     /// <summary>
@@ -580,7 +625,7 @@ public sealed class AssetBrowserPanel(
         }
 
         ImGui.SameLine();
-        DrawCreateControls();
+        DrawCreateControls(context.Selection);
         ImGui.SameLine();
         _ = ImGui.InputText("搜索", ref _search, 128);
         int kindIndex = KindFilter.HasValue ? (int)KindFilter.Value + 1 : 0;
@@ -618,29 +663,35 @@ public sealed class AssetBrowserPanel(
         ImGui.End();
     }
 
-    private void DrawCreateControls()
+    private void DrawCreateControls(EditorSelection selection)
     {
-        int createKindIndex = Array.IndexOf(CreateKinds, _createKind);
+        int createKindIndex = Array.IndexOf(CreateKinds, CreateKind);
         if (createKindIndex < 0)
         {
             createKindIndex = Array.IndexOf(CreateKinds, AssetBrowserItemKind.Script);
-            _createKind = AssetBrowserItemKind.Script;
+            CreateKind = AssetBrowserItemKind.Script;
         }
 
         if (ImGui.Combo("Create Type", ref createKindIndex, CreateKindLabels, CreateKindLabels.Length) &&
             createKindIndex >= 0 &&
             createKindIndex < CreateKinds.Length)
         {
-            _createKind = CreateKinds[createKindIndex];
-            _createPath = GetDefaultCreatePath(_createKind);
+            CreateKind = CreateKinds[createKindIndex];
+            string folder = selection.FolderPath ?? string.Empty;
+            CreatePath = MakeCreatePathUnique(ApplyFolderToCreatePath(folder, GetDefaultCreatePath(CreateKind)));
         }
 
         ImGui.SameLine();
-        _ = ImGui.InputText("New Asset", ref _createPath, 256);
+        string createPath = CreatePath;
+        if (ImGui.InputText("New Asset", ref createPath, 256))
+        {
+            CreatePath = createPath;
+        }
+
         ImGui.SameLine();
         if (ImGui.Button("Create"))
         {
-            _ = TryCreateAsset(_createPath, _createKind);
+            _ = TryCreateAsset(CreatePath, CreateKind);
         }
     }
 
@@ -1008,7 +1059,78 @@ public sealed class AssetBrowserPanel(
         };
     }
 
-    private static string SuggestNextCreatePath(AssetBrowserItemKind kind, string previousPath)
+    private void ApplyCreateFolderContext(string folderPath)
+    {
+        CreatePath = MakeCreatePathUnique(ApplyFolderToCreatePath(folderPath, CreatePath));
+    }
+
+    private string SuggestNextCreatePath(AssetBrowserItemKind kind, string previousPath)
+    {
+        return MakeCreatePathUnique(SuggestNextCreatePathCandidate(kind, previousPath));
+    }
+
+    private string MakeCreatePathUnique(string path)
+    {
+        string normalized = (path ?? string.Empty).Trim().Replace('\\', '/');
+        if (normalized.Length == 0)
+        {
+            return GetDefaultCreatePath(CreateKind);
+        }
+
+        if (!CreatePathExists(normalized))
+        {
+            return normalized;
+        }
+
+        string directory = Path.GetDirectoryName(normalized)?.Replace('\\', '/') ?? string.Empty;
+        string extension = Path.GetExtension(normalized);
+        string name = Path.GetFileNameWithoutExtension(normalized);
+        if (CreateKind == AssetBrowserItemKind.Folder)
+        {
+            extension = string.Empty;
+            name = Path.GetFileName(normalized);
+        }
+
+        string baseName = string.IsNullOrWhiteSpace(name)
+            ? Path.GetFileNameWithoutExtension(GetDefaultCreatePath(CreateKind))
+            : name;
+        for (int index = 1; index < 10_000; index++)
+        {
+            string candidateName = IncrementTrailingNumber(baseName, index);
+            string candidate = string.IsNullOrWhiteSpace(directory)
+                ? candidateName + extension
+                : directory + "/" + candidateName + extension;
+            if (!CreatePathExists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return normalized;
+    }
+
+    private bool CreatePathExists(string path)
+    {
+        for (int i = 0; i < LastAssets.Count; i++)
+        {
+            if (string.Equals(LastAssets[i].Path, path, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        for (int i = 0; i < FolderTargets.Count; i++)
+        {
+            if (string.Equals(FolderTargets[i].Path, path, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string SuggestNextCreatePathCandidate(AssetBrowserItemKind kind, string previousPath)
     {
         if (string.IsNullOrWhiteSpace(previousPath))
         {
@@ -1019,10 +1141,59 @@ public sealed class AssetBrowserPanel(
         string directory = Path.GetDirectoryName(normalized)?.Replace('\\', '/') ?? string.Empty;
         string extension = Path.GetExtension(normalized);
         string name = Path.GetFileNameWithoutExtension(normalized);
+        if (kind == AssetBrowserItemKind.Folder)
+        {
+            extension = string.Empty;
+            name = Path.GetFileName(normalized);
+        }
+
         string nextName = string.IsNullOrWhiteSpace(name) ? Path.GetFileNameWithoutExtension(GetDefaultCreatePath(kind)) : name + "1";
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            nextName = IncrementTrailingNumber(name, 1);
+        }
+
         return string.IsNullOrWhiteSpace(directory)
             ? nextName + extension
             : directory + "/" + nextName + extension;
+    }
+
+    private static string IncrementTrailingNumber(string value, int offset)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return offset.ToString(CultureInfo.InvariantCulture);
+        }
+
+        int digitStart = value.Length;
+        while (digitStart > 0 && char.IsDigit(value[digitStart - 1]))
+        {
+            digitStart--;
+        }
+
+        if (digitStart == value.Length)
+        {
+            return value + offset.ToString(CultureInfo.InvariantCulture);
+        }
+
+        string prefix = value[..digitStart];
+        string numberText = value[digitStart..];
+        return int.TryParse(numberText, NumberStyles.None, CultureInfo.InvariantCulture, out int number)
+            ? prefix + (number + offset).ToString(CultureInfo.InvariantCulture)
+            : value + offset.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private static string ApplyFolderToCreatePath(string folderPath, string createPath)
+    {
+        string normalizedFolder = (folderPath ?? string.Empty).Trim().Replace('\\', '/').TrimEnd('/');
+        string normalizedPath = (createPath ?? string.Empty).Trim().Replace('\\', '/');
+        if (normalizedFolder.Length == 0 || normalizedPath.Length == 0)
+        {
+            return normalizedPath;
+        }
+
+        string fileName = Path.GetFileName(normalizedPath);
+        return normalizedFolder + "/" + fileName;
     }
 
     private bool IsPendingDeleteFor(AssetBrowserItem item)
