@@ -71,6 +71,25 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证本机测试入口先构建一次，再顺序以 no-build 执行各测试工程，避免并发写同一 obj 目录造成 CS2012 误判。
+    /// </summary>
+    [Fact]
+    public void LocalTestRunnerBuildsOnceThenRunsProjectsSequentiallyNoBuild()
+    {
+        string runner = ReadRepositoryFile("tools", "run-tests.ps1");
+
+        Assert.Contains("dotnet @Arguments", runner, StringComparison.Ordinal);
+        Assert.Contains("\"build-server\", \"shutdown\"", runner, StringComparison.Ordinal);
+        Assert.Contains("\"build\", \"PixelEngine.sln\"", runner, StringComparison.Ordinal);
+        Assert.Contains("\"--disable-build-servers\"", runner, StringComparison.Ordinal);
+        Assert.Contains("\"-m:1\"", runner, StringComparison.Ordinal);
+        Assert.Contains("\"--no-build\"", runner, StringComparison.Ordinal);
+        Assert.Contains("foreach ($projectPath in $testProjects)", runner, StringComparison.Ordinal);
+        Assert.Contains("Sort-Object FullName", runner, StringComparison.Ordinal);
+        Assert.Contains("\"--filter\", $Filter", runner, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Benchmark 回归门禁按 Markdown 表头解析 Mean 列，不会把 Error/StdDev 等时间列误当作均值。
     /// </summary>
     [Fact]
