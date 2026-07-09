@@ -381,20 +381,39 @@ public sealed class LavaMineSceneTests
         ownedMetalBefore = CountRigidOwnedMaterial(grid, metal, minX: 326, minY: 96, maxX: 354, maxY: 104);
         Assert.True(ownedMetalBefore > 0, $"刚体 stamp 进入下一帧 dirty rect 后仍应保留 metal 梁，actual={ownedMetalBefore}。");
 
-        for (int y = 96; y < 104; y++)
+        float metalTemperatureBefore = temperature.GetTemperature(330, 100);
+        Assert.True(
+            metalTemperatureBefore < materials.Hot.MeltPoint[metal],
+            $"metal 梁在 lava 注热前不应已达熔点，temperature={metalTemperatureBefore:F2}, meltPoint={materials.Hot.MeltPoint[metal]:F2}。");
+
+        float metalTemperatureAfter = metalTemperatureBefore;
+        int moltenMetalCells = 0;
+        int ownedMetalAfter = ownedMetalBefore;
+        int maxDestroyedBodies = 0;
+        int maxCreatedBodies = 0;
+        for (int tick = 0; tick < 16; tick++)
         {
-            for (int x = 326; x < 354; x++)
+            AddLavaPoolHeat(temperature);
+            engine.RunHeadlessTicks(1);
+
+            metalTemperatureAfter = MathF.Max(metalTemperatureAfter, temperature.GetTemperature(330, 100));
+            moltenMetalCells = CountMaterial(grid, moltenMetal, minX: 326, minY: 96, maxX: 354, maxY: 108);
+            ownedMetalAfter = CountRigidOwnedMaterial(grid, metal, minX: 326, minY: 96, maxX: 354, maxY: 104);
+            maxDestroyedBodies = Math.Max(maxDestroyedBodies, physics.LastDestructionResult.DestroyedBodies);
+            maxCreatedBodies = Math.Max(maxCreatedBodies, physics.LastDestructionResult.CreatedBodies);
+            if (moltenMetalCells > 0 && ownedMetalAfter == 0 && maxDestroyedBodies >= 1 && maxCreatedBodies >= 1)
             {
-                temperature.AddHeat(x, y, 1_200f);
+                break;
             }
         }
 
-        engine.RunHeadlessTicks(1);
-
-        Assert.True(CountMaterial(grid, moltenMetal, minX: 326, minY: 96, maxX: 354, maxY: 108) > 0);
-        Assert.Equal(0, CountRigidOwnedMaterial(grid, metal, minX: 326, minY: 96, maxX: 354, maxY: 104));
-        Assert.True(physics.LastDestructionResult.DestroyedBodies >= 1, $"metal 梁相变应破坏父刚体，actual={physics.LastDestructionResult}。");
-        Assert.True(physics.LastDestructionResult.CreatedBodies >= 1, $"metal 梁相变后上方 wood 连通块应重建为子刚体，actual={physics.LastDestructionResult}。");
+        Assert.True(
+            metalTemperatureAfter >= materials.Hot.MeltPoint[metal],
+            $"lava 池热量应经温度场传导到 metal 梁并达到熔点，temperature={metalTemperatureAfter:F2}, meltPoint={materials.Hot.MeltPoint[metal]:F2}。");
+        Assert.True(moltenMetalCells > 0);
+        Assert.Equal(0, ownedMetalAfter);
+        Assert.True(maxDestroyedBodies >= 1, $"metal 梁相变应破坏父刚体，maxDestroyed={maxDestroyedBodies}。");
+        Assert.True(maxCreatedBodies >= 1, $"metal 梁相变后上方 wood 连通块应重建为子刚体，maxCreated={maxCreatedBodies}。");
 
         RigidBodySnapshot[] splitSnapshots = CopySnapshots(physics);
         RigidBodySnapshot woodSnapshot = splitSnapshots.Single(snapshot =>
@@ -412,6 +431,19 @@ public sealed class LavaMineSceneTests
         Assert.True(
             movedWood.Transform.Position.Y > woodSnapshot.Transform.Position.Y + 0.01f,
             $"上方 wood 子刚体应沿 Demo 重力方向下落，beforeY={woodSnapshot.Transform.Position.Y:F4}, afterY={movedWood.Transform.Position.Y:F4}。");
+
+        static void AddLavaPoolHeat(TemperatureField field)
+        {
+            const float targetLavaTemperature = 12_000f;
+            for (int x = 328; x < 352; x += 4)
+            {
+                float current = field.GetTemperature(x, 104);
+                if (current < targetLavaTemperature)
+                {
+                    field.AddHeat(x, 104, targetLavaTemperature - current);
+                }
+            }
+        }
     }
 
     private static async Task<Engine> CreateLavaMineEngineAsync()
