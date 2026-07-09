@@ -327,6 +327,7 @@ internal sealed class EditorMainMenuBar
         DrawPanelMenuItem(app, "Project", EditorDockSpace.AssetBrowserWindowTitle);
         DrawPanelMenuItem(app, "Console", EditorDockSpace.ConsoleDiagnosticsWindowTitle);
         DrawPanelMenuItem(app, "Profiler", EditorDockSpace.PerformanceHudWindowTitle);
+        DrawPanelMenuItem(app, "UI Manifest", UiManifestPanel.PanelTitle);
         DrawPanelMenuItem(app, "Project Settings...", ProjectSettingsPanel.PanelTitle);
         DrawPanelMenuItem(app, "Player Settings...", PlayerSettingsPanel.PanelTitle);
         DrawPanelMenuItem(app, "Build Settings...", BuildSettingsPanel.PanelTitle);

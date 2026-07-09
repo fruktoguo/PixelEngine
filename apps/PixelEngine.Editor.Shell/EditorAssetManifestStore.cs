@@ -101,6 +101,20 @@ internal readonly record struct EditorAssetFolderDeleteResult(
     EditorAssetFolderDeletePreflight Preflight,
     string Diagnostic);
 
+internal readonly record struct EditorUiManifestScreenEntry(
+    string Id,
+    string Path,
+    bool Preload,
+    bool FileExists,
+    string? AssetId,
+    string LogicalPath);
+
+internal readonly record struct EditorUiManifestSyncResult(
+    int RegisteredScreens,
+    int ExistingScreens,
+    int MissingFiles,
+    string Diagnostic);
+
 /// <summary>
 /// Content 资产清单的扫描、索引、移动与脚本模板生成。
 /// </summary>
@@ -195,6 +209,127 @@ internal sealed class EditorAssetManifestStore
     {
         string normalized = NormalizeLogicalPath(logicalFolderPath, nameof(logicalFolderPath));
         return CollectFolderAssets(normalized);
+    }
+
+    public IReadOnlyList<EditorUiManifestScreenEntry> ListUiManifestScreens()
+    {
+        string manifestPath = Path.Combine(ContentRoot, "ui", "ui-manifest.json");
+        EditorUiManifestDocument document = LoadUiManifestDocument(manifestPath);
+        EditorUiManifestScreenDocument[] screens = NormalizeUiScreens(document.Screens);
+        Dictionary<string, EditorAssetRecord> assetsByPath = BuildAssetRecordPathMap(Refresh());
+        List<EditorUiManifestScreenEntry> entries = new(screens.Length);
+        for (int i = 0; i < screens.Length; i++)
+        {
+            string logicalPath = "ui/" + screens[i].Path;
+            bool exists = File.Exists(Path.Combine(ContentRoot, "ui", screens[i].Path.Replace('/', Path.DirectorySeparatorChar)));
+            _ = assetsByPath.TryGetValue(logicalPath, out EditorAssetRecord asset);
+            entries.Add(new EditorUiManifestScreenEntry(
+                screens[i].Id,
+                screens[i].Path,
+                screens[i].Preload,
+                exists,
+                string.IsNullOrWhiteSpace(asset.Id) ? null : asset.Id,
+                logicalPath));
+        }
+
+        return [.. entries.OrderBy(static entry => entry.Id, StringComparer.OrdinalIgnoreCase)];
+    }
+
+    public EditorUiManifestSyncResult SyncUiManifestScreens()
+    {
+        string uiRoot = Path.Combine(ContentRoot, "ui");
+        string manifestPath = Path.Combine(uiRoot, "ui-manifest.json");
+        _ = Directory.CreateDirectory(uiRoot);
+        EditorUiManifestDocument document = LoadUiManifestDocument(manifestPath);
+        EditorUiManifestScreenDocument[] screens = NormalizeUiScreens(document.Screens);
+        Dictionary<string, EditorUiManifestScreenDocument> byPath = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> usedIds = new(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < screens.Length; i++)
+        {
+            byPath[screens[i].Path] = screens[i];
+            _ = usedIds.Add(screens[i].Id);
+        }
+
+        IReadOnlyList<EditorAssetRecord> records = Refresh();
+        List<EditorUiManifestScreenDocument> updated = [.. screens];
+        int registered = 0;
+        for (int i = 0; i < records.Count; i++)
+        {
+            EditorAssetRecord record = records[i];
+            if (record.AssetType != EditorAssetType.UiScreen ||
+                !TryBuildUiScreenManifestEntry(record.LogicalPath, out string candidateId, out string screenPath) ||
+                byPath.ContainsKey(screenPath))
+            {
+                continue;
+            }
+
+            string id = AllocateUiScreenId(candidateId, usedIds);
+            EditorUiManifestScreenDocument screen = new()
+            {
+                Id = id,
+                Path = screenPath,
+                Preload = true,
+            };
+            updated.Add(screen);
+            byPath[screen.Path] = screen;
+            registered++;
+        }
+
+        int missing = CountMissingUiManifestScreens(updated);
+        if (registered > 0)
+        {
+            SaveUiManifestDocument(manifestPath, new EditorUiManifestDocument
+            {
+                Screens = [.. updated],
+                Images = document.Images,
+            });
+        }
+
+        int existing = updated.Count - registered;
+        return new EditorUiManifestSyncResult(
+            registered,
+            existing,
+            missing,
+            registered == 0
+                ? $"UI manifest 已同步：existing={existing.ToString(CultureInfo.InvariantCulture)}, missing={missing.ToString(CultureInfo.InvariantCulture)}"
+                : $"UI manifest 已登记 {registered.ToString(CultureInfo.InvariantCulture)} 个 screen：existing={existing.ToString(CultureInfo.InvariantCulture)}, missing={missing.ToString(CultureInfo.InvariantCulture)}");
+    }
+
+    public bool TrySetUiManifestScreenPreload(string screenId, bool preload, out string diagnostic)
+    {
+        if (string.IsNullOrWhiteSpace(screenId))
+        {
+            diagnostic = "UI screen id 不能为空。";
+            return false;
+        }
+
+        string manifestPath = Path.Combine(ContentRoot, "ui", "ui-manifest.json");
+        EditorUiManifestDocument document = LoadUiManifestDocument(manifestPath);
+        EditorUiManifestScreenDocument[] screens = NormalizeUiScreens(document.Screens);
+        for (int i = 0; i < screens.Length; i++)
+        {
+            if (!string.Equals(screens[i].Id, screenId.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            screens[i] = new EditorUiManifestScreenDocument
+            {
+                Id = screens[i].Id,
+                Path = screens[i].Path,
+                Preload = preload,
+            };
+            SaveUiManifestDocument(manifestPath, new EditorUiManifestDocument
+            {
+                Screens = screens,
+                Images = document.Images,
+            });
+            diagnostic = $"已更新 UI screen {screens[i].Id} preload={preload}。";
+            return true;
+        }
+
+        diagnostic = $"UI manifest 缺少 screen id：{screenId}";
+        return false;
     }
 
     public EditorAssetRecord CreateAsset(string logicalPath, EditorAssetType assetType, string? textContents = null)
@@ -747,6 +882,17 @@ internal sealed class EditorAssetManifestStore
         for (int i = 0; i < normalized.Length; i++)
         {
             byPath[normalized[i].LogicalPath] = normalized[i];
+        }
+
+        return byPath;
+    }
+
+    private static Dictionary<string, EditorAssetRecord> BuildAssetRecordPathMap(IReadOnlyList<EditorAssetRecord> records)
+    {
+        Dictionary<string, EditorAssetRecord> byPath = new(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < records.Count; i++)
+        {
+            byPath[records[i].LogicalPath] = records[i];
         }
 
         return byPath;
@@ -1514,6 +1660,41 @@ internal sealed class EditorAssetManifestStore
 
         screenPath = string.Empty;
         return false;
+    }
+
+    private int CountMissingUiManifestScreens(IReadOnlyList<EditorUiManifestScreenDocument> screens)
+    {
+        int missing = 0;
+        for (int i = 0; i < screens.Count; i++)
+        {
+            string path = Path.Combine(ContentRoot, "ui", screens[i].Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+            {
+                missing++;
+            }
+        }
+
+        return missing;
+    }
+
+    private static string AllocateUiScreenId(string candidateId, HashSet<string> usedIds)
+    {
+        string baseId = string.IsNullOrWhiteSpace(candidateId) ? "screen" : candidateId;
+        if (usedIds.Add(baseId))
+        {
+            return baseId;
+        }
+
+        for (int index = 2; index < 10_000; index++)
+        {
+            string id = baseId + "-" + index.ToString(CultureInfo.InvariantCulture);
+            if (usedIds.Add(id))
+            {
+                return id;
+            }
+        }
+
+        throw new InvalidOperationException($"无法生成唯一 UI screen id：{baseId}");
     }
 
     private static bool TryBuildUiScreenManifestEntry(string logicalPath, out string screenId, out string screenPath)
