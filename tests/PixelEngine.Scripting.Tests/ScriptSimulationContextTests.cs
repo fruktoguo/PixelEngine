@@ -286,6 +286,43 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
+    /// 验证方向向量 + 速度区间 Emit 重载会映射为真实速度锥发射，并按 fixed step 缩放速度。
+    /// </summary>
+    [Fact]
+    public void ParticleEmitVelocityConeOverloadMapsDirectionAndSpeedRange()
+    {
+        // Arrange：准备输入与初始状态
+        Fixture fixture = Fixture.Create();
+        MaterialId sand = fixture.Context.Materials.Resolve("sand");
+
+        fixture.Context.Particles.Emit(
+            originX: 10,
+            originY: 11,
+            dirX: 0,
+            dirY: -2,
+            coneRadians: 0f,
+            minSpeed: 30f,
+            maxSpeed: 90f,
+            count: 3,
+            material: sand,
+            lifeTicks: 6);
+
+        // Assert：验证预期结果
+        Assert.Equal(1, fixture.Context.FlushParticleCommands());
+        Assert.Equal(3, fixture.Particles.ActiveCount);
+        for (int i = 0; i < fixture.Particles.ActiveCount; i++)
+        {
+            Particle particle = fixture.Particles.ActiveReadOnly[i];
+            Assert.Equal(10f, particle.X);
+            Assert.Equal(11f, particle.Y);
+            Assert.Equal(0f, particle.Vx, precision: 5);
+            Assert.InRange(particle.Vy, -1.5f, -0.5f);
+            Assert.Equal(6, particle.Life);
+            Assert.Equal(sand.Value, particle.Material);
+        }
+    }
+
+    /// <summary>
     /// 验证脚本 Emit 命令入队与 flush 在预热后不产生托管堆分配。
     /// </summary>
     [Fact]
