@@ -516,6 +516,7 @@ internal sealed class EditorProjectSceneEntry
 [JsonSerializable(typeof(EditorProjectDocument))]
 [JsonSerializable(typeof(RecentProjectsDocument))]
 [JsonSerializable(typeof(EditorAssetManifestDocument))]
+[JsonSerializable(typeof(EditorUiManifestDocument))]
 internal sealed partial class EditorShellJsonContext : JsonSerializerContext
 {
 }

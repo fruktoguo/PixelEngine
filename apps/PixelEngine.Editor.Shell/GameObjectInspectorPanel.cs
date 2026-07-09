@@ -146,6 +146,7 @@ internal sealed class GameObjectInspectorPanel(
             case AssetBrowserItemKind.Texture:
             case AssetBrowserItemKind.Audio:
             case AssetBrowserItemKind.Scene:
+            case AssetBrowserItemKind.UiScreen:
             case AssetBrowserItemKind.Json:
             case AssetBrowserItemKind.Other:
             default:
@@ -182,6 +183,7 @@ internal sealed class GameObjectInspectorPanel(
             AssetBrowserItemKind.Texture or
             AssetBrowserItemKind.Audio or
             AssetBrowserItemKind.Scene or
+            AssetBrowserItemKind.UiScreen or
             AssetBrowserItemKind.Json or
             AssetBrowserItemKind.Other => null,
             _ => null,

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using PixelEngine.Editor;
 using PixelEngine.Editor.Shell;
 using PixelEngine.Editor.Shell.Build;
@@ -73,6 +74,7 @@ public sealed class EditorProjectAssetModelTests
             AssetBrowserCreateResult scene = source.CreateAsset(new AssetBrowserCreateRequest("scenes/NewScene.scene", AssetBrowserItemKind.Scene));
             AssetBrowserCreateResult prefab = source.CreateAsset(new AssetBrowserCreateRequest("prefabs/NewPrefab.prefab", AssetBrowserItemKind.Prefab));
             AssetBrowserCreateResult script = source.CreateAsset(new AssetBrowserCreateRequest("scripts/NewBehaviour.cs", AssetBrowserItemKind.Script));
+            AssetBrowserCreateResult uiScreen = source.CreateAsset(new AssetBrowserCreateRequest("ui/screens/NewScreen.xhtml", AssetBrowserItemKind.UiScreen));
             AssetBrowserCreateResult json = source.CreateAsset(new AssetBrowserCreateRequest("data/NewAsset.json", AssetBrowserItemKind.Json));
             AssetBrowserCreateResult texture = source.CreateAsset(new AssetBrowserCreateRequest("textures/generated.png", AssetBrowserItemKind.Texture));
 
@@ -83,6 +85,7 @@ public sealed class EditorProjectAssetModelTests
             Assert.True(scene.Succeeded);
             Assert.True(prefab.Succeeded);
             Assert.True(script.Succeeded);
+            Assert.True(uiScreen.Succeeded);
             Assert.True(json.Succeeded);
             Assert.False(texture.Succeeded);
             Assert.StartsWith("asset_", material.AssetId, StringComparison.Ordinal);
@@ -91,12 +94,23 @@ public sealed class EditorProjectAssetModelTests
             Assert.Equal(AssetBrowserItemKind.Scene, Find(assets, "scenes/NewScene.scene").Kind);
             Assert.Equal(AssetBrowserItemKind.Prefab, Find(assets, "prefabs/NewPrefab.prefab").Kind);
             Assert.Equal(AssetBrowserItemKind.Script, Find(assets, "scripts/NewBehaviour.cs").Kind);
+            Assert.Equal(AssetBrowserItemKind.UiScreen, Find(assets, "ui/screens/NewScreen.xhtml").Kind);
             Assert.Equal(AssetBrowserItemKind.Json, Find(assets, "data/NewAsset.json").Kind);
 
             EngineSceneDocument sceneDocument = EngineSceneDocumentLoader.LoadDocument(Path.Combine(contentRoot, "scenes", "NewScene.scene"));
             EngineSceneDocument prefabDocument = EngineSceneDocumentLoader.LoadDocument(Path.Combine(contentRoot, "prefabs", "NewPrefab.prefab"));
             Assert.Equal("{\"materials\":[]}" + Environment.NewLine, File.ReadAllText(Path.Combine(contentRoot, "materials.json")));
             Assert.StartsWith("材质定义：0 项", Find(assets, "materials.json").PreviewSummary, StringComparison.Ordinal);
+            string uiScreenText = File.ReadAllText(Path.Combine(contentRoot, "ui", "screens", "NewScreen.xhtml"));
+            Assert.Contains("<rml title=\"NewScreen\"", uiScreenText, StringComparison.Ordinal);
+            Assert.Contains("data-screen=\"new-screen\"", uiScreenText, StringComparison.Ordinal);
+            Assert.Contains("data-contract=\"editor.ui-screen/v1\"", uiScreenText, StringComparison.Ordinal);
+            Assert.StartsWith("UI Screen：NewScreen，", Find(assets, "ui/screens/NewScreen.xhtml").PreviewSummary, StringComparison.Ordinal);
+            using JsonDocument uiManifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(contentRoot, "ui", "ui-manifest.json")));
+            JsonElement screen = Assert.Single(uiManifest.RootElement.GetProperty("screens").EnumerateArray());
+            Assert.Equal("new-screen", screen.GetProperty("id").GetString());
+            Assert.Equal("screens/NewScreen.xhtml", screen.GetProperty("path").GetString());
+            Assert.True(screen.GetProperty("preload").GetBoolean());
             Assert.Equal("NewScene", sceneDocument.Name);
             Assert.Empty(sceneDocument.Entities ?? []);
             Assert.Equal("NewPrefab", prefabDocument.Name);
@@ -488,6 +502,8 @@ public sealed class EditorProjectAssetModelTests
             File.WriteAllBytes(Path.Combine(contentRoot, "textures", "sand.png"), [1, 2, 3]);
             File.WriteAllBytes(Path.Combine(contentRoot, "audio", "hit.wav"), [4, 5]);
             File.WriteAllText(Path.Combine(contentRoot, "materials.json"), /*lang=json,strict*/ "{\"materials\":[{\"name\":\"sand\"},{\"name\":\"water\"}]}\n");
+            _ = Directory.CreateDirectory(Path.Combine(contentRoot, "ui", "screens"));
+            File.WriteAllText(Path.Combine(contentRoot, "ui", "screens", "hud.xhtml"), "<rml title=\"HUD\"><body /></rml>\n");
             File.WriteAllText(Path.Combine(contentRoot, "scripts", "DemoBehaviour.cs"), "using PixelEngine.Scripting; public sealed class DemoBehaviour : Behaviour { }\n");
             SavePrefabDocument(contentRoot, "prefabs/rock.prefab", "Rock");
             string scenePath = Path.Combine(contentRoot, "scenes", "main.scene");
@@ -527,6 +543,7 @@ public sealed class EditorProjectAssetModelTests
             Assert.Equal("纹理：32×16，3 B", Find(assets, "textures/sand.png").PreviewSummary);
             Assert.Equal("音频：2 B", Find(assets, "audio/hit.wav").PreviewSummary);
             Assert.StartsWith("材质定义：2 项", Find(assets, "materials.json").PreviewSummary, StringComparison.Ordinal);
+            Assert.StartsWith("UI Screen：HUD，", Find(assets, "ui/screens/hud.xhtml").PreviewSummary, StringComparison.Ordinal);
             Assert.Equal("场景：2 个 GameObject，1 个根，1 个 Behaviour", Find(assets, "scenes/main.scene").PreviewSummary);
             Assert.Equal("Prefab：1 个 GameObject，1 个根，0 个 Behaviour", Find(assets, "prefabs/rock.prefab").PreviewSummary);
             Assert.StartsWith("脚本：DemoBehaviour，", Find(assets, "scripts/DemoBehaviour.cs").PreviewSummary, StringComparison.Ordinal);

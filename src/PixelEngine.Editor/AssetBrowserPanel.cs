@@ -36,7 +36,7 @@ public sealed class AssetBrowserPanel(
     private readonly AssetBrowserDeleteHandler? _deleteAsset = deleteAsset;
     private readonly AssetBrowserMoveHandler? _moveAsset = moveAsset;
     private readonly AssetBrowserCreateHandler? _createAsset = createAsset;
-    private static readonly string[] KindFilterLabels = ["全部", "Material", "Texture", "Audio", "Scene", "Prefab", "Script", "Json", "Other"];
+    private static readonly string[] KindFilterLabels = ["全部", "Material", "Texture", "Audio", "Scene", "Prefab", "Script", "UI Screen", "Json", "Other"];
     private static readonly string[] SortModeLabels = ["路径", "类型 / 路径", "最近修改", "大小"];
     private static readonly AssetBrowserItemKind[] CreateKinds =
     [
@@ -44,10 +44,11 @@ public sealed class AssetBrowserPanel(
         AssetBrowserItemKind.Scene,
         AssetBrowserItemKind.Prefab,
         AssetBrowserItemKind.Script,
+        AssetBrowserItemKind.UiScreen,
         AssetBrowserItemKind.Json,
     ];
 
-    private static readonly string[] CreateKindLabels = ["Material", "Scene", "Prefab", "Script", "Json"];
+    private static readonly string[] CreateKindLabels = ["Material", "Scene", "Prefab", "Script", "UI Screen", "Json"];
     private string _search = string.Empty;
     private AssetBrowserDeleteRequest? _pendingDeleteRequest;
     private AssetBrowserMoveRequest? _pendingMoveRequest;
@@ -735,6 +736,7 @@ public sealed class AssetBrowserPanel(
             AssetBrowserItemKind.Scene => "scenes/NewScene.scene",
             AssetBrowserItemKind.Prefab => "prefabs/NewPrefab.prefab",
             AssetBrowserItemKind.Script => "scripts/NewBehaviour.cs",
+            AssetBrowserItemKind.UiScreen => "ui/screens/NewScreen.xhtml",
             AssetBrowserItemKind.Json => "data/NewAsset.json",
             AssetBrowserItemKind.Other => "NewAsset",
             _ => "NewAsset",

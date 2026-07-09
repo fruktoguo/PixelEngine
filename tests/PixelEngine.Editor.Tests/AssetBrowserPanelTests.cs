@@ -34,6 +34,10 @@ public sealed class AssetBrowserPanelTests
 
             // Assert：验证预期结果
             Assert.Contains(assets, item => item.Path == "materials.json" && item.Kind == AssetBrowserItemKind.Material);
+            _ = Directory.CreateDirectory(Path.Combine(root, "ui", "screens"));
+            File.WriteAllText(Path.Combine(root, "ui", "screens", "hud.xhtml"), "<rml title=\"HUD\" />");
+            assets = source.ListAssets();
+            Assert.Contains(assets, item => item.Path == "ui/screens/hud.xhtml" && item.Kind == AssetBrowserItemKind.UiScreen);
             AssetBrowserItem texture = Assert.Single(assets, item => item.Path == "textures/sand.png");
             Assert.Equal(AssetBrowserItemKind.Texture, texture.Kind);
             Assert.Equal(new AssetThumbnail(12, 16, 16), texture.Thumbnail);
@@ -479,19 +483,24 @@ public sealed class AssetBrowserPanelTests
 
         bool materialCreated = panel.TryCreateAsset("materials.json", AssetBrowserItemKind.Material);
         bool scriptCreated = panel.TryCreateAsset("scripts/NewBehaviour.cs", AssetBrowserItemKind.Script);
+        bool uiScreenCreated = panel.TryCreateAsset("ui/screens/NewScreen.xhtml", AssetBrowserItemKind.UiScreen);
         bool unsupported = panel.TryCreateAsset("textures/generated.png", AssetBrowserItemKind.Texture);
 
         // Assert：验证预期结果
         Assert.True(materialCreated);
         Assert.True(scriptCreated);
+        Assert.True(uiScreenCreated);
         Assert.False(unsupported);
-        Assert.Equal(2, requests.Count);
+        Assert.Equal(3, requests.Count);
         Assert.Equal("materials.json", requests[0].Path);
         Assert.Equal(AssetBrowserItemKind.Material, requests[0].Kind);
         Assert.Equal("scripts/NewBehaviour.cs", requests[1].Path);
         Assert.Equal(AssetBrowserItemKind.Script, requests[1].Kind);
+        Assert.Equal("ui/screens/NewScreen.xhtml", requests[2].Path);
+        Assert.Equal(AssetBrowserItemKind.UiScreen, requests[2].Kind);
         Assert.Contains(panel.LastAssets, asset => asset.Path == "materials.json" && asset.AssetId == "asset_created");
         Assert.Contains(panel.LastAssets, asset => asset.Path == "scripts/NewBehaviour.cs" && asset.AssetId == "asset_created");
+        Assert.Contains(panel.LastAssets, asset => asset.Path == "ui/screens/NewScreen.xhtml" && asset.AssetId == "asset_created");
         Assert.Contains("暂不支持", panel.Status, StringComparison.Ordinal);
     }
 
