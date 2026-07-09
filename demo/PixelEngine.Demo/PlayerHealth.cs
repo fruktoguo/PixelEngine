@@ -1,5 +1,4 @@
 using PixelEngine.Scripting;
-using PixelEngine.Simulation;
 
 namespace PixelEngine.Demo;
 
@@ -216,33 +215,41 @@ public sealed class PlayerHealth : Behaviour
         }
 
         MaterialInfo info = Context.Materials.GetInfo(material);
-        MaterialProperty properties = info.Properties;
-        if ((properties & MaterialProperty.Acid) != 0)
+        if (IsNamedOrTagged(info, "acid"))
         {
             return AcidDamagePerSecond;
         }
 
-        if ((properties & MaterialProperty.Fire) != 0)
+        if (IsNamedOrTagged(info, "fire"))
         {
             return FireDamagePerSecond;
         }
 
         bool hotHazard =
             info.TemperatureOfFire > 0 &&
-            (info.Category == MaterialLegendCategory.Hazard ||
-             info.RenderStyle == MaterialRenderStyle.Hazard ||
-             info.RenderStyle == MaterialRenderStyle.Emissive ||
+            (IsHazard(info) ||
              info.Emissive ||
-             (properties & MaterialProperty.MoltenMetal) != 0);
+             IsNamedOrTagged(info, "molten"));
         if (hotHazard)
         {
             float heatScale = Math.Clamp(info.TemperatureOfFire / 255f, 0.25f, 1f);
             return MathF.Max(FireDamagePerSecond, LavaDamagePerSecond * heatScale);
         }
 
-        return info.Category == MaterialLegendCategory.Hazard || info.RenderStyle == MaterialRenderStyle.Hazard
+        return IsHazard(info)
             ? FireDamagePerSecond
             : 0f;
+    }
+
+    private static bool IsHazard(MaterialInfo info)
+    {
+        return string.Equals(info.LegendCategory, "Hazard", StringComparison.Ordinal);
+    }
+
+    private static bool IsNamedOrTagged(MaterialInfo info, string token)
+    {
+        return info.Name.Contains(token, StringComparison.OrdinalIgnoreCase) ||
+            info.DisplayName.Contains(token, StringComparison.OrdinalIgnoreCase);
     }
 
     private void ApplyDamage(float amount)
