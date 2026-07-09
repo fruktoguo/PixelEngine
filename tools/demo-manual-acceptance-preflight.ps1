@@ -559,11 +559,12 @@ function Get-ManualScopes {
             scope = "fullRoutePlaythroughVideo"
             kind = "video"
             minDurationSeconds = 30.0
-            checklist = @("routeCompleted", "materialsReactionsBodiesShown", "audioLightingHudShown")
+            checklist = @("routeCompleted", "materialsReactionsBodiesShown", "audioLightingHudShown", "playerPackageStandaloneRun")
             criteria = @{
                 routeCompleted = "视频必须展示从出生点用至少一种解法抵达出口并触发通关状态。"
                 materialsReactionsBodiesShown = "视频必须在路线中展示材质、反应、刚体破坏或坍塌参与解法。"
                 audioLightingHudShown = "视频必须展示路线中的音频、光照或 HUD 状态，并能看清通关反馈。"
+                playerPackageStandaloneRun = "视频必须展示从不含编辑器的玩家包启动 Demo 并进入同一 lava-mine 游戏内容。"
             }
             title = "从出生点用至少一种解法完整抵达出口，贯穿材质/反应/刚体/粒子/光照/音频"
         },
