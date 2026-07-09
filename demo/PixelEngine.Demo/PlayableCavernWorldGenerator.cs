@@ -4,7 +4,7 @@ using PixelEngine.Scripting;
 namespace PixelEngine.Demo;
 
 /// <summary>
-/// 面向直接试玩的确定性洞穴世界生成器，生成宽幅地形、洞穴、矿脉与少量危险池。
+/// 面向直接试玩的确定性横向闯关世界生成器，生成宽幅路线、熔岩坑、跳台与可拆障碍。
 /// </summary>
 public sealed class PlayableCavernWorldGenerator(string? materialMapPath = null) : IProceduralWorldGenerator
 {
@@ -43,146 +43,116 @@ public sealed class PlayableCavernWorldGenerator(string? materialMapPath = null)
         MaterialId dirt = context.Materials.Resolve("dirt");
         MaterialId stone = context.Materials.Resolve("stone");
         MaterialId sand = context.Materials.Resolve("sand");
-        MaterialId water = context.Materials.Resolve("water");
         MaterialId lava = context.Materials.Resolve("lava");
         MaterialId metal = context.Materials.Resolve("metal");
         MaterialId wood = context.Materials.Resolve("wood");
+        MaterialId boundaryStone = context.Materials.Resolve("boundary_stone");
         if (!empty.IsValid || !dirt.IsValid || !stone.IsValid || !sand.IsValid ||
-            !water.IsValid || !lava.IsValid || !metal.IsValid || !wood.IsValid)
+            !lava.IsValid || !metal.IsValid || !wood.IsValid)
         {
-            throw new InvalidOperationException("Playable Demo 需要 empty/dirt/stone/sand/water/lava/metal/wood 材质。");
+            throw new InvalidOperationException("Playable Demo 需要 empty/dirt/stone/sand/lava/metal/wood 材质。");
         }
 
         _ = context.Edit.PaintRect(0, 0, context.WidthCells - 1, context.HeightCells - 1, empty.Value);
-        int floorBase = context.HeightCells - 96;
-        for (int x = 0; x < context.WidthCells; x++)
-        {
-            int surface = SurfaceY(x, floorBase);
-            for (int y = surface; y < context.HeightCells; y++)
-            {
-                ushort material = y > surface + 48 ? stone.Value : dirt.Value;
-                context.Edit.PaintCell(x, y, material);
-            }
-
-            for (int y = surface - 1; y >= Math.Max(0, surface - 3); y--)
-            {
-                context.Edit.PaintCell(x, y, sand.Value);
-            }
-        }
-
-        CarveSpawnPocket(context, empty.Value, wood.Value);
-        CarveCaves(context, empty.Value);
-        PaintDeposits(context, metal.Value, stone.Value);
-        PaintHazards(context, water.Value, lava.Value, stone.Value);
-        PaintBounds(context, stone.Value);
+        PaintSideScrollingRoute(
+            context,
+            dirt.Value,
+            stone.Value,
+            sand.Value,
+            lava.Value,
+            metal.Value,
+            wood.Value,
+            boundaryStone.IsValid ? boundaryStone.Value : stone.Value);
     }
 
     private string? ResolveMaterialMapPath()
     {
-        if (!string.IsNullOrWhiteSpace(materialMapPath))
-        {
-            return Path.GetFullPath(materialMapPath);
-        }
-
-        string outputContentPath = Path.Combine(
-            DemoStartupOptions.ResolveDefaultContentRoot(AppContext.BaseDirectory),
-            DefaultMaterialMapRelativePath);
-        if (File.Exists(outputContentPath))
-        {
-            return outputContentPath;
-        }
-
-        string sourceContentPath = Path.Combine("demo", "PixelEngine.Demo", "content", DefaultMaterialMapRelativePath);
-        return File.Exists(sourceContentPath) ? Path.GetFullPath(sourceContentPath) : null;
+        return string.IsNullOrWhiteSpace(materialMapPath) ? null : Path.GetFullPath(materialMapPath);
     }
 
-    private static int SurfaceY(int x, int floorBase)
+    private static void PaintSideScrollingRoute(
+        in ProceduralWorldBuildContext context,
+        ushort dirt,
+        ushort stone,
+        ushort sand,
+        ushort lava,
+        ushort metal,
+        ushort wood,
+        ushort boundaryStone)
     {
-        float wave =
-            (MathF.Sin(x * 0.013f) * 22f) +
-            (MathF.Sin((x * 0.031f) + 1.7f) * 11f) +
-            (MathF.Sin((x * 0.004f) + 4.1f) * 28f);
-        return Math.Clamp((int)MathF.Round(floorBase + wave), 250, 448);
-    }
+        int floorY = context.HeightCells - 96;
+        FillRect(context, 0, floorY, context.WidthCells, context.HeightCells - floorY, dirt);
+        FillRect(context, 0, floorY + 28, context.WidthCells, 22, stone);
+        FillRect(context, 20, floorY - 16, 130, 16, stone);
+        FillRect(context, 30, floorY - 24, 84, 8, sand);
 
-    private static void CarveSpawnPocket(in ProceduralWorldBuildContext context, ushort empty, ushort wood)
-    {
-        _ = context.Edit.PaintRect(24, 210, 180, 338, empty);
-        _ = context.Edit.PaintRect(28, 330, 168, 338, wood);
-        _ = context.Edit.PaintRect(190, 260, 270, 330, empty);
-    }
-
-    private static void CarveCaves(in ProceduralWorldBuildContext context, ushort empty)
-    {
-        for (int x = 96; x < context.WidthCells - 64; x += 112)
+        for (int x = 190; x < context.WidthCells - 180; x += 260)
         {
-            int centerY = SurfaceY(x, context.HeightCells - 96) - 54 + (int)(Hash01(x, 17) * 72f);
-            int radiusX = 42 + (int)(Hash01(x, 29) * 34f);
-            int radiusY = 18 + (int)(Hash01(x, 43) * 24f);
-            CarveEllipse(context, x, centerY, radiusX, radiusY, empty);
+            int width = 76 + (int)(Hash01(x, 7) * 28f);
+            FillRect(context, x, floorY - 2, width, 30, lava);
+            FillRect(context, x - 6, floorY + 28, width + 12, 8, stone);
         }
 
-        for (int x = 180; x < context.WidthCells - 180; x += 220)
+        for (int x = 180; x < context.WidthCells - 220; x += 190)
         {
-            int y = SurfaceY(x, context.HeightCells - 96) - 30;
-            _ = context.Edit.PaintRect(x - 86, y, x + 86, y + 30, empty);
+            int y = floorY - 42 - (int)(Hash01(x, 17) * 60f);
+            ushort material = x / 190 % 2 == 0 ? wood : metal;
+            FillRect(context, x, y, 92, 10, material);
         }
+
+        for (int x = 260; x < context.WidthCells - 180; x += 230)
+        {
+            int height = 24 + (int)(Hash01(x, 31) * 26f);
+            ushort material = x / 230 % 3 == 0 ? metal : wood;
+            FillRect(context, x, floorY - height, 24, height, material);
+        }
+
+        for (int x = 420; x < context.WidthCells - 240; x += 360)
+        {
+            FillRect(context, x, floorY - 116, 72, 12, metal);
+            FillRect(context, x + 92, floorY - 82, 68, 10, wood);
+            FillRect(context, x + 38, floorY - 54, 32, 18, stone);
+        }
+
+        FillSlope(context, 42, floorY - 1, 96, 24, sand);
+        FillSlope(context, context.WidthCells - 250, floorY - 1, 140, 28, sand);
+        PaintBounds(context, boundaryStone);
     }
 
-    private static void PaintDeposits(in ProceduralWorldBuildContext context, ushort metal, ushort stone)
+    private static void FillRect(in ProceduralWorldBuildContext context, int x, int y, int width, int height, ushort material)
     {
-        for (int x = 360; x < context.WidthCells - 160; x += 430)
+        if (width <= 0 || height <= 0)
         {
-            int y = SurfaceY(x, context.HeightCells - 96) + 26;
-            CarveEllipse(context, x, y, 30, 14, metal);
-            _ = context.Edit.PaintRect(x - 44, y + 18, x + 44, y + 23, stone);
+            return;
         }
+
+        int minX = Math.Clamp(x, 0, context.WidthCells - 1);
+        int minY = Math.Clamp(y, 0, context.HeightCells - 1);
+        int maxX = Math.Clamp(x + width - 1, 0, context.WidthCells - 1);
+        int maxY = Math.Clamp(y + height - 1, 0, context.HeightCells - 1);
+        if (maxX < minX || maxY < minY)
+        {
+            return;
+        }
+
+        _ = context.Edit.PaintRect(minX, minY, maxX, maxY, material);
     }
 
-    private static void PaintHazards(in ProceduralWorldBuildContext context, ushort water, ushort lava, ushort stone)
+    private static void FillSlope(in ProceduralWorldBuildContext context, int x, int baseY, int width, int height, ushort material)
     {
-        for (int x = 560; x < context.WidthCells - 240; x += 760)
+        for (int cx = 0; cx < width; cx++)
         {
-            int y = SurfaceY(x, context.HeightCells - 96) - 4;
-            _ = context.Edit.PaintRect(x - 60, y, x + 60, y + 20, water);
-        }
-
-        for (int x = 1100; x < context.WidthCells - 260; x += 920)
-        {
-            int y = SurfaceY(x, context.HeightCells - 96) + 12;
-            _ = context.Edit.PaintRect(x - 38, y, x + 38, y + 16, lava);
-            _ = context.Edit.PaintRect(x - 48, y + 17, x + 48, y + 22, stone);
+            int columnHeight = Math.Max(1, (int)MathF.Round((1f - (cx / (float)Math.Max(1, width - 1))) * height));
+            FillRect(context, x + cx, baseY - columnHeight + 1, 1, columnHeight, material);
         }
     }
 
     private static void PaintBounds(in ProceduralWorldBuildContext context, ushort stone)
     {
-        _ = context.Edit.PaintRect(0, 0, context.WidthCells - 1, 7, stone);
-        _ = context.Edit.PaintRect(0, context.HeightCells - 8, context.WidthCells - 1, context.HeightCells - 1, stone);
-        _ = context.Edit.PaintRect(0, 0, 7, context.HeightCells - 1, stone);
-        _ = context.Edit.PaintRect(context.WidthCells - 8, 0, context.WidthCells - 1, context.HeightCells - 1, stone);
-    }
-
-    private static void CarveEllipse(in ProceduralWorldBuildContext context, int centerX, int centerY, int radiusX, int radiusY, ushort material)
-    {
-        int minX = Math.Max(8, centerX - radiusX);
-        int maxX = Math.Min(context.WidthCells - 9, centerX + radiusX);
-        int minY = Math.Max(8, centerY - radiusY);
-        int maxY = Math.Min(context.HeightCells - 9, centerY + radiusY);
-        float invX = 1f / Math.Max(1, radiusX * radiusX);
-        float invY = 1f / Math.Max(1, radiusY * radiusY);
-        for (int y = minY; y <= maxY; y++)
-        {
-            int dy = y - centerY;
-            for (int x = minX; x <= maxX; x++)
-            {
-                int dx = x - centerX;
-                if ((dx * dx * invX) + (dy * dy * invY) <= 1f)
-                {
-                    context.Edit.PaintCell(x, y, material);
-                }
-            }
-        }
+        FillRect(context, 0, 0, context.WidthCells, 8, stone);
+        FillRect(context, 0, context.HeightCells - 8, context.WidthCells, 8, stone);
+        FillRect(context, 0, 0, 8, context.HeightCells, stone);
+        FillRect(context, context.WidthCells - 8, 0, 8, context.HeightCells, stone);
     }
 
     private static float Hash01(int x, int salt)

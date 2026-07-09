@@ -574,9 +574,9 @@ public sealed class PlayerControllerIntegrationTests
 
         Assert.Equal(72, tool.Radius);
         Assert.Equal(320f, tool.Force);
-        Assert.Equal(1f, tool.TerrainEffectScale);
-        Assert.Equal(72, tool.EffectiveRadius);
-        Assert.Equal(320f, tool.EffectiveForce);
+        Assert.Equal(10f, tool.TerrainEffectScale);
+        Assert.Equal(720, tool.EffectiveRadius);
+        Assert.Equal(3_200f, tool.EffectiveForce);
     }
 
     /// <summary>
@@ -702,6 +702,7 @@ public sealed class PlayerControllerIntegrationTests
         ExplosiveTool tool = scene.CreateEntity().AddComponent<ExplosiveTool>();
         tool.Radius = 3;
         tool.Force = 1f;
+        tool.TerrainEffectScale = 1f;
         tool.CooldownSeconds = 0f;
         FillRect(grid, material: stone, minX: 10, minY: 10, maxX: 15, maxY: 15);
 
@@ -733,6 +734,7 @@ public sealed class PlayerControllerIntegrationTests
         ExplosiveTool tool = scene.CreateEntity().AddComponent<ExplosiveTool>();
         tool.Radius = 22;
         tool.Force = 1_000f;
+        tool.TerrainEffectScale = 1f;
         tool.CooldownSeconds = 0f;
 
         input.Update([], [MouseButton.Middle], mouseX: 40f, mouseY: 30f, wheelY: 0f);

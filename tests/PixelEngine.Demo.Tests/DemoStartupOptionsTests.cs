@@ -228,10 +228,10 @@ public sealed class DemoStartupOptionsTests
     }
 
     /// <summary>
-    /// 验证默认可玩程序化场景从 AI 材质地图导入 cell，而不是只走旧的数学地形填充。
+    /// 验证默认可玩程序化场景生成横向熔岩闯关路线，不再自动回到旧洞穴材质图。
     /// </summary>
     [Fact]
-    public void DefaultPlayableWorldImportsAiMaterialMap()
+    public void DefaultPlayableWorldBuildsSideScrollingLavaRoute()
     {
         string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
         DemoStartupOptions options = DemoStartupOptions.Parse([
@@ -244,7 +244,7 @@ public sealed class DemoStartupOptionsTests
         ]);
         PixelEngine.Hosting.EngineProject project = DemoProgram.BuildProject(options);
         using PixelEngine.Hosting.Engine engine = DemoProgram.BuildEngine(options, project);
-        PlayableCavernWorldGenerator generator = new(Path.Combine(contentRoot, PlayableCavernWorldGenerator.DefaultMaterialMapRelativePath));
+        PlayableCavernWorldGenerator generator = new();
         engine.RegisterProceduralWorldGenerator(
             PlayableCavernWorldGenerator.Key,
             generator);
@@ -256,33 +256,35 @@ public sealed class DemoStartupOptionsTests
         MaterialTable materials = engine.Context.GetService<MaterialTable>();
         CellGrid grid = engine.Context.GetService<CellGrid>();
         PixelEngine.Hosting.ProceduralWorldDescriptor descriptor = generator.Describe(default);
-        Assert.True(materials.TryGetId("acid", out ushort acid));
         Assert.True(materials.TryGetId("metal", out ushort metal));
         Assert.True(materials.TryGetId("wood", out ushort wood));
-        Assert.True(materials.TryGetId("water", out ushort water));
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        Assert.True(materials.TryGetId("sand", out ushort sand));
         Assert.True(materials.TryGetId("lava", out ushort lava));
 
-        int acidCells = 0;
         int metalCells = 0;
-        int waterCells = 0;
+        int woodCells = 0;
+        int stoneCells = 0;
         int lavaCells = 0;
+        int floorY = descriptor.HeightCells - 96;
         for (int y = 0; y < descriptor.HeightCells; y++)
         {
             for (int x = 0; x < descriptor.WidthCells; x++)
             {
                 ushort material = grid.MaterialAt(x, y);
-                acidCells += material == acid ? 1 : 0;
                 metalCells += material == metal ? 1 : 0;
-                waterCells += material == water ? 1 : 0;
+                woodCells += material == wood ? 1 : 0;
+                stoneCells += material == stone ? 1 : 0;
                 lavaCells += material == lava ? 1 : 0;
             }
         }
 
-        Assert.True(acidCells > 100, $"AI 图里的酸液区域应进入世界，actual={acidCells}");
-        Assert.True(metalCells > 100, $"AI 图里的矿脉应进入世界，actual={metalCells}");
-        Assert.True(waterCells > 100, $"AI 图里的水池应进入世界，actual={waterCells}");
-        Assert.True(lavaCells > 100, $"AI 图里的熔岩池应进入世界，actual={lavaCells}");
-        Assert.Equal(wood, grid.MaterialAt(72, 188));
+        Assert.True(lavaCells > 600, $"横向路线应包含多个中段 lava 坑，actual={lavaCells}");
+        Assert.True(metalCells > 300, $"横向路线应包含 metal 可拆跳台/障碍，actual={metalCells}");
+        Assert.True(woodCells > 300, $"横向路线应包含 wood 可拆桥梁/障碍，actual={woodCells}");
+        Assert.True(stoneCells > 1_000, $"横向路线应包含 stone 主地形和障碍，actual={stoneCells}");
+        Assert.Equal(sand, grid.MaterialAt(72, floorY - 8));
+        Assert.Equal(lava, grid.MaterialAt(210, floorY + 4));
     }
 
     /// <summary>
