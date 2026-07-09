@@ -4256,6 +4256,57 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 UI Runtime 证据预检会拒绝只有布尔结论但缺少足够时长 / 帧数支撑的弱产品面报告。
+    /// </summary>
+    [Fact]
+    public void UiRuntimeEvidencePreflightRejectsWeakTransparentWindowDuration()
+    {
+        // Arrange：搭建测试场景与依赖
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-ui-runtime-weak-duration-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreateUiRuntimeEvidenceManifest(temp);
+            JsonObject rootNode = JsonNode.Parse(File.ReadAllText(manifest))!.AsObject();
+            JsonArray evidence = rootNode["evidence"]!.AsArray();
+            JsonObject transparentEntry = evidence
+                .Select(static node => node!.AsObject())
+                .Single(static node => string.Equals((string?)node["scope"], "transparent_ui_product_window", StringComparison.Ordinal));
+            string reportPath = (string)transparentEntry["path"]!;
+            string report = File.ReadAllText(reportPath)
+                .Replace("videoDurationSeconds: 30", "videoDurationSeconds: 2", StringComparison.Ordinal);
+            File.WriteAllText(reportPath, report);
+            transparentEntry["sha256"] = GetSha256(reportPath);
+            File.WriteAllText(manifest, rootNode.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+            string artifacts = Path.Combine(temp, "out");
+            // Act：执行被测操作
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "ui-runtime-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            // Assert：验证不变式与预期结果
+            Assert.Equal(5, result.ExitCode);
+            string outputReport = File.ReadAllText(Path.Combine(artifacts, "ui-runtime-evidence-preflight.md"));
+            Assert.Contains("status: blocked_missing_ui_runtime_scope_evidence", outputReport, StringComparison.Ordinal);
+            Assert.Contains("transparent_ui_product_window videoDurationSeconds 必须至少为 30", outputReport, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: ui_runtime_evidence_attached_pending_review", outputReport, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 Editor UX 证据预检入口覆盖 plan/19 的真实窗口 UX 证据债，且不会把 pending review 误当成完成。
     /// </summary>
     [Fact]
@@ -7131,6 +7182,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 lines.Add($"{field}: true");
             }
 
+            foreach (KeyValuePair<string, double> field in GetUiRuntimeMinimumNumberFields(scope.Key))
+            {
+                lines.Add($"{field.Key}: {field.Value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}");
+            }
+
             string report = WriteTextEvidence(Path.Combine(evidenceRoot, $"{scope.Key}.md"), string.Join(Environment.NewLine, lines));
             evidence.Add(new Dictionary<string, object>
             {
@@ -7153,6 +7209,36 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             manifestPath,
             System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         return manifestPath;
+    }
+
+    private static Dictionary<string, double> GetUiRuntimeMinimumNumberFields(string scope)
+    {
+        return scope switch
+        {
+            "transparent_ui_product_window" => new Dictionary<string, double>
+            {
+                ["videoDurationSeconds"] = 30,
+                ["capturedFrameCount"] = 300,
+            },
+            "rmlui_angle_gles_native_profile" => new Dictionary<string, double>
+            {
+                ["smokeFrameCount"] = 60,
+            },
+            "platform_ime_composition" => new Dictionary<string, double>
+            {
+                ["compositionSessionCount"] = 1,
+            },
+            "ultralight_optional_profile_gate" => new Dictionary<string, double>
+            {
+                ["licenseDocumentCount"] = 1,
+            },
+            "ui_native_release_artifact" => new Dictionary<string, double>
+            {
+                ["releaseArtifactCount"] = 1,
+                ["sha256EntryCount"] = 1,
+            },
+            _ => [],
+        };
     }
 
     private static string CreateEditorUxEvidenceManifest(string tempRoot, string suffix = "good")

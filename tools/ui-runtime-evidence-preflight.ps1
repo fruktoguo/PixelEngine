@@ -160,6 +160,40 @@ function Assert-TrueField {
     }
 }
 
+function Get-RequiredNumber {
+    param(
+        [System.Collections.IDictionary]$Fields,
+        [string]$Name,
+        [string]$Scope
+    )
+
+    $value = Get-RequiredField -Fields $Fields -Name $Name -Scope $Scope
+    $parsed = 0.0
+    if (-not [double]::TryParse(
+        $value,
+        [Globalization.NumberStyles]::Float,
+        [Globalization.CultureInfo]::InvariantCulture,
+        [ref]$parsed)) {
+        throw "$Scope $Name 必须为数字。"
+    }
+
+    return $parsed
+}
+
+function Assert-NumberAtLeast {
+    param(
+        [System.Collections.IDictionary]$Fields,
+        [string]$Name,
+        [double]$Minimum,
+        [string]$Scope
+    )
+
+    $actual = Get-RequiredNumber -Fields $Fields -Name $Name -Scope $Scope
+    if ($actual -lt $Minimum) {
+        throw "$Scope $Name 必须至少为 $Minimum，实际为 $actual。"
+    }
+}
+
 function Assert-CommonEvidenceIdentity {
     param(
         [System.Collections.IDictionary]$Fields,
@@ -200,26 +234,43 @@ function Get-RequiredUiRuntimeScopes {
             scope = "transparent_ui_product_window"
             title = "真实窗口透明 UI 产品面：same-window/same-GL、alpha、pass-through、capture、Editor overlay"
             trueFields = @("sameWindowSameGl", "alphaBlendVerified", "passThroughVerified", "captureVerified", "editorOverlayVerified", "videoOrWalkthroughAttached")
+            minimumNumberFields = @(
+                @{ name = "videoDurationSeconds"; minimum = 30 },
+                @{ name = "capturedFrameCount"; minimum = 300 }
+            )
         },
         [pscustomobject]@{
             scope = "rmlui_angle_gles_native_profile"
             title = "RmlUi ANGLE/GLES native profile：GLES3 renderer、ANGLE context、shader profile、状态恢复 smoke"
             trueFields = @("glesRendererImplemented", "angleContextVerified", "shaderProfileGles300Es", "sameContextFunctionTable", "stateRestoreSmokePassed")
+            minimumNumberFields = @(
+                @{ name = "smokeFrameCount"; minimum = 60 }
+            )
         },
         [pscustomobject]@{
             scope = "platform_ime_composition"
             title = "真实平台 IME composition：预编辑、候选窗、committed text 分离、三后端一致性"
             trueFields = @("windowsImeSmokePassed", "preeditVisible", "candidateWindowChecked", "committedTextSeparated", "backendConsistencyChecked")
+            minimumNumberFields = @(
+                @{ name = "compositionSessionCount"; minimum = 1 }
+            )
         },
         [pscustomobject]@{
             scope = "ultralight_optional_profile_gate"
             title = "Ultralight optional profile：后端/许可/provenance/发行 gate 或明确 inactive gate 复核"
             trueFields = @("nativeSdkProvenanceRecorded", "licenseReviewed", "redistributionDecisionRecorded", "releaseAuditGatePassed", "fallbackPathVerified")
+            minimumNumberFields = @(
+                @{ name = "licenseDocumentCount"; minimum = 1 }
+            )
         },
         [pscustomobject]@{
             scope = "ui_native_release_artifact"
             title = "UI native release artifact：active RID R2R/AOT fallback、SHA256、NOTICE/license、tag release 同源证据"
             trueFields = @("activeRidArtifactsAttached", "aotFallbackVerified", "sha256SumsAttached", "noticeLicenseAttached", "tagReleaseWorkflowEvidence")
+            minimumNumberFields = @(
+                @{ name = "releaseArtifactCount"; minimum = 1 },
+                @{ name = "sha256EntryCount"; minimum = 1 }
+            )
         }
     )
 }
@@ -271,6 +322,14 @@ function Add-ScopedEvidence {
         foreach ($field in @($ScopeDefinition.trueFields)) {
             Assert-TrueField -Fields $fields -Name ([string]$field) -Scope $scope
         }
+
+        foreach ($field in @($ScopeDefinition.minimumNumberFields)) {
+            Assert-NumberAtLeast `
+                -Fields $fields `
+                -Name ([string]$field.name) `
+                -Minimum ([double]$field.minimum) `
+                -Scope $scope
+        }
     }
     catch {
         $Missing.Add("scope $scope 语义无效：$($_.Exception.Message)")
@@ -309,6 +368,10 @@ function Write-UiRuntimeEvidenceReport {
     foreach ($scope in Get-RequiredUiRuntimeScopes) {
         $lines.Add("- $($scope.scope): $($scope.title)")
         $lines.Add("  required_true_fields: $($scope.trueFields -join ', ')")
+        $numberFields = @($scope.minimumNumberFields | ForEach-Object { "$($_.name)>=$($_.minimum)" })
+        if ($numberFields.Count -gt 0) {
+            $lines.Add("  required_number_fields: $($numberFields -join ', ')")
+        }
     }
     $lines.Add("")
 
