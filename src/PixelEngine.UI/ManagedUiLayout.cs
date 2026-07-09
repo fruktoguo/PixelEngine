@@ -551,26 +551,41 @@ internal static class ManagedUiLayout
         string ClassName,
         string IdValue)
     {
+        /// <summary>
+        /// 创建按元素标签名匹配的托管 UI 样式选择器。
+        /// </summary>
         public static ManagedUiSelector Tag(string tagName)
         {
             return new ManagedUiSelector(ManagedUiSelectorKind.Tag, tagName, string.Empty, string.Empty);
         }
 
+        /// <summary>
+        /// 创建按 CSS class 名匹配的托管 UI 样式选择器。
+        /// </summary>
         public static ManagedUiSelector Class(string className)
         {
             return new ManagedUiSelector(ManagedUiSelectorKind.Class, string.Empty, className, string.Empty);
         }
 
+        /// <summary>
+        /// 创建同时按元素标签名与 CSS class 名匹配的托管 UI 样式选择器。
+        /// </summary>
         public static ManagedUiSelector TagClass(string tagName, string className)
         {
             return new ManagedUiSelector(ManagedUiSelectorKind.TagClass, tagName, className, string.Empty);
         }
 
+        /// <summary>
+        /// 创建按元素 id 匹配的托管 UI 样式选择器。
+        /// </summary>
         public static ManagedUiSelector Id(string id)
         {
             return new ManagedUiSelector(ManagedUiSelectorKind.Id, string.Empty, string.Empty, id);
         }
 
+        /// <summary>
+        /// 判断当前选择器是否命中指定元素的标签、class 或 id。
+        /// </summary>
         public bool Matches(string tagName, string? classes, string? elementId)
         {
             return Kind switch
