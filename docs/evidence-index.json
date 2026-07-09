@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-10",
-  "generatedFromCommit": "b7fcf5321a4daf5d5a282350fd61e4886cc0bd13",
+  "generatedFromCommit": "bdeb5aa578c101c6cf514136f13e42e1d80f4c6d",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -13,6 +13,19 @@
     "completeState": "只有同时捕获 commit、runSessionId、硬件、命令、稳定报告和 SHA256 的条目才能标记 complete。"
   },
   "entries": [
+    {
+      "entryId": "test-001-native-smoke-20260710",
+      "taskIds": ["TEST-001"],
+      "evidenceState": "complete_local_native_smoke",
+      "commit": "bdeb5aa578c101c6cf514136f13e42e1d80f4c6d",
+      "runSessionId": "local-20260710-test001-native-smoke",
+      "runIdentityStatus": "captured",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8c/16t; AMD Radeon RX 7900 XT; driver 32.0.31021.5001; .NET SDK 10.0.108; win-x64",
+      "command": "$env:PIXELENGINE_RENDERING_GL_SMOKE='1'; $env:PIXELENGINE_RENDERING_ANGLE_SMOKE='1'; ./tools/run-native-smoke.ps1 -Configuration Release -ResultsDirectory artifacts/native-smoke-final; $env:GOSUMDB='off'; go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/ci.yml",
+      "reportPath": "docs/evidence-2026-07-10-test-001-native-smoke.md",
+      "sha256": "63e925e01e8ab6863038b125442a1f484b4619592339a656b286a58622bdb062",
+      "notes": "无环境普通分类测试明确 skipped 20/9/4/1；本机真实 GL/ANGLE smoke 34/34 passed；workflow 静态检查通过；未执行远端 push/run，CI-002/CI-003 不因本报告解除。"
+    },
     {
       "entryId": "ci-001-workflow-validation-20260710",
       "taskIds": ["CI-001"],
