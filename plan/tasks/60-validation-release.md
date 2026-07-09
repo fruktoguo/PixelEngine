@@ -32,10 +32,12 @@
 
 ## 证据可追溯性
 
-- [ ] `EVID-001` 建立稳定 evidence index，记录 task ID、commit、run/session id、硬件、命令、报告路径和 SHA256。
+- [x] `EVID-001` 建立稳定 evidence index，记录 task ID、commit、run/session id、硬件、命令、报告路径和 SHA256。
   - 优先级：P1。
   - 依赖：`PLAN-001`。
+  - 设计来源：`plan/14-testing-benchmarking.md` §3.10–§3.11、§5–§6；`plan/15-build-packaging-distribution.md` §1、§5–§6；`plan/17-roadmap-execution-order.md` §2、§4；`plan/tasks/70-evidence-contracts.md`。
   - 验收：已完成任务不再只引用会被清理的 `scratch/`/临时 `artifacts/`；历史报告明确标记旧 commit；preflight 输出可追踪到原始材料。
+  - 证据：`docs/evidence-index.json`、`docs/evidence-index.md`、`tools/validate-evidence-index.ps1`；校验输出 `Evidence index valid: 17 entries, 45 referenced task IDs.`；`TaskEvidenceCatalogIndexesAllEvidencePreflightStatusesAsNonPassing` 通过 1/1。
 
 - [!] `EVID-002` 完成 GL/OpenAL/Box2D/ALC 的外部 native leak detector。阻塞：需要冻结候选 commit、detector 环境和四类同源报告。
   - 优先级：P1。
