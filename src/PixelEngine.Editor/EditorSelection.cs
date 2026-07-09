@@ -26,6 +26,11 @@ public sealed class EditorSelection
     public string? AssetPath { get; private set; }
 
     /// <summary>
+    /// 当前选中的 Project Window 文件夹路径；空字符串表示 content 根目录。
+    /// </summary>
+    public string? FolderPath { get; private set; }
+
+    /// <summary>
     /// 当前选中的实体句柄。
     /// </summary>
     public string? EntityHandle { get; private set; }
@@ -68,6 +73,20 @@ public sealed class EditorSelection
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(assetPath);
         AssetPath = assetPath;
+        FolderPath = null;
+        EntityHandle = null;
+        GameObjectStableId = null;
+        BodyId = null;
+    }
+
+    /// <summary>
+    /// 设置 Project Window 文件夹选择。
+    /// </summary>
+    /// <param name="folderPath">文件夹逻辑路径；空字符串表示 content 根目录。</param>
+    public void SelectFolder(string folderPath)
+    {
+        FolderPath = (folderPath ?? string.Empty).Trim().Replace('\\', '/');
+        AssetPath = null;
         EntityHandle = null;
         GameObjectStableId = null;
         BodyId = null;
@@ -81,7 +100,10 @@ public sealed class EditorSelection
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(entityHandle);
         EntityHandle = entityHandle;
+        AssetPath = null;
+        FolderPath = null;
         GameObjectStableId = null;
+        BodyId = null;
     }
 
     /// <summary>
@@ -97,6 +119,7 @@ public sealed class EditorSelection
 
         GameObjectStableId = stableId;
         AssetPath = null;
+        FolderPath = null;
         EntityHandle = null;
         BodyId = null;
     }
@@ -108,6 +131,10 @@ public sealed class EditorSelection
     public void SelectBody(int bodyId)
     {
         BodyId = bodyId;
+        AssetPath = null;
+        FolderPath = null;
+        EntityHandle = null;
+        GameObjectStableId = null;
     }
 
     /// <summary>
@@ -119,6 +146,7 @@ public sealed class EditorSelection
         CellY = null;
         MaterialId = null;
         AssetPath = null;
+        FolderPath = null;
         EntityHandle = null;
         GameObjectStableId = null;
         BodyId = null;

@@ -25,6 +25,7 @@ internal sealed class GameObjectInspectorPanel(
     private readonly Action<string>? _instantiatePrefab = instantiatePrefab;
     private readonly ScriptAssetOpenHandler? _openScriptAsset = openScriptAsset;
     private string _componentSearch = string.Empty;
+    private string? _statusSelectionKey;
 
     public string Title => EditorDockSpace.InspectorWindowTitle;
 
@@ -44,6 +45,13 @@ internal sealed class GameObjectInspectorPanel(
 
         Visible = visible;
         // 无选中时早退；否则绘制头部、Transform 与组件列表
+        if (!context.Selection.GameObjectStableId.HasValue && context.Selection.FolderPath is not null)
+        {
+            DrawFolderInspector(context.Selection.FolderPath);
+            ImGui.End();
+            return;
+        }
+
         if (!context.Selection.GameObjectStableId.HasValue && !string.IsNullOrWhiteSpace(context.Selection.AssetPath))
         {
             DrawAssetInspector(context.Selection.AssetPath!);
@@ -98,18 +106,39 @@ internal sealed class GameObjectInspectorPanel(
         return new AssetInspectorSnapshot(assetPath, Found: false, "Unknown", null, 0, null, null, $"资产不存在：{assetPath}");
     }
 
+    internal FolderInspectorSnapshot CaptureFolderInspector(string folderPath)
+    {
+        string normalized = (folderPath ?? string.Empty).Trim().Replace('\\', '/');
+        if (_assetSource is not IAssetBrowserFolderDataSource folderSource)
+        {
+            return new FolderInspectorSnapshot(normalized, Found: false, 0, "文件夹数据源不可用");
+        }
+
+        IReadOnlyList<AssetBrowserFolderItem> folders = folderSource.ListFolders();
+        for (int i = 0; i < folders.Count; i++)
+        {
+            AssetBrowserFolderItem folder = folders[i];
+            if (string.Equals(folder.Path, normalized, StringComparison.OrdinalIgnoreCase))
+            {
+                return new FolderInspectorSnapshot(folder.Path, Found: true, folder.AssetCount, "就绪");
+            }
+        }
+
+        return new FolderInspectorSnapshot(normalized, Found: false, 0, $"文件夹不存在：{normalized}");
+    }
+
     internal bool TryInvokePrimaryAssetAction(string assetPath)
     {
         AssetInspectorSnapshot asset = CaptureAssetInspector(assetPath);
         if (!asset.Found)
         {
-            RecordInspectorStatus(asset.Status, EditorConsoleSeverity.Warning, "inspector-asset-action");
+            RecordInspectorStatus(asset.Status, EditorConsoleSeverity.Warning, "inspector-asset-action", GetAssetSelectionKey(asset.Path));
             return false;
         }
 
         if (!Enum.TryParse(asset.Kind, ignoreCase: false, out AssetBrowserItemKind kind))
         {
-            RecordInspectorStatus($"资产类型不可操作：{asset.Kind}", EditorConsoleSeverity.Warning, "inspector-asset-action");
+            RecordInspectorStatus($"资产类型不可操作：{asset.Kind}", EditorConsoleSeverity.Warning, "inspector-asset-action", GetAssetSelectionKey(asset.Path));
             return false;
         }
 
@@ -118,7 +147,7 @@ internal sealed class GameObjectInspectorPanel(
             case AssetBrowserItemKind.Script:
                 if (_openScriptAsset is null)
                 {
-                    RecordInspectorStatus("脚本外部编辑器不可用", EditorConsoleSeverity.Warning, "inspector-asset-action");
+                    RecordInspectorStatus("脚本外部编辑器不可用", EditorConsoleSeverity.Warning, "inspector-asset-action", GetAssetSelectionKey(asset.Path));
                     return false;
                 }
 
@@ -128,18 +157,19 @@ internal sealed class GameObjectInspectorPanel(
                         ? opened ? $"打开脚本 {asset.Path}" : $"脚本外部编辑器打开失败：{asset.Path}"
                         : diagnostic,
                     opened ? EditorConsoleSeverity.Info : EditorConsoleSeverity.Warning,
-                    "inspector-asset-action");
+                    "inspector-asset-action",
+                    GetAssetSelectionKey(asset.Path));
                 return opened;
 
             case AssetBrowserItemKind.Prefab:
                 if (_instantiatePrefab is null)
                 {
-                    RecordInspectorStatus("Prefab 实例化服务不可用", EditorConsoleSeverity.Warning, "inspector-asset-action");
+                    RecordInspectorStatus("Prefab 实例化服务不可用", EditorConsoleSeverity.Warning, "inspector-asset-action", GetAssetSelectionKey(asset.Path));
                     return false;
                 }
 
                 _instantiatePrefab(asset.Path);
-                RecordInspectorStatus($"实例化 {asset.Path}", EditorConsoleSeverity.Info, "inspector-asset-action");
+                RecordInspectorStatus($"实例化 {asset.Path}", EditorConsoleSeverity.Info, "inspector-asset-action", GetAssetSelectionKey(asset.Path));
                 return true;
 
             case AssetBrowserItemKind.Material:
@@ -151,7 +181,7 @@ internal sealed class GameObjectInspectorPanel(
             case AssetBrowserItemKind.Folder:
             case AssetBrowserItemKind.Other:
             default:
-                RecordInspectorStatus($"当前资产没有 Inspector 主操作：{asset.Path}", EditorConsoleSeverity.Info, "inspector-asset-action");
+                RecordInspectorStatus($"当前资产没有 Inspector 主操作：{asset.Path}", EditorConsoleSeverity.Info, "inspector-asset-action", GetAssetSelectionKey(asset.Path));
                 return false;
         }
     }
@@ -171,7 +201,18 @@ internal sealed class GameObjectInspectorPanel(
         }
 
         ImGui.SeparatorText("Inspector 状态");
-        ImGui.TextUnformatted(Status == ReadyStatus ? asset.Status : Status);
+        ImGui.TextUnformatted(GetSelectionStatus(GetAssetSelectionKey(asset.Path), asset.Status));
+    }
+
+    private void DrawFolderInspector(string folderPath)
+    {
+        FolderInspectorSnapshot folder = CaptureFolderInspector(folderPath);
+        ImGui.SeparatorText("Folder");
+        ImGui.TextUnformatted($"Path: {(string.IsNullOrEmpty(folder.Path) ? "content/" : folder.Path + "/")}");
+        ImGui.TextUnformatted("Type: Folder");
+        ImGui.TextUnformatted($"Assets: {folder.AssetCount}");
+        ImGui.SeparatorText("Inspector 状态");
+        ImGui.TextUnformatted(GetSelectionStatus(GetFolderSelectionKey(folder.Path), folder.Status));
     }
 
     private static string? GetPrimaryAssetActionLabel(AssetBrowserItemKind kind)
@@ -192,15 +233,33 @@ internal sealed class GameObjectInspectorPanel(
         };
     }
 
-    private void RecordInspectorStatus(string status, EditorConsoleSeverity severity, string source)
+    private void RecordInspectorStatus(string status, EditorConsoleSeverity severity, string source, string selectionKey)
     {
         Status = string.IsNullOrWhiteSpace(status) ? ReadyStatus : status;
+        _statusSelectionKey = selectionKey;
         _console?.Add(new EditorConsoleEntry(
             DateTimeOffset.UtcNow,
             EditorConsoleCategory.Asset,
             severity,
             source,
             Status));
+    }
+
+    private string GetSelectionStatus(string selectionKey, string fallback)
+    {
+        return Status != ReadyStatus && string.Equals(_statusSelectionKey, selectionKey, StringComparison.Ordinal)
+            ? Status
+            : fallback;
+    }
+
+    private static string GetAssetSelectionKey(string assetPath)
+    {
+        return "asset:" + assetPath;
+    }
+
+    private static string GetFolderSelectionKey(string folderPath)
+    {
+        return "folder:" + folderPath;
     }
 
     private void DrawHeader(EditorGameObject gameObject)
@@ -587,4 +646,10 @@ internal readonly record struct AssetInspectorSnapshot(
     long SizeBytes,
     string? PreviewSummary,
     string? PrimaryActionLabel,
+    string Status);
+
+internal readonly record struct FolderInspectorSnapshot(
+    string Path,
+    bool Found,
+    int AssetCount,
     string Status);

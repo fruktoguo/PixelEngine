@@ -723,6 +723,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("class EditorUndoStack", source, StringComparison.Ordinal);
         Assert.Contains("interface IEditorCommand", source, StringComparison.Ordinal);
         Assert.Contains("class GameObjectHierarchyPanel", source, StringComparison.Ordinal);
+        Assert.Contains("SyncSelection", source, StringComparison.Ordinal);
+        Assert.Contains("selection.FolderPath is not null", source, StringComparison.Ordinal);
         Assert.Contains("class GameObjectInspectorPanel", source, StringComparison.Ordinal);
         Assert.Contains("EditorSceneRuntimeProjection", source, StringComparison.Ordinal);
         Assert.Contains("StableIdToEntityId", source, StringComparison.Ordinal);
@@ -734,6 +736,9 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("CaptureAssetInspector", source, StringComparison.Ordinal);
         Assert.Contains("AssetInspectorSnapshot", source, StringComparison.Ordinal);
         Assert.Contains("DrawAssetInspector", source, StringComparison.Ordinal);
+        Assert.Contains("CaptureFolderInspector", source, StringComparison.Ordinal);
+        Assert.Contains("FolderInspectorSnapshot", source, StringComparison.Ordinal);
+        Assert.Contains("DrawFolderInspector", source, StringComparison.Ordinal);
         Assert.Contains("TryInvokePrimaryAssetAction", source, StringComparison.Ordinal);
         Assert.Contains("_app.InstantiatePrefab", source, StringComparison.Ordinal);
         Assert.Contains("_app.OpenScriptAsset", source, StringComparison.Ordinal);
@@ -751,7 +756,10 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("GameObjectStableId", editorSelection, StringComparison.Ordinal);
         Assert.Contains("SelectGameObject", editorSelection, StringComparison.Ordinal);
         Assert.Contains("SelectAsset", editorSelection, StringComparison.Ordinal);
+        Assert.Contains("SelectFolder", editorSelection, StringComparison.Ordinal);
+        Assert.Contains("FolderPath", editorSelection, StringComparison.Ordinal);
         Assert.Contains("AssetPath = null;", editorSelection, StringComparison.Ordinal);
+        Assert.Contains("FolderPath = null;", editorSelection, StringComparison.Ordinal);
         Assert.Contains("GameObjectStableId = null;", editorSelection, StringComparison.Ordinal);
         Assert.Contains("AttachScriptScene(Scripting.Scene scriptScene)", hostingEngine, StringComparison.Ordinal);
         Assert.Contains("--scripted-hierarchy-probe", File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellOptions.cs")), StringComparison.Ordinal);

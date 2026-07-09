@@ -53,8 +53,18 @@ internal sealed class GameObjectHierarchyPanel(EditorSceneModel scene, EditorUnd
         ImGui.End();
     }
 
-    private void SyncSelection(EditorSelection selection)
+    internal void SyncSelection(EditorSelection selection)
     {
+        if (!string.IsNullOrWhiteSpace(selection.AssetPath) || selection.FolderPath is not null)
+        {
+            if (_scene.SelectedStableId.HasValue)
+            {
+                _scene.Select(null);
+            }
+
+            return;
+        }
+
         if (selection.GameObjectStableId.HasValue && _scene.TryGet(selection.GameObjectStableId.Value, out _))
         {
             if (_scene.SelectedStableId != selection.GameObjectStableId)
