@@ -234,7 +234,7 @@ public sealed class PlayableHud : Behaviour
         }
 
         uint color = _goal?.Reached == true ? 0xFF_80_F0_80 : 0xFF_E8_D0_6A;
-        string status = _goal?.Reached == true ? "已抵达出口" : "向右穿过熔岩坑与路障，抵达出口";
+        string status = _goal?.Reached == true ? "已抵达右侧出口" : "左起点 -> 右出口，穿过熔岩坑与路障";
         gui.TextColored($"目标 {status}", color);
     }
 
