@@ -37,7 +37,7 @@
   - 依赖：`ARCH-003` 可并行。
   - 验收：破坏 burst benchmark 报告分配和 p99；池对象完整清理；CCL/凸分解/碎片守恒测试不回归。
 
-- [ ] `PERF-006` 把 resident chunk 批量加入改为单次 snapshot rebuild 和指数扩容，消除一批 N 个 chunk 的 O(n²) 复制/分配。
+- [~] `PERF-006` 把 resident chunk 批量加入改为单次 snapshot rebuild 和指数扩容，消除一批 N 个 chunk 的 O(n²) 复制/分配。
   - 优先级：P1。
   - 依赖：`BASE-007`。
   - 验收：提供 batch mutation API；单批只重建一次稳定 snapshot；1/16/64/256 chunk benchmark 与驻留正确性测试通过。
