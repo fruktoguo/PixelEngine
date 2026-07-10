@@ -4,6 +4,8 @@
 
 > **DOC-002 历史证据口径（2026-07-10）**：后文 checkbox 与“已通过/已完成”叙述冻结自旧计划快照 `179efc3a`，迁移基线为 `5af1541f`，均不构成 live 状态；证据等级以 [稳定 Evidence Index](../docs/evidence-index.md) 为准。未入索引的 `artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/` 仅是可再生历史线索；替代报告与重跑命令见 [DOC-002 校正报告](../docs/evidence-2026-07-10-doc-002-legacy-plan-audit.md)。
 
+> **DOC-002 结构清单校正**：后文 §5 的目录树是依赖方向与职责分层示意，不是完整 solution inventory，“定稿”只约束分层 / 依赖边界；当前项目清单与数量以 `plan/01 §3.2`、`PixelEngine.sln` 和仓库内实际 `.csproj` 的可重算交集为准。
+
 > 本文件锁定整个 PixelEngine 的技术选型、解决方案结构、目标框架与跨切面约定。所有其它 plan 文档以此为准、不得另立选型。权威设计依据：`docs/PixelEngine-架构与需求设计.md`（下称「架构文档」），开发宪法：`AGENTS.md`。
 > 状态：`- [ ]` 未开始 / `- [x]` 完成并有可追溯证据 / `- [!]` 外部证据、人工验收、硬件、发行或 native 阻塞；进行中事项必须拆成已完成子项与未完成/阻塞子项。
 
