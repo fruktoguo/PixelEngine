@@ -385,6 +385,148 @@ public sealed class EditorProjectAssetModelTests
     }
 
     /// <summary>
+    /// 验证文件夹移动后可批量重写多个 Scene，且所有工程与启动配置不再残留旧前缀。
+    /// </summary>
+    [Fact]
+    public void SynchronizeMovedScenePathsRewritesEveryConfigurationAfterFolderMove()
+    {
+        // Arrange：准备两个位于同一文件夹的 Scene 及全部配置引用
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            EditorProject project = EditorProject.CreateNew(projectRoot, "Scene Folder Move Project");
+            string contentRoot = project.ContentRootPath;
+            string oldPrefix = "scenes/episode-one";
+            string newPrefix = "scenes/campaign/episode-one";
+            string oldIntro = $"{oldPrefix}/intro.scene";
+            string oldBoss = $"{oldPrefix}/boss.world";
+            string newIntro = $"{newPrefix}/intro.scene";
+            string newBoss = $"{newPrefix}/boss.world";
+            EngineSceneDocument scene = new()
+            {
+                FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+                Name = "folder-move",
+                Entities = [],
+            };
+            EngineSceneDocumentLoader.SaveDocument(scene, Path.Combine(contentRoot, oldIntro.Replace('/', Path.DirectorySeparatorChar)));
+            EngineSceneDocumentLoader.SaveDocument(scene, Path.Combine(contentRoot, oldBoss.Replace('/', Path.DirectorySeparatorChar)));
+            project.UpsertScene(oldIntro, makeStartScene: true);
+            project.RegisterScene(oldBoss);
+            EngineProjectSettingsStore.SaveProjectSettings(
+                projectRoot,
+                ProjectSettingsDto.CreateDefault(project.Name) with
+                {
+                    StartScene = oldIntro,
+                });
+            EngineProjectSettingsStore.SavePlayerSettings(
+                projectRoot,
+                PlayerSettingsDto.CreateDefault(project.Name) with
+                {
+                    StartupScene = oldIntro,
+                });
+            EngineProjectSettingsStore.SaveStartupSettings(
+                contentRoot,
+                EngineProjectStartupSettings.CreateDefault() with
+                {
+                    StartScene = oldIntro,
+                });
+            EngineProjectSettingsStore.SaveBuildProfile(
+                projectRoot,
+                new BuildProfileDto
+                {
+                    ProductName = project.Name,
+                    Scenes =
+                    [
+                        new BuildProfileSceneDto
+                        {
+                            SceneName = "intro",
+                            Source = oldIntro,
+                            Included = true,
+                            IsStartup = true,
+                            SourceKind = SceneSourceKind.SceneFile,
+                        },
+                        new BuildProfileSceneDto
+                        {
+                            SceneName = "boss",
+                            Source = oldBoss,
+                            Included = true,
+                            SourceKind = SceneSourceKind.SceneFile,
+                        },
+                    ],
+                });
+            string oldDirectory = Path.Combine(contentRoot, oldPrefix.Replace('/', Path.DirectorySeparatorChar));
+            string newDirectory = Path.Combine(contentRoot, newPrefix.Replace('/', Path.DirectorySeparatorChar));
+            _ = Directory.CreateDirectory(Path.GetDirectoryName(newDirectory)!);
+            Directory.Move(oldDirectory, newDirectory);
+            EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
+            EditorProjectSceneAssetMoveService service = new(project, manifest);
+
+            SceneSettingsSyncCounts counts = service.SynchronizeMovedScenePaths(
+            [
+                new EditorScenePathRewrite($"  {oldIntro.Replace('/', '\\')}  ", newIntro),
+                new EditorScenePathRewrite(oldBoss, newBoss),
+            ]);
+
+            // Assert：验证每类配置的聚合计数与最终路径
+            Assert.Equal(new SceneSettingsSyncCounts(2, 1, 1, 2, 1), counts);
+            EditorProject reloadedProject = EditorProject.Load(projectRoot);
+            Assert.Equal(newIntro, reloadedProject.StartScene);
+            Assert.Contains(reloadedProject.Scenes, entry => string.Equals(entry.Path, newIntro, StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(reloadedProject.Scenes, entry => string.Equals(entry.Path, newBoss, StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(newIntro, EngineProjectSettingsStore.LoadProjectSettings(projectRoot).StartScene);
+            Assert.Equal(newIntro, EngineProjectSettingsStore.LoadPlayerSettings(projectRoot).StartupScene);
+            Assert.Equal(newIntro, EngineProjectSettingsStore.LoadStartupSettings(contentRoot).StartScene);
+            BuildProfileDto buildSettings = EngineProjectSettingsStore.LoadBuildProfile(projectRoot);
+            Assert.Contains(buildSettings.Scenes, entry => string.Equals(entry.Source, newIntro, StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(buildSettings.Scenes, entry => string.Equals(entry.Source, newBoss, StringComparison.OrdinalIgnoreCase));
+
+            string[] configurationFiles =
+            [
+                project.ProjectFilePath,
+                Path.Combine(projectRoot, EngineProjectSettingsStore.ProjectSettingsFileName),
+                Path.Combine(projectRoot, EngineProjectSettingsStore.PlayerSettingsFileName),
+                Path.Combine(projectRoot, EngineProjectSettingsStore.BuildSettingsFileName),
+                Path.Combine(contentRoot, EngineProjectSettingsStore.StartupSettingsFileName),
+            ];
+            Assert.All(
+                configurationFiles,
+                path => Assert.DoesNotContain(oldPrefix, File.ReadAllText(path), StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
+    /// 验证批量重写在持久化前拒绝非 Scene 路径。
+    /// </summary>
+    [Fact]
+    public void SynchronizeMovedScenePathsRejectsNonSceneAssetsBeforeWriting()
+    {
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            EditorProject project = EditorProject.CreateNew(projectRoot, "Invalid Scene Rewrite Project");
+            string projectJson = File.ReadAllText(project.ProjectFilePath);
+            EditorProjectSceneAssetMoveService service = new(
+                project,
+                new EditorAssetManifestStore(projectRoot, project.ContentRootPath));
+
+            _ = Assert.Throws<InvalidOperationException>(() => service.SynchronizeMovedScenePaths(
+            [
+                new EditorScenePathRewrite("scenes/main.scene", "textures/main.png"),
+            ]));
+
+            Assert.Equal(projectJson, File.ReadAllText(project.ProjectFilePath));
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
     /// 验证 Project Window move request 会回查 stable id，并通过 Shell 数据源重写活动场景与磁盘文档中的 typed asset reference。
     /// </summary>
     [Fact]

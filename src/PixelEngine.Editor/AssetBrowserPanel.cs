@@ -12,7 +12,7 @@ namespace PixelEngine.Editor;
 public delegate bool ScriptAssetOpenHandler(string assetPath, out string diagnostic);
 
 /// <summary>
-/// content 资源浏览器面板。
+/// 工程级 Project Window，展示 Content 与 ScriptSource logical root。
 /// </summary>
 /// <param name="source">资产数据源。</param>
 /// <param name="audioPreview">音频试听服务。</param>
@@ -77,6 +77,8 @@ public sealed class AssetBrowserPanel(
     private string _pendingMoveTargetPath = string.Empty;
     private AssetBrowserFolderMoveRequest? _pendingFolderMoveRequest;
     private string _pendingFolderMoveTargetPath = string.Empty;
+    private EditorSelection? _trackedSelection;
+    private bool _snapshotLoaded;
 
     /// <inheritdoc />
     public string Title => EditorDockSpace.AssetBrowserWindowTitle;
@@ -100,7 +102,7 @@ public sealed class AssetBrowserPanel(
     public IReadOnlyList<AssetBrowserFolderItem> FolderTargets { get; private set; } = [];
 
     /// <summary>
-    /// 当前 Project Window 文件夹作用域；空字符串表示 content 根目录。
+    /// 当前 Project Window 文件夹作用域；空字符串表示双根总览。
     /// </summary>
     public string ActiveFolderPath { get; private set; } = string.Empty;
 
@@ -185,11 +187,46 @@ public sealed class AssetBrowserPanel(
     /// <returns>完整资产快照。</returns>
     public IReadOnlyList<AssetBrowserItem> Refresh()
     {
-        LastAssets = _source.ListAssets();
-        RebuildFolderTargets();
-        EnsureActiveFolderStillExists();
-        ApplyFilter();
-        return LastAssets;
+        if (_source is IAssetBrowserRefreshableDataSource refreshable)
+        {
+            refreshable.RefreshAssets();
+        }
+
+        return ReloadSnapshot();
+    }
+
+    /// <summary>
+    /// 刷新资产列表，并按 stable asset id 对共享选择态重新定位。
+    /// </summary>
+    /// <param name="selection">要跟随资产移动、重命名或删除的 Editor 选择态。</param>
+    /// <returns>完整资产快照。</returns>
+    public IReadOnlyList<AssetBrowserItem> Refresh(EditorSelection selection)
+    {
+        _trackedSelection = selection ?? throw new ArgumentNullException(nameof(selection));
+        return Refresh();
+    }
+
+    /// <summary>
+    /// 泵送数据源的增量变更，并在首帧或缓存变化时重载 Project Window 快照。
+    /// </summary>
+    /// <returns>本次调用重载了 UI 快照时返回 true。</returns>
+    public bool ApplyPendingChanges()
+    {
+        bool changed = _source is IAssetBrowserRefreshableDataSource refreshable &&
+            refreshable.ApplyPendingChanges();
+        if (_source is IAssetBrowserDiagnosticDataSource diagnosticSource &&
+            !string.IsNullOrWhiteSpace(diagnosticSource.AssetDatabaseDiagnostic))
+        {
+            Status = diagnosticSource.AssetDatabaseDiagnostic;
+        }
+
+        if (!changed && _snapshotLoaded)
+        {
+            return false;
+        }
+
+        _ = ReloadSnapshot();
+        return true;
     }
 
     /// <summary>
@@ -202,13 +239,22 @@ public sealed class AssetBrowserPanel(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(selection);
+        _trackedSelection = selection;
         AssetBrowserItem? item = FindAsset(path);
         if (item is null)
         {
             return false;
         }
 
-        selection.SelectAsset(item.Value.Path);
+        if (string.IsNullOrWhiteSpace(item.Value.AssetId))
+        {
+            selection.SelectAsset(item.Value.Path);
+        }
+        else
+        {
+            selection.SelectAsset(item.Value.AssetId, item.Value.Path);
+        }
+
         Status = $"选中 {item.Value.Path}";
         return true;
     }
@@ -222,10 +268,8 @@ public sealed class AssetBrowserPanel(
     public bool SelectFolder(string path, EditorSelection selection)
     {
         ArgumentNullException.ThrowIfNull(selection);
-        if (FolderTargets.Count == 0)
-        {
-            _ = Refresh();
-        }
+        _trackedSelection = selection;
+        EnsureSnapshotLoaded();
 
         string normalized = (path ?? string.Empty).Trim().Replace('\\', '/');
         for (int i = 0; i < FolderTargets.Count; i++)
@@ -238,7 +282,7 @@ public sealed class AssetBrowserPanel(
 
             selection.SelectFolder(folder.Path);
             ActiveFolderPath = folder.Path;
-            ApplyCreateFolderContext(folder.Path);
+            ApplyFolderInputContext(folder.Path);
             ApplyFilter();
             Status = $"选中文件夹 {folder.DisplayName}";
             return true;
@@ -746,6 +790,8 @@ public sealed class AssetBrowserPanel(
     /// <inheritdoc />
     public void Draw(in EditorContext context)
     {
+        _trackedSelection = context.Selection;
+        _ = ApplyPendingChanges();
         bool visible = Visible;
         if (!ImGui.Begin(Title, ref visible))
         {
@@ -757,7 +803,7 @@ public sealed class AssetBrowserPanel(
         Visible = visible;
         if (ImGui.Button("刷新"))
         {
-            _ = Refresh();
+            _ = Refresh(context.Selection);
         }
 
         ImGui.SameLine();
@@ -781,10 +827,7 @@ public sealed class AssetBrowserPanel(
 
         ApplyFilter();
 
-        // 首帧或空缓存时主动 Refresh；列表绘制与 Shell 拖拽 drop 共用同一份筛选快照。
-        IReadOnlyList<AssetBrowserItem> assets = FilteredAssets.Count == 0 && LastAssets.Count == 0
-            ? Refresh()
-            : FilteredAssets;
+        IReadOnlyList<AssetBrowserItem> assets = FilteredAssets;
         for (int i = 0; i < FolderTargets.Count; i++)
         {
             DrawFolderDropTarget(FolderTargets[i], context.Selection);
@@ -895,7 +938,7 @@ public sealed class AssetBrowserPanel(
             ImGui.EndDragDropTarget();
         }
 
-        if (!string.IsNullOrEmpty(folder.Path))
+        if (!string.IsNullOrEmpty(folder.Path) && !IsProtectedLogicalRoot(folder.Path))
         {
             ImGui.SameLine();
             if (IsPendingFolderMoveFor(folder))
@@ -953,7 +996,7 @@ public sealed class AssetBrowserPanel(
         string label = string.IsNullOrWhiteSpace(item.AssetId)
             ? $"{item.DisplayName} [{item.Kind}]"
             : $"{item.DisplayName} [{item.Kind}]##{item.AssetId}";
-        bool selected = string.Equals(selection.AssetPath, item.Path, StringComparison.Ordinal);
+        bool selected = IsAssetSelected(selection, item);
         if (ImGui.Selectable(label, selected))
         {
             _ = SelectAsset(item.Path, selection);
@@ -1154,6 +1197,7 @@ public sealed class AssetBrowserPanel(
         {
             _pendingFolderMoveRequest = null;
             _pendingFolderMoveTargetPath = string.Empty;
+            RemapFolderContextAfterMove(request.Path, request.NewPath);
             _ = Refresh();
         }
 
@@ -1244,9 +1288,126 @@ public sealed class AssetBrowserPanel(
         };
     }
 
-    private void ApplyCreateFolderContext(string folderPath)
+    private void ApplyFolderInputContext(string folderPath)
     {
-        CreatePath = MakeCreatePathUnique(ApplyFolderToCreatePath(folderPath, CreatePath));
+        CreatePath = MakeCreatePathUnique(RebasePathToFolder(folderPath, CreatePath));
+        ImportDestinationPath = MakePathUnique(
+            RebasePathToFolder(folderPath, ImportDestinationPath),
+            ImportKind);
+    }
+
+    private void RemapFolderContextAfterMove(string oldPath, string newPath)
+    {
+        string normalizedOldPath = NormalizeFolderPath(oldPath);
+        string normalizedNewPath = ResolveFolderMoveTarget(normalizedOldPath, newPath);
+        bool activeChanged = TryRemapFolderPath(
+            ActiveFolderPath,
+            normalizedOldPath,
+            normalizedNewPath,
+            out string remappedActivePath);
+        string remappedSelectionPath = string.Empty;
+        bool selectionChanged = _trackedSelection?.FolderPath is { } selectedFolder &&
+            TryRemapFolderPath(
+                selectedFolder,
+                normalizedOldPath,
+                normalizedNewPath,
+                out remappedSelectionPath);
+
+        if (activeChanged)
+        {
+            ActiveFolderPath = remappedActivePath;
+        }
+
+        if (selectionChanged)
+        {
+            _trackedSelection!.SelectFolder(remappedSelectionPath);
+        }
+
+        if (activeChanged || selectionChanged)
+        {
+            string folderContext = selectionChanged ? remappedSelectionPath : remappedActivePath;
+            ApplyFolderInputContext(folderContext);
+        }
+    }
+
+    private string FindNearestExistingFolder(string path)
+    {
+        string candidate = NormalizeFolderPath(path);
+        while (true)
+        {
+            for (int i = 0; i < FolderTargets.Count; i++)
+            {
+                if (string.Equals(FolderTargets[i].Path, candidate, StringComparison.OrdinalIgnoreCase))
+                {
+                    return FolderTargets[i].Path;
+                }
+            }
+
+            if (candidate.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            candidate = GetLogicalDirectoryName(candidate) ?? string.Empty;
+        }
+    }
+
+    private static bool TryRemapFolderPath(
+        string path,
+        string oldPath,
+        string newPath,
+        out string remappedPath)
+    {
+        string normalizedPath = NormalizeFolderPath(path);
+        if (string.Equals(normalizedPath, oldPath, StringComparison.OrdinalIgnoreCase))
+        {
+            remappedPath = newPath;
+            return true;
+        }
+
+        if (oldPath.Length > 0 &&
+            normalizedPath.StartsWith(oldPath + "/", StringComparison.OrdinalIgnoreCase))
+        {
+            remappedPath = newPath + normalizedPath[oldPath.Length..];
+            return true;
+        }
+
+        remappedPath = normalizedPath;
+        return false;
+    }
+
+    private static string ResolveFolderMoveTarget(string oldPath, string newPath)
+    {
+        string normalizedTarget = NormalizeFolderPath(newPath);
+        string? rootedPrefix = oldPath.StartsWith("Content/", StringComparison.OrdinalIgnoreCase)
+            ? "Content"
+            : oldPath.StartsWith("ScriptSource/", StringComparison.OrdinalIgnoreCase)
+                ? "ScriptSource"
+                : null;
+        return rootedPrefix is null ||
+            normalizedTarget.Equals("Content", StringComparison.OrdinalIgnoreCase) ||
+            normalizedTarget.StartsWith("Content/", StringComparison.OrdinalIgnoreCase) ||
+            normalizedTarget.Equals("ScriptSource", StringComparison.OrdinalIgnoreCase) ||
+            normalizedTarget.StartsWith("ScriptSource/", StringComparison.OrdinalIgnoreCase)
+                ? normalizedTarget
+                : rootedPrefix + "/" + normalizedTarget;
+    }
+
+    private static string NormalizeFolderPath(string path)
+    {
+        return (path ?? string.Empty).Trim().Replace('\\', '/').Trim('/');
+    }
+
+    private static string RebasePathToFolder(string folderPath, string path)
+    {
+        string normalizedFolder = NormalizeFolderPath(folderPath);
+        string normalizedPath = (path ?? string.Empty).Trim().Replace('\\', '/');
+        string fileName = Path.GetFileName(normalizedPath);
+        return string.IsNullOrWhiteSpace(fileName)
+            ? normalizedPath
+            : normalizedFolder.Length == 0
+                ? fileName
+                : normalizedFolder + "/" + fileName;
     }
 
     private string SuggestNextCreatePath(AssetBrowserItemKind kind, string previousPath)
@@ -1391,6 +1552,12 @@ public sealed class AssetBrowserPanel(
         return normalizedFolder + "/" + fileName;
     }
 
+    private static bool IsProtectedLogicalRoot(string folderPath)
+    {
+        return string.Equals(folderPath, "Content", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(folderPath, "ScriptSource", StringComparison.OrdinalIgnoreCase);
+    }
+
     private bool IsPendingDeleteFor(AssetBrowserItem item)
     {
         return TryGetPendingDeleteFor(item, out _);
@@ -1502,22 +1669,27 @@ public sealed class AssetBrowserPanel(
         ];
     }
 
-    private void EnsureActiveFolderStillExists()
+    private void ReconcileFolderSelection(EditorSelection? selection)
     {
-        if (string.IsNullOrWhiteSpace(ActiveFolderPath))
+        bool tracksFolderSelection = selection?.FolderPath is not null;
+        string requestedPath = tracksFolderSelection
+            ? selection!.FolderPath!
+            : ActiveFolderPath;
+        string resolvedPath = FindNearestExistingFolder(requestedPath);
+        bool activeChanged = !string.Equals(ActiveFolderPath, resolvedPath, StringComparison.Ordinal);
+        bool selectionChanged = tracksFolderSelection &&
+            !string.Equals(selection!.FolderPath, resolvedPath, StringComparison.Ordinal);
+
+        ActiveFolderPath = resolvedPath;
+        if (selectionChanged)
         {
-            return;
+            selection!.SelectFolder(resolvedPath);
         }
 
-        for (int i = 0; i < FolderTargets.Count; i++)
+        if (activeChanged || selectionChanged)
         {
-            if (string.Equals(FolderTargets[i].Path, ActiveFolderPath, StringComparison.OrdinalIgnoreCase))
-            {
-                return;
-            }
+            ApplyFolderInputContext(resolvedPath);
         }
-
-        ActiveFolderPath = string.Empty;
     }
 
     private void RebuildFolderTargets()
@@ -1525,6 +1697,10 @@ public sealed class AssetBrowserPanel(
         Dictionary<string, int> folders = new(StringComparer.OrdinalIgnoreCase)
         {
             [string.Empty] = LastAssets.Count,
+        };
+        HashSet<string> authoritativeFolders = new(StringComparer.OrdinalIgnoreCase)
+        {
+            string.Empty,
         };
         if (_source is IAssetBrowserFolderDataSource folderSource)
         {
@@ -1535,6 +1711,7 @@ public sealed class AssetBrowserPanel(
                 folders[folderPath] = folders.TryGetValue(folderPath, out int count)
                     ? Math.Max(count, explicitFolders[i].AssetCount)
                     : explicitFolders[i].AssetCount;
+                _ = authoritativeFolders.Add(folderPath);
             }
         }
 
@@ -1543,7 +1720,11 @@ public sealed class AssetBrowserPanel(
             string? folder = GetLogicalDirectoryName(LastAssets[i].Path);
             while (!string.IsNullOrEmpty(folder))
             {
-                folders[folder] = folders.TryGetValue(folder, out int count) ? count + 1 : 1;
+                if (!authoritativeFolders.Contains(folder))
+                {
+                    folders[folder] = folders.TryGetValue(folder, out int count) ? count + 1 : 1;
+                }
+
                 folder = GetLogicalDirectoryName(folder);
             }
         }
@@ -1577,10 +1758,7 @@ public sealed class AssetBrowserPanel(
 
     private AssetBrowserItem? FindAsset(string path)
     {
-        if (LastAssets.Count == 0)
-        {
-            _ = Refresh();
-        }
+        EnsureSnapshotLoaded();
 
         for (int i = 0; i < LastAssets.Count; i++)
         {
@@ -1593,12 +1771,88 @@ public sealed class AssetBrowserPanel(
         return null;
     }
 
+    private IReadOnlyList<AssetBrowserItem> ReloadSnapshot()
+    {
+        LastAssets = _source.ListAssets();
+        _snapshotLoaded = true;
+        ReconcileAssetSelection(_trackedSelection);
+        RebuildFolderTargets();
+        ReconcileFolderSelection(_trackedSelection);
+        ApplyFilter();
+        return LastAssets;
+    }
+
+    private void EnsureSnapshotLoaded()
+    {
+        if (!_snapshotLoaded)
+        {
+            _ = ReloadSnapshot();
+        }
+    }
+
+    private void ReconcileAssetSelection(EditorSelection? selection)
+    {
+        if (selection is null)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(selection.AssetId))
+        {
+            for (int i = 0; i < LastAssets.Count; i++)
+            {
+                AssetBrowserItem item = LastAssets[i];
+                if (!string.IsNullOrWhiteSpace(item.AssetId) &&
+                    string.Equals(item.AssetId, selection.AssetId, StringComparison.OrdinalIgnoreCase))
+                {
+                    selection.SelectAsset(item.AssetId, item.Path);
+                    return;
+                }
+            }
+
+            selection.ClearAsset();
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(selection.AssetPath))
+        {
+            return;
+        }
+
+        for (int i = 0; i < LastAssets.Count; i++)
+        {
+            AssetBrowserItem item = LastAssets[i];
+            if (!string.Equals(item.Path, selection.AssetPath, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(item.AssetId))
+            {
+                selection.SelectAsset(item.Path);
+            }
+            else
+            {
+                selection.SelectAsset(item.AssetId, item.Path);
+            }
+
+            return;
+        }
+
+        selection.ClearAsset();
+    }
+
+    private static bool IsAssetSelected(EditorSelection selection, AssetBrowserItem item)
+    {
+        return !string.IsNullOrWhiteSpace(selection.AssetId)
+            ? !string.IsNullOrWhiteSpace(item.AssetId) &&
+                string.Equals(selection.AssetId, item.AssetId, StringComparison.OrdinalIgnoreCase)
+            : string.Equals(selection.AssetPath, item.Path, StringComparison.OrdinalIgnoreCase);
+    }
+
     private bool TryFindFolder(string path, out AssetBrowserFolderItem folder)
     {
-        if (FolderTargets.Count == 0)
-        {
-            _ = Refresh();
-        }
+        EnsureSnapshotLoaded();
 
         string normalized = (path ?? string.Empty).Trim().Replace('\\', '/');
         for (int i = 0; i < FolderTargets.Count; i++)

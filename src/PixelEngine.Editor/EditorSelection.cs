@@ -21,7 +21,12 @@ public sealed class EditorSelection
     public int? MaterialId { get; private set; }
 
     /// <summary>
-    /// 当前选中的资产路径。
+    /// 当前选中资产的工程级稳定 id；旧数据源按路径选择时为空。
+    /// </summary>
+    public string? AssetId { get; private set; }
+
+    /// <summary>
+    /// 当前选中资产的显示/兼容路径；稳定身份由 <see cref="AssetId"/> 提供。
     /// </summary>
     public string? AssetPath { get; private set; }
 
@@ -72,11 +77,38 @@ public sealed class EditorSelection
     public void SelectAsset(string assetPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(assetPath);
+        AssetId = null;
         AssetPath = assetPath;
         FolderPath = null;
         EntityHandle = null;
         GameObjectStableId = null;
         BodyId = null;
+    }
+
+    /// <summary>
+    /// 按工程级 stable asset id 设置资产选择，并保存当前路径用于显示和旧调用兼容。
+    /// </summary>
+    /// <param name="assetId">非空工程级 stable asset id。</param>
+    /// <param name="assetPath">资产当前逻辑路径。</param>
+    public void SelectAsset(string assetId, string assetPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(assetId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(assetPath);
+        AssetId = assetId;
+        AssetPath = assetPath;
+        FolderPath = null;
+        EntityHandle = null;
+        GameObjectStableId = null;
+        BodyId = null;
+    }
+
+    /// <summary>
+    /// 仅清除资产选择，不影响可并存的 cell 或材质选择。
+    /// </summary>
+    public void ClearAsset()
+    {
+        AssetId = null;
+        AssetPath = null;
     }
 
     /// <summary>
@@ -86,6 +118,7 @@ public sealed class EditorSelection
     public void SelectFolder(string folderPath)
     {
         FolderPath = (folderPath ?? string.Empty).Trim().Replace('\\', '/');
+        AssetId = null;
         AssetPath = null;
         EntityHandle = null;
         GameObjectStableId = null;
@@ -100,6 +133,7 @@ public sealed class EditorSelection
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(entityHandle);
         EntityHandle = entityHandle;
+        AssetId = null;
         AssetPath = null;
         FolderPath = null;
         GameObjectStableId = null;
@@ -118,6 +152,7 @@ public sealed class EditorSelection
         }
 
         GameObjectStableId = stableId;
+        AssetId = null;
         AssetPath = null;
         FolderPath = null;
         EntityHandle = null;
@@ -131,6 +166,7 @@ public sealed class EditorSelection
     public void SelectBody(int bodyId)
     {
         BodyId = bodyId;
+        AssetId = null;
         AssetPath = null;
         FolderPath = null;
         EntityHandle = null;
@@ -145,6 +181,7 @@ public sealed class EditorSelection
         CellX = null;
         CellY = null;
         MaterialId = null;
+        AssetId = null;
         AssetPath = null;
         FolderPath = null;
         EntityHandle = null;

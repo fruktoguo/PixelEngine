@@ -10,6 +10,8 @@
 
 `EDITOR-004` 已实现用户级 `editor-workspace.json`、自动恢复优先级、异常退出抑制、窗口尺寸恢复、隔离 user-data、Project Picker 在有/无工程间可逆切换、统一 dirty 转场协调器，以及 Scene/Project/Recent 的原子写入。当前编辑场景与 Project StartScene 已彻底分层；缺失或损坏场景会保留原状态并给出诊断。全量 Hosting 中发行/性能证据工具测试会执行大量外部脚本，不属于本节点回归入口；本节点使用非发行工具集与 Editor 全量测试闭合，证据数字记录在 canonical task。
 
+`EDITOR-005` 已把 Asset Database 收敛为 `Content` / `ScriptSource` 双 logical root 与各自独立 manifest；Project Window 查询只读取内存快照，显式刷新和双根 watcher 才更新索引。外部创建、修改、删除和重命名按有界批次消费，watcher 溢出退化为单根完整重扫；唯一文件身份可延续 stable id 并同步 typed reference、UI manifest 与 Scene settings，身份歧义则拒绝猜测并显示诊断。manifest 采用条件原子写入和损坏隔离恢复，Script 创建与双击打开均解析到项目真实 `ScriptSourcePath`；资产/文件夹选择以 stable id 和路径迁移共同恢复。
+
 > **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
 
 > **DOC-002 历史证据口径（2026-07-10）**：后文 checkbox 与“已通过/已完成”叙述冻结自旧计划快照 `179efc3a`，迁移基线为 `5af1541f`，均不构成 live 状态；证据等级以 [稳定 Evidence Index](../docs/evidence-index.md) 为准。未入索引的 `artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/` 仅是可再生历史线索；替代报告与重跑命令见 [DOC-002 校正报告](../docs/evidence-2026-07-10-doc-002-legacy-plan-audit.md)。

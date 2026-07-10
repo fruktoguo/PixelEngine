@@ -21,7 +21,34 @@ internal readonly record struct EditorAssetDropPayload(
             return false;
         }
 
-        result = new EditorAssetDropPayload(payload.AssetId, payload.Path, MapKind(payload.Kind));
+        EditorAssetType assetType = MapKind(payload.Kind);
+        string logicalPath = payload.Path;
+        bool rooted = EditorRootedBrowserPath.TryParse(payload.Path, out EditorAssetPath rootedPath, out _);
+        string normalizedPath = payload.Path.Replace('\\', '/');
+        bool declaresKnownRoot = normalizedPath.StartsWith(
+                EditorRootedBrowserPath.ContentRootName + "/",
+                StringComparison.OrdinalIgnoreCase) ||
+            normalizedPath.StartsWith(
+                EditorRootedBrowserPath.ScriptSourceRootName + "/",
+                StringComparison.OrdinalIgnoreCase);
+        if (!rooted && declaresKnownRoot)
+        {
+            result = default;
+            return false;
+        }
+
+        if (rooted)
+        {
+            if (rootedPath.Root == EditorAssetRootKind.ScriptSource && assetType != EditorAssetType.Script)
+            {
+                result = default;
+                return false;
+            }
+
+            logicalPath = rootedPath.RelativePath;
+        }
+
+        result = new EditorAssetDropPayload(payload.AssetId, logicalPath, assetType);
         return true;
     }
 

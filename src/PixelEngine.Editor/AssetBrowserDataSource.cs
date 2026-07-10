@@ -93,7 +93,7 @@ public readonly record struct AssetThumbnail(uint TextureHandle, int Width, int 
 /// <summary>
 /// 资源浏览器资产项。
 /// </summary>
-/// <param name="Path">相对 content 根目录的资产路径。</param>
+/// <param name="Path">生产数据源使用 Content/... 或 ScriptSource/... rooted path；legacy 数据源可使用相对路径。</param>
 /// <param name="Kind">资产类型。</param>
 /// <param name="SizeBytes">文件大小。</param>
 /// <param name="LastModifiedUtc">最后修改 UTC 时间。</param>
@@ -118,7 +118,7 @@ public readonly record struct AssetBrowserItem(
 /// <summary>
 /// Project Window 可作为拖拽移动目标的逻辑文件夹。
 /// </summary>
-/// <param name="Path">相对 content 根目录的逻辑文件夹路径；空字符串表示 content 根目录。</param>
+/// <param name="Path">生产数据源的 rooted logical folder；空字符串表示 Project Window 总根。</param>
 /// <param name="AssetCount">该文件夹及其子文件夹下的资产数量。</param>
 public readonly record struct AssetBrowserFolderItem(
     string Path,
@@ -134,7 +134,7 @@ public readonly record struct AssetBrowserFolderItem(
 /// Project Window 可传递给 Shell 的 typed drag payload。
 /// </summary>
 /// <param name="AssetId">工程级 stable asset id。</param>
-/// <param name="Path">相对 content 根目录的 logical path。</param>
+/// <param name="Path">资产 rooted logical path。</param>
 /// <param name="Kind">资产类型。</param>
 public readonly record struct AssetBrowserDragPayload(
     string AssetId,
@@ -144,7 +144,7 @@ public readonly record struct AssetBrowserDragPayload(
 /// <summary>
 /// Project Window 资产删除请求。
 /// </summary>
-/// <param name="Path">相对 content 根目录的 logical path。</param>
+/// <param name="Path">资产 rooted logical path。</param>
 /// <param name="AssetId">工程级 stable asset id。</param>
 /// <param name="Kind">资产类型。</param>
 /// <param name="Confirmed">用户是否已确认删除。</param>
@@ -168,10 +168,10 @@ public readonly record struct AssetBrowserFolderDeleteRequest(
 /// <summary>
 /// Project Window 资产移动 / 重命名请求。
 /// </summary>
-/// <param name="Path">当前相对 content 根目录的 logical path。</param>
+/// <param name="Path">当前资产 rooted logical path。</param>
 /// <param name="AssetId">工程级 stable asset id。</param>
 /// <param name="Kind">资产类型。</param>
-/// <param name="NewPath">移动 / 重命名后的 logical path。</param>
+/// <param name="NewPath">移动 / 重命名后的同根 rooted logical path。</param>
 public readonly record struct AssetBrowserMoveRequest(
     string Path,
     string AssetId,
@@ -190,7 +190,7 @@ public readonly record struct AssetBrowserFolderMoveRequest(
 /// <summary>
 /// Project Window 资产创建请求。
 /// </summary>
-/// <param name="Path">相对 content 根目录的新资产 logical path。</param>
+/// <param name="Path">新资产 rooted logical path；legacy 输入可由数据源按类型选择默认根。</param>
 /// <param name="Kind">要创建的资产类型。</param>
 public readonly record struct AssetBrowserCreateRequest(
     string Path,
@@ -200,7 +200,7 @@ public readonly record struct AssetBrowserCreateRequest(
 /// Project Window 资产导入请求。
 /// </summary>
 /// <param name="SourceFullPath">要导入的外部源文件完整路径。</param>
-/// <param name="Path">相对 content 根目录的目标 logical path。</param>
+/// <param name="Path">Content rooted logical path。</param>
 /// <param name="Kind">要导入的资产类型。</param>
 public readonly record struct AssetBrowserImportRequest(
     string SourceFullPath,
@@ -340,10 +340,38 @@ public delegate AssetBrowserImportSourcePickResult AssetBrowserImportSourcePickH
 public interface IAssetBrowserDataSource
 {
     /// <summary>
-    /// 枚举当前可见资产。
+    /// 枚举当前缓存的可见资产；只读调用不得隐式触发完整磁盘扫描。
     /// </summary>
     /// <returns>资产快照。</returns>
     IReadOnlyList<AssetBrowserItem> ListAssets();
+}
+
+/// <summary>
+/// 可显式完整刷新并逐帧泵送增量变更的 Project Window 数据源扩展。
+/// </summary>
+public interface IAssetBrowserRefreshableDataSource
+{
+    /// <summary>
+    /// 执行一次显式完整资产刷新；用于用户主动 Refresh 等低频入口。
+    /// </summary>
+    void RefreshAssets();
+
+    /// <summary>
+    /// 应用已经排队的增量资产变更，不得退化为逐帧完整扫描。
+    /// </summary>
+    /// <returns>数据源缓存发生变化、调用方需要重新读取快照时返回 true。</returns>
+    bool ApplyPendingChanges();
+}
+
+/// <summary>
+/// 暴露 Asset Database 可展示诊断的数据源扩展。
+/// </summary>
+public interface IAssetBrowserDiagnosticDataSource
+{
+    /// <summary>
+    /// 当前需要用户关注的 Asset Database 诊断；无诊断时为空。
+    /// </summary>
+    string AssetDatabaseDiagnostic { get; }
 }
 
 /// <summary>

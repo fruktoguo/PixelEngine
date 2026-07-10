@@ -48,6 +48,11 @@ internal readonly record struct EditorAssetPathRewrite(
     string NewPath,
     EditorAssetType AssetType);
 
+internal sealed record EditorAssetRecordSyncResult(
+    EditorAssetRecord[] Upserted,
+    string[] RemovedPaths,
+    bool ManifestChanged);
+
 /// <summary>
 /// EditorAssetReferenceDocumentMovePlan。
 /// </summary>
@@ -123,6 +128,20 @@ internal sealed class EditorAssetManifestStore
     public const int CurrentFormatVersion = 1;
     public const string ManifestRelativePath = ".pixelengine/assets.json";
 
+    private readonly record struct RefreshIdentitySignature(
+        EditorAssetType AssetType,
+        long SizeBytes,
+        DateTimeOffset LastModifiedUtc);
+
+    private readonly record struct ScannedAsset(
+        string LogicalPath,
+        EditorAssetType AssetType,
+        long SizeBytes,
+        DateTimeOffset LastModifiedUtc)
+    {
+        public RefreshIdentitySignature Signature => new(AssetType, SizeBytes, LastModifiedUtc);
+    }
+
     public EditorAssetManifestStore(EditorProject project)
         : this(
             project?.ProjectRoot ?? throw new ArgumentNullException(nameof(project)),
@@ -131,14 +150,49 @@ internal sealed class EditorAssetManifestStore
     }
 
     public EditorAssetManifestStore(string projectRoot, string contentRoot)
+        : this(projectRoot, contentRoot, ManifestRelativePath, referenceDocumentRoot: null)
+    {
+    }
+
+    public EditorAssetManifestStore(string projectRoot, string contentRoot, string manifestRelativePath)
+        : this(projectRoot, contentRoot, manifestRelativePath, referenceDocumentRoot: null)
+    {
+    }
+
+    public EditorAssetManifestStore(
+        string projectRoot,
+        string contentRoot,
+        string manifestRelativePath,
+        string? referenceDocumentRoot)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(projectRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(contentRoot);
+        ArgumentException.ThrowIfNullOrWhiteSpace(manifestRelativePath);
         ProjectRoot = Path.GetFullPath(projectRoot);
         ContentRoot = Path.IsPathRooted(contentRoot)
             ? Path.GetFullPath(contentRoot)
             : Path.GetFullPath(Path.Combine(ProjectRoot, contentRoot));
-        ManifestPath = Path.Combine(ProjectRoot, ManifestRelativePath.Replace('/', Path.DirectorySeparatorChar));
+        if (Path.IsPathRooted(manifestRelativePath))
+        {
+            throw new ArgumentException("资产 manifest 路径必须相对工程根目录。", nameof(manifestRelativePath));
+        }
+
+        ManifestPath = Path.GetFullPath(Path.Combine(
+            ProjectRoot,
+            manifestRelativePath.Replace('/', Path.DirectorySeparatorChar)));
+        string projectRootWithSeparator = Path.EndsInDirectorySeparator(ProjectRoot)
+            ? ProjectRoot
+            : ProjectRoot + Path.DirectorySeparatorChar;
+        if (!ManifestPath.StartsWith(projectRootWithSeparator, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("资产 manifest 路径不能越过工程根目录。", nameof(manifestRelativePath));
+        }
+
+        ReferenceDocumentRoot = string.IsNullOrWhiteSpace(referenceDocumentRoot)
+            ? ContentRoot
+            : Path.IsPathRooted(referenceDocumentRoot)
+                ? Path.GetFullPath(referenceDocumentRoot)
+                : Path.GetFullPath(Path.Combine(ProjectRoot, referenceDocumentRoot));
     }
 
     public string ProjectRoot { get; }
@@ -147,12 +201,452 @@ internal sealed class EditorAssetManifestStore
 
     public string ManifestPath { get; }
 
+    public string ReferenceDocumentRoot { get; }
+
     /// <summary>
-    /// 重新扫描 content 目录并写回 manifest，返回最新资产列表。
+    /// 最近一次 manifest 读取或刷新产生的恢复诊断。
+    /// </summary>
+    public string LastDiagnostic { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// 最近一次损坏恢复所隔离的原 manifest 路径。
+    /// </summary>
+    public string? LastCorruptManifestPath { get; private set; }
+
+    /// <summary>
+    /// 最近一次完整刷新根据唯一文件签名推断出的旧路径到新路径映射。
+    /// </summary>
+    public IReadOnlyList<EditorAssetPathRewrite> LastRefreshPathRewrites { get; private set; } = [];
+
+    /// <summary>
+    /// 最近一次完整刷新是否遇到无法安全判定身份的一对多或多对多候选。
+    /// </summary>
+    public bool LastRefreshHadAmbiguousIdentityMatches { get; private set; }
+
+    /// <summary>
+    /// 重新扫描 content 目录，仅在结果变化时写回 manifest，并返回最新资产列表。
     /// </summary>
     public IReadOnlyList<EditorAssetRecord> Refresh()
     {
+        ResetManifestDiagnostic();
         return RefreshCore();
+    }
+
+    /// <summary>
+    /// 从磁盘读取单个 logical path，并在 manifest 中新增或刷新该记录。
+    /// </summary>
+    public bool TryUpsertAssetFromDisk(string logicalPath, out EditorAssetRecord record)
+    {
+        ResetManifestDiagnostic();
+        string normalized = NormalizeLogicalPath(logicalPath, nameof(logicalPath));
+        string fullPath = ResolveFullPath(normalized);
+        if (!File.Exists(fullPath))
+        {
+            record = default;
+            return false;
+        }
+
+        EditorAssetManifestDocument document = LoadDocumentForIncrementalUpdate();
+        EditorAssetRecordDocument[] records = NormalizeRecords(document.Assets);
+        int existingIndex = FindRecordIndexByPath(records, normalized);
+        HashSet<string> usedIds = CollectUsedIds(records, existingIndex);
+        string id = existingIndex >= 0 &&
+            !string.IsNullOrWhiteSpace(records[existingIndex].Id) &&
+            usedIds.Add(records[existingIndex].Id)
+                ? records[existingIndex].Id
+                : AllocateAssetId(usedIds);
+        EditorAssetRecordDocument refreshed = CreateRecordFromFile(id, normalized, fullPath);
+        if (existingIndex >= 0 && ManifestRecordsEqual(records[existingIndex], refreshed))
+        {
+            record = ToAssetRecord(refreshed);
+            return true;
+        }
+
+        if (existingIndex >= 0)
+        {
+            records[existingIndex] = refreshed;
+        }
+        else
+        {
+            records = [.. records, refreshed];
+        }
+
+        SaveDocument(new EditorAssetManifestDocument
+        {
+            FormatVersion = CurrentFormatVersion,
+            Assets = records,
+        });
+        record = ToAssetRecord(refreshed);
+        return true;
+    }
+
+    /// <summary>
+    /// 批量同步一组外部文件状态，只读取/写入一次 manifest；目录路径会被忽略。
+    /// </summary>
+    public EditorAssetRecordSyncResult SynchronizeAssetRecords(IReadOnlyList<string> logicalPaths)
+    {
+        ArgumentNullException.ThrowIfNull(logicalPaths);
+        ResetManifestDiagnostic();
+        EditorAssetManifestDocument document = LoadDocumentForIncrementalUpdate();
+        EditorAssetRecordDocument[] original = NormalizeRecords(document.Assets);
+        Dictionary<string, EditorAssetRecordDocument> byPath = BuildRecordMap(original);
+        HashSet<string> usedIds = new(
+            original
+                .Where(static record => !string.IsNullOrWhiteSpace(record.Id))
+                .Select(static record => record.Id),
+            StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, EditorAssetRecord> upserted = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> removed = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < logicalPaths.Count; i++)
+        {
+            string normalized = NormalizeLogicalPath(logicalPaths[i], nameof(logicalPaths));
+            if (!visited.Add(normalized))
+            {
+                continue;
+            }
+
+            string fullPath = ResolveFullPath(normalized);
+            if (File.Exists(fullPath))
+            {
+                string id = byPath.TryGetValue(normalized, out EditorAssetRecordDocument? existing) &&
+                    !string.IsNullOrWhiteSpace(existing.Id)
+                        ? existing.Id
+                        : AllocateAssetId(usedIds);
+                _ = usedIds.Add(id);
+                EditorAssetRecordDocument refreshed = CreateRecordFromFile(id, normalized, fullPath);
+                byPath[normalized] = refreshed;
+                upserted[normalized] = ToAssetRecord(refreshed);
+                _ = removed.Remove(normalized);
+            }
+            else if (byPath.Remove(normalized))
+            {
+                _ = removed.Add(normalized);
+                _ = upserted.Remove(normalized);
+            }
+        }
+
+        EditorAssetManifestDocument next = new()
+        {
+            FormatVersion = CurrentFormatVersion,
+            Assets = [.. byPath.Values],
+        };
+        bool changed = !ManifestRecordArraysEqual(original, NormalizeRecords(next.Assets));
+        if (changed)
+        {
+            SaveDocument(next);
+        }
+
+        return new EditorAssetRecordSyncResult(
+            [.. upserted.Values.OrderBy(static record => record.LogicalPath, StringComparer.OrdinalIgnoreCase)],
+            [.. removed.Order(StringComparer.OrdinalIgnoreCase)],
+            changed);
+    }
+
+    /// <summary>
+    /// 仅移除指定 logical path 的 manifest 记录，不删除磁盘文件或重写引用。
+    /// </summary>
+    public bool RemoveAssetRecord(string logicalPath)
+    {
+        ResetManifestDiagnostic();
+        string normalized = NormalizeLogicalPath(logicalPath, nameof(logicalPath));
+        EditorAssetManifestDocument document = LoadDocumentForIncrementalUpdate();
+        EditorAssetRecordDocument[] records = NormalizeRecords(document.Assets);
+        int index = FindRecordIndexByPath(records, normalized);
+        if (index < 0)
+        {
+            return false;
+        }
+
+        List<EditorAssetRecordDocument> retained = new(records.Length - 1);
+        for (int i = 0; i < records.Length; i++)
+        {
+            if (i != index)
+            {
+                retained.Add(records[i]);
+            }
+        }
+
+        SaveDocument(new EditorAssetManifestDocument
+        {
+            FormatVersion = CurrentFormatVersion,
+            Assets = [.. retained],
+        });
+        return true;
+    }
+
+    /// <summary>
+    /// 外部文件夹已删除后，一次性移除其全部 manifest 记录；不再对每个文件重复写 manifest。
+    /// </summary>
+    public int RemoveFolderRecords(string logicalFolderPath)
+    {
+        ResetManifestDiagnostic();
+        string normalized = NormalizeLogicalPath(logicalFolderPath, nameof(logicalFolderPath));
+        EditorAssetManifestDocument document = LoadDocumentForIncrementalUpdate();
+        EditorAssetRecordDocument[] records = NormalizeRecords(document.Assets);
+        List<EditorAssetRecordDocument> retained = new(records.Length);
+        int removed = 0;
+        for (int i = 0; i < records.Length; i++)
+        {
+            if (IsUnderLogicalFolder(records[i].LogicalPath, normalized))
+            {
+                removed++;
+            }
+            else
+            {
+                retained.Add(records[i]);
+            }
+        }
+
+        if (removed > 0)
+        {
+            SaveDocument(new EditorAssetManifestDocument
+            {
+                FormatVersion = CurrentFormatVersion,
+                Assets = [.. retained],
+            });
+        }
+
+        return removed;
+    }
+
+    /// <summary>
+    /// 在外部已完成文件 rename/move 后，同步 manifest 与引用并保留 stable asset id。
+    /// </summary>
+    public bool TryMoveAssetRecordFromDisk(
+        string currentLogicalPath,
+        string newLogicalPath,
+        out EditorAssetRecord record)
+    {
+        bool moved = TryReconcileExternalAssetMove(
+            currentLogicalPath,
+            newLogicalPath,
+            activeScene: null,
+            out EditorAssetMoveResult result);
+        record = moved ? result.Asset : default;
+        return moved;
+    }
+
+    /// <summary>
+    /// 对 FileSystemWatcher 已观察到的外部资产移动执行完整引用同步；失败时尽量把物理文件恢复到旧路径。
+    /// </summary>
+    public bool TryReconcileExternalAssetMove(
+        string currentLogicalPath,
+        string newLogicalPath,
+        EditorSceneModel? activeScene,
+        out EditorAssetMoveResult result)
+    {
+        ResetManifestDiagnostic();
+        string current = NormalizeLogicalPath(currentLogicalPath, nameof(currentLogicalPath));
+        string next = NormalizeLogicalPath(newLogicalPath, nameof(newLogicalPath));
+        if (string.Equals(current, next, StringComparison.OrdinalIgnoreCase))
+        {
+            bool upserted = TryUpsertAssetFromDisk(next, out EditorAssetRecord sameAsset);
+            result = upserted
+                ? new EditorAssetMoveResult(sameAsset, 0, false)
+                : default;
+            return upserted;
+        }
+
+        EditorAssetType currentType = Classify(current);
+        EditorAssetType nextType = Classify(next);
+        if (currentType != nextType)
+        {
+            throw new InvalidOperationException($"资产 manifest 增量移动不能改变类型：{currentType} -> {nextType}。");
+        }
+
+        string targetFullPath = ResolveFullPath(next);
+        if (!File.Exists(targetFullPath))
+        {
+            result = default;
+            return false;
+        }
+
+        EditorAssetManifestDocument originalManifest = LoadDocumentForIncrementalUpdate();
+        EditorAssetRecordDocument[] records = NormalizeRecords(originalManifest.Assets);
+        int sourceIndex = FindRecordIndexByPath(records, current);
+        int targetIndex = FindRecordIndexByPath(records, next);
+        if (targetIndex >= 0 && targetIndex != sourceIndex)
+        {
+            if (sourceIndex >= 0)
+            {
+                throw new InvalidOperationException($"资产 manifest 已存在目标路径：{next}");
+            }
+
+            EditorAssetRecord existingTarget = ToAssetRecord(records[targetIndex]);
+            return ReconcileExternalMoveReferences(
+                current,
+                next,
+                existingTarget,
+                originalManifest,
+                manifestChanged: false,
+                activeScene,
+                out result);
+        }
+
+        if (sourceIndex < 0)
+        {
+            result = default;
+            return false;
+        }
+
+        EditorAssetRecordDocument moved = CreateRecordFromFile(records[sourceIndex].Id, next, targetFullPath);
+        records[sourceIndex] = moved;
+        EditorAssetManifestDocument movedManifest = new()
+        {
+            FormatVersion = CurrentFormatVersion,
+            Assets = records,
+        };
+        return ReconcileExternalMoveReferences(
+            current,
+            next,
+            ToAssetRecord(moved),
+            originalManifest,
+            manifestChanged: true,
+            activeScene,
+            out result,
+            movedManifest);
+    }
+
+    private bool ReconcileExternalMoveReferences(
+        string current,
+        string next,
+        EditorAssetRecord movedAsset,
+        EditorAssetManifestDocument originalManifest,
+        bool manifestChanged,
+        EditorSceneModel? activeScene,
+        out EditorAssetMoveResult result,
+        EditorAssetManifestDocument? movedManifest = null)
+    {
+        string sourceFullPath = ResolveFullPath(current);
+        string targetFullPath = ResolveFullPath(next);
+        IReadOnlyList<EditorAssetReferenceDocumentMovePlan> referenceDocuments =
+            LoadReferenceDocumentExternalMovePlans(sourceFullPath, targetFullPath);
+        List<EditorAssetReferenceDocumentWriteRollback> writtenReferenceDocuments = [];
+        try
+        {
+            if (manifestChanged)
+            {
+                SaveDocument(movedManifest ?? throw new InvalidOperationException("外部资产移动缺少目标 manifest。"));
+            }
+
+            RewriteUiManifestScreenPaths(
+                [new EditorAssetPathRewrite(movedAsset.Id, current, next, movedAsset.AssetType)],
+                writtenReferenceDocuments);
+            int updatedDocuments = RewriteReferencesInReferenceDocuments(
+                referenceDocuments,
+                current,
+                next,
+                movedAsset.Id,
+                movedAsset.AssetType,
+                writtenReferenceDocuments);
+            bool updatedActiveScene = activeScene is not null &&
+                RewriteReferences(activeScene, current, next, movedAsset.Id, movedAsset.AssetType);
+            result = new EditorAssetMoveResult(movedAsset, updatedDocuments, updatedActiveScene);
+            return true;
+        }
+        catch
+        {
+            if (manifestChanged)
+            {
+                RollBackMove(sourceFullPath, targetFullPath, originalManifest, writtenReferenceDocuments);
+            }
+            else
+            {
+                RestoreReferenceDocuments(writtenReferenceDocuments);
+            }
+
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 对 FileSystemWatcher 已观察到的外部文件夹移动执行一次 manifest 与引用批量同步。
+    /// </summary>
+    public bool TryReconcileExternalFolderMove(
+        string currentFolderPath,
+        string newFolderPath,
+        EditorSceneModel? activeScene,
+        out EditorAssetFolderMoveResult result)
+    {
+        ResetManifestDiagnostic();
+        string current = NormalizeLogicalPath(currentFolderPath, nameof(currentFolderPath));
+        string next = NormalizeLogicalPath(newFolderPath, nameof(newFolderPath));
+        string targetFullPath = ResolveFullPath(next);
+        if (!Directory.Exists(targetFullPath))
+        {
+            result = default;
+            return false;
+        }
+
+        EditorAssetManifestDocument originalManifest = LoadDocumentForIncrementalUpdate();
+        EditorAssetPathRewrite[] rewrites = BuildFolderAssetRewrites(originalManifest, current, next);
+        bool manifestChanged = rewrites.Length > 0;
+        if (!manifestChanged)
+        {
+            rewrites = BuildAlreadyMovedFolderAssetRewrites(originalManifest, current, next);
+        }
+
+        if (rewrites.Length == 0)
+        {
+            result = new EditorAssetFolderMoveResult(current, next, 0, 0, false);
+            return true;
+        }
+
+        EditorAssetManifestDocument movedManifest = manifestChanged
+            ? ReplaceFolderLogicalPathPrefix(originalManifest, rewrites)
+            : originalManifest;
+        string sourceFullPath = ResolveFullPath(current);
+        IReadOnlyList<EditorAssetReferenceDocumentMovePlan> referenceDocuments =
+            LoadReferenceDocumentExternalFolderMovePlans(sourceFullPath, targetFullPath, next);
+        List<EditorAssetReferenceDocumentWriteRollback> writtenReferenceDocuments = [];
+        try
+        {
+            if (manifestChanged)
+            {
+                SaveDocument(movedManifest);
+            }
+
+            RewriteUiManifestScreenPaths(rewrites, writtenReferenceDocuments);
+            int updatedDocuments = RewriteFolderReferencesInReferenceDocuments(
+                referenceDocuments,
+                rewrites,
+                writtenReferenceDocuments);
+            bool updatedActiveScene = false;
+            if (activeScene is not null)
+            {
+                for (int i = 0; i < rewrites.Length; i++)
+                {
+                    updatedActiveScene |= RewriteReferences(
+                        activeScene,
+                        rewrites[i].OldPath,
+                        rewrites[i].NewPath,
+                        rewrites[i].AssetId,
+                        rewrites[i].AssetType);
+                }
+            }
+
+            result = new EditorAssetFolderMoveResult(
+                current,
+                next,
+                rewrites.Length,
+                updatedDocuments,
+                updatedActiveScene);
+            return true;
+        }
+        catch
+        {
+            if (manifestChanged)
+            {
+                RollBackFolderMove(sourceFullPath, targetFullPath, originalManifest, writtenReferenceDocuments);
+            }
+            else
+            {
+                RestoreReferenceDocuments(writtenReferenceDocuments);
+            }
+
+            throw;
+        }
     }
 
     public bool TryResolveAssetId(string? assetId, out EditorAssetRecord record)
@@ -695,30 +1189,139 @@ internal sealed class EditorAssetManifestStore
     // 扫描 content 目录并与 manifest 合并，尽量保留已有 stable asset id
     private IReadOnlyList<EditorAssetRecord> RefreshCore()
     {
-        EditorAssetManifestDocument document = LoadDocument();
+        EditorAssetManifestDocument document = LoadDocument(
+            out bool recoveredCorruptManifest,
+            out bool requiresCanonicalRewrite);
         Dictionary<string, EditorAssetRecordDocument> byPath = BuildRecordMap(document.Assets);
-        HashSet<string> usedIds = new(StringComparer.OrdinalIgnoreCase);
-        List<EditorAssetRecordDocument> refreshed = [];
+        List<ScannedAsset> scanned = [];
         if (Directory.Exists(ContentRoot))
         {
             foreach (string fullPath in Directory.EnumerateFiles(ContentRoot, "*", SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase))
             {
                 string logicalPath = NormalizeLogicalPath(Path.GetRelativePath(ContentRoot, fullPath), "content file");
                 FileInfo info = new(fullPath);
-                string id = byPath.TryGetValue(logicalPath, out EditorAssetRecordDocument? existing) &&
-                    !string.IsNullOrWhiteSpace(existing.Id) &&
-                    usedIds.Add(existing.Id)
-                    ? existing.Id
-                    : AllocateAssetId(usedIds);
-                refreshed.Add(new EditorAssetRecordDocument
-                {
-                    Id = id,
-                    LogicalPath = logicalPath,
-                    AssetType = Classify(logicalPath),
-                    SizeBytes = info.Length,
-                    LastModifiedUtc = info.LastWriteTimeUtc,
-                });
+                scanned.Add(new ScannedAsset(
+                    logicalPath,
+                    Classify(logicalPath),
+                    info.Length,
+                    info.LastWriteTimeUtc));
             }
+        }
+
+        string?[] assignedIds = new string?[scanned.Count];
+        HashSet<string> assignedIdsSet = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> reservedOrAllocatedIds = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, int> oldIdCounts = new(StringComparer.OrdinalIgnoreCase);
+        foreach (EditorAssetRecordDocument existing in byPath.Values)
+        {
+            if (string.IsNullOrWhiteSpace(existing.Id))
+            {
+                continue;
+            }
+
+            string id = existing.Id.Trim();
+            _ = reservedOrAllocatedIds.Add(id);
+            oldIdCounts[id] = oldIdCounts.TryGetValue(id, out int count) ? count + 1 : 1;
+        }
+
+        HashSet<string> diskPaths = new(StringComparer.OrdinalIgnoreCase);
+        List<int> unmatchedDiskIndices = [];
+        for (int i = 0; i < scanned.Count; i++)
+        {
+            ScannedAsset asset = scanned[i];
+            _ = diskPaths.Add(asset.LogicalPath);
+            if (!byPath.TryGetValue(asset.LogicalPath, out EditorAssetRecordDocument? existing))
+            {
+                unmatchedDiskIndices.Add(i);
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(existing.Id) && assignedIdsSet.Add(existing.Id))
+            {
+                assignedIds[i] = existing.Id;
+            }
+        }
+
+        Dictionary<RefreshIdentitySignature, List<EditorAssetRecordDocument>> missingOldBySignature = [];
+        foreach (EditorAssetRecordDocument existing in byPath.Values)
+        {
+            if (diskPaths.Contains(existing.LogicalPath))
+            {
+                continue;
+            }
+
+            RefreshIdentitySignature signature = new(
+                existing.AssetType,
+                existing.SizeBytes,
+                existing.LastModifiedUtc);
+            if (!missingOldBySignature.TryGetValue(signature, out List<EditorAssetRecordDocument>? candidates))
+            {
+                candidates = [];
+                missingOldBySignature.Add(signature, candidates);
+            }
+
+            candidates.Add(existing);
+        }
+
+        Dictionary<RefreshIdentitySignature, List<int>> unmatchedDiskBySignature = [];
+        for (int i = 0; i < unmatchedDiskIndices.Count; i++)
+        {
+            int scannedIndex = unmatchedDiskIndices[i];
+            RefreshIdentitySignature signature = scanned[scannedIndex].Signature;
+            if (!unmatchedDiskBySignature.TryGetValue(signature, out List<int>? candidates))
+            {
+                candidates = [];
+                unmatchedDiskBySignature.Add(signature, candidates);
+            }
+
+            candidates.Add(scannedIndex);
+        }
+
+        List<EditorAssetPathRewrite> inferredRewrites = [];
+        bool ambiguousIdentityMatches = false;
+        foreach ((RefreshIdentitySignature signature, List<int> diskCandidates) in unmatchedDiskBySignature)
+        {
+            if (!missingOldBySignature.TryGetValue(signature, out List<EditorAssetRecordDocument>? oldCandidates))
+            {
+                continue;
+            }
+
+            if (diskCandidates.Count != 1 || oldCandidates.Count != 1)
+            {
+                ambiguousIdentityMatches = true;
+                continue;
+            }
+
+            string id = oldCandidates[0].Id;
+            if (!string.IsNullOrWhiteSpace(id) &&
+                oldIdCounts.TryGetValue(id, out int idCount) &&
+                idCount == 1 &&
+                assignedIdsSet.Add(id))
+            {
+                assignedIds[diskCandidates[0]] = id;
+                ScannedAsset newAsset = scanned[diskCandidates[0]];
+                inferredRewrites.Add(new EditorAssetPathRewrite(
+                    id,
+                    oldCandidates[0].LogicalPath,
+                    newAsset.LogicalPath,
+                    newAsset.AssetType));
+            }
+        }
+
+        List<EditorAssetRecordDocument> refreshed = new(scanned.Count);
+        for (int i = 0; i < scanned.Count; i++)
+        {
+            ScannedAsset asset = scanned[i];
+            string id = assignedIds[i] ?? AllocateAssetId(reservedOrAllocatedIds);
+            _ = assignedIdsSet.Add(id);
+            refreshed.Add(new EditorAssetRecordDocument
+            {
+                Id = id,
+                LogicalPath = asset.LogicalPath,
+                AssetType = asset.AssetType,
+                SizeBytes = asset.SizeBytes,
+                LastModifiedUtc = asset.LastModifiedUtc,
+            });
         }
 
         EditorAssetManifestDocument normalized = new()
@@ -726,7 +1329,21 @@ internal sealed class EditorAssetManifestStore
             FormatVersion = CurrentFormatVersion,
             Assets = [.. refreshed.OrderBy(static item => item.LogicalPath, StringComparer.OrdinalIgnoreCase)],
         };
-        SaveDocument(normalized);
+        if (recoveredCorruptManifest || requiresCanonicalRewrite || !ManifestDocumentsEqual(document, normalized))
+        {
+            SaveDocument(normalized);
+            if (recoveredCorruptManifest)
+            {
+                LastDiagnostic = LastDiagnostic.Replace(
+                    "将从 content 目录重建",
+                    "已从 content 目录重建",
+                    StringComparison.Ordinal);
+            }
+        }
+
+        LastRefreshPathRewrites = [.. inferredRewrites.OrderBy(static rewrite => rewrite.OldPath, StringComparer.OrdinalIgnoreCase)];
+        LastRefreshHadAmbiguousIdentityMatches = ambiguousIdentityMatches;
+
         return [.. normalized.Assets.Select(static item => new EditorAssetRecord(
             item.Id,
             item.LogicalPath,
@@ -751,23 +1368,64 @@ internal sealed class EditorAssetManifestStore
 
     private EditorAssetManifestDocument LoadDocument()
     {
+        return LoadDocument(out _, out _);
+    }
+
+    private EditorAssetManifestDocument LoadDocumentForIncrementalUpdate()
+    {
+        EditorAssetManifestDocument document = LoadDocument(
+            out bool recoveredCorruptManifest,
+            out _);
+        if (!recoveredCorruptManifest)
+        {
+            return document;
+        }
+
+        _ = RefreshCore();
+        return LoadDocument();
+    }
+
+    private EditorAssetManifestDocument LoadDocument(
+        out bool recoveredCorruptManifest,
+        out bool requiresCanonicalRewrite)
+    {
+        recoveredCorruptManifest = false;
+        requiresCanonicalRewrite = false;
         if (!File.Exists(ManifestPath))
         {
+            requiresCanonicalRewrite = true;
             return new EditorAssetManifestDocument { FormatVersion = CurrentFormatVersion, Assets = [] };
         }
 
-        string json = File.ReadAllText(ManifestPath);
-        EditorAssetManifestDocument document = JsonSerializer.Deserialize(
-                json,
-                EditorShellJsonContext.Default.EditorAssetManifestDocument) ??
-            throw new JsonException("资产 manifest 为空或格式无效。");
-        return document.FormatVersion != CurrentFormatVersion
-            ? throw new NotSupportedException($"不支持的资产 manifest 版本：{document.FormatVersion}。")
-            : new EditorAssetManifestDocument
+        try
+        {
+            string json = File.ReadAllText(ManifestPath);
+            EditorAssetManifestDocument document = JsonSerializer.Deserialize(
+                    json,
+                    EditorShellJsonContext.Default.EditorAssetManifestDocument) ??
+                throw new JsonException("资产 manifest 为空或格式无效。");
+            if (document.FormatVersion != CurrentFormatVersion)
+            {
+                throw new NotSupportedException($"不支持的资产 manifest 版本：{document.FormatVersion}。");
+            }
+
+            EditorAssetRecordDocument[] normalizedAssets = NormalizeRecords(document.Assets);
+            requiresCanonicalRewrite = !ManifestRecordArraysEqual(document.Assets, normalizedAssets);
+            return new EditorAssetManifestDocument
             {
                 FormatVersion = CurrentFormatVersion,
-                Assets = NormalizeRecords(document.Assets),
+                Assets = normalizedAssets,
             };
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+        {
+            string corruptPath = QuarantineCorruptManifest();
+            recoveredCorruptManifest = true;
+            requiresCanonicalRewrite = true;
+            LastCorruptManifestPath = corruptPath;
+            LastDiagnostic = $"资产 manifest 已损坏并隔离到 {corruptPath}；将从 content 目录重建。原因：{exception.Message}";
+            return new EditorAssetManifestDocument { FormatVersion = CurrentFormatVersion, Assets = [] };
+        }
     }
 
     private void SaveDocument(EditorAssetManifestDocument document)
@@ -786,7 +1444,27 @@ internal sealed class EditorAssetManifestStore
         string json = JsonSerializer.Serialize(
             normalized,
             EditorShellJsonContext.Default.EditorAssetManifestDocument);
-        File.WriteAllText(ManifestPath, json);
+        EditorAtomicTextFile.WriteAllText(ManifestPath, json);
+    }
+
+    private string QuarantineCorruptManifest()
+    {
+        string directory = Path.GetDirectoryName(ManifestPath) ?? ProjectRoot;
+        string fileName = Path.GetFileNameWithoutExtension(ManifestPath);
+        string extension = Path.GetExtension(ManifestPath);
+        string corruptPath = Path.Combine(
+            directory,
+            $"{fileName}.corrupt-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmssfff}-{Guid.NewGuid():N}{extension}");
+        File.Move(ManifestPath, corruptPath, overwrite: false);
+        return corruptPath;
+    }
+
+    private void ResetManifestDiagnostic()
+    {
+        LastDiagnostic = string.Empty;
+        LastCorruptManifestPath = null;
+        LastRefreshPathRewrites = [];
+        LastRefreshHadAmbiguousIdentityMatches = false;
     }
 
     private void UpsertUiScreenManifestEntry(string logicalPath)
@@ -899,6 +1577,115 @@ internal sealed class EditorAssetManifestStore
         return [.. byPath.Values.OrderBy(static item => item.Id, StringComparer.OrdinalIgnoreCase)];
     }
 
+    private static bool ManifestDocumentsEqual(
+        EditorAssetManifestDocument left,
+        EditorAssetManifestDocument right)
+    {
+        return left.FormatVersion == right.FormatVersion &&
+            ManifestRecordArraysEqual(left.Assets, right.Assets);
+    }
+
+    private static bool ManifestRecordsEqual(
+        EditorAssetRecordDocument left,
+        EditorAssetRecordDocument right)
+    {
+        return string.Equals(left.Id, right.Id, StringComparison.Ordinal) &&
+            string.Equals(left.LogicalPath, right.LogicalPath, StringComparison.Ordinal) &&
+            left.AssetType == right.AssetType &&
+            left.SizeBytes == right.SizeBytes &&
+            left.LastModifiedUtc == right.LastModifiedUtc;
+    }
+
+    private static bool ManifestRecordArraysEqual(
+        EditorAssetRecordDocument[]? left,
+        EditorAssetRecordDocument[]? right)
+    {
+        if (ReferenceEquals(left, right))
+        {
+            return true;
+        }
+
+        if (left is null || right is null || left.Length != right.Length)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < left.Length; i++)
+        {
+            EditorAssetRecordDocument? leftRecord = left[i];
+            EditorAssetRecordDocument? rightRecord = right[i];
+            if (leftRecord is null ||
+                rightRecord is null ||
+                !string.Equals(leftRecord.Id, rightRecord.Id, StringComparison.Ordinal) ||
+                !string.Equals(leftRecord.LogicalPath, rightRecord.LogicalPath, StringComparison.Ordinal) ||
+                leftRecord.AssetType != rightRecord.AssetType ||
+                leftRecord.SizeBytes != rightRecord.SizeBytes ||
+                leftRecord.LastModifiedUtc != rightRecord.LastModifiedUtc)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static int FindRecordIndexByPath(
+        EditorAssetRecordDocument[] records,
+        string logicalPath)
+    {
+        for (int i = 0; i < records.Length; i++)
+        {
+            if (string.Equals(records[i].LogicalPath, logicalPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static HashSet<string> CollectUsedIds(
+        EditorAssetRecordDocument[] records,
+        int excludedIndex)
+    {
+        HashSet<string> usedIds = new(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < records.Length; i++)
+        {
+            if (i != excludedIndex && !string.IsNullOrWhiteSpace(records[i].Id))
+            {
+                _ = usedIds.Add(records[i].Id);
+            }
+        }
+
+        return usedIds;
+    }
+
+    private static EditorAssetRecordDocument CreateRecordFromFile(
+        string id,
+        string logicalPath,
+        string fullPath)
+    {
+        FileInfo info = new(fullPath);
+        return new EditorAssetRecordDocument
+        {
+            Id = id,
+            LogicalPath = logicalPath,
+            AssetType = Classify(logicalPath),
+            SizeBytes = info.Length,
+            LastModifiedUtc = info.LastWriteTimeUtc,
+        };
+    }
+
+    private static EditorAssetRecord ToAssetRecord(EditorAssetRecordDocument document)
+    {
+        return new EditorAssetRecord(
+            document.Id,
+            document.LogicalPath,
+            document.AssetType,
+            document.SizeBytes,
+            document.LastModifiedUtc);
+    }
+
     private static EditorAssetRecordDocument[] NormalizeRecords(EditorAssetRecordDocument[]? records)
     {
         if (records is null || records.Length == 0)
@@ -909,7 +1696,9 @@ internal sealed class EditorAssetManifestStore
         Dictionary<string, EditorAssetRecordDocument> unique = new(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < records.Length; i++)
         {
-            EditorAssetRecordDocument record = records[i];
+            EditorAssetRecordDocument record = records[i] ??
+                throw new InvalidOperationException($"资产 manifest 第 {i} 条记录为空。");
+
             if (string.IsNullOrWhiteSpace(record.Id) || string.IsNullOrWhiteSpace(record.LogicalPath))
             {
                 continue;
@@ -1000,6 +1789,33 @@ internal sealed class EditorAssetManifestStore
             }
 
             rewrites.Add(new EditorAssetPathRewrite(record.Id, record.LogicalPath, movedPath, record.AssetType));
+        }
+
+        return [.. rewrites.OrderBy(static item => item.OldPath, StringComparer.OrdinalIgnoreCase)];
+    }
+
+    private static EditorAssetPathRewrite[] BuildAlreadyMovedFolderAssetRewrites(
+        EditorAssetManifestDocument document,
+        string currentFolderPath,
+        string newFolderPath)
+    {
+        EditorAssetRecordDocument[] records = NormalizeRecords(document.Assets);
+        List<EditorAssetPathRewrite> rewrites = [];
+        for (int i = 0; i < records.Length; i++)
+        {
+            EditorAssetRecordDocument record = records[i];
+            if (!IsUnderLogicalFolder(record.LogicalPath, newFolderPath))
+            {
+                continue;
+            }
+
+            string oldPath = MoveLogicalPath(record.LogicalPath, newFolderPath, currentFolderPath);
+            if (Classify(oldPath) != record.AssetType)
+            {
+                continue;
+            }
+
+            rewrites.Add(new EditorAssetPathRewrite(record.Id, oldPath, record.LogicalPath, record.AssetType));
         }
 
         return [.. rewrites.OrderBy(static item => item.OldPath, StringComparer.OrdinalIgnoreCase)];
@@ -1145,7 +1961,7 @@ internal sealed class EditorAssetManifestStore
 
     private int CollectReferenceDocuments(EditorAssetRecord asset, List<string> locations, string? ignoredReferenceFolder = null)
     {
-        if (!Directory.Exists(ContentRoot))
+        if (!Directory.Exists(ReferenceDocumentRoot))
         {
             return 0;
         }
@@ -1153,19 +1969,23 @@ internal sealed class EditorAssetManifestStore
         int referencedDocuments = 0;
         string[] files =
         [
-            .. Directory.EnumerateFiles(ContentRoot, "*.scene", SearchOption.AllDirectories)
-                .Concat(Directory.EnumerateFiles(ContentRoot, "*.prefab", SearchOption.AllDirectories))
+            .. Directory.EnumerateFiles(ReferenceDocumentRoot, "*.scene", SearchOption.AllDirectories)
+                .Concat(Directory.EnumerateFiles(ReferenceDocumentRoot, "*.prefab", SearchOption.AllDirectories))
                 .Order(StringComparer.OrdinalIgnoreCase),
         ];
+        bool sharedRoot = PathsEqual(ContentRoot, ReferenceDocumentRoot);
         for (int i = 0; i < files.Length; i++)
         {
-            string logicalDocumentPath = NormalizeLogicalPath(Path.GetRelativePath(ContentRoot, files[i]), "reference document");
-            if (string.Equals(logicalDocumentPath, asset.LogicalPath, StringComparison.OrdinalIgnoreCase))
+            string logicalDocumentPath = NormalizeLogicalPath(
+                Path.GetRelativePath(ReferenceDocumentRoot, files[i]),
+                "reference document");
+            if (sharedRoot && string.Equals(logicalDocumentPath, asset.LogicalPath, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            if (!string.IsNullOrWhiteSpace(ignoredReferenceFolder) &&
+            if (sharedRoot &&
+                !string.IsNullOrWhiteSpace(ignoredReferenceFolder) &&
                 IsUnderLogicalFolder(logicalDocumentPath, ignoredReferenceFolder))
             {
                 continue;
@@ -1247,22 +2067,22 @@ internal sealed class EditorAssetManifestStore
 
     private IReadOnlyList<EditorAssetReferenceDocumentMovePlan> LoadReferenceDocumentMovePlans(string sourceFullPath, string targetFullPath)
     {
-        if (!Directory.Exists(ContentRoot))
+        if (!Directory.Exists(ReferenceDocumentRoot))
         {
             return [];
         }
 
         string[] files =
         [
-            .. Directory.EnumerateFiles(ContentRoot, "*.scene", SearchOption.AllDirectories)
-                .Concat(Directory.EnumerateFiles(ContentRoot, "*.prefab", SearchOption.AllDirectories))
+            .. Directory.EnumerateFiles(ReferenceDocumentRoot, "*.scene", SearchOption.AllDirectories)
+                .Concat(Directory.EnumerateFiles(ReferenceDocumentRoot, "*.prefab", SearchOption.AllDirectories))
                 .Order(StringComparer.OrdinalIgnoreCase),
         ];
         EditorAssetReferenceDocumentMovePlan[] plans = new EditorAssetReferenceDocumentMovePlan[files.Length];
         for (int i = 0; i < files.Length; i++)
         {
             EngineSceneDocument document = EngineSceneDocumentLoader.LoadDocument(files[i]);
-            string savePath = string.Equals(
+            string savePath = PathsEqual(ContentRoot, ReferenceDocumentRoot) && string.Equals(
                 Path.GetFullPath(files[i]),
                 sourceFullPath,
                 StringComparison.OrdinalIgnoreCase)
@@ -1278,27 +2098,100 @@ internal sealed class EditorAssetManifestStore
         return plans;
     }
 
-    private IReadOnlyList<EditorAssetReferenceDocumentMovePlan> LoadReferenceDocumentFolderMovePlans(
-        string sourceFolderFullPath,
-        string targetFolderFullPath,
-        string currentFolderPath)
+    private IReadOnlyList<EditorAssetReferenceDocumentMovePlan> LoadReferenceDocumentExternalMovePlans(
+        string sourceFullPath,
+        string targetFullPath)
     {
-        if (!Directory.Exists(ContentRoot))
+        if (!Directory.Exists(ReferenceDocumentRoot))
         {
             return [];
         }
 
         string[] files =
         [
-            .. Directory.EnumerateFiles(ContentRoot, "*.scene", SearchOption.AllDirectories)
-                .Concat(Directory.EnumerateFiles(ContentRoot, "*.prefab", SearchOption.AllDirectories))
+            .. Directory.EnumerateFiles(ReferenceDocumentRoot, "*.scene", SearchOption.AllDirectories)
+                .Concat(Directory.EnumerateFiles(ReferenceDocumentRoot, "*.prefab", SearchOption.AllDirectories))
                 .Order(StringComparer.OrdinalIgnoreCase),
         ];
+        bool sharedRoot = PathsEqual(ContentRoot, ReferenceDocumentRoot);
         EditorAssetReferenceDocumentMovePlan[] plans = new EditorAssetReferenceDocumentMovePlan[files.Length];
         for (int i = 0; i < files.Length; i++)
         {
-            string logicalDocumentPath = NormalizeLogicalPath(Path.GetRelativePath(ContentRoot, files[i]), "reference document");
-            string savePath = IsUnderLogicalFolder(logicalDocumentPath, currentFolderPath)
+            bool movedReferenceDocument = sharedRoot && PathsEqual(files[i], targetFullPath);
+            EngineSceneDocument document = EngineSceneDocumentLoader.LoadDocument(files[i]);
+            plans[i] = new EditorAssetReferenceDocumentMovePlan(
+                movedReferenceDocument ? sourceFullPath : files[i],
+                files[i],
+                File.ReadAllText(files[i]),
+                EditorSceneModel.FromDocument(document));
+        }
+
+        return plans;
+    }
+
+    private IReadOnlyList<EditorAssetReferenceDocumentMovePlan> LoadReferenceDocumentExternalFolderMovePlans(
+        string sourceFolderFullPath,
+        string targetFolderFullPath,
+        string newFolderPath)
+    {
+        if (!Directory.Exists(ReferenceDocumentRoot))
+        {
+            return [];
+        }
+
+        string[] files =
+        [
+            .. Directory.EnumerateFiles(ReferenceDocumentRoot, "*.scene", SearchOption.AllDirectories)
+                .Concat(Directory.EnumerateFiles(ReferenceDocumentRoot, "*.prefab", SearchOption.AllDirectories))
+                .Order(StringComparer.OrdinalIgnoreCase),
+        ];
+        bool sharedRoot = PathsEqual(ContentRoot, ReferenceDocumentRoot);
+        EditorAssetReferenceDocumentMovePlan[] plans = new EditorAssetReferenceDocumentMovePlan[files.Length];
+        for (int i = 0; i < files.Length; i++)
+        {
+            string logicalDocumentPath = NormalizeLogicalPath(
+                Path.GetRelativePath(ReferenceDocumentRoot, files[i]),
+                "reference document");
+            bool movedReferenceDocument = sharedRoot && IsUnderLogicalFolder(logicalDocumentPath, newFolderPath);
+            string originalPath = movedReferenceDocument
+                ? Path.Combine(sourceFolderFullPath, Path.GetRelativePath(targetFolderFullPath, files[i]))
+                : files[i];
+
+            EngineSceneDocument document = EngineSceneDocumentLoader.LoadDocument(files[i]);
+            plans[i] = new EditorAssetReferenceDocumentMovePlan(
+                originalPath,
+                files[i],
+                File.ReadAllText(files[i]),
+                EditorSceneModel.FromDocument(document));
+        }
+
+        return plans;
+    }
+
+    private IReadOnlyList<EditorAssetReferenceDocumentMovePlan> LoadReferenceDocumentFolderMovePlans(
+        string sourceFolderFullPath,
+        string targetFolderFullPath,
+        string currentFolderPath)
+    {
+        if (!Directory.Exists(ReferenceDocumentRoot))
+        {
+            return [];
+        }
+
+        string[] files =
+        [
+            .. Directory.EnumerateFiles(ReferenceDocumentRoot, "*.scene", SearchOption.AllDirectories)
+                .Concat(Directory.EnumerateFiles(ReferenceDocumentRoot, "*.prefab", SearchOption.AllDirectories))
+                .Order(StringComparer.OrdinalIgnoreCase),
+        ];
+        bool sharedRoot = PathsEqual(ContentRoot, ReferenceDocumentRoot);
+        EditorAssetReferenceDocumentMovePlan[] plans = new EditorAssetReferenceDocumentMovePlan[files.Length];
+        for (int i = 0; i < files.Length; i++)
+        {
+            string logicalDocumentPath = NormalizeLogicalPath(
+                Path.GetRelativePath(ReferenceDocumentRoot, files[i]),
+                "reference document");
+            string savePath = sharedRoot && IsUnderLogicalFolder(logicalDocumentPath, currentFolderPath)
                 ? Path.Combine(targetFolderFullPath, Path.GetRelativePath(sourceFolderFullPath, files[i]))
                 : files[i];
             EngineSceneDocument document = EngineSceneDocumentLoader.LoadDocument(files[i]);
@@ -1911,6 +2804,14 @@ public sealed class {{className}} : Behaviour
         }
 
         return normalized.Count == 0 ? throw new InvalidOperationException($"{fieldName} 不能解析为空路径。") : string.Join('/', normalized);
+    }
+
+    private static bool PathsEqual(string left, string right)
+    {
+        return string.Equals(
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     }
 }
 
