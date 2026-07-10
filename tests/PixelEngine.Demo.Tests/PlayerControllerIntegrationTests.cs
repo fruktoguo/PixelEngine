@@ -2155,6 +2155,58 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证默认半径坍塌扫描只在首次扩容时分配，跨帧重试复用同一组 scratch。
+    /// </summary>
+    [Fact]
+    public void PlayableProjectileCollapseScanReusesDefaultRadiusScratchAcrossRetries()
+    {
+        using Engine engine = CreateManualScriptEngine(out _, out _, out _, out ScriptScene scene, DemoMaterials());
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        _ = entity.AddComponent<PlayerController>();
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+
+        engine.RunHeadlessTicks(2);
+
+        long firstScanAllocation = MeasureCollapseScanAllocation(projectile, 48, 32);
+        long retryAllocation = MeasureCollapseScanAllocation(projectile, 48, 32);
+
+        Assert.Equal(81 * 81, projectile.CollapseScanScratchCapacity);
+        Assert.InRange(firstScanAllocation, 40_000, 100_000);
+        Assert.InRange(retryAllocation, 0, 1_024);
+    }
+
+    /// <summary>
+    /// 验证最大半径扫描的四个数组总计约 4.1 MB 且只发生一次，重复扫描不再按窗口面积分配。
+    /// </summary>
+    [Fact]
+    public void PlayableProjectileCollapseScanReusesMaximumRadiusScratchAcrossRetries()
+    {
+        using Engine engine = CreateManualScriptEngine(
+            out _,
+            out _,
+            out _,
+            out ScriptScene scene,
+            DemoMaterials(),
+            worldWidthCells: 704,
+            worldHeightCells: 704);
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        _ = entity.AddComponent<PlayerController>();
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.CollapseScanRadius = 320;
+
+        engine.RunHeadlessTicks(2);
+
+        long firstScanAllocation = MeasureCollapseScanAllocation(projectile, 352, 352);
+        long retryAllocation = MeasureCollapseScanAllocation(projectile, 352, 352);
+
+        Assert.Equal(641 * 641, projectile.CollapseScanScratchCapacity);
+        Assert.InRange(firstScanAllocation, 4_000_000, 4_250_000);
+        Assert.InRange(retryAllocation, 0, 1_024);
+    }
+
+    /// <summary>
     /// 验证爆破扫描允许悬空块接触扫描框上边界，避免打掉支撑后上方石块因局部窗口过小被误判为不可转换。
     /// </summary>
     [Fact]
@@ -2780,6 +2832,16 @@ public sealed class PlayerControllerIntegrationTests
         return CreateScriptEngine(typeof(PlayerController), out input, out grid, out _);
     }
 
+    private static long MeasureCollapseScanAllocation(PlayableProjectileTool projectile, int centerX, int centerY)
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        _ = projectile.RunCollapseScanForTesting(centerX, centerY, maxConversions: 1);
+        return GC.GetAllocatedBytesForCurrentThread() - before;
+    }
+
     private static Engine CreateManualScriptEngine(
         out ScriptInputApi input,
         out CellGrid grid,
@@ -2787,9 +2849,19 @@ public sealed class PlayerControllerIntegrationTests
         out ScriptScene scene,
         MaterialTable? materials = null,
         IAudioApi? audio = null,
-        string? contentRoot = null)
+        string? contentRoot = null,
+        int worldWidthCells = TestWorldWidth,
+        int worldHeightCells = TestWorldHeight)
     {
-        Engine engine = CreateBaseEngine(out input, out grid, out camera, materials: materials, audio: audio, contentRoot: contentRoot);
+        Engine engine = CreateBaseEngine(
+            out input,
+            out grid,
+            out camera,
+            materials: materials,
+            audio: audio,
+            contentRoot: contentRoot,
+            worldWidthCells: worldWidthCells,
+            worldHeightCells: worldHeightCells);
         scene = new ScriptScene();
         engine.Context.RegisterService(scene);
         _ = engine.AttachScriptingFromServices();
@@ -2814,7 +2886,9 @@ public sealed class PlayerControllerIntegrationTests
         Type? entryType = null,
         MaterialTable? materials = null,
         IAudioApi? audio = null,
-        string? contentRoot = null)
+        string? contentRoot = null,
+        int worldWidthCells = TestWorldWidth,
+        int worldHeightCells = TestWorldHeight)
     {
         materials ??= Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
         EngineBuilder builder = new EngineBuilder()
@@ -2834,7 +2908,7 @@ public sealed class PlayerControllerIntegrationTests
 
         Engine engine = builder.Build();
         engine.Context.RegisterService(materials);
-        _ = engine.AttachResidentSimulationWorld(worldWidthCells: 96, worldHeightCells: 64, particleCapacity: 16);
+        _ = engine.AttachResidentSimulationWorld(worldWidthCells, worldHeightCells, particleCapacity: 16);
         _ = engine.AttachPhysics();
         input = new ScriptInputApi();
         camera = new ScriptCameraApi(viewportWidth: 40, viewportHeight: 20, centerX: 20, centerY: 10, zoom: 1);
