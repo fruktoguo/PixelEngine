@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Text.Json;
+using Hexa.NET.ImGui;
 using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Editor.Shell.Settings;
 using PixelEngine.Hosting;
@@ -14,25 +16,45 @@ internal sealed class EditorShellApp
     private const string DefaultWorkbenchBehaviourTypeName = "DefaultWorkbenchBehaviour";
     private static readonly TimeSpan ScriptedBuildProbeTimeout = TimeSpan.FromMinutes(10);
     private readonly EditorShellOptions _options;
+    private readonly EditorUserDataPaths _userDataPaths;
     private readonly EditorUiScaleContextState _projectPickerUiScaleState = new();
+    private readonly EditorTransitionCoordinator _transitions;
     private EditorProject? _pendingProject;
+    private bool _pendingSceneOverrideFromWorkspace;
+    private string? _commandLineSceneOverride;
     private bool _closeProjectRequested;
     private bool _exitRequested;
+    private bool _allowDirtyShutdown;
 
-    private EditorShellApp(EditorShellOptions options, EditorPreferencesStore preferences)
+    private EditorShellApp(
+        EditorShellOptions options,
+        EditorUserDataPaths userDataPaths,
+        EditorPreferencesStore preferences,
+        RecentProjectsStore recentProjects,
+        EditorWorkspaceStore workspace)
     {
         _options = options;
+        _userDataPaths = userDataPaths ?? throw new ArgumentNullException(nameof(userDataPaths));
+        LayoutPath = string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("PIXELENGINE_EDITOR_LAYOUT_PATH"))
+            ? userDataPaths.LayoutPath
+            : EditorShellWindow.DefaultLayoutPath;
         Preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
+        RecentProjects = recentProjects ?? throw new ArgumentNullException(nameof(recentProjects));
+        Workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
+        _commandLineSceneOverride = options.ScenePath;
         ProjectPicker = new ProjectPickerWindow(options);
         MainMenu = new EditorMainMenuBar();
-        Layout = new EditorShellLayout(EditorShellWindow.DefaultLayoutPath);
+        EditorWorkspaceWindowState windowState = Workspace.Current.Window ?? new EditorWorkspaceWindowState();
+        Layout = new EditorShellLayout(LayoutPath, windowState.Width, windowState.Height);
         PreferencesWindow = new EditorPreferencesWindow(Preferences, ResetLayout);
-        RecentProjects = RecentProjectsStore.LoadDefault();
+        _transitions = new EditorTransitionCoordinator(
+            () => CurrentSession?.SceneModel.IsDirty == true,
+            TrySaveSceneForTransition);
     }
 
     internal static EditorShellApp CreateForTests(EditorPreferencesStore? preferences = null)
     {
-        return new EditorShellApp(new EditorShellOptions(
+        EditorShellOptions options = new(
             ProjectPath: null,
             ScenePath: null,
             WindowTicks: 0,
@@ -47,8 +69,20 @@ internal sealed class EditorShellApp
             ScriptedPreferencesProbe: false,
             BuildOutputPath: null,
             CaptureFramePath: null,
-            LogDirectory: null),
-            preferences ?? EditorPreferencesStore.CreateInMemory());
+            LogDirectory: null)
+        {
+            EphemeralUserState = true,
+        };
+        EditorUserDataPaths userDataPaths = EditorUserDataPaths.Resolve(
+            options,
+            environmentUserDataDirectory: null,
+            ephemeralDirectory: Path.Combine(Path.GetTempPath(), "PixelEngine", "EditorTests", "in-memory"));
+        return new EditorShellApp(
+            options,
+            userDataPaths,
+            preferences ?? EditorPreferencesStore.CreateInMemory(),
+            RecentProjectsStore.CreateInMemory(),
+            EditorWorkspaceStore.CreateInMemory());
     }
 
     public EditorConsoleStore ConsoleStore { get; } = new();
@@ -63,13 +97,19 @@ internal sealed class EditorShellApp
 
     public bool HasOpenProject => CurrentProject is not null;
 
-    public string? SceneOverridePath => _options.ScenePath;
+    public string? SceneOverridePath { get; private set; }
 
     public RecentProjectsStore RecentProjects { get; }
+
+    internal EditorWorkspaceStore Workspace { get; }
+
+    internal string LayoutPath { get; }
 
     public string? LastProjectError { get; private set; }
 
     public string? LastAssetOpenDiagnostic { get; private set; }
+
+    internal EditorTransitionPrompt? PendingTransition => _transitions.Pending;
 
     public EditorProjectSession? CurrentSession { get; private set; }
 
@@ -85,7 +125,16 @@ internal sealed class EditorShellApp
         try
         {
             options = EditorShellOptions.Parse(args);
-            return new EditorShellApp(options, EditorPreferencesStore.LoadDefault()).Run();
+            EditorUserDataPaths userDataPaths = EditorUserDataPaths.Resolve(options);
+            string? preferencesOverride = Environment.GetEnvironmentVariable("PIXELENGINE_EDITOR_PREFERENCES_PATH");
+            return new EditorShellApp(
+                options,
+                userDataPaths,
+                EditorPreferencesStore.Load(string.IsNullOrWhiteSpace(preferencesOverride)
+                    ? userDataPaths.PreferencesPath
+                    : preferencesOverride),
+                RecentProjectsStore.Load(userDataPaths.RecentProjectsPath),
+                EditorWorkspaceStore.Load(userDataPaths.WorkspacePath)).Run();
         }
         catch (Exception exception)
         {
@@ -97,16 +146,38 @@ internal sealed class EditorShellApp
 
     private int Run()
     {
-        using EditorShellWindow shellWindow = EditorShellWindow.Create(Preferences.Current.UiScale);
+        bool previousShutdownWasClean = Workspace.Current.LastCleanShutdown;
+        if (!Workspace.TrySetShutdownState(cleanShutdown: false, out string startupStateDiagnostic))
+        {
+            ConsoleStore.AddProjectError("workspace", startupStateDiagnostic);
+        }
+
+        EditorWorkspaceWindowState windowState = Workspace.Current.Window ?? new EditorWorkspaceWindowState();
+        using EditorShellWindow shellWindow = EditorShellWindow.Create(
+            Preferences.Current.UiScale,
+            LayoutPath,
+            windowState.Width,
+            windowState.Height);
         if (_options.ScriptedPreferencesProbe)
         {
             ShowPreferences(EditorPreferencesCategory.Appearance);
         }
 
-        if (!string.IsNullOrWhiteSpace(_options.ProjectPath))
+        string? startupProjectPath = ResolveStartupProjectPath(
+            _options,
+            Preferences.Current,
+            Workspace.Current,
+            previousShutdownWasClean);
+
+        if (!string.IsNullOrWhiteSpace(startupProjectPath))
         {
-            OpenProjectPath(_options.ProjectPath);
+            OpenProjectPath(startupProjectPath);
             ApplyPendingProject(shellWindow);
+        }
+        else if (!previousShutdownWasClean && string.IsNullOrWhiteSpace(_options.ProjectPath))
+        {
+            LastProjectError = "上一次 Editor 未正常关闭，已停止自动打开工程；请从 Recent 手动恢复。";
+            ConsoleStore.AddProjectError("workspace", LastProjectError);
         }
 
         UpdateTitle(shellWindow);
@@ -141,6 +212,7 @@ internal sealed class EditorShellApp
             previousSeconds = now;
             if (CurrentSession is null)
             {
+                shellWindow.EnsureProjectPickerGui();
                 if (_options.ScriptedDefaultWorkbenchProbe &&
                     !scriptedDefaultWorkbench.ProjectCreated &&
                     string.IsNullOrWhiteSpace(_options.ProjectPath))
@@ -214,6 +286,7 @@ internal sealed class EditorShellApp
                 }
 
                 ApplyDeferredClose();
+                ApplyPendingProject(shellWindow);
                 if (_options.ScriptedBuildCancelProbe)
                 {
                     RunScriptedBuildCancelProbeActions(scriptedBuildCancel);
@@ -329,6 +402,10 @@ internal sealed class EditorShellApp
                 $"editor_preferences_probe=True, preferences_visible={PreferencesWindow.Visible}, " +
                 $"ui_scale_percent={EditorUiScale.ToPercent(Preferences.Current.UiScale)}, " +
                 $"save_layout_on_exit={Preferences.Current.SaveLayoutOnExit}, " +
+                $"reopen_last_project={Preferences.Current.ReopenLastProject}, " +
+                $"restore_last_scene={Preferences.Current.RestoreLastScene}, " +
+                $"ephemeral_user_state={_userDataPaths.IsEphemeral}, " +
+                $"user_data_root={_userDataPaths.RootDirectory}, " +
                 $"preferences_path={Preferences.StoragePath}, " +
                 $"window_pos={PreferencesWindow.LastWindowPosition.X:F0},{PreferencesWindow.LastWindowPosition.Y:F0}, " +
                 $"window_size={PreferencesWindow.LastWindowSize.X:F0}x{PreferencesWindow.LastWindowSize.Y:F0}, " +
@@ -375,9 +452,39 @@ internal sealed class EditorShellApp
             }
         }
 
+        if (!Workspace.TrySetWindowSize(
+            shellWindow.Window.LogicalWidth,
+            shellWindow.Window.LogicalHeight,
+            out string windowStateDiagnostic))
+        {
+            ConsoleStore.AddProjectError("workspace", windowStateDiagnostic);
+        }
+
+        bool cleanShutdown = CurrentSession?.SceneModel.IsDirty != true || _allowDirtyShutdown;
         CurrentSession?.Dispose();
         CurrentSession = null;
+        if (cleanShutdown && !Workspace.TrySetShutdownState(cleanShutdown: true, out string shutdownStateDiagnostic))
+        {
+            ConsoleStore.AddProjectError("workspace", shutdownStateDiagnostic);
+        }
+
         return 0;
+    }
+
+    internal static string? ResolveStartupProjectPath(
+        EditorShellOptions options,
+        EditorPreferencesDocument preferences,
+        EditorWorkspaceDocument workspace,
+        bool previousShutdownWasClean)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(preferences);
+        ArgumentNullException.ThrowIfNull(workspace);
+        return !string.IsNullOrWhiteSpace(options.ProjectPath)
+            ? options.ProjectPath
+            : options.ReopenLastProject && preferences.ReopenLastProject && previousShutdownWasClean
+                ? workspace.LastSuccessfulProjectPath
+                : null;
     }
 
     private void RunScriptedMenuLayoutProbeActions(ScriptedMenuLayoutProbeState state)
@@ -1205,15 +1312,10 @@ internal sealed class EditorShellApp
 
     public void CreateProject(string projectRoot, string name)
     {
-        try
-        {
-            OpenProject(EditorProject.CreateNew(projectRoot, name));
-        }
-        catch (Exception exception)
-        {
-            LastProjectError = exception.Message;
-            ConsoleStore.AddProjectError("project", exception.Message);
-        }
+        HandleTransitionResult(_transitions.Request(
+            EditorTransitionKind.CreateProject,
+            () => TryCreateAndQueueProject(projectRoot, name),
+            projectRoot));
     }
 
     public void OpenProjectPath(string projectRootOrFile)
@@ -1235,22 +1337,18 @@ internal sealed class EditorShellApp
     public void OpenProject(EditorProject project)
     {
         ArgumentNullException.ThrowIfNull(project);
-        LastProjectError = null;
-        RecentProjects.AddOrUpdate(project);
-        RecentProjects.Save();
-        _pendingProject = project;
+        HandleTransitionResult(_transitions.Request(
+            EditorTransitionKind.OpenProject,
+            () => QueueProject(project),
+            project.ProjectRoot));
     }
 
     public void CloseProject()
     {
-        if (CurrentSession is null)
-        {
-            CurrentProject = null;
-            _pendingProject = null;
-            return;
-        }
-
-        _closeProjectRequested = true;
+        HandleTransitionResult(_transitions.Request(
+            EditorTransitionKind.CloseProject,
+            QueueCloseProject,
+            CurrentProject?.ProjectRoot));
     }
 
     public void FocusProjectPicker(ProjectPickerMode mode)
@@ -1388,8 +1486,18 @@ internal sealed class EditorShellApp
             return false;
         }
 
-        CurrentSession.SaveScene();
-        return true;
+        try
+        {
+            CurrentSession.SaveScene();
+            LastProjectError = null;
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            LastProjectError = $"保存场景失败：{exception.Message}";
+            ConsoleStore.AddProjectError("scene-save", LastProjectError);
+            return false;
+        }
     }
 
     public bool SaveSceneAs()
@@ -1399,8 +1507,19 @@ internal sealed class EditorShellApp
             return false;
         }
 
-        _ = CurrentSession.SaveSceneAsAuto();
-        return true;
+        try
+        {
+            _ = CurrentSession.SaveSceneAsAuto();
+            RecordCurrentWorkspace();
+            LastProjectError = null;
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            LastProjectError = $"另存场景失败：{exception.Message}";
+            ConsoleStore.AddProjectError("scene-save-as", LastProjectError);
+            return false;
+        }
     }
 
     public bool NewScene()
@@ -1410,8 +1529,11 @@ internal sealed class EditorShellApp
             return false;
         }
 
-        _ = CurrentSession.NewSceneAuto();
-        return true;
+        EditorTransitionResult result = _transitions.Request(
+            EditorTransitionKind.NewScene,
+            CreateNewSceneAndRecord);
+        HandleTransitionResult(result);
+        return result.Status is EditorTransitionStatus.Executed or EditorTransitionStatus.ConfirmationRequired;
     }
 
     public bool OpenScene(string sceneRelativePath)
@@ -1421,13 +1543,239 @@ internal sealed class EditorShellApp
             return false;
         }
 
-        CurrentSession.OpenScene(sceneRelativePath);
-        return true;
+        EditorTransitionResult result = _transitions.Request(
+            EditorTransitionKind.OpenScene,
+            () => OpenSceneAndRecord(sceneRelativePath),
+            sceneRelativePath);
+        HandleTransitionResult(result);
+        return result.Status is EditorTransitionStatus.Executed or EditorTransitionStatus.ConfirmationRequired;
     }
 
     public void RequestExit()
     {
-        _exitRequested = true;
+        HandleTransitionResult(_transitions.Request(
+            EditorTransitionKind.Exit,
+            () => _exitRequested = true));
+    }
+
+    internal void DrawTransitionPrompt()
+    {
+        if (_transitions.Pending is not { } pending)
+        {
+            return;
+        }
+
+        const string PopupTitle = "Unsaved Scene Changes";
+        ImGui.OpenPopup(PopupTitle);
+        bool open = true;
+        if (!ImGui.BeginPopupModal(PopupTitle, ref open, ImGuiWindowFlags.AlwaysAutoResize))
+        {
+            return;
+        }
+
+        ImGui.TextWrapped("当前场景有未保存修改。继续操作前请选择保存、放弃修改或取消。");
+        ImGui.TextUnformatted($"操作：{pending.Kind}");
+        if (!string.IsNullOrWhiteSpace(pending.Target))
+        {
+            ImGui.TextWrapped($"目标：{pending.Target}");
+        }
+
+        if (ImGui.Button("Save"))
+        {
+            ResolveTransitionFromPopup(EditorTransitionDecision.Save);
+        }
+
+        ImGui.SameLine();
+        if (ImGui.Button("Don't Save"))
+        {
+            ResolveTransitionFromPopup(EditorTransitionDecision.Discard);
+        }
+
+        ImGui.SameLine();
+        if (ImGui.Button("Cancel") || !open)
+        {
+            ResolveTransitionFromPopup(EditorTransitionDecision.Cancel);
+        }
+
+        ImGui.EndPopup();
+    }
+
+    internal void DrawTransientWindows()
+    {
+        ProjectPicker.Draw(this);
+        DrawTransitionPrompt();
+    }
+
+    internal EditorTransitionResult ResolveTransition(EditorTransitionDecision decision)
+    {
+        EditorTransitionPrompt? pending = _transitions.Pending;
+        EditorTransitionResult result = _transitions.Resolve(decision);
+        if (result.Executed &&
+            decision == EditorTransitionDecision.Discard &&
+            pending?.Kind == EditorTransitionKind.Exit)
+        {
+            _allowDirtyShutdown = true;
+        }
+
+        HandleTransitionResult(result);
+        return result;
+    }
+
+    private void ResolveTransitionFromPopup(EditorTransitionDecision decision)
+    {
+        EditorTransitionResult result = ResolveTransition(decision);
+        if (result.Status is not EditorTransitionStatus.SaveFailed)
+        {
+            ImGui.CloseCurrentPopup();
+        }
+    }
+
+    private void QueueProject(EditorProject project)
+    {
+        LastProjectError = null;
+        bool hasCommandLineScene = !string.IsNullOrWhiteSpace(_commandLineSceneOverride);
+        SceneOverridePath = hasCommandLineScene
+            ? _commandLineSceneOverride
+            : Preferences.Current.RestoreLastScene ? ResolveWorkspaceScene(project) : null;
+        _pendingSceneOverrideFromWorkspace = !hasCommandLineScene && !string.IsNullOrWhiteSpace(SceneOverridePath);
+        _commandLineSceneOverride = null;
+        _pendingProject = project;
+    }
+
+    private string? ResolveWorkspaceScene(EditorProject project)
+    {
+        string? lastScene = Workspace.ResolveLastScene(project.ProjectRoot);
+        if (string.IsNullOrWhiteSpace(lastScene))
+        {
+            return null;
+        }
+
+        try
+        {
+            if (File.Exists(project.ResolveSceneFullPath(lastScene)))
+            {
+                return lastScene;
+            }
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException)
+        {
+            ConsoleStore.AddProjectError("workspace", $"忽略无效的上次场景 {lastScene}：{exception.Message}");
+            return null;
+        }
+
+        ConsoleStore.AddProjectError("workspace", $"上次场景已不存在，改用工程 Start Scene：{lastScene}");
+        return null;
+    }
+
+    private void CreateNewSceneAndRecord()
+    {
+        if (CurrentSession is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _ = CurrentSession.NewSceneAuto();
+            RecordCurrentWorkspace();
+            LastProjectError = null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            LastProjectError = $"新建场景失败：{exception.Message}";
+            ConsoleStore.AddProjectError("scene-new", LastProjectError);
+        }
+    }
+
+    private void OpenSceneAndRecord(string sceneRelativePath)
+    {
+        if (CurrentSession is null)
+        {
+            return;
+        }
+
+        try
+        {
+            CurrentSession.OpenScene(sceneRelativePath);
+            RecordCurrentWorkspace();
+            LastProjectError = null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or JsonException or NotSupportedException)
+        {
+            LastProjectError = $"打开场景失败：{exception.Message}";
+            ConsoleStore.AddProjectError("scene-open", LastProjectError);
+        }
+    }
+
+    private void RecordCurrentWorkspace()
+    {
+        if (CurrentProject is null || CurrentSession is null)
+        {
+            return;
+        }
+
+        if (!Workspace.TryRecordProjectOpened(
+            CurrentProject.ProjectRoot,
+            CurrentSession.CurrentSceneRelativePath,
+            DateTimeOffset.UtcNow,
+            out string diagnostic))
+        {
+            ConsoleStore.AddProjectError("workspace", diagnostic);
+        }
+    }
+
+    private void TryCreateAndQueueProject(string projectRoot, string name)
+    {
+        try
+        {
+            QueueProject(EditorProject.CreateNew(projectRoot, name));
+        }
+        catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            LastProjectError = exception.Message;
+            ConsoleStore.AddProjectError("project", exception.Message);
+        }
+    }
+
+    private void QueueCloseProject()
+    {
+        if (CurrentSession is null)
+        {
+            CurrentProject = null;
+            _pendingProject = null;
+            return;
+        }
+
+        _closeProjectRequested = true;
+    }
+
+    private EditorTransitionSaveResult TrySaveSceneForTransition()
+    {
+        if (CurrentSession is null)
+        {
+            return EditorTransitionSaveResult.Success();
+        }
+
+        try
+        {
+            CurrentSession.SaveScene();
+            return EditorTransitionSaveResult.Success();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            LastProjectError = $"保存场景失败：{exception.Message}";
+            ConsoleStore.AddProjectError("scene-save", LastProjectError);
+            return EditorTransitionSaveResult.Failure(LastProjectError);
+        }
+    }
+
+    private void HandleTransitionResult(EditorTransitionResult result)
+    {
+        if (result.Status is EditorTransitionStatus.SaveFailed or EditorTransitionStatus.PendingTransitionExists)
+        {
+            LastProjectError = result.Diagnostic;
+            ConsoleStore.AddProjectError("editor-transition", result.Diagnostic);
+        }
     }
 
     // 帧末创建 EditorProjectSession，接管 Engine tick 与 ImGui 面板
@@ -1440,16 +1788,60 @@ internal sealed class EditorShellApp
 
         EditorProject project = _pendingProject;
         _pendingProject = null;
-        ProjectSettingsDto legacySettings = EngineProjectSettingsStore.LoadProjectSettings(project.ProjectRoot);
-        if (!Preferences.TryMigrateLegacy(legacySettings.EditorPreferences, out string migrationDiagnostic))
-        {
-            ConsoleStore.AddProjectError("preferences", migrationDiagnostic);
-        }
-
         CurrentSession?.Dispose();
         shellWindow.ShutdownProjectPickerGui();
-        CurrentSession = EditorProjectSession.Open(project, shellWindow.Window, this);
-        CurrentProject = project;
+        CurrentSession = null;
+        CurrentProject = null;
+        try
+        {
+            ProjectSettingsDto legacySettings = EngineProjectSettingsStore.LoadProjectSettings(project.ProjectRoot);
+            if (!Preferences.TryMigrateLegacy(legacySettings.EditorPreferences, out string migrationDiagnostic))
+            {
+                ConsoleStore.AddProjectError("preferences", migrationDiagnostic);
+            }
+
+            try
+            {
+                CurrentSession = EditorProjectSession.Open(project, shellWindow.Window, this);
+            }
+            catch (Exception exception) when (
+                _pendingSceneOverrideFromWorkspace &&
+                exception is IOException or InvalidOperationException or JsonException or NotSupportedException)
+            {
+                ConsoleStore.AddProjectError(
+                    "workspace",
+                    $"恢复上次场景失败，已回退工程 Start Scene：{exception.Message}");
+                SceneOverridePath = null;
+                _pendingSceneOverrideFromWorkspace = false;
+                CurrentSession = EditorProjectSession.Open(project, shellWindow.Window, this);
+            }
+
+            CurrentProject = project;
+            ProjectPicker.Close();
+            RecordCurrentWorkspace();
+            SceneOverridePath = null;
+            _pendingSceneOverrideFromWorkspace = false;
+            RecentProjects.AddOrUpdate(project);
+            try
+            {
+                RecentProjects.Save();
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                ConsoleStore.AddProjectError("recent-projects", $"工程已打开，但最近工程列表保存失败：{exception.Message}");
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or JsonException or NotSupportedException)
+        {
+            LastProjectError = $"打开工程失败：{exception.Message}";
+            ConsoleStore.AddProjectError("project-open", LastProjectError);
+            CurrentSession?.Dispose();
+            CurrentSession = null;
+            CurrentProject = null;
+            SceneOverridePath = null;
+            _pendingSceneOverrideFromWorkspace = false;
+            FocusProjectPicker(ProjectPickerMode.OpenProject);
+        }
     }
 
     private void ApplyDeferredClose()
@@ -1462,6 +1854,7 @@ internal sealed class EditorShellApp
         CurrentSession?.Dispose();
         CurrentSession = null;
         CurrentProject = null;
+        ProjectPicker.Focus(ProjectPickerMode.RecentProjects);
         _closeProjectRequested = false;
     }
 
@@ -1469,7 +1862,7 @@ internal sealed class EditorShellApp
     {
         shellWindow.SetTitle(
             CurrentProject?.Name,
-            CurrentSession?.CurrentSceneDisplayName ?? CurrentProject?.ResolveDisplaySceneName(_options.ScenePath),
+            CurrentSession?.CurrentSceneDisplayName ?? CurrentProject?.ResolveDisplaySceneName(null),
             dirty: CurrentSession?.SceneModel.IsDirty == true);
     }
 

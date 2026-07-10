@@ -4,11 +4,12 @@
 
 ## Unity-like Editor
 
-- [~] `EDITOR-004` 建立 Editor workspace 恢复、转场数据安全与用户状态隔离。
+- [x] `EDITOR-004` 建立 Editor workspace 恢复、转场数据安全与用户状态隔离。
   - 优先级：P0。
   - 依赖：`BASE-013`。
   - 设计来源：`plan/19-standalone-editor-app.md` §编辑器产品化修复（2026-07-11）。
   - 验收：无显式命令行工程时自动恢复最后一次成功打开的工程；场景优先级为 CLI override > 每工程 last scene > Project StartScene；打开/新建场景不再修改启动场景；New/Open Scene、切换/关闭工程、Exit 均受 Save/Don't Save/Cancel dirty guard 保护；缺失或损坏场景不会伪装为空场景；自动化默认使用隔离 user-data，不能污染真实 Recent/Layout/Workspace；Recent、Workspace、project 与 scene 关键写入采用原子替换且失败不破坏旧文件。
+  - 证据：Workspace/Options/Transition/Picker/Project/Scene/Layout/Preferences 合并定向回归 77 passed / 1 native skipped；Hosting 非发行工具回归 389 passed / 4 native skipped；Editor 84/84；Editor Shell Release build 0 warning / 0 error；真实窗口 12 帧工程短跑通过；同一隔离 user-data 的连续两进程验证无参数启动自动恢复工程；显式打开 `empty-window-probe.scene` 后 workspace 恢复该编辑场景，但 `project.pixelproj` 仍保持 `scenes/lava-mine.scene`。
 
 - [ ] `EDITOR-005` 修正 Asset Database 的 Content/ScriptSource 根、缓存与增量刷新语义。
   - 优先级：P0。

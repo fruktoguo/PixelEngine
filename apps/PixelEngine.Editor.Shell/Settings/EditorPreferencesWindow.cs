@@ -175,6 +175,20 @@ internal sealed class EditorPreferencesWindow(
         }
 
         ImGui.TextWrapped("关闭时保存窗口停靠和尺寸；关闭此选项会保留上一次已保存的布局。");
+        bool reopenLastProject = _store.Current.ReopenLastProject;
+        if (ImGui.Checkbox("Reopen last project on startup", ref reopenLastProject))
+        {
+            Update(_store.Current with { ReopenLastProject = reopenLastProject });
+        }
+
+        ImGui.TextWrapped("无显式 --project 时恢复最后一次成功打开的工程；自动化和上次异常退出不会盲目重试。");
+        bool restoreLastScene = _store.Current.RestoreLastScene;
+        if (ImGui.Checkbox("Restore last open scene", ref restoreLastScene))
+        {
+            Update(_store.Current with { RestoreLastScene = restoreLastScene });
+        }
+
+        ImGui.TextWrapped("当前编辑场景保存在用户 workspace，不会改写工程的 Start Scene。");
         if (ImGui.Button("Reset to Default Layout"))
         {
             _resetLayout();

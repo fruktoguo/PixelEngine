@@ -16,6 +16,10 @@ internal sealed record EditorPreferencesDocument
 
     public bool SaveLayoutOnExit { get; init; } = true;
 
+    public bool ReopenLastProject { get; init; } = true;
+
+    public bool RestoreLastScene { get; init; } = true;
+
     public string ExternalScriptEditor { get; init; } = string.Empty;
 
     public bool TryNormalize(out EditorPreferencesDocument normalized, out string diagnostic)

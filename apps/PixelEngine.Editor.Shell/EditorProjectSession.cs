@@ -431,11 +431,12 @@ internal sealed class EditorProjectSession : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         string relative = AllocateNewScenePath();
         EditorSceneModel empty = EditorSceneModel.Empty(Path.GetFileNameWithoutExtension(relative) ?? "scene");
+        string normalized = Project.ResolveSceneRelativePath(relative);
+        Engine.SaveSceneDocument(empty.ToDocument(), Project.ResolveSceneFullPath(normalized));
+        Project.RegisterScene(normalized);
         SceneModel.ReplaceWith(empty, markDirty: false);
         UndoStack.Clear();
-        CurrentSceneRelativePath = Project.ResolveSceneRelativePath(relative);
-        Project.UpsertScene(CurrentSceneRelativePath, makeStartScene: true);
-        SaveScene();
+        CurrentSceneRelativePath = normalized;
         return CurrentSceneRelativePath;
     }
 
@@ -450,7 +451,7 @@ internal sealed class EditorProjectSession : IDisposable
         SceneModel.ReplaceWith(loaded, markDirty: false);
         UndoStack.Clear();
         CurrentSceneRelativePath = normalized;
-        Project.UpsertScene(normalized, makeStartScene: true);
+        Project.RegisterScene(normalized);
     }
 
     public void Dispose()
@@ -485,12 +486,33 @@ internal sealed class EditorProjectSession : IDisposable
         }
     }
 
-    private static EditorSceneModel LoadSceneModel(EditorProject project, string sceneRelativePath)
+    internal static EditorSceneModel LoadSceneModel(EditorProject project, string sceneRelativePath)
     {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sceneRelativePath);
         string scenePath = project.ResolveSceneFullPath(sceneRelativePath);
-        return File.Exists(scenePath)
-            ? EditorSceneModel.FromDocument(EngineSceneDocumentLoader.LoadDocument(scenePath))
-            : EditorSceneModel.Empty(project.ResolveDisplaySceneName(sceneRelativePath));
+        try
+        {
+            return EditorSceneModel.FromDocument(EngineSceneDocumentLoader.LoadDocument(scenePath));
+        }
+        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            throw new FileNotFoundException(
+                $"无法打开场景 '{sceneRelativePath}'：场景文件不存在。",
+                scenePath,
+                exception);
+        }
+        catch (Exception exception) when (exception is
+            System.Text.Json.JsonException or
+            NotSupportedException or
+            InvalidOperationException or
+            IOException or
+            UnauthorizedAccessException)
+        {
+            throw new InvalidOperationException(
+                $"无法打开场景 '{sceneRelativePath}'：{exception.Message}",
+                exception);
+        }
     }
 
     private static EditorSceneRuntimeProjection ProjectAuthoringScene(Engine engine, EditorSceneModel sceneModel)

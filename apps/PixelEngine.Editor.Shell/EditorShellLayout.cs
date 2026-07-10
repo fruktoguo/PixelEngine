@@ -11,12 +11,15 @@ internal sealed class EditorShellLayout
     private const int MinimumSavedDockSpaceHeight = 450;
     private readonly EditorDockSpace _dockSpace = new();
 
-    public EditorShellLayout(string layoutPath)
+    public EditorShellLayout(
+        string layoutPath,
+        int targetWindowWidth = EditorWorkspaceWindowState.DefaultWidth,
+        int targetWindowHeight = EditorWorkspaceWindowState.DefaultHeight)
     {
         LayoutPath = layoutPath;
-        if (SavedDockLayoutIsTooSmall(layoutPath))
+        if (SavedDockLayoutIsIncompatible(layoutPath, targetWindowWidth, targetWindowHeight))
         {
-            File.Delete(layoutPath);
+            TryDeleteLayout(layoutPath);
         }
 
         _dockSpace.ResetLayoutState(buildDefaultLayout: !File.Exists(layoutPath));
@@ -46,34 +49,67 @@ internal sealed class EditorShellLayout
 
     internal static bool SavedDockLayoutIsTooSmall(string layoutPath)
     {
+        return SavedDockLayoutIsIncompatible(
+            layoutPath,
+            int.MaxValue,
+            int.MaxValue);
+    }
+
+    internal static bool SavedDockLayoutIsIncompatible(
+        string layoutPath,
+        int targetWindowWidth,
+        int targetWindowHeight)
+    {
         if (!File.Exists(layoutPath))
         {
             return false;
         }
 
         bool readingViewportHostWindow = false;
-        foreach (string line in File.ReadLines(layoutPath))
+        try
         {
-            if (line.StartsWith("[Window][", StringComparison.Ordinal))
+            foreach (string line in File.ReadLines(layoutPath))
             {
-                readingViewportHostWindow = line.Contains("[WindowOverViewport_", StringComparison.Ordinal);
-                continue;
-            }
+                if (line.StartsWith("[Window][", StringComparison.Ordinal))
+                {
+                    readingViewportHostWindow = line.Contains("[WindowOverViewport_", StringComparison.Ordinal);
+                    continue;
+                }
 
-            if (!TryReadSavedSize(line, readingViewportHostWindow, out int width, out int height))
-            {
-                continue;
-            }
+                if (!TryReadSavedSize(line, readingViewportHostWindow, out int width, out int height))
+                {
+                    continue;
+                }
 
-            if (width > 0 &&
-                height > 0 &&
-                (width < MinimumSavedDockSpaceWidth || height < MinimumSavedDockSpaceHeight))
-            {
-                return true;
+                bool tooSmall = width > 0 && height > 0 &&
+                    (width < MinimumSavedDockSpaceWidth || height < MinimumSavedDockSpaceHeight);
+                bool tooLargeForWindow = targetWindowWidth > 0 &&
+                    targetWindowHeight > 0 &&
+                    (width > targetWindowWidth * 1.5 || height > targetWindowHeight * 1.5);
+                if (tooSmall || tooLargeForWindow)
+                {
+                    return true;
+                }
             }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return true;
         }
 
         return false;
+    }
+
+    private static void TryDeleteLayout(string layoutPath)
+    {
+        try
+        {
+            File.Delete(layoutPath);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // 只影响布局自愈；ImGui 仍可尝试读取原文件并给用户 Reset Layout 入口。
+        }
     }
 
     private static bool TryReadSavedSize(string line, bool readingViewportHostWindow, out int width, out int height)

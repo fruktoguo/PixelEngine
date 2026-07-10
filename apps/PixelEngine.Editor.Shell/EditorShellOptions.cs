@@ -20,6 +20,21 @@ internal sealed record EditorShellOptions(
     string? CaptureFramePath,
     string? LogDirectory)
 {
+    /// <summary>
+    /// 显式指定的 Editor 用户数据根目录；为空时由环境变量或平台默认目录解析。
+    /// </summary>
+    public string? UserDataDirectory { get; init; }
+
+    /// <summary>
+    /// 是否使用隔离的临时用户状态。所有 scripted probe 默认启用，避免污染真实 Editor 状态。
+    /// </summary>
+    public bool EphemeralUserState { get; init; }
+
+    /// <summary>
+    /// 无显式 <c>--project</c> 时是否允许恢复上一个成功打开的工程。
+    /// </summary>
+    public bool ReopenLastProject { get; init; } = true;
+
     public static EditorShellOptions Parse(string[] args)
     {
         string? projectPath = null;
@@ -37,6 +52,9 @@ internal sealed record EditorShellOptions(
         bool scriptedHierarchyProbe = false;
         bool scriptedDefaultWorkbenchProbe = false;
         bool scriptedPreferencesProbe = false;
+        bool ephemeralUserState = false;
+        bool reopenLastProject = true;
+        string? userDataDirectory = null;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -95,12 +113,35 @@ internal sealed record EditorShellOptions(
                 case "--log-directory":
                     logDirectory = RequireValue(args, ref i, arg);
                     break;
+                case "--user-data-dir":
+                    userDataDirectory = RequireValue(args, ref i, arg);
+                    break;
+                case "--ephemeral-user-state":
+                    ephemeralUserState = true;
+                    break;
+                case "--no-reopen-last-project":
+                    reopenLastProject = false;
+                    break;
                 default:
                     throw new ArgumentException($"未知参数：{arg}");
             }
         }
 
-        return new EditorShellOptions(projectPath, scenePath, windowTicks, scriptedProbe, scriptedBuildProbe, scriptedBuildRunProbe, scriptedBuildCancelProbe, scriptedBuildSettingsProbe, scriptedMenuLayoutProbe, scriptedHierarchyProbe, scriptedDefaultWorkbenchProbe, scriptedPreferencesProbe, buildOutputPath, captureFramePath, logDirectory);
+        bool hasScriptedProbe = scriptedProbe ||
+            scriptedBuildProbe ||
+            scriptedBuildRunProbe ||
+            scriptedBuildCancelProbe ||
+            scriptedBuildSettingsProbe ||
+            scriptedMenuLayoutProbe ||
+            scriptedHierarchyProbe ||
+            scriptedDefaultWorkbenchProbe ||
+            scriptedPreferencesProbe;
+        return new EditorShellOptions(projectPath, scenePath, windowTicks, scriptedProbe, scriptedBuildProbe, scriptedBuildRunProbe, scriptedBuildCancelProbe, scriptedBuildSettingsProbe, scriptedMenuLayoutProbe, scriptedHierarchyProbe, scriptedDefaultWorkbenchProbe, scriptedPreferencesProbe, buildOutputPath, captureFramePath, logDirectory)
+        {
+            UserDataDirectory = string.IsNullOrWhiteSpace(userDataDirectory) ? null : userDataDirectory.Trim(),
+            EphemeralUserState = ephemeralUserState || hasScriptedProbe,
+            ReopenLastProject = reopenLastProject,
+        };
     }
 
     private static string RequireValue(string[] args, ref int index, string option)

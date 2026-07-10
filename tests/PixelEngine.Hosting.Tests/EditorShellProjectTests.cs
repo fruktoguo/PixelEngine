@@ -99,6 +99,85 @@ public sealed class EditorShellProjectTests
     }
 
     /// <summary>
+    /// 验证登记编辑器当前场景只更新场景目录，不会把玩家启动场景漂移到最近打开的场景。
+    /// </summary>
+    [Fact]
+    public void RegisterSceneKeepsConfiguredStartScene()
+    {
+        using TempDirectory temp = new();
+        EditorProject project = EditorProject.CreateNew(Path.Combine(temp.Path, "Project"), "Project");
+        string secondaryPath = Path.Combine(project.ContentRootPath, "scenes", "secondary.scene");
+        EngineSceneDocumentLoader.SaveDocument(
+            new EngineSceneDocument
+            {
+                FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+                Name = "secondary",
+                Entities = [],
+            },
+            secondaryPath);
+
+        project.RegisterScene("scenes/secondary.scene");
+
+        Assert.Equal("scenes/main.scene", project.StartScene);
+        Assert.Contains(project.Scenes, static scene => scene.Path == "scenes/secondary.scene");
+        EditorProject reloaded = EditorProject.Load(project.ProjectRoot);
+        Assert.Equal("scenes/main.scene", reloaded.StartScene);
+        Assert.Contains(reloaded.Scenes, static scene => scene.Path == "scenes/secondary.scene");
+    }
+
+    /// <summary>
+    /// 验证声明场景缺失或 JSON 损坏时给出可执行诊断，而不是伪装成一个空场景。
+    /// </summary>
+    [Fact]
+    public void LoadSceneModelRejectsMissingAndCorruptedDeclaredScene()
+    {
+        using TempDirectory temp = new();
+        EditorProject project = EditorProject.CreateNew(Path.Combine(temp.Path, "Project"), "Project");
+        string scenePath = project.ResolveSceneFullPath(project.StartScene);
+        File.Delete(scenePath);
+
+        FileNotFoundException missing = Assert.Throws<FileNotFoundException>(() =>
+            EditorProjectSession.LoadSceneModel(project, project.StartScene));
+        Assert.Equal(scenePath, missing.FileName);
+        Assert.Contains("场景文件不存在", missing.Message, StringComparison.Ordinal);
+
+        File.WriteAllText(scenePath, "{ damaged scene");
+        InvalidOperationException corrupted = Assert.Throws<InvalidOperationException>(() =>
+            EditorProjectSession.LoadSceneModel(project, project.StartScene));
+        _ = Assert.IsType<JsonException>(corrupted.InnerException);
+        Assert.Contains(project.StartScene, corrupted.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证原子文本提交失败时既有 JSON 保持逐字节完整，且临时文件会被清理。
+    /// </summary>
+    [Fact]
+    public void AtomicTextWritesKeepPreviousJsonWhenCommitFails()
+    {
+        using TempDirectory temp = new();
+        string projectPath = Path.Combine(temp.Path, "project.pixelproj");
+        string scenePath = Path.Combine(temp.Path, "main.scene");
+        const string original = "{\"name\":\"intact\"}";
+        File.WriteAllText(projectPath, original);
+        File.WriteAllText(scenePath, original);
+
+        IOException projectFailure = Assert.Throws<IOException>(() => EditorAtomicTextFile.WriteAllText(
+            projectPath,
+            "{\"name\":\"replacement\"}",
+            static (_, _) => throw new IOException("simulated atomic commit failure")));
+        IOException sceneFailure = Assert.Throws<IOException>(() => AtomicTextFile.WriteAllText(
+            scenePath,
+            "{\"name\":\"replacement\"}",
+            static (_, _) => throw new IOException("simulated atomic commit failure")));
+
+        Assert.Contains("simulated", projectFailure.Message, StringComparison.Ordinal);
+        Assert.Contains("simulated", sceneFailure.Message, StringComparison.Ordinal);
+        Assert.Equal(original, File.ReadAllText(projectPath));
+        Assert.Equal(original, File.ReadAllText(scenePath));
+        Assert.Empty(Directory.GetFiles(temp.Path, "*.tmp", SearchOption.TopDirectoryOnly));
+    }
+
+    /// <summary>
     /// 验证 EditorProjectSession.Open 遇到合法但不存在的脚本源目录时仍能打开工程，并把 watcher 失败写入 Console。
     /// </summary>
     [NativeSmokeFact]
@@ -167,6 +246,26 @@ public sealed class EditorShellProjectTests
 
         // Assert：验证预期结果
         Assert.Empty(store.Entries);
+    }
+
+    /// <summary>
+    /// 验证最近工程列表经原子写入后可以完整重载，且不会遗留临时文件。
+    /// </summary>
+    [Fact]
+    public void RecentProjectsSaveRoundTripsWithoutTemporaryFiles()
+    {
+        using TempDirectory temp = new();
+        EditorProject project = EditorProject.CreateNew(Path.Combine(temp.Path, "Project"), "Project");
+        string path = Path.Combine(temp.Path, "recent-projects.json");
+        RecentProjectsStore store = RecentProjectsStore.Load(path);
+        store.AddOrUpdate(project);
+
+        store.Save();
+
+        RecentProjectEntry entry = Assert.Single(RecentProjectsStore.Load(path).Entries);
+        Assert.Equal(project.ProjectRoot, entry.ProjectPath);
+        Assert.Equal(project.Name, entry.Name);
+        Assert.Empty(Directory.GetFiles(temp.Path, "*.tmp", SearchOption.TopDirectoryOnly));
     }
 
     /// <summary>

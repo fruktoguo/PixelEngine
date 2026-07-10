@@ -9,10 +9,10 @@ internal sealed class RecentProjectsStore
 {
     public const int MaxEntries = 20;
 
-    private readonly string _path;
+    private readonly string? _path;
     private readonly List<RecentProjectEntry> _entries;
 
-    private RecentProjectsStore(string path, List<RecentProjectEntry> entries)
+    private RecentProjectsStore(string? path, List<RecentProjectEntry> entries)
     {
         _path = path;
         _entries = entries;
@@ -28,6 +28,11 @@ internal sealed class RecentProjectsStore
     public static RecentProjectsStore LoadDefault()
     {
         return Load(DefaultPath);
+    }
+
+    public static RecentProjectsStore CreateInMemory()
+    {
+        return new RecentProjectsStore(null, []);
     }
 
     public static RecentProjectsStore Load(string path)
@@ -163,6 +168,11 @@ internal sealed class RecentProjectsStore
 
     public void Save()
     {
+        if (_path is null)
+        {
+            return;
+        }
+
         string? directory = Path.GetDirectoryName(_path);
         if (!string.IsNullOrEmpty(directory))
         {
@@ -176,7 +186,7 @@ internal sealed class RecentProjectsStore
         string json = JsonSerializer.Serialize(
             document,
             EditorShellJsonContext.Default.RecentProjectsDocument);
-        File.WriteAllText(_path, json);
+        EditorAtomicTextFile.WriteAllText(_path, json);
     }
 }
 

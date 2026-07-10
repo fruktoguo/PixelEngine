@@ -54,19 +54,36 @@ internal sealed class EditorShellWindow : IDisposable
         _projectPickerGuiShutdown = true;
     }
 
-    public static EditorShellWindow Create(float uiScale = EditorUiScale.Default)
+    public void EnsureProjectPickerGui()
     {
+        if (!_projectPickerGuiShutdown)
+        {
+            return;
+        }
+
+        _bootstrap.EnsureInputConnector();
+        _projectPickerGuiShutdown = false;
+    }
+
+    public static EditorShellWindow Create(
+        float uiScale = EditorUiScale.Default,
+        string? layoutPath = null,
+        int width = EditorWorkspaceWindowState.DefaultWidth,
+        int height = EditorWorkspaceWindowState.DefaultHeight)
+    {
+        int normalizedWidth = width > 0 ? width : EditorWorkspaceWindowState.DefaultWidth;
+        int normalizedHeight = height > 0 ? height : EditorWorkspaceWindowState.DefaultHeight;
         RenderWindowOptions windowOptions = new()
         {
             Title = "PixelEngine Editor",
-            Width = 1280,
-            Height = 720,
+            Width = normalizedWidth,
+            Height = normalizedHeight,
             VSync = true,
         };
         GuiAppOptions guiOptions = new()
         {
             Enabled = true,
-            LayoutPath = DefaultLayoutPath,
+            LayoutPath = string.IsNullOrWhiteSpace(layoutPath) ? DefaultLayoutPath : Path.GetFullPath(layoutPath),
             Theme = GuiThemeKind.Unity6Dark,
             DpiScale = EditorUiScale.Normalize(uiScale),
         };

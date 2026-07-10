@@ -38,7 +38,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             new HexaImGuiBackend(),
             new EditorAppOptions
             {
-                LayoutPath = EditorShellWindow.DefaultLayoutPath,
+                LayoutPath = app.LayoutPath,
                 EnableMultiViewport = false,
                 DpiScale = app.UiScale,
             });
@@ -402,6 +402,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
                 app.ApplyCurrentUiPreferences(_uiScaleState, editor.Options.DpiScale);
                 editor.SetLayoutPersistence(app.Preferences.Current.SaveLayoutOnExit);
                 _menu.Draw(app);
+                app.DrawTransientWindows();
             }
         }
     }
