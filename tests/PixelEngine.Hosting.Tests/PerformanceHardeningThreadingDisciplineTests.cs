@@ -180,12 +180,14 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
         string source = ReadProductionSource("src", "PixelEngine.Physics", "RigidBodyDestruction.cs");
 
         // Assert：验证预期结果
-        Assert.Contains("Dictionary<int, HashSet<int>> damagedLocalByBody = BuildDamageMap", source, StringComparison.Ordinal);
-        Assert.Contains("if (!damagedLocalByBody.TryGetValue(stamp.BodyKey", source, StringComparison.Ordinal);
+        Assert.Contains("private readonly Dictionary<int, HashSet<int>> _damagedLocalByBody", source, StringComparison.Ordinal);
+        Assert.Contains("_damagedLocalByBody.Clear()", source, StringComparison.Ordinal);
+        Assert.Contains("if (!_damagedLocalByBody.TryGetValue(stamp.BodyKey", source, StringComparison.Ordinal);
         Assert.Contains("_ = locals.Add((stamp.LocalY << 16) ^ stamp.LocalX)", source, StringComparison.Ordinal);
-        _ = Assert.Single(Regex.Matches(source, "workItems\\.Add\\(new RebuildWorkItem").Cast<Match>());
+        Assert.Contains("private RebuildWorkItem[] _workItems", source, StringComparison.Ordinal);
+        Assert.Contains("_workItems[_workItemCount++].Set", source, StringComparison.Ordinal);
         Assert.Contains("private static readonly RangeJob PreparePlansJob", source, StringComparison.Ordinal);
-        Assert.Contains("jobs.ParallelRange(workItems.Count, 1, PreparePlansJob, batch)", source, StringComparison.Ordinal);
+        Assert.Contains("jobs.ParallelRange(workItemCount, 1, PreparePlansJob, _preparationBatch)", source, StringComparison.Ordinal);
         Assert.Contains("ConnectedComponentLabeler.Label", source, StringComparison.Ordinal);
         Assert.Contains("RigidBodyMaskShapeBuilder.TryBuildConvexPieces", source, StringComparison.Ordinal);
         Assert.Contains("Box2D.b2DestroyBody", source, StringComparison.Ordinal);
@@ -324,7 +326,7 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
 
         string movementSection = source[powderStart..lifetimeStart];
         Assert.Contains("TryMoveTo", movementSection, StringComparison.Ordinal);
-        Assert.Contains("window.TryMoveCell(", movementSection, StringComparison.Ordinal);
+        Assert.Contains("window.TryMoveCellFromCenter(", movementSection, StringComparison.Ordinal);
         Assert.Contains("TryMoveTo(ref window", movementSection, StringComparison.Ordinal);
         Assert.DoesNotContain("Vector<", movementSection, StringComparison.Ordinal);
         Assert.DoesNotContain("System.Numerics", movementSection, StringComparison.Ordinal);
