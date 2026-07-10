@@ -92,6 +92,19 @@
       "notes": "AddRange 在 1/16/64/256 chunk 的 Mean 为 2.393us/5.261us/13.163us/36.021us，Allocated 为 216B/1,096B/4,072B/16,264B；相对逐个 Add 在 256 chunk 约 10.90x，单批 snapshot rebuild 由 World/WorldStreamer/Save/Hosting 测试锁定。"
     },
     {
+      "entryId": "perf-007-collapse-scratch-20260710",
+      "taskIds": ["PERF-007"],
+      "evidenceState": "complete_local_demo_scan_scratch",
+      "commit": "2402789c2ec7c7caa911baf8f8e5bdf8a94182c1",
+      "runSessionId": "local-20260710-perf007-collapse-scratch",
+      "runIdentityStatus": "captured",
+      "hardware": "Microsoft Windows 11 build 26100; AMD Ryzen 7 5800X 8c/16t; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "dotnet build PixelEngine.sln -c Release --no-restore -m:1; dotnet test tests/PixelEngine.Demo.Tests/PixelEngine.Demo.Tests.csproj -c Release --no-build --no-restore -m:1 --filter FullyQualifiedName~PlayableProjectileCollapseScanReuses; dotnet test PixelEngine.sln -c Release --no-build --no-restore -m:1; pwsh -NoProfile -File tools/validate-task-catalog.ps1",
+      "reportPath": "docs/evidence-2026-07-10-perf-007-collapse-scratch.md",
+      "sha256": "221592adecff19ae482bfc8f1c230ff2a1c4aed3e2a1a2372be122d9dd42dd23",
+      "notes": "GC.GetAllocatedBytesForCurrentThread 探针：半径 40 首次 65,728 B、重试 0 B；半径 320 首次 4,108,928 B、重试 0 B。四个实例级数组按需扩容并由 Behaviour OnDestroy 释放。"
+    },
+    {
       "entryId": "arch-001-custom-metric-20260710",
       "taskIds": ["ARCH-001"],
       "evidenceState": "complete_local_api_boundary_regression",
