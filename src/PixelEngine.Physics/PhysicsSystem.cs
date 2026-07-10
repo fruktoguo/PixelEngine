@@ -340,7 +340,9 @@ public sealed class PhysicsSystem : IDisposable
         LastDestructionResult = RebuildDamagedBodies();
         PublishShatterAudioEvent(LastDestructionResult);
         // 8b：擦除上一帧 RigidOwned stamp，同步角色 proxy AABB
-        LastErasedCellCount = Measure(FrameSubPhase.PhysicsErase, EraseAllBodies);
+        long eraseStarted = Stopwatch.GetTimestamp();
+        LastErasedCellCount = EraseAllBodies();
+        RecordSub(FrameSubPhase.PhysicsErase, eraseStarted);
         Registry.Clear();
         SyncCharacterProxies();
 
@@ -362,7 +364,9 @@ public sealed class PhysicsSystem : IDisposable
         ResolveCharacterProxyBodyContacts();
 
         // 8d：inverse-sample 写回网格，并清理角色 AABB 内漏判的 RigidOwned
-        int stamped = Measure(FrameSubPhase.PhysicsInverseSample, StampAllBodies);
+        long inverseSampleStarted = Stopwatch.GetTimestamp();
+        int stamped = StampAllBodies();
+        RecordSub(FrameSubPhase.PhysicsInverseSample, inverseSampleStarted);
         LastCharacterProxyOverlapClearedCount = ClearCharacterProxyOverlaps();
         if (LastCharacterProxyOverlapClearedCount > 0)
         {
@@ -1322,14 +1326,6 @@ public sealed class PhysicsSystem : IDisposable
             (int)MathF.Floor(minY),
             (int)MathF.Ceiling(maxX),
             (int)MathF.Ceiling(maxY));
-    }
-
-    private int Measure(FrameSubPhase phase, Func<int> action)
-    {
-        long started = Stopwatch.GetTimestamp();
-        int result = action();
-        RecordSub(phase, started);
-        return result;
     }
 
     private void RecordSub(FrameSubPhase phase, long started)

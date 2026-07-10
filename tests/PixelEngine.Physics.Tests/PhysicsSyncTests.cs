@@ -118,6 +118,45 @@ public sealed unsafe class PhysicsSyncTests
     }
 
     /// <summary>
+    /// 验证刚体同步稳态调用不为 erase/inverse-sample 计时路径创建实例委托。
+    /// </summary>
+    [Fact]
+    public void SyncStepSteadyStateDoesNotAllocateAfterWarmup()
+    {
+        // Arrange：准备一个固定位置的单像素刚体，使测量只覆盖稳态同步路径。
+        PhysicsScale.ConfigureBox2DLengthUnits();
+        B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
+        worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
+        worldDef.EnableSleep = 0;
+        B2WorldId worldId = Box2D.b2CreateWorld(in worldDef);
+
+        try
+        {
+            TestChunkSource source = new(new Chunk(new ChunkCoord(0, 0)));
+            CellGrid grid = new(source, MaterialPropsTable.Empty);
+            PhysicsWorld physicsWorld = new();
+            RigidStampRegistry registry = new();
+            B2BodyId bodyId = CreateDynamicBoxBody(worldId, new Vector2(20, 20));
+            BodyLocalMask mask = CreateFilledMask(1, 1, material: 2, Vector2.Zero);
+            _ = physicsWorld.AddBody(bodyId, mask);
+            PhysicsSystem system = new(worldId, physicsWorld, grid, registry);
+
+            system.SyncStep(1f / 60f);
+            system.SyncStep(1f / 60f);
+
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            system.SyncStep(1f / 60f);
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            Assert.Equal(0, allocated);
+        }
+        finally
+        {
+            Box2D.b2DestroyWorld(worldId);
+        }
+    }
+
+    /// <summary>
     /// 验证动态刚体在 inverse-sampling 写回前会被角色 AABB proxy 约束，而不是穿过玩家后再由脚本层解卡。
     /// </summary>
     [Fact]
