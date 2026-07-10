@@ -751,6 +751,12 @@ public sealed class DemoStartupOptionsTests
 
             ScriptAssemblyRegistry registry = engine.Context.GetService<ScriptAssemblyRegistry>();
             Assert.Contains(registry.Assemblies, assembly => assembly.GetType("PackagedDemoBehaviour", throwOnError: false) is not null);
+
+            DemoProgram.AttachMinimalSmokeWorld(engine);
+            ScriptSimulationContext scriptContext = engine.AttachScriptingFromServices();
+            ScriptEntityInspection entity = Assert.Single(scriptContext.Scene.CaptureInspectionSnapshot());
+            ScriptComponentInspection behaviour = Assert.Single(entity.Components);
+            Assert.Equal("PackagedDemoBehaviour", behaviour.TypeName);
         }
         finally
         {

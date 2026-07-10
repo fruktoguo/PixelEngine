@@ -114,6 +114,13 @@ public static class DemoProgram
         using Engine engine = BuildEngine(options, project);
         engine.RegisterProceduralWorldGenerator(PlayableCavernWorldGenerator.Key, new PlayableCavernWorldGenerator());
 
+        // Scene 物化会立即解析 Behaviour，因此程序集必须先于任何 world/scene 挂载完成注册。
+        RegisterPackagedScriptAssemblies(engine, options, RuntimeFeature.IsDynamicCodeSupported);
+        engine.RegisterScriptAssembly(assembly);
+        Console.WriteLine(options.HotReloadEnabled
+            ? "脚本程序集已注册；热重载等待脚本宿主装配。"
+            : "脚本程序集已注册；热重载已由参数关闭。");
+
         // 内容包就绪时挂载 Simulation/Physics/Audio；否则走最小冒烟 world
         bool contentLoaded = false;
         if (engine.HasContentPackage())
@@ -145,12 +152,7 @@ public static class DemoProgram
 
         EngineProbeApi probe = engine.Probe;
 
-        // 注册 Demo 与随包脚本程序集，并按能力接入 Scripting 与热重载
-        engine.RegisterScriptAssembly(assembly);
-        RegisterPackagedScriptAssemblies(engine, options, RuntimeFeature.IsDynamicCodeSupported);
-        Console.WriteLine(options.HotReloadEnabled
-            ? "脚本程序集已注册；热重载等待脚本宿主装配。"
-            : "脚本程序集已注册；热重载已由参数关闭。");
+        // world/scene 已挂载后，接入真实 Simulation 脚本上下文与热重载。
         ScriptHotReloadRuntimeOptions? hotReload = CreateHotReloadOptions(
             options,
             RuntimeFeature.IsDynamicCodeSupported);
