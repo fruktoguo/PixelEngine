@@ -1641,11 +1641,14 @@ public sealed class AssetBrowserPanel(
             string.Equals(folder.Path, "Content", StringComparison.OrdinalIgnoreCase));
         bool hasScriptRoot = FolderTargets.Any(folder =>
             string.Equals(folder.Path, "ScriptSource", StringComparison.OrdinalIgnoreCase));
+        bool isScriptFolder = IsSameOrChildFolder(normalized, "ScriptSource");
+        bool targetsScriptRoot = kind == AssetBrowserItemKind.Script ||
+            (kind == AssetBrowserItemKind.Folder && isScriptFolder);
         return !hasContentRoot || !hasScriptRoot
             ? normalized
-            : kind == AssetBrowserItemKind.Script
-            ? IsSameOrChildFolder(normalized, "ScriptSource") ? normalized : "ScriptSource"
-            : IsSameOrChildFolder(normalized, "Content") ? normalized : "Content";
+            : targetsScriptRoot
+                ? isScriptFolder ? normalized : "ScriptSource"
+                : IsSameOrChildFolder(normalized, "Content") ? normalized : "Content";
     }
 
     private static bool IsSameOrChildFolder(string candidate, string root)
