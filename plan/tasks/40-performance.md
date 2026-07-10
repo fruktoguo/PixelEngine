@@ -17,10 +17,11 @@
   - 设计来源：`plan/08-rendering.md`；`plan/16-performance-hardening.md`；架构 §1.4/§12。
   - 验收：用同场景、同分辨率、同硬件前后对比；render-buffer 与 render+lighting+post 分项满足正式校准预算；画面逐像素/容差回归通过；稳态零分配。
 
-- [~] `PERF-003` 让 full-active CA 达到 2–4M cells/8ms 目标，或基于代表硬件和产品场景正式重校准架构指标。
+- [!] `PERF-003` 让 full-active CA 达到 2–4M cells/8ms 目标，或基于代表硬件和产品场景正式重校准架构指标。
   - 优先级：P0。
   - 依赖：`PERF-001`。
   - 当前事实：`FullActive2M` 在 Ryzen 7 5800X / .NET 10.0.8 / 8 worker（8 physical cores）上为 2,166,784 cells/12.965ms，折算约 1.337M cells/8ms，仍低于 2M 下限；262,144-cell `StepJobSystem` 旧 4-worker 基线为 4.122ms。详见 `docs/evidence-2026-07-10-perf-003-ca-throughput.md`。
+  - 阻塞：本机已完成代表规模与 8 physical cores 校准但仍低于 2M/8ms；继续关闭需要 6-RID 目标硬件 BenchmarkDotNet 证据，或产品/架构负责人冻结新的分辨率、活跃率与降级策略后同步重校准 §1.4/§12.8。当前没有该外部硬件或决策输入，不能伪造完成。
   - 设计来源：`plan/03-simulation-kernel.md`；`plan/16-performance-hardening.md`；架构 §12.7/§12.8。
   - 验收：不得只优化 benchmark fixture；保留质量守恒和 checkerboard 不变式；若重校准，必须同步产品分辨率、活跃率假设、降级策略和架构置信度。
 
