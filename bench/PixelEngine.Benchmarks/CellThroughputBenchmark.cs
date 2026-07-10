@@ -50,7 +50,7 @@ public class CellThroughputBenchmark : IDisposable
         _source = new TestChunkSource(_chunks);
         MaterialPropsTable materials = CreateMaterials();
         _kernel = new SimulationKernel(_source, materials, worldSeed: 0xBEEFUL);
-        _jobs = new JobSystem(workerCount: Math.Min(4, Math.Max(1, Environment.ProcessorCount)));
+        _jobs = new JobSystem(workerCount: Math.Min(8, Math.Max(1, Environment.ProcessorCount)));
     }
 
     /// <summary>
