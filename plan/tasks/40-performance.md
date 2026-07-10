@@ -48,7 +48,7 @@
 
 ## 目标硬件证据
 
-- [!] `PERF-008` 取得玩家包真实窗口至少 60 秒、3600 帧的 phase p99 和降级策略证据。阻塞：`PERF-002`、`PERF-003` 尚未闭合，且需要冻结候选 commit/目标硬件。
+- [!] `PERF-008` 取得玩家包真实窗口至少 60 秒、3600 帧的 phase p99 和降级策略证据。阻塞：`PERF-003` 尚未闭合，且需要冻结候选 commit/目标硬件。
   - 优先级：P1。
   - 验收：同源 manifest 覆盖 CA、render、physics、logic/audio p99，固定步长不追帧、player package、real window、timeline 和降级观测。
 
