@@ -13,6 +13,7 @@ internal sealed class ProjectPickerWindow
     private string _newProjectName = "NewPixelProject";
     private string _openProjectPath;
     private ProjectPickerMode _mode;
+    private float _lastUiScale = float.NaN;
 
     public ProjectPickerWindow(EditorShellOptions options)
         : this(options, NativeProjectFolderPicker.Instance)
@@ -41,8 +42,17 @@ internal sealed class ProjectPickerWindow
 
     public void Draw(EditorShellApp app)
     {
-        ImGui.SetNextWindowPos(new Vector2(24, 48), ImGuiCond.FirstUseEver);
-        ImGui.SetNextWindowSize(new Vector2(680, 500), ImGuiCond.FirstUseEver);
+        float scale = app.UiScale;
+        ImGuiCond placementCondition = MathF.Abs(scale - _lastUiScale) > 0.0001f
+            ? ImGuiCond.Always
+            : ImGuiCond.FirstUseEver;
+        ImGui.SetNextWindowPos(
+            new Vector2(EditorUiScale.Scale(24f, scale), EditorUiScale.Scale(48f, scale)),
+            placementCondition);
+        ImGui.SetNextWindowSize(
+            EditorUiScale.FitWindow(new Vector2(680f, 500f), scale, ImGui.GetMainViewport().WorkSize),
+            placementCondition);
+        _lastUiScale = scale;
         if (!ImGui.Begin("Project Picker"))
         {
             ImGui.End();
@@ -91,7 +101,7 @@ internal sealed class ProjectPickerWindow
 
         _mode = ProjectPickerMode.NewProject;
         _ = ImGui.InputText("Project Name", ref _newProjectName, 128);
-        DrawPathInputWithBrowse("Project Directory", ref _newProjectRoot, "new_project_root");
+        DrawPathInputWithBrowse("Project Directory", ref _newProjectRoot, "new_project_root", app.UiScale);
         if (ImGui.Button("Create Project"))
         {
             app.CreateProject(_newProjectRoot, _newProjectName);
@@ -112,7 +122,7 @@ internal sealed class ProjectPickerWindow
         }
 
         _mode = ProjectPickerMode.OpenProject;
-        DrawPathInputWithBrowse("Project Root or project.pixelproj", ref _openProjectPath, "open_project_root");
+        DrawPathInputWithBrowse("Project Root or project.pixelproj", ref _openProjectPath, "open_project_root", app.UiScale);
         if (ImGui.Button("Open Project"))
         {
             app.OpenProjectPath(_openProjectPath);
@@ -121,16 +131,21 @@ internal sealed class ProjectPickerWindow
         ImGui.EndTabItem();
     }
 
-    private void DrawPathInputWithBrowse(string label, ref string path, string id)
+    private void DrawPathInputWithBrowse(string label, ref string path, string id, float uiScale)
     {
         const float BrowseButtonWidth = 88f;
+        float scaledButtonWidth = EditorUiScale.Scale(BrowseButtonWidth, uiScale);
         ImGui.TextUnformatted(label);
-        float inputWidth = Math.Min(520f, Math.Max(240f, ImGui.GetContentRegionAvail().X - BrowseButtonWidth - ImGui.GetStyle().ItemSpacing.X));
+        float inputWidth = Math.Min(
+            EditorUiScale.Scale(520f, uiScale),
+            Math.Max(
+                EditorUiScale.Scale(240f, uiScale),
+                ImGui.GetContentRegionAvail().X - scaledButtonWidth - ImGui.GetStyle().ItemSpacing.X));
         ImGui.PushItemWidth(inputWidth);
         _ = ImGui.InputText($"##{id}_path", ref path, 512);
         ImGui.PopItemWidth();
         ImGui.SameLine();
-        if (ImGui.Button($"Browse...##{id}", new Vector2(BrowseButtonWidth, 0f)))
+        if (ImGui.Button($"Browse...##{id}", new Vector2(scaledButtonWidth, 0f)))
         {
             _ = ApplyFolderPicker(ref path);
         }

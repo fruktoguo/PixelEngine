@@ -13,6 +13,7 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
     private ImGuiContextPtr _context;
     private string _layoutPath = string.Empty;
     private ImGuiFrameMetrics _frameMetrics = ImGuiFrameMetrics.Create(1, 1, 1f, 1f);
+    private bool _saveLayoutOnShutdown = true;
     private bool _initialized;
 
     /// <inheritdoc />
@@ -32,7 +33,7 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
     }
 
     /// <inheritdoc />
-    public void Initialize(GuiAppOptions options)
+    public unsafe void Initialize(GuiAppOptions options)
     {
         options = options.Normalize();
         if (_initialized)
@@ -45,6 +46,7 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
         _layoutPath = options.LayoutPath;
         SetCurrentContext();
         ImGuiIOPtr io = ImGui.GetIO();
+        io.IniFilename = null;
         io.ConfigFlags |= ImGuiConfigFlags.NavEnableKeyboard;
         _clipboard.Attach();
         if (options.EnableMultiViewport)
@@ -155,6 +157,12 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
     }
 
     /// <inheritdoc />
+    public void SetLayoutPersistence(bool enabled)
+    {
+        _saveLayoutOnShutdown = enabled;
+    }
+
+    /// <inheritdoc />
     public void Shutdown()
     {
         if (!_initialized)
@@ -165,7 +173,7 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
         SetCurrentContext();
         ImGuiImplOpenGL3.Shutdown();
         _clipboard.Detach();
-        if (!string.IsNullOrWhiteSpace(_layoutPath))
+        if (_saveLayoutOnShutdown && !string.IsNullOrWhiteSpace(_layoutPath))
         {
             ImGui.SaveIniSettingsToDisk(_layoutPath);
         }

@@ -136,6 +136,7 @@ public sealed class ImGuiInputBridge
             Silk.NET.Input.Key.Space => ImGuiKey.Space,
             Silk.NET.Input.Key.Enter => ImGuiKey.Enter,
             Silk.NET.Input.Key.Escape => ImGuiKey.Escape,
+            Silk.NET.Input.Key.Comma => ImGuiKey.Comma,
             Silk.NET.Input.Key.ControlLeft => ImGuiKey.LeftCtrl,
             Silk.NET.Input.Key.ShiftLeft => ImGuiKey.LeftShift,
             Silk.NET.Input.Key.AltLeft => ImGuiKey.LeftAlt,

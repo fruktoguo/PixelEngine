@@ -89,6 +89,8 @@ public sealed class GuiAppCombinedFrameTests
         input.Key(Key.ControlLeft, down: true);
         input.Key(Key.V, down: true);
         input.Key(Key.V, down: false);
+        input.Key(Key.Comma, down: true);
+        input.Key(Key.Comma, down: false);
         input.Key(Key.ControlLeft, down: false);
 
         Assert.Equal(
@@ -97,6 +99,8 @@ public sealed class GuiAppCombinedFrameTests
                 "key:ModCtrl=True",
                 "key:V=True",
                 "key:V=False",
+                "key:Comma=True",
+                "key:Comma=False",
                 "key:LeftCtrl=False",
                 "key:ModCtrl=False",
             ],
@@ -147,6 +151,11 @@ public sealed class GuiAppCombinedFrameTests
 
         public void AddText(string text)
         {
+        }
+
+        public void SetLayoutPersistence(bool enabled)
+        {
+            _calls.Add($"layout:{enabled}");
         }
 
         public void Shutdown()

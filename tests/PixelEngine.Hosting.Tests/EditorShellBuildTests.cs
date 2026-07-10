@@ -511,7 +511,6 @@ public sealed class EditorShellBuildTests
         Assert.Equal("scripts/probe", reopenedProject.ScriptSourceDir);
         Assert.Equal("scenes/settings-probe.scene", reopenedProject.StartScene);
         Assert.True(projectSnapshot.RequireStableMaterialNames);
-        Assert.False(projectSnapshot.SaveLayoutOnExit);
 
         Assert.False(projectPanel.TryApplyProjectSettings(reloadedProject with { ContentRoot = "../outside" }, out string projectDiagnostic));
         Assert.Contains("ContentRoot", projectDiagnostic, StringComparison.Ordinal);

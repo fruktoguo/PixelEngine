@@ -94,7 +94,9 @@ internal sealed class EditorProjectSession : IDisposable
             EditorAssetManifestStore assets = new(project);
             _ = assets.Refresh();
             EditorPrefabAssetStore prefabs = new(project.ContentRootPath, assets);
-            EditorScriptAssetOpenService scriptAssetOpenService = new(assets);
+            EditorScriptAssetOpenService scriptAssetOpenService = new(
+                assets,
+                () => app.Preferences.Current.ExternalScriptEditor);
             engine.Context.RegisterService<IScriptHotReloadDiagnosticSink>(new EditorConsoleScriptHotReloadDiagnosticSink(app.ConsoleStore));
             RegisterInitialProjectScriptAssembly(project, engine, app.ConsoleStore);
             EditorSceneRuntimeProjection projection = ProjectAuthoringScene(engine, sceneModel);

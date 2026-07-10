@@ -25,6 +25,7 @@ internal sealed class EditorMainMenuBar
     public void Draw(EditorShellApp app)
     {
         ArgumentNullException.ThrowIfNull(app);
+        DispatchShortcuts(app);
         if (!ImGui.BeginMainMenuBar())
         {
             return;
@@ -67,51 +68,59 @@ internal sealed class EditorMainMenuBar
     private static void DrawToolbar(EditorShellApp app)
     {
         EditorMainToolbarState state = CaptureToolbarState(app);
+        float uiScale = app.UiScale;
         ImGuiViewportPtr viewport = ImGui.GetMainViewport();
-        if (!ImGuiP.BeginViewportSideBar(ToolbarWindowName, viewport, ImGuiDir.Up, ToolbarHeight, ToolbarWindowFlags))
+        if (!ImGuiP.BeginViewportSideBar(
+            ToolbarWindowName,
+            viewport,
+            ImGuiDir.Up,
+            EditorUiScale.Scale(ToolbarHeight, uiScale),
+            ToolbarWindowFlags))
         {
             ImGui.End();
             return;
         }
 
-        if (ToolbarButton("New Project", enabled: true))
+        if (ToolbarButton("New Project", enabled: true, uiScale: uiScale))
         {
             app.FocusProjectPicker(ProjectPickerMode.NewProject);
         }
 
         ImGui.SameLine();
-        if (ToolbarButton("Open Project", enabled: true))
+        if (ToolbarButton("Open Project", enabled: true, uiScale: uiScale))
         {
             app.FocusProjectPicker(ProjectPickerMode.OpenProject);
         }
 
         ImGui.SameLine();
-        if (ToolbarButton("Save Scene", state.HasSession))
+        if (ToolbarButton("Save Scene", state.HasSession, uiScale))
         {
             _ = app.SaveScene();
         }
 
         ImGui.SameLine();
-        if (ToolbarButton("Build", state.HasOpenProject))
+        if (ToolbarButton("Build", state.HasOpenProject, uiScale))
         {
             app.ShowBuildSettings();
         }
 
-        float playControlsX = Math.Max(390f, (viewport.Size.X * 0.5f) - (((ToolbarButtonWidth * 3f) + 16f) * 0.5f));
+        float playControlsX = Math.Max(
+            EditorUiScale.Scale(390f, uiScale),
+            (viewport.Size.X * 0.5f) - (((EditorUiScale.Scale(ToolbarButtonWidth, uiScale) * 3f) + EditorUiScale.Scale(16f, uiScale)) * 0.5f));
         ImGui.SameLine(playControlsX);
-        if (ToolbarButton("Play", state.CanEnterPlay))
+        if (ToolbarButton("Play", state.CanEnterPlay, uiScale))
         {
             app.EnterPlayMode();
         }
 
         ImGui.SameLine();
-        if (ToolbarButton("Pause", state.CanEnterEdit))
+        if (ToolbarButton("Pause", state.CanEnterEdit, uiScale))
         {
             app.EnterEditMode();
         }
 
         ImGui.SameLine();
-        if (ToolbarButton("Step", state.HasSession))
+        if (ToolbarButton("Step", state.HasSession, uiScale))
         {
             app.StepOnce();
         }
@@ -121,14 +130,14 @@ internal sealed class EditorMainMenuBar
         ImGui.End();
     }
 
-    private static bool ToolbarButton(string label, bool enabled)
+    private static bool ToolbarButton(string label, bool enabled, float uiScale)
     {
         if (!enabled)
         {
             ImGui.BeginDisabled();
         }
 
-        bool clicked = ImGui.Button(label, new Vector2(ToolbarButtonWidth, 0f));
+        bool clicked = ImGui.Button(label, new Vector2(EditorUiScale.Scale(ToolbarButtonWidth, uiScale), 0f));
         if (!enabled)
         {
             ImGui.EndDisabled();
@@ -187,12 +196,20 @@ internal sealed class EditorMainMenuBar
             ImGui.EndMenu();
         }
 
-        if (ImGui.MenuItem("Save Scene", "Ctrl+S", selected: false, enabled: app.HasOpenProject))
+        if (ImGui.MenuItem(
+            "Save Scene",
+            EditorShortcutCatalog.Get(EditorShortcutCommand.SaveScene).DisplayText,
+            selected: false,
+            enabled: app.HasOpenProject))
         {
             _ = app.SaveScene();
         }
 
-        if (ImGui.MenuItem("Save Scene As...", "Ctrl+Shift+S", selected: false, enabled: app.HasOpenProject))
+        if (ImGui.MenuItem(
+            "Save Scene As...",
+            EditorShortcutCatalog.Get(EditorShortcutCommand.SaveSceneAs).DisplayText,
+            selected: false,
+            enabled: app.HasOpenProject))
         {
             _ = app.SaveSceneAs();
         }
@@ -232,12 +249,20 @@ internal sealed class EditorMainMenuBar
             return;
         }
 
-        if (ImGui.MenuItem("Undo", "Ctrl+Z", selected: false, enabled: app.CurrentSession?.UndoStack.CanUndo == true))
+        if (ImGui.MenuItem(
+            "Undo",
+            EditorShortcutCatalog.Get(EditorShortcutCommand.Undo).DisplayText,
+            selected: false,
+            enabled: app.CurrentSession?.UndoStack.CanUndo == true))
         {
             _ = app.Undo();
         }
 
-        if (ImGui.MenuItem("Redo", "Ctrl+Y", selected: false, enabled: app.CurrentSession?.UndoStack.CanRedo == true))
+        if (ImGui.MenuItem(
+            "Redo",
+            EditorShortcutCatalog.Get(EditorShortcutCommand.Redo).DisplayText,
+            selected: false,
+            enabled: app.CurrentSession?.UndoStack.CanRedo == true))
         {
             _ = app.Redo();
         }
@@ -247,9 +272,21 @@ internal sealed class EditorMainMenuBar
             app.DeleteSelectedGameObject();
         }
 
-        if (ImGui.MenuItem("Duplicate", "Ctrl+D", selected: false, enabled: app.CurrentSession?.SceneModel.SelectedStableId is not null))
+        if (ImGui.MenuItem(
+            "Duplicate",
+            EditorShortcutCatalog.Get(EditorShortcutCommand.Duplicate).DisplayText,
+            selected: false,
+            enabled: app.CurrentSession?.SceneModel.SelectedStableId is not null))
         {
             app.DuplicateSelectedGameObject();
+        }
+
+        ImGui.Separator();
+        if (ImGui.MenuItem(
+            "Preferences...",
+            EditorShortcutCatalog.Get(EditorShortcutCommand.OpenPreferences).DisplayText))
+        {
+            app.ShowPreferences();
         }
 
         ImGui.EndMenu();
@@ -320,17 +357,46 @@ internal sealed class EditorMainMenuBar
             app.FocusProjectPicker(ProjectPickerMode.OpenProject);
         }
 
-        DrawPanelMenuItem(app, "Hierarchy", EditorDockSpace.SceneHierarchyWindowTitle);
-        DrawPanelMenuItem(app, "Scene View", EditorDockSpace.ViewportWindowTitle);
-        DrawPanelMenuItem(app, "Game View", EditorDockSpace.GameViewWindowTitle);
-        DrawPanelMenuItem(app, "Inspector", EditorDockSpace.InspectorWindowTitle);
-        DrawPanelMenuItem(app, "Project", EditorDockSpace.AssetBrowserWindowTitle);
-        DrawPanelMenuItem(app, "Console", EditorDockSpace.ConsoleDiagnosticsWindowTitle);
-        DrawPanelMenuItem(app, "Profiler", EditorDockSpace.PerformanceHudWindowTitle);
-        DrawPanelMenuItem(app, "UI Manifest", UiManifestPanel.PanelTitle);
-        DrawPanelMenuItem(app, "Project Settings...", ProjectSettingsPanel.PanelTitle);
-        DrawPanelMenuItem(app, "Player Settings...", PlayerSettingsPanel.PanelTitle);
-        DrawPanelMenuItem(app, "Build Settings...", BuildSettingsPanel.PanelTitle);
+        if (ImGui.BeginMenu("General"))
+        {
+            DrawPanelMenuItem(app, "Hierarchy", EditorDockSpace.SceneHierarchyWindowTitle);
+            DrawPanelMenuItem(app, "Scene View", EditorDockSpace.ViewportWindowTitle);
+            DrawPanelMenuItem(app, "Game View", EditorDockSpace.GameViewWindowTitle);
+            DrawPanelMenuItem(app, "Inspector", EditorDockSpace.InspectorWindowTitle);
+            DrawPanelMenuItem(app, "Project", EditorDockSpace.AssetBrowserWindowTitle);
+            ImGui.EndMenu();
+        }
+
+        if (ImGui.BeginMenu("Analysis"))
+        {
+            DrawPanelMenuItem(app, "Console", EditorDockSpace.ConsoleDiagnosticsWindowTitle);
+            DrawPanelMenuItem(app, "Profiler", EditorDockSpace.PerformanceHudWindowTitle);
+            ImGui.EndMenu();
+        }
+
+        if (ImGui.BeginMenu("Settings"))
+        {
+            DrawPanelMenuItem(app, "UI Manifest", UiManifestPanel.PanelTitle);
+            DrawPanelMenuItem(app, "Project Settings...", ProjectSettingsPanel.PanelTitle);
+            DrawPanelMenuItem(app, "Player Settings...", PlayerSettingsPanel.PanelTitle);
+            DrawPanelMenuItem(app, "Build Settings...", BuildSettingsPanel.PanelTitle);
+            ImGui.EndMenu();
+        }
+
+        if (ImGui.BeginMenu("Tools"))
+        {
+            DrawPanelMenuItem(app, "Materials", EditorDockSpace.MaterialReactionEditorWindowTitle);
+            DrawPanelMenuItem(app, "Brush", EditorDockSpace.MaterialBrushWindowTitle);
+            DrawPanelMenuItem(app, "World Inspector", EditorDockSpace.WorldInspectorWindowTitle);
+            DrawPanelMenuItem(app, "Overlays", EditorDockSpace.DebugOverlayWindowTitle);
+            DrawPanelMenuItem(app, "Simulation", EditorDockSpace.SimulationControlWindowTitle);
+            DrawPanelMenuItem(app, "Play Mode", EditorDockSpace.EditorModeWindowTitle);
+            DrawPanelMenuItem(app, "Save / Load", EditorDockSpace.SaveLoadWindowTitle);
+            DrawPanelMenuItem(app, "Physics", EditorDockSpace.PhysicsTuningWindowTitle);
+            DrawPanelMenuItem(app, "Particles", EditorDockSpace.ParticleTuningWindowTitle);
+            DrawPanelMenuItem(app, "Lighting", EditorDockSpace.LightingTuningWindowTitle);
+            ImGui.EndMenu();
+        }
         ImGui.Separator();
         if (ImGui.MenuItem("Reset Layout"))
         {
@@ -355,7 +421,11 @@ internal sealed class EditorMainMenuBar
             return;
         }
 
-        if (ImGui.MenuItem("Play", "Ctrl+P", selected: false, enabled: app.CurrentSession is not null))
+        if (ImGui.MenuItem(
+            "Play",
+            EditorShortcutCatalog.Get(EditorShortcutCommand.TogglePlayMode).DisplayText,
+            selected: false,
+            enabled: app.CurrentSession is not null))
         {
             app.EnterPlayMode();
         }
@@ -390,7 +460,7 @@ internal sealed class EditorMainMenuBar
 
         if (ImGui.MenuItem("Shortcuts"))
         {
-            ImGui.OpenPopup("PixelEngine Editor Shortcuts");
+            app.ShowPreferences(EditorPreferencesCategory.Shortcuts);
         }
 
         if (ImGui.BeginPopup("About PixelEngine Editor"))
@@ -400,16 +470,57 @@ internal sealed class EditorMainMenuBar
             ImGui.EndPopup();
         }
 
-        if (ImGui.BeginPopup("PixelEngine Editor Shortcuts"))
+        ImGui.EndMenu();
+    }
+
+    private static void DispatchShortcuts(EditorShellApp app)
+    {
+        if (EditorShortcutCatalog.IsPressed(EditorShortcutCommand.OpenPreferences))
         {
-            ImGui.TextUnformatted("Ctrl+S Save Scene");
-            ImGui.TextUnformatted("Ctrl+Z Undo");
-            ImGui.TextUnformatted("Ctrl+Y Redo");
-            ImGui.TextUnformatted("Ctrl+P Play");
-            ImGui.EndPopup();
+            app.ShowPreferences();
         }
 
-        ImGui.EndMenu();
+        if (app.CurrentSession is null)
+        {
+            return;
+        }
+
+        if (EditorShortcutCatalog.IsPressed(EditorShortcutCommand.SaveSceneAs))
+        {
+            _ = app.SaveSceneAs();
+        }
+        else if (EditorShortcutCatalog.IsPressed(EditorShortcutCommand.SaveScene))
+        {
+            _ = app.SaveScene();
+        }
+
+        if (EditorShortcutCatalog.IsPressed(EditorShortcutCommand.Undo))
+        {
+            _ = app.Undo();
+        }
+
+        if (EditorShortcutCatalog.IsPressed(EditorShortcutCommand.Redo))
+        {
+            _ = app.Redo();
+        }
+
+        if (EditorShortcutCatalog.IsPressed(EditorShortcutCommand.Duplicate) &&
+            app.CurrentSession.SceneModel.SelectedStableId is not null)
+        {
+            app.DuplicateSelectedGameObject();
+        }
+
+        if (EditorShortcutCatalog.IsPressed(EditorShortcutCommand.TogglePlayMode))
+        {
+            if (app.CurrentSession.CaptureEditorPlaySession().Mode == Hosting.EditorMode.Play)
+            {
+                app.EnterEditMode();
+            }
+            else
+            {
+                app.EnterPlayMode();
+            }
+        }
     }
 }
 

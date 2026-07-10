@@ -151,6 +151,16 @@ public sealed class GuiApp : IDisposable
         }
     }
 
+    /// <summary>
+    /// 设置关闭 GUI 时是否保存当前 ImGui 布局。
+    /// </summary>
+    /// <param name="enabled">是否持久化布局。</param>
+    public void SetLayoutPersistence(bool enabled)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _controller.SetLayoutPersistence(enabled);
+    }
+
     /// <inheritdoc />
     public void Dispose()
     {

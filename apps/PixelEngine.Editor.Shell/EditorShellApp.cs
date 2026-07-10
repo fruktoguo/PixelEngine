@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Editor.Shell.Settings;
+using PixelEngine.Hosting;
 using Silk.NET.OpenGL;
 
 namespace PixelEngine.Editor.Shell;
@@ -13,20 +14,23 @@ internal sealed class EditorShellApp
     private const string DefaultWorkbenchBehaviourTypeName = "DefaultWorkbenchBehaviour";
     private static readonly TimeSpan ScriptedBuildProbeTimeout = TimeSpan.FromMinutes(10);
     private readonly EditorShellOptions _options;
+    private readonly EditorUiScaleContextState _projectPickerUiScaleState = new();
     private EditorProject? _pendingProject;
     private bool _closeProjectRequested;
     private bool _exitRequested;
 
-    private EditorShellApp(EditorShellOptions options)
+    private EditorShellApp(EditorShellOptions options, EditorPreferencesStore preferences)
     {
         _options = options;
+        Preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         ProjectPicker = new ProjectPickerWindow(options);
         MainMenu = new EditorMainMenuBar();
         Layout = new EditorShellLayout(EditorShellWindow.DefaultLayoutPath);
+        PreferencesWindow = new EditorPreferencesWindow(Preferences, ResetLayout);
         RecentProjects = RecentProjectsStore.LoadDefault();
     }
 
-    internal static EditorShellApp CreateForTests()
+    internal static EditorShellApp CreateForTests(EditorPreferencesStore? preferences = null)
     {
         return new EditorShellApp(new EditorShellOptions(
             ProjectPath: null,
@@ -40,12 +44,20 @@ internal sealed class EditorShellApp
             ScriptedMenuLayoutProbe: false,
             ScriptedHierarchyProbe: false,
             ScriptedDefaultWorkbenchProbe: false,
+            ScriptedPreferencesProbe: false,
             BuildOutputPath: null,
             CaptureFramePath: null,
-            LogDirectory: null));
+            LogDirectory: null),
+            preferences ?? EditorPreferencesStore.CreateInMemory());
     }
 
     public EditorConsoleStore ConsoleStore { get; } = new();
+
+    public EditorPreferencesStore Preferences { get; }
+
+    public EditorPreferencesWindow PreferencesWindow { get; }
+
+    public float UiScale => Preferences.Current.UiScale;
 
     public EditorProject? CurrentProject { get; private set; }
 
@@ -73,7 +85,7 @@ internal sealed class EditorShellApp
         try
         {
             options = EditorShellOptions.Parse(args);
-            return new EditorShellApp(options).Run();
+            return new EditorShellApp(options, EditorPreferencesStore.LoadDefault()).Run();
         }
         catch (Exception exception)
         {
@@ -85,7 +97,12 @@ internal sealed class EditorShellApp
 
     private int Run()
     {
-        using EditorShellWindow shellWindow = EditorShellWindow.Create();
+        using EditorShellWindow shellWindow = EditorShellWindow.Create(Preferences.Current.UiScale);
+        if (_options.ScriptedPreferencesProbe)
+        {
+            ShowPreferences(EditorPreferencesCategory.Appearance);
+        }
+
         if (!string.IsNullOrWhiteSpace(_options.ProjectPath))
         {
             OpenProjectPath(_options.ProjectPath);
@@ -155,6 +172,7 @@ internal sealed class EditorShellApp
                 shellWindow.Window.DoEvents();
                 if (!shellWindow.Gui.IsRunning)
                 {
+                    _projectPickerUiScaleState.Reset();
                     shellWindow.Gui.Initialize();
                 }
 
@@ -170,9 +188,12 @@ internal sealed class EditorShellApp
                     shellWindow.Window.LogicalHeight,
                     _ =>
                     {
+                        ApplyCurrentUiPreferences(_projectPickerUiScaleState, shellWindow.Gui.Options.DpiScale);
+                        shellWindow.Gui.SetLayoutPersistence(Preferences.Current.SaveLayoutOnExit);
                         MainMenu.Draw(this);
                         Layout.DrawDockSpace();
                         ProjectPicker.Draw(this);
+                        PreferencesWindow.Draw();
                     },
                     shellWindow.Window.FramebufferScaleX,
                     shellWindow.Window.FramebufferScaleY);
@@ -302,6 +323,18 @@ internal sealed class EditorShellApp
                 $"window_ticks={executed}");
         }
 
+        if (_options.ScriptedPreferencesProbe)
+        {
+            Console.WriteLine(
+                $"editor_preferences_probe=True, preferences_visible={PreferencesWindow.Visible}, " +
+                $"ui_scale_percent={EditorUiScale.ToPercent(Preferences.Current.UiScale)}, " +
+                $"save_layout_on_exit={Preferences.Current.SaveLayoutOnExit}, " +
+                $"preferences_path={Preferences.StoragePath}, " +
+                $"window_pos={PreferencesWindow.LastWindowPosition.X:F0},{PreferencesWindow.LastWindowPosition.Y:F0}, " +
+                $"window_size={PreferencesWindow.LastWindowSize.X:F0}x{PreferencesWindow.LastWindowSize.Y:F0}, " +
+                $"navigation_visible={PreferencesWindow.LastNavigationVisible}");
+        }
+
         if (_options.ScriptedBuildSettingsProbe)
         {
             WriteScriptedBuildSettingsProbeSummary(scriptedBuildSettings);
@@ -342,6 +375,8 @@ internal sealed class EditorShellApp
             }
         }
 
+        CurrentSession?.Dispose();
+        CurrentSession = null;
         return 0;
     }
 
@@ -1320,6 +1355,17 @@ internal sealed class EditorShellApp
         _ = CurrentSession?.ShowBuildSettings();
     }
 
+    public void ShowPreferences(EditorPreferencesCategory category = EditorPreferencesCategory.Appearance)
+    {
+        PreferencesWindow.Show(category);
+    }
+
+    public void ApplyCurrentUiPreferences(EditorUiScaleContextState state, float fontAtlasScale)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        state.Apply(Preferences.Current.UiScale, fontAtlasScale);
+    }
+
     public bool ShowPanel(string title)
     {
         return CurrentSession?.ShowPanel(title) == true;
@@ -1394,6 +1440,12 @@ internal sealed class EditorShellApp
 
         EditorProject project = _pendingProject;
         _pendingProject = null;
+        ProjectSettingsDto legacySettings = EngineProjectSettingsStore.LoadProjectSettings(project.ProjectRoot);
+        if (!Preferences.TryMigrateLegacy(legacySettings.EditorPreferences, out string migrationDiagnostic))
+        {
+            ConsoleStore.AddProjectError("preferences", migrationDiagnostic);
+        }
+
         CurrentSession?.Dispose();
         shellWindow.ShutdownProjectPickerGui();
         CurrentSession = EditorProjectSession.Open(project, shellWindow.Window, this);

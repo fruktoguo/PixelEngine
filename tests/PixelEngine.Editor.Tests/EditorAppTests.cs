@@ -152,6 +152,29 @@ public sealed class EditorAppTests
     }
 
     /// <summary>
+    /// 重置布局恢复各面板注册时的默认可见性，不再把全部工具窗口强制展开。
+    /// </summary>
+    [Fact]
+    public void ResetDockLayoutRestoresRegisteredDefaultVisibility()
+    {
+        RecordingBackend backend = new();
+        using EditorApp app = new(backend, new EditorAppOptions());
+        RecordingPanel corePanel = new() { Visible = true };
+        RecordingPanel utilityPanel = new() { Visible = false };
+        app.AddPanel(corePanel);
+        app.AddPanel(utilityPanel);
+        app.Initialize();
+        corePanel.Visible = false;
+        utilityPanel.Visible = true;
+
+        app.ResetDockLayout();
+
+        Assert.True(corePanel.Visible);
+        Assert.False(utilityPanel.Visible);
+        Assert.Contains("ResetDockLayout", backend.Events);
+    }
+
+    /// <summary>
     /// 验证 ImGuiController 在禁用时不初始化后端，启用时能成对初始化与关闭。
     /// </summary>
     [Fact]
@@ -171,10 +194,11 @@ public sealed class EditorAppTests
         ImGuiController enabled = new(enabledBackend, new EditorAppOptions());
 
         enabled.Initialize();
+        enabled.SetLayoutPersistence(false);
         enabled.Shutdown();
 
         Assert.False(enabled.IsInitialized);
-        Assert.Equal(["Initialize", "Shutdown"], enabledBackend.Events);
+        Assert.Equal(["Initialize", "LayoutPersistence:False", "Shutdown"], enabledBackend.Events);
     }
 
     /// <summary>
@@ -202,6 +226,8 @@ public sealed class EditorAppTests
         input.Key(Key.ControlLeft, down: true);
         input.Key(Key.V, down: true);
         input.Key(Key.V, down: false);
+        input.Key(Key.Comma, down: true);
+        input.Key(Key.Comma, down: false);
         input.Key(Key.ControlLeft, down: false);
 
         // Assert：验证预期结果
@@ -211,6 +237,8 @@ public sealed class EditorAppTests
                 "Key:ModCtrl=True",
                 "Key:V=True",
                 "Key:V=False",
+                "Key:Comma=True",
+                "Key:Comma=False",
                 "Key:LeftCtrl=False",
                 "Key:ModCtrl=False",
             ],
@@ -423,6 +451,11 @@ public sealed class EditorAppTests
 
         public void AddText(string text)
         {
+        }
+
+        public void SetLayoutPersistence(bool enabled)
+        {
+            Events.Add($"LayoutPersistence:{enabled}");
         }
 
         public void Shutdown()

@@ -20,8 +20,8 @@ public sealed class EditorScriptAssetOpenServiceTests
         using TempDir temp = new();
         EditorAssetManifestStore manifest = CreateManifestWithScript(temp.Path, out string scriptPath);
         RecordingLauncher launcher = new();
-        ProjectSettingsDto settings = CreateSettings("\"C:/Program Files/Code/code.exe\" --goto \"{file}:12\"");
-        EditorScriptAssetOpenService service = new(manifest, () => settings, launcher);
+        const string command = "\"C:/Program Files/Code/code.exe\" --goto \"{file}:12\"";
+        EditorScriptAssetOpenService service = new(manifest, () => command, launcher);
 
         EditorScriptAssetOpenResult result = service.OpenScriptAsset("scripts/PlayerController.cs");
 
@@ -46,8 +46,8 @@ public sealed class EditorScriptAssetOpenServiceTests
         using TempDir temp = new();
         EditorAssetManifestStore manifest = CreateManifestWithScript(temp.Path, out string scriptPath);
         RecordingLauncher launcher = new();
-        ProjectSettingsDto settings = CreateSettings("\"C:/Program Files/Code/code.exe\" --reuse-window");
-        EditorScriptAssetOpenService service = new(manifest, () => settings, launcher);
+        const string command = "\"C:/Program Files/Code/code.exe\" --reuse-window";
+        EditorScriptAssetOpenService service = new(manifest, () => command, launcher);
 
         EditorScriptAssetOpenResult result = service.OpenScriptAsset("scripts/PlayerController.cs");
 
@@ -71,7 +71,7 @@ public sealed class EditorScriptAssetOpenServiceTests
         using TempDir temp = new();
         EditorAssetManifestStore manifest = CreateManifestWithScript(temp.Path, out string scriptPath);
         RecordingLauncher launcher = new();
-        EditorScriptAssetOpenService service = new(manifest, () => CreateSettings(string.Empty), launcher);
+        EditorScriptAssetOpenService service = new(manifest, () => string.Empty, launcher);
 
         EditorScriptAssetOpenResult result = service.OpenScriptAsset("scripts/PlayerController.cs");
 
@@ -94,7 +94,7 @@ public sealed class EditorScriptAssetOpenServiceTests
         using TempDir temp = new();
         EditorAssetManifestStore manifest = CreateManifestWithScript(temp.Path, out _);
         RecordingLauncher launcher = new(succeed: false, diagnostic: "configured editor not found");
-        EditorScriptAssetOpenService service = new(manifest, () => CreateSettings("missing-editor --open {file}"), launcher);
+        EditorScriptAssetOpenService service = new(manifest, () => "missing-editor --open {file}", launcher);
 
         EditorScriptAssetOpenResult result = service.OpenScriptAsset("scripts/PlayerController.cs");
 
@@ -116,7 +116,7 @@ public sealed class EditorScriptAssetOpenServiceTests
         EditorAssetManifestStore manifest = new(temp.Path, contentRoot);
         _ = manifest.CreateAsset("textures/sand.png", EditorAssetType.Texture, textContents: "texture");
         RecordingLauncher launcher = new();
-        EditorScriptAssetOpenService service = new(manifest, () => CreateSettings("code"), launcher);
+        EditorScriptAssetOpenService service = new(manifest, () => "code", launcher);
 
         EditorScriptAssetOpenResult result = service.OpenScriptAsset("textures/sand.png");
 
@@ -136,7 +136,7 @@ public sealed class EditorScriptAssetOpenServiceTests
         string contentRoot = Path.Combine(temp.Path, "content");
         EditorAssetManifestStore manifest = new(temp.Path, contentRoot);
         RecordingLauncher launcher = new();
-        EditorScriptAssetOpenService service = new(manifest, () => CreateSettings("code"), launcher);
+        EditorScriptAssetOpenService service = new(manifest, () => "code", launcher);
 
         EditorScriptAssetOpenResult result = service.OpenScriptAsset("scripts/MissingBehaviour.cs");
 
@@ -155,7 +155,7 @@ public sealed class EditorScriptAssetOpenServiceTests
         string contentRoot = Path.Combine(temp.Path, "content");
         EditorAssetManifestStore manifest = new(temp.Path, contentRoot);
         RecordingLauncher launcher = new();
-        EditorScriptAssetOpenService service = new(manifest, () => CreateSettings("code"), launcher);
+        EditorScriptAssetOpenService service = new(manifest, () => "code", launcher);
 
         EditorScriptAssetOpenResult result = service.OpenScriptAsset("../outside.cs");
 
@@ -171,17 +171,6 @@ public sealed class EditorScriptAssetOpenServiceTests
         EditorAssetRecord script = manifest.CreateAsset("scripts/PlayerController.cs", EditorAssetType.Script);
         scriptPath = Path.GetFullPath(Path.Combine(contentRoot, script.LogicalPath.Replace('/', Path.DirectorySeparatorChar)));
         return manifest;
-    }
-
-    private static ProjectSettingsDto CreateSettings(string externalScriptEditor)
-    {
-        return new ProjectSettingsDto
-        {
-            EditorPreferences = new EditorPreferencesDto
-            {
-                ExternalScriptEditor = externalScriptEditor,
-            },
-        };
     }
 
     private sealed class RecordingLauncher(bool succeed = true, string diagnostic = "") : IExternalScriptEditorProcessLauncher

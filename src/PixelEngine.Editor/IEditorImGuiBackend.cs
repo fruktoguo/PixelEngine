@@ -86,6 +86,12 @@ public interface IEditorImGuiBackend
     void AddText(string text);
 
     /// <summary>
+    /// 设置关闭 backend 时是否把当前 ImGui 布局写回磁盘。
+    /// </summary>
+    /// <param name="enabled">是否持久化布局。</param>
+    void SetLayoutPersistence(bool enabled);
+
+    /// <summary>
     /// 关闭 ImGui 后端并销毁 context。
     /// </summary>
     void Shutdown();
