@@ -8,8 +8,7 @@ namespace PixelEngine.Hosting;
 /// </summary>
 public sealed class EditorHostBootstrap : IDisposable
 {
-    private readonly GuiWindowInputConnector _inputConnector;
-    private bool _inputConnectorDisposed;
+    private GuiWindowInputConnector? _inputConnector;
     private bool _disposed;
 
     private EditorHostBootstrap(RenderWindow window, GuiApp gui, GuiWindowInputConnector inputConnector)
@@ -34,13 +33,22 @@ public sealed class EditorHostBootstrap : IDisposable
     /// </summary>
     public void DisposeInputConnector()
     {
-        if (_inputConnectorDisposed)
+        if (_inputConnector is null)
         {
             return;
         }
 
         _inputConnector.Dispose();
-        _inputConnectorDisposed = true;
+        _inputConnector = null;
+    }
+
+    /// <summary>
+    /// 在工程关闭或打开失败后重新连接项目选择器输入。
+    /// </summary>
+    public void EnsureInputConnector()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _inputConnector ??= new GuiWindowInputConnector(Window, Gui.Input);
     }
 
     /// <summary>

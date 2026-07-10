@@ -26,6 +26,8 @@ public sealed class EditorPreferencesTests
             {
                 UiScale = 1.5f,
                 SaveLayoutOnExit = false,
+                ReopenLastProject = false,
+                RestoreLastScene = false,
                 ExternalScriptEditor = "  code --goto {file}  ",
             },
             out string diagnostic);
@@ -36,6 +38,8 @@ public sealed class EditorPreferencesTests
         Assert.True(reloaded.LoadedFromDisk);
         Assert.Equal(1.5f, reloaded.Current.UiScale);
         Assert.False(reloaded.Current.SaveLayoutOnExit);
+        Assert.False(reloaded.Current.ReopenLastProject);
+        Assert.False(reloaded.Current.RestoreLastScene);
         Assert.Equal("code --goto {file}", reloaded.Current.ExternalScriptEditor);
         Assert.Empty(Directory.GetFiles(temp.Path, "*.tmp"));
     }

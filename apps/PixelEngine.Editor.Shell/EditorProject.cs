@@ -136,9 +136,7 @@ internal sealed class EditorProject
     public void ApplyProjectSettings(ProjectSettingsDto settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        Document = ApplyProjectSettings(Document, settings);
-        Scenes = Document.Scenes ?? [];
-        Save();
+        PersistDocument(ApplyProjectSettings(Document, settings));
     }
 
     public EngineProject ToEngineProject(string? sceneOverridePath = null)
@@ -189,7 +187,7 @@ internal sealed class EditorProject
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
         string normalizedPath = NormalizeScenePath(relativePath, DefaultStartScene, nameof(relativePath));
         EditorProjectSceneEntry[] entries = EnsureSceneEntry([.. Scenes], normalizedPath);
-        Document = new EditorProjectDocument
+        EditorProjectDocument nextDocument = new()
         {
             FormatVersion = CurrentFormatVersion,
             Name = Name,
@@ -198,8 +196,25 @@ internal sealed class EditorProject
             StartScene = makeStartScene ? normalizedPath : StartScene,
             Scenes = entries,
         };
-        Scenes = entries;
-        Save();
+        PersistDocument(nextDocument);
+    }
+
+    /// <summary>
+    /// 将场景登记到工程场景目录，但不改变玩家启动场景。
+    /// </summary>
+    public void RegisterScene(string relativePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
+        string normalizedPath = NormalizeScenePath(relativePath, DefaultStartScene, nameof(relativePath));
+        for (int i = 0; i < Scenes.Count; i++)
+        {
+            if (string.Equals(Scenes[i].Path, normalizedPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+        }
+
+        UpsertScene(normalizedPath, makeStartScene: false);
     }
 
     public bool ReplaceScenePath(string currentRelativePath, string newRelativePath)
@@ -237,7 +252,7 @@ internal sealed class EditorProject
         }
 
         string startScene = string.Equals(StartScene, current, StringComparison.OrdinalIgnoreCase) ? next : StartScene;
-        Document = Normalize(new EditorProjectDocument
+        EditorProjectDocument nextDocument = Normalize(new EditorProjectDocument
         {
             FormatVersion = CurrentFormatVersion,
             Name = Name,
@@ -246,9 +261,16 @@ internal sealed class EditorProject
             StartScene = startScene,
             Scenes = [.. entries],
         });
-        Scenes = Document.Scenes ?? [];
-        Save();
+        PersistDocument(nextDocument);
         return true;
+    }
+
+    private void PersistDocument(EditorProjectDocument document)
+    {
+        EditorProjectDocument normalized = Normalize(document);
+        SaveDocument(ProjectFilePath, normalized);
+        Document = normalized;
+        Scenes = normalized.Scenes ?? [];
     }
 
     private string ResolveSceneName(string relativePath)
@@ -347,7 +369,7 @@ internal sealed class EditorProject
         string json = JsonSerializer.Serialize(
             Normalize(document),
             EditorShellJsonContext.Default.EditorProjectDocument);
-        File.WriteAllText(projectFile, json);
+        EditorAtomicTextFile.WriteAllText(projectFile, json);
     }
 
     private static EditorProjectDocument Normalize(EditorProjectDocument document)

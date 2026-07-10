@@ -108,6 +108,33 @@ Collapsed=0
         }
     }
 
+    /// <summary>
+    /// 4K 工作台布局恢复到 720p 窗口时会重建，避免所有面板落在可视区外。
+    /// </summary>
+    [Fact]
+    public void SavedDockLayoutRejectsViewportFarLargerThanRestoredWindow()
+    {
+        string directory = CreateTempDirectory();
+        try
+        {
+            string path = Path.Combine(directory, "editor-shell-imgui.ini");
+            File.WriteAllText(path, """
+[Window][WindowOverViewport_11111111]
+Pos=0,24
+Size=3840,1965
+Collapsed=0
+""");
+
+            Assert.True(EditorShellLayout.SavedDockLayoutIsIncompatible(path, 1280, 720));
+            _ = new EditorShellLayout(path, 1280, 720);
+            Assert.False(File.Exists(path));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         string path = Path.Combine(Path.GetTempPath(), "PixelEngine.EditorShellLayoutTests", Guid.NewGuid().ToString("N"));

@@ -355,7 +355,8 @@ public sealed class HostingProjectDisciplineTests
             '\n',
             Directory.EnumerateFiles(Path.Combine(root, "apps", "PixelEngine.Editor.Shell"), "*.cs").Select(File.ReadAllText));
 
-        Assert.Contains("EditorShellWindow.Create(Preferences.Current.UiScale)", shellSource, StringComparison.Ordinal);
+        Assert.Contains("using EditorShellWindow shellWindow = EditorShellWindow.Create(", shellSource, StringComparison.Ordinal);
+        Assert.Contains("LayoutPath", shellSource, StringComparison.Ordinal);
         Assert.Contains("EditorHostBootstrap.Create", shellSource, StringComparison.Ordinal);
         Assert.DoesNotContain("RenderWindow.Create", shellSource.Replace("EditorHostBootstrap.Create", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
     }
@@ -371,9 +372,11 @@ public sealed class HostingProjectDisciplineTests
         string bootstrap = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Hosting", "EditorHostBootstrap.cs"));
 
         Assert.Contains("public void DisposeInputConnector()", bootstrap, StringComparison.Ordinal);
-        Assert.Contains("_inputConnectorDisposed", bootstrap, StringComparison.Ordinal);
+        Assert.Contains("_inputConnector is null", bootstrap, StringComparison.Ordinal);
         Assert.Contains("_inputConnector.Dispose();", bootstrap, StringComparison.Ordinal);
+        Assert.Contains("public void EnsureInputConnector()", bootstrap, StringComparison.Ordinal);
         Assert.Contains("_bootstrap.DisposeInputConnector();", shellWindow, StringComparison.Ordinal);
+        Assert.Contains("_bootstrap.EnsureInputConnector();", shellWindow, StringComparison.Ordinal);
         Assert.Contains("_projectPickerGuiShutdown", shellWindow, StringComparison.Ordinal);
     }
 
@@ -491,7 +494,8 @@ public sealed class HostingProjectDisciplineTests
         // Assert：验证预期结果
         Assert.Contains("project.pixelproj", shellSource, StringComparison.Ordinal);
         Assert.Contains("EngineProject", shellSource, StringComparison.Ordinal);
-        Assert.Contains("RecentProjectsStore.LoadDefault()", shellSource, StringComparison.Ordinal);
+        Assert.Contains("RecentProjectsStore.Load(userDataPaths.RecentProjectsPath)", shellSource, StringComparison.Ordinal);
+        Assert.Contains("EditorWorkspaceStore.Load(userDataPaths.WorkspacePath)", shellSource, StringComparison.Ordinal);
         Assert.Contains("ProjectPicker.Draw(this)", shellSource, StringComparison.Ordinal);
         Assert.Contains("EditorMainMenuBar", shellSource, StringComparison.Ordinal);
         Assert.Contains("EditorShellLayout", shellSource, StringComparison.Ordinal);
@@ -707,8 +711,9 @@ public sealed class HostingProjectDisciplineTests
         string guiBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "HexaImGuiBackend.cs"));
         string editorBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "HexaImGuiBackend.cs"));
 
-        Assert.Contains("EditorPreferencesStore.LoadDefault()", shellApp, StringComparison.Ordinal);
-        Assert.Contains("EditorShellWindow.Create(Preferences.Current.UiScale)", shellApp, StringComparison.Ordinal);
+        Assert.Contains("EditorPreferencesStore.Load(", shellApp, StringComparison.Ordinal);
+        Assert.Contains("userDataPaths.PreferencesPath", shellApp, StringComparison.Ordinal);
+        Assert.Contains("using EditorShellWindow shellWindow = EditorShellWindow.Create(", shellApp, StringComparison.Ordinal);
         Assert.Contains("PreferencesWindow.Draw()", shellApp, StringComparison.Ordinal);
         Assert.Contains("DpiScale = EditorUiScale.Normalize(uiScale)", shellWindow, StringComparison.Ordinal);
         Assert.Contains("DpiScale = app.UiScale", host, StringComparison.Ordinal);

@@ -12,7 +12,7 @@ internal sealed class ProjectPickerWindow
     private string _newProjectRoot;
     private string _newProjectName = "NewPixelProject";
     private string _openProjectPath;
-    private ProjectPickerMode _mode;
+    private bool _selectModeOnNextDraw = true;
     private float _lastUiScale = float.NaN;
 
     public ProjectPickerWindow(EditorShellOptions options)
@@ -28,20 +28,43 @@ internal sealed class ProjectPickerWindow
             "PixelEngine Projects");
         _newProjectRoot = Path.Combine(defaultProjectsRoot, _newProjectName);
         _openProjectPath = options.ProjectPath ?? defaultProjectsRoot;
-        _mode = string.IsNullOrWhiteSpace(options.ProjectPath)
+        Mode = string.IsNullOrWhiteSpace(options.ProjectPath)
             ? ProjectPickerMode.NewProject
             : ProjectPickerMode.OpenProject;
     }
 
     internal string FolderPickerDiagnostic { get; private set; } = string.Empty;
 
+    public bool Visible { get; private set; } = true;
+
+    internal ProjectPickerMode Mode { get; private set; }
+
+    internal ProjectPickerMode? PendingTabSelection => _selectModeOnNextDraw ? Mode : null;
+
     public void Focus(ProjectPickerMode mode)
     {
-        _mode = mode;
+        if (!Enum.IsDefined(mode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(mode), mode, "未知 Project Picker 模式。");
+        }
+
+        Mode = mode;
+        _selectModeOnNextDraw = true;
+        Visible = true;
+    }
+
+    public void Close()
+    {
+        Visible = false;
     }
 
     public void Draw(EditorShellApp app)
     {
+        if (!Visible)
+        {
+            return;
+        }
+
         float scale = app.UiScale;
         ImGuiCond placementCondition = MathF.Abs(scale - _lastUiScale) > 0.0001f
             ? ImGuiCond.Always
@@ -53,12 +76,15 @@ internal sealed class ProjectPickerWindow
             EditorUiScale.FitWindow(new Vector2(680f, 500f), scale, ImGui.GetMainViewport().WorkSize),
             placementCondition);
         _lastUiScale = scale;
-        if (!ImGui.Begin("Project Picker"))
+        bool visible = Visible;
+        if (!ImGui.Begin("Project Picker", ref visible))
         {
+            Visible = visible;
             ImGui.End();
             return;
         }
 
+        Visible = visible;
         ImGui.TextUnformatted("PixelEngine Editor");
         ImGui.Separator();
         if (app.HasOpenProject)
@@ -71,16 +97,21 @@ internal sealed class ProjectPickerWindow
             ImGui.TextUnformatted("No project selected");
         }
 
-        ImGui.TextUnformatted(_mode == ProjectPickerMode.NewProject
-            ? "Mode: New Project"
-            : "Mode: Open Project");
+        ImGui.TextUnformatted(Mode switch
+        {
+            ProjectPickerMode.NewProject => "Mode: New Project",
+            ProjectPickerMode.OpenProject => "Mode: Open Project",
+            ProjectPickerMode.RecentProjects => "Mode: Recent Projects",
+            _ => "Mode: Project Picker",
+        });
         ImGui.Spacing();
         if (ImGui.BeginTabBar("ProjectPickerTabs"))
         {
-            DrawNewProjectTab(app);
-            DrawOpenProjectTab(app);
-            DrawRecentProjectsTab(app);
+            DrawNewProjectTab(app, GetTabItemFlags(ProjectPickerMode.NewProject));
+            DrawOpenProjectTab(app, GetTabItemFlags(ProjectPickerMode.OpenProject));
+            DrawRecentProjectsTab(app, GetTabItemFlags(ProjectPickerMode.RecentProjects));
             ImGui.EndTabBar();
+            _selectModeOnNextDraw = false;
         }
 
         if (!string.IsNullOrWhiteSpace(app.LastProjectError))
@@ -92,14 +123,14 @@ internal sealed class ProjectPickerWindow
         ImGui.End();
     }
 
-    private void DrawNewProjectTab(EditorShellApp app)
+    private void DrawNewProjectTab(EditorShellApp app, ImGuiTabItemFlags flags)
     {
-        if (!ImGui.BeginTabItem("New Project"))
+        if (!ImGui.BeginTabItem("New Project", flags))
         {
             return;
         }
 
-        _mode = ProjectPickerMode.NewProject;
+        Mode = ProjectPickerMode.NewProject;
         _ = ImGui.InputText("Project Name", ref _newProjectName, 128);
         DrawPathInputWithBrowse("Project Directory", ref _newProjectRoot, "new_project_root", app.UiScale);
         if (ImGui.Button("Create Project"))
@@ -114,14 +145,14 @@ internal sealed class ProjectPickerWindow
         ImGui.EndTabItem();
     }
 
-    private void DrawOpenProjectTab(EditorShellApp app)
+    private void DrawOpenProjectTab(EditorShellApp app, ImGuiTabItemFlags flags)
     {
-        if (!ImGui.BeginTabItem("Open Project"))
+        if (!ImGui.BeginTabItem("Open Project", flags))
         {
             return;
         }
 
-        _mode = ProjectPickerMode.OpenProject;
+        Mode = ProjectPickerMode.OpenProject;
         DrawPathInputWithBrowse("Project Root or project.pixelproj", ref _openProjectPath, "open_project_root", app.UiScale);
         if (ImGui.Button("Open Project"))
         {
@@ -129,6 +160,13 @@ internal sealed class ProjectPickerWindow
         }
 
         ImGui.EndTabItem();
+    }
+
+    private ImGuiTabItemFlags GetTabItemFlags(ProjectPickerMode mode)
+    {
+        return _selectModeOnNextDraw && Mode == mode
+            ? ImGuiTabItemFlags.SetSelected
+            : ImGuiTabItemFlags.None;
     }
 
     private void DrawPathInputWithBrowse(string label, ref string path, string id, float uiScale)
@@ -169,12 +207,14 @@ internal sealed class ProjectPickerWindow
         return false;
     }
 
-    private static void DrawRecentProjectsTab(EditorShellApp app)
+    private void DrawRecentProjectsTab(EditorShellApp app, ImGuiTabItemFlags flags)
     {
-        if (!ImGui.BeginTabItem("Recent"))
+        if (!ImGui.BeginTabItem("Recent", flags))
         {
             return;
         }
+
+        Mode = ProjectPickerMode.RecentProjects;
 
         IReadOnlyList<RecentProjectEntry> entries = app.RecentProjects.Entries;
         if (entries.Count == 0)
@@ -218,6 +258,7 @@ internal enum ProjectPickerMode
 {
     NewProject,
     OpenProject,
+    RecentProjects,
 }
 
 internal interface IProjectFolderPicker

@@ -177,6 +177,30 @@ public sealed class EditorShellSceneMaterializationTests
     }
 
     /// <summary>
+    /// 验证 Editor authoring 模型加载、替换与再序列化不会丢失场景初始世界存档来源。
+    /// </summary>
+    [Fact]
+    public void EditorSceneModelRoundTripsInitialSaveDirectoryThroughReplace()
+    {
+        EditorSceneModel loaded = EditorSceneModel.FromDocument(new EngineSceneDocument
+        {
+            FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+            Name = "saved-world",
+            InitialSaveDirectory = "../saves/checkpoint",
+            Entities = [],
+        });
+        Assert.Equal("../saves/checkpoint", loaded.ToDocument().InitialSaveDirectory);
+
+        EditorSceneModel active = EditorSceneModel.Empty("active");
+        active.ReplaceWith(loaded, markDirty: false);
+
+        EngineSceneDocument roundTrip = active.ToDocument();
+        Assert.Equal("saved-world", roundTrip.Name);
+        Assert.Equal("../saves/checkpoint", roundTrip.InitialSaveDirectory);
+        Assert.False(active.IsDirty);
+    }
+
+    /// <summary>
     /// 验证编辑器命令栈覆盖创建、删除、重父、重命名、复制、组件字段与 Transform 修改的 Undo/Redo 往返。
     /// </summary>
     [Fact]

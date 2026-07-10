@@ -51,7 +51,7 @@ public static class EngineSceneDocumentLoader
         string json = JsonSerializer.Serialize(
             normalized,
             EngineSceneJsonContext.Default.EngineSceneDocument);
-        File.WriteAllText(path, json);
+        AtomicTextFile.WriteAllText(path, json);
     }
 
     /// <summary>

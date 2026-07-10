@@ -18,6 +18,11 @@ internal sealed class EditorSceneModel
 
     public string Name { get; set; }
 
+    /// <summary>
+    /// 可选初始世界存档目录；原样随场景 authoring 往返。
+    /// </summary>
+    public string? InitialSaveDirectory { get; private set; }
+
     public int? SelectedStableId { get; private set; }
 
     public bool IsDirty { get; private set; }
@@ -37,7 +42,10 @@ internal sealed class EditorSceneModel
     {
         ArgumentNullException.ThrowIfNull(document);
         // 两遍构建：先创建节点，再按 ParentId 挂接层级
-        EditorSceneModel model = new(document.Name ?? "main");
+        EditorSceneModel model = new(document.Name ?? "main")
+        {
+            InitialSaveDirectory = document.InitialSaveDirectory,
+        };
         EngineSceneEntityDocument[] entities = document.Entities ?? [];
         for (int i = 0; i < entities.Length; i++)
         {
@@ -117,6 +125,7 @@ internal sealed class EditorSceneModel
         {
             FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
             Name = Name,
+            InitialSaveDirectory = InitialSaveDirectory,
             Entities = entities,
         };
     }
@@ -394,6 +403,7 @@ internal sealed class EditorSceneModel
         _roots.Clear();
         _nextStableId = 1;
         Name = source.Name;
+        InitialSaveDirectory = source.InitialSaveDirectory;
         foreach (EditorGameObject gameObject in source.EnumerateDepthFirst())
         {
             AddLoaded(gameObject.CloneShallow());
