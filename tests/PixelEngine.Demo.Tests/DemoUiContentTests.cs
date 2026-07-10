@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Xml.Linq;
 using PixelEngine.Gui;
 using PixelEngine.Hosting;
@@ -1666,10 +1665,7 @@ public sealed class DemoUiContentTests
     private static WeaponCatalog LoadDefaultWeaponCatalog()
     {
         string path = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content", "weapons.json");
-        WeaponCatalog catalog = JsonSerializer.Deserialize(File.ReadAllText(path), DemoConfigJsonContext.Default.WeaponCatalog)
-            ?? throw new InvalidDataException("默认 weapons.json 无法反序列化。");
-        catalog.Validate();
-        return catalog;
+        return WeaponCatalog.Parse(File.ReadAllText(path));
     }
 
     private static Engine CreateHudEngine(

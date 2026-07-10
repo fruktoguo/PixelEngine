@@ -77,6 +77,17 @@ public static class EngineContentLoader
             throw new InvalidDataException($"配置文件为空或无法解析：{path}");
     }
 
+    /// <summary>
+    /// 经 Hosting 公开门面读取内容根目录中的配置文本，保持路径包含校验且允许玩法层显式 AOT-safe 解析。
+    /// </summary>
+    /// <param name="contentRoot">内容根目录。</param>
+    /// <param name="relativePath">相对内容根目录的配置路径。</param>
+    /// <returns>配置文件 UTF-8 文本。</returns>
+    public static string ReadConfigText(string contentRoot, string relativePath)
+    {
+        return File.ReadAllText(ResolveContentFile(contentRoot, relativePath));
+    }
+
     private static string ResolveContentFile(string contentRoot, string relativePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(contentRoot);

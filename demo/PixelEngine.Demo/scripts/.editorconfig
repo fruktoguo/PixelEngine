@@ -1,0 +1,3 @@
+# scripts 是工程配置声明的源码根，不是 C# namespace 层级。
+[*.cs]
+dotnet_diagnostic.IDE0130.severity = none

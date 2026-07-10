@@ -14,10 +14,21 @@ namespace PixelEngine.Scripting;
 /// </summary>
 internal sealed class ScriptCompiler
 {
+    private const string ImplicitUsingsSource = """
+        global using global::System;
+        global using global::System.Collections.Generic;
+        global using global::System.IO;
+        global using global::System.Linq;
+        global using global::System.Net.Http;
+        global using global::System.Threading;
+        global using global::System.Threading.Tasks;
+        """;
+
     private static readonly CSharpCompilationOptions CompilationOptions = new(
         OutputKind.DynamicallyLinkedLibrary,
         optimizationLevel: OptimizationLevel.Release,
-        allowUnsafe: false);
+        allowUnsafe: false,
+        nullableContextOptions: NullableContextOptions.Enable);
 
     private static readonly CSharpParseOptions ParseOptions = CSharpParseOptions.Default
         .WithLanguageVersion(LanguageVersion.CSharp14);
@@ -50,12 +61,18 @@ internal sealed class ScriptCompiler
             throw new ArgumentException("脚本源文件列表不能为空。", nameof(sources));
         }
 
-        SyntaxTree[] trees = new SyntaxTree[sources.Count];
+        // 与 Microsoft.NET.Sdk 的 ImplicitUsings=enable / Nullable=enable 对齐，保证同一份工程源码
+        // 在 Player 静态编译和 Editor 热编译中具有相同的基础语言上下文。
+        SyntaxTree[] trees = new SyntaxTree[sources.Count + 1];
+        trees[0] = CSharpSyntaxTree.ParseText(
+            SourceText.From(ImplicitUsingsSource, Encoding.UTF8),
+            ParseOptions,
+            "PixelEngine.ScriptImplicitUsings.g.cs");
         for (int i = 0; i < sources.Count; i++)
         {
             ScriptSourceFile source = sources[i];
             SourceText text = SourceText.From(source.Source, Encoding.UTF8);
-            trees[i] = CSharpSyntaxTree.ParseText(text, ParseOptions, source.Path);
+            trees[i + 1] = CSharpSyntaxTree.ParseText(text, ParseOptions, source.Path);
         }
 
         CSharpCompilation compilation = CSharpCompilation.Create(

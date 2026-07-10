@@ -95,7 +95,7 @@ internal static class EditorGameViewContract
             EditorDockSpace.ViewportWindowTitle,
             EditorViewportCameraOwner.AuthoringCamera,
             EditorViewportInputOwner.AuthoringTools,
-            UsesRuntimeViewportTexture: true,
+            UsesRuntimeViewportTexture: false,
             AllowsEditorOverlay: true,
             UiPresentLayerOrders.Game,
             UiPresentLayerOrders.Editor,

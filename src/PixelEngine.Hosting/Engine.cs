@@ -340,6 +340,17 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>
+    /// 从当前 ContentRoot 读取配置文本，供玩法层执行显式 AOT-safe 解析。
+    /// </summary>
+    /// <param name="relativePath">相对 ContentRoot 的配置路径。</param>
+    /// <returns>配置文件 UTF-8 文本。</returns>
+    public string ReadConfigText(string relativePath)
+    {
+        ThrowIfShutdown();
+        return EngineContentLoader.ReadConfigText(Context.Options.ContentRoot, relativePath);
+    }
+
+    /// <summary>
     /// 初始化音频系统并加载 ContentRoot/audio 下的 WAV clip，供脚本音频 API 使用。
     /// </summary>
     /// <param name="backend">可选音频后端；为 null 时优先 OpenAL，失败自动降级无声后端。</param>

@@ -147,7 +147,7 @@ public static class DemoProgram
 
         // 注册 Demo 与随包脚本程序集，并按能力接入 Scripting 与热重载
         engine.RegisterScriptAssembly(assembly);
-        RegisterPackagedScriptAssemblies(engine, options, RuntimeFeature.IsDynamicCodeSupported);
+        RegisterPackagedScriptAssemblies(engine, options, RuntimeFeature.IsDynamicCodeSupported, assembly);
         Console.WriteLine(options.HotReloadEnabled
             ? "脚本程序集已注册；热重载等待脚本宿主装配。"
             : "脚本程序集已注册；热重载已由参数关闭。");
@@ -715,10 +715,24 @@ public static class DemoProgram
     /// <summary>
     /// 注册玩家包随 content/scripts 分发的脚本程序集。
     /// </summary>
-    public static void RegisterPackagedScriptAssemblies(Engine engine, DemoStartupOptions options, bool dynamicCodeSupported)
+    /// <param name="engine">目标引擎实例。</param>
+    /// <param name="options">玩家启动选项。</param>
+    /// <param name="dynamicCodeSupported">当前运行时是否支持动态脚本编译。</param>
+    /// <param name="staticallyCompiledAssembly">Player 已静态编译的项目脚本程序集；传入时跳过同源源码重复加载。</param>
+    public static void RegisterPackagedScriptAssemblies(
+        Engine engine,
+        DemoStartupOptions options,
+        bool dynamicCodeSupported,
+        Assembly? staticallyCompiledAssembly = null)
     {
         ArgumentNullException.ThrowIfNull(engine);
         ArgumentNullException.ThrowIfNull(options);
+        if (staticallyCompiledAssembly == typeof(DemoProgram).Assembly)
+        {
+            Console.WriteLine("项目脚本已由 Player 静态程序集注册；跳过 content/scripts 重复编译。");
+            return;
+        }
+
         string scriptDirectory = Path.Combine(Path.GetFullPath(options.ContentRoot), "scripts");
         if (!Directory.Exists(scriptDirectory))
         {

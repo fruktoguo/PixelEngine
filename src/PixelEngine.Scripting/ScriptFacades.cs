@@ -1096,6 +1096,13 @@ public interface IGameTime
 public interface IConfigApi
 {
     /// <summary>
+    /// 从当前 ContentRoot 读取配置文本，供脚本执行 AOT-safe 的显式解析。
+    /// </summary>
+    /// <param name="relativePath">相对 ContentRoot 的配置路径。</param>
+    /// <returns>配置文件 UTF-8 文本。</returns>
+    string ReadText(string relativePath);
+
+    /// <summary>
     /// 从当前 ContentRoot 加载一个配置文档。
     /// </summary>
     /// <typeparam name="TConfig">配置文档类型。</typeparam>

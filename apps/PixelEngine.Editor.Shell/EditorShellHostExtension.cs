@@ -269,8 +269,6 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
         }
 
         _sceneViewPanel = new SceneViewPanel(
-            () => pipeline.CurrentViewportTexture,
-            engine.Context.GetService<ScriptCameraApi>(),
             _sceneModel ?? throw new InvalidOperationException("Scene View 需要先配置 authoring scene model。"),
             _undoStack ?? throw new InvalidOperationException("Scene View 需要先配置 authoring undo stack。"),
             brushPanel);

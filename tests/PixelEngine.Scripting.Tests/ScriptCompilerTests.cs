@@ -34,6 +34,36 @@ public sealed class ScriptCompilerTests
     }
 
     /// <summary>
+    /// 验证动态脚本与 SDK 工程共享 implicit usings 和 nullable enable 语言上下文。
+    /// </summary>
+    [Fact]
+    public void CompilerMatchesSdkImplicitUsingsAndNullableContext()
+    {
+        ScriptCompiler compiler = new();
+        ScriptCompilationResult result = compiler.Compile(
+            "PixelEngine.UserScripts.SdkContext",
+            [new ScriptSourceFile("SdkContext.cs", """
+                using PixelEngine.Scripting;
+
+                namespace UserScripts;
+
+                public sealed class SdkContextScript : Behaviour
+                {
+                    private readonly List<string?> _values = [];
+
+                    protected override void OnUpdate(float dt)
+                    {
+                        ReadOnlySpan<int> values = [1, 2, 3];
+                        _values.Add(values.Length.ToString());
+                    }
+                }
+                """)]);
+
+        Assert.True(result.Success, FormatDiagnostics(result));
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Id == "CS8632");
+    }
+
+    /// <summary>
     /// 验证编译失败会返回诊断且不产出程序集字节。
     /// </summary>
     [Fact]

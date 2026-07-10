@@ -1,13 +1,6 @@
-using System.Text.Json.Serialization;
+using System.Text.Json;
 
 namespace PixelEngine.Demo;
-
-/// <summary>
-/// Demo 内容配置 JSON source-generation 上下文；实际文件读取仍由 Hosting Content/Config API 执行。
-/// </summary>
-[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, UseStringEnumConverter = true)]
-[JsonSerializable(typeof(WeaponCatalog))]
-public sealed partial class DemoConfigJsonContext : JsonSerializerContext;
 
 /// <summary>
 /// Demo 数据驱动武器目录；由 Hosting Content/Config API 从 content/weapons.json 加载。
@@ -18,6 +11,59 @@ public sealed class WeaponCatalog
     /// 可装备武器定义，顺序即 HUD 与数字键默认顺序。
     /// </summary>
     public WeaponDefinition[] Weapons { get; init; } = [];
+
+    /// <summary>
+    /// 从内容文本显式解析武器目录；不依赖 source generator，Editor 热编译与 NativeAOT Player 共用同一实现。
+    /// </summary>
+    /// <param name="json">weapons.json 文本。</param>
+    /// <returns>解析并完成语义校验的武器目录。</returns>
+    public static WeaponCatalog Parse(string json)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(json);
+        using JsonDocument document = JsonDocument.Parse(json);
+        if (!document.RootElement.TryGetProperty("weapons", out JsonElement weaponsElement) ||
+            weaponsElement.ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidDataException("武器目录缺少 weapons 数组。");
+        }
+
+        WeaponDefinition[] weapons = new WeaponDefinition[weaponsElement.GetArrayLength()];
+        int index = 0;
+        foreach (JsonElement item in weaponsElement.EnumerateArray())
+        {
+            weapons[index++] = new WeaponDefinition
+            {
+                Id = ReadString(item, "id"),
+                DisplayName = ReadString(item, "displayName"),
+                Kind = ReadEnum<WeaponKind>(item, "kind"),
+                Damage = ReadSingle(item, "damage"),
+                Radius = ReadInt32(item, "radius"),
+                Falloff = ReadEnum<WeaponFalloff>(item, "falloff"),
+                Impulse = ReadSingle(item, "impulse"),
+                FuseSeconds = ReadSingle(item, "fuseSeconds"),
+                ThrowSpeed = ReadSingle(item, "throwSpeed"),
+                Gravity = ReadSingle(item, "gravity"),
+                Bounce = ReadSingle(item, "bounce"),
+                CooldownSeconds = ReadSingle(item, "cooldownSeconds"),
+                AmmoMax = ReadInt32(item, "ammoMax"),
+                ReloadSeconds = ReadSingle(item, "reloadSeconds"),
+                HeatPerCell = ReadSingle(item, "heatPerCell"),
+                BeamDps = ReadSingle(item, "beamDps"),
+                SpawnMaterial = ReadString(item, "spawnMaterial"),
+                Spread = ReadSingle(item, "spread"),
+                Recoil = ReadSingle(item, "recoil"),
+                ScreenShake = ReadSingle(item, "screenShake"),
+                TracerDuration = ReadSingle(item, "tracerDuration"),
+                MuzzleCue = ReadString(item, "muzzleCue"),
+                ImpactCue = ReadString(item, "impactCue"),
+                HudColor = ReadString(item, "hudColor"),
+            };
+        }
+
+        WeaponCatalog catalog = new() { Weapons = weapons };
+        catalog.Validate();
+        return catalog;
+    }
 
     /// <summary>
     /// 校验武器目录语义，避免坏内容包在运行时退化为空武器或默认值武器。
@@ -129,6 +175,49 @@ public sealed class WeaponCatalog
         {
             throw new InvalidDataException($"武器 {weaponId} 配置无效：{message}");
         }
+    }
+
+    private static string ReadString(JsonElement item, string name)
+    {
+        return !item.TryGetProperty(name, out JsonElement value)
+            ? string.Empty
+            : value.ValueKind == JsonValueKind.String
+                ? value.GetString() ?? string.Empty
+                : throw new InvalidDataException($"武器配置字段 {name} 必须是字符串。");
+    }
+
+    private static float ReadSingle(JsonElement item, string name)
+    {
+        return !item.TryGetProperty(name, out JsonElement value)
+            ? 0f
+            : value.TryGetSingle(out float result) && float.IsFinite(result)
+                ? result
+                : throw new InvalidDataException($"武器配置字段 {name} 必须是有限数值。");
+    }
+
+    private static int ReadInt32(JsonElement item, string name)
+    {
+        return !item.TryGetProperty(name, out JsonElement value)
+            ? 0
+            : value.TryGetInt32(out int result)
+                ? result
+                : throw new InvalidDataException($"武器配置字段 {name} 必须是整数。");
+    }
+
+    private static TEnum ReadEnum<TEnum>(JsonElement item, string name)
+        where TEnum : struct, Enum
+    {
+        if (!item.TryGetProperty(name, out JsonElement value))
+        {
+            return default;
+        }
+
+        string text = value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? string.Empty
+            : throw new InvalidDataException($"武器配置字段 {name} 必须是字符串。");
+        return Enum.TryParse(text, ignoreCase: true, out TEnum result) && Enum.IsDefined(result)
+            ? result
+            : throw new InvalidDataException($"武器配置字段 {name} 的枚举值无效：{text}。");
     }
 }
 
