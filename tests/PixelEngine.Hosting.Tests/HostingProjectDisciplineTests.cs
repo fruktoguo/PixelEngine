@@ -635,9 +635,19 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("AssetBrowserCreateRequest", assetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("AssetBrowserImportRequest", assetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("AssetBrowserImportSourcePickResult", assetBrowserDataSource, StringComparison.Ordinal);
+        Assert.Contains("AssetBrowserDescriptor", assetBrowserDataSource, StringComparison.Ordinal);
+        Assert.Contains("AssetBrowserBadge", assetBrowserDataSource, StringComparison.Ordinal);
+        Assert.Contains("IAssetBrowserContextDataSource", assetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("TryCreateAsset", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("TryImportAsset", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("TryPickImportSource", assetBrowserPanel, StringComparison.Ordinal);
+        Assert.Contains("project_window_layout", assetBrowserPanel, StringComparison.Ordinal);
+        Assert.Contains("DrawFolderTree", assetBrowserPanel, StringComparison.Ordinal);
+        Assert.Contains("DrawBreadcrumbs", assetBrowserPanel, StringComparison.Ordinal);
+        Assert.Contains("IsDirectAssetChild", assetBrowserPanel, StringComparison.Ordinal);
+        Assert.Contains("MatchesSearch", assetBrowserPanel, StringComparison.Ordinal);
+        Assert.Contains("BeginPopupContextItem", assetBrowserPanel, StringComparison.Ordinal);
+        Assert.Contains("TryOpenSceneAsset", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("AssetBrowserItemKind.Folder", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("AssetBrowserItemKind.Material", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("AssetBrowserItemKind.UiScreen", assetBrowserPanel, StringComparison.Ordinal);
@@ -649,6 +659,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("Browse Source", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("createAsset: assetBrowserDataSource.CreateAsset", host, StringComparison.Ordinal);
         Assert.Contains("importAsset: assetBrowserDataSource.ImportAsset", host, StringComparison.Ordinal);
+        Assert.Contains("openSceneAsset: _app.OpenSceneAsset", host, StringComparison.Ordinal);
         Assert.Contains("pickImportSource: static (initialPath, _) => NativeFolderPicker.TryPickFile", host, StringComparison.Ordinal);
         Assert.Contains("deleteFolder: request => assetBrowserDataSource.DeleteFolder(request, _sceneModel)", host, StringComparison.Ordinal);
         Assert.Contains("moveFolder: request => assetBrowserDataSource.MoveFolder(request, _sceneModel)", host, StringComparison.Ordinal);
@@ -661,6 +672,9 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("public IReadOnlyList<AssetBrowserFolderItem> ListFolders", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("EditorAssetRootKind.ScriptSource", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("ScriptManifestRelativePath", shellAssetBrowserDataSource, StringComparison.Ordinal);
+        Assert.Contains("BuildDescriptor", shellAssetBrowserDataSource, StringComparison.Ordinal);
+        Assert.Contains("GetContextBadges", shellAssetBrowserDataSource, StringComparison.Ordinal);
+        Assert.Contains("TryBuildKnownJsonPreview", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("ApplyQueuedChanges", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("SynchronizeAssetRecords", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("store.DeleteFolder(path.RelativePath, activeScene, request.Confirmed)", shellAssetBrowserDataSource, StringComparison.Ordinal);
@@ -682,6 +696,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("UpsertUiScreenManifestEntry", shellAssetManifestStore, StringComparison.Ordinal);
         Assert.Contains("ui-manifest.json", shellAssetManifestStore, StringComparison.Ordinal);
         string shellApp = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellApp.cs"));
+        Assert.Contains("public bool OpenSceneAsset", shellApp, StringComparison.Ordinal);
         Assert.Contains("--scripted-menu-layout-probe", File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellOptions.cs")), StringComparison.Ordinal);
         Assert.Contains("editor_menu_layout_probe", shellApp, StringComparison.Ordinal);
         Assert.Contains("RunScriptedMenuLayoutProbeActions", shellApp, StringComparison.Ordinal);

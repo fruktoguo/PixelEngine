@@ -83,6 +83,44 @@ public enum AssetBrowserSortMode
 }
 
 /// <summary>
+/// Project Window 资产的上下文 badge。
+/// </summary>
+[Flags]
+public enum AssetBrowserBadge
+{
+    /// <summary>
+    /// 无特殊上下文。
+    /// </summary>
+    None = 0,
+
+    /// <summary>
+    /// 工程启动入口或启动配置。
+    /// </summary>
+    Startup = 1 << 0,
+
+    /// <summary>
+    /// Editor 当前正在编辑的场景。
+    /// </summary>
+    Current = 1 << 1,
+
+    /// <summary>
+    /// 测试、probe 或验收专用资产。
+    /// </summary>
+    Test = 1 << 2,
+}
+
+/// <summary>
+/// Project Window 面向用户的资源语义描述。
+/// </summary>
+/// <param name="TypeLabel">本地化类型名。</param>
+/// <param name="Purpose">资源在工程中的用途。</param>
+/// <param name="Badges">不依赖当前 Session 的静态 badge。</param>
+public readonly record struct AssetBrowserDescriptor(
+    string TypeLabel,
+    string Purpose,
+    AssetBrowserBadge Badges = AssetBrowserBadge.None);
+
+/// <summary>
 /// ImGui 可展示的纹理缩略图。
 /// </summary>
 /// <param name="TextureHandle">GL 纹理句柄。</param>
@@ -100,6 +138,7 @@ public readonly record struct AssetThumbnail(uint TextureHandle, int Width, int 
 /// <param name="Thumbnail">可用缩略图；没有时为 null。</param>
 /// <param name="AssetId">工程级 stable asset id；旧文件系统数据源可为空。</param>
 /// <param name="PreviewSummary">Project Window 可展示的只读资产预览摘要。</param>
+/// <param name="Descriptor">面向用户的类型、用途与静态 badge。</param>
 public readonly record struct AssetBrowserItem(
     string Path,
     AssetBrowserItemKind Kind,
@@ -107,7 +146,8 @@ public readonly record struct AssetBrowserItem(
     DateTimeOffset LastModifiedUtc,
     AssetThumbnail? Thumbnail,
     string? AssetId = null,
-    string? PreviewSummary = null)
+    string? PreviewSummary = null,
+    AssetBrowserDescriptor? Descriptor = null)
 {
     /// <summary>
     /// UI 显示名。
@@ -129,6 +169,13 @@ public readonly record struct AssetBrowserFolderItem(
     /// </summary>
     public string DisplayName => string.IsNullOrWhiteSpace(Path) ? "content/" : Path + "/";
 }
+
+/// <summary>
+/// Project Window breadcrumb 中的一个可导航节点。
+/// </summary>
+/// <param name="Label">节点显示名。</param>
+/// <param name="Path">选择该节点后的 logical folder path。</param>
+public readonly record struct AssetBrowserBreadcrumbItem(string Label, string Path);
 
 /// <summary>
 /// Project Window 可传递给 Shell 的 typed drag payload。
@@ -384,6 +431,19 @@ public interface IAssetBrowserFolderDataSource
     /// </summary>
     /// <returns>文件夹快照。</returns>
     IReadOnlyList<AssetBrowserFolderItem> ListFolders();
+}
+
+/// <summary>
+/// 提供随当前工程 Session 变化的 Project Window badge。
+/// </summary>
+public interface IAssetBrowserContextDataSource
+{
+    /// <summary>
+    /// 返回指定 rooted asset path 的动态 badge；不得触发磁盘扫描。
+    /// </summary>
+    /// <param name="assetPath">资产 rooted logical path。</param>
+    /// <returns>当前上下文 badge。</returns>
+    AssetBrowserBadge GetContextBadges(string assetPath);
 }
 
 /// <summary>

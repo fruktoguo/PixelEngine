@@ -283,6 +283,7 @@ public sealed class AssetBrowserPanelTests
         AssetBrowserPanel panel = new(source);
 
         _ = panel.Refresh();
+        panel.SetSearch(".");
         panel.SetKindFilter(AssetBrowserItemKind.Texture);
 
         // Assert：验证预期结果
@@ -294,7 +295,7 @@ public sealed class AssetBrowserPanelTests
         AssetBrowserItem filtered = Assert.Single(panel.FilteredAssets);
         Assert.Equal("textures/z-rock.png", filtered.Path);
 
-        panel.SetSearch(string.Empty);
+        panel.SetSearch(".");
         panel.SetKindFilter(null);
         panel.SetSortMode(AssetBrowserSortMode.SizeDescending);
 
@@ -1158,7 +1159,7 @@ public sealed class AssetBrowserPanelTests
     }
 
     /// <summary>
-    /// 验证 Project Window 文件夹选择会限定资产列表作用域，根目录恢复全量列表。
+    /// 验证 Project Window 文件夹选择只展示直接子项，搜索时才展开后代结果。
     /// </summary>
     [Fact]
     public void AssetBrowserPanelScopesFilteredAssetsToSelectedFolder()
@@ -1181,14 +1182,23 @@ public sealed class AssetBrowserPanelTests
         // Assert：验证预期结果
         Assert.True(selectedFolder);
         Assert.Equal("levels", panel.ActiveFolderPath);
+        Assert.Empty(panel.FilteredAssets);
+        Assert.Contains(panel.VisibleFolders, folder => folder.Path == "levels/textures");
+
+        Assert.True(panel.SelectFolder("levels/textures", selection));
+        Assert.Equal(["levels/textures/sand.png"], panel.FilteredAssets.Select(static item => item.Path));
+
+        panel.SetSearch("sand");
         Assert.Equal(["levels/textures/sand.png"], panel.FilteredAssets.Select(static item => item.Path));
 
         bool selectedRoot = panel.SelectFolder(string.Empty, selection);
         panel.SetKindFilter(null);
+        panel.SetSearch(string.Empty);
 
         Assert.True(selectedRoot);
         Assert.Equal(string.Empty, panel.ActiveFolderPath);
-        Assert.Equal(["levels/one.scene", "levels/textures/sand.png", "scripts/Player.cs"], panel.FilteredAssets.Select(static item => item.Path));
+        Assert.Empty(panel.FilteredAssets);
+        Assert.Equal(["levels", "scripts"], panel.VisibleFolders.Select(static folder => folder.Path));
     }
 
     /// <summary>
@@ -1220,8 +1230,172 @@ public sealed class AssetBrowserPanelTests
         Assert.Equal(string.Empty, selection.FolderPath);
         Assert.Equal("NewScene.scene", panel.CreatePath);
         Assert.Equal("sand.png", panel.ImportDestinationPath);
-        AssetBrowserItem visible = Assert.Single(panel.FilteredAssets);
-        Assert.Equal("scripts/Player.cs", visible.Path);
+        Assert.Empty(panel.FilteredAssets);
+        AssetBrowserFolderItem visible = Assert.Single(panel.VisibleFolders);
+        Assert.Equal("scripts", visible.Path);
+    }
+
+    /// <summary>
+    /// 验证双根目录树、breadcrumb 与右栏直接子项投影完全由内存快照派生。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelBuildsDualRootBreadcrumbsAndDirectChildren()
+    {
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("Content/audio/cues.json", AssetBrowserItemKind.Json, 10, DateTimeOffset.UnixEpoch, null, "asset_cues"),
+            new AssetBrowserItem("Content/audio/loops/lava.wav", AssetBrowserItemKind.Audio, 20, DateTimeOffset.UnixEpoch, null, "asset_lava"),
+            new AssetBrowserItem("ScriptSource/Gameplay/Player.cs", AssetBrowserItemKind.Script, 30, DateTimeOffset.UnixEpoch, null, "asset_player"),
+        ]);
+        source.ReplaceFolders(
+        [
+            new AssetBrowserFolderItem("Content", 2),
+            new AssetBrowserFolderItem("Content/audio", 2),
+            new AssetBrowserFolderItem("Content/audio/loops", 1),
+            new AssetBrowserFolderItem("ScriptSource", 1),
+            new AssetBrowserFolderItem("ScriptSource/Gameplay", 1),
+        ]);
+        AssetBrowserPanel panel = new(source);
+        EditorSelection selection = new();
+
+        _ = panel.Refresh(selection);
+
+        Assert.Equal(["Content", "ScriptSource"], panel.VisibleFolders.Select(static folder => folder.Path));
+        Assert.Empty(panel.FilteredAssets);
+        Assert.Equal([new AssetBrowserBreadcrumbItem("工程", string.Empty)], panel.Breadcrumbs);
+
+        Assert.True(panel.SelectFolder("Content/audio", selection));
+        Assert.Equal(["Content/audio/loops"], panel.VisibleFolders.Select(static folder => folder.Path));
+        Assert.Equal(["Content/audio/cues.json"], panel.FilteredAssets.Select(static item => item.Path));
+        Assert.Equal(
+            ["", "Content", "Content/audio"],
+            panel.Breadcrumbs.Select(static breadcrumb => breadcrumb.Path));
+
+        panel.SetSearch("lava");
+        Assert.Equal(["Content/audio/loops/lava.wav"], panel.FilteredAssets.Select(static item => item.Path));
+    }
+
+    /// <summary>
+    /// 验证搜索覆盖 localized type、用途、摘要与动态 badge。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelSearchesSemanticDescriptorsSummariesAndBadges()
+    {
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem(
+                "Content/reactions.json",
+                AssetBrowserItemKind.Material,
+                10,
+                DateTimeOffset.UnixEpoch,
+                null,
+                "asset_reactions",
+                "材质定义：9 项",
+                new AssetBrowserDescriptor("材质反应规则", "定义材质接触与温度反应规则")),
+            new AssetBrowserItem(
+                "Content/scenes/lava-mine.scene",
+                AssetBrowserItemKind.Scene,
+                20,
+                DateTimeOffset.UnixEpoch,
+                null,
+                "asset_main",
+                "场景：12 个 GameObject",
+                new AssetBrowserDescriptor("场景", "可玩主场景")),
+            new AssetBrowserItem(
+                "Content/scenes/audio-probe.scene",
+                AssetBrowserItemKind.Scene,
+                30,
+                DateTimeOffset.UnixEpoch,
+                null,
+                "asset_probe",
+                "场景：2 个 GameObject",
+                new AssetBrowserDescriptor("场景", "空间音频验收", AssetBrowserBadge.Test)),
+        ]);
+        source.ReplaceFolders(
+        [
+            new AssetBrowserFolderItem("Content", 3),
+            new AssetBrowserFolderItem("Content/scenes", 2),
+        ]);
+        source.SetContextBadges("Content/scenes/lava-mine.scene", AssetBrowserBadge.Startup | AssetBrowserBadge.Current);
+        AssetBrowserPanel panel = new(source);
+        _ = panel.Refresh();
+
+        panel.SetSearch("材质反应规则");
+        Assert.Equal("Content/reactions.json", Assert.Single(panel.FilteredAssets).Path);
+        panel.SetSearch("材质接触");
+        Assert.Equal("Content/reactions.json", Assert.Single(panel.FilteredAssets).Path);
+        panel.SetSearch("12 个 GameObject");
+        Assert.Equal("Content/scenes/lava-mine.scene", Assert.Single(panel.FilteredAssets).Path);
+        panel.SetSearch("当前");
+        Assert.Equal("Content/scenes/lava-mine.scene", Assert.Single(panel.FilteredAssets).Path);
+        panel.SetSearch("测试");
+        Assert.Equal("Content/scenes/audio-probe.scene", Assert.Single(panel.FilteredAssets).Path);
+        Assert.Equal(
+            AssetBrowserBadge.Startup | AssetBrowserBadge.Current,
+            panel.GetBadges("Content/scenes/lava-mine.scene"));
+    }
+
+    /// <summary>
+    /// 验证 Scene 与 Script 双击主操作各走专用 handler，其它资产不会被误当作 Scene 打开。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelDispatchesSceneAndScriptPrimaryOpenActions()
+    {
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("Content/scenes/main.scene", AssetBrowserItemKind.Scene, 10, DateTimeOffset.UnixEpoch, null, "asset_scene"),
+            new AssetBrowserItem("ScriptSource/Player.cs", AssetBrowserItemKind.Script, 20, DateTimeOffset.UnixEpoch, null, "asset_script"),
+        ]);
+        List<string> scenes = [];
+        List<string> scripts = [];
+        bool OpenScene(string path, out string diagnostic)
+        {
+            scenes.Add(path);
+            diagnostic = "场景等待 dirty guard 确认";
+            return true;
+        }
+
+        bool OpenScript(string path, out string diagnostic)
+        {
+            scripts.Add(path);
+            diagnostic = string.Empty;
+            return true;
+        }
+
+        AssetBrowserPanel panel = new(source, openScriptAsset: OpenScript, openSceneAsset: OpenScene);
+        _ = panel.Refresh();
+
+        Assert.True(panel.TryOpenSceneAsset("Content/scenes/main.scene"));
+        Assert.False(panel.TryOpenSceneAsset("ScriptSource/Player.cs"));
+        Assert.True(panel.TryOpenScriptAsset("ScriptSource/Player.cs"));
+        Assert.Equal(["Content/scenes/main.scene"], scenes);
+        Assert.Equal(["ScriptSource/Player.cs"], scripts);
+        Assert.Contains("打开脚本", panel.Status, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 rooted Project Window 会把 Script 创建路由到 ScriptSource，并把非 Script 创建/导入路由到 Content。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelRoutesCreateAndImportToCompatibleLogicalRoots()
+    {
+        RecordingAssetSource source = new([]);
+        source.ReplaceFolders(
+        [
+            new AssetBrowserFolderItem("Content", 0),
+            new AssetBrowserFolderItem("Content/levels", 0),
+            new AssetBrowserFolderItem("ScriptSource", 0),
+            new AssetBrowserFolderItem("ScriptSource/Gameplay", 0),
+        ]);
+        AssetBrowserPanel panel = new(source);
+        _ = panel.Refresh();
+
+        Assert.True(panel.BeginCreateAssetInFolder("Content/levels", AssetBrowserItemKind.Script));
+        Assert.StartsWith("ScriptSource/", panel.CreatePath, StringComparison.Ordinal);
+        Assert.True(panel.BeginCreateAssetInFolder("ScriptSource/Gameplay", AssetBrowserItemKind.Scene));
+        Assert.StartsWith("Content/", panel.CreatePath, StringComparison.Ordinal);
+        Assert.True(panel.BeginImportAssetInFolder(@"C:\Imports\sand.png", "ScriptSource/Gameplay", AssetBrowserItemKind.Texture));
+        Assert.StartsWith("Content/", panel.ImportDestinationPath, StringComparison.Ordinal);
     }
 
     private sealed class RecordingThumbnailProvider : ITextureThumbnailProvider
@@ -1239,10 +1413,14 @@ public sealed class AssetBrowserPanelTests
         }
     }
 
-    private sealed class RecordingAssetSource(IReadOnlyList<AssetBrowserItem> assets) : IAssetBrowserDataSource, IAssetBrowserFolderDataSource
+    private sealed class RecordingAssetSource(IReadOnlyList<AssetBrowserItem> assets) :
+        IAssetBrowserDataSource,
+        IAssetBrowserFolderDataSource,
+        IAssetBrowserContextDataSource
     {
         private IReadOnlyList<AssetBrowserItem> _assets = assets;
         private IReadOnlyList<AssetBrowserFolderItem> _folders = [];
+        private readonly Dictionary<string, AssetBrowserBadge> _contextBadges = new(StringComparer.OrdinalIgnoreCase);
 
         public IReadOnlyList<AssetBrowserItem> ListAssets()
         {
@@ -1254,6 +1432,13 @@ public sealed class AssetBrowserPanelTests
             return _folders;
         }
 
+        public AssetBrowserBadge GetContextBadges(string assetPath)
+        {
+            return _contextBadges.TryGetValue(assetPath, out AssetBrowserBadge badges)
+                ? badges
+                : AssetBrowserBadge.None;
+        }
+
         public void ReplaceAssets(IReadOnlyList<AssetBrowserItem> assets)
         {
             _assets = assets;
@@ -1262,6 +1447,11 @@ public sealed class AssetBrowserPanelTests
         public void ReplaceFolders(IReadOnlyList<AssetBrowserFolderItem> folders)
         {
             _folders = folders;
+        }
+
+        public void SetContextBadges(string assetPath, AssetBrowserBadge badges)
+        {
+            _contextBadges[assetPath] = badges;
         }
     }
 

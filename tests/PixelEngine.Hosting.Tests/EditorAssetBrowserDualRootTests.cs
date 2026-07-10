@@ -44,6 +44,77 @@ public sealed class EditorAssetBrowserDualRootTests
     }
 
     /// <summary>
+    /// 验证 Demo 常见配置、音频、UI、字体与 probe 场景具备可理解用途，启动/当前 badge 随内存 Session 更新。
+    /// </summary>
+    [Fact]
+    public void ProductionBrowserDescribesDemoResourceRolesAndDynamicBadges()
+    {
+        using TempDirectory temp = new();
+        EditorProject project = EditorProject.CreateNew(Path.Combine(temp.Path, "DemoSemantics"), "Demo Semantics");
+        string scenes = Path.Combine(project.ContentRootPath, "scenes");
+        File.Copy(Path.Combine(scenes, "main.scene"), Path.Combine(scenes, "lava-mine.scene"));
+        File.Copy(Path.Combine(scenes, "main.scene"), Path.Combine(scenes, "lava-mine-camera-probe.scene"));
+        project.UpsertScene("scenes/lava-mine.scene", makeStartScene: true);
+        File.WriteAllText(Path.Combine(project.ContentRootPath, "materials.json"), "{\"materials\":[]}");
+        File.WriteAllText(Path.Combine(project.ContentRootPath, "reactions.json"), "{\"reactions\":[]}");
+        File.WriteAllText(Path.Combine(project.ContentRootPath, "startup.json"), "{\"startScene\":\"scenes/lava-mine.scene\"}");
+        File.WriteAllText(Path.Combine(project.ContentRootPath, "weapons.json"), "{\"items\":[]}");
+        string audio = Path.Combine(project.ContentRootPath, "audio");
+        _ = Directory.CreateDirectory(audio);
+        File.WriteAllText(Path.Combine(audio, "cues.json"), "{\"cues\":[]}");
+        File.WriteAllBytes(Path.Combine(audio, "lava_bubble_loop.wav"), [1, 2, 3, 4]);
+        string screens = Path.Combine(project.ContentRootPath, "ui", "screens");
+        string fonts = Path.Combine(project.ContentRootPath, "ui", "fonts");
+        _ = Directory.CreateDirectory(screens);
+        _ = Directory.CreateDirectory(fonts);
+        File.WriteAllText(Path.Combine(project.ContentRootPath, "ui", "ui-manifest.json"), "{\"screens\":[]}");
+        File.WriteAllText(Path.Combine(screens, "main-menu.xhtml"), "<rml title=\"Main Menu\" />");
+        File.WriteAllBytes(Path.Combine(fonts, "NotoSansSC-VF.ttf"), [1, 2, 3]);
+        File.WriteAllText(
+            Path.Combine(project.ScriptSourcePath, "DemoSceneAuthoringBehaviours.cs"),
+            "public sealed class DemoSceneAuthoringBehaviours { }");
+        string currentScene = "scenes/lava-mine.scene";
+
+        using EditorAssetBrowserDataSource source = new(project, currentScenePath: () => currentScene);
+
+        AssetBrowserItem materials = Assert.Single(source.ListAssets(), item => item.Path == "Content/materials.json");
+        AssetBrowserItem reactions = Assert.Single(source.ListAssets(), item => item.Path == "Content/reactions.json");
+        AssetBrowserItem startup = Assert.Single(source.ListAssets(), item => item.Path == "Content/startup.json");
+        AssetBrowserItem weapons = Assert.Single(source.ListAssets(), item => item.Path == "Content/weapons.json");
+        AssetBrowserItem cues = Assert.Single(source.ListAssets(), item => item.Path == "Content/audio/cues.json");
+        AssetBrowserItem clip = Assert.Single(source.ListAssets(), item => item.Path == "Content/audio/lava_bubble_loop.wav");
+        AssetBrowserItem uiManifest = Assert.Single(source.ListAssets(), item => item.Path == "Content/ui/ui-manifest.json");
+        AssetBrowserItem screen = Assert.Single(source.ListAssets(), item => item.Path == "Content/ui/screens/main-menu.xhtml");
+        AssetBrowserItem font = Assert.Single(source.ListAssets(), item => item.Path == "Content/ui/fonts/NotoSansSC-VF.ttf");
+        AssetBrowserItem probe = Assert.Single(source.ListAssets(), item => item.Path == "Content/scenes/lava-mine-camera-probe.scene");
+        AssetBrowserItem script = Assert.Single(source.ListAssets(), item => item.Path == "ScriptSource/DemoSceneAuthoringBehaviours.cs");
+
+        Assert.Contains("CA 材质", materials.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Equal("材质反应规则", reactions.Descriptor?.TypeLabel);
+        Assert.Contains("启动场景", startup.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Contains("scenes/lava-mine.scene", startup.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("武器", weapons.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Contains("0 项", weapons.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("Cue", cues.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Contains("0 项", cues.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("运行时音效", clip.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Contains("预加载", uiManifest.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Contains("游戏界面", screen.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Equal("字体", font.Descriptor?.TypeLabel);
+        Assert.Equal(AssetBrowserBadge.Test, probe.Descriptor?.Badges);
+        Assert.Contains("热重载", script.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Equal(
+            AssetBrowserBadge.Startup | AssetBrowserBadge.Current,
+            source.GetContextBadges("Content/scenes/lava-mine.scene"));
+        Assert.Equal(AssetBrowserBadge.Startup, source.GetContextBadges("Content/startup.json"));
+
+        currentScene = "scenes/lava-mine-camera-probe.scene";
+
+        Assert.Equal(AssetBrowserBadge.Startup, source.GetContextBadges("Content/scenes/lava-mine.scene"));
+        Assert.Equal(AssetBrowserBadge.Current, source.GetContextBadges("Content/scenes/lava-mine-camera-probe.scene"));
+    }
+
+    /// <summary>
     /// 验证重复只读查询只消费缓存，不改写两个 manifest。
     /// </summary>
     [Fact]
@@ -448,6 +519,85 @@ public sealed class EditorAssetBrowserDualRootTests
             item => item.Path == "ScriptSource/RenamedBehaviour.cs");
         Assert.Equal(stableId, renamed.AssetId);
         Assert.DoesNotContain(source.ListAssets(), item => item.Path == "ScriptSource/OldBehaviour.cs");
+    }
+
+    /// <summary>
+    /// 验证真实 Demo 的配置、音频、UI、字体、材质图与 probe 场景都带可理解用途和动态角色 badge。
+    /// </summary>
+    [Fact]
+    public void DemoProjectAssetsExposeSemanticDescriptorsAndDynamicBadges()
+    {
+        string demoRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo");
+        EditorProject project = EditorProject.Load(demoRoot);
+        string currentScene = project.StartScene;
+        using EditorAssetBrowserDataSource source = new(project, currentScenePath: () => currentScene);
+
+        AssetBrowserItem materials = Find("Content/materials.json");
+        AssetBrowserItem reactions = Find("Content/reactions.json");
+        AssetBrowserItem startup = Find("Content/startup.json");
+        AssetBrowserItem weapons = Find("Content/weapons.json");
+        AssetBrowserItem cues = Find("Content/audio/cues.json");
+        AssetBrowserItem audio = Find("Content/audio/lava_bubble_loop.wav");
+        AssetBrowserItem uiManifest = Find("Content/ui/ui-manifest.json");
+        AssetBrowserItem uiScreen = Find("Content/ui/screens/main-menu.xhtml");
+        AssetBrowserItem font = Find("Content/ui/fonts/NotoSansSC-VF.ttf");
+        AssetBrowserItem materialMap = Find("Content/maps/ai-cavern-material-map.png");
+        AssetBrowserItem mainScene = Find("Content/scenes/lava-mine.scene");
+        AssetBrowserItem cameraProbe = Find("Content/scenes/lava-mine-camera-probe.scene");
+        AssetBrowserItem script = Find("ScriptSource/DemoSceneAuthoringBehaviours.cs");
+
+        Assert.Contains("CA 材质", materials.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Contains("材质目录：21", materials.PreviewSummary, StringComparison.Ordinal);
+        Assert.Equal("材质反应规则", reactions.Descriptor?.TypeLabel);
+        Assert.Contains("反应规则：9", reactions.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("启动场景", startup.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Contains("scenes/lava-mine.scene", startup.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("武器", weapons.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Contains("武器目录：6", weapons.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("Cue", cues.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Contains("音频 Cue 映射：13", cues.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("运行时音效", audio.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Contains("预加载", uiManifest.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Contains("7 个 Screen", uiManifest.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("7 个预加载", uiManifest.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("Web-first", uiScreen.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Contains("id=main-menu", uiScreen.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("demo.webfirst.main-menu/v1", uiScreen.PreviewSummary, StringComparison.Ordinal);
+        Assert.Equal("字体", font.Descriptor?.TypeLabel);
+        Assert.Contains("初始世界材质图", materialMap.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Contains("相机跟随", cameraProbe.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Equal(AssetBrowserBadge.Test, cameraProbe.Descriptor?.Badges);
+        Assert.Contains("热重载", script.Descriptor?.Purpose, StringComparison.Ordinal);
+        Assert.Equal(
+            AssetBrowserBadge.Startup | AssetBrowserBadge.Current,
+            source.GetContextBadges(mainScene.Path));
+        Assert.Equal(AssetBrowserBadge.Startup, source.GetContextBadges(startup.Path));
+
+        currentScene = "scenes/lava-mine-camera-probe.scene";
+        Assert.Equal(AssetBrowserBadge.Startup, source.GetContextBadges(mainScene.Path));
+        Assert.Equal(AssetBrowserBadge.Current, source.GetContextBadges(cameraProbe.Path));
+        Assert.Equal("scenes/lava-mine.scene", project.StartScene);
+
+        AssetBrowserItem Find(string path)
+        {
+            return Assert.Single(source.ListAssets(), item => item.Path == path);
+        }
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "PixelEngine.sln")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("无法定位 PixelEngine 仓库根目录。");
     }
 
     private sealed class TempDirectory : IDisposable

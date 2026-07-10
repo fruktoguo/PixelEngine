@@ -233,7 +233,10 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
 
         _editor.AddPanel(new EditorMainMenuPanel(_app, _editor));
         _editor.AddPanel(_app.PreferencesWindow);
-        _assetBrowserDataSource = new EditorAssetBrowserDataSource(_project, activeScene: _sceneModel);
+        _assetBrowserDataSource = new EditorAssetBrowserDataSource(
+            _project,
+            activeScene: _sceneModel,
+            currentScenePath: () => _app.CurrentSession?.CurrentSceneRelativePath);
         EditorAssetBrowserDataSource assetBrowserDataSource = _assetBrowserDataSource;
         if (!string.IsNullOrWhiteSpace(assetBrowserDataSource.LastDiagnostic))
         {
@@ -278,6 +281,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             assetBrowserDataSource,
             instantiatePrefab: _app.InstantiatePrefab,
             openScriptAsset: _app.OpenScriptAsset,
+            openSceneAsset: _app.OpenSceneAsset,
             deleteAsset: request => assetBrowserDataSource.DeleteAsset(request, _sceneModel),
             deleteFolder: request => assetBrowserDataSource.DeleteFolder(request, _sceneModel),
             moveAsset: request => assetBrowserDataSource.MoveAsset(request, _sceneModel),
