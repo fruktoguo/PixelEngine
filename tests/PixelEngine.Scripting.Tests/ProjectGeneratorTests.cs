@@ -40,6 +40,8 @@ public sealed class ProjectGeneratorTests
             XDocument project = XDocument.Load(result.ProjectPath);
             Assert.Equal("net10.0", ReadProperty(project, "TargetFramework"));
             Assert.Equal("true", ReadProperty(project, "GenerateDocumentationFile"));
+            Assert.Equal("false", ReadProperty(project, "ServerGarbageCollection"));
+            Assert.Equal("true", ReadProperty(project, "ConcurrentGarbageCollection"));
             Assert.Equal(
                 [
                     NormalizeMsBuildPath(Path.Combine(root, "src", "PixelEngine.Hosting", "PixelEngine.Hosting.csproj")),
@@ -82,6 +84,8 @@ public sealed class ProjectGeneratorTests
             XDocument project = XDocument.Load(result.ProjectPath);
             // Assert：验证预期结果
             Assert.Equal("true", ReadProperty(project, "GenerateDocumentationFile"));
+            Assert.Equal("false", ReadProperty(project, "ServerGarbageCollection"));
+            Assert.Equal("true", ReadProperty(project, "ConcurrentGarbageCollection"));
             Assert.Equal(["PixelEngine.Hosting", "PixelEngine.Scripting"], ReadIncludes(project, "PackageReference"));
             Assert.Empty(ReadIncludes(project, "ProjectReference"));
             foreach (XElement package in project.Descendants("PackageReference"))

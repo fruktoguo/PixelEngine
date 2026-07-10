@@ -93,6 +93,22 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证用户入口显式固定本机目标场景定档的 Workstation + Concurrent GC 组合。
+    /// </summary>
+    [Fact]
+    public void UserFacingEntryPointsPinWorkstationConcurrentGc()
+    {
+        string root = FindRepositoryRoot();
+        XDocument editor = XDocument.Load(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "PixelEngine.Editor.Shell.csproj"));
+        XDocument demo = XDocument.Load(Path.Combine(root, "demo", "PixelEngine.Demo", "PixelEngine.Demo.csproj"));
+
+        Assert.Equal("false", editor.Descendants("ServerGarbageCollection").Single().Value);
+        Assert.Equal("true", editor.Descendants("ConcurrentGarbageCollection").Single().Value);
+        Assert.Equal("false", demo.Descendants("ServerGarbageCollection").Single().Value);
+        Assert.Equal("true", demo.Descendants("ConcurrentGarbageCollection").Single().Value);
+    }
+
+    /// <summary>
     /// 验证正式输出验证链路与 Editor Build And Run 都隐藏子进程窗口，避免用户启动正式应用时看到控制台窗口。
     /// </summary>
     [Fact]
