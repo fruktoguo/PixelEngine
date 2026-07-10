@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-10",
-  "generatedFromCommit": "ff90cf44c0e8c4364120e246d858bfc56c330af1",
+  "generatedFromCommit": "2551c2aa58077901e2b32cc39b45a2540f1d83f1",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -51,6 +51,19 @@
       "reportPath": "docs/evidence-2026-07-10-perf-003-ca-throughput.md",
       "sha256": "4526bbc74deab4863c7b4de6be66398543fd62e56a11a638c9fdc8d639436dc2",
       "notes": "本机 2,166,784-cell FullActive2M 平均 16.575ms、约 1.046M cells/8ms、Allocated -；已完成 movement source/target 寻址复用和 Full dirty 短路，但仍低于 2M/8ms，不能据此关闭 PERF-003 或伪造目标硬件/跨 RID 证据。"
+    },
+    {
+      "entryId": "perf-004-zero-allocation-20260710",
+      "taskIds": ["PERF-004"],
+      "evidenceState": "complete_local_zero_allocation",
+      "commit": "2551c2aa58077901e2b32cc39b45a2540f1d83f1",
+      "runSessionId": "local-20260710-perf004-zero-allocation",
+      "runIdentityStatus": "captured",
+      "hardware": "Microsoft Windows 11 build 26100; AMD Ryzen 7 5800X 8c/16t; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "dotnet test tests/PixelEngine.Simulation.Tests/PixelEngine.Simulation.Tests.csproj -c Release --no-restore --filter FullyQualifiedName~SimulationPhaseInterfaceTests; dotnet test tests/PixelEngine.Physics.Tests/PixelEngine.Physics.Tests.csproj -c Release --no-restore --filter FullyQualifiedName~PhysicsSyncTests; pwsh tools/run-benchmark.ps1 -Artifacts artifacts/perf-004-simulation-rect -BenchmarkDotNetArgs \"--filter=*SimulationAllocationBenchmarks.*RectAtInputPhaseSteadyState*\"; pwsh tools/run-benchmark.ps1 -Artifacts artifacts/perf-004-physics-sync -BenchmarkDotNetArgs \"--filter=*PhysicsBenchmarks.PhysicsSystemSyncStepSteadyState*\"",
+      "reportPath": "docs/evidence-2026-07-10-perf-004-zero-allocation.md",
+      "sha256": "ff40c55716b95b63bcfe026cd03fbd5fcb258390019ae92ff43226421237a7d6",
+      "notes": "Simulation 批量 edit/clear BDN 分别为 36.733us/26.091us，Physics SyncStep 为 1.0259ms（1 body）与 977.7us（16 bodies），四个场景 MemoryDiagnoser 均为 Allocated -；调用级分配测试和行为测试全部通过。"
     },
     {
       "entryId": "arch-001-custom-metric-20260710",
