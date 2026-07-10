@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-10",
-  "generatedFromCommit": "464f40a397ca3bf279d541fcfef9e0629628e1f4",
+  "generatedFromCommit": "17a88e67242ecc713832f1804f6ddc093b70dffe",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -25,6 +25,19 @@
       "reportPath": "docs/evidence-2026-07-10-perf-001-benchmark-baseline.md",
       "sha256": "43b3e97d467f1583139b639f89e52a7d4f37ccd6ac57121f6d5f668ea7977f0c",
       "notes": "当前 commit 的正式 BDN 基线：CA 6、render 2、physics 8、粒子 9、UI 4，共 29 个 benchmark；均有 warmup 与多次 measured iteration，原始 artifacts 只作可再生引用。MinIterationTime/outlier warning 按原始报告保留。"
+    },
+    {
+      "entryId": "perf-002-render-buffer-20260710",
+      "taskIds": ["PERF-002"],
+      "evidenceState": "complete_local_render_buffer_regression",
+      "commit": "17a88e67242ecc713832f1804f6ddc093b70dffe",
+      "runSessionId": "local-20260710-perf002-render-buffer",
+      "runIdentityStatus": "captured",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8c/16t; AMD Radeon RX 7900 XT driver 32.0.31021.5001; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "dotnet build PixelEngine.sln -c Release --no-restore -m:1; dotnet test PixelEngine.sln -c Release --no-build --no-restore -m:1 --logger console;verbosity=minimal; dotnet run --project demo/PixelEngine.Demo/PixelEngine.Demo.csproj -c Release --no-build -- --no-hot-reload --window-ticks 120 --no-vsync --content demo/PixelEngine.Demo/content --log-dir artifacts/perf-002-boundary-fast-window; pwsh tools/run-benchmark.ps1 -Project bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -Artifacts artifacts/perf-002-render-buffer-final -BenchmarkDotNetArgs @('--filter=*RenderBufferViewportBenchmarks*','--launchCount=1','--warmupCount=3','--iterationCount=5'); pwsh tools/validate-task-catalog.ps1; git diff --check",
+      "reportPath": "docs/evidence-2026-07-10-perf-002-render-buffer.md",
+      "sha256": "5b9b6cf823cd2a03f9ce620cb5d6bcda8065a72147fc48b26c4c1b81eedbf11f",
+      "notes": "同场景窗口 render-buffer 平均 15.362ms→7.475ms、p99 22.644ms→13.079ms；1280x720 BDN 强制重建 6.458ms、稳定复用 3.137us，MemoryDiagnoser 均为 Allocated -。solution 全量 1472 passed/34 skipped，32 projects build 为 0 warning/0 error。"
     },
     {
       "entryId": "arch-001-custom-metric-20260710",
