@@ -251,10 +251,17 @@ public static class DemoProgram
             {
                 long tickStart = Stopwatch.GetTimestamp();
                 double now = stopwatch.Elapsed.TotalSeconds;
+                long threadAllocatedBytesBeforeTick = GC.GetAllocatedBytesForCurrentThread();
                 _ = engine.RunOneTick(now - previousSeconds);
                 previousSeconds = now;
                 double tickMs = (Stopwatch.GetTimestamp() - tickStart) * 1000.0 / Stopwatch.Frequency;
-                windowFrameProbe.RecordFrame(tickMs, engine.Context.Profiler.LastSubFrame, engine.Context.Counters);
+                long threadAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - threadAllocatedBytesBeforeTick;
+                windowFrameProbe.RecordFrame(
+                    tickMs,
+                    engine.Context.Profiler.LastFrame,
+                    engine.Context.Profiler.LastSubFrame,
+                    engine.Context.Counters,
+                    threadAllocatedBytes);
                 particleFrameProbe?.RecordFrame(tickMs, engine.Context.Profiler.LastSubFrame, engine.Context.Counters);
             }
 
@@ -690,18 +697,7 @@ public static class DemoProgram
     private static TBehaviour? FindBehaviour<TBehaviour>(ScriptScene scene)
         where TBehaviour : Behaviour
     {
-        foreach (ScriptEntityInspection entity in scene.CaptureInspectionSnapshot())
-        {
-            foreach (ScriptComponentInspection component in entity.Components)
-            {
-                if (component.Behaviour is TBehaviour behaviour)
-                {
-                    return behaviour;
-                }
-            }
-        }
-
-        return null;
+        return scene.TryGetFirstComponent(out TBehaviour? behaviour) ? behaviour : null;
     }
 
     /// <summary>

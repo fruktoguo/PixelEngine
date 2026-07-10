@@ -8,6 +8,7 @@ namespace PixelEngine.Gui;
 public sealed class GuiApp : IDisposable
 {
     private readonly GuiController _controller;
+    private readonly ScriptGuiContext _scriptGuiContext;
     private bool _initialized;
     private bool _disposed;
 
@@ -27,6 +28,7 @@ public sealed class GuiApp : IDisposable
         _controller = controller ?? throw new ArgumentNullException(nameof(controller));
         Options = _controller.Options;
         Input = new GuiInputBridge(_controller.Backend);
+        _scriptGuiContext = new ScriptGuiContext(1, 1, 1f / 60f, default);
     }
 
     /// <summary>
@@ -125,12 +127,12 @@ public sealed class GuiApp : IDisposable
         }
 
         _controller.NewFrame(deltaSeconds, width, height, framebufferScaleX, framebufferScaleY);
-        ScriptGuiContext gui = new(width, height, deltaSeconds, Input.Capture);
+        _scriptGuiContext.ResetFrame(width, height, deltaSeconds, Input.Capture);
         // 同一 ImGui frame 内固定顺序：Managed UI → 脚本 OnGui，共享 Input.Capture 仲裁。
-        drawManagedGui?.Invoke(gui);
+        drawManagedGui?.Invoke(_scriptGuiContext);
         if (drawScriptGui is not null)
         {
-            drawScriptGui(gui);
+            drawScriptGui(_scriptGuiContext);
         }
 
         _controller.Render();

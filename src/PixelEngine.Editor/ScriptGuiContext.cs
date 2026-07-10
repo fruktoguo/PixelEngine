@@ -1,166 +1,135 @@
-using Hexa.NET.ImGui;
 using PixelEngine.Scripting;
-using System.Numerics;
 
 namespace PixelEngine.Editor;
 
 /// <summary>
-/// 将脚本公开的 <see cref="IGuiContext" /> 适配到当前 ImGui frame。
+/// 将脚本公开的 <see cref="IGuiContext" /> 适配到 Editor 当前 ImGui frame，
+/// 并复用 <see cref="PixelEngine.Gui.ScriptGuiContext" /> 的无分配 UTF-8 编码路径。
 /// </summary>
-public sealed class ScriptGuiContext(int width, int height, float deltaTime, EditorInputSnapshot capture) : IGuiContext
+/// <param name="width">framebuffer 宽度。</param>
+/// <param name="height">framebuffer 高度。</param>
+/// <param name="deltaTime">GUI 帧间隔。</param>
+/// <param name="capture">Editor 输入捕获快照。</param>
+public sealed class ScriptGuiContext(
+    int width,
+    int height,
+    float deltaTime,
+    EditorInputSnapshot capture) : IGuiContext
 {
-    /// <inheritdoc />
-    public int Width { get; } = Math.Max(1, width);
+    private readonly PixelEngine.Gui.ScriptGuiContext _inner = new(width, height, deltaTime, MapCapture(capture));
 
     /// <inheritdoc />
-    public int Height { get; } = Math.Max(1, height);
+    public int Width => _inner.Width;
 
     /// <inheritdoc />
-    public float DeltaTime { get; } = float.IsFinite(deltaTime) && deltaTime > 0f ? deltaTime : 1f / 60f;
+    public int Height => _inner.Height;
 
     /// <inheritdoc />
-    public bool WantsMouse { get; } = capture.WantCaptureMouse;
+    public float DeltaTime => _inner.DeltaTime;
 
     /// <inheritdoc />
-    public bool WantsKeyboard { get; } = capture.WantCaptureKeyboard;
+    public bool WantsMouse => _inner.WantsMouse;
+
+    /// <inheritdoc />
+    public bool WantsKeyboard => _inner.WantsKeyboard;
+
+    internal void ResetFrame(int width, int height, float deltaTime, EditorInputSnapshot capture)
+    {
+        _inner.ResetFrame(width, height, deltaTime, MapCapture(capture));
+    }
 
     /// <inheritdoc />
     public void SetNextWindow(float x, float y, float width, float height, GuiCondition condition = GuiCondition.Always)
     {
-        if (!float.IsFinite(x) || !float.IsFinite(y) || !float.IsFinite(width) || !float.IsFinite(height))
-        {
-            throw new ArgumentOutOfRangeException(nameof(width), "GUI 窗口坐标与尺寸必须是有限数值。");
-        }
-
-        ImGui.SetNextWindowPos(new Vector2(x, y), MapCondition(condition));
-        ImGui.SetNextWindowSize(new Vector2(Math.Max(1f, width), Math.Max(1f, height)), MapCondition(condition));
+        _inner.SetNextWindow(x, y, width, height, condition);
     }
 
     /// <inheritdoc />
     public bool BeginWindow(string id, string title, GuiWindowFlags flags = GuiWindowFlags.None)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        ArgumentNullException.ThrowIfNull(title);
-        bool visible = true;
-        return ImGui.Begin($"{title}##{id}", ref visible, MapWindowFlags(flags));
+        return _inner.BeginWindow(id, title, flags);
     }
 
     /// <inheritdoc />
     public void EndWindow()
     {
-        ImGui.End();
+        _inner.EndWindow();
     }
 
     /// <inheritdoc />
     public void Text(string text)
     {
-        ImGui.TextUnformatted(text ?? string.Empty);
+        _inner.Text(text);
+    }
+
+    /// <inheritdoc />
+    public void Text(ReadOnlySpan<char> text)
+    {
+        _inner.Text(text);
     }
 
     /// <inheritdoc />
     public void TextColored(string text, uint colorBgra)
     {
-        ImGui.PushStyleColor(ImGuiCol.Text, BgraToVector4(colorBgra));
-        ImGui.TextUnformatted(text ?? string.Empty);
-        ImGui.PopStyleColor();
+        _inner.TextColored(text, colorBgra);
+    }
+
+    /// <inheritdoc />
+    public void TextColored(ReadOnlySpan<char> text, uint colorBgra)
+    {
+        _inner.TextColored(text, colorBgra);
     }
 
     /// <inheritdoc />
     public void SameLine()
     {
-        ImGui.SameLine();
+        _inner.SameLine();
     }
 
     /// <inheritdoc />
     public void Separator()
     {
-        ImGui.Separator();
+        _inner.Separator();
     }
 
     /// <inheritdoc />
     public bool Button(string label)
     {
-        return ImGui.Button(label ?? string.Empty);
+        return _inner.Button(label);
     }
 
     /// <inheritdoc />
     public bool Checkbox(string label, ref bool value)
     {
-        return ImGui.Checkbox(label ?? string.Empty, ref value);
+        return _inner.Checkbox(label, ref value);
     }
 
     /// <inheritdoc />
     public void ProgressBar(float value01, string? label = null)
     {
-        float clamped = float.IsFinite(value01) ? Math.Clamp(value01, 0f, 1f) : 0f;
-        ImGui.ProgressBar(clamped, new Vector2(-1f, 0f), label ?? string.Empty);
+        _inner.ProgressBar(value01, label);
+    }
+
+    /// <inheritdoc />
+    public void ProgressBar(float value01, ReadOnlySpan<char> label)
+    {
+        _inner.ProgressBar(value01, label);
     }
 
     /// <inheritdoc />
     public void ColorSwatch(string id, uint colorBgra, float size = 16f)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        float side = float.IsFinite(size) ? Math.Max(1f, size) : 16f;
-        _ = ImGui.ColorButton($"##{id}", BgraToVector4(colorBgra), ImGuiColorEditFlags.NoTooltip, new Vector2(side, side));
+        _inner.ColorSwatch(id, colorBgra, size);
     }
 
-    private static ImGuiCond MapCondition(GuiCondition condition)
+    /// <inheritdoc />
+    public void ColorSwatch(ReadOnlySpan<char> id, uint colorBgra, float size = 16f)
     {
-        return condition switch
-        {
-            GuiCondition.Always => ImGuiCond.Always,
-            GuiCondition.FirstUseEver => ImGuiCond.FirstUseEver,
-            _ => throw new ArgumentOutOfRangeException(nameof(condition), condition, "未知 GUI 条件。"),
-        };
+        _inner.ColorSwatch(id, colorBgra, size);
     }
 
-    private static ImGuiWindowFlags MapWindowFlags(GuiWindowFlags flags)
+    private static PixelEngine.Gui.GuiInputSnapshot MapCapture(EditorInputSnapshot capture)
     {
-        ImGuiWindowFlags result = ImGuiWindowFlags.None;
-        if ((flags & GuiWindowFlags.NoTitleBar) != 0)
-        {
-            result |= ImGuiWindowFlags.NoTitleBar;
-        }
-
-        if ((flags & GuiWindowFlags.NoResize) != 0)
-        {
-            result |= ImGuiWindowFlags.NoResize;
-        }
-
-        if ((flags & GuiWindowFlags.NoMove) != 0)
-        {
-            result |= ImGuiWindowFlags.NoMove;
-        }
-
-        if ((flags & GuiWindowFlags.AlwaysAutoResize) != 0)
-        {
-            result |= ImGuiWindowFlags.AlwaysAutoResize;
-        }
-
-        if ((flags & GuiWindowFlags.NoSavedSettings) != 0)
-        {
-            result |= ImGuiWindowFlags.NoSavedSettings;
-        }
-
-        if ((flags & GuiWindowFlags.NoBackground) != 0)
-        {
-            result |= ImGuiWindowFlags.NoBackground;
-        }
-
-        if ((flags & GuiWindowFlags.NoScrollbar) != 0)
-        {
-            result |= ImGuiWindowFlags.NoScrollbar;
-        }
-
-        return result;
-    }
-
-    private static Vector4 BgraToVector4(uint colorBgra)
-    {
-        float b = (colorBgra & 0xFF) / 255f;
-        float g = ((colorBgra >> 8) & 0xFF) / 255f;
-        float r = ((colorBgra >> 16) & 0xFF) / 255f;
-        float a = ((colorBgra >> 24) & 0xFF) / 255f;
-        return new Vector4(r, g, b, a);
+        return new PixelEngine.Gui.GuiInputSnapshot(capture.WantCaptureMouse, capture.WantCaptureKeyboard);
     }
 }

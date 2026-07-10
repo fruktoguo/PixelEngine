@@ -223,7 +223,7 @@ public static class MarchingSquares
         return rangeCount;
     }
 
-    private static int TraceContoursWithScratch(
+    internal static int TraceContoursWithScratch(
         ReadOnlySpan<byte> solidMask,
         int width,
         int height,

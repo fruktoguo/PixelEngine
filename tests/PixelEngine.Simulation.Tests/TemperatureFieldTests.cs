@@ -40,6 +40,36 @@ public sealed class TemperatureFieldTests
     }
 
     /// <summary>
+    /// 验证没有热量的 resident chunk 不会在每个温度 tick 物化临时 block，
+    /// 以守护温度热路径的稳态零分配约束。
+    /// </summary>
+    [Fact]
+    public void ConductStepSkipsAmbientResidentChunksWithoutAllocations()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out _);
+        FillAll(source, Water);
+        MaterialTable materials = CreateMaterials();
+        TemperatureField field = new();
+
+        // 预热 scratch 容量；无热量时不应创建任何 TemperatureBlock。
+        field.ConductStep(source, materials.Hot);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 32; i++)
+        {
+            field.ConductStep(source, materials.Hot, frameIndex: (uint)i, worldSeed: 17);
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Assert.False(field.HasActiveBlocks);
+        Assert.Equal(0, allocated);
+    }
+
+    /// <summary>
     /// 验证阈值相变使用温度场读数直接改材质、打 parity 并标记 dirty。
     /// </summary>
     [Fact]
@@ -266,6 +296,37 @@ public sealed class TemperatureFieldTests
 
         Assert.False(field.HasActiveBlocks);
         Assert.Equal(0, field.GetTemperature(32, 32));
+    }
+
+    /// <summary>
+    /// 验证已冷却并回收的温度 block 在下一次热源注入中复用其双缓冲，守护持续战斗的稳态零分配。
+    /// </summary>
+    [Fact]
+    public void ReusesCooledTemperatureBlocksWithoutAllocations()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Fill(center, Water);
+        MaterialTable materials = CreateMaterials(waterHeatConduct: 0);
+        TemperatureField field = new(storageKind: TemperatureStorageKind.Float32);
+        field.AddHeat(32, 32, 90);
+
+        for (int i = 0; i < 30; i++)
+        {
+            field.ConductStep(source, materials.Hot, frameIndex: (uint)i, worldSeed: 17);
+        }
+
+        Assert.False(field.HasActiveBlocks);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        field.AddHeat(32, 32, 90);
+        field.ConductStep(source, materials.Hot, frameIndex: 31, worldSeed: 17);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Assert.True(field.HasActiveBlocks);
+        Assert.Equal(0, allocated);
     }
 
     /// <summary>

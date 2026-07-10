@@ -60,10 +60,12 @@ public sealed class RenderBufferBuilder(
     /// <param name="target">目标 render buffer。</param>
     /// <param name="aux">副输出 buffer。</param>
     /// <param name="profiler">可选 Core 诊断 profiler。</param>
-    public void Build(RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux, FrameProfiler? profiler = null)
+    public void Build(in RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux, FrameProfiler? profiler = null)
     {
         long started = Stopwatch.GetTimestamp();
-        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(context.Chunks);
+        ArgumentNullException.ThrowIfNull(context.Materials);
+        ArgumentNullException.ThrowIfNull(context.Temperature);
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(aux);
         if (target.Width != context.Camera.ViewportWidth || target.Height != context.Camera.ViewportHeight)
@@ -117,7 +119,7 @@ public sealed class RenderBufferBuilder(
         RecordSub(profiler, started);
     }
 
-    private bool CanReuseStableFrame(RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux)
+    private bool CanReuseStableFrame(in RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux)
     {
         if (!_hasBuiltFrame ||
             !ReferenceEquals(_lastTarget, target) ||
@@ -152,7 +154,7 @@ public sealed class RenderBufferBuilder(
         return true;
     }
 
-    private void RememberBuiltFrame(RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux)
+    private void RememberBuiltFrame(in RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux)
     {
         ReadOnlySpan<Chunk> resident = context.Chunks.ResidentChunks;
         if (_lastResidentChunks.Length < resident.Length)
@@ -182,7 +184,7 @@ public sealed class RenderBufferBuilder(
     private static void BuildRows(int start, int end, int workerIndex, object? state)
     {
         BuildState buildState = (BuildState)state!;
-        RenderFrameContext context = buildState.Context!;
+        RenderFrameContext context = buildState.Context;
         RenderBuffer target = buildState.Target!;
         RenderAuxBuffers aux = buildState.Aux!;
         RenderBufferBuilder builder = buildState.Builder!;
@@ -238,7 +240,7 @@ public sealed class RenderBufferBuilder(
         }
     }
 
-    private void BuildRowsStyledSegmented(RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux, int start, int end)
+    private void BuildRowsStyledSegmented(in RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux, int start, int end)
     {
         Span<uint> pixels = target.Pixels;
         Span<uint> emissive = aux.Emissive;
@@ -316,7 +318,7 @@ public sealed class RenderBufferBuilder(
     }
 
     private void BuildRowsPaletteZoomFast(
-        RenderFrameContext context,
+        in RenderFrameContext context,
         RenderBuffer target,
         RenderAuxBuffers aux,
         int start,
@@ -392,7 +394,7 @@ public sealed class RenderBufferBuilder(
     }
 
     private void BuildRowsStyledZoom(
-        RenderFrameContext context,
+        in RenderFrameContext context,
         RenderBuffer target,
         RenderAuxBuffers aux,
         int start,
@@ -431,7 +433,7 @@ public sealed class RenderBufferBuilder(
         }
     }
 
-    private void BuildRowsPaletteFast(RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux, int start, int end)
+    private void BuildRowsPaletteFast(in RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux, int start, int end)
     {
         Span<uint> pixels = target.Pixels;
         Span<uint> emissive = aux.Emissive;
@@ -493,7 +495,7 @@ public sealed class RenderBufferBuilder(
         }
     }
 
-    private bool CanUsePaletteFastPath(RenderFrameContext context)
+    private bool CanUsePaletteFastPath(in RenderFrameContext context)
     {
         CameraState camera = context.Camera;
         MaterialHotTable hot = context.Materials.Hot;
@@ -505,7 +507,7 @@ public sealed class RenderBufferBuilder(
             (_textures is null || !hot.HasTexturedMaterials);
     }
 
-    private bool CanUseStyledSegmentedFastPath(RenderFrameContext context)
+    private bool CanUseStyledSegmentedFastPath(in RenderFrameContext context)
     {
         CameraState camera = context.Camera;
         MaterialHotTable hot = context.Materials.Hot;
@@ -517,7 +519,7 @@ public sealed class RenderBufferBuilder(
             (_textures is null || !hot.HasTexturedMaterials);
     }
 
-    private bool TryGetStyledZoomPixelsPerCell(RenderFrameContext context, out int pixelsPerCell)
+    private bool TryGetStyledZoomPixelsPerCell(in RenderFrameContext context, out int pixelsPerCell)
     {
         pixelsPerCell = 0;
         CameraState camera = context.Camera;
@@ -542,7 +544,7 @@ public sealed class RenderBufferBuilder(
         return true;
     }
 
-    private bool TryGetPaletteZoomPixelsPerCell(RenderFrameContext context, out int pixelsPerCell)
+    private bool TryGetPaletteZoomPixelsPerCell(in RenderFrameContext context, out int pixelsPerCell)
     {
         pixelsPerCell = 0;
         CameraState camera = context.Camera;
@@ -569,12 +571,12 @@ public sealed class RenderBufferBuilder(
         return true;
     }
 
-    private bool ShouldUseMaterialStyles(RenderFrameContext context)
+    private bool ShouldUseMaterialStyles(in RenderFrameContext context)
     {
         return RenderStyleLevel == RenderBufferStyleLevel.Full && context.Materials.Visual.HasStyleEffects;
     }
 
-    private int GetStyledPaletteRunLength(RenderFrameContext context, Chunk chunk, int localStart, int remaining, int worldX, int worldY)
+    private int GetStyledPaletteRunLength(in RenderFrameContext context, Chunk chunk, int localStart, int remaining, int worldX, int worldY)
     {
         MaterialHotTable hot = context.Materials.Hot;
         MaterialVisualTable visual = context.Materials.Visual;
@@ -628,7 +630,7 @@ public sealed class RenderBufferBuilder(
     }
 
     // 空世界检测：材质 id 0 为透明 empty 且所有 resident chunk 全为 0 时可跳过像素写入。
-    private bool CanClearEmptyWorld(RenderFrameContext context)
+    private bool CanClearEmptyWorld(in RenderFrameContext context)
     {
         if (context.DebugCellColors is not null)
         {
@@ -685,7 +687,7 @@ public sealed class RenderBufferBuilder(
         return true;
     }
 
-    private bool CanReuseEmptyWorldCache(RenderFrameContext context, ReadOnlySpan<Chunk> chunks)
+    private bool CanReuseEmptyWorldCache(in RenderFrameContext context, ReadOnlySpan<Chunk> chunks)
     {
         if (!ReferenceEquals(_emptyWorldSource, context.Chunks) ||
             !ReferenceEquals(_emptyWorldMaterials, context.Materials) ||
@@ -706,7 +708,7 @@ public sealed class RenderBufferBuilder(
         return true;
     }
 
-    private void StoreEmptyWorldCache(RenderFrameContext context, ReadOnlySpan<Chunk> chunks)
+    private void StoreEmptyWorldCache(in RenderFrameContext context, ReadOnlySpan<Chunk> chunks)
     {
         if (_emptyWorldChunks.Length < chunks.Length)
         {
@@ -794,7 +796,7 @@ public sealed class RenderBufferBuilder(
     }
 
     private void WriteScalarPixel(
-        RenderFrameContext context,
+        in RenderFrameContext context,
         int worldX,
         int worldY,
         int index,
@@ -816,7 +818,7 @@ public sealed class RenderBufferBuilder(
     }
 
     // 标量采样管线：纹理 → 色噪 → 温度辉光 → 材质 style → 调试色 → emissive/occluder 标记。
-    private uint SampleCell(RenderFrameContext context, int worldX, int worldY, out bool isEmissive, out bool isOccluder)
+    private uint SampleCell(in RenderFrameContext context, int worldX, int worldY, out bool isEmissive, out bool isOccluder)
     {
         isEmissive = false;
         isOccluder = false;
@@ -882,7 +884,7 @@ public sealed class RenderBufferBuilder(
     }
 
     private uint ApplyMaterialStyle(
-        RenderFrameContext context,
+        in RenderFrameContext context,
         Chunk chunk,
         int local,
         ushort materialId,
@@ -939,7 +941,7 @@ public sealed class RenderBufferBuilder(
     }
 
     private uint ApplyBoundaryEdge(
-        RenderFrameContext context,
+        in RenderFrameContext context,
         Chunk chunk,
         int local,
         ushort materialId,
@@ -961,7 +963,7 @@ public sealed class RenderBufferBuilder(
     }
 
     private bool HasBoundaryEdge(
-        RenderFrameContext context,
+        in RenderFrameContext context,
         Chunk chunk,
         int local,
         ushort materialId,
@@ -1138,7 +1140,7 @@ public sealed class RenderBufferBuilder(
 
     private sealed class BuildState
     {
-        public RenderFrameContext? Context;
+        public RenderFrameContext Context;
         public RenderBuffer? Target;
         public RenderAuxBuffers? Aux;
         public RenderBufferBuilder? Builder;

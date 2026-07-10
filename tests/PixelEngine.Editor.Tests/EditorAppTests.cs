@@ -95,6 +95,44 @@ public sealed class EditorAppTests
     }
 
     /// <summary>
+    /// 验证 Editor Play 模式连续帧复用脚本 GUI 上下文并刷新尺寸快照。
+    /// </summary>
+    [Fact]
+    public void DrawFrameReusesScriptGuiContextAcrossFrames()
+    {
+        RecordingBackend backend = new();
+        using EditorApp app = new(backend, new EditorAppOptions { EnableDockSpace = false });
+        object? first = null;
+        object? second = null;
+        int secondWidth = 0;
+        app.Initialize();
+
+        app.DrawFrame(
+            0.016f,
+            640,
+            360,
+            new EngineCounters(),
+            1,
+            EditorPerformanceSnapshot.FromCounters(new EngineCounters()),
+            gui => first = gui);
+        app.DrawFrame(
+            0.008f,
+            1280,
+            720,
+            new EngineCounters(),
+            2,
+            EditorPerformanceSnapshot.FromCounters(new EngineCounters()),
+            gui =>
+            {
+                second = gui;
+                secondWidth = gui.Width;
+            });
+
+        Assert.Same(first, second);
+        Assert.Equal(1280, secondWidth);
+    }
+
+    /// <summary>
     /// 验证 EditorApp 可按标题重新显示已注册面板，未知标题不会伪造成功。
     /// </summary>
     [Fact]

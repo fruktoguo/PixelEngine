@@ -12,6 +12,15 @@ namespace PixelEngine.Rendering.Tests;
 public sealed class RenderBufferBuilderTests
 {
     /// <summary>
+    /// 验证每帧构建上下文是只读值类型，不会在 Hosting 相位 9 产生对象分配。
+    /// </summary>
+    [Fact]
+    public void RenderFrameContextIsValueType()
+    {
+        Assert.True(typeof(RenderFrameContext).IsValueType);
+    }
+
+    /// <summary>
     /// 验证相机 1:1 映射下，屏幕像素正确对应世界单元格材质颜色，且非发光材质不写入 Emissive。
     /// </summary>
     [Fact]

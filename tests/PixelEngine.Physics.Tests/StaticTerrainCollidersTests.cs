@@ -1,4 +1,5 @@
 using System.Numerics;
+using PixelEngine.Core;
 using PixelEngine.Core.Mathematics;
 using PixelEngine.Interop.Box2D;
 using PixelEngine.Simulation;
@@ -96,6 +97,55 @@ public sealed class StaticTerrainCollidersTests
             // Assert：验证预期结果
             Assert.Equal(0, colliders.ColliderChunkCount);
             Assert.Equal(0, colliders.LastRebuiltChunkCount);
+        }
+        finally
+        {
+            Box2D.b2DestroyWorld(worldId);
+        }
+    }
+
+    /// <summary>
+    /// 验证同一 chunk 在预热后的持续 collider 重建复用边界追踪和 chain scratch，
+    /// 不在物理热路径产生托管堆分配。
+    /// </summary>
+    [Fact]
+    public void UpdateReusesGeometryScratchAcrossSteadyRebuildsWithoutAllocations()
+    {
+        PhysicsScale.ConfigureBox2DLengthUnits();
+        B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
+        worldDef.Gravity = new B2Vec2 { X = 0f, Y = 0f };
+        B2WorldId worldId = Box2D.b2CreateWorld(in worldDef);
+
+        try
+        {
+            Chunk chunk = new(new ChunkCoord(0, 0));
+            FillRect(chunk, minX: 0, minY: 0, maxX: EngineConstants.ChunkSize, maxY: EngineConstants.ChunkSize, material: 2);
+            int toggledCell = CellAddressing.LocalIndexFromLocal(0, 0);
+            TestChunkSource source = new(chunk);
+            PhysicsWorld physicsWorld = new();
+            _ = physicsWorld.AddBody(CreateBody(worldId, new Vector2(32, 32)), CreateMask(16, 16));
+            using StaticTerrainColliders colliders = new(worldId, expandedChunkRadius: 0);
+
+            // 预热完整实心与单孔两种 topology，填满 ArrayPool 与长期 scratch。
+            colliders.Update(source, physicsWorld);
+            chunk.MaterialBuffer[toggledCell] = 0;
+            colliders.Update(source, physicsWorld);
+            chunk.MaterialBuffer[toggledCell] = 2;
+            colliders.Update(source, physicsWorld);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 16; i++)
+            {
+                chunk.MaterialBuffer[toggledCell] = (i & 1) == 0 ? (ushort)0 : (ushort)2;
+                colliders.Update(source, physicsWorld);
+            }
+
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+            Assert.Equal(0, allocated);
         }
         finally
         {

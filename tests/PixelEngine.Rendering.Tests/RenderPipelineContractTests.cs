@@ -232,6 +232,9 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("BindBuffer(BufferTargetARB.PixelUnpackBuffer", state, StringComparison.Ordinal);
         Assert.Contains("PixelStore(PixelStoreParameter.UnpackAlignment", state, StringComparison.Ordinal);
         Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Game, this)", guiBridge, StringComparison.Ordinal);
+        Assert.Contains("private readonly Action<IGuiContext>? _scriptGui;", guiBridge, StringComparison.Ordinal);
+        Assert.Contains("_scriptGui = scriptRuntime is null ? null : scriptRuntime.DrawGui;", guiBridge, StringComparison.Ordinal);
+        Assert.DoesNotContain("_scriptRuntime is null ? null : _scriptRuntime.DrawGui", guiBridge, StringComparison.Ordinal);
         Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Game, this)", uiCompositor, StringComparison.Ordinal);
         Assert.Contains("IUiPresentTargetProvider? targetProvider", uiCompositor, StringComparison.Ordinal);
         Assert.Contains("context.WithTarget(target)", uiCompositor, StringComparison.Ordinal);

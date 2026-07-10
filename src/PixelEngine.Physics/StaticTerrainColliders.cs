@@ -16,6 +16,12 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
     private readonly B2WorldId _worldId;
     private readonly int _expandedChunkRadius;
     private readonly Dictionary<ChunkCoord, TerrainCollider> _colliders = [];
+    private readonly HashSet<ChunkCoord> _wantedChunks = [];
+    private readonly List<ChunkCoord> _removeScratch = [];
+    private readonly List<B2ChainId> _chainScratch = new(capacity: 16);
+    // 相位 8 的静态地形重建在主线程串行执行；scratch 仅归本 collider 管理器所有，
+    // 避免每个 dirty chunk 重新分配边界链容器。见 docs §8.3。
+    private readonly MarchingSquares.TraceScratch _traceScratch = new();
     private bool _disposed;
 
     /// <summary>
@@ -85,7 +91,7 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
     {
         foreach (TerrainCollider collider in _colliders.Values)
         {
-            DestroyCollider(collider);
+            DestroyCollider(in collider);
         }
 
         LastDestroyedChunkCount += _colliders.Count;
@@ -106,7 +112,8 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
 
     private HashSet<ChunkCoord> BuildWantedChunkSet(PhysicsWorld physicsWorld)
     {
-        HashSet<ChunkCoord> wanted = [];
+        HashSet<ChunkCoord> wanted = _wantedChunks;
+        wanted.Clear();
         // 每个 awake 刚体 AABB 按 expandedChunkRadius 膨胀后并入 wanted 集。
         for (int i = 0; i < physicsWorld.BodySlotCount; i++)
         {
@@ -135,7 +142,8 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
 
     private void DestroyOutOfRange(HashSet<ChunkCoord> wanted)
     {
-        List<ChunkCoord>? remove = null;
+        List<ChunkCoord> remove = _removeScratch;
+        remove.Clear();
         foreach (ChunkCoord coord in _colliders.Keys)
         {
             if (wanted.Contains(coord))
@@ -143,11 +151,10 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
                 continue;
             }
 
-            remove ??= [];
             remove.Add(coord);
         }
 
-        if (remove is null)
+        if (remove.Count == 0)
         {
             return;
         }
@@ -155,10 +162,12 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
         for (int i = 0; i < remove.Count; i++)
         {
             TerrainCollider collider = _colliders[remove[i]];
-            DestroyCollider(collider);
+            DestroyCollider(in collider);
             _ = _colliders.Remove(remove[i]);
             LastDestroyedChunkCount++;
         }
+
+        remove.Clear();
     }
 
     private void EnsureCollider(Chunk chunk)
@@ -166,9 +175,9 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
         ulong hash = ComputeTerrainHash(chunk);
         if (hash == 0)
         {
-            if (_colliders.Remove(chunk.Coord, out TerrainCollider? existing))
+            if (_colliders.Remove(chunk.Coord, out TerrainCollider existing))
             {
-                DestroyCollider(existing);
+                DestroyCollider(in existing);
                 LastDestroyedChunkCount++;
             }
 
@@ -176,21 +185,22 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
         }
 
         // 内容 hash 未变则跳过重建，降低每帧 contour 追踪开销。
-        if (_colliders.TryGetValue(chunk.Coord, out TerrainCollider? collider) && collider.ContentHash == hash)
+        bool hasExisting = _colliders.TryGetValue(chunk.Coord, out TerrainCollider existingCollider);
+        if (hasExisting && existingCollider.ContentHash == hash)
         {
             return;
         }
 
-        if (collider is not null)
+        if (hasExisting)
         {
-            DestroyCollider(collider);
+            DestroyCollider(in existingCollider);
             LastDestroyedChunkCount++;
         }
 
         TerrainCollider rebuilt = BuildCollider(chunk, hash);
-        if (rebuilt.ChainIds.Length == 0)
+        if (rebuilt.ChainCount == 0)
         {
-            DestroyCollider(rebuilt);
+            DestroyCollider(in rebuilt);
             _ = _colliders.Remove(chunk.Coord);
             return;
         }
@@ -209,15 +219,22 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
             B2BodyDef bodyDef = Box2D.b2DefaultBodyDef();
             bodyDef.Type = B2BodyType.StaticBody;
             B2BodyId bodyId = Box2D.b2CreateBody(_worldId, in bodyDef);
-            List<B2ChainId> chains = [];
-            CreateContourChains(chunk, bodyId, mask.AsSpan(0, EngineConstants.ChunkArea), chains);
+            _chainScratch.Clear();
+            CreateContourChains(chunk, bodyId, mask.AsSpan(0, EngineConstants.ChunkArea), _chainScratch);
             // contour 失败时回退 row-run 矩形 chain，保证薄地形仍有 collider。
-            if (chains.Count == 0)
+            if (_chainScratch.Count == 0)
             {
-                CreateTilemapFallbackChains(chunk, bodyId, chains);
+                CreateTilemapFallbackChains(chunk, bodyId, _chainScratch);
             }
 
-            return new TerrainCollider(bodyId, [.. chains], hash);
+            if (_chainScratch.Count == 0)
+            {
+                return new TerrainCollider(bodyId, [], chainCount: 0, hash);
+            }
+
+            B2ChainId[] chainIds = ArrayPool<B2ChainId>.Shared.Rent(_chainScratch.Count);
+            _chainScratch.CopyTo(chainIds, 0);
+            return new TerrainCollider(bodyId, chainIds, _chainScratch.Count, hash);
         }
         finally
         {
@@ -233,37 +250,36 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
         }
     }
 
-    private static void CreateContourChains(Chunk chunk, B2BodyId bodyId, ReadOnlySpan<byte> mask, List<B2ChainId> chains)
+    private void CreateContourChains(Chunk chunk, B2BodyId bodyId, ReadOnlySpan<byte> mask, List<B2ChainId> chains)
     {
-        int maxPointCount = MarchingSquares.GetMaximumContourPointCount(EngineConstants.ChunkSize, EngineConstants.ChunkSize);
-        Vector2[] points = ArrayPool<Vector2>.Shared.Rent(maxPointCount);
-        Vector2[] simplified = ArrayPool<Vector2>.Shared.Rent(maxPointCount);
-        ContourRange[] ranges = ArrayPool<ContourRange>.Shared.Rent(maxPointCount / 4);
-        try
+        _traceScratch.EnsureGeometryCapacity(EngineConstants.ChunkSize, EngineConstants.ChunkSize);
+        int rangeCount = MarchingSquares.TraceContoursWithScratch(
+            mask,
+            EngineConstants.ChunkSize,
+            EngineConstants.ChunkSize,
+            _traceScratch._contour,
+            _traceScratch._ranges,
+            _traceScratch);
+        int baseX = chunk.Coord.X << EngineConstants.ChunkSizeLog2;
+        int baseY = chunk.Coord.Y << EngineConstants.ChunkSizeLog2;
+        for (int i = 0; i < rangeCount; i++)
         {
-            // Marching Squares 提轮廓 → Douglas-Peucker 简化 → Box2D chain。
-            int rangeCount = MarchingSquares.TraceContours(mask, EngineConstants.ChunkSize, EngineConstants.ChunkSize, points, ranges);
-            int baseX = chunk.Coord.X << EngineConstants.ChunkSizeLog2;
-            int baseY = chunk.Coord.Y << EngineConstants.ChunkSizeLog2;
-            for (int i = 0; i < rangeCount; i++)
+            ContourRange range = _traceScratch._ranges[i];
+            int count = DouglasPeucker.Simplify(
+                _traceScratch._contour.AsSpan(range.Start, range.Count),
+                _traceScratch._simplified,
+                epsilon: 0.5f,
+                closed: true);
+            int uniqueCount = count > 1 && _traceScratch._simplified[0] == _traceScratch._simplified[count - 1]
+                ? count - 1
+                : count;
+            if (uniqueCount < 4)
             {
-                ContourRange range = ranges[i];
-                int count = DouglasPeucker.Simplify(points.AsSpan(range.Start, range.Count), simplified, epsilon: 0.5f, closed: true);
-                int uniqueCount = count > 1 && simplified[0] == simplified[count - 1] ? count - 1 : count;
-                if (uniqueCount < 4)
-                {
-                    continue;
-                }
-
-                B2ChainId chainId = CreateChain(bodyId, simplified.AsSpan(0, uniqueCount), baseX, baseY);
-                chains.Add(chainId);
+                continue;
             }
-        }
-        finally
-        {
-            ArrayPool<Vector2>.Shared.Return(points);
-            ArrayPool<Vector2>.Shared.Return(simplified);
-            ArrayPool<ContourRange>.Shared.Return(ranges);
+
+            B2ChainId chainId = CreateChain(bodyId, _traceScratch._simplified.AsSpan(0, uniqueCount), baseX, baseY);
+            chains.Add(chainId);
         }
     }
 
@@ -320,14 +336,18 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
         }
     }
 
-    private static void DestroyCollider(TerrainCollider collider)
+    private static void DestroyCollider(in TerrainCollider collider)
     {
-        for (int i = 0; i < collider.ChainIds.Length; i++)
+        for (int i = 0; i < collider.ChainCount; i++)
         {
             Box2D.b2DestroyChain(collider.ChainIds[i]);
         }
 
         Box2D.b2DestroyBody(collider.BodyId);
+        if (collider.ChainIds.Length != 0)
+        {
+            ArrayPool<B2ChainId>.Shared.Return(collider.ChainIds);
+        }
     }
 
     private static ulong ComputeTerrainHash(Chunk chunk)
@@ -369,11 +389,13 @@ public sealed unsafe class StaticTerrainColliders : IDisposable
             (int)MathF.Ceiling(maxY));
     }
 
-    private sealed class TerrainCollider(B2BodyId bodyId, B2ChainId[] chainIds, ulong contentHash)
+    private readonly struct TerrainCollider(B2BodyId bodyId, B2ChainId[] chainIds, int chainCount, ulong contentHash)
     {
         public B2BodyId BodyId { get; } = bodyId;
 
         public B2ChainId[] ChainIds { get; } = chainIds;
+
+        public int ChainCount { get; } = chainCount;
 
         public ulong ContentHash { get; } = contentHash;
     }

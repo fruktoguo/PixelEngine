@@ -36,6 +36,29 @@ public sealed class InverseSamplingRasterizationTests
         }
     }
 
+    /// <summary>
+    /// 验证刚体在斜角 inverse-sampling 时不会让上一帧 stamp 列表扩容；容量必须在创建时覆盖旋转 AABB。
+    /// </summary>
+    [Fact]
+    public void RotatedStampKeepsPreallocatedStampCapacity()
+    {
+        BodyLocalMask mask = CreateFilledMask(width: 16, height: 16, material: 2, origin: new Vector2(8f, 8f));
+        PixelRigidBody body = new(1, default, mask);
+        int initialCapacity = body.PreviousStamps.Capacity;
+        TestChunkSource source = TestChunkSource.CreateSquare(radius: 1);
+        CellGrid grid = new(source, MaterialPropsTable.Empty);
+        RigidStampRegistry registry = new();
+
+        foreach (float angle in new[] { 0f, MathF.PI / 4f, MathF.PI / 2f, MathF.PI * 0.75f })
+        {
+            Transform2D transform = new(new Vector2(32f, 32f), angle);
+            _ = RigidBodyRasterizer.StampInverseSampling(body, in transform, grid, registry);
+
+            Assert.Equal(initialCapacity, body.PreviousStamps.Capacity);
+            _ = RigidBodyRasterizer.EraseAtCurrentTransform(body, grid, registry);
+        }
+    }
+
     private static BodyLocalMask CreateFilledMask(int width, int height, ushort material, Vector2 origin)
     {
         int area = width * height;

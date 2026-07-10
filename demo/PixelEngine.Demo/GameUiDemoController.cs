@@ -368,55 +368,49 @@ public sealed class GameUiDemoController : Behaviour
             return;
         }
 
-        ScriptEntityInspection[] entities = Context.Scene.CaptureInspectionSnapshot();
-        for (int i = 0; i < entities.Length; i++)
+        if (_health is null && Context.Scene.TryGetFirstComponent(out PlayerHealth? sceneHealth))
         {
-            ScriptComponentInspection[] components = entities[i].Components;
-            for (int j = 0; j < components.Length; j++)
-            {
-                Behaviour behaviour = components[j].Behaviour;
-                if (_health is null && behaviour is PlayerHealth sceneHealth)
-                {
-                    _health = sceneHealth;
-                }
-                else if (_player is null && behaviour is PlayerController scenePlayer)
-                {
-                    _player = scenePlayer;
-                }
-                else if (_weapons is null && behaviour is WeaponController sceneWeapons)
-                {
-                    _weapons = sceneWeapons;
-                }
-                else if (_brush is null && behaviour is MaterialBrush sceneBrush)
-                {
-                    _brush = sceneBrush;
-                }
-                else if (_explosive is null && behaviour is ExplosiveTool sceneExplosive)
-                {
-                    _explosive = sceneExplosive;
-                }
-                else if (_projectile is null && behaviour is PlayableProjectileTool sceneProjectile)
-                {
-                    _projectile = sceneProjectile;
-                }
-                else if (_mission is null && behaviour is MissionDirector sceneMission)
-                {
-                    _mission = sceneMission;
-                }
-                else if (_hazard is null && behaviour is RisingHazardDirector sceneHazard)
-                {
-                    _hazard = sceneHazard;
-                }
-                else if (_goal is null && behaviour is GoalTrigger sceneGoal)
-                {
-                    _goal = sceneGoal;
-                }
+            _health = sceneHealth;
+        }
 
-                if (HasAllHudSources())
-                {
-                    return;
-                }
-            }
+        if (_player is null && Context.Scene.TryGetFirstComponent(out PlayerController? scenePlayer))
+        {
+            _player = scenePlayer;
+        }
+
+        if (_weapons is null && Context.Scene.TryGetFirstComponent(out WeaponController? sceneWeapons))
+        {
+            _weapons = sceneWeapons;
+        }
+
+        if (_brush is null && Context.Scene.TryGetFirstComponent(out MaterialBrush? sceneBrush))
+        {
+            _brush = sceneBrush;
+        }
+
+        if (_explosive is null && Context.Scene.TryGetFirstComponent(out ExplosiveTool? sceneExplosive))
+        {
+            _explosive = sceneExplosive;
+        }
+
+        if (_projectile is null && Context.Scene.TryGetFirstComponent(out PlayableProjectileTool? sceneProjectile))
+        {
+            _projectile = sceneProjectile;
+        }
+
+        if (_mission is null && Context.Scene.TryGetFirstComponent(out MissionDirector? sceneMission))
+        {
+            _mission = sceneMission;
+        }
+
+        if (_hazard is null && Context.Scene.TryGetFirstComponent(out RisingHazardDirector? sceneHazard))
+        {
+            _hazard = sceneHazard;
+        }
+
+        if (_goal is null && Context.Scene.TryGetFirstComponent(out GoalTrigger? sceneGoal))
+        {
+            _goal = sceneGoal;
         }
     }
 

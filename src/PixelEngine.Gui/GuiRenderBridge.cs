@@ -12,7 +12,7 @@ public sealed class GuiRenderBridge : IUiPresentLayer, IDisposable
 {
     private readonly RenderPipeline _pipeline;
     private readonly GuiApp _gui;
-    private readonly IScriptRuntime? _scriptRuntime;
+    private readonly Action<IGuiContext>? _scriptGui;
     private readonly Action<IGuiDrawContext>? _managedGui;
     private readonly IDisposable _registration;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
@@ -27,7 +27,7 @@ public sealed class GuiRenderBridge : IUiPresentLayer, IDisposable
     {
         _pipeline = pipeline;
         _gui = gui;
-        _scriptRuntime = scriptRuntime;
+        _scriptGui = scriptRuntime is null ? null : scriptRuntime.DrawGui;
         _managedGui = managedGui;
         _previousSeconds = _clock.Elapsed.TotalSeconds;
         _registration = _pipeline.RegisterUiLayer(UiPresentLayerOrders.Game, this);
@@ -94,7 +94,7 @@ public sealed class GuiRenderBridge : IUiPresentLayer, IDisposable
             context.LogicalWidth,
             context.LogicalHeight,
             _managedGui,
-            _scriptRuntime is null ? null : _scriptRuntime.DrawGui,
+            _scriptGui,
             context.FramebufferScaleX,
             context.FramebufferScaleY);
         RecordSub(context.Profiler, started);

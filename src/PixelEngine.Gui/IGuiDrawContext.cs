@@ -61,11 +61,30 @@ public interface IGuiDrawContext
     void Text(string text);
 
     /// <summary>
+    /// 绘制一行 span 文本；支持的后端应直接消费该视图以避免动态字符串分配。
+    /// </summary>
+    /// <param name="text">文本内容；仅需在本次调用期间有效。</param>
+    void Text(ReadOnlySpan<char> text)
+    {
+        Text(text.ToString());
+    }
+
+    /// <summary>
     /// 使用 BGRA 颜色绘制一行文本。
     /// </summary>
     /// <param name="text">文本内容。</param>
     /// <param name="colorBgra">BGRA 颜色。</param>
     void TextColored(string text, uint colorBgra);
+
+    /// <summary>
+    /// 使用 BGRA 颜色绘制一行 span 文本。
+    /// </summary>
+    /// <param name="text">文本内容；仅需在本次调用期间有效。</param>
+    /// <param name="colorBgra">BGRA 颜色。</param>
+    void TextColored(ReadOnlySpan<char> text, uint colorBgra)
+    {
+        TextColored(text.ToString(), colorBgra);
+    }
 
     /// <summary>
     /// 后续控件与前一个控件放在同一行。
@@ -131,6 +150,16 @@ public interface IGuiDrawContext
     void ProgressBar(float value01, string? label = null);
 
     /// <summary>
+    /// 绘制 0..1 进度条，并使用 span 作为覆盖文本。
+    /// </summary>
+    /// <param name="value01">进度值。</param>
+    /// <param name="label">覆盖文本；仅需在本次调用期间有效。</param>
+    void ProgressBar(float value01, ReadOnlySpan<char> label)
+    {
+        ProgressBar(value01, label.ToString());
+    }
+
+    /// <summary>
     /// 绘制指定尺寸的 0..1 进度条；不支持尺寸的后端可退回默认进度条。
     /// </summary>
     /// <param name="value01">进度值。</param>
@@ -151,6 +180,17 @@ public interface IGuiDrawContext
     /// <param name="colorBgra">BGRA 颜色。</param>
     /// <param name="size">边长，单位像素。</param>
     void ColorSwatch(string id, uint colorBgra, float size = 16f);
+
+    /// <summary>
+    /// 绘制颜色色块，并使用 span 提供稳定控件 id。
+    /// </summary>
+    /// <param name="id">稳定控件 id；仅需在本次调用期间有效。</param>
+    /// <param name="colorBgra">BGRA 颜色。</param>
+    /// <param name="size">边长，单位像素。</param>
+    void ColorSwatch(ReadOnlySpan<char> id, uint colorBgra, float size = 16f)
+    {
+        ColorSwatch(id.ToString(), colorBgra, size);
+    }
 
     /// <summary>
     /// 绘制一张已上传到当前 GL 上下文的 2D 图片纹理。

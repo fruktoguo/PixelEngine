@@ -506,18 +506,12 @@ internal sealed class DemoWindowScriptedProbe(
             return _player;
         }
 
-        foreach (ScriptEntityInspection entity in _probe.ScriptScene.CaptureInspectionSnapshot())
+        if (!_probe.ScriptScene.TryGetFirstComponent(out PlayerController? player))
         {
-            foreach (ScriptComponentInspection component in entity.Components)
-            {
-                if (component.Behaviour is PlayerController player)
-                {
-                    _player = player;
-                    return player;
-                }
-            }
+            return null;
         }
 
-        return null;
+        _player = player;
+        return player;
     }
 }

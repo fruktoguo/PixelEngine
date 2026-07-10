@@ -266,19 +266,11 @@ public sealed class RisingHazardDirector : Behaviour
             return;
         }
 
-        ScriptEntityInspection[] entities = Context.Scene.CaptureInspectionSnapshot();
-        for (int i = 0; i < entities.Length; i++)
+        if (Context.Scene.TryGetFirstComponent(out MissionDirector? sceneMission))
         {
-            ScriptComponentInspection[] components = entities[i].Components;
-            for (int j = 0; j < components.Length; j++)
-            {
-                if (components[j].Behaviour is MissionDirector mission)
-                {
-                    _mission = mission;
-                    BlockedReason = string.Empty;
-                    return;
-                }
-            }
+            _mission = sceneMission;
+            BlockedReason = string.Empty;
+            return;
         }
 
         BlockedReason = "场景中未找到 MissionDirector；熔岩仍会上升，但无法同步任务熔岩线。";
