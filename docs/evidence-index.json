@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-10",
-  "generatedFromCommit": "bdf624504a624c008d93f601376f00ef62f8aade",
+  "generatedFromCommit": "b9c968551af1f6e81695dc99dd4c8f6067f7471f",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -264,14 +264,14 @@
       "entryId": "doc-002-legacy-plan-audit-20260710",
       "taskIds": ["DOC-002"],
       "evidenceState": "complete_documentation_audit",
-      "commit": "bdf624504a624c008d93f601376f00ef62f8aade",
+      "commit": "b9c968551af1f6e81695dc99dd4c8f6067f7471f",
       "runSessionId": "local-20260710-doc002-legacy-plan-audit",
       "runIdentityStatus": "captured",
       "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X; .NET SDK 10.0.108; win-x64; repository/documentation audit",
       "command": "pwsh tools/validate-task-catalog.ps1; compare rg --files -g '*.csproj' with dotnet sln PixelEngine.sln list; dotnet test tests/PixelEngine.Demo.Tests/PixelEngine.Demo.Tests.csproj -c Release --no-restore -m:1 --filter current-route-contracts; pwsh tools/validate-evidence-index.ps1; git diff --check",
       "reportPath": "docs/evidence-2026-07-10-doc-002-legacy-plan-audit.md",
       "sha256": "fb51091b5268f1c8ae721542e9aad38a541514936b84c4425914c6ec752c38d6",
-      "notes": "21 份旧计划统一绑定冻结快照、迁移 commit 与证据等级；1692 条 checkbox 哈希未漂移；当前工程 32/32 无差异，Demo 横向路线合同 3/3 通过。"
+      "notes": "21 份旧计划统一绑定冻结快照、迁移 commit 与证据等级；1692 条 checkbox 哈希未漂移；当前工程 32/32 无差异，Demo 横向路线合同 3/3 通过；补充明确 plan/00 结构树和 plan/01 的 12/4/18 数字只属历史结构。"
     },
     {
       "entryId": "plan14-short-20260702",
