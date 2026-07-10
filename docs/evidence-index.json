@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-10",
-  "generatedFromCommit": "bb5fb05432db904320e57691e6fcd5fc1069deb3",
+  "generatedFromCommit": "ff221659d513688659b00388d44d8b19964f5cc0",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -77,6 +77,19 @@
       "reportPath": "docs/evidence-2026-07-10-perf-005-rigidbody-rebuild-pool.md",
       "sha256": "bb5c5abfdb2309e99e9b672a1624c3cdb7a2215573dc5b4f9ce1224dd6977510",
       "notes": "破坏重建 Managed allocation：DamagedBodyCount=1 为 74,808 B、16 为 981,208 B；从 PERF-001 的 166,240 B/3,147,384 B 分别下降 55.00%/68.82%。BDN 原始 WorkloadResult 派生 p99 为 1.6362ms/3.9098ms；p99 计算方法和原始日志哈希写在稳定报告中。"
+    },
+    {
+      "entryId": "perf-006-resident-chunk-batch-20260710",
+      "taskIds": ["PERF-006"],
+      "evidenceState": "complete_local_batch_snapshot_benchmark",
+      "commit": "ff221659d513688659b00388d44d8b19964f5cc0",
+      "runSessionId": "local-20260710-perf006-resident-chunk-batch-committed",
+      "runIdentityStatus": "captured",
+      "hardware": "Microsoft Windows 11 build 26100; AMD Ryzen 7 5800X 8c/16t; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "dotnet build PixelEngine.sln -c Release --no-restore; dotnet test PixelEngine.sln -c Release --no-build --no-restore -m:1; pwsh -NoProfile -File tools/run-benchmark.ps1 -Artifacts artifacts/perf-006-resident-chunk-batch-committed -BenchmarkDotNetArgs @('--filter=*ResidentChunkMapBenchmarks*','--job=short','--warmupCount=1','--iterationCount=5')",
+      "reportPath": "docs/evidence-2026-07-10-perf-006-resident-chunk-batch.md",
+      "sha256": "7eccc3caf584173e8cb6503ca72c267ca62f7cbafafa317b1958360d6e6350c6",
+      "notes": "AddRange 在 1/16/64/256 chunk 的 Mean 为 2.393us/5.261us/13.163us/36.021us，Allocated 为 216B/1,096B/4,072B/16,264B；相对逐个 Add 在 256 chunk 约 10.90x，单批 snapshot rebuild 由 World/WorldStreamer/Save/Hosting 测试锁定。"
     },
     {
       "entryId": "arch-001-custom-metric-20260710",
