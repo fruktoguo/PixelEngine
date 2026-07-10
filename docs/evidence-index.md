@@ -38,6 +38,7 @@
 | `performance-hud-window-20260704` | `BASE-008`, `BASE-010`, `PERF-001`, `PERF-008`, `PERF-010` | `local_window_sample` | `34d341e5` | `hud-slice2-dynamic` | [HUD window](runtime-reports/2026-07-04-performance-hud-steady-window-samples.md) | `49884c1c…80527` |
 | `editor-shell-attach-probe-20260706` | `BASE-013`, `EDITOR-003` | `scripted_probe_only` | `d009c234` | 未记录 | [EditorShell attach](runtime-reports/2026-07-06-editor-shell-attach-probe.md) | `f8182250…acf21d` |
 | `editor-007-scene-authoring-20260711` | `EDITOR-007` | `complete_local_scene_authoring_contract_and_window_smoke` | `c3e08ba2` | `local-20260711-editor007-scene-authoring` | [EDITOR-007 Scene authoring](evidence-2026-07-11-editor-007-scene-authoring.md) | `e71ee81f…100c1b` |
+| `doc-001-getting-started-20260711` | `DOC-001` | `documentation_skeleton_and_local_clean_project_complete_pending_dependencies` | `a324c5fc` | `local-20260711-doc001-clean-project-r2r` | [DOC-001 Getting Started](evidence-2026-07-11-doc-001-getting-started.md) | `4bdf8804…2b9cad2` |
 | `editor-preferences-ui-scale-20260710` | `EDITOR-003` | `automated_preferences_slice_complete_pending_human_review` | `8d8598fc` | `local-20260710-editor-preferences-150` | [Editor Preferences and 150% UI Scale](evidence-2026-07-10-editor-preferences-ui-scale.md) | `cf028de4…faa78f` |
 
 完整硬件、命令、报告路径、SHA256、状态和备注以 JSON 为准；此表使用短 hash 仅便于人工浏览。当前索引中的历史条目保留“可追溯但未完成”的状态，不能据此把 `CI-*`、`PERF-*`、`DEMO-*`、`EDITOR-*` 或 `UI-*` 的阻塞任务改成 `[x]`。

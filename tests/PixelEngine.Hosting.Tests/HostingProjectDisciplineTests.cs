@@ -15,6 +15,29 @@ namespace PixelEngine.Hosting.Tests;
 public sealed class HostingProjectDisciplineTests
 {
     /// <summary>
+    /// 验证对外入门文档持续指向独立 Editor、默认双根工程与已验证的 R2R 玩家构建链。
+    /// </summary>
+    [Fact]
+    public void GettingStartedDocumentsTrackStandaloneEditorAndFirstProjectWorkflow()
+    {
+        string root = FindRepositoryRoot();
+        string readme = File.ReadAllText(Path.Combine(root, "README.md"));
+        string gettingStarted = File.ReadAllText(Path.Combine(root, "docs", "getting-started.md"));
+        string tutorial = File.ReadAllText(Path.Combine(root, "docs", "tutorial-first-project.md"));
+
+        Assert.Contains("docs/getting-started.md", readme, StringComparison.Ordinal);
+        Assert.Contains("docs/tutorial-first-project.md", readme, StringComparison.Ordinal);
+        Assert.Contains("apps/PixelEngine.Editor.Shell/PixelEngine.Editor.Shell.csproj", gettingStarted, StringComparison.Ordinal);
+        Assert.Contains("--no-reopen-last-project", gettingStarted, StringComparison.Ordinal);
+        Assert.Contains("旧式向 Demo 传 `--editor` 的方式不再使用", gettingStarted, StringComparison.Ordinal);
+        Assert.Contains("ScriptSource", tutorial, StringComparison.Ordinal);
+        Assert.Contains("FirstProjectBehaviour", tutorial, StringComparison.Ordinal);
+        Assert.Contains("-Channel r2r", tutorial, StringComparison.Ordinal);
+        Assert.Contains("--headless --ticks 2 --no-hot-reload", tutorial, StringComparison.Ordinal);
+        Assert.Contains("FIRST_PROJECT_STARTED", tutorial, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证仓库内所有项目都登记在 solution 中，避免工具、测试或应用项目绕过常规 build/test 入口。
     /// </summary>
     [Fact]
