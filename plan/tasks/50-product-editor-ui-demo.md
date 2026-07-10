@@ -13,10 +13,11 @@
   - 优先级：P1。
   - 验收：resize/DPI 切换无一帧旧坐标；面板空白区阻断；图像透明区透传；交互区捕获；IME caret/candidate 锚点位于实际控件。
 
-- [~] `EDITOR-003` 完成默认工作台 author→play→edit→build→run 产品验收。当前切片：补齐 Unity-like 全局 Preferences、150% 高 DPI UI 缩放与编辑器级设置归属；完成后仍需真实窗口 reviewer 闭合整项。
+- [!] `EDITOR-003` 完成默认工作台 author→play→edit→build→run 产品验收。阻塞：全局 Preferences 与 150% 高 DPI 自动化切片已完成，整项仍需要真实窗口完整路线和 reviewer。
   - 优先级：P1。
   - 验收：Hierarchy/Inspector/Scene View/gizmo/Undo/Redo/Console/Prefab/Settings/外部脚本编辑/Build And Run 可理解、可恢复；720p 和高 DPI 无标签截断或工具区溢出。
   - 当前切片验收：`Edit > Preferences...` 在无工程和已打开工程时均可用；设置按类别导航而非平铺；UI Scale 支持 75%–200% 并持久化，150% 同时缩放字体、ImGui 样式和 Shell 固定尺寸；外部脚本编辑器与布局保存从 Project Settings 迁到用户级 Preferences，旧工程字段仅作兼容迁移；自动化覆盖读写、归一化、菜单接线与高 DPI 布局边界。
+  - 已完成证据：实现 commit `8d8598fc`；Editor 84/84、UI 106/106、Hosting 非发行工具回归 344/344、solution Release build 0 warning/0 error；150% Preferences 与默认核心工作台真实窗口 framebuffer probe 见 `docs/evidence-2026-07-10-editor-preferences-ui-scale.md`。该材料不替代人工点击和完整路线。
 
 ## Web-first 透明 UI
 
