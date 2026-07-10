@@ -61,7 +61,7 @@
   - 优先级：P2。
   - 验收：CPU/GPU 同 commit/run id；粒子数至少 100K；GPU 路径无 CPU stamp；比较报告可从原始 probe 重算且 GPU 更快。
 
-- [ ] `PERF-011` 完成温度/反应热点、GC 模式和逻辑/音频预算的目标场景定档。
+- [~] `PERF-011` 完成温度/反应热点、GC 模式和逻辑/音频预算的目标场景定档。
   - 优先级：P2。
   - 验收：真实内容规模覆盖温度 stencil、reaction hit/miss、Server/Concurrent GC 组合和 logic/audio phase；报告包含分配、pause、cache/branch、p99，并选定唯一生产 GC 配置。
 
