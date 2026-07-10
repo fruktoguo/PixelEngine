@@ -1,8 +1,9 @@
 # 2026-07-10 PERF-003 CA 吞吐与 2M profile 证据
 
 taskIds: `PERF-003`
-implementationCommit: `0bab515c17d05790d161b2231a7c7a7e09d07c94`
-benchmarkRunId: `local-20260710-perf003-full-active-2m`
+implementationCommit: `ff90cf44c0e8c4364120e246d858bfc56c330af1`
+hotpathImplementationCommit: `0bab515c17d05790d161b2231a7c7a7e09d07c94`
+benchmarkRunId: `local-20260710-perf003-full-active-2m-8workers`
 runIdentityStatus: `captured`
 hardware: `Microsoft Windows 11 build 26100; AMD Ryzen 7 5800X 8c/16t; .NET SDK 10.0.108; .NET 10.0.8; win-x64`
 
@@ -15,17 +16,17 @@ hardware: `Microsoft Windows 11 build 26100; AMD Ryzen 7 5800X 8c/16t; .NET SDK 
 - `dispersion=0` 的液体跳过两个必然失败的水平扫描；`WorkingDirty` 已是 `DirtyRect.Full` 时跳过重复 union。
 - 保留单缓冲原地更新、4-pass checkerboard、parity、防密度错误置换、RigidOwned damage、Damage 清零、KeepAlive 和 32px MoveCap；`DirtyRectLifecycleTests` 新增 Full dirty 合并回归。
 
-正式提交后在 Ryzen 7 5800X 上运行 `FullActive2M`：23×23 active chunks，即 2,166,784 active cells；4 worker 的 `StepJobSystem` 平均 `16.575ms`，StdDev `1.264ms`，98 个有效 workload 样本，`Allocated -`。折算为 8ms 预算约 `1,045,808 active cells`，仍低于 2M 下限，不能将 PERF-003 标记为完成，也不足以单凭本机结果正式重校准架构目标。
+在代表本机 8 physical cores 的 8 worker 配置下运行 `FullActive2M`：23×23 active chunks，即 2,166,784 active cells；`StepJobSystem` 平均 `12.965ms`，StdDev `0.792ms`，96 个有效 workload 样本，`Allocated -`。折算为 8ms 预算约 `1,337,005 active cells`，仍低于 2M 下限，不能将 PERF-003 标记为完成，也不足以单凭本机结果正式重校准架构目标。
 
-同一提交前的 262,144-cell 当前基线为 `StepJobSystem 4.122ms`（约 508,770 cells/8ms）；该小 profile 仅用于局部回归，不能替代 2M profile。2M 结果表明，扩大工作集后吞吐有改善，但距离原目标仍约 1.9×，需要目标硬件、产品场景和降级策略共同决定是否继续优化或重校准。
+同一轨道的 262,144-cell 当前基线为 `StepJobSystem 4.122ms`（旧 4-worker 夹具，约 508,770 cells/8ms）；该小 profile 仅用于局部回归，不能替代 2M profile。8-worker 结果表明，使用全部代表物理核后吞吐明显改善，但距离原目标仍约 1.5×，需要目标硬件、产品场景和降级策略共同决定是否继续优化或重校准。
 
 ## 可复现命令
 
-以下 benchmark 命令在 `0bab515c17d05790d161b2231a7c7a7e09d07c94` 执行；`tools/run-benchmark.ps1` 使用隔离工作副本，防止仓库内同名 worktree 干扰 BDN discovery。
+以下 benchmark 命令在 `ff90cf44c0e8c4364120e246d858bfc56c330af1` 执行；`tools/run-benchmark.ps1` 使用隔离工作副本，防止仓库内同名 worktree 干扰 BDN discovery。
 
 ```powershell
 dotnet build bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -c Release --no-restore -m:1
-pwsh -NoProfile -File tools/run-benchmark.ps1 -Project "bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj" -Artifacts "artifacts/perf-003-full-active-2m-committed" -BenchmarkDotNetArgs @('--filter=*CellThroughputBenchmark.StepJobSystem*FullActive2M*','--launchCount=1','--warmupCount=3','--iterationCount=5')
+pwsh -NoProfile -File tools/run-benchmark.ps1 -Project "bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj" -Artifacts "artifacts/perf-003-full-active-2m-8workers-committed" -BenchmarkDotNetArgs @('--filter=*CellThroughputBenchmark.StepJobSystem*FullActive2M*','--launchCount=1','--warmupCount=3','--iterationCount=5')
 dotnet test tests/PixelEngine.Simulation.Tests/PixelEngine.Simulation.Tests.csproj -c Release --no-restore -m:1
 pwsh -NoProfile -File tools/validate-task-catalog.ps1
 git diff --check
@@ -37,14 +38,14 @@ git diff --check
 
 | Benchmark | Profile | Mean | StdDev | 有效样本 | Allocated |
 |---|---|---:|---:|---:|---:|
-| `CellThroughputBenchmark.StepJobSystem` | `FullActive2M` | 16.575ms | 1.264ms | 98 | `-` |
+| `CellThroughputBenchmark.StepJobSystem` | `FullActive2M` | 12.965ms | 0.792ms | 96 | `-` |
 
 原始 artifacts：
 
-- Markdown 报告：`artifacts/perf-003-full-active-2m-committed/results/PixelEngine.Benchmarks.CellThroughputBenchmark-report-github.md`
-  - SHA256: `BEDF17F0575204CE3F73CB31CBB5A4DFEEF4DA22CA3E364B0E0700DC76016EB6`
-- BenchmarkDotNet 日志：`artifacts/perf-003-full-active-2m-committed/PixelEngine.Benchmarks.CellThroughputBenchmark-20260710-084643.log`
-  - SHA256: `97CF27082458AD1E40D678D6AD63C3B1A2A44F537C3A6C35E67B38933CB3AC53`
+- Markdown 报告：`artifacts/perf-003-full-active-2m-8workers-committed/results/PixelEngine.Benchmarks.CellThroughputBenchmark-report-github.md`
+  - SHA256: `F9A70996AD54FECAAFFF472ACA23206CA40D71FA796EB3E0FEAA259686276ECB`
+- BenchmarkDotNet 日志：`artifacts/perf-003-full-active-2m-8workers-committed/PixelEngine.Benchmarks.CellThroughputBenchmark-20260710-085432.log`
+  - SHA256: `22AC403753D5221391EB779BCB30522EF742BE9439102B69B3511C4E2E2E3E53`
 
 ## 正确性与边界
 

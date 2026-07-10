@@ -26,7 +26,7 @@
 - [x] R2R 主发行与 AOT 次发行的编译模式审计已接入 plan/15，但 release runner 的最终证据仍归 M15 阻塞。
 - [!] full-active CA 当前未达最终目标：`docs/benchmark-reports/2026-07-02-plan14-short.md` 记录 `StepJobSystem(FullActiveLiquid)` 约 262,144 active cells / 38.327ms，约 54.7K active cells / 8ms，低于 2–4M active cells / 8ms 目标。
 
-2026-07-10 本机正式规模校准：新增 `CellThroughputBenchmark.FullActive2M`（23×23 active chunks，2,166,784 cells），Ryzen 7 5800X / .NET 10.0.8 / 4 worker 的 `StepJobSystem` 平均 16.575ms，折算约 1.046M cells/8ms；movement 热路径局部优化已提交，但仍不能关闭 full-active 目标，详见 `docs/evidence-2026-07-10-perf-003-ca-throughput.md`。
+2026-07-10 本机正式规模校准：新增 `CellThroughputBenchmark.FullActive2M`（23×23 active chunks，2,166,784 cells），Ryzen 7 5800X / .NET 10.0.8 / 8 worker（8 physical cores）的 `StepJobSystem` 平均 12.965ms，折算约 1.337M cells/8ms；movement 热路径局部优化已提交，但仍不能关闭 full-active 目标，详见 `docs/evidence-2026-07-10-perf-003-ca-throughput.md`。
 - [!] 硬件计数器未闭合：当前工具能报告平台或权限边界，但 `Cache Misses` 和 `Branch Mispredictions` 真实列需要 elevated ETW 或目标 runner。
 - [!] AVX-512 未闭合：当前本机 Ryzen 7 5800X 只有 AVX2 证据，不能验证 Vector512 可用性或降频净损。
 - [!] 目标硬件未闭合：缺 win-arm64、linux-x64、linux-arm64、osx-x64、osx-arm64 代表硬件或可信 runner 的 BenchmarkDotNet 长跑。
