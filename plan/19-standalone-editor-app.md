@@ -15,6 +15,8 @@ EditorShell 必须区分工程级 Settings 与用户级 Preferences：`Project S
 
 `UI Scale` 是 Editor 视觉密度的单一权威值，范围 75%–200%，标准档包含 100%、125%、150%、175%、200%。它必须同时驱动启动时 CJK 字体 atlas 尺寸、当前 ImGui context 的字体显示比例、主题 padding/spacing 等 style metrics，以及 Shell 顶部工具栏等显式像素尺寸；不能只放大文字。偏好变更立即应用并原子持久化，重启后以目标字号重新构建字体 atlas，避免 4K 屏长期使用位图放大。`Save layout on exit` 与 `External script editor` 属于用户级设置；旧 `ProjectSettingsDto.EditorPreferences` 暂留为只读兼容来源并在首次加载全局偏好时迁移，不再出现在 Project Settings 面板，也不再由工程设置探针写入。
 
+实现状态：commit `8d8598fc` 已完成上述自动化切片，并把默认可见面板收敛为 Hierarchy、Scene / Game View、Inspector、Project / Console；其余窗口经分类 Window 菜单按需打开。稳定自动化报告见 [`docs/evidence-2026-07-10-editor-preferences-ui-scale.md`](../docs/evidence-2026-07-10-editor-preferences-ui-scale.md)。真实 4K 显示器人工操作、菜单点击与完整 author→play→edit→build→run reviewer 仍归 M15，不因 scripted framebuffer probe 关闭。
+
 ---
 
 ## 1. 当前产品职责
