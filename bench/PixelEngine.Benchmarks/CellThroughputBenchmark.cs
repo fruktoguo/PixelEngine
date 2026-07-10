@@ -6,7 +6,7 @@ using PixelEngine.Simulation;
 namespace PixelEngine.Benchmarks;
 
 /// <summary>
-/// 热路径：SimulationKernel 单帧 CA 更新；假设 8×8 活跃区块网格，对比满激活/全休眠/典型脏矩形三档规模。
+/// 热路径：SimulationKernel 单帧 CA 更新；对比 262K/约 2.17M 满激活、全休眠与典型脏矩形规模。
 /// </summary>
 [MemoryDiagnoser]
 public class CellThroughputBenchmark : IDisposable
@@ -15,46 +15,59 @@ public class CellThroughputBenchmark : IDisposable
     private const ushort Oil = 2;
     private const ushort Sand = 3;
     private const ushort Rock = 4;
-    private const int ActiveChunksPerAxis = 8;
-    private const int ResidentChunksPerAxis = ActiveChunksPerAxis + 2;
+    private const int DefaultActiveChunksPerAxis = 8;
+    private const int FullActive2MChunksPerAxis = 23;
 
-    private readonly Chunk[] _chunks = new Chunk[ResidentChunksPerAxis * ResidentChunksPerAxis];
-    private readonly TestChunkSource _source;
-    private readonly MaterialPropsTable _materials;
-    private readonly SimulationKernel _kernel;
-    private readonly JobSystem _jobs = new(workerCount: Math.Min(4, Math.Max(1, Environment.ProcessorCount)));
+    private Chunk[] _chunks = [];
+    private TestChunkSource? _source;
+    private SimulationKernel? _kernel;
+    private JobSystem? _jobs;
 
     /// <summary>
-    /// 创建 cell throughput benchmark fixture。
+    /// 活跃 profile。
     /// </summary>
-    public CellThroughputBenchmark()
+    [Params(CellProfile.FullActiveLiquid, CellProfile.FullActive2M, CellProfile.FullStaticSleeping, CellProfile.TypicalDirtyRect)]
+    public CellProfile Profile { get; set; }
+
+    /// <summary>
+    /// 创建当前 profile 的 chunk、材质表与持久 worker。
+    /// </summary>
+    [GlobalSetup]
+    public void Setup()
     {
+        int activeChunksPerAxis = ActiveChunksPerAxis;
+        int residentChunksPerAxis = activeChunksPerAxis + 2;
+        _chunks = new Chunk[residentChunksPerAxis * residentChunksPerAxis];
         int index = 0;
-        for (int cy = -1; cy <= ActiveChunksPerAxis; cy++)
+        for (int cy = -1; cy <= activeChunksPerAxis; cy++)
         {
-            for (int cx = -1; cx <= ActiveChunksPerAxis; cx++)
+            for (int cx = -1; cx <= activeChunksPerAxis; cx++)
             {
                 _chunks[index++] = new Chunk(new ChunkCoord(cx, cy));
             }
         }
 
         _source = new TestChunkSource(_chunks);
-        _materials = CreateMaterials();
-        _kernel = new SimulationKernel(_source, _materials, worldSeed: 0xBEEFUL);
+        MaterialPropsTable materials = CreateMaterials();
+        _kernel = new SimulationKernel(_source, materials, worldSeed: 0xBEEFUL);
+        _jobs = new JobSystem(workerCount: Math.Min(4, Math.Max(1, Environment.ProcessorCount)));
     }
 
     /// <summary>
-    /// 活跃 profile。
+    /// 释放当前 profile 的持久 worker。
     /// </summary>
-    [Params(CellProfile.FullActiveLiquid, CellProfile.FullStaticSleeping, CellProfile.TypicalDirtyRect)]
-    public CellProfile Profile { get; set; }
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        Dispose();
+    }
 
     /// <summary>
     /// 当前 profile 的活跃 cell 数，用于从耗时换算 cells/s。
     /// </summary>
     public int ActiveCells => Profile switch
     {
-        CellProfile.FullActiveLiquid => ActiveChunksPerAxis * ActiveChunksPerAxis * EngineConstants.ChunkArea,
+        CellProfile.FullActiveLiquid or CellProfile.FullActive2M => ActiveChunksPerAxis * ActiveChunksPerAxis * EngineConstants.ChunkArea,
         CellProfile.FullStaticSleeping => 0,
         CellProfile.TypicalDirtyRect => 16 * 16,
         _ => throw new InvalidOperationException($"未知 cell throughput profile：{Profile}。"),
@@ -69,8 +82,9 @@ public class CellThroughputBenchmark : IDisposable
         ResetChunks();
         // Chunk.Reset 只重置网格与 dirty 元数据；内核的 frame/parity 也必须回到
         // 同一初态，否则相邻测量会以不同 parity 进入 CA，失去可比性。
-        _kernel.RestoreFrameState(frameIndex: 0, currentParity: 0);
-        if (Profile == CellProfile.FullActiveLiquid)
+        SimulationKernel kernel = _kernel ?? throw new InvalidOperationException("benchmark kernel 尚未初始化。");
+        kernel.RestoreFrameState(frameIndex: 0, currentParity: 0);
+        if (Profile is CellProfile.FullActiveLiquid or CellProfile.FullActive2M)
         {
             FillFullActiveLiquid();
         }
@@ -90,8 +104,9 @@ public class CellThroughputBenchmark : IDisposable
     [Benchmark(Baseline = true)]
     public void StepSingleThread()
     {
-        _kernel.StepCa();
-        _kernel.SwapDirtyRects();
+        SimulationKernel kernel = _kernel ?? throw new InvalidOperationException("benchmark kernel 尚未初始化。");
+        kernel.StepCa();
+        kernel.SwapDirtyRects();
     }
 
     /// <summary>
@@ -100,14 +115,17 @@ public class CellThroughputBenchmark : IDisposable
     [Benchmark]
     public void StepJobSystem()
     {
-        _kernel.StepCa(_jobs);
-        _kernel.SwapDirtyRects();
+        SimulationKernel kernel = _kernel ?? throw new InvalidOperationException("benchmark kernel 尚未初始化。");
+        JobSystem jobs = _jobs ?? throw new InvalidOperationException("benchmark jobs 尚未初始化。");
+        kernel.StepCa(jobs);
+        kernel.SwapDirtyRects();
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
-        _jobs.Dispose();
+        _jobs?.Dispose();
+        _jobs = null;
     }
 
     private void FillFullActiveLiquid()
@@ -116,7 +134,7 @@ public class CellThroughputBenchmark : IDisposable
         {
             for (int cx = 0; cx < ActiveChunksPerAxis; cx++)
             {
-                Chunk chunk = _source.GetRequired(new ChunkCoord(cx, cy));
+                Chunk chunk = (_source ?? throw new InvalidOperationException("benchmark source 尚未初始化。")).GetRequired(new ChunkCoord(cx, cy));
                 for (int i = 0; i < chunk.MaterialBuffer.Length; i++)
                 {
                     chunk.MaterialBuffer[i] = (i & 1) == 0 ? Water : Oil;
@@ -129,7 +147,7 @@ public class CellThroughputBenchmark : IDisposable
 
     private void FillTypicalDirtyRect()
     {
-        Chunk chunk = _source.GetRequired(new ChunkCoord(ActiveChunksPerAxis / 2, ActiveChunksPerAxis / 2));
+        Chunk chunk = (_source ?? throw new InvalidOperationException("benchmark source 尚未初始化。")).GetRequired(new ChunkCoord(ActiveChunksPerAxis / 2, ActiveChunksPerAxis / 2));
         for (int y = 24; y < 40; y++)
         {
             for (int x = 24; x < 40; x++)
@@ -147,7 +165,7 @@ public class CellThroughputBenchmark : IDisposable
         {
             for (int cx = 0; cx < ActiveChunksPerAxis; cx++)
             {
-                Chunk chunk = _source.GetRequired(new ChunkCoord(cx, cy));
+                Chunk chunk = (_source ?? throw new InvalidOperationException("benchmark source 尚未初始化。")).GetRequired(new ChunkCoord(cx, cy));
                 Array.Fill(chunk.MaterialBuffer, Rock);
             }
         }
@@ -161,6 +179,10 @@ public class CellThroughputBenchmark : IDisposable
             chunk.Reset(chunk.Coord);
         }
     }
+
+    private int ActiveChunksPerAxis => Profile == CellProfile.FullActive2M
+        ? FullActive2MChunksPerAxis
+        : DefaultActiveChunksPerAxis;
 
     private static MaterialPropsTable CreateMaterials()
     {
@@ -180,6 +202,9 @@ public class CellThroughputBenchmark : IDisposable
     {
         /// <summary>64 个活跃 chunk，液体交错。</summary>
         FullActiveLiquid,
+
+        /// <summary>23×23 活跃 chunk，约 2.17M 液体 cell 交错。</summary>
+        FullActive2M,
 
         /// <summary>64 个常驻非空 chunk，但 dirty 为空并保持 sleeping。</summary>
         FullStaticSleeping,

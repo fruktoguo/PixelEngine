@@ -133,6 +133,11 @@ public sealed class Chunk
     /// </summary>
     public void MarkWorkingDirty(int lx, int ly, int padding)
     {
+        if (WorkingDirty == DirtyRect.Full)
+        {
+            return;
+        }
+
         WorkingDirty = WorkingDirty.Union(lx, ly, padding);
         State = ChunkState.Awake;
     }
@@ -150,7 +155,7 @@ public sealed class Chunk
 
     internal void MarkWorkingDirty(DirtyRect rect)
     {
-        if (rect.IsEmpty)
+        if (rect.IsEmpty || WorkingDirty == DirtyRect.Full)
         {
             return;
         }

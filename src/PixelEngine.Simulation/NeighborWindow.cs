@@ -399,6 +399,28 @@ public ref struct NeighborWindow
     }
 
     /// <summary>
+    /// 从中心 chunk 的已知本地坐标读取 movement 目标，供中心 chunk 内的垂直扫描复用 slot 4 基址。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool TryReadCenterNonEmptyMoveTarget(
+        int targetLocalX,
+        int targetLocalY,
+        out ushort targetMaterial,
+        out byte targetFlags)
+    {
+        int targetLocal = CellAddressing.LocalIndexFromLocal(targetLocalX, targetLocalY);
+        targetMaterial = Unsafe.Add(ref _matBase4, targetLocal);
+        if (targetMaterial == 0)
+        {
+            targetFlags = 0;
+            return false;
+        }
+
+        targetFlags = Unsafe.Add(ref _flagsBase4, targetLocal);
+        return true;
+    }
+
+    /// <summary>
     /// 在 movement 扫描阶段一次 slot/local 解析判断目标是否可被源 cell 置换。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -472,6 +494,85 @@ public ref struct NeighborWindow
         (sourceLifetime, targetLifetime) = (targetLifetime, sourceLifetime);
 
         Unsafe.Add(ref SelectDamageBase(sourceSlot), sourceLocal) = 0;
+        Unsafe.Add(ref SelectDamageBase(targetSlot), targetLocal) = 0;
+        return true;
+    }
+
+    /// <summary>
+    /// 使用已知的中心 chunk source local index 完成 movement，避免重复解析 source slot/local。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool TryMoveCellFromCenter(
+        int sourceLocalIndex,
+        int targetX,
+        int targetY,
+        MaterialPropsTable materials,
+        byte sourceDensity,
+        byte parityBit,
+        IRigidDamageSink rigidDamageSink,
+        out int targetSlot)
+    {
+        targetSlot = SlotOf(targetX, targetY);
+        int targetLocal = CellAddressing.LocalIndex(targetX, targetY);
+
+        return TryMoveCellFromCenterKnownTarget(
+            sourceLocalIndex,
+            targetX,
+            targetY,
+            targetSlot,
+            targetLocal,
+            materials,
+            sourceDensity,
+            parityBit,
+            rigidDamageSink);
+    }
+
+    /// <summary>
+    /// 使用已解析的 target slot/local 完成中心 source movement，避免探测后的二次寻址。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool TryMoveCellFromCenterKnownTarget(
+        int sourceLocalIndex,
+        int targetX,
+        int targetY,
+        int targetSlot,
+        int targetLocal,
+        MaterialPropsTable materials,
+        byte sourceDensity,
+        byte parityBit,
+        IRigidDamageSink rigidDamageSink)
+    {
+
+        ref ushort targetMaterial = ref Unsafe.Add(ref SelectMaterialBase(targetSlot), targetLocal);
+        ref byte targetFlags = ref Unsafe.Add(ref SelectFlagsBase(targetSlot), targetLocal);
+        // 目标非空时须未更新且密度更低才可置换；否则 movement 失败。
+        if (targetMaterial != 0 &&
+            (CellFlags.MatchesFrame(targetFlags, parityBit) ||
+            materials.DensityOf(targetMaterial) >= sourceDensity))
+        {
+            return false;
+        }
+
+        if (CellFlags.Has(targetFlags, CellFlags.RigidOwned))
+        {
+            rigidDamageSink.OnOwnedCellDamaged(targetX, targetY, targetMaterial);
+            targetFlags = CellFlags.Clear(targetFlags, CellFlags.RigidOwned);
+        }
+
+        ref ushort sourceMaterial = ref Unsafe.Add(ref _matBase4, sourceLocalIndex);
+        (sourceMaterial, targetMaterial) = (targetMaterial, sourceMaterial);
+
+        ref byte sourceFlags = ref Unsafe.Add(ref _flagsBase4, sourceLocalIndex);
+        (sourceFlags, targetFlags) = (targetFlags, sourceFlags);
+        // 交换后双方立即标记本帧 parity，满足 checkerboard 单写约束。
+        sourceFlags = CellFlags.SetParity(sourceFlags, parityBit);
+        targetFlags = CellFlags.SetParity(targetFlags, parityBit);
+
+        ref byte sourceLifetime = ref Unsafe.Add(ref _lifeBase4, sourceLocalIndex);
+        ref byte targetLifetime = ref Unsafe.Add(ref SelectLifetimeBase(targetSlot), targetLocal);
+        (sourceLifetime, targetLifetime) = (targetLifetime, sourceLifetime);
+
+        Unsafe.Add(ref _damageBase4, sourceLocalIndex) = 0;
         Unsafe.Add(ref SelectDamageBase(targetSlot), targetLocal) = 0;
         return true;
     }
