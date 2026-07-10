@@ -9,6 +9,12 @@
 > 产品依据：`../docs/PixelEngine-核心目标与产品定位.md`。本文件是 Unity-like Editor 状态账本，负责独立编辑器壳、项目/资源/Hierarchy/Inspector/Scene View/Game View/Console/Settings/Prefab/Build Settings、EditorShell 与玩家包解耦，以及 M13 结构闭合、M14 UX Contract、M15 人工 UX 证据。
 > 状态约定：`- [x]` 已有源码、测试、工具、报告或 plan 证据；`- [ ]` 未完成目标；`- [!]` 外部证据债、人工验收、硬件/native/发行/真实窗口阻塞。本文不再使用进行中状态，所有部分完成事项拆成已完成子项与未完成/阻塞子项。
 
+### 2026-07-10 Editor Preferences 设计补充
+
+EditorShell 必须区分工程级 Settings 与用户级 Preferences：`Project Settings` / `Player Settings` / `Build Settings` 继续随工程入盘；`Edit > Preferences...` 独立保存在用户 AppData，且在 ProjectPicker 与工程工作台两种状态都可打开。Preferences 使用左侧类别导航，首批类别为 Appearance、General、External Tools 与 Shortcuts；只展示已经接入真实行为的选项，不提供无效的语言或快捷键编辑占位。
+
+`UI Scale` 是 Editor 视觉密度的单一权威值，范围 75%–200%，标准档包含 100%、125%、150%、175%、200%。它必须同时驱动启动时 CJK 字体 atlas 尺寸、当前 ImGui context 的字体显示比例、主题 padding/spacing 等 style metrics，以及 Shell 顶部工具栏等显式像素尺寸；不能只放大文字。偏好变更立即应用并原子持久化，重启后以目标字号重新构建字体 atlas，避免 4K 屏长期使用位图放大。`Save layout on exit` 与 `External script editor` 属于用户级设置；旧 `ProjectSettingsDto.EditorPreferences` 暂留为只读兼容来源并在首次加载全局偏好时迁移，不再出现在 Project Settings 面板，也不再由工程设置探针写入。
+
 ---
 
 ## 1. 当前产品职责
