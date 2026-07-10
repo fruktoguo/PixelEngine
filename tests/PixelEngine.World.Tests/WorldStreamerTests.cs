@@ -314,6 +314,57 @@ public sealed class WorldStreamerTests
     }
 
     /// <summary>
+    /// 验证相位 2 对 1/16/64/256 个后台装载结果只执行一次 live snapshot rebuild。
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(16)]
+    [InlineData(64)]
+    [InlineData(256)]
+    public void ApplyPreparedBatchesLoadedChunks(int chunkCount)
+    {
+        // Arrange：准备后台完成队列与独立温度子块。
+        ResidentChunkMap chunks = new();
+        ResidencyTable residency = new();
+        int chunkBytes = ChunkMemoryBudget.EstimatedResidentChunkBytes;
+        ChunkMemoryBudget budget = new(chunkBytes * (chunkCount + 1L), chunkBytes * chunkCount);
+        TemperatureField temperature = new();
+        CompletedChunkQueue completed = new();
+        for (int i = 0; i < chunkCount; i++)
+        {
+            ChunkCoord coord = new(i, 0);
+            Half[] chunkTemperature = new Half[TemperatureField.BlockArea];
+            chunkTemperature[0] = (Half)i;
+            completed.Enqueue(CompletedStreamingOperation.Loaded(new Chunk(coord), chunkTemperature));
+        }
+
+        WorldStreamer streamer = new(
+            chunks,
+            residency,
+            budget,
+            temperature,
+            new MemoryChunkStore(),
+            IdentityRemap(),
+            completed: completed);
+
+        // Act：执行相位 2 批量应用。
+        Assert.Equal(chunkCount, streamer.ApplyPrepared(frame: 7));
+
+        // Assert：验证 live map、metadata、budget 与单次快照重建保持一致。
+        Assert.Equal(chunkCount, chunks.Count);
+        Assert.Equal(1, chunks.SnapshotRebuildCount);
+        Assert.Equal(chunkCount, residency.Count);
+        Assert.Equal(chunkBytes * chunkCount, budget.ResidentBytes);
+        for (int i = 0; i < chunkCount; i++)
+        {
+            ChunkCoord coord = new(i, 0);
+            Assert.True(chunks.TryGetChunk(coord, out _));
+            Assert.True(residency.TryGetInfo(coord, out ChunkResidencyInfo info));
+            Assert.Equal(ChunkResidencyState.Cached, info.State);
+        }
+    }
+
+    /// <summary>
     /// 验证无请求的相位 11 tick 在预热后不产生托管堆分配。
     /// </summary>
     [Fact]
