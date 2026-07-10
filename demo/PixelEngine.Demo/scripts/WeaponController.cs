@@ -181,8 +181,7 @@ public sealed class WeaponController : Behaviour
             return;
         }
 
-        Catalog = Context.Config.Load(CatalogPath, DemoConfigJsonContext.Default.WeaponCatalog);
-        Catalog.Validate();
+        Catalog = WeaponCatalog.Parse(Context.Config.ReadText(CatalogPath));
         _laserSparkMaterial = Context.Materials.Resolve("fire");
 
         Ammo = new int[Catalog.Weapons.Length];

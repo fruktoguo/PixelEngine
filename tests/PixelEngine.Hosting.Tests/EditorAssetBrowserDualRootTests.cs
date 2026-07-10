@@ -544,7 +544,7 @@ public sealed class EditorAssetBrowserDualRootTests
         AssetBrowserItem materialMap = Find("Content/maps/ai-cavern-material-map.png");
         AssetBrowserItem mainScene = Find("Content/scenes/lava-mine.scene");
         AssetBrowserItem cameraProbe = Find("Content/scenes/lava-mine-camera-probe.scene");
-        AssetBrowserItem script = Find("ScriptSource/DemoSceneAuthoringBehaviours.cs");
+        AssetBrowserItem script = Find("ScriptSource/LevelDirector.cs");
 
         Assert.Contains("CA 材质", materials.Descriptor?.Purpose, StringComparison.Ordinal);
         Assert.Contains("材质目录：21", materials.PreviewSummary, StringComparison.Ordinal);

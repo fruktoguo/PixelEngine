@@ -25,11 +25,12 @@
   - 验收：双栏 folder tree + breadcrumb + 直接子项导航可用；创建/导入/移动/删除收进明确工具栏或上下文菜单；类型、用途、启动/当前/测试资产 badge 与摘要可理解；Scene 双击直接打开且不改变 StartScene，Script 双击打开真正源码；搜索覆盖路径、类型、用途与摘要；Demo 的 materials/reactions/startup/weapons/audio/UI/font/probe 文件无需猜文件名即可理解用途。
   - 证据：Editor 全量 96/96；Hosting 非发行工具回归 428 passed / 4 native-GL 条件 skipped；Editor Shell Release build 0 warning / 0 error；Demo 工程真实窗口 12 帧通过并注册 23 个面板。自动化覆盖双根树、breadcrumb、直接子文件夹/资产、深层搜索结果、localized type/用途/摘要/动态 badge 搜索、Scene/Script 专用主操作、Content/ScriptSource 兼容创建与导入路由，以及 Demo materials/reactions/startup/weapons/audio Cue 与 clip/UI manifest 与 screen/font/probe/script 的语义 descriptor；Scene 打开复用统一 dirty guard，当前场景 badge 从 Session 内存实时计算，Project StartScene 只读且不被 Project Window 改写。
 
-- [ ] `EDITOR-007` 建立 Scene View 独立 authoring 可视化并让实例工程真实可见。
+- [x] `EDITOR-007` 建立 Scene View 独立 authoring 可视化并让实例工程真实可见。
   - 优先级：P0。
   - 依赖：`EDITOR-005`、`EDITOR-006`。
   - 设计来源：`plan/19-standalone-editor-app.md` §编辑器产品化修复（2026-07-11）；架构 §17.4。
   - 验收：Scene View 与 Game View 不再共用运行时 camera/语义；Edit 模式显示声明式初始 world 或 procedural preview，并叠加网格、场景边界、对象 marker/name、Frame All/Frame Selected；Editor 与 Player 使用同一份项目脚本/世界来源，不保留同全名空壳 Behaviour；Demo 默认打开 lava-mine 时 Scene View 非空，empty/probe 场景有清晰测试标识且不会污染下次启动。
+  - 证据：Scene authoring / Game View / shell discipline / scene materialization / project 合并定向回归 101 passed / 1 native 条件 skipped；Hosting 非 tooling 回归 434 passed / 4 native-GL 条件 skipped；Scripting 90/90、Editor 96/96、Demo 132 passed / 1 native-GL 条件 skipped；Editor Shell Release build 0 warning / 0 error。`SceneAuthoringPreviewTests` 覆盖 lava-mine 640×360 LevelDirector preview、对象/出生点/终点 marker、显式空 probe 标识、独立相机、Frame All/Selected、dock 1×1 首帧延迟 framing 与 Demo 完整脚本目录动态编译；真实窗口 12 帧截图 `artifacts/editor-007-scene-authoring-framed.bmp` 显示场景边界、网格、洞穴/平台/熔岩示意及分离 marker，运行摘要为 `project_open=True`、`editor_panels=23`。Demo 完整 Behaviour 已迁入唯一 `scripts/` 源，Player 静态编译与 Editor Roslyn 热编译共用源码；空壳同名 Behaviour 已删除，脚本编译器对齐 SDK implicit usings/nullable，武器配置改为 Hosting 路径门控下的 AOT-safe 显式解析。
 
 - [!] `EDITOR-001` 完成 Project Window 真实工作流验收。阻塞：需要真实窗口 reviewer 和当前 HEAD 录屏/报告。
   - 优先级：P1。

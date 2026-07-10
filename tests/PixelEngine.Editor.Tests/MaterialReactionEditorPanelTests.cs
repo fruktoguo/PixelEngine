@@ -367,7 +367,7 @@ public sealed class MaterialReactionEditorPanelTests
         string root = FindRepositoryRoot();
         string panelSource = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "MaterialReactionEditorPanel.cs"));
         string editorSource = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "MaterialLegendPreview.cs"));
-        string demoHudSource = File.ReadAllText(Path.Combine(root, "demo", "PixelEngine.Demo", "PlayableHud.cs"));
+        string demoHudSource = File.ReadAllText(Path.Combine(root, "demo", "PixelEngine.Demo", "scripts", "PlayableHud.cs"));
 
         // Assert：验证预期结果
         Assert.Contains("flow rate", panelSource, StringComparison.Ordinal);

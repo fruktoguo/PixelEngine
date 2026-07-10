@@ -415,8 +415,7 @@ public sealed class DemoStartupOptionsTests
 
         _ = engine.LoadContentPackage();
         MaterialTable materials = engine.Context.GetService<MaterialTable>();
-        WeaponCatalog catalog = engine.LoadConfig("weapons.json", DemoConfigJsonContext.Default.WeaponCatalog);
-        catalog.Validate();
+        WeaponCatalog catalog = WeaponCatalog.Parse(engine.ReadConfigText("weapons.json"));
 
         // Assert：验证预期结果
         Assert.Equal(6, catalog.Weapons.Length);
@@ -472,22 +471,22 @@ public sealed class DemoStartupOptionsTests
 
             // Assert：验证预期结果
             FileNotFoundException missing = Assert.Throws<FileNotFoundException>(
-                () => engine.LoadConfig("weapons.json", DemoConfigJsonContext.Default.WeaponCatalog));
+                () => WeaponCatalog.Parse(engine.ReadConfigText("weapons.json")));
             Assert.Contains("weapons.json", missing.FileName, StringComparison.OrdinalIgnoreCase);
 
             File.WriteAllText(Path.Combine(contentRoot, "weapons.json"), "{ \"weapons\": [");
-            System.Text.Json.JsonException invalid = Assert.Throws<System.Text.Json.JsonException>(
-                () => engine.LoadConfig("weapons.json", DemoConfigJsonContext.Default.WeaponCatalog));
+            System.Text.Json.JsonException invalid = Assert.ThrowsAny<System.Text.Json.JsonException>(
+                () => WeaponCatalog.Parse(engine.ReadConfigText("weapons.json")));
             Assert.False(string.IsNullOrWhiteSpace(invalid.Message));
 
             File.WriteAllText(Path.Combine(contentRoot, "weapons.json"), /*lang=json,strict*/ "{ \"weapons\": [{ \"id\": \"bad\", \"displayName\": \"Bad\", \"kind\": \"wrongKind\" }] }");
-            System.Text.Json.JsonException invalidKind = Assert.Throws<System.Text.Json.JsonException>(
-                () => engine.LoadConfig("weapons.json", DemoConfigJsonContext.Default.WeaponCatalog));
+            InvalidDataException invalidKind = Assert.Throws<InvalidDataException>(
+                () => WeaponCatalog.Parse(engine.ReadConfigText("weapons.json")));
             Assert.False(string.IsNullOrWhiteSpace(invalidKind.Message));
 
             File.WriteAllText(Path.Combine(contentRoot, "weapons.json"), /*lang=json,strict*/ "{ \"weapons\": [{ \"displayName\": \"Broken\", \"kind\": \"builder\", \"ammoMax\": 1 }] }");
             InvalidDataException missingField = Assert.Throws<InvalidDataException>(
-                () => engine.LoadConfig("weapons.json", DemoConfigJsonContext.Default.WeaponCatalog).Validate());
+                () => WeaponCatalog.Parse(engine.ReadConfigText("weapons.json")));
             Assert.Contains("id", missingField.Message, StringComparison.OrdinalIgnoreCase);
         }
         finally
@@ -751,6 +750,40 @@ public sealed class DemoStartupOptionsTests
 
             ScriptAssemblyRegistry registry = engine.Context.GetService<ScriptAssemblyRegistry>();
             Assert.Contains(registry.Assemblies, assembly => assembly.GetType("PackagedDemoBehaviour", throwOnError: false) is not null);
+        }
+        finally
+        {
+            string? root = Directory.GetParent(contentRoot)?.FullName;
+            if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 Demo Player 已静态编译同源 scripts 时不会再次加载 content/scripts 的同名 Behaviour。
+    /// </summary>
+    [Fact]
+    public void RegisterPackagedScriptAssembliesSkipsSourceAlreadyCompiledIntoPlayer()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), "pixelengine-static-scripts-" + Guid.NewGuid().ToString("N"), "content");
+        try
+        {
+            string scripts = Path.Combine(contentRoot, "scripts");
+            _ = Directory.CreateDirectory(scripts);
+            File.WriteAllText(Path.Combine(scripts, "Duplicate.cs"), "this source must not be compiled");
+            DemoStartupOptions options = DemoStartupOptions.Parse(["--content", contentRoot]);
+            using Engine engine = new EngineBuilder()
+                .UseHeadless()
+                .WithContentRoot(contentRoot)
+                .Build();
+
+            DemoProgram.RegisterPackagedScriptAssemblies(
+                engine,
+                options,
+                dynamicCodeSupported: false,
+                typeof(DemoProgram).Assembly);
         }
         finally
         {

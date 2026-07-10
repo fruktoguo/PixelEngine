@@ -11,6 +11,16 @@ public sealed class EngineScriptConfigApi(string contentRoot) : IConfigApi
     private readonly string _contentRoot = Path.GetFullPath(contentRoot);
 
     /// <summary>
+    /// 从 ContentRoot 下按相对路径读取配置文本。
+    /// </summary>
+    /// <param name="relativePath">相对 ContentRoot 的配置路径。</param>
+    /// <returns>配置文件 UTF-8 文本。</returns>
+    public string ReadText(string relativePath)
+    {
+        return EngineContentLoader.ReadConfigText(_contentRoot, relativePath);
+    }
+
+    /// <summary>
     /// 从 ContentRoot 下按相对路径加载脚本配置文件。
     /// </summary>
     /// <typeparam name="TConfig">配置对象类型。</typeparam>

@@ -41,7 +41,7 @@ public sealed class EditorShellGameViewContractTests
         Assert.Equal(EditorDockSpace.ViewportWindowTitle, contract.WindowTitle);
         Assert.Equal(EditorViewportCameraOwner.AuthoringCamera, contract.CameraOwner);
         Assert.Equal(EditorViewportInputOwner.AuthoringTools, contract.InputOwner);
-        Assert.True(contract.UsesRuntimeViewportTexture);
+        Assert.False(contract.UsesRuntimeViewportTexture);
         Assert.True(contract.AllowsEditorOverlay);
         Assert.Equal(UiPresentLayerOrders.Game, contract.GameUiLayerOrder);
         Assert.Equal(UiPresentLayerOrders.Editor, contract.EditorOverlayLayerOrder);

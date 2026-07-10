@@ -956,12 +956,15 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("Hexa.NET.ImGuizmo", ReadIncludes(shellProject, "PackageReference"));
         Assert.Contains("class SceneViewPanel", source, StringComparison.Ordinal);
         Assert.Contains("new SceneViewPanel(", source, StringComparison.Ordinal);
-        Assert.Contains("engine.Context.GetService<ScriptCameraApi>()", source, StringComparison.Ordinal);
-        Assert.Contains("ScriptCameraApi camera", source, StringComparison.Ordinal);
-        Assert.Contains("_camera.SetZoom", source, StringComparison.Ordinal);
-        Assert.Contains("_camera.SetCenter", source, StringComparison.Ordinal);
-        Assert.Contains("ViewportPanel.FitTexture", source, StringComparison.Ordinal);
-        Assert.Contains("ViewportPanel.CreateTextureRef", source, StringComparison.Ordinal);
+        Assert.Contains("SceneAuthoringCamera", source, StringComparison.Ordinal);
+        Assert.Contains("SceneAuthoringPreviewBuilder", source, StringComparison.Ordinal);
+        Assert.Contains("Frame All", source, StringComparison.Ordinal);
+        Assert.Contains("Frame Selected", source, StringComparison.Ordinal);
+        Assert.Contains("DrawGrid", source, StringComparison.Ordinal);
+        Assert.Contains("DrawBoundary", source, StringComparison.Ordinal);
+        Assert.Contains("DrawMarkers", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("engine.Context.GetService<ScriptCameraApi>()", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ScriptCameraApi camera", source, StringComparison.Ordinal);
         Assert.Contains("MaterialBrushPalettePanel? brushPanel", source, StringComparison.Ordinal);
         Assert.Contains("brushPanel.ApplyAt", source, StringComparison.Ordinal);
         Assert.Contains("WantCaptureMouse", source, StringComparison.Ordinal);
@@ -1659,7 +1662,7 @@ public sealed class HostingProjectDisciplineTests
         string root = FindRepositoryRoot();
         string source = string.Join(
             '\n',
-            Directory.EnumerateFiles(Path.Combine(root, "demo", "PixelEngine.Demo"), "*.cs").Select(File.ReadAllText));
+            Directory.EnumerateFiles(Path.Combine(root, "demo", "PixelEngine.Demo"), "*.cs", SearchOption.AllDirectories).Select(File.ReadAllText));
 
         Assert.DoesNotContain("using PixelEngine.Content", source, StringComparison.Ordinal);
         Assert.DoesNotContain("using PixelEngine.Simulation", source, StringComparison.Ordinal);
@@ -1717,7 +1720,7 @@ public sealed class HostingProjectDisciplineTests
         string demoDirectory = Path.Combine(root, "demo", "PixelEngine.Demo");
         string startupOptions = File.ReadAllText(Path.Combine(demoDirectory, "DemoStartupOptions.cs"));
         string demoProgram = File.ReadAllText(Path.Combine(demoDirectory, "DemoProgram.cs"));
-        string pauseMenu = File.ReadAllText(Path.Combine(demoDirectory, "PauseMenu.cs"));
+        string pauseMenu = File.ReadAllText(Path.Combine(demoDirectory, "scripts", "PauseMenu.cs"));
 
         // Assert：验证预期结果
         Assert.DoesNotContain("--editor", startupOptions, StringComparison.Ordinal);
