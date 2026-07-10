@@ -359,6 +359,18 @@ EOF
   done
 }
 
+copy_packaged_scripts() {
+  local project_root
+  project_root="$(dirname "$content_root")"
+  # Demo 自身的 scripts 已编译进 PixelEngine.Demo；外部工程脚本才作为玩家内容分发。
+  if [[ -f "$project_root/PixelEngine.Demo.csproj" || ! -d "$project_root/scripts" ]]; then
+    return
+  fi
+
+  mkdir -p "$content_dir/scripts"
+  cp -a "$project_root/scripts"/. "$content_dir/scripts"/
+}
+
 find "$output_root" -mindepth 1 -maxdepth 1 \
   \( -name "PixelEngine-Demo-*-$rid-$channel" -o -name "PixelEngine-Demo-*-$rid-$channel.zip" -o -name "PixelEngine-Demo-*-$rid-$channel.tar.gz" \) \
   -exec rm -rf -- {} +
@@ -369,6 +381,7 @@ cp -a "$publish_dir"/. "$app_dir"/
 remove_player_package_noise "$app_dir"
 rm -rf "$app_dir/content" "$app_dir/_PUBLISH_INTERMEDIATE_README.txt" "$content_dir"
 copy_filtered_content
+copy_packaged_scripts
 
 if [[ "$rid" == win-* ]]; then
   cp "$publish_dir/$assembly_base.exe" "$staging_dir/$windows_launcher"
