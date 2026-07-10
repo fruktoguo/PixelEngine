@@ -2,6 +2,10 @@
 
 > **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
 
+> **DOC-002 历史证据口径（2026-07-10）**：后文 checkbox 与“已通过/已完成”叙述冻结自旧计划快照 `179efc3a`，迁移基线为 `5af1541f`，均不构成 live 状态；证据等级以 [稳定 Evidence Index](../docs/evidence-index.md) 为准。未入索引的 `artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/` 仅是可再生历史线索；替代报告与重跑命令见 [DOC-002 校正报告](../docs/evidence-2026-07-10-doc-002-legacy-plan-audit.md)。
+
+> **DOC-002 性能证据校正**：后文 `artifacts/benchmark-run-ca-*` 目录只代表历史 Dry 入口探针；正式规模数据与未达目标结论以 [`PERF-003` 稳定报告](../docs/evidence-2026-07-10-perf-003-ca-throughput.md) 为准，目标硬件状态以 canonical `PERF-*` 为准。
+
 > 本文件是 M15 的性能证据账本，承载 Engine Core、Web-first UI Runtime、Showcase Demo Game 和发行模式的性能门禁状态。它不新增子系统，只判断现有实现是否有足够证据证明可交付。
 > 技术依据：`../docs/PixelEngine-架构与需求设计.md` §1.4、§12、§17.3、§19，`00-conventions-and-techstack.md`，`14-testing-benchmarking.md`，`15-build-packaging-distribution.md`。
 > 状态标记：只使用 `- [x]`、`- [ ]`、`- [!]`。进行中状态必须拆成已完成子项与未完成或阻塞子项。

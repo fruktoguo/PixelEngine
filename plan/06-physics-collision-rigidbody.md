@@ -2,6 +2,8 @@
 
 > **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
 
+> **DOC-002 历史证据口径（2026-07-10）**：后文 checkbox 与“已通过/已完成”叙述冻结自旧计划快照 `179efc3a`，迁移基线为 `5af1541f`，均不构成 live 状态；证据等级以 [稳定 Evidence Index](../docs/evidence-index.md) 为准。未入索引的 `artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/` 仅是可再生历史线索；替代报告与重跑命令见 [DOC-002 校正报告](../docs/evidence-2026-07-10-doc-002-legacy-plan-audit.md)。
+
 > 范围：全像素碰撞与刚体物理的**全部**实现。包含 Box2D v3.1 的 `[LibraryImport]` 薄绑定、自建 task-callback 桥、像素簇→刚体管线（CCL→Marching Squares→Douglas-Peucker→凸分解→复合刚体）、两世界栅格化同步、破坏/挖掘重建、静态地形局部 collider、以及独立于 Box2D 的玩家/生物角色控制器。
 > 权威依据：架构文档 §8（全像素碰撞与刚体）、§14（C#/C++ 边界与 task 桥）、§6.4（确定性 physics workerCount=1）；不变式 #5（CA↔刚体双向耦合）、#9（CPU sim 权威）、#10（native 收敛到 Box2D）。技术栈：`plan/00` §4 物理行；工程宪法：`AGENTS.md`。
 > 状态约定：`- [x]` 已有源码、测试、工具、报告或 plan 证据；`- [ ]` 未完成目标；`- [!]` 阻塞、证据债、人工验收或外部环境限制。

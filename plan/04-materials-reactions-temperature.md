@@ -2,6 +2,10 @@
 
 > **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
 
+> **DOC-002 历史证据口径（2026-07-10）**：后文 checkbox 与“已通过/已完成”叙述冻结自旧计划快照 `179efc3a`，迁移基线为 `5af1541f`，均不构成 live 状态；证据等级以 [稳定 Evidence Index](../docs/evidence-index.md) 为准。未入索引的 `artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/` 仅是可再生历史线索；替代报告与重跑命令见 [DOC-002 校正报告](../docs/evidence-2026-07-10-doc-002-legacy-plan-audit.md)。
+
+> **DOC-002 基准校正**：后文 `BenchmarkDotNet.Artifacts/...` 只记录历史生成位置；同一行保留的 BDN 命令是复现入口，正式零分配边界与等级以稳定的 [`PERF-004` 报告](../docs/evidence-2026-07-10-perf-004-zero-allocation.md) 为准。
+
 > 范围锚定：本文档定义**材质定义、反应表、温度场**的运行时数据模型与执行逻辑。权威依据：架构文档 §7.3 / §7.4 / §7.5（材质 / 反应 / 温度），并受 §5.3（parity）、§5.5（KeepAlive）、§5.8（32px halo）、§11.2（name↔id）、§4.3（过载降级）约束。技术栈与全局约定见 `00-conventions-and-techstack.md`，开发宪法见 `../AGENTS.md`。
 > 状态约定：`- [ ]` 未开始 / `- [x]` 完成并有可追溯证据 / `- [!]` 外部证据、人工验收、硬件、发行或 native 阻塞；进行中事项必须拆成已完成子项与未完成/阻塞子项。
 

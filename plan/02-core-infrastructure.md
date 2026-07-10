@@ -2,6 +2,8 @@
 
 > **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
 
+> **DOC-002 历史证据口径（2026-07-10）**：后文 checkbox 与“已通过/已完成”叙述冻结自旧计划快照 `179efc3a`，迁移基线为 `5af1541f`，均不构成 live 状态；证据等级以 [稳定 Evidence Index](../docs/evidence-index.md) 为准。未入索引的 `artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/` 仅是可再生历史线索；替代报告与重跑命令见 [DOC-002 校正报告](../docs/evidence-2026-07-10-doc-002-legacy-plan-audit.md)。
+
 > 本文档定义 `src/PixelEngine.Core/` 的完整实现计划。Core 是整个解决方案的依赖底座（依赖方向见 plan/00 §5：`… → Interop → Core`，Core 不反向依赖任何项目），是**无「像素」语义的可复用基础设施**：数学、内存、持久线程池、确定性 RNG、无锁事件总线、帧时钟、诊断/计时、编译期常量。
 > 权威依据：`docs/PixelEngine-架构与需求设计.md`（下称「架构」）、`AGENTS.md`、`plan/00-conventions-and-techstack.md`。
 > 状态约定：`- [ ]` 未开始 / `- [x]` 完成并有可追溯证据 / `- [!]` 外部证据、人工验收、硬件、发行或 native 阻塞；进行中事项必须拆成已完成子项与未完成/阻塞子项。

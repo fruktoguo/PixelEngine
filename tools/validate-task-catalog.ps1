@@ -23,6 +23,7 @@ $canonicalFiles = Get-ChildItem -LiteralPath $taskRoot -File -Filter '*.md' |
 
 $anyCheckboxPattern = '^\s*-\s+\[[^\]]*\](?:\s+|$)'
 $legacyCheckboxPattern = '^\s*-\s+\[(?<state>[x ~!])\]\s+'
+$legacyEvidenceMarker = 'DOC-002 历史证据口径（2026-07-10）'
 $taskPattern = '^\s*-\s+\[(?<state>[x ~!])\]\s+`(?<id>[A-Z]+-\d{3})`(?:\s|$)'
 $taskLocations = @{}
 $stateCounts = [ordered]@{ done = 0; open = 0; active = 0; blocked = 0 }
@@ -112,6 +113,11 @@ foreach ($plan in $coverage.plans) {
     if (-not (Test-Path -LiteralPath $planPath -PathType Leaf)) {
         $errors.Add("Legacy plan not found: $($plan.path)")
         continue
+    }
+
+    $planText = Get-Content -LiteralPath $planPath -Raw
+    if (-not $planText.Contains($legacyEvidenceMarker, [StringComparison]::Ordinal)) {
+        $errors.Add("Legacy plan is missing the DOC-002 evidence marker: $($plan.path)")
     }
 
     $actual = [ordered]@{ done = 0; open = 0; active = 0; blocked = 0 }

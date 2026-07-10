@@ -2,6 +2,8 @@
 
 > **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
 
+> **DOC-002 历史证据口径（2026-07-10）**：后文 checkbox 与“已通过/已完成”叙述冻结自旧计划快照 `179efc3a`，迁移基线为 `5af1541f`，均不构成 live 状态；证据等级以 [稳定 Evidence Index](../docs/evidence-index.md) 为准。未入索引的 `artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/` 仅是可再生历史线索；替代报告与重跑命令见 [DOC-002 校正报告](../docs/evidence-2026-07-10-doc-002-legacy-plan-audit.md)。
+
 > 范围锚点：本文件只覆盖 **falling-sand 内核机制本身**——CellGrid SoA 数据结构、Chunk、单缓冲原地更新 + parity、4-pass checkerboard 调度、32px move cap、movement rules、KeepAlive 跨界唤醒、dirty-rect grow/shrink/swap/sleep，以及帧相位 3/4/6/7 的内核接口与「何时调用反应/温度/生命周期」的钩子。
 > **明确不在本文件范围**：材质属性语义（`Density`/`Dispersion`/`Type` 等字段的定义与加载）在 `plan/04`；自由粒子池与积分在 `plan/05`；反应表数据与 `[tag]` 展开、温度场扩散在 `plan/04`（本文件只定义「何时调用反应执行」的钩子，不定义表）；chunk 驻留/流式装卸/border ring/内存上限在 `plan/07`（本文件定义 `Chunk` 与 `CellGrid` 的数据结构与**本地访问**，并通过 `IChunkSource` seam 消费 plan/07 提供的驻留集合）。
 > 权威依据：`docs/PixelEngine-架构与需求设计.md`（下称「架构」），开发宪法 `AGENTS.md`，技术栈锚文档 `plan/00`。引用格式 `§x.y` 指架构章节，`[相位 N]` 指架构 §3.3 的帧相位。
