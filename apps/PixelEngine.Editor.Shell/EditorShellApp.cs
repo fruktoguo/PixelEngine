@@ -1551,6 +1551,54 @@ internal sealed class EditorShellApp
         return result.Status is EditorTransitionStatus.Executed or EditorTransitionStatus.ConfirmationRequired;
     }
 
+    /// <summary>
+    /// 从 Project Window rooted asset path 打开场景；复用统一 dirty guard 且不修改 Project StartScene。
+    /// </summary>
+    /// <param name="assetPath">Content/... rooted 场景路径。</param>
+    /// <param name="diagnostic">打开、待确认或失败诊断。</param>
+    /// <returns>场景已打开或 dirty-guard 转场已受理时返回 true。</returns>
+    public bool OpenSceneAsset(string assetPath, out string diagnostic)
+    {
+        if (!EditorRootedBrowserPath.TryParse(assetPath, out EditorAssetPath path, out diagnostic) ||
+            path.Root != EditorAssetRootKind.Content)
+        {
+            diagnostic = string.IsNullOrWhiteSpace(diagnostic)
+                ? $"Scene 资产必须位于 Content logical root：{assetPath}"
+                : diagnostic;
+            return false;
+        }
+
+        string extension = Path.GetExtension(path.RelativePath);
+        if (!string.Equals(extension, ".scene", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(extension, ".world", StringComparison.OrdinalIgnoreCase))
+        {
+            diagnostic = $"Project Window 只能打开 .scene 或 .world：{assetPath}";
+            return false;
+        }
+
+        LastProjectError = null;
+        bool accepted = OpenScene(path.RelativePath);
+        if (!accepted || !string.IsNullOrWhiteSpace(LastProjectError))
+        {
+            diagnostic = LastProjectError ?? $"场景打开请求未执行：{assetPath}";
+            return false;
+        }
+
+        if (PendingTransition is { Kind: EditorTransitionKind.OpenScene } pending &&
+            string.Equals(pending.Target, path.RelativePath, StringComparison.OrdinalIgnoreCase))
+        {
+            diagnostic = $"场景 {assetPath} 等待 Save / Discard / Cancel 确认。";
+            return true;
+        }
+
+        bool opened = CurrentSession is not null &&
+            string.Equals(CurrentSession.CurrentSceneRelativePath, path.RelativePath, StringComparison.OrdinalIgnoreCase);
+        diagnostic = opened
+            ? $"已打开场景 {assetPath}；Project StartScene 未改变。"
+            : $"场景打开请求未完成：{assetPath}";
+        return opened;
+    }
+
     public void RequestExit()
     {
         HandleTransitionResult(_transitions.Request(

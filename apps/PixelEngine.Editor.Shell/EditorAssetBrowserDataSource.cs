@@ -12,6 +12,7 @@ internal sealed class EditorAssetBrowserDataSource :
     IAssetBrowserRefreshableDataSource,
     IAssetBrowserDiagnosticDataSource,
     IAssetBrowserFolderDataSource,
+    IAssetBrowserContextDataSource,
     IDisposable
 {
     private const string ScriptManifestRelativePath = ".pixelengine/script-assets.json";
@@ -22,6 +23,8 @@ internal sealed class EditorAssetBrowserDataSource :
     private readonly ITextureThumbnailProvider? _thumbnailProvider;
     private readonly EditorProjectSceneAssetMoveService? _sceneAssetMoveService;
     private readonly EditorSceneModel? _activeScene;
+    private readonly EditorProject? _project;
+    private readonly Func<string?>? _currentScenePath;
     private readonly bool _rootedBrowserPaths;
     private readonly Queue<EditorAssetChange> _pendingChanges = [];
     private readonly HashSet<EditorAssetRootKind> _pendingFullRescanRoots = [];
@@ -33,7 +36,8 @@ internal sealed class EditorAssetBrowserDataSource :
     public EditorAssetBrowserDataSource(
         EditorProject project,
         ITextureThumbnailProvider? thumbnailProvider = null,
-        EditorSceneModel? activeScene = null)
+        EditorSceneModel? activeScene = null,
+        Func<string?>? currentScenePath = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         _assets = new EditorAssetManifestStore(project);
@@ -57,6 +61,8 @@ internal sealed class EditorAssetBrowserDataSource :
         _thumbnailProvider = thumbnailProvider;
         _sceneAssetMoveService = new EditorProjectSceneAssetMoveService(project, _assets);
         _activeScene = activeScene;
+        _project = project;
+        _currentScenePath = currentScenePath;
         _rootedBrowserPaths = true;
         RefreshAssets();
     }
@@ -76,6 +82,8 @@ internal sealed class EditorAssetBrowserDataSource :
         _thumbnailProvider = thumbnailProvider;
         _sceneAssetMoveService = sceneAssetMoveService;
         _activeScene = null;
+        _project = null;
+        _currentScenePath = null;
         RefreshAssets();
     }
 
@@ -92,6 +100,34 @@ internal sealed class EditorAssetBrowserDataSource :
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _folderSnapshot;
+    }
+
+    /// <inheritdoc />
+    public AssetBrowserBadge GetContextBadges(string assetPath)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_project is null ||
+            !EditorRootedBrowserPath.TryParse(assetPath, out EditorAssetPath path, out _) ||
+            path.Root != EditorAssetRootKind.Content)
+        {
+            return AssetBrowserBadge.None;
+        }
+
+        AssetBrowserBadge badges = AssetBrowserBadge.None;
+        if (string.Equals(path.RelativePath, _project.StartScene, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(path.RelativePath, "startup.json", StringComparison.OrdinalIgnoreCase))
+        {
+            badges |= AssetBrowserBadge.Startup;
+        }
+
+        string? currentScene = _currentScenePath?.Invoke();
+        if (!string.IsNullOrWhiteSpace(currentScene) &&
+            string.Equals(path.RelativePath, NormalizeLogicalPathForComparison(currentScene), StringComparison.OrdinalIgnoreCase))
+        {
+            badges |= AssetBrowserBadge.Current;
+        }
+
+        return badges;
     }
 
     /// <inheritdoc />
@@ -582,7 +618,8 @@ internal sealed class EditorAssetBrowserDataSource :
             record.LastModifiedUtc,
             thumbnail,
             record.Id,
-            BuildPreviewSummary(root, record, kind, thumbnail));
+            BuildPreviewSummary(root, record, kind, thumbnail),
+            BuildDescriptor(root, record, kind));
     }
 
     private bool UpsertSnapshot(EditorAssetRootKind root, EditorAssetRecord record, string? previousBrowserPath = null)
@@ -1239,6 +1276,160 @@ internal sealed class EditorAssetBrowserDataSource :
         return _thumbnailProvider is not null && _thumbnailProvider.TryGetThumbnail(logicalPath, out thumbnail);
     }
 
+    private static AssetBrowserDescriptor BuildDescriptor(
+        EditorAssetRootKind root,
+        EditorAssetRecord record,
+        AssetBrowserItemKind kind)
+    {
+        string path = record.LogicalPath.Replace('\\', '/');
+        string fileName = Path.GetFileName(path);
+        string extension = Path.GetExtension(path).ToLowerInvariant();
+        AssetBrowserBadge badges = IsTestAsset(path, kind)
+            ? AssetBrowserBadge.Test
+            : AssetBrowserBadge.None;
+        string typeLabel = GetTypeLabel(kind, extension, fileName);
+        string purpose = GetPurpose(root, path, kind, extension);
+        return new AssetBrowserDescriptor(typeLabel, purpose, badges);
+    }
+
+    private static string GetTypeLabel(AssetBrowserItemKind kind, string extension, string fileName)
+    {
+        return kind switch
+        {
+            AssetBrowserItemKind.Material when string.Equals(fileName, "reactions.json", StringComparison.OrdinalIgnoreCase) =>
+                "材质反应规则",
+            AssetBrowserItemKind.Other => extension switch
+            {
+                ".ttf" or ".otf" or ".woff" or ".woff2" => "字体",
+                ".txt" or ".md" => "说明文档",
+                ".ini" => "Editor 配置",
+                _ => "文件",
+            },
+            AssetBrowserItemKind.Folder => "文件夹",
+            AssetBrowserItemKind.Material => "材质目录",
+            AssetBrowserItemKind.Texture => "纹理",
+            AssetBrowserItemKind.Audio => "音频片段",
+            AssetBrowserItemKind.Scene => "场景",
+            AssetBrowserItemKind.Prefab => "Prefab",
+            AssetBrowserItemKind.Script => "C# 脚本",
+            AssetBrowserItemKind.UiScreen => "UI Screen",
+            AssetBrowserItemKind.Json => "JSON 配置",
+            _ => kind.ToString(),
+        };
+    }
+
+    private static string GetPurpose(
+        EditorAssetRootKind root,
+        string path,
+        AssetBrowserItemKind kind,
+        string extension)
+    {
+        return root == EditorAssetRootKind.ScriptSource
+            ? string.Equals(Path.GetFileName(path), "DemoSceneAuthoringBehaviours.cs", StringComparison.OrdinalIgnoreCase)
+                ? "Demo 场景 authoring 脚本入口，参与 Editor 热重载与 Player 编译"
+                : "项目运行时 C# 脚本，参与 Editor 热重载与 Player 编译"
+            : path.ToLowerInvariant() switch
+            {
+                "materials.json" => "定义 CA 材质、渲染参数、温度与音频绑定的权威目录",
+                "reactions.json" => "定义材质接触、温度与方向性反应规则",
+                "startup.json" => "玩家运行时启动配置与启动场景入口",
+                "weapons.json" => "武器、弹丸与材料工具的运行时目录",
+                "audio/cues.json" => "把稳定音频 Cue handle 映射到音频片段",
+                "ui/ui-manifest.json" => "注册 Web-first UI Screen、路径与预加载策略",
+                "imgui.ini" => "Editor ImGui 工作台布局配置",
+                _ => GetContentAssetPurpose(path, kind, extension),
+            };
+    }
+
+    private static string GetContentAssetPurpose(
+        string path,
+        AssetBrowserItemKind kind,
+        string extension)
+    {
+        return kind switch
+        {
+            AssetBrowserItemKind.Audio when IsPathUnder(path, "audio") =>
+                $"运行时音效片段：{HumanizeFileName(path)}",
+            AssetBrowserItemKind.UiScreen when IsPathUnder(path, "ui/screens") =>
+                $"Web-first 游戏界面：{HumanizeFileName(path)}",
+            AssetBrowserItemKind.Other when IsPathUnder(path, "ui/fonts") => extension switch
+            {
+                ".ttf" or ".otf" or ".woff" or ".woff2" => "游戏 UI 的本地化字体资源",
+                _ when string.Equals(Path.GetFileName(path), "OFL.txt", StringComparison.OrdinalIgnoreCase) => "字体开放授权说明",
+                _ when string.Equals(Path.GetFileName(path), "SOURCE.txt", StringComparison.OrdinalIgnoreCase) => "字体来源与版本说明",
+                _ => "字体配套说明",
+            },
+            AssetBrowserItemKind.Scene when IsPathUnder(path, "scenes") =>
+                IsTestAsset(path, kind)
+                    ? GetProbePurpose(path)
+                    : "可编辑的世界、GameObject 与 Behaviour authoring 场景",
+            AssetBrowserItemKind.Texture when IsPathUnder(path, "maps") =>
+                "初始世界材质图；像素颜色映射为模拟材质",
+            AssetBrowserItemKind.Texture when IsPathUnder(path, "textures") =>
+                $"材质渲染纹理：{HumanizeFileName(path)}",
+            AssetBrowserItemKind.Scene => "可编辑场景资产",
+            AssetBrowserItemKind.Prefab => "可复用 GameObject authoring 模板",
+            AssetBrowserItemKind.Json => "工程运行时配置数据",
+            AssetBrowserItemKind.Texture => "渲染或世界构建纹理",
+            AssetBrowserItemKind.Audio => "运行时音频片段",
+            AssetBrowserItemKind.UiScreen => "Web-first UI Screen 文档",
+            AssetBrowserItemKind.Material => "模拟材质或反应定义",
+            AssetBrowserItemKind.Script => "项目 C# 脚本",
+            AssetBrowserItemKind.Other => "工程辅助资源",
+            AssetBrowserItemKind.Folder => "逻辑文件夹",
+            _ => "工程资源",
+        };
+    }
+
+    private static bool IsTestAsset(string path, AssetBrowserItemKind kind)
+    {
+        string fileName = Path.GetFileName(path);
+        return (kind == AssetBrowserItemKind.Scene && fileName.EndsWith("-probe.scene", StringComparison.OrdinalIgnoreCase)) ||
+            IsPathUnder(path, "tests") ||
+            IsPathUnder(path, "probes");
+    }
+
+    private static string GetProbePurpose(string path)
+    {
+        string fileName = Path.GetFileNameWithoutExtension(path);
+        return fileName.ToLowerInvariant() switch
+        {
+            "empty-window-probe" => "空世界与窗口链路测试场景，不属于默认游戏流程",
+            "lava-mine-audio-probe" => "熔岩矿井音频路由与空间音效测试场景",
+            "lava-mine-camera-probe" => "熔岩矿井相机跟随与 viewport 测试场景",
+            "lava-mine-goal-probe" => "熔岩矿井目标、出口与胜利流程测试场景",
+            "lava-mine-health-probe" => "熔岩矿井伤害、生命与重生测试场景",
+            "lava-mine-particle-light-probe" => "熔岩矿井粒子、光照与合成测试场景",
+            "lava-mine-reaction-probe" => "熔岩矿井材质反应与温度测试场景",
+            _ => $"{HumanizeFileName(path)} 测试场景，不属于默认游戏流程",
+        };
+    }
+
+    private static bool IsPathUnder(string path, string folder)
+    {
+        return path.StartsWith(folder.TrimEnd('/') + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string HumanizeFileName(string path)
+    {
+        string name = Path.GetFileNameWithoutExtension(path);
+        int numericPrefixSeparator = name.IndexOf('_');
+        if (numericPrefixSeparator > 0 && name[..numericPrefixSeparator].All(char.IsDigit))
+        {
+            name = name[(numericPrefixSeparator + 1)..];
+        }
+
+        return name.Replace('-', ' ').Replace('_', ' ');
+    }
+
+    private static string NormalizeLogicalPathForComparison(string path)
+    {
+        string normalized = path.Replace('\\', '/').Trim().TrimStart('/');
+        return normalized.StartsWith(EditorRootedBrowserPath.ContentRootName + "/", StringComparison.OrdinalIgnoreCase)
+            ? normalized[(EditorRootedBrowserPath.ContentRootName.Length + 1)..]
+            : normalized;
+    }
+
     private string BuildPreviewSummary(
         EditorAssetRootKind root,
         EditorAssetRecord record,
@@ -1295,6 +1486,11 @@ internal sealed class EditorAssetBrowserDataSource :
         {
             using FileStream stream = File.OpenRead(ResolveAssetFullPath(root, record.LogicalPath));
             using JsonDocument document = JsonDocument.Parse(stream);
+            if (TryBuildKnownJsonPreview(record.LogicalPath, document.RootElement, record.SizeBytes, out string knownPreview))
+            {
+                return knownPreview;
+            }
+
             string shape = TryCountJsonCollection(document.RootElement, out int count)
                 ? $"{count.ToString(CultureInfo.InvariantCulture)} 项"
                 : DescribeJsonShape(document.RootElement);
@@ -1327,10 +1523,27 @@ internal sealed class EditorAssetBrowserDataSource :
         try
         {
             string fullPath = ResolveAssetFullPath(root, record.LogicalPath);
-            string? title = TryReadRmlTitle(fullPath);
-            return string.IsNullOrWhiteSpace(title)
-                ? $"UI Screen：{FormatSize(record.SizeBytes)}"
-                : $"UI Screen：{title}，{FormatSize(record.SizeBytes)}";
+            string? title = TryReadRmlAttribute(fullPath, "title");
+            string? screen = TryReadRmlAttribute(fullPath, "data-screen");
+            string? contract = TryReadRmlAttribute(fullPath, "data-contract");
+            List<string> details = [];
+            if (!string.IsNullOrWhiteSpace(title))
+            {
+                details.Add(title);
+            }
+
+            if (!string.IsNullOrWhiteSpace(screen))
+            {
+                details.Add($"id={screen}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(contract))
+            {
+                details.Add($"contract={contract}");
+            }
+
+            details.Add(FormatSize(record.SizeBytes));
+            return $"UI Screen：{string.Join("，", details)}";
         }
         catch (Exception ex) when (IsPreviewFailure(ex))
         {
@@ -1356,7 +1569,10 @@ internal sealed class EditorAssetBrowserDataSource :
         {
             if (TryGetArrayCount(root, "materials", out count) ||
                 TryGetArrayCount(root, "reactions", out count) ||
-                TryGetArrayCount(root, "items", out count))
+                TryGetArrayCount(root, "items", out count) ||
+                TryGetArrayCount(root, "weapons", out count) ||
+                TryGetArrayCount(root, "cues", out count) ||
+                TryGetArrayCount(root, "screens", out count))
             {
                 return true;
             }
@@ -1367,6 +1583,68 @@ internal sealed class EditorAssetBrowserDataSource :
 
         count = 0;
         return false;
+    }
+
+    private static bool TryBuildKnownJsonPreview(
+        string logicalPath,
+        JsonElement root,
+        long sizeBytes,
+        out string preview)
+    {
+        string normalized = logicalPath.Replace('\\', '/');
+        if (string.Equals(normalized, "startup.json", StringComparison.OrdinalIgnoreCase) &&
+            root.TryGetProperty("startScene", out JsonElement startScene) &&
+            startScene.ValueKind == JsonValueKind.String)
+        {
+            preview = $"启动配置：场景 {startScene.GetString()}，{FormatSize(sizeBytes)}";
+            return true;
+        }
+
+        string? property = normalized.ToLowerInvariant() switch
+        {
+            "materials.json" => "materials",
+            "reactions.json" => "reactions",
+            "weapons.json" => "weapons",
+            "audio/cues.json" => "cues",
+            "ui/ui-manifest.json" => "screens",
+            _ => null,
+        };
+        if (property is null ||
+            !root.TryGetProperty(property, out JsonElement entries) ||
+            entries.ValueKind != JsonValueKind.Array)
+        {
+            preview = string.Empty;
+            return false;
+        }
+
+        int count = entries.GetArrayLength();
+        if (string.Equals(normalized, "ui/ui-manifest.json", StringComparison.OrdinalIgnoreCase))
+        {
+            int preloadCount = 0;
+            foreach (JsonElement entry in entries.EnumerateArray())
+            {
+                if (entry.ValueKind == JsonValueKind.Object &&
+                    entry.TryGetProperty("preload", out JsonElement preload) &&
+                    preload.ValueKind == JsonValueKind.True)
+                {
+                    preloadCount++;
+                }
+            }
+
+            preview = $"UI 清单：{count.ToString(CultureInfo.InvariantCulture)} 个 Screen，{preloadCount.ToString(CultureInfo.InvariantCulture)} 个预加载，{FormatSize(sizeBytes)}";
+            return true;
+        }
+
+        string label = property switch
+        {
+            "materials" => "材质目录",
+            "reactions" => "反应规则",
+            "weapons" => "武器目录",
+            "cues" => "音频 Cue 映射",
+            _ => "配置",
+        };
+        preview = $"{label}：{count.ToString(CultureInfo.InvariantCulture)} 项，{FormatSize(sizeBytes)}";
+        return true;
     }
 
     private static bool TryGetArrayCount(JsonElement root, string propertyName, out int count)
@@ -1428,17 +1706,17 @@ internal sealed class EditorAssetBrowserDataSource :
         return null;
     }
 
-    private static string? TryReadRmlTitle(string fullPath)
+    private static string? TryReadRmlAttribute(string fullPath, string attributeName)
     {
         foreach (string line in File.ReadLines(fullPath).Take(40))
         {
-            int titleIndex = line.IndexOf("title=", StringComparison.OrdinalIgnoreCase);
-            if (titleIndex < 0)
+            int attributeIndex = line.IndexOf(attributeName + "=", StringComparison.OrdinalIgnoreCase);
+            if (attributeIndex < 0)
             {
                 continue;
             }
 
-            int quoteStart = titleIndex + "title=".Length;
+            int quoteStart = attributeIndex + attributeName.Length + 1;
             while (quoteStart < line.Length && char.IsWhiteSpace(line[quoteStart]))
             {
                 quoteStart++;

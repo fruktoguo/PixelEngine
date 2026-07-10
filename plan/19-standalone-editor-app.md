@@ -12,6 +12,8 @@
 
 `EDITOR-005` 已把 Asset Database 收敛为 `Content` / `ScriptSource` 双 logical root 与各自独立 manifest；Project Window 查询只读取内存快照，显式刷新和双根 watcher 才更新索引。外部创建、修改、删除和重命名按有界批次消费，watcher 溢出退化为单根完整重扫；唯一文件身份可延续 stable id 并同步 typed reference、UI manifest 与 Scene settings，身份歧义则拒绝猜测并显示诊断。manifest 采用条件原子写入和损坏隔离恢复，Script 创建与双击打开均解析到项目真实 `ScriptSourcePath`；资产/文件夹选择以 stable id 和路径迁移共同恢复。
 
+`EDITOR-006` 已把 Project Window 重构为左侧双根 folder tree 与右侧 breadcrumb / 直接子项导航；深层资产只在搜索态展开并显示完整路径。New、Import、Refresh 和选中资产主操作位于工具栏，移动、重命名与删除收进 stable-id 绑定的工具栏/上下文菜单，Script 与非 Script 创建会自动路由到兼容 logical root。资产 descriptor 在索引刷新时生成本地化类型、工程用途、静态测试 badge 和 schema 摘要；StartScene / CurrentScene badge 仅比较内存工程与 Session 状态。Scene 双击走 `EditorShellApp.OpenSceneAsset` 与统一 dirty guard，不修改 Project StartScene；搜索覆盖 path、enum/localized type、用途、摘要、badge 与 stable id。Demo 的材质、反应、启动、武器、音频 Cue/clip、UI manifest/screen、字体、材质地图、材质纹理、probe 场景与真实 ScriptSource 均有直接可读语义。
+
 > **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
 
 > **DOC-002 历史证据口径（2026-07-10）**：后文 checkbox 与“已通过/已完成”叙述冻结自旧计划快照 `179efc3a`，迁移基线为 `5af1541f`，均不构成 live 状态；证据等级以 [稳定 Evidence Index](../docs/evidence-index.md) 为准。未入索引的 `artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/` 仅是可再生历史线索；替代报告与重跑命令见 [DOC-002 校正报告](../docs/evidence-2026-07-10-doc-002-legacy-plan-audit.md)。

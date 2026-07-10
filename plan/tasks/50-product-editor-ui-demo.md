@@ -18,11 +18,12 @@
   - 验收：Project Window 能显示并创建到真正参与编译/热重载的 ScriptSource；Content 与 ScriptSource 均有稳定、不可越界的 logical root；只读查询不扫描磁盘、不解析全库、不写 manifest；外部变更可增量失效并刷新；空工程不会逐帧刷新；manifest 损坏可诊断恢复；选择以 stable asset id 为主并在移动/重命名后跟随。
   - 证据：Asset monitor / dual root / manifest refresh / scene settings 合并定向回归 45/45；Hosting 非发行工具回归 426 passed / 4 native-GL 条件 skipped；Editor 92/92；Editor Shell Release build 0 warning / 0 error；Demo 工程真实窗口 12 帧短跑通过并注册 23 个面板。自动化覆盖双 manifest、真正 ScriptSource 创建与源码打开、重叠物理根去重、查询零写入、watcher 批处理/溢出重扫、manifest 损坏隔离恢复、唯一签名 rename 身份延续、歧义拒绝猜测、外部文件/文件夹 rename 的引用与 Scene settings 同步，以及 stable asset/folder selection 随移动恢复。
 
-- [ ] `EDITOR-006` 重做 Project Window 信息架构、资源语义与主操作。
+- [x] `EDITOR-006` 重做 Project Window 信息架构、资源语义与主操作。
   - 优先级：P0。
   - 依赖：`EDITOR-005`。
   - 设计来源：`plan/19-standalone-editor-app.md` §编辑器产品化修复（2026-07-11）。
   - 验收：双栏 folder tree + breadcrumb + 直接子项导航可用；创建/导入/移动/删除收进明确工具栏或上下文菜单；类型、用途、启动/当前/测试资产 badge 与摘要可理解；Scene 双击直接打开且不改变 StartScene，Script 双击打开真正源码；搜索覆盖路径、类型、用途与摘要；Demo 的 materials/reactions/startup/weapons/audio/UI/font/probe 文件无需猜文件名即可理解用途。
+  - 证据：Editor 全量 96/96；Hosting 非发行工具回归 428 passed / 4 native-GL 条件 skipped；Editor Shell Release build 0 warning / 0 error；Demo 工程真实窗口 12 帧通过并注册 23 个面板。自动化覆盖双根树、breadcrumb、直接子文件夹/资产、深层搜索结果、localized type/用途/摘要/动态 badge 搜索、Scene/Script 专用主操作、Content/ScriptSource 兼容创建与导入路由，以及 Demo materials/reactions/startup/weapons/audio Cue 与 clip/UI manifest 与 screen/font/probe/script 的语义 descriptor；Scene 打开复用统一 dirty guard，当前场景 badge 从 Session 内存实时计算，Project StartScene 只读且不被 Project Window 改写。
 
 - [ ] `EDITOR-007` 建立 Scene View 独立 authoring 可视化并让实例工程真实可见。
   - 优先级：P0。

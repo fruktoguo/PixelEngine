@@ -12,12 +12,21 @@ namespace PixelEngine.Editor;
 public delegate bool ScriptAssetOpenHandler(string assetPath, out string diagnostic);
 
 /// <summary>
+/// Project Window 场景资产打开回调。
+/// </summary>
+/// <param name="assetPath">场景资产 rooted logical path。</param>
+/// <param name="diagnostic">可展示给用户的打开或 dirty-guard 诊断。</param>
+/// <returns>场景打开或 dirty-guard 转场已受理时返回 true。</returns>
+public delegate bool SceneAssetOpenHandler(string assetPath, out string diagnostic);
+
+/// <summary>
 /// 工程级 Project Window，展示 Content 与 ScriptSource logical root。
 /// </summary>
 /// <param name="source">资产数据源。</param>
 /// <param name="audioPreview">音频试听服务。</param>
 /// <param name="instantiatePrefab">可选 prefab 实例化回调。</param>
 /// <param name="openScriptAsset">可选脚本资产打开回调。</param>
+/// <param name="openSceneAsset">可选场景资产打开回调。</param>
 /// <param name="deleteAsset">可选资产删除回调。</param>
 /// <param name="deleteFolder">可选文件夹递归删除回调。</param>
 /// <param name="moveAsset">可选资产移动 / 重命名回调。</param>
@@ -30,6 +39,7 @@ public sealed class AssetBrowserPanel(
     IAudioPreviewService? audioPreview = null,
     Action<string>? instantiatePrefab = null,
     ScriptAssetOpenHandler? openScriptAsset = null,
+    SceneAssetOpenHandler? openSceneAsset = null,
     AssetBrowserDeleteHandler? deleteAsset = null,
     AssetBrowserFolderDeleteHandler? deleteFolder = null,
     AssetBrowserMoveHandler? moveAsset = null,
@@ -42,6 +52,7 @@ public sealed class AssetBrowserPanel(
     private readonly IAudioPreviewService? _audioPreview = audioPreview;
     private readonly Action<string>? _instantiatePrefab = instantiatePrefab;
     private readonly ScriptAssetOpenHandler? _openScriptAsset = openScriptAsset;
+    private readonly SceneAssetOpenHandler? _openSceneAsset = openSceneAsset;
     private readonly AssetBrowserDeleteHandler? _deleteAsset = deleteAsset;
     private readonly AssetBrowserFolderDeleteHandler? _deleteFolder = deleteFolder;
     private readonly AssetBrowserMoveHandler? _moveAsset = moveAsset;
@@ -79,6 +90,8 @@ public sealed class AssetBrowserPanel(
     private string _pendingFolderMoveTargetPath = string.Empty;
     private EditorSelection? _trackedSelection;
     private bool _snapshotLoaded;
+    private bool _showCreateEditor;
+    private bool _showImportEditor;
 
     /// <inheritdoc />
     public string Title => EditorDockSpace.AssetBrowserWindowTitle;
@@ -100,6 +113,17 @@ public sealed class AssetBrowserPanel(
     /// 当前可作为拖拽移动目标的逻辑文件夹快照。
     /// </summary>
     public IReadOnlyList<AssetBrowserFolderItem> FolderTargets { get; private set; } = [];
+
+    /// <summary>
+    /// 当前 folder scope 的直接子文件夹；搜索时仍保持目录导航而不混入深层结果。
+    /// </summary>
+    public IReadOnlyList<AssetBrowserFolderItem> VisibleFolders { get; private set; } = [];
+
+    /// <summary>
+    /// 当前 folder scope 的可点击 breadcrumb。
+    /// </summary>
+    public IReadOnlyList<AssetBrowserBreadcrumbItem> Breadcrumbs { get; private set; } =
+        [new AssetBrowserBreadcrumbItem("工程", string.Empty)];
 
     /// <summary>
     /// 当前 Project Window 文件夹作用域；空字符串表示双根总览。
@@ -306,9 +330,16 @@ public sealed class AssetBrowserPanel(
             return false;
         }
 
-        if (!TryFindFolder(folderPath, out AssetBrowserFolderItem folder))
+        if (!TryFindFolder(folderPath, out AssetBrowserFolderItem requestedFolder))
         {
             Status = $"文件夹不存在：{folderPath}";
+            return false;
+        }
+
+        string compatiblePath = ResolveCompatibleCreateFolder(requestedFolder.Path, kind);
+        if (!TryFindFolder(compatiblePath, out AssetBrowserFolderItem folder))
+        {
+            Status = $"工程缺少可创建 {kind} 的 logical root：{compatiblePath}";
             return false;
         }
 
@@ -467,6 +498,51 @@ public sealed class AssetBrowserPanel(
             ? opened ? $"打开脚本 {item.Value.Path}" : $"脚本外部编辑器打开失败：{item.Value.Path}"
             : diagnostic;
         return opened;
+    }
+
+    /// <summary>
+    /// 通过 Shell dirty-guard 转场打开指定 Scene，且不修改 Project StartScene。
+    /// </summary>
+    /// <param name="path">场景资产 rooted logical path。</param>
+    /// <returns>打开或待确认转场已受理时返回 true。</returns>
+    public bool TryOpenSceneAsset(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        AssetBrowserItem? item = FindAsset(path);
+        if (item is null)
+        {
+            Status = $"资产不存在：{path}";
+            return false;
+        }
+
+        if (item.Value.Kind != AssetBrowserItemKind.Scene)
+        {
+            Status = $"仅 Scene 资产可在 Editor 中打开：{item.Value.Path}";
+            return false;
+        }
+
+        if (_openSceneAsset is null)
+        {
+            Status = "场景打开服务不可用";
+            return false;
+        }
+
+        bool opened = _openSceneAsset(item.Value.Path, out string diagnostic);
+        Status = string.IsNullOrWhiteSpace(diagnostic)
+            ? opened ? $"打开场景 {item.Value.Path}" : $"场景打开失败：{item.Value.Path}"
+            : diagnostic;
+        return opened;
+    }
+
+    /// <summary>
+    /// 返回资产静态 descriptor 与当前 Session 合并后的 badge。
+    /// </summary>
+    /// <param name="path">资产 logical path。</param>
+    /// <returns>资产存在时的 badge；否则为 <see cref="AssetBrowserBadge.None"/>。</returns>
+    public AssetBrowserBadge GetBadges(string path)
+    {
+        AssetBrowserItem? item = FindAsset(path);
+        return item is null ? AssetBrowserBadge.None : GetBadges(item.Value);
     }
 
     /// <summary>
@@ -634,9 +710,10 @@ public sealed class AssetBrowserPanel(
             candidateName = Path.GetFileName(GetDefaultCreatePath(kind));
         }
 
+        string compatibleFolder = ResolveCompatibleCreateFolder(folderPath, kind);
         ImportKind = kind;
         ImportSourcePath = sourceFullPath ?? string.Empty;
-        ImportDestinationPath = MakePathUnique(ApplyFolderToCreatePath(folderPath, candidateName), kind);
+        ImportDestinationPath = MakePathUnique(ApplyFolderToCreatePath(compatibleFolder, candidateName), kind);
         Status = $"准备导入 {kind} 到 {ImportDestinationPath}";
         return true;
     }
@@ -801,15 +878,106 @@ public sealed class AssetBrowserPanel(
         }
 
         Visible = visible;
+        DrawToolbar(context.Selection);
+        if (!string.IsNullOrWhiteSpace(_search))
+        {
+            // 搜索可能命中动态“启动 / 当前” badge；只在搜索态重算，普通浏览不逐帧分配投影。
+            ApplyFilter();
+        }
+
+        if (ImGui.BeginTable(
+            "project_window_layout",
+            2,
+            ImGuiTableFlags.Resizable | ImGuiTableFlags.BordersInnerV))
+        {
+            ImGui.TableSetupColumn("Folders", ImGuiTableColumnFlags.WidthFixed, 220f);
+            ImGui.TableSetupColumn("Contents", ImGuiTableColumnFlags.WidthStretch);
+            ImGui.TableNextRow();
+            _ = ImGui.TableNextColumn();
+            _ = ImGui.BeginChild("project_folder_tree");
+            DrawFolderTree(context.Selection);
+            ImGui.EndChild();
+
+            _ = ImGui.TableNextColumn();
+            DrawBreadcrumbs(context.Selection);
+            ImGui.Separator();
+            _ = ImGui.BeginChild("project_folder_contents");
+            for (int i = 0; i < VisibleFolders.Count; i++)
+            {
+                DrawFolderContentRow(VisibleFolders[i], context.Selection);
+            }
+
+            for (int i = 0; i < FilteredAssets.Count; i++)
+            {
+                DrawAssetRow(FilteredAssets[i], context.Selection);
+            }
+
+            ImGui.EndChild();
+            ImGui.EndTable();
+        }
+
+        DrawPendingActionEditors();
+        ImGui.TextUnformatted(Status);
+        ImGui.End();
+    }
+
+    private void DrawToolbar(EditorSelection selection)
+    {
         if (ImGui.Button("刷新"))
         {
-            _ = Refresh(context.Selection);
+            _ = Refresh(selection);
         }
 
         ImGui.SameLine();
-        DrawCreateControls(context.Selection);
+        if (ImGui.Button("新建..."))
+        {
+            _showCreateEditor = !_showCreateEditor;
+            _showImportEditor = false;
+            _ = BeginCreateAssetInFolder(ActiveFolderPath, CreateKind);
+        }
+
         ImGui.SameLine();
-        _ = ImGui.InputText("搜索", ref _search, 128);
+        if (ImGui.Button("导入..."))
+        {
+            _showImportEditor = !_showImportEditor;
+            _showCreateEditor = false;
+        }
+
+        AssetBrowserItem? selectedAsset = string.IsNullOrWhiteSpace(selection.AssetPath)
+            ? null
+            : FindAsset(selection.AssetPath);
+        if (selectedAsset is { } selected)
+        {
+            ImGui.SameLine();
+            DrawPrimaryAssetAction(selected);
+            ImGui.SameLine();
+            if (ImGui.Button("重命名"))
+            {
+                _ = BeginMoveAsset(selected.Path);
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("删除"))
+            {
+                _ = TryRequestDeleteAsset(selected.Path);
+            }
+        }
+
+        if (_showCreateEditor)
+        {
+            DrawCreateControls(selection);
+        }
+        else if (_showImportEditor)
+        {
+            DrawImportControls(selection);
+        }
+
+        string search = _search;
+        if (ImGui.InputText("搜索", ref search, 128))
+        {
+            SetSearch(search);
+        }
+        ImGui.SameLine();
         int kindIndex = KindFilter.HasValue ? (int)KindFilter.Value + 1 : 0;
         if (ImGui.Combo("类型", ref kindIndex, KindFilterLabels, KindFilterLabels.Length))
         {
@@ -824,22 +992,6 @@ public sealed class AssetBrowserPanel(
         {
             SetSortMode((AssetBrowserSortMode)sortMode);
         }
-
-        ApplyFilter();
-
-        IReadOnlyList<AssetBrowserItem> assets = FilteredAssets;
-        for (int i = 0; i < FolderTargets.Count; i++)
-        {
-            DrawFolderDropTarget(FolderTargets[i], context.Selection);
-        }
-
-        for (int i = 0; i < assets.Count; i++)
-        {
-            DrawAssetRow(assets[i], context.Selection);
-        }
-
-        ImGui.TextUnformatted(Status);
-        ImGui.End();
     }
 
     private void DrawCreateControls(EditorSelection selection)
@@ -856,8 +1008,7 @@ public sealed class AssetBrowserPanel(
             createKindIndex < CreateKinds.Length)
         {
             CreateKind = CreateKinds[createKindIndex];
-            string folder = selection.FolderPath ?? string.Empty;
-            CreatePath = MakeCreatePathUnique(ApplyFolderToCreatePath(folder, GetDefaultCreatePath(CreateKind)));
+            _ = BeginCreateAssetInFolder(selection.FolderPath ?? ActiveFolderPath, CreateKind);
         }
 
         ImGui.SameLine();
@@ -872,8 +1023,6 @@ public sealed class AssetBrowserPanel(
         {
             _ = TryCreateAsset(CreatePath, CreateKind);
         }
-
-        DrawImportControls(selection);
     }
 
     private void DrawImportControls(EditorSelection selection)
@@ -890,7 +1039,7 @@ public sealed class AssetBrowserPanel(
             importKindIndex < ImportKinds.Length)
         {
             ImportKind = ImportKinds[importKindIndex];
-            string folder = selection.FolderPath ?? string.Empty;
+            string folder = ResolveCompatibleCreateFolder(selection.FolderPath ?? ActiveFolderPath, ImportKind);
             ImportDestinationPath = MakePathUnique(ApplyFolderToCreatePath(folder, GetDefaultCreatePath(ImportKind)), ImportKind);
         }
 
@@ -918,69 +1067,150 @@ public sealed class AssetBrowserPanel(
         }
     }
 
-    private void DrawFolderDropTarget(AssetBrowserFolderItem folder, EditorSelection selection)
+    private void DrawFolderTree(EditorSelection selection)
     {
-        string label = $"{folder.DisplayName} ({folder.AssetCount})##folder-{folder.Path}";
-        bool selected = string.Equals(selection.FolderPath, folder.Path, StringComparison.Ordinal);
-        if (ImGui.Selectable(label, selected))
+        bool rootSelected = string.IsNullOrWhiteSpace(selection.FolderPath);
+        if (ImGui.Selectable("工程##project-root", rootSelected))
+        {
+            _ = SelectFolder(string.Empty, selection);
+        }
+
+        for (int i = 0; i < FolderTargets.Count; i++)
+        {
+            if (IsDirectFolderChild(FolderTargets[i].Path, string.Empty))
+            {
+                DrawFolderTreeNode(FolderTargets[i], selection);
+            }
+        }
+    }
+
+    private void DrawFolderTreeNode(AssetBrowserFolderItem folder, EditorSelection selection)
+    {
+        bool hasChildren = FolderTargets.Any(candidate => IsDirectFolderChild(candidate.Path, folder.Path));
+        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.SpanAvailWidth;
+        if (!hasChildren)
+        {
+            flags |= ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.NoTreePushOnOpen;
+        }
+
+        if (string.Equals(selection.FolderPath, folder.Path, StringComparison.OrdinalIgnoreCase))
+        {
+            flags |= ImGuiTreeNodeFlags.Selected;
+        }
+
+        if (GetLogicalDirectoryName(folder.Path) is null)
+        {
+            flags |= ImGuiTreeNodeFlags.DefaultOpen;
+        }
+
+        bool open = ImGui.TreeNodeEx($"{folder.DisplayName} ({folder.AssetCount})##tree-{folder.Path}", flags);
+        if (ImGui.IsItemClicked())
         {
             _ = SelectFolder(folder.Path, selection);
         }
 
-        if (ImGui.BeginDragDropTarget())
+        DrawFolderDropTarget(folder);
+        DrawFolderContextMenu(folder);
+        if (hasChildren && open)
         {
-            // Shell 层 drop 服务消费 typed payload；此处只校验 assetId 并委托移动服务。
-            if (AssetBrowserDragPayloadImGui.TryAcceptPayload(out AssetBrowserDragPayload payload))
+            for (int i = 0; i < FolderTargets.Count; i++)
             {
-                _ = TryMoveDragPayloadToFolder(payload, folder.Path);
+                if (IsDirectFolderChild(FolderTargets[i].Path, folder.Path))
+                {
+                    DrawFolderTreeNode(FolderTargets[i], selection);
+                }
             }
 
-            ImGui.EndDragDropTarget();
+            ImGui.TreePop();
+        }
+    }
+
+    private void DrawFolderContentRow(AssetBrowserFolderItem folder, EditorSelection selection)
+    {
+        bool selected = string.Equals(selection.FolderPath, folder.Path, StringComparison.OrdinalIgnoreCase);
+        if (ImGui.Selectable($"[文件夹] {folder.DisplayName}  {folder.AssetCount} 项##content-folder-{folder.Path}", selected))
+        {
+            _ = SelectFolder(folder.Path, selection);
+        }
+
+        if (ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left) && ImGui.IsItemHovered())
+        {
+            _ = SelectFolder(folder.Path, selection);
+        }
+
+        DrawFolderDropTarget(folder);
+        DrawFolderContextMenu(folder);
+    }
+
+    private void DrawFolderDropTarget(AssetBrowserFolderItem folder)
+    {
+        if (!ImGui.BeginDragDropTarget())
+        {
+            return;
+        }
+
+        // Shell 层 drop 服务消费 typed payload；此处只校验 assetId 并委托移动服务。
+        if (AssetBrowserDragPayloadImGui.TryAcceptPayload(out AssetBrowserDragPayload payload))
+        {
+            _ = TryMoveDragPayloadToFolder(payload, folder.Path);
+        }
+
+        ImGui.EndDragDropTarget();
+    }
+
+    private void DrawFolderContextMenu(AssetBrowserFolderItem folder)
+    {
+        if (!ImGui.BeginPopupContextItem($"folder-context-{folder.Path}"))
+        {
+            return;
+        }
+
+        if (ImGui.MenuItem("新建资产..."))
+        {
+            _showCreateEditor = true;
+            _showImportEditor = false;
+            _ = BeginCreateAssetInFolder(folder.Path, CreateKind);
+        }
+
+        if (ImGui.MenuItem("导入..."))
+        {
+            _showImportEditor = true;
+            _showCreateEditor = false;
+            ApplyFolderInputContext(folder.Path);
         }
 
         if (!string.IsNullOrEmpty(folder.Path) && !IsProtectedLogicalRoot(folder.Path))
         {
-            ImGui.SameLine();
-            if (IsPendingFolderMoveFor(folder))
-            {
-                _ = ImGui.InputText($"新路径##move-folder-{folder.Path}", ref _pendingFolderMoveTargetPath, 256);
-                ImGui.SameLine();
-                if (ImGui.Button($"确认移动##folder-{folder.Path}"))
-                {
-                    _ = TryConfirmMoveFolder(folder.Path);
-                }
-
-                ImGui.SameLine();
-                if (ImGui.Button($"取消移动##folder-{folder.Path}"))
-                {
-                    _pendingFolderMoveRequest = null;
-                    _pendingFolderMoveTargetPath = string.Empty;
-                    Status = $"已取消移动文件夹 {folder.DisplayName}";
-                }
-            }
-            else if (ImGui.Button($"移动/重命名##folder-{folder.Path}"))
+            ImGui.Separator();
+            if (ImGui.MenuItem("移动 / 重命名"))
             {
                 _ = BeginMoveFolder(folder.Path);
             }
 
-            ImGui.SameLine();
-            if (IsPendingFolderDeleteFor(folder))
-            {
-                if (ImGui.Button($"确认删除##folder-delete-{folder.Path}"))
-                {
-                    _ = TryConfirmDeleteFolder(folder.Path);
-                }
-
-                ImGui.SameLine();
-                if (ImGui.Button($"取消删除##folder-delete-{folder.Path}"))
-                {
-                    _pendingFolderDeleteRequest = null;
-                    Status = $"已取消删除文件夹 {folder.DisplayName}";
-                }
-            }
-            else if (ImGui.Button($"删除##folder-delete-{folder.Path}"))
+            if (ImGui.MenuItem("删除"))
             {
                 _ = TryRequestDeleteFolder(folder.Path);
+            }
+        }
+
+        ImGui.EndPopup();
+    }
+
+    private void DrawBreadcrumbs(EditorSelection selection)
+    {
+        for (int i = 0; i < Breadcrumbs.Count; i++)
+        {
+            AssetBrowserBreadcrumbItem breadcrumb = Breadcrumbs[i];
+            if (i > 0)
+            {
+                ImGui.SameLine();
+                ImGui.TextUnformatted(">");
+                ImGui.SameLine();
+            }
+
+            if (ImGui.Button($"{breadcrumb.Label}##breadcrumb-{breadcrumb.Path}"))
+            {
+                _ = SelectFolder(breadcrumb.Path, selection);
             }
         }
     }
@@ -993,14 +1223,27 @@ public sealed class AssetBrowserPanel(
             ImGui.SameLine();
         }
 
+        string typeLabel = item.Descriptor?.TypeLabel ?? GetDefaultTypeLabel(item.Kind);
+        string badgeLabel = FormatBadges(GetBadges(item));
+        string presentation = string.IsNullOrWhiteSpace(badgeLabel)
+            ? $"{item.DisplayName}  [{typeLabel}]"
+            : $"{item.DisplayName}  [{typeLabel}]  [{badgeLabel}]";
         string label = string.IsNullOrWhiteSpace(item.AssetId)
-            ? $"{item.DisplayName} [{item.Kind}]"
-            : $"{item.DisplayName} [{item.Kind}]##{item.AssetId}";
+            ? presentation
+            : $"{presentation}##{item.AssetId}";
         bool selected = IsAssetSelected(selection, item);
         if (ImGui.Selectable(label, selected))
         {
             _ = SelectAsset(item.Path, selection);
-            if (item.Kind == AssetBrowserItemKind.Script && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+        }
+
+        if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+        {
+            if (item.Kind == AssetBrowserItemKind.Scene)
+            {
+                _ = TryOpenSceneAsset(item.Path);
+            }
+            else if (item.Kind == AssetBrowserItemKind.Script)
             {
                 _ = TryOpenScriptAsset(item.Path);
             }
@@ -1017,70 +1260,163 @@ public sealed class AssetBrowserPanel(
             ImGui.EndDragDropSource();
         }
 
-        if (item.Kind == AssetBrowserItemKind.Audio)
+        DrawAssetContextMenu(item);
+        if (!string.IsNullOrWhiteSpace(_search))
         {
-            ImGui.SameLine();
-            if (ImGui.Button($"试听##{item.Path}"))
-            {
-                _ = TryPreviewAudio(item.Path);
-            }
+            ImGui.TextUnformatted($"路径：{item.Path}");
         }
-        else if (item.Kind == AssetBrowserItemKind.Prefab)
+
+        if (!string.IsNullOrWhiteSpace(item.Descriptor?.Purpose))
         {
-            ImGui.SameLine();
-            if (ImGui.Button($"实例化##{item.Path}"))
-            {
-                _instantiatePrefab?.Invoke(item.Path);
-                Status = $"实例化 {item.Path}";
-            }
+            ImGui.TextUnformatted($"用途：{item.Descriptor.Value.Purpose}");
         }
 
         if (!string.IsNullOrWhiteSpace(item.PreviewSummary))
         {
-            ImGui.TextUnformatted($"预览：{item.PreviewSummary}");
+            ImGui.TextUnformatted($"摘要：{item.PreviewSummary}");
         }
+    }
 
-        ImGui.SameLine();
-        if (IsPendingMoveFor(item))
+    private void DrawPrimaryAssetAction(AssetBrowserItem item)
+    {
+        if (item.Kind == AssetBrowserItemKind.Scene)
         {
-            _ = ImGui.InputText($"新路径##move-{item.Path}", ref _pendingMoveTargetPath, 256);
-            ImGui.SameLine();
-            if (ImGui.Button($"确认移动##{item.Path}"))
+            if (ImGui.Button("打开场景"))
             {
-                _ = TryConfirmMoveAsset(item.Path);
-            }
-
-            ImGui.SameLine();
-            if (ImGui.Button($"取消移动##{item.Path}"))
-            {
-                _pendingMoveRequest = null;
-                _pendingMoveTargetPath = string.Empty;
-                Status = $"已取消移动 {item.Path}";
+                _ = TryOpenSceneAsset(item.Path);
             }
         }
-        else if (ImGui.Button($"移动/重命名##{item.Path}"))
+        else if (item.Kind == AssetBrowserItemKind.Script)
+        {
+            if (ImGui.Button("打开脚本"))
+            {
+                _ = TryOpenScriptAsset(item.Path);
+            }
+        }
+        else if (item.Kind == AssetBrowserItemKind.Audio)
+        {
+            if (ImGui.Button("试听"))
+            {
+                _ = TryPreviewAudio(item.Path);
+            }
+        }
+        else if (item.Kind == AssetBrowserItemKind.Prefab && ImGui.Button("实例化"))
+        {
+            _instantiatePrefab?.Invoke(item.Path);
+            Status = $"实例化 {item.Path}";
+        }
+    }
+
+    private void DrawAssetContextMenu(AssetBrowserItem item)
+    {
+        if (!ImGui.BeginPopupContextItem($"asset-context-{item.AssetId ?? item.Path}"))
+        {
+            return;
+        }
+
+        if (item.Kind == AssetBrowserItemKind.Scene && ImGui.MenuItem("打开场景"))
+        {
+            _ = TryOpenSceneAsset(item.Path);
+        }
+
+        if (item.Kind == AssetBrowserItemKind.Script && ImGui.MenuItem("打开脚本"))
+        {
+            _ = TryOpenScriptAsset(item.Path);
+        }
+
+        if (item.Kind == AssetBrowserItemKind.Audio && ImGui.MenuItem("试听"))
+        {
+            _ = TryPreviewAudio(item.Path);
+        }
+
+        if (item.Kind == AssetBrowserItemKind.Prefab && ImGui.MenuItem("实例化"))
+        {
+            _instantiatePrefab?.Invoke(item.Path);
+            Status = $"实例化 {item.Path}";
+        }
+
+        ImGui.Separator();
+        if (ImGui.MenuItem("移动 / 重命名"))
         {
             _ = BeginMoveAsset(item.Path);
         }
 
-        ImGui.SameLine();
-        if (IsPendingDeleteFor(item))
+        if (ImGui.MenuItem("删除"))
         {
-            if (ImGui.Button($"确认删除##{item.Path}"))
+            _ = TryRequestDeleteAsset(item.Path);
+        }
+
+        ImGui.EndPopup();
+    }
+
+    private void DrawPendingActionEditors()
+    {
+        if (_pendingMoveRequest is { } move)
+        {
+            ImGui.Separator();
+            ImGui.TextUnformatted($"移动 / 重命名：{move.Path}");
+            _ = ImGui.InputText("目标路径##asset-move-target", ref _pendingMoveTargetPath, 256);
+            if (ImGui.Button("确认移动##asset-move"))
             {
-                _ = TryConfirmDeleteAsset(item.Path);
+                _ = TryConfirmMoveAsset(move.Path);
             }
 
             ImGui.SameLine();
-            if (ImGui.Button($"取消##{item.Path}"))
+            if (ImGui.Button("取消##asset-move"))
             {
-                _pendingDeleteRequest = null;
-                Status = $"已取消删除 {item.Path}";
+                _pendingMoveRequest = null;
+                _pendingMoveTargetPath = string.Empty;
             }
         }
-        else if (ImGui.Button($"删除##{item.Path}"))
+
+        if (_pendingFolderMoveRequest is { } folderMove)
         {
-            _ = TryRequestDeleteAsset(item.Path);
+            ImGui.Separator();
+            ImGui.TextUnformatted($"移动 / 重命名文件夹：{folderMove.Path}");
+            _ = ImGui.InputText("目标路径##folder-move-target", ref _pendingFolderMoveTargetPath, 256);
+            if (ImGui.Button("确认移动##folder-move"))
+            {
+                _ = TryConfirmMoveFolder(folderMove.Path);
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("取消##folder-move"))
+            {
+                _pendingFolderMoveRequest = null;
+                _pendingFolderMoveTargetPath = string.Empty;
+            }
+        }
+
+        if (_pendingDeleteRequest is { } delete)
+        {
+            ImGui.Separator();
+            ImGui.TextUnformatted($"确认删除资产：{delete.Path}");
+            if (ImGui.Button("确认删除##asset-delete"))
+            {
+                _ = TryConfirmDeleteAsset(delete.Path);
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("取消##asset-delete"))
+            {
+                _pendingDeleteRequest = null;
+            }
+        }
+
+        if (_pendingFolderDeleteRequest is { } folderDelete)
+        {
+            ImGui.Separator();
+            ImGui.TextUnformatted($"确认递归删除文件夹：{folderDelete.Path}");
+            if (ImGui.Button("确认删除##folder-delete"))
+            {
+                _ = TryConfirmDeleteFolder(folderDelete.Path);
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("取消##folder-delete"))
+            {
+                _pendingFolderDeleteRequest = null;
+            }
         }
     }
 
@@ -1290,10 +1626,32 @@ public sealed class AssetBrowserPanel(
 
     private void ApplyFolderInputContext(string folderPath)
     {
-        CreatePath = MakeCreatePathUnique(RebasePathToFolder(folderPath, CreatePath));
+        string createFolder = ResolveCompatibleCreateFolder(folderPath, CreateKind);
+        string importFolder = ResolveCompatibleCreateFolder(folderPath, ImportKind);
+        CreatePath = MakeCreatePathUnique(RebasePathToFolder(createFolder, CreatePath));
         ImportDestinationPath = MakePathUnique(
-            RebasePathToFolder(folderPath, ImportDestinationPath),
+            RebasePathToFolder(importFolder, ImportDestinationPath),
             ImportKind);
+    }
+
+    private string ResolveCompatibleCreateFolder(string folderPath, AssetBrowserItemKind kind)
+    {
+        string normalized = NormalizeFolderPath(folderPath);
+        bool hasContentRoot = FolderTargets.Any(folder =>
+            string.Equals(folder.Path, "Content", StringComparison.OrdinalIgnoreCase));
+        bool hasScriptRoot = FolderTargets.Any(folder =>
+            string.Equals(folder.Path, "ScriptSource", StringComparison.OrdinalIgnoreCase));
+        return !hasContentRoot || !hasScriptRoot
+            ? normalized
+            : kind == AssetBrowserItemKind.Script
+            ? IsSameOrChildFolder(normalized, "ScriptSource") ? normalized : "ScriptSource"
+            : IsSameOrChildFolder(normalized, "Content") ? normalized : "Content";
+    }
+
+    private static bool IsSameOrChildFolder(string candidate, string root)
+    {
+        return string.Equals(candidate, root, StringComparison.OrdinalIgnoreCase) ||
+            candidate.StartsWith(root + "/", StringComparison.OrdinalIgnoreCase);
     }
 
     private void RemapFolderContextAfterMove(string oldPath, string newPath)
@@ -1558,16 +1916,6 @@ public sealed class AssetBrowserPanel(
             string.Equals(folderPath, "ScriptSource", StringComparison.OrdinalIgnoreCase);
     }
 
-    private bool IsPendingDeleteFor(AssetBrowserItem item)
-    {
-        return TryGetPendingDeleteFor(item, out _);
-    }
-
-    private bool IsPendingFolderDeleteFor(AssetBrowserFolderItem folder)
-    {
-        return TryGetPendingFolderDelete(folder.Path, out _);
-    }
-
     private bool TryGetPendingDeleteFor(AssetBrowserItem item, out AssetBrowserDeleteRequest request)
     {
         if (_pendingDeleteRequest is { } pending &&
@@ -1595,16 +1943,6 @@ public sealed class AssetBrowserPanel(
 
         request = default;
         return false;
-    }
-
-    private bool IsPendingMoveFor(AssetBrowserItem item)
-    {
-        return TryGetPendingMoveFor(item, out _);
-    }
-
-    private bool IsPendingFolderMoveFor(AssetBrowserFolderItem folder)
-    {
-        return TryGetPendingFolderMove(folder.Path, out _);
     }
 
     private bool TryGetPendingFolderMove(string path, out AssetBrowserFolderMoveRequest request)
@@ -1638,6 +1976,7 @@ public sealed class AssetBrowserPanel(
 
     private void ApplyFilter()
     {
+        RebuildNavigationProjection();
         if (LastAssets.Count == 0)
         {
             FilteredAssets = [];
@@ -1645,17 +1984,19 @@ public sealed class AssetBrowserPanel(
         }
 
         IEnumerable<AssetBrowserItem> query = LastAssets;
-        if (!string.IsNullOrWhiteSpace(ActiveFolderPath))
+        bool searching = !string.IsNullOrWhiteSpace(_search);
+        if (searching)
         {
-            query = query.Where(item => IsAssetVisibleInFolderScope(item.Path, ActiveFolderPath));
-        }
+            if (!string.IsNullOrWhiteSpace(ActiveFolderPath))
+            {
+                query = query.Where(item => IsAssetVisibleInFolderScope(item.Path, ActiveFolderPath));
+            }
 
-        if (!string.IsNullOrWhiteSpace(_search))
+            query = query.Where(MatchesSearch);
+        }
+        else
         {
-            query = query.Where(item =>
-                item.Path.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                item.Kind.ToString().Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                (!string.IsNullOrWhiteSpace(item.AssetId) && item.AssetId.Contains(_search, StringComparison.OrdinalIgnoreCase)));
+            query = query.Where(item => IsDirectAssetChild(item.Path, ActiveFolderPath));
         }
 
         if (KindFilter.HasValue)
@@ -1667,6 +2008,43 @@ public sealed class AssetBrowserPanel(
         [
             .. ApplySort(query),
         ];
+    }
+
+    private bool MatchesSearch(AssetBrowserItem item)
+    {
+        string typeLabel = item.Descriptor?.TypeLabel ?? GetDefaultTypeLabel(item.Kind);
+        string purpose = item.Descriptor?.Purpose ?? string.Empty;
+        string summary = item.PreviewSummary ?? string.Empty;
+        string badges = FormatBadges(GetBadges(item));
+        return item.Path.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            item.Kind.ToString().Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            typeLabel.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            purpose.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            summary.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            badges.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            (!string.IsNullOrWhiteSpace(item.AssetId) && item.AssetId.Contains(_search, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void RebuildNavigationProjection()
+    {
+        VisibleFolders =
+        [
+            .. FolderTargets.Where(folder => IsDirectFolderChild(folder.Path, ActiveFolderPath)),
+        ];
+
+        List<AssetBrowserBreadcrumbItem> breadcrumbs = [new("工程", string.Empty)];
+        if (!string.IsNullOrWhiteSpace(ActiveFolderPath))
+        {
+            string[] segments = ActiveFolderPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            string path = string.Empty;
+            for (int i = 0; i < segments.Length; i++)
+            {
+                path = path.Length == 0 ? segments[i] : path + "/" + segments[i];
+                breadcrumbs.Add(new AssetBrowserBreadcrumbItem(segments[i], path));
+            }
+        }
+
+        Breadcrumbs = breadcrumbs;
     }
 
     private void ReconcileFolderSelection(EditorSelection? selection)
@@ -1909,6 +2287,73 @@ public sealed class AssetBrowserPanel(
     {
         string normalizedFolder = folderPath.Trim().Replace('\\', '/').TrimEnd('/');
         return normalizedFolder.Length == 0 || IsAssetUnderFolder(assetPath, normalizedFolder);
+    }
+
+    private static bool IsDirectAssetChild(string assetPath, string folderPath)
+    {
+        string normalizedAsset = assetPath.Replace('\\', '/').Trim('/');
+        string normalizedFolder = NormalizeFolderPath(folderPath);
+        string? parent = GetLogicalDirectoryName(normalizedAsset);
+        return string.Equals(parent ?? string.Empty, normalizedFolder, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsDirectFolderChild(string candidatePath, string folderPath)
+    {
+        string candidate = NormalizeFolderPath(candidatePath);
+        string parent = NormalizeFolderPath(folderPath);
+        return candidate.Length > 0 &&
+            !string.Equals(candidate, parent, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(GetLogicalDirectoryName(candidate) ?? string.Empty, parent, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private AssetBrowserBadge GetBadges(AssetBrowserItem item)
+    {
+        AssetBrowserBadge badges = item.Descriptor?.Badges ?? AssetBrowserBadge.None;
+        if (_source is IAssetBrowserContextDataSource contextSource)
+        {
+            badges |= contextSource.GetContextBadges(item.Path);
+        }
+
+        return badges;
+    }
+
+    private static string GetDefaultTypeLabel(AssetBrowserItemKind kind)
+    {
+        return kind switch
+        {
+            AssetBrowserItemKind.Folder => "文件夹",
+            AssetBrowserItemKind.Material => "材质定义",
+            AssetBrowserItemKind.Texture => "纹理",
+            AssetBrowserItemKind.Audio => "音频",
+            AssetBrowserItemKind.Scene => "场景",
+            AssetBrowserItemKind.Prefab => "Prefab",
+            AssetBrowserItemKind.Script => "C# 脚本",
+            AssetBrowserItemKind.UiScreen => "UI Screen",
+            AssetBrowserItemKind.Json => "JSON 配置",
+            AssetBrowserItemKind.Other => "文件",
+            _ => kind.ToString(),
+        };
+    }
+
+    private static string FormatBadges(AssetBrowserBadge badges)
+    {
+        List<string> labels = [];
+        if ((badges & AssetBrowserBadge.Startup) != 0)
+        {
+            labels.Add("启动");
+        }
+
+        if ((badges & AssetBrowserBadge.Current) != 0)
+        {
+            labels.Add("当前");
+        }
+
+        if ((badges & AssetBrowserBadge.Test) != 0)
+        {
+            labels.Add("测试");
+        }
+
+        return string.Join(" · ", labels);
     }
 
     private static string? GetLogicalDirectoryName(string logicalPath)
