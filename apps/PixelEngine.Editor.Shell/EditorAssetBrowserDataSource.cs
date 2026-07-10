@@ -1325,9 +1325,7 @@ internal sealed class EditorAssetBrowserDataSource :
         string extension)
     {
         return root == EditorAssetRootKind.ScriptSource
-            ? string.Equals(Path.GetFileName(path), "DemoSceneAuthoringBehaviours.cs", StringComparison.OrdinalIgnoreCase)
-                ? "Demo 场景 authoring 脚本入口，参与 Editor 热重载与 Player 编译"
-                : "项目运行时 C# 脚本，参与 Editor 热重载与 Player 编译"
+            ? "项目运行时 C# 脚本，参与 Editor 热重载与 Player 编译"
             : path.ToLowerInvariant() switch
             {
                 "materials.json" => "定义 CA 材质、渲染参数、温度与音频绑定的权威目录",
