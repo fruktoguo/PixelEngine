@@ -9,6 +9,85 @@ namespace PixelEngine.Physics.Geometry;
 public static class MarchingSquares
 {
     /// <summary>
+    /// 供刚体破坏 worker 独占的轮廓追踪 scratch；同一实例不可跨并发调用共享。
+    /// </summary>
+    internal sealed class TraceScratch
+    {
+        private const int InitialEdgeCapacity = 2048;
+
+        internal readonly List<BoundaryEdge> _edges = new(InitialEdgeCapacity);
+        internal readonly Dictionary<EdgeKey, EdgeIndexSet> _edgesByStart = new(InitialEdgeCapacity);
+        internal bool[] _used = new bool[InitialEdgeCapacity];
+        internal Vector2[] _contour = [];
+        internal Vector2[] _simplified = [];
+        internal ContourRange[] _ranges = [];
+
+        internal void EnsureGeometryCapacity(int width, int height)
+        {
+            int maximumContourPointCount = GetMaximumContourPointCount(width, height);
+            if (_contour.Length < maximumContourPointCount)
+            {
+                _contour = new Vector2[maximumContourPointCount];
+                _simplified = new Vector2[maximumContourPointCount];
+            }
+
+            int maximumContourRangeCount = GetMaximumContourRangeCount(width, height);
+            if (_ranges.Length < maximumContourRangeCount)
+            {
+                _ranges = new ContourRange[maximumContourRangeCount];
+            }
+        }
+
+        internal void EnsureUsedCapacity(int required)
+        {
+            if (required <= _used.Length)
+            {
+                return;
+            }
+
+            Array.Resize(ref _used, Math.Max(required, _used.Length * 2));
+        }
+
+        internal void PrepareContainers()
+        {
+            _edges.Clear();
+            _edgesByStart.Clear();
+        }
+
+        internal void PrepareUsed(int edgeCount)
+        {
+            EnsureUsedCapacity(edgeCount);
+            _used.AsSpan(0, edgeCount).Clear();
+        }
+    }
+
+    /// <summary>
+    /// 使用调用方独占 scratch 追踪固体区域的外边界，供物理破坏 worker 复用容器容量。
+    /// </summary>
+    internal static int TraceOuterContour(
+        ReadOnlySpan<byte> solidMask,
+        int width,
+        int height,
+        Span<Vector2> destination,
+        TraceScratch scratch)
+    {
+        ArgumentNullException.ThrowIfNull(scratch);
+        scratch.EnsureGeometryCapacity(width, height);
+        int count = TraceContoursWithScratch(solidMask, width, height, destination, scratch._ranges, scratch);
+        if (count == 0)
+        {
+            return 0;
+        }
+
+        ContourRange outer = scratch._ranges[0];
+        if (outer.Start != 0)
+        {
+            destination.Slice(outer.Start, outer.Count).CopyTo(destination);
+        }
+
+        return outer.Count;
+    }
+    /// <summary>
     /// 追踪固体区域的外边界，输出 CCW 闭合折线。
     /// </summary>
     /// <param name="solidMask">二值固体 mask，非 0 表示固体。</param>
@@ -144,6 +223,99 @@ public static class MarchingSquares
         return rangeCount;
     }
 
+    private static int TraceContoursWithScratch(
+        ReadOnlySpan<byte> solidMask,
+        int width,
+        int height,
+        Span<Vector2> destination,
+        Span<ContourRange> ranges,
+        TraceScratch scratch)
+    {
+        ValidateArguments(solidMask, width, height, destination);
+        if (ranges.IsEmpty)
+        {
+            throw new ArgumentException("ranges 不能为空。", nameof(ranges));
+        }
+
+        scratch.PrepareContainers();
+        BuildBoundaryEdges(solidMask, width, height, scratch._edges);
+        if (scratch._edges.Count == 0)
+        {
+            return 0;
+        }
+
+        BuildStartIndex(scratch._edges, scratch._edgesByStart);
+        scratch.PrepareUsed(scratch._edges.Count);
+        int written = 0;
+        int rangeCount = 0;
+        int remainingEdges = scratch._edges.Count;
+
+        while (remainingEdges > 0)
+        {
+            if (rangeCount >= ranges.Length)
+            {
+                throw new ArgumentException("ranges 缓冲不足。", nameof(ranges));
+            }
+
+            int startEdgeIndex = FindStartEdge(scratch._edges, scratch._used);
+            BoundaryEdge startEdge = scratch._edges[startEdgeIndex];
+            EdgeKey start = startEdge.Start;
+            EdgeKey current = start;
+            int currentEdgeIndex = startEdgeIndex;
+            int startOffset = written;
+
+            while (true)
+            {
+                if (written >= destination.Length)
+                {
+                    throw new ArgumentException("destination 缓冲不足。", nameof(destination));
+                }
+
+                destination[written++] = current.ToVector2();
+                if (scratch._used[currentEdgeIndex])
+                {
+                    throw new InvalidOperationException("边界链重复访问。");
+                }
+
+                scratch._used[currentEdgeIndex] = true;
+                remainingEdges--;
+                BoundaryEdge currentEdge = scratch._edges[currentEdgeIndex];
+                EdgeKey next = currentEdge.End;
+                current = next;
+                if (current.Equals(start))
+                {
+                    if (written >= destination.Length)
+                    {
+                        throw new ArgumentException("destination 缓冲不足。", nameof(destination));
+                    }
+
+                    destination[written++] = start.ToVector2();
+                    break;
+                }
+
+                currentEdgeIndex = FindNextEdge(scratch._edges, scratch._edgesByStart, scratch._used, currentEdge);
+            }
+
+            Span<Vector2> contour = destination[startOffset..written];
+            bool isHole = SignedArea(contour) > 0f;
+            ranges[rangeCount++] = new ContourRange(startOffset, contour.Length, isHole);
+        }
+
+        for (int i = 0; i < rangeCount; i++)
+        {
+            ContourRange range = ranges[i];
+            NormalizeWinding(destination.Slice(range.Start, range.Count), wantCounterClockwise: !range.IsHole);
+        }
+
+        int firstOuterIndex = FindFirstOuterRange(ranges, rangeCount);
+        if (firstOuterIndex > 0)
+        {
+            (ranges[0], ranges[firstOuterIndex]) = (ranges[firstOuterIndex], ranges[0]);
+        }
+
+        return rangeCount;
+    }
+
     private static int FindFirstOuterRange(Span<ContourRange> ranges, int rangeCount)
     {
         for (int i = 0; i < rangeCount; i++)
@@ -186,6 +358,16 @@ public static class MarchingSquares
     private static List<BoundaryEdge> BuildBoundaryEdges(ReadOnlySpan<byte> solidMask, int width, int height)
     {
         List<BoundaryEdge> edges = new(width * height * 2);
+        BuildBoundaryEdges(solidMask, width, height, edges);
+        return edges;
+    }
+
+    private static void BuildBoundaryEdges(
+        ReadOnlySpan<byte> solidMask,
+        int width,
+        int height,
+        List<BoundaryEdge> edges)
+    {
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
@@ -217,8 +399,6 @@ public static class MarchingSquares
                 }
             }
         }
-
-        return edges;
     }
 
     private static void AddEdge(List<BoundaryEdge> edges, int startX, int startY, int endX, int endY)
@@ -242,6 +422,22 @@ public static class MarchingSquares
         }
 
         return edgesByStart;
+    }
+
+    private static void BuildStartIndex(List<BoundaryEdge> edges, Dictionary<EdgeKey, EdgeIndexSet> destination)
+    {
+        destination.Clear();
+        for (int i = 0; i < edges.Count; i++)
+        {
+            EdgeKey start = edges[i].Start;
+            if (!destination.TryGetValue(start, out EdgeIndexSet indices))
+            {
+                indices = default;
+            }
+
+            indices.Add(i);
+            destination[start] = indices;
+        }
     }
 
     private static int FindStartEdge(List<BoundaryEdge> edges, bool[] used)
@@ -278,6 +474,40 @@ public static class MarchingSquares
         BoundaryEdge current)
     {
         if (!edgesByStart.TryGetValue(current.End, out List<int>? candidates))
+        {
+            throw new InvalidOperationException("边界链断裂。");
+        }
+
+        int bestIndex = -1;
+        int bestRank = int.MaxValue;
+        int currentDirection = DirectionOrder(current);
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            int edgeIndex = candidates[i];
+            if (used[edgeIndex])
+            {
+                continue;
+            }
+
+            int candidateDirection = DirectionOrder(edges[edgeIndex]);
+            int rank = TurnRank(currentDirection, candidateDirection);
+            if (rank < bestRank)
+            {
+                bestRank = rank;
+                bestIndex = edgeIndex;
+            }
+        }
+
+        return bestIndex >= 0 ? bestIndex : throw new InvalidOperationException("边界链断裂。");
+    }
+
+    private static int FindNextEdge(
+        List<BoundaryEdge> edges,
+        Dictionary<EdgeKey, EdgeIndexSet> edgesByStart,
+        bool[] used,
+        BoundaryEdge current)
+    {
+        if (!edgesByStart.TryGetValue(current.End, out EdgeIndexSet candidates))
         {
             throw new InvalidOperationException("边界链断裂。");
         }
@@ -367,7 +597,49 @@ public static class MarchingSquares
         }
     }
 
-    private readonly record struct EdgeKey(int X, int Y)
+    internal struct EdgeIndexSet
+    {
+        private int _first;
+        private int _second;
+        private int _third;
+        private int _fourth;
+
+        public int Count { get; private set; }
+
+        public readonly int this[int index] => index switch
+        {
+            0 when Count > 0 => _first,
+            1 when Count > 1 => _second,
+            2 when Count > 2 => _third,
+            3 when Count > 3 => _fourth,
+            _ => throw new ArgumentOutOfRangeException(nameof(index)),
+        };
+
+        public void Add(int edgeIndex)
+        {
+            switch (Count)
+            {
+                case 0:
+                    _first = edgeIndex;
+                    break;
+                case 1:
+                    _second = edgeIndex;
+                    break;
+                case 2:
+                    _third = edgeIndex;
+                    break;
+                case 3:
+                    _fourth = edgeIndex;
+                    break;
+                default:
+                    throw new InvalidOperationException("同一边界顶点的出边超过 4 条。");
+            }
+
+            Count++;
+        }
+    }
+
+    internal readonly record struct EdgeKey(int X, int Y)
     {
         public Vector2 ToVector2()
         {
@@ -376,5 +648,5 @@ public static class MarchingSquares
 
     }
 
-    private readonly record struct BoundaryEdge(EdgeKey Start, EdgeKey End);
+    internal readonly record struct BoundaryEdge(EdgeKey Start, EdgeKey End);
 }
