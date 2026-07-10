@@ -9,10 +9,21 @@ namespace PixelEngine.Editor.Shell;
 /// </summary>
 internal sealed class EditorShellWindow : IDisposable
 {
-    public static readonly string DefaultLayoutPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "PixelEngine",
-        "editor-shell-imgui.ini");
+    private const string LayoutPathEnvironmentVariable = "PIXELENGINE_EDITOR_LAYOUT_PATH";
+
+    public static string DefaultLayoutPath
+    {
+        get
+        {
+            string? overridePath = Environment.GetEnvironmentVariable(LayoutPathEnvironmentVariable);
+            return string.IsNullOrWhiteSpace(overridePath)
+                ? Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "PixelEngine",
+                    "editor-shell-imgui.ini")
+                : Path.GetFullPath(overridePath);
+        }
+    }
 
     private readonly EditorHostBootstrap _bootstrap;
     private bool _projectPickerGuiShutdown;
@@ -43,7 +54,7 @@ internal sealed class EditorShellWindow : IDisposable
         _projectPickerGuiShutdown = true;
     }
 
-    public static EditorShellWindow Create()
+    public static EditorShellWindow Create(float uiScale = EditorUiScale.Default)
     {
         RenderWindowOptions windowOptions = new()
         {
@@ -57,6 +68,7 @@ internal sealed class EditorShellWindow : IDisposable
             Enabled = true,
             LayoutPath = DefaultLayoutPath,
             Theme = GuiThemeKind.Unity6Dark,
+            DpiScale = EditorUiScale.Normalize(uiScale),
         };
         return new EditorShellWindow(EditorHostBootstrap.Create(windowOptions, guiOptions));
     }

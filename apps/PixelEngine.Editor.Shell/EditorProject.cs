@@ -515,6 +515,7 @@ internal sealed class EditorProjectSceneEntry
     WriteIndented = true)]
 [JsonSerializable(typeof(EditorProjectDocument))]
 [JsonSerializable(typeof(RecentProjectsDocument))]
+[JsonSerializable(typeof(Settings.EditorPreferencesDocument))]
 [JsonSerializable(typeof(EditorAssetManifestDocument))]
 [JsonSerializable(typeof(EditorUiManifestDocument))]
 internal sealed partial class EditorShellJsonContext : JsonSerializerContext

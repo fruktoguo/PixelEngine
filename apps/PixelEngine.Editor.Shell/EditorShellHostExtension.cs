@@ -40,6 +40,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             {
                 LayoutPath = EditorShellWindow.DefaultLayoutPath,
                 EnableMultiViewport = false,
+                DpiScale = app.UiScale,
             });
         _gameUiPresentTargetProvider = new GameViewUiPresentTargetProvider(
             CapturePlayMode,
@@ -229,7 +230,8 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             return;
         }
 
-        _editor.AddPanel(new EditorMainMenuPanel(_app));
+        _editor.AddPanel(new EditorMainMenuPanel(_app, _editor));
+        _editor.AddPanel(_app.PreferencesWindow);
         EditorAssetBrowserDataSource assetBrowserDataSource = new(_project);
         if (_sceneModel is not null && _undoStack is not null && _prefabs is not null)
         {
@@ -273,53 +275,59 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             pickImportSource: static (initialPath, _) => NativeFolderPicker.TryPickFile(initialPath, out string selectedPath, out string diagnostic)
                 ? new AssetBrowserImportSourcePickResult(true, selectedPath, string.Empty)
                 : new AssetBrowserImportSourcePickResult(false, string.Empty, diagnostic)));
-        _editor.AddPanel(new UiManifestPanel(new EditorAssetManifestStore(_project)));
+        AddHiddenPanel(new UiManifestPanel(new EditorAssetManifestStore(_project)));
         MaterialReactionEditorPanel? materialReactionPanel = TryCreateMaterialReactionPanel(engine);
         if (materialReactionPanel is not null)
         {
-            _editor.AddPanel(materialReactionPanel);
+            AddHiddenPanel(materialReactionPanel);
         }
 
         _projectSettingsPanel = new ProjectSettingsPanel(_project);
         _playerSettingsPanel = new PlayerSettingsPanel(_project);
         _buildSettingsPanel = new BuildSettingsPanel(_project, console: _app.ConsoleStore);
-        _editor.AddPanel(_projectSettingsPanel);
-        _editor.AddPanel(_playerSettingsPanel);
-        _editor.AddPanel(_buildSettingsPanel);
+        AddHiddenPanel(_projectSettingsPanel);
+        AddHiddenPanel(_playerSettingsPanel);
+        AddHiddenPanel(_buildSettingsPanel);
         _editor.AddPanel(new EditorConsolePanel(_app));
-        _editor.AddPanel(new PerformanceHudPanel());
-        _editor.AddPanel(new SimulationControlToolbar(new EditorSimulationControlAdapter(_app)));
-        _editor.AddPanel(new EditorModePanel(new EditorPlaySessionAdapter(_app)));
-        _editor.AddPanel(new SaveLoadPanel(new EditorWorldSaveLoadService(
+        AddHiddenPanel(new PerformanceHudPanel());
+        AddHiddenPanel(new SimulationControlToolbar(new EditorSimulationControlAdapter(_app)));
+        AddHiddenPanel(new EditorModePanel(new EditorPlaySessionAdapter(_app)));
+        AddHiddenPanel(new SaveLoadPanel(new EditorWorldSaveLoadService(
             engine,
             Path.Combine(_project.ProjectRoot, "saves"))));
         if (engine.Context.TryGetService(out DebugOverlaySettings debugSettings))
         {
-            _editor.AddPanel(new DebugOverlayPanel(debugSettings));
+            AddHiddenPanel(new DebugOverlayPanel(debugSettings));
         }
 
         if (engine.Context.TryGetService(out ISimulationInspectApi inspectApi))
         {
-            _editor.AddPanel(new WorldInspectorPanel(inspectApi));
+            AddHiddenPanel(new WorldInspectorPanel(inspectApi));
         }
 
         if (brushPanel is not null)
         {
-            _editor.AddPanel(brushPanel);
+            AddHiddenPanel(brushPanel);
         }
 
         if (engine.Context.TryGetService(out PhysicsSystem physics))
         {
-            _editor.AddPanel(new PhysicsTuningPanel(new PhysicsSystemTuningService(physics)));
+            AddHiddenPanel(new PhysicsTuningPanel(new PhysicsSystemTuningService(physics)));
         }
 
         if (engine.Context.TryGetService(out ParticleSystem particles))
         {
-            _editor.AddPanel(new ParticleTuningPanel(new ParticleSystemTuningService(particles)));
+            AddHiddenPanel(new ParticleTuningPanel(new ParticleSystemTuningService(particles)));
         }
 
-        _editor.AddPanel(new LightingTuningPanel(new RenderPipelineLightingTuningService(pipeline.Settings)));
+        AddHiddenPanel(new LightingTuningPanel(new RenderPipelineLightingTuningService(pipeline.Settings)));
         _panelsRegistered = true;
+    }
+
+    private void AddHiddenPanel(IEditorPanel panel)
+    {
+        panel.Visible = false;
+        _editor.AddPanel(panel);
     }
 
     private MaterialReactionEditorPanel? TryCreateMaterialReactionPanel(Engine engine)
@@ -377,9 +385,10 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             : EditorRuntimeDiagnostics.FullQuality;
     }
 
-    private sealed class EditorMainMenuPanel(EditorShellApp app) : IEditorChromePanel
+    private sealed class EditorMainMenuPanel(EditorShellApp app, EditorApp editor) : IEditorChromePanel
     {
         private readonly EditorMainMenuBar _menu = new();
+        private readonly EditorUiScaleContextState _uiScaleState = new();
 
         public string Title => "Main Menu";
 
@@ -390,6 +399,8 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             _ = context;
             if (Visible)
             {
+                app.ApplyCurrentUiPreferences(_uiScaleState, editor.Options.DpiScale);
+                editor.SetLayoutPersistence(app.Preferences.Current.SaveLayoutOnExit);
                 _menu.Draw(app);
             }
         }

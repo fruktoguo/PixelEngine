@@ -57,17 +57,17 @@ public sealed record ProjectResourceRulesDto
 }
 
 /// <summary>
-/// 编辑器偏好设置。
+/// 旧版工程内编辑器偏好，仅用于向用户级 Preferences 兼容迁移。
 /// </summary>
 public sealed record EditorPreferencesDto
 {
     /// <summary>
-    /// 是否在退出编辑器时保存布局。
+    /// 旧版布局保存选项；新代码不得把它作为运行时权威值。
     /// </summary>
     public bool SaveLayoutOnExit { get; init; } = true;
 
     /// <summary>
-    /// 外部脚本编辑器命令；空字符串表示使用系统默认。
+    /// 旧版外部脚本编辑器命令；新代码不得执行项目提供的该值。
     /// </summary>
     public string ExternalScriptEditor { get; init; } = string.Empty;
 }
@@ -113,7 +113,7 @@ public sealed record ProjectSettingsDto
     public ProjectResourceRulesDto ResourceRules { get; init; } = new();
 
     /// <summary>
-    /// 编辑器偏好设置。
+    /// 旧版工程内编辑器偏好，仅保留反序列化兼容。
     /// </summary>
     public EditorPreferencesDto EditorPreferences { get; init; } = new();
 

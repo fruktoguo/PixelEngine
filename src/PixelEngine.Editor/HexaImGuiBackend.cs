@@ -18,6 +18,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
     private ImPlotContextPtr _plotContext;
     private string _layoutPath = string.Empty;
     private ImGuiFrameMetrics _frameMetrics = ImGuiFrameMetrics.Create(1, 1, 1f, 1f);
+    private bool _saveLayoutOnShutdown = true;
     private bool _initialized;
 
     /// <inheritdoc />
@@ -37,7 +38,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
     }
 
     /// <inheritdoc />
-    public void Initialize(EditorAppOptions options)
+    public unsafe void Initialize(EditorAppOptions options)
     {
         options = options.Normalize();
         if (_initialized)
@@ -54,6 +55,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
         _plotContext = ImPlot.CreateContext();
         ImPlot.SetCurrentContext(_plotContext);
         ImGuiIOPtr io = ImGui.GetIO();
+        io.IniFilename = null;
         io.ConfigFlags |= EditorDockSpace.BuildConfigFlags(options.EnableMultiViewport);
         _clipboard.Attach();
         GuiTheme.ApplyCurrent(options.Theme);
@@ -194,6 +196,12 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
     }
 
     /// <inheritdoc />
+    public void SetLayoutPersistence(bool enabled)
+    {
+        _saveLayoutOnShutdown = enabled;
+    }
+
+    /// <inheritdoc />
     public void Shutdown()
     {
         if (!_initialized)
@@ -205,7 +213,7 @@ public sealed class HexaImGuiBackend : IEditorImGuiBackend
         ImGuiImplOpenGL3.Shutdown();
         _clipboard.Detach();
         ImPlot.DestroyContext(_plotContext);
-        if (!string.IsNullOrWhiteSpace(_layoutPath))
+        if (_saveLayoutOnShutdown && !string.IsNullOrWhiteSpace(_layoutPath))
         {
             ImGui.SaveIniSettingsToDisk(_layoutPath);
         }

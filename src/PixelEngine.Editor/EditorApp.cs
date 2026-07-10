@@ -11,6 +11,7 @@ public sealed class EditorApp : IDisposable
     private readonly ImGuiController _controller;
     private readonly ScriptGuiContext _scriptGuiContext;
     private readonly List<IEditorPanel> _panels = [];
+    private readonly List<bool> _defaultPanelVisibility = [];
     private bool _initialized;
     private bool _disposed;
 
@@ -70,6 +71,7 @@ public sealed class EditorApp : IDisposable
     {
         ArgumentNullException.ThrowIfNull(panel);
         _panels.Add(panel);
+        _defaultPanelVisibility.Add(panel.Visible);
     }
 
     /// <summary>
@@ -124,7 +126,20 @@ public sealed class EditorApp : IDisposable
             _controller.ResetDockLayout();
         }
 
-        _ = ShowAllPanels();
+        for (int i = 0; i < _panels.Count; i++)
+        {
+            _panels[i].Visible = _defaultPanelVisibility[i];
+        }
+    }
+
+    /// <summary>
+    /// 设置关闭 Editor backend 时是否保存当前布局。
+    /// </summary>
+    /// <param name="enabled">是否持久化布局。</param>
+    public void SetLayoutPersistence(bool enabled)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _controller.SetLayoutPersistence(enabled);
     }
 
     /// <summary>

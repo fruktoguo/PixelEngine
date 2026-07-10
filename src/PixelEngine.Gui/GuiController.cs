@@ -69,6 +69,15 @@ public sealed class GuiController
     }
 
     /// <summary>
+    /// 设置关闭 GUI 时是否保存当前布局。
+    /// </summary>
+    /// <param name="enabled">是否持久化布局。</param>
+    public void SetLayoutPersistence(bool enabled)
+    {
+        Backend.SetLayoutPersistence(enabled);
+    }
+
+    /// <summary>
     /// 关闭 backend 并销毁 context。
     /// </summary>
     public void Shutdown()

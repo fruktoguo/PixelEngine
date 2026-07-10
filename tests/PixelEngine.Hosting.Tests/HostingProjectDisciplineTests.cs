@@ -352,7 +352,7 @@ public sealed class HostingProjectDisciplineTests
             '\n',
             Directory.EnumerateFiles(Path.Combine(root, "apps", "PixelEngine.Editor.Shell"), "*.cs").Select(File.ReadAllText));
 
-        Assert.Contains("EditorShellWindow.Create()", shellSource, StringComparison.Ordinal);
+        Assert.Contains("EditorShellWindow.Create(Preferences.Current.UiScale)", shellSource, StringComparison.Ordinal);
         Assert.Contains("EditorHostBootstrap.Create", shellSource, StringComparison.Ordinal);
         Assert.DoesNotContain("RenderWindow.Create", shellSource.Replace("EditorHostBootstrap.Create", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
     }
@@ -561,6 +561,10 @@ public sealed class HostingProjectDisciplineTests
             "Profiler",
             "About",
             "Shortcuts",
+            "Preferences...",
+            "Analysis",
+            "Settings",
+            "Tools",
             "New Project",
             "Open Project",
             "Save Scene",
@@ -679,6 +683,50 @@ public sealed class HostingProjectDisciplineTests
             File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "HexaImGuiBackend.cs")),
             File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellApp.cs")),
             File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellHostExtension.cs"))), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 Preferences 属于用户作用域、同时驱动两套 ImGui context，并让辅助面板默认隐藏。
+    /// </summary>
+    [Fact]
+    public void EditorPreferencesStayUserScopedAndDriveBothImGuiContexts()
+    {
+        string root = FindRepositoryRoot();
+        string shellRoot = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
+        string shellApp = File.ReadAllText(Path.Combine(shellRoot, "EditorShellApp.cs"));
+        string shellWindow = File.ReadAllText(Path.Combine(shellRoot, "EditorShellWindow.cs"));
+        string host = File.ReadAllText(Path.Combine(shellRoot, "EditorShellHostExtension.cs"));
+        string menu = File.ReadAllText(Path.Combine(shellRoot, "EditorMainMenuBar.cs"));
+        string preferencesStore = File.ReadAllText(Path.Combine(shellRoot, "Settings", "EditorPreferencesStore.cs"));
+        string preferencesWindow = File.ReadAllText(Path.Combine(shellRoot, "Settings", "EditorPreferencesWindow.cs"));
+        string projectSettings = File.ReadAllText(Path.Combine(shellRoot, "Settings", "ProjectSettingsPanel.cs"));
+        string scriptOpener = File.ReadAllText(Path.Combine(shellRoot, "EditorScriptAssetOpenService.cs"));
+        string guiBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "HexaImGuiBackend.cs"));
+        string editorBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "HexaImGuiBackend.cs"));
+
+        Assert.Contains("EditorPreferencesStore.LoadDefault()", shellApp, StringComparison.Ordinal);
+        Assert.Contains("EditorShellWindow.Create(Preferences.Current.UiScale)", shellApp, StringComparison.Ordinal);
+        Assert.Contains("PreferencesWindow.Draw()", shellApp, StringComparison.Ordinal);
+        Assert.Contains("DpiScale = EditorUiScale.Normalize(uiScale)", shellWindow, StringComparison.Ordinal);
+        Assert.Contains("DpiScale = app.UiScale", host, StringComparison.Ordinal);
+        Assert.Contains("_editor.AddPanel(_app.PreferencesWindow)", host, StringComparison.Ordinal);
+        Assert.Contains("AddHiddenPanel(_projectSettingsPanel)", host, StringComparison.Ordinal);
+        Assert.Contains("AddHiddenPanel(_buildSettingsPanel)", host, StringComparison.Ordinal);
+        Assert.Contains("EditorUiScale.Scale(ToolbarHeight, uiScale)", menu, StringComparison.Ordinal);
+        Assert.Contains("DispatchShortcuts(app)", menu, StringComparison.Ordinal);
+        Assert.Contains("Appearance", preferencesWindow, StringComparison.Ordinal);
+        Assert.Contains("External Tools", preferencesWindow, StringComparison.Ordinal);
+        Assert.Contains("EditorShortcutCatalog.All", preferencesWindow, StringComparison.Ordinal);
+        Assert.Contains("editor-preferences.json", preferencesStore, StringComparison.Ordinal);
+        Assert.Contains("FileOptions.WriteThrough", preferencesStore, StringComparison.Ordinal);
+        Assert.DoesNotContain("外部脚本编辑器", projectSettings, StringComparison.Ordinal);
+        Assert.DoesNotContain("退出时保存布局", projectSettings, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProjectSettingsDto", scriptOpener, StringComparison.Ordinal);
+        foreach (string backend in new[] { guiBackend, editorBackend })
+        {
+            Assert.Contains("io.IniFilename = null", backend, StringComparison.Ordinal);
+            Assert.Contains("_saveLayoutOnShutdown", backend, StringComparison.Ordinal);
+        }
     }
 
     /// <summary>

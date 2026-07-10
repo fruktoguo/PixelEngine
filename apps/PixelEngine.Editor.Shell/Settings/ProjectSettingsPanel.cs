@@ -44,11 +44,6 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
                 RequireStableMaterialNames = true,
                 ContentFileGlobs = ["materials.json", "reactions.json", "scenes/**/*.scene", "ui/**/*", "scripts/**/*.cs"],
             },
-            EditorPreferences = _settings.EditorPreferences with
-            {
-                SaveLayoutOnExit = false,
-                ExternalScriptEditor = "system-default",
-            },
         };
         return !TryApplyProjectSettings(next, out string diagnostic)
             ? throw new InvalidOperationException(diagnostic)
@@ -67,8 +62,6 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
             DefaultUiBackendDiagnostic = UltralightOptionalProfileGate.GetInactiveReason(_settings.DefaultUiBackend),
             RequireStableMaterialNames = _settings.ResourceRules.RequireStableMaterialNames,
             ContentFileGlobCount = _settings.ResourceRules.ContentFileGlobs?.Length ?? 0,
-            SaveLayoutOnExit = _settings.EditorPreferences.SaveLayoutOnExit,
-            ExternalScriptEditor = _settings.EditorPreferences.ExternalScriptEditor,
             Diagnostic = _validationMessage,
         };
     }
@@ -152,19 +145,6 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
             changed = true;
         }
 
-        bool saveLayout = _settings.EditorPreferences.SaveLayoutOnExit;
-        if (ImGui.Checkbox("退出时保存布局", ref saveLayout))
-        {
-            next = next with { EditorPreferences = next.EditorPreferences with { SaveLayoutOnExit = saveLayout } };
-            changed = true;
-        }
-
-        changed |= InputText(
-            "外部脚本编辑器",
-            _settings.EditorPreferences.ExternalScriptEditor,
-            value => next = next with { EditorPreferences = next.EditorPreferences with { ExternalScriptEditor = value } },
-            512);
-
         if (changed)
         {
             _ = TryApplyProjectSettings(next, out _);
@@ -222,10 +202,6 @@ internal sealed record ScriptedProjectSettingsProbeSnapshot
     public bool RequireStableMaterialNames { get; init; }
 
     public int ContentFileGlobCount { get; init; }
-
-    public bool SaveLayoutOnExit { get; init; }
-
-    public string ExternalScriptEditor { get; init; } = string.Empty;
 
     public string Diagnostic { get; init; } = string.Empty;
 }

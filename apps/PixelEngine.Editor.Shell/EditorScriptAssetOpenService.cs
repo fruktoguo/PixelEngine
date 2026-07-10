@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
-using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell;
 
@@ -10,12 +9,12 @@ namespace PixelEngine.Editor.Shell;
 /// </summary>
 internal sealed class EditorScriptAssetOpenService(
     EditorAssetManifestStore assets,
-    Func<ProjectSettingsDto>? settingsProvider = null,
+    Func<string>? editorCommandProvider = null,
     IExternalScriptEditorProcessLauncher? processLauncher = null)
 {
     private const string FilePlaceholder = "{file}";
     private readonly EditorAssetManifestStore _assets = assets ?? throw new ArgumentNullException(nameof(assets));
-    private readonly Func<ProjectSettingsDto> _settingsProvider = settingsProvider ?? (() => EngineProjectSettingsStore.LoadProjectSettings(assets.ProjectRoot));
+    private readonly Func<string> _editorCommandProvider = editorCommandProvider ?? (() => string.Empty);
     private readonly IExternalScriptEditorProcessLauncher _processLauncher = processLauncher ?? new ExternalScriptEditorProcessLauncher();
 
     public bool TryOpenScriptAsset(string logicalPath, out string diagnostic)
@@ -46,8 +45,7 @@ internal sealed class EditorScriptAssetOpenService(
                 return Failed(asset, $"脚本文件不存在：{fullPath}", fullPath);
             }
 
-            ProjectSettingsDto settings = _settingsProvider().Normalize();
-            string editorCommand = settings.EditorPreferences.ExternalScriptEditor?.Trim() ?? string.Empty;
+            string editorCommand = _editorCommandProvider()?.Trim() ?? string.Empty;
             bool useSystemDefault = IsSystemDefault(editorCommand);
             if (!TryCreateStartInfo(editorCommand, fullPath, useSystemDefault, out ProcessStartInfo? startInfo, out string diagnostic) ||
                 startInfo is null)
