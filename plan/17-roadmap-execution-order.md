@@ -4,7 +4,7 @@
 
 > **DOC-002 历史证据口径（2026-07-10）**：后文 checkbox 与“已通过/已完成”叙述冻结自旧计划快照 `179efc3a`，迁移基线为 `5af1541f`，均不构成 live 状态；证据等级以 [稳定 Evidence Index](../docs/evidence-index.md) 为准。未入索引的 `artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/` 仅是可再生历史线索；替代报告与重跑命令见 [DOC-002 校正报告](../docs/evidence-2026-07-10-doc-002-legacy-plan-audit.md)。
 
-> **DOC-002 路线图校正**：M0–M15 表与 §6 是历史里程碑定义 / 验收快照，不是当前 dashboard；其中 M13 `[x]` 仅代表 `BASE-013`–`BASE-015` 自动化结构基线。旧 Editor capture/build-result 的 `artifacts/` 路径已降为可再生线索，不能证明 M15 人工 UX 或发行完成。
+> **DOC-002 路线图校正**：M0–M15 表与 §6 是历史里程碑定义 / 验收快照，不是当前 dashboard；其中 M13 `[x]` 仅代表 `BASE-013`–`BASE-015` 自动化结构基线，后文“plan/01–20 验收全部勾选”也只描述迁移前 checkbox 快照。旧 Editor capture/build-result 的 `artifacts/` 路径已降为可再生线索，不能证明 M15 人工 UX 或发行完成。
 
 > 本文件是实际编码的节奏表:把 `plan/01`–`plan/20` 编织进里程碑 M0–M15,给出依赖图、并行关系、退出标准与中文 git 提交节点序列。与架构文档 §18 的 M0–M10 对齐,并把用户新增的脚本系统(plan/11)、Editor ImGui 面板层(plan/12)、Unity-like Editor 与发行解耦(plan/19,含 GUI 宿主中性化程序集 `PixelEngine.Gui`)、Web-first 透明 HTML UI Runtime(plan/20,`PixelEngine.UI`)纳入。M13/M14/M15 三个里程碑在 M12 之后续接:M13「Unity-like Editor 结构闭合与发行解耦」、M14「Unity-like Editor / Web-first 透明 HTML UI Runtime 产品面校准与 Showcase Demo Game」、M15「证据、基准、发行与产品化闭合」。
 > 原则:vertical-slice-first(尽早让「沙能下落并渲染上屏」端到端跑通),一步到位、无 MVP、无临时实现(`AGENTS.md`)。
