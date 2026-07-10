@@ -8,6 +8,7 @@ namespace PixelEngine.Demo;
 public sealed class PlayableProjectileTool : Behaviour
 {
     private PlayerController? _player;
+    private readonly CollapseScanScratch _collapseScanScratch = new();
     private float _cooldownRemaining;
     private int _pendingCollapseFrames;
     private int _pendingCollapseX;
@@ -166,6 +167,19 @@ public sealed class PlayableProjectileTool : Behaviour
     protected override void OnStart()
     {
         _player = Entity.TryGetComponent(out PlayerController player) ? player : null;
+    }
+
+    /// <inheritdoc />
+    protected override void OnDestroy()
+    {
+        _collapseScanScratch.Release();
+    }
+
+    internal int CollapseScanScratchCapacity => _collapseScanScratch.Capacity;
+
+    internal int RunCollapseScanForTesting(int centerX, int centerY, int maxConversions)
+    {
+        return ConvertFloatingSolidIslandsNear(centerX, centerY, maxConversions);
     }
 
     /// <inheritdoc />
@@ -348,12 +362,15 @@ public sealed class PlayableProjectileTool : Behaviour
     {
         int radius = Math.Clamp(CollapseScanRadius, 4, 320);
         int size = (radius * 2) + 1;
+        int area = size * size;
         int originX = centerX - radius;
         int originY = centerY - radius;
-        bool[] visited = new bool[size * size];
-        bool[] component = new bool[size * size];
-        int[] queue = new int[size * size];
-        int[] cells = new int[size * size];
+        _collapseScanScratch.EnsureCapacity(area);
+        bool[] visited = _collapseScanScratch.Visited;
+        bool[] component = _collapseScanScratch.WorkingMask;
+        int[] queue = _collapseScanScratch.Queue;
+        int[] cells = _collapseScanScratch.Cells;
+        Array.Clear(visited, 0, area);
         int converted = 0;
         LastCollapseSkipReason = "scan_empty";
         LastCollapseSolidCandidates = 0;
@@ -369,7 +386,7 @@ public sealed class PlayableProjectileTool : Behaviour
                     continue;
                 }
 
-                Array.Clear(component);
+                Array.Clear(component, 0, area);
                 int cellCount = FloodFillSolidIsland(localX, localY, originX, originY, size, visited, component, queue, cells, out int minX, out int minY, out int maxX, out int maxY, out ComponentBorderContact borderContact);
                 if (!CanConvertIsland(cellCount, minX, minY, maxX, maxY, borderContact, out string rejection))
                 {
@@ -577,11 +594,14 @@ public sealed class PlayableProjectileTool : Behaviour
     {
         int radius = Math.Clamp(FallbackOverhangRadius, 12, 96);
         int size = (radius * 2) + 1;
+        int area = size * size;
         int originX = centerX - radius;
         int originY = centerY - radius;
-        bool[] visited = new bool[size * size];
-        bool[] candidate = new bool[size * size];
-        int[] queue = new int[size * size];
+        _collapseScanScratch.EnsureCapacity(area);
+        bool[] visited = _collapseScanScratch.Visited;
+        bool[] candidate = _collapseScanScratch.WorkingMask;
+        int[] queue = _collapseScanScratch.Queue;
+        Array.Clear(visited, 0, area);
         int converted = 0;
 
         for (int localY = 0; localY < size; localY++)
@@ -959,8 +979,10 @@ public sealed class PlayableProjectileTool : Behaviour
         }
 
         int size = width * height;
-        bool[] visited = new bool[size];
-        int[] queue = new int[size];
+        _collapseScanScratch.EnsureCapacity(size);
+        bool[] visited = _collapseScanScratch.Visited;
+        int[] queue = _collapseScanScratch.Queue;
+        Array.Clear(visited, 0, size);
         int head = 0;
         int tail = 0;
         int count = 0;
@@ -985,10 +1007,10 @@ public sealed class PlayableProjectileTool : Behaviour
             minY = Math.Min(minY, worldY);
             maxX = Math.Max(maxX, worldX);
             maxY = Math.Max(maxY, worldY);
-            TryEnqueueConnected(localX - 1, localY);
-            TryEnqueueConnected(localX + 1, localY);
-            TryEnqueueConnected(localX, localY - 1);
-            TryEnqueueConnected(localX, localY + 1);
+            TryEnqueueConnected(localX - 1, localY, x, y, width, height, visited, queue, ref tail);
+            TryEnqueueConnected(localX + 1, localY, x, y, width, height, visited, queue, ref tail);
+            TryEnqueueConnected(localX, localY - 1, x, y, width, height, visited, queue, ref tail);
+            TryEnqueueConnected(localX, localY + 1, x, y, width, height, visited, queue, ref tail);
         }
 
         int tightWidth = maxX - minX + 1;
@@ -1012,25 +1034,34 @@ public sealed class PlayableProjectileTool : Behaviour
         _ = Context.Bodies.CreateFromRegion(minX, minY, tightWidth, tightHeight);
         LastCollapsedRegion = (minX, minY, tightWidth, tightHeight);
         return true;
+    }
 
-        void TryEnqueueConnected(int localX, int localY)
+    private void TryEnqueueConnected(
+        int localX,
+        int localY,
+        int originX,
+        int originY,
+        int width,
+        int height,
+        bool[] visited,
+        int[] queue,
+        ref int tail)
+    {
+        if ((uint)localX >= (uint)width || (uint)localY >= (uint)height)
         {
-            if ((uint)localX >= (uint)width || (uint)localY >= (uint)height)
-            {
-                return;
-            }
+            return;
+        }
 
-            int packed = Pack(localX, localY, width);
-            if (visited[packed])
-            {
-                return;
-            }
+        int packed = Pack(localX, localY, width);
+        if (visited[packed])
+        {
+            return;
+        }
 
-            visited[packed] = true;
-            if (IsSolid(x + localX, y + localY))
-            {
-                queue[tail++] = packed;
-            }
+        visited[packed] = true;
+        if (IsSolid(originX + localX, originY + localY))
+        {
+            queue[tail++] = packed;
         }
     }
 
@@ -1144,6 +1175,56 @@ public sealed class PlayableProjectileTool : Behaviour
         }
 
         return contact;
+    }
+
+    /// <summary>
+    /// 为坍塌扫描按需扩容的四个实例级工作数组。主扫描、悬挑兜底和 impact fallback 串行运行，因此可以安全共享。
+    /// </summary>
+    private sealed class CollapseScanScratch
+    {
+        public bool[] Visited { get; private set; } = Array.Empty<bool>();
+
+        public bool[] WorkingMask { get; private set; } = Array.Empty<bool>();
+
+        public int[] Queue { get; private set; } = Array.Empty<int>();
+
+        public int[] Cells { get; private set; } = Array.Empty<int>();
+
+        internal int Capacity => Visited.Length;
+
+        public void EnsureCapacity(int requiredLength)
+        {
+            if (requiredLength <= Visited.Length)
+            {
+                return;
+            }
+
+            int capacity = Visited.Length;
+            if (capacity == 0)
+            {
+                capacity = requiredLength;
+            }
+            else
+            {
+                int grown = capacity <= (int.MaxValue - (capacity / 2))
+                    ? capacity + (capacity / 2)
+                    : int.MaxValue;
+                capacity = Math.Max(requiredLength, grown);
+            }
+
+            Visited = new bool[capacity];
+            WorkingMask = new bool[capacity];
+            Queue = new int[capacity];
+            Cells = new int[capacity];
+        }
+
+        public void Release()
+        {
+            Visited = Array.Empty<bool>();
+            WorkingMask = Array.Empty<bool>();
+            Queue = Array.Empty<int>();
+            Cells = Array.Empty<int>();
+        }
     }
 
     [Flags]
