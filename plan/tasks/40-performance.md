@@ -61,7 +61,7 @@
   - 优先级：P2。
   - 验收：CPU/GPU 同 commit/run id；粒子数至少 100K；GPU 路径无 CPU stamp；比较报告可从原始 probe 重算且 GPU 更快。
 
-- [~] `PERF-011` 完成温度/反应热点、GC 模式和逻辑/音频预算的目标场景定档。
+- [!] `PERF-011` 完成温度/反应热点、GC 模式和逻辑/音频预算的目标场景定档。阻塞：本机 640×360 真实 lava-mine hit/miss + 六类温度 stencil、Workstation/Server Concurrent GC、audio-stress 窗口 allocation/p99 已完成，唯一生产配置已固化为 Workstation+Concurrent+SustainedLowLatency；但 hardware counter preflight 为 `blocked_non_admin`，缺 Cache Misses / Branch Mispredictions，且 target evidence preflight 为 `blocked_missing_target_performance_manifest`，尚无代表玩家硬件 60s/3600-frame 玩家包真实窗口 allocation/实际 GC pause/logic-audio p99 同源长跑。解除条件：elevated ETW 或等价 runner 的 cache/branch 报告 + 目标玩家硬件同提交长跑 manifest 回流并通过 preflight 后人工复核。证据：`docs/evidence-2026-07-10-perf-011-target-scene-gc.md`。
   - 优先级：P2。
   - 验收：真实内容规模覆盖温度 stencil、reaction hit/miss、Server/Concurrent GC 组合和 logic/audio phase；报告包含分配、pause、cache/branch、p99，并选定唯一生产 GC 配置。
 

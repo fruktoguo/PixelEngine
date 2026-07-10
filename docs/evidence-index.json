@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-10",
-  "generatedFromCommit": "ff221659d513688659b00388d44d8b19964f5cc0",
+  "generatedFromCommit": "1e48faa0962f70d1f8fbae09a47a3ab284dc764b",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -103,6 +103,19 @@
       "reportPath": "docs/evidence-2026-07-10-perf-007-collapse-scratch.md",
       "sha256": "221592adecff19ae482bfc8f1c230ff2a1c4aed3e2a1a2372be122d9dd42dd23",
       "notes": "GC.GetAllocatedBytesForCurrentThread 探针：半径 40 首次 65,728 B、重试 0 B；半径 320 首次 4,108,928 B、重试 0 B。四个实例级数组按需扩容并由 Behaviour OnDestroy 释放。"
+    },
+    {
+      "entryId": "perf-011-target-scene-gc-20260710",
+      "taskIds": ["PERF-011"],
+      "evidenceState": "local_formal_target_scene_blocked_external_counters_and_target_hardware",
+      "commit": "1e48faa0962f70d1f8fbae09a47a3ab284dc764b",
+      "runSessionId": "perf-011-lava-mine-reaction-temperature-workstation-steady",
+      "runIdentityStatus": "captured",
+      "hardware": "Microsoft Windows 11 build 26100; AMD Ryzen 7 5800X 8c/16t; AMD Radeon RX 7900 XT; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "DOTNET_gcServer=0 / 1 + DOTNET_gcConcurrent=1 运行 LavaMineReactionTemperatureBenchmarks Workstation/Server BDN；dotnet run --project demo/PixelEngine.Demo/PixelEngine.Demo.csproj -c Release --no-build -- --no-hot-reload --no-vsync --window-ticks 120 --scripted-window-demo --scene scenes/lava-mine-audio-probe.scene --content demo/PixelEngine.Demo/content --log-dir artifacts/perf-011-window-production-gc；pwsh tools/run-benchmark.ps1 -Artifacts artifacts/perf-011-render-frame-context -BenchmarkDotNetArgs @('--filter','*RenderingAllocationBenchmarks.BuildRenderBufferWithFrameContext*','--job','short','--warmupCount','1','--iterationCount','3')",
+      "reportPath": "docs/evidence-2026-07-10-perf-011-target-scene-gc.md",
+      "sha256": "d137043372e4f62809bed4a247e54f376d0f55d547be876f412a482a5738a68c",
+      "notes": "本机真实内容 hit/miss + 六类温度 stencil、两种 Concurrent GC、audio-stress logic/audio p99 与 allocation 已记录；生产配置固化为 Workstation+Concurrent+SustainedLowLatency。cache/branch 因非管理员 ETW 阻塞，且缺目标玩家硬件 60s/3600-frame 同源 manifest，PERF-011 保持阻塞。"
     },
     {
       "entryId": "arch-001-custom-metric-20260710",
