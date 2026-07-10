@@ -26,6 +26,18 @@ public sealed class RenderBufferBuilder(
     private int _emptyWorldChunkCount;
     private IChunkSource? _emptyWorldSource;
     private MaterialTable? _emptyWorldMaterials;
+    private Chunk[] _lastResidentChunks = [];
+    private int _lastResidentChunkCount;
+    private RenderBuffer? _lastTarget;
+    private RenderAuxBuffers? _lastAux;
+    private IChunkSource? _lastChunkSource;
+    private MaterialTable? _lastMaterials;
+    private MaterialHotTable? _lastHot;
+    private MaterialVisualTable? _lastVisual;
+    private CameraState _lastCamera;
+    private float _lastFrameTimeSeconds;
+    private RenderBufferStyleLevel _lastRenderStyleLevel;
+    private bool _hasBuiltFrame;
 
     /// <inheritdoc />
     public RenderBufferStyleLevel RenderStyleLevel { get; private set; } = (options ?? new RenderBufferBuilderOptions()).StyleLevel;
@@ -61,8 +73,15 @@ public sealed class RenderBufferBuilder(
 
         aux.Resize(target.Width, target.Height);
         // 早退：本帧未推进 sim 且无调试着色时跳过重建。
-        if (!context.SimStepped && context.DebugCellColors is null)
+        if (!context.SimStepped && !context.ForceRebuild && context.DebugCellColors is null)
         {
+            RecordSub(profiler, started);
+            return;
+        }
+
+        if (!context.ForceRebuild && CanReuseStableFrame(context, target, aux))
+        {
+            RecordStyleSub(profiler, started, active: false);
             RecordSub(profiler, started);
             return;
         }
@@ -72,6 +91,7 @@ public sealed class RenderBufferBuilder(
         if (CanClearEmptyWorld(context))
         {
             target.Pixels.Clear();
+            RememberBuiltFrame(context, target, aux);
             RecordSub(profiler, started);
             return;
         }
@@ -85,14 +105,78 @@ public sealed class RenderBufferBuilder(
         if (_jobs is null)
         {
             BuildRows(0, target.Height, 0, _state);
+            RememberBuiltFrame(context, target, aux);
             RecordStyleSub(profiler, started, useMaterialStyles);
             RecordSub(profiler, started);
             return;
         }
 
         _jobs.ParallelRange(target.Height, Math.Max(1, _options.MinRowsPerJob), BuildRows, _state);
+        RememberBuiltFrame(context, target, aux);
         RecordStyleSub(profiler, started, useMaterialStyles);
         RecordSub(profiler, started);
+    }
+
+    private bool CanReuseStableFrame(RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux)
+    {
+        if (!_hasBuiltFrame ||
+            !ReferenceEquals(_lastTarget, target) ||
+            !ReferenceEquals(_lastAux, aux) ||
+            !ReferenceEquals(_lastChunkSource, context.Chunks) ||
+            !ReferenceEquals(_lastMaterials, context.Materials) ||
+            !ReferenceEquals(_lastHot, context.Materials.Hot) ||
+            !ReferenceEquals(_lastVisual, context.Materials.Visual) ||
+            _lastCamera != context.Camera ||
+            _lastFrameTimeSeconds != context.FrameTimeSeconds ||
+            _lastRenderStyleLevel != RenderStyleLevel ||
+            context.DebugCellColors is not null ||
+            context.Temperature.HasActiveBlocks)
+        {
+            return false;
+        }
+
+        ReadOnlySpan<Chunk> resident = context.Chunks.ResidentChunks;
+        if (_lastResidentChunkCount != resident.Length)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < resident.Length; i++)
+        {
+            if (!ReferenceEquals(_lastResidentChunks[i], resident[i]) || HasDirtyMetadata(resident[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private void RememberBuiltFrame(RenderFrameContext context, RenderBuffer target, RenderAuxBuffers aux)
+    {
+        ReadOnlySpan<Chunk> resident = context.Chunks.ResidentChunks;
+        if (_lastResidentChunks.Length < resident.Length)
+        {
+            Array.Resize(ref _lastResidentChunks, resident.Length);
+        }
+
+        resident.CopyTo(_lastResidentChunks);
+        if (_lastResidentChunkCount > resident.Length)
+        {
+            Array.Clear(_lastResidentChunks, resident.Length, _lastResidentChunkCount - resident.Length);
+        }
+
+        _lastResidentChunkCount = resident.Length;
+        _lastTarget = target;
+        _lastAux = aux;
+        _lastChunkSource = context.Chunks;
+        _lastMaterials = context.Materials;
+        _lastHot = context.Materials.Hot;
+        _lastVisual = context.Materials.Visual;
+        _lastCamera = context.Camera;
+        _lastFrameTimeSeconds = context.FrameTimeSeconds;
+        _lastRenderStyleLevel = RenderStyleLevel;
+        _hasBuiltFrame = true;
     }
 
     private static void BuildRows(int start, int end, int workerIndex, object? state)
@@ -112,6 +196,12 @@ public sealed class RenderBufferBuilder(
         if (builder.TryGetPaletteZoomPixelsPerCell(context, out int pixelsPerCell))
         {
             builder.BuildRowsPaletteZoomFast(context, target, aux, start, end, pixelsPerCell);
+            return;
+        }
+
+        if (builder.TryGetStyledZoomPixelsPerCell(context, out int styledPixelsPerCell))
+        {
+            builder.BuildRowsStyledZoom(context, target, aux, start, end, styledPixelsPerCell);
             return;
         }
 
@@ -174,6 +264,24 @@ public sealed class RenderBufferBuilder(
                 if (!context.Chunks.TryGetChunk(CellAddressing.WorldToChunk(worldX, worldY), out Chunk chunk))
                 {
                     pixels.Slice(rowOffset, run).Clear();
+                    sx += run;
+                    continue;
+                }
+
+                if (context.Temperature.HasActiveBlock(chunk.Coord))
+                {
+                    for (int temperatureOffset = 0; temperatureOffset < run; temperatureOffset++)
+                    {
+                        WriteScalarPixel(
+                            context,
+                            worldX + temperatureOffset,
+                            worldY,
+                            rowOffset + temperatureOffset,
+                            pixels,
+                            emissive,
+                            occluder);
+                    }
+
                     sx += run;
                     continue;
                 }
@@ -241,6 +349,24 @@ public sealed class RenderBufferBuilder(
                     continue;
                 }
 
+                if (context.Temperature.HasActiveBlock(chunk.Coord))
+                {
+                    for (int temperatureOffset = 0; temperatureOffset < repeat; temperatureOffset++)
+                    {
+                        WriteScalarPixel(
+                            context,
+                            worldX,
+                            worldY,
+                            index + temperatureOffset,
+                            pixels,
+                            emissive,
+                            occluder);
+                    }
+
+                    sx += repeat;
+                    continue;
+                }
+
                 ushort material = chunk.Material[CellAddressing.LocalIndex(worldX, worldY)];
                 uint color = palette[material];
                 if (hasColorNoise)
@@ -256,6 +382,46 @@ public sealed class RenderBufferBuilder(
                 }
 
                 if (hot.Type[material] == CellType.Solid || (flags & MaterialProperty.Static) != 0)
+                {
+                    occluder.Slice(index, repeat).Fill(byte.MaxValue);
+                }
+
+                sx += repeat;
+            }
+        }
+    }
+
+    private void BuildRowsStyledZoom(
+        RenderFrameContext context,
+        RenderBuffer target,
+        RenderAuxBuffers aux,
+        int start,
+        int end,
+        int pixelsPerCell)
+    {
+        Span<uint> pixels = target.Pixels;
+        Span<uint> emissive = aux.Emissive;
+        Span<byte> occluder = aux.Occluder;
+        int originX = (int)context.Camera.OriginWorldX;
+        int originY = (int)context.Camera.OriginWorldY;
+
+        for (int sy = start; sy < end; sy++)
+        {
+            int row = sy * target.Width;
+            int worldY = originY + (sy / pixelsPerCell);
+            for (int sx = 0; sx < target.Width;)
+            {
+                int worldX = originX + (sx / pixelsPerCell);
+                int repeat = Math.Min(pixelsPerCell - (sx % pixelsPerCell), target.Width - sx);
+                int index = row + sx;
+                uint color = SampleCell(context, worldX, worldY, out bool isEmissive, out bool isOccluder);
+                pixels.Slice(index, repeat).Fill(color);
+                if (isEmissive)
+                {
+                    emissive.Slice(index, repeat).Fill(color);
+                }
+
+                if (isOccluder)
                 {
                     occluder.Slice(index, repeat).Fill(byte.MaxValue);
                 }
@@ -294,6 +460,24 @@ public sealed class RenderBufferBuilder(
                     continue;
                 }
 
+                if (context.Temperature.HasActiveBlock(chunk.Coord))
+                {
+                    for (int temperatureOffset = 0; temperatureOffset < run; temperatureOffset++)
+                    {
+                        WriteScalarPixel(
+                            context,
+                            worldX + temperatureOffset,
+                            worldY,
+                            row + sx + temperatureOffset,
+                            pixels,
+                            emissive,
+                            occluder);
+                    }
+
+                    sx += run;
+                    continue;
+                }
+
                 ReadOnlySpan<ushort> materials = chunk.Material.Slice(
                     CellAddressing.LocalIndexFromLocal(localX, localY),
                     run);
@@ -318,7 +502,6 @@ public sealed class RenderBufferBuilder(
             camera.OriginWorldY == MathF.Truncate(camera.OriginWorldY) &&
             context.DebugCellColors is null &&
             !ShouldUseMaterialStyles(context) &&
-            !context.Temperature.HasActiveBlocks &&
             (_textures is null || !hot.HasTexturedMaterials);
     }
 
@@ -331,8 +514,32 @@ public sealed class RenderBufferBuilder(
             camera.OriginWorldX == MathF.Truncate(camera.OriginWorldX) &&
             camera.OriginWorldY == MathF.Truncate(camera.OriginWorldY) &&
             context.DebugCellColors is null &&
-            !context.Temperature.HasActiveBlocks &&
             (_textures is null || !hot.HasTexturedMaterials);
+    }
+
+    private bool TryGetStyledZoomPixelsPerCell(RenderFrameContext context, out int pixelsPerCell)
+    {
+        pixelsPerCell = 0;
+        CameraState camera = context.Camera;
+        if (!ShouldUseMaterialStyles(context) ||
+            camera.CellsPerPixel <= 0f ||
+            camera.CellsPerPixel >= 1f ||
+            camera.OriginWorldX != MathF.Truncate(camera.OriginWorldX) ||
+            camera.OriginWorldY != MathF.Truncate(camera.OriginWorldY) ||
+            context.DebugCellColors is not null)
+        {
+            return false;
+        }
+
+        float reciprocal = 1f / camera.CellsPerPixel;
+        int rounded = (int)MathF.Round(reciprocal);
+        if (rounded <= 1 || rounded > 8 || MathF.Abs(reciprocal - rounded) > 0.0001f)
+        {
+            return false;
+        }
+
+        pixelsPerCell = rounded;
+        return true;
     }
 
     private bool TryGetPaletteZoomPixelsPerCell(RenderFrameContext context, out int pixelsPerCell)
@@ -346,7 +553,6 @@ public sealed class RenderBufferBuilder(
             camera.OriginWorldY != MathF.Truncate(camera.OriginWorldY) ||
             context.DebugCellColors is not null ||
             ShouldUseMaterialStyles(context) ||
-            context.Temperature.HasActiveBlocks ||
             (_textures is not null && hot.HasTexturedMaterials))
         {
             return false;
@@ -397,9 +603,7 @@ public sealed class RenderBufferBuilder(
 
         for (int length = 0; length < unbrokenRun; length++)
         {
-            int currentX = worldX + length;
-            if (IsBoundaryEdge(context, materialId, currentX - 1, worldY) ||
-                IsBoundaryEdge(context, materialId, currentX, worldY - 1))
+            if (HasBoundaryEdge(context, chunk, localStart + length, materialId, worldX + length, worldY))
             {
                 return length;
             }
@@ -408,16 +612,19 @@ public sealed class RenderBufferBuilder(
         return unbrokenRun;
     }
 
-    private static bool IsStyledPaletteFastMaterial(MaterialHotTable hot, MaterialVisualTable visual, ushort materialId)
+    private bool IsStyledPaletteFastMaterial(MaterialHotTable hot, MaterialVisualTable visual, ushort materialId)
     {
         MaterialRenderStyle style = visual.RenderStyle[materialId];
         return (style is MaterialRenderStyle.Ground or MaterialRenderStyle.Solid or MaterialRenderStyle.Destructible) &&
-            (hot.Type[materialId] == CellType.Solid ||
+            (hot.Type[materialId] == CellType.Empty ||
+                hot.Type[materialId] == CellType.Solid ||
                 (hot.PropertyFlags[materialId] & MaterialProperty.Static) != 0) &&
-            hot.TextureId[materialId] < 0 &&
+            (_textures is null || hot.TextureId[materialId] < 0) &&
             visual.Opacity[materialId] == byte.MaxValue &&
             visual.HighlightColorBGRA[materialId] == 0 &&
-            (hot.BaseColorBGRA[materialId] >> 24) == byte.MaxValue;
+            (hot.Type[materialId] == CellType.Empty
+                ? (hot.BaseColorBGRA[materialId] >> 24) == 0
+                : (hot.BaseColorBGRA[materialId] >> 24) == byte.MaxValue);
     }
 
     // 空世界检测：材质 id 0 为透明 empty 且所有 resident chunk 全为 0 时可跳过像素写入。
@@ -706,7 +913,7 @@ public sealed class RenderBufferBuilder(
             case MaterialRenderStyle.Hazard:
                 styledEmissive = true;
                 color = ApplyPulseHighlight(color, highlightColor, context.FrameTimeSeconds);
-                color = ApplyBoundaryEdge(context, materialId, edgeColor, color, worldX, worldY);
+                color = ApplyBoundaryEdge(context, chunk, local, materialId, edgeColor, color, worldX, worldY);
                 break;
             case MaterialRenderStyle.Emissive:
                 styledEmissive = true;
@@ -716,7 +923,7 @@ public sealed class RenderBufferBuilder(
             case MaterialRenderStyle.Destructible:
             case MaterialRenderStyle.Ground:
             default:
-                color = ApplyBoundaryEdge(context, materialId, edgeColor, color, worldX, worldY);
+                color = ApplyBoundaryEdge(context, chunk, local, materialId, edgeColor, color, worldX, worldY);
                 break;
         }
 
@@ -731,31 +938,73 @@ public sealed class RenderBufferBuilder(
         return color;
     }
 
-    private uint ApplyBoundaryEdge(RenderFrameContext context, ushort materialId, uint edgeColor, uint color, int worldX, int worldY)
+    private uint ApplyBoundaryEdge(
+        RenderFrameContext context,
+        Chunk chunk,
+        int local,
+        ushort materialId,
+        uint edgeColor,
+        uint color,
+        int worldX,
+        int worldY)
     {
-        return edgeColor != 0 &&
-            (IsBoundaryEdge(context, materialId, worldX - 1, worldY) ||
-                IsBoundaryEdge(context, materialId, worldX, worldY - 1))
+        return edgeColor != 0 && HasBoundaryEdge(context, chunk, local, materialId, worldX, worldY)
             ? Blend(color, edgeColor, 0.65f)
             : color;
     }
 
-    private bool IsBoundaryEdge(RenderFrameContext context, ushort materialId, int neighborX, int neighborY)
+    private static bool IsBoundaryNeighbor(MaterialHotTable hot, ushort materialId, ushort neighborMaterial)
     {
-        if (!context.Chunks.TryGetChunk(CellAddressing.WorldToChunk(neighborX, neighborY), out Chunk neighborChunk))
+        return neighborMaterial != materialId &&
+            hot.Type[neighborMaterial] != CellType.Solid &&
+            (hot.PropertyFlags[neighborMaterial] & MaterialProperty.Static) == 0;
+    }
+
+    private bool HasBoundaryEdge(
+        RenderFrameContext context,
+        Chunk chunk,
+        int local,
+        ushort materialId,
+        int worldX,
+        int worldY)
+    {
+        MaterialHotTable hot = context.Materials.Hot;
+        int localX = CellAddressing.LocalCoord(worldX);
+        int localY = CellAddressing.LocalCoord(worldY);
+        ushort leftMaterial;
+        if (localX > 0)
+        {
+            leftMaterial = chunk.Material[local - 1];
+        }
+        else if (!context.Chunks.TryGetChunk(CellAddressing.WorldToChunk(worldX - 1, worldY), out Chunk leftChunk))
+        {
+            return true;
+        }
+        else
+        {
+            leftMaterial = leftChunk.Material[CellAddressing.LocalIndex(worldX - 1, worldY)];
+        }
+
+        if (IsBoundaryNeighbor(hot, materialId, leftMaterial))
         {
             return true;
         }
 
-        ushort neighborMaterial = neighborChunk.Material[CellAddressing.LocalIndex(neighborX, neighborY)];
-        if (neighborMaterial == materialId)
+        ushort topMaterial;
+        if (localY > 0)
         {
-            return false;
+            topMaterial = chunk.Material[local - EngineConstants.ChunkSize];
+        }
+        else if (!context.Chunks.TryGetChunk(CellAddressing.WorldToChunk(worldX, worldY - 1), out Chunk topChunk))
+        {
+            return true;
+        }
+        else
+        {
+            topMaterial = topChunk.Material[CellAddressing.LocalIndex(worldX, worldY - 1)];
         }
 
-        CellType neighborType = context.Materials.Hot.Type[neighborMaterial];
-        return neighborType != CellType.Solid &&
-            (context.Materials.Hot.PropertyFlags[neighborMaterial] & MaterialProperty.Static) == 0;
+        return IsBoundaryNeighbor(hot, materialId, topMaterial);
     }
 
     private static uint ApplyDamageCrack(uint color, byte damage, ushort integrity)

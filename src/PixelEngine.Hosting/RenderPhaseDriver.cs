@@ -79,13 +79,15 @@ public sealed class RenderPhaseDriver(
         bool forceRefreshForParticleErase = _sink.ParticleRenderMode == ParticleRenderMode.CpuStamp &&
             (_hadCpuParticleStamps || activeParticles.Length > 0);
         bool forceRefreshForCamera = !_hasBuiltCamera || CameraChanged(_lastBuiltCamera, camera);
+        bool forceRenderRefresh = forceRefreshForParticleErase || forceRefreshForCamera;
         RenderFrameContext frame = new(
             _chunks,
             _materials,
             _temperature,
             camera,
-            context.Timing.RunSim || forceRefreshForParticleErase || forceRefreshForCamera,
-            CellDebugOverlaysEnabled() ? _debugOverlays : null);
+            context.Timing.RunSim || forceRenderRefresh,
+            CellDebugOverlaysEnabled() ? _debugOverlays : null,
+            forceRebuild: forceRenderRefresh);
         _builder.Build(frame, _renderBuffer, _aux, context.Context.Profiler);
         if (_sink.ParticleRenderMode == ParticleRenderMode.CpuStamp)
         {

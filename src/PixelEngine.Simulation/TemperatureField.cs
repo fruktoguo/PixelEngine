@@ -100,6 +100,16 @@ public sealed class TemperatureField
     public bool HasActiveBlocks => _blocks.Count != 0;
 
     /// <summary>
+    /// 判断指定 64x64 chunk 是否包含活动温度子块，供渲染相位按 chunk 保留 palette 快路径。
+    /// </summary>
+    /// <param name="coord">chunk 坐标。</param>
+    /// <returns>存在活动温度子块时返回 <see langword="true"/>。</returns>
+    public bool HasActiveBlock(ChunkCoord coord)
+    {
+        return _blocks.ContainsKey(coord);
+    }
+
+    /// <summary>
     /// 温度子块存储格式。
     /// </summary>
     public TemperatureStorageKind StorageKind { get; }

@@ -44,6 +44,8 @@
 - [x] 小任务回退已落地：活跃任务或活跃 chunk 少时回退单线程，避免 barrier 开销主导。
 - [x] SIMD 规则已落实：温度 stencil、palette→BGRA、bulk fill/clear、dirty flag 扫描等可向量化；sand/liquid movement 明确保留 scalar。
 - [x] RenderStyle 着色质量档已接入：开启时禁用 zoom palette 行复制，按世界空间逐像素计算 BGRA；关闭时恢复 palette 快路径。
+
+当前实现补充：Full 样式档的整数放大视口改为按世界 cell 一次采样、按屏幕重复填充；稳定帧缓存按 camera/material/resident chunk/dirty 元数据校验复用，活动温度 chunk 保守地禁用整帧复用但不再阻塞其他 chunk 的 palette 快路径。`RenderBufferViewportBenchmarks` 在 Ryzen 7 5800X / .NET 10 上记录 1280x720 强制重建 6.458ms、稳定复用 3.137us，均为零托管分配。
 - [x] bounds-check 消除流程已建立：热路径使用 `MemoryMarshal.GetArrayDataReference`、`Unsafe.Add` 或 fixed 指针漫游，并以 disassembly guard 守门。
 - [x] GC 策略已建立：Workstation 与 Server GC 实测定档，`EngineGcCoordinator` 串行化 GC latency mode 与 NoGCRegion 等进程级状态，并由 `PerformanceHardeningMemoryDisciplineTests` 覆盖失败/结束路径的 gate 释放与并发 latency mode 阻塞语义。
 - [x] GPU 下放边界已明确：光照、bloom、高密度粒子和可选非权威 pass 可走 GPU；权威 cell 网格留 CPU，无 GPU readback 卡流水线。

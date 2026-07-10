@@ -10,10 +10,10 @@
   - 设计来源：`plan/14-testing-benchmarking.md`；`plan/16-performance-hardening.md`。
   - 验收：至少覆盖 full-active CA、typical dirty、render-buffer、physics、粒子和 UI allocation；每项有 warmup、多次 measured iteration、commit/RID/硬件信息和稳定报告路径。
 
-- [ ] `PERF-002` 优化 CPU `BuildRenderBuffer` 路径，使普通 720p/1080p Demo 不再由 render-buffer 主导掉帧。
+- [~] `PERF-002` 优化 CPU `BuildRenderBuffer` 路径，使普通 720p/1080p Demo 不再由 render-buffer 主导掉帧。
   - 优先级：P0。
   - 依赖：`PERF-001`。
-  - 当前事实：本轮 0 active-cell 窗口短跑中 render-buffer 平均约 17.1ms、p99 约 25.5ms，已超过完整渲染目标预算。
+  - 当前事实：同场景同硬件优化后 0 active-cell 窗口短跑 render-buffer 平均 7.475ms、p99 13.079ms（前值 15.362ms/22.644ms）；1280x720 隔离基准强制重建平均 6.458ms，稳定复用 3.137us，均为 0B allocation。
   - 设计来源：`plan/08-rendering.md`；`plan/16-performance-hardening.md`；架构 §1.4/§12。
   - 验收：用同场景、同分辨率、同硬件前后对比；render-buffer 与 render+lighting+post 分项满足正式校准预算；画面逐像素/容差回归通过；稳态零分配。
 
