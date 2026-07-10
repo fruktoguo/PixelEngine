@@ -2,6 +2,8 @@
 
 > **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
 
+> **DOC-002 历史证据口径（2026-07-10）**：后文 checkbox 与“已通过/已完成”叙述冻结自旧计划快照 `179efc3a`，迁移基线为 `5af1541f`，均不构成 live 状态；证据等级以 [稳定 Evidence Index](../docs/evidence-index.md) 为准。未入索引的 `artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/` 仅是可再生历史线索；替代报告与重跑命令见 [DOC-002 校正报告](../docs/evidence-2026-07-10-doc-002-legacy-plan-audit.md)。
+
 > 范围锚点：本文件定义**离网格的自由粒子系统**与 **cell↔particle handshake**，归属 `PixelEngine.Simulation`（命名空间 `PixelEngine.Simulation.Particles`）。网格 cell 的 CA 规则在 `plan/03-simulation-kernel.md`；粒子的**渲染合成**在 `plan/08-rendering.md`（CPU stamp）与 `plan/09-gpu-compute.md`（GPU point-sprite）；材质定义（含密度、是否发光）在 `plan/04-materials-reactions-temperature.md`。
 > 权威设计依据：架构文档 `docs/PixelEngine-架构与需求设计.md` §7.6（grid cell vs free particle）、§3.3（帧相位 3/7/9）、§9.3（粒子合成）、§19 R13（粒子泄漏）。技术栈：`plan/00`。开发宪法：`AGENTS.md`。
 > 状态：`- [ ]` 未开始 / `- [x]` 完成并有可追溯证据 / `- [!]` 外部证据、人工验收、硬件、发行或 native 阻塞；进行中事项必须拆成已完成子项与未完成/阻塞子项。

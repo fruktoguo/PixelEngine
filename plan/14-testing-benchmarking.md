@@ -2,6 +2,10 @@
 
 > **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
 
+> **DOC-002 历史证据口径（2026-07-10）**：后文 checkbox 与“已通过/已完成”叙述冻结自旧计划快照 `179efc3a`，迁移基线为 `5af1541f`，均不构成 live 状态；证据等级以 [稳定 Evidence Index](../docs/evidence-index.md) 为准。未入索引的 `artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/` 仅是可再生历史线索；替代报告与重跑命令见 [DOC-002 校正报告](../docs/evidence-2026-07-10-doc-002-legacy-plan-audit.md)。
+
+> **DOC-002 CI 校正**：后文“测试全绿”“CI 门禁”旧 `[x]` 只表示相应本地自动化或门禁实现曾通过；“6-RID 矩阵”旧 `[x]` 只表示矩阵已接线 / 规则已覆盖，不表示 hosted runner 全绿。`CI-001` 的稳定等级是 `local_static_validation_complete`，首次当前 HEAD 远端 run 与长期矩阵仍分别由 `CI-002`、`CI-003` 管理。
+
 > 本文件定义 PixelEngine 的全部自动化验证设施：xUnit 单元 / 性质测试、BenchmarkDotNet 性能基准、以及把二者接入 CI 的门禁。权威依据：架构文档 §16.2（测试策略）、§17.3（反汇编与微基准守门）、§12.6/§12.7/§12.8（性能校验）、以及各被测子系统对应章节。开发宪法：`../AGENTS.md`（尤其 §7 测试与验证）。技术栈：`00-conventions-and-techstack.md`。
 > 状态约定：`- [x]` 已有源码、测试、工具、报告或 plan 证据；`- [ ]` 未完成目标；`- [!]` 阻塞、证据债、人工验收或外部环境限制。
 

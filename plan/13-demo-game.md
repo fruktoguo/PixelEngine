@@ -2,6 +2,10 @@
 
 > **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
 
+> **DOC-002 历史证据口径（2026-07-10）**：后文 checkbox 与“已通过/已完成”叙述冻结自旧计划快照 `179efc3a`，迁移基线为 `5af1541f`，均不构成 live 状态；证据等级以 [稳定 Evidence Index](../docs/evidence-index.md) 为准。未入索引的 `artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/` 仅是可再生历史线索；替代报告与重跑命令见 [DOC-002 校正报告](../docs/evidence-2026-07-10-doc-002-legacy-plan-audit.md)。
+
+> **DOC-002 Demo 校正**：唯一正式验收路线是 canonical `SCOPE-006` 的“横向熔岩矿洞逃生”。§5 旧“引水成石桥 / 坍塌木桥”行已被取代，只保留为机制测试；`ObjectiveCrystal`、`crystal` 与采集型 `MineYield` 只保留为旧任务 dogfood，当前路线中的 `Excavator` / `MineYield` 是通用开路与事件能力，water 龙头也只是材质解法而非水位目标。后文 `artifacts/*.bmp` 及“窗口短跑 / scripted / preflight 通过”均是历史本地机器探针，不是长期或人工证据，也不替代 `DEMO-*` 的真实窗口验收。
+
 > 本文件定义在 PixelEngine 引擎之上开发的Showcase Demo Game。Demo 与引擎的关系等同「Unity 游戏之于 Unity 引擎」：**只依赖引擎的公开 API，绝不触碰引擎内部类**。Demo 是引擎公开 API 的 dogfood 验证——若某玩法能力只能靠引擎内部实现，即判定引擎 API 设计有缺陷，记为「需引擎补 API」并上报，**不得在 Demo 里开后门**（`AGENTS.md §0`）。
 > 权威设计依据：`../docs/PixelEngine-架构与需求设计.md`（下称架构文档）。技术栈定稿：`00-conventions-and-techstack.md`。开发宪法：`../AGENTS.md`。
 > 状态约定：`- [x]` 已有源码、测试、工具、报告或 plan 证据；`- [ ]` 未完成目标；`- [!]` 阻塞、证据债、人工验收或外部环境限制。

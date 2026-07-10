@@ -2,6 +2,10 @@
 
 > **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
 
+> **DOC-002 历史证据口径（2026-07-10）**：后文 checkbox 与“已通过/已完成”叙述冻结自旧计划快照 `179efc3a`，迁移基线为 `5af1541f`，均不构成 live 状态；证据等级以 [稳定 Evidence Index](../docs/evidence-index.md) 为准。未入索引的 `artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/` 仅是可再生历史线索；替代报告与重跑命令见 [DOC-002 校正报告](../docs/evidence-2026-07-10-doc-002-legacy-plan-audit.md)。
+
+> **DOC-002 UI / IME 证据校正**：后文 `{SCRATCH}/...`、`scratch/...` 与 DPI capture 已全部降为历史线索；测试过滤器和 native build 命令是复现入口，自动化边界由 canonical `BASE-014` 记录，真实候选窗、composition 手感、native profile 与人工 UX 仍由 `UI-*` / `OPT-*` 管理。
+
 > 产品依据：`../docs/PixelEngine-核心目标与产品定位.md`。本文件是 Web-first 透明 HTML UI / Web-first UI Runtime 状态账本，负责 `PixelEngine.UI`、ManagedFallback/RmlUi/Ultralight 三后端、same-window/same-GL 透明合成、C#↔UI 桥、输入三级仲裁、FontEngine、`content/ui`、native dynamic-only gate 与 M14/M15 UI 证据。
 > 状态约定：`- [x]` 已有源码、测试、工具、报告或 plan 证据；`- [ ]` 未完成目标；`- [!]` 外部证据债、人工验收、硬件/native/发行/IME/真实窗口阻塞。本文不再使用进行中状态，所有部分完成事项拆成已完成子项与未完成/阻塞子项。
 

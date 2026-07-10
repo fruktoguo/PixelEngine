@@ -2,6 +2,10 @@
 
 > **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
 
+> **DOC-002 历史证据口径（2026-07-10）**：后文 checkbox 与“已通过/已完成”叙述冻结自旧计划快照 `179efc3a`，迁移基线为 `5af1541f`，均不构成 live 状态；证据等级以 [稳定 Evidence Index](../docs/evidence-index.md) 为准。未入索引的 `artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/` 仅是可再生历史线索；替代报告与重跑命令见 [DOC-002 校正报告](../docs/evidence-2026-07-10-doc-002-legacy-plan-audit.md)。
+
+> **DOC-002 产物路径校正**：后文 `artifacts/publish`、`artifacts/package` 和 staging 路径是 publish/audit 命令的可再生输出参数，不是稳定证据链接；发行完成只能由 canonical `REL-*` 及稳定 manifest/hash 报告证明。
+
 > 本文件是 M15 的发行证据账本，承载玩家包、Windows-first active set、长期 6-RID 保留矩阵、R2R/AOT、native 打包、签名、公证、GitHub Release 与 build-player 的可追溯状态。
 > 产品北极星：Engine Core + Unity-like Editor + Web-first UI Runtime + Showcase Demo Game。技术依据：`../docs/PixelEngine-架构与需求设计.md`、`00-conventions-and-techstack.md`、`../AGENTS.md`。
 > 状态标记：只使用 `- [x]`、`- [ ]`、`- [!]`。进行中状态必须拆成已完成子项与未完成或阻塞子项。
