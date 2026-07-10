@@ -1,5 +1,13 @@
 # Plan 19 — Unity-like Editor 独立应用（PixelEngine.Editor.Shell）
 
+## 编辑器产品化修复（2026-07-11）
+
+真实实例工程走查确认，M13 的自动化结构闭合并不等于产品交互已经正确。当前实现把 Editor 当前场景与 Project StartScene 混为一体，导致浏览测试场景会改写受版本控制的启动配置；所有主要转场缺少统一 dirty guard；Recent 早于 Session 成功写入且 scripted probe 污染真实用户目录；Project Window 只扫描 Content，却把 Script 创建到不参与项目 ScriptSource 编译的路径；Asset 查询还会在 Inspector 帧循环中递归扫盘、解析全库并重写 manifest。上述均为确定性实现缺陷，不得继续归类为“只缺人工 reviewer”。
+
+产品化修复按四层收敛。第一层是用户级 workspace：显式 CLI 优先，其次恢复最后一次成功工程与每工程 last scene，Project StartScene 只由 Project Settings 修改；New/Open Scene、切换/关闭工程和 Exit 共用 Save/Don't Save/Cancel 转场协调器，失败保持原 Session/Undo/选择，关键文档走原子替换，scripted probe 使用隔离 user-data。第二层是 Asset Database：Content 与 ScriptSource 是显式 logical root，查询纯内存、增量失效，manifest 写入只发生在索引变更提交时，stable id 贯穿选择与操作。第三层是 Project Window：采用 folder tree、breadcrumb、直接子项与上下文操作，资源 descriptor 提供本地化类型、用途、badge 和摘要，Scene/Script 双击走各自主操作。第四层是 Scene authoring：Scene View 拥有独立 camera/authoring 语义，消费声明式初始 world 或受控 procedural preview，并绘制网格、边界与对象 overlay；Editor 和 Player 必须使用同一项目脚本与世界来源，不得再用同全名空壳 Behaviour 冒充 dogfood。
+
+对应 live 状态只在 `plan/tasks/50-product-editor-ui-demo.md` 的 `EDITOR-004`–`EDITOR-007` 维护；本节仅作为详细设计与边界依据，不新增历史 checkbox。
+
 > **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
 
 > **DOC-002 历史证据口径（2026-07-10）**：后文 checkbox 与“已通过/已完成”叙述冻结自旧计划快照 `179efc3a`，迁移基线为 `5af1541f`，均不构成 live 状态；证据等级以 [稳定 Evidence Index](../docs/evidence-index.md) 为准。未入索引的 `artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/` 仅是可再生历史线索；替代报告与重跑命令见 [DOC-002 校正报告](../docs/evidence-2026-07-10-doc-002-legacy-plan-audit.md)。
