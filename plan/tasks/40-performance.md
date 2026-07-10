@@ -27,7 +27,7 @@
 
 ## 零分配与数据结构
 
-- [~] `PERF-004` 消除 `SimulationKernel` 批量编辑捕获 lambda和 `PhysicsSystem.SyncStep` 实例方法组委托的帧/交互路径分配。
+- [x] `PERF-004` 消除 `SimulationKernel` 批量编辑捕获 lambda和 `PhysicsSystem.SyncStep` 实例方法组委托的帧/交互路径分配。
   - 优先级：P1。
   - 依赖：`BASE-003`、`BASE-006`。
   - 验收：改为无捕获 callback、泛型静态路径或显式循环；BenchmarkDotNet/分配测试证明对应调用 0 B；行为测试全绿。
