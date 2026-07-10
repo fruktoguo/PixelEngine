@@ -1182,13 +1182,13 @@ public sealed class PlayableProjectileTool : Behaviour
     /// </summary>
     private sealed class CollapseScanScratch
     {
-        public bool[] Visited { get; private set; } = Array.Empty<bool>();
+        public bool[] Visited { get; private set; } = [];
 
-        public bool[] WorkingMask { get; private set; } = Array.Empty<bool>();
+        public bool[] WorkingMask { get; private set; } = [];
 
-        public int[] Queue { get; private set; } = Array.Empty<int>();
+        public int[] Queue { get; private set; } = [];
 
-        public int[] Cells { get; private set; } = Array.Empty<int>();
+        public int[] Cells { get; private set; } = [];
 
         internal int Capacity => Visited.Length;
 
@@ -1220,10 +1220,10 @@ public sealed class PlayableProjectileTool : Behaviour
 
         public void Release()
         {
-            Visited = Array.Empty<bool>();
-            WorkingMask = Array.Empty<bool>();
-            Queue = Array.Empty<int>();
-            Cells = Array.Empty<int>();
+            Visited = [];
+            WorkingMask = [];
+            Queue = [];
+            Cells = [];
         }
     }
 
