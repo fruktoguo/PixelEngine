@@ -40,7 +40,7 @@
   - 依赖：`PLAN-001`。
   - 设计来源：`plan/14-testing-benchmarking.md` §3.10–§3.11、§5–§6；`plan/15-build-packaging-distribution.md` §1、§5–§6；`plan/17-roadmap-execution-order.md` §2、§4；`plan/tasks/70-evidence-contracts.md`。
   - 验收：已完成任务不再只引用会被清理的 `scratch/`/临时 `artifacts/`；历史报告明确标记旧 commit；preflight 输出可追踪到原始材料。
-  - 证据：`docs/evidence-index.json`、`docs/evidence-index.md`、`tools/validate-evidence-index.ps1`；校验输出 `Evidence index valid: 17 entries, 45 referenced task IDs.`；`TaskEvidenceCatalogIndexesAllEvidencePreflightStatusesAsNonPassing` 通过 1/1。
+  - 证据：`docs/evidence-index.json`、`docs/evidence-index.md`、`tools/validate-evidence-index.ps1`；entry / task 数量由 `pwsh tools/validate-evidence-index.ps1` 实时重算，不在本条复制固定值；`TaskEvidenceCatalogIndexesAllEvidencePreflightStatusesAsNonPassing` 通过 1/1。
 
 - [!] `EVID-002` 完成 GL/OpenAL/Box2D/ALC 的外部 native leak detector。阻塞：需要冻结候选 commit、detector 环境和四类同源报告。
   - 优先级：P1。
@@ -55,7 +55,7 @@
 
 ## 玩家包与 Release
 
-- [!] `REL-001` 从当前候选 HEAD 重建 Editor 和 win-x64 R2R/AOT 玩家包，替换当前绑定旧 `85e1914d` 的最终输出。阻塞：`CI-002`、`ARCH-001`–`ARCH-005`、`PERF-002`–`PERF-007` 尚未完成；不等待 M15 人工体验任务。
+- [!] `REL-001` 从当前候选 HEAD 重建 Editor 和 win-x64 R2R/AOT 玩家包，替换当前绑定旧 `85e1914d` 的最终输出。阻塞：`ARCH-001`–`ARCH-005`、`PERF-002`、`PERF-004`–`PERF-007` 与 `DOC-002` 已完成；阶段 A/B 仍缺 `CI-002` 的当前 HEAD 远端全绿，以及 `PERF-003` / `PERF-011` 的外部硬件、权限或指标决策证据。三项闭合后才能冻结候选 HEAD；不等待 M15 人工体验任务。
   - 优先级：P1。
   - 验收：build-result、launcher、content、NOTICE、SHA256、player-only audit、窗口 smoke 全部通过；manifest 绑定当前 HEAD。
 
