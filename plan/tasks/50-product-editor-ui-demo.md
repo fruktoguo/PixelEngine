@@ -86,7 +86,7 @@
 
 ## 对外文档
 
-- [~] `DOC-001` 新增根 README、Getting Started 和一个从新建工程到 build-player 的最小完整教程。
+- [!] `DOC-001` 新增根 README、Getting Started 和一个从新建工程到 build-player 的最小完整教程。阻塞：文档骨架、玩家脚本链修复及本机干净工程 R2R 复验已完成；待 `EDITOR-003` 独立人工 reviewer 与 `REL-001` 冻结 candidate 后，按最终界面/命令从干净目录人工复走 Project Picker → Script → Play → Build And Run。
   - 优先级：P1。
   - 依赖：`EDITOR-003`、`REL-001` 的命令和界面稳定后收口；可先写骨架。
   - 验收：全新用户能安装前置、启动 Editor、创建脚本/场景、Play、构建并运行玩家包；命令在干净目录复验。

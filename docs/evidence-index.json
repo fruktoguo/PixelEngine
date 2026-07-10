@@ -469,6 +469,19 @@
       "notes": "独立 SceneAuthoringCamera、lava-mine 受控 procedural preview、网格/边界/marker/Frame、dock 首帧 framing、Demo Editor/Player 同源 scripts 与动态编译完整实现均已闭合；真实窗口短跑不替代 EDITOR-001–003 的人工 reviewer。"
     },
     {
+      "entryId": "doc-001-getting-started-20260711",
+      "taskIds": ["DOC-001"],
+      "evidenceState": "documentation_skeleton_and_local_clean_project_complete_pending_dependencies",
+      "commit": "a324c5fcc2b00a911c44febb7133196fb7149fed",
+      "runSessionId": "local-20260711-doc001-clean-project-r2r",
+      "runIdentityStatus": "captured",
+      "hardware": "Windows 11 build 26100; AMD Ryzen 7 5800X 8c/16t; AMD Radeon RX 7900 XT; .NET SDK 10.0.108; win-x64 R2R",
+      "command": "build-player.ps1 win-x64/r2r with clean external project; run packaged PixelEngine.Demo.dll --content ../content --headless --ticks 2 --no-hot-reload; targeted Hosting tests; full Demo tests; validate-task-catalog.ps1",
+      "reportPath": "docs/evidence-2026-07-11-doc-001-getting-started.md",
+      "sha256": "4bdf8804f075bfc839882a364d89903f22437ff2d55df1c8c021776392b9cad2",
+      "notes": "README/Getting Started/首个工程教程、本机干净工程 R2R 构建及随包脚本执行已完成；待 EDITOR-003 reviewer 与 REL-001 frozen candidate 后按最终 UI/命令人工复走，不能据此将 DOC-001 标记完成。"
+    },
+    {
       "entryId": "editor-preferences-ui-scale-20260710",
       "taskIds": ["EDITOR-003"],
       "evidenceState": "automated_preferences_slice_complete_pending_human_review",
