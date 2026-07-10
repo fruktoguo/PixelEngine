@@ -4,8 +4,33 @@
 
 ## Unity-like Editor
 
+- [~] `EDITOR-004` 建立 Editor workspace 恢复、转场数据安全与用户状态隔离。
+  - 优先级：P0。
+  - 依赖：`BASE-013`。
+  - 设计来源：`plan/19-standalone-editor-app.md` §编辑器产品化修复（2026-07-11）。
+  - 验收：无显式命令行工程时自动恢复最后一次成功打开的工程；场景优先级为 CLI override > 每工程 last scene > Project StartScene；打开/新建场景不再修改启动场景；New/Open Scene、切换/关闭工程、Exit 均受 Save/Don't Save/Cancel dirty guard 保护；缺失或损坏场景不会伪装为空场景；自动化默认使用隔离 user-data，不能污染真实 Recent/Layout/Workspace；Recent、Workspace、project 与 scene 关键写入采用原子替换且失败不破坏旧文件。
+
+- [ ] `EDITOR-005` 修正 Asset Database 的 Content/ScriptSource 根、缓存与增量刷新语义。
+  - 优先级：P0。
+  - 依赖：`EDITOR-004`。
+  - 设计来源：`plan/19-standalone-editor-app.md` §编辑器产品化修复（2026-07-11）。
+  - 验收：Project Window 能显示并创建到真正参与编译/热重载的 ScriptSource；Content 与 ScriptSource 均有稳定、不可越界的 logical root；只读查询不扫描磁盘、不解析全库、不写 manifest；外部变更可增量失效并刷新；空工程不会逐帧刷新；manifest 损坏可诊断恢复；选择以 stable asset id 为主并在移动/重命名后跟随。
+
+- [ ] `EDITOR-006` 重做 Project Window 信息架构、资源语义与主操作。
+  - 优先级：P0。
+  - 依赖：`EDITOR-005`。
+  - 设计来源：`plan/19-standalone-editor-app.md` §编辑器产品化修复（2026-07-11）。
+  - 验收：双栏 folder tree + breadcrumb + 直接子项导航可用；创建/导入/移动/删除收进明确工具栏或上下文菜单；类型、用途、启动/当前/测试资产 badge 与摘要可理解；Scene 双击直接打开且不改变 StartScene，Script 双击打开真正源码；搜索覆盖路径、类型、用途与摘要；Demo 的 materials/reactions/startup/weapons/audio/UI/font/probe 文件无需猜文件名即可理解用途。
+
+- [ ] `EDITOR-007` 建立 Scene View 独立 authoring 可视化并让实例工程真实可见。
+  - 优先级：P0。
+  - 依赖：`EDITOR-005`、`EDITOR-006`。
+  - 设计来源：`plan/19-standalone-editor-app.md` §编辑器产品化修复（2026-07-11）；架构 §17.4。
+  - 验收：Scene View 与 Game View 不再共用运行时 camera/语义；Edit 模式显示声明式初始 world 或 procedural preview，并叠加网格、场景边界、对象 marker/name、Frame All/Frame Selected；Editor 与 Player 使用同一份项目脚本/世界来源，不保留同全名空壳 Behaviour；Demo 默认打开 lava-mine 时 Scene View 非空，empty/probe 场景有清晰测试标识且不会污染下次启动。
+
 - [!] `EDITOR-001` 完成 Project Window 真实工作流验收。阻塞：需要真实窗口 reviewer 和当前 HEAD 录屏/报告。
   - 优先级：P1。
+  - 依赖：`EDITOR-004`、`EDITOR-005`、`EDITOR-006`、`EDITOR-007`。
   - 设计来源：`plan/19-standalone-editor-app.md`。
   - 验收：文件夹浏览、创建、导入、搜索/过滤、选择→Inspector、drag/drop、move/rename、引用重写、删除确认、只读预览和错误恢复全部使用真实鼠标键盘走通。
 
