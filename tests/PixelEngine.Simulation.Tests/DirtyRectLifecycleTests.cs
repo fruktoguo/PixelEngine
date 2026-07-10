@@ -1,3 +1,4 @@
+using PixelEngine.Core;
 using Xunit;
 
 namespace PixelEngine.Simulation.Tests;
@@ -45,6 +46,21 @@ public sealed class DirtyRectLifecycleTests
         Assert.Equal(DirtyRect.Empty, chunk.CurrentDirty);
         Assert.Equal(DirtyRect.Empty, chunk.WorkingDirty);
         Assert.Equal(ChunkState.Sleeping, chunk.State);
+    }
+
+    /// <summary>
+    /// 验证 working dirty 已覆盖整个 chunk 时，后续 cell 合并仍保持 Full 语义。
+    /// </summary>
+    [Fact]
+    public void ChunkMarkWorkingDirtyKeepsFullRectAfterFurtherCellMarks()
+    {
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        chunk.SetWorkingDirty(DirtyRect.Full);
+
+        chunk.MarkWorkingDirty(10, 10, EngineConstants.DirtyRectPadding);
+
+        Assert.Equal(DirtyRect.Full, chunk.WorkingDirty);
+        Assert.Equal(ChunkState.Awake, chunk.State);
     }
 
     /// <summary>

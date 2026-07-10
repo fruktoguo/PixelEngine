@@ -17,7 +17,7 @@
   - 设计来源：`plan/08-rendering.md`；`plan/16-performance-hardening.md`；架构 §1.4/§12。
   - 验收：用同场景、同分辨率、同硬件前后对比；render-buffer 与 render+lighting+post 分项满足正式校准预算；画面逐像素/容差回归通过；稳态零分配。
 
-- [ ] `PERF-003` 让 full-active CA 达到 2–4M cells/8ms 目标，或基于代表硬件和产品场景正式重校准架构指标。
+- [~] `PERF-003` 让 full-active CA 达到 2–4M cells/8ms 目标，或基于代表硬件和产品场景正式重校准架构指标。
   - 优先级：P0。
   - 依赖：`PERF-001`。
   - 当前事实：历史正式记录为 262,144 cells/38.327ms，距离原目标约 36.6–73.1 倍。
