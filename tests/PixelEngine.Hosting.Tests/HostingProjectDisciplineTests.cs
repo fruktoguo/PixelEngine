@@ -337,6 +337,9 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("Remove-EditorDeveloperMetadata $finalEditorDir", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("editorSymbolsIncluded = $IncludeEditorSymbols.IsPresent", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("editorDeveloperMetadataPolicy = if ($IncludeEditorSymbols.IsPresent) { 'included-for-diagnostics' } else { 'pdb-and-xml-pruned' }", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("-Name 'native-build'", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("tools/build-native.ps1", finalOutputScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("-Tail 80 -Raw", finalOutputScript, StringComparison.Ordinal);
     }
 
     /// <summary>

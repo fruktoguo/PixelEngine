@@ -75,7 +75,7 @@ function Get-LogTail([string]$Path) {
     return ''
   }
 
-  return (Get-Content -LiteralPath $Path -Tail 80 -Raw)
+  return ((Get-Content -LiteralPath $Path -Tail 80) -join [Environment]::NewLine)
 }
 
 function Invoke-ProcessChecked(
@@ -233,9 +233,18 @@ $dotnet = (Get-Command dotnet -ErrorAction Stop).Source
 $pwsh = (Get-Command pwsh -ErrorAction Stop).Source
 $gitCommit = (& git -C $repoRoot rev-parse HEAD).Trim()
 
+$nativeBuildScript = Join-Path $repoRoot 'tools/build-native.ps1'
 $editorProject = Join-Path $repoRoot 'apps/PixelEngine.Editor.Shell/PixelEngine.Editor.Shell.csproj'
 $demoBuildScript = Join-Path $repoRoot 'tools/build-player.ps1'
 $editorExe = Join-Path $editorPublish 'PixelEngine.Editor.Shell.exe'
+
+$nativeBuildResult = Invoke-ProcessChecked `
+  -Name 'native-build' `
+  -FilePath $pwsh `
+  -Arguments @('-NoProfile', '-File', $nativeBuildScript, '-Rid', $Rid, '-Configuration', $Configuration) `
+  -WorkingDirectory $repoRoot `
+  -StdoutPath (Join-Path $logRoot 'native-build.stdout.log') `
+  -StderrPath (Join-Path $logRoot 'native-build.stderr.log')
 
 $editorPublishResult = Invoke-ProcessChecked `
   -Name 'editor-publish' `
