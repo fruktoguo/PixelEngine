@@ -379,6 +379,83 @@ public sealed class RenderBufferBuilderTests
     }
 
     /// <summary>
+    /// 验证 sim tick 没有 dirty rect 时复用已构建的 render buffer 与辅助缓冲，而不是重复扫描视口。
+    /// </summary>
+    [Fact]
+    public void BuildReusesStableBuffersWhenSimulationStepHasNoVisualDirty()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        SetMaterial(chunk, 0, 0, 1);
+        chunks.Add(chunk);
+        CountingChunkSource counting = new(chunks);
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "sand", CellType.Powder, 0xFF010203u));
+        RenderBuffer target = new(4, 4);
+        RenderAuxBuffers aux = new(4, 4);
+        RenderBufferBuilder builder = new();
+        RenderFrameContext context = new(
+            counting,
+            materials,
+            new TemperatureField(),
+            CameraState.OneToOne(0, 0, 4, 4),
+            simStepped: true);
+
+        builder.Build(context, target, aux);
+        uint[] pixels = target.Pixels.ToArray();
+        uint[] emissive = aux.Emissive.ToArray();
+        byte[] occluder = aux.Occluder.ToArray();
+        counting.Reset();
+
+        builder.Build(context, target, aux);
+
+        Assert.Equal(0, counting.TryGetChunkCalls);
+        Assert.Equal(pixels, target.Pixels.ToArray());
+        Assert.Equal(emissive, aux.Emissive.ToArray());
+        Assert.Equal(occluder, aux.Occluder.ToArray());
+    }
+
+    /// <summary>
+    /// 验证未由 dirty rect 表达的视觉变化可强制重建稳定帧缓存。
+    /// </summary>
+    [Fact]
+    public void BuildForceRebuildIgnoresStableFrameCache()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        SetMaterial(chunk, 0, 0, 1);
+        chunks.Add(chunk);
+        CountingChunkSource counting = new(chunks);
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "sand", CellType.Powder, 0xFF010203u));
+        RenderBuffer target = new(1, 1);
+        RenderAuxBuffers aux = new(1, 1);
+        RenderBufferBuilder builder = new();
+        RenderFrameContext stable = new(
+            counting,
+            materials,
+            new TemperatureField(),
+            CameraState.OneToOne(0, 0, 1, 1),
+            simStepped: true);
+        builder.Build(stable, target, aux);
+        counting.Reset();
+
+        RenderFrameContext forced = new(
+            counting,
+            materials,
+            new TemperatureField(),
+            CameraState.OneToOne(0, 0, 1, 1),
+            simStepped: false,
+            forceRebuild: true);
+        builder.Build(forced, target, aux);
+
+        Assert.True(counting.TryGetChunkCalls > 0);
+        Assert.Equal(0xFF010203u, target.Pixels[0]);
+    }
+
+    /// <summary>
     /// 验证全空材质世界将像素与辅助缓冲清零为透明。
     /// </summary>
     [Fact]
@@ -652,14 +729,15 @@ public sealed class RenderBufferBuilderTests
             Material(1, "stone", CellType.Solid, 0xFF102030u) with
             {
                 RenderStyle = MaterialRenderStyle.Solid,
+                TextureId = 12,
             });
-        RenderBuffer target = new(32, 1);
-        RenderAuxBuffers aux = new(32, 1);
+        RenderBuffer target = new(64, 1);
+        RenderAuxBuffers aux = new(64, 1);
         RenderFrameContext context = new(
             counting,
             materials,
             new TemperatureField(),
-            CameraState.OneToOne(0, 0, 32, 1),
+            CameraState.OneToOne(0, 0, 64, 1),
             simStepped: true);
 
         new RenderBufferBuilder().Build(context, target, aux);
@@ -667,8 +745,10 @@ public sealed class RenderBufferBuilderTests
         Assert.True(
             counting.TryGetChunkCalls <= 2,
             $"未破损纯固体样式段应按 chunk row 分段构建，避免逐像素取 chunk，actual calls={counting.TryGetChunkCalls}。");
-        Assert.All(target.Pixels.ToArray(), static value => Assert.Equal(0xFF102030u, value));
-        Assert.All(aux.Occluder.ToArray(), static value => Assert.Equal(byte.MaxValue, value));
+        Assert.All(target.Pixels[..32].ToArray(), static value => Assert.Equal(0xFF102030u, value));
+        Assert.All(target.Pixels[32..].ToArray(), static value => Assert.Equal(0u, value));
+        Assert.All(aux.Occluder[..32].ToArray(), static value => Assert.Equal(byte.MaxValue, value));
+        Assert.All(aux.Occluder[32..].ToArray(), static value => Assert.Equal((byte)0, value));
     }
 
     /// <summary>
@@ -745,6 +825,64 @@ public sealed class RenderBufferBuilderTests
         Assert.Equal(scalar.Pixels.ToArray(), segmented.Pixels.ToArray());
         Assert.Equal(scalarAux.Emissive.ToArray(), segmentedAux.Emissive.ToArray());
         Assert.Equal(scalarAux.Occluder.ToArray(), segmentedAux.Occluder.ToArray());
+    }
+
+    /// <summary>
+    /// 验证样式着色在整数放大时每个世界 cell 只采样一次，并与标量像素映射完全一致。
+    /// </summary>
+    [Fact]
+    public void BuildStyledZoomPathMatchesScalarPath()
+    {
+        ResidentChunkMap chunks = new();
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        SetMaterial(chunk, 0, 0, 1);
+        SetMaterial(chunk, 1, 0, 2);
+        SetMaterial(chunk, 0, 1, 3);
+        SetMaterial(chunk, 1, 1, 4);
+        chunks.Add(chunk);
+        MaterialTable materials = Materials(
+            Material(0, "empty", CellType.Empty, 0),
+            Material(1, "stone", CellType.Solid, 0xFF404040u) with
+            {
+                RenderStyle = MaterialRenderStyle.Destructible,
+                EdgeColorBGRA = 0xFFFFFFFFu,
+            },
+            Material(2, "water", CellType.Liquid, 0xFF001020u) with
+            {
+                RenderStyle = MaterialRenderStyle.Liquid,
+                HighlightColorBGRA = 0xFF80C0FFu,
+            },
+            Material(3, "smoke", CellType.Gas, 0xFF808080u) with
+            {
+                RenderStyle = MaterialRenderStyle.Gas,
+                Opacity = 128,
+            },
+            Material(4, "lava", CellType.Liquid, 0xFF101000u) with
+            {
+                RenderStyle = MaterialRenderStyle.Hazard,
+                HighlightColorBGRA = 0xFFFF8000u,
+            });
+        RenderBuffer zoomed = new(4, 4);
+        RenderAuxBuffers zoomedAux = new(4, 4);
+        RenderBuffer scalar = new(4, 4);
+        RenderAuxBuffers scalarAux = new(4, 4);
+        TemperatureField zoomedTemperature = new();
+        TemperatureField scalarTemperature = new();
+        CameraState zoomedCamera = new(0, 0, 0.5f, 4, 4);
+        CameraState scalarCamera = new(0, 0, 0.5002f, 4, 4);
+
+        new RenderBufferBuilder().Build(
+            new RenderFrameContext(chunks, materials, zoomedTemperature, zoomedCamera, simStepped: true, frameTimeSeconds: 0.25f),
+            zoomed,
+            zoomedAux);
+        new RenderBufferBuilder().Build(
+            new RenderFrameContext(chunks, materials, scalarTemperature, scalarCamera, simStepped: true, frameTimeSeconds: 0.25f),
+            scalar,
+            scalarAux);
+
+        Assert.Equal(scalar.Pixels.ToArray(), zoomed.Pixels.ToArray());
+        Assert.Equal(scalarAux.Emissive.ToArray(), zoomedAux.Emissive.ToArray());
+        Assert.Equal(scalarAux.Occluder.ToArray(), zoomedAux.Occluder.ToArray());
     }
 
     /// <summary>

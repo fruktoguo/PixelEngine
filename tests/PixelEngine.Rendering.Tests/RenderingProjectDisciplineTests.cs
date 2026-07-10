@@ -325,7 +325,7 @@ public sealed class RenderingProjectDisciplineTests
         Assert.Contains("Vector128.IsHardwareAccelerated", scanner, StringComparison.Ordinal);
         Assert.Contains("LoadUnsafe", scanner, StringComparison.Ordinal);
         Assert.Contains("ExtractMostSignificantBits", scanner, StringComparison.Ordinal);
-        Assert.Contains("IsBoundaryEdge(context, materialId", builder, StringComparison.Ordinal);
+        Assert.Contains("HasBoundaryEdge(context, chunk, local", builder, StringComparison.Ordinal);
         Assert.Contains("RenderStyleSegmentedBenchmarks", benchmark, StringComparison.Ordinal);
         Assert.Contains("BuildRenderBufferStyledSegmented", benchmark, StringComparison.Ordinal);
         Assert.Contains("RenderStyleSegmentScannerBenchmarks", benchmark, StringComparison.Ordinal);
