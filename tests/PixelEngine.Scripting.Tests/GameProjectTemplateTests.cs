@@ -19,6 +19,8 @@ public sealed class GameProjectTemplateTests
 
         Assert.Equal("net10.0", ReadProperty(project, "TargetFramework"));
         Assert.Equal("true", ReadProperty(project, "GenerateDocumentationFile"));
+        Assert.Equal("false", ReadProperty(project, "ServerGarbageCollection"));
+        Assert.Equal("true", ReadProperty(project, "ConcurrentGarbageCollection"));
         Assert.Equal(
             [
                 "{{EngineRoot}}/src/PixelEngine.Hosting/PixelEngine.Hosting.csproj",
@@ -38,6 +40,8 @@ public sealed class GameProjectTemplateTests
 
         Assert.Equal("net10.0", ReadProperty(project, "TargetFramework"));
         Assert.Equal("true", ReadProperty(project, "GenerateDocumentationFile"));
+        Assert.Equal("false", ReadProperty(project, "ServerGarbageCollection"));
+        Assert.Equal("true", ReadProperty(project, "ConcurrentGarbageCollection"));
         Assert.Equal(
             ["PixelEngine.Hosting", "PixelEngine.Scripting"],
             ReadIncludes(project, "PackageReference"));

@@ -4,6 +4,8 @@
     <AssemblyName>PixelEngine.Editor.Shell</AssemblyName>
     <RootNamespace>PixelEngine.Editor.Shell</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
   </PropertyGroup>
 
   <ItemGroup>
