@@ -16,6 +16,10 @@ public sealed class DemoWindowFrameTimeProbeTests
     public void BuildSummaryReportsWarmupExcludedPercentilesAndLoadCounters()
     {
         DemoWindowFrameTimeProbe probe = new(2, "static");
+        double[] main = new double[FrameStats.PhaseCount];
+        main[(int)FramePhase.GameLogic] = 0.7;
+        main[(int)FramePhase.Temperature] = 0.8;
+        main[(int)FramePhase.WorldStreaming] = 0.9;
         double[] sub = new double[FrameStats.SubPhaseCount];
         sub[(int)FrameSubPhase.CaPassA] = 0.1;
         sub[(int)FrameSubPhase.CaPassB] = 0.2;
@@ -23,6 +27,7 @@ public sealed class DemoWindowFrameTimeProbeTests
         sub[(int)FrameSubPhase.RenderBufferBuild] = 0.4;
         sub[(int)FrameSubPhase.GpuUpload] = 0.5;
         sub[(int)FrameSubPhase.Present] = 0.6;
+        sub[(int)FrameSubPhase.AudioDispatch] = 1.1;
 
         for (int i = 1; i <= 6; i++)
         {
@@ -43,7 +48,7 @@ public sealed class DemoWindowFrameTimeProbeTests
                 SimHz = 60 - i,
             };
             counters.SetCustomMetric("test_metric", i * 10000);
-            probe.RecordFrame(i, sub, counters);
+            probe.RecordFrame(i, main, sub, counters, threadAllocatedBytes: i * 128L);
         }
 
         string summary = probe.BuildSummary(gpuTimerAvailable: true, vSyncEnabled: false);
@@ -59,6 +64,13 @@ public sealed class DemoWindowFrameTimeProbeTests
         Assert.Contains("cpu_work_avg_ms=4.500", summary);
         Assert.Contains("gpu_frame_avg_ms=2.250", summary);
         Assert.Contains("present_wait_avg_ms=1.125", summary);
+        Assert.Contains("game_logic_avg_ms=0.700", summary);
+        Assert.Contains("temperature_avg_ms=0.800", summary);
+        Assert.Contains("world_streaming_avg_ms=0.900", summary);
+        Assert.Contains("audio_dispatch_avg_ms=1.100", summary);
+        Assert.Contains("logic_audio_avg_ms=1.800", summary);
+        Assert.Contains("thread_allocated_bytes_avg=576.000", summary);
+        Assert.Contains("runtime_gc_pause_observed=false", summary);
         Assert.Contains("active_cells_avg=4500.000", summary);
         Assert.Contains("active_cells_p50=4000.000", summary);
         Assert.Contains("active_cells_p95=6000.000", summary);

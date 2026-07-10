@@ -13,7 +13,7 @@ namespace PixelEngine.Rendering;
 /// <param name="debugCellColors">可选逐 cell 调试着色钩子。</param>
 /// <param name="frameTimeSeconds">渲染帧时间相位；仅供视觉着色使用，不驱动 sim 追帧。</param>
 /// <param name="forceRebuild">是否强制重建；用于相机变化或 CPU 粒子擦除等不由 chunk dirty rect 表达的视觉变化。</param>
-public sealed class RenderFrameContext(
+public readonly struct RenderFrameContext(
     IChunkSource chunks,
     MaterialTable materials,
     TemperatureField temperature,

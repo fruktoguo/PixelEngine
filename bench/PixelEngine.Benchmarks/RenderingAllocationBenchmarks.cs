@@ -87,6 +87,21 @@ public class RenderingAllocationBenchmarks
     }
 
     /// <summary>
+    /// 验证 Hosting 每帧重建只读 RenderFrameContext 后的完整构建入口保持零托管分配。
+    /// </summary>
+    [Benchmark]
+    public void BuildRenderBufferWithFrameContext()
+    {
+        RenderFrameContext context = new(
+            _chunks,
+            _materials,
+            _temperature,
+            CameraState.OneToOne(0, 0, 64, 64),
+            simStepped: true);
+        _builder.Build(context, _target, _aux);
+    }
+
+    /// <summary>
     /// 验证Stamp Particles。
     /// </summary>
     [Benchmark]

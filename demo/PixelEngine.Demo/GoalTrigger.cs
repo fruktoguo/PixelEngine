@@ -201,18 +201,10 @@ public sealed class GoalTrigger : Behaviour
             return true;
         }
 
-        ScriptEntityInspection[] entities = Context.Scene.CaptureInspectionSnapshot();
-        for (int i = 0; i < entities.Length; i++)
+        if (Context.Scene.TryGetFirstComponent(out PlayerController? scenePlayer))
         {
-            ScriptComponentInspection[] components = entities[i].Components;
-            for (int j = 0; j < components.Length; j++)
-            {
-                if (components[j].Behaviour is PlayerController player)
-                {
-                    _player = player;
-                    return true;
-                }
-            }
+            _player = scenePlayer;
+            return true;
         }
 
         BlockedReason = "场景中未找到 PlayerController。";

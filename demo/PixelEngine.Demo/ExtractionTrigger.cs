@@ -142,22 +142,14 @@ public sealed class ExtractionTrigger : Behaviour
             return;
         }
 
-        ScriptEntityInspection[] entities = Context.Scene.CaptureInspectionSnapshot();
-        for (int i = 0; i < entities.Length && (_player is null || _mission is null); i++)
+        if (_player is null && Context.Scene.TryGetFirstComponent(out PlayerController? scenePlayer))
         {
-            ScriptComponentInspection[] components = entities[i].Components;
-            for (int j = 0; j < components.Length; j++)
-            {
-                Behaviour behaviour = components[j].Behaviour;
-                if (_player is null && behaviour is PlayerController player)
-                {
-                    _player = player;
-                }
-                else if (_mission is null && behaviour is MissionDirector mission)
-                {
-                    _mission = mission;
-                }
-            }
+            _player = scenePlayer;
+        }
+
+        if (_mission is null && Context.Scene.TryGetFirstComponent(out MissionDirector? sceneMission))
+        {
+            _mission = sceneMission;
         }
 
         BlockedReason = _player is null || _mission is null

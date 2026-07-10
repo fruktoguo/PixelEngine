@@ -34,6 +34,49 @@ public sealed class GuiAppCombinedFrameTests
     }
 
     /// <summary>
+    /// 验证组合帧会在 Managed UI 与脚本之间、以及连续帧之间复用同一个 GUI 上下文。
+    /// </summary>
+    [Fact]
+    public void DrawCombinedFrameReusesGuiContextAcrossCallbacksAndFrames()
+    {
+        List<string> calls = [];
+        FakeGuiBackend backend = new(calls);
+        using GuiApp app = new(backend, new GuiAppOptions());
+        app.Initialize();
+        IGuiDrawContext? firstManaged = null;
+        PixelEngine.Scripting.IGuiContext? firstScript = null;
+        PixelEngine.Scripting.IGuiContext? secondScript = null;
+        int firstWidth = 0;
+        int secondWidth = 0;
+
+        app.DrawCombinedFrame(
+            1f / 60f,
+            800,
+            600,
+            gui => firstManaged = gui,
+            gui =>
+            {
+                firstScript = gui;
+                firstWidth = gui.Width;
+            });
+        app.DrawCombinedFrame(
+            1f / 120f,
+            1280,
+            720,
+            drawManagedGui: null,
+            gui =>
+            {
+                secondScript = gui;
+                secondWidth = gui.Width;
+            });
+
+        Assert.Same(firstManaged, firstScript);
+        Assert.Same(firstScript, secondScript);
+        Assert.Equal(800, firstWidth);
+        Assert.Equal(1280, secondWidth);
+    }
+
+    /// <summary>
     /// 验证Gui Input Bridge Publishes Modifier Keys For Clipboard Shortcuts。
     /// </summary>
     [Fact]

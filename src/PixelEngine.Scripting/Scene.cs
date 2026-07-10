@@ -44,6 +44,30 @@ public sealed class Scene
     public int ScriptExceptionCount => _invoker.Exceptions.Count;
 
     /// <summary>
+    /// 尝试从场景的同类型稠密组件分桶中读取一个组件实例，不创建检查快照或临时集合。
+    /// </summary>
+    /// <typeparam name="T">要查找的组件类型。</typeparam>
+    /// <param name="component">找到时返回组件实例；未找到时为默认值。</param>
+    /// <returns>场景中存在该组件类型时返回 true，否则返回 false。</returns>
+    /// <remarks>
+    /// 返回实例的实体顺序不是稳定排序契约；组件被移除后稠密分桶会执行 swap-remove。
+    /// 需要完整有序视图的 Editor/诊断代码应继续使用 <see cref="CaptureInspectionSnapshot" />。
+    /// </remarks>
+    public bool TryGetFirstComponent<T>([NotNullWhen(true)] out T? component)
+        where T : class, IComponent
+    {
+        if (_buckets.TryGetValue(typeof(T), out IComponentBucket? bucket) &&
+            bucket.TryGetFirstObject(out IComponent value))
+        {
+            component = (T)value;
+            return true;
+        }
+
+        component = null;
+        return false;
+    }
+
+    /// <summary>
     /// 捕获当前脚本实体与 Behaviour 组件快照，供 Editor 层级与 Inspector 使用。
     /// </summary>
     /// <returns>按实体 id 升序排列的只读快照数组。</returns>
@@ -526,6 +550,8 @@ public sealed class Scene
 
         bool TryGetObject(int entityId, out IComponent component);
 
+        bool TryGetFirstObject(out IComponent component);
+
         void Remove(int entityId);
 
         void Destroy(int entityId, IScriptContext context, ScriptInvoker invoker);
@@ -584,6 +610,18 @@ public sealed class Scene
             if (TryGet(entityId, out T typed))
             {
                 component = typed;
+                return true;
+            }
+
+            component = null!;
+            return false;
+        }
+
+        public bool TryGetFirstObject(out IComponent component)
+        {
+            if (Count > 0)
+            {
+                component = _components[0];
                 return true;
             }
 
@@ -765,6 +803,18 @@ public sealed class Scene
             if (_indices.TryGetValue(entityId, out int index))
             {
                 component = _components[index];
+                return true;
+            }
+
+            component = null!;
+            return false;
+        }
+
+        public bool TryGetFirstObject(out IComponent component)
+        {
+            if (Count > 0)
+            {
+                component = _components[0];
                 return true;
             }
 

@@ -41,7 +41,52 @@ public sealed class ScriptDispatchAllocationTests
         Assert.Equal(0, allocated);
     }
 
+    /// <summary>
+    /// 验证场景级组件查询会跟随稠密分桶的添加与 swap-remove 结果。
+    /// </summary>
+    [Fact]
+    public void SceneComponentLookupTracksDenseBucketMutations()
+    {
+        Scene scene = new();
+        Entity firstEntity = scene.CreateEntity();
+        MarkerComponent first = firstEntity.AddComponent<MarkerComponent>();
+        MarkerComponent second = scene.CreateEntity().AddComponent<MarkerComponent>();
+
+        Assert.True(scene.TryGetFirstComponent(out MarkerComponent? found));
+        Assert.Same(first, found);
+
+        firstEntity.RemoveComponent<MarkerComponent>();
+
+        Assert.True(scene.TryGetFirstComponent(out found));
+        Assert.Same(second, found);
+    }
+
+    /// <summary>
+    /// 验证缺失组件的场景级查询在预热后不创建检查快照或其他托管对象。
+    /// </summary>
+    [Fact]
+    public void MissingSceneComponentLookupDoesNotAllocateManagedMemory()
+    {
+        Scene scene = new();
+        _ = scene.CreateEntity().AddComponent<NoopBehaviour>();
+        _ = scene.TryGetFirstComponent<MarkerComponent>(out _);
+        bool found = false;
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 1_024; i++)
+        {
+            found |= scene.TryGetFirstComponent<MarkerComponent>(out _);
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.False(found);
+        Assert.Equal(0, allocated);
+    }
+
     private sealed class NoopBehaviour : Behaviour;
+
+    private sealed class MarkerComponent : IComponent;
 
     private sealed class NoopSystem : ISystem
     {

@@ -17,6 +17,11 @@ internal sealed class DemoWindowFrameTimeProbe(int warmupFrames, string scenario
     private readonly List<double> _presentSubmitMs = [];
     private readonly List<double> _presentWaitMs = [];
     private readonly List<double> _effectiveFrameMs = [];
+    private readonly List<double> _gameLogicMs = [];
+    private readonly List<double> _temperatureMs = [];
+    private readonly List<double> _worldStreamingMs = [];
+    private readonly List<double> _audioDispatchMs = [];
+    private readonly List<double> _logicAudioMs = [];
     private readonly List<double> _caMs = [];
     private readonly List<double> _physicsMs = [];
     private readonly List<double> _renderBufferMs = [];
@@ -32,16 +37,33 @@ internal sealed class DemoWindowFrameTimeProbe(int warmupFrames, string scenario
     private readonly List<double> _customMetric = [];
     private string _customMetricName = string.Empty;
     private readonly List<double> _simHz = [];
+    private readonly List<double> _threadAllocatedBytes = [];
+    private readonly List<double> _runtimeGcPauseMs = [];
+    private bool _hasGcBaseline;
+    private int _lastGen0Collections;
+    private int _lastGen1Collections;
+    private int _lastGen2Collections;
+    private long _lastGcIndex;
+    private long _gen0Collections;
+    private long _gen1Collections;
+    private long _gen2Collections;
+    private int _runtimeGcInfoEvents;
     private int _framesSeen;
 
     public int MeasuredFrames => _wallMs.Count;
 
-    public void RecordFrame(double wallMilliseconds, ReadOnlySpan<double> subPhases, EngineCounters counters)
+    public void RecordFrame(
+        double wallMilliseconds,
+        ReadOnlySpan<double> mainPhases,
+        ReadOnlySpan<double> subPhases,
+        EngineCounters counters,
+        long threadAllocatedBytes)
     {
         ArgumentNullException.ThrowIfNull(counters);
         _framesSeen++;
         if (_framesSeen <= warmupFrames)
         {
+            TrackRuntimeGc(record: false);
             return;
         }
 
@@ -51,6 +73,13 @@ internal sealed class DemoWindowFrameTimeProbe(int warmupFrames, string scenario
         _presentSubmitMs.Add(Sub(subPhases, FrameSubPhase.Present));
         _presentWaitMs.Add(counters.FramePresentWaitMilliseconds);
         _effectiveFrameMs.Add(counters.EffectiveFrameMilliseconds);
+        double gameLogicMilliseconds = Phase(mainPhases, FramePhase.GameLogic);
+        double audioDispatchMilliseconds = Sub(subPhases, FrameSubPhase.AudioDispatch);
+        _gameLogicMs.Add(gameLogicMilliseconds);
+        _temperatureMs.Add(Phase(mainPhases, FramePhase.Temperature));
+        _worldStreamingMs.Add(Phase(mainPhases, FramePhase.WorldStreaming));
+        _audioDispatchMs.Add(audioDispatchMilliseconds);
+        _logicAudioMs.Add(gameLogicMilliseconds + audioDispatchMilliseconds);
         _caMs.Add(Sub(subPhases, FrameSubPhase.CaPassA) +
             Sub(subPhases, FrameSubPhase.CaPassB) +
             Sub(subPhases, FrameSubPhase.CaPassC) +
@@ -75,6 +104,13 @@ internal sealed class DemoWindowFrameTimeProbe(int warmupFrames, string scenario
         counters.CustomMetric.Read(out _customMetricName, out long customMetricValue);
         _customMetric.Add(customMetricValue);
         _simHz.Add(counters.SimHz);
+        _threadAllocatedBytes.Add(Math.Max(0, threadAllocatedBytes));
+        TrackRuntimeGc(record: true);
+    }
+
+    public void RecordFrame(double wallMilliseconds, ReadOnlySpan<double> subPhases, EngineCounters counters)
+    {
+        RecordFrame(wallMilliseconds, [], subPhases, counters, threadAllocatedBytes: 0);
     }
 
     public string BuildSummary(bool gpuTimerAvailable, bool vSyncEnabled)
@@ -97,13 +133,23 @@ internal sealed class DemoWindowFrameTimeProbe(int warmupFrames, string scenario
             Stats("present_submit", _presentSubmitMs) + ", " +
             Stats("present_wait", _presentWaitMs) + ", " +
             Stats("effective_frame", _effectiveFrameMs) + ", " +
+            Stats("game_logic", _gameLogicMs) + ", " +
+            Stats("temperature", _temperatureMs) + ", " +
+            Stats("world_streaming", _worldStreamingMs) + ", " +
+            Stats("audio_dispatch", _audioDispatchMs) + ", " +
+            Stats("logic_audio", _logicAudioMs) + ", " +
             Stats("ca", _caMs) + ", " +
             Stats("physics", _physicsMs) + ", " +
             Stats("render_buffer", _renderBufferMs) + ", " +
             Stats("gpu_upload", _uploadMs) + ", " +
             Stats("lighting", _lightingMs) + ", " +
             Stats("bloom", _bloomMs) + ", " +
-            Stats("particle_stamp", _particleStampMs);
+            Stats("particle_stamp", _particleStampMs) + ", " +
+            LoadStats("thread_allocated_bytes", _threadAllocatedBytes) + ", " +
+            $"runtime_gc_pause_observed={(_runtimeGcPauseMs.Count > 0 ? "true" : "false")}, " +
+            $"runtime_gc_info_events={_runtimeGcInfoEvents}, " +
+            $"gc_gen0_collections={_gen0Collections}, gc_gen1_collections={_gen1Collections}, gc_gen2_collections={_gen2Collections}, " +
+            Stats("runtime_gc_pause", _runtimeGcPauseMs);
     }
 
     private double SampleSeconds()
@@ -121,6 +167,69 @@ internal sealed class DemoWindowFrameTimeProbe(int warmupFrames, string scenario
     {
         int index = (int)phase;
         return (uint)index < (uint)values.Length ? values[index] : 0.0;
+    }
+
+    private static double Phase(ReadOnlySpan<double> values, FramePhase phase)
+    {
+        int index = (int)phase;
+        return (uint)index < (uint)values.Length ? values[index] : 0.0;
+    }
+
+    private void TrackRuntimeGc(bool record)
+    {
+        int gen0Collections = GC.CollectionCount(0);
+        int gen1Collections = GC.CollectionCount(1);
+        int gen2Collections = GC.CollectionCount(2);
+
+        if (!_hasGcBaseline)
+        {
+            _hasGcBaseline = true;
+            _lastGen0Collections = gen0Collections;
+            _lastGen1Collections = gen1Collections;
+            _lastGen2Collections = gen2Collections;
+            return;
+        }
+
+        bool collectionObserved = gen0Collections != _lastGen0Collections ||
+            gen1Collections != _lastGen1Collections ||
+            gen2Collections != _lastGen2Collections;
+        if (record)
+        {
+            _gen0Collections += Math.Max(0, gen0Collections - _lastGen0Collections);
+            _gen1Collections += Math.Max(0, gen1Collections - _lastGen1Collections);
+            _gen2Collections += Math.Max(0, gen2Collections - _lastGen2Collections);
+            // GetGCMemoryInfo 会物化 GC 诊断载荷；仅在 CollectionCount 已变化时读取，
+            // 避免为了观测 pause 反向污染真实窗口稳态分配。
+            if (collectionObserved)
+            {
+                GCMemoryInfo memoryInfo = GC.GetGCMemoryInfo();
+                if (memoryInfo.Index != _lastGcIndex)
+                {
+                    _runtimeGcInfoEvents++;
+                    double pauseMilliseconds = 0;
+                    bool hasPauseDuration = false;
+                    foreach (TimeSpan pauseDuration in memoryInfo.PauseDurations)
+                    {
+                        if (pauseDuration >= TimeSpan.Zero)
+                        {
+                            pauseMilliseconds += pauseDuration.TotalMilliseconds;
+                            hasPauseDuration = true;
+                        }
+                    }
+
+                    if (hasPauseDuration)
+                    {
+                        _runtimeGcPauseMs.Add(pauseMilliseconds);
+                    }
+                }
+
+                _lastGcIndex = memoryInfo.Index;
+            }
+        }
+
+        _lastGen0Collections = gen0Collections;
+        _lastGen1Collections = gen1Collections;
+        _lastGen2Collections = gen2Collections;
     }
 
     private static string LoadStats(string name, List<double> samples)

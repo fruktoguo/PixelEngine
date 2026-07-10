@@ -1,28 +1,60 @@
 using Hexa.NET.ImGui;
 using PixelEngine.Scripting;
 using System.Numerics;
+using System.Text;
 
 namespace PixelEngine.Gui;
 
 /// <summary>
 /// 将脚本公开的 <see cref="IGuiContext" /> 适配到当前 ImGui frame。
 /// </summary>
-public sealed class ScriptGuiContext(int width, int height, float deltaTime, GuiInputSnapshot capture) : IGuiContext, IGuiDrawContext
+public sealed class ScriptGuiContext : IGuiContext, IGuiDrawContext
 {
-    /// <inheritdoc />
-    public int Width { get; } = Math.Max(1, width);
+    private const int InitialUtf8Capacity = 4096;
+    private byte[] _utf8Buffer = GC.AllocateUninitializedArray<byte>(InitialUtf8Capacity);
+
+    /// <summary>
+    /// 创建脚本 GUI 上下文。
+    /// </summary>
+    /// <param name="width">framebuffer 宽度。</param>
+    /// <param name="height">framebuffer 高度。</param>
+    /// <param name="deltaTime">GUI 帧间隔。</param>
+    /// <param name="capture">输入捕获快照。</param>
+    public ScriptGuiContext(int width, int height, float deltaTime, GuiInputSnapshot capture)
+    {
+        ResetFrame(width, height, deltaTime, capture);
+    }
 
     /// <inheritdoc />
-    public int Height { get; } = Math.Max(1, height);
+    public int Width { get; private set; }
 
     /// <inheritdoc />
-    public float DeltaTime { get; } = float.IsFinite(deltaTime) && deltaTime > 0f ? deltaTime : 1f / 60f;
+    public int Height { get; private set; }
 
     /// <inheritdoc />
-    public bool WantsMouse { get; } = capture.WantCaptureMouse;
+    public float DeltaTime { get; private set; }
 
     /// <inheritdoc />
-    public bool WantsKeyboard { get; } = capture.WantCaptureKeyboard;
+    public bool WantsMouse { get; private set; }
+
+    /// <inheritdoc />
+    public bool WantsKeyboard { get; private set; }
+
+    /// <summary>
+    /// 更新当前帧尺寸、时间与输入捕获快照，同时保留 UTF-8 scratch 供后续帧复用。
+    /// </summary>
+    /// <param name="width">framebuffer 宽度。</param>
+    /// <param name="height">framebuffer 高度。</param>
+    /// <param name="deltaTime">GUI 帧间隔。</param>
+    /// <param name="capture">输入捕获快照。</param>
+    public void ResetFrame(int width, int height, float deltaTime, GuiInputSnapshot capture)
+    {
+        Width = Math.Max(1, width);
+        Height = Math.Max(1, height);
+        DeltaTime = float.IsFinite(deltaTime) && deltaTime > 0f ? deltaTime : 1f / 60f;
+        WantsMouse = capture.WantCaptureMouse;
+        WantsKeyboard = capture.WantCaptureKeyboard;
+    }
 
     /// <inheritdoc />
     public void SetNextWindow(float x, float y, float width, float height, GuiCondition condition = GuiCondition.Always)
@@ -59,12 +91,12 @@ public sealed class ScriptGuiContext(int width, int height, float deltaTime, Gui
         return BeginWindowCore(id, title, MapWindowFlags(flags));
     }
 
-    private static bool BeginWindowCore(string id, string title, ImGuiWindowFlags flags)
+    private bool BeginWindowCore(string id, string title, ImGuiWindowFlags flags)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         ArgumentNullException.ThrowIfNull(title);
         bool visible = true;
-        return ImGui.Begin($"{title}##{id}", ref visible, flags);
+        return ImGui.Begin(EncodeCompositeNullTerminated(title, "##", id), ref visible, flags);
     }
 
     /// <inheritdoc />
@@ -76,14 +108,26 @@ public sealed class ScriptGuiContext(int width, int height, float deltaTime, Gui
     /// <inheritdoc />
     public void Text(string text)
     {
-        ImGui.TextUnformatted(text ?? string.Empty);
+        Text((text ?? string.Empty).AsSpan());
+    }
+
+    /// <inheritdoc />
+    public void Text(ReadOnlySpan<char> text)
+    {
+        ImGui.TextUnformatted(EncodeNullTerminated(text));
     }
 
     /// <inheritdoc />
     public void TextColored(string text, uint colorBgra)
     {
+        TextColored((text ?? string.Empty).AsSpan(), colorBgra);
+    }
+
+    /// <inheritdoc />
+    public void TextColored(ReadOnlySpan<char> text, uint colorBgra)
+    {
         ImGui.PushStyleColor(ImGuiCol.Text, BgraToVector4(colorBgra));
-        ImGui.TextUnformatted(text ?? string.Empty);
+        ImGui.TextUnformatted(EncodeNullTerminated(text));
         ImGui.PopStyleColor();
     }
 
@@ -145,8 +189,14 @@ public sealed class ScriptGuiContext(int width, int height, float deltaTime, Gui
     /// <inheritdoc />
     public void ProgressBar(float value01, string? label = null)
     {
+        ProgressBar(value01, (label ?? string.Empty).AsSpan());
+    }
+
+    /// <inheritdoc />
+    public void ProgressBar(float value01, ReadOnlySpan<char> label)
+    {
         float clamped = float.IsFinite(value01) ? Math.Clamp(value01, 0f, 1f) : 0f;
-        ImGui.ProgressBar(clamped, new Vector2(-1f, 0f), label ?? string.Empty);
+        ImGui.ProgressBar(clamped, new Vector2(-1f, 0f), EncodeNullTerminated(label));
     }
 
     /// <inheritdoc />
@@ -163,8 +213,23 @@ public sealed class ScriptGuiContext(int width, int height, float deltaTime, Gui
     public void ColorSwatch(string id, uint colorBgra, float size = 16f)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        ColorSwatch(id.AsSpan(), colorBgra, size);
+    }
+
+    /// <inheritdoc />
+    public void ColorSwatch(ReadOnlySpan<char> id, uint colorBgra, float size = 16f)
+    {
+        if (id.IsEmpty || id.Trim().IsEmpty)
+        {
+            throw new ArgumentException("GUI 控件 id 不能为空或空白。", nameof(id));
+        }
+
         float side = float.IsFinite(size) ? Math.Max(1f, size) : 16f;
-        _ = ImGui.ColorButton($"##{id}", BgraToVector4(colorBgra), ImGuiColorEditFlags.NoTooltip, new Vector2(side, side));
+        _ = ImGui.ColorButton(
+            EncodeCompositeNullTerminated("##", id),
+            BgraToVector4(colorBgra),
+            ImGuiColorEditFlags.NoTooltip,
+            new Vector2(side, side));
     }
 
     /// <inheritdoc />
@@ -297,5 +362,60 @@ public sealed class ScriptGuiContext(int width, int height, float deltaTime, Gui
         float r = ((colorBgra >> 16) & 0xFF) / 255f;
         float a = ((colorBgra >> 24) & 0xFF) / 255f;
         return new Vector4(r, g, b, a);
+    }
+
+    private ReadOnlySpan<byte> EncodeNullTerminated(ReadOnlySpan<char> text)
+    {
+        int byteCount = Encoding.UTF8.GetByteCount(text);
+        EnsureUtf8Capacity(checked(byteCount + 1));
+        int written = Encoding.UTF8.GetBytes(text, _utf8Buffer);
+        _utf8Buffer[written] = 0;
+        return _utf8Buffer.AsSpan(0, written + 1);
+    }
+
+    private ReadOnlySpan<byte> EncodeCompositeNullTerminated(
+        ReadOnlySpan<char> first,
+        ReadOnlySpan<char> second)
+    {
+        int firstByteCount = Encoding.UTF8.GetByteCount(first);
+        int secondByteCount = Encoding.UTF8.GetByteCount(second);
+        int required = checked(firstByteCount + secondByteCount + 1);
+        EnsureUtf8Capacity(required);
+
+        int written = Encoding.UTF8.GetBytes(first, _utf8Buffer);
+        written += Encoding.UTF8.GetBytes(second, _utf8Buffer.AsSpan(written));
+        _utf8Buffer[written] = 0;
+        return _utf8Buffer.AsSpan(0, written + 1);
+    }
+
+    private ReadOnlySpan<byte> EncodeCompositeNullTerminated(
+        ReadOnlySpan<char> first,
+        ReadOnlySpan<char> second,
+        ReadOnlySpan<char> third)
+    {
+        int firstByteCount = Encoding.UTF8.GetByteCount(first);
+        int secondByteCount = Encoding.UTF8.GetByteCount(second);
+        int thirdByteCount = Encoding.UTF8.GetByteCount(third);
+        int required = checked(firstByteCount + secondByteCount + thirdByteCount + 1);
+        EnsureUtf8Capacity(required);
+
+        int written = Encoding.UTF8.GetBytes(first, _utf8Buffer);
+        written += Encoding.UTF8.GetBytes(second, _utf8Buffer.AsSpan(written));
+        written += Encoding.UTF8.GetBytes(third, _utf8Buffer.AsSpan(written));
+        _utf8Buffer[written] = 0;
+        return _utf8Buffer.AsSpan(0, written + 1);
+    }
+
+    private void EnsureUtf8Capacity(int requiredCapacity)
+    {
+        if (requiredCapacity <= _utf8Buffer.Length)
+        {
+            return;
+        }
+
+        int doubledCapacity = _utf8Buffer.Length <= Array.MaxLength / 2
+            ? _utf8Buffer.Length * 2
+            : Array.MaxLength;
+        Array.Resize(ref _utf8Buffer, Math.Max(requiredCapacity, doubledCapacity));
     }
 }

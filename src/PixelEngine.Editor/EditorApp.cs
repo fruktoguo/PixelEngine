@@ -9,6 +9,7 @@ namespace PixelEngine.Editor;
 public sealed class EditorApp : IDisposable
 {
     private readonly ImGuiController _controller;
+    private readonly ScriptGuiContext _scriptGuiContext;
     private readonly List<IEditorPanel> _panels = [];
     private bool _initialized;
     private bool _disposed;
@@ -33,6 +34,7 @@ public sealed class EditorApp : IDisposable
         Options = _controller.Options;
         Selection = new EditorSelection();
         Input = new ImGuiInputBridge(_controller.Backend);
+        _scriptGuiContext = new ScriptGuiContext(1, 1, 1f / 60f, default);
     }
 
     /// <summary>
@@ -251,8 +253,8 @@ public sealed class EditorApp : IDisposable
 
         if (drawScriptGui is not null)
         {
-            ScriptGuiContext gui = new(width, height, deltaSeconds, Input.Capture);
-            drawScriptGui(gui);
+            _scriptGuiContext.ResetFrame(width, height, deltaSeconds, Input.Capture);
+            drawScriptGui(_scriptGuiContext);
         }
 
         _controller.Render();

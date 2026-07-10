@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../demo/PixelEngine.Demo/PixelEngine.Demo.csproj" />
     <ProjectReference Include="../../src/PixelEngine.Core/PixelEngine.Core.csproj" />
     <ProjectReference Include="../../src/PixelEngine.Simulation/PixelEngine.Simulation.csproj" />
     <ProjectReference Include="../../src/PixelEngine.Physics/PixelEngine.Physics.csproj" />

@@ -50,9 +50,13 @@ public sealed class TemperatureField
     private const float AmbientTemperatureCelsius = 0f;
     private const float AmbientCoolingPerStep = 3f;
     private const float AmbientTemperatureEpsilon = 0.01f;
+    // 仅缓存近期冷却完毕的温度块：避免长距离探索把临时 glow 峰值永久转化为常驻内存。
+    private const int MaxRecycledBlockCount = 128;
 
     private readonly Dictionary<ChunkCoord, TemperatureBlock> _blocks = [];
     private readonly ChunkCoord[] _inactiveBlockBuffer = GC.AllocateArray<ChunkCoord>(128, pinned: true);
+    private readonly HashSet<ChunkCoord> _conductActiveCoords = [];
+    private readonly Stack<TemperatureBlock> _recycledBlocks = new(MaxRecycledBlockCount);
     private Chunk[] _conductChunks = [];
     private TemperatureBlock[] _conductBlocks = [];
     private int[] _conductWorkerHits = [];
@@ -352,7 +356,10 @@ public sealed class TemperatureField
 
             for (int i = 0; i < count; i++)
             {
-                _ = _blocks.Remove(_inactiveBlockBuffer[i]);
+                if (_blocks.Remove(_inactiveBlockBuffer[i], out TemperatureBlock? block))
+                {
+                    RecycleBlock(block);
+                }
             }
 
             if (count < _inactiveBlockBuffer.Length)
@@ -491,16 +498,45 @@ public sealed class TemperatureField
 
     private int CaptureConductChunks(ReadOnlySpan<Chunk> residentChunks)
     {
+        if (_blocks.Count == 0)
+        {
+            _activeConductChunkCount = 0;
+            return 0;
+        }
+
         EnsureConductCapacity(residentChunks.Length);
+        _conductActiveCoords.Clear();
+        foreach (ChunkCoord coord in _blocks.Keys)
+        {
+            _ = _conductActiveCoords.Add(coord);
+        }
+
+        int count = 0;
         for (int i = 0; i < residentChunks.Length; i++)
         {
             Chunk chunk = residentChunks[i];
-            _conductChunks[i] = chunk;
-            _conductBlocks[i] = GetOrCreateBlock(chunk.Coord);
+            if (!RequiresConductBlock(chunk.Coord))
+            {
+                continue;
+            }
+
+            _conductChunks[count] = chunk;
+            _conductBlocks[count] = GetOrCreateBlock(chunk.Coord);
+            count++;
         }
 
-        _activeConductChunkCount = residentChunks.Length;
-        return residentChunks.Length;
+        _conductActiveCoords.Clear();
+        _activeConductChunkCount = count;
+        return count;
+    }
+
+    private bool RequiresConductBlock(ChunkCoord coord)
+    {
+        return _conductActiveCoords.Contains(coord) ||
+            _conductActiveCoords.Contains(new ChunkCoord(coord.X - 1, coord.Y)) ||
+            _conductActiveCoords.Contains(new ChunkCoord(coord.X + 1, coord.Y)) ||
+            _conductActiveCoords.Contains(new ChunkCoord(coord.X, coord.Y - 1)) ||
+            _conductActiveCoords.Contains(new ChunkCoord(coord.X, coord.Y + 1));
     }
 
     private void EnsureConductCapacity(int chunkCount)
@@ -725,9 +761,22 @@ public sealed class TemperatureField
             return block;
         }
 
-        block = new TemperatureBlock(StorageKind);
+        block = _recycledBlocks.Count == 0
+            ? new TemperatureBlock(StorageKind)
+            : _recycledBlocks.Pop();
         _blocks.Add(coord, block);
         return block;
+    }
+
+    private void RecycleBlock(TemperatureBlock block)
+    {
+        if (_recycledBlocks.Count == MaxRecycledBlockCount)
+        {
+            return;
+        }
+
+        block.Reset();
+        _recycledBlocks.Push(block);
     }
 
     private static bool TryPhaseTarget(MaterialHotTable hot, ushort material, float temperature, out ushort target)
@@ -848,6 +897,22 @@ public sealed class TemperatureField
             }
 
             _currentHalf!.CopyTo(_scratchHalf!, 0);
+        }
+
+        /// <summary>
+        /// 清除 ping-pong 两侧缓冲，供冷却后的 block 在后续热源注入中安全复用。
+        /// </summary>
+        public void Reset()
+        {
+            if (StorageKind == TemperatureStorageKind.Float32)
+            {
+                _currentFloat!.AsSpan().Clear();
+                _scratchFloat!.AsSpan().Clear();
+                return;
+            }
+
+            _currentHalf!.AsSpan().Clear();
+            _scratchHalf!.AsSpan().Clear();
         }
 
         // ping-pong：传导结果在 scratch，帧末交换 current/scratch 指针。
