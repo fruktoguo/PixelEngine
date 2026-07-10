@@ -2,6 +2,7 @@ using PixelEngine.Hosting;
 using PixelEngine.Rendering;
 using PixelEngine.Serialization;
 using PixelEngine.Simulation;
+using PixelEngine.Scripting;
 using PixelEngine.UI;
 using PixelEngine.World;
 using Xunit;
@@ -762,28 +763,38 @@ public sealed class DemoStartupOptionsTests
     }
 
     /// <summary>
-    /// 验证 Demo Player 已静态编译同源 scripts 时不会再次加载 content/scripts 的同名 Behaviour。
+    /// 验证 Demo Player 注册自身程序集后仍会加载外部工程随包分发的 Behaviour。
     /// </summary>
     [Fact]
-    public void RegisterPackagedScriptAssembliesSkipsSourceAlreadyCompiledIntoPlayer()
+    public void RegisterPackagedScriptAssembliesLoadsExternalProjectScriptsAlongsideDemoAssembly()
     {
         string contentRoot = Path.Combine(Path.GetTempPath(), "pixelengine-static-scripts-" + Guid.NewGuid().ToString("N"), "content");
         try
         {
             string scripts = Path.Combine(contentRoot, "scripts");
             _ = Directory.CreateDirectory(scripts);
-            File.WriteAllText(Path.Combine(scripts, "Duplicate.cs"), "this source must not be compiled");
+            File.WriteAllText(Path.Combine(scripts, "ExternalProjectBehaviour.cs"), """
+                using PixelEngine.Scripting;
+
+                public sealed class ExternalProjectBehaviour : Behaviour
+                {
+                }
+                """);
             DemoStartupOptions options = DemoStartupOptions.Parse(["--content", contentRoot]);
             using Engine engine = new EngineBuilder()
                 .UseHeadless()
                 .WithContentRoot(contentRoot)
                 .Build();
+            engine.RegisterScriptAssembly(typeof(DemoProgram).Assembly);
 
             DemoProgram.RegisterPackagedScriptAssemblies(
                 engine,
                 options,
-                dynamicCodeSupported: false,
-                typeof(DemoProgram).Assembly);
+                dynamicCodeSupported: true);
+
+            ScriptAssemblyRegistry registry = engine.Context.GetService<ScriptAssemblyRegistry>();
+            Assert.Contains(registry.Assemblies, assembly =>
+                assembly.GetType("ExternalProjectBehaviour", throwOnError: false) is not null);
         }
         finally
         {
@@ -810,12 +821,15 @@ public sealed class DemoStartupOptionsTests
             using Engine engine = DemoProgram.BuildEngine(options, project);
 
             DemoProgram.AttachMinimalSmokeWorld(engine);
+            engine.RegisterScriptAssembly(typeof(DemoProgram).Assembly);
+            ScriptSimulationContext scriptContext = engine.AttachScriptingFromServices();
 
             MaterialTable materials = engine.Context.GetService<MaterialTable>();
             Assert.True(materials.TryGetId("empty", out ushort empty));
             Assert.Equal(0, empty);
             Assert.True(engine.Context.TryGetService(out SimulationPhaseDriver _));
             Assert.True(engine.Context.TryGetService(out CellGrid _));
+            Assert.Same(scriptContext, engine.Context.GetService<ScriptSimulationContext>());
         }
         finally
         {

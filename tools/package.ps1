@@ -223,6 +223,11 @@ function Copy-PackagedScripts([string]$SourceRoot, [string]$DestinationRoot) {
     return
   }
 
+  # Demo 自身的 scripts 已编译进 PixelEngine.Demo；只有编辑器创建的外部工程需要随包分发源码。
+  if (Test-Path -LiteralPath (Join-Path $projectRoot 'PixelEngine.Demo.csproj') -PathType Leaf) {
+    return
+  }
+
   $sourceScripts = Join-Path $projectRoot 'scripts'
   if (-not (Test-Path -LiteralPath $sourceScripts -PathType Container)) {
     return
