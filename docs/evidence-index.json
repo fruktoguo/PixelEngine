@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-10",
-  "generatedFromCommit": "2551c2aa58077901e2b32cc39b45a2540f1d83f1",
+  "generatedFromCommit": "bb5fb05432db904320e57691e6fcd5fc1069deb3",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -64,6 +64,19 @@
       "reportPath": "docs/evidence-2026-07-10-perf-004-zero-allocation.md",
       "sha256": "ff40c55716b95b63bcfe026cd03fbd5fcb258390019ae92ff43226421237a7d6",
       "notes": "Simulation 批量 edit/clear BDN 分别为 36.733us/26.091us，Physics SyncStep 为 1.0259ms（1 body）与 977.7us（16 bodies），四个场景 MemoryDiagnoser 均为 Allocated -；调用级分配测试和行为测试全部通过。"
+    },
+    {
+      "entryId": "perf-005-rigidbody-rebuild-pool-20260710",
+      "taskIds": ["PERF-005"],
+      "evidenceState": "complete_local_burst_pool_benchmark",
+      "commit": "bb5fb05432db904320e57691e6fcd5fc1069deb3",
+      "runSessionId": "local-20260710-perf005-rigidbody-rebuild-pool",
+      "runIdentityStatus": "captured",
+      "hardware": "Microsoft Windows 11 build 26100; AMD Ryzen 7 5800X 8c/16t; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "dotnet test tests/PixelEngine.Physics.Tests/PixelEngine.Physics.Tests.csproj -c Release --no-restore; dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --no-restore --filter FullyQualifiedName~PerformanceHardeningMemoryDisciplineTests; pwsh -NoProfile -File tools/run-benchmark.ps1 -Artifacts artifacts/perf-005-rebuild-final -BenchmarkDotNetArgs @('--filter=*PhysicsBenchmarks.RigidBodyDestructionRebuildDirty*','--job=short','--warmupCount=1','--iterationCount=5')",
+      "reportPath": "docs/evidence-2026-07-10-perf-005-rigidbody-rebuild-pool.md",
+      "sha256": "bb5c5abfdb2309e99e9b672a1624c3cdb7a2215573dc5b4f9ce1224dd6977510",
+      "notes": "破坏重建 Managed allocation：DamagedBodyCount=1 为 74,808 B、16 为 981,208 B；从 PERF-001 的 166,240 B/3,147,384 B 分别下降 55.00%/68.82%。BDN 原始 WorkloadResult 派生 p99 为 1.6362ms/3.9098ms；p99 计算方法和原始日志哈希写在稳定报告中。"
     },
     {
       "entryId": "arch-001-custom-metric-20260710",
