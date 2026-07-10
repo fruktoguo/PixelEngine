@@ -127,6 +127,32 @@ public sealed class SimulationPhaseInterfaceTests
     }
 
     /// <summary>
+    /// 验证批量矩形编辑在跨 chunk 稳态调用中不创建闭包、委托或其他托管分配。
+    /// </summary>
+    [Fact]
+    public void BatchRectEditsDoNotAllocateAfterWarmup()
+    {
+        TestChunkSource source = CreateDenseSource(-1, -1, 1, 1);
+        SimulationKernel kernel = new(source, CreateMaterials());
+
+        _ = kernel.EditRectAtInputPhase(0, 0, 65, 65, Sand, persistentFlags: 0);
+        _ = kernel.ClearRectAtInputPhase(0, 0, 65, 65);
+
+        long beforeEdit = GC.GetAllocatedBytesForCurrentThread();
+        int editWrites = kernel.EditRectAtInputPhase(0, 0, 65, 65, Sand, persistentFlags: 0);
+        long editAllocated = GC.GetAllocatedBytesForCurrentThread() - beforeEdit;
+
+        long beforeClear = GC.GetAllocatedBytesForCurrentThread();
+        int clearWrites = kernel.ClearRectAtInputPhase(0, 0, 65, 65);
+        long clearAllocated = GC.GetAllocatedBytesForCurrentThread() - beforeClear;
+
+        Assert.Equal(66 * 66, editWrites);
+        Assert.Equal(66 * 66, clearWrites);
+        Assert.Equal(0, editAllocated);
+        Assert.Equal(0, clearAllocated);
+    }
+
+    /// <summary>
     /// 验证相位 7 清 cell 返回原值并写 current dirty，使下一次 CA 立即看见变化。
     /// </summary>
     [Fact]

@@ -76,6 +76,43 @@ public class SimulationAllocationBenchmarks
     }
 
     /// <summary>
+    /// 准备批量矩形写入分配基准。
+    /// </summary>
+    [IterationSetup(Target = nameof(EditRectAtInputPhaseSteadyState))]
+    public void SetupEditRectAtInputPhase()
+    {
+        ResetWorld();
+    }
+
+    /// <summary>
+    /// 准备批量矩形清空分配基准。
+    /// </summary>
+    [IterationSetup(Target = nameof(ClearRectAtInputPhaseSteadyState))]
+    public void SetupClearRectAtInputPhase()
+    {
+        ResetWorld();
+        _ = _kernel.EditRectAtInputPhase(0, 0, 65, 65, Sand, persistentFlags: 0);
+    }
+
+    /// <summary>
+    /// 验证跨 chunk 批量写入的稳态分配。
+    /// </summary>
+    [Benchmark]
+    public int EditRectAtInputPhaseSteadyState()
+    {
+        return _kernel.EditRectAtInputPhase(0, 0, 65, 65, Sand, persistentFlags: 0);
+    }
+
+    /// <summary>
+    /// 验证跨 chunk 批量清空的稳态分配。
+    /// </summary>
+    [Benchmark]
+    public int ClearRectAtInputPhaseSteadyState()
+    {
+        return _kernel.ClearRectAtInputPhase(0, 0, 65, 65);
+    }
+
+    /// <summary>
     /// 验证Apply Structural Damage Accumulates。
     /// </summary>
     [Benchmark]
