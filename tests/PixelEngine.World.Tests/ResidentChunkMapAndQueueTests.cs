@@ -59,6 +59,43 @@ public sealed class ResidentChunkMapAndQueueTests
     }
 
     /// <summary>
+    /// 验证批量驻留在 1/16/64/256 个 chunk 下只重建一次稳定快照，并支持一次批量摘除。
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(16)]
+    [InlineData(64)]
+    [InlineData(256)]
+    public void ResidentChunkMapBatchMutationRebuildsSnapshotOnce(int chunkCount)
+    {
+        ResidentChunkMap map = new();
+        Chunk[] chunks = new Chunk[chunkCount];
+        ChunkCoord[] coords = new ChunkCoord[chunkCount];
+        for (int i = 0; i < chunkCount; i++)
+        {
+            ChunkCoord coord = new(i, 0);
+            coords[i] = coord;
+            chunks[i] = new Chunk(coord);
+        }
+
+        map.AddRange(chunks);
+
+        Assert.Equal(chunkCount, map.Count);
+        Assert.Equal(chunkCount, map.ResidentChunks.Length);
+        Assert.Equal(1, map.SnapshotRebuildCount);
+
+        Chunk[] removed = new Chunk[chunkCount];
+        Assert.Equal(chunkCount, map.RemoveRange(coords, removed));
+        Assert.Equal(0, map.Count);
+        Assert.Equal(0, map.ResidentChunks.Length);
+        Assert.Equal(2, map.SnapshotRebuildCount);
+        for (int i = 0; i < chunkCount; i++)
+        {
+            Assert.Same(chunks[i], removed[i]);
+        }
+    }
+
+    /// <summary>
     /// 验证流式请求队列保持 FIFO 并校验 load/unload payload。
     /// </summary>
     [Fact]

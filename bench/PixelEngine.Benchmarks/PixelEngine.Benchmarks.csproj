@@ -18,6 +18,7 @@
     <ProjectReference Include="../../src/PixelEngine.Gui/PixelEngine.Gui.csproj" />
     <ProjectReference Include="../../src/PixelEngine.UI/PixelEngine.UI.csproj" />
     <ProjectReference Include="../../src/PixelEngine.Hosting/PixelEngine.Hosting.csproj" />
+    <ProjectReference Include="../../src/PixelEngine.World/PixelEngine.World.csproj" />
   </ItemGroup>
 
   <ItemGroup>

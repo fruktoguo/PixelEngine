@@ -109,6 +109,7 @@ public sealed class WorldSaveService(ChunkCodec? chunkCodec = null, ManifestCode
     {
         ArrayBufferWriter<byte> chunkBuffer = new();
         Half[] temperature = new Half[TemperatureField.BlockArea];
+        Chunk[] loadedChunks = new Chunk[chunkIndex.Length];
         for (int i = 0; i < chunkIndex.Length; i++)
         {
             ChunkCoord coord = chunkIndex[i];
@@ -127,9 +128,15 @@ public sealed class WorldSaveService(ChunkCodec? chunkCodec = null, ManifestCode
             remap.RemapInPlace(chunk.MaterialBuffer, chunk.DamageBuffer);
             world.Temperature.ImportBlock(coord, temperature);
             chunk.SetCurrentDirty(DirtyRect.Full);
-            world.Chunks.Add(chunk);
+            loadedChunks[i] = chunk;
+        }
+
+        world.Chunks.AddRange(loadedChunks);
+        for (int i = 0; i < loadedChunks.Length; i++)
+        {
+            Chunk chunk = loadedChunks[i];
             world.Residency.Set(
-                coord,
+                chunk.Coord,
                 new ChunkResidencyInfo(
                     ChunkResidencyState.Cached,
                     LastTouchedFrame: 0,
@@ -141,9 +148,9 @@ public sealed class WorldSaveService(ChunkCodec? chunkCodec = null, ManifestCode
     private static void ClearWorld(WorldLoadContext world)
     {
         Chunk[] existing = world.Chunks.ResidentChunks.ToArray();
+        world.Chunks.Clear();
         for (int i = 0; i < existing.Length; i++)
         {
-            _ = world.Chunks.TryRemove(existing[i].Coord, out _);
             _ = world.Residency.Remove(existing[i].Coord);
         }
     }

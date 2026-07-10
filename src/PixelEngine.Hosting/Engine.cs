@@ -1941,15 +1941,21 @@ public sealed class Engine : IDisposable
         const int ResidentBorderChunks = 2;
         int lastPlayableChunkX = (worldWidthCells - 1) / Core.EngineConstants.ChunkSize;
         int lastPlayableChunkY = (worldHeightCells - 1) / Core.EngineConstants.ChunkSize;
+        int chunkWidth = checked(lastPlayableChunkX + (ResidentBorderChunks * 2) + 1);
+        int chunkHeight = checked(lastPlayableChunkY + (ResidentBorderChunks * 2) + 1);
+        Chunk[] residentChunks = new Chunk[checked(chunkWidth * chunkHeight)];
+        int write = 0;
         // Resident world 没有 WorldManager 的按帧边界补环，脚本/input-phase 写入会把第一圈 border 标成 current dirty。
         // 预驻留第二圈，保证被唤醒的 border chunk 也能构造 CA 所需的完整 3x3 邻域。
         for (int cy = -ResidentBorderChunks; cy <= lastPlayableChunkY + ResidentBorderChunks; cy++)
         {
             for (int cx = -ResidentBorderChunks; cx <= lastPlayableChunkX + ResidentBorderChunks; cx++)
             {
-                chunks.Add(new Chunk(new ChunkCoord(cx, cy)));
+                residentChunks[write++] = new Chunk(new ChunkCoord(cx, cy));
             }
         }
+
+        chunks.AddRange(residentChunks);
     }
 
     private RuntimeWorldStateBridge EnsureRuntimeWorldStateBridge(ParticleSystem particles)

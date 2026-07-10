@@ -22,8 +22,11 @@ public sealed class WorldStreamer
     private readonly StreamingRequestQueue _requests;
     private readonly CompletedChunkQueue _completed;
     private readonly PreparationBatch _preparationBatch;
+    private readonly HashSet<ChunkCoord> _pendingLoadedCoords = [];
     private StreamingRequest[] _requestBatch = [];
     private PreparedStreamingOperation[] _preparedBatch = [];
+    private Chunk[] _loadedChunkBatch = [];
+    private Chunk[] _detachedChunkBatch = [];
     private static readonly ThreadLocal<PooledByteBufferWriter> IoWriters = new(() => new PooledByteBufferWriter());
     private static readonly ThreadLocal<PooledByteBufferWriter> PayloadWriters = new(() => new PooledByteBufferWriter());
 
@@ -83,22 +86,75 @@ public sealed class WorldStreamer
     public int ApplyPrepared(long frame)
     {
         int applied = 0;
-        // 相位 2：把后台完成的 load/unload 事件合并回 live map，sim 侧此后才可见新驻留区。
-        while (_completed.TryDequeue(out CompletedStreamingOperation operation))
+        int loadedCount = 0;
+        bool loadedBatchCommitted = false;
+        _pendingLoadedCoords.Clear();
+        try
         {
-            if (operation.Kind == CompletedStreamingKind.Loaded)
+            // 相位 2：把后台完成的 load/unload 事件合并回 live map，sim 侧此后才可见新驻留区。
+            while (_completed.TryDequeue(out CompletedStreamingOperation operation))
             {
-                ApplyLoaded(operation, frame);
-            }
-            else
-            {
-                ApplyUnloaded(operation.Coord);
+                if (operation.Kind == CompletedStreamingKind.Loaded)
+                {
+                    if (TryPrepareLoaded(operation, out Chunk chunk))
+                    {
+                        try
+                        {
+                            EnsureLoadedChunkCapacity(loadedCount + 1);
+                            _loadedChunkBatch[loadedCount++] = chunk;
+                        }
+                        catch
+                        {
+                            _chunkPool.Return(chunk);
+                            throw;
+                        }
+                    }
+                }
+                else
+                {
+                    ApplyUnloaded(operation.Coord);
+                }
+
+                applied++;
             }
 
-            applied++;
+            if (loadedCount > 0)
+            {
+                _chunks.AddRange(_loadedChunkBatch.AsSpan(0, loadedCount));
+                loadedBatchCommitted = true;
+                for (int i = 0; i < loadedCount; i++)
+                {
+                    Chunk chunk = _loadedChunkBatch[i];
+                    _residency.Set(
+                        chunk.Coord,
+                        new ChunkResidencyInfo(
+                            ChunkResidencyState.Cached,
+                            frame,
+                            ChunkMemoryBudget.EstimatedResidentChunkBytes,
+                            DirtySinceLoad: false));
+                    _budget.Add(ChunkMemoryBudget.EstimatedResidentChunkBytes);
+                }
+            }
+
+            return applied;
         }
+        catch
+        {
+            if (!loadedBatchCommitted)
+            {
+                for (int i = 0; i < loadedCount; i++)
+                {
+                    _chunkPool.Return(_loadedChunkBatch[i]);
+                }
+            }
 
-        return applied;
+            throw;
+        }
+        finally
+        {
+            _pendingLoadedCoords.Clear();
+            _loadedChunkBatch.AsSpan(0, loadedCount).Clear();
+        }
     }
 
     /// <summary>
@@ -173,29 +229,29 @@ public sealed class WorldStreamer
         return processed;
     }
 
-    private void ApplyLoaded(CompletedStreamingOperation operation, long frame)
+    private bool TryPrepareLoaded(CompletedStreamingOperation operation, out Chunk preparedChunk)
     {
         Chunk chunk = operation.Chunk ?? throw new InvalidOperationException("装载完成事件缺少 chunk。");
         Half[] temperature = operation.Temperature ?? throw new InvalidOperationException("装载完成事件缺少温度子块。");
+        preparedChunk = null!;
         try
         {
-            if (_chunks.Contains(chunk.Coord))
+            if (_chunks.Contains(chunk.Coord) || !_pendingLoadedCoords.Add(chunk.Coord))
             {
                 _chunkPool.Return(chunk);
-                return;
+                return false;
             }
 
             _temperature.ImportBlock(chunk.Coord, temperature.AsSpan(0, TemperatureField.BlockArea));
             chunk.SetCurrentDirty(DirtyRect.Full);
-            _chunks.Add(chunk);
-            _residency.Set(
-                chunk.Coord,
-                new ChunkResidencyInfo(
-                    ChunkResidencyState.Cached,
-                    frame,
-                    ChunkMemoryBudget.EstimatedResidentChunkBytes,
-                    DirtySinceLoad: false));
-            _budget.Add(ChunkMemoryBudget.EstimatedResidentChunkBytes);
+            preparedChunk = chunk;
+            return true;
+        }
+        catch
+        {
+            _ = _pendingLoadedCoords.Remove(chunk.Coord);
+            _chunkPool.Return(chunk);
+            throw;
         }
         finally
         {
@@ -225,35 +281,41 @@ public sealed class WorldStreamer
 
     private void SubmitUnloads(ReadOnlySpan<ChunkCoord> unloadCoords)
     {
-        for (int i = 0; i < unloadCoords.Length; i++)
+        EnsureDetachedChunkCapacity(unloadCoords.Length);
+        int detachedCount = _chunks.RemoveRange(unloadCoords, _detachedChunkBatch);
+        try
         {
-            ChunkCoord coord = unloadCoords[i];
-            if (!_chunks.TryRemove(coord, out Chunk chunk))
+            for (int i = 0; i < detachedCount; i++)
             {
-                continue;
-            }
+                Chunk chunk = _detachedChunkBatch[i];
+                ChunkCoord coord = chunk.Coord;
 
-            // 卸载先从 live map 摘下 chunk，再携带温度子块入队；sim 不再读写该坐标。
-            Half[] temperature = ArrayPool<Half>.Shared.Rent(TemperatureField.BlockArea);
-            bool queued = false;
-            try
-            {
-                _temperature.ExportBlock(coord, temperature.AsSpan(0, TemperatureField.BlockArea));
-                _requests.Enqueue(StreamingRequest.Unload(chunk, temperature));
-                queued = true;
-            }
-            finally
-            {
-                if (!queued)
+                // 卸载先从 live map 摘下 chunk，再携带温度子块入队；sim 不再读写该坐标。
+                Half[] temperature = ArrayPool<Half>.Shared.Rent(TemperatureField.BlockArea);
+                bool queued = false;
+                try
                 {
-                    ArrayPool<Half>.Shared.Return(temperature);
+                    _temperature.ExportBlock(coord, temperature.AsSpan(0, TemperatureField.BlockArea));
+                    _requests.Enqueue(StreamingRequest.Unload(chunk, temperature));
+                    queued = true;
+                }
+                finally
+                {
+                    if (!queued)
+                    {
+                        ArrayPool<Half>.Shared.Return(temperature);
+                    }
+                }
+
+                if (_residency.TryGetInfo(coord, out ChunkResidencyInfo info))
+                {
+                    _residency.Set(coord, info with { State = ChunkResidencyState.Detached });
                 }
             }
-
-            if (_residency.TryGetInfo(coord, out ChunkResidencyInfo info))
-            {
-                _residency.Set(coord, info with { State = ChunkResidencyState.Detached });
-            }
+        }
+        finally
+        {
+            _detachedChunkBatch.AsSpan(0, detachedCount).Clear();
         }
     }
 
@@ -381,18 +443,66 @@ public sealed class WorldStreamer
 
     private void EnsureRequestCapacity(int required)
     {
-        if (_requestBatch.Length < required)
+        if (_requestBatch.Length >= required)
         {
-            Array.Resize(ref _requestBatch, required);
+            return;
         }
+
+        int capacity = _requestBatch.Length == 0 ? 4 : _requestBatch.Length;
+        while (capacity < required)
+        {
+            capacity = checked(capacity * 2);
+        }
+
+        Array.Resize(ref _requestBatch, capacity);
     }
 
     private void EnsurePreparedCapacity(int required)
     {
-        if (_preparedBatch.Length < required)
+        if (_preparedBatch.Length >= required)
         {
-            Array.Resize(ref _preparedBatch, required);
+            return;
         }
+
+        int capacity = _preparedBatch.Length == 0 ? 4 : _preparedBatch.Length;
+        while (capacity < required)
+        {
+            capacity = checked(capacity * 2);
+        }
+
+        Array.Resize(ref _preparedBatch, capacity);
+    }
+
+    private void EnsureLoadedChunkCapacity(int required)
+    {
+        if (_loadedChunkBatch.Length >= required)
+        {
+            return;
+        }
+
+        int capacity = _loadedChunkBatch.Length == 0 ? 4 : _loadedChunkBatch.Length;
+        while (capacity < required)
+        {
+            capacity = checked(capacity * 2);
+        }
+
+        Array.Resize(ref _loadedChunkBatch, capacity);
+    }
+
+    private void EnsureDetachedChunkCapacity(int required)
+    {
+        if (_detachedChunkBatch.Length >= required)
+        {
+            return;
+        }
+
+        int capacity = _detachedChunkBatch.Length == 0 ? 4 : _detachedChunkBatch.Length;
+        while (capacity < required)
+        {
+            capacity = checked(capacity * 2);
+        }
+
+        Array.Resize(ref _detachedChunkBatch, capacity);
     }
 
     private static PooledByteBufferWriter RentIoWriter()
