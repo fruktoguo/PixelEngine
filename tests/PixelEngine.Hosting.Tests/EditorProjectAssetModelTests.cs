@@ -108,7 +108,7 @@ public sealed class EditorProjectAssetModelTests
             EngineSceneDocument sceneDocument = EngineSceneDocumentLoader.LoadDocument(Path.Combine(contentRoot, "scenes", "NewScene.scene"));
             EngineSceneDocument prefabDocument = EngineSceneDocumentLoader.LoadDocument(Path.Combine(contentRoot, "prefabs", "NewPrefab.prefab"));
             Assert.Equal("{\"materials\":[]}" + Environment.NewLine, File.ReadAllText(Path.Combine(contentRoot, "materials.json")));
-            Assert.StartsWith("材质定义：0 项", Find(assets, "materials.json").PreviewSummary, StringComparison.Ordinal);
+            Assert.StartsWith("材质目录：0 项", Find(assets, "materials.json").PreviewSummary, StringComparison.Ordinal);
             string uiScreenText = File.ReadAllText(Path.Combine(contentRoot, "ui", "screens", "NewScreen.xhtml"));
             Assert.Contains("<rml title=\"NewScreen\"", uiScreenText, StringComparison.Ordinal);
             Assert.Contains("data-screen=\"new-screen\"", uiScreenText, StringComparison.Ordinal);
@@ -1003,7 +1003,7 @@ public sealed class EditorProjectAssetModelTests
             // Assert：验证预期结果
             Assert.Equal("纹理：32×16，3 B", Find(assets, "textures/sand.png").PreviewSummary);
             Assert.Equal("音频：2 B", Find(assets, "audio/hit.wav").PreviewSummary);
-            Assert.StartsWith("材质定义：2 项", Find(assets, "materials.json").PreviewSummary, StringComparison.Ordinal);
+            Assert.StartsWith("材质目录：2 项", Find(assets, "materials.json").PreviewSummary, StringComparison.Ordinal);
             Assert.StartsWith("UI Screen：HUD，", Find(assets, "ui/screens/hud.xhtml").PreviewSummary, StringComparison.Ordinal);
             Assert.Equal("场景：2 个 GameObject，1 个根，1 个 Behaviour", Find(assets, "scenes/main.scene").PreviewSummary);
             Assert.Equal("Prefab：1 个 GameObject，1 个根，0 个 Behaviour", Find(assets, "prefabs/rock.prefab").PreviewSummary);

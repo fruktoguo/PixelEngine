@@ -1394,6 +1394,8 @@ public sealed class AssetBrowserPanelTests
         Assert.StartsWith("ScriptSource/", panel.CreatePath, StringComparison.Ordinal);
         Assert.True(panel.BeginCreateAssetInFolder("ScriptSource/Gameplay", AssetBrowserItemKind.Scene));
         Assert.StartsWith("Content/", panel.CreatePath, StringComparison.Ordinal);
+        Assert.True(panel.BeginCreateAssetInFolder("ScriptSource/Gameplay", AssetBrowserItemKind.Folder));
+        Assert.StartsWith("ScriptSource/Gameplay/", panel.CreatePath, StringComparison.Ordinal);
         Assert.True(panel.BeginImportAssetInFolder(@"C:\Imports\sand.png", "ScriptSource/Gameplay", AssetBrowserItemKind.Texture));
         Assert.StartsWith("Content/", panel.ImportDestinationPath, StringComparison.Ordinal);
     }
