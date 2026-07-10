@@ -1399,12 +1399,27 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("否决 (b)", plan, StringComparison.Ordinal);
     }
 
+    // —— 性能、原生与发布模式 ——
+    /// <summary>
+    /// 验证 native superbuild 把绝对 toolchain 与 Ninja 路径传给 Box2D 子构建，确保干净检出可直接构建。
+    /// </summary>
+    [Fact]
+    public void NativeSuperbuildForwardsAbsoluteToolchainAndNinjaToBox2D()
+    {
+        string root = FindRepositoryRoot();
+        string nativeCMake = File.ReadAllText(Path.Combine(root, "native", "CMakeLists.txt"));
+
+        Assert.Contains("PIXELENGINE_TOOLCHAIN_FILE_ABSOLUTE", nativeCMake, StringComparison.Ordinal);
+        Assert.Contains("BASE_DIR \"${CMAKE_CURRENT_SOURCE_DIR}\"", nativeCMake, StringComparison.Ordinal);
+        Assert.Contains("-DCMAKE_TOOLCHAIN_FILE:FILEPATH=${PIXELENGINE_TOOLCHAIN_FILE_ABSOLUTE}", nativeCMake, StringComparison.Ordinal);
+        Assert.Contains("-DCMAKE_MAKE_PROGRAM:FILEPATH=${CMAKE_MAKE_PROGRAM}", nativeCMake, StringComparison.Ordinal);
+        Assert.DoesNotContain("-DCMAKE_TOOLCHAIN_FILE:FILEPATH=${CMAKE_TOOLCHAIN_FILE}", nativeCMake, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// 验证 HTML UI native 作为 dynamic-only 依赖随 UI/Demo publish 落入 runtimes/native，不进入 Box2D dual-build 静态链。
     /// </summary>
     [Fact]
-
-    // —— 性能、原生与发布模式 ——
     public void HtmlUiNativePackagingUsesDynamicOnlyRuntimeLayout()
     {
         // Arrange：准备输入与初始状态
