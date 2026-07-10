@@ -92,10 +92,9 @@ internal sealed class EditorProjectSession : IDisposable
             EditorSceneModel sceneModel = LoadSceneModel(project, sceneRelativePath);
             EditorUndoStack undoStack = new();
             EditorAssetManifestStore assets = new(project);
-            _ = assets.Refresh();
             EditorPrefabAssetStore prefabs = new(project.ContentRootPath, assets);
             EditorScriptAssetOpenService scriptAssetOpenService = new(
-                assets,
+                project,
                 () => app.Preferences.Current.ExternalScriptEditor);
             engine.Context.RegisterService<IScriptHotReloadDiagnosticSink>(new EditorConsoleScriptHotReloadDiagnosticSink(app.ConsoleStore));
             RegisterInitialProjectScriptAssembly(project, engine, app.ConsoleStore);
@@ -272,7 +271,18 @@ internal sealed class EditorProjectSession : IDisposable
     public void InstantiatePrefab(string assetPath)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        UndoStack.Execute(SceneModel, new InstantiatePrefabCommand(Prefabs, assetPath, SceneModel.SelectedStableId));
+        string logicalPath = assetPath;
+        if (EditorRootedBrowserPath.TryParse(assetPath, out EditorAssetPath rootedPath, out _))
+        {
+            if (rootedPath.Root != EditorAssetRootKind.Content)
+            {
+                throw new InvalidOperationException("Prefab 必须来自 Content logical root。");
+            }
+
+            logicalPath = rootedPath.RelativePath;
+        }
+
+        UndoStack.Execute(SceneModel, new InstantiatePrefabCommand(Prefabs, logicalPath, SceneModel.SelectedStableId));
     }
 
     public EditorScriptAssetOpenResult OpenScriptAsset(string assetPath)

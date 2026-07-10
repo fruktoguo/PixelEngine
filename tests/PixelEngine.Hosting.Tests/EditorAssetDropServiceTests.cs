@@ -372,6 +372,30 @@ public sealed class EditorAssetDropServiceTests
     }
 
     /// <summary>
+    /// 验证生产 Project Window 的 rooted payload 在进入运行时资产引用前会去掉 logical root，且拒绝错根类型与越界路径。
+    /// </summary>
+    [Fact]
+    public void RootedBrowserPayloadNormalizesToRuntimeLogicalPath()
+    {
+        Assert.True(EditorAssetDropPayload.TryFromBrowserPayload(
+            new AssetBrowserDragPayload("asset_prefab", "Content/prefabs/Crate.prefab", AssetBrowserItemKind.Prefab),
+            out EditorAssetDropPayload prefab));
+        Assert.Equal("prefabs/Crate.prefab", prefab.LogicalPath);
+
+        Assert.True(EditorAssetDropPayload.TryFromBrowserPayload(
+            new AssetBrowserDragPayload("asset_script", "ScriptSource/Game/Player.cs", AssetBrowserItemKind.Script),
+            out EditorAssetDropPayload script));
+        Assert.Equal("Game/Player.cs", script.LogicalPath);
+
+        Assert.False(EditorAssetDropPayload.TryFromBrowserPayload(
+            new AssetBrowserDragPayload("asset_texture", "ScriptSource/textures/sand.png", AssetBrowserItemKind.Texture),
+            out _));
+        Assert.False(EditorAssetDropPayload.TryFromBrowserPayload(
+            new AssetBrowserDragPayload("asset_prefab", "Content/../outside.prefab", AssetBrowserItemKind.Prefab),
+            out _));
+    }
+
+    /// <summary>
     /// 验证资产移动会重写 Inspector 字段中的 stable asset reference，而不是只重写 prefab link。
     /// </summary>
     [Fact]

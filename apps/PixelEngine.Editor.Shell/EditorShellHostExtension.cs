@@ -28,6 +28,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
     private BuildSettingsPanel? _buildSettingsPanel;
     private SceneViewPanel? _sceneViewPanel;
     private GameViewPanel? _gameViewPanel;
+    private EditorAssetBrowserDataSource? _assetBrowserDataSource;
     private bool _panelsRegistered;
 
     public EditorShellHostExtension(EditorProject project, EditorShellApp app)
@@ -173,7 +174,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             engine.Context.Profiler,
             () => BuildRuntimeDiagnostics(engine),
             engine.Context.TryGetService(out IScriptRuntime scriptRuntime) ? scriptRuntime : null);
-        return new CompositeDisposable(input, Bridge, _editor);
+        return new CompositeDisposable(input, Bridge, _assetBrowserDataSource, _editor);
     }
 
     public bool TryGetInputCapture(out EditorHostInputCapture capture)
@@ -232,7 +233,18 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
 
         _editor.AddPanel(new EditorMainMenuPanel(_app, _editor));
         _editor.AddPanel(_app.PreferencesWindow);
-        EditorAssetBrowserDataSource assetBrowserDataSource = new(_project);
+        _assetBrowserDataSource = new EditorAssetBrowserDataSource(_project, activeScene: _sceneModel);
+        EditorAssetBrowserDataSource assetBrowserDataSource = _assetBrowserDataSource;
+        if (!string.IsNullOrWhiteSpace(assetBrowserDataSource.LastDiagnostic))
+        {
+            _app.ConsoleStore.Add(new EditorConsoleEntry(
+                DateTimeOffset.UtcNow,
+                EditorConsoleCategory.Asset,
+                EditorConsoleSeverity.Warning,
+                "asset-database",
+                assetBrowserDataSource.LastDiagnostic));
+        }
+
         if (_sceneModel is not null && _undoStack is not null && _prefabs is not null)
         {
             _editor.AddPanel(new GameObjectHierarchyPanel(_sceneModel, _undoStack, _prefabs));

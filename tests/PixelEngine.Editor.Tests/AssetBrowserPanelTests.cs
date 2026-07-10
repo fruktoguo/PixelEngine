@@ -77,6 +77,7 @@ public sealed class AssetBrowserPanelTests
         AssetBrowserItem filtered = Assert.Single(panel.FilteredAssets);
         Assert.Equal("audio/hit.wav", filtered.Path);
         Assert.True(selected);
+        Assert.Null(selection.AssetId);
         Assert.Equal("audio/hit.wav", selection.AssetPath);
         Assert.Null(selection.FolderPath);
         Assert.True(played);
@@ -93,9 +94,10 @@ public sealed class AssetBrowserPanelTests
         EditorSelection selection = new();
 
         selection.SelectGameObject(7);
-        selection.SelectAsset("scripts/Player.cs");
+        selection.SelectAsset("asset_player", "scripts/Player.cs");
 
         // Assert：验证预期结果
+        Assert.Equal("asset_player", selection.AssetId);
         Assert.Equal("scripts/Player.cs", selection.AssetPath);
         Assert.Null(selection.FolderPath);
         Assert.Null(selection.GameObjectStableId);
@@ -105,6 +107,7 @@ public sealed class AssetBrowserPanelTests
         selection.SelectFolder("scripts");
 
         Assert.Equal("scripts", selection.FolderPath);
+        Assert.Null(selection.AssetId);
         Assert.Null(selection.AssetPath);
         Assert.Null(selection.GameObjectStableId);
         Assert.Null(selection.EntityHandle);
@@ -113,10 +116,152 @@ public sealed class AssetBrowserPanelTests
         selection.SelectGameObject(9);
 
         Assert.Equal(9, selection.GameObjectStableId);
+        Assert.Null(selection.AssetId);
         Assert.Null(selection.AssetPath);
         Assert.Null(selection.FolderPath);
         Assert.Null(selection.EntityHandle);
         Assert.Null(selection.BodyId);
+    }
+
+    /// <summary>
+    /// 验证缺少 stable id 的 legacy/mock 资产仍可按路径选择，并在刷新时安全保留或清理。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelKeepsLegacyPathSelectionCompatibleAcrossRefresh()
+    {
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("textures/legacy.png", AssetBrowserItemKind.Texture, 10, DateTimeOffset.UnixEpoch, null),
+        ]);
+        AssetBrowserPanel panel = new(source);
+        EditorSelection selection = new();
+
+        _ = panel.Refresh(selection);
+        Assert.True(panel.SelectAsset("textures/legacy.png", selection));
+        source.ReplaceAssets(
+        [
+            new AssetBrowserItem("textures/legacy.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null),
+        ]);
+        _ = panel.Refresh();
+
+        Assert.Null(selection.AssetId);
+        Assert.Equal("textures/legacy.png", selection.AssetPath);
+
+        source.ReplaceAssets([]);
+        _ = panel.Refresh();
+        Assert.Null(selection.AssetId);
+        Assert.Null(selection.AssetPath);
+    }
+
+    /// <summary>
+    /// 验证同路径出现新 stable id 时不会把选择偷偷转移到另一个资产。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelClearsStableSelectionWhenPathIsReusedByNewAsset()
+    {
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 10, DateTimeOffset.UnixEpoch, null, "asset_old"),
+        ]);
+        AssetBrowserPanel panel = new(source);
+        EditorSelection selection = new();
+
+        _ = panel.Refresh(selection);
+        Assert.True(panel.SelectAsset("textures/sand.png", selection));
+        source.ReplaceAssets(
+        [
+            new AssetBrowserItem("textures/sand.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_new"),
+        ]);
+
+        _ = panel.Refresh();
+
+        Assert.Null(selection.AssetId);
+        Assert.Null(selection.AssetPath);
+    }
+
+    /// <summary>
+    /// 验证读取缓存快照不会隐式执行完整刷新，只有公开 Refresh 才触发完整刷新契约。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelSeparatesCachedListingFromExplicitFullRefresh()
+    {
+        RefreshableRecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("textures/cached.png", AssetBrowserItemKind.Texture, 10, DateTimeOffset.UnixEpoch, null, "asset_cached"),
+        ]);
+        source.StageFullRefresh(
+        [
+            new AssetBrowserItem("textures/refreshed.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_refreshed"),
+        ]);
+        AssetBrowserPanel panel = new(source);
+
+        AssetBrowserItem cached = Assert.Single(source.ListAssets());
+
+        Assert.Equal("textures/cached.png", cached.Path);
+        Assert.Equal(0, source.FullRefreshCount);
+
+        IReadOnlyList<AssetBrowserItem> refreshed = panel.Refresh();
+
+        Assert.Equal("textures/refreshed.png", Assert.Single(refreshed).Path);
+        Assert.Equal(1, source.FullRefreshCount);
+    }
+
+    /// <summary>
+    /// 验证增量 pump 仅在缓存变化时重载 UI 快照，并按 stable id 跟随资产移动。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelReloadsSnapshotOnlyWhenPendingChangesModifyCache()
+    {
+        RefreshableRecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("textures/old.png", AssetBrowserItemKind.Texture, 10, DateTimeOffset.UnixEpoch, null, "asset_texture"),
+        ]);
+        AssetBrowserPanel panel = new(source);
+        EditorSelection selection = new();
+
+        Assert.True(panel.ApplyPendingChanges());
+        Assert.True(panel.SelectAsset("textures/old.png", selection));
+        int initialListCount = source.ListAssetsCount;
+        source.QueuePendingChanges(
+        [
+            new AssetBrowserItem("textures/new.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_texture"),
+        ]);
+
+        bool changed = panel.ApplyPendingChanges();
+
+        Assert.True(changed);
+        Assert.Equal("textures/new.png", Assert.Single(panel.LastAssets).Path);
+        Assert.Equal("asset_texture", selection.AssetId);
+        Assert.Equal("textures/new.png", selection.AssetPath);
+        Assert.Equal(initialListCount + 1, source.ListAssetsCount);
+        Assert.Equal(2, source.ListFoldersCount);
+        Assert.Equal(0, source.FullRefreshCount);
+
+        Assert.False(panel.ApplyPendingChanges());
+        Assert.Equal(initialListCount + 1, source.ListAssetsCount);
+        Assert.Equal(2, source.ListFoldersCount);
+        Assert.Equal(0, source.FullRefreshCount);
+    }
+
+    /// <summary>
+    /// 验证空工程逐帧只泵送增量，首帧后不会重复读取快照或执行完整刷新。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelDoesNotRepeatFullRefreshForEmptyProjectFrames()
+    {
+        RefreshableRecordingAssetSource source = new([]);
+        AssetBrowserPanel panel = new(source);
+
+        Assert.True(panel.ApplyPendingChanges());
+        Assert.False(panel.ApplyPendingChanges());
+        Assert.False(panel.ApplyPendingChanges());
+        Assert.False(panel.ApplyPendingChanges());
+
+        Assert.Empty(panel.LastAssets);
+        Assert.Equal(1, source.ListAssetsCount);
+        Assert.Equal(1, source.ListFoldersCount);
+        Assert.Equal(4, source.ApplyPendingCount);
+        Assert.Equal(0, source.FullRefreshCount);
     }
 
     /// <summary>
@@ -254,17 +399,27 @@ public sealed class AssetBrowserPanelTests
         AssetBrowserDeleteResult DeleteAsset(AssetBrowserDeleteRequest request)
         {
             requests.Add(request);
-            return request.Confirmed
-                ? new AssetBrowserDeleteResult(true, false, $"deleted {request.Path}")
-                : new AssetBrowserDeleteResult(false, true, $"confirm {request.Path}");
+            if (!request.Confirmed)
+            {
+                return new AssetBrowserDeleteResult(false, true, $"confirm {request.Path}");
+            }
+
+            source.ReplaceAssets(
+            [
+                new AssetBrowserItem("textures/legacy.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null),
+            ]);
+            return new AssetBrowserDeleteResult(true, false, $"deleted {request.Path}");
         }
 
         AssetBrowserPanel panel = new(source, deleteAsset: DeleteAsset);
+        EditorSelection selection = new();
 
-        _ = panel.Refresh();
+        _ = panel.Refresh(selection);
+        Assert.True(panel.SelectAsset("textures/sand.png", selection));
         bool requested = panel.TryRequestDeleteAsset("textures/sand.png");
-        bool confirmed = panel.TryConfirmDeleteAsset("textures/sand.png");
         bool legacy = panel.TryRequestDeleteAsset("textures/legacy.png");
+        string legacyStatus = panel.Status;
+        bool confirmed = panel.TryConfirmDeleteAsset("textures/sand.png");
 
         // Assert：验证预期结果
         Assert.False(requested);
@@ -275,7 +430,9 @@ public sealed class AssetBrowserPanelTests
         Assert.True(requests[1].Confirmed);
         Assert.Equal("asset_texture", requests[1].AssetId);
         Assert.Equal(AssetBrowserItemKind.Texture, requests[1].Kind);
-        Assert.Contains("stable asset id", panel.Status, StringComparison.Ordinal);
+        Assert.Contains("stable asset id", legacyStatus, StringComparison.Ordinal);
+        Assert.Null(selection.AssetId);
+        Assert.Null(selection.AssetPath);
     }
 
     /// <summary>
@@ -341,8 +498,10 @@ public sealed class AssetBrowserPanelTests
         }
 
         AssetBrowserPanel panel = new(source, moveAsset: MoveAsset);
+        EditorSelection selection = new();
 
-        _ = panel.Refresh();
+        _ = panel.Refresh(selection);
+        Assert.True(panel.SelectAsset("textures/sand.png", selection));
         bool moved = panel.TryMoveAsset("textures/sand.png", "textures/renamed/sand.png");
         bool legacy = panel.TryMoveAsset("textures/legacy.png", "textures/renamed/legacy.png");
 
@@ -355,6 +514,8 @@ public sealed class AssetBrowserPanelTests
         Assert.Equal("textures/renamed/sand.png", request.NewPath);
         Assert.Equal(AssetBrowserItemKind.Texture, request.Kind);
         Assert.Contains(panel.LastAssets, asset => asset.Path == "textures/renamed/sand.png" && asset.AssetId == "asset_texture");
+        Assert.Equal("asset_texture", selection.AssetId);
+        Assert.Equal("textures/renamed/sand.png", selection.AssetPath);
         Assert.Contains("stable asset id", panel.Status, StringComparison.Ordinal);
     }
 
@@ -733,6 +894,103 @@ public sealed class AssetBrowserPanelTests
     }
 
     /// <summary>
+    /// 验证移动父文件夹后，选中的后代文件夹、活动作用域与创建/导入输入会按 rooted 前缀一起迁移。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelFollowsSelectedDescendantFolderAfterRootedMove()
+    {
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("Content/levels/sub/one.scene", AssetBrowserItemKind.Scene, 10, DateTimeOffset.UnixEpoch, null, "asset_scene"),
+        ]);
+        source.ReplaceFolders(
+        [
+            new AssetBrowserFolderItem("Content", 1),
+            new AssetBrowserFolderItem("Content/levels", 1),
+            new AssetBrowserFolderItem("Content/levels/sub", 1),
+        ]);
+        AssetBrowserFolderMoveResult MoveFolder(AssetBrowserFolderMoveRequest request)
+        {
+            source.ReplaceAssets(
+            [
+                new AssetBrowserItem("Content/world/levels/sub/one.scene", AssetBrowserItemKind.Scene, 10, DateTimeOffset.UnixEpoch, null, "asset_scene"),
+            ]);
+            source.ReplaceFolders(
+            [
+                new AssetBrowserFolderItem("Content", 1),
+                new AssetBrowserFolderItem("Content/world", 1),
+                new AssetBrowserFolderItem("Content/world/levels", 1),
+                new AssetBrowserFolderItem("Content/world/levels/sub", 1),
+            ]);
+            return new AssetBrowserFolderMoveResult(true, $"moved {request.NewPath}");
+        }
+
+        AssetBrowserPanel panel = new(source, moveFolder: MoveFolder);
+        EditorSelection selection = new();
+
+        _ = panel.Refresh(selection);
+        Assert.True(panel.SelectFolder("Content/levels/sub", selection));
+        Assert.True(panel.BeginCreateAssetInFolder("Content/levels/sub", AssetBrowserItemKind.Scene));
+        Assert.True(panel.BeginImportAssetInFolder(@"C:\Imports\sand.png", "Content/levels/sub", AssetBrowserItemKind.Texture));
+
+        bool moved = panel.TryMoveFolder("Content/levels", "world/levels");
+
+        Assert.True(moved);
+        Assert.Equal("Content/world/levels/sub", selection.FolderPath);
+        Assert.Equal("Content/world/levels/sub", panel.ActiveFolderPath);
+        Assert.StartsWith("Content/world/levels/sub/", panel.CreatePath, StringComparison.Ordinal);
+        Assert.StartsWith("Content/world/levels/sub/", panel.ImportDestinationPath, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content/levels/sub/", panel.CreatePath, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content/levels/sub/", panel.ImportDestinationPath, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证文件夹移动只重定位 folder context，不会破坏其中已选资产的 stable-id 跟随。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelPreservesStableAssetSelectionAcrossFolderMove()
+    {
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("Content/levels/one.scene", AssetBrowserItemKind.Scene, 10, DateTimeOffset.UnixEpoch, null, "asset_scene"),
+        ]);
+        source.ReplaceFolders(
+        [
+            new AssetBrowserFolderItem("Content", 1),
+            new AssetBrowserFolderItem("Content/levels", 1),
+        ]);
+        AssetBrowserFolderMoveResult MoveFolder(AssetBrowserFolderMoveRequest request)
+        {
+            source.ReplaceAssets(
+            [
+                new AssetBrowserItem("Content/world/levels/one.scene", AssetBrowserItemKind.Scene, 10, DateTimeOffset.UnixEpoch, null, "asset_scene"),
+            ]);
+            source.ReplaceFolders(
+            [
+                new AssetBrowserFolderItem("Content", 1),
+                new AssetBrowserFolderItem("Content/world", 1),
+                new AssetBrowserFolderItem("Content/world/levels", 1),
+            ]);
+            return new AssetBrowserFolderMoveResult(true, $"moved {request.NewPath}");
+        }
+
+        AssetBrowserPanel panel = new(source, moveFolder: MoveFolder);
+        EditorSelection selection = new();
+
+        _ = panel.Refresh(selection);
+        Assert.True(panel.SelectFolder("Content/levels", selection));
+        Assert.True(panel.SelectAsset("Content/levels/one.scene", selection));
+
+        bool moved = panel.TryMoveFolder("Content/levels", "world/levels");
+
+        Assert.True(moved);
+        Assert.Equal("asset_scene", selection.AssetId);
+        Assert.Equal("Content/world/levels/one.scene", selection.AssetPath);
+        Assert.Null(selection.FolderPath);
+        Assert.Equal("Content/world/levels", panel.ActiveFolderPath);
+    }
+
+    /// <summary>
     /// 验证 Project Window 文件夹递归删除会携带子资产 stable id 集合、二次确认并刷新列表。
     /// </summary>
     [Fact]
@@ -778,6 +1036,97 @@ public sealed class AssetBrowserPanelTests
         Assert.Empty(panel.LastAssets);
         Assert.DoesNotContain(panel.FolderTargets, folder => folder.Path == "levels");
         Assert.Contains("content 根目录", panel.Status, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证删除当前文件夹后回退到最近存在父目录，后续创建与导入不会复活已删除路径。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelFallsBackToExistingParentAfterFolderDelete()
+    {
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("Content/levels/sub/one.scene", AssetBrowserItemKind.Scene, 10, DateTimeOffset.UnixEpoch, null, "asset_scene"),
+        ]);
+        source.ReplaceFolders(
+        [
+            new AssetBrowserFolderItem("Content", 1),
+            new AssetBrowserFolderItem("Content/levels", 1),
+            new AssetBrowserFolderItem("Content/levels/sub", 1),
+        ]);
+        List<AssetBrowserCreateRequest> createRequests = [];
+        List<AssetBrowserImportRequest> importRequests = [];
+        AssetBrowserFolderDeleteResult DeleteFolder(AssetBrowserFolderDeleteRequest request)
+        {
+            if (!request.Confirmed)
+            {
+                return new AssetBrowserFolderDeleteResult(false, true, "confirm");
+            }
+
+            source.ReplaceAssets([]);
+            source.ReplaceFolders(
+            [
+                new AssetBrowserFolderItem("Content", 0),
+                new AssetBrowserFolderItem("Content/levels", 0),
+            ]);
+            return new AssetBrowserFolderDeleteResult(true, false, "deleted");
+        }
+
+        AssetBrowserCreateResult CreateAsset(AssetBrowserCreateRequest request)
+        {
+            createRequests.Add(request);
+            source.ReplaceAssets(
+            [
+                new AssetBrowserItem(request.Path, request.Kind, 10, DateTimeOffset.UnixEpoch, null, "asset_created"),
+            ]);
+            source.ReplaceFolders(
+            [
+                new AssetBrowserFolderItem("Content", 1),
+                new AssetBrowserFolderItem("Content/levels", 1),
+            ]);
+            return new AssetBrowserCreateResult(true, "created", "asset_created", request.Path);
+        }
+
+        AssetBrowserImportResult ImportAsset(AssetBrowserImportRequest request)
+        {
+            importRequests.Add(request);
+            source.ReplaceAssets(
+            [
+                .. source.ListAssets(),
+                new AssetBrowserItem(request.Path, request.Kind, 10, DateTimeOffset.UnixEpoch, null, "asset_imported"),
+            ]);
+            return new AssetBrowserImportResult(true, "imported", "asset_imported", request.Path);
+        }
+
+        AssetBrowserPanel panel = new(
+            source,
+            deleteFolder: DeleteFolder,
+            createAsset: CreateAsset,
+            importAsset: ImportAsset);
+        EditorSelection selection = new();
+
+        _ = panel.Refresh(selection);
+        Assert.True(panel.SelectFolder("Content/levels/sub", selection));
+        Assert.True(panel.BeginCreateAssetInFolder("Content/levels/sub", AssetBrowserItemKind.Scene));
+        Assert.True(panel.BeginImportAssetInFolder(@"C:\Imports\sand.png", "Content/levels/sub", AssetBrowserItemKind.Texture));
+        Assert.False(panel.TryRequestDeleteFolder("Content/levels/sub"));
+
+        bool deleted = panel.TryConfirmDeleteFolder("Content/levels/sub");
+
+        Assert.True(deleted);
+        Assert.Equal("Content/levels", selection.FolderPath);
+        Assert.Equal("Content/levels", panel.ActiveFolderPath);
+        Assert.StartsWith("Content/levels/", panel.CreatePath, StringComparison.Ordinal);
+        Assert.StartsWith("Content/levels/", panel.ImportDestinationPath, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content/levels/sub/", panel.CreatePath, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content/levels/sub/", panel.ImportDestinationPath, StringComparison.Ordinal);
+
+        Assert.True(panel.TryCreateCurrentAsset());
+        Assert.True(panel.TryImportCurrentAsset());
+        Assert.Equal("Content/levels/NewScene.scene", Assert.Single(createRequests).Path);
+        Assert.Equal("Content/levels/sand.png", Assert.Single(importRequests).Path);
+        Assert.DoesNotContain("Content/levels/sub/", createRequests[0].Path, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content/levels/sub/", importRequests[0].Path, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -859,6 +1208,8 @@ public sealed class AssetBrowserPanelTests
 
         _ = panel.Refresh();
         bool selectedFolder = panel.SelectFolder("levels", selection);
+        Assert.True(panel.BeginCreateAssetInFolder("levels", AssetBrowserItemKind.Scene));
+        Assert.True(panel.BeginImportAssetInFolder(@"C:\Imports\sand.png", "levels", AssetBrowserItemKind.Texture));
         source.ReplaceAssets([new AssetBrowserItem("scripts/Player.cs", AssetBrowserItemKind.Script, 30, DateTimeOffset.UnixEpoch, null, "asset_script")]);
         source.ReplaceFolders([new AssetBrowserFolderItem("scripts", 1)]);
         _ = panel.Refresh();
@@ -866,6 +1217,9 @@ public sealed class AssetBrowserPanelTests
         // Assert：验证预期结果
         Assert.True(selectedFolder);
         Assert.Equal(string.Empty, panel.ActiveFolderPath);
+        Assert.Equal(string.Empty, selection.FolderPath);
+        Assert.Equal("NewScene.scene", panel.CreatePath);
+        Assert.Equal("sand.png", panel.ImportDestinationPath);
         AssetBrowserItem visible = Assert.Single(panel.FilteredAssets);
         Assert.Equal("scripts/Player.cs", visible.Path);
     }
@@ -908,6 +1262,65 @@ public sealed class AssetBrowserPanelTests
         public void ReplaceFolders(IReadOnlyList<AssetBrowserFolderItem> folders)
         {
             _folders = folders;
+        }
+    }
+
+    private sealed class RefreshableRecordingAssetSource(IReadOnlyList<AssetBrowserItem> assets) :
+        IAssetBrowserDataSource,
+        IAssetBrowserFolderDataSource,
+        IAssetBrowserRefreshableDataSource
+    {
+        private IReadOnlyList<AssetBrowserItem> _assets = assets;
+        private IReadOnlyList<AssetBrowserItem> _fullRefreshAssets = assets;
+        private IReadOnlyList<AssetBrowserItem>? _pendingAssets;
+
+        public int ListAssetsCount { get; private set; }
+
+        public int ListFoldersCount { get; private set; }
+
+        public int FullRefreshCount { get; private set; }
+
+        public int ApplyPendingCount { get; private set; }
+
+        public IReadOnlyList<AssetBrowserItem> ListAssets()
+        {
+            ListAssetsCount++;
+            return _assets;
+        }
+
+        public IReadOnlyList<AssetBrowserFolderItem> ListFolders()
+        {
+            ListFoldersCount++;
+            return [];
+        }
+
+        public void RefreshAssets()
+        {
+            FullRefreshCount++;
+            _assets = _fullRefreshAssets;
+        }
+
+        public bool ApplyPendingChanges()
+        {
+            ApplyPendingCount++;
+            if (_pendingAssets is null)
+            {
+                return false;
+            }
+
+            _assets = _pendingAssets;
+            _pendingAssets = null;
+            return true;
+        }
+
+        public void StageFullRefresh(IReadOnlyList<AssetBrowserItem> assets)
+        {
+            _fullRefreshAssets = assets;
+        }
+
+        public void QueuePendingChanges(IReadOnlyList<AssetBrowserItem> assets)
+        {
+            _pendingAssets = assets;
         }
     }
 

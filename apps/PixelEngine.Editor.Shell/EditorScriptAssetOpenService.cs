@@ -7,15 +7,45 @@ namespace PixelEngine.Editor.Shell;
 /// <summary>
 /// 在外部 IDE 中打开 .cs 脚本资产。
 /// </summary>
-internal sealed class EditorScriptAssetOpenService(
-    EditorAssetManifestStore assets,
-    Func<string>? editorCommandProvider = null,
-    IExternalScriptEditorProcessLauncher? processLauncher = null)
+internal sealed class EditorScriptAssetOpenService
 {
     private const string FilePlaceholder = "{file}";
-    private readonly EditorAssetManifestStore _assets = assets ?? throw new ArgumentNullException(nameof(assets));
-    private readonly Func<string> _editorCommandProvider = editorCommandProvider ?? (() => string.Empty);
-    private readonly IExternalScriptEditorProcessLauncher _processLauncher = processLauncher ?? new ExternalScriptEditorProcessLauncher();
+    private readonly EditorAssetManifestStore? _assets;
+    private readonly EditorProject? _project;
+    private readonly string _projectRoot;
+    private readonly string _contentRoot;
+    private readonly Func<string> _editorCommandProvider;
+    private readonly IExternalScriptEditorProcessLauncher _processLauncher;
+
+    /// <summary>
+    /// 兼容基于 content manifest 的旧 Project Window opener。
+    /// </summary>
+    public EditorScriptAssetOpenService(
+        EditorAssetManifestStore assets,
+        Func<string>? editorCommandProvider = null,
+        IExternalScriptEditorProcessLauncher? processLauncher = null)
+    {
+        _assets = assets ?? throw new ArgumentNullException(nameof(assets));
+        _projectRoot = assets.ProjectRoot;
+        _contentRoot = assets.ContentRoot;
+        _editorCommandProvider = editorCommandProvider ?? (static () => string.Empty);
+        _processLauncher = processLauncher ?? new ExternalScriptEditorProcessLauncher();
+    }
+
+    /// <summary>
+    /// 生产 Project Window 双根 opener；直接验证 Content/ 或 ScriptSource/ 下的真实 .cs 文件。
+    /// </summary>
+    public EditorScriptAssetOpenService(
+        EditorProject project,
+        Func<string>? editorCommandProvider = null,
+        IExternalScriptEditorProcessLauncher? processLauncher = null)
+    {
+        _project = project ?? throw new ArgumentNullException(nameof(project));
+        _projectRoot = project.ProjectRoot;
+        _contentRoot = project.ContentRootPath;
+        _editorCommandProvider = editorCommandProvider ?? (static () => string.Empty);
+        _processLauncher = processLauncher ?? new ExternalScriptEditorProcessLauncher();
+    }
 
     public bool TryOpenScriptAsset(string logicalPath, out string diagnostic)
     {
@@ -29,54 +59,92 @@ internal sealed class EditorScriptAssetOpenService(
         ArgumentException.ThrowIfNullOrWhiteSpace(logicalPath);
         try
         {
-            if (!_assets.TryResolveLogicalPath(logicalPath, out EditorAssetRecord asset))
-            {
-                return Failed(logicalPath, $"脚本资产不存在或未登记：{logicalPath}");
-            }
-
-            if (asset.AssetType != EditorAssetType.Script)
-            {
-                return Failed(asset, $"资产不是 script 类型，拒绝外部打开：{asset.LogicalPath} ({asset.AssetType})。");
-            }
-
-            string fullPath = ResolveFullPath(asset);
-            if (!File.Exists(fullPath))
-            {
-                return Failed(asset, $"脚本文件不存在：{fullPath}", fullPath);
-            }
-
-            string editorCommand = _editorCommandProvider()?.Trim() ?? string.Empty;
-            bool useSystemDefault = IsSystemDefault(editorCommand);
-            if (!TryCreateStartInfo(editorCommand, fullPath, useSystemDefault, out ProcessStartInfo? startInfo, out string diagnostic) ||
-                startInfo is null)
-            {
-                return Failed(asset, diagnostic, fullPath, editorCommand, useSystemDefault);
-            }
-
-            if (!_processLauncher.Start(startInfo, out string launcherDiagnostic))
-            {
-                string message = string.IsNullOrWhiteSpace(launcherDiagnostic)
-                    ? $"启动外部脚本编辑器失败：{asset.LogicalPath}。"
-                    : $"启动外部脚本编辑器失败：{asset.LogicalPath}。{launcherDiagnostic}";
-                return Failed(asset, message, fullPath, editorCommand, useSystemDefault);
-            }
-
-            string success = useSystemDefault
-                ? $"已用系统默认 opener 打开脚本：{asset.LogicalPath}"
-                : $"已用外部脚本编辑器打开脚本：{asset.LogicalPath}";
-            return new EditorScriptAssetOpenResult(
-                Success: true,
-                AssetId: asset.Id,
-                LogicalPath: asset.LogicalPath,
-                ResolvedPath: fullPath,
-                EditorCommand: useSystemDefault ? "system-default" : editorCommand,
-                UsedSystemDefault: useSystemDefault,
-                Diagnostic: success);
+            return _project is null
+                ? OpenManifestScriptAsset(logicalPath)
+                : OpenRootedScriptAsset(logicalPath);
         }
         catch (Exception ex) when (!OperatingSystem.IsBrowser())
         {
             return Failed(logicalPath, $"脚本资产打开失败：{ex.Message}");
         }
+    }
+
+    private EditorScriptAssetOpenResult OpenManifestScriptAsset(string logicalPath)
+    {
+        EditorAssetManifestStore assets = _assets ??
+            throw new InvalidOperationException("legacy script opener 缺少 asset manifest。");
+        if (!assets.TryResolveLogicalPath(logicalPath, out EditorAssetRecord asset))
+        {
+            return Failed(logicalPath, $"脚本资产不存在或未登记：{logicalPath}");
+        }
+
+        if (asset.AssetType != EditorAssetType.Script)
+        {
+            return Failed(asset, $"资产不是 script 类型，拒绝外部打开：{asset.LogicalPath} ({asset.AssetType})。");
+        }
+
+        string fullPath = ResolveLegacyFullPath(asset);
+        return !File.Exists(fullPath)
+            ? Failed(asset, $"脚本文件不存在：{fullPath}", fullPath)
+            : OpenResolvedScript(asset.Id, asset.LogicalPath, fullPath);
+    }
+
+    private EditorScriptAssetOpenResult OpenRootedScriptAsset(string rootedPath)
+    {
+        EditorProject project = _project ??
+            throw new InvalidOperationException("rooted script opener 缺少 EditorProject。");
+        if (!EditorRootedBrowserPath.TryParse(rootedPath, out EditorAssetPath path, out string diagnostic))
+        {
+            return Failed(rootedPath, diagnostic);
+        }
+
+        string canonicalPath = EditorRootedBrowserPath.Format(path);
+        if (!string.Equals(Path.GetExtension(path.RelativePath), ".cs", StringComparison.OrdinalIgnoreCase))
+        {
+            return Failed(canonicalPath, $"外部脚本编辑器仅支持 .cs 文件：{canonicalPath}");
+        }
+
+        string fullPath = EditorRootedBrowserPath.ResolveFullPath(
+            path,
+            project.ContentRootPath,
+            project.ScriptSourcePath);
+        return !File.Exists(fullPath)
+            ? Failed(string.Empty, canonicalPath, $"脚本文件不存在：{fullPath}", fullPath)
+            : OpenResolvedScript(string.Empty, canonicalPath, fullPath);
+    }
+
+    private EditorScriptAssetOpenResult OpenResolvedScript(
+        string assetId,
+        string logicalPath,
+        string fullPath)
+    {
+        string editorCommand = _editorCommandProvider()?.Trim() ?? string.Empty;
+        bool useSystemDefault = IsSystemDefault(editorCommand);
+        if (!TryCreateStartInfo(editorCommand, fullPath, useSystemDefault, out ProcessStartInfo? startInfo, out string diagnostic) ||
+            startInfo is null)
+        {
+            return Failed(assetId, logicalPath, diagnostic, fullPath, editorCommand, useSystemDefault);
+        }
+
+        if (!_processLauncher.Start(startInfo, out string launcherDiagnostic))
+        {
+            string message = string.IsNullOrWhiteSpace(launcherDiagnostic)
+                ? $"启动外部脚本编辑器失败：{logicalPath}。"
+                : $"启动外部脚本编辑器失败：{logicalPath}。{launcherDiagnostic}";
+            return Failed(assetId, logicalPath, message, fullPath, editorCommand, useSystemDefault);
+        }
+
+        string success = useSystemDefault
+            ? $"已用系统默认 opener 打开脚本：{logicalPath}"
+            : $"已用外部脚本编辑器打开脚本：{logicalPath}";
+        return new EditorScriptAssetOpenResult(
+            Success: true,
+            AssetId: assetId,
+            LogicalPath: logicalPath,
+            ResolvedPath: fullPath,
+            EditorCommand: useSystemDefault ? "system-default" : editorCommand,
+            UsedSystemDefault: useSystemDefault,
+            Diagnostic: success);
     }
 
     private bool TryCreateStartInfo(
@@ -92,7 +160,9 @@ internal sealed class EditorScriptAssetOpenService(
             {
                 FileName = fullPath,
                 UseShellExecute = true,
-                WorkingDirectory = Path.GetDirectoryName(fullPath) ?? _assets.ContentRoot,
+                WorkingDirectory = _project is null
+                    ? _contentRoot
+                    : Path.GetDirectoryName(fullPath) ?? _contentRoot,
             };
             diagnostic = string.Empty;
             return true;
@@ -113,7 +183,7 @@ internal sealed class EditorScriptAssetOpenService(
         {
             FileName = ReplaceFilePlaceholder(tokens[0], fullPath),
             UseShellExecute = false,
-            WorkingDirectory = _assets.ProjectRoot,
+            WorkingDirectory = _projectRoot,
         };
         for (int i = 1; i < tokens.Length; i++)
         {
@@ -129,9 +199,9 @@ internal sealed class EditorScriptAssetOpenService(
         return true;
     }
 
-    private string ResolveFullPath(EditorAssetRecord asset)
+    private string ResolveLegacyFullPath(EditorAssetRecord asset)
     {
-        string contentRoot = Path.GetFullPath(_assets.ContentRoot);
+        string contentRoot = Path.GetFullPath(_contentRoot);
         string fullPath = Path.GetFullPath(Path.Combine(contentRoot, asset.LogicalPath));
         string rootWithSeparator = contentRoot.EndsWith(Path.DirectorySeparatorChar)
             ? contentRoot
@@ -221,10 +291,27 @@ internal sealed class EditorScriptAssetOpenService(
         string? editorCommand = null,
         bool usedSystemDefault = false)
     {
-        return new EditorScriptAssetOpenResult(
-            false,
+        return Failed(
             asset.Id,
             asset.LogicalPath,
+            diagnostic,
+            resolvedPath,
+            editorCommand,
+            usedSystemDefault);
+    }
+
+    private static EditorScriptAssetOpenResult Failed(
+        string assetId,
+        string logicalPath,
+        string diagnostic,
+        string? resolvedPath = null,
+        string? editorCommand = null,
+        bool usedSystemDefault = false)
+    {
+        return new EditorScriptAssetOpenResult(
+            false,
+            assetId,
+            logicalPath,
             resolvedPath,
             editorCommand,
             usedSystemDefault,
