@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-10",
-  "generatedFromCommit": "0bab515c17d05790d161b2231a7c7a7e09d07c94",
+  "generatedFromCommit": "ff90cf44c0e8c4364120e246d858bfc56c330af1",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -43,13 +43,13 @@
       "entryId": "perf-003-ca-throughput-20260710",
       "taskIds": ["PERF-003"],
       "evidenceState": "local_formal_benchmark_target_gap",
-      "commit": "0bab515c17d05790d161b2231a7c7a7e09d07c94",
-      "runSessionId": "local-20260710-perf003-full-active-2m",
+      "commit": "ff90cf44c0e8c4364120e246d858bfc56c330af1",
+      "runSessionId": "local-20260710-perf003-full-active-2m-8workers",
       "runIdentityStatus": "captured",
       "hardware": "Microsoft Windows 11 build 26100; AMD Ryzen 7 5800X 8c/16t; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
-      "command": "dotnet build bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -c Release --no-restore -m:1; pwsh tools/run-benchmark.ps1 -Project bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -Artifacts artifacts/perf-003-full-active-2m-committed -BenchmarkDotNetArgs @('--filter=*CellThroughputBenchmark.StepJobSystem*FullActive2M*','--launchCount=1','--warmupCount=3','--iterationCount=5'); dotnet test tests/PixelEngine.Simulation.Tests/PixelEngine.Simulation.Tests.csproj -c Release --no-restore -m:1",
+      "command": "dotnet build bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -c Release --no-restore -m:1; pwsh tools/run-benchmark.ps1 -Project bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -Artifacts artifacts/perf-003-full-active-2m-8workers-committed -BenchmarkDotNetArgs @('--filter=*CellThroughputBenchmark.StepJobSystem*FullActive2M*','--launchCount=1','--warmupCount=3','--iterationCount=5'); dotnet test tests/PixelEngine.Simulation.Tests/PixelEngine.Simulation.Tests.csproj -c Release --no-restore -m:1",
       "reportPath": "docs/evidence-2026-07-10-perf-003-ca-throughput.md",
-      "sha256": "bb330f73502dae4ae15396a55efcfad6c65103f3a010b5f09ab71f19dd3c9b2c",
+      "sha256": "4526bbc74deab4863c7b4de6be66398543fd62e56a11a638c9fdc8d639436dc2",
       "notes": "本机 2,166,784-cell FullActive2M 平均 16.575ms、约 1.046M cells/8ms、Allocated -；已完成 movement source/target 寻址复用和 Full dirty 短路，但仍低于 2M/8ms，不能据此关闭 PERF-003 或伪造目标硬件/跨 RID 证据。"
     },
     {

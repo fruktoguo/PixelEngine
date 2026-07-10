@@ -20,7 +20,7 @@
 - [~] `PERF-003` 让 full-active CA 达到 2–4M cells/8ms 目标，或基于代表硬件和产品场景正式重校准架构指标。
   - 优先级：P0。
   - 依赖：`PERF-001`。
-  - 当前事实：`FullActive2M` 在 Ryzen 7 5800X / .NET 10.0.8 / 4 worker 上为 2,166,784 cells/16.575ms，折算约 1.046M cells/8ms，仍低于 2M 下限；262,144-cell `StepJobSystem` 当前基线为 4.122ms。详见 `docs/evidence-2026-07-10-perf-003-ca-throughput.md`。
+  - 当前事实：`FullActive2M` 在 Ryzen 7 5800X / .NET 10.0.8 / 8 worker（8 physical cores）上为 2,166,784 cells/12.965ms，折算约 1.337M cells/8ms，仍低于 2M 下限；262,144-cell `StepJobSystem` 旧 4-worker 基线为 4.122ms。详见 `docs/evidence-2026-07-10-perf-003-ca-throughput.md`。
   - 设计来源：`plan/03-simulation-kernel.md`；`plan/16-performance-hardening.md`；架构 §12.7/§12.8。
   - 验收：不得只优化 benchmark fixture；保留质量守恒和 checkerboard 不变式；若重校准，必须同步产品分辨率、活跃率假设、降级策略和架构置信度。
 

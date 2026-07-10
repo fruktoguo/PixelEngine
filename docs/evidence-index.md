@@ -8,7 +8,7 @@
 |---|---|---|---|---|---|---|
 | `perf-001-benchmark-baseline-20260710` | `PERF-001` | `complete_local_formal_benchmark_baseline` | `9548d549` | `local-20260710-perf001-bdn` | [PERF-001 formal benchmark baseline](evidence-2026-07-10-perf-001-benchmark-baseline.md) | `43b3e97d…977f0c` |
 | `perf-002-render-buffer-20260710` | `PERF-002` | `complete_local_render_buffer_regression` | `17a88e67` | `local-20260710-perf002-render-buffer` | [PERF-002 render-buffer optimization](evidence-2026-07-10-perf-002-render-buffer.md) | `5b9b6cf8…eedbf11f` |
-| `perf-003-ca-throughput-20260710` | `PERF-003` | `local_formal_benchmark_target_gap` | `0bab515c` | `local-20260710-perf003-full-active-2m` | [PERF-003 CA throughput](evidence-2026-07-10-perf-003-ca-throughput.md) | `bb330f73…d3c9b2c` |
+| `perf-003-ca-throughput-20260710` | `PERF-003` | `local_formal_benchmark_target_gap` | `ff90cf44` | `local-20260710-perf003-full-active-2m-8workers` | [PERF-003 CA throughput](evidence-2026-07-10-perf-003-ca-throughput.md) | `4526bbc7…9436dc2` |
 | `arch-001-custom-metric-20260710` | `ARCH-001` | `complete_local_api_boundary_regression` | `72d90ad2` | `local-20260710-arch001-custom-metric` | [ARCH-001 custom metric channel](evidence-2026-07-10-arch-001-custom-metric.md) | `e87e076d…5364c3` |
 | `arch-005-air-smoke-status-20260710` | `ARCH-005` | `complete_local_runtime_boundary_regression` | `464f40a3` | `local-20260710-arch005-air-smoke-status` | [ARCH-005 air/smoke status](evidence-2026-07-10-arch-005-air-smoke-status.md) | `53eba06e…524882` |
 | `test-001-native-smoke-20260710` | `TEST-001` | `complete_local_native_smoke` | `bdeb5aa5` | `local-20260710-test001-native-smoke` | [TEST-001 native smoke](evidence-2026-07-10-test-001-native-smoke.md) | `0f4ff66c…a91b13aa` |
