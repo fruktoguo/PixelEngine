@@ -32,7 +32,7 @@
   - 依赖：`BASE-003`、`BASE-006`。
   - 验收：改为无捕获 callback、泛型静态路径或显式循环；BenchmarkDotNet/分配测试证明对应调用 0 B；行为测试全绿。
 
-- [ ] `PERF-005` 池化刚体破坏重建中的 Dictionary/HashSet/List/plans/worker scratch，控制高频破坏时的 GC 和延迟尖峰。
+- [~] `PERF-005` 池化刚体破坏重建中的 Dictionary/HashSet/List/plans/worker scratch，控制高频破坏时的 GC 和延迟尖峰。
   - 优先级：P1。
   - 依赖：`ARCH-003` 可并行。
   - 验收：破坏 burst benchmark 报告分配和 p99；池对象完整清理；CCL/凸分解/碎片守恒测试不回归。
