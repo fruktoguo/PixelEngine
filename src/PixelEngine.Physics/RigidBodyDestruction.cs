@@ -15,17 +15,30 @@ namespace PixelEngine.Physics;
 /// </summary>
 public sealed class RigidBodyDestruction
 {
+    private const int InitialBodyScratchCapacity = 16;
+    private const int InitialDamageLocalCapacity = 32;
+    private const int InitialWorkerScratchCapacity = 4;
+
     private static readonly RangeJob PreparePlansJob = static (start, end, workerIndex, context) =>
     {
         RebuildPreparationBatch batch = (RebuildPreparationBatch)context!;
         batch.MarkWorker(workerIndex);
         for (int i = start; i < end; i++)
         {
-            batch.Plans[i] = PreparePlan(batch.Items[i], batch.FragmentPixelThreshold);
+            PreparePlan(batch.Items[i], batch.Plans[i], batch.GeometryScratch[workerIndex], batch.FragmentPixelThreshold);
         }
     };
 
     private readonly ParticleSystem? _particles;
+    private readonly Dictionary<int, HashSet<int>> _damagedLocalByBody = new(InitialBodyScratchCapacity);
+    private HashSet<int>[] _damageSetPool = new HashSet<int>[InitialBodyScratchCapacity];
+    private RebuildWorkItem[] _workItems = new RebuildWorkItem[InitialBodyScratchCapacity];
+    private RebuildPlan[] _plans = new RebuildPlan[InitialBodyScratchCapacity];
+    private int[] _workerHits = GC.AllocateArray<int>(InitialWorkerScratchCapacity, pinned: true);
+    private MarchingSquares.TraceScratch[] _geometryScratch = new MarchingSquares.TraceScratch[InitialWorkerScratchCapacity];
+    private readonly RebuildPreparationBatch _preparationBatch = new();
+    private int _damageSetCount;
+    private int _workItemCount;
 
     /// <summary>
     /// 创建刚体破坏重建服务。
@@ -37,6 +50,21 @@ public sealed class RigidBodyDestruction
         ArgumentOutOfRangeException.ThrowIfNegative(fragmentPixelThreshold);
         FragmentPixelThreshold = fragmentPixelThreshold;
         _particles = particles;
+        for (int i = 0; i < _damageSetPool.Length; i++)
+        {
+            _damageSetPool[i] = new HashSet<int>(InitialDamageLocalCapacity);
+        }
+
+        for (int i = 0; i < InitialBodyScratchCapacity; i++)
+        {
+            _workItems[i] = new RebuildWorkItem();
+            _plans[i] = new RebuildPlan();
+        }
+
+        for (int i = 0; i < _geometryScratch.Length; i++)
+        {
+            _geometryScratch[i] = new MarchingSquares.TraceScratch();
+        }
     }
 
     /// <summary>
@@ -99,13 +127,13 @@ public sealed class RigidBodyDestruction
             return default;
         }
 
-        // 按 bodyKey 合并本帧 damage 事件，每体最多重建一次。
-        Dictionary<int, HashSet<int>> damagedLocalByBody = BuildDamageMap(registry, damageEvents);
+        // 按 bodyKey 合并本帧 damage 事件，每体最多重建一次；map 与局部坐标集合跨 burst 复用。
+        BuildDamageMap(registry, damageEvents);
         int damagedBodies = 0;
         int skippedSleeping = 0;
-        List<RebuildWorkItem> workItems = new(damagedLocalByBody.Count);
+        _workItemCount = 0;
 
-        foreach ((int bodyKey, HashSet<int> damagedLocals) in damagedLocalByBody)
+        foreach ((int bodyKey, HashSet<int> damagedLocals) in _damagedLocalByBody)
         {
             if (!physicsWorld.TryGetBody(bodyKey, out PixelRigidBody? body))
             {
@@ -120,26 +148,39 @@ public sealed class RigidBodyDestruction
                 continue;
             }
 
-            workItems.Add(new RebuildWorkItem(body, ParentBodyState.Capture(body.BodyId), damagedLocals));
+            EnsureScratchCapacity(_workItemCount + 1);
+            _workItems[_workItemCount++].Set(body, ParentBodyState.Capture(body.BodyId), damagedLocals);
         }
 
-        // 准备阶段：CCL + 凸分解可并行；Apply 阶段串行改 Box2D world。
-        long prepareStarted = Stopwatch.GetTimestamp();
-        RebuildPlan[] plans = PreparePlans(workItems, jobs);
-        LastPreparationMilliseconds = ElapsedMilliseconds(prepareStarted);
         int destroyedBodies = 0;
         int createdBodies = 0;
         int fragmentPixels = 0;
-        long applyStarted = Stopwatch.GetTimestamp();
-        for (int i = 0; i < plans.Length; i++)
+        try
         {
-            RigidDestructionResult result = ApplyPlan(worldId, physicsWorld, grid, registry, plans[i]);
-            destroyedBodies += result.DestroyedBodies;
-            createdBodies += result.CreatedBodies;
-            fragmentPixels += result.FragmentPixels;
+            // 准备阶段：CCL + 凸分解可并行；Apply 阶段串行改 Box2D world。
+            long prepareStarted = Stopwatch.GetTimestamp();
+            PreparePlans(_workItemCount, jobs);
+            LastPreparationMilliseconds = ElapsedMilliseconds(prepareStarted);
+            long applyStarted = Stopwatch.GetTimestamp();
+            for (int i = 0; i < _workItemCount; i++)
+            {
+                RigidDestructionResult result = ApplyPlan(worldId, physicsWorld, grid, registry, _plans[i]);
+                destroyedBodies += result.DestroyedBodies;
+                createdBodies += result.CreatedBodies;
+                fragmentPixels += result.FragmentPixels;
+            }
+
+            LastApplyMilliseconds = ElapsedMilliseconds(applyStarted);
+        }
+        finally
+        {
+            for (int i = 0; i < _workItemCount; i++)
+            {
+                _plans[i].ClearTransientState();
+                _workItems[i].Clear();
+            }
         }
 
-        LastApplyMilliseconds = ElapsedMilliseconds(applyStarted);
         return new RigidDestructionResult(damagedBodies, destroyedBodies, createdBodies, fragmentPixels, skippedSleeping);
     }
 
@@ -149,9 +190,15 @@ public sealed class RigidBodyDestruction
         return elapsed * 1000.0 / Stopwatch.Frequency;
     }
 
-    private static Dictionary<int, HashSet<int>> BuildDamageMap(RigidStampRegistry registry, IReadOnlyList<RigidDamageEvent> damageEvents)
+    private void BuildDamageMap(RigidStampRegistry registry, IReadOnlyList<RigidDamageEvent> damageEvents)
     {
-        Dictionary<int, HashSet<int>> damagedLocalByBody = [];
+        for (int i = 0; i < _damageSetCount; i++)
+        {
+            _damageSetPool[i].Clear();
+        }
+
+        _damageSetCount = 0;
+        _damagedLocalByBody.Clear();
         for (int i = 0; i < damageEvents.Count; i++)
         {
             RigidDamageEvent damage = damageEvents[i];
@@ -160,47 +207,99 @@ public sealed class RigidBodyDestruction
                 continue;
             }
 
-            if (!damagedLocalByBody.TryGetValue(stamp.BodyKey, out HashSet<int>? locals))
+            if (!_damagedLocalByBody.TryGetValue(stamp.BodyKey, out HashSet<int>? locals))
             {
-                locals = [];
-                damagedLocalByBody.Add(stamp.BodyKey, locals);
+                locals = RentDamageSet();
+                _damagedLocalByBody.Add(stamp.BodyKey, locals);
             }
 
             // local 坐标打包为 int，避免 (x,y) 结构体在 HashSet 中额外分配。
             _ = locals.Add((stamp.LocalY << 16) ^ stamp.LocalX);
         }
-
-        return damagedLocalByBody;
     }
 
-    private RebuildPlan[] PreparePlans(List<RebuildWorkItem> workItems, JobSystem? jobs)
+    private HashSet<int> RentDamageSet()
     {
-        if (workItems.Count == 0)
+        if (_damageSetCount == _damageSetPool.Length)
+        {
+            int oldLength = _damageSetPool.Length;
+            Array.Resize(ref _damageSetPool, Math.Max(4, oldLength * 2));
+            for (int i = oldLength; i < _damageSetPool.Length; i++)
+            {
+                _damageSetPool[i] = new HashSet<int>(InitialDamageLocalCapacity);
+            }
+        }
+
+        HashSet<int> result = _damageSetPool[_damageSetCount++];
+        result.Clear();
+        return result;
+    }
+
+    private void EnsureScratchCapacity(int required)
+    {
+        if (required <= _workItems.Length)
+        {
+            return;
+        }
+
+        int oldLength = _workItems.Length;
+        int newLength = oldLength == 0 ? 4 : oldLength;
+        while (newLength < required)
+        {
+            newLength *= 2;
+        }
+
+        Array.Resize(ref _workItems, newLength);
+        Array.Resize(ref _plans, newLength);
+        for (int i = oldLength; i < newLength; i++)
+        {
+            _workItems[i] = new RebuildWorkItem();
+            _plans[i] = new RebuildPlan();
+        }
+    }
+
+    private void EnsureWorkerScratchCapacity(int required)
+    {
+        if (required <= _workerHits.Length)
+        {
+            return;
+        }
+
+        _workerHits = GC.AllocateArray<int>(required, pinned: true);
+        Array.Resize(ref _geometryScratch, required);
+        for (int i = 0; i < _geometryScratch.Length; i++)
+        {
+            _geometryScratch[i] ??= new MarchingSquares.TraceScratch();
+        }
+    }
+
+    private void PreparePlans(int workItemCount, JobSystem? jobs)
+    {
+        if (workItemCount == 0)
         {
             LastPlanningUsedJobSystem = false;
             LastPlanningWorkerCount = 0;
-            return [];
+            return;
         }
 
-        RebuildPlan[] plans = new RebuildPlan[workItems.Count];
         if (jobs is null)
         {
             LastPlanningUsedJobSystem = false;
             LastPlanningWorkerCount = 0;
-            for (int i = 0; i < workItems.Count; i++)
+            for (int i = 0; i < workItemCount; i++)
             {
-                plans[i] = PreparePlan(workItems[i], FragmentPixelThreshold);
+                PreparePlan(_workItems[i], _plans[i], _geometryScratch[0], FragmentPixelThreshold);
             }
 
-            return plans;
+            return;
         }
 
-        int[] workerHits = GC.AllocateArray<int>(jobs.WorkerCount, pinned: true);
-        RebuildPreparationBatch batch = new([.. workItems], plans, FragmentPixelThreshold, workerHits);
+        EnsureWorkerScratchCapacity(jobs.WorkerCount);
+        _workerHits.AsSpan(0, jobs.WorkerCount).Clear();
+        _preparationBatch.Configure(_workItems, _plans, _geometryScratch, FragmentPixelThreshold, _workerHits);
         LastPlanningUsedJobSystem = true;
-        jobs.ParallelRange(workItems.Count, 1, PreparePlansJob, batch);
-        LastPlanningWorkerCount = CountWorkerHits(workerHits);
-        return plans;
+        jobs.ParallelRange(workItemCount, 1, PreparePlansJob, _preparationBatch);
+        LastPlanningWorkerCount = CountWorkerHits(_workerHits.AsSpan(0, jobs.WorkerCount));
     }
 
     private RigidDestructionResult ApplyPlan(
@@ -217,8 +316,9 @@ public sealed class RigidBodyDestruction
         physicsWorld.RemoveBody(plan.Body.BodyKey);
 
         int fragments = 0;
-        foreach (ParticleSpawn spawn in plan.FragmentSpawns)
+        for (int i = 0; i < plan.FragmentSpawnCount; i++)
         {
+            ParticleSpawn spawn = plan.GetFragmentSpawn(i);
             if (_particles is not null)
             {
                 _ = _particles.TrySpawn(in spawn);
@@ -228,8 +328,9 @@ public sealed class RigidBodyDestruction
         }
 
         int created = 0;
-        foreach (ChildBodyPlan child in plan.Children)
+        for (int i = 0; i < plan.ChildCount; i++)
         {
+            ChildBodyPlan child = plan.GetChild(i);
             if (!ShapeBuilder.TryBuildBody(
                 worldId,
                 child.ConvexPieces.AsSpan(0, child.ConvexPieceCount),
@@ -282,7 +383,11 @@ public sealed class RigidBodyDestruction
         return fragments;
     }
 
-    private static RebuildPlan PreparePlan(RebuildWorkItem workItem, int fragmentPixelThreshold)
+    private static void PreparePlan(
+        RebuildWorkItem workItem,
+        RebuildPlan plan,
+        MarchingSquares.TraceScratch geometryScratch,
+        int fragmentPixelThreshold)
     {
         BodyLocalMask sourceMask = workItem.Body.Mask;
         int area = sourceMask.Width * sourceMask.Height;
@@ -314,24 +419,22 @@ public sealed class RigidBodyDestruction
                 Connectivity.Four,
                 fragmentPixelThreshold);
 
-            RebuildPlan plan = new(workItem.Body, workItem.Parent);
+            plan.Initialize(workItem.Body, workItem.Parent);
             for (int i = 0; i < componentCount; i++)
             {
                 ConnectedComponent component = components[i];
                 // 低于阈值的连通块转自由粒子，不再创建子刚体。
                 if (component.IsFragment)
                 {
-                    CollectFragmentParticles(sourceMask, labels.AsSpan(0, area), component, workItem.Parent, plan.FragmentSpawns);
+                    CollectFragmentParticles(sourceMask, labels.AsSpan(0, area), component, workItem.Parent, plan);
                     continue;
                 }
 
-                if (TryCreateChildPlan(sourceMask, materials.AsSpan(0, area), labels.AsSpan(0, area), component, plan.Children))
+                if (TryCreateChildPlan(sourceMask, materials.AsSpan(0, area), labels.AsSpan(0, area), component, geometryScratch, plan))
                 {
                     continue;
                 }
             }
-
-            return plan;
         }
         finally
         {
@@ -347,7 +450,8 @@ public sealed class RigidBodyDestruction
         ReadOnlySpan<ushort> sourceMaterials,
         ReadOnlySpan<int> labels,
         in ConnectedComponent component,
-        List<ChildBodyPlan> children)
+        MarchingSquares.TraceScratch geometryScratch,
+        RebuildPlan plan)
     {
         RectI bounds = component.Bounds;
         int width = bounds.Width;
@@ -355,6 +459,8 @@ public sealed class RigidBodyDestruction
         int area = width * height;
         byte[] childSolid = ArrayPool<byte>.Shared.Rent(area);
         ushort[] childMaterials = ArrayPool<ushort>.Shared.Rent(area);
+        ConvexPolygon[] convexPieces = ArrayPool<ConvexPolygon>.Shared.Rent(Math.Max(8, area));
+        bool retainedConvexPieces = false;
 
         try
         {
@@ -377,19 +483,24 @@ public sealed class RigidBodyDestruction
             }
 
             Vector2 childOrigin = sourceMask.LocalOrigin - new Vector2(bounds.MinX, bounds.MinY);
-            if (!RigidBodyMaskShapeBuilder.TryBuildConvexPieces(childSolid.AsSpan(0, area), width, height, childOrigin, out ConvexPolygon[] pieces, out int pieceCount))
+            if (!RigidBodyMaskShapeBuilder.TryBuildConvexPieces(childSolid.AsSpan(0, area), width, height, childOrigin, convexPieces, geometryScratch, out int pieceCount))
             {
                 return false;
             }
 
             BodyLocalMask childMask = new(width, height, childOrigin, childSolid.AsSpan(0, area), childMaterials.AsSpan(0, area));
-            children.Add(new ChildBodyPlan(childMask, pieces, pieceCount, bounds));
+            plan.AddChild(childMask, convexPieces, pieceCount, bounds);
+            retainedConvexPieces = true;
             return true;
         }
         finally
         {
             ArrayPool<byte>.Shared.Return(childSolid);
             ArrayPool<ushort>.Shared.Return(childMaterials);
+            if (!retainedConvexPieces)
+            {
+                ArrayPool<ConvexPolygon>.Shared.Return(convexPieces);
+            }
         }
     }
 
@@ -398,7 +509,7 @@ public sealed class RigidBodyDestruction
         ReadOnlySpan<int> labels,
         in ConnectedComponent component,
         in ParentBodyState parent,
-        List<ParticleSpawn> destination)
+        RebuildPlan destination)
     {
         for (int y = component.Bounds.MinY; y < component.Bounds.MaxY; y++)
         {
@@ -418,7 +529,7 @@ public sealed class RigidBodyDestruction
 
                 Vector2 local = new Vector2(x + 0.5f, y + 0.5f) - sourceMask.LocalOrigin;
                 Vector2 world = parent.Transform.TransformPoint(local);
-                destination.Add(new ParticleSpawn(world.X, world.Y, 0f, 0f, material, ColorVariant: 0, Life: 0));
+                destination.AddFragment(new ParticleSpawn(world.X, world.Y, 0f, 0f, material, ColorVariant: 0, Life: 0));
             }
         }
     }
@@ -481,58 +592,183 @@ public sealed class RigidBodyDestruction
         }
     }
 
-    private sealed class RebuildWorkItem(PixelRigidBody body, ParentBodyState parent, HashSet<int> damagedLocals)
+    private sealed class RebuildWorkItem
     {
-        public PixelRigidBody Body { get; } = body;
+        public PixelRigidBody Body { get; private set; } = null!;
 
-        public ParentBodyState Parent { get; } = parent;
+        public ParentBodyState Parent { get; private set; }
 
-        public HashSet<int> DamagedLocals { get; } = damagedLocals;
+        public HashSet<int> DamagedLocals { get; private set; } = null!;
+
+        public void Set(PixelRigidBody body, ParentBodyState parent, HashSet<int> damagedLocals)
+        {
+            Body = body;
+            Parent = parent;
+            DamagedLocals = damagedLocals;
+        }
+
+        public void Clear()
+        {
+            Body = null!;
+            Parent = default;
+            DamagedLocals = null!;
+        }
     }
 
-    private sealed class RebuildPlan(PixelRigidBody body, ParentBodyState parent)
+    private sealed class RebuildPlan
     {
-        public PixelRigidBody Body { get; } = body;
+        private const int InitialChildCapacity = 4;
+        private const int InitialFragmentCapacity = 32;
+        private ChildBodyPlan[] _children = new ChildBodyPlan[InitialChildCapacity];
+        private ParticleSpawn[] _fragmentSpawns = new ParticleSpawn[InitialFragmentCapacity];
+        private PixelRigidBody BodyStorage { get; set; } = null!;
+        private ParentBodyState ParentStorage { get; set; }
 
-        public ParentBodyState Parent { get; } = parent;
+        public RebuildPlan()
+        {
+            for (int i = 0; i < _children.Length; i++)
+            {
+                _children[i] = new ChildBodyPlan();
+            }
+        }
 
-        public List<ChildBodyPlan> Children { get; } = [];
+        public int ChildCount { get; private set; }
 
-        public List<ParticleSpawn> FragmentSpawns { get; } = [];
+        public int FragmentSpawnCount { get; private set; }
+
+        public PixelRigidBody Body => BodyStorage;
+
+        public ParentBodyState Parent => ParentStorage;
+
+        public void Initialize(PixelRigidBody body, ParentBodyState parent)
+        {
+            BodyStorage = body;
+            ParentStorage = parent;
+            ChildCount = 0;
+            FragmentSpawnCount = 0;
+        }
+
+        public void AddChild(BodyLocalMask mask, ConvexPolygon[] convexPieces, int convexPieceCount, RectI sourceBounds)
+        {
+            EnsureChildCapacity(ChildCount + 1);
+            _children[ChildCount++].Set(mask, convexPieces, convexPieceCount, sourceBounds);
+        }
+
+        public void AddFragment(in ParticleSpawn spawn)
+        {
+            if (FragmentSpawnCount == _fragmentSpawns.Length)
+            {
+                Array.Resize(ref _fragmentSpawns, _fragmentSpawns.Length * 2);
+            }
+
+            _fragmentSpawns[FragmentSpawnCount++] = spawn;
+        }
+
+        public ChildBodyPlan GetChild(int index)
+        {
+            return _children[index];
+        }
+
+        public ParticleSpawn GetFragmentSpawn(int index)
+        {
+            return _fragmentSpawns[index];
+        }
+
+        public void ClearTransientState()
+        {
+            for (int i = 0; i < ChildCount; i++)
+            {
+                _children[i].ClearTransientState();
+            }
+
+            ChildCount = 0;
+            FragmentSpawnCount = 0;
+            BodyStorage = null!;
+            ParentStorage = default;
+        }
+
+        private void EnsureChildCapacity(int required)
+        {
+            if (required <= _children.Length)
+            {
+                return;
+            }
+
+            int oldLength = _children.Length;
+            Array.Resize(ref _children, Math.Max(required, oldLength * 2));
+            for (int i = oldLength; i < _children.Length; i++)
+            {
+                _children[i] = new ChildBodyPlan();
+            }
+        }
     }
 
-    private sealed class ChildBodyPlan(
-        BodyLocalMask mask,
-        ConvexPolygon[] convexPieces,
-        int convexPieceCount,
-        RectI sourceBounds)
+    private sealed class ChildBodyPlan
     {
-        public BodyLocalMask Mask { get; } = mask;
+        private BodyLocalMask? MaskStorage { get; set; }
+        private ConvexPolygon[]? ConvexPiecesStorage { get; set; }
 
-        public ConvexPolygon[] ConvexPieces { get; } = convexPieces;
+        public BodyLocalMask Mask => MaskStorage!;
 
-        public int ConvexPieceCount { get; } = convexPieceCount;
+        public ConvexPolygon[] ConvexPieces => ConvexPiecesStorage!;
 
-        public RectI SourceBounds { get; } = sourceBounds;
+        public int ConvexPieceCount { get; private set; }
+
+        public RectI SourceBounds { get; private set; }
+
+        public void Set(BodyLocalMask mask, ConvexPolygon[] convexPieces, int convexPieceCount, RectI sourceBounds)
+        {
+            MaskStorage = mask;
+            ConvexPiecesStorage = convexPieces;
+            ConvexPieceCount = convexPieceCount;
+            SourceBounds = sourceBounds;
+        }
+
+        public void ClearTransientState()
+        {
+            if (ConvexPiecesStorage is not null)
+            {
+                ArrayPool<ConvexPolygon>.Shared.Return(ConvexPiecesStorage);
+            }
+
+            MaskStorage = null;
+            ConvexPiecesStorage = null;
+            ConvexPieceCount = 0;
+            SourceBounds = default;
+        }
     }
 
-    private sealed class RebuildPreparationBatch(
-        RebuildWorkItem[] items,
-        RebuildPlan[] plans,
-        int fragmentPixelThreshold,
-        int[] workerHits)
+    private sealed class RebuildPreparationBatch
     {
-        public RebuildWorkItem[] Items { get; } = items;
+        private int[] _workerHits = [];
 
-        public RebuildPlan[] Plans { get; } = plans;
+        public RebuildWorkItem[] Items { get; private set; } = [];
 
-        public int FragmentPixelThreshold { get; } = fragmentPixelThreshold;
+        public RebuildPlan[] Plans { get; private set; } = [];
+
+        public MarchingSquares.TraceScratch[] GeometryScratch { get; private set; } = [];
+
+        public int FragmentPixelThreshold { get; private set; }
+
+        public void Configure(
+            RebuildWorkItem[] items,
+            RebuildPlan[] plans,
+            MarchingSquares.TraceScratch[] geometryScratch,
+            int fragmentPixelThreshold,
+            int[] workerHits)
+        {
+            Items = items;
+            Plans = plans;
+            GeometryScratch = geometryScratch;
+            FragmentPixelThreshold = fragmentPixelThreshold;
+            _workerHits = workerHits;
+        }
 
         public void MarkWorker(int workerIndex)
         {
-            if ((uint)workerIndex < (uint)workerHits.Length)
+            if ((uint)workerIndex < (uint)_workerHits.Length)
             {
-                Volatile.Write(ref workerHits[workerIndex], 1);
+                Volatile.Write(ref _workerHits[workerIndex], 1);
             }
         }
     }

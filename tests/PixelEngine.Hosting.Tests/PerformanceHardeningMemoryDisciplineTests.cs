@@ -55,7 +55,8 @@ public sealed class PerformanceHardeningMemoryDisciplineTests
         Assert.Contains("GC.AllocateArray<EjectionRequest>(EngineConstants.ParticleEjectMaxPerTick, pinned: true)", particles, StringComparison.Ordinal);
 
         string destruction = ReadProductionSource("src", "PixelEngine.Physics", "RigidBodyDestruction.cs");
-        Assert.Contains("GC.AllocateArray<int>(jobs.WorkerCount, pinned: true)", destruction, StringComparison.Ordinal);
+        Assert.Contains("private int[] _workerHits = GC.AllocateArray<int>(InitialWorkerScratchCapacity, pinned: true)", destruction, StringComparison.Ordinal);
+        Assert.Contains("EnsureWorkerScratchCapacity", destruction, StringComparison.Ordinal);
         Assert.Contains("ArrayPool<byte>.Shared.Rent(area)", destruction, StringComparison.Ordinal);
         Assert.Contains("ArrayPool<ushort>.Shared.Rent(area)", destruction, StringComparison.Ordinal);
         Assert.Contains("ArrayPool<int>.Shared.Rent(area)", destruction, StringComparison.Ordinal);
@@ -64,8 +65,8 @@ public sealed class PerformanceHardeningMemoryDisciplineTests
         Assert.Contains("ArrayPool<ushort>.Shared.Return", destruction, StringComparison.Ordinal);
 
         string shapeBuilder = ReadProductionSource("src", "PixelEngine.Physics", "RigidBodyMaskShapeBuilder.cs");
-        Assert.Contains("ArrayPool<Vector2>.Shared.Rent", shapeBuilder, StringComparison.Ordinal);
-        Assert.Contains("ArrayPool<Vector2>.Shared.Return", shapeBuilder, StringComparison.Ordinal);
+        Assert.Contains("MarchingSquares.TraceScratch", shapeBuilder, StringComparison.Ordinal);
+        Assert.Contains("traceScratch.EnsureGeometryCapacity", shapeBuilder, StringComparison.Ordinal);
 
         string codec = ReadProductionSource("src", "PixelEngine.Serialization", "ChunkCodec.cs");
         Assert.Contains("PooledByteBufferWriter payloadWriter", codec, StringComparison.Ordinal);

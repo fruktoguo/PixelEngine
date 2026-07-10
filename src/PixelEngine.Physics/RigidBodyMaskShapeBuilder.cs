@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Numerics;
 using PixelEngine.Physics.Geometry;
 
@@ -33,34 +32,61 @@ public static class RigidBodyMaskShapeBuilder
         out ConvexPolygon[] pieces,
         out int pieceCount)
     {
-        Vector2[] contour = ArrayPool<Vector2>.Shared.Rent(MarchingSquares.GetMaximumContourPointCount(width, height));
-        Vector2[] simplified = ArrayPool<Vector2>.Shared.Rent(contour.Length);
         ConvexPolygon[] output = new ConvexPolygon[Math.Max(8, width * height)];
+        bool success = TryBuildConvexPieces(solid, width, height, localOrigin, output, out pieceCount);
+        pieces = success ? output : [];
+        return success;
+    }
 
-        try
+    internal static bool TryBuildConvexPieces(
+        ReadOnlySpan<byte> solid,
+        int width,
+        int height,
+        Vector2 localOrigin,
+        Span<ConvexPolygon> output,
+        out int pieceCount)
+    {
+        return TryBuildConvexPieces(
+            solid,
+            width,
+            height,
+            localOrigin,
+            output,
+            new MarchingSquares.TraceScratch(),
+            out pieceCount);
+    }
+
+    internal static bool TryBuildConvexPieces(
+        ReadOnlySpan<byte> solid,
+        int width,
+        int height,
+        Vector2 localOrigin,
+        Span<ConvexPolygon> output,
+        MarchingSquares.TraceScratch traceScratch,
+        out int pieceCount)
+    {
+        if (output.IsEmpty)
         {
-            int contourCount = MarchingSquares.TraceOuterContour(solid, width, height, contour);
-            if (contourCount < 4)
-            {
-                pieces = [];
-                pieceCount = 0;
-                return false;
-            }
-
-            int simplifiedCount = DouglasPeucker.Simplify(contour.AsSpan(0, contourCount), simplified, epsilon: 0f, closed: true);
-            for (int i = 0; i < simplifiedCount; i++)
-            {
-                simplified[i] -= localOrigin;
-            }
-
-            pieceCount = ConvexDecomposer.Decompose(simplified.AsSpan(0, simplifiedCount), output);
-            pieces = output;
-            return pieceCount > 0;
+            throw new ArgumentException("输出凸片缓冲不能为空。", nameof(output));
         }
-        finally
+
+        traceScratch.EnsureGeometryCapacity(width, height);
+        Span<Vector2> contour = traceScratch._contour;
+        Span<Vector2> simplified = traceScratch._simplified;
+        int contourCount = MarchingSquares.TraceOuterContour(solid, width, height, contour, traceScratch);
+        if (contourCount < 4)
         {
-            ArrayPool<Vector2>.Shared.Return(contour);
-            ArrayPool<Vector2>.Shared.Return(simplified);
+            pieceCount = 0;
+            return false;
         }
+
+        int simplifiedCount = DouglasPeucker.Simplify(contour[..contourCount], simplified, epsilon: 0f, closed: true);
+        for (int i = 0; i < simplifiedCount; i++)
+        {
+            simplified[i] -= localOrigin;
+        }
+
+        pieceCount = ConvexDecomposer.Decompose(simplified[..simplifiedCount], output);
+        return pieceCount > 0;
     }
 }
