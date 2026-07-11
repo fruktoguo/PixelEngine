@@ -1498,6 +1498,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("RUNTIME_OUTPUT_DIRECTORY \"${PIXELENGINE_NATIVE_OUT_DIR}/shared\"", uiNativeCMake, StringComparison.Ordinal);
         Assert.Contains("pixelengine_ui_native", buildNativePs1, StringComparison.Ordinal);
         Assert.Contains("pixelengine_ui_native", buildNativeSh, StringComparison.Ordinal);
+        Assert.DoesNotContain("mapfile", buildNativeSh, StringComparison.Ordinal);
+        Assert.Contains("while IFS= read -r library", buildNativeSh, StringComparison.Ordinal);
         Assert.Contains("NOTICE.txt", packagePs1, StringComparison.Ordinal);
         Assert.Contains("RmlUi: MIT license", packagePs1, StringComparison.Ordinal);
         Assert.Contains("Ultralight: inactive optional commercial-license profile", packagePs1, StringComparison.Ordinal);
