@@ -103,6 +103,7 @@ internal sealed class RecentProjectsStore
                 Name = string.IsNullOrWhiteSpace(name) ? "Project" : name,
                 ProjectPath = projectPath,
                 LastOpenedUtc = entry.LastOpenedUtc,
+                Favorite = entry.Favorite,
             });
             if (entries.Count == MaxEntries)
             {
@@ -144,10 +145,12 @@ internal sealed class RecentProjectsStore
     {
         ArgumentNullException.ThrowIfNull(project);
         string projectPath = Path.GetFullPath(project.ProjectRoot);
+        bool favorite = false;
         for (int i = _entries.Count - 1; i >= 0; i--)
         {
             if (string.Equals(Path.GetFullPath(_entries[i].ProjectPath), projectPath, StringComparison.OrdinalIgnoreCase))
             {
+                favorite |= _entries[i].Favorite;
                 _entries.RemoveAt(i);
             }
         }
@@ -159,11 +162,66 @@ internal sealed class RecentProjectsStore
                 Name = project.Name,
                 ProjectPath = projectPath,
                 LastOpenedUtc = DateTimeOffset.UtcNow,
+                Favorite = favorite,
             });
         if (_entries.Count > MaxEntries)
         {
             _entries.RemoveRange(MaxEntries, _entries.Count - MaxEntries);
         }
+    }
+
+    public bool SetFavorite(string projectPath, bool favorite)
+    {
+        if (!TryGetFullPath(projectPath, out string? fullPath) || fullPath is null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < _entries.Count; i++)
+        {
+            RecentProjectEntry entry = _entries[i];
+            if (!string.Equals(entry.ProjectPath, fullPath, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (entry.Favorite == favorite)
+            {
+                return false;
+            }
+
+            _entries[i] = new RecentProjectEntry
+            {
+                Name = entry.Name,
+                ProjectPath = entry.ProjectPath,
+                LastOpenedUtc = entry.LastOpenedUtc,
+                Favorite = favorite,
+            };
+            return true;
+        }
+
+        return false;
+    }
+
+    public bool Remove(string projectPath)
+    {
+        if (!TryGetFullPath(projectPath, out string? fullPath) || fullPath is null)
+        {
+            return false;
+        }
+
+        for (int i = _entries.Count - 1; i >= 0; i--)
+        {
+            if (!string.Equals(_entries[i].ProjectPath, fullPath, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            _entries.RemoveAt(i);
+            return true;
+        }
+
+        return false;
     }
 
     public void Save()
@@ -208,4 +266,6 @@ internal sealed class RecentProjectEntry
     public string ProjectPath { get; init; } = string.Empty;
 
     public DateTimeOffset LastOpenedUtc { get; init; }
+
+    public bool Favorite { get; init; }
 }

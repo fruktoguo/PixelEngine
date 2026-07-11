@@ -96,7 +96,13 @@ internal sealed class EditorShellWindow : IDisposable
 
     public void SetTitle(string? projectName, string? sceneName, bool dirty)
     {
-        string project = string.IsNullOrWhiteSpace(projectName) ? "No Project" : projectName;
+        if (string.IsNullOrWhiteSpace(projectName))
+        {
+            Window.SetTitle("PixelEngine Hub");
+            return;
+        }
+
+        string project = projectName;
         string scene = string.IsNullOrWhiteSpace(sceneName) ? "No Scene" : sceneName;
         Window.SetTitle($"PixelEngine Editor - {project} - {scene}{(dirty ? "*" : string.Empty)}");
     }

@@ -259,13 +259,40 @@ public sealed class EditorShellProjectTests
         string path = Path.Combine(temp.Path, "recent-projects.json");
         RecentProjectsStore store = RecentProjectsStore.Load(path);
         store.AddOrUpdate(project);
+        Assert.True(store.SetFavorite(project.ProjectRoot, favorite: true));
 
         store.Save();
 
         RecentProjectEntry entry = Assert.Single(RecentProjectsStore.Load(path).Entries);
         Assert.Equal(project.ProjectRoot, entry.ProjectPath);
         Assert.Equal(project.Name, entry.Name);
+        Assert.True(entry.Favorite);
         Assert.Empty(Directory.GetFiles(temp.Path, "*.tmp", SearchOption.TopDirectoryOnly));
+    }
+
+    /// <summary>
+    /// 验证 Recent 收藏可切换，移除后持久化列表不再包含该工程。
+    /// </summary>
+    [Fact]
+    public void RecentProjectsFavoriteAndRemoveMutationsAreStable()
+    {
+        using TempDirectory temp = new();
+        EditorProject first = EditorProject.CreateNew(Path.Combine(temp.Path, "First"), "First");
+        EditorProject second = EditorProject.CreateNew(Path.Combine(temp.Path, "Second"), "Second");
+        string path = Path.Combine(temp.Path, "recent-projects.json");
+        RecentProjectsStore store = RecentProjectsStore.Load(path);
+        store.AddOrUpdate(first);
+        store.AddOrUpdate(second);
+
+        Assert.True(store.SetFavorite(first.ProjectRoot, favorite: true));
+        Assert.False(store.SetFavorite(first.ProjectRoot, favorite: true));
+        Assert.True(store.Remove(second.ProjectRoot));
+        Assert.False(store.Remove(second.ProjectRoot));
+        store.Save();
+
+        RecentProjectEntry entry = Assert.Single(RecentProjectsStore.Load(path).Entries);
+        Assert.Equal(first.ProjectRoot, entry.ProjectPath);
+        Assert.True(entry.Favorite);
     }
 
     /// <summary>
@@ -303,6 +330,7 @@ public sealed class EditorShellProjectTests
                 Name = "New Duplicate",
                 ProjectPath = duplicateProject,
                 LastOpenedUtc = baseTime.AddDays(31),
+                Favorite = true,
             },
         ];
         for (int i = 0; i < 25; i++)
@@ -328,6 +356,7 @@ public sealed class EditorShellProjectTests
         RecentProjectEntry duplicate = Assert.Single(store.Entries, entry =>
             string.Equals(entry.ProjectPath, Path.GetFullPath(duplicateProject), StringComparison.OrdinalIgnoreCase));
         Assert.Equal("New Duplicate", duplicate.Name);
+        Assert.True(duplicate.Favorite);
         Assert.Contains(store.Entries, static entry => entry.Name == "FallbackName");
         Assert.All(store.Entries, static entry => Assert.Equal(Path.GetFullPath(entry.ProjectPath), entry.ProjectPath));
         RecentProjectEntry previous = store.Entries[0];

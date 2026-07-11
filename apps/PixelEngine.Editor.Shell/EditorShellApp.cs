@@ -47,7 +47,6 @@ internal sealed class EditorShellApp
         Workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
         _commandLineSceneOverride = options.ScenePath;
         ProjectPicker = new ProjectPickerWindow(options);
-        MainMenu = new EditorMainMenuBar();
         EditorWorkspaceWindowState windowState = Workspace.Current.Window ?? new EditorWorkspaceWindowState();
         Layout = new EditorShellLayout(
             LayoutPath,
@@ -127,8 +126,6 @@ internal sealed class EditorShellApp
     public EditorProjectSession? CurrentSession { get; private set; }
 
     private ProjectPickerWindow ProjectPicker { get; }
-
-    private EditorMainMenuBar MainMenu { get; }
 
     private EditorShellLayout Layout { get; }
 
@@ -278,8 +275,7 @@ internal sealed class EditorShellApp
                     shellWindow.Window.LogicalHeight,
                     _ =>
                     {
-                        MainMenu.Draw(this);
-                        Layout.DrawDockSpace();
+                        EditorMainMenuBar.DispatchShortcuts(this);
                         ProjectPicker.Draw(this);
                         PreferencesWindow.Draw();
                     },
@@ -1549,10 +1545,43 @@ internal sealed class EditorShellApp
         ProjectPicker.Focus(mode);
     }
 
+    public void SetRecentProjectFavorite(string projectPath, bool favorite)
+    {
+        PersistRecentProjectsChange(
+            RecentProjects.SetFavorite(projectPath, favorite),
+            "更新工程收藏状态失败");
+    }
+
+    public void RemoveRecentProject(string projectPath)
+    {
+        PersistRecentProjectsChange(
+            RecentProjects.Remove(projectPath),
+            "移除最近工程失败");
+    }
+
     public void ResetLayout()
     {
         Layout.ResetLayout();
         CurrentSession?.ResetLayout();
+    }
+
+    private void PersistRecentProjectsChange(bool changed, string failurePrefix)
+    {
+        if (!changed)
+        {
+            return;
+        }
+
+        try
+        {
+            RecentProjects.Save();
+            LastProjectError = null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            LastProjectError = $"{failurePrefix}：{exception.Message}";
+            ConsoleStore.AddProjectError("recent-projects", LastProjectError);
+        }
     }
 
     public void EnterPlayMode()

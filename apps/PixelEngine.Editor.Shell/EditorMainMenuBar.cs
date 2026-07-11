@@ -653,7 +653,7 @@ internal sealed class EditorMainMenuBar
         ImGui.EndMenu();
     }
 
-    private static void DispatchShortcuts(EditorShellApp app)
+    internal static void DispatchShortcuts(EditorShellApp app)
     {
         if (EditorShortcutCatalog.IsPressed(EditorShortcutCommand.OpenPreferences))
         {
