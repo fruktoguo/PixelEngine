@@ -135,6 +135,32 @@ Collapsed=0
         }
     }
 
+    /// <summary>
+    /// 默认工作台结构升级时会丢弃旧 ini，并用 sidecar 记录当前结构版本。
+    /// </summary>
+    [Fact]
+    public void ConstructorMigratesLegacyLayoutAndWritesCurrentVersion()
+    {
+        string directory = CreateTempDirectory();
+        try
+        {
+            string path = Path.Combine(directory, "editor-shell-imgui.ini");
+            File.WriteAllText(path, "[Window][Legacy]\nPos=0,0\nSize=1280,720\n");
+            File.WriteAllText($"{path}.version", "1");
+
+            _ = new EditorShellLayout(path, 1280, 720, migrateToCurrentLayout: true);
+
+            Assert.False(File.Exists(path));
+            Assert.Equal(
+                EditorShellLayout.CurrentLayoutVersion.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                File.ReadAllText($"{path}.version").Trim());
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         string path = Path.Combine(Path.GetTempPath(), "PixelEngine.EditorShellLayoutTests", Guid.NewGuid().ToString("N"));

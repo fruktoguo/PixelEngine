@@ -61,7 +61,8 @@ public sealed class EnginePhasePipeline
         {
             EnginePhase phase = (EnginePhase)raw;
             // Edit 暂停态不跑脚本与 sim 命令，但保留输入采样与渲染相位以维持编辑器交互。
-            if (engine.Mode == EngineExecutionMode.Edit && phase == EnginePhase.GameLogicAndScripts)
+            if ((engine.Mode is EngineExecutionMode.Edit or EngineExecutionMode.Paused) &&
+                phase == EnginePhase.GameLogicAndScripts)
             {
                 continue;
             }

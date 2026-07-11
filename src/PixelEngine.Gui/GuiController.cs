@@ -59,6 +59,13 @@ public sealed class GuiController
         Backend.NewFrame(deltaSeconds, width, height, framebufferScaleX, framebufferScaleY);
     }
 
+    /// <summary>在下一帧开始前应用 UI 缩放。</summary>
+    public void SetUiScale(float scale)
+    {
+        ThrowIfNotInitialized();
+        Backend.SetUiScale(scale);
+    }
+
     /// <summary>
     /// 渲染 ImGui draw data。Hexa.NET OpenGL3 backend 负责恢复被它修改的 GL 状态。
     /// </summary>

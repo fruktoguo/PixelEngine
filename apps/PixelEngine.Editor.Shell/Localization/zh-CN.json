@@ -1,0 +1,16 @@
+{
+  "formatVersion": 1,
+  "locale": "zh-CN",
+  "displayName": "简体中文",
+  "strings": {
+    "menu.file": "文件", "menu.edit": "编辑", "menu.gameObject": "游戏对象", "menu.window": "窗口", "menu.play": "运行", "menu.help": "帮助",
+    "action.newProject": "新建工程", "action.openProject": "打开工程", "action.saveScene": "保存场景", "action.build": "构建",
+    "action.play": "运行", "action.pause": "暂停", "action.resume": "继续", "action.step": "单步", "action.stop": "停止",
+    "action.undo": "撤销", "action.redo": "重做", "action.create": "创建", "action.delete": "删除", "action.duplicate": "复制", "action.rename": "重命名",
+    "window.preferences": "偏好设置", "window.hierarchy": "层级", "window.project": "工程", "window.inspector": "检查器", "window.scene": "场景", "window.game": "游戏视图", "window.console": "控制台",
+    "prefs.appearance": "外观", "prefs.general": "常规", "prefs.externalTools": "外部工具", "prefs.shortcuts": "快捷键", "prefs.language": "语言",
+    "prefs.uiScale": "界面缩放", "prefs.theme": "主题", "prefs.saveLayout": "持续保存布局", "prefs.reopenProject": "启动时重新打开上一个工程", "prefs.restoreScene": "恢复上次打开的场景", "prefs.resetLayout": "恢复默认布局",
+    "hierarchy.sceneRoot": "场景根节点", "hierarchy.generated": "生成点位", "hierarchy.runtime": "运行时（Play）· {0} 个实体 · {1} 个刚体", "game.waiting": "正在等待游戏视图纹理",
+    "scene.playerSpawn": "玩家出生点", "scene.goal": "目标点", "status.noProject": "未打开工程", "status.noScene": "未打开场景"
+  }
+}

@@ -16,6 +16,11 @@ public enum EditorMode
     /// 运行模式：输入交给游戏/脚本，编辑工具让位。
     /// </summary>
     Play,
+
+    /// <summary>
+    /// 暂停的 Play session；Game View 保持运行时世界，允许继续或单步。
+    /// </summary>
+    Paused,
 }
 
 /// <summary>

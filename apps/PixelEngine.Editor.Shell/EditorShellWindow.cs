@@ -79,6 +79,10 @@ internal sealed class EditorShellWindow : IDisposable
             Width = normalizedWidth,
             Height = normalizedHeight,
             VSync = true,
+            UseDarkWindowChrome = true,
+            TitleBarColorRgb = 0x202226,
+            TitleBarTextColorRgb = 0xE7E9ED,
+            WindowBorderColorRgb = 0x111216,
         };
         GuiAppOptions guiOptions = new()
         {

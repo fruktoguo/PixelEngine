@@ -16,18 +16,20 @@ internal enum EditorPreferencesCategory
 /// </summary>
 internal sealed class EditorPreferencesWindow(
     EditorPreferencesStore store,
-    Action resetLayout) : IEditorPanel
+    Action resetLayout,
+    Action<string>? languageChanged = null) : IEditorPanel
 {
-    private static readonly (EditorPreferencesCategory Category, string Label)[] Categories =
+    private static readonly (EditorPreferencesCategory Category, string Key, string Fallback)[] Categories =
     [
-        (EditorPreferencesCategory.Appearance, "Appearance"),
-        (EditorPreferencesCategory.General, "General"),
-        (EditorPreferencesCategory.ExternalTools, "External Tools"),
-        (EditorPreferencesCategory.Shortcuts, "Shortcuts"),
+        (EditorPreferencesCategory.Appearance, "prefs.appearance", "Appearance"),
+        (EditorPreferencesCategory.General, "prefs.general", "General"),
+        (EditorPreferencesCategory.ExternalTools, "prefs.externalTools", "External Tools"),
+        (EditorPreferencesCategory.Shortcuts, "prefs.shortcuts", "Shortcuts"),
     ];
 
     private readonly EditorPreferencesStore _store = store ?? throw new ArgumentNullException(nameof(store));
     private readonly Action _resetLayout = resetLayout ?? throw new ArgumentNullException(nameof(resetLayout));
+    private readonly Action<string>? _languageChanged = languageChanged;
     private string _diagnostic = store.LastDiagnostic;
     private float _lastWindowScale = float.NaN;
 
@@ -100,8 +102,8 @@ internal sealed class EditorPreferencesWindow(
             _ = ImGui.TableNextColumn();
             for (int i = 0; i < Categories.Length; i++)
             {
-                (EditorPreferencesCategory category, string label) = Categories[i];
-                if (ImGui.Selectable(label, SelectedCategory == category))
+                (EditorPreferencesCategory category, string key, string fallback) = Categories[i];
+                if (ImGui.Selectable(EditorLocalization.Get(key, fallback), SelectedCategory == category))
                 {
                     SelectedCategory = category;
                 }
@@ -144,10 +146,11 @@ internal sealed class EditorPreferencesWindow(
 
     private void DrawAppearance()
     {
-        ImGui.SeparatorText("Appearance");
+        ImGui.SeparatorText(EditorLocalization.Get("prefs.appearance", "Appearance"));
+        DrawLanguageSelector();
         float percent = EditorUiScale.ToPercent(_store.Current.UiScale);
         if (ImGui.SliderFloat(
-            "UI Scale",
+            EditorLocalization.Get("prefs.uiScale", "UI Scale"),
             ref percent,
             EditorUiScale.Minimum * 100f,
             EditorUiScale.Maximum * 100f,
@@ -160,36 +163,73 @@ internal sealed class EditorPreferencesWindow(
         ImGui.TextWrapped("4K 显示器推荐 150%。字体、菜单、间距、滚动条和工具栏尺寸会一起缩放。");
         ImGui.TextWrapped("缩放会立即应用；重启后字体 atlas 会按目标像素大小重建，以获得最清晰的文字。");
         ImGui.Spacing();
-        ImGui.TextUnformatted("Theme");
+        ImGui.TextUnformatted(EditorLocalization.Get("prefs.theme", "Theme"));
         ImGui.SameLine();
         ImGui.TextDisabled("Unity 6 Dark");
     }
 
+    private void DrawLanguageSelector()
+    {
+        IReadOnlyList<EditorLanguageInfo> languages = EditorLocalization.AvailableLanguages;
+        string currentDisplay = _store.Current.Language;
+        for (int i = 0; i < languages.Count; i++)
+        {
+            if (string.Equals(languages[i].Locale, _store.Current.Language, StringComparison.OrdinalIgnoreCase))
+            {
+                currentDisplay = languages[i].DisplayName;
+                break;
+            }
+        }
+
+        if (!ImGui.BeginCombo(EditorLocalization.Get("prefs.language", "Language"), currentDisplay))
+        {
+            return;
+        }
+
+        for (int i = 0; i < languages.Count; i++)
+        {
+            EditorLanguageInfo language = languages[i];
+            bool selected = string.Equals(language.Locale, _store.Current.Language, StringComparison.OrdinalIgnoreCase);
+            if (ImGui.Selectable($"{language.DisplayName}##language_{language.Locale}", selected))
+            {
+                Update(_store.Current with { Language = language.Locale });
+                _languageChanged?.Invoke(language.Locale);
+            }
+
+            if (selected)
+            {
+                ImGui.SetItemDefaultFocus();
+            }
+        }
+
+        ImGui.EndCombo();
+    }
+
     private void DrawGeneral()
     {
-        ImGui.SeparatorText("General");
+        ImGui.SeparatorText(EditorLocalization.Get("prefs.general", "General"));
         bool saveLayout = _store.Current.SaveLayoutOnExit;
-        if (ImGui.Checkbox("Save layout on exit", ref saveLayout))
+        if (ImGui.Checkbox(EditorLocalization.Get("prefs.saveLayout", "Save layout continuously"), ref saveLayout))
         {
             Update(_store.Current with { SaveLayoutOnExit = saveLayout });
         }
 
         ImGui.TextWrapped("关闭时保存窗口停靠和尺寸；关闭此选项会保留上一次已保存的布局。");
         bool reopenLastProject = _store.Current.ReopenLastProject;
-        if (ImGui.Checkbox("Reopen last project on startup", ref reopenLastProject))
+        if (ImGui.Checkbox(EditorLocalization.Get("prefs.reopenProject", "Reopen last project on startup"), ref reopenLastProject))
         {
             Update(_store.Current with { ReopenLastProject = reopenLastProject });
         }
 
         ImGui.TextWrapped("无显式 --project 时恢复最后一次成功打开的工程；自动化和上次异常退出不会盲目重试。");
         bool restoreLastScene = _store.Current.RestoreLastScene;
-        if (ImGui.Checkbox("Restore last open scene", ref restoreLastScene))
+        if (ImGui.Checkbox(EditorLocalization.Get("prefs.restoreScene", "Restore last open scene"), ref restoreLastScene))
         {
             Update(_store.Current with { RestoreLastScene = restoreLastScene });
         }
 
         ImGui.TextWrapped("当前编辑场景保存在用户 workspace，不会改写工程的 Start Scene。");
-        if (ImGui.Button("Reset to Default Layout"))
+        if (ImGui.Button(EditorLocalization.Get("prefs.resetLayout", "Reset to Default Layout")))
         {
             _resetLayout();
         }
@@ -197,7 +237,7 @@ internal sealed class EditorPreferencesWindow(
 
     private void DrawExternalTools()
     {
-        ImGui.SeparatorText("External Tools");
+        ImGui.SeparatorText(EditorLocalization.Get("prefs.externalTools", "External Tools"));
         string command = _store.Current.ExternalScriptEditor;
         if (ImGui.InputText("Script Editor", ref command, 1024))
         {
@@ -213,7 +253,7 @@ internal sealed class EditorPreferencesWindow(
 
     private static void DrawShortcuts()
     {
-        ImGui.SeparatorText("Shortcuts");
+        ImGui.SeparatorText(EditorLocalization.Get("prefs.shortcuts", "Shortcuts"));
         ImGui.TextWrapped("以下快捷键由菜单和全局命令调度共用；文本框正在编辑时由 ImGui 焦点路由优先处理。");
         if (!ImGui.BeginTable("editor_shortcuts", 2, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH))
         {

@@ -67,6 +67,21 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
         _editor.ResetDockLayout();
     }
 
+    public void PrepareFrame()
+    {
+        _editor.SetUiScale(_app.UiScale);
+        _editor.SetLayoutPersistence(_app.Preferences.Current.SaveLayoutOnExit);
+    }
+
+    public void RequestGameViewFocus()
+    {
+        if (_gameViewPanel is not null)
+        {
+            _gameViewPanel.Visible = true;
+            _gameViewPanel.RequestFocus();
+        }
+    }
+
     public bool TryStartScriptedBuildProbe(string outputDirectory, bool runAfterBuild, out string diagnostic)
     {
         if (_buildSettingsPanel is null)
@@ -219,9 +234,12 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
 
     private EditorMode CapturePlayMode()
     {
-        return _app.CurrentSession?.CaptureEditorPlaySession().Mode == Hosting.EditorMode.Play
+        Hosting.EditorMode mode = _app.CurrentSession?.CaptureEditorPlaySession().Mode ?? Hosting.EditorMode.Edit;
+        return mode == Hosting.EditorMode.Play
             ? EditorMode.Play
-            : EditorMode.Edit;
+            : mode == Hosting.EditorMode.Paused
+                ? EditorMode.Paused
+                : EditorMode.Edit;
     }
 
     private void RegisterPanels(Engine engine, RenderPipeline pipeline)
@@ -231,7 +249,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             return;
         }
 
-        _editor.AddPanel(new EditorMainMenuPanel(_app, _editor));
+        _editor.AddPanel(new EditorMainMenuPanel(_app));
         _editor.AddPanel(_app.PreferencesWindow);
         _assetBrowserDataSource = new EditorAssetBrowserDataSource(
             _project,
@@ -250,7 +268,16 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
 
         if (_sceneModel is not null && _undoStack is not null && _prefabs is not null)
         {
-            _editor.AddPanel(new GameObjectHierarchyPanel(_sceneModel, _undoStack, _prefabs));
+            PhysicsSystem? runtimePhysics = engine.Context.TryGetService(out PhysicsSystem registeredPhysics)
+                ? registeredPhysics
+                : null;
+            RuntimeSceneHierarchyDataSource runtimeHierarchy = new(engine.CurrentScene?.ScriptScene, runtimePhysics);
+            _editor.AddPanel(new GameObjectHierarchyPanel(
+                _sceneModel,
+                _undoStack,
+                _prefabs,
+                runtimeHierarchy.Capture,
+                CapturePlayMode));
             _editor.AddPanel(new GameObjectInspectorPanel(
                 _sceneModel,
                 _undoStack,
@@ -399,10 +426,9 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             : EditorRuntimeDiagnostics.FullQuality;
     }
 
-    private sealed class EditorMainMenuPanel(EditorShellApp app, EditorApp editor) : IEditorChromePanel
+    private sealed class EditorMainMenuPanel(EditorShellApp app) : IEditorChromePanel
     {
         private readonly EditorMainMenuBar _menu = new();
-        private readonly EditorUiScaleContextState _uiScaleState = new();
 
         public string Title => "Main Menu";
 
@@ -413,8 +439,6 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             _ = context;
             if (Visible)
             {
-                app.ApplyCurrentUiPreferences(_uiScaleState, editor.Options.DpiScale);
-                editor.SetLayoutPersistence(app.Preferences.Current.SaveLayoutOnExit);
                 _menu.Draw(app);
                 app.DrawTransientWindows();
             }
@@ -512,7 +536,9 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             return new EditorPlaySessionSnapshot(
                 snapshot.Mode == Hosting.EditorMode.Play
                     ? EditorMode.Play
-                    : EditorMode.Edit,
+                    : snapshot.Mode == Hosting.EditorMode.Paused
+                        ? EditorMode.Paused
+                        : EditorMode.Edit,
                 snapshot.Source == Hosting.EditorPlaySource.TemporarySnapshot
                     ? EditorPlaySource.TemporarySnapshot
                     : EditorPlaySource.CurrentState,

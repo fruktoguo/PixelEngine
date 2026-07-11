@@ -118,6 +118,11 @@ public sealed class GuiAppCombinedFrameTests
             _calls.Add("initialize");
         }
 
+        public void SetUiScale(float scale)
+        {
+            _ = scale;
+        }
+
         public void NewFrame(float deltaSeconds, int width, int height, float framebufferScaleX, float framebufferScaleY)
         {
             _calls.Add($"new:{width}x{height}@{framebufferScaleX}x{framebufferScaleY}");

@@ -1,5 +1,6 @@
 using Hexa.NET.ImGui;
 using Hexa.NET.ImGui.Backends.OpenGL3;
+using System.Diagnostics;
 
 namespace PixelEngine.Gui;
 
@@ -14,6 +15,9 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
     private string _layoutPath = string.Empty;
     private ImGuiFrameMetrics _frameMetrics = ImGuiFrameMetrics.Create(1, 1, 1f, 1f);
     private bool _saveLayoutOnShutdown = true;
+    private float _fontAtlasScale = 1f;
+    private float _appliedUiScale = 1f;
+    private long _lastLayoutSaveTimestamp;
     private bool _initialized;
 
     /// <inheritdoc />
@@ -56,6 +60,14 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
 
         GuiTheme.ApplyCurrent(options.Theme);
         AddConfiguredFont(io, options);
+        _fontAtlasScale = NormalizeScale(options.DpiScale);
+        _appliedUiScale = _fontAtlasScale;
+        if (MathF.Abs(_appliedUiScale - 1f) > 0.0001f)
+        {
+            ImGui.GetStyle().ScaleAllSizes(_appliedUiScale);
+        }
+
+        ImGui.GetStyle().FontScaleMain = 1f;
         if (File.Exists(_layoutPath))
         {
             ImGui.LoadIniSettingsFromDisk(_layoutPath);
@@ -63,6 +75,22 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
 
         _ = ImGuiImplOpenGL3.Init(options.GlslVersion);
         _initialized = true;
+    }
+
+    /// <inheritdoc />
+    public void SetUiScale(float scale)
+    {
+        ThrowIfNotInitialized();
+        SetCurrentContext();
+        float normalized = NormalizeScale(scale);
+        float ratio = normalized / _appliedUiScale;
+        if (MathF.Abs(ratio - 1f) > 0.0001f)
+        {
+            ImGui.GetStyle().ScaleAllSizes(ratio);
+            _appliedUiScale = normalized;
+        }
+
+        ImGui.GetStyle().FontScaleMain = normalized / _fontAtlasScale;
     }
 
     /// <inheritdoc />
@@ -93,6 +121,7 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
         SetCurrentContext();
         ImGui.Render();
         ImGuiImplOpenGL3.RenderDrawData(ImGui.GetDrawData());
+        TryAutoSaveLayout();
     }
 
     /// <inheritdoc />
@@ -184,6 +213,9 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
         _context = default;
         _layoutPath = string.Empty;
         _frameMetrics = ImGuiFrameMetrics.Create(1, 1, 1f, 1f);
+        _fontAtlasScale = 1f;
+        _appliedUiScale = 1f;
+        _lastLayoutSaveTimestamp = 0;
         _initialized = false;
     }
 
@@ -212,6 +244,37 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
     {
         ImGui.SetCurrentContext(_context);
         ImGuiImplOpenGL3.SetCurrentContext(_context);
+    }
+
+    private void TryAutoSaveLayout()
+    {
+        if (!_saveLayoutOnShutdown || string.IsNullOrWhiteSpace(_layoutPath))
+        {
+            return;
+        }
+
+        ImGuiIOPtr io = ImGui.GetIO();
+        long now = Stopwatch.GetTimestamp();
+        if (!io.WantSaveIniSettings ||
+            (_lastLayoutSaveTimestamp != 0 && Stopwatch.GetElapsedTime(_lastLayoutSaveTimestamp, now) < TimeSpan.FromSeconds(2)))
+        {
+            return;
+        }
+
+        string? directory = Path.GetDirectoryName(_layoutPath);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            _ = Directory.CreateDirectory(directory);
+        }
+
+        ImGui.SaveIniSettingsToDisk(_layoutPath);
+        io.WantSaveIniSettings = false;
+        _lastLayoutSaveTimestamp = now;
+    }
+
+    private static float NormalizeScale(float scale)
+    {
+        return float.IsFinite(scale) ? Math.Clamp(scale, 0.75f, 2f) : 1f;
     }
 
 }

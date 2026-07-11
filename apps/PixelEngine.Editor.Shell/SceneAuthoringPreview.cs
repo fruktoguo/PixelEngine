@@ -90,8 +90,8 @@ internal static class SceneAuthoringPreviewBuilder
                 float spawnY = ReadFiniteFloat(component, "PlayerSpawnY", height * 0.7f, -height, height * 2f);
                 float goalX = ReadFiniteFloat(component, "GoalX", width * 0.9f, -width, width * 2f);
                 float goalY = ReadFiniteFloat(component, "GoalY", height * 0.6f, -height, height * 2f);
-                markers.Add(new SceneAuthoringMarker(null, "Player Spawn", new Vector2(spawnX, spawnY), SceneAuthoringMarkerKind.PlayerSpawn));
-                markers.Add(new SceneAuthoringMarker(null, "Goal", new Vector2(goalX, goalY), SceneAuthoringMarkerKind.Goal));
+                markers.Add(new SceneAuthoringMarker(null, EditorLocalization.Get("scene.playerSpawn", "Player Spawn"), new Vector2(spawnX, spawnY), SceneAuthoringMarkerKind.PlayerSpawn));
+                markers.Add(new SceneAuthoringMarker(null, EditorLocalization.Get("scene.goal", "Goal"), new Vector2(goalX, goalY), SceneAuthoringMarkerKind.Goal));
                 hasProceduralWorld = true;
             }
         }

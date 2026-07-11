@@ -46,6 +46,16 @@ public sealed class GuiApp : IDisposable
     /// </summary>
     public bool IsRunning => _initialized && Options.Enabled;
 
+    /// <summary>在下一帧开始前安全应用 UI 缩放。</summary>
+    public void SetUiScale(float scale)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_initialized)
+        {
+            _controller.SetUiScale(scale);
+        }
+    }
+
     /// <summary>
     /// 初始化 GUI。禁用时不触碰 ImGui 后端。
     /// </summary>

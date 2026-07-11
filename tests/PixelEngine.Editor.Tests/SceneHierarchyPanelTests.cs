@@ -25,6 +25,7 @@ public sealed class SceneHierarchyPanelTests
 
         SceneHierarchyEntityItem item = Assert.Single(snapshot.Entities);
         Assert.Equal($"script:{entity.Id}", item.Handle);
+        Assert.Equal($"HierarchyBehaviour · Entity {entity.Id}", item.DisplayName);
         Assert.Equal(1, item.ComponentCount);
         Assert.Empty(snapshot.Bodies);
     }

@@ -112,7 +112,7 @@ internal static class EditorGameViewContract
             EditorViewportSurface.GameView,
             EditorDockSpace.GameViewWindowTitle,
             EditorViewportCameraOwner.RuntimePipelineCamera,
-            mode == EditorMode.Play
+            mode is EditorMode.Play or EditorMode.Paused
                 ? EditorViewportInputOwner.GameUiThenGameplay
                 : EditorViewportInputOwner.AuthoringTools,
             UsesRuntimeViewportTexture: true,

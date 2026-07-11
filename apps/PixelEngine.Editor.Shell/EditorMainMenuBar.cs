@@ -2,6 +2,7 @@ using System.Numerics;
 using Hexa.NET.ImGui;
 using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Editor.Shell.Settings;
+using L = PixelEngine.Editor.EditorLocalization;
 
 namespace PixelEngine.Editor.Shell;
 
@@ -50,6 +51,7 @@ internal sealed class EditorMainMenuBar
             ? session!.CaptureEditorPlaySession()
             : default;
         bool isPlaying = hasSession && playSession.Mode == Hosting.EditorMode.Play;
+        bool isPaused = hasSession && playSession.Mode == Hosting.EditorMode.Paused;
         string projectName = app.CurrentProject?.Name ?? "No Project";
         string sceneName = session?.CurrentSceneDisplayName ?? "No Scene";
         int objectCount = session?.SceneModel.Count ?? 0;
@@ -58,6 +60,7 @@ internal sealed class EditorMainMenuBar
             app.HasOpenProject,
             hasSession,
             isPlaying,
+            isPaused,
             session?.SceneModel.IsDirty == true,
             projectName,
             sceneName,
@@ -81,25 +84,25 @@ internal sealed class EditorMainMenuBar
             return;
         }
 
-        if (ToolbarButton("New Project", enabled: true, uiScale: uiScale))
+        if (ToolbarButton(L.Get("action.newProject", "New Project"), enabled: true, uiScale: uiScale))
         {
             app.FocusProjectPicker(ProjectPickerMode.NewProject);
         }
 
         ImGui.SameLine();
-        if (ToolbarButton("Open Project", enabled: true, uiScale: uiScale))
+        if (ToolbarButton(L.Get("action.openProject", "Open Project"), enabled: true, uiScale: uiScale))
         {
             app.FocusProjectPicker(ProjectPickerMode.OpenProject);
         }
 
         ImGui.SameLine();
-        if (ToolbarButton("Save Scene", state.HasSession, uiScale))
+        if (ToolbarButton(L.Get("action.saveScene", "Save Scene"), state.HasSession, uiScale))
         {
             _ = app.SaveScene();
         }
 
         ImGui.SameLine();
-        if (ToolbarButton("Build", state.HasOpenProject, uiScale))
+        if (ToolbarButton(L.Get("action.build", "Build"), state.HasOpenProject, uiScale))
         {
             app.ShowBuildSettings();
         }
@@ -108,19 +111,22 @@ internal sealed class EditorMainMenuBar
             EditorUiScale.Scale(390f, uiScale),
             (viewport.Size.X * 0.5f) - (((EditorUiScale.Scale(ToolbarButtonWidth, uiScale) * 3f) + EditorUiScale.Scale(16f, uiScale)) * 0.5f));
         ImGui.SameLine(playControlsX);
-        if (ToolbarButton("Play", state.CanEnterPlay, uiScale))
+        if (ToolbarButton(L.Get("action.play", "Play"), state.CanEnterPlay, uiScale))
         {
             app.EnterPlayMode();
         }
 
         ImGui.SameLine();
-        if (ToolbarButton("Pause", state.CanEnterEdit, uiScale))
+        if (ToolbarButton(
+            state.IsPaused ? L.Get("action.resume", "Resume") : L.Get("action.pause", "Pause"),
+            state.CanPause,
+            uiScale))
         {
-            app.EnterEditMode();
+            app.TogglePauseMode();
         }
 
         ImGui.SameLine();
-        if (ToolbarButton("Step", state.HasSession, uiScale))
+        if (ToolbarButton(L.Get("action.step", "Step"), state.CanStep, uiScale))
         {
             app.StepOnce();
         }
@@ -148,17 +154,17 @@ internal sealed class EditorMainMenuBar
 
     private static void DrawFileMenu(EditorShellApp app)
     {
-        if (!ImGui.BeginMenu("File"))
+        if (!ImGui.BeginMenu(L.Get("menu.file", "File")))
         {
             return;
         }
 
-        if (ImGui.MenuItem("New Project..."))
+        if (ImGui.MenuItem(L.Get("action.newProject", "New Project") + "..."))
         {
             app.FocusProjectPicker(ProjectPickerMode.NewProject);
         }
 
-        if (ImGui.MenuItem("Open Project..."))
+        if (ImGui.MenuItem(L.Get("action.openProject", "Open Project") + "..."))
         {
             app.FocusProjectPicker(ProjectPickerMode.OpenProject);
         }
@@ -197,7 +203,7 @@ internal sealed class EditorMainMenuBar
         }
 
         if (ImGui.MenuItem(
-            "Save Scene",
+            L.Get("action.saveScene", "Save Scene"),
             EditorShortcutCatalog.Get(EditorShortcutCommand.SaveScene).DisplayText,
             selected: false,
             enabled: app.HasOpenProject))
@@ -244,13 +250,13 @@ internal sealed class EditorMainMenuBar
 
     private static void DrawEditMenu(EditorShellApp app)
     {
-        if (!ImGui.BeginMenu("Edit"))
+        if (!ImGui.BeginMenu(L.Get("menu.edit", "Edit")))
         {
             return;
         }
 
         if (ImGui.MenuItem(
-            "Undo",
+            L.Get("action.undo", "Undo"),
             EditorShortcutCatalog.Get(EditorShortcutCommand.Undo).DisplayText,
             selected: false,
             enabled: app.CurrentSession?.UndoStack.CanUndo == true))
@@ -259,7 +265,7 @@ internal sealed class EditorMainMenuBar
         }
 
         if (ImGui.MenuItem(
-            "Redo",
+            L.Get("action.redo", "Redo"),
             EditorShortcutCatalog.Get(EditorShortcutCommand.Redo).DisplayText,
             selected: false,
             enabled: app.CurrentSession?.UndoStack.CanRedo == true))
@@ -267,13 +273,13 @@ internal sealed class EditorMainMenuBar
             _ = app.Redo();
         }
         ImGui.Separator();
-        if (ImGui.MenuItem("Delete", "Del", selected: false, enabled: app.CurrentSession?.SceneModel.SelectedStableId is not null))
+        if (ImGui.MenuItem(L.Get("action.delete", "Delete"), "Del", selected: false, enabled: app.CurrentSession?.SceneModel.SelectedStableId is not null))
         {
             app.DeleteSelectedGameObject();
         }
 
         if (ImGui.MenuItem(
-            "Duplicate",
+            L.Get("action.duplicate", "Duplicate"),
             EditorShortcutCatalog.Get(EditorShortcutCommand.Duplicate).DisplayText,
             selected: false,
             enabled: app.CurrentSession?.SceneModel.SelectedStableId is not null))
@@ -294,7 +300,7 @@ internal sealed class EditorMainMenuBar
 
     private static void DrawGameObjectMenu(EditorShellApp app)
     {
-        if (!ImGui.BeginMenu("GameObject"))
+        if (!ImGui.BeginMenu(L.Get("menu.gameObject", "GameObject")))
         {
             return;
         }
@@ -332,12 +338,12 @@ internal sealed class EditorMainMenuBar
         }
 
         ImGui.Separator();
-        if (ImGui.MenuItem("Rename", string.Empty, selected: false, enabled: app.CurrentSession?.SceneModel.SelectedStableId is not null))
+        if (ImGui.MenuItem(L.Get("action.rename", "Rename"), string.Empty, selected: false, enabled: app.CurrentSession?.SceneModel.SelectedStableId is not null))
         {
             app.RenameSelectedGameObject();
         }
 
-        if (ImGui.MenuItem("Delete", string.Empty, selected: false, enabled: app.CurrentSession?.SceneModel.SelectedStableId is not null))
+        if (ImGui.MenuItem(L.Get("action.delete", "Delete"), string.Empty, selected: false, enabled: app.CurrentSession?.SceneModel.SelectedStableId is not null))
         {
             app.DeleteSelectedGameObject();
         }
@@ -347,7 +353,7 @@ internal sealed class EditorMainMenuBar
 
     private static void DrawWindowMenu(EditorShellApp app)
     {
-        if (!ImGui.BeginMenu("Window"))
+        if (!ImGui.BeginMenu(L.Get("menu.window", "Window")))
         {
             return;
         }
@@ -416,13 +422,13 @@ internal sealed class EditorMainMenuBar
 
     private static void DrawPlayMenu(EditorShellApp app)
     {
-        if (!ImGui.BeginMenu("Play"))
+        if (!ImGui.BeginMenu(L.Get("menu.play", "Play")))
         {
             return;
         }
 
         if (ImGui.MenuItem(
-            "Play",
+            L.Get("action.play", "Play"),
             EditorShortcutCatalog.Get(EditorShortcutCommand.TogglePlayMode).DisplayText,
             selected: false,
             enabled: app.CurrentSession is not null))
@@ -430,14 +436,24 @@ internal sealed class EditorMainMenuBar
             app.EnterPlayMode();
         }
 
-        if (ImGui.MenuItem("Pause", string.Empty, selected: false, enabled: app.CurrentSession is not null))
+        EditorMainToolbarState state = CaptureToolbarState(app);
+        if (ImGui.MenuItem(
+            state.IsPaused ? L.Get("action.resume", "Resume") : L.Get("action.pause", "Pause"),
+            string.Empty,
+            selected: false,
+            enabled: state.CanPause))
         {
-            app.EnterEditMode();
+            app.TogglePauseMode();
         }
 
-        if (ImGui.MenuItem("Step", string.Empty, selected: false, enabled: app.CurrentSession is not null))
+        if (ImGui.MenuItem(L.Get("action.step", "Step"), string.Empty, selected: false, enabled: state.CanStep))
         {
             app.StepOnce();
+        }
+
+        if (ImGui.MenuItem(L.Get("action.stop", "Stop"), string.Empty, selected: false, enabled: state.CanEnterEdit))
+        {
+            app.EnterEditMode();
         }
 
         ImGui.EndMenu();
@@ -445,7 +461,7 @@ internal sealed class EditorMainMenuBar
 
     private static void DrawHelpMenu(EditorShellApp app)
     {
-        if (!ImGui.BeginMenu("Help"))
+        if (!ImGui.BeginMenu(L.Get("menu.help", "Help")))
         {
             return;
         }
@@ -528,6 +544,7 @@ internal readonly record struct EditorMainToolbarState(
     bool HasOpenProject,
     bool HasSession,
     bool IsPlaying,
+    bool IsPaused,
     bool IsDirty,
     string ProjectName,
     string SceneName,
@@ -536,7 +553,11 @@ internal readonly record struct EditorMainToolbarState(
 {
     public bool CanEnterPlay => HasSession && !IsPlaying;
 
-    public bool CanEnterEdit => HasSession && IsPlaying;
+    public bool CanEnterEdit => HasSession && (IsPlaying || IsPaused);
+
+    public bool CanPause => HasSession && (IsPlaying || IsPaused);
+
+    public bool CanStep => HasSession && !IsPlaying;
 
     public string StatusText =>
         HasOpenProject

@@ -124,6 +124,7 @@ internal sealed class EditorProjectSession : IDisposable
     public void RunOneTick(double deltaSeconds)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.PrepareFrame();
         // 编辑模式下场景图变更后重建 ScriptScene 投影
         RefreshEditProjectionIfNeeded();
         _ = Engine.RunOneTick(deltaSeconds);
@@ -135,13 +136,37 @@ internal sealed class EditorProjectSession : IDisposable
     public void EnterPlayMode()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        _ = EnterPlayTemporary();
+        if (Engine.Mode == EngineExecutionMode.Paused)
+        {
+            _ = _playSession.ResumePlay();
+        }
+        else if (Engine.Mode != EngineExecutionMode.Play)
+        {
+            _ = EnterPlayTemporary();
+        }
+
+        _editorHost.RequestGameViewFocus();
     }
 
     public void EnterEditMode()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         _ = ExitEditorPlay();
+    }
+
+    public void TogglePauseMode()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (Engine.Mode == EngineExecutionMode.Play)
+        {
+            _ = _playSession.PausePlay();
+        }
+        else if (Engine.Mode == EngineExecutionMode.Paused)
+        {
+            _ = _playSession.ResumePlay();
+        }
+
+        _editorHost.RequestGameViewFocus();
     }
 
     public Hosting.EditorPlaySessionSnapshot CaptureEditorPlaySession()
@@ -175,7 +200,18 @@ internal sealed class EditorProjectSession : IDisposable
     public void StepOnce()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        if (Engine.Mode == EngineExecutionMode.Play)
+        {
+            _ = _playSession.PausePlay();
+        }
+
+        if (Engine.Mode is not (EngineExecutionMode.Edit or EngineExecutionMode.Paused))
+        {
+            return;
+        }
+
         _ = Engine.StepOnce();
+        _editorHost.RequestGameViewFocus();
     }
 
     public void CreateGameObject()

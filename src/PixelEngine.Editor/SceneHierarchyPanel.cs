@@ -83,13 +83,24 @@ public sealed class RuntimeSceneHierarchyDataSource(Scene? scriptScene = null, P
         for (int i = 0; i < entities.Length; i++)
         {
             ScriptEntityInspection entity = entities[i];
+            string displayName = entity.Components.Length == 0
+                ? $"Entity {entity.EntityId}"
+                : $"{GetShortTypeName(entity.Components[0].TypeName)} · Entity {entity.EntityId}";
             items[i] = new SceneHierarchyEntityItem(
                 entity.Handle,
-                $"Entity {entity.EntityId}",
+                displayName,
                 entity.Components.Length);
         }
 
         return items;
+    }
+
+    private static string GetShortTypeName(string typeName)
+    {
+        int separator = Math.Max(typeName.LastIndexOf('.'), typeName.LastIndexOf('+'));
+        return separator >= 0 && separator < typeName.Length - 1
+            ? typeName[(separator + 1)..]
+            : typeName;
     }
 
     private IReadOnlyList<SceneHierarchyBodyItem> CaptureBodies()

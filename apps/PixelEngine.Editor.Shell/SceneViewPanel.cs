@@ -279,8 +279,38 @@ internal sealed class SceneViewPanel(
                     SceneAuthoringMarkerKind.GameObject => ObjectColor,
                     _ => ObjectColor,
                 };
-            drawList.AddCircleFilled(screen, selected ? 6f : 4f, color);
-            drawList.AddText(screen + new Vector2(8f, -8f), color, marker.Name);
+            float markerRadius = marker.Kind == SceneAuthoringMarkerKind.GameObject ? 6f : 10f;
+            if (marker.Kind == SceneAuthoringMarkerKind.PlayerSpawn)
+            {
+                drawList.AddTriangleFilled(
+                    screen + new Vector2(0f, -markerRadius),
+                    screen + new Vector2(markerRadius, markerRadius),
+                    screen + new Vector2(-markerRadius, markerRadius),
+                    color);
+            }
+            else if (marker.Kind == SceneAuthoringMarkerKind.Goal)
+            {
+                drawList.AddRectFilled(
+                    screen - new Vector2(markerRadius, markerRadius),
+                    screen + new Vector2(markerRadius, markerRadius),
+                    color,
+                    2f);
+            }
+            else
+            {
+                drawList.AddCircleFilled(screen, selected ? 8f : markerRadius, color);
+            }
+
+            Vector2 textSize = ImGui.CalcTextSize(marker.Name);
+            Vector2 labelMin = screen + new Vector2(14f, -(textSize.Y * 0.5f));
+            float labelMinX = _canvasMin.X + 4f;
+            float labelMinY = _canvasMin.Y + 4f;
+            float labelMaxX = Math.Max(labelMinX, _canvasMin.X + _canvasSize.X - textSize.X - 12f);
+            float labelMaxY = Math.Max(labelMinY, _canvasMin.Y + _canvasSize.Y - textSize.Y - 8f);
+            labelMin.X = Math.Clamp(labelMin.X, labelMinX, labelMaxX);
+            labelMin.Y = Math.Clamp(labelMin.Y, labelMinY, labelMaxY);
+            drawList.AddRectFilled(labelMin - new Vector2(4f, 2f), labelMin + textSize + new Vector2(4f, 2f), 0xD9222429, 3f);
+            drawList.AddText(labelMin, color, marker.Name);
         }
     }
 

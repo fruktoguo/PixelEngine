@@ -17,7 +17,6 @@ internal sealed class EditorShellApp
     private static readonly TimeSpan ScriptedBuildProbeTimeout = TimeSpan.FromMinutes(10);
     private readonly EditorShellOptions _options;
     private readonly EditorUserDataPaths _userDataPaths;
-    private readonly EditorUiScaleContextState _projectPickerUiScaleState = new();
     private readonly EditorTransitionCoordinator _transitions;
     private EditorProject? _pendingProject;
     private bool _pendingSceneOverrideFromWorkspace;
@@ -39,14 +38,21 @@ internal sealed class EditorShellApp
             ? userDataPaths.LayoutPath
             : EditorShellWindow.DefaultLayoutPath;
         Preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
+        EditorLocalization.Configure(
+            [Path.Combine(AppContext.BaseDirectory, "Localization"), userDataPaths.LocalizationDirectory],
+            Preferences.Current.Language);
         RecentProjects = recentProjects ?? throw new ArgumentNullException(nameof(recentProjects));
         Workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
         _commandLineSceneOverride = options.ScenePath;
         ProjectPicker = new ProjectPickerWindow(options);
         MainMenu = new EditorMainMenuBar();
         EditorWorkspaceWindowState windowState = Workspace.Current.Window ?? new EditorWorkspaceWindowState();
-        Layout = new EditorShellLayout(LayoutPath, windowState.Width, windowState.Height);
-        PreferencesWindow = new EditorPreferencesWindow(Preferences, ResetLayout);
+        Layout = new EditorShellLayout(
+            LayoutPath,
+            windowState.Width,
+            windowState.Height,
+            migrateToCurrentLayout: true);
+        PreferencesWindow = new EditorPreferencesWindow(Preferences, ResetLayout, SetLanguage);
         _transitions = new EditorTransitionCoordinator(
             () => CurrentSession?.SceneModel.IsDirty == true,
             TrySaveSceneForTransition);
@@ -92,6 +98,11 @@ internal sealed class EditorShellApp
     public EditorPreferencesWindow PreferencesWindow { get; }
 
     public float UiScale => Preferences.Current.UiScale;
+
+    private void SetLanguage(string locale)
+    {
+        _ = EditorLocalization.TrySetLocale(locale);
+    }
 
     public EditorProject? CurrentProject { get; private set; }
 
@@ -188,6 +199,9 @@ internal sealed class EditorShellApp
         int requestedTicks = _options.WindowTicks;
         bool configuredImGui = false;
         bool scriptedPlayEntered = false;
+        bool scriptedPlayPaused = false;
+        bool scriptedPlayStepped = false;
+        bool scriptedPlayResumed = false;
         bool scriptedPlayExited = false;
         bool scriptedSceneSaved = false;
         bool scriptedProjectClosed = false;
@@ -244,7 +258,6 @@ internal sealed class EditorShellApp
                 shellWindow.Window.DoEvents();
                 if (!shellWindow.Gui.IsRunning)
                 {
-                    _projectPickerUiScaleState.Reset();
                     shellWindow.Gui.Initialize();
                 }
 
@@ -254,14 +267,14 @@ internal sealed class EditorShellApp
                     configuredImGui = true;
                 }
 
+                shellWindow.Gui.SetUiScale(Preferences.Current.UiScale);
+                shellWindow.Gui.SetLayoutPersistence(Preferences.Current.SaveLayoutOnExit);
                 shellWindow.Gui.DrawFrame(
                     deltaSeconds,
                     shellWindow.Window.LogicalWidth,
                     shellWindow.Window.LogicalHeight,
                     _ =>
                     {
-                        ApplyCurrentUiPreferences(_projectPickerUiScaleState, shellWindow.Gui.Options.DpiScale);
-                        shellWindow.Gui.SetLayoutPersistence(Preferences.Current.SaveLayoutOnExit);
                         MainMenu.Draw(this);
                         Layout.DrawDockSpace();
                         ProjectPicker.Draw(this);
@@ -280,6 +293,9 @@ internal sealed class EditorShellApp
                     RunScriptedProbeActions(
                         executed,
                         ref scriptedPlayEntered,
+                        ref scriptedPlayPaused,
+                        ref scriptedPlayStepped,
+                        ref scriptedPlayResumed,
                         ref scriptedPlayExited,
                         ref scriptedSceneSaved,
                         ref scriptedProjectClosed);
@@ -388,6 +404,9 @@ internal sealed class EditorShellApp
                 $"editor_bridge_frames={CurrentSession?.EditorBridgeFrameCount ?? executed}, " +
                 $"render_camera_synced={projectOpen}, " +
                 $"scripted_play_entered={scriptedPlayEntered}, " +
+                $"scripted_play_paused={scriptedPlayPaused}, " +
+                $"scripted_play_stepped={scriptedPlayStepped}, " +
+                $"scripted_play_resumed={scriptedPlayResumed}, " +
                 $"scripted_play_exited={scriptedPlayExited}, " +
                 $"scripted_scene_saved={scriptedSceneSaved}, " +
                 $"scripted_project_closed={scriptedProjectClosed}, " +
@@ -1273,6 +1292,9 @@ internal sealed class EditorShellApp
     private void RunScriptedProbeActions(
         int executedTicks,
         ref bool playEntered,
+        ref bool playPaused,
+        ref bool playStepped,
+        ref bool playResumed,
         ref bool playExited,
         ref bool sceneSaved,
         ref bool projectClosed)
@@ -1286,6 +1308,29 @@ internal sealed class EditorShellApp
         {
             CurrentSession.EnterPlayMode();
             playEntered = true;
+            return;
+        }
+
+        if (playEntered && !playPaused && executedTicks >= 14)
+        {
+            CurrentSession.TogglePauseMode();
+            playPaused = CurrentSession.Engine.Mode == EngineExecutionMode.Paused;
+            return;
+        }
+
+        if (playPaused && !playStepped && executedTicks >= 15)
+        {
+            long before = CurrentSession.Engine.Context.Clock.SimTickIndex;
+            CurrentSession.StepOnce();
+            playStepped = CurrentSession.Engine.Mode == EngineExecutionMode.Paused &&
+                CurrentSession.Engine.Context.Clock.SimTickIndex == before + 1;
+            return;
+        }
+
+        if (playStepped && !playResumed && executedTicks >= 16)
+        {
+            CurrentSession.EnterPlayMode();
+            playResumed = CurrentSession.Engine.Mode == EngineExecutionMode.Play;
             return;
         }
 
@@ -1370,6 +1415,11 @@ internal sealed class EditorShellApp
     public void EnterEditMode()
     {
         CurrentSession?.EnterEditMode();
+    }
+
+    public void TogglePauseMode()
+    {
+        CurrentSession?.TogglePauseMode();
     }
 
     public void StepOnce()
