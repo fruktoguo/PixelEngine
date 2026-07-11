@@ -1,6 +1,6 @@
 {
   "schema": "pixelengine.evidence-index/v1",
-  "generatedAt": "2026-07-11",
+  "generatedAt": "2026-07-12",
   "generatedFromCommit": "97d7c0b99cedbd907f8b82a716684aec320f4a47",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
@@ -499,13 +499,13 @@
       "taskIds": ["CI-002", "TEST-003"],
       "evidenceState": "local_remediation_validated_remote_ci_and_gpu_runner_required",
       "commit": "97d7c0b99cedbd907f8b82a716684aec320f4a47",
-      "runSessionId": "local-20260711-ci002-remediation",
-      "runIdentityStatus": "captured_precommit_worktree_parent_sha",
+      "runSessionId": "local-20260712-ci002-clean-97d7",
+      "runIdentityStatus": "captured_clean_detached_commit",
       "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8c/16t; AMD Radeon RX 7900 XT driver 32.0.31021.5001; .NET SDK 10.0.108; win-x64",
-      "command": "dotnet build PixelEngine.sln Release WAE; 13-project dotnet test with TRX and summarize-ci-test-results.ps1; benchmark-regression.ps1 against ci-baseline.json; NativeSmokeToolingTests; NativeGpuCiContractTests; actionlint; validate-task-catalog.ps1; validate-target-hardware-matrix.ps1",
+      "command": "detached clean worktree at 97d7c0b9; git submodule update --init --recursive; build-native.ps1 win-x64 Release; dotnet build PixelEngine.sln Release; dotnet test PixelEngine.sln Release --no-build --logger trx; summarize-ci-test-results.ps1; disassembly-guard.ps1; benchmark-regression.ps1 against ci-baseline.json; actionlint; validate-task-catalog.ps1; validate-target-hardware-matrix.ps1",
       "reportPath": "docs/evidence-2026-07-11-ci-002-local-remediation.md",
-      "sha256": "f200a4690fe09af95191d9287c53fea3cbd793efbe81d0ca271c71612dd574cc",
-      "notes": "修复实现提交为 97d7c0b9；本地 TRX/benchmark 在提交前相同补丁工作树执行，summary 保留父提交 9dedb58e，故只证明本地修复，不替代当前完整 SHA 的远端 CI。CI-002 保持 active；真实 ANGLE runner 缺失由 TEST-003 保持 blocked。"
+      "sha256": "7bb1cb2248d9c0317083322108768198709f568082c1dc18fe9a3d9bac49f4e4",
+      "notes": "修复实现提交 97d7c0b9 已在同 SHA detached clean worktree 完成 native/solution build、13-TRX 聚合、disassembly 与正式 benchmark guard；本地 runner/run id 明确不冒充 GitHub Actions。CI-002 保持 active，仍需 push 后当前完整 SHA 的远端 Windows artifact；真实 ANGLE runner 缺失由 TEST-003 保持 blocked。"
     }
   ]
 }

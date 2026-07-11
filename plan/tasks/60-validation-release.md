@@ -15,7 +15,7 @@
   - 优先级：P0。
   - 恢复说明：2026-07-11 已在当前候选 HEAD 恢复执行；首次远端 run 暴露 hosted Windows 子进程编码/Bash 解析、benchmark 重复 filter 与 standard runner 无 WGL 三类问题，按普通 CI 与专用 GPU smoke 的真实能力边界修正。
   - 验收：win-x64 build、1492+ tests、disassembly guard、benchmark regression 实际执行；artifact/report 绑定 run id 和 commit SHA，并持久化逐程序集 TRX 与聚合计数。该任务只证明 standard hosted Windows 的 build/test/benchmark/disassembly，不声称独立 native GPU smoke 已执行。
-  - 本地修复证据：`docs/evidence-2026-07-11-ci-002-local-remediation.md`；实现提交 `97d7c0b9` 已通过 Windows WAE build、13 个测试程序集聚合与正式 benchmark guard，但本地运行发生在提交前工作树，且当前提交尚未 push/远端运行，因此任务继续保持 `[~]`。
+  - 本地修复证据：`docs/evidence-2026-07-11-ci-002-local-remediation.md`；实现提交 `97d7c0b9` 已在 detached clean worktree 中按同一 SHA 完成 Windows native/solution build、13-TRX 聚合、disassembly guard 与正式 benchmark regression，全部通过。当前提交尚未 push/远端运行，因此任务继续保持 `[~]`。
 
 - [!] `CI-003` 取得长期 6-RID build/test 与 4-RID verify-publish 矩阵证据。阻塞：`CI-002` 未完成，且需要对应 hosted runner/native 构建可用。
   - 优先级：P1。
