@@ -36,4 +36,7 @@ Evidence Index: `editor-009-unity-interaction-20260711`
 
 ## 正式输出
 
-完成实现提交后，从该提交创建 detached clean worktree，运行 `tools/update-final-output.ps1`；只有 Editor 默认工作台 probe、Demo 80 tick 窗口 probe与 `tools/verify-final-output.ps1` 全部通过后，才以同卷目录替换主工作树 `最终输出/`。发布 manifest、实现 commit、checksum 数量与入口见最终包 `_验证记录/manifest.json` 及 `SHA256SUMS`。
+- 实现提交 `92933b8451f5c348507ccfa6ca9edc988777757a` 在 detached clean worktree 中完成首轮官方发行验证：`win-x64`、Release、R2R、RmlUi。
+- Editor 默认工作台 probe：`completed=True`、`succeeded=True`、22 个必需面板、脚本创建/热重载/挂载成功、Scene 保存、Play 进出与 Build Player 全部成功。
+- Demo 窗口 probe：正式 `PixelEngine Demo.exe` 完成 80/80 tick，输出 `window_frame_probe`，RmlUi/Rendering/Input/Physics 均实际接入。
+- `tools/verify-final-output.ps1` 独立审计通过，`SHA256SUMS` 覆盖 271 个文件。任务完成提交后按同一流程重新生成正式输出，最终包 `_验证记录/manifest.json` 的 `gitCommit` 必须与最终 HEAD 精确一致，不允许 `AllowCommitMismatch`。

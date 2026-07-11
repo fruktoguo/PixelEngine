@@ -40,12 +40,13 @@
   - 证据要求：缩放/状态机/布局/语言包/运行态对象自动化；Demo 工程真实窗口 Play+Step+输入长跑与截图；Editor 全量、Hosting 定向、Release build 0 warning/0 error；重新生成并审计 `最终输出/`。
   - 证据：`docs/evidence-2026-07-11-editor-008-stability-workspace-localization.md`（Evidence Index: `editor-008-stability-workspace-localization-20260711`）；真实窗口 140% UI Scale 240 tick 长跑及 Play→Pause→Step→Resume→Stop 全链路 exit 0；Editor 97/97、UI 106 passed / 9 native GL 条件 skipped、Hosting 定向 108/108；Solution Release build 0 warning / 0 error；官方 `最终输出/` 已重新生成并通过独立审计。
 
-- [~] `EDITOR-009` 闭合 Unity-like 运行、场景编辑、Project、Console 与播放工具栏交互。
+- [x] `EDITOR-009` 闭合 Unity-like 运行、场景编辑、Project、Console 与播放工具栏交互。
   - 优先级：P0。
   - 依赖：`EDITOR-008`。
   - 设计来源：2026-07-11 用户第二轮真实窗口反馈与截图；`plan/12-editor-tooling-ui.md`；`plan/19-standalone-editor-app.md`；架构 §17.4。
   - 验收：Demo 在嵌入 Game View 中可稳定看到玩家视觉并以键鼠实际操控，输入焦点、viewport 映射和 UI capture 与独立 Player 一致；Hierarchy 的 authoring、procedural marker 与 Play runtime 实体均可选择并联动 Inspector/Scene/Game View，出生点与目标点可在 Hierarchy 或 Scene View 选中并用 Unity-like Move gizmo 拖拽，修改进入 Undo/Redo、dirty guard 与 `.scene` 序列化；Project Window 直接反映 Content/ScriptSource 真实目录，提供 Unity-like 文件夹树、breadcrumb、网格/列表切换、文件类型图标、图片缩略图、资产类型/状态与主操作；Console 提供 Unity-like Clear、Collapse、Clear on Play、Error Pause、日志/警告/错误计数过滤、可选行与完整详情；顶部使用 Unity-like Play/Pause/Step 图标与明确活动色，Play 中 Play 按钮承担 Stop 语义且状态实时正确；默认布局、间距、选中态、图标与字体保持统一现代深色视觉。
   - 证据要求：玩家可见/移动与 viewport 输入自动化及真实窗口截图；marker 选择/拖拽/Undo/保存往返；runtime selection/Inspector；真实目录、类型图标与纹理缩略图；Console 状态机；工具栏状态；Editor/UI/Hosting/Demo 定向回归、Solution Release build 0 warning / 0 error、官方 `最终输出/` 重生成与独立审计。
+  - 证据：`docs/evidence-2026-07-11-editor-009-unity-interaction.md`（Evidence Index: `editor-009-unity-interaction-20260711`）；最终代码真实 Game View 探针确认玩家从 X=51.000 移至 X=53.083、玩家与 viewport overlay 各 6 条绘制命令且保持 Play；Editor 105/105、Scripting 93/93、Hosting 592 passed / 4 native 条件 skipped、UI 110 passed / 10 native 条件 skipped、Rendering 177 passed / 22 native 条件 skipped、Demo 134 passed / 1 native 条件 skipped，关键 GL 像素回读显式启用后 4/4；Solution Release build 0 warning / 0 error。官方 clean-worktree `win-x64/r2r/RmlUi` 输出已通过默认工作台构建探针、Demo 80 tick 真实窗口探针、271 项 SHA256 与独立审计。
 
 - [!] `EDITOR-001` 完成 Project Window 真实工作流验收。阻塞：需要真实窗口 reviewer 和当前 HEAD 录屏/报告。
   - 优先级：P1。
