@@ -48,11 +48,12 @@
   - 证据要求：玩家可见/移动与 viewport 输入自动化及真实窗口截图；marker 选择/拖拽/Undo/保存往返；runtime selection/Inspector；真实目录、类型图标与纹理缩略图；Console 状态机；工具栏状态；Editor/UI/Hosting/Demo 定向回归、Solution Release build 0 warning / 0 error、官方 `最终输出/` 重生成与独立审计。
   - 证据：`docs/evidence-2026-07-11-editor-009-unity-interaction.md`（Evidence Index: `editor-009-unity-interaction-20260711`）；最终代码真实 Game View 探针确认玩家从 X=51.000 移至 X=53.083、玩家与 viewport overlay 各 6 条绘制命令且保持 Play；Editor 105/105、Scripting 93/93、Hosting 592 passed / 4 native 条件 skipped、UI 110 passed / 10 native 条件 skipped、Rendering 177 passed / 22 native 条件 skipped、Demo 134 passed / 1 native 条件 skipped，关键 GL 像素回读显式启用后 4/4；Solution Release build 0 warning / 0 error。官方 clean-worktree `win-x64/r2r/RmlUi` 输出已通过默认工作台构建探针、Demo 80 tick 真实窗口探针、271 项 SHA256 与独立审计。
 
-- [~] `EDITOR-010` 建立 VS Code 默认脚本编辑与一键打开 C# 工程工作流。
+- [x] `EDITOR-010` 建立 VS Code 默认脚本编辑与一键打开 C# 工程工作流。
   - 优先级：P0。
   - 依赖：`EDITOR-009`。
   - 设计来源：2026-07-11 用户补充反馈；`plan/11-scripting-system.md`；`plan/19-standalone-editor-app.md` §脚本外部编辑器；架构 §17.4。
   - 验收：Editor Preferences v1 的空外部编辑器安全迁移到 VS Code，v2 以明确 sentinel 区分 VS Code、Visual Studio、Rider、System Default 与自定义命令；Windows 上可靠探测 VS Code 的 PATH、User/System Installer 与注册表安装，脚本双击和 Console source location 默认复用工程窗口并定位到准确行列；`Assets > Open C# Project` 可直接打开当前工程，VS Code 打开工程根或根级 `.code-workspace` 而非孤立 solution，Visual Studio/Rider 优先复用真正包含当前 `.csproj` 的工程根/祖先 `.sln`；standalone 新工程没有项目文件时生成稳定、可解析 ScriptSource 与引擎引用、内容不变不重写的 `.csproj/.sln`。保留 system-default、自定义 executable command、`{file}` 及无 placeholder 自动追加的兼容行为；所有失败进入可见诊断与 Console。自动化覆盖迁移、IDE 探测、脚本定位、Demo 祖先 solution、standalone 工程生成/幂等、菜单与本地化；Hosting/Scripting 定向回归和 Solution Release build 0 warning / 0 error。
+  - 证据：`docs/evidence-2026-07-11-editor-010-vscode-project-workflow.md`（Evidence Index: `editor-010-vscode-project-workflow-20260711`）；真实机 VS Code/Rider/Visual Studio 三 IDE 均解析到真实 executable；standalone SDK 工程真实 build 0 warning / 0 error；focused 77/77、FinalOutput 11/11、Hosting 624 passed / 4 native 条件 skipped；Solution Release build 0 warning / 0 error；官方 clean-worktree `win-x64/r2r/RmlUi` 输出通过工作台、Demo 80 tick、319 项 SHA256 与独立审计。
 
 - [!] `EDITOR-001` 完成 Project Window 真实工作流验收。阻塞：需要真实窗口 reviewer 和当前 HEAD 录屏/报告。
   - 优先级：P1。
