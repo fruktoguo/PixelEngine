@@ -79,7 +79,7 @@ public sealed class HostingProjectDisciplineTests
             ["PixelEngine.Hosting", "PixelEngine.Scripting"],
             [
                 .. ReadIncludes(project, "ProjectReference")
-                    .Select(include => Path.GetFileNameWithoutExtension(include)),
+                    .Select(GetIncludedProjectName),
             ]);
         Assert.Empty(ReadIncludes(project, "PackageReference"));
     }
@@ -97,7 +97,7 @@ public sealed class HostingProjectDisciplineTests
             ["PixelEngine.Hosting", "PixelEngine.Editor", "PixelEngine.Gui"],
             [
                 .. ReadIncludes(project, "ProjectReference")
-                    .Select(include => Path.GetFileNameWithoutExtension(include)),
+                    .Select(GetIncludedProjectName),
             ]);
     }
 
@@ -1487,6 +1487,7 @@ public sealed class HostingProjectDisciplineTests
 
         // Assert：验证预期结果
         Assert.Contains("PixelEngine.UiNative.targets", directoryTargets, StringComparison.Ordinal);
+        Assert.Contains("'$(IsTestProject)' == 'true'", directoryTargets, StringComparison.Ordinal);
         Assert.Contains("'$(MSBuildProjectName)' == 'PixelEngine.UI' or '$(MSBuildProjectName)' == 'PixelEngine.Demo'", directoryTargets, StringComparison.Ordinal);
         Assert.Contains(@"out\$(PixelEngineUiNativeRid)\shared\", uiNativeTargets, StringComparison.Ordinal);
         Assert.Contains(@"runtimes\$(PixelEngineUiNativeRid)\native\$(PixelEngineUiNativeLibraryName)", uiNativeTargets, StringComparison.Ordinal);
@@ -1986,6 +1987,11 @@ public sealed class HostingProjectDisciplineTests
                 .Where(include => !string.IsNullOrWhiteSpace(include))
                 .Select(include => include!),
         ];
+    }
+
+    private static string GetIncludedProjectName(string include)
+    {
+        return Path.GetFileNameWithoutExtension(include.Replace('\\', '/'));
     }
 
     private static string FindRepositoryRoot()

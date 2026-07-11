@@ -142,6 +142,8 @@ internal sealed class EditorAssetManifestStore
         public RefreshIdentitySignature Signature => new(AssetType, SizeBytes, LastModifiedUtc);
     }
 
+    private readonly Action<EngineSceneDocument, string> _saveReferenceDocument;
+
     public EditorAssetManifestStore(EditorProject project)
         : this(
             project?.ProjectRoot ?? throw new ArgumentNullException(nameof(project)),
@@ -163,7 +165,8 @@ internal sealed class EditorAssetManifestStore
         string projectRoot,
         string contentRoot,
         string manifestRelativePath,
-        string? referenceDocumentRoot)
+        string? referenceDocumentRoot,
+        Action<EngineSceneDocument, string>? saveReferenceDocument = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(projectRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(contentRoot);
@@ -193,6 +196,7 @@ internal sealed class EditorAssetManifestStore
             : Path.IsPathRooted(referenceDocumentRoot)
                 ? Path.GetFullPath(referenceDocumentRoot)
                 : Path.GetFullPath(Path.Combine(ProjectRoot, referenceDocumentRoot));
+        _saveReferenceDocument = saveReferenceDocument ?? EngineSceneDocumentLoader.SaveDocument;
     }
 
     public string ProjectRoot { get; }
@@ -2205,7 +2209,7 @@ internal sealed class EditorAssetManifestStore
         return plans;
     }
 
-    private static int RewriteReferencesInReferenceDocuments(
+    private int RewriteReferencesInReferenceDocuments(
         IReadOnlyList<EditorAssetReferenceDocumentMovePlan> documents,
         string oldPath,
         string newPath,
@@ -2222,7 +2226,7 @@ internal sealed class EditorAssetManifestStore
                 continue;
             }
 
-            EngineSceneDocumentLoader.SaveDocument(document.Model.ToDocument(), document.SaveFullPath);
+            _saveReferenceDocument(document.Model.ToDocument(), document.SaveFullPath);
             writtenDocuments.Add(new EditorAssetReferenceDocumentWriteRollback(
                 document.OriginalFullPath,
                 document.SaveFullPath,
@@ -2233,7 +2237,7 @@ internal sealed class EditorAssetManifestStore
         return updated;
     }
 
-    private static int RewriteFolderReferencesInReferenceDocuments(
+    private int RewriteFolderReferencesInReferenceDocuments(
         IReadOnlyList<EditorAssetReferenceDocumentMovePlan> documents,
         IReadOnlyList<EditorAssetPathRewrite> rewrites,
         List<EditorAssetReferenceDocumentWriteRollback> writtenDocuments)
@@ -2254,7 +2258,7 @@ internal sealed class EditorAssetManifestStore
                 continue;
             }
 
-            EngineSceneDocumentLoader.SaveDocument(document.Model.ToDocument(), document.SaveFullPath);
+            _saveReferenceDocument(document.Model.ToDocument(), document.SaveFullPath);
             writtenDocuments.Add(new EditorAssetReferenceDocumentWriteRollback(
                 document.OriginalFullPath,
                 document.SaveFullPath,

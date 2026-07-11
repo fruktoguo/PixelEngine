@@ -31,6 +31,21 @@ function Invoke-Checked([string]$filePath, [string[]]$arguments) {
   }
 }
 
+function Write-SmokeCrashLogs([string]$directory) {
+  $logDirectory = Join-Path $directory 'logs'
+  if (-not (Test-Path -LiteralPath $logDirectory -PathType Container)) {
+    return
+  }
+
+  Get-ChildItem -LiteralPath $logDirectory -Filter 'demo-crash-*.log' -File |
+    Sort-Object LastWriteTimeUtc -Descending |
+    Select-Object -First 3 |
+    ForEach-Object {
+      Write-Host "----- $($_.FullName) -----"
+      Get-Content -LiteralPath $_.FullName
+    }
+}
+
 function Get-HostRid {
   $architecture = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
   if ($IsWindows -or $env:OS -eq 'Windows_NT') {
@@ -95,7 +110,13 @@ function Test-QemuAarch64Available {
 
 function Invoke-Smoke([string]$executable, [string]$targetRid) {
   if ((Get-HostRid) -eq $targetRid) {
-    Invoke-Checked $executable -arguments @('--smoke')
+    try {
+      Invoke-Checked $executable -arguments @('--smoke')
+    }
+    catch {
+      Write-SmokeCrashLogs (Split-Path -Parent $executable)
+      throw
+    }
     return
   }
 
