@@ -13,13 +13,23 @@ internal static class Utf8TestProcess
         [Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
         [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
         $global:OutputEncoding = [Console]::OutputEncoding
+        $global:ErrorActionPreference = 'Stop'
+        if ($null -ne (Get-Variable -Name PSStyle -ErrorAction SilentlyContinue)) {
+            $PSStyle.OutputRendering = 'PlainText'
+        }
         if ($args.Count -lt 1) { throw 'missing script path' }
         $scriptPath = [string]$args[0]
         $scriptArguments = if ($args.Count -gt 1) { @($args[1..($args.Count - 1)]) } else { @() }
         $global:LASTEXITCODE = 0
-        & $scriptPath @scriptArguments
-        $scriptSucceeded = $?
-        $scriptExitCode = $global:LASTEXITCODE
+        try {
+            & $scriptPath @scriptArguments
+            $scriptSucceeded = $?
+            $scriptExitCode = $global:LASTEXITCODE
+        }
+        catch {
+            [Console]::Error.WriteLine([string]$_.Exception.Message)
+            exit 1
+        }
         if ($scriptExitCode -ne 0) { exit $scriptExitCode }
         if (-not $scriptSucceeded) { exit 1 }
         """;
@@ -82,6 +92,7 @@ internal static class Utf8TestProcess
         startInfo.StandardOutputEncoding = Utf8;
         startInfo.StandardErrorEncoding = Utf8;
         startInfo.Environment["PYTHONUTF8"] = "1";
+        startInfo.Environment["NO_COLOR"] = "1";
     }
 
     internal static string ResolveBashExecutable()

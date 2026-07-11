@@ -5811,7 +5811,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 Path.Combine(temp, "missing-publish"),
                 "-PackageRoot",
                 packageRoot);
-            Assert.Equal(0, audit.ExitCode);
+            Assert.True(audit.ExitCode == 0, audit.Output);
             Assert.Contains("Package audit passed. Packages: 1. Expanded: 1.", audit.Output, StringComparison.Ordinal);
         }
         finally
@@ -5855,7 +5855,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "win-x64");
 
             // Assert：验证不变式与预期结果
-            Assert.Equal(0, audit.ExitCode);
+            Assert.True(audit.ExitCode == 0, audit.Output);
             Assert.Contains("Package audit passed. Packages: 1. Expanded: 1.", audit.Output, StringComparison.Ordinal);
 
             _ = WriteTextEvidence(Path.Combine(expandedPackage, "app", "runtimes", "win-x64", "native", "PixelEngine.UI.Native.dll"), "ui native");
@@ -5912,7 +5912,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "-ActiveRids",
                 "win-x64");
             // Assert：验证不变式与预期结果
-            Assert.Equal(0, clean.ExitCode);
+            Assert.True(clean.ExitCode == 0, clean.Output);
 
             string ultralightNative = Path.Combine(expandedPackage, "app", "runtimes", "win-x64", "native", "Ultralight.dll");
             _ = WriteTextEvidence(ultralightNative, "inactive ultralight native");
@@ -6088,7 +6088,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "--active-rids",
                 "win-x64");
             // Assert：验证预期结果
-            Assert.Equal(0, clean.ExitCode);
+            Assert.True(clean.ExitCode == 0, clean.Output);
 
             _ = WriteTextEvidence(Path.Combine(expandedPackage, "app", "runtimes", "win-x64", "native", "WebCore.dll"), "inactive ultralight native");
             RewriteFriendlyExpandedPackageChecksum(expandedPackage);
@@ -6169,6 +6169,61 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
             Assert.NotEqual(0, guizmo.ExitCode);
             Assert.Contains("app/Hexa.NET.ImGuizmo.dll", guizmo.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 hosted Windows 原生 Python 的 CRLF ZIP listing 不会污染 archive entry identity。
+    /// </summary>
+    [Fact]
+    public void BashReleaseArtifactAuditAcceptsCrLfPythonZipListing()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-bash-python-crlf-audit-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string packageRoot = Path.Combine(temp, "package");
+            List<string> checksumLines = [];
+            foreach (string channel in new[] { "r2r", "aot" })
+            {
+                string packageName = $"PixelEngine-Demo-9.9.9-win-x64-{channel}";
+                string expandedPackage = Path.Combine(packageRoot, packageName);
+                CreateFriendlyExpandedPackage(
+                    expandedPackage,
+                    channel,
+                    includeUiNative: string.Equals(channel, "r2r", StringComparison.Ordinal));
+                string archive = Path.Combine(packageRoot, packageName + ".zip");
+                CreateZipWithRoot(expandedPackage, archive, packageName);
+                checksumLines.Add($"{GetSha256(archive)}  {Path.GetFileName(archive)}");
+            }
+
+            _ = WriteTextEvidence(
+                Path.Combine(packageRoot, "SHA256SUMS"),
+                string.Join(Environment.NewLine, checksumLines) + Environment.NewLine);
+            string shimDirectory = CreateCrLfPython3Shim(Path.Combine(temp, "shim"));
+            string path = shimDirectory + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH");
+
+            ScriptResult audit = RunBashScriptWithEnvironment(
+                root,
+                "tools/audit-release-artifacts.sh",
+                new Dictionary<string, string>(StringComparer.Ordinal) { ["PATH"] = path },
+                "--publish-root",
+                ToBashPath(Path.Combine(temp, "missing-publish")),
+                "--package-root",
+                ToBashPath(packageRoot),
+                "--active-rids",
+                "win-x64");
+
+            Assert.True(audit.ExitCode == 0, audit.Output);
+            Assert.Contains("Package OK: 2 expanded=2", audit.Output, StringComparison.Ordinal);
         }
         finally
         {
@@ -8576,15 +8631,63 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
     private static ScriptResult RunBashScript(string workingDirectory, string scriptPath, params string[] arguments)
     {
+        return RunBashScriptWithEnvironment(workingDirectory, scriptPath, null, arguments);
+    }
+
+    private static ScriptResult RunBashScriptWithEnvironment(
+        string workingDirectory,
+        string scriptPath,
+        IReadOnlyDictionary<string, string>? environment,
+        params string[] arguments)
+    {
         using System.Diagnostics.Process process = new()
         {
             StartInfo = Utf8TestProcess.CreateBash(workingDirectory, scriptPath, arguments),
         };
+        if (environment is not null)
+        {
+            foreach ((string name, string value) in environment)
+            {
+                process.StartInfo.Environment[name] = value;
+            }
+        }
 
         _ = process.Start();
         string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
         process.WaitForExit();
         return new ScriptResult(process.ExitCode, output);
+    }
+
+    private static string CreateCrLfPython3Shim(string directory)
+    {
+        _ = Directory.CreateDirectory(directory);
+        string shim = Path.Combine(directory, "python3");
+        File.WriteAllText(
+            shim,
+            """
+            #!/usr/bin/env bash
+            set -euo pipefail
+            cat >/dev/null
+            if [[ "$#" -eq 2 ]]; then
+              while IFS= read -r line || [[ -n "$line" ]]; do
+                printf '%s\r\n' "$line"
+              done < <(unzip -Z1 "$2")
+              exit 0
+            fi
+            if [[ "$#" -eq 3 ]]; then
+              unzip -p "$2" "$3"
+              exit $?
+            fi
+            exit 64
+            """);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(
+                shim,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        return directory;
     }
 
     private static ScriptResult RunDotNet(string workingDirectory, params string[] arguments)

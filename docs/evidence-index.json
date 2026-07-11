@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-12",
-  "generatedFromCommit": "97d7c0b99cedbd907f8b82a716684aec320f4a47",
+  "generatedFromCommit": "0a766c459b31ab29002d3fb00ac8e889aa100bc3",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -497,15 +497,15 @@
     {
       "entryId": "ci-002-local-remediation-20260711",
       "taskIds": ["CI-002", "TEST-003"],
-      "evidenceState": "local_remediation_validated_remote_ci_and_gpu_runner_required",
-      "commit": "97d7c0b99cedbd907f8b82a716684aec320f4a47",
-      "runSessionId": "local-20260712-ci002-clean-97d7",
-      "runIdentityStatus": "captured_clean_detached_commit",
-      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8c/16t; AMD Radeon RX 7900 XT driver 32.0.31021.5001; .NET SDK 10.0.108; win-x64",
-      "command": "detached clean worktree at 97d7c0b9; git submodule update --init --recursive; build-native.ps1 win-x64 Release; dotnet build PixelEngine.sln Release; dotnet test PixelEngine.sln Release --no-build --logger trx; summarize-ci-test-results.ps1; disassembly-guard.ps1; benchmark-regression.ps1 against ci-baseline.json; actionlint; validate-task-catalog.ps1; validate-target-hardware-matrix.ps1",
+      "evidenceState": "remote_windows_run_captured_hosted_fixture_remediation_validated_rerun_required",
+      "commit": "0a766c459b31ab29002d3fb00ac8e889aa100bc3",
+      "runSessionId": "github-actions-29165262888-attempt-1",
+      "runIdentityStatus": "captured_remote_push_run_and_local_followup_validation",
+      "hardware": "GitHub-hosted windows-latest for run 29165262888; follow-up validation on Microsoft Windows 11 build 26100, AMD Ryzen 7 5800X, AMD Radeon RX 7900 XT, .NET SDK 10.0.108, win-x64",
+      "command": "push 0a766c45 to main; GitHub Actions CI run 29165262888; download benchmark-guard and win-x64 build-test evidence; local WAE Hosting build; focused 26-test hosted-fixture regression; full Hosting test 666 total; bash -n audit-release-artifacts.sh",
       "reportPath": "docs/evidence-2026-07-11-ci-002-local-remediation.md",
-      "sha256": "59d32ab311e1abd7c7e8499332d0419a02146b565a4ba222155cfaf0b9f872d2",
-      "notes": "修复实现提交 97d7c0b9 已在同 SHA detached clean worktree 完成 native/solution build、13-TRX 聚合、disassembly 与正式 benchmark guard；本地 runner/run id 明确不冒充 GitHub Actions。CI-002 保持 blocked，解除条件是用户明确授权 push 后取得当前完整 SHA 的远端 Windows artifact；真实 ANGLE runner 缺失由 TEST-003 保持 blocked。"
+      "sha256": "55a96ace3c2f2a587ed446b712e7aac822f7ece3462fbb56749aa66d6d886682",
+      "notes": "远端 run 29165262888 真实确认 benchmark/disassembly、win-x64 verify-publish 与 win-arm64 build-only 成功，并以 13-TRX 报告暴露 8 个 hosted Windows fixture 失败；UTF-8 PowerShell 与 Python CRLF ZIP listing 根因已完成本地修复和 666 项 Hosting 回归，CI-002 保持 active 等待新 SHA 重跑。真实 ANGLE runner 缺失仍由 TEST-003 保持 blocked。"
     }
   ]
 }

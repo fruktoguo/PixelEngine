@@ -1,15 +1,15 @@
-# CI-002 Windows 托管门禁本地修复证据
+# CI-002 Windows 托管门禁修复与远端恢复证据
 
 Evidence Index: `ci-002-local-remediation-20260711`
 
 ## 结论与边界
 
 - CI 修复源码已提交为 `97d7c0b99cedbd907f8b82a716684aec320f4a47`。本轮把 standard hosted Windows 的 build/test/TRX 聚合、disassembly guard 与 benchmark regression 同专用真实 GPU smoke 分离，并对两条链路都采用 fail-closed 合同。
-- `CI-002` 现保持 `[!]`：当前提交尚未 push，也没有绑定当前完整 SHA 的 GitHub Actions Windows artifact；所有可在本地可靠执行的验证均已完成，剩余条件需要用户明确授权 push 与远端 Actions 状态变化。本文只登记“本地修复与验证完成”，不冒充远端首次全绿。
+- 用户授权后，`main` 的 `0a766c459b31ab29002d3fb00ac8e889aa100bc3` 已推送并触发 GitHub Actions run `29165262888`。该 run 的 Windows benchmark/disassembly、win-x64 verify-publish 与 win-arm64 build-only 均成功；win-x64 build-test 在 1774 项测试中暴露 8 个 hosted Windows tooling contract 失败。因此 `CI-002` 恢复为 `[~]`，当前继续修复并重跑，本文不把部分成功冒充首次全绿。
 - `TEST-003` 仍保持 `[!]`：当前仓库没有注册满足交互桌面、Desktop GL 3.3+、真实 ANGLE/GLES 3.0+ 与隔离标签要求的 Windows x64 self-hosted runner。
 - 2026-07-12 已在 detached clean worktree 中直接 checkout 完整实现提交 `97d7c0b9`，初始化该提交锁定的全部递归 submodule 后，按 Windows CI 顺序重新执行 native build、solution build、13-TRX test aggregate、disassembly guard 与正式 benchmark regression。新本地摘要直接绑定 `97d7c0b9`，取代首轮 pre-commit 工作树结果；它仍是本地证据，不是 GitHub Actions artifact。
 
-## 前次远端失败与修复范围
+## 历次远端失败与修复范围
 
 前次 GitHub Actions run `29149667017` 绑定旧提交 `10884980beab725c913ea89b10a2957d675372b4`。Windows 路径暴露三类问题：托管测试子进程的 UTF-8/PowerShell/Git Bash 差异、benchmark 模糊 filter 导致同一类型重复执行，以及 `windows-latest` 没有可用 WGL 图形上下文。当前实现据此完成：
 
@@ -18,6 +18,23 @@ Evidence Index: `ci-002-local-remediation-20260711`
 - standard CI 为 13 个预期测试程序集持久化逐程序集 TRX，聚合器校验计数、唯一 run identity、最低总数与 job 状态；native GPU 项在普通测试中明确为 NotExecuted，并声明由独立 workflow 承担。
 - 新增仅允许可信完整 SHA 手工 dispatch 的 `native-gpu-smoke.yml`，要求带 `pixelengine-wgl-angle` 与 `pixelengine-native-smoke` 标签的 Windows x64 self-hosted runner；preflight、TRX、图形 marker、runner/SHA identity 与最终 SHA256SUMS 均失败闭合。
 - native smoke 要求四个项目全部存在并对 TRX Counters 与逐条结果对账；任何失败、跳过、未执行、空执行、runner 非零、SHA 漂移、Desktop GL/ANGLE 能力缺失都会失败。
+
+### 当前 main 首次远端恢复 run
+
+GitHub Actions run `29165262888`（workflow=`CI`、event=`push`、attempt=`1`、SHA=`0a766c459b31ab29002d3fb00ac8e889aa100bc3`）提供了第一份绑定当前主线的真实 hosted Windows 结果：
+
+| Windows job | 结果 |
+|---|---|
+| benchmark-guard (win-x64) | success；native build、solution build、disassembly guard、正式 benchmark regression 与 evidence upload 全部成功 |
+| verify-publish (win-x64) | success |
+| build-test (win-arm64, build-only) | success；test step 按合同明确 skipped |
+| build-test (win-x64) | native/solution build 成功；13/13 TRX；1774 total、1737 executed、1729 passed、8 failed、37 NotExecuted；job failure |
+
+下载产物中的 `benchmark-guard.md` SHA256 为 `83fc046c1c748392ff8f94a5ffbd6d5e8b5322b772bc0477723e615ba618436b`，`build-test-win-x64.md` SHA256 为 `a4b411d62f555a54fc9b09de2ff6481df40bf23c817cd94850029cef5e6680e2`；二者都显式绑定同一 run id 与完整 SHA。
+
+8 个失败全部属于 Hosting tooling fixture，而不是引擎运行行为：4 个 native-smoke 合同测试直接 `pwsh -File`，绕过统一 UTF-8 helper 后无法稳定匹配中文失败诊断；4 个 Bash release-audit fixture 在 hosted Windows 检测到原生 `python3`，其 text-mode `print()` 输出 CRLF，末尾 `\r` 污染 ZIP entry identity。当前修复让 native-smoke fixture 统一使用 UTF-8/PlainText PowerShell bootstrap，并让 ZIP listing 生产者输出二进制 LF、消费者防御性剥离末尾 CR；另以真实 Bash + CRLF `python3` shim 新增回归测试。非 Windows job 的现有失败继续由 `CI-003` 跟踪，不混入 `CI-002` 的 Windows 首次全绿结论。
+
+修复提交前的 Windows 本地回归结果：Hosting Tests 以 warnings-as-errors 构建成功（0 warning / 0 error）；远端失败切片与两项新增平台边界测试共 26/26 passed；Hosting Tests 全量 666 total、662 passed、4 个图形条件项 skipped、0 failed；`bash -n tools/audit-release-artifacts.sh` 通过。这组结果只证明修复已具备推送条件，最终仍以新完整 SHA 的 hosted Windows artifact 为准。
 
 ## 本地验证
 
@@ -69,4 +86,4 @@ Evidence Index: `ci-002-local-remediation-20260711`
 
 ## 解除 `CI-002` 的精确条件
 
-在用户明确授权 push 后，对包含本修复的当前完整 SHA 运行 GitHub Actions。只有 win-x64 build/test、13 个程序集 TRX 聚合、disassembly guard 与 benchmark regression jobs 全部成功，且 artifact/report 的 run id、attempt 与完整 commit SHA 同源，才能将 `CI-002` 改为 `[x]`。专用真实 GPU 结果仍由 `TEST-003` 独立闭合；非 Windows 长期矩阵失败由 `CI-003` 管理，本文不声称其已修复。
+把本轮 hosted Windows fixture 修复提交并推送后，对新的完整 SHA 运行 GitHub Actions。只有 win-x64 build/test、13 个程序集 TRX 聚合、disassembly guard 与 benchmark regression jobs 全部成功，且 artifact/report 的 run id、attempt 与完整 commit SHA 同源，才能将 `CI-002` 改为 `[x]`。专用真实 GPU 结果仍由 `TEST-003` 独立闭合；非 Windows 长期矩阵失败由 `CI-003` 管理，本文不声称其已修复。

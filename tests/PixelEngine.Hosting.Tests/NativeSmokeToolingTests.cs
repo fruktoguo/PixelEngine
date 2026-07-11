@@ -292,6 +292,50 @@ public sealed class NativeSmokeToolingTests
         Assert.False(File.Exists(fixture.RunnerCallsPath));
     }
 
+    /// <summary>
+    /// 验证 PowerShell test process 在 hosted Windows 上对 stdout、stderr 与 terminating error
+    /// 都使用无 ANSI 的 UTF-8 文本，避免中文诊断被 console code page 或渲染样式破坏。
+    /// </summary>
+    [Fact]
+    public void Utf8PowerShellProcessPreservesChineseStdoutStderrAndException()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "pixelengine-utf8-powershell-" + Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(root);
+        string script = Path.Combine(root, "utf8-sentinel.ps1");
+        File.WriteAllText(
+            script,
+            """
+            [Console]::Out.WriteLine('stdout-中文-✓')
+            [Console]::Error.WriteLine('stderr-中文-✓')
+            throw 'exception-中文-✓'
+            """);
+
+        try
+        {
+            using Process process = new()
+            {
+                StartInfo = Utf8TestProcess.CreatePowerShell(root, script, []),
+            };
+
+            Assert.True(process.Start());
+            string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+            Assert.True(process.WaitForExit(30_000), "UTF-8 PowerShell sentinel timed out.");
+
+            Assert.NotEqual(0, process.ExitCode);
+            Assert.Contains("stdout-中文-✓", output, StringComparison.Ordinal);
+            Assert.Contains("stderr-中文-✓", output, StringComparison.Ordinal);
+            Assert.Contains("exception-中文-✓", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("\u001b[", output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     private sealed class NativeSmokeFixture : IDisposable
     {
         private static readonly string[] IdentityEnvironmentNames =
@@ -476,26 +520,18 @@ public sealed class NativeSmokeToolingTests
             }
 
             string resultsDirectory = Path.Combine(Root, "results-" + Guid.NewGuid().ToString("N"));
-            using Process process = new();
-            process.StartInfo.FileName = "pwsh";
-            process.StartInfo.WorkingDirectory = repositoryRoot;
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.CreateNoWindow = true;
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.RedirectStandardError = true;
-            process.StartInfo.ArgumentList.Add("-NoProfile");
-            process.StartInfo.ArgumentList.Add("-ExecutionPolicy");
-            process.StartInfo.ArgumentList.Add("Bypass");
-            process.StartInfo.ArgumentList.Add("-File");
-            process.StartInfo.ArgumentList.Add(Path.Combine(repositoryRoot, "tools", "run-native-smoke.ps1"));
-            process.StartInfo.ArgumentList.Add("-Configuration");
-            process.StartInfo.ArgumentList.Add("Release");
-            process.StartInfo.ArgumentList.Add("-ResultsDirectory");
-            process.StartInfo.ArgumentList.Add(resultsDirectory);
-            process.StartInfo.ArgumentList.Add("-TestRunner");
-            process.StartInfo.ArgumentList.Add(RunnerPath);
-            process.StartInfo.ArgumentList.Add("-ProjectManifestPath");
-            process.StartInfo.ArgumentList.Add(manifestPath);
+            string scriptPath = Path.Combine(repositoryRoot, "tools", "run-native-smoke.ps1");
+            string[] arguments =
+            [
+                "-Configuration", "Release",
+                "-ResultsDirectory", resultsDirectory,
+                "-TestRunner", RunnerPath,
+                "-ProjectManifestPath", manifestPath,
+            ];
+            using Process process = new()
+            {
+                StartInfo = Utf8TestProcess.CreatePowerShell(repositoryRoot, scriptPath, arguments),
+            };
             process.StartInfo.Environment["PIXELENGINE_RENDERING_GL_SMOKE"] = "1";
             process.StartInfo.Environment["PIXELENGINE_RENDERING_ANGLE_SMOKE"] = "1";
             process.StartInfo.Environment["PIXELENGINE_NATIVE_SMOKE_FIXTURE_TRX"] = trxPath ?? string.Empty;

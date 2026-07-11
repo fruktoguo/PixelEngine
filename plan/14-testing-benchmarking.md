@@ -114,6 +114,8 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 **CI-002 普通测试证据合同**：每个非 build-only RID 必须为全部测试程序集生成独立 TRX，汇总器逐文件校验 `Counters` 与 `UnitTestResult`、程序集集合、唯一 run id、最低总数和所有失败状态，并把原始 TRX 与带 `run_id` / commit SHA / runner / RID 的 Markdown 一起上传。普通矩阵允许 `NativeSmokeFact` 因未声明图形 scope 而明确记为 `NotExecuted`，但 Failed/Error/Timeout/Aborted/Inconclusive/NotRunnable 等任何状态都 fail-closed；build-only 必须明确 `tests_ran=false`、test step=skipped 且不得携带旧 TRX。
 
+**hosted Windows 子进程文本边界**：会断言本地化诊断文本的 PowerShell fixture 必须统一经 UTF-8 test-process helper 启动，显式固定 stdin/stdout/stderr 编码、关闭 ANSI color，并把 terminating error 的原始 message 写入 stderr；不得绕过 helper 直接执行 `pwsh -File`。Bash 发行审计从 ZIP helper 读取 entry identity 时，生产者必须按二进制 LF 输出、消费者还要防御性移除末尾 CR，避免 Windows 原生 Python 的 text-mode CRLF 把 `README.txt`、launcher 或 native 路径悄悄改名。真实 Bash 脚本 fixture 必须覆盖 CRLF Python listing，确保该平台差异保持 fail-closed 且不误拒绝合法包。
+
 **Native GPU smoke 能力边界**：standard GitHub-hosted `windows-latest` 只承担 build/test/benchmark/verify-publish，不具备可依赖的 WGL/GPU，禁止在普通 push/PR CI 中设置两个 native smoke 环境变量。真实 Desktop GL 3.3+ 与 ANGLE/GLES3 smoke 使用独立 `Native GPU Smoke` workflow，仅接受人工 dispatch 的同仓库完整候选 SHA，并路由到同时具备 `self-hosted`、`Windows`、`X64`、`pixelengine-wgl-angle`、`pixelengine-native-smoke` labels 的隔离 runner；public repo 不允许让该 runner 执行 fork PR。workflow 采用只读 token、关闭 checkout credential persistence，严格核对 checkout HEAD 与输入 SHA，记录 CPU/GPU/driver/OS/交互 session/runner identity，并要求每项目 total>0、passed=total、failed/skipped/not-executed=0；失败证据仍上传但不得 `continue-on-error`。当前无匹配 runner 的外部证据由 canonical `TEST-003` 阻塞，不能用条件 skip、软件 mock 或 standard runner 红灯冒充完成。
 
 ### 3.12 破坏模型 / 武器 / 可玩循环测试方法学（showcase Demo 可玩闭环，plan/03/04/05/06/13）

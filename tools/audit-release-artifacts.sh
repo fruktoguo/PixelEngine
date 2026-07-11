@@ -286,7 +286,9 @@ import sys
 import zipfile
 with zipfile.ZipFile(sys.argv[1]) as archive:
     for name in archive.namelist():
-        print(name)
+        # Windows native Python translates text-mode \n to CRLF even when invoked
+        # from Git Bash. Emit bytes so archive identities stay platform-neutral.
+        sys.stdout.buffer.write(name.encode("utf-8") + b"\n")
 PY
         return
       fi
@@ -436,6 +438,8 @@ assert_friendly_package_layout() {
   local app_files=()
   local archive_entry
   while IFS= read -r archive_entry || [[ -n "$archive_entry" ]]; do
+    # Defense in depth for third-party listing tools that still emit CRLF.
+    archive_entry="${archive_entry%$'\r'}"
     local raw="$archive_entry"
     local is_directory=0
     [[ "$raw" == */ ]] && is_directory=1
