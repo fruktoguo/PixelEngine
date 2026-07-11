@@ -938,30 +938,25 @@ public sealed class EditorShellBuildTests
 
     private static void RunAudit(string shell, string publish, string package, bool devLayout, bool expectSuccess, string? expected = null)
     {
-        ProcessStartInfo startInfo = new()
-        {
-            FileName = shell,
-            WorkingDirectory = RepositoryRoot(),
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        startInfo.ArgumentList.Add("-NoProfile");
-        startInfo.ArgumentList.Add("-ExecutionPolicy");
-        startInfo.ArgumentList.Add("Bypass");
-        startInfo.ArgumentList.Add("-File");
-        startInfo.ArgumentList.Add(Path.Combine(RepositoryRoot(), "tools", "audit-release-artifacts.ps1"));
-        startInfo.ArgumentList.Add("-PublishRoot");
-        startInfo.ArgumentList.Add(publish);
-        startInfo.ArgumentList.Add("-PackageRoot");
-        startInfo.ArgumentList.Add(package);
-        startInfo.ArgumentList.Add("-ActiveRids");
-        startInfo.ArgumentList.Add("win-x64");
+        List<string> arguments =
+        [
+            "-PublishRoot",
+            publish,
+            "-PackageRoot",
+            package,
+            "-ActiveRids",
+            "win-x64",
+        ];
         if (devLayout)
         {
-            startInfo.ArgumentList.Add("-DevLayout");
+            arguments.Add("-DevLayout");
         }
+
+        ProcessStartInfo startInfo = Utf8TestProcess.CreatePowerShell(
+            RepositoryRoot(),
+            Path.Combine(RepositoryRoot(), "tools", "audit-release-artifacts.ps1"),
+            arguments,
+            shell);
 
         using Process process = Process.Start(startInfo) ?? throw new InvalidOperationException("无法启动 audit-release-artifacts.ps1。");
         string stdout = process.StandardOutput.ReadToEnd();

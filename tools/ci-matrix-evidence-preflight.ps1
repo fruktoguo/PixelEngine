@@ -429,7 +429,7 @@ foreach ($rid in $knownVerifyRids) {
 $workflowRunReport = [string](Get-JsonPropertyValue -Node $manifest -Name "workflowRunReport")
 $benchmarkGuardReport = [string](Get-JsonPropertyValue -Node $manifest.benchmarkGuard -Name "report")
 Add-EvidenceFile -Evidence $evidence -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -DeclaredSha256 ([string](Get-JsonPropertyValue -Node $manifest -Name "workflowRunSha256"))
-Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -ExpectedValues @{ conclusion = "success" }
+Add-MarkdownEvidenceCheck -Missing $missing -Root $root -Scope "workflow_run" -Path $workflowRunReport -ExpectedValues @{ aggregator_job_status = "success" }
 $workflowRunValues = Read-MarkdownEvidenceTable -Path (Resolve-EvidencePath -Root $root -Path $workflowRunReport)
 Add-WorkflowRunMetadataCheck -Missing $missing -Values $workflowRunValues
 $expectedRunIdentity = Get-ExpectedRunIdentity -Missing $missing -Root $root -WorkflowRunReport $workflowRunReport
@@ -461,6 +461,8 @@ foreach ($rid in $rids) {
         runner = $expectedRunner
         build_only = $expectedBuildOnly
         tests_ran = $expectedTestsRan.ToString().ToLowerInvariant()
+        native_gpu_smoke_scope = "separate_workflow"
+        native_gpu_smoke_executed = "false"
         conclusion = "success"
     }
     Add-RunIdentityCheck -Missing $missing -Root $root -Scope "build_test/$rid/report" -Path $buildReportPath -ExpectedIdentity $expectedRunIdentity

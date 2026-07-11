@@ -59,7 +59,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("tools/run-benchmark.ps1", disassembly, StringComparison.Ordinal);
         Assert.Contains("BenchmarkDotNet regression run", regression, StringComparison.Ordinal);
         Assert.Contains("maxRatio", regression, StringComparison.Ordinal);
-        Assert.Contains("rowContains", regression, StringComparison.Ordinal);
+        Assert.Contains("benchmarkType", regression, StringComparison.Ordinal);
+        Assert.Contains("parameters", regression, StringComparison.Ordinal);
         Assert.Contains("RNGCHKFAIL", disassembly, StringComparison.Ordinal);
         Assert.Contains("ymm|zmm", disassembly, StringComparison.Ordinal);
         Assert.Contains("HardwareIntrinsics", disassembly, StringComparison.Ordinal);
@@ -68,6 +69,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("CellThroughputBenchmark.StepJobSystem.TypicalDirtyRect", baseline, StringComparison.Ordinal);
         Assert.Contains("ReactionLookupBenchmark.FindDirect", baseline, StringComparison.Ordinal);
         Assert.Contains("ParticleIntegrationBenchmark.IntegrateFlyingParticles.200000", baseline, StringComparison.Ordinal);
+        Assert.DoesNotContain("rowContains", baseline, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -103,14 +105,23 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         {
             string reports = Path.Combine(temp, "reports");
             _ = Directory.CreateDirectory(reports);
-            string reportPath = Path.Combine(reports, "synthetic-report-github.md");
+            string reportPath = Path.Combine(reports, "PixelEngine.Benchmarks.CellThroughputBenchmark-report-github.md");
             File.WriteAllText(
                 reportPath,
                 """
-                | Method | Scenario | Mean | Error | StdDev |
+                | Method | Profile | Mean | Error | StdDev |
                 |------- |--------- |-----:|------:|-------:|
+                | StepJobSystem | FullActiveLiquidLegacy | 99.999 ms | 1.000 ns | 2.000 ns |
                 | StepJobSystem | FullActiveLiquid | 38.327 ms | 1.000 ns | 2.000 ns |
                 | StepJobSystem | TypicalDirtyRect | 413.100 us | 1.000 ns | 2.000 ns |
+                """);
+            File.WriteAllText(
+                Path.Combine(reports, "PixelEngine.Benchmarks.OtherCellThroughputBenchmark-report-github.md"),
+                """
+                | Method | Profile | Mean |
+                |------- |-------- |-----:|
+                | StepJobSystem | FullActiveLiquid | 1.000 ns |
+                | StepJobSystem | TypicalDirtyRect | 1.000 ns |
                 """);
 
             string baselinePath = Path.Combine(temp, "baseline.json");
@@ -122,17 +133,19 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                   "benchmarks": [
                     {
                       "name": "PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem.FullActiveLiquid",
+                      "benchmarkType": "PixelEngine.Benchmarks.CellThroughputBenchmark",
                       "method": "StepJobSystem",
                       "filter": "*CellThroughputBenchmark.StepJobSystem*",
-                      "rowContains": ["FullActiveLiquid"],
+                      "parameters": { "Profile": "FullActiveLiquid" },
                       "baselineMeanNs": 38327000.0,
                       "maxRatio": 1.0
                     },
                     {
                       "name": "PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem.TypicalDirtyRect",
+                      "benchmarkType": "PixelEngine.Benchmarks.CellThroughputBenchmark",
                       "method": "StepJobSystem",
                       "filter": "*CellThroughputBenchmark.StepJobSystem*",
-                      "rowContains": ["TypicalDirtyRect"],
+                      "parameters": { "Profile": "TypicalDirtyRect" },
                       "baselineMeanNs": 413100.0,
                       "maxRatio": 1.0
                     }
@@ -165,10 +178,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
-    /// 验证参数化 benchmark 若缺 rowContains 会失败，防止同名 Method 的多行报告被任意第一行误配。
+    /// 验证参数化 benchmark 若缺精确参数契约会失败，防止同名 Method 的多行报告被任意第一行误配。
     /// </summary>
     [Fact]
-    public void BenchmarkRegressionGateRequiresRowContainsForAmbiguousParameterizedRows()
+    public void BenchmarkRegressionGateRequiresExactParametersForAmbiguousParameterizedRows()
     {
         // Arrange：搭建测试场景与依赖
         string root = FindRepositoryRoot();
@@ -179,9 +192,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             string reports = Path.Combine(temp, "results");
             _ = Directory.CreateDirectory(reports);
             File.WriteAllText(
-                Path.Combine(reports, "ambiguous-report-github.md"),
+                Path.Combine(reports, "PixelEngine.Benchmarks.CellThroughputBenchmark-report-github.md"),
                 """
-                | Method | Scenario | Mean |
+                | Method | Profile | Mean |
                 |------- |--------- |-----:|
                 | StepJobSystem | FullActiveLiquid | 38.327 ms |
                 | StepJobSystem | TypicalDirtyRect | 413.100 us |
@@ -196,6 +209,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                   "benchmarks": [
                     {
                       "name": "PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem",
+                      "benchmarkType": "PixelEngine.Benchmarks.CellThroughputBenchmark",
                       "method": "StepJobSystem",
                       "filter": "*CellThroughputBenchmark.StepJobSystem*",
                       "baselineMeanNs": 38327000.0,
@@ -216,8 +230,101 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
             // Assert：验证不变式与预期结果
             Assert.NotEqual(0, result.ExitCode);
-            Assert.Contains("multiple report rows", result.Output, StringComparison.Ordinal);
-            Assert.Contains("rowContains", result.Output, StringComparison.Ordinal);
+            Assert.Contains("multiple parameterized rows", result.Output, StringComparison.Ordinal);
+            Assert.Contains("exact parameters object", result.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证多个 baseline 条目共享同一 BDN filter 时只执行一次，并从该次参数表中精确选择各自的行。
+    /// </summary>
+    [Fact]
+    public void BenchmarkRegressionGateRunsEachDistinctFilterExactlyOnce()
+    {
+        // Arrange：用可观察的 runner 生成一张含两行参数的真实 Markdown 表。
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-benchmark-regression-filter-group-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            _ = Directory.CreateDirectory(temp);
+            string callsPath = Path.Combine(temp, "runner-calls.txt");
+            string runnerPath = Path.Combine(temp, "fake-benchmark-runner.ps1");
+            File.WriteAllText(
+                runnerPath,
+                """
+                param(
+                  [string]$Project,
+                  [string]$Artifacts,
+                  [string[]]$BenchmarkDotNetArgs
+                )
+
+                Add-Content -LiteralPath '__CALLS__' -Value ($BenchmarkDotNetArgs -join ' ')
+                $results = Join-Path $Artifacts 'results'
+                New-Item -ItemType Directory -Force -Path $results | Out-Null
+                @'
+                | Method | Profile | Mean |
+                |------- |-------- |-----:|
+                | StepJobSystem | FullActiveLiquid | 38.327 ms |
+                | StepJobSystem | TypicalDirtyRect | 413.100 us |
+                '@ | Set-Content -LiteralPath (Join-Path $results 'PixelEngine.Benchmarks.CellThroughputBenchmark-report-github.md')
+                """.Replace("__CALLS__", callsPath.Replace("'", "''")));
+
+            string baselinePath = Path.Combine(temp, "baseline.json");
+            File.WriteAllText(
+                baselinePath,
+                                     /*lang=json,strict*/
+                                     """
+                {
+                  "benchmarks": [
+                    {
+                      "name": "PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem.FullActiveLiquid",
+                      "benchmarkType": "PixelEngine.Benchmarks.CellThroughputBenchmark",
+                      "method": "StepJobSystem",
+                      "filter": "*CellThroughputBenchmark.StepJobSystem*",
+                      "parameters": { "Profile": "FullActiveLiquid" },
+                      "baselineMeanNs": 38327000.0,
+                      "maxRatio": 1.0
+                    },
+                    {
+                      "name": "PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem.TypicalDirtyRect",
+                      "benchmarkType": "PixelEngine.Benchmarks.CellThroughputBenchmark",
+                      "method": "StepJobSystem",
+                      "filter": "*CellThroughputBenchmark.StepJobSystem*",
+                      "parameters": { "Profile": "TypicalDirtyRect" },
+                      "baselineMeanNs": 413100.0,
+                      "maxRatio": 1.0
+                    }
+                  ]
+                }
+                """);
+
+            // Act：走与 CI 相同的“执行 benchmark”分支，不提供预制 ReportsPath。
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "benchmark-regression.ps1"),
+                "-BaselinePath",
+                baselinePath,
+                "-Artifacts",
+                Path.Combine(temp, "artifacts"),
+                "-BenchmarkRunnerPath",
+                runnerPath);
+
+            // Assert：共享 filter 仅调用一次，且两个精确参数 baseline 均被校验。
+            Assert.Equal(0, result.ExitCode);
+            string[] calls = File.ReadAllLines(callsPath);
+            string call = Assert.Single(calls);
+            Assert.Contains("--filter *CellThroughputBenchmark.StepJobSystem*", call, StringComparison.Ordinal);
+            Assert.Contains("FullActiveLiquid mean=38327000", result.Output, StringComparison.Ordinal);
+            Assert.Contains("TypicalDirtyRect mean=413100", result.Output, StringComparison.Ordinal);
+            Assert.Contains("Benchmark regression gate passed.", result.Output, StringComparison.Ordinal);
         }
         finally
         {
@@ -7135,7 +7242,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 ["run_attempt"] = "1",
                 ["sha"] = "abc",
                 ["ref"] = "refs/heads/main",
-                ["conclusion"] = "success",
+                ["aggregator_job_status"] = "success",
             });
 
         string benchmark = WriteMarkdownEvidence(
@@ -7162,6 +7269,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                     ["runner"] = buildRunners[rid],
                     ["build_only"] = testsRan ? "false" : "true",
                     ["tests_ran"] = testsRan ? "true" : "false",
+                    ["native_gpu_smoke_scope"] = "separate_workflow",
+                    ["native_gpu_smoke_executed"] = "false",
                     ["run_id"] = "1",
                     ["sha"] = "abc",
                     ["conclusion"] = "success",
@@ -8454,22 +8563,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             ];
         }
 
-        using System.Diagnostics.Process process = new();
-        process.StartInfo.FileName = "pwsh";
-        process.StartInfo.WorkingDirectory = workingDirectory;
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.RedirectStandardError = true;
-        process.StartInfo.UseShellExecute = false;
-        process.StartInfo.CreateNoWindow = true;
-        process.StartInfo.ArgumentList.Add("-NoProfile");
-        process.StartInfo.ArgumentList.Add("-ExecutionPolicy");
-        process.StartInfo.ArgumentList.Add("Bypass");
-        process.StartInfo.ArgumentList.Add("-File");
-        process.StartInfo.ArgumentList.Add(scriptPath);
-        foreach (string argument in effectiveArguments)
+        using System.Diagnostics.Process process = new()
         {
-            process.StartInfo.ArgumentList.Add(argument);
-        }
+            StartInfo = Utf8TestProcess.CreatePowerShell(workingDirectory, scriptPath, effectiveArguments),
+        };
 
         _ = process.Start();
         string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
@@ -8479,18 +8576,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
 
     private static ScriptResult RunBashScript(string workingDirectory, string scriptPath, params string[] arguments)
     {
-        using System.Diagnostics.Process process = new();
-        process.StartInfo.FileName = "bash";
-        process.StartInfo.WorkingDirectory = workingDirectory;
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.RedirectStandardError = true;
-        process.StartInfo.UseShellExecute = false;
-        process.StartInfo.CreateNoWindow = true;
-        process.StartInfo.ArgumentList.Add(scriptPath);
-        foreach (string argument in arguments)
+        using System.Diagnostics.Process process = new()
         {
-            process.StartInfo.ArgumentList.Add(argument);
-        }
+            StartInfo = Utf8TestProcess.CreateBash(workingDirectory, scriptPath, arguments),
+        };
 
         _ = process.Start();
         string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();

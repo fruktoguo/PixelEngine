@@ -75,33 +75,29 @@ jobs:
         run: dotnet build PixelEngine.sln -c Release
 
       - name: Test solution
-        if: matrix.build_only != 'true' && runner.os == 'Windows'
+        id: solution_tests
+        if: matrix.build_only != 'true'
         shell: pwsh
-        run: dotnet test PixelEngine.sln -c Release --no-build
-
-      - name: Test solution
-        if: matrix.build_only != 'true' && runner.os != 'Windows'
-        shell: bash
-        run: dotnet test PixelEngine.sln -c Release --no-build
+        run: |
+          $resultsDirectory = 'artifacts/test-results/${{ matrix.rid }}-${{ github.run_id }}-${{ github.run_attempt }}'
+          New-Item -ItemType Directory -Force -Path $resultsDirectory | Out-Null
+          dotnet test PixelEngine.sln -c Release --no-build --logger "trx" --results-directory $resultsDirectory
 
       - name: Write build-test evidence
         if: always()
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path artifacts/ci-matrix-evidence | Out-Null
-          @(
-            "# CI build-test evidence: ${{ matrix.rid }}",
-            "",
-            "| Key | Value |",
-            "|---|---|",
-            "| rid | ${{ matrix.rid }} |",
-            "| runner | ${{ matrix.runner }} |",
-            "| build_only | ${{ matrix.build_only }} |",
-            "| tests_ran | ${{ matrix.build_only != 'true' }} |",
-            "| run_id | ${{ github.run_id }} |",
-            "| sha | ${{ github.sha }} |",
-            "| conclusion | ${{ job.status }} |"
-          ) | Set-Content -Path artifacts/ci-matrix-evidence/build-test-${{ matrix.rid }}.md -Encoding UTF8
+          ./tools/summarize-ci-test-results.ps1 `
+            -ResultsDirectory 'artifacts/test-results/${{ matrix.rid }}-${{ github.run_id }}-${{ github.run_attempt }}' `
+            -OutputPath 'artifacts/ci-matrix-evidence/build-test-${{ matrix.rid }}.md' `
+            -Rid '${{ matrix.rid }}' `
+            -Runner '${{ matrix.runner }}' `
+            -RunId '${{ github.run_id }}' `
+            -CommitSha '${{ github.sha }}' `
+            -BuildOnly '${{ matrix.build_only }}' `
+            -TestStepOutcome '${{ steps.solution_tests.outcome }}' `
+            -JobStatus '${{ job.status }}' `
+            -MinimumTotal 1492
 
       - name: Upload build-test evidence
         if: always()
@@ -109,45 +105,9 @@ jobs:
         with:
           name: ci-evidence-build-test-${{ matrix.rid }}
           if-no-files-found: error
-          path: artifacts/ci-matrix-evidence/build-test-${{ matrix.rid }}.md
-
-  native-smoke:
-    name: native-smoke (win-x64)
-    runs-on: windows-latest
-    env:
-      PIXELENGINE_RENDERING_GL_SMOKE: '1'
-      PIXELENGINE_RENDERING_ANGLE_SMOKE: '1'
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-
-      - name: Build native
-        shell: pwsh
-        run: ./tools/build-native.ps1 -Rid win-x64 -Configuration Release
-
-      - name: Build solution
-        shell: pwsh
-        run: dotnet build PixelEngine.sln -c Release
-
-      - name: Run native smoke tests
-        shell: pwsh
-        run: ./tools/run-native-smoke.ps1 -Configuration Release -ResultsDirectory artifacts/native-smoke
-
-      - name: Upload native smoke report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-smoke-report-win-x64
-          if-no-files-found: error
-          path: artifacts/native-smoke
+          path: |
+            artifacts/ci-matrix-evidence/build-test-${{ matrix.rid }}.md
+            artifacts/test-results/${{ matrix.rid }}-${{ github.run_id }}-${{ github.run_attempt }}/**/*.trx
 
   benchmark-guard:
     name: benchmark-guard (win-x64)
@@ -303,7 +263,7 @@ jobs:
             "| run_attempt | ${{ github.run_attempt }} |",
             "| sha | ${{ github.sha }} |",
             "| ref | ${{ github.ref }} |",
-            "| conclusion | ${{ job.status }} |"
+            "| aggregator_job_status | ${{ job.status }} |"
           ) | Set-Content -Path artifacts/ci-matrix-evidence/workflow-run.md -Encoding UTF8
           function Get-Sha256([string]$path) {
             return (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()

@@ -2188,22 +2188,10 @@ public sealed class HostingProjectDisciplineTests
 
     private static string RunPowerShellScript(string workingDirectory, string scriptPath, params string[] arguments)
     {
-        using System.Diagnostics.Process process = new();
-        process.StartInfo.FileName = "pwsh";
-        process.StartInfo.WorkingDirectory = workingDirectory;
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.RedirectStandardError = true;
-        process.StartInfo.UseShellExecute = false;
-        process.StartInfo.ArgumentList.Add("-NoLogo");
-        process.StartInfo.ArgumentList.Add("-NoProfile");
-        process.StartInfo.ArgumentList.Add("-ExecutionPolicy");
-        process.StartInfo.ArgumentList.Add("Bypass");
-        process.StartInfo.ArgumentList.Add("-File");
-        process.StartInfo.ArgumentList.Add(scriptPath);
-        foreach (string argument in arguments)
+        using System.Diagnostics.Process process = new()
         {
-            process.StartInfo.ArgumentList.Add(argument);
-        }
+            StartInfo = Utf8TestProcess.CreatePowerShell(workingDirectory, scriptPath, arguments),
+        };
 
         _ = process.Start();
         string stdout = process.StandardOutput.ReadToEnd();
@@ -2216,22 +2204,10 @@ public sealed class HostingProjectDisciplineTests
 
     private static ProcessResult RunPowerShellScriptRaw(string workingDirectory, string scriptPath, params string[] arguments)
     {
-        using System.Diagnostics.Process process = new();
-        process.StartInfo.FileName = "pwsh";
-        process.StartInfo.WorkingDirectory = workingDirectory;
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.RedirectStandardError = true;
-        process.StartInfo.UseShellExecute = false;
-        process.StartInfo.ArgumentList.Add("-NoLogo");
-        process.StartInfo.ArgumentList.Add("-NoProfile");
-        process.StartInfo.ArgumentList.Add("-ExecutionPolicy");
-        process.StartInfo.ArgumentList.Add("Bypass");
-        process.StartInfo.ArgumentList.Add("-File");
-        process.StartInfo.ArgumentList.Add(scriptPath);
-        foreach (string argument in arguments)
+        using System.Diagnostics.Process process = new()
         {
-            process.StartInfo.ArgumentList.Add(argument);
-        }
+            StartInfo = Utf8TestProcess.CreatePowerShell(workingDirectory, scriptPath, arguments),
+        };
 
         _ = process.Start();
         string stdout = process.StandardOutput.ReadToEnd();

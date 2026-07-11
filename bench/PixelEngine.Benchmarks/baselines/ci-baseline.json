@@ -3,6 +3,7 @@
   "benchmarks": [
     {
       "name": "PixelEngine.Benchmarks.GcPauseBenchmark.SteadyPoolRentReturn",
+      "benchmarkType": "PixelEngine.Benchmarks.GcPauseBenchmark",
       "method": "SteadyPoolRentReturn",
       "filter": "*GcPauseBenchmark.SteadyPoolRentReturn*",
       "baselineMeanNs": 1000000.0,
@@ -10,22 +11,29 @@
     },
     {
       "name": "PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem.FullActiveLiquid",
+      "benchmarkType": "PixelEngine.Benchmarks.CellThroughputBenchmark",
       "method": "StepJobSystem",
       "filter": "*CellThroughputBenchmark.StepJobSystem*",
-      "rowContains": ["FullActiveLiquid"],
+      "parameters": {
+        "Profile": "FullActiveLiquid"
+      },
       "baselineMeanNs": 100000000.0,
       "maxRatio": 1.0
     },
     {
       "name": "PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem.TypicalDirtyRect",
+      "benchmarkType": "PixelEngine.Benchmarks.CellThroughputBenchmark",
       "method": "StepJobSystem",
       "filter": "*CellThroughputBenchmark.StepJobSystem*",
-      "rowContains": ["TypicalDirtyRect"],
+      "parameters": {
+        "Profile": "TypicalDirtyRect"
+      },
       "baselineMeanNs": 5000000.0,
       "maxRatio": 1.0
     },
     {
       "name": "PixelEngine.Benchmarks.ReactionLookupBenchmark.FindDirect",
+      "benchmarkType": "PixelEngine.Benchmarks.ReactionLookupBenchmark",
       "method": "FindDirect",
       "filter": "*ReactionLookupBenchmark.FindDirect*",
       "baselineMeanNs": 100.0,
@@ -33,9 +41,12 @@
     },
     {
       "name": "PixelEngine.Benchmarks.ParticleIntegrationBenchmark.IntegrateFlyingParticles.200000",
+      "benchmarkType": "PixelEngine.Benchmarks.ParticleIntegrationBenchmark",
       "method": "IntegrateFlyingParticles",
       "filter": "*ParticleIntegrationBenchmark.IntegrateFlyingParticles*",
-      "rowContains": ["200000"],
+      "parameters": {
+        "Count": "200000"
+      },
       "baselineMeanNs": 10000000.0,
       "maxRatio": 1.0
     }

@@ -1,6 +1,6 @@
 {
-  "schema": "pixelengine.target-hardware-matrix/v1",
-  "generatedAt": "2026-07-10",
+  "schema": "pixelengine.target-hardware-matrix/v2",
+  "generatedAt": "2026-07-11",
   "sourceOfTruth": "tools/release-rids.json",
   "sourceCommit": "796b57817b9136340b70ee0594fe743f1f094d97",
   "product": {
@@ -11,7 +11,7 @@
     "conditionalRids": ["win-arm64"],
     "activeRidsAtSnapshot": ["win-x64", "win-arm64"],
     "longTermCompatibilityRids": ["win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64"],
-    "identityCapturePerRun": ["rid", "runner", "runnerImage", "cpu", "gpu", "driver", "os", "dotnetVersion", "gitCommit", "benchmarkRunId"]
+    "identityCapturePerRun": ["rid", "runner", "runnerImage", "cpu", "gpu", "driver", "os", "dotnetVersion", "gitCommit", "benchmarkRunId", "sessionId", "userInteractive", "glVendor", "glRenderer", "glVersion", "angleRenderer"]
   },
   "entries": [
     {
@@ -19,13 +19,32 @@
       "lifecycle": "active_required",
       "productRequirement": "required",
       "targetArchitecture": "x64",
-      "runner": {
+      "buildTestRunner": {
         "provider": "github-hosted",
         "label": "windows-latest",
         "shell": "pwsh",
         "hostArchitecture": "x64",
         "targetArchitecture": "x64",
-        "identityCapture": ["runner.os", "ImageVersion", "dotnet --info", "Get-CimInstance Win32_Processor", "Get-CimInstance Win32_VideoController"]
+        "identityCapture": ["runner.os", "ImageVersion", "dotnet --info", "Get-CimInstance Win32_Processor", "Get-CimInstance Win32_VideoController"],
+        "capabilities": ["build", "test", "benchmark", "verify_publish"],
+        "graphicsNativeSmokeEligible": false,
+        "ineligibleReason": "Standard github-hosted windows-latest has no contractual WGL/GPU capability and must not execute GL/ANGLE native smoke."
+      },
+      "nativeGpuSmokeRunner": {
+        "provider": "external_required",
+        "registrationStatus": "missing",
+        "labels": ["self-hosted", "Windows", "X64", "pixelengine-wgl-angle", "pixelengine-native-smoke"],
+        "shell": "pwsh",
+        "hostArchitecture": "x64",
+        "targetArchitecture": "x64",
+        "workflow": ".github/workflows/native-gpu-smoke.yml",
+        "trigger": "workflow_dispatch",
+        "candidateShaRequired": true,
+        "interactiveDesktopRequired": true,
+        "fixtureAllowedInProduction": false,
+        "capabilities": ["desktop_gl_3_3", "angle_gles_3_0", "native_smoke"],
+        "identityCapture": ["runner.name", "runner.os", "runner.arch", "sessionId", "userInteractive", "Win32_Processor", "Win32_VideoController", "GPU driver", "Win32_OperatingSystem", "dotnet --info", "GL_VENDOR", "GL_RENDERER", "GL_VERSION", "ANGLE renderer", "gitCommit", "runId", "runAttempt"],
+        "externalConditions": ["Register an isolated Windows x64 runner carrying every required label", "Runner must expose a non-Session-0 interactive desktop and real non-Basic/non-Remote/non-Virtual GPU", "Dispatch the dedicated workflow for an exact trusted 40-character candidate SHA"]
       },
       "hardware": {
         "cpu": {
@@ -89,7 +108,7 @@
       "lifecycle": "active_conditional",
       "productRequirement": "conditional",
       "targetArchitecture": "arm64",
-      "runner": {
+      "buildTestRunner": {
         "provider": "github-hosted",
         "label": "windows-latest",
         "shell": "pwsh",
@@ -158,7 +177,7 @@
       "lifecycle": "dormant_long_term",
       "productRequirement": "long_term_compatibility",
       "targetArchitecture": "x64",
-      "runner": {
+      "buildTestRunner": {
         "provider": "github-hosted",
         "label": "ubuntu-latest",
         "shell": "bash",
@@ -205,7 +224,7 @@
       "lifecycle": "dormant_long_term",
       "productRequirement": "long_term_compatibility",
       "targetArchitecture": "arm64",
-      "runner": {
+      "buildTestRunner": {
         "provider": "github-hosted",
         "label": "ubuntu-24.04-arm",
         "releaseRunnerLabel": "ubuntu-latest",
@@ -254,7 +273,7 @@
       "lifecycle": "dormant_long_term",
       "productRequirement": "long_term_compatibility",
       "targetArchitecture": "x64",
-      "runner": {
+      "buildTestRunner": {
         "provider": "github-hosted",
         "label": "macos-15-intel",
         "shell": "bash",
@@ -301,7 +320,7 @@
       "lifecycle": "dormant_long_term",
       "productRequirement": "long_term_compatibility",
       "targetArchitecture": "arm64",
-      "runner": {
+      "buildTestRunner": {
         "provider": "github-hosted",
         "label": "macos-14",
         "shell": "bash",

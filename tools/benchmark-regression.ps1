@@ -3,7 +3,8 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$BaselinePath,
   [string]$Artifacts = "artifacts/benchmark-regression",
-  [string]$ReportsPath = ""
+  [string]$ReportsPath = "",
+  [string]$BenchmarkRunnerPath = ""
 )
 
 $ErrorActionPreference = 'Stop'
@@ -67,9 +68,19 @@ function Get-HeaderIndex([object[]]$headers, [string[]]$names) {
   return -1
 }
 
-function Get-BenchmarkReportRows([string]$reports) {
+function Convert-HeaderToKey([string]$header) {
+  return ($header -replace '\s+', '')
+}
+
+function Get-BenchmarkReportRows([System.IO.FileInfo]$reportFile) {
   $rows = [System.Collections.Generic.List[object]]::new()
-  $lines = $reports -split "`r?`n"
+  $lines = (Get-Content -LiteralPath $reportFile.FullName -Raw) -split "`r?`n"
+  $suffix = '-report-github.md'
+  if (-not $reportFile.Name.EndsWith($suffix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Unsupported BenchmarkDotNet report filename: $($reportFile.FullName)"
+  }
+
+  $benchmarkType = $reportFile.Name.Substring(0, $reportFile.Name.Length - $suffix.Length)
 
   for ($i = 0; $i -lt ($lines.Count - 1); $i++) {
     $headers = @(Split-MarkdownRow $lines[$i])
@@ -102,10 +113,27 @@ function Get-BenchmarkReportRows([string]$reports) {
         throw "BenchmarkDotNet report row has fewer cells than the header: '$($lines[$j])'."
       }
 
+      if ($cells.Count -ne $headers.Count) {
+        throw "BenchmarkDotNet report row/header cell count mismatch in '$($reportFile.FullName)': '$($lines[$j])'."
+      }
+
+      $cellsByHeader = @{}
+      for ($columnIndex = 0; $columnIndex -lt $headers.Count; $columnIndex++) {
+        $headerKey = Convert-HeaderToKey ([string]$headers[$columnIndex])
+        if ([string]::IsNullOrWhiteSpace($headerKey) -or $cellsByHeader.ContainsKey($headerKey)) {
+          throw "BenchmarkDotNet report contains an empty or duplicate normalized header '$headerKey' in '$($reportFile.FullName)'."
+        }
+
+        $cellsByHeader[$headerKey] = [string]$cells[$columnIndex]
+      }
+
       $rows.Add([pscustomobject]@{
+        BenchmarkType = $benchmarkType
         Method = [string]$cells[$methodIndex]
         Mean = [string]$cells[$meanIndex]
+        Cells = $cellsByHeader
         Raw = [string]$lines[$j]
+        Source = $reportFile.FullName
       })
     }
   }
@@ -121,14 +149,78 @@ function Test-PositiveFinite([double]$value) {
   return $value -gt 0 -and -not [double]::IsNaN($value) -and -not [double]::IsInfinity($value)
 }
 
-function Test-RowContains([object]$row, [string[]]$needles) {
-  foreach ($needle in $needles) {
-    if ($row.Raw -notlike "*$needle*") {
+function Get-ExactParameters([object]$entry) {
+  $parameters = @{}
+  if ($entry.PSObject.Properties.Name -contains 'rowContains') {
+    throw "Benchmark '$([string]$entry.name)' uses unsupported rowContains matching; replace it with an exact parameters object keyed by BenchmarkDotNet column name."
+  }
+
+  if ($entry.PSObject.Properties.Name -notcontains 'parameters' -or $null -eq $entry.parameters) {
+    return $parameters
+  }
+
+  foreach ($property in $entry.parameters.PSObject.Properties) {
+    $key = Convert-HeaderToKey ([string]$property.Name)
+    if ([string]::IsNullOrWhiteSpace($key) -or $key.Equals('Method', [StringComparison]::OrdinalIgnoreCase) -or $key.Equals('Mean', [StringComparison]::OrdinalIgnoreCase)) {
+      throw "Benchmark '$([string]$entry.name)' contains an invalid parameter column '$($property.Name)'."
+    }
+
+    if ($parameters.ContainsKey($key)) {
+      throw "Benchmark '$([string]$entry.name)' contains duplicate normalized parameter column '$key'."
+    }
+
+    $parameters[$key] = [string]$property.Value
+  }
+
+  return $parameters
+}
+
+function Test-ExactParameters([object]$row, [hashtable]$parameters) {
+  foreach ($key in $parameters.Keys) {
+    if (-not $row.Cells.ContainsKey($key)) {
+      return $false
+    }
+
+    if (-not ([string]$row.Cells[$key]).Equals([string]$parameters[$key], [StringComparison]::Ordinal)) {
       return $false
     }
   }
 
   return $true
+}
+
+function Format-ExactParameters([hashtable]$parameters) {
+  return (($parameters.Keys | Sort-Object | ForEach-Object { "$_='$($parameters[$_])'" }) -join ', ')
+}
+
+function Get-BenchmarkReportFiles([string]$searchPath) {
+  if (Test-Path -LiteralPath $searchPath -PathType Leaf) {
+    $files = @(Get-Item -LiteralPath $searchPath)
+  }
+  else {
+    $files = @(Get-ChildItem -LiteralPath $searchPath -File -Filter '*report-github.md' -Recurse -ErrorAction SilentlyContinue)
+  }
+
+  if (-not $files) {
+    throw "No BenchmarkDotNet markdown report was found under $searchPath."
+  }
+
+  return @($files | Sort-Object FullName)
+}
+
+function Get-BenchmarkReportRowsFromPath([string]$searchPath) {
+  $rows = [System.Collections.Generic.List[object]]::new()
+  foreach ($file in @(Get-BenchmarkReportFiles $searchPath)) {
+    foreach ($row in @(Get-BenchmarkReportRows $file)) {
+      $rows.Add($row)
+    }
+  }
+
+  if ($rows.Count -eq 0) {
+    throw 'No BenchmarkDotNet report rows with Method and Mean columns were found.'
+  }
+
+  return $rows
 }
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
@@ -148,9 +240,19 @@ function Resolve-RepositoryPath([string]$path) {
 $projectPath = Resolve-RepositoryPath $Project
 $baselineFullPath = Resolve-RepositoryPath $BaselinePath
 $artifactsPath = Resolve-RepositoryPath $Artifacts
+$benchmarkRunnerFullPath = if ([string]::IsNullOrWhiteSpace($BenchmarkRunnerPath)) {
+  Join-Path $repoRoot 'tools/run-benchmark.ps1'
+}
+else {
+  Resolve-RepositoryPath $BenchmarkRunnerPath
+}
 
 if (-not (Test-Path $baselineFullPath)) {
   throw "Baseline file not found: $baselineFullPath"
+}
+
+if (-not (Test-Path -LiteralPath $benchmarkRunnerFullPath -PathType Leaf)) {
+  throw "Benchmark runner not found: $benchmarkRunnerFullPath"
 }
 
 $baseline = Get-Content -LiteralPath $baselineFullPath -Raw | ConvertFrom-Json
@@ -158,19 +260,51 @@ if (-not $baseline.benchmarks -or $baseline.benchmarks.Count -eq 0) {
   throw 'Baseline file must contain at least one benchmark entry.'
 }
 
-if ([string]::IsNullOrWhiteSpace($ReportsPath)) {
+$contracts = [System.Collections.Generic.List[object]]::new()
+$filters = [System.Collections.Generic.List[string]]::new()
+$filterSet = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($entry in $baseline.benchmarks) {
+  $name = [string]$entry.name
+  $benchmarkType = [string]$entry.benchmarkType
+  $method = [string]$entry.method
+  $filter = [string]$entry.filter
+  $baselineMeanNs = [double]$entry.baselineMeanNs
+  $maxRatio = [double]$entry.maxRatio
+  if ([string]::IsNullOrWhiteSpace($name) -or
+      [string]::IsNullOrWhiteSpace($benchmarkType) -or
+      [string]::IsNullOrWhiteSpace($method) -or
+      [string]::IsNullOrWhiteSpace($filter) -or
+      -not (Test-PositiveFinite $baselineMeanNs) -or
+      -not (Test-PositiveFinite $maxRatio)) {
+    throw 'Invalid baseline entry: name, benchmarkType, method, filter, baselineMeanNs, and maxRatio are required and numeric values must be positive finite values.'
+  }
+
+  $parameters = Get-ExactParameters $entry
+  $contracts.Add([pscustomobject]@{
+    Name = $name
+    BenchmarkType = $benchmarkType
+    Method = $method
+    Filter = $filter
+    Parameters = $parameters
+    BaselineMeanNs = $baselineMeanNs
+    MaxRatio = $maxRatio
+  })
+
+  if ($filterSet.Add($filter)) {
+    $filters.Add($filter)
+  }
+}
+
+$usesProvidedReports = -not [string]::IsNullOrWhiteSpace($ReportsPath)
+$reportRowsByFilter = @{}
+if (-not $usesProvidedReports) {
   Remove-Item -LiteralPath $artifactsPath -Recurse -Force -ErrorAction SilentlyContinue
 
-  $entryIndex = 0
-  foreach ($entry in $baseline.benchmarks) {
-    $filter = [string]$entry.filter
-    if ([string]::IsNullOrWhiteSpace($filter)) {
-      throw 'Baseline entry is missing filter.'
-    }
-
-    $entryArtifacts = Join-Path $Artifacts "run-$entryIndex"
-    & (Join-Path $repoRoot "tools/run-benchmark.ps1") `
-      -Project $Project `
+  $filterIndex = 0
+  foreach ($filter in $filters) {
+    $entryArtifacts = Join-Path $artifactsPath "run-$filterIndex"
+    & $benchmarkRunnerFullPath `
+      -Project $projectPath `
       -Artifacts $entryArtifacts `
       -BenchmarkDotNetArgs @(
         "--filter", $filter,
@@ -178,73 +312,59 @@ if ([string]::IsNullOrWhiteSpace($ReportsPath)) {
         "--warmupCount", "1",
         "--iterationCount", "1",
         "--exporters", "markdown")
-    if ($LASTEXITCODE -ne 0) {
-      throw "BenchmarkDotNet regression run failed for filter '$filter' with exit code $LASTEXITCODE."
+    if (-not $?) {
+      throw "BenchmarkDotNet regression run failed for filter '$filter'."
     }
 
-    $entryIndex++
-  }
-
-  $reportSearchPath = Join-Path $artifactsPath 'results'
-  if (-not (Test-Path -LiteralPath $reportSearchPath)) {
-    $reportSearchPath = $artifactsPath
+    $reportRowsByFilter[$filter] = @(Get-BenchmarkReportRowsFromPath $entryArtifacts)
+    $filterIndex++
   }
 }
 else {
   $reportSearchPath = Resolve-RepositoryPath $ReportsPath
+  $providedReportRows = @(Get-BenchmarkReportRowsFromPath $reportSearchPath)
 }
 
-if (Test-Path -LiteralPath $reportSearchPath -PathType Leaf) {
-  $markdownFiles = @(Get-Item -LiteralPath $reportSearchPath)
-}
-else {
-  $markdownFiles = @(Get-ChildItem -LiteralPath $reportSearchPath -File -Filter '*report-github.md' -Recurse -ErrorAction SilentlyContinue)
-}
-
-if (-not $markdownFiles) {
-  throw "No BenchmarkDotNet markdown report was found under $reportSearchPath."
-}
-
-$reports = ($markdownFiles | Sort-Object FullName | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join [Environment]::NewLine
-$reportRows = @(Get-BenchmarkReportRows $reports)
 $failed = $false
 
-foreach ($entry in $baseline.benchmarks) {
-  $name = [string]$entry.name
-  $method = [string]$entry.method
-  $filter = [string]$entry.filter
-  $baselineMeanNs = [double]$entry.baselineMeanNs
-  $maxRatio = [double]$entry.maxRatio
-  if ([string]::IsNullOrWhiteSpace($name) -or [string]::IsNullOrWhiteSpace($filter) -or -not (Test-PositiveFinite $baselineMeanNs) -or -not (Test-PositiveFinite $maxRatio)) {
-    throw 'Invalid baseline entry: name, filter, baselineMeanNs, and maxRatio are required and must be positive finite values.'
+foreach ($contract in $contracts) {
+  $name = [string]$contract.Name
+  $benchmarkType = [string]$contract.BenchmarkType
+  $method = [string]$contract.Method
+  $filter = [string]$contract.Filter
+  $parameters = [hashtable]$contract.Parameters
+  $baselineMeanNs = [double]$contract.BaselineMeanNs
+  $maxRatio = [double]$contract.MaxRatio
+  $reportRows = if ($usesProvidedReports) {
+    @($providedReportRows)
+  }
+  else {
+    @($reportRowsByFilter[$filter])
   }
 
-  if ([string]::IsNullOrWhiteSpace($method)) {
-    $method = ($name -split '\.')[-1]
+  $identityMatches = @($reportRows | Where-Object {
+    [string]::Equals([string]$_.BenchmarkType, $benchmarkType, [StringComparison]::Ordinal) -and
+    [string]::Equals([string]$_.Method, $method, [StringComparison]::Ordinal)
+  })
+  if ($identityMatches.Count -eq 0) {
+    throw "Benchmark '$name' did not find exact report identity benchmarkType='$benchmarkType', method='$method'."
   }
 
-  $methodCandidates = @($name, $method, (($name -split '\.')[-1])) | Select-Object -Unique
-  $matches = @($reportRows | Where-Object { $methodCandidates -contains $_.Method -or $_.Raw -like "*$name*" })
+  $matches = @($identityMatches | Where-Object { Test-ExactParameters -row $_ -parameters $parameters })
   if ($matches.Count -eq 0) {
-    throw "Benchmark '$name' (method '$method') was not found in BenchmarkDotNet report."
-  }
-
-  $rowContains = @()
-  if ($entry.PSObject.Properties.Name -contains 'rowContains') {
-    $rowContains = @($entry.rowContains | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-  }
-
-  $matches = @($matches | Where-Object { Test-RowContains -row $_ -needles $rowContains })
-  if ($matches.Count -eq 0) {
-    throw "Benchmark '$name' (method '$method') did not contain a row matching: $($rowContains -join ', ')."
+    $parameterDescription = Format-ExactParameters $parameters
+    $availableColumns = @($identityMatches | ForEach-Object { $_.Cells.Keys } | Sort-Object -Unique) -join ', '
+    throw "Benchmark '$name' did not find exact parameters {$parameterDescription}; available columns: $availableColumns."
   }
 
   if ($matches.Count -gt 1) {
-    if ($rowContains.Count -eq 0) {
-      throw "Benchmark '$name' (method '$method') matched multiple report rows; add rowContains to disambiguate parameterized benchmark output."
+    if ($parameters.Count -eq 0) {
+      throw "Benchmark '$name' matched multiple parameterized rows; add an exact parameters object keyed by BenchmarkDotNet column name."
     }
 
-    throw "Benchmark '$name' (method '$method') rowContains matched multiple report rows: $($rowContains -join ', ')."
+    $parameterDescription = Format-ExactParameters $parameters
+    $sources = @($matches | ForEach-Object { $_.Source } | Sort-Object -Unique) -join ', '
+    throw "Benchmark '$name' matched multiple rows for exact parameters {$parameterDescription}; duplicate report rows came from: $sources."
   }
 
   $meanNs = Convert-MeanToNanoseconds $matches[0].Mean

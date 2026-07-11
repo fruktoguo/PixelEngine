@@ -1,9 +1,11 @@
+using System.Text.Json;
 using PixelEngine.Rendering.Compute;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.Testing;
 using Silk.NET.OpenGL;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace PixelEngine.Rendering.Tests;
 
@@ -11,27 +13,33 @@ namespace PixelEngine.Rendering.Tests;
 /// RenderWindow 集成冒烟测试：需 PIXELENGINE_RENDERING_GL_SMOKE=1（ANGLE 用 PIXELENGINE_RENDERING_ANGLE_SMOKE=1），验证真实 GL 上下文与管线各阶段。
 /// </summary>
 [Trait("Category", "NativeSmoke")]
-public sealed class RenderWindowIntegrationTests
+public sealed class RenderWindowIntegrationTests(ITestOutputHelper output)
 {
+    private readonly ITestOutputHelper _output = output;
+
     /// <summary>
-    /// 在 GL 冒烟环境变量启用时，能够创建窗口并交换缓冲区，且 GL 版本不低于 3.0。
+    /// 在 GL 冒烟环境变量启用时，能够创建窗口并交换缓冲区，且 Desktop GL 版本不低于 3.3。
     /// </summary>
     [NativeSmokeFact]
     public void CanCreateWindowWhenExplicitlyEnabled()
     {
-
         using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
         {
             Title = "PixelEngine GL smoke",
             Width = 64,
             Height = 64,
-            BackendPreference = RenderBackendPreference.Auto,
+            BackendPreference = RenderBackendPreference.DesktopGl33,
             EnableDebugContext = true,
         });
 
         window.DoEvents();
         window.SwapBuffers();
-        Assert.True(window.Capabilities.MajorVersion >= 3);
+        Assert.False(window.Capabilities.IsGles, BackendMessage(window));
+        Assert.True(
+            window.Capabilities.MajorVersion > 3 ||
+            (window.Capabilities.MajorVersion == 3 && window.Capabilities.MinorVersion >= 3),
+            BackendMessage(window));
+        WriteGraphicsCapability(window, "desktop-gl");
     }
 
     /// <summary>
@@ -794,7 +802,9 @@ public sealed class RenderWindowIntegrationTests
             window.Capabilities.MajorVersion > 3 ||
             (window.Capabilities.MajorVersion == 3 && window.Capabilities.MinorVersion >= 0),
             BackendMessage(window));
+        Assert.True(window.Capabilities.IsAngle, BackendMessage(window));
         Assert.False(window.Capabilities.HasBufferStorage);
+        WriteGraphicsCapability(window, "angle-gles");
 
         RenderPipelineFrame(window);
     }
@@ -841,6 +851,27 @@ public sealed class RenderWindowIntegrationTests
     private static string BackendMessage(RenderWindow window)
     {
         return $"{window.Backend}: {window.Capabilities.Version} / {window.Capabilities.Renderer} / {window.Capabilities.Vendor}";
+    }
+
+    private void WriteGraphicsCapability(RenderWindow window, string backend)
+    {
+        GlCapabilities capabilities = window.Capabilities;
+        Assert.False(string.IsNullOrWhiteSpace(capabilities.Vendor), "GL_VENDOR 不能为空。");
+        Assert.False(string.IsNullOrWhiteSpace(capabilities.Renderer), "GL_RENDERER 不能为空。");
+        Assert.False(string.IsNullOrWhiteSpace(capabilities.Version), "GL_VERSION 不能为空。");
+        string json = JsonSerializer.Serialize(new
+        {
+            schema = "pixelengine.graphics-capability/v1",
+            backend,
+            vendor = capabilities.Vendor,
+            renderer = capabilities.Renderer,
+            version = capabilities.Version,
+            major = capabilities.MajorVersion,
+            minor = capabilities.MinorVersion,
+            isGles = capabilities.IsGles,
+            isAngle = capabilities.IsAngle,
+        });
+        _output.WriteLine("PIXELENGINE_GRAPHICS_CAPABILITY " + json);
     }
 
     private static byte[] ReadTarget(RenderWindow window, ColorRenderTarget target)

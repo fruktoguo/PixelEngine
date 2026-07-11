@@ -1,0 +1,374 @@
+name: Native GPU Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact 40-character commit SHA from fruktoguo/PixelEngine to validate
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-gpu-smoke-${{ inputs.candidate_sha }}
+  cancel-in-progress: false
+
+env:
+  CI: true
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  PIXELENGINE_RENDERING_GL_SMOKE: '1'
+  PIXELENGINE_RENDERING_ANGLE_SMOKE: '1'
+  PIXELENGINE_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+  PIXELENGINE_EXPECTED_RUNNER_LABELS: self-hosted,Windows,X64,pixelengine-wgl-angle,pixelengine-native-smoke
+
+jobs:
+  native-gpu-smoke:
+    name: native-smoke (win-x64 real GPU)
+    runs-on: [self-hosted, Windows, X64, pixelengine-wgl-angle, pixelengine-native-smoke]
+    timeout-minutes: 90
+
+    steps:
+      - name: Validate candidate SHA syntax
+        shell: pwsh
+        run: |
+          if ($env:PIXELENGINE_CANDIDATE_SHA -cnotmatch '^[0-9a-fA-F]{40}$') {
+            throw 'candidate_sha must be an exact 40-character hexadecimal commit SHA.'
+          }
+
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 1
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Verify checked-out commit identity
+        shell: pwsh
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          if (-not [string]::Equals($actual, $env:PIXELENGINE_CANDIDATE_SHA, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Checked-out commit mismatch. expected=$env:PIXELENGINE_CANDIDATE_SHA actual=$actual"
+          }
+          "PIXELENGINE_CHECKED_OUT_SHA=$($actual.ToLowerInvariant())" | Out-File -LiteralPath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Initialize immutable run evidence
+        shell: pwsh
+        run: |
+          $evidenceRoot = Join-Path $env:GITHUB_WORKSPACE 'artifacts/native-gpu-smoke'
+          New-Item -ItemType Directory -Force -Path $evidenceRoot | Out-Null
+          $context = [ordered]@{
+            schema = 'pixelengine.native-gpu-workflow-context/v2'
+            workflow = $env:GITHUB_WORKFLOW
+            event = $env:GITHUB_EVENT_NAME
+            repository = $env:GITHUB_REPOSITORY
+            ref = $env:GITHUB_REF
+            dispatchSha = $env:GITHUB_SHA
+            candidateSha = $env:PIXELENGINE_CANDIDATE_SHA
+            checkedOutSha = $env:PIXELENGINE_CHECKED_OUT_SHA
+            runId = $env:GITHUB_RUN_ID
+            runAttempt = $env:GITHUB_RUN_ATTEMPT
+            runnerName = $env:RUNNER_NAME
+            runnerOs = $env:RUNNER_OS
+            runnerArch = $env:RUNNER_ARCH
+            expectedRunnerLabels = $env:PIXELENGINE_EXPECTED_RUNNER_LABELS
+            jobStatus = 'in_progress'
+          }
+          $context | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $evidenceRoot 'workflow-context.json') -Encoding UTF8
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Validate native GPU runner
+        shell: pwsh
+        run: ./tools/native-gpu-runner-preflight.ps1 -OutputDirectory artifacts/native-gpu-smoke/preflight
+
+      - name: Build native
+        shell: pwsh
+        run: ./tools/build-native.ps1 -Rid win-x64 -Configuration Release
+
+      - name: Build solution
+        shell: pwsh
+        run: dotnet build PixelEngine.sln -c Release
+
+      - name: Run native GPU smoke tests
+        shell: pwsh
+        run: ./tools/run-native-smoke.ps1 -Configuration Release -ResultsDirectory artifacts/native-gpu-smoke/tests
+
+      - name: Finalize workflow evidence
+        if: ${{ always() }}
+        shell: pwsh
+        env:
+          PIXELENGINE_JOB_STATUS: ${{ job.status }}
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          $evidenceRoot = Join-Path $env:GITHUB_WORKSPACE 'artifacts/native-gpu-smoke'
+          New-Item -ItemType Directory -Force -Path $evidenceRoot | Out-Null
+          $contextPath = Join-Path $evidenceRoot 'workflow-context.json'
+          if (Test-Path -LiteralPath $contextPath -PathType Leaf) {
+            $context = Get-Content -LiteralPath $contextPath -Raw | ConvertFrom-Json
+          } else {
+            $context = [pscustomobject]@{}
+          }
+          $validationErrors = [Collections.Generic.List[string]]::new()
+          function Get-PropertyValue([object]$node, [string]$name) {
+            if ($null -eq $node) {
+              return $null
+            }
+            $property = $node.PSObject.Properties[$name]
+            return $null -eq $property ? $null : $property.Value
+          }
+          function Require-Text([object]$node, [string]$name, [string]$label) {
+            $value = [string](Get-PropertyValue $node $name)
+            if ([string]::IsNullOrWhiteSpace($value)) {
+              $validationErrors.Add("native-smoke summary 缺少非空 $label。")
+            }
+            return $value
+          }
+          function Read-VersionPart([object]$node, [string]$name, [string]$label) {
+            $value = Get-PropertyValue $node $name
+            $parsed = -1
+            if ($null -eq $value -or -not [int]::TryParse(
+                [string]$value,
+                [Globalization.NumberStyles]::None,
+                [Globalization.CultureInfo]::InvariantCulture,
+                [ref]$parsed) -or $parsed -lt 0) {
+              $validationErrors.Add("native-smoke summary 的 $label 必须为非负整数。")
+              return -1
+            }
+            return $parsed
+          }
+
+          $preflightPath = Join-Path $evidenceRoot 'preflight/native-gpu-runner-preflight.json'
+          if (-not (Test-Path -LiteralPath $preflightPath -PathType Leaf)) {
+            $validationErrors.Add('缺少 preflight/native-gpu-runner-preflight.json。')
+          } else {
+            try {
+              $preflight = Get-Content -LiteralPath $preflightPath -Raw | ConvertFrom-Json
+              if (([string](Get-PropertyValue $preflight 'schema')) -cne 'pixelengine.native-gpu-runner-preflight/v1') {
+                $validationErrors.Add('runner preflight schema 必须为 pixelengine.native-gpu-runner-preflight/v1。')
+              }
+              if (([string](Get-PropertyValue $preflight 'status')) -cne 'success') {
+                $validationErrors.Add('runner preflight status 必须为 success。')
+              }
+              if ((Get-PropertyValue $preflight 'fixtureUsed') -ne $false) {
+                $validationErrors.Add('生产 native GPU workflow 的 preflight fixtureUsed 必须为 false。')
+              }
+              if (@(Get-PropertyValue $preflight 'eligibleGpuAdapters').Count -lt 1) {
+                $validationErrors.Add('runner preflight 必须至少记录一个 eligibleGpuAdapter。')
+              }
+
+              $preflightSession = Get-PropertyValue $preflight 'session'
+              if ([int](Get-PropertyValue $preflightSession 'id') -le 0 -or
+                  (Get-PropertyValue $preflightSession 'userInteractive') -ne $true) {
+                $validationErrors.Add('runner preflight 必须证明非 Session 0 的交互桌面。')
+              }
+
+              $preflightIdentity = Get-PropertyValue $preflight 'runnerIdentity'
+              if (-not [string]::Equals([string](Get-PropertyValue $preflightIdentity 'candidateSha'), $env:PIXELENGINE_CANDIDATE_SHA, [StringComparison]::OrdinalIgnoreCase) -or
+                  -not [string]::Equals([string](Get-PropertyValue $preflightIdentity 'checkedOutSha'), $env:PIXELENGINE_CHECKED_OUT_SHA, [StringComparison]::OrdinalIgnoreCase) -or
+                  -not [string]::Equals([string](Get-PropertyValue $preflightIdentity 'dispatchSha'), $env:GITHUB_SHA, [StringComparison]::OrdinalIgnoreCase)) {
+                $validationErrors.Add('runner preflight SHA identity 必须与 workflow environment 同源一致。')
+              }
+              if (-not [string]::Equals([string](Get-PropertyValue $preflightIdentity 'runId'), $env:GITHUB_RUN_ID, [StringComparison]::Ordinal) -or
+                  -not [string]::Equals([string](Get-PropertyValue $preflightIdentity 'runAttempt'), $env:GITHUB_RUN_ATTEMPT, [StringComparison]::Ordinal) -or
+                  -not [string]::Equals([string](Get-PropertyValue $preflightIdentity 'name'), $env:RUNNER_NAME, [StringComparison]::Ordinal) -or
+                  -not [string]::Equals([string](Get-PropertyValue $preflightIdentity 'os'), $env:RUNNER_OS, [StringComparison]::OrdinalIgnoreCase) -or
+                  -not [string]::Equals([string](Get-PropertyValue $preflightIdentity 'arch'), $env:RUNNER_ARCH, [StringComparison]::OrdinalIgnoreCase)) {
+                $validationErrors.Add('runner preflight run/runner identity 必须与 workflow environment 同源一致。')
+              }
+              if (([string](Get-PropertyValue $preflightIdentity 'workflow')) -cne 'Native GPU Smoke' -or
+                  ([string](Get-PropertyValue $preflightIdentity 'event')) -cne 'workflow_dispatch') {
+                $validationErrors.Add('runner preflight workflow/event identity 无效。')
+              }
+            } catch {
+              $validationErrors.Add("无法审计 runner preflight：$($_.Exception.Message)")
+            }
+          }
+
+          $summaryFiles = @(Get-ChildItem -LiteralPath (Join-Path $evidenceRoot 'tests') -Filter 'summary.json' -File -Recurse -ErrorAction SilentlyContinue)
+          if ($summaryFiles.Count -gt 1) {
+            $validationErrors.Add("native GPU evidence 必须恰好包含一份 native-smoke summary；actual=$($summaryFiles.Count)。")
+          } elseif ($summaryFiles.Count -eq 0) {
+            if ([string]::Equals($env:PIXELENGINE_JOB_STATUS, 'success', [StringComparison]::OrdinalIgnoreCase)) {
+              $validationErrors.Add('成功 job 缺少 native-smoke summary.json。')
+            }
+          } else {
+            try {
+              $summary = Get-Content -LiteralPath $summaryFiles[0].FullName -Raw | ConvertFrom-Json
+              if (([string](Get-PropertyValue $summary 'schema')) -cne 'pixelengine.native-smoke/v2' -or
+                  [int](Get-PropertyValue $summary 'schemaVersion') -ne 2) {
+                $validationErrors.Add('native-smoke summary 必须使用 pixelengine.native-smoke/v2。')
+              }
+              if ((Get-PropertyValue $summary 'success') -ne $true) {
+                $validationErrors.Add('native-smoke summary success 必须为 true。')
+              }
+              if (([string](Get-PropertyValue $summary 'evidenceKind')) -cne 'executed-native-smoke' -or
+                  (Get-PropertyValue $summary 'testSeamActive') -ne $false -or
+                  ([string](Get-PropertyValue $summary 'projectSetSource')) -cne 'built-in-required-projects') {
+                $validationErrors.Add('native-smoke summary 必须是无 test seam 的 built-in executed-native-smoke evidence。')
+              }
+
+              $projectCount = [int](Get-PropertyValue $summary 'projectCount')
+              $successfulProjectCount = [int](Get-PropertyValue $summary 'successfulProjectCount')
+              $totalTests = [int](Get-PropertyValue $summary 'totalTests')
+              $passedTests = [int](Get-PropertyValue $summary 'passedTests')
+              $failedTests = [int](Get-PropertyValue $summary 'failedTests')
+              $skippedTests = [int](Get-PropertyValue $summary 'skippedTests')
+              $notExecutedTests = [int](Get-PropertyValue $summary 'notExecutedTests')
+              if ($projectCount -ne 4 -or $successfulProjectCount -ne 4) {
+                $validationErrors.Add("native-smoke 必须执行并成功完成四个内建项目；projects=$successfulProjectCount/$projectCount。")
+              }
+              if ($totalTests -le 0 -or $passedTests -ne $totalTests -or
+                  $failedTests -ne 0 -or $skippedTests -ne 0 -or $notExecutedTests -ne 0) {
+                $validationErrors.Add("native-smoke 测试计数无效；total=$totalTests passed=$passedTests failed=$failedTests skipped=$skippedTests notExecuted=$notExecutedTests。")
+              }
+              $projectReports = @(Get-PropertyValue $summary 'projects')
+              $requiredProjects = @('demo', 'hosting', 'rendering', 'ui')
+              $actualProjects = @($projectReports | ForEach-Object { [string](Get-PropertyValue $_ 'name') } | Sort-Object)
+              if ($projectReports.Count -ne 4 -or
+                  (Compare-Object -ReferenceObject $requiredProjects -DifferenceObject $actualProjects -CaseSensitive).Count -ne 0) {
+                $validationErrors.Add('native-smoke projects 必须恰好是 demo、hosting、rendering、ui。')
+              }
+              foreach ($projectReport in $projectReports) {
+                if ((Get-PropertyValue $projectReport 'projectExists') -ne $true -or
+                    (Get-PropertyValue $projectReport 'trxExists') -ne $true -or
+                    (Get-PropertyValue $projectReport 'counterConsistent') -ne $true -or
+                    (Get-PropertyValue $projectReport 'success') -ne $true -or
+                    [int](Get-PropertyValue $projectReport 'total') -le 0 -or
+                    [int](Get-PropertyValue $projectReport 'passed') -ne [int](Get-PropertyValue $projectReport 'total') -or
+                    [int](Get-PropertyValue $projectReport 'failed') -ne 0 -or
+                    [int](Get-PropertyValue $projectReport 'skipped') -ne 0 -or
+                    [int](Get-PropertyValue $projectReport 'notExecuted') -ne 0) {
+                  $validationErrors.Add("native-smoke project report 无效：$([string](Get-PropertyValue $projectReport 'name'))。")
+                }
+              }
+
+              $runIdentity = Get-PropertyValue $summary 'runIdentity'
+              $githubRun = Get-PropertyValue $runIdentity 'githubRun'
+              $summaryRunner = Get-PropertyValue $runIdentity 'runner'
+              if (([string](Get-PropertyValue $runIdentity 'source')) -cne 'github-actions' -or
+                  (Get-PropertyValue $runIdentity 'githubActions') -ne $true -or
+                  (Get-PropertyValue $githubRun 'available') -ne $true -or
+                  -not [string]::Equals([string](Get-PropertyValue $githubRun 'id'), $env:GITHUB_RUN_ID, [StringComparison]::Ordinal) -or
+                  -not [string]::Equals([string](Get-PropertyValue $githubRun 'attempt'), $env:GITHUB_RUN_ATTEMPT, [StringComparison]::Ordinal)) {
+                $validationErrors.Add('native-smoke GitHub run identity 必须与 workflow environment 同源一致。')
+              }
+              if (-not [string]::Equals([string](Get-PropertyValue $runIdentity 'candidateSha'), $env:PIXELENGINE_CANDIDATE_SHA, [StringComparison]::OrdinalIgnoreCase) -or
+                  -not [string]::Equals([string](Get-PropertyValue $runIdentity 'checkedOutSha'), $env:PIXELENGINE_CHECKED_OUT_SHA, [StringComparison]::OrdinalIgnoreCase) -or
+                  -not [string]::Equals([string](Get-PropertyValue $runIdentity 'dispatchSha'), $env:GITHUB_SHA, [StringComparison]::OrdinalIgnoreCase)) {
+                $validationErrors.Add('native-smoke SHA identity 必须与 workflow environment 同源一致。')
+              }
+              if ((Get-PropertyValue $summaryRunner 'available') -ne $true -or
+                  -not [string]::Equals([string](Get-PropertyValue $summaryRunner 'name'), $env:RUNNER_NAME, [StringComparison]::Ordinal) -or
+                  -not [string]::Equals([string](Get-PropertyValue $summaryRunner 'os'), $env:RUNNER_OS, [StringComparison]::OrdinalIgnoreCase) -or
+                  -not [string]::Equals([string](Get-PropertyValue $summaryRunner 'arch'), $env:RUNNER_ARCH, [StringComparison]::OrdinalIgnoreCase)) {
+                $validationErrors.Add('native-smoke runner identity 必须与 workflow environment 同源一致。')
+              }
+
+              $graphicsContext = Get-PropertyValue $summary 'graphicsContext'
+              $glVendor = Require-Text $graphicsContext 'glVendor' 'graphicsContext.glVendor'
+              $glRenderer = Require-Text $graphicsContext 'glRenderer' 'graphicsContext.glRenderer'
+              $glVersion = Require-Text $graphicsContext 'glVersion' 'graphicsContext.glVersion'
+              $angleBackend = Require-Text $graphicsContext 'angleBackend' 'graphicsContext.angleBackend'
+
+              $desktopGl = Get-PropertyValue $graphicsContext 'desktopGl'
+              foreach ($field in @('vendor', 'renderer', 'version')) {
+                [void](Require-Text $desktopGl $field "graphicsContext.desktopGl.$field")
+              }
+              $desktopMajor = Read-VersionPart $desktopGl 'major' 'graphicsContext.desktopGl.major'
+              $desktopMinor = Read-VersionPart $desktopGl 'minor' 'graphicsContext.desktopGl.minor'
+              if ($desktopMajor -ge 0 -and ($desktopMajor -lt 3 -or ($desktopMajor -eq 3 -and $desktopMinor -lt 3))) {
+                $validationErrors.Add("Desktop GL 必须 >= 3.3；actual=$desktopMajor.$desktopMinor。")
+              }
+              if ((Get-PropertyValue $desktopGl 'isGles') -ne $false) {
+                $validationErrors.Add('graphicsContext.desktopGl.isGles 必须为 false。')
+              }
+              if ((Get-PropertyValue $desktopGl 'isAngle') -ne $false) {
+                $validationErrors.Add('graphicsContext.desktopGl.isAngle 必须为 false。')
+              }
+              if (-not [string]::Equals($glVendor, [string](Get-PropertyValue $desktopGl 'vendor'), [StringComparison]::Ordinal) -or
+                  -not [string]::Equals($glRenderer, [string](Get-PropertyValue $desktopGl 'renderer'), [StringComparison]::Ordinal) -or
+                  -not [string]::Equals($glVersion, [string](Get-PropertyValue $desktopGl 'version'), [StringComparison]::Ordinal)) {
+                $validationErrors.Add('graphicsContext 顶层 GL identity 必须与 desktopGl 同源一致。')
+              }
+
+              $angleGles = Get-PropertyValue $graphicsContext 'angleGles'
+              foreach ($field in @('vendor', 'renderer', 'version')) {
+                [void](Require-Text $angleGles $field "graphicsContext.angleGles.$field")
+              }
+              $angleMajor = Read-VersionPart $angleGles 'major' 'graphicsContext.angleGles.major'
+              $angleMinor = Read-VersionPart $angleGles 'minor' 'graphicsContext.angleGles.minor'
+              if ($angleMajor -ge 0 -and ($angleMajor -lt 3 -or ($angleMajor -eq 3 -and $angleMinor -lt 0))) {
+                $validationErrors.Add("ANGLE/GLES 必须 >= 3.0；actual=$angleMajor.$angleMinor。")
+              }
+              if ((Get-PropertyValue $angleGles 'isGles') -ne $true) {
+                $validationErrors.Add('graphicsContext.angleGles.isGles 必须为 true。')
+              }
+              if ((Get-PropertyValue $angleGles 'isAngle') -ne $true) {
+                $validationErrors.Add('graphicsContext.angleGles.isAngle 必须为 true。')
+              }
+              if (-not [string]::Equals($angleBackend, [string](Get-PropertyValue $angleGles 'renderer'), [StringComparison]::Ordinal)) {
+                $validationErrors.Add('graphicsContext.angleBackend 必须与 angleGles.renderer 同源一致。')
+              }
+              if ($angleBackend.IndexOf('ANGLE', [StringComparison]::OrdinalIgnoreCase) -lt 0 -or
+                  ([string](Get-PropertyValue $angleGles 'renderer')).IndexOf('ANGLE', [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+                $validationErrors.Add('ANGLE/GLES renderer identity 必须明确包含 ANGLE。')
+              }
+            } catch {
+              $validationErrors.Add("无法审计 native-smoke summary：$($_.Exception.Message)")
+            }
+          }
+
+          $context | Add-Member -NotePropertyName checkedOutSha -NotePropertyValue $env:PIXELENGINE_CHECKED_OUT_SHA -Force
+          $context | Add-Member -NotePropertyName jobStatus -NotePropertyValue $env:PIXELENGINE_JOB_STATUS -Force
+          $context | Add-Member -NotePropertyName completedAtUtc -NotePropertyValue ([DateTime]::UtcNow.ToString('O')) -Force
+          $context | Add-Member -NotePropertyName summaryContract -NotePropertyValue 'pixelengine.native-smoke/v2 + Desktop GL >= 3.3 + ANGLE/GLES >= 3.0' -Force
+          $context | Add-Member -NotePropertyName evidenceValidationErrors -NotePropertyValue @($validationErrors) -Force
+          $context | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $contextPath -Encoding UTF8
+          @(
+            '# Native GPU smoke workflow evidence',
+            '',
+            "- Run: ``$env:GITHUB_RUN_ID`` attempt ``$env:GITHUB_RUN_ATTEMPT``",
+            "- Candidate SHA: ``$env:PIXELENGINE_CANDIDATE_SHA``",
+            "- Checked-out SHA: ``$env:PIXELENGINE_CHECKED_OUT_SHA``",
+            "- Runner: ``$env:RUNNER_NAME`` / ``$env:RUNNER_OS`` / ``$env:RUNNER_ARCH``",
+            "- Job status: ``$env:PIXELENGINE_JOB_STATUS``",
+            '- Graphics contract: `pixelengine.native-smoke/v2`; Desktop GL >= 3.3 and not GLES; ANGLE/GLES >= 3.0 with `isGles=true` and `isAngle=true`.',
+            "- Evidence validation errors: $($validationErrors.Count)"
+          ) | Set-Content -LiteralPath (Join-Path $evidenceRoot 'workflow-context.md') -Encoding UTF8
+
+          $relativePaths = [Collections.Generic.List[string]]::new()
+          foreach ($file in [IO.Directory]::EnumerateFiles($evidenceRoot, '*', [IO.SearchOption]::AllDirectories)) {
+            $relativePath = [IO.Path]::GetRelativePath($evidenceRoot, $file).Replace([IO.Path]::DirectorySeparatorChar, '/')
+            if (-not [string]::Equals($relativePath, 'SHA256SUMS', [StringComparison]::Ordinal)) {
+              $relativePaths.Add($relativePath)
+            }
+          }
+          $sortedPaths = $relativePaths.ToArray()
+          [Array]::Sort($sortedPaths, [StringComparer]::Ordinal)
+          $checksumLines = foreach ($relativePath in $sortedPaths) {
+            $nativePath = $relativePath.Replace('/', [IO.Path]::DirectorySeparatorChar)
+            $hash = (Get-FileHash -LiteralPath (Join-Path $evidenceRoot $nativePath) -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $relativePath"
+          }
+          $checksumLines | Set-Content -LiteralPath (Join-Path $evidenceRoot 'SHA256SUMS') -Encoding UTF8
+
+          if ($validationErrors.Count -gt 0) {
+            throw ("Native GPU evidence validation failed:`n" + ($validationErrors -join "`n"))
+          }
+
+      - name: Upload native GPU smoke evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-gpu-smoke-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.candidate_sha }}
+          if-no-files-found: error
+          retention-days: 90
+          path: artifacts/native-gpu-smoke

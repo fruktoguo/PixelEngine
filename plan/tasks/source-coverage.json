@@ -108,7 +108,7 @@
       "expected": { "done": 102, "open": 0, "active": 0, "blocked": 2 },
       "checkboxSha256": "e54a48da76b33c0871abc3ec3a819a4ad578563ef92106ad9cb12586338ef9ed",
       "completedCapabilityIds": ["BASE-016"],
-      "followUpTaskIds": ["CI-001", "CI-002", "CI-003", "TEST-001", "TEST-002", "PERF-001", "PERF-008", "PERF-009", "PERF-010", "PERF-011", "PERF-012", "EVID-002", "EVID-003"]
+      "followUpTaskIds": ["CI-001", "CI-002", "CI-003", "TEST-001", "TEST-002", "TEST-003", "PERF-001", "PERF-008", "PERF-009", "PERF-010", "PERF-011", "PERF-012", "EVID-002", "EVID-003"]
     },
     {
       "path": "plan/15-build-packaging-distribution.md",
@@ -173,7 +173,7 @@
     {
       "id": "D",
       "name": "M15 产品与目标环境证据",
-      "taskIds": ["PERF-008", "PERF-009", "PERF-010", "PERF-012", "EVID-002", "EDITOR-004", "EDITOR-005", "EDITOR-006", "EDITOR-007", "EDITOR-008", "EDITOR-009", "EDITOR-010", "EDITOR-001", "EDITOR-002", "EDITOR-003", "UI-001", "UI-002", "UI-003", "DEMO-001", "DEMO-002", "DEMO-003", "DEMO-004", "DEMO-005", "DOC-001", "CI-003", "REL-004", "REL-005"]
+      "taskIds": ["PERF-008", "PERF-009", "PERF-010", "PERF-012", "EVID-002", "EDITOR-004", "EDITOR-005", "EDITOR-006", "EDITOR-007", "EDITOR-008", "EDITOR-009", "EDITOR-010", "EDITOR-001", "EDITOR-002", "EDITOR-003", "UI-001", "UI-002", "UI-003", "TEST-003", "DEMO-001", "DEMO-002", "DEMO-003", "DEMO-004", "DEMO-005", "DOC-001", "CI-003", "REL-004", "REL-005"]
     },
     {
       "id": "E",
