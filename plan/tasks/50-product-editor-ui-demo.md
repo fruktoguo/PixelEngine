@@ -71,6 +71,7 @@
   - 完成证据：必须同时包含可重跑自动化、PixelEngine framebuffer 证据、真实窗口输入路线和与同机 Unity 参照图的逐项差异表；仅 source-contract 测试、静态截图或“观感接近”均不能关闭本任务。每轮若仍发现可复现差异，保持 `[~]` 并继续修复。
   - 当前切片验收：`Edit > Preferences...` 在无工程和已打开工程时均可用；设置按类别导航而非平铺；UI Scale 支持 75%–200% 并持久化，150% 同时缩放字体、ImGui 样式和 Shell 固定尺寸；外部脚本编辑器与布局保存从 Project Settings 迁到用户级 Preferences，旧工程字段仅作兼容迁移；自动化覆盖读写、归一化、菜单接线与高 DPI 布局边界。
   - 已完成证据：实现 commit `8d8598fc`；Editor 84/84、UI 106/106、Hosting 非发行工具回归 344/344、solution Release build 0 warning/0 error；150% Preferences 与默认核心工作台真实窗口 framebuffer probe 见 `docs/evidence-2026-07-10-editor-preferences-ui-scale.md`。该材料不替代人工点击和完整路线。
+  - Unity 对标循环 01：实现 commit `5f916a1e` 已完成 Unity 6.5 同机参照、扁平紧凑主题、中央 Play 组、右侧 Layout、底部状态栏与真实 Component 菜单；Editor 105/105、UI 110 passed / 10 native 条件 skipped、Hosting 非发行工具回归 538 passed / 4 skipped、solution Release build 0 warning / 0 error，1280×720 framebuffer SHA256 与剩余差异见 `docs/evidence-2026-07-12-editor-003-unity-parity-cycle-01.md`。任务保持 `[~]`。
 
 ## Web-first 透明 UI
 
