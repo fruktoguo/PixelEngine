@@ -521,6 +521,19 @@
       "notes": "Scene 图标工具与真实 operation/local-global/grid 状态、Inspector 默认焦点、核心页签无常驻关闭按钮及 Window 菜单双向显隐已闭合；内容面板细节、DPI/resize、WGC 白屏和完整 Build And Run 差异仍保留，EDITOR-003 继续进行中。"
     },
     {
+      "entryId": "editor-003-unity-parity-cycle03-20260712",
+      "taskIds": ["EDITOR-003"],
+      "evidenceState": "unity_parity_cycle_complete_task_still_active",
+      "commit": "3de287d87a915a690a12ee1ad724417899aadaff",
+      "runSessionId": "local-20260712-editor003-unity-parity-cycle03",
+      "runIdentityStatus": "captured",
+      "hardware": "Windows build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT; .NET SDK 10.0.108; win-x64; Unity 6.5 6000.5.3f1 live reference; PixelEngine 1280x720 framebuffer and real-input probes",
+      "command": "Unity BallWorld live Hierarchy/Inspector reference; PixelEngine real LevelDirector selection and Scene Visibility click through computer-use; EditorShell internal capture-frame v3f/v3g; full Hosting with blame-hang; Editor/UI tests; solution Release build; task catalog validation",
+      "reportPath": "docs/evidence-2026-07-12-editor-003-unity-parity-cycle-03.md",
+      "sha256": "def4239dd54b83a244525d38984c5c41ea7fa2d5f28f58b144fe6d8136a9f5f2",
+      "notes": "Hierarchy 搜索/图标/真实 Scene Visibility/Picking、Inspector active/name/Transform/Behaviour/Add Component 与 GameObject Enabled scene-prefab-runtime 语义已闭合；Project/Console/Picker、DPI/resize、WGC 白屏和完整 Build And Run 差异仍保留，EDITOR-003 继续进行中。"
+    },
+    {
       "entryId": "ci-002-local-remediation-20260711",
       "taskIds": ["CI-002", "TEST-003"],
       "evidenceState": "complete_remote_windows_build_test_disassembly_benchmark_guard",
