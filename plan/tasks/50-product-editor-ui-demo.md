@@ -32,12 +32,13 @@
   - 验收：Scene View 与 Game View 不再共用运行时 camera/语义；Edit 模式显示声明式初始 world 或 procedural preview，并叠加网格、场景边界、对象 marker/name、Frame All/Frame Selected；Editor 与 Player 使用同一份项目脚本/世界来源，不保留同全名空壳 Behaviour；Demo 默认打开 lava-mine 时 Scene View 非空，empty/probe 场景有清晰测试标识且不会污染下次启动。
   - 证据：稳定报告 `docs/evidence-2026-07-11-editor-007-scene-authoring.md`（Evidence Index: `editor-007-scene-authoring-20260711`）；Scene authoring / Game View / shell discipline / scene materialization / project 合并定向回归 101 passed / 1 native 条件 skipped；Hosting 非 tooling 回归 434 passed / 4 native-GL 条件 skipped；Scripting 90/90、Editor 96/96、Demo 132 passed / 1 native-GL 条件 skipped；Editor Shell Release build 0 warning / 0 error。`SceneAuthoringPreviewTests` 覆盖 lava-mine 640×360 LevelDirector preview、对象/出生点/终点 marker、显式空 probe 标识、独立相机、Frame All/Selected、dock 1×1 首帧延迟 framing 与 Demo 完整脚本目录动态编译；真实窗口 12 帧截图显示场景边界、网格、洞穴/平台/熔岩示意及分离 marker，运行摘要为 `project_open=True`、`editor_panels=23`。Demo 完整 Behaviour 已迁入唯一 `scripts/` 源，Player 静态编译与 Editor Roslyn 热编译共用源码；空壳同名 Behaviour 已删除，脚本编译器对齐 SDK implicit usings/nullable，武器配置改为 Hosting 路径门控下的 AOT-safe 显式解析。
 
-- [~] `EDITOR-008` 修复真实使用暴露的 Editor 稳定性、运行态可见性、本地化、工作区与视觉系统缺陷。
+- [x] `EDITOR-008` 修复真实使用暴露的 Editor 稳定性、运行态可见性、本地化、工作区与视觉系统缺陷。
   - 优先级：P0。
   - 依赖：`EDITOR-004`–`EDITOR-007`。
   - 设计来源：2026-07-11 用户真实窗口反馈；`plan/19-standalone-editor-app.md`；架构 §17.4。
   - 验收：UI Scale 75%–200% 连续调整与长跑不崩溃且布局不发生指数缩放；Play/Pause/Step 状态机不抛异常并符合单步语义；Game View 在 Play 中显示玩家、HUD 与运行内容且接收正确 viewport 输入；Hierarchy/Scene View 能区分并显示 authoring 与 runtime/procedural 对象、出生点、目标点和关键 marker；布局周期保存、崩溃恢复、跨 DPI/分辨率归一化恢复，并以用户截图的 Scene 主区 + 右侧 Hierarchy/Inspector + 右下 Project 为默认工作区；Editor Shell 的原生标题栏跟随引擎深色配色且保留系统拖拽、缩放与 Snap Layout，工作区使用现代化 Unity-like 主题；Editor Shell 核心菜单、工具栏、Preferences、Hierarchy 与 Scene/Game 状态文案通过可外置语言包解析，内置简体中文与 English，并在 Preferences 中即时切换和持久化。
   - 证据要求：缩放/状态机/布局/语言包/运行态对象自动化；Demo 工程真实窗口 Play+Step+输入长跑与截图；Editor 全量、Hosting 定向、Release build 0 warning/0 error；重新生成并审计 `最终输出/`。
+  - 证据：`docs/evidence-2026-07-11-editor-008-stability-workspace-localization.md`（Evidence Index: `editor-008-stability-workspace-localization-20260711`）；真实窗口 140% UI Scale 240 tick 长跑及 Play→Pause→Step→Resume→Stop 全链路 exit 0；Editor 97/97、UI 106 passed / 9 native GL 条件 skipped、Hosting 定向 108/108；Solution Release build 0 warning / 0 error；官方 `最终输出/` 已重新生成并通过独立审计。
 
 - [!] `EDITOR-001` 完成 Project Window 真实工作流验收。阻塞：需要真实窗口 reviewer 和当前 HEAD 录屏/报告。
   - 优先级：P1。
