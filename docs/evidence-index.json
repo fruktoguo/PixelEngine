@@ -508,6 +508,19 @@
       "notes": "Unity 6.5 同机参照与全局 chrome/theme 首轮收敛已完成；Scene 工具、默认 Inspector/tab、Project/Console/Picker、DPI/resize、WGC 白屏和完整 Build And Run 差异仍保留，EDITOR-003 继续进行中。"
     },
     {
+      "entryId": "editor-003-unity-parity-cycle02-20260712",
+      "taskIds": ["EDITOR-003"],
+      "evidenceState": "unity_parity_cycle_complete_task_still_active",
+      "commit": "dfd838685a06f304e8939abb2411d39a53ead981",
+      "runSessionId": "local-20260712-editor003-unity-parity-cycle02",
+      "runIdentityStatus": "captured",
+      "hardware": "Windows build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT; .NET SDK 10.0.108; win-x64; Unity 6.5 6000.5.3f1 live reference; PixelEngine 1280x720 framebuffer probe",
+      "command": "Unity BallWorld live Scene/Inspector/dock reference; EditorShell --project demo/PixelEngine.Demo --window-ticks 24 --capture-frame %TEMP%/pixelengine-editor003-workbench-v2g.bmp --ephemeral-user-state --no-reopen-last-project; Editor/UI tests; Hosting excluding PerformanceHardeningToolingDisciplineTests; solution Release build; task catalog validation",
+      "reportPath": "docs/evidence-2026-07-12-editor-003-unity-parity-cycle-02.md",
+      "sha256": "45cbb5d49a810cbd3f1ebf23c9a30e2b6001e9a2d0607f0a2b42f0cefe8d612d",
+      "notes": "Scene 图标工具与真实 operation/local-global/grid 状态、Inspector 默认焦点、核心页签无常驻关闭按钮及 Window 菜单双向显隐已闭合；内容面板细节、DPI/resize、WGC 白屏和完整 Build And Run 差异仍保留，EDITOR-003 继续进行中。"
+    },
+    {
       "entryId": "ci-002-local-remediation-20260711",
       "taskIds": ["CI-002", "TEST-003"],
       "evidenceState": "complete_remote_windows_build_test_disassembly_benchmark_guard",
