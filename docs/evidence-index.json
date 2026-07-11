@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-11",
-  "generatedFromCommit": "c3e08ba21b5818f071b41b843ca8c132796bce9c",
+  "generatedFromCommit": "97d7c0b99cedbd907f8b82a716684aec320f4a47",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -493,6 +493,19 @@
       "reportPath": "docs/evidence-2026-07-10-editor-preferences-ui-scale.md",
       "sha256": "cf028de4d82b744d95f03c933165d3bafb0c6b2ea24a8280748f715cc9faa78f",
       "notes": "用户级 Preferences、150% 双 ImGui context、style 非累乘、核心默认面板与布局保存开关自动化切片已闭合；Computer Use native pipe 不可用，scripted framebuffer probe 不替代目标 4K 人工点击和 EDITOR-003 完整 reviewer。"
+    },
+    {
+      "entryId": "ci-002-local-remediation-20260711",
+      "taskIds": ["CI-002", "TEST-003"],
+      "evidenceState": "local_remediation_validated_remote_ci_and_gpu_runner_required",
+      "commit": "97d7c0b99cedbd907f8b82a716684aec320f4a47",
+      "runSessionId": "local-20260711-ci002-remediation",
+      "runIdentityStatus": "captured_precommit_worktree_parent_sha",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8c/16t; AMD Radeon RX 7900 XT driver 32.0.31021.5001; .NET SDK 10.0.108; win-x64",
+      "command": "dotnet build PixelEngine.sln Release WAE; 13-project dotnet test with TRX and summarize-ci-test-results.ps1; benchmark-regression.ps1 against ci-baseline.json; NativeSmokeToolingTests; NativeGpuCiContractTests; actionlint; validate-task-catalog.ps1; validate-target-hardware-matrix.ps1",
+      "reportPath": "docs/evidence-2026-07-11-ci-002-local-remediation.md",
+      "sha256": "f200a4690fe09af95191d9287c53fea3cbd793efbe81d0ca271c71612dd574cc",
+      "notes": "修复实现提交为 97d7c0b9；本地 TRX/benchmark 在提交前相同补丁工作树执行，summary 保留父提交 9dedb58e，故只证明本地修复，不替代当前完整 SHA 的远端 CI。CI-002 保持 active；真实 ANGLE runner 缺失由 TEST-003 保持 blocked。"
     }
   ]
 }
