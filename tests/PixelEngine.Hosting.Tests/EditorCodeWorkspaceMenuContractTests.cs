@@ -43,8 +43,12 @@ public sealed class EditorCodeWorkspaceMenuContractTests
         Assert.Equal(assetsMenu, strings.GetProperty("menu.assets").GetString());
         Assert.Equal(openProject, strings.GetProperty("action.openCSharpProject").GetString());
         Assert.Equal(recommendedEditor, strings.GetProperty("prefs.editor.vscode").GetString());
-        Assert.False(string.IsNullOrWhiteSpace(strings.GetProperty("prefs.customEditorHelp").GetString()));
-        Assert.False(string.IsNullOrWhiteSpace(strings.GetProperty("prefs.scriptEditorHelp").GetString()));
+        string customHelp = Assert.IsType<string>(strings.GetProperty("prefs.customEditorHelp").GetString());
+        string scriptHelp = Assert.IsType<string>(strings.GetProperty("prefs.scriptEditorHelp").GetString());
+        Assert.Contains("{solution}", customHelp, StringComparison.Ordinal);
+        Assert.Contains("{workspace}", customHelp, StringComparison.Ordinal);
+        Assert.Contains(".code-workspace", scriptHelp, StringComparison.Ordinal);
+        Assert.Contains(".sln", scriptHelp, StringComparison.Ordinal);
     }
 
     private static string FindRepositoryRoot()
