@@ -11,7 +11,7 @@ namespace PixelEngine.Physics.Tests;
 /// 相位 8 CA↔刚体同步测试。
 /// 不变式：stamp/erase 不误删普通 cell、SyncStep 排空伤害队列并重 stamp、角色 proxy 先于写回约束刚体。
 /// </summary>
-public sealed unsafe class PhysicsSyncTests
+public sealed class PhysicsSyncTests
 {
     /// <summary>
     /// 验证 erase 只清仍由刚体占用的旧 stamp，不误删 CA 已消耗后的普通 cell。

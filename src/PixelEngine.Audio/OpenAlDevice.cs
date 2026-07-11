@@ -43,7 +43,7 @@ public sealed unsafe class OpenAlDevice : IDisposable
         {
             ALContext contextApi = ALContext.GetApi();
             AL al = AL.GetApi();
-            Device* rawDevice = contextApi.OpenDevice(null!);
+            Device* rawDevice = contextApi.OpenDevice(null);
             if (rawDevice == null)
             {
                 failureReason = "OpenAL 默认设备不可用。";
