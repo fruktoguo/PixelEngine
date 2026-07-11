@@ -77,7 +77,7 @@ public sealed class ResidentChunkMap : IChunkSource
             _ = _chunks.EnsureCapacity(checked(_chunks.Count + chunks.Length));
             for (int i = 0; i < chunks.Length; i++)
             {
-                Chunk chunk = chunks[i]!;
+                Chunk chunk = chunks[i];
                 _chunks.Add(chunk.Coord, chunk);
             }
 
