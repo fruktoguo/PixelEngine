@@ -3,7 +3,7 @@
 	url = https://github.com/erincatto/box2d.git
 [submodule "native/rmlui"]
 	path = native/rmlui
-	url = https://github.com/mikke89/RmlUi.git
+	url = https://github.com/fruktoguo/RmlUi.git
 [submodule "native/freetype"]
 	path = native/freetype
 	url = https://gitlab.freedesktop.org/freetype/freetype.git
