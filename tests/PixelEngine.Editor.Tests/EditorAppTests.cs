@@ -310,11 +310,13 @@ public sealed class EditorAppTests
 
         Assert.Equal(GuiThemeKind.Unity6Dark, editorOptions.Theme);
         Assert.Equal(GuiThemeKind.NeutralDark, guiOptions.Theme);
-        Assert.Equal("PixelEngine Modern Dark", tokens.Name);
-        Assert.Equal(4f, tokens.WindowRounding);
-        Assert.Equal(4f, tokens.TabRounding);
-        Assert.Equal(new Vector4(0x1E / 255f, 0x1F / 255f, 0x22 / 255f, 1f), tokens.WindowBg);
-        Assert.Equal(new Vector4(0x4C / 255f, 0x8D / 255f, 1f, 1f), tokens.Accent);
+        Assert.Equal("Unity 6 Editor Dark", tokens.Name);
+        Assert.Equal(0f, tokens.WindowRounding);
+        Assert.Equal(0f, tokens.TabRounding);
+        Assert.Equal(new Vector2(6f, 6f), tokens.WindowPadding);
+        Assert.Equal(new Vector2(5f, 3f), tokens.FramePadding);
+        Assert.Equal(new Vector4(0x2B / 255f, 0x2B / 255f, 0x2B / 255f, 1f), tokens.WindowBg);
+        Assert.Equal(new Vector4(0x3B / 255f, 0x85 / 255f, 0xC5 / 255f, 1f), tokens.Accent);
     }
 
     /// <summary>

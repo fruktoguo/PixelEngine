@@ -34,6 +34,22 @@ public sealed class EditorMainToolbarStateTests
         Assert.True(paused.CanStep);
     }
 
+    /// <summary>
+    /// 验证底部状态栏只承载工程、场景与对象摘要，Play 模式由独立着色标签表达。
+    /// </summary>
+    [Fact]
+    public void StatusTextKeepsWorkspaceSummarySeparateFromModeLabel()
+    {
+        EditorMainToolbarState state = Create(isPlaying: true, isPaused: false) with
+        {
+            IsDirty = true,
+            ObjectCount = 3,
+        };
+
+        Assert.Equal("Demo  |  Scene*  |  3 GameObjects", state.StatusText);
+        Assert.DoesNotContain("Play", state.StatusText, StringComparison.Ordinal);
+    }
+
     private static EditorMainToolbarState Create(bool isPlaying, bool isPaused)
     {
         return new EditorMainToolbarState(

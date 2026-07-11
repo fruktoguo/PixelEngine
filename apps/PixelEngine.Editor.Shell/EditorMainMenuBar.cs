@@ -11,11 +11,14 @@ namespace PixelEngine.Editor.Shell;
 /// </summary>
 internal sealed class EditorMainMenuBar
 {
-    private const float ToolbarHeight = 36f;
-    private const float ToolbarButtonWidth = 92f;
+    private const float ToolbarHeight = 38f;
+    private const float StatusBarHeight = 22f;
     private const float PlayControlButtonSize = 28f;
     private const float PlayControlGap = 4f;
+    private const float LayoutButtonWidth = 72f;
     private const string ToolbarWindowName = "##PixelEngineEditorToolbar";
+    private const string StatusBarWindowName = "##PixelEngineEditorStatusBar";
+    private const string LayoutPopupName = "##PixelEngineEditorLayoutPopup";
     private const ImGuiWindowFlags ToolbarWindowFlags =
         ImGuiWindowFlags.NoTitleBar |
         ImGuiWindowFlags.NoResize |
@@ -38,11 +41,13 @@ internal sealed class EditorMainMenuBar
         DrawEditMenu(app);
         DrawAssetsMenu(app);
         DrawGameObjectMenu(app);
+        DrawComponentMenu(app);
         DrawWindowMenu(app);
         DrawPlayMenu(app);
         DrawHelpMenu(app);
         ImGui.EndMainMenuBar();
         DrawToolbar(app);
+        DrawStatusBar(app);
     }
 
     internal static EditorMainToolbarState CaptureToolbarState(EditorShellApp app)
@@ -87,36 +92,13 @@ internal sealed class EditorMainMenuBar
             return;
         }
 
-        if (ToolbarButton(L.Get("action.newProject", "New Project"), enabled: true, uiScale: uiScale))
-        {
-            app.FocusProjectPicker(ProjectPickerMode.NewProject);
-        }
-
-        ImGui.SameLine();
-        if (ToolbarButton(L.Get("action.openProject", "Open Project"), enabled: true, uiScale: uiScale))
-        {
-            app.FocusProjectPicker(ProjectPickerMode.OpenProject);
-        }
-
-        ImGui.SameLine();
-        if (ToolbarButton(L.Get("action.saveScene", "Save Scene"), state.HasSession, uiScale))
-        {
-            _ = app.SaveScene();
-        }
-
-        ImGui.SameLine();
-        if (ToolbarButton(L.Get("action.build", "Build"), state.HasOpenProject, uiScale))
-        {
-            app.ShowBuildSettings();
-        }
-
         float scaledPlayButtonSize = EditorUiScale.Scale(PlayControlButtonSize, uiScale);
         float scaledPlayGap = EditorUiScale.Scale(PlayControlGap, uiScale);
         float playControlsWidth = (scaledPlayButtonSize * 3f) + (scaledPlayGap * 2f);
         float playControlsX = Math.Max(
-            EditorUiScale.Scale(390f, uiScale),
-            (viewport.Size.X * 0.5f) - (playControlsWidth * 0.5f));
-        ImGui.SameLine(playControlsX);
+            ImGui.GetStyle().WindowPadding.X,
+            (ImGui.GetWindowSize().X * 0.5f) - (playControlsWidth * 0.5f));
+        ImGui.SetCursorPosX(playControlsX);
         if (PlayControlButton(
             EditorToolbarPlayIcon.Play,
             state.IsPlaySessionActive,
@@ -149,25 +131,81 @@ internal sealed class EditorMainMenuBar
             app.StepOnce();
         }
 
+        float scaledLayoutButtonWidth = EditorUiScale.Scale(LayoutButtonWidth, uiScale);
+        float layoutX = Math.Max(
+            ImGui.GetCursorPosX() + scaledPlayGap,
+            ImGui.GetWindowSize().X - ImGui.GetStyle().WindowPadding.X - scaledLayoutButtonWidth);
+        ImGui.SameLine(layoutX);
+        if (ImGui.Button(L.Get("action.layout", "Layout"), new Vector2(scaledLayoutButtonWidth, 0f)))
+        {
+            ImGui.OpenPopup(LayoutPopupName);
+        }
+
+        if (ImGui.BeginPopup(LayoutPopupName))
+        {
+            if (ImGui.MenuItem(L.Get("action.resetLayout", "Reset Layout")))
+            {
+                app.ResetLayout();
+            }
+
+            ImGui.EndPopup();
+        }
+
+        ImGui.End();
+    }
+
+    private static void DrawStatusBar(EditorShellApp app)
+    {
+        EditorMainToolbarState state = CaptureToolbarState(app);
+        float uiScale = app.UiScale;
+        ImGuiViewportPtr viewport = ImGui.GetMainViewport();
+        if (!ImGuiP.BeginViewportSideBar(
+            StatusBarWindowName,
+            viewport,
+            ImGuiDir.Down,
+            EditorUiScale.Scale(StatusBarHeight, uiScale),
+            ToolbarWindowFlags))
+        {
+            ImGui.End();
+            return;
+        }
+
+        Vector4 modeColor = state.IsPlaySessionActive
+            ? new Vector4(0x63 / 255f, 0xA6 / 255f, 0xD8 / 255f, 1f)
+            : state.IsDirty
+                ? new Vector4(0xE0 / 255f, 0xA5 / 255f, 0x43 / 255f, 1f)
+                : ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled];
+        ImGui.TextColored(modeColor, state.Mode);
         ImGui.SameLine();
         ImGui.TextUnformatted(state.StatusText);
         ImGui.End();
     }
 
-    private static bool ToolbarButton(string label, bool enabled, float uiScale)
+    private static void DrawComponentMenu(EditorShellApp app)
     {
-        if (!enabled)
+        if (!ImGui.BeginMenu("Component"))
         {
-            ImGui.BeginDisabled();
+            return;
         }
 
-        bool clicked = ImGui.Button(label, new Vector2(EditorUiScale.Scale(ToolbarButtonWidth, uiScale), 0f));
-        if (!enabled)
+        bool canAdd = app.CurrentSession?.SceneModel.SelectedStableId is not null;
+        string[] behaviours = app.GetBehaviourTypeNames();
+        if (behaviours.Length == 0)
         {
-            ImGui.EndDisabled();
+            _ = ImGui.MenuItem("No Components Available", string.Empty, selected: false, enabled: false);
+        }
+        else
+        {
+            for (int i = 0; i < behaviours.Length; i++)
+            {
+                if (ImGui.MenuItem(behaviours[i], string.Empty, selected: false, enabled: canAdd))
+                {
+                    app.AddComponentToSelected(behaviours[i]);
+                }
+            }
         }
 
-        return clicked && enabled;
+        ImGui.EndMenu();
     }
 
     private static bool PlayControlButton(
@@ -193,9 +231,9 @@ internal sealed class EditorMainMenuBar
 
         ImDrawListPtr drawList = ImGui.GetWindowDrawList();
         uint background = selected
-            ? 0xFFDA874C
-            : hovered && enabled ? 0xFF45474D : 0xFF2C2E33;
-        drawList.AddRectFilled(min, min + new Vector2(size), background, EditorUiScale.Scale(4f, uiScale));
+            ? 0xFFC5853B
+            : hovered && enabled ? 0xFF4A4A4A : 0xFF353535;
+        drawList.AddRectFilled(min, min + new Vector2(size), background, EditorUiScale.Scale(2f, uiScale));
         uint foreground = enabled ? 0xFFF1F3F6 : 0xFF70737A;
         float unit = size / 14f;
         Vector2 center = min + new Vector2(size * 0.5f);
@@ -690,6 +728,6 @@ internal readonly record struct EditorMainToolbarState(
 
     public string StatusText =>
         HasOpenProject
-            ? $"{ProjectName} / {SceneName}{(IsDirty ? "*" : string.Empty)} / {Mode} / {ObjectCount} objects"
-            : "No Project";
+            ? $"{ProjectName}  |  {SceneName}{(IsDirty ? "*" : string.Empty)}  |  {ObjectCount} GameObjects"
+            : "Open or create a project";
 }

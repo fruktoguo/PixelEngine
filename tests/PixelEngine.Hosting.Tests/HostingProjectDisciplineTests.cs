@@ -713,6 +713,7 @@ public sealed class HostingProjectDisciplineTests
             "File",
             "Edit",
             "GameObject",
+            "Component",
             "Window",
             "Play",
             "Help",
@@ -758,9 +759,13 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("EditorMainToolbarState", menu, StringComparison.Ordinal);
         Assert.Contains("CaptureToolbarState", menu, StringComparison.Ordinal);
         Assert.Contains("##PixelEngineEditorToolbar", menu, StringComparison.Ordinal);
+        Assert.Contains("##PixelEngineEditorStatusBar", menu, StringComparison.Ordinal);
+        Assert.Contains("##PixelEngineEditorLayoutPopup", menu, StringComparison.Ordinal);
         Assert.Contains("ImGuiP.BeginViewportSideBar", menu, StringComparison.Ordinal);
         Assert.Contains("ImGuiDir.Up", menu, StringComparison.Ordinal);
+        Assert.Contains("ImGuiDir.Down", menu, StringComparison.Ordinal);
         Assert.Contains("ToolbarHeight", menu, StringComparison.Ordinal);
+        Assert.Contains("StatusBarHeight", menu, StringComparison.Ordinal);
         Assert.Contains("IEditorChromePanel", host, StringComparison.Ordinal);
         Assert.Contains("DrawPanels(in context, chromeOnly: true)", File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "EditorApp.cs")), StringComparison.Ordinal);
         Assert.Contains("app.FocusProjectPicker(ProjectPickerMode.NewProject)", menu, StringComparison.Ordinal);

@@ -14,6 +14,23 @@
 
 `EDITOR-006` 已把 Project Window 重构为左侧双根 folder tree 与右侧 breadcrumb / 直接子项导航；深层资产只在搜索态展开并显示完整路径。New、Import、Refresh 和选中资产主操作位于工具栏，移动、重命名与删除收进 stable-id 绑定的工具栏/上下文菜单，Script 与非 Script 创建会自动路由到兼容 logical root。资产 descriptor 在索引刷新时生成本地化类型、工程用途、静态测试 badge 和 schema 摘要；StartScene / CurrentScene badge 仅比较内存工程与 Session 状态。Scene 双击走 `EditorShellApp.OpenSceneAsset` 与统一 dirty guard，不修改 Project StartScene；搜索覆盖 path、enum/localized type、用途、摘要、badge 与 stable id。Demo 的材质、反应、启动、武器、音频 Cue/clip、UI manifest/screen、字体、材质地图、材质纹理、probe 场景与真实 ScriptSource 均有直接可读语义。
 
+## Unity 6.5 视觉与交互对标增补（2026-07-12）
+
+`EDITOR-003` 的真实窗口参照固定为 Windows Unity 6.5 `6000.5.3f1`，基线工程使用 `D:\Project\BallWorld` 的默认布局。对标范围是 PixelEngine 已公开并可完成真实工作的 Editor 表面；不要求复制 Unity 未进入 PixelEngine 产品范围的包管理、云服务或 3D 专用系统，也绝不允许为视觉相似加入无行为 stub。一个能力一旦出现在 PixelEngine 菜单、工具栏或面板中，就必须拥有可理解、可撤销/恢复的真实行为，并在视觉层级和交互反馈上符合 Unity 用户预期。
+
+首轮同机对照把差异分成六个持续验收面：
+
+| 验收面 | Unity 6.5 参照 | PixelEngine 收敛要求 |
+| --- | --- | --- |
+| 全局 chrome | 扁平紧凑的菜单/工具栏、中央 Play 组、右侧 Layout、底部状态与任务反馈 | 去除宽大的常驻文件操作，统一中性深灰密度；Play 组严格居中且活动态为 Unity 蓝；真实状态移到底栏，Layout 入口只暴露已接线行为 |
+| 核心工作台 | Scene 为主视图，Hierarchy/Project/Inspector/Console 以紧凑 tab/dock 组织 | 默认布局、tab、分隔线、关闭按钮、最小尺寸和 720p/高 DPI 行为与参照同构，面板不得互相覆盖或截断 |
+| 选择与 Inspector | Hierarchy 蓝色选择持续驱动 Inspector；GameObject header、Transform、组件 foldout 与 Add Component 层级清晰 | 选择颜色、键盘焦点、字段密度、组件折叠/启用/增删/重排及 Undo/Redo 反馈一致 |
+| Scene / Game | Scene 工具、grid/snap、gizmo 与 framing 可发现；Play 后按钮着色并切换 Game View 工具语境 | 所有可见工具均接真实行为；快捷键、hover/tooltip、active/disabled、Play→Pause→Step→Edit 状态无歧义 |
+| Project / Console / Picker | 资源树、搜索过滤、行选择、日志等级与首次工程入口使用一致的紧凑层级 | 目录/资产/日志操作、删除确认、drag/drop、错误恢复和 Project Picker 信息架构需用真实鼠标键盘闭环 |
+| 窗口系统 | resize、DPI、IME、焦点、停靠与 Windows Graphics Capture 可稳定观察 | framebuffer、屏幕录制和输入坐标必须一致；白屏捕获、旧 DPI 坐标、透明区域误捕获均视为未完成 |
+
+交付按“全局主题/chrome/status → 核心面板密度与选择 → Scene/Inspector 操作 → Project/Console/Picker → resize/DPI/录屏 → 完整 author→play→edit→build→run”循环推进。每轮必须保留 Unity 参照、PixelEngine 当前帧、输入动作与自动化结果；脚本化 source-contract 只能作回归门禁，不能替代真实窗口 reviewer。只有差异矩阵清零、同机复走完整路线且没有可复现的视觉或交互偏差时，canonical `EDITOR-003` 才能改为完成。
+
 > **状态迁移（2026-07-10）**：本文件保留详细设计与历史 checkbox；当前状态、顺序和完成条件以 [`plan/tasks/README.md`](tasks/README.md) 为唯一真相源。不要在本文件新增 live task；设计变化仍须同步到这里。
 
 > **DOC-002 历史证据口径（2026-07-10）**：后文 checkbox 与“已通过/已完成”叙述冻结自旧计划快照 `179efc3a`，迁移基线为 `5af1541f`，均不构成 live 状态；证据等级以 [稳定 Evidence Index](../docs/evidence-index.md) 为准。未入索引的 `artifacts/`、`BenchmarkDotNet.Artifacts/`、`scratch/` 仅是可再生历史线索；替代报告与重跑命令见 [DOC-002 校正报告](../docs/evidence-2026-07-10-doc-002-legacy-plan-audit.md)。
